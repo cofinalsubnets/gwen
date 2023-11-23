@@ -18,7 +18,14 @@ another list processing style programming language
 - `.` prints a value and returns it
 
 ## code examples
+
+### a quine
+`L` is macro similar to `list`
+```lisp
+((\ l (L l (L l))) '(\ l (L l (L l))))
+```
 ### church numerals
+exponent operation `exp` would simply be identity function
 ```lisp
 (: (add a b f x) (a f (b f x))
    (mul a b f) (a (b f))
@@ -30,11 +37,5 @@ another list processing style programming language
    five (add two three)
    six (mul two three)
    seven (add one six)
-   (. (mul two (mul five (mul six seven)) (+ 1) 0)))
-```
-
-### a quine
-`L` is the list macro
-```lisp
-((\ l (L l (L l))) '(\ l (L l (L l))))
+ (. (mul two (mul five (mul six seven)) (+ 1) 0)))
 ```
