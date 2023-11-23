@@ -1,0 +1,6 @@
+perf.*
+vgcore.*
+*.o
+.gdb_history
+flamegraph.svg
+gwen
