@@ -10,7 +10,7 @@ depends=('glibc')
 makedepends=('git' 'pandoc')
 provides=('gwen')
 _gitname="${pkgname}-${pkgver}"
-source=("${_gitname}::git+https://github.com/cofinalsubnets/lisa.git")
+source=("${_gitname}::git+https://github.com/cofinalsubnets/gwen.git")
 sha256sums=(SKIP)
 
 pkgver() {
