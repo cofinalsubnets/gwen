@@ -409,7 +409,7 @@ static NoInline gwen_word read_atom(gwen_core f, gwen_file i, int c) {
 static Vm(prc) {
   Ip = (thread) Sp[1];
   int c = getnum(Sp[1] = Sp[0]);
-  putc(c, stdout);
+  putchar(c);
   Sp++;
   return GwenContinue(); }
 
@@ -498,13 +498,13 @@ static NoInline void copy_from(gwen_core f, gwen_word *p0, gwen_size len0) {
   f->symbols = 0;
   // copy stack
   while (sn--) *sp1++ = cp(f, *sp0++, p0, t0);
-  f->ip = (thread) cp(f, (gwen_word) f->ip, p0, t0);
-  f->dict = (table) cp(f, (gwen_word) f->dict, p0, t0);
-  f->macro = (table) cp(f, (gwen_word) f->macro, p0, t0);
+  f->ip = (gwen_cell) cp(f, (gwen_word) f->ip, p0, t0);
+  f->dict = (gwen_table) cp(f, (gwen_word) f->dict, p0, t0);
+  f->macro = (gwen_table) cp(f, (gwen_word) f->macro, p0, t0);
   // copy managed values
   for (struct gwen_mm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
   // cheney's alg
-  for (thread k; (k = (thread) f->cp) < (thread) f->hp;)
+  for (gwen_cell k; (k = (gwen_cell) f->cp) < (gwen_cell) f->hp;)
     if (datp(k)) dtyp(k)->evac(f, (gwen_word) k, p0, t0); // is data
     else { // is thread
       for (; k->ap; k->x = cp(f, k->x, p0, t0), k++);
@@ -1487,13 +1487,6 @@ static Vm(lazy_bind) {
   Ip[1].x = var;
   return GwenContinue(); }
 
-NoInline gwen_status gwen_reads(gwen_core f, char *prog) {
-  FILE *i = fmemopen(prog, strlen(prog), "r");
-  if (!i) return Oom;
-  gwen_status s = gwen_read1f(f, i);
-  fclose(i);
-  return s; }
-
 // compile and execute expression
 NoInline gwen_status gwen_eval(gwen_core f) {
   scope c = enscope(f, (scope) nil, nil, nil);
@@ -1506,9 +1499,9 @@ NoInline gwen_status gwen_eval(gwen_core f) {
     m = analyze(f, &c, m, x),
     m = m ? em1(f, &c, m, yield) : m,
     k = m ? construct(f, &c, m) : k);
-  k = k ? (thread) pushs(f, 1, k) : k;
+  k = k ? (gwen_cell) pushs(f, 1, k) : k;
   if (!k) return Oom;
-  f->sp[0] = (word) f->ip;
+  f->sp[0] = (gwen_word) f->ip;
   f->ip = k;
   gwen_status s = gwen_run(f);
   if (s == Ok)
@@ -1520,6 +1513,7 @@ NoInline gwen_status gwen_eval(gwen_core f) {
 static word lassoc(gwen_core f, word l, word k) {
   for (; twop(l); l = B(l)) if (eql(f, k, A(A(l)))) return A(l);
   return 0; }
+
 // list concat
 static word lconcat(gwen_core f, word l, word n) {
   if (!twop(l)) return n;

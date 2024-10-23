@@ -26,7 +26,6 @@ void
   gwen_write1f(gwen_core, gwen_file);
 gwen_status
   gwen_read1f(gwen_core, gwen_file),
-  gwen_reads(gwen_core, char*),
   gwen_eval(gwen_core);
 gwen_word
   gwen_pop1(gwen_core);
