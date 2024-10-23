@@ -1,6 +1,6 @@
 # Maintainer: gwem <cofinalsubnets@gmail.com>
 pkgname=gwen-git
-pkgver=6d9d89a
+pkgver=0.0.0
 pkgrel=1
 pkgdesc="list expression interpreter"
 arch=(x86_64 i686 aarch64 armv7h)
@@ -9,7 +9,7 @@ license=(Unlicense)
 depends=('glibc')
 makedepends=('git' 'pandoc')
 provides=('gwen')
-_gitname="${pkgname}-${pkgver}"
+_gitname="${pkgname}"
 source=("${_gitname}::git+https://github.com/cofinalsubnets/gwen.git")
 sha256sums=(SKIP)
 
