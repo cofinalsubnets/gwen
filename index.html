@@ -7,12 +7,29 @@
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="stylesheet" href="/style.css">
     <script src='gwen.js'></script>
+<style>
+table { border: 1px solid black; border-collapse: collapse; }
+td, th { border: 1px solid black; padding: 0.5em;}
+</style>
   </head>
   <body>
     <h1>gwen.js demo</h1>
     <p>type an expression in the text box below and press enter...</p>
     <p>or call <code>gwen_eval</code> with a string in the javascript console</p>
-    <p>try <code>(: fib (\ n (? (&lt; n 3) 1 (+ (fib (- n 1)) (fib (- n 2))))) (fib 20))</code></p>
+    <p>there are five special forms that are pretty close to their scheme counterparts:</p>
+    <table>
+      <thead>
+        <tr><th scope=col>gwen</th><th scope=col>scheme</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>`</code></td><td><code>quote</code></td></tr>
+        <tr><td><code>?</code></td><td><code>cond</code></td></tr>
+        <tr><td><code>\</code></td><td><code>lambda</code></td></tr>
+        <tr><td><code>:</code></td><td><code>let*</code></td></tr>
+        <tr><td><code>,</code></td><td><code>begin</code></td></tr>
+      </tbody>
+    </table>
+    <p>try <code>(: (fib n) (? (&lt; n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 20))</code></p>
     <input type='text' id='cmdline'></input>
   </body>
 </html>
