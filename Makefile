@@ -12,6 +12,10 @@ test_bounce: $(bounce_binary)
 	@echo '[bouncing]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
 
+test_js:
+	node gwen.js test/heron.gw test/church.gw test/fib.gw
+
+
 #build
 CC ?= gcc
 CFLAGS ?= -std=gnu11 -g -O2 -Wall\

@@ -12,78 +12,78 @@ const gwen_eval = (() => {
     sepBy = (p, l) => (s, y, n) => cat(p, opt(cat(l, sepBy(p, l))))(s, y, n),
     opt = (a) => (s, y) => a(s, y, _ => y(s, [])),
     rep = (a) => (s, y) => opt(cat(a, rep(a)))(s, y),
-    atom = pmap(re(/^[a-zA-Z0-9_+\\:,`*?<>=/%-]+/), a => a.map(s => (i => ''+(i)==s?i:intern(s))(parseInt((s))))),
-    ws = drop(re(/^[ \t\n]*(#[^\n]*)?/)),
+    atom = pmap(re(/^[a-zA-Z0-9_+\\:,`*?<>=/%-]+/), a => a.map(s => (i => ''+(i)==s?i:intern(s))(parseFloat((s))))),
+    ws = drop(re(/^[ \t\n]*(;[^\n]*)?/)),
     list = pmap(cat(drop(lit("(")), cat(ws, cat((s,y,n)=>sepBy(alt(atom, list), ws)(s,y,n), cat(ws, drop(lit(")")))))), x => [x]),
     expr = (s, y, n) => alt(atom, list)(s, y, n),
     exprs = cat(ws, cat(sepBy(expr, ws), ws)),
-    parse = (p, s) => p(s, (_, x) => x[0], undefined)
+    parse = (p, s) => p(s, (_, x) => x[0], _ => undefined)
       ;
 
   class Symbol { constructor(nom) { this.nom = nom; } }
-  const symbols = {};
-  const intern = str => (sym => sym ? sym : (symbols[str] = new Symbol(str)))(symbols[str]);
   const
-    Quote = intern('`'),
-    Lambda = intern("\\"),
-    Define = intern(":"),
-    Cond = intern("?"),
-    Begin = intern(",");
-
-  const
+    symbols = {},
+    intern = str => (sym => sym ? sym : (symbols[str] = new Symbol(str)))(symbols[str]),
+    [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(intern),
     empty = x => undefined,
-    store = (k, v, l) => x => x === k ? v : l(x);
+    store = (k, v, l) => x => x === k ? v : l(x),
+    G = (() =>{
+      const aa = [
+        ["+", a => b => a + b],
+        ["-", a => b => a - b],
+        ["*", a => b => a * b],
+        ["/", a => b => a / b],
+        ["%", a => b => a % b],
+        ["=", a => b => a===b?1:0],
+        ["<", a => b => a<b?1:0],
+        ["<=", a => b => a<=b?1:0],
+        [">=", a=>b=>a>=b?1:0],
+        [">", a=>b=>a>b?1:0],
+        ["X", a=>b=>[a].concat(Array.isArray(b)?b:[])],
+        ["A", a=>Array.isArray(a)?a[0]:a],
+        ["B", a=>!Array.isArray(a)||a.length<2?0:a.slice(1)],
+      ];
+      return aa.reduce((s, [k, v]) => store(intern(k), v, s), empty);
+    })(),
 
-  const G = (() =>{
-    const aa = [
-      ["+", a => b => a + b],
-      ["-", a => b => a - b],
-      ["*", a => b => a * b],
-      ["/", a => b => a / b],
-      ["%", a => b => a % b],
-      ["=", a => b => a===b?1:0],
-      ["<", a => b => a<b?1:0],
-      ["<=", a => b => a<=b?1:0],
-      [">=", a=>b=>a>=b?1:0],
-      [">", a=>b=>a>b?1:0],
-    ];
-    return aa.reduce((s, [k, v]) => store(intern(k), v, s), empty);
-  })();
+    g_sprint = x => {
+      if (x instanceof Symbol) return x.nom;
+      if (Array.isArray(x)) {
+        let len = 0, s = '(';
+        for (let i = 0; i < x.length; i++, len++)
+          s += (len ? ' ':'') + g_sprint(x[i]);
+        return s + ')';
+      }
+      return ''+x;
+    },
+    ev = x => l => {
+      if (x instanceof Symbol) return l(x);
+      if (!Array.isArray(x)) return x;
+      if (x.length == 0) return 0;
+      const [x0, ...a] = x;
+      if (x0 == Quote) return a[0];
+      if (x0 == Begin) return a.reduce((_, x) => ev(x)(l), 0);
+      if (x0 == Lambda) return a.slice(0, -1).reduceRight((f, arg) => l => x => f(store(arg, x, l)), ev(a[a.length-1]))(l);
+      if (x0 == Cond) return !a.length ? 0 : a.length == 1 ? ev(a[0])(l) : (ev(a[0])(l) ? ev(a[1]) : ev([Cond, ...a.slice(2)]))(l);
+      if (x0 == Define) {
+        if (a.length == 0) return 0;
+        if (a.length == 1) return ev(a[0])(l);
+        let [k, v] = a, q = x => x === k ? b : l(x), b;
+        while (Array.isArray(k)) {
+          const k0 = k[0];
+          v = [Lambda].concat(k.slice(1)).concat([v]);
+          k = k0;
+        }
+        b = ev(v)(q);
+        return ev([Define, ...a.slice(2)])(q);
+      }
+      return x.map(x => ev(x)(l)).reduce((f, x) => typeof(f)==='function'?f(x):f);
+    };
 
-  const g_sprint = x => {
-    if (typeof(x)==='string') return g_sprints(x);
-    if (x instanceof Symbol) return x.nom||'#sym';
-    if (Array.isArray(x)) {
-      let len = 0, s = '(';
-      for (let i = 0; i < x.length; i++, len++)
-        s += (len ? ' ':'') + g_sprint(x[i]);
-      return s + ')';
-    }
-    return ''+x;
-  }
-
-  const ev = x => l => {
-    if (x instanceof Symbol) return l(x);
-    if (!Array.isArray(x)) return x;
-    if (x.length == 0) return 0;
-    const [x0, ...a] = x;
-    if (x0 == Quote) return a[0];
-    if (x0 == Begin) return a.reduce((_, x) => ev(x)(l), 0);
-    if (x0 == Lambda) return a.slice(0, -1).reduceRight((f, arg) => l => x => f(store(arg, x, l)), ev(a[a.length-1]))(l);
-    if (x0 == Cond) return !a.length ? 0 : a.length == 1 ? ev(a[0])(l) : (ev(a[0])(l) ? ev(a[1]) : ev([Cond, ...a.slice(2)]))(l);
-    if (x0 == Define) {
-      if (a.length == 0) return 0;
-      if (a.length == 1) return ev(a[0])(l);
-      const [k, v] = a, q = x => x === k ? b : l(x), b = ev(v)(q);
-      return ev([Define, ...a.slice(2)])(q);
-    }
-    return x.map(x => ev(x)(l)).reduce((f, x) => typeof(f)==='function'?f(x):f);
-  }
   return s => g_sprint(ev(parse(expr, s))(G));
-
 })();
 
-window.addEventListener('load', () => {
+if (typeof window != 'undefined') window.addEventListener('load', () => {
   const cmdline = document.getElementById('cmdline');
   cmdline.addEventListener('change', ({target:{value}}) => {
     try {
@@ -93,3 +93,21 @@ window.addEventListener('load', () => {
     }
   });
 });
+else if (typeof process != 'undefined') {
+  const ev_wrap = s => {
+    let ok = false;
+    try {
+      ok = '0' != gwen_eval(`(: assert (\\ x x) ${s.toString()})`);
+    } catch (e) {
+      console.error(e);
+    }
+    return ok;
+  }
+  const fs = require('node:fs');
+  const files = process.argv.slice(2);
+  for (const file of files)
+    if (!ev_wrap(fs.readFileSync(file)))
+      console.error(`[gwen.js] ${file}: ERROR`);
+    else
+      console.log(`[gwen.js] ${file}: ok`);
+}
