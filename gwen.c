@@ -366,8 +366,7 @@ static NoInline gwen_word read_str_lit(gwen_core f, gwen_file i) {
   gwen_string o = new_buffer(f);
   for (size_t n = 0, lim = sizeof(gwen_word); o; o = grow_buffer(f, o), lim *= 2)
     for (int x; n < lim;) {
-      if (feof(i) ||
-          (x = fgetc(i)) == '"')
+      if (feof(i) || (x = fgetc(i)) == '"')
         fin: return o->len = n, (gwen_word) o;
       if (x == '\\') { // escapes next character
         if (feof(i)) goto fin;
@@ -380,7 +379,7 @@ static NoInline gwen_word read_atom(gwen_core f, gwen_file i, int c) {
   if (a) a->text[0] = c;
   for (size_t n = 1, lim = sizeof(gwen_word); a; a = grow_buffer(f, a), lim *= 2)
     while (n < lim) {
-      if (feof(i)) { terminate:
+      if (feof(i)) { fin:
         a->text[a->len = n] = 0; // final 0 for strtol()
         goto out; }
       switch (c = getc(i)) {
@@ -388,7 +387,7 @@ static NoInline gwen_word read_atom(gwen_core f, gwen_file i, int c) {
         case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
         case '(': case ')': case '"': case '\'':
           ungetc(c, i);
-          goto terminate;
+          goto fin;
         default: a->text[n++] = c; } } out:
   if (!a) return 0;
   char *e; long n = strtol(a->text, &e, 0);
@@ -420,6 +419,7 @@ static NoInline Vm(gc, gwen_size n) {
 
 static void *bump(gwen_core f, size_t n) {
   void *x = f->hp; return f->hp += n, x; }
+
 static void *cells(gwen_core f, size_t n) { return
   n <= avail(f) || gwen_please(f, n) ? bump(f, n) : 0; }
 
@@ -431,8 +431,10 @@ static void *cells(gwen_core f, size_t n) { return
 //   v = (t2 - t0) / (t2 - t1)
 // between
 #define v_lo 8
+#define too_little (len1 < req || v < v_lo)
 // and
 #define v_hi (v_lo << 6)
+#define too_big (len1 >> 1 > req && v > v_hi)
 // where
 //       non-gc running time     t1    t2
 //   ,.........................,/      |
@@ -444,60 +446,54 @@ static NoInline bool gwen_please(gwen_core f, gwen_size req) {
   f->pool = b0p1, f->loop = b0p0;
   size_t t0 = f->t0, t1 = clock(),
          len0 = f->len;
-
+  // do initial copy to alternate pool
   copy_from(f, b0p0, len0);
-
+  size_t t2 = f->t0 = clock(), // set last gc timestamp
+         v = t2 == t1 ? v_hi : (t2 - t0) / (t2 - t1), // speed factor
+         len1 = len0; // target size
+  // calculate the minimum memory required to be able to return true:
+  //    req + used = req + (total - free)
   req += len0 - avail(f);
-  size_t t2 = f->t0 = clock(),
-         v = t2 == t1 ? v_hi : (t2 - t0) / (t2 - t1),
-         len1 = len0;
-
-  // how to calculate whether v in bounds
-#define too_little (len1 < req || v < v_lo)
-#define too_big (len1 >> 1 > req && v > v_hi)
-
-  // calculate new size if needed
+  // if v is out of bounds calculate new len to compensate assuming v = k*len
   if   (too_little) do len1 <<= 1, v <<= 1; while (too_little);
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
-  else return true; // the current size is ok so return success
-
-  // allocate a pool with the new size
+  else return true; // no change reqired, common case
+  // we are going to try and resize
+  // allocate a pool with the new target size
   gwen_word *b1p0 = malloc(len1 * 2 * sizeof(gwen_word));
-  // if it fails return success if possible (ie. if only trying to grow for speed)
+  // if it failed we can still still return true if request was satisfied by original pool
   if (!b1p0) return req <= len0;
-
-  // got new pool so copy again
+  // we got a new pool so copy again
+  // reset core variables on new pool
   f->loop = (f->pool = b1p0) + (f->len = len1);
-  copy_from(f, b0p1, len0);
-  free(b0p0 < b0p1 ? b0p0 : b0p1);
-  f->t0 = clock();
-  return true; }
+  copy_from(f, b0p1, len0); // do second copy
+  free(b0p0 < b0p1 ? b0p0 : b0p1); // free old pool
+  f->t0 = clock(); // set last gc timestamp
+  return true; } // size successfully adjusted
 
 
+#define CP(d) ((d) = (void*) cp(f, (gwen_word) (d), p0, t0))
 static NoInline void copy_from(gwen_core f, gwen_word *p0, gwen_size len0) {
-  gwen_word
-    len1 = f->len,
-    *p1 = f->pool,
-    *t0 = p0 + len0,
-    *t1 = p1 + len1,
-    *sp0 = f->sp,
-    sn = t0 - sp0,
-    *sp1 = t1 - sn;
-  f->sp = sp1;
-  f->hp = f->cp = p1;
-  f->symbols = 0;
+  gwen_word len1 = f->len, // target pool length
+            *p1 = f->pool, // target pool
+            *t0 = p0 + len0, // source pool top
+            *t1 = p1 + len1, // target pool top
+            *sp0 = f->sp, // source pool stack
+            sn = t0 - sp0, // stack height
+            *sp1 = t1 - sn; // target pool stack
+  // reset stack, heap, symbols
+  f->sp = sp1, f->hp = f->cp = p1, f->symbols = 0;
   // copy stack
   while (sn--) *sp1++ = cp(f, *sp0++, p0, t0);
-  f->ip = (gwen_cell) cp(f, (gwen_word) f->ip, p0, t0);
-  f->dict = (gwen_table) cp(f, (gwen_word) f->dict, p0, t0);
-  f->macro = (gwen_table) cp(f, (gwen_word) f->macro, p0, t0);
-  // copy managed values
+  // copy other internal state
+  CP(f->ip), CP(f->dict), CP(f->macro);
+  // copy protected stack values
   for (struct gwen_mm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
-  // cheney's alg
+  // copy all reachable values using cheney's method
   for (gwen_cell k; (k = (gwen_cell) f->cp) < (gwen_cell) f->hp;)
     if (datp(k)) dtyp(k)->evac(f, (gwen_word) k, p0, t0); // is data
     else { // is thread
-      for (; k->ap; k->x = cp(f, k->x, p0, t0), k++);
+      while (k->x) k->x = cp(f, k->x, p0, t0), k++;
       f->cp = (gwen_word*) k + 2; } }
 
 #define bounded(a, b, c) ((gwen_word)(a)<=(gwen_word)(b)&&(gwen_word)(b)<(gwen_word)(c))

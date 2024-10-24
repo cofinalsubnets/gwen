@@ -1,13 +1,34 @@
 # gwen lisp
 
-gwen is a lisp dialect. features include
+gwen is a like simplified scheme with less words and parentheses.
+however unlike scheme and other lisp dialects, every value acts
+as a unary function. for functions this is done by currying like
+in haskell. other objects are interpreted as their own constant
+functions. this expands the range of evaluable expressions in
+useful ways while also simplifying the implementation.
 
-- lexical scope (like scheme)
-- all functions curried (like haskell)
-- no variadic functions (can be simulated with macros)
-- generalized apply procedure (interprets data as constant functions)
-- nil = 0
+## 
 
+variable scope is similar to scheme. there are five special forms
+which have similar scheme counterparts.
+
+|  scheme  | gwen |
+|----------|------|
+| `begin`  | `,`  |
+| `cond`   | `?`  |
+| `let*`   | `:`  |
+| `quote`  | <code>&#96;</code> |
+| `lambda` | <code>&#92;</code> |
+
+the internal syntax of some forms is simplified compared to scheme.
+
+|  scheme  | gwen |
+|----------|------|
+| `(cond (a b) (c d) (#t e))`   | `(? a b c d e)`  |
+| `(let* ((a b) (c d)) e)`   | `(: a b c d e)`  |
+| `(lambda (a b) c)` | <code>(&#92; a b c)</code> |
+
+in conditionals only one value is false, `0`. `()` and `#f` are not distinct values.
 
 ## example program
 
