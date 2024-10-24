@@ -1,8 +1,8 @@
 (: prelude
   '(; list of prelude expressions to be evaluated sequentially in order
     ; aliases
-    (: true -1 X? twop (nilp x) (? x 0 -1))
-    ; functions on functions
+    (: true -1 (nilp x) (? x 0 -1))
+    ; function functions
     (: (id x) x
        (const x y) x
        (flip f x y) (f y x)

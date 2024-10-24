@@ -36,16 +36,16 @@ const gwen_eval = (() => {
       if (ev(a[i])(l)) return ev(a[i + 1])(l); // conditional branch
     }
 
-    if (x0 == Define) for (let i = 0, bs = [];; i += 2) {
+    if (x0 == Define) for (let i = 0, bs = () => 0;; i += 2) {
       if (i == a.length) a.push(0); // no inner expression => 0
       // last expression, call bindings and eval
-      if (i == a.length - 1) return bs.forEach(b=>b(l)), ev(a[i])(l);
+      if (i == a.length - 1) return bs(l), ev(a[i])(l);
       // key, value, closure binding, current store
-      let k = a[i], v = a[i+1], cb, l0 = l;
+      let k = a[i], v = a[i+1], cb, l0 = l, b0 = bs;
       // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
       while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0];
       l = x => x === k ? cb : l0(x); // update store
-      bs.push(l => cb = ev(v)(l)); // push bind function
+      bs = l => (b0(l), (cb = ev(v)(l)));
     }
 
     // map eval fold apply

@@ -4,8 +4,8 @@ bounce_binary=gwen.b.bin
 prelude=prelude.gw
 tests=$(sort $(wildcard test/*.gw))
 
-test_all: test test_bounce
-test: $(optimized_binary)
+test: test_optimized test_bounce
+test_optimized: $(optimized_binary)
 	@echo '[optimized]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
 test_bounce: $(bounce_binary)
@@ -54,6 +54,8 @@ source_files=$(source_binary) $(source_static_library)\
 all: $(source_files)
 $(source_static_library): gwen.o
 	ar rcs $@ $<
+	strip --strip-unneeded $@
+	ranlib $@
 $(source_manpage): gwen.1.md
 	pandoc -s -t man -o $@ $<
 
@@ -124,6 +126,6 @@ flame: flamegraph.svg
 repl: $(optimized_binary) $(prelude)
 	rlwrap ./$(optimized_binary) -i $(prelude)
 
-.PHONY: test_all test_optimized test_bounce\
+.PHONY: test test_optimized test_bounce test_js\
 	install uninstall\
  	sloc bits valg perf bench flame disasm repl all
