@@ -12,8 +12,8 @@ const gwen_eval = (() => {
     sepBy = (p, l) => (s, y, n) => cat(p, opt(cat(l, sepBy(p, l))))(s, y, n),
     opt = (a) => (s, y) => a(s, y, _ => y(s, [])),
     rep = (a) => (s, y) => opt(cat(a, rep(a)))(s, y),
-    atom = pmap(re(/^[a-zA-Z0-9_+\\:,`*?<>=/%-]+/), a => a.map(s => (i => ''+(i)==s?i:intern(s))(parseFloat((s))))),
-    ws = drop(re(/^[ \t\n]*(;[^\n]*)?/)),
+    atom = pmap(re(/^[a-zA-Z0-9_+~\\:,`*.?<>=/%-]+/), a => a.map(s => (i => ''+(i)==s?i:intern(s))(parseFloat((s))))),
+    ws = drop(re(/^([ \t\n]*|;[^\r]*)*/)),
     list = pmap(cat(drop(lit("(")), cat(ws, cat((s,y,n)=>sepBy(alt(atom, list), ws)(s,y,n), cat(ws, drop(lit(")")))))), x => [x]),
     expr = (s, y, n) => alt(atom, list)(s, y, n),
     exprs = cat(ws, cat(sepBy(expr, ws), ws)),
@@ -22,6 +22,7 @@ const gwen_eval = (() => {
 
   class Symbol { constructor(nom) { this.nom = nom; } }
   const
+    { isArray } = Array,
     symbols = {},
     intern = str => (sym => sym ? sym : (symbols[str] = new Symbol(str)))(symbols[str]),
     [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(intern),
@@ -29,6 +30,8 @@ const gwen_eval = (() => {
     store = (k, v, l) => x => x === k ? v : l(x),
     G = (() =>{
       const aa = [
+        ["assert", a => { if (a) return a; throw 'assertion failed'; }],
+        [".", a => (console.log(a), a)],
         ["+", a => b => a + b],
         ["-", a => b => a - b],
         ["*", a => b => a * b],
@@ -47,35 +50,48 @@ const gwen_eval = (() => {
     })(),
 
     g_sprint = x => {
-      if (x instanceof Symbol) return x.nom;
+      if (x instanceof Symbol) return x.nom||'#symbol';
       if (Array.isArray(x)) {
         let len = 0, s = '(';
         for (let i = 0; i < x.length; i++, len++)
           s += (len ? ' ':'') + g_sprint(x[i]);
         return s + ')';
       }
+      if (typeof(x)==='function') return '#function';
       return ''+x;
     },
+
     ev = x => l => {
       if (x instanceof Symbol) return l(x);
       if (!Array.isArray(x)) return x;
       if (x.length == 0) return 0;
       const [x0, ...a] = x;
       if (x0 == Quote) return a[0];
-      if (x0 == Begin) return a.reduce((_, x) => ev(x)(l), 0);
-      if (x0 == Lambda) return a.slice(0, -1).reduceRight((f, arg) => l => x => f(store(arg, x, l)), ev(a[a.length-1]))(l);
-      if (x0 == Cond) return !a.length ? 0 : a.length == 1 ? ev(a[0])(l) : (ev(a[0])(l) ? ev(a[1]) : ev([Cond, ...a.slice(2)]))(l);
+      if (x0 == Begin) return (
+        a.reduce((_, x) => ev(x)(l), 0));
+      if (x0 == Lambda) return (
+        a.slice(0, -1).reduceRight(
+          (f, arg) => l => x => f(store(arg, x, l)),
+          ev(a[a.length-1])
+        )(l));
+      if (x0 == Cond) return (
+        a.length == 0 ? 0 :
+        a.length == 1 ? ev(a[0])(l) :
+        ev(a[0])(l)   ? ev(a[1])(l) :
+                        ev([Cond, ...a.slice(2)])(l));
       if (x0 == Define) {
         if (a.length == 0) return 0;
         if (a.length == 1) return ev(a[0])(l);
-        let [k, v] = a, q = x => x === k ? b : l(x), b;
-        while (Array.isArray(k)) {
-          const k0 = k[0];
-          v = [Lambda].concat(k.slice(1)).concat([v]);
-          k = k0;
+        if (a.length % 2 == 0) a.push(a[a.length-2]);
+        const bind = (d, qq) => {
+          if (d.length < 2) return qq.forEach(x => x(l)), ev(d[0])(l);
+          let b, [k, v, ...e] = d, q = l;
+          while (isArray(k)) v = [Lambda].concat(k.slice(1)).concat([v]), k = k[0];
+          l = x => x === k ? b : q(x);
+          qq.push(l => b = ev(v)(l));
+          return bind(e, qq);
         }
-        b = ev(v)(q);
-        return ev([Define, ...a.slice(2)])(q);
+        return bind(a, []);
       }
       return x.map(x => ev(x)(l)).reduce((f, x) => typeof(f)==='function'?f(x):f);
     };
@@ -97,7 +113,7 @@ else if (typeof process != 'undefined') {
   const ev_wrap = s => {
     let ok = false;
     try {
-      ok = '0' != gwen_eval(`(: assert (\\ x x) ${s.toString()})`);
+      ok = '0' != gwen_eval(s.toString());
     } catch (e) {
       console.error(e);
     }

@@ -13,7 +13,10 @@ test_bounce: $(bounce_binary)
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
 
 test_js:
-	node gwen.js test/heron.gw test/church.gw test/fib.gw
+	node gwen.js\
+	 	test/heron.gw\
+	 	test/church.gw\
+	 	test/closure.gw
 
 
 #build
