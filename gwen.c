@@ -406,6 +406,8 @@ static NoInline gwen_word read_atom(gwen_core f, gwen_file i, int c) {
   char *e; long n = strtol(a->text, &e, 0);
   return *e == 0 ? putnum(n) : (gwen_word) intern(f, a); }
 
+// end of parser
+
 static Vm(prc) {
   Ip = (thread) Sp[1];
   int c = getnum(Sp[1] = Sp[0]);

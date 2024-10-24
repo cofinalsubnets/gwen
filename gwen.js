@@ -1,24 +1,18 @@
 const gwen_eval = (() => {
   const { isArray } = Array,
-    pmap = (p, f) => (s, y, n) => p(s, (s, x) => y(s, f(x)), n),
+    pmap = (f, p) => (s, y, n) => p(s, (s, x) => y(s, f(x)), n),
     drop = a => (s, y, n) => a(s, (s, _) => y(s, []), n),
-    re = r => (s, y, n) => {
-      const m = s.match(r);
-      return m ? y(s.slice(m[0].length), [m[0]]) : n(s);
-    },
-    lit = (l) => (s, y, n) => s.startsWith(l) ? y(s.slice(l.length), [l]) : n(s),
+    re = r => (s, y, n) => (m => m ? y(s.slice(m[0].length), [m[0]]) : n(s))(s.match(r)),
+    lit = l => (s, y, n) => s.startsWith(l) ? y(s.slice(l.length), [l]) : n(s),
     alt = (a, b) => (s, y, n) => a(s, y, _ => b(s, y, n)),
     cat = (a, b) => (s, y, n) => a(s, (s, p1) => b(s, (s, p2) => y(s, p1.concat(p2)), n), n),
-    sepBy = (p, l) => (s, y, n) => cat(p, opt(cat(l, sepBy(p, l))))(s, y, n),
     opt = (a) => (s, y) => a(s, y, _ => y(s, [])),
-    rep = (a) => (s, y) => opt(cat(a, rep(a)))(s, y),
-    atom = pmap(re(/^[a-zA-Z0-9_+~\\:,`*.?<>=/%-]+/), a => a.map(s => (i => ''+(i)==s?i:intern(s))(parseFloat((s))))), //`
-    ws = drop(re(/^([ \t\n]*|;[^\r]*)*/)),
-    list = pmap(cat(drop(lit("(")), cat(ws, cat((s,y,n)=>sepBy(alt(atom, list), ws)(s,y,n), cat(ws, drop(lit(")")))))), x => [x]),
-    expr = (s, y, n) => alt(atom, list)(s, y, n),
-    exprs = cat(ws, cat(sepBy(expr, ws), ws)),
-    parse = (p, s) => p(s, (_, x) => x[0], _ => undefined)
-      ;
+    ws = drop(re(/^([ \t\n]*|;[^\r]*)*/)), // whitespace
+    exprs = (s, y, n) => cat(opt(ws), cat(expr, opt(exprs)))(s, y, n),
+    list = pmap(x => [x], cat(drop(lit("(")), cat(exprs, drop(lit(")"))))),
+    atom = pmap(([s])=>[(i=>''+i==s?i:intern(s))(parseFloat((s)))], re(/^[^ \r\n\t()'"]+/)), 
+    expr = alt(atom, list), // one expression
+    gwen_parse = (s) => expr(s, (_, x) => x[0], e => console.error('parse error', e));
 
   class Symbol { constructor(nom) { this.nom = nom; } }
   const intern = (sym => s => (y => y ? y : (sym[s] = new Symbol(s)))(sym[s]))({}),
@@ -98,7 +92,7 @@ const gwen_eval = (() => {
     };
 
 
-  return s => g_sprint(ev(parse(expr, s))(G));
+  return s => g_sprint(ev(gwen_parse(s))(G));
 })();
 
 if (typeof process != 'undefined') {
