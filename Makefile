@@ -16,7 +16,8 @@ test_js:
 	node gwen.js\
 	 	test/heron.gw\
 	 	test/church.gw\
-	 	test/closure.gw
+	 	test/closure.gw\
+		test/fib.gw
 
 
 #build

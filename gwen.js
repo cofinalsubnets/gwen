@@ -74,25 +74,20 @@ const gwen_eval = (() => {
           (f, arg) => l => x => f(store(arg, x, l)),
           ev(a[a.length-1])
         )(l));
-      if (x0 == Cond) return (
-        a.length == 0 ? 0 :
-        a.length == 1 ? ev(a[0])(l) :
-        ev(a[0])(l)   ? ev(a[1])(l) :
-                        ev([Cond, ...a.slice(2)])(l));
-      if (x0 == Define) {
-        if (a.length == 0) return 0;
-        if (a.length == 1) return ev(a[0])(l);
-        if (a.length % 2 == 0) a.push(a[a.length-2]);
-        const bind = (d, qq) => {
-          if (d.length < 2) return qq.forEach(x => x(l)), ev(d[0])(l);
-          let b, [k, v, ...e] = d, q = l;
-          while (isArray(k)) v = [Lambda].concat(k.slice(1)).concat([v]), k = k[0];
-          l = x => x === k ? b : q(x);
-          qq.push(l => b = ev(v)(l));
-          return bind(e, qq);
-        }
-        return bind(a, []);
+      if (x0 == Cond) for (let i = 0;; i += 2) {
+        if (i == a.length) return 0;
+        if (i == a.length - 1) return ev(a[i])(l);
+        if (ev(a[i])(l)) return ev(a[i + 1])(l);
       }
+      if (x0 == Define) for (let i = 0, bs = [];; i += 2) {
+        if (i == a.length) a.push(0);
+        if (i == a.length - 1) return bs.forEach(b=>b(l)), ev(a[i])(l);
+        let b, k = a[i], v = a[i+1], q = l;
+        while (isArray(k)) v = [Lambda].concat(k.slice(1)).concat([v]), k = k[0];
+        l = x => x === k ? b : q(x);
+        bs.push(l => b = ev(v)(l));
+      }
+      // it's not a special form just a regular function expression
       return x.map(x => ev(x)(l)).reduce((f, x) => typeof(f)==='function'?f(x):f);
     };
 
