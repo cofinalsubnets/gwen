@@ -26,26 +26,65 @@ const gwen_eval = (() => {
     symbols = {},
     intern = str => (sym => sym ? sym : (symbols[str] = new Symbol(str)))(symbols[str]),
     [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(intern),
-    empty = x => undefined,
-    store = (k, v, l) => x => x === k ? v : l(x),
-    G = (() =>{
-      const aa = [
-        ["assert", a => { if (a) return a; throw 'assertion failed'; }],
-        [".", a => (console.log(a), a)],
-        ["+", a => b => a + b],
-        ["-", a => b => a - b],
-        ["*", a => b => a * b],
-        ["/", a => b => a / b],
-        ["%", a => b => a % b],
-        ["=", a => b => a===b?1:0],
-        ["<", a => b => a<b?1:0],
-        ["<=", a => b => a<=b?1:0],
-        [">=", a=>b=>a>=b?1:0],
-        [">", a=>b=>a>b?1:0],
-        ["X", a=>b=>[a].concat(Array.isArray(b)?b:[])],
-        ["A", a=>Array.isArray(a)?a[0]:a],
-        ["B", a=>!Array.isArray(a)||a.length<2?0:a.slice(1)],
-      ];
+    ev = x => l => {
+      if (x instanceof Symbol) return l(x);
+      if (!isArray(x)) return x;
+      if (x.length == 0) return 0;
+      const [x0, ...a] = x;
+      // examine the first item to see if it's a special form
+      if (x0 == Quote) return a[0];
+      if (x0 == Begin) return a.reduce((_, x) => ev(x)(l), 0);
+      if (x0 == Lambda) return a.slice(0, -1).reduceRight(
+        (f, arg) => l => x => f(y => y === arg ? x : l(y)),
+        ev(a[a.length-1])
+      )(l);
+
+      if (x0 == Cond) for (let i = 0;; i += 2) {
+        if (i == a.length) return 0; // no default case => 0
+        if (i == a.length - 1) return ev(a[i])(l); // default case
+        if (ev(a[i])(l)) return ev(a[i + 1])(l); // conditional branch
+      }
+
+      if (x0 == Define) for (let i = 0, bs = [];; i += 2) {
+        if (i == a.length) a.push(0); // no inner expression => 0
+        // last expression, call bindings and eval
+        if (i == a.length - 1) return bs.forEach(b=>b(l)), ev(a[i])(l);
+        // key, value, closure binding, current store
+        let k = a[i], v = a[i+1], cb, l0 = l;
+        // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
+        while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0];
+        l = x => x === k ? cb : l0(x); // update store
+        bs.push(l => cb = ev(v)(l)); // push bind function
+      }
+
+      // map eval fold apply
+      return x.map(x => ev(x)(l)).reduce(
+        (f, x) => typeof(f) === 'function' ? f(x) : f
+      );
+    };
+
+  const
+    G = (() => {
+      const
+        empty = x => undefined,
+        store = (k, v, l) => x => x === k ? v : l(x),
+        aa = [
+          ["assert", a => { if (a) return a; throw 'assertion failed'; }],
+          [".", a => (console.log(a), a)],
+          ["+", a => b => a + b],
+          ["-", a => b => a - b],
+          ["*", a => b => a * b],
+          ["/", a => b => a / b],
+          ["%", a => b => a % b],
+          ["=", a => b => a===b?1:0],
+          ["<", a => b => a<b?1:0],
+          ["<=", a => b => a<=b?1:0],
+          [">=", a=>b=>a>=b?1:0],
+          [">", a=>b=>a>b?1:0],
+          ["X", a=>b=>[a].concat(Array.isArray(b)?b:[])],
+          ["A", a=>Array.isArray(a)?a[0]:a],
+          ["B", a=>!Array.isArray(a)||a.length<2?0:a.slice(1)],
+        ];
       return aa.reduce((s, [k, v]) => store(intern(k), v, s), empty);
     })(),
 
@@ -59,37 +98,8 @@ const gwen_eval = (() => {
       }
       if (typeof(x)==='function') return '#function';
       return ''+x;
-    },
-
-    ev = x => l => {
-      if (x instanceof Symbol) return l(x);
-      if (!Array.isArray(x)) return x;
-      if (x.length == 0) return 0;
-      const [x0, ...a] = x;
-      if (x0 == Quote) return a[0];
-      if (x0 == Begin) return (
-        a.reduce((_, x) => ev(x)(l), 0));
-      if (x0 == Lambda) return (
-        a.slice(0, -1).reduceRight(
-          (f, arg) => l => x => f(store(arg, x, l)),
-          ev(a[a.length-1])
-        )(l));
-      if (x0 == Cond) for (let i = 0;; i += 2) {
-        if (i == a.length) return 0;
-        if (i == a.length - 1) return ev(a[i])(l);
-        if (ev(a[i])(l)) return ev(a[i + 1])(l);
-      }
-      if (x0 == Define) for (let i = 0, bs = [];; i += 2) {
-        if (i == a.length) a.push(0);
-        if (i == a.length - 1) return bs.forEach(b=>b(l)), ev(a[i])(l);
-        let b, k = a[i], v = a[i+1], q = l;
-        while (isArray(k)) v = [Lambda].concat(k.slice(1)).concat([v]), k = k[0];
-        l = x => x === k ? b : q(x);
-        bs.push(l => b = ev(v)(l));
-      }
-      // it's not a special form just a regular function expression
-      return x.map(x => ev(x)(l)).reduce((f, x) => typeof(f)==='function'?f(x):f);
     };
+
 
   return s => g_sprint(ev(parse(expr, s))(G));
 })();
