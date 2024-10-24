@@ -6,15 +6,29 @@
     <title>gwen.js demo</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="stylesheet" href="/style.css">
+    <style>
+      table { border: 1px solid black; border-collapse: collapse; }
+      td, th { border: 1px solid black; padding: 0.5em;}
+      textarea { margin-top: 1em; margin-bottom: 1em; }
+    </style>
     <script src='gwen.js'></script>
-<style>
-table { border: 1px solid black; border-collapse: collapse; }
-td, th { border: 1px solid black; padding: 0.5em;}
-</style>
+    <script>
+      window.addEventListener('load', () => {
+        const input = document.getElementById('input'),
+              button = document.getElementById('eval');
+        button.addEventListener('click', () => {
+          try {
+            alert(gwen_eval(input.value));
+          } catch (e) {
+            alert(e);
+          }
+        });
+      });
+    </script>
   </head>
   <body>
     <h1>gwen.js demo</h1>
-    <p>type an expression in the text box below and press enter...</p>
+    <p>type an expression in the text box below and press eval...</p>
     <p>or call <code>gwen_eval</code> with a string in the javascript console</p>
     <p>there are five special forms that are pretty close to their scheme counterparts:</p>
     <table>
@@ -29,7 +43,9 @@ td, th { border: 1px solid black; padding: 0.5em;}
         <tr><td><code>,</code></td><td><code>begin</code></td></tr>
       </tbody>
     </table>
-    <p>try <code>(: (fib n) (? (&lt; n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 20))</code></p>
-    <input type='text' id='cmdline'></input>
+    <textarea type='text' rows=6 cols=60 id='input'>
+      (: (fib n) (? (&lt; n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 20))
+    </textarea>
+    <div><button id='eval'>eval</button></button>
   </body>
 </html>

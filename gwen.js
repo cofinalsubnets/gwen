@@ -12,7 +12,7 @@ const gwen_eval = (() => {
     sepBy = (p, l) => (s, y, n) => cat(p, opt(cat(l, sepBy(p, l))))(s, y, n),
     opt = (a) => (s, y) => a(s, y, _ => y(s, [])),
     rep = (a) => (s, y) => opt(cat(a, rep(a)))(s, y),
-    atom = pmap(re(/^[a-zA-Z0-9_+~\\:,`*.?<>=/%-]+/), a => a.map(s => (i => ''+(i)==s?i:intern(s))(parseFloat((s))))),
+    atom = pmap(re(/^[a-zA-Z0-9_+~\\:,`*.?<>=/%-]+/), a => a.map(s => (i => ''+(i)==s?i:intern(s))(parseFloat((s))))), //`
     ws = drop(re(/^([ \t\n]*|;[^\r]*)*/)),
     list = pmap(cat(drop(lit("(")), cat(ws, cat((s,y,n)=>sepBy(alt(atom, list), ws)(s,y,n), cat(ws, drop(lit(")")))))), x => [x]),
     expr = (s, y, n) => alt(atom, list)(s, y, n),
@@ -101,17 +101,7 @@ const gwen_eval = (() => {
   return s => g_sprint(ev(parse(expr, s))(G));
 })();
 
-if (typeof window != 'undefined') window.addEventListener('load', () => {
-  const cmdline = document.getElementById('cmdline');
-  cmdline.addEventListener('change', ({target:{value}}) => {
-    try {
-      alert(gwen_eval(value));
-    } catch (e) {
-      alert(e);
-    }
-  });
-});
-else if (typeof process != 'undefined') {
+if (typeof process != 'undefined') {
   const ev_wrap = s => {
     let ok = false;
     try {
