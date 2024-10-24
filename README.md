@@ -1,11 +1,11 @@
 # gwen lisp
 
-gwen is a like simplified scheme with less words and parentheses.
+gwen is a like simplified scheme with less words and parentheses,
 however unlike scheme and other lisp dialects, every value acts
-as a unary function. for functions this is done by currying like
-in haskell. other objects are interpreted as their own constant
-functions. this expands the range of evaluable expressions in
-useful ways while also simplifying the implementation.
+as a one argument function. for functions this is done by currying
+like in haskell. other objects are interpreted as their own constant
+functions. this expands the range of evaluable expressions and
+simplifies the eval function.
 
 ## 
 
@@ -47,4 +47,3 @@ in conditionals only one value is false, `0`. `()` and `#f` are not distinct val
    (assert (= 420
     (mul two (mul five (mul six seven)) (+ 1) 0))))
 ```
-
