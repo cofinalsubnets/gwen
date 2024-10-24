@@ -1,12 +1,13 @@
 # gwen lisp
 
-gwen is a lisp dialect. notable features include
+gwen is a lisp dialect. features include
 
 - lexical scope (like scheme)
 - all functions curried (like haskell)
 - no variadic functions (can be simulated with macros)
 - generalized apply procedure (interprets data as constant functions)
 - nil = 0
+
 
 ## example program
 
