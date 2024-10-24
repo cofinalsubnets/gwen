@@ -1,5 +1,5 @@
 const gwen_eval = (() => {
-  const
+  const { isArray } = Array,
     pmap = (p, f) => (s, y, n) => p(s, (s, x) => y(s, f(x)), n),
     drop = a => (s, y, n) => a(s, (s, _) => y(s, []), n),
     re = r => (s, y, n) => {
@@ -21,8 +21,7 @@ const gwen_eval = (() => {
       ;
 
   class Symbol { constructor(nom) { this.nom = nom; } }
-  const { isArray } = Array,
-        intern = (sym => s => (y => y ? y : (sym[s] = new Symbol(s)))(sym[s]))({}),
+  const intern = (sym => s => (y => y ? y : (sym[s] = new Symbol(s)))(sym[s]))({}),
         [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(intern);
   const ev = x => l => {
     if (x instanceof Symbol) return l(x);
