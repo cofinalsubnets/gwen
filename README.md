@@ -1,11 +1,10 @@
 # gwen lisp
 
-gwen is a like simplified scheme with less words and parentheses,
-however unlike scheme and other lisp dialects, every value acts
-as a one argument function. for functions this is done by currying
-like in haskell. other objects are interpreted as their own constant
-functions. this expands the range of evaluable expressions and
-simplifies the eval function.
+gwen is a like simplified version of scheme with less words and
+parentheses, however unlike scheme and other lisp dialects, every
+value acts as a one argument function. for functions this is done
+by currying like in haskell. other objects are interpreted as their
+own constant functions.
 
 ## 
 
@@ -22,13 +21,13 @@ which have similar scheme counterparts.
 
 the internal syntax of some forms is simplified compared to scheme.
 
-|  scheme  | gwen |
-|----------|------|
-| `(cond (a b) (c d) (#t e))`   | `(? a b c d e)`  |
-| `(let* ((a b) (c d)) e)`   | `(: a b c d e)`  |
-| `(lambda (a b) c)` | <code>(&#92; a b c)</code> |
+|  scheme                     | gwen             |
+|-----------------------------|------------------|
+| `(cond (a b) (c d) (#t e))` | `(? a b c d e)`  |
+| `(let* ((a b) (c d)) e)`    | `(: a b c d e)`  |
+| `(lambda (a b) c)`          | <code>(&#92; a b c)</code> |
 
-in conditionals only one value is false, `0`. `()` and `#f` are not distinct values.
+in conditionals only one value is false, `0`.
 
 ## example program
 
