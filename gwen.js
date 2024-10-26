@@ -2,8 +2,26 @@ const gwen = (() => {
   const
     { isArray } = Array,
     [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(Symbol.for),
+    // global environment
+    G = (g => x => g[x])([
+        ["assert", a => { if (a) return a; throw 'assertion failed'; }],
+        [".", a => (console.log(a), a)],
+        ["+", a => b => a + b],
+        ["-", a => b => a - b],
+        ["*", a => b => a * b],
+        ["/", a => b => a / b],
+        ["%", a => b => a % b],
+        ["=", a => b => a===b?1:0],
+        ["<", a => b => a<b?1:0],
+        ["<=", a => b => a<=b?1:0],
+        [">=", a=>b=>a>=b?1:0],
+        [">", a=>b=>a>b?1:0],
+        ["X", a=>b=>[a].concat(isArray(b)?b:[])],
+        ["A", a=>isArray(a)?a[0]:a],
+        ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
+      ].reduce((g, [k, v]) => ((g[Symbol.for(k)] = v), g)), {}),
 
-    // parser combinators
+    // read
     pmap = (f, p) => (s, y, n) => p(s, (s, x) => y(s, f(x)), n),
     drop = a => (s, y, n) => a(s, (s, _) => y(s, []), n),
     re = r => (s, y, n) => (m => m ? y(s.slice(m[0].length), [m[0]]) : n(s))(s.match(r)),
@@ -16,9 +34,9 @@ const gwen = (() => {
     list = pmap(x => [x], cat(drop(lit("(")), cat(exprs, drop(lit(")"))))),
     atom = pmap(([s])=>[(i=>''+i==s?i:Symbol.for(s))(parseFloat((s)))], re(/^[^ \r\n\t()'"]+/)), 
     expr = alt(atom, list),
-    // parse one expression from a string
     gwen_read = (s) => expr(s, (_, x) => x[0], e => console.error('parse error', e)),
 
+    // eval
     ev = x => l => {
       if (typeof(x) === 'symbol') return l(x);
       if (!isArray(x)) return x;
@@ -56,24 +74,7 @@ const gwen = (() => {
       );
     },
 
-    G = (g => g.get.bind(g))([
-        ["assert", a => { if (a) return a; throw 'assertion failed'; }],
-        [".", a => (console.log(a), a)],
-        ["+", a => b => a + b],
-        ["-", a => b => a - b],
-        ["*", a => b => a * b],
-        ["/", a => b => a / b],
-        ["%", a => b => a % b],
-        ["=", a => b => a===b?1:0],
-        ["<", a => b => a<b?1:0],
-        ["<=", a => b => a<=b?1:0],
-        [">=", a=>b=>a>=b?1:0],
-        [">", a=>b=>a>b?1:0],
-        ["X", a=>b=>[a].concat(isArray(b)?b:[])],
-        ["A", a=>isArray(a)?a[0]:a],
-        ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
-      ].reduce((g, [k, v]) => (g.set(Symbol.for(k), v), g), new Map())),
-
+    // print
     gwen_show = x => {
       if (isArray(x)) return `(${x.map(gwen_show).join(' ')})`;
       switch (typeof(x)) {
@@ -83,7 +84,6 @@ const gwen = (() => {
       }
     };
 
-
   return {
     eval: x => ev(x)(G),
     read: gwen_read,
@@ -91,22 +91,4 @@ const gwen = (() => {
   }
 })();
 
-if (typeof process != 'undefined') {
-  const ev_wrap = s => {
-    const { show, eval, read } = gwen;
-    let ok = false;
-    try {
-      ok = eval(read(s.toString())) !== 0;
-    } catch (e) {
-      console.error(e);
-    }
-    return ok;
-  }
-  const fs = require('node:fs');
-  const files = process.argv.slice(2);
-  for (const file of files)
-    if (!ev_wrap(fs.readFileSync(file)))
-      console.error(`[gwen.js] ${file}: ERROR`);
-    else
-      console.log(`[gwen.js] ${file}: ok`);
-}
+if (typeof(module) != 'undefined') module.exports = gwen;
