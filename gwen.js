@@ -56,37 +56,26 @@ const gwen = (() => {
       );
     },
 
-    G = (() => {
-      const
-        empty = x => undefined,
-        store = (k, v, l) => x => x === k ? v : l(x),
-        aa = [
-          ["assert", a => { if (a) return a; throw 'assertion failed'; }],
-          [".", a => (console.log(a), a)],
-          ["+", a => b => a + b],
-          ["-", a => b => a - b],
-          ["*", a => b => a * b],
-          ["/", a => b => a / b],
-          ["%", a => b => a % b],
-          ["=", a => b => a===b?1:0],
-          ["<", a => b => a<b?1:0],
-          ["<=", a => b => a<=b?1:0],
-          [">=", a=>b=>a>=b?1:0],
-          [">", a=>b=>a>b?1:0],
-          ["X", a=>b=>[a].concat(Array.isArray(b)?b:[])],
-          ["A", a=>Array.isArray(a)?a[0]:a],
-          ["B", a=>!Array.isArray(a)||a.length<2?0:a.slice(1)],
-        ];
-      return aa.reduce((s, [k, v]) => store(Symbol.for(k), v, s), empty);
-    })(),
+    G = (g => g.get.bind(g))([
+        ["assert", a => { if (a) return a; throw 'assertion failed'; }],
+        [".", a => (console.log(a), a)],
+        ["+", a => b => a + b],
+        ["-", a => b => a - b],
+        ["*", a => b => a * b],
+        ["/", a => b => a / b],
+        ["%", a => b => a % b],
+        ["=", a => b => a===b?1:0],
+        ["<", a => b => a<b?1:0],
+        ["<=", a => b => a<=b?1:0],
+        [">=", a=>b=>a>=b?1:0],
+        [">", a=>b=>a>b?1:0],
+        ["X", a=>b=>[a].concat(isArray(b)?b:[])],
+        ["A", a=>isArray(a)?a[0]:a],
+        ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
+      ].reduce((g, [k, v]) => (g.set(Symbol.for(k), v), g), new Map())),
 
     gwen_show = x => {
-      if (Array.isArray(x)) {
-        let len = 0, s = '(';
-        for (let i = 0; i < x.length; i++, len++)
-          s += (len ? ' ':'') + g_sprint(x[i]);
-        return s + ')';
-      }
+      if (isArray(x)) return `(${x.map(gwen_show).join(' ')})`;
       switch (typeof(x)) {
         case 'symbol': return Symbol.keyFor(x) || '#symbol';
         case 'function': return `#\\${x.name}`;
