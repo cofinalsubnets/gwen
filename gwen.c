@@ -301,29 +301,20 @@ static gwen_word pushs(gwen_core f, gwen_size m, ...) {
   va_end(xs);
   return r; }
 
-static gwen_string new_buffer(gwen_core f) {
-  string s = cells(f, Width(struct gwen_string) + 1);
-  return s ? ini_str(s, sizeof(gwen_word)) : s; }
-
-static NoInline gwen_string grow_buffer(gwen_core f, gwen_string s) {
-  gwen_string t; gwen_size len = s->len;
-  avec(f, s, t = cells(f, Width(struct gwen_string) + 2 * b2w(len)));
-  if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
-  return t; }
-
+////
+/// " the parser "
+//
+//
 // get the next significant character from the stream
-static NoInline int read_char(gwen_core f, gwen_file i) {
+static int read_char(gwen_core f, gwen_file i) {
   for (int c;;) switch (c = getc(i)) {
     default: return c;
     case '#': case ';': while (!feof(i) && (c = getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-static gwen_word read_str_lit(gwen_core, gwen_file), read_atom(gwen_core, gwen_file, int);
+static gwen_word read_str_lit(gwen_core, gwen_file), read_atom(gwen_core, gwen_file);
 static gwen_status reads(gwen_core, gwen_file);
 
-////
-/// " the parser "
-//
 static gwen_status enquote(gwen_core f) {
   pair w = pairof(f, f->sp[0], nil);
   if (!w) return Oom;
@@ -335,76 +326,67 @@ static gwen_status enquote(gwen_core f) {
   f->sp[0] = (gwen_word) w;
   return Ok; }
 
-static gwen_status gwen_read1c(gwen_core f, gwen_file i, int c) {
+gwen_status gwen_read1f(gwen_core f, gwen_file i) {
+  int c = read_char(f, i);
   if (feof(i)) return Eof;
   gwen_word x; switch (c) {
     case '\'': return (c = gwen_read1f(f, i)) == Ok ? enquote(f) : c;
     case '(': return reads(f, i);
     case ')': x = nil; break;
     case '"': x = read_str_lit(f, i); break;
-    default: x = read_atom(f, i, c); }
+    default: ungetc(c, i), x = read_atom(f, i); }
   return x && pushs(f, 1, x) ? Ok : Oom; }
 
-gwen_status gwen_read1f(gwen_core f, gwen_file i) {
-  return gwen_read1c(f, i, read_char(f, i)); }
-
 static gwen_status reads(gwen_core f, gwen_file i) {
-  gwen_word c;
-  if (feof(i) || (c = read_char(f, i)) == ')') unnest:
-    return pushs(f, 1, nil) ? Ok : Oom;
-  c = gwen_read1c(f, i, c);
-  if (c == Eof) goto unnest;
-  if (c != Ok) return c;
-  c = reads(f, i);
-  if (c != Ok) return c;
-  c = (gwen_word) pairof(f, f->sp[1], f->sp[0]);
-  if (!c) return Oom;
-  *++f->sp = (gwen_word) c;
+  gwen_word c = read_char(f, i);
+  if (c == EOF || c == ')') return pushs(f, 1, nil) ? Ok : Oom;
+  ungetc(c, i);
+  if ((c = gwen_read1f(f, i)) != Ok) return c;
+  if ((c = reads(f, i)) != Ok) return c;
+  if (!(c = (gwen_word) pairof(f, f->sp[1], f->sp[0]))) return Oom;
+  *++f->sp = c;
   return Ok; }
 
-static NoInline gwen_word read_str_lit(gwen_core f, gwen_file i) {
-  gwen_string o = new_buffer(f);
-  for (size_t n = 0, lim = sizeof(gwen_word); o; o = grow_buffer(f, o), lim *= 2)
-    for (int x; n < lim;) {
-      if (feof(i) || (x = fgetc(i)) == '"')
-        fin: return o->len = n, (gwen_word) o;
-      if (x == '\\') { // escapes next character
-        if (feof(i)) goto fin;
-        else x = fgetc(i); }
-      o->text[n++] = x; }
-  return 0; }
+// create and grow buffers for reading
+static gwen_string bnew(gwen_core f) {
+  string s = cells(f, Width(struct gwen_string) + 1);
+  return s ? ini_str(s, sizeof(gwen_word)) : s; }
+static gwen_string bgrow(gwen_core f, gwen_string s) {
+  gwen_string t; gwen_size len = s->len;
+  avec(f, s, t = cells(f, Width(struct gwen_string) + 2 * b2w(len)));
+  if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
+  return t; }
 
-static NoInline gwen_word read_atom(gwen_core f, gwen_file i, int c) {
-  gwen_string a = new_buffer(f);
-  if (a) a->text[0] = c;
-  for (size_t n = 1, lim = sizeof(gwen_word); a; a = grow_buffer(f, a), lim *= 2)
-    while (n < lim) {
-      if (feof(i)) { fin:
-        a->text[a->len = n] = 0; // final 0 for strtol()
-        goto out; }
-      switch (c = getc(i)) {
-        // these characters terminate an atom
-        case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
-        case '(': case ')': case '"': case '\'':
-          ungetc(c, i);
-          goto fin;
-        default: a->text[n++] = c; } } out:
-  if (!a) return 0;
-  char *e; long n = strtol(a->text, &e, 0);
-  return *e == 0 ? putnum(n) : (gwen_word) intern(f, a); }
+static gwen_word read_str_lit(gwen_core f, gwen_file i) {
+  gwen_string b = bnew(f);
+  int c; size_t n = 0;
+  for (size_t lim = sizeof(gwen_word); b; b = bgrow(f, b), lim *= 2)
+    while (n < lim) switch (c = fgetc(i)) {
+      case '\\': c = fgetc(i); if (c == EOF)
+      case '"': case EOF: goto out;
+      default: b->text[n++] = c; } out:
+  if (!b) return 0;
+  b->len = n;
+  return (gwen_word) b; }
+
+static gwen_word read_atom(gwen_core f, gwen_file i) {
+  gwen_string b = bnew(f);
+  int c; size_t n = 0;
+  for (size_t lim = sizeof(gwen_word); b; b = bgrow(f, b), lim *= 2)
+    while (n < lim) switch (c = getc(i)) {
+      case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
+      case '(': case ')': case '"': case '\'': case EOF: ungetc(c, i); goto out;
+      default: b->text[n++] = c; } out:
+  if (!b) return 0;
+  b->len = n, b->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
+  char *e; long j = strtol(b->text, &e, 0);
+  return *e == 0 ? putnum(j) : (gwen_word) intern(f, b); }
 
 // end of parser
 
-static Vm(prc) {
-  Ip = (thread) Sp[1];
-  int c = getnum(Sp[1] = Sp[0]);
-  putchar(c);
-  Sp++;
-  return GwenContinue(); }
-
-
 #define op(n, x) (Ip = (thread) Sp[n], Sp[n] = (x), Sp += n, GwenContinue())
-static Vm(display) { return transmit(f, stdout, *Sp), op(1, *Sp); }
+static Vm(prc)     { gwen_word w = *Sp; putchar(getnum(w));     return op(1, w); }
+static Vm(display) { gwen_word w = *Sp; transmit(f, stdout, w); return op(1, w); }
 
 static void transmit(gwen_core f, gwen_file out, gwen_word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
@@ -417,9 +399,7 @@ static NoInline Vm(gc, gwen_size n) {
   Unpack(f);
   return ok ? GwenContinue() : Oom; }
 
-static void *bump(gwen_core f, size_t n) {
-  void *x = f->hp; return f->hp += n, x; }
-
+static void *bump(gwen_core f, size_t n) { void *x = f->hp; return f->hp += n, x; }
 static void *cells(gwen_core f, size_t n) { return
   n <= avail(f) || gwen_please(f, n) ? bump(f, n) : 0; }
 

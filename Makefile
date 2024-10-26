@@ -125,7 +125,9 @@ flame: flamegraph.svg
 	xdg-open $<
 repl: $(optimized_binary) $(prelude)
 	rlwrap ./$(optimized_binary) -i $(prelude)
+serve:
+	darkhttpd .
 
 .PHONY: test test_optimized test_bounce test_js\
-	install uninstall\
+	install uninstall serve\
  	sloc bits valg perf bench flame disasm repl all

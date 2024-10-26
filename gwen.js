@@ -10,15 +10,13 @@ const gwen_eval = (() => {
     ws = drop(re(/^([ \t\n]*|;[^\r]*)*/)), // whitespace
     exprs = (s, y, n) => cat(opt(ws), cat(expr, opt(exprs)))(s, y, n),
     list = pmap(x => [x], cat(drop(lit("(")), cat(exprs, drop(lit(")"))))),
-    atom = pmap(([s])=>[(i=>''+i==s?i:intern(s))(parseFloat((s)))], re(/^[^ \r\n\t()'"]+/)), 
+    atom = pmap(([s])=>[(i=>''+i==s?i:Symbol.for(s))(parseFloat((s)))], re(/^[^ \r\n\t()'"]+/)), 
     expr = alt(atom, list), // one expression
     gwen_parse = (s) => expr(s, (_, x) => x[0], e => console.error('parse error', e));
 
-  class Symbol { constructor(nom) { this.nom = nom; } }
-  const intern = (sym => s => (y => y ? y : (sym[s] = new Symbol(s)))(sym[s]))({}),
-        [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(intern);
+  const [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(Symbol.for);
   const ev = x => l => {
-    if (x instanceof Symbol) return l(x);
+    if (typeof(x) === 'symbol') return l(x);
     if (!isArray(x)) return x;
     if (x.length == 0) return 0;
     const [x0, ...a] = x;
@@ -76,19 +74,21 @@ const gwen_eval = (() => {
           ["A", a=>Array.isArray(a)?a[0]:a],
           ["B", a=>!Array.isArray(a)||a.length<2?0:a.slice(1)],
         ];
-      return aa.reduce((s, [k, v]) => store(intern(k), v, s), empty);
+      return aa.reduce((s, [k, v]) => store(Symbol.for(k), v, s), empty);
     })(),
 
     g_sprint = x => {
-      if (x instanceof Symbol) return x.nom||'#symbol';
       if (Array.isArray(x)) {
         let len = 0, s = '(';
         for (let i = 0; i < x.length; i++, len++)
           s += (len ? ' ':'') + g_sprint(x[i]);
         return s + ')';
       }
-      if (typeof(x)==='function') return '#function';
-      return ''+x;
+      switch (typeof(x)) {
+        case 'symbol': return Symbol.keyFor(x) || '#symbol';
+        case 'function': return `#\\${x.name}`;
+        default: return '' + x;
+      }
     };
 
 
