@@ -15,10 +15,11 @@
     <script>
       window.addEventListener('load', () => {
         const input = document.getElementById('input'),
-              button = document.getElementById('eval');
+              button = document.getElementById('eval'),
+              { show, eval, read } = gwen;
         button.addEventListener('click', () => {
           try {
-            alert(gwen_eval(input.value));
+            alert(show(eval(read(input.value))));
           } catch (e) {
             alert(e);
           }
@@ -34,7 +35,6 @@
       <li><a href="https://github.com/cofinalsubnets/gwen/blob/main/gwen.js">gwen.js</a></li>
     </ul>
     <p>type an expression in the text box below and press eval...</p>
-    <p>or call <code>gwen_eval</code> with a string in the javascript console</p>
     <p>there are five special forms that are pretty close to their scheme counterparts:</p>
     <table>
       <thead>
