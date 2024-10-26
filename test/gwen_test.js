@@ -12,8 +12,16 @@ test('gwen.show', t => assert.equal(s, gwen.show(l)));
 
 const
   [Let, Assert] = [':', 'assert'].map(Symbol.for),
-  sharedTests = [ 'church', 'closure', 'heron', 'fib' ];
+  sharedTests = [ 'church', 'closure', 'heron' ];
 for (const t of sharedTests) {
   const expr = gwen.read(fs.readFileSync(`test/${t}.gw`).toString());
   test(t, x => gwen.eval([Let, Assert, assert, expr]));
 }
+
+test('fib', t => {
+  const
+    n = 20,
+    fib = n => n < 3 ? 1 : fib(n-1)+fib(n-2),
+    p = `(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib ${n}))`;
+  assert(gwen.eval(gwen.read(p)) === fib(n));
+});

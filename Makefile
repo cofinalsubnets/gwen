@@ -4,21 +4,15 @@ bounce_binary=gwen.b.bin
 prelude=prelude.gw
 tests=$(sort $(wildcard test/*.gw))
 
-test: test_optimized test_bounce
 test_optimized: $(optimized_binary)
 	@echo '[optimized]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
 test_bounce: $(bounce_binary)
 	@echo '[bouncing]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
-
 test_js:
-	node gwen.js\
-	 	test/heron.gw\
-	 	test/church.gw\
-	 	test/closure.gw\
-		test/fib.gw
-
+	npm test
+test_all: test_optimized test_bounce test_js
 
 #build
 CC ?= gcc
