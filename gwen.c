@@ -146,7 +146,6 @@ struct gwen_core {
   gwen_table dict, macro; // global environment and macros
   gwen_symbol symbols; // internal symbols
                   //
-  bool (*please)(gwen_core, gwen_size);
   // memory management
   gwen_word len, // size of each pool
             *pool, // on pool
@@ -157,7 +156,9 @@ struct gwen_core {
   } *safe;
   union { // gc state
     uintptr_t t0; // end time of last gc
-    gwen_heap cp; }; };
+    gwen_heap cp; };
+  // gc method
+  bool (*please)(gwen_core, gwen_size); };
 
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(gwen_word) == sizeof(union gwen_cell), "cell is 1 word wide");
@@ -276,6 +277,7 @@ gwen_core gwen_open(void) {
   gwen_word *pool = malloc(2 * len0 * sizeof(gwen_word));
   if (!pool) return gwen_close(f);
   f->t0 = clock();
+  f->please = gwen_please;
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
 #define Definition(a, b) gwen_define(f, a, (gwen_word) b) &&
   if (!(f->dict = new_table(f)) ||
@@ -288,7 +290,7 @@ gwen_core gwen_open(void) {
   return f; }
 
 static NoInline gwen_word pushsr(gwen_core f, gwen_size m, gwen_size n, va_list xs) {
-  if (!n) return gwen_please(f, m) ? m : n;
+  if (!n) return f->please(f, m) ? m : n;
   gwen_word x = va_arg(xs, gwen_word), y;
   avec(f, x, y = pushsr(f, m, n - 1, xs));
   return y ? *--f->sp = x : y; }
@@ -385,7 +387,7 @@ static gwen_word read_atom(gwen_core f, gwen_file i) {
 // end of parser
 
 #define op(n, x) (Ip = (thread) Sp[n], Sp[n] = (x), Sp += n, GwenContinue())
-static Vm(prc)     { gwen_word w = *Sp; putchar(getnum(w));     return op(1, w); }
+static Vm(prc)     { gwen_word w = *Sp; putc(getnum(w), stdout);     return op(1, w); }
 static Vm(display) { gwen_word w = *Sp; transmit(f, stdout, w); return op(1, w); }
 
 static void transmit(gwen_core f, gwen_file out, gwen_word x) {
@@ -395,13 +397,13 @@ static void transmit(gwen_core f, gwen_file out, gwen_word x) {
 
 static NoInline Vm(gc, gwen_size n) {
   Pack(f);
-  bool ok = gwen_please(f, n);
+  bool ok = f->please(f, n);
   Unpack(f);
   return ok ? GwenContinue() : Oom; }
 
 static void *bump(gwen_core f, size_t n) { void *x = f->hp; return f->hp += n, x; }
 static void *cells(gwen_core f, size_t n) { return
-  n <= avail(f) || gwen_please(f, n) ? bump(f, n) : 0; }
+  n <= avail(f) || f->please(f, n) ? bump(f, n) : 0; }
 
 // garbage collector
 // please : bool la size_t
@@ -569,7 +571,7 @@ static gwen_word hash_two(gwen_core v, gwen_word x) {
 static gwen_pair pairof(gwen_core f, gwen_word a, gwen_word b) {
   if (avail(f) < Width(struct gwen_pair)) {
     bool ok;
-    avec(f, a, avec(f, b, ok = gwen_please(f, Width(struct gwen_pair))));
+    avec(f, a, avec(f, b, ok = f->please(f, Width(struct gwen_pair))));
     if (!ok) return 0; }
   gwen_pair w = (pair) f->hp;
   f->hp += Width(struct gwen_pair);
@@ -703,7 +705,7 @@ static gwen_symbol intern_r(gwen_core v, gwen_string b, gwen_symbol *y) {
 static gwen_symbol intern(gwen_core f, gwen_string b) {
   if (avail(f) < Width(struct gwen_symbol)) {
     bool ok;
-    avec(f, b, ok = gwen_please(f, Width(struct gwen_symbol)));
+    avec(f, b, ok = f->please(f, Width(struct gwen_symbol)));
     if (!ok) return 0; }
   return intern_r(f, b, &f->symbols); }
 
@@ -1112,8 +1114,8 @@ static Vm(defmacro) {
   return op(2, Sp[1]); }
 
 static Vm(data) {
-  gwen_word r = (word) Ip;
-  return op(1, r); }
+  gwen_word this = (word) Ip;
+  return op(1, this); }
 
 static Vm(K) { Have1();
   *--Sp = Ip[1].x;

@@ -4,7 +4,6 @@ const gwen = (() => {
     [Quote, Lambda, Define, Cond, Begin] = ['`', '\\', ':', '?', ','].map(Symbol.for),
     // global environment
     G = (g => x => g[x])([
-        ["assert", a => { if (a) return a; throw 'assertion failed'; }],
         [".", a => (console.log(a), a)],
         ["+", a => b => a + b],
         ["-", a => b => a - b],
@@ -19,7 +18,7 @@ const gwen = (() => {
         ["X", a=>b=>[a].concat(isArray(b)?b:[])],
         ["A", a=>isArray(a)?a[0]:a],
         ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
-      ].reduce((g, [k, v]) => ((g[Symbol.for(k)] = v), g)), {}),
+      ].reduce((g, [k, v]) => ((g[Symbol.for(k)] = v), g), {})),
 
     // read
     pmap = (f, p) => (s, y, n) => p(s, (s, x) => y(s, f(x)), n),

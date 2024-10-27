@@ -25,3 +25,15 @@ test('fib', t => {
     p = `(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib ${n}))`;
   assert(gwen.eval(gwen.read(p)) === fib(n));
 });
+
+test('even/odd', t => {
+  const
+    oddp = x => !evenp(x),
+    evenp = x =>
+      gwen.eval(gwen.read(
+        `(: (even n) (? (> n 0) (odd (- n 1)) 1)
+            (odd n) (? (> n 0) (even (- n 1)) 0)
+          (even ${x}))`));
+  assert(evenp(22));
+  assert(oddp(23));
+});
