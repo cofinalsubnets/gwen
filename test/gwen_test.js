@@ -12,7 +12,9 @@ test('gwen.show', t => assert.equal(s, gwen.show(l)));
 
 const
   [Let, Assert] = [':', 'assert'].map(Symbol.for),
-  sharedTests = [ 'church', 'closure', 'heron' ];
+  sharedTests = [ 'church', 'closure', 'heron',
+    'lambda',
+    'tak' ];
 for (const t of sharedTests) {
   const expr = gwen.read(fs.readFileSync(`test/${t}.gw`).toString());
   test(t, x => gwen.eval([Let, Assert, assert, expr]));
