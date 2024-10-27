@@ -11,8 +11,7 @@ const gwen = (() => {
       if (!x.length) return l => 0;
       const [x0, ...a] = x;
       if (x0 === Quote) return l => a[0];
-      if (x0 === Begin) return x = x.map(ana),
-                               l => x.reduce((_, e) => e(l), 0);
+      if (x0 === Begin) return x.map(ana).reduce((a, b) => l => (a(l), b(l)), l => 0);
       if (x0 === Lambda) return a.slice(0, -1).reduceRight(
         (f, arg) => l => x => f(y => y === arg ? x : l(y)),
         ana(a[a.length-1])
@@ -35,10 +34,8 @@ const gwen = (() => {
         b = l => (cb = v(b0(l)), l); // new binding function calls old binding function
       }
 
-      return x.map(ana).reduce(
-        (f, x) => l => ((g,y) => typeof(g) === 'function' ? g(y) : g)(f(l), x(l)),
-        l => x => x
-      );
+      const ap = (f, x) => typeof(f) === 'function' ? f(x) : f;
+      return x.map(ana).reduce((f, x) => l => ap(f(l), x(l)), l => x => x);
     },
 
     ev = x => l => {
@@ -158,11 +155,9 @@ const gwen = (() => {
     };
 
   return {
-    eval: x=>ana(x)(global_env),
+    eval: x => ana(x)(global_env),
     read: gwen_read,
     show: gwen_show,
-    ana,
-    global_env,
   }
 })();
 
