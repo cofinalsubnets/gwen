@@ -21,7 +21,7 @@ const gwen = (() => {
         if (i === a.length) a.push(0); // no default case => 0
         if (i === a.length - 1) return f(ana(a[i])); // default case
         const ant = ana(a[i]), con = ana(a[i+1]), f0 = f;
-        f = x => l => ant(l) ? con(l) : f0(x)(l);
+        f = x => f0(l => ant(l) ? con(l) : x(l));
       }
 
       if (x0 === Let) for (let i = 0, b = l => l, m = b;; i += 2) {
