@@ -13,6 +13,7 @@ test('gwen.show', t => assert.equal(s, gwen.show(l)));
 const
   [Let, Assert] = [':', 'assert'].map(Symbol.for),
   sharedTests = [ 'church', 'closure', 'heron',
+    //'fib',
     'lambda',
     'tak' ];
 for (const t of sharedTests) {
