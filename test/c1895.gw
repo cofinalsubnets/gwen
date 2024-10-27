@@ -4,7 +4,7 @@
     x (f 0 1)
     m (- p (A x))
     n (- (B x) m)
-    (L m n k))
+    (L m n))
    p (c1895 103 110)
    l (c1895~ p)
    (, (assert (= 103 (A l)))
