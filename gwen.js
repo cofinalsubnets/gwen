@@ -156,10 +156,10 @@ const gwen = (() => {
     };
 
   return {
-    eval: x => ana(x)(global_env),
+    ana_eval: x => ana(x)(global_env),
     read: gwen_read,
     show: gwen_show,
-    ev: x => ev(x)(global_env),
+    eval: x => ev(x)(global_env),
   }
 })();
 
