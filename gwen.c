@@ -190,7 +190,7 @@ static gwen_vm display, bnot, rng, data,
    gensym, ev0,
    Xp, Np, symbolp, stringp, defmacro,
    ssub, sget, slen, scat,
-   prc,
+   prc, error,
    cons, car, cdr,
    lt, le, eq, gt, ge,
    tset, tget, tdel, tnew, tkeys, tlen,
@@ -256,6 +256,7 @@ gwen_word gwen_pop1(gwen_core f) { return pop1(f); }
   _("twop", S1(Xp)) _("X", S2(cons)) _("A", S1(car)) _("B", S1(cdr))\
   _("strp", S1(stringp)) _("symp", S1(symbolp)) _("nump", S1(Np))\
   _("sget", S2(sget)) _("ssub", S3(ssub)) _("slen", S1(slen)) _("scat", S2(scat))\
+  _("error", S1(error))\
   _(".", S1(display)) _("putc", S1(prc))\
   _("rand", S1(rng)) _("~", S1(bnot))\
   _("thd", S1(thda)) _("peek", S1(peek)) _("poke", S2(poke)) _("trim", S1(trim)) _("seek", S2(seek))\
@@ -391,6 +392,7 @@ static gwen_word read_atom(gwen_core f, gwen_file i) {
 #define op(n, x) (Ip = (thread) Sp[n], Sp[n] = (x), Sp += n, GwenContinue())
 static Vm(prc)     { gwen_word w = *Sp; putc(getnum(w), stdout);     return op(1, w); }
 static Vm(display) { gwen_word w = *Sp; transmit(f, stdout, w); return op(1, w); }
+static Vm(error) { exit(1); }
 
 static void transmit(gwen_core f, gwen_file out, gwen_word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
