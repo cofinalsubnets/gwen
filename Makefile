@@ -4,6 +4,7 @@ bounce_binary=gwen.b.bin
 prelude=prelude.gw
 tests=$(sort $(wildcard test/*.gw))
 
+test: test_all
 test_optimized: $(optimized_binary)
 	@echo '[optimized]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
@@ -13,6 +14,7 @@ test_bounce: $(bounce_binary)
 test_js:
 	npm test
 test_all: test_optimized test_bounce test_js
+.PHONY: test test_all test_optimized test_bounce test_js
 
 #build
 CC ?= gcc
@@ -92,6 +94,7 @@ $(target_c_header): $(source_c_header)
 install: $(source_files) $(target_files)
 uninstall:
 	rm -f $(target_files)
+.PHONY: install uninstall
 
 # other tasks
 #
@@ -122,6 +125,4 @@ repl: $(optimized_binary) $(prelude)
 serve:
 	darkhttpd .
 
-.PHONY: test test_optimized test_bounce test_js\
-	install uninstall serve\
- 	sloc bits valg perf bench flame disasm repl all
+.PHONY: serve sloc bits valg perf bench flame disasm repl all
