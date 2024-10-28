@@ -14,5 +14,5 @@
     (assert
      (= 2 (tlen t))
      (= 2 (llen (tkeys t))))
-    (: (table-to-list t) (foldl (\ l k (X k (X (get k) l))) 0 (tkeys t))
+    (: (table-to-list t) (foldl 0 (\ l k (X k (X (get k) l))) (tkeys t))
      (assert (= (* 2 (tlen t)) (llen (table-to-list t)))))))

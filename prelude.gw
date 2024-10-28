@@ -11,9 +11,9 @@
     (: inc (+ 1)
        dec (+ -1))
     ; list functions
-    (: (foldl f z l) (? l (foldl f (f z (A l)) (B l)) z)
-       (foldr f z l) (? l (f (A l) (foldr f z (B l))) z)
-       (map f l) (? l (X (f (A l)) (map f (B l))))
+    (: (map f l) (? l (X (f (A l)) (map f (B l))))
+       (foldl z f l) (? l (foldl (f z (A l)) f (B l)) z)
+       (foldr z f l) (? l (f (A l) (foldr z f (B l))) z)
        (filter f l) (? l (: m (filter f (B l)) (? (f (A l)) (X (A l) m) m)))
        (init l) (? (B l) (X (A l) (init (B l))))
        (last l) (? (B l) (last (B l)) (A l))
@@ -21,16 +21,16 @@
        (all f l) (? l (? (f (A l)) (all f (B l))) true)
        (any f l) (? l (? (f (A l)) true (any f (B l))))
        (append a b) (? a (X (A a) (append (B a) b)) b)
-       reverse (foldl (flip X) 0)
-       (partition p) (foldr (\ a m
+       reverse (foldl 0 (flip X))
+       (partition p) (foldr '(0) (\ a m
         (? (p a) (X (X a (A m)) (B m))
-                 (X (A m) (X a (B m))))) '(()))
+                 (X (A m) (X a (B m))))))
        (llen l) (? (twop l) (+ 1 (llen (B l)))))
     ; data constructors
     (: (iota n) (: (k m) (? (< m n) (X m (k (inc m)))) (k 0))
        (puts s) (: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l))) (f 0 (slen s))))
 
-    (:: 'L (foldr (\ a l (X X (X a (X l 0)))) 0))
+    (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
     (:: '&& (: (f l) (? l (X '? (X (A l) (X (A (B l)) (X (f (B (B l))) 0))))) f))
     (: (vprintf s l) (: len (slen s)
                         (p n l) (? (< n len)
