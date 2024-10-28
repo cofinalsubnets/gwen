@@ -1,9 +1,11 @@
 #include "gwen.h"
-#include <stdbool.h>
-#include <stdarg.h>
+#include <stdarg.h> // this is a freestanding header
+
+// these are not freestanding headers
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+
 typedef intptr_t gwen_word;
 
 // the vm assumes tail calls are optimized by the C compiler when possible.
@@ -502,7 +504,7 @@ static Vm(le) { return op(2, Sp[0] <= Sp[1] ? putnum(-1) : nil); }
 static Vm(gt) { return op(2, Sp[0] > Sp[1] ? putnum(-1) : nil); }
 static Vm(ge) { return op(2, Sp[0] >= Sp[1] ? putnum(-1) : nil);}
 static Vm(bnot) { return op(1, ~Sp[0] | 1); }
-static Vm(rng) { return op(1, putnum(random())); }
+static Vm(rng) { return op(1, putnum(rand())); }
 static Vm(pairp) { return op(1, twop(Sp[0]) ? putnum(-1) : nil); }
 static Vm(fixnump) { return op(1, nump(Sp[0]) ? putnum(-1) : nil); }
 static Vm(stringp) { return op(1, strp(Sp[0]) ? putnum(-1) : nil); }
@@ -717,7 +719,7 @@ static Vm(gensym) {
   Have(req);
   gwen_symbol y = (gwen_symbol) Hp;
   Hp += req;
-  return op(1, (gwen_word) ini_anon(y, random())); }
+  return op(1, (gwen_word) ini_anon(y, rand())); }
 
 
 // FIXME poor hashing method :(

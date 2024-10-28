@@ -17,8 +17,7 @@ test_all: test_optimized test_bounce test_js
 .PHONY: test test_all test_optimized test_bounce test_js
 
 #build
-CC ?= gcc
-CFLAGS ?= -std=gnu11 -g -O2 -Wall\
+CFLAGS ?= -std=c99 -g -O2 -Wall\
  	-Wstrict-prototypes -Wno-shift-negative-value\
 	-fno-asynchronous-unwind-tables -fno-stack-protector
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
