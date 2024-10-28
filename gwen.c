@@ -188,7 +188,7 @@ static gwen_word
   cp(gwen_core, gwen_word, gwen_word*, gwen_word*); // for recursive use by evac functions
 static gwen_vm display, bnot, rng, data,
    gensym, ev0,
-   Xp, Np, stringp, defmacro,
+   Xp, Np, symbolp, stringp, defmacro,
    ssub, sget, slen, scat,
    prc,
    cons, car, cdr,
@@ -250,16 +250,18 @@ gwen_word gwen_pop1(gwen_core f) { return pop1(f); }
 #define S2(i) ((union gwen_cell[]){{curry},{.x=putnum(2)},{i}})
 #define S3(i) ((union gwen_cell[]){{curry},{.x=putnum(3)},{i}})
 #define ini(_)\
-  _("nump", S1(Np)) _("+", S2(add)) _("-", S2(sub)) _("*", S2(mul))\
+  _("+", S2(add)) _("-", S2(sub)) _("*", S2(mul))\
   _("/", S2(quot)) _("%", S2(rem)) _("<", S2(lt)) _("<=", S2(le))\
   _("=", S2(eq)) _(">=", S2(ge)) _(">", S2(gt))\
   _("twop", S1(Xp)) _("X", S2(cons)) _("A", S1(car)) _("B", S1(cdr))\
-  _("strp", S1(stringp)) _("sget", S2(sget)) _("ssub", S3(ssub)) _("slen", S1(slen)) _("scat", S2(scat))\
+  _("strp", S1(stringp)) _("symp", S1(symbolp)) _("nump", S1(Np))\
+  _("sget", S2(sget)) _("ssub", S3(ssub)) _("slen", S1(slen)) _("scat", S2(scat))\
   _(".", S1(display)) _("putc", S1(prc))\
   _("rand", S1(rng)) _("~", S1(bnot))\
   _("thd", S1(thda)) _("peek", S1(peek)) _("poke", S2(poke)) _("trim", S1(trim)) _("seek", S2(seek))\
   _("tnew", S1(tnew)) _("tkeys", S1(tkeys)) _("tlen", S1(tlen)) _("tset", S3(tset)) _("tget", S3(tget)) _("tdel", S3(tdel))\
-  _("gensym", S1(gensym)) _("ev", S1(ev0)) _("::", S2(defmacro))
+  _("gensym", S1(gensym))\
+  _("ev", S1(ev0)) _("::", S2(defmacro))
 
 static NoInline bool gwen_define(gwen_core f, const char *k, gwen_word v) {
   if (!pushs(f, 1, v)) return false;
@@ -510,6 +512,7 @@ static Vm(rng) { return op(1, putnum(random())); }
 static Vm(Xp) { return op(1, twop(Sp[0]) ? putnum(-1) : nil); }
 static Vm(Np) { return op(1, nump(Sp[0]) ? putnum(-1) : nil); }
 static Vm(stringp) { return op(1, strp(Sp[0]) ? putnum(-1) : nil); }
+static Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
 static bool eql(gwen_core f, gwen_word a, gwen_word b) {
   if (a == b) return true;
   if (nump(a | b) ||

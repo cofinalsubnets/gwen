@@ -7,3 +7,4 @@ vgcore.*
 flamegraph.svg
 *.bin
 gwen.1
+node_modules

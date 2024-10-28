@@ -4,38 +4,57 @@ const gwen = (() => {
     // special forms, need these
     [Quote, Lambda, Let, Cond, Begin] = ['`', '\\', ':', '?', ','].map(Symbol.for),
 
-    // analyzing evaluator: expression -> environment -> expression
-    ana = x => {
-      if (typeof(x) === 'symbol') return l => l(x);
-      if (!isArray(x)) return l => x;
-      if (!x.length) return l => 0;
-      const [x0, ...a] = x;
-      if (x0 === Quote) return l => a[0];
-      if (x0 === Begin) return x.map(ana).reduce((a, b) => l => (a(l), b(l)), l => 0);
-      if (x0 === Lambda) return a.slice(0, -1).reduceRight(
+    // evaluator: expression -> environment -> expression
+    ev = x => {
+      if (typeof(x) === 'symbol') return l => l(x); // symbols get looked up
+      if (!isArray(x)) return l => x; // non-symbol non-lists get returned
+      if (!x.length) return l => 0; // empty list same as zero
+      // it's a list, examine the first item to see if special form
+      // quote returns the thing
+      if (x[0] === Quote) return l => x[1];
+      // sequence evaluates in order and returns the last value
+      if (x[0] === Begin) return x.slice(1).map(ev).reduce(
+        (a, b) => l => (a(l), b(l)),
+        l => 0
+      );
+      // lambda folds the arguments into a function of environment
+      // that returns the described function
+      if (x[0] === Lambda) return x.slice(1, -1).reduceRight(
         (f, arg) => l => x => f(y => y === arg ? x : l(y)),
-        ana(a[a.length-1])
+        ev(x[x.length-1])
       );
 
-      if (x0 === Cond) for (let i = 0, f = x => x;; i += 2) {
-        if (i === a.length) a.push(0); // no default case => 0
-        if (i === a.length - 1) return f(ana(a[i])); // default case
-        const ant = ana(a[i]), con = ana(a[i+1]), f0 = f;
+      // cond folds the branches into a function of the default expression that returns
+      // a function of environment that evaluates to one branch as you would expect
+      if (x[0] === Cond) for (let i = 1, f = x => x;; i += 2) {
+        if (i === x.length) x.push(0); // no default case => 0
+        if (i === x.length - 1) return f(ev(x[i])); // default case
+        const ant = ev(x[i]), con = ev(x[i+1]), f0 = f;
         f = x => f0(l => ant(l) ? con(l) : x(l));
       }
 
-      if (x0 === Let) for (let i = 0, b = l => l, m = b;; i += 2) {
-        if (i === a.length) a.push(0); // no inner expression => eval 0
-        if (i === a.length - 1) return x = ana(a[i]), l => x(b(m(l))); // compose and return
-        let k = a[i], v = a[i+1], cb, m0 = m, b0 = b; // key, value, closure binding, current store
+      // let folds the definitions into m, b : environment -> environment
+      // - m adds a defined variable to the given environment
+      // - b uses the environment to evaluate a definition then returns it
+      // finally they are composed with the inner expression so that all
+      // names are in scope before any definition is evaluated and then the
+      // bindings are then evaluated in order, followed by the inner
+      // expression.
+      if (x[0] === Let) for (let i = 1, b = l => l, m = b;; i += 2) {
+        if (i === x.length) x.push(0); // no inner expression => eval 0
+        if (i === x.length - 1) return x = ev(x[i]), l => x(b(m(l))); // compose and return
+        const m0 = m, b0 = b; // 
+        let k = x[i], v = x[i+1], cb; // key, value, closure binding
         while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
-        v = ana(v);
+        v = ev(v);
         m = l => x => x === k ? cb : m0(l)(x); // new store defaults to old store
         b = l => (cb = v(b0(l)), l); // new binding function calls old binding function
       }
 
+      // it is not a special form, reduce to a function that
+      // evals and applies in the given environment
       const ap = (f, x) => typeof(f) === 'function' ? f(x) : f;
-      return x.map(ana).reduce((f, x) => l => ap(f(l), x(l)), l => x => x);
+      return x.map(ev).reduce((f, x) => l => ap(f(l), x(l)), l => x => x);
     },
 
     // expression parser
@@ -100,7 +119,7 @@ const gwen = (() => {
     };
 
   return {
-    eval: x => ana(x)(global_env),
+    eval: x => ev(x)(global_env),
     read: gwen_read,
     show: gwen_show,
   }
