@@ -1,36 +1,36 @@
 (:
- eee '(: ; evaluator
+ eee '(:
   (meta-eval x) (?
    (symp x) (\ l (l x))
    (not (twop x)) (const x)
-   (: x0 (A x) a (B x) (?
-    (= x0 '`) (const (A a))
-    (= x0 ',) (foldl 0 (\ a b l (, (a l) (b l)))
-                       (map meta-eval a))
-    (= x0 '\) (foldr (meta-eval (last a))
-                     (\ a f l x (f (\ y (? (= y a) x (l y)))))
-                     (init a))
-    (= x0 '?) (cond-loop a id)
-    (= x0 ':) (let-loop a id)
-    (: y (map meta-eval x)
-     (\ l (foldl id id (map (\ x (x l)) y)))))))
+   (: x0 (car x) a (cdr x)
+    (? (= x0 '`) (const (car a))
+       (= x0 ',) (foldl 0 (\ a b l (, (a l) (b l)))
+                          (map meta-eval a))
+       (= x0 '\) (foldr (meta-eval (last a))
+                        (\ a f l x (f (\ y (? (= y a) x (l y)))))
+                        (init a))
+       (= x0 '?) (cond-loop a id)
+       (= x0 ':) (let-loop a id)
+       (: y (map meta-eval x)
+        (\ l (foldl id id (map (\ x (x l)) y)))))))
 
-  (cond-loop a f)
-   (? (nilp a) (cond-loop (X 0 0) f)
-      (nilp (B a)) (f (meta-eval (A a)))
-      (: ant (meta-eval (A a)) con (meta-eval (A (B a)))
-       (cond-loop (B (B a)) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
+  (cond-loop a f) (?
+   (nilp a) (cond-loop (cons 0 0) f)
+   (nilp (cdr a)) (f (meta-eval (car a)))
+   (: ant (meta-eval (car a)) con (meta-eval (cadr a))
+    (cond-loop (cddr a) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
 
-  (let-loop a b m)
-   (? (nilp a) (let-loop (X 0 0) b m)
-      (nilp (B a)) (meta-eval (A a) (b m))
-      (desugar (A a) (A (B a)) (\ k v
-       (: t (tnew 0) get (tget 0 t) set (tset t 0)
-        (let-loop (B (B a)) (\ l (, (set (meta-eval v (b l))) l))
-                            (\ x (? (= x k) (get 0) (m x))))))))
+  (let-loop a b m) (?
+   (nilp a) (let-loop (X 0 0) b m)
+   (nilp (cdr a)) (meta-eval (car a) (b m))
+   (desugar (car a) (cadr a) (\ k v
+    (: t (tnew 0) get (tget 0 t) set (tset t 0)
+     (let-loop (cddr a) (\ l (, (set (meta-eval v (b l))) l))
+                        (\ x (? (= x k) (get 0) (m x))))))))
 
   (desugar k v c)
-   (? (twop k) (desugar (A k) (X '\ (append (B k) (X v 0))) c)
+   (? (twop k) (desugar (car k) (cons '\ (append (cdr k) (cons v 0))) c)
                (c k v))
   ;return
   meta-eval)

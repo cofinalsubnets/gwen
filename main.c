@@ -47,7 +47,7 @@ static gwen_status run_file(gwen_core f, gwen_file in) {
   gwen_status s;
   // evaluate expressions for side effects
   while ((s = gwen_read1f(f, in)) == Ok && (s = gwen_eval(f)) == Ok)
-    gwen_pop1(f);
+    gwen_drop(f, 1);
   return s == Eof ? Ok : s; }
 
 static gwen_status gwen_repl(gwen_core f, gwen_file in, gwen_file out) {
@@ -57,7 +57,7 @@ static gwen_status gwen_repl(gwen_core f, gwen_file in, gwen_file out) {
     if (s == Ok && (s = gwen_eval(f)) == Ok)
       gwen_write1f(f, out),
       fprintf(out, "\n"),
-      gwen_pop1(f); } }
+      gwen_drop(f, 1); } }
 
 static gwen_status run(gwen_core f, char **av, bool usestdin) {
   gwen_status s = Ok;
