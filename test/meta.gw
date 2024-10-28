@@ -1,0 +1,31 @@
+(: (desugar k v c)
+ (? (twop k) (desugar (A k) (X '\ (append (B k) (X v 0))) c) (c k v)))
+(: G (tget 0 global-namespace))
+(: eee '(: (meta-eval x l) (?
+ (symp x) (l x)
+ (not (twop x)) x
+ (: x0 (A x) a (B x) (?
+  (= x0 '`) (A a)
+  (= x0 ',) (foldl (\ _ x (meta-eval x l)) 0 a)
+  (= x0 '\) ((foldr (\ a f l x (f (\ y (? (= y a) x (l y))))) (meta-eval (last a)) (init a)) l)
+  (= x0 '?) (: (loop a) (? (nilp a) a (nilp (B a)) (meta-eval (A a) l)
+                           (meta-eval (A a) l) (meta-eval (A (B a)) l)
+                           (loop (B (B a))))
+             (loop a))
+  (= x0 ':) (: (loop a b m)
+                (? (nilp a) (loop (X 0 0) b m) (nilp (B a)) (meta-eval (A a) (b m))
+                               (desugar (A a) (A (B a)) (\ k v
+                                (: t (tnew 0) get (tget 0 t) set (tset t 0)
+                                 (loop (B (B a)) (\ l (, (set (meta-eval v (b l))) l))
+                                                 (\ x (? (= x k) (get 0) (m x))))))))
+             (loop a id l))
+  (foldl (\ f x (f x)) id (map (\ x (meta-eval x l)) x))
+ ))) meta-eval))
+
+(: meta-eval (ev eee)
+   expr '((\ a b (: c (+ a 9) d (+ c b) (* c d))) 4 5)
+   (, (assert (= 234 (ev expr)))
+      (assert (= 234 (meta-eval expr G)))
+      (assert (= 234 (meta-eval eee G expr G)))
+      (assert (= 234 (meta-eval eee G eee G expr G)))
+))
