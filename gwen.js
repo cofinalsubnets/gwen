@@ -4,59 +4,6 @@ const gwen = (() => {
     // special forms, need these
     [Quote, Lambda, Let, Cond, Begin] = ['`', '\\', ':', '?', ','].map(Symbol.for),
 
-    // evaluator: expression -> environment -> expression
-    ana = x => {
-      if (typeof(x) === 'symbol') return l => l(x); // symbols get looked up
-      if (!isArray(x)) return l => x; // non-symbol non-lists get returned
-      if (!x.length) return l => 0; // empty list same as zero
-      // it's a list, examine the first item to see if special form
-      // quote returns the thing
-      if (x[0] === Quote) return l => x[1];
-      // sequence evaluates in order and returns the last value
-      if (x[0] === Begin) return x.slice(1).map(ana).reduce(
-        (a, b) => l => (a(l), b(l)),
-        l => 0
-      );
-      // lambda folds the arguments into a function of environment
-      // that returns the described function
-      if (x[0] === Lambda) return x.slice(1, -1).reduceRight(
-        (f, arg) => l => x => f(y => y === arg ? x : l(y)),
-        ana(x[x.length-1])
-      );
-
-      // cond folds the branches into a function of the default expression that returns
-      // a function of environment that evaluates to one branch as you would expect
-      if (x[0] === Cond) for (let i = 1, f = x => x;; i += 2) {
-        if (i === x.length) x.push(0); // no default case => 0
-        if (i === x.length - 1) return f(ana(x[i])); // default case
-        const ant = ana(x[i]), con = ana(x[i+1]), f0 = f;
-        f = x => f0(l => ant(l) ? con(l) : x(l));
-      }
-
-      // let folds the definitions into m, b : environment -> environment
-      // - m adds a defined variable to the given environment
-      // - b uses the environment to evaluate a definition then returns it
-      // finally they are composed with the inner expression so that all
-      // names are in scope before any definition is evaluated and then the
-      // bindings are then evaluated in order, followed by the inner
-      // expression.
-      if (x[0] === Let) for (let i = 1, b = l => l, m = b;; i += 2) {
-        if (i === x.length) x.push(0); // no inner expression => eval 0
-        if (i === x.length - 1) return x = ana(x[i]), l => x(b(m(l))); // compose and return
-        const m0 = m, b0 = b; // 
-        let k = x[i], v = x[i+1], cb; // key, value, closure binding
-        while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
-        v = ana(v);
-        m = l => x => x === k ? cb : m0(l)(x); // new store defaults to old store
-        b = l => (cb = v(b0(l)), l); // new binding function calls old binding function
-      }
-
-      // it is not a special form, reduce to a function that
-      // evals and applies in the given environment
-      const ap = (f, x) => typeof(f) === 'function' ? f(x) : f;
-      return x.map(ana).reduce((f, x) => l => ap(f(l), x(l)), l => x => x);
-    },
-
     // expression parser
     // parsing functions have type
     //   (string * (string * [any] -> S) * (string -> F) -> S + F
@@ -109,6 +56,7 @@ const gwen = (() => {
         ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
       ].reduce((g, [k, v]) => ((g[Symbol.for(k)] = v), g), {})),
 
+    // evaluator: expression -> environment -> expression
     ev = x => l => {
       // look up a symbol
       if (typeof(x) === 'symbol') return l(x);
@@ -144,6 +92,59 @@ const gwen = (() => {
       return x.map(x => ev(x)(l)).reduce(
         (f, x) => typeof(f) === 'function' ? f(x) : f
       );
+    },
+
+    // fully analyzing evaluator but not used now because there's a bug in it at the moment
+    ana = x => {
+      if (typeof(x) === 'symbol') return l => l(x); // symbols get looked up
+      if (!isArray(x)) return l => x; // non-symbol non-lists get returned
+      if (!x.length) return l => 0; // empty list same as zero
+      // it's a list, examine the first item to see if special form
+      // quote returns the thing
+      if (x[0] === Quote) return l => x[1];
+      // sequence evaluates in order and returns the last value
+      if (x[0] === Begin) return x.slice(1).map(ana).reduce(
+        (a, b) => l => (a(l), b(l)),
+        l => 0
+      );
+      // lambda folds the arguments into a function of environment
+      // that returns the described function
+      if (x[0] === Lambda) return x.slice(1, -1).reduceRight(
+        (f, arg) => l => x => f(y => y === arg ? x : l(y)),
+        ana(x[x.length-1])
+      );
+
+      // cond folds the branches into a function of the default expression that returns
+      // a function of environment that evaluates to one branch as you would expect
+      if (x[0] === Cond) for (let i = 1, f = x => x;; i += 2) {
+        if (i === x.length) x.push(0); // no default case => 0
+        if (i === x.length - 1) return f(ana(x[i])); // default case
+        const ant = ana(x[i]), con = ana(x[i+1]), f0 = f;
+        f = x => f0(l => ant(l) ? con(l) : x(l));
+      }
+
+      // let folds the definitions into m, b : environment -> environment
+      // - m adds a defined variable to the given environment
+      // - b uses the environment to evaluate a definition then returns it
+      // finally they are composed with the inner expression so that all
+      // names are in scope before any definition is evaluated and then the
+      // bindings are then evaluated in order, followed by the inner
+      // expression.
+      if (x[0] === Let) for (let i = 1, b = l => l, m = b;; i += 2) {
+        if (i === x.length) x.push(0); // no inner expression => eval 0
+        if (i === x.length - 1) return x = ana(x[i]), l => x(b(m(l))); // compose and return
+        const m0 = m, b0 = b; // 
+        let k = x[i], v = x[i+1], cb; // key, value, closure binding
+        while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
+        v = ana(v);
+        m = l => x => x === k ? cb : m0(l)(x); // new store defaults to old store
+        b = l => (cb = v(b0(l)), l); // new binding function calls old binding function
+      }
+
+      // it is not a special form, reduce to a function that
+      // evals and applies in the given environment
+      const ap = (f, x) => typeof(f) === 'function' ? f(x) : f;
+      return x.map(ana).reduce((f, x) => l => ap(f(l), x(l)), l => x => x);
     },
 
     // print function
