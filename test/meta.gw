@@ -13,13 +13,14 @@
                      (init a))
     (= x0 '?) (cond-loop a id)
     (= x0 ':) (let-loop a id)
-    ((\ x l (foldl (\ f x (f x)) id (map (\ x (x l)) x))) (map meta-eval x)))))
+    (: y (map meta-eval x)
+     (\ l (foldl id id (map (\ x (x l)) y)))))))
 
   (cond-loop a f)
    (? (nilp a) (cond-loop (X 0 0) f)
       (nilp (B a)) (f (meta-eval (A a)))
       (: ant (meta-eval (A a)) con (meta-eval (A (B a)))
-       (cond-loop (B (B a)) (\ x (f (\ l (? (ant l) (con l) (x l))))))))
+       (cond-loop (B (B a)) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
 
   (let-loop a b m)
    (? (nilp a) (let-loop (X 0 0) b m)
