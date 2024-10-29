@@ -32,9 +32,8 @@ in conditionals only one value is false, `0`.
 ## example program
 
 ```lisp
-; self evaluator test from test/meta.gw
-(:
- eee '(:
+(: ; self evaluator test from test/meta.gw
+ evr '(: ; expression for the evaluator
   (meta-eval x) (?
    (symp x) (\ l (l x))
    (not (twop x)) (const x)
@@ -57,7 +56,7 @@ in conditionals only one value is false, `0`.
     (cond-loop (cddr a) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
 
   (let-loop a b m) (?
-   (nilp a) (let-loop (X 0 0) b m)
+   (nilp a) (let-loop (cons 0 0) b m)
    (nilp (cdr a)) (meta-eval (car a) (b m))
    (desugar (car a) (cadr a) (\ k v
     (: t (tnew 0) get (tget 0 t) set (tset t 0)
@@ -69,11 +68,11 @@ in conditionals only one value is false, `0`.
                (c k v))
   ;return
   meta-eval)
- meta-eval (ev eee)
+ meta-eval (ev evr)
  expr '((\ a b (: c (+ a 9) d (+ c b) (* c d))) 4 5)
  G (tget 0 global-namespace)
  (, (assert (= 234 (ev expr)))
     (assert (= 234 (meta-eval expr G)))
-    (assert (= 234 (meta-eval eee G expr G)))
-    (assert (= 234 (meta-eval eee G eee G expr G)))))
+    (assert (= 234 (meta-eval evr G expr G)))
+    (assert (= 234 (meta-eval evr G evr G expr G)))))
 ```

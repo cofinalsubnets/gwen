@@ -123,5 +123,4 @@ repl: $(optimized_binary) $(prelude)
 	rlwrap ./$(optimized_binary) -i $(prelude)
 serve:
 	darkhttpd .
-
-.PHONY: serve sloc bits valg perf bench flame disasm repl all
+.PHONY: clean valg sloc bits disasm perf flame repl serve
