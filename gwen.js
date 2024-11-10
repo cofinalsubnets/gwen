@@ -86,35 +86,16 @@ const gwen = (() => {
         f = alt => f0(l => ant(l) ? con(l) : alt(l));
       }
 
-      if (x0 === Let) {
-        for (let i = 0;; i += 2) {
-          if (i === a.length) a.push(0); // no inner expression => eval 0
-          if (i === a.length - 1) { a[i] = ev(a[i]); break; }
-          let k = a[i], v = a[i+1]; // key, value, closure binding, current store
-          while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
-          a[i] = k, a[i+1] = ev(v);
-        }
-        return m => {
-          for (let i = 0, b = id;; i += 2) {
-            if (i === a.length - 1) return a[i](b(m)); // call b with m and eval last expression
-            let k = a[i], v = a[i+1], cb, m0 = m, b0 = b; // key, value, closure binding, current store
-            m = x => x === k ? cb : m0(x); // new store defaults to old store
-            b = l => (cb = v(b0(l)), l); // new binding function calls old binding function
-          }
-        }
+      if (x0 === Let) for (let i = 0, f = id;; i+= 2) {
+        if (i === a.length) a.push(0); // no inner expression => eval 0
+        if (i === a.length - 1) return x = ev(a[i]), l => x(f(l));
+        let f0 = f, k = a[i], v = a[i+1]; // key, value, closure binding, current store
+        while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
+        v = ev(v), f = l0 => {
+          let l1 = x => x === k ? u : l0(x), l2 = f0(l1), u = v(l2);
+          return l2;
+        };
       }
-      /*
-      if (x0 === Let)
-        for (let i = 0, b = id, m = b;; i += 2) {
-          if (i === a.length) a.push(0); // no inner expression => eval 0
-          if (i === a.length - 1) return x = ev(a[i]), l => x(b(m(l))); // call b with m and eval last expression
-          let k = a[i], v = a[i+1], cb, m0 = m, b0 = b; // key, value, closure binding, current store
-          while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
-          v = ev(v);
-          m = l => x => x === k ? cb : m0(l)(x); // new store defaults to old store
-          b = l => (cb = v(b0(l)), l); // new binding function calls old binding function
-        }
-        */
 
       return x.map(ev).reduce((f, x) => l => ap(f(l), x(l)), K(id));
     },
