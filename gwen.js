@@ -92,8 +92,8 @@ const gwen = (() => {
         let f0 = f, k = a[i], v = a[i+1]; // key, value, closure binding, current store
         while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
         v = ev(v), f = l0 => {
-          let l1 = x => x === k ? u : l0(x), l2 = f0(l1), u = v(l2);
-          return l2;
+          const l1 = f0(x => x === k ? u : l0(x)), u = v(l1);
+          return l1;
         };
       }
 
