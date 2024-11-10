@@ -22,7 +22,7 @@ test('fib', t => {
   const
     n = 20,
     fib = n => n < 3 ? 1 : fib(n-1)+fib(n-2),
-    p = `(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib ${n}))`;
+    p = `(: (fib n) (? (< n 3) 1 (: f_1 (fib (- n 1)) f_2 (fib (- n 2)) (+ f_1 f_2))) (fib ${n}))`;
   assert(gwen.eval(gwen.read(p)) === fib(n));
 });
 

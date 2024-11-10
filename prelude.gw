@@ -1,4 +1,4 @@
-(: prelude
+(: prelude-defns
   '(; list of prelude expressions to be evaluated sequentially in order
     ; aliases
     (: true -1 (nilp x) (? x 0 -1) not nilp
@@ -46,13 +46,19 @@
                               (p (inc n) l)))))
                         (p 0 l)))
     ; end of prelude definitions
-    )
-   boot '(:
-    (ev x) x ;thread compiler goes here
-    ; redefine eval
-    (tset global-namespace 'ev ev))
- (,
-   ;; can't use fold yet heheh
-   (: (f v x) (? x (f (ev (A x)) (B x)) v) (f 0 prelude))
-  ;  end of prelude
- ))
+    ))
+
+;; can't use fold yet heheh
+(: (f v x) (? x (f (ev (A x)) (B x)) v) (f 0 prelude-defns))
+; now we can use prelude functions
+(: thread-compiler '(: E 1 Get (tget 0)
+  (enscope par arg imp) (: s (tnew 0) set (tset s) (,
+   (set 'arg arg) (set 'imp imp) (set 'par par)
+   s))
+
+
+E))
+
+(tset global-namespace 'E (ev thread-compiler))
+(each (tdel global-namespace) '(prelude-defns thread-compiler))
+;  end of prelude

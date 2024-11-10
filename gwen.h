@@ -14,11 +14,12 @@ typedef struct gwen_file *gwen_file;
 
 // thanks !!
 typedef struct gwen_core *gwen_core;
-typedef enum gwen_status {
+typedef enum {
   GwenStatusEof = -1,
   GwenStatusOk = 0,
   GwenStatusOom = 1,
 } gwen_status;
+
 gwen_core gwen_open(void);
 void gwen_close(gwen_core),
   gwen_write1f(gwen_core, gwen_file);
@@ -26,4 +27,5 @@ gwen_status
   gwen_read1f(gwen_core, gwen_file),
   gwen_eval(gwen_core);
 size_t gwen_drop(gwen_core, size_t);
+
 #endif
