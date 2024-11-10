@@ -54,6 +54,11 @@ const gwen = (() => {
         ["X", a=>b=>[a].concat(isArray(b)?b:[])],
         ["A", a=>isArray(a)?a[0]:a],
         ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
+        ["tget", z=>t=>k=>t instanceof Map && t.has(k) ? t.get(k) : z],
+        ["tset", t=>k=>v=>t instanceof Map ? t.set(k, v) : v],
+        ["tnew", _=>new Map()],
+        ["tlen", t=>t instanceof Map ? t.size : 0],
+        ["tdel", z=>t=>k=>t instanceof Map && t.has(k) ? (z = t.get(k), t.delete(k), z) : z],
       ].reduce((g, [k, v]) => ((g[Symbol.for(k)] = v), g), {})),
 
     // helper functions
@@ -89,7 +94,7 @@ const gwen = (() => {
       if (x0 === Let) for (let i = 0, f = id;; i+= 2) {
         if (i === a.length) a.push(0); // no inner expression => eval 0
         if (i === a.length - 1) return x = ev(a[i]), l => x(f(l));
-        let f0 = f, k = a[i], v = a[i+1]; // key, value, closure binding, current store
+        let f0 = f, k = a[i], v = a[i+1]; // current binding function, key, value
         while (isArray(k)) v = [Lambda, ...k.slice(1), v], k = k[0]; // desugar (: (f a b) (g a b)) to (: f (\ a b (g a b)))
         v = ev(v), f = l0 => {
           const l1 = f0(x => x === k ? u : l0(x)), u = v(l1);

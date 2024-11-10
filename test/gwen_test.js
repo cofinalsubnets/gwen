@@ -26,6 +26,15 @@ test('fib', t => {
   assert(gwen.eval(gwen.read(p)) === fib(n));
 });
 
+test('sequential', t => {
+  const
+    a = 2,
+    b = a + 3,
+    c = b * 9,
+    p = '(: a 2 b (+ a 3) c (* b 9) (+ a c))';
+  assert(gwen.eval(gwen.read(p)) === a + c);
+});
+
 test('even/odd', t => {
   const
     oddp = x => !evenp(x),
