@@ -518,9 +518,11 @@ static bool eql(gwen_core f, gwen_word a, gwen_word b) {
 
 static bool not_equal(gwen_core f, gwen_word a, gwen_word b) { return false; }
 
+static void trim_thread(thread k) { ttag(k)->head = k; }
+
 static Vm(trim) {
   gwen_thread k = (gwen_thread) Sp[0];
-  ttag(k)->head = k;
+  trim_thread(k);
   return op(1, (gwen_word) k); }
 
 static Vm(seek) {
@@ -539,7 +541,8 @@ static Vm(poke) {
 static Vm(thda) {
   size_t n = getnum(Sp[0]);
   Have(n + Width(struct tag));
-  gwen_thread k = mo_ini(memset(Hp, -1, n * sizeof(gwen_word)), n);
+  gwen_thread k = mo_ini((gwen_thread) Hp, n);
+  memset(k, -1, n * sizeof(gwen_word));
   Hp += n + Width(struct tag);
   return op(1, (gwen_word) k); }
 
@@ -583,7 +586,6 @@ static Vm(cons) {
   Hp += Width(struct gwen_pair);
   return op(2, (gwen_word) w); }
 
-
 static gwen_word copy_string(gwen_core v, gwen_word x, gwen_word *p0, gwen_word *t0) {
   gwen_string src = (string) x;
   size_t len = sizeof(struct gwen_string) + src->len;
@@ -625,13 +627,18 @@ static Vm(ssub) {
   if (!strp(Sp[0])) Sp[3] = nil;
   else {
     string s = (string) Sp[0];
-    size_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
-           j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
-    i = max(i, 0), j = min(j, s->len);
-    Have(Width(struct gwen_string) + b2w(j - i));
-    gwen_string t = ini_str((string) Hp, j - i);
-    memcpy(t->text, s->text + i, j);
-    Sp[3] = (gwen_word) t; }
+    intptr_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
+             j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
+    i = max(i, 0), i = min(i, s->len);
+    j = max(j, i), j = min(j, s->len);
+    if (i == j) Sp[3] = nil;
+    else {
+      size_t req = Width(struct gwen_string) + b2w(j - i);
+      Have(req);
+      gwen_string t = ini_str((string) Hp, j - i);
+      Hp += req;
+      memcpy(t->text, s->text + i, j - i);
+      Sp[3] = (gwen_word) t; } }
   Ip = r, Sp += 3;
   return Continue(); }
 
@@ -1100,7 +1107,7 @@ static word analyze_lambda(gwen_core f, scope *c, word imps, word exp) {
   thread k = pushs(f, 3, c1ix, ret, putnum(arity)) ? construct(f, &d, m) : 0;
   if (!k) goto fail;
   if (arity > 1) (--k)->x = putnum(arity), (--k)->ap = curry;
-  ttag(k)->head = k;
+  trim_thread(k);
   UM(f);
   return (word) pairof(f, (word) k, d->imps);
 fail:

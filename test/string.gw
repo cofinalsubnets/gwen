@@ -1,0 +1,14 @@
+(assert
+ (= "xx" (scat "xx" ""))
+ (= "xx" (scat "x" "x"))
+ (= "xx" (scat "" "xx"))
+ (= 4 (slen "slen"))
+ (= "bidden" (ssub "forbidden planet" 3 9))
+ (= "all of it" (ssub "all of it" -9 100))
+ )
+
+(: (stripPrefix p s) (? (= p (ssub s 0 (slen p))) (ssub s (slen p) (slen s))))
+(assert (= "eon" (stripPrefix "vapor" "vaporeon")))
+(: (lit l y n s) ((\ ss (? ss (y ss (X l 0)) (n s))) (stripPrefix l s)))
+(assert (= '(ok "eon" ("vapor"))
+ (lit "vapor" (\ s m (X 'ok (X s (X m 0)))) 0 "vaporeon")))
