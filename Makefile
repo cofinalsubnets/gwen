@@ -1,20 +1,19 @@
 nom=gwen
-optimized_binary=gwen.bin
-bounce_binary=gwen.b.bin
+tco_binary=gwen.bin
+trampoline_binary=gwen.b.bin
 prelude=prelude.gw
 tests=$(sort $(wildcard test/*.gw))
 
-test: test_all
-test_optimized: $(optimized_binary)
-	@echo '[optimized]'
+test: test_tco test_bounce test_js
+test_tco: $(tco_binary)
+	@echo '[tco]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
-test_bounce: $(bounce_binary)
-	@echo '[bouncing]'
+test_bounce: $(trampoline_binary)
+	@echo '[trampoline]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" bash -c "time ./$< $(prelude) $(tests)"
 test_js:
 	npm test
-test_all: test_optimized test_bounce test_js
-.PHONY: test test_all test_optimized test_bounce test_js
+.PHONY: test test_tco test_bounce test_js
 
 #build
 CFLAGS ?= -std=c99 -g -O2 -Wall\
@@ -32,11 +31,17 @@ gwen.b.o: gwen.c gwen.h
 	$(cc) -c -DGwenCanUseTco=0 $< -o $@
 
 # installlation
+# default install to the user's home directory under ~/.local/
+DESTDIR ?= $(HOME)/
+PREFIX ?= .local/
+VIMPREFIX ?= .vim/
+dest=$(DESTDIR)$(PREFIX)
+vimdir=$(DESTDIR)$(VIMPREFIX)
 
 # all the local files to install
-source_binary=gwen.bin
+source_binary=$(tco_binary)
 source_static_library=libgwen.a
-source_prelude=prelude.gw
+source_prelude=$(prelude)
 source_c_header=gwen.h
 source_manpage=gwen.1
 source_vim_ftdetect=gwen.ftdetect.vim
@@ -46,7 +51,6 @@ source_files=$(source_binary) $(source_static_library)\
 						 $(source_vim_ftdetect) $(source_vim_syntax)\
 						 $(source_manpage)
 
-all: $(source_files)
 $(source_static_library): gwen.o
 	ar rcs $@ $<
 	strip --strip-unneeded $@
@@ -54,12 +58,6 @@ $(source_static_library): gwen.o
 $(source_manpage): gwen.1.md
 	pandoc -s -t man -o $@ $<
 
-# default install to the user's home directory under ~/.local/
-DESTDIR ?= $(HOME)/
-PREFIX ?= .local/
-VIMPREFIX ?= .vim/
-dest=$(DESTDIR)$(PREFIX)
-vimdir=$(DESTDIR)$(VIMPREFIX)
 
 # all the target files
 target_binary=$(dest)/bin/gwen
@@ -74,12 +72,12 @@ target_files=$(target_binary) $(target_static_library)\
 						 $(target_vim_ftdetect) $(target_vim_syntax)\
 						 $(target_manpage)
 
+$(target_binary): $(source_binary)
+	install -D -m 755 -s $< $@
 $(target_vim_ftdetect): $(source_vim_ftdetect)
 	install -D -m 644 $< $@
 $(target_vim_syntax): $(source_vim_syntax)
 	install -D -m 644 $< $@
-$(target_binary): $(source_binary)
-	install -D -m 755 -s $< $@
 $(target_static_library): $(source_static_library)
 	install -D -m 644 $< $@
 $(target_manpage): $(source_manpage)
@@ -100,27 +98,27 @@ uninstall:
 clean:
 	rm -r `git check-ignore * */*`
 # valgrind detects some memory errors
-valg: $(optimized_binary)
-	valgrind --error-exitcode=1 ./$(optimized_binary) $(prelude) $(tests)
+valg: $(tco_binary)
+	valgrind --error-exitcode=1 ./$(tco_binary) $(prelude) $(tests)
 # approximate lines of code
 sloc:
 	cloc --force-lang=Lisp,gw * test/* lib/*
 # size of binaries
-bits: $(optimized_binary) $(bounce_binary)
+bits: $(tco_binary) $(trampoline_binary)
 	du -h $^
-disasm: $(optimized_binary)
+disasm: $(tco_binary)
 	rizin -A $<
 # profiling on linux
-perf.data: $(optimized_binary)
-	perf record ./$(optimized_binary) $(prelude) $(tests)
+perf.data: $(tco_binary)
+	perf record ./$(tco_binary) $(prelude) $(tests)
 perf: perf.data
 	perf report
 flamegraph.svg: perf.data
 	flamegraph --perfdata $<
 flame: flamegraph.svg
 	xdg-open $<
-repl: $(optimized_binary) $(prelude)
-	rlwrap ./$(optimized_binary) -i $(prelude)
+repl: $(tco_binary) $(prelude)
+	rlwrap ./$(tco_binary) -i $(prelude)
 serve:
 	darkhttpd .
 .PHONY: clean valg sloc bits disasm perf flame repl serve

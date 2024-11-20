@@ -6,7 +6,7 @@ value acts as a one argument function. for functions this is done
 by currying like in haskell. other objects are interpreted as their
 own constant functions.
 
-## 
+## lisp dialect
 
 variable scope is similar to scheme. there are five special forms
 which have similar scheme counterparts.

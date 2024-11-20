@@ -96,11 +96,11 @@ static struct gwen_type
   table_type = { .hash = hash_table, .copy = copy_table, .evac = walk_table, .equal = not_equal, .emit = print_table, };
 
 // allocated data types other than threads
-#define GwenDataHeader() gwen_vm *ap; struct gwen_type *typ
+#define GwenDataHeader gwen_vm *ap; struct gwen_type *typ
 static gwen_vm data;
 
 typedef struct gwen_pair {
-  GwenDataHeader();
+  GwenDataHeader;
   gwen_word a, b;
 } *gwen_pair, *pair;
 
@@ -108,7 +108,7 @@ static Inline gwen_pair ini_pair(gwen_pair w, gwen_word a, gwen_word b) {
   return w->ap = data, w->typ = &pair_type, w->a = a, w->b = b, w; }
 
 typedef struct gwen_string {
-  GwenDataHeader();
+  GwenDataHeader;
   uintptr_t len;
   char text[];
 } *gwen_string, *string;
@@ -117,7 +117,7 @@ static Inline gwen_string ini_str(gwen_string s, uintptr_t len) {
   return s->ap = data, s->typ = &string_type, s->len = len, s; }
 
 typedef struct gwen_symbol {
-  GwenDataHeader();
+  GwenDataHeader;
   gwen_string nom;
   gwen_word code;
   struct gwen_symbol *l, *r;
@@ -129,7 +129,7 @@ static Inline gwen_symbol ini_anon(gwen_symbol y, gwen_word code) {
   return y->ap = data, y->typ = &symbol_type, y->nom = 0, y->code = code, y; }
 
 typedef struct gwen_table {
-  GwenDataHeader();
+  GwenDataHeader;
   uintptr_t len, cap;
   struct gwen_table_entry {
     gwen_word key, val;
@@ -201,6 +201,11 @@ static gwen_vm display, bnot, rng, data,
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
 #define A(o) ((gwen_pair)(o))->a
 #define B(o) ((gwen_pair)(o))->b
+#define AB(o) A(B(o))
+#define AA(o) A(A(o))
+#define BA(o) B(A(o))
+#define BB(o) B(B(o))
+#define BBA(o) B(B(A(o)))
 #define nilp(_) ((_)==nil)
 #define nump(_) ((gwen_word)(_)&1)
 #define homp(_) (!nump(_))
@@ -301,8 +306,10 @@ static int read_char(gwen_core f, gwen_file i) {
     case '#': case ';': while (!feof(i) && (c = getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-static gwen_word read_str_lit(gwen_core, gwen_file), read_atom(gwen_core, gwen_file);
-static gwen_status reads(gwen_core, gwen_file);
+static gwen_status reads(gwen_core, gwen_file), read_str_lit(gwen_core, gwen_file),
+read_atom(gwen_core, gwen_file);
+
+typedef gwen_status gwen_par(gwen_core, gwen_status, gwen_word);
 
 static gwen_status enquote(gwen_core f) {
   pair w = pairof(f, f->sp[0], nil);
@@ -315,16 +322,16 @@ static gwen_status enquote(gwen_core f) {
   f->sp[0] = (gwen_word) w;
   return Ok; }
 
+
 gwen_status gwen_read1f(gwen_core f, gwen_file i) {
   int c = read_char(f, i);
-  if (feof(i)) return Eof;
-  gwen_word x; switch (c) {
+  switch (c) {
+    case EOF: return Eof;
     case '\'': return (c = gwen_read1f(f, i)) == Ok ? enquote(f) : c;
     case '(': return reads(f, i);
-    case ')': x = nil; break;
-    case '"': x = read_str_lit(f, i); break;
-    default: ungetc(c, i), x = read_atom(f, i); }
-  return x && pushs(f, 1, x) ? Ok : Oom; }
+    case ')': return pushs(f, 1, nil) ? Ok : Oom;
+    case '"': return read_str_lit(f, i);
+    default: return ungetc(c, i), read_atom(f, i); } }
 
 static gwen_status reads(gwen_core f, gwen_file i) {
   gwen_word c = read_char(f, i);
@@ -346,7 +353,7 @@ static gwen_string bgrow(gwen_core f, gwen_string s) {
   if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
   return t; }
 
-static gwen_word read_str_lit(gwen_core f, gwen_file i) {
+static gwen_status read_str_lit(gwen_core f, gwen_file i) {
   gwen_string b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(gwen_word); b; b = bgrow(f, b), lim *= 2)
@@ -354,11 +361,11 @@ static gwen_word read_str_lit(gwen_core f, gwen_file i) {
       case '\\': c = fgetc(i); if (c == EOF)
       case '"': case EOF: goto out;
       default: b->text[n++] = c; } out:
-  if (!b) return 0;
+  if (!b) return Oom;
   b->len = n;
-  return (gwen_word) b; }
+  return pushs(f, 1, b) ? Ok : Oom; }
 
-static gwen_word read_atom(gwen_core f, gwen_file i) {
+static gwen_status read_atom(gwen_core f, gwen_file i) {
   gwen_string b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(gwen_word); b; b = bgrow(f, b), lim *= 2)
@@ -366,10 +373,11 @@ static gwen_word read_atom(gwen_core f, gwen_file i) {
       case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
       case '(': case ')': case '"': case '\'': case EOF: ungetc(c, i); goto out;
       default: b->text[n++] = c; } out:
-  if (!b) return 0;
+  if (!b) return Oom;
   b->len = n, b->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
   char *e; long j = strtol(b->text, &e, 0);
-  return *e == 0 ? putnum(j) : (gwen_word) intern(f, b); }
+  gwen_word x = *e == 0 ? putnum(j) : (gwen_word) intern(f, b);
+  return !x || !pushs(f, 1, x) ? Oom : Ok; }
 
 // end of parser
 
@@ -975,11 +983,12 @@ static C0(analyze) {
     if (y == &symbol_type) return analyze_symbol(f, c, m, x, *c); }
   return em2(f, c, m, K, x); }
 
-static gwen_vm lazy_bind, drop, define, top_bind;
+static gwen_vm lazy_bind, drop, define, g_bind;
 static C0(analyze_variable_reference) {
-  return nilp((gwen_word) (*c)->par) ? em2(f, c, m, top_bind, x) : // XXX undefined case
-         pushs(f, 3, c1var, x, (*c)->pals) ? m + 2 :
-         0; }
+  if (nilp((gwen_word) (*c)->par)) {
+    x = (gwen_word) pairof(f, x, (gwen_word) f->dict);
+    return !x ? x : em2(f, c, m, g_bind, x); }
+  return pushs(f, 3, c1var, x, (*c)->pals) ? m + 2 : 0; }
 
 static long index_of(gwen_core f, scope c, gwen_word var) {
   size_t i = 0;
@@ -1009,6 +1018,7 @@ static C1(c1var) {
     k[-1].x = putnum(idx + ins),
     pull(f, c, k - 2); }
 
+#define P(x) (transmit(f, stdout, x), puts(""))
 static C0(analyze_symbol, scope d) {
   gwen_word y;
   if (nilp((gwen_word) d)) {
@@ -1023,7 +1033,9 @@ static C0(analyze_symbol, scope d) {
     // lazy bind
     bind(y, (gwen_word) pairof(f, y, (gwen_word) d));
     bind(m, em2(f, c, m, lazy_bind, y));
-    y = B(B(A(f->sp[2]))); // get the closure args to pass in
+    x = f->sp[2];
+    y = BBA(x); // get the closure args to pass in
+    A(x) = AA(x);
     return analyze_arguments(f, c, m, y); } // XXX
 
   // look in pals
@@ -1070,8 +1082,8 @@ static gwen_word linit(gwen_core f, gwen_word x) {
   if (!twop(x)) return pushs(f, 1, nil) ? nil : 0;
   if (!twop(B(x))) return pushs(f, 1, A(x)) ? nil : 0;
   word y = A(x);
-  return avec(f, y, x = linit(f, B(x))),
-         x ? (word) pairof(f, y, x) : x; }
+  avec(f, y, x = linit(f, B(x)));
+  return x ? (word) pairof(f, y, x) : x; }
 
 static word analyze_lambda(gwen_core f, scope *c, word imps, word exp) {
   // storing exp in scope->args for the moment is expedient
@@ -1204,14 +1216,14 @@ static c1
 static C0(analyze_if) {
   if (!pushs(f, 2, x, generate_cond_pop_exit)) return 0;
   struct gwen_pair p = { data, &pair_type, nil, nil };
-  for (x = pop1(f), MM(f, &x); m; x = B(B(x))) {
+  for (x = pop1(f), MM(f, &x); m; x = BB(x)) {
     if (!twop(x)) x = (word) &p;
     m = analyze(f, c, m + 2, A(x));
     if (!twop(B(x))) { // at end, default branch
       m = pushs(f, 1, generate_cond_peek_exit) ? m : 0;
       break; }
     m = pushs(f, 1, generate_cond_pop_branch) ? m : 0;
-    m = m ? analyze(f, c, m + 2, A(B(x))) : m;
+    m = m ? analyze(f, c, m + 2, AB(x)) : m;
     m = pushs(f, 2, generate_cond_push_branch, generate_cond_peek_exit) ? m : 0; }
   return UM(f), m && pushs(f, 1, generate_cond_push_exit) ? m : 0; }
 
@@ -1281,36 +1293,36 @@ static gwen_status desug(gwen_core f, word *d, word *e) {
   while (twop(*d));
   return f->sp++, Ok; }
 
-// this function is loooong
-static size_t analyze_let_l(gwen_core f, scope *b, scope *c, size_t m, word exp) {
-  if (!twop(exp)) return nil;
-  if (!twop(B(exp))) return A(exp);
+static size_t analyze_let(gwen_core f, scope *b, size_t m, word exp) {
+  if (!twop(exp)) return analyze(f, b, m, nil);
+  if (!twop(B(exp))) return analyze(f, b, m, A(exp));
+  scope q = *b, *c = &q;
+  avec(f, exp, q = enscope(f, q, q->args, q->imps));
+  if (!q) return 0;
   // lots of variables :(
   word nom = nil, def = nil, lam = nil,
        v = nil, d = nil, e = nil;
   MM(f, &nom), MM(f, &def), MM(f, &exp), MM(f, &lam);
-  MM(f, &d); MM(f, &e); MM(f, &v);
+  MM(f, &d); MM(f, &e); MM(f, &v); MM(f, &q);
+// this is the longest function in the whole C implementation :(
+// it handles the let special form in a way to support sequential and recursive binding.
 
   // collect vars and defs into two lists
-  for (; twop(exp) && twop(B(exp)); exp = B(B(exp))) {
-    d = A(exp), e = A(B(exp)), desug(f, &d, &e);
+  for (; twop(exp) && twop(B(exp)); exp = BB(exp)) {
+    d = A(exp), e = AB(exp), desug(f, &d, &e);
     if (!(nom = (word) pairof(f, d, nom)) ||
         !(def = (word) pairof(f, e, def)))
       goto fail;
-    else if (lambp(f, A(def))) {
+    if (lambp(f, e)) {
       // if it's a lambda compile it and record in lam list
-      word x = analyze_lambda(f, c, nil, B(A(def)));
-      x = x ? (word) pairof(f, A(nom), x) : x;
-      x = x ? (word) pairof(f, x, lam) : x;
-      if (x) lam = x;
-      else goto fail; } }
+      word x = analyze_lambda(f, c, nil, B(e));
+      x = x ? (word) pairof(f, d, x) : x;
+      lam = x ? (word) pairof(f, x, lam) : x;
+      if (!lam) goto fail; } }
 
-  // if there's no body then use the last definition
-  bool even = !twop(exp);
-  if (even) {
-    word x = (word) pairof(f, A(nom), nil);
-    if (!x) goto fail;
-    exp = x; }
+  // if there's no body then evaluate the name of the last definition
+  bool even = !twop(exp); // we check this again later to make global bindings at top level
+  if (even && !(exp = (word) pairof(f, A(nom), nil))) goto fail;
 
   // find closures
   // for each function f with closure C(f)
@@ -1319,42 +1331,41 @@ static size_t analyze_let_l(gwen_core f, scope *b, scope *c, size_t m, word exp)
   long j;
   do for (j = 0, d = lam; twop(d); d = B(d)) // for each bound function variable
     for (e = lam; twop(e); e = B(e)) // for each bound function variable
-      if (A(A(d)) != A(A(e)) && // skip yourself
-          lidx(f, B(B(A(e))), A(A(d))) >= 0) // if you need this function
-        for (word v = B(A(d)); twop(v); v = B(v)) { // then you need its variables
-          word vars = B(B(A(e))), var = A(v);
-          if (lidx(f, vars, var) < 0 && !(vars = (word) pairof(f, var, vars))) goto fail; // oom
-          else if (vars != B(B(A(e)))) B(B(A(e))) = vars, j++; } // if list is updated then record the change
+      if (d != e && // skip yourself
+          lidx(f, BBA(e), AA(d)) >= 0) // if you need this function
+        for (v = BA(d); twop(v); v = B(v)) { // then you need its variables
+          word vars = BBA(e), var = A(v);
+          if (lidx(f, vars, var) < 0) { // only add if it's not already there
+            if (!(vars = (word) pairof(f, var, vars))) goto fail; // oom
+            j++, BBA(e) = vars; } }
   while (j);
 
   // now delete defined functions from the closure variable lists
   // they will be bound lazily when the function runs
-  for (e = lam; twop(e); e = B(e)) B(B(A(e))) = ldels(f, lam, B(B(A(e))));
+  for (e = lam; twop(e); BBA(e) = ldels(f, lam, BBA(e)), e = B(e)) ;
 
-  (*c)->lams = lam, e = nil;
+  (*c)->lams = lam;
   // construct lambda with reversed argument list
   exp = lconcat(f, nom, exp);
-  gwen_symbol l = literal_symbol(f, "\\"); // XXX change to symbol
-  exp = exp && l ? (word) pairof(f, (word) l, exp) : 0;
-  if (!exp) goto fail;
-  // exp is now the required lambda expression, analyze it
-  m = analyze(f, b, m, exp);
-  if (!m) goto fail;
-  if (!((*b)->pals = (word) pairof(f, nil, (*b)->pals))) goto fail;
-  // now evaluate definitions in order tracking var names on pals list
-  // first reverse the nom and def lists
+  gwen_symbol l = exp ? literal_symbol(f, "\\") : 0;
+  exp = l ? (word) pairof(f, (word) l, exp) : 0;
+  m = exp ? analyze(f, b, m, exp) : 0; // exp is now the required lambda, analyze it
+  if (!m || !((*b)->pals = (word) pairof(f, nil, (*b)->pals))) goto fail;
+
+  // reverse the nom and def lists
   nom = rlconcat(f, nom, nil), def = rlconcat(f, def, nil);
-  size_t nn = 0;
-  // store lambdas on scope for lazy binding and construct new lambda application expression
+  // evaluate definitions in order tracking var names on pals list
+  // store lambdas on scope for lazy binding and construct new application
   // - reverse noms onto exp
-  // - reverse expressions onto e = nil and recompile lambdas
+  // - reverse onto e = nil and recompile lambdas
+  size_t nn = 0;
   for (; twop(nom); nom = B(nom), def = B(def), nn++) {
     // if lambda then recompile with the explicit closure
     // and put in arg list and lam list (latter is used for lazy binding)
     if (lambp(f, A(def))) {
       d = lassoc(f, lam, A(nom));
       word _;
-      if (!(_ = analyze_lambda(f, c, B(B(d)), B(A(def))))) goto fail;
+      if (!(_ = analyze_lambda(f, c, BB(d), BA(def)))) goto fail;
       else A(def) = B(d) = _; }
     // if toplevel then bind
     if (even && nilp((*b)->args)) {
@@ -1370,17 +1381,12 @@ static size_t analyze_let_l(gwen_core f, scope *b, scope *c, size_t m, word exp)
     if (!(m = analyze(f, b, m, A(def))) ||
         !((*b)->pals = (word) pairof(f, A(nom), (*b)->pals)))
       goto fail; }
-  if (nn > 1) m = pushs(f, 2, c1apn, putnum(nn)) ? m + 2 : 0;
-  else m = pushs(f, 1, c1ap) ? m + 1 : 0;
-  if (m) for (nn++; nn--; (*b)->pals = B((*b)->pals));
-done: return UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), m;
-fail: m = 0; goto done; }
 
-static size_t analyze_let(gwen_core f, scope *c, size_t m, word x) {
-  scope d = *c;
-  avec(f, x, d = enscope(f, d, d->args, d->imps));
-  avec(f, d, m = analyze_let_l(f, c, &d, m, x));
-  return m; }
+  m = nn <= 1 ? pushs(f, 1, c1ap) ? m + 1 : 0 :
+                pushs(f, 2, c1apn, putnum(nn)) ? m + 2 : 0;
+  for (nn++; nn--; (*b)->pals = B((*b)->pals));
+done: return UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), m;
+fail: m = 0; goto done; }
 
 static size_t analyze_sequence(gwen_core f, scope *c, size_t m, word x) {
   if (!twop(x)) return em2(f, c, m, K, nil);
@@ -1391,7 +1397,7 @@ static size_t analyze_sequence(gwen_core f, scope *c, size_t m, word x) {
 
 static C0(analyze_macro, word b) {
   if (!pushs(f, 2, x, b)) return 0;
-  x = (word) literal_symbol(f, "`"); // XXX change to symbol
+  x = (word) literal_symbol(f, "`");
   if (!x || !pushs(f, 1, x)) return 0;
   pair mxp = (pair) cells(f, 4 * Width(struct gwen_pair));
   if (!mxp) return 0;
@@ -1429,25 +1435,26 @@ static Vm(ev0) {
   Pack(f);
   gwen_status s = gwen_eval(f);
   Unpack(f);
-  return s != Ok ? s : op(1, *Sp); }
+  return s == Ok ? op(1, *Sp) : s; }
 
-static Vm(top_bind) {
-  gwen_word var = Ip[1].x;
-  var = table_get(f, f->dict, var, var);
+static Vm(g_bind) {
+  gwen_word x = Ip[1].x, var = A(x);
+  gwen_table t = (gwen_table) B(x);
+  x = table_get(f, t, var, var);
   Ip[0].ap = K;
-  Ip[1].x = var;
+  Ip[1].x = x;
   return Continue(); }
 
 static Vm(lazy_bind) {
-  gwen_word ref = Ip[1].x, var = A(A(ref));
+  gwen_word ref = Ip[1].x, var = A(ref);
   scope env = (scope) B(ref);
-  var = A(B(lassoc(f, env->lams, var)));
+  var = AB(lassoc(f, env->lams, var));
   Ip[0].ap = K;
   Ip[1].x = var;
   return Continue(); }
 
 static gwen_word lassoc(gwen_core f, word l, word k) {
-  for (; twop(l); l = B(l)) if (eql(f, k, A(A(l)))) return A(l);
+  for (; twop(l); l = B(l)) if (eql(f, k, AA(l))) return A(l);
   return 0; }
 
 // list concat
