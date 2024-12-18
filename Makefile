@@ -1,3 +1,4 @@
+default: test
 test: test_tc test_tr
 
 n=gwen

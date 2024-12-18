@@ -1,239 +1,9 @@
-#include "gwen.h"
-#include <stdarg.h> // this is a freestanding header
-
-// these are not freestanding headers
-#include <time.h>
-#include <string.h>
-#include <stdlib.h>
-
-typedef intptr_t GwenWord, *GwenStack, *GwenHeap;
-
-// theres a big benefit in speed from tail call optimization but not all platforms support it
-#ifndef TCO
-#define TCO 1 // on by default
-#endif
-
-#if TCO
-#define Vm(n, ...) gwen_status n(GwenCore *f, GwenCell* Ip, GwenHeap Hp, GwenStack Sp, ##__VA_ARGS__)
-#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
-#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
-#define YieldStatus GwenStatusOk
-#define Continue() Ip->ap(f, Ip, Hp, Sp)
-#define Have(n) if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n)
-#define Have1() if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1)
-#else
-#define Vm(n, ...) gwen_status n(GwenCore *f, ##__VA_ARGS__)
-#define Hp f->hp
-#define Sp f->sp
-#define Ip f->ip
-#define Pack(f) ((void)0)
-#define Unpack(f) ((void)0)
-#define YieldStatus GwenStatusEof
-#define Continue() Ok
-#define Have(n) if (Sp - Hp < n) return gc(f, n)
-#define Have1() if (Sp == Hp) return gc(f, 1)
-#endif
-
-#define Inline inline __attribute__((always_inline))
-#define NoInline __attribute__((noinline))
-
-// thanks !!
-typedef GwenWord *GwenStack, *GwenHeap;
-typedef union GwenCell GwenCell, *gwen_thread, *thread;
-typedef Vm(GwenVm);
-union GwenCell {
-  GwenVm *ap;
-  GwenWord x;
-  GwenCell *m; };
-
-// functions are laid out in memory like this
-//
-// *|*|*|*|*|*|0|^
-// * = function pointer or inline value
-// ? = function name / metadata (optional)
-// 0 = null
-// ^ = pointer to head of function
-//
-// this way we can support internal pointers for branch
-// destinations, return addresses, etc, while letting
-// the garbage collector always find the head.
-static struct tag { GwenCell *null, *head, end[]; } *ttag(thread k) {
-  while (k->x) k++;
-  return (struct tag*) k; }
-
-static Inline GwenCell* mo_ini(GwenCell* _, uintptr_t len) {
-  struct tag *t = (struct tag*) (_ + len);
-  return t->null = NULL, t->head = _; }
-
-typedef bool
-  gwen_equal_t(gwen_core, GwenWord, GwenWord);
-typedef GwenWord
-  gwen_copy_t(gwen_core, GwenWord, GwenWord*, GwenWord*),
-  gwen_hash_t(gwen_core, GwenWord);
-typedef void
-  gwen_evac_t(gwen_core, GwenWord, GwenWord*, GwenWord*, GwenHeap*),
-  gwen_print_t(gwen_core, gwen_file, GwenWord);
-
-// basic data type method table
-typedef struct gwen_type {
-  gwen_copy_t *copy;
-  gwen_evac_t *evac;
-  gwen_equal_t *equal;
-  gwen_print_t *emit;
-  gwen_hash_t *hash;
-} *typ;
-
-static gwen_hash_t hash_two, hash_string, hash_symbol, hash_table;
-static gwen_copy_t cp_two, copy_string, copy_symbol, copy_table;
-static gwen_evac_t wk_two, walk_string, walk_symbol, walk_table;
-static gwen_equal_t eq_two, string_equal, not_equal;
-static gwen_print_t print_string, print_two, print_table, print_symbol;
-
-static struct gwen_type
+#include "i.h"
+GwenType
   pair_type = { .hash = hash_two, .copy = cp_two, .evac = wk_two, .emit = print_two, .equal = eq_two, },
   string_type = { .hash = hash_string, .copy = copy_string, .evac = walk_string, .emit = print_string, .equal = string_equal, },
   symbol_type = { .hash = hash_symbol, .copy = copy_symbol, .evac = walk_symbol, .equal = not_equal, .emit = print_symbol, },
   table_type = { .hash = hash_table, .copy = copy_table, .evac = walk_table, .equal = not_equal, .emit = print_table, };
-
-// allocated data types other than threads
-#define GwenDataHeader GwenVm *ap; struct gwen_type *typ
-static GwenVm data;
-
-typedef struct GwenPair {
-  GwenDataHeader;
-  GwenWord a, b;
-} GwenPair, *gwen_pair, *pair;
-
-static Inline gwen_pair ini_pair(gwen_pair w, GwenWord a, GwenWord b) {
-  return w->ap = data, w->typ = &pair_type, w->a = a, w->b = b, w; }
-
-typedef struct GwenString {
-  GwenDataHeader;
-  uintptr_t len;
-  char text[];
-} GwenString;
-
-static Inline GwenString* ini_str(GwenString* s, uintptr_t len) {
-  return s->ap = data, s->typ = &string_type, s->len = len, s; }
-
-typedef struct GwenSymbol {
-  GwenDataHeader;
-  GwenString *nom;
-  GwenWord code;
-  struct GwenSymbol *l, *r;
-} GwenSymbol;
-
-static Inline GwenSymbol* ini_sym(GwenSymbol* y, GwenString*nom, uintptr_t code) {
-  return y->ap = data, y->typ = &symbol_type, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
-static Inline GwenSymbol* ini_anon(GwenSymbol* y, GwenWord code) {
-  return y->ap = data, y->typ = &symbol_type, y->nom = 0, y->code = code, y; }
-
-typedef struct GwenTableEntry {
-  GwenWord key, val;
-  struct GwenTableEntry *next;
-} GwenTableEntry;
-typedef struct GwenTable {
-  GwenDataHeader;
-  uintptr_t len, cap;
-  GwenTableEntry **tab;
-} GwenTable, *gwen_table;
-static Inline gwen_table ini_table(gwen_table t, uintptr_t len, uintptr_t cap, GwenTableEntry **tab) {
-  return t->ap = data, t->typ = &table_type, t->len = len, t->cap = cap, t->tab = tab, t; }
-
-// runtime core data structure -- 1 core = 1 thread of execution
-struct GwenCore {
-  // vm registers
-  GwenCell* ip;
-  GwenHeap hp; // heap pointer
-  GwenStack sp; // stack pointer
-  // environment
-  gwen_table dict, macro; // global environment and macros
-  GwenSymbol* symbols; // internal symbols
-  // memory management
-  GwenWord len, *pool, *loop; // memory pool size and pointers
-  uintptr_t t0; // end time of last gc
-  struct gwen_mm { // protected memory locations (usually C stack addresses)
-    GwenWord *addr; struct gwen_mm *next; } *safe; };
-
-_Static_assert(-1 >> 1 == -1, "support sign extended shift");
-_Static_assert(sizeof(GwenWord) == sizeof(GwenCell), "cell is 1 word wide");
-
-static gwen_pair
-  pairof(gwen_core, GwenWord, GwenWord);
-static gwen_table
-  new_table(gwen_core),
-  table_set(gwen_core, gwen_table, GwenWord, GwenWord);
-static GwenSymbol
-  *literal_symbol(gwen_core, const char*),
-  *intern(gwen_core, GwenString*);
-static void
-  *bump(gwen_core, uintptr_t),
-  *cells(gwen_core, uintptr_t),
-  copy_from(gwen_core, GwenWord*, uintptr_t),
-  transmit(gwen_core, gwen_file, GwenWord);
-static Vm(gc, uintptr_t s);
-static bool
-  gwen_please(gwen_core, uintptr_t),
-  eql(gwen_core, GwenWord, GwenWord);
-static GwenWord
-  table_get(gwen_core, gwen_table, GwenWord, GwenWord),
-  pushs(gwen_core, uintptr_t, ...),
-  hash(gwen_core, GwenWord),
-  cp(gwen_core, GwenWord, GwenWord*, GwenWord*); // for recursive use by evac functions
-static GwenVm display, bnot, rng, data,
-   gensym, ev0, pairp, fixnump, symbolp, stringp, defmacro,
-   ssub, sget, slen, scat, prc, error, cons, car, cdr,
-   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
-   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-   curry;
-
-#define Oom GwenStatusOom
-#define Ok GwenStatusOk
-#define Eof GwenStatusEof
-
-#define Width(_) b2w(sizeof(_))
-#define avail(f) (f->sp-f->hp)
-#define getnum(_) ((GwenWord)(_)>>1)
-#define putnum(_) (((GwenWord)(_)<<1)|1)
-#define nil putnum(0)
-#define MM(f,r) ((f->safe=&((struct gwen_mm){(GwenWord*)(r),f->safe})))
-#define UM(f) (f->safe=f->safe->next)
-#define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
-#define A(o) ((GwenPair*)(o))->a
-#define B(o) ((GwenPair*)(o))->b
-#define AB(o) A(B(o))
-#define AA(o) A(A(o))
-#define BA(o) B(A(o))
-#define BB(o) B(B(o))
-#define BBA(o) B(B(A(o)))
-#define nilp(_) ((_)==nil)
-#define nump(_) ((GwenWord)(_)&1)
-#define homp(_) (!nump(_))
-#define datp(_) (ptr(_)->ap==data)
-#define mix ((uintptr_t)2708237354241864315)
-#define bind(n, x) if (!(n = (x))) return 0
-#define ptr(o) ((GwenCell*)(o))
-#define dtyp(x) ((typ)ptr(x)[1].m)
-#define max(a, b) ((a)>(b)?(a):(b))
-#define min(a, b) ((a)<(b)?(a):(b))
-
-static Inline bool strp(GwenWord _) { return homp(_) && dtyp(_) == &string_type; }
-static Inline bool twop(GwenWord _) { return homp(_) && dtyp(_) == &pair_type; }
-static Inline bool tblp(GwenWord _) { return homp(_) && dtyp(_) == &table_type; }
-static Inline bool symp(GwenWord _) { return homp(_) && dtyp(_) == &symbol_type; }
-
-// align bytes up to the nearest word
-static Inline size_t b2w(size_t b) {
-  size_t q = b / sizeof(GwenWord), r = b % sizeof(GwenWord);
-  return q + (r ? 1 : 0); }
-
-static Inline GwenWord pop1(GwenCore *f) { return *f->sp++; }
-static Inline size_t stack_height(GwenCore *f) { return f->pool + f->len - f->sp; }
-size_t gwen_drop(GwenCore *f, size_t n) {
-  size_t h = stack_height(f);
-  n = min(n, h);
-  f->sp += n;
-  return n; }
 
 #define S1(i) ((GwenCell[]){{i}})
 #define S2(i) ((GwenCell[]){{curry},{.x=putnum(2)},{i}})
@@ -262,7 +32,7 @@ static NoInline bool gwen_define(GwenCore *f, const char *k, GwenWord v) {
 
 #define Dict(a, b) {a, b},
 static struct { const char *n; GwenCell* v; } ini_dict[] = { ini(Dict) };
-gwen_core gwen_open(void) {
+GwenCore *gwen_open(void) {
   GwenCore *f = malloc(sizeof(GwenCore));
   if (!f) return f;
   memset(f, 0, sizeof(GwenCore));
@@ -300,19 +70,17 @@ static GwenWord pushs(GwenCore *f, uintptr_t m, ...) {
 //
 //
 // get the next significant character from the stream
-static int read_char(GwenCore *f, gwen_file i) {
+static int read_char(GwenCore *f, GwenFile *i) {
   for (int c;;) switch (c = getc(i)) {
     default: return c;
     case '#': case ';': while (!feof(i) && (c = getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-static gwen_status reads(gwen_core, gwen_file), read_str_lit(gwen_core, gwen_file),
-read_atom(gwen_core, gwen_file);
+static GwenStatus reads(GwenCore*, GwenFile*), read_str_lit(GwenCore*, GwenFile*),
+  read_atom(GwenCore*, GwenFile*);
 
-typedef gwen_status gwen_par(gwen_core, gwen_status, GwenWord);
-
-static gwen_status enquote(GwenCore *f) {
-  pair w = pairof(f, f->sp[0], nil);
+static GwenStatus enquote(GwenCore *f) {
+  GwenPair *w = pairof(f, f->sp[0], nil);
   if (!w) return Oom;
   f->sp[0] = (GwenWord) w;
   GwenSymbol* y = literal_symbol(f, "`");
@@ -323,7 +91,7 @@ static gwen_status enquote(GwenCore *f) {
   return Ok; }
 
 
-gwen_status gwen_read1f(GwenCore *f, gwen_file i) {
+GwenStatus gwen_read1f(GwenCore *f, GwenFile* i) {
   int c = read_char(f, i);
   switch (c) {
     case EOF: return Eof;
@@ -333,7 +101,7 @@ gwen_status gwen_read1f(GwenCore *f, gwen_file i) {
     case '"': return read_str_lit(f, i);
     default: return ungetc(c, i), read_atom(f, i); } }
 
-static gwen_status reads(GwenCore *f, gwen_file i) {
+static GwenStatus reads(GwenCore *f, GwenFile* i) {
   GwenWord c = read_char(f, i);
   if (c == EOF || c == ')') return pushs(f, 1, nil) ? Ok : Oom;
   ungetc(c, i);
@@ -354,7 +122,7 @@ static GwenString* bgrow(GwenCore *f, GwenString* s) {
   if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
   return t; }
 
-static gwen_status read_str_lit(GwenCore *f, gwen_file i) {
+static GwenStatus read_str_lit(GwenCore *f, GwenFile* i) {
   GwenString* b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(GwenWord); b; b = bgrow(f, b), lim *= 2)
@@ -366,7 +134,7 @@ static gwen_status read_str_lit(GwenCore *f, gwen_file i) {
   b->len = n;
   return pushs(f, 1, b) ? Ok : Oom; }
 
-static gwen_status read_atom(GwenCore *f, gwen_file i) {
+static GwenStatus read_atom(GwenCore *f, GwenFile* i) {
   GwenString* b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(GwenWord); b; b = bgrow(f, b), lim *= 2)
@@ -382,12 +150,12 @@ static gwen_status read_atom(GwenCore *f, gwen_file i) {
 
 // end of parser
 
-#define op(n, x) (Ip = (thread) Sp[n], Sp[n] = (x), Sp += n, Continue())
+#define op(n, x) (Ip = (GwenCell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
 static Vm(prc)     { GwenWord w = *Sp; putc(getnum(w), stdout);     return op(1, w); }
 static Vm(display) { GwenWord w = *Sp; transmit(f, stdout, w); return op(1, w); }
 static Vm(error) { exit(1); }
 
-static void transmit(GwenCore *f, gwen_file out, GwenWord x) {
+static void transmit(GwenCore *f, GwenFile* out, GwenWord x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
   else if (ptr(x)->ap == data) dtyp(x)->emit(f, out, x);
   else fprintf(out, "#%lx", (long) x); }
@@ -467,7 +235,7 @@ static NoInline void copy_from(GwenCore *f, GwenWord *p0, uintptr_t len0) {
   while (sn--) *sp1++ = cp(f, *sp0++, p0, t0);
   CP(f->ip), CP(f->dict), CP(f->macro);
   // copy protected values
-  for (struct gwen_mm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
+  for (GwenMm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
   // copy all reachable values using cheney's method
   GwenHeap cptr = p1;
   for (GwenCell* k; (k = (GwenCell*) cptr) < (GwenCell*) f->hp;)
@@ -477,7 +245,7 @@ static NoInline void copy_from(GwenCore *f, GwenWord *p0, uintptr_t len0) {
       cptr = (GwenWord*) k + 2; } }
 
 #define bounded(a, b, c) ((GwenWord)(a)<=(GwenWord)(b)&&(GwenWord)(b)<(GwenWord)(c))
-static NoInline GwenWord cp(gwen_core v, GwenWord x, GwenWord *p0, GwenWord *t0) {
+static NoInline GwenWord cp(GwenCore *v, GwenWord x, GwenWord *p0, GwenWord *t0) {
   // if it's a number or out of managed memory then return it
   if (nump(x) || !bounded(p0, x, t0)) return x;
   GwenCell* src = (GwenCell*) x;
@@ -488,7 +256,7 @@ static NoInline GwenWord cp(gwen_core v, GwenWord x, GwenWord *p0, GwenWord *t0)
   if (datp(src)) return dtyp(src)->copy(v, (GwenWord) src, p0, t0);
   // it's a thread, find the end
   struct tag *t = ttag(src);
-  thread ini = t->head, d = bump(v, t->end - ini), dst = d;
+  GwenCell *ini = t->head, *d = bump(v, t->end - ini), *dst = d;
   for (GwenCell *s = ini; (d->x = s->x); s++->x = (GwenWord) d++);
   d[1].ap = (GwenVm*) dst;
   return (GwenWord) (src - ini + dst); }
@@ -519,37 +287,37 @@ static bool eql(GwenCore *f, GwenWord a, GwenWord b) {
 
 static bool not_equal(GwenCore *f, GwenWord a, GwenWord b) { return false; }
 
-static void trim_thread(thread k) { ttag(k)->head = k; }
+static void trim_thread(GwenCell *k) { ttag(k)->head = k; }
 
 static Vm(trim) {
-  gwen_thread k = (gwen_thread) Sp[0];
+  GwenCell *k = (GwenCell*) Sp[0];
   trim_thread(k);
   return op(1, (GwenWord) k); }
 
 static Vm(seek) {
-  gwen_thread k = (gwen_thread) Sp[1];
+  GwenCell *k = (GwenCell*) Sp[1];
   return op(2, (GwenWord) (k + getnum(Sp[0]))); }
 
 static Vm(peek) {
-  gwen_thread k = (gwen_thread) Sp[0];
+  GwenCell *k = (GwenCell*) Sp[0];
   return op(1, k[0].x); }
 
 static Vm(poke) {
-  thread k = (thread) Sp[1];
+  GwenCell *k = (GwenCell*) Sp[1];
   k->x = Sp[0];
   return op(2, (GwenWord) k); }
 
 static Vm(thda) {
   size_t n = getnum(Sp[0]);
   Have(n + Width(struct tag));
-  gwen_thread k = mo_ini((gwen_thread) Hp, n);
+  GwenCell *k = mo_ini((GwenCell*) Hp, n);
   memset(k, -1, n * sizeof(GwenWord));
   Hp += n + Width(struct tag);
   return op(1, (GwenWord) k); }
 
-static GwenWord cp_two(gwen_core v, GwenWord x, GwenWord *p0, GwenWord *t0) {
-  gwen_pair src = (pair) x,
-            dst = ini_pair(bump(v, Width(GwenPair)), src->a, src->b);
+static GwenWord cp_two(GwenCore *v, GwenWord x, GwenWord *p0, GwenWord *t0) {
+  GwenPair *src = (GwenPair*) x,
+           *dst = ini_pair(bump(v, Width(GwenPair)), src->a, src->b);
   return (GwenWord) (src->ap = (GwenVm*) dst); }
 
 static void wk_two(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0, GwenHeap *cptr) {
@@ -557,7 +325,7 @@ static void wk_two(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0, GwenHeap
   A(x) = cp(f, A(x), p0, t0);
   B(x) = cp(f, B(x), p0, t0); }
 
-static void print_two(GwenCore *f, gwen_file o, GwenWord x) {
+static void print_two(GwenCore *f, GwenFile *o, GwenWord x) {
   for (putc('(', o);; putc(' ', o)) {
     transmit(f, o, A(x));
     if (!twop(x = B(x))) { putc(')', o); break; } } }
@@ -566,16 +334,16 @@ static void print_two(GwenCore *f, gwen_file o, GwenWord x) {
 static bool eq_two(GwenCore *f, GwenWord x, GwenWord y) {
   return eql(f, A(x), A(y)) && eql(f, B(x), B(y)); }
 
-static GwenWord hash_two(gwen_core v, GwenWord x) {
-  GwenWord hc = hash(v, A(x)) * hash(v, B(x));
+static GwenWord hash_two(GwenCore *f, GwenWord x) {
+  GwenWord hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-static gwen_pair pairof(GwenCore *f, GwenWord a, GwenWord b) {
+static GwenPair *pairof(GwenCore *f, GwenWord a, GwenWord b) {
   if (avail(f) < Width(GwenPair)) {
     bool ok;
     avec(f, a, avec(f, b, ok = gwen_please(f, Width(GwenPair))));
     if (!ok) return 0; }
-  gwen_pair w = (pair) f->hp;
+  GwenPair *w = (GwenPair*) f->hp;
   f->hp += Width(GwenPair);
   return ini_pair(w, a, b); }
 
@@ -583,19 +351,19 @@ static Vm(car) { return op(1, twop(Sp[0]) ? A(Sp[0]) : Sp[0]); }
 static Vm(cdr) { return op(1, twop(Sp[0]) ? B(Sp[0]) : nil); }
 static Vm(cons) {
   Have(Width(GwenPair));
-  gwen_pair w = ini_pair((gwen_pair) Hp, Sp[0], Sp[1]);
+  GwenPair *w = ini_pair((GwenPair*) Hp, Sp[0], Sp[1]);
   Hp += Width(GwenPair);
   return op(2, (GwenWord) w); }
 
-static GwenWord copy_string(gwen_core v, GwenWord x, GwenWord *p0, GwenWord *t0) {
+static GwenWord copy_string(GwenCore* v, GwenWord x, GwenWord *p0, GwenWord *t0) {
   GwenString* src = (GwenString*) x;
   size_t len = sizeof(GwenString) + src->len;
   return (GwenWord) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
-static void walk_string(gwen_core v, GwenWord x, GwenWord *p0, GwenWord *t0, GwenHeap *cp) {
+static void walk_string(GwenCore* v, GwenWord x, GwenWord *p0, GwenWord *t0, GwenHeap *cp) {
   *cp += Width(GwenString) + b2w(((GwenString*) x)->len); }
 
-static void print_string(gwen_core v, gwen_file o, GwenWord _) {
+static void print_string(GwenCore* v, GwenFile *o, GwenWord _) {
   GwenString* s = (GwenString*) _;
   size_t len = s->len;
   const char *text = s->text;
@@ -604,7 +372,7 @@ static void print_string(gwen_core v, gwen_file o, GwenWord _) {
     if ((c = *text++) == '\\' || c == '"') putc('\\', o);
   putc('"', o); }
 
-static GwenWord hash_string(gwen_core v, GwenWord _) {
+static GwenWord hash_string(GwenCore* v, GwenWord _) {
   GwenString *s = (GwenString*) _;
   uintptr_t h = 1;
   size_t words = s->len / sizeof(GwenWord),
@@ -644,7 +412,7 @@ static Vm(ssub) {
   return Continue(); }
 
 static Vm(sget) {
-  thread r = (thread) Sp[2];
+  GwenCell *r = (GwenCell*) Sp[2];
   if (!strp(Sp[0])) Sp[2] = nil;
   else {
     GwenString*s = (GwenString*) Sp[0];
@@ -668,9 +436,9 @@ static Vm(scat) {
   memcpy(z->text + x->len, y->text, y->len);
   return op(2, (GwenWord) z); }
 
-static GwenSymbol* intern_r(gwen_core, GwenString*, GwenSymbol**);
+static GwenSymbol* intern_r(GwenCore*, GwenString*, GwenSymbol**);
 
-static GwenWord hash_symbol(gwen_core v, GwenWord _) {
+static GwenWord hash_symbol(GwenCore *v, GwenWord _) {
   return ((GwenSymbol*) _)->code; }
 static GwenWord copy_symbol(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0) {
   GwenSymbol *src = (GwenSymbol*) x,
@@ -681,13 +449,13 @@ static GwenWord copy_symbol(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0)
 static void walk_symbol(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0, GwenHeap *cp) {
   *cp += Width(GwenSymbol) - (((GwenSymbol*)x)->nom ? 0 : 2); }
 
-static void print_symbol(GwenCore *f, gwen_file o, GwenWord x) {
+static void print_symbol(GwenCore *f, GwenFile *o, GwenWord x) {
   GwenString* s = ((GwenSymbol*) x)->nom;
   if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
   else fprintf(o, "#sym@%lx", (long) x); }
 
 
-static GwenSymbol* intern_r(gwen_core v, GwenString* b, GwenSymbol* *y) {
+static GwenSymbol* intern_r(GwenCore *v, GwenString* b, GwenSymbol* *y) {
   GwenSymbol* z = *y;
   if (!z) return *y =
     ini_sym(bump(v, Width(GwenSymbol)), b, hash(v, putnum(hash(v, (GwenWord) b))));
@@ -724,9 +492,9 @@ static Vm(gensym) {
 static GwenWord hash_table(GwenCore *f, GwenWord h) { return mix; }
 
 static GwenWord copy_table(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0) {
-  gwen_table src = (gwen_table) x;
+  GwenTable *src = (GwenTable*) x;
   GwenWord i = src->cap;
-  gwen_table dst = bump(f, Width(GwenTable) + i);
+  GwenTable *dst = bump(f, Width(GwenTable) + i);
   src->ap = (GwenVm*) ini_table(dst, src->len, src->cap, (void*) (dst + 1));
 
   //FIXME do these allocations in a block with the rest
@@ -739,7 +507,7 @@ static GwenWord copy_table(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0) 
   return (GwenWord) dst; }
 
 static void walk_table(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0, GwenHeap *cptr) {
-  gwen_table t = (gwen_table) x;
+  GwenTable *t = (GwenTable*) x;
   *cptr += Width(GwenTable) + t->cap + t->len * Width(GwenTableEntry);
   for (GwenWord i = 0, lim = t->cap; i < lim; i++)
     for (GwenTableEntry *e = t->tab[i]; e;
@@ -747,8 +515,8 @@ static void walk_table(GwenCore *f, GwenWord x, GwenWord *p0, GwenWord *t0, Gwen
       e->val = cp(f, e->val, p0, t0),
       e = e->next); }
 
-static void print_table(GwenCore *f, gwen_file o, GwenWord x) {
-  gwen_table t = (gwen_table) x;
+static void print_table(GwenCore *f, GwenFile *o, GwenWord x) {
+  GwenTable *t = (GwenTable*) x;
   fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x); }
 
 // this is a totally ad hoc, unproven hashing method.
@@ -779,15 +547,15 @@ static GwenWord hash(GwenCore *f, GwenWord x) {
   GwenWord len = (GwenCell*) t - t->head;
   return mix ^ (mix * len); }
 
-static gwen_table new_table(GwenCore *f) {
-  gwen_table t = cells(f, Width(GwenTable) + 1);
+static GwenTable *new_table(GwenCore *f) {
+  GwenTable *t = cells(f, Width(GwenTable) + 1);
   if (!t) return t;
   GwenTableEntry **tab = (void*) (t + 1);
   tab[0] = 0;
   return ini_table(t, 0, 1, tab); }
 
 
-static NoInline gwen_table table_insert(GwenCore *f, gwen_table t, GwenWord k, GwenWord v, GwenWord i) {
+static NoInline GwenTable *table_insert(GwenCore *f, GwenTable *t, GwenWord k, GwenWord v, GwenWord i) {
   GwenTableEntry *e;
   avec(f, t, avec(f, k, avec(f, v, e = cells(f, Width(GwenTableEntry)))));
   if (!e) return 0;
@@ -813,23 +581,23 @@ static NoInline gwen_table table_insert(GwenCore *f, gwen_table t, GwenWord k, G
   t->cap = cap1, t->tab = tab1;
   return t; }
 
-static Inline GwenWord index_of_key(GwenCore *f, gwen_table t, GwenWord k) {
+static Inline GwenWord index_of_key(GwenCore *f, GwenTable *t, GwenWord k) {
   // relies on table capacity being a power of 2
   return (t->cap - 1) & hash(f, k); }
 
-static NoInline gwen_table table_set(GwenCore *f, gwen_table t, GwenWord k, GwenWord v) {
+static NoInline GwenTable *table_set(GwenCore *f, GwenTable *t, GwenWord k, GwenWord v) {
   GwenWord index = index_of_key(f, t, k);
   GwenTableEntry *entry = t->tab[index];
   while (entry && !eql(f, k, entry->key)) entry = entry->next;
   if (entry) return entry->val = v, t;
   return table_insert(f, t, k, v, index); }
 
-static GwenTableEntry *table_delete_r(GwenCore *f, gwen_table t, GwenWord k, GwenWord *v, GwenTableEntry *e) {
+static GwenTableEntry *table_delete_r(GwenCore *f, GwenTable *t, GwenWord k, GwenWord *v, GwenTableEntry *e) {
   if (!e) return e;
   if (eql(f, e->key, k)) return t->len--, *v = e->val, e->next;
   return e->next = table_delete_r(f, t, k, v, e->next), e; }
 
-static void table_shrink(GwenCore *f, gwen_table t) {
+static void table_shrink(GwenCore *f, GwenTable *t) {
   GwenWord cap = t->cap;
   GwenTableEntry *coll = 0, *x, *y; // collect all entries in one list
   for (GwenWord i = 0; i < cap; i++)
@@ -843,7 +611,7 @@ static void table_shrink(GwenCore *f, gwen_table t) {
     t->tab[i] = coll,
     coll = x; }
 
-static NoInline GwenWord table_delete(GwenCore *f, gwen_table t, GwenWord k, GwenWord v) {
+static NoInline GwenWord table_delete(GwenCore *f, GwenTable *t, GwenWord k, GwenWord v) {
   GwenWord idx = index_of_key(f, t, k);
   t->tab[idx] = table_delete_r(f, t, k, &v, t->tab[idx]);
   if (t->len / t->cap > 1) table_shrink(f, t);
@@ -851,46 +619,46 @@ static NoInline GwenWord table_delete(GwenCore *f, gwen_table t, GwenWord k, Gwe
 
 static Vm(tnew) {
   Have(Width(GwenTable) + 1);
-  gwen_table t = (void*) Hp;
-  GwenTableEntry **tab = (void*) (t + 1);
+  GwenTable *t = (GwenTable*) Hp;
+  GwenTableEntry **tab = (GwenTableEntry**) (t + 1);
   Hp += Width(GwenTable) + 1;
   tab[0] = 0;
   return op(1, (GwenWord) ini_table(t, 0, 1, tab)); }
 
-static GwenWord table_get(GwenCore *f, gwen_table t, GwenWord k, GwenWord zero) {
+static GwenWord table_get(GwenCore *f, GwenTable *t, GwenWord k, GwenWord zero) {
   GwenTableEntry *entry = t->tab[index_of_key(f, t, k)];
   while (entry && !eql(f, k, entry->key)) entry = entry->next;
   return entry ? entry->val : zero; }
 
 static Vm(tget) {
   return op(3, !tblp(Sp[1]) ? Sp[2] :
-    table_get(f, (gwen_table) Sp[1], Sp[2], Sp[0])); }
+    table_get(f, (GwenTable*) Sp[1], Sp[2], Sp[0])); }
 
 static Vm(tset) {
   GwenWord x = Sp[0];
   if (!tblp(x)) return op(3, nil);
   Pack(f);
-  gwen_table t = table_set(f, (gwen_table) x, Sp[1], Sp[2]);
+  GwenTable *t = table_set(f, (GwenTable*) x, Sp[1], Sp[2]);
   Unpack(f);
   return !t ? Oom : op(3, Sp[2]); }
 
 static Vm(tdel) {
   GwenWord x = Sp[1];
   return op(3, !tblp(x) ? nil :
-    table_delete(f, (gwen_table) x, Sp[2], Sp[0])); }
+    table_delete(f, (GwenTable*) x, Sp[2], Sp[0])); }
 
 static Vm(tlen) {
   GwenWord x = Sp[0];
   if (!tblp(x)) return op(1, nil);
-  gwen_table t = (gwen_table) x;
+  GwenTable *t = (GwenTable*) x;
   return op(1, putnum(t->len)); }
 
 static Vm(tkeys) {
   if (!tblp(Sp[0])) return op(1, nil);
-  gwen_table t = (gwen_table) Sp[0];
+  GwenTable *t = (GwenTable*) Sp[0];
   GwenWord len = t->len, list = nil;
   Have(len * Width(GwenPair));
-  gwen_pair pairs = (gwen_pair) Hp;
+  GwenPair *pairs = (GwenPair*) Hp;
   Hp += len * Width(GwenPair);
   for (int i = t->cap; i;)
     for (GwenTableEntry *e = t->tab[--i]; e; e = e->next)
@@ -900,7 +668,7 @@ static Vm(tkeys) {
   return op(1, list); }
 
 
-static thread mo_n(gwen_core, size_t);
+static GwenCell *mo_n(GwenCore*, size_t);
 // index of item in list
 static long lidx(GwenCore *f, GwenWord l, GwenWord x) {
   for (long i = 0; twop(l); l = B(l), i++) if (eql(f, A(l), x)) return i;
@@ -935,7 +703,7 @@ static GwenVm pushr, cond, jump, pushk, yield, ret, ap, apn, tap, tapn;
 typedef C0(c0);
 // and
 // - generate phase: allocate thread; call constructor; trim thread
-#define C1(n, ...) thread n(GwenCore *f, scope *c, thread k, ##__VA_ARGS__)
+#define C1(n, ...) GwenCell *n(GwenCore *f, scope *c, GwenCell *k, ##__VA_ARGS__)
 typedef C1(c1);
 
 
@@ -951,17 +719,17 @@ static scope enscope(GwenCore *f, scope par, GwenWord args, GwenWord imps) {
   return c; }
 
 static GwenWord
-  lassoc(gwen_core, GwenWord, GwenWord),
-  lconcat(gwen_core, GwenWord, GwenWord),
-  rlconcat(gwen_core, GwenWord, GwenWord);
+  lassoc(GwenCore*, GwenWord, GwenWord),
+  lconcat(GwenCore*, GwenWord, GwenWord),
+  rlconcat(GwenCore*, GwenWord, GwenWord);
 
 static c0 analyze_if, analyze_let, analyze_arguments, analyze_list;
 static c1 c1apn, c1var, c2var;
 // basic functions
 static C1(yieldk) { return k; }
 static C1(pull) { return ((c1*) (*f->sp++))(f, c, k); }
-static thread construct(GwenCore *f, scope *c, size_t m) {
-  thread k = mo_n(f, m);
+static GwenCell *construct(GwenCore *f, scope *c, size_t m) {
+  GwenCell *k = mo_n(f, m);
   if (!k) return k;
   memset(k, -1, m * sizeof(GwenWord));
   return pull(f, c, k + m); }
@@ -974,10 +742,10 @@ static size_t em2(GwenCore *f, scope *c, size_t m, GwenVm *i, GwenWord x) {
   return pushs(f, 3, c1ix, i, x) ? m + 2 : 0; }
 // analyzer
 
-static NoInline size_t analyze_symbol(gwen_core, scope*, size_t, GwenWord, scope);
+static NoInline size_t analyze_symbol(GwenCore*, scope*, size_t, GwenWord, scope);
 static C0(analyze) {
   if (homp(x) && ptr(x)->ap == data) {
-    typ y = dtyp(x);
+    GwenType *y = dtyp(x);
     if (y == &pair_type) return analyze_list(f, c, m, x);
     if (y == &symbol_type) return analyze_symbol(f, c, m, x, *c); }
   return em2(f, c, m, pushk, x); }
@@ -1096,7 +864,7 @@ static GwenWord analyze_lambda(GwenCore *f, scope *c, GwenWord imps, GwenWord ex
   size_t m = analyze(f, &d, 4, exp);
   if (!m) goto fail;
   size_t arity = llen(d->args) + llen(d->imps);
-  thread k = pushs(f, 3, c1ix, ret, putnum(arity)) ? construct(f, &d, m) : 0;
+  GwenCell *k = pushs(f, 3, c1ix, ret, putnum(arity)) ? construct(f, &d, m) : 0;
   if (!k) goto fail;
   if (arity > 1) (--k)->x = putnum(arity), (--k)->ap = curry;
   trim_thread(k);
@@ -1146,15 +914,15 @@ static Vm(yield) { Pack(f); return YieldStatus; }
 
 static Vm(ap) {
   if (nump(Sp[1])) return Ip++, Sp++, Continue();
-  thread k = (thread) Sp[1];
+  GwenCell *k = (GwenCell*) Sp[1];
   Sp[1] = (GwenWord) (Ip + 1);
   Ip = k;
   return Continue(); }
 
 static Vm(apn) {
   size_t n = getnum(Ip[1].x);
-  thread ra = Ip + 2; // return address
-  Ip = ((thread) Sp[n]) + 2; // only used by let form so will not be num
+  GwenCell *ra = Ip + 2; // return address
+  Ip = ((GwenCell*) Sp[n]) + 2; // only used by let form so will not be num
   Sp[n] = (GwenWord) ra; // store return address
   return Continue(); }
 
@@ -1162,14 +930,14 @@ static Vm(tap) {
   GwenWord x = Sp[0], j = Sp[1];
   Sp += getnum(Ip[1].x) + 1;
   if (nump(j)) return op(1, j);
-  Ip = (thread) j;
+  Ip = (GwenCell*) j;
   *Sp = x;
   return Continue(); }
 
 static Vm(tapn) {
   size_t n = getnum(Ip[1].x),
          r = getnum(Ip[2].x);
-  Ip = ((thread) Sp[n]) + 2;
+  Ip = ((GwenCell*) Sp[n]) + 2;
   GwenStack osp = Sp;
   Sp += r + 1;
   while (n--) Sp[n] = osp[n];
@@ -1182,23 +950,23 @@ static Vm(pushkj) {
   return Continue(); }
 
 static Vm(curry) {
-  thread k;
+  GwenCell *k;
   size_t n = getnum(Ip[1].x),
          S = 3 + Width(struct tag);
   if (n == 2) {
     Have(S);
-    k = (thread) Hp;
+    k = (GwenCell*) Hp;
     k[0].ap = pushkj, k[1].x = *Sp++, k[2].m = Ip + 2;
     k[3].x = 0,   k[4].m = k; }
   else {
     S += 2;
     Have(S);
-    k = (thread) Hp;
+    k = (GwenCell*) Hp;
     k[0].ap = curry, k[1].x = putnum(n - 1);
     k[2].ap = pushkj,  k[3].x = *Sp++, k[4].m = Ip + 2;
     k[5].x = 0,    k[6].m = k; }
   Hp += S;
-  Ip = (thread) *Sp;
+  Ip = (GwenCell*) *Sp;
   *Sp = (GwenWord) k;
   return Continue(); }
 
@@ -1229,8 +997,8 @@ static C0(analyze_if) {
 // first emitter called for cond expression
 // pushes cond expression exit address onto scope stack ends
 static C1(generate_cond_push_exit) {
-  pair w = pairof(f, (GwenWord) k, (*c)->ends);
-  return !w ? 0 : pull(f, c, (thread) A((*c)->ends = (GwenWord) w)); }
+  GwenPair *w = pairof(f, (GwenWord) k, (*c)->ends);
+  return !w ? 0 : pull(f, c, (GwenCell*) A((*c)->ends = (GwenWord) w)); }
 
 // last emitter called for cond expression
 // pops cond expression exit address off scope stack ends
@@ -1238,10 +1006,10 @@ static C1(generate_cond_pop_exit) {
   return (*c)->ends = B((*c)->ends), pull(f, c, k); }
 
 static C1(generate_cond_push_branch) {
-  pair w = pairof(f, (GwenWord) k, (*c)->alts);
-  if (!w) return (thread) w;
+  GwenPair *w = pairof(f, (GwenWord) k, (*c)->alts);
+  if (!w) return (GwenCell*) w;
   (*c)->alts = (GwenWord) w;
-  k = (thread) w->a;
+  k = (GwenCell*) w->a;
   return pull(f, c, k); }
 
 static C1(generate_cond_peek_exit) {
@@ -1281,7 +1049,7 @@ static GwenWord desugr(GwenCore *f, GwenWord *d, GwenWord *e, GwenWord a) {
   GwenWord b; avec(f, a, b = desugr(f, d, e, B(a)));
   return !b ? b : (GwenWord) pairof(f, A(a), b); }
 
-static gwen_status desug(GwenCore *f, GwenWord *d, GwenWord *e) {
+static GwenStatus desug(GwenCore *f, GwenWord *d, GwenWord *e) {
   if (!twop(*d)) return Ok;
   GwenWord x, l = (GwenWord) literal_symbol(f, "\\");
   if (!l || !pushs(f, 1, l)) return Oom;
@@ -1368,10 +1136,10 @@ static size_t analyze_let(GwenCore *f, scope *b, size_t m, GwenWord exp) {
       else A(def) = B(d) = _; }
     // if toplevel then bind
     if (even && nilp((*b)->args)) {
-      thread t = cells(f, 2 * Width(GwenPair) + 2 + Width(struct tag));
+      GwenCell *t = cells(f, 2 * Width(GwenPair) + 2 + Width(struct tag));
       if (!t) goto fail;
-      gwen_pair w = (gwen_pair) t,
-                x = w + 1;
+      GwenPair *w = (GwenPair*) t,
+               *x = w + 1;
       t += 2 * Width(GwenPair);
       t[0].ap = define, t[1].x = A(nom), t[2].x = 0, t[3].m = t;
       ini_pair(w, A(def), nil); // dict add
@@ -1398,7 +1166,7 @@ static C0(analyze_macro, GwenWord b) {
   if (!pushs(f, 2, x, b)) return 0;
   x = (GwenWord) literal_symbol(f, "`");
   if (!x || !pushs(f, 1, x)) return 0;
-  pair mxp = (pair) cells(f, 4 * Width(GwenPair));
+  GwenPair *mxp = (GwenPair*) cells(f, 4 * Width(GwenPair));
   if (!mxp) return 0;
   x = (GwenWord) ini_pair(mxp, f->sp[1], (GwenWord) ini_pair(mxp+1, (GwenWord) ini_pair(mxp+2, f->sp[0], (GwenWord) ini_pair(mxp+3, f->sp[2], nil)), nil));
   f->sp += 2, *f->sp = x;
@@ -1432,13 +1200,13 @@ static Vm(define) {
 
 static Vm(ev0) {
   Pack(f);
-  gwen_status s = gwen_eval(f);
+  GwenStatus s = gwen_eval(f);
   Unpack(f);
   return s == Ok ? op(1, *Sp) : s; }
 
 static Vm(g_bind) {
   GwenWord x = Ip[1].x, var = A(x);
-  gwen_table t = (gwen_table) B(x);
+  GwenTable *t = (GwenTable*) B(x);
   x = table_get(f, t, var, var);
   Ip[0].ap = pushk;
   Ip[1].x = x;
@@ -1468,17 +1236,17 @@ static GwenWord rlconcat(GwenCore *f, GwenWord l, GwenWord n) {
   return n; }
 
 // allocate a thread
-static gwen_thread mo_n(GwenCore *f, uintptr_t n) {
-  gwen_thread k = cells(f, n + Width(struct tag));
+static GwenCell *mo_n(GwenCore *f, uintptr_t n) {
+  GwenCell *k = cells(f, n + Width(struct tag));
   return !k ? k : mo_ini(k, n); }
 
 // compile and execute expression
-NoInline gwen_status gwen_eval(GwenCore *f) {
+NoInline GwenStatus gwen_eval(GwenCore *f) {
   scope c = enscope(f, (scope) nil, nil, nil);
   if (!c) return Oom;
   GwenWord x = f->sp[0];
   f->sp[0] = (GwenWord) yieldk;
-  thread k = 0;
+  GwenCell *k = 0;
   size_t m = 1;
   avec(f, c,
     m = analyze(f, &c, m, x),
@@ -1488,7 +1256,7 @@ NoInline gwen_status gwen_eval(GwenCore *f) {
   if (!k) return Oom;
   f->sp[0] = (GwenWord) f->ip;
   f->ip = k;
-  gwen_status s;
+  GwenStatus s;
 #if TCO
   s = f->ip->ap(f, f->ip, f->hp, f->sp);
 #else
@@ -1496,11 +1264,11 @@ NoInline gwen_status gwen_eval(GwenCore *f) {
   s = s == Eof ? Ok : s;
 #endif
   if (s != Ok) f->ip = 0, f->sp = f->pool + f->len;
-  else x = f->sp[0], f->ip = (thread) *++f->sp, f->sp[0] = x;
+  else x = f->sp[0], f->ip = (GwenCell*) *++f->sp, f->sp[0] = x;
   return s; }
 
 void gwen_close(GwenCore *f) {
   if (f) free(f->pool < f->loop ? f->pool : f->loop), free(f); }
 
-void gwen_write1f(GwenCore *f, gwen_file out) {
+void gwen_write1f(GwenCore *f, GwenFile *out) {
   transmit(f, out, f->sp[0]); }
