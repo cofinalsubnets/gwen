@@ -1,8 +1,8 @@
 default: test
 test: test_tc test_tr
 
-n=gwen
-x=gw
+n=p
+x=p
 c=.
 b=.
 l=.

@@ -1,4 +1,4 @@
-#include "gwen.h"
+#include "p.h"
 #include <getopt.h>
 #include <unistd.h>
 #include <errno.h>
@@ -6,24 +6,24 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#define Ok GwenStatusOk
-#define Eof GwenStatusEof
-#define Oom GwenStatusOom
+#define Ok PStatusOk
+#define Eof PStatusEof
+#define Oom PStatusOom
 
-static gwen_status catf(gwen_core f, gwen_file in, gwen_file out, bool *y) {
+static p_status catf(p_core f, p_file in, p_file out, bool *y) {
   for (;;) {
-    gwen_status s = gwen_read1f(f, in);
+    p_status s = p_read1f(f, in);
     if (s == Eof) return Ok;
     if (s != Ok) return s;
     if (*y) putchar(' ');
     else *y = true;
-    gwen_write1f(f, out); } }
+    p_write1f(f, out); } }
 
-static gwen_status expcat(gwen_core f, char **av, bool usestdin) {
-  gwen_status s = Ok;
+static p_status expcat(p_core f, char **av, bool usestdin) {
+  p_status s = Ok;
   bool y = false;
   while (s == Ok && *av) {
-    gwen_file in = fopen(*av++, "r");
+    p_file in = fopen(*av++, "r");
     if (!in) s = Oom;
     else s = catf(f, in, stdout, &y), fclose(in); }
   if (s == Ok && usestdin)
@@ -43,31 +43,31 @@ static FILE *try_open(char *nom) {
   if (!file) fprintf(stderr, "# error opening %s: %s\n", nom, strerror(errno));
   return file; }
 
-static gwen_status run_file(gwen_core f, gwen_file in) {
-  gwen_status s;
+static p_status run_file(p_core f, p_file in) {
+  p_status s;
   // evaluate expressions for side effects
-  while ((s = gwen_read1f(f, in)) == Ok && (s = gwen_eval(f)) == Ok)
-    gwen_drop(f, 1);
+  while ((s = p_read1f(f, in)) == Ok && (s = p_eval(f)) == Ok)
+    p_drop(f, 1);
   return s == Eof ? Ok : s; }
 
-static gwen_status gwen_repl(gwen_core f, gwen_file in, gwen_file out) {
-  for (gwen_status s;;) {
+static p_status p_repl(p_core f, p_file in, p_file out) {
+  for (p_status s;;) {
     fprintf(out, ">>> ");
-    if ((s = gwen_read1f(f, in)) == Eof) return Ok;
-    if (s == Ok && (s = gwen_eval(f)) == Ok)
-      gwen_write1f(f, out),
+    if ((s = p_read1f(f, in)) == Eof) return Ok;
+    if (s == Ok && (s = p_eval(f)) == Ok)
+      p_write1f(f, out),
       fprintf(out, "\n"),
-      gwen_drop(f, 1); } }
+      p_drop(f, 1); } }
 
-static gwen_status run(gwen_core f, char **av, bool usestdin) {
-  gwen_status s = Ok;
+static p_status run(p_core f, char **av, bool usestdin) {
+  p_status s = Ok;
   for (; s == Ok && *av; av++) {
     FILE *file = try_open(*av);
     if (!file) return Eof;
     s = run_file(f, file);
     fclose(file); }
   if (s != Ok || !usestdin) return s;
-  if (isatty(STDIN_FILENO)) return gwen_repl(f, stdin, stdout);
+  if (isatty(STDIN_FILENO)) return p_repl(f, stdin, stdout);
   return run_file(f, stdin); }
 
 int main(int ac, char **av) {
@@ -81,7 +81,7 @@ int main(int ac, char **av) {
     case -1: goto out; } out:
   av += optind;
   usestdin = usestdin || ac == optind;
-  gwen_core f = gwen_open();
-  gwen_status s = f ? (cat ? expcat : run)(f, av, usestdin) : Oom;
-  gwen_close(f);
+  p_core f = p_open();
+  p_status s = f ? (cat ? expcat : run)(f, av, usestdin) : Oom;
+  p_close(f);
   return s; }
