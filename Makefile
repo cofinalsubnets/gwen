@@ -3,10 +3,10 @@ test: test_tc test_tr
 
 n=gwen
 x=gw
-c=c
-b=_b
-l=l
-d=doc
+c=.
+b=.
+l=.
+d=.
 
 prelude=$l/prelude.$x
 tco_binary=$b/$n.tc.bin
@@ -40,8 +40,8 @@ made_files=$(made_binary) $(made_static_library)\
 						 $(made_vim_ftdetect) $(made_vim_syntax)\
 						 $(made_manpage)
 
-$(made_static_library): $b/$n.o
-	ar rcs $@ $b/$n.o
+$(made_static_library): $b/$n.tc.o
+	ar rcs $@ $b/$n.tc.o
 	strip --strip-unneeded $@
 	ranlib $@
 $(made_manpage): $d/$n.1.md $b
@@ -114,7 +114,7 @@ repl: $(tco_binary) $(prelude)
 serve:
 	darkhttpd .
 test_js:
-	cd js && npm test
+	npm test
 test_tc: $(tco_binary)
 	@echo '[tco]'
 	@/usr/bin/env TIMEFORMAT="in %Rs" sh -c "time ./$(tco_binary) $(prelude) $(tests)"

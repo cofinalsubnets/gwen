@@ -1,8 +1,9 @@
 const
   gwen = require('../gwen'),
-  fs = require('node:fs'),
+  fs = require('node:fs/promises'),
   test = require('node:test'),
-  assert = require('node:assert/strict');
+  assert = require('node:assert/strict'),
+  testDir = 'test';
 
 const
   s = '(1 2 (3 (4) 5) 6 (7 eight) 9)',
@@ -10,13 +11,13 @@ const
 test('gwen.read', t => assert.deepEqual(l, gwen.read(s)));
 test('gwen.show', t => assert.equal(s, gwen.show(l)));
 
-const
-  [Let, Assert] = [':', 'assert'].map(Symbol.for),
-  sharedTests = [ 'church', 'closure', 'heron', 'lambda', 'tak' ];
-for (const t of sharedTests) {
-  const expr = gwen.read(fs.readFileSync(`../test/${t}.gw`).toString());
-  test(t, x => gwen.eval([Let, Assert, assert, expr]));
-}
+test('common tests', t => {
+  const [Let, Assert] = [':', 'assert'].map(Symbol.for);
+  return Promise.all([ 'church', 'closure', 'heron', 'lambda', 'tak' ].map(async n => {
+    const expr = gwen.read((await fs.readFile(`test/${n}.gw`)).toString());
+    await t.test(n, x => gwen.eval([Let, Assert, assert, expr]));
+  }));
+});
 
 test('fib', t => {
   const
