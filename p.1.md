@@ -1,10 +1,10 @@
-% GWEN(1) Version 0.9 | GWEN
+% P(1) Version 0.9 | P
 
-GWEN
+P
 ====
 
 
-**gwen** - list expression interpreter
+**p** - list expression interpreter
 
 
 
@@ -12,11 +12,11 @@ SYNOPSIS
 ========
 
 
-| **gwen** \[**-i**] \[**-c**] \[**-h**] \[_file_ _..._]
+| **p** \[**-i**] \[**-c**] \[**-h**] \[_file_ _..._]
 
 
 
 DESCRIPTION
 ===========
 
-gwen
+p

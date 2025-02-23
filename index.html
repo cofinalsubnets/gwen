@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>gwen.js demo</title>
+    <title>p.js demo</title>
     <style>
       * { line-height: 1.4em; font-family: monospace,sans-serif; }
       body { margin: 1em; max-width: 60em; background: hsl(220, 90%, 80%); color: #222; }
@@ -14,12 +14,12 @@
       td, th { border: 1px solid black; padding: 0.5em;}
       textarea { margin-top: 1em; margin-bottom: 1em; }
     </style>
-    <script src='gwen.js'></script>
+    <script src='p.js'></script>
     <script>
       window.addEventListener('load', () => {
         const input = document.getElementById('input'),
               button = document.getElementById('eval'),
-              { show, eval, read } = gwen;
+              { show, eval, read } = p;
         button.addEventListener('click', () => {
           try {
             alert(show(eval(read(input.value))));
@@ -31,17 +31,17 @@
     </script>
   </head>
   <body>
-    <h1>gwen.js demo</h1>
-    <p>this is an interpreter for gwen written in javascript</p>
+    <h1>p.js demo</h1>
+    <p>this is an interpreter for p written in javascript</p>
     <ul>
-      <li><a href="https://github.com/cofinalsubnets/gwen">gwen</a></li>
-      <li><a href="https://github.com/cofinalsubnets/gwen/blob/main/gwen.js">gwen.js</a></li>
+      <li><a href="https://github.com/cofinalsubnets/p">p</a></li>
+      <li><a href="https://github.com/cofinalsubnets/p/blob/main/p.js">p.js</a></li>
     </ul>
     <p>type an expression in the text box below and press eval...</p>
     <p>there are five special forms that are pretty close to their scheme counterparts:</p>
     <table>
       <thead>
-        <tr><th scope=col>gwen</th><th scope=col>scheme</th></tr>
+        <tr><th scope=col>p</th><th scope=col>scheme</th></tr>
       </thead>
       <tbody>
         <tr><td><code>`</code></td><td><code>quote</code></td></tr>

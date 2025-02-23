@@ -1,4 +1,4 @@
-const gwen = (() => {
+const p = (() => {
   const
     { isArray } = Array, // need this
     // special forms, need these
@@ -36,7 +36,7 @@ const gwen = (() => {
 
     //
     // parse one expression from a string and return it
-    gwen_read = (s) => expr(s, (_, x) => x[0], e => console.error('parse error', e)),
+    p_read = (s) => expr(s, (_, x) => x[0], e => console.error('parse error', e)),
 
     // top level environment definitions
     global_env = (g => x => g[x])([
@@ -106,19 +106,19 @@ const gwen = (() => {
     },
 
     // print function
-    gwen_show = x => {
+    p_show = x => {
       switch (typeof(x)) {
         case 'symbol': return Symbol.keyFor(x) || '#symbol';
         case 'function': return `#\\${x.name}`;
-        default: return isArray(x) ? `(${x.map(gwen_show).join(' ')})` : '' + x;
+        default: return isArray(x) ? `(${x.map(p_show).join(' ')})` : '' + x;
       }
     };
 
   return {
-    read: gwen_read,
-    show: gwen_show,
+    read: p_read,
+    show: p_show,
     eval: x => ev(x)(global_env),
   }
 })();
 
-if (typeof(module) !== 'undefined') module.exports = gwen;
+if (typeof(module) !== 'undefined') module.exports = p;

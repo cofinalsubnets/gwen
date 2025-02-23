@@ -1,124 +1,144 @@
-default: test
-test: test_tc test_tr
-
+# makefile for p
+# name and file extension
 n=p
 x=p
-c=.
-b=.
-l=.
-d=.
 
-prelude=$l/prelude.$x
-tco_binary=$b/$n.tc.bin
-trampoline_binary=$b/$n.tr.bin
+default: test
 
-tests=$(sort $(wildcard test/*.$x))
+# c headers and source files
+h=$(wildcard *.h)
+c=$(filter-out main.c, $(wildcard *.c))
+
 #build
-CFLAGS ?= -std=c99 -g -O2 -Wall\
+CFLAGS ?= -std=c99 -g -O2 -Wall -fpic\
  	-Wstrict-prototypes -Wno-shift-negative-value\
 	-fno-asynchronous-unwind-tables -fno-stack-protector
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
-$(tco_binary): $c/main.c $b/$n.tc.o
-	$(cc) $^ -o $@
-$(trampoline_binary): $c/main.c $b/$n.tr.o
-	$(cc) -DTCO=0 $^ -o $@
-
-$b/$n.tc.o: $c/$n.c $c/$n.h
+%.tc.o: %.c
 	$(cc) -c $< -o $@
-$b/$n.tr.o: $c/$n.c $c/$n.h
-	$(cc) -c -DTCO=0 $< -o $@
 
+%.tr.o: %.c
+	$(cc) -c $< -o $@ -DTCO=0
 
-# all the local files to install
-made_binary=$(tco_binary)
-made_static_library=$b/lib$n.a
-made_manpage=$b/$n.1
-made_vim_ftdetect=vim/$n.ftdetect.vim
-made_vim_syntax=vim/$n.syntax.vim
-made_files=$(made_binary) $(made_static_library)\
-						 $(made_vim_ftdetect) $(made_vim_syntax)\
-						 $(made_manpage)
-
-$(made_static_library): $b/$n.tc.o
-	ar rcs $@ $b/$n.tc.o
+lib$n.%.a: $(c:.c=.%.o)
+	ar rcs $@ $^
 	strip --strip-unneeded $@
 	ranlib $@
-$(made_manpage): $d/$n.1.md $b
-	pandoc -s -t man -o $@ $<
+
+lib$n.%.so: $(c:.c=.%.o)
+	$(cc) -shared -o $@ $^
+
+$n.%.bin: main.c lib$n.%.a
+	$(cc) $^ -o $@
+
+# tco / trampoline binaries
+tc_bin=$n.tc.bin
+tr_bin=$n.tr.bin
+
 
 # installlation
 # default install to home directory under ~/.local/
 DESTDIR ?= $(HOME)/
 PREFIX ?= .local/
 VIMPREFIX ?= .vim/
+
 dest=$(DESTDIR)$(PREFIX)
 vimdir=$(DESTDIR)$(VIMPREFIX)
 
-# all the target files
-installed_binary=$(dest)/bin/$n
-installed_static_library=$(dest)/lib/lib$n.a
-installed_prelude=$(dest)/lib/$n/prelude.$x
-installed_c_header=$(dest)/include/$n.h
-installed_manpage=$(dest)/share/man/man1/$n.1
-installed_vim_ftdetect=$(vimdir)/ftdetect/$n.vim
-installed_vim_syntax=$(vimdir)/syntax/$n.vim
-installed_files=$(installed_binary) $(installed_static_library)\
-						 $(installed_prelude) $(installed_c_header)\
-						 $(installed_vim_ftdetect) $(installed_vim_syntax)\
-						 $(installed_manpage)
+prelude=prelude.$x
+source_binary=$(tc_bin)
+source_static_library=lib$n.tc.a
+source_prelude=$(prelude)
+source_c_header=$n.h
+source_manpage=$n.1
+source_vim_ftdetect=$n.ftdetect.vim
+source_vim_syntax=$n.syntax.vim
+source_shared_library=lib$n.tc.so
 
-install: all $(installed_files)
+all: $(source_binary) $(source_static_library) $(source_c_header)\
+	$(source_prelude) $(source_manpage) $(source_vim_syntax) $(source_shared_library)
+
+$(source_manpage): $n.1.md
+	pandoc -s -t man -o $@ $<
+
+# all installed file paths
+target_binary=$(dest)/bin/$n
+target_static_library=$(dest)/lib/lib$n.a
+target_prelude=$(dest)/lib/$n/prelude.$x
+target_c_header=$(dest)/include/$n.h
+target_manpage=$(dest)/share/man/man1/$n.1
+target_vim_ftdetect=$(vimdir)/ftdetect/$n.vim
+target_vim_syntax=$(vimdir)/syntax/$n.vim
+target_shared_library=$(dest)/lib/lib$n.so
+target_files=$(target_binary) $(target_static_library)\
+						 $(target_prelude) $(target_c_header)\
+						 $(target_vim_ftdetect) $(target_vim_syntax)\
+						 $(target_manpage) $(target_shared_library)
+
+install: $(target_files)
 uninstall:
-	rm -f $(installed_files)
+	rm -f $(target_files)
 
-$(installed_binary): $(made_binary)
+.PHONY:	all install uninstall
+
+$(target_binary): $(source_binary)
 	install -D -m 755 -s $< $@
-$(installed_vim_ftdetect): $(made_vim_ftdetect)
+$(target_vim_ftdetect): $(source_vim_ftdetect)
 	install -D -m 644 $< $@
-$(installed_vim_syntax): $(made_vim_syntax)
+$(target_vim_syntax): $(source_vim_syntax)
 	install -D -m 644 $< $@
-$(installed_static_library): $(made_static_library)
+$(target_static_library): $(source_static_library)
 	install -D -m 644 $< $@
-$(installed_manpage): $(made_manpage)
+$(target_manpage): $(source_manpage)
 	install -D -m 644 $< $@
-$(installed_prelude): $(prelude)
+$(target_prelude): $(source_prelude)
 	install -D -m 644 $< $@
-$(installed_c_header): $c/$n.h
+$(target_c_header): $(source_c_header)
 	install -D -m 644 $< $@
+$(target_shared_library): $(source_shared_library)
+	install -D -m 644 $< $@
+
+tests=$(sort $(wildcard test/*.$x))
+test: test_c
+test_c: test_tc test_tr
+test_all: test_c test_js
+test_js:
+	npm test
+test_tc: $(tc_bin)
+	@echo '[tco]'
+	@/usr/bin/env TIMEFORMAT="in %Rs" sh -c "time ./$(tc_bin) $(prelude) $(tests)"
+test_tr: $(tr_bin)
+	@echo '[trampoline]'
+	@/usr/bin/env TIMEFORMAT="in %Rs" sh -c "time ./$(tr_bin) $(prelude) $(tests)"
+.PHONY: test test_all test_c test_js test_tr test_tc
 
 clean:
 	rm -rf `git check-ignore * */*`
 # valgrind detects some memory errors
-valg: $(tco_binary)
-	valgrind --error-exitcode=1 ./$(tco_binary) $(prelude) $(tests)
+valg: $(tc_bin)
+	valgrind --error-exitcode=1 ./$(tc_bin) $(prelude) $(tests)
 # count lines of code
 sloc:
 	cloc --force-lang=Lisp,$x * test/* lib/*
 # size of binaries
-bits: $(tco_binary) $(trampoline_binary)
+bits: $(tc_bin) $(tr_bin)
 	du -h $^
-disasm: $(tco_binary)
+disasm: $(tc_bin)
 	rizin -A $<
 # profiling on linux
-perf.data: $(tco_binary)
-	perf record ./$(tco_binary) $(prelude) $(tests)
+perf.data: $(tc_bin)
+	perf record ./$(tc_bin) $(prelude) $(tests)
 perf: perf.data
 	perf report
 flamegraph.svg: perf.data
 	flamegraph --perfdata $<
 flame: flamegraph.svg
 	xdg-open $<
-repl: $(tco_binary) $(prelude)
-	rlwrap ./$(tco_binary) -i $(prelude)
+repl: $(tc_bin) $(prelude)
+	rlwrap ./$(tc_bin) -i $(prelude)
 serve:
 	darkhttpd .
-test_js:
-	npm test
-test_tc: $(tco_binary)
-	@echo '[tco]'
-	@/usr/bin/env TIMEFORMAT="in %Rs" sh -c "time ./$(tco_binary) $(prelude) $(tests)"
-test_tr: $(trampoline_binary)
-	@echo '[trampoline]'
-	@/usr/bin/env TIMEFORMAT="in %Rs" sh -c "time ./$(trampoline_binary) $(prelude) $(tests)"
-.PHONY: test_all all test_c test_js install uninstall clean valg sloc bits disasm perf flame repl serve
+
+.PHONY: clean valg sloc bits disasm perf flame repl serve
+.NOTINTERMEDIATE: $(c:.c=.tc.o) $(c:.c=.tr.o)

@@ -10,17 +10,17 @@
 #define Eof PStatusEof
 #define Oom PStatusOom
 
-static p_status catf(p_core f, p_file in, p_file out, bool *y) {
+static PStatus catf(PCore*f, p_file in, p_file out, bool *y) {
   for (;;) {
-    p_status s = p_read1f(f, in);
+    PStatus s = p_read1f(f, in);
     if (s == Eof) return Ok;
     if (s != Ok) return s;
     if (*y) putchar(' ');
     else *y = true;
     p_write1f(f, out); } }
 
-static p_status expcat(p_core f, char **av, bool usestdin) {
-  p_status s = Ok;
+static PStatus expcat(PCore*f, char **av, bool usestdin) {
+  PStatus s = Ok;
   bool y = false;
   while (s == Ok && *av) {
     p_file in = fopen(*av++, "r");
@@ -43,15 +43,15 @@ static FILE *try_open(char *nom) {
   if (!file) fprintf(stderr, "# error opening %s: %s\n", nom, strerror(errno));
   return file; }
 
-static p_status run_file(p_core f, p_file in) {
-  p_status s;
+static PStatus run_file(PCore*f, p_file in) {
+  PStatus s;
   // evaluate expressions for side effects
   while ((s = p_read1f(f, in)) == Ok && (s = p_eval(f)) == Ok)
     p_drop(f, 1);
   return s == Eof ? Ok : s; }
 
-static p_status p_repl(p_core f, p_file in, p_file out) {
-  for (p_status s;;) {
+static PStatus p_repl(PCore*f, p_file in, p_file out) {
+  for (PStatus s;;) {
     fprintf(out, ">>> ");
     if ((s = p_read1f(f, in)) == Eof) return Ok;
     if (s == Ok && (s = p_eval(f)) == Ok)
@@ -59,8 +59,8 @@ static p_status p_repl(p_core f, p_file in, p_file out) {
       fprintf(out, "\n"),
       p_drop(f, 1); } }
 
-static p_status run(p_core f, char **av, bool usestdin) {
-  p_status s = Ok;
+static PStatus run(PCore*f, char **av, bool usestdin) {
+  PStatus s = Ok;
   for (; s == Ok && *av; av++) {
     FILE *file = try_open(*av);
     if (!file) return Eof;
@@ -81,7 +81,7 @@ int main(int ac, char **av) {
     case -1: goto out; } out:
   av += optind;
   usestdin = usestdin || ac == optind;
-  p_core f = p_open();
-  p_status s = f ? (cat ? expcat : run)(f, av, usestdin) : Oom;
+  PCore*f = p_open();
+  PStatus s = f ? (cat ? expcat : run)(f, av, usestdin) : Oom;
   p_close(f);
   return s; }
