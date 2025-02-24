@@ -22,6 +22,7 @@ typedef intptr_t PWord, *PStack, *PHeap;
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
 #define YieldStatus PStatusOk
 #define Continue() Ip->ap(f, Ip, Hp, Sp)
+#define Jump(v) v(f, Ip, Hp, Sp)
 #define Have(n) if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n)
 #define Have1() if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1)
 #else
@@ -33,6 +34,7 @@ typedef intptr_t PWord, *PStack, *PHeap;
 #define Unpack(f) ((void)0)
 #define YieldStatus PStatusEof
 #define Continue() Ok
+#define Jump(v) v(f)
 #define Have(n) if (Sp - Hp < n) return gc(f, n)
 #define Have1() if (Sp == Hp) return gc(f, 1)
 #endif
@@ -153,11 +155,15 @@ PWord
   cp(PCore*, PWord, PWord*, PWord*); // for recursive use by evac functions
 Vm(gc, uintptr_t s);
 PVm display, bnot, rng, data,
+    defmacro,
+    ret, ap1, ap, apn, tap, tap1, tapn,
+    jump, cond, pushp, pushk, yield,
    gensym, ev0, pairp, fixnump, symbolp, stringp,
    ssub, sget, slen, scat, prc, error, cons, car, cdr,
    lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
    seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-   curry;
+   curry
+   ;
 
 #define Oom PStatusOom
 #define Ok PStatusOk
@@ -178,12 +184,12 @@ PVm display, bnot, rng, data,
 #define BA(o) B(A(o))
 #define BB(o) B(B(o))
 #define BBA(o) B(B(A(o)))
-#define nilp(_) ((_)==nil)
+#define Z(x) ((intptr_t)(x))
+#define nilp(_) (Z(_)==nil)
 #define nump(_) ((PWord)(_)&1)
 #define homp(_) (!nump(_))
 #define datp(_) (ptr(_)->ap==data)
 #define mix ((uintptr_t)2708237354241864315)
-#define bind(n, x) if (!(n = (x))) return 0
 #define ptr(o) ((PCell*)(o))
 #define dtyp(x) ((PType*)ptr(x)[1].m)
 #define max(a, b) ((a)>(b)?(a):(b))
@@ -191,10 +197,15 @@ PVm display, bnot, rng, data,
 
 extern PType pair_type, string_type, symbol_type, table_type;
 
-static Inline bool strp(PWord _) { return homp(_) && dtyp(_) == &string_type; }
-static Inline bool twop(PWord _) { return homp(_) && dtyp(_) == &pair_type; }
-static Inline bool tblp(PWord _) { return homp(_) && dtyp(_) == &table_type; }
-static Inline bool symp(PWord _) { return homp(_) && dtyp(_) == &symbol_type; }
+static Inline bool hstrp(PWord _) { return dtyp(_) == &string_type; }
+static Inline bool htwop(PWord _) { return dtyp(_) == &pair_type; }
+static Inline bool htblp(PWord _) { return dtyp(_) == &table_type; }
+static Inline bool hsymp(PWord _) { return dtyp(_) == &symbol_type; }
+
+static Inline bool strp(PWord _) { return homp(_) && hstrp(_); }
+static Inline bool twop(PWord _) { return homp(_) && htwop(_); }
+static Inline bool tblp(PWord _) { return homp(_) && htblp(_); }
+static Inline bool symp(PWord _) { return homp(_) && hsymp(_); }
 
 static Inline PPair *ini_pair(PPair *w, PWord a, PWord b) {
   return w->ap = data, w->typ = &pair_type, w->a = a, w->b = b, w; }
@@ -220,4 +231,6 @@ static Inline size_t stack_height(PCore *f) { return f->pool + f->len - f->sp; }
 
 #define bounded(a, b, c) ((PWord)(a)<=(PWord)(b)&&(PWord)(b)<(PWord)(c))
 #define op(n, x) (Ip = (PCell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
+
+
 #endif

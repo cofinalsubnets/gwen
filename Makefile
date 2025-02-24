@@ -23,7 +23,7 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 lib$n.%.a: $(c:.c=.%.o)
 	ar rcs $@ $^
-	strip --strip-unneeded $@
+#	strip --strip-unneeded $@
 	ranlib $@
 
 lib$n.%.so: $(c:.c=.%.o)

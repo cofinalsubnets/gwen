@@ -24,6 +24,14 @@ static PStatus enquote(PCore *f) {
   f->sp[0] = (PWord) w;
   return Ok; }
 
+Vm(p_in) {
+  FILE *i = (FILE*) Sp[0];
+  Pack(f);
+  PStatus s = p_read1f(f, i);
+  Unpack(f);
+  if (s != Ok) return s;
+  return op(2, Sp[0]); }
+
 
 PStatus p_read1f(PCore *f, PFile* i) {
   int c = read_char(f, i);
@@ -81,5 +89,3 @@ static PStatus read_atom(PCore *f, PFile* i) {
   char *e; long j = strtol(b->text, &e, 0);
   PWord x = *e == 0 ? putnum(j) : (PWord) intern(f, b);
   return !x || !pushs(f, 1, x) ? Oom : Ok; }
-
-// end of parser

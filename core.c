@@ -1,15 +1,5 @@
 #include "i.h"
 
-static Vm(defmacro) {
-  Pack(f);
-  if (!table_set(f, f->macro, Sp[0], Sp[1])) return Oom;
-  Unpack(f);
-  return op(2, Sp[1]); }
-
-Vm(data) {
-  PWord this = (PWord) Ip;
-  return op(1, this); }
-
 #define S1(i) ((PCell[]){{i}})
 #define S2(i) ((PCell[]){{curry},{.x=putnum(2)},{i}})
 #define S3(i) ((PCell[]){{curry},{.x=putnum(3)},{i}})
