@@ -70,14 +70,6 @@ Vm(ret) {
 
 Vm(yield) { return Pack(f), YieldStatus; }
 
-Vm(ap1) {
-  PWord k = Sp[0];
-  if (nump(k)) return Ip++, *++Sp = k, Continue();
-  Sp[0] = Sp[1];
-  Sp[1] = (PWord) (Ip + 1);
-  Ip = (PCell*) k;
-  return Continue(); }
-
 Vm(ap) {
   if (nump(Sp[1])) return Ip++, Sp++, Continue();
   PCell *k = (PCell*) Sp[1];
@@ -90,14 +82,6 @@ Vm(apn) {
   PCell *ra = Ip + 2; // return address
   Ip = ((PCell*) Sp[n]) + 2; // only used by let form so will not be num
   Sp[n] = (PWord) ra; // store return address
-  return Continue(); }
-
-Vm(tap1) {
-  PWord j = Sp[0], x = Sp[1];
-  Sp += getnum(Ip[1].x) + 1;
-  if (nump(j)) return op(1, j);
-  Ip = (PCell*) j;
-  *Sp = x;
   return Continue(); }
 
 Vm(tap) {

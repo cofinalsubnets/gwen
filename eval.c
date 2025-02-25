@@ -82,7 +82,7 @@ static PEnv* envup(PCore *f, PEnv* par, PWord args, PWord imps) {
 
 static PWord ana_lam(PCore *f, PEnv**c, PWord imps, PWord exp);
 static ana ana_if, ana_let, ana_list;
-static cata cataap, cataap1, cataapn, catavar;
+static cata cataap, cataapn, catavar;
 // basic functions
 static Cata(yieldk) { return k; }
 static Cata(pull) { return ((cata*) (*f->sp++))(f, c, k); }
@@ -344,10 +344,6 @@ static size_t ana_args(PCore *f, PEnv* *c, size_t m, PWord x) {
     UM(f),
     m; }
 
-#ifndef R2L
-#define R2L 1
-#endif
-#if R2L
 static size_t ana_args_r2l(PCore *f, PEnv* *c, size_t m, PWord x) {
   if (!twop(x)) return m;
   PWord a = A(x);
@@ -356,21 +352,31 @@ static size_t ana_args_r2l(PCore *f, PEnv* *c, size_t m, PWord x) {
   UM(f);
   if (!m) return m;
   m = analyze(f, c, m, a);
-  if (!m || !((*c)->stack = (PWord) pairof(f, nil, (*c)->stack))) return 0;
+  if (!((*c)->stack = Z(pairof(f, nil, (*c)->stack)))) return 0;
   return m; }
-static size_t ana_ap(PCore *f, PEnv* *c, size_t m, PWord fn, PWord args) {
-  size_t argc = llen(args);
-  avec(f, fn, m = ana_args_r2l(f, c, m + argc, args));
-  for (m = m ? analyze(f, c, m, fn) : m; m && argc--;
-    m = pushs(f, 1, cataap1) ? m : 0,
-    (*c)->stack = B((*c)->stack));
-  return m; }
-#else
+
+static size_t ana_args_r(PCore *f, PEnv**c, size_t m, PWord x) {
+  avec(f, x, m = ((*c)->stack = Z(pairof(f, nil, (*c)->stack))) ? m : 0);
+  return m ? ana_args_r2l(f, c, m, x) : m; }
+
+
 static size_t ana_ap(PCore *f, PEnv* *c, size_t m, PWord fn, PWord args) {
   avec(f, args, m = analyze(f, c, m, fn));
-  m = m ? ana_args(f, c, m, args): m;
-  return m; }
-#endif
+  if (!m) return m;
+  size_t argc = llen(args);
+  if (!argc) return m;
+  if (argc > 1 &&
+      f->sp[0] == Z(cataix) &&
+      f->sp[1] == Z(pushk) &&
+      homp(f->sp[2]) &&
+      ptr(f->sp[2])[0].ap == curry &&
+      getnum(ptr(f->sp[2])[1].x) == argc) {
+    m = ana_args_r(f, c, m, args);
+    m = m && pushs(f, 2, cataapn, putnum(argc)) ? m + 2 : 0;
+    do (*c)->stack = B((*c)->stack);
+    while (argc--);
+    return m; }
+  return ana_args(f, c, m, args); }
 
 static Ana(ana_list) {
   PWord a = A(x), b = B(x);
@@ -512,11 +518,6 @@ static Cata(cataap) {
   else (--k)->ap = ap; // regular call
   return pull(f, c, k); } // ok
 
-static Cata(cataap1) {
-  if (k->ap == ret) k->ap = tap1; // tail call
-  else (--k)->ap = ap1; // regular call
-  return pull(f, c, k); } // ok
-                          //
 static Cata(cataapn) {
   PWord n = *f->sp++;
   if (k->ap == ret) k->x = n, (--k)->ap = tapn;

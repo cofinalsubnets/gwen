@@ -156,7 +156,7 @@ PWord
 Vm(gc, uintptr_t s);
 PVm display, bnot, rng, data,
     defmacro,
-    ret, ap1, ap, apn, tap, tap1, tapn,
+    ret, ap, apn, tap, tapn,
     jump, cond, pushp, pushk, yield,
    gensym, ev0, pairp, fixnump, symbolp, stringp,
    ssub, sget, slen, scat, prc, error, cons, car, cdr,
