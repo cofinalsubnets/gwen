@@ -2,32 +2,30 @@
 
 // at all times vm is running a function. thread compiler tracks
 // function state using this type
-typedef struct PEnv {
+typedef struct Env {
   // these parameters represent stack state at a point in compile process
-  PWord args,  // list // function positional arguments (never empty)
-        imps,  // list // closure variables
-        stack; // list // current values on stack
+  Word args,  // list // function positional arguments (never empty)
+       imps,  // list // closure variables
+       stack; // list // current values on stack
   // these are values of variables known at compile time
-  PWord lams; // alist // known function definitions
+  Word lams; // alist // known function definitions
   // these are two stacks of jump target addresses for conditional expressions
-  PWord alts, // list // alternate branch address stack
-        ends, // list // exit branch address stack
-        rets  // list // return address stack
-        ;
+  Word alts, // list // alternate branch address stack
+       ends; // list // exit branch address stack
   // this is the enclosing function PEnv* if any
-  struct PEnv *par;
-} PEnv;
+  struct Env *par;
+} PEnv, Env;
 
-static long lidx(PCore*, PWord, PWord);
+static long lidx(PCore*, Word, Word);
 
 // thread compiler functions are defined in two phases:
-#define Ana(n, ...) size_t n(PCore *f, PEnv* *c, size_t m, PWord x, ##__VA_ARGS__)
+#define Ana(n, ...) size_t n(Core *f, Env **c, size_t m, Word x, ##__VA_ARGS__)
 // ana phase 
 // - takes an expression and returns an upper bound for the length of a thread that
 //   pushes the input expression's value onto the stack.
 // - side effect: top of stack is now a function pointer that when called with a
 //   properly initialized thread object, starts next compiler phase.
-#define Cata(n, ...) PCell *n(PCore *f, PEnv* *c, PCell *k, ##__VA_ARGS__)
+#define Cata(n, ...) Cell *n(Core *f, Env **c, Cell *k, ##__VA_ARGS__)
 // cata phase
 // - takes a thread pointer, emits code immediately prior to the indexed instruction,
 //   pops a precomputed (by phase 0) continuation off the stack and calls it with the
@@ -36,75 +34,83 @@ static long lidx(PCore*, PWord, PWord);
 typedef Ana(ana);
 typedef Cata(cata);
 
-static cata yieldk;
 static ana analyze;
-static PStatus run_vm(PCore*);
-static PEnv* envup(PCore*, PEnv*, PWord, PWord);
-static size_t em1(PCore*, PEnv**, size_t, PVm*);
-static PCell *construct(PCore*, PEnv**, size_t);
+static Env *envup(Core*, Env*, Word, Word);
+static size_t em1(Core*, Env**, size_t, PVm*);
+static Cell *construct(Core*, Env**, size_t);
+
+static Status run_vm(Core *f) {
+  Status s;
+#if TCO
+  s = f->ip->ap(f, f->ip, f->hp, f->sp);
+#else
+  do s = f->ip->ap(f); while (s == Ok);
+  s = s == Eof ? Ok : s;
+#endif
+  return s; }
+
+static Cata(yieldk) { return k; }
 
 // compile and execute expression
-NoInline PStatus p_eval(PCore *f) {
-  PEnv* c = envup(f, (PEnv*) nil, nil, nil);
+NoInline Status p_eval(Core *f) {
+  Env *c = envup(f, (PEnv*) nil, nil, nil);
   if (!c) return Oom;
-  PWord x = f->sp[0];
-  f->sp[0] = (PWord) yieldk;
-  PCell *k = 0;
+  Word x = f->sp[0];
+  f->sp[0] = (Word) yieldk;
+  Cell *k = 0;
   size_t m = 1;
   avec(f, c,
     m = analyze(f, &c, m, x),
     m = m ? em1(f, &c, m, yield) : m,
     k = m ? construct(f, &c, m) : k);
-  k = k ? (PCell*) pushs(f, 1, k) : k;
+  k = k ? (Cell*) pushs(f, 1, k) : k;
   if (!k) return Oom;
-  f->sp[0] = (PWord) f->ip;
+  f->sp[0] = (Word) f->ip;
   f->ip = k;
-  PStatus s = run_vm(f);
+  Status s = run_vm(f);
   if (s != Ok) f->ip = 0, f->sp = f->pool + f->len;
-  else x = f->sp[0], f->ip = (PCell*) *++f->sp, f->sp[0] = x;
+  else x = f->sp[0], f->ip = (Cell*) *++f->sp, f->sp[0] = x;
   return s; }
 
 Vm(ev0) {
   Pack(f);
-  PStatus s = p_eval(f);
+  Status s = p_eval(f);
   Unpack(f);
   return s == Ok ? op(1, *Sp) : s; }
 
 // PEnv* constructor
-static PEnv* envup(PCore *f, PEnv* par, PWord args, PWord imps) {
+static Env *envup(Core *f, Env* par, Word args, Word imps) {
   if (!pushs(f, 3, args, imps, par)) return 0;
-  PEnv* c = (PEnv*) mo_n(f, Width(PEnv));
-  args = pop1(f), imps = pop1(f), par = (PEnv*) pop1(f);
+  Env *c = (Env*) mo_n(f, Width(Env));
+  args = pop1(f), imps = pop1(f), par = (Env*) pop1(f);
   if (c)
     c->args = args, c->imps = imps, c->par = par,
-    c->stack = c->alts = c->ends = c->rets = c->lams = nil;
+    c->stack = c->alts = c->ends = c->lams = nil;
   return c; }
 
-static PWord ana_lam(PCore *f, PEnv**c, PWord imps, PWord exp);
+static Word ana_lam(Core*, Env**, Word, Word);
 static ana ana_if, ana_let, ana_list;
 static cata cataap, cataapn, catavar;
 // basic functions
-static Cata(yieldk) { return k; }
-static Cata(pull) { return ((cata*) (*f->sp++))(f, c, k); }
-static PCell *construct(PCore *f, PEnv* *c, size_t m) {
-  PCell *k = mo_n(f, m);
+static Inline Cata(pull) { return ((cata*) (*f->sp++))(f, c, k); }
+static Cell *construct(Core *f, Env **c, size_t m) {
+  Cell *k = mo_n(f, m);
   if (!k) return k;
-  memset(k, -1, m * sizeof(PWord));
+  memset(k, -1, m * sizeof(Word));
   return pull(f, c, k + m); }
 static Cata(catai) { return k[-1].x = *f->sp++, pull(f, c, k - 1); }
 static Cata(cataix) { return k[-2].x = *f->sp++, k[-1].x = *f->sp++, pull(f, c, k - 2); }
 
 // generic instruction ana handlers
-static size_t em1(PCore *f, PEnv* *c, size_t m, PVm *i) {
+static size_t em1(Core *f, Env **c, size_t m, PVm *i) {
   return pushs(f, 2, catai, i) ? m + 1 : 0; }
-static size_t em2(PCore *f, PEnv* *c, size_t m, PVm *i, PWord x) {
+static size_t em2(Core *f, Env **c, size_t m, PVm *i, Word x) {
   return pushs(f, 3, cataix, i, x) ? m + 2 : 0; }
 // analyzer
-static PWord
-  lassoc(PCore*, PWord, PWord),
-  lconcat(PCore*, PWord, PWord),
-  rlconcat(PCore*, PWord, PWord);
-
+static Word
+  lassoc(Core*, Word, Word),
+  lconcat(Core*, Word, Word),
+  rlconcat(Core*, Word, Word);
 
 
 // conditionals
@@ -119,9 +125,9 @@ static cata
 // conditional expression analyzer
 static Ana(ana_if) {
   if (!pushs(f, 2, x, generate_cond_pop_exit)) return 0;
-  PPair p = { data, &pair_type, nil, nil };
+  Pair p = { data, &pair_type, nil, nil };
   for (x = pop1(f), MM(f, &x); m; x = BB(x)) {
-    if (!twop(x)) x = (PWord) &p;
+    if (!twop(x)) x = (Word) &p;
     m = analyze(f, c, m + 2, A(x));
     if (!twop(B(x))) { // this means we have just analyzed the default case
       m = pushs(f, 1, generate_cond_peek_exit) ? m : 0; // now branch to exit
@@ -182,30 +188,30 @@ static bool lambp(PCore *f, PWord x) {
 // DEFINE
 // let expressions
 
-static PWord ldels(PCore *f, PWord lam, PWord l) {
+static Word ldels(Core *f, Word lam, Word l) {
   if (!twop(l)) return nil;
-  PWord m = ldels(f, lam, B(l));
+  Word m = ldels(f, lam, B(l));
   if (!lassoc(f, lam, A(l))) B(l) = m, m = l;
   return m; }
 
-static PWord desugr(PCore *f, PWord *d, PWord *e, PWord a) {
-  if (!twop(a)) return (PWord) pairof(f, *e, nil);
-  PWord b; avec(f, a, b = desugr(f, d, e, B(a)));
-  return !b ? b : (PWord) pairof(f, A(a), b); }
+static Word desugr(Core *f, Word *d, Word *e, Word a) {
+  if (!twop(a)) return (Word) pairof(f, *e, nil);
+  Word b; avec(f, a, b = desugr(f, d, e, B(a)));
+  return !b ? b : (Word) pairof(f, A(a), b); }
 
-static PStatus desug(PCore *f, PWord *d, PWord *e) {
+static Status desug(Core *f, Word *d, Word *e) {
   if (!twop(*d)) return Ok;
-  PWord x, l = (PWord) literal_symbol(f, "\\");
+  Word x, l = (Word) literal_symbol(f, "\\");
   if (!l || !pushs(f, 1, l)) return Oom;
-  do if (!(x = (PWord) desugr(f, d, e, B(*d))) ||
-         !(x = (PWord) pairof(f, f->sp[0], x)))
+  do if (!(x = (Word) desugr(f, d, e, B(*d))) ||
+         !(x = (Word) pairof(f, f->sp[0], x)))
     return Oom;
   else *d = A(*d), *e = x;
   while (twop(*d));
   return f->sp++, Ok; }
 
 // list length
-static size_t llen(PWord l) {
+static size_t llen(Word l) {
   size_t n = 0;
   while (twop(l)) n++, l = B(l);
   return n; }
@@ -223,8 +229,7 @@ static size_t ana_let(PCore *f, PEnv* *b, size_t m, PWord exp) {
   avec(f, exp, q = envup(f, q, q->args, q->imps));
   if (!q) return 0;
   // lots of variables :(
-  PWord nom = nil, def = nil, lam = nil,
-       v = nil, d = nil, e = nil;
+  Word nom = nil, def = nil, lam = nil, v = nil, d = nil, e = nil;
   MM(f, &nom), MM(f, &def), MM(f, &exp), MM(f, &lam);
   MM(f, &d); MM(f, &e); MM(f, &v); MM(f, &q);
 // this is the longest function in the whole C implementation :(
@@ -385,38 +390,37 @@ static Ana(ana_list) {
     PWord macro = table_get(f, f->macro, a, 0);
     if (macro) return ana_mac(f, c, m, macro, b);
     PString* n = ((PSymbol*) a)->nom;
-    if (n && n->len == 1)
-      switch (n->text[0]) { // special form?
-        case '`': return em2(f, c, m, pushk, twop(b) ? A(b) : nil); // quote
-        case ',': return ana_seq(f, c, m, b); // sequence
-        case ':': return ana_let(f, c, m, b);
-        case '?': return ana_if(f, c, m, b);
-        case '\\': return (x = ana_lam(f, c, nil, b)) ? analyze(f, c, m, x) : x; } }
+    if (n && n->len == 1) switch (n->text[0]) { // special form?
+      case '`': return em2(f, c, m, pushk, twop(b) ? A(b) : nil);
+      case ',': return ana_seq(f, c, m, b);
+      case ':': return ana_let(f, c, m, b);
+      case '?': return ana_if(f, c, m, b);
+      case '\\': return (x = ana_lam(f, c, nil, b)) ? analyze(f, c, m, x) : x; } }
   return ana_ap(f, c, m, a, b); }
 
 
 static Vm(free_variable) {
-  PWord x = Ip[1].x, var = A(x);
-  PTable *t = (PTable*) B(x);
-  x = table_get(f, t, var, var);
+  Word x = Ip[1].x, var = A(x);
+  Table *t = (Table*) B(x);
+  x = table_get(f, t, var, nil); // error here if you want
   Ip[0].ap = pushk;
   Ip[1].x = x;
   return Continue(); }
 
 static Vm(lazy_bind) {
-  PWord ref = Ip[1].x, var = A(ref);
-  PEnv* env = (PEnv*) B(ref);
+  Word ref = Ip[1].x, var = A(ref);
+  Env *env = (Env*) B(ref);
   var = AB(lassoc(f, env->lams, var));
   Ip[0].ap = pushk;
   Ip[1].x = var;
   return Continue(); }
 
-static PWord lassoc(PCore *f, PWord l, PWord k) {
+static Word lassoc(Core *f, Word l, Word k) {
   for (; twop(l); l = B(l)) if (eql(f, k, AA(l))) return A(l);
   return 0; }
 
 // list concat
-static PWord lconcat(PCore *f, PWord l, PWord n) {
+static Word lconcat(Core *f, Word l, Word n) {
   if (!twop(l)) return n;
   avec(f, l, n = lconcat(f, B(l), n));
   return n ? (PWord) pairof(f, A(l), n) : n; }
@@ -433,41 +437,41 @@ PCell *mo_n(PCore *f, uintptr_t n) {
 
 static ana ana_sym;
 static Ana(analyze) {
-  if (homp(x) && datp(x)) {
-    PType *y = dtyp(x);
+  if (homp(x)) {
+    Type *y = dtyp(x);
     if (y == &pair_type) return ana_list(f, c, m, x);
     if (y == &symbol_type) return ana_sym(f, c, m, x); }
   return em2(f, c, m, pushk, x); }
 
 // index of item in list
-static long lidx(PCore *f, PWord l, PWord x) {
+static long lidx(Core *f, Word l, Word x) {
   for (long i = 0; twop(l); l = B(l), i++) if (eql(f, x, A(l))) return i;
   return -1; }
 
-static long stack_index_of_symbol(PCore *f, PEnv* c, PWord var) {
+static long stack_index_of_symbol(Core *f, Env *c, Word var) {
   size_t i = 0;
-  for (PWord l = c->imps; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  for (PWord l = c->args; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  for (Word l = c->imps; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  for (Word l = c->args; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
   return -1; }
 
 static Ana(ana_sym_free) {
-  PWord y = table_get(f, f->dict, x, 0);
+  Word y = table_get(f, f->dict, x, 0);
   if (y) return em2(f, c, m, pushk, y);
-  x = (PWord) pairof(f, x, (*c)->imps),
+  x = (Word) pairof(f, x, (*c)->imps),
   x = x ? A((*c)->imps = x) : x;
   return x ? em2(f, c, m, free_variable, x) : x;  }
 
-static Ana(ana_sym_local_fn, PEnv *d) {
-  x = (PWord) pairof(f, x, (PWord) d);
+static Ana(ana_sym_local_fn, Env *d) {
+  x = (Word) pairof(f, x, (Word) d);
   m = x ? em2(f, c, m, lazy_bind, x) : 0;
   if (!m) return m;
   x = f->sp[2]; // get the (symbol arg1 arg2 ...)
-  PWord y = BBA(x); // get the args
+  Word y = BBA(x); // get the args
   A(x) = AA(x); // set car of pair to just the symbol -- (symbol . PEnv*)
   return ana_args(f, c, m, y); }
 
 static Cata(c2var) {
-  PWord var = *f->sp++, stack = *f->sp++;
+  Word var = *f->sp++, stack = *f->sp++;
   size_t i = lidx(f, stack, var);
   return k[-2].ap = pushp,
          k[-1].x = putnum(i),
@@ -475,7 +479,7 @@ static Cata(c2var) {
 
 // emit stack reference instruction
 static Cata(catavar) {
-  PWord
+  Word
     var = *f->sp++, // variable name
     ins = llen(*f->sp++), // stack inset
     idx = stack_index_of_symbol(f, *c, var);
@@ -484,16 +488,16 @@ static Cata(catavar) {
     k[-1].x = putnum(idx + ins),
     pull(f, c, k - 2); }
 
-static Ana(ana_sym_local_def, PWord stack) { 
+static Ana(ana_sym_local_def, Word stack) { 
   return pushs(f, 3, c2var, x, stack) ? m + 2 : 0; }
 
-static Ana(ana_sym_stack_ref, PEnv *d) {
+static Ana(ana_sym_stack_ref, Env *d) {
   if (*c != d) // if we have found the variable in an enclosing PEnv* then import it
-    x = (PWord) pairof(f, x, (*c)->imps),
+    x = (Word) pairof(f, x, (*c)->imps),
     x = x ? A((*c)->imps = x) : x;
   return pushs(f, 3, catavar, x, (*c)->stack) ? m + 2 : 0; }
 
-static Ana(ana_sym_r, PEnv* d) {
+static Ana(ana_sym_r, Env* d) {
   // free symbol?
   if (nilp(d)) return ana_sym_free(f, c, m, x);
   // defined as a function by a local let binding?
@@ -508,7 +512,7 @@ static Ana(ana_sym_r, PEnv* d) {
   // otherwise recur on the enclosing env
   return ana_sym_r(f, c, m, x, d->par); }
 
-static NoInline size_t ana_sym(PCore *f, PEnv* *c, size_t m, PWord x) {
+static NoInline size_t ana_sym(Core *f, Env* *c, size_t m, Word x) {
   return ana_sym_r(f, c, m, x, *c); }
 
 // emits call instruction and modifies to tail call
@@ -519,48 +523,36 @@ static Cata(cataap) {
   return pull(f, c, k); } // ok
 
 static Cata(cataapn) {
-  PWord n = *f->sp++;
+  Word n = *f->sp++;
   if (k->ap == ret) k->x = n, (--k)->ap = tapn;
   else (--k)->x = n, (--k)->ap = apn;
   return pull(f, c, k); }
 
 // lambda decons pushes last list item to stack returns init of list
-static PWord linit(PCore *f, PWord x) {
+static Word linit(Core *f, Word x) {
   if (!twop(x)) return pushs(f, 1, nil) ? nil : 0;
   if (!twop(B(x))) return pushs(f, 1, A(x)) ? nil : 0;
-  PWord y = A(x);
+  Word y = A(x);
   avec(f, y, x = linit(f, B(x)));
-  return x ? (PWord) pairof(f, y, x) : x; }
+  return x ? (Word) pairof(f, y, x) : x; }
 
-
-static PWord ana_lam(PCore *f, PEnv* *c, PWord imps, PWord exp) {
-  // storing exp in PEnv*->args for the moment is expedient
-  PEnv* d = envup(f, *c, exp, imps);
+static Word ana_lam(Core *f, Env **c, Word imps, Word exp) {
+  // expediently storing exp in args for the moment
+  Env *d = envup(f, *c, exp, imps);
   if (!d) return 0;
   MM(f, &d);
   // get the real args
-  PWord args = linit(f, d->args);
+  Word args = linit(f, d->args);
   if (!(d->args = args)) goto fail;
-  exp = f->sp[0], f->sp[0] = (PWord) yieldk;
+  exp = f->sp[0], f->sp[0] = (Word) yieldk;
   size_t m = analyze(f, &d, 4, exp);
   if (!m) goto fail;
   size_t arity = llen(d->args) + llen(d->imps);
-  PCell *k = pushs(f, 3, cataix, ret, putnum(arity)) ? construct(f, &d, m) : 0;
+  Cell *k = pushs(f, 3, cataix, ret, putnum(arity)) ? construct(f, &d, m) : 0;
   if (!k) goto fail;
   if (arity > 1) (--k)->x = putnum(arity), (--k)->ap = curry;
-  trim_thread(k);
   UM(f);
-  return (PWord) pairof(f, (PWord) k, d->imps);
+  return Z(pairof(f, Z(trim_thread(k)), d->imps));
 fail:
   UM(f);
   return 0; }
-
-static PStatus run_vm(PCore *f) {
-  PStatus s;
-#if TCO
-  s = f->ip->ap(f, f->ip, f->hp, f->sp);
-#else
-  for (s = Ok; s == Ok; s = f->ip->ap(f));
-  s = s == Eof ? Ok : s;
-#endif
-  return s; }

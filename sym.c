@@ -1,6 +1,22 @@
 #include "i.h"
 
 static PSymbol* intern_r(PCore*, PString*, PSymbol**);
+Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
+
+Symbol* ini_sym(Symbol *y, String *nom, uintptr_t code) {
+  return y->ap = data,
+         y->typ = &symbol_type,
+         y->nom = nom,
+         y->code = code,
+         y->l = y->r = 0,
+         y; }
+
+static Inline Symbol* ini_anon(Symbol* y, Word code) {
+  return y->ap = data,
+         y->typ = &symbol_type,
+         y->nom = 0,
+         y->code = code,
+         y; }
 
 static PWord hash_symbol(PCore *v, PWord _) {
   return ((PSymbol*) _)->code; }
@@ -10,8 +26,8 @@ static PWord copy_symbol(PCore *f, PWord x, PWord *p0, PWord *t0) {
                intern_r(f, (PString*) cp(f, (PWord) src->nom, p0, t0), &f->symbols) :
                ini_anon(bump(f, Width(PSymbol) - 2), src->code);
   return (PWord) (src->ap = (PVm*) dst); }
-static void walk_symbol(PCore *f, PWord x, PWord *p0, PWord *t0, PHeap *cp) {
-  *cp += Width(PSymbol) - (((PSymbol*)x)->nom ? 0 : 2); }
+static void walk_symbol(PCore *f, PWord x, PWord *p0, PWord *t0) {
+  f->cp += Width(PSymbol) - (((PSymbol*)x)->nom ? 0 : 2); }
 
 static void print_symbol(PCore *f, PFile *o, PWord x) {
   PString* s = ((PSymbol*) x)->nom;

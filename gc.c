@@ -61,7 +61,7 @@ NoInline bool p_please(PCore *f, uintptr_t req) {
 
 #define CP(d) ((d) = (void*) cp(f, (PWord) (d), p0, t0))
 // this function expects pool loop and len to have been set already on the state
-static NoInline void copy_from(PCore *f, PWord *p0, uintptr_t len0) {
+static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   PWord len1 = f->len, // target pool length
            *p1 = f->pool, // target pool
            *t0 = p0 + len0, // source pool top
@@ -77,12 +77,12 @@ static NoInline void copy_from(PCore *f, PWord *p0, uintptr_t len0) {
   // copy protected values
   for (PMm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
   // copy all reachable values using cheney's method
-  PHeap cptr = p1;
-  for (PCell* k; (k = (PCell*) cptr) < (PCell*) f->hp;)
-    if (datp(k)) dtyp(k)->evac(f, (PWord) k, p0, t0, &cptr); // is data
+  f->cp = p1;
+  for (Cell *k; (k = (Cell*) f->cp) < (Cell*) f->hp;)
+    if (k->ap == data) dtyp(k)->evac(f, (PWord) k, p0, t0); // is data
     else { // is thread
       while (k->x) k->x = cp(f, k->x, p0, t0), k++;
-      cptr = (PWord*) k + 2; } }
+      f->cp = (Word*) k + 2; } }
 
 NoInline PWord cp(PCore *v, PWord x, PWord *p0, PWord *t0) {
   // if it's a number or out of managed memory then return it

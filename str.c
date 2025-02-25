@@ -48,13 +48,21 @@ Vm(scat) {
   memcpy(z->text, x->text, x->len);
   memcpy(z->text + x->len, y->text, y->len);
   return op(2, (PWord) z); }
+
+Vm(stringp) { return op(1, strp(Sp[0]) ? putnum(-1) : nil); }
+String* ini_str(String *s, uintptr_t len) {
+  return s->ap = data,
+         s->typ = &string_type,
+         s->len = len,
+         s; }
+
 static PWord copy_string(PCore* v, PWord x, PWord *p0, PWord *t0) {
   PString* src = (PString*) x;
   size_t len = sizeof(PString) + src->len;
   return (PWord) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
-static void walk_string(PCore* v, PWord x, PWord *p0, PWord *t0, PHeap *cp) {
-  *cp += Width(PString) + b2w(((PString*) x)->len); }
+static void walk_string(Core* f, Word x, Word *p0, Word *t0) {
+  f->cp += Width(PString) + b2w(((PString*) x)->len); }
 
 static void print_string(PCore* v, PFile *o, PWord _) {
   PString* s = (PString*) _;

@@ -1,10 +1,12 @@
 #include "i.h"
-void trim_thread(PCell *k) { ttag(k)->head = k; }
+PCell *trim_thread(PCell *k) { return ttag(k)->head = k; }
+Thread *mo_ini(Thread* _, uintptr_t len) {
+  struct tag *t = (struct tag*) (_ + len);
+  return t->null = NULL, t->head = _; }
 
 Vm(trim) {
   PCell *k = (PCell*) Sp[0];
-  trim_thread(k);
-  return op(1, (PWord) k); }
+  return op(1, Z(trim_thread(k))); }
 
 Vm(seek) {
   PCell *k = (PCell*) Sp[1];

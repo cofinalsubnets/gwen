@@ -23,7 +23,6 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 lib$n.%.a: $(c:.c=.%.o)
 	ar rcs $@ $^
-#	strip --strip-unneeded $@
 	ranlib $@
 
 lib$n.%.so: $(c:.c=.%.o)
@@ -35,7 +34,6 @@ $n.%.bin: main.c lib$n.%.a
 # tco / trampoline binaries
 tc_bin=$n.tc.bin
 tr_bin=$n.tr.bin
-
 
 # installlation
 # default install to home directory under ~/.local/
@@ -115,9 +113,12 @@ test_tr: $(tr_bin)
 
 clean:
 	rm -rf `git check-ignore * */*`
+
 # valgrind detects some memory errors
-valg: $(tc_bin)
-	valgrind --error-exitcode=1 ./$(tc_bin) $(prelude) $(tests)
+valg: valg-tc
+valg-%: $n.%.bin
+	valgrind --error-exitcode=1 ./$^ $(prelude) $(tests)
+
 # count lines of code
 sloc:
 	cloc --force-lang=Lisp,$x * test/* lib/*
@@ -141,4 +142,4 @@ serve:
 	darkhttpd .
 
 .PHONY: clean valg sloc bits disasm perf flame repl serve
-.NOTINTERMEDIATE: $(c:.c=.tc.o) $(c:.c=.tr.o)
+.NOTINTERMEDIATE:

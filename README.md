@@ -29,6 +29,8 @@ the internal syntax of some forms is simplified compared to scheme.
 
 in conditionals only one value is false, `0`.
 
+evaluation order for general function application is unspecified.
+
 ## example program
 
 ```lisp

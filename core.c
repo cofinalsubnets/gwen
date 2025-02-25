@@ -74,7 +74,7 @@ PWord pushs(PCore *f, uintptr_t m, ...) {
   return r; }
 
 size_t p_drop(PCore *f, size_t n) {
-  size_t h = stack_height(f);
+  size_t h = f->pool + f->len - f->sp;
   n = min(n, h);
   f->sp += n;
   return n; }

@@ -18,14 +18,22 @@ static PWord copy_table(PCore *f, PWord x, PWord *p0, PWord *t0) {
       s = s->next);
   return (PWord) dst; }
 
-static void walk_table(PCore *f, PWord x, PWord *p0, PWord *t0, PHeap *cptr) {
+static void walk_table(PCore *f, PWord x, PWord *p0, PWord *t0) {
   PTable *t = (PTable*) x;
-  *cptr += Width(PTable) + t->cap + t->len * Width(PTableEntry);
+  f->cp += Width(PTable) + t->cap + t->len * Width(PTableEntry);
   for (PWord i = 0, lim = t->cap; i < lim; i++)
     for (PTableEntry *e = t->tab[i]; e;
       e->key = cp(f, e->key, p0, t0),
       e->val = cp(f, e->val, p0, t0),
       e = e->next); }
+
+Table *ini_table(Table *t, uintptr_t len, uintptr_t cap, PTableEntry **tab) {
+  return t->ap = data,
+         t->typ = &table_type,
+         t->len = len,
+         t->cap = cap,
+         t->tab = tab,
+         t; }
 
 static void print_table(PCore *f, PFile *o, PWord x) {
   PTable *t = (PTable*) x;

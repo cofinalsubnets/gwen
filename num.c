@@ -11,3 +11,4 @@ Vm(gt) { return op(2, Sp[0] > Sp[1] ? putnum(-1) : nil); }
 Vm(ge) { return op(2, Sp[0] >= Sp[1] ? putnum(-1) : nil);}
 Vm(bnot) { return op(1, ~Sp[0] | 1); }
 Vm(rng) { return op(1, putnum(rand())); }
+Vm(fixnump) { return op(1, nump(Sp[0]) ? putnum(-1) : nil); }

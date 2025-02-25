@@ -9,7 +9,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-typedef intptr_t PWord, *PStack, *PHeap;
+typedef intptr_t PWord, *PStack, *PHeap, Word, *Heap, *Stack;
+typedef PCore Core;
+typedef PStatus Status;
 
 // theres a big benefit in speed from tail call optimization but not all platforms support it
 #ifndef TCO
@@ -17,7 +19,7 @@ typedef intptr_t PWord, *PStack, *PHeap;
 #endif
 
 #if TCO
-#define Vm(n, ...) PStatus n(PCore *f, PCell* Ip, PHeap Hp, PStack Sp, ##__VA_ARGS__)
+#define Vm(n, ...) Status n(Core *f, Thread* Ip, Heap Hp, Stack Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
 #define YieldStatus PStatusOk
@@ -26,7 +28,7 @@ typedef intptr_t PWord, *PStack, *PHeap;
 #define Have(n) if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n)
 #define Have1() if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1)
 #else
-#define Vm(n, ...) PStatus n(PCore *f, ##__VA_ARGS__)
+#define Vm(n, ...) Status n(Core *f, ##__VA_ARGS__)
 #define Hp f->hp
 #define Sp f->sp
 #define Ip f->ip
@@ -42,21 +44,25 @@ typedef intptr_t PWord, *PStack, *PHeap;
 
 // thanks !!
 typedef PWord *PStack, *PHeap;
-typedef union PCell PCell;
+typedef union PCell PCell, Thread, Cell;
+typedef struct PType PType, Type;
 typedef Vm(PVm);
 union PCell {
   PVm *ap;
-  PWord x;
-  PCell *m; };
+  Word x;
+  Cell *m;
+  Type *typ; };
 
 typedef bool
-  p_equal_t(PCore*, PWord, PWord);
-typedef PWord
-  p_copy_t(PCore*, PWord, PWord*, PWord*),
-  p_hash_t(PCore*, PWord);
+  p_equal_t(Core*, PWord, PWord);
+
+typedef Word
+  p_copy_t(Core*, Word, Word*, Word*),
+  p_hash_t(Core*, PWord);
+
 typedef void
-  p_evac_t(PCore*, PWord, PWord*, PWord*, PHeap*),
-  p_print_t(PCore*, p_file, PWord);
+  p_evac_t(Core*, Word, Word*, Word*),
+  p_print_t(Core*, p_file, Word);
 
 // basic data type method table
 typedef struct PType {
@@ -72,20 +78,20 @@ typedef struct PType {
 typedef struct PPair {
   PDataHeader;
   PWord a, b;
-} PPair;
+} PPair, Pair;
 
 
 typedef struct PString {
   PDataHeader;
   uintptr_t len;
   char text[];
-} PString;
+} PString, String;
 typedef struct PSymbol {
   PDataHeader;
   PString *nom;
   PWord code;
   struct PSymbol *l, *r;
-} PSymbol;
+} PSymbol, Symbol;
 
 typedef struct PTableEntry {
   PWord key, val;
@@ -95,7 +101,7 @@ typedef struct PTable {
   PDataHeader;
   uintptr_t len, cap;
   PTableEntry **tab;
-} PTable;
+} PTable, Table;
 typedef struct PMm {
   PWord *addr;
   struct PMm *next;
@@ -115,32 +121,33 @@ struct PCore {
   // memory management
   uintptr_t len;
   PWord *pool, *loop;
-  uintptr_t t0; // end time of last gc
+  union {
+    uintptr_t t0; // end time of last gc
+    Heap cp; }; // gc copy pointer
   PMm *safe;
 };
 
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
-struct tag { PCell *null, *head, end[]; } *ttag(PCell*);
-static Inline PCell* mo_ini(PCell* _, uintptr_t len) {
-  struct tag *t = (struct tag*) (_ + len);
-  return t->null = NULL, t->head = _; }
+struct tag { Thread *null, *head, end[]; } *ttag(Thread*);
 
-_Static_assert(-1 >> 1 == -1, "support sign extended shift");
-_Static_assert(sizeof(PWord) == sizeof(PCell), "cell is 1 word wide");
-
-PCell
+Thread
+  *mo_ini(Thread*, uintptr_t),
+  *trim_thread(Thread*),
   *mo_n(PCore*, size_t);
-PPair
+Pair
+  *ini_pair(Pair*, Word, Word),
   *pairof(PCore*, PWord, PWord);
-PTable
+Table
+  *ini_table(Table*, uintptr_t, uintptr_t, PTableEntry**),
   *new_table(PCore*),
   *table_set(PCore*, PTable*, PWord, PWord);
-PSymbol
+Symbol
+  *ini_sym(Symbol*, String*, uintptr_t),
   *literal_symbol(PCore*, const char*),
   *intern(PCore*, PString*);
+String *ini_str(String*, uintptr_t);
 void
-  trim_thread(PCell*),
   *bump(PCore*, uintptr_t),
   *cells(PCore*, uintptr_t),
   transmit(PCore*, PFile*, PWord);
@@ -158,12 +165,11 @@ PVm display, bnot, rng, data,
     defmacro,
     ret, ap, apn, tap, tapn,
     jump, cond, pushp, pushk, yield,
-   gensym, ev0, pairp, fixnump, symbolp, stringp,
-   ssub, sget, slen, scat, prc, error, cons, car, cdr,
-   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
-   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-   curry
-   ;
+    gensym, ev0, pairp, fixnump, symbolp, stringp,
+    ssub, sget, slen, scat, prc, error, cons, car, cdr,
+    lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
+    seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
+    curry ;
 
 #define Oom PStatusOom
 #define Ok PStatusOk
@@ -185,52 +191,35 @@ PVm display, bnot, rng, data,
 #define BB(o) B(B(o))
 #define BBA(o) B(B(A(o)))
 #define Z(x) ((intptr_t)(x))
+#define R(_) ((Cell*)(_))
 #define nilp(_) (Z(_)==nil)
 #define nump(_) ((PWord)(_)&1)
-#define homp(_) (!nump(_))
+#define thdp(_) (!nump(_))
 #define datp(_) (ptr(_)->ap==data)
-#define mix ((uintptr_t)2708237354241864315)
-#define ptr(o) ((PCell*)(o))
-#define dtyp(x) ((PType*)ptr(x)[1].m)
+#define dtyp(_) R(_)[1].typ
 #define max(a, b) ((a)>(b)?(a):(b))
 #define min(a, b) ((a)<(b)?(a):(b))
+#define mix ((uintptr_t)2708237354241864315)
 
-extern PType pair_type, string_type, symbol_type, table_type;
+#define homp thdp
+#define ptr R
 
-static Inline bool hstrp(PWord _) { return dtyp(_) == &string_type; }
-static Inline bool htwop(PWord _) { return dtyp(_) == &pair_type; }
-static Inline bool htblp(PWord _) { return dtyp(_) == &table_type; }
-static Inline bool hsymp(PWord _) { return dtyp(_) == &symbol_type; }
+#define pop1(f) (*(f)->sp++)
 
-static Inline bool strp(PWord _) { return homp(_) && hstrp(_); }
-static Inline bool twop(PWord _) { return homp(_) && htwop(_); }
-static Inline bool tblp(PWord _) { return homp(_) && htblp(_); }
-static Inline bool symp(PWord _) { return homp(_) && hsymp(_); }
-
-static Inline PPair *ini_pair(PPair *w, PWord a, PWord b) {
-  return w->ap = data, w->typ = &pair_type, w->a = a, w->b = b, w; }
-
-static Inline PString* ini_str(PString* s, uintptr_t len) {
-  return s->ap = data, s->typ = &string_type, s->len = len, s; }
-
-static Inline PSymbol* ini_sym(PSymbol* y, PString*nom, uintptr_t code) {
-  return y->ap = data, y->typ = &symbol_type, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
-static Inline PSymbol* ini_anon(PSymbol* y, PWord code) {
-  return y->ap = data, y->typ = &symbol_type, y->nom = 0, y->code = code, y; }
-
-static Inline PTable *ini_table(PTable *t, uintptr_t len, uintptr_t cap, PTableEntry **tab) {
-  return t->ap = data, t->typ = &table_type, t->len = len, t->cap = cap, t->tab = tab, t; }
+extern Type pair_type, string_type, symbol_type, table_type;
+static Inline bool strp(Word _) { return homp(_) && dtyp(_) == &string_type; }
+static Inline bool twop(Word _) { return homp(_) && dtyp(_) == &pair_type; }
+static Inline bool tblp(Word _) { return homp(_) && dtyp(_) == &table_type; }
+static Inline bool symp(Word _) { return homp(_) && dtyp(_) == &symbol_type; }
 
 // align bytes up to the nearest word
 static Inline size_t b2w(size_t b) {
   size_t q = b / sizeof(PWord), r = b % sizeof(PWord);
   return q + (r ? 1 : 0); }
 
-static Inline PWord pop1(PCore *f) { return *f->sp++; }
-static Inline size_t stack_height(PCore *f) { return f->pool + f->len - f->sp; }
-
 #define bounded(a, b, c) ((PWord)(a)<=(PWord)(b)&&(PWord)(b)<(PWord)(c))
 #define op(n, x) (Ip = (PCell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
 
-
+_Static_assert(-1 >> 1 == -1, "support sign extended shift");
+_Static_assert(sizeof(PWord) == sizeof(Thread), "cell is 1 word wide");
 #endif

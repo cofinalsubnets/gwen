@@ -6,5 +6,5 @@ vgcore.*
 .gdb_history
 flamegraph.svg
 *.bin
-gwen.1
+*.1
 node_modules
