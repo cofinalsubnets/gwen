@@ -110,17 +110,17 @@ typedef struct PMm {
 // runtime core data structure -- 1 core = 1 thread of execution
 struct PCore {
   // vm registers
-  PCell *ip;
-  PHeap  hp; // heap pointer
-  PStack sp; // stack pointer
+  Cell *ip;
+  Heap  hp; // heap pointer
+  Stack sp; // stack pointer
              //
   // environment
-  PTable *dict, *macro; // global environment and macros
-  PSymbol *symbols; // internal symbols
+  Table *dict, *macro; // global environment and macros
+  Symbol *symbols; // internal symbols
                     //
   // memory management
   uintptr_t len;
-  PWord *pool, *loop;
+  Word *pool, *loop;
   union {
     uintptr_t t0; // end time of last gc
     Heap cp; }; // gc copy pointer
@@ -152,19 +152,19 @@ void
   *cells(PCore*, uintptr_t),
   transmit(PCore*, PFile*, PWord);
 bool
-  p_please(PCore*, uintptr_t),
-  eql(PCore*, PWord, PWord);
+  p_please(Core*, uintptr_t),
+  eql(Core*, Word, Word);
 p_equal_t not_equal;
-PWord
-  table_get(PCore*, PTable*, PWord, PWord),
-  pushs(PCore*, uintptr_t, ...),
-  hash(PCore*, PWord),
-  cp(PCore*, PWord, PWord*, PWord*); // for recursive use by evac functions
+Word
+  table_get(Core*, Table*, Word, Word),
+  pushs(Core*, uintptr_t, ...),
+  hash(Core*, Word),
+  cp(Core*, Word, Word*, Word*); // for recursive use by evac functions
 Vm(gc, uintptr_t s);
 PVm display, bnot, rng, data,
     defmacro,
     ret, ap, apn, tap, tapn,
-    jump, cond, pushp, pushk, yield,
+    jump, cond, dup, imm, yield,
     gensym, ev0, pairp, fixnump, symbolp, stringp,
     ssub, sget, slen, scat, prc, error, cons, car, cdr,
     lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
@@ -180,7 +180,7 @@ PVm display, bnot, rng, data,
 #define getnum(_) ((PWord)(_)>>1)
 #define putnum(_) (((PWord)(_)<<1)|1)
 #define nil putnum(0)
-#define MM(f,r) ((f->safe=&((PMm){(PWord*)(r),f->safe})))
+#define MM(f,r) ((f->safe=&((PMm){(Word*)(r),f->safe})))
 #define UM(f) (f->safe=f->safe->next)
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
 #define A(o) ((PPair*)(o))->a
@@ -190,12 +190,12 @@ PVm display, bnot, rng, data,
 #define BA(o) B(A(o))
 #define BB(o) B(B(o))
 #define BBA(o) B(B(A(o)))
-#define Z(x) ((intptr_t)(x))
+#define Z(_) ((Word)(_))
 #define R(_) ((Cell*)(_))
 #define nilp(_) (Z(_)==nil)
-#define nump(_) ((PWord)(_)&1)
+#define nump(_) (Z(_)&1)
 #define thdp(_) (!nump(_))
-#define datp(_) (ptr(_)->ap==data)
+#define datp(_) (R(_)->ap==data)
 #define dtyp(_) R(_)[1].typ
 #define max(a, b) ((a)>(b)?(a):(b))
 #define min(a, b) ((a)<(b)?(a):(b))
@@ -217,9 +217,10 @@ static Inline size_t b2w(size_t b) {
   size_t q = b / sizeof(PWord), r = b % sizeof(PWord);
   return q + (r ? 1 : 0); }
 
-#define bounded(a, b, c) ((PWord)(a)<=(PWord)(b)&&(PWord)(b)<(PWord)(c))
+#define bounded(a, b, c) (Z(a)<=Z(b)&&Z(b)<Z(c))
 #define op(n, x) (Ip = (PCell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
 
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(PWord) == sizeof(Thread), "cell is 1 word wide");
+
 #endif
