@@ -59,7 +59,7 @@ NoInline bool p_please(Core *f, uintptr_t req) {
   return true; } // size successfully adjusted
 
 
-#define CP(d) ((d) = (void*) cp(f, (PWord) (d), p0, t0))
+#define CP(d) ((d) = (void*) cp(f, (Word) (d), p0, t0))
 // this function expects pool loop and len to have been set already on the state
 static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   Word len1 = f->len, // target pool length
@@ -75,7 +75,7 @@ static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   while (sn--) *sp1++ = cp(f, *sp0++, p0, t0);
   CP(f->ip), CP(f->dict), CP(f->macro);
   // copy protected values
-  for (PMm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
+  for (Mm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
   // copy all reachable values using cheney's method
   f->cp = p1;
   for (Cell *k; (k = R(f->cp)) < R(f->hp);)
@@ -92,10 +92,10 @@ NoInline Word cp(Core *v, Word x, Word *p0, Word *t0) {
   // if the cell holds a pointer to the new space then return the pointer
   if (homp(x) && bounded(v->pool, x, v->pool + v->len)) return x;
   // if it's data then call the given copy function
-  if (datp(src)) return dtyp(src)->copy(v, (PWord) src, p0, t0);
+  if (datp(src)) return dtyp(src)->copy(v, (Word) src, p0, t0);
   // it's a thread, find the end
   struct tag *t = ttag(src);
   Cell *ini = t->head, *d = bump(v, t->end - ini), *dst = d;
   for (Cell *s = ini; (d->x = s->x); s++->x = (Word) d++);
-  d[1].ap = (PVm*) dst;
+  d[1].ap = (Vm*) dst;
   return (Word) (src - ini + dst); }

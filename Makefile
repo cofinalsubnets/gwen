@@ -1,4 +1,6 @@
 # makefile for p
+# name of this file
+m=Makefile
 # name and file extension
 n=p
 x=p
@@ -12,13 +14,14 @@ c=$(filter-out main.c, $(wildcard *.c))
 #build
 CFLAGS ?= -std=c99 -g -O2 -Wall -fpic\
  	-Wstrict-prototypes -Wno-shift-negative-value\
-	-fno-asynchronous-unwind-tables -fno-stack-protector
+	-fno-asynchronous-unwind-tables -fno-stack-protector\
+	-falign-functions
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
-%.tc.o: %.c
+%.tc.o: %.c $h $m
 	$(cc) -c $< -o $@
 
-%.tr.o: %.c
+%.tr.o: %.c $h $m
 	$(cc) -c $< -o $@ -DTCO=0
 
 lib$n.%.a: $(c:.c=.%.o)

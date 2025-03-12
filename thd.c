@@ -1,34 +1,38 @@
 #include "i.h"
-PCell *trim_thread(PCell *k) { return ttag(k)->head = k; }
-Thread *mo_ini(Thread* _, uintptr_t len) {
+Cell *trim_thread(Cell *k) { return ttag(k)->head = k; }
+Cell *mo_ini(Thread* _, uintptr_t len) {
   struct tag *t = (struct tag*) (_ + len);
   return t->null = NULL, t->head = _; }
+// allocate a thread
+Cell *mo_n(Core *f, uintptr_t n) {
+  Cell *k = cells(f, n + Width(struct tag));
+  return !k ? k : mo_ini(k, n); }
 
 Vm(trim) {
-  PCell *k = (PCell*) Sp[0];
+  Cell *k = (Cell*) Sp[0];
   return op(1, Z(trim_thread(k))); }
 
 Vm(seek) {
-  PCell *k = (PCell*) Sp[1];
-  return op(2, (PWord) (k + getnum(Sp[0]))); }
+  Cell *k = (Cell*) Sp[1];
+  return op(2, (Word) (k + getnum(Sp[0]))); }
 
 Vm(peek) {
-  PCell *k = (PCell*) Sp[0];
+  Cell *k = (Cell*) Sp[0];
   return op(1, k[0].x); }
 
 Vm(poke) {
-  PCell *k = (PCell*) Sp[1];
+  Cell *k = (Cell*) Sp[1];
   k->x = Sp[0];
-  return op(2, (PWord) k); }
+  return op(2, (Word) k); }
 
 Vm(thda) {
   size_t n = getnum(Sp[0]);
   Have(n + Width(struct tag));
-  PCell *k = mo_ini((PCell*) Hp, n);
-  memset(k, -1, n * sizeof(PWord));
+  Cell *k = mo_ini((Cell*) Hp, n);
+  memset(k, -1, n * sizeof(Word));
   Hp += n + Width(struct tag);
-  return op(1, (PWord) k); }
+  return op(1, (Word) k); }
 
-struct tag *ttag(PCell *k) {
+struct tag *ttag(Cell *k) {
   while (k->x) k++;
   return (struct tag*) k; }

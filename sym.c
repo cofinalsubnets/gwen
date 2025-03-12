@@ -1,6 +1,6 @@
 #include "i.h"
 
-static PSymbol* intern_r(PCore*, PString*, PSymbol**);
+static Symbol* intern_r(Core*, String*, Symbol**);
 Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
 
 Symbol* ini_sym(Symbol *y, String *nom, uintptr_t code) {
@@ -18,57 +18,57 @@ static Inline Symbol* ini_anon(Symbol* y, Word code) {
          y->code = code,
          y; }
 
-static PWord hash_symbol(PCore *v, PWord _) {
-  return ((PSymbol*) _)->code; }
-static PWord copy_symbol(PCore *f, PWord x, PWord *p0, PWord *t0) {
-  PSymbol *src = (PSymbol*) x,
+static Word hash_symbol(Core *v, Word _) {
+  return ((Symbol*) _)->code; }
+static Word copy_symbol(Core *f, Word x, Word *p0, Word *t0) {
+  Symbol *src = (Symbol*) x,
              *dst = src->nom ?
-               intern_r(f, (PString*) cp(f, (PWord) src->nom, p0, t0), &f->symbols) :
-               ini_anon(bump(f, Width(PSymbol) - 2), src->code);
-  return (PWord) (src->ap = (PVm*) dst); }
-static void walk_symbol(PCore *f, PWord x, PWord *p0, PWord *t0) {
-  f->cp += Width(PSymbol) - (((PSymbol*)x)->nom ? 0 : 2); }
+               intern_r(f, (String*) cp(f, (Word) src->nom, p0, t0), &f->symbols) :
+               ini_anon(bump(f, Width(Symbol) - 2), src->code);
+  return (Word) (src->ap = (Vm*) dst); }
+static void walk_symbol(Core *f, Word x, Word *p0, Word *t0) {
+  f->cp += Width(Symbol) - (((Symbol*)x)->nom ? 0 : 2); }
 
-static void print_symbol(PCore *f, PFile *o, PWord x) {
-  PString* s = ((PSymbol*) x)->nom;
+static void print_symbol(Core *f, PFile *o, Word x) {
+  String* s = ((Symbol*) x)->nom;
   if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
   else fprintf(o, "#sym@%lx", (long) x); }
 
 
-static PSymbol* intern_r(PCore *v, PString* b, PSymbol* *y) {
-  PSymbol* z = *y;
+static Symbol* intern_r(Core *v, String* b, Symbol* *y) {
+  Symbol* z = *y;
   if (!z) return *y =
-    ini_sym(bump(v, Width(PSymbol)), b, hash(v, putnum(hash(v, (PWord) b))));
-  PString* a = z->nom;
+    ini_sym(bump(v, Width(Symbol)), b, hash(v, putnum(hash(v, (Word) b))));
+  String* a = z->nom;
   int i = a->len < b->len ? -1 :
           a->len > b->len ? 1 :
           strncmp(a->text, b->text, a->len);
   return i == 0 ? z : intern_r(v, b, i < 0 ? &z->l : &z->r); }
 
-PSymbol* intern(PCore *f, PString* b) {
-  if (avail(f) < Width(PSymbol)) {
+Symbol* intern(Core *f, String* b) {
+  if (avail(f) < Width(Symbol)) {
     bool ok;
-    avec(f, b, ok = p_please(f, Width(PSymbol)));
+    avec(f, b, ok = p_please(f, Width(Symbol)));
     if (!ok) return 0; }
   return intern_r(f, b, &f->symbols); }
 
 
-PSymbol* literal_symbol(PCore *f, const char *nom) {
+Symbol* literal_symbol(Core *f, const char *nom) {
   size_t len = strlen(nom);
-  PString* o = cells(f, Width(PString) + b2w(len));
+  String *o = cells(f, Width(String) + b2w(len));
   if (!o) return 0;
   memcpy(o->text, nom, len);
   return intern(f, ini_str(o, len)); }
 
 Vm(gensym) {
-  const int req = Width(PSymbol) - 2;
+  const int req = Width(Symbol) - 2;
   Have(req);
-  PSymbol* y = (PSymbol*) Hp;
+  Symbol* y = (Symbol*) Hp;
   Hp += req;
-  return op(1, (PWord) ini_anon(y, rand())); }
+  return op(1, (Word) ini_anon(y, rand())); }
 
 
-PType symbol_type = {
+Type symbol_type = {
   .hash = hash_symbol,
   .copy = copy_symbol,
   .evac = walk_symbol,

@@ -15,12 +15,12 @@ Vm(cons) {
   Have(Width(Pair));
   Pair *w = ini_pair((Pair*) Hp, Sp[0], Sp[1]);
   Hp += Width(Pair);
-  return op(2, (Word) w); }
+  return op(2, Z(w)); }
 
 static Word cp_two(Core *v, Word x, Word *p0, Word *t0) {
   Pair *src = (Pair*) x,
        *dst = ini_pair(bump(v, Width(Pair)), src->a, src->b);
-  return (Word) (src->ap = (PVm*) dst); }
+  return Z(src->ap = (Vm*) dst); }
 
 static void wk_two(Core *f, Word x, Word *p0, Word *t0) {
   f->cp += Width(Pair);
@@ -36,8 +36,8 @@ static void print_two(Core *f, PFile *o, Word x) {
 static bool eq_two(Core *f, Word x, Word y) {
   return eql(f, A(x), A(y)) && eql(f, B(x), B(y)); }
 
-static PWord hash_two(PCore *f, PWord x) {
-  PWord hc = hash(f, A(x)) * hash(f, B(x));
+static Word hash_two(PCore *f, Word x) {
+  Word hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
 Vm(pairp) { return op(1, twop(Sp[0]) ? putnum(-1) : nil); }
@@ -48,10 +48,9 @@ Pair *ini_pair(Pair *w, Word a, Word b) {
          w->b = b,
          w; }
 
-PType pair_type = {
+Type pair_type = {
   .hash = hash_two,
   .copy = cp_two,
   .evac = wk_two,
   .emit = print_two,
-  .equal = eq_two,
-};
+  .equal = eq_two, };

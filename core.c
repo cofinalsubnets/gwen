@@ -1,12 +1,12 @@
 #include "i.h"
 
-#define S1(i) ((PCell[]){{i}})
-#define S2(i) ((PCell[]){{curry},{.x=putnum(2)},{i}})
-#define S3(i) ((PCell[]){{curry},{.x=putnum(3)},{i}})
+#define S1(i) ((Cell[]){{i}})
+#define S2(i) ((Cell[]){{curry},{.x=putnum(2)},{i}})
+#define S3(i) ((Cell[]){{curry},{.x=putnum(3)},{i}})
 
 static struct {
   const char *n;
-  PCell *v;
+  Cell *v;
 } ini_dict[] = {
   {"+", S2(add)}, {"-", S2(sub)}, {"*", S2(mul)}, {"/", S2(quot)}, {"%", S2(rem)}, 
   {"<", S2(lt)}, {"<=", S2(le)}, {"=", S2(eq)}, {">=", S2(ge)}, {">", S2(gt)},
@@ -32,48 +32,48 @@ static struct {
   {"::", S2(defmacro)},
 };
 
-static NoInline bool p_define(PCore *f, const char *k, PWord v) {
+static NoInline bool p_define(Core *f, const char *k, Word v) {
   if (!pushs(f, 1, v)) return false;
-  PSymbol* y = literal_symbol(f, k);
+  Symbol* y = literal_symbol(f, k);
   v = pop1(f);
-  return y && table_set(f, f->dict, (PWord) y, v); }
-PCore *p_open(void) {
-  PCore *f = malloc(sizeof(PCore));
+  return y && table_set(f, f->dict, (Word) y, v); }
+Core *p_open(void) {
+  Core *f = malloc(sizeof(Core));
   if (!f) return f;
-  memset(f, 0, sizeof(PCore));
+  memset(f, 0, sizeof(Core));
   const uintptr_t len0 = 1;
-  PWord *pool = malloc(2 * len0 * sizeof(PWord));
+  Word *pool = malloc(2 * len0 * sizeof(Word));
   if (!pool) return p_close(f), NULL;
   f->t0 = clock();
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
-#define Definition(a, b) p_define(f, a, (PWord) b) &&
+#define Definition(a, b) p_define(f, a, (Word) b) &&
   if (!(f->dict = new_table(f)) ||
       !(f->macro = new_table(f)) ||
-      !p_define(f, "global-namespace", (PWord) f->dict))
+      !p_define(f, "global-namespace", (Word) f->dict))
     return p_close(f), NULL;
   for (long i = 0; i < sizeof(ini_dict)/sizeof(*ini_dict); i++)
-    if (!p_define(f, ini_dict[i].n, (PWord) ini_dict[i].v))
+    if (!p_define(f, ini_dict[i].n, (Word) ini_dict[i].v))
       return p_close(f), NULL;
   return f; }
 
-void p_close(PCore *f) {
+void p_close(Core *f) {
   if (f) free(f->pool < f->loop ? f->pool : f->loop), free(f); }
 
-static NoInline PWord pushsr(PCore *f, uintptr_t m, uintptr_t n, va_list xs) {
+static NoInline Word pushsr(Core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (!n) return p_please(f, m) ? m : n;
-  PWord x = va_arg(xs, PWord), y;
+  Word x = va_arg(xs, Word), y;
   avec(f, x, y = pushsr(f, m, n - 1, xs));
   return y ? *--f->sp = x : y; }
 
-PWord pushs(PCore *f, uintptr_t m, ...) {
+Word pushs(Core *f, uintptr_t m, ...) {
   va_list xs; va_start(xs, m);
-  PWord n, r = 0;
+  Word n, r = 0;
   if (avail(f) < m) r = pushsr(f, m, m, xs);
-  else for (n = 0, f->sp -= m; n < m; f->sp[n++] = r = va_arg(xs, PWord));
+  else for (n = 0, f->sp -= m; n < m; f->sp[n++] = r = va_arg(xs, Word));
   va_end(xs);
   return r; }
 
-size_t p_drop(PCore *f, size_t n) {
+size_t p_drop(Core *f, size_t n) {
   size_t h = f->pool + f->len - f->sp;
   n = min(n, h);
   f->sp += n;

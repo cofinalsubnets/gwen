@@ -21,12 +21,15 @@ typedef enum PStatus {
 
 PCore
   *p_open(void);
+
 void
   p_close(PCore*),
   p_write1f(PCore*, PFile*);
+
 PStatus
   p_read1f(PCore*, PFile*),
   p_eval(PCore*);
+
 size_t
   p_drop(PCore*, size_t);
 #endif
