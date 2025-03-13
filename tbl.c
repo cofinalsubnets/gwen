@@ -146,7 +146,8 @@ Vm(tnew) {
   return op(1, (Word) ini_table(t, 0, 1, tab)); }
 
 Word table_get(Core *f, Table *t, Word k, Word zero) {
-  TableEntry *e = t->tab[index_of_key(f, t, k)];
+  size_t i = index_of_key(f, t, k);
+  TableEntry *e = t->tab[i];
   while (e && !eql(f, k, e->key)) e = e->next;
   return e ? e->val : zero; }
 

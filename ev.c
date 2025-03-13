@@ -183,7 +183,6 @@ static bool lambp(PCore *f, Word x) {
 
 // DEFINE
 // let expressions
-
 static Word ldels(Core *f, Word lam, Word l) {
   if (!twop(l)) return nil;
   Word m = ldels(f, lam, B(l));
@@ -218,6 +217,8 @@ static Vm(defglobal) {
   Unpack(f);
   return op(1, Sp[0]); }
 
+// this is the longest function in the whole C implementation :(
+// it handles the let special form in a way to support sequential and recursive binding.
 static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
   if (!twop(exp)) return analyze(f, b, m, nil);
   if (!twop(B(exp))) return analyze(f, b, m, A(exp));
@@ -228,8 +229,6 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
   Word nom = nil, def = nil, lam = nil, v = nil, d = nil, e = nil;
   MM(f, &nom), MM(f, &def), MM(f, &exp), MM(f, &lam);
   MM(f, &d); MM(f, &e); MM(f, &v); MM(f, &q);
-// this is the longest function in the whole C implementation :(
-// it handles the let special form in a way to support sequential and recursive binding.
 
   // collect vars and defs into two lists
   for (; twop(exp) && twop(B(exp)); exp = BB(exp)) {
@@ -266,7 +265,7 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
 
   // now delete defined functions from the closure variable lists
   // they will be bound lazily when the function runs
-  for (e = lam; twop(e); BBA(e) = ldels(f, lam, BBA(e)), e = B(e)) ;
+  for (e = lam; twop(e); BBA(e) = ldels(f, lam, BBA(e)), e = B(e));
 
   (*c)->lams = lam;
   // construct lambda with reversed argument list
@@ -400,9 +399,8 @@ static Ana(ana_list) {
 
 
 static Vm(free_variable) {
-  Word x = Ip[1].x, var = A(x);
-  Table *t = (Table*) B(x);
-  x = table_get(f, t, var, nil); // error here if you want on undefined variable
+  Word x = Ip[1].x;
+  x = table_get(f, f->dict, x, nil); // error here if you want on undefined variable
   Ip[0].ap = imm;
   Ip[1].x = x;
   return Continue(); }

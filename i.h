@@ -150,7 +150,7 @@ Word
   cp(Core*, Word, Word*, Word*); // for recursive use by evac functions
 Vm(gc, uintptr_t s);
 Vm display, bnot, rng, data,
-   defmacro,
+   defmacro, symnom,
    ret, ap, apn, tap, tapn,
    jump, cond, dup, imm, yield,
    gensym, ev0, pairp, fixnump, symbolp, stringp,

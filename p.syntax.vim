@@ -15,14 +15,14 @@ syn match PAtom "'[^ \t()]\+" contains=PAtomMark
 syn region PAtom start=+'"+ skip=+\\"+ end=+"+
 syn iskeyword @,!,37-38,42-47,:,60-63,\,`,|,~,^
 syn keyword PForm ? : \\ , `
-syn keyword PFunc < <= = >= >
+syn keyword PFunc < <= = >= > !=
 syn keyword PFunc + - ~ ! * / % .
 syn keyword PFunc X A B cons list car cdr caar cadr cdar cddr
 syn keyword PFunc foldl foldr map filter id const append each all any init last reverse
 syn keyword PFunc && \|\| \| & ^ << >>
 syn keyword PFunc :: inc dec flip diag partition llen iota puts
 syn keyword PFunc twop nump symp tblp strp nilp homp ev ap not
-syn keyword PFunc str slen sget scat ssub ystr gensym putc
+syn keyword PFunc str slen sget scat ssub ystr sym putc
 syn keyword PFunc tbl tget tset tlen thas tkeys tdel
 syn keyword PMacro L vprintf
 

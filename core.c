@@ -26,7 +26,7 @@ static struct {
   {"twop", S1(pairp)}, {"strp", S1(stringp)}, {"symp", S1(symbolp)}, {"nump", S1(fixnump)},
 
   // symbols
-  {"gensym", S1(gensym)},
+  {"sym", S1(gensym)}, {"nom", S1(symnom)},
 
   {"ev", S1(ev0)},
   {"::", S2(defmacro)},
@@ -37,27 +37,30 @@ static NoInline bool p_define(Core *f, const char *k, Word v) {
   Symbol* y = literal_symbol(f, k);
   v = pop1(f);
   return y && table_set(f, f->dict, (Word) y, v); }
-Core *p_open(void) {
-  Core *f = malloc(sizeof(Core));
-  if (!f) return f;
+
+void p_fin(Core *f) { free(f->pool < f->loop ? f->pool : f->loop); }
+void p_close(Core *f) { p_fin(f), free(f); }
+PStatus p_ini(Core *f) {
   memset(f, 0, sizeof(Core));
   const uintptr_t len0 = 1;
   Word *pool = malloc(2 * len0 * sizeof(Word));
-  if (!pool) return p_close(f), NULL;
+  if (!pool) return Oom;
   f->t0 = clock();
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
 #define Definition(a, b) p_define(f, a, (Word) b) &&
   if (!(f->dict = new_table(f)) ||
       !(f->macro = new_table(f)) ||
       !p_define(f, "global-namespace", (Word) f->dict))
-    return p_close(f), NULL;
+    return p_fin(f), Oom;
   for (long i = 0; i < sizeof(ini_dict)/sizeof(*ini_dict); i++)
     if (!p_define(f, ini_dict[i].n, (Word) ini_dict[i].v))
-      return p_close(f), NULL;
-  return f; }
+      return p_fin(f), Oom;
+  return Ok; }
 
-void p_close(Core *f) {
-  if (f) free(f->pool < f->loop ? f->pool : f->loop), free(f); }
+Core *p_open(void) {
+  Core *f = malloc(sizeof(Core));
+  return !f || p_ini(f) == Ok ? f : (free(f), NULL); }
+
 
 static NoInline Word pushsr(Core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (!n) return p_please(f, m) ? m : n;
@@ -74,8 +77,9 @@ Word pushs(Core *f, uintptr_t m, ...) {
   return r; }
 
 size_t p_drop(Core *f, size_t n) {
-  size_t h = f->pool + f->len - f->sp;
+  size_t h = p_height(f);
   n = min(n, h);
   f->sp += n;
   return n; }
 
+size_t p_height(Core *f) { return f->pool + f->len - f->sp; }
