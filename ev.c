@@ -442,15 +442,15 @@ static long lidx(Core *f, Word l, Word x) {
   return -1; }
 
 static long stack_index_of_symbol(Core *f, Env *c, Word var) {
-  size_t i = 0;
-  for (Word l = c->imps; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  for (Word l = c->args; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  long l, i = 0;
+  for (l = c->imps; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  for (l = c->args; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
   return -1; }
 
 static Ana(ana_sym_free) {
   Word y = table_get(f, f->dict, x, 0);
   if (y) return ana_imm(f, c, m, y);
-  x = Z(pairof(f, x, (*c)->imps)),
+  x = Z(pairof(f, x, (*c)->imps)), // XXX why is this needed???
   x = x ? A((*c)->imps = x) : x;
   return x ? ana_i2(f, c, m, free_variable, x) : x;  }
 
@@ -465,7 +465,7 @@ static Ana(ana_sym_local_fn, Env *d) {
 
 static Cata(c2var) {
   Word var = *f->sp++, stack = *f->sp++;
-  size_t i = lidx(f, stack, var);
+  long i = lidx(f, stack, var);
   return k[-2].ap = dup,
          k[-1].x = putnum(i),
          pull(f, c, k - 2); }
@@ -485,11 +485,10 @@ static Ana(ana_sym_local_def, Word stack) {
   return pushs(f, 3, c2var, x, stack) ? m + 2 : 0; }
 
 static Ana(ana_sym_stack_ref, Env *d) {
-  if (*c != d) // if we have found the variable in an enclosing PEnv* then import it
+  if (*c != d) // if we have found the variable in an enclosing scope then import it
     x = Z(pairof(f, x, (*c)->imps)),
     x = x ? A((*c)->imps = x) : x;
   return pushs(f, 3, cata_var, x, (*c)->stack) ? m + 2 : 0; }
-
 
 static Ana(ana_sym_r, Env *d) {
   // free symbol?

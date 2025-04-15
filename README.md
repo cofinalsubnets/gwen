@@ -8,7 +8,7 @@ own constant functions.
 
 ## lisp dialect
 
-variable scope is similar to scheme. there are five special forms
+variable scope is like scheme. there are five special forms
 which have similar scheme counterparts.
 
 |  scheme  | gwen |
@@ -19,7 +19,7 @@ which have similar scheme counterparts.
 | `quote`  | <code>&#96;</code> |
 | `lambda` | <code>&#92;</code> |
 
-the internal syntax of some forms is simplified compared to scheme.
+the syntax of some forms is simplified compared to scheme.
 
 |  scheme                     | gwen             |
 |-----------------------------|------------------|
@@ -29,7 +29,8 @@ the internal syntax of some forms is simplified compared to scheme.
 
 in conditionals only one value is false, `0`.
 
-evaluation order for general function application is unspecified.
+evaluation order for function expressions is not guaranteed.
+if you need a specific order use `,`.
 
 ## example program
 
