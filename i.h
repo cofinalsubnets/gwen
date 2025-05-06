@@ -46,10 +46,12 @@ typedef struct Type Type;
 typedef union Cell Cell, Thread;
 typedef Vm(Vm);
 typedef Vm PVm;
+#define DataHeader Vm *ap; Type *typ
 typedef struct Pair {
-  Vm *ap; Type *typ;
+  DataHeader;
   Word a, b;
 } Pair;
+
 union Cell {
   Vm *ap;
   Word x;
@@ -69,35 +71,31 @@ typedef struct Type {
 } Type;
 
 
-
 typedef struct String {
-  Vm *ap; Type *typ;
+  DataHeader;
   uintptr_t len;
   char text[];
 } String;
 
-typedef struct Symbol {
-  Vm *ap; Type *typ;
-  String *nom;
-  Word code;
-  struct Symbol *l, *r;
-} Symbol;
+typedef struct Symbol Symbol;
 
-typedef struct TableEntry {
-  Word key, val;
-  struct TableEntry *next;
-} TableEntry;
-
-typedef struct Table {
-  Vm *ap; Type *typ;
-  uintptr_t len, cap;
-  TableEntry **tab;
-} Table;
+typedef struct Table Table;
 
 typedef struct Mm {
   Word *addr;
   struct Mm *next;
 } Mm, Mm;
+
+struct PVars {
+  Table *dict,
+        *macro;
+  Symbol *quote,
+         *begin,
+         *let,
+         *cond,
+         *lambda; };
+#define NPVars (sizeof(struct PVars)/sizeof(Word))
+
 
 // runtime core data structure -- 1 core = 1 thread of execution
 struct PCore {
@@ -107,9 +105,9 @@ struct PCore {
        *sp; // stack pointer
 
   Symbol *symbols; // interned symbol tree
-  // environment // TODO clarify what this is exactly
-  Table *dict,  // global environment
-        *macro; // compiler macros
+  union {
+    struct PVars vars;
+    Word var_array[NPVars]; };
   // memory management
   uintptr_t len;
   Word *pool, *loop;
@@ -120,21 +118,23 @@ struct PCore {
 struct tag { Cell *null, *head, end[]; } *ttag(Cell*);
 
 Cell
-  *mo_ini(Thread*, uintptr_t),
   *trim_thread(Thread*),
   *mo_n(Core*, size_t);
+
 Pair
   *ini_pair(Pair*, Word, Word),
   *pairof(Core*, Word, Word);
+
 Table
-  *ini_table(Table*, uintptr_t, uintptr_t, TableEntry**),
   *new_table(Core*),
   *table_set(Core*, Table*, Word, Word);
+
 Symbol
-  *ini_sym(Symbol*, String*, uintptr_t),
   *literal_symbol(Core*, const char*),
   *intern(Core*, String*);
-String *ini_str(String*, uintptr_t);
+
+String
+  *ini_str(String*, uintptr_t);
 void
   *bump(Core*, uintptr_t),
   *cells(Core*, uintptr_t),
@@ -148,7 +148,9 @@ Word
   pushs(Core*, uintptr_t, ...),
   hash(Core*, Word),
   cp(Core*, Word, Word*, Word*); // for recursive use by evac functions
+
 Vm(gc, uintptr_t s);
+
 Vm display, bnot, rng, data,
    defmacro, symnom,
    ret, ap, apn, tap, tapn,
@@ -159,7 +161,6 @@ Vm display, bnot, rng, data,
    seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
    curry;
 
-extern Type pair_type, string_type, symbol_type, table_type;
 
 #define Oom PStatusOom
 #define Ok PStatusOk
@@ -199,10 +200,7 @@ extern Type pair_type, string_type, symbol_type, table_type;
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
 
-static Inline bool strp(Word _) { return homp(_) && dtyp(_) == &string_type; }
-static Inline bool twop(Word _) { return homp(_) && dtyp(_) == &pair_type; }
-static Inline bool tblp(Word _) { return homp(_) && dtyp(_) == &table_type; }
-static Inline bool symp(Word _) { return homp(_) && dtyp(_) == &symbol_type; }
+bool symp(Word), strp(Word), twop(Word);
 
 // align bytes up to the nearest word
 static Inline size_t b2w(size_t b) {

@@ -1,5 +1,23 @@
 #include "i.h"
 
+Type table_type;
+
+typedef struct TableEntry {
+  Word key, val;
+  struct TableEntry *next;
+} TableEntry;
+
+typedef struct Table {
+  DataHeader;
+  uintptr_t len, cap;
+  TableEntry **tab;
+} Table;
+
+static Inline bool tblp(Word _) { return homp(_) && dtyp(_) == &table_type; }
+
+static Table
+  *ini_table(Table*, uintptr_t, uintptr_t, TableEntry**);
+
 // FIXME very poor hashing method :(
 static Word hash_table(Core *f, Word h) { return mix; }
 
@@ -183,8 +201,7 @@ Vm(tkeys) {
   Hp += len * Width(Pair);
   for (int i = t->cap; i;)
     for (TableEntry *e = t->tab[--i]; e; e = e->next)
-      pairs->ap = data, pairs->typ = &pair_type,
-      pairs->a = e->key, pairs->b = list,
+      ini_pair(pairs, e->key, list),
       list = (Word) pairs, pairs++;
   return op(1, list); }
 

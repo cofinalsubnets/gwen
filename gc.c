@@ -59,7 +59,6 @@ NoInline bool p_please(Core *f, uintptr_t req) {
   return true; } // size successfully adjusted
 
 
-#define CP(d) ((d) = (void*) cp(f, (Word) (d), p0, t0))
 // this function expects pool loop and len to have been set already on the state
 static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   Word len1 = f->len, // target pool length
@@ -73,7 +72,9 @@ static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   f->sp = sp1, f->hp = p1, f->symbols = 0;
   // copy stack and variables
   while (sn--) *sp1++ = cp(f, *sp0++, p0, t0);
-  CP(f->ip), CP(f->dict), CP(f->macro);
+  f->ip = (Cell*) cp(f, (Word) f->ip, p0, t0);
+  for (int i = 0; i < NPVars; i++)
+    f->var_array[i] = cp(f, f->var_array[i], p0, t0);
   // copy protected values
   for (Mm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
   // copy all reachable values using cheney's method

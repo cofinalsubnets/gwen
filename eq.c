@@ -15,4 +15,3 @@ bool eql(Core *f, Word a, Word b) {
       dtyp(a) != dtyp(b)) return false;
   // in that case call the type's equality method
   return dtyp(a)->equal(f, a, b); }
-

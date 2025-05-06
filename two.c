@@ -1,4 +1,6 @@
 #include "i.h"
+Type pair_type;
+bool twop(Word _) { return homp(_) && dtyp(_) == &pair_type; }
 
 Pair *pairof(Core *f, Word a, Word b) {
   if (avail(f) < Width(Pair)) {

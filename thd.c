@@ -1,6 +1,6 @@
 #include "i.h"
 Cell *trim_thread(Cell *k) { return ttag(k)->head = k; }
-Cell *mo_ini(Thread* _, uintptr_t len) {
+static Cell *mo_ini(Thread* _, uintptr_t len) {
   struct tag *t = (struct tag*) (_ + len);
   return t->null = NULL, t->head = _; }
 // allocate a thread

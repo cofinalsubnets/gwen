@@ -1,5 +1,9 @@
 #include "i.h"
 
+static Type string_type;
+
+bool strp(Word _) { return homp(_) && dtyp(_) == &string_type; }
+
 Vm(slen) {
   Word x = Sp[0];
   return op(1, strp(x) ? putnum(((String*)x)->len) : nil); }
@@ -85,8 +89,8 @@ static Word hash_string(Core* v, Word _) {
   return h; }
 
 static bool string_equal(Core *f, Word x, Word y) {
-  String*a = (String*) x, *b = (String*) y;
+  String *a = (String*) x, *b = (String*) y;
   return a->len == b->len && 0 == strncmp(a->text, b->text, a->len); }
 
-Type
+static Type
   string_type = { .hash = hash_string, .copy = copy_string, .evac = walk_string, .emit = print_string, .equal = string_equal, };

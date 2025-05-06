@@ -1,9 +1,17 @@
 #include "i.h"
+struct Symbol {
+  DataHeader;
+  String *nom;
+  Word code;
+  Symbol *l, *r;
+};
+Type symbol_type;
 
 static Symbol *intern_r(Core*, String*, Symbol**);
 Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
+bool symp(Word _) { return homp(_) && dtyp(_) == &symbol_type; }
 
-Symbol *ini_sym(Symbol *y, String *nom, uintptr_t code) {
+static Symbol *ini_sym(Symbol *y, String *nom, uintptr_t code) {
   return y->ap = data,
          y->typ = &symbol_type,
          y->nom = nom,
@@ -46,7 +54,7 @@ static Symbol *intern_r(Core *v, String *b, Symbol **y) {
           strncmp(a->text, b->text, a->len);
   return i == 0 ? z : intern_r(v, b, i < 0 ? &z->l : &z->r); }
 
-Symbol* intern(Core *f, String* b) {
+Symbol *intern(Core *f, String* b) {
   if (avail(f) < Width(Symbol)) {
     bool ok;
     avec(f, b, ok = p_please(f, Width(Symbol)));
@@ -54,7 +62,7 @@ Symbol* intern(Core *f, String* b) {
   return intern_r(f, b, &f->symbols); }
 
 
-Symbol* literal_symbol(Core *f, const char *nom) {
+Symbol *literal_symbol(Core *f, const char *nom) {
   size_t len = strlen(nom);
   String *o = cells(f, Width(String) + b2w(len));
   if (!o) return 0;
@@ -72,10 +80,9 @@ Vm(gensym) {
   if (strp(Sp[0])) return Jump(symm);
   const int req = Width(Symbol) - 2;
   Have(req);
-  Symbol* y = (Symbol*) Hp;
+  Symbol *y = (Symbol*) Hp;
   Hp += req;
   return op(1, (Word) ini_anon(y, rand())); }
-
 
 Vm(symnom) {
   Word y = *Sp;

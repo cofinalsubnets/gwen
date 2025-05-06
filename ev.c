@@ -119,10 +119,12 @@ static size_t ana_i2(Core *f, Env **c, size_t m, Vm *i, Word x) {
   return pushs(f, 3, cata_ix, i, x) ? m + 2 : 0; }
 
 // conditional expression analyzer
-static Ana(ana_if) {
+static NoInline Ana(ana_if) {
   if (!pushs(f, 2, x, generate_cond_pop_exit)) return 0;
-  Pair p = { data, &pair_type, nil, nil };
-  for (x = pop1(f), MM(f, &x); m; x = BB(x)) {
+  Pair p = { 0, 0, nil, nil };
+  x = pop1(f);
+  MM(f, &x);
+  for (; m; x = BB(x)) {
     if (!twop(x)) x = (Word) &p;
     m = analyze(f, c, m + 2, A(x));
     if (!twop(B(x))) { // this means we have just analyzed the default case
@@ -177,9 +179,7 @@ static Cata(generate_cond_pop_branch) {
          pull(f, c, k - 2); }
 
 static bool lambp(PCore *f, Word x) {
-  if (!twop(x) || !symp(x = A(x))) return false;
-  String* s = ((Symbol*) x)->nom;
-  return s && s->len == 1 && s->text[0] == '\\'; }
+  return twop(x) && A(x) == (Word) f->vars.lambda; }
 
 // DEFINE
 // let expressions
@@ -213,7 +213,7 @@ static size_t llen(Word l) {
 
 static Vm(defglobal) {
   Pack(f);
-  if (!table_set(f, f->dict, Ip[1].x, Sp[0])) return Oom;
+  if (!table_set(f, f->vars.dict, Ip[1].x, Sp[0])) return Oom;
   Unpack(f);
   return op(1, Sp[0]); }
 
@@ -318,10 +318,13 @@ static size_t ana_imm(Core *f, Env **c, size_t m, Word x) {
 
 static size_t ana_seq(Core *f, Env* *c, size_t m, Word x) {
   if (!twop(x)) return ana_imm(f, c, m, nil);
-  for (MM(f, &x); m && twop(B(x)); x = B(x))
+  MM(f, &x);
+  while (m && twop(B(x)))
     m = analyze(f, c, m, A(x)),
-    m = m ? ana_i1(f, c, m, drop1) : m;
-  return UM(f), m ? analyze(f, c, m, A(x)) : m; }
+    m = m ? ana_i1(f, c, m, drop1) : m,
+    x = B(x);
+  UM(f);
+  return m ? analyze(f, c, m, A(x)) : m; }
 
 static Ana(ana_mac, Word b) {
   if (!pushs(f, 2, x, b)) return 0;
@@ -385,22 +388,20 @@ static size_t ana_ap(Core *f, Env* *c, size_t m, Word fn, Word args) {
 static Ana(ana_list) {
   Word a = A(x), b = B(x);
   if (!twop(b)) return analyze(f, c, m, a); // singleton list has value of first element
-  if (symp(a)) {
-    Word macro = table_get(f, f->macro, a, 0);
-    if (macro) return ana_mac(f, c, m, macro, b);
-    String *n = ((Symbol*) a)->nom;
-    if (n && n->len == 1) switch (n->text[0]) { // special form?
-      case '`': return ana_imm(f, c, m, twop(b) ? A(b) : nil);
-      case ',': return ana_seq(f, c, m, b);
-      case ':': return ana_let(f, c, m, b);
-      case '?': return ana_if(f, c, m, b);
-      case '\\': return (x = ana_lam(f, c, nil, b)) ? analyze(f, c, m, x) : x; } }
+  if (a == (Word) f->vars.quote) return ana_imm(f, c, m, twop(b) ? A(b) : nil);
+  if (a == (Word) f->vars.begin) return ana_seq(f, c, m, b);
+  if (a == (Word) f->vars.let) return ana_let(f, c, m, b);
+  if (a == (Word) f->vars.cond) return ana_if(f, c, m, b);
+  if (a == (Word) f->vars.lambda) return
+    (x = ana_lam(f, c, nil, b)) ? analyze(f, c, m, x) : x;
+  Word macro = table_get(f, f->vars.macro, a, 0);
+  if (macro) return ana_mac(f, c, m, macro, b);
   return ana_ap(f, c, m, a, b); }
 
 
 static Vm(free_variable) {
   Word x = Ip[1].x;
-  x = table_get(f, f->dict, x, nil); // error here if you want on undefined variable
+  x = table_get(f, f->vars.dict, x, nil); // error here if you want on undefined variable
   Ip[0].ap = imm;
   Ip[1].x = x;
   return Continue(); }
@@ -430,10 +431,8 @@ static Word rlconcat(Core *f, Word l, Word n) {
 
 static Ana(ana_sym_r, Env *d);
 static Ana(analyze) {
-  if (homp(x)) {
-    Type *y = dtyp(x);
-    if (y == &pair_type) return ana_list(f, c, m, x);
-    if (y == &symbol_type) return ana_sym_r(f, c, m, x, *c); }
+  if (twop(x)) return ana_list(f, c, m, x);
+  if (symp(x)) return ana_sym_r(f, c, m, x, *c);
   return ana_imm(f, c, m, x); }
 
 // index of item in list
@@ -448,7 +447,7 @@ static long stack_index_of_symbol(Core *f, Env *c, Word var) {
   return -1; }
 
 static Ana(ana_sym_free) {
-  Word y = table_get(f, f->dict, x, 0);
+  Word y = table_get(f, f->vars.dict, x, 0);
   if (y) return ana_imm(f, c, m, y);
   x = Z(pairof(f, x, (*c)->imps)), // XXX why is this needed???
   x = x ? A((*c)->imps = x) : x;

@@ -2,7 +2,7 @@
 
 Vm(defmacro) {
   Pack(f);
-  if (!table_set(f, f->macro, Sp[0], Sp[1])) return Oom;
+  if (!table_set(f, f->vars.macro, Sp[0], Sp[1])) return Oom;
   Unpack(f);
   return op(2, Sp[1]); }
 

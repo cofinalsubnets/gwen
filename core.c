@@ -36,7 +36,7 @@ static NoInline bool p_define(Core *f, const char *k, Word v) {
   if (!pushs(f, 1, v)) return false;
   Symbol* y = literal_symbol(f, k);
   v = pop1(f);
-  return y && table_set(f, f->dict, (Word) y, v); }
+  return y && table_set(f, f->vars.dict, (Word) y, v); }
 
 void p_fin(Core *f) { free(f->pool < f->loop ? f->pool : f->loop); }
 void p_close(Core *f) { p_fin(f), free(f); }
@@ -48,9 +48,14 @@ PStatus p_ini(Core *f) {
   f->t0 = clock();
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
 #define Definition(a, b) p_define(f, a, (Word) b) &&
-  if (!(f->dict = new_table(f)) ||
-      !(f->macro = new_table(f)) ||
-      !p_define(f, "global-namespace", (Word) f->dict))
+  if (!(f->vars.dict = new_table(f)) ||
+      !(f->vars.macro = new_table(f)) ||
+      !(f->vars.quote = literal_symbol(f, "`")) ||
+      !(f->vars.begin = literal_symbol(f, ",")) ||
+      !(f->vars.let = literal_symbol(f, ":")) ||
+      !(f->vars.cond = literal_symbol(f, "?")) ||
+      !(f->vars.lambda = literal_symbol(f, "\\")) ||
+      !p_define(f, "global-namespace", (Word) f->vars.dict))
     return p_fin(f), Oom;
   for (long i = 0; i < sizeof(ini_dict)/sizeof(*ini_dict); i++)
     if (!p_define(f, ini_dict[i].n, (Word) ini_dict[i].v))
