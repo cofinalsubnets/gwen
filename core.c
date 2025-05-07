@@ -4,43 +4,39 @@
 #define S2(i) ((Cell[]){{curry},{.x=putnum(2)},{i}})
 #define S3(i) ((Cell[]){{curry},{.x=putnum(3)},{i}})
 
-static struct {
-  const char *n;
-  Cell *v;
-} ini_dict[] = {
-  {"+", S2(add)}, {"-", S2(sub)}, {"*", S2(mul)}, {"/", S2(quot)}, {"%", S2(rem)}, 
-  {"<", S2(lt)}, {"<=", S2(le)}, {"=", S2(eq)}, {">=", S2(ge)}, {">", S2(gt)},
-  {"rand", S1(rng)},
-  {"X", S2(cons)}, {"A", S1(car)}, {"B", S1(cdr)},
-  {"sget", S2(sget)}, {"ssub", S3(ssub)}, {"slen", S1(slen)}, {"scat", S2(scat)},
-  {"error", S1(error)},
-  {".", S1(display)}, {"putc", S1(prc)},
-  {"~", S1(bnot)},
-  // thread functions
-  {"thd", S1(thda)}, {"peek", S1(peek)}, {"poke", S2(poke)},
-  {"trim", S1(trim)}, {"seek", S2(seek)},
-  // table functions
-  {"tnew", S1(tnew)}, {"tkeys", S1(tkeys)}, {"tlen", S1(tlen)},
-  {"tset", S3(tset)}, {"tget", S3(tget)}, {"tdel", S3(tdel)},
-  // type predicates
-  {"twop", S1(pairp)}, {"strp", S1(stringp)}, {"symp", S1(symbolp)}, {"nump", S1(fixnump)},
+#define bifs(_) \
+  _("+", S2(add)) _("-", S2(sub)) _("*", S2(mul)) _("/", S2(quot)) _("%", S2(rem)) \
+  _("<", S2(lt))  _("<=", S2(le)) _("=", S2(eq))  _(">=", S2(ge))  _(">", S2(gt)) \
+  _("rand", S1(rng)) \
+  _("X", S2(cons)) _("A", S1(car)) _("B", S1(cdr)) \
+  _("sget", S2(sget)) _("ssub", S3(ssub)) _("slen", S1(slen)) _("scat", S2(scat)) \
+  _(".", S1(display)) _("putc", S1(prc)) \
+  _("~", S1(bnot)) \
+  _("thd", S1(thda)) _("peek", S1(peek)) _("poke", S2(poke))\
+  _("trim", S1(trim)) _("seek", S2(seek)) \
+  _("tnew", S1(tnew)) _("tkeys", S1(tkeys)) _("tlen", S1(tlen))\
+  _("tset", S3(tset)) _("tget", S3(tget)) _("tdel", S3(tdel))\
+  _("twop", S1(pairp)) _("strp", S1(stringp))\
+  _("symp", S1(symbolp)) _("nump", S1(fixnump))\
+  _("sym", S1(gensym)) _("nom", S1(symnom))\
+  _("ev", S1(ev0)) _("::", S2(defmacro))
+#define dict_entry(n, d) {n, d},
+static struct { const char *n; Cell *v; } ini_dict[] = { bifs(dict_entry) };
 
-  // symbols
-  {"sym", S1(gensym)}, {"nom", S1(symnom)},
-
-  {"ev", S1(ev0)},
-  {"::", S2(defmacro)},
-};
+static Symbol *literal_symbol(Core *f, const char *nom) {
+  size_t len = strlen(nom);
+  String *o = cells(f, Width(String) + b2w(len));
+  if (!o) return 0;
+  memcpy(o->text, nom, len);
+  return intern(f, ini_str(o, len)); }
 
 static NoInline bool p_define(Core *f, const char *k, Word v) {
-  if (!pushs(f, 1, v)) return false;
-  Symbol* y = literal_symbol(f, k);
-  v = pop1(f);
+  Symbol *y;
+  avec(f, v, y = literal_symbol(f, k));
   return y && table_set(f, f->vars.dict, (Word) y, v); }
 
-void p_fin(Core *f) { free(f->pool < f->loop ? f->pool : f->loop); }
-void p_close(Core *f) { p_fin(f), free(f); }
-PStatus p_ini(Core *f) {
+static void p_fin(Core *f) { free(f->pool < f->loop ? f->pool : f->loop); }
+static Status p_ini(Core *f) {
   memset(f, 0, sizeof(Core));
   const uintptr_t len0 = 1;
   Word *pool = malloc(2 * len0 * sizeof(Word));
@@ -62,6 +58,7 @@ PStatus p_ini(Core *f) {
       return p_fin(f), Oom;
   return Ok; }
 
+void p_close(Core *f) { p_fin(f), free(f); }
 Core *p_open(void) {
   Core *f = malloc(sizeof(Core));
   return !f || p_ini(f) == Ok ? f : (free(f), NULL); }

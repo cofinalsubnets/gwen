@@ -196,8 +196,8 @@ static Word desugr(Core *f, Word *d, Word *e, Word a) {
 
 static Status desug(Core *f, Word *d, Word *e) {
   if (!twop(*d)) return Ok;
-  Word x, l = (Word) literal_symbol(f, "\\");
-  if (!l || !pushs(f, 1, l)) return Oom;
+  Word x;
+  if (!pushs(f, 1, f->vars.lambda)) return Oom;
   do if (!(x = (Word) desugr(f, d, e, B(*d))) ||
          !(x = (Word) pairof(f, f->sp[0], x)))
     return Oom;
@@ -270,7 +270,7 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
   (*c)->lams = lam;
   // construct lambda with reversed argument list
   exp = lconcat(f, nom, exp);
-  Symbol* l = exp ? literal_symbol(f, "\\") : 0;
+  Symbol* l = exp ? f->vars.lambda : 0;
   exp = l ? Z(pairof(f, Z(l), exp)) : 0;
   m = exp ? analyze(f, b, m, exp) : 0; // exp is now the required lambda, analyze it
   if (!m || !((*b)->stack = Z(pairof(f, nil, (*b)->stack)))) goto fail;
@@ -327,9 +327,7 @@ static size_t ana_seq(Core *f, Env* *c, size_t m, Word x) {
   return m ? analyze(f, c, m, A(x)) : m; }
 
 static Ana(ana_mac, Word b) {
-  if (!pushs(f, 2, x, b)) return 0;
-  x = Z(literal_symbol(f, "`"));
-  if (!x || !pushs(f, 1, x)) return 0;
+  if (!pushs(f, 3, f->vars.quote, x, b)) return 0;
   Pair *mxp = (Pair*) cells(f, 4 * Width(Pair));
   if (!mxp) return 0;
   x = Z(ini_pair(mxp, f->sp[1], Z(ini_pair(mxp+1, Z(ini_pair(mxp+2, f->sp[0],  Z(ini_pair(mxp+3, f->sp[2], nil)))), nil))));

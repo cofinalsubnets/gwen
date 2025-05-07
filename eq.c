@@ -10,8 +10,8 @@ bool eql(Core *f, Word a, Word b) {
   // that's the only way unless a and b are both data
   // with the same type
   if (nump(a | b) ||
-      ptr(a)->ap != data ||
-      ptr(b)->ap != data ||
+      R(a)->ap != data ||
+      R(b)->ap != data ||
       dtyp(a) != dtyp(b)) return false;
   // in that case call the type's equality method
   return dtyp(a)->equal(f, a, b); }

@@ -61,14 +61,6 @@ Symbol *intern(Core *f, String* b) {
     if (!ok) return 0; }
   return intern_r(f, b, &f->symbols); }
 
-
-Symbol *literal_symbol(Core *f, const char *nom) {
-  size_t len = strlen(nom);
-  String *o = cells(f, Width(String) + b2w(len));
-  if (!o) return 0;
-  memcpy(o->text, nom, len);
-  return intern(f, ini_str(o, len)); }
-
 static Vm(symm) {
   Have(Width(Symbol));
   Pack(f);

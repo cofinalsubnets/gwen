@@ -1,5 +1,5 @@
 #include "i.h"
-Type pair_type;
+static Type pair_type;
 bool twop(Word _) { return homp(_) && dtyp(_) == &pair_type; }
 
 Pair *pairof(Core *f, Word a, Word b) {
@@ -18,6 +18,13 @@ Vm(cons) {
   Pair *w = ini_pair((Pair*) Hp, Sp[0], Sp[1]);
   Hp += Width(Pair);
   return op(2, Z(w)); }
+
+Status p_cons(Core *f) {
+  Pair *p = cells(f, Width(Pair));
+  if (!p) return Oom;
+  ini_pair(p, f->sp[0], f->sp[1]);
+  *++f->sp = (Word) p;
+  return Ok; }
 
 static Word cp_two(Core *v, Word x, Word *p0, Word *t0) {
   Pair *src = (Pair*) x,
@@ -50,7 +57,7 @@ Pair *ini_pair(Pair *w, Word a, Word b) {
          w->b = b,
          w; }
 
-Type pair_type = {
+static Type pair_type = {
   .hash = hash_two,
   .copy = cp_two,
   .evac = wk_two,

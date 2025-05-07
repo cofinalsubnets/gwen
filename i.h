@@ -60,7 +60,6 @@ union Cell {
   Pair *w;
 };
 
-
 // primitive type method tables
 typedef struct Type {
   Word (*copy)(Core*, Word, Word*, Word*); // for gc
@@ -78,7 +77,6 @@ typedef struct String {
 } String;
 
 typedef struct Symbol Symbol;
-
 typedef struct Table Table;
 
 typedef struct Mm {
@@ -130,19 +128,21 @@ Table
   *table_set(Core*, Table*, Word, Word);
 
 Symbol
-  *literal_symbol(Core*, const char*),
   *intern(Core*, String*);
 
 String
   *ini_str(String*, uintptr_t);
+
 void
   *bump(Core*, uintptr_t),
   *cells(Core*, uintptr_t),
   transmit(Core*, PFile*, Word);
+
 bool
   not_equal(Core*, Word, Word),
   p_please(Core*, uintptr_t),
   eql(Core*, Word, Word);
+
 Word
   table_get(Core*, Table*, Word, Word),
   pushs(Core*, uintptr_t, ...),
@@ -156,7 +156,7 @@ Vm display, bnot, rng, data,
    ret, ap, apn, tap, tapn,
    jump, cond, dup, imm, yield,
    gensym, ev0, pairp, fixnump, symbolp, stringp,
-   ssub, sget, slen, scat, prc, error, cons, car, cdr,
+   ssub, sget, slen, scat, prc, cons, car, cdr,
    lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
    seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
    curry;
@@ -185,15 +185,12 @@ Vm display, bnot, rng, data,
 #define R(_) ((Cell*)(_))
 #define nilp(_) (Z(_)==nil)
 #define nump(_) (Z(_)&1)
-#define thdp(_) (!nump(_))
+#define homp(_) (!nump(_))
 #define datp(_) (R(_)->ap==data)
 #define dtyp(_) R(_)[1].typ
 #define max(a, b) ((a)>(b)?(a):(b))
 #define min(a, b) ((a)<(b)?(a):(b))
 #define mix ((uintptr_t)2708237354241864315)
-
-#define homp thdp
-#define ptr R
 
 #define pop1(f) (*(f)->sp++)
 

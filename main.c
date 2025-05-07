@@ -81,7 +81,7 @@ int main(int ac, char **av) {
     case -1: goto out; } out:
   av += optind;
   usestdin = usestdin || ac == optind;
-  PCore*f = p_open();
+  PCore *f = p_open();
   PStatus s = f ? (cat ? expcat : run)(f, av, usestdin) : Oom;
   p_close(f);
   return s; }
