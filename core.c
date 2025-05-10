@@ -19,16 +19,14 @@
   _("twop", S1(pairp)) _("strp", S1(stringp))\
   _("symp", S1(symbolp)) _("nump", S1(fixnump))\
   _("sym", S1(gensym)) _("nom", S1(symnom))\
-  _("ev", S1(ev0)) _("::", S2(defmacro))
+  _("ev", S1(ev0)) _("::", S2(defmacro)) \
+  _("read", S1(read0)) _("readf", S1(readf))
 #define dict_entry(n, d) {n, d},
 static struct { const char *n; Cell *v; } ini_dict[] = { bifs(dict_entry) };
 
 static Symbol *literal_symbol(Core *f, const char *nom) {
-  size_t len = strlen(nom);
-  String *o = cells(f, Width(String) + b2w(len));
-  if (!o) return 0;
-  memcpy(o->text, nom, len);
-  return intern(f, ini_str(o, len)); }
+  String *o = literal_string(f, nom);
+  return o ? intern(f, o) : 0; }
 
 static NoInline bool p_define(Core *f, const char *k, Word v) {
   Symbol *y;
@@ -70,11 +68,15 @@ static NoInline Word pushsr(Core *f, uintptr_t m, uintptr_t n, va_list xs) {
   avec(f, x, y = pushsr(f, m, n - 1, xs));
   return y ? *--f->sp = x : y; }
 
-Word pushs(Core *f, uintptr_t m, ...) {
-  va_list xs; va_start(xs, m);
+static NoInline Word vpushs(Core *f, uintptr_t m, va_list xs) {
   Word n, r = 0;
   if (avail(f) < m) r = pushsr(f, m, m, xs);
   else for (n = 0, f->sp -= m; n < m; f->sp[n++] = r = va_arg(xs, Word));
+  return r; }
+
+Word pushs(Core *f, uintptr_t m, ...) {
+  va_list xs; va_start(xs, m);
+  Word r = vpushs(f, m, xs);
   va_end(xs);
   return r; }
 

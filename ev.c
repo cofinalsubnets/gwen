@@ -54,7 +54,7 @@ static cata
   generate_cond_pop_exit,
   generate_cond_peek_exit;
 
-static Status run_vm(Core *f) {
+Status p_run(Core *f) {
   Status s;
 #if TCO
   s = f->ip->ap(f, f->ip, f->hp, f->sp);
@@ -64,6 +64,13 @@ static Status run_vm(Core *f) {
 #endif
   return s; }
 
+Status p_evalx(Core *f, const char *x) {
+  Status s = p_read1t(f, x);
+  return s == Ok ? p_eval(f) : s; }
+
+Status p_evalf(Core *f, FILE *i) {
+  Status s = p_read1f(f, i);
+  return s == Ok ? p_eval(f) : s; }
 
 // compile and execute expression
 NoInline Status p_eval(Core *f) {
@@ -81,7 +88,7 @@ NoInline Status p_eval(Core *f) {
   if (!k) return Oom;
   f->sp[0] = (Word) f->ip;
   f->ip = k;
-  Status s = run_vm(f);
+  Status s = p_run(f);
   if (s != Ok) f->ip = 0, f->sp = f->pool + f->len;
   else x = f->sp[0], f->ip = (Cell*) *++f->sp, f->sp[0] = x;
   return s; }

@@ -94,3 +94,9 @@ static bool string_equal(Core *f, Word x, Word y) {
 
 static Type
   string_type = { .hash = hash_string, .copy = copy_string, .evac = walk_string, .emit = print_string, .equal = string_equal, };
+
+String *literal_string(Core *f, const char *text) {
+  size_t len = strlen(text);
+  String *o = cells(f, Width(String) + b2w(len));
+  if (o) memcpy(ini_str(o, len)->text, text, len);
+  return o; }

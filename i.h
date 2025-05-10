@@ -115,6 +115,8 @@ struct PCore {
 
 struct tag { Cell *null, *head, end[]; } *ttag(Cell*);
 
+Status p_cons(Core*), p_run(Core*);
+
 Cell
   *trim_thread(Thread*),
   *mo_n(Core*, size_t);
@@ -131,6 +133,7 @@ Symbol
   *intern(Core*, String*);
 
 String
+  *literal_string(Core*, const char*),
   *ini_str(String*, uintptr_t);
 
 void
@@ -159,6 +162,7 @@ Vm display, bnot, rng, data,
    ssub, sget, slen, scat, prc, cons, car, cdr,
    lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
    seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
+   read0, readf,
    curry;
 
 

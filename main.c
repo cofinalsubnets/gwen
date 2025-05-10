@@ -43,21 +43,18 @@ static FILE *try_open(char *nom) {
   if (!file) fprintf(stderr, "# error opening %s: %s\n", nom, strerror(errno));
   return file; }
 
-static PStatus run_file(PCore*f, p_file in) {
+static PStatus run_file(PCore *f, p_file in) {
   PStatus s;
   // evaluate expressions for side effects
-  while ((s = p_read1f(f, in)) == Ok && (s = p_eval(f)) == Ok)
-    p_drop(f, 1);
+  while ((s = p_evalf(f, in)) == Ok) p_drop(f, 1);
   return s == Eof ? Ok : s; }
 
 static PStatus p_repl(PCore*f, p_file in, p_file out) {
-  for (PStatus s;;) {
-    fprintf(out, ">>> ");
-    if ((s = p_read1f(f, in)) == Eof) return Ok;
-    if (s == Ok && (s = p_eval(f)) == Ok)
-      p_write1f(f, out),
-      fprintf(out, "\n"),
-      p_drop(f, 1); } }
+  static const char repl_prog[] =
+    "(: (repl _) (: r (, (puts \">>> \") (read 0)) (? r (, (. (ev (A r))) (putc 10) (repl 0)))) (repl 0))";
+  PStatus s = p_evalx(f, repl_prog);
+  if (s == Ok) p_drop(f, 1);
+  return s; }
 
 static PStatus run(PCore*f, char **av, bool usestdin) {
   PStatus s = Ok;

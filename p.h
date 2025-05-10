@@ -28,6 +28,9 @@ void
 
 PStatus
   p_read1f(PCore*, PFile*),
+  p_read1t(PCore*, const char*),
+  p_evalx(PCore*, const char*),
+  p_evalf(PCore*, PFile*),
   p_eval(PCore*);
 
 size_t
