@@ -1,10 +1,11 @@
 #include "i.h"
 Cell *trim_thread(Cell *k) { return ttag(k)->head = k; }
-static Cell *mo_ini(Thread* _, uintptr_t len) {
+static thread *mo_ini(thread *_, size_t len) {
   struct tag *t = (struct tag*) (_ + len);
   return t->null = NULL, t->head = _; }
+
 // allocate a thread
-Cell *mo_n(Core *f, uintptr_t n) {
+Cell *mo_n(Core *f, size_t n) {
   Cell *k = cells(f, n + Width(struct tag));
   return !k ? k : mo_ini(k, n); }
 

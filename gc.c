@@ -59,6 +59,7 @@ NoInline bool p_please(Core *f, uintptr_t req) {
   return true; } // size successfully adjusted
 
 
+#define NPVars (sizeof(struct PVars)/sizeof(word))
 // this function expects pool loop and len to have been set already on the state
 static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   Word len1 = f->len, // target pool length
@@ -69,7 +70,7 @@ static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
        sn = t0 - sp0, // stack height
        *sp1 = t1 - sn; // target pool stack
   // reset stack, heap, symbols
-  f->sp = sp1, f->hp = p1, f->symbols = 0;
+  f->sp = sp1, f->hp = f->cp = p1, f->symbols = 0;
   // copy stack and variables
   while (sn--) *sp1++ = cp(f, *sp0++, p0, t0);
   f->ip = (Cell*) cp(f, (Word) f->ip, p0, t0);
@@ -78,14 +79,13 @@ static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   // copy protected values
   for (Mm *r = f->safe; r; r = r->next) *r->addr = cp(f, *r->addr, p0, t0);
   // copy all reachable values using cheney's method
-  f->cp = p1;
   for (Cell *k; (k = R(f->cp)) < R(f->hp);)
     if (datp(k)) typof(k)->evac(f, Z(k), p0, t0); // is data
     else { // is thread
       while (k->x) k->x = cp(f, k->x, p0, t0), k++;
       f->cp = (Word*) k + 2; } }
 
-NoInline Word cp(Core *v, Word x, Word *p0, Word *t0) {
+NoInline word cp(proc *v, word x, word *p0, word *t0) {
   // if it's a number or out of managed memory then return it
   if (nump(x) || !within(p0, x, t0)) return x;
   Cell *src = (Cell*) x;
@@ -93,7 +93,7 @@ NoInline Word cp(Core *v, Word x, Word *p0, Word *t0) {
   // if the cell holds a pointer to the new space then return the pointer
   if (homp(x) && owns(v, x)) return x;
   // if it's data then call the given copy function
-  if (datp(src)) return dtyp(src)->copy(v, (Word) src, p0, t0);
+  if (datp(src)) return typof(src)->copy(v, (Word) src, p0, t0);
   // it's a thread, find the end
   struct tag *t = ttag(src);
   Cell *ini = t->head, *d = bump(v, t->end - ini), *dst = d;

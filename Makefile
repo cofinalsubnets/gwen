@@ -6,8 +6,8 @@ n=p
 x=p
 
 # default version
-t=tc # tail called
-#t=tr # trampolined
+#t=tc # tail called
+t=tr # trampolined
 
 default: test
 
@@ -28,7 +28,7 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 	$(cc) -c $< -o $@ -DTCO=1
 # trampolined objects
 %.tr.o: %.c $h $m
-	$(cc) -c $< -o $@ -DTCO=0
+	$(cc) -c $< -o $@
 # static library
 lib$n.%.a: $(c:.c=.%.o)
 	ar rcs $@ $^

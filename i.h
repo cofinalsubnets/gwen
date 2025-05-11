@@ -10,11 +10,8 @@
 #include <stdlib.h>
 
 // theres a big benefit in speed from tail call optimization but not all platforms support it
-#ifndef TCO
-#define TCO 1 // on by default
-#endif
 
-#if TCO
+#ifdef TCO
 #define Vm(n, ...) Status n(Core *f, Thread* Ip, Heap Hp, Stack Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
@@ -39,7 +36,6 @@
 #define Have(n) if (Sp - Hp < n) return Ap(gc, f, n)
 #define Have1() if (Sp == Hp) return Ap(gc, f, 1)
 
-
 // thanks !!
 typedef intptr_t word, Word, *Heap, *Stack;
 typedef PCore Core, proc;
@@ -49,18 +45,12 @@ typedef union Cell Cell, Thread, thread;
 typedef Vm(vm);
 typedef vm Vm, PVm;
 typedef Vm(MVm, int);
-#define DataHeader Vm *ap; Type *typ
-typedef struct Pair {
-  DataHeader;
-  Word a, b;
-} Pair;
 
 union Cell {
   Vm *ap;
   Word x;
   Cell *m;
   Type *typ;
-  Pair *w;
 };
 
 // primitive type method tables
@@ -71,6 +61,13 @@ typedef struct Type {
   void (*emit)(Core*, p_file, Word);       // print it // replace this with stringify...
   Word (*hash)(Core*, Word);               // hash it
 } Type;
+
+#define DataHeader vm *ap; typ *typ
+typedef struct Pair {
+  DataHeader;
+  word a, b;
+} Pair, pair;
+
 
 
 typedef struct String {
@@ -85,30 +82,29 @@ typedef struct Table Table;
 typedef struct Mm {
   Word *addr;
   struct Mm *next;
-} Mm, Mm;
+} Mm, mm;
 
-struct PVars {
-  Table *dict,
-        *macro;
-  Symbol *quote,
-         *begin,
-         *let,
-         *cond,
-         *lambda; };
-#define NPVars (sizeof(struct PVars)/sizeof(Word))
 
 
 // runtime core data structure -- 1 core = 1 thread of execution
 struct PCore {
   // vm registers
   Cell *ip; // instruction pointer
-  Word *hp, // heap pointer
+  word *hp, // heap pointer
        *sp; // stack pointer
 
   Symbol *symbols; // interned symbol tree
   union {
-    struct PVars vars;
-    Word var_array[NPVars]; };
+    struct PVars {
+      Cell *ip;
+      Table *dict,
+            *macro;
+      Symbol *quote,
+             *begin,
+             *let,
+             *cond,
+             *lambda; } vars;
+    word var_array[sizeof(struct PVars)/sizeof(word)]; };
 
   // memory management
   uintptr_t len;
@@ -122,7 +118,7 @@ struct PCore {
 
 struct tag { Cell *null, *head, end[]; } *ttag(Cell*);
 
-Status p_cons(Core*), p_run(Core*);
+Status p_cons(Core*);
 
 Cell
   *trim_thread(Thread*),
@@ -222,5 +218,14 @@ static Inline size_t b2w(size_t b) {
 
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(Cell*) == sizeof(Cell), "cell is 1 word wide");
+
+static inline int p_run(Core *f) {
+#if TCO
+  return f->ip->ap(f, f->ip, f->hp, f->sp); }
+#else
+  int s;
+  do s = f->ip->ap(f); while (s == Ok);
+  return Eof ? Ok : s; }
+#endif
 
 #endif

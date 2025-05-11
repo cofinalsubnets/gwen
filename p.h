@@ -13,11 +13,10 @@ typedef struct PFile PFile, *p_file;
 
 // thanks !!
 typedef struct PCore PCore;
-typedef enum PStatus {
-  PStatusEof = -1,
-  PStatusOk = 0,
-  PStatusOom = 1,
-} PStatus;
+#define PStatusEof -1
+#define PStatusOk 0
+#define PStatusOom 1
+typedef int PStatus;
 
 PCore
   *p_open(void);
@@ -26,7 +25,7 @@ void
   p_close(PCore*),
   p_write1f(PCore*, PFile*);
 
-PStatus
+int
   p_read1f(PCore*, PFile*),
   p_read1t(PCore*, const char*),
   p_evalx(PCore*, const char*),

@@ -54,16 +54,6 @@ static cata
   generate_cond_pop_exit,
   generate_cond_peek_exit;
 
-int p_run(Core *f) {
-  int s;
-#if TCO
-  s = f->ip->ap(f, f->ip, f->hp, f->sp);
-#else
-  do s = f->ip->ap(f); while (s == Ok);
-  s = s == Eof ? Ok : s;
-#endif
-  return s; }
-
 int p_evalx(Core *f, const char *x) {
   Status s = p_read1t(f, x);
   return s == Ok ? p_eval(f) : s; }
