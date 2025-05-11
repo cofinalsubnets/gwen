@@ -1,9 +1,9 @@
 #include "i.h"
 NoInline Vm(gc, uintptr_t n) {
   Pack(f);
-  bool ok = p_please(f, n);
+  int s = p_please(f, n) ? Ok : Oom;
   Unpack(f);
-  return ok ? Continue() : Oom; }
+  return Bind(s); }
 
 void *bump(Core *f, size_t n) { void *x = f->hp; return f->hp += n, x; }
 void *cells(Core *f, size_t n) { return
@@ -80,18 +80,18 @@ static NoInline void copy_from(Core *f, Word *p0, uintptr_t len0) {
   // copy all reachable values using cheney's method
   f->cp = p1;
   for (Cell *k; (k = R(f->cp)) < R(f->hp);)
-    if (k->ap == data) k[1].typ->evac(f, Z(k), p0, t0); // is data
+    if (datp(k)) typof(k)->evac(f, Z(k), p0, t0); // is data
     else { // is thread
       while (k->x) k->x = cp(f, k->x, p0, t0), k++;
       f->cp = (Word*) k + 2; } }
 
 NoInline Word cp(Core *v, Word x, Word *p0, Word *t0) {
   // if it's a number or out of managed memory then return it
-  if (nump(x) || !bounded(p0, x, t0)) return x;
+  if (nump(x) || !within(p0, x, t0)) return x;
   Cell *src = (Cell*) x;
   x = src->x;
   // if the cell holds a pointer to the new space then return the pointer
-  if (homp(x) && bounded(v->pool, x, v->pool + v->len)) return x;
+  if (homp(x) && owns(v, x)) return x;
   // if it's data then call the given copy function
   if (datp(src)) return dtyp(src)->copy(v, (Word) src, p0, t0);
   // it's a thread, find the end

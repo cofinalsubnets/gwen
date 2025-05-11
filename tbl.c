@@ -79,7 +79,7 @@ Word hash(Core *f, Word x) {
     return x; }
 
   if (datp(x)) return dtyp(x)->hash(f, x);
-  if (!bounded(f->pool, x, f->pool+f->len)) return mix ^ (mix * x);
+  if (!owns(f, x)) return mix ^ (mix * x);
   // it's a function, hash by length
   struct tag *t = ttag((Cell*) x);
   Word len = (Cell*) t - t->head;

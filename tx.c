@@ -5,7 +5,7 @@ Vm(display) { Word w = *Sp; transmit(f, stdout, w); return op(1, w); }
 
 void transmit(Core *f, PFile* out, Word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
-  else if (R(x)->ap == data) dtyp(x)->emit(f, out, x);
+  else if (datp(x)) dtyp(x)->emit(f, out, x);
   else fprintf(out, "#%lx", (long) x); }
 
 void p_write1f(Core *f, PFile *out) {

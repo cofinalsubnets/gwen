@@ -16,36 +16,39 @@
 
 #if TCO
 #define Vm(n, ...) Status n(Core *f, Thread* Ip, Heap Hp, Stack Sp, ##__VA_ARGS__)
+#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
 #define YieldStatus PStatusOk
-#define Continue() Ip->ap(f, Ip, Hp, Sp)
 #define Jump(v) v(f, Ip, Hp, Sp)
-#define Have(n) if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n)
-#define Have1() if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1)
+#define Continue() Ap(Ip->ap, f)
 #else
 #define Vm(n, ...) Status n(Core *f, ##__VA_ARGS__)
+#define Ap(g, f, ...) g(f, ##__VA_ARGS__)
 #define Hp f->hp
 #define Sp f->sp
 #define Ip f->ip
 #define Pack(f) ((void)0)
 #define Unpack(f) ((void)0)
 #define YieldStatus PStatusEof
-#define Continue() Ok
 #define Jump(v) v(f)
-#define Have(n) if (Sp - Hp < n) return gc(f, n)
-#define Have1() if (Sp == Hp) return gc(f, 1)
+#define Continue() Ok
 #endif
+
+#define Bind(s) Ap(f->bind, f, s)
+#define Have(n) if (Sp - Hp < n) return Ap(gc, f, n)
+#define Have1() if (Sp == Hp) return Ap(gc, f, 1)
 
 
 // thanks !!
-typedef intptr_t Word, *Heap, *Stack;
-typedef PCore Core;
+typedef intptr_t word, Word, *Heap, *Stack;
+typedef PCore Core, proc;
 typedef PStatus Status;
-typedef struct Type Type;
-typedef union Cell Cell, Thread;
-typedef Vm(Vm);
-typedef Vm PVm;
+typedef struct Type Type, typ;
+typedef union Cell Cell, Thread, thread;
+typedef Vm(vm);
+typedef vm Vm, PVm;
+typedef Vm(MVm, int);
 #define DataHeader Vm *ap; Type *typ
 typedef struct Pair {
   DataHeader;
@@ -106,12 +109,16 @@ struct PCore {
   union {
     struct PVars vars;
     Word var_array[NPVars]; };
+
   // memory management
   uintptr_t len;
   Word *pool, *loop;
   Mm *safe;
   union { uintptr_t t0;  // end time of last gc
-          Heap cp; }; }; // gc copy pointer
+          Heap cp; }; // gc copy pointer
+
+  MVm *bind;
+  struct PCore *next; };
 
 struct tag { Cell *null, *head, end[]; } *ttag(Cell*);
 
@@ -152,8 +159,8 @@ Word
   hash(Core*, Word),
   cp(Core*, Word, Word*, Word*); // for recursive use by evac functions
 
-Vm(gc, uintptr_t s);
-
+Vm(gc, uintptr_t);
+Vm(mbind, int);
 Vm display, bnot, rng, data,
    defmacro, symnom,
    ret, ap, apn, tap, tapn,
@@ -191,7 +198,8 @@ Vm display, bnot, rng, data,
 #define nump(_) (Z(_)&1)
 #define homp(_) (!nump(_))
 #define datp(_) (R(_)->ap==data)
-#define dtyp(_) R(_)[1].typ
+#define typof(_) R(_)[1].typ
+#define dtyp typof
 #define max(a, b) ((a)>(b)?(a):(b))
 #define min(a, b) ((a)<(b)?(a):(b))
 #define mix ((uintptr_t)2708237354241864315)
@@ -208,8 +216,9 @@ static Inline size_t b2w(size_t b) {
   size_t q = b / sizeof(Word), r = b % sizeof(Word);
   return q + (r ? 1 : 0); }
 
-#define bounded(a, b, c) (Z(a)<=Z(b)&&Z(b)<Z(c))
+#define within(a, b, c) (Z(a)<=Z(b)&&Z(b)<Z(c))
 #define op(n, x) (Ip = (Cell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
+#define owns(f, x) within(f->pool, x, f->pool + f->len)
 
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(Cell*) == sizeof(Cell), "cell is 1 word wide");

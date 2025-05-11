@@ -61,8 +61,10 @@ static int read_char(Core *f, In *i) {
     case '#': case ';': while (!p_in_eof(i) && (c = p_in_getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-static Status reads(Core*, In*), read_str_lit(Core*, In*),
-  read_atom(PCore*, In*);
+static int
+  reads(Core*, In*),
+  read_string(Core*, In*, char),
+  read_atom(Core*, In*);
 
 static Status enquote(Core *f) {
   Pair *w = pairof(f, f->sp[0], nil);
@@ -73,15 +75,7 @@ static Status enquote(Core *f) {
   f->sp[0] = (Word) w;
   return Ok; }
 
-static Status p_read1(Core *f, In* i) {
-  int c = read_char(f, i);
-  switch (c) {
-    case EOF: return Eof;
-    case '\'': return (c = p_read1(f, i)) == Ok ? enquote(f) : c;
-    case '(': return reads(f, i);
-    case ')': return pushs(f, 1, nil) ? Ok : Oom;
-    case '"': return read_str_lit(f, i);
-    default: return p_in_ungetc(i, c), read_atom(f, i); } }
+static int p_read1(Core*, In*);
 
 Status p_read1f(Core *f, FILE* i) {
   FileIn fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
@@ -91,15 +85,26 @@ Status p_read1t(Core *f, const char *t) {
   TextIn ti = {{p_text_getc, p_text_ungetc, p_text_eof}, t, 0};
   return p_read1(f, (In*) &ti); }
 
-static Status reads(Core *f, In* i) {
+static int p_read1(Core *f, In* i) {
+  int c = read_char(f, i);
+  switch (c) {
+    case EOF: return Eof;
+    case '\'': return (c = p_read1(f, i)) == Ok ? enquote(f) : c;
+    case '(': return reads(f, i);
+    case ')': return pushs(f, 1, nil) ? Ok : Oom;
+    case '"': return read_string(f, i, '"');
+    default: return p_in_ungetc(i, c),
+                    read_atom(f, i); } }
+
+static int reads(Core *f, In* i) {
   Word c = read_char(f, i);
   if (c == EOF || c == ')') return pushs(f, 1, nil) ? Ok : Oom;
   p_in_ungetc(i, c);
-  if ((c = p_read1(f, i)) != Ok) return c;
-  if ((c = reads(f, i)) != Ok) return c;
-  if (!(c = Z(pairof(f, f->sp[1], f->sp[0])))) return Oom;
-  *++f->sp = c;
-  return Ok; }
+  int s = p_read1(f, i);
+  s = s == Ok ? reads(f, i) : s;
+  return s != Ok ? s :
+    !(c = Z(pairof(f, f->sp[1], f->sp[0]))) ? Oom :
+    (*++f->sp = c, Ok); }
 
 // create and grow buffers for reading
 static String *bnew(Core *f) {
@@ -112,19 +117,32 @@ static String *bgrow(Core *f, String *s) {
   if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
   return t; }
 
-static Status read_str_lit(Core *f, In* i) {
+static int read_string(Core *f, In* i, char delim) {
   String* b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(Word); b; b = bgrow(f, b), lim *= 2)
-    while (n < lim) switch (c = p_in_getc(i)) {
-      case '\\': c = p_in_getc(i); if (c == EOF)
-      case '"': case EOF: goto out;
-      default: b->text[n++] = c; } out:
+    while (n < lim)
+      if ((c = p_in_getc(i)) == EOF ||
+           c == delim ||
+           (c == '\\' && (c = p_in_getc(i)) == EOF))
+        goto out;
+      else b->text[n++] = c;
+out:
   if (!b) return Oom;
   b->len = n;
   return pushs(f, 1, b) ? Ok : Oom; }
 
-static Status read_atom(Core *f, In *i) {
+#define alpha_c "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+#define digit_c "0123456789"
+#define whitespace_c " \n\t\r\f"
+#define delim_c "(){}[]"
+#define math_c "-+*/%^<>&|"
+#define sign_c "-+"
+#define quote_c "\"'`"
+#define punct_c ",:.?!"
+#define comment_c ";#"
+
+static int read_atom(Core *f, In *i) {
   String *b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(Word); b; b = bgrow(f, b), lim *= 2)
