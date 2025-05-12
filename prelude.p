@@ -1,7 +1,7 @@
 (: prelude-defns
   '(; list of prelude expressions to be evaluated sequentially in order
     ; aliases
-    (: true -1 (nilp x) (? x 0 -1) not nilp
+    (: true -1 nilp (= 0) not nilp
        cons X car A cdr B null nilp
        (caar x) (A (A x)) (cadr x) (A (B x))
        (cdar x) (B (A x)) (cddr x) (B (B x)))

@@ -6,14 +6,14 @@ n=p
 x=p
 
 # default version
-#t=tc # tail called
-t=tr # trampolined
+t=tc
+#t=tr
 
 default: test
 
 # c headers and source files
-h=$(wildcard *.h)
-c=$(filter-out main.c, $(wildcard *.c))
+h=$n.h
+c=$n.c
 
 #build
 CFLAGS ?= \
@@ -24,20 +24,27 @@ CFLAGS ?= \
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 # tail called objects
-%.tc.o: %.c $h $m
-	$(cc) -c $< -o $@ -DTCO=1
+$n.tc.o: $n.c $n.h boot.h $m
+	$(cc) -c $< -o $@ -DTCO
 # trampolined objects
-%.tr.o: %.c $h $m
+$n.tr.o: $n.c $n.h boot.h $m
 	$(cc) -c $< -o $@
 # static library
-lib$n.%.a: $(c:.c=.%.o)
+lib$n.%.a: $n.%.o
 	ar rcs $@ $^
 # shared library
-lib$n.%.so: $(c:.c=.%.o)
+lib$n.%.so: $n.%.o
 	$(cc) -shared -o $@ $^
+
 # executable
-$n.%.bin: main.c lib$n.%.a
+$n.%.bin: main.c boot.h lib$n.%.a
 	$(cc) $^ -o $@
+
+boot.h: boot.p $m
+	@echo "static const char boot_prog[] =" > $@
+	@cat $< | ([ -e ./$n.$t.bin ] && ./$n.$t.bin cat.$x || cat) | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
+	@echo ";" >> $@
+
 
 # installlation
 # default install to home directory under ~/.local/
@@ -61,6 +68,7 @@ all: $(built_binary) $(built_static_library) $(built_c_header)\
 
 $(built_manpage): $n.1.md
 	pandoc -s -t man -o $@ $<
+
 
 # all installed file paths
 VIMPREFIX ?= .vim/
@@ -136,7 +144,7 @@ flamegraph.svg: perf.data
 flame: flamegraph.svg
 	xdg-open $<
 repl: $n.$t.bin
-	rlwrap ./$< $(prelude) -i
+	rlwrap ./$< $(prelude) repl.$x -i
 serve:
 	darkhttpd .
 

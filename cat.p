@@ -1,0 +1,5 @@
+(: (rpl i) (: r (read 0) (? r
+    (, (? i (putc 32))
+       (: ar (A r) (, (. ar)
+                      (rpl (? (nilp (twop ar)))))))))
+ (rpl 0))
