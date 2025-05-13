@@ -239,7 +239,7 @@ static NoInline bool p_define(core *f, const char *k, word v) {
   avec(f, v, y = symof(f, k));
   return y && table_set(f, f->dict, (Word) y, v); }
 
-static NoInline Vm(gc, uintptr_t n) {
+static Vm(gc, uintptr_t n) {
   Pack(f);
   int s = p_please(f, n) ? Ok : Oom;
   Unpack(f);
@@ -268,35 +268,36 @@ static NoInline void copy_from(core*, word*, uintptr_t);
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
-NoInline bool p_please(core *f, uintptr_t req) {
-  word *b0p0 = f->pool, *b0p1 = f->loop;
-  f->pool = b0p1, f->loop = b0p0;
-  size_t t0 = f->t0, t1 = clock(),
-         len0 = f->len;
-  // do initial copy to alternate pool
-  copy_from(f, b0p0, len0);
-  size_t t2 = f->t0 = clock(), // set last gc timestamp
-         v = t2 == t1 ? v_hi : (t2 - t0) / (t2 - t1), // speed factor
-         len1 = len0; // target size
+static NoInline bool p_please(core *f, uintptr_t req) {
+  word *src = f->pool, *dest = f->loop;
+  f->pool = dest, f->loop = src;    // swap
+  size_t t0 = f->t0, t1 = clock() , // get last gc end time
+         len0 = f->len;             // get original length
+  copy_from(f, src, len0);          // copy to new pool
+  size_t t2 = f->t0 = clock(),      // get and set last gc end time
+         v = t2 == t1 ?             // t1 and t2 can be the same
+           v_hi :                   // in that case choose high
+           (t2 - t0) / (t2 - t1),   // otherwise take ratio of total run time to gc time
+         len1 = len0;               // initial destination size is same as target size
   // calculate the minimum memory required to be able to return true:
   //    req + used = req + (total - free)
   req += len0 - avail(f);
-  // if v is out of bounds calculate new len to compensate assuming v = k*len
+  // if v is out of bounds then calculate len1
+  // by inverse proportionally adjusting len and v until v is in bounds
   if   (too_little) do len1 <<= 1, v <<= 1; while (too_little);
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
-  else return true; // no change reqired, common case
-  // we are going to try and resize
-  // allocate a pool with the new target size
-  word *b1p0 = malloc(len1 * 2 * sizeof(word));
-  // if it failed we can still still return true if request was satisfied by original pool
-  if (!b1p0) return req <= len0;
-  // we got a new pool so copy again
-  // reset core variables on new pool
-  f->loop = (f->pool = b1p0) + (f->len = len1);
-  copy_from(f, b0p1, len0); // do second copy
-  free(b0p0 < b0p1 ? b0p0 : b0p1); // free old pool
-  f->t0 = clock(); // set last gc timestamp
-  return true; } // size successfully adjusted
+  else return true; // no change reqired, hopefully the most common case
+                    //
+  // at this point we got a new target length and are gonna try and resize
+  word *dest2 = malloc(len1 * 2 * sizeof(word)); // allocate pool with the new target size
+  return !dest2 ? req <= len0 :                  // if this fails gc still succeeds if the original pool is not too small
+   (f->pool = dest2,                             // reset core variables on new pool
+    f->len = len1,
+    f->loop = dest2 + len1,
+    copy_from(f, dest, len0),                    // do second copy
+    free(src < dest ? src : dest),               // free original pool
+    f->t0 = clock(),                             // set last gc timestamp
+    true); }                                     // size successfully adjusted
 
 
 // this function expects pool loop and len to have been set already on the state
@@ -350,7 +351,7 @@ static NoInline word cp(proc *v, word x, word *p0, word *t0) {
   d[1].ap = (vm*) dst;
   return W(src - ini + dst); }
 
-Vm(data) {
+static Vm(data) {
   word _ = W(Ip);
   return op(1, _); }
 
@@ -362,26 +363,25 @@ static Vm(pushk_jump) {
 
 // branch instructions
 
-Vm(jump) { return
-  Ip = Ip[1].m,
-  Continue(); }
+static Vm(jump) {
+  return Ip = Ip[1].m,
+         Continue(); }
 
-Vm(cond) { return
-  Ip = nilp(*Sp) ? Ip[1].m : Ip + 2,
-  Sp++,
-  Continue(); }
+static Vm(cond) {
+  return Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2,
+         Continue(); }
 
 // load instructions
 //
 // push an immediate value
-Vm(imm) {
+static Vm(imm) {
   Have1();
   *--Sp = Ip[1].x;
   Ip += 2;
   return Continue(); }
 
 // push a value from the stack
-Vm(ref) {
+static Vm(ref) {
   Have1();
   Sp[-1] = Sp[getnum(Ip[1].x)];
   Sp--;
@@ -390,16 +390,16 @@ Vm(ref) {
 
 // call and return
 // apply function to one argument
-Vm(ap) {
+static Vm(ap) {
   if (nump(Sp[1])) Ip++, Sp++;
   else {
-    Cell *k = R(Sp[1]);
+    cell *k = R(Sp[1]);
     Sp[1] = Z(Ip + 1);
     Ip = k; }
   return Continue(); }
 
 // tail call
-Vm(tap) {
+static Vm(tap) {
   word x = Sp[0], j = Sp[1];
   Sp += getnum(Ip[1].x) + 1;
   if (nump(j)) return op(1, j);
@@ -408,15 +408,15 @@ Vm(tap) {
   return Continue(); }
 
 // apply to multiple arguments
-Vm(apn) {
+static Vm(apn) {
   size_t n = getnum(Ip[1].x);
-  Cell *ra = Ip + 2; // return address
+  cell *ra = Ip + 2; // return address
   Ip = R(Sp[n]) + 2; // this instruction is only emitted when the callee is known to be a function
   Sp[n] = Z(ra); // store return address
   return Continue(); }
 
 // tail call
-Vm(tapn) {
+static Vm(tapn) {
   size_t n = getnum(Ip[1].x),
          r = getnum(Ip[2].x);
   Ip = R(Sp[n]) + 2;
@@ -425,15 +425,15 @@ Vm(tapn) {
   return Continue(); }
 
 // return
-Vm(ret) {
+static Vm(ret) {
   word n = getnum(Ip[1].x) + 1;
   return op(n, *Sp); }
 
 // exit vm and return to C
-Vm(yield) { return Pack(f), YieldStatus; }
+static Vm(yield) { return Pack(f), YieldStatus; }
 
 // currying
-Vm(curry) {
+static Vm(curry) {
   Cell *k = R(Hp), *j = k;
   size_t S = 3 + Width(struct tag),
          n = getnum(Ip[1].x);
@@ -684,6 +684,8 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
   avec(f, exp, q = envup(f, q, q->args, q->imps));
   if (!q) return 0;
   // lots of variables :(
+#define fail() (f->safe = mm, 0)
+  struct Mm *mm = f->safe;
   Word nom = nil, def = nil, lam = nil, v = nil, d = nil, e = nil;
   MM(f, &nom), MM(f, &def), MM(f, &exp), MM(f, &lam);
   MM(f, &d); MM(f, &e); MM(f, &v); MM(f, &q);
@@ -693,17 +695,17 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
     d = A(exp), e = AB(exp), desug(f, &d, &e);
     if (!(nom = consw(f, d, nom)) ||
         !(def = consw(f, e, def)))
-      goto fail;
+      return fail();
     if (lambp(f, e)) {
       // if it's a lambda compile it and record in lam list
       Word x = ana_lam(f, c, nil, B(e));
       x = x ? consw(f, d, x) : x;
       lam = x ? consw(f, x, lam) : x;
-      if (!lam) goto fail; } }
+      if (!lam) return fail(); } }
 
   // if there's no body then evaluate the name of the last definition
   bool even = !twop(exp); // we check this again later to make global bindings at top level
-  if (even && !(exp = consw(f, A(nom), nil))) goto fail;
+  if (even && !(exp = consw(f, A(nom), nil))) return fail();
 
   // find closures
   // for each function f with closure C(f)
@@ -717,7 +719,7 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
         for (v = BA(d); twop(v); v = B(v)) { // then you need its variables
           Word vars = BBA(e), var = A(v);
           if (lidx(f, vars, var) < 0) { // only add if it's not already there
-            if (!(vars = consw(f, var, vars))) goto fail; // oom
+            if (!(vars = consw(f, var, vars))) return fail(); // oom
             j++, BBA(e) = vars; } }
   while (j);
 
@@ -731,7 +733,7 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
   symbol *l = exp ? f->lambda : 0;
   exp = l ? consw(f, Z(l), exp) : 0;
   m = exp ? analyze(f, b, m, exp) : 0; // exp is now the required lambda, analyze it
-  if (!m || !((*b)->stack = consw(f, nil, (*b)->stack))) goto fail;
+  if (!m || !((*b)->stack = consw(f, nil, (*b)->stack))) return fail();
 
   // reverse the nom and def lists
   nom = rlconcat(f, nom, nil), def = rlconcat(f, def, nil);
@@ -746,12 +748,12 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
     if (lambp(f, A(def))) {
       d = lassoc(f, lam, A(nom));
       Word _;
-      if (!(_ = ana_lam(f, c, BB(d), BA(def)))) goto fail;
+      if (!(_ = ana_lam(f, c, BB(d), BA(def)))) return fail();
       else A(def) = B(d) = _; }
     // if toplevel then bind
     if (even && nilp((*b)->args)) {
       Cell *t = cells(f, 2 * Width(pair) + 2 + Width(struct tag));
-      if (!t) goto fail;
+      if (!t) return fail();
       pair *w = (pair*) t,
            *x = w + 1;
       t += 2 * Width(pair);
@@ -761,13 +763,12 @@ static size_t ana_let(Core *f, Env* *b, size_t m, Word exp) {
       A(def) = Z(x); }
     if (!(m = analyze(f, b, m, A(def))) ||
         !((*b)->stack = consw(f, A(nom), (*b)->stack)))
-      goto fail; }
+      return fail(); }
 
   m = nn <= 1 ? pushs(f, 1, cataap) ? m + 1 : 0 :
                 pushs(f, 2, cataapn, putnum(nn)) ? m + 2 : 0;
   for (nn++; nn--; (*b)->stack = B((*b)->stack));
-done: return UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), UM(f), m;
-fail: m = 0; goto done; }
+  return f->safe = mm, m; }
 
 static Vm(drop1) { return Ip++, Sp++, Continue(); }
 
@@ -789,7 +790,7 @@ static Ana(ana_mac, Word b) {
   Pair *mxp = (Pair*) cells(f, 4 * Width(Pair));
   if (!mxp) return 0;
   x = Z(ini_pair(mxp, f->sp[1], Z(ini_pair(mxp+1, Z(ini_pair(mxp+2, f->sp[0],  Z(ini_pair(mxp+3, f->sp[2], nil)))), nil))));
-  f->sp += 2, *f->sp = x;
+  *(f->sp += 2) = x;
   return p_eval(f) != Ok ? 0 : analyze(f, c, m, pop1(f)); }
 
 // evaluate function call arguments and apply
@@ -1068,7 +1069,7 @@ static int p_read1(core *f, In* i) {
                       read_atom(f, i); } }
 
 static int reads(Core *f, In* i) {
-  Word c = read_char(f, i);
+  word c = read_char(f, i);
   if (c == EOF || c == ')') return pushs(f, 1, nil) ? Ok : Oom;
   p_in_ungetc(i, c);
   int s = p_read1(f, i);
@@ -1080,7 +1081,7 @@ static int reads(Core *f, In* i) {
 // create and grow buffers for reading
 static string *bnew(Core *f) {
   string *s = cells(f, Width(string) + 1);
-  return s ? ini_str(s, sizeof(Word)) : s; }
+  return s ? ini_str(s, sizeof(word)) : s; }
 
 static string *bgrow(Core *f, string *s) {
   string *t; uintptr_t len = s->len;
@@ -1103,10 +1104,10 @@ out:
   b->len = n;
   return pushs(f, 1, b) ? Ok : Oom; }
 
-static int read_atom(Core *f, In *i) {
+static int read_atom(core *f, In *i) {
   string *b = bnew(f);
   int c; size_t n = 0;
-  for (size_t lim = sizeof(Word); b; b = bgrow(f, b), lim *= 2)
+  for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
     while (n < lim) switch (c = p_in_getc(i)) {
       case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
       case '(': case ')': case '"': case '\'': case EOF: p_in_ungetc(i, c); goto out;
@@ -1167,30 +1168,30 @@ static NoInline word vpushs(core *f, uintptr_t m, va_list xs) {
   else for (n = 0, f->sp -= m; n < m; f->sp[n++] = r = va_arg(xs, Word));
   return r; }
 
-word pushs(Core *f, uintptr_t m, ...) {
+word pushs(core *f, uintptr_t m, ...) {
   va_list xs;
   va_start(xs, m);
   word r = vpushs(f, m, xs);
   va_end(xs);
   return r; }
 
-bool twop(Word _) { return homp(_) && dtyp(_) == &pair_type; }
+bool twop(word _) { return homp(_) && dtyp(_) == &pair_type; }
 
-Pair *pairof(Core *f, Word a, Word b) {
-  if (avail(f) < Width(Pair)) {
+pair *pairof(core *f, word a, word b) {
+  if (avail(f) < Width(pair)) {
     bool ok;
-    avec(f, a, avec(f, b, ok = p_please(f, Width(Pair))));
+    avec(f, a, avec(f, b, ok = p_please(f, Width(pair))));
     if (!ok) return 0; }
-  Pair *w = (Pair*) f->hp;
-  f->hp += Width(Pair);
+  pair *w = (pair*) f->hp;
+  f->hp += Width(pair);
   return ini_pair(w, a, b); }
 
 Vm(car) { return op(1, twop(Sp[0]) ? A(Sp[0]) : Sp[0]); }
 Vm(cdr) { return op(1, twop(Sp[0]) ? B(Sp[0]) : nil); }
 Vm(cons) {
-  Have(Width(Pair));
-  Pair *w = ini_pair((Pair*) Hp, Sp[0], Sp[1]);
-  Hp += Width(Pair);
+  Have(Width(pair));
+  pair *w = ini_pair((pair*) Hp, Sp[0], Sp[1]);
+  Hp += Width(pair);
   return op(2, Z(w)); }
 
 static Word cp_two(Core *v, Word x, Word *p0, Word *t0) {
@@ -1216,8 +1217,8 @@ static Word hash_two(PCore *f, Word x) {
   Word hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-Vm(pairp) { return op(1, twop(Sp[0]) ? putnum(-1) : nil); }
-static Pair *ini_pair(Pair *w, Word a, Word b) {
+static Vm(pairp) { return op(1, twop(Sp[0]) ? putnum(-1) : nil); }
+static pair *ini_pair(pair *w, word a, word b) {
   return w->ap = data,
          w->typ = &pair_type,
          w->a = a,
@@ -1230,21 +1231,20 @@ static word list_r(Core *f, size_t n, va_list xs) {
   avec(f, x, r = list_r(f, n - 1, xs));
   return r ? consw(f, x, r) : r; }
 
-word list(Core *f, size_t n, ...) {
+static word list(Core *f, size_t n, ...) {
   va_list xs;
   va_start(xs, n);
   word r = list_r(f, n, xs);
   va_end(xs);
   return  r; }
 
+static bool strp(Word _) { return homp(_) && dtyp(_) == &string_type; }
 
-bool strp(Word _) { return homp(_) && dtyp(_) == &string_type; }
-
-Vm(slen) {
+static Vm(slen) {
   Word x = Sp[0];
   return op(1, strp(x) ? putnum(((string*)x)->len) : nil); }
 
-Vm(ssub) {
+static Vm(ssub) {
   Cell* r = (Cell*) Sp[3];
   if (!strp(Sp[0])) Sp[3] = nil;
   else {
@@ -1264,7 +1264,7 @@ Vm(ssub) {
   Ip = r, Sp += 3;
   return Continue(); }
 
-Vm(sget) {
+static Vm(sget) {
   Cell *r = (Cell*) Sp[2];
   if (!strp(Sp[0])) Sp[2] = nil;
   else {
@@ -1275,8 +1275,8 @@ Vm(sget) {
   Ip = r, Sp += 2;
   return Continue(); }
 
-Vm(scat) {
-  Word a = Sp[0], b = Sp[1];
+static Vm(scat) {
+  word a = Sp[0], b = Sp[1];
   if (!strp(a)) return op(2, b);
   if (!strp(b)) return op(2, a);
   string *x = (string*) a, *y = (string*) b;
@@ -1289,8 +1289,8 @@ Vm(scat) {
   memcpy(z->text + x->len, y->text, y->len);
   return op(2, (Word) z); }
 
-Vm(stringp) { return op(1, strp(Sp[0]) ? putnum(-1) : nil); }
-string* ini_str(string *s, uintptr_t len) {
+static Vm(stringp) { return op(1, strp(Sp[0]) ? putnum(-1) : nil); }
+static string* ini_str(string *s, uintptr_t len) {
   return s->ap = data,
          s->typ = &string_type,
          s->len = len,
@@ -1313,11 +1313,11 @@ static void print_string(Core* v, FILE *o, Word _) {
     if ((c = *text++) == '\\' || c == '"') putc('\\', o);
   putc('"', o); }
 
-static Word hash_string(Core* v, Word _) {
+static word hash_string(core *v, word _) {
   string *s = (string*) _;
   uintptr_t h = 1;
-  size_t words = s->len / sizeof(Word),
-         bytes = s->len % sizeof(Word);
+  size_t words = s->len / sizeof(word),
+         bytes = s->len % sizeof(word);
   const char *bs = s->text + s->len - bytes;
   while (bytes--) h = mix * (h ^ (mix * bs[bytes]));
   const intptr_t *ws = (intptr_t*) s->text;
@@ -1328,20 +1328,17 @@ static bool string_equal(Core *f, Word x, Word y) {
   string *a = (string*) x, *b = (string*) y;
   return a->len == b->len && 0 == strncmp(a->text, b->text, a->len); }
 
-
-string *strof(Core *f, const char *text) {
+static string *strof(Core *f, const char *text) {
   size_t len = strlen(text);
   string *o = cells(f, Width(string) + b2w(len));
   if (o) memcpy(ini_str(o, len)->text, text, len);
   return o; }
 
-
-
 typedef struct table {
   DataHeader;
   uintptr_t len, cap;
   struct entry {
-    Word key, val;
+    word key, val;
     struct entry *next;
   } **tab;
 } Table, table;
@@ -1374,15 +1371,14 @@ static word copy_table(core *f, word x, word *p0, word *t0) {
       s = s->next);
   return (Word) dst; }
 
-static void walk_table(Core *f, Word x, Word *p0, Word *t0) {
+static void walk_table(core *f, word x, word *p0, word *t0) {
   table *t = (table*) x;
-  f->cp += Width(Table) + t->cap + t->len * Width(struct entry);
-  for (Word i = 0, lim = t->cap; i < lim; i++)
+  f->cp += Width(table) + t->cap + t->len * Width(struct entry);
+  for (word i = 0, lim = t->cap; i < lim; i++)
     for (struct entry*e = t->tab[i]; e;
       e->key = cp(f, e->key, p0, t0),
       e->val = cp(f, e->val, p0, t0),
       e = e->next); }
-
 
 static void print_table(Core *f, FILE *o, Word x) {
   table *t = (table*) x;
@@ -1402,7 +1398,7 @@ static void print_table(Core *f, FILE *o, Word x) {
 // a unique identifier when it's created & hash using that,
 // or use the address but rehash as part of garbage collection.
 
-Word hash(Core *f, Word x) {
+word hash(core *f, word x) {
   if (nump(x)) {
     const int shift = sizeof(word) * 4;
     return x *= mix, (x << shift) | (x >> shift); }
@@ -1493,17 +1489,17 @@ Vm(tnew) {
   tab[0] = 0;
   return op(1, (word) ini_table(t, 0, 1, tab)); }
 
-Word table_get(Core *f, Table *t, Word k, Word zero) {
+static word table_get(core *f, table *t, word k, word zero) {
   size_t i = index_of_key(f, t, k);
   struct entry *e = t->tab[i];
   while (e && !eql(f, k, e->key)) e = e->next;
   return e ? e->val : zero; }
 
-Vm(tget) {
+static Vm(tget) {
   return op(3, !tblp(Sp[1]) ? Sp[2] :
     table_get(f, (Table*) Sp[1], Sp[2], Sp[0])); }
 
-Vm(tset) {
+static Vm(tset) {
   word x = Sp[0];
   if (!tblp(x)) return op(3, nil);
   Pack(f);
@@ -1511,7 +1507,7 @@ Vm(tset) {
   Unpack(f);
   return !t ? Oom : op(3, Sp[2]); }
 
-Vm(tdel) {
+static Vm(tdel) {
   Word x = Sp[1];
   return op(3, !tblp(x) ? nil :
     table_delete(f, (Table*) x, Sp[2], Sp[0])); }
@@ -1534,7 +1530,6 @@ Vm(tkeys) {
       ini_pair(pairs, e->key, list),
       list = (Word) pairs, pairs++;
   return op(1, list); }
-
 
 Vm(trim) {
   cell *k = (cell*) Sp[0];
@@ -1571,8 +1566,7 @@ struct symbol {
   Word code;
   symbol *l, *r; };
 
-
-static symbol *intern_r(Core*, string*, symbol**);
+static symbol *intern_r(core*, string*, symbol**);
 Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
 bool symp(Word _) { return homp(_) && dtyp(_) == &symbol_type; }
 
@@ -1599,15 +1593,15 @@ static Word copy_symbol(Core *f, Word x, Word *p0, Word *t0) {
            ini_anon(bump(f, Width(symbol) - 2), src->code);
   return (word) (src->ap = (vm*) dst); }
 
-static void walk_symbol(Core *f, Word x, Word *p0, Word *t0) {
+static void walk_symbol(core *f, word x, word *p0, word *t0) {
   f->cp += Width(symbol) - (((symbol*)x)->nom ? 0 : 2); }
 
-static void print_symbol(Core *f, FILE *o, Word x) {
+static void print_symbol(core *f, FILE *o, word x) {
   string* s = ((symbol*) x)->nom;
   if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
   else fprintf(o, "#sym@%lx", (long) x); }
 
-static symbol *intern_r(Core *v, string *b, symbol **y) {
+static symbol *intern_r(core *v, string *b, symbol **y) {
   symbol *z = *y;
   if (!z) return *y =
     ini_sym(bump(v, Width(symbol)), b, hash(v, putnum(hash(v, (Word) b))));
@@ -1644,12 +1638,38 @@ Vm(symnom) {
   y = symp(y) && ((symbol*)y)->nom ? Z(((symbol*)y)->nom) : nil;
   return op(1, y); }
 
+static bool not_equal(Core *f, Word a, Word b) { return false; }
+static type
+  pair_type = {
+    .hash = hash_two,
+    .copy = cp_two,
+    .evac = wk_two,
+    .emit = print_two,
+    .equal = eq_two, },
+  string_type = {
+    .hash = hash_string,
+    .copy = copy_string,
+    .evac = walk_string,
+    .emit = print_string,
+    .equal = string_equal, },
+  symbol_type = {
+    .hash = hash_symbol,
+    .copy = copy_symbol,
+    .evac = walk_symbol,
+    .equal = not_equal,
+    .emit = print_symbol, },
+  table_type = {
+    .hash = hash_table,
+    .copy = copy_table,
+    .evac = walk_table,
+    .equal = not_equal,
+    .emit = print_table, };
 
-Vm(add) { return op(2, (Sp[0]|1) + (Sp[1]&~1)); }
-Vm(sub) { return op(2, (Sp[0]|1) - (Sp[1]&~1)); }
-Vm(mul) { return op(2, putnum(getnum(Sp[0])*getnum(Sp[1]))); }
+Vm(add)  { return op(2, (Sp[0]|1) + (Sp[1]&~1)); }
+Vm(sub)  { return op(2, (Sp[0]|1) - (Sp[1]&~1)); }
+Vm(mul)  { return op(2, putnum(getnum(Sp[0])*getnum(Sp[1]))); }
 Vm(quot) { return op(2, nilp(Sp[1]) ? nil : putnum(getnum(Sp[0])/getnum(Sp[1]))); }
-Vm(rem) { return op(2, nilp(Sp[1]) ? nil : putnum(getnum(Sp[0])%getnum(Sp[1]))); }
+Vm(rem)  { return op(2, nilp(Sp[1]) ? nil : putnum(getnum(Sp[0])%getnum(Sp[1]))); }
 Vm(eq) { return op(2, eql(f, Sp[0], Sp[1]) ? putnum(-1) : nil); }
 Vm(lt) { return op(2, Sp[0] < Sp[1] ? putnum(-1) : nil); }
 Vm(le) { return op(2, Sp[0] <= Sp[1] ? putnum(-1) : nil); }
@@ -1657,16 +1677,13 @@ Vm(gt) { return op(2, Sp[0] > Sp[1] ? putnum(-1) : nil); }
 Vm(ge) { return op(2, Sp[0] >= Sp[1] ? putnum(-1) : nil);}
 Vm(bnot) { return op(1, ~Sp[0] | 1); }
 Vm(band) { return op(2, (Sp[0] & Sp[1]) | 1); }
-Vm(bor) { return op(2, (Sp[0] | Sp[1]) | 1); }
+Vm(bor)  { return op(2, (Sp[0] | Sp[1]) | 1); }
 Vm(bxor) { return op(2, (Sp[0] ^ Sp[1]) | 1); }
-Vm(rng) { return op(1, putnum(rand())); }
+Vm(rng)  { return op(1, putnum(rand())); }
 Vm(fixnump) { return op(1, nump(Sp[0]) ? putnum(-1) : nil); }
 
 // default equality method for things that are only equal to themselves
-bool not_equal(Core *f, Word a, Word b) { return false; }
-
-// general equality test
-bool eql(Core *f, Word a, Word b) {
+static bool eql(Core *f, Word a, Word b) {
   // everything equals itself
   if (a == b) return true;
   // if a and b have same type
@@ -1709,7 +1726,6 @@ static int p_ini(core *f) {
       return p_fin(f, Oom);
   return Ok; }
 
-
 int p_main(const char *p, const char **av) {
   TextIn ti = {{p_text_getc, p_text_ungetc, p_text_eof}, p, 0};
   In *i = (In*) &ti;
@@ -1726,29 +1742,3 @@ int p_main(const char *p, const char **av) {
     !(v = pushs(f, 1, v)) ?
       Oom :
       p_eval(f)); }
-
-static type
-  pair_type = {
-    .hash = hash_two,
-    .copy = cp_two,
-    .evac = wk_two,
-    .emit = print_two,
-    .equal = eq_two, },
-  string_type = {
-    .hash = hash_string,
-    .copy = copy_string,
-    .evac = walk_string,
-    .emit = print_string,
-    .equal = string_equal, },
-  symbol_type = {
-    .hash = hash_symbol,
-    .copy = copy_symbol,
-    .evac = walk_symbol,
-    .equal = not_equal,
-    .emit = print_symbol, },
-  table_type = {
-    .hash = hash_table,
-    .copy = copy_table,
-    .evac = walk_table,
-    .equal = not_equal,
-    .emit = print_table, };

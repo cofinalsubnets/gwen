@@ -24,7 +24,7 @@
        (all f l) (? l (? (f (A l)) (all f (B l))) true)
        (any f l) (? l (? (f (A l)) true (any f (B l))))
        (append a b) (? a (X (A a) (append (B a) b)) b)
-       reverse (foldl 0 (flip X))
+       reverse ((: (r a b) (? b (r (X (A b) a) (B b)) a)) 0)
        (partition p) (foldr '(0) (\ a m
         (? (p a) (X (X a (A m)) (B m))
                  (X (A m) (X a (B m))))))
@@ -48,9 +48,7 @@
                         (p 0 l))))
   (, ((: (f v x) (? x (f (ev (A x)) (B x)) v)) 0
       (tset global-namespace 'prelude prelude))
-     (ev '(: (putsl s) (, (puts s) (putc 10))
-             (putxl x) (, (. x) (putc 10))
-             (evals x) (? x (, (ev (A x)) (evals (B x))))
+     (ev '(: (evals x) (? x (, (ev (A x)) (evals (B x))))
              (reads l) (: r (read()) (? r (reads (X (A r) l)) l))
              (evalf f) (evals (readf f))
              (evalfs fs) (? fs (, (evalf (A fs)) (evalfs (B fs))))
