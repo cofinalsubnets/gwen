@@ -1629,6 +1629,9 @@ static int p_fin(core *f, int s) {
     s; }
 
 
+#ifndef VERSION
+#define VERSION ""
+#endif
 #define d_entry(bn, n, _) && p_define(f, n, W(bn))
 #define i_entry(i)        && p_define(f, "i_"#i, W(i))
 static int p_ini(core *f) {

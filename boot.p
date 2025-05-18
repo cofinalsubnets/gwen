@@ -106,4 +106,4 @@
      (\ fs (: prog (A fs) args (B fs)
             (? args       (process prog (A args) (B args))
                (isatty 0) (repl ())
-                          (evals (reads ())))))))))
+                          (evals (reads ()))))))))

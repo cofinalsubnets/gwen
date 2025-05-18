@@ -27,7 +27,7 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D VERSION='"$(ver)"'
 # tail called objects
 $n.tc.o: $n.c $n.h boot.h $m
 	@echo $@
-	$(cc) -c $< -o $@ -DTCO
+	@$(cc) -c $< -o $@ -DTCO
 # trampolined objects
 $n.tr.o: $n.c $n.h boot.h $m
 	@echo $@
@@ -145,7 +145,8 @@ disasm: $n.$t.bin
 	rizin -A $<
 # profiling on linux
 perf.data: $n.$t.bin
-	perf record ./$^ $(tests)
+	@echo $@
+	@perf record ./$^ $(tests)
 perf: perf.data
 	perf report
 flamegraph.svg: perf.data
