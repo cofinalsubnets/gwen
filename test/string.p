@@ -12,9 +12,9 @@
 (: (lit l y n s) ((\ ss (? ss (y ss (X l 0)) (n s))) (stripPrefix l s))
    (drop p y) (p (\ s _ (y s 0)))
    (opt p y _) (p y (\ s (y s 0)))
-   (cat a b y n) (a (\ s l (b (\ s m (y s (append l m))) n s)) n)
+   (cats a b y n) (a (\ s l (b (\ s m (y s (cat l m))) n s)) n)
    (alt a b y n) (a y (b y n))
-   (rep a y n s) ((opt (cat a (rep a))) y n s))
+   (rep a y n s) ((opt (cats a (rep a))) y n s))
 (assert
  (= '("eon" "vapor")
   (lit "vapor" X 0 "vaporeon"))

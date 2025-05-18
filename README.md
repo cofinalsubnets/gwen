@@ -73,7 +73,7 @@ if you need a specific order use `,`.
   meta-eval)
  meta-eval (ev evr)
  expr '((\ a b (: c (+ a 9) d (+ c b) (* c d))) 4 5)
- G (tget 0 global-namespace)
+ G (tget 0 globals)
  (, (assert (= 234 (ev expr)))
     (assert (= 234 (meta-eval expr G)))
     (assert (= 234 (meta-eval evr G expr G)))

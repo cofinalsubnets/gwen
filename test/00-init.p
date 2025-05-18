@@ -1,3 +1,4 @@
+(: test_t0 (clock 0))
 (:
  (term-esc string) (, (putc 27) (puts string))
  green-dot "[32m."
