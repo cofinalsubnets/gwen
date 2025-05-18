@@ -21,6 +21,9 @@ typedef union cell cell, thread;
 
 // theres a big benefit in speed from tail call optimization but not all platforms support it
 
+#ifndef VERSION
+#define VERSION ""
+#endif
 #ifdef TCO
 #define YieldStatus PStatusOk
 #define Vm(n, ...) int n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
@@ -251,10 +254,6 @@ static symbol *symof(core *f, const char *nom) {
   string *o = strof(f, nom);
   return o ? intern(f, o) : 0; }
 
-static NoInline bool p_define(core *f, const char *k, word v) {
-  symbol *y; return
-    pushs(f, 1, v) && (y = symof(f, k)) &&
-      table_set(f, f->dict, (word) y, pop1(f)); }
 
 static NoInline Vm(gc, uintptr_t n) {
   Pack(f);
@@ -1194,32 +1193,31 @@ Vm(readf) {
   fclose(i);
   return t == Ok ? (Unpack(f), op(2, *Sp)) : t; }
 
-static NoInline long p_gettime(void) {
+NoInline long p_gettime(void) {
   struct timespec ts;
   int s = clock_gettime(CLOCK_REALTIME, &ts);
   return s ? -1 :
     ts.tv_sec  * 1000 +
     ts.tv_nsec / 1000000; }
 
-Vm(sysclock) {
-  return op(1, putnum(p_gettime())); }
+Vm(sysclock) { return op(1, putnum(p_gettime())); }
 
 Vm(p_isatty) { return op(1, isatty(getnum(*Sp)) ? putnum(-1) : nil); }
 Vm(prc)     { word w = *Sp; putc(getnum(w), stdout);     return op(1, w); }
 Vm(display) { word w = *Sp; transmit(f, stdout, w); return op(1, w); }
 
-static void transmit(core *f, FILE* out, word x) {
+void transmit(core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
   else if (datp(x)) dtyp(x)->em(f, out, x);
   else fprintf(out, "#%lx", (long) x); }
 
-static NoInline word pushsr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
+NoInline word pushsr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (!n) return p_please(f, m) ? m : n;
   word x = va_arg(xs, word), y;
   avec(f, x, y = pushsr(f, m, n - 1, xs));
   return y ? *--f->sp = x : y; }
 
-static word pushs(core *f, uintptr_t m, ...) {
+word pushs(core *f, uintptr_t m, ...) {
   va_list xs;
   va_start(xs, m);
   word n, r = 0;
@@ -1628,11 +1626,12 @@ static int p_fin(core *f, int s) {
     f->pool = f->loop = NULL,
     s; }
 
-#ifndef VERSION
-#define VERSION ""
-#endif
-#define d_entry(bn, n, _) && p_define(f, n, W(bn))
-#define i_entry(i)        && p_define(f, "i_"#i, W(i))
+#define d_entry(bn, n, _) && p_ini_def(f, n, W(bn))
+#define i_entry(i)        && p_ini_def(f, "i_"#i, W(i))
+static NoInline bool p_ini_def(core *f, const char *k, word v) {
+  symbol *y; return
+    pushs(f, 1, v) && (y = symof(f, k)) &&
+      table_set(f, f->dict, (word) y, pop1(f)); }
 static int p_ini(core *f) {
   memset(f, 0, sizeof(core));
   const uintptr_t len0 = 1;
@@ -1649,10 +1648,10 @@ static int p_ini(core *f) {
       (f->quote = symof(f, "`")) &&
       (f->begin = symof(f, ",")) &&
       (f->lambda = symof(f, "\\")) &&
-      p_define(f, "globals", Z(f->dict)) &&
+      p_ini_def(f, "globals", Z(f->dict)) &&
+      p_ini_def(f, "macros", W(f->macro)) &&
       (v = strof(f, VERSION)) &&
-      p_define(f, "version", W(v)) &&
-      p_define(f, "macros", W(f->macro))
+      p_ini_def(f, "version", W(v))
       insts(i_entry)
       bifs(d_entry))
     return Ok;
@@ -1673,7 +1672,6 @@ static int mkxpn(core *f, const char **av) {
   v = !v ? v : wpairof(f, f->sp[0], v);    // apply the function
   return !v ? Oom : (f->sp[0] = v, Ok); }
 
-
 #define TextInput(t) ((In*)&(TextIn) {{p_text_getc, p_text_ungetc, p_text_eof}, p, 0})
 #define Core() &((core){})
 int p_main(const char *p, const char **av) {
@@ -1684,7 +1682,6 @@ int p_main(const char *p, const char **av) {
   s = s != Ok ? s : mkxpn(f, av);
   s = s != Ok ? s : p_eval(f);
   return p_fin(f, s); }
-
 static word
   cp_two(core *v, word x, word *p0, word *t0),
   cp_sym(core *f, word x, word *p0, word *t0),
@@ -1696,7 +1693,6 @@ static void wk_two(core *f, word x, word *p0, word *t0),
   em_sym(core *f, FILE *o, word x);
 
 static bool eq_two(core *f, word x, word y);
-
 static bool eq_not(core *f, word a, word b) { return false; }
 static type
   two_type = { .xx = xx_two, .cp = cp_two, .wk = wk_two, .em = em_two, .eq = eq_two, },
@@ -1715,7 +1711,10 @@ static void wk_two(core *f, word x, word *p0, word *t0) {
   B(x) = cp(f, B(x), p0, t0); }
 
 static void em_two(core *f, FILE *o, word x) {
-  for (putc('(', o);; putc(' ', o)) {
+  if (A(x) == W(f->quote) && twop(B(x)))
+    putc('\'', o),
+    transmit(f, o, AB(x));
+  else for (putc('(', o);; putc(' ', o)) {
     transmit(f, o, A(x));
     if (!twop(x = B(x))) { putc(')', o); break; } } }
 
