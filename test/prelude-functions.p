@@ -15,6 +15,8 @@
   (all odd os)
   (all even m)
   (any odd l)
+  (memq 1 '(1 2 3 4))
+  (nilp (memq 5 '(1 2 3 4)))
   (= '(1 2 3) (rev '(3 2 1)))
   (= '(1 2 3 4 5 6) (cat '(1 2 3) '(4 5 6)))
   ))

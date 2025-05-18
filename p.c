@@ -1628,7 +1628,6 @@ static int p_fin(core *f, int s) {
     f->pool = f->loop = NULL,
     s; }
 
-
 #ifndef VERSION
 #define VERSION ""
 #endif
@@ -1697,7 +1696,6 @@ static void wk_two(core *f, word x, word *p0, word *t0),
   em_sym(core *f, FILE *o, word x);
 
 static bool eq_two(core *f, word x, word y);
-
 
 static bool eq_not(core *f, word a, word b) { return false; }
 static type

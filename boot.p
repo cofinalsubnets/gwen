@@ -24,7 +24,8 @@
        (all f l) (? l (? (f (A l)) (all f (B l))) true)
        (any f l) (? l (? (f (A l)) true (any f (B l))))
        (cat a b) (foldr b X a)
-       memq (co any =)
+       (assq x l) (? l (? (= x (A (A l))) (A l) (assq x (B l))))
+       (memq x) (any (= x))
        rev (foldl 0 (flip X))
        (part p) (foldr '(0) (\ a m
         (? (p a) (X (X a (A m)) (B m))
@@ -34,9 +35,9 @@
        (iota n) (: (k m) (? (< m n) (X m (k (inc m)))) (k 0))
        (puts s) (: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l))) (f 0 (slen s)))
        :: (tset macros))
-    (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
-    (:: '&& (: (f l) (? l (X '? (X (A l) (X (A (B l)) (X (f (B (B l))) 0))))) f))
-    (:: '>>= (\ l (X (last l) (init l))))
+    (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
+       (:: '&& (: (f l) (? l (X '? (X (A l) (X (A (B l)) (X (f (B (B l))) 0))))) f))
+       (:: '>>= (\ l (X (last l) (init l)))))
     (: eval (:
      (scop par arg imp)
       (: t (tnew()) (, (tset t 'par par)
@@ -44,37 +45,61 @@
                        (tset t 'imp imp)
                        t))
         (cpush c k v)
-         (, (tset c k (X v (tget 0 c k))) c)
-        (ana_sym_free x) (ana_imm (tget x globals x))
-        (ana_sym c x k)
-         (: (ana_sym_r d)
-             (? (nilp d) (ana_sym_free x k)
-                         (ana_sym_r (tget 0 d 'par)))
-          (ana_sym_r c))
+         (, (tset c k (X v (tget 0 c k))) v)
+        (cpop c k) (: s (tget 0 c k)
+         (, (tset c k (B s))
+            (A s)))
+        (cpeek c k) (A (tget 0 c k))
         (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
         (em2 i x k) (em1 i (em1 x k))
-        (ana_i i) (em1 i)
-        (ana_ix i x) (em2 i x)
         ana_imm (em2 i_imm)
         ana_cons (em2 i_ret 1 (\ n (seek n (thd n))))
         (atomp x) (nilp (twop x))
         (ana_seq c x k) (?
-         (atomp x) (ana_imm 0 k)
+         (atomp x)     (ana_imm 0 k)
          (atomp (B x)) (ana c (A x) k)
-         (ana c (A x) (ana_i i_drop1 (ana_seq c (B x) k))))
-        (ana c x k) (?
-         (symp x)  (ana_sym c x k)          ; to do
-         (atomp x) (ana_imm c x k)          ; ok
+         (ana c (A x)  (em1 i_drop1 (ana_seq c (B x) k))))
+        (ana c x) (?
+         (symp x)  (ana_sym c x)          ; to do
+         (atomp x) (ana_imm x)            ; ok
          (: a (A x) b (B x) (?
-          (= a '`)        (ana_imm (A b) k) ; ok
-          (= a '?)        (ana_if c b k)    ; to do
-          (= a '\)        (ana_lam c b k)   ; to do
-          (= a ':)        (ana_let c b k)   ; to do
-          (= a ',)        (ana_seq c b k)   ; ok
-          (nilp (twop b)) (ana c a k)       ; ok
+          (= a '`)        (ana_imm (A b)) ; ok
+          (= a '?)        (ana_if c b)    ; to do
+          (= a '\)        (ana_lam c b)   ; to do
+          (= a ':)        (ana_let c b)   ; to do
+          (= a ',)        (ana_seq c b)   ; ok
+          (nilp (twop b)) (ana c a)       ; ok
           (: m (tget 0 macros a) (? m
-           (ana_mac c m b k)                ; to do
-           (ana_ap c a b k))))))            ; to do
+           (ana c (m b))                  ; ok
+           (ana_ap c a b))))))            ; to do
+        (branch_push_end c k n)
+         (cpush c 'end (k n))
+        (branch_peek_end c k n)
+         ; FIXME tail calls
+         (poke i_jump (seek -1 (poke (cpeek c 'end) (seek -1 (k (+ 2 n))))))
+        (branch_pop_alt c k n)
+         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 (k (+ 2 n))))))
+        (branch_peek_alt c k n)
+         ()
+        (ana_ap c a b)
+         ()
+        (ana_if c b k0 n) (:
+         k ((ana_if_r c b (co (cpush c 'end) k0)) n)
+         (, (cpop c 'end) k))
+        (ana_if_r c b k) (?
+         (atomp b) (ana_imm 0 k)
+         (atomp (B b)) (ana c (A b) k))
+        (ana_lam c b) (?
+         (atomp b) (ana_imm 0)
+         (atomp (B b)) (ana c (A b)) ; maybe this should make it a one argument function?
+        )
+        (ana_let c b) (?
+         (atomp b) (ana_imm 0)
+         (atomp (B b)) (ana c (A b)))
+        (ana_sym c x k)
+         (>>= c (: (ana_sym_r d)
+          (? (nilp d) (ana_imm (tget x globals x) k)
+           (ana_sym_r (tget 0 d 'par)))))
         (eval x) (ana (scop 0 0 0) x ana_cons 0 0)
         eval)))
 

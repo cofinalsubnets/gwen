@@ -22,9 +22,9 @@ syn keyword PFunc foldl foldr map filter id const cat each all any init last rev
 syn keyword PFunc && \|\| \| & ^ << >>
 syn keyword PFunc :: inc dec flip diag part llen iota puts
 syn keyword PFunc twop nump symp tblp strp nilp homp ev ap not
-syn keyword PFunc str slen sget scat ssub ystr sym putc
-syn keyword PFunc tbl tget tset tlen thas tkeys tdel
-syn keyword PMacro L vprintf
+syn keyword PFunc str slen sget scat ssub ystr sym putc co
+syn keyword PFunc tnew tget tset tlen thas tkeys tdel memq assq
+syn keyword PMacro L vprintf >>=
 
 syn region PString start='"' skip='\\\\\|\\"' end='"'
 
