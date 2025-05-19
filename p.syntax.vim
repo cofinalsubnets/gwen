@@ -3,16 +3,9 @@
 if exists("b:current_syntax")
   finish
 endif
-syn cluster PListCluster contains=PAtom,PAtomMark,PComment,PTodo,PFunc,PList,PNumber,PSymbol,PForm,PString,PMacro
 syn match PSymbol contained ![^()"; \t]\+!
 syn match PAtomMark "'"
 syn match PAtom "'[^ \t()]\+" contains=PAtomMark
-" FIXME highlight signs right
-"syn match PNumber "\(+\|-\)*\(0b\|0B\)\(\.[01]\+\|[01]\+\(\.[01]*\)\=\)"
-"syn match PNumber "\(+\|-\)*\(0o\|0O\)\(\.\o\+\|\o\+\(\.\o*\)\=\)"
-"syn match PNumber "\(+\|-\)*\(0z\|0Z\)\(\.[0-9abAB]\+\|[0-9abAB]\+\(\.[0-9abAB]*\)\=\)"
-"syn match PNumber "\(+\|-\)\?\(0x\|0X\)\(\.\x\+\|\x\+\(\.\x*\)\=\)"
-syn region PAtom start=+'"+ skip=+\\"+ end=+"+
 syn iskeyword @,!,37-38,42-47,:,60-63,\,`,|,~,^
 syn keyword PForm ? : \\ , ` :-
 syn keyword PFunc < <= = >= > !=
@@ -25,15 +18,15 @@ syn keyword PFunc twop nump symp tblp strp nilp homp ev ap not
 syn keyword PFunc str slen sget scat ssub ystr sym putc co atomp
 syn keyword PFunc tnew tget tset tlen thas tkeys tdel memq assq
 syn keyword PMacro L vprintf >>= where
+syn keyword PBool true false
 
 syn region PString start='"' skip='\\\\\|\\"' end='"'
 
-
 syn match PParenError ")"
 
-syn match PComment ";.*$" contains=PTodo
-syn match PTodo "\(#.*$\|XXX\|TODO\|FIXME\)"
-syn match PNumber "-\?\(\d\+\)"
+syn match PComment ";.*$"
+syn match PTodo "#.*$"
+syn match PNumber "\(-\d\+\|\d\+\)"
 
 syn sync lines=100
 
@@ -46,9 +39,11 @@ hi def link PMacro          Operator
 hi def link PNumber         Number
 hi def link PParenError     Error
 hi def link PString         String
-hi def link PTodo           Todo
+hi def link PTodo           Debug
+hi def link PBool           Boolean
+hi def link PParen          Delimiter
 
+syn cluster PListCluster contains=PAtom,PAtomMark,PComment,PTodo,PFunc,PList,PNumber,PSymbol,PForm,PString,PMacro
 syn region PList matchgroup=PParen start="(" matchgroup=PParen end=")" contains=@PListCluster
-hi def link PParen Delimiter
 
 let b:current_syntax = "p"

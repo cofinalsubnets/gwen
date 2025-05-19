@@ -1,6 +1,6 @@
 (: # top expression
 # prelude is a list of expressions to be evaluated sequentially
-prelude '(
+pre '(
   ; define functions
   (: true -1 false 0 nilp (= 0) not nilp
      (atomp x) (nilp (twop x))
@@ -51,37 +51,48 @@ prelude '(
     (ana c x) (:- (? (symp x)  (ana_sym c x)            ; to do
                      (atomp x) (imm x)                  ; ok
                                (ana_two c (A x) (B x))) ; to do
+
+     (ana_apl c b k) (? (atomp b) k (ana c (A b) (em1 i_ap (ana_apl c (B b) k))))
+     (ana_ap c f b j) (ana c f (ana_apl c b j))
      (ana_sym c x k) (>>= c (:
-      (on_stack d) ()
+      (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
+      (ana_sym_local_fn asq d)
+       (em2 i_lazy_bind (X (A asq) d) (ana_apl c (B asq) k))
+      (stkidx x d)
+        (: imp  (tget 0 d 'imp)
+           limp (llen imp)
+           arg  (tget 0 d 'arg)
+           ii (idx imp x)
+           ai (idx arg x)
+         (? (>= ii 0) ii
+            (>= ai 0) (+ limp ai)
+            -1))
       (ana_sym_r d)
        (? (nilp d) (imm (tget x globals x) k)
         (: y (assq x (tget 0 d 'lam))
          (? y (ana_sym_local_fn y d)
-          (: y (tget 0 d 'stack)
-           (? (memq x y)   (ana_sym_local_def y)
-              (on_stack d) (ana_sym_stack_ref d)
-                           (ana_sym_r (tget 0 d 'par)))))))))
+          (: y (tget 0 d 'loc)
+           (? (memq x y)          (ana_sym_local_def y)
+              (>= (stkidx x d) 0) (ana_sym_stack_ref d)
+                                  (ana_sym_r (tget 0 d 'par)))))))))
 
-     (ana_two c a b) (:- (?  (= a '`)  (imm (A b))     ; ok
-                             (= a '?)  (ana_if c b)    ; ok
-                             (= a '\)  (ana_lam c b)   ; to do
-                             (= a ':)  (ana_let c b)   ; to do
-                             (= a ',)  (ana_seq c b)   ; ok
-                             (atomp b) (ana c a)       ; ok
-                             (: m (tget 0 macros a)
-                              (? m (ana c (m b))       ; ok
-                                   (ana_ap c a b))))   ; ok
+     (ana_two c a b) (:- (? (= a '`)  (imm (A b))     ; ok
+                            (= a '?)  (ana_if c b)    ; ok
+                            (= a '\)  (ana_lam c b)   ; to do
+                            (= a ':)  (ana_let c b)   ; to do
+                            (= a ',)  (ana_seq c b)   ; ok
+                            (atomp b) (ana c a)       ; ok
+                            (: m (tget 0 macros a)
+                             (? m (ana c (m b))       ; ok
+                                  (ana_ap c a b))))   ; ok
       (ana_lam c b) (? (atomp b) (imm 0) (atomp (B b)) (ana c (A b)))
       (ana_let c b) (? (atomp b) (imm 0) (atomp (B b)) (ana c (A b)))
-      (ana_ap c f b j) (:- (ana c f (apl b j))
-                        (apl b k) (? (atomp b) k (ana c (A b) (em1 i_ap (apl (B b) k)))))
+
+
       (ana_seq c x k) (? (atomp x)     (imm 0 k)
                          (atomp (B x)) (ana c (A x) k)
                                        (ana c (A x) (em1 i_drop1 (ana_seq c (B x) k))))
-
-      (ana_if c b k) (:-
-        (pop 'end (ana_if_r b (push 'end  k)))
-
+      (ana_if c b k) (:- (pop 'end (ana_if_r b (push 'end  k)))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
        (peek_end c k n) (: j (k (+ 2 n))
@@ -89,43 +100,45 @@ prelude '(
         (poke i_jump (seek -1 (poke (cpeek c 'end) (seek -1 j)))))
        (pop_alt c k n) (: j (k (+ 2 n))
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
-       (peek_alt c k n)
-        ()
-       push_alt (push 'alt)
        (ana_if_r b k) (?
         (atomp b) (imm 0 k)
         (atomp (B b)) (ana c (A b) (peek_end c k))
-        (ana c (A b) (pop_alt c (ana c (A (B b)) (peek_end c (push_alt (ana_if_r (B (B b)) k))))))))))))
+        (ana c (A b) (pop_alt c (ana c (A (B b)) (peek_end c (push 'alt (ana_if_r (B (B b)) k))))))))))))
 # end thread compiler
+
 # the last item in the prelude is the boot script
 # it evaluates to a function of a list of strings (arguments)
-(: (evals x) (? x (, (ev (A x)) (evals (B x))))
-   (reads l) (: r (read ()) (? r (reads (X (A r) l)) l))
-   (evalf f) (evals (readf f))
-   (evalfs fs) (? fs (, (evalf (A fs)) (evalfs (B fs))))
-   (repl _) (: r (, (puts "    ") (read 0))
-                (? r (, (. (ev (A r)))
-                        (putc 10) (repl 0))))
-      (show_help prog) (,
-       (puts "usage: ") (puts prog) (puts " [args]
+(: (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
+   (repl _)  (: r (, (puts "    ") (read 0))
+              (? r (, (. (ev (A r)))
+                      (putc 10)
+                      (repl 0))))
+   (show_help prog) (,
+    (puts "usage: ") (puts prog) (puts " [args]
   args:
     -h    show this message
     -v    show version
     -r    start repl
     file  evaluate file
 "))
-      (show_version prog) (, (puts prog) (puts " ") (puts version) (putc 10))
-      (process prog arg args) (,
-       (? (= arg "-h") (show_help prog)
-          (= arg "-v") (show_version prog)
-          (= arg "-r") (repl ())
-          (evalf arg))
-       (? args (process prog (A args) (B args))))
+   (show_version prog) (, (puts prog) (puts " ") (puts version) (putc 10))
+   (process prog arg args) (,
+    (? (= arg "-h") (show_help prog)
+       (= arg "-v") (show_version prog)
+       (= arg "-r") (repl ())
+       ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
+        (readf arg)))
+    (? args (process prog (A args) (B args))))
+
+   ii (cat '(peek poke seek macros thd)
+                     (filter (\ y (= "i_" (ssub 0 2 (nom y)))) (tkeys globals)))
+   (, (each (tdel 0 globals) ii)
     (\ fs (: prog (A fs) args (B fs)
            (? args       (process prog (A args) (B args))
               (isatty 0) (repl ())
-                         (evals (reads ())))))))
+                         (reads ())))))))
 # end of prelude
 # main expression
- ((: (boot a b) (? b (, (ev a) (boot (A b) (B b))) (ev a)))
-  (A prelude) (B prelude))) # end of top expression
+ ((: (boot a b) (? b (, (ev a) (boot (A b) (B b))) (ev a))) (A pre) (B pre))
+
+  ) # end of top expression
