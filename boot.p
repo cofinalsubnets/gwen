@@ -41,6 +41,8 @@
 # thread compiler
   (: (eval x)
    (:- (ana (scop 0 0 0) x (thd0 1) 0 0)
+    (evens n) (? (atomp n) 0 (odds (B n)))
+    (odds n) (? (atomp n) 0 (X (A n) (evens (B n))))
     (thd0 r) (em2 i_ret r (\ n (seek n (thd n))))
     (scop par arg imp) (: t (tnew()) (, (tset t 'par par) (tset t 'arg arg) (tset t 'imp imp) t))
     (cpush c k v) (, (tset c k (X v (tget 0 c k))) v)
@@ -108,13 +110,43 @@
         (, (ana d x (thd0 arity))) 0)
        (ana c (X k (tget 0 d 'imp))))
 
-      (ana_let_i c b) (
-      )
 
 
-      (ana_let c b) (? (atomp b)     (imm 0)
-                       (atomp (B b)) (ana c (A b))
-                                     (ana_let_i c b))
+      (ana_let c b) (:- (? (atomp b)     (imm 0)
+                           (atomp (B b)) (ana c (A b))
+                                         (ana_let_i c b))
+       (ana_let_i b exp) (:
+        q (scop q (tget 0 b 'arg) (tget 0 b 'imp))
+        ;; collect vars and defs into two lists
+        ;;; if it's a lambda compile it and record in lam list
+        noms (odds exp)
+        defs (evens exp)
+        ;; if there's no body then evaluate the name of the last definition
+        body (last (? (= 0 (% (llen exp) 2)) noms exp))
+        ;;; also in that case do global bind if at toplevel
+
+        ;; find closures
+        ;;; for each f closure C(f)
+        ;;; for each g closure C(g)
+        ;;; if f in C(g) then C(f) <= C(g)
+
+        ;; now delete defined function from the closure variable lists
+        ;; they will be bound lazily when the function runs
+
+        ;; make lambda with reversed arguments
+        ;; evaluate definitions in order tracking var names on stack
+        ;; store lambdas on env for lazy binding and pull_m new application
+        ;; - reverse noms onto exp
+        ;; - reverse onto e = nil and recompile lambdas
+
+        ;; iterate over noms / defs
+        ;;; if lambda then recompile with the explicit closure
+        ;;; and put in arg list and lam list (latter is used for lazy binding)
+        ;;; if toplevel then bind
+        ;; emit apply ...
+        ;; pop values off virtual stack...
+        ;; done :)
+       ))
 
       (ana_seq c x k) (? (atomp x)     (imm 0 k)
                          (atomp (B x)) (ana c (A x) k)
