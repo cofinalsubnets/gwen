@@ -26,10 +26,12 @@
      (part p) (foldr '(0) (\ a m
       (? (p a) (X (X a (A m)) (B m))
                (X (A m) (X a (B m))))))
+     (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
      (iota n) (: (k m) (? (< m n) (X m (k (inc m)))) (k 0))
      (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n))
-                                          (f (+ n 1) l))))
+                                          (f (+ n 1) l)))
+     )
                0 (slen s)))
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
      (:: '&& (: (f l) (? l (X '? (X (A l) (X (A (B l)) (X (f (B (B l))) 0))))) f))
@@ -38,7 +40,8 @@
 
 # thread compiler
   (: (eval x)
-   (:- (ana (scop 0 0 0) x (em2 i_ret 1 (\ n (seek n (thd n)))) 0 0)
+   (:- (ana (scop 0 0 0) x (thd0 1) 0 0)
+    (thd0 r) (em2 i_ret r (\ n (seek n (thd n))))
     (scop par arg imp) (: t (tnew()) (, (tset t 'par par) (tset t 'arg arg) (tset t 'imp imp) t))
     (cpush c k v) (, (tset c k (X v (tget 0 c k))) v)
     (cpop c k) (: s (tget 0 c k) (, (tset c k (B s)) (A s)))
@@ -46,7 +49,7 @@
     (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
     (em2 i x k) (em1 i (em1 x k))
     imm (em2 i_imm)
-    (ana c x) (:- (? (symp x)  (ana_sym c x)            ; to do
+    (ana c x) (:- (? (symp x)  (ana_sym c x)            ; ok?
                      (atomp x) (imm x)                  ; ok
                                (ana_two c (A x) (B x))) ; to do
 
@@ -56,35 +59,53 @@
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
       (ana_sym_local_fn asq d)
        (em2 i_lazy_bind (X (A asq) d) (ana_apl c (B asq) k))
-      (stkidx x d)
-        (: imp  (tget 0 d 'imp)
-           limp (llen imp)
-           arg  (tget 0 d 'arg)
-           ii (idx imp x)
-           ai (idx arg x)
-         (? (>= ii 0) ii
-            (>= ai 0) (+ limp ai)
-            -1))
-      (ana_sym_r d)
+      (ana_sym_r d) (:
+        (stkidx x)
+          (: imp  (tget 0 d 'imp)
+             limp (llen imp)
+             arg  (tget 0 d 'arg)
+             ii (idx imp x)
+             ai (idx arg x)
+           (? (>= ii 0) ii
+              (>= ai 0) (+ limp ai)
+              -1))
        (? (nilp d) (imm (tget x globals x) k)
         (: y (assq x (tget 0 d 'lam))
          (? y (ana_sym_local_fn y d)
           (: y (tget 0 d 'loc)
-           (? (memq x y)          (ana_sym_local_def y)
-              (>= (stkidx x d) 0) (ana_sym_stack_ref d)
-                                  (ana_sym_r (tget 0 d 'par)))))))))
+           (? (memq x y)        (ana_sym_local_def y)
+              (>= (stkidx x) 0) (ana_sym_stack_ref d)
+                                (ana_sym_r (tget 0 d 'par))))))))))
 
      (ana_two c a b) (:- (? (= a '`)  (imm (A b))     ; ok
                             (= a '?)  (ana_if c b)    ; ok
-                            (= a '\)  (ana_lam c b)   ; to do
+                            (= a '\)  (ana_lam c b)   ; ok
                             (= a ':)  (ana_let c b)   ; to do
                             (= a ',)  (ana_seq c b)   ; ok
                             (atomp b) (ana c a)       ; ok
                             (: m (tget 0 macros a)
                              (? m (ana c (m b))       ; ok
                                   (ana_ap c a b))))   ; ok
-      (ana_lam c b) (? (atomp b) (imm 0) (atomp (B b)) (ana c (A b)))
-      (ana_let c b) (? (atomp b) (imm 0) (atomp (B b)) (ana c (A b)))
+
+      (ana_lam c b) (? (atomp b)     (imm 0)
+                       (atomp (B b)) (ana c (A b))
+                                     (ana_ll c 0 b))
+      (ana_ll c imp exp) (:
+       arg (init exp)
+       x (last exp)
+       d (scop c arg imp)
+       arity (+ (llen arg) (llen imp))
+       k ((? (> arity 1) (em2 i_curry arity) id)
+        (, (ana d x (thd0 arity))) 0)
+       (ana c (X k (tget 0 d 'imp))))
+
+      (ana_let_i c b) (
+      )
+
+
+      (ana_let c b) (? (atomp b)     (imm 0)
+                       (atomp (B b)) (ana c (A b))
+                                     (ana_let_i c b))
 
       (ana_seq c x k) (? (atomp x)     (imm 0 k)
                          (atomp (B x)) (ana c (A x) k)
@@ -111,26 +132,25 @@
    (\ fs (:- (? args       (procs prog (A args) (B args))
                 (isatty 0) (repl ())
                            (reads ()))
-   prog (A fs) args (B fs)
- (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
- (repl _)  (: r (, (puts "    ") (read 0))
-            (? r (, (. (ev (A r)))
-                    (putc 10)
-                    (repl 0))))
- (procs prog a as) (, (proc1 prog a)
-                      (? as (procs prog (A as) (B as))))
- (proc1 prog arg) (:-
-  (? (= arg "-h") (, (puts "usage: ") (puts prog) (puts help))
-       (= arg "-v") (, (puts prog) (puts " ") (puts version) (putc 10))
-       (= arg "-r") (repl ())
-       ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
-        (readf arg)))
-  help " [args]
-args:
-  -h    show this message
-  -v    show version
-  -r    start repl
-  file  evaluate file
+
+          prog (A fs) args (B fs)
+          (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
+          (repl _)  (: r (, (puts "    ") (read 0))
+                     (? r (, (. (ev (A r))) (putc 10) (repl 0))))
+          (procs prog a as) (, (proc1 prog a)
+                               (? as (procs prog (A as) (B as))))
+          (proc1 prog arg) (:-
+           (? (= arg "-h") (, (puts "usage: ") (puts prog) (puts help))
+                (= arg "-v") (, (puts prog) (puts " ") (puts version) (putc 10))
+                (= arg "-r") (repl ())
+                ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
+                 (readf arg)))
+           help " [args]
+        args:
+          -h    show this message
+          -v    show version
+          -r    start repl
+          file  evaluate file
 "))))))
 # end of prelude
 # main expression

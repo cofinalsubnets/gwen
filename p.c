@@ -209,7 +209,6 @@ static Inline size_t b2w(size_t b) {
   return q + (r ? 1 : 0); }
 
 #define within(a, b, c) (W(a)<=W(b)&&W(b)<W(c))
-#define op(n, x) (Ip = (cell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
 #define owns(f, x) within(f->pool, x, f->pool + f->len)
 
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
@@ -313,7 +312,7 @@ static NoInline bool p_please(core *f, uintptr_t req0) {
      f->len = len1,
      f->loop = dest2 + len1,
      copy_from(f, dest, len0),                   // do second copy
-     free(src < dest ? src : dest),              // free original pool
+     free(min(src, dest)),                       // free original pool
      f->t0 = clock(),                            // set last gc timestamp
      true); }                                    // size successfully adjusted
 
@@ -351,14 +350,16 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
     if (datp(k)) typof(k)->wk(f, Z(k), p0, t0); // is data
     else { while (k->x) k->x = CP(k->x), k++;     // is thread
            f->cp = (word*) k + 2; }
-  // run destructors
+  // run destructors ...
+  // this has never been tested or used
   struct dtor *nd = NULL;
   for (struct dtor *n, *d = f->dtors; d; d = d->next)
     if (!owns(f, R(d->x)->x)) d->d(d->x);
     else n = bump(f, Width(struct dtor)),
          n->d = d->d,
          n->x = R(d->x)->x,
-         n->next = nd;
+         n->next = nd,
+         nd = n;
   f->dtors = nd; }
 
 static NoInline word cp(core *v, word x, word *p0, word *t0) {
@@ -375,9 +376,10 @@ static NoInline word cp(core *v, word x, word *p0, word *t0) {
   cell *ini = t->head, *d = bump(v, t->end - ini), *dst = d;
   // copy source contents to dest and write dest addresses to source
   for (cell *s = ini; (d->x = s->x); s++->x = W(d++));
-  ((struct tag*)d)->head = dst;
+  ((struct tag*) d)->head = dst;
   return W(dst + (src - ini)); }
 
+#define op(n, x) (Ip = (cell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
 static Vm(data) {
   word x = W(Ip);
   return op(1, x); }
@@ -1621,10 +1623,9 @@ static bool eql(core *f, word a, word b) {
   return typof(a)->eq(f, a, b); }
 
 static int p_fin(core *f, int s) {
-  return
-    free(f->pool < f->loop ? f->pool : f->loop),
-    f->pool = f->loop = NULL,
-    s; }
+  return free(min(f->pool, f->loop)),
+         f->pool = f->loop = NULL,
+         s; }
 
 #define d_entry(bn, n, _) && p_ini_def(f, n, W(bn))
 #define i_entry(i)        && p_ini_def(f, "i_"#i, W(i))
@@ -1632,6 +1633,7 @@ static NoInline bool p_ini_def(core *f, const char *k, word v) {
   symbol *y; return
     pushs(f, 1, v) && (y = symof(f, k)) &&
       table_set(f, f->dict, (word) y, pop1(f)); }
+
 static int p_ini(core *f) {
   memset(f, 0, sizeof(core));
   const uintptr_t len0 = 1;
@@ -1640,22 +1642,20 @@ static int p_ini(core *f) {
   f->t0 = clock();
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
   string *v;
-  if ((f->dict = mktbl(f)) &&
-      (f->macro = mktbl(f)) &&
-      (f->eval = symof(f, "ev")) &&
-      (f->let = symof(f, ":")) &&
-      (f->cond = symof(f, "?")) &&
-      (f->quote = symof(f, "`")) &&
-      (f->begin = symof(f, ",")) &&
-      (f->lambda = symof(f, "\\")) &&
-      p_ini_def(f, "globals", Z(f->dict)) &&
-      p_ini_def(f, "macros", W(f->macro)) &&
-      (v = strof(f, VERSION)) &&
-      p_ini_def(f, "version", W(v))
-      insts(i_entry)
-      bifs(d_entry))
-    return Ok;
-  return p_fin(f, Oom); }
+  return
+    (f->dict = mktbl(f)) &&
+    (f->macro = mktbl(f)) &&
+    (f->eval = symof(f, "ev")) &&
+    (f->let = symof(f, ":")) &&
+    (f->cond = symof(f, "?")) &&
+    (f->quote = symof(f, "`")) &&
+    (f->begin = symof(f, ",")) &&
+    (f->lambda = symof(f, "\\")) &&
+    p_ini_def(f, "globals", Z(f->dict)) &&
+    p_ini_def(f, "macros", W(f->macro)) &&
+    (v = strof(f, VERSION)) &&
+    p_ini_def(f, "version", W(v)) insts(i_entry) bifs(d_entry) ?
+      Ok : p_fin(f, Oom); }
 
 static word mkargv(p_core *f, const char **av) {
   if (!*av) return nil;

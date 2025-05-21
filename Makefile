@@ -74,7 +74,6 @@ $(built_manpage): $n.1.md
 	@echo $@
 	@pandoc -s -t man -o $@ $<
 
-
 # all installed file paths
 VIMPREFIX ?= .vim/
 vimdir=$(DESTDIR)$(VIMPREFIX)
@@ -151,8 +150,6 @@ perf: perf.data
 	perf report
 flamegraph.svg: perf.data
 	flamegraph --perfdata $<
-flame: flamegraph.svg
-	xdg-open $<
 repl: $n.$t.bin
 	rlwrap ./$<
 serve:
@@ -162,4 +159,4 @@ serve:
 .PHONY: \
   all install uninstall \
   test test_all test_c test_js test_tr test_tc \
-	clean valg sloc bits disasm perf flame repl serve
+	clean valg sloc bits disasm perf repl serve
