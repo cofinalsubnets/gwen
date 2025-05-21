@@ -214,7 +214,13 @@ static Inline size_t b2w(size_t b) {
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
 
+static Vm(dot) {
+  px(Sp[0]);
+  Ip++;
+  return Continue(); }
+
 #define insts(_) \
+  _(dot)\
   _(data) _(ret) _(ap) _(tap) _(apn) _(tapn) \
   _(jump) _(cond) _(ref) _(imm) _(yield) _(drop1) \
   _(curry) _(defglobal) _(lazy_bind) _(ret0)
@@ -228,7 +234,7 @@ _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
   _(bif_mul, "*", S2(mul)) _(bif_quot, "/", S2(quot)) _(bif_rem, "%", S2(rem)) \
   _(bif_lt, "<", S2(lt))  _(bif_le, "<=", S2(le)) _(bif_eq, "=", S2(eq))\
   _(bif_ge, ">=", S2(ge))  _(bif_gt, ">", S2(gt)) \
-  _(bif_rand, "rand", S1(rng)) \
+  _(bif_dot, "dot", S1(dot)) _(bif_rand, "rand", S1(rng)) \
   _(bif_X, "X", S2(cons)) _(bif_A, "A", S1(car)) _(bif_B, "B", S1(cdr)) \
   _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) \
   _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \

@@ -50,37 +50,40 @@
     (em2 i x k) (em1 i (em1 x k))
     imm (em2 i_imm)
     (cata_var c x ins j m) (:
+     k (j (+ 2 m))
      idx (stkidx c x)
-     (poke i_ref (seek -1 (poke (+ idx ins) (seek -1 (j (+ 2 m)))))))
+     (poke i_ref (seek -1 (poke (+ idx ins) (seek -1 k)))))
     (stkidx d x)
       (: imp  (tget 0 d 'imp)
-         limp (llen imp)
          arg  (tget 0 d 'arg)
          ii (idx imp x)
          ai (idx arg x)
        (? (>= ii 0) ii
-          (>= ai 0) (+ limp ai)
+          (>= ai 0) (+ (llen imp) ai)
           -1))
     (ana c x) (:- (? (symp x)  (ana_sym c x)            ; ok?
                      (atomp x) (imm x)                  ; ok
                                (ana_two c (A x) (B x))) ; to do
 
      (ana_apl c b k) (? (atomp b) k (ana c (A b) (em1 i_ap (ana_apl c (B b) k))))
-     (ana_ap c f b j) (ana c f (ana_apl c b j))
-     (ana_sym c x k) (>>= c (:
+     (ana_ap c f b j)  (,
+        (cpush c 'stack ())
+        (: k (ana c f (ana_apl c b j))
+         (, (cpop c 'stack) k)))
+     (ana_sym c x) (>>= c (:- ana_sym_r
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
-      (ana_sym_local_fn asq d)
+      (ana_sym_local_fn asq d k)
        (em2 i_lazy_bind (X (A asq) d) (ana_apl c (B asq) k))
       (ana_sym_stack_ref x d) (,
        (? (nilp (= c d)) (cpush c 'imp x))
        (cata_var d x (llen (tget 0 c 'stack))))
       (ana_sym_r d) (:
-       (? (nilp d) (imm (tget x globals x) k)
+       (? (nilp d) (imm (tget x globals x))
         (: y (assq x (tget 0 d 'lam))
          (? y (ana_sym_local_fn y d)
           (: y (tget 0 d 'loc)
            (? (memq x y)          (ana_sym_local_def y)
-              (>= (stkidx d x) 0) (ana_sym_stack_ref x d k)
+              (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
                                   (ana_sym_r (tget 0 d 'par))))))))))
 
      (ana_two c a b) (:- (? (= a '`)  (imm (A b))     ; ok
