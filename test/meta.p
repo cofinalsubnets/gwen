@@ -16,13 +16,13 @@
         (\ l (foldl id id (map (\ x (x l)) y)))))))
 
   (cond-loop a f) (?
-   (nilp a) (cond-loop (cons 0 0) f)
+   (nilp a) (cond-loop (X 0 0) f)
    (nilp (cdr a)) (f (meta-eval (car a)))
    (: ant (meta-eval (car a)) con (meta-eval (cadr a))
     (cond-loop (cddr a) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
 
   (let-loop a b m) (?
-   (nilp a) (let-loop (cons 0 0) b m)
+   (nilp a) (let-loop (X 0 0) b m)
    (nilp (cdr a)) (meta-eval (car a) (b m))
    (desugar (car a) (cadr a) (\ k v
     (: t (tnew 0) get (tget 0 t) set (tset t 0)
@@ -36,7 +36,7 @@
   meta-eval)
  meta-eval (ev evr)
  expr '((\ a b (: c (+ a 9) d (+ c b) (* c d))) 4 5)
- G (tget 0 globals)
+ G ev
  (, (assert (= 234 (ev expr)))
     (assert (= 234 (meta-eval expr G)))
     (assert (= 234 (meta-eval evr G expr G)))

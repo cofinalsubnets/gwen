@@ -1682,6 +1682,7 @@ int p_main(const char *p, const char **av) {
   s = s != Ok ? s : mkxpn(f, av);
   s = s != Ok ? s : p_eval(f);
   return p_fin(f, s); }
+
 static word
   cp_two(core *v, word x, word *p0, word *t0),
   cp_sym(core *f, word x, word *p0, word *t0),

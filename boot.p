@@ -1,7 +1,6 @@
-(: # top expression
+# top expression
+((: (go a b) (? b (go (ev (A b)) (B b)) a)) 0 '(
 # prelude is a list of expressions to be evaluated sequentially
-pre '(
-  ; define functions
   (: true -1 false 0 nilp (= 0) not nilp
      (atomp x) (nilp (twop x))
      cons X car A cdr B null nilp
@@ -32,7 +31,6 @@ pre '(
      (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n))
                                           (f (+ n 1) l))))
                0 (slen s)))
-  ; define macros
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
      (:: '&& (: (f l) (? l (X '? (X (A l) (X (A (B l)) (X (f (B (B l))) 0))))) f))
      (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
@@ -88,7 +86,6 @@ pre '(
       (ana_lam c b) (? (atomp b) (imm 0) (atomp (B b)) (ana c (A b)))
       (ana_let c b) (? (atomp b) (imm 0) (atomp (B b)) (ana c (A b)))
 
-
       (ana_seq c x k) (? (atomp x)     (imm 0 k)
                          (atomp (B x)) (ana c (A x) k)
                                        (ana c (A x) (em1 i_drop1 (ana_seq c (B x) k))))
@@ -105,40 +102,36 @@ pre '(
         (atomp (B b)) (ana c (A b) (peek_end c k))
         (ana c (A b) (pop_alt c (ana c (A (B b)) (peek_end c (push 'alt (ana_if_r (B (B b)) k))))))))))))
 # end thread compiler
-
 # the last item in the prelude is the boot script
 # it evaluates to a function of a list of strings (arguments)
-(: (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
-   (repl _)  (: r (, (puts "    ") (read 0))
-              (? r (, (. (ev (A r)))
-                      (putc 10)
-                      (repl 0))))
-   (show_help prog) (,
-    (puts "usage: ") (puts prog) (puts " [args]
-  args:
-    -h    show this message
-    -v    show version
-    -r    start repl
-    file  evaluate file
-"))
-   (show_version prog) (, (puts prog) (puts " ") (puts version) (putc 10))
-   (process prog arg args) (,
-    (? (= arg "-h") (show_help prog)
-       (= arg "-v") (show_version prog)
+(, (each (tdel 0 globals)
+    (cat '(peek poke seek macros thd globals)
+     (filter (\ y (= "i_" (ssub (nom y) 0 2)))
+      (tkeys globals))))
+   (\ fs (:- (? args       (procs prog (A args) (B args))
+                (isatty 0) (repl ())
+                           (reads ()))
+   prog (A fs) args (B fs)
+ (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
+ (repl _)  (: r (, (puts "    ") (read 0))
+            (? r (, (. (ev (A r)))
+                    (putc 10)
+                    (repl 0))))
+ (procs prog a as) (, (proc1 prog a)
+                      (? as (procs prog (A as) (B as))))
+ (proc1 prog arg) (:-
+  (? (= arg "-h") (, (puts "usage: ") (puts prog) (puts help))
+       (= arg "-v") (, (puts prog) (puts " ") (puts version) (putc 10))
        (= arg "-r") (repl ())
        ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
         (readf arg)))
-    (? args (process prog (A args) (B args))))
-
-   ii (cat '(peek poke seek macros thd)
-                     (filter (\ y (= "i_" (ssub 0 2 (nom y)))) (tkeys globals)))
-   (, (each (tdel 0 globals) ii)
-    (\ fs (: prog (A fs) args (B fs)
-           (? args       (process prog (A args) (B args))
-              (isatty 0) (repl ())
-                         (reads ())))))))
+  help " [args]
+args:
+  -h    show this message
+  -v    show version
+  -r    start repl
+  file  evaluate file
+"))))))
 # end of prelude
 # main expression
- ((: (boot a b) (? b (, (ev a) (boot (A b) (B b))) (ev a))) (A pre) (B pre))
-
-  ) # end of top expression
+# end of top expression
