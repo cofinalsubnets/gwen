@@ -17,7 +17,7 @@ syn keyword PFunc :: inc dec flip diag part llen iota puts
 syn keyword PFunc twop nump symp tblp strp nilp homp ev ap not
 syn keyword PFunc str slen sget scat ssub ystr sym putc co atomp
 syn keyword PFunc tnew tget tset tlen thas tkeys tdel memq assq
-syn keyword PMacro L vprintf >>= where
+syn keyword PMacro L vprintf >>= \|>
 syn keyword PBool true false
 
 syn region PString start='"' skip='\\\\\|\\"' end='"'

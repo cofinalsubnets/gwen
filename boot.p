@@ -6,12 +6,14 @@
      cons X car A cdr B null nilp
      (caar x) (A (A x)) (cadr x) (A (B x))
      (cdar x) (B (A x)) (cddr x) (B (B x))
+     AA caar AB cadr BA cdar BB cddr
      inc (+ 1) dec (+ -1) :: (tset macros)
      (id x) x (const x y) x (co f g x) (f (g x))
      (flip f x y) (f y x) (diag f x) (f x x)
      (map f l) (? l (X (f (A l)) (map f (B l))))
      (foldl z f l) (? l (foldl (f z (A l)) f (B l)) z)
      (foldr z f l) (? l (f (A l) (foldr z f (B l))) z)
+     (foldl1 f l) (foldl (A l) f (B l))
      (filter p l) (? l (: m (filter p (B l))
                         (? (p (A l)) (X (A l) m) m)))
      (init l) (? (B l) (X (A l) (init (B l))))
@@ -20,8 +22,9 @@
      (all f l) (? l (? (f (A l)) (all f (B l))) true)
      (any f l) (? l (? (f (A l)) true (any f (B l))))
      (cat a b) (foldr b X a)
-     (assq x l) (? l (? (= x (A (A l))) (A l) (assq x (B l))))
+     (assq x l) (? l (? (= x (AA l)) (A l) (assq x (B l))))
      (memq x) (any (= x))
+     (zip a b) (? (twop a) (? (twop b) (X (X (A a) (A b)) (zip (B a) (B b)))))
      rev (foldl 0 (flip X))
      (part p) (foldr '(0) (\ a m
       (? (p a) (X (X a (A m)) (B m))
@@ -34,9 +37,10 @@
      )
                0 (slen s)))
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
-     (:: '&& (: (f l) (? l (X '? (X (A l) (X (A (B l)) (X (f (B (B l))) 0))))) f))
+     (:: '&& (: (f l) (? l (X '? (X (A l) (X (AB l) (X (f (BB l)) 0))))) f))
      (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
-     (:: '>>= (\ l (X (last l) (init l)))))
+     (:: '>>= (\ l (X (last l) (init l))))
+     (:: '|> (foldl1 (\ m f (X f (X m 0))))))
 
 # thread compiler
   (: (eval x)
@@ -100,7 +104,7 @@
 
       (ana_lam c b) (? (atomp b)     (imm 0)
                        (atomp (B b)) (ana c (A b))
-                                     (ana_ll c 0 b))
+                                     (ana c (ana_ll c 0 b)))
       (ana_ll c imp exp) (:
        arg (init exp)
        x (last exp)
@@ -108,49 +112,65 @@
        arity (+ (llen arg) (llen imp))
        k ((? (> arity 1) (em2 i_curry arity) id)
         (, (ana d x (thd0 arity))) 0)
-       (ana c (X k (tget 0 d 'imp))))
+       (X k (tget 0 d 'imp)))
 
 
+      (desug n d) (? (atomp n) (X n d)
+                     (desug (A n) (X '\ (cat (B n) (L d)))))
+      (lambp x) (&& (twop x) (= '\ (A x)))
 
-      (ana_let c b) (:- (? (atomp b)     (imm 0)
-                           (atomp (B b)) (ana c (A b))
-                                         (ana_let_i c b))
-       (ana_let_i b exp) (:
-        q (scop q (tget 0 b 'arg) (tget 0 b 'imp))
-        ;; collect vars and defs into two lists
-        ;;; if it's a lambda compile it and record in lam list
-        noms (odds exp)
-        defs (evens exp)
-        ;; if there's no body then evaluate the name of the last definition
-        body (last (? (= 0 (% (llen exp) 2)) noms exp))
-        ;;; also in that case do global bind if at toplevel
+      (ana_let c b) (:-
+       (? (atomp b)     (imm 0)
+          (atomp (B b)) (ana c (A b))
+          (l1 0 0 (A b) (AB b) (BB b)))
+       pushs (cpush c 'stack)
+       (pops _) (cpop c 'stack)
+       q (scop c (tget 0 c 'arg) (tget 0 c 'imp))
+       ; l1 collects bindings and passes them with the body expression to l2
+       (l1 noms defs nom def rest) (:-
+       (, ;(.. 'l1)
+        (? (atomp rest) (l2 noms1 defs1 nom1)
+           (atomp (B rest)) (l2 noms1 defs1 (A rest))
+           (l1 noms1 defs1 (A rest) (AB rest) (BB rest))))
+        nd1 (desug nom def)
+        nom1 (A nd1) def1 (B nd1)
+        noms1 (X nom1 noms) defs1 (X def1 defs))
 
-        ;; find closures
-        ;;; for each f closure C(f)
-        ;;; for each g closure C(g)
-        ;;; if f in C(g) then C(f) <= C(g)
+       ; l2 finds closures for all local functions and passes a lambda for the body to l3
+       (l2 noms defs exp) (:-
+        (, ;(.. 'l2 )
+         (l3 noms defs clams llam))
 
-        ;; now delete defined function from the closure variable lists
-        ;; they will be bound lazily when the function runs
+        lams (>>= 0 noms defs
+              (: (b l n d) (? (atomp n) l
+               (: ll (? (not (lambp (A d))) l (X (ana_ll q 0 (BA d)) l))
+                (b ll (B n) (B d))))))
+        (close lams) lams
+        clams (close lams) ;; find transitive closures of closures
+                           ;; exclude local functions from closures
+        llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
+        ;; l3 collects def values on stack and applies lambda
+       (l3 noms defs clams llam k) (:
+;         _ (.. 'l3)
+         k1 (em1 i_ap  k)
+;         _ (pushs 0)
+         k2 (foldl k1 (\ k nd (ana c (B nd) k)) (zip noms defs))
+;         _ (pops 0)
+         (ana c llam k2)
+         )
+          ;; evaluate lambda and push on stack
+          ;; evaluate arguments in original order
+          ;;; push each name onto the stack afterwards
+          ;;; if the argument is a lambda then remake with explicit closure
+          ;;; and put in arg and lam list
+          ;; output apply instruction
+          ;; pop args off stack
+          ;; done :>
 
-        ;; make lambda with reversed arguments
-        ;; evaluate definitions in order tracking var names on stack
-        ;; store lambdas on env for lazy binding and pull_m new application
-        ;; - reverse noms onto exp
-        ;; - reverse onto e = nil and recompile lambdas
+       ) ; end ana_let
 
-        ;; iterate over noms / defs
-        ;;; if lambda then recompile with the explicit closure
-        ;;; and put in arg list and lam list (latter is used for lazy binding)
-        ;;; if toplevel then bind
-        ;; emit apply ...
-        ;; pop values off virtual stack...
-        ;; done :)
-       ))
-
-      (ana_seq c x k) (? (atomp x)     (imm 0 k)
-                         (atomp (B x)) (ana c (A x) k)
-                                       (ana c (A x) (em1 i_drop1 (ana_seq c (B x) k))))
+      (ana_seq c x k) (? (atomp x) (imm 0 k)
+       (ana c (A x) (? (atomp (B x)) k (em1 i_drop1 (ana_seq c (B x) k)))))
       (ana_if c b k) (:- (pop 'end (ana_if_r b (push 'end  k)))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
@@ -162,7 +182,7 @@
        (ana_if_r b k) (?
         (atomp b) (imm 0 k)
         (atomp (B b)) (ana c (A b) (peek_end c k))
-        (ana c (A b) (pop_alt c (ana c (A (B b)) (peek_end c (push 'alt (ana_if_r (B (B b)) k))))))))))))
+        (ana c (A b) (pop_alt c (ana c (AB b) (peek_end c (push 'alt (ana_if_r (BB b) k))))))))))))
 # end thread compiler
 # the last item in the prelude is the boot script
 # it evaluates to a function of a list of strings (arguments)
@@ -193,6 +213,3 @@
           -r    start repl
           file  evaluate file
 "))))))
-# end of prelude
-# main expression
-# end of top expression

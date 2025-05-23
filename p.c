@@ -895,12 +895,14 @@ static size_t ana_ap_r2l(core *f, env **c, size_t m, word args, word argc) {
 static Ana(ana_lambda, word);
 static Ana(ana_list) {
   word a = A(x), b = B(x);
-  if (!twop(b)) return analyze(f, c, m, a); // singleton list has value of first element
   if (a == W(f->quote)) return ana_imm(f, c, m, twop(b) ? A(b) : nil);
   if (a == W(f->begin)) return ana_seq(f, c, m, b);
   if (a == W(f->let)) return ana_let(f, c, m, b);
   if (a == W(f->cond)) return ana_if(f, c, m, b);
-  if (a == W(f->lambda)) return ana_lambda(f, c, m, x, b);
+  if (a == W(f->lambda)) return !twop(b) ? ana_imm(f, c, m, nil) :
+                                !twop(B(b)) ? analyze(f, c, m, A(b)) :
+                                ana_lambda(f, c, m, x, b); 
+  if (!twop(b)) return analyze(f, c, m, a); // singleton list has value of first element
   word macro = table_get(f, f->macro, a, 0);
   return macro ? ana_mac(f, c, m, macro, b) :
                  ana_ap(f, c, m, a, b); }
