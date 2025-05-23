@@ -152,7 +152,7 @@
         ;; l3 collects def values on stack and applies lambda
        (l3 noms defs clams llam k) (:
 ;         _ (.. 'l3)
-         k1 (em1 i_ap  k)
+         k1 ((? (> (llen noms) 1) (em2 i_apn (llen noms)) (em1 i_ap)) k)
 ;         _ (pushs 0)
          k2 (foldl k1 (\ k nd (ana c (B nd) k)) (zip noms defs))
 ;         _ (pops 0)
