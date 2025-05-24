@@ -45,7 +45,7 @@
 
 # thread compiler
   (: (eval x)
-   (:- (ana (scop 0 0 0) x (thd0 1) 0 0)
+   (:- (ana 0 (scop 0 0 0) x (thd0 1) 0 0)
     (evens n) (? (atomp n) 0 (odds (B n)))
     (odds n) (? (atomp n) 0 (X (A n) (evens (B n))))
     (thd0 r) (em2 i_ret r (\ n (seek n (thd n))))
@@ -68,62 +68,52 @@
        (? (>= ii 0) ii
           (>= ai 0) (+ (llen imp) ai)
           -1))
-    (ana c x) (:- (? (symp x)  (ana_sym c x)            ; ok?
-                     (atomp x) (imm x)                  ; ok
-                               (ana_two c (A x) (B x))) ; to do
+    (ana s c x) (:- (? (symp x)  (ana_sym s c x)            ; ok?
+                       (atomp x) (imm x)                  ; ok
+                                 (ana_two s c (A x) (B x))) ; to do
 
-     (ana_apl c b k) (? (atomp b) k (ana c (A b) (em1 i_ap (ana_apl c (B b) k))))
-     (ana_ap c f b j)  (,
-;      (.. 'ana_ap)
-;      (.. b)
-;      (.. (tget 0 c 'stack))
-      (cpush c 'stack ())
-      (: k (ana c f (ana_apl c b j))
-       (, (cpop c 'stack) k)))
-     (ana_sym c x) (>>= c (:- ana_sym_r
-;      _ (.. 'ana_sym)
-;      _ (.. x)
-;      _ (.. (tget 0 c 'stack))
+     (ana_apl s c b k) (? (atomp b) k (ana s c (A b) (em1 i_ap (ana_apl s c (B b) k))))
+     (ana_ap s c f b j)  (,
+      (: s1 (X 0 s)
+        (ana s1 c f (ana_apl s1 c b j))))
+     (ana_sym s c x) (>>= c (:- ana_sym_r
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
       (ana_sym_local_fn asq d k) (,
-;       (.. 'ana_sym_local)
        (em2 i_lazy_bind (X (A asq) d) (ana_apl c (B asq) k)))
       (ana_sym_stack_ref x d) (,
-;       (.. 'ana_sym_stack_ref)
        (? (nilp (= c d)) (cpush c 'imp x))
-       (cata_var d x (llen (tget 0 c 'stack))))
+       (cata_var d x (llen s)))
       (ana_sym_local_def stack) (,
-;       (.. 'ana_sym_local_def)
        (em2 i_ref (lidx x stack)))
       (ana_sym_r d)
        (? (nilp d) (imm (tget x globals x))
         (: y (assq x (tget 0 d 'lam))
          (? y (ana_sym_local_fn y d)
-          (: y (tget 0 d 'stack)
+          (: y s
            (? (memq x y)          (ana_sym_local_def y)
               (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
                                   (ana_sym_r (tget 0 d 'par)))))))))
 
-     (ana_two c a b) (:- (? (= a '`)  (imm (A b))     ; ok
-                            (= a '?)  (ana_if c b)    ; ok
-                            (= a '\)  (ana_lam c b)   ; ok
-                            (= a ':)  (ana_let c b)   ; to do
-                            (= a ',)  (ana_seq c b)   ; ok
-                            (atomp b) (ana c a)       ; ok
-                            (: m (tget 0 macros a)
-                             (? m (ana c (m b))       ; ok
-                                  (ana_ap c a b))))   ; ok
+     (ana_two s c a b) (:- (? (= a '`)  (imm (A b))     ; ok
+                              (= a '?)  (ana_if s c b)    ; ok
+                              (= a '\)  (ana_lam s c b)   ; ok
+                              (= a ':)  (ana_let c b)   ; to do
+                              (= a ',)  (ana_seq s c b)   ; ok
+                              (atomp b) (ana s c a)       ; ok
+                              (: m (tget 0 macros a)
+                               (? m (ana s c (m b))       ; ok
+                                    (ana_ap s c a b))))   ; ok
 
-      (ana_lam c b) (? (atomp b)     (imm 0)
-                       (atomp (B b)) (ana c (A b))
-                                     (ana c (ana_ll c 0 b)))
+      (ana_lam s c b) (? (atomp b)     (imm 0)
+                         (atomp (B b)) (ana s c (A b))
+                                       (ana s c (ana_ll c 0 b)))
       (ana_ll c imp exp) (:
        arg (init exp)
        x (last exp)
        d (scop c arg imp)
        arity (+ (llen arg) (llen imp))
        k ((? (> arity 1) (em2 i_curry arity) id)
-        (, (ana d x (thd0 arity))) 0)
+        (, (ana 0 d x (thd0 arity))) 0)
        (X k (tget 0 d 'imp)))
 
 
@@ -133,10 +123,8 @@
 
       (ana_let c b) (:-
        (? (atomp b)     (imm 0)
-          (atomp (B b)) (ana c (A b))
+          (atomp (B b)) (ana 0 c (A b))
           (l1 0 0 (A b) (AB b) (BB b)))
-       pushs (cpush c 'stack)
-       (pops _) (cpop c 'stack)
        q (scop c (tget 0 c 'arg) (tget 0 c 'imp))
        ; l1 collects bindings and passes them with the body expression to l2
        (l1 noms defs nom def rest) (:-
@@ -166,20 +154,13 @@
         ;; l3 collects def values on stack and applies lambda
        (l3 noms defs clams llam k) (:
 ;         _ (.. 'l3)
-         s0 (tget 0 c 'stack)
          k1 ((: a (llen noms) (? (> a 1) (em2 i_apn a) (em1 i_ap))) k)
-;         _ (pushs 0)
-         (f k nds) (? (nilp nds) k
+         (f s k nds) (? (nilp nds) k
           (: nd (A nds) n (A nd) d (B nd)
-            _ (cpush c 'stack n)
-            k1 (f k (B nds))
-            _ (cpop c 'stack)
-            (ana c d k1)))
-         k2 (f k1 (zip noms defs))
-;         (foldr k1 (\ nd k (: n (A nd) d (B nd) _ (.. 'l3l) _(.. n)_ (.. d) _ (.. (tget 0 c 'stack)) k1 (em1 i_dot (ana c d k)) _ (cpush c 'stack n) k1)) (zip noms defs))
-;         _ (pops 0)
-         k3 (ana c llam k2)
-;         _ (tset c 'stack s0)
+            k1 (f (X n s) k (B nds))
+            (ana s c d k1)))
+         k2 (f s k1 (zip noms defs))
+         k3 (ana s c llam k2)
          k3
          )
           ;; evaluate lambda and push on stack
@@ -193,9 +174,9 @@
 
        ) ; end ana_let
 
-      (ana_seq c x k) (? (atomp x) (imm 0 k)
-       (ana c (A x) (? (atomp (B x)) k (em1 i_drop1 (ana_seq c (B x) k)))))
-      (ana_if c b k) (:- (pop 'end (ana_if_r b (push 'end  k)))
+      (ana_seq s c x k) (? (atomp x) (imm 0 k)
+       (ana s c (A x) (? (atomp (B x)) k (em1 i_drop1 (ana_seq s c (B x) k)))))
+      (ana_if s c b k) (:- (pop 'end (ana_if_r b (push 'end  k)))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
        (peek_end c k n) (: j (k (+ 2 n))
@@ -205,8 +186,8 @@
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
        (ana_if_r b k) (?
         (atomp b) (imm 0 k)
-        (atomp (B b)) (ana c (A b) (peek_end c k))
-        (ana c (A b) (pop_alt c (ana c (AB b) (peek_end c (push 'alt (ana_if_r (BB b) k))))))))))))
+        (atomp (B b)) (ana s c (A b) (peek_end c k))
+        (ana s c (A b) (pop_alt c (ana s c (AB b) (peek_end c (push 'alt (ana_if_r (BB b) k))))))))))))
 # end thread compiler
 # the last item in the prelude is the boot script
 # it evaluates to a function of a list of strings (arguments)
