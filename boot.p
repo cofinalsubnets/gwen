@@ -23,6 +23,7 @@
      (any f l) (? l (? (f (A l)) true (any f (B l))))
      (cat a b) (foldr b X a)
      (assq x l) (? l (? (= x (AA l)) (A l) (assq x (B l))))
+     (lidx x) ((: (f n l) (? (twop l) (? (= x (A l)) n (f (+ 1 n) (B l))) -1)) 0)
      (memq x) (any (= x))
      (zip a b) (? (twop a) (? (twop b) (X (X (A a) (A b)) (zip (B a) (B b)))))
      rev (foldl 0 (flip X))
@@ -73,24 +74,35 @@
 
      (ana_apl c b k) (? (atomp b) k (ana c (A b) (em1 i_ap (ana_apl c (B b) k))))
      (ana_ap c f b j)  (,
-        (cpush c 'stack ())
-        (: k (ana c f (ana_apl c b j))
-         (, (cpop c 'stack) k)))
+;      (.. 'ana_ap)
+;      (.. b)
+;      (.. (tget 0 c 'stack))
+      (cpush c 'stack ())
+      (: k (ana c f (ana_apl c b j))
+       (, (cpop c 'stack) k)))
      (ana_sym c x) (>>= c (:- ana_sym_r
+;      _ (.. 'ana_sym)
+;      _ (.. x)
+;      _ (.. (tget 0 c 'stack))
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
-      (ana_sym_local_fn asq d k)
-       (em2 i_lazy_bind (X (A asq) d) (ana_apl c (B asq) k))
+      (ana_sym_local_fn asq d k) (,
+;       (.. 'ana_sym_local)
+       (em2 i_lazy_bind (X (A asq) d) (ana_apl c (B asq) k)))
       (ana_sym_stack_ref x d) (,
+;       (.. 'ana_sym_stack_ref)
        (? (nilp (= c d)) (cpush c 'imp x))
        (cata_var d x (llen (tget 0 c 'stack))))
-      (ana_sym_r d) (:
+      (ana_sym_local_def stack) (,
+;       (.. 'ana_sym_local_def)
+       (em2 i_ref (lidx x stack)))
+      (ana_sym_r d)
        (? (nilp d) (imm (tget x globals x))
         (: y (assq x (tget 0 d 'lam))
          (? y (ana_sym_local_fn y d)
-          (: y (tget 0 d 'loc)
+          (: y (tget 0 d 'stack)
            (? (memq x y)          (ana_sym_local_def y)
               (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
-                                  (ana_sym_r (tget 0 d 'par))))))))))
+                                  (ana_sym_r (tget 0 d 'par)))))))))
 
      (ana_two c a b) (:- (? (= a '`)  (imm (A b))     ; ok
                             (= a '?)  (ana_if c b)    ; ok
@@ -139,8 +151,10 @@
        ; l2 finds closures for all local functions and passes a lambda for the body to l3
        (l2 noms defs exp) (:-
         (, ;(.. 'l2 )
-         (l3 noms defs clams llam))
+         (l3 rnoms rdefs clams llam))
 
+        rnoms (rev noms)
+        rdefs (rev defs)
         lams (>>= 0 noms defs
               (: (b l n d) (? (atomp n) l
                (: ll (? (not (lambp (A d))) l (X (ana_ll q 0 (BA d)) l))
@@ -148,15 +162,25 @@
         (close lams) lams
         clams (close lams) ;; find transitive closures of closures
                            ;; exclude local functions from closures
-        llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
+        llam (X '\ (cat rnoms (L exp)))) ;; construct reversed lambda expression
         ;; l3 collects def values on stack and applies lambda
        (l3 noms defs clams llam k) (:
 ;         _ (.. 'l3)
-         k1 ((? (> (llen noms) 1) (em2 i_apn (llen noms)) (em1 i_ap)) k)
+         s0 (tget 0 c 'stack)
+         k1 ((: a (llen noms) (? (> a 1) (em2 i_apn a) (em1 i_ap))) k)
 ;         _ (pushs 0)
-         k2 (foldl k1 (\ k nd (ana c (B nd) k)) (zip noms defs))
+         (f k nds) (? (nilp nds) k
+          (: nd (A nds) n (A nd) d (B nd)
+            _ (cpush c 'stack n)
+            k1 (f k (B nds))
+            _ (cpop c 'stack)
+            (ana c d k1)))
+         k2 (f k1 (zip noms defs))
+;         (foldr k1 (\ nd k (: n (A nd) d (B nd) _ (.. 'l3l) _(.. n)_ (.. d) _ (.. (tget 0 c 'stack)) k1 (em1 i_dot (ana c d k)) _ (cpush c 'stack n) k1)) (zip noms defs))
 ;         _ (pops 0)
-         (ana c llam k2)
+         k3 (ana c llam k2)
+;         _ (tset c 'stack s0)
+         k3
          )
           ;; evaluate lambda and push on stack
           ;; evaluate arguments in original order
