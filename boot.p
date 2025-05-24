@@ -138,7 +138,7 @@
 
        ; l2 finds closures for all local functions and passes a lambda for the body to l3
        (l2 noms defs exp) (:-
-        (, ;(.. 'l2 )
+        (,
          (l3 rnoms rdefs clams llam))
 
         rnoms (rev noms)
@@ -150,10 +150,9 @@
         (close lams) lams
         clams (close lams) ;; find transitive closures of closures
                            ;; exclude local functions from closures
-        llam (X '\ (cat rnoms (L exp)))) ;; construct reversed lambda expression
+        llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
         ;; l3 collects def values on stack and applies lambda
        (l3 noms defs clams llam k) (:
-;         _ (.. 'l3)
          k1 ((: a (llen noms) (? (> a 1) (em2 i_apn a) (em1 i_ap))) k)
          (f s k nds) (? (nilp nds) k
           (: nd (A nds) n (A nd) d (B nd)
