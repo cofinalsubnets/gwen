@@ -128,7 +128,7 @@
        q (scop c (tget 0 c 'arg) (tget 0 c 'imp))
        ; l1 collects bindings and passes them with the body expression to l2
        (l1 noms defs nom def rest) (:-
-       (, ;(.. 'l1)
+       (,
         (? (atomp rest) (l2 noms1 defs1 nom1)
            (atomp (B rest)) (l2 noms1 defs1 (A rest))
            (l1 noms1 defs1 (A rest) (AB rest) (BB rest))))
@@ -147,9 +147,11 @@
               (: (b l n d) (? (atomp n) l
                (: ll (? (not (lambp (A d))) l (X (ana_ll q 0 (BA d)) l))
                 (b ll (B n) (B d))))))
-        (close lams) lams
         clams (close lams) ;; find transitive closures of closures
                            ;; exclude local functions from closures
+        (close lams) (
+         lams
+        )
         llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
         ;; l3 collects def values on stack and applies lambda
        (l3 noms defs clams llam k) (:
@@ -195,19 +197,20 @@
      (filter (\ y (= "i_" (ssub (nom y) 0 2)))
       (tkeys globals))))
    (\ fs (:- (? args       (procs prog (A args) (B args))
-                (isatty 0) (repl ())
+                (isatty 0) (repl prompt)
                            (reads ()))
 
           prog (A fs) args (B fs)
+          prompt "    "
           (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
-          (repl _)  (: r (, (puts "    ") (read 0))
-                     (? r (, (. (ev (A r))) (putc 10) (repl 0))))
+          (repl p)  (: r (, (puts p) (read 0))
+                     (? r (, (. (ev (A r))) (putc 10) (repl p))))
           (procs prog a as) (, (proc1 prog a)
                                (? as (procs prog (A as) (B as))))
           (proc1 prog arg) (:-
            (? (= arg "-h") (, (puts "usage: ") (puts prog) (puts help))
                 (= arg "-v") (, (puts prog) (puts " ") (puts version) (putc 10))
-                (= arg "-r") (repl ())
+                (= arg "-r") (repl prompt)
                 ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
                  (readf arg)))
            help " [args]

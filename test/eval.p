@@ -31,4 +31,8 @@
  (= 4 (eval '(: a 2 (+ a a))))
  (= 9 (eval '(: a 4 b 5 (+ a b))))
  (= 48 (eval '(: a 9 b 3 c 8 (* c (- a b)))))
+ (= 48 (eval '(: a 9 b (- a 6) c (* 8 (- a b)) c)))
+ (= '(1 3 5) (eval '(: (evens n) (? (atomp n) 0 (odds (B n)))
+                       (odds n) (? (atomp n) 0 (X (A n) (evens (B n))))
+                       (odds '(1 2 3 4 5 6)))))
 )
