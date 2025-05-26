@@ -220,7 +220,7 @@ static Vm(dot) {
   return Continue(); }
 
 #define insts(_) \
-  _(dot)\
+  _(dot) _(free_variable)\
   _(data) _(ret) _(ap) _(tap) _(apn) _(tapn) \
   _(jump) _(cond) _(ref) _(imm) _(yield) _(drop1) \
   _(curry) _(defglobal) _(lazy_bind) _(ret0)
@@ -571,7 +571,6 @@ static NoInline int p_eval(core *f) {
   // :)
   return s; }
 
-
 static Vm(ev0) {
   Pack(f);
   int s = p_eval(f);
@@ -752,12 +751,13 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
     for (e = lam; twop(e); e = B(e)) // for each bound function variable
       if (d != e && // skip yourself
           lidx(f, BBA(e), AA(d)) >= 0) // if you need this function
-        for (v = BA(d); twop(v); v = B(v)) { // then you need its variables
+        for (v = BBA(d); twop(v); v = B(v)) { // then you need its variables
           word vars = BBA(e), var = A(v);
           if (lidx(f, vars, var) < 0) { // only add if it's not already there
             if (!(vars = wpairof(f, var, vars))) return fail(); // oom
-            j++, BBA(e) = vars; } }
+            else j++, BBA(e) = vars; } }
   while (j);
+  //fputs("lllammm ", stdout), px(lam);
 
   // now delete defined functions from the closure variable lists
   // they will be bound lazily when the function runs
@@ -949,23 +949,25 @@ static long stack_index_of_symbol(core *f, env *c, word var) {
 static Ana(ana_sym_free) {
   word y = table_get(f, f->dict, x, 0);
   if (y) return ana_imm(f, c, m, y);
-  x = wpairof(f, x, (*c)->imps), // XXX why is this needed???
+  x = wpairof(f, x, (*c)->imps); // XXX why is this needed???
   x = x ? A((*c)->imps = x) : x;
   return x ? ana_i2(f, c, m, free_variable, x) : x;  }
 
 static Vm(lazy_bind) {
   word ref = Ip[1].x,
-       var = A(ref);
-  env *en = (env*) B(ref);
-  ref = AB(lassoc(f, en->lams, var));
+       var = A(ref),
+       lams = B(ref);
+  ref = AB(lassoc(f, lams, var));
+//  puts("laz");
+//  px(var);
+//  px(ref);
   if (!ref) return PStatusVar;
-  var = ref ? ref : var;
   Ip[0].ap = imm;
-  Ip[1].x = var;
+  Ip[1].x = ref;
   return Continue(); }
 
 static Ana(ana_sym_local_fn, env *d) {
-  x = wpairof(f, x, Z(d));
+  x = wpairof(f, x, Z(d->lams));
   m = x ? ana_i2(f, c, m, lazy_bind, x) : 0;
   if (!m) return m;
   x = f->sp[2]; // get the (symbol arg1 arg2 ...)

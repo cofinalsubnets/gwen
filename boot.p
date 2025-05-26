@@ -3,6 +3,7 @@
 # prelude is a list of expressions to be evaluated sequentially
   (: true -1 false 0 nilp (= 0) not nilp
      (atomp x) (nilp (twop x))
+     (!= a b) (? (= a b) 0 -1)
      cons X car A cdr B null nilp
      (caar x) (A (A x)) (cadr x) (A (B x))
      (cdar x) (B (A x)) (cddr x) (B (B x))
@@ -19,6 +20,7 @@
      (init l) (? (B l) (X (A l) (init (B l))))
      (last l) (? (B l) (last (B l)) (A l))
      (each f l) (? l (, (f (A l)) (each f (B l))))
+     (ldel x l) (? (twop l) (? (= (A l) x) (B l) (X (A l) (ldel x (B l)))))
      (all f l) (? l (? (f (A l)) (all f (B l))) true)
      (any f l) (? l (? (f (A l)) true (any f (B l))))
      (cat a b) (foldr b X a)
@@ -41,7 +43,10 @@
      (:: '&& (: (f l) (? l (X '? (X (A l) (X (AB l) (X (f (BB l)) 0))))) f))
      (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
      (:: '>>= (\ l (X (last l) (init l))))
-     (:: '|> (foldl1 (\ m f (X f (X m 0))))))
+     (:: '|> (foldl1 (\ m f (X f (X m 0)))))
+     )
+     (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
+     (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ x f (L f x)) g)))))
 
 # thread compiler
   (: (eval x)
@@ -53,8 +58,11 @@
     (cpush c k v) (, (tset c k (X v (tget 0 c k))) v)
     (cpop c k) (: s (tget 0 c k) (, (tset c k (B s)) (A s)))
     (cpeek c k) (A (tget 0 c k))
-    (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
-    (em2 i x k) (em1 i (em1 x k))
+    (em1 i k n) (,
+     (: j (k (+ 1 n))
+      (poke i (seek -1 j))))
+    (em2 i x k) (,
+    (em1 i (em1 x k)))
     imm (em2 i_imm)
     (cata_var c x ins j m) (:
      k (j (+ 2 m))
@@ -72,21 +80,29 @@
                        (atomp x) (imm x)                  ; ok
                                  (ana_two s c (A x) (B x))) ; to do
 
-     (ana_apl s c b k) (? (atomp b) k (ana s c (A b) (em1 i_ap (ana_apl s c (B b) k))))
-     (ana_ap s c f b j)  (,
-      (: s1 (X 0 s)
-        (ana s1 c f (ana_apl s1 c b j))))
+     (ana_apl s c b)
+      (? (atomp b) id
+         (co (ana s c (A b))
+          (co (em1 i_ap)
+           (ana_apl s c (B b)))))
+     (ana_ap s c f b)  (co (ana s c f) (ana_apl (X 0 s) c b))
      (ana_sym s c x) (>>= c (:- ana_sym_r
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
       (ana_sym_local_fn asq d k) (,
-       (em2 i_lazy_bind (X (A asq) d) (ana_apl c (B asq) k)))
+       (em2 i_lazy_bind (X (A asq) (tget 0 d 'lam)) (ana_apl (X 0 s) c (BB asq) k)))
       (ana_sym_stack_ref x d) (,
        (? (nilp (= c d)) (cpush c 'imp x))
        (cata_var d x (llen s)))
       (ana_sym_local_def stack) (,
        (em2 i_ref (lidx x stack)))
+      (thas t x) (: s (sym 0) (not (= s (tget s t x))))
+      (ana_sym_free x)
+       (: s (sym 0)
+          y (tget s globals x)
+          (? (!= y s) (imm y)
+          (, (cpush c 'imp x) (em2 i_free_variable x))))
       (ana_sym_r d)
-       (? (nilp d) (imm (tget x globals x))
+       (? (nilp d) (ana_sym_free x)
         (: y (assq x (tget 0 d 'lam))
          (? y (ana_sym_local_fn y d)
           (: y s
@@ -111,11 +127,10 @@
        arg (init exp)
        x (last exp)
        d (scop c arg imp)
-       arity (+ (llen arg) (llen imp))
-       k ((? (> arity 1) (em2 i_curry arity) id)
-        (, (ana 0 d x (thd0 arity))) 0)
+       k0 (ana 0 d x)
+       arity (+ (llen arg) (tget 0 d 'imp))
+       k ((? (> arity 1) (em2 i_curry arity) id) (k0 (thd0 arity)) 0)
        (X k (tget 0 d 'imp)))
-
 
       (desug n d) (? (atomp n) (X n d)
                      (desug (A n) (X '\ (cat (B n) (L d)))))
@@ -145,39 +160,56 @@
         rdefs (rev defs)
         lams (>>= 0 noms defs
               (: (b l n d) (? (atomp n) l
-               (: ll (? (not (lambp (A d))) l (X (ana_ll q 0 (BA d)) l))
+               (: ll (? (not (lambp (A d))) l (X 
+                                                 (X (A n)
+                                                  (ana_ll q 0 (BA d))
+                                                 )
+                                               l))
                 (b ll (B n) (B d))))))
-        clams (close lams) ;; find transitive closures of closures
-                           ;; exclude local functions from closures
-        (close lams) (
-         lams
-        )
+        # find transitive closures of closures
+        # exclude local functions from closures
+        (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
+        (cl n l l1 l2) (?
+         l2 (? (&& (!= l1 l2) (memq (AA l1) (BB (A l2))))
+             (>>= n (BB (A l1)) (: (f n v)
+                            (? v (: var ( (A v))
+                                    vars ( (B (BA l2)))
+                                    (? (memq var vars)
+                                     (f n (B v))
+                                     (, (set_cdr (BA l2) (X var vars))
+                                        (f (+ 1 n) (B v)))))
+                             (cl n l l1 (B l2)))))
+             (cl n l l1 (B l2)))
+         l1 (cl n l (B l1) l)
+         n (close l)
+         l)
+        (close l) (cl 0 l l l)
+        lnoms (map A lams)
+        (lamdel cs) (flip map cs (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))))
+        clams (lamdel (close lams))
+        _ (? clams clams)
         llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
         ;; l3 collects def values on stack and applies lambda
        (l3 noms defs clams llam k) (:
+         _ (tset q 'lam clams)
          k1 ((: a (llen noms) (? (> a 1) (em2 i_apn a) (em1 i_ap))) k)
          (f s k nds) (? (nilp nds) k
           (: nd (A nds) n (A nd) d (B nd)
             k1 (f (X n s) k (B nds))
-            (ana s c d k1)))
+            (? (not (lambp d))
+            (ana s c d k1)
+             (: qa (assq n clams)
+                l (ana_ll q (BB qa) (B d))
+                x (set_cdr qa l)
+                (ana s c x k1)))))
          k2 (f s k1 (zip noms defs))
-         k3 (ana s c llam k2)
-         k3
-         )
-          ;; evaluate lambda and push on stack
-          ;; evaluate arguments in original order
-          ;;; push each name onto the stack afterwards
-          ;;; if the argument is a lambda then remake with explicit closure
-          ;;; and put in arg and lam list
-          ;; output apply instruction
-          ;; pop args off stack
-          ;; done :>
-
-       ) ; end ana_let
+         k3 (
+             (ana s c llam k2))
+         k3)) ; end ana_let
 
       (ana_seq s c x k) (? (atomp x) (imm 0 k)
        (ana s c (A x) (? (atomp (B x)) k (em1 i_drop1 (ana_seq s c (B x) k)))))
-      (ana_if s c b k) (:- (pop 'end (ana_if_r b (push 'end  k)))
+      (ana_if s c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
        (peek_end c k n) (: j (k (+ 2 n))
@@ -185,10 +217,14 @@
         (poke i_jump (seek -1 (poke (cpeek c 'end) (seek -1 j)))))
        (pop_alt c k n) (: j (k (+ 2 n))
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
-       (ana_if_r b k) (?
-        (atomp b) (imm 0 k)
-        (atomp (B b)) (ana s c (A b) (peek_end c k))
-        (ana s c (A b) (pop_alt c (ana s c (AB b) (peek_end c (push 'alt (ana_if_r (BB b) k))))))))))))
+       (ana_if_r b) (?
+        (atomp b) (imm 0)
+        (atomp (B b)) (co (ana s c (A b)) (peek_end c))
+        (co (ana s c (A b))
+         (co (pop_alt c)
+          (co (ana s c (AB b))
+           (co (peek_end c)
+            (co (push 'alt) (ana_if_r (BB b)))))))))))))
 # end thread compiler
 # the last item in the prelude is the boot script
 # it evaluates to a function of a list of strings (arguments)
