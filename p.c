@@ -137,7 +137,7 @@ static Vm(gc, uintptr_t);
 static vm display, bnot, rng, data,
    symnom, ret, ret0, ap, apn, tap, tapn,
    sysclock,
-   jump, cond, ref, imm, yield,
+   jump, cond, ref, imm, yield, yieldi,
    gensym, ev0, pairp, fixnump, symbolp, stringp,
    ssub, sget, slen, scat, prc, cons, car, cdr,
    lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
@@ -467,6 +467,7 @@ static Vm(ret0) { return op(1, *Sp); }
 
 // exit vm and return to C
 static Vm(yield) { return Pack(f), YieldStatus; }
+static Vm(yieldi) { return Ip = Ip[1].m, Pack(f), YieldStatus; }
 
 // currying
 static Vm(curry) {
@@ -524,7 +525,8 @@ typedef Cata(cata);
 
 static ana analyze, ana_if, ana_let, ana_list;
 static env *enscope(core*, env*, word, word);
-static size_t ana_i1(core*, env**, size_t, vm*);
+static size_t ana_i1(core*, env**, size_t, vm*),
+              ana_i2(core*, env**, size_t, vm*, word);
 static cell *pull_m(core*, env**, size_t);
 static Cata(yieldk) { return k; }
 static word
@@ -542,40 +544,39 @@ static cata
   generate_cond_pop_exit,
   generate_cond_peek_exit;
 
-// compile and execute expression
-static NoInline int p_eval(core *f) {
+static NoInline int p_ana(core *f, vm *y) {
   env *c = enscope(f, (env*) nil, nil, nil);
   if (!c) return Oom;
   word x = f->sp[0];
   f->sp[0] = (word) yieldk; // function that returns thread from code generation
   MM(f, &c);
   size_t m = analyze(f, &c, 1, x);
-  m = m ? ana_i1(f, &c, m, yield) : m;
+  m = m ? ana_i2(f, &c, m, y, W(f->ip)) : m;
   cell *k = m ? pull_m(f, &c, m) : 0;
   UM(f);
-  k = k ? (cell*) pushs(f, 1, k) : k;
-  if (!k) return Oom;
-  f->sp[0] = W(f->ip);
-  f->ip = k;
-  int s;
+  return k ? (f->ip = k, Ok) : Oom; }
+// compile and execute expression
+static Inline int p_eval(core *f) {
+  int s = p_ana(f, yieldi);
+  if (s != Ok) return s;
 #ifdef TCO
-  s = f->ip->ap(f, f->ip, f->hp, f->sp);
+  return f->ip->ap(f, f->ip, f->hp, f->sp); }
 #else
   do s = f->ip->ap(f); while (s == Ok);
-  s = s == Eof ? Ok : s;
+  return s == Eof ? Ok : s; }
 #endif
-  // if there was an error then reset the stack
-  if (s != Ok) f->ip = 0, f->sp = f->pool + f->len;
-  // otherwise restore original ip and put return value on stack
-  else x = f->sp[0], f->ip = (cell*) *++f->sp, f->sp[0] = x;
-  // :)
-  return s; }
 
 static Vm(ev0) {
+  Ip++;
   Pack(f);
-  int s = p_eval(f);
-  Unpack(f);
-  return s != Ok ? s : op(1, *Sp); }
+  int s = p_ana(f, jump);
+  if (s != Ok) return s;
+#ifdef TCO
+  return Unpack(f), Continue(); }
+#else
+  do s = f->ip->ap(f); while (s == Ok);
+  return s == Eof ? Ok : s; }
+#endif
 
 static cell *mo_ini(thread *_, size_t len) {
   struct tag *t = (struct tag*) (_ + len);
@@ -1195,8 +1196,8 @@ static NoInline int p_readsp(core *f, string *s) {
   n[s->len] = 0;
   FILE *i = fopen(n, "r");
   if (!i) return pushs(f, 1, nil) ? Ok : Oom;
-  FileIn fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
-  int t = reads(f, (In*)&fi);
+  In *fi = FileInput(i);
+  int t = reads(f, fi);
   fclose(i);
   return t; }
 
@@ -1648,6 +1649,7 @@ static NoInline bool p_ini_def(core *f, const char *k, word v) {
     pushs(f, 1, v) && (y = symof(f, k)) &&
       table_set(f, f->dict, (word) y, pop1(f)); }
 
+static cell bif_yield[] = { {yield} };
 static int p_ini(core *f) {
   memset(f, 0, sizeof(core));
   const uintptr_t len0 = 1;
@@ -1655,6 +1657,7 @@ static int p_ini(core *f) {
   if (!pool) return Oom;
   f->t0 = clock();
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
+  f->ip = bif_yield;
   string *v;
   return
     (f->dict = mktbl(f)) &&
