@@ -1189,20 +1189,25 @@ Vm(read0) {
   return Unpack(f),
          op(2, W(p)); }
 
-Vm(readf) {
-  if (!strp(Sp[0])) return op(1, nil);
-  string *s = (string*)Sp[0];
-  if (s->len > 255) return op(1, nil);
+static NoInline int p_readsp(core *f, string *s) {
   char n[265]; // :)
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
   FILE *i = fopen(n, "r");
-  if (!i) return op(1, nil);
-  Pack(f);
+  if (!i) return pushs(f, 1, nil) ? Ok : Oom;
   FileIn fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   int t = reads(f, (In*)&fi);
   fclose(i);
-  return t == Ok ? (Unpack(f), op(2, *Sp)) : t; }
+  return t; }
+
+Vm(readf) {
+  if (!strp(Sp[0])) return op(1, nil);
+  string *s = (string*)Sp[0];
+  if (s->len > 255) return op(1, nil);
+  Pack(f);
+  int t = p_readsp(f, s);
+  Unpack(f);
+  return t == Ok ? op(2, *Sp) : t; }
 
 NoInline long p_gettime(void) {
   struct timespec ts;
