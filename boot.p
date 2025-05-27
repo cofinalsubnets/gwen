@@ -46,7 +46,7 @@
      (:: '|> (foldl1 (\ m f (X f (X m 0)))))
      )
      (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
-     (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ x f (L f x)) g)))))
+     (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
 
 # thread compiler
   (: (eval x)
@@ -58,16 +58,11 @@
     (cpush c k v) (, (tset c k (X v (tget 0 c k))) v)
     (cpop c k) (: s (tget 0 c k) (, (tset c k (B s)) (A s)))
     (cpeek c k) (A (tget 0 c k))
-    (em1 i k n) (,
-     (: j (k (+ 1 n))
-      (poke i (seek -1 j))))
-    (em2 i x k) (,
-    (em1 i (em1 x k)))
+    (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
+    (em2 i x k) (em1 i (em1 x k))
     imm (em2 i_imm)
-    (cata_var c x ins j m) (:
-     k (j (+ 2 m))
-     idx (stkidx c x)
-     (poke i_ref (seek -1 (poke (+ idx ins) (seek -1 k)))))
+    (cata_var c x ins j m)
+     (poke i_ref (seek -1 (poke (+ (stkidx c x) ins) (seek -1 (j (+ 2 m))))))
     (stkidx d x)
       (: imp  (tget 0 d 'imp)
          arg  (tget 0 d 'arg)
@@ -76,15 +71,15 @@
        (? (>= ii 0) ii
           (>= ai 0) (+ (llen imp) ai)
           -1))
-    (ana s c x) (:- (? (symp x)  (ana_sym s c x)            ; ok?
-                       (atomp x) (imm x)                  ; ok
-                                 (ana_two s c (A x) (B x))) ; to do
+    (ana s c x) (:- (? (symp x)  (ana_sym s c x)
+                       (atomp x) (imm x)
+                                 (ana_two s c (A x) (B x)))
 
      (ana_apl s c b)
       (? (atomp b) id
-         (co (ana s c (A b))
-          (co (em1 i_ap)
-           (ana_apl s c (B b)))))
+         (<=< (ana s c (A b))
+              (em1 i_ap)
+              (ana_apl s c (B b))))
      (ana_ap s c f b)  (co (ana s c f) (ana_apl (X 0 s) c b))
      (ana_sym s c x) (>>= c (:- ana_sym_r
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
@@ -220,11 +215,12 @@
        (ana_if_r b) (?
         (atomp b) (imm 0)
         (atomp (B b)) (co (ana s c (A b)) (peek_end c))
-        (co (ana s c (A b))
-         (co (pop_alt c)
-          (co (ana s c (AB b))
-           (co (peek_end c)
-            (co (push 'alt) (ana_if_r (BB b)))))))))))))
+        (<=< (ana s c (A b))
+             (pop_alt c)
+             (ana s c (AB b))
+             (peek_end c)
+             (push 'alt)
+             (ana_if_r (BB b)))))))))
 # end thread compiler
 # the last item in the prelude is the boot script
 # it evaluates to a function of a list of strings (arguments)

@@ -958,9 +958,6 @@ static Vm(lazy_bind) {
        var = A(ref),
        lams = B(ref);
   ref = AB(lassoc(f, lams, var));
-//  puts("laz");
-//  px(var);
-//  px(ref);
   if (!ref) return PStatusVar;
   Ip[0].ap = imm;
   Ip[1].x = ref;
