@@ -55,18 +55,18 @@
     (odds n) (? (atomp n) 0 (X (A n) (evens (B n))))
     zget (tget 0)
     (arity c) (+ (llen (zget c 'arg)) (llen (zget c 'imp)))
-    (thd0 r) (em2 i_ret r (\ n (seek n (thd n))))
-    (cpush c k v) (, (tset c k (X v (tget 0 c k))) v)
-    (cpop c k) (: s (tget 0 c k) (, (tset c k (B s)) (A s)))
-    (cpeek c k) (A (tget 0 c k))
+    (thd0 r n) (poke i_ret (seek -1 (poke r (seek (+ 1 n) (thd (+ 2 n))))))
+    (cpush c k v) (, (tset c k (X v (zget c k))) v)
+    (cpop c k) (: s (zget c k) (, (tset c k (B s)) (A s)))
+    (cpeek c k) (A (zget c k))
     (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
     (em2 i x k) (em1 i (em1 x k))
     imm (em2 i_imm)
     (cata_var c x ins j m)
      (poke i_ref (seek -1 (poke (+ (stkidx c x) ins) (seek -1 (j (+ 2 m))))))
     (stkidx d x)
-      (: imp  (tget 0 d 'imp)
-         arg  (tget 0 d 'arg)
+      (: imp  (zget d 'imp)
+         arg  (zget d 'arg)
          ii (idx imp x)
          ai (idx arg x)
        (? (>= ii 0) ii
@@ -84,7 +84,7 @@
      (ana_sym s c x) (>>= c (:- ana_sym_r
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
       (ana_sym_local_fn asq d)
-       (<=< (em2 i_lazy_bind (X (A asq) (tget 0 d 'lam)))
+       (<=< (em2 i_lazy_bind (X (A asq) (zget d 'lam)))
             (ana_apl (X 0 s) c (BB asq)))
       (ana_sym_stack_ref x d) (,
        (? (nilp (= c d)) (cpush c 'imp x))
@@ -97,12 +97,12 @@
           (, (cpush c 'imp x) (em2 i_free_variable x))))
       (ana_sym_r d)
        (? (nilp d) (ana_sym_free x)
-        (: y (assq x (tget 0 d 'lam))
+        (: y (assq x (zget d 'lam))
          (? y (ana_sym_local_fn y d)
           (: y s
            (? (memq x y)          (ana_sym_local_def y)
               (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
-                                  (ana_sym_r (tget 0 d 'par)))))))))
+                                  (ana_sym_r (zget d 'par)))))))))
 
      (ana_two s c a b) (:- (? (= a '`)  (imm (A b))     ; ok
                               (= a '?)  (ana_if s c b)    ; ok
@@ -110,7 +110,7 @@
                               (= a ':)  (ana_let c b)   ; to do
                               (= a ',)  (ana_seq s c b)   ; ok
                               (atomp b) (ana s c a)       ; ok
-                              (: m (tget 0 macros a)
+                              (: m (zget macros a)
                                (? m (ana s c (m b))       ; ok
                                     (ana_ap s c a b))))   ; ok
 
@@ -122,10 +122,10 @@
        x (last exp)
        d (scop c arg imp)
        k0 (ana 0 d x)
-       imp1 (tget 0 d 'imp)
-       arity (+ (llen arg) (llen imp1))
-       k ((? (> arity 1) (em2 i_curry arity) id) (k0 (thd0 arity)) 0)
-       (X k imp1))
+       imp1 (zget d 'imp)
+       ar (+ (llen arg) (llen imp1))
+       k ((? (> ar 1) (em2 i_curry ar) id) (k0 (thd0 ar)) 0)
+       (X k (zget d 'imp)))
 
       (desug n d) (? (atomp n) (X n d)
                      (desug (A n) (X '\ (cat (B n) (L d)))))
@@ -135,7 +135,7 @@
        (? (atomp b)     (imm 0)
           (atomp (B b)) (ana 0 c (A b))
           (l1 0 0 (A b) (AB b) (BB b)))
-       q (scop c (tget 0 c 'arg) (tget 0 c 'imp))
+       q (scop c (zget c 'arg) (zget c 'imp))
        ; l1 collects bindings and passes them with the body expression to l2
        (l1 noms defs nom def rest) (:
         nd1 (desug nom def)
