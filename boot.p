@@ -33,7 +33,7 @@
                (X (A m) (X a (B m))))))
      (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
-     (iota n) (: (k m) (? (< m n) (X m (k (inc m)))) (k 0))
+     iota (\ n (: (k m) (? (< m n) (X m (k (inc m)))) (k 0)))) (:
      (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
      (:: '&& (: (f l) (? l (X '? (X (A l) (X (AB l) (X (f (BB l)) 0))))) f))
@@ -48,8 +48,6 @@
    (:- (ana 0 top x (thd0 top) 0 0)
     anon (sym 0)
     top (scop 0 (L anon) 0)
-    (evens n) (? (atomp n) 0 (odds (B n)))
-    (odds n) (? (atomp n) 0 (X (A n) (evens (B n))))
     zget (tget 0)
     (arity c) (+ (llen (zget c 'arg)) (llen (zget c 'imp)))
     (thd0 r n) (poke i_ret (seek -1 (poke (arity r) (seek (+ 1 n) (thd (+ 2 n))))))
