@@ -34,10 +34,7 @@
      (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
      (iota n) (: (k m) (? (< m n) (X m (k (inc m)))) (k 0))
-     (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n))
-                                          (f (+ n 1) l)))
-     )
-               0 (slen s)))
+     (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
      (:: '&& (: (f l) (? l (X '? (X (A l) (X (AB l) (X (f (BB l)) 0))))) f))
      (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
@@ -123,7 +120,6 @@
        x (last exp)
        d (scop c arg imp)
        k0 (ana 0 d x (thd0 d))
-       imp1 (zget d 'imp)
        ar (arity d)
        k ((? (> ar 1) (em2 i_curry ar) id) k0 0)
        (X k (zget d 'imp)))
@@ -222,11 +218,7 @@
              (peek_end c)
              (push 'alt)
              (ana_if_r (BB b))))))))))
-  boot_script
-'(, (each (tdel 0 globals)
-    (cat '(peek poke seek macros thd globals)
-     (filter (\ y (= "i_" (ssub (nom y) 0 2)))
-      (tkeys globals))))
+  boot_script '
    (\ fs (:- (? args       (procs prog (A args) (B args))
                 (isatty 0) (repl prompt)
                            (reads ()))
@@ -250,8 +242,10 @@
           -v    show version
           -r    start repl
           file  evaluate file
-"))))
+")))
 
 (, ((: (go a b) (? b (go (ev (A b)) (B b)) a)) 0 prelude)
+(tset globals 'prelude prelude)
+; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
    (ev boot_script)
    ))
