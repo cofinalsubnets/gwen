@@ -70,22 +70,22 @@
     (ana s c x) (:- (? (symp x)  (ana_sym s c x)
                        (atomp x) (imm x)
                                  (ana_two s c (A x) (B x)))
-
      (ana_apl s c b)
       (? (atomp b) id
          (<=< (ana s c (A b))
               (em1 i_ap)
               (ana_apl s c (B b))))
-     (ana_ap s c f b)  (co (ana s c f) (ana_apl (X 0 s) c b))
+     (ana_ap s c f b)  (<=< (ana s c f) (ana_apl (X 0 s) c b))
      (ana_sym s c x) (>>= c (:- ana_sym_r
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
-      (ana_sym_local_fn asq d k) (,
-       (em2 i_lazy_bind (X (A asq) (tget 0 d 'lam)) (ana_apl (X 0 s) c (BB asq) k)))
+      (ana_sym_local_fn asq d)
+       (<=< (em2 i_lazy_bind (X (A asq) (tget 0 d 'lam)))
+            (ana_apl (X 0 s) c (BB asq)))
       (ana_sym_stack_ref x d) (,
        (? (nilp (= c d)) (cpush c 'imp x))
        (cata_var d x (llen s)))
-      (ana_sym_local_def stack) (,
-       (em2 i_ref (lidx x stack)))
+      (ana_sym_local_def stack)
+       (em2 i_ref (lidx x stack))
       (thas t x) (: s (sym 0) (not (= s (tget s t x))))
       (ana_sym_free x)
        (: s (sym 0)
@@ -119,9 +119,10 @@
        x (last exp)
        d (scop c arg imp)
        k0 (ana 0 d x)
-       arity (+ (llen arg) (tget 0 d 'imp))
+       imp1 (tget 0 d 'imp)
+       arity (+ (llen arg) (llen imp1))
        k ((? (> arity 1) (em2 i_curry arity) id) (k0 (thd0 arity)) 0)
-       (X k (tget 0 d 'imp)))
+       (X k imp1))
 
       (desug n d) (? (atomp n) (X n d)
                      (desug (A n) (X '\ (cat (B n) (L d)))))
@@ -133,20 +134,16 @@
           (l1 0 0 (A b) (AB b) (BB b)))
        q (scop c (tget 0 c 'arg) (tget 0 c 'imp))
        ; l1 collects bindings and passes them with the body expression to l2
-       (l1 noms defs nom def rest) (:-
-       (,
+       (l1 noms defs nom def rest) (:
+        nd1 (desug nom def)
+        nom1 (A nd1) def1 (B nd1)
+        noms1 (X nom1 noms) defs1 (X def1 defs)
         (? (atomp rest) (l2 noms1 defs1 nom1)
            (atomp (B rest)) (l2 noms1 defs1 (A rest))
            (l1 noms1 defs1 (A rest) (AB rest) (BB rest))))
-        nd1 (desug nom def)
-        nom1 (A nd1) def1 (B nd1)
-        noms1 (X nom1 noms) defs1 (X def1 defs))
 
        ; l2 finds closures for all local functions and passes a lambda for the body to l3
-       (l2 noms defs exp) (:-
-        (,
-         (l3 rnoms rdefs clams llam))
-
+       (l2 noms defs exp) (:- (l3 rnoms rdefs clams llam)
         rnoms (rev noms)
         rdefs (rev defs)
         lams (>>= 0 noms defs
@@ -192,19 +189,19 @@
                  (: qa (assq n clams)
                     x (ana_ll q (BB qa) (B d))
                   (set_cdr qa x)))
-             (co (ana s c d1) (loop (X n s) (B nds)))))
+             (<=< (ana s c d1) (loop (X n s) (B nds)))))
          _ (tset q 'lam clams)
-         k1 ((: a (llen noms) (? (> a 1) (em2 i_apn a) (em1 i_ap))))
-         k2 (co (loop s (zip noms defs)) k1)
-         (co (ana s c llam) k2))) ; end ana_let
+         a (llen noms)
+         ap (? (> a 1) (em2 i_apn a) (em1 i_ap))
+         (<=< (ana s c llam) (loop s (zip noms defs)) ap))) ; end ana_let
 
       (ana_seq s c x)
        (? (atomp x) (imm 0)
-        (co (ana s c (A x))
-         (? (atomp (B x)) id
-                          (co (em1 i_drop1)
-                              (ana_seq s c (B x))))))
-      (ana_if s c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
+        (<=< (ana s c (A x))
+             (? (atomp (B x)) id
+                              (<=< (em1 i_drop1)
+                                   (ana_seq s c (B x))))))
+      (ana_if s c b) (:- (<=< (pop 'end) (ana_if_r b) (push 'end))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
        (peek_end c k n) (: j (k (+ 2 n))
@@ -214,7 +211,7 @@
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
        (ana_if_r b) (?
         (atomp b) (imm 0)
-        (atomp (B b)) (co (ana s c (A b)) (peek_end c))
+        (atomp (B b)) (<=< (ana s c (A b)) (peek_end c))
         (<=< (ana s c (A b))
              (pop_alt c)
              (ana s c (AB b))
@@ -254,9 +251,3 @@
 (, ((: (go a b) (? b (go (ev (A b)) (B b)) a)) 0 prelude)
    (ev boot_script)
    ))
-# prelude is a list of expressions to be evaluated sequentially
-
-# thread compiler
-# end thread compiler
-# the last item in the prelude is the boot script
-# it evaluates to a function of a list of strings (arguments)

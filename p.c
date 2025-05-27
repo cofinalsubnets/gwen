@@ -938,13 +938,13 @@ static Ana(analyze) {
 
 // index of item in list
 static long lidx(core *f, word l, word x) {
-  for (long i = 0; twop(l); l = B(l), i++) if (eql(f, x, A(l))) return i;
+  for (long i = 0; !nilp(l); l = B(l), i++) if (eql(f, x, A(l))) return i;
   return -1; }
 
 static long stack_index_of_symbol(core *f, env *c, word var) {
   long l, i = 0;
-  for (l = c->imps; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  for (l = c->args; twop(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  for (l = c->imps; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  for (l = c->args; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
   return -1; }
 
 static Ana(ana_sym_free) {

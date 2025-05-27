@@ -14,10 +14,10 @@ syn keyword PFunc X A B AA AB BA BB car cdr cons caar cadr cdar cddr
 syn keyword PFunc foldl foldr map filter id const cat each all any init last rev
 syn keyword PFunc && \|\| \| & ^ << >>
 syn keyword PFunc :: inc dec flip diag part llen iota puts
-syn keyword PFunc twop nump symp tblp strp nilp homp ev ap not
+syn keyword PFunc twop nump symp tblp strp nilp homp ev not
 syn keyword PFunc str slen sget scat ssub ystr sym putc co atomp
 syn keyword PFunc tnew tget tset tlen thas tkeys tdel memq assq
-syn keyword PMacro L vprintf >>= \|>
+syn keyword PMacro L vprintf >>= \|> >=> <=<
 syn keyword PBool true false
 
 syn region PString start='"' skip='\\\\\|\\"' end='"'
