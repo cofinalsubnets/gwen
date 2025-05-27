@@ -1,6 +1,5 @@
 # top expression
-((: (go a b) (? b (go (ev (A b)) (B b)) a)) 0 '(
-# prelude is a list of expressions to be evaluated sequentially
+(: prelude '(
   (: true -1 false 0 nilp (= 0) not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
@@ -42,13 +41,10 @@
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
      (:: '&& (: (f l) (? l (X '? (X (A l) (X (AB l) (X (f (BB l)) 0))))) f))
      (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
-     (:: '>>= (\ l (X (last l) (init l))))
-     (:: '|> (foldl1 (\ m f (X f (X m 0)))))
-     )
+     (:: '>>= (\ l (X (last l) (init l)))))
+     (:: '|> (foldl1 (\ m f (L f m ))))
      (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
      (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
-
-# thread compiler
   (: (eval x)
    (:- (ana 0 (scop 0 0 0) x (thd0 1) 0 0)
     (evens n) (? (atomp n) 0 (odds (B n)))
@@ -155,7 +151,7 @@
         rdefs (rev defs)
         lams (>>= 0 noms defs
               (: (b l n d) (? (atomp n) l
-               (: ll (? (not (lambp (A d))) l (X 
+               (: ll (? (not (lambp (A d))) l (X
                                                  (X (A n)
                                                   (ana_ll q 0 (BA d))
                                                  )
@@ -185,25 +181,29 @@
         _ (? clams clams)
         llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
         ;; l3 collects def values on stack and applies lambda
-       (l3 noms defs clams llam k) (:
-         _ (tset q 'lam clams)
-         k1 ((: a (llen noms) (? (> a 1) (em2 i_apn a) (em1 i_ap))) k)
-         (f s k nds) (? (nilp nds) k
-          (: nd (A nds) n (A nd) d (B nd)
-            k1 (f (X n s) k (B nds))
-            (? (not (lambp d))
-            (ana s c d k1)
-             (: qa (assq n clams)
-                l (ana_ll q (BB qa) (B d))
-                x (set_cdr qa l)
-                (ana s c x k1)))))
-         k2 (f s k1 (zip noms defs))
-         k3 (
-             (ana s c llam k2))
-         k3)) ; end ana_let
 
-      (ana_seq s c x k) (? (atomp x) (imm 0 k)
-       (ana s c (A x) (? (atomp (B x)) k (em1 i_drop1 (ana_seq s c (B x) k)))))
+
+       (l3 noms defs clams llam) (:
+         (loop s nds) (? (nilp nds) id
+          (: nd (A nds)
+             n (A nd)
+             d (B nd)
+             d1 (? (not (lambp d)) d
+                 (: qa (assq n clams)
+                    x (ana_ll q (BB qa) (B d))
+                  (set_cdr qa x)))
+             (co (ana s c d1) (loop (X n s) (B nds)))))
+         _ (tset q 'lam clams)
+         k1 ((: a (llen noms) (? (> a 1) (em2 i_apn a) (em1 i_ap))))
+         k2 (co (loop s (zip noms defs)) k1)
+         (co (ana s c llam) k2))) ; end ana_let
+
+      (ana_seq s c x)
+       (? (atomp x) (imm 0)
+        (co (ana s c (A x))
+         (? (atomp (B x)) id
+                          (co (em1 i_drop1)
+                              (ana_seq s c (B x))))))
       (ana_if s c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
@@ -220,11 +220,9 @@
              (ana s c (AB b))
              (peek_end c)
              (push 'alt)
-             (ana_if_r (BB b)))))))))
-# end thread compiler
-# the last item in the prelude is the boot script
-# it evaluates to a function of a list of strings (arguments)
-(, (each (tdel 0 globals)
+             (ana_if_r (BB b))))))))))
+  boot_script
+'(, (each (tdel 0 globals)
     (cat '(peek poke seek macros thd globals)
      (filter (\ y (= "i_" (ssub (nom y) 0 2)))
       (tkeys globals))))
@@ -251,4 +249,14 @@
           -v    show version
           -r    start repl
           file  evaluate file
-"))))))
+"))))
+
+(, ((: (go a b) (? b (go (ev (A b)) (B b)) a)) 0 prelude)
+   (ev boot_script)
+   ))
+# prelude is a list of expressions to be evaluated sequentially
+
+# thread compiler
+# end thread compiler
+# the last item in the prelude is the boot script
+# it evaluates to a function of a list of strings (arguments)

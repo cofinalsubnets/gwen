@@ -235,7 +235,7 @@ static Vm(dot) {
   _(bif_lt, "<", S2(lt))  _(bif_le, "<=", S2(le)) _(bif_eq, "=", S2(eq))\
   _(bif_ge, ">=", S2(ge))  _(bif_gt, ">", S2(gt)) \
   _(bif_dot, "dot", S1(dot)) _(bif_rand, "rand", S1(rng)) \
-  _(bif_X, "X", S2(cons)) _(bif_A, "A", S1(car)) _(bif_B, "B", S1(cdr)) \
+  _(bif_cons, "X", S2(cons)) _(bif_car, "A", S1(car)) _(bif_cdr, "B", S1(cdr)) \
   _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) \
   _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \
   _(bif_display, ".", S1(display)) _(bif_putc, "putc", S1(prc)) \
@@ -619,7 +619,7 @@ static NoInline Ana(ana_if) {
   MM(f, &x);
   for (; m; x = BB(x)) {
     if (!twop(x)) x = (word) &p;
-    m = analyze(f, c, m + 2, A(x));
+    m = analyze(f, c, m + 3, A(x));
     if (!twop(B(x))) { // this means we have just analyzed the default case
       m = pushs(f, 1, generate_cond_peek_exit) ? m : 0; // now branch to exit
       break; }
@@ -627,7 +627,7 @@ static NoInline Ana(ana_if) {
     // pop the last branch address off the stack to be jumped to in case the test failed
     m = pushs(f, 1, generate_cond_pop_branch) ? m : 0;
     // otherwise here is the consequent
-    m = m ? analyze(f, c, m + 2, AB(x)) : m;
+    m = m ? analyze(f, c, m + 3, AB(x)) : m;
     // after consequent jump to exit, then push new branch address at present code position (these are emitted backwards)
     m = m && pushs(f, 2, generate_cond_push_branch,
                          generate_cond_peek_exit) ? m : 0; }
@@ -658,8 +658,10 @@ static Cata(generate_cond_peek_exit) {
   cell *addr = (cell*) A((*c)->ends);
   // if the destination is a return or tail call,
   // then copy it forward instead of emitting a jump.
-  if (addr->ap == ret || addr->ap == tap || addr->ap == tapn) // tapn case never seems to happen?
-    k[0].ap = addr[0].ap, k[1].x = addr[1].x;
+  if (addr->ap == ret || addr->ap == tap)
+    k[0].ap = addr[0].ap, k[1].x = addr[1].x; // XXX optimization to remove ...
+  else if (addr->ap == tapn)
+    k--, k[0].ap = tapn, k[1].x = addr[1].x, k[2].x = addr[2].x;
   else k[0].ap = jump, k[1].x = (word) addr;
   return pull(f, c, k); }
 
@@ -757,7 +759,6 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
             if (!(vars = wpairof(f, var, vars))) return fail(); // oom
             else j++, BBA(e) = vars; } }
   while (j);
-  //fputs("lllammm ", stdout), px(lam);
 
   // now delete defined functions from the closure variable lists
   // they will be bound lazily when the function runs
@@ -1024,7 +1025,8 @@ static Cata(cataap) {
 static Cata(cataapn) {
   word n = *f->sp++;
   if (k->ap == ret) k->x = n, (--k)->ap = tapn;
-  else (--k)->x = n, (--k)->ap = apn;
+  else
+    (--k)->x = n, (--k)->ap = apn;
   return pull(f, c, k); }
 
 // lambda decons pushes last list item to stack returns init of list
