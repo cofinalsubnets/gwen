@@ -37,4 +37,5 @@
  (= 7 (eval '(: a 1 b 3 c 2 (f x) (+ a x) (g x) (f (* b x)) (g c))))
  (= '(4 3 2 1) (eval '(: (f o i) (? i (f (X (A i) o) (B i)) o) (f 0)) '(1 2 3 4)))
  (= 0 (eval '(\ x (: (f n) (- x n))) 5 5))
+ (= 44 (eval '(\ x y z (: q z (f r) (- (* x (+ y r)) q))) 5 9 6 1))
 )
