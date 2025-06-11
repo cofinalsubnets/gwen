@@ -1,4 +1,4 @@
-(: l (iota 10)
+(: l (L 0 1 2 3 4 5 6 7 8 9)
    m (map (diag +) l)
    n (map (* 2) l)
    (even n) (? n (odd (dec n)) -1)

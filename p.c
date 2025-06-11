@@ -1796,17 +1796,21 @@ static word xx_tbl(core *f, word h) { return mix; }
 
 static word cp_tbl(core *f, word x, word *p0, word *t0) {
   table *src = (table*) x;
-  word i = src->cap;
-  table *dst = bump(f, Width(table) + i);
-  src->ap = (vm*) ini_table(dst, src->len, src->cap, (void*) (dst + 1));
-
-  //FIXME do these allocations in a block with the rest
-  for (struct entry *s, *e, *d; i--; dst->tab[i] = e)
-    for (s = src->tab[i], e = NULL; s;
-      d = bump(f, Width(struct entry)),
-      d->key = s->key, d->val = s->val,
-      d->next = e, e = d,
-      s = s->next);
+  size_t len = src->len, cap = src->cap;
+  table *dst = bump(f, Width(table) + cap + Width(struct entry) * len);
+  struct entry **tab = (void*) (dst + 1),
+               *dd = (void*) (tab + cap);
+  src->ap = (vm*) ini_table(dst, len, cap, tab);
+  while (cap--) {
+    struct entry *s = src->tab[cap], *last = NULL;
+    while (s) {
+      struct entry *d = dd++;
+      d->key = s->key;
+      d->val = s->val;
+      d->next = last;
+      last = d;
+      s = s->next; }
+    tab[cap] = last; }
   return (word) dst; }
 
 static void wk_tbl(core *f, word x, word *p0, word *t0) {

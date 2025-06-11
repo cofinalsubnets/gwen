@@ -36,5 +36,5 @@
  (= '(1 3 5) (eval '(: (evens m) (? (atomp m) 0 (odds (B m))) (odds n) (? (atomp n) 0 (X (A n) (evens (B n)))) (odds '(1 2 3 4 5 6)))))
  (= 7 (eval '(: a 1 b 3 c 2 (f x) (+ a x) (g x) (f (* b x)) (g c))))
  (= '(4 3 2 1) (eval '(: (f o i) (? i (f (X (A i) o) (B i)) o) (f 0)) '(1 2 3 4)))
- (= 'yes (eval '(\ x (: (f n) (? (= x n) 'yes 'no))) 1 1))
+ (= 0 (eval '(\ x (: (f n) (- x n))) 5 5))
 )

@@ -33,7 +33,7 @@
                (X (A m) (X a (B m))))))
      (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
-     iota (\ n (: (k m) (? (< m n) (X m (k (inc m)))) (k 0)))) (:
+     ) (:
      (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
      (:: '&& (: (f l) (? l (X '? (X (A l) (X (AB l) (X (f (BB l)) 0))))) f))
@@ -198,7 +198,7 @@
          _ (tset q 'lam clams)
          a (llen noms)
          ap (? (> a 1) (em2 i_apn a) (em1 i_ap))
-         (<=< (ana s c llam) (loop s (zip noms defs)) ap))) ; end ana_let
+         (<=< (ana s c llam) (loop (X 0 s) (zip noms defs)) ap))) ; end ana_let
 
       (ana_seq s c x)
        (? (atomp x) (imm 0)
@@ -237,10 +237,10 @@
                                (? as (procs prog (A as) (B as))))
           (proc1 prog arg) (:-
            (? (= arg "-h") (, (puts "usage: ") (puts prog) (puts help))
-                (= arg "-v") (, (puts prog) (puts " ") (puts version) (putc 10))
-                (= arg "-r") (repl prompt)
-                ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
-                 (readf arg)))
+              (= arg "-v") (, (puts prog) (puts " ") (puts version) (putc 10))
+              (= arg "-r") (repl prompt)
+              ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
+               (readf arg)))
            help " [args]
         args:
           -h    show this message
