@@ -7,5 +7,5 @@
    (, (. s) (puts p) (puts(. us) (puts " seconds") (putc 10))))
 (: f (test-get 'fail) (? f (,
  (. (llen f)) (puts " failed:") (putc 10)
- (each (\ x (, (puts "  ") (.. x))) f)
+ (each f (\ x (, (puts "  ") (.. x))))
 )))

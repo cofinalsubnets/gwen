@@ -18,7 +18,7 @@
                         (? (p (A l)) (X (A l) m) m)))
      (init l) (? (B l) (X (A l) (init (B l))))
      (last l) (? (B l) (last (B l)) (A l))
-     (each f l) (? l (, (f (A l)) (each f (B l))))
+     (each l f) (? l (, (f (A l)) (each (B l) f)))
      (ldel x l) (? (twop l) (? (= (A l) x) (B l) (X (A l) (ldel x (B l)))))
      (all f l) (? l (? (f (A l)) (all f (B l))) true)
      (any f l) (? l (? (f (A l)) true (any f (B l))))
@@ -66,7 +66,6 @@
          arg  (zget d 'arg)
          ii (idx imp x)
          ai (idx arg x)
-;         _ (puts "stkidx ") _ (. x) _ (puts " ")
        ( (? (>= ii 0) ii
           (>= ai 0) (+ (llen imp) ai)
           -1)))
@@ -80,18 +79,13 @@
               (ana_apl s c (B b))))
      (ana_ap s c f b)  (<=< (ana s c f) (ana_apl (X 0 s) c b))
      (ana_sym s c x) (>>= c (:- ana_sym_r
-;      _ (puts "ana_sym ") _ (.. x)
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
       (ana_sym_local_fn asq d) (,
-;       (.. 'ana_sym_local_fn)
        (<=< (em2 i_lazy_bind (X (A asq) (zget d 'lam)))
             (ana_apl (X 0 s) c (BB asq))))
       (ana_sym_stack_ref x d) (,
-;       (puts "ana_sym_stack_ref ") (. x) (puts " ") (.. s)
        (? (nilp (= c d)) (import c x))
-       (<=< (cata_var d x (llen s))
-           ; (em1 i_dot)
-            ))
+       (cata_var d x (llen s)))
       (ana_sym_local_def stack)
        (em2 i_ref (lidx x stack))
       (ana_sym_free x)
@@ -107,15 +101,15 @@
               (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
                                   (ana_sym_r (zget d 'par)))))))))
 
-     (ana_two s c a b) (:- (? (= a '`)  (imm (A b))     ; ok
-                              (= a '?)  (ana_if s c b)    ; ok
-                              (= a '\)  (ana_lam s c b)   ; ok
-                              (= a ':)  (ana_let c b)   ; to do
-                              (= a ',)  (ana_seq s c b)   ; ok
-                              (atomp b) (ana s c a)       ; ok
+     (ana_two s c a b) (:- (? (= a '`)  (imm (A b))
+                              (= a '?)  (ana_if s c b)
+                              (= a '\)  (ana_lam s c b)
+                              (= a ':)  (ana_let c b)
+                              (= a ',)  (ana_seq s c b)
+                              (atomp b) (ana s c a)
                               (: m (zget macros a)
-                               (? m (ana s c (m b))       ; ok
-                                    (ana_ap s c a b))))   ; ok
+                               (? m (ana s c (m b))
+                                    (ana_ap s c a b))))
 
       (ana_lam s c b) (? (atomp b)     (imm 0)
                          (atomp (B b)) (ana s c (A b))
@@ -194,18 +188,20 @@
                  (: qa (assq n clams)
                     x (ana_ll q (BB qa) (B d))
                   (set_cdr qa x)))
-             (<=< (ana s c d1) (loop (X n s) (B nds)))))
+             (<=< (ana s c d1)
+                  (loop (X n s) (B nds)))))
          _ (tset q 'lam clams)
-         a (llen noms)
-         ap (? (> a 1) (em2 i_apn a) (em1 i_ap))
-         (<=< (ana s c llam) (loop (X 0 s) (zip noms defs)) ap))) ; end ana_let
+         n (llen noms)
+         (<=< (ana s c llam)
+              (loop (X 0 s) (zip noms defs))
+              (? (> n 1) (em2 i_apn n) (em1 i_ap))))) ; end ana_let
 
       (ana_seq s c x)
        (? (atomp x) (imm 0)
         (<=< (ana s c (A x))
              (? (atomp (B x)) id
-                              (<=< (em1 i_drop1)
-                                   (ana_seq s c (B x))))))
+              (<=< (em1 i_drop1)
+                   (ana_seq s c (B x))))))
       (ana_if s c b) (:- (<=< (pop 'end) (ana_if_r b) (push 'end))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
@@ -216,7 +212,8 @@
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
        (ana_if_r b) (?
         (atomp b) (imm 0)
-        (atomp (B b)) (<=< (ana s c (A b)) (peek_end c))
+        (atomp (B b)) (<=< (ana s c (A b))
+                           (peek_end c))
         (<=< (ana s c (A b))
              (pop_alt c)
              (ana s c (AB b))
@@ -232,22 +229,22 @@
           prompt "    "
           (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
           (repl p)  (: r (, (puts p) (read 0))
-                     (? r (, (. (ev (A r))) (putc 10) (repl p))))
+                     (? r (, (.. (ev (A r))) (repl p))))
           (procs prog a as) (, (proc1 prog a)
                                (? as (procs prog (A as) (B as))))
           (proc1 prog arg) (:-
-           (? (= arg "-h") (, (puts "usage: ") (puts prog) (puts help))
-              (= arg "-v") (, (puts prog) (puts " ") (puts version) (putc 10))
+           (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
+              (= arg "-v") (, (puts prog) (puts " ") (putln version))
               (= arg "-r") (repl prompt)
               ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
                (readf arg)))
-           help " [args]
-        args:
-          -h    show this message
-          -v    show version
-          -r    start repl
-          file  evaluate file
-")))
+           (putln s) (, (puts s) (putc 10))
+           help (L " [args]"
+                   " args:"
+                   "   -h   show this message"
+                   "   -v   show version"
+                   "   -r   start repl"
+                   " file   evaluate file"))))
 
 (, ((: (go a b) (? b (go (ev (A b)) (B b)) a)) 0 prelude)
 (tset globals 'prelude prelude)
