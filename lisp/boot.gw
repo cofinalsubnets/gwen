@@ -14,6 +14,7 @@
      (foldl z f l) (? l (foldl (f z (A l)) f (B l)) z)
      (foldr z f l) (? l (f (A l) (foldr z f (B l))) z)
      (foldl1 f l) (foldl (A l) f (B l))
+     (foldr1 f l) (foldr (last l) f (init l))
      (filter p l) (? l (: m (filter p (B l))
                         (? (p (A l)) (X (A l) m) m)))
      (init l) (? (B l) (X (A l) (init (B l))))
@@ -36,7 +37,7 @@
      ) (:
      (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
   (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
-     (:: '&& (: (f l) (? l (X '? (X (A l) (X (AB l) (X (f (BB l)) 0))))) f))
+     (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))
      (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
      (:: '>>= (\ l (X (last l) (init l)))))
      (:: '|> (foldl1 (\ m f (L f m ))))
@@ -48,7 +49,7 @@
    (:- (ana 0 top x (thd0 top) 0 0)
     anon (sym 0)
     top (scop 0 (L anon) 0)
-    (toplp e) (nilp (par e))
+    toplp (= top)
     (par e) (tget 0 e 'par)
     zget (tget 0)
     (arity c) (+ (llen (zget c 'arg)) (llen (zget c 'imp)))
@@ -98,10 +99,9 @@
        (? (nilp d) (ana_sym_free x)
         (: y (assq x (zget d 'lam))
          (? y (ana_sym_local_fn y d)
-          (: y s
-           (? (memq x y)          (ana_sym_local_def y)
-              (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
-                                  (ana_sym_r (zget d 'par)))))))))
+          (? (memq x s)          (ana_sym_local_def s)
+             (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
+                                 (ana_sym_r (zget d 'par))))))))
 
      (ana_two s c a b) (:- (? (= a '`)  (imm (A b))
                               (= a '?)  (ana_if s c b)
@@ -127,7 +127,7 @@
 
       (desug n d) (? (atomp n) (X n d)
                      (desug (A n) (X '\ (cat (B n) (L d)))))
-      (lambp x) (&& (twop x) (= '\ (A x)))
+      (lambp x) (? (twop x) (= '\ (A x)))
 
       (ana_let c b) (:-
        (? (atomp b)     (imm 0)
@@ -160,7 +160,7 @@
 
         (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
         (cl n l l1 l2) (?
-         l2 (? (&& (!= l1 l2) (memq (AA l1) (BB (A l2))))
+         l2 (? (? (!= l1 l2) (memq (AA l1) (BB (A l2))))
              (>>= n (BB (A l1)) (: (f n v)
                             (? v (: var ( (A v))
                                     vars ( (B (BA l2)))
@@ -185,13 +185,18 @@
           (: nd (A nds)
              n (A nd)
              d (B nd)
-             ; this is now the expression to evaluate
-             d1 (? (not (lambp d)) d
+             ; this will now be the expression to evaluate
+             d1 (? (lambp d)
                  (: qa (assq n clams)
                     x (ana_ll q (BB qa) (B d))
-                  (set_cdr qa x)))
+                  (, (set_cdr qa x)
+                     x))
+                 d)
 
              (<=< (ana s c d1)
+                  (? (&& (toplp (par q)) (atomp rest))
+                   (em2 i_defglob (last noms)) ; after fixing defglobal in C
+                   id)
               ; here is where to bind in global scope if toplp q and atomp rest
                   (loop (X n s) (B nds)))))
          _ (tset q 'lam clams)

@@ -232,7 +232,7 @@ static Vm(dot) { return
   _(dot) _(free_variable)\
   _(data) _(ret) _(ap) _(tap) _(apn) _(tapn) \
   _(jump) _(cond) _(ref) _(imm) _(yield) _(drop1) \
-  _(curry) _(defglobal) _(lazy_bind) _(ret0)
+  _(curry) _(defglobal) _(defglob) _(lazy_bind) _(ret0)
 
 #define S1(i) {{i}, {ret0}}
 #define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
@@ -725,6 +725,13 @@ static Vm(defglobal) {
   if (!table_set(f, f->dict, Ip[1].x, Sp[0])) return Oom;
   Unpack(f);
   return op(1, Sp[0]); }
+
+static Vm(defglob) {
+  Pack(f);
+  if (!table_set(f, f->dict, Ip[1].x, Sp[0])) return Oom;
+  Unpack(f);
+  Ip += 2;
+  return Continue(); }
 
 
 // emits call instruction and modifies to tail call
