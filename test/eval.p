@@ -38,4 +38,6 @@
  (= '(4 3 2 1) (eval '(: (f o i) (? i (f (X (A i) o) (B i)) o) (f 0)) '(1 2 3 4)))
  (= 0 (eval '(\ x (: (f n) (- x n))) 5 5))
  (= 44 (eval '(\ x y z (: q z (f r) (- (* x (+ y r)) q))) 5 9 6 1))
+ (= 9 (eval '(\ n (: t (tnew 0) (, (tset t 'k n) (tget 0 t)))) 9 'k))
+ (: evaluator (last prelude) (= 44 (eval evaluator evaluator evaluator evaluator evaluator '(\ x y z (: q z (f r) (- (* x (+ y r)) q))) 5 9 6 1)))
 )

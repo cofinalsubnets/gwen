@@ -120,7 +120,7 @@
        d (scop c arg imp)
        k0 (ana 0 d x (thd0 d))
        ar (arity d)
-       k ((? (> ar 1) (em2 i_curry ar) id) k0 0)
+       k (trim ((? (> ar 1) (em2 i_curry ar) id) k0 0))
        (X k (zget d 'imp)))
 
       (desug n d) (? (atomp n) (X n d)
@@ -206,8 +206,11 @@
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
        (peek_end c k n) (: j (k (+ 2 n))
-        ; FIXME tail calls
-        (poke i_jump (seek -1 (poke (cpeek c 'end) (seek -1 j)))))
+        dest (cpeek c 'end)
+        (? (= i_ret (peek dest))
+         (poke i_ret (seek -1 (poke (peek (seek 1 dest)) (seek -1 j))))
+         (poke i_jump (seek -1 (poke (cpeek c 'end) (seek -1 j))))))
+
        (pop_alt c k n) (: j (k (+ 2 n))
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
        (ana_if_r b) (?
@@ -219,7 +222,9 @@
              (ana s c (AB b))
              (peek_end c)
              (push 'alt)
-             (ana_if_r (BB b))))))))))
+             (ana_if_r (BB b)))))))))
+   eval
+   )
   boot_script '
    (\ fs (:- (? args       (procs prog (A args) (B args))
                 (isatty 0) (repl prompt)

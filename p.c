@@ -4,6 +4,13 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <errno.h>
+
+#define PStatusEof -1
+#define PStatusOk 0
+#define PStatusOom ENOMEM
+#define PStatusVar ENOENT
+#define PStatusDom EDOM
 
 // thanks !!
 typedef struct p_core p_core, core;
@@ -313,14 +320,16 @@ static NoInline bool p_please(core *f, uintptr_t req0) {
                     //
   // at this point we got a new target length and are gonna try and resize
   word *dest2 = malloc(len1 * 2 * sizeof(word)); // allocate pool with the new target size
-  return !dest2 ? req <= total :                  // if this fails gc still succeeds if the original pool is not too small
-    (f->pool = dest2,                            // reset core variables on new pool
-     f->len = len1,
-     f->loop = dest2 + len1,
-     copy_from(f, dest, len0),                   // do second copy
-     free(min(src, dest)),                       // free original pool
-     f->t0 = clock(),                            // set last gc timestamp
-     true); }                                    // size successfully adjusted
+  if (!dest2) return req <= total; // if this fails still return true if the original pool is not too small
+
+  // we got the new pool so copy again and return true
+  f->pool = dest2;          // reset core variables on new pool
+  f->len = len1;
+  f->loop = dest2 + len1;
+  copy_from(f, dest, len0); // do second copy
+  free(min(src, dest));     // free original pool
+  f->t0 = clock();          // set last gc timestamp
+  return true; }            // size successfully adjusted
 
 
 // this function expects pool loop and len to have been set already on the state
