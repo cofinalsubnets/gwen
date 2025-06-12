@@ -28,30 +28,31 @@ CFLAGS ?= \
 ver=$(shell git rev-parse HEAD)
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D VERSION='"$(ver)"'
 
-
+built_binary=$b
+$(built_binary): $o c/main.c c/boot.h $m
+	@echo $@
+	@$(cc) $< c/main.c -o $@
 $o: c/$n.c c/$n.h
 	@echo $@
 	@$(cc) -c c/$n.c -o $@
-
-$b: $o c/main.c c/boot.h $m
-	@echo $@
-	@$(cc) $< c/main.c -o $@
-
 $0: $o c/main.c c/boot.0.h $m
 	@echo $@
 	@$(cc) $< c/main.c -o $@ -DBOOT_H='"boot.0.h"'
-
 c/boot.0.h: lisp/boot.$x lisp/cat.$x
 	@echo $@
 	@echo "static const char boot_prog[] =" > $@
 	@cat $< | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
 	@echo ";" >> $@
-
-c/boot.h: lisp/boot.$x $0 lisp/cat.$x
+c/boot.h: lisp/boot.$x lisp/cat.$x $0
 	@echo $@
 	@echo "static const char boot_prog[] =" > $@
 	@cat $< | ./$0 lisp/cat.$x | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
 	@echo ";" >> $@
+
+built_manpage=doc/$n.1
+$(built_manpage): doc/$n.1.md
+	@echo $@
+	@pandoc -s -t man -o $@ $<
 
 # installlation
 # default install to home directory under ~/.local/
@@ -60,21 +61,9 @@ PREFIX ?= .local/
 
 dest=$(DESTDIR)$(PREFIX)
 
-built_binary=$b
-built_static_library=lib$n.a
-built_c_header=c/$n.h
-built_manpage=doc/$n.1
 built_vim_ftdetect=vim/ftdetect/$n.vim
 built_vim_syntax=vim/syntax/$n.vim
-built_shared_library=lib$n.so
-
-all: $(built_binary) $(built_static_library) $(built_c_header)\
-	$(built_manpage) $(built_vim_syntax) $(built_shared_library)
-
-$(built_manpage): doc/$n.1.md
-	@echo $@
-	@pandoc -s -t man -o $@ $<
-
+built_vim_files=$(built_vim_syntax) $(built_vim_ftdetect)
 # all installed file paths
 VIMPREFIX ?= .vim/
 vimdir=$(DESTDIR)$(VIMPREFIX)
@@ -82,13 +71,18 @@ installed_binary=$(dest)/bin/$n
 installed_manpage=$(dest)/share/man/man1/$n.1
 installed_vim_ftdetect=$(vimdir)/ftdetect/$n.vim
 installed_vim_syntax=$(vimdir)/syntax/$n.vim
-installed_files=$(installed_binary)\
-						 $(installed_vim_ftdetect) $(installed_vim_syntax)\
-						 $(installed_manpage)
+installed_vim_files=$(installed_vim_syntax) $(installed_vim_ftdetect)
 
+installed_files=\
+	$(installed_binary)\
+	$(installed_vim_files)\
+ 	$(installed_manpage)
+
+all: $(built_binary) $(built_manpage) $(built_vim_files)
 install: $(installed_files)
 uninstall:
 	rm -f $(installed_files)
+
 
 $(installed_binary): $(built_binary)
 	@echo $< '->' $@
@@ -123,7 +117,6 @@ test_c: $b
 clean:
 	rm -rf `git check-ignore * */*`
 # valgrind detects some memory errors
-valg: valg-tc
 valg: $b
 	valgrind --error-exitcode=1 ./$^ $(tests)
 # count lines of code

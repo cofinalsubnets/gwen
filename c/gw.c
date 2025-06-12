@@ -401,7 +401,7 @@ static Vm(data) {
   word x = W(Ip);
   return op(1, x); }
 
-static Vm(pushk_jump) {
+static Vm(uncurry) {
   Have1();
   *--Sp = Ip[1].x;
   Ip = Ip[2].m;
@@ -494,7 +494,7 @@ static Vm(curry) {
     Have(S);
     k[0].ap = curry, k[1].x = putnum(n - 1); }
 
-  j[0].ap = pushk_jump, j[1].x = *Sp++, j[2].m = Ip + 2;
+  j[0].ap = uncurry, j[1].x = *Sp++, j[2].m = Ip + 2;
   j[3].x = 0, j[4].m = k;
 
   return
@@ -969,7 +969,7 @@ static long lidx(core *f, word l, word x) {
   for (long i = 0; !nilp(l); l = B(l), i++) if (eql(f, x, A(l))) return i;
   return -1; }
 
-static long stack_index_of_symbol(core *f, env *c, word var) {
+static Inline long stack_index_of_symbol(core *f, env *c, word var) {
   long l, i = 0;
   for (l = c->imps; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
   for (l = c->args; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;

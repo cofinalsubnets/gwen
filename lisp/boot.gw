@@ -42,7 +42,7 @@
      (:: '|> (foldl1 (\ m f (L f m ))))
      (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
      (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
-  (:
+  (: eval (:
     (scop par arg imp) (: t (tnew()) (, (tset t 'par par) (tset t 'arg arg) (tset t 'imp imp) t))
     (eval x)
    (:- (ana 0 top x (thd0 top) 0 0)
@@ -226,9 +226,10 @@
              (ana s c (AB b))
              (peek_end c)
              (push 'alt)
-             (ana_if_r (BB b)))))))))
+             (ana_if_r (BB b))))))))
    eval
-   )
+    )
+   ))
   boot_script '
    (\ fs (:- (? args       (procs prog (A args) (B args))
                 (isatty 0) (repl prompt)
