@@ -64,7 +64,7 @@ built_static_library=lib$n.$t.a
 built_c_header=c/$n.h
 built_manpage=doc/$n.1
 built_vim_ftdetect=vim/ftdetect/$n.vim
-built_vim_syntax=vim/ftdetect/$n.vim
+built_vim_syntax=vim/syntax/$n.vim
 built_shared_library=lib$n.$t.so
 
 all: $(built_binary) $(built_static_library) $(built_c_header)\
