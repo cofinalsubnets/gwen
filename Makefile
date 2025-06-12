@@ -15,6 +15,11 @@ default: test
 h=$n.h
 c=$n.c
 
+b=$n.$t.bin
+0=$n.$t.0.bin
+
+o=c/$n.o
+
 #build
 CFLAGS ?= \
   -std=gnu17 -g -O2 -Wall -fpic \
@@ -24,32 +29,29 @@ CFLAGS ?= \
 ver=$(shell git rev-parse HEAD)
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D VERSION='"$(ver)"'
 
-# tail called objects
-$n.tc.o: c/$n.c c/$n.h c/boot.h $m
-	@echo $@
-	@$(cc) -c $< -o $@
-# trampolined objects
-$n.tr.o: c/$n.c c/$n.h c/boot.h $m
-	@echo $@
-	@$(cc) -c $< -o $@ -DNTCO
-# static library
-lib$n.%.a: $n.%.o
-	@echo $@
-	@ar rcs $@ $^
-# shared library
-lib$n.%.so: $n.%.o
-	@echo $@
-	@$(cc) -shared -o $@ $^
 
-# executable
-$n.%.bin: c/main.c c/boot.h lib$n.%.a
+$o: c/$n.c c/$n.h
 	@echo $@
-	@$(cc) $^ -o $@
+	@$(cc) -c c/$n.c -o $@
 
-c/boot.h: lisp/boot.p lisp/cat.p $m
+$b: $o c/main.c c/boot.h $m
+	@echo $@
+	@$(cc) $< c/main.c -o $@
+
+$0: $o c/main.c c/boot.0.h $m
+	@echo $@
+	@$(cc) $< c/main.c -o $@ -DBOOT_H='"boot.0.h"'
+
+c/boot.0.h: lisp/boot.$x lisp/cat.$x
 	@echo $@
 	@echo "static const char boot_prog[] =" > $@
-	@cat $< | ([ -e ./$n.$t.bin ] && ./$n.$t.bin lisp/cat.$x || cat) | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
+	@cat $< | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
+	@echo ";" >> $@
+
+c/boot.h: lisp/boot.$x $0 lisp/cat.$x
+	@echo $@
+	@echo "static const char boot_prog[] =" > $@
+	@cat $< | ./$0 lisp/cat.$x | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
 	@echo ";" >> $@
 
 # installlation
@@ -59,7 +61,7 @@ PREFIX ?= .local/
 
 dest=$(DESTDIR)$(PREFIX)
 
-built_binary=$n.$t.bin
+built_binary=$b
 built_static_library=lib$n.$t.a
 built_c_header=c/$n.h
 built_manpage=doc/$n.1
@@ -117,45 +119,41 @@ $(installed_shared_library): $(built_shared_library)
 
 tests=$(sort $(wildcard test/*.$x))
 test: test_c
-test_c: test_tc test_tr
 test_all: test_c test_js
 test_js:
 	cd js && npm test
-test_tc: $n.tc.bin
-	@echo '[tail called]'
-	@./$n.tc.bin $(tests)
-test_tr: $n.tr.bin
-	@echo '[trampolined]'
-	@./$n.tr.bin $(tests)
+test_c: $b
+	@./$b $(tests)
 
 clean:
 	rm -rf `git check-ignore * */*`
 # valgrind detects some memory errors
 valg: valg-tc
-valg-%: $n.%.bin
+valg: $b
 	valgrind --error-exitcode=1 ./$^ $(tests)
 # count lines of code
 sloc:
 	cloc --force-lang=Lisp,$x *
 # size of binaries
-bits: $n.tc.bin $n.tr.bin
+bits: $b
 	du -h $^
-disasm: $n.$t.bin
+
+disasm: $b
 	rizin -A $<
 # profiling on linux
-perf.data: $n.$t.bin
+perf.data: $b
 	@echo $@
 	@perf record ./$^ $(tests)
 perf: perf.data
 	perf report
 flamegraph.svg: perf.data
 	flamegraph --perfdata $<
-repl: $n.$t.bin
+repl: $b
 	rlwrap ./$<
 serve:
 	darkhttpd .
 
-#.NOTINTERMEDIATE:
+.NOTINTERMEDIATE:
 .PHONY: \
   all install uninstall \
   test test_all test_c test_js test_tr test_tc \
