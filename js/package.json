@@ -4,7 +4,7 @@
   "description": "list expression interpreter",
   "main": "p.js",
   "directories": {
-    "test": "test"
+    "test": "../test"
   },
   "scripts": {
     "test": "node --test"

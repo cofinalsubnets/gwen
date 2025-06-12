@@ -25,13 +25,13 @@ ver=$(shell git rev-parse HEAD)
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D VERSION='"$(ver)"'
 
 # tail called objects
-$n.tc.o: $n.c $n.h boot.h $m
-	@echo $@
-	@$(cc) -c $< -o $@ -DTCO
-# trampolined objects
-$n.tr.o: $n.c $n.h boot.h $m
+$n.tc.o: c/$n.c c/$n.h c/boot.h $m
 	@echo $@
 	@$(cc) -c $< -o $@
+# trampolined objects
+$n.tr.o: c/$n.c c/$n.h c/boot.h $m
+	@echo $@
+	@$(cc) -c $< -o $@ -DNTCO
 # static library
 lib$n.%.a: $n.%.o
 	@echo $@
@@ -42,14 +42,14 @@ lib$n.%.so: $n.%.o
 	@$(cc) -shared -o $@ $^
 
 # executable
-$n.%.bin: main.c boot.h lib$n.%.a
+$n.%.bin: c/main.c c/boot.h lib$n.%.a
 	@echo $@
 	@$(cc) $^ -o $@
 
-boot.h: boot.p $m
+c/boot.h: lisp/boot.p lisp/cat.p $m
 	@echo $@
 	@echo "static const char boot_prog[] =" > $@
-	@cat $< | ([ -e ./$n.$t.bin ] && ./$n.$t.bin cat.$x || cat) | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
+	@cat $< | ([ -e ./$n.$t.bin ] && ./$n.$t.bin lisp/cat.$x || cat) | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/' >> $@
 	@echo ";" >> $@
 
 # installlation
@@ -61,16 +61,16 @@ dest=$(DESTDIR)$(PREFIX)
 
 built_binary=$n.$t.bin
 built_static_library=lib$n.$t.a
-built_c_header=$n.h
-built_manpage=$n.1
-built_vim_ftdetect=$n.ftdetect.vim
-built_vim_syntax=$n.syntax.vim
+built_c_header=c/$n.h
+built_manpage=doc/$n.1
+built_vim_ftdetect=vim/ftdetect/$n.vim
+built_vim_syntax=vim/ftdetect/$n.vim
 built_shared_library=lib$n.$t.so
 
 all: $(built_binary) $(built_static_library) $(built_c_header)\
 	$(built_manpage) $(built_vim_syntax) $(built_shared_library)
 
-$(built_manpage): $n.1.md
+$(built_manpage): doc/$n.1.md
 	@echo $@
 	@pandoc -s -t man -o $@ $<
 
@@ -94,25 +94,25 @@ uninstall:
 	rm -f $(installed_files)
 
 $(installed_binary): $(built_binary)
-	@echo $@
+	@echo $< '->' $@
 	@install -D -m 755 -s $< $@
 $(installed_vim_ftdetect): $(built_vim_ftdetect)
-	@echo $@
+	@echo $< '->' $@
 	@install -D -m 644 $< $@
 $(installed_vim_syntax): $(built_vim_syntax)
-	@echo $@
+	@echo $< '->' $@
 	@install -D -m 644 $< $@
 $(installed_static_library): $(built_static_library)
-	@echo $@
+	@echo $< '->' $@
 	@install -D -m 644 $< $@
 $(installed_manpage): $(built_manpage)
-	@echo $@
+	@echo $< '->' $@
 	@install -D -m 644 $< $@
 $(installed_c_header): $(built_c_header)
-	@echo $@
+	@echo $< '->' $@
 	@install -D -m 644 $< $@
 $(installed_shared_library): $(built_shared_library)
-	@echo $@
+	@echo $< '->' $@
 	@install -D -m 644 $< $@
 
 tests=$(sort $(wildcard test/*.$x))
@@ -120,7 +120,7 @@ test: test_c
 test_c: test_tc test_tr
 test_all: test_c test_js
 test_js:
-	npm test
+	cd js && npm test
 test_tc: $n.tc.bin
 	@echo '[tail called]'
 	@./$n.tc.bin $(tests)
@@ -136,7 +136,7 @@ valg-%: $n.%.bin
 	valgrind --error-exitcode=1 ./$^ $(tests)
 # count lines of code
 sloc:
-	cloc --force-lang=Lisp,$x * test/* lib/*
+	cloc --force-lang=Lisp,$x *
 # size of binaries
 bits: $n.tc.bin $n.tr.bin
 	du -h $^
@@ -155,7 +155,7 @@ repl: $n.$t.bin
 serve:
 	darkhttpd .
 
-.NOTINTERMEDIATE:
+#.NOTINTERMEDIATE:
 .PHONY: \
   all install uninstall \
   test test_all test_c test_js test_tr test_tc \

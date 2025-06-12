@@ -31,14 +31,7 @@ typedef union cell cell, thread;
 #ifndef VERSION
 #define VERSION ""
 #endif
-#ifdef TCO
-#define YieldStatus PStatusOk
-#define Vm(n, ...) int n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
-#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
-#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
-#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
-#define Continue() Ap(Ip->ap, f)
-#else
+#ifdef NTCO
 #define YieldStatus PStatusEof
 #define Vm(n, ...) int n(core *f, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
@@ -48,6 +41,13 @@ typedef union cell cell, thread;
 #define Pack(f) ((void)0)
 #define Unpack(f) ((void)0)
 #define Continue() Ok
+#else
+#define YieldStatus PStatusOk
+#define Vm(n, ...) int n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
+#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
+#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
+#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
+#define Continue() Ap(Ip->ap, f)
 #endif
 
 #define Jump(v) Ap(v, f)
@@ -93,7 +93,9 @@ struct type {
   bool (*eq)(core*, word, word);        // check equality with another object of same type
   void (*em)(core*, FILE*, word);        // print it // replace this with stringify...
   word (*xx)(core*, word);               // hash it
-  string *(*show)(core*, word); };
+  string *(*show)(core*, word);
+  vm *ap;
+};
 
 #define DataHeader vm *ap; type *typ
 typedef struct Pair {
@@ -221,10 +223,10 @@ static Inline size_t b2w(size_t b) {
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
 
-static Vm(dot) {
-  px(Sp[0]);
-  Ip++;
-  return Continue(); }
+static Vm(dot) { return
+  px(Sp[0]),
+  Ip++,
+  Continue(); }
 
 #define insts(_) \
   _(dot) _(free_variable)\
@@ -455,7 +457,10 @@ static Vm(tap) {
 static Vm(apn) {
   size_t n = getnum(Ip[1].x);
   cell *ra = Ip + 2; // return address
-  Ip = R(Sp[n]) + 2; // this instruction is only emitted when the callee is known to be a function
+  // this instruction is only emitted when the callee is known to be a function
+  // so putting a value off the stack into Ip is safe. the +2 is cause we leave
+  // the currying instruction in there... should be skipped in compiler instead FIXME
+  Ip = R(Sp[n]) + 2;
   Sp[n] = Z(ra); // store return address
   return Continue(); }
 
@@ -546,7 +551,6 @@ static word
 
 
 static cata
-  cataap, cataapn, cata_var,
   generate_cond_push_branch,
   generate_cond_pop_branch,
   generate_cond_push_exit,
@@ -568,11 +572,11 @@ static NoInline int p_ana(core *f, vm *y) {
 static Inline int p_eval(core *f) {
   int s = p_ana(f, yieldi);
   if (s != Ok) return s;
-#ifdef TCO
-  return f->ip->ap(f, f->ip, f->hp, f->sp); }
-#else
+#ifdef NTCO
   do s = f->ip->ap(f); while (s == Ok);
   return s == Eof ? Ok : s; }
+#else
+  return f->ip->ap(f, f->ip, f->hp, f->sp); }
 #endif
 
 static Vm(ev0) {
@@ -580,11 +584,11 @@ static Vm(ev0) {
   Pack(f);
   int s = p_ana(f, jump);
   if (s != Ok) return s;
-#ifdef TCO
-  return Unpack(f), Continue(); }
-#else
+#ifdef NTCO
   do s = f->ip->ap(f); while (s == Ok);
   return s == Eof ? Ok : s; }
+#else
+  return Unpack(f), Continue(); }
 #endif
 
 static cell *mo_ini(thread *_, size_t len) {
@@ -721,6 +725,20 @@ static Vm(defglobal) {
   if (!table_set(f, f->dict, Ip[1].x, Sp[0])) return Oom;
   Unpack(f);
   return op(1, Sp[0]); }
+
+
+// emits call instruction and modifies to tail call
+// if next operation is return
+static Cata(cataap) {
+  if (k->ap == ret) k->ap = tap; // tail call
+  else (--k)->ap = ap; // regular call
+  return pull(f, c, k); } // ok
+static Cata(cataapn) {
+  word n = *f->sp++;
+  if (k->ap == ret) k->x = n, (--k)->ap = tapn;
+  else
+    (--k)->x = n, (--k)->ap = apn;
+  return pull(f, c, k); }
 
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
@@ -1024,20 +1042,6 @@ static Ana(ana_sym_r, env *d) {
     return ana_sym_stack_ref(f, c, m, x, d);
   // otherwise recur on the enclosing env
   return ana_sym_r(f, c, m, x, d->par); }
-
-// emits call instruction and modifies to tail call
-// if next operation is return
-static Cata(cataap) {
-  if (k->ap == ret) k->ap = tap; // tail call
-  else (--k)->ap = ap; // regular call
-  return pull(f, c, k); } // ok
-
-static Cata(cataapn) {
-  word n = *f->sp++;
-  if (k->ap == ret) k->x = n, (--k)->ap = tapn;
-  else
-    (--k)->x = n, (--k)->ap = apn;
-  return pull(f, c, k); }
 
 // lambda decons pushes last list item to stack returns init of list
 static word linit(core *f, word x) {

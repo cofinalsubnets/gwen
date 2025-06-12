@@ -48,6 +48,8 @@
    (:- (ana 0 top x (thd0 top) 0 0)
     anon (sym 0)
     top (scop 0 (L anon) 0)
+    (toplp e) (nilp (par e))
+    (par e) (tget 0 e 'par)
     zget (tget 0)
     (arity c) (+ (llen (zget c 'arg)) (llen (zget c 'imp)))
     (thd0 r n) (poke i_ret (seek -1 (poke (arity r) (seek (+ 1 n) (thd (+ 2 n))))))
@@ -66,9 +68,9 @@
          arg  (zget d 'arg)
          ii (idx imp x)
          ai (idx arg x)
-       ( (? (>= ii 0) ii
+       (? (>= ii 0) ii
           (>= ai 0) (+ (llen imp) ai)
-          -1)))
+          -1))
     (ana s c x) (:- (? (symp x)  (ana_sym s c x)
                        (atomp x) (imm x)
                                  (ana_two s c (A x) (B x)))
@@ -132,17 +134,19 @@
           (atomp (B b)) (ana 0 c (A b))
           (l1 0 0 (A b) (AB b) (BB b)))
        q (scop c (zget c 'arg) (zget c 'imp))
+       # l1 pass nom def and value expressions to l2
        ; l1 collects bindings and passes them with the body expression to l2
        (l1 noms defs nom def rest) (:
         nd1 (desug nom def)
         nom1 (A nd1) def1 (B nd1)
         noms1 (X nom1 noms) defs1 (X def1 defs)
-        (? (atomp rest) (l2 noms1 defs1 nom1)
-           (atomp (B rest)) (l2 noms1 defs1 (A rest))
+        (? (atomp rest) (l2 noms1 defs1 nom1 rest) ; even case -- we lose that info here
+           (atomp (B rest)) (l2 noms1 defs1 (A rest) rest)
            (l1 noms1 defs1 (A rest) (AB rest) (BB rest))))
 
-       ; l2 finds closures for all local functions and passes a lambda for the body to l3
-       (l2 noms defs exp) (:- (l3 rnoms rdefs clams llam)
+       # l2 pass noms defs exp with revised lambda defs to l3
+       ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
+       (l2 noms defs exp rest) (:- (l3 rnoms rdefs clams llam rest)
         rnoms (rev noms)
         rdefs (rev defs)
         lams (>>= 0 noms defs
@@ -153,8 +157,7 @@
                                                  )
                                                l))
                 (b ll (B n) (B d))))))
-        # find transitive closures of closures
-        # exclude local functions from closures
+
         (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
         (cl n l l1 l2) (?
          l2 (? (&& (!= l1 l2) (memq (AA l1) (BB (A l2))))
@@ -174,21 +177,22 @@
         lnoms (map A lams)
         (lamdel cs) (flip map cs (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))))
         clams (lamdel (close lams))
-        _ (? clams clams)
         llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
-        ;; l3 collects def values on stack and applies lambda
 
-
-       (l3 noms defs clams llam) (:
+       # l3 collect defs and apply
+       (l3 noms defs clams llam rest) (:
          (loop s nds) (? (nilp nds) id
           (: nd (A nds)
              n (A nd)
              d (B nd)
+             ; this is now the expression to evaluate
              d1 (? (not (lambp d)) d
                  (: qa (assq n clams)
                     x (ana_ll q (BB qa) (B d))
                   (set_cdr qa x)))
+
              (<=< (ana s c d1)
+              ; here is where to bind in global scope if toplp q and atomp rest
                   (loop (X n s) (B nds)))))
          _ (tset q 'lam clams)
          n (llen noms)
@@ -232,17 +236,16 @@
 
           prog (A fs) args (B fs)
           prompt "    "
-          (reads l) (: r (read ()) (? r (, (ev (A r)) (reads l)) l))
+          (reads l) (: r (read ()) (? r (, (ev 'ev (A r)) (reads l)) l))
           (repl p)  (: r (, (puts p) (read 0))
-                     (? r (, (.. (ev (A r))) (repl p))))
+                     (? r (, (.. (ev 'ev (A r))) (repl p))))
           (procs prog a as) (, (proc1 prog a)
                                (? as (procs prog (A as) (B as))))
           (proc1 prog arg) (:-
            (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
               (= arg "-v") (, (puts prog) (puts " ") (putln version))
               (= arg "-r") (repl prompt)
-              ((: (evals x) (? x (, (ev (A x)) (evals (B x)))))
-               (readf arg)))
+              ((: (evals x) (? x (, (ev 'ev (A x)) (evals (B x))))) (readf arg)))
            (putln s) (, (puts s) (putc 10))
            help (L " [args]"
                    " args:"
@@ -251,8 +254,11 @@
                    "   -r   start repl"
                    " file   evaluate file"))))
 
-(, ((: (go a b) (? b (go (ev (A b)) (B b)) a)) 0 prelude)
-(tset globals 'prelude prelude)
-; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
-   (ev boot_script)
-   ))
+(: (go a b) (? b (go (ev 'ev (A b)) (B b)) a)
+ (, (go 0 prelude)
+    (tset globals 'prelude prelude)
+    ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
+    (ev 'ev boot_script)
+ ))
+
+))
