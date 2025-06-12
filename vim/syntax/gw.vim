@@ -1,4 +1,4 @@
-" vim syntax for p
+" vim syntax for gw
 " based on lisp.vim by Charles E Campbell <http://www.drchip.org/astronaut/vim/index.html#SYNTAX_LISP>
 if exists("b:current_syntax")
   finish
@@ -46,4 +46,4 @@ hi def link PParen          Delimiter
 syn cluster PListCluster contains=PAtom,PAtomMark,PComment,PTodo,PFunc,PList,PNumber,PSymbol,PForm,PString,PMacro
 syn region PList matchgroup=PParen start="(" matchgroup=PParen end=")" contains=@PListCluster
 
-let b:current_syntax = "p"
+let b:current_syntax = "gw"

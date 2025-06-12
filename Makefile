@@ -79,16 +79,12 @@ $(built_manpage): doc/$n.1.md
 VIMPREFIX ?= .vim/
 vimdir=$(DESTDIR)$(VIMPREFIX)
 installed_binary=$(dest)/bin/$n
-installed_static_library=$(dest)/lib/lib$n.a
-installed_c_header=$(dest)/include/$n.h
 installed_manpage=$(dest)/share/man/man1/$n.1
 installed_vim_ftdetect=$(vimdir)/ftdetect/$n.vim
 installed_vim_syntax=$(vimdir)/syntax/$n.vim
-installed_shared_library=$(dest)/lib/lib$n.so
-installed_files=$(installed_binary) $(installed_static_library)\
-						 $(installed_c_header)\
+installed_files=$(installed_binary)\
 						 $(installed_vim_ftdetect) $(installed_vim_syntax)\
-						 $(installed_manpage) $(installed_shared_library)
+						 $(installed_manpage)
 
 install: $(installed_files)
 uninstall:
