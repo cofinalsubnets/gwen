@@ -6,7 +6,6 @@ n=gw
 x=gw
 
 # default version
-t=tc
 #t=tr
 
 default: test
@@ -15,8 +14,8 @@ default: test
 h=$n.h
 c=$n.c
 
-b=$n.$t.bin
-0=$n.$t.0.bin
+b=$n.bin
+0=$n.0.bin
 
 o=c/$n.o
 
@@ -62,12 +61,12 @@ PREFIX ?= .local/
 dest=$(DESTDIR)$(PREFIX)
 
 built_binary=$b
-built_static_library=lib$n.$t.a
+built_static_library=lib$n.a
 built_c_header=c/$n.h
 built_manpage=doc/$n.1
 built_vim_ftdetect=vim/ftdetect/$n.vim
 built_vim_syntax=vim/syntax/$n.vim
-built_shared_library=lib$n.$t.so
+built_shared_library=lib$n.so
 
 all: $(built_binary) $(built_static_library) $(built_c_header)\
 	$(built_manpage) $(built_vim_syntax) $(built_shared_library)
