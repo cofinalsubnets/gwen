@@ -1,4 +1,4 @@
-#include "p.h"
+#include "gw.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -1704,7 +1704,7 @@ static int mkxpn(core *f, const char **av) {
 
 #define TextInput(t) ((In*)&(TextIn) {{p_text_getc, p_text_ungetc, p_text_eof}, p, 0})
 #define Core() &((core){})
-int p_main(const char *p, const char **av) {
+int gw_main(const char *p, const char **av) {
   In *i = TextInput(p);
   core *f = Core();
   word s = p_ini(f);

@@ -2,8 +2,8 @@
 m=Makefile
 
 # name and file extension
-n=p
-x=p
+n=gw
+x=gw
 
 # default version
 t=tc
