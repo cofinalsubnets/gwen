@@ -736,8 +736,7 @@ static Cata(cataap) {
 static Cata(cataapn) {
   word n = *f->sp++;
   if (k->ap == ret) k->x = n, (--k)->ap = tapn;
-  else
-    (--k)->x = n, (--k)->ap = apn;
+  else (--k)->x = n, (--k)->ap = apn;
   return pull(f, c, k); }
 
 // this is the longest function in the whole C implementation :(
@@ -865,17 +864,11 @@ static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
     UM(f),
     m; }
 
-
-
 // evaluate a function expression by applying the function to arguments
 static size_t ana_ap(core *f, env* *c, size_t m, word fn, word args) {
-  // evaluation order can be different.
-  // first analyze the function and count the arguments
   size_t argc = llen(args);
   avec(f, args, m = analyze(f, c, m, fn));
-  // if there are no arguments or the analysis failed we are done.
-  if (!argc || !m) return m;
-  return ana_ap_l2r(f, c, m, args); }
+  return !argc || !m ? m : ana_ap_l2r(f, c, m, args); }
 
 static Ana(ana_lambda, word);
 static Ana(ana_list) {
@@ -975,9 +968,6 @@ static Cata(cata_var) {
     k[-1].x = putnum(idx + ins),
     pull(f, c, k - 2); }
 
-static Ana(ana_sym_local_def, word stack) {
-  return pushs(f, 3, c2var, x, stack) ? m + 2 : 0; }
-
 static Ana(ana_sym_stack_ref, env *d) {
   if (*c != d) // if we have found the variable in an enclosing scope then import it
     x = wpairof(f, x, (*c)->imps),
@@ -992,7 +982,7 @@ static Ana(ana_sym_r, env *d) {
   if (y) return ana_sym_local_fn(f, c, m, y, d);
   // bound on the stack by a local let binding?
   if (lidx(f, d->stack, x) >= 0)
-    return ana_sym_local_def(f, c, m, x, d->stack);
+    return pushs(f, 3, c2var, x, d->stack) ? m + 2 : 0;
   // bound on the stack as a closure or positional argument?
   if (stack_index_of_symbol(f, d, x) >= 0)
     return ana_sym_stack_ref(f, c, m, x, d);
@@ -1520,7 +1510,6 @@ struct symbol {
   word code;
   symbol *l, *r; };
 
-static symbol *intern_r(core*, string*, symbol**);
 Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
 bool symp(word _) { return homp(_) && dtyp(_) == &sym_type; }
 
@@ -1539,7 +1528,7 @@ static symbol *ini_anon(symbol *y, word code) {
          y->code = code,
          y; }
 
-static symbol *intern_r(core *v, string *b, symbol **y) {
+static symbol *intern_seek(core *v, string *b, symbol **y) {
   symbol *z = *y;
   if (!z) return *y =
     ini_sym(bump(v, Width(symbol)), b, hash(v, putnum(hash(v, (word) b))));
@@ -1547,19 +1536,19 @@ static symbol *intern_r(core *v, string *b, symbol **y) {
   int i = a->len < b->len ? -1 :
           a->len > b->len ? 1 :
           strncmp(a->text, b->text, a->len);
-  return i == 0 ? z : intern_r(v, b, i < 0 ? &z->l : &z->r); }
+  return i == 0 ? z : intern_seek(v, b, i < 0 ? &z->l : &z->r); }
 
 static symbol *intern(core *f, string* b) {
   if (avail(f) < Width(symbol)) {
     bool ok;
     avec(f, b, ok = p_please(f, Width(symbol)));
     if (!ok) return 0; }
-  return intern_r(f, b, &f->symbols); }
+  return intern_seek(f, b, &f->symbols); }
 
 static Vm(symm) {
   Have(Width(symbol));
   Pack(f);
-  symbol *y = intern_r(f, (string*) f->sp[0], &f->symbols);
+  symbol *y = intern_seek(f, (string*) f->sp[0], &f->symbols);
   Unpack(f);
   return op(1, Z(y)); }
 
@@ -1717,7 +1706,7 @@ static word xx_sym(core *v, word _) { return ((symbol*) _)->code; }
 static word cp_sym(core *f, word x, word *p0, word *t0) {
   symbol *src = (symbol*) x,
          *dst = src->nom ?
-           intern_r(f, (string*) cp(f, (word) src->nom, p0, t0), &f->symbols) :
+           intern_seek(f, (string*) cp(f, (word) src->nom, p0, t0), &f->symbols) :
            ini_anon(bump(f, Width(symbol) - 2), src->code);
   return (word) (src->ap = (vm*) dst); }
 
