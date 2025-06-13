@@ -75,38 +75,57 @@
     (ana s c x) (:- (? (symp x)  (ana_sym s c x)
                        (atomp x) (imm x)
                                  (ana_two s c (A x) (B x)))
-     (ana_apl s c b)
-      (? (atomp b) id
-         (<=< (ana s c (A b))
-              (em1 i_ap)
-              (ana_apl s c (B b))))
-     (ana_ap s c f b)  (<=< (ana s c f) (ana_apl (X 0 s) c b))
+     (ana_apl_s n s c b) (:
+           (loop s c b) (,
+            (? (atomp b) id
+             (:
+                a1 (ana s c (A b))
+                a2 (em1 i_ap)
+                a3 (loop s c (B b))
+
+               (<=< a1 a2 a3))))
+
+      _ (cpush c 'stk n)
+      s1 (X n s)
+      a (loop s1 c b)
+      _ (cpop c 'stk)
+      a)
+
+     (ana_ap s c f b)  (:
+      a1 (ana s c f)
+      a2 (ana_apl_s 0 s c b)
+      (<=< a1 a2))
+
      (ana_sym s c x) (>>= c (:- ana_sym_r
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
       (ana_sym_local_fn asq d) (,
-       (<=< (em2 i_lazy_bind (X (A asq) (zget d 'lam)))
-            (ana_apl (X 0 s) c (BB asq))))
-      (ana_sym_stack_ref x d) (,
+       (: a1 (em2 i_lazy_bind (X (A asq) (zget d 'lam)))
+          a2 (ana_apl_s 1 s c (BB asq))
+        (<=< a1 a2)))
+      (ana_sym_stack_ref d) (,
        (? (nilp (= c d)) (import c x))
-       (cata_var d x (llen s)))
-      (ana_sym_local_def stack)
+       (cata_var c x (llen (zget c 'stk))))
+      (ana_sym_local_def stack) (,
        (em2 i_ref (lidx x stack))
-      (ana_sym_free x)
+       )
+      (ana_sym_free x) (,
        (: y (tget anon globals x)
           (? (!= y anon) (imm y)
-          (, (import c x) (em2 i_free_variable x))))
+          (, (import c x) (em2 i_free_variable x)))))
       (ana_sym_r d)
        (? (nilp d) (ana_sym_free x)
         (: y (assq x (zget d 'lam))
          (? y (ana_sym_local_fn y d)
-          (? (memq x s)          (ana_sym_local_def s)
-             (>= (stkidx d x) 0) (ana_sym_stack_ref x d)
+          (? (&& (= c d) (memq x (zget d 'stk)))
+              (ana_sym_local_def (zget d 'stk))
+             (memq x (zget d 'stk)) (ana_sym_stack_ref d)
+             (>= (stkidx d x) 0) (ana_sym_stack_ref d)
                                  (ana_sym_r (zget d 'par))))))))
 
      (ana_two s c a b) (:- (? (= a '`)  (imm (A b))
                               (= a '?)  (ana_if s c b)
                               (= a '\)  (ana_lam s c b)
-                              (= a ':)  (ana_let c b)
+                              (= a ':)  (ana_let s c b)
                               (= a ',)  (ana_seq s c b)
                               (atomp b) (ana s c a)
                               (: m (zget macros a)
@@ -129,11 +148,12 @@
                      (desug (A n) (X '\ (cat (B n) (L d)))))
       (lambp x) (? (twop x) (= '\ (A x)))
 
-      (ana_let c b) (:-
+      (ana_let s c b) (:-
        (? (atomp b)     (imm 0)
-          (atomp (B b)) (ana 0 c (A b))
+          (atomp (B b)) (ana s c (A b))
           (l1 0 0 (A b) (AB b) (BB b)))
        q (scop c (zget c 'arg) (zget c 'imp))
+;       _ (tset c 'stk s) # FIXME should be adjusting this consistently elsewhere
        # l1 pass nom def and value expressions to l2
        ; l1 collects bindings and passes them with the body expression to l2
        (l1 noms defs nom def rest) (:
@@ -181,10 +201,15 @@
 
        # l3 collect defs and apply
        (l3 noms defs clams llam rest) (:
+         (loop_s n s nds) (:
+          _ (cpush c 'stk n)
+          s0 (X n s)
+          s1 (zget c 'stk)
+;          _ (tset q 'stk s1)
+          l (loop s0 nds)
+          l)
          (loop s nds) (? (nilp nds) id
-          (: nd (A nds)
-             n (A nd)
-             d (B nd)
+          (: nd (A nds) n (A nd) d (B nd)
              ; this will now be the expression to evaluate
              d1 (? (lambp d)
                  (: qa (assq n clams)
@@ -192,18 +217,21 @@
                   (, (set_cdr qa x)
                      x))
                  d)
-
-             (<=< (ana s c d1)
-                  (? (&& (toplp (par q)) (atomp rest))
-                   (em2 i_defglob (last noms)) ; after fixing defglobal in C
+             a1 (ana s c d1)
+             a2 (? (&& (toplp c) (atomp rest))
+                   (em2 i_defglob (last noms))
                    id)
               ; here is where to bind in global scope if toplp q and atomp rest
-                  (loop (X n s) (B nds)))))
+             a3 (loop_s n s (B nds))
+             (<=< a1 a2 a3)))
          _ (tset q 'lam clams)
+         s0 (zget c 'stk)
          n (llen noms)
-         (<=< (ana s c llam)
-              (loop (X 0 s) (zip noms defs))
-              (? (> n 1) (em2 i_apn n) (em1 i_ap))))) ; end ana_let
+         a1 (ana s c llam)
+         a2 (loop_s -1 s (zip noms defs))
+         a3 (? (> n 1) (em2 i_apn n) (em1 i_ap))
+         _ (tset c 'stk s0)
+         (<=< a1 a2 a3))) ; end ana_let
 
       (ana_seq s c x)
        (? (atomp x) (imm 0)

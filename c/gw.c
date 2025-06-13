@@ -232,7 +232,7 @@ static Vm(dot) { return
   _(dot) _(free_variable)\
   _(data) _(ret) _(ap) _(tap) _(apn) _(tapn) \
   _(jump) _(cond) _(ref) _(imm) _(yield) _(drop1) \
-  _(curry) _(defglobal) _(defglob) _(lazy_bind) _(ret0)
+  _(curry) _(defglob) _(lazy_bind) _(ret0)
 
 #define S1(i) {{i}, {ret0}}
 #define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
@@ -720,19 +720,12 @@ static size_t llen(word l) {
   while (twop(l)) n++, l = B(l);
   return n; }
 
-static Vm(defglobal) {
-  Pack(f);
-  if (!table_set(f, f->dict, Ip[1].x, Sp[0])) return Oom;
-  Unpack(f);
-  return op(1, Sp[0]); }
-
 static Vm(defglob) {
   Pack(f);
   if (!table_set(f, f->dict, Ip[1].x, Sp[0])) return Oom;
   Unpack(f);
   Ip += 2;
   return Continue(); }
-
 
 // emits call instruction and modifies to tail call
 // if next operation is return
@@ -822,20 +815,13 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
       word _;
       if (!(_ = ana_lam(f, c, BB(d), BA(def)))) return fail();
       else A(def) = B(d) = _; }
-    // if toplevel then bind
-    if (even && nilp((*b)->args)) {
-      cell *t = cells(f, 2 * Width(pair) + 2 + Width(struct tag));
-      if (!t) return fail();
-      pair *w = (pair*) t,
-           *x = w + 1;
-      t += 2 * Width(pair);
-      t[0].ap = defglobal, t[1].x = A(nom), t[2].x = 0, t[3].m = t;
-      ini_pair(w, A(def), nil); // dict add
-      ini_pair(x, Z(t), Z(w));
-      A(def) = Z(x); }
     if (!(m = analyze(f, b, m, A(def))) ||
         !((*b)->stack = wpairof(f, A(nom), (*b)->stack)))
-      return fail(); }
+      return fail();
+    // if toplevel then bind
+    if (even && nilp((*b)->args))
+      if (!(m = ana_i2(f, c, m, defglob, A(nom))))
+        return fail(); }
 
   m = nn <= 1 ? pushs(f, 1, cataap) ? m + 1 : 0 :
                 pushs(f, 2, cataapn, putnum(nn)) ? m + 2 : 0;
