@@ -46,7 +46,7 @@
   (: eval (:
     (scop par arg imp) (: t (tnew()) (, (tset t 'par par) (tset t 'arg arg) (tset t 'imp imp) t))
     (eval x)
-   (:- (ana 0 top x (thd0 top) 0 0)
+   (:- (ana top x (thd0 top) 0 0)
     anon (sym 0)
     top (scop 0 (L anon) 0)
     toplp (= top)
@@ -73,14 +73,14 @@
        (? (>= ii 0) ii
           (>= ai 0) (+ (llen imp) ai)
           -1))
-    (ana s c x) (:- (? (symp x)  (ana_sym c x)
-                       (atomp x) (imm x)
-                                 (ana_two c (A x) (B x)))
+    (ana c x) (:- (? (symp x)  (ana_sym c x)
+                     (atomp x) (imm x)
+                               (ana_two c (A x) (B x)))
      (ana_apl_s n c b) (:
            (loop c b) (,
             (? (atomp b) id
              (:
-                a1 (ana (stkof c) c (A b))
+                a1 (ana c (A b))
                 a2 (em1 i_ap)
                 a3 (loop c (B b))
 
@@ -92,12 +92,11 @@
       a)
 
      (ana_ap c f b)  (:
-      a1 (ana (stkof c) c f)
+      a1 (ana c f)
       a2 (ana_apl_s 0 c b)
       (<=< a1 a2))
 
      (ana_sym c x) (>>= c (:- ana_sym_r
-      s (stkof c)
       (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
       (ana_sym_local_fn asq d) (,
        (: a1 (em2 i_lazy_bind (X (A asq) (zget d 'lam)))
@@ -128,19 +127,19 @@
                             (= a '\)  (ana_lam c b)
                             (= a ':)  (ana_let c b)
                             (= a ',)  (ana_seq c b)
-                            (atomp b) (ana (stkof c) c a)
+                            (atomp b) (ana c a)
                             (: m (zget macros a)
-                             (? m (ana (stkof c) c (m b))
+                             (? m (ana c (m b))
                                   (ana_ap c a b))))
 
       (ana_lam c b) (? (atomp b)     (imm 0)
-                       (atomp (B b)) (ana (stkof c) c (A b))
-                                     (ana (stkof c) c (ana_ll c 0 b)))
+                       (atomp (B b)) (ana c (A b))
+                                     (ana c (ana_ll c 0 b)))
       (ana_ll c imp exp) (:
        arg (init exp)
        x (last exp)
        d (scop c arg imp)
-       k0 (ana 0 d x (thd0 d))
+       k0 (ana d x (thd0 d))
        ar (arity d)
        k (trim ((? (> ar 1) (em2 i_curry ar) id) k0 0))
        (X k (zget d 'imp)))
@@ -151,9 +150,8 @@
 
       (ana_let c b) (:-
        (? (atomp b)     (imm 0)
-          (atomp (B b)) (ana s c (A b))
+          (atomp (B b)) (ana c (A b))
           (l1 0 0 (A b) (AB b) (BB b)))
-       s (stkof c)
        q (scop c (zget c 'arg) (zget c 'imp))
 ;       _ (tset c 'stk s) # FIXME should be adjusting this consistently elsewhere
        # l1 pass nom def and value expressions to l2
@@ -217,7 +215,7 @@
                   (, (set_cdr qa x)
                      x))
                  d)
-             a1 (ana (zget c 'stk) c d1)
+             a1 (ana c d1)
              a2 (? (&& (toplp c) (atomp rest))
                    (em2 i_defglob (last noms))
                    id)
@@ -227,7 +225,7 @@
          _ (tset q 'lam clams)
          s0 (zget c 'stk)
          n (llen noms)
-         a1 (ana s0 c llam)
+         a1 (ana c llam)
          a2 (loop_s -1 (zip noms defs))
          a3 (? (> n 1) (em2 i_apn n) (em1 i_ap))
          _ (tset c 'stk s0)
@@ -235,12 +233,11 @@
 
       (ana_seq c x)
        (? (atomp x) (imm 0)
-        (<=< (ana (stkof c) c (A x))
+        (<=< (ana c (A x))
              (? (atomp (B x)) id
               (<=< (em1 i_drop1)
                    (ana_seq c (B x))))))
       (ana_if c b) (:- (<=< (pop 'end) (ana_if_r b) (push 'end))
-       s (stkof c)
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
        (peek_end c k n) (: j (k (+ 2 n))
@@ -253,11 +250,11 @@
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
        (ana_if_r b) (?
         (atomp b) (imm 0)
-        (atomp (B b)) (<=< (ana s c (A b))
+        (atomp (B b)) (<=< (ana c (A b))
                            (peek_end c))
-        (<=< (ana s c (A b))
+        (<=< (ana c (A b))
              (pop_alt c)
-             (ana s c (AB b))
+             (ana c (AB b))
              (peek_end c)
              (push 'alt)
              (ana_if_r (BB b))))))))
