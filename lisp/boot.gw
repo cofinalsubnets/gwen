@@ -75,7 +75,7 @@
           -1))
     (ana s c x) (:- (? (symp x)  (ana_sym c x)
                        (atomp x) (imm x)
-                                 (ana_two s c (A x) (B x)))
+                                 (ana_two c (A x) (B x)))
      (ana_apl_s n c b) (:
            (loop c b) (,
             (? (atomp b) id
@@ -91,8 +91,8 @@
       _ (cpop c 'stk)
       a)
 
-     (ana_ap s c f b)  (:
-      a1 (ana s c f)
+     (ana_ap c f b)  (:
+      a1 (ana (stkof c) c f)
       a2 (ana_apl_s 0 c b)
       (<=< a1 a2))
 
@@ -123,15 +123,15 @@
              (>= (stkidx d x) 0) (ana_sym_stack_ref d)
                                  (ana_sym_r (zget d 'par))))))))
 
-     (ana_two s c a b) (:- (? (= a '`)  (imm (A b))
-                              (= a '?)  (ana_if  c b)
-                              (= a '\)  (ana_lam c b)
-                              (= a ':)  (ana_let c b)
-                              (= a ',)  (ana_seq c b)
-                              (atomp b) (ana s c a)
-                              (: m (zget macros a)
-                               (? m (ana s c (m b))
-                                    (ana_ap s c a b))))
+     (ana_two c a b) (:- (? (= a '`)  (imm (A b))
+                            (= a '?)  (ana_if  c b)
+                            (= a '\)  (ana_lam c b)
+                            (= a ':)  (ana_let c b)
+                            (= a ',)  (ana_seq c b)
+                            (atomp b) (ana (stkof c) c a)
+                            (: m (zget macros a)
+                             (? m (ana (stkof c) c (m b))
+                                  (ana_ap c a b))))
 
       (ana_lam c b) (? (atomp b)     (imm 0)
                        (atomp (B b)) (ana (stkof c) c (A b))
