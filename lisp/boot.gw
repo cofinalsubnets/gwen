@@ -282,34 +282,36 @@
     ) ; end eval
    eval)
 
-  boot_script '
-   (\ fs (:- (? args       (procs prog (A args) (B args))
-                (isatty 0) (repl prompt)
-                           (reads ()))
-
-          prog (A fs) args (B fs)
-          prompt "    "
-          (reads l) (: r (read ()) (? r (, (ev 'ev (A r)) (reads l)) l))
-          (repl p)  (: r (, (puts p) (read 0))
-                     (? r (, (.. (ev 'ev (A r))) (repl p))))
-          (procs prog a as) (, (proc1 prog a)
-                               (? as (procs prog (A as) (B as))))
-          (proc1 prog arg) (:-
-           (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
-              (= arg "-v") (, (puts prog) (puts " ") (putln version))
-              (= arg "-r") (repl prompt)
-              ((: (evals x) (? x (, (ev 'ev (A x)) (evals (B x))))) (readf arg)))
-           (putln s) (, (puts s) (putc 10))
-           help (L " [args]"
-                   " args:"
-                   "   -h   show this message"
-                   "   -v   show version"
-                   "   -r   start repl"
-                   " file   evaluate file"))))
-
-(: (go a b) (? b (go (ev 'ev (A b)) (B b)) a)
- (, (go 0 prelude)
-    (tset globals 'eval (ev evaluator))
-    (tset globals 'evaluator evaluator)
+; this does some initialization and then returns the main function
+(: ; we can't use prelude yet here
+   (go e a b) (? b (go e (e (A b)) (B b)) a)
+   e0 ev
+   _ (go e0 0 prelude)
+   e1 (e0 evaluator)
+   _ (go e1 0 prelude)
+   e2 (e1 evaluator)
+   _ (tset globals 'eval e2)
+   _ (tset globals 'evaluator evaluator)
     ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
-    (ev 'ev boot_script)))))
+   (e2 '(\ fs ; we can use prelude in here
+    (:- (? args       (procs prog (A args) (B args))
+           (isatty 0) (repl prompt)
+                      (reads 0))
+      prog (A fs) args (B fs)
+      prompt "    "
+      (reads l) (: r (read ()) (? r (, (ev 'ev (A r)) (reads l)) l))
+      (repl p)  (: r (, (puts p) (read 0))
+                 (? r (, (. (ev 'ev (A r))) (putc 10) (repl p))))
+      (procs prog a as) (, (proc1 prog a) (? as (procs prog (A as) (B as))))
+      (putln s) (, (puts s) (putc 10))
+      (proc1 prog arg)
+       (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
+          (= arg "-v") (, (puts prog) (puts " ") (putln version))
+          (= arg "-r") (repl prompt)
+          ((: (evals x) (? x (, (ev 'ev (A x)) (evals (B x))))) (readf arg)))
+       help (L " [args]"
+               " args:"
+               "   -h   show this message"
+               "   -v   show version"
+               "   -r   start repl"
+               " file   evaluate file"))))))
