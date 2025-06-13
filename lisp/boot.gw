@@ -39,7 +39,7 @@
 
   (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
   (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))
-  (:: '|| (\ l (.. (: (or l) (? l (: y (sym 0) (L ': y (A l) (L '? y y (or (B l)))))) (or l)))))
+  (:: '|| (\ l (: (or l) (? l (: y (sym 0) (L ': y (A l) (L '? y y (or (B l)))))) (or l))))
   (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
   (:: '>>= (\ l (X (last l) (init l))))
   (:: '|> (foldl1 (\ m f (L f m ))))
@@ -47,14 +47,11 @@
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
   ) ; end prelude
 
-  evaluator '(:
+  evaluator '(:- eval
     (scop par arg imp) (: t (tnew()) (, (tset t 'par par) (tset t 'arg arg) (tset t 'imp imp) t))
-    (eval x)
-   (:- (ana top x (thd0 top) 0 0)
     anon (sym 0)
-    top (scop 0 (L anon) 0)
-    toplp (= top)
-    (parof e) (tget 0 e 'par)
+    (toplp c) (nilp (parof c))
+    (parof c) (tget 0 c 'par)
     (stkof c) (tget 0 c 'stk)
     (argof c) (tget 0 c 'arg)
     (impof c) (tget 0 c 'imp)
@@ -62,7 +59,7 @@
     (arity c) (+ (llen (argof c)) (llen (impof c)))
     (thd0 r n) (poke i_ret (seek -1 (poke (arity r) (seek (+ 1 n) (thd (+ 2 n))))))
     (cpush c k v) (, (tset c k (X v (zget c k))) v)
-    (import c v) (? (!= top c) (cpush c 'imp v))
+    (import c v) (? (not (toplp c)) (cpush c 'imp v))
     (cpop c k) (: s (zget c k) (, (tset c k (B s)) (A s)))
     (cpeek c k) (A (zget c k))
     (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
@@ -88,6 +85,9 @@
          (? (<= 0 ai) (+ (llen imp) ai)
                       -1))))
     (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
+
+    (eval x) (: top (scop 0 (L 0) 0) (ana top x (thd0 top) 0 0))
+
     (ana c x) (:- (? (symp x)  (ana_sym c x)
                      (atomp x) (imm x)
                                (ana_two c (A x) (B x)))
@@ -274,13 +274,7 @@
          a2 (loops -1 (zip noms defs))
          a3 (? (> n 1) (em_apn n) em_ap)
          _ (tset c 'stk s0)
-         (<=< a1 a2 a3))
-
-       ) ; end ana_let
-      ) ; end ana_two
-     ) ; end ana
-    ) ; end eval
-   eval)
+         (<=< a1 a2 a3))))))
 
 ; this does some initialization and then returns the main function
 (: ; we can't use prelude yet here
@@ -292,6 +286,7 @@
    e2 (e1 evaluator)
    _ (tset globals 'eval e2)
    _ (tset globals 'evaluator evaluator)
+;   _ (tset globals 'ev e2)
     ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
    (e2 '(\ fs ; we can use prelude in here
     (:- (? args       (procs prog (A args) (B args))
@@ -299,16 +294,16 @@
                       (reads 0))
       prog (A fs) args (B fs)
       prompt "    "
-      (reads l) (: r (read ()) (? r (, (ev 'ev (A r)) (reads l)) l))
+      (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
       (repl p)  (: r (, (puts p) (read 0))
-                 (? r (, (. (ev 'ev (A r))) (putc 10) (repl p))))
+                 (? r (, (. (ev (A r))) (putc 10) (repl p))))
       (procs prog a as) (, (proc1 prog a) (? as (procs prog (A as) (B as))))
-      (putln s) (, (puts s) (putc 10))
       (proc1 prog arg)
        (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
           (= arg "-v") (, (puts prog) (puts " ") (putln version))
           (= arg "-r") (repl prompt)
-          ((: (evals x) (? x (, (ev 'ev (A x)) (evals (B x))))) (readf arg)))
+          (each (readf arg) ev))
+      (putln s) (, (puts s) (putc 10))
        help (L " [args]"
                " args:"
                "   -h   show this message"
