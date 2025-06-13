@@ -61,6 +61,15 @@
     (cpeek c k) (A (zget c k))
     (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
     (em2 i x k) (em1 i (em1 x k))
+    (em_ap k n)
+     (: j (k (+ 1 n))
+      (? (= i_ret (peek j))
+         (poke i_tap j)
+         (poke i_ap (seek -1 j))))
+    (em_apn n k m) (: j (k (+ 2 m))
+     (? (= i_ret (peek j))
+      (poke i_tapn (seek -1 (poke n j)))
+      (poke i_apn (seek -1 (poke n (seek -1 j))))))
     imm (em2 i_imm)
     (cata_var c x ins j m) (:
      k (j (+ 2 m))
@@ -81,7 +90,7 @@
             (? (atomp b) id
              (:
                 a1 (ana c (A b))
-                a2 (em1 i_ap)
+                a2 em_ap
                 a3 (loop c (B b))
 
                (<=< a1 a2 a3))))
@@ -227,7 +236,7 @@
          n (llen noms)
          a1 (ana c llam)
          a2 (loop_s -1 (zip noms defs))
-         a3 (? (> n 1) (em2 i_apn n) (em1 i_ap))
+         a3 (? (> n 1) (em_apn n) em_ap)
          _ (tset c 'stk s0)
          (<=< a1 a2 a3))) ; end ana_let
 
