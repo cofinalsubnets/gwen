@@ -34,26 +34,32 @@
                (X (A m) (X a (B m))))))
      (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
-     ) (:
-     (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
-  (, (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
-     (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))
-     (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
-     (:: '>>= (\ l (X (last l) (init l)))))
-     (:: '|> (foldl1 (\ m f (L f m ))))
-     (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
-     (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
-  (: eval (:
+     )
+  (: (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
+
+  (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
+  (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))
+  (:: '|| (\ l (.. (: (or l) (? l (: y (sym 0) (L ': y (A l) (L '? y y (or (B l)))))) (or l)))))
+  (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
+  (:: '>>= (\ l (X (last l) (init l))))
+  (:: '|> (foldl1 (\ m f (L f m ))))
+  (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
+  (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
+  ) ; end prelude
+
+  evaluator '(:
     (scop par arg imp) (: t (tnew()) (, (tset t 'par par) (tset t 'arg arg) (tset t 'imp imp) t))
     (eval x)
    (:- (ana top x (thd0 top) 0 0)
     anon (sym 0)
     top (scop 0 (L anon) 0)
     toplp (= top)
-    (par e) (tget 0 e 'par)
-    (stkof c) (zget c 'stk)
+    (parof e) (tget 0 e 'par)
+    (stkof c) (tget 0 c 'stk)
+    (argof c) (tget 0 c 'arg)
+    (impof c) (tget 0 c 'imp)
     zget (tget 0)
-    (arity c) (+ (llen (zget c 'arg)) (llen (zget c 'imp)))
+    (arity c) (+ (llen (argof c)) (llen (impof c)))
     (thd0 r n) (poke i_ret (seek -1 (poke (arity r) (seek (+ 1 n) (thd (+ 2 n))))))
     (cpush c k v) (, (tset c k (X v (zget c k))) v)
     (import c v) (? (!= top c) (cpush c 'imp v))
@@ -75,13 +81,13 @@
      k (j (+ 2 m))
      (poke i_ref (seek -1 (poke (+ ins (stkidx c x)) (seek -1 k)))))
     (stkidx d x)
-      (: imp  (zget d 'imp)
-         arg  (zget d 'arg)
+      (: imp  (impof d)
          ii (idx imp x)
-         ai (idx arg x)
-       (? (>= ii 0) ii
-          (>= ai 0) (+ (llen imp) ai)
-          -1))
+       (? (<= 0 ii) ii
+        (: ai (idx (argof d) x)
+         (? (<= 0 ai) (+ (llen imp) ai)
+                      -1))))
+    (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
     (ana c x) (:- (? (symp x)  (ana_sym c x)
                      (atomp x) (imm x)
                                (ana_two c (A x) (B x)))
@@ -105,45 +111,79 @@
       a2 (ana_apl_s 0 c b)
       (<=< a1 a2))
 
-     (ana_sym c x) (>>= c (:- ana_sym_r
-      (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
-      (ana_sym_local_fn asq d) (,
-       (: a1 (em2 i_lazy_bind (X (A asq) (zget d 'lam)))
-          a2 (ana_apl_s 1 c (BB asq))
-        (<=< a1 a2)))
-      (ana_sym_stack_ref d) (,
-       (? (nilp (= c d)) (import c x))
-       (cata_var c x (llen (stkof c))))
-      (ana_sym_local_def stack) (,
-       (em2 i_ref (lidx x stack))
-       )
-      (ana_sym_free x) (,
-       (: y (tget anon globals x)
-          (? (!= y anon) (imm y)
-          (, (import c x) (em2 i_free_variable x)))))
-      (ana_sym_r d)
-       (? (nilp d) (ana_sym_free x)
-        (: y (assq x (zget d 'lam))
-         (? y (ana_sym_local_fn y d)
-          (? (&& (= c d) (memq x (zget d 'stk)))
-              (ana_sym_local_def (zget d 'stk))
-             (memq x (zget d 'stk)) (ana_sym_stack_ref d)
-             (>= (stkidx d x) 0) (ana_sym_stack_ref d)
-                                 (ana_sym_r (zget d 'par))))))))
+     (ana_sym c x) (>>= c (: (ana_sym_r d)
+      (? (nilp d) ; outside all lexical scopes?
+          (: y (tget anon globals x) ; check global scope
+           (? (!= y anon) (imm y) ; if it's there use that
+            (, (import c x) ; if it's not there... do something
+               (em2 i_free_variable x))))
+        ; else...
+       (: lam (zget d 'lam)
+          lfd (assq x lam)
+          stk (zget d 'stk)
+        (? lfd ; local function def?
+             (co (em2 i_lazy_bind (X (A lfd) lam))
+                 (ana_apl_s 1 c (BB lfd)))
+          ; else ...
+          ; bound on stack by an inner let form?
+         (&& (= c d) (memq x stk))
+          (em2 i_ref (lidx x stk))
+         ; bound on stack by an outer let form or function or closure?
+         (? (memq x stk) 1 (<= 0 (stkidx d x)))
+          (, (? (!= c d) (import c x))
+             (cata_var c x (llen (stkof c))))
+         ; else recur
+         (ana_sym_r (zget d 'par)))))))
 
-     (ana_two c a b) (:- (? (= a '`)  (imm (A b))
-                            (= a '?)  (ana_if  c b)
-                            (= a '\)  (ana_lam c b)
-                            (= a ':)  (ana_let c b)
-                            (= a ',)  (ana_seq c b)
-                            (atomp b) (ana c a)
-                            (: m (zget macros a)
-                             (? m (ana c (m b))
-                                  (ana_ap c a b))))
+     (ana_two c a b) (:-
+      (? (= a '` )  (imm (A b))
+         (= a '? )  (ana_if  c b)
+         (= a '\ )  (ana_lam c b)
+         (= a ': )  (ana_let c b)
+         (= a ', )  (ana_seq c b)
+         (atomp b) (ana c a)
+         (: m (zget macros a)
+          (? m (ana c (m b))
+               (ana_ap c a b))))
 
+      ; ana_seq is recursive but pretty simple
+      (ana_seq c x)
+       (? (atomp x) (imm 0)
+        (co (ana c (A x))
+            (? (atomp (B x)) id
+             (co (em1 i_drop1)
+                 (ana_seq c (B x))))))
+
+      ;ana_if is a bit complicated
+      (ana_if c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
+       (pop y k n) (: j (k n) (, (cpop c y) j))
+       (push y k n) (cpush c y (k n))
+       (peek_end c k n) (: j (k (+ 2 n))
+        dest (cpeek c 'end)
+        (? (= i_ret (peek dest))
+         (poke i_ret  (seek -1 (poke (peek (seek 1 dest)) (seek -1 j))))
+         (poke i_jump (seek -1 (poke (cpeek c 'end)       (seek -1 j))))))
+
+       (pop_alt c k n) (: j (k (+ 2 n))
+        (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
+       (ana_if_r b) (?
+        (atomp b) (imm 0)
+        (atomp (B b)) (co (ana c (A b))
+                          (peek_end c))
+        ; we want exact control over evaluation order here
+        (: a0 (ana c (A b))
+           a1 (pop_alt c)
+           a2 (ana c (AB b))
+           a3 (peek_end c)
+           a4 (push 'alt)
+           a5 (ana_if_r (BB b))
+        (<=< a0 a1 a2 a3 a4 a5))))
+
+      ; ana_lam is small because it uses ana_ll which ana_let also uses
       (ana_lam c b) (? (atomp b)     (imm 0)
                        (atomp (B b)) (ana c (A b))
                                      (ana c (ana_ll c 0 b)))
+      ; ana_ll isn't too bad
       (ana_ll c imp exp) (:
        arg (init exp)
        x (last exp)
@@ -153,14 +193,14 @@
        k (trim ((? (> ar 1) (em2 i_curry ar) id) k0 0))
        (X k (zget d 'imp)))
 
-      (desug n d) (? (atomp n) (X n d)
-                     (desug (A n) (X '\ (cat (B n) (L d)))))
-      (lambp x) (? (twop x) (= '\ (A x)))
-
+      ; ana_let is the worst :[
       (ana_let c b) (:-
        (? (atomp b)     (imm 0)
           (atomp (B b)) (ana c (A b))
           (l1 0 0 (A b) (AB b) (BB b)))
+       (lambp x) (? (twop x) (= '\ (A x)))
+       (desug n d) (? (atomp n) (X n d)
+                      (desug (A n) (X '\ (cat (B n) (L d)))))
        q (scop c (zget c 'arg) (zget c 'imp))
 ;       _ (tset c 'stk s) # FIXME should be adjusting this consistently elsewhere
        # l1 pass nom def and value expressions to l2
@@ -210,11 +250,7 @@
 
        # l3 collect defs and apply
        (l3 noms defs clams llam rest) (:
-         (loop_s n nds) (:
-          _ (cpush c 'stk n)
-;          _ (tset q 'stk s1)
-          l (loop nds)
-          l)
+         (loops n nds) (, (cpush c 'stk n) (loop nds))
          (loop nds) (? (nilp nds) id
           (: nd (A nds) n (A nd) d (B nd)
              ; this will now be the expression to evaluate
@@ -229,47 +265,23 @@
                    (em2 i_defglob (last noms))
                    id)
               ; here is where to bind in global scope if toplp q and atomp rest
-             a3 (loop_s n (B nds))
+             a3 (loops n (B nds))
              (<=< a1 a2 a3)))
          _ (tset q 'lam clams)
          s0 (stkof c)
          n (llen noms)
          a1 (ana c llam)
-         a2 (loop_s -1 (zip noms defs))
+         a2 (loops -1 (zip noms defs))
          a3 (? (> n 1) (em_apn n) em_ap)
          _ (tset c 'stk s0)
-         (<=< a1 a2 a3))) ; end ana_let
+         (<=< a1 a2 a3))
 
-      (ana_seq c x)
-       (? (atomp x) (imm 0)
-        (co (ana c (A x))
-            (? (atomp (B x)) id
-             (co (em1 i_drop1)
-                 (ana_seq c (B x))))))
-      (ana_if c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
-       (pop y k n) (: j (k n) (, (cpop c y) j))
-       (push y k n) (cpush c y (k n))
-       (peek_end c k n) (: j (k (+ 2 n))
-        dest (cpeek c 'end)
-        (? (= i_ret (peek dest))
-         (poke i_ret (seek -1 (poke (peek (seek 1 dest)) (seek -1 j))))
-         (poke i_jump (seek -1 (poke (cpeek c 'end) (seek -1 j))))))
+       ) ; end ana_let
+      ) ; end ana_two
+     ) ; end ana
+    ) ; end eval
+   eval)
 
-       (pop_alt c k n) (: j (k (+ 2 n))
-        (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
-       (ana_if_r b) (?
-        (atomp b) (imm 0)
-        (atomp (B b)) (co (ana c (A b))
-                          (peek_end c))
-        (: a0 (ana c (A b))
-           a1 (pop_alt c)
-           a2 (ana c (AB b))
-           a3 (peek_end c)
-           a4 (push 'alt)
-           a5 (ana_if_r (BB b))
-        (<=< a0 a1 a2 a3 a4 a5)))))))
-   eval
-    )))
   boot_script '
    (\ fs (:- (? args       (procs prog (A args) (B args))
                 (isatty 0) (repl prompt)
@@ -297,9 +309,7 @@
 
 (: (go a b) (? b (go (ev 'ev (A b)) (B b)) a)
  (, (go 0 prelude)
-    (tset globals 'prelude prelude)
+    (tset globals 'eval (ev evaluator))
+    (tset globals 'evaluator evaluator)
     ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
-    (ev 'ev boot_script)
- ))
-
-))
+    (ev 'ev boot_script)))))

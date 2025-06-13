@@ -865,20 +865,7 @@ static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
     UM(f),
     m; }
 
-static size_t ana_ap_r2lr(core *f, env **c, size_t m, word x) {
-  if (!twop(x)) return m;
-  word a = A(x);
-  MM(f, &a);
-  m = ana_ap_r2lr(f, c, m, B(x));
-  UM(f);
-  if (!m) return m;
-  m = analyze(f, c, m, a);
-  if (!((*c)->stack = wpairof(f, nil, (*c)->stack))) return 0;
-  return m; }
 
-
-
-static size_t ana_ap_r2l(core *f, env **c, size_t m, word args, word argc);
 
 // evaluate a function expression by applying the function to arguments
 static size_t ana_ap(core *f, env* *c, size_t m, word fn, word args) {
@@ -888,31 +875,7 @@ static size_t ana_ap(core *f, env* *c, size_t m, word fn, word args) {
   avec(f, args, m = analyze(f, c, m, fn));
   // if there are no arguments or the analysis failed we are done.
   if (!argc || !m) return m;
-  // otherwise eval the arguments and apply the function.
-  // for single applications l2r is efficient.
-  if (argc == 1) return ana_ap_l2r(f, c, m, args);
-  // otherwise r2l is more efficient. whether or not we can r2l requires
-  // knowing the function arity ahead of time which we can check by reflecting
-  // on the stack.
-  bool can_r2l = // the question is ...
-    f->sp[0] == Z(cata_ix) &&         // was the last instruction we emitted
-    f->sp[1] == Z(imm) &&             // an immediate load
-    homp(f->sp[2]) &&                 // of a function
-    R(f->sp[2])[0].ap == curry &&     // that's curried
-    getnum(R(f->sp[2])[1].x) == argc; // and has the same arity as the call?
-  return can_r2l ? ana_ap_r2l(f, c, m, args, argc) : // if so then r2l
-                   ana_ap_l2r(f, c, m, args); }      // else l2r
-
-static size_t ana_ap_r2l(core *f, env **c, size_t m, word args, word argc) {
-  m += 2;
-  MM(f, &args);
-  m = ((*c)->stack = wpairof(f, nil, (*c)->stack)) ? m : 0;
-  UM(f);
-  m = m ? ana_ap_r2lr(f, c, m, args) : m;
-  if (!m || !pushs(f, 2, cataapn, putnum(argc))) return 0;
-  do (*c)->stack = B((*c)->stack);
-  while (argc--);
-  return m; }
+  return ana_ap_l2r(f, c, m, args); }
 
 static Ana(ana_lambda, word);
 static Ana(ana_list) {
