@@ -104,7 +104,7 @@
         (<=< a1 a2)))
       (ana_sym_stack_ref d) (,
        (? (nilp (= c d)) (import c x))
-       (cata_var c x (llen (zget c 'stk))))
+       (cata_var c x (llen (stkof c))))
       (ana_sym_local_def stack) (,
        (em2 i_ref (lidx x stack))
        )
@@ -223,7 +223,7 @@
              a3 (loop_s n (B nds))
              (<=< a1 a2 a3)))
          _ (tset q 'lam clams)
-         s0 (zget c 'stk)
+         s0 (stkof c)
          n (llen noms)
          a1 (ana c llam)
          a2 (loop_s -1 (zip noms defs))
@@ -233,11 +233,11 @@
 
       (ana_seq c x)
        (? (atomp x) (imm 0)
-        (<=< (ana c (A x))
-             (? (atomp (B x)) id
-              (<=< (em1 i_drop1)
-                   (ana_seq c (B x))))))
-      (ana_if c b) (:- (<=< (pop 'end) (ana_if_r b) (push 'end))
+        (co (ana c (A x))
+            (? (atomp (B x)) id
+             (co (em1 i_drop1)
+                 (ana_seq c (B x))))))
+      (ana_if c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
        (peek_end c k n) (: j (k (+ 2 n))
@@ -250,17 +250,17 @@
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
        (ana_if_r b) (?
         (atomp b) (imm 0)
-        (atomp (B b)) (<=< (ana c (A b))
-                           (peek_end c))
-        (<=< (ana c (A b))
-             (pop_alt c)
-             (ana c (AB b))
-             (peek_end c)
-             (push 'alt)
-             (ana_if_r (BB b))))))))
+        (atomp (B b)) (co (ana c (A b))
+                          (peek_end c))
+        (: a0 (ana c (A b))
+           a1 (pop_alt c)
+           a2 (ana c (AB b))
+           a3 (peek_end c)
+           a4 (push 'alt)
+           a5 (ana_if_r (BB b))
+        (<=< a0 a1 a2 a3 a4 a5)))))))
    eval
-    )
-   ))
+    )))
   boot_script '
    (\ fs (:- (? args       (procs prog (A args) (B args))
                 (isatty 0) (repl prompt)
