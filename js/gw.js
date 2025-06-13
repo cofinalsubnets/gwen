@@ -1,4 +1,4 @@
-const glisp = (() => {
+const gw = (() => {
   const
     { isArray } = Array, // need this
     // special forms, need these
@@ -36,24 +36,24 @@ const glisp = (() => {
 
     //
     // parse one expression from a string and return it
-    glisp_read = (s) => expr(s, (_, x) => x[0], e => console.error('parse error', e)),
+    gw_read = (s) => expr(s, (_, x) => x[0], e => console.error('parse error', e)),
 
     // top level environment definitions
     global_env = (g => x => g[x])([
-        [".",  a => (console.log(a), a)],
-        ["+",  a => b => a + b],
-        ["-",  a => b => a - b],
-        ["*",  a => b => a * b],
-        ["/",  a => b => a / b],
-        ["%",  a => b => a % b],
-        ["<",  a => b => a <   b ? 1 : 0],
-        ["<=", a => b => a <=  b ? 1 : 0],
-        ["=",  a => b => a === b ? 1 : 0],
-        [">=", a => b => a >=  b ? 1 : 0],
-        [">",  a => b => a >   b ? 1 : 0],
-        ["X",  a => b => [a].concat(isArray(b) ? b : [])],
-        ["A",  a => isArray(a) ? a[0] : a],
-        ["B",  a => !isArray(a) || a.length < 2 ? 0 : a.slice(1)],
+        [".", a => (console.log(a), a)],
+        ["+", a => b => a + b],
+        ["-", a => b => a - b],
+        ["*", a => b => a * b],
+        ["/", a => b => a / b],
+        ["%", a => b => a % b],
+        ["=", a => b => a===b?1:0],
+        ["<", a => b => a<b?1:0],
+        ["<=", a => b => a<=b?1:0],
+        [">=", a=>b=>a>=b?1:0],
+        [">", a=>b=>a>b?1:0],
+        ["X", a=>b=>[a].concat(isArray(b)?b:[])],
+        ["A", a=>isArray(a)?a[0]:a],
+        ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
         ["tget", z=>t=>k=>t instanceof Map && t.has(k) ? t.get(k) : z],
         ["tset", t=>k=>v=>t instanceof Map ? t.set(k, v) : v],
         ["tnew", _=>new Map()],
@@ -106,19 +106,19 @@ const glisp = (() => {
     },
 
     // print function
-    glisp_show = x => {
+    gw_show = x => {
       switch (typeof(x)) {
         case 'symbol': return Symbol.keyFor(x) || '#symbol';
         case 'function': return `#\\${x.name}`;
-        default: return isArray(x) ? `(${x.map(glisp_show).join(' ')})` : '' + x;
+        default: return isArray(x) ? `(${x.map(gw_show).join(' ')})` : '' + x;
       }
     };
 
   return {
-    read: glisp_read,
-    show: glisp_show,
+    read: gw_read,
+    show: gw_show,
     eval: x => ev(x)(global_env),
   }
 })();
 
-if (typeof(module) !== 'undefined') module.exports = glisp;
+if (typeof(module) !== 'undefined') module.exports = gw;
