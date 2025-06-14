@@ -143,7 +143,7 @@ static word
   cp(core*, word, word*, word*);
 
 static Vm(gc, uintptr_t);
-static vm display, bnot, rng, data,
+static vm bnot, rng, data,
    symnom, ret, ret0, ap, apn, tap, tapn,
    sysclock,
    jump, cond, ref, imm, yield, yieldi,
@@ -223,11 +223,7 @@ static Inline size_t b2w(size_t b) {
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
 
-static Vm(dot) { return
-  px(Sp[0]),
-  Ip++,
-  Continue(); }
-
+static vm dot;
 #define insts(_) \
   _(dot) _(free_variable)\
   _(data) _(ret) _(ap) _(tap) _(apn) _(tapn) \
@@ -243,11 +239,11 @@ static Vm(dot) { return
   _(bif_mul, "*", S2(mul)) _(bif_quot, "/", S2(quot)) _(bif_rem, "%", S2(rem)) \
   _(bif_lt, "<", S2(lt))  _(bif_le, "<=", S2(le)) _(bif_eq, "=", S2(eq))\
   _(bif_ge, ">=", S2(ge))  _(bif_gt, ">", S2(gt)) \
-  _(bif_dot, "dot", S1(dot)) _(bif_rand, "rand", S1(rng)) \
+  _(bif_rand, "rand", S1(rng)) \
   _(bif_cons, "X", S2(cons)) _(bif_car, "A", S1(car)) _(bif_cdr, "B", S1(cdr)) \
   _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) \
   _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \
-  _(bif_display, ".", S1(display)) _(bif_putc, "putc", S1(prc)) \
+  _(bif_dot, ".", S1(dot)) _(bif_putc, "putc", S1(prc)) \
   _(bif_bnot, "~", S1(bnot)) \
   _(bif_thd, "thd", S1(thda)) _(bif_peek, "peek", S1(peek)) _(bif_poke, "poke", S2(poke))\
   _(bif_trim, "trim", S1(trim)) _(bif_seek, "seek", S2(seek)) \
@@ -935,6 +931,8 @@ static Vm(lazy_bind) {
   word ref = Ip[1].x,
        var = A(ref),
        lams = B(ref);
+//  px(ref);
+//  puts("");
   ref = AB(lassoc(f, lams, var));
   if (!ref) return PStatusVar;
   Ip[0].ap = imm;
@@ -1179,8 +1177,9 @@ NoInline long p_gettime(void) {
 Vm(sysclock) { return op(1, putnum(p_gettime())); }
 
 Vm(p_isatty) { return op(1, isatty(getnum(*Sp)) ? putnum(-1) : nil); }
-Vm(prc)     { word w = *Sp; putc(getnum(w), stdout);     return op(1, w); }
-Vm(display) { word w = *Sp; transmit(f, stdout, w); return op(1, w); }
+Vm(prc)     { word w = *Sp; putc(getnum(w), stdout); Ip++; return Continue(); }
+static Vm(dot) { return transmit(f, stdout, Sp[0]), Ip++, Continue(); }
+
 
 void transmit(core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));

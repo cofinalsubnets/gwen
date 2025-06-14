@@ -119,8 +119,8 @@
                (em2 i_free_variable x))))
         ; else...
        (: lam (zget d 'lam)
-          lfd (assq x lam)
           stk (zget d 'stk)
+          lfd (assq x lam)
         (? lfd ; local function def?
              (co (em2 i_lazy_bind (X (A lfd) lam))
                  (ana_apl_s 1 c (BB lfd)))
@@ -262,7 +262,7 @@
                  d)
              a1 (ana c d1)
              a2 (? (&& (toplp c) (atomp rest))
-                   (em2 i_defglob (last noms))
+                   (em2 i_defglob n)
                    id)
               ; here is where to bind in global scope if toplp q and atomp rest
              a3 (loops n (B nds))
@@ -282,7 +282,7 @@
    e0 ev
    _ (go e0 0 prelude)
    e1 (e0 evaluator)
-   _ (go e1 0 prelude)
+;   _ (go e1 0 prelude)
    e2 (e1 evaluator)
    _ (tset globals 'eval e2)
    _ (tset globals 'evaluator evaluator)
