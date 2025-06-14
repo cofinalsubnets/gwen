@@ -151,8 +151,8 @@
       i (peek a)
       (?  (|| (= i i_ret) (= i i_tap))
            (p1 i (p1 (peek (seek 1 a)) j))
-          (= i i_tapn) (,
-           (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j))))
+          (= i i_tapn)
+           (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j)))
           (p1 i_jump (p1 a j)))))
 
     (ana_apl n c b) (:
@@ -272,13 +272,8 @@
        (loop nds) (? (nilp nds) id
                    (: nd (A nds) n (A nd) d (B nd)
                       d (? (nilp (lambp d)) d (: qa (assq n clams)
-                                                 ;_ (.. 'QA)
-                                                 ;_ (.. clams)
-                                                 ;_ (.. qa)
                                                  x (ana_ll q (BB qa) (B d))
                                                  _ (set_cdr qa x)
-                                                 ;_ (.. qa)
-                                                 ;_ (.. clams)
                                                  x))
                       a1 (ana c d)
                       a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
@@ -301,41 +296,37 @@
 
 ; this does some initialization and then returns the main function
 (: ; we can't use prelude directly yet here
+   (go e a) (? a (, (e (A a)) (go e (B a))))
+   e0 ev
+   _ (go e0 prelude)
+;   _ (go e0 prelude)
+   e1 (e0 evaluator)
+;   _ (go e1 prelude)
+   e2 (e1 evaluator)
+   _ (tset globals 'ev e2)
+   _ (tset globals 'eval e2)
    _ (tset globals 'evaluator evaluator)
    _ (tset globals 'prelude prelude)
-   (go a) (? a (, (ev (A a)) (go (B a))))
-   _ (go prelude)
-   (ev '(: ; in here we can use them
-     e0 ev
-;     _ (each prelude e0)
-     ex (cat (A prelude) (L evaluator))
-     _ (tset globals 'ex ex)
-     e1 (e0 evaluator)
-;     _ (each prelude e1)
-     e2 (e1 evaluator)
-     _ (tset globals 'e0 e0)
-     _ (tset globals 'eval e2)
-     _ (tset globals 'ev e2)
-      ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
-     (e2 '(\ fs ; we can use prelude in here
-      (:- (? args       (procs prog (A args) (B args))
-             (isatty 0) (repl prompt)
-                        (reads 0))
-        prog (A fs) args (B fs)
-        prompt "    "
-        (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
-        (repl p)  (: r (, (puts p) (read 0))
-                   (? r (, (. (ev (A r))) (putc 10) (repl p))))
-        (procs prog a as) (, (proc1 prog a) (? as (procs prog (A as) (B as))))
-        (proc1 prog arg)
-         (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
-            (= arg "-v") (, (puts prog) (puts " ") (putln version))
-            (= arg "-r") (repl prompt)
-            (each (readf arg) ev))
-        (putln s) (, (puts s) (putc 10))
-         help (L " [args]"
-                 " args:"
-                 "   -h   show this message"
-                 "   -v   show version"
-                 "   -r   start repl"
-                 " file   evaluate file"))))))))
+    ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
+   (e2 '(\ fs ; we can use prelude in here
+    (:- (? args       (procs prog (A args) (B args))
+           (isatty 0) (repl prompt)
+                      (reads 0))
+      prog (A fs) args (B fs)
+      prompt "    "
+      (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
+      (repl p)  (: r (, (puts p) (read 0))
+                 (? r (, (. (ev (A r))) (putc 10) (repl p))))
+      (procs prog a as) (, (proc1 prog a) (? as (procs prog (A as) (B as))))
+      (proc1 prog arg)
+       (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
+          (= arg "-v") (, (puts prog) (puts " ") (putln version))
+          (= arg "-r") (repl prompt)
+          (each (readf arg) ev))
+      (putln s) (, (puts s) (putc 10))
+       help (L " [args]"
+               " args:"
+               "   -h   show this message"
+               "   -v   show version"
+               "   -r   start repl"
+               " file   evaluate file"))))))
