@@ -624,7 +624,7 @@ static size_t ana_i2(core *f, env **c, size_t m, vm *i, word x) {
 // conditional expression analyzer
 static NoInline Ana(ana_if) {
   if (!pushs(f, 2, x, generate_cond_pop_exit)) return 0;
-  Pair p = { 0, 0, nil, nil };
+  Pair p = { 0, 0, nil, nil }; // this is weird :/
   x = pop1(f);
   MM(f, &x);
   for (; m; x = BB(x)) {

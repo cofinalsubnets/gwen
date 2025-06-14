@@ -34,8 +34,7 @@
                (X (A m) (X a (B m))))))
      (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
-     )
-  (: (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
+     (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
 
   (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
   (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))
@@ -44,54 +43,79 @@
   (:: '>>= (\ l (X (last l) (init l))))
   (:: '|> (foldl1 (\ m f (L f m ))))
   (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
-  (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
-  ) ; end prelude
+  (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))) ; end prelude
 
   evaluator '(:- eval
-    (scop par arg imp) (: t (tnew()) (, (tset t 'par par) (tset t 'arg arg) (tset t 'imp imp) t))
     anon (sym 0)
-    (toplp c) (nilp (parof c))
-    (parof c) (tget 0 c 'par)
-    (stkof c) (tget 0 c 'stk)
-    (argof c) (tget 0 c 'arg)
-    (impof c) (tget 0 c 'imp)
-    (lamof c) (tget 0 c 'lam)
     zget (tget 0)
+
+;; functions for working with variable scope records
+    (toplp c) (nilp (parof c)) (parof c) (tget 0 c 'par)
+    (stkof c) (tget 0 c 'stk)  (argof c) (tget 0 c 'arg)
+    (impof c) (tget 0 c 'imp)  (lamof c) (tget 0 c 'lam)
     (arity c) (+ (llen (argof c)) (llen (impof c)))
-    (thd0 r n) (poke i_ret (seek -1 (poke (arity r) (seek (+ 1 n) (thd (+ 2 n))))))
     (cpush c k v) (, (tset c k (X v (zget c k))) v)
-    (import c v) (? (not (toplp c)) (cpush c 'imp v))
-    (cpop c k) (: s (zget c k) (, (tset c k (B s)) (A s)))
+    (cpop c k) (: s (zget c k)
+                  _ (tset c k (B s))
+                  (A s))
     (cpeek c k) (A (zget c k))
+    (scop par arg imp) (:
+     t (tnew 0)
+     _ (tset t 'par par)
+     _ (tset t 'arg arg)
+     _ (tset t 'imp imp)
+     t)
+
+;; thread initializer
+    (thd0 c n) (:
+     k (thd (+ 2 n))             ; full initial thread
+     k (seek (+ 1 n) k)         ; go to last writeable address
+     k (poke (arity c) k)       ; write return instruction
+     k (seek -1 k)
+     k (poke i_ret k)
+     k)
+
+;; import a variable into this scope
+    (import c v)
+     (? (not (toplp c))
+      (cpush c 'imp v))
+
     (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
-    (em2 i x k) (em1 i (em1 x k))
+    (em2 i x) (co (em1 i) (em1 x))
     (em_ap k n)
      (: j (k (+ 1 n))
-      (? (= i_ret (peek j))
+      (? (retp j)
          (poke i_tap j)
          (poke i_ap (seek -1 j))))
+
     (em_apn n k m) (: j (k (+ 2 m))
-     (? (= i_ret (peek j))
+     (? (retp j)
       (poke i_tapn (seek -1 (poke n j)))
       (poke i_apn (seek -1 (poke n (seek -1 j))))))
+
+    (retp k) (= i_ret (peek k))
+
     imm (em2 i_imm)
-    (cata_var c x ins j m) (:
-     k (j (+ 2 m))
+    (cata_var c x ins j m) (: k (j (+ 2 m))
      (poke i_ref (seek -1 (poke (+ ins (stkidx c x)) (seek -1 k)))))
+
     (stkidx d x)
-      (: imp  (impof d)
-         ii (idx imp x)
+      (: imp (impof d)
+         ii  (lidx x imp)
        (? (<= 0 ii) ii
-        (: ai (idx (argof d) x)
+        (: ai (lidx x (argof d))
          (? (<= 0 ai) (+ (llen imp) ai)
                       -1))))
-    (idx l i) (>>= l 0 (: (ii l n) (? l (? (= i (A l)) n (ii (B l) (inc n))) -1)))
 
-    (eval x) (: top (scop 0 (L 0) 0) (ana top x (thd0 top) 0 0))
+    (eval x) (:
+     t (scop 0 (L 0) 0)
+     (ana t x (thd0 t) 0 0))
 
-    (ana c x) (:- (? (symp x)  (ana_sym c x)
-                     (atomp x) (imm x)
-                               (ana_two c (A x) (B x)))
+    (ana c x) (:-
+     (? (symp x)  (ana_sym c x)
+        (atomp x) (imm x)
+                  (ana_two c (A x) (B x)))
+
      (ana_apl_s n c b) (:
            (loop c b)
             (? (atomp b) id
@@ -105,39 +129,40 @@
       a)
 
      (ana_ap c f b)  (co (ana c f) (ana_apl_s 0 c b))
-     (ana_sym c x) (>>= c (: (ana_sym_r d)
-      (? (nilp d) ; outside all lexical scopes?
-          (: y (tget anon globals x) ; check global scope
-           (? (!= y anon) (imm y) ; if it's there use that
-            (, (import c x) ; if it's not there... do something
-               (em2 i_free_variable x))))
-        ; else...
-       (: lam (lamof d)
-          stk (stkof d)
-          lfd (assq x lam)
-        (? lfd ; local function def? ;; ana_sym_local_fn
-             (: ;y (X x lam)
-                arg (BB lfd)
-                a1 (em2 i_lazy_bind lfd)
-                a2 (ana_apl_s 0 c arg)
-              (co a1 a2))
-          ; else ...
-          ; bound on stack by an inner let form?
-         (&& (= c d) (memq x stk))
-          (em2 i_ref (lidx x stk))
-         ; bound on stack by an outer let form or function or closure?
-         (? (memq x stk) 1 (<= 0 (stkidx d x)))
-          (, (? (!= c d) (import c x))
-             (cata_var c x (llen (stkof c))))
-         ; else recur
-         (ana_sym_r (zget d 'par)))))))
+     (ana_sym c x) (:- (ana_sym_r c)
+      (ana_sym_r d)
+       (? (nilp d) ; outside all lexical scopes?
+           (: y (tget anon globals x) ; check global scope
+            (? (!= y anon) (imm y) ; if it's there use that
+             (, (import c x) ; if it's not there... do something
+                (em2 i_free_variable x))))
+         ; else...
+        (: lam (lamof d)
+           stk (stkof d)
+           lfd (assq x lam)
+         (? lfd ; local function def? ;; ana_sym_local_fn
+              (: ;y (X x lam)
+                 arg (BB lfd)
+                 a1 (em2 i_lazy_bind lfd)
+                 a2 (ana_apl_s 0 c arg)
+               (co a1 a2))
+           ; else ...
+           ; bound on stack by an inner let form?
+          (&& (= c d) (memq x stk))
+           (em2 i_ref (lidx x stk))
+          ; bound on stack by an outer let form or function or closure?
+          (? (memq x stk) 1 (<= 0 (stkidx d x)))
+           (, (? (!= c d) (import c x))
+              (cata_var c x (llen (stkof c))))
+          ; else recur
+          (ana_sym_r (zget d 'par))))))
 
      (ana_two c a b) (:-
-      (? (= a '` )  (imm (A b))
-         (= a '? )  (ana_if  c b)
-         (= a '\ )  (ana_lam c b)
-         (= a ': )  (ana_let c b)
-         (= a ', )  (ana_seq c b)
+      (? (= a '` ) (imm (A b))
+         (= a '? ) (ana_if  c b)
+         (= a '\ ) (ana_lam c b)
+         (= a ': ) (ana_let c b)
+         (= a ', ) (ana_seq c b)
          (atomp b) (ana c a)
          (: m (zget macros a)
           (? m (ana c (m b))
@@ -151,18 +176,30 @@
              (co (em1 i_drop1)
                  (ana_seq c (B x))))))
 
+      (tapp j) (= i_tap (peek j))
+      (tapnp j) (= i_tapn (peek j))
       ;ana_if is a bit complicated
       (ana_if c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
-       (peek_end c k n) (: j (k (+ 2 n))
-        dest (cpeek c 'end)
-        (? (= i_ret (peek dest))
-         (poke i_ret  (seek -1 (poke (peek (seek 1 dest)) (seek -1 j))))
-         (poke i_jump (seek -1 (poke (cpeek c 'end)       (seek -1 j))))))
+       (peek_end c k n) (: j (k (+ 3 n))
+        dest (cpeek c 'end) (?
+         (|| (retp dest) (tapp dest))
+          (poke (peek dest)
+           (seek -1 (poke (peek (seek 1 dest))
+            (seek -1 j))))
+         (tapnp dest) (,
+          (poke i_tapn
+           (seek -1 (poke (peek (seek 1 dest))
+            (seek -1 (poke (peek (seek 2 dest))
+             (seek -1 j)))))))
+         (poke i_jump
+          (seek -1 (poke (cpeek c 'end)
+           (seek -1 j))))))
 
        (pop_alt c k n) (: j (k (+ 2 n))
         (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
+
        (ana_if_r b) (?
         (atomp b) (imm 0)
         (atomp (B b)) (co (ana c (A b))
