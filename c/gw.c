@@ -969,23 +969,15 @@ static Ana(ana_sym_r, env *d) {
 
 static Vm(lazy_bind);
 static Ana(ana_sym_local_fn, env *d) {
-  x = wpairof(f, x, Z(d->lams));
-  if (!x) return 0;
   m = ana_i2(f, c, m, lazy_bind, x);
   if (!m) return m;
   x = f->sp[2];
-  word y = BBA(x); // get the args
-  A(x) = AA(x); // set car of pair to just the symbol -- (symbol . env)
+  word y = BB(x); // get the args
   return ana_ap_l2r(f, c, m, y); }
 
 static Vm(lazy_bind) {
   word ref = Ip[1].x,
-       var = A(ref),
-       lams = B(ref),
-       lfd = lassoc(f, lams, var);
-  if (!lfd) {
-    px(ref);
-  }
+       lfd = ref;
   ref = AB(lfd);
   if (!ref) return PStatusVar;
   Ip[0].ap = imm;

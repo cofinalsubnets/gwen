@@ -43,4 +43,5 @@
  (= 44 (eval '(\ x y z (: q z (f r) (- (* x (+ y r)) q))) 5 9 6 1))
  (= 9 (eval '(\ n (: t (tnew 0) (, (tset t 'k n) (tget 0 t)))) 9 'k))
  (= 44 (eval evaluator evaluator '(\ x y z (: q z (f r) (- (* x (+ y r)) q))) 5 9 6 1))
+ (= '(3 4) (eval '(: (a x l) (? l (? (= x (AA l)) (A l) (a x (B l))))) 3 '((1 2) (2 3) (3 4) (4 5))))
 )

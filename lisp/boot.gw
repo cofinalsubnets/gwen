@@ -55,6 +55,7 @@
     (stkof c) (tget 0 c 'stk)
     (argof c) (tget 0 c 'arg)
     (impof c) (tget 0 c 'imp)
+    (lamof c) (tget 0 c 'lam)
     zget (tget 0)
     (arity c) (+ (llen (argof c)) (llen (impof c)))
     (thd0 r n) (poke i_ret (seek -1 (poke (arity r) (seek (+ 1 n) (thd (+ 2 n))))))
@@ -111,13 +112,13 @@
             (, (import c x) ; if it's not there... do something
                (em2 i_free_variable x))))
         ; else...
-       (: lam (zget d 'lam)
-          stk (zget d 'stk)
+       (: lam (lamof d)
+          stk (stkof d)
           lfd (assq x lam)
         (? lfd ; local function def? ;; ana_sym_local_fn
-             (: y (X x lam)
+             (: ;y (X x lam)
                 arg (BB lfd)
-                a1 (em2 i_lazy_bind y)
+                a1 (em2 i_lazy_bind lfd)
                 a2 (ana_apl_s 0 c arg)
               (co a1 a2))
           ; else ...
@@ -197,6 +198,7 @@
        (lambp x) (? (twop x) (= '\ (A x)))
        (desug n d) (? (atomp n) (X n d)
                       (desug (A n) (X '\ (cat (B n) (L d)))))
+       (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
        q (scop c (zget c 'arg) (zget c 'imp))
 ;       _ (tset c 'stk s) # FIXME should be adjusting this consistently elsewhere
        # l1 pass nom def and value expressions to l2
@@ -221,19 +223,20 @@
                                                l))
                 (b ll (B n) (B d))))))
 
-        (set_car p x) (, (poke x (seek 2 p)) x) # don't do this :<
-        (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
         (cl n l l1 l2) (?
-         l2 (? (? (!= l1 l2) (memq (AA l1) (BB (A l2))))
-             (>>= n (BB (A l1)) (: (f n v)
-                            (? v (: var ( (A v))
-                                    vars ( (B (BA l2)))
-                                    (? (memq var vars)
-                                     (f n (B v))
-                                     (, (set_cdr (BA l2) (X var vars))
-                                        (f (+ 1 n) (B v)))))
-                             (cl n l l1 (B l2)))))
-             (cl n l l1 (B l2)))
+         (&& l1 l2 (!= l1 l2) (memq (AA l1) (BB (A l2))))
+            (>>= n (BB (A l1)) (: (f n v)
+                                (? (nilp v) (cl n l l1 (B l2)) (:
+                                 var (A v)
+                                 vars (B (BA l2))
+                                 (? (memq var vars)
+                                  (f n (B v))
+                                  (, ;(puts "1 ") (.. (A l2))
+                                     (set_cdr (BA l2) (X var vars))
+                                     ;(puts "2 ") (.. (A l2))
+                                     (f (+ 1 n) (B v))))))))
+
+         l2 (cl n l l1 (B l2))
          l1 (cl n l (B l1) l)
          n (close l)
          l)
@@ -241,6 +244,7 @@
         lnoms (map A lams)
         (lamdel cs) (flip map cs (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))))
         clams (lamdel (close lams))
+        _ (tset q 'lam clams)
         llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
 
        # l3 collect defs and apply
@@ -262,7 +266,6 @@
               ; here is where to bind in global scope if toplp q and atomp rest
              a3 (loops n (B nds))
              (<=< a1 a2 a3)))
-         _ (tset q 'lam clams)
          s0 (stkof c)
          n (llen noms)
          a1 (ana c llam)
@@ -272,7 +275,7 @@
          (<=< a1 a2 a3))))))
 
 ; this does some initialization and then returns the main function
-(: ; we can't use prelude yet here
+(: ; we can't use prelude directly yet here
    (go e a b) (? b (go e (e (A b)) (B b)) a)
    _ (tset globals 'evaluator evaluator)
    _ (tset globals 'prelude prelude)
