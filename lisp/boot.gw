@@ -114,9 +114,12 @@
        (: lam (zget d 'lam)
           stk (zget d 'stk)
           lfd (assq x lam)
-        (? lfd ; local function def?
-             (co (em2 i_lazy_bind (X (A lfd) lam))
-                 (ana_apl_s 1 c (BB lfd)))
+        (? lfd ; local function def? ;; ana_sym_local_fn
+             (: y (X x lam)
+                arg (BB lfd)
+                a1 (em2 i_lazy_bind y)
+                a2 (ana_apl_s 0 c arg)
+              (co a1 a2))
           ; else ...
           ; bound on stack by an inner let form?
          (&& (= c d) (memq x stk))
@@ -218,6 +221,7 @@
                                                l))
                 (b ll (B n) (B d))))))
 
+        (set_car p x) (, (poke x (seek 2 p)) x) # don't do this :<
         (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
         (cl n l l1 l2) (?
          l2 (? (? (!= l1 l2) (memq (AA l1) (BB (A l2))))
@@ -270,14 +274,17 @@
 ; this does some initialization and then returns the main function
 (: ; we can't use prelude yet here
    (go e a b) (? b (go e (e (A b)) (B b)) a)
+   _ (tset globals 'evaluator evaluator)
+   _ (tset globals 'prelude prelude)
    e0 ev
    _ (go e0 0 prelude)
+   ex (e0 '(cat (A prelude) (L evaluator)))
+   _ (tset globals 'ex ex)
    e1 (e0 evaluator)
 ;   _ (go e1 0 prelude)
    e2 (e1 evaluator)
    _ (tset globals '_ev ev)
    _ (tset globals 'eval e2)
-   _ (tset globals 'evaluator evaluator)
    _ (tset globals 'ev e2)
     ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
    (e2 '(\ fs ; we can use prelude in here

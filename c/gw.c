@@ -967,27 +967,30 @@ static Ana(ana_sym_r, env *d) {
   // otherwise recur on the enclosing env
   return ana_sym_r(f, c, m, x, d->par); }
 
+static Vm(lazy_bind);
+static Ana(ana_sym_local_fn, env *d) {
+  x = wpairof(f, x, Z(d->lams));
+  if (!x) return 0;
+  m = ana_i2(f, c, m, lazy_bind, x);
+  if (!m) return m;
+  x = f->sp[2];
+  word y = BBA(x); // get the args
+  A(x) = AA(x); // set car of pair to just the symbol -- (symbol . env)
+  return ana_ap_l2r(f, c, m, y); }
+
 static Vm(lazy_bind) {
   word ref = Ip[1].x,
        var = A(ref),
        lams = B(ref),
        lfd = lassoc(f, lams, var);
+  if (!lfd) {
+    px(ref);
+  }
   ref = AB(lfd);
   if (!ref) return PStatusVar;
   Ip[0].ap = imm;
   Ip[1].x = ref;
   return Continue(); }
-
-static Ana(ana_sym_local_fn, env *d) {
-  m = ana_i2(f, c, m, lazy_bind, x);
-  if (!m) return m;
-  x = f->sp[2];
-  x = wpairof(f, x, Z(d->lams));
-  if (!x) return 0;
-  f->sp[2] = x;
-  word y = BBA(x); // get the args
-  A(x) = AA(x); // set car of pair to just the symbol -- (symbol . env)
-  return ana_ap_l2r(f, c, m, y); }
 
 // lambda decons pushes last list item to stack returns init of list
 static word linit(core *f, word x) {
