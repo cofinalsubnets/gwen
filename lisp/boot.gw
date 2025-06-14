@@ -116,9 +116,9 @@
          (= a ': ) (ana_let c b)
          (= a ', ) (ana_seq c b)
          (atomp b) (ana c a)
-         (: m (zget macros a)
-          (? m (ana c (m b))
-               (ana_ap c a b))))))
+         (: m (tget 0 macros a) (? m
+          (ana c (m b))
+          (ana_ap c a b))))))
 
     ;ana_if is a bit complicated
     (ana_if c b) (:- (: a0 (pop 'end)
@@ -185,6 +185,7 @@
        ; else...
       (: lam (lamof d)
          stk (stkof d)
+     (assq x l) (? l (? (= x (AA l)) (A l) (assq x (B l))))
          lfd (assq x lam)
        (? lfd ; local function def? ;; ana_sym_local_fn
             (: ;y (X x lam)
@@ -236,8 +237,7 @@
 
      # l2 pass noms defs exp with revised lambda defs to l3
      ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
-     (loop2 c q noms defs exp rest) (:-
-      (loop3 c q (rev noms) (rev defs) clams llam rest)
+     (loop2 c q noms defs exp rest) (:
 
       (close l) (:- (cl 0 l l l)
         (cl n l l1 l2) (?
@@ -247,10 +247,10 @@
             (? (nilp v) (cl n l l1 (B l2))
              (: var (A v)
                 vars (B (BA l2))
-              (? (memq var vars)
-               (loop n (B v))
-               (, (set_cdr (BA l2) (X var vars))
-                  (loop (+ 1 n) (B v)))))))
+                n (? (memq var vars) n
+                   (, (set_cdr (BA l2) (X var vars))
+                      (+ 1 n)))
+                (loop n (B v)))))
          l2 (cl n l l1 (B l2))
          l1 (cl n l (B l1) l)
          n (cl 0 l l l)
@@ -264,24 +264,28 @@
                                     (loop a (B n) (B d)))))
       (lamdel lnoms) (map (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))))
       clams (lamdel (map A lams) (close lams))
-      _ (tset q 'lam clams)
-      llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
-
+      llam (X '\ (cat noms (L exp))) ;; construct reversed lambda expression
+      (loop3 c q (rev noms) (rev defs) clams llam rest))
      # l3 collect defs and apply
      (loop3 c q noms defs clams llam rest) (:
-       (loops n nds) (, (cpush c 'stk n) (loop nds))
-       (loop nds) (? (nilp nds) id (:
-        nd (A nds)
-        n (A nd)
-        d (B nd)
-        d (? (nilp (lambp d)) d (: qa (assq n clams)
-                                   x (ana_ll q (BB qa) (B d))
-                                 (set_cdr qa x)))
-        a1 (ana c d)
-        a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
-        a3 (loops n (B nds))
-        (<=< a1 a2 a3)))
-
+       _ (tset q 'lam clams)
+       (loop nds) (? (nilp nds) id
+                   (: nd (A nds) n (A nd) d (B nd)
+                      d (? (nilp (lambp d)) d (: qa (assq n clams)
+                                                 ;_ (.. 'QA)
+                                                 ;_ (.. clams)
+                                                 ;_ (.. qa)
+                                                 x (ana_ll q (BB qa) (B d))
+                                                 _ (set_cdr qa x)
+                                                 ;_ (.. qa)
+                                                 ;_ (.. clams)
+                                                 x))
+                      a1 (ana c d)
+                      a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
+                      a3 (loops n (B nds))
+                      (<=< a1 a2 a3)))
+       (loops n nds) (: _ (cpush c 'stk n)
+                        (loop nds))
        s0 (stkof c)
        n (llen noms)
        a1 (ana c llam)
@@ -297,39 +301,40 @@
 
 ; this does some initialization and then returns the main function
 (: ; we can't use prelude directly yet here
-   (go e a b) (? b (go e (e (A b)) (B b)) a)
+   (go a) (? a (, (ev (A a)) (go (B a))))
    _ (tset globals 'evaluator evaluator)
    _ (tset globals 'prelude prelude)
-   e0 ev
-   _ (go e0 0 prelude)
-   ex (e0 '(cat (A prelude) (L evaluator)))
-   _ (tset globals 'ex ex)
-   e1 (e0 evaluator)
-;   _ (go e1 0 prelude)
-   e2 (e1 evaluator)
-   _ (tset globals '_ev ev)
-   _ (tset globals 'eval e2)
-   _ (tset globals 'ev e2)
-    ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
-   (e2 '(\ fs ; we can use prelude in here
-    (:- (? args       (procs prog (A args) (B args))
-           (isatty 0) (repl prompt)
-                      (reads 0))
-      prog (A fs) args (B fs)
-      prompt "    "
-      (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
-      (repl p)  (: r (, (puts p) (read 0))
-                 (? r (, (. (ev (A r))) (putc 10) (repl p))))
-      (procs prog a as) (, (proc1 prog a) (? as (procs prog (A as) (B as))))
-      (proc1 prog arg)
-       (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
-          (= arg "-v") (, (puts prog) (puts " ") (putln version))
-          (= arg "-r") (repl prompt)
-          (each (readf arg) ev))
-      (putln s) (, (puts s) (putc 10))
-       help (L " [args]"
-               " args:"
-               "   -h   show this message"
-               "   -v   show version"
-               "   -r   start repl"
-               " file   evaluate file"))))))
+   _ (go prelude)
+   (ev '(:
+     ex (ev '(cat (A prelude) (L evaluator)))
+     _ (tset globals 'ex ex)
+     e1 (ev evaluator)
+     _ (go e1 0 prelude)
+     e2 (e1 evaluator)
+     _ (tset globals '_ev ev)
+     _ (tset globals 'eval e2)
+     _ (tset globals 'ev e2)
+     _ (tset globals 'go go)
+      ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
+     (e2 '(\ fs ; we can use prelude in here
+      (:- (? args       (procs prog (A args) (B args))
+             (isatty 0) (repl prompt)
+                        (reads 0))
+        prog (A fs) args (B fs)
+        prompt "    "
+        (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
+        (repl p)  (: r (, (puts p) (read 0))
+                   (? r (, (. (ev (A r))) (putc 10) (repl p))))
+        (procs prog a as) (, (proc1 prog a) (? as (procs prog (A as) (B as))))
+        (proc1 prog arg)
+         (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
+            (= arg "-v") (, (puts prog) (puts " ") (putln version))
+            (= arg "-r") (repl prompt)
+            (each (readf arg) ev))
+        (putln s) (, (puts s) (putc 10))
+         help (L " [args]"
+                 " args:"
+                 "   -h   show this message"
+                 "   -v   show version"
+                 "   -r   start repl"
+                 " file   evaluate file"))))))))
