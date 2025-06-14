@@ -34,6 +34,7 @@
                (X (A m) (X a (B m))))))
      (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
+     zget (tget 0)
      (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
 
   (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
@@ -46,8 +47,6 @@
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))) ; end prelude
 
   evaluator '(:- eval
-    anon (sym 0)
-    zget (tget 0)
 
 ;; functions for working with variable scope records
     (toplp c) (nilp (parof c)) (parof c) (tget 0 c 'par)
@@ -55,9 +54,7 @@
     (impof c) (tget 0 c 'imp)  (lamof c) (tget 0 c 'lam)
     (arity c) (+ (llen (argof c)) (llen (impof c)))
     (cpush c k v) (, (tset c k (X v (zget c k))) v)
-    (cpop c k) (: s (zget c k)
-                  _ (tset c k (B s))
-                  (A s))
+    (cpop c k) (: s (zget c k) _ (tset c k (B s)) (A s))
     (cpeek c k) (A (zget c k))
     (scop par arg imp) (:
      t (tnew 0)
@@ -70,9 +67,8 @@
     (thd0 c n) (:
      k (thd (+ 2 n))             ; full initial thread
      k (seek (+ 1 n) k)         ; go to last writeable address
-     k (poke (arity c) k)       ; write return instruction
-     k (seek -1 k)
-     k (poke i_ret k)
+     k (p0 (arity c) k)       ; write return instruction
+     k (p1 i_ret k)
      k)
 
 ;; import a variable into this scope
@@ -80,24 +76,29 @@
      (? (not (toplp c))
       (cpush c 'imp v))
 
-    (em1 i k n) (poke i (seek -1 (k (+ 1 n))))
-    (em2 i x) (co (em1 i) (em1 x))
-    (em_ap k n)
-     (: j (k (+ 1 n))
-      (? (retp j)
-         (poke i_tap j)
-         (poke i_ap (seek -1 j))))
+    p0 poke
+    (p1 x k) (poke x (seek -1 k))
+    (em1 i k n) (p1 i (k (+ 1 n)))
+    (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
 
-    (em_apn n k m) (: j (k (+ 2 m))
-     (? (retp j)
-      (poke i_tapn (seek -1 (poke n j)))
-      (poke i_apn (seek -1 (poke n (seek -1 j))))))
-
-    (retp k) (= i_ret (peek k))
+    (em_ap k n) (:
+     j (k (+ 1 n))
+     i (peek j)
+     (? (= i i_ret)
+      (p0 i_tap j)
+      (p1 i_ap j)))
+    (em_apn n k m) (:
+     j (k (+ 2 m))
+     i (peek j)
+     (? (= i i_ret)
+      (p1 i_tapn (p0 n j))
+      (p1 i_apn (p1 n j))))
 
     imm (em2 i_imm)
-    (cata_var c x ins j m) (: k (j (+ 2 m))
-     (poke i_ref (seek -1 (poke (+ ins (stkidx c x)) (seek -1 k)))))
+    (cata_var c x ins j m) (:
+     k (j (+ 2 m))
+     k (p1 (+ ins (stkidx c x)) k)
+     (p1 i_ref k))
 
     (stkidx d x)
       (: imp (impof d)
@@ -116,7 +117,7 @@
         (atomp x) (imm x)
                   (ana_two c (A x) (B x)))
 
-     (ana_apl_s n c b) (:
+     (ana_apl n c b) (:
            (loop c b)
             (? (atomp b) id
              (: a1 (ana c (A b))
@@ -128,12 +129,13 @@
       _ (cpop c 'stk)
       a)
 
-     (ana_ap c f b)  (co (ana c f) (ana_apl_s 0 c b))
+     (ana_ap c f b)  (co (ana c f) (ana_apl 0 c b))
      (ana_sym c x) (:- (ana_sym_r c)
       (ana_sym_r d)
        (? (nilp d) ; outside all lexical scopes?
-           (: y (tget anon globals x) ; check global scope
-            (? (!= y anon) (imm y) ; if it's there use that
+           (: a0 (sym 0)
+              y (tget a0 globals x) ; check global scope
+            (? (!= y a0) (imm y) ; if it's there use that
              (, (import c x) ; if it's not there... do something
                 (em2 i_free_variable x))))
          ; else...
@@ -144,7 +146,7 @@
               (: ;y (X x lam)
                  arg (BB lfd)
                  a1 (em2 i_lazy_bind lfd)
-                 a2 (ana_apl_s 0 c arg)
+                 a2 (ana_apl 0 c arg)
                (co a1 a2))
            ; else ...
            ; bound on stack by an inner let form?
@@ -155,7 +157,7 @@
            (, (? (!= c d) (import c x))
               (cata_var c x (llen (stkof c))))
           ; else recur
-          (ana_sym_r (zget d 'par))))))
+          (ana_sym_r (parof d))))))
 
      (ana_two c a b) (:-
       (? (= a '` ) (imm (A b))
@@ -179,39 +181,39 @@
       (tapp j) (= i_tap (peek j))
       (tapnp j) (= i_tapn (peek j))
       ;ana_if is a bit complicated
-      (ana_if c b) (:- (co (pop 'end) (co (ana_if_r b) (push 'end)))
+      (ana_if c b) (:- (: a0 (pop 'end)
+                          a1 (ana_if_r b)
+                          a2 (push 'end)
+                        (<=< a0 a1 a2))
        (pop y k n) (: j (k n) (, (cpop c y) j))
        (push y k n) (cpush c y (k n))
-       (peek_end c k n) (: j (k (+ 3 n))
-        dest (cpeek c 'end) (?
-         (|| (retp dest) (tapp dest))
-          (poke (peek dest)
-           (seek -1 (poke (peek (seek 1 dest))
-            (seek -1 j))))
-         (tapnp dest) (,
-          (poke i_tapn
-           (seek -1 (poke (peek (seek 1 dest))
-            (seek -1 (poke (peek (seek 2 dest))
-             (seek -1 j)))))))
-         (poke i_jump
-          (seek -1 (poke (cpeek c 'end)
-           (seek -1 j))))))
-
-       (pop_alt c k n) (: j (k (+ 2 n))
-        (poke i_cond (seek -1 (poke (cpop c 'alt) (seek -1 j)))))
-
        (ana_if_r b) (?
         (atomp b) (imm 0)
         (atomp (B b)) (co (ana c (A b))
                           (peek_end c))
-        ; we want exact control over evaluation order here
         (: a0 (ana c (A b))
            a1 (pop_alt c)
            a2 (ana c (AB b))
            a3 (peek_end c)
            a4 (push 'alt)
            a5 (ana_if_r (BB b))
-        (<=< a0 a1 a2 a3 a4 a5))))
+         (<=< a0 a1 a2 a3 a4 a5)))
+
+       (pop_alt c k n) (:
+        j (k (+ 2 n))
+        alt (cpop c 'alt)
+        j (p1 alt j)
+        (p1 i_cond j))
+
+       (peek_end c k n) (:
+        j (k (+ 3 n))
+        a (cpeek c 'end)
+        i (peek a)
+        (?  (|| (= i i_ret) (= i i_tap))
+             (p1 i (p1 (peek (seek 1 a)) j))
+            (= i i_tapn) (,
+             (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j))))
+            (p1 i_jump (p1 a j)))))
 
       ; ana_lam is small because it uses ana_ll which ana_let also uses
       (ana_lam c b) (? (atomp b)     (imm 0)
@@ -225,7 +227,7 @@
        k0 (ana d x (thd0 d))
        ar (arity d)
        k (trim ((? (> ar 1) (em2 i_curry ar) id) k0 0))
-       (X k (zget d 'imp)))
+       (X k (impof d)))
 
       ; ana_let is the worst :[
       (ana_let c b) (:-
@@ -236,7 +238,7 @@
        (desug n d) (? (atomp n) (X n d)
                       (desug (A n) (X '\ (cat (B n) (L d)))))
        (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
-       q (scop c (zget c 'arg) (zget c 'imp))
+       q (scop c (argof c) (impof c))
 ;       _ (tset c 'stk s) # FIXME should be adjusting this consistently elsewhere
        # l1 pass nom def and value expressions to l2
        ; l1 collects bindings and passes them with the body expression to l2
@@ -251,35 +253,33 @@
        # l2 pass noms defs exp with revised lambda defs to l3
        ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
        (l2 noms defs exp rest) (:- (l3 (rev noms) (rev defs) clams llam rest)
-        lams (>>= 0 noms defs
-              (: (b l n d) (? (atomp n) l
-               (: ll (? (not (lambp (A d))) l (X
-                                                 (X (A n)
-                                                  (ana_ll q 0 (BA d))
-                                                 )
-                                               l))
-                (b ll (B n) (B d))))))
+        lams (:- (loop 0 noms defs)
+         (loop a n d) (?
+          (atomp n) a
+          (nilp (lambp (A d))) (loop a (B n) (B d))
+          (: k (A n)
+             v (ana_ll q 0 (BA d)) ; first compile pass ..
+             a (X (X k v) a)
+           (loop a (B n) (B d)))))
 
+        (close l) (cl 0 l l l)
         (cl n l l1 l2) (?
          (&& l1 l2 (!= l1 l2) (memq (AA l1) (BB (A l2))))
-            (>>= n (BB (A l1)) (: (f n v)
-                                (? (nilp v) (cl n l l1 (B l2)) (:
-                                 var (A v)
-                                 vars (B (BA l2))
-                                 (? (memq var vars)
-                                  (f n (B v))
-                                  (, ;(puts "1 ") (.. (A l2))
-                                     (set_cdr (BA l2) (X var vars))
-                                     ;(puts "2 ") (.. (A l2))
-                                     (f (+ 1 n) (B v))))))))
-
+          (:- (loop n (BB (A l1)))
+           (loop n v)
+            (? (nilp v) (cl n l l1 (B l2))
+             (: var (A v)
+                vars (B (BA l2))
+              (? (memq var vars)
+               (loop n (B v))
+               (, (set_cdr (BA l2) (X var vars))
+                  (loop (+ 1 n) (B v)))))))
          l2 (cl n l l1 (B l2))
          l1 (cl n l (B l1) l)
          n (close l)
          l)
-        (close l) (cl 0 l l l)
-        lnoms (map A lams)
-        (lamdel cs) (flip map cs (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))))
+
+        (lamdel cs) (map (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) (map A lams))))) cs)
         clams (lamdel (close lams))
         _ (tset q 'lam clams)
         llam (X '\ (cat noms (L exp)))) ;; construct reversed lambda expression
@@ -287,22 +287,18 @@
        # l3 collect defs and apply
        (l3 noms defs clams llam rest) (:
          (loops n nds) (, (cpush c 'stk n) (loop nds))
-         (loop nds) (? (nilp nds) id
-          (: nd (A nds) n (A nd) d (B nd)
-             ; this will now be the expression to evaluate
-             d1 (? (lambp d)
-                 (: qa (assq n clams)
-                    x (ana_ll q (BB qa) (B d))
-                  (, (set_cdr qa x)
-                     x))
-                 d)
-             a1 (ana c d1)
-             a2 (? (&& (toplp c) (atomp rest))
-                   (em2 i_defglob n)
-                   id)
-              ; here is where to bind in global scope if toplp q and atomp rest
-             a3 (loops n (B nds))
-             (<=< a1 a2 a3)))
+         (loop nds) (? (nilp nds) id (:
+          nd (A nds)
+          n (A nd)
+          d (B nd)
+          d (? (nilp (lambp d)) d (: qa (assq n clams)
+                                     x (ana_ll q (BB qa) (B d))
+                                   (set_cdr qa x)))
+          a1 (ana c d)
+          a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
+          a3 (loops n (B nds))
+          (<=< a1 a2 a3)))
+
          s0 (stkof c)
          n (llen noms)
          a1 (ana c llam)
