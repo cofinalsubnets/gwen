@@ -92,25 +92,18 @@
                      (atomp x) (imm x)
                                (ana_two c (A x) (B x)))
      (ana_apl_s n c b) (:
-           (loop c b) (,
+           (loop c b)
             (? (atomp b) id
-             (:
-                a1 (ana c (A b))
+             (: a1 (ana c (A b))
                 a2 em_ap
                 a3 (loop c (B b))
-
-               (<=< a1 a2 a3))))
-
+               (<=< a1 a2 a3)))
       _ (cpush c 'stk n)
       a (loop c b)
       _ (cpop c 'stk)
       a)
 
-     (ana_ap c f b)  (:
-      a1 (ana c f)
-      a2 (ana_apl_s 0 c b)
-      (<=< a1 a2))
-
+     (ana_ap c f b)  (co (ana c f) (ana_apl_s 0 c b))
      (ana_sym c x) (>>= c (: (ana_sym_r d)
       (? (nilp d) ; outside all lexical scopes?
           (: y (tget anon globals x) ; check global scope
@@ -215,9 +208,7 @@
 
        # l2 pass noms defs exp with revised lambda defs to l3
        ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
-       (l2 noms defs exp rest) (:- (l3 rnoms rdefs clams llam rest)
-        rnoms (rev noms)
-        rdefs (rev defs)
+       (l2 noms defs exp rest) (:- (l3 (rev noms) (rev defs) clams llam rest)
         lams (>>= 0 noms defs
               (: (b l n d) (? (atomp n) l
                (: ll (? (not (lambp (A d))) l (X
@@ -286,7 +277,9 @@
    e2 (e1 evaluator)
    _ (tset globals 'eval e2)
    _ (tset globals 'evaluator evaluator)
-;   _ (tset globals 'ev e2)
+   _ (tset globals 'prelude prelude)
+   _ (tset globals 'go go)
+   _ (tset globals 'ev e2)
     ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
    (e2 '(\ fs ; we can use prelude in here
     (:- (? args       (procs prog (A args) (B args))
