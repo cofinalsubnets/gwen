@@ -1,6 +1,6 @@
 # top expression
 (: prelude '(
-  (: true -1 false 0 nilp (= 0) not nilp
+  (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
      cons X car A cdr B null nilp
@@ -21,10 +21,10 @@
      (last l) (? (B l) (last (B l)) (A l))
      (each l f) (? l (, (f (A l)) (each (B l) f)))
      (ldel x l) (? (twop l) (? (= (A l) x) (B l) (X (A l) (ldel x (B l)))))
-     (all f l) (? l (? (f (A l)) (all f (B l))) true)
-     (any f l) (? l (? (f (A l)) true (any f (B l))))
+     (all f l) (? l (? (f (A l)) (all f (B l))) -1)
+     (any f l) (? l (? (f (A l)) -1 (any f (B l))))
      (cat a b) (foldr b X a)
-     (assq x l) (? l (? (= x (AA l)) (A l) (assq x (B l))))
+     (assq x l) (? l (? (= x (A (A l))) (A l) (assq x (B l))))
      (lidx x) ((: (f n l) (? (twop l) (? (= x (A l)) n (f (+ 1 n) (B l))) -1)) 0)
      (memq x) (any (= x))
      (zip a b) (? (twop a) (? (twop b) (X (X (A a) (A b)) (zip (B a) (B b)))))
@@ -90,10 +90,6 @@
       (p1 i_tapn (p0 n j))
       (p1 i_apn (p1 n j))))
     imm (em2 i_imm)
-    (cata_var c x ins j m) (:
-     k (j (+ 2 m))
-     k (p1 (+ ins (stkidx c x)) k)
-     (p1 i_ref k))
     (stkidx d x)
       (: imp (impof d)
          ii  (lidx x imp)
@@ -185,24 +181,29 @@
        ; else...
       (: lam (lamof d)
          stk (stkof d)
-     (assq x l) (? l (? (= x (AA l)) (A l) (assq x (B l))))
          lfd (assq x lam)
        (? lfd ; local function def? ;; ana_sym_local_fn
-            (: ;y (X x lam)
-               arg (BB lfd)
-               a1 (em2 i_lazy_bind lfd)
-               a2 (ana_apl 0 c arg)
-             (co a1 a2))
-         ; else ...
-         ; bound on stack by an inner let form?
-        (&& (= c d) (memq x stk))
-         (em2 i_ref (lidx x stk))
-        ; bound on stack by an outer let form or function or closure?
-        (? (memq x stk) 1 (<= 0 (stkidx d x)))
+            (: a1 (em2 i_lazy_bind lfd)
+               a2 (ana_apl 0 c (BB lfd))
+             (<=< a1 a2))
+         (memq x stk) ; is it bound on a let stack in this scope?
+          (? (= c d) (em2 i_ref (lidx x stk))
+                     (, (import c x)
+                        (cata_var c x)))
+        (<= 0 (stkidx d x)) ; is it bound as a closure or argument variable?
          (, (? (!= c d) (import c x))
-            (cata_var c x (llen (stkof c))))
+            (cata_var c x))
         ; else recur
-        (ana_sym_r (parof d))))))
+        (ana_sym_r (parof d)))))
+
+    (cata_var c x) (:
+     i (llen (stkof c))
+     (\ j m (:
+      k (j (+ 2 m))
+      i (+ i (stkidx c x))
+      k (p1 i k)
+      k (p1 i_ref k)
+      k))))
 
     ; ana_ll isn't too bad
     (ana_ll c imp exp) (:
@@ -213,6 +214,7 @@
      ar (arity d)
      k (trim ((? (> ar 1) (em2 i_curry ar) id) k0 0))
      (X k (impof d)))
+
     ; ana_lam is small because it uses ana_ll which ana_let also uses
     (ana_lam c b) (?
      (atomp b)     (imm 0)
@@ -231,13 +233,22 @@
       nd (desug nom def)
       nom (A nd) def (B nd)
       noms (X nom noms) defs (X def defs)
-      (? (atomp rest)     (loop2 c q noms defs nom      rest) ; even case -- we lose that info here
+      (? (atomp rest)     (loop2 c q noms defs nom      rest)
          (atomp (B rest)) (loop2 c q noms defs (A rest) rest)
          (loop1 c q noms defs (A rest) (AB rest) (BB rest))))
 
      # l2 pass noms defs exp with revised lambda defs to l3
      ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
      (loop2 c q noms defs exp rest) (:
+
+      lams (:- (loop 0 noms defs)
+            (loop a n d) (?
+             (atomp n) a
+             (nilp (lambp (A d))) (loop a (B n) (B d))
+             (: k (A n)
+                v (ana_ll q 0 (BA d)) ; first compile pass ..
+                a (X (X k v) a)
+              (loop a (B n) (B d)))))
 
       (close l) (:- (cl 0 l l l)
         (cl n l l1 l2) (?
@@ -255,17 +266,14 @@
          l1 (cl n l (B l1) l)
          n (cl 0 l l l)
          l))
-      lams (:- (loop 0 noms defs) (loop a n d) (?
-                                   (atomp n) a
-                                   (nilp (lambp (A d))) (loop a (B n) (B d))
-                                   (: k (A n)
-                                      v (ana_ll q 0 (BA d)) ; first compile pass ..
-                                      a (X (X k v) a)
-                                    (loop a (B n) (B d)))))
+
+      lams (close lams)
+      lnoms (map A lams)
       (lamdel lnoms) (map (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))))
-      clams (lamdel (map A lams) (close lams))
+      clams (lamdel lnoms lams)
       llam (X '\ (cat noms (L exp))) ;; construct reversed lambda expression
       (loop3 c q (rev noms) (rev defs) clams llam rest))
+
      # l3 collect defs and apply
      (loop3 c q noms defs clams llam rest) (:
        _ (tset q 'lam clams)
@@ -279,7 +287,7 @@
                       a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
                       a3 (loops n (B nds))
                       (<=< a1 a2 a3)))
-       (loops n nds) (: _ (cpush c 'stk n)
+       (loops n nds) (, (cpush c 'stk n)
                         (loop nds))
        s0 (stkof c)
        n (llen noms)
@@ -296,38 +304,46 @@
 
 ; this does some initialization and then returns the main function
 (: ; we can't use prelude directly yet here
-   (go e a) (? a (, (e (A a)) (go e (B a))))
-   e0 ev
-   _ (go e0 prelude)
-;   _ (go e0 prelude)
-   e1 (e0 evaluator)
-;   _ (go e1 prelude)
-   e2 (e1 evaluator)
-   _ (tset globals 'e0 e0)
-   _ (tset globals 'ev e2)
-   _ (tset globals 'eval e2)
+   (go a) (? a (, (ev (A a)) (go (B a))))
+   _ (go prelude)
+   _ (tset globals 'e0 ev)
    _ (tset globals 'evaluator evaluator)
    _ (tset globals 'prelude prelude)
-    ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
-   (e2 '(\ fs ; we can use prelude in here
-    (:- (? args       (procs prog (A args) (B args))
-           (isatty 0) (repl prompt)
-                      (reads 0))
+   (ev '(:
+    egg (cat (A prelude) (L (X ', (cat (B prelude) (L (L 'ev (L '` evaluator)))))))
+    e1 (ev egg egg)
+    _ (tset globals 'ev e1)
+    _ (tset globals 'eval e1)
+;    _ (each prelude e1)
+    (e1 ' (\ fs (: ; we can use prelude in here
       prog (A fs) args (B fs)
       prompt "    "
-      (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
-      (repl p)  (: r (, (puts p) (read 0))
-                 (? r (, (. (ev (A r))) (putc 10) (repl p))))
-      (procs prog a as) (, (proc1 prog a) (? as (procs prog (A as) (B as))))
-      (proc1 prog arg)
-       (? (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
-          (= arg "-v") (, (puts prog) (puts " ") (putln version))
-          (= arg "-r") (repl prompt)
-          (each (readf arg) ev))
+      (reads _) (: r (read 0)
+                 (? r (, (ev (A r))
+                         (reads 0))))
+      (repl p) (: r (, (puts p) (read 0))
+                (? r (, (. (ev (A r)))
+                        (putc 10)
+                        (repl p))))
+      (procs prog a as)
+       (, (proc1 prog a)
+          (? as (procs prog (A as) (B as))))
+      (proc1 prog arg) (?
+       (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
+       (= arg "-v") (, (puts prog) (puts " ") (putln version))
+       (= arg "-r") (repl prompt)
+       (each (readf arg) ev))
       (putln s) (, (puts s) (putc 10))
-       help (L " [args]"
-               " args:"
-               "   -h   show this message"
-               "   -v   show version"
-               "   -r   start repl"
-               " file   evaluate file"))))))
+      help (L " [args]"
+              " args:"
+              "   -h   show this message"
+              "   -v   show version"
+              "   -r   start repl"
+              " file   evaluate file")
+
+      (? args       (procs prog (A args) (B args))
+         (isatty 0) (repl prompt)
+                    (reads 0))))
+    ))))
+    ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
+   )

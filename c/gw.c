@@ -143,7 +143,7 @@ static word
   cp(core*, word, word*, word*);
 
 static Vm(gc, uintptr_t);
-static vm bnot, rng, data,
+static vm bnot, rng, data, nullp,
    symnom, ret, ret0, ap, apn, tap, tapn,
    sysclock,
    jump, cond, ref, imm, yield, yieldi,
@@ -252,6 +252,7 @@ static vm dot;
   _(bif_tset, "tset", S3(tset)) _(bif_tget, "tget", S3(tget)) _(bif_tdel, "tdel", S3(tdel))\
   _(bif_twop, "twop", S1(pairp)) _(bif_strp, "strp", S1(stringp))\
   _(bif_symp, "symp", S1(symbolp)) _(bif_nump, "nump", S1(fixnump))\
+  _(bif_nilp, "nilp", S1(nullp))\
   _(bif_sym, "sym", S1(gensym)) _(bif_nom, "nom", S1(symnom))\
   _(bif_ev, "ev", S1(ev0))\
   _(bif_isatty, "isatty", S1(p_isatty))\
@@ -1507,6 +1508,7 @@ struct symbol {
   symbol *l, *r; };
 
 Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
+Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 bool symp(word _) { return homp(_) && dtyp(_) == &sym_type; }
 
 static symbol *ini_sym(symbol *y, string *nom, uintptr_t code) {
