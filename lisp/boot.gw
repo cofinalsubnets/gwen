@@ -303,6 +303,7 @@
    e1 (e0 evaluator)
 ;   _ (go e1 prelude)
    e2 (e1 evaluator)
+   _ (tset globals 'e0 e0)
    _ (tset globals 'ev e2)
    _ (tset globals 'eval e2)
    _ (tset globals 'evaluator evaluator)

@@ -74,16 +74,16 @@ uninstall:
 	rm -f $(installed_files)
 
 $(installed_binary): $(built_binary)
-	@echo $< '->' $@
+	@echo $@
 	@install -D -m 755 -s $< $@
 $(installed_vim_ftdetect): vim/ftdetect/$n.vim
-	@echo $< '->' $@
+	@echo $@
 	@install -D -m 644 $< $@
 $(installed_vim_syntax): vim/syntax/$n.vim
-	@echo $< '->' $@
+	@echo $@
 	@install -D -m 644 $< $@
 $(installed_manpage): $(built_manpage)
-	@echo $< '->' $@
+	@echo $@
 	@install -D -m 644 $< $@
 
 tests=$(sort $(wildcard test/*.$x))
