@@ -42,10 +42,10 @@ $0: $o c/main.c c/boot.0.h $m
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
 c/boot.0.h: lisp/boot.$x
 	@echo $@
-	@cat $< | $(sed) > $@
+	@$(sed) <$< >$@
 c/boot.h: lisp/boot.$x lisp/cat.$x $0
 	@echo $@
-	@cat $< | ./$0 lisp/cat.$x | $(sed) > $@
+	@./$0 lisp/cat.$x <$< | $(sed) >$@
 
 built_manpage=doc/$n.1
 $(built_manpage): doc/$n.1.md

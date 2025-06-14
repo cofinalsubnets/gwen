@@ -927,27 +927,6 @@ static Ana(ana_sym_free) {
   x = x ? A((*c)->imps = x) : x;
   return x ? ana_i2(f, c, m, free_variable, x) : x;  }
 
-static Vm(lazy_bind) {
-  word ref = Ip[1].x,
-       var = A(ref),
-       lams = B(ref);
-//  px(ref);
-//  puts("");
-  ref = AB(lassoc(f, lams, var));
-  if (!ref) return PStatusVar;
-  Ip[0].ap = imm;
-  Ip[1].x = ref;
-  return Continue(); }
-
-static Ana(ana_sym_local_fn, env *d) {
-  x = wpairof(f, x, Z(d->lams));
-  m = x ? ana_i2(f, c, m, lazy_bind, x) : 0;
-  if (!m) return m;
-  x = f->sp[2]; // get the (symbol arg1 arg2 ...)
-  word y = BBA(x); // get the args
-  A(x) = AA(x); // set car of pair to just the symbol -- (symbol . env)
-  return ana_ap_l2r(f, c, m, y); }
-
 static Cata(c2var) {
   word var = *f->sp++, stack = *f->sp++;
   long i = lidx(f, stack, var);
@@ -972,6 +951,7 @@ static Ana(ana_sym_stack_ref, env *d) {
     x = x ? A((*c)->imps = x) : x;
   return pushs(f, 3, cata_var, x, (*c)->stack) ? m + 2 : 0; }
 
+static Ana(ana_sym_local_fn, env *d);
 static Ana(ana_sym_r, env *d) {
   // free symbol?
   if (nilp(d)) return ana_sym_free(f, c, m, x);
@@ -986,6 +966,28 @@ static Ana(ana_sym_r, env *d) {
     return ana_sym_stack_ref(f, c, m, x, d);
   // otherwise recur on the enclosing env
   return ana_sym_r(f, c, m, x, d->par); }
+
+static Vm(lazy_bind) {
+  word ref = Ip[1].x,
+       var = A(ref),
+       lams = B(ref),
+       lfd = lassoc(f, lams, var);
+  ref = AB(lfd);
+  if (!ref) return PStatusVar;
+  Ip[0].ap = imm;
+  Ip[1].x = ref;
+  return Continue(); }
+
+static Ana(ana_sym_local_fn, env *d) {
+  m = ana_i2(f, c, m, lazy_bind, x);
+  if (!m) return m;
+  x = f->sp[2];
+  x = wpairof(f, x, Z(d->lams));
+  if (!x) return 0;
+  f->sp[2] = x;
+  word y = BBA(x); // get the args
+  A(x) = AA(x); // set car of pair to just the symbol -- (symbol . env)
+  return ana_ap_l2r(f, c, m, y); }
 
 // lambda decons pushes last list item to stack returns init of list
 static word linit(core *f, word x) {
