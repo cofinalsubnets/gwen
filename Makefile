@@ -20,33 +20,36 @@ b=$n.bin
 o=c/$n.o
 
 #build
-CFLAGS ?= \
+CFLAGS=\
   -std=gnu17 -g -O2 -Wall -fpic\
- 	-Wstrict-prototypes -Wno-shift-negative-value \
-  -fno-asynchronous-unwind-tables -fno-stack-protector \
+ 	-Wstrict-prototypes -Wno-shift-negative-value\
+	-fno-plt -fno-exceptions -fomit-frame-pointer\
+  -fno-asynchronous-unwind-tables -fno-stack-protector\
+	-fno-stack-clash-protection -fcf-protection=none\
   -falign-functions
 ver=$(shell git rev-parse HEAD)
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D VERSION='"$(ver)"'
 
 built_binary=$b
-$(built_binary): $o c/main.c c/boot.h $m
+$(built_binary): $o c/main.c c/main.h $m
 	@echo $@
 	@$(cc) $< c/main.c -o $@
-$o: c/$n.c c/$n.h
+$o: c/$n.c c/$n.h $m
 	@echo $@
 	@$(cc) -c c/$n.c -o $@
-$0: $o c/main.c c/boot.0.h $m
+$0: $o c/main.c c/main.0.h $m
 	@echo $@
-	@$(cc) $< c/main.c -o $@ -DBOOT_H='"boot.0.h"'
+	@$(cc) $< c/main.c -o $@ -DMAIN_H='"main.0.h"'
 
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-c/boot.0.h: lisp/boot.$x
+c/main.0.h: lisp/main.$x
 	@echo $@
 	@$(sed) <$< >$@
-c/boot.h: lisp/boot.$x lisp/cat.$x $0
+c/main.h: lisp/main.$x lisp/cat.$x $0
 	@echo $@
 	@./$0 lisp/cat.$x <$< | $(sed) >$@
 
+# TODO generate this from lisp not pandoc
 built_manpage=doc/$n.1
 $(built_manpage): doc/$n.1.md
 	@echo $@

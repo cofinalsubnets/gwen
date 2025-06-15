@@ -1,9 +1,9 @@
 #include "gw.h"
 static const char main_prog[] =
-#ifdef BOOT_H
-#include BOOT_H
+#ifdef MAIN_H
+#include MAIN_H
 #else
-#include "boot.h"
+#include "main.h"
 #endif
 ;
 int main(int ac, const char **av) { return gw_main(main_prog, av); }

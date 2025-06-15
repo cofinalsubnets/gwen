@@ -27,6 +27,7 @@ typedef union cell cell, thread;
 #ifndef VERSION
 #define VERSION ""
 #endif
+
 // theres a big benefit in speed from tail call optimization but not all platforms support it
 #ifdef NTCO
 #define YieldStatus PStatusEof
@@ -129,7 +130,7 @@ static void
 
 static bool symp(word), strp(word), twop(word),
   eq_not(core*, word, word),
-  p_please(core*, uintptr_t),
+  gw_please(core*, uintptr_t),
   eql(core*, word, word);
 
 static word
@@ -255,16 +256,17 @@ static symbol *symof(core *f, const char *nom) {
   string *o = strof(f, nom);
   return o ? intern(f, o) : 0; }
 
+static NoInline long gw_clock(void);
 
 static NoInline Vm(gc, uintptr_t n) {
   Pack(f);
-  int s = p_please(f, n) ? Ok : Oom;
+  int s = gw_please(f, n) ? Ok : Oom;
   Unpack(f);
   return s != Ok ? s : Ap(f->ip->ap, f); }
 
 static void *bump(core *f, size_t n) { void *x = f->hp; return f->hp += n, x; }
 static void *cells(core *f, size_t n) { return
-  n <= avail(f) || p_please(f, n) ? bump(f, n) : 0; }
+  n <= avail(f) || gw_please(f, n) ? bump(f, n) : 0; }
 
 static NoInline void copy_from(core*, word*, uintptr_t);
 // garbage collector
@@ -285,14 +287,14 @@ static NoInline void copy_from(core*, word*, uintptr_t);
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
-static NoInline bool p_please(core *f, uintptr_t req0) {
+static NoInline bool gw_please(core *f, uintptr_t req0) {
   word *src = f->pool, *dest = f->loop;
   f->pool = dest, f->loop = src;    // swap
-  size_t t0 = f->t0, t1 = clock() , // get last gc end time
+  size_t t0 = f->t0, t1 = gw_clock() , // get last gc end time
          len0 = f->len;             // get original length
                                     //
   copy_from(f, src, len0);          // copy to new pool
-  size_t t2 = f->t0 = clock(),      // get and set last gc end time
+  size_t t2 = f->t0 = gw_clock(),      // get and set last gc end time
          total = len0,
          avail = avail(f),
          used = total - avail,
@@ -317,7 +319,7 @@ static NoInline bool p_please(core *f, uintptr_t req0) {
   f->loop = dest2 + len1;
   copy_from(f, dest, len0); // do second copy
   free(min(src, dest));     // free original pool
-  f->t0 = clock();          // set last gc timestamp
+  f->t0 = gw_clock();          // set last gc timestamp
   return true; }            // size successfully adjusted
 
 
@@ -463,8 +465,8 @@ static Vm(tapn) {
 // return
 static Vm(ret) {
   word n = getnum(Ip[1].x) + 1;
-  return op(n, *Sp); }
-static Vm(ret0) { return op(1, *Sp); }
+  return Ip = R(Sp[n]), Sp[n] = Sp[0], Sp += n, Continue(); }
+static Vm(ret0) { return Ip = R(Sp[1]), Sp[1] = Sp[0], Sp += 1, Continue(); }
 
 // exit vm and return to C
 static Vm(yield) { return Pack(f), YieldStatus; }
@@ -524,7 +526,7 @@ static long lidx(core*, word, word);
 typedef Ana(ana);
 typedef Cata(cata);
 
-static ana analyze, ana_if, ana_let, ana_list;
+static ana analyze, ana_if, ana_let;
 static env *enscope(core*, env*, word, word);
 static size_t ana_i1(core*, env**, size_t, vm*),
               ana_i2(core*, env**, size_t, vm*, word);
@@ -858,20 +860,6 @@ static size_t ana_ap(core *f, env* *c, size_t m, word fn, word args) {
   return !argc || !m ? m : ana_ap_l2r(f, c, m, args); }
 
 static Ana(ana_lambda, word);
-static Ana(ana_list) {
-  word a = A(x), b = B(x);
-  if (a == W(f->quote)) return ana_imm(f, c, m, twop(b) ? A(b) : nil);
-  if (a == W(f->begin)) return ana_seq(f, c, m, b);
-  if (a == W(f->let)) return ana_let(f, c, m, b);
-  if (a == W(f->cond)) return ana_if(f, c, m, b);
-  if (a == W(f->lambda)) return !twop(b) ? ana_imm(f, c, m, nil) :
-                                !twop(B(b)) ? analyze(f, c, m, A(b)) :
-                                ana_lambda(f, c, m, x, b);
-  if (!twop(b)) return analyze(f, c, m, a); // singleton list has value of first element
-  word macro = table_get(f, f->macro, a, 0);
-  return macro ? ana_mac(f, c, m, macro, b) :
-                 ana_ap(f, c, m, a, b); }
-
 static Vm(free_variable) {
   word x = Ip[1].x;
   x = table_get(f, f->dict, x, x); // error here if you want on undefined variable
@@ -895,10 +883,21 @@ static word rlconcat(core *f, word l, word n) {
   return n; }
 
 static Ana(ana_sym_r, env *d);
-static Ana(analyze) {
-  if (twop(x)) return ana_list(f, c, m, x);
+static NoInline Ana(analyze) {
   if (symp(x)) return ana_sym_r(f, c, m, x, *c);
-  return ana_imm(f, c, m, x); }
+  if (!twop(x)) return ana_imm(f, c, m, x);
+  word a = A(x), b = B(x);
+  if (a == W(f->quote)) return ana_imm(f, c, m, twop(b) ? A(b) : nil);
+  if (a == W(f->begin)) return ana_seq(f, c, m, b);
+  if (a == W(f->let)) return ana_let(f, c, m, b);
+  if (a == W(f->cond)) return ana_if(f, c, m, b);
+  if (a == W(f->lambda)) return !twop(b) ? ana_imm(f, c, m, nil) :
+                                !twop(B(b)) ? analyze(f, c, m, A(b)) :
+                                ana_lambda(f, c, m, x, b);
+  if (!twop(b)) return analyze(f, c, m, a); // singleton list has value of first element
+  word macro = table_get(f, f->macro, a, 0);
+  return macro ? ana_mac(f, c, m, macro, b) :
+                 ana_ap(f, c, m, a, b); }
 
 // index of item in list
 static long lidx(core *f, word l, word x) {
@@ -1125,15 +1124,21 @@ static NoInline int p_read1f(core *f, FILE* i) {
   In *fi = FileInput(i);
   return p_read1(f, fi); }
 
-Vm(read0) {
+static Vm(read0) {
   Pack(f);
   int s = p_read1f(f, stdin);
-  if (s == Eof) return Unpack(f), op(1, nil);
-  if (s != Ok) return s;
-  pair *p = pairof(f, f->sp[0], f->sp[1]);
-  if (!p) return Oom;
-  return Unpack(f),
-         op(2, W(p)); }
+  if (s == Eof) return // no error but end of file
+    Unpack(f), Sp[0] = nil, Ip++, Continue();
+  if (s != Ok) return s; // or was there an error?
+  // no error and got a value on stack
+  // make a list of it
+  pair *p = pairof(f, f->sp[0], nil);
+  if (!p) return Oom; // ...
+  Unpack(f);
+  Sp += 1;
+  Ip += 1;
+  Sp[0] = W(p);
+  return Continue(); }
 
 static NoInline int p_readsp(core *f, string *s) {
   char n[265]; // :)
@@ -1146,29 +1151,36 @@ static NoInline int p_readsp(core *f, string *s) {
   fclose(i);
   return t; }
 
-Vm(readf) {
-  if (!strp(Sp[0])) return op(1, nil);
+static Vm(readf) {
+  if (!strp(Sp[0])) return Sp[0] = nil,
+                           Ip += 1,
+                           Continue();
   string *s = (string*)Sp[0];
-  if (s->len > 255) return op(1, nil);
+  if (s->len > 255) return Sp[0] = nil,
+                           Ip += 1,
+                           Continue();
   Pack(f);
   int t = p_readsp(f, s);
-  Unpack(f);
-  return t == Ok ? op(2, *Sp) : t; }
+  if (t != Ok) return t;
+  return Unpack(f),
+         Sp[1] = Sp[0],
+         Sp++,
+         Ip++,
+         Continue(); }
 
-static NoInline long p_gettime(void) {
+static NoInline long gw_clock(void) {
   struct timespec ts;
   int s = clock_gettime(CLOCK_REALTIME, &ts);
   return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
 
-Vm(sysclock) { return
-  Sp[0] = putnum(p_gettime()),
-  Ip++,
-  Continue(); }
+static Vm(sysclock) {
+  return Sp[0] = putnum(gw_clock()), Ip += 1, Continue(); }
 
-Vm(p_isatty) { return op(1, isatty(getnum(*Sp)) ? putnum(-1) : nil); }
-Vm(prc)     { word w = *Sp; putc(getnum(w), stdout); Ip++; return Continue(); }
+static Vm(p_isatty) {
+  return Sp[0] = isatty(getnum(Sp[0])) ? putnum(-1) : nil, Ip += 1, Continue(); }
+
+Vm(prc) { word w = *Sp; putc(getnum(w), stdout); Ip++; return Continue(); }
 static Vm(dot) { return transmit(f, stdout, Sp[0]), Ip++, Continue(); }
-
 
 void transmit(core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
@@ -1176,7 +1188,7 @@ void transmit(core *f, FILE* out, word x) {
   else fprintf(out, "#%lx", (long) x); }
 
 NoInline word pushsr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
-  if (!n) return p_please(f, m) ? m : n;
+  if (!n) return gw_please(f, m) ? m : n;
   word x = va_arg(xs, word), y;
   avec(f, x, y = pushsr(f, m, n - 1, xs));
   return y ? *--f->sp = x : y; }
@@ -1195,22 +1207,25 @@ bool twop(word _) { return homp(_) && dtyp(_) == &two_type; }
 pair *pairof(core *f, word a, word b) {
   if (avail(f) < Width(pair)) {
     bool ok;
-    avec(f, a, avec(f, b, ok = p_please(f, Width(pair))));
+    avec(f, a, avec(f, b, ok = gw_please(f, Width(pair))));
     if (!ok) return 0; }
   pair *w = (pair*) f->hp;
   f->hp += Width(pair);
   return ini_pair(w, a, b); }
 
-Vm(car) { return op(1, twop(Sp[0]) ? A(Sp[0]) : Sp[0]); }
-Vm(cdr) { return op(1, twop(Sp[0]) ? B(Sp[0]) : nil); }
-Vm(cons) {
+static Vm(car) { return Sp[0] = twop(Sp[0]) ? A(Sp[0]) : Sp[0], Ip += 1, Continue(); }
+static Vm(cdr) { return Sp[0] = twop(Sp[0]) ? B(Sp[0]) : nil, Ip += 1, Continue(); }
+static Vm(cons) {
   Have(Width(pair));
   pair *w = ini_pair((pair*) Hp, Sp[0], Sp[1]);
-  Hp += Width(pair);
-  return op(2, Z(w)); }
+  return Hp += Width(pair),
+         Sp[1] = W(w),
+         Sp += 1,
+         Ip += 1,
+         Continue(); }
 
+static Vm(pairp) { return Sp[0] = twop(Sp[0]) ? putnum(-1) : nil, Ip += 1, Continue(); }
 
-static Vm(pairp) { return op(1, twop(Sp[0]) ? putnum(-1) : nil); }
 static pair *ini_pair(pair *w, word a, word b) {
   return w->ap = data,
          w->typ = &two_type,
@@ -1220,9 +1235,10 @@ static pair *ini_pair(pair *w, word a, word b) {
 
 static bool strp(word _) { return homp(_) && dtyp(_) == &str_type; }
 
-static Vm(slen) {
-  word x = Sp[0];
-  return op(1, strp(x) ? putnum(((string*)x)->len) : nil); }
+static Vm(slen) { return
+  Sp[0] = strp(Sp[0]) ? putnum(((string*)Sp[0])->len) : nil,
+  Ip += 1,
+  Continue(); }
 
 static Vm(ssub) {
   cell* r = (cell*) Sp[3];
@@ -1245,31 +1261,36 @@ static Vm(ssub) {
   return Continue(); }
 
 static Vm(sget) {
-  cell *r = (cell*) Sp[2];
-  if (!strp(Sp[0])) Sp[2] = nil;
+  if (!strp(Sp[0])) Sp[1] = nil;
   else {
-    string*s = (string*) Sp[0];
+    string *s = (string*) Sp[0];
     size_t i = min(s->len - 1, getnum(Sp[1]));
     i = max(i, 0);
-    Sp[2] = putnum(s->text[i]); }
-  Ip = r, Sp += 2;
+    Sp[1] = putnum(s->text[i]); }
+  Ip++, Sp++;
   return Continue(); }
 
 static Vm(scat) {
-  word a = Sp[0], b = Sp[1];
-  if (!strp(a)) return op(2, b);
-  if (!strp(b)) return op(2, a);
+  word a = Sp[0];
+  if (!strp(a)) return Sp += 1, Ip += 1, Continue();
+  word b = Sp[1];
+  if (!strp(b)) return Sp[1] = a, Sp += 1, Ip += 1, Continue();
   string *x = (string*) a, *y = (string*) b;
   size_t len = x->len + y->len,
          req = Width(string) + b2w(len);
   Have(req);
-  string*z = ini_str((string*) Hp, len);
-  Hp += req;
-  memcpy(z->text, x->text, x->len);
-  memcpy(z->text + x->len, y->text, y->len);
-  return op(2, (word) z); }
+  string *z = ini_str((string*) Hp, len);
+  return Hp += req,
+         memcpy(z->text, x->text, x->len),
+         memcpy(z->text + x->len, y->text, y->len),
+         Sp[1] = W(z),
+         Ip += 1,
+         Continue(); }
 
-static Vm(stringp) { return op(1, strp(Sp[0]) ? putnum(-1) : nil); }
+static Vm(stringp) { return
+  Sp[0] = strp(Sp[0]) ? putnum(-1) : nil,
+  Ip += 1,
+  Continue(); }
 static string* ini_str(string *s, uintptr_t len) {
   return s->ap = data,
          s->typ = &str_type,
@@ -1413,9 +1434,11 @@ static Vm(tnew) {
   Have(Width(table) + 1);
   table *t = (table*) Hp;
   struct entry **tab = (struct entry**) (t + 1);
-  Hp += Width(table) + 1;
-  tab[0] = 0;
-  return op(1, (word) ini_table(t, 0, 1, tab)); }
+  return Hp += Width(table) + 1,
+         tab[0] = 0,
+         Sp[0] = (word) ini_table(t, 0, 1, tab),
+         Ip++,
+         Continue(); }
 
 static word table_get(core *f, table *t, word k, word zero) {
   size_t i = index_of_key(f, t, k);
@@ -1423,70 +1446,65 @@ static word table_get(core *f, table *t, word k, word zero) {
   while (e && !eql(f, k, e->key)) e = e->next;
   return e ? e->val : zero; }
 
-static Vm(tget) {
-  return op(3, !tblp(Sp[1]) ? Sp[2] :
-    table_get(f, (table*) Sp[1], Sp[2], Sp[0])); }
+static Vm(tget) { return
+  Sp[2] = !tblp(Sp[1]) ? Sp[0] : table_get(f, (table*) Sp[1], Sp[2], Sp[0]),
+  Sp += 2,
+  Ip += 1,
+  Continue(); }
 
 static Vm(tset) {
-  if (!tblp(Sp[0])) return op(3, nil);
-  Pack(f);
-  table *t = table_set(f, (table*) Sp[0], Sp[1], Sp[2]);
-  Unpack(f);
-  return !t ? Oom : op(3, Sp[2]); }
+  if (tblp(Sp[0])) {
+    Pack(f);
+    table *t = table_set(f, (table*) Sp[0], Sp[1], Sp[2]);
+    if (!t) return Oom;
+    Unpack(f); }
+  return Sp += 2,
+         Ip += 1,
+         Continue(); }
 
-static Vm(tdel) {
-  word x = Sp[1];
-  return op(3, !tblp(x) ? nil :
-    table_delete(f, (table*) x, Sp[2], Sp[0])); }
+static Vm(tdel) { return
+  Sp[2] = !tblp(Sp[1]) ? nil : table_delete(f, (table*) Sp[1], Sp[2], Sp[0]),
+  Sp += 2,
+  Ip += 1,
+  Continue(); }
 
-static Vm(tlen) {
-  word x = Sp[0];
-  if (!tblp(x)) return op(1, nil);
-  table *t = (table*) x;
-  return op(1, putnum(t->len)); }
+static Vm(tlen) { return
+  Sp[0] = tblp(Sp[0]) ? putnum(((table*)Sp[0])->len) : nil,
+  Ip += 1,
+  Continue(); }
 
 static Vm(tkeys) {
-  if (!tblp(Sp[0])) return op(1, nil);
-  table *t = (table*) Sp[0];
-  word len = t->len, list = nil;
-  Have(len * Width(Pair));
-  pair *pairs = (Pair*) Hp;
-  Hp += len * Width(Pair);
-  for (int i = t->cap; i;)
-    for (struct entry *e = t->tab[--i]; e; e = e->next)
-      ini_pair(pairs, e->key, list),
-      list = (word) pairs, pairs++;
-  return op(1, list); }
+  word list = nil;
+  if (tblp(Sp[0])) {
+    table *t = (table*) Sp[0];
+    word len = t->len;
+    Have(len * Width(Pair));
+    pair *pairs = (Pair*) Hp;
+    Hp += len * Width(Pair);
+    for (int i = t->cap; i;)
+      for (struct entry *e = t->tab[--i]; e; e = e->next)
+        ini_pair(pairs, e->key, list),
+        list = (word) pairs, pairs++; }
+  return Sp[0] = list, Ip++, Continue(); }
 
-static cell *trim_thread(cell *k) {
-  return ttag(k)->head = k; }
-
-static Vm(trim) {
-  cell *k = (cell*) Sp[0];
-  return op(1, W(trim_thread(k))); }
-
-static Vm(seek) {
-  cell *k = (cell*) Sp[1];
-  return op(2, (word) (k + getnum(Sp[0]))); }
-
-static Vm(peek) {
-  cell *k = (cell*) Sp[0];
-  return op(1, k[0].x); }
-
-static Vm(poke) {
-  cell *k = (cell*) Sp[1];
-  k->x = Sp[0];
-  return op(2, (word) k); }
-
+static cell *trim_thread(cell *k) { return ttag(k)->head = k; }
+static Vm(trim) { return Sp[0] = W(trim_thread((cell*) Sp[0])), Ip += 1, Continue(); }
+static Vm(seek) { return Sp[1] = W(((cell*) Sp[1]) + getnum(Sp[0])), Sp += 1, Ip += 1, Continue(); }
+static Vm(peek) { return Sp[0] = R(Sp[0])->x, Ip += 1, Continue(); }
+static Vm(poke) { return R(Sp[1])->x = Sp[0], Sp += 1, Ip += 1, Continue(); }
 static Vm(thda) {
   size_t n = getnum(Sp[0]);
   Have(n + Width(struct tag));
   cell *k = R(Hp);
-  Hp += n + Width(struct tag);
   struct tag *t = (struct tag*) (k + n);
-  t->null = NULL, t->head = k;
-  memset(k, -1, n * sizeof(word));
-  return op(1, (word) k); }
+  return
+    Hp += n + Width(struct tag),
+    t->null = NULL,
+    t->head = k,
+    memset(k, -1, n * sizeof(word)),
+    Sp[0] = (word) k,
+    Ip += 1,
+    Continue(); }
 
 static struct tag *ttag(cell *k) {
   while (k->x) k++;
@@ -1498,7 +1516,7 @@ struct symbol {
   word code;
   symbol *l, *r; };
 
-Vm(symbolp) { return op(1, symp(Sp[0]) ? putnum(-1) : nil); }
+Vm(symbolp) { return Sp[0] = symp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 bool symp(word _) { return homp(_) && dtyp(_) == &sym_type; }
 
@@ -1530,31 +1548,39 @@ static symbol *intern_seek(core *v, string *b, symbol **y) {
 static symbol *intern(core *f, string* b) {
   if (avail(f) < Width(symbol)) {
     bool ok;
-    avec(f, b, ok = p_please(f, Width(symbol)));
+    avec(f, b, ok = gw_please(f, Width(symbol)));
     if (!ok) return 0; }
   return intern_seek(f, b, &f->symbols); }
 
-static Vm(symm) {
+static Vm(nomsym) {
   Have(Width(symbol));
-  Pack(f);
-  symbol *y = intern_seek(f, (string*) f->sp[0], &f->symbols);
-  Unpack(f);
-  return op(1, Z(y)); }
+  symbol *y; return
+    Pack(f),
+    y = intern_seek(f, (string*) f->sp[0], &f->symbols),
+    Unpack(f),
+    Sp[0] = W(y),
+    Ip++,
+    Continue(); }
 
 static Vm(gensym) {
-  if (strp(Sp[0])) return Jump(symm);
+  if (strp(Sp[0])) return Jump(nomsym);
   const int req = Width(symbol) - 2;
   Have(req);
   symbol *y = (symbol*) Hp;
-  Hp += req;
-  return op(1, (word) ini_anon(y, rand())); }
+  return Hp += req,
+         Sp[0] = W(ini_anon(y, rand())),
+         Ip++,
+         Continue(); }
 
 static Vm(symnom) {
   word y = Sp[0];
-  y = symp(y) && ((symbol*)y)->nom ? Z(((symbol*)y)->nom) : nil;
-  return op(1, y); }
+  return
+    y = symp(y) && ((symbol*)y)->nom ? Z(((symbol*)y)->nom) : nil,
+    Sp[0] = y,
+    Ip++,
+    Continue(); }
 
-#define io(n, x) word _ = (x); *(Sp += n-1) = _; ++Ip; return Continue()
+#define io(n, x) word _ = (x); *(Sp += n-1) = _; Ip++; return Continue()
 Vm(add)  { io(2, (Sp[0]|1) + (Sp[1]&~1)); }
 Vm(sub)  { io(2, (Sp[0]|1) - (Sp[1]&~1)); }
 Vm(mul)  { io(2, putnum(getnum(Sp[0])*getnum(Sp[1]))); }
@@ -1577,32 +1603,32 @@ static bool eql(core *f, word a, word b) {
   // everything equals itself
   if (a == b) return true;
   // if a and b have same type
-  if (nump(a | b) ||
+  if (     nump(a | b) ||
       R(a)->ap != data ||
       R(b)->ap != data ||
       dtyp(a) != dtyp(b)) return false;
   // in that case call the type's equality method to check
   return typof(a)->eq(f, a, b); }
 
-static int p_fin(core *f, int s) {
+static int gw_fin(core *f, int s) {
   return free(min(f->pool, f->loop)),
          f->pool = f->loop = NULL,
          s; }
 
-#define d_entry(bn, n, _) && p_ini_def(f, n, W(bn))
-#define i_entry(i)        && p_ini_def(f, "i_"#i, W(i))
-static NoInline bool p_ini_def(core *f, const char *k, word v) {
+#define d_entry(bn, n, _) && gw_ini_def(f, n, W(bn))
+#define i_entry(i)        && gw_ini_def(f, "i_"#i, W(i))
+static NoInline bool gw_ini_def(core *f, const char *k, word v) {
   symbol *y; return
     pushs(f, 1, v) && (y = symof(f, k)) &&
       table_set(f, f->dict, (word) y, pop1(f)); }
 
 static cell bif_yield[] = { {yield} };
-static int p_ini(core *f) {
+static int gw_ini(core *f) {
   memset(f, 0, sizeof(core));
   const uintptr_t len0 = 1;
   word *pool = malloc(2 * len0 * sizeof(word));
   if (!pool) return Oom;
-  f->t0 = clock();
+  f->t0 = gw_clock();
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
   f->ip = bif_yield;
   string *v;
@@ -1615,26 +1641,11 @@ static int p_ini(core *f) {
     (f->quote = symof(f, "`")) &&
     (f->begin = symof(f, ",")) &&
     (f->lambda = symof(f, "\\")) &&
-    p_ini_def(f, "globals", Z(f->dict)) &&
-    p_ini_def(f, "macros", W(f->macro)) &&
+    gw_ini_def(f, "globals", Z(f->dict)) &&
+    gw_ini_def(f, "macros", W(f->macro)) &&
     (v = strof(f, VERSION)) &&
-    p_ini_def(f, "version", W(v)) insts(i_entry) bifs(d_entry) ?
-      Ok : p_fin(f, Oom); }
-
-static word mkargv(p_core *f, const char **av) {
-  if (!*av) return nil;
-  string *s = strof(f, *av);
-  if (!s) return 0;
-  word r; avec(f, s, r = mkargv(f, av + 1));
-  return !r ? r : wpairof(f, (word) s, r); }
-
-static int mkxpn(core *f, const char **av) {
-  word v = mkargv(f, av);                  // get argv
-  v = !v ? v : wpairof(f, v, nil);         // put it in a list
-  v = !v ? v : wpairof(f, W(f->quote), v); // quote it
-  v = !v ? v : wpairof(f, v, nil);         // put that in a list
-  v = !v ? v : wpairof(f, f->sp[0], v);    // apply the function
-  return !v ? Oom : (f->sp[0] = v, Ok); }
+    gw_ini_def(f, "version", W(v)) insts(i_entry) bifs(d_entry) ?
+      Ok : gw_fin(f, Oom); }
 
 static word
   cp_two(core *v, word x, word *p0, word *t0),
@@ -1762,12 +1773,26 @@ static void em_tbl(core *f, FILE *o, word x) {
   table *t = (table*) x;
   fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x); }
 
-#define TextInput(t) ((In*)&(TextIn) {{p_text_getc, p_text_ungetc, p_text_eof}, p, 0})
+static word mkargv(p_core *f, const char **av) {
+  if (!*av) return nil;
+  string *s = strof(f, *av);
+  if (!s) return 0;
+  word r; avec(f, s, r = mkargv(f, av + 1));
+  return !r ? r : wpairof(f, (word) s, r); }
+
+static int mkxpn(core *f, const char **av) {
+  word v = mkargv(f, av);                  // get argv
+  v = !v ? v : wpairof(f, v, nil);         // put it in a list
+  v = !v ? v : wpairof(f, W(f->quote), v); // quote it
+  v = !v ? v : wpairof(f, v, nil);         // put that in a list
+  v = !v ? v : wpairof(f, f->sp[0], v);    // apply the function
+  return !v ? Oom : (f->sp[0] = v, Ok); }
+
 int gw_main(const char *p, const char **av) {
-  In *i = TextInput(p);
+  In *i = ((In*)&(TextIn){{p_text_getc, p_text_ungetc, p_text_eof}, p, 0});
   core *f = &((core){});
-  word s = p_ini(f);
+  int s = gw_ini(f);
   s = s != Ok ? s : p_read1(f, i);
   s = s != Ok ? s : mkxpn(f, av);
   s = s != Ok ? s : p_eval(f);
-  return p_fin(f, s); }
+  return gw_fin(f, s); }

@@ -8,4 +8,4 @@ flamegraph.svg
 *.bin
 *.1
 node_modules
-boot*.h
+main*.h
