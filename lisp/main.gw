@@ -30,7 +30,6 @@
      (memq x) (any (= x))
      (zip a b) (? (twop a) (? (twop b) (X (X (A a) (A b)) (zip (B a) (B b)))))
      rev (foldl 0 (flip X))
-     (ap f) (foldl f (\ f x (f x)))
      (part p) (foldr '(0) (\ a m
       (? (p a) (X (X a (A m)) (B m))
                (X (A m) (X a (B m))))))
@@ -325,7 +324,6 @@
  _ (go e1 prelude) ; second prelude
  e2 (e1 evaluator) ; final eval
  _ (tset globals 'e0 e0)
- _ (tset globals 'evaluator evaluator)
  _ (tset globals 'ev e2)
  ; use final eval on an expression for the main function
  ; this will then be called with the command line arguments

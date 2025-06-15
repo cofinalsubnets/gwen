@@ -11,7 +11,6 @@ x=gw
 default: test
 
 # c headers and source files
-h=$n.h
 c=$n.c
 
 b=$n.bin
@@ -34,7 +33,7 @@ built_binary=$b
 $(built_binary): $o c/main.c c/main.h $m
 	@echo $@
 	@$(cc) $< c/main.c -o $@
-$o: c/$n.c c/$n.h $m
+$o: c/$n.c $m
 	@echo $@
 	@$(cc) -c c/$n.c -o $@
 $0: $o c/main.c c/main.0.h $m
