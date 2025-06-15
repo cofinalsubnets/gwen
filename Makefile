@@ -19,8 +19,9 @@ b=$n.bin
 o=c/$n.o
 
 #build
+CC=clang
 CFLAGS=\
-  -std=gnu17 -g -O2 -Wall -fpic\
+  -std=gnu17 -g -Os -Wall -fpic\
  	-Wstrict-prototypes -Wno-shift-negative-value\
 	-fno-plt -fno-exceptions -fomit-frame-pointer\
   -fno-asynchronous-unwind-tables -fno-stack-protector\

@@ -218,21 +218,22 @@
       k (p1 i_ref k)
       k))))
 
-    ; ana_ll isn't too bad
-    (ana_ll c imp exp) (:
-     arg (init exp)
-     x (last exp)
+    (ana_lu c imp arg x) (:
      d (scop c arg imp)
      k0 (ana d x (thd0 d))
      ar (arity d)
      k (trim ((? (> ar 1) (em2 i_curry ar) id) k0 0))
      (X k (impof d)))
 
+    ; ana_ll isn't too bad
+    (ana_ll c imp exp) (: arg (init exp)
+                          x (last exp)
+                        (ana_lu c imp arg x))
+
     ; ana_lam is small because it uses ana_ll which ana_let also uses
-    (ana_lam c b) (?
-     (atomp b)     (imm 0)
-     (atomp (B b)) (ana c (A b))
-     (ana c (ana_ll c 0 b)))
+    (ana_lam c b) (? (atomp b)     (imm 0)
+                     (atomp (B b)) (ana c (A b))
+                     (ana c (ana_ll c 0 b)))
 
     ; ana_let is the worst :[
     (ana_let c b) (?
@@ -300,8 +301,7 @@
                       a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
                       a3 (loops n (B nds))
                       (<=< a1 a2 a3)))
-       (loops n nds) (, (cpush c 'stk n)
-                        (loop nds))
+       (loops n nds) (, (cpush c 'stk n) (loop nds))
        s0 (stkof c)
        n (llen noms)
        a1 (ana c llam)
