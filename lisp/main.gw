@@ -16,8 +16,7 @@
      (foldr z f l) (? l (f (A l) (foldr z f (B l))) z)
      (foldl1 f l) (foldl (A l) f (B l))
      (foldr1 f l) (foldr (last l) f (init l))
-     (filter p l) (? l (: m (filter p (B l))
-                        (? (p (A l)) (X (A l) m) m)))
+     (filter p l) (? l (: m (filter p (B l)) (? (p (A l)) (X (A l) m) m)))
      (init l) (? (B l) (X (A l) (init (B l))))
      (last l) (? (B l) (last (B l)) (A l))
      (each l f) (? l (, (f (A l)) (each (B l) f)))
@@ -318,12 +317,15 @@
 # run time...
 ; can't use prelude yet directly here
  (go e a) (? a (, (e (A a)) (go e (B a)))) ; for evaluating the prelude
+ t0 (clock 0)
  e0 ev             ; initial eval
  _ (go e0 prelude) ; initial prelude
  e1 (e0 evaluator) ; second eval
  _ (go e1 prelude) ; second prelude
  e2 (e1 evaluator) ; final eval
+ t1 (clock 0)
  _ (tset globals 'ev e2)
+ _ (tset globals 'boot_ms (- t1 t0))
  ; use final eval on an expression for the main function
  ; this will then be called with the command line arguments
  (e2 '(,

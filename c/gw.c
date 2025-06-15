@@ -1327,30 +1327,16 @@ static struct tag *ttag(cell *k) {
   while (k->x) k++;
   return (struct tag*) k; }
 
-struct symbol {
-  DataHeader;
-  string *nom;
-  word code;
-  symbol *l, *r; };
+struct symbol { DataHeader; string *nom; word code; symbol *l, *r; };
 
 Vm(symbolp) { return Sp[0] = symp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
-bool symp(word _) { return homp(_) && typof(_) == &sym_type; }
+static bool symp(word _) { return homp(_) && typof(_) == &sym_type; }
 
 static symbol *ini_sym(symbol *y, string *nom, uintptr_t code) {
-  return y->ap = data,
-         y->typ = &sym_type,
-         y->nom = nom,
-         y->code = code,
-         y->l = y->r = 0,
-         y; }
-
+  return y->ap = data, y->typ = &sym_type, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
 static symbol *ini_anon(symbol *y, word code) {
-  return y->ap = data,
-         y->typ = &sym_type,
-         y->nom = 0,
-         y->code = code,
-         y; }
+  return y->ap = data, y->typ = &sym_type, y->nom = 0, y->code = code, y; }
 
 static symbol *intern_seek(core *v, string *b, symbol **y) {
   symbol *z = *y;
@@ -1560,9 +1546,8 @@ static symbol *symof(core *f, const char *nom) {
 #define d_entry(bn, n, _) && gw_ini_def(f, n, W(bn))
 #define i_entry(i)        && gw_ini_def(f, "i_"#i, W(i))
 static NoInline bool gw_ini_def(core *f, const char *k, word v) {
-  symbol *y; return
-    pushs(f, 1, v) && (y = symof(f, k)) &&
-      table_set(f, f->dict, (word) y, pop1(f)); }
+  symbol *y; return pushs(f, 1, v) && (y = symof(f, k)) &&
+                      table_set(f, f->dict, (word) y, pop1(f)); }
 
 #define insts(_) \
   _(dot) _(free_variable)\
