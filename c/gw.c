@@ -4,13 +4,12 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <errno.h>
 
-#define PStatusEof -1
 #define PStatusOk 0
-#define PStatusOom ENOMEM
-#define PStatusVar ENOENT
-#define PStatusDom EDOM
+#define PStatusEof -1
+#define PStatusOom 1
+#define PStatusVar 2
+#define PStatusDom 3
 
 // thanks !!
 typedef struct p_core p_core, core;
@@ -25,12 +24,10 @@ typedef union cell cell, thread;
 #include <stdio.h>
 
 #define px(x) (transmit(f, stdout, x),puts(""))
-
-// theres a big benefit in speed from tail call optimization but not all platforms support it
-
 #ifndef VERSION
 #define VERSION ""
 #endif
+// theres a big benefit in speed from tail call optimization but not all platforms support it
 #ifdef NTCO
 #define YieldStatus PStatusEof
 #define Vm(n, ...) int n(core *f, ##__VA_ARGS__)
@@ -94,8 +91,7 @@ struct type {
   void (*em)(core*, FILE*, word);        // print it // replace this with stringify...
   word (*xx)(core*, word);               // hash it
   string *(*show)(core*, word);
-  vm *ap;
-};
+  vm *ap; };
 
 #define DataHeader vm *ap; type *typ
 typedef struct Pair {
@@ -143,9 +139,8 @@ static word
   cp(core*, word, word*, word*);
 
 static Vm(gc, uintptr_t);
-static vm bnot, rng, data, nullp,
+static vm bnot, rng, data, nullp, sysclock,
    symnom, ret, ret0, ap, apn, tap, tapn,
-   sysclock,
    jump, cond, ref, imm, yield, yieldi,
    gensym, ev0, pairp, fixnump, symbolp, stringp,
    ssub, sget, slen, scat, prc, cons, car, cdr,
@@ -154,12 +149,7 @@ static vm bnot, rng, data, nullp,
    read0, readf, p_isatty,
    curry;
 
-static type
-  str_type,
-  two_type,
-  str_type,
-  sym_type,
-  tbl_type;
+static type str_type, two_type, str_type, sym_type, tbl_type;
 
 typedef struct In {
   int (*getc)(struct In*),
@@ -1165,14 +1155,15 @@ Vm(readf) {
   Unpack(f);
   return t == Ok ? op(2, *Sp) : t; }
 
-NoInline long p_gettime(void) {
+static NoInline long p_gettime(void) {
   struct timespec ts;
   int s = clock_gettime(CLOCK_REALTIME, &ts);
-  return s ? -1 :
-    ts.tv_sec  * 1000 +
-    ts.tv_nsec / 1000000; }
+  return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
 
-Vm(sysclock) { return op(1, putnum(p_gettime())); }
+Vm(sysclock) { return
+  Sp[0] = putnum(p_gettime()),
+  Ip++,
+  Continue(); }
 
 Vm(p_isatty) { return op(1, isatty(getnum(*Sp)) ? putnum(-1) : nil); }
 Vm(prc)     { word w = *Sp; putc(getnum(w), stdout); Ip++; return Continue(); }
@@ -1352,7 +1343,7 @@ word hash(core *f, word x) {
 table *mktbl(core *f) {
   table *t = cells(f, Width(table) + 1);
   if (!t) return t;
-  struct entry**tab = (void*) (t + 1);
+  struct entry **tab = (struct entry**) (t + 1);
   tab[0] = 0;
   return ini_table(t, 0, 1, tab); }
 
@@ -1645,16 +1636,6 @@ static int mkxpn(core *f, const char **av) {
   v = !v ? v : wpairof(f, f->sp[0], v);    // apply the function
   return !v ? Oom : (f->sp[0] = v, Ok); }
 
-#define TextInput(t) ((In*)&(TextIn) {{p_text_getc, p_text_ungetc, p_text_eof}, p, 0})
-int gw_main(const char *p, const char **av) {
-  In *i = TextInput(p);
-  core *f = &((core){});
-  word s = p_ini(f);
-  s = s != Ok ? s : p_read1(f, i);
-  s = s != Ok ? s : mkxpn(f, av);
-  s = s != Ok ? s : p_eval(f);
-  return p_fin(f, s); }
-
 static word
   cp_two(core *v, word x, word *p0, word *t0),
   cp_sym(core *f, word x, word *p0, word *t0),
@@ -1753,8 +1734,8 @@ static word cp_tbl(core *f, word x, word *p0, word *t0) {
   table *src = (table*) x;
   size_t len = src->len, cap = src->cap;
   table *dst = bump(f, Width(table) + cap + Width(struct entry) * len);
-  struct entry **tab = (void*) (dst + 1),
-               *dd = (void*) (tab + cap);
+  struct entry **tab = (struct entry**) (dst + 1),
+               *dd = (struct entry*) (tab + cap);
   src->ap = (vm*) ini_table(dst, len, cap, tab);
   while (cap--) {
     struct entry *s = src->tab[cap], *last = NULL;
@@ -1780,3 +1761,13 @@ static void wk_tbl(core *f, word x, word *p0, word *t0) {
 static void em_tbl(core *f, FILE *o, word x) {
   table *t = (table*) x;
   fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x); }
+
+#define TextInput(t) ((In*)&(TextIn) {{p_text_getc, p_text_ungetc, p_text_eof}, p, 0})
+int gw_main(const char *p, const char **av) {
+  In *i = TextInput(p);
+  core *f = &((core){});
+  word s = p_ini(f);
+  s = s != Ok ? s : p_read1(f, i);
+  s = s != Ok ? s : mkxpn(f, av);
+  s = s != Ok ? s : p_eval(f);
+  return p_fin(f, s); }

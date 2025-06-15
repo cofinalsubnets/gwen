@@ -21,7 +21,7 @@ o=c/$n.o
 
 #build
 CFLAGS ?= \
-  -std=gnu17 -g -O2 -Wall -fpic \
+  -std=gnu17 -g -O2 -Wall -fpic\
  	-Wstrict-prototypes -Wno-shift-negative-value \
   -fno-asynchronous-unwind-tables -fno-stack-protector \
   -falign-functions

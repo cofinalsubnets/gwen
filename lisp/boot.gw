@@ -1,3 +1,4 @@
+; this expression evaluates to a function of a list (command line arguments)
 (: # prelude definitions
  prelude '( ; a list of expressions to be evaluated in order
   (: true -1 false 0 not nilp
@@ -327,7 +328,7 @@
  _ (tset globals 'ev e2)
  _ (tset globals 'eval e2)
  ; use final eval on an expression for the main function
- ; C will then call this with the command line arguments
+ ; this will then be called with the command line arguments
  (e2 '(\ fs (:- ; we can use prelude in here
   (? args       (procs (A args) (B args))
      (isatty 0) (repl prompt)
