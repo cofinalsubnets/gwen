@@ -101,7 +101,7 @@ valg: $b
 	valgrind --error-exitcode=1 ./$^ $(tests)
 # count lines of code
 sloc:
-	cloc --force-lang=Lisp,$x *
+	cloc --force-lang=Lisp,$x c lisp
 # size of binaries
 bits: $b
 	du -h $^

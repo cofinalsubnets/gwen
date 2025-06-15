@@ -1,5 +1,4 @@
-(:
-# prelude definitions
+(: # prelude definitions
  prelude '( ; a list of expressions to be evaluated in order
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
@@ -315,10 +314,9 @@
     (lambp x) (? (twop x) (= '\ (A x)))
     (desug n d) (? (atomp n) (X n d)
                    (desug (A n) (X '\ (cat (B n) (L d))))))
-
 # run time...
-; can't use prelude directly here
- (go e a) (? a (, (e (A a)) (go e (B a)))) ; to evaluate the prelude
+; can't use prelude yet directly here
+ (go e a) (? a (, (e (A a)) (go e (B a)))) ; for evaluating the prelude
  e0 ev             ; initial eval
  _ (go e0 prelude) ; initial prelude
  e1 (e0 evaluator) ; second eval
@@ -331,13 +329,19 @@
  ; use final eval on an expression for the main function
  ; C will then call this with the command line arguments
  (e2 '(\ fs (:- ; we can use prelude in here
-  (? args       (procs prog (A args) (B args))
+  (? args       (procs (A args) (B args))
      (isatty 0) (repl prompt)
                 (reads 0))
   ; where
   prog (A fs)
   args (B fs)
   prompt "    "
+  help (L " [args]"
+          " args:"
+          "   -h   show this message"
+          "   -v   show version"
+          "   -r   start repl"
+          " file   evaluate file")
   (reads _) (: r (read 0)
              (? r (, (ev (A r))
                      (reads 0))))
@@ -346,16 +350,10 @@
             (? r (, (. (ev (A r)))
                     (putc 10)
                     (repl p))))
-  (procs prog a as) (,
+  (putln s) (, (puts s) (putc 10))
+  (procs a as) (,
    (? (= a "-h") (, (puts "usage: ") (puts prog) (each help putln))
       (= a "-v") (, (puts prog) (puts " ") (putln version))
       (= a "-r") (repl prompt)
       (each (readf a) ev))
-   (? as (procs prog (A as) (B as))))
-  (putln s) (, (puts s) (putc 10))
-  help (L " [args]"
-          " args:"
-          "   -h   show this message"
-          "   -v   show version"
-          "   -r   start repl"
-          " file   evaluate file")))))
+   (? as (procs (A as) (B as))))))))

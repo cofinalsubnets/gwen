@@ -1646,10 +1646,9 @@ static int mkxpn(core *f, const char **av) {
   return !v ? Oom : (f->sp[0] = v, Ok); }
 
 #define TextInput(t) ((In*)&(TextIn) {{p_text_getc, p_text_ungetc, p_text_eof}, p, 0})
-#define Core() &((core){})
 int gw_main(const char *p, const char **av) {
   In *i = TextInput(p);
-  core *f = Core();
+  core *f = &((core){});
   word s = p_ini(f);
   s = s != Ok ? s : p_read1(f, i);
   s = s != Ok ? s : mkxpn(f, av);
