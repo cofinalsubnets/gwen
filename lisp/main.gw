@@ -327,12 +327,10 @@
  ; use final eval on an expression for the main function
  ; this will then be called with the command line arguments
  (e2 '(,
-
-  ;(: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
-  ;   p '(macros peek poke seek trim thd)
-  ;   p (cat i p)
-    ; (each p (tdel 0 globals))
-  ;   )
+  (: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
+     p '(macros peek poke seek trim thd globals)
+     p (cat i p)
+    (each p (tdel 0 globals)))
   (\ fs (:- ; we can use prelude in here
    (? args       (procs (A args) (B args)) ; if any cli args then process them
       (isatty 0) (repl prompt) ; else if attached to a tty then start a repl
