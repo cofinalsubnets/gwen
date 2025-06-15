@@ -323,29 +323,35 @@
  e1 (e0 evaluator) ; second eval
  _ (go e1 prelude) ; second prelude
  e2 (e1 evaluator) ; final eval
- _ (tset globals 'e0 e0)
  _ (tset globals 'ev e2)
  ; use final eval on an expression for the main function
  ; this will then be called with the command line arguments
- (e2 '(\ fs (:- ; we can use prelude in here
-  (? args       (procs (A args) (B args)) ; if any cli args then process them
-     (isatty 0) (repl prompt) ; else if attached to a tty then start a repl
-                (reads 0))    ; else eval expressions from stdin
-  ; where
-  prog (A fs) args (B fs)
-  prompt "    "
-  help (L " [args]"
-          " args:"
-          "   -h   show this message"
-          "   -v   show version"
-          "   -r   start repl"
-          " file   evaluate file")
-  (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
-  (repl p) (: r (, (puts p) (read 0)) (? r (, (. (ev (A r))) (putc 10) (repl p))))
-  (putln s) (, (puts s) (putc 10))
-  (procs a as) (,
-   (? (= a "-h") (, (puts "usage: ") (puts prog) (each help putln))
-      (= a "-v") (, (puts prog) (puts " ") (putln version))
-      (= a "-r") (repl prompt)
-      (each (readf a) ev))
-   (? as (procs (A as) (B as))))))))
+ (e2 '(,
+
+  ;(: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
+  ;   p '(macros peek poke seek trim thd)
+  ;   p (cat i p)
+    ; (each p (tdel 0 globals))
+  ;   )
+  (\ fs (:- ; we can use prelude in here
+   (? args       (procs (A args) (B args)) ; if any cli args then process them
+      (isatty 0) (repl prompt) ; else if attached to a tty then start a repl
+                 (reads 0))    ; else eval expressions from stdin
+   ; where
+   prog (A fs) args (B fs)
+   prompt "    "
+   help (L " [args]"
+           " args:"
+           "   -h   show this message"
+           "   -v   show version"
+           "   -r   start repl"
+           " file   evaluate file")
+   (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
+   (repl p) (: r (, (puts p) (read 0)) (? r (, (. (ev (A r))) (putc 10) (repl p))))
+   (putln s) (, (puts s) (putc 10))
+   (procs a as) (,
+    (? (= a "-h") (, (puts "usage: ") (puts prog) (each help putln))
+       (= a "-v") (, (puts prog) (puts " ") (putln version))
+       (= a "-r") (repl prompt)
+       (each (readf a) ev))
+    (? as (procs (A as) (B as)))))))))

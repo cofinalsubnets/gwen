@@ -141,7 +141,7 @@ static word
 static Vm(gc, uintptr_t);
 static vm bnot, rng, data, nullp, sysclock,
    symnom, ret, ret0, ap, apn, tap, tapn,
-   jump, cond, ref, imm, yield, yieldi,
+   jump, cond, ref, imm,
    gensym, ev0, pairp, fixnump, symbolp, stringp,
    ssub, sget, slen, scat, prc, cons, car, cdr,
    lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
@@ -473,10 +473,6 @@ static Vm(ret) {
   return Ip = R(Sp[n]), Sp[n] = Sp[0], Sp += n, Continue(); }
 static Vm(ret0) { return Ip = R(Sp[1]), Sp[1] = Sp[0], Sp += 1, Continue(); }
 
-// exit vm and return to C
-static Vm(yield) { return Pack(f), YieldStatus; }
-static Vm(yieldi) { return Ip = Ip[1].m, Pack(f), YieldStatus; }
-
 // currying
 static Vm(curry) {
   cell *k = R(Hp), *j = k;
@@ -563,8 +559,8 @@ static NoInline int p_ana(core *f, vm *y) {
   UM(f);
   return k ? (f->ip = k, Ok) : Oom; }
 // compile and execute expression
-static Inline int p_eval(core *f) {
-  int s = p_ana(f, yieldi);
+static Inline int p_eval(core *f, vm *y) {
+  int s = p_ana(f, y);
   if (s != Ok) return s;
 #ifdef NTCO
   do s = f->ip->ap(f); while (s == Ok);
@@ -576,14 +572,9 @@ static Inline int p_eval(core *f) {
 static Vm(ev0) {
   Ip++;
   Pack(f);
-  int s = p_ana(f, jump);
-  if (s != Ok) return s;
-#ifdef NTCO
-  do s = f->ip->ap(f); while (s == Ok);
-  return s == Eof ? Ok : s; }
-#else
-  return Unpack(f), Continue(); }
-#endif
+  int s = p_eval(f, jump);
+  Unpack(f);
+  return s == Ok ? Continue() : s; }
 
 static cell *mo_ini(thread *_, size_t len) {
   struct tag *t = (struct tag*) (_ + len);
@@ -836,13 +827,15 @@ static size_t ana_seq(core *f, env* *c, size_t m, word x) {
   UM(f);
   return m ? analyze(f, c, m, A(x)) : m; }
 
+// exit vm and return to C
+static Vm(yieldi) { return Ip = Ip[1].m, Pack(f), YieldStatus; }
 static Ana(ana_mac, word b) {
   if (!pushs(f, 3, f->quote, x, b)) return 0;
   Pair *mxp = (Pair*) cells(f, 4 * Width(Pair));
   if (!mxp) return 0;
   x = Z(ini_pair(mxp, f->sp[1], Z(ini_pair(mxp+1, Z(ini_pair(mxp+2, f->sp[0],  Z(ini_pair(mxp+3, f->sp[2], nil)))), nil))));
   *(f->sp += 2) = x;
-  return p_eval(f) != Ok ? 0 : analyze(f, c, m, pop1(f)); }
+  return p_eval(f, yieldi) != Ok ? 0 : analyze(f, c, m, pop1(f)); }
 
 // evaluate function call arguments and apply
 static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
@@ -1615,43 +1608,6 @@ static bool eql(core *f, word a, word b) {
   // in that case call the type's equality method to check
   return typof(a)->eq(f, a, b); }
 
-static int gw_fin(core *f, int s) {
-  return free(min(f->pool, f->loop)),
-         f->pool = f->loop = NULL,
-         s; }
-
-#define d_entry(bn, n, _) && gw_ini_def(f, n, W(bn))
-#define i_entry(i)        && gw_ini_def(f, "i_"#i, W(i))
-static NoInline bool gw_ini_def(core *f, const char *k, word v) {
-  symbol *y; return
-    pushs(f, 1, v) && (y = symof(f, k)) &&
-      table_set(f, f->dict, (word) y, pop1(f)); }
-
-static cell bif_yield[] = { {yield} };
-static int gw_ini(core *f) {
-  memset(f, 0, sizeof(core));
-  const uintptr_t len0 = 1;
-  word *pool = malloc(2 * len0 * sizeof(word));
-  if (!pool) return Oom;
-  f->t0 = gw_clock();
-  f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
-  f->ip = bif_yield;
-  string *v;
-  return
-    (f->dict = mktbl(f)) &&
-    (f->macro = mktbl(f)) &&
-    (f->eval = symof(f, "ev")) &&
-    (f->let = symof(f, ":")) &&
-    (f->cond = symof(f, "?")) &&
-    (f->quote = symof(f, "`")) &&
-    (f->begin = symof(f, ",")) &&
-    (f->lambda = symof(f, "\\")) &&
-    gw_ini_def(f, "globals", Z(f->dict)) &&
-    gw_ini_def(f, "macros", W(f->macro)) &&
-    (v = strof(f, VERSION)) &&
-    gw_ini_def(f, "version", W(v)) insts(i_entry) bifs(d_entry) ?
-      Ok : gw_fin(f, Oom); }
-
 static word
   cp_two(core *v, word x, word *p0, word *t0),
   cp_sym(core *f, word x, word *p0, word *t0),
@@ -1785,7 +1741,45 @@ static word mkargv(p_core *f, const char **av) {
   word r; avec(f, s, r = mkargv(f, av + 1));
   return !r ? r : wpairof(f, (word) s, r); }
 
-static int mkxpn(core *f, const char **av) {
+#define d_entry(bn, n, _) && gw_ini_def(f, n, W(bn))
+#define i_entry(i)        && gw_ini_def(f, "i_"#i, W(i))
+static NoInline bool gw_ini_def(core *f, const char *k, word v) {
+  symbol *y; return
+    pushs(f, 1, v) && (y = symof(f, k)) &&
+      table_set(f, f->dict, (word) y, pop1(f)); }
+
+static int gw_fin(core*, int);
+static Vm(yield) { return Pack(f), YieldStatus; }
+static cell bif_yield[] = { {yield} };
+static int gw_ini(core *f) {
+  memset(f, 0, sizeof(core));
+  const uintptr_t len0 = 1;
+  word *pool = malloc(2 * len0 * sizeof(word));
+  if (!pool) return Oom;
+  f->t0 = gw_clock();
+  f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);
+  f->ip = bif_yield;
+  string *v;
+  return
+    (f->dict = mktbl(f)) &&
+    (f->macro = mktbl(f)) &&
+    (f->eval = symof(f, "ev")) &&
+    (f->let = symof(f, ":")) &&
+    (f->cond = symof(f, "?")) &&
+    (f->quote = symof(f, "`")) &&
+    (f->begin = symof(f, ",")) &&
+    (f->lambda = symof(f, "\\")) &&
+    gw_ini_def(f, "globals", Z(f->dict)) &&
+    gw_ini_def(f, "macros", W(f->macro)) &&
+    (v = strof(f, VERSION)) &&
+    gw_ini_def(f, "version", W(v)) insts(i_entry) bifs(d_entry) ?
+      Ok : gw_fin(f, Oom); }
+
+static int gw_fin(core *f, int s) {
+  return free(min(f->pool, f->loop)), f->pool = f->loop = NULL, s; }
+
+
+static Inline int mkxpn(core *f, const char **av) {
   word v = mkargv(f, av);                  // get argv
   v = !v ? v : wpairof(f, v, nil);         // put it in a list
   v = !v ? v : wpairof(f, W(f->quote), v); // quote it
@@ -1799,5 +1793,5 @@ int gw_main(const char *p, const char **av) {
   int s = gw_ini(f);
   s = s != Ok ? s : p_read1(f, i);
   s = s != Ok ? s : mkxpn(f, av);
-  s = s != Ok ? s : p_eval(f);
+  s = s != Ok ? s : p_eval(f, yieldi);
   return gw_fin(f, s); }
