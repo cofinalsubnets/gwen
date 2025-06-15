@@ -19,7 +19,6 @@ b=$n.bin
 o=c/$n.o
 
 #build
-CC=clang
 CFLAGS=\
   -std=gnu17 -g -Os -Wall -fpic\
  	-Wstrict-prototypes -Wno-shift-negative-value\

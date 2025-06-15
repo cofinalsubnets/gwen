@@ -15,24 +15,24 @@ sha256sums=(SKIP)
 
 pkgver() {
   cd ${_gitname}
-  git checkout gwen &> /dev/null
+  git checkout main &> /dev/null
   git describe --always | sed 's/-/_/g'
 }
   
 build() {
   cd ${_gitname}
-  git checkout gwen &> /dev/null
-  make CC=gcc CFLAGS="-g -O2 -Wall" all
+  git checkout main &> /dev/null
+  make all
 }
 
 check() {
   cd ${_gitname}
-  git checkout gwen &> /dev/null
+  git checkout main &> /dev/null
   make test
 }
 
 package() {
   cd ${_gitname}
-  git checkout gwen &> /dev/null
+  git checkout main &> /dev/null
   make DESTDIR="${pkgdir}/" PREFIX="usr/" VIMPREFIX="usr/share/vim/vimfiles/" install
 }
