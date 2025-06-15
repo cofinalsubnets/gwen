@@ -385,10 +385,12 @@ static NoInline word cp(core *v, word x, word *p0, word *t0) {
   ((struct tag*) d)->head = dst;
   return W(dst + (src - ini)); }
 
-#define op(n, x) (Ip = (cell*) Sp[n], Sp[n] = (x), Sp += n, Continue())
 static Vm(data) {
   word x = W(Ip);
-  return op(1, x); }
+  Ip = R(Sp[1]);
+  Sp[1] = x;
+  Sp += 1;
+  return Continue(); }
 
 static Vm(uncurry) {
   Have1();
@@ -437,9 +439,13 @@ static Vm(ap) {
 static Vm(tap) {
   word x = Sp[0], j = Sp[1];
   Sp += getnum(Ip[1].x) + 1;
-  if (nump(j)) return op(1, j);
+  if (nump(j)) return
+    Ip = R(Sp[1]),
+    Sp[1] = j,
+    Sp += 1,
+    Continue();
   Ip = R(j);
-  *Sp = x;
+  Sp[0] = x;
   return Continue(); }
 
 // apply to multiple arguments
