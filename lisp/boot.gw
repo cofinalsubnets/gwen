@@ -1,5 +1,6 @@
-# top expression
-(: prelude '(
+(:
+# prelude definitions
+ prelude '( ; a list of expressions to be evaluated in order
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
@@ -46,8 +47,10 @@
   (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))) ; end prelude
 
+# eval function
+  ; a single expression whose value is the eval function.
+  ; you can use prelude definitions in here.
   evaluator '(:- eval
-
 ;; functions for working with variable scope records
     (toplp c) (nilp (parof c)) (parof c) (tget 0 c 'par)
     (stkof c) (tget 0 c 'stk)  (argof c) (tget 0 c 'arg)
@@ -64,15 +67,14 @@
      t)
 ;; thread initializer
     (thd0 c n) (:
-     k (thd (+ 2 n))             ; full initial thread
-     k (seek (+ 1 n) k)         ; go to last writeable address
-     k (p0 (arity c) k)       ; write return instruction
+     k (thd (+ 2 n))    ; full initial thread
+     k (seek (+ 1 n) k) ; go to last writeable address
+     k (p0 (arity c) k) ; write return instruction
      k (p1 i_ret k)
      k)
 ;; import a variable into this scope
     (import c v)
-     (? (not (toplp c))
-      (cpush c 'imp v))
+     (? (not (toplp c)) (cpush c 'imp v))
     p0 poke
     (p1 x k) (poke x (seek -1 k))
     (em1 i k n) (p1 i (k (+ 1 n)))
@@ -80,15 +82,13 @@
     (em_ap k n) (:
      j (k (+ 1 n))
      i (peek j)
-     (? (= i i_ret)
-      (p0 i_tap j)
-      (p1 i_ap j)))
+     (? (= i i_ret) (p0 i_tap j)
+                    (p1 i_ap j)))
     (em_apn n k m) (:
      j (k (+ 2 m))
      i (peek j)
-     (? (= i i_ret)
-      (p1 i_tapn (p0 n j))
-      (p1 i_apn (p1 n j))))
+     (? (= i i_ret) (p1 i_tapn (p0 n j))
+                    (p1 i_apn (p1 n j))))
     imm (em2 i_imm)
     (stkidx d x)
       (: imp (impof d)
@@ -99,8 +99,8 @@
                       -1))))
 
     (eval x) (:
-     t (scop 0 (L 0) 0)
-     (ana t x (thd0 t) 0 0))
+     c (scop 0 (L 0) 0)
+     (ana c x (thd0 c) 0 0))
 
     (ana c x)
      (? (symp x)  (ana_sym c x)
@@ -117,16 +117,20 @@
           (ana_ap c a b))))))
 
     ;ana_if is a bit complicated
-    (ana_if c b) (:- (: a0 (pop 'end)
-                        a1 (ana_if_r b)
-                        a2 (push 'end)
-                      (<=< a0 a1 a2))
+    (ana_if c b) (:-
+     (: a0 (pop 'end)
+        a1 (ana_if_r b)
+        a2 (push 'end)
+      (<=< a0 a1 a2))
+     ; where
      (pop y k n) (: j (k n) (, (cpop c y) j))
      (push y k n) (cpush c y (k n))
      (ana_if_r b) (?
       (atomp b) (imm 0)
-      (atomp (B b)) (co (ana c (A b))
-                        (peek_end c))
+      (atomp (B b))
+       (: a0 (ana c (A b))
+          a1 (peek_end c)
+        (<=< a0 a1))
       (: a0 (ana c (A b))
          a1 (pop_alt c)
          a2 (ana c (AB b))
@@ -146,23 +150,33 @@
       a (cpeek c 'end)
       i (peek a)
       (?  (|| (= i i_ret) (= i i_tap))
-           (p1 i (p1 (peek (seek 1 a)) j))
+           (p1 i
+            (p1 (peek (seek 1 a))
+             j))
           (= i i_tapn)
-           (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j)))
-          (p1 i_jump (p1 a j)))))
+           (p1 i
+            (p1 (peek (seek 1 a))
+             (p1 (peek (seek 2 a))
+              j)))
+          (p1 i_jump
+           (p1 a
+            j)))))
 
     (ana_apl n c b) (:
-          (loop c b)
-           (? (atomp b) id
-            (: a1 (ana c (A b))
-               a2 em_ap
-               a3 (loop c (B b))
-              (<=< a1 a2 a3)))
+     (loop c b)
+      (? (atomp b) id
+       (: a0 (ana c (A b))
+          a1 em_ap
+          a2 (loop c (B b))
+        (<=< a0 a1 a2)))
      _ (cpush c 'stk n)
      a (loop c b)
      _ (cpop c 'stk)
      a)
-    (ana_ap c f b)  (co (ana c f) (ana_apl 0 c b))
+
+    (ana_ap c f b) (: a0 (ana c f)
+                      a1 (ana_apl 0 c b)
+                    (<=< a0 a1))
     ; ana_seq is recursive but pretty simple
     (ana_seq c x)
      (? (atomp x) (imm 0)
@@ -227,7 +241,7 @@
      (atomp (B b)) (ana c (A b))
      (loop1 c (scop c (argof c) (impof c)) 0 0 (A b) (AB b) (BB b)))
 
-     # l1 pass nom def and value expressions to l2
+     ;; l1 pass nom def and value expressions to l2
      ; l1 collects bindings and passes them with the body expression to l2
      (loop1 c q noms defs nom def rest) (:
       nd (desug nom def)
@@ -237,7 +251,7 @@
          (atomp (B rest)) (loop2 c q noms defs (A rest) rest)
          (loop1 c q noms defs (A rest) (AB rest) (BB rest))))
 
-     # l2 pass noms defs exp with revised lambda defs to l3
+     ;; l2 pass noms defs exp with revised lambda defs to l3
      ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
      (loop2 c q noms defs exp rest) (:
 
@@ -274,7 +288,7 @@
       llam (X '\ (cat noms (L exp))) ;; construct reversed lambda expression
       (loop3 c q (rev noms) (rev defs) clams llam rest))
 
-     # l3 collect defs and apply
+     ;; l3 collect defs and apply
      (loop3 c q noms defs clams llam rest) (:
        _ (tset q 'lam clams)
        (loop nds) (? (nilp nds) id
@@ -302,46 +316,46 @@
     (desug n d) (? (atomp n) (X n d)
                    (desug (A n) (X '\ (cat (B n) (L d))))))
 
-; this does some initialization and then returns the main function
-(: ; we can't use prelude directly yet here
-   (go e a) (? a (, (e (A a)) (go e (B a))))
-   e0 ev
-   _ (go e0 prelude)
-   e1 (e0 evaluator)
-   _ (go e1 prelude)
-   e2 (e1 evaluator)
-   _ (tset globals 'e0 ev)
-   _ (tset globals 'evaluator evaluator)
-;   _ (tset globals 'prelude prelude)
-   _ (tset globals 'ev e2)
-   _ (tset globals 'eval e2)
-   (e2 '(\ fs (: ; we can use prelude in here
-    ; (each (tdel 0 globals) (cat '(peek poke seek macros thd globals) (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))))
-    prog (A fs) args (B fs)
-    prompt "    "
-    (reads _) (: r (read 0)
-               (? r (, (ev (A r))
-                       (reads 0))))
-    (repl p) (: r (, (puts p) (read 0))
-              (? r (, (. (ev (A r)))
-                      (putc 10)
-                      (repl p))))
-    (procs prog a as)
-     (, (proc1 prog a)
-        (? as (procs prog (A as) (B as))))
-    (proc1 prog arg) (?
-     (= arg "-h") (, (puts "usage: ") (puts prog) (each help putln))
-     (= arg "-v") (, (puts prog) (puts " ") (putln version))
-     (= arg "-r") (repl prompt)
-     (each (readf arg) ev))
-    (putln s) (, (puts s) (putc 10))
-    help (L " [args]"
-            " args:"
-            "   -h   show this message"
-            "   -v   show version"
-            "   -r   start repl"
-            " file   evaluate file")
-
-    (? args       (procs prog (A args) (B args))
-       (isatty 0) (repl prompt)
-                  (reads 0)))))))
+# run time...
+; can't use prelude directly here
+ (go e a) (? a (, (e (A a)) (go e (B a)))) ; to evaluate the prelude
+ e0 ev             ; initial eval
+ _ (go e0 prelude) ; initial prelude
+ e1 (e0 evaluator) ; second eval
+ _ (go e1 prelude) ; second prelude
+ e2 (e1 evaluator) ; final eval
+ _ (tset globals 'e0 e0)
+ _ (tset globals 'evaluator evaluator)
+ _ (tset globals 'ev e2)
+ _ (tset globals 'eval e2)
+ ; use final eval on an expression for the main function
+ ; C will then call this with the command line arguments
+ (e2 '(\ fs (:- ; we can use prelude in here
+  (? args       (procs prog (A args) (B args))
+     (isatty 0) (repl prompt)
+                (reads 0))
+  ; where
+  prog (A fs)
+  args (B fs)
+  prompt "    "
+  (reads _) (: r (read 0)
+             (? r (, (ev (A r))
+                     (reads 0))))
+  (repl p) (: r (, (puts p)
+                   (read 0))
+            (? r (, (. (ev (A r)))
+                    (putc 10)
+                    (repl p))))
+  (procs prog a as) (,
+   (? (= a "-h") (, (puts "usage: ") (puts prog) (each help putln))
+      (= a "-v") (, (puts prog) (puts " ") (putln version))
+      (= a "-r") (repl prompt)
+      (each (readf a) ev))
+   (? as (procs prog (A as) (B as))))
+  (putln s) (, (puts s) (putc 10))
+  help (L " [args]"
+          " args:"
+          "   -h   show this message"
+          "   -v   show version"
+          "   -r   start repl"
+          " file   evaluate file")))))
