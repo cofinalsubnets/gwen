@@ -17,15 +17,17 @@ gwen lisp is a simple lisp dialect inspired by haskell and scheme.
 |--------------------|----------|
 | `,`                | `begin`  |
 | `?`                | `cond`   |
-| `:`                | `let*`   |
+| `:`                | `letrec` |
 | <code>&#96;</code> | `quote`  |
 | <code>&#92;</code> | `lambda` |
 
 `define` and `set!` forms are not present. a `:` form at top level with
 no body is considered global definition. in all contexts a `:` form
-with no body has the value of its last defined variable. `:` bindings
-other than functions are evaluated sequentially and variables can be
-shadowed in the expected way.
+with no body has the value of its last defined variable. `:` supports
+recursive function definitions and syntactic sugar for functions similar
+to scheme's `define`. bindings other than functions are evaluated
+sequentially, and prior bindings within the same form can be referred to
+and shadowed in the obvious way.
 
 the syntax of some of the forms is simplified (less parentheses)
 gwen compared to scheme.
@@ -33,7 +35,7 @@ gwen compared to scheme.
 | gwen                         | scheme                      |
 |------------------------------|-----------------------------|
 | `(? a b c d e)`              | `(cond (a b) (c d) (#t e))` |
-| `(: a b c d e)`              | `(let* ((a b) (c d)) e)`    |
+| `(: a b c d e)`              | `(letrec  ((a b) (c d)) e)` |
 | <code>(&#92; a b c d)</code> | `(lambda (a b c) d)`        |
 
 in conditionals only `0` is false. this is equivalent to `#f` and `'()`
