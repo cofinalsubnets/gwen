@@ -97,9 +97,8 @@
          (? (<= 0 ai) (+ (llen imp) ai)
                       -1))))
 
-    (eval x) (:
-     c (scop 0 (L 0) 0)
-     (ana c x (thd0 c) 0 0))
+    (eval x) (: c (scop 0 (L 0) 0)
+              (ana c x (thd0 c) 0 0))
 
     (ana c x)
      (? (symp x)  (ana_sym c x)
@@ -283,8 +282,8 @@
 
       lams (close lams)
       lnoms (map A lams)
-      (lamdel lnoms) (map (\ ll (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))))
-      clams (lamdel lnoms lams)
+      (ldd ll) (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))
+      clams (map ldd lams)
       llam (X '\ (cat noms (L exp))) ;; construct reversed lambda expression
       (loop3 c q (rev noms) (rev defs) clams llam rest))
 
@@ -310,7 +309,7 @@
        _ (tset c 'stk s0)
        (<=< a1 a2 a3))
 
-    (set_cdr p x) (, (poke x (seek 3 p)) x) # don't do this :<
+    (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[
     (lambp x) (? (twop x) (= '\ (A x)))
     (desug n d) (? (atomp n) (X n d)
                    (desug (A n) (X '\ (cat (B n) (L d))))))
