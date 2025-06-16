@@ -49,7 +49,7 @@ c/main.h: lisp/main.$x lisp/cat.$x $0
 	@./$0 lisp/cat.$x <$< | $(sed) >$@
 
 built_manpage=$n.1
-$(built_manpage): $(built_binary) lisp/manpage.$x
+$(built_manpage): $0 lisp/manpage.$x
 	@echo $@
 	@./$^ > $@
 

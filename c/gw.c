@@ -1325,17 +1325,12 @@ Vm(bxor) { io(2, (Sp[0] ^ Sp[1]) | 1); }
 Vm(rng)  { io(1, putnum(rand())); }
 Vm(fixnump) { io(1, nump(Sp[0]) ? putnum(-1) : nil); }
 
-// default equality method for things that are only equal to themselves
 static bool eql(core *f, word a, word b) {
-  // everything equals itself
-  if (a == b) return true;
-  // if a and b have same type
-  if (     nump(a | b) ||
-      R(a)->ap != data ||
-      R(b)->ap != data ||
-      typof(a) != typof(b)) return false;
-  // in that case call the type's equality method to check
-  return typof(a)->eq(f, a, b); }
+  return a == b || (homp(a | b) &&
+                    R(a)->ap == data &&
+                    R(b)->ap == data &&
+                    typof(a) == typof(b) &&
+                    typof(a)->eq(f, a, b)); }
 
 static word
   cp_sym(core *f, word x, word *p0, word *t0),
@@ -1347,6 +1342,7 @@ static void wk_two(core *f, word x, word *p0, word *t0),
   em_sym(core *f, FILE *o, word x);
 
 static bool eq_two(core *f, word x, word y);
+// default equality method for things that are only equal to themselves
 static bool eq_not(core *f, word a, word b) { return false; }
 static word cp_two(core *v, word x, word *p0, word *t0) {
   pair *src = (pair*) x,
@@ -1354,11 +1350,10 @@ static word cp_two(core *v, word x, word *p0, word *t0) {
   return W(src->ap = (vm*) dst); }
 
 static type
-  two_type = { .xx = xx_two, .cp = cp_two, .wk = wk_two, .em = em_two, .eq = eq_two, },
-  str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .em = em_str, .eq = eq_str, },
+  two_type = { .xx = xx_two, .cp = cp_two, .wk = wk_two, .eq = eq_two, .em = em_two, },
+  str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .eq = eq_str, .em = em_str, },
   sym_type = { .xx = xx_sym, .cp = cp_sym, .wk = wk_sym, .eq = eq_not, .em = em_sym, },
   tbl_type = { .xx = xx_tbl, .cp = cp_tbl, .wk = wk_tbl, .eq = eq_not, .em = em_tbl, };
-
 
 static void wk_two(core *f, word x, word *p0, word *t0) {
   f->cp += Width(Pair);
@@ -1483,29 +1478,18 @@ static NoInline bool gw_ini_def(core *f, const char *k, word v) {
 #define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
 #define S3(i) {{curry},{.x=putnum(3)},{i}, {ret0}}
 #define BIFS(_) \
-  _(bif_clock, "clock", S1(sysclock))\
-  _(bif_add, "+", S2(add)) _(bif_sub, "-", S2(sub)) \
-  _(bif_mul, "*", S2(mul)) _(bif_quot, "/", S2(quot)) _(bif_rem, "%", S2(rem)) \
-  _(bif_lt, "<", S2(lt))  _(bif_le, "<=", S2(le)) _(bif_eq, "=", S2(eq))\
-  _(bif_ge, ">=", S2(ge))  _(bif_gt, ">", S2(gt)) \
-  _(bif_rand, "rand", S1(rng)) \
+  _(bif_clock, "clock", S1(sysclock)) _(bif_isatty, "isatty", S1(p_isatty))\
+  _(bif_add, "+", S2(add)) _(bif_sub, "-", S2(sub)) _(bif_mul, "*", S2(mul)) _(bif_quot, "/", S2(quot)) _(bif_rem, "%", S2(rem)) \
+  _(bif_lt, "<", S2(lt))  _(bif_le, "<=", S2(le)) _(bif_eq, "=", S2(eq)) _(bif_ge, ">=", S2(ge))  _(bif_gt, ">", S2(gt)) \
+  _(bif_bnot, "~", S1(bnot)) _(bif_rand, "rand", S1(rng)) \
   _(bif_cons, "X", S2(cons)) _(bif_car, "A", S1(car)) _(bif_cdr, "B", S1(cdr)) \
-  _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) \
-  _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \
-  _(bif_dot, ".", S1(dot)) _(bif_putc, "putc", S1(prc)) \
-  _(bif_bnot, "~", S1(bnot)) \
-  _(bif_thd, "thd", S1(thda)) _(bif_peek, "peek", S1(peek)) _(bif_poke, "poke", S2(poke))\
-  _(bif_trim, "trim", S1(trim)) _(bif_seek, "seek", S2(seek)) \
-  _(bif_tnew, "tnew", S1(tnew)) _(bif_tkeys, "tkeys", S1(tkeys)) \
-  _(bif_tlen, "tlen", S1(tlen))\
-  _(bif_tset, "tset", S3(tset)) _(bif_tget, "tget", S3(tget)) _(bif_tdel, "tdel", S3(tdel))\
-  _(bif_twop, "twop", S1(pairp)) _(bif_strp, "strp", S1(stringp))\
-  _(bif_symp, "symp", S1(symbolp)) _(bif_nump, "nump", S1(fixnump))\
-  _(bif_nilp, "nilp", S1(nullp))\
+  _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \
+  _(bif_read, "read", S1(read0)) _(bif_readf, "readf", S1(readf)) _(bif_dot, ".", S1(dot)) _(bif_putc, "putc", S1(prc)) \
   _(bif_sym, "sym", S1(gensym)) _(bif_nom, "nom", S1(symnom))\
-  _(bif_ev, "ev", S1(ev0))\
-  _(bif_isatty, "isatty", S1(p_isatty))\
-  _(bif_read, "read", S1(read0)) _(bif_readf, "readf", S1(readf))
+  _(bif_thd, "thd", S1(thda)) _(bif_peek, "peek", S1(peek)) _(bif_poke, "poke", S2(poke)) _(bif_trim, "trim", S1(trim)) _(bif_seek, "seek", S2(seek)) \
+  _(bif_tnew, "tnew", S1(tnew)) _(bif_tkeys, "tkeys", S1(tkeys)) _(bif_tlen, "tlen", S1(tlen)) _(bif_tset, "tset", S3(tset)) _(bif_tget, "tget", S3(tget)) _(bif_tdel, "tdel", S3(tdel))\
+  _(bif_twop, "twop", S1(pairp)) _(bif_strp, "strp", S1(stringp)) _(bif_symp, "symp", S1(symbolp)) _(bif_nump, "nump", S1(fixnump)) _(bif_nilp, "nilp", S1(nullp))\
+  _(bif_ev, "ev", S1(ev0))
 #define bif_entry(n, _, d) static const cell n[] = d;
 BIFS(bif_entry);
 
