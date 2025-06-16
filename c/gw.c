@@ -92,8 +92,7 @@ struct string { DataHeader; uintptr_t len; char text[]; };
 
 static struct tag { cell *null, *head, end[]; } *ttag(cell*);
 
-static bool gw_please(core*, uintptr_t),
-            eql(core*, word, word);
+static bool gw_please(core*, uintptr_t), eql(core*, word, word);
 
 static word cp(core*, word, word*, word*);
 
@@ -109,10 +108,15 @@ static vm bnot, rng, data, nullp, sysclock,
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
 // align bytes up to the nearest word
-static NoInline long gw_clock(void);
-
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
+
+static void *gw_malloc(size_t n) { return malloc(n); }
+static void gw_free(void *n) { return free(n); }
+static NoInline long gw_clock(void) {
+  struct timespec ts;
+  int s = clock_gettime(CLOCK_REALTIME, &ts);
+  return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
 
 #define Eof PStatusEof
 #define Oom PStatusOom
@@ -130,6 +134,7 @@ static void *cells(core *f, size_t n) { return
 
 #define max(a, b) ((a)>(b)?(a):(b))
 #define min(a, b) ((a)<(b)?(a):(b))
+
 
 static NoInline void copy_from(core*, word*, uintptr_t);
 // garbage collector
@@ -171,19 +176,18 @@ static NoInline bool gw_please(core *f, uintptr_t req0) {
   if   (too_little) do len1 <<= 1, v <<= 1; while (too_little);
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
   else return true; // no change reqired, hopefully the most common case
-                    //
   // at this point we got a new target length and are gonna try and resize
-  word *dest2 = malloc(len1 * 2 * sizeof(word)); // allocate pool with the new target size
+  word *dest2 = gw_malloc(len1 * 2 * sizeof(word)); // allocate pool with the new target size
   if (!dest2) return req <= total; // if this fails still return true if the original pool is not too small
-
   // we got the new pool so copy again and return true
-  f->pool = dest2;          // reset core variables on new pool
-  f->len = len1;
-  f->loop = dest2 + len1;
-  copy_from(f, dest, len0); // do second copy
-  free(min(src, dest));     // free original pool
-  f->t0 = gw_clock();          // set last gc timestamp
-  return true; }            // size successfully adjusted
+  return
+    f->len = len1,            // set core variables referring to new pool
+    f->pool = dest2,          //
+    f->loop = dest2 + len1,   //
+    copy_from(f, dest, len0), // do second copy
+    gw_free(min(src, dest)),  // free original pool
+    f->t0 = gw_clock(),       // set last gc timestamp
+    true; }                   // size successfully adjusted
 
 
 static Inline size_t b2w(size_t b) {
@@ -262,10 +266,7 @@ static NoInline word cp(core *v, word x, word *p0, word *t0) {
 
 static Vm(data) {
   word x = W(Ip);
-  Ip = R(Sp[1]);
-  Sp[1] = x;
-  Sp += 1;
-  return Continue(); }
+  return Ip = R(Sp[1]), Sp[1] = x, Sp += 1, Continue(); }
 
 #define Have1() if (Sp == Hp) return Ap(gc, f, 1)
 static Vm(uncurry) { Have1(); return *--Sp = Ip[1].x, Ip = Ip[2].m, Continue(); }
@@ -547,11 +548,9 @@ static Vm(defglob) { return Pack(f),
 static Cata(cataap) { return k[0].ap == ret ?
   (k[0].ap = tap, pull(f, c, k)) :
   (k[-1].ap = ap, pull(f, c, k - 1)); }
-static Cata(cataapn) {
-  word n = *f->sp++;
-  return k[0].ap == ret ?
-   (k[0].x = n,  k[-1].ap = tapn, pull(f, c, k - 1)) :
-   (k[-1].x = n, k[-2].ap = apn,  pull(f, c, k - 2)); }
+static Cata(cataapn) { word n = *f->sp++; return k[0].ap == ret ?
+ (k[0].x = n,  k[-1].ap = tapn, pull(f, c, k - 1)) :
+ (k[-1].x = n, k[-2].ap = apn,  pull(f, c, k - 2)); }
 
 // list concat
 static word lconcat(core *f, word l, word n) { return !twop(l) ? n :
@@ -660,8 +659,7 @@ static size_t ana_seq(core *f, env* *c, size_t m, word x) {
   while (m && twop(B(x))) m = analyze(f, c, m, A(x)),
                           m = m ? ana_i1(f, c, m, drop1) : m,
                           x = B(x);
-  UM(f);
-  return m ? analyze(f, c, m, A(x)) : m; }
+  return UM(f), m ? analyze(f, c, m, A(x)) : m; }
 
 // exit vm and return to C
 static Vm(yieldi) { return Ip = Ip[1].m, Pack(f), YieldStatus; }
@@ -670,7 +668,10 @@ static Ana(ana_mac, word b) {
   if (!pushs(f, 3, f->quote, x, b)) return 0;
   Pair *mxp = (Pair*) cells(f, 4 * Width(Pair));
   if (!mxp) return 0;
-  x = W(ini_pair(mxp, f->sp[1], W(ini_pair(mxp+1, W(ini_pair(mxp+2, f->sp[0],  W(ini_pair(mxp+3, f->sp[2], nil)))), nil))));
+  x = W(ini_pair(mxp + 3, f->sp[2], nil));
+  x = W(ini_pair(mxp + 2, f->sp[0], x));
+  x = W(ini_pair(mxp + 1, x, nil));
+  x = W(ini_pair(mxp, f->sp[1], x));
   *(f->sp += 2) = x;
   return p_eval(f, yieldi) != Ok ? 0 : analyze(f, c, m, pop1(f)); }
 
@@ -682,9 +683,8 @@ static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
   while (m && twop(x)) m = analyze(f, c, m + 1, A(x)), // eval each argument
                        x = B(x),
                        m = m && pushs(f, 1, cataap) ? m : 0; // and apply the function
-  return (*c)->stack = B((*c)->stack), // pop anonymous stack argument
-         UM(f),
-         m; }
+  // pop the argument
+  return (*c)->stack = B((*c)->stack), UM(f), m; }
 
 // evaluate a function expression by applying the function to arguments
 static size_t ana_ap(core *f, env* *c, size_t m, word fn, word args) {
@@ -740,8 +740,7 @@ static Cata(cata_var) {
   return k[-2].ap = ref, k[-1].x = putnum(idx + ins), pull(f, c, k - 2); }
 
 static Vm(lazy_bind) {
-  word ref = Ip[1].x,
-       lfd = ref;
+  word ref = Ip[1].x, lfd = ref;
   ref = AB(lfd);
   if (!ref) return PStatusVar;
   return Ip[0].ap = imm, Ip[1].x = ref, Continue(); }
@@ -944,21 +943,11 @@ static NoInline int p_readsp(core *f, string *s) {
 
 static bool strp(word);
 static Vm(readf) {
-  if (!strp(Sp[0])) return Sp[0] = nil,
-                           Ip += 1,
-                           Continue();
-  string *s = (string*)Sp[0];
-  if (s->len > 255) return Sp[0] = nil,
-                           Ip += 1,
-                           Continue();
+  string *s = (string*) Sp[0];
+  if (!strp(Sp[0]) || s->len > 255) return Sp[0] = nil, Ip += 1, Continue();
   Pack(f);
   int t = p_readsp(f, s);
   return t != Ok ? t : (Unpack(f), Sp[1] = Sp[0], Sp++, Ip++, Continue()); }
-
-static NoInline long gw_clock(void) {
-  struct timespec ts;
-  int s = clock_gettime(CLOCK_REALTIME, &ts);
-  return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
 
 static Vm(sysclock) { return Sp[0] = putnum(gw_clock()), Ip += 1, Continue(); }
 
@@ -1349,7 +1338,6 @@ static bool eql(core *f, word a, word b) {
   return typof(a)->eq(f, a, b); }
 
 static word
-  cp_two(core *v, word x, word *p0, word *t0),
   cp_sym(core *f, word x, word *p0, word *t0),
   xx_two(core *f, word x),
   xx_sym(core *v, word _);
@@ -1360,16 +1348,17 @@ static void wk_two(core *f, word x, word *p0, word *t0),
 
 static bool eq_two(core *f, word x, word y);
 static bool eq_not(core *f, word a, word b) { return false; }
+static word cp_two(core *v, word x, word *p0, word *t0) {
+  pair *src = (pair*) x,
+       *dst = ini_pair(bump(v, Width(pair)), src->a, src->b);
+  return W(src->ap = (vm*) dst); }
+
 static type
   two_type = { .xx = xx_two, .cp = cp_two, .wk = wk_two, .em = em_two, .eq = eq_two, },
   str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .em = em_str, .eq = eq_str, },
   sym_type = { .xx = xx_sym, .cp = cp_sym, .wk = wk_sym, .eq = eq_not, .em = em_sym, },
   tbl_type = { .xx = xx_tbl, .cp = cp_tbl, .wk = wk_tbl, .eq = eq_not, .em = em_tbl, };
 
-static word cp_two(core *v, word x, word *p0, word *t0) {
-  pair *src = (pair*) x,
-       *dst = ini_pair(bump(v, Width(pair)), src->a, src->b);
-  return W(src->ap = (vm*) dst); }
 
 static void wk_two(core *f, word x, word *p0, word *t0) {
   f->cp += Width(Pair);
@@ -1521,13 +1510,13 @@ static NoInline bool gw_ini_def(core *f, const char *k, word v) {
 BIFS(bif_entry);
 
 static int gw_fin(core *f, int s) { return
-  free(min(f->pool, f->loop)), f->pool = f->loop = NULL, s; }
+  gw_free(min(f->pool, f->loop)), f->pool = f->loop = NULL, s; }
 static Vm(yield) { return Pack(f), YieldStatus; }
 static cell bif_yield[] = { {yield} };
 static int gw_ini(core *f) {
   memset(f, 0, sizeof(core));
   const uintptr_t len0 = 1;
-  word *pool = malloc(2 * len0 * sizeof(word));
+  word *pool = gw_malloc(2 * len0 * sizeof(word));
   if (!pool) return Oom;
   f->t0 = gw_clock();
   f->sp = f->loop = (f->hp = f->pool = pool) + (f->len = len0);

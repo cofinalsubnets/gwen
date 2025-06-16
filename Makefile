@@ -48,11 +48,10 @@ c/main.h: lisp/main.$x lisp/cat.$x $0
 	@echo $@
 	@./$0 lisp/cat.$x <$< | $(sed) >$@
 
-# TODO generate this from lisp not pandoc
-built_manpage=doc/$n.1
-$(built_manpage): doc/$n.1.md
+built_manpage=$n.1
+$(built_manpage): $(built_binary) lisp/manpage.$x
 	@echo $@
-	@pandoc -s -t man -o $@ $<
+	@./$^ > $@
 
 all: $(built_binary) $(built_manpage)
 

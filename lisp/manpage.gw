@@ -1,0 +1,20 @@
+(: 
+ (putln s) (, (puts s) (putc 10) s)
+ concat (foldl "" scat)
+ sec "1"
+ nom "gw"
+ upnom "GW"
+ .TH (concat (L ".TH \"" upnom "\" \"" sec "\" \"\" \"Version " version "\" \"" upnom "\""))
+ (.SH n) (concat (L ".SH " n))
+ (\f i s) (concat (L "\\f[" i "]" s "\\f[R]"))
+ \fB (\f "B")
+ desc "list expression interpreter"
+ (, (putln .TH)
+    (putln (.SH upnom))
+    (putln (concat (L (\fB nom) " \\- " desc)))
+    (putln (.SH "SYNOPSIS"))
+    (putln ".PP")
+    (putln (concat (L (\fB nom) " [" (\fB "-h") "] [" (\fB "-v") "] [" (\fB "-r") "] [" (\f "I" "file") (\f "I" "\\&...") "]")))
+    (putln (.SH "DESCRIPTION"))
+    (putln nom)
+ ))

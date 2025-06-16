@@ -34,7 +34,6 @@
                (X (A m) (X a (B m))))))
      (.. x) (, (. x) (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l))))
-     zget (tget 0)
      (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
 
   (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
@@ -51,6 +50,7 @@
   ; you can use prelude definitions in here.
   evaluator '(:- eval
 ;; functions for working with variable scope records
+    zget (tget 0)
     (toplp c) (nilp (parof c)) (parof c) (tget 0 c 'par)
     (stkof c) (tget 0 c 'stk)  (argof c) (tget 0 c 'arg)
     (impof c) (tget 0 c 'imp)  (lamof c) (tget 0 c 'lam)
