@@ -419,7 +419,7 @@ static NoInline int p_ana(core *f, vm *y) {
   UM(f);
   return k ? (f->ip = k, Ok) : Oom; }
 // compile and execute expression
-static Inline int p_eval(core *f, vm *y) {
+static NoInline int p_eval(core *f, vm *y) {
   int s = p_ana(f, y);
   if (s != Ok) return s;
 #ifdef NTCO
@@ -429,12 +429,7 @@ static Inline int p_eval(core *f, vm *y) {
   return f->ip->ap(f, f->ip, f->hp, f->sp); }
 #endif
 
-static Vm(ev0) {
-  Ip++;
-  Pack(f);
-  int s = p_eval(f, jump);
-  Unpack(f);
-  return s == Ok ? Continue() : s; }
+static NoInline Vm(ev0) { return Ip++, Pack(f), p_eval(f, jump); }
 
 #define A(o) ((pair*)(o))->a
 #define B(o) ((pair*)(o))->b

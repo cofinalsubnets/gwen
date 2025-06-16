@@ -20,7 +20,7 @@ o=c/$n.o
 
 #build
 CFLAGS=\
-  -std=gnu17 -g -Os -Wall -fpic\
+  -std=gnu17 -g -O2 -Wall -fpic\
  	-Wstrict-prototypes -Wno-shift-negative-value\
 	-fno-plt -fno-exceptions -fomit-frame-pointer\
   -fno-asynchronous-unwind-tables -fno-stack-protector\

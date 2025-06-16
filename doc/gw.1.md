@@ -1,4 +1,4 @@
-% GW(1) Version 0.9 | GW
+% GW(1) Version 0.0 | GW
 
 GW
 ====
