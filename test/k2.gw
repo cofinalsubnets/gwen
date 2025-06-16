@@ -1,0 +1,47 @@
+(:
+ (dict-has d k) (:
+  (loop k ks vs) (? ks
+   (? (= k (A ks)) vs (loop k (B ks) (B vs))))
+  (loop k (A d) (B d)))
+ (dict-get d k) (: x (dict-has d k) (? x (A x)))
+ (dict-set d k v) (X (X k (A d)) (X v (B d)))
+ (anon? x) (&& (symp x) (nilp (nom x)))
+ (var? x) (&& (twop x) (anon? (B x)))
+ (var x) (X x (sym 0))
+ has-s dict-has
+ (unord-eq a b) (&&
+  (= (llen a) (llen b))
+  (all (flip memq a) b))
+ (sX x s n m y) (y x s)
+ (sno n m y) (n sno)
+ (sun x) (sX x sno)
+ (stake i s)
+  (? (nilp i) s
+   (s (\ _ s)
+      (stake i)
+      (\ x s (X x (stake (+ -1 i) s)))))
+ (smap f s)
+  (s (\ _ s)
+     (\ s _ m _ (m (smap f s)))
+     (\ x s (sX (f x) (smap f s))))
+ (sfold f z s)
+  (s (\ _ z)
+     (sfold f z)
+     (\ x s (f x (sfold f z s))))
+ slist (sfold X 0)
+ (est u v s) (:
+  (walk u s) (? (nilp (var? u)) u
+              (: t (has-s s u)
+               (? t (walk (A t) s) u)))
+  x (walk u s) y (walk v s)
+  (? (= x y) (sun s)
+     (var? x) (sun (ext-s s x y))
+     (var? y) (sun (ext-s s y x))
+     (&& (twop x) (twop y)
+     (et (est (A x) (A y)) (est (B x) (B y)) s))))
+
+ (assert
+  (unord-eq '(1 2 3) '(2 1 3))
+  (unord-eq '(2 1 3) (stake 3 (sX 1 (sX 2 (sX 3 sno)))))
+  (unord-eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
+ ))
