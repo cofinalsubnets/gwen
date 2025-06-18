@@ -49,15 +49,19 @@
   ; a single expression whose value is the eval function.
   ; you can use prelude definitions in here.
   evaluator '(:- eval
+    (em1 i k n) (p1 i (k (+ 1 n)))
+    (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
+    imm (em2 i_imm) p0 poke
+    (p1 x k) (poke x (seek -1 k))
+    (eval x) (: c (scop 0 (L 0) 0) (ana c x (thd0 c) 0 0))
 ;; functions for working with variable scope records
-    zget (tget 0)
     (toplp c) (nilp (parof c)) (parof c) (tget 0 c 'par)
     (stkof c) (tget 0 c 'stk)  (argof c) (tget 0 c 'arg)
     (impof c) (tget 0 c 'imp)  (lamof c) (tget 0 c 'lam)
     (arity c) (+ (llen (argof c)) (llen (impof c)))
-    (cpush c k v) (, (tset c k (X v (zget c k))) v)
-    (cpop c k) (: s (zget c k) _ (tset c k (B s)) (A s))
-    (cpeek c k) (A (zget c k))
+    (cpush c k v) (, (tset c k (X v (tget 0 c k))) v)
+    (cpop c k) (: s (tget 0 c k) _ (tset c k (B s)) (A s))
+    (cpeek c k) (A (tget 0 c k))
     (scop par arg imp) (:
      t (tnew 0)
      _ (tset t 'par par)
@@ -74,10 +78,7 @@
 ;; import a variable into this scope
     (import c v)
      (? (not (toplp c)) (cpush c 'imp v))
-    p0 poke
-    (p1 x k) (poke x (seek -1 k))
-    (em1 i k n) (p1 i (k (+ 1 n)))
-    (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
+
     (em_ap k n) (:
      j (k (+ 1 n))
      i (peek j)
@@ -88,7 +89,6 @@
      i (peek j)
      (? (= i i_ret) (p1 i_tapn (p0 n j))
                     (p1 i_apn (p1 n j))))
-    imm (em2 i_imm)
     (stkidx d x)
       (: imp (impof d)
          ii  (lidx x imp)
@@ -96,9 +96,6 @@
         (: ai (lidx x (argof d))
          (? (<= 0 ai) (+ (llen imp) ai)
                       -1))))
-
-    (eval x) (: c (scop 0 (L 0) 0)
-              (ana c x (thd0 c) 0 0))
 
     (ana c x)
      (? (symp x)  (ana_sym c x)
@@ -319,8 +316,8 @@
  t0 (clock 0)
  e0 ev             ; initial eval
  _ (go e0 prelude) ; initial prelude
- e1 (e0 evaluator) ; second eval
- _ (go e1 prelude) ; second prelude
+ e1 (e0 evaluator) ; middle eval
+ _ (go e1 prelude) ; final prelude
  e2 (e1 evaluator) ; final eval
  t1 (clock 0)
  _ (tset globals 'ev e2)
@@ -331,7 +328,7 @@
   (: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
      p '(macros peek poke seek trim thd globals)
      p (cat i p)
-    (each p (tdel 0 globals)))
+   (each p (tdel 0 globals)))
   (\ fs (:- ; we can use prelude in here
    (? args       (procs (A args) (B args)) ; if any cli args then process them
       (isatty 0) (repl prompt) ; else if attached to a tty then start a repl

@@ -36,8 +36,6 @@
 #define PStatusOk 0
 #define PStatusEof -1
 #define PStatusOom 1
-#define PStatusVar 2
-#define PStatusDom 3
 
 // thanks !!
 typedef struct p_core p_core, core;
@@ -90,20 +88,6 @@ typedef struct TextIn { struct In in; const char *text; int i; } TextIn;
 typedef struct Pair { DataHeader; word a, b; } Pair, pair;
 struct string { DataHeader; uintptr_t len; char text[]; };
 
-static struct tag { cell *null, *head, end[]; } *ttag(cell*);
-
-static bool gw_please(core*, uintptr_t), eql(core*, word, word);
-
-static word cp(core*, word, word*, word*);
-
-static vm bnot, rng, data, nullp, sysclock,
-          symnom, ret, ret0, ap, apn, tap, tapn,
-          jump, cond, ref, imm, dot,
-          gensym, ev0, pairp, fixnump, symbolp, stringp,
-          ssub, sget, slen, scat, prc, cons, car, cdr,
-          lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
-          seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-          read0, readf, p_isatty, curry;
 
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
@@ -111,8 +95,9 @@ static vm bnot, rng, data, nullp, sysclock,
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
 
-static void *gw_malloc(size_t n) { return malloc(n); }
-static void gw_free(void *n) { return free(n); }
+#define gw_malloc malloc
+#define gw_free free
+
 static NoInline long gw_clock(void) {
   struct timespec ts;
   int s = clock_gettime(CLOCK_REALTIME, &ts);
@@ -121,6 +106,7 @@ static NoInline long gw_clock(void) {
 #define Eof PStatusEof
 #define Oom PStatusOom
 #define Ok PStatusOk
+static bool gw_please(core*, uintptr_t), eql(core*, word, word);
 static NoInline Vm(gc, uintptr_t n) {
   Pack(f);
   int s = gw_please(f, n) ? Ok : Oom;
@@ -190,9 +176,12 @@ static NoInline bool gw_please(core *f, uintptr_t req0) {
     true; }                   // size successfully adjusted
 
 
+static word cp(core*, word, word*, word*);
 static Inline size_t b2w(size_t b) {
   size_t q = b / sizeof(word), r = b % sizeof(word);
   return q + (r ? 1 : 0); }
+
+static vm data;
 #define W(_) ((word)(_))
 #define R(_) ((cell*)(_))
 #define Width(_) b2w(sizeof(_))
@@ -245,6 +234,7 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
          nd = n;
   f->dtors = nd; }
 
+static struct tag { cell *null, *head, end[]; } *ttag(cell*);
 #define nump(_) (W(_)&1)
 #define homp(_) (!nump(_))
 static NoInline word cp(core *v, word x, word *p0, word *t0) {
@@ -270,7 +260,6 @@ static Vm(data) {
 
 #define Have1() if (Sp == Hp) return Ap(gc, f, 1)
 static Vm(uncurry) { Have1(); return *--Sp = Ip[1].x, Ip = Ip[2].m, Continue(); }
-
 // branch instructions
 
 static Vm(jump) { return Ip = Ip[1].m, Continue(); }
@@ -279,7 +268,6 @@ static Vm(jump) { return Ip = Ip[1].m, Continue(); }
 #define nil putnum(0)
 #define nilp(_) (W(_)==nil)
 static Vm(cond) { return Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
-
 // load instructions
 //
 // push an immediate value
@@ -337,9 +325,15 @@ static Vm(curry) {
          n = getnum(Ip[1].x);
   if (n == 2) { Have(S); }
   else { S += 2; Have(S); j += 2, k[0].ap = curry, k[1].x = putnum(n - 1); }
-  j[0].ap = uncurry, j[1].x = *Sp++, j[2].m = Ip + 2;
-  j[3].x = 0, j[4].m = k;
+  j[0].ap = uncurry, j[1].x = *Sp++, j[2].m = Ip + 2, j[3].x = 0, j[4].m = k;
   return Hp += S, Ip = R(*Sp), Sp[0] = W(k), Continue(); }
+
+static vm bnot, rng, nullp, sysclock, symnom, dot,
+          gensym, pairp, fixnump, symbolp, stringp,
+          ssub, sget, slen, scat, prc, cons, car, cdr,
+          lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
+          seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
+          read0, readf, p_isatty;
 
 // at all times vm is running a function. thread compiler tracks
 // function state using this type
@@ -408,6 +402,7 @@ static env *enscope(core *f, env* par, word args, word imps) {
 
 #define MM(f,r) ((f->safe=&((struct Mm){(word*)(r),f->safe})))
 #define UM(f) (f->safe=f->safe->next)
+// keep this separate and NoInline so p_eval can be tail call optimized if possible
 static NoInline int p_ana(core *f, vm *y) {
   env *c = enscope(f, (env*) nil, nil, nil);
   if (!c) return Oom;
@@ -419,7 +414,9 @@ static NoInline int p_ana(core *f, vm *y) {
   cell *k = m ? pull_m(f, &c, m) : 0;
   UM(f);
   return k ? (f->ip = k, Ok) : Oom; }
+
 // compile and execute expression
+// NoInline because we always want tail calls to jump into this if possible
 static NoInline int p_eval(core *f, vm *y) {
   int s = p_ana(f, y);
   if (s != Ok) return s;
@@ -430,7 +427,6 @@ static NoInline int p_eval(core *f, vm *y) {
   return f->ip->ap(f, f->ip, f->hp, f->sp); }
 #endif
 
-static NoInline Vm(ev0) { return Ip++, Pack(f), p_eval(f, jump); }
 
 #define A(o) ((pair*)(o))->a
 #define B(o) ((pair*)(o))->b
@@ -742,7 +738,6 @@ static Cata(cata_var) {
 static Vm(lazy_bind) {
   word ref = Ip[1].x, lfd = ref;
   ref = AB(lfd);
-  if (!ref) return PStatusVar;
   return Ip[0].ap = imm, Ip[1].x = ref, Continue(); }
 
 static Ana(ana_sym_r, env *d) {
@@ -1474,6 +1469,7 @@ static NoInline bool gw_ini_def(core *f, const char *k, word v) {
   _(jump) _(cond) _(ref) _(imm) _(yield) _(drop1) \
   _(curry) _(defglob) _(lazy_bind) _(ret0)
 
+static NoInline Vm(ev0) { return Ip++, Pack(f), p_eval(f, jump); }
 #define S1(i) {{i}, {ret0}}
 #define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
 #define S3(i) {{curry},{.x=putnum(3)},{i}, {ret0}}
