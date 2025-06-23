@@ -56,11 +56,13 @@
   (reify st) (flip catmap ks (\ k
    (: it (has-s (X (map A (A st)) (B st)) k)
     (? it (L k (walk* (A it) st))))))
-  (slist (smap reify (? n (stake n (g '(()))) (g '(()))))))
- )
+  (: s (g '(()))
+     s (? n (stake n s) s)
+     s (slist s)
+   (map reify s))))
 
-(:: 'zz (\ x (: a (sym 0) b (sym 0) c (sym 0)
- (L '\ a (L '\ b c (L c (L x a)))))))
+(:: 'zz (\ x (: s (sym 0) n (sym 0) m (sym 0) y (sym 0) x (A x)
+ (L '\ s n m y (L m (L x s))))))
 (:: 'et (\ xs (: x (A xs) xs (B xs)
  (foldl x (\ a b (L (\ a b s (s* (a s) b)) a b)) xs))))
 (:: 'vel (\ xs (: x (A xs) xs (B xs)
@@ -84,4 +86,9 @@
   (Run 0 '(a b c) (\\ a b c (vel (et (est a 1) (est b 2) (est c 3))
                                  (et (est a 4) (est b 5) (est c 6))
                                  (et (est a 7) (est b 8) (est c 9))))))
+ (unord-eq '((a 0) (a 1) (a 2) (a 3) (a 4) (a 5) (a 6) (a 7) (a 8) (a 9))
+  (Run 10 '(a) (\\ a
+   (: (never s) ((vel (\ _ sno) (zz never)) s)
+      (at-least n) (vel (est a n) (zz (at-least (+ n 1))))
+    (vel never (est a 0) (at-least 1))))))
 )
