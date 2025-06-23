@@ -1,3 +1,4 @@
+; a micro kanren like logic dsl with church encoded streams
 (:
  (dict-has d k) (:
   (loop k ks vs) (? ks
@@ -9,12 +10,19 @@
  (var? x) (&& (twop x) (anon? (B x)))
  (var x) (X x (sym 0))
  has-s dict-has
+ ext-s dict-set
  (unord-eq a b) (&&
   (= (llen a) (llen b))
   (all (flip memq a) b))
  (sX x s n m y) (y x s)
  (sno n m y) (n sno)
  (sun x) (sX x sno)
+ (s+ s t) (s (\ _ t)
+             (\ s _ m _ (m (s+ t s)))
+             (\ x s (sX x (s+ s t))))
+ (s* s g) (s (\ _ s)
+             (\ s _ m _ (m (s* s g)))
+             (\ x s (s+ (g x) (s* s g))))
  (stake i s)
   (? (nilp i) s
    (s (\ _ s)
@@ -39,9 +47,41 @@
      (var? y) (sun (ext-s s y x))
      (&& (twop x) (twop y)
      (et (est (A x) (A y)) (est (B x) (B y)) s))))
+ (catmap f x) (? (twop x) (cat (f (A x)) (catmap f (B x))))
+ (Run n ks g) (:
+  (walk* u s) (?
+   (var? u) (: t (has-s s u) (? t (walk* (A t) s) u))
+   (twop u) (X (walk* (A u) s) (walk* (B u) s))
+   u)
+  (reify st) (flip catmap ks (\ k
+   (: it (has-s (X (map A (A st)) (B st)) k)
+    (? it (L k (walk* (A it) st))))))
+  (slist (smap reify (? n (stake n (g '(()))) (g '(()))))))
+ )
 
- (assert
-  (unord-eq '(1 2 3) '(2 1 3))
-  (unord-eq '(2 1 3) (stake 3 (sX 1 (sX 2 (sX 3 sno)))))
-  (unord-eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
- ))
+(:: 'zz (\ x (: a (sym 0) b (sym 0) c (sym 0)
+ (L '\ a (L '\ b c (L c (L x a)))))))
+(:: 'et (\ xs (: x (A xs) xs (B xs)
+ (foldl x (\ a b (L (\ a b s (s* (a s) b)) a b)) xs))))
+(:: 'vel (\ xs (: x (A xs) xs (B xs)
+ (foldl x (\ a b (L (\ a b s (s+ (a s) (b s))) a b)) xs))))
+(:: '\\ (\ a (X (X '\ a) (map (\ a (L var (L '` a))) (init a)))))
+
+(assert
+ (unord-eq '(1 2 3) '(2 1 3))
+ (unord-eq '(2 1 3) (stake 3 (sX 1 (sX 2 (sX 3 sno)))))
+ (unord-eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
+ (: s1 (sX 1 (sX 2 (sX 3 sno)))
+    s2 (smap (+ 3) s1)
+  (unord-eq '(1 2 3 4 5 6) (slist (s+ s1 s2))))
+ (= '((a 1)) (Run 0 '(a) (\\ a (est a 1))))
+ (= 0 (Run 0 '(a) (\\ a (et (est a 1) (est a 2)))))
+ (= '((a (1 2 (3 (4))) b (3 (4)) c 4))
+    (Run 0 '(a b c) (\\ a b c (et (est a (L 1 2 b))
+                                  (est b (L 3 (L c)))
+                                  (est c 4)))))
+ (unord-eq '((a 7 b 8 c 9) (a 4 b 5 c 6) (a 1 b 2 c 3))
+  (Run 0 '(a b c) (\\ a b c (vel (et (est a 1) (est b 2) (est c 3))
+                                 (et (est a 4) (est b 5) (est c 6))
+                                 (et (est a 7) (est b 8) (est c 9))))))
+)
