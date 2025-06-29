@@ -1,38 +1,36 @@
 ; generates a manual page for gwen
 (: 
- (putln s) (, (puts s) (putc 10) s)
+ (putln s) (, (puts s) (putc 10))
  concat (foldl "" scat)
  sec "1"
  nom "gw"
  upnom "GW"
- .TH (concat (L ".TH \"" upnom "\" \"" sec "\" \"\" \"Version " version "\" \"" upnom "\""))
- (.SH n) (concat (L ".SH " n))
+ section (scat ".SH ")
  (\f i s) (concat (L "\\f[" i "]" s "\\f[R]"))
  \fB (\f "B")
  \fI (\f "I")
- (, (putln .TH)
-    (putln (.SH "NAME"))
-    (putln (concat (L (\fB nom) " \\- list expression interpreter")))
-    (putln (.SH "SYNOPSIS"))
-    (putln ".PP")
-    (putln (concat (L (\fB nom) " [" (\fB "-h") "] [" (\fB "-v") "] [" (\fB "-r") "] [" (\fI "file") (\fI "\\&...") "]")))
-    (putln (.SH "DESCRIPTION"))
-    (putln (concat (L
-     nom " is a minimal scheme-like lisp dialect with simple syntax and evaluation rules."
-    )))
-    (putln (.SH "COMMAND LINE OPTIONS"))
-    (putln ".TP")
-    (putln ".B \\-h")
-    (putln "show help")
-    (putln ".TP")
-    (putln ".B \\-v")
-    (putln "show version")
-    (putln ".TP")
-    (putln ".B \\-r")
-    (putln "start a repl")
-    (putln ".TP")
-    (putln ".I file\\&...")
-    (putln "scripts to eval")
-    (putln ".TP")
-    (putln "If arguments are given, process them in order and exit; else if stdin is a tty then start a repl; else eval stdin.")
- ))
+ lines (L
+   (concat (L ".TH \"" upnom "\" \"" sec "\" \"\" \"Version " version "\" \"" upnom "\""))
+   (section "NAME")
+   (scat (\fB nom) " \\- list expression interpreter")
+   (section "SYNOPSIS")
+   ".PP"
+   (concat (L (\fB nom) " [" (\fB "-h") "] [" (\fB "-v") "] [" (\fB "-r") "] [" (\fI "file") (\fI "\\&...") "]"))
+   (section "DESCRIPTION")
+   (scat nom " is a minimal scheme-like lisp dialect with simple syntax and evaluation rules.")
+   (section "COMMAND LINE OPTIONS")
+   ".TP"
+   ".B \\-h"
+   "show help"
+   ".TP"
+   ".B \\-v"
+   "show version"
+   ".TP"
+   ".B \\-r"
+   "start a repl"
+   ".TP"
+   ".I file\\&..."
+   "scripts to eval"
+   ".TP"
+   "If arguments are given, process them in order and exit; else if stdin is a tty then start a repl; else eval stdin.")
+ (each lines putln))

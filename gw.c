@@ -222,6 +222,7 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
     if (datp(k)) typof(k)->wk(f, W(k), p0, t0); // is data
     else { while (k->x) k->x = CP(k->x), k++;     // is thread
            f->cp = (word*) k + 2; }
+  /*
   // run destructors ...
   // this has never been tested or used
   struct dtor *nd = NULL;
@@ -232,7 +233,9 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
          n->x = R(d->x)->x,
          n->next = nd,
          nd = n;
-  f->dtors = nd; }
+  f->dtors = nd;
+  */
+}
 
 static struct tag { cell *null, *head, end[]; } *ttag(cell*);
 #define nump(_) (W(_)&1)
@@ -1152,13 +1155,13 @@ static struct entry *table_delete_r(core *f, table *t, word k, word *v, struct e
   if (eql(f, e->key, k)) return t->len--, *v = e->val, e->next;
   return e->next = table_delete_r(f, t, k, v, e->next), e; }
 
-static void table_shrink(core *f, table *t) {
+static Inline void table_shrink(core *f, table *t) {
   word cap = t->cap;
   struct entry *coll = 0, *x, *y; // collect all entries in one list
   for (word i = 0; i < cap; i++)
     for (x = t->tab[i], t->tab[i] = 0; x;)
       y = x, x = x->next, y->next = coll, coll = y;
-  t->cap = cap >>= 2;
+  t->cap = cap >>= 1;
   for (word i; coll;)
     i = (cap - 1) & hash(f, coll->key),
     x = coll->next,
@@ -1169,7 +1172,7 @@ static void table_shrink(core *f, table *t) {
 static NoInline word table_delete(core *f, table *t, word k, word v) {
   word idx = index_of_key(f, t, k);
   t->tab[idx] = table_delete_r(f, t, k, &v, t->tab[idx]);
-  if (t->len / t->cap > 1) table_shrink(f, t);
+  if (t->cap > 1 && t->len / t->cap < 1) table_shrink(f, t);
   return v; }
 
 static Vm(tnew) {
