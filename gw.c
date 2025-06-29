@@ -933,8 +933,7 @@ static NoInline int p_readsp(core *f, string *s) {
   if (!i) return pushs(f, 1, nil) ? Ok : Oom;
   In *fi = FileInput(i);
   int t = reads(f, fi);
-  fclose(i);
-  return t; }
+  return fclose(i), t; }
 
 static bool strp(word);
 static Vm(readf) {
@@ -1251,8 +1250,8 @@ static struct tag *ttag(cell *k) {
 
 struct symbol { DataHeader; string *nom; word code; symbol *l, *r; };
 
-Vm(symbolp) { return Sp[0] = symp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
-Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
+static Vm(symbolp) { return Sp[0] = symp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
+static Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 static bool symp(word _) { return homp(_) && typof(_) == &sym_type; }
 
 static symbol *ini_sym(symbol *y, string *nom, uintptr_t code) {
@@ -1428,16 +1427,13 @@ static word cp_tbl(core *f, word x, word *p0, word *t0) {
   struct entry **tab = (struct entry**) (dst + 1),
                *dd = (struct entry*) (tab + cap);
   src->ap = (vm*) ini_table(dst, len, cap, tab);
-  while (cap--) {
-    struct entry *s = src->tab[cap], *last = NULL;
-    while (s) {
-      struct entry *d = dd++;
-      d->key = s->key;
-      d->val = s->val;
-      d->next = last;
-      last = d;
-      s = s->next; }
-    tab[cap] = last; }
+  for (struct entry *d, *s, *last; cap--; tab[cap] = last)
+    for (s = src->tab[cap], last = NULL; s; d = dd++,
+                                            d->key = s->key,
+                                            d->val = s->val,
+                                            d->next = last,
+                                            last = d,
+                                            s = s->next);
   return (word) dst; }
 
 static void wk_tbl(core *f, word x, word *p0, word *t0) {

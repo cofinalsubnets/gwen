@@ -16,7 +16,7 @@ c=$n.c
 b=$n.bin
 0=$n.0.bin
 
-o=c/$n.o
+o=$n.o
 
 #build
 CFLAGS=\
@@ -30,26 +30,26 @@ ver=$(shell git rev-parse HEAD)
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D VERSION='"$(ver)"'
 
 built_binary=$b
-$(built_binary): $o c/main.c c/main.h $m
+$(built_binary): $o main.c main.h $m
 	@echo $@
-	@$(cc) $< c/main.c -o $@
-$o: c/$n.c $m
+	@$(cc) $< main.c -o $@
+$o: $n.c $m
 	@echo $@
-	@$(cc) -c c/$n.c -o $@
-$0: $o c/main.c c/main.0.h $m
+	@$(cc) -c $n.c -o $@
+$0: $o main.c main.0.h $m
 	@echo $@
-	@$(cc) $< c/main.c -o $@ -DMAIN_H='"main.0.h"'
+	@$(cc) $< main.c -o $@ -DMAIN_H='"main.0.h"'
 
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-c/main.0.h: lisp/main.$x
+main.0.h: main.$x
 	@echo $@
 	@$(sed) <$< >$@
-c/main.h: lisp/main.$x lisp/cat.$x $0
+main.h: main.$x cat.$x $0
 	@echo $@
-	@./$0 lisp/cat.$x <$< | $(sed) >$@
+	@./$0 cat.$x <$< | $(sed) >$@
 
 built_manpage=$n.1
-$(built_manpage): $0 lisp/manpage.$x
+$(built_manpage): $0 manpage.$x
 	@echo $@
 	@./$^ > $@
 

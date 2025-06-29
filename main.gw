@@ -91,11 +91,10 @@
                     (p1 i_apn (p1 n j))))
     (stkidx d x)
       (: imp (impof d)
-         ii  (lidx x imp)
-       (? (<= 0 ii) ii
-        (: ai (lidx x (argof d))
-         (? (<= 0 ai) (+ (llen imp) ai)
-                      -1))))
+         i (lidx x imp)
+       (? (>= i 0) i
+        (: i (lidx x (argof d))
+         (? (< i 0) i (+ (llen imp) i)))))
 
     (ana c x)
      (? (symp x)  (ana_sym c x)
@@ -256,7 +255,7 @@
              (atomp n) a
              (nilp (lambp (A d))) (loop a (B n) (B d))
              (: k (A n)
-                v (ana_ll q 0 (BA d)) ; first compile pass ..
+                v (ana_ll q 0 (BA d)) ; first pass ..
                 a (X (X k v) a)
               (loop a (B n) (B d)))))
 
