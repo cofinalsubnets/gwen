@@ -4,10 +4,8 @@
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
-     cons X car A cdr B null nilp
-     (caar x) (A (A x)) (cadr x) (A (B x))
-     (cdar x) (B (A x)) (cddr x) (B (B x))
-     AA caar AB cadr BA cdar BB cddr
+     (AA x) (A (A x)) (AB x) (A (B x))
+     (BA x) (B (A x)) (BB x) (B (B x))
      inc (+ 1) dec (+ -1) :: (tset macros)
      (id x) x (const x y) x (co f g x) (f (g x))
      (flip f x y) (f y x) (diag f x) (f x x)
@@ -69,26 +67,18 @@
      _ (tset t 'imp imp)
      t)
 ;; thread initializer
-    (thd0 c n) (:
-     k (thd (+ 2 n))    ; full initial thread
-     k (seek (+ 1 n) k) ; go to last writeable address
-     k (p0 (arity c) k) ; write return instruction
-     k (p1 i_ret k)
-     k)
+    (thd0 c n) (p1 i_ret (p0 (arity c) (seek (+ 1 n) (thd (+ 2 n)))))
 ;; import a variable into this scope
-    (import c v)
-     (? (not (toplp c)) (cpush c 'imp v))
+    (import c v) (? (not (toplp c)) (cpush c 'imp v))
 
     (em_ap k n) (:
      j (k (+ 1 n))
-     i (peek j)
-     (? (= i i_ret) (p0 i_tap j)
-                    (p1 i_ap j)))
+     (? (= (peek j) i_ret) (p0 i_tap j)
+                           (p1 i_ap j)))
     (em_apn n k m) (:
      j (k (+ 2 m))
-     i (peek j)
-     (? (= i i_ret) (p1 i_tapn (p0 n j))
-                    (p1 i_apn (p1 n j))))
+     (? (= (peek j) i_ret) (p1 i_tapn (p0 n j))
+                           (p1 i_apn (p1 n j))))
     (stkidx d x)
       (: imp (impof d)
          i (lidx x imp)
@@ -136,25 +126,17 @@
      (pop_alt c k n) (:
       j (k (+ 2 n))
       alt (cpop c 'alt)
-      j (p1 alt j)
-      (p1 i_cond j))
+      (p1 i_cond (p1 alt j)))
 
      (peek_end c k n) (:
       j (k (+ 3 n))
       a (cpeek c 'end)
       i (peek a)
       (?  (|| (= i i_ret) (= i i_tap))
-           (p1 i
-            (p1 (peek (seek 1 a))
-             j))
+           (p1 i (p1 (peek (seek 1 a)) j))
           (= i i_tapn)
-           (p1 i
-            (p1 (peek (seek 1 a))
-             (p1 (peek (seek 2 a))
-              j)))
-          (p1 i_jump
-           (p1 a
-            j)))))
+           (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j)))
+          (p1 i_jump (p1 a j)))))
 
     (ana_apl n c b) (:
      (loop c b)
@@ -168,9 +150,7 @@
      _ (cpop c 'stk)
      a)
 
-    (ana_ap c f b) (: a0 (ana c f)
-                      a1 (ana_apl 0 c b)
-                    (<=< a0 a1))
+    (ana_ap c f b) (co (ana c f) (ana_apl 0 c b))
     ; ana_seq is recursive but pretty simple
     (ana_seq c x)
      (? (atomp x) (imm 0)
@@ -190,7 +170,7 @@
       (: lam (lamof d)
          stk (stkof d)
          lfd (assq x lam)
-       (? lfd ; local function def? ;; ana_sym_local_fn
+       (? lfd ; local function def?
             (: a1 (em2 i_lazy_bind lfd)
                a2 (ana_apl 0 c (BB lfd))
              (<=< a1 a2))
@@ -209,21 +189,17 @@
      (\ j m (:
       k (j (+ 2 m))
       i (+ i (stkidx c x))
-      k (p1 i k)
-      k (p1 i_ref k)
-      k))))
+      (p1 i_ref (p1 i k))))))
 
     (ana_lu c imp arg x) (:
      d (scop c arg imp)
-     k0 (ana d x (thd0 d))
+     k (ana d x (thd0 d))
      ar (arity d)
-     k (trim ((? (> ar 1) (em2 i_curry ar) id) k0 0))
-     (X k (impof d)))
+     k ((? (> ar 1) (em2 i_curry ar) id) k 0)
+     (X (trim k) (impof d)))
 
     ; ana_ll isn't too bad
-    (ana_ll c imp exp) (: arg (init exp)
-                          x (last exp)
-                        (ana_lu c imp arg x))
+    (ana_ll c imp exp) (ana_lu c imp (init exp) (last exp))
 
     ; ana_lam is small because it uses ana_ll which ana_let also uses
     (ana_lam c b) (? (atomp b)     (imm 0)
@@ -290,8 +266,7 @@
                    (: nd (A nds) n (A nd) d (B nd)
                       d (? (nilp (lambp d)) d (: qa (assq n clams)
                                                  x (ana_ll q (BB qa) (B d))
-                                                 _ (set_cdr qa x)
-                                                 x))
+                                                 (set_cdr qa x)))
                       a1 (ana c d)
                       a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
                       a3 (loops n (B nds))
@@ -305,7 +280,7 @@
        _ (tset c 'stk s0)
        (<=< a1 a2 a3))
 
-    (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[
+    (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[ weh
     (lambp x) (? (twop x) (= '\ (A x)))
     (desug n d) (? (atomp n) (X n d)
                    (desug (A n) (X '\ (cat (B n) (L d))))))
@@ -319,16 +294,16 @@
  _ (go e1 prelude) ; final prelude
  e2 (e1 evaluator) ; final eval
  t1 (clock 0)
- _ (tset globals 'ev e2)
  _ (tset globals 'boot_ms (- t1 t0))
- ; use final eval on an expression for the main function
- ; this will then be called with the command line arguments
- (e2 '(,
+ _ (tset globals 'ev e2) ; redefine eval
+ ; now use final eval on an expression for the main function
+ (e2 '(, ; can use prelude in here
+  ; delete internal stuff from global namespace
   (: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
      p '(macros peek poke seek trim thd globals)
-     p (cat i p)
-   (each p (tdel 0 globals)))
-  (\ fs (:- ; we can use prelude in here
+   (each (cat i p) (tdel 0 globals)))
+  ; this is the main function
+  (\ fs (:- ; this will then be called with the command line arguments
    (? args       (procs (A args) (B args)) ; if any cli args then process them
       (isatty 0) (repl prompt) ; else if attached to a tty then start a repl
                  (reads 0))    ; else eval expressions from stdin

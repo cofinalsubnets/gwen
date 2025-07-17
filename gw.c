@@ -73,7 +73,7 @@ typedef struct string string;
 struct type {
   word (*cp)(core*, word, word*, word*); // for gc
   void (*wk)(core*, word, word*, word*); // for gc
-  bool (*eq)(core*, word, word);        // check equality with another object of same type
+  bool (*eq)(core*, word, word);         // check equality with another object of same type
   void (*em)(core*, FILE*, word);        // print it // replace this with stringify...
   word (*xx)(core*, word);               // hash it
   string *(*show)(core*, word); };
@@ -869,6 +869,8 @@ static int reads(core *f, In* i) {
     !(c = wpairof(f, f->sp[1], f->sp[0])) ? Oom :
     (*++f->sp = c, Ok); }
 
+#define str(x) ((string*)(x))
+#define sym(x) ((symbol*)(x))
 static string *ini_str(string*, uintptr_t);
 // create and grow buffers for reading
 static string *bnew(core *f) {
@@ -940,7 +942,7 @@ static NoInline int p_readsp(core *f, string *s) {
 
 static bool strp(word);
 static Vm(readf) {
-  string *s = (string*) Sp[0];
+  string *s = str(Sp[0]);
   if (!strp(Sp[0]) || s->len > 255) return Sp[0] = nil, Ip += 1, Continue();
   Pack(f);
   int t = p_readsp(f, s);
@@ -998,7 +1000,7 @@ static pair *ini_pair(pair *w, word a, word b) {
 static bool strp(word _) { return homp(_) && typof(_) == &str_type; }
 
 static Vm(slen) { return
-  Sp[0] = strp(Sp[0]) ? putnum(((string*)Sp[0])->len) : nil,
+  Sp[0] = strp(Sp[0]) ? putnum(str(Sp[0])->len) : nil,
   Ip += 1,
   Continue(); }
 
@@ -1006,7 +1008,7 @@ static Vm(ssub) {
   cell* r = (cell*) Sp[3];
   if (!strp(Sp[0])) Sp[3] = nil;
   else {
-    string *s = (string*) Sp[0];
+    string *s = str(Sp[0]);
     intptr_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
              j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
     i = max(i, 0), i = min(i, s->len);
@@ -1015,7 +1017,7 @@ static Vm(ssub) {
     else {
       size_t req = Width(string) + b2w(j - i);
       Have(req);
-      string* t = ini_str((string*) Hp, j - i);
+      string* t = ini_str(str(Hp), j - i);
       Hp += req;
       memcpy(t->text, s->text + i, j - i);
       Sp[3] = (word) t; } }
@@ -1024,7 +1026,7 @@ static Vm(ssub) {
 static Vm(sget) {
   if (!strp(Sp[0])) Sp[1] = nil;
   else {
-    string *s = (string*) Sp[0];
+    string *s = str(Sp[0]);
     size_t i = min(s->len - 1, getnum(Sp[1]));
     i = max(i, 0);
     Sp[1] = putnum(s->text[i]); }
@@ -1035,11 +1037,11 @@ static Vm(scat) {
   if (!strp(a)) return Sp += 1, Ip += 1, Continue();
   word b = Sp[1];
   if (!strp(b)) return Sp[1] = a, Sp += 1, Ip += 1, Continue();
-  string *x = (string*) a, *y = (string*) b;
+  string *x = str(a), *y = str(b);
   size_t len = x->len + y->len,
          req = Width(string) + b2w(len);
   Have(req);
-  string *z = ini_str((string*) Hp, len);
+  string *z = ini_str(str(Hp), len);
   return Hp += req,
          memcpy(z->text, x->text, x->len),
          memcpy(z->text + x->len, y->text, y->len),
@@ -1283,7 +1285,7 @@ static Vm(nomsym) {
   Have(Width(symbol));
   symbol *y; return
     Pack(f),
-    y = intern_seek(f, (string*) f->sp[0], &f->symbols),
+    y = intern_seek(f, str(f->sp[0]), &f->symbols),
     Unpack(f),
     Sp[0] = W(y),
     Ip++,
@@ -1373,52 +1375,46 @@ static word xx_two(core *f, word x) {
   word hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-static word xx_sym(core *v, word _) { return ((symbol*) _)->code; }
+static word xx_sym(core *v, word _) { return sym(_)->code; }
 static word cp_sym(core *f, word x, word *p0, word *t0) {
-  symbol *src = (symbol*) x,
+  symbol *src = sym(x),
          *dst = src->nom ?
-           intern_seek(f, (string*) cp(f, (word) src->nom, p0, t0), &f->symbols) :
+           intern_seek(f, str(cp(f, W(src->nom), p0, t0)), &f->symbols) :
            ini_anon(bump(f, Width(symbol) - 2), src->code);
   return (word) (src->ap = (vm*) dst); }
 
 static void wk_sym(core *f, word x, word *p0, word *t0) {
-  f->cp += Width(symbol) - (((symbol*)x)->nom ? 0 : 2); }
+  f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
 static void em_sym(core *f, FILE *o, word x) {
-  string* s = ((symbol*) x)->nom;
+  string* s = sym(x)->nom;
   if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
   else fprintf(o, "#sym@%lx", (long) x); }
 
 static word cp_str(core* v, word x, word *p0, word *t0) {
-  string* src = (string*) x;
+  string *src = str(x);
   size_t len = sizeof(string) + src->len;
   return (word) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
 static void wk_str(core* f, word x, word *p0, word *t0) {
-  f->cp += Width(string) + b2w(((string*) x)->len); }
+  f->cp += Width(string) + b2w(str(x)->len); }
 
 static void em_str(core* v, FILE *o, word _) {
-  string* s = (string*) _;
-  size_t len = s->len;
-  const char *text = s->text;
+  size_t len = str(_)->len;
+  const char *text = str(_)->text;
   putc('"', o);
   for (char c; len--; putc(c, o))
     if ((c = *text++) == '\\' || c == '"') putc('\\', o);
   putc('"', o); }
 
 static word xx_str(core *v, word _) {
-  string *s = (string*) _;
-  uintptr_t h = 1;
-  size_t words = s->len / sizeof(word),
-         bytes = s->len % sizeof(word);
-  const char *bs = s->text + s->len - bytes;
-  while (bytes--) h = mix * (h ^ (mix * bs[bytes]));
-  const intptr_t *ws = (intptr_t*) s->text;
-  while (words--) h = mix * (h ^ (mix * ws[words]));
+  uintptr_t len = str(_)->len, h = 2166136261;
+  unsigned char *bs = (unsigned char*) str(_)->text;
+  while (len--) h ^= *bs++, h *= 16777619;
   return h; }
 
 static bool eq_str(core *f, word x, word y) {
-  string *a = (string*) x, *b = (string*) y;
+  string *a = str(x), *b = str(y);
   return a->len == b->len && 0 == strncmp(a->text, b->text, a->len); }
 
 static word xx_tbl(core *f, word h) { return mix; }
@@ -1463,9 +1459,9 @@ static NoInline bool gw_ini_def(core *f, const char *k, word v) {
                       table_set(f, f->dict, (word) y, pop1(f)); }
 
 #define insts(_) \
-  _(dot) _(free_variable)\
-  _(data) _(ret) _(ap) _(tap) _(apn) _(tapn) \
-  _(jump) _(cond) _(ref) _(imm) _(yield) _(drop1) \
+  _(free_variable)\
+  _(ret) _(ap) _(tap) _(apn) _(tapn) \
+  _(jump) _(cond) _(ref) _(imm) _(drop1) \
   _(curry) _(defglob) _(lazy_bind) _(ret0)
 
 static NoInline Vm(ev0) { return Ip++, Pack(f), p_eval(f, jump); }

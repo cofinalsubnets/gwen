@@ -9,6 +9,7 @@
  (anon? x) (&& (symp x) (nilp (nom x)))
  (var? x) (&& (twop x) (anon? (B x)))
  (var x) (X x (sym 0))
+ empty-dict '(0)
  has-s dict-has
  ext-s dict-set
  (unord-eq a b) (&&
@@ -56,10 +57,7 @@
   (reify st) (flip catmap ks (\ k
    (: it (has-s (X (map A (A st)) (B st)) k)
     (? it (L k (walk* (A it) st))))))
-  (: s (g '(()))
-     s (? n (stake n s) s)
-     s (slist s)
-   (map reify s))))
+  (map reify (slist ((? n (stake n) id) (g empty-dict))))))
 
 (:: 'zz (\ x (: s (sym 0) n (sym 0) m (sym 0) y (sym 0) x (A x)
  (L '\ s n m y (L m (L x s))))))
