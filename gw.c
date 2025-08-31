@@ -83,11 +83,10 @@ struct g_core {
     struct Mm *next; } *safe;
   union { uintptr_t t0;  // end time of last gc
           word *cp; }; // gc copy pointer
-  /*
   struct dtor {
     word x;
     void (*d)(word);
-    struct dtor *next; } *dtors; */
+    struct dtor *next; } *dtors;
 };
 
 // primitive type method tables
@@ -99,11 +98,11 @@ struct type {
   word (*xx)(core*, word);               // hash it
   string *(*show)(core*, word); };
 
-typedef struct In {
-  int (*getc)(struct In*), (*ungetc)(struct In*, int), (*eof)(struct In*); } In;
+typedef struct g_input {
+  int (*getc)(struct g_input*), (*ungetc)(struct g_input*, int), (*eof)(struct g_input*); } input;
 
-typedef struct FileIn { struct In in; FILE *file; } FileIn;
-typedef struct TextIn { struct In in; const char *text; int i; } TextIn;
+typedef struct file_input { input in; FILE *file; } file_input;
+typedef struct text_input { input in; const char *text; int i; } text_input;
 
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
@@ -237,7 +236,6 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
     if (datp(k)) typof(k)->wk(f, W(k), p0, t0); // is data
     else { while (k->x) k->x = CP(k->x), k++;     // is thread
            f->cp = (word*) k + 2; }
-  /*
   // run destructors ...
   // this has never been tested or used
   struct dtor *nd = NULL;
@@ -249,7 +247,6 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
          n->next = nd,
          nd = n;
   f->dtors = nd;
-  */
 }
 
 static struct tag { cell *null, *head, end[]; } *ttag(cell*);
@@ -274,13 +271,21 @@ static NoInline word cp(core *v, word x, word *p0, word *t0) {
 
 static Vm(data) {
   word x = W(Ip);
-  return Ip = R(Sp[1]), Sp[1] = x, Sp += 1, Continue(); }
+  return Ip = R(Sp[1]),
+         Sp[1] = x,
+         Sp += 1,
+         Continue(); }
 
 #define Have1() if (Sp == Hp) return Ap(gc, f, 1)
-static Vm(uncurry) { Have1(); return *--Sp = Ip[1].x, Ip = Ip[2].m, Continue(); }
-// branch instructions
+static Vm(uncurry) {
+  Have1();
+  return *--Sp = Ip[1].x,
+         Ip = Ip[2].m,
+         Continue(); }
 
-static Vm(jump) { return Ip = Ip[1].m, Continue(); }
+static Vm(jump) {
+  return Ip = Ip[1].m,
+         Continue(); }
 
 #define putnum(_) (((word)(_)<<1)|1)
 #define nil putnum(0)
@@ -821,53 +826,55 @@ static word ana_lam(core *f, env **c, word imps, word exp) {
 #define p_getc(i) getc(i)
 #define p_ungetc(i, c) ungetc(c, i)
 #define p_eof(i) feof(i)
-#define fi(i) ((FileIn*)(i))
+#define fi(i) ((file_input*)(i))
 
-static int p_in_getc(In *i) { return i->getc(i); }
-static int p_in_ungetc(In *i, int c) { return i->ungetc(i, c); }
-static int p_in_eof(In *i) { return i->eof(i); }
+static int p_in_getc(input *i) { return i->getc(i); }
+static int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
+static int p_in_eof(input *i) { return i->eof(i); }
 
-static int p_file_getc(In *i) { return getc(fi(i)->file); }
-static int p_file_ungetc(In *i, int c) { return ungetc(c, fi(i)->file); }
-static int p_file_eof(In *i) { return feof(fi(i)->file); }
+static int p_file_getc(input *i) { return getc(fi(i)->file); }
+static int p_file_ungetc(input *i, int c) { return ungetc(c, fi(i)->file); }
+static int p_file_eof(input *i) { return feof(fi(i)->file); }
 
-#define ti(i) ((TextIn*)(i))
-static int p_text_getc(In *i) {
-  TextIn *t = ti(i);
+#define ti(i) ((text_input*)(i))
+static int p_text_getc(input *i) {
+  text_input *t = ti(i);
   char c = t->text[t->i];
   if (c) t->i++;
   return c; }
 
-static int p_text_ungetc(In *i, int _) {
-  TextIn *t = ti(i);
+static int p_text_ungetc(input *i, int _) {
+  text_input *t = ti(i);
   int idx = t->i;
   return idx = idx ? idx - 1 : idx, t->i = idx, t->text[idx]; }
 
-static int p_text_eof(In *i) { return !ti(i)->text[ti(i)->i]; }
+static int p_text_eof(input *i) { return !ti(i)->text[ti(i)->i]; }
 
 ////
 /// " the parser "
 //
 //
 // get the next significant character from the stream
-static int read_char(core *f, In *i) {
+static int read_char(core *f, input *i) {
   for (int c;;) switch (c = p_in_getc(i)) {
     default: return c;
     case '#': case ';': while (!p_in_eof(i) && (c = p_in_getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-static int reads(core*, In*), read_string(core*, In*, char), read_atom(core*, In*);
+static int reads(core*, input*),
+           read_string(core*, input*, char),
+           read_atom(core*, input*);
 
-static int p_read1(core*, In*);
+static int p_read1(core*, input*);
 
-static int rquote(core *f, In *i) {
+static int rquote(core *f, input *i) {
   int s = p_read1(f, i);
   if (s != Ok) return s;
   pair *w = pairof(f, f->sp[0], nil);
   w = !w ? w : pairof(f, W(f->quote), f->sp[0] = W(w));
   return !w ? Oom : (f->sp[0] = W(w), Ok); }
 
-static int p_read1(core *f, In* i) {
+static int p_read1(core *f, input* i) {
   int c = read_char(f, i);
   switch (c) {
     case EOF:  return Eof;
@@ -877,7 +884,7 @@ static int p_read1(core *f, In* i) {
     case '"':  return read_string(f, i, '"');
     default:   return p_in_ungetc(i, c), read_atom(f, i); } }
 
-static int reads(core *f, In* i) {
+static int reads(core *f, input* i) {
   word c = read_char(f, i);
   if (c == EOF || c == ')') return pushs(f, 1, nil) ? Ok : Oom;
   p_in_ungetc(i, c);
@@ -901,7 +908,7 @@ static string *bgrow(core *f, string *s) {
   if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
   return t; }
 
-static int read_string(core *f, In* i, char delim) {
+static int read_string(core *f, input* i, char delim) {
   string *b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
@@ -917,7 +924,7 @@ out:
   return pushs(f, 1, b) ? Ok : Oom; }
 
 static symbol *intern(core*, string*);
-static int read_atom(core *f, In *i) {
+static int read_atom(core *f, input *i) {
   string *b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
@@ -931,9 +938,9 @@ static int read_atom(core *f, In *i) {
   word x = *e == 0 ? putnum(j) : W(intern(f, b));
   return !x || !pushs(f, 1, x) ? Oom : Ok; }
 
-#define FileInput(f) ((In*)&(FileIn){{p_file_getc, p_file_ungetc, p_file_eof}, f})
+#define file_input(f) ((input*)&(file_input){{p_file_getc, p_file_ungetc, p_file_eof}, f})
 static NoInline int p_read1f(core *f, FILE* i) {
-  In *fi = FileInput(i);
+  input *fi = file_input(i);
   return p_read1(f, fi); }
 
 static Vm(read0) {
@@ -954,7 +961,7 @@ static NoInline int p_readsp(core *f, string *s) {
   n[s->len] = 0;
   FILE *i = fopen(n, "r");
   if (!i) return pushs(f, 1, nil) ? Ok : Oom;
-  In *fi = FileInput(i);
+  input *fi = file_input(i);
   int t = reads(f, fi);
   return fclose(i), t; }
 
@@ -1532,7 +1539,7 @@ static Inline int mkxpn(core *f, const char **av) {
   return !v ? Oom : (f->sp[0] = v, Ok); }
 
 g_core *g_run(g_core *f, const char *p, const char **av) {
-  In *i = ((In*)&(TextIn){{p_text_getc, p_text_ungetc, p_text_eof}, p, 0});
+  input *i = ((input*)&(text_input){{p_text_getc, p_text_ungetc, p_text_eof}, p, 0});
   int s = p_read1(f, i);
   s = s != Ok ? s : mkxpn(f, av);
   s = s != Ok ? s : p_eval(f, yieldi);
