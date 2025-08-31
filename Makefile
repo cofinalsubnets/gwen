@@ -12,6 +12,7 @@ default: test
 
 # c headers and source files
 c=$n.c
+h=$n.h
 
 b=$n.bin
 0=$n.0.bin
@@ -27,15 +28,15 @@ CFLAGS=\
 	-fno-stack-clash-protection -fcf-protection=none\
   -falign-functions
 ver=$(shell git rev-parse HEAD)
-cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D VERSION='"$(ver)"'
+cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D g_version='"$(ver)"'
 
 built_binary=$b
 $(built_binary): $o main.c main.h $m
 	@echo $@
 	@$(cc) $< main.c -o $@
-$o: $n.c $m
+$o: $c $m $h
 	@echo $@
-	@$(cc) -c $n.c -o $@
+	@$(cc) -c $c -o $@
 $0: $o main.c main.0.h $m
 	@echo $@
 	@$(cc) $< main.c -o $@ -DMAIN_H='"main.0.h"'
