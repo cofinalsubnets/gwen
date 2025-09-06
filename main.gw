@@ -171,7 +171,7 @@
          stk (stkof d)
          lfd (assq x lam)
        (? lfd ; local function def?
-            (: a1 (em2 i_lazy_bind lfd)
+            (: a1 (em2 i_late_bind lfd)
                a2 (ana_apl 0 c (BB lfd))
              (<=< a1 a2))
          (memq x stk) ; is it bound on a let stack in this scope?

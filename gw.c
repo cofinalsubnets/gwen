@@ -12,10 +12,31 @@
 #endif
 
 
+#define encode(f, s) ((g_core*)((g_word)(f)|s))
+#define core_of g_core_of
+#define code_of g_code_of
+
+typedef enum g_type {
+  g_type_fixnum,
+  g_type_symbol,
+  g_type_pair,
+  g_type_string,
+  g_type_table,
+  g_type_cell,
+} g_type;
+
+typedef struct g_string g_string;
+typedef struct g_pair g_pair;
+typedef struct g_symbol g_symbol;
+typedef struct g_table g_table;
+typedef union g_cell g_cell;
+g_type g_type_of(g_word);
+char *g_gs2cs(g_string*);
+g_core *g_cs2gs(char*);
 
 // theres a big benefit in speed from tail call optimization but not all platforms support it
 #ifdef NTCO
-#define YieldStatus PStatusEof
+#define YieldStatus g_status_eof
 #define Vm(n, ...) int n(core *f, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
 #define Hp f->hp
@@ -23,9 +44,9 @@
 #define Ip f->ip
 #define Pack(f) ((void)0)
 #define Unpack(f) ((void)0)
-#define Continue() Ok
+#define Continue() g_status_ok
 #else
-#define YieldStatus PStatusOk
+#define YieldStatus g_status_ok
 #define Vm(n, ...) int n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
@@ -33,21 +54,17 @@
 #define Continue() Ap(Ip->ap, f)
 #endif
 
-#define PStatusOk 0
-#define PStatusEof -1
-#define PStatusOom 1
-
 // thanks !!
 typedef g_core p_core, core;
 typedef g_word word;
-typedef struct type type;
+typedef struct mtbl mtbl, type;
 typedef union g_cell cell, thread;
 
 typedef Vm(vm);
 typedef Vm(MVm, int);
-union g_cell { vm *ap; word x; cell *m; type *typ; };
+union g_cell { vm *ap; word x; cell *m; mtbl *typ; };
 
-#define DataHeader vm *ap; type *typ
+#define DataHeader vm *ap; mtbl *typ
 typedef struct g_string {
   DataHeader;
   uintptr_t len;
@@ -86,11 +103,10 @@ struct g_core {
   struct dtor {
     word x;
     void (*d)(word);
-    struct dtor *next; } *dtors;
-};
+    struct dtor *next; } *dtors; };
 
 // primitive type method tables
-struct type {
+struct mtbl {
   word (*cp)(core*, word, word*, word*); // for gc
   void (*wk)(core*, word, word*, word*); // for gc
   bool (*eq)(core*, word, word);         // check equality with another object of same type
@@ -118,20 +134,20 @@ static NoInline long g_clock(void) {
   int s = clock_gettime(CLOCK_REALTIME, &ts);
   return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
 
-#define Eof PStatusEof
-#define Oom PStatusOom
-#define Ok PStatusOk
-static bool gw_please(core*, uintptr_t), eql(core*, word, word);
+#define Eof g_status_eof
+#define Oom g_status_oom
+#define Ok g_status_ok
+static bool g_please(core*, uintptr_t), eql(core*, word, word);
 static NoInline Vm(gc, uintptr_t n) {
   Pack(f);
-  int s = gw_please(f, n) ? Ok : Oom;
+  int s = g_please(f, n) ? Ok : Oom;
   Unpack(f);
   return s != Ok ? s : Ap(f->ip->ap, f); }
 
 static void *bump(core *f, size_t n) { void *x = f->hp; return f->hp += n, x; }
 #define avail(f) (f->sp-f->hp)
 static void *cells(core *f, size_t n) { return
-  n <= avail(f) || gw_please(f, n) ? bump(f, n) : 0; }
+  n <= avail(f) || g_please(f, n) ? bump(f, n) : 0; }
 
 #define max(a, b) ((a)>(b)?(a):(b))
 #define min(a, b) ((a)<(b)?(a):(b))
@@ -155,7 +171,7 @@ static NoInline void copy_from(core*, word*, uintptr_t);
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
-static NoInline bool gw_please(core *f, uintptr_t req0) {
+static NoInline bool g_please(core *f, uintptr_t req0) {
   word *src = f->pool, *dest = f->loop;
   f->pool = dest, f->loop = src;    // swap
   size_t t0 = f->t0, t1 = g_clock() , // get last gc end time
@@ -246,8 +262,7 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
          n->x = R(d->x)->x,
          n->next = nd,
          nd = n;
-  f->dtors = nd;
-}
+  f->dtors = nd; }
 
 static struct tag { cell *null, *head, end[]; } *ttag(cell*);
 #define nump(_) (W(_)&1)
@@ -467,7 +482,7 @@ static bool strp(word _) { return homp(_) && typof(_) == &str_type; }
 static bool tblp(word _) { return homp(_) && typof(_) == &tbl_type; }
 static bool symp(word _) { return homp(_) && typof(_) == &sym_type; }
 // conditional expression analyzer
-static NoInline Ana(ana_if) {
+static Ana(ana_if) {
   if (!pushs(f, 2, x, ana_if_pop_exit)) return 0;
   pair p = { 0, 0, nil, nil }; // this is weird :/
   x = pop1(f);
@@ -575,17 +590,17 @@ static Cata(cataapn) { word n = *f->sp++; return k[0].ap == ret ?
  (k[0].x = n,  k[-1].ap = tapn, pull(f, c, k - 1)) :
  (k[-1].x = n, k[-2].ap = apn,  pull(f, c, k - 2)); }
 
-// list concat
-static word lconcat(core *f, word l, word n) { return !twop(l) ? n :
-  (avec(f, l, n = lconcat(f, B(l), n)),
+static word append(core *f, word l, word n) { return !twop(l) ? n :
+  (avec(f, l, n = append(f, B(l), n)),
    n ? wpairof(f, A(l), n) : n); }
 
-// reverse list concat
-static word rlconcat(core *f, word l, word n) {
+static word reverse(core *f, word l) {
+  word n = nil;
   for (word m; twop(l);) m = l, l = B(l), B(m) = n, n = m;
   return n; }
 
 static word ana_lam(core*, env**, word, word);
+
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
 static size_t ana_let(core *f, env* *b, size_t m, word exp) {
@@ -637,14 +652,14 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
 
   (*c)->lams = lam;
   // pull_m lambda with reversed argument list
-  exp = lconcat(f, nom, exp);
+  exp = append(f, nom, exp);
   symbol *l = exp ? f->lambda : 0;
   exp = l ? wpairof(f, W(l), exp) : 0;
   m = exp ? analyze(f, b, m, exp) : 0; // exp is now the required lambda, analyze it
   if (!m || !((*b)->stack = wpairof(f, nil, (*b)->stack))) return fail();
 
   // reverse the nom and def lists
-  nom = rlconcat(f, nom, nil), def = rlconcat(f, def, nil);
+  nom = reverse(f, nom), def = reverse(f, def);
   // evaluate definitions in order tracking var names on stack list
   // store lambdas on env for lazy binding and pull_m new application
   // - reverse noms onto exp
@@ -761,7 +776,7 @@ static Cata(cata_var) {
        idx = stack_index_of_symbol(f, *c, var);
   return k[-2].ap = ref, k[-1].x = putnum(idx + ins), pull(f, c, k - 2); }
 
-static Vm(lazy_bind) {
+static Vm(late_bind) {
   word ref = Ip[1].x, lfd = ref;
   ref = AB(lfd);
   return Ip[0].ap = imm, Ip[1].x = ref, Continue(); }
@@ -777,7 +792,7 @@ static Ana(ana_sym_r, env *d) {
   // defined as a function by a local let binding?
   word y = lassoc(f, d->lams, x);
   if (y) {
-    m = ana_i2(f, c, m, lazy_bind, y);
+    m = ana_i2(f, c, m, late_bind, y);
     if (!m) return m;
     y = f->sp[2];
     word z = BB(y); // get the args
@@ -983,10 +998,11 @@ static void transmit(core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
   else if (datp(x)) typof(x)->em(f, out, x);
   else fprintf(out, "#%lx", (long) x); }
+
 static Vm(dot) { return transmit(f, stdout, Sp[0]), Ip++, Continue(); }
 
 static NoInline word pushsr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
-  if (!n) return gw_please(f, m) ? m : n;
+  if (!n) return g_please(f, m) ? m : n;
   word x = va_arg(xs, word), y;
   return avec(f, x, y = pushsr(f, m, n - 1, xs)), y ? *--f->sp = x : y; }
 
@@ -1002,7 +1018,7 @@ static word pushs(core *f, uintptr_t m, ...) {
 static pair *pairof(core *f, word a, word b) {
   if (avail(f) < Width(pair)) {
     bool ok;
-    avec(f, a, avec(f, b, ok = gw_please(f, Width(pair))));
+    avec(f, a, avec(f, b, ok = g_please(f, Width(pair))));
     if (!ok) return 0; }
   pair *w = (pair*) f->hp;
   return f->hp += Width(pair), ini_pair(w, a, b); }
@@ -1091,7 +1107,6 @@ static string *strof(core *f, const char *text) {
 static table *ini_table(table *t, uintptr_t len, uintptr_t cap, struct entry**tab) {
   return t->ap = data, t->typ = &tbl_type, t->len = len, t->cap = cap, t->tab = tab, t; }
 
-// FIXME very poor hashing method :(
 static void em_tbl(core *f, FILE *o, word x);
 static void wk_tbl(core *f, word x, word *p0, word *t0);
 static word cp_tbl(core *f, word x, word *p0, word *t0);
@@ -1130,7 +1145,7 @@ static table *mktbl(core *f) {
   struct entry **tab = (struct entry**) (t + 1);
   return !t ? 0 : ini_table(t, 0, 1, (tab[0] = 0, tab)); }
 
-static NoInline table *table_insert(core *f, table *t, word k, word v, word i) {
+static table *table_insert(core *f, table *t, word k, word v, word i) {
   struct entry *e;
   avec(f, t, avec(f, k, avec(f, v, e = cells(f, Width(struct entry)))));
   if (!e) return 0;
@@ -1171,24 +1186,22 @@ static struct entry *table_delete_r(core *f, table *t, word k, word *v, struct e
   if (eql(f, e->key, k)) return t->len--, *v = e->val, e->next;
   return e->next = table_delete_r(f, t, k, v, e->next), e; }
 
-static Inline void table_shrink(core *f, table *t) {
-  word cap = t->cap;
-  struct entry *coll = 0, *x, *y; // collect all entries in one list
-  for (word i = 0; i < cap; i++)
-    for (x = t->tab[i], t->tab[i] = 0; x;)
-      y = x, x = x->next, y->next = coll, coll = y;
-  t->cap = cap >>= 1;
-  for (word i; coll;)
-    i = (cap - 1) & hash(f, coll->key),
-    x = coll->next,
-    coll->next = t->tab[i],
-    t->tab[i] = coll,
-    coll = x; }
-
 static NoInline word table_delete(core *f, table *t, word k, word v) {
   word idx = index_of_key(f, t, k);
   t->tab[idx] = table_delete_r(f, t, k, &v, t->tab[idx]);
-  if (t->cap > 1 && t->len / t->cap < 1) table_shrink(f, t);
+  if (t->cap > 1 && t->len / t->cap < 1) {
+    word cap = t->cap;
+    struct entry *coll = 0, *x, *y; // collect all entries in one list
+    for (word i = 0; i < cap; i++)
+      for (x = t->tab[i], t->tab[i] = 0; x;)
+        y = x, x = x->next, y->next = coll, coll = y;
+    t->cap = cap >>= 1;
+    for (word i; coll;)
+      i = (cap - 1) & hash(f, coll->key),
+      x = coll->next,
+      coll->next = t->tab[i],
+      t->tab[i] = coll,
+      coll = x; }
   return v; }
 
 static Vm(tnew) {
@@ -1288,7 +1301,7 @@ static symbol *intern_seek(core *v, string *b, symbol **y) {
 static symbol *intern(core *f, string* b) {
   if (avail(f) < Width(symbol)) {
     bool ok;
-    avec(f, b, ok = gw_please(f, Width(symbol)));
+    avec(f, b, ok = g_please(f, Width(symbol)));
     if (!ok) return 0; }
   return intern_seek(f, b, &f->symbols); }
 
@@ -1332,12 +1345,15 @@ op(bxor, 2, (Sp[0] ^ Sp[1]) | 1)
 op(rng, 1, putnum(rand()))
 op(fixnump, 1, nump(Sp[0]) ? putnum(-1) : nil)
 
+static NoInline bool long_eql(core *f, word a, word b) {
+  return homp(a | b) &&
+         R(a)->ap == data &&
+         R(b)->ap == data &&
+         typof(a) == typof(b) &&
+         typof(a)->eq(f, a, b); }
+
 static bool eql(core *f, word a, word b) {
-  return a == b || (homp(a | b) &&
-                    R(a)->ap == data &&
-                    R(b)->ap == data &&
-                    typof(a) == typof(b) &&
-                    typof(a)->eq(f, a, b)); }
+  return a == b || long_eql(f, a, b); }
 
 static word
   cp_sym(core *f, word x, word *p0, word *t0),
@@ -1425,6 +1441,7 @@ static bool eq_str(core *f, word x, word y) {
   string *a = str(x), *b = str(y);
   return a->len == b->len && 0 == strncmp(a->text, b->text, a->len); }
 
+// FIXME very poor hashing method :(
 static word xx_tbl(core *f, word h) { return mix; }
 
 static word cp_tbl(core *f, word x, word *p0, word *t0) {
@@ -1461,7 +1478,7 @@ static NoInline Vm(ev0) { return Ip++, Pack(f), p_eval(f, jump); }
   _(free_variable)\
   _(ret) _(ap) _(tap) _(apn) _(tapn) \
   _(jump) _(cond) _(ref) _(imm) _(drop1) \
-  _(curry) _(defglob) _(lazy_bind) _(ret0)
+  _(curry) _(defglob) _(late_bind) _(ret0)
 #define S1(i) {{i}, {ret0}}
 #define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
 #define S3(i) {{curry},{.x=putnum(3)},{i}, {ret0}}
@@ -1485,39 +1502,40 @@ static symbol *symof(core *f, const char *nom) {
   string *o = strof(f, nom);
   return o ? intern(f, o) : 0; }
 
-static NoInline bool gw_ini_def(core *f, const char *k, word v) {
+static NoInline bool g_ini_def(core *f, const char *k, word v) {
   symbol *y; return pushs(f, 1, v) && (y = symof(f, k)) &&
                       table_set(f, f->dict, (word) y, pop1(f)); }
-#define okp(g) (Z(g)&3==0)
 
 void g_fin(g_core *f) {
-  if (f) g_free(min(f->pool, f->loop)),
-         g_free(f); }
+  if (f) { for (struct dtor *d = f->dtors; d; d = d->next) d->d(d->x);
+           g_free(min(f->pool, f->loop));
+           g_free(f); } }
 
-static Vm(yield) { return Pack(f), YieldStatus; }
-static cell bif_yield[] = { {yield} };
-#define d_entry(bn, n, _) && gw_ini_def(f, n, W(bn))
-#define i_entry(i)        && gw_ini_def(f, "i_"#i, W(i))
+static cell bif_yield[] = { {yieldi}, {.m = bif_yield} };
+#define d_entry(bn, n, _) && g_ini_def(f, n, W(bn))
+#define i_entry(i)        && g_ini_def(f, "i_"#i, W(i))
 
 g_core *g_ini() {
   g_core *f = g_malloc(sizeof(g_core));
   if (f) {
     memset(f, 0, sizeof(core));
-    word *pool = g_malloc(2 * sizeof(word));
+    size_t len = 1;
+    word *pool = g_malloc(2 * len * sizeof(word));
     if (pool) {
-      f->len = 1;
+      f->len = len;
       f->t0 = g_clock();
-      f->sp = f->loop = (f->hp = f->pool = pool) + f->len;
+      f->hp = f->pool = pool;
+      f->sp = f->loop = pool + len;
       f->ip = bif_yield;
       string *ver;
       if ((f->dict = mktbl(f))       && (f->macro = mktbl(f)) &&
           (f->eval = symof(f, "ev")) && (f->let = symof(f, ":")) &&
           (f->cond = symof(f, "?"))  && (f->quote = symof(f, "`")) &&
           (f->begin = symof(f, ",")) && (f->lambda = symof(f, "\\")) &&
-          gw_ini_def(f, "globals", W(f->dict)) &&
-          gw_ini_def(f, "macros", W(f->macro)) &&
+          g_ini_def(f, "globals", W(f->dict)) &&
+          g_ini_def(f, "macros", W(f->macro)) &&
           (ver = strof(f, g_version)) &&
-          gw_ini_def(f, "version", W(ver))
+          g_ini_def(f, "version", W(ver))
           insts(i_entry)
           BIFS(d_entry))
         return f; } }

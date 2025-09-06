@@ -39,7 +39,7 @@ $o: $c $m $h
 	@$(cc) -c $c -o $@
 $0: $o main.c main.0.h $m
 	@echo $@
-	@$(cc) $< main.c -o $@ -DMAIN_H='"main.0.h"'
+	@$(cc) $< main.c -o $@ -Dg_main_h='"main.0.h"'
 
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
 main.0.h: main.$x

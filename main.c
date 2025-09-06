@@ -1,8 +1,8 @@
 #include "gw.h"
 
 static const char g_main[] =
-#ifdef MAIN_H
-#include MAIN_H
+#ifdef g_main_h
+#include g_main_h
 #else
 #include "main.h"
 #endif
@@ -11,5 +11,5 @@ static const char g_main[] =
 int main(int ac, const char **av) {
   g_core *f = g_ini();
   if (g_ok(f)) f = g_run(f, g_main, av);
-  g_fin(core_of(f));
-  return code_of(f); }
+  g_fin(g_core_of(f));
+  return g_code_of(f); }
