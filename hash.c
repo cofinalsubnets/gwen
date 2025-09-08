@@ -65,6 +65,7 @@ static Inline word index_of_key(core *f, table *t, word k) {
   return (t->cap - 1) & hash(f, k); }
 
 NoInline g_core *g_hash_set_c(g_core *f) {
+  if (!g_ok(f)) return f;
   g_table *t = (g_table*) f->sp[0];
   g_word k = f->sp[1], v = f->sp[2], i = index_of_key(f, t, k);
   struct entry *e = t->tab[i];
@@ -95,33 +96,6 @@ NoInline g_core *g_hash_set_c(g_core *f) {
   return f->sp += 2,
          *f->sp = (g_word) t,
          f; }
-
-NoInline table *table_set(core *f, table *t, word k, word v) {
-  word i = index_of_key(f, t, k);
-  struct entry *e = t->tab[i];
-  while (e && !eql(f, k, e->key)) e = e->next;
-  if (e) return e->val = v, t;
-  avec(f, t, avec(f, k, avec(f, v, e = cells(f, Width(struct entry)))));
-  if (!e) return 0;
-  e->key = k, e->val = v, e->next = t->tab[i];
-  t->tab[i] = e;
-  word cap0 = t->cap, load = ++t->len / cap0;
-  if (load <= 1) return t;
-  // grow the table
-  struct entry **tab0, **tab1;
-  word cap1 = 2 * cap0;
-  avec(f, t, tab1 = cells(f, cap1));
-  tab0 = t->tab;
-  if (!tab1) return 0;
-  memset(tab1, 0, cap1 * sizeof(word));
-  for (t->cap = cap1, t->tab = tab1; cap0--;)
-    for (struct entry *e, *es = tab0[cap0]; es;
-      e = es,
-      es = es->next,
-      i = (cap1-1) & hash(f, e->key),
-      e->next = tab1[i],
-      tab1[i] = e);
-  return t; }
 
 static struct entry *table_delete_r(core *f, table *t, word k, word *v, struct entry *e) {
   if (!e) return e;
@@ -200,3 +174,14 @@ Vm(tkeys) {
         ini_pair(pairs, e->key, list),
         list = (word) pairs, pairs++; }
   return Sp[0] = list, Ip++, Continue(); }
+
+g_core *g_step(g_core *f, vm *i) {
+  cell t[] = { {i}, {yieldi}, {.m = f->ip} };
+  f->ip = t;
+  int s;
+#ifdef NTCO
+  s = i(f);
+#else
+  s = i(f, f->ip, f->hp, f->sp);
+#endif
+  return encode(f, s); }

@@ -1,12 +1,7 @@
 #include "i.h"
 
-static string *strof(core *f, const char *text) {
-  size_t len = strlen(text);
-  string *o = cells(f, Width(string) + b2w(len));
-  if (o) memcpy(ini_str(o, len)->text, text, len);
-  return o; }
-
 static g_core *g_strof_c(g_core *f, const char *cs) {
+  if (!g_ok(f)) return f;
   size_t nbytes = strlen(cs),
          nwords = b2w(nbytes),
          req = Width(string) + nwords + 1;
@@ -20,35 +15,33 @@ static g_core *g_strof_c(g_core *f, const char *cs) {
   return f; }
 
 static symbol *symof(core *f, const char *nom) {
-  string *o = strof(f, nom);
+  size_t len = strlen(nom);
+  string *o = cells(f, Width(string) + b2w(len));
+  if (o) memcpy(ini_str(o, len)->text, nom, len);
   return o ? intern(f, o) : 0; }
 
 static g_core *g_symof_c(g_core *f, const char *nom) {
   f = g_strof_c(f, nom);
-  return g_ok(f) ? g_intern_c(f) : f; }
+  return g_intern_c(f); }
 
-static NoInline bool g_ini_def(core *f, const char *k, word v) {
-  symbol *y;
-  return pushs(f, 1, v) && (y = symof(f, k)) &&
-         table_set(f, f->dict, (word) y, pop1(f)); }
-
-static NoInline g_core *g_ini_def_c(g_core *f, const char *k, word v) {
+static g_core *g_ini_def_c(g_core *f, const char *k, word v) {
   f = pushc(f, 1, v);
-  f = g_ok(f) ? g_symof_c(f, k) : f;
-  f = g_ok(f) ? pushc(f, 1, f->dict) : f;
-  f = g_ok(f) ? g_hash_set_c(f) : f;
-  if (g_ok(f)) pop1(f);
+  f = g_symof_c(f, k);
+  f = pushc(f, 1, f->dict);
+  f = g_hash_set_c(f);
+  if (g_ok(f)) f->sp++;
   return f; }
 
 void g_fin(g_core *f) {
-  if (f) { for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
-           g_free(min(f->pool, f->loop));
-           g_free(f); } }
+  if ((f = core_of(f))) {
+    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
+    f->free(min(f->pool, f->loop));
+    f->free(f); } }
 
 Vm(yieldi) { return Ip = Ip[1].m, Pack(f), YieldStatus; }
 static cell bif_yield[] = { {yieldi}, {.m = bif_yield} };
-#define d_entry(bn, n, _) f = g_ok(f) ?  g_ini_def_c(f, n, W(bn)) : f;
-#define i_entry(i)        f = g_ok(f) ? g_ini_def_c(f, "i_"#i, W(i)) : f;
+#define d_entry(bn, n, _) f = g_ini_def_c(f, n, W(bn));
+#define i_entry(i)        f = g_ini_def_c(f, "i_"#i, W(i));
 #define insts(_) \
   _(free_variable)\
   _(ret) _(ap) _(tap) _(apn) _(tapn) \
@@ -87,33 +80,32 @@ g_core *g_ini() {
       f->ip = bif_yield;
       f->malloc = g_malloc;
       f->free = g_free;
-      string *ver;
-      if (!((f->dict = mktbl(f))       && (f->macro = mktbl(f)) &&
-          (f->eval = symof(f, "ev")) && (f->let = symof(f, ":")) &&
-          (f->cond = symof(f, "?"))  && (f->quote = symof(f, "`")) &&
-          (f->begin = symof(f, ",")) && (f->lambda = symof(f, "\\"))))
-        return encode(f, Oom);
-      f =  g_ini_def_c(f, "globals", W(f->dict));
-      f = g_ok(f) ? g_ini_def_c(f, "macros", W(f->macro)) : f;
-      f = g_ok(f) ? g_strof_c(f, g_version) : f;
-      f = g_ok(f) ? g_ini_def_c(f, "version", pop1(f)) : f;
-      insts(i_entry);
-      BIFS(d_entry);
-      return f; } }
+      if ((f->dict = mktbl(f))       &&
+          (f->macro = mktbl(f))      &&
+          (f->eval = symof(f, "ev")) &&
+          (f->let = symof(f, ":"))   &&
+          (f->cond = symof(f, "?"))  &&
+          (f->quote = symof(f, "`")) &&
+          (f->begin = symof(f, ",")) &&
+          (f->lambda = symof(f, "\\"))) {
+        f = g_ini_def_c(f, "globals", W(f->dict));
+        f = g_ini_def_c(f, "macros", W(f->macro));
+        f = g_strof_c(f, g_version);
+        f = g_ini_def_c(f, "version", pop1(f));
+        insts(i_entry);
+        BIFS(d_entry);
+        return f; } } }
   return encode(f, g_status_oom); }
 
 g_core *g_run(g_core *f, const char *p, const char **av) {
-  f = p_readcs(f, p);
   int n = 0;
-  while (g_ok(f) && av[n]) f = g_strof_c(f, av[n++]);
-  f = g_ok(f) ? pushc(f, 1, nil) : f;
-  while (g_ok(f) && n--) f = g_cons_stack(f, 1, 0);
-  f = g_ok(f) ? pushc(f, 1, nil) : f;
-  f = g_ok(f) ? g_cons_stack(f, 1, 0) : f;
-  f = g_ok(f) ? pushc(f, 1, f->quote) : f;
-  f = g_ok(f) ? g_cons_stack(f, 0, 1) : f;
-  f = g_ok(f) ? pushc(f, 1, nil) : f;
-  f = g_ok(f) ? g_cons_stack(f, 1, 0) : f;
-  f = g_ok(f) ? g_cons_stack(f, 1, 0) : f;
-  f = g_ok(f) ? encode(f, p_eval(f, yieldi)) : f;
-  return f; }
+  for (f = p_readcs(f, p);   av[n]; f = g_strof_c(f, av[n++]));
+  for (f = pushc(f, 1, nil); n--;   f = g_cons_stack(f, 1, 0));
+  f = pushc(f, 1, nil);
+  f = g_cons_stack(f, 1, 0);
+  f = pushc(f, 1, f->quote);
+  f = g_cons_stack(f, 0, 1);
+  f = pushc(f, 1, nil);
+  f = g_cons_stack(f, 1, 0);
+  f = g_cons_stack(f, 1, 0);
+  return g_eval_c(f, yieldi); }

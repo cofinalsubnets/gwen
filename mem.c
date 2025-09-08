@@ -21,15 +21,15 @@ static core *pushcr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   return f; }
 
 static core *vpushc(core *f, uintptr_t m, va_list xs) {
-  if (avail(f) < m) f = pushcr(f, m, 0, xs);
-  else {
-    f->sp -= m;
-    for (word n = 0; n < m; n++)
-      f->sp[n] = va_arg(xs, word); }
-  return f;
-}
+  if (g_ok(f)) {
+    if (avail(f) < m) f = pushcr(f, m, 0, xs);
+    else {
+      f->sp -= m;
+      for (word n = 0; n < m; n++)
+        f->sp[n] = va_arg(xs, word); } }
+  return f; }
 
-core *pushc(core *f, uintptr_t m, ...) {
+g_core *pushc(core *f, uintptr_t m, ...) {
   va_list xs;
   va_start(xs, m);
   f = vpushc(f, m, xs);

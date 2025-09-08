@@ -47,6 +47,7 @@ Vm(cons) {
 Vm(pairp) { return Sp[0] = twop(Sp[0]) ? putnum(-1) : nil, Ip += 1, Continue(); }
 
 g_core *g_cons_stack(g_core *f, int i, int j) {
+  if (!g_ok(f)) return f;
   if (avail(f) < Width(pair)) f = please(f, Width(pair));
   if (g_ok(f)) {
     pair *p = ini_pair((pair*) f->hp, f->sp[i], f->sp[j]);
@@ -55,6 +56,7 @@ g_core *g_cons_stack(g_core *f, int i, int j) {
   return f; }
 
 g_core *g_cons_c(g_core *f, g_word a, g_word b) {
+  if (!g_ok(f)) return f;
   if (avail(f) < Width(pair) + 1) f = please(f, Width(pair) + 1);
   if (g_ok(f)) {
     pair *p = ini_pair((pair*) f->hp, a, b);

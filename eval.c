@@ -1,4 +1,35 @@
 #include "i.h"
+static int p_ana(g_core*, vm*);
+
+NoInline g_core *g_eval_c(g_core *f, vm *y) {
+  if (!g_ok(f)) return f;
+  int s = p_ana(f, y);
+  if (s == Ok) {
+#ifdef NTCO
+    do s = f->ip->ap(f); while (s == Ok);
+    s = s == Eof ? Ok : s; }
+#else
+    s = f->ip->ap(f, f->ip, f->hp, f->sp); }
+#endif
+  return encode(f, s); }
+
+// compile and execute expression
+// NoInline because we always want tail calls to jump into this if possible
+static NoInline int p_eval(core *f, vm *y) {
+  int s = p_ana(f, y);
+  if (s != Ok) return s;
+#ifdef NTCO
+  do s = f->ip->ap(f); while (s == Ok);
+  return s == Eof ? Ok : s; }
+#else
+  return f->ip->ap(f, f->ip, f->hp, f->sp); }
+#endif
+
+// index of item in list
+static long lidx(core *f, word l, word x) {
+  for (long i = 0; !nilp(l); l = B(l), i++) if (eql(f, x, A(l))) return i;
+  return -1; }
+
 
 // at all times vm is running a function. thread compiler tracks
 // function state using this type
@@ -16,22 +47,11 @@ typedef struct env {
   struct env *par;
 } env;
 
-static long lidx(core*, word, word);
 
-// thread compiler functions are defined in two phases:
 #define Ana(n, ...) size_t n(core *f, env **c, size_t m, word x, ##__VA_ARGS__)
-// ana phase
-// - takes an expression and returns an upper bound for the length of a thread that
-//   pushes the input expression's value onto the stack.
-// - side effect: top of stack is now a function pointer that when called with a
-//   properly initialized thread object, starts next compiler phase.
+typedef Ana(ana);
 #define Cata(n, ...) cell *n(core *f, env **c, cell *k, ##__VA_ARGS__)
-// cata phase
-// - takes a thread pointer, emits code immediately prior to the indexed instruction,
-//   pops a precomputed (by phase 0) continuation off the stack and calls it with the
-//   decremented pointer.
-
-typedef Ana(ana); typedef Cata(cata);
+typedef Cata(cata);
 static ana analyze, ana_if, ana_let;
 static Inline Cata(pull) { return ((cata*) (*f->sp++))(f, c, k); }
 static Cata(cata_i) { return k[-1].x = *f->sp++, pull(f, c, k - 1); }
@@ -63,6 +83,7 @@ static env *enscope(core *f, env* par, word args, word imps) {
          c->stack = c->alts = c->ends = c->lams = nil;
   return c; }
 
+
 // keep this separate and NoInline so p_eval can be tail call optimized if possible
 static NoInline int p_ana(core *f, vm *y) {
   env *c = enscope(f, (env*) nil, nil, nil);
@@ -75,18 +96,6 @@ static NoInline int p_ana(core *f, vm *y) {
   cell *k = m ? pull_m(f, &c, m) : 0;
   UM(f);
   return k ? (f->ip = k, Ok) : Oom; }
-
-// compile and execute expression
-// NoInline because we always want tail calls to jump into this if possible
-NoInline int p_eval(core *f, vm *y) {
-  int s = p_ana(f, y);
-  if (s != Ok) return s;
-#ifdef NTCO
-  do s = f->ip->ap(f); while (s == Ok);
-  return s == Eof ? Ok : s; }
-#else
-  return f->ip->ap(f, f->ip, f->hp, f->sp); }
-#endif
 
 
 static cata ana_if_push_branch, ana_if_pop_branch, ana_if_push_exit, ana_if_pop_exit, ana_if_peek_exit;
@@ -183,9 +192,19 @@ static size_t llen(word l) {
   while (twop(l)) n++, l = B(l);
   return n; }
 
-Vm(defglob) { return Pack(f),
-  !table_set(f, f->dict, Ip[1].x, Sp[0]) ?  Oom :
-   (Unpack(f), Ip += 2, Continue()); }
+Vm(defglob) {
+  Have(3);
+  g_word v = Sp[0];
+  *--Sp = v;
+  *--Sp = Ip[1].x;
+  *--Sp = (g_word) f->dict;
+  Pack(f);
+  f = g_hash_set_c(f);
+  if (!g_ok(f)) return code_of(f); 
+  Unpack(f);
+  Sp++;
+  Ip += 2;
+  return Continue(); }
 
 // emits call instruction and modifies to tail call
 // if next operation is return
@@ -328,38 +347,43 @@ static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
   // pop the argument
   return (*c)->stack = B((*c)->stack), UM(f), m; }
 
-// evaluate a function expression by applying the function to arguments
-static size_t ana_ap(core *f, env* *c, size_t m, word fn, word args) {
-  size_t argc = llen(args);
-  avec(f, args, m = analyze(f, c, m, fn));
-  return !argc || !m ? m : ana_ap_l2r(f, c, m, args); }
 
-static Ana(ana_sym_r, env *d);
-static Ana(ana_lambda, word);
+static Ana(ana_var, env *d);
+
+static Ana(ana_lambda, word b) { return
+    !twop(b) ? ana_imm(f, c, m, nil) :
+    !twop(B(b)) ? analyze(f, c, m, A(b)) :
+    (x = ana_lam(f, c, nil, b)) ? analyze(f, c, m, x) : x; }
+
 static NoInline Ana(analyze) {
-  if (symp(x)) return ana_sym_r(f, c, m, x, *c);
+  // symbol?
+  if (symp(x)) return ana_var(f, c, m, x, *c);
+  // not a list?
   if (!twop(x)) return ana_imm(f, c, m, x);
-  word a = A(x), b = B(x);
+  g_word a = A(x), b = B(x);
+  // special form?
   if (a == W(f->quote)) return ana_imm(f, c, m, twop(b) ? A(b) : nil);
   if (a == W(f->begin)) return ana_seq(f, c, m, b);
   if (a == W(f->let)) return ana_let(f, c, m, b);
   if (a == W(f->cond)) return ana_if(f, c, m, b);
-  if (a == W(f->lambda)) return !twop(b) ? ana_imm(f, c, m, nil) :
-                                !twop(B(b)) ? analyze(f, c, m, A(b)) :
-                                ana_lambda(f, c, m, x, b);
-  if (!twop(b)) return analyze(f, c, m, a); // singleton list has value of first element
+  if (a == W(f->lambda)) return ana_lambda(f, c, m, x, b);
+
+  // singleton?
+  if (!twop(b)) return analyze(f, c, m, a); // value of first element
+
+  // macro?
   word macro = table_get(f, f->macro, a, 0);
-  return macro ? ana_mac(f, c, m, macro, b) : ana_ap(f, c, m, a, b); }
+  if (macro) return ana_mac(f, c, m, macro, b);
+
+  // apply.
+  avec(f, b, m = analyze(f, c, m, a));
+  return m ? ana_ap_l2r(f, c, m, b) : m; }
 
 Vm(free_variable) {
   word x = Ip[1].x;
   x = table_get(f, f->dict, x, x); // error here if you want on undefined variable
   return Ip[0].ap = imm, Ip[1].x = x, Continue(); }
 
-// index of item in list
-static long lidx(core *f, word l, word x) {
-  for (long i = 0; !nilp(l); l = B(l), i++) if (eql(f, x, A(l))) return i;
-  return -1; }
 
 static long stack_index_of_symbol(core *f, env *c, word var) {
   long l, i = 0;
@@ -384,7 +408,7 @@ Vm(late_bind) {
   ref = AB(lfd);
   return Ip[0].ap = imm, Ip[1].x = ref, Continue(); }
 
-static Ana(ana_sym_r, env *d) {
+static Ana(ana_var, env *d) {
   // free symbol?
   if (nilp(d)) {
     word y = table_get(f, f->dict, x, 0);
@@ -410,7 +434,7 @@ static Ana(ana_sym_r, env *d) {
       x = x ? A((*c)->imps = x) : x;
     return pushs(f, 3, cata_var, x, (*c)->stack) ? m + 2 : 0; }
   // otherwise recur on the enclosing env
-  return ana_sym_r(f, c, m, x, d->par); }
+  return ana_var(f, c, m, x, d->par); }
 
 
 // lambda decons pushes last list item to stack returns init of list
@@ -420,11 +444,6 @@ static word linit(core *f, word x) {
   word y = A(x); return avec(f, y, x = linit(f, B(x))),
                         x ? wpairof(f, y, x) : x; }
 
-static cell *trim_thread(cell *k) { return ttag(k)->head = k; }
-Vm(trim) { return Sp[0] = W(trim_thread((cell*) Sp[0])), Ip += 1, Continue(); }
-
-static Ana(ana_lambda, word b) {
-  return (x = ana_lam(f, c, nil, b)) ? analyze(f, c, m, x) : x; }
 static word ana_lam(core *f, env **c, word imps, word exp) {
   // expediently storing exp in args for the moment
   env *d = enscope(f, *c, exp, imps);
@@ -440,26 +459,6 @@ static word ana_lam(core *f, env **c, word imps, word exp) {
   cell *k = (m = ana_i2(f, c, m, ret, putnum(arity))) ? pull_m(f, &d, m) : 0;
   if (!k) return UM(f), 0;
   if (arity > 1) (--k)->x = putnum(arity), (--k)->ap = curry;
-  return UM(f), wpairof(f, W(trim_thread(k)), d->imps); }
-
-Vm(seek) { return Sp[1] = W(((cell*) Sp[1]) + getnum(Sp[0])), Sp += 1, Ip += 1, Continue(); }
-Vm(peek) { return Sp[0] = R(Sp[0])->x, Ip += 1, Continue(); }
-Vm(poke) { return R(Sp[1])->x = Sp[0], Sp += 1, Ip += 1, Continue(); }
-Vm(thda) {
-  size_t n = getnum(Sp[0]);
-  Have(n + Width(struct tag));
-  cell *k = R(Hp);
-  struct tag *t = (struct tag*) (k + n);
-  return Hp += n + Width(struct tag),
-         t->null = NULL,
-         t->head = k,
-         memset(k, -1, n * sizeof(word)),
-         Sp[0] = (word) k,
-         Ip += 1,
-         Continue(); }
-
-struct tag *ttag(cell *k) {
-  while (k->x) k++;
-  return (struct tag*) k; }
-
+  ttag(k)->head = k;
+  return UM(f), wpairof(f, W(k), d->imps); }
 NoInline Vm(ev0) { return Ip++, Pack(f), p_eval(f, jump); }

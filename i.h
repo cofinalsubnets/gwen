@@ -154,19 +154,6 @@ _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
 #define Eof g_status_eof
 #define Oom g_status_oom
 #define Ok g_status_ok
-
-core *please(core*, uintptr_t);
-
-bool g_please(core*, uintptr_t),
-     eql(core*, word, word);
-void *bump(core*, size_t),
-     *cells(core*, size_t);
-
-word pushs(core*, uintptr_t, ...);
-core *pushc(core*, uintptr_t, ...);
-
-word cp(core*, word, word*, word*);
-
 static Inline size_t b2w(size_t b) {
   size_t q = b / sizeof(word), r = b % sizeof(word);
   return q + (r ? 1 : 0); }
@@ -188,28 +175,6 @@ static Inline size_t b2w(size_t b) {
 #define nump(_) (W(_)&1)
 #define homp(_) (!nump(_))
 
-Vm(gc, uintptr_t);
-long g_clock(void);
-struct tag { cell *null, *head, end[]; } *ttag(cell*);
-vm data, bnot, rng, nullp, sysclock, symnom, dot,
-   gensym, pairp, fixnump, symbolp, stringp,
-   ssub, sget, slen, scat, prc, cons, car, cdr,
-   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
-   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-   read0, readf, p_isatty, yieldi, defglob, drop1, imm, ref,
-   free_variable, curry, ev0, ret0,
-   cond, jump, ap, tap, apn, tapn, ret, late_bind;
-
-g_table *table_set(core*, table*, word, word),
-        *mktbl(g_core*);
-
-typedef int g_ret;
-
-int p_eval(g_core*, vm*);
-int p_read1(core*, input*);
-g_core *p_readcs(g_core*, const char*);
-g_core *g_eval(g_core*, vm*);
-
 #define str(x) ((string*)(x))
 #define sym(x) ((symbol*)(x))
 #define two(x) ((pair*)(x))
@@ -229,30 +194,62 @@ g_core *g_eval(g_core*, vm*);
 #define BBA(o) B(B(A(o)))
 
 #define mix ((uintptr_t)2708237354241864315)
-g_pair *pairof(core*, word, word);
+#define Have(n) if (Sp - Hp < n) return Ap(gc, f, n)
+#define Have1() if (Sp == Hp) return Ap(gc, f, 1)
 
 
-g_pair *ini_pair(g_pair*, g_word, g_word);
-
-uintptr_t hash(g_core*, g_word);
-void transmit(g_core*, FILE*, g_word);
 
 extern type str_type, two_type, str_type, sym_type, tbl_type;
 static Inline bool twop(word _) { return homp(_) && typof(_) == &two_type; }
 static Inline bool strp(word _) { return homp(_) && typof(_) == &str_type; }
 static Inline bool tblp(word _) { return homp(_) && typof(_) == &tbl_type; }
 static Inline bool symp(word _) { return homp(_) && typof(_) == &sym_type; }
+
+g_pair *pairof(core*, word, word),
+       *ini_pair(g_pair*, g_word, g_word);
 g_string *ini_str(string*, uintptr_t);
-g_table *ini_table(g_table*, uintptr_t, uintptr_t, struct entry**);
+g_table *ini_table(g_table*, uintptr_t, uintptr_t, struct entry**),
+        *table_set(core*, table*, word, word),
+        *mktbl(g_core*);
+
 g_symbol *intern(g_core*, g_string*),
          *ini_sym(g_symbol*, g_string*, uintptr_t);
-g_core *g_intern_c(g_core*);
 
-g_word table_get(g_core*, g_table*, g_word, g_word);
-#define Have(n) if (Sp - Hp < n) return Ap(gc, f, n)
-#define Have1() if (Sp == Hp) return Ap(gc, f, 1)
-g_core *g_cons_stack(g_core*, int, int),
+g_word table_get(g_core*, g_table*, g_word, g_word),
+       pushs(core*, uintptr_t, ...),
+       cp(core*, word, word*, word*);
+
+int
+    p_read1(g_core*, input*);
+
+g_core *please(g_core*, uintptr_t),
+       *pushc(g_core*, uintptr_t, ...),
+       *g_cons_stack(g_core*, int, int),
        *g_cons_c(g_core*, g_word, g_word),
+       *g_intern_c(g_core*),
        *g_list_n(g_core*, uintptr_t),
        *g_hash_set_c(g_core*),
+       *g_eval_c(g_core*, vm*),
+       *g_step(g_core*, vm*),
+       *p_readcs(g_core*, const char*),
        *g_list(g_core*, uintptr_t, ...);
+
+bool g_please(core*, uintptr_t),
+     eql(core*, word, word);
+struct tag { cell *null, *head, end[]; } *ttag(cell*);
+void *bump(core*, size_t),
+     *cells(core*, size_t),
+     transmit(g_core*, FILE*, g_word);
+uintptr_t hash(g_core*, g_word),
+          g_clock(void);
+
+Vm(gc, uintptr_t);
+vm data, bnot, rng, nullp, sysclock, symnom, dot,
+   gensym, pairp, fixnump, symbolp, stringp,
+   ssub, sget, slen, scat, prc, cons, car, cdr,
+   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
+   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
+   read0, readf, p_isatty, yieldi, defglob, drop1, imm, ref,
+   free_variable, curry, ev0, ret0,
+   cond, jump, ap, tap, apn, tapn, ret, late_bind;
+

@@ -1,6 +1,6 @@
 #include "i.h"
 
-NoInline long g_clock(void) {
+NoInline uintptr_t g_clock(void) {
   struct timespec ts;
   int s = clock_gettime(CLOCK_REALTIME, &ts);
   return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
