@@ -9,3 +9,4 @@ flamegraph.svg
 *.1
 node_modules
 main*.h
+boot*.h

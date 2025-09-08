@@ -1,0 +1,91 @@
+#include "i.h"
+Vm(stringp) { return Sp[0] = strp(Sp[0]) ? putnum(-1) : nil, Ip += 1, Continue(); }
+static uintptr_t xx_str(core *v, word _);
+static bool eq_str(core *f, word x, word y);
+static void em_str(core* v, FILE *o, word _);
+static void wk_str(core* f, word x, word *p0, word *t0);
+static word cp_str(core* v, word x, word *p0, word *t0);
+
+string* ini_str(string *s, uintptr_t len) {
+  return s->ap = data, s->typ = &str_type, s->len = len, s; }
+
+methods
+  str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .eq = eq_str, .em = em_str, };
+
+
+static word cp_str(core* v, word x, word *p0, word *t0) {
+  string *src = str(x);
+  size_t len = sizeof(string) + src->len;
+  return (word) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
+
+static void wk_str(core* f, word x, word *p0, word *t0) {
+  f->cp += Width(string) + b2w(str(x)->len); }
+
+static void em_str(core* v, FILE *o, word _) {
+  size_t len = str(_)->len;
+  const char *text = str(_)->text;
+  putc('"', o);
+  for (char c; len--; putc(c, o))
+    if ((c = *text++) == '\\' || c == '"') putc('\\', o);
+  putc('"', o); }
+
+static uintptr_t xx_str(core *v, word _) {
+  uintptr_t len = str(_)->len, h = 2166136261;
+  unsigned char *bs = (unsigned char*) str(_)->text;
+  while (len--) h ^= *bs++, h *= 16777619;
+  return h; }
+
+static bool eq_str(core *f, word x, word y) {
+  string *a = str(x), *b = str(y);
+  return a->len == b->len && 0 == strncmp(a->text, b->text, a->len); }
+
+
+Vm(slen) { return
+  Sp[0] = strp(Sp[0]) ? putnum(str(Sp[0])->len) : nil,
+  Ip += 1,
+  Continue(); }
+
+Vm(ssub) {
+  cell* r = (cell*) Sp[3];
+  if (!strp(Sp[0])) Sp[3] = nil;
+  else {
+    string *s = str(Sp[0]);
+    intptr_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
+             j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
+    i = max(i, 0), i = min(i, s->len);
+    j = max(j, i), j = min(j, s->len);
+    if (i == j) Sp[3] = nil;
+    else {
+      size_t req = Width(string) + b2w(j - i);
+      Have(req);
+      string* t = ini_str(str(Hp), j - i);
+      Hp += req;
+      memcpy(t->text, s->text + i, j - i);
+      Sp[3] = (word) t; } }
+  return Ip = r, Sp += 3, Continue(); }
+
+Vm(sget) {
+  if (!strp(Sp[0])) Sp[1] = nil;
+  else {
+    string *s = str(Sp[0]);
+    size_t i = min(s->len - 1, getnum(Sp[1]));
+    i = max(i, 0);
+    Sp[1] = putnum(s->text[i]); }
+  return Ip++, Sp++, Continue(); }
+
+Vm(scat) {
+  word a = Sp[0];
+  if (!strp(a)) return Sp += 1, Ip += 1, Continue();
+  word b = Sp[1];
+  if (!strp(b)) return Sp[1] = a, Sp += 1, Ip += 1, Continue();
+  string *x = str(a), *y = str(b);
+  size_t len = x->len + y->len,
+         req = Width(string) + b2w(len);
+  Have(req);
+  string *z = ini_str(str(Hp), len);
+  return Hp += req,
+         memcpy(z->text, x->text, x->len),
+         memcpy(z->text + x->len, y->text, y->len),
+         Sp[1] = W(z),
+         Ip += 1,
+         Continue(); }

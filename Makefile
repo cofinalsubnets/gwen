@@ -1,25 +1,22 @@
+default_target: test
+
 # name of this file
 m=Makefile
-
 # name and file extension
 n=gw
 x=gw
 
-# default version
-#t=tr
-
-default: test
-
-# c headers and source files
-c=$n.c
-h=$n.h
+#build
+# c files and headers
+main_c=main.c
+c=$(filter-out $(main_c), $(wildcard *.c))
+boot_h=boot.h boot.0.h
+h=$(filter-out $(boot_h), $(wildcard *.h))
 
 b=$n.bin
 0=$n.0.bin
+o=$(c:.c=.o)
 
-o=$n.o
-
-#build
 CFLAGS=\
   -std=gnu17 -g -O2 -Wall -fpic\
  	-Wstrict-prototypes -Wno-shift-negative-value\
@@ -27,25 +24,29 @@ CFLAGS=\
   -fno-asynchronous-unwind-tables -fno-stack-protector\
 	-fno-stack-clash-protection -fcf-protection=none\
   -falign-functions
-ver=$(shell git rev-parse HEAD)
-cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -D g_version='"$(ver)"'
+
+cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
+	 -D g_version='"$(shell git rev-parse HEAD)"'
 
 built_binary=$b
-$(built_binary): $o main.c main.h $m
+$(built_binary): $o main.c boot.h $m
 	@echo $@
-	@$(cc) $< main.c -o $@
-$o: $c $m $h
-	@echo $@
-	@$(cc) -c $c -o $@
-$0: $o main.c main.0.h $m
-	@echo $@
-	@$(cc) $< main.c -o $@ -Dg_main_h='"main.0.h"'
+	@$(cc) $o main.c -o $@
 
+.c.o:
+	@echo $@
+	@$(cc) -c $<
+
+$0: $o main.c boot.0.h $m
+	@echo $@
+	@$(cc) $o main.c -o $@ -Dg_main_h='"boot.0.h"'
+
+# sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-main.0.h: main.$x
+boot.0.h: main.$x
 	@echo $@
 	@$(sed) <$< >$@
-main.h: main.$x cat.$x $0
+boot.h: main.$x cat.$x $0
 	@echo $@
 	@./$0 cat.$x <$< | $(sed) >$@
 
@@ -102,8 +103,8 @@ clean:
 valg: $b
 	valgrind --error-exitcode=1 ./$^ $(tests)
 # count lines of code
-sloc:
-	cloc --force-lang=Lisp,$x .
+cloc:
+	cloc --by-file-by-lang --force-lang=Lisp,$x $c $(main_c) $h *.$x
 # size of binaries
 bits: $b
 	du -h $^
@@ -126,4 +127,5 @@ serve:
 .PHONY: \
   all install uninstall \
   test test_all test_c test_js test_tr test_tc \
-	clean valg sloc bits disasm perf repl serve
+	clean valg sloc bits disasm perf repl serve \
+	default_target

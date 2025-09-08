@@ -4,7 +4,7 @@ static const char g_main[] =
 #ifdef g_main_h
 #include g_main_h
 #else
-#include "main.h"
+#include "boot.h"
 #endif
 ;
 
