@@ -45,12 +45,13 @@ static word cp_tbl(core *f, word x, word *p0, word *t0) {
                *dd = (struct entry*) (tab + cap);
   src->ap = (vm*) ini_table(dst, len, cap, tab);
   for (struct entry *d, *s, *last; cap--; tab[cap] = last)
-    for (s = src->tab[cap], last = NULL; s; d = dd++,
-                                            d->key = s->key,
-                                            d->val = s->val,
-                                            d->next = last,
-                                            last = d,
-                                            s = s->next);
+    for (s = src->tab[cap], last = NULL; s;
+      d = dd++,
+      d->key = s->key,
+      d->val = s->val,
+      d->next = last,
+      last = d,
+      s = s->next);
   return (word) dst; }
 
 // FIXME very poor hashing method :(
@@ -134,11 +135,11 @@ Vm(tnew) {
   Have(Width(table) + 1);
   table *t = (table*) Hp;
   struct entry **tab = (struct entry**) (t + 1);
-  return Hp += Width(table) + 1,
-         tab[0] = 0,
-         Sp[0] = (word) ini_table(t, 0, 1, tab),
-         Ip++,
-         Continue(); }
+  Hp += Width(table) + 1;
+  tab[0] = 0;
+  Sp[0] = (word) ini_table(t, 0, 1, tab);
+  Ip++;
+  return Continue(); }
 
 g_word table_get(core *f, table *t, word k, word zero) {
   size_t i = index_of_key(f, t, k);
@@ -146,11 +147,11 @@ g_word table_get(core *f, table *t, word k, word zero) {
   while (e && !eql(f, k, e->key)) e = e->next;
   return e ? e->val : zero; }
 
-Vm(tget) { return
-  Sp[2] = !tblp(Sp[1]) ? Sp[0] : table_get(f, (table*) Sp[1], Sp[2], Sp[0]),
-  Sp += 2,
-  Ip += 1,
-  Continue(); }
+Vm(tget) {
+  Sp[2] = !tblp(Sp[1]) ? Sp[0] : table_get(f, (table*) Sp[1], Sp[2], Sp[0]);
+  Sp += 2;
+  Ip += 1;
+  return Continue(); }
 
 Vm(tset) {
   if (tblp(Sp[0])) {
@@ -160,16 +161,16 @@ Vm(tset) {
     Unpack(f); }
   return Ip += 1, Continue(); }
 
-Vm(tdel) { return
-  Sp[2] = !tblp(Sp[1]) ? nil : table_delete(f, (table*) Sp[1], Sp[2], Sp[0]),
-  Sp += 2,
-  Ip += 1,
-  Continue(); }
+Vm(tdel) {
+  Sp[2] = !tblp(Sp[1]) ? nil : table_delete(f, (table*) Sp[1], Sp[2], Sp[0]);
+  Sp += 2;
+  Ip += 1;
+  return Continue(); }
 
-Vm(tlen) { return
-  Sp[0] = tblp(Sp[0]) ? putnum(((table*)Sp[0])->len) : nil,
-  Ip += 1,
-  Continue(); }
+Vm(tlen) {
+  Sp[0] = tblp(Sp[0]) ? putnum(((table*)Sp[0])->len) : nil;
+  Ip += 1;
+  return Continue(); }
 
 Vm(tkeys) {
   word list = nil;
@@ -183,15 +184,6 @@ Vm(tkeys) {
       for (struct entry *e = t->tab[--i]; e; e = e->next)
         ini_pair(pairs, e->key, list),
         list = (word) pairs, pairs++; }
-  return Sp[0] = list, Ip++, Continue(); }
-
-g_core *g_step(g_core *f, vm *i) {
-  cell t[] = { {i}, {yieldi}, {.m = f->ip} };
-  f->ip = t;
-  int s;
-#ifdef NTCO
-  s = i(f);
-#else
-  s = i(f, f->ip, f->hp, f->sp);
-#endif
-  return encode(f, s); }
+  Sp[0] = list;
+  Ip++;
+  return Continue(); }

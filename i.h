@@ -85,8 +85,6 @@ typedef struct g_pair {
 } pair;
 
 typedef void
-  *g_malloc_t(size_t),
-  g_free_t(void*),
   g_dtor_t(g_core*, g_word);
 
 // runtime core data structure -- 1 core = 1 thread of execution

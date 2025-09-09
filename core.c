@@ -60,7 +60,7 @@ static cell bif_yield[] = { {yieldi}, {.m = bif_yield} };
 #define bif_entry(n, _, d) static const cell n[] = d;
 BIFS(bif_entry);
 
-g_core *g_ini() {
+g_core *g_ini(g_malloc_t *g_malloc, g_free_t *g_free) {
   g_core *f = g_malloc(sizeof(g_core));
   if (!f) return encode(NULL, g_status_oom);
 

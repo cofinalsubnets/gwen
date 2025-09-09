@@ -14,30 +14,54 @@ NoInline g_core *g_eval_c(g_core *f, vm *y) {
 
   return encode(f, s); }
 
-// compile and execute expression
-// NoInline because we always want tail calls to jump into this if possible
-static NoInline int p_eval(core *f, vm *y) {
-  f = p_ana(f, y);
-  int s = code_of(f);
-  if (s != Ok) return s;
-#ifdef NTCO
-  do s = f->ip->ap(f); while (s == Ok);
-  return s == Eof ? Ok : s; }
-#else
-  return f->ip->ap(f, f->ip, f->hp, f->sp); }
-#endif
+NoInline Vm(ev0) {
+  Ip++;
+  Pack(f);
+  return code_of(g_eval_c(f, jump)); }
+
+Vm(defglob) {
+  Have(3);
+  g_word v = Sp[0];
+  *--Sp = v;
+  *--Sp = Ip[1].x;
+  *--Sp = (g_word) f->dict;
+  Pack(f);
+  f = g_hash_set_c(f);
+  if (!g_ok(f)) return code_of(f); 
+  Unpack(f);
+  Sp++;
+  Ip += 2;
+  return Continue(); }
+
+Vm(drop1) { return Ip++, Sp++, Continue(); }
+
+Vm(free_variable) {
+  word x = Ip[1].x;
+  x = table_get(f, f->dict, x, x); // error here if you want on undefined variable
+  return Ip[0].ap = imm, Ip[1].x = x, Continue(); }
+
+Vm(late_bind) {
+  word ref = Ip[1].x, lfd = ref;
+  ref = AB(lfd);
+  return Ip[0].ap = imm, Ip[1].x = ref, Continue(); }
+
 
 // index of item in list
 static long lidx(core *f, word l, word x) {
   for (long i = 0; !nilp(l); l = B(l), i++) if (eql(f, x, A(l))) return i;
   return -1; }
 
+static cell *mo_n(core *f, size_t n) { // allocate a thread
+  cell *k = cells(f, n + Width(struct tag));
+  if (!k) return k;
+  struct tag *t = (struct tag*) (k + n);
+  return t->null = NULL, t->head = k; }
 
 // at all times vm is running a function. thread compiler tracks
 // function state using this type
 typedef struct env {
   // these parameters represent stack state at a point in compile process
-  word args,  // list // function positional arguments (never empty)
+  word args,  // list // function positional arguments
        imps,  // list // closure variables
        stack; // list // current values on stack
   // these are values of variables known at compile time
@@ -49,33 +73,45 @@ typedef struct env {
   struct env *par;
 } env;
 
+#define C0(n, ...) g_core *n(g_core *f, env **c, ##__VA_ARGS__)
+#define C1(n, ...) C0(n, word x, ##__VA_ARGS__)
+#define C2(n, ...) C0(n, size_t m, ##__VA_ARGS__)
+typedef C1(c1);
+typedef C2(c2);
+
+static Inline cell* em1(vm *i, cell*k) { return k[-1].ap = i, k-1; }
+static Inline cell* em2(vm *i, word x, cell*k) { return k[-2].ap = i, k[-1].x = x, k-2; }
+
+static Inline C2(c_pull) { return ((c2*) *f->sp++)(f, c, m); }
+static C2(c2_i) {
+  vm *i = (vm*) pop1(f);
+  f = c_pull(f, c, m + 1);
+  if (g_ok(f)) f->sp[0] = (word) em1(i, (cell*) f->sp[0]);
+  return f; }
+
+static C2(c2_ix) {
+  vm *i = (vm*) pop1(f);
+  word x = pop1(f);
+  MM(f, &x);
+  f = c_pull(f, c, m + 2);
+  UM(f);
+  if (g_ok(f)) f->sp[0] = (word) em2(i, x, (cell*) f->sp[0]);
+  return f; }
+
 
 #define Ana(n, ...) size_t n(core *f, env **c, size_t m, word x, ##__VA_ARGS__)
 typedef Ana(ana);
 #define Cata(n, ...) cell *n(core *f, env **c, cell *k, ##__VA_ARGS__)
 typedef Cata(cata);
+
 static ana analyze, ana_if, ana_let;
 static Inline Cata(pull) { return ((cata*) (*f->sp++))(f, c, k); }
 static Cata(cata_i) { return k[-1].x = *f->sp++, pull(f, c, k - 1); }
 static Cata(cata_ix) { return k[-2].x = *f->sp++, k[-1].x = *f->sp++, pull(f, c, k - 2); }
 
-static cell *mo_n(core *f, size_t n) { // allocate a thread
-  cell *k = cells(f, n + Width(struct tag));
-  if (!k) return k;
-  struct tag *t = (struct tag*) (k + n);
-  return t->null = NULL, t->head = k; }
-
 static cell *pull_m(core *f, env **c, size_t m) {
   cell *k = mo_n(f, m);
   return !k ? k : (memset(k, -1, m * sizeof(word)), pull(f, c, k + m)); }
-
-// generic instruction ana handlers
-static size_t ana_i1(core *f, env **c, size_t m, vm *i) {
-  return pushs(f, 2, cata_i, i) ? m + 1 : 0; }
-static size_t ana_i2(core *f, env **c, size_t m, vm *i, word x) {
-  return pushs(f, 3, cata_ix, i, x) ? m + 2 : 0; }
-
-static Cata(yieldk) { return k; }
 
 static env *enscope(core *f, env* par, word args, word imps) {
   if (!pushs(f, 3, args, imps, par)) return 0;
@@ -85,6 +121,13 @@ static env *enscope(core *f, env* par, word args, word imps) {
          c->stack = c->alts = c->ends = c->lams = nil;
   return c; }
 
+// generic instruction ana handlers
+static size_t ana_i1(core *f, env **c, size_t m, vm *i) {
+  return pushs(f, 2, cata_i, i) ? m + 1 : 0; }
+static size_t ana_i2(core *f, env **c, size_t m, vm *i, word x) {
+  return pushs(f, 3, cata_ix, i, x) ? m + 2 : 0; }
+
+static Cata(yieldk) { return k; }
 
 // keep this separate and NoInline so p_eval can be tail call optimized if possible
 static NoInline g_core *p_ana(core *f, vm *y) {
@@ -163,7 +206,8 @@ static Cata(ana_if_pop_branch) {
          (*c)->alts = B((*c)->alts),
          pull(f, c, k - 2); }
 
-static bool lambp(core *f, word x) { return twop(x) && A(x) == (word) f->lambda; }
+static Inline bool lambp(core *f, word x) {
+  return twop(x) && A(x) == (word) f->lambda; }
 
 static word lassoc(core *f, word l, word k) {
   for (; twop(l); l = B(l)) if (eql(f, k, AA(l))) return A(l);
@@ -177,50 +221,23 @@ static word ldels(core *f, word lam, word l) {
   if (!lassoc(f, lam, A(l))) B(l) = m, m = l;
   return m; }
 
-static word desugr(core *f, word *d, word *e, word a) {
-  if (!twop(a)) return wpairof(f, *e, nil);
-  word b; avec(f, a, b = desugr(f, d, e, B(a)));
-  return !b ? b : wpairof(f, A(a), b); }
-
-static int desug(core *f, word *d, word *e) {
-  if (!twop(*d)) return Ok;
-  word x;
-  if (!pushs(f, 1, f->lambda)) return Oom;
-  do if (!(x = desugr(f, d, e, B(*d))) || !(x = wpairof(f, f->sp[0], x))) return Oom;
-  else *d = A(*d), *e = x;
-  while (twop(*d));
-  return f->sp++, Ok; }
-
 // list length
 static size_t llen(word l) {
   size_t n = 0;
   while (twop(l)) n++, l = B(l);
   return n; }
 
-Vm(defglob) {
-  Have(3);
-  g_word v = Sp[0];
-  *--Sp = v;
-  *--Sp = Ip[1].x;
-  *--Sp = (g_word) f->dict;
-  Pack(f);
-  f = g_hash_set_c(f);
-  if (!g_ok(f)) return code_of(f); 
-  Unpack(f);
-  Sp++;
-  Ip += 2;
-  return Continue(); }
-
 // emits call instruction and modifies to tail call
 // if next operation is return
 static Cata(cataap) { return k[0].ap == ret ?
   (k[0].ap = tap, pull(f, c, k)) :
   (k[-1].ap = ap, pull(f, c, k - 1)); }
+
 static Cata(cataapn) { word n = *f->sp++; return k[0].ap == ret ?
  (k[0].x = n,  k[-1].ap = tapn, pull(f, c, k - 1)) :
  (k[-1].x = n, k[-2].ap = apn,  pull(f, c, k - 2)); }
 
-static word append(core *f, word l, word n) { return !twop(l) ? n :
+static NoInline word append(core *f, word l, word n) { return !twop(l) ? n :
   (avec(f, l, n = append(f, B(l), n)),
    n ? wpairof(f, A(l), n) : n); }
 
@@ -230,6 +247,16 @@ static word reverse(core *f, word l) {
   return n; }
 
 static word ana_lam(core*, env**, word, word);
+
+static Inline g_core *desug(core *f, word *d, word *e) {
+  while (twop(*d)) {
+    word x = wpairof(f, *e, nil);
+    x = x ? append(f, B(*d), x) : x;
+    x = x ? wpairof(f, (word) f->lambda, x) : x;
+    if (!x) return encode(f, Oom);
+    *e = x;
+    *d = A(*d); }
+  return f; }
 
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
@@ -248,7 +275,9 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
 
   // collect vars and defs into two lists
   for (; twop(exp) && twop(B(exp)); exp = BB(exp)) {
-    d = A(exp), e = AB(exp), desug(f, &d, &e);
+    d = A(exp), e = AB(exp);
+    f = desug(f, &d, &e);
+    if (!g_ok(f)) return fail();
     if (!(nom = wpairof(f, d, nom)) || !(def = wpairof(f, e, def))) return fail();
     // if it's a lambda compile it and record in lam list
     if (lambp(f, e)) { word x = ana_lam(f, c, nil, B(e));
@@ -316,13 +345,12 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
   for (nn++; nn--; (*b)->stack = B((*b)->stack));
   return f->safe = mm, m; }
 
-Vm(drop1) { return Ip++, Sp++, Continue(); }
-
 static Inline size_t ana_imm(core *f, env **c, size_t m, word x) {
   return ana_i2(f, c, m, imm, x); }
 
 static size_t ana_seq(core *f, env* *c, size_t m, word x) {
-  if (!twop(x)) return ana_imm(f, c, m, nil);
+  if (!twop(x))
+    return ana_imm(f, c, m, nil);
   MM(f, &x);
   while (m && twop(B(x))) m = analyze(f, c, m, A(x)),
                           m = m ? ana_i1(f, c, m, drop1) : m,
@@ -385,11 +413,6 @@ static NoInline Ana(analyze) {
   avec(f, b, m = analyze(f, c, m, a));
   return m ? ana_ap_l2r(f, c, m, b) : m; }
 
-Vm(free_variable) {
-  word x = Ip[1].x;
-  x = table_get(f, f->dict, x, x); // error here if you want on undefined variable
-  return Ip[0].ap = imm, Ip[1].x = x, Continue(); }
-
 
 static long stack_index_of_symbol(core *f, env *c, word var) {
   long l, i = 0;
@@ -408,11 +431,6 @@ static Cata(cata_var) {
        ins = llen(*f->sp++), // stack inset
        idx = stack_index_of_symbol(f, *c, var);
   return k[-2].ap = ref, k[-1].x = putnum(idx + ins), pull(f, c, k - 2); }
-
-Vm(late_bind) {
-  word ref = Ip[1].x, lfd = ref;
-  ref = AB(lfd);
-  return Ip[0].ap = imm, Ip[1].x = ref, Continue(); }
 
 static Ana(ana_var, env *d) {
   // free symbol?
@@ -443,12 +461,18 @@ static Ana(ana_var, env *d) {
   return ana_var(f, c, m, x, d->par); }
 
 
-// lambda decons pushes last list item to stack returns init of list
-static word linit(core *f, word x) {
-  if (!twop(x)) return pushs(f, 1, nil) ? nil : 0;
-  if (!twop(B(x))) return pushs(f, 1, A(x)) ? nil : 0;
-  word y = A(x); return avec(f, y, x = linit(f, B(x))),
-                        x ? wpairof(f, y, x) : x; }
+// decons that pushes the init and last element of list to the stack
+static g_core *linit(core *f, word x) {
+  if (!twop(x)) return pushc(f, 2, nil, nil);
+  if (!twop(B(x))) return pushc(f, 2, A(x), nil);
+  MM(f, &x);
+  int n = 0;
+  do f = pushc(f, 1, A(x)), n++, x = B(x);
+  while (twop(B(x)));
+  f = pushc(f, 1, nil);
+  while (n--) f = g_cons_stack(f, 1, 0);
+  UM(f);
+  return pushc(f, 1, A(x)); }
 
 static word ana_lam(core *f, env **c, word imps, word exp) {
   // expediently storing exp in args for the moment
@@ -456,9 +480,11 @@ static word ana_lam(core *f, env **c, word imps, word exp) {
   if (!d) return 0;
   MM(f, &d);
   // get the real args
-  word args = linit(f, d->args);
-  if (!(d->args = args)) return UM(f), 0;
-  exp = f->sp[0], f->sp[0] = W(yieldk);
+  f = linit(f, d->args);
+  if (!g_ok(f)) return UM(f), 0;
+  exp = pop1(f);
+  d->args = f->sp[0];
+  f->sp[0] = W(yieldk);
   size_t m = analyze(f, &d, 2, exp);
   if (!m) return UM(f), 0;
   size_t arity = llen(d->args) + llen(d->imps);
@@ -467,9 +493,3 @@ static word ana_lam(core *f, env **c, word imps, word exp) {
   if (arity > 1) (--k)->x = putnum(arity), (--k)->ap = curry;
   ttag(k)->head = k;
   return UM(f), wpairof(f, W(k), d->imps); }
-
-NoInline Vm(ev0) {
- Ip++;
- Pack(f);
- f = g_eval_c(f, jump);
- return code_of(f); }

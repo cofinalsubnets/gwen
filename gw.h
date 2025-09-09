@@ -17,8 +17,12 @@ typedef enum g_status {
 void
   g_fin(g_core*);
 
+typedef void
+  *g_malloc_t(size_t),
+  g_free_t(void*);
+
 g_core
-  *g_ini(void),
+  *g_ini(g_malloc_t*, g_free_t*),
   *g_run(g_core*, const char*, const char**);
 
 #define g_core_of(f) ((g_core*)((g_word)(f)&~3))
