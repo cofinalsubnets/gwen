@@ -23,38 +23,40 @@ static int read_char(core *f, input *i) {
     case '#': case ';': while (!p_in_eof(i) && (c = p_in_getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-static int reads(core*, input*),
-           read_string(core*, input*, char),
-           read_atom(core*, input*);
+static g_core
+*reads(core*, input*),
+  *p_read1(g_core*, input*),
+  *read_string(core*, input*, char),
+  *read_atom(core*, input*);
 
 
-static int rquote(core *f, input *i) {
-  int s = p_read1(f, i);
-  if (s != Ok) return s;
+static g_core *rquote(core *f, input *i) {
+  f = p_read1(f, i);
   f = pushc(f, 1, nil);
   f = g_cons_stack(f, 1, 0);
   f = pushc(f, 1, f->quote);
-  f = g_cons_stack(f, 0, 1);
-  return code_of(f); }
+  return g_cons_stack(f, 0, 1); }
 
-int p_read1(core *f, input* i) {
+static g_core *p_read1(core *f, input* i) {
+  if (!g_ok(f)) return f;
   int c = read_char(f, i);
   switch (c) {
-    case EOF:  return Eof;
+    case EOF:  return encode(f, Eof);
     case '\'': return rquote(f, i);
     case '(':  return reads(f, i);
-    case ')':  return pushs(f, 1, nil) ? Ok : Oom;
+    case ')':  return pushc(f, 1, nil);
     case '"':  return read_string(f, i, '"');
-    default:   return p_in_ungetc(i, c), read_atom(f, i); } }
+    default:   return p_in_ungetc(i, c),
+                      read_atom(f, i); } }
 
-static int reads(core *f, input* i) {
+static g_core *reads(core *f, input* i) {
+  if (!g_ok(f)) return f;
   word c = read_char(f, i);
-  if (c == EOF || c == ')') return pushs(f, 1, nil) ? Ok : Oom;
+  if (c == EOF || c == ')') return pushc(f, 1, nil);
   p_in_ungetc(i, c);
-  int s = p_read1(f, i);
-  s = s == Ok ? reads(f, i) : s;
-  if (s != Ok) return s;
-  return code_of(g_cons_stack(f, 1, 0)); }
+  f = p_read1(f, i);
+  f = reads(f, i);
+  return g_cons_stack(f, 1, 0); }
 
 // create and grow buffers for reading
 static string *bnew(core *f) {
@@ -67,7 +69,7 @@ static string *bgrow(core *f, string *s) {
   if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
   return t; }
 
-static int read_string(core *f, input* i, char delim) {
+static g_core *read_string(core *f, input* i, char delim) {
   string *b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
@@ -78,11 +80,11 @@ static int read_string(core *f, input* i, char delim) {
         goto out;
       else b->text[n++] = c;
 out:
-  if (!b) return Oom;
+  if (!b) return encode(f, Oom);
   b->len = n;
-  return pushs(f, 1, b) ? Ok : Oom; }
+  return pushc(f, 1, b); }
 
-static int read_atom(core *f, input *i) {
+static g_core *read_atom(core *f, input *i) {
   string *b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
@@ -90,16 +92,17 @@ static int read_atom(core *f, input *i) {
       case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
       case '(': case ')': case '"': case '\'': case EOF: p_in_ungetc(i, c); goto out;
       default: b->text[n++] = c; } out:
-  if (!b) return Oom;
+  if (!b) return encode(f, Oom);
   b->len = n, b->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
   char *e; long j = strtol(b->text, &e, 0);
   word x = *e == 0 ? putnum(j) : W(intern(f, b));
-  return !x || !pushs(f, 1, x) ? Oom : Ok; }
+  if (!x) return encode(f, Oom);
+  return pushc(f, 1, x); }
 
 #define file_input(f) ((input*)&(file_input){{p_file_getc, p_file_ungetc, p_file_eof}, f})
 static NoInline int p_read1f(core *f, FILE* i) {
   input *fi = file_input(i);
-  return p_read1(f, fi); }
+  return code_of(p_read1(f, fi)); }
 
 Vm(read0) {
   Pack(f);
@@ -120,8 +123,8 @@ static NoInline int p_readsp(core *f, string *s) {
   FILE *i = fopen(n, "r");
   if (!i) return pushs(f, 1, nil) ? Ok : Oom;
   input *fi = file_input(i);
-  int t = reads(f, fi);
-  return fclose(i), t; }
+  f = reads(f, fi);
+  return fclose(i), code_of(f); }
 
 Vm(readf) {
   string *s = str(Sp[0]);
@@ -146,7 +149,7 @@ static int p_text_eof(input *i) { return !ti(i)->text[ti(i)->i]; }
 
 g_core* p_readcs(g_core *f, const char *cs) {
   input *i = ((input*)&(text_input){{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0});
-  return encode(f, p_read1(f, i)); }
+  return p_read1(f, i); }
 
 void transmit(core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));

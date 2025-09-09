@@ -219,9 +219,6 @@ g_word table_get(g_core*, g_table*, g_word, g_word),
        pushs(core*, uintptr_t, ...),
        cp(core*, word, word*, word*);
 
-int
-    p_read1(g_core*, input*);
-
 g_core *please(g_core*, uintptr_t),
        *pushc(g_core*, uintptr_t, ...),
        *g_cons_stack(g_core*, int, int),
