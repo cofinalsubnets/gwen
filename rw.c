@@ -100,38 +100,54 @@ static g_core *read_atom(core *f, input *i) {
   return pushc(f, 1, x); }
 
 #define file_input(f) ((input*)&(file_input){{p_file_getc, p_file_ungetc, p_file_eof}, f})
-static NoInline int p_read1f(core *f, FILE* i) {
+static NoInline g_core *p_read1f(core *f, FILE* i) {
   input *fi = file_input(i);
-  return code_of(p_read1(f, fi)); }
+  return p_read1(f, fi); }
 
 Vm(read0) {
   Pack(f);
-  int s = p_read1f(f, stdin);
+  f = p_read1f(f, stdin);
+  int s = code_of(f);
   if (s == Eof) return // no error but end of file
-    Unpack(f), Sp[0] = nil, Ip++, Continue();
+    f = core_of(f),
+    Unpack(f),
+    Sp[0] = nil,
+    Ip++,
+    Continue();
+
   if (s != Ok) return s; // or was there an error?
   // no error and got a value on stack
   // make a list of it
   pair *p = pairof(f, f->sp[0], nil);
   if (!p) return Oom; // ...
-  return Unpack(f), Sp += 1, Ip += 1, Sp[0] = W(p), Continue(); }
+  Unpack(f);
+  Sp += 1;
+  Ip += 1;
+  Sp[0] = W(p);
+  return Continue(); }
 
-static NoInline int p_readsp(core *f, string *s) {
+static NoInline g_core *p_readsp(core *f, string *s) {
   char n[265]; // :)
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
   FILE *i = fopen(n, "r");
-  if (!i) return pushs(f, 1, nil) ? Ok : Oom;
+  if (!i) return pushc(f, 1, nil);
   input *fi = file_input(i);
   f = reads(f, fi);
-  return fclose(i), code_of(f); }
+  fclose(i);
+  return f; }
 
 Vm(readf) {
   string *s = str(Sp[0]);
   if (!strp(Sp[0]) || s->len > 255) return Sp[0] = nil, Ip += 1, Continue();
   Pack(f);
-  int t = p_readsp(f, s);
-  return t != Ok ? t : (Unpack(f), Sp[1] = Sp[0], Sp++, Ip++, Continue()); }
+  f = p_readsp(f, s);
+  if (!g_ok(f)) return code_of(f);
+  Unpack(f);
+  Sp[1] = Sp[0];
+  Sp++;
+  Ip++;
+  return Continue(); }
 
 #define ti(i) ((text_input*)(i))
 static int p_text_getc(input *i) {
