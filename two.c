@@ -30,12 +30,9 @@ static void em_two(core *f, FILE *o, word x) {
     if (!twop(x = B(x))) { putc(')', o); break; } } }
 
 pair *pairof(core *f, word a, word b) {
-  if (avail(f) < Width(pair)) {
-    bool ok;
-    avec(f, a, avec(f, b, ok = g_please(f, Width(pair))));
-    if (!ok) return 0; }
-  pair *w = (pair*) f->hp;
-  return f->hp += Width(pair), ini_pair(w, a, b); }
+  f = pushc(f, 2, a, b);
+  f = g_cons_stack(f, 0, 1);
+  return g_ok(f) ? (pair*) pop1(f) : 0; }
 
 Vm(car) { return Sp[0] = twop(Sp[0]) ? A(Sp[0]) : Sp[0], Ip += 1, Continue(); }
 Vm(cdr) { return Sp[0] = twop(Sp[0]) ? B(Sp[0]) : nil, Ip += 1, Continue(); }

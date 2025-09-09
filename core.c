@@ -14,15 +14,13 @@ static g_core *g_strof_c(g_core *f, const char *cs) {
     push1(f, o); }
   return f; }
 
-static symbol *symof(core *f, const char *nom) {
-  size_t len = strlen(nom);
-  string *o = cells(f, Width(string) + b2w(len));
-  if (o) memcpy(ini_str(o, len)->text, nom, len);
-  return o ? intern(f, o) : 0; }
-
 static g_core *g_symof_c(g_core *f, const char *nom) {
   f = g_strof_c(f, nom);
   return g_intern_c(f); }
+
+static symbol *symof(core *f, const char *nom) {
+  f = g_symof_c(f, nom);
+  return g_ok(f) ? (g_symbol*) pop1(f) : 0; }
 
 static g_core *g_ini_def_c(g_core *f, const char *k, word v) {
   f = pushc(f, 1, v);

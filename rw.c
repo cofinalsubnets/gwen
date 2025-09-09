@@ -31,9 +31,11 @@ static int reads(core*, input*),
 static int rquote(core *f, input *i) {
   int s = p_read1(f, i);
   if (s != Ok) return s;
-  pair *w = pairof(f, f->sp[0], nil);
-  w = !w ? w : pairof(f, W(f->quote), f->sp[0] = W(w));
-  return !w ? Oom : (f->sp[0] = W(w), Ok); }
+  f = pushc(f, 1, nil);
+  f = g_cons_stack(f, 1, 0);
+  f = pushc(f, 1, f->quote);
+  f = g_cons_stack(f, 0, 1);
+  return code_of(f); }
 
 int p_read1(core *f, input* i) {
   int c = read_char(f, i);
@@ -51,9 +53,8 @@ static int reads(core *f, input* i) {
   p_in_ungetc(i, c);
   int s = p_read1(f, i);
   s = s == Ok ? reads(f, i) : s;
-  return s != Ok ? s :
-    !(c = wpairof(f, f->sp[1], f->sp[0])) ? Oom :
-    (*++f->sp = c, Ok); }
+  if (s != Ok) return s;
+  return code_of(g_cons_stack(f, 1, 0)); }
 
 // create and grow buffers for reading
 static string *bnew(core *f) {
@@ -153,4 +154,3 @@ void transmit(core *f, FILE* out, word x) {
   else fprintf(out, "#%lx", (long) x); }
 Vm(prc) { word w = *Sp; return putc(getnum(w), stdout), Ip++, Continue(); }
 Vm(dot) { return transmit(f, stdout, Sp[0]), Ip++, Continue(); }
-
