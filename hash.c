@@ -60,6 +60,16 @@ table *mktbl(core *f) {
   struct entry **tab = (struct entry**) (t + 1);
   return !t ? 0 : ini_table(t, 0, 1, (tab[0] = 0, tab)); }
 
+g_core *g_tbl_new(g_core *f) {
+  if (!g_ok(f)) return f;
+  if (avail(f) < Width(table) + 2) f = please(f, Width(table) + 2);
+  if (g_ok(f)) {
+    table *t = cells(f, Width(table) + 1);
+    struct entry **tab = (struct entry**) (t + 1);
+    tab[0] = 0;
+    *--f->sp = (word) ini_table(t, 0, 1, tab); }
+  return f; }
+
 // relies on table capacity being a power of 2
 static Inline word index_of_key(core *f, table *t, word k) {
   return (t->cap - 1) & hash(f, k); }

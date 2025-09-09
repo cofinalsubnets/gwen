@@ -30,7 +30,7 @@ static g_core
   *read_atom(core*, input*);
 
 
-static g_core *rquote(core *f, input *i) {
+static Inline g_core *rquote(core *f, input *i) {
   f = p_read1(f, i);
   f = pushc(f, 1, nil);
   f = g_cons_stack(f, 1, 0);
@@ -69,7 +69,7 @@ static string *bgrow(core *f, string *s) {
   if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
   return t; }
 
-static g_core *read_string(core *f, input* i, char delim) {
+static Inline g_core *read_string(core *f, input* i, char delim) {
   string *b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
@@ -84,7 +84,7 @@ out:
   b->len = n;
   return pushc(f, 1, b); }
 
-static g_core *read_atom(core *f, input *i) {
+static Inline g_core *read_atom(core *f, input *i) {
   string *b = bnew(f);
   int c; size_t n = 0;
   for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)

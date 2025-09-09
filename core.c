@@ -18,10 +18,6 @@ static g_core *g_symof_c(g_core *f, const char *nom) {
   f = g_strof_c(f, nom);
   return g_intern_c(f); }
 
-static symbol *symof(core *f, const char *nom) {
-  f = g_symof_c(f, nom);
-  return g_ok(f) ? (g_symbol*) pop1(f) : 0; }
-
 static g_core *g_ini_def_c(g_core *f, const char *k, word v) {
   f = pushc(f, 1, v);
   f = g_symof_c(f, k);
@@ -66,34 +62,49 @@ BIFS(bif_entry);
 
 g_core *g_ini() {
   g_core *f = g_malloc(sizeof(g_core));
-  if (f) {
-    memset(f, 0, sizeof(core));
-    size_t len = 1;
-    word *pool = g_malloc(2 * len * sizeof(word));
-    if (pool) {
-      f->len = len;
-      f->t0 = g_clock();
-      f->hp = f->pool = pool;
-      f->sp = f->loop = pool + len;
-      f->ip = bif_yield;
-      f->malloc = g_malloc;
-      f->free = g_free;
-      if ((f->dict = mktbl(f))       &&
-          (f->macro = mktbl(f))      &&
-          (f->eval = symof(f, "ev")) &&
-          (f->let = symof(f, ":"))   &&
-          (f->cond = symof(f, "?"))  &&
-          (f->quote = symof(f, "`")) &&
-          (f->begin = symof(f, ",")) &&
-          (f->lambda = symof(f, "\\"))) {
-        f = g_ini_def_c(f, "globals", W(f->dict));
-        f = g_ini_def_c(f, "macros", W(f->macro));
-        f = g_strof_c(f, g_version);
-        f = g_ini_def_c(f, "version", pop1(f));
-        insts(i_entry);
-        BIFS(d_entry);
-        return f; } } }
-  return encode(f, g_status_oom); }
+  if (!f) return encode(NULL, g_status_oom);
+
+  memset(f, 0, sizeof(core));
+  size_t len = 1;
+  word *pool = g_malloc(2 * len * sizeof(word));
+  if (!pool) return encode(f, g_status_oom);
+
+  f->len = len;
+  f->t0 = g_clock();
+  f->hp = f->pool = pool;
+  f->sp = f->loop = pool + len;
+  f->ip = bif_yield;
+  f->malloc = g_malloc;
+  f->free = g_free;
+
+  f = g_tbl_new(f);
+  f = g_tbl_new(f);
+  f = g_symof_c(f, "ev");
+  f = g_symof_c(f, ":");
+  f = g_symof_c(f, "?");
+  f = g_symof_c(f, "`");
+  f = g_symof_c(f, ",");
+  f = g_symof_c(f, "\\");
+
+  if (g_ok(f))
+    f->lambda = (symbol*) pop1(f),
+    f->begin = (symbol*) pop1(f),
+    f->quote = (symbol*) pop1(f),
+    f->cond = (symbol*) pop1(f),
+    f->let = (symbol*) pop1(f),
+    f->eval = (symbol*) pop1(f),
+    f->macro = (table*) pop1(f),
+    f->dict = (table*) pop1(f);
+
+  f = g_ini_def_c(f, "globals", W(f->dict));
+  f = g_ini_def_c(f, "macros", W(f->macro));
+  f = g_strof_c(f, g_version);
+  f = g_ini_def_c(f, "version", pop1(f));
+
+  insts(i_entry);
+  BIFS(d_entry);
+
+  return f; }
 
 g_core *g_run(g_core *f, const char *p, const char **av) {
   int n = 0;

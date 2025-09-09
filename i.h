@@ -211,6 +211,7 @@ g_string *ini_str(string*, uintptr_t);
 g_table *ini_table(g_table*, uintptr_t, uintptr_t, struct entry**),
         *table_set(core*, table*, word, word),
         *mktbl(g_core*);
+g_core *g_tbl_new(g_core*);
 
 g_symbol *intern(g_core*, g_string*),
          *ini_sym(g_symbol*, g_string*, uintptr_t);
