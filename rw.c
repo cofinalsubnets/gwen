@@ -24,7 +24,7 @@ static int read_char(core *f, input *i) {
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
 static g_core
-*reads(core*, input*),
+  *reads(core*, input*),
   *p_read1(g_core*, input*),
   *read_string(core*, input*, char),
   *read_atom(core*, input*);
@@ -58,46 +58,56 @@ static g_core *reads(core *f, input* i) {
   f = reads(f, i);
   return g_cons_stack(f, 1, 0); }
 
-// create and grow buffers for reading
-static string *bnew(core *f) {
-  string *s = cells(f, Width(string) + 1);
-  return s ? ini_str(s, sizeof(word)) : s; }
+static g_core *g_buf_new(g_core *f) {
+  if (avail(f) < Width(string) + 2)
+    f = please(f, Width(string) + 2);
+  if (g_ok(f)) {
+    string *o = (string*) f->hp;
+    f->hp += Width(string) + 1;
+    *--f->sp = (word) ini_str(o, sizeof(word)); }
+  return f; }
 
-static string *bgrow(core *f, string *s) {
-  string *t; uintptr_t len = s->len;
-  avec(f, s, t = cells(f, Width(string) + 2 * b2w(len)));
-  if (t) memcpy(ini_str(t, 2 * len)->text, s->text, len);
-  return t; }
+static g_core *g_buf_grow(g_core *f) {
+  size_t len = str(f->sp[0])->len,
+         req = Width(string) + 2 * b2w(len);
+  if (avail(f) < req) f = please(f, req);
+  if (g_ok(f)) {
+    string *o = (string*) f->hp;
+    f->hp += req;
+    memcpy(ini_str(o, 2 * len)->text, str(f->sp[0])->text, len);
+    f->sp[0] = (word) o; }
+  return f; }
 
 static Inline g_core *read_string(core *f, input* i, char delim) {
-  string *b = bnew(f);
-  int c; size_t n = 0;
-  for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
-    while (n < lim)
+  int c;
+  size_t n = 0, lim = sizeof(word);
+  for (f = g_buf_new(f); g_ok(f); f = g_buf_grow(f), lim *= 2)
+    for (string *b = str(f->sp[0]); n < lim;)
       if ((c = p_in_getc(i)) == EOF ||
            c == delim ||
            (c == '\\' && (c = p_in_getc(i)) == EOF))
         goto out;
       else b->text[n++] = c;
 out:
-  if (!b) return encode(f, Oom);
-  b->len = n;
-  return pushc(f, 1, b); }
+  if (g_ok(f)) str(f->sp[0])->len = n;
+  return f; }
 
 static Inline g_core *read_atom(core *f, input *i) {
-  string *b = bnew(f);
-  int c; size_t n = 0;
-  for (size_t lim = sizeof(word); b; b = bgrow(f, b), lim *= 2)
-    while (n < lim) switch (c = p_in_getc(i)) {
+  int c;
+  size_t n = 0, lim = sizeof(word);
+  f = g_buf_new(f);
+  for (; g_ok(f); f = g_buf_grow(f), lim *= 2)
+    for (string *b = str(f->sp[0]); n < lim;) switch (c = p_in_getc(i)) {
       case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
       case '(': case ')': case '"': case '\'': case EOF: p_in_ungetc(i, c); goto out;
       default: b->text[n++] = c; } out:
-  if (!b) return encode(f, Oom);
+  if (!g_ok(f)) return f;
+  string *b = str(f->sp[0]);
   b->len = n, b->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
-  char *e; long j = strtol(b->text, &e, 0);
-  word x = *e == 0 ? putnum(j) : W(intern(f, b));
-  if (!x) return encode(f, Oom);
-  return pushc(f, 1, x); }
+  char *e;
+  long j = strtol(b->text, &e, 0);
+  if (*e == 0) return f->sp[0] = putnum(j), f;
+  return g_intern_c(f); }
 
 #define file_input(f) ((input*)&(file_input){{p_file_getc, p_file_ungetc, p_file_eof}, f})
 static NoInline g_core *p_read1f(core *f, FILE* i) {
@@ -163,7 +173,7 @@ static int p_text_ungetc(input *i, int _) {
 
 static int p_text_eof(input *i) { return !ti(i)->text[ti(i)->i]; }
 
-g_core* p_readcs(g_core *f, const char *cs) {
+g_core *p_readcs(g_core *f, const char *cs) {
   input *i = ((input*)&(text_input){{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0});
   return p_read1(f, i); }
 
@@ -171,5 +181,6 @@ void transmit(core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
   else if (datp(x)) typof(x)->em(f, out, x);
   else fprintf(out, "#%lx", (long) x); }
+
 Vm(prc) { word w = *Sp; return putc(getnum(w), stdout), Ip++, Continue(); }
 Vm(dot) { return transmit(f, stdout, Sp[0]), Ip++, Continue(); }

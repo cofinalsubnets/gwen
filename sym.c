@@ -20,7 +20,7 @@ symbol *intern(core *f, string* b) {
 g_core *g_intern_c(g_core *f) {
   if (!g_ok(f)) return f;
   f = avail(f) < Width(symbol) ? please(f, Width(symbol)) : f;
-  if (g_ok(f)) f->sp[0] = (g_word) intern_seek(f, (g_string*) f->sp[0], &f->symbols);
+  if (g_ok(f)) f->sp[0] = (g_word) intern_seek(f, str(f->sp[0]), &f->symbols);
   return f; }
 
 symbol *ini_sym(symbol *y, string *nom, uintptr_t code) {

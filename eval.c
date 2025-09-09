@@ -1,22 +1,24 @@
 #include "i.h"
-static int p_ana(g_core*, vm*);
+static g_core *p_ana(g_core*, vm*);
 
 NoInline g_core *g_eval_c(g_core *f, vm *y) {
-  if (!g_ok(f)) return f;
-  int s = p_ana(f, y);
-  if (s == Ok) {
+  f = p_ana(f, y);
+  int s = code_of(f);
+  if (g_ok(f)) {
 #ifdef NTCO
     do s = f->ip->ap(f); while (s == Ok);
     s = s == Eof ? Ok : s; }
 #else
     s = f->ip->ap(f, f->ip, f->hp, f->sp); }
 #endif
+
   return encode(f, s); }
 
 // compile and execute expression
 // NoInline because we always want tail calls to jump into this if possible
 static NoInline int p_eval(core *f, vm *y) {
-  int s = p_ana(f, y);
+  f = p_ana(f, y);
+  int s = code_of(f);
   if (s != Ok) return s;
 #ifdef NTCO
   do s = f->ip->ap(f); while (s == Ok);
@@ -85,9 +87,10 @@ static env *enscope(core *f, env* par, word args, word imps) {
 
 
 // keep this separate and NoInline so p_eval can be tail call optimized if possible
-static NoInline int p_ana(core *f, vm *y) {
+static NoInline g_core *p_ana(core *f, vm *y) {
+  if (!g_ok(f)) return f;
   env *c = enscope(f, (env*) nil, nil, nil);
-  if (!c) return Oom;
+  if (!c) return encode(f, Oom);
   word x = f->sp[0];
   f->sp[0] = (word) yieldk; // function that returns thread from code generation
   MM(f, &c);
@@ -95,7 +98,9 @@ static NoInline int p_ana(core *f, vm *y) {
   m = m ? ana_i2(f, &c, m, y, W(f->ip)) : m;
   cell *k = m ? pull_m(f, &c, m) : 0;
   UM(f);
-  return k ? (f->ip = k, Ok) : Oom; }
+  if (!k) return encode(f, Oom);
+  f->ip = k;
+  return f; }
 
 
 static cata ana_if_push_branch, ana_if_pop_branch, ana_if_push_exit, ana_if_pop_exit, ana_if_peek_exit;
@@ -324,7 +329,6 @@ static size_t ana_seq(core *f, env* *c, size_t m, word x) {
                           x = B(x);
   return UM(f), m ? analyze(f, c, m, A(x)) : m; }
 
-// exit vm and return to C
 static Ana(ana_mac, word b) {
   if (!pushs(f, 3, f->quote, x, b)) return 0;
   pair *mxp = (pair*) cells(f, 4 * Width(pair));
@@ -334,7 +338,9 @@ static Ana(ana_mac, word b) {
   x = W(ini_pair(mxp + 1, x, nil));
   x = W(ini_pair(mxp, f->sp[1], x));
   *(f->sp += 2) = x;
-  return p_eval(f, yieldi) != Ok ? 0 : analyze(f, c, m, pop1(f)); }
+  f = g_eval_c(f, yieldi);
+  if (!g_ok(f)) return 0; // FIXME ignores actual error
+  return analyze(f, c, m, pop1(f)); }
 
 // evaluate function call arguments and apply
 static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
@@ -461,4 +467,9 @@ static word ana_lam(core *f, env **c, word imps, word exp) {
   if (arity > 1) (--k)->x = putnum(arity), (--k)->ap = curry;
   ttag(k)->head = k;
   return UM(f), wpairof(f, W(k), d->imps); }
-NoInline Vm(ev0) { return Ip++, Pack(f), p_eval(f, jump); }
+
+NoInline Vm(ev0) {
+ Ip++;
+ Pack(f);
+ f = g_eval_c(f, jump);
+ return code_of(f); }
