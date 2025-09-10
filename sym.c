@@ -10,13 +10,6 @@ static symbol *intern_seek(core *v, string *b, symbol **y) {
           strncmp(a->text, b->text, a->len);
   return i == 0 ? z : intern_seek(v, b, i < 0 ? &z->l : &z->r); }
 
-symbol *intern(core *f, string* b) {
-  if (avail(f) < Width(symbol)) {
-    bool ok;
-    avec(f, b, ok = g_please(f, Width(symbol)));
-    if (!ok) return 0; }
-  return intern_seek(f, b, &f->symbols); }
-
 g_core *g_intern_c(g_core *f) {
   if (!g_ok(f)) return f;
   f = avail(f) < Width(symbol) ? please(f, Width(symbol)) : f;

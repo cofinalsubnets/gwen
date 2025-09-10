@@ -1,18 +1,5 @@
 #include "i.h"
 
-static NoInline word pushsr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
-  if (!n) return g_please(f, m) ? m : n;
-  word x = va_arg(xs, word), y;
-  return avec(f, x, y = pushsr(f, m, n - 1, xs)), y ? *--f->sp = x : y; }
-
-word pushs(core *f, uintptr_t m, ...) {
-  va_list xs;
-  va_start(xs, m);
-  word n, r = 0;
-  if (avail(f) < m) r = pushsr(f, m, m, xs);
-  else for (n = 0, f->sp -= m; n < m; f->sp[n++] = r = va_arg(xs, word));
-  return va_end(xs), r; }
-
 static core *pushcr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
   word x = va_arg(xs, word);
@@ -35,6 +22,13 @@ g_core *pushc(core *f, uintptr_t m, ...) {
   f = vpushc(f, m, xs);
   va_end(xs);
   return f; }
+
+word pushs(core *f, uintptr_t m, ...) {
+  va_list xs;
+  va_start(xs, m);
+  f = vpushc(f, m, xs);
+  va_end(xs);
+  return g_ok(f) ? f->sp[0] : 0; }
 
 g_core *g_list_n(g_core *f, uintptr_t m) {
   f = pushc(f, 1, nil);

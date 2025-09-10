@@ -182,7 +182,6 @@ static Inline size_t b2w(size_t b) {
 #define nil putnum(0)
 #define getnum(_) ((word)(_)>>1)
 #define nilp(_) (W(_)==nil)
-#define wpairof(...) W(pairof(__VA_ARGS__))
 #define A(o) two(o)->a
 #define B(o) two(o)->b
 #define AB(o) A(B(o))
@@ -211,8 +210,7 @@ g_table *ini_table(g_table*, uintptr_t, uintptr_t, struct entry**),
         *mktbl(g_core*);
 g_core *g_tbl_new(g_core*);
 
-g_symbol *intern(g_core*, g_string*),
-         *ini_sym(g_symbol*, g_string*, uintptr_t);
+g_symbol *ini_sym(g_symbol*, g_string*, uintptr_t);
 
 g_word table_get(g_core*, g_table*, g_word, g_word),
        pushs(core*, uintptr_t, ...),

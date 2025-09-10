@@ -128,12 +128,13 @@ Vm(read0) {
   if (s != Ok) return s; // or was there an error?
   // no error and got a value on stack
   // make a list of it
-  pair *p = pairof(f, f->sp[0], nil);
-  if (!p) return Oom; // ...
+  f = pushc(f, 1, nil);
+  f = g_cons_stack(f, 1, 0);
+  if (!g_ok(f)) return code_of(f);
   Unpack(f);
+  Sp[1] = Sp[0];
   Sp += 1;
   Ip += 1;
-  Sp[0] = W(p);
   return Continue(); }
 
 static NoInline g_core *p_readsp(core *f, string *s) {
