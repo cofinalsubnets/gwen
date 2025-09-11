@@ -57,7 +57,7 @@ Vm(pairp) {
   Ip++;
   return Continue(); }
 
-g_core *g_cons_stack(g_core *f, int i, int j) {
+static g_core *g_cons_stack(g_core *f, int i, int j) {
   f = g_have(f, Width(pair));
   if (g_ok(f)) {
     pair *p = (pair*) f->hp;
@@ -65,3 +65,6 @@ g_core *g_cons_stack(g_core *f, int i, int j) {
     f->hp += Width(pair);
     *++f->sp = (word) p; }
   return f; }
+
+g_core *g_cons_l(g_core *f) { return g_cons_stack(f, 0, 1); }
+g_core *g_cons_r(g_core *f) { return g_cons_stack(f, 1, 0); }

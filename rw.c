@@ -32,9 +32,9 @@ static g_core
 static Inline g_core *rquote(core *f, input *i) {
   f = p_read1(f, i);
   f = g_push(f, 1, nil);
-  f = g_cons_stack(f, 1, 0);
+  f = g_cons_r(f);
   f = g_push(f, 1, f->quote);
-  return g_cons_stack(f, 0, 1); }
+  return g_cons_l(f); }
 
 static g_core *p_read1(core *f, input* i) {
   if (!g_ok(f)) return f;
@@ -55,7 +55,7 @@ static g_core *reads(core *f, input* i) {
   p_in_ungetc(i, c);
   f = p_read1(f, i);
   f = reads(f, i);
-  return g_cons_stack(f, 1, 0); }
+  return g_cons_r(f); }
 
 static g_core *g_buf_new(g_core *f) {
   f = g_have(f, Width(string) + 2);
@@ -129,7 +129,7 @@ Vm(read0) {
   // no error and got a value on stack
   // make a list of it
   f = g_push(f, 1, nil);
-  f = g_cons_stack(f, 1, 0);
+  f = g_cons_r(f);
   if (!g_ok(f)) return code_of(f);
   Unpack(f);
   Sp[1] = Sp[0];

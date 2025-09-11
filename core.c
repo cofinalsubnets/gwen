@@ -38,15 +38,17 @@ static g_core *g_tbl_new(g_core *f) {
 g_core *g_main(g_core *f, const char *p, const char **av) {
   int n = 0;
   for (f = g_read_cs(f, p);   av[n]; f = g_strof_c(f, av[n++]));
-  for (f = g_push(f, 1, nil); n--;   f = g_cons_stack(f, 1, 0));
+  for (f = g_push(f, 1, nil); n--;   f = g_cons_r(f));
   f = g_push(f, 1, nil);
-  f = g_cons_stack(f, 1, 0);
+  f = g_cons_r(f);
   f = g_push(f, 1, f->quote);
-  f = g_cons_stack(f, 0, 1);
+  f = g_cons_l(f);
   f = g_push(f, 1, nil);
-  f = g_cons_stack(f, 1, 0);
-  f = g_cons_stack(f, 1, 0);
-  f = g_eval(f, g_yield);
+  f = g_cons_r(f);
+  f = g_cons_r(f);
+  f = g_ana(f, g_yield);
+  if (g_ok(f))
+    f = encode(f, f->ip->ap(f, f->ip, f->hp, f->sp));
   return f; }
 
 void g_fin(g_core *f) {
@@ -54,7 +56,6 @@ void g_fin(g_core *f) {
     for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
     g_free(min(f->pool, f->loop));
     g_free(f); } }
-
 
 g_core *g_ini() {
   g_core *f = g_malloc(sizeof(g_core));

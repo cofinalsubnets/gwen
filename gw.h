@@ -2,7 +2,6 @@
 #define gw_h
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 typedef intptr_t g_word;
 
@@ -14,11 +13,9 @@ typedef enum g_status {
   g_status_err = 2,
   g_status_eof = 3,
 } g_status;
-void
-  g_fin(g_core*);
-g_core
-  *g_ini(void),
-  *g_main(g_core*, const char*, const char**);
+void g_fin(g_core*);
+g_core *g_ini(void),
+       *g_main(g_core*, const char*, const char**);
 
 #define g_core_of(f) ((g_core*)((g_word)(f)&~3))
 #define g_code_of(f) ((g_status)((g_word)(f)&3))

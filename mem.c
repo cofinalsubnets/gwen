@@ -10,19 +10,15 @@ static core *g_pushr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (g_ok(f)) push1(f, x);
   return f; }
 
-core *vpushc(core *f, uintptr_t m, va_list xs) {
+g_core *g_push(core *f, uintptr_t m, ...) {
+  va_list xs;
+  va_start(xs, m);
   if (g_ok(f)) {
     if (avail(f) < m) f = g_pushr(f, m, 0, xs);
     else {
       f->sp -= m;
       for (word n = 0; n < m; n++)
         f->sp[n] = va_arg(xs, word); } }
-  return f; }
-
-g_core *g_push(core *f, uintptr_t m, ...) {
-  va_list xs;
-  va_start(xs, m);
-  f = vpushc(f, m, xs);
   va_end(xs);
   return f; }
 

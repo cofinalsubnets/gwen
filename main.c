@@ -11,5 +11,6 @@ static const char m[] =
 int main(int ac, const char **av) {
   g_core *f = g_ini();
   f = g_main(f, m, av);
+  int s = g_code_of(f);
   g_fin(f);
-  return g_code_of(f); }
+  return s; }

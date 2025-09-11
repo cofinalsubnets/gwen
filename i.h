@@ -3,7 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#define encode(f, s) ((g_core*)((g_word)(f)|s))
+#include <stdbool.h>
+#define encode(f, s) ((g_core*)((g_word)(f)|(s)))
 #define core_of g_core_of
 #define code_of g_code_of
 
@@ -68,7 +69,7 @@ typedef int g_ret_type;
 
 // theres a big benefit in speed from tail call optimization but not all platforms support it
 #define YieldStatus g_status_ok
-#define Vm(n, ...) g_ret_type n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
+#define Vm(n, ...) g_ret_type n(core *f, cell* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
@@ -89,7 +90,6 @@ typedef struct methods methods, type, g_type;
 typedef union g_cell cell, thread;
 
 typedef Vm(vm);
-typedef Vm(MVm, int);
 union g_cell { vm *ap; word x; cell *m; methods *typ; };
 
 #define DataHeader vm *ap; methods *typ
@@ -178,16 +178,14 @@ uintptr_t hash(g_core*, g_word),
 g_word cp(core*, word, word*, word*);
 g_core *g_have(g_core*, uintptr_t),
        *g_cells(g_core*, size_t),
-       *vpushc(core*, uintptr_t, va_list),
        *g_push(g_core*, uintptr_t, ...),
-       *g_cons_stack(g_core*, int, int),
+       *g_cons_l(g_core*),
+       *g_cons_r(g_core*),
        *g_intern(g_core*),
        *g_hash_get(g_core*),
        *g_hash_put(g_core*),
-       *g_list(g_core*, size_t),
-       *g_eval(g_core*, vm*),
+       *g_ana(g_core*, vm*),
        *g_read_cs(g_core*, const char*);
-#define pushc g_push
 
 Vm(gc, uintptr_t);
 vm data, bnot, rng, nullp, sysclock, symnom, dot,
