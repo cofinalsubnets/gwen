@@ -151,7 +151,7 @@ Vm(tset) {
   if (tblp(Sp[0])) {
     Pack(f);
     f = g_hash_put(f);
-    if (!g_ok(f)) return code_of(f);
+    if (!g_ok(f)) return f;
     Unpack(f); }
   Ip += 1;
   return Continue(); }

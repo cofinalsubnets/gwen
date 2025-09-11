@@ -65,10 +65,9 @@
 #define g_version ""
 #endif
 
-typedef int g_ret_type;
+typedef g_core* g_ret_type;
 
 // theres a big benefit in speed from tail call optimization but not all platforms support it
-#define YieldStatus g_status_ok
 #define Vm(n, ...) g_ret_type n(core *f, cell* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)

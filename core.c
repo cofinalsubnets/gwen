@@ -48,7 +48,7 @@ g_core *g_main(g_core *f, const char *p, const char **av) {
   f = g_cons_r(f);
   f = g_ana(f, g_yield);
   if (g_ok(f))
-    f = encode(f, f->ip->ap(f, f->ip, f->hp, f->sp));
+    f = f->ip->ap(f, f->ip, f->hp, f->sp);
   return f; }
 
 void g_fin(g_core *f) {

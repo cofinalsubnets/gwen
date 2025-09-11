@@ -143,7 +143,7 @@ NoInline word cp(core *v, word x, word *p0, word *t0) {
 NoInline Vm(gc, uintptr_t n) {
   Pack(f);
   f = please(f, n);
-  if (!g_ok(f)) return code_of(f);
+  if (!g_ok(f)) return f;
   Unpack(f);
   return Continue(); }
 

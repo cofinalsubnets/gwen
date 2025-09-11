@@ -3,10 +3,8 @@
 
 static g_core *g_eval(g_core *f, vm *y) {
   f = g_ana(f, y);
-  int s = code_of(f);
-  f = core_of(f);
-  if (s == Ok) s = f->ip->ap(f, f->ip, f->hp, f->sp);
-  return encode(f, s); }
+  if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
+  return f; }
 
 // function state using this type
 typedef struct env {
@@ -503,7 +501,7 @@ NoInline Vm(ev0) {
   Ip++;
   Pack(f);
   f = g_eval(f, g_yield);
-  if (!g_ok(f)) return code_of(f);
+  if (!g_ok(f)) return f;
   Unpack(f);
   return Continue(); }
 
@@ -515,7 +513,7 @@ Vm(defglob) {
   *--Sp = (g_word) f->dict;
   Pack(f);
   f = g_hash_put(f);
-  if (!g_ok(f)) return code_of(f); 
+  if (!g_ok(f)) return f;
   Unpack(f);
   Sp++;
   Ip += 2;
@@ -530,7 +528,7 @@ Vm(free_variable) {
   word x = Ip[1].x;
   Pack(f);
   f = g_push(f, 3, x, f->dict, x);
-  if (!g_ok(f)) return Oom;
+  if (!g_ok(f)) return f;
   f = g_hash_get(f);
   Unpack(f);
   Ip[0].ap = imm;

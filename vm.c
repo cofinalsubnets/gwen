@@ -100,7 +100,7 @@ Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 Vm(g_yield) {
   Ip = Ip[1].m;
   Pack(f);
-  return YieldStatus; }
+  return f; }
 
 Vm(seek) {
   Sp[1] = W(((cell*) Sp[1]) + getnum(Sp[0]));

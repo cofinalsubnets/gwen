@@ -117,20 +117,19 @@ static NoInline g_core *p_read1f(core *f, FILE* i) {
 Vm(read0) {
   Pack(f);
   f = p_read1f(f, stdin);
-  int s = code_of(f);
-  if (s == Eof) { // no error but end of file
+  if (code_of(f) == Eof) { // no error but end of file
     f = core_of(f);
     Unpack(f);
     Sp[0] = nil;
     Ip += 1;
     return Continue(); }
 
-  if (s != Ok) return s; // or was there an error?
+  if (!g_ok(f)) return f; // or was there an error?
   // no error and got a value on stack
   // make a list of it
   f = g_push(f, 1, nil);
   f = g_cons_r(f);
-  if (!g_ok(f)) return code_of(f);
+  if (!g_ok(f)) return f;
   Unpack(f);
   Sp[1] = Sp[0];
   Sp += 1;
@@ -153,7 +152,7 @@ Vm(readf) {
   if (!strp(Sp[0]) || s->len > 255) return Sp[0] = nil, Ip += 1, Continue();
   Pack(f);
   f = p_readsp(f, s);
-  if (!g_ok(f)) return code_of(f);
+  if (!g_ok(f)) return f;
   Unpack(f);
   Sp[1] = Sp[0];
   Sp += 1;
