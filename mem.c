@@ -91,29 +91,29 @@ NoInline core *please(core *f, uintptr_t req0) {
 
 // this function expects pool loop and len to have been set already on the state
 static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
-  word len1 = f->len, // target pool length
-       *p1 = f->pool, // target pool
-       *t0 = p0 + len0, // source pool top
-       *t1 = p1 + len1, // target pool top
-       *sp0 = f->sp, // source pool stack
-       sn = t0 - sp0, // stack height
-       *sp1 = t1 - sn; // target pool stack
+  g_word
+    len1 = f->len, // target pool length
+    *p1 = f->pool, // target pool
+    *t0 = p0 + len0, // source pool top
+    *t1 = p1 + len1, // target pool top
+    *sp0 = f->sp, // source pool stack
+    sn = t0 - sp0, // stack height
+    *sp1 = t1 - sn; // target pool stack
   // reset stack, heap, symbols
   f->sp = sp1;
   f->hp = f->cp = p1;
   f->symbols = 0;
-  // copy variables
-  for (int n = 0; n < g_var_N; n++)
+  // copy all reachable values
+  for (int n = 0; n < g_var_N; n++) // variables
     f->vars[n] = CP(f->vars[n]);
-  // copy stack
-  while (sn--) *sp1++ = CP(*sp0++);
-  // copy protected values
-  for (struct root *r = f->safe; r; *r->ptr = CP(*r->ptr), r = r->next);
-  // copy all reachable values using cheney's method
-  for (cell *k; (k = cell(f->cp)) < cell(f->hp);)
-    if (datp(k)) typ(k)->wk(f, W(k), p0, t0); // is data
-    else { while (k->x) k->x = CP(k->x), k++;     // is thread
-           f->cp = (word*) k + 2; }
+  while (sn--) *sp1++ = CP(*sp0++); // stack
+  for (struct root *r = f->safe; r; *r->ptr = CP(*r->ptr), r = r->next); // C values
+  // use cheney's algorithm
+  while (f->cp < f->hp)
+    if (datp(f->cp)) typ(f->cp)->wk(f, word(f->cp), p0, t0);
+    else { while (*f->cp) *f->cp = CP(*f->cp),
+                          f->cp++;
+           f->cp += 2; }
   // run destructors ...
   // this has never been tested or used
   struct dtor *nd = NULL;

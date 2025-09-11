@@ -24,7 +24,7 @@ static g_core *g_ini_def_c(g_core *f, const char *k, word v) {
   if (g_ok(f)) f->sp++;
   return f; }
 
-static g_core *g_tbl_new(g_core *f) {
+static g_core *g_tbl(g_core *f) {
   f = g_cells(f, Width(table) + 1);
   if (g_ok(f)) {
     table *t = tbl(f->sp[0]);
@@ -74,8 +74,8 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
   static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
   f->ip = bif_yield;
 
-  f = g_tbl_new(f);
-  f = g_tbl_new(f);
+  f = g_tbl(f);
+  f = g_tbl(f);
   f = g_symof(f, "ev");
   f = g_symof(f, ":");
   f = g_symof(f, "?");
@@ -99,7 +99,7 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
   f = g_ini_def_c(f, "version", pop1(f));
 
 #define insts(_) _(free_variable) _(ret) _(ap) _(tap) _(apn) _(tapn) _(jump) _(cond) _(ref) _(imm) _(drop1) _(curry) _(defglob) _(late_bind) _(ret0)
-#define i_entry(i)        f = g_ini_def_c(f, "i_"#i, W(i));
+#define i_entry(i) f = g_ini_def_c(f, "i_"#i, W(i));
   insts(i_entry);
 #define S1(i) {{i}, {ret0}}
 #define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
