@@ -90,12 +90,14 @@ static NoInline Ana(analyze) {
   if (!twop(x)) return ana_i2(f, c, m, imm, x);
 
   g_word a = A(x), b = B(x);
-  if (a == W(f->begin)) return ana_seq(f, c, m, b);
-  if (a == W(f->let)) return ana_let(f, c, m, b);
-  if (a == W(f->cond)) return ana_if(f, c, m, b);
-  if (a == W(f->lambda)) return ana_lambda(f, c, m, x, b);
-  if (a == W(f->quote)) return x = twop(b) ? A(b) : nil,
-                               ana_i2(f, c, m, imm, x);
+  if (symp(a)) {
+    g_symbol *y = sym(a);
+    if (y == f->begin) return ana_seq(f, c, m, b);
+    if (y == f->let) return ana_let(f, c, m, b);
+    if (y == f->cond) return ana_if(f, c, m, b);
+    if (y == f->lambda) return ana_lambda(f, c, m, x, b);
+    if (y == f->quote) return x = twop(b) ? A(b) : nil,
+                              ana_i2(f, c, m, imm, x); }
 
   // singleton?
   if (!twop(b)) return analyze(f, c, m, a); // value of first element
@@ -147,14 +149,17 @@ static Cata(cata_if_push_exit) { // first emitter called for cond expression
   word w = pop1(f);
   k = R(A((*c)->ends = w));
   return pull(f, c, k); }
+
 static Cata(cata_if_pop_exit) { // last emitter called for cond expression
   (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
   return pull(f, c, k); }
+
 static Cata(cata_if_pop_branch) { // last emitter called for a branch
   k[-2].ap = cond; // pops next branch address off env stack alts
   k[-1].x = A((*c)->alts);
   (*c)->alts = B((*c)->alts);
   return pull(f, c, k - 2); }
+
 static Cata(cata_if_push_branch) {
   f = g_cons_c(f, W(k), (*c)->alts);
   if (!g_ok(f)) return 0;
@@ -219,7 +224,7 @@ static Ana(ana_mac, word b) {
   f = g_cons_stack(f, 1, 0);
   f = g_cons_stack(f, 0, 1);
   f = g_cons_stack(f, 1, 0);
-  f = g_eval_c(f, yieldi);
+  f = g_eval_c(f, g_yield);
   m = g_ok(f) ? analyze(f, c, m, pop1(f)) : 0;
   return m; }
 
@@ -493,7 +498,7 @@ static g_core *mo_c(core *f, size_t n) {
 NoInline Vm(ev0) {
   Ip++;
   Pack(f);
-  f = g_eval_c(f, yieldi);
+  f = g_eval_c(f, g_yield);
   if (!g_ok(f)) return code_of(f);
   Unpack(f);
   return Continue(); }

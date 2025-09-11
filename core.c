@@ -101,7 +101,7 @@ g_core *g_ini() {
   f = g_strof_c(f, g_version);
   f = g_ini_def_c(f, "version", pop1(f));
 
-  static cell bif_yield[] = { {yieldi}, {.m = bif_yield} };
+  static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
   f->ip = bif_yield;
 
 #define insts(_) _(free_variable) _(ret) _(ap) _(tap) _(apn) _(tapn) _(jump) _(cond) _(ref) _(imm) _(drop1) _(curry) _(defglob) _(late_bind) _(ret0)

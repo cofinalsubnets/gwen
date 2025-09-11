@@ -1,4 +1,4 @@
-default_target: test
+default: test
 
 # name of this file
 m=Makefile

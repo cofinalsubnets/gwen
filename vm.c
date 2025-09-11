@@ -97,7 +97,7 @@ Vm(symbolp) { return Sp[0] = symp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 
 
-Vm(yieldi) {
+Vm(g_yield) {
   Ip = Ip[1].m;
   Pack(f);
   return YieldStatus; }

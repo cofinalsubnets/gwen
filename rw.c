@@ -29,7 +29,6 @@ static g_core
   *read_string(core*, input*, char),
   *read_atom(core*, input*);
 
-
 static Inline g_core *rquote(core *f, input *i) {
   f = p_read1(f, i);
   f = pushc(f, 1, nil);
@@ -46,8 +45,8 @@ static g_core *p_read1(core *f, input* i) {
     case '(':  return reads(f, i);
     case ')':  return pushc(f, 1, nil);
     case '"':  return read_string(f, i, '"');
-    default:   return p_in_ungetc(i, c),
-                      read_atom(f, i); } }
+    default:   p_in_ungetc(i, c);
+               return read_atom(f, i); } }
 
 static g_core *reads(core *f, input* i) {
   if (!g_ok(f)) return f;
@@ -64,7 +63,7 @@ static g_core *g_buf_new(g_core *f) {
     string *o = (string*) f->hp;
     f->hp += Width(string) + 1;
     ini_str(o, sizeof(word));
-    *--f->sp = word(o); }
+    push1(f, o); }
   return f; }
 
 static g_core *g_buf_grow(g_core *f) {
@@ -119,12 +118,12 @@ Vm(read0) {
   Pack(f);
   f = p_read1f(f, stdin);
   int s = code_of(f);
-  if (s == Eof) return // no error but end of file
-    f = core_of(f),
-    Unpack(f),
-    Sp[0] = nil,
-    Ip++,
-    Continue();
+  if (s == Eof) { // no error but end of file
+    f = core_of(f);
+    Unpack(f);
+    Sp[0] = nil;
+    Ip += 1;
+    return Continue(); }
 
   if (s != Ok) return s; // or was there an error?
   // no error and got a value on stack
@@ -157,8 +156,8 @@ Vm(readf) {
   if (!g_ok(f)) return code_of(f);
   Unpack(f);
   Sp[1] = Sp[0];
-  Sp++;
-  Ip++;
+  Sp += 1;
+  Ip += 1;
   return Continue(); }
 
 #define ti(i) ((text_input*)(i))
@@ -171,7 +170,9 @@ static int p_text_getc(input *i) {
 static int p_text_ungetc(input *i, int _) {
   text_input *t = ti(i);
   int idx = t->i;
-  return idx = idx ? idx - 1 : idx, t->i = idx, t->text[idx]; }
+  idx = idx ? idx - 1 : idx;
+  t->i = idx;
+  return t->text[idx]; }
 
 static int p_text_eof(input *i) { return !ti(i)->text[ti(i)->i]; }
 
@@ -181,8 +182,16 @@ g_core *p_readcs(g_core *f, const char *cs) {
 
 void transmit(core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
-  else if (datp(x)) typof(x)->em(f, out, x);
+  else if (datp(x)) typ(x)->em(f, out, x);
   else fprintf(out, "#%lx", (long) x); }
 
-Vm(prc) { word w = *Sp; return putc(getnum(w), stdout), Ip++, Continue(); }
-Vm(dot) { return transmit(f, stdout, Sp[0]), Ip++, Continue(); }
+Vm(prc) {
+  word w = *Sp;
+  putc(getnum(w), stdout);
+  Ip += 1;
+  return Continue(); }
+
+Vm(dot) {
+  transmit(f, stdout, Sp[0]);
+  Ip += 1;
+  return Continue(); }

@@ -9,9 +9,10 @@ typedef intptr_t g_word;
 typedef struct g_core g_core;
 
 typedef enum g_status {
-  g_status_ok,
-  g_status_oom,
-  g_status_eof,
+  g_status_ok = 0,
+  g_status_oom = 1,
+  g_status_err = 2,
+  g_status_eof = 3,
 } g_status;
 
 void

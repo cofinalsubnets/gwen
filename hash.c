@@ -5,7 +5,7 @@ uintptr_t hash(g_core *f, g_word x) {
   if (nump(x)) {
     const int shift = sizeof(word) * 4;
     return x *= mix, (x << shift) | (x >> shift); }
-  if (datp(x)) return typof(x)->xx(f, x);
+  if (datp(x)) return typ(x)->xx(f, x);
   if (!owns(f, x)) return mix ^ (mix * x);
 
   // it's a function, hash by length

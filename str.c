@@ -1,4 +1,5 @@
 #include "i.h"
+#define max(a, b) ((a)>(b)?(a):(b))
 
 Vm(stringp) { return Sp[0] = strp(Sp[0]) ? putnum(-1) : nil, Ip += 1, Continue(); }
 static uintptr_t xx_str(core *v, word _);

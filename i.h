@@ -13,41 +13,39 @@
 #define g_malloc malloc
 #define g_free free
 
-#define avail(f) (f->sp-f->hp)
-#define max(a, b) ((a)>(b)?(a):(b))
 #define min(a, b) ((a)<(b)?(a):(b))
 
 #define Eof g_status_eof
 #define Oom g_status_oom
 #define Ok g_status_ok
 
-#define W(_) ((word)(_))
-#define Z W
+#define putnum(_) (((word)(_)<<1)|1)
+#define getnum(_) ((word)(_)>>1)
+#define nil putnum(0)
+
+#define str(x) ((g_string*)(x))
+#define sym(x) ((g_symbol*)(x))
+#define two(x) ((g_pair*)(x))
+#define cell(x) ((cell*)(x))
+#define tbl(x) ((g_table*)(x))
+#define word(x) ((g_word)(x))
+#define W word
 #define R(_) ((cell*)(_))
 #define Width(_) b2w(sizeof(_))
-#define CP(x) cp(f, W(x), p0, t0)
 #define within(a, b, c) (W(a)<=W(b)&&W(b)<W(c))
 #define owns(f, x) within(f->pool, x, f->pool + f->len)
 #define datp(_) (R(_)->ap==data)
-#define typof(_) R(_)[1].typ
+#define typ(_) R(_)[1].typ
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
 #define MM(f,r) ((f->safe=&((struct root){(word*)(r),f->safe})))
 #define UM(f) (f->safe=f->safe->next)
 #define pop1(f) (*(f)->sp++)
 #define push1(f, x) (*--(f)->sp=(word)(x))
 #define nump(_) (W(_)&1)
-#define homp(_) (!nump(_))
+#define celp(_) (!nump(_))
+#define homp celp
 
-#define str(x) ((g_string*)(x))
-#define sym(x) ((g_symbol*)(x))
-#define two(x) ((g_pair*)(x))
-#define ptr(x) ((g_word*)(x))
-#define tbl(x) ((g_table*)(x))
-#define word(x) W(x)
 
-#define putnum(_) (((word)(_)<<1)|1)
-#define nil putnum(0)
-#define getnum(_) ((word)(_)>>1)
 #define nilp(_) (W(_)==nil)
 #define A(o) two(o)->a
 #define B(o) two(o)->b
@@ -65,10 +63,13 @@
 #ifndef g_version
 #define g_version ""
 #endif
+
+typedef int g_ret_type;
+
 // theres a big benefit in speed from tail call optimization but not all platforms support it
 #ifdef NTCO
 #define YieldStatus g_status_eof
-#define Vm(n, ...) int n(core *f, ##__VA_ARGS__)
+#define Vm(n, ...) g_ret_type n(core *f, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
 #define Hp f->hp
 #define Sp f->sp
@@ -78,7 +79,7 @@
 #define Continue() g_status_ok
 #else
 #define YieldStatus g_status_ok
-#define Vm(n, ...) int n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
+#define Vm(n, ...) g_ret_type n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
@@ -125,15 +126,28 @@ typedef struct g_pair {
   word a, b;
 } pair;
 
-// runtime core data structure -- 1 core = 1 thread of execution
+enum g_var {
+  g_var_ip,
+  g_var_dict,
+  g_var_mac,
+  g_var_ev,
+  g_var_qt,
+  g_var_do,
+  g_var_de,
+  g_var_if,
+  g_var_la,
+  g_var_N, };
+
 struct g_core {
   // vm registers
-  cell *ip;
   word *hp, *sp;
-
-  // variables
-  table *dict, *macro;
-  symbol *eval, *quote, *begin, *let, *cond, *lambda;
+  union {
+    struct {
+      cell *ip;
+      table *dict, *macro;
+      symbol *eval, *quote, *begin, *let, *cond, *lambda;
+    };
+    g_word vars[g_var_N]; };
 
   // symbol tree
   symbol *symbols;
@@ -149,21 +163,15 @@ struct g_core {
     void (*d)(g_core*, g_word);
     struct dtor *next; } *dtors; };
 
-typedef bool g_mtd_eq_t(g_core*, g_word, g_word);
-typedef g_word g_mtd_gc_cp_t(g_core*, g_word, g_word*, g_word*);
-typedef void
-  g_mtd_gc_wk_t(g_core*, g_word, g_word*, g_word*),
-  g_mtd_em_t(g_core*, FILE*, g_word);
-typedef uintptr_t g_mtd_xx_t(g_core*, g_word);
-typedef g_core *g_mtd_show_t(g_core*, g_word);
 // primitive type method tables
-struct methods {
-  g_mtd_gc_cp_t *cp; // for gc
-  g_mtd_gc_wk_t *wk; // for gc
-  g_mtd_eq_t *eq;         // check equality with another object of same type
-  g_mtd_em_t *em;        // print it // replace this with stringify...
-  g_mtd_xx_t *xx;               // hash it
-  g_mtd_show_t *show; };
+typedef struct methods {
+  g_word (*cp)(g_core*, g_word, g_word*, g_word*); // for gc
+  void (*wk)(g_core*, g_word, g_word*, g_word*);
+  bool (*eq)(g_core*, g_word, g_word);
+  void (*em)(g_core*, FILE*, g_word);
+  uintptr_t (*xx)(g_core*, g_word);
+  g_core (*show)(g_core*, g_word);
+} g_type;
 
 typedef struct g_input {
   int (*getc)(struct g_input*),
@@ -173,7 +181,6 @@ typedef struct g_input {
 
 typedef struct file_input { input in; FILE *file; } file_input;
 typedef struct text_input { input in; const char *text; int i; } text_input;
-
 
 bool neql(g_core*, g_word, g_word),
      eql(core*, word, word);
@@ -198,45 +205,48 @@ vm data, bnot, rng, nullp, sysclock, symnom, dot,
    ssub, sget, slen, scat, prc, cons, car, cdr,
    lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
    seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-   read0, readf, p_isatty, yieldi, defglob, drop1, imm, ref,
+   read0, readf, p_isatty, g_yield, defglob, drop1, imm, ref,
    free_variable, curry, ev0, ret0,
    cond, jump, ap, tap, apn, tapn, ret, late_bind;
 
-extern type str_type, two_type, str_type, sym_type, tbl_type;
-static Inline bool twop(word _) { return homp(_) && typof(_) == &two_type; }
-static Inline bool strp(word _) { return homp(_) && typof(_) == &str_type; }
-static Inline bool tblp(word _) { return homp(_) && typof(_) == &tbl_type; }
-static Inline bool symp(word _) { return homp(_) && typof(_) == &sym_type; }
-
-
 static Inline void *bump(g_core *f, size_t n) {
   void *x = f->hp;
-  return f->hp += n,
-         x; }
+  f->hp += n;
+  return x; }
 
+extern type str_type, two_type, str_type, sym_type, tbl_type, num_type, cel_type;
+static Inline bool twop(word _) { return celp(_) && typ(_) == &two_type; }
+static Inline bool strp(word _) { return celp(_) && typ(_) == &str_type; }
+static Inline bool tblp(word _) { return celp(_) && typ(_) == &tbl_type; }
+static Inline bool symp(word _) { return celp(_) && typ(_) == &sym_type; }
 static Inline void ini_pair(g_pair *w, g_word a, g_word b) {
   w->ap = data;
   w->typ = &two_type;
   w->a = a;
   w->b = b; }
+
 static Inline void ini_table(g_table *t, uintptr_t len, uintptr_t cap, struct entry**tab) {
   t->ap = data;
   t->typ = &tbl_type;
   t->len = len;
   t->cap = cap;
   t->tab = tab; }
+
 static Inline void ini_str(g_string *s, uintptr_t len) {
   s->ap = data;
   s->typ = &str_type;
   s->len = len; }
 
+
 static Inline size_t b2w(size_t b) {
-  size_t q = b / sizeof(word), r = b % sizeof(word);
+  size_t q = b / sizeof(word),
+         r = b % sizeof(word);
   return q + (r ? 1 : 0); }
 
 static Inline struct tag { cell *null, *head, end[]; } *ttag(cell*k) {
   while (k->x) k++;
   return (struct tag*) k; }
+
 // align bytes up to the nearest word
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");

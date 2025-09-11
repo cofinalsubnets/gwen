@@ -1,4 +1,6 @@
 #include "i.h"
+#define avail(f) (f->sp-f->hp)
+#define CP(x) cp(f, W(x), p0, t0)
 static g_core *please(g_core*, uintptr_t);
 
 static core *pushcr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
@@ -29,7 +31,7 @@ g_core *g_cells(g_core *f, size_t n) {
   if (g_ok(f)) {
     cell *k = (cell*) f->hp;
     f->hp += n;
-    *--f->sp = (word) k; }
+    push1(f, k); }
   return f; }
 
 Inline g_core *g_have(g_core *f, uintptr_t n) {
@@ -102,21 +104,15 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
   f->hp = f->cp = p1;
   f->symbols = 0;
   // copy variables
-  f->ip     = (cell*)   CP(f->ip);
-  f->dict   = (table*)  CP(f->dict);
-  f->macro  = (table*)  CP(f->macro);
-  f->quote  = (symbol*) CP(f->quote);
-  f->begin  = (symbol*) CP(f->begin);
-  f->let    = (symbol*) CP(f->let);
-  f->cond   = (symbol*) CP(f->cond);
-  f->lambda = (symbol*) CP(f->lambda);
+  for (int n = 0; n < g_var_N; n++)
+    f->vars[n] = CP(f->vars[n]);
   // copy stack
   while (sn--) *sp1++ = CP(*sp0++);
   // copy protected values
   for (struct root *r = f->safe; r; *r->ptr = CP(*r->ptr), r = r->next);
   // copy all reachable values using cheney's method
   for (cell *k; (k = R(f->cp)) < R(f->hp);)
-    if (datp(k)) typof(k)->wk(f, W(k), p0, t0); // is data
+    if (datp(k)) typ(k)->wk(f, W(k), p0, t0); // is data
     else { while (k->x) k->x = CP(k->x), k++;     // is thread
            f->cp = (word*) k + 2; }
   // run destructors ...
@@ -139,7 +135,7 @@ NoInline word cp(core *v, word x, word *p0, word *t0) {
   // if the cell holds a pointer to the new space then return the pointer
   if (homp(x) && owns(v, x)) return x;
   // if it's data then call the given copy function
-  if (datp(src)) return typof(src)->cp(v, (word) src, p0, t0);
+  if (datp(src)) return typ(src)->cp(v, (word) src, p0, t0);
   // it's a thread, find the end to find the head
   struct tag *t = ttag(src);
   cell *ini = t->head, *d = bump(v, t->end - ini), *dst = d;
