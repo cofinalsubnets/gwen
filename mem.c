@@ -3,23 +3,24 @@
 #define CP(x) cp(f, W(x), p0, t0)
 static g_core *please(g_core*, uintptr_t);
 
+void *g_malloc(g_core *f, size_t n) { return malloc(n); }
+void g_free(g_core *f, void *x) { return free(x); }
+
 static core *g_pushr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
   word x = va_arg(xs, word);
   avec(f, x, f = g_pushr(f, m, n + 1, xs));
-  if (g_ok(f)) push1(f, x);
+  if (g_ok(f)) *--f->sp = x;
   return f; }
 
 g_core *g_push(core *f, uintptr_t m, ...) {
-  va_list xs;
-  va_start(xs, m);
   if (g_ok(f)) {
-    if (avail(f) < m) f = g_pushr(f, m, 0, xs);
-    else {
-      f->sp -= m;
-      for (word n = 0; n < m; n++)
-        f->sp[n] = va_arg(xs, word); } }
-  va_end(xs);
+    va_list xs;
+    va_start(xs, m);
+    g_word n = 0;
+    if (avail(f) < m) f = g_pushr(f, m, n, xs);
+    else for (f->sp -= m; n < m; f->sp[n++] = va_arg(xs, word));
+    va_end(xs); }
   return f; }
 
 g_core *g_cells(g_core *f, size_t n) {
@@ -27,11 +28,13 @@ g_core *g_cells(g_core *f, size_t n) {
   if (g_ok(f)) {
     cell *k = (cell*) f->hp;
     f->hp += n;
-    push1(f, k); }
+    *--f->sp = word(k); }
   return f; }
 
 Inline g_core *g_have(g_core *f, uintptr_t n) {
-  return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
+  if (g_ok(f))
+    f = avail(f) < n ? please(f, n) : f;
+  return f; }
 
 static NoInline void copy_from(core*, word*, uintptr_t);
 // garbage collector
@@ -74,14 +77,14 @@ NoInline core *please(core *f, uintptr_t req0) {
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
   else return f; // no change reqired, hopefully the most common case
   // at this point we got a new target length and are gonna try and resize
-  word *dest2 = g_malloc(len1 * 2 * sizeof(word)); // allocate pool with the new target size
+  word *dest2 = f->malloc(f, len1 * 2 * sizeof(word)); // allocate pool with the new target size
   if (!dest2) return req <= total ? f : encode(f, Oom); // if this fails still return true if the original pool is not too small
   // we got the new pool so copy again and return true
   f->len = len1;            // set core variables referring to new pool
   f->pool = dest2;          //
   f->loop = dest2 + len1;   //
   copy_from(f, dest, len0); // do second copy
-  g_free(min(src, dest));  // free original pool
+  f->free(f, min(src, dest));  // free original pool
   f->t0 = g_clock();       // set last gc timestamp
   return f; }            // size successfully adjusted
 
@@ -129,7 +132,7 @@ NoInline word cp(core *v, word x, word *p0, word *t0) {
   cell *src = (cell*) x;
   x = src->x;
   // if the cell holds a pointer to the new space then return the pointer
-  if (homp(x) && owns(v, x)) return x;
+  if (!nump(x) && owns(v, x)) return x;
   // if it's data then call the given copy function
   if (datp(src)) return typ(src)->cp(v, (word) src, p0, t0);
   // it's a thread, find the end to find the head
@@ -146,4 +149,3 @@ NoInline Vm(gc, uintptr_t n) {
   if (!g_ok(f)) return f;
   Unpack(f);
   return Continue(); }
-

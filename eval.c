@@ -55,9 +55,9 @@ static g_core *g_cons_c(g_core *f, g_word a, g_word b) {
   return g_cons_l(f); }
 
 
-static word lassoc(core*, word, word);
+static word assoc(core*, word, word);
 static word ldels(core*, word, word);
-static long stack_index_of_symbol(core*, struct env*, word);
+static word memq(core*, word, word);
 static size_t llen(word);
 
 
@@ -261,7 +261,7 @@ static Ana(ana_var, env *d) {
     x = x ? ana_i2(f, c, m, free_variable, x) : x;
     return x;  }
   // defined as a function by a local let binding?
-  word y = lassoc(f, d->lams, x);
+  word y = assoc(f, d->lams, x);
   if (y) {
     m = ana_i2(f, c, m, late_bind, y);
     if (!m) return m;
@@ -273,7 +273,7 @@ static Ana(ana_var, env *d) {
     f = g_push(f, 3, c2var, x, d->stack);
     return g_ok(f) ? m + 2 : 0; }
   // bound on the stack as a closure or positional argument?
-  if (stack_index_of_symbol(f, d, x) >= 0) {
+  if (memq(f, d->imps, x) || memq(f, d->args, x)) {
     if (*c != d) // if we have found the variable in an enclosing scope then import it
       f = g_cons_c(f, x, (*c)->imps),
       x = g_ok(f) ? pop1(f) : 0,
@@ -416,7 +416,7 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
     // if lambda then recompile with the explicit closure
     // and put in arg list and lam list (latter is used for lazy binding)
     if (lambp(f, A(def))) {
-      d = lassoc(f, lam, A(nom));
+      d = assoc(f, lam, A(nom));
       f = ana_lam(f, c, BB(d), BA(def));
       if (!g_ok(f)) return fail();
       else A(def) = B(d) = pop1(f); }
@@ -461,13 +461,19 @@ static Cata(c2var) {
   k[-1].x = putnum(i);
   return pull(f, c, k - 2); }
 
+static long index_of_symbol(core *f, env *c, word var) {
+  long l, i = 0;
+  for (l = c->imps; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  for (l = c->args; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  return -1; }
+
 // emit stack reference instruction
 static Cata(cata_var) {
   word var = *f->sp++, // variable name
        ins = llen(*f->sp++), // stack inset
-       idx = stack_index_of_symbol(f, *c, var);
+       i = index_of_symbol(f, *c, var);
   k[-2].ap = ref;
-  k[-1].x = putnum(idx + ins);
+  k[-1].x = putnum(i + ins);
   return pull(f, c, k - 2); }
 
 static Inline Cata(pull) {
@@ -566,17 +572,20 @@ static g_core *enscope(core *f, env* par, word args, word imps) {
     f = g_push(f, 1, c); }
   return f; }
 
-static word lassoc(core *f, word l, word k) {
+static word assoc(core *f, word l, word k) {
   for (; twop(l); l = B(l)) if (eql(f, k, AA(l))) return A(l);
   return 0; }
 
+static word memq(core *f, word l, word k) {
+  for (; twop(l); l = B(l)) if (eql(f, k, A(l))) return l;
+  return 0; }
 
 // DEFINE
 // let expressions
 static word ldels(core *f, word lam, word l) {
   if (!twop(l)) return nil;
   word m = ldels(f, lam, B(l));
-  if (!lassoc(f, lam, A(l))) B(l) = m, m = l;
+  if (!assoc(f, lam, A(l))) B(l) = m, m = l;
   return m; }
 
 // list length
@@ -585,8 +594,3 @@ static size_t llen(word l) {
   while (twop(l)) n++, l = B(l);
   return n; }
 
-static long stack_index_of_symbol(core *f, env *c, word var) {
-  long l, i = 0;
-  for (l = c->imps; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  for (l = c->args; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  return -1; }

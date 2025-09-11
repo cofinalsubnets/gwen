@@ -1,4 +1,12 @@
 #include "i.h"
+
+typedef struct g_input {
+  int (*getc)(struct g_input*),
+      (*ungetc)(struct g_input*, int),
+      (*eof)(struct g_input*);
+} input;
+typedef struct text_input { input in; const char *text; int i; } text_input;
+typedef struct file_input { input in; FILE *file; } file_input;
 #define p_getc(i) getc(i)
 #define p_ungetc(i, c) ungetc(c, i)
 #define p_eof(i) feof(i)
@@ -63,7 +71,7 @@ static g_core *g_buf_new(g_core *f) {
     string *o = (string*) f->hp;
     f->hp += Width(string) + 1;
     ini_str(o, sizeof(word));
-    push1(f, o); }
+    *--f->sp = word(o); }
   return f; }
 
 static g_core *g_buf_grow(g_core *f) {
@@ -123,10 +131,6 @@ Vm(read0) {
     Sp[0] = nil;
     Ip += 1;
     return Continue(); }
-
-  if (!g_ok(f)) return f; // or was there an error?
-  // no error and got a value on stack
-  // make a list of it
   f = g_push(f, 1, nil);
   f = g_cons_r(f);
   if (!g_ok(f)) return f;

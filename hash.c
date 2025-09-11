@@ -50,7 +50,7 @@ static word cp_tbl(core *f, word x, word *p0, word *t0) {
       d->next = last,
       last = d,
       s = s->next);
-  return (word) dst; }
+  return word(dst); }
 
 // FIXME very poor hashing method :(
 static uintptr_t xx_tbl(core *f, word h) { return mix; }
@@ -97,8 +97,12 @@ NoInline g_core *g_hash_put(g_core *f) {
 
 static struct entry *table_delete_r(core *f, table *t, word k, word *v, struct entry *e) {
   if (!e) return e;
-  if (eql(f, e->key, k)) return t->len--, *v = e->val, e->next;
-  return e->next = table_delete_r(f, t, k, v, e->next), e; }
+  if (eql(f, e->key, k)) {
+    t->len--;
+    *v = e->val;
+    return e->next; }
+  e->next = table_delete_r(f, t, k, v, e->next);
+  return e; }
 
 static NoInline word table_delete(core *f, table *t, word k, word v) {
   word idx = index_of_key(f, t, k);

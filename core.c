@@ -1,30 +1,28 @@
 #include "i.h"
+#define g_push1(f, x) g_push((f), 1, (x))
 
-static g_core *g_strof_c(g_core *f, const char *cs) {
-  size_t nbytes = strlen(cs),
-         nwords = b2w(nbytes),
-         req = Width(string) + nwords + 1;
-  f = g_have(f, req);
+static g_core *g_strof(g_core *f, const char *cs) {
+  size_t bytes = strlen(cs),
+         words = b2w(bytes),
+         req = Width(string) + words;
+  f = g_cells(f, req);
   if (g_ok(f)) {
-    g_string *o = (g_string*) f->hp;
-    f->hp += Width(string) + nwords;
-    ini_str(o, nbytes);
-    memcpy(o->text, cs, nbytes);
-    push1(f, o); }
+    g_string *o = str(f->sp[0]);
+    ini_str(o, bytes);
+    memcpy(o->text, cs, bytes); }
   return f; }
 
-static Inline g_core *g_symof_c(g_core *f, const char *nom) {
-  f = g_strof_c(f, nom);
+static g_core *g_symof(g_core *f, const char *nom) {
+  f = g_strof(f, nom);
   return g_intern(f); }
 
 static g_core *g_ini_def_c(g_core *f, const char *k, word v) {
-  f = g_push(f, 1, v);
-  f = g_symof_c(f, k);
-  f = g_push(f, 1, f->dict);
+  f = g_push1(f, v);
+  f = g_symof(f, k);
+  f = g_push1(f, f->dict);
   f = g_hash_put(f);
   if (g_ok(f)) f->sp++;
   return f; }
-
 
 static g_core *g_tbl_new(g_core *f) {
   f = g_cells(f, Width(table) + 1);
@@ -37,48 +35,53 @@ static g_core *g_tbl_new(g_core *f) {
 
 g_core *g_main(g_core *f, const char *p, const char **av) {
   int n = 0;
-  for (f = g_read_cs(f, p);   av[n]; f = g_strof_c(f, av[n++]));
+  for (f = g_read_cs(f, p);   av[n]; f = g_strof(f, av[n++]));
   for (f = g_push(f, 1, nil); n--;   f = g_cons_r(f));
-  f = g_push(f, 1, nil);
+  f = g_push1(f, nil);
   f = g_cons_r(f);
-  f = g_push(f, 1, f->quote);
+  f = g_push1(f, f->quote);
   f = g_cons_l(f);
-  f = g_push(f, 1, nil);
+  f = g_push1(f, nil);
   f = g_cons_r(f);
   f = g_cons_r(f);
   f = g_ana(f, g_yield);
-  if (g_ok(f))
-    f = f->ip->ap(f, f->ip, f->hp, f->sp);
+  f = g_ok(f) ? f->ip->ap(f, f->ip, f->hp, f->sp) : f;
   return f; }
 
 void g_fin(g_core *f) {
   if ((f = core_of(f))) {
     for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
-    g_free(min(f->pool, f->loop));
-    g_free(f); } }
+    f->free(f, min(f->pool, f->loop));
+    f->free(f, f); } }
 
-g_core *g_ini() {
-  g_core *f = g_malloc(sizeof(g_core));
-  if (!f) return encode(NULL, g_status_oom);
+g_core *g_ini() { return g_ini_m(g_malloc, g_free); }
+
+g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
+  g_core *f = g_malloc(NULL, sizeof(g_core));
+  if (!f) return encode(f, g_status_oom);
 
   memset(f, 0, sizeof(core));
   size_t len = 1;
-  word *pool = g_malloc(2 * len * sizeof(word));
+  word *pool = g_malloc(f, 2 * len * sizeof(word));
   if (!pool) return encode(f, g_status_oom);
 
   f->t0 = g_clock();
   f->len = len;
   f->hp = f->pool = pool;
   f->sp = f->loop = pool + len;
+  f->malloc = g_malloc;
+  f->free = g_free;
+  static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
+  f->ip = bif_yield;
 
   f = g_tbl_new(f);
   f = g_tbl_new(f);
-  f = g_symof_c(f, "ev");
-  f = g_symof_c(f, ":");
-  f = g_symof_c(f, "?");
-  f = g_symof_c(f, "`");
-  f = g_symof_c(f, ",");
-  f = g_symof_c(f, "\\");
+  f = g_symof(f, "ev");
+  f = g_symof(f, ":");
+  f = g_symof(f, "?");
+  f = g_symof(f, "`");
+  f = g_symof(f, ",");
+  f = g_symof(f, "\\");
 
   if (g_ok(f))
     f->lambda = sym(pop1(f)),
@@ -92,11 +95,8 @@ g_core *g_ini() {
 
   f = g_ini_def_c(f, "globals", word(f->dict));
   f = g_ini_def_c(f, "macros", word(f->macro));
-  f = g_strof_c(f, g_version);
+  f = g_strof(f, g_version);
   f = g_ini_def_c(f, "version", pop1(f));
-
-  static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
-  f->ip = bif_yield;
 
 #define insts(_) _(free_variable) _(ret) _(ap) _(tap) _(apn) _(tapn) _(jump) _(cond) _(ref) _(imm) _(drop1) _(curry) _(defglob) _(late_bind) _(ret0)
 #define i_entry(i)        f = g_ini_def_c(f, "i_"#i, W(i));

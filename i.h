@@ -1,3 +1,4 @@
+// thanks !!
 #include "gw.h"
 #include <stdarg.h>
 #include <string.h>
@@ -10,9 +11,6 @@
 
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
-
-#define g_malloc malloc
-#define g_free free
 
 #define min(a, b) ((a)<(b)?(a):(b))
 
@@ -41,11 +39,9 @@
 #define MM(f,r) ((f->safe=&((struct root){(word*)(r),f->safe})))
 #define UM(f) (f->safe=f->safe->next)
 #define pop1(f) (*(f)->sp++)
-#define push1(f, x) (*--(f)->sp=(word)(x))
 #define nump(_) (W(_)&1)
 #define celp(_) (!nump(_))
 #define homp celp
-
 
 #define nilp(_) (W(_)==nil)
 #define A(o) two(o)->a
@@ -59,7 +55,6 @@
 #define mix ((uintptr_t)2708237354241864315)
 #define Have(n) if (Sp - Hp < n) return Ap(gc, f, n)
 #define Have1() if (Sp == Hp) return Ap(gc, f, 1)
-
 
 #ifndef g_version
 #define g_version ""
@@ -76,15 +71,10 @@ typedef struct g_string g_string;
 typedef struct g_pair g_pair;
 typedef struct g_symbol g_symbol;
 typedef struct g_table g_table;
-typedef union g_cell g_cell;
-char *g_gs2cs(g_string*);
-g_core *g_cs2gs(char*);
-
-// thanks !!
-typedef g_core p_core, core;
+typedef union g_cell g_cell, cell;
+typedef g_core core;
 typedef g_word word;
-typedef struct methods methods, type, g_type;
-typedef union g_cell cell, thread;
+typedef struct g_type methods, type, g_type;
 
 typedef Vm(vm);
 union g_cell { vm *ap; word x; cell *m; methods *typ; };
@@ -146,10 +136,14 @@ struct g_core {
   struct dtor {
     g_word x;
     void (*d)(g_core*, g_word);
-    struct dtor *next; } *dtors; };
+    struct dtor *next; } *dtors;
+  void *(*malloc)(g_core*, size_t),
+       (*free)(g_core*, void*); };
 
+void *g_libc_malloc(g_core*, size_t),
+     g_libc_free(g_core*, void*);
 // primitive type method tables
-typedef struct methods {
+typedef struct g_type {
   g_word (*cp)(g_core*, g_word, g_word*, g_word*); // for gc
   void (*wk)(g_core*, g_word, g_word*, g_word*);
   bool (*eq)(g_core*, g_word, g_word);
@@ -157,15 +151,6 @@ typedef struct methods {
   uintptr_t (*xx)(g_core*, g_word);
   g_core (*show)(g_core*, g_word);
 } g_type;
-
-typedef struct g_input {
-  int (*getc)(struct g_input*),
-      (*ungetc)(struct g_input*, int),
-      (*eof)(struct g_input*);
-} input;
-
-typedef struct file_input { input in; FILE *file; } file_input;
-typedef struct text_input { input in; const char *text; int i; } text_input;
 
 bool neql(g_core*, g_word, g_word),
      eql(core*, word, word);
