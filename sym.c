@@ -19,7 +19,7 @@ static symbol *intern_seek(core *v, string *b, symbol **y) {
           strncmp(a->text, b->text, a->len);
   return i == 0 ? z : intern_seek(v, b, i < 0 ? &z->l : &z->r); }
 
-g_core *g_intern_c(g_core *f) {
+g_core *g_intern(g_core *f) {
   f = g_have(f, Width(symbol));
   if (g_ok(f)) f->sp[0] = (g_word) intern_seek(f, str(f->sp[0]), &f->symbols);
   return f; }

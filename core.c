@@ -15,13 +15,13 @@ static g_core *g_strof_c(g_core *f, const char *cs) {
 
 static Inline g_core *g_symof_c(g_core *f, const char *nom) {
   f = g_strof_c(f, nom);
-  return g_intern_c(f); }
+  return g_intern(f); }
 
 static g_core *g_ini_def_c(g_core *f, const char *k, word v) {
-  f = pushc(f, 1, v);
+  f = g_push(f, 1, v);
   f = g_symof_c(f, k);
-  f = pushc(f, 1, f->dict);
-  f = g_hash_put_c(f);
+  f = g_push(f, 1, f->dict);
+  f = g_hash_put(f);
   if (g_ok(f)) f->sp++;
   return f; }
 
@@ -35,23 +35,18 @@ static g_core *g_tbl_new(g_core *f) {
     ini_table(t, 0, 1, tab); }
   return f; }
 
-static Vm(g_vm_fin) {
-  int s = code_of(f);
-  g_fin(f);
-  return s; }
-
-g_core *g_run(g_core *f, const char *p, const char **av) {
+g_core *g_main(g_core *f, const char *p, const char **av) {
   int n = 0;
-  for (f = p_readcs(f, p);   av[n]; f = g_strof_c(f, av[n++]));
-  for (f = pushc(f, 1, nil); n--;   f = g_cons_stack(f, 1, 0));
-  f = pushc(f, 1, nil);
+  for (f = g_read_cs(f, p);   av[n]; f = g_strof_c(f, av[n++]));
+  for (f = g_push(f, 1, nil); n--;   f = g_cons_stack(f, 1, 0));
+  f = g_push(f, 1, nil);
   f = g_cons_stack(f, 1, 0);
-  f = pushc(f, 1, f->quote);
+  f = g_push(f, 1, f->quote);
   f = g_cons_stack(f, 0, 1);
-  f = pushc(f, 1, nil);
+  f = g_push(f, 1, nil);
   f = g_cons_stack(f, 1, 0);
   f = g_cons_stack(f, 1, 0);
-  f = g_eval_c(f, g_vm_fin);
+  f = g_eval(f, g_yield);
   return f; }
 
 void g_fin(g_core *f) {
@@ -60,8 +55,6 @@ void g_fin(g_core *f) {
     g_free(min(f->pool, f->loop));
     g_free(f); } }
 
-
-static cell bif_fin[] = { {g_vm_fin} };
 
 g_core *g_ini() {
   g_core *f = g_malloc(sizeof(g_core));

@@ -67,24 +67,12 @@
 typedef int g_ret_type;
 
 // theres a big benefit in speed from tail call optimization but not all platforms support it
-#ifdef NTCO
-#define YieldStatus g_status_eof
-#define Vm(n, ...) g_ret_type n(core *f, ##__VA_ARGS__)
-#define Ap(g, f, ...) g(f, ##__VA_ARGS__)
-#define Hp f->hp
-#define Sp f->sp
-#define Ip f->ip
-#define Pack(f) ((void)0)
-#define Unpack(f) ((void)0)
-#define Continue() g_status_ok
-#else
 #define YieldStatus g_status_ok
 #define Vm(n, ...) g_ret_type n(core *f, thread* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
 #define Continue() Ap(Ip->ap, f)
-#endif
 
 typedef struct g_string g_string;
 typedef struct g_pair g_pair;
@@ -191,13 +179,15 @@ g_word cp(core*, word, word*, word*);
 g_core *g_have(g_core*, uintptr_t),
        *g_cells(g_core*, size_t),
        *vpushc(core*, uintptr_t, va_list),
-       *pushc(g_core*, uintptr_t, ...),
-       *g_tget(g_core*),
+       *g_push(g_core*, uintptr_t, ...),
        *g_cons_stack(g_core*, int, int),
-       *g_intern_c(g_core*),
-       *g_hash_put_c(g_core*),
-       *g_eval_c(g_core*, vm*),
-       *p_readcs(g_core*, const char*);
+       *g_intern(g_core*),
+       *g_hash_get(g_core*),
+       *g_hash_put(g_core*),
+       *g_list(g_core*, size_t),
+       *g_eval(g_core*, vm*),
+       *g_read_cs(g_core*, const char*);
+#define pushc g_push
 
 Vm(gc, uintptr_t);
 vm data, bnot, rng, nullp, sysclock, symnom, dot,

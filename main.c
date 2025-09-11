@@ -1,7 +1,6 @@
 #include "gw.h"
-#include <stdlib.h>
 
-static const char g_main[] =
+static const char m[] =
 #ifdef g_main_h
 #include g_main_h
 #else
@@ -10,4 +9,7 @@ static const char g_main[] =
 ;
 
 int main(int ac, const char **av) {
-  return g_code_of(g_run(g_ini(), g_main, av)); }
+  g_core *f = g_ini();
+  f = g_main(f, m, av);
+  g_fin(f);
+  return g_code_of(f); }

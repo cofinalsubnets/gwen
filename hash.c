@@ -59,7 +59,7 @@ static uintptr_t xx_tbl(core *f, word h) { return mix; }
 static Inline word index_of_key(core *f, table *t, word k) {
   return (t->cap - 1) & hash(f, k); }
 
-NoInline g_core *g_hash_put_c(g_core *f) {
+NoInline g_core *g_hash_put(g_core *f) {
   if (!g_ok(f)) return f;
   g_table *t = (g_table*) f->sp[0];
   g_word k = f->sp[1], v = f->sp[2], i = index_of_key(f, t, k);
@@ -129,7 +129,7 @@ Vm(tnew) {
   Ip++;
   return Continue(); }
 
-g_core *g_tget(core *f) {
+g_core *g_hash_get(core *f) {
   table *t = (table*) f->sp[1];
   word k = f->sp[2],
        zero = f->sp[0];
@@ -142,7 +142,7 @@ g_core *g_tget(core *f) {
 
 Vm(tget) {
   Pack(f);
-  f = g_tget(f);
+  f = g_hash_get(f);
   Unpack(f);
   Ip += 1;
   return Continue(); }
@@ -150,7 +150,7 @@ Vm(tget) {
 Vm(tset) {
   if (tblp(Sp[0])) {
     Pack(f);
-    f = g_hash_put_c(f);
+    f = g_hash_put(f);
     if (!g_ok(f)) return code_of(f);
     Unpack(f); }
   Ip += 1;

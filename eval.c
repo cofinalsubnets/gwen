@@ -1,7 +1,7 @@
 #include "i.h"
 
 static g_core *g_cons_c(g_core *f, g_word a, g_word b) {
-  f = pushc(f, 2, a, b);
+  f = g_push(f, 2, a, b);
   return g_cons_stack(f, 0, 1); }
 
 static word pushs(core *f, uintptr_t m, ...) {
@@ -12,17 +12,12 @@ static word pushs(core *f, uintptr_t m, ...) {
   return g_ok(f) ? f->sp[0] : 0; }
 
 static g_core *p_ana(g_core*, vm*);
-NoInline g_core *g_eval_c(g_core *f, vm *y) {
+NoInline g_core *g_eval(g_core *f, vm *y) {
   f = p_ana(f, y);
   int s = code_of(f);
   f = core_of(f);
-  if (s == Ok) {
-#ifdef NTCO
-    do s = f->ip->ap(f); while (s == Ok);
-    s = s == Eof ? Ok : s; }
-#else
-    s = f->ip->ap(f, f->ip, f->hp, f->sp); }
-#endif
+  if (s == Ok)
+    s = f->ip->ap(f, f->ip, f->hp, f->sp);
   return encode(f, s); }
 
 struct env;
@@ -71,7 +66,7 @@ static NoInline g_core *p_ana(core *f, vm *y) {
   size_t m = analyze(f, &c, 1, x);
   if (!m) f = encode(f, Oom);
   else {
-    f = pushc(f, 3, cata_ix, y, f->ip);
+    f = g_push(f, 3, cata_ix, y, f->ip);
     f = alloc_thread_c(f, &c, m + 2);
     if (g_ok(f)) {
       cell *k = pull(f, &c, (cell*) pop1(f));
@@ -102,9 +97,9 @@ static NoInline Ana(analyze) {
   // singleton?
   if (!twop(b)) return analyze(f, c, m, a); // value of first element
 
-  f = pushc(f, 3, 0, f->macro, a);
+  f = g_push(f, 3, 0, f->macro, a);
   if (!g_ok(f)) return 0;
-  f = g_tget(f);
+  f = g_hash_get(f);
   x = pop1(f);
   // macro?
   if (x) return ana_mac(f, c, m, x, b);
@@ -194,7 +189,7 @@ static g_core *append(core *f) {
   for (word l; g_ok(f) && twop(f->sp[0]); i++)
     l = B(f->sp[0]),
     f->sp[0] = A(f->sp[0]),
-    f = pushc(f, 1, l);
+    f = g_push(f, 1, l);
   if (!g_ok(f)) return f;
   if (i == 0) return f->sp++, f;
   if (g_ok(f)) f->sp[0] = f->sp[i + 1];
@@ -219,12 +214,12 @@ static size_t ana_seq(core *f, env* *c, size_t m, word x) {
   return m; }
 
 static Ana(ana_mac, word b) {
-  f = pushc(f, 5 , nil, b, f->quote, nil, x);
+  f = g_push(f, 5 , nil, b, f->quote, nil, x);
   f = g_cons_stack(f, 1, 0);
   f = g_cons_stack(f, 1, 0);
   f = g_cons_stack(f, 0, 1);
   f = g_cons_stack(f, 1, 0);
-  f = g_eval_c(f, g_yield);
+  f = g_eval(f, g_yield);
   m = g_ok(f) ? analyze(f, c, m, pop1(f)) : 0;
   return m; }
 
@@ -255,9 +250,9 @@ static Ana(ana_lambda, word b) {
 static Ana(ana_var, env *d) {
   // free symbol?
   if (nilp(d)) {
-    f = pushc(f, 3, 0, f->dict, x);
+    f = g_push(f, 3, 0, f->dict, x);
     if (!g_ok(f)) return 0;
-    f = g_tget(f);
+    f = g_hash_get(f);
     word y = pop1(f);
     if (y) return ana_i2(f, c, m, imm, y);
     f = g_cons_c(f, x, (*c)->imps);
@@ -283,7 +278,7 @@ static Ana(ana_var, env *d) {
       x = g_ok(f) ? pop1(f) : 0,
       x = x ? A((*c)->imps = x) : x;
     if (!x) return 0;
-    f = pushc(f, 3, cata_var, x, (*c)->stack);
+    f = g_push(f, 3, cata_var, x, (*c)->stack);
     return g_ok(f) ? m + 2 : 0; }
   // otherwise recur on the enclosing env
   return ana_var(f, c, m, x, d->par); }
@@ -295,17 +290,17 @@ static g_core *ana_lam(core *f, env **c, word imps, word exp) {
   MM(f, &d);
   word x = d->args;
   // get the real args
-  if (!twop(x)) f = pushc(f, 2, nil, nil);
-  else if (!twop(B(x))) f = pushc(f, 2, A(x), nil);
+  if (!twop(x)) f = g_push(f, 2, nil, nil);
+  else if (!twop(B(x))) f = g_push(f, 2, A(x), nil);
   else {
     MM(f, &x);
     int n = 0;
-    do f = pushc(f, 1, A(x)), n++, x = B(x);
+    do f = g_push(f, 1, A(x)), n++, x = B(x);
     while (twop(B(x)));
-    f = pushc(f, 1, nil);
+    f = g_push(f, 1, nil);
     while (n--) f = g_cons_stack(f, 1, 0);
     UM(f);
-    f = pushc(f, 1, A(x)); }
+    f = g_push(f, 1, A(x)); }
   if (!g_ok(f)) return UM(f), f;
 
   exp = pop1(f);
@@ -328,7 +323,7 @@ static g_core *ana_lam(core *f, env **c, word imps, word exp) {
 static size_t ana_let(core *f, env* *b, size_t m, word exp) {
   if (!twop(exp)) return analyze(f, b, m, nil);
   if (!twop(B(exp))) return analyze(f, b, m, A(exp));
-  f = pushc(f, 1, exp);
+  f = g_push(f, 1, exp);
   f = enscope_c(f, *b, (*b)->args, (*b)->imps);
   if (!g_ok(f)) return 0;
   env *q = (env*) pop1(f), **c = &q;
@@ -345,7 +340,7 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
     d = A(exp), e = AB(exp);
     while (twop(d)) { // desugar...
       f = g_cons_c(f, e, nil);
-      f = pushc(f, 1, B(d));
+      f = g_push(f, 1, B(d));
       f = append(f);
       f = g_cons_c(f, (word) f->lambda, pop1(f));
       if (!g_ok(f)) return fail();
@@ -360,7 +355,7 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
     if (lambp(f, e)) {
       f = ana_lam(f, c, nil, B(e));
       word x = g_ok(f) ? pop1(f) : 0;
-      f = pushc(f, 3, d, x, lam);
+      f = g_push(f, 3, d, x, lam);
       f = g_cons_stack(f, 0, 1);
       f = g_cons_stack(f, 0, 1);
       if (g_ok(f)) lam = pop1(f);
@@ -395,9 +390,9 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
   for (e = lam; twop(e); BBA(e) = ldels(f, lam, BBA(e)), e = B(e));
 
   (*c)->lams = lam;
-  f = pushc(f, 2, nom, exp);
+  f = g_push(f, 2, nom, exp);
   f = append(f);
-  f = pushc(f, 1, f->lambda);
+  f = g_push(f, 1, f->lambda);
   f = g_cons_stack(f, 0, 1);
   if (!g_ok(f)) return fail();
   // pull_m lambda with reversed argument list
@@ -409,7 +404,8 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
   (*b)->stack = pop1(f);
 
   // reverse the nom and def lists
-  nom = reverse(f, nom), def = reverse(f, def);
+  nom = reverse(f, nom);
+  def = reverse(f, def);
   // evaluate definitions in order tracking var names on stack list
   // store lambdas on env for lazy binding and pull_m new application
   // - reverse noms onto exp
@@ -498,7 +494,7 @@ static g_core *mo_c(core *f, size_t n) {
 NoInline Vm(ev0) {
   Ip++;
   Pack(f);
-  f = g_eval_c(f, g_yield);
+  f = g_eval(f, g_yield);
   if (!g_ok(f)) return code_of(f);
   Unpack(f);
   return Continue(); }
@@ -510,7 +506,7 @@ Vm(defglob) {
   *--Sp = Ip[1].x;
   *--Sp = (g_word) f->dict;
   Pack(f);
-  f = g_hash_put_c(f);
+  f = g_hash_put(f);
   if (!g_ok(f)) return code_of(f); 
   Unpack(f);
   Sp++;
@@ -525,9 +521,9 @@ Vm(drop1) {
 Vm(free_variable) {
   word x = Ip[1].x;
   Pack(f);
-  f = pushc(f, 3, x, f->dict, x);
+  f = g_push(f, 3, x, f->dict, x);
   if (!g_ok(f)) return Oom;
-  f = g_tget(f);
+  f = g_hash_get(f);
   Unpack(f);
   Ip[0].ap = imm;
   Ip[1].x = *Sp++;
@@ -553,14 +549,14 @@ static g_core *alloc_thread_c(core *f, env **c, size_t m) {
   return f; }
 
 static g_core *enscope_c(core *f, env* par, word args, word imps) {
-  f = pushc(f, 3, args, imps, par);
+  f = g_push(f, 3, args, imps, par);
   f = mo_c(f, Width(env));
   if (g_ok(f)) {
     env *c = (env*) pop1(f);
     args = pop1(f), imps = pop1(f), par = (env*) pop1(f);
     c->args = args, c->imps = imps, c->par = par,
     c->stack = c->alts = c->ends = c->lams = nil;
-    f = pushc(f, 1, c); }
+    f = g_push(f, 1, c); }
   return f; }
 
 static word lassoc(core *f, word l, word k) {

@@ -31,9 +31,9 @@ static g_core
 
 static Inline g_core *rquote(core *f, input *i) {
   f = p_read1(f, i);
-  f = pushc(f, 1, nil);
+  f = g_push(f, 1, nil);
   f = g_cons_stack(f, 1, 0);
-  f = pushc(f, 1, f->quote);
+  f = g_push(f, 1, f->quote);
   return g_cons_stack(f, 0, 1); }
 
 static g_core *p_read1(core *f, input* i) {
@@ -43,7 +43,7 @@ static g_core *p_read1(core *f, input* i) {
     case EOF:  return encode(f, Eof);
     case '\'': return rquote(f, i);
     case '(':  return reads(f, i);
-    case ')':  return pushc(f, 1, nil);
+    case ')':  return g_push(f, 1, nil);
     case '"':  return read_string(f, i, '"');
     default:   p_in_ungetc(i, c);
                return read_atom(f, i); } }
@@ -51,7 +51,7 @@ static g_core *p_read1(core *f, input* i) {
 static g_core *reads(core *f, input* i) {
   if (!g_ok(f)) return f;
   word c = read_char(f, i);
-  if (c == EOF || c == ')') return pushc(f, 1, nil);
+  if (c == EOF || c == ')') return g_push(f, 1, nil);
   p_in_ungetc(i, c);
   f = p_read1(f, i);
   f = reads(f, i);
@@ -107,7 +107,7 @@ static Inline g_core *read_atom(core *f, input *i) {
   char *e;
   long j = strtol(b->text, &e, 0);
   if (*e == 0) return f->sp[0] = putnum(j), f;
-  return g_intern_c(f); }
+  return g_intern(f); }
 
 #define file_input(f) ((input*)&(file_input){{p_file_getc, p_file_ungetc, p_file_eof}, f})
 static NoInline g_core *p_read1f(core *f, FILE* i) {
@@ -128,7 +128,7 @@ Vm(read0) {
   if (s != Ok) return s; // or was there an error?
   // no error and got a value on stack
   // make a list of it
-  f = pushc(f, 1, nil);
+  f = g_push(f, 1, nil);
   f = g_cons_stack(f, 1, 0);
   if (!g_ok(f)) return code_of(f);
   Unpack(f);
@@ -142,7 +142,7 @@ static NoInline g_core *p_readsp(core *f, string *s) {
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
   FILE *i = fopen(n, "r");
-  if (!i) return pushc(f, 1, nil);
+  if (!i) return g_push(f, 1, nil);
   input *fi = file_input(i);
   f = reads(f, fi);
   fclose(i);
@@ -176,7 +176,7 @@ static int p_text_ungetc(input *i, int _) {
 
 static int p_text_eof(input *i) { return !ti(i)->text[ti(i)->i]; }
 
-g_core *p_readcs(g_core *f, const char *cs) {
+g_core *g_read_cs(g_core *f, const char *cs) {
   input *i = ((input*)&(text_input){{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0});
   return p_read1(f, i); }
 
