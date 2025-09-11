@@ -1,9 +1,18 @@
 #include "i.h"
 
+static Inline void ini_sym(symbol *y, string *nom, uintptr_t code) {
+  y->ap = data;
+  y->typ = &sym_type;
+  y->nom = nom;
+  y->code = code;
+  y->l = y->r = 0; }
+
 static symbol *intern_seek(core *v, string *b, symbol **y) {
   symbol *z = *y;
-  if (!z) return *y =
-    ini_sym(bump(v, Width(symbol)), b, hash(v, putnum(hash(v, (word) b))));
+  if (!z) return
+    z = bump(v, Width(symbol)),
+    ini_sym(z, b, hash(v, putnum(hash(v, (word) b)))),
+    *y = z;
   string *a = z->nom;
   int i = a->len < b->len ? -1 :
           a->len > b->len ? 1 :
@@ -11,13 +20,9 @@ static symbol *intern_seek(core *v, string *b, symbol **y) {
   return i == 0 ? z : intern_seek(v, b, i < 0 ? &z->l : &z->r); }
 
 g_core *g_intern_c(g_core *f) {
-  if (!g_ok(f)) return f;
-  f = avail(f) < Width(symbol) ? please(f, Width(symbol)) : f;
+  f = g_have(f, Width(symbol));
   if (g_ok(f)) f->sp[0] = (g_word) intern_seek(f, str(f->sp[0]), &f->symbols);
   return f; }
-
-symbol *ini_sym(symbol *y, string *nom, uintptr_t code) {
-  return y->ap = data, y->typ = &sym_type, y->nom = nom, y->code = code, y->l = y->r = 0, y; }
 static symbol *ini_anon(symbol *y, word code) {
   return y->ap = data, y->typ = &sym_type, y->nom = 0, y->code = code, y; }
 Vm(nomsym) {

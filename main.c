@@ -10,7 +10,4 @@ static const char g_main[] =
 ;
 
 int main(int ac, const char **av) {
-  g_core *f = g_ini(malloc, free);
-  if (g_ok(f)) f = g_run(f, g_main, av);
-  g_fin(g_core_of(f));
-  return g_code_of(f); }
+  return g_code_of(g_run(g_ini(), g_main, av)); }

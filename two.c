@@ -10,7 +10,8 @@ static bool eq_two(core *f, word x, word y) {
 
 static word cp_two(core *v, word x, word *p0, word *t0) {
   pair *src = (pair*) x,
-       *dst = ini_pair(bump(v, Width(pair)), src->a, src->b);
+       *dst = bump(v, Width(pair));
+  ini_pair(dst, src->a, src->b);
   return W(src->ap = (vm*) dst); }
 
 static void wk_two(core *f, word x, word *p0, word *t0) {
@@ -43,7 +44,8 @@ Vm(cdr) {
 
 Vm(cons) {
   Have(Width(pair));
-  pair *w = ini_pair((pair*) Hp, Sp[0], Sp[1]);
+  pair *w = (pair*) Hp;
+  ini_pair(w, Sp[0], Sp[1]);
   Hp += Width(pair);
   Sp[1] = W(w);
   Sp++;
@@ -56,20 +58,10 @@ Vm(pairp) {
   return Continue(); }
 
 g_core *g_cons_stack(g_core *f, int i, int j) {
-  if (!g_ok(f)) return f;
-  if (avail(f) < Width(pair)) f = please(f, Width(pair));
+  f = g_have(f, Width(pair));
   if (g_ok(f)) {
-    pair *p = ini_pair((pair*) f->hp, f->sp[i], f->sp[j]);
+    pair *p = (pair*) f->hp;
+    ini_pair(p, f->sp[i], f->sp[j]);
     f->hp += Width(pair);
     *++f->sp = (word) p; }
   return f; }
-
-g_core *g_cons_c(g_core *f, g_word a, g_word b) {
-  f = pushc(f, 2, a, b);
-  return g_cons_stack(f, 0, 1); }
-
-pair *ini_pair(pair *w, word a, word b) {
-  w->ap = data; w->typ = &two_type;
-  w->a = a;
-  w->b = b;
-  return w; }

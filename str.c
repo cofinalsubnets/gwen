@@ -1,4 +1,5 @@
 #include "i.h"
+
 Vm(stringp) { return Sp[0] = strp(Sp[0]) ? putnum(-1) : nil, Ip += 1, Continue(); }
 static uintptr_t xx_str(core *v, word _);
 static bool eq_str(core *f, word x, word y);
@@ -6,8 +7,6 @@ static void em_str(core* v, FILE *o, word _);
 static void wk_str(core* f, word x, word *p0, word *t0);
 static word cp_str(core* v, word x, word *p0, word *t0);
 
-string* ini_str(string *s, uintptr_t len) {
-  return s->ap = data, s->typ = &str_type, s->len = len, s; }
 
 methods
   str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .eq = eq_str, .em = em_str, };
@@ -58,8 +57,9 @@ Vm(ssub) {
     else {
       size_t req = Width(string) + b2w(j - i);
       Have(req);
-      string* t = ini_str(str(Hp), j - i);
+      string* t = str(Hp);
       Hp += req;
+      ini_str(t, j - i);
       memcpy(t->text, s->text + i, j - i);
       Sp[3] = (word) t; } }
   return Ip = r, Sp += 3, Continue(); }
@@ -82,8 +82,9 @@ Vm(scat) {
   size_t len = x->len + y->len,
          req = Width(string) + b2w(len);
   Have(req);
-  string *z = ini_str(str(Hp), len);
+  string *z = str(Hp);
   return Hp += req,
+         ini_str(z, len),
          memcpy(z->text, x->text, x->len),
          memcpy(z->text + x->len, y->text, y->len),
          Sp[1] = W(z),

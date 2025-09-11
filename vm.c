@@ -96,3 +96,44 @@ op(fixnump, 1, nump(Sp[0]) ? putnum(-1) : nil)
 Vm(symbolp) { return Sp[0] = symp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
 
+
+Vm(yieldi) {
+  Ip = Ip[1].m;
+  Pack(f);
+  return YieldStatus; }
+
+Vm(seek) {
+  Sp[1] = W(((cell*) Sp[1]) + getnum(Sp[0]));
+  Sp += 1;
+  Ip += 1;
+  return Continue(); }
+
+Vm(peek) {
+  Sp[0] = R(Sp[0])->x;
+  Ip += 1;
+  return Continue(); }
+
+Vm(poke) {
+  R(Sp[1])->x = Sp[0];
+  Sp += 1;
+  Ip += 1;
+  return Continue(); }
+
+Vm(thda) {
+  size_t n = getnum(Sp[0]);
+  Have(n + Width(struct tag));
+  cell *k = R(Hp);
+  struct tag *t = (struct tag*) (k + n);
+  Hp += n + Width(struct tag);
+  t->null = NULL;
+  t->head = k;
+  memset(k, -1, n * sizeof(word));
+  Sp[0] = (word) k;
+  Ip += 1;
+  return Continue(); }
+
+Vm(trim) {
+  cell *k = (cell*) Sp[0];
+  ttag(k)->head = k;
+  Ip += 1;
+  return Continue(); }

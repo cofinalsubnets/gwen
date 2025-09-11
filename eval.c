@@ -1,9 +1,22 @@
 #include "i.h"
+
+static g_core *g_cons_c(g_core *f, g_word a, g_word b) {
+  f = pushc(f, 2, a, b);
+  return g_cons_stack(f, 0, 1); }
+
+static word pushs(core *f, uintptr_t m, ...) {
+  va_list xs;
+  va_start(xs, m);
+  f = vpushc(f, m, xs);
+  va_end(xs);
+  return g_ok(f) ? f->sp[0] : 0; }
+
 static g_core *p_ana(g_core*, vm*);
 NoInline g_core *g_eval_c(g_core *f, vm *y) {
   f = p_ana(f, y);
   int s = code_of(f);
-  if (g_ok(f)) {
+  f = core_of(f);
+  if (s == Ok) {
 #ifdef NTCO
     do s = f->ip->ap(f); while (s == Ok);
     s = s == Eof ? Ok : s; }
@@ -56,19 +69,21 @@ static NoInline g_core *p_ana(core *f, vm *y) {
   f->sp[0] = (word) yieldk; // function that returns thread from code generation
   MM(f, &c);
   size_t m = analyze(f, &c, 1, x);
-  if (m) m = pushs(f, 3, cata_ix, y, f->ip) ? m + 2 : 0;
-  f = m ? alloc_thread_c(f, &c, m) : encode(f, Oom);
-  cell *k = g_ok(f) ? pull(f, &c, (cell*) pop1(f)) : 0;
+  if (!m) f = encode(f, Oom);
+  else {
+    f = pushc(f, 3, cata_ix, y, f->ip);
+    f = alloc_thread_c(f, &c, m + 2);
+    if (g_ok(f)) {
+      cell *k = pull(f, &c, (cell*) pop1(f));
+      if (!k) f = encode(f, Oom);
+      else f->ip = k; } }
   UM(f);
-  if (!k) return encode(f, Oom);
-  f->ip = k;
   return f; }
 
 static ana ana_if, ana_let, ana_seq, ana_ap_l2r;
 static Ana(ana_lambda, word b);
 static Ana(ana_mac, word b);
 static Ana(ana_var, env *d);
-static g_core *ana_lam(core*, env**, word, word);
 
 static NoInline Ana(analyze) {
   if (symp(x))  return ana_var(f, c, m, x, *c);
@@ -85,8 +100,11 @@ static NoInline Ana(analyze) {
   // singleton?
   if (!twop(b)) return analyze(f, c, m, a); // value of first element
 
+  f = pushc(f, 3, 0, f->macro, a);
+  if (!g_ok(f)) return 0;
+  f = g_tget(f);
+  x = pop1(f);
   // macro?
-  x = table_get(f, f->macro, a, 0);
   if (x) return ana_mac(f, c, m, x, b);
 
   // apply.
@@ -94,14 +112,14 @@ static NoInline Ana(analyze) {
   if (m) m = ana_ap_l2r(f, c, m, b);
   return m; }
 
-static cata ana_if_push_branch,
-            ana_if_pop_branch,
-            ana_if_push_exit,
-            ana_if_pop_exit,
-            ana_if_peek_exit;
+static cata cata_if_push_branch,
+            cata_if_pop_branch,
+            cata_if_push_exit,
+            cata_if_pop_exit,
+            cata_if_peek_exit;
 
 static Ana(ana_if) {
-  if (!pushs(f, 2, x, ana_if_pop_exit)) return 0;
+  if (!pushs(f, 2, x, cata_if_pop_exit)) return 0;
   pair p = { 0, 0, nil, nil }; // this is weird :/
   x = pop1(f);
   MM(f, &x);
@@ -109,35 +127,35 @@ static Ana(ana_if) {
     if (!twop(x)) x = (word) &p;
     m = analyze(f, c, m + 3, A(x));
     if (!twop(B(x))) { // this means we have just analyzed the default case
-      m = pushs(f, 1, ana_if_peek_exit) ? m : 0; // now branch to exit
+      m = pushs(f, 1, cata_if_peek_exit) ? m : 0; // now branch to exit
       break; }
     // otherwise we analyzed a conditional test
     // pop the last branch address off the stack to be jumped to in case the test failed
-    m = pushs(f, 1, ana_if_pop_branch) ? m : 0;
+    m = pushs(f, 1, cata_if_pop_branch) ? m : 0;
     // otherwise here is the consequent
     m = m ? analyze(f, c, m + 3, AB(x)) : m;
     // after consequent jump to exit, then push new branch address at present code position (these are emitted backwards)
-    m = m && pushs(f, 2, ana_if_push_branch,
-                         ana_if_peek_exit) ? m : 0; }
+    m = m && pushs(f, 2, cata_if_push_branch,
+                         cata_if_peek_exit) ? m : 0; }
   UM(f);
-  m = m && pushs(f, 1, ana_if_push_exit) ? m : 0; // push the exit address for the whole conditional
+  m = m && pushs(f, 1, cata_if_push_exit) ? m : 0; // push the exit address for the whole conditional
   return m; }
 
-static Cata(ana_if_push_exit) { // first emitter called for cond expression
+static Cata(cata_if_push_exit) { // first emitter called for cond expression
   f = g_cons_c(f, W(k), (*c)->ends);
   if (!g_ok(f)) return 0;
   word w = pop1(f);
   k = R(A((*c)->ends = w));
   return pull(f, c, k); }
-static Cata(ana_if_pop_exit) { // last emitter called for cond expression
+static Cata(cata_if_pop_exit) { // last emitter called for cond expression
   (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
   return pull(f, c, k); }
-static Cata(ana_if_pop_branch) { // last emitter called for a branch
+static Cata(cata_if_pop_branch) { // last emitter called for a branch
   k[-2].ap = cond; // pops next branch address off env stack alts
   k[-1].x = A((*c)->alts);
   (*c)->alts = B((*c)->alts);
   return pull(f, c, k - 2); }
-static Cata(ana_if_push_branch) {
+static Cata(cata_if_push_branch) {
   f = g_cons_c(f, W(k), (*c)->alts);
   if (!g_ok(f)) return 0;
   word w = pop1(f);
@@ -145,15 +163,19 @@ static Cata(ana_if_push_branch) {
   k = R(A(w));
   return pull(f, c, k); }
 
-static Cata(ana_if_peek_exit) {
+static Cata(cata_if_peek_exit) {
   k -= 2;
   cell *addr = (cell*) A((*c)->ends);
   // if the destination is a return or tail call,
   // then copy it forward instead of emitting a jump.
   if (addr->ap == ret || addr->ap == tap)
-    k[0].ap = addr[0].ap, k[1].x = addr[1].x; // XXX optimization to remove ...
+    k[0].ap = addr[0].ap,
+    k[1].x = addr[1].x; // XXX optimization to remove ...
   else if (addr->ap == tapn)
-    k--, k[0].ap = tapn, k[1].x = addr[1].x, k[2].x = addr[2].x;
+    k--,
+    k[0].ap = tapn,
+    k[1].x = addr[1].x,
+    k[2].x = addr[2].x;
   else k[0].ap = jump, k[1].x = (word) addr;
   return pull(f, c, k); }
 
@@ -162,7 +184,7 @@ static cata c2var, cata_var, cataap, cataapn;
 static Inline bool lambp(core *f, word x) {
   return twop(x) && A(x) == (word) f->lambda; }
 
-static g_core *append2(core *f) {
+static g_core *append(core *f) {
   int i = 0;
   for (word l; g_ok(f) && twop(f->sp[0]); i++)
     l = B(f->sp[0]),
@@ -179,17 +201,6 @@ static word reverse(core *f, word l) {
   word n = nil;
   for (word m; twop(l);) m = l, l = B(l), B(m) = n, n = m;
   return n; }
-
-static Inline g_core *desug(core *f, word *d, word *e) {
-  while (twop(*d)) {
-    f = g_cons_c(f, *e, nil);
-    f = pushc(f, 1, B(*d));
-    f = append2(f);
-    f = g_cons_c(f, (word) f->lambda, pop1(f));
-    if (!g_ok(f)) break;
-    *e = pop1(f);
-    *d = A(*d); }
-  return f; }
 
 static size_t ana_seq(core *f, env* *c, size_t m, word x) {
   if (!twop(x)) return ana_i2(f, c, m, imm, nil);
@@ -217,30 +228,32 @@ static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
   MM(f, &x); // handle oom here ..
   // push one anonymous argument on the stack representing the function
   f = g_cons_c(f, nil, (*c)->stack);
-  if (g_ok(f)) (*c)->stack = pop1(f);
-  else m = 0;
-  while (m && twop(x))
-    m = analyze(f, c, m + 1, A(x)), // eval each argument
-    x = B(x),
-    m = m && pushs(f, 1, cataap) ? m : 0; // and apply the function
-  // pop the argument
-  (*c)->stack = B((*c)->stack);
+  if (g_ok(f)) {
+    (*c)->stack = pop1(f);
+    while (m && twop(x))
+      m = analyze(f, c, m + 1, A(x)), // eval each argument
+      x = B(x),
+      m = m && pushs(f, 1, cataap) ? m : 0; // and apply the function
+    // pop the argument
+    (*c)->stack = B((*c)->stack); }
   UM(f);
   return m; }
 
-
-
+static g_core *ana_lam(core*, env**, word, word);
 static Ana(ana_lambda, word b) {
   if (!twop(b)) return ana_i2(f, c, m, imm, nil);
   if (!twop(B(b))) return analyze(f, c, m, A(b));
   f = ana_lam(f, c, nil, b);
-  return g_ok(f) ? analyze(f, c, m, pop1(f)) : 0; }
-
+  if (!g_ok(f)) return 0;
+  return analyze(f, c, m, pop1(f)); }
 
 static Ana(ana_var, env *d) {
   // free symbol?
   if (nilp(d)) {
-    word y = table_get(f, f->dict, x, 0);
+    f = pushc(f, 3, 0, f->dict, x);
+    if (!g_ok(f)) return 0;
+    f = g_tget(f);
+    word y = pop1(f);
     if (y) return ana_i2(f, c, m, imm, y);
     f = g_cons_c(f, x, (*c)->imps);
     x = g_ok(f) ? pop1(f) : 0;
@@ -264,7 +277,9 @@ static Ana(ana_var, env *d) {
       f = g_cons_c(f, x, (*c)->imps),
       x = g_ok(f) ? pop1(f) : 0,
       x = x ? A((*c)->imps = x) : x;
-    return x && pushs(f, 3, cata_var, x, (*c)->stack) ? m + 2 : 0; }
+    if (!x) return 0;
+    f = pushc(f, 3, cata_var, x, (*c)->stack);
+    return g_ok(f) ? m + 2 : 0; }
   // otherwise recur on the enclosing env
   return ana_var(f, c, m, x, d->par); }
 
@@ -323,7 +338,14 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
   // collect vars and defs into two lists
   for (; twop(exp) && twop(B(exp)); exp = BB(exp)) {
     d = A(exp), e = AB(exp);
-    f = desug(f, &d, &e);
+    while (twop(d)) { // desugar...
+      f = g_cons_c(f, e, nil);
+      f = pushc(f, 1, B(d));
+      f = append(f);
+      f = g_cons_c(f, (word) f->lambda, pop1(f));
+      if (!g_ok(f)) return fail();
+      e = pop1(f);
+      d = A(d); }
     f = g_cons_c(f, d, nom);
     f = g_cons_c(f, e, def);
     if (!g_ok(f)) return fail();
@@ -369,7 +391,7 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
 
   (*c)->lams = lam;
   f = pushc(f, 2, nom, exp);
-  f = append2(f);
+  f = append(f);
   f = pushc(f, 1, f->lambda);
   f = g_cons_stack(f, 0, 1);
   if (!g_ok(f)) return fail();
@@ -461,20 +483,20 @@ static long lidx(core *f, word l, word x) {
   return -1; }
 
 static g_core *mo_c(core *f, size_t n) {
-  if (!g_ok(f)) return f;
-  if (avail(f) < n + Width(struct tag) + 1) f = please(f, n + Width(struct tag) + 1);
-  if (!g_ok(f)) return f;
-  cell *k = (cell*) f->hp;
-  f->hp += n + Width(struct tag);
-  struct tag *t = (struct tag*) (k + n);
-  t->null = NULL, t->head = k;
-  push1(f, (word) k);
+  f = g_cells(f, n + Width(struct tag));
+  if (g_ok(f)) {
+    cell *k = (cell*) f->sp[0];
+    struct tag *t = (struct tag*) (k + n);
+    t->null = NULL, t->head = k; }
   return f; }
 
 NoInline Vm(ev0) {
   Ip++;
   Pack(f);
-  return code_of(g_eval_c(f, jump)); }
+  f = g_eval_c(f, yieldi);
+  if (!g_ok(f)) return code_of(f);
+  Unpack(f);
+  return Continue(); }
 
 Vm(defglob) {
   Have(3);
@@ -483,7 +505,7 @@ Vm(defglob) {
   *--Sp = Ip[1].x;
   *--Sp = (g_word) f->dict;
   Pack(f);
-  f = g_hash_set_c(f);
+  f = g_hash_put_c(f);
   if (!g_ok(f)) return code_of(f); 
   Unpack(f);
   Sp++;
@@ -497,9 +519,13 @@ Vm(drop1) {
 
 Vm(free_variable) {
   word x = Ip[1].x;
-  x = table_get(f, f->dict, x, x); // error here if you want on undefined variable
+  Pack(f);
+  f = pushc(f, 3, x, f->dict, x);
+  if (!g_ok(f)) return Oom;
+  f = g_tget(f);
+  Unpack(f);
   Ip[0].ap = imm;
-  Ip[1].x = x;
+  Ip[1].x = *Sp++;
   return Continue(); }
 
 Vm(late_bind) {
@@ -515,21 +541,22 @@ static size_t ana_i2(core *f, env **c, size_t m, vm *i, word x) {
 
 static g_core *alloc_thread_c(core *f, env **c, size_t m) {
   f = mo_c(f, m);
-  if (!g_ok(f)) return 0;
-  cell *k = (cell*) f->sp[0];
-  memset(k, -1, m * sizeof(word));
-  f->sp[0] = (word) (k + m);
+  if (g_ok(f)) {
+    cell *k = (cell*) f->sp[0];
+    memset(k, -1, m * sizeof(word));
+    f->sp[0] = (word) (k + m); }
   return f; }
 
 static g_core *enscope_c(core *f, env* par, word args, word imps) {
   f = pushc(f, 3, args, imps, par);
   f = mo_c(f, Width(env));
-  if (!g_ok(f)) return f;
-  env *c = (env*) pop1(f);
-  args = pop1(f), imps = pop1(f), par = (env*) pop1(f);
-  c->args = args, c->imps = imps, c->par = par,
-  c->stack = c->alts = c->ends = c->lams = nil;
-  return pushc(f, 1, c); }
+  if (g_ok(f)) {
+    env *c = (env*) pop1(f);
+    args = pop1(f), imps = pop1(f), par = (env*) pop1(f);
+    c->args = args, c->imps = imps, c->par = par,
+    c->stack = c->alts = c->ends = c->lams = nil;
+    f = pushc(f, 1, c); }
+  return f; }
 
 static word lassoc(core *f, word l, word k) {
   for (; twop(l); l = B(l)) if (eql(f, k, AA(l))) return A(l);

@@ -1,4 +1,5 @@
 #include "i.h"
+static g_core *please(g_core*, uintptr_t);
 
 static core *pushcr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
@@ -7,7 +8,7 @@ static core *pushcr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (g_ok(f)) push1(f, x);
   return f; }
 
-static core *vpushc(core *f, uintptr_t m, va_list xs) {
+core *vpushc(core *f, uintptr_t m, va_list xs) {
   if (g_ok(f)) {
     if (avail(f) < m) f = pushcr(f, m, 0, xs);
     else {
@@ -23,37 +24,16 @@ g_core *pushc(core *f, uintptr_t m, ...) {
   va_end(xs);
   return f; }
 
-word pushs(core *f, uintptr_t m, ...) {
-  va_list xs;
-  va_start(xs, m);
-  f = vpushc(f, m, xs);
-  va_end(xs);
-  return g_ok(f) ? f->sp[0] : 0; }
-
-g_core *g_list_n(g_core *f, uintptr_t m) {
-  f = pushc(f, 1, nil);
-  while (g_ok(f) && m--)
-    f = g_cons_stack(f, 1, 0);
+g_core *g_cells(g_core *f, size_t n) {
+  f = g_have(f, n + 1);
+  if (g_ok(f)) {
+    cell *k = (cell*) f->hp;
+    f->hp += n;
+    *--f->sp = (word) k; }
   return f; }
 
-g_core *g_list(g_core *f, uintptr_t m, ...) {
-  va_list xs;
-  va_start(xs, m);
-  f = vpushc(f, m, xs);
-  va_end(xs);
-  f = g_ok(f) ? g_list_n(f, m) : f;
-  return f; }
-
-void *bump(core *f, size_t n) {
-  void *x = f->hp;
-  return f->hp += n,
-         x; }
-
-void *cells(core *f, size_t n) {
-  return n <= avail(f) || g_please(f, n) ? bump(f, n) : 0; }
-
-NoInline bool g_please(core *f, size_t n) {
-  return g_ok(please(f, n)); }
+Inline g_core *g_have(g_core *f, uintptr_t n) {
+  return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
 
 static NoInline void copy_from(core*, word*, uintptr_t);
 // garbage collector
@@ -96,14 +76,14 @@ NoInline core *please(core *f, uintptr_t req0) {
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
   else return f; // no change reqired, hopefully the most common case
   // at this point we got a new target length and are gonna try and resize
-  word *dest2 = f->malloc(len1 * 2 * sizeof(word)); // allocate pool with the new target size
+  word *dest2 = g_malloc(len1 * 2 * sizeof(word)); // allocate pool with the new target size
   if (!dest2) return req <= total ? f : encode(f, Oom); // if this fails still return true if the original pool is not too small
   // we got the new pool so copy again and return true
   f->len = len1;            // set core variables referring to new pool
   f->pool = dest2;          //
   f->loop = dest2 + len1;   //
   copy_from(f, dest, len0); // do second copy
-  f->free(min(src, dest));  // free original pool
+  g_free(min(src, dest));  // free original pool
   f->t0 = g_clock();       // set last gc timestamp
   return f; }            // size successfully adjusted
 
@@ -170,7 +150,8 @@ NoInline word cp(core *v, word x, word *p0, word *t0) {
 
 NoInline Vm(gc, uintptr_t n) {
   Pack(f);
-  int s = g_please(f, n) ? Ok : Oom;
+  f = please(f, n);
+  if (!g_ok(f)) return code_of(f);
   Unpack(f);
-  return s != Ok ? s : Ap(f->ip->ap, f); }
+  return Continue(); }
 

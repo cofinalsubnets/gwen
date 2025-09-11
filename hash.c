@@ -14,9 +14,6 @@ uintptr_t hash(g_core *f, g_word x) {
   return mix ^ (mix * len); }
 
 
-g_table *ini_table(g_table *t, uintptr_t len, uintptr_t cap, struct entry**tab) {
-  return t->ap = data, t->typ = &tbl_type, t->len = len, t->cap = cap, t->tab = tab, t; }
-
 static void em_tbl(core *f, FILE *o, word x),
             wk_tbl(core *f, word x, word *p0, word *t0);
 static word cp_tbl(core *f, word x, word *p0, word *t0);
@@ -43,7 +40,8 @@ static word cp_tbl(core *f, word x, word *p0, word *t0) {
   table *dst = bump(f, Width(table) + cap + Width(struct entry) * len);
   struct entry **tab = (struct entry**) (dst + 1),
                *dd = (struct entry*) (tab + cap);
-  src->ap = (vm*) ini_table(dst, len, cap, tab);
+  ini_table(dst, len, cap, tab);
+  src->ap = (vm*) dst;
   for (struct entry *d, *s, *last; cap--; tab[cap] = last)
     for (s = src->tab[cap], last = NULL; s;
       d = dd++,
@@ -56,26 +54,12 @@ static word cp_tbl(core *f, word x, word *p0, word *t0) {
 
 // FIXME very poor hashing method :(
 static uintptr_t xx_tbl(core *f, word h) { return mix; }
-table *mktbl(core *f) {
-  table *t = cells(f, Width(table) + 1);
-  struct entry **tab = (struct entry**) (t + 1);
-  return !t ? 0 : ini_table(t, 0, 1, (tab[0] = 0, tab)); }
-
-g_core *g_tbl_new(g_core *f) {
-  if (!g_ok(f)) return f;
-  if (avail(f) < Width(table) + 2) f = please(f, Width(table) + 2);
-  if (g_ok(f)) {
-    table *t = cells(f, Width(table) + 1);
-    struct entry **tab = (struct entry**) (t + 1);
-    tab[0] = 0;
-    *--f->sp = (word) ini_table(t, 0, 1, tab); }
-  return f; }
 
 // relies on table capacity being a power of 2
 static Inline word index_of_key(core *f, table *t, word k) {
   return (t->cap - 1) & hash(f, k); }
 
-NoInline g_core *g_hash_set_c(g_core *f) {
+NoInline g_core *g_hash_put_c(g_core *f) {
   if (!g_ok(f)) return f;
   g_table *t = (g_table*) f->sp[0];
   g_word k = f->sp[1], v = f->sp[2], i = index_of_key(f, t, k);
@@ -83,8 +67,9 @@ NoInline g_core *g_hash_set_c(g_core *f) {
   while (e && !eql(f, k, e->key)) e = e->next;
   if (e) e->val = v;
   else {
-    e = cells(f, Width(struct entry));
-    if (!e) return encode(f, g_status_oom);
+    f = g_cells(f, Width(struct entry));
+    if (!g_ok(f)) return f;
+    e = (struct entry*) pop1(f);
     t = (g_table*) f->sp[0];
     k = f->sp[1], v = f->sp[2];
     e->key = k, e->val = v, e->next = t->tab[i], t->tab[i] = e;
@@ -92,8 +77,10 @@ NoInline g_core *g_hash_set_c(g_core *f) {
     if (load > 1) {
       // grow the table
       word cap1 = 2 * cap0;
-      struct entry **tab0, **tab1 = cells(f, cap1);
-      if (!tab1) return encode(f, g_status_oom);
+      struct entry **tab0, **tab1;
+      f = g_cells(f, cap1);
+      if (!g_ok(f)) return f;
+      tab1 = (struct entry**) pop1(f);
       t = (g_table*) f->sp[0];
       tab0 = t->tab;
       memset(tab1, 0, cap1 * sizeof(word));
@@ -104,9 +91,9 @@ NoInline g_core *g_hash_set_c(g_core *f) {
           i = (cap1-1) & hash(f, e->key),
           e->next = tab1[i],
           tab1[i] = e); } }
-  return f->sp += 2,
-         *f->sp = (g_word) t,
-         f; }
+  f->sp += 2;
+  f->sp[0] = (g_word) t;
+  return f; }
 
 static struct entry *table_delete_r(core *f, table *t, word k, word *v, struct entry *e) {
   if (!e) return e;
@@ -137,29 +124,37 @@ Vm(tnew) {
   struct entry **tab = (struct entry**) (t + 1);
   Hp += Width(table) + 1;
   tab[0] = 0;
-  Sp[0] = (word) ini_table(t, 0, 1, tab);
+  ini_table(t, 0, 1, tab);
+  Sp[0] = (word) t;
   Ip++;
   return Continue(); }
 
-g_word table_get(core *f, table *t, word k, word zero) {
+g_core *g_tget(core *f) {
+  table *t = (table*) f->sp[1];
+  word k = f->sp[2],
+       zero = f->sp[0];
   size_t i = index_of_key(f, t, k);
   struct entry *e = t->tab[i];
   while (e && !eql(f, k, e->key)) e = e->next;
-  return e ? e->val : zero; }
+  f->sp += 2;
+  f->sp[0] = e ? e->val : zero;
+  return f; }
 
 Vm(tget) {
-  Sp[2] = !tblp(Sp[1]) ? Sp[0] : table_get(f, (table*) Sp[1], Sp[2], Sp[0]);
-  Sp += 2;
+  Pack(f);
+  f = g_tget(f);
+  Unpack(f);
   Ip += 1;
   return Continue(); }
 
 Vm(tset) {
   if (tblp(Sp[0])) {
     Pack(f);
-    f = g_hash_set_c(f);
+    f = g_hash_put_c(f);
     if (!g_ok(f)) return code_of(f);
     Unpack(f); }
-  return Ip += 1, Continue(); }
+  Ip += 1;
+  return Continue(); }
 
 Vm(tdel) {
   Sp[2] = !tblp(Sp[1]) ? nil : table_delete(f, (table*) Sp[1], Sp[2], Sp[0]);
@@ -185,5 +180,5 @@ Vm(tkeys) {
         ini_pair(pairs, e->key, list),
         list = (word) pairs, pairs++; }
   Sp[0] = list;
-  Ip++;
+  Ip += 1;
   return Continue(); }

@@ -59,22 +59,23 @@ static g_core *reads(core *f, input* i) {
   return g_cons_stack(f, 1, 0); }
 
 static g_core *g_buf_new(g_core *f) {
-  if (avail(f) < Width(string) + 2)
-    f = please(f, Width(string) + 2);
+  f = g_have(f, Width(string) + 2);
   if (g_ok(f)) {
     string *o = (string*) f->hp;
     f->hp += Width(string) + 1;
-    *--f->sp = (word) ini_str(o, sizeof(word)); }
+    ini_str(o, sizeof(word));
+    *--f->sp = word(o); }
   return f; }
 
 static g_core *g_buf_grow(g_core *f) {
   size_t len = str(f->sp[0])->len,
          req = Width(string) + 2 * b2w(len);
-  if (avail(f) < req) f = please(f, req);
+  f = g_have(f, req);
   if (g_ok(f)) {
     string *o = (string*) f->hp;
     f->hp += req;
-    memcpy(ini_str(o, 2 * len)->text, str(f->sp[0])->text, len);
+    ini_str(o, 2 * len);
+    memcpy(o->text, str(f->sp[0])->text, len);
     f->sp[0] = (word) o; }
   return f; }
 
