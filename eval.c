@@ -156,7 +156,7 @@ static Cata(cata_if_push_branch) {
   if (!g_ok(f)) return 0;
   word w = pop1(f);
   (*c)->alts = w;
-  k = R(A(w));
+  k = cell(A(w));
   return pull(f, c, k); }
 
 static Cata(cata_if_peek_exit) {

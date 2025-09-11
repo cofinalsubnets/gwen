@@ -31,12 +31,12 @@
 #define tbl(x) ((g_table*)(x))
 #define word(x) ((g_word)(x))
 #define W word
-#define R(_) ((cell*)(_))
+#define R cell
 #define Width(_) b2w(sizeof(_))
 #define within(a, b, c) (W(a)<=W(b)&&W(b)<W(c))
 #define owns(f, x) within(f->pool, x, f->pool + f->len)
-#define datp(_) (R(_)->ap==data)
-#define typ(_) R(_)[1].typ
+#define datp(_) (cell(_)->ap==data)
+#define typ(_) cell(_)[1].typ
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
 #define MM(f,r) ((f->safe=&((struct root){(word*)(r),f->safe})))
 #define UM(f) (f->safe=f->safe->next)
@@ -65,10 +65,8 @@
 #define g_version ""
 #endif
 
-typedef g_core* g_ret_type;
-
 // theres a big benefit in speed from tail call optimization but not all platforms support it
-#define Vm(n, ...) g_ret_type n(core *f, cell* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
+#define Vm(n, ...) g_core *n(core *f, cell* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)

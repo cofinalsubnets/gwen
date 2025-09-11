@@ -1,43 +1,63 @@
 #include "i.h"
 Vm(data) {
   word x = W(Ip);
-  return Ip = R(Sp[1]),
-         Sp[1] = x,
-         Sp += 1,
-         Continue(); }
+  Sp += 1;
+  Ip = cell(Sp[0]);
+  Sp[0] = x;
+  return Continue(); }
 
 Vm(uncurry) {
   Have1();
-  return *--Sp = Ip[1].x,
-         Ip = Ip[2].m,
-         Continue(); }
+  *--Sp = Ip[1].x;
+  Ip = Ip[2].m;
+  return Continue(); }
 
 Vm(jump) {
-  return Ip = Ip[1].m,
-         Continue(); }
+  Ip = Ip[1].m;
+  return Continue(); }
 
-Vm(cond) { return Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2, Continue(); }
+Vm(cond) {
+  Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2;
+  return Continue(); }
 // load instructions
 //
 // push an immediate value
-Vm(imm) { Have1(); return Sp -= 1, Sp[0] = Ip[1].x, Ip += 2, Continue(); }
+Vm(imm) {
+  Have1();
+  Sp -= 1;
+  Sp[0] = Ip[1].x;
+  Ip += 2;
+  return Continue(); }
 
 // push a value from the stack
-Vm(ref) { Have1(); return
-  Sp[-1] = Sp[getnum(Ip[1].x)], Sp -= 1, Ip += 2, Continue(); }
+Vm(ref) {
+  Have1();
+  Sp[-1] = Sp[getnum(Ip[1].x)];
+  Sp -= 1;
+  Ip += 2;
+  return Continue(); }
 
 // call and return
 // apply function to one argument
 Vm(ap) {
   if (nump(Sp[1])) return Ip++, Sp++, Continue();
-  cell *k = R(Sp[1]); return Sp[1] = W(Ip + 1), Ip = k, Continue(); }
+  cell *k = cell(Sp[1]);
+  Sp[1] = word(Ip + 1);
+  Ip = k;
+  return Continue(); }
 
 // tail call
 Vm(tap) {
   word x = Sp[0], j = Sp[1];
   Sp += getnum(Ip[1].x) + 1;
-  if (nump(j)) return Ip = R(Sp[1]), Sp[1] = j, Sp += 1, Continue();
-  return Ip = R(j), Sp[0] = x, Continue(); }
+  if (nump(j)) {
+    Sp += 1;
+    Ip = cell(Sp[0]);
+    Sp[0] = j;
+    return Continue(); }
+  Ip = cell(j);
+  Sp[0] = x;
+  return Continue(); }
 
 // apply to multiple arguments
 Vm(apn) {
@@ -46,7 +66,7 @@ Vm(apn) {
   // this instruction is only emitted when the callee is known to be a function
   // so putting a value off the stack into Ip is safe. the +2 is cause we leave
   // the currying instruction in there... should be skipped in compiler instead FIXME
-  Ip = R(Sp[n]) + 2;
+  Ip = cell(Sp[n]) + 2;
   Sp[n] = W(ra); // store return address
   return Continue(); }
 
@@ -54,7 +74,7 @@ Vm(apn) {
 Vm(tapn) {
   size_t n = getnum(Ip[1].x),
          r = getnum(Ip[2].x);
-  Ip = R(Sp[n]) + 2;
+  Ip = cell(Sp[n]) + 2;
   word *o = Sp;
   for (Sp += r + 1; n--; Sp[n] = o[n]);
   return Continue(); }
@@ -62,18 +82,32 @@ Vm(tapn) {
 // return
 Vm(ret) {
   word n = getnum(Ip[1].x) + 1;
-  return Ip = R(Sp[n]), Sp[n] = Sp[0], Sp += n, Continue(); }
-Vm(ret0) { return Ip = R(Sp[1]), Sp[1] = Sp[0], Sp += 1, Continue(); }
+  Ip = cell(Sp[n]);
+  Sp[n] = Sp[0];
+  Sp += n;
+  return Continue(); }
+Vm(ret0) {
+  Ip = cell(Sp[1]);
+  Sp[1] = Sp[0];
+  Sp += 1;
+  return Continue(); }
 
 // currying
 Vm(curry) {
-  cell *k = R(Hp), *j = k;
+  cell *k = cell(Hp), *j = k;
   size_t S = 3 + Width(struct tag),
          n = getnum(Ip[1].x);
   if (n == 2) { Have(S); }
   else { S += 2; Have(S); j += 2, k[0].ap = curry, k[1].x = putnum(n - 1); }
-  j[0].ap = uncurry, j[1].x = *Sp++, j[2].m = Ip + 2, j[3].x = 0, j[4].m = k;
-  return Hp += S, Ip = R(*Sp), Sp[0] = W(k), Continue(); }
+  j[0].ap = uncurry;
+  j[1].x = *Sp++;
+  j[2].m = Ip + 2;
+  j[3].x = 0;
+  j[4].m = k;
+  Hp += S;
+  Ip = cell(*Sp);
+  Sp[0] = word(k);
+  return Continue(); }
 
 
 #define op(nom, n, x) Vm(nom) { word _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
@@ -93,8 +127,16 @@ op(bor, 2, (Sp[0] | Sp[1]) | 1)
 op(bxor, 2, (Sp[0] ^ Sp[1]) | 1)
 op(rng, 1, putnum(rand()))
 op(fixnump, 1, nump(Sp[0]) ? putnum(-1) : nil)
-Vm(symbolp) { return Sp[0] = symp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
-Vm(nullp) { return Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil, Ip++, Continue(); }
+
+Vm(symbolp) {
+  Sp[0] = symp(Sp[0]) ? putnum(-1) : nil;
+  Ip += 1;
+  return Continue(); }
+
+Vm(nullp) {
+  Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil;
+  Ip += 1;
+  return Continue(); }
 
 
 Vm(g_yield) {
@@ -109,12 +151,12 @@ Vm(seek) {
   return Continue(); }
 
 Vm(peek) {
-  Sp[0] = R(Sp[0])->x;
+  Sp[0] = cell(Sp[0])->x;
   Ip += 1;
   return Continue(); }
 
 Vm(poke) {
-  R(Sp[1])->x = Sp[0];
+  cell(Sp[1])->x = Sp[0];
   Sp += 1;
   Ip += 1;
   return Continue(); }
@@ -122,7 +164,7 @@ Vm(poke) {
 Vm(thda) {
   size_t n = getnum(Sp[0]);
   Have(n + Width(struct tag));
-  cell *k = R(Hp);
+  cell *k = cell(Hp);
   struct tag *t = (struct tag*) (k + n);
   Hp += n + Width(struct tag);
   t->null = NULL;

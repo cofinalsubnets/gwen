@@ -107,7 +107,7 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
   // copy protected values
   for (struct root *r = f->safe; r; *r->ptr = CP(*r->ptr), r = r->next);
   // copy all reachable values using cheney's method
-  for (cell *k; (k = R(f->cp)) < R(f->hp);)
+  for (cell *k; (k = cell(f->cp)) < cell(f->hp);)
     if (datp(k)) typ(k)->wk(f, W(k), p0, t0); // is data
     else { while (k->x) k->x = CP(k->x), k++;     // is thread
            f->cp = (word*) k + 2; }
@@ -115,10 +115,10 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
   // this has never been tested or used
   struct dtor *nd = NULL;
   for (struct dtor *n, *d = f->dtors; d; d = d->next)
-    if (!owns(f, R(d->x)->x)) d->d(f, d->x);
+    if (!owns(f, cell(d->x)->x)) d->d(f, d->x);
     else n = bump(f, Width(struct dtor)),
          n->d = d->d,
-         n->x = R(d->x)->x,
+         n->x = cell(d->x)->x,
          n->next = nd,
          nd = n;
   f->dtors = nd; }
