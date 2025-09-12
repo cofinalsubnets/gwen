@@ -46,6 +46,19 @@ Vm(ap) {
   Ip = k;
   return Continue(); }
 
+Vm(apl) {
+  if (nump(Sp[0])) return
+    Sp[1] = Sp[0],
+    Sp++,
+    Ip++,
+    Continue();
+  cell *k = cell(Sp[0]);
+  Sp[0] = Sp[1];
+  Sp[1] = word(Ip + 1);
+  Ip = k;
+  return Continue(); }
+
+
 // tail call
 Vm(tap) {
   word x = Sp[0], j = Sp[1];

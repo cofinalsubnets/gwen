@@ -177,7 +177,7 @@ vm data, bnot, rng, nullp, sysclock, symnom, dot,
    seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
    read0, readf, p_isatty, g_yield, defglob, drop1, imm, ref,
    free_variable, curry, ev0, ret0,
-   cond, jump, ap, tap, apn, tapn, ret, late_bind;
+   cond, jump, ap, tap, apl, apn, tapn, ret, late_bind;
 
 static Inline void *bump(g_core *f, size_t n) {
   void *x = f->hp;

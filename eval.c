@@ -82,12 +82,11 @@ static C2(c2_yield) { return f; }
 #define Ana(n, ...) size_t n(core *f, struct env **c, size_t m, word x, ##__VA_ARGS__)
 #define Cata(n, ...) cell *n(core *f, struct env **c, cell *k, ##__VA_ARGS__)
 typedef Ana(ana);
-static ana analyze, ana_if, ana_let, ana_ap_l2r;
+static ana analyze, ana_if, ana_let, ana_ap_l2r, ana_ap, ana_ap_r2l;
 static size_t ana_seq(g_core*, env**, size_t, word, word);
 static Ana(ana_lambda, word b);
 static Ana(ana_mac, word b);
 static Ana(ana_var, env *d);
-static Ana(ana_ap, word);
 
 typedef Cata(cata);
 static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_apn;
@@ -172,11 +171,7 @@ static NoInline A2(analyze_2) {
   avec(f, b, f = analyze_2(f, c, a));
   return a2_ap_l2r(f, c, b); }
   */
-
-static NoInline Ana(analyze) {
-  if (symp(x))  return ana_var(f, c, m, x, *c);
-  if (!twop(x)) return ana_ix(f, c, m, imm, x);
-
+static Ana(ana_two) {
   g_word a = A(x), b = B(x);
   if (symp(a)) {
     g_symbol *y = sym(a);
@@ -190,15 +185,38 @@ static NoInline Ana(analyze) {
   // singleton?
   if (!twop(b)) return analyze(f, c, m, a); // value of first element
 
-  x = g_hash_get(f, 0, f->macro, a);
-  if (x) return ana_mac(f, c, m, x, b);
+  a = g_hash_get(f, 0, f->macro, a);
+  if (a) return ana_mac(f, c, m, a, b);
 
-  return ana_ap(f, c, m, a, b); }
+  return ana_ap(f, c, m, x); }
 
-static Ana(ana_ap, word y) {
+static Ana(analyze) {
+  if (symp(x))  return ana_var(f, c, m, x, *c);
+  if (!twop(x)) return ana_ix(f, c, m, imm, x);
+  return ana_two(f, c, m, x); }
+
+static Ana(ana_ap) {
+//  return ana_ap_r2l(f, c, m, x);
+  word y = B(x);
+  x = A(x);
   avec(f, y, m = analyze(f, c, m, x));
   if (m) m = ana_ap_l2r(f, c, m, y);
   return m; }
+
+  /*
+static A2(a2_r2l) {
+  if (!twop(x)) return f;
+  avec(f, x, f = a2_r2l(f, c, B(x)));
+  return analyze_2(f, c, A(x)); }
+
+static A2(a2_ap) {
+  size_t len = llen(x);
+  MM(f, &x);
+  while (len--) f = a2_i(f, c, apl);
+  UM(f);
+  return a2_r2l(f, c, x); }
+*/
+    
 
 static cata
   cata_if_push_branch,
@@ -328,6 +346,24 @@ static size_t ana_seq(core *f, env* *c, size_t m, word a, word b) {
   if (!g_ok(f)) return 0;
   return ana_seq(f, c, m, A(b), B(b)); }
 
+  /*
+static g_core *a2_seq(g_core *f, env **c, word a, word b) {
+  if (twop(b)) avec(f, a,
+    f = a2_seq(f, c, A(b), B(b)),
+    f = a2_i(f, c2_i, drop1));
+  return analyze_2(f, c, a); }
+
+static A2(a2_mac, word b) {
+  f = g_push(f, 5 , nil, b, f->quote, nil, x);
+  f = g_cons_r(f);
+  f = g_cons_r(f);
+  f = g_cons_l(f);
+  f = g_cons_r(f);
+  f = g_ana(f, g_yield);
+  f = g_ok(f) ? f->ip->ap(f, f->ip, f->hp, f->sp) : f;
+  return g_ok(f) ? analyze_2(f, c, pop1(f)) : 0; }
+  */
+
 static Ana(ana_mac, word b) {
   f = g_push(f, 5 , nil, b, f->quote, nil, x);
   f = g_cons_r(f);
@@ -344,13 +380,11 @@ static size_t ana_ap_l2r(core *f, env **c, size_t m, word x) {
   // push one anonymous argument on the stack representing the function
   f = g_cons_2(f, nil, (*c)->stack);
   if (g_ok(f)) {
-    (*c)->stack = pop1(f);
-    while (m && twop(x))
-      m = analyze(f, c, m + 1, A(x)), // eval each argument
-      x = B(x),
+    for ((*c)->stack = pop1(f); m && twop(x); x = B(x))
+      m = analyze(f, c, m, A(x)), // eval each argument
       f = encode(f, m ? Ok : Oom),
       f = g_push(f, 1, cata_ap),
-      m = g_ok(f) ? m : 0;
+      m = g_ok(f) ? m + 1 : 0;
     // pop the argument
     (*c)->stack = B((*c)->stack); }
   UM(f);
