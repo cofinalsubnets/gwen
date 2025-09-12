@@ -1,7 +1,7 @@
 #include "i.h"
 #define g_push1(f, x) g_push((f), 1, (x))
 
-static g_core *g_strof(g_core *f, const char *cs) {
+static g_core *g_ini_strof(g_core *f, const char *cs) {
   size_t bytes = strlen(cs),
          words = b2w(bytes),
          req = Width(string) + words;
@@ -12,19 +12,19 @@ static g_core *g_strof(g_core *f, const char *cs) {
     memcpy(o->text, cs, bytes); }
   return f; }
 
-static g_core *g_symof(g_core *f, const char *nom) {
-  f = g_strof(f, nom);
+static g_core *g_ini_symof(g_core *f, const char *nom) {
+  f = g_ini_strof(f, nom);
   return g_intern(f); }
 
-static g_core *g_ini_def_c(g_core *f, const char *k, word v) {
+static g_core *g_ini_def(g_core *f, const char *k, word v) {
   f = g_push1(f, v);
-  f = g_symof(f, k);
+  f = g_ini_symof(f, k);
   f = g_push1(f, f->dict);
   f = g_hash_put(f);
   if (g_ok(f)) f->sp++;
   return f; }
 
-static g_core *g_tbl(g_core *f) {
+static g_core *g_ini_tbl(g_core *f) {
   f = g_cells(f, Width(table) + 1);
   if (g_ok(f)) {
     table *t = tbl(f->sp[0]);
@@ -35,8 +35,10 @@ static g_core *g_tbl(g_core *f) {
 
 g_core *g_main(g_core *f, const char *p, const char **av) {
   int n = 0;
-  for (f = g_read_cs(f, p);   av[n]; f = g_strof(f, av[n++]));
-  for (f = g_push(f, 1, nil); n--;   f = g_cons_r(f));
+  f = g_read_cs(f, p);
+  while (av[n]) f = g_ini_strof(f, av[n++]);
+  f = g_push(f, 1, nil);
+  while (n--) f = g_cons_r(f);
   f = g_push1(f, nil);
   f = g_cons_r(f);
   f = g_push1(f, f->quote);
@@ -74,14 +76,14 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
   static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
   f->ip = bif_yield;
 
-  f = g_tbl(f);
-  f = g_tbl(f);
-  f = g_symof(f, "ev");
-  f = g_symof(f, ":");
-  f = g_symof(f, "?");
-  f = g_symof(f, "`");
-  f = g_symof(f, ",");
-  f = g_symof(f, "\\");
+  f = g_ini_tbl(f);
+  f = g_ini_tbl(f);
+  f = g_ini_symof(f, "ev");
+  f = g_ini_symof(f, ":");
+  f = g_ini_symof(f, "?");
+  f = g_ini_symof(f, "`");
+  f = g_ini_symof(f, ",");
+  f = g_ini_symof(f, "\\");
 
   if (g_ok(f))
     f->lambda = sym(pop1(f)),
@@ -93,17 +95,11 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
     f->macro = tbl(pop1(f)),
     f->dict = tbl(pop1(f));
 
-  f = g_ini_def_c(f, "globals", word(f->dict));
-  f = g_ini_def_c(f, "macros", word(f->macro));
-  f = g_strof(f, g_version);
-  f = g_ini_def_c(f, "version", pop1(f));
+  f = g_ini_def(f, "globals", word(f->dict));
+  f = g_ini_def(f, "macros", word(f->macro));
+  f = g_ini_strof(f, g_version);
+  f = g_ini_def(f, "version", pop1(f));
 
-#define insts(_) _(free_variable) _(ret) _(ap) _(tap) _(apn) _(tapn) _(jump) _(cond) _(ref) _(imm) _(drop1) _(curry) _(defglob) _(late_bind) _(ret0)
-#define i_entry(i) f = g_ini_def_c(f, "i_"#i, W(i));
-  insts(i_entry);
-#define S1(i) {{i}, {ret0}}
-#define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
-#define S3(i) {{curry},{.x=putnum(3)},{i}, {ret0}}
 #define bifs(_) \
   _(bif_clock, "clock", S1(sysclock)) _(bif_isatty, "isatty", S1(p_isatty))\
   _(bif_add, "+", S2(add)) _(bif_sub, "-", S2(sub)) _(bif_mul, "*", S2(mul)) _(bif_quot, "/", S2(quot)) _(bif_rem, "%", S2(rem)) \
@@ -117,9 +113,15 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
   _(bif_tnew, "tnew", S1(tnew)) _(bif_tkeys, "tkeys", S1(tkeys)) _(bif_tlen, "tlen", S1(tlen)) _(bif_tset, "tset", S3(tset)) _(bif_tget, "tget", S3(tget)) _(bif_tdel, "tdel", S3(tdel))\
   _(bif_twop, "twop", S1(pairp)) _(bif_strp, "strp", S1(stringp)) _(bif_symp, "symp", S1(symbolp)) _(bif_nump, "nump", S1(fixnump)) _(bif_nilp, "nilp", S1(nullp))\
   _(bif_ev, "ev", S1(ev0))
+#define S1(i) {{i}, {ret0}}
+#define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
+#define S3(i) {{curry},{.x=putnum(3)},{i}, {ret0}}
 #define built_in_function(n, _, d) static const cell n[] = d;
-#define bif_dict_entry(bn, n, _) f = g_ini_def_c(f, n, W(bn));
   bifs(built_in_function);
+#define bif_dict_entry(bn, n, _) f = g_ini_def(f, n, W(bn));
   bifs(bif_dict_entry);
+#define insts(_) _(free_variable) _(ret) _(ap) _(tap) _(apn) _(tapn) _(jump) _(cond) _(ref) _(imm) _(drop1) _(curry) _(defglob) _(late_bind) _(ret0)
+#define i_dict_entry(i) f = g_ini_def(f, "i_"#i, W(i));
+  insts(i_dict_entry);
 
   return f; }
