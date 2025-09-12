@@ -1,4 +1,52 @@
 #include "i.h"
+
+NoInline Vm(ev0) {
+  Ip++;
+  Pack(f);
+  f = g_ana(f, jump);
+  if (!g_ok(f)) return f;
+  return f->ip->ap(f, f->ip, f->hp, f->sp); }
+
+static g_core *mo_c(core *f, size_t n) {
+  f = g_cells(f, n + Width(struct tag));
+  if (g_ok(f)) {
+    cell *k = (cell*) f->sp[0];
+    struct tag *t = (struct tag*) (k + n);
+    t->null = NULL;
+    t->head = k; }
+  return f; }
+
+
+Vm(defglob) {
+  Have(3);
+  Sp -= 3;
+  Sp[0] = (g_word) f->dict;
+  Sp[1] = Ip[1].x;
+  Sp[2] = Sp[3];
+  Pack(f);
+  f = g_hash_put(f);
+  if (!g_ok(f)) return f;
+  Unpack(f);
+  Sp += 1;
+  Ip += 2;
+  return Continue(); }
+
+Vm(drop1) {
+  Ip += 1;
+  Sp += 1;
+  return Continue(); }
+
+Vm(free_variable) {
+  Ip[0].ap = imm;
+  Ip[1].x = g_hash_get(f, Ip[1].x, f->dict, Ip[1].x);
+  return Continue(); }
+
+Vm(late_bind) {
+  word ref = Ip[1].x, lfd = ref;
+  ref = AB(lfd);
+  Ip[0].ap = imm;
+  Ip[1].x = ref;
+  return Continue(); }
 // index of item in list
 static long lidx(core *f, word l, word x) {
   for (long i = 0; !nilp(l); l = B(l), i++)
@@ -63,13 +111,28 @@ typedef struct env {
   // this is the enclosing function env* if any
   struct env *par;
 } env;
+
+static long index_of_symbol(core *f, env *c, word var) {
+  long l, i = 0;
+  for (l = c->imps; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  for (l = c->args; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
+  return -1; }
+static g_core *enscope(core *f, env* par, word args, word imps) {
+  f = g_push(f, 3, args, imps, par);
+  f = mo_c(f, Width(env));
+  if (g_ok(f)) {
+    env *c = (env*) pop1(f);
+    args = pop1(f), imps = pop1(f), par = (env*) pop1(f);
+    c->args = args, c->imps = imps, c->par = par,
+    c->stack = c->alts = c->ends = c->lams = nil;
+    *--f->sp = (word) c; }
+  return f; }
 static g_core *ana_ix_atp(g_core *f, env **c, size_t m, vm *i, word x);
 static g_core *atp2(g_core*, env**, size_t);
 
 static g_core *enscope(core*, env*, word, word);
 
 #define Ana(n, ...) size_t n(core *f, struct env **c, size_t m, word x, ##__VA_ARGS__)
-#define Cata(n, ...) cell *n(core *f, struct env **c, cell *k, ##__VA_ARGS__)
 typedef Ana(ana);
 static ana analyze, ana_if, ana_let, ana_ap_l2r, ana_ap, ana_ap_r2l;
 static size_t ana_seq(g_core*, env**, size_t, word, word);
@@ -77,9 +140,8 @@ static Ana(ana_lambda, word b);
 static Ana(ana_mac, word b);
 static Ana(ana_var, env *d);
 
-typedef Cata(cata);
-static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_apn;
-static Cata(yieldk) { return k; }
+typedef g_core *cata(core*, env**);
+static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_apn, cata_yield;
 
 // keep this separate and NoInline so g_eval can be tail call optimized if possible
 NoInline g_core *g_ana(core *f, vm *y) {
@@ -87,7 +149,7 @@ NoInline g_core *g_ana(core *f, vm *y) {
   if (!g_ok(f)) return f;
   env *c = (env*) pop1(f);
   word x = f->sp[0];
-  f->sp[0] = (word) yieldk; // function that returns thread from code generation
+  f->sp[0] = (word) cata_yield; // function that returns thread from code generation
   MM(f, &c);
   size_t m = analyze(f, &c, 1, x);
   if (!m) f = encode(f, Oom);
@@ -101,19 +163,25 @@ static g_core *g_cons_2(g_core *f, g_word a, g_word b) {
   f = g_push(f, 2, a, b);
   return g_cons_l(f); }
 
-
 // generic instruction ana handlers
 static Inline size_t ana_ix(core *f, env **c, size_t m, vm *i, word x) {
   f = g_push(f, 3, cata_ix, i, x);
   return g_ok(f) ? m + 2 : 0; }
 
+static g_core *ana_ix_atp(g_core *f, env **c, size_t m, vm *i, word x) {
+  m = ana_ix(f, c, m, i, x);
+  f = m ? mo_c(f, m) : encode(f, Oom);
+  if (g_ok(f)) {
+    cell *k = cell(f->sp[0]);
+    memset(k, -1, m * sizeof(word));
+    k += m;
+    f->sp[0] = word(k);
+    f = pull(f, c); }
+  return f; }
+
 static Inline size_t ana_i(core *f, env **c, size_t m, vm *i) {
   f = g_push(f, 2, cata_i, i);
   return g_ok(f) ? m + 1 : 0; }
-
-static g_core *ana2(g_core *f, env **c, size_t m, word x) {
-  m = analyze(f, c, m, x);
-  return m ? f : encode(f, Oom); }
 
 static Ana(ana_two) {
   g_word a = A(x), b = B(x);
@@ -146,79 +214,6 @@ static Ana(ana_ap) {
   avec(f, y, m = analyze(f, c, m, x));
   if (m) m = ana_ap_l2r(f, c, m, y);
   return m; }
-
-static cata
-  cata_if_push_branch,
-  cata_if_pop_branch,
-  cata_if_push_exit,
-  cata_if_pop_exit,
-  cata_if_peek_exit;
-
-static Ana(ana_if) {
-  f = g_push(f, 2, x, cata_if_pop_exit);
-  if (!g_ok(f)) return 0;
-  x = *f->sp++;
-  MM(f, &x);
-  for (;m;) {
-    word y = twop(x) ? A(x) : x;
-    m = analyze(f, c, m + 3, y);
-    if (!m) break;
-    if (!twop(x) || !twop(B(x))) { // this means we have just analyzed the default case
-      f = g_push(f, 1, cata_if_peek_exit);
-      m = g_ok(f) ? m : 0;
-      break; }
-    f = g_push(f, 1, cata_if_pop_branch);
-    m = g_ok(f) ? analyze(f, c, m + 3, AB(x)) : 0;
-    f = m ? g_push(f, 2, cata_if_push_branch, cata_if_peek_exit) : encode(f, Oom);
-    m = g_ok(f) ? m : 0;
-    x = BB(x); }
-  UM(f);
-  if (m) 
-    f = g_push(f, 1, cata_if_push_exit),
-    m = g_ok(f) ? m : 0;
-  return m; }
-
-static Cata(cata_if_push_exit) { // first emitter called for cond expression
-  f = g_cons_2(f, W(k), (*c)->ends);
-  if (!g_ok(f)) return 0;
-  word w = pop1(f);
-  k = cell(A((*c)->ends = w));
-  return pull(f, c, k); }
-
-static Cata(cata_if_pop_exit) { // last emitter called for cond expression
-  (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
-  return pull(f, c, k); }
-
-
-static Cata(cata_if_pop_branch) { // last emitter called for a branch
-  k -= 2;
-  k[0].ap = cond; // pops next branch address off env stack alts
-  k[1].x = A((*c)->alts);
-  (*c)->alts = B((*c)->alts);
-  return pull(f, c, k); }
-
-static Cata(cata_if_push_branch) {
-  f = g_cons_2(f, W(k), (*c)->alts);
-  if (!g_ok(f)) return 0;
-  word w = pop1(f);
-  (*c)->alts = w;
-  k = cell(A(w));
-  return pull(f, c, k); }
-
-static Cata(cata_if_peek_exit) {
-  cell *addr = (cell*) A((*c)->ends);
-  // if the destination is a return or tail call,
-  // then copy it forward instead of emitting a jump.
-  if (addr->ap == ret || addr->ap == tap)
-    k = memcpy(k - 2, addr, 2 * sizeof(word));
-  else if (addr->ap == tapn)
-    k = memcpy(k - 3, addr, 3 * sizeof(word));
-  else
-    k -= 2,
-    k[0].ap = jump,
-    k[1].x = (word) addr;
-  return pull(f, c, k); }
-
 
 static size_t ana_seq(core *f, env* *c, size_t m, word a, word b) {
   if (!twop(b)) return analyze(f, c, m, a);
@@ -325,7 +320,7 @@ static g_core *ana_lam(core *f, env **c, word imps, word exp) {
 
   exp = pop1(f);
   d->args = f->sp[0];
-  f->sp[0] = word(yieldk);
+  f->sp[0] = word(cata_yield);
   size_t m = analyze(f, &d, 2, exp);
   if (!m) return UM(f), encode(f, Oom);
   size_t arity = llen(d->args) + llen(d->imps);
@@ -466,132 +461,155 @@ fail:
   m = 0;
   goto end; }
 
+
+
+static cata
+  cata_if_push_branch,
+  cata_if_pop_branch,
+  cata_if_push_exit,
+  cata_if_pop_exit,
+  cata_if_peek_exit;
+
+static Ana(ana_if) {
+  f = g_push(f, 2, x, cata_if_pop_exit);
+  if (!g_ok(f)) return 0;
+  x = *f->sp++;
+  MM(f, &x);
+  for (;m;) {
+    word y = twop(x) ? A(x) : x;
+    m = analyze(f, c, m + 3, y);
+    if (!m) break;
+    if (!twop(x) || !twop(B(x))) { // this means we have just analyzed the default case
+      f = g_push(f, 1, cata_if_peek_exit);
+      m = g_ok(f) ? m : 0;
+      break; }
+    f = g_push(f, 1, cata_if_pop_branch);
+    m = g_ok(f) ? analyze(f, c, m + 3, AB(x)) : 0;
+    f = m ? g_push(f, 2, cata_if_push_branch, cata_if_peek_exit) : encode(f, Oom);
+    m = g_ok(f) ? m : 0;
+    x = BB(x); }
+  UM(f);
+  if (m) 
+    f = g_push(f, 1, cata_if_push_exit),
+    m = g_ok(f) ? m : 0;
+  return m; }
+
+#define Cata(n, ...) g_core *n(core *f, struct env **c, ##__VA_ARGS__)
+static Cata(cata_yield) {
+//  puts("cata yield");
+  return f; }
+static Cata(cata_if_push_exit) { // first emitter called for cond expression
+//  puts("cata if push exit");
+  f = g_cons_2(f, f->sp[0], (*c)->ends);
+  if (g_ok(f)) (*c)->ends = pop1(f);
+  return pull(f, c); }
+
+static Cata(cata_if_pop_exit) { // last emitter called for cond expression
+//  puts("cata if pop exit");
+  (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
+  return pull(f, c); }
+
+
+static Cata(cata_if_pop_branch) { // last emitter called for a branch
+//  puts("cata if pop branch");
+  cell *k = cell(f->sp[0]);
+  k -= 2;
+  k[0].ap = cond; // pops next branch address off env stack alts
+  k[1].x = A((*c)->alts);
+  (*c)->alts = B((*c)->alts);
+  f->sp[0] = word(k);
+  return pull(f, c); }
+
+static Cata(cata_if_push_branch) {
+//  puts("cata if push branch");
+  f = g_cons_2(f, f->sp[0], (*c)->alts);
+  if (g_ok(f)) (*c)->alts = pop1(f);
+  return pull(f, c); }
+
+static Cata(cata_if_peek_exit) {
+//  puts("cata if peek exit");
+  cell *addr = cell(A((*c)->ends)),
+       *k = cell(f->sp[0]);
+  // if the destination is a return or tail call,
+  // then copy it forward instead of emitting a jump.
+  if (addr->ap == ret || addr->ap == tap)
+    k = memcpy(k - 2, addr, 2 * sizeof(word));
+  else if (addr->ap == tapn)
+    k = memcpy(k - 3, addr, 3 * sizeof(word));
+  else
+    k -= 2,
+    k[0].ap = jump,
+    k[1].x = (word) addr;
+  f->sp[0] = word(k);
+  return pull(f, c); }
 // emits call instruction and modifies to tail call
 // if next operation is return
 static Cata(cata_ap) {
+//  puts("cata ap");
+  cell *k = cell(f->sp[0]);
   if (k[0].ap == ret) k[0].ap = tap;
   else --k, k[0].ap = ap;
-  return pull(f, c, k); }
+  f->sp[0] = word(k);
+  return pull(f, c); }
 
 static Cata(cata_apn) {
-  word n = *f->sp++;
+//  puts("cata apn");
+  cell *k = cell(f->sp[0]);
+  word n = f->sp[1];
   if (k[0].ap == ret) k[0].x = n, --k, k[0].ap = tapn;
   else --k, k[0].x = n, --k, k[0].ap = apn;
-  return pull(f, c, k); }
+  f->sp[1] = word(k);
+  f->sp += 1;
+  return pull(f, c); }
 
 static Cata(cata_var_2) {
-  word var = *f->sp++, stack = *f->sp++;
+//  puts("cata var 2");
+  cell *k = cell(f->sp[0]);
+  word var = f->sp[1], stack = f->sp[2];
   long i = lidx(f, stack, var);
   k -= 2;
   k[0].ap = ref;
   k[1].x = putnum(i);
-  return pull(f, c, k); }
-
-static long index_of_symbol(core *f, env *c, word var) {
-  long l, i = 0;
-  for (l = c->imps; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  for (l = c->args; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  return -1; }
+  f->sp[2] = word(k);
+  f->sp += 2;
+  return pull(f, c); }
 
 // emit stack reference instruction
 static Cata(cata_var) {
-  word var = *f->sp++, // variable name
-       ins = llen(*f->sp++), // stack inset
+//  puts("cata var");
+  cell *k = cell(f->sp[0]);
+  word var = f->sp[1], // variable name
+       ins = llen(f->sp[2]), // stack inset
        i = index_of_symbol(f, *c, var);
   k -= 2;
   k[0].ap = ref;
   k[1].x = putnum(i + ins);
-  return pull(f, c, k); }
+  f->sp[2] = word(k);
+  f->sp += 2;
+  return pull(f, c); }
 
 static Inline Cata(pull) {
-  cata *p = (cata*) f->sp[0];
+//  puts("cata pull");
+  cata *p = (cata*) f->sp[1];
+  f->sp[1] = f->sp[0];
   f->sp += 1;
-  return p(f, c, k); }
+  return p(f, c); }
 
 static Cata(cata_i) {
+//  puts("cata i");
+  cell *k = cell(f->sp[0]);
   k -= 1;
-  k[0].x = f->sp[0];
+  k[0].x = f->sp[1];
   f->sp += 1;
-  return pull(f, c, k); }
+  f->sp[0] = word(k);
+  return pull(f, c); }
 
 static Cata(cata_ix) {
+//  puts("cata ix");
+  cell *k = cell(f->sp[0]);
   k -= 2;
-  k[0].x = f->sp[0];
-  k[1].x = f->sp[1];
+  k[0].x = f->sp[1];
+  k[1].x = f->sp[2];
   f->sp += 2;
-  return pull(f, c, k); }
-
-static g_core *mo_c(core *f, size_t n) {
-  f = g_cells(f, n + Width(struct tag));
-  if (g_ok(f)) {
-    cell *k = (cell*) f->sp[0];
-    struct tag *t = (struct tag*) (k + n);
-    t->null = NULL;
-    t->head = k; }
-  return f; }
-
-NoInline Vm(ev0) {
-  Ip++;
-  Pack(f);
-  f = g_ana(f, jump);
-  if (!g_ok(f)) return f;
-  return f->ip->ap(f, f->ip, f->hp, f->sp); }
-
-Vm(defglob) {
-  Have(3);
-  Sp -= 3;
-  Sp[0] = (g_word) f->dict;
-  Sp[1] = Ip[1].x;
-  Sp[2] = Sp[3];
-  Pack(f);
-  f = g_hash_put(f);
-  if (!g_ok(f)) return f;
-  Unpack(f);
-  Sp += 1;
-  Ip += 2;
-  return Continue(); }
-
-Vm(drop1) {
-  Ip += 1;
-  Sp += 1;
-  return Continue(); }
-
-Vm(free_variable) {
-  Ip[0].ap = imm;
-  Ip[1].x = g_hash_get(f, Ip[1].x, f->dict, Ip[1].x);
-  return Continue(); }
-
-Vm(late_bind) {
-  word ref = Ip[1].x, lfd = ref;
-  ref = AB(lfd);
-  Ip[0].ap = imm;
-  Ip[1].x = ref;
-  return Continue(); }
-
-static g_core *atp2(g_core *f, env **c, size_t m) {
-  f = mo_c(f, m);
-  if (g_ok(f))
-    memset(cell(f->sp[0]), -1, m * sizeof(word)),
-    f->sp[0] = word(cell(f->sp[0]) + m);
-  return f; }
-
-static g_core *ana_ix_atp(g_core *f, env **c, size_t m, vm *i, word x) {
-  m = ana_ix(f, c, m, i, x);
-  f = m ? mo_c(f, m) : encode(f, Oom);
-  if (g_ok(f)) {
-    cell *k = cell(pop1(f));
-    memset(k, -1, m * sizeof(word));
-    k = pull(f, c, k + m);
-    f = k ? g_push(f, 1, k) : encode(f, Oom); }
-  return f; }
-
-static g_core *enscope(core *f, env* par, word args, word imps) {
-  f = g_push(f, 3, args, imps, par);
-  f = mo_c(f, Width(env));
-  if (g_ok(f)) {
-    env *c = (env*) pop1(f);
-    args = pop1(f), imps = pop1(f), par = (env*) pop1(f);
-    c->args = args, c->imps = imps, c->par = par,
-    c->stack = c->alts = c->ends = c->lams = nil;
-    *--f->sp = (word) c; }
-  return f; }
+  f->sp[0] = word(k);
+  return pull(f, c); }

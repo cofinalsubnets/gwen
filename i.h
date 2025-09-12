@@ -39,6 +39,7 @@
 #define MM(f,r) ((f->safe=&((struct root){(word*)(r),f->safe})))
 #define UM(f) (f->safe=f->safe->next)
 #define pop1(f) (*(f)->sp++)
+#define push1(f, x) (*--(f)->sp=(x))
 #define nump(_) (W(_)&1)
 #define celp(_) (!nump(_))
 #define homp celp
