@@ -157,14 +157,14 @@ bool neql(g_core*, g_word, g_word),
 void transmit(g_core*, FILE*, g_word);
 uintptr_t hash(g_core*, g_word),
           g_clock(void);
-g_word cp(core*, word, word*, word*);
+g_word cp(core*, word, word*, word*),
+       g_hash_get(g_core*, g_word, table*, g_word);
 g_core *g_have(g_core*, uintptr_t),
        *g_cells(g_core*, size_t),
        *g_push(g_core*, uintptr_t, ...),
        *g_cons_l(g_core*),
        *g_cons_r(g_core*),
        *g_intern(g_core*),
-       *g_hash_get(g_core*),
        *g_hash_put(g_core*),
        *g_ana(g_core*, vm*),
        *g_read_cs(g_core*, const char*);

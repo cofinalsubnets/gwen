@@ -19,6 +19,7 @@ o=$(c:.c=.o)
 
 CFLAGS=\
   -std=gnu17 -g -O2 -Wall -fpic\
+	-Wno-unused-function\
  	-Wstrict-prototypes -Wno-shift-negative-value\
 	-fno-plt -fno-exceptions -fomit-frame-pointer\
   -fno-asynchronous-unwind-tables -fno-stack-protector\

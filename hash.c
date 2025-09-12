@@ -133,21 +133,15 @@ Vm(tnew) {
   Ip++;
   return Continue(); }
 
-g_core *g_hash_get(core *f) {
-  table *t = (table*) f->sp[1];
-  word k = f->sp[2],
-       zero = f->sp[0];
+g_word g_hash_get(g_core *f, word zero, table *t, word k) {
   size_t i = index_of_key(f, t, k);
   struct entry *e = t->tab[i];
   while (e && !eql(f, k, e->key)) e = e->next;
-  f->sp += 2;
-  f->sp[0] = e ? e->val : zero;
-  return f; }
+  return e ? e->val : zero; }
 
 Vm(tget) {
-  Pack(f);
-  f = g_hash_get(f);
-  Unpack(f);
+  Sp[2] = g_hash_get(f, Sp[0], tbl(Sp[1]), Sp[2]);
+  Sp += 2;
   Ip += 1;
   return Continue(); }
 
