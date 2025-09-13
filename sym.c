@@ -13,7 +13,7 @@ static Inline void ini_anon(symbol *y, word code) {
   y->nom = 0;
   y->code = code; }
 
-static symbol *intern_seek(core *v, string *b, symbol **y) {
+static symbol *g_intern_r(core *v, string *b, symbol **y) {
   symbol *z = *y;
   if (!z) { // found an empty spot, insert new symbol
     z = bump(v, Width(symbol)),
@@ -25,18 +25,18 @@ static symbol *intern_seek(core *v, string *b, symbol **y) {
           a->len > b->len ? 1 :
           strncmp(a->text, b->text, a->len);
   return i == 0 ? z :
-    intern_seek(v, b, i < 0 ? &z->l : &z->r); }
+    g_intern_r(v, b, i < 0 ? &z->l : &z->r); }
 
 g_core *g_intern(g_core *f) {
   f = g_have(f, Width(symbol));
-  if (g_ok(f)) f->sp[0] = (g_word) intern_seek(f, str(f->sp[0]), &f->symbols);
+  if (g_ok(f)) f->sp[0] = (g_word) g_intern_r(f, str(f->sp[0]), &f->symbols);
   return f; }
 
 Vm(nomsym) {
   Have(Width(symbol));
   symbol *y;
   Pack(f);
-  y = intern_seek(f, str(f->sp[0]), &f->symbols),
+  y = g_intern_r(f, str(f->sp[0]), &f->symbols),
   Unpack(f);
   Sp[0] = word(y);
   Ip += 1;
@@ -72,7 +72,7 @@ static uintptr_t xx_sym(core *v, word _) { return sym(_)->code; }
 
 static word cp_sym(core *f, word x, word *p0, word *t0) {
   symbol *src = sym(x), *dst;
-  if (src->nom) dst = intern_seek(f, str(cp(f, W(src->nom), p0, t0)), &f->symbols);
+  if (src->nom) dst = g_intern_r(f, str(cp(f, W(src->nom), p0, t0)), &f->symbols);
   else dst = bump(f, Width(symbol) - 2),
        ini_anon(dst, src->code);
   return (word) (src->ap = (vm*) dst); }

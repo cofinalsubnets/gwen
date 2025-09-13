@@ -1,6 +1,6 @@
 ; this expression evaluates to a function of a list (command line arguments)
 (: # prelude definitions
- prelude '( ; a list of expressions to be evaluated in order
+ prel '( ; a list of expressions to be evaluated in order
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
@@ -46,7 +46,7 @@
 # eval function
   ; a single expression whose value is the eval function.
   ; you can use prelude definitions in here.
-  evaluator '(:- eval
+  evalr '(:- eval
     (em1 i k n) (p1 i (k (+ 1 n)))
     (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
     imm (em2 i_imm) p0 poke
@@ -114,14 +114,14 @@
       (atomp (B b))
        (: a0 (ana c (A b))
           a1 (peek_end c)
-        (<=< a0 a1))
+        (>=> a1 a0))
       (: a0 (ana c (A b))
          a1 (pop_alt c)
          a2 (ana c (AB b))
          a3 (peek_end c)
          a4 (push 'alt)
          a5 (ana_if_r (BB b))
-       (<=< a0 a1 a2 a3 a4 a5)))
+       (>=> a5 a4 a3 a2 a1 a0)))
 
      (pop_alt c k n) (:
       j (k (+ 2 n))
@@ -144,7 +144,7 @@
        (: a0 (ana c (A b))
           a1 em_ap
           a2 (loop c (B b))
-        (<=< a0 a1 a2)))
+        (>=> a2 a1 a0)))
      _ (cpush c 'stk n)
      a (loop c b)
      _ (cpop c 'stk)
@@ -289,10 +289,10 @@
  (go e a) (? a (, (e (A a)) (go e (B a)))) ; for evaluating the prelude
  t0 (clock 0)
  e0 ev             ; initial eval
- _ (go e0 prelude) ; initial prelude
- e1 (e0 evaluator) ; middle eval
- _ (go e1 prelude) ; final prelude
- e2 (e1 evaluator) ; final eval
+ _ (go e0 prel) ; initial prelude
+ e1 (e0 evalr) ; middle eval
+ _ (go e1 prel) ; final prelude
+ e2 (e1 evalr) ; final eval
  t1 (clock 0)
  _ (tset globals 'boot_ms (- t1 t0))
  _ (tset globals 'ev e2) ; redefine eval

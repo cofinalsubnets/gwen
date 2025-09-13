@@ -1,17 +1,14 @@
 #include "i.h"
 #define max(a, b) ((a)>(b)?(a):(b))
 
-Vm(stringp) { return Sp[0] = strp(Sp[0]) ? putnum(-1) : nil, Ip += 1, Continue(); }
 static uintptr_t xx_str(core *v, word _);
 static bool eq_str(core *f, word x, word y);
 static void em_str(core* v, FILE *o, word _);
 static void wk_str(core* f, word x, word *p0, word *t0);
 static word cp_str(core* v, word x, word *p0, word *t0);
 
-
 methods
   str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .eq = eq_str, .em = em_str, };
-
 
 static word cp_str(core* v, word x, word *p0, word *t0) {
   string *src = str(x);
@@ -37,24 +34,23 @@ static uintptr_t xx_str(core *v, word _) {
 
 static bool eq_str(core *f, word x, word y) {
   string *a = str(x), *b = str(y);
-  return a->len == b->len && 0 == strncmp(a->text, b->text, a->len); }
+  return a->len == b->len &&
+    0 == strncmp(a->text, b->text, a->len); }
 
-
-Vm(slen) { return
-  Sp[0] = strp(Sp[0]) ? putnum(str(Sp[0])->len) : nil,
-  Ip += 1,
-  Continue(); }
+Vm(slen) {
+  Sp[0] = strp(Sp[0]) ? putnum(str(Sp[0])->len) : nil;
+  Ip += 1;
+  return Continue(); }
 
 Vm(ssub) {
-  cell* r = (cell*) Sp[3];
-  if (!strp(Sp[0])) Sp[3] = nil;
+  if (!strp(Sp[0])) Sp[2] = nil;
   else {
     string *s = str(Sp[0]);
     intptr_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
              j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
     i = max(i, 0), i = min(i, s->len);
     j = max(j, i), j = min(j, s->len);
-    if (i == j) Sp[3] = nil;
+    if (i == j) Sp[2] = nil;
     else {
       size_t req = Width(string) + b2w(j - i);
       Have(req);
@@ -62,8 +58,10 @@ Vm(ssub) {
       Hp += req;
       ini_str(t, j - i);
       memcpy(t->text, s->text + i, j - i);
-      Sp[3] = (word) t; } }
-  return Ip = r, Sp += 3, Continue(); }
+      Sp[2] = (word) t; } }
+  return Ip += 1,
+         Sp += 2,
+         Continue(); }
 
 Vm(sget) {
   if (!strp(Sp[0])) Sp[1] = nil;
@@ -72,13 +70,21 @@ Vm(sget) {
     size_t i = min(s->len - 1, getnum(Sp[1]));
     i = max(i, 0);
     Sp[1] = putnum(s->text[i]); }
-  return Ip++, Sp++, Continue(); }
+  return Ip += 1,
+         Sp += 1,
+         Continue(); }
 
 Vm(scat) {
   word a = Sp[0];
-  if (!strp(a)) return Sp += 1, Ip += 1, Continue();
+  if (!strp(a)) return Sp += 1,
+                       Ip += 1,
+                       Continue();
   word b = Sp[1];
-  if (!strp(b)) return Sp[1] = a, Sp += 1, Ip += 1, Continue();
+  if (!strp(b)) return Sp[1] = a,
+                       Sp += 1,
+                       Ip += 1,
+                       Continue();
+
   string *x = str(a), *y = str(b);
   size_t len = x->len + y->len,
          req = Width(string) + b2w(len);
@@ -91,3 +97,8 @@ Vm(scat) {
          Sp[1] = W(z),
          Ip += 1,
          Continue(); }
+
+Vm(stringp) {
+  Sp[0] = strp(Sp[0]) ? putnum(-1) : nil;
+  Ip += 1;
+  return Continue(); }
