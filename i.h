@@ -221,3 +221,5 @@ static Inline struct tag { cell *null, *head, end[]; } *ttag(cell*k) {
 // align bytes up to the nearest word
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");
 _Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
+#define g_push1(f, x) g_push((f), 1, (x))
+#define g_push2(f, x, y) g_push((f), 2, (x), (y))

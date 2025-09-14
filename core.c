@@ -1,5 +1,4 @@
 #include "i.h"
-#define g_push1(f, x) g_push((f), 1, (x))
 
 static g_core *g_ini_strof(g_core *f, const char *cs) {
   size_t bytes = strlen(cs),
