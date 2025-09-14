@@ -119,14 +119,19 @@ static g_core *enscope(core *f, env* par, word args, word imps) {
   return f; }
 
 typedef size_t ana(core*, env**, size_t, word);
-typedef g_core *cata(core*, env**, size_t, size_t);
+typedef g_core *cata(core*, env**, size_t);
 
 static ana analyze, ana_if, ana_let, ana_ap_l2r, ana_ap, ana_ap_r2l;
 static size_t ana_curry(core*, env**, size_t),
               ana_seq(g_core*, env**, size_t, word, word);
 
 static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_apn, cata_yield;
-static g_core *ana_ix_atp(g_core *f, env**, size_t m, vm *i, word x);
+static g_core *ana_atp(g_core *f, env**, size_t m);
+
+// generic instruction ana handlers
+static Inline size_t ana_ix(core *f, size_t m, vm *i, word x) {
+  f = g_push(f, 3, cata_ix, i, x);
+  return g_ok(f) ? m + 2 : 0; }
 
 // keep this separate and NoInline so g_eval can be tail call optimized if possible
 NoInline g_core *g_ana(core *f, vm *y) {
@@ -137,31 +142,23 @@ NoInline g_core *g_ana(core *f, vm *y) {
   f->sp[0] = (word) cata_yield; // function that returns thread from code generation
   MM(f, &c);
   size_t m = analyze(f, &c, 0, x);
-  if (!m) return UM(f), encode(f, Oom);
-
-  f = ana_ix_atp(f, &c, m, y, (word) f->ip);
+  m = m ? ana_ix(f, m, y, (word) f->ip) : m;
+  f = ana_atp(f, &c, m);
   if (g_ok(f)) f->ip = cell(pop1(f));
-
   return UM(f), f; }
 
 static g_core *g_cons_2(g_core *f, g_word a, g_word b) {
   f = g_push(f, 2, a, b);
   return g_cons_l(f); }
 
-// generic instruction ana handlers
-static Inline size_t ana_ix(core *f, size_t m, vm *i, word x) {
-  f = g_push(f, 3, cata_ix, i, x);
-  return g_ok(f) ? m + 2 : 0; }
-
-static g_core *ana_ix_atp(g_core *f, env **c, size_t m, vm *i, word x) {
-  m = ana_ix(f, m, i, x);
+static g_core *ana_atp(g_core *f, env **c, size_t m) {
   f = m ? mo_c(f, m) : encode(f, Oom);
   if (g_ok(f)) {
     cell *k = cell(f->sp[0]);
     memset(k, -1, m * sizeof(word));
     k += m;
     f->sp[0] = word(k);
-    f = pull(f, c, 0, m); }
+    f = pull(f, c, 0); }
   return f; }
 
 static cata
@@ -171,7 +168,7 @@ static cata
   cata_if_pop_exit,
   cata_if_jump_to_exit;
 
-#define Cata(_, ...) g_core *_(core *f, struct env **c, size_t m, size_t n, ##__VA_ARGS__)
+#define Cata(_, ...) g_core *_(core *f, struct env **c, size_t m, ##__VA_ARGS__)
 static Cata(cata_curry) {
   m += 2;
   cell *k = cell(f->sp[0]);
@@ -183,7 +180,7 @@ static Cata(cata_curry) {
     k[1].x = putnum(ar);
   f->sp[1] = word(k);
   f->sp += 1;
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 
 static size_t ana_curry(core *f, env **c, size_t m) {
@@ -198,11 +195,11 @@ static Cata(cata_yield) {
 static Cata(cata_if_push_exit) { // first emitter called for cond expression
   f = g_cons_2(f, f->sp[0], (*c)->ends);
   if (g_ok(f)) (*c)->ends = pop1(f);
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Cata(cata_if_pop_exit) { // last emitter called for cond expression
   (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Cata(cata_if_pop_branch) { // last emitter called for a branch
   m += 3; // not 2?
@@ -212,12 +209,12 @@ static Cata(cata_if_pop_branch) { // last emitter called for a branch
   k[1].x = A((*c)->alts);
   (*c)->alts = B((*c)->alts);
   f->sp[0] = word(k);
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Cata(cata_if_push_branch) {
   f = g_cons_2(f, f->sp[0], (*c)->alts);
   if (g_ok(f)) (*c)->alts = pop1(f);
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Cata(cata_if_jump_to_exit) {
   m += 3;
@@ -234,7 +231,7 @@ static Cata(cata_if_jump_to_exit) {
     k[0].ap = jump,
     k[1].x = (word) addr;
   f->sp[0] = word(k);
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 // emits call instruction and modifies to tail call
 // if next operation is return
@@ -244,7 +241,7 @@ static Cata(cata_ap) {
   if (k[0].ap == ret) k[0].ap = tap;
   else --k, k[0].ap = ap;
   f->sp[0] = word(k);
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Cata(cata_apn) {
   m += 2;
@@ -254,7 +251,7 @@ static Cata(cata_apn) {
   else --k, k[0].x = v, --k, k[0].ap = apn;
   f->sp[1] = word(k);
   f->sp += 1;
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Cata(cata_var_2) {
   m += 2;
@@ -269,7 +266,7 @@ static Cata(cata_var_2) {
   k[1].x = putnum(i);
   f->sp[2] = word(k);
   f->sp += 2;
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Inline long index_of_symbol(core *f, env *c, word var) {
   long l, i = 0;
@@ -289,13 +286,13 @@ static Cata(cata_var) {
   k[1].x = putnum(i + ins);
   f->sp[2] = word(k);
   f->sp += 2;
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Inline Cata(pull) {
   cata *p = (cata*) f->sp[1];
   f->sp[1] = f->sp[0];
   f->sp += 1;
-  return p(f, c, m, n); }
+  return p(f, c, m); }
 
 static Cata(cata_i) {
   m += 1;
@@ -304,7 +301,7 @@ static Cata(cata_i) {
   k[0].x = f->sp[1];
   f->sp += 1;
   f->sp[0] = word(k);
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 static Cata(cata_ix) {
   m += 2;
@@ -314,7 +311,7 @@ static Cata(cata_ix) {
   k[1].x = f->sp[2];
   f->sp += 2;
   f->sp[0] = word(k);
-  return pull(f, c, m, n); }
+  return pull(f, c, m); }
 
 #define Ana(n, ...) size_t n(core *f, struct env **c, size_t m, word x, ##__VA_ARGS__)
 static Ana(ana_lambda, word b);
@@ -484,14 +481,15 @@ static g_core *ana_lam(core *f, env **c, word imps, word exp) {
 
   size_t m = ana_curry(f, &d, 0);
   m = m ? analyze(f, &d, m, exp) : m;
-  if (!m) return UM(f), encode(f, Oom);
   size_t arity = llen(d->args) + llen(d->imps);
-  f = ana_ix_atp(f, &d, m, ret, putnum(arity));
-  cell *k = g_ok(f) ? cell(pop1(f)) : 0;
-  if (!k) return UM(f), encode(f, Oom);
-  ttag(k)->head = k;
+  m = m ? ana_ix(f, m, ret, putnum(arity)) : m;
+  f = ana_atp(f, &d, m);
   UM(f);
-  return g_cons_2(f, W(k), d->imps); }
+  if (g_ok(f)) {
+    cell *k = cell(pop1(f));
+    ttag(k)->head = k;
+    f = g_cons_2(f, W(k), d->imps); }
+  return f; }
 
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
