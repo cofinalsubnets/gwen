@@ -137,9 +137,9 @@ static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_apn, cata
 static size_t ana_curry(core*, env**, size_t),
               ana_seq(g_core*, env**, size_t, word, word);
 
-
 // generic instruction ana handlers
 static Inline size_t ana_ix(core *f, size_t m, vm *i, word x) {
+  if (!m || !g_ok(f)) return 0;
   f = g_push(f, 3, cata_ix, i, x);
   return g_ok(f) ? m + 2 : 0; }
 
@@ -152,14 +152,14 @@ NoInline g_core *g_ana(core *f, vm *y) {
   f->sp[0] = (word) cata_yield; // function that returns thread from code generation
   MM(f, &c);
   size_t m = analyze(f, &c, 1, x);
-  m = m ? ana_ix(f, m, y, (word) f->ip) : m;
+  m = ana_ix(f, m, y, (word) f->ip);
   f = atp(f, &c, m);
   if (g_ok(f)) f->ip = cell(pop1(f));
   UM(f);
   return f; }
 
 static g_core *atp(g_core *f, env **c, size_t m) {
-  f = g_ok(f) ? m ? mo_c(f, m) : encode(f, Oom) : f;
+  f = !g_ok(f) ? f : !m ? encode(f, Oom) : mo_c(f, m);
   if (g_ok(f)) {
     cell *k = cell(f->sp[0]);
     memset(k, -1, m * sizeof(word));
@@ -326,9 +326,8 @@ static Ana(analyze) {
       return m; }
     // defined as a function by a local let form?
     word y;
-    if ((y = assq(f, d->lams, x))) return
-      m = ana_ix(f, m, late_bind, y),
-      ana_ap_args(f, c, m, BB(f->sp[2]));
+    if ((y = assq(f, d->lams, x))) return m = ana_ix(f, m, late_bind, y),
+                                          ana_ap_args(f, c, m, BB(f->sp[2]));
     // non function definition from local let form?
     if (memq(f, d->stack, x)) return
       f = g_push(f, 3, cata_var_2, x, d->stack),
@@ -360,9 +359,8 @@ static Ana(analyze) {
     if (y == f->let) return !twop(B(b)) ? analyze(f, c, m, A(b)) :
                                           ana_let(f, c, m, b);
     if (y == f->begin) return ana_seq(f, c, m, A(b), B(b));
-    if (y == f->lambda) return !twop(B(b)) ? analyze(f, c, m, A(b)) :
-                               (f = ana_lambda(f, c, nil, b),
-                                g_ok(f) ? analyze(f, c, m, pop1(f)) : 0);
+    if (y == f->lambda) return f = ana_lambda(f, c, nil, b),
+                               g_ok(f) ? analyze(f, c, m, pop1(f)) : 0;
     if (y == f->cond) return !twop(B(b)) ? analyze(f, c, m, A(b)) :
                                            ana_if(f, c, m, b); }
 
@@ -384,55 +382,50 @@ static Ana(analyze) {
     avec(f, b, m = analyze(f, c, m, a)),
     ana_ap_args(f, c, m, b); }
 
-// noncommutative
-static Ana(ana_if) {
-  f = g_push(f, 2, x, cata_if_pop_exit);
-  if (!g_ok(f)) return 0;
-  x = pop1(f);
+static Ana(ana_if_r) {
   MM(f, &x);
-  for (;m;) {
-    word y = twop(x) ? A(x) : x;
-    m = analyze(f, c, m + 3, y);
-    if (!m) break;
-    if (!twop(x) || !twop(B(x))) { // this means we have just analyzed the default case
-      f = g_push(f, 1, cata_if_jump_to_exit);
+  m = analyze(f, c, m + 3, twop(x) ? A(x) : x);
+  if (m) {
+    if (!twop(x) || !twop(B(x)))
+      f = g_push(f, 1, cata_if_jump_to_exit),
       m = g_ok(f) ? m : 0;
-      break; }
-    f = g_push(f, 1, cata_if_pop_branch);
-    m = analyze(f, c, m + 3, AB(x));
-    f = m ? g_push(f, 2, cata_if_push_branch, cata_if_jump_to_exit) : encode(f, Oom);
-    m = g_ok(f) ? m : 0;
-    x = BB(x); }
-  UM(f);
-  if (m) 
-    f = g_push(f, 1, cata_if_push_exit),
-    m = g_ok(f) ? m : 0;
+    else
+      f = g_push(f, 1, cata_if_pop_branch),
+      m = analyze(f, c, m + 3, AB(x)),
+      f = g_push(f, 2, cata_if_push_branch, cata_if_jump_to_exit),
+      m = ana_if_r(f, c, m, BB(x)); }
+  return UM(f), m; }
+
+static Ana(ana_if) {
+  avec(f, x, f = g_push(f, 1, cata_if_pop_exit));
+  if (!g_ok(f)) return 0;
+  m = ana_if_r(f, c, m, x);
+  if (m) f = g_push(f, 1, cata_if_push_exit),
+         m = g_ok(f) ? m : 0;
   return m; }
 
 static size_t ana_seq(core *f, env* *c, size_t m, word a, word b) {
+  if (!m || !g_ok(f)) return 0;
   if (!twop(b)) return analyze(f, c, m, a);
-  avec(f, b,
-    m = analyze(f, c, m + 1, a),
-    f = m ? g_push(f, 2, cata_i, drop1) : encode(f, Oom),
-    m = g_ok(f) ? ana_seq(f, c, m, A(b), B(b)) : 0);
-  return m; }
+  avec(f, b, m = analyze(f, c, m + 1, a),
+             f = g_push(f, 2, cata_i, drop1));
+  return ana_seq(f, c, m, A(b), B(b)); }
+
+static size_t ana_ap_arg_r(core *f, env**c, size_t m, word x) {
+  if (!m || !g_ok(f)) return 0;
+  if (!twop(x)) return m;
+  avec(f, x, m = analyze(f, c, m + 1, A(x)),
+             f = g_push(f, 1, cata_ap));
+  return ana_ap_arg_r(f, c, m, B(x)); }
 
 // evaluate function call arguments and apply
 static size_t ana_ap_args(core *f, env **c, size_t m, word x) {
   if (!m || !g_ok(f)) return 0;
-  MM(f, &x);
-  if (g_ok(f = g_cons_2(f, nil, (*c)->stack))) {
-    // push one anonymous argument on the stack to represent the function value
-    (*c)->stack = pop1(f); 
-    while (m && twop(x))
-      m = analyze(f, c, m + 1, A(x)), // eval each argument
-      x = B(x),
-      f = encode(f, m ? Ok : Oom),
-      f = g_push(f, 1, cata_ap),
-      m = g_ok(f) ? m : 0;
-    if (m && g_ok(f))
-      (*c)->stack = B((*c)->stack); }
-  UM(f);
+  avec(f, x, f = g_cons_2(f, nil, (*c)->stack));
+  if (!g_ok(f)) return 0;
+  (*c)->stack = pop1(f); 
+  m = ana_ap_arg_r(f, c, m, x);
+  if (m) (*c)->stack = B((*c)->stack);
   return m; }
 
 static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
@@ -465,7 +458,7 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
     avec(f, exp, f = g_push(f, 2, cata_curry, d));
     size_t m = analyze(f, &d, 2, exp),
            arity = llen(d->args) + llen(d->imps);
-    m = m ? ana_ix(f, m, ret, putnum(arity)) : m;
+    m = ana_ix(f, m, ret, putnum(arity));
     if (g_ok(f = atp(f, &d, m))) {
       cell *k = cell(pop1(f));
       ttag(k)->head = k;
@@ -482,12 +475,18 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
   f = g_push(f, 1, exp);
   f = enscope(f, *b, (*b)->args, (*b)->imps);
   if (!g_ok(f)) return 0;
-  env *q = (env*) pop1(f), **c = &q;
+  env *q = (env*) pop1(f),
+      **c = &q;
   exp = pop1(f);
 
   // lots of variables :(
   struct root *mm = f->safe;
-  word nom = nil, def = nil, lam = nil, v = nil, d = nil, e = nil;
+  word nom = nil, // 511 - 592
+       def = nil, // 514 - 593
+       lam = nil, // 520 - 579
+       v = nil,   // 541 - 542
+       d = nil,   // 504 - 582
+       e = nil;   // 504 - 545
   MM(f, &nom), MM(f, &def), MM(f, &exp), MM(f, &lam);
   MM(f, &d); MM(f, &e); MM(f, &v); MM(f, &q);
 
