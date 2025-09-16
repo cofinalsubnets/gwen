@@ -1,4 +1,43 @@
 #include "i.h"
+
+NoInline Vm(ev0) {
+  Ip++;
+  Pack(f);
+  f = g_ana(f, jump);
+  if (!g_ok(f)) return f;
+  return f->ip->ap(f, f->ip, f->hp, f->sp); }
+
+Vm(defglob) {
+  Have(3);
+  Sp -= 3;
+  Sp[0] = (g_word) f->dict;
+  Sp[1] = Ip[1].x;
+  Sp[2] = Sp[3];
+  Pack(f);
+  f = g_hash_put(f);
+  if (!g_ok(f)) return f;
+  Unpack(f);
+  Sp += 1;
+  Ip += 2;
+  return Continue(); }
+
+Vm(drop1) {
+  Ip += 1;
+  Sp += 1;
+  return Continue(); }
+
+Vm(free_variable) {
+  Ip[0].ap = imm;
+  Ip[1].x = g_hash_get(f, Ip[1].x, f->dict, Ip[1].x);
+  return Continue(); }
+
+Vm(late_bind) {
+  word ref = Ip[1].x, lfd = ref;
+  ref = AB(lfd);
+  Ip[0].ap = imm;
+  Ip[1].x = ref;
+  return Continue(); }
+
 Vm(data) {
   word x = W(Ip);
   Sp += 1;
