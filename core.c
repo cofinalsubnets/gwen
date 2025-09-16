@@ -60,18 +60,18 @@ void g_fin(g_core *f) {
 g_core *g_ini() { return g_ini_m(g_malloc, g_free); }
 
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
+  const size_t len0 = 1024;
   g_core *f = g_malloc(NULL, sizeof(g_core));
   if (!f) return encode(f, g_status_oom);
 
   memset(f, 0, sizeof(core));
-  size_t len = 1;
-  word *pool = g_malloc(f, 2 * len * sizeof(word));
+  word *pool = g_malloc(f, 2 * len0 * sizeof(word));
   if (!pool) return encode(f, g_status_oom);
 
   f->t0 = g_clock();
-  f->len = len;
+  f->len = len0;
   f->hp = f->pool = pool;
-  f->sp = f->loop = pool + len;
+  f->sp = f->loop = pool + len0;
   f->malloc = g_malloc;
   f->free = g_free;
   static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
