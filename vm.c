@@ -81,6 +81,9 @@ Vm(ref) {
 Vm(ap) {
   if (nump(Sp[1])) return Ip++, Sp++, Continue();
   cell *k = cell(Sp[1]);
+  if (!k) {
+    puts("QQQ");
+  }
   Sp[1] = word(Ip + 1);
   Ip = k;
   return Continue(); }
@@ -151,6 +154,9 @@ Vm(curry) {
          n = getnum(Ip[1].x);
   if (n == 2) { Have(S); }
   else { S += 2; Have(S); j += 2, k[0].ap = curry, k[1].x = putnum(n - 1); }
+  if (nilp(Sp[1])) {
+    fprintf(stderr, "QQQ\n");
+  }
   j[0].ap = uncurry;
   j[1].x = *Sp++;
   j[2].m = Ip + 2;
