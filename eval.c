@@ -242,8 +242,9 @@ static Ana(analyze) {
       return m; }
     // defined as a function by a local let form?
     word y;
-    if ((y = assq(f, d->lams, x))) return m = ana_ix(f, m, late_bind, y), // XXX swap
-                                          ana_ap_args(f, c, m, BB(f->sp[2])); // XXX
+    if ((y = assq(f, d->lams, x))) return
+      avec(f, y, m = ana_ix(f, m, late_bind, y)), // XXX swap
+      ana_ap_args(f, c, m, BB(y)); // XXX
     // non function definition from local let form?
     if (memq(f, d->stack, x)) return
       f = g_push(f, 3, cata_var_2, x, d->stack),
