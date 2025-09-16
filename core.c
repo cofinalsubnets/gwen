@@ -35,7 +35,8 @@ static g_core *g_ini_tbl(g_core *f) {
 g_core *g_run(g_core *f) {
   return !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp); }
 
-g_core *g_main(g_core *f, const char *p, const char **av) {
+int g_main(const char *p, const char **av) {
+  g_core *f = g_ini();
   int n = 0;
   f = g_read_cs(f, p);
   while (av[n]) f = g_ini_strof(f, av[n++]);
@@ -49,7 +50,9 @@ g_core *g_main(g_core *f, const char *p, const char **av) {
   f = g_cons_r(f);
   f = g_cons_r(f);
   f = g_ana(f, g_yield);
-  return g_run(f); }
+  f = g_run(f);
+  g_fin(f);
+  return code_of(f); }
 
 void g_fin(g_core *f) {
   if ((f = core_of(f))) {

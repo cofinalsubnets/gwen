@@ -8,9 +8,4 @@ static const char m[] =
 #endif
 ;
 
-int main(int ac, const char **av) {
-  g_core *f = g_ini();
-  f = g_main(f, m, av);
-  int s = g_code_of(f);
-  g_fin(f);
-  return s; }
+int main(int ac, const char **av) { return g_main(m, av); }
