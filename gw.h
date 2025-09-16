@@ -22,6 +22,7 @@ g_core
   *g_run(g_core*);
 int g_main(const char*, const char**);
 
+#define g_ini() g_ini_m(g_malloc, g_free)
 #define g_core_of(f) ((g_core*)((g_word)(f)&~3))
 #define g_code_of(f) ((g_status)((g_word)(f)&3))
 #define g_ok(f) (g_code_of(f) == g_status_ok)

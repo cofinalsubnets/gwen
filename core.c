@@ -59,8 +59,6 @@ void g_fin(g_core *f) {
 //    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
     f->free(f, f); } }
 
-g_core *g_ini() { return g_ini_m(g_malloc, g_free); }
-
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
   const size_t len0 = 1024;
   g_core *f = g_malloc(NULL, sizeof(g_core) + 2 * len0 * sizeof(word));
