@@ -164,7 +164,6 @@ static Cata(cata_if_jump_out) {
       Kp[1].x = (word) addr; }
   return f; }
 
-
 static Cata(cata_ap) {
   word arity = pop1(f);
   f = pull(f, c, m + 2);
@@ -245,15 +244,15 @@ static Cata(cata_ret) {
 
 static Ana(analyze) {
   if (!g_ok(f)) return f;
-
   // is it a variable?
   if (symp(x)) for (env *d = *c;; d = d->par) {
     if (nilp(d)) { // free variable?
       word y = g_hash_get(f, 0, f->dict, x);
       if (y) return ana_ix(f, imm, y);
       f = g_cons_2(f, x, (*c)->imps);
-      (*c)->imps = pop1(f);
-      return ana_ix(f, free_variable, (*c)->imps); }
+      if (g_ok(f)) (*c)->imps = pop1(f),
+                   f = ana_ix(f, free_variable, (*c)->imps);
+      return f; }
     // defined as a function by a local let form?
     word y;
     if ((y = assq(f, d->lams, x))) return
@@ -264,11 +263,10 @@ static Ana(analyze) {
       g_push(f, 3, cata_var_2, x, d->stack);
     // closure or positional argument on stack?
     if (memq(f, d->imps, x) || memq(f, d->args, x)) {
-      if (*c != d) // if we have found the variable in an enclosing scope then import it
-        f = g_cons_2(f, x, (*c)->imps),
-        x = g_ok(f) ? pop1(f) : 0,
-        x = x ? A((*c)->imps = x) : x;
-      return !x ? encode(f, Oom) : g_push(f, 3, cata_var, x, (*c)->stack); } }
+      if (*c != d) { // if we have found the variable in an enclosing scope then import it
+        f = g_cons_2(f, x, (*c)->imps);
+        if (g_ok(f)) x = pop1(f), (*c)->imps = x, x = A(x); }
+      return g_push(f, 3, cata_var, x, (*c)->stack); } }
 
   // if it's not a variable or a list then it evals to itself
   if (!twop(x)) return ana_ix(f, imm, x);
@@ -307,18 +305,15 @@ static Ana(analyze) {
   avec(f, a, f = ana_ap_args(f, c, b));
   return analyze(f, c, a); }
 
-// XXX reverse all of this...
 static Ana(ana_if_r) {
-  MM(f, &x);
-  if (!twop(x) || !twop(B(x)))
-    f = g_push(f, 1, cata_if_jump_out);
-  else
-    f = ana_if_r(f, c, BB(x)),
-    f = g_push(f, 2, cata_if_jump_out, cata_if_push_branch),
-    f = analyze(f, c, AB(x)),
-    f = g_push(f, 1, cata_if_pop_branch);
-  f = analyze(f, c, twop(x) ? A(x) : nil);
-  return UM(f), f; }
+  avec(f, x, f =
+    !twop(x) || !twop(B(x)) ?
+      g_push(f, 1, cata_if_jump_out) :
+      (f = ana_if_r(f, c, BB(x)),
+       f = g_push(f, 2, cata_if_jump_out, cata_if_push_branch),
+       f = analyze(f, c, AB(x)),
+       g_push(f, 1, cata_if_pop_branch)));
+  return analyze(f, c, twop(x) ? A(x) : nil); }
 
 static Ana(ana_if) {
   avec(f, x, f = g_push(f, 1, cata_if_push_exit));
@@ -327,9 +322,8 @@ static Ana(ana_if) {
 
 static g_core *ana_seq(core *f, env* *c, word a, word b) {
   if (!g_ok(f)) return f;
-  if (twop(b))
-    avec(f, a, f = ana_seq(f, c, A(b), B(b)),
-               f = g_push(f, 2, cata_i, drop1));
+  if (twop(b)) avec(f, a, f = ana_seq(f, c, A(b), B(b)),
+                          f = g_push(f, 2, cata_i, drop1));
   return analyze(f, c, a); }
 
 static g_core *ana_ap_args_r(core *f, env**c, word x) {
