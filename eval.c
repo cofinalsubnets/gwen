@@ -17,15 +17,12 @@ static word memq(core *f, word l, word k) {
   for (; twop(l); l = B(l)) if (eql(f, k, A(l))) return l;
   return 0; }
 
-// DEFINE
-// let expressions
 static word ldels(core *f, word lam, word l) {
   if (!twop(l)) return nil;
   word m = ldels(f, lam, B(l));
   if (!assq(f, lam, A(l))) B(l) = m, m = l;
   return m; }
 
-// list length
 static size_t llen(word l) {
   size_t n = 0;
   while (twop(l)) n++, l = B(l);
@@ -95,7 +92,7 @@ static Inline g_core *g_cons_2(g_core *f, g_word a, g_word b) {
 typedef Ana(ana);
 typedef Cata(cata);
 static ana analyze, ana_if, ana_let, ana_ap_args;
-static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_yield, atp;
+static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_yield, atp, cata_ret;
 static size_t ana_seq(g_core*, env**, size_t, word, word);
 
 // generic instruction ana handlers
@@ -146,8 +143,8 @@ static Cata(cata_curry) {
     Kp[1].x = putnum(ar);
   return pull(f, c, m); }
 
+// atp will move in here
 static Cata(cata_yield) {
-//  if (m != n) { assert(m == n); }
   return f; }
 
 static Cata(cata_if_push_exit) { // first emitter called for cond expression
@@ -243,6 +240,14 @@ static Cata(cata_ix) {
   Kp -= 2;
   Kp[0].x = pop1(f);
   Kp[1].x = pop1(f);
+  return pull(f, c, m); }
+
+static Cata(cata_ret) {
+  env *d = (env*) pop1(f);
+  m += 2;
+  Kp -= 2;
+  Kp[0].ap = ret;
+  Kp[1].x = putnum(arity_of(d));
   return pull(f, c, m); }
 
 static Ana(analyze) {
@@ -381,9 +386,9 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
     d->args = f->sp[0];
     f->sp[0] = word(cata_yield);
     avec(f, exp, f = g_push(f, 2, cata_curry, d));
-    size_t m = analyze(f, &d, 2, exp),
-           arity = arity_of(d);
-    m = ana_ix(f, m, ret, putnum(arity));
+    size_t m = analyze(f, &d, 2, exp);
+    f = g_push(f, 2, cata_ret, d);
+    m = g_ok(f) ? m + 2 : m;
     cell *k, *ip = f->ip;
     avec(f, ip, f = atp(f, &d, m));
     if (g_ok(f)) {
