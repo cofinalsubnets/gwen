@@ -53,7 +53,7 @@ g_core *g_main(g_core *f, const char *p, const char **av) {
 
 void g_fin(g_core *f) {
   if ((f = core_of(f))) {
-    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
+//    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
     f->free(f, min(f->pool, f->loop));
     f->free(f, f); } }
 

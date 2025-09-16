@@ -134,12 +134,13 @@ struct g_core {
   struct root { word *ptr; struct root *next; } *safe;
   union { uintptr_t t0;  // end time of last gc
           word *cp; }; // gc copy pointer
-  struct dtor {
+  /* struct dtor {
     g_word x;
     void (*d)(g_core*, g_word);
-    struct dtor *next; } *dtors;
+    struct dtor *next; } *dtors; */
   void *(*malloc)(g_core*, size_t),
-       (*free)(g_core*, void*); };
+       (*free)(g_core*, void*);
+  g_word end[]; };
 
 void *g_libc_malloc(g_core*, size_t),
      g_libc_free(g_core*, void*);

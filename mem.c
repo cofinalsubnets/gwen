@@ -36,12 +36,14 @@ Inline g_core *g_have(g_core *f, uintptr_t n) {
     f = avail(f) < n ? please(f, n) : f;
   return f; }
 
-static NoInline void copy_from(core*, word*, uintptr_t);
-// garbage collector
-// please : bool la size_t
-// try to return with at least req words of available memory.
-// return true on success, false otherwise. governs the heap size
-// as a side effect by trying to keep
+NoInline Vm(gc, uintptr_t n) {
+  Pack(f);
+  f = please(f, n);
+  if (!g_ok(f)) return f;
+  Unpack(f);
+  return Continue(); }
+
+// keep
 //   v = (t2 - t0) / (t2 - t1)
 // between
 #define v_lo 8
@@ -55,22 +57,21 @@ static NoInline void copy_from(core*, word*, uintptr_t);
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
+static NoInline void copy_from(core*, word*, uintptr_t);
+static NoInline void swap(core *f) {
+  word *pool0 = f->pool, *loop0 = f->loop;
+  f->pool = loop0, f->loop = pool0;
+  copy_from(f, pool0, f->len); }
+
 NoInline core *please(core *f, uintptr_t req0) {
-  word *src = f->pool, *dest = f->loop;
-  f->pool = dest, f->loop = src;    // swap
-  size_t t0 = f->t0, t1 = g_clock() , // get last gc end time
-         len0 = f->len;             // get original length
-                                    //
-  copy_from(f, src, len0);          // copy to new pool
+  word *pool0 = f->pool, *loop0 = f->loop;
+  size_t t0 = f->t0, t1 = g_clock(),
+         len0 = f->len;
+  swap(f);          // copy to new pool
   size_t t2 = f->t0 = g_clock(),      // get and set last gc end time
-         total = len0,
-         avail = avail(f),
-         used = total - avail,
-         req = req0 + used,
-         v = t2 == t1 ?             // t1 and t2 can be the same
-           v_hi :                   // in that case choose high
-           (t2 - t0) / (t2 - t1),   // otherwise take ratio of total run time to gc time
-         len1 = len0;               // initial destination size same as the target size
+         req = req0 + len0 - avail(f),
+         v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
+         len1 = len0;
   // if v is out of bounds then calculate len1
   // by inverse proportionally adjusting len and v until v is in bounds
   if   (too_little) do len1 <<= 1, v <<= 1; while (too_little);
@@ -78,16 +79,15 @@ NoInline core *please(core *f, uintptr_t req0) {
   else return f; // no change reqired, hopefully the most common case
   // at this point we got a new target length and are gonna try and resize
   word *dest2 = f->malloc(f, len1 * 2 * sizeof(word)); // allocate pool with the new target size
-  if (!dest2) return req <= total ? f : encode(f, Oom); // if this fails still return true if the original pool is not too small
+  if (!dest2) return req <= len0 ? f : encode(f, Oom); // if this fails still return true if the original pool is not too small
   // we got the new pool so copy again and return true
   f->len = len1;            // set core variables referring to new pool
   f->pool = dest2;          //
   f->loop = dest2 + len1;   //
-  copy_from(f, dest, len0); // do second copy
-  f->free(f, min(src, dest));  // free original pool
+  copy_from(f, loop0, len0); // do second copy
+  f->free(f, min(pool0, loop0));  // free original pool
   f->t0 = g_clock();       // set last gc timestamp
   return f; }            // size successfully adjusted
-
 
 // this function expects pool loop and len to have been set already on the state
 static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
@@ -114,6 +114,7 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
     else { while (*f->cp) *f->cp = CP(*f->cp),
                           f->cp++;
            f->cp += 2; }
+  /*
   // run destructors ...
   // this has never been tested or used
   struct dtor *nd = NULL;
@@ -124,7 +125,8 @@ static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
          n->x = cell(d->x)->x,
          n->next = nd,
          nd = n;
-  f->dtors = nd; }
+  f->dtors = nd; */
+}
 
 NoInline word cp(core *v, word x, word *p0, word *t0) {
   // if it's a number or outside managed memory then return it
@@ -142,10 +144,3 @@ NoInline word cp(core *v, word x, word *p0, word *t0) {
   for (cell *s = ini; (d->x = s->x); s++->x = W(d++));
   ((struct tag*) d)->head = dst;
   return W(dst + (src - ini)); }
-
-NoInline Vm(gc, uintptr_t n) {
-  Pack(f);
-  f = please(f, n);
-  if (!g_ok(f)) return f;
-  Unpack(f);
-  return Continue(); }
