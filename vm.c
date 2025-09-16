@@ -235,3 +235,14 @@ Vm(trim) {
   ttag(k)->head = k;
   Ip += 1;
   return Continue(); }
+
+Vm(prc) {
+  word w = *Sp;
+  putc(getnum(w), stdout);
+  Ip += 1;
+  return Continue(); }
+
+Vm(dot) {
+  transmit(f, stdout, Sp[0]);
+  Ip += 1;
+  return Continue(); }

@@ -78,10 +78,9 @@ static g_core *enscope(core *f, env* par, word args, word imps) {
   f = mo_c(f, Width(env));
   if (g_ok(f)) {
     env *c = (env*) pop1(f);
-    args = pop1(f), imps = pop1(f), par = (env*) pop1(f);
-    c->args = args, c->imps = imps, c->par = par,
+    c->args = pop1(f), c->imps = pop1(f), c->par = (env*) pop1(f),
     c->stack = c->alts = c->ends = c->lams = nil;
-    *--f->sp = (word) c; }
+    push1(f, (word) c); }
   return f; }
 
 static Inline g_core *g_cons_2(g_core *f, g_word a, g_word b) {
@@ -104,18 +103,16 @@ NoInline g_core *g_ana(core *f, vm *y) {
   f = enscope(f, (env*) nil, nil, nil);
   if (!g_ok(f)) return f;
   env *c = (env*) pop1(f);
-  MM(f, &c);
   word x = f->sp[0];
-  f->sp[0] = (word) cata_yield; // function that returns thread from code generation
-  f = ana_ix(f, y, (word) f->ip);
-  f = analyze(f, &c, x);
-  f = pull(f, &c, 0);
-  UM(f);
-  return f; }
+  return
+    f->sp[0] = (word) cata_yield, // function that returns thread from code generation
+    avec(f, c,
+      avec(f, x, f = ana_ix(f, y, (word) f->ip)),
+      f = analyze(f, &c, x),
+      f = pull(f, &c, 0)),
+    f; }
 
 #define Kp (f->ip)
-
-
 static Cata(cata_yield) {
   f = mo_c(f, m);
   if (g_ok(f)) {

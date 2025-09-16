@@ -23,25 +23,21 @@ g_core *g_push(core *f, uintptr_t m, ...) {
     va_end(xs); }
   return f; }
 
+Inline g_core *g_have(g_core *f, uintptr_t n) {
+  return !g_ok(f) ? f : avail(f) < n ? please(f, n) : f; }
+
 g_core *g_cells(g_core *f, size_t n) {
-  f = g_have(f, n + 1);
+  f = g_have(f, n);
   if (g_ok(f)) {
     cell *k = (cell*) f->hp;
     f->hp += n;
     *--f->sp = word(k); }
   return f; }
 
-Inline g_core *g_have(g_core *f, uintptr_t n) {
-  if (g_ok(f))
-    f = avail(f) < n ? please(f, n) : f;
-  return f; }
 
 NoInline Vm(gc, uintptr_t n) {
   Pack(f);
-  f = please(f, n);
-  if (!g_ok(f)) return f;
-  Unpack(f);
-  return Continue(); }
+  return g_run(please(f, n)); }
 
 // keep
 //   v = (t2 - t0) / (t2 - t1)
@@ -142,4 +138,4 @@ NoInline word cp(core *v, word x, word *p0, word *t0) {
   // copy source contents to dest and write dest addresses to source
   for (cell *s = ini; (d->x = s->x); s++->x = W(d++));
   ((struct tag*) d)->head = dst;
-  return W(dst + (src - ini)); }
+  return word(dst + (src - ini)); }
