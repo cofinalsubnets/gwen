@@ -115,21 +115,20 @@ NoInline g_core *g_ana(core *f, vm *y) {
   size_t m = analyze(f, &c, 1, x);
   m = ana_ix(f, m, y, (word) f->ip);
   f = atp(f, &c, m);
-  if (g_ok(f)) f->ip = cell(pop1(f));
   UM(f);
   return f; }
 
+#define Kp (f->ip)
 static g_core *atp(g_core *f, env **c, size_t m) {
   f = !g_ok(f) ? f : !m ? encode(f, Oom) : mo_c(f, m);
   if (g_ok(f)) {
-    cell *k = cell(f->sp[0]);
+    cell *k = cell(pop1(f));
     memset(k, -1, m * sizeof(word));
     k += m;
-    f->sp[0] = word(k);
+    Kp = k;
     f = pull(f, c, 0); }
   return f; }
 
-#define Kp (f->sp[0])
 static cata
   cata_if_push_branch,
   cata_if_pop_branch,
@@ -139,7 +138,7 @@ static cata
 
 static size_t arity_of(env *c) { return llen(c->args) + llen(c->imps); }
 static Cata(cata_curry) {
-  cell *k = (cell*) pop1(f);
+  cell *k = Kp;
   env *d = (env*) pop1(f);
   size_t ar = arity_of(d);
   m += 2;
@@ -147,7 +146,7 @@ static Cata(cata_curry) {
     k -= 2,
     k[0].ap = curry,
     k[1].x = putnum(ar);
-  push1(f, (word) k);
+  Kp = k;
   return pull(f, c, m); }
 
 static Cata(cata_yield) {
@@ -155,7 +154,7 @@ static Cata(cata_yield) {
   return f; }
 
 static Cata(cata_if_push_exit) { // first emitter called for cond expression
-  f = g_cons_2(f, Kp, (*c)->ends);
+  f = g_cons_2(f, (word) Kp, (*c)->ends);
   if (g_ok(f)) (*c)->ends = pop1(f);
   return pull(f, c, m); }
 
@@ -165,16 +164,16 @@ static Cata(cata_if_pop_exit) { // last emitter called for cond expression
 
 static Cata(cata_if_pop_branch) { // last emitter called for a branch
   m += 3; // not 2?
-  cell *k = cell(Kp);
+  cell *k = Kp;
   k -= 2;
   k[0].ap = cond; // pops next branch address off env stack alts
   k[1].x = A((*c)->alts);
   (*c)->alts = B((*c)->alts);
-  Kp = word(k);
+  Kp = k;
   return pull(f, c, m); }
 
 static Cata(cata_if_push_branch) {
-  f = g_cons_2(f, Kp, (*c)->alts);
+  f = g_cons_2(f, (word) Kp, (*c)->alts);
   if (g_ok(f)) (*c)->alts = pop1(f);
   return pull(f, c, m); }
 
@@ -192,13 +191,13 @@ static Cata(cata_if_jump_out) {
     k -= 2,
     k[0].ap = jump,
     k[1].x = (word) addr;
-  Kp = word(k);
+  Kp = k;
   return pull(f, c, m); }
 
 
 static Cata(cata_ap) {
   m += 2;
-  cell *k = (cell*) pop1(f);
+  cell *k = Kp;
   word arity = pop1(f);
   if (getnum(arity) > 1) {
     if (k[0].ap == ret) k[0].x = arity, --k, k[0].ap = tapn;
@@ -206,12 +205,12 @@ static Cata(cata_ap) {
   else {
     if (k[0].ap == ret) k[0].ap = tap;
     else --k, k[0].ap = ap; }
-  push1(f, word(k));
+  Kp = k;
   return pull(f, c, m); }
 
 static Cata(cata_var_2) {
   m += 2;
-  cell *k = cell(pop1(f));
+  cell *k = Kp;
   word var = pop1(f), stack = pop1(f);
   long i = 0;
   while (twop(stack))
@@ -220,43 +219,37 @@ static Cata(cata_var_2) {
   k -= 2;
   k[0].ap = ref;
   k[1].x = putnum(i);
-  push1(f, word(k));
+  Kp = k;
   return pull(f, c, m); }
 
 // emit stack reference instruction
 static Cata(cata_var) {
   m += 2;
-  cell *k = cell(pop1(f));
+  cell *k = Kp;
   word var = pop1(f), // variable name
        ins = llen(pop1(f)), // stack inset
        i = index_of_symbol(f, *c, var);
   k -= 2;
   k[0].ap = ref;
   k[1].x = putnum(i + ins);
-  push1(f, word(k));
+  Kp = k;
   return pull(f, c, m); }
 
 static Inline Cata(pull) {
-  cata *p = (cata*) f->sp[1];
-  f->sp[1] = f->sp[0];
-  f->sp += 1;
+  cata *p = (cata*) pop1(f);
   return p(f, c, m); }
 
 static Cata(cata_i) {
   m += 1;
-  cell *k = (cell*) pop1(f);
-  k -= 1;
-  k[0].x = pop1(f);
-  push1(f, (word) k);
+  Kp -= 1;
+  Kp[0].x = pop1(f);
   return pull(f, c, m); }
 
 static Cata(cata_ix) {
   m += 2;
-  cell *k = cell(pop1(f));
-  k -= 2;
-  k[0].x = pop1(f);
-  k[1].x = pop1(f);
-  push1(f, (word) k);
+  Kp -= 2;
+  Kp[0].x = pop1(f);
+  Kp[1].x = pop1(f);
   return pull(f, c, m); }
 
 static Ana(analyze) {
@@ -398,10 +391,10 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
     size_t m = analyze(f, &d, 2, exp),
            arity = llen(d->args) + llen(d->imps);
     m = ana_ix(f, m, ret, putnum(arity));
-    cell *ip = f->ip;
+    cell *k, *ip = f->ip;
     avec(f, ip, f = atp(f, &d, m));
     if (g_ok(f)) {
-      cell *k = cell(pop1(f));
+      k = f->ip;
       ttag(k)->head = k;
       f->ip = ip;
       f = g_cons_2(f, word(k), d->imps); } }
