@@ -109,8 +109,8 @@ NoInline g_core *g_ana(core *f, vm *y) {
   word x = f->sp[0];
   f->sp[0] = (word) cata_yield; // function that returns thread from code generation
   MM(f, &c);
-  size_t m = analyze(f, &c, 1, x);
-  m = ana_ix(f, m, y, (word) f->ip);
+  size_t m = analyze(f, &c, 1, x); // XXX swap
+  m = ana_ix(f, m, y, (word) f->ip); // XXX
   f = atp(f, &c, m);
   UM(f);
   return f; }
