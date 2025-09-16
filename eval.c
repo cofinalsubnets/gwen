@@ -63,8 +63,7 @@ typedef struct env {
   word alts, // list // alternate branch address stack
        ends; // list // exit branch address stack
   // this is the enclosing function env* if any
-  struct env *par;
-} env;
+  struct env *par; } env;
 
 static g_core *ana_lambda(core *f, env **c, word imps, word exp);
 
@@ -93,7 +92,7 @@ static Inline g_core *g_cons_2(g_core *f, g_word a, g_word b) {
 typedef Ana(ana);
 typedef Cata(cata);
 static ana analyze, ana_if, ana_let, ana_ap_args;
-static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_yield, atp, cata_ret;
+static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_yield, cata_ret;
 static size_t ana_seq(g_core*, env**, size_t, word, word);
 
 // generic instruction ana handlers
@@ -112,24 +111,19 @@ NoInline g_core *g_ana(core *f, vm *y) {
   f->sp[0] = (word) cata_yield; // function that returns thread from code generation
   size_t m = ana_ix(f, 1, y, (word) f->ip);
   m = analyze(f, &c, m, x);
-  f = atp(f, &c, m);
+  f = pull(f, &c, 0);
   UM(f);
   return f; }
 
 #define Kp (f->ip)
-static g_core *atp(g_core *f, env **c, size_t m) {
+
+
+static Cata(cata_yield) {
   f = mo_c(f, m);
   if (g_ok(f)) {
     Kp = cell(pop1(f));
     memset(Kp, -1, m * sizeof(word));
-    Kp += m;
-    f = pull(f, c, 0); }
-  return f; }
-
-static size_t arity_of(env *c) { return llen(c->args) + llen(c->imps); }
-
-// atp will move in here
-static Cata(cata_yield) {
+    Kp += m; }
   return f; }
 
 static Cata(cata_if_push_exit) {
@@ -232,6 +226,7 @@ static Cata(cata_ix) {
     Kp[1].x = x;
   return f; }
 
+static size_t arity_of(env *c) { return llen(c->args) + llen(c->imps); }
 static Cata(cata_curry) {
   size_t ar = arity_of((env*) pop1(f));
   f = pull(f, c, m + 2);
@@ -388,7 +383,7 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
     f = g_push(f, 2, cata_curry, d);
     m = g_ok(f) ? m : 0;
     cell *k, *ip = f->ip;
-    avec(f, ip, f = atp(f, &d, m));
+    avec(f, ip, f = pull(f, &d, 0));
     if (g_ok(f)) {
       k = f->ip;
       ttag(k)->head = k;
@@ -397,7 +392,6 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
 
   UM(f);
   return f; }
-
 
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
