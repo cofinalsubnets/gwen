@@ -32,6 +32,9 @@ static g_core *g_ini_tbl(g_core *f) {
     ini_table(t, 0, 1, tab); }
   return f; }
 
+g_core *g_run(g_core *f) {
+  return !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp); }
+
 g_core *g_main(g_core *f, const char *p, const char **av) {
   int n = 0;
   f = g_read_cs(f, p);
@@ -46,8 +49,7 @@ g_core *g_main(g_core *f, const char *p, const char **av) {
   f = g_cons_r(f);
   f = g_cons_r(f);
   f = g_ana(f, g_yield);
-  f = g_ok(f) ? f->ip->ap(f, f->ip, f->hp, f->sp) : f;
-  return f; }
+  return g_run(f); }
 
 void g_fin(g_core *f) {
   if ((f = core_of(f))) {

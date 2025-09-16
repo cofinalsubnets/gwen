@@ -1,11 +1,9 @@
 #include "i.h"
 
 NoInline Vm(ev0) {
-  Ip++;
+  Ip += 1;
   Pack(f);
-  f = g_ana(f, jump);
-  if (!g_ok(f)) return f;
-  return f->ip->ap(f, f->ip, f->hp, f->sp); }
+  return g_run(g_ana(f, jump)); }
 
 Vm(defglob) {
   Have(3);

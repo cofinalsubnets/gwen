@@ -354,23 +354,25 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
     while (twop(B(x))) f = g_push(f, 1, A(x)), n++, x = B(x);
     f = g_push(f, 1, nil);
     while (n--) f = g_cons_r(f);
-    f = g_push(f, 1, A(x));
-    UM(f); }
+    UM(f);
+    f = g_push(f, 1, A(x)); }
 
-  if (g_ok(f)) {
-    exp = pop1(f);
-    d->args = f->sp[0];
-    f->sp[0] = word(cata_yield);
-    avec(f, exp, f = g_push(f, 2, cata_ret, d));
-    f = analyze(f, &d, exp);
-    f = g_push(f, 2, cata_curry, d);
-    cell *k, *ip = f->ip;
+  cell *k, *ip;
+  if (g_ok(f))
+    exp = pop1(f),
+    d->args = f->sp[0],
+    f->sp[0] = word(cata_yield),
+    avec(f, exp, f = g_push(f, 2, cata_ret, d)),
+    f = analyze(f, &d, exp),
+    f = g_push(f, 2, cata_curry, d),
+    ip = f->ip,
     avec(f, ip, f = pull(f, &d, 0));
-    if (g_ok(f)) {
-      k = f->ip;
-      ttag(k)->head = k;
-      f->ip = ip;
-      f = g_cons_2(f, word(k), d->imps); } }
+
+  if (g_ok(f))
+    k = f->ip,
+    ttag(k)->head = k,
+    f->ip = ip,
+    f = g_cons_2(f, word(k), d->imps);
 
   UM(f);
   return f; }
