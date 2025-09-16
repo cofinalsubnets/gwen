@@ -54,19 +54,17 @@ g_core *g_main(g_core *f, const char *p, const char **av) {
 void g_fin(g_core *f) {
   if ((f = core_of(f))) {
 //    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
-    f->free(f, min(f->pool, f->loop));
     f->free(f, f); } }
 
 g_core *g_ini() { return g_ini_m(g_malloc, g_free); }
 
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
   const size_t len0 = 1024;
-  g_core *f = g_malloc(NULL, sizeof(g_core));
-  if (!f) return encode(f, g_status_oom);
+  g_core *f = g_malloc(NULL, sizeof(g_core) + 2 * len0 * sizeof(word));
+  if (!f) return encode(NULL, g_status_oom);
 
   memset(f, 0, sizeof(core));
-  word *pool = g_malloc(f, 2 * len0 * sizeof(word));
-  if (!pool) return encode(f, g_status_oom);
+  word *pool = f->end;
 
   f->t0 = g_clock();
   f->len = len0;

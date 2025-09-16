@@ -9,7 +9,9 @@ void g_free(g_core *f, void *x) { return free(x); }
 static core *g_pushr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
   word x = va_arg(xs, word);
-  avec(f, x, f = g_pushr(f, m, n + 1, xs));
+  MM(f, &x);
+  f = g_pushr(f, m, n + 1, xs);
+  UM(f);
   if (g_ok(f)) *--f->sp = x;
   return f; }
 
@@ -60,7 +62,7 @@ static NoInline void swap(core *f) {
   copy_from(f, pool0, f->sp, f->len); }
 
 NoInline core *please(core *f, uintptr_t req0) {
-  word *pool0 = f->pool, *loop0 = f->loop;
+  word *loop0 = f->loop;
   size_t t0 = f->t0, t1 = g_clock(),
          len0 = f->len;
   swap(f);          // copy to new pool
@@ -74,16 +76,21 @@ NoInline core *please(core *f, uintptr_t req0) {
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
   else return f; // no change reqired, hopefully the most common case
   // at this point we got a new target length and are gonna try and resize
-  word *dest2 = f->malloc(f, len1 * 2 * sizeof(word)); // allocate pool with the new target size
-  if (!dest2) return req <= len0 ? f : encode(f, Oom); // if this fails still return true if the original pool is not too small
+  g_core *g = f->malloc(f, sizeof(core) + len1 * 2 * sizeof(word)); // allocate pool with the new target size
+  if (!g) return req <= len0 ? f : encode(f, Oom); // if this fails still return true if the original pool is not too small
+  memset(g, 0, sizeof(core));
   // we got the new pool so copy again and return true
-  f->len = len1;            // set core variables referring to new pool
-  f->pool = dest2;          //
-  f->loop = dest2 + len1;   //
-  copy_from(f, loop0, f->sp, len0); // do second copy
-  f->free(f, min(pool0, loop0));  // free original pool
-  f->t0 = g_clock();       // set last gc timestamp
-  return f; }            // size successfully adjusted
+  g->len = len1;            // set core variables referring to new pool
+  g->pool = g->end;          //
+  g->loop = g->end + len1;   //
+  memcpy(g->vars, f->vars, sizeof(word) * g_var_N);
+  g->malloc = f->malloc;
+  g->free = f->free;
+  g->safe = f->safe;
+  copy_from(g, loop0, f->sp, len0); // do second copy
+  f->free(f, f);  // free original pool
+  g->t0 = g_clock();       // set last gc timestamp
+  return g; }            // size successfully adjusted
 
 // this function expects pool loop and len to have been set already on the state
 static NoInline void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {

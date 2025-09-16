@@ -317,13 +317,13 @@ static Ana(ana_if) {
   f = ana_if_r(f, c, x);
   return g_push(f, 1, cata_if_pop_exit); }
 
-static g_core *ana_seq(core *f, env* *c, word a, word b) {
+static NoInline g_core *ana_seq(core *f, env* *c, word a, word b) {
   if (!g_ok(f)) return f;
   if (twop(b)) avec(f, a, f = ana_seq(f, c, A(b), B(b)),
                           f = g_push(f, 2, cata_i, drop1));
   return analyze(f, c, a); }
 
-static g_core *ana_ap_args_r(core *f, env**c, word x) {
+static NoInline g_core *ana_ap_args_r(core *f, env**c, word x) {
   if (!twop(x)) return f;
   avec(f, x, f = ana_ap_args_r(f, c, B(x)),
              f = g_push(f, 2, cata_ap, putnum(1)));
