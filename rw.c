@@ -37,19 +37,16 @@ static g_core
   *read_string(core*, input*, char),
   *read_atom(core*, input*);
 
-static Inline g_core *rquote(core *f, input *i) {
-  f = p_read1(f, i);
-  f = g_push(f, 1, nil);
-  f = g_cons_r(f);
-  f = g_push(f, 1, f->quote);
-  return g_cons_l(f); }
-
 static g_core *p_read1(core *f, input* i) {
   if (!g_ok(f)) return f;
   int c = read_char(f, i);
   switch (c) {
     case EOF:  return encode(f, Eof);
-    case '\'': return rquote(f, i);
+    case '\'': return f = p_read1(f, i),
+                      f = g_push(f, 1, nil),
+                      f = g_cons_r(f),
+                      f = g_push(f, 1, f->quote),
+                      f = g_cons_l(f);
     case '(':  return reads(f, i);
     case ')':  return g_push(f, 1, nil);
     case '"':  return read_string(f, i, '"');

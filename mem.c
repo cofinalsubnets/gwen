@@ -57,11 +57,11 @@ NoInline Vm(gc, uintptr_t n) {
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
-static NoInline void copy_from(core*, word*, uintptr_t);
+static NoInline void copy_from(core*, word*, word*, uintptr_t);
 static NoInline void swap(core *f) {
   word *pool0 = f->pool, *loop0 = f->loop;
   f->pool = loop0, f->loop = pool0;
-  copy_from(f, pool0, f->len); }
+  copy_from(f, pool0, f->sp, f->len); }
 
 NoInline core *please(core *f, uintptr_t req0) {
   word *pool0 = f->pool, *loop0 = f->loop;
@@ -84,19 +84,18 @@ NoInline core *please(core *f, uintptr_t req0) {
   f->len = len1;            // set core variables referring to new pool
   f->pool = dest2;          //
   f->loop = dest2 + len1;   //
-  copy_from(f, loop0, len0); // do second copy
+  copy_from(f, loop0, f->sp, len0); // do second copy
   f->free(f, min(pool0, loop0));  // free original pool
   f->t0 = g_clock();       // set last gc timestamp
   return f; }            // size successfully adjusted
 
 // this function expects pool loop and len to have been set already on the state
-static NoInline void copy_from(core *f, word *p0, uintptr_t len0) {
+static NoInline void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
   g_word
     len1 = f->len, // target pool length
     *p1 = f->pool, // target pool
     *t0 = p0 + len0, // source pool top
     *t1 = p1 + len1, // target pool top
-    *sp0 = f->sp, // source pool stack
     sn = t0 - sp0, // stack height
     *sp1 = t1 - sn; // target pool stack
   // reset stack, heap, symbols
