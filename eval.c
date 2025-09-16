@@ -122,10 +122,9 @@ NoInline g_core *g_ana(core *f, vm *y) {
 static g_core *atp(g_core *f, env **c, size_t m) {
   f = !g_ok(f) ? f : !m ? encode(f, Oom) : mo_c(f, m);
   if (g_ok(f)) {
-    cell *k = cell(pop1(f));
-    memset(k, -1, m * sizeof(word));
-    k += m;
-    Kp = k;
+    Kp = cell(pop1(f));
+    memset(Kp, -1, m * sizeof(word));
+    Kp += m;
     f = pull(f, c, 0); }
   return f; }
 
@@ -138,15 +137,13 @@ static cata
 
 static size_t arity_of(env *c) { return llen(c->args) + llen(c->imps); }
 static Cata(cata_curry) {
-  cell *k = Kp;
   env *d = (env*) pop1(f);
   size_t ar = arity_of(d);
   m += 2;
   if (ar > 1)
-    k -= 2,
-    k[0].ap = curry,
-    k[1].x = putnum(ar);
-  Kp = k;
+    Kp -= 2,
+    Kp[0].ap = curry,
+    Kp[1].x = putnum(ar);
   return pull(f, c, m); }
 
 static Cata(cata_yield) {
@@ -164,12 +161,10 @@ static Cata(cata_if_pop_exit) { // last emitter called for cond expression
 
 static Cata(cata_if_pop_branch) { // last emitter called for a branch
   m += 3; // not 2?
-  cell *k = Kp;
-  k -= 2;
-  k[0].ap = cond; // pops next branch address off env stack alts
-  k[1].x = A((*c)->alts);
+  Kp -= 2;
+  Kp[0].ap = cond; // pops next branch address off env stack alts
+  Kp[1].x = A((*c)->alts);
   (*c)->alts = B((*c)->alts);
-  Kp = k;
   return pull(f, c, m); }
 
 static Cata(cata_if_push_branch) {
@@ -179,60 +174,58 @@ static Cata(cata_if_push_branch) {
 
 static Cata(cata_if_jump_out) {
   m += 3;
-  cell *addr = cell(A((*c)->ends)),
-       *k = cell(Kp);
+  cell *addr = cell(A((*c)->ends));
   // if the destination is a return or tail call,
   // then copy it forward instead of emitting a jump.
   if (addr->ap == ret || addr->ap == tap)
-    k = memcpy(k - 2, addr, 2 * sizeof(word));
+    Kp = memcpy(Kp - 2, addr, 2 * sizeof(word));
   else if (addr->ap == tapn)
-    k = memcpy(k - 3, addr, 3 * sizeof(word));
+    Kp = memcpy(Kp - 3, addr, 3 * sizeof(word));
   else
-    k -= 2,
-    k[0].ap = jump,
-    k[1].x = (word) addr;
-  Kp = k;
+    Kp -= 2,
+    Kp[0].ap = jump,
+    Kp[1].x = (word) addr;
   return pull(f, c, m); }
 
 
 static Cata(cata_ap) {
   m += 2;
-  cell *k = Kp;
   word arity = pop1(f);
   if (getnum(arity) > 1) {
-    if (k[0].ap == ret) k[0].x = arity, --k, k[0].ap = tapn;
-    else --k, k[0].x = arity, --k, k[0].ap = apn; }
+    if (Kp[0].ap == ret)
+      Kp -= 1,
+      Kp[0].ap = tapn,
+      Kp[1].x = arity;
+    else
+      Kp -= 2,
+      Kp[0].ap = apn,
+      Kp[1].x = arity; }
   else {
-    if (k[0].ap == ret) k[0].ap = tap;
-    else --k, k[0].ap = ap; }
-  Kp = k;
+    if (Kp[0].ap == ret) Kp[0].ap = tap;
+    else Kp -= 1, Kp[0].ap = ap; }
   return pull(f, c, m); }
 
 static Cata(cata_var_2) {
   m += 2;
-  cell *k = Kp;
   word var = pop1(f), stack = pop1(f);
   long i = 0;
   while (twop(stack))
     if (eql(f, A(stack), var)) break;
     else stack = B(stack), i++;
-  k -= 2;
-  k[0].ap = ref;
-  k[1].x = putnum(i);
-  Kp = k;
+  Kp -= 2;
+  Kp[0].ap = ref;
+  Kp[1].x = putnum(i);
   return pull(f, c, m); }
 
 // emit stack reference instruction
 static Cata(cata_var) {
   m += 2;
-  cell *k = Kp;
   word var = pop1(f), // variable name
        ins = llen(pop1(f)), // stack inset
        i = index_of_symbol(f, *c, var);
-  k -= 2;
-  k[0].ap = ref;
-  k[1].x = putnum(i + ins);
-  Kp = k;
+  Kp -= 2;
+  Kp[0].ap = ref;
+  Kp[1].x = putnum(i + ins);
   return pull(f, c, m); }
 
 static Inline Cata(pull) {
@@ -389,7 +382,7 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
     f->sp[0] = word(cata_yield);
     avec(f, exp, f = g_push(f, 2, cata_curry, d));
     size_t m = analyze(f, &d, 2, exp),
-           arity = llen(d->args) + llen(d->imps);
+           arity = arity_of(d);
     m = ana_ix(f, m, ret, putnum(arity));
     cell *k, *ip = f->ip;
     avec(f, ip, f = atp(f, &d, m));
