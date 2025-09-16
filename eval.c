@@ -460,17 +460,16 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
   if (!g_ok(f)) return forget();
   exp = pop1(f);
 
-  m = analyze(f, b, m, exp); // exp is now the required lambda, analyze it
+  m = analyze(f, b, m, exp); // XXX this goes after the loop below
   f = m ? f : encode(f, Oom);
   f = g_cons_2(f, nil, (*b)->stack);
-
   if (!g_ok(f)) return forget();
   (*b)->stack = pop1(f);
 
   // reverse the nom and def lists
   // evaluate definitions in order tracking var names on stack list
-  // store lambdas on env for lazy binding and pull_m new application
-  nom = reverse(f, nom), def = reverse(f, def);
+  // store lambdas on env for lazy binding
+  nom = reverse(f, nom), def = reverse(f, def); // XXX instead, do not reverse
   for (j = 0; twop(nom); j++, nom = B(nom), def = B(def)) {
     // if lambda then recompile with the explicit closure
     // and put in arg list and lam list (latter is used for lazy binding)
@@ -479,17 +478,17 @@ static size_t ana_let(core *f, env* *b, size_t m, word exp) {
       f = ana_lambda(f, c, BB(d), BA(def));
       if (!g_ok(f)) return forget();
       A(def) = B(d) = pop1(f); }
-    m = analyze(f, b, m, A(def));
+    m = analyze(f, b, m, A(def)); // XXX swap
     f = m ? f : encode(f, Oom);
     f = g_cons_2(f, A(nom), (*b)->stack);
     if (!g_ok(f)) return forget();
     (*b)->stack = pop1(f);
     // if toplevel then bind
     if (even && nilp((*b)->args)) {
-      m = ana_ix(f, m, defglob, A(nom));
+      m = ana_ix(f, m, defglob, A(nom)); // XXX
       if (!m) return forget(); } }
 
-  f = g_push(f, 2, cata_ap, putnum(j));
+  f = g_push(f, 2, cata_ap, putnum(j)); // XXX this goes above the loop
   m = g_ok(f) ? m + 2 : 0;
 
   for (j++; j--; (*b)->stack = B((*b)->stack));
