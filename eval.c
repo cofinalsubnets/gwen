@@ -59,9 +59,8 @@ typedef struct env {
        stack; // list // current values on stack
   // these are values of variables known at compile time
   word lams; // alist // known function definitions
-  // these are two stacks of jump target addresses for conditional expressions
-  word alts, // list // alternate branch address stack
-       ends; // list // exit branch address stack
+  // two stacks of branch addresses for conditional expressions
+  word alts, ends;
   // this is the enclosing function env* if any
   struct env *par; } env;
 
@@ -115,10 +114,10 @@ NoInline g_core *g_ana(core *f, vm *y) {
 #define Kp (f->ip)
 static Cata(cata_yield) {
   f = mo_c(f, m);
-  if (g_ok(f)) {
-    Kp = cell(pop1(f));
-    memset(Kp, -1, m * sizeof(word));
-    Kp += m; }
+  if (g_ok(f))
+    Kp = cell(pop1(f)),
+    memset(Kp, -1, m * sizeof(word)),
+    Kp += m;
   return f; }
 
 static Cata(cata_if_push_exit) {
@@ -150,15 +149,15 @@ static Cata(cata_if_push_branch) {
 static Cata(cata_if_jump_out) {
   f = pull(f, c, m + 3);
   if (g_ok(f)) {
-    cell *addr = cell(A((*c)->ends));
-    if (addr->ap == ret || addr->ap == tap)
-      Kp = memcpy(Kp - 2, addr, 2 * sizeof(word));
-    else if (addr->ap == tapn)
-      Kp = memcpy(Kp - 3, addr, 3 * sizeof(word));
+    cell *a = cell(A((*c)->ends));
+    if (a->ap == ret || a->ap == tap)
+      Kp = memcpy(Kp - 2, a, 2 * sizeof(word));
+    else if (a->ap == tapn)
+      Kp = memcpy(Kp - 3, a, 3 * sizeof(word));
     else
       Kp -= 2,
       Kp[0].ap = jump,
-      Kp[1].x = (word) addr; }
+      Kp[1].x = (word) a; }
   return f; }
 
 static Cata(cata_ap) {
@@ -179,7 +178,6 @@ static Cata(cata_var_2) {
   while (twop(stack))
     if (eql(f, A(stack), var)) break;
     else stack = B(stack), i++;
-
   f = pull(f, c, m + 2);
   if (g_ok(f))
     Kp -= 2,
@@ -192,7 +190,6 @@ static Cata(cata_var) {
   word var = pop1(f), // variable name
        ins = llen(pop1(f)), // stack inset
        i = index_of_symbol(f, *c, var);
-
   f = pull(f, c, m + 2);
   if (g_ok(f))
     Kp -= 2,
@@ -294,12 +291,12 @@ static Ana(analyze) {
     f = g_cons_r(f),
     f = g_cons_l(f),
     f = g_cons_r(f),
-    f = g_run(g_ana(f, g_yield)),
+    f = g_eva(f, g_yield),
     g_ok(f) ? analyze(f, c, pop1(f)) : f;
 
   // application.
-  avec(f, a, f = ana_ap_args(f, c, b));
-  return analyze(f, c, a); }
+  return avec(f, a, f = ana_ap_args(f, c, b)),
+         analyze(f, c, a); }
 
 static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
   f = enscope(f, *c, exp, imps);
@@ -375,7 +372,7 @@ static g_core *ana_ap_args(core *f, env **c, word x) {
 
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
-static g_core *ana_let(core *f, env* *b, word exp) {
+static g_core *ana_let(core *f, env **b, word exp) {
   struct root *mm = f->safe;
 #define forget() ((f)->safe=(mm),f)
   MM(f, &exp);
@@ -407,11 +404,10 @@ static g_core *ana_let(core *f, env* *b, word exp) {
     nom = pop1(f);
     // if it's a lambda compile it and record in lam list
     if (lambp(f, e)) {
+      f = g_push(f, 2, d, lam);
       f = ana_lambda(f, c, nil, B(e));
-      f = g_push(f, 1, d);
-      f = g_cons_l(f);
-      f = g_push(f, 1, lam);
       f = g_cons_r(f);
+      f = g_cons_l(f);
       if (!g_ok(f)) return forget();
       lam = pop1(f); }
     exp = BB(exp); }

@@ -8,4 +8,5 @@ static const char m[] =
 #endif
 ;
 
-int main(int ac, const char **av) { return g_main(m, av); }
+int main(int ac, const char **av) {
+  return g_main(m, av); }

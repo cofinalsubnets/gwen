@@ -72,12 +72,12 @@ typedef struct g_string g_string;
 typedef struct g_pair g_pair;
 typedef struct g_symbol g_symbol;
 typedef struct g_table g_table;
-typedef union g_cell g_cell, cell;
+typedef g_cell cell;
 typedef g_core core;
 typedef g_word word;
 typedef struct g_type methods, type, g_type;
 
-typedef Vm(vm);
+typedef g_vm vm;
 union g_cell { vm *ap; word x; cell *m; methods *typ; };
 
 #define DataHeader vm *ap; methods *typ
@@ -169,6 +169,9 @@ g_core *g_have(g_core*, uintptr_t),
        *g_intern(g_core*),
        *g_hash_put(g_core*),
        *g_ana(g_core*, vm*),
+       *p_readsp(g_core*, g_string*),
+       *p_read1f(g_core*, FILE*),
+       *g_strof(g_core*, const char*),
        *g_read_cs(g_core*, const char*);
 
 Vm(gc, uintptr_t);
@@ -218,6 +221,9 @@ static Inline size_t b2w(size_t b) {
 static Inline struct tag { cell *null, *head, end[]; } *ttag(cell*k) {
   while (k->x) k++;
   return (struct tag*) k; }
+
+static Inline g_core *g_eva(g_core *f, vm *y) {
+  return g_run(g_ana(f, y)); }
 
 // align bytes up to the nearest word
 _Static_assert(-1 >> 1 == -1, "support sign extended shift");

@@ -8,13 +8,12 @@ x=gw
 
 #build
 # c files and headers
-main_c=main.c
+main_c=main.c cat.c
 c=$(filter-out $(main_c), $(wildcard *.c))
-boot_h=boot.h boot.0.h
+boot_h=boot.h
 h=$(filter-out $(boot_h), $(wildcard *.h))
 
 b=$n.bin
-0=$n.0.bin
 o=$(c:.c=.o)
 
 CFLAGS=\
@@ -38,18 +37,15 @@ $(built_binary): $o main.c boot.h $m
 	@echo $@
 	@$(cc) -c $<
 
-$0: $o main.c boot.0.h $m
+cat.bin: $o cat.c $m
 	@echo $@
-	@$(cc) $o main.c -o $@ -Dg_main_h='"boot.0.h"'
+	@$(cc) $o cat.c -o $@
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-boot.0.h: main.$x
+boot.h: main.$x cat.bin
 	@echo $@
-	@$(sed) <$< >$@
-boot.h: main.$x cat.$x $0
-	@echo $@
-	@./$0 cat.$x <$< | $(sed) >$@
+	@./cat.bin < main.$x | $(sed) >$@
 
 built_manpage=$n.1
 $(built_manpage): $0 manpage.$x

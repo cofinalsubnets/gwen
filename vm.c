@@ -3,7 +3,7 @@
 NoInline Vm(ev0) {
   Ip += 1;
   Pack(f);
-  return g_run(g_ana(f, jump)); }
+  return g_eva(f, jump); }
 
 Vm(defglob) {
   Have(3);

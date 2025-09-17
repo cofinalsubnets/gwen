@@ -1,6 +1,6 @@
 #include "i.h"
 
-static g_core *g_ini_strof(g_core *f, const char *cs) {
+g_core *g_strof(g_core *f, const char *cs) {
   size_t bytes = strlen(cs),
          words = b2w(bytes),
          req = Width(string) + words;
@@ -12,7 +12,7 @@ static g_core *g_ini_strof(g_core *f, const char *cs) {
   return f; }
 
 static g_core *g_ini_symof(g_core *f, const char *nom) {
-  f = g_ini_strof(f, nom);
+  f = g_strof(f, nom);
   return g_intern(f); }
 
 static g_core *g_ini_def(g_core *f, const char *k, word v) {
@@ -39,17 +39,15 @@ int g_main(const char *p, const char **av) {
   g_core *f = g_ini();
   int n = 0;
   f = g_read_cs(f, p);
-  while (av[n]) f = g_ini_strof(f, av[n++]);
+  f = g_push(f, 3, nil, f->quote, nil);
+  while (av[n]) f = g_strof(f, av[n++]);
   f = g_push(f, 1, nil);
   while (n--) f = g_cons_r(f);
-  f = g_push1(f, nil);
-  f = g_cons_r(f);
-  f = g_push1(f, f->quote);
   f = g_cons_l(f);
-  f = g_push1(f, nil);
   f = g_cons_r(f);
+  f = g_cons_l(f);
   f = g_cons_r(f);
-  f = g_run(g_ana(f, g_yield));
+  f = g_eva(f, g_yield);
   g_fin(f);
   return code_of(f); }
 
@@ -96,7 +94,7 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
 
   f = g_ini_def(f, "globals", word(f->dict));
   f = g_ini_def(f, "macros", word(f->macro));
-  f = g_ini_strof(f, g_version);
+  f = g_strof(f, g_version);
   f = g_ini_def(f, "version", pop1(f));
 
 #define bifs(_) \

@@ -31,11 +31,11 @@ static g_core *p_read1(core *f, input* i) {
   int c = read_char(f, i);
   switch (c) {
     case EOF:  return encode(f, Eof);
-    case '\'': return f = p_read1(f, i),
+    case '\'': return f = g_push(f, 1, f->quote),
+                      f = p_read1(f, i),
                       f = g_push(f, 1, nil),
                       f = g_cons_r(f),
-                      f = g_push(f, 1, f->quote),
-                      g_cons_l(f);
+                      g_cons_r(f);
     case '(':  return p_reads(f, i);
     case ')':  return g_push(f, 1, nil);
     case '"':  return read_string(f, i, '"');
@@ -105,7 +105,7 @@ static int p_file_getc(input *i) { return getc(((file_input*) i)->file); }
 static int p_file_ungetc(input *i, int c) { return ungetc(c, ((file_input*) i)->file); }
 static int p_file_eof(input *i) { return feof(((file_input*) i)->file); }
 
-static NoInline g_core *p_read1f(core *f, FILE* i) {
+NoInline g_core *p_read1f(core *f, FILE* i) {
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   return p_read1(f, (input*) &fi); }
 
@@ -127,8 +127,8 @@ Vm(read0) {
   Ip += 1;
   return Continue(); }
 
-static NoInline g_core *p_readsp(core *f, string *s) {
-  char n[265]; // :)
+NoInline g_core *p_readsp(core *f, string *s) {
+  char n[256]; // :)
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
   FILE *i = fopen(n, "r");
