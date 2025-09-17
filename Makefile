@@ -8,10 +8,10 @@ x=gw
 
 #build
 # c files and headers
-main_c=main.c cat.c
-c=$(filter-out $(main_c), $(wildcard *.c))
 main_h=main.h
+main_c=main.c cat.c
 h=$(filter-out $(main_h), $(wildcard *.h))
+c=$(filter-out $(main_c), $(wildcard *.c))
 
 b=$n
 o=$(c:.c=.o)
@@ -43,9 +43,9 @@ lcat: $m $h $o cat.c
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-$(main_h): main.$x lcat
+$(main_h): lcat main.$x
 	@echo $@
-	@./lcat < main.$x | $(sed) >$@
+	@./$< <main.$x | $(sed) >$@
 
 built_manpage=$n.1
 $(built_manpage): $0 manpage.$x

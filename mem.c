@@ -77,7 +77,7 @@ NoInline core *please(core *f, uintptr_t req0) {
   else return f; // no change reqired, hopefully the most common case
   // at this point we got a new target length and are gonna try and resize
   g_core *g = f->malloc(f, sizeof(core) + len1 * 2 * sizeof(word)); // allocate pool with the new target size
-  if (!g) return req <= len0 ? f : encode(f, Oom); // if this fails still return true if the original pool is not too small
+  if (!g) return req <= len0 ? f : encode(f, g_status_oom); // if this fails still return true if the original pool is not too small
   memset(g, 0, sizeof(core));
   // we got the new pool so copy again and return true
   g->len = len1;            // set core variables referring to new pool

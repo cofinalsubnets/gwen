@@ -34,6 +34,7 @@ g_core
   *g_read1(g_core*),
   *g_read1f(g_core*, FILE*),
   *g_read1s(g_core*, const char*),
+  *g_tbl(g_core*),
   *g_run(g_core*),
   *g_push(g_core*, uintptr_t, ...),
   *g_pop(g_core*, uintptr_t),

@@ -1,6 +1,17 @@
 #include "i.h"
 #define max(a, b) ((a)>(b)?(a):(b))
 
+g_core *g_strof(g_core *f, const char *cs) {
+  size_t bytes = strlen(cs),
+         words = b2w(bytes),
+         req = Width(string) + words;
+  f = g_cells(f, req);
+  if (g_ok(f)) {
+    g_string *o = str(f->sp[0]);
+    ini_str(o, bytes);
+    memcpy(o->text, cs, bytes); }
+  return f; }
+
 static uintptr_t xx_str(core *v, word _);
 static bool eq_str(core *f, word x, word y);
 static void em_str(core* v, FILE *o, word _);

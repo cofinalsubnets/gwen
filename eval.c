@@ -370,6 +370,7 @@ static g_core *ana_ap_args(core *f, env **c, word x) {
   (*c)->stack = B((*c)->stack);
   return f; }
 
+#define BBA(o) B(BA(o))
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
 static g_core *ana_let(core *f, env **b, word exp) {

@@ -1,5 +1,9 @@
 #include "i.h"
 
+g_core *g_symof(g_core *f, const char *nom) {
+  f = g_strof(f, nom);
+  return g_intern(f); }
+
 static Inline void ini_sym(symbol *y, string *nom, uintptr_t code) {
   y->ap = data;
   y->typ = &sym_type;
@@ -43,7 +47,7 @@ Vm(nomsym) {
   return Continue(); }
 
 Vm(gensym) {
-  if (strp(Sp[0])) return Ap(nomsym, f);
+  if (strp(Sp[0])) return nomsym(f, Ip, Hp, Sp);
   const int req = Width(symbol) - 2;
   Have(req);
   symbol *y = (symbol*) Hp;

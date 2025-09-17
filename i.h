@@ -4,6 +4,27 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+typedef struct g_string g_string;
+typedef struct g_pair g_pair;
+typedef struct g_symbol g_symbol;
+typedef struct g_table g_table;
+typedef g_cell cell;
+typedef g_core core;
+typedef g_word word;
+typedef struct g_type methods, type, g_type;
+
+typedef g_vm vm;
+union g_cell { vm *ap; word x; cell *m; methods *typ; };
+
+#define putnum(_) (((g_word)(_)<<1)|1)
+#define getnum(_) ((g_word)(_)>>1)
+#define nil putnum(0)
+
+_Static_assert(-1 >> 1 == -1, "sign extended shift");
+_Static_assert(sizeof(g_cell) == sizeof(g_word));
+_Static_assert(nil == g_nil);
+
 #define encode(f, s) ((g_core*)((g_word)(f)|(s)))
 #define core_of g_core_of
 #define code_of g_code_of
@@ -12,14 +33,6 @@
 #define NoInline __attribute__((noinline))
 
 #define min(a, b) ((a)<(b)?(a):(b))
-
-#define Eof g_status_eof
-#define Oom g_status_oom
-#define Ok g_status_ok
-
-#define putnum(_) (((word)(_)<<1)|1)
-#define getnum(_) ((word)(_)>>1)
-#define nil putnum(0)
 
 #define str(x) ((g_string*)(x))
 #define sym(x) ((g_symbol*)(x))
@@ -50,34 +63,15 @@
 #define AA(o) A(A(o))
 #define BA(o) B(A(o))
 #define BB(o) B(B(o))
-#define BBA(o) B(B(A(o)))
 
 #define mix ((uintptr_t)2708237354241864315)
-#define Have(n) if (Sp - Hp < n) return Ap(gc, f, n)
-#define Have1() if (Sp == Hp) return Ap(gc, f, 1)
+#define Have(n) if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n)
+#define Have1() if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1)
 
-#ifndef g_version
-#define g_version ""
-#endif
-
-// theres a big benefit in speed from tail call optimization but not all platforms support it
 #define Vm(n, ...) g_core *n(core *f, cell* Ip, word* Hp, word* Sp, ##__VA_ARGS__)
-#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
-#define Continue() Ap(Ip->ap, f)
-
-typedef struct g_string g_string;
-typedef struct g_pair g_pair;
-typedef struct g_symbol g_symbol;
-typedef struct g_table g_table;
-typedef g_cell cell;
-typedef g_core core;
-typedef g_word word;
-typedef struct g_type methods, type, g_type;
-
-typedef g_vm vm;
-union g_cell { vm *ap; word x; cell *m; methods *typ; };
+#define Continue() Ip->ap(f, Ip, Hp, Sp)
 
 #define DataHeader vm *ap; methods *typ
 typedef struct g_string {
@@ -211,8 +205,5 @@ static Inline struct tag { cell *null, *head, end[]; } *ttag(cell*k) {
 static Inline g_core *g_eva(g_core *f, vm *y) {
   return g_run(g_ana(f, y)); }
 
-// align bytes up to the nearest word
-_Static_assert(-1 >> 1 == -1, "support sign extended shift");
-_Static_assert(sizeof(cell*) == sizeof(cell), "cell is 1 word wide");
 #define g_push1(f, x) g_push((f), 1, (x))
 #define g_push2(f, x, y) g_push((f), 2, (x), (y))

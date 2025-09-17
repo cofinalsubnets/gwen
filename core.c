@@ -1,34 +1,14 @@
 #include "i.h"
 #include <assert.h>
 
-g_core *g_strof(g_core *f, const char *cs) {
-  size_t bytes = strlen(cs),
-         words = b2w(bytes),
-         req = Width(string) + words;
-  f = g_cells(f, req);
-  if (g_ok(f)) {
-    g_string *o = str(f->sp[0]);
-    ini_str(o, bytes);
-    memcpy(o->text, cs, bytes); }
-  return f; }
-
-g_core *g_symof(g_core *f, const char *nom) {
-  f = g_strof(f, nom);
-  return g_intern(f); }
+#ifndef g_version
+#define g_version ""
+#endif
 
 static Inline g_core *g_ini_def(g_core *f, const char *k, word v) {
   f = g_push(f, 1, v);
   f = g_symof(f, k);
   return g_hash_put_2(f); }
-
-static g_core *g_ini_tbl(g_core *f) {
-  f = g_cells(f, Width(table) + 1);
-  if (g_ok(f)) {
-    table *t = tbl(f->sp[0]);
-    struct entry **tab = (struct entry**) (t + 1);
-    tab[0] = 0;
-    ini_table(t, 0, 1, tab); }
-  return f; }
 
 g_core *g_run(g_core *f) {
   return !g_ok(f) ? f :
@@ -50,7 +30,7 @@ enum g_status g_fin(g_core *f) {
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
   const size_t len0 = 1024;
   g_core *f = g_malloc(NULL, sizeof(g_core) + 2 * len0 * sizeof(word));
-  if (!f) return encode(NULL, g_status_oom);
+  if (!f) return encode(f, g_status_oom);
 
   memset(f, 0, sizeof(core));
   word *pool = f->end;
@@ -64,8 +44,8 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
   static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
   f->ip = bif_yield;
 
-  f = g_ini_tbl(f);
-  f = g_ini_tbl(f);
+  f = g_tbl(f);
+  f = g_tbl(f);
   f = g_symof(f, ":");
   f = g_symof(f, "?");
   f = g_symof(f, "`");

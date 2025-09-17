@@ -1,5 +1,14 @@
 #include "i.h"
 
+g_core *g_tbl(g_core *f) {
+  f = g_cells(f, Width(table) + 1);
+  if (g_ok(f)) {
+    table *t = tbl(f->sp[0]);
+    struct entry **tab = (struct entry**) (t + 1);
+    tab[0] = 0;
+    ini_table(t, 0, 1, tab); }
+  return f; }
+
 // general hashing method...
 uintptr_t hash(g_core *f, g_word x) {
   if (nump(x)) {
@@ -25,6 +34,7 @@ methods
 static void em_tbl(g_core *f, FILE *o, word x) {
   g_table *t = (g_table*) x;
   fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x); }
+
 static void wk_tbl(core *f, word x, word *p0, word *t0) {
   table *t = (table*) x;
   f->cp += Width(table) + t->cap + t->len * Width(struct entry);
@@ -65,6 +75,7 @@ NoInline g_core *g_hash_put_2(g_core *f) {
   f->sp[1] = f->sp[0];
   f->sp[0] = x;
   return g_hash_put(f); }
+
 NoInline g_core *g_hash_put(g_core *f) {
   if (!g_ok(f)) return f;
   g_table *t = (g_table*) f->sp[0];

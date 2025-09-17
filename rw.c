@@ -30,7 +30,7 @@ static g_core *g_read1i(core *f, input* i) {
   if (!g_ok(f)) return f;
   int c = read_char(f, i);
   switch (c) {
-    case EOF:  return encode(f, Eof);
+    case EOF:  return encode(f, g_status_eof);
     case '\'': return f = g_push(f, 1, f->quote),
                       f = g_read1i(f, i),
                       f = g_push(f, 1, nil),
@@ -125,7 +125,7 @@ static NoInline g_core *g_readsf(core *f, string *s) {
 Vm(read0) {
   Pack(f);
   f = g_read1f(f, stdin);
-  if (code_of(f) == Eof) return // no error but end of file
+  if (code_of(f) == g_status_eof) return // no error but end of file
     f = core_of(f),
     Unpack(f),
     Sp[0] = nil,
