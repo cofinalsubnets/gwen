@@ -294,48 +294,12 @@ static Ana(analyze) {
     f = g_cons_r(f),
     f = g_cons_l(f),
     f = g_cons_r(f),
-    f = g_ana(f, g_yield),
-    f = g_ok(f) ? f->ip->ap(f, f->ip, f->hp, f->sp) : f,
-    g_ok(f) ? analyze(f, c, pop1(f)) : 0;
+    f = g_run(g_ana(f, g_yield)),
+    g_ok(f) ? analyze(f, c, pop1(f)) : f;
 
   // application.
   avec(f, a, f = ana_ap_args(f, c, b));
   return analyze(f, c, a); }
-
-static Ana(ana_if_r) {
-  avec(f, x, f =
-    !twop(x) || !twop(B(x)) ?
-      g_push(f, 1, cata_if_jump_out) :
-      (f = ana_if_r(f, c, BB(x)),
-       f = g_push(f, 2, cata_if_jump_out, cata_if_push_branch),
-       f = analyze(f, c, AB(x)),
-       g_push(f, 1, cata_if_pop_branch)));
-  return analyze(f, c, twop(x) ? A(x) : nil); }
-
-static Ana(ana_if) {
-  avec(f, x, f = g_push(f, 1, cata_if_push_exit));
-  f = ana_if_r(f, c, x);
-  return g_push(f, 1, cata_if_pop_exit); }
-
-static NoInline g_core *ana_seq(core *f, env* *c, word a, word b) {
-  if (!g_ok(f)) return f;
-  if (twop(b)) avec(f, a, f = ana_seq(f, c, A(b), B(b)),
-                          f = g_push(f, 2, cata_i, drop1));
-  return analyze(f, c, a); }
-
-static NoInline g_core *ana_ap_args_r(core *f, env**c, word x) {
-  if (!twop(x)) return f;
-  avec(f, x, f = ana_ap_args_r(f, c, B(x)),
-             f = g_push(f, 2, cata_ap, putnum(1)));
-  return analyze(f, c, A(x)); }
-
-// evaluate function call arguments and apply
-static g_core *ana_ap_args(core *f, env **c, word x) {
-  avec(f, x, f = g_cons_2(f, nil, (*c)->stack));
-  (*c)->stack = pop1(f);
-  f = ana_ap_args_r(f, c, x);
-  (*c)->stack = B((*c)->stack);
-  return f; }
 
 static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
   f = enscope(f, *c, exp, imps);
@@ -372,6 +336,41 @@ static g_core *ana_lambda(core *f, env **c, word imps, word exp) {
     f = g_cons_2(f, word(k), d->imps);
 
   UM(f);
+  return f; }
+
+static Ana(ana_if_r) {
+  avec(f, x, f =
+    !twop(x) || !twop(B(x)) ?
+      g_push(f, 1, cata_if_jump_out) :
+      (f = ana_if_r(f, c, BB(x)),
+       f = g_push(f, 2, cata_if_jump_out, cata_if_push_branch),
+       f = analyze(f, c, AB(x)),
+       g_push(f, 1, cata_if_pop_branch)));
+  return analyze(f, c, twop(x) ? A(x) : nil); }
+
+static Ana(ana_if) {
+  avec(f, x, f = g_push(f, 1, cata_if_push_exit));
+  f = ana_if_r(f, c, x);
+  return g_push(f, 1, cata_if_pop_exit); }
+
+static g_core *ana_seq(core *f, env* *c, word a, word b) {
+  if (!g_ok(f)) return f;
+  if (twop(b)) avec(f, a, f = ana_seq(f, c, A(b), B(b)),
+                          f = g_push(f, 2, cata_i, drop1));
+  return analyze(f, c, a); }
+
+static g_core *ana_ap_args_r(core *f, env**c, word x) {
+  if (!twop(x)) return f;
+  avec(f, x, f = ana_ap_args_r(f, c, B(x)),
+             f = g_push(f, 2, cata_ap, putnum(1)));
+  return analyze(f, c, A(x)); }
+
+// evaluate function call arguments and apply
+static g_core *ana_ap_args(core *f, env **c, word x) {
+  avec(f, x, f = g_cons_2(f, nil, (*c)->stack));
+  (*c)->stack = pop1(f);
+  f = ana_ap_args_r(f, c, x);
+  (*c)->stack = B((*c)->stack);
   return f; }
 
 // this is the longest function in the whole C implementation :(
@@ -421,8 +420,8 @@ static g_core *ana_let(core *f, env* *b, word exp) {
   bool even = !twop(exp); // we check this again later to make global bindings at top level
   if (even) {
     f = g_cons_2(f, A(nom), nil);
-    if (g_ok(f)) exp = pop1(f);
-    else return forget(); }
+    if (!g_ok(f)) return forget();
+    exp = pop1(f); }
 
   // find closures
   // for each function f with closure C(f)

@@ -116,7 +116,6 @@ static NoInline void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
     else { while (*f->cp) *f->cp = CP(*f->cp),
                           f->cp++;
            f->cp += 2; }
-  /*
   // run destructors ...
   // this has never been tested or used
   struct dtor *nd = NULL;
@@ -127,8 +126,7 @@ static NoInline void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
          n->x = cell(d->x)->x,
          n->next = nd,
          nd = n;
-  f->dtors = nd; */
-}
+  f->dtors = nd; }
 
 NoInline word cp(core *v, word x, word *p0, word *t0) {
   // if it's a number or outside managed memory then return it

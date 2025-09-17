@@ -49,14 +49,13 @@ int g_main(const char *p, const char **av) {
   f = g_push1(f, nil);
   f = g_cons_r(f);
   f = g_cons_r(f);
-  f = g_ana(f, g_yield);
-  f = g_run(f);
+  f = g_run(g_ana(f, g_yield));
   g_fin(f);
   return code_of(f); }
 
 void g_fin(g_core *f) {
   if ((f = core_of(f))) {
-//    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
+    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
     f->free(f, f); } }
 
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {

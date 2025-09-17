@@ -52,12 +52,10 @@ static g_core *p_reads(core *f, input* i) {
          g_cons_r(f); }
 
 static g_core *g_buf_new(g_core *f) {
-  f = g_have(f, Width(string) + 2);
+  f = g_cells(f, Width(string) + 1);
   if (g_ok(f)) {
-    string *o = (string*) f->hp;
-    f->hp += Width(string) + 1;
-    ini_str(o, sizeof(word));
-    push1(f, word(o)); }
+    string *o = (string*) f->sp[0];
+    ini_str(o, sizeof(word)); }
   return f; }
 
 static g_core *g_buf_grow(g_core *f) {
