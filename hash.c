@@ -91,16 +91,17 @@ NoInline g_core *g_hash_put(g_core *f) {
           i = (cap1-1) & hash(f, e->key),
           e->next = tab1[i],
           tab1[i] = e); } }
+
   f->sp += 2;
   f->sp[0] = (g_word) t;
   return f; }
 
 static struct entry *table_delete_r(core *f, table *t, word k, word *v, struct entry *e) {
   if (!e) return e;
-  if (eql(f, e->key, k)) {
-    t->len--;
-    *v = e->val;
-    return e->next; }
+  if (eql(f, e->key, k)) return
+    t->len--,
+    *v = e->val,
+    e->next;
   e->next = table_delete_r(f, t, k, v, e->next);
   return e; }
 

@@ -26,7 +26,7 @@ g_core *g_push(core *f, uintptr_t m, ...) {
   return f; }
 
 g_core *g_pop(core *f, uintptr_t m) {
-  f->sp += m;
+  if (g_ok(f)) f->sp += m;
   return f; }
 
 Inline g_core *g_have(g_core *f, uintptr_t n) {
@@ -61,12 +61,11 @@ NoInline Vm(gc, uintptr_t n) {
 //   t0                  gc time (this cycle)
 static NoInline void copy_from(core*, word*, word*, uintptr_t);
 static NoInline void swap(core *f) {
-  word *pool0 = f->pool, *loop0 = f->loop;
-  f->pool = loop0, f->loop = pool0;
-  copy_from(f, pool0, f->sp, f->len); }
+  word *pool0 = f->pool;
+  f->pool = f->loop, f->loop = pool0;
+  copy_from(f, f->loop, f->sp, f->len); }
 
 NoInline core *please(core *f, uintptr_t req0) {
-  word *loop0 = f->loop;
   size_t t0 = f->t0, t1 = g_clock(),
          len0 = f->len;
   swap(f);          // copy to new pool
@@ -87,14 +86,14 @@ NoInline core *please(core *f, uintptr_t req0) {
   g->len = len1;            // set core variables referring to new pool
   g->pool = g->end;          //
   g->loop = g->end + len1;   //
-  memcpy(g->vars, f->vars, sizeof(word) * g_var_N);
   g->malloc = f->malloc;
   g->free = f->free;
   g->safe = f->safe;
-  copy_from(g, loop0, f->sp, len0); // do second copy
-  f->free(f, f);  // free original pool
-  g->t0 = g_clock();       // set last gc timestamp
-  return g; }            // size successfully adjusted
+  memcpy(g->vars, f->vars, sizeof(word) * g_var_N);
+  copy_from(g, f->pool, f->sp, f->len); // do second copy
+  f->free(f, f);     // free original pool
+  g->t0 = g_clock(); // set last gc timestamp
+  return g; }        // size successfully adjusted
 
 // this function expects pool loop and len to have been set already on the state
 static NoInline void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
