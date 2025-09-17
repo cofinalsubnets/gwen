@@ -3,7 +3,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdbool.h>
 #define encode(f, s) ((g_core*)((g_word)(f)|(s)))
 #define core_of g_core_of
@@ -102,18 +101,6 @@ typedef struct g_pair {
   word a, b;
 } pair;
 
-enum g_var {
-  g_var_ip,
-  g_var_dict,
-  g_var_mac,
-  g_var_ev,
-  g_var_qt,
-  g_var_do,
-  g_var_de,
-  g_var_if,
-  g_var_la,
-  g_var_N, };
-
 struct g_core {
   // vm registers
   word *hp, *sp;
@@ -160,6 +147,7 @@ void transmit(g_core*, FILE*, g_word);
 uintptr_t hash(g_core*, g_word),
           g_clock(void);
 g_word cp(core*, word, word*, word*),
+       g_var(g_core*, enum g_var),
        g_hash_get(g_core*, g_word, table*, g_word);
 g_core *g_have(g_core*, uintptr_t),
        *g_cells(g_core*, size_t),
@@ -169,10 +157,7 @@ g_core *g_have(g_core*, uintptr_t),
        *g_intern(g_core*),
        *g_hash_put(g_core*),
        *g_ana(g_core*, vm*),
-       *p_readsp(g_core*, g_string*),
-       *p_read1f(g_core*, FILE*),
-       *g_strof(g_core*, const char*),
-       *g_read_cs(g_core*, const char*);
+       *p_readsp(g_core*, g_string*);
 
 Vm(gc, uintptr_t);
 vm data, bnot, rng, nullp, sysclock, symnom, dot,

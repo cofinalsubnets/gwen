@@ -25,6 +25,10 @@ g_core *g_push(core *f, uintptr_t m, ...) {
     va_end(xs); }
   return f; }
 
+g_core *g_pop(core *f, uintptr_t m) {
+  f->sp += m;
+  return f; }
+
 Inline g_core *g_have(g_core *f, uintptr_t n) {
   return !g_ok(f) ? f : avail(f) < n ? please(f, n) : f; }
 

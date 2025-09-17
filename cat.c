@@ -1,11 +1,13 @@
-#include "i.h"
+#include "gw.h"
 
 int main(void) {
   g_core *f = g_ini();
-  f = p_read1f(f, stdin);
-  if (g_ok(f)) transmit(f, stdout, pop1(f));
-  while (g_ok(f = p_read1f(f, stdin)))
+  f = g_read1f(f, stdin);
+  if (g_ok(f)) g_writef(f, stdout),
+               g_pop(f, 1);
+  while (g_ok(f = g_read1f(f, stdin)))
     fputc(' ', stdout),
-    transmit(f, stdout, pop1(f));
+    g_writef(f, stdout),
+    g_pop(f, 1);
   g_fin(f);
-  return 0; }
+  return g_code_of(f); }

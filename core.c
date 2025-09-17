@@ -35,21 +35,12 @@ static g_core *g_ini_tbl(g_core *f) {
 g_core *g_run(g_core *f) {
   return !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp); }
 
-int g_main(const char *p, const char **av) {
-  g_core *f = g_ini();
-  int n = 0;
-  f = g_read_cs(f, p);
-  f = g_push(f, 3, nil, f->quote, nil);
-  while (av[n]) f = g_strof(f, av[n++]);
-  f = g_push(f, 1, nil);
-  while (n--) f = g_cons_r(f);
-  f = g_cons_l(f);
-  f = g_cons_r(f);
-  f = g_cons_l(f);
-  f = g_cons_r(f);
-  f = g_eva(f, g_yield);
-  g_fin(f);
-  return code_of(f); }
+g_core *g_eval(g_core *f) {
+  return g_eva(f, g_yield); }
+
+
+g_word g_var(g_core *f, enum g_var n) {
+  return f->vars[n]; }
 
 void g_fin(g_core *f) {
   if ((f = core_of(f))) {
