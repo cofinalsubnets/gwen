@@ -41,8 +41,9 @@ g_core
   *g_eval(g_core*)
   ;
 
+enum g_status
+  g_fin(g_core*);
 void
-  g_fin(g_core*),
   *g_malloc(g_core*, size_t),
   g_free(g_core*, void*),
   g_writef(g_core*, FILE*)

@@ -109,25 +109,7 @@ NoInline g_core *g_read1f(core *f, FILE* i) {
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   return g_read1i(f, (input*) &fi); }
 
-Vm(read0) {
-  Pack(f);
-  f = g_read1f(f, stdin);
-  if (code_of(f) == Eof) { // no error but end of file
-    f = core_of(f);
-    Unpack(f);
-    Sp[0] = nil;
-    Ip += 1;
-    return Continue(); }
-  f = g_push(f, 1, nil);
-  f = g_cons_r(f);
-  if (!g_ok(f)) return f;
-  Unpack(f);
-  Sp[1] = Sp[0];
-  Sp += 1;
-  Ip += 1;
-  return Continue(); }
-
-NoInline g_core *g_readsip(core *f, string *s) {
+static NoInline g_core *g_readsf(core *f, string *s) {
   char n[256]; // :)
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
@@ -138,6 +120,25 @@ NoInline g_core *g_readsip(core *f, string *s) {
   fclose(i);
   return f; }
 
+Vm(read0) {
+  Pack(f);
+  f = g_read1f(f, stdin);
+  if (code_of(f) == Eof) return // no error but end of file
+    f = core_of(f),
+    Unpack(f),
+    Sp[0] = nil,
+    Ip += 1,
+    Continue();
+  f = g_push(f, 1, nil);
+  f = g_cons_r(f);
+  if (!g_ok(f)) return f;
+  return
+    Unpack(f),
+    Sp[1] = Sp[0],
+    Sp += 1,
+    Ip += 1,
+    Continue(); }
+
 Vm(readf) {
   string *s = str(Sp[0]);
   if (!strp(Sp[0]) || s->len > 255) return
@@ -145,13 +146,14 @@ Vm(readf) {
     Ip += 1,
     Continue();
   Pack(f);
-  f = g_readsip(f, s);
+  f = g_readsf(f, s);
   if (!g_ok(f)) return f;
-  return Unpack(f),
-         Sp[1] = Sp[0],
-         Sp += 1,
-         Ip += 1,
-         Continue(); }
+  return
+    Unpack(f),
+    Sp[1] = Sp[0],
+    Sp += 1,
+    Ip += 1,
+    Continue(); }
 
 typedef struct text_input { input in; const char *text; int i; } text_input;
 static int p_text_getc(input *i) {

@@ -38,14 +38,14 @@ g_core *g_run(g_core *f) {
 g_core *g_eval(g_core *f) {
   return g_eva(f, g_yield); }
 
-
 g_word g_var(g_core *f, enum g_var n) {
   return f->vars[n]; }
 
-void g_fin(g_core *f) {
-  if ((f = core_of(f))) {
+enum g_status g_fin(g_core *f) {
+  if ((f = g_core_of(f))) {
     for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
-    f->free(f, f); } }
+    f->free(f, f); }
+  return g_code_of(f); }
 
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
   const size_t len0 = 1024;
