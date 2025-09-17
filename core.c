@@ -42,10 +42,11 @@ g_word g_var(g_core *f, enum g_var n) {
   return f->vars[n]; }
 
 enum g_status g_fin(g_core *f) {
+  enum g_status g = g_code_of(f);
   if ((f = g_core_of(f))) {
     for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
     f->free(f, f); }
-  return g_code_of(f); }
+  return g; }
 
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
   const size_t len0 = 1024;
@@ -116,10 +117,9 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
 #define height(f) (f->pool+f->len-f->sp)
 
   /*
-  if (g_ok(f))
-    f = g_push(f, 3, f->dict, nil, f->macro),
-    f = g_hash_put(f),
-    f = g_pop(f, 1);
-    */
+  f = g_push(f, 3, f->dict, nil, f->macro),
+  f = g_hash_put(f),
+  f = g_pop(f, 1);
+  */
 
   return f; }

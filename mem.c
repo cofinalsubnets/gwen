@@ -30,7 +30,7 @@ g_core *g_pop(core *f, uintptr_t m) {
   return f; }
 
 Inline g_core *g_have(g_core *f, uintptr_t n) {
-  return !g_ok(f) ? f : avail(f) < n ? please(f, n) : f; }
+  return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
 
 g_core *g_cells(g_core *f, size_t n) {
   f = g_have(f, n);
@@ -59,16 +59,13 @@ NoInline Vm(gc, uintptr_t n) {
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
-static NoInline void copy_from(core*, word*, word*, uintptr_t);
-static NoInline void swap(core *f) {
-  word *pool0 = f->pool;
-  f->pool = f->loop, f->loop = pool0;
-  copy_from(f, f->loop, f->sp, f->len); }
-
+static void copy_from(core*, word*, word*, uintptr_t);
 NoInline core *please(core *f, uintptr_t req0) {
   size_t t0 = f->t0, t1 = g_clock(),
          len0 = f->len;
-  swap(f);          // copy to new pool
+  word *pool0 = f->pool;
+  f->pool = f->loop, f->loop = pool0;
+  copy_from(f, f->loop, f->sp, f->len);
   size_t t2 = f->t0 = g_clock(),      // get and set last gc end time
          req = req0 + len0 - avail(f),
          v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
@@ -84,8 +81,8 @@ NoInline core *please(core *f, uintptr_t req0) {
   memset(g, 0, sizeof(core));
   // we got the new pool so copy again and return true
   g->len = len1;            // set core variables referring to new pool
-  g->pool = g->end;          //
-  g->loop = g->end + len1;   //
+  g->pool = g->end;
+  g->loop = g->end + len1;
   g->malloc = f->malloc;
   g->free = f->free;
   g->safe = f->safe;
@@ -96,7 +93,7 @@ NoInline core *please(core *f, uintptr_t req0) {
   return g; }        // size successfully adjusted
 
 // this function expects pool loop and len to have been set already on the state
-static NoInline void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
+static void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
   g_word
     len1 = f->len, // target pool length
     *p1 = f->pool, // target pool
