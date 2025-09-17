@@ -109,6 +109,8 @@ NoInline g_core *g_read1f(core *f, FILE* i) {
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   return g_read1i(f, (input*) &fi); }
 
+g_core *g_read1(core *f) { return g_read1f(f, stdin); }
+
 static NoInline g_core *g_readsf(core *f, string *s) {
   char n[256]; // :)
   memcpy(n, s->text, s->len);
@@ -173,7 +175,7 @@ static int p_text_eof(input *i) {
   text_input *t = (text_input*) i;
   return !t->text[t->i]; }
 
-g_core *g_readcs(g_core *f, const char *cs) {
+g_core *g_read1s(g_core *f, const char *cs) {
   text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
   return g_read1i(f, (input*) &t); }
 
@@ -182,4 +184,5 @@ void transmit(core *f, FILE* out, word x) {
   else if (datp(x)) typ(x)->em(f, out, x);
   else fprintf(out, "#%lx", (long) x); }
 
-void g_writef(g_core *f, FILE *o) { transmit(f, o, f->sp[0]); }
+void g_write1(g_core *f) { g_write1f(f, stdout); }
+void g_write1f(g_core *f, FILE *o) { transmit(f, o, f->sp[0]); }

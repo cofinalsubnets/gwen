@@ -2,12 +2,12 @@
 
 int main(void) {
   g_core *f = g_ini();
-  f = g_read1f(f, stdin);
-  if (g_ok(f)) g_writef(f, stdout),
+  f = g_read1(f);
+  if (g_ok(f)) g_write1(f),
                g_pop(f, 1);
-  while (g_ok(f = g_read1f(f, stdin)))
-    fputc(' ', stdout),
-    g_writef(f, stdout),
+  while (g_ok(f = g_read1(f)))
+    putchar(' '),
+    g_write1(f),
     g_pop(f, 1);
   g_fin(f);
   return g_code_of(f); }

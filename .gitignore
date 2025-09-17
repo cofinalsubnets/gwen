@@ -10,3 +10,5 @@ flamegraph.svg
 node_modules
 main*.h
 boot*.h
+lcat
+gw

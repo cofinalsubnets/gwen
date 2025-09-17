@@ -1,4 +1,5 @@
 #include "i.h"
+#include <assert.h>
 
 g_core *g_strof(g_core *f, const char *cs) {
   size_t bytes = strlen(cs),
@@ -11,17 +12,14 @@ g_core *g_strof(g_core *f, const char *cs) {
     memcpy(o->text, cs, bytes); }
   return f; }
 
-static g_core *g_ini_symof(g_core *f, const char *nom) {
+g_core *g_symof(g_core *f, const char *nom) {
   f = g_strof(f, nom);
   return g_intern(f); }
 
-static g_core *g_ini_def(g_core *f, const char *k, word v) {
+static Inline g_core *g_ini_def(g_core *f, const char *k, word v) {
   f = g_push(f, 1, v);
-  f = g_ini_symof(f, k);
-  f = g_push(f, 1, f->dict);
-  f = g_hash_put(f);
-  f = g_pop(f, 1);
-  return f; }
+  f = g_symof(f, k);
+  return g_hash_put_2(f); }
 
 static g_core *g_ini_tbl(g_core *f) {
   f = g_cells(f, Width(table) + 1);
@@ -33,7 +31,8 @@ static g_core *g_ini_tbl(g_core *f) {
   return f; }
 
 g_core *g_run(g_core *f) {
-  return !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp); }
+  return !g_ok(f) ? f :
+    f->ip->ap(f, f->ip, f->hp, f->sp); }
 
 g_core *g_eval(g_core *f) {
   return g_eva(f, g_yield); }
@@ -67,12 +66,11 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
 
   f = g_ini_tbl(f);
   f = g_ini_tbl(f);
-  f = g_ini_symof(f, "ev");
-  f = g_ini_symof(f, ":");
-  f = g_ini_symof(f, "?");
-  f = g_ini_symof(f, "`");
-  f = g_ini_symof(f, ",");
-  f = g_ini_symof(f, "\\");
+  f = g_symof(f, ":");
+  f = g_symof(f, "?");
+  f = g_symof(f, "`");
+  f = g_symof(f, ",");
+  f = g_symof(f, "\\");
 
   if (g_ok(f))
     f->lambda = sym(pop1(f)),
@@ -80,16 +78,17 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
     f->quote = sym(pop1(f)),
     f->cond = sym(pop1(f)),
     f->let = sym(pop1(f)),
-    f->eval = sym(pop1(f)),
     f->macro = tbl(pop1(f)),
-    f->dict = tbl(pop1(f));
+    f->dict = tbl(f->sp[0]);
 
-
-
-  f = g_ini_def(f, "globals", word(f->dict));
-  f = g_ini_def(f, "macros", word(f->macro));
   f = g_strof(f, g_version);
-  f = g_ini_def(f, "version", pop1(f));
+  f = g_symof(f, "version");
+  f = g_hash_put_2(f);
+  f = g_ini_def(f, "globals", (word) f->dict);
+  f = g_ini_def(f, "macros", (word) f->macro);
+
+  //f = g_push(f, 2, putnum(9), f->macro);
+  //f = g_hash_put_2(f);
 
 #define bifs(_) \
   _(bif_clock, "clock", S1(sysclock)) _(bif_isatty, "isatty", S1(p_isatty))\
@@ -122,4 +121,6 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
   f = g_pop(f, 1);
   */
 
+  f = g_pop(f, 1);
+  assert(height(f) == 0);
   return f; }

@@ -10,10 +10,10 @@ x=gw
 # c files and headers
 main_c=main.c cat.c
 c=$(filter-out $(main_c), $(wildcard *.c))
-boot_h=boot.h
-h=$(filter-out $(boot_h), $(wildcard *.h))
+main_h=main.h
+h=$(filter-out $(main_h), $(wildcard *.h))
 
-b=$n.bin
+b=$n
 o=$(c:.c=.o)
 
 CFLAGS=\
@@ -29,7 +29,7 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
 	 -D g_version='"$(shell git rev-parse HEAD)"'
 
 built_binary=$b
-$(built_binary): $o main.c boot.h $m
+$(built_binary): $m $h $o $(main_h) main.c
 	@echo $@
 	@$(cc) $o main.c -o $@
 
@@ -37,15 +37,15 @@ $(built_binary): $o main.c boot.h $m
 	@echo $@
 	@$(cc) -c $<
 
-cat.bin: $o cat.c $m
+lcat: $m $h $o cat.c
 	@echo $@
 	@$(cc) $o cat.c -o $@
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-boot.h: main.$x cat.bin
+$(main_h): main.$x lcat
 	@echo $@
-	@./cat.bin < main.$x | $(sed) >$@
+	@./lcat < main.$x | $(sed) >$@
 
 built_manpage=$n.1
 $(built_manpage): $0 manpage.$x

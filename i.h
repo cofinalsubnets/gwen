@@ -108,7 +108,7 @@ struct g_core {
     struct {
       cell *ip;
       table *dict, *macro;
-      symbol *eval, *quote, *begin, *let, *cond, *lambda;
+      symbol *quote, *begin, *let, *cond, *lambda;
     };
     g_word vars[g_var_N]; };
 
@@ -156,6 +156,7 @@ g_core *g_have(g_core*, uintptr_t),
        *g_cons_r(g_core*),
        *g_intern(g_core*),
        *g_hash_put(g_core*),
+       *g_hash_put_2(g_core*),
        *g_ana(g_core*, vm*),
        *p_readsp(g_core*, g_string*);
 

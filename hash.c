@@ -59,6 +59,12 @@ static uintptr_t xx_tbl(core *f, word h) { return mix; }
 static Inline word index_of_key(core *f, table *t, word k) {
   return (t->cap - 1) & hash(f, k); }
 
+NoInline g_core *g_hash_put_2(g_core *f) {
+  g_word x = f->sp[2];
+  f->sp[2] = f->sp[1];
+  f->sp[1] = f->sp[0];
+  f->sp[0] = x;
+  return g_hash_put(f); }
 NoInline g_core *g_hash_put(g_core *f) {
   if (!g_ok(f)) return f;
   g_table *t = (g_table*) f->sp[0];
