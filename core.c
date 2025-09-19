@@ -1,14 +1,4 @@
 #include "i.h"
-#include <assert.h>
-
-#ifndef g_version
-#define g_version ""
-#endif
-
-static Inline g_core *g_ini_def(g_core *f, const char *k, word v) {
-  f = g_push(f, 1, v);
-  f = g_symof(f, k);
-  return g_hash_put_2(f); }
 
 g_core *g_run(g_core *f) {
   return !g_ok(f) ? f :
@@ -22,23 +12,30 @@ g_word g_var(g_core *f, enum g_var n) {
 
 enum g_status g_fin(g_core *f) {
   enum g_status g = g_code_of(f);
-  if ((f = g_core_of(f))) {
+  f = g_core_of(f);
+  if (f) {
     for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
     f->free(f, f); }
   return g; }
 
+
+static NoInline g_core *g_ini_def(g_core *f, const char *k, g_word v) {
+  f = g_push(f, 1, v);
+  f = g_symof(f, k);
+  return g_hash_put_2(f); }
+g_core *g_ini() { return g_ini_m(g_malloc, g_free); }
 g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
   const size_t len0 = 1024;
-  g_core *f = g_malloc(NULL, sizeof(g_core) + 2 * len0 * sizeof(word));
+  g_core *f = g_malloc(NULL, sizeof(g_core) + 2 * len0 * sizeof(g_word));
   if (!f) return encode(f, g_status_oom);
 
-  memset(f, 0, sizeof(core));
-  word *pool = f->end;
+  memset(f, 0, sizeof(g_core));
+  g_word *pool = f->end;
 
   f->t0 = g_clock();
   f->len = len0;
   f->hp = f->pool = pool;
-  f->sp = f->loop = pool + len0;
+  f->sp = pool + len0;
   f->malloc = g_malloc;
   f->free = g_free;
   static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
@@ -61,14 +58,14 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
     f->macro = tbl(pop1(f)),
     f->dict = tbl(f->sp[0]);
 
+  f = g_ini_def(f, "globals", (g_word) f->dict);
+  f = g_ini_def(f, "macros", (g_word) f->macro);
+#ifndef g_version
+#define g_version ""
+#endif
   f = g_strof(f, g_version);
   f = g_symof(f, "version");
   f = g_hash_put_2(f);
-  f = g_ini_def(f, "globals", (word) f->dict);
-  f = g_ini_def(f, "macros", (word) f->macro);
-
-  //f = g_push(f, 2, putnum(9), f->macro);
-  //f = g_hash_put_2(f);
 
 #define bifs(_) \
   _(bif_clock, "clock", S1(sysclock)) _(bif_isatty, "isatty", S1(p_isatty))\
@@ -88,19 +85,15 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
 #define S3(i) {{curry},{.x=putnum(3)},{i}, {ret0}}
 #define built_in_function(n, _, d) static const cell n[] = d;
   bifs(built_in_function);
-#define bif_dict_entry(bn, n, _) f = g_ini_def(f, n, W(bn));
+#define bif_dict_entry(bn, n, _) f = g_ini_def(f, n, word(bn));
   bifs(bif_dict_entry);
 #define insts(_) _(free_variable) _(ret) _(ap) _(tap) _(apn) _(tapn) _(jump) _(cond) _(ref) _(imm) _(drop1) _(curry) _(defglob) _(late_bind) _(ret0)
-#define i_dict_entry(i) f = g_ini_def(f, "i_"#i, W(i));
+#define i_dict_entry(i) f = g_ini_def(f, "i_"#i, word(i));
   insts(i_dict_entry);
-#define height(f) (f->pool+f->len-f->sp)
 
   /*
   f = g_push(f, 3, f->dict, nil, f->macro),
   f = g_hash_put(f),
-  f = g_pop(f, 1);
   */
 
-  f = g_pop(f, 1);
-  assert(height(f) == 0);
-  return f; }
+  return g_pop(f, 1); }

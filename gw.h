@@ -2,12 +2,13 @@
 #define gw_h
 #include <stdint.h>
 #include <stddef.h>
-#include <stdio.h>
 
 typedef intptr_t g_word;
 typedef struct g_core g_core;
 typedef union g_cell g_cell;
+typedef struct g_type g_type;
 typedef g_core *g_vm(g_core*, g_cell*, g_word*, g_word*);
+union g_cell { g_vm *ap; g_word x; g_cell *m; g_type *typ; };
 
 typedef enum g_status {
   g_status_ok = 0,
@@ -28,11 +29,10 @@ enum g_var {
   g_var_N, };
 
 g_core
-  *g_ini_m(void *(*)(g_core*, size_t), void (*)(g_core*, void*)),
+  *g_ini(void),
   *g_strof(g_core*, const char*),
   *g_symof(g_core*, const char*),
   *g_read1(g_core*),
-  *g_read1f(g_core*, FILE*),
   *g_read1s(g_core*, const char*),
   *g_tbl(g_core*),
   *g_run(g_core*),
@@ -46,16 +46,12 @@ enum g_status
   g_fin(g_core*);
 
 void
-  g_write1(g_core*),
-  g_write1f(g_core*, FILE*),
-  *g_malloc(g_core*, size_t),
-  g_free(g_core*, void*);
+  g_write1(g_core*);
 
 g_word
   g_var(g_core*, enum g_var);
 
 #define g_nil 1
-#define g_ini() g_ini_m(g_malloc, g_free)
 #define g_core_of(f) ((g_core*)((g_word)(f)&~3))
 #define g_code_of(f) ((g_status)((g_word)(f)&3))
 #define g_ok(f) (g_code_of(f) == g_status_ok)

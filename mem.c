@@ -1,12 +1,9 @@
 #include "i.h"
 #define avail(f) (f->sp-f->hp)
-#define CP(x) cp(f, W(x), p0, t0)
+#define CP(x) cp(f, word(x), p0, t0)
 static g_core *please(g_core*, uintptr_t);
 
-void *g_malloc(g_core *f, size_t n) { return malloc(n); }
-void g_free(g_core *f, void *x) { return free(x); }
-
-static core *g_pushr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
+static g_core *g_pushr(g_core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
   word x = va_arg(xs, word);
   MM(f, &x);
@@ -15,7 +12,7 @@ static core *g_pushr(core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (g_ok(f)) *--f->sp = x;
   return f; }
 
-g_core *g_push(core *f, uintptr_t m, ...) {
+g_core *g_push(g_core *f, uintptr_t m, ...) {
   if (g_ok(f)) {
     va_list xs;
     va_start(xs, m);
@@ -25,7 +22,7 @@ g_core *g_push(core *f, uintptr_t m, ...) {
     va_end(xs); }
   return f; }
 
-g_core *g_pop(core *f, uintptr_t m) {
+g_core *g_pop(g_core *f, uintptr_t m) {
   if (g_ok(f)) f->sp += m;
   return f; }
 
@@ -59,13 +56,13 @@ NoInline Vm(gc, uintptr_t n) {
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
-static void copy_from(core*, word*, word*, uintptr_t);
-NoInline core *please(core *f, uintptr_t req0) {
+static void copy_from(g_core*, word*, word*, uintptr_t);
+NoInline g_core *please(g_core *f, uintptr_t req0) {
   size_t t0 = f->t0, t1 = g_clock(),
          len0 = f->len;
   word *pool0 = f->pool;
-  f->pool = f->loop, f->loop = pool0;
-  copy_from(f, f->loop, f->sp, f->len);
+  f->pool += f->pool == f->end ? f->len : -f->len;
+  copy_from(f, pool0, f->sp, f->len);
   size_t t2 = f->t0 = g_clock(),      // get and set last gc end time
          req = req0 + len0 - avail(f),
          v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
@@ -76,13 +73,12 @@ NoInline core *please(core *f, uintptr_t req0) {
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
   else return f; // no change reqired, hopefully the most common case
   // at this point we got a new target length and are gonna try and resize
-  g_core *g = f->malloc(f, sizeof(core) + len1 * 2 * sizeof(word)); // allocate pool with the new target size
+  g_core *g = f->malloc(f, sizeof(g_core) + len1 * 2 * sizeof(word)); // allocate pool with the new target size
   if (!g) return req <= len0 ? f : encode(f, g_status_oom); // if this fails still return true if the original pool is not too small
-  memset(g, 0, sizeof(core));
+  memset(g, 0, sizeof(g_core));
   // we got the new pool so copy again and return true
   g->len = len1;            // set core variables referring to new pool
   g->pool = g->end;
-  g->loop = g->end + len1;
   g->malloc = f->malloc;
   g->free = f->free;
   g->safe = f->safe;
@@ -93,7 +89,7 @@ NoInline core *please(core *f, uintptr_t req0) {
   return g; }        // size successfully adjusted
 
 // this function expects pool loop and len to have been set already on the state
-static void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
+static void copy_from(g_core *f, word *p0, word *sp0, uintptr_t len0) {
   g_word
     len1 = f->len, // target pool length
     *p1 = f->pool, // target pool
@@ -128,7 +124,7 @@ static void copy_from(core *f, word *p0, word *sp0, uintptr_t len0) {
          nd = n;
   f->dtors = nd; }
 
-NoInline word cp(core *v, word x, word *p0, word *t0) {
+NoInline word cp(g_core *v, word x, word *p0, word *t0) {
   // if it's a number or outside managed memory then return it
   if (nump(x) || !within(p0, x, t0)) return x;
   cell *src = (cell*) x;
@@ -138,9 +134,9 @@ NoInline word cp(core *v, word x, word *p0, word *t0) {
   // if it's data then call the given copy function
   if (datp(src)) return typ(src)->cp(v, (word) src, p0, t0);
   // it's a thread, find the end to find the head
-  struct tag *t = ttag(src);
+  struct g_tag *t = ttag(src);
   cell *ini = t->head, *d = bump(v, t->end - ini), *dst = d;
   // copy source contents to dest and write dest addresses to source
-  for (cell *s = ini; (d->x = s->x); s++->x = W(d++));
-  ((struct tag*) d)->head = dst;
+  for (cell *s = ini; (d->x = s->x); s++->x = word(d++));
+  ((struct g_tag*) d)->head = dst;
   return word(dst + (src - ini)); }

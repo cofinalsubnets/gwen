@@ -17,7 +17,7 @@ static Inline void ini_anon(symbol *y, word code) {
   y->nom = 0;
   y->code = code; }
 
-static symbol *g_intern_r(core *v, string *b, symbol **y) {
+static symbol *g_intern_r(g_core *v, string *b, symbol **y) {
   symbol *z = *y;
   if (!z) { // found an empty spot, insert new symbol
     z = bump(v, Width(symbol)),
@@ -64,27 +64,27 @@ Vm(symnom) {
   Ip += 1;
   return Continue(); }
 
-static word cp_sym(core *f, word x, word *p0, word *t0);
-static uintptr_t xx_sym(core *v, word _);
+static word cp_sym(g_core *f, word x, word *p0, word *t0);
+static uintptr_t xx_sym(g_core *v, word _);
 static void
-  wk_sym(core *f, word x, word *p0, word *t0),
-  em_sym(core *f, FILE *o, word x);
-type
+  wk_sym(g_core *f, word x, word *p0, word *t0),
+  em_sym(g_core *f, FILE *o, word x);
+g_type
   sym_type = { .xx = xx_sym, .cp = cp_sym, .wk = wk_sym, .eq = neql, .em = em_sym, };
 
-static uintptr_t xx_sym(core *v, word _) { return sym(_)->code; }
+static uintptr_t xx_sym(g_core *v, word _) { return sym(_)->code; }
 
-static word cp_sym(core *f, word x, word *p0, word *t0) {
-  symbol *src = sym(x), *dst;
-  if (src->nom) dst = g_intern_r(f, str(cp(f, W(src->nom), p0, t0)), &f->symbols);
+static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
+  g_symbol *src = sym(x), *dst;
+  if (src->nom) dst = g_intern_r(f, str(cp(f, word(src->nom), p0, t0)), &f->symbols);
   else dst = bump(f, Width(symbol) - 2),
        ini_anon(dst, src->code);
-  return (word) (src->ap = (vm*) dst); }
+  return (g_word) (src->ap = (g_vm*) dst); }
 
-static void wk_sym(core *f, word x, word *p0, word *t0) {
+static void wk_sym(g_core *f, word x, word *p0, word *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
-static void em_sym(core *f, FILE *o, word x) {
+static void em_sym(g_core *f, FILE *o, word x) {
   string* s = sym(x)->nom;
   if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
   else fprintf(o, "#sym@%lx", (long) x); }

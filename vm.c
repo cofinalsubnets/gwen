@@ -37,7 +37,7 @@ Vm(late_bind) {
   return Continue(); }
 
 Vm(data) {
-  word x = W(Ip);
+  word x = word(Ip);
   Sp += 1;
   Ip = cell(Sp[0]);
   Sp[0] = x;
@@ -117,7 +117,7 @@ Vm(apn) {
   // so putting a value off the stack into Ip is safe. the +2 is cause we leave
   // the currying instruction in there... should be skipped in compiler instead FIXME
   Ip = cell(Sp[n]) + 2;
-  Sp[n] = W(ra); // store return address
+  Sp[n] = word(ra); // store return address
   return Continue(); }
 
 // tail call
@@ -145,7 +145,7 @@ Vm(ret0) {
 // currying
 Vm(curry) {
   cell *k = cell(Hp), *j = k;
-  size_t S = 3 + Width(struct tag),
+  size_t S = 3 + Width(struct g_tag),
          n = getnum(Ip[1].x);
   if (n == 2) { Have(S); }
   else { S += 2; Have(S); j += 2, k[0].ap = curry, k[1].x = putnum(n - 1); }
@@ -195,7 +195,7 @@ Vm(g_yield) {
   return f; }
 
 Vm(seek) {
-  Sp[1] = W(((cell*) Sp[1]) + getnum(Sp[0]));
+  Sp[1] = word(((cell*) Sp[1]) + getnum(Sp[0]));
   Sp += 1;
   Ip += 1;
   return Continue(); }
@@ -213,10 +213,10 @@ Vm(poke) {
 
 Vm(thda) {
   size_t n = getnum(Sp[0]);
-  Have(n + Width(struct tag));
+  Have(n + Width(struct g_tag));
   cell *k = cell(Hp);
-  struct tag *t = (struct tag*) (k + n);
-  Hp += n + Width(struct tag);
+  struct g_tag *t = (struct g_tag*) (k + n);
+  Hp += n + Width(struct g_tag);
   t->null = NULL;
   t->head = k;
   memset(k, -1, n * sizeof(word));

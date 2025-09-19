@@ -14,19 +14,19 @@ static Inline int p_in_eof(input *i) { return i->eof(i); }
 //
 //
 // get the next significant character from the stream
-static int read_char(core *f, input *i) {
+static int read_char(g_core *f, input *i) {
   for (int c;;) switch (c = p_in_getc(i)) {
     default: return c;
     case '#': case ';': while (!p_in_eof(i) && (c = p_in_getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
 static g_core
-  *g_readsi(core*, input*),
+  *g_readsi(g_core*, input*),
   *g_read1i(g_core*, input*),
-  *read_string(core*, input*, char),
-  *read_atom(core*, input*);
+  *read_string(g_core*, input*, char),
+  *read_atom(g_core*, input*);
 
-static g_core *g_read1i(core *f, input* i) {
+static g_core *g_read1i(g_core *f, input* i) {
   if (!g_ok(f)) return f;
   int c = read_char(f, i);
   switch (c) {
@@ -42,7 +42,7 @@ static g_core *g_read1i(core *f, input* i) {
     default:   return p_in_ungetc(i, c),
                       read_atom(f, i); } }
 
-static g_core *g_readsi(core *f, input* i) {
+static g_core *g_readsi(g_core *f, input* i) {
   if (!g_ok(f)) return f;
   word c = read_char(f, i);
   if (c == EOF || c == ')') return g_push(f, 1, nil);
@@ -70,7 +70,7 @@ static g_core *g_buf_grow(g_core *f) {
     f->sp[0] = (word) o; }
   return f; }
 
-static Inline g_core *read_string(core *f, input* i, char delim) {
+static Inline g_core *read_string(g_core *f, input* i, char delim) {
   int c;
   size_t n = 0, lim = sizeof(word);
   for (f = g_buf_new(f); g_ok(f); f = g_buf_grow(f), lim *= 2)
@@ -84,7 +84,7 @@ out:
   if (g_ok(f)) str(f->sp[0])->len = n;
   return f; }
 
-static Inline g_core *read_atom(core *f, input *i) {
+static Inline g_core *read_atom(g_core *f, input *i) {
   int c;
   size_t n = 0, lim = sizeof(word);
   for (f = g_buf_new(f); g_ok(f); f = g_buf_grow(f), lim *= 2)
@@ -105,13 +105,13 @@ static int p_file_getc(input *i) { return getc(((file_input*) i)->file); }
 static int p_file_ungetc(input *i, int c) { return ungetc(c, ((file_input*) i)->file); }
 static int p_file_eof(input *i) { return feof(((file_input*) i)->file); }
 
-NoInline g_core *g_read1f(core *f, FILE* i) {
+NoInline g_core *g_read1f(g_core *f, FILE* i) {
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   return g_read1i(f, (input*) &fi); }
 
-g_core *g_read1(core *f) { return g_read1f(f, stdin); }
+g_core *g_read1(g_core *f) { return g_read1f(f, stdin); }
 
-static NoInline g_core *g_readsf(core *f, string *s) {
+static NoInline g_core *g_readsf(g_core *f, string *s) {
   char n[256]; // :)
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
@@ -179,7 +179,7 @@ g_core *g_read1s(g_core *f, const char *cs) {
   text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
   return g_read1i(f, (input*) &t); }
 
-void transmit(core *f, FILE* out, word x) {
+void transmit(g_core *f, FILE* out, word x) {
   if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
   else if (datp(x)) typ(x)->em(f, out, x);
   else fprintf(out, "#%lx", (long) x); }

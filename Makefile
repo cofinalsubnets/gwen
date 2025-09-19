@@ -9,7 +9,7 @@ x=gw
 #build
 # c files and headers
 main_h=main.h
-main_c=main.c cat.c
+main_c=main.c lcat.c
 h=$(filter-out $(main_h), $(wildcard *.h))
 c=$(filter-out $(main_c), $(wildcard *.c))
 
@@ -37,9 +37,9 @@ $(built_binary): $m $h $o $(main_h) main.c
 	@echo $@
 	@$(cc) -c $<
 
-lcat: $m $h $o cat.c
+lcat: $m $h $o lcat.c
 	@echo $@
-	@$(cc) $o cat.c -o $@
+	@$(cc) $o lcat.c -o $@
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'

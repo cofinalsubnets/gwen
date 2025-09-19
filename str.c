@@ -12,24 +12,24 @@ g_core *g_strof(g_core *f, const char *cs) {
     memcpy(o->text, cs, bytes); }
   return f; }
 
-static uintptr_t xx_str(core *v, word _);
-static bool eq_str(core *f, word x, word y);
-static void em_str(core* v, FILE *o, word _);
-static void wk_str(core* f, word x, word *p0, word *t0);
-static word cp_str(core* v, word x, word *p0, word *t0);
+static uintptr_t xx_str(g_core *v, word _);
+static bool eq_str(g_core *f, word x, word y);
+static void em_str(g_core* v, FILE *o, word _);
+static void wk_str(g_core* f, word x, word *p0, word *t0);
+static word cp_str(g_core* v, word x, word *p0, word *t0);
 
-methods
+g_type
   str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .eq = eq_str, .em = em_str, };
 
-static word cp_str(core* v, word x, word *p0, word *t0) {
+static word cp_str(g_core* v, word x, word *p0, word *t0) {
   string *src = str(x);
   size_t len = sizeof(string) + src->len;
   return (word) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
-static void wk_str(core* f, word x, word *p0, word *t0) {
+static void wk_str(g_core* f, word x, word *p0, word *t0) {
   f->cp += Width(string) + b2w(str(x)->len); }
 
-static void em_str(core* v, FILE *o, word _) {
+static void em_str(g_core* v, FILE *o, word _) {
   size_t len = str(_)->len;
   const char *text = str(_)->text;
   putc('"', o);
@@ -37,13 +37,13 @@ static void em_str(core* v, FILE *o, word _) {
     if ((c = *text++) == '\\' || c == '"') putc('\\', o);
   putc('"', o); }
 
-static uintptr_t xx_str(core *v, word _) {
+static uintptr_t xx_str(g_core *v, word _) {
   uintptr_t len = str(_)->len, h = 2166136261;
   unsigned char *bs = (unsigned char*) str(_)->text;
   while (len--) h ^= *bs++, h *= 16777619;
   return h; }
 
-static bool eq_str(core *f, word x, word y) {
+static bool eq_str(g_core *f, word x, word y) {
   string *a = str(x), *b = str(y);
   return a->len == b->len &&
     0 == strncmp(a->text, b->text, a->len); }
@@ -105,7 +105,7 @@ Vm(scat) {
          ini_str(z, len),
          memcpy(z->text, x->text, x->len),
          memcpy(z->text + x->len, y->text, y->len),
-         Sp[1] = W(z),
+         Sp[1] = word(z),
          Ip += 1,
          Continue(); }
 

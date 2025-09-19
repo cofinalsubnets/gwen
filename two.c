@@ -1,32 +1,33 @@
 #include "i.h"
 
-static uintptr_t xx_two(core*, word);
-static void wk_two(core*, word, word*, word*), em_two(core*, FILE*, word);
-static bool eq_two(core *f, word x, word y);
+static uintptr_t xx_two(g_core*, g_word);
+static void wk_two(g_core*, g_word, g_word*, g_word*),
+            em_two(g_core*, FILE*, g_word);
+static bool eq_two(g_core*, g_word, g_word);
 
 // FIXME could overflow the stack -- use off pool for this
-static bool eq_two(core *f, word x, word y) {
+static bool eq_two(g_core *f, g_word x, g_word y) {
   return eql(f, A(x), A(y)) && eql(f, B(x), B(y)); }
 
-static word cp_two(core *v, word x, word *p0, word *t0) {
-  pair *src = (pair*) x,
-       *dst = bump(v, Width(pair));
+static g_word cp_two(g_core *v, g_word x, g_word *p0, g_word *t0) {
+  g_pair *src = (g_pair*) x,
+         *dst = bump(v, Width(g_pair));
   ini_pair(dst, src->a, src->b);
-  return W(src->ap = (vm*) dst); }
+  return word(src->ap = (g_vm*) dst); }
 
-static void wk_two(core *f, word x, word *p0, word *t0) {
-  f->cp += Width(pair);
+static void wk_two(g_core *f, g_word x, g_word *p0, g_word *t0) {
+  f->cp += Width(g_pair);
   A(x) = cp(f, A(x), p0, t0);
   B(x) = cp(f, B(x), p0, t0); }
 
-type
+g_type
   two_type = { .xx = xx_two, .cp = cp_two, .wk = wk_two, .eq = eq_two, .em = em_two, };
-static uintptr_t xx_two(core *f, word x) {
-  word hc = hash(f, A(x)) * hash(f, B(x));
+static uintptr_t xx_two(g_core *f, g_word x) {
+  uintptr_t hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-static void em_two(core *f, FILE *o, word x) {
-  if (A(x) == W(f->quote) && twop(B(x)))
+static void em_two(g_core *f, FILE *o, g_word x) {
+  if (A(x) == word(f->quote) && twop(B(x)))
     putc('\'', o),
     transmit(f, o, AB(x));
   else for (putc('(', o);; putc(' ', o)) {
@@ -43,11 +44,11 @@ Vm(cdr) {
   return Continue(); }
 
 Vm(cons) {
-  Have(Width(pair));
-  pair *w = (pair*) Hp;
+  Have(Width(g_pair));
+  g_pair *w = (g_pair*) Hp;
   ini_pair(w, Sp[0], Sp[1]);
-  Hp += Width(pair);
-  Sp[1] = W(w);
+  Hp += Width(g_pair);
+  Sp[1] = word(w);
   Sp++;
   Ip++;
   return Continue(); }
@@ -58,12 +59,12 @@ Vm(pairp) {
   return Continue(); }
 
 static g_core *g_cons_stack(g_core *f, int i, int j) {
-  f = g_have(f, Width(pair));
+  f = g_have(f, Width(g_pair));
   if (g_ok(f)) {
-    pair *p = (pair*) f->hp;
+    g_pair *p = (pair*) f->hp;
     ini_pair(p, f->sp[i], f->sp[j]);
-    f->hp += Width(pair);
-    *++f->sp = (word) p; }
+    f->hp += Width(g_pair);
+    *++f->sp = (g_word) p; }
   return f; }
 
 g_core *g_cons_l(g_core *f) { return g_cons_stack(f, 0, 1); }
