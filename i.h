@@ -19,17 +19,16 @@ struct g_core {
   struct g_symbol *symbols;
 
   // memory management
+  void *(*malloc)(g_core*, size_t),
+       (*free)(g_core*, void*);
   uintptr_t len; // memory pool size
-  g_word *pool; // on and off pool
+  g_word *pool;
   struct root { g_word *ptr; struct root *next; } *safe;
-  union { uintptr_t t0;  // end time of last gc
-          g_word *cp; }; // gc copy pointer
+  union { uintptr_t t0; g_word *cp; }; // gc copy pointer
   struct dtor {
     g_word x;
     void (*d)(g_core*, g_word);
     struct dtor *next; } *dtors;
-  void *(*malloc)(g_core*, size_t),
-       (*free)(g_core*, void*);
   g_word end[]; };
 
 // built in type method tables
