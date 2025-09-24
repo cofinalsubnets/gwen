@@ -27,6 +27,8 @@
      (memq x) (any (= x))
      (zip a b) (? (twop a) (? (twop b) (X (X (A a) (A b)) (zip (B a) (B b)))))
      rev (foldl 0 (flip X))
+     (drop n l) (? n (drop (- n 1) (B l)) l)
+     (take n l) (? n (X (A l) (take (- n 1) (B l))))
      (part p) (foldr '(0) (\ a m
       (? (p a) (X (X a (A m)) (B m))
                (X (A m) (X a (B m))))))
@@ -150,7 +152,9 @@
      _ (cpop c 'stk)
      a)
 
-    (ana_ap c f b) (co (ana c f) (ana_apl 0 c b))
+    (ana_ap c f b) (: a0 (ana c f)
+                      a1 (ana_apl 0 c b)
+                    (>=> a1 a0))
     ; ana_seq is recursive but pretty simple
     (ana_seq c x)
      (? (atomp x) (imm 0)

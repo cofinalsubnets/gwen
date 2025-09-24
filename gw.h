@@ -46,6 +46,7 @@ enum g_status
   g_fin(g_core*);
 
 void
+  g_dbg(g_core*, const char*),
   g_write1(g_core*);
 
 g_word

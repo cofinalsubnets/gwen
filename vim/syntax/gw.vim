@@ -11,7 +11,7 @@ syn keyword PForm ? : \\ , ` :-
 syn keyword PFunc < <= = >= > !=
 syn keyword PFunc + - ~ ! * / % .
 syn keyword PFunc X A B AA AB BA BB car cdr cons caar cadr cdar cddr
-syn keyword PFunc foldl foldr map filter id const cat each all any init last rev
+syn keyword PFunc foldl foldr map filter id const cat each all any init last rev take drop
 syn keyword PFunc && \|\| \| & ^ << >>
 syn keyword PFunc :: inc dec flip diag part llen iota puts
 syn keyword PFunc twop nump symp tblp strp nilp homp ev not

@@ -19,11 +19,10 @@ static Inline void ini_anon(symbol *y, word code) {
 
 static symbol *g_intern_r(g_core *v, string *b, symbol **y) {
   symbol *z = *y;
-  if (!z) { // found an empty spot, insert new symbol
-    z = bump(v, Width(symbol)),
+  if (!z) return // found an empty spot, insert new symbol
+    z = bump(v, Width(g_symbol)),
     ini_sym(z, b, hash(v, putnum(hash(v, (word) b)))),
     *y = z;
-    return z; }
   string *a = z->nom;
   int i = a->len < b->len ? -1 :
           a->len > b->len ? 1 :

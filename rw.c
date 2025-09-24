@@ -14,7 +14,7 @@ static Inline int p_in_eof(input *i) { return i->eof(i); }
 //
 //
 // get the next significant character from the stream
-static int read_char(g_core *f, input *i) {
+static int read_char(input *i) {
   for (int c;;) switch (c = p_in_getc(i)) {
     default: return c;
     case '#': case ';': while (!p_in_eof(i) && (c = p_in_getc(i)) != '\n' && c != '\r');
@@ -28,7 +28,7 @@ static g_core
 
 static g_core *g_read1i(g_core *f, input* i) {
   if (!g_ok(f)) return f;
-  int c = read_char(f, i);
+  int c = read_char(i);
   switch (c) {
     case EOF:  return encode(f, g_status_eof);
     case '\'': return f = g_push(f, 1, f->quote),
@@ -43,13 +43,15 @@ static g_core *g_read1i(g_core *f, input* i) {
                       read_atom(f, i); } }
 
 static g_core *g_readsi(g_core *f, input* i) {
-  if (!g_ok(f)) return f;
-  word c = read_char(f, i);
-  if (c == EOF || c == ')') return g_push(f, 1, nil);
-  return p_in_ungetc(i, c),
-         f = g_read1i(f, i),
-         f = g_readsi(f, i),
-         g_cons_r(f); }
+  intptr_t n = 0;
+  while (g_ok(f)) {
+    int c = read_char(i);
+    if (c == EOF || c == ')') break;
+    p_in_ungetc(i, c);
+    f = g_read1i(f, i);
+    n++; }
+  for (f = g_push(f, 1, nil); n--; f = g_cons_r(f));
+  return f; }
 
 static g_core *g_buf_new(g_core *f) {
   f = g_cells(f, Width(string) + 1);
@@ -87,14 +89,17 @@ out:
 static Inline g_core *read_atom(g_core *f, input *i) {
   int c;
   size_t n = 0, lim = sizeof(word);
-  for (f = g_buf_new(f); g_ok(f); f = g_buf_grow(f), lim *= 2)
-    for (string *b = str(f->sp[0]); n < lim;) switch (c = p_in_getc(i)) {
+  for (f = g_buf_new(f); g_ok(f); f = g_buf_grow(f), lim *= 2) {
+    string *b = str(f->sp[0]);
+    while (n < lim) switch (c = p_in_getc(i)) {
       case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
       case '(': case ')': case '"': case '\'': case EOF: p_in_ungetc(i, c); goto out;
-      default: b->text[n++] = c; } out:
+      default: b->text[n++] = c; } }
+out:
   if (!g_ok(f)) return f;
   string *buf = str(f->sp[0]);
-  buf->len = n, buf->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
+  buf->len = n;
+  buf->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
   char *e;
   long j = strtol(buf->text, &e, 0);
   if (*e == 0) return f->sp[0] = putnum(j), f;
@@ -111,7 +116,23 @@ NoInline g_core *g_read1f(g_core *f, FILE* i) {
 
 g_core *g_read1(g_core *f) { return g_read1f(f, stdin); }
 
-static NoInline g_core *g_readsf(g_core *f, string *s) {
+Vm(read0) {
+  Pack(f);
+  f = g_read1f(f, stdin);
+  if (code_of(f) == g_status_eof) return // no error but end of file
+    f = core_of(f),
+    Unpack(f),
+    Ip += 1,
+    Continue();
+  f = g_cons_l(f);
+  if (!g_ok(f)) return f;
+  return
+    Unpack(f),
+    Ip += 1,
+    Continue(); }
+
+static NoInline g_core *g_readsf(g_core *f) {
+  string *s = (string*) pop1(f);
   char n[256]; // :)
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
@@ -122,25 +143,6 @@ static NoInline g_core *g_readsf(g_core *f, string *s) {
   fclose(i);
   return f; }
 
-Vm(read0) {
-  Pack(f);
-  f = g_read1f(f, stdin);
-  if (code_of(f) == g_status_eof) return // no error but end of file
-    f = core_of(f),
-    Unpack(f),
-    Sp[0] = nil,
-    Ip += 1,
-    Continue();
-  f = g_push(f, 1, nil);
-  f = g_cons_r(f);
-  if (!g_ok(f)) return f;
-  return
-    Unpack(f),
-    Sp[1] = Sp[0],
-    Sp += 1,
-    Ip += 1,
-    Continue(); }
-
 Vm(readf) {
   string *s = str(Sp[0]);
   if (!strp(Sp[0]) || s->len > 255) return
@@ -148,12 +150,10 @@ Vm(readf) {
     Ip += 1,
     Continue();
   Pack(f);
-  f = g_readsf(f, s);
+  f = g_readsf(f);
   if (!g_ok(f)) return f;
   return
     Unpack(f),
-    Sp[1] = Sp[0],
-    Sp += 1,
     Ip += 1,
     Continue(); }
 
@@ -175,7 +175,7 @@ static int p_text_eof(input *i) {
   text_input *t = (text_input*) i;
   return !t->text[t->i]; }
 
-g_core *g_read1s(g_core *f, const char *cs) {
+NoInline g_core *g_read1s(g_core *f, const char *cs) {
   text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
   return g_read1i(f, (input*) &t); }
 

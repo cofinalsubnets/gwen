@@ -122,10 +122,11 @@ _Static_assert(nil == g_nil);
 #define two(x) ((g_pair*)(x))
 #define cell(x) ((g_cell*)(x))
 #define tbl(x) ((g_table*)(x))
+#define ptr(x) ((g_word*)(x))
 #define word(x) ((g_word)(x))
 #define Width(_) b2w(sizeof(_))
 #define within(a, b, c) (word(a)<=word(b)&&word(b)<word(c))
-#define owns(f, x) within(f->pool, x, f->pool + f->len)
+#define owns(f, x) within((g_word*)f, x, (g_word*)f + f->len)
 #define datp(_) (cell(_)->ap==data)
 #define typ(_) cell(_)[1].typ
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
