@@ -13,9 +13,7 @@ g_word g_var(g_core *f, enum g_var n) {
 enum g_status g_fin(g_core *f) {
   enum g_status g = g_code_of(f);
   f = g_core_of(f);
-  if (f) {
-    for (struct dtor *d = f->dtors; d; d = d->next) d->d(f, d->x);
-    f->free(f, f); }
+  if (f) g_free(f);
   return g; }
 
 
@@ -23,10 +21,9 @@ static NoInline g_core *g_ini_def(g_core *f, const char *k, g_word v) {
   f = g_push(f, 1, v);
   f = g_symof(f, k);
   return g_hash_put_2(f); }
-g_core *g_ini() { return g_ini_m(g_malloc, g_free); }
-g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void*)) {
+g_core *g_ini(void) {
   const size_t len0 = 1024;
-  g_core *f = g_malloc(NULL, sizeof(g_core) + 2 * len0 * sizeof(g_word));
+  g_core *f = g_malloc(sizeof(g_core) + 2 * len0 * sizeof(g_word));
   if (!f) return encode(f, g_status_oom);
 
   memset(f, 0, sizeof(g_core));
@@ -36,8 +33,6 @@ g_core *g_ini_m(void *(*g_malloc)(g_core*, size_t), void (*g_free)(g_core*, void
   f->len = len0;
   f->hp = f->pool = pool;
   f->sp = pool + len0;
-  f->malloc = g_malloc;
-  f->free = g_free;
   static cell bif_yield[] = { {g_yield}, {.m = bif_yield} };
   f->ip = bif_yield;
 

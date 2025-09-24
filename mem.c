@@ -1,6 +1,5 @@
 #include "i.h"
 #define avail(f) (f->sp-f->hp)
-#define CP(x) cp(f, word(x), p0, t0)
 static g_core *please(g_core*, uintptr_t);
 
 static g_core *g_pushr(g_core *f, uintptr_t m, uintptr_t n, va_list xs) {
@@ -56,14 +55,14 @@ NoInline Vm(gc, uintptr_t n) {
 //   -----------------------------------
 //   |                          `------'
 //   t0                  gc time (this cycle)
-static void copy_from(g_core*, word*, word*, uintptr_t);
+static g_core *copy_core(g_core*, g_word*, uintptr_t, g_core*);
 NoInline g_core *please(g_core *f, uintptr_t req0) {
   size_t t0 = f->t0, t1 = g_clock(),
          len0 = f->len;
-  word *pool0 = f->pool;
-  f->pool += f->pool == f->end ? f->len : -f->len;
-  copy_from(f, pool0, f->sp, f->len);
-  size_t t2 = f->t0 = g_clock(),      // get and set last gc end time
+  word *pool0 = f->pool,
+       *pool1 = pool0 == f->end ? pool0 + len0 : f->end;
+  f = copy_core(f, pool1, len0, f);
+  size_t t2 = f->t0,      // get and set last gc end time
          req = req0 + len0 - avail(f),
          v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
          len1 = len0;
@@ -73,56 +72,44 @@ NoInline g_core *please(g_core *f, uintptr_t req0) {
   else if (too_big) do len1 >>= 1, v >>= 1; while (too_big);
   else return f; // no change reqired, hopefully the most common case
   // at this point we got a new target length and are gonna try and resize
-  g_core *g = f->malloc(f, sizeof(g_core) + len1 * 2 * sizeof(word)); // allocate pool with the new target size
+  g_core *g = g_malloc(sizeof(g_core) + len1 * 2 * sizeof(word)); // allocate pool with the new target size
   if (!g) return req <= len0 ? f : encode(f, g_status_oom); // if this fails still return true if the original pool is not too small
-  memset(g, 0, sizeof(g_core));
+  g = copy_core(g, g->end, len1, f);
   // we got the new pool so copy again and return true
-  g->len = len1;            // set core variables referring to new pool
-  g->pool = g->end;
-  g->malloc = f->malloc;
-  g->free = f->free;
-  g->safe = f->safe;
-  memcpy(g->vars, f->vars, sizeof(word) * g_var_N);
-  copy_from(g, f->pool, f->sp, f->len); // do second copy
-  f->free(f, f);     // free original pool
-  g->t0 = g_clock(); // set last gc timestamp
+  g_free(f);     // free original pool
   return g; }        // size successfully adjusted
 
-// this function expects pool loop and len to have been set already on the state
-static void copy_from(g_core *f, word *p0, word *sp0, uintptr_t len0) {
+static void copy_from(g_core*, word*, word*, uintptr_t);
+static g_core *copy_core(g_core *g, g_word *p1, uintptr_t len1, g_core *f) {
+  g_word *p0 = f->pool, *sp0 = f->sp;
+  uintptr_t len0 = f->len;
+  g->pool = p1;
+  g->len = len1;
+  g->safe = f->safe;
+
+  for (int i = 0; i < g_var_N; i++) g->vars[i] = f->vars[i];
   g_word
-    len1 = f->len, // target pool length
-    *p1 = f->pool, // target pool
     *t0 = p0 + len0, // source pool top
     *t1 = p1 + len1, // target pool top
     sn = t0 - sp0, // stack height
     *sp1 = t1 - sn; // target pool stack
   // reset stack, heap, symbols
-  f->sp = sp1;
-  f->hp = f->cp = p1;
-  f->symbols = 0;
+  g->sp = sp1;
+  g->hp = g->cp = p1;
+  g->symbols = 0;
   // copy all reachable values
   for (int n = 0; n < g_var_N; n++) // variables
-    f->vars[n] = CP(f->vars[n]);
-  while (sn--) *sp1++ = CP(*sp0++); // stack
-  for (struct root *r = f->safe; r; *r->ptr = CP(*r->ptr), r = r->next); // C values
+    g->vars[n] = cp(g, f->vars[n], p0, t0);
+  while (sn--) *sp1++ = cp(g, *sp0++, p0, t0); // stack
+  for (struct root *r = g->safe; r; *r->ptr = cp(g, *r->ptr, p0, t0), r = r->next); // C values
   // use cheney's algorithm
-  while (f->cp < f->hp)
-    if (datp(f->cp)) typ(f->cp)->wk(f, word(f->cp), p0, t0);
-    else { while (*f->cp) *f->cp = CP(*f->cp),
-                          f->cp++;
-           f->cp += 2; }
-  // run destructors ...
-  // this has never been tested or used
-  struct dtor *nd = NULL;
-  for (struct dtor *n, *d = f->dtors; d; d = d->next)
-    if (!owns(f, cell(d->x)->x)) d->d(f, d->x);
-    else n = bump(f, Width(struct dtor)),
-         n->d = d->d,
-         n->x = cell(d->x)->x,
-         n->next = nd,
-         nd = n;
-  f->dtors = nd; }
+  while (g->cp < g->hp)
+    if (datp(g->cp)) typ(g->cp)->wk(g, word(g->cp), p0, t0);
+    else { while (*g->cp) *g->cp = cp(g, *g->cp, p0, t0),
+                          g->cp++;
+           g->cp += 2; }
+  g->t0 = g_clock();
+  return g; }
 
 NoInline word cp(g_core *v, word x, word *p0, word *t0) {
   // if it's a number or outside managed memory then return it

@@ -18,17 +18,10 @@ struct g_core {
   // symbol tree
   struct g_symbol *symbols;
 
-  // memory management
-  void *(*malloc)(g_core*, size_t),
-       (*free)(g_core*, void*);
   uintptr_t len; // memory pool size
   g_word *pool;
   struct root { g_word *ptr; struct root *next; } *safe;
   union { uintptr_t t0; g_word *cp; }; // gc copy pointer
-  struct dtor {
-    g_word x;
-    void (*d)(g_core*, g_word);
-    struct dtor *next; } *dtors;
   g_word end[]; };
 
 // built in type method tables
@@ -69,10 +62,10 @@ typedef struct g_string {
 } g_string, string;
 
 
+#define g_free free
+#define g_malloc malloc
 void
   g_write1f(g_core*, FILE*),
-  *g_malloc(g_core*, size_t),
-  g_free(g_core*, void*),
   transmit(g_core*, FILE*, g_word);
 bool
   neql(g_core*, g_word, g_word),
