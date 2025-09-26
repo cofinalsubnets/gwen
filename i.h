@@ -6,6 +6,17 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+enum g_var {
+  g_var_ip,
+  g_var_dict,
+  g_var_mac,
+  g_var_qt,
+  g_var_do,
+  g_var_de,
+  g_var_if,
+  g_var_la,
+  g_var_N, };
+
 struct g_core {
   g_word *hp, *sp;
   union {
@@ -87,7 +98,6 @@ g_core
   *g_intern(g_core*),
   *g_hash_put(g_core*),
   *g_hash_put_2(g_core*),
-  *g_ana(g_core*, g_vm*),
   *p_readsp(g_core*, g_string*);
 
 g_vm
@@ -192,9 +202,6 @@ static Inline size_t b2w(size_t b) {
 static Inline struct g_tag { g_cell *null, *head, end[]; } *ttag(g_cell*k) {
   while (k->x) k++;
   return (struct g_tag*) k; }
-
-static Inline g_core *g_eva(g_core *f, g_vm *y) {
-  return g_run(g_ana(f, y)); }
 
 typedef g_word word;
 typedef g_cell cell;

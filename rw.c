@@ -22,37 +22,7 @@ static int read_char(input *i) {
 
 static g_core
   *g_readsi(g_core*, input*),
-  *g_read1i(g_core*, input*),
-  *read_string(g_core*, input*, char),
-  *read_atom(g_core*, input*);
-
-static g_core *g_read1i(g_core *f, input* i) {
-  if (!g_ok(f)) return f;
-  int c = read_char(i);
-  switch (c) {
-    case EOF:  return encode(f, g_status_eof);
-    case '\'': return f = g_push(f, 1, f->quote),
-                      f = g_read1i(f, i),
-                      f = g_push(f, 1, nil),
-                      f = g_cons_r(f),
-                      g_cons_r(f);
-    case '(':  return g_readsi(f, i);
-    case ')':  return g_push(f, 1, nil);
-    case '"':  return read_string(f, i, '"');
-    default:   return p_in_ungetc(i, c),
-                      read_atom(f, i); } }
-
-static g_core *g_readsi(g_core *f, input* i) {
-  intptr_t n = 0;
-  while (g_ok(f)) {
-    int c = read_char(i);
-    if (c == EOF || c == ')') break;
-    p_in_ungetc(i, c);
-    f = g_read1i(f, i);
-    n++; }
-  for (f = g_push(f, 1, nil); n--; f = g_cons_r(f));
-  return f; }
-
+  *g_read1i(g_core*, input*);
 static g_core *g_buf_new(g_core *f) {
   f = g_cells(f, Width(string) + 1);
   if (g_ok(f)) {
@@ -72,38 +42,56 @@ static g_core *g_buf_grow(g_core *f) {
     f->sp[0] = (word) o; }
   return f; }
 
-static Inline g_core *read_string(g_core *f, input* i, char delim) {
-  int c;
-  size_t n = 0, lim = sizeof(word);
-  for (f = g_buf_new(f); g_ok(f); f = g_buf_grow(f), lim *= 2)
-    for (string *b = str(f->sp[0]); n < lim;)
-      if ((c = p_in_getc(i)) == EOF ||
-           c == delim ||
-           (c == '\\' && (c = p_in_getc(i)) == EOF))
-        goto out;
-      else b->text[n++] = c;
-out:
-  if (g_ok(f)) str(f->sp[0])->len = n;
-  return f; }
 
-static Inline g_core *read_atom(g_core *f, input *i) {
-  int c;
-  size_t n = 0, lim = sizeof(word);
-  for (f = g_buf_new(f); g_ok(f); f = g_buf_grow(f), lim *= 2) {
-    string *b = str(f->sp[0]);
-    while (n < lim) switch (c = p_in_getc(i)) {
-      case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
-      case '(': case ')': case '"': case '\'': case EOF: p_in_ungetc(i, c); goto out;
-      default: b->text[n++] = c; } }
-out:
+static g_core *g_read1i(g_core *f, input* i) {
   if (!g_ok(f)) return f;
-  string *buf = str(f->sp[0]);
-  buf->len = n;
-  buf->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
-  char *e;
-  long j = strtol(buf->text, &e, 0);
-  if (*e == 0) return f->sp[0] = putnum(j), f;
-  return g_intern(f); }
+  int c = read_char(i);
+  size_t n = 0;
+  switch (c) {
+    case '(':  return g_readsi(f, i);
+    case ')':  return g_push(f, 1, nil);
+    case EOF:  return encode(f, g_status_eof);
+    case '\'':
+      f = g_push(f, 2, nil, f->quote);
+      f = g_read1i(f, i);
+      f = g_cons_l(f);
+      return g_cons_r(f);
+    case '"':  
+      f = g_buf_new(f);
+      for (size_t lim = sizeof(word); g_ok(f); f = g_buf_grow(f), lim *= 2)
+        for (string *b = str(f->sp[0]); n < lim; b->text[n++] = c)
+          if ((c = p_in_getc(i)) == EOF || c == '"' ||
+               (c == '\\' && (c = p_in_getc(i)) == EOF))
+            return b->len = n, f;
+      return f;
+    default:
+      p_in_ungetc(i, c);
+      f = g_buf_new(f);
+      for (size_t lim = sizeof(word); g_ok(f); f = g_buf_grow(f), lim *= 2)
+        for (string *b = str(f->sp[0]); n < lim; b->text[n++] = c)
+          switch (c = p_in_getc(i)) {
+            default: continue;
+            case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
+            case '(': case ')': case '"': case '\'': case EOF:
+              p_in_ungetc(i, c);
+              b->len = n;
+              b->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
+              char *e;
+              long j = strtol(b->text, &e, 0);
+              if (*e == 0) f->sp[0] = putnum(j);
+              else f = g_intern(f);
+              return f; }
+      return f; } }
+
+static g_core *g_readsi(g_core *f, input* i) {
+  intptr_t n = 0;
+  for (int c; g_ok(f); n++) {
+    c = read_char(i);
+    if (c == EOF || c == ')') break;
+    p_in_ungetc(i, c);
+    f = g_read1i(f, i); }
+  for (f = g_push(f, 1, nil); n--; f = g_cons_r(f));
+  return f; }
 
 typedef struct file_input { input in; FILE *file; } file_input;
 static int p_file_getc(input *i) { return getc(((file_input*) i)->file); }

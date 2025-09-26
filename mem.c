@@ -1,6 +1,12 @@
 #include "i.h"
-#define avail(f) (f->sp-f->hp)
 static g_core *please(g_core*, uintptr_t);
+
+g_core *g_pop(g_core *f, uintptr_t m) {
+  if (g_ok(f)) f->sp += m;
+  return f; }
+
+uintptr_t g_height(g_core *f) {
+  return (g_word*) f + f->len - f->sp; }
 
 static g_core *g_pushr(g_core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
@@ -11,6 +17,7 @@ static g_core *g_pushr(g_core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (g_ok(f)) *--f->sp = x;
   return f; }
 
+#define avail(f) (f->sp-f->hp)
 g_core *g_push(g_core *f, uintptr_t m, ...) {
   if (g_ok(f)) {
     va_list xs;
@@ -21,21 +28,16 @@ g_core *g_push(g_core *f, uintptr_t m, ...) {
     va_end(xs); }
   return f; }
 
-g_core *g_pop(g_core *f, uintptr_t m) {
-  if (g_ok(f)) f->sp += m;
-  return f; }
-
 g_core *g_have(g_core *f, uintptr_t n) {
   return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
 
-g_core *g_cells(g_core *f, size_t n) {
+g_core *g_cells(g_core *f, uintptr_t n) {
   f = g_have(f, n + 1);
   if (g_ok(f)) {
     cell *k = (cell*) f->hp;
     f->hp += n;
     *--f->sp = word(k); }
   return f; }
-
 
 NoInline Vm(gc, uintptr_t n) {
   Pack(f);

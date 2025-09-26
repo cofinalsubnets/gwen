@@ -59,8 +59,8 @@ Vm(ssub) {
     string *s = str(Sp[0]);
     intptr_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
              j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
-    i = max(i, 0), i = min(i, s->len);
-    j = max(j, i), j = min(j, s->len);
+    i = 0 > i ? 0 : i > s->len ? s->len : i;
+    j = i > j ? i : j > s->len ? s->len : j;
     if (i == j) Sp[2] = nil;
     else {
       size_t req = Width(string) + b2w(j - i);

@@ -17,16 +17,6 @@ typedef enum g_status {
   g_status_eof = 3,
 } g_status;
 
-enum g_var {
-  g_var_ip,
-  g_var_dict,
-  g_var_mac,
-  g_var_qt,
-  g_var_do,
-  g_var_de,
-  g_var_if,
-  g_var_la,
-  g_var_N, };
 
 g_core
   *g_ini(void),
@@ -42,15 +32,13 @@ g_core
   *g_cons_r(g_core*),
   *g_eval(g_core*);
 
+uintptr_t g_height(g_core*);
 enum g_status
   g_fin(g_core*);
 
 void
   g_dbg(g_core*, const char*),
   g_write1(g_core*);
-
-g_word
-  g_var(g_core*, enum g_var);
 
 #define g_nil 1
 #define g_core_of(f) ((g_core*)((g_word)(f)&~3))

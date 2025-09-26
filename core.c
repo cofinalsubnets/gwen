@@ -1,14 +1,8 @@
 #include "i.h"
 
-g_core *g_run(g_core *f) {
+g_core Inline *g_run(g_core *f) {
   return !g_ok(f) ? f :
     f->ip->ap(f, f->ip, f->hp, f->sp); }
-
-g_core *g_eval(g_core *f) {
-  return g_eva(f, g_yield); }
-
-g_word g_var(g_core *f, enum g_var n) {
-  return f->vars[n]; }
 
 enum g_status g_fin(g_core *f) {
   enum g_status s = g_code_of(f);
@@ -22,7 +16,7 @@ static NoInline g_core *g_ini_def(g_core *f, const char *k, g_word v) {
   f = g_symof(f, k);
   return g_hash_put_2(f); }
 g_core *g_ini(void) {
-  const size_t len0 = 1024;
+  const size_t len0 = 1<<10;
   g_core *f = g_malloc(2 * len0 * sizeof(g_word));
   if (!f) return encode(f, g_status_oom);
   memset(f, 0, sizeof(g_core));

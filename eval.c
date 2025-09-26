@@ -62,12 +62,6 @@ typedef struct env {
   // this is the enclosing function env* if any
   struct env *par; } env;
 
-static Inline long index_of_symbol(g_core *f, env *c, g_word var) {
-  long l, i = 0;
-  for (l = c->imps; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  for (l = c->args; !nilp(l); l = B(l), i++) if (eql(f, var, A(l))) return i;
-  return -1; }
-
 static g_core *enscope(g_core *f, env* par, g_word args, g_word imps) {
   f = g_push(f, 3, args, imps, par);
   f = mo_c(f, Width(env));
@@ -86,26 +80,25 @@ static Inline g_core *g_cons_2(g_core *f, g_word a, g_word b) {
 typedef Ana(ana);
 typedef Cata(cata);
 static ana analyze, ana_if, ana_let, ana_ap_args;
-static cata pull, cata_i, cata_ix, cata_var_2, cata_var, cata_ap, cata_yield, cata_ret;
+static cata pull, cata_i, cata_ix, cata_var, cata_ap, cata_yield, cata_ret;
 static g_core *ana_seq(g_core*, env**, g_word, g_word);
 
 // generic instruction ana handlers
-static Inline g_core *ana_ix(g_core *f, g_vm *i, g_word x) {
+static g_core *ana_ix(g_core *f, g_vm *i, g_word x) {
   return g_push(f, 3, cata_ix, i, x); }
 
 // keep this separate and NoInline so g_eval can be tail call optimized if possible
-NoInline g_core *g_ana(g_core *f, g_vm *y) {
+static NoInline g_core *g_ana(g_core *f, g_vm *y) {
   f = enscope(f, (env*) nil, nil, nil);
   if (!g_ok(f)) return f;
   env *c = (env*) pop1(f);
   g_word x = f->sp[0];
-  return
-    f->sp[0] = (g_word) cata_yield, // function that returns thread from code generation
-    avec(f, c,
-      avec(f, x, f = ana_ix(f, y, (g_word) f->ip)),
-      f = analyze(f, &c, x),
-      f = pull(f, &c, 0)),
-    f; }
+  f->sp[0] = (g_word) cata_yield;
+  avec(f, c,
+    avec(f, x, f = ana_ix(f, y, (g_word) f->ip)),
+    f = analyze(f, &c, x),
+    f = pull(f, &c, 0));
+  return f; }
 
 #define Kp (f->ip)
 static Cata(cata_yield) {
@@ -169,29 +162,24 @@ static Cata(cata_ap) {
   return f; }
 
 static Cata(cata_var_2) {
-  g_word var = pop1(f), stack = pop1(f);
-  long i = 0;
+  g_word var = pop1(f),
+         stack = pop1(f),
+         i = 0;
   while (twop(stack))
     if (eql(f, A(stack), var)) break;
     else stack = B(stack), i++;
-  f = pull(f, c, m + 2);
-  if (g_ok(f))
-    Kp -= 2,
-    Kp[0].ap = ref,
-    Kp[1].x = putnum(i);
-  return f; }
+  f = ana_ix(f, ref, putnum(i));
+  return pull(f, c, m); }
 
 // emit stack reference instruction
 static Cata(cata_var) {
-  g_word var = pop1(f), // variable name
-         ins = llen(pop1(f)), // stack inset
-         i = index_of_symbol(f, *c, var);
-  f = pull(f, c, m + 2);
-  if (g_ok(f))
-    Kp -= 2,
-    Kp[0].ap = ref,
-    Kp[1].x = putnum(i + ins);
-  return f; }
+  g_word v = pop1(f), // variable name
+         i = llen(pop1(f)); // stack inset
+  for (word l = (*c)->imps; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
+  for (word l = (*c)->args; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
+out:
+  f = ana_ix(f, ref, putnum(i));
+  return pull(f, c, m); }
 
 static Inline Cata(pull) { return ((cata*) pop1(f))(f, c, m); }
 
@@ -216,21 +204,13 @@ static Cata(cata_ix) {
 static size_t arity_of(env *c) { return llen(c->args) + llen(c->imps); }
 static Cata(cata_curry) {
   size_t ar = arity_of((env*) pop1(f));
-  f = pull(f, c, m + 2);
-  if (g_ok(f) && ar > 1)
-    Kp -= 2,
-    Kp[0].ap = curry,
-    Kp[1].x = putnum(ar);
-  return f; }
+  if (ar > 1) f = ana_ix(f, curry, putnum(ar));
+  return pull(f, c, m); }
 
 static Cata(cata_ret) {
   size_t ar = arity_of((env*) pop1(f));
-  f = pull(f, c, m + 2);
-  if (g_ok(f))
-    Kp -= 2,
-    Kp[0].ap = ret,
-    Kp[1].x = putnum(ar);
-  return f; }
+  f = ana_ix(f, ret, putnum(ar));
+  return pull(f, c, m); }
 
 static g_core *ana_lambda(g_core *f, env **c, g_word imps, g_word exp);
 static Ana(analyze) {
@@ -252,7 +232,7 @@ static Ana(analyze) {
     // non function definition from local let form?
     if (memq(f, d->stack, x)) return
       g_push(f, 3, cata_var_2, x, d->stack);
-    // closure or positional argument on stack?
+    // closure or positional argument?
     if (memq(f, d->imps, x) || memq(f, d->args, x)) {
       if (*c != d) { // if we have found the variable in an enclosing scope then import it
         f = g_cons_2(f, x, (*c)->imps);
@@ -288,7 +268,7 @@ static Ana(analyze) {
     f = g_cons_r(f),
     f = g_cons_l(f),
     f = g_cons_r(f),
-    f = g_eva(f, g_yield),
+    f = g_eval(f),
     g_ok(f) ? analyze(f, c, pop1(f)) : f;
 
   // application.
@@ -471,3 +451,14 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
 
   f = analyze(f, b, exp);
   return forget(); }
+
+static Inline g_core *g_eva(g_core *f, g_vm *y) {
+  return g_run(g_ana(f, y)); }
+
+g_core *g_eval(g_core *f) {
+  return g_eva(f, g_yield); }
+
+NoInline Vm(ev0) {
+  Ip += 1;
+  Pack(f);
+  return g_eva(f, jump); }

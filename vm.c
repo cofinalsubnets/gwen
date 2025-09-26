@@ -1,10 +1,4 @@
 #include "i.h"
-
-NoInline Vm(ev0) {
-  Ip += 1;
-  Pack(f);
-  return g_eva(f, jump); }
-
 Vm(defglob) {
   Have(3);
   Sp -= 3;

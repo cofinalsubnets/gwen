@@ -107,7 +107,7 @@
      (: a0 (pop 'end)
         a1 (ana_if_r b)
         a2 (push 'end)
-      (<=< a0 a1 a2))
+      (>=> a2 a1 a0))
      ; where
      (pop y k n) (: j (k n) (, (cpop c y) j))
      (push y k n) (cpush c y (k n))
@@ -162,6 +162,7 @@
           (? (atomp (B x)) id
            (co (em1 i_drop1)
                (ana_seq c (B x))))))
+
    (ana_sym c x) (:- (ana_sym_r c)
     (ana_sym_r d)
      (? (nilp d) ; outside all lexical scopes?
@@ -171,118 +172,116 @@
            (, (import c x) ; if it's not there... do something
               (em2 i_free_variable x))))
        ; else...
-      (: lam (lamof d)
+      (: (cata_var c) (:
+          i (llen (stkof c))
+          (\ j m (:
+           k (j (+ 2 m))
+           i (+ i (stkidx c x))
+           (p1 i_ref (p1 i k)))))
+         lam (lamof d)
          stk (stkof d)
          lfd (assq x lam)
        (? lfd ; local function def?
             (: a1 (em2 i_late_bind lfd)
                a2 (ana_apl 0 c (BB lfd))
-             (<=< a1 a2))
+             (>=> a2 a1))
          (memq x stk) ; is it bound on a let stack in this scope?
           (? (= c d) (em2 i_ref (lidx x stk))
                      (, (import c x)
-                        (cata_var c x)))
+                        (cata_var c)))
         (<= 0 (stkidx d x)) ; is it bound as a closure or argument variable?
          (, (? (!= c d) (import c x))
-            (cata_var c x))
+            (cata_var c))
         ; else recur
-        (ana_sym_r (parof d)))))
+        (ana_sym_r (parof d))))))
 
-    (cata_var c x) (:
-     i (llen (stkof c))
-     (\ j m (:
-      k (j (+ 2 m))
-      i (+ i (stkidx c x))
-      (p1 i_ref (p1 i k))))))
 
-    (ana_lu c imp arg x) (:
+    (ana_ll c imp exp) (:
+     arg (init exp)
+     x (last exp)
      d (scop c arg imp)
      k (ana d x (thd0 d))
      ar (arity d)
-     k ((? (> ar 1) (em2 i_curry ar) id) k 0)
-     (X (trim k) (impof d)))
+     k (trim ((? (> ar 1) (em2 i_curry ar) id) k 0))
+     imp (impof d)
+     (X k imp))
 
-    ; ana_ll isn't too bad
-    (ana_ll c imp exp) (ana_lu c imp (init exp) (last exp))
-
-    ; ana_lam is small because it uses ana_ll which ana_let also uses
     (ana_lam c b) (? (atomp b)     (imm 0)
                      (atomp (B b)) (ana c (A b))
                      (ana c (ana_ll c 0 b)))
 
-    ; ana_let is the worst :[
+    ; ana_let is the worst :(
     (ana_let c b) (?
      (atomp b)     (imm 0)
      (atomp (B b)) (ana c (A b))
-     (loop1 c (scop c (argof c) (impof c)) 0 0 (A b) (AB b) (BB b)))
-
+     (:- (l1 0 0 (A b) (AB b) (BB b))
+        q (scop c (argof c) (impof c))
      ;; l1 pass nom def and value expressions to l2
      ; l1 collects bindings and passes them with the body expression to l2
-     (loop1 c q noms defs nom def rest) (:
+     (l1 noms defs nom def rest) (:
       nd (desug nom def)
-      nom (A nd) def (B nd)
-      noms (X nom noms) defs (X def defs)
-      (? (atomp rest)     (loop2 c q noms defs nom      rest)
-         (atomp (B rest)) (loop2 c q noms defs (A rest) rest)
-         (loop1 c q noms defs (A rest) (AB rest) (BB rest))))
-
-     ;; l2 pass noms defs exp with revised lambda defs to l3
+      nom (A nd)
+      def (B nd)
+      noms (X nom noms)
+      defs (X def defs)
+      (? (atomp rest)     (l2 noms defs nom      1)
+         (atomp (B rest)) (l2 noms defs (A rest) 0)
+         (l1 noms defs (A rest) (AB rest) (BB rest))))
+     ;; l2 find closures and revise lambda defs then emit eval/apply
      ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
-     (loop2 c q noms defs exp rest) (:
+     (l2 noms defs exp even) (:
 
-      lams (:- (loop 0 noms defs)
-            (loop a n d) (?
-             (atomp n) a
-             (nilp (lambp (A d))) (loop a (B n) (B d))
-             (: k (A n)
-                v (ana_ll q 0 (BA d)) ; first pass ..
-                a (X (X k v) a)
-              (loop a (B n) (B d)))))
+      lams (:- (cl 0 l l l)
 
-      (close l) (:- (cl 0 l l l)
-        (cl n l l1 l2) (?
-         (&& l1 l2 (!= l1 l2) (memq (AA l1) (BB (A l2))))
-          (:- (loop n (BB (A l1)))
-           (loop n v)
-            (? (nilp v) (cl n l l1 (B l2))
-             (: var (A v)
-                vars (B (BA l2))
-                n (? (memq var vars) n
-                   (, (set_cdr (BA l2) (X var vars))
-                      (+ 1 n)))
-                (loop n (B v)))))
-         l2 (cl n l l1 (B l2))
-         l1 (cl n l (B l1) l)
-         n (cl 0 l l l)
-         l))
+       l (>>= 0 noms defs (: (ll a n d) (?
+          (atomp n) a
+          (nilp (lambp (A d))) (ll a (B n) (B d))
+          (: k (A n)
+             v (ana_ll q 0 (BA d)) ; first pass ..
+             a (X (X k v) a)
+           (ll a (B n) (B d))))))
+       (cl n l l1 l2) (?
+        (&& l1 l2 (!= l1 l2) (memq (AA l1) (BB (A l2))))
+         (>>= n (BB (A l1)) (: (ll n v)
+          (? (nilp v) (cl n l l1 (B l2))
+           (: var (A v)
+              vars (B (BA l2))
+              n (? (memq var vars) n
+                 (, (set_cdr (BA l2) (X var vars))
+                    (+ 1 n)))
+              (ll n (B v))))))
+        l2 (cl n l l1 (B l2))
+        l1 (cl n l (B l1) l)
+        n (cl 0 l l l)
+        l))
 
-      lams (close lams)
+
       lnoms (map A lams)
       (ldd ll) (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))
       clams (map ldd lams)
-      llam (X '\ (cat noms (L exp))) ;; construct reversed lambda expression
-      (loop3 c q (rev noms) (rev defs) clams llam rest))
-
-     ;; l3 collect defs and apply
-     (loop3 c q noms defs clams llam rest) (:
-       _ (tset q 'lam clams)
-       (loop nds) (? (nilp nds) id
-                   (: nd (A nds) n (A nd) d (B nd)
-                      d (? (nilp (lambp d)) d (: qa (assq n clams)
-                                                 x (ana_ll q (BB qa) (B d))
-                                                 (set_cdr qa x)))
-                      a1 (ana c d)
-                      a2 (? (&& (toplp c) (atomp rest)) (em2 i_defglob n) id)
-                      a3 (loops n (B nds))
-                      (<=< a1 a2 a3)))
-       (loops n nds) (, (cpush c 'stk n) (loop nds))
-       s0 (stkof c)
-       n (llen noms)
-       a1 (ana c llam)
-       a2 (loops -1 (zip noms defs))
-       a3 (? (> n 1) (em_apn n) em_ap)
-       _ (tset c 'stk s0)
-       (<=< a1 a2 a3))
+      llam (X '\ (cat noms (L exp)))
+      _ (tset q 'lam clams)
+      (lls n nds) (, (cpush c 'stk n)
+                     (ll nds))
+      (ll nds) (? (nilp nds) id
+       (: nd (A nds)
+          n (A nd)
+          d (B nd)
+          d (? (lambp d) (: qa (assq n clams)
+                            x (ana_ll q (BB qa) (B d))
+                            (set_cdr qa x))
+                         d)
+          a1 (ana c d)
+          a2 (? (&& (toplp c) even) (em2 i_defglob n) id)
+          a3 (lls n (B nds))
+          (>=> a3 a2 a1)))
+      s0 (stkof c)
+      n  (llen noms)
+      a1 (ana c llam)
+      a2 (lls -1 (zip (rev noms) (rev defs)))
+      a3 (? (> n 1) (em_apn n) em_ap)
+      _ (tset c 'stk s0)
+      (>=> a3 a2 a1))))
 
     (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[ weh
     (lambp x) (? (twop x) (= '\ (A x)))
@@ -307,25 +306,31 @@
      p '(macros peek poke seek trim thd globals)
    (each (cat i p) (tdel 0 globals)))
   ; this is the main function
-  (\ fs (:- ; this will then be called with the command line arguments
-   (? args       (procs (A args) (B args)) ; if any cli args then process them
-      (isatty 0) (repl prompt) ; else if attached to a tty then start a repl
-                 (reads 0))    ; else eval expressions from stdin
-   ; where
-   prog (A fs) args (B fs)
-   prompt "    "
-   help (L " [args]"
-           " args:"
-           "   -h   show this message"
-           "   -v   show version"
-           "   -r   start repl"
-           " file   evaluate file")
-   (reads _) (: r (read 0) (? r (, (ev (A r)) (reads 0))))
-   (repl p) (: r (, (puts p) (read 0)) (? r (, (. (ev (A r))) (putc 10) (repl p))))
-   (putln s) (, (puts s) (putc 10))
-   (procs a as) (,
-    (? (= a "-h") (, (puts "usage: ") (puts prog) (each help putln))
-       (= a "-v") (, (puts prog) (puts " ") (putln version))
-       (= a "-r") (repl prompt)
-       (each (readf a) ev))
-    (? as (procs (A as) (B as)))))))))
+  (\ fs (: ; this will then be called with the command line arguments
+     ; else eval expressions from stdin
+ prog (A fs) args (B fs)
+ prompt "    "
+ help (L " [args]"
+         " args:"
+         "   -h   show this message"
+         "   -v   show version"
+         "   -r   start repl"
+         " file   evaluate file")
+ (rel _) (: r (read _)
+           (? r (, (ev (A r))
+                   (rel _))))
+ (repl p) (: r (, (puts p) (read 0))
+             (? r (, (. (ev (A r)))
+                     (putc 10)
+                     (repl p))))
+ (putln s) (, (puts s)
+              (putc 10))
+ (go a as) (, (? (= a "-h") (, (puts "usage: ") (puts prog) (each help putln))
+                 (= a "-v") (, (puts prog) (puts " ") (putln version))
+                 (= a "-r") (repl prompt)
+                            (each (readf a) ev))
+              (? as (go (A as) (B as))))
+
+ (? args       (go (A args) (B args)) ; if any cli args then process them
+    (isatty 0) (repl prompt) ; else if attached to a tty then start a repl
+               (rel 0)))))))
