@@ -5,10 +5,9 @@ int main(void) {
   g_core *f = g_ini();
   if (g_ok(f = g_read1(f)))
     g_write1(f),
-    g_pop(f, 1);
+    f = g_pop(f, 1);
   while (g_ok(f = g_read1(f)))
     putchar(' '),
     g_write1(f),
-    g_pop(f, 1);
-  g_fin(f);
-  return g_code_of(f); }
+    f = g_pop(f, 1);
+  return g_fin(f); }

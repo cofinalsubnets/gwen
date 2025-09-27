@@ -2,9 +2,13 @@
 Vm(defglob) {
   Have(3);
   Sp -= 3;
-  Sp[0] = (g_word) f->dict;
-  Sp[1] = Ip[1].x;
-  Sp[2] = Sp[3];
+  g_table *t = f->dict;
+  g_word k = Ip[1].x,
+         v = Sp[3];
+
+  Sp[0] = k;
+  Sp[1] = v;
+  Sp[2] = (g_word) t;
   Pack(f);
   f = g_hash_put(f);
   if (!g_ok(f)) return f;
@@ -19,18 +23,22 @@ Vm(drop1) {
   return Continue(); }
 
 Vm(free_variable) {
+  g_word y = Ip[1].x,
+         v = g_hash_get(f, y, f->dict, y); // see if it's defined now...
   Ip[0].ap = imm;
-  Ip[1].x = g_hash_get(f, Ip[1].x, f->dict, Ip[1].x);
+  Ip[1].x = v;
   return Continue(); }
 
 Vm(late_bind) {
-  word ref = Ip[1].x, lfd = ref;
-  ref = AB(lfd);
+  word v = AB(Ip[1].x);
   Ip[0].ap = imm;
-  Ip[1].x = ref;
+  Ip[1].x = v;
   return Continue(); }
 
 Vm(data) {
+  return typ(Ip)->ap(f, Ip, Hp, Sp); }
+
+Vm(self) {
   word x = word(Ip);
   Sp += 1;
   Ip = cell(Sp[0]);
@@ -94,14 +102,15 @@ Vm(apl) {
 Vm(tap) {
   word x = Sp[0], j = Sp[1];
   Sp += getnum(Ip[1].x) + 1;
-  if (nump(j)) {
-    Sp += 1;
-    Ip = cell(Sp[0]);
-    Sp[0] = j;
-    return Continue(); }
-  Ip = cell(j);
-  Sp[0] = x;
-  return Continue(); }
+  if (nump(j)) return
+    Sp += 1,
+    Ip = cell(Sp[0]),
+    Sp[0] = j,
+    Continue();
+  return
+    Ip = cell(j),
+    Sp[0] = x,
+    Continue(); }
 
 // apply to multiple arguments
 Vm(apn) {
@@ -110,7 +119,8 @@ Vm(apn) {
   // this instruction is only emitted when the callee is known to be a function
   // so putting a value off the stack into Ip is safe. the +2 is cause we leave
   // the currying instruction in there... should be skipped in compiler instead FIXME
-  Ip = cell(Sp[n]) + 2;
+  Ip = cell(Sp[n]);
+  Ip += 2;
   Sp[n] = word(ra); // store return address
   return Continue(); }
 
@@ -153,25 +163,6 @@ Vm(curry) {
   Sp[0] = word(k);
   return Continue(); }
 
-
-#define op(nom, n, x) Vm(nom) { word _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
-op(add, 2, (Sp[0]|1) + (Sp[1]&~1))
-op(sub, 2, (Sp[0]|1) - (Sp[1]&~1))
-op(mul, 2, putnum(getnum(Sp[0])*getnum(Sp[1])))
-op(quot, 2, nilp(Sp[1]) ? nil : putnum(getnum(Sp[0])/getnum(Sp[1])))
-op(rem, 2, nilp(Sp[1]) ? nil : putnum(getnum(Sp[0])%getnum(Sp[1])))
-op(eq, 2, eql(f, Sp[0], Sp[1]) ? putnum(-1) : nil)
-op(lt, 2, Sp[0] < Sp[1] ? putnum(-1) : nil)
-op(le, 2, Sp[0] <= Sp[1] ? putnum(-1) : nil)
-op(gt, 2, Sp[0] > Sp[1] ? putnum(-1) : nil)
-op(ge, 2, Sp[0] >= Sp[1] ? putnum(-1) : nil)
-op(bnot, 1, ~Sp[0] | 1)
-op(band, 2, (Sp[0] & Sp[1]) | 1)
-op(bor, 2, (Sp[0] | Sp[1]) | 1)
-op(bxor, 2, (Sp[0] ^ Sp[1]) | 1)
-op(rng, 1, putnum(rand()))
-op(fixnump, 1, nump(Sp[0]) ? putnum(-1) : nil)
-
 Vm(symbolp) {
   Sp[0] = symp(Sp[0]) ? putnum(-1) : nil;
   Ip += 1;
@@ -182,55 +173,7 @@ Vm(nullp) {
   Ip += 1;
   return Continue(); }
 
-
 Vm(g_yield) {
   Ip = Ip[1].m;
   Pack(f);
   return f; }
-
-Vm(seek) {
-  Sp[1] = word(((cell*) Sp[1]) + getnum(Sp[0]));
-  Sp += 1;
-  Ip += 1;
-  return Continue(); }
-
-Vm(peek) {
-  Sp[0] = cell(Sp[0])->x;
-  Ip += 1;
-  return Continue(); }
-
-Vm(poke) {
-  cell(Sp[1])->x = Sp[0];
-  Sp += 1;
-  Ip += 1;
-  return Continue(); }
-
-Vm(thda) {
-  size_t n = getnum(Sp[0]);
-  Have(n + Width(struct g_tag));
-  cell *k = cell(Hp);
-  struct g_tag *t = (struct g_tag*) (k + n);
-  Hp += n + Width(struct g_tag);
-  t->null = NULL;
-  t->head = k;
-  memset(k, -1, n * sizeof(word));
-  Sp[0] = (word) k;
-  Ip += 1;
-  return Continue(); }
-
-Vm(trim) {
-  cell *k = (cell*) Sp[0];
-  ttag(k)->head = k;
-  Ip += 1;
-  return Continue(); }
-
-Vm(prc) {
-  word w = *Sp;
-  putc(getnum(w), stdout);
-  Ip += 1;
-  return Continue(); }
-
-Vm(dot) {
-  transmit(f, stdout, Sp[0]);
-  Ip += 1;
-  return Continue(); }

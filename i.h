@@ -36,13 +36,15 @@ struct g_core {
   g_word end[]; };
 
 // built in type method tables
-struct g_type {
+typedef struct g_type {
   g_word (*cp)(g_core*, g_word, g_word*, g_word*); // for gc
   void (*wk)(g_core*, g_word, g_word*, g_word*);
   bool (*eq)(g_core*, g_word, g_word);
-  void (*em)(g_core*, FILE*, g_word);
+  g_core *(*em)(g_core*, FILE*, g_word);
   uintptr_t (*xx)(g_core*, g_word);
-  g_core (*show)(g_core*, g_word); };
+  g_vm *ap;
+  g_core *(*show)(g_core*, g_word);
+} g_type;
 
 typedef struct g_pair {
   g_vm *ap;
@@ -76,7 +78,6 @@ typedef struct g_string {
 #define g_free free
 #define g_malloc malloc
 void
-  g_write1f(g_core*, FILE*),
   transmit(g_core*, FILE*, g_word);
 bool
   neql(g_core*, g_word, g_word),
@@ -92,6 +93,7 @@ g_core
   *g_have(g_core*, uintptr_t),
   *g_cells(g_core*, size_t),
   *g_push(g_core*, uintptr_t, ...),
+  *g_tbl(g_core*),
   *g_cons_l(g_core*),
   *g_cons_r(g_core*),
   *g_ini_m(void *(*)(g_core*, size_t), void (*)(g_core*, void*)),
@@ -101,7 +103,7 @@ g_core
   *p_readsp(g_core*, g_string*);
 
 g_vm
-  data, bnot, rng, nullp, sysclock, symnom, dot,
+  data, bnot, rng, nullp, sysclock, symnom, dot, self,
   gensym, pairp, fixnump, symbolp, stringp,
   ssub, sget, slen, scat, prc, cons, car, cdr,
   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
@@ -118,7 +120,6 @@ Vm(gc, uintptr_t);
 #define nil putnum(0)
 
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
-_Static_assert(sizeof(g_cell) == sizeof(g_cell*));
 _Static_assert(nil == g_nil);
 
 #define encode(f, s) ((g_core*)((g_word)(f)|(s)))
@@ -203,5 +204,9 @@ static Inline struct g_tag { g_cell *null, *head, end[]; } *ttag(g_cell*k) {
   while (k->x) k++;
   return (struct g_tag*) k; }
 
+
+static g_core Inline *g_run(g_core *f) {
+  return !g_ok(f) ? f :
+    f->ip->ap(f, f->ip, f->hp, f->sp); }
 typedef g_word word;
 typedef g_cell cell;

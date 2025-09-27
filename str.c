@@ -14,12 +14,17 @@ g_core *g_strof(g_core *f, const char *cs) {
 
 static uintptr_t xx_str(g_core *v, word _);
 static bool eq_str(g_core *f, word x, word y);
-static void em_str(g_core* v, FILE *o, word _);
+static g_core *em_str(g_core* v, FILE *o, word _);
 static void wk_str(g_core* f, word x, word *p0, word *t0);
 static word cp_str(g_core* v, word x, word *p0, word *t0);
 
-g_type
-  str_type = { .xx = xx_str, .cp = cp_str, .wk = wk_str, .eq = eq_str, .em = em_str, };
+g_type str_type = {
+  .xx = xx_str,
+  .cp = cp_str,
+  .wk = wk_str,
+  .eq = eq_str,
+  .ap = self,
+  .em = em_str, };
 
 static word cp_str(g_core* v, word x, word *p0, word *t0) {
   string *src = str(x);
@@ -29,13 +34,14 @@ static word cp_str(g_core* v, word x, word *p0, word *t0) {
 static void wk_str(g_core* f, word x, word *p0, word *t0) {
   f->cp += Width(string) + b2w(str(x)->len); }
 
-static void em_str(g_core* v, FILE *o, word _) {
+static g_core *em_str(g_core* v, FILE *o, word _) {
   size_t len = str(_)->len;
   const char *text = str(_)->text;
   putc('"', o);
   for (char c; len--; putc(c, o))
     if ((c = *text++) == '\\' || c == '"') putc('\\', o);
-  putc('"', o); }
+  putc('"', o);
+  return v; }
 
 static uintptr_t xx_str(g_core *v, word _) {
   uintptr_t len = str(_)->len, h = 2166136261;

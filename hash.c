@@ -22,18 +22,24 @@ uintptr_t hash(g_core *f, g_word x) {
   g_word len = (g_cell*) t - t->head;
   return mix ^ (mix * len); }
 
-
-static void em_tbl(g_core*, FILE*, g_word),
+static g_core* em_tbl(g_core*, FILE*, g_word);
+static void
             wk_tbl(g_core*, g_word, g_word*, g_word*);
 static g_word cp_tbl(g_core*, g_word, g_word*, g_word*);
 static uintptr_t xx_tbl(g_core*, g_word);
 
-g_type
-  tbl_type = { .xx = xx_tbl, .cp = cp_tbl, .wk = wk_tbl, .eq = neql, .em = em_tbl, };
+g_type tbl_type = {
+  .xx = xx_tbl,
+  .cp = cp_tbl,
+  .wk = wk_tbl,
+  .eq = neql,
+  .ap = self,
+  .em = em_tbl, };
 
-static void em_tbl(g_core *f, FILE *o, g_word x) {
+static g_core *em_tbl(g_core *f, FILE *o, g_word x) {
   g_table *t = (g_table*) x;
-  fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x); }
+  fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x);
+  return f; }
 
 static void wk_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {
   g_table *t = (g_table*) x;
@@ -70,49 +76,67 @@ static Inline g_word index_of_key(g_core *f, g_table *t, g_word k) {
   return (t->cap - 1) & hash(f, k); }
 
 NoInline g_core *g_hash_put_2(g_core *f) {
-  g_word x = f->sp[2];
-  f->sp[2] = f->sp[1];
-  f->sp[1] = f->sp[0];
-  f->sp[0] = x;
+  g_word t = f->sp[0],
+         k = f->sp[1],
+         v = f->sp[2];
+  f->sp[0] = k;
+  f->sp[1] = v;
+  f->sp[2] = t;
   return g_hash_put(f); }
 
 NoInline g_core *g_hash_put(g_core *f) {
-  if (!g_ok(f)) return f;
-  g_table *t = (g_table*) f->sp[0];
-  g_word k = f->sp[1], v = f->sp[2], i = index_of_key(f, t, k);
+  g_table *t = (g_table*) f->sp[2];
+  g_word v = f->sp[1],
+         k = f->sp[0];
+
+  g_word i = index_of_key(f, t, k);
   struct entry *e = t->tab[i];
   while (e && !eql(f, k, e->key)) e = e->next;
-  if (e) e->val = v;
-  else {
-    f = g_cells(f, Width(struct entry));
-    if (!g_ok(f)) return f;
-    e = (struct entry*) pop1(f);
-    t = (g_table*) f->sp[0];
-    k = f->sp[1], v = f->sp[2];
-    e->key = k, e->val = v, e->next = t->tab[i], t->tab[i] = e;
-    g_word cap0 = t->cap, load = ++t->len / cap0;
-    if (load > 1) {
-      // grow the table
-      g_word cap1 = 2 * cap0;
-      struct entry **tab0, **tab1;
-      f = g_cells(f, cap1);
-      if (!g_ok(f)) return f;
-      tab1 = (struct entry**) pop1(f);
-      t = (g_table*) f->sp[0];
-      tab0 = t->tab;
-      memset(tab1, 0, cap1 * sizeof(g_word));
-      for (t->cap = cap1, t->tab = tab1; cap0--;)
-        for (struct entry *e, *es = tab0[cap0]; es;
-          e = es,
-          es = es->next,
-          i = (cap1-1) & hash(f, e->key),
-          e->next = tab1[i],
-          tab1[i] = e); } }
 
+  if (e) {
+    e->val = v;
+    goto done; }
+
+  f = g_cells(f, Width(struct entry));
+  if (!g_ok(f)) return f;
+
+  e = (struct entry*) pop1(f);
+  t = (g_table*) f->sp[2];
+  k = f->sp[0];
+  v = f->sp[1];
+
+  e->key = k;
+  e->val = v;
+  e->next = t->tab[i];
+  t->tab[i] = e;
+
+  g_word cap0 = t->cap,
+         load = ++t->len / cap0;
+
+  if (load < 2) goto done;
+
+  // grow the table
+  g_word cap1 = 2 * cap0;
+  struct entry **tab0, **tab1;
+  f = g_cells(f, cap1);
+  if (!g_ok(f)) return f;
+  tab1 = (struct entry**) pop1(f);
+  t = (g_table*) f->sp[2];
+  tab0 = t->tab;
+  memset(tab1, 0, cap1 * sizeof(g_word));
+  for (t->cap = cap1, t->tab = tab1; cap0--;)
+    for (struct entry *e, *es = tab0[cap0]; es;
+      e = es,
+      es = es->next,
+      i = (cap1-1) & hash(f, e->key),
+      e->next = tab1[i],
+      tab1[i] = e);
+
+done:
   f->sp += 2;
-  f->sp[0] = (g_word) t;
   return f; }
 
+  
 static struct entry *table_delete_r(g_core *f, g_table *t, g_word k, g_word *v, struct entry *e) {
   if (!e) return e;
   if (eql(f, e->key, k)) return
@@ -166,7 +190,7 @@ Vm(tget) {
 Vm(tset) {
   if (tblp(Sp[0])) {
     Pack(f);
-    f = g_hash_put(f);
+    f = g_hash_put_2(f);
     if (!g_ok(f)) return f;
     Unpack(f); }
   Ip += 1;

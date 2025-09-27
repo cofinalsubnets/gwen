@@ -17,12 +17,6 @@ static g_word memq(g_core *f, g_word l, g_word k) {
   for (; twop(l); l = B(l)) if (eql(f, k, A(l))) return l;
   return 0; }
 
-static g_word ldels(g_core *f, g_word lam, g_word l) {
-  if (!twop(l)) return nil;
-  g_word m = ldels(f, lam, B(l));
-  if (!assq(f, lam, A(l))) B(l) = m, m = l;
-  return m; }
-
 static size_t llen(g_word l) {
   size_t n = 0;
   while (twop(l)) n++, l = B(l);
@@ -120,13 +114,21 @@ static Cata(cata_if_pop_exit) {
   if (g_ok(f)) (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
   return f; }
 
+static Cata(cata_ix_, g_vm *i, g_word x) {
+  avec(f, x, f = pull(f, c, m + 2));
+  if (g_ok(f))
+    Kp -= 2,
+    Kp[0].ap = i,
+    Kp[1].x = x;
+  return f; }
+
 static Cata(cata_if_pop_branch) {
   f = pull(f, c, m + 2);
   if (g_ok(f))
     Kp -= 2,
     Kp[0].ap = cond,
-    Kp[1].x = A((*c)->alts),
-    (*c)->alts = B((*c)->alts);
+    Kp[1].x = A((*c)->alts);
+  (*c)->alts = B((*c)->alts);
   return f; }
 
 static Cata(cata_if_push_branch) {
@@ -150,15 +152,18 @@ static Cata(cata_if_jump_out) {
   return f; }
 
 static Cata(cata_ap) {
+  f = pull(f, c, m + 1);
+  if (g_ok(f)) {
+    if (Kp[0].ap == ret) Kp[0].ap = tap;
+    else Kp -= 1, Kp[0].ap = ap; }
+  return f; }
+
+static Cata(cata_apn) {
   g_word arity = pop1(f);
   f = pull(f, c, m + 2);
   if (g_ok(f)) {
-    if (getnum(arity) > 1) {
-      if (Kp[0].ap == ret) Kp -= 1, Kp[0].ap = tapn, Kp[1].x = arity;
-      else Kp -= 2, Kp[0].ap = apn, Kp[1].x = arity; }
-    else {
-      if (Kp[0].ap == ret) Kp[0].ap = tap;
-      else Kp -= 1, Kp[0].ap = ap; } }
+    if (Kp[0].ap == ret) Kp -= 1, Kp[0].ap = tapn, Kp[1].x = arity;
+    else Kp -= 2, Kp[0].ap = apn, Kp[1].x = arity; }
   return f; }
 
 static Cata(cata_var_2) {
@@ -168,8 +173,7 @@ static Cata(cata_var_2) {
   while (twop(stack))
     if (eql(f, A(stack), var)) break;
     else stack = B(stack), i++;
-  f = ana_ix(f, ref, putnum(i));
-  return pull(f, c, m); }
+  return cata_ix_(f, c, m, ref, putnum(i)); }
 
 // emit stack reference instruction
 static Cata(cata_var) {
@@ -178,8 +182,7 @@ static Cata(cata_var) {
   for (word l = (*c)->imps; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
   for (word l = (*c)->args; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
 out:
-  f = ana_ix(f, ref, putnum(i));
-  return pull(f, c, m); }
+  return cata_ix_(f, c, m, ref, putnum(i)); }
 
 static Inline Cata(pull) { return ((cata*) pop1(f))(f, c, m); }
 
@@ -194,23 +197,16 @@ static Cata(cata_i) {
 static Cata(cata_ix) {
   g_vm *i = (g_vm*) pop1(f);
   g_word x = pop1(f);
-  avec(f, x, f = pull(f, c, m + 2));
-  if (g_ok(f))
-    Kp -= 2,
-    Kp[0].ap = i,
-    Kp[1].x = x;
-  return f; }
+  return cata_ix_(f, c, m, i, x); }
 
 static size_t arity_of(env *c) { return llen(c->args) + llen(c->imps); }
 static Cata(cata_curry) {
   size_t ar = arity_of((env*) pop1(f));
-  if (ar > 1) f = ana_ix(f, curry, putnum(ar));
-  return pull(f, c, m); }
+  return ar > 1 ? cata_ix_(f, c, m, curry, putnum(ar)) : pull(f, c, m); }
 
 static Cata(cata_ret) {
   size_t ar = arity_of((env*) pop1(f));
-  f = ana_ix(f, ret, putnum(ar));
-  return pull(f, c, m); }
+  return cata_ix_(f, c, m, ret, putnum(ar)); }
 
 static g_core *ana_lambda(g_core *f, env **c, g_word imps, g_word exp);
 static Ana(analyze) {
@@ -263,12 +259,7 @@ static Ana(analyze) {
   // macro?
   g_word mac = g_hash_get(f, 0, f->macro, a);
   if (mac) return
-    f = g_push(f, 5 , nil, b, f->quote, nil, mac),
-    f = g_cons_r(f),
-    f = g_cons_r(f),
-    f = g_cons_l(f),
-    f = g_cons_r(f),
-    f = g_eval(f),
+    f = g_apply(g_push(f, 2 , b, mac)),
     g_ok(f) ? analyze(f, c, pop1(f)) : f;
 
   // application.
@@ -336,7 +327,7 @@ static g_core *ana_seq(g_core *f, env* *c, g_word a, g_word b) {
 static g_core *ana_ap_args_r(g_core *f, env**c, g_word x) {
   if (!twop(x)) return f;
   avec(f, x, f = ana_ap_args_r(f, c, B(x)),
-             f = g_push(f, 2, cata_ap, putnum(1)));
+             f = g_push(f, 1, cata_ap));
   return analyze(f, c, A(x)); }
 
 // evaluate function call arguments and apply
@@ -347,6 +338,12 @@ static g_core *ana_ap_args(g_core *f, env **c, g_word x) {
     f = ana_ap_args_r(f, c, x),
     (*c)->stack = B((*c)->stack);
   return f; }
+
+static g_word ldels(g_core *f, g_word lam, g_word l) {
+  if (!twop(l)) return nil;
+  g_word m = ldels(f, lam, B(l));
+  if (!assq(f, lam, A(l))) B(l) = m, m = l;
+  return m; }
 
 #define BBA(o) B(BA(o))
 // this is the longest function in the whole C implementation :(
@@ -360,12 +357,8 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
   env *q = (env*) pop1(f),
       **c = &q;
   // lots of variables :(
-  g_word nom = nil, // 511 - 592
-         def = nil, // 514 - 593
-         lam = nil, // 520 - 579
-         v = nil,   // 541 - 542
-         d = nil,   // 504 - 582
-         e = nil;   // 504 - 545
+  g_word nom = nil, def = nil, lam = nil,
+         v = nil, d = nil, e = nil;
   MM(f, &nom), MM(f, &def), MM(f, &lam);
   MM(f, &d); MM(f, &e); MM(f, &v); MM(f, &q);
 
@@ -373,8 +366,7 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
   while (twop(exp) && twop(B(exp))) {
     for (d = A(exp), e = AB(exp); twop(d); e = pop1(f), d = A(d)) {
       f = g_cons_2(f, e, nil);
-      f = g_cons_2(f, word(f->lambda), B(d));
-      f = append(f);
+      f = append(g_cons_2(f, word(f->lambda), B(d)));
       if (!g_ok(f)) return forget(); }
     f = g_cons_2(f, d, nom);
     f = g_cons_2(f, e, def);
@@ -384,9 +376,7 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
     // if it's a lambda compile it and record in lam list
     if (lambp(f, e)) {
       f = g_push(f, 2, d, lam);
-      f = ana_lambda(f, c, nil, B(e));
-      f = g_cons_r(f);
-      f = g_cons_l(f);
+      f = g_cons_l(g_cons_r(ana_lambda(f, c, nil, B(e))));
       if (!g_ok(f)) return forget();
       lam = pop1(f); }
     exp = BB(exp); }
@@ -419,15 +409,14 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
   for (e = lam; twop(e); BBA(e) = ldels(f, lam, BBA(e)), e = B(e));
 
   (*c)->lams = lam;
-  f = g_push(f, 3, f->lambda, nom, exp);
-  f = g_cons_l(f);
-  f = append(f);
+  f = append(g_cons_l(g_push(f, 3, f->lambda, nom, exp)));
 
   if (!g_ok(f)) return forget();
   exp = pop1(f);
 
   size_t ll = llen(nom);
-  f = g_push(f, 2, cata_ap, putnum(ll));
+  f = ll > 1 ? g_push(f, 2, cata_apn, putnum(ll)) :
+               g_push(f, 1, cata_ap);
   f = g_cons_2(f, nil, (*b)->stack); // push function stack rep
   (*b)->stack = pop1(f);
   nom = reverse(f, nom); // put in literal order
@@ -452,13 +441,15 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
   f = analyze(f, b, exp);
   return forget(); }
 
-static Inline g_core *g_eva(g_core *f, g_vm *y) {
-  return g_run(g_ana(f, y)); }
-
 g_core *g_eval(g_core *f) {
-  return g_eva(f, g_yield); }
+  return g_run(g_ana(f, g_yield)); }
+
+NoInline g_core *g_apply(g_core *f) {
+  if (!g_ok(f)) return f;
+  cell ip[] = {{ap}, {g_yield}, {.m = f->ip}};
+  return ap(f, ip, f->hp, f->sp); }
 
 NoInline Vm(ev0) {
   Ip += 1;
   Pack(f);
-  return g_eva(f, jump); }
+  return g_run(g_ana(f, jump)); }

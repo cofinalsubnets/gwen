@@ -65,11 +65,17 @@ Vm(symnom) {
 
 static word cp_sym(g_core *f, word x, word *p0, word *t0);
 static uintptr_t xx_sym(g_core *v, word _);
-static void
-  wk_sym(g_core *f, word x, word *p0, word *t0),
-  em_sym(g_core *f, FILE *o, word x);
-g_type
-  sym_type = { .xx = xx_sym, .cp = cp_sym, .wk = wk_sym, .eq = neql, .em = em_sym, };
+static void wk_sym(g_core *f, word x, word *p0, word *t0);
+static g_core * em_sym(g_core *f, FILE *o, word x),
+              *show_sym(g_core*, g_word);
+g_type sym_type = {
+  .xx = xx_sym,
+  .cp = cp_sym,
+  .wk = wk_sym,
+  .eq = neql,
+  .em = em_sym,
+  .show = show_sym,
+  .ap = self, };
 
 static uintptr_t xx_sym(g_core *v, word _) { return sym(_)->code; }
 
@@ -83,7 +89,12 @@ static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
 static void wk_sym(g_core *f, word x, word *p0, word *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
-static void em_sym(g_core *f, FILE *o, word x) {
+static g_core *em_sym(g_core *f, FILE *o, word x) {
   string* s = sym(x)->nom;
   if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
-  else fprintf(o, "#sym@%lx", (long) x); }
+  else fprintf(o, "#sym@%lx", (long) x);
+  return f; }
+
+static g_core*show_sym(g_core*f,g_word x) {
+  g_word n = (g_word) ((g_symbol*) x)->nom;
+  return g_push(f, 1, n ? n : nil); }

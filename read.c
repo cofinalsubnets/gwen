@@ -3,11 +3,54 @@
 typedef struct g_input {
   int (*getc)(struct g_input*),
       (*ungetc)(struct g_input*, int),
-      (*eof)(struct g_input*); } input;
+      (*eof)(struct g_input*);
+} g_input, input;
 
+typedef struct text_input {
+  g_input in;
+  const char *text;
+  int i;
+} text_input;
+
+typedef struct file_input {
+  g_input in;
+  FILE *file;
+} file_input;
+
+static int p_text_getc(g_input *i) {
+  text_input *t = ((text_input*) i);
+  char c = t->text[t->i];
+  if (c) t->i++;
+  return c; }
+
+static int p_text_ungetc(g_input *i, int _) {
+  text_input *t = ((text_input*) i);
+  int idx = t->i;
+  idx = idx ? idx - 1 : idx;
+  t->i = idx;
+  return t->text[idx]; }
+
+static int p_text_eof(g_input *i) {
+  text_input *t = (text_input*) i;
+  return !t->text[t->i]; }
+
+static g_core *g_read1i(g_core*, input*);
+NoInline g_core *g_read1s(g_core *f, const char *cs) {
+  text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
+  return g_read1i(f, (input*) &t); }
+
+static int p_file_getc(input *i) { return getc(((file_input*) i)->file); }
+static int p_file_ungetc(input *i, int c) { return ungetc(c, ((file_input*) i)->file); }
+static int p_file_eof(input *i) { return feof(((file_input*) i)->file); }
 static Inline int p_in_getc(input *i) { return i->getc(i); }
 static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
 static Inline int p_in_eof(input *i) { return i->eof(i); }
+
+NoInline g_core *g_read1f(g_core *f, FILE*i) {
+  file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
+  return g_read1i(f, (input*) &fi); }
+
+g_core *g_read1(g_core *f) { return g_read1f(f, stdin); }
 
 ////
 /// " the parser "
@@ -19,10 +62,6 @@ static int read_char(input *i) {
     default: return c;
     case '#': case ';': while (!p_in_eof(i) && (c = p_in_getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
-
-static g_core
-  *g_readsi(g_core*, input*),
-  *g_read1i(g_core*, input*);
 static g_core *g_buf_new(g_core *f) {
   f = g_cells(f, Width(string) + 1);
   if (g_ok(f)) {
@@ -40,6 +79,17 @@ static g_core *g_buf_grow(g_core *f) {
     ini_str(o, 2 * len);
     memcpy(o->text, str(f->sp[0])->text, len);
     f->sp[0] = (word) o; }
+  return f; }
+
+
+static g_core *g_readsi(g_core *f, input* i) {
+  intptr_t n = 0;
+  for (int c; g_ok(f); n++) {
+    c = read_char(i);
+    if (c == EOF || c == ')') break;
+    p_in_ungetc(i, c);
+    f = g_read1i(f, i); }
+  for (f = g_push(f, 1, nil); n--; f = g_cons_r(f));
   return f; }
 
 
@@ -83,27 +133,6 @@ static g_core *g_read1i(g_core *f, input* i) {
               return f; }
       return f; } }
 
-static g_core *g_readsi(g_core *f, input* i) {
-  intptr_t n = 0;
-  for (int c; g_ok(f); n++) {
-    c = read_char(i);
-    if (c == EOF || c == ')') break;
-    p_in_ungetc(i, c);
-    f = g_read1i(f, i); }
-  for (f = g_push(f, 1, nil); n--; f = g_cons_r(f));
-  return f; }
-
-typedef struct file_input { input in; FILE *file; } file_input;
-static int p_file_getc(input *i) { return getc(((file_input*) i)->file); }
-static int p_file_ungetc(input *i, int c) { return ungetc(c, ((file_input*) i)->file); }
-static int p_file_eof(input *i) { return feof(((file_input*) i)->file); }
-
-NoInline g_core *g_read1f(g_core *f, FILE* i) {
-  file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
-  return g_read1i(f, (input*) &fi); }
-
-g_core *g_read1(g_core *f) { return g_read1f(f, stdin); }
-
 Vm(read0) {
   Pack(f);
   f = g_read1f(f, stdin);
@@ -114,10 +143,9 @@ Vm(read0) {
     Continue();
   f = g_cons_l(f);
   if (!g_ok(f)) return f;
-  return
-    Unpack(f),
-    Ip += 1,
-    Continue(); }
+  Unpack(f);
+  Ip += 1;
+  return Continue(); }
 
 static NoInline g_core *g_readsf(g_core *f) {
   string *s = (string*) pop1(f);
@@ -140,37 +168,6 @@ Vm(readf) {
   Pack(f);
   f = g_readsf(f);
   if (!g_ok(f)) return f;
-  return
-    Unpack(f),
-    Ip += 1,
-    Continue(); }
-
-typedef struct text_input { input in; const char *text; int i; } text_input;
-static int p_text_getc(input *i) {
-  text_input *t = ((text_input*) i);
-  char c = t->text[t->i];
-  if (c) t->i++;
-  return c; }
-
-static int p_text_ungetc(input *i, int _) {
-  text_input *t = ((text_input*) i);
-  int idx = t->i;
-  idx = idx ? idx - 1 : idx;
-  t->i = idx;
-  return t->text[idx]; }
-
-static int p_text_eof(input *i) {
-  text_input *t = (text_input*) i;
-  return !t->text[t->i]; }
-
-NoInline g_core *g_read1s(g_core *f, const char *cs) {
-  text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
-  return g_read1i(f, (input*) &t); }
-
-void transmit(g_core *f, FILE* out, word x) {
-  if (nump(x)) fprintf(out, "%ld", (long) getnum(x));
-  else if (datp(x)) typ(x)->em(f, out, x);
-  else fprintf(out, "#%lx", (long) x); }
-
-void g_write1(g_core *f) { g_write1f(f, stdout); }
-void g_write1f(g_core *f, FILE *o) { transmit(f, o, f->sp[0]); }
+  Unpack(f);
+  Ip += 1;
+  return Continue(); }

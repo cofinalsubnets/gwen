@@ -5,9 +5,6 @@ g_core *g_pop(g_core *f, uintptr_t m) {
   if (g_ok(f)) f->sp += m;
   return f; }
 
-uintptr_t g_height(g_core *f) {
-  return (g_word*) f + f->len - f->sp; }
-
 static g_core *g_pushr(g_core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
   word x = va_arg(xs, word);
@@ -95,7 +92,6 @@ static g_core *copy_core(g_core *g, g_word *p1, uintptr_t len1, g_core *f) {
   g->sp = t1 - ht;
   g->hp = g->cp = g->end;
   g->symbols = 0;
-
   // copy variables
   for (int n = 0; n < g_var_N; n++)
     g->vars[n] = cp(g, f->vars[n], p0, t0);
@@ -109,10 +105,10 @@ static g_core *copy_core(g_core *g, g_word *p1, uintptr_t len1, g_core *f) {
     *r->ptr = cp(g, *r->ptr, p0, t0);
 
   // use cheney's algorithm to avoid unbounded recursion
-  while (g->cp < g->hp) if (datp(g->cp))
-                          typ(g->cp)->wk(g, (g_word) g->cp, p0, t0);
-                        else for (g->cp += 2; g->cp[-2]; g->cp++)
-                               g->cp[-2] = cp(g, g->cp[-2], p0, t0);
+  while (g->cp < g->hp)
+    if (datp(g->cp)) typ(g->cp)->wk(g, (g_word) g->cp, p0, t0);
+    else for (g->cp += 2; g->cp[-2]; g->cp++)
+      g->cp[-2] = cp(g, g->cp[-2], p0, t0);
 
   g->t0 = g_clock();
   return g; }
