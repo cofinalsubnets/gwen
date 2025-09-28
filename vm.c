@@ -5,7 +5,6 @@ Vm(defglob) {
   g_table *t = f->dict;
   g_word k = Ip[1].x,
          v = Sp[3];
-
   Sp[0] = k;
   Sp[1] = v;
   Sp[2] = (g_word) t;
@@ -30,7 +29,7 @@ Vm(free_variable) {
   return Continue(); }
 
 Vm(late_bind) {
-  word v = AB(Ip[1].x);
+  g_word v = AB(Ip[1].x);
   Ip[0].ap = imm;
   Ip[1].x = v;
   return Continue(); }
@@ -39,7 +38,7 @@ Vm(data) {
   return typ(Ip)->ap(f, Ip, Hp, Sp); }
 
 Vm(self) {
-  word x = word(Ip);
+  g_word x = word(Ip);
   Sp += 1;
   Ip = cell(Sp[0]);
   Sp[0] = x;
@@ -80,27 +79,14 @@ Vm(ref) {
 // apply function to one argument
 Vm(ap) {
   if (nump(Sp[1])) return Ip++, Sp++, Continue();
-  cell *k = cell(Sp[1]);
+  g_cell *k = cell(Sp[1]);
   Sp[1] = word(Ip + 1);
   Ip = k;
   return Continue(); }
-
-Vm(apl) {
-  if (nump(Sp[0])) return
-    Sp[1] = Sp[0],
-    Sp++,
-    Ip++,
-    Continue();
-  cell *k = cell(Sp[0]);
-  Sp[0] = Sp[1];
-  Sp[1] = word(Ip + 1);
-  Ip = k;
-  return Continue(); }
-
 
 // tail call
 Vm(tap) {
-  word x = Sp[0], j = Sp[1];
+  g_word x = Sp[0], j = Sp[1];
   Sp += getnum(Ip[1].x) + 1;
   if (nump(j)) return
     Sp += 1,
@@ -115,7 +101,7 @@ Vm(tap) {
 // apply to multiple arguments
 Vm(apn) {
   size_t n = getnum(Ip[1].x);
-  cell *ra = Ip + 2; // return address
+  g_cell *ra = Ip + 2; // return address
   // this instruction is only emitted when the callee is known to be a function
   // so putting a value off the stack into Ip is safe. the +2 is cause we leave
   // the currying instruction in there... should be skipped in compiler instead FIXME
@@ -129,13 +115,13 @@ Vm(tapn) {
   size_t n = getnum(Ip[1].x),
          r = getnum(Ip[2].x);
   Ip = cell(Sp[n]) + 2;
-  word *o = Sp;
+  g_word *o = Sp;
   for (Sp += r + 1; n--; Sp[n] = o[n]);
   return Continue(); }
 
 // return
 Vm(ret) {
-  word n = getnum(Ip[1].x) + 1;
+  g_word n = getnum(Ip[1].x) + 1;
   Ip = cell(Sp[n]);
   Sp[n] = Sp[0];
   Sp += n;
@@ -148,11 +134,18 @@ Vm(ret0) {
 
 // currying
 Vm(curry) {
-  cell *k = cell(Hp), *j = k;
+  g_cell *k = cell(Hp), *j = k;
   size_t S = 3 + Width(struct g_tag),
          n = getnum(Ip[1].x);
-  if (n == 2) { Have(S); }
-  else { S += 2; Have(S); j += 2, k[0].ap = curry, k[1].x = putnum(n - 1); }
+
+  if (n == 2) Have(S);
+  else {
+    S += 2;
+    Have(S);
+    j += 2;
+    k[0].ap = curry;
+    k[1].x = putnum(n - 1); }
+
   j[0].ap = uncurry;
   j[1].x = *Sp++;
   j[2].m = Ip + 2;

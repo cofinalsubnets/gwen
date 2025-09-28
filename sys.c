@@ -2,6 +2,11 @@
 #include <time.h>
 #include <unistd.h>
 
+void *g_malloc(g_core*f, size_t n) {
+  return malloc(n); }
+void g_free(g_core*f, void*x) {
+  return free(x); }
+
 NoInline uintptr_t g_clock(void) {
   struct timespec ts;
   int s = clock_gettime(CLOCK_REALTIME, &ts);

@@ -1,5 +1,4 @@
 #include "i.h"
-
 static uintptr_t xx_two(g_core*, g_word);
 static void wk_two(g_core*, g_word, g_word*, g_word*);
 static g_core * em_two(g_core*, FILE*, g_word);
@@ -67,7 +66,7 @@ Vm(pairp) {
 static g_core *g_cons_stack(g_core *f, int i, int j) {
   f = g_have(f, Width(g_pair));
   if (g_ok(f)) {
-    g_pair *p = (pair*) f->hp;
+    g_pair *p = (g_pair*) f->hp;
     ini_pair(p, f->sp[i], f->sp[j]);
     f->hp += Width(g_pair);
     *++f->sp = (g_word) p; }

@@ -1,6 +1,6 @@
 #include "i.h"
 
-#define op(nom, n, x) Vm(nom) { word _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
+#define op(nom, n, x) Vm(nom) { g_word _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 op(add, 2, (Sp[0]|1) + (Sp[1]&~1))
 op(sub, 2, (Sp[0]|1) - (Sp[1]&~1))
 op(mul, 2, putnum(getnum(Sp[0])*getnum(Sp[1])))

@@ -1,4 +1,5 @@
 #include "i.h"
+#include <string.h>
 
 g_core *g_tbl(g_core *f) {
   f = g_cells(f, Width(g_table) + 1);
@@ -23,8 +24,7 @@ uintptr_t hash(g_core *f, g_word x) {
   return mix ^ (mix * len); }
 
 static g_core* em_tbl(g_core*, FILE*, g_word);
-static void
-            wk_tbl(g_core*, g_word, g_word*, g_word*);
+static void wk_tbl(g_core*, g_word, g_word*, g_word*);
 static g_word cp_tbl(g_core*, g_word, g_word*, g_word*);
 static uintptr_t xx_tbl(g_core*, g_word);
 
@@ -74,15 +74,6 @@ static uintptr_t xx_tbl(g_core *f, g_word h) { return mix; }
 // relies on table capacity being a power of 2
 static Inline g_word index_of_key(g_core *f, g_table *t, g_word k) {
   return (t->cap - 1) & hash(f, k); }
-
-NoInline g_core *g_hash_put_2(g_core *f) {
-  g_word t = f->sp[0],
-         k = f->sp[1],
-         v = f->sp[2];
-  f->sp[0] = k;
-  f->sp[1] = v;
-  f->sp[2] = t;
-  return g_hash_put(f); }
 
 NoInline g_core *g_hash_put(g_core *f) {
   g_table *t = (g_table*) f->sp[2];
@@ -189,8 +180,14 @@ Vm(tget) {
 
 Vm(tset) {
   if (tblp(Sp[0])) {
+    g_word t = Sp[0],
+           k = Sp[1],
+           v = Sp[2];
+    Sp[0] = k;
+    Sp[1] = v;
+    Sp[2] = t;
     Pack(f);
-    f = g_hash_put_2(f);
+    f = g_hash_put(f);
     if (!g_ok(f)) return f;
     Unpack(f); }
   Ip += 1;

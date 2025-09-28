@@ -1,4 +1,5 @@
 #include "i.h"
+#include <string.h>
 
 typedef struct g_input {
   int (*getc)(struct g_input*),
@@ -34,6 +35,7 @@ static int p_text_eof(g_input *i) {
   text_input *t = (text_input*) i;
   return !t->text[t->i]; }
 
+static g_core *g_readsi(g_core *f, input* i);
 static g_core *g_read1i(g_core*, input*);
 NoInline g_core *g_read1s(g_core *f, const char *cs) {
   text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
@@ -46,7 +48,7 @@ static Inline int p_in_getc(input *i) { return i->getc(i); }
 static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
 static Inline int p_in_eof(input *i) { return i->eof(i); }
 
-NoInline g_core *g_read1f(g_core *f, FILE*i) {
+static NoInline g_core *g_read1f(g_core *f, FILE*i) {
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   return g_read1i(f, (input*) &fi); }
 
@@ -66,7 +68,7 @@ static g_core *g_buf_new(g_core *f) {
   f = g_cells(f, Width(string) + 1);
   if (g_ok(f)) {
     string *o = (string*) f->sp[0];
-    ini_str(o, sizeof(word)); }
+    ini_str(o, sizeof(g_word)); }
   return f; }
 
 static g_core *g_buf_grow(g_core *f) {
@@ -78,7 +80,7 @@ static g_core *g_buf_grow(g_core *f) {
     f->hp += req;
     ini_str(o, 2 * len);
     memcpy(o->text, str(f->sp[0])->text, len);
-    f->sp[0] = (word) o; }
+    f->sp[0] = (g_word) o; }
   return f; }
 
 
@@ -108,7 +110,7 @@ static g_core *g_read1i(g_core *f, input* i) {
       return g_cons_r(f);
     case '"':  
       f = g_buf_new(f);
-      for (size_t lim = sizeof(word); g_ok(f); f = g_buf_grow(f), lim *= 2)
+      for (size_t lim = sizeof(g_word); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (string *b = str(f->sp[0]); n < lim; b->text[n++] = c)
           if ((c = p_in_getc(i)) == EOF || c == '"' ||
                (c == '\\' && (c = p_in_getc(i)) == EOF))
@@ -117,7 +119,7 @@ static g_core *g_read1i(g_core *f, input* i) {
     default:
       p_in_ungetc(i, c);
       f = g_buf_new(f);
-      for (size_t lim = sizeof(word); g_ok(f); f = g_buf_grow(f), lim *= 2)
+      for (size_t lim = sizeof(g_word); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (string *b = str(f->sp[0]); n < lim; b->text[n++] = c)
           switch (c = p_in_getc(i)) {
             default: continue;
@@ -136,8 +138,8 @@ static g_core *g_read1i(g_core *f, input* i) {
 Vm(read0) {
   Pack(f);
   f = g_read1f(f, stdin);
-  if (code_of(f) == g_status_eof) return // no error but end of file
-    f = core_of(f),
+  if (g_code_of(f) == g_status_eof) return // no error but end of file
+    f = g_core_of(f),
     Unpack(f),
     Ip += 1,
     Continue();

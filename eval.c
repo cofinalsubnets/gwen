@@ -1,9 +1,10 @@
 #include "i.h"
+#include <string.h>
 
 static g_core *mo_c(g_core *f, size_t n) {
   f = g_cells(f, n + Width(struct g_tag));
   if (g_ok(f)) {
-    cell *k = (cell*) f->sp[0];
+    g_cell *k = (g_cell*) f->sp[0];
     struct g_tag *t = (struct g_tag*) (k + n);
     t->null = NULL;
     t->head = k; }
@@ -94,6 +95,19 @@ static NoInline g_core *g_ana(g_core *f, g_vm *y) {
     f = pull(f, &c, 0));
   return f; }
 
+g_core *g_eval(g_core *f) {
+  return g_run(g_ana(f, g_yield)); }
+
+NoInline g_core *g_apply(g_core *f) {
+  if (!g_ok(f)) return f;
+  g_cell ip[] = {{ap}, {g_yield}, {.m = f->ip}};
+  return ap(f, ip, f->hp, f->sp); }
+
+NoInline Vm(ev0) {
+  Ip += 1;
+  Pack(f);
+  return g_run(g_ana(f, jump)); }
+
 #define Kp (f->ip)
 static Cata(cata_yield) {
   f = mo_c(f, m);
@@ -101,12 +115,6 @@ static Cata(cata_yield) {
     Kp = cell(pop1(f)),
     memset(Kp, -1, m * sizeof(g_word)),
     Kp += m;
-  return f; }
-
-static Cata(cata_if_push_exit) {
-  f = pull(f, c, m);
-  f = g_cons_2(f, (g_word) Kp, (*c)->ends);
-  if (g_ok(f)) (*c)->ends = pop1(f);
   return f; }
 
 static Cata(cata_if_pop_exit) {
@@ -137,10 +145,16 @@ static Cata(cata_if_push_branch) {
   if (g_ok(f)) (*c)->alts = pop1(f);
   return f; }
 
+static Cata(cata_if_push_exit) {
+  f = pull(f, c, m);
+  f = g_cons_2(f, (g_word) Kp, (*c)->ends);
+  if (g_ok(f)) (*c)->ends = pop1(f);
+  return f; }
+
 static Cata(cata_if_jump_out) {
   f = pull(f, c, m + 3);
   if (g_ok(f)) {
-    cell *a = cell(A((*c)->ends));
+    g_cell *a = cell(A((*c)->ends));
     if (a->ap == ret || a->ap == tap)
       Kp = memcpy(Kp - 2, a, 2 * sizeof(g_word));
     else if (a->ap == tapn)
@@ -179,8 +193,8 @@ static Cata(cata_var_2) {
 static Cata(cata_var) {
   g_word v = pop1(f), // variable name
          i = llen(pop1(f)); // stack inset
-  for (word l = (*c)->imps; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
-  for (word l = (*c)->args; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
+  for (g_word l = (*c)->imps; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
+  for (g_word l = (*c)->args; !nilp(l); l = B(l), i++) if (eql(f, v, A(l))) goto out;
 out:
   return cata_ix_(f, c, m, ref, putnum(i)); }
 
@@ -283,7 +297,7 @@ static g_core *ana_lambda(g_core *f, env **c, g_word imps, g_word exp) {
     UM(f);
     f = g_push(f, 1, A(x)); }
 
-  cell *k, *ip;
+  g_cell *k, *ip;
   if (g_ok(f))
     exp = pop1(f),
     d->args = f->sp[0],
@@ -315,8 +329,7 @@ static Ana(ana_if_r) {
 
 static Ana(ana_if) {
   avec(f, x, f = g_push(f, 1, cata_if_push_exit));
-  f = ana_if_r(f, c, x);
-  return g_push(f, 1, cata_if_pop_exit); }
+  return g_push(ana_if_r(f, c, x), 1, cata_if_pop_exit); }
 
 static g_core *ana_seq(g_core *f, env* *c, g_word a, g_word b) {
   if (!g_ok(f)) return f;
@@ -440,16 +453,3 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
 
   f = analyze(f, b, exp);
   return forget(); }
-
-g_core *g_eval(g_core *f) {
-  return g_run(g_ana(f, g_yield)); }
-
-NoInline g_core *g_apply(g_core *f) {
-  if (!g_ok(f)) return f;
-  cell ip[] = {{ap}, {g_yield}, {.m = f->ip}};
-  return ap(f, ip, f->hp, f->sp); }
-
-NoInline Vm(ev0) {
-  Ip += 1;
-  Pack(f);
-  return g_run(g_ana(f, jump)); }

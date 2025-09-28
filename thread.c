@@ -1,7 +1,8 @@
 #include "i.h"
+#include <string.h>
 
 Vm(seek) {
-  Sp[1] = word(((cell*) Sp[1]) + getnum(Sp[0]));
+  Sp[1] = word(((g_cell*) Sp[1]) + getnum(Sp[0]));
   Sp += 1;
   Ip += 1;
   return Continue(); }
@@ -25,8 +26,8 @@ Vm(thda) {
   Hp += n + Width(struct g_tag);
   t->null = NULL;
   t->head = k;
-  memset(k, -1, n * sizeof(word));
-  Sp[0] = (word) k;
+  memset(k, -1, n * sizeof(g_word));
+  Sp[0] = (g_word) k;
   Ip += 1;
   return Continue(); }
 

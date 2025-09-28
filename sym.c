@@ -1,8 +1,5 @@
 #include "i.h"
-
-g_core *g_symof(g_core *f, const char *nom) {
-  f = g_strof(f, nom);
-  return g_intern(f); }
+#include <string.h>
 
 static Inline void ini_sym(symbol *y, string *nom, uintptr_t code) {
   y->ap = data;
@@ -11,7 +8,7 @@ static Inline void ini_sym(symbol *y, string *nom, uintptr_t code) {
   y->code = code;
   y->l = y->r = 0; }
 
-static Inline void ini_anon(symbol *y, word code) {
+static Inline void ini_anon(symbol *y, g_word code) {
   y->ap = data;
   y->typ = &sym_type;
   y->nom = 0;
@@ -21,7 +18,7 @@ static symbol *g_intern_r(g_core *v, string *b, symbol **y) {
   symbol *z = *y;
   if (!z) return // found an empty spot, insert new symbol
     z = bump(v, Width(g_symbol)),
-    ini_sym(z, b, hash(v, putnum(hash(v, (word) b)))),
+    ini_sym(z, b, hash(v, putnum(hash(v, (g_word) b)))),
     *y = z;
   string *a = z->nom;
   int i = a->len < b->len ? -1 :
@@ -57,16 +54,16 @@ Vm(gensym) {
   return Continue(); }
 
 Vm(symnom) {
-  word y = Sp[0];
+  g_word y = Sp[0];
   y = symp(y) && ((symbol*)y)->nom ? word(((symbol*)y)->nom) : nil;
   Sp[0] = y;
   Ip += 1;
   return Continue(); }
 
-static word cp_sym(g_core *f, word x, word *p0, word *t0);
-static uintptr_t xx_sym(g_core *v, word _);
-static void wk_sym(g_core *f, word x, word *p0, word *t0);
-static g_core * em_sym(g_core *f, FILE *o, word x),
+static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
+static uintptr_t xx_sym(g_core *v, g_word _);
+static void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
+static g_core * em_sym(g_core *f, FILE *o, g_word x),
               *show_sym(g_core*, g_word);
 g_type sym_type = {
   .xx = xx_sym,
@@ -77,7 +74,7 @@ g_type sym_type = {
   .show = show_sym,
   .ap = self, };
 
-static uintptr_t xx_sym(g_core *v, word _) { return sym(_)->code; }
+static uintptr_t xx_sym(g_core *v, g_word _) { return sym(_)->code; }
 
 static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
   g_symbol *src = sym(x), *dst;
@@ -86,10 +83,10 @@ static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
        ini_anon(dst, src->code);
   return (g_word) (src->ap = (g_vm*) dst); }
 
-static void wk_sym(g_core *f, word x, word *p0, word *t0) {
+static void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
-static g_core *em_sym(g_core *f, FILE *o, word x) {
+static g_core *em_sym(g_core *f, FILE *o, g_word x) {
   string* s = sym(x)->nom;
   if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
   else fprintf(o, "#sym@%lx", (long) x);

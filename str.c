@@ -1,5 +1,5 @@
 #include "i.h"
-#define max(a, b) ((a)>(b)?(a):(b))
+#include <string.h>
 
 g_core *g_strof(g_core *f, const char *cs) {
   size_t bytes = strlen(cs),
@@ -12,11 +12,11 @@ g_core *g_strof(g_core *f, const char *cs) {
     memcpy(o->text, cs, bytes); }
   return f; }
 
-static uintptr_t xx_str(g_core *v, word _);
-static bool eq_str(g_core *f, word x, word y);
-static g_core *em_str(g_core* v, FILE *o, word _);
-static void wk_str(g_core* f, word x, word *p0, word *t0);
-static word cp_str(g_core* v, word x, word *p0, word *t0);
+static uintptr_t xx_str(g_core *v, g_word _);
+static bool eq_str(g_core *f, g_word x, g_word y);
+static g_core *em_str(g_core* v, FILE *o, g_word _);
+static void wk_str(g_core* f, g_word x, g_word *p0, g_word *t0);
+static g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0);
 
 g_type str_type = {
   .xx = xx_str,
@@ -26,15 +26,15 @@ g_type str_type = {
   .ap = self,
   .em = em_str, };
 
-static word cp_str(g_core* v, word x, word *p0, word *t0) {
+static g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0) {
   string *src = str(x);
   size_t len = sizeof(string) + src->len;
-  return (word) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
+  return (g_word) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
-static void wk_str(g_core* f, word x, word *p0, word *t0) {
+static void wk_str(g_core* f, g_word x, g_word *p0, g_word *t0) {
   f->cp += Width(string) + b2w(str(x)->len); }
 
-static g_core *em_str(g_core* v, FILE *o, word _) {
+static g_core *em_str(g_core* v, FILE *o, g_word _) {
   size_t len = str(_)->len;
   const char *text = str(_)->text;
   putc('"', o);
@@ -43,13 +43,13 @@ static g_core *em_str(g_core* v, FILE *o, word _) {
   putc('"', o);
   return v; }
 
-static uintptr_t xx_str(g_core *v, word _) {
+static uintptr_t xx_str(g_core *v, g_word _) {
   uintptr_t len = str(_)->len, h = 2166136261;
   unsigned char *bs = (unsigned char*) str(_)->text;
   while (len--) h ^= *bs++, h *= 16777619;
   return h; }
 
-static bool eq_str(g_core *f, word x, word y) {
+static bool eq_str(g_core *f, g_word x, g_word y) {
   string *a = str(x), *b = str(y);
   return a->len == b->len &&
     0 == strncmp(a->text, b->text, a->len); }
@@ -75,11 +75,13 @@ Vm(ssub) {
       Hp += req;
       ini_str(t, j - i);
       memcpy(t->text, s->text + i, j - i);
-      Sp[2] = (word) t; } }
+      Sp[2] = (g_word) t; } }
   return Ip += 1,
          Sp += 2,
          Continue(); }
 
+static Inline size_t max(size_t a, size_t b) { return a > b ? a : b; }
+static Inline size_t min(size_t a, size_t b) { return a < b ? a : b; }
 Vm(sget) {
   if (!strp(Sp[0])) Sp[1] = nil;
   else {
@@ -92,11 +94,11 @@ Vm(sget) {
          Continue(); }
 
 Vm(scat) {
-  word a = Sp[0];
+  g_word a = Sp[0];
   if (!strp(a)) return Sp += 1,
                        Ip += 1,
                        Continue();
-  word b = Sp[1];
+  g_word b = Sp[1];
   if (!strp(b)) return Sp[1] = a,
                        Sp += 1,
                        Ip += 1,

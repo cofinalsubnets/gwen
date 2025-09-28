@@ -1,10 +1,16 @@
 // thanks !!
 #include "gw.h"
 #include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+union g_cell {
+  g_core *(*ap)(g_core*, g_cell*, g_word*, g_word*);
+  g_word x;
+  g_cell *m;
+  struct g_type *typ; };
+_Static_assert(sizeof(g_cell) == sizeof(g_word));
+typedef g_core *g_vm(g_core*, g_cell*, g_word*, g_word*);
 
 enum g_var {
   g_var_ip,
@@ -17,23 +23,33 @@ enum g_var {
   g_var_la,
   g_var_N, };
 
+// cores occur in pairs located 2^len words away from each other.
+// the address of the lower core is a pointer to a 2^(len+1) word size
+// block returned by the allocator. the upper core is located 2^len words
+// above the lower core. during operation the active core switches between upper
+// and lower cores, and sometimes is transparently relocated to the lower core
+// of a different pair.
 struct g_core {
-  g_word *hp, *sp;
-  union {
+  g_word *hp, *sp; // heap and stack pointers
+  struct g_symbol *symbols; // symbol tree
+  union { // concrete state variables
+    g_word vars[g_var_N];
     struct {
       union g_cell *ip;
       struct g_table *dict, *macro;
-      struct g_symbol *quote, *begin, *let, *cond, *lambda; };
-    g_word vars[g_var_N]; };
-
-  // symbol tree
-  struct g_symbol *symbols;
-
-  uintptr_t len; // memory pool size
-  g_word *pool;
-  struct root { g_word *ptr; struct root *next; } *safe;
-  union { uintptr_t t0; g_word *cp; }; // gc copy pointer
-  g_word end[]; };
+      struct g_symbol *quote, *begin, *let, *cond, *lambda; }; };
+  // memory pool size
+  uintptr_t len;
+  g_word *pool; // lower core address
+  struct root { // linked list of pointers to values saved by C functions
+    g_word *ptr; // pointer to C stack value
+    struct root *next; } *safe;
+  union { // gc state
+    uintptr_t t0; // end of last gc timestamp
+    g_word *cp; }; // copy pointer
+  g_malloc_t *malloc;
+  g_free_t *free;
+  g_word end[]; }; // end of struct == initial heap pointer for this core
 
 // built in type method tables
 typedef struct g_type {
@@ -50,7 +66,7 @@ typedef struct g_pair {
   g_vm *ap;
   g_type *typ;
   g_word a, b;
-} g_pair, pair;
+} g_pair;
 
 typedef struct g_symbol {
   g_vm *ap;
@@ -74,33 +90,29 @@ typedef struct g_string {
   char text[];
 } g_string, string;
 
+g_malloc_t g_malloc;
+g_free_t g_free;
 
-#define g_free free
-#define g_malloc malloc
 void
   transmit(g_core*, FILE*, g_word);
+
 bool
   neql(g_core*, g_word, g_word),
   eql(g_core*, g_word, g_word);
+
 uintptr_t
   hash(g_core*, g_word),
   g_clock(void);
+
 g_word
   cp(g_core*, g_word, g_word*, g_word*),
   g_hash_get(g_core*, g_word, g_table*, g_word);
+
 g_core
-  *g_read1f(g_core*, FILE*),
   *g_have(g_core*, uintptr_t),
   *g_cells(g_core*, size_t),
-  *g_push(g_core*, uintptr_t, ...),
-  *g_tbl(g_core*),
-  *g_cons_l(g_core*),
-  *g_cons_r(g_core*),
-  *g_ini_m(void *(*)(g_core*, size_t), void (*)(g_core*, void*)),
-  *g_intern(g_core*),
   *g_hash_put(g_core*),
-  *g_hash_put_2(g_core*),
-  *p_readsp(g_core*, g_string*);
+  *gc(g_core*, g_cell*, g_word*, g_word*, uintptr_t);
 
 g_vm
   data, bnot, rng, nullp, sysclock, symnom, dot, self,
@@ -110,23 +122,17 @@ g_vm
   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
   read0, readf, p_isatty, g_yield, defglob, drop1, imm, ref,
   free_variable, curry, ev0, ret0,
-  cond, jump, ap, tap, apl, apn, tapn, ret, late_bind;
+  cond, jump, ap, tap, apn, tapn, ret, late_bind;
 
 #define Vm(n, ...) g_core *n(g_core *f, g_cell* Ip, g_word* Hp, g_word* Sp, ##__VA_ARGS__)
-Vm(gc, uintptr_t);
 
-#define putnum(_) (((g_word)(_)<<1)|1)
-#define getnum(_) ((g_word)(_)>>1)
-#define nil putnum(0)
+#define putnum g_putnum
+#define getnum g_getnum
+#define nil g_nil
 
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
-_Static_assert(nil == g_nil);
 
 #define encode(f, s) ((g_core*)((g_word)(f)|(s)))
-#define core_of g_core_of
-#define code_of g_code_of
-
-#define min(a, b) ((a)<(b)?(a):(b))
 
 #define str(x) ((g_string*)(x))
 #define sym(x) ((g_symbol*)(x))
@@ -141,7 +147,7 @@ _Static_assert(nil == g_nil);
 #define datp(_) (cell(_)->ap==data)
 #define typ(_) cell(_)[1].typ
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
-#define MM(f,r) ((f->safe=&((struct root){(word*)(r),f->safe})))
+#define MM(f,r) ((f->safe=&((struct root){(g_word*)(r),f->safe})))
 #define UM(f) (f->safe=f->safe->next)
 #define pop1(f) (*(f)->sp++)
 #define push1(f, x) (*--(f)->sp=(x))
@@ -158,8 +164,8 @@ _Static_assert(nil == g_nil);
 #define BB(o) B(B(o))
 
 #define mix ((uintptr_t)2708237354241864315)
-#define Have(n) if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n)
-#define Have1() if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1)
+#define Have(n) do {if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n); } while (0)
+#define Have1() do {if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1); } while (0)
 
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
@@ -204,9 +210,6 @@ static Inline struct g_tag { g_cell *null, *head, end[]; } *ttag(g_cell*k) {
   while (k->x) k++;
   return (struct g_tag*) k; }
 
-
 static g_core Inline *g_run(g_core *f) {
   return !g_ok(f) ? f :
     f->ip->ap(f, f->ip, f->hp, f->sp); }
-typedef g_word word;
-typedef g_cell cell;
