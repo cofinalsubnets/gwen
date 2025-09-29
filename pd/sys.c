@@ -1,12 +1,14 @@
 #include "i.h"
-#include "sys.h"
+#include "main.h"
+#include <time.h>
+#include <unistd.h>
 
 void *g_malloc(g_core*f, size_t n) {
+  Pd->system->logToConsole("malloc\n");
   return Pd->system->realloc(NULL, n); }
 
 void g_free(g_core*f, void*x) {
   Pd->system->realloc(x, 0); }
-
 NoInline uintptr_t g_clock(void) {
   return Pd->system->getCurrentTimeMilliseconds(); }
 
