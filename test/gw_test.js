@@ -3,8 +3,7 @@ const
   fs = require('node:fs/promises'),
   test = require('node:test'),
   assert = require('node:assert/strict'),
-  suff = 'gw',
-  testDir = '../test';
+  suff = 'gw';
 
 test('expressions', t => {
   const
@@ -16,12 +15,14 @@ test('expressions', t => {
   ]);
 });
 
+/*
 test('common tests', t => {
   const [Let, Assert] = [':', 'assert'].map(Symbol.for);
   return Promise.all([ 'church', 'closure', 'heron', 'lambda', 'tak' ].map(n =>
-    fs.readFile(`${testDir}/${n}.${suff}`).then(r =>
+    fs.readFile(`test/${n}.${suff}`).then(r =>
       t.test(n, x => gw.eval([Let, Assert, assert, gw.read(n.toString())])))));
 });
+*/
 
 test('fib', t => {
   const

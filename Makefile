@@ -6,10 +6,13 @@ m=Makefile
 n=gw
 x=gw
 
+target ?= host
+built_binary=$(target)/$n
+
 #build
 # c files and headers
-main_h=main.h
-main_c=main.c lcat.c
+main_h=host/main.h
+main_c=host/main.c host/lcat.c
 h=$(filter-out $(main_h), $(wildcard *.h))
 c=$(filter-out $(main_c), $(wildcard *.c))
 
@@ -29,22 +32,21 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
 	 -D g_target=g_target_libc
 
-built_binary=$b
-$(built_binary): $m $h $o $(main_h) main.c
+$(built_binary): $m $h $o $(main_h) host/main.c
 	@echo $@
-	@$(cc) $o main.c -o $@
+	@$(cc) $o host/main.c -o $@
 
 .c.o:
 	@echo $@
 	@$(cc) -c $<
 
-lcat: $m $h $o lcat.c
+host/lcat: $m $h $o host/lcat.c
 	@echo $@
-	@$(cc) $o lcat.c -o $@
+	@$(cc) $o host/lcat.c -o $@
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-$(main_h): lcat main.$x
+$(main_h): host/lcat main.$x
 	@echo $@
 	@./$< <main.$x | $(sed) >$@
 
@@ -91,9 +93,9 @@ tests=$(sort $(wildcard test/*.$x))
 test: test_c
 test_all: test_c test_js
 test_js:
-	cd js && npm test
-test_c: $b
-	@./$b $(tests)
+	npm test
+test_c: $(built_binary)
+	@$(built_binary) $(tests)
 
 clean:
 	rm -rf `git check-ignore * */*`

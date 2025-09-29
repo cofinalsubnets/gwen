@@ -3,20 +3,17 @@
   "version": "0.0.0",
   "description": "list expression interpreter",
   "main": "p.js",
-  "directories": {
-    "test": "../test"
-  },
   "scripts": {
     "test": "node --test"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cofinalsubnets/p.git"
+    "url": "git+https://github.com/cofinalsubnets/gwen.git"
   },
   "author": "gwem <cofinalsubnets@gmail.com>",
   "license": "Unlicense",
   "bugs": {
-    "url": "https://github.com/cofinalsubnets/p/issues"
+    "url": "https://github.com/cofinalsubnets/gwen/issues"
   },
-  "homepage": "https://github.com/cofinalsubnets/p#readme"
+  "homepage": "https://github.com/cofinalsubnets/gwen#readme"
 }
