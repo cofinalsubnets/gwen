@@ -24,7 +24,7 @@ VPATH += ../
 SRC = $(wildcard *.c) $(wildcard ../*.c)
 
 # List all user directories here
-UINCDIR = 
+UINCDIR = ../
 
 # List user asm files
 UASRC = 

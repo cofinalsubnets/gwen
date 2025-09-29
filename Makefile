@@ -7,16 +7,16 @@ n=gw
 x=gw
 
 target ?= host
-built_binary=$(target)/$n
 
 #build
 # c files and headers
 main_h=host/main.h
 main_c=host/main.c host/lcat.c
-h=$(filter-out $(main_h), $(wildcard *.h))
-c=$(filter-out $(main_c), $(wildcard *.c))
+h=$(filter-out $(main_h), $(wildcard *.h) $(wildcard $(target)/*.h))
+c=$(filter-out $(main_c), $(wildcard *.c) $(wildcard $(target)/*.c))
 
-b=$n
+b=$(target)/$n
+built_binary=$b
 o=$(c:.c=.o)
 
 CFLAGS=\
@@ -32,13 +32,13 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
 	 -D g_target=g_target_libc
 
-$(built_binary): $m $h $o $(main_h) host/main.c
+host/$n: $m $h $o $(main_h) host/main.c
 	@echo $@
 	@$(cc) $o host/main.c -o $@
 
 .c.o:
 	@echo $@
-	@$(cc) -c $<
+	@$(cc) -c $< -o $@
 
 host/lcat: $m $h $o host/lcat.c
 	@echo $@

@@ -87,3 +87,9 @@ enum g_status g_fin(g_core *f) {
   enum g_status s = g_code_of(f);
   if ((f = g_core_of(f))) f->free(f, f->pool);
   return s; }
+
+
+Vm(sysclock) {
+  Sp[0] = putnum(g_clock());
+  Ip += 1;
+  return Continue(); }
