@@ -15,6 +15,8 @@ op(bnot, 1, ~Sp[0] | 1)
 op(band, 2, (Sp[0] & Sp[1]) | 1)
 op(bor, 2, (Sp[0] | Sp[1]) | 1)
 op(bxor, 2, (Sp[0] ^ Sp[1]) | 1)
+op(bsr, 2, (Sp[0] >> getnum(Sp[1]) | 1))
+op(bsl, 2, putnum(getnum(Sp[0]) << getnum(Sp[1])))
 op(rng, 1, putnum(rand()))
 op(fixnump, 1, nump(Sp[0]) ? putnum(-1) : nil)
 

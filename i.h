@@ -1,8 +1,21 @@
 // thanks !!
 #include "gw.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+#define g_target_libc 0
+#ifndef g_target
+#define g_target g_target_libc
+#endif
+
+#if g_target == g_target_libc
+#include <stdio.h>
+typedef FILE g_file;
+#define g_stdout stdout
+#define g_stdin stdin
+#define g_stderr stderr
+#endif
+
 
 union g_cell {
   g_core *(*ap)(g_core*, g_cell*, g_word*, g_word*);
@@ -56,7 +69,7 @@ typedef struct g_type {
   g_word (*cp)(g_core*, g_word, g_word*, g_word*); // for gc
   void (*wk)(g_core*, g_word, g_word*, g_word*);
   bool (*eq)(g_core*, g_word, g_word);
-  g_core *(*em)(g_core*, FILE*, g_word);
+  g_core *(*em)(g_core*, g_file*, g_word);
   uintptr_t (*xx)(g_core*, g_word);
   g_vm *ap;
   g_core *(*show)(g_core*, g_word);
@@ -94,7 +107,7 @@ g_malloc_t g_malloc;
 g_free_t g_free;
 
 void
-  transmit(g_core*, FILE*, g_word);
+  transmit(g_core*, g_file*, g_word);
 
 bool
   neql(g_core*, g_word, g_word),
@@ -115,8 +128,9 @@ g_core
   *gc(g_core*, g_cell*, g_word*, g_word*, uintptr_t);
 
 g_vm
-  data, bnot, rng, nullp, sysclock, symnom, dot, self,
+  data, rng, nullp, sysclock, symnom, dot, self,
   gensym, pairp, fixnump, symbolp, stringp,
+  band, bor, bxor, bsr, bsl, bnot,
   ssub, sget, slen, scat, prc, cons, car, cdr,
   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,

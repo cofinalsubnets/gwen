@@ -15,7 +15,7 @@ typedef struct text_input {
 
 typedef struct file_input {
   g_input in;
-  FILE *file;
+  g_file *file;
 } file_input;
 
 static int p_text_getc(g_input *i) {
@@ -48,11 +48,11 @@ static Inline int p_in_getc(input *i) { return i->getc(i); }
 static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
 static Inline int p_in_eof(input *i) { return i->eof(i); }
 
-static NoInline g_core *g_read1f(g_core *f, FILE*i) {
+static NoInline g_core *g_read1f(g_core *f, g_file*i) {
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   return g_read1i(f, (input*) &fi); }
 
-g_core *g_read1(g_core *f) { return g_read1f(f, stdin); }
+g_core *g_read1(g_core *f) { return g_read1f(f, g_stdin); }
 
 ////
 /// " the parser "
@@ -103,11 +103,7 @@ static g_core *g_read1i(g_core *f, input* i) {
     case '(':  return g_readsi(f, i);
     case ')':  return g_push(f, 1, nil);
     case EOF:  return encode(f, g_status_eof);
-    case '\'':
-      f = g_push(f, 2, nil, f->quote);
-      f = g_read1i(f, i);
-      f = g_cons_l(f);
-      return g_cons_r(f);
+    case '\'': return g_cons_r(g_cons_l(g_read1i(g_push(f, 2, nil, f->quote), i)));
     case '"':  
       f = g_buf_new(f);
       for (size_t lim = sizeof(g_word); g_ok(f); f = g_buf_grow(f), lim *= 2)
@@ -137,7 +133,7 @@ static g_core *g_read1i(g_core *f, input* i) {
 
 Vm(read0) {
   Pack(f);
-  f = g_read1f(f, stdin);
+  f = g_read1f(f, g_stdin);
   if (g_code_of(f) == g_status_eof) return // no error but end of file
     f = g_core_of(f),
     Unpack(f),
@@ -154,7 +150,7 @@ static NoInline g_core *g_readsf(g_core *f) {
   char n[256]; // :)
   memcpy(n, s->text, s->len);
   n[s->len] = 0;
-  FILE *i = fopen(n, "r");
+  g_file *i = fopen(n, "r");
   if (!i) return g_push(f, 1, nil);
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   f = g_readsi(f, (input*) &fi);

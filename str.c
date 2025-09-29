@@ -14,7 +14,7 @@ g_core *g_strof(g_core *f, const char *cs) {
 
 static uintptr_t xx_str(g_core *v, g_word _);
 static bool eq_str(g_core *f, g_word x, g_word y);
-static g_core *em_str(g_core* v, FILE *o, g_word _);
+static g_core *em_str(g_core* v, g_file *o, g_word _);
 static void wk_str(g_core* f, g_word x, g_word *p0, g_word *t0);
 static g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0);
 
@@ -34,7 +34,7 @@ static g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0) {
 static void wk_str(g_core* f, g_word x, g_word *p0, g_word *t0) {
   f->cp += Width(string) + b2w(str(x)->len); }
 
-static g_core *em_str(g_core* v, FILE *o, g_word _) {
+static g_core *em_str(g_core* v, g_file *o, g_word _) {
   size_t len = str(_)->len;
   const char *text = str(_)->text;
   putc('"', o);

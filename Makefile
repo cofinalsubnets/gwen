@@ -26,7 +26,8 @@ CFLAGS=\
   -falign-functions
 
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
-	 -D g_version='"$(shell git rev-parse HEAD)"'
+	 -D g_version='"$(shell git rev-parse HEAD)"'\
+	 -D g_target=g_target_libc
 
 built_binary=$b
 $(built_binary): $m $h $o $(main_h) main.c

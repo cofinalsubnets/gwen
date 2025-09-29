@@ -1,7 +1,7 @@
 #include "i.h"
 static uintptr_t xx_two(g_core*, g_word);
 static void wk_two(g_core*, g_word, g_word*, g_word*);
-static g_core * em_two(g_core*, FILE*, g_word);
+static g_core * em_two(g_core*, g_file*, g_word);
 static bool eq_two(g_core*, g_word, g_word);
 
 // FIXME could overflow the stack -- use off pool for this
@@ -30,7 +30,7 @@ static uintptr_t xx_two(g_core *f, g_word x) {
   uintptr_t hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-static g_core *em_two(g_core *f, FILE *o, g_word x) {
+static g_core *em_two(g_core *f, g_file *o, g_word x) {
   if (A(x) == word(f->quote) && twop(B(x)))
     putc('\'', o),
     transmit(f, o, AB(x));
