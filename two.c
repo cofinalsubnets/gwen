@@ -1,7 +1,7 @@
 #include "i.h"
 static uintptr_t xx_two(g_core*, g_word);
 static void wk_two(g_core*, g_word, g_word*, g_word*);
-static g_core * em_two(g_core*, g_file*, g_word);
+static g_core * em_two(g_core*, g_file, g_word);
 static bool eq_two(g_core*, g_word, g_word);
 
 // FIXME could overflow the stack -- use off pool for this
@@ -30,13 +30,13 @@ static uintptr_t xx_two(g_core *f, g_word x) {
   uintptr_t hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-static g_core *em_two(g_core *f, g_file *o, g_word x) {
+static g_core *em_two(g_core *f, g_file o, g_word x) {
   if (A(x) == word(f->quote) && twop(B(x)))
-    putc('\'', o),
+    g_fputc('\'', o),
     transmit(f, o, AB(x));
-  else for (putc('(', o);; putc(' ', o)) {
+  else for (g_fputc('(', o);; g_fputc(' ', o)) {
     transmit(f, o, A(x));
-    if (!twop(x = B(x))) { putc(')', o); break; } }
+    if (!twop(x = B(x))) { g_fputc(')', o); break; } }
   return f; }
 
 Vm(car) {

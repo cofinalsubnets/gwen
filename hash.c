@@ -23,7 +23,7 @@ uintptr_t hash(g_core *f, g_word x) {
   g_word len = (g_cell*) t - t->head;
   return mix ^ (mix * len); }
 
-static g_core* em_tbl(g_core*, g_file*, g_word);
+static g_core* em_tbl(g_core*, g_file, g_word);
 static void wk_tbl(g_core*, g_word, g_word*, g_word*);
 static g_word cp_tbl(g_core*, g_word, g_word*, g_word*);
 static uintptr_t xx_tbl(g_core*, g_word);
@@ -36,9 +36,9 @@ g_type tbl_type = {
   .ap = self,
   .em = em_tbl, };
 
-static g_core *em_tbl(g_core *f, g_file *o, g_word x) {
+static g_core *em_tbl(g_core *f, g_file o, g_word x) {
   g_table *t = (g_table*) x;
-  fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x);
+  g_fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x);
   return f; }
 
 static void wk_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {

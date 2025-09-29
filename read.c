@@ -1,22 +1,11 @@
 #include "i.h"
 #include <string.h>
 
-typedef struct g_input {
-  int (*getc)(struct g_input*),
-      (*ungetc)(struct g_input*, int),
-      (*eof)(struct g_input*);
-} g_input, input;
-
 typedef struct text_input {
   g_input in;
   const char *text;
   int i;
 } text_input;
-
-typedef struct file_input {
-  g_input in;
-  g_file *file;
-} file_input;
 
 static int p_text_getc(g_input *i) {
   text_input *t = ((text_input*) i);
@@ -35,8 +24,6 @@ static int p_text_eof(g_input *i) {
   text_input *t = (text_input*) i;
   return !t->text[t->i]; }
 
-static g_core *g_readsi(g_core *f, input* i);
-static g_core *g_read1i(g_core*, input*);
 
 NoInline g_core *g_read1s(g_core *f, const char *cs) {
   f = g_readss(f, cs);
@@ -48,18 +35,7 @@ NoInline g_core *g_readss(g_core *f, const char *cs) {
   f = g_readsi(f, (input*) &t);
   return f; }
 
-static int p_file_getc(input *i) { return getc(((file_input*) i)->file); }
-static int p_file_ungetc(input *i, int c) { return ungetc(c, ((file_input*) i)->file); }
-static int p_file_eof(input *i) { return feof(((file_input*) i)->file); }
-static Inline int p_in_getc(input *i) { return i->getc(i); }
-static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
-static Inline int p_in_eof(input *i) { return i->eof(i); }
 
-static NoInline g_core *g_read1f(g_core *f, g_file*i) {
-  file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
-  return g_read1i(f, (input*) &fi); }
-
-g_core *g_read1(g_core *f) { return g_read1f(f, g_stdin); }
 
 ////
 /// " the parser "
@@ -91,7 +67,7 @@ static g_core *g_buf_grow(g_core *f) {
   return f; }
 
 
-static g_core *g_readsi(g_core *f, input* i) {
+g_core *g_readsi(g_core *f, input* i) {
   intptr_t n = 0;
   for (int c; g_ok(f); n++) {
     c = read_char(i);
@@ -102,7 +78,7 @@ static g_core *g_readsi(g_core *f, input* i) {
   return f; }
 
 
-static g_core *g_read1i(g_core *f, input* i) {
+g_core *g_read1i(g_core *f, input* i) {
   if (!g_ok(f)) return f;
   int c = read_char(i);
   size_t n = 0;
@@ -137,42 +113,3 @@ static g_core *g_read1i(g_core *f, input* i) {
               else f = g_intern(f);
               return f; }
       return f; } }
-
-Vm(read0) {
-  Pack(f);
-  f = g_read1f(f, g_stdin);
-  if (g_code_of(f) == g_status_eof) return // no error but end of file
-    f = g_core_of(f),
-    Unpack(f),
-    Ip += 1,
-    Continue();
-  f = g_cons_l(f);
-  if (!g_ok(f)) return f;
-  Unpack(f);
-  Ip += 1;
-  return Continue(); }
-
-static NoInline g_core *g_readsf(g_core *f) {
-  string *s = (string*) pop1(f);
-  char n[256]; // :)
-  memcpy(n, s->text, s->len);
-  n[s->len] = 0;
-  g_file *i = fopen(n, "r");
-  if (!i) return g_push(f, 1, nil);
-  file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
-  f = g_readsi(f, (input*) &fi);
-  fclose(i);
-  return f; }
-
-Vm(readf) {
-  string *s = str(Sp[0]);
-  if (!strp(Sp[0]) || s->len > 255) return
-    Sp[0] = nil,
-    Ip += 1,
-    Continue();
-  Pack(f);
-  f = g_readsf(f);
-  if (!g_ok(f)) return f;
-  Unpack(f);
-  Ip += 1;
-  return Continue(); }

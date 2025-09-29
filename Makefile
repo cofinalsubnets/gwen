@@ -30,7 +30,7 @@ CFLAGS=\
 
 cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
-	 -D g_target=g_target_libc
+	 -D g_target=g_target_$(target)
 
 host/$n: $m $h $o $(main_h) host/main.c
 	@echo $@

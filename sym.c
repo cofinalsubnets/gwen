@@ -63,7 +63,7 @@ Vm(symnom) {
 static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
 static uintptr_t xx_sym(g_core *v, g_word _);
 static void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
-static g_core * em_sym(g_core *f, g_file *o, g_word x),
+static g_core * em_sym(g_core *f, g_file o, g_word x),
               *show_sym(g_core*, g_word);
 g_type sym_type = {
   .xx = xx_sym,
@@ -86,10 +86,10 @@ static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
 static void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
-static g_core *em_sym(g_core *f, g_file *o, g_word x) {
+static g_core *em_sym(g_core *f, g_file o, g_word x) {
   string* s = sym(x)->nom;
-  if (s) for (int i = 0; i < s->len; putc(s->text[i++], o));
-  else fprintf(o, "#sym@%lx", (long) x);
+  if (s) for (int i = 0; i < s->len; g_fputc(s->text[i++], o));
+  else g_fprintf(o, "#sym@%lx", (long) x);
   return f; }
 
 static g_core*show_sym(g_core*f,g_word x) {

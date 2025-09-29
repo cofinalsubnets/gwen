@@ -1,20 +1,35 @@
 // thanks !!
+#ifndef _g_i_h
+#define _g_i_h
 #include "gw.h"
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define g_target_libc 0
+#define g_target_host 0
+#define g_target_pd 1
 #ifndef g_target
-#define g_target g_target_libc
+#define g_target g_target_host
 #endif
 
-#if g_target == g_target_libc
+#if g_target == g_target_host
 #include <stdio.h>
-typedef FILE g_file;
+typedef FILE *g_file;
 #define g_stdout stdout
 #define g_stdin stdin
 #define g_stderr stderr
+#define g_fprintf fprintf
+#define g_fputc putc
+#elif g_target == g_target_pd
+#include "pd_api.h"
+typedef int g_file;
+#define g_stdin  0
+#define g_stdout 1
+#define g_stderr 2
+#define g_fprintf(_, ...) Pd->system->logToConsole(__VA_ARGS__)
+#define g_fputc(c, _) Pd->system->logToConsole("%c", (int) c)
+extern PlaydateAPI *Pd;
 #endif
+
 
 
 union g_cell {
@@ -69,7 +84,7 @@ typedef struct g_type {
   g_word (*cp)(g_core*, g_word, g_word*, g_word*); // for gc
   void (*wk)(g_core*, g_word, g_word*, g_word*);
   bool (*eq)(g_core*, g_word, g_word);
-  g_core *(*em)(g_core*, g_file*, g_word);
+  g_core *(*em)(g_core*, g_file, g_word);
   uintptr_t (*xx)(g_core*, g_word);
   g_vm *ap;
   g_core *(*show)(g_core*, g_word);
@@ -107,7 +122,7 @@ g_malloc_t g_malloc;
 g_free_t g_free;
 
 void
-  transmit(g_core*, g_file*, g_word);
+  transmit(g_core*, g_file, g_word);
 
 bool
   neql(g_core*, g_word, g_word),
@@ -135,7 +150,7 @@ g_vm
   ssub, sget, slen, scat, prc, cons, car, cdr,
   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-  read0, readf, p_isatty, g_yield, defglob, drop1, imm, ref,
+  g_yield, defglob, drop1, imm, ref,
   free_variable, curry, ev0, ret0,
   cond, jump, ap, tap, apn, tapn, ret, late_bind;
 
@@ -228,3 +243,15 @@ static Inline struct g_tag { g_cell *null, *head, end[]; } *ttag(g_cell*k) {
 static g_core Inline *g_run(g_core *f) {
   return !g_ok(f) ? f :
     f->ip->ap(f, f->ip, f->hp, f->sp); }
+
+typedef struct g_input {
+  int (*getc)(struct g_input*),
+      (*ungetc)(struct g_input*, int),
+      (*eof)(struct g_input*);
+} g_input, input;
+static Inline int p_in_getc(input *i) { return i->getc(i); }
+static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
+static Inline int p_in_eof(input *i) { return i->eof(i); }
+g_core *g_read1i(g_core*, g_input*),
+       *g_readsi(g_core*, input*);
+#endif
