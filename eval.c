@@ -99,9 +99,14 @@ g_core *g_eval(g_core *f) {
   return g_run(g_ana(f, g_yield)); }
 
 NoInline g_core *g_apply(g_core *f) {
-  if (!g_ok(f)) return f;
-  g_cell ip[] = {{ap}, {g_yield}, {.m = f->ip}};
-  return ap(f, ip, f->hp, f->sp); }
+  f = mo_c(f, 3);
+  if (g_ok(f)) {
+    g_cell *k = (g_cell*) pop1(f);
+    k[0].ap = ap;
+    k[1].ap = g_yield;
+    k[2].m = f->ip;
+    f = ap(f, k, f->hp, f->sp); }
+  return f; }
 
 NoInline Vm(ev0) {
   Ip += 1;
