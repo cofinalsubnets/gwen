@@ -46,6 +46,14 @@ static g_core *g_symof(g_core *f, const char *nom) {
 static g_core *g_ini_def(g_core *f, const char *k, g_word v) {
   return g_hash_put(g_symof(g_push(f, 1, v), k)); }
 
+g_core *g_define(g_core *f, const char *s) {
+  f = g_intern(g_strof(g_push(f, 1, f->dict), s));
+  if (!g_ok(f)) return f;
+  g_word w = f->sp[1];
+  f->sp[1] = f->sp[2];
+  f->sp[2] = w;
+  return g_pop(g_hash_put(f), 1); }
+
 struct g_core *g_ini_m(g_malloc_t *g_malloc, g_free_t *g_free) {
   const size_t len0 = 1 << 10;
   struct g_core *f = g_malloc(NULL, 2 * len0 * sizeof(g_word));

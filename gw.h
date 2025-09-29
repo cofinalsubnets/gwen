@@ -21,6 +21,7 @@ g_core
   *g_readss(g_core*, const char*),
   *g_eval(g_core*),
   *g_evals(g_core*, const char*),
+  *g_define(g_core*, const char*),
   *g_apply(g_core*),
   *g_read1(g_core*),
   *g_write1(g_core*),

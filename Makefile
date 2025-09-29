@@ -10,7 +10,7 @@ target ?= host
 
 #build
 # c files and headers
-main_h=host/main.h
+main_h=host/main.h boot.h
 main_c=host/main.c host/lcat.c
 h=$(filter-out $(main_h), $(wildcard *.h) $(wildcard $(target)/*.h))
 c=$(filter-out $(main_c), $(wildcard *.c) $(wildcard $(target)/*.c))
@@ -46,9 +46,13 @@ host/lcat: $m $h $o host/lcat.c
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-$(main_h): host/lcat main.$x
+host/main.h: host/lcat main.$x
 	@echo $@
-	@./$< <main.$x | $(sed) >$@
+	@$< <main.$x | $(sed) >$@
+
+boot.h: host/lcat boot.$x
+	@echo $@
+	@$< <boot.$x | $(sed) > $@
 
 built_manpage=$n.1
 $(built_manpage): $0 manpage.$x
