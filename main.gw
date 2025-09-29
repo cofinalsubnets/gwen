@@ -331,6 +331,7 @@
                             (each (readf a) ev))
               (? as (go (A as) (B as))))
 
+ (,
  (? args       (go (A args) (B args)) ; if any cli args then process them
     (isatty 0) (repl prompt) ; else if attached to a tty then start a repl
-               (rel 0)))))))
+               (rel 0))))))))

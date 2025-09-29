@@ -18,7 +18,9 @@ g_free_t g_free;
 g_core
   *g_ini_m(g_malloc_t*, g_free_t*),
   *g_read1s(g_core*, const char*),
+  *g_readss(g_core*, const char*),
   *g_eval(g_core*),
+  *g_evals(g_core*, const char*),
   *g_apply(g_core*),
   *g_read1(g_core*),
   *g_write1(g_core*),

@@ -22,7 +22,7 @@ static int p_text_getc(g_input *i) {
   text_input *t = ((text_input*) i);
   char c = t->text[t->i];
   if (c) t->i++;
-  return c; }
+  return c ? c : EOF; }
 
 static int p_text_ungetc(g_input *i, int _) {
   text_input *t = ((text_input*) i);
@@ -37,9 +37,16 @@ static int p_text_eof(g_input *i) {
 
 static g_core *g_readsi(g_core *f, input* i);
 static g_core *g_read1i(g_core*, input*);
+
 NoInline g_core *g_read1s(g_core *f, const char *cs) {
+  f = g_readss(f, cs);
+  if (g_ok(f)) f->sp[0] = A(f->sp[0]);
+  return f; }
+
+NoInline g_core *g_readss(g_core *f, const char *cs) {
   text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
-  return g_read1i(f, (input*) &t); }
+  f = g_readsi(f, (input*) &t);
+  return f; }
 
 static int p_file_getc(input *i) { return getc(((file_input*) i)->file); }
 static int p_file_ungetc(input *i, int c) { return ungetc(c, ((file_input*) i)->file); }

@@ -83,7 +83,7 @@ static g_core *ana_ix(g_core *f, g_vm *i, g_word x) {
   return g_push(f, 3, cata_ix, i, x); }
 
 // keep this separate and NoInline so g_eval can be tail call optimized if possible
-static NoInline g_core *g_ana(g_core *f, g_vm *y) {
+NoInline g_core *g_ana(g_core *f, g_vm *y) {
   f = enscope(f, (env*) nil, nil, nil);
   if (!g_ok(f)) return f;
   env *c = (env*) pop1(f);
@@ -458,3 +458,8 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
 
   f = analyze(f, b, exp);
   return forget(); }
+
+g_core *g_evals(g_core *f, const char *s) {
+  f = g_read1s(f, "(:(r x y)(? y(r(ev'ev(A y))(B y))x)r)");
+  f = g_push(f, 4, nil, f->quote, nil, nil);
+  return g_eval(g_cons_r(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_readss(f, s))))))); }

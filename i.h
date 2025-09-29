@@ -122,6 +122,7 @@ g_word
   g_hash_get(g_core*, g_word, g_table*, g_word);
 
 g_core
+  *g_ana(g_core *, g_vm*),
   *g_have(g_core*, uintptr_t),
   *g_cells(g_core*, size_t),
   *g_hash_put(g_core*),
