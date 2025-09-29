@@ -27,7 +27,6 @@ typedef int g_file;
 #define g_stderr 2
 #define g_fprintf(_, ...) Pd->system->logToConsole(__VA_ARGS__)
 #define g_fputc(c, _) Pd->system->logToConsole("%c", (int) c)
-extern PlaydateAPI *Pd;
 #endif
 
 
