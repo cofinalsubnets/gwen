@@ -28,6 +28,7 @@ g_vm g_buttons,
      theta,
      g_get_glyph,
      g_put_glyph,
+     g_fps,
      g_clear;
 
 extern uint8_t font_8x8[256][8];

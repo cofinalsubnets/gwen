@@ -1,6 +1,7 @@
 # gwen lisp
 
-gwen lisp is a simple lisp dialect inspired by haskell and scheme.
+gwen lisp is a simple lisp dialect inspired by haskell and scheme
+that runs on unix-like systems and also on the playdate game console.
 
 ## features
 - integers, symbols, strings, pairs, hash tables, and functions

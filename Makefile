@@ -55,7 +55,7 @@ boot.h: host/lcat boot.$x
 	@$< <boot.$x | $(sed) > $@
 
 built_manpage=$n.1
-$(built_manpage): $0 manpage.$x
+$(built_manpage): host/$n manpage.$x
 	@echo $@
 	@./$^ > $@
 
@@ -128,8 +128,11 @@ repl: $b
 serve:
 	darkhttpd .
 
+pdx:
+	make -C pd
+
 .PHONY: \
   all install uninstall \
   test test_all test_c test_js test_tr test_tc \
 	clean valg sloc bits disasm perf repl serve \
-	default_target
+	default_target pdx

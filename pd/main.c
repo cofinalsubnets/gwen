@@ -65,6 +65,7 @@ static const union g_cell
   bif_put_glyph[] = {{g_put_glyph}, {ret0}},
   bif_clear[] = {{g_clear}, {ret0}},
   bif_buttons[] = {{g_buttons}, {ret0}},
+  bif_fps[] = {{g_fps}, {ret0}},
   bif_fb_get[] = { {curry}, {.x = putnum(2)}, {fb_get}, {ret0}},
   bif_fb_put[] = { {curry}, {.x = putnum(3)}, {fb_put}, {ret0}};
 
@@ -84,7 +85,7 @@ void gg_free(g_core*f, void*x) {
 static g_core *g_pd_init(void) {
   g_core *f;
   f = g_ini_m(gg_malloc, gg_free);
-  f = g_push(f, 9,
+  f = g_push(f, 10,
       bif_cur_h,
       bif_cur_v,
       bif_theta,
@@ -93,6 +94,7 @@ static g_core *g_pd_init(void) {
       bif_clear,
       bif_fb_put,
       bif_fb_get,
+      bif_fps,
       bif_buttons);
   g_dbg(f);
   f = g_define(f, "cursor_h");
@@ -103,6 +105,7 @@ static g_core *g_pd_init(void) {
   f = g_define(f, "clear");
   f = g_define(f, "fb_put");
   f = g_define(f, "fb_get");
+  f = g_define(f, "get_fps");
   f = g_define(f, "get_buttons");
 
   const char prog[] = "(,"
