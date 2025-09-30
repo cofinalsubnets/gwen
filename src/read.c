@@ -1,5 +1,4 @@
 #include "i.h"
-#include <string.h>
 
 typedef struct text_input {
   g_input in;

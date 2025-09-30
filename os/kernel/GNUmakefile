@@ -83,6 +83,8 @@ override CFLAGS += \
 override CPPFLAGS := \
     -I src \
     -I limine-protocol/include \
+		-I ../../src \
+		-Dg_target=g_target_free \
     -isystem freestnd-c-hdrs/include \
     $(CPPFLAGS) \
     -DLIMINE_API_REVISION=3 \
@@ -172,7 +174,7 @@ override LDFLAGS += \
 # Use "find" to glob all *.c, *.S, and *.asm files in the tree
 # (except the src/arch/* directories, as those are gonna be added
 # in the next step).
-override SRCFILES := $(shell find -L src cc-runtime/src -type f -not -path 'src/arch/*' 2>/dev/null | LC_ALL=C sort)
+override SRCFILES := $(shell find -L src cc-runtime/src ../../src -type f -not -path 'src/arch/*' 2>/dev/null | LC_ALL=C sort)
 # Add architecture specific files, if they exist.
 override SRCFILES += $(shell find -L src/arch/$(ARCH) -type f 2>/dev/null | LC_ALL=C sort)
 # Obtain the object and header dependencies file names.

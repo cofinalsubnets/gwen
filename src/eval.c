@@ -1,5 +1,4 @@
 #include "i.h"
-#include <string.h>
 
 static g_core *mo_c(g_core *f, size_t n) {
   f = g_cells(f, n + Width(struct g_tag));

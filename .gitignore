@@ -12,3 +12,4 @@ host/main.h
 src/boot.h
 lcat
 gw
+os/src

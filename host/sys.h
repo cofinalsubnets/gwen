@@ -2,6 +2,7 @@
 #define _g_host_sys_h
 #include "i.h"
 #include <stdio.h>
+#include <stdlib.h>
 typedef FILE *g_file;
 #define g_stdout stdout
 #define g_stdin stdin

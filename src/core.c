@@ -1,5 +1,5 @@
 #include "i.h"
-#include <string.h>
+void *memset(void*, int, size_t);
 
 #ifndef g_version
 #define g_version ""
@@ -14,7 +14,6 @@
   _(bif_lt, "<", S2(lt))  _(bif_le, "<=", S2(le)) _(bif_eq, "=", S2(eq)) _(bif_ge, ">=", S2(ge))  _(bif_gt, ">", S2(gt)) \
   _(bif_bnot, "~", S1(bnot)) _(bif_bsl, "<<", S2(bsl)) _(bif_bsr, ">>", S2(bsr))\
   _(bif_band, "&", S2(band)) _(bif_bor, "|", S2(bor)) _(bif_bxor, "^", S2(bxor))\
-  _(bif_rand, "rand", S1(rng)) \
   _(bif_cons, "X", S2(cons)) _(bif_car, "A", S1(car)) _(bif_cdr, "B", S1(cdr)) \
   _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \
   _(bif_dot, ".", S1(dot)) _(bif_putc, "putc", S1(prc)) \
@@ -85,9 +84,9 @@ struct g_core *g_ini_m(g_malloc_t *g_malloc, g_free_t *g_free) {
   f = g_ini_def(f, "macros", (g_word) f->macro);
   f = g_ini_def(f, "globals", (g_word) f->dict);
   f = g_hash_put(g_symof(g_strof(f, g_version), "version"));
-  for (int i = 0; i < LEN(bifff); i++)
+  for (size_t i = 0; i < LEN(bifff); i++)
     f = g_ini_def(f, bifff[i].n, (g_word) bifff[i].x);
-  for (int i = 0; i < LEN(i_dict); i++)
+  for (size_t i = 0; i < LEN(i_dict); i++)
     f = g_ini_def(f, i_dict[i].n, (g_word) i_dict[i].i);
   return g_pop(f, 1); }
 

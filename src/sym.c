@@ -1,5 +1,4 @@
 #include "i.h"
-#include <string.h>
 
 static Inline void ini_sym(symbol *y, string *nom, uintptr_t code) {
   y->ap = data;
@@ -48,7 +47,7 @@ Vm(gensym) {
   Have(req);
   symbol *y = (symbol*) Hp;
   Hp += req;
-  ini_anon(y, rand());
+  ini_anon(y, g_clock());
   Sp[0] = word(y);
   Ip += 1;
   return Continue(); }

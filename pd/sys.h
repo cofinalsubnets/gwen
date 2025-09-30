@@ -1,6 +1,7 @@
 #ifndef _g_pd_sys_h
 #define _g_pd_sys_h
 #include "pd_api.h"
+#include <stdlib.h>
 typedef int g_file;
 #define g_stdin  0
 #define g_stdout 1

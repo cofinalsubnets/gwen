@@ -1,5 +1,4 @@
 #include "i.h"
-#include <string.h>
 
 Vm(seek) {
   Sp[1] = word(((g_cell*) Sp[1]) + getnum(Sp[0]));

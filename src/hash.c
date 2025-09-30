@@ -1,5 +1,4 @@
 #include "i.h"
-#include <string.h>
 
 g_core *g_tbl(g_core *f) {
   f = g_cells(f, Width(g_table) + 1);

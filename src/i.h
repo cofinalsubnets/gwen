@@ -2,14 +2,14 @@
 #ifndef _g_i_h
 #define _g_i_h
 #include "gw.h"
-#include <stdlib.h>
 #include <stdbool.h>
 
 #define g_target_host 0
 #define g_target_pd 1
+#define g_target_free 2
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
-#if g_target == g_target_host
+#if g_target == g_target_host || g_target == g_target_free
 #define Vm(n, ...) g_core *n(g_core *f, g_cell *Ip, g_word *Hp, g_word *Sp, ##__VA_ARGS__)
 #define YieldStatus g_status_ok
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
@@ -80,7 +80,21 @@ struct g_core {
 #include "../host/sys.h"
 #elif g_target == g_target_pd
 #include "../pd/sys.h"
+#elif g_target == g_target_free
+typedef int g_file;
+#define g_stdin 0
+#define g_stdout 1
+#define g_stderr 2
+#define g_fprintf(...) ((void)0)
+#define g_fputc(...) ((void)0)
+#define EOF (-1)
 #endif
+
+void *memcpy(void *restrict, const void*restrict, size_t),
+     *memset(void*, int, size_t);
+long strtol(const char*restrict, char**restrict, int);
+size_t strlen(const char*);
+int strncmp(const char*, const char*, size_t);
 
 // built in type method tables
 typedef struct g_type {
@@ -147,7 +161,7 @@ g_core
   *g_hash_put(g_core*);
 
 g_vm
-  data, rng, nullp, sysclock, symnom, dot, self,
+  data, nullp, sysclock, symnom, dot, self,
   gensym, pairp, fixnump, symbolp, stringp,
   band, bor, bxor, bsr, bsl, bnot,
   ssub, sget, slen, scat, prc, cons, car, cdr,

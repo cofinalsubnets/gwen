@@ -1,5 +1,4 @@
 #include "i.h"
-#include <string.h>
 
 g_core *g_strof(g_core *f, const char *cs) {
   size_t bytes = strlen(cs),
