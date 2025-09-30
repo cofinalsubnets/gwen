@@ -10,7 +10,7 @@ target ?= host
 
 #build
 # c files and headers
-main_h=host/main.h boot.h
+main_h=host/main.h src/boot.h
 main_c=host/main.c host/lcat.c
 h=$(filter-out $(main_h), $(wildcard *.h) $(wildcard $(target)/*.h))
 c=$(filter-out $(main_c), $(wildcard *.c) $(wildcard $(target)/*.c))
@@ -32,17 +32,15 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
 	 -D g_target=g_target_$(target)
 
-host/$n: $m $h $o $(main_h) host/main.c
-	@echo $@
-	@$(cc) $o host/main.c -o $@
+host/$n:
+	@make -C host $n
 
 .c.o:
 	@echo $@
 	@$(cc) -c $< -o $@
 
-host/lcat: $m $h $o host/lcat.c
-	@echo $@
-	@$(cc) $o host/lcat.c -o $@
+host/lcat:
+	make -C host lcat
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
@@ -50,9 +48,9 @@ host/main.h: host/lcat main.$x
 	@echo $@
 	@$< <main.$x | $(sed) >$@
 
-boot.h: host/lcat boot.$x
+src/boot.h: host/lcat src/boot.$x
 	@echo $@
-	@$< <boot.$x | $(sed) > $@
+	@$< <src/boot.$x | $(sed) > $@
 
 built_manpage=$n.1
 $(built_manpage): host/$n manpage.$x

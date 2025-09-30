@@ -5,7 +5,7 @@
 #include "font.h"
 
 static const char boot[] =
-#include "boot.h"
+#include "../src/boot.h"
 ;
 
 g_core *G = NULL;

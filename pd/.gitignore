@@ -1,3 +1,4 @@
 build
 *.pdx
 pdex.elf
+./src
