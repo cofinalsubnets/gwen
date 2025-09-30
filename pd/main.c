@@ -17,18 +17,11 @@ static void draw_glyph_buffer(void);
 
 static int g_update(void *userdata) {
 	Pd = userdata;
-
-  g_core *f = G;
-  f = g_strof(f, "update");
-  f = g_intern(f);
-  f = g_eval(f);
-  f = g_push(f, 1, nil);
-  f = g_apply(f);
-  G = g_pop(f, 1);
+  G = g_pop(g_evals(G, "(update 0)"), 1);
   draw_glyph_buffer();
 	return 1; }
 
-static void g_dbg(g_core*f) {
+void g_dbg(g_core*f) {
   if (!g_ok(f) || !f)
     Pd->system->logToConsole("f@%lx\n", f);
   else Pd->system->logToConsole(
@@ -113,7 +106,7 @@ static g_core *g_pd_init(void) {
   f = g_define(f, "get_buttons");
   g_dbg(f);
 
-  f = g_evals(f, boot);
+//  f = g_evals(f, boot);
 
   const char prog[] = "(,"
    "(fb_put 1 1 99)"
@@ -140,11 +133,13 @@ static g_core *g_pd_init(void) {
   g_dbg(f);
   return f; }
 
+static void g_boot_cb(void *u) {
+  G = g_pop(g_evals(G, boot), 1); }
+
 static void g_reset_cb(void *id) {
   g_fb_clear();
   g_fin(G);
-  G = g_pd_init();
-}
+  G = g_pd_init(); }
 
 
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
@@ -159,17 +154,20 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       static const char *options[] = { "draw", "life", "shell"};
       screen_menu_item = pd->system->addOptionsMenuItem("screen", options, 3, g_screen_cb, NULL);
       pd->system->addMenuItem("reset", g_reset_cb, NULL);
+      pd->system->addMenuItem("boot", g_boot_cb, NULL);
       break;
     default:
+      /*
       f = G;
-      f = g_strof(f, "event");
-      f = g_intern(f);
+      f = g_evals(f, "event");
+      f = g_push(f, 3, nil, putnum(arg), putnum(event));
+      f = g_cons_r(f);
+      f = g_cons_r(f);
+      f = g_cons_r(f);
+      f = g_cons_r(f);
       f = g_eval(f);
-      f = g_push(f, 1, putnum(event));
-      f = g_apply(f);
-      f = g_push(f, 1, putnum(arg));
-      f = g_apply(f);
       G = g_pop(f, 1);
+      */
       break; }
 
 	return 0; }

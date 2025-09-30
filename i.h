@@ -247,4 +247,5 @@ g_core *g_read1i(g_core*, g_input*),
        *g_run(g_core*),
        *g_readsi(g_core*, input*);
 
+void g_dbg(g_core*);
 #endif

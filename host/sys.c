@@ -72,3 +72,4 @@ g_core *g_read1(g_core *f) { return g_read1f(f, g_stdin); }
 
 Inline g_core *g_run(g_core *f) {
   return !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp); }
+void g_dbg(g_core*f){}

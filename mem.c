@@ -57,11 +57,15 @@ static g_core *copy_core(g_core*, g_word*, uintptr_t, g_core*);
 //   |                          `------'
 //   t0                  gc time (this cycle)
 NoInline g_core *please(g_core *f, uintptr_t req0) {
+//  g_fprintf(g_stderr, "alloc");
+//  g_dbg(f);
   size_t t0 = f->t0, t1 = g_clock(),
          len0 = f->len;
   g_word *w = (g_word*) f, *w0 = f->pool;
   g_core *g = (g_core*) (w == w0 ? w0 + len0 : w0);
+//  g_fprintf(g_stderr, "pre copy");
   f = copy_core(g, f->pool, f->len, f);
+//  g_fprintf(g_stderr, "post copy");
   size_t t2 = f->t0,      // get and set last gc end time
          req = req0 + len0 - avail(f),
          v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
@@ -73,11 +77,18 @@ NoInline g_core *please(g_core *f, uintptr_t req0) {
 #define shrink() (len1>>=1,v>>=1)
   if   (too_little) do grow(); while (too_little); // too small -> calculate bigger size
   else if (too_big) do shrink(); while (too_big);  // too big -> calculate smaller size
-  else return f;                                   // just right -> all done
+  else {
+//    g_fprintf(g_stderr, "gc done");
+    return f; }                                  // just right -> all done
 
+ // g_fprintf(g_stderr, "alloc try len0=%d len1=%d", len0, len1);
   // allocate a new pool with target size
   g = f->malloc(f, len1 * 2 * sizeof(g_word));
-  if (!g) return encode(f, req <= len0 ? g_status_ok : g_status_oom); // if this fails still return true if the original pool is not too small
+  if (!g) {
+    if (req <= len0) return f;
+  //  g_fprintf(g_stderr, "alloc failed");
+    return encode(f, g_status_oom); }
+ // g_fprintf(g_stderr, "alloc ok");
   g = copy_core(g, (g_word*) g, len1, f);
   f->free(f, f->pool);
   return g; }

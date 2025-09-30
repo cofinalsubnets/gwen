@@ -43,8 +43,9 @@
   (:: '>>= (\ l (X (last l) (init l))))
   (:: '|> (foldl1 (\ m f (L f m ))))
   (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
-  (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))) ; end prelude
+  (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g))))))) ; end prelude
 
+(:
 # eval function
   ; a single expression whose value is the eval function.
   ; you can use prelude definitions in here.
@@ -286,7 +287,8 @@
     (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[ weh
     (lambp x) (? (twop x) (= '\ (A x)))
     (desug n d) (? (atomp n) (X n d)
-                   (desug (A n) (X '\ (cat (B n) (L d))))))
+                   (desug (A n) (X '\ (cat (B n) (L d)))))))
+(:
 # run time...
 ; can't use prelude yet directly here
  (go e a) (? a (, (e (A a)) (go e (B a)))) ; for evaluating the prelude
@@ -303,6 +305,6 @@
  (e2 '(, ; can use prelude in here
   ; delete internal stuff from global namespace
   (: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
-     p '(macros peek poke seek trim thd globals)
+     p '(prel evalr macros peek poke seek trim thd globals)
    (each (cat i p) (tdel 0 globals)))
   ev)))
