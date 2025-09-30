@@ -43,7 +43,7 @@ Vm(nomsym) {
   return Continue(); }
 
 Vm(gensym) {
-  if (strp(Sp[0])) return nomsym(f, Ip, Hp, Sp);
+  if (strp(Sp[0])) return Ap(nomsym, f);
   const int req = Width(symbol) - 2;
   Have(req);
   symbol *y = (symbol*) Hp;

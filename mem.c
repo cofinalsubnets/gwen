@@ -39,7 +39,9 @@ g_core *g_cells(g_core *f, uintptr_t n) {
 
 NoInline Vm(gc, uintptr_t n) {
   Pack(f);
-  return g_run(please(f, n)); }
+  f = please(f, n);
+  if (g_ok(f)) return Unpack(f), Continue();
+  return f; }
 
 static g_core *copy_core(g_core*, g_word*, uintptr_t, g_core*);
 

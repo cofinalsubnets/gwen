@@ -7,25 +7,35 @@
 
 #define g_target_host 0
 #define g_target_pd 1
-#ifndef g_target
-#define g_target g_target_host
+#define Inline inline __attribute__((always_inline))
+#define NoInline __attribute__((noinline))
+#if g_target == g_target_host
+#define Vm(n, ...) g_core *n(g_core *f, g_cell *Ip, g_word *Hp, g_word *Sp, ##__VA_ARGS__)
+#define YieldStatus g_status_ok
+#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
+#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
+#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
+#define Continue() Ap(Ip->ap, f)
+#elif g_target == g_target_pd
+#define Vm(n, ...) g_core *n(g_core *f, ##__VA_ARGS__)
+#define YieldStatus g_status_eof
+#define Ap(g, f, ...) g(f, ##__VA_ARGS__)
+#define Hp f->hp
+#define Sp f->sp
+#define Ip f->ip
+#define Pack(f) ((void)0)
+#define Unpack(f) ((void)0)
+#define Continue() f
 #endif
+typedef Vm(g_vm);
 
 union g_cell {
-  g_core *(*ap)(g_core*, g_cell*, g_word*, g_word*);
+  g_vm *ap;
   g_word x;
   g_cell *m;
   struct g_type *typ; };
 
 _Static_assert(sizeof(g_cell) == sizeof(g_word));
-typedef g_core *g_vm(g_core*, g_cell*, g_word*, g_word*);
-
-#if g_target == g_target_host
-#include "host/sys.h"
-#elif g_target == g_target_pd
-#include "pd/sys.h"
-#endif
-
 
 enum g_var {
   g_var_ip,
@@ -65,6 +75,12 @@ struct g_core {
   g_malloc_t *malloc;
   g_free_t *free;
   g_word end[]; }; // end of struct == initial heap pointer for this core
+
+#if g_target == g_target_host
+#include "host/sys.h"
+#elif g_target == g_target_pd
+#include "pd/sys.h"
+#endif
 
 // built in type method tables
 typedef struct g_type {
@@ -123,12 +139,12 @@ g_word
   cp(g_core*, g_word, g_word*, g_word*),
   g_hash_get(g_core*, g_word, g_table*, g_word);
 
+Vm(gc, uintptr_t);
 g_core
   *g_ana(g_core *, g_vm*),
   *g_have(g_core*, uintptr_t),
   *g_cells(g_core*, size_t),
-  *g_hash_put(g_core*),
-  *gc(g_core*, g_cell*, g_word*, g_word*, uintptr_t);
+  *g_hash_put(g_core*);
 
 g_vm
   data, rng, nullp, sysclock, symnom, dot, self,
@@ -140,8 +156,6 @@ g_vm
   g_yield, defglob, drop1, imm, ref,
   free_variable, curry, ev0, ret0,
   cond, jump, ap, tap, apn, tapn, ret, late_bind;
-
-#define Vm(n, ...) g_core *n(g_core *f, g_cell* Ip, g_word* Hp, g_word* Sp, ##__VA_ARGS__)
 
 #define putnum g_putnum
 #define getnum g_getnum
@@ -181,15 +195,9 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define BB(o) B(B(o))
 
 #define mix ((uintptr_t)2708237354241864315)
-#define Have(n) do {if (Sp - Hp < n) return gc(f, Ip, Hp, Sp, n); } while (0)
-#define Have1() do {if (Sp == Hp) return gc(f, Ip, Hp, Sp, 1); } while (0)
+#define Have(n) do {if (Sp - Hp < n) return Ap(gc, f, n); } while (0)
+#define Have1() do {if (Sp == Hp) return Ap(gc, f, 1); } while (0)
 
-#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
-#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
-#define Continue() Ip->ap(f, Ip, Hp, Sp)
-
-#define Inline inline __attribute__((always_inline))
-#define NoInline __attribute__((noinline))
 static Inline void *bump(g_core *f, size_t n) {
   void *x = f->hp;
   f->hp += n;
@@ -227,10 +235,6 @@ static Inline struct g_tag { g_cell *null, *head, end[]; } *ttag(g_cell*k) {
   while (k->x) k++;
   return (struct g_tag*) k; }
 
-static g_core Inline *g_run(g_core *f) {
-  return !g_ok(f) ? f :
-    f->ip->ap(f, f->ip, f->hp, f->sp); }
-
 typedef struct g_input {
   int (*getc)(struct g_input*),
       (*ungetc)(struct g_input*, int),
@@ -240,5 +244,7 @@ static Inline int p_in_getc(input *i) { return i->getc(i); }
 static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
 static Inline int p_in_eof(input *i) { return i->eof(i); }
 g_core *g_read1i(g_core*, g_input*),
+       *g_run(g_core*),
        *g_readsi(g_core*, input*);
+
 #endif

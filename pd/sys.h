@@ -32,4 +32,6 @@ g_vm g_buttons,
      g_clear;
 
 extern uint8_t font_8x8[256][8];
+
+g_core *g_run(g_core*);
 #endif

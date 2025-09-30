@@ -10,4 +10,5 @@ typedef FILE *g_file;
 #define g_fputc putc
 
 g_vm p_isatty, readf, read0;
+
 #endif

@@ -111,8 +111,9 @@ static g_core *g_pd_init(void) {
   f = g_define(f, "fb_get");
   f = g_define(f, "get_fps");
   f = g_define(f, "get_buttons");
+  g_dbg(f);
 
-//  f = g_evals(f, boot);
+  f = g_evals(f, boot);
 
   const char prog[] = "(,"
    "(fb_put 1 1 99)"
@@ -136,6 +137,7 @@ static g_core *g_pd_init(void) {
    "))))"
    ")";
   f = g_evals(f, prog);
+  g_dbg(f);
   return f; }
 
 static void g_reset_cb(void *id) {

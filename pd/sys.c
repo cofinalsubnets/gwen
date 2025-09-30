@@ -63,3 +63,8 @@ Vm(g_clear) {
       glyph_buffer[i][j] = 0;
   Ip += 1;
   return Continue(); }
+
+g_core *g_run(g_core *f) {
+  while (g_ok(f)) f = f->ip->ap(f);
+  f = g_code_of(f) == g_status_eof ? g_core_of(f) : f;
+  return f; }

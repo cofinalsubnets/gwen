@@ -105,13 +105,17 @@ NoInline g_core *g_apply(g_core *f) {
     k[0].ap = ap;
     k[1].ap = g_yield;
     k[2].m = f->ip;
-    f = ap(f, k, f->hp, f->sp); }
+    f->ip = k;
+    f = g_run(f); }
   return f; }
 
 NoInline Vm(ev0) {
   Ip += 1;
   Pack(f);
-  return g_run(g_ana(f, jump)); }
+  f = g_ana(f, jump);
+  if (!g_ok(f)) return f;
+  Unpack(f);
+  return Continue(); }
 
 #define Kp (f->ip)
 static Cata(cata_yield) {

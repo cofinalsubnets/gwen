@@ -35,7 +35,7 @@ Vm(late_bind) {
   return Continue(); }
 
 Vm(data) {
-  return typ(Ip)->ap(f, Ip, Hp, Sp); }
+  return Ap(typ(Ip)->ap, f); }
 
 Vm(self) {
   g_word x = word(Ip);
@@ -169,4 +169,4 @@ Vm(nullp) {
 Vm(g_yield) {
   Ip = Ip[1].m;
   Pack(f);
-  return f; }
+  return encode(f, YieldStatus); }
