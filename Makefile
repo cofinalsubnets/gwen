@@ -53,7 +53,7 @@ src/boot.h: host/lcat src/boot.$x
 	@$< <src/boot.$x | $(sed) > $@
 
 built_manpage=$n.1
-$(built_manpage): host/$n manpage.$x
+$(built_manpage): host/$n host/manpage.$x
 	@echo $@
 	@./$^ > $@
 

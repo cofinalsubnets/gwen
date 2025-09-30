@@ -58,6 +58,6 @@ sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
 	@echo $@
 	@./lcat <../src/boot.$x | $(sed) >$@
 
-main.h: lcat ../main.$x
+main.h: lcat main.$x
 	@echo $@
-	@./lcat <../main.$x | $(sed) >$@
+	@./lcat <main.$x | $(sed) >$@
