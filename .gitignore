@@ -9,6 +9,6 @@ flamegraph.svg
 *.1
 node_modules
 host/main.h
-boot.h
+src/boot.h
 lcat
 gw
