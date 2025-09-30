@@ -15,14 +15,12 @@ test('expressions', t => {
   ]);
 });
 
-/*
 test('common tests', t => {
   const [Let, Assert] = [':', 'assert'].map(Symbol.for);
-  return Promise.all([ 'church', 'closure', 'heron', 'lambda', 'tak' ].map(n =>
+  return Promise.all([ 'church', 'closure', 'heron', 'form', 'tak' ].map(n =>
     fs.readFile(`../test/${n}.${suff}`).then(r =>
       t.test(n, x => gw.eval([Let, Assert, assert, gw.read(n.toString())])))));
 });
-*/
 
 test('fib', t => {
   const

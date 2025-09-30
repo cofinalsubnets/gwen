@@ -1,8 +1,10 @@
-default: all test
+default: host_all test
 host/%:
 	@make -C host $(notdir $@)
 
 pd/%:
+	make -C pd $(notdir $@)
+os/%:
 	make -C pd $(notdir $@)
 
 # name of this file
@@ -13,20 +15,22 @@ x=gw
 bin=host/$n
 target ?= host
 
-all: all_host all_pd
+all: host_all pd_all os_all
 
-all_host: host/$n host/$n.1
+host_all: host/$n host/$n.1
 
-all_pd: pd/$n.pdx
+pd_all: pd/$n.pdx
 
+os_all:
+	make -C os
 
 test: test_c
 test_sequence=$(sort $(wildcard test/*.$x))
+test_all: test_c test_js
 test_c: $(bin)
 	@$(bin) $(test_sequence)
 test_js:
 	@cd js && npm test
-test_all: test_c test_js
 
 clean:
 	rm -rf `git check-ignore * */*`
