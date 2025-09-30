@@ -33,35 +33,27 @@ cc=$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)\
 	 -D g_target=g_target_$(target)
 
 $n: $m $(main_h) $h $o $(wildcard *.c)
-	@echo $@
-	@$(cc) $o main.c -o $@
+	$(cc) $o main.c -o $@
 
 $a: $m $h $o
-	@echo $@
-	@ar rcs $@ $^
+	ar rcs $@ $^
 
 sys.o: sys.c
-	@echo $@
-	@$(cc) -c $< -o $@
+	$(cc) -c $< -o $@
 
 %.o: ../src/%.c
-	@echo $@
-	@$(cc) -c $< -o $@
+	$(cc) -c $< -o $@
 
 lcat: $o $(wildcard *.c)
-	@echo $@
-	@$(cc) $o lcat.c -o $@
+	$(cc) $o lcat.c -o $@
 
 # sed command to escape lisp text into C string format
 sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
 ../src/boot.h: lcat ../src/boot.$x
-	@echo $@
-	@./lcat <../src/boot.$x | $(sed) >$@
+	./lcat <../src/boot.$x | $(sed) >$@
 
 main.h: lcat main.$x
-	@echo $@
-	@./lcat <main.$x | $(sed) >$@
+	./lcat <main.$x | $(sed) >$@
 
 $n.1: $n manpage.$x
-	@echo $@
-	@./$^ > $@
+	./$^ > $@

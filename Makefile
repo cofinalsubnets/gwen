@@ -1,6 +1,6 @@
 default: host_all test
 host/%:
-	@make -C host $(notdir $@)
+	make -C host $(notdir $@)
 
 pd/%:
 	make -C pd $(notdir $@)
@@ -28,9 +28,9 @@ test: test_c
 test_sequence=$(sort $(wildcard test/*.$x))
 test_all: test_c test_js
 test_c: $(bin)
-	@$(bin) $(test_sequence)
+	$(bin) $(test_sequence)
 test_js:
-	@cd js && npm test
+	cd js && npm test
 
 clean:
 	rm -rf `git check-ignore * */*`
@@ -41,14 +41,13 @@ valg: $b
 cloc:
 	cloc --by-file-by-lang --force-lang=Lisp,$x $c $(main_c) $h *.$x
 # size of binaries
-bits: $b
-	du -h $^
+bits: host/$n
+	readelf -S host/$n | grep -A 1 '\(text\|data\)'
 disasm: $b
 	rizin -A $<
 # profiling on linux
 perf.data: $b
-	@echo $@
-	@perf record ./$^ $(test_sequence)
+	perf record ./$^ $(test_sequence)
 perf: perf.data
 	perf report
 flamegraph.svg: perf.data

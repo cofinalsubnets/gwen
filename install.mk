@@ -17,15 +17,11 @@ install: $(installed_files)
 uninstall:
 	rm -f $(installed_files)
 
-$(installed_binary): $(built_binary)
-	@echo $@
-	@install -D -m 755 -s $< $@
+$(installed_binary): host/$n
+	install -D -m 755 -s $< $@
 $(installed_vim_ftdetect): vim/ftdetect/$n.vim
-	@echo $@
-	@install -D -m 644 $< $@
+	install -D -m 644 $< $@
 $(installed_vim_syntax): vim/syntax/$n.vim
-	@echo $@
-	@install -D -m 644 $< $@
-$(installed_manpage): $(built_manpage)
-	@echo $@
-	@install -D -m 644 $< $@
+	install -D -m 644 $< $@
+$(installed_manpage): host/$n.1
+	install -D -m 644 $< $@
