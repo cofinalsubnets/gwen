@@ -23,7 +23,6 @@ static union g_cell
 static g_core *de(const char *k, g_cell* v, g_core *f) {
   return g_define(g_push(f, 1, v), k); }
 
-
 int main(int _argc, const char **argv) {
   g_core *f = de("isatty", bif_isatty,
       de("readf", bif_readf,

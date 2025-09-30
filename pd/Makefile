@@ -20,13 +20,13 @@ endif
 # ex: VPATH += src1:src2
 ######
 
-VPATH += ../src/
+VPATH += ../src/ ../font/
 
 # List C source files here
-SRC = $(wildcard *.c) $(wildcard ../src/*.c)
+SRC = $(wildcard *.c) $(wildcard ../src/*.c) $(wildcard ../font/*.c)
 
 # List all user directories here
-UINCDIR = ../src/
+UINCDIR = ../src/ ../font/
 
 # List user asm files
 UASRC = 

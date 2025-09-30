@@ -69,6 +69,7 @@ override CC_IS_CLANG := $(shell ! $(CC) --version 2>/dev/null | grep -q '^Target
 override CFLAGS += \
     -Wall \
     -Wextra \
+		-Wno-unused-parameter \
     -std=gnu11 \
     -nostdinc \
     -ffreestanding \

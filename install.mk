@@ -12,10 +12,14 @@ installed_manpage=$(DESTDIR)/$(PREFIX)/share/man/man1/$n.1
 installed_vim_ftdetect=$(DESTDIR)/$(VIMPREFIX)/ftdetect/$n.vim
 installed_vim_syntax=$(DESTDIR)/$(VIMPREFIX)/syntax/$n.vim
 installed_vim_files=$(installed_vim_syntax) $(installed_vim_ftdetect)
-installed_files=$(installed_binary) $(installed_vim_files) $(installed_manpage)
-install: $(installed_files)
+installs=\
+	$(installed_binary)\
+ 	$(installed_vim_files)\
+ 	$(installed_manpage)
+
+install: $(installs)
 uninstall:
-	rm -f $(installed_files)
+	rm -f $(installs)
 
 $(installed_binary): host/$n
 	install -D -m 755 -s $< $@

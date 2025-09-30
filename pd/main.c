@@ -201,7 +201,7 @@ static void draw_glyph_buffer(void) {
   uint8_t *frame = Pd->graphics->getFrame();
   for (int i = 0; i < ROWS; i++)
     for (int j = 0; j < COLS; j++) {
-      uint8_t *glyph = font_8x8[glyph_buffer[i][j]];
+      uint8_t *glyph = cga_8x8[glyph_buffer[i][j]];
       for (int k = 0; k < 8; k++)
         frame[52 * (8 * i + k) + j] = i == Row && j == Col ? ~glyph[k] : glyph[k]; }
   Pd->graphics->markUpdatedRows(0, LCD_ROWS); }

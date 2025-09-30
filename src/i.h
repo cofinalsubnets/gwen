@@ -10,13 +10,18 @@
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
 #if g_target == g_target_host || g_target == g_target_free
+#define g_tco 1
+#elif g_target == g_target_pd
+#define g_tco 0
+#endif
+#if g_tco
 #define Vm(n, ...) g_core *n(g_core *f, g_cell *Ip, g_word *Hp, g_word *Sp, ##__VA_ARGS__)
 #define YieldStatus g_status_ok
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
 #define Continue() Ap(Ip->ap, f)
-#elif g_target == g_target_pd
+#else
 #define Vm(n, ...) g_core *n(g_core *f, ##__VA_ARGS__)
 #define YieldStatus g_status_eof
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
@@ -75,6 +80,15 @@ struct g_core {
   g_malloc_t *malloc;
   g_free_t *free;
   g_word end[]; }; // end of struct == initial heap pointer for this core
+                   //
+static Inline g_core *g_run(g_core *f) {
+#if g_tco
+  f = !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp);
+#else
+  while (g_ok(f)) f = f->ip->ap(f);
+  f = g_code_of(f) == g_status_eof ? g_core_of(f) : f;
+#endif
+  return f; }
 
 #if g_target == g_target_host
 #include "../host/sys.h"
@@ -209,8 +223,8 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define BB(o) B(B(o))
 
 #define mix ((uintptr_t)2708237354241864315)
-#define Have(n) do {if (Sp - Hp < n) return Ap(gc, f, n); } while (0)
-#define Have1() do {if (Sp == Hp) return Ap(gc, f, 1); } while (0)
+#define Have(n) do { if ((size_t) (Sp - Hp) < n) return Ap(gc, f, n); } while (0)
+#define Have1() do { if (Sp == Hp) return Ap(gc, f, 1); } while (0)
 
 static Inline void *bump(g_core *f, size_t n) {
   void *x = f->hp;

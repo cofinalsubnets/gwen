@@ -2,6 +2,7 @@
 #define _g_pd_sys_h
 #include "pd_api.h"
 #include <stdlib.h>
+#include "font.h"
 typedef int g_file;
 #define g_stdin  0
 #define g_stdout 1
@@ -32,7 +33,6 @@ g_vm g_buttons,
      g_fps,
      g_clear;
 
-extern uint8_t font_8x8[256][8];
 
 g_core *g_run(g_core*);
 #endif
