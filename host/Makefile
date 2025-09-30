@@ -61,3 +61,7 @@ sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
 main.h: lcat main.$x
 	@echo $@
 	@./lcat <main.$x | $(sed) >$@
+
+$n.1: $n manpage.$x
+	@echo $@
+	@./$^ > $@

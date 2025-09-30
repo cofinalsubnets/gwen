@@ -1,5 +1,5 @@
 const
-  gw = require('../gw'),
+  gw = require('./gw'),
   fs = require('node:fs/promises'),
   test = require('node:test'),
   assert = require('node:assert/strict'),
@@ -19,7 +19,7 @@ test('expressions', t => {
 test('common tests', t => {
   const [Let, Assert] = [':', 'assert'].map(Symbol.for);
   return Promise.all([ 'church', 'closure', 'heron', 'lambda', 'tak' ].map(n =>
-    fs.readFile(`test/${n}.${suff}`).then(r =>
+    fs.readFile(`../test/${n}.${suff}`).then(r =>
       t.test(n, x => gw.eval([Let, Assert, assert, gw.read(n.toString())])))));
 });
 */
