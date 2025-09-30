@@ -1,6 +1,6 @@
 ; this expression evaluates to a function of a list (command line arguments)
-(: # prelude definitions
- prel '( ; a list of expressions to be evaluated in order
+(:
+ prelude '( ; a list of expressions to be evaluated in order
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
@@ -46,10 +46,9 @@
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g))))))) ; end prelude
 
 (:
-# eval function
   ; a single expression whose value is the eval function.
   ; you can use prelude definitions in here.
-  evalr '(:- eval
+  eval '(:- eval
     (em1 i k n) (p1 i (k (+ 1 n)))
     (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
     imm (em2 i_imm) p0 poke
@@ -288,23 +287,19 @@
     (lambp x) (? (twop x) (= '\ (A x)))
     (desug n d) (? (atomp n) (X n d)
                    (desug (A n) (X '\ (cat (B n) (L d)))))))
-(:
-# run time...
-; can't use prelude yet directly here
+
+(: ; can't use prelude yet directly here
  (go e a) (? a (, (e (A a)) (go e (B a)))) ; for evaluating the prelude
  t0 (clock 0)
  e0 ev             ; initial eval
- _ (go e0 prel) ; initial prelude
- e1 (e0 evalr) ; middle eval
- _ (go e1 prel) ; final prelude
- e2 (e1 evalr) ; final eval
+ _ (go e0 prelude) ; initial prelude
+ e1 (e0 eval)      ; middle eval
+ _ (go e1 prelude) ; final prelude
+ e2 (e1 eval)      ; final eval
  t1 (clock 0)
  _ (tset globals 'boot_ms (- t1 t0))
  _ (tset globals 'ev e2) ; redefine eval
- ; now use final eval on an expression for the main function
- (e2 '(, ; can use prelude in here
-  ; delete internal stuff from global namespace
-  (: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
-     p '(prel evalr macros peek poke seek trim thd globals)
-   (each (cat i p) (tdel 0 globals)))
-  ev)))
+ ; delete initialization specific variables
+ (e2 '(: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
+         p '(prelude eval macros peek poke seek trim thd globals)
+       (each (cat i p) (tdel 0 globals)))))
