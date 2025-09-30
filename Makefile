@@ -43,11 +43,11 @@ cloc:
 # size of binaries
 bits: host/$n
 	readelf -S host/$n | grep -A 1 '\(text\|data\)'
-disasm: $b
+disasm: host/$n
 	rizin -A $<
 # profiling on linux
-perf.data: $b
-	perf record ./$^ $(test_sequence)
+perf.data: host/$n
+	perf record host/$n $(test_sequence)
 perf: perf.data
 	perf report
 flamegraph.svg: perf.data
