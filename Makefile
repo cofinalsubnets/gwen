@@ -12,8 +12,6 @@ os/%:
 n=gw
 x=gw
 #build
-bin=host/$n
-target ?= host
 
 all: host_all pd_all os_all
 
@@ -27,20 +25,19 @@ os_all:
 test: test_c
 test_sequence=$(sort $(wildcard test/*.$x))
 test_all: test_c test_js
-test_c: $(bin)
-	$(bin) $(test_sequence)
+test_c: host/$n
+	host/$n $(test_sequence)
 test_js:
 	cd js && npm test
 
 clean:
 	rm -rf `git check-ignore * */*`
 # valgrind detects some memory errors
-valg: $b
+valg: host/$n
 	valgrind --error-exitcode=1 ./$^ $(test_sequence)
 # count lines of code
 cloc:
 	cloc --by-file-by-lang --force-lang=Lisp,$x $c $(main_c) $h *.$x
-# size of binaries
 bits: host/$n
 	readelf -S host/$n | grep -A 1 '\(text\|data\)'
 disasm: host/$n
@@ -53,7 +50,7 @@ perf: perf.data
 flamegraph.svg: perf.data
 	flamegraph --perfdata $<
 repl: $b
-	rlwrap ./$<
+	rlwrap host/$n
 serve:
 	darkhttpd .
 include install.mk

@@ -48,12 +48,11 @@ lcat: $o $(wildcard *.c)
 	$(cc) $o lcat.c -o $@
 
 # sed command to escape lisp text into C string format
-sed=sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/.*/"&\\n"/'
-../src/boot.h: lcat ../src/boot.$x
-	./lcat <../src/boot.$x | $(sed) >$@
+../src/boot.h: lcat lcat.sed ../src/boot.$x
+	./lcat <../src/boot.$x | sed -f lcat.sed >$@
 
-main.h: lcat main.$x
-	./lcat <main.$x | $(sed) >$@
+main.h: lcat lcat.sed main.$x
+	./lcat <main.$x | sed -f lcat.sed >$@
 
 $n.1: $n manpage.$x
 	./$^ > $@
