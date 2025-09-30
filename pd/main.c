@@ -4,6 +4,10 @@
 #include "i.h"
 #include "font.h"
 
+static const char boot[] =
+#include "boot.h"
+;
+
 g_core *G = NULL;
 PlaydateAPI *Pd;
 
@@ -107,6 +111,8 @@ static g_core *g_pd_init(void) {
   f = g_define(f, "fb_get");
   f = g_define(f, "get_fps");
   f = g_define(f, "get_buttons");
+
+//  f = g_evals(f, boot);
 
   const char prog[] = "(,"
    "(fb_put 1 1 99)"
