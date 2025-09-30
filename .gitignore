@@ -8,7 +8,7 @@ flamegraph.svg
 *.bin
 *.1
 node_modules
-main*.h
-boot*.h
+host/main.h
+boot.h
 lcat
 gw

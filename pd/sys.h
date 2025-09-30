@@ -1,5 +1,12 @@
+#ifndef _g_pd_sys_h
+#define _g_pd_sys_h
 #include "pd_api.h"
-
+typedef int g_file;
+#define g_stdin  0
+#define g_stdout 1
+#define g_stderr 2
+#define g_fprintf(_, ...) Pd->system->logToConsole(__VA_ARGS__)
+#define g_fputc(c, _) g_fb_putc(c)
 extern PlaydateAPI *Pd;
 
 #define ROWS 30
@@ -14,3 +21,14 @@ void
   g_fb_set_cursor(int, int);
 
 int g_fb_row(void), g_fb_col(void);
+
+g_vm g_buttons,
+     g_cursor_h,
+     g_cursor_v,
+     theta,
+     g_get_glyph,
+     g_put_glyph,
+     g_clear;
+
+extern uint8_t font_8x8[256][8];
+#endif

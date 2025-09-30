@@ -47,7 +47,7 @@ static g_core *g_ini_def(g_core *f, const char *k, g_word v) {
   return g_hash_put(g_symof(g_push(f, 1, v), k)); }
 
 g_core *g_define(g_core *f, const char *s) {
-  f = g_intern(g_strof(g_push(f, 1, f->dict), s));
+  if (g_ok(f)) f = g_intern(g_strof(g_push(f, 1, f->dict), s));
   if (!g_ok(f)) return f;
   g_word w = f->sp[1];
   f->sp[1] = f->sp[2];

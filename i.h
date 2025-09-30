@@ -11,33 +11,21 @@
 #define g_target g_target_host
 #endif
 
-#if g_target == g_target_host
-#include <stdio.h>
-typedef FILE *g_file;
-#define g_stdout stdout
-#define g_stdin stdin
-#define g_stderr stderr
-#define g_fprintf fprintf
-#define g_fputc putc
-#elif g_target == g_target_pd
-#include "pd_api.h"
-typedef int g_file;
-#define g_stdin  0
-#define g_stdout 1
-#define g_stderr 2
-#define g_fprintf(_, ...) Pd->system->logToConsole(__VA_ARGS__)
-#define g_fputc(c, _) Pd->system->logToConsole("%c", (int) c)
-#endif
-
-
-
 union g_cell {
   g_core *(*ap)(g_core*, g_cell*, g_word*, g_word*);
   g_word x;
   g_cell *m;
   struct g_type *typ; };
+
 _Static_assert(sizeof(g_cell) == sizeof(g_word));
 typedef g_core *g_vm(g_core*, g_cell*, g_word*, g_word*);
+
+#if g_target == g_target_host
+#include "host/sys.h"
+#elif g_target == g_target_pd
+#include "pd/sys.h"
+#endif
+
 
 enum g_var {
   g_var_ip,
