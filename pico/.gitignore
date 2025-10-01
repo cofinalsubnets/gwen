@@ -7,3 +7,15 @@ build-*
 build_*
 .DS_Store
 *.pdf
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+generated/
+*.dis
+*.elf
+*.elf.map
+*.hex
+*.uf2
+pico-sdk/
+pico_flash_region.ld
