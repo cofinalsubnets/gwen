@@ -38,12 +38,8 @@ void g_fb32_cur_px_msg(g_fb32 *fb, uint32_t px, const char *msg) {
 
 void k_log(const char *msg) {
   g_fb32_cur_px_msg(&k_fb, 0xffeeddcc, msg); }
-void k_log_n_r(uintptr_t n, uintptr_t base) {
-  if (n) {
-    uintptr_t dig = n % base;
-    k_log_n_r(n / base, base);
-    const char d[2] = {digits[dig], 0};
-    k_log(d); } }
+
+static void k_log_n_r(uintptr_t n, uintptr_t base) { if (n) k_log_n(n, base); }
 
 void k_log_n(uintptr_t n, uintptr_t base) {
   uintptr_t dig = n % base;
