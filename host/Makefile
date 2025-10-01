@@ -22,7 +22,6 @@ so=lib$n.so
 CFLAGS=\
 	-I../src\
   -std=gnu17 -g -Os -Wall -fpic\
-	-Wno-unused-function\
  	-Wstrict-prototypes -Wno-shift-negative-value\
 	-fno-plt -fno-exceptions -fomit-frame-pointer\
   -fno-asynchronous-unwind-tables -fno-stack-protector\
