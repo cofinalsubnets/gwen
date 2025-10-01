@@ -171,6 +171,7 @@ g_word
 
 Vm(gc, uintptr_t);
 g_core
+  *please(g_core*, uintptr_t),
   *g_ana(g_core *, g_vm*),
   *g_have(g_core*, uintptr_t),
   *g_cells(g_core*, size_t),

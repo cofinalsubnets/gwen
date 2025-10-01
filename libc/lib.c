@@ -62,7 +62,7 @@ void * memchr( const void * s, int c, size_t n )
 
 
 #define LEN(x) (sizeof(x)/(sizeof(*x)))
-static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 static const char spaces[] = " \n\t\v\r\f";
 
 int isspace( int c ) {

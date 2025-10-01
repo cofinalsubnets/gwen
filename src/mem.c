@@ -1,6 +1,5 @@
 #include "i.h"
 #include <stdarg.h>
-static g_core *please(g_core*, uintptr_t);
 
 g_core *g_pop(g_core *f, uintptr_t m) {
   if (g_ok(f)) f->sp += m;

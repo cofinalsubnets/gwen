@@ -16,6 +16,7 @@ typedef void *g_malloc_t(g_core*, size_t),
 g_malloc_t g_malloc;
 g_free_t g_free;
 g_core
+  *g_ini_m_n(g_malloc_t*, g_free_t*, const size_t),
   *g_ini_m(g_malloc_t*, g_free_t*),
   *g_read1s(g_core*, const char*),
   *g_readss(g_core*, const char*),

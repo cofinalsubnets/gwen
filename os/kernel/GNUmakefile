@@ -87,7 +87,7 @@ override CPPFLAGS := \
 		-I ../../libc \
 		-I ../../font \
 		-Dg_target=g_target_free \
-    -isystem freestnd-c-hdrs/include \
+    -isystem ../../libc \
     $(CPPFLAGS) \
     -DLIMINE_API_REVISION=3 \
     -MMD \

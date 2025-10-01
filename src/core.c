@@ -53,8 +53,10 @@ g_core *g_define(g_core *f, const char *s) {
   f->sp[2] = w;
   return g_pop(g_hash_put(f), 1); }
 
-struct g_core *g_ini_m(g_malloc_t *g_malloc, g_free_t *g_free) {
-  const size_t len0 = 1 << 10;
+g_core *g_ini_m(g_malloc_t *malloc, g_free_t *free) {
+  return g_ini_m_n(malloc, free, 1 << 10); }
+
+struct g_core *g_ini_m_n(g_malloc_t *g_malloc, g_free_t *g_free, const size_t len0) {
   struct g_core *f = g_malloc(NULL, 2 * len0 * sizeof(g_word));
   if (!f) return encode(f, g_status_oom);
   memset(f, 0, sizeof(struct g_core));

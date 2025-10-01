@@ -32,11 +32,6 @@ clone_repo_commit() {
 rm -f .deps-obtained
 
 clone_repo_commit \
-    https://codeberg.org/OSDev/freestnd-c-hdrs-0bsd.git \
-    freestnd-c-hdrs \
-    5e4e9e70278fe89ea328d359a58aff4f4a94b165
-
-clone_repo_commit \
     https://codeberg.org/OSDev/cc-runtime.git \
     cc-runtime \
     dae79833b57a01b9fd3e359ee31def69f5ae899b
