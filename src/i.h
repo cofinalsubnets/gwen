@@ -9,11 +9,13 @@
 #define g_target_free 2
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
-#if g_target == g_target_host || g_target == g_target_free
+
+#if g_target == g_target_host
 #define g_tco 1
-#elif g_target == g_target_pd
+#else
 #define g_tco 0
 #endif
+
 #if g_tco
 #define Vm(n, ...) g_core *n(g_core *f, g_cell *Ip, g_word *Hp, g_word *Sp, ##__VA_ARGS__)
 #define YieldStatus g_status_ok
