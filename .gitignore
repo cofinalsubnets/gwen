@@ -13,3 +13,5 @@ src/boot.h
 lcat
 gw
 os/src
+os/libc
+os/font
