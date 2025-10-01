@@ -70,6 +70,7 @@ override CFLAGS += \
     -Wall \
     -Wextra \
 		-Wno-unused-parameter \
+		-Wno-shift-negative-value \
     -std=gnu11 \
     -nostdinc \
     -ffreestanding \

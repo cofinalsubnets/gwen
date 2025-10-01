@@ -1,10 +1,10 @@
-#include <limine.h>
+#include "k.h"
 
 __attribute__((used, section(".limine_requests_start")))
 static volatile LIMINE_REQUESTS_START_MARKER;
 
 __attribute__((used, section(".limine_requests")))
-volatile LIMINE_BASE_REVISION(3);
+static volatile LIMINE_BASE_REVISION(3);
 
 __attribute__((used, section(".limine_requests")))
 volatile struct limine_framebuffer_request framebuffer_request = {
@@ -24,3 +24,9 @@ volatile struct limine_stack_size_request stack_req = {
 
 __attribute__((used, section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER;
+
+bool limine_ok(void) { return
+  LIMINE_BASE_REVISION_SUPPORTED &&
+  framebuffer_request.response &&
+  framebuffer_request.response->framebuffer_count &&
+  memmap_req.response; }

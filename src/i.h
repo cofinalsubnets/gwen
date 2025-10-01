@@ -10,7 +10,7 @@
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
 
-#if g_target == g_target_host
+#if g_target == g_target_host || g_target == g_target_free
 #define g_tco 1
 #else
 #define g_tco 0

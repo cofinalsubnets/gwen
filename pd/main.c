@@ -17,7 +17,7 @@ static void draw_glyph_buffer(void);
 
 static int g_update(void *userdata) {
 	Pd = userdata;
-  G = g_pop(g_evals(G, "(update 0)"), 1);
+  G = g_evals_(G, "(update 0)");
   draw_glyph_buffer();
 	return 1; }
 
@@ -134,7 +134,7 @@ static g_core *g_pd_init(void) {
   return f; }
 
 static void g_boot_cb(void *u) {
-  G = g_pop(g_evals(G, boot), 1); }
+  G = g_evals_(G, boot); }
 
 static void g_reset_cb(void *id) {
   g_fb_clear();
@@ -165,8 +165,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       f = g_cons_r(f);
       f = g_cons_r(f);
       f = g_cons_r(f);
-      f = g_eval(f);
-      G = g_pop(f, 1);
+      f = g_eval_(f);
       */
       break; }
 

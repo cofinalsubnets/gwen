@@ -29,4 +29,4 @@ int main(int _argc, const char **argv) {
       de("read", bif_read,
         de("putc", bif_putc,
         g_ini()))));
-  return g_fin(g_apply(main_args(g_evals(g_pop(g_evals(f, boot), 1), main_), argv))); }
+  return g_fin(g_apply(main_args(g_evals(g_evals_(f, boot), main_), argv))); }
