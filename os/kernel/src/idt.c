@@ -7,9 +7,9 @@
 #define ABORT TRAP
 #define sixteen_bits ((1<<16)-1)
 #define present_bit (1<<7)
-#define off1(x) ((uintptr_t)x & sixteen_bits)
-#define off2(x) (((uintptr_t)x >> 16) & sixteen_bits)
-#define off3(x) ((uintptr_t)x >> 32)
+#define off1(x) ((uint16_t)((uintptr_t)x & 0xffff))
+#define off2(x) ((uint16_t)(((uintptr_t)x >> 16) &0xffff))
+#define off3(x) ((uint32_t)((uintptr_t)x >> 32))
 #define idesc(gate_type, addr) {\
   off1(addr),\
   gdt_code_segment_index << 3, \
@@ -47,11 +47,16 @@ struct idt_entry idt[256] = {
   [32] = {},
 };
 
-static void isr_0(void) {
+void isr_0(void) {
   for (;;) asm ("hlt"); }
 
+struct limit_base idtr;
 void idt_ini(void) {
-  struct idt_entry i0 = idesc(FAULT, isr_0);
-  memcpy(idt, &i0, sizeof(struct idt_entry)); }
+  idtr.limit = sizeof(idt) - 1;
+  idtr.base = (uint64_t) idt;
+  for (int i = 0; i < 256; i++)
+    idt[i].offset_1 = off1(isr_0),
+    idt[i].offset_2 = off2(isr_0),
+    idt[i].offset_3 = off3(isr_0);
+  asm ("lidt %0" : :"m"(idtr)); }
 
-struct limit_base idtr = { (uint16_t) (sizeof(idt) - 1), (uint64_t) idt };

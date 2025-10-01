@@ -202,4 +202,29 @@ long int strtol( const char * s, char ** endptr, int base )
     }
 
     return ( sign == '+' ) ? rc : -rc;
-}
+}  
+
+static uint64_t rol64(uint64_t x, int k) {
+    return (x << k) | (x >> (64 - k)); }
+
+static struct xoshiro256pp_state { uint64_t s[4]; } g_prng_state;
+static uint64_t xoshiro256pp(struct xoshiro256pp_state *state) {
+  uint64_t *s = state->s;
+  uint64_t const result = rol64(s[0] + s[3], 23) + s[0];
+  uint64_t const t = s[1] << 17;
+  s[2] ^= s[0];
+  s[3] ^= s[1];
+  s[1] ^= s[2];
+  s[0] ^= s[3];
+
+  s[2] ^= t;
+  s[3] = rol64(s[3], 45);
+
+  return result; }
+
+int rand(void) {
+  return (int) xoshiro256pp(&g_prng_state); }
+void srand(unsigned int seed) {
+  uint64_t s = seed;
+  s += s << 32;
+  g_prng_state.s[0] = g_prng_state.s[1] = g_prng_state.s[2] = g_prng_state.s[3] = s; }

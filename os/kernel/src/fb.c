@@ -46,17 +46,17 @@ void k_log_n(uintptr_t n, uintptr_t base) {
   const char d[2] = {digits[dig], 0};
   k_log(d); }
 
-void k_set_cursor(size_t x, size_t y) {
-  k_fb.cur_x = x % k_fb.width;
-  k_fb.cur_y = y % k_fb.height; }
+void g_fb32_set_cursor(g_fb32 *fb, size_t x, size_t y) {
+  fb->cur_x = x % fb->width;
+  fb->cur_y = y % fb->height; }
 
-void k_fb_ini(void) {
+void g_fb32_ini(g_fb32 *b) {
   struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
-  k_fb._ = fb->address;
-  k_fb.width = fb->width;
-  k_fb.height = fb->height;
-  k_fb.pitch = fb->pitch;
-  k_fb.cur_x = k_fb.cur_y = 0; }
+  b->_ = fb->address;
+  b->width = fb->width;
+  b->height = fb->height;
+  b->pitch = fb->pitch;
+  b->cur_x = b->cur_y = 0; }
 
 void  k_dbg(g_core *f) {
   k_log("\nf@0x"), k_log_n((uintptr_t) f, 16);
@@ -65,3 +65,14 @@ void  k_dbg(g_core *f) {
     k_log("\n  len="), k_log_n(f->len, 10);
     k_log("\n  allocd="), k_log_n(f->hp - f->end, 10);
     k_log("\n  stackd="), k_log_n((g_word*) f + f->len - f->sp, 10); } }
+
+void g_fb32_test_pattern(g_fb32 *fb) {
+  // Note: we assume the framebuffer model is RGB with 32-bit pixels.
+  for (size_t i = 0; i < 100; i++)
+    g_fb32_px(fb, i, 200 + i, 0x78349aed);
+  size_t y0 = k_fb.height / 4, x0 = k_fb.width / 4;
+  uint32_t colors[] = {0x12e4c932, 0xcd8237fa, 0x5d8e412a, 0x48d03aa2};
+  for (int i = 4, j = 128; i > 0; i--, j /= 2)
+    for (size_t x = x0 - j / 2; x < x0 + j / 2; x++)
+      for (size_t y = y0 - j / 2; y < y0 + j / 2; y++)
+        g_fb32_px(fb, x, y, colors[i-1]); }

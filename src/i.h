@@ -106,12 +106,6 @@ typedef int g_file;
 #define EOF (-1)
 #endif
 
-void *memcpy(void *restrict, const void*restrict, size_t),
-     *memset(void*, int, size_t);
-long strtol(const char*restrict, char**restrict, int);
-size_t strlen(const char*);
-int strncmp(const char*, const char*, size_t);
-
 // built in type method tables
 typedef struct g_type {
   g_word (*cp)(g_core*, g_word, g_word*, g_word*); // for gc
@@ -151,6 +145,12 @@ typedef struct g_string {
   char text[];
 } g_string, string;
 
+typedef struct g_input {
+  int (*getc)(struct g_input*),
+      (*ungetc)(struct g_input*, int),
+      (*eof)(struct g_input*);
+} g_input, input;
+
 g_malloc_t g_malloc;
 g_free_t g_free;
 
@@ -169,14 +169,16 @@ g_word
   cp(g_core*, g_word, g_word*, g_word*),
   g_hash_get(g_core*, g_word, g_table*, g_word);
 
-Vm(gc, uintptr_t);
 g_core
   *please(g_core*, uintptr_t),
   *g_ana(g_core *, g_vm*),
   *g_have(g_core*, uintptr_t),
   *g_cells(g_core*, size_t),
-  *g_hash_put(g_core*);
+  *g_hash_put(g_core*),
+  *g_read1i(g_core*, g_input*),
+  *g_readsi(g_core*, input*);
 
+Vm(gc, uintptr_t);
 g_vm
   data, nullp, sysclock, symnom, dot, self,
   gensym, pairp, fixnump, symbolp, stringp,
@@ -266,17 +268,15 @@ static Inline struct g_tag { g_cell *null, *head, end[]; } *ttag(g_cell*k) {
   while (k->x) k++;
   return (struct g_tag*) k; }
 
-typedef struct g_input {
-  int (*getc)(struct g_input*),
-      (*ungetc)(struct g_input*, int),
-      (*eof)(struct g_input*);
-} g_input, input;
-static Inline int p_in_getc(input *i) { return i->getc(i); }
-static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
-static Inline int p_in_eof(input *i) { return i->eof(i); }
-g_core *g_read1i(g_core*, g_input*),
-       *g_run(g_core*),
-       *g_readsi(g_core*, input*);
 
 void g_dbg(g_core*);
+
+// libc functions used internally...
+// declare them here so the kernel can refer to them
+// without including any non-freestanding header files.
+void *memcpy(void *restrict, const void*restrict, size_t),
+     *memset(void*, int, size_t);
+long strtol(const char*restrict, char**restrict, int);
+size_t strlen(const char*);
+int strncmp(const char*, const char*, size_t);
 #endif

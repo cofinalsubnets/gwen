@@ -25,7 +25,7 @@ volatile struct limine_stack_size_request stack_req = {
 __attribute__((used, section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER;
 
-bool limine_ok(void) { return
+bool boot_ok(void) { return
   LIMINE_BASE_REVISION_SUPPORTED &&
   framebuffer_request.response &&
   framebuffer_request.response->framebuffer_count &&

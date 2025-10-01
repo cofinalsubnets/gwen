@@ -1,5 +1,8 @@
 #include "i.h"
 
+static Inline int p_in_getc(input *i) { return i->getc(i); }
+static Inline int p_in_ungetc(input *i, int c) { return i->ungetc(i, c); }
+static Inline int p_in_eof(input *i) { return i->eof(i); }
 typedef struct text_input {
   g_input in;
   const char *text;
@@ -33,8 +36,6 @@ NoInline g_core *g_readss(g_core *f, const char *cs) {
   text_input t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
   f = g_readsi(f, (input*) &t);
   return f; }
-
-
 
 ////
 /// " the parser "
