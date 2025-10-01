@@ -11,10 +11,12 @@
 typedef intptr_t g_word;
 typedef union g_cell g_cell;
 typedef struct g_core g_core;
-typedef void *g_malloc_t(g_core*, size_t),
-              g_free_t(g_core*, void*);
+typedef void
+  *g_malloc_t(g_core*, size_t),
+   g_free_t(g_core*, void*);
 g_malloc_t g_malloc;
 g_free_t g_free;
+
 g_core
   *g_ini_m_n(g_malloc_t*, g_free_t*, const size_t),
   *g_ini_m(g_malloc_t*, g_free_t*),
@@ -35,7 +37,6 @@ g_core
   *g_tbl(g_core*),
   *g_cons_l(g_core*),
   *g_cons_r(g_core*);
-
 
 #define g_ini() g_ini_m(g_malloc, g_free)
 enum g_status {

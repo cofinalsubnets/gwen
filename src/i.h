@@ -6,11 +6,11 @@
 
 #define g_target_host 0
 #define g_target_pd 1
-#define g_target_free 2
+#define g_target_os 2
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
 
-#if g_target == g_target_host || g_target == g_target_free
+#if g_target == g_target_host || g_target == g_target_os
 #define g_tco 1
 #else
 #define g_tco 0
@@ -96,7 +96,7 @@ static Inline g_core *g_run(g_core *f) {
 #include "../host/sys.h"
 #elif g_target == g_target_pd
 #include "../pd/sys.h"
-#elif g_target == g_target_free
+#elif g_target == g_target_os
 typedef int g_file;
 #define g_stdin 0
 #define g_stdout 1

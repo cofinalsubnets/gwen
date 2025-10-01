@@ -79,31 +79,29 @@ void *gg_malloc(g_core*f, size_t n) {
 void gg_free(g_core*f, void*x) {
   Pd->system->realloc(x, 0); }
 
+static struct {
+  const char *n;
+  const g_cell *v;
+} defs[] = {
+  {"cursor_h", bif_cur_h},
+  {"cursor_v", bif_cur_v},
+  {"get_angle", bif_theta},
+  {"get_glyph", bif_get_glyph},
+  {"put_glyph", bif_put_glyph},
+  {"clear", bif_clear},
+  {"fb_put", bif_fb_put},
+  {"fb_get", bif_fb_get},
+  {"get_fps", bif_fps},
+  {"get_buttons", bif_buttons},
+};
+
 static g_core *g_pd_init(void) {
   g_core *f;
   f = g_ini_m(gg_malloc, gg_free);
-  f = g_push(f, 10,
-      bif_cur_h,
-      bif_cur_v,
-      bif_theta,
-      bif_get_glyph,
-      bif_put_glyph,
-      bif_clear,
-      bif_fb_put,
-      bif_fb_get,
-      bif_fps,
-      bif_buttons);
   g_dbg(f);
-  f = g_define(f, "cursor_h");
-  f = g_define(f, "cursor_v");
-  f = g_define(f, "get_angle");
-  f = g_define(f, "get_glyph");
-  f = g_define(f, "put_glyph");
-  f = g_define(f, "clear");
-  f = g_define(f, "fb_put");
-  f = g_define(f, "fb_get");
-  f = g_define(f, "get_fps");
-  f = g_define(f, "get_buttons");
+#define LEN(x) (sizeof(x)/sizeof(*x))
+  for (int i = 0; i < LEN(defs); i++)
+    f = g_define(g_push(f, 1, defs[i].v), defs[i].n);
   g_dbg(f);
 
 //  f = g_evals(f, boot);
