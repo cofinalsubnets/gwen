@@ -6,11 +6,38 @@
 
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/time.h"
+#include "i.h"
+static const char boot[] =
+#include "boot.h"
+;
+
+uintptr_t g_clock(void) {
+  return get_absolute_time(); }
+
+void *g_malloc(g_core*f, size_t n) {
+  return malloc(n); }
+void g_free(g_core*f, void*x) {
+  return free(x); }
+#define g_static_size  (1<<14)
+static void *g_static_kmalloc(g_core *f, size_t n) {
+  static g_word g_static_pool[2][g_static_size];
+  return f ? NULL : g_static_pool; }
+static void g_static_kfree(g_core *f, void *_) {}
 
 int main() {
     stdio_init_all();
+    printf("Hello, world!\n");
+    g_core *f = g_ini_m_n(g_static_kmalloc, g_static_kfree, g_static_size);
+    printf("got f@0x%x", (unsigned int) f);
+    if (g_ok(f)) f = g_evals_(f, boot),
+                 printf("post boot got f@0x%x\n", (unsigned int) f);
+    else printf("not ok, skip boot sequence\n");
+
+    printf("entering loop ...\n");
     while (true) {
-        printf("Hello, world!\n");
+
+        printf("Hello from in the loop\n");
         sleep_ms(1000);
     }
 }

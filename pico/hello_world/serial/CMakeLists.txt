@@ -1,7 +1,23 @@
 add_executable(hello_serial
         hello_serial.c
+        ../../../src/core.c
+        ../../../src/equal.c
+        ../../../src/eval.c
+        ../../../src/hash.c
+        ../../../src/mem.c
+        ../../../src/num.c
+        ../../../src/read.c
+        ../../../src/str.c
+        ../../../src/sym.c
+        ../../../src/thread.c
+        ../../../src/two.c
+        ../../../src/vm.c
+        ../../../src/write.c
         )
 
+include_directories(
+  ../../../src
+)
 # pull in common dependencies
 target_link_libraries(hello_serial pico_stdlib)
 
