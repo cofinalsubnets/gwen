@@ -6,6 +6,7 @@
      (!= a b) (? (= a b) 0 -1)
      (AA x) (A (A x)) (AB x) (A (B x))
      (BA x) (B (A x)) (BB x) (B (B x))
+     car A cdr B caar AA cadr AB cdar BA cddr BB
      inc (+ 1) dec (+ -1) :: (tset macros)
      (id x) x (const x y) x (co f g x) (f (g x))
      (flip f x y) (f y x) (diag f x) (f x x)

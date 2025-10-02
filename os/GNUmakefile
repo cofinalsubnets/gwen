@@ -16,9 +16,6 @@ HOST_CPPFLAGS :=
 HOST_LDFLAGS :=
 HOST_LIBS :=
 
-.PHONY: default
-default: run
-
 .PHONY: all
 all: $(IMAGE_NAME).iso
 
