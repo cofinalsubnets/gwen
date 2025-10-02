@@ -465,10 +465,8 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
 g_core *g_evals(g_core *f, const char *s) {
   f = g_read1s(f, "(:(r x y)(? y(r(ev'ev(A y))(B y))x)r)");
   f = g_push(f, 4, nil, f->quote, nil, nil);
-  return g_eval(g_cons_r(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_readss(f, s))))))); }
+  f = g_cons_r(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_readss(f, s))))));
+  return g_eval(f); }
 
-g_core *g_eval_(g_core *f) {
-  return g_pop(g_eval(f), 1); }
-
-g_core *g_evals_(g_core *f, const char *s) {
-  return g_pop(g_evals(f, s), 1); }
+g_core *g_eval_(g_core *f)                 { return g_pop(g_eval(f), 1); }
+g_core *g_evals_(g_core *f, const char *s) { return g_pop(g_evals(f, s), 1); }
