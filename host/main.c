@@ -5,7 +5,7 @@ static const char main_[] =
 #include "main.h"
 ;
 
-static const char g_boot_sequence[] =
+static const char boot_sequence[] =
 #include "boot.h"
 ;
 
@@ -29,10 +29,22 @@ static struct {
   {"read", bif_read},
   {"putc", bif_putc}, };
 
+static void report(g_core *f) {
+  enum g_status s = g_code_of(f);
+  f = g_core_of(f);
+  switch (s) {
+    case g_status_oom:
+      fprintf(stderr, "# oom@%ldB\n", f ? f->len * sizeof(g_word) : 0);
+    default: }; }
+
 #define LEN(x) (sizeof(x)/sizeof(*x))
 int main(int _argc, const char **argv) {
-  g_core *f = g_ini();
+  g_core *f = g_ini_dynamic();
+  f = g_evals_(f, boot_sequence);
   for (int i = 0; i < LEN(defs); i++)
     f = g_define(g_push(f, 1, defs[i].v), defs[i].n);
-  f = g_apply(main_args(g_evals(g_evals_(f, g_boot_sequence), main_), argv));
+  f = g_evals(f, main_);
+  f = main_args(f, argv);
+  f = g_apply(f);
+  report(f);
   return g_fin(f); }

@@ -151,8 +151,6 @@ typedef struct g_input {
       (*eof)(struct g_input*);
 } g_input, input;
 
-g_malloc_t g_malloc;
-g_free_t g_free;
 
 void
   transmit(g_core*, g_file, g_word);

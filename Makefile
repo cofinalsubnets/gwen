@@ -1,3 +1,6 @@
+# name and file extension
+n=gw
+x=gw
 default: host_all test
 host/%:
 	make -C host $(notdir $@)
@@ -7,15 +10,16 @@ pd/%:
 os/%:
 	make -C pd $(notdir $@)
 
-# name of this file
-# name and file extension
-n=gw
-x=gw
+src/boot.h: host/lcat src/boot.$x
+	host/lcat < src/boot.$x | sed -f host/lcat.sed > $@
+
 #build
 
 all: host_all pd_all os_all
 
-host_all: host/$n host/$n.1
+host_files=host/$n host/$n.1
+host_all: $(host_files)
+
 
 pd_all: pd/$n.pdx
 

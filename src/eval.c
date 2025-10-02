@@ -441,9 +441,9 @@ static g_core *ana_let(g_core *f, env **b, g_word exp) {
   f = g_cons_2(f, nil, (*b)->stack); // push function stack rep
   (*b)->stack = pop1(f);
   nom = reverse(f, nom); // put in literal order
-  for (v = nom; twop(B(v)); v = B(v)) // push initial variable stack reps
-    f = g_cons_2(f, A(v), (*b)->stack),
-    (*b)->stack = pop1(f);
+  for (v = nom; g_ok(f) && twop(B(v)); v = B(v)) { // push initial variable stack reps
+    f = g_cons_2(f, A(v), (*b)->stack);
+    if (g_ok(f)) (*b)->stack = pop1(f); }
 
 
   nom = reverse(f, nom); // back to reverse order
@@ -469,5 +469,6 @@ g_core *g_evals(g_core *f, const char *s) {
 
 g_core *g_eval_(g_core *f) {
   return g_pop(g_eval(f), 1); }
+
 g_core *g_evals_(g_core *f, const char *s) {
   return g_pop(g_evals(f, s), 1); }

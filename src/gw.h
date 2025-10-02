@@ -14,12 +14,12 @@ typedef struct g_core g_core;
 typedef void
   *g_malloc_t(g_core*, size_t),
    g_free_t(g_core*, void*);
-g_malloc_t g_malloc;
-g_free_t g_free;
 
 g_core
-  *g_ini_m_n(g_malloc_t*, g_free_t*, const size_t),
+  *g_ini_0(g_malloc_t*, g_free_t*, size_t, void*),
   *g_ini_m(g_malloc_t*, g_free_t*),
+  *g_ini_dynamic(void),
+  *g_ini_static(size_t, void*),
   *g_read1s(g_core*, const char*),
   *g_readss(g_core*, const char*),
   *g_eval(g_core*),
@@ -38,7 +38,6 @@ g_core
   *g_cons_l(g_core*),
   *g_cons_r(g_core*);
 
-#define g_ini() g_ini_m(g_malloc, g_free)
 enum g_status {
   g_status_ok  = 0,
   g_status_oom = 1,
@@ -46,5 +45,6 @@ enum g_status {
   g_status_eof = 3,
 } g_fin(g_core*);
 
-//extern const char g_boot_sequence[];
+extern const char g_boot_sequence[];
+#define g_ini() g_ini_dynamic()
 #endif

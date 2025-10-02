@@ -1,7 +1,6 @@
 #include "i.h"
 Vm(prc) {
-  g_word w = *Sp;
-  g_fputc(getnum(w), g_stdout);
+  g_fputc(getnum(*Sp), g_stdout);
   Ip += 1;
   return Continue(); }
 

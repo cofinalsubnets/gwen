@@ -53,18 +53,31 @@ g_core *g_define(g_core *f, const char *s) {
   f->sp[2] = w;
   return g_pop(g_hash_put(f), 1); }
 
-g_core *g_ini_m(g_malloc_t *malloc, g_free_t *free) {
-  return g_ini_m_n(malloc, free, 1 << 10); }
 
-struct g_core *g_ini_m_n(g_malloc_t *g_malloc, g_free_t *g_free, const size_t len0) {
-  struct g_core *f = g_malloc(NULL, 2 * len0 * sizeof(g_word));
-  if (!f) return encode(f, g_status_oom);
-  memset(f, 0, sizeof(struct g_core));
+static void *g_malloc(g_core*f, size_t n) { return malloc(n); }
+static void *g_static_malloc(g_core*f, size_t n) { return NULL; }
+static void g_free(g_core*f, void*x) { return free(x); }
+static void g_static_free(g_core*f, void*x) {}
+
+g_core *g_ini_static(size_t n, void *_) {
+  return g_ini_0(g_static_malloc, g_static_free, n, _); }
+
+g_core *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
+  const size_t len0 = 1 << 10;
+  g_core *f = ma(NULL, 2 * len0 * sizeof(g_word));
+  return g_ini_0(ma, fr, len0, f); }
+
+g_core *g_ini_dynamic(void) {
+  return g_ini_m(g_malloc, g_free); }
+
+struct g_core *g_ini_0(g_malloc_t *ma, g_free_t *fr, size_t len0, void *_) {
+  if (!_ || len0 * sizeof(g_word) < sizeof(g_core)) return encode(_, g_status_oom);
+  g_core *f = memset(_, 0, sizeof(g_core));
   f->t0 = g_clock();
   f->pool = (g_word*) f;
   f->len = len0;
-  f->malloc = g_malloc;
-  f->free = g_free;
+  f->malloc = ma;
+  f->free = fr;
   f->hp = f->end;
   f->sp = (g_word*) f + len0;
   f->ip = bif_stop;
@@ -101,13 +114,7 @@ enum g_status g_fin(g_core *f) {
   if ((f = g_core_of(f))) f->free(f, f->pool);
   return s; }
 
-
 Vm(sysclock) {
   Sp[0] = putnum(g_clock());
   Ip += 1;
   return Continue(); }
-
-void *g_malloc(g_core*f, size_t n) {
-  return malloc(n); }
-void g_free(g_core*f, void*x) {
-  return free(x); }
