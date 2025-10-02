@@ -15,11 +15,6 @@ endif()
 
 set(PICO_EXAMPLES_PATH ${PROJECT_SOURCE_DIR})
 
-# If you want debug output from USB (pass -DPICO_STDIO_USB=1) this ensures you don't lose any debug output while USB is set up
-if (NOT DEFINED PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS)
-    set(PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS 3000)
-endif()
-
 # Allow using the example keys, as this is the examples repository
 if (NOT DEFINED PICO_ALLOW_EXAMPLE_KEYS)
     set(PICO_ALLOW_EXAMPLE_KEYS 1)
