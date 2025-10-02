@@ -44,7 +44,7 @@ lib$n.so: $o
 sys.o: sys.c
 	$(cc) -c $< -o $@
 
-%.o: ../src/%.c
+%.o: ../src/%.c $h
 	$(cc) -c $< -o $@
 
 lcat: $o $(wildcard *.c)

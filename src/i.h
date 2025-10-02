@@ -270,11 +270,13 @@ static Inline struct g_tag { g_cell *null, *head, end[]; } *ttag(g_cell*k) {
 
 
 void g_dbg(g_core*);
+extern const char g_boot[];
 
 // libc functions used internally...
 // declare them here so the kernel can refer to them
 // without including any non-freestanding header files.
-void *memcpy(void *restrict, const void*restrict, size_t),
+void *malloc(size_t), free(void*),
+     *memcpy(void *restrict, const void*restrict, size_t),
      *memset(void*, int, size_t);
 long strtol(const char*restrict, char**restrict, int);
 size_t strlen(const char*);

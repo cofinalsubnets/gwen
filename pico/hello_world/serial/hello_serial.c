@@ -15,10 +15,6 @@ static const char boot[] =
 uintptr_t g_clock(void) {
   return get_absolute_time(); }
 
-void *g_malloc(g_core*f, size_t n) {
-  return malloc(n); }
-void g_free(g_core*f, void*x) {
-  return free(x); }
 #define g_static_size  (1<<14)
 static void *g_static_kmalloc(g_core *f, size_t n) {
   static g_word g_static_pool[2][g_static_size];

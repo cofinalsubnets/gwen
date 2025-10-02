@@ -20,13 +20,13 @@ endif
 # ex: VPATH += src1:src2
 ######
 
-VPATH += ../src/
+VPATH += ../src/ ../font/
 
 # List C source files here
-SRC = $(wildcard *.c) $(wildcard ../src/*.c)
+SRC = $(wildcard *.c) $(wildcard ../src/*.c) $(wildcard ../font/cga_8x8.c)
 
 # List all user directories here
-UINCDIR = ../src/
+UINCDIR = ../src/ ../font/
 
 # List user asm files
 UASRC = 
@@ -189,7 +189,7 @@ pdc: simulator
 pdx:
 	$(PDC) $(PDCFLAGS) Source $(PRODUCT)
 
-$(OBJDIR)/%.o : %.c | MKOBJDIR MKDEPDIR
+$(OBJDIR)/%.o : %.c | MKOBJDIR MKDEPDIR ../src/boot.h
 	mkdir -p `dirname $@`
 	$(CC) -c $(CPFLAGS) -I . $(INCDIR) $< -o $@
 
@@ -223,3 +223,6 @@ clean:
 # Include the dependency files, should be the last of the makefile
 #
 -include $(wildcard $(DEPDIR)/*)
+
+../src/boot.h:
+	make -C ../host $@

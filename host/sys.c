@@ -8,11 +8,6 @@ Vm(p_isatty) {
   Ip += 1;
   return Continue(); }
 
-void *g_malloc(g_core*f, size_t n) {
-  return malloc(n); }
-void g_free(g_core*f, void*x) {
-  return free(x); }
-
 NoInline uintptr_t g_clock(void) {
   struct timespec ts;
   int s = clock_gettime(CLOCK_REALTIME, &ts);
@@ -70,4 +65,11 @@ Vm(read0) {
   return Continue(); }
 g_core *g_read1(g_core *f) { return g_read1f(f, g_stdin); }
 
-void g_dbg(g_core*f){}
+void g_dbg(g_core*f){
+  g_fprintf(g_stderr,
+    "f@0x%lx\n  ip=0x%lx\n  len=%ld\n  allocd=%ld\n  stackd=%ld\n",
+    (uintptr_t) f,
+    (uintptr_t) f->ip,
+    f->len,
+    f->hp - (g_word*) f,
+    (g_word*) f + f->len - f->sp); }

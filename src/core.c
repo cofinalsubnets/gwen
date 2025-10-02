@@ -68,8 +68,6 @@ struct g_core *g_ini_m_n(g_malloc_t *g_malloc, g_free_t *g_free, const size_t le
   f->hp = f->end;
   f->sp = (g_word*) f + len0;
   f->ip = bif_stop;
-  f = g_tbl(f); // dict
-  f = g_tbl(f); // macro
   f = g_symof(f, ":");
   f = g_symof(f, "?");
   f = g_symof(f, "`");
@@ -80,12 +78,18 @@ struct g_core *g_ini_m_n(g_malloc_t *g_malloc, g_free_t *g_free, const size_t le
     f->begin = sym(pop1(f)),
     f->quote = sym(pop1(f)),
     f->cond = sym(pop1(f)),
-    f->let = sym(pop1(f)),
-    f->macro = tbl(pop1(f)),
-    f->dict = tbl(f->sp[0]); // keep this one on stack for following definitions
-  f = g_ini_def(f, "macros", (g_word) f->macro);
-  f = g_ini_def(f, "globals", (g_word) f->dict);
-  f = g_hash_put(g_symof(g_strof(f, g_version), "version"));
+    f->let = sym(pop1(f));
+  f = g_tbl(f); // dict
+  f = g_tbl(f); // macro
+  if (g_ok(f))
+    f->macro = tbl(f->sp[0]),
+    f->dict = tbl(f->sp[1]),
+    f = g_symof(f, "macros"),
+    f = g_hash_put(f),
+    f = g_ini_def(f, "globals", (g_word) f->dict),
+    f = g_strof(f, g_version),
+    f = g_symof(f, "version"),
+    f = g_hash_put(f);
   for (size_t i = 0; i < LEN(bifff); i++)
     f = g_ini_def(f, bifff[i].n, (g_word) bifff[i].x);
   for (size_t i = 0; i < LEN(i_dict); i++)
@@ -102,3 +106,8 @@ Vm(sysclock) {
   Sp[0] = putnum(g_clock());
   Ip += 1;
   return Continue(); }
+
+void *g_malloc(g_core*f, size_t n) {
+  return malloc(n); }
+void g_free(g_core*f, void*x) {
+  return free(x); }

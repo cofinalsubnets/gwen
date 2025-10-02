@@ -1,12 +1,12 @@
 #include "i.h"
 #include "sys.h"
 
-static const char boot[] =
-#include "boot.h"
-;
-
 static const char main_[] =
 #include "main.h"
+;
+
+static const char g_boot_sequence[] =
+#include "boot.h"
 ;
 
 static g_core *main_args(g_core *f, const char **argv) {
@@ -27,12 +27,12 @@ static struct {
   {"isatty", bif_isatty},
   {"readf", bif_readf},
   {"read", bif_read},
-  {"putc", bif_putc},
-};
+  {"putc", bif_putc}, };
 
 #define LEN(x) (sizeof(x)/sizeof(*x))
 int main(int _argc, const char **argv) {
-  g_core *f = g_evals_(g_ini(), boot);
+  g_core *f = g_ini();
   for (int i = 0; i < LEN(defs); i++)
     f = g_define(g_push(f, 1, defs[i].v), defs[i].n);
-  return g_fin(g_apply(main_args(g_evals(f, main_), argv))); }
+  f = g_apply(main_args(g_evals(g_evals_(f, g_boot_sequence), main_), argv));
+  return g_fin(f); }

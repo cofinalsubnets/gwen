@@ -45,4 +45,6 @@ enum g_status {
   g_status_err = 2,
   g_status_eof = 3,
 } g_fin(g_core*);
+
+//extern const char g_boot_sequence[];
 #endif
