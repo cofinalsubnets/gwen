@@ -1,5 +1,15 @@
 #include "i.h"
-void *memset(void*, int, size_t);
+
+static Vm(sysclock) {
+  Sp[0] = putnum(g_clock());
+  Ip += 1;
+  return Continue(); }
+
+
+static Vm(nullp) {
+  Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil;
+  Ip += 1;
+  return Continue(); }
 
 #ifndef g_version
 #define g_version ""
@@ -58,21 +68,27 @@ static void *g_malloc(g_core*f, size_t n) { return malloc(n); }
 static void *g_static_malloc(g_core*f, size_t n) { return NULL; }
 static void g_free(g_core*f, void*x) { return free(x); }
 static void g_static_free(g_core*f, void*x) {}
+static g_core *g_ini_0(g_malloc_t*, g_free_t*, size_t, g_core*);
 
 g_core *g_ini_static(size_t n, void *_) {
-  return g_ini_0(g_static_malloc, g_static_free, n, _); }
+  return g_ini_0(g_static_malloc, g_static_free, n / (2 * sizeof(g_word)), _); }
 
-g_core *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
+g_core *g_ini_dynamic(g_malloc_t *ma, g_free_t *fr) {
   const size_t len0 = 1 << 10;
   g_core *f = ma(NULL, 2 * len0 * sizeof(g_word));
   return g_ini_0(ma, fr, len0, f); }
 
-g_core *g_ini_dynamic(void) {
-  return g_ini_m(g_malloc, g_free); }
-
-struct g_core *g_ini_0(g_malloc_t *ma, g_free_t *fr, size_t len0, void *_) {
-  if (!_ || len0 * sizeof(g_word) < sizeof(g_core)) return encode(_, g_status_oom);
-  g_core *f = memset(_, 0, sizeof(g_core));
+// this is the general initialization function. arguments are
+// - ma: malloc function pointer
+// - fr: free function pointer
+// - len0: initial semispace size in words (== total_space_size / 2)
+// - _: pointer
+static struct g_core *g_ini_0(g_malloc_t *ma, g_free_t *fr, size_t len0, g_core *f) {
+  if (f == NULL                            || // fail if pointer is null
+      g_code_of(f)                         || //   or if pointer is not word aligned
+      len0 * sizeof(g_word) < sizeof(g_core)) //   or if space is not large enough
+    return encode(NULL, g_status_oom);
+  memset(f, 0, sizeof(g_core));
   f->t0 = g_clock();
   f->pool = (g_word*) f;
   f->len = len0;
@@ -113,8 +129,3 @@ enum g_status g_fin(g_core *f) {
   enum g_status s = g_code_of(f);
   if ((f = g_core_of(f))) f->free(f, f->pool);
   return s; }
-
-Vm(sysclock) {
-  Sp[0] = putnum(g_clock());
-  Ip += 1;
-  return Continue(); }

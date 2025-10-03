@@ -97,7 +97,7 @@ static struct {
 
 static g_core *g_pd_init(void) {
   g_core *f;
-  f = g_ini_m(gg_malloc, gg_free);
+  f = g_ini_dynamic(gg_malloc, gg_free);
   g_dbg(f);
 #define LEN(x) (sizeof(x)/sizeof(*x))
   for (int i = 0; i < LEN(defs); i++)

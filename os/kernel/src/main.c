@@ -4,8 +4,7 @@ static void k_log_memmap(void);
 static const char boot[] =
 #include "boot.h"
 ;
-#define g_static_size  (1<<23)
-static g_word g_static_pool[2][g_static_size];
+static g_word g_static_pool[1<<17];
 void k_ini(void) {
   if (!boot_ok()) k_fin();
 
@@ -13,7 +12,7 @@ void k_ini(void) {
   g_fb32_test_pattern(&k_fb);
 
   k_log("g_ini()");
-  g_core *f = g_ini_static(g_static_size, g_static_pool);
+  g_core *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
   f = g_evals_(f, boot);
   if (!g_ok(f)) k_log(" XXX f=0x"),
                 k_log_n((uintptr_t) f, 16),

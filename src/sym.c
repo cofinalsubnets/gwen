@@ -94,3 +94,8 @@ static g_core *em_sym(g_core *f, g_file o, g_word x) {
 static g_core*show_sym(g_core*f,g_word x) {
   g_word n = (g_word) ((g_symbol*) x)->nom;
   return g_push(f, 1, n ? n : nil); }
+
+Vm(symbolp) {
+  Sp[0] = symp(Sp[0]) ? putnum(-1) : nil;
+  Ip += 1;
+  return Continue(); }

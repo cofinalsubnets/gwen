@@ -3,38 +3,10 @@
 #define _g_i_h
 #include "gw.h"
 #include <stdbool.h>
+typedef Vm(g_vm);
 
-#define g_target_host 0
-#define g_target_pd 1
-#define g_target_os 2
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
-
-#if g_target == g_target_host || g_target == g_target_os
-#define g_tco 1
-#else
-#define g_tco 0
-#endif
-
-#if g_tco
-#define Vm(n, ...) g_core *n(g_core *f, g_cell *Ip, g_word *Hp, g_word *Sp, ##__VA_ARGS__)
-#define YieldStatus g_status_ok
-#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
-#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
-#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
-#define Continue() Ap(Ip->ap, f)
-#else
-#define Vm(n, ...) g_core *n(g_core *f, ##__VA_ARGS__)
-#define YieldStatus g_status_eof
-#define Ap(g, f, ...) g(f, ##__VA_ARGS__)
-#define Hp f->hp
-#define Sp f->sp
-#define Ip f->ip
-#define Pack(f) ((void)0)
-#define Unpack(f) ((void)0)
-#define Continue() f
-#endif
-typedef Vm(g_vm);
 
 union g_cell {
   g_vm *ap;
@@ -178,13 +150,13 @@ g_core
 
 Vm(gc, uintptr_t);
 g_vm
-  data, nullp, sysclock, symnom, dot, self,
+  data, symnom, dot, self,
   gensym, pairp, fixnump, symbolp, stringp,
   band, bor, bxor, bsr, bsl, bnot,
   ssub, sget, slen, scat, prc, cons, car, cdr,
   lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
   seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-  g_yield, defglob, drop1, imm, ref,
+  defglob, drop1, imm, ref,
   free_variable, curry, ev0, ret0,
   cond, jump, ap, tap, apn, tapn, ret, late_bind;
 

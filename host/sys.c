@@ -25,6 +25,7 @@ static int p_file_eof(input *i) { return feof(((file_input*) i)->file); }
 static NoInline g_core *g_read1f(g_core *f, g_file i) {
   file_input fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
   return g_read1i(f, (input*) &fi); }
+
 static NoInline g_core *g_readsf(g_core *f) {
   string *s = (string*) pop1(f);
   char n[256]; // :)
