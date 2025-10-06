@@ -1,36 +1,39 @@
-#include "k.h"
 #include "fb.h"
 #include "font.h"
-
+#include <limine.h>
+__attribute__((used, section(".limine_requests")))
+volatile struct limine_framebuffer_request framebuffer_request = {
+    .id = LIMINE_FRAMEBUFFER_REQUEST,
+    .revision = 0 };
 g_fb32 k_fb;
 
 void g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px) {
   fb->_[row * fb->pitch / 4 + col] = px; }
 
-void g_fb32_px_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint32_t px, uint8_t *bmp) {
+void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg) {
   for (int r = 0; r < 8; r++) {
     uint8_t o = bmp[r];
     for (int c = 0; c < 8; c++, o <<= 1) {
-      fb->_[(row + r) * fb->pitch / 4 + col + c] = o & 128 ? px : 0; } } }
+      fb->_[(row + r) * fb->pitch / 4 + col + c] = o & 128 ? fg : bg; } } }
 
-void g_fb32_px_msg(g_fb32 *fb, size_t row, size_t col, uint32_t px, const char *msg) {
+void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
   size_t h = fb->height, w = fb->width;
   for (; *msg; msg++) {
     int c = *msg;
-    g_fb32_px_bmp_8x8(&k_fb, row, col, px, cga_8x8[c]);
+    g_fb32_bmp_8x8(&k_fb, row, col, cga_8x8[c], fg, bg);
     col += 8;
     if (col >= w)
       col %= w,
       row += 8,
       row %= h; } }
 
-void g_fb32_cur_px_msg(g_fb32 *fb, uint32_t px, const char *msg) {
+void g_fb32_cur_msg(g_fb32 *fb, uint32_t px, const char *msg) {
   size_t h = fb->height / 8, w = fb->width / 8;
   for (; *msg; msg++) {
     int c = *msg;
-    if (c == '\n') fb->cur_x = 0, fb->cur_y = fb->cur_y + 1 % h;
+    if (c == '\n') fb->cur_x = 0, fb->cur_y = (fb->cur_y + 1) % h;
     else {
-      g_fb32_px_bmp_8x8(fb, fb->cur_y * 8, fb->cur_x * 8, px, cga_8x8[c]);
+      g_fb32_bmp_8x8(fb, fb->cur_y * 8, fb->cur_x * 8, cga_8x8[c], px, 0);
       fb->cur_x += 1;
       if (fb->cur_x >= w)
         fb->cur_x %= w,

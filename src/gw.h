@@ -11,6 +11,7 @@ typedef void
    g_free_t(g_core*, void*);
 
 g_core
+  *g_ini(void),
   *g_ini_dynamic(g_malloc_t*, g_free_t*),
   *g_ini_static(size_t, void*),
   *g_read1(g_core*),
@@ -79,5 +80,4 @@ extern const char g_boot_sequence[];
 #define g_putnum(_) (((g_word)(_)<<1)|1)
 #define g_getnum(_) ((g_word)(_)>>1)
 #define g_nil g_putnum(0)
-#define g_ini() g_ini_dynamic(g_malloc, g_free)
 #endif

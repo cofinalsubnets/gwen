@@ -58,7 +58,7 @@ static g_core *copy_core(g_core*, g_word*, uintptr_t, g_core*);
 NoInline g_core *please(g_core *f, uintptr_t req0) {
 //  g_fprintf(g_stderr, "alloc");
 //  g_dbg(f);
-  size_t t0 = f->t0, t1 = g_clock(),
+  size_t t0 = f->t0, t1 = g_sys_clock(),
          len0 = f->len;
   g_word *w = (g_word*) f, *w0 = f->pool;
   g_core *g = (g_core*) (w == w0 ? w0 + len0 : w0);
@@ -97,15 +97,18 @@ static g_core *copy_core(g_core *g, g_word *p1, uintptr_t len1, g_core *f) {
   g->malloc = f->malloc;
   g->pool = p1;
   g->len = len1;
+
   uintptr_t len0 = f->len;
   g_word *p0 = (g_word*) f,
          *t0 = (g_word*) f + len0, // source pool top
          *t1 = (g_word*) g + len1, // target pool top
          ht = t0 - f->sp; // stack height
+
   // reset stack, heap, symbols
   g->sp = t1 - ht;
   g->hp = g->cp = g->end;
   g->symbols = 0;
+
   // copy variables
   for (int n = 0; n < g_var_N; n++)
     g->vars[n] = cp(g, f->vars[n], p0, t0);
@@ -124,22 +127,24 @@ static g_core *copy_core(g_core *g, g_word *p1, uintptr_t len1, g_core *f) {
     else for (g->cp += 2; g->cp[-2]; g->cp++)
       g->cp[-2] = cp(g, g->cp[-2], p0, t0);
 
-  g->t0 = g_clock();
+  g->t0 = g_sys_clock();
   return g; }
 
-NoInline g_word cp(g_core *v, g_word x, g_word *p0, g_word *t0) {
-  // if it's a number or outside managed memory then return it
+NoInline g_word cp(g_core *f, g_word x, g_word *p0, g_word *t0) {
+  // if it's a number or it's outside managed memory then return it
   if (nump(x) || !within(p0, x, t0)) return x;
   g_cell *src = (g_cell*) x;
-  x = src->x;
-  // if the cell holds a pointer to the new space then return the pointer
-  if (!nump(x) && within((g_word*) v, x, (g_word*) v + v->len)) return x;
-  // if it's data then call the given copy function
-  if (datp(src)) return typ(src)->cp(v, (g_word) src, p0, t0);
+  x = src->x; // get its contents
+  // if it contains a pointer to the new space then return the pointer
+  if (!nump(x) && within((g_word*) f, x, (g_word*) f + f->len)) return x;
+  // if it's data then call the copy function
+  if (x == (g_word) data) return typ(src)->cp(f, (g_word) src, p0, t0);
   // it's a thread, find the end to find the head
   struct g_tag *t = ttag(src);
-  g_cell *ini = t->head, *d = bump(v, t->end - ini), *dst = d;
+  g_cell *ini = t->head,
+         *d = bump(f, t->end - ini),
+         *dst = d;
   // copy source contents to dest and write dest addresses to source
-  for (g_cell *s = ini; (d->x = s->x); s++->x = word(d++));
+  for (g_cell *s = ini; (d->x = s->x); s++->x = (g_word) d++);
   ((struct g_tag*) d)->head = dst;
-  return word(dst + (src - ini)); }
+  return (g_word) (dst + (src - ini)); }

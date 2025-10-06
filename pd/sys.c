@@ -3,7 +3,7 @@
 #include <time.h>
 #include <unistd.h>
 extern PlaydateAPI *Pd;
-NoInline uintptr_t g_clock(void) {
+NoInline uintptr_t g_sys_clock(void) {
   return Pd->system->getCurrentTimeMilliseconds(); }
 
 Vm(g_fps) {

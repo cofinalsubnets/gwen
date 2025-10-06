@@ -133,7 +133,7 @@ bool
 
 uintptr_t
   hash(g_core*, g_word),
-  g_clock(void);
+  g_sys_clock(void);
 
 g_word
   cp(g_core*, g_word, g_word*, g_word*),

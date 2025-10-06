@@ -47,7 +47,7 @@ Vm(gensym) {
   Have(req);
   symbol *y = (symbol*) Hp;
   Hp += req;
-  ini_anon(y, g_clock());
+  ini_anon(y, g_sys_clock());
   Sp[0] = word(y);
   Ip += 1;
   return Continue(); }

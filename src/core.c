@@ -1,7 +1,7 @@
 #include "i.h"
 
 static Vm(sysclock) {
-  Sp[0] = putnum(g_clock());
+  Sp[0] = putnum(g_sys_clock());
   Ip += 1;
   return Continue(); }
 
@@ -64,32 +64,28 @@ g_core *g_define(g_core *f, const char *s) {
   return g_pop(g_hash_put(f), 1); }
 
 
-static void *g_malloc(g_core*f, size_t n) { return malloc(n); }
 static void *g_static_malloc(g_core*f, size_t n) { return NULL; }
-static void g_free(g_core*f, void*x) { return free(x); }
 static void g_static_free(g_core*f, void*x) {}
-static g_core *g_ini_0(g_malloc_t*, g_free_t*, size_t, g_core*);
+static void *g_libc_malloc(g_core*f, size_t n) { return malloc(n); }
+static void g_libc_free(g_core*f, void*x) { return free(x); }
 
-g_core *g_ini_static(size_t n, void *_) {
-  return g_ini_0(g_static_malloc, g_static_free, n / (2 * sizeof(g_word)), _); }
-
+static g_core *g_ini_0(g_core*, g_malloc_t*, g_free_t*, size_t);
+g_core *g_ini_static(size_t n, void *f) { return g_ini_0(f, g_static_malloc, g_static_free, n / (2 * sizeof(g_word))); }
+g_core *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
 g_core *g_ini_dynamic(g_malloc_t *ma, g_free_t *fr) {
   const size_t len0 = 1 << 10;
-  g_core *f = ma(NULL, 2 * len0 * sizeof(g_word));
-  return g_ini_0(ma, fr, len0, f); }
-
+  return g_ini_0(ma(NULL, 2 * len0 * sizeof(g_word)), ma, fr, len0); }
 // this is the general initialization function. arguments are
 // - ma: malloc function pointer
 // - fr: free function pointer
 // - len0: initial semispace size in words (== total_space_size / 2)
-// - _: pointer
-static struct g_core *g_ini_0(g_malloc_t *ma, g_free_t *fr, size_t len0, g_core *f) {
+// - f: core pointer
+static struct g_core *g_ini_0(g_core *f, g_malloc_t *ma, g_free_t *fr, size_t len0) {
   if (f == NULL                            || // fail if pointer is null
       g_code_of(f)                         || //   or if pointer is not word aligned
       len0 * sizeof(g_word) < sizeof(g_core)) //   or if space is not large enough
     return encode(NULL, g_status_oom);
   memset(f, 0, sizeof(g_core));
-  f->t0 = g_clock();
   f->pool = (g_word*) f;
   f->len = len0;
   f->malloc = ma;
@@ -97,12 +93,13 @@ static struct g_core *g_ini_0(g_malloc_t *ma, g_free_t *fr, size_t len0, g_core 
   f->hp = f->end;
   f->sp = (g_word*) f + len0;
   f->ip = bif_stop;
+  f->t0 = g_sys_clock(); // this goes right before first allocation so gc always sees initialized t0
   f = g_symof(f, ":");
   f = g_symof(f, "?");
   f = g_symof(f, "`");
   f = g_symof(f, ",");
   f = g_symof(f, "\\");
-  if (g_ok(f))
+  if (g_ok(f)) // these must be in reverse order from above
     f->lambda = sym(pop1(f)),
     f->begin = sym(pop1(f)),
     f->quote = sym(pop1(f)),
