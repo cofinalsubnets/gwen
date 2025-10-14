@@ -69,23 +69,22 @@ extern volatile struct limine_memmap_request memmap_req;
 
 uintptr_t g_sys_clock(void) { return 0; }
 
+void k_step(void) {
+}
+
 void k_ini(void) {
+
   if (!LIMINE_BASE_REVISION_SUPPORTED ||
       !framebuffer_request.response ||
       !framebuffer_request.response->framebuffer_count ||
       !memmap_req.response)
-    k_fin();
+    for (;;) k_stop();
 
   g_fb32_ini(&k_fb);
-//  mandelbrot();
   g_fb32_test_pattern(&k_fb);
 
   for (uint64_t i = 0; i < framebuffer_request.response->framebuffer_count; i++)
-    k_log("\nfb"), k_log_n(i, 10), k_log(" "), k_log_n(k_fb.width, 10), k_log("x"), k_log_n(k_fb.height, 10);
-  k_log("\nrsp@0x");
-  asm ("mov %rsp, %rdi\n"
-       "mov $16, %rsi\n"
-       "call k_log_n\n");
+    k_log("\nfb"), k_log_n(i, 10), k_log(": "), k_log_n(k_fb.width, 10), k_log("x"), k_log_n(k_fb.height, 10);
   k_log("\nmemmap: "), k_log_n(memmap_req.response->entry_count, 10), k_log(" regions");
 
   k_log("\ng_ini()");
@@ -103,7 +102,4 @@ void k_ini(void) {
   k_dbg(f); 
   k_log("\nload interrupt descriptor table"), k_init(), k_log(".");
   k_log("\nawaiting interrupts...");
-  for(;;);
-  //asm("int $10");
-  k_fin();
-  }
+  for (;;) k_step(), k_stop(); }

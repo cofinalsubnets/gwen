@@ -1,15 +1,18 @@
 #include "fb.h"
 #include "font.h"
 #include <limine.h>
+
 __attribute__((used, section(".limine_requests")))
 volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST,
     .revision = 0 };
+
 g_fb32 k_fb;
 
 void g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px) {
   fb->_[row * fb->pitch / 4 + col] = px; }
 
+// add a scale parameter to this
 void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg) {
   for (int r = 0; r < 8; r++) {
     uint8_t o = bmp[r];

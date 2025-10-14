@@ -1,24 +1,12 @@
 #include "k.h"
-void k_fin(void) { for (;;) asm ("hlt"); }
-void k_reset(void) {
-  uint64_t idtr0 = 0;
-  asm volatile ("lidt (%0)\n"
-                "int $0" :: "r"(&idtr0)); }
-void
-     default_isr_null(void);
+void k_stop(void) { asm ("hlt"); }
 void keyboard_isr_stub(void),
-     default_isr(int),
-     default_isr_0(void),
-     default_isr_1(void),
-     timer_isr_stub(void)
-  ;
+     timer_isr_stub(void);
 
-#define gdt_code_segment_index 5 // 5 == index of 64 bit code segment in GDT set up by limine
-#define INTERRUPT 0xe
-#define TRAP 0xf
+#define INTERRUPT 0x8e
+#define TRAP 0x8f
 #define FAULT TRAP
 #define ABORT TRAP
-#define present_bit (1<<7)
 
 struct idt_entry {
   uint16_t isr_low,
@@ -37,73 +25,72 @@ struct limit_base {
 } __attribute__((packed));
 _Static_assert(sizeof(struct limit_base) == 10);
 
-static struct idt_entry idt[256];
+void k_reset(void) {
+  struct limit_base idtr0 = { 0, 0};
+  asm volatile ("lidt (%0)\n"
+                "int $0" :: "r"(&idtr0)); }
 
-void default_isr_null(void) {
-  k_log("\nunhandled interrupt");
-  for (int i = INT16_MAX; i; i--);
-  k_reset(); }
-
+static struct idt_entry idt[256]; // TODO make this array as small as possible?
 static struct {
   void (*isr)(void);
-  int gate_type;
+  int type_attr;
 } built_in_isrs[48] = {
   // divide by zero
-  [0] = {default_isr_0, FAULT},
+  [0] = {k_reset, FAULT},
   // debug exception
-  [1] = {default_isr_1, TRAP},
+  [1] = {k_reset, TRAP},
   // non maskable interrup
-  [2] = {default_isr_null, INTERRUPT},
+  [2] = {k_reset, INTERRUPT},
   // breakpoint
-  [3] = {default_isr_null, TRAP},
+  [3] = {k_reset, TRAP},
   // overflow
-  [4] = {default_isr_null, TRAP},
+  [4] = {k_reset, TRAP},
   // BOUND range exceeded
-  [5] = {default_isr_null, FAULT},
+  [5] = {k_reset, FAULT},
   // invalid opcode
-  [6] = {default_isr_null, FAULT},
+  [6] = {k_reset, FAULT},
   // coprocessor device not accessible
-  [7] = {default_isr_null, FAULT},
+  [7] = {k_reset, FAULT},
   // double fault
-  [8] = {default_isr_null, ABORT},
+  [8] = {k_reset, ABORT},
   // coprocessor segment overrun
-  [9] = {default_isr_null, FAULT},
+  [9] = {k_reset, FAULT},
   // invalid task switch segment
-  [10] = {default_isr_null, FAULT},
+  [10] = {k_reset, FAULT},
   // segment not present
-  [11] = {default_isr_null, FAULT},
+  [11] = {k_reset, FAULT},
   // stack segment fault
-  [12] = {default_isr_null, FAULT},
+  [12] = {k_reset, FAULT},
   // general protection fault
-  [13] = {default_isr_null, FAULT},
+  [13] = {k_reset, FAULT},
   // page fault
-  [14] = {default_isr_null, FAULT},
+  [14] = {k_reset, FAULT},
   // reserved
-  [15] = {default_isr_null, FAULT},
+  [15] = {k_reset, FAULT},
   // x87 floating point error
-  [16] = {default_isr_null, FAULT},
+  [16] = {k_reset, FAULT},
   // alignment check
-  [17] = {default_isr_null, FAULT},
+  [17] = {k_reset, FAULT},
   // machine check
-  [18] = {default_isr_null, ABORT},
+  [18] = {k_reset, ABORT},
   // simd floating point exception
-  [19] = {default_isr_null, FAULT},
+  [19] = {k_reset, FAULT},
   // virtualization exception
-  [20] = {default_isr_null, FAULT},
+  [20] = {k_reset, FAULT},
   // control protection exception
-  [21] = {default_isr_null, FAULT},
+  [21] = {k_reset, FAULT},
 
   // 22-31 reserved
-  [22] = {default_isr_null, FAULT},
-  [23] = {default_isr_null, FAULT},
-  [24] = {default_isr_null, FAULT},
-  [25] = {default_isr_null, FAULT},
-  [26] = {default_isr_null, FAULT},
-  [27] = {default_isr_null, FAULT},
-  [28] = {default_isr_null, FAULT},
-  [29] = {default_isr_null, FAULT},
-  [30] = {default_isr_null, FAULT},
-  [31] = {default_isr_null, FAULT},
+  [22] = {k_reset, FAULT},
+  [23] = {k_reset, FAULT},
+  [24] = {k_reset, FAULT},
+  [25] = {k_reset, FAULT},
+  [26] = {k_reset, FAULT},
+  [27] = {k_reset, FAULT},
+  [28] = {k_reset, FAULT},
+  [29] = {k_reset, FAULT},
+  [30] = {k_reset, FAULT},
+  [31] = {k_reset, FAULT},
 
   // PIC interrupts
   //
@@ -111,37 +98,22 @@ static struct {
   [32] = {timer_isr_stub, INTERRUPT},
   // keyboard interrupt
   [33] = {keyboard_isr_stub, INTERRUPT},
-  [33] = {default_isr_null, FAULT},
-  [34] = {default_isr_null, FAULT},
-  [35] = {default_isr_null, FAULT},
-  [36] = {default_isr_null, FAULT},
-  [37] = {default_isr_null, FAULT},
-  [38] = {default_isr_null, FAULT},
-  [39] = {default_isr_null, FAULT},
-  [40] = {default_isr_null, FAULT},
-  [41] = {default_isr_null, FAULT},
-  [42] = {default_isr_null, FAULT},
-  [43] = {default_isr_null, FAULT},
-  [44] = {default_isr_null, FAULT},
-  [45] = {default_isr_null, FAULT},
-  [46] = {default_isr_null, FAULT},
-  [47] = {default_isr_null, FAULT},
+  [34] = {k_reset, FAULT},
+  [35] = {k_reset, FAULT},
+  [36] = {k_reset, FAULT},
+  [37] = {k_reset, FAULT},
+  [38] = {k_reset, FAULT},
+  [39] = {k_reset, FAULT},
+  [40] = {k_reset, FAULT},
+  [41] = {k_reset, FAULT},
+  [42] = {k_reset, FAULT},
+  [43] = {k_reset, FAULT},
+  [44] = {k_reset, FAULT},
+  [45] = {k_reset, FAULT},
+  [46] = {k_reset, FAULT},
+  [47] = {k_reset, FAULT},
 };
 
-#define LEN(x) (sizeof(x)/sizeof(*x))
-static void idt_init(void) {
-  for (unsigned long i = 0; i < LEN(built_in_isrs); i++) {
-    struct idt_entry *e = idt + i;
-    uintptr_t p = (uintptr_t)  built_in_isrs[i].isr;
-    e->isr_low = p & 0xffff;
-    e->kernel_cs = gdt_code_segment_index << 3;
-    e->ist = 0;
-    e->attributes = present_bit | built_in_isrs[i].gate_type;
-    e->isr_mid = (p >> 16) & 0xffff;
-    e->isr_high = (p >> 32) & 0xffffffff;
-    e->reserved = 0; }
-  struct limit_base idtr = { sizeof(idt) - 1, (uint64_t) &idt[0], };
-  asm volatile ("lidt (%0)" :: "r"(&idtr)); }
 
 
 // CHATGPT CODE
@@ -159,11 +131,9 @@ static inline void io_wait(void) {
   asm volatile ("outb %%al, $0x80" : : "a"(0)); }
 
 void pic_remap(void) {
-  unsigned char a1, a2;
-
-  // Save masks
-  a1 = inb(0x21);
-  a2 = inb(0xA1);
+  unsigned char // Save masks
+    a1 = inb(0x21),
+    a2 = inb(0xA1);
 
   // Start initialization (ICW1)
   outb(0x20, 0x11); // Start init for master
@@ -173,10 +143,8 @@ void pic_remap(void) {
   outb(0x21, 0x20); // Master PIC vectors start at 0x20
   outb(0xA1, 0x28); // Slave PIC vectors start at 0x28
 
-  // Tell Master that there is a Slave PIC at IRQ2 (ICW3)
-  outb(0x21, 4);
-  // Tell Slave its cascade identity (ICW3)
-  outb(0xA1, 2);
+  outb(0x21, 4); // Tell Master that there is a Slave PIC at IRQ2 (ICW3)
+  outb(0xA1, 2); // Tell Slave its cascade identity (ICW3)
 
   // Set mode (ICW4)
   outb(0x21, 0x01);
@@ -188,29 +156,19 @@ void pic_remap(void) {
 
 void pic_unmask(uint8_t irq) {
   uint16_t port;
-  uint8_t value;
 
-  if (irq < 8) {
-    port = 0x21;
-  } else {
-    port = 0xA1;
-    irq -= 8; }
+  if (irq < 8) port = 0x21;
+  else port = 0xA1, irq -= 8;
 
-  value = inb(port) & ~(1 << irq);
-  outb(port, value); }
+  outb(port, inb(port) & ~(1 << irq)); }
 
 void pic_mask(uint8_t irq) {
   uint16_t port;
-  uint8_t value;
 
-  if (irq < 8) {
-    port = 0x21;
-  } else {
-    port = 0xA1;
-    irq -= 8; }
+  if (irq < 8) port = 0x21;
+  else port = 0xA1, irq -= 8;
 
-  value = inb(port) | (1 << irq);
-  outb(port, value); }
+  outb(port, inb(port) | (1 << irq)); }
 
 #define PIC1_COMMAND 0x20
 #define PIC2_COMMAND 0xA0
@@ -220,11 +178,10 @@ void pic_send_eoi(uint8_t irq) {
   if (irq >= 8) outb(PIC2_COMMAND, PIC_EOI);
   outb(PIC1_COMMAND, PIC_EOI); }
 static const char scancode_ascii[128] = {
-      0,  27, '1','2','3','4','5','6','7','8','9','0','-','=', '\b',
-          '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n', 0,
-              'a','s','d','f','g','h','j','k','l',';','\'','`', 0, '\\',
-                  'z','x','c','v','b','n','m',',','.','/', 0, '*', 0, ' ',
-                      /* rest unused */
+  0,  27, '1','2','3','4','5','6','7','8','9','0','-','=', '\b',
+  '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n', 0,
+  'a','s','d','f','g','h','j','k','l',';','\'','`', 0, '\\',
+  'z','x','c','v','b','n','m',',','.','/', 0, '*', 0, ' ',
 };
 
 char scancode_to_ascii(uint8_t scancode) {
@@ -236,11 +193,11 @@ char scancode_to_ascii(uint8_t scancode) {
 #define PIT_FREQUENCY 1193182
 
 void pit_set_freq(uint32_t hz) {
-  uint16_t divisor = (uint16_t)(PIT_FREQUENCY / hz);
+  uint32_t divisor = (uint32_t)(PIT_FREQUENCY / hz);
 
   outb(PIT_COMMAND, 0x36); // Channel 0, LSB/MSB, mode 3, binary
-  outb(PIT_CHANNEL0, (uint8_t)(divisor & 0xFF));       // Low byte
-  outb(PIT_CHANNEL0, (uint8_t)((divisor >> 8) & 0xFF)); // High byte
+  outb(PIT_CHANNEL0, 0xff); //(uint8_t)(divisor & 0xFF));       // Low byte
+  outb(PIT_CHANNEL0, 0xff); //(uint8_t)((divisor >> 8) & 0xFF)); // High byte
 }
 // END CHATGPT
 //
@@ -263,18 +220,29 @@ void keyboard_interrupt_handler(void) {
   // Send EOI to PIC
   outb(PIC1_COMMAND, PIC_EOI); }
 
-void default_isr(int i) {
-  k_log("\ngot unhandled interrupt: 0x"), k_log_n(i, 16);
-  k_reset(); }
 void timer_interrupt_handler(void) {
-  k_log("\ngot timer interrupt");
-//  outb(0x20, 0x20);
+//  k_log("\ngot timer interrupt");
+  outb(0x20, 0x20);
 }
 
+#define LEN(x) (sizeof(x)/sizeof(*x))
 void k_init(void) {
-  idt_init();
+  for (unsigned long i = 0; i < LEN(built_in_isrs); i++) {
+    uintptr_t p = (uintptr_t)  built_in_isrs[i].isr;
+    idt[i].isr_low = p & 0xffff;
+    idt[i].kernel_cs = 0x28; // determined by GDT index 5 of 64 bit code segment * 8 bytes per segment descriptor
+    idt[i].ist = 0;
+    idt[i].attributes = built_in_isrs[i].type_attr;
+    idt[i].isr_mid = (p >> 16) & 0xffff;
+    idt[i].isr_high = (p >> 32) & 0xffffffff;
+    idt[i].reserved = 0; }
+
+  struct limit_base idtr = {
+    .limit = sizeof(idt) - 1, 
+    .base = (uint64_t) &idt, };
+  asm volatile ("lidt (%0)" :: "r"(&idtr));
   pit_set_freq(1);
-  pic_remap();         // move IRQs to 0x20–0x2F
-  pic_unmask(1);       // enable keyboard IRQ
-//  pic_unmask(0); // timer interrupts?
+  pic_remap();   // move IRQs to 0x20–0x2F
+  pic_unmask(1); // enable keyboard IRQ
+  pic_unmask(0); // enable timer IRQ
   asm volatile("sti"); }

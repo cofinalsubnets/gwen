@@ -1,20 +1,10 @@
 ; keyboard_isr.asm
 global keyboard_isr_stub
 extern keyboard_interrupt_handler  ; defined in C
-
 global timer_isr_stub
 extern timer_interrupt_handler  ; defined in C
 
-global default_isr_stub
-extern default_isr
-
-global default_isr_1
-global default_isr_0
-
-global default_isr_fail
-extern default_isr_null  ; defined in C
-
-%macro pre_isr 0
+%macro isr_stub 1
   push rbp
   push rax
   push rbx
@@ -30,9 +20,7 @@ extern default_isr_null  ; defined in C
   push r13
   push r14
   push r15
-%endmacro
-
-%macro post_isr 0
+  call %1
   pop r15
   pop r14
   pop r13
@@ -52,32 +40,17 @@ extern default_isr_null  ; defined in C
 %endmacro
 
 section .text
-align 8
-default_isr_0:
-  pre_isr
-  mov rdi, 0
-  call default_isr
-  post_isr
-align 8
-default_isr_1:
-  pre_isr
-  mov rdi, 1
-  call default_isr
-  post_isr
+
 align 8
 keyboard_isr_stub:
-iretq
-  pre_isr
-  call keyboard_interrupt_handler
-  post_isr
+  isr_stub keyboard_interrupt_handler
+
 align 8
 timer_isr_stub:
-  pre_isr
-  call timer_interrupt_handler
-_isr_ret:
-  post_isr
+  isr_stub timer_interrupt_handler
 
-default_isr_fail:
-pre_isr
-call default_isr_null
-post_isr
+align 8
+ctx_switch:
+  mov [rdi], rsp
+  mov rsp, [rsi]
+  ret
