@@ -6,20 +6,20 @@ override SRCFILES := \
 	$(shell find -L $(src_dirs) -type f -not -path 'src/arch/*' 2>/dev/null | LC_ALL=C sort)
 # Add architecture specific files, if they exist.
 override SRCFILES += $(shell find -L src/arch/$(ARCH) -type f 2>/dev/null | LC_ALL=C sort)
+# Add architecture specific files, if they exist.
+override SRCFILES += $(wildcard src/$(ARCH).*)
 # Obtain the object and header dependencies file names.
 override CFILES := $(filter %.c,$(SRCFILES))
+
 override ASFILES := $(filter %.S,$(SRCFILES))
-ifeq ($(ARCH),x86_64)
-override NASMFILES := $(filter %.asm,$(SRCFILES))
-endif
+
 override OBJ := $(addprefix obj-$(ARCH)/,$(CFILES:.c=.c.o) $(ASFILES:.S=.S.o))
 ifeq ($(ARCH),x86_64)
+override NASMFILES := $(filter %.asm,$(SRCFILES))
 override OBJ += $(addprefix obj-$(ARCH)/,$(NASMFILES:.asm=.asm.o))
 endif
+
 override HEADER_DEPS := $(addprefix obj-$(ARCH)/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
-
-
-
 
 # Default target. This must come first, before header dependencies.
 .PHONY: all
