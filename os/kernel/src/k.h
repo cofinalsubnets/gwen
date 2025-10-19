@@ -3,30 +3,34 @@
 #include <limine.h>
 #include "i.h"
 #include "libc_internal.h"
+#include "fb.h"
 
+#define G_FREQ 100
+#define G_TIMER_HZ G_FREQ
 
-bool
-  boot_ok(void);
-
+extern g_fb32 k_fb;
 void
-  k_log(const char*),
-  k_log_n(uintptr_t n, uintptr_t base),
-  k_dbg(g_core*),
   k_stop(void),
-  k_reset(void)
-  ;
+  k_reset(void),
+  k_dbg(g_core*),
+  k_sleep_ticks(uintptr_t),
+  k_init(void);
 
-void
-  k_log(const char*),
-  k_log_n(uintptr_t n, uintptr_t base),
-  k_dbg(g_core*);
-
-void k_init(void);
+#define k_sleep(n) k_sleep_ticks((n)*G_FREQ)
 
 typedef struct g_task {
-  void *sp;
-  uint32_t id, state;
+  uintptr_t *sp, id, wait;
   struct g_task *next;
 } g_task;
+
+void resume(g_task*);
+
+extern uintptr_t g_ticks;
+uintptr_t g_new_id(void);
+
+//extern volatile struct limine_stack_size_request stack_req;
+extern volatile struct limine_memmap_request memmap_req;
+
+bool boot_check(void);
 
 #endif

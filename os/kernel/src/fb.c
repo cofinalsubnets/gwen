@@ -19,24 +19,27 @@ void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t f
     for (int c = 0; c < 8; c++, o <<= 1) {
       fb->_[(row + r) * fb->pitch / 4 + col + c] = o & 128 ? fg : bg; } } }
 
+void g_fb32_char(g_fb32 *fb, size_t row, size_t col, char c, uint32_t fg, uint32_t bg) {
+  g_fb32_bmp_8x8(&k_fb, row, col, cga_8x8[c], fg, bg); }
+
 void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
   size_t h = fb->height, w = fb->width;
   for (; *msg; msg++) {
     int c = *msg;
-    g_fb32_bmp_8x8(&k_fb, row, col, cga_8x8[c], fg, bg);
+    g_fb32_char(fb, row, col, c, fg, bg);
     col += 8;
     if (col >= w)
       col %= w,
       row += 8,
       row %= h; } }
 
-void g_fb32_cur_msg(g_fb32 *fb, uint32_t px, const char *msg) {
+void g_fb32_cur_msg(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg) {
   size_t h = fb->height / 8, w = fb->width / 8;
   for (; *msg; msg++) {
     int c = *msg;
     if (c == '\n') fb->cur_x = 0, fb->cur_y = (fb->cur_y + 1) % h;
     else {
-      g_fb32_bmp_8x8(fb, fb->cur_y * 8, fb->cur_x * 8, cga_8x8[c], px, 0);
+      g_fb32_bmp_8x8(fb, fb->cur_y * 8, fb->cur_x * 8, cga_8x8[c], fg, bg);
       fb->cur_x += 1;
       if (fb->cur_x >= w)
         fb->cur_x %= w,
@@ -47,12 +50,11 @@ void g_fb32_set_cursor(g_fb32 *fb, size_t x, size_t y) {
   fb->cur_x = x % fb->width;
   fb->cur_y = y % fb->height; }
 
-void g_fb32_ini(g_fb32 *b) {
-  struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
-  b->_ = fb->address;
-  b->width = fb->width;
-  b->height = fb->height;
-  b->pitch = fb->pitch;
+void g_fb32_ini(g_fb32 *b, uint32_t *_, size_t width, size_t height, size_t pitch) {
+  b->_ = _;
+  b->width = width;
+  b->height = height;
+  b->pitch = pitch;
   b->cur_x = b->cur_y = 0; }
 
 void g_fb32_test_pattern(g_fb32 *fb) {

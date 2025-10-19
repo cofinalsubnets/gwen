@@ -34,10 +34,10 @@ static void report(g_core *f) {
   f = g_core_of(f);
   switch (s) {
     case g_status_oom:
-      fprintf(stderr, "# oom@%ldB\n", f ? f->len * sizeof(g_word) : 0);
+      fprintf(stderr, "# oom@%ldB\n", !f ? 0 : f->len * sizeof(g_word) * 2);
     default: }; }
 
-static g_word pool[1<<20];
+static g_word pool[1<<22];
 #define LEN(x) (sizeof(x)/sizeof(*x))
 int main(int _argc, const char **argv) {
   //g_core *f = g_ini();

@@ -1,7 +1,7 @@
 /* Tell the linker that we want a loongarch64 ELF64 output file */
 OUTPUT_FORMAT(elf64-loongarch)
 
-ENTRY(k_ini)
+ENTRY(kmain)
 
 /* Define the program headers we want so the bootloader gives us the right */
 /* MMU permissions; this also allows us to exert more control over the linking */
