@@ -43,20 +43,13 @@ global k_reset
   iretq
 %endmacro
 
-section .data
-align 8
-key_buffer:
-  times 64 db 0
-key_buffer_idx:
-  db 0
-
 section .text
 
 align 8
 timer_isr:
   inc qword [rel g_ticks]
   push rax
-  mov eax, 0x20
+  mov al, 0x20
   out 0x20, al
   pop rax
   iretq
@@ -66,9 +59,8 @@ keyboard_isr_stub:
   isr_stub keyboard_interrupt_handler
 
 k_reset:
-  xor eax, eax
-  push rax
-  push rax
+  push 0
+  push 0
   lidt [rsp]
   int 0
 
@@ -79,45 +71,41 @@ ctx_switch:
 
 start_interrupts:
   ; configure PIT
-  mov eax, 0x36
+  mov al, 0x36
   out 0x43, al
-  mov eax, 0x9b
-  out 0x40, al
-  mov eax, 0x2e
-  out 0x40, al
+  mov dx, 0x40 ; store to dx instead of dl so dh is subsequently 0
+  mov al, 0x9b
+  out dx, al
+  mov al, 0x2e
+  out dx, al
 
-  ; save original master and slave PIC masks
-  in al, 0x21
-  mov edi, eax
-  in al, 0xa1
-  mov esi, eax
-
-  ; start init
-  mov eax, 0x11
+  ; start init -- each will now want 3 more bytes
+  mov al, 0x11
   out 0x20, al
   out 0xa0, al
-  ; configure master PIC
-  mov eax, 0x20
+
+  ; first two bytes to master
+  mov dl, 0x21 ; master PIC data port number in dx
+  mov al, 0x20
+  out dx, al
+  mov al, 4
+  out dx, al
+
+  ; first two bytes to slave
+  mov dl, 0xa1 ; slave PIC data port number in dx
+  mov al, 0x28
+  out dx, al
+  mov al, 2
+  out dx, al
+
+  ; last byte to each
+  mov al, 1
   out 0x21, al
-  mov eax, 0x4
+  out dx, al
+  mov al, 0
   out 0x21, al
-  ; configure slave PIC
-  mov eax, 0x28
-  out 0xa1, al
-  mov eax, 0x4
-  out 0xa1, al
-  ; set same mode on both
-  mov eax, 0x1
-  out 0x21, al
-  out 0xa1, al
-  ; restore original masks
-  mov eax, edi
-  out 0x21, al
-  mov eax, esi
-  out 0xa1, al
-  ; unmask timer and keyboard interrupts
-  in al, 0x21
-  and al, 0xfc
-  out 0x21, al
+  out dx, al
+
+  ; enable interrupts
   sti
   ret

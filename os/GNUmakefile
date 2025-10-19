@@ -32,9 +32,10 @@ ovmf/ovmf-code-$(ARCH).fd:
 		riscv64) dd if=/dev/zero of=$@ bs=1 count=0 seek=33554432 2>/dev/null;; \
 	esac
 
+git_clone_limine_url=https://codeberg.org/Limine/Limine.git
 limine/limine:
 	rm -rf limine
-	git clone https://codeberg.org/Limine/Limine.git limine --branch=v10.x-binary --depth=1
+	git clone $(git_clone_limine_url) limine --branch=v10.x-binary --depth=1
 	$(MAKE) -C limine \
 		CC="$(HOST_CC)" \
 		CFLAGS="$(HOST_CFLAGS)" \

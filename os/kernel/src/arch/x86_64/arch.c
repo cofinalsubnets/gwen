@@ -4,7 +4,6 @@ void k_stop(void) { asm ("hlt"); }
 void keyboard_isr_stub(void),
      start_interrupts(void),
      timer_isr(void);
-extern uint8_t key_buffer[64], key_buffer_idx;
 
 #define INTERRUPT 0x8e
 #define TRAP 0x8f
@@ -113,19 +112,9 @@ static struct {
   [47] = {k_reset, FAULT},
 };
 
-
-
-// CHATGPT CODE
-
-
-// END CHATGPT
-//
-//
 void resume(g_task *t) {
 //  ctx_switch(t->sp);
 }
-
-
 
 #define LEN(x) (sizeof(x)/sizeof(*x))
 void keyboard_interrupt_handler(void) {
@@ -142,8 +131,6 @@ void keyboard_interrupt_handler(void) {
   } else if (code < LEN(scancode_ascii)) {
     // Key pressed
     code = scancode_ascii[code];
-    if (key_buffer_idx >= LEN(key_buffer)) key_buffer_idx = 0;
-    key_buffer[key_buffer_idx++] = code;
     k_log_char(code);
   }
   asm volatile (
