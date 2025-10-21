@@ -37,11 +37,9 @@ static void report(g_core *f) {
       fprintf(stderr, "# oom@%ldB\n", !f ? 0 : f->len * sizeof(g_word) * 2);
     default: }; }
 
-static g_word pool[1<<22];
 #define LEN(x) (sizeof(x)/sizeof(*x))
 int main(int _argc, const char **argv) {
-  //g_core *f = g_ini();
-  g_core *f = g_ini_static(sizeof(pool), pool);
+  g_core *f = g_ini();
   f = g_evals_(f, boot_sequence);
   for (int i = 0; i < LEN(defs); i++)
     f = g_define(g_push(f, 1, defs[i].v), defs[i].n);

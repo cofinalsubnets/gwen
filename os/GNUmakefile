@@ -52,6 +52,10 @@ kernel: kernel/.deps-obtained
 
 include iso.mk
 
+.PHONY: disasm
+disasm:
+	rizin kernel/kernel.$(ARCH)
+
 .PHONY: clean
 clean:
 	$(MAKE) -C kernel clean

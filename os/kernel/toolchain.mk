@@ -87,7 +87,7 @@ override LDFLAGS += \
     -static \
     -z max-page-size=0x1000 \
     --gc-sections \
-    -T linker-scripts/$(ARCH).lds
+    -T $(ARCH).lds
 
 ifeq ($(ARCH),x86_64)
     # Internal nasm flags that should not be changed by the user.

@@ -1,5 +1,3 @@
-extern keyboard_interrupt_handler  ; defined in C
-extern g_ticks
 extern k_log_char
 
 global keyboard_isr
@@ -8,6 +6,13 @@ global k_init
 global key_buffer
 global key_buffer_idx
 global k_reset
+global g_sys_clock
+global g_ticks
+global resume
+extern kb_int
+
+%define INTERRUPT 0x8e
+%define TRAP 0x8f
 
 %macro push15 0
   push rbp
@@ -56,30 +61,44 @@ section .bss
 align 8
 idt:
   resq 512
-
-%define INTERRUPT 0x8e
-%define TRAP 0x8f
-%define FAULT TRAP
-%define ABORT TRAP
+g_ticks:
+  resq 1
+kbq:
+  resb 8
+kbq_len:
+  resb 1
 
 section .rodata
+
 align 8
 scan_ascii:
-  db 0,27,`1234567890-=\b\tqwertyuiop[]\n`,0,"asdfghjkl;'`",0,"\zxcvbnm,./",0,'*',0,' '
+  db 0,27,"1234567890-=",8,9,"qwertyuiop[]",10,0,"asdfghjkl;'`",0,"\zxcvbnm,./",0,"*",0," "
+scan_ascii_end:
 align 8
 isrs:
   times 32 dq k_reset
-  dq timer_isr
-  dq keyboard_isr
+  times  1 dq timer_isr
+  times  1 dq keyboard_isr
   times 14 dq k_reset
+
+align 8
 isr_types:
-  times 2 db TRAP
-  times 1 db INTERRUPT ; NMI
+  times  2 db TRAP
+  times  1 db INTERRUPT ; NMI
   times 29 db TRAP
-  times 2 db INTERRUPT ; timer & keyboard interrupts
+  times  2 db INTERRUPT ; timer & keyboard interrupts
   times 14 db TRAP
 
 section .text
+
+align 8
+resume:
+  ret
+
+align 8
+g_sys_clock:
+  mov rax, [rel g_ticks]
+  ret
 
 align 8
 timer_isr:
@@ -93,30 +112,22 @@ timer_isr:
 align 8
 keyboard_isr:
   push15
-  xor eax, eax
   in al, 0x60
-  test al, al
-  js .kbisr.out
-  movzx edi, byte [scan_ascii + rax]
-  call k_log_char
-.kbisr.out:
+  movzx edi, al
+  call kb_int
   mov al, 0x20
   out 0x20, al
   pop15
   iretq
 
-k_reset:
-  push 0
-  push 0
-  lidt [rsp]
-  int 0
-
+align 8
 k_init:
+  ; populate IDT
   lea rdi, [rel idt]
   lea rcx, [rel isrs]
   lea rdx, [rel isr_types]
   mov rax, rdx
-.loop:
+.idt_entry:
   ; store three parts of isr pointer
   mov rbx, qword [rcx]
   mov [rdi], word bx ; low
@@ -132,12 +143,14 @@ k_init:
   add rcx, 8
   add rdi, 16
   cmp rcx, rax
-  jne .loop
-  ; load idt
+  jne .idt_entry
+
+  ; load IDT
   push idt
-  push word 4095
+  push word 4095 ; sizeof idt - 1
   lidt [rsp]
   add rsp, 10
+
   ; configure PIT
   mov al, 0x36
   out 0x43, al
@@ -146,6 +159,7 @@ k_init:
   out dx, al
   mov al, 0x2e
   out dx, al
+
   ; start PIC init -- each will now want 3 more bytes
   mov al, 0x11
   out 0x20, al
@@ -176,3 +190,9 @@ k_init:
   ; enable interrupts
   sti
   ret
+
+k_reset:
+  push 0
+  push 0
+  lidt [rsp]
+  int 0

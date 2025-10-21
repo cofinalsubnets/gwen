@@ -45,7 +45,7 @@ cloc:
 bits: host/$n
 	readelf -S host/$n | grep -A 1 '\(text\|data\)'
 disasm: host/$n
-	rizin -A $<
+	rizin $<
 # profiling on linux
 perf.data: host/$n
 	perf record host/$n $(test_sequence)

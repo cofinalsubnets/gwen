@@ -1,13 +1,12 @@
 #include "fb.h"
 #include "font.h"
-#include <limine.h>
+#include "k.h"
+#include "limine.h"
 
 __attribute__((used, section(".limine_requests")))
 volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST,
     .revision = 0 };
-
-g_fb32 k_fb;
 
 void g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px) {
   fb->_[row * fb->pitch / 4 + col] = px; }
@@ -20,7 +19,7 @@ void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t f
       fb->_[(row + r) * fb->pitch / 4 + col + c] = o & 128 ? fg : bg; } } }
 
 void g_fb32_char(g_fb32 *fb, size_t row, size_t col, char c, uint32_t fg, uint32_t bg) {
-  g_fb32_bmp_8x8(&k_fb, row, col, cga_8x8[c], fg, bg); }
+  g_fb32_bmp_8x8(fb, row, col, cga_8x8[c], fg, bg); }
 
 void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
   size_t h = fb->height, w = fb->width;
@@ -57,13 +56,36 @@ void g_fb32_ini(g_fb32 *b, uint32_t *_, size_t width, size_t height, size_t pitc
   b->pitch = pitch;
   b->cur_x = b->cur_y = 0; }
 
+static void g_fb32_log_n_r(g_fb32 *fb, uintptr_t n, uintptr_t base) {
+  if (n) g_fb32_log_n(fb, n, base); }
+
+void g_fb32_log_n(g_fb32 *fb, uintptr_t n, uintptr_t base) {
+  uintptr_t dig = n % base;
+  g_fb32_log_n_r(fb, n / base, base);
+  const char d[2] = {digits[dig], 0};
+  g_fb32_log(fb, d); }
+
+void g_fb32_log_c(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg) {
+  g_fb32_cur_msg(fb, msg, fg, bg); }
+void g_fb32_log(g_fb32 *fb, const char *msg) {
+  g_fb32_log_c(fb, msg, 0xffeeddcc, 0); }
+void g_fb32_log_char_c(g_fb32 *fb, char c, uint32_t fg, uint32_t bg) {
+  char s[2] = {c, 0};
+  g_fb32_log_c(fb, s, fg, bg); }
+void g_fb32_log_char(g_fb32 *fb, char c) {
+  g_fb32_log_char_c(fb, c, 0xffeeddcc, 0); }
+
+
 void g_fb32_test_pattern(g_fb32 *fb) {
   // Note: we assume the framebuffer model is RGB with 32-bit pixels.
   for (size_t i = 0; i < 100; i++)
     g_fb32_px(fb, i, 200 + i, 0x78349aed);
-  size_t y0 = k_fb.height / 4, x0 = k_fb.width / 4;
+  size_t y0 = fb->height / 4, x0 = fb->width / 4;
   uint32_t colors[] = {0x12e4c932, 0xcd8237fa, 0x5d8e412a, 0x48d03aa2};
   for (int i = 4, j = 128; i > 0; i--, j /= 2)
     for (size_t x = x0 - j / 2; x < x0 + j / 2; x++)
       for (size_t y = y0 - j / 2; y < y0 + j / 2; y++)
-        g_fb32_px(fb, x, y, colors[i-1]); }
+        g_fb32_px(fb, x, y, colors[i-1]);
+  g_fb32_log_n(fb, fb->width, 10);
+  g_fb32_log_char(fb, 'x');
+  g_fb32_log_n(fb, fb->height, 10); }
