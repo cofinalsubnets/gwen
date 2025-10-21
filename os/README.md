@@ -1,3 +1,3 @@
-# gwen lisp os
+# Gwen OS
 
-based on "Limine C Template" by mintsuki et al.
+Originally based on "Limine C Template" by Mintsuki et al.

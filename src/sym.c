@@ -43,7 +43,7 @@ Vm(nomsym) {
 
 Vm(gensym) {
   if (strp(Sp[0])) return Ap(nomsym, f);
-  const int req = Width(symbol) - 2;
+  const uintptr_t req = Width(symbol) - 2;
   Have(req);
   symbol *y = (symbol*) Hp;
   Hp += req;
@@ -87,11 +87,11 @@ static void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
 
 static g_core *em_sym(g_core *f, g_file o, g_word x) {
   string* s = sym(x)->nom;
-  if (s) for (int i = 0; i < s->len; g_fputc(s->text[i++], o));
+  if (s) for (uintptr_t i = 0; i < s->len; g_fputc(s->text[i++], o));
   else g_fprintf(o, "#sym@%lx", (long) x);
   return f; }
 
-static g_core*show_sym(g_core*f,g_word x) {
+static g_core *show_sym(g_core *f, g_word x) {
   g_word n = (g_word) ((g_symbol*) x)->nom;
   return g_push(f, 1, n ? n : nil); }
 

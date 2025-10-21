@@ -2,12 +2,12 @@ extern k_log_char
 
 global keyboard_isr
 global timer_isr
-global k_init
+global arch_init
 global key_buffer
 global key_buffer_idx
 global k_reset
 global g_sys_clock
-global g_ticks
+extern K
 global resume
 extern kb_int
 
@@ -61,8 +61,6 @@ section .bss
 align 8
 idt:
   resq 512
-g_ticks:
-  resq 1
 kbq:
   resb 8
 kbq_len:
@@ -97,12 +95,12 @@ resume:
 
 align 8
 g_sys_clock:
-  mov rax, [rel g_ticks]
+  mov rax, [rel K]
   ret
 
 align 8
 timer_isr:
-  inc qword [rel g_ticks]
+  inc qword [rel K]
   push rax
   mov al, 0x20
   out 0x20, al
@@ -121,7 +119,7 @@ keyboard_isr:
   iretq
 
 align 8
-k_init:
+arch_init:
   ; populate IDT
   lea rdi, [rel idt]
   lea rcx, [rel isrs]

@@ -64,8 +64,10 @@ Vm(ssub) {
     string *s = str(Sp[0]);
     intptr_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
              j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
-    i = 0 > i ? 0 : i > s->len ? s->len : i;
-    j = i > j ? i : j > s->len ? s->len : j;
+    i = MAX(i, 0);
+    i = MIN(i, s->len);
+    j = MAX(j, i);
+    j = MIN(j, s->len);
     if (i == j) Sp[2] = nil;
     else {
       size_t req = Width(string) + b2w(j - i);
@@ -75,9 +77,9 @@ Vm(ssub) {
       ini_str(t, j - i);
       memcpy(t->text, s->text + i, j - i);
       Sp[2] = (g_word) t; } }
-  return Ip += 1,
-         Sp += 2,
-         Continue(); }
+  Ip += 1;
+  Sp += 2;
+  return Continue(); }
 
 static Inline size_t max(size_t a, size_t b) { return a > b ? a : b; }
 static Inline size_t min(size_t a, size_t b) { return a < b ? a : b; }

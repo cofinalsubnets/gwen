@@ -3,11 +3,6 @@
 #include "k.h"
 #include "limine.h"
 
-__attribute__((used, section(".limine_requests")))
-volatile struct limine_framebuffer_request framebuffer_request = {
-    .id = LIMINE_FRAMEBUFFER_REQUEST,
-    .revision = 0 };
-
 void g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px) {
   fb->_[row * fb->pitch / 4 + col] = px; }
 
@@ -18,7 +13,7 @@ void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t f
     for (int c = 0; c < 8; c++, o <<= 1) {
       fb->_[(row + r) * fb->pitch / 4 + col + c] = o & 128 ? fg : bg; } } }
 
-void g_fb32_char(g_fb32 *fb, size_t row, size_t col, char c, uint32_t fg, uint32_t bg) {
+void g_fb32_char(g_fb32 *fb, size_t row, size_t col, uint8_t c, uint32_t fg, uint32_t bg) {
   g_fb32_bmp_8x8(fb, row, col, cga_8x8[c], fg, bg); }
 
 void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
@@ -32,18 +27,21 @@ void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg
       row += 8,
       row %= h; } }
 
-void g_fb32_cur_msg(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg) {
-  size_t h = fb->height / 8, w = fb->width / 8;
+void k_cur_msg(const char *msg, uint32_t fg, uint32_t bg) {
+  size_t h = K.fb.height / 8, w = K.fb.width / 8;
   for (; *msg; msg++) {
     int c = *msg;
-    if (c == '\n') fb->cur_x = 0, fb->cur_y = (fb->cur_y + 1) % h;
+    if (c == '\n') K.fb.cur_x = 0, K.fb.cur_y = (K.fb.cur_y + 1) % h;
     else {
-      g_fb32_bmp_8x8(fb, fb->cur_y * 8, fb->cur_x * 8, cga_8x8[c], fg, bg);
-      fb->cur_x += 1;
-      if (fb->cur_x >= w)
-        fb->cur_x %= w,
-        fb->cur_y += 1,
-        fb->cur_y %= h; } } }
+      g_fb32_bmp_8x8(&K.fb, K.fb.cur_y * 8, K.fb.cur_x * 8, cga_8x8[c], fg, bg);
+      K.fb.cur_x += 1;
+      if (K.fb.cur_x >= w)
+        K.fb.cur_x %= w,
+        K.fb.cur_y += 1,
+        K.fb.cur_y %= h; } } }
+
+void g_fb32_draw_cb(g_fb32 *fb, g_cb *cb) {
+}
 
 void g_fb32_set_cursor(g_fb32 *fb, size_t x, size_t y) {
   fb->cur_x = x % fb->width;
@@ -65,8 +63,6 @@ void g_fb32_log_n(g_fb32 *fb, uintptr_t n, uintptr_t base) {
   const char d[2] = {digits[dig], 0};
   g_fb32_log(fb, d); }
 
-void g_fb32_log_c(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg) {
-  g_fb32_cur_msg(fb, msg, fg, bg); }
 void g_fb32_log(g_fb32 *fb, const char *msg) {
   g_fb32_log_c(fb, msg, 0xffeeddcc, 0); }
 void g_fb32_log_char_c(g_fb32 *fb, char c, uint32_t fg, uint32_t bg) {
@@ -75,17 +71,3 @@ void g_fb32_log_char_c(g_fb32 *fb, char c, uint32_t fg, uint32_t bg) {
 void g_fb32_log_char(g_fb32 *fb, char c) {
   g_fb32_log_char_c(fb, c, 0xffeeddcc, 0); }
 
-
-void g_fb32_test_pattern(g_fb32 *fb) {
-  // Note: we assume the framebuffer model is RGB with 32-bit pixels.
-  for (size_t i = 0; i < 100; i++)
-    g_fb32_px(fb, i, 200 + i, 0x78349aed);
-  size_t y0 = fb->height / 4, x0 = fb->width / 4;
-  uint32_t colors[] = {0x12e4c932, 0xcd8237fa, 0x5d8e412a, 0x48d03aa2};
-  for (int i = 4, j = 128; i > 0; i--, j /= 2)
-    for (size_t x = x0 - j / 2; x < x0 + j / 2; x++)
-      for (size_t y = y0 - j / 2; y < y0 + j / 2; y++)
-        g_fb32_px(fb, x, y, colors[i-1]);
-  g_fb32_log_n(fb, fb->width, 10);
-  g_fb32_log_char(fb, 'x');
-  g_fb32_log_n(fb, fb->height, 10); }

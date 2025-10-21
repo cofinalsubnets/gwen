@@ -7,6 +7,9 @@ typedef Vm(g_vm);
 
 #define Inline inline __attribute__((always_inline))
 #define NoInline __attribute__((noinline))
+#define LEN(x) (sizeof(x)/sizeof(*x))
+#define MIN(x,y) ((x)<(y)?(x):(y))
+#define MAX(x,y) ((x)>(y)?(x):(y))
 
 union g_cell {
   g_vm *ap;
@@ -73,8 +76,9 @@ typedef int g_file;
 #define g_stdin 0
 #define g_stdout 1
 #define g_stderr 2
-#define g_fprintf(...) ((void)0)
-#define g_fputc(...) ((void)0)
+void k_logf(const char*, ...), k_log_char(char);
+#define g_fprintf(_, ...) k_logf(__VA_ARGS__)
+#define g_fputc(_, ...) k_log_char(__VA_ARGS__)
 #define EOF (-1)
 #endif
 

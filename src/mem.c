@@ -14,12 +14,12 @@ static g_core *g_pushr(g_core *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (g_ok(f)) *--f->sp = x;
   return f; }
 
-#define avail(f) (f->sp-f->hp)
+#define avail(f) ((uintptr_t)(f->sp-f->hp))
 g_core *g_push(g_core *f, uintptr_t m, ...) {
   if (!g_ok(f)) return f;
   va_list xs;
   va_start(xs, m);
-  g_word n = 0;
+  uintptr_t n = 0;
   if (avail(f) < m) f = g_pushr(f, m, n, xs);
   else for (f->sp -= m; n < m; f->sp[n++] = va_arg(xs, g_word));
   va_end(xs);

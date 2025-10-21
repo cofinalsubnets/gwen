@@ -14,7 +14,6 @@ static Vm(nullp) {
 #ifndef g_version
 #define g_version ""
 #endif
-#define LEN(a) (sizeof(a)/sizeof(*a))
 #define S1(i) {{i}, {ret0}}
 #define S2(i) {{curry},{.x=putnum(2)},{i}, {ret0}}
 #define S3(i) {{curry},{.x=putnum(3)},{i}, {ret0}}
