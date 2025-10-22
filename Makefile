@@ -11,10 +11,10 @@ test: bin/host/$n
 target ?= host
 #build
 # c files and headers
-share_h=$(wildcard share/*.h)
-share_c=$(wildcard share/*.c)
-font_c=$(wildcard share/font/*.c)
-font_h=$(wildcard share/font/*.h)
+share_h=$(wildcard g/*.h)
+share_c=$(wildcard g/*.c)
+font_c=$(wildcard g/font/*.c)
+font_h=$(wildcard g/font/*.h)
 host_o=$(addprefix bin/host/, $(share_c:.c=.o) sys.o)
 a=bin/host/$n.a
 so=bin/host/lib$n.so
@@ -24,7 +24,7 @@ flags:= -std=gnu17 -g -O2 -pipe\
  	-fno-exceptions -fno-asynchronous-unwind-tables -fno-stack-clash-protection\
  	-fcf-protection=none\
 	-flto -fpic
-cc=$(CC) $(flags) -Ishare -Ihost -Ibin\
+cc=$(CC) $(flags) -Ig/ -Ihost/ -Ibin/ \
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
 	 -D g_target=g_target_$(target)
 
@@ -68,12 +68,12 @@ bin/host/main.o: host/main.c bin/host/main.h bin/boot.h $(share_h) Makefile
 #	@$(cc) -c $< -o $@
 
 # sed command to escape lisp text into C string format
-bin/boot.h: bin/host/lcat host/lcat.sed share/boot.$x
-	@echo LC $@
-	@$l < share/boot.$x | sed -f host/lcat.sed >$@
+bin/boot.h: bin/host/lcat host/lcat.sed g/boot.$x
+	@echo MI $@
+	@$l < g/boot.$x | sed -f host/lcat.sed >$@
 
 bin/host/main.h: bin/host/lcat host/lcat.sed host/main.$x
-	@echo LC $@
+	@echo MI $@
 	@$l < host/main.$x | sed -f host/lcat.sed > $@
 
 bin/host/$n.1: bin/host/$n host/manpage.$x
@@ -90,7 +90,7 @@ dest=$(DESTDIR)/$(PREFIX)/
 vimdest=$(DESTDIR)/$(VIMPREFIX)/
 installs=\
  	$(dest)/bin/$n\
-  $(dest)/share/man/man1/$n.1\
+  $(dest)/g/man/man1/$n.1\
   $(dest)/lib/$n.a\
   $(dest)/lib/lib$n.so\
   $(dest)/include/$n.h\
@@ -101,7 +101,7 @@ uninstall:
 	@echo RM $(abspath $(installs))
 	@rm -f $(installs)
 
-$(dest)/include/$n.h: share/$n.h
+$(dest)/include/$n.h: g/$n.h
 	@echo IN $(abspath $@)
 	@install -D -m 644 $< $@
 $(dest)/lib/$n.a: bin/host/$n.a
@@ -113,18 +113,21 @@ $(dest)/lib/lib$n.so: bin/host/lib$n.so
 $(dest)/bin/$n: bin/host/$n
 	@echo IN $(abspath $@)
 	@install -D -m 755 -s $< $@
-$(dest)/share/man/man1/$n.1: bin/host/$n.1
+$(dest)/g/man/man1/$n.1: bin/host/$n.1
 	@echo IN $(abspath $@)
 	@install -D -m 644 $< $@
-$(vimdest)/ftdetect/$n.vim: vim/ftdetect/$n.vim
+$(vimdest)/ftdetect/$n.vim: misc/vim/ftdetect/$n.vim
 	@echo IN $(abspath $@)
 	@install -D -m 644 $< $@
-$(vimdest)/syntax/$n.vim: vim/syntax/$n.vim
+$(vimdest)/syntax/$n.vim: misc/vim/syntax/$n.vim
 	@echo IN $(abspath $@)
 	@install -D -m 644 $< $@
 
 clean:
 	@echo CLEAN
+	@rm -rf bin
+distclean:
+	@echo DISTCLEAN
 	@rm -rf `git check-ignore * */*`
 # valgrind detects some memory errors
 valg: bin/host/$n
@@ -159,13 +162,13 @@ kcflags:=-std=gnu17 -g -O2 -pipe\
  	-fcf-protection=none\
 	-nostdinc -ffreestanding -fno-lto -fno-PIC -ffunction-sections -fdata-sections
 kcppflags := \
-    -I k/src \
-		-I bin \
-		-I share \
-		-I k/libc \
-		-I share/font \
+    -I k/src/ \
+		-I bin/ \
+		-I g/ \
+		-I k/libc/ \
+		-I g/font/ \
 		-Dg_target=g_target_os \
-    -isystem k/libc \
+    -isystem k/libc/ \
     $(kcppflags) \
     -DLIMINE_API_REVISION=3
 
@@ -248,7 +251,7 @@ bin/k_$a/%.o: %.c Makefile $(share_h) bin/boot.h
 	@echo CC $@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-bin/k_$a/share/cga_8x8.o: share/font/cga_8x8.c
+bin/k_$a/g/cga_8x8.o: g/font/cga_8x8.c
 	@echo CC $@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -262,7 +265,7 @@ bin/k_$a/k/src/$a/%.o: k/src/$a/%.asm
 	@nasm $(NASMFLAGS) $< -o $@
 
 
-bin/$n-$a.iso: bin/$n-$a.k bin/limine/limine k/limine.conf
+bin/$n-$a.iso: bin/$n-$a.k dl/limine/limine k/limine.conf
 	@echo MK $@
 	@rm -rf iso_root
 	@mkdir -p iso_root/boot
@@ -270,19 +273,19 @@ bin/$n-$a.iso: bin/$n-$a.k bin/limine/limine k/limine.conf
 	@mkdir -p iso_root/boot/limine
 	@cp k/limine.conf iso_root/boot/limine/
 	@mkdir -p iso_root/EFI/BOOT
-	@cp bin/limine/limine-uefi-cd.bin iso_root/boot/limine/
+	@cp dl/limine/limine-uefi-cd.bin iso_root/boot/limine/
 ifeq ($a,x86_64)
-	@cp bin/limine/limine-bios.sys bin/limine/limine-bios-cd.bin iso_root/boot/limine/
-	@cp bin/limine/BOOTX64.EFI bin/limine/BOOTIA32.EFI iso_root/EFI/BOOT/
+	@cp dl/limine/limine-bios.sys dl/limine/limine-bios-cd.bin iso_root/boot/limine/
+	@cp dl/limine/BOOTX64.EFI dl/limine/BOOTIA32.EFI iso_root/EFI/BOOT/
 	@xorriso -as mkisofs -quiet -R -r -J -b boot/limine/limine-bios-cd.bin \
 		-no-emul-boot -boot-load-size 4 -boot-info-table -hfsplus \
 		-apm-block-size 2048 --efi-boot boot/limine/limine-uefi-cd.bin \
 		-efi-boot-part --efi-boot-image --protective-msdos-label \
 		iso_root -o $@
-	@bin/limine/limine bios-install $@
+	@dl/limine/limine bios-install $@
 endif
 ifeq ($a,aarch64)
-	@cp -v bin/limine/BOOTAA64.EFI iso_root/EFI/BOOT/
+	@cp -v dl/limine/BOOTAA64.EFI iso_root/EFI/BOOT/
 	@xorriso -as mkisofs -quiet -R -r -J \
 		-hfsplus -apm-block-size 2048 \
 		--efi-boot boot/limine/limine-uefi-cd.bin \
@@ -290,7 +293,7 @@ ifeq ($a,aarch64)
 		iso_root -o $@
 endif
 ifeq ($a,riscv64)
-	@cp -v bin/limine/BOOTRISCV64.EFI iso_root/EFI/BOOT/
+	@cp -v dl/limine/BOOTRISCV64.EFI iso_root/EFI/BOOT/
 	@xorriso -as mkisofs -R -r -J \
 		-hfsplus -apm-block-size 2048 \
 		--efi-boot boot/limine/limine-uefi-cd.bin \
@@ -298,7 +301,7 @@ ifeq ($a,riscv64)
 		iso_root -o $@
 endif
 ifeq ($a,loongarch64)
-	@cp -v bin/limine/BOOTLOONGARCH64.EFI iso_root/EFI/BOOT/
+	@cp -v dl/limine/BOOTLOONGARCH64.EFI iso_root/EFI/BOOT/
 	@xorriso -as mkisofs -R -r -J \
 		-hfsplus -apm-block-size 2048 \
 		--efi-boot boot/limine/limine-uefi-cd.bin \
@@ -313,7 +316,7 @@ bin/$n-$a.hdd: bin/$n-$a.iso limine/limine k/limine.conf
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
 ifeq ($a,x86_64)
 	@PATH=$$PATH:/usr/sbin:/sbin sgdisk $@ -n 1:2048 -t 1:ef00 -m 1
-	@bin/limine/limine bios-install $@ 2>&1 >/dev/null
+	@dl/limine/limine bios-install $@ 2>&1 >/dev/null
 else
 	@PATH=$$PATH:/usr/sbin:/sbin sgdisk $@ -n 1:2048 -t 1:ef00
 endif
@@ -322,18 +325,18 @@ endif
 	@mcopy -i $@@@1M $< ::/boot/kernel
 	@mcopy -i $@@@1M k/limine.conf ::/boot/limine
 ifeq ($a,x86_64)
-	@mcopy -i $@@@1M bin/limine/limine-bios.sys ::/boot/limine
-	@mcopy -i $@@@1M bin/limine/BOOTX64.EFI ::/EFI/BOOT
-	@mcopy -i $@@@1M bin/limine/BOOTIA32.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M dl/limine/limine-bios.sys ::/boot/limine
+	@mcopy -i $@@@1M dl/limine/BOOTX64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M dl/limine/BOOTIA32.EFI ::/EFI/BOOT
 endif
 ifeq ($a,aarch64)
-	@mcopy -i $@@@1M bin/limine/BOOTAA64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M dl/limine/BOOTAA64.EFI ::/EFI/BOOT
 endif
 ifeq ($a,riscv64)
-	@mcopy -i $@@@1M bin/limine/BOOTRISCV64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M dl/limine/BOOTRISCV64.EFI ::/EFI/BOOT
 endif
 ifeq ($a,loongarch64)
-	@mcopy -i $@@@1M bin/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
+	@mcopy -i $@@@1M dl/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
 endif
 
 .PHONY: run run-hdd
@@ -342,11 +345,11 @@ run-hdd: run-hdd-$a
 QEMUFLAGS := -m 2G
 qemu-x86_64=qemu-system-x86_64 $(QEMUFLAGS)\
 	-M q35\
-	-drive if=pflash,unit=0,format=raw,file=bin/ovmf/ovmf-code-x86_64.fd,readonly=on
+	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-x86_64.fd,readonly=on
 .PHONY: run-x86_64 run-hdd-x86_64
-run-x86_64: bin/$n-$a.iso bin/ovmf/ovmf-code-$a.fd
+run-x86_64: bin/$n-$a.iso dl/ovmf/ovmf-code-$a.fd
 	$(qemu-x86_64) -cdrom $<
-run-hdd-x86_64: bin/$n-$a.hdd bin/ovmf/ovmf-code-$a.fd
+run-hdd-x86_64: bin/$n-$a.hdd dl/ovmf/ovmf-code-$a.fd
 	$(qemu-x86_64) -hda $<
 
 qemu-aarch64=qemu-system-aarch64 $(QEMUFLAGS)\
@@ -356,12 +359,12 @@ qemu-aarch64=qemu-system-aarch64 $(QEMUFLAGS)\
 		-device qemu-xhci \
 		-device usb-kbd \
 		-device usb-mouse \
-		-drive if=pflash,unit=0,format=raw,file=bin/ovmf/ovmf-code-aarch64.fd,readonly=on
+		-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-aarch64.fd,readonly=on
 
 .PHONY: run-aarch64 run-hdd-aarch64
-run-aarch64: bin/ovmf/ovmf-code-aarch64.fd $n-aarch64.iso
+run-aarch64: dl/ovmf/ovmf-code-aarch64.fd $n-aarch64.iso
 	$(qemu-aarch64) -cdrom $n-aarch64.iso
-run-hdd-aarch64: bin/ovmf/ovmf-code-aarch64.fd $n-aarch64.hdd
+run-hdd-aarch64: dl/ovmf/ovmf-code-aarch64.fd $n-aarch64.hdd
 	$(qemu-aarch64) -hda $n-aarch64.hdd
 
 qemu-riscv64=qemu-system-riscv64 $(QEMUFLAGS)\
@@ -371,12 +374,12 @@ qemu-riscv64=qemu-system-riscv64 $(QEMUFLAGS)\
 	-device qemu-xhci \
 	-device usb-kbd \
 	-device usb-mouse \
-	-drive if=pflash,unit=0,format=raw,file=bin/ovmf/ovmf-code-riscv64.fd,readonly=on
+	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-riscv64.fd,readonly=on
 
 .PHONY: run-riscv64 run-hdd-riscv64
-run-riscv64: bin/ovmf/ovmf-code-riscv64.fd $n-riscv64.iso
+run-riscv64: dl/ovmf/ovmf-code-riscv64.fd $n-riscv64.iso
 	$(qemu-riscv64) -cdrom $n-riscv64.iso
-run-hdd-riscv64: bin/ovmf/ovmf-code-riscv64.fd $n-riscv64.hdd
+run-hdd-riscv64: dl/ovmf/ovmf-code-riscv64.fd $n-riscv64.hdd
 	$(qemu-riscv64) -hda $n-riscv64.hdd
 
 qemu-loongarch64=qemu-system-loongarch64 $(QEMUFLAGS)\
@@ -386,18 +389,18 @@ qemu-loongarch64=qemu-system-loongarch64 $(QEMUFLAGS)\
 	-device qemu-xhci \
 	-device usb-kbd \
 	-device usb-mouse \
-	-drive if=pflash,unit=0,format=raw,file=bin/ovmf/ovmf-code-loongarch64.fd,readonly=on
+	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-loongarch64.fd,readonly=on
 
 .PHONY: run-loongarch64 run-hdd-loongarch64
-run-loongarch64: bin/ovmf/ovmf-code-loongarch64.fd bin/$n-loongarch64.iso
+run-loongarch64: dl/ovmf/ovmf-code-loongarch64.fd bin/$n-loongarch64.iso
 	$(qemu-loongarch64) -cdrom $n-$a.iso
 
-run-hdd-loongarch64: bin/ovmf/ovmf-code-loongarch64.fd bin/$n-loongarch64.hdd
+run-hdd-loongarch64: dl/ovmf/ovmf-code-loongarch64.fd bin/$n-loongarch64.hdd
 	$(qemu-loongarch64) -hda $n-$a.hdd
 
-bin/ovmf/ovmf-code-%.fd:
+dl/ovmf/ovmf-code-%.fd:
 	@echo MK ovmf
-	@mkdir -p bin/ovmf
+	@mkdir -p dl/ovmf
 	@curl -sLo $@ https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/$(notdir $@)
 	@case "$a" in \
 		aarch64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
@@ -407,9 +410,9 @@ bin/ovmf/ovmf-code-%.fd:
 # Toolchain for building the 'limine' executable for the host.
 git_clone_limine=git clone\
 	https://codeberg.org/Limine/Limine.git\
- 	bin/limine --branch=v10.x-binary --depth=1 > /dev/null 2>&1
-bin/limine/limine:
+ 	dl/limine --branch=v10.x-binary --depth=1 > /dev/null 2>&1
+dl/limine/limine:
 	@echo MK limine
-	@rm -rf bin/limine
+	@rm -rf dl/limine
 	@$(git_clone_limine)
-	@make -sC bin/limine
+	@make -sC dl/limine

@@ -3,4 +3,6 @@ vgcore.*
 .gdb_history
 flamegraph.svg
 /bin/
-node_modules
+/limine/
+/ovmf/
+/dl/
