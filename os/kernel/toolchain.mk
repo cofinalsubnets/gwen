@@ -1,59 +1,11 @@
-# Check if the architecture is supported.
-ifeq ($(filter $(ARCH),aarch64 loongarch64 riscv64 x86_64),)
-    $(error Architecture $(ARCH) not supported)
-endif
-
-# User controllable toolchain and toolchain prefix.
-TOOLCHAIN :=
-TOOLCHAIN_PREFIX :=
-ifneq ($(TOOLCHAIN),)
-    ifeq ($(TOOLCHAIN_PREFIX),)
-        TOOLCHAIN_PREFIX := $(TOOLCHAIN)-
-    endif
-endif
-
-# User controllable C compiler command.
-ifneq ($(TOOLCHAIN_PREFIX),)
-    CC := $(TOOLCHAIN_PREFIX)gcc
-else
-    CC := cc
-endif
-
-# User controllable linker command.
-LD := $(TOOLCHAIN_PREFIX)ld
-
-# Defaults overrides for variables if using "llvm" as toolchain.
-ifeq ($(TOOLCHAIN),llvm)
-    CC := clang
-    LD := ld.lld
-endif
-
-# User controllable C flags.
-CFLAGS := -g -O2 -pipe
-
-# User controllable C preprocessor flags. We set none by default.
-CPPFLAGS :=
-
-ifeq ($(ARCH),x86_64)
-    # User controllable nasm flags.
-    NASMFLAGS := -g
-endif
-
-# User controllable linker flags. We set none by default.
-LDFLAGS :=
-
-# Ensure the dependencies have been obtained.
-ifneq ($(filter-out clean distclean,$(MAKECMDGOALS)),)
-    ifeq ($(wildcard .deps-obtained),)
-        $(error Please run the ./get-deps script first)
-    endif
-endif
-
-# Check if CC is Clang.
-override CC_IS_CLANG := $(shell ! $(CC) --version 2>/dev/null | grep -q '^Target: '; echo $$?)
-
-# Internal C flags that should not be changed by the user.
-override CFLAGS += \
+NASMFLAGS := -g -F dwarf -Wall
+LDFLAGS :=\
+    -nostdlib \
+    -static \
+    -z max-page-size=0x1000 \
+    --gc-sections \
+    -T $(ARCH).lds
+CFLAGS:=-g -O2 -pipe\
     -Wall \
     -Wextra \
 		-Wno-unused-parameter \
@@ -68,9 +20,10 @@ override CFLAGS += \
     -ffunction-sections \
     -fdata-sections
 
-override CPPFLAGS := \
+CPPFLAGS := \
     -I src \
     -I limine-protocol/include \
+		-I ../../bin \
 		-I ../../src \
 		-I ../../libc \
 		-I ../../font \
@@ -81,20 +34,8 @@ override CPPFLAGS := \
     -MMD \
     -MP
 
-# Internal linker flags that should not be changed by the user.
-override LDFLAGS += \
-    -nostdlib \
-    -static \
-    -z max-page-size=0x1000 \
-    --gc-sections \
-    -T $(ARCH).lds
 
-ifeq ($(ARCH),x86_64)
-    # Internal nasm flags that should not be changed by the user.
-    override NASMFLAGS := \
-        $(patsubst -g,-g -F dwarf,$(NASMFLAGS)) \
-        -Wall
-endif
+
 
 # Architecture specific internal flags.
 ifeq ($(ARCH),x86_64)
@@ -147,6 +88,7 @@ ifeq ($(ARCH),riscv64)
         -m elf64lriscv \
         --no-relax
 endif
+
 ifeq ($(ARCH),loongarch64)
     ifeq ($(CC_IS_CLANG),1)
         override CC += \

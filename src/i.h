@@ -1,7 +1,7 @@
 // thanks !!
 #ifndef _g_i_h
 #define _g_i_h
-#include "gw.h"
+#include "mt.h"
 #include <stdbool.h>
 typedef Vm(g_vm);
 
@@ -70,7 +70,7 @@ static Inline g_core *g_run(g_core *f) {
 #if g_target == g_target_host
 #include "../host/sys.h"
 #elif g_target == g_target_pd
-#include "../pd/sys.h"
+#include "pd/sys.h"
 #elif g_target == g_target_os
 typedef int g_file;
 #define g_stdin 0

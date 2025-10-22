@@ -111,10 +111,7 @@ static struct g_core *g_ini_0(g_core *f, g_malloc_t *ma, g_free_t *fr, size_t le
     f->dict = tbl(f->sp[1]),
     f = g_symof(f, "macros"),
     f = g_hash_put(f),
-    f = g_ini_def(f, "globals", (g_word) f->dict),
-    f = g_strof(f, g_version),
-    f = g_symof(f, "version"),
-    f = g_hash_put(f);
+    f = g_ini_def(f, "globals", (g_word) f->dict);
   for (size_t i = 0; i < LEN(bifff); i++)
     f = g_ini_def(f, bifff[i].n, (g_word) bifff[i].x);
   for (size_t i = 0; i < LEN(i_dict); i++)

@@ -8,10 +8,6 @@ flamegraph.svg
 *.bin
 *.1
 node_modules
-host/main.h
-src/boot.h
-lcat
-gw
 os/src
 os/libc
 os/font
