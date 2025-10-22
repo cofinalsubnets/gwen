@@ -1,18 +1,10 @@
-# gwen lisp
+# mitty
 
-gwen lisp is a simple lisp dialect inspired by haskell and scheme
-that runs on unix-like systems and various embedded platforms.
+mitty is a lisp environment that can be built as a C library, an
+executable, or an operating system on various platforms. mitty lisp
+is a simple lisp dialect inspired by haskell and scheme.
 
-## features
-- integers, symbols, strings, pairs, hash tables, and functions
-- threaded code interpreter with self hosting compiler
-- lexical scope, closures, garbage collection, etc
-- five special forms plus macros
-- every expression has a value (no exceptions)
-- every value is a function (data returns itself)
-- every function has one argument (automatic currying)
-
-## gwen vs. scheme
+## mitty vs. scheme
 
 | gwen               |  scheme  |
 |--------------------|----------|
@@ -43,11 +35,12 @@ in conditionals only `0` is false. this is equivalent to `#f` and `'()`
 in scheme. dotted pairs are not read nor displayed (an atom in cdr is
 always omitted from display).
 
-since all functions are curried, no function is nullary (no arguments)
-or variadic (variable number of arguments). variadic functions can be
-simulated with macros. if you need a nullary function, write a unary
-function and ignore the argument. in the absence of nullary functions,
-the value of a singleton list is the value of the car of the list.
 
-evaluation order for function application can be variable. if
-you need a specific order use `,` or `:`.
+argument evaluation order for function expressions can be variable.
+if you need a specific order of evaluation, use `,`, `:`, or nested applications.
+
+unlike in other lisp dialects, since functions always act as if applied to one
+value at a time, there are no nullary functions, and the value of a singleton list
+is the value of the head of the list. nullary functions are simulated by ignoring
+the argument to a unary function. variadic functions can be simulated using macros
+or implemented with various methods.

@@ -37,7 +37,7 @@ Vm(g_cursor_v) {
   Ip += 1;
   return Continue(); }
 Vm(curc) {
-  glyph_buffer[Row][Col] = getnum(Sp[0]);
+  gb[Row][Col] = getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 
@@ -49,17 +49,17 @@ Vm(theta) {
   return Continue(); }
 
 Vm(g_get_glyph) {
-  Sp[0] = putnum(glyph_buffer[Row][Col]);
+  Sp[0] = putnum(gb[Row][Col]);
   Ip += 1;
   return Continue(); }
 Vm(g_put_glyph) {
-  glyph_buffer[Row][Col] = getnum(Sp[0]);
+  gb[Row][Col] = getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 
 Vm(g_clear) {
   for (int i = 0; i < ROWS; i++)
     for (int j = 0; j < COLS; j++)
-      glyph_buffer[i][j] = 0;
+      gb[i][j] = 0;
   Ip += 1;
   return Continue(); }

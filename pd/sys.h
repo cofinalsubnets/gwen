@@ -14,7 +14,7 @@ extern PlaydateAPI *Pd;
 #define ROWS 30
 #define COLS 50
 
-extern uint8_t glyph_buffer[ROWS][COLS];
+extern uint8_t gb[ROWS][COLS];
 extern int Row, Col;
 void
   g_fb_clear(void),

@@ -1,10 +1,10 @@
-; generates a manual page for gwen
+; generates a manual page
 (: 
  (putln s) (, (puts s) (putc 10))
  concat (foldl "" scat)
  sec "1"
- nom "gw"
- upnom "GW"
+ nom "mitty"
+ upnom "MITTY"
  section (scat ".SH ")
  (\f i s) (concat (L "\\f[" i "]" s "\\f[R]"))
  \fB (\f "B")

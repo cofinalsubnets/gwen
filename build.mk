@@ -6,7 +6,7 @@ h=$(wildcard src/*.h)
 c=$(wildcard src/*.c)
 host_o=$(addprefix bin/host/, $(c:.c=.o) sys.o)
 host_h=bin/host/main.h host/sys.h bin/boot.h
-a=bin/host/lib$n.a
+a=bin/host/$n.a
 so=bin/host/lib$n.so
 CFLAGS ?=\
   -std=gnu17 -g -O2 -Wall -fpic\
@@ -16,31 +16,39 @@ CFLAGS ?=\
   -fno-asynchronous-unwind-tables -fno-stack-protector\
 	-fno-stack-clash-protection -fcf-protection=none\
   -falign-functions
-cc=$(CC) -Isrc $(CFLAGS)\
+cc=$(CC) -Isrc -Ibin $(CFLAGS)\
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
 	 -D g_target=g_target_$(target)
+ld=ld
 
-bin/host/$n: bin/host/main.h bin/boot.h host/main.c $a
+bin/host/$n: bin/host/main.o $a
 	@echo CC $@
-	@$(cc) -o $@ -Ibin -Ibin/host host/main.c $a
-bin/host/lcat: host/lcat.c $a
+	@mkdir -p $(dir $@)
+	@$(CC) -o $@ $^
+bin/host/lcat: bin/host/lcat.o $a
 	@echo CC $@
-	$(cc) -o $@ -Ibin -Ibin/host $^
-bin/host/lib$n.a: $(host_o)
+	@mkdir -p $(dir $@)
+	@$(cc) -o $@ $^
+bin/host/$n.a: $(host_o)
 	@echo AR $@
-	@ar rcs $@ $(host_o)
-bin/host/lib$n.so: $o
-	gcc -shared -o $@ $^
+	@mkdir -p $(dir $@)
+	@ar rcs $@ $^
+bin/host/lib$n.so: $a
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@gcc -shared -o $@ $^
 bin/host/%.o: %.c $h Makefile
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(cc) -c $< -o $@
-bin/host/sys.o: host/sys.c $h Makefile
+bin/host/%.o: host/%.c $h Makefile
 	@echo CC $@
-	@$(cc) -c $< -o $@
-bin/host/lcat.o: host/lcat.c $h Makefile
+	@mkdir -p $(dir $@)
+	@$(cc) -c -Ibin/host $< -o $@
+bin/host/main.o: host/main.c bin/host/main.h bin/boot.h $h Makefile
 	@echo CC $@
-	@$(cc) -c $< -o $@
+	@mkdir -p $(dir $@)
+	@$(cc) -c -Ibin/host $< -o $@
 
 #.c.o:
 #	@echo $@
@@ -48,12 +56,13 @@ bin/host/lcat.o: host/lcat.c $h Makefile
 
 # sed command to escape lisp text into C string format
 bin/boot.h: bin/host/lcat host/lcat.sed src/boot.$x
-	@echo CAT $@
+	@echo MI $@
 	@bin/host/lcat < src/boot.$x | sed -f host/lcat.sed >$@
 
 bin/host/main.h: bin/host/lcat host/lcat.sed host/main.$x
-	@echo CAT $@
+	@echo MI $@
 	@bin/host/lcat < host/main.$x | sed -f host/lcat.sed > $@
 
 bin/$n.1: $n manpage.$x
-	bin/host/$n manpage.$x > $@
+	@echo MI $@
+	@bin/host/$n manpage.$x > $@

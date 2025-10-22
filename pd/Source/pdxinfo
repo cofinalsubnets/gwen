@@ -1,5 +1,5 @@
-name=gw.pdx
+name=mitty.pdx
 author=gwen
-description=gwen lisp
-bundleID=pics.salt.gwen.lisp
+description=mitty.pdx
+bundleID=pics.salt.pdx.mitty
 imagePath=

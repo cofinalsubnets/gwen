@@ -4,21 +4,42 @@
 #include "i.h"
 #include "font.h"
 
+static bool show_cursor;
 static const char boot[] =
-#include "../src/boot.h"
+#include "boot.h"
 ;
 
 g_core *G = NULL;
 PlaydateAPI *Pd;
 
-uint8_t glyph_buffer[ROWS][COLS];
+uint8_t gb[ROWS][COLS];
+static void random_life(void);
 
-static void draw_glyph_buffer(void);
+static void draw_gb(void);
+
+#define draw_mode 0
+#define synth_mode 1
+#define life_mode 2
+#define shell_mode 3
+#define live_char 0xb2
+#define dead_char 0xb0
+
+static int mode = draw_mode;
+static int g_update(void*), synth_update(void*);
+static int life_update(void *userdata);
+static int update(void *userdata) {
+  static int (*update_modes[])(void*) = {
+    g_update,
+    synth_update,
+    life_update,
+    g_update, };
+  int r = update_modes[mode](userdata);
+  draw_gb();
+  return r; }
 
 static int g_update(void *userdata) {
 	Pd = userdata;
   G = g_evals_(G, "(update 0)");
-  draw_glyph_buffer();
 	return 1; }
 
 void g_dbg(g_core*f) {
@@ -41,7 +62,7 @@ void g_dbg(g_core*f) {
 static Vm(fb_get) {
   size_t row = getnum(Sp[0]),
          col = getnum(Sp[1]);
-  *++Sp = putnum(glyph_buffer[row % ROWS][col % COLS]);
+  *++Sp = putnum(gb[row % ROWS][col % COLS]);
   Ip += 1;
   return Continue(); }
 
@@ -49,7 +70,7 @@ static Vm(fb_put) {
   size_t row = getnum(Sp[0]),
          col = getnum(Sp[1]);
   char b = getnum(Sp[2]);
-  glyph_buffer[row % ROWS][col % COLS] = b;
+  gb[row % ROWS][col % COLS] = b;
   Sp += 2;
   Ip += 1;
   return Continue(); }
@@ -67,11 +88,12 @@ static const union g_cell
   bif_fb_put[] = { {curry}, {.x = putnum(3)}, {fb_put}, {ret0}};
 
 static PDMenuItem *screen_menu_item;
-#define g_screen_draw 0
 
+static void enter_mode(int m);
 static void g_screen_cb(void *ud) {
-  int screen = Pd->system->getMenuItemValue(screen_menu_item);
-  Pd->system->logToConsole("screen=%d", screen); }
+  int m = Pd->system->getMenuItemValue(screen_menu_item);
+  Pd->system->logToConsole("mode=%d", m);
+  enter_mode(m); }
 
 void *gg_malloc(g_core*f, size_t n) {
   return Pd->system->realloc(NULL, n); }
@@ -137,7 +159,52 @@ static void g_boot_cb(void *u) {
 static void g_reset_cb(void *id) {
   g_fb_clear();
   g_fin(G);
-  G = g_pd_init(); }
+  G = g_pd_init();
+  mode = 0;
+}
+
+PDSynth *synth;
+PlaydateAPI *Pd;
+static SoundWaveform waveforms[] = {
+  kWaveformSquare,
+  kWaveformTriangle,
+  kWaveformSine,
+  kWaveformNoise,
+  kWaveformSawtooth,
+  kWaveformPOPhase,
+  kWaveformPODigital,
+  kWaveformPOVosim,
+};
+static int active_waveform = 0;
+static float freq = 1000, freq_max = 20000, freq_min = 20, vol = 0.5;
+static PDSynthSignal *signal;
+static float constant_signal(void *u, int* i, float *f) { return *(float*)u; }
+
+static void leave_mode(int m) {
+  switch (m) {
+    case synth_mode:
+      Pd->sound->synth->freeSynth(synth);
+    default: } }
+
+static void random_life(void) {
+  for (int i = 0; i < ROWS; i++)
+    for (int j = 0; j < COLS; j++)
+      gb[i][j] = rand() & 1 ? live_char : dead_char; }
+
+static void enter_mode(int m) {
+  if (m != mode) {
+    leave_mode(mode);
+    switch (mode = m) {
+      case draw_mode: show_cursor = true;
+      default: g_fb_clear(); break;
+      case life_mode:
+        show_cursor = false;
+        random_life();
+        break;
+      case synth_mode:
+        show_cursor = false;
+        synth = Pd->sound->synth->newSynth();
+        Pd->sound->synth->setWaveform(synth, waveforms[active_waveform]); } } }
 
 
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
@@ -145,27 +212,15 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
   g_core *f;
   switch (event) {
     case kEventInit:
-      g_reset_cb(NULL);
-      pd->system->setUpdateCallback(g_update, pd);
-      g_fb_set_cursor(6, 0);
-      g_fb_puts("fb write");
-      static const char *options[] = { "draw", "life", "shell"};
-      screen_menu_item = pd->system->addOptionsMenuItem("screen", options, 3, g_screen_cb, NULL);
+      G = g_pd_init();
+      enter_mode(mode);
+      pd->system->setUpdateCallback(update, pd);
+      static const char *options[] = { "draw", "synth", "life", "shell"};
+      screen_menu_item = pd->system->addOptionsMenuItem("screen", options, LEN(options), g_screen_cb, NULL);
       pd->system->addMenuItem("reset", g_reset_cb, NULL);
       pd->system->addMenuItem("boot", g_boot_cb, NULL);
       break;
-    default:
-      /*
-      f = G;
-      f = g_evals(f, "event");
-      f = g_push(f, 3, nil, putnum(arg), putnum(event));
-      f = g_cons_r(f);
-      f = g_cons_r(f);
-      f = g_cons_r(f);
-      f = g_cons_r(f);
-      f = g_eval_(f);
-      */
-      break; }
+    default: }
 
 	return 0; }
 
@@ -181,7 +236,7 @@ int g_fb_col(void) { return Col; }
 
 void g_fb_putc(char c) {
   if (c == '\n') Row += 1, Row %= ROWS, Col = 0;
-  else glyph_buffer[Row][Col] = c,
+  else gb[Row][Col] = c,
     Col += 1, Col %= COLS,
     Row = Col ? Row : (Row + 1 % ROWS); }
 
@@ -191,14 +246,63 @@ void g_fb_puts(const char *s) {
 void g_fb_clear(void) {
   for (int i = 0; i < ROWS; i++)
     for (int j = 0; j < COLS; j++)
-      glyph_buffer[i][j] = 0;
+      gb[i][j] = 0;
   g_fb_set_cursor(0, 0); }
 
-static void draw_glyph_buffer(void) {
+static void draw_gb(void) {
   uint8_t *frame = Pd->graphics->getFrame();
   for (int i = 0; i < ROWS; i++)
     for (int j = 0; j < COLS; j++) {
-      uint8_t *glyph = cga_8x8[glyph_buffer[i][j]];
+      uint8_t *glyph = cga_8x8[gb[i][j]];
       for (int k = 0; k < 8; k++)
-        frame[52 * (8 * i + k) + j] = i == Row && j == Col ? ~glyph[k] : glyph[k]; }
+        frame[52 * (8 * i + k) + j] = show_cursor && i == Row && j == Col ? ~glyph[k] : glyph[k]; }
   Pd->graphics->markUpdatedRows(0, LCD_ROWS); }
+
+static void shift_waveform(int n) {
+  active_waveform += n;
+  active_waveform %= LEN(waveforms);
+  Pd->sound->synth->setWaveform(synth, waveforms[active_waveform]); }
+
+static int life_update(void *userdata) {
+  PDButtons current, pushed, released;
+  Pd->system->getButtonState(&current, &pushed, &released);
+  if (pushed & (kButtonA|kButtonB)) random_life();
+  uint8_t db[ROWS][COLS];
+  for (int i = 0; i < ROWS; i++)
+    for (int j = 0; j < COLS; j++) {
+      int i_1 = i-1<0?ROWS-1:i-1,
+          i1  = i+1==ROWS?0:i+1,
+          j_1 = j-1<0?COLS-1:j-1,
+          j1  = j+1==COLS?0:j+1,
+          n = (gb[i_1][j_1] == live_char ? 1 : 0)
+            + (gb[i_1][j] == live_char ? 1 : 0)
+            + (gb[i_1][j1] == live_char ? 1 : 0)
+            + (gb[i][j_1] == live_char ? 1 : 0)
+            + (gb[i][j1] == live_char ? 1 : 0)
+            + (gb[i1][j_1] == live_char ? 1 : 0)
+            + (gb[i1][j] == live_char ? 1 : 0)
+            + (gb[i1][j1] == live_char ? 1 : 0);
+      db[i][j] = n == 3 || (n == 2 && gb[i][j] == live_char) ? live_char : dead_char; }
+  memcpy(gb, db, sizeof(db));
+  return 1; }
+
+static int synth_update(void* userdata) {
+	PlaydateAPI* pd = userdata;
+  pd->sound->synth->setVolume(synth, vol, vol);
+  pd->sound->synth->playNote(synth, freq, 100, -1, 0);
+
+  freq += freq * pd->system->getCrankChange() / 360.0f;
+
+  PDButtons current, pushed, released;
+  pd->system->getButtonState(&current, &pushed, &released);
+
+  if (pushed & kButtonUp) vol += 0.1f;
+  if (pushed & kButtonDown) vol -= 0.1f;
+  vol = vol > 1 ? 1 : vol;
+  vol = vol < 0 ? 0 : vol;
+
+
+  if (pushed & kButtonLeft) shift_waveform(-1);
+  if (pushed & kButtonRight) shift_waveform(1);
+
+	return 1; }

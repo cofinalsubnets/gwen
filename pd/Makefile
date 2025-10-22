@@ -1,18 +1,15 @@
-PRODUCT = gw.pdx
+PRODUCT = mitty.pdx
 $(PRODUCT): all
-
 HEAP_SIZE      = 8388208
-STACK_SIZE     = 61800
-
+STACK_SIZE     = 4194304
 
 # Locate the SDK
 SDK = ${PLAYDATE_SDK_PATH}
 ifeq ($(SDK),)
 	SDK = $(shell egrep '^\s*SDKRoot' ~/.Playdate/config | head -n 1 | cut -c9-)
-endif
-
-ifeq ($(SDK),)
-$(error SDK path not found; set ENV value PLAYDATE_SDK_PATH)
+	ifeq ($(SDK),)
+		$(error SDK path not found; set ENV value PLAYDATE_SDK_PATH)
+	endif
 endif
 
 ######
@@ -26,7 +23,7 @@ VPATH += ../src/ ../font/
 SRC = $(wildcard *.c) $(wildcard ../src/*.c) $(wildcard ../font/cga_8x8.c)
 
 # List all user directories here
-UINCDIR = ../src/ ../font/
+UINCDIR = ../src/ ../font/ ../bin/
 
 # List user asm files
 UASRC = 
@@ -43,31 +40,11 @@ ULIBDIR =
 # List all user libraries here
 ULIBS =
 
-detected_OS := $(shell uname -s)
-detected_OS := $(strip $(detected_OS))
-
-$(info detected_OS is "$(detected_OS)")
-
-ifeq ($(detected_OS), Linux)
-
-  GCCFLAGS = -g
-  SIMCOMPILER = gcc $(GCCFLAGS)
-  DYLIB_FLAGS = -shared -fPIC
-  DYLIB_EXT = so
-  PDCFLAGS = -sdkpath $(SDK)
-endif
-
-ifeq ($(detected_OS), Darwin)
-
-  CLANGFLAGS = -g
-  SIMCOMPILER = clang $(CLANGFLAGS)
-  DYLIB_FLAGS = -dynamiclib -rdynamic
-  DYLIB_EXT = dylib
-  PDCFLAGS=
-  # Uncomment to build a binary that works with Address Sanitizer
-  #CLANGFLAGS += -fsanitize=address
-
-endif
+GCCFLAGS = -g
+SIMCOMPILER = gcc $(GCCFLAGS)
+DYLIB_FLAGS = -shared -fPIC
+DYLIB_EXT = so
+PDCFLAGS = -sdkpath $(SDK)
 
 TRGT = arm-none-eabi-
 GCC:=$(dir $(shell which $(TRGT)gcc))
@@ -189,9 +166,9 @@ pdc: simulator
 pdx:
 	$(PDC) $(PDCFLAGS) Source $(PRODUCT)
 
-$(OBJDIR)/%.o : %.c | MKOBJDIR MKDEPDIR ../src/boot.h
+$(OBJDIR)/%.o : %.c | MKOBJDIR MKDEPDIR ../bin/boot.h
 	mkdir -p `dirname $@`
-	$(CC) -c $(CPFLAGS) -I . $(INCDIR) $< -o $@
+	$(CC) -c $(CPFLAGS) -I . -I ../bin $(INCDIR) $< -o $@
 
 $(OBJDIR)/%.o : %.s | MKOBJDIR MKDEPDIR
 	$(AS) -c $(ASFLAGS) $< -o $@
@@ -224,5 +201,5 @@ clean:
 #
 -include $(wildcard $(DEPDIR)/*)
 
-../src/boot.h:
-	make -C ../host $@
+../bin/boot.h:
+	make -C .. bin.boot.h

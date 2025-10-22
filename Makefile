@@ -1,5 +1,5 @@
 n=mitty
-x=mt
+x=mi
 test: bin/host/$n
 	$< test/*.$x
 .PHONY: test

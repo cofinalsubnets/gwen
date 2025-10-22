@@ -46,4 +46,4 @@ hi def link PParen          Delimiter
 syn cluster PListCluster contains=PAtom,PAtomMark,PComment,PTodo,PFunc,PList,PNumber,PSymbol,PForm,PString,PMacro
 syn region PList matchgroup=PParen start="(" matchgroup=PParen end=")" contains=@PListCluster
 
-let b:current_syntax = "gw"
+let b:current_syntax = "mitty"

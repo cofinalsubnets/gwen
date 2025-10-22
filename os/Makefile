@@ -7,7 +7,7 @@ ARCH := x86_64
 # Default user QEMU flags. These are appended to the QEMU command calls.
 QEMUFLAGS := -m 2G
 
-override IMAGE_NAME := gw-$(ARCH)
+override IMAGE_NAME := mitty-$(ARCH)
 
 # Toolchain for building the 'limine' executable for the host.
 HOST_CC := cc
@@ -23,6 +23,7 @@ all: $(IMAGE_NAME).iso
 all-hdd: $(IMAGE_NAME).hdd
 
 include run.mk
+include iso.mk
 
 ovmf/ovmf-code-$(ARCH).fd:
 	mkdir -p ovmf
@@ -49,12 +50,6 @@ kernel/.deps-obtained:
 .PHONY: kernel
 kernel: kernel/.deps-obtained
 	$(MAKE) -C kernel
-
-include iso.mk
-
-.PHONY: disasm
-disasm:
-	rizin kernel/kernel.$(ARCH)
 
 .PHONY: clean
 clean:
