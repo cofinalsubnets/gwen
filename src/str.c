@@ -65,9 +65,9 @@ Vm(ssub) {
     intptr_t i = nump(Sp[1]) ? getnum(Sp[1]) : 0,
              j = nump(Sp[2]) ? getnum(Sp[2]) : 0;
     i = MAX(i, 0);
-    i = MIN(i, s->len);
+    i = MIN(i, (intptr_t) s->len);
     j = MAX(j, i);
-    j = MIN(j, s->len);
+    j = MIN(j, (intptr_t) s->len);
     if (i == j) Sp[2] = nil;
     else {
       size_t req = Width(string) + b2w(j - i);

@@ -1,4 +1,4 @@
-#include "mt.h"
+#include "mitty.h"
 #include <stdio.h>
 
 int main(void) {

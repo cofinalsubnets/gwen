@@ -1,7 +1,7 @@
 // thanks !!
 #ifndef _g_i_h
 #define _g_i_h
-#include "mt.h"
+#include "mitty.h"
 #include <stdbool.h>
 typedef Vm(g_vm);
 
