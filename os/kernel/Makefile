@@ -1,9 +1,8 @@
 ARCH?=$(shell uname -m)
-src_src=$(addprefix src/, $(notdir $(wildcard ../../src/*.c)))
-font_src=$(addprefix font/, $(notdir $(wildcard ../../font/*.c)))
+share_src=$(addprefix share/, $(notdir $(wildcard ../../share/*.c ../../share/font/*.c)))
 libc_src=$(addprefix libc/, $(notdir $(wildcard ../../libc/*.c)))
 os_src=$(notdir $(wildcard src/*.c src/*.S src/*.asm src/arch/$(ARCH).c src/arch/$(ARCH).S src/arch/$(ARCH).asm))
-src=$(src_src) $(font_src) $(libc_src) $(os_src)
+src=$(share_src) $(libc_src) $(os_src)
 o=$(addprefix obj-$(ARCH)/, $(patsubst %.S, %.o, $(patsubst %.asm, %.o, $(patsubst %.c, %.o, $(src)))))
 NASMFLAGS := -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 LDFLAGS := -static -nostdlib --gc-sections -T $(ARCH).lds -z max-page-size=0x1000
@@ -16,9 +15,9 @@ CFLAGS:=-std=gnu17 -g -O2 -pipe\
 CPPFLAGS := \
     -I src \
 		-I ../../bin \
-		-I ../../src \
+		-I ../../share \
 		-I ../../libc \
-		-I ../../font \
+		-I ../../share/font \
 		-Dg_target=g_target_os \
     -isystem ../../libc \
     $(CPPFLAGS) \
@@ -110,7 +109,7 @@ obj-$(ARCH)/%.o: src/%.c Makefile ../../bin/boot.h
 	@echo CC $@
 	@mkdir -p "$(dir $@)"
 	@$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
-obj-$(ARCH)/cga_8x8.o: ../../font/cga_8x8.c
+obj-$(ARCH)/share/cga_8x8.o: ../../share/font/cga_8x8.c
 	@echo CC $@
 	@mkdir -p "$(dir $@)"
 	@$(CC) -c $< -o $@
@@ -118,7 +117,7 @@ obj-$(ARCH)/%.S.o: %.S Makefile ../../bin/boot.h
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
 	@$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
-obj-$(ARCH)/$(ARCH).o: src/arch/$(ARCH).asm Makefile ../../bin/boot.h
+obj-$(ARCH)/%.o: src/$(ARCH)/%.asm Makefile ../../bin/boot.h
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
 	@nasm $(NASMFLAGS) $< -o $@

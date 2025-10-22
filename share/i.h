@@ -57,68 +57,8 @@ struct g_core {
   g_malloc_t *malloc;
   g_free_t *free;
   g_word end[]; }; // end of struct == initial heap pointer for this core
-                   //
-static Inline g_core *g_run(g_core *f) {
-#if g_tco
-  f = !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp);
-#else
-  while (g_ok(f)) f = f->ip->ap(f);
-  f = g_code_of(f) == g_status_eof ? g_core_of(f) : f;
-#endif
-  return f; }
 
-#if g_target == g_target_host
-#include <stdio.h>
-#include <stdlib.h>
-typedef FILE *g_file;
-#define g_stdout stdout
-#define g_stdin stdin
-#define g_stderr stderr
-#define g_fprintf fprintf
-#define g_fputc putc
-g_vm p_isatty, readf, read0;
-#elif g_target == g_target_pd
-#include "pd_api.h"
-#include <stdlib.h>
-#include "font.h"
-typedef int g_file;
-#define g_stdin  0
-#define g_stdout 1
-#define g_stderr 2
-#define g_fprintf(_, ...) Pd->system->logToConsole(__VA_ARGS__)
-#define g_fputc(c, _) g_fb_putc(c)
-extern PlaydateAPI *Pd;
-#define ROWS 30
-#define COLS 50
-extern uint8_t gb[ROWS][COLS];
-extern int Row, Col;
-void
-  g_fb_clear(void),
-  g_fb_putc(char),
-  g_fb_puts(const char*),
-  g_fb_set_cursor(int, int);
-
-int g_fb_row(void), g_fb_col(void);
-
-g_vm g_buttons,
-     g_cursor_h,
-     g_cursor_v,
-     theta,
-     g_get_glyph,
-     g_put_glyph,
-     g_fps,
-     g_clear;
-g_core *g_run(g_core*);
-#elif g_target == g_target_os
-typedef int g_file;
-#define g_stdin 0
-#define g_stdout 1
-#define g_stderr 2
-void k_logf(const char*, ...), k_log_char(char);
-#define g_fprintf(_, ...) k_logf(__VA_ARGS__)
-#define g_fputc(_, ...) k_log_char(__VA_ARGS__)
-#define EOF (-1)
-#endif
+#include "sys.h"
 
 // built in type method tables
 typedef struct g_type {

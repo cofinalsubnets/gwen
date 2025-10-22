@@ -1,12 +1,8 @@
 perf.data*
 vgcore.*
-*.o
-*.a
-*.so
 .gdb_history
 flamegraph.svg
-*.bin
-*.1
+/bin/
 node_modules
 os/src
 os/libc

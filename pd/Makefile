@@ -17,13 +17,13 @@ endif
 # ex: VPATH += src1:src2
 ######
 
-VPATH += ../src/ ../font/
+VPATH += ../share/ ../share/font/
 
 # List C source files here
-SRC = $(wildcard *.c) $(wildcard ../src/*.c) $(wildcard ../font/cga_8x8.c)
+SRC = $(wildcard *.c) $(wildcard ../share/*.c) $(wildcard ../share/font/*.c)
 
 # List all user directories here
-UINCDIR = ../src/ ../font/ ../bin/
+UINCDIR = ../share/ ../share/font/ ../bin/
 
 # List user asm files
 UASRC = 
@@ -202,4 +202,4 @@ clean:
 -include $(wildcard $(DEPDIR)/*)
 
 ../bin/boot.h:
-	make -C .. bin.boot.h
+	make -C .. bin/boot.h

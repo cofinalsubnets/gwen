@@ -34,5 +34,7 @@ g_vm g_buttons,
      g_clear;
 
 
-g_core *g_run(g_core*);
+static Inline g_core *g_run(g_core *f) {
+  while (g_ok(f)) f = f->ip->ap(f);
+  return g_code_of(f) == g_status_eof ? g_core_of(f) : f; }
 #endif
