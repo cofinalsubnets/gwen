@@ -147,14 +147,14 @@ serve:
 
 ARCH=$(shell uname -m)
 a=$(ARCH)
-k_c=$(share_c) $(font_c) $(wildcard k/libc/*.c) $(wildcard k/src/*.c) $(wildcard k/src/$a/*.c)
-k_h=$(share_h) $(font_h) $(wildcard k/libc/*.h) $(wildcard k/src/*.h) $(wildcard k/src/$a/*.h)
-k_S=$(wildcard k/src/*.S) $(wildcard k/src/$a/*.S)
-k_asm=$(wildcard k/src/*.asm) $(wildcard k/src/$a/*.asm)
+k_c=$(share_c) $(font_c) $(wildcard k/libc/*.c) $(wildcard k/*.c) $(wildcard k/$a/*.c)
+k_h=$(share_h) $(font_h) $(wildcard k/libc/*.h) $(wildcard k/*.h) $(wildcard k/$a/*.h)
+k_S=$(wildcard k/*.S) $(wildcard k/$a/*.S)
+k_asm=$(wildcard k/*.asm) $(wildcard k/$a/*.asm)
 k_o=$(addprefix bin/k_$a/, $(k_c:.c=.o) $(k_S:.S=.o) $(k_asm:.asm=.o))
 
 NASMFLAGS := -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
-kldflags := -static -nostdlib --gc-sections -T k/$a.lds -z max-page-size=0x1000
+kldflags := -static -nostdlib --gc-sections -T k/$a/$a.lds -z max-page-size=0x1000
 kcflags:=-std=gnu17 -g -O2 -pipe\
 	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
@@ -162,7 +162,7 @@ kcflags:=-std=gnu17 -g -O2 -pipe\
  	-fcf-protection=none\
 	-nostdinc -ffreestanding -fno-lto -fno-PIC -ffunction-sections -fdata-sections
 kcppflags := \
-    -I k/src/ \
+    -I k/ \
 		-I bin/ \
 		-I g/ \
 		-I k/libc/ \
@@ -241,7 +241,7 @@ ifeq ($(ARCH),loongarch64)
         -m elf64loongarch
 endif
 
-bin/$n-$a.k: Makefile k/$a.lds $(k_o)
+bin/$n-$a.k: Makefile k/$a/$a.lds $(k_o)
 	@echo LD $@
 	@mkdir -p "$(dir $@)"
 	@$(LD) $(kldflags) $(k_o) -o $@
@@ -255,11 +255,11 @@ bin/k_$a/g/cga_8x8.o: g/font/cga_8x8.c
 	@echo CC $@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-bin/k_$a/%.o: k/src/%.S $(share_h) Makefile bin/boot.h
+bin/k_$a/%.o: k/%.S $(share_h) Makefile bin/boot.h
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-bin/k_$a/k/src/$a/%.o: k/src/$a/%.asm
+bin/k_$a/k/$a/%.o: k/$a/%.asm
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
 	@nasm $(NASMFLAGS) $< -o $@
