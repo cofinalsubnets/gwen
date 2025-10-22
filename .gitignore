@@ -4,6 +4,3 @@ vgcore.*
 flamegraph.svg
 /bin/
 node_modules
-os/src
-os/libc
-os/font
