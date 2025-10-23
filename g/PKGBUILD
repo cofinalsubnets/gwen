@@ -22,7 +22,7 @@ pkgver() {
 build() {
   cd ${_gitname}
   git checkout main &> /dev/null
-  make all
+  make all_host
 }
 
 check() {

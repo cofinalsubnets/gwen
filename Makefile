@@ -2,13 +2,15 @@ n=mitty
 x=mi
 m=bin/host/$n
 l=bin/host/lcat
-ARCH=$(shell uname -m)
-.PHONY: test all
+a=$(shell uname -m)
 test: bin/host/$n
-	@echo MI test
+	@echo LI test
 	@$m test/*.$x
-
-all: bin/$n-$(ARCH).k bin/host/$n bin/host/lib$n.so bin/pd/$n.pdx
+all: all_host all_pd all_k
+all_host: bin/host/$n bin/host/lib$n.so bin/host/$n.1
+all_pd: bin/pd/$n.pdx
+all_k: bin/$n-$a.k
+.PHONY: test all all_host all_pd all_k
 
 #build
 target ?= host
@@ -19,8 +21,6 @@ share_c=$(wildcard g/*.c)
 font_c=$(wildcard g/font/*.c)
 font_h=$(wildcard g/font/*.h)
 host_o=$(addprefix bin/host/, $(share_c:.c=.o) sys.o)
-a=bin/host/$n.a
-so=bin/host/lib$n.so
 flags:= -std=gnu17 -g -O2 -pipe\
  	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
@@ -66,23 +66,18 @@ bin/host/main.o: host/main.c bin/host/main.h bin/boot.h $(share_h) Makefile
 	@mkdir -p $(dir $@)
 	@$(cc) -c -Ibin/host $< -o $@
 
-#.c.o:
-#	@echo $@
-#	@$(cc) -c $< -o $@
-
 # sed command to escape lisp text into C string format
 bin/boot.h: bin/host/lcat host/lcat.sed g/boot.$x
-	@echo MI $@
-	@$l < g/boot.$x | sed -f host/lcat.sed >$@
+	@echo LI $@
+	@$< < g/boot.$x | sed -f host/lcat.sed >$@
 
 bin/host/main.h: bin/host/lcat host/lcat.sed host/main.$x
-	@echo MI $@
-	@$l < host/main.$x | sed -f host/lcat.sed > $@
+	@echo LI $@
+	@$< < host/main.$x | sed -f host/lcat.sed > $@
 
 bin/host/$n.1: bin/host/$n host/manpage.$x
-	@echo MI $@
-	@$m host/manpage.$x > $@
-
+	@echo LI $@
+	@$^ > $@
 
 # installlation
 # default install to home directory under ~/.local/
@@ -105,32 +100,32 @@ uninstall:
 	@rm -f $(installs)
 
 $(dest)/include/$n.h: g/$n.h
-	@echo IN $(abspath $@)
+	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
 $(dest)/lib/$n.a: bin/host/$n.a
-	@echo IN $(abspath $@)
+	@echo CP $(abspath $@)
 	@install -D -m 755 $< $@
 $(dest)/lib/lib$n.so: bin/host/lib$n.so
-	@echo IN $(abspath $@)
+	@echo CP $(abspath $@)
 	@install -D -m 755 $< $@
 $(dest)/bin/$n: bin/host/$n
-	@echo IN $(abspath $@)
+	@echo CP $(abspath $@)
 	@install -D -m 755 -s $< $@
 $(dest)/g/man/man1/$n.1: bin/host/$n.1
-	@echo IN $(abspath $@)
+	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
 $(vimdest)/ftdetect/$n.vim: g/vim/ftdetect.vim
-	@echo IN $(abspath $@)
+	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
 $(vimdest)/syntax/$n.vim: g/vim/syntax.vim
-	@echo IN $(abspath $@)
+	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
 
 clean:
-	@echo CLEAN
+	@echo RM bin
 	@rm -rf bin
 distclean:
-	@echo DISTCLEAN
+	@echo RM bin dl
 	@rm -rf `git check-ignore * */*`
 # valgrind detects some memory errors
 valg: bin/host/$n
@@ -147,8 +142,6 @@ repl: bin/host/$n
 serve:
 	darkhttpd .
 
-
-a=$(ARCH)
 k_c=$(share_c) $(font_c) $(wildcard k/*.c) $(wildcard k/arch/$a/*.c)
 k_h=$(share_h) $(font_h) $(wildcard k/*.h) $(wildcard k/arch/$a/*.h)
 k_S=$(wildcard k/*.S) $(wildcard k/arch/$a/*.S)
@@ -163,15 +156,15 @@ kcflags:=-std=gnu17 -g -O2 -pipe\
  	-fcf-protection=none\
 	-nostdinc -ffreestanding -fno-lto -fno-PIC -ffunction-sections -fdata-sections
 kcppflags := \
-    -I k/ \
-		-I k/include/ \
-		-I bin/ \
-		-I g/ \
-		-I g/font/ \
-		-Dg_target=g_target_os \
-    -isystem k/include/ \
-    $(kcppflags) \
-    -DLIMINE_API_REVISION=3
+	-I k/ \
+	-I k/include/ \
+	-I bin/ \
+	-I g/ \
+	-I g/font/ \
+	-Dg_target=g_target_os \
+	-isystem k/include/ \
+	$(kcppflags) \
+	-DLIMINE_API_REVISION=3
 
 ifeq ($(CC_IS_CLANG),1)
 kcc_if_clang=-target $a-unknown-none-elf
@@ -223,7 +216,7 @@ bin/k_$a/g/cga_8x8.o: g/font/cga_8x8.c
 	@echo CC $@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-bin/k_$a/%.o: k/%.S $(share_h) Makefile bin/boot.h
+bin/k_$a/%.o: k/%.S $(share_h) Makefile
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -278,18 +271,18 @@ bin/$n-$a.hdd: bin/$n-$a.k dl/limine/limine k/limine/limine.conf
 k_qemu_x86_64=-M q35
 k_qemu_risc=-M virt -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_loongarch64=$(k_qemu_risc) -cpu la464
-k_qemu_aarch64=$(k_qemu_risc) -cpu=cortex-a72
-k_qemu_riscv64=$(k_qemu_risc) -cpu=rv64
+k_qemu_aarch64=$(k_qemu_risc) -cpu cortex-a72
+k_qemu_riscv64=$(k_qemu_risc) -cpu rv64
 k_qemu=qemu-system-$a -m 2G $(k_qemu_$a)\
 	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-$a.fd,readonly=on
 
-.PHONY: run run-hdd run-$a run-hdd-$a
 run: run-$a
 run-hdd: run-hdd-$a
 run-$a: bin/$n-$a.iso dl/ovmf/ovmf-code-$a.fd
 	$(k_qemu) -cdrom $<
 run-hdd-$a: bin/$n-$a.hdd dl/ovmf/ovmf-code-$a.fd
 	$(k_qemu) -hda $<
+.PHONY: run run-hdd run-$a run-hdd-$a
 
 dl/ovmf/ovmf-code-%.fd:
 	@echo MK ovmf
@@ -306,105 +299,58 @@ dl/limine/limine:
 	@git clone https://codeberg.org/Limine/Limine.git dl/limine --branch=v10.x-binary --depth=1 > /dev/null 2>&1
 	@make -sC dl/limine
 
-bin/pd/%:
-	@make -C pd ../$@
-
-pd_objdir=bin/pd
-pdx=$(pd_objdir)/mitty.pdx
-default: $(pdx)
-
-pd_src = $(wildcard pd/*.c) $(wildcard g/*.c) $(wildcard g/font/*.c)
-
-pd_simcompiler = gcc -g
-pd_dylib_flags = -shared -fPIC
-
-TRGT = arm-none-eabi-
-GCC:=$(dir $(shell which $(TRGT)gcc))
-ifeq ($(GCC),)
-GCC = /usr/local/bin/
-endif
-OJBCPY:=$(dir $(shell which $(TRGT)objcopy))
-ifeq ($(OJBCPY),)
-OJBCPY = /usr/local/bin/
-endif
-
-# Locate the SDK
-SDK = $(PLAYDATE_SDK_PATH)
-ifeq ($(SDK),)
-	SDK = $(shell egrep '^\s*SDKRoot' ~/.Playdate/config | head -n 1 | cut -c9-)
-	ifeq ($(SDK),)
+pd_sdk=$(PLAYDATE_SDK_PATH)
+ifeq ($(pd_sdk),)
+	pd_sdk = $(shell egrep '^\s*SDKRoot' ~/.Playdate/config | head -n 1 | cut -c9-)
+	ifeq ($(pd_sdk),)
 		$(error SDK path not found; set ENV value PLAYDATE_SDK_PATH)
 	endif
 endif
-
-PDCFLAGS = -sdkpath $(SDK)
-PDC = $(SDK)/bin/pdc
-pd_cc   = $(GCC)$(TRGT)gcc -g3
-pd_cp   = $(OJBCPY)$(TRGT)objcopy
-pd_as   = $(GCC)$(TRGT)gcc -x assembler-with-cpp
-pd_opt = -O2 -falign-functions=16 -fomit-frame-pointer
-
-pd_ldscript=$(patsubst ~%,$(HOME)%,$(SDK)/C_API/buildsupport/link_map.ld)
-FPU = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
-
-pd_incdir  = $(patsubst %,-I %, pd $(SDK)/C_API g g/font bin)
-pd_defs=-DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_target=g_target_pd
-HEAP_SIZE      = 8388208
-STACK_SIZE     = 4194304
-pd_adefs=\
-  -D__HEAP_SIZE=$(HEAP_SIZE)\
- 	-D__STACK_SIZE=$(STACK_SIZE)
-pd_src += $(SDK)/C_API/buildsupport/setup.c
-pd_objs    = $(addprefix $(pd_objdir)/, $(pd_src:.c=.o))
-pd_mcflags = -mthumb -mcpu=cortex-m7 $(FPU)
-pd_asflags  = $(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst) $(pd_adefs)
+pd_src=$(wildcard pd/*.c) $(share_c) $(font_c)
+pd_gcc=arm-none-eabi-gcc
+pd_cc=$(pd_gcc) -g3
+pd_as=$(pd_gcc) -x assembler-with-cpp
+pd_opt=-O2 -falign-functions=16 -fomit-frame-pointer
+pd_lds=$(patsubst ~%,$(HOME)%,$(pd_sdk)/C_API/buildsupport/link_map.ld)
+pd_fpu=-mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
+pd_incdir=$(patsubst %,-I %, pd $(pd_sdk)/C_API g g/font bin)
+pd_defs =-DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_target=g_target_pd
+pd_heap =8388208
+pd_stack=4194304
+pd_adefs=-D__HEAP_SIZE=$(pd_heap) -D__STACK_SIZE=$(pd_stack)
+pd_src +=$(pd_sdk)/C_API/buildsupport/setup.c
+pd_o=$(addprefix bin/pd/, $(pd_src:.c=.o))
+pd_mcflags=-mthumb -mcpu=cortex-m7 $(pd_fpu)
+pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst) $(pd_adefs)
 pd_cpflags=\
 	$(pd_mcflags) $(pd_opt) $(pd_defs)\
  	-gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas\
  	-fverbose-asm -Wdouble-promotion -mword-relocations -fno-common\
-  -ffunction-sections -fdata-sections -Wa,-ahlms=$(pd_objdir)/$(notdir $(<:.c=.lst))
+  -ffunction-sections -fdata-sections -Wa,-ahlms=bin/pd/$(notdir $(<:.c=.lst))
 pd_ldflags=\
-	-nostartfiles $(pd_mcflags) -T$(pd_ldscript)\
- 	-Wl,-Map=$(pd_objdir)/pdex.map,--cref,--gc-sections,--no-warn-mismatch,--emit-relocs
-Source=$(pd_objdir)/Source
+	-nostartfiles $(pd_mcflags) -T$(pd_lds)\
+ 	-Wl,-Map=bin/pd/pdex.map,--cref,--gc-sections,--no-warn-mismatch,--emit-relocs
 
-$(pdx): $(Source)/pdex.elf $(Source)/pdex.so
-	@echo PDC $@
-	@$(PDC) $(PDCFLAGS) $(Source) $(pdx)
-
-$(Source)/pdex.elf: $(pd_objdir)/pdex.elf
+bin/pd/$n.pdx: bin/pd/Source/pdex.elf bin/pd/Source/pdex.so
+	@echo PD $@
+	@$(pd_sdk)/bin/pdc -sdkpath $(pd_sdk) bin/pd/Source $@
+bin/pd/Source/pdex.%: bin/pd/pdex.%
 	@echo CP $@
 	@mkdir -p $(dir $@)
 	@cp $< $@
-
-$(Source)/pdex.so: $(pd_objdir)/pdex.so
-	@echo CP $@
-	@mkdir -p $(dir $@)
-	@cp $< $@
-
-$(pd_objdir)/%.o : %.c | bin/boot.h
+bin/pd/%.o : %.c | bin/boot.h
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I pd -I bin $(pd_incdir) $< -o $@
-
-$(pd_objdir)/%.o : %.s
+bin/pd/%.o : %.s
 	@echo AS $@
 	@$(pd_as) -c $(pd_asflags) $< -o $@
-
-.PRECIOUS: $(pd_objdir)/%elf $(pd_objdir)/%bin $(pd_objdir)/%hex
-$(pd_objdir)/pdex.elf: $(pd_objs) $(pd_ldscript)
+bin/pd/pdex.elf: $(pd_o) $(pd_lds)
 	@echo CC $@
 	@mkdir -p $(dir $@)
-	@$(pd_cc) $(pd_objs) $(pd_ldflags) -o $@
-$(pd_objdir)/pdex.hex: $(pd_objdir)/pdex.elf
-	@echo CP $@
-	@mkdir -p $(dir $@)
-	@$(pd_cp) -O ihex $< $@
-$(pd_objdir)/pdex.bin: $(pd_objdir)/pdex.elf
-	@echo CP $@
-	@mkdir -p $(dir $@)
-	@$(pd_cp) -O binary $< $@
-$(pd_objdir)/pdex.so: $(pd_src)
+	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
+bin/pd/pdex.so: $(pd_src)
 	@echo CC $@
 	@mkdir -p $(dir $@)
-	@$(pd_simcompiler) $(pd_dylib_flags) -lm -Dg_target=g_target_pd -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o $(pd_objdir)/pdex.so $(pd_src)
+	@gcc -g -shared -fPIC -lm -Dg_target=g_target_pd -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o bin/pd/pdex.so $(pd_src)
+.PRECIOUS: bin/pd/%elf
