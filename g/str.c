@@ -11,11 +11,6 @@ g_core *g_strof(g_core *f, const char *cs) {
     memcpy(o->text, cs, bytes); }
   return f; }
 
-static uintptr_t xx_str(g_core *v, g_word _);
-static bool eq_str(g_core *f, g_word x, g_word y);
-static g_core *em_str(g_core* v, g_file o, g_word _);
-static void wk_str(g_core* f, g_word x, g_word *p0, g_word *t0);
-static g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0);
 
 g_type str_type = {
   .xx = xx_str,
@@ -25,15 +20,15 @@ g_type str_type = {
   .ap = self,
   .em = em_str, };
 
-static g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0) {
+g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0) {
   string *src = str(x);
   size_t len = sizeof(string) + src->len;
   return (g_word) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
-static void wk_str(g_core* f, g_word x, g_word *p0, g_word *t0) {
+void wk_str(g_core* f, g_word x, g_word *p0, g_word *t0) {
   f->cp += Width(string) + b2w(str(x)->len); }
 
-static g_core *em_str(g_core* v, g_file o, g_word _) {
+g_core *em_str(g_core* v, g_file o, g_word _) {
   size_t len = str(_)->len;
   const char *text = str(_)->text;
   g_fputc('"', o);
@@ -42,13 +37,13 @@ static g_core *em_str(g_core* v, g_file o, g_word _) {
   g_fputc('"', o);
   return v; }
 
-static uintptr_t xx_str(g_core *v, g_word _) {
+uintptr_t xx_str(g_core *v, g_word _) {
   uintptr_t len = str(_)->len, h = 2166136261;
   unsigned char *bs = (unsigned char*) str(_)->text;
   while (len--) h ^= *bs++, h *= 16777619;
   return h; }
 
-static bool eq_str(g_core *f, g_word x, g_word y) {
+bool eq_str(g_core *f, g_word x, g_word y) {
   string *a = str(x), *b = str(y);
   return a->len == b->len &&
     0 == strncmp(a->text, b->text, a->len); }

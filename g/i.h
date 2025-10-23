@@ -30,6 +30,10 @@ enum g_var {
   g_var_la,
   g_var_N, };
 
+struct d {
+  int32_t type, rank;
+  intptr_t shape[]; };
+
 // cores occur in pairs located 2^len words away from each other.
 // the address of the lower core is a pointer to a 2^(len+1) word size
 // block returned by the allocator. the upper core is located 2^len words
@@ -60,16 +64,37 @@ struct g {
 
 #include "sys.h"
 
+typedef intptr_t g_cp_t(struct g*, intptr_t, intptr_t*, intptr_t*);
+typedef void g_wk_t(struct g*, intptr_t, intptr_t*, intptr_t*);
+typedef bool g_id_t(struct g*, intptr_t, intptr_t);
+typedef struct g *g_em_t(struct g*, g_file, intptr_t);
+typedef uintptr_t g_xx_t(struct g*, intptr_t);
+typedef struct g *g_pp_t(struct g*, intptr_t);
 // built in type method tables
 typedef struct g_type {
-  g_word (*cp)(g_core*, g_word, g_word*, g_word*); // for gc
-  void (*wk)(g_core*, g_word, g_word*, g_word*);
-  bool (*eq)(g_core*, g_word, g_word);
-  g_core *(*em)(g_core*, g_file, g_word);
-  uintptr_t (*xx)(g_core*, g_word);
+  g_cp_t *cp;
+  g_wk_t *wk;
+  g_id_t *eq;
+  g_em_t *em;
+  g_xx_t *xx;
   g_vm *ap;
-  g_core *(*show)(g_core*, g_word);
+  g_pp_t *show;
 } g_type;
+
+g_cp_t cp_two, cp_tbl, cp_str, cp_sym;
+g_wk_t wk_two, wk_tbl, wk_str, wk_sym;
+g_id_t neql, eq_two, eq_str;
+g_em_t em_two, em_sym, em_str, em_tbl;
+g_xx_t xx_two, xx_tbl, xx_sym, xx_str;
+
+
+extern g_cp_t *t_cp[];
+extern g_wk_t *t_wk[];
+extern g_em_t *t_em[];
+extern g_xx_t *t_xx[];
+extern g_vm *t_ap[];
+extern g_pp_t *t_pp[];
+extern g_id_t *t_id[];
 
 typedef struct g_pair {
   g_vm *ap;
@@ -188,29 +213,20 @@ static Inline void *bump(g_core *f, size_t n) {
   f->hp += n;
   return x; }
 
-extern g_type str_type, two_type, str_type, sym_type, tbl_type, num_type, cel_type;
-static Inline bool twop(g_word _) { return celp(_) && typ(_) == &two_type; }
-static Inline bool strp(g_word _) { return celp(_) && typ(_) == &str_type; }
-static Inline bool tblp(g_word _) { return celp(_) && typ(_) == &tbl_type; }
-static Inline bool symp(g_word _) { return celp(_) && typ(_) == &sym_type; }
-static Inline void ini_pair(g_pair *w, g_word a, g_word b) {
-  w->ap = data;
-  w->typ = &two_type;
-  w->a = a;
-  w->b = b; }
+enum g_ty {
+  g_ty_two,
+  g_ty_str,
+  g_ty_sym,
+  g_ty_tbl, };
 
-static Inline void ini_table(g_table *t, uintptr_t len, uintptr_t cap, struct entry**tab) {
-  t->ap = data;
-  t->typ = &tbl_type;
-  t->len = len;
-  t->cap = cap;
-  t->tab = tab; }
+extern g_type str_type, two_type, sym_type, tbl_type;
+bool twop(intptr_t), strp(intptr_t), tblp(intptr_t), symp(intptr_t);
 
-static Inline void ini_str(g_string *s, uintptr_t len) {
-  s->ap = data;
-  s->typ = &str_type;
-  s->len = len; }
-
+void ini_pair(g_pair*, intptr_t, intptr_t),
+     ini_table(g_table*, uintptr_t, uintptr_t, struct entry**),
+     ini_sym(g_symbol*, g_string*, uintptr_t),
+     ini_anon(g_symbol*, uintptr_t),
+     ini_str(g_string*, uintptr_t);
 static Inline size_t b2w(size_t b) {
   size_t q = b / sizeof(g_word),
          r = b % sizeof(g_word);

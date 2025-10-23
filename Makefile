@@ -4,8 +4,9 @@ m=bin/h/$n
 l=bin/h/lcat
 a?=$(shell uname -m)
 test: bin/h/$n
-	@echo LI test
+	@echo GL test
 	@$m t/*.$x
+
 all: all_host all_pd all_k
 all_host: bin/h/$n bin/h/lib$n.so bin/h/$n.1
 all_pd: bin/pd/$n.pdx
@@ -68,15 +69,15 @@ bin/h/main.o: h/main.c bin/h/main.h bin/boot.h $(share_h) Makefile
 
 # sed command to escape lisp text into C string format
 bin/boot.h: bin/h/lcat h/lcat.sed g/boot.$x
-	@echo LI $@
+	@echo GL $@
 	@$< < g/boot.$x | sed -f h/lcat.sed >$@
 
 bin/h/main.h: bin/h/lcat h/lcat.sed h/main.$x
-	@echo LI $@
+	@echo GL $@
 	@$< < h/main.$x | sed -f h/lcat.sed > $@
 
 bin/h/$n.1: bin/h/$n h/manpage.$x
-	@echo LI $@
+	@echo GL $@
 	@$^ > $@
 
 # installlation
@@ -98,6 +99,7 @@ install: $(installs)
 uninstall:
 	@echo RM $(abspath $(installs))
 	@rm -f $(installs)
+.PHONY: install uninstall
 
 $(dest)/include/$x.h: g/$x.h
 	@echo CP $(abspath $@)
@@ -141,6 +143,7 @@ repl: bin/h/$n
 	rlwrap $m
 serve:
 	darkhttpd .
+.PHONY: clean distclean valg perf repl serve
 
 k_c=$(share_c) $(font_c) $(wildcard k/*.c) $(wildcard k/arch/$a/*.c)
 k_h=$(share_h) $(font_h) $(wildcard k/*.h) $(wildcard k/arch/$a/*.h)

@@ -22,10 +22,10 @@ uintptr_t hash(g_core *f, g_word x) {
   g_word len = (g_cell*) t - t->head;
   return mix ^ (mix * len); }
 
-static g_core* em_tbl(g_core*, g_file, g_word);
-static void wk_tbl(g_core*, g_word, g_word*, g_word*);
-static g_word cp_tbl(g_core*, g_word, g_word*, g_word*);
-static uintptr_t xx_tbl(g_core*, g_word);
+g_core* em_tbl(g_core*, g_file, g_word);
+void wk_tbl(g_core*, g_word, g_word*, g_word*);
+g_word cp_tbl(g_core*, g_word, g_word*, g_word*);
+uintptr_t xx_tbl(g_core*, g_word);
 
 g_type tbl_type = {
   .xx = xx_tbl,
@@ -35,12 +35,12 @@ g_type tbl_type = {
   .ap = self,
   .em = em_tbl, };
 
-static g_core *em_tbl(g_core *f, g_file o, g_word x) {
+g_core *em_tbl(g_core *f, g_file o, g_word x) {
   g_table *t = (g_table*) x;
   g_fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x);
   return f; }
 
-static void wk_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {
+void wk_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {
   g_table *t = (g_table*) x;
   f->cp += Width(g_table) + t->cap + t->len * Width(struct entry);
   for (g_word i = 0, lim = t->cap; i < lim; i++)
@@ -49,7 +49,7 @@ static void wk_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {
       e->val = cp(f, e->val, p0, t0),
       e = e->next); }
 
-static g_word cp_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {
+g_word cp_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {
   g_table *src = (g_table*) x;
   size_t len = src->len, cap = src->cap;
   g_table *dst = bump(f, Width(g_table) + cap + Width(struct entry) * len);
@@ -68,7 +68,7 @@ static g_word cp_tbl(g_core *f, g_word x, g_word *p0, g_word *t0) {
   return word(dst); }
 
 // FIXME very poor hashing method :(
-static uintptr_t xx_tbl(g_core *f, g_word h) { return mix; }
+uintptr_t xx_tbl(g_core *f, g_word h) { return mix; }
 
 // relies on table capacity being a power of 2
 static Inline g_word index_of_key(g_core *f, g_table *t, g_word k) {

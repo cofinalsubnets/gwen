@@ -1,20 +1,16 @@
 #include "i.h"
-static uintptr_t xx_two(g_core*, g_word);
-static void wk_two(g_core*, g_word, g_word*, g_word*);
-static g_core * em_two(g_core*, g_file, g_word);
-static bool eq_two(g_core*, g_word, g_word);
 
 // FIXME could overflow the stack -- use off pool for this
-static bool eq_two(g_core *f, g_word x, g_word y) {
+bool eq_two(g_core *f, g_word x, g_word y) {
   return eql(f, A(x), A(y)) && eql(f, B(x), B(y)); }
 
-static g_word cp_two(g_core *v, g_word x, g_word *p0, g_word *t0) {
+g_word cp_two(g_core *v, g_word x, g_word *p0, g_word *t0) {
   g_pair *src = (g_pair*) x,
          *dst = bump(v, Width(g_pair));
   ini_pair(dst, src->a, src->b);
   return word(src->ap = (g_vm*) dst); }
 
-static void wk_two(g_core *f, g_word x, g_word *p0, g_word *t0) {
+void wk_two(g_core *f, g_word x, g_word *p0, g_word *t0) {
   f->cp += Width(g_pair);
   A(x) = cp(f, A(x), p0, t0);
   B(x) = cp(f, B(x), p0, t0); }
@@ -26,11 +22,11 @@ g_type two_type = {
   .eq = eq_two,
   .em = em_two,
   .ap = self, };
-static uintptr_t xx_two(g_core *f, g_word x) {
+uintptr_t xx_two(g_core *f, g_word x) {
   uintptr_t hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-static g_core *em_two(g_core *f, g_file o, g_word x) {
+g_core *em_two(g_core *f, g_file o, g_word x) {
   if (A(x) == word(f->quote) && twop(B(x)))
     g_fputc('\'', o),
     transmit(f, o, AB(x));

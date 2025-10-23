@@ -1,18 +1,5 @@
 #include "i.h"
 
-static Inline void ini_sym(symbol *y, string *nom, uintptr_t code) {
-  y->ap = data;
-  y->typ = &sym_type;
-  y->nom = nom;
-  y->code = code;
-  y->l = y->r = 0; }
-
-static Inline void ini_anon(symbol *y, g_word code) {
-  y->ap = data;
-  y->typ = &sym_type;
-  y->nom = 0;
-  y->code = code; }
-
 static symbol *g_intern_r(g_core *v, string *b, symbol **y) {
   symbol *z = *y;
   if (!z) return // found an empty spot, insert new symbol
@@ -59,41 +46,35 @@ Vm(symnom) {
   Ip += 1;
   return Continue(); }
 
-static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
-static uintptr_t xx_sym(g_core *v, g_word _);
-static void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
-static g_core * em_sym(g_core *f, g_file o, g_word x),
-              *show_sym(g_core*, g_word);
+g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
+uintptr_t xx_sym(g_core *v, g_word _);
+void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
+g_core * em_sym(g_core *f, g_file o, g_word x);
 g_type sym_type = {
   .xx = xx_sym,
   .cp = cp_sym,
   .wk = wk_sym,
   .eq = neql,
   .em = em_sym,
-  .show = show_sym,
   .ap = self, };
 
-static uintptr_t xx_sym(g_core *v, g_word _) { return sym(_)->code; }
+uintptr_t xx_sym(g_core *v, g_word _) { return sym(_)->code; }
 
-static g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
+g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
   g_symbol *src = sym(x), *dst;
   if (src->nom) dst = g_intern_r(f, str(cp(f, word(src->nom), p0, t0)), &f->symbols);
   else dst = bump(f, Width(symbol) - 2),
        ini_anon(dst, src->code);
   return (g_word) (src->ap = (g_vm*) dst); }
 
-static void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
+void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
-static g_core *em_sym(g_core *f, g_file o, g_word x) {
+g_core *em_sym(g_core *f, g_file o, g_word x) {
   string* s = sym(x)->nom;
   if (s) for (uintptr_t i = 0; i < s->len; g_fputc(s->text[i++], o));
   else g_fprintf(o, "#sym@%lx", (long) x);
   return f; }
-
-static g_core *show_sym(g_core *f, g_word x) {
-  g_word n = (g_word) ((g_symbol*) x)->nom;
-  return g_push(f, 1, n ? n : nil); }
 
 Vm(symbolp) {
   Sp[0] = symp(Sp[0]) ? putnum(-1) : nil;
