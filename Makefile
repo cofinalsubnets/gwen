@@ -119,10 +119,10 @@ $(dest)/bin/$n: bin/host/$n
 $(dest)/g/man/man1/$n.1: bin/host/$n.1
 	@echo IN $(abspath $@)
 	@install -D -m 644 $< $@
-$(vimdest)/ftdetect/$n.vim: misc/vim/ftdetect.vim
+$(vimdest)/ftdetect/$n.vim: g/vim/ftdetect.vim
 	@echo IN $(abspath $@)
 	@install -D -m 644 $< $@
-$(vimdest)/syntax/$n.vim: misc/vim/syntax.vim
+$(vimdest)/syntax/$n.vim: g/vim/syntax.vim
 	@echo IN $(abspath $@)
 	@install -D -m 644 $< $@
 
