@@ -2,7 +2,7 @@ n=mitty
 x=mi
 m=bin/host/$n
 l=bin/host/lcat
-a=$(shell uname -m)
+a?=$(shell uname -m)
 test: bin/host/$n
 	@echo LI test
 	@$m test/*.$x

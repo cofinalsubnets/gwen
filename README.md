@@ -1,12 +1,11 @@
-# mitty
+# g lisp
 
-mitty is a lisp environment that can be built as a C library, an
-executable, or an operating system on various platforms. mitty lisp
-is a simple lisp dialect inspired by haskell and scheme.
+g lisp is a lisp dialect and environment that can be built as a C library,
+an executable, or an operating system on various platforms.
 
-## mitty vs. scheme
+## g lisp vs. scheme
 
-| gwen               |  scheme  |
+| g                  |  scheme  |
 |--------------------|----------|
 | `,`                | `begin`  |
 | `?`                | `cond`   |
@@ -25,7 +24,7 @@ and shadowed in the obvious way.
 the syntax of some of the forms is simplified (less parentheses)
 gwen compared to scheme.
 
-| gwen                           | scheme                      |
+| g                              | scheme                      |
 |--------------------------------|-----------------------------|
 | `(? a b c d e)`                | `(cond (a b) (c d) (#t e))` |
 | `(: a b c d e)`                | `(letrec  ((a b) (c d)) e)` |
@@ -39,7 +38,7 @@ always omitted from display).
 argument evaluation order for function expressions can be variable.
 if you need a specific order of evaluation, use `,`, `:`, or nested applications.
 
-unlike in other lisp dialects, since functions always act as if applied to one
+unlike other lisp dialects, since functions always act as if applied to one
 value at a time, there are no nullary functions, and the value of a singleton list
 is the value of the head of the list. nullary functions are simulated by ignoring
 the argument to a unary function. variadic functions can be simulated using macros
