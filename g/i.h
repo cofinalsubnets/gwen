@@ -15,7 +15,7 @@ union g_cell {
   g_vm *ap;
   g_word x;
   g_cell *m;
-  struct g_type *typ; };
+  uintptr_t typ; };
 
 _Static_assert(sizeof(g_cell) == sizeof(g_word));
 
@@ -70,16 +70,6 @@ typedef bool g_id_t(struct g*, intptr_t, intptr_t);
 typedef struct g *g_em_t(struct g*, g_file, intptr_t);
 typedef uintptr_t g_xx_t(struct g*, intptr_t);
 typedef struct g *g_pp_t(struct g*, intptr_t);
-// built in type method tables
-typedef struct g_type {
-  g_cp_t *cp;
-  g_wk_t *wk;
-  g_id_t *eq;
-  g_em_t *em;
-  g_xx_t *xx;
-  g_vm *ap;
-  g_pp_t *show;
-} g_type;
 
 g_cp_t cp_two, cp_tbl, cp_str, cp_sym;
 g_wk_t wk_two, wk_tbl, wk_str, wk_sym;
@@ -98,13 +88,13 @@ extern g_id_t *t_id[];
 
 typedef struct g_pair {
   g_vm *ap;
-  g_type *typ;
+  uintptr_t typ;
   g_word a, b;
 } g_pair;
 
 typedef struct g_symbol {
   g_vm *ap;
-  g_type *typ;
+  uintptr_t typ;
   struct g_string *nom;
   uintptr_t code;
   struct g_symbol *l, *r;
@@ -112,14 +102,14 @@ typedef struct g_symbol {
 
 typedef struct g_table {
   g_vm *ap;
-  g_type *typ;
+  uintptr_t typ;
   uintptr_t len, cap;
   struct entry { g_word key, val; struct entry *next; } **tab;
 } g_table, table;
 
 typedef struct g_string {
   g_vm *ap;
-  g_type *typ;
+  uintptr_t typ;
   uintptr_t len;
   char text[];
 } g_string, string;
@@ -219,7 +209,6 @@ enum g_ty {
   g_ty_sym,
   g_ty_tbl, };
 
-extern g_type str_type, two_type, sym_type, tbl_type;
 bool twop(intptr_t), strp(intptr_t), tblp(intptr_t), symp(intptr_t);
 
 void ini_pair(g_pair*, intptr_t, intptr_t),

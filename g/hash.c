@@ -14,7 +14,7 @@ uintptr_t hash(g_core *f, g_word x) {
   if (nump(x)) {
     const int shift = sizeof(g_word) * 4;
     return x *= mix, (x << shift) | (x >> shift); }
-  if (datp(x)) return typ(x)->xx(f, x);
+  if (datp(x)) return t_xx[typ(x)](f, x);
   if (!owns(f, x)) return mix ^ (mix * x);
 
   // it's a function, hash by length
@@ -26,14 +26,6 @@ g_core* em_tbl(g_core*, g_file, g_word);
 void wk_tbl(g_core*, g_word, g_word*, g_word*);
 g_word cp_tbl(g_core*, g_word, g_word*, g_word*);
 uintptr_t xx_tbl(g_core*, g_word);
-
-g_type tbl_type = {
-  .xx = xx_tbl,
-  .cp = cp_tbl,
-  .wk = wk_tbl,
-  .eq = neql,
-  .ap = self,
-  .em = em_tbl, };
 
 g_core *em_tbl(g_core *f, g_file o, g_word x) {
   g_table *t = (g_table*) x;

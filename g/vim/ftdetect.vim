@@ -1,1 +1,1 @@
-au BufRead,BufNewFile *.g set filetype=glisp
+au BufRead,BufNewFile *.g set filetype=gl

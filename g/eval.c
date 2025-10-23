@@ -558,7 +558,7 @@ Vm(late_bind) {
   return Continue(); }
 
 Vm(data) {
-  return Ap(typ(Ip)->ap, f); }
+  return Ap(t_ap[typ(Ip)], f); }
 
 Vm(self) {
   g_word x = word(Ip);

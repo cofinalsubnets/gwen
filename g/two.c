@@ -15,13 +15,6 @@ void wk_two(g_core *f, g_word x, g_word *p0, g_word *t0) {
   A(x) = cp(f, A(x), p0, t0);
   B(x) = cp(f, B(x), p0, t0); }
 
-g_type two_type = {
-  .xx = xx_two,
-  .cp = cp_two,
-  .wk = wk_two,
-  .eq = eq_two,
-  .em = em_two,
-  .ap = self, };
 uintptr_t xx_two(g_core *f, g_word x) {
   uintptr_t hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }

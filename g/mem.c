@@ -123,7 +123,7 @@ static g_core *copy_core(g_core *g, g_word *p1, uintptr_t len1, g_core *f) {
 
   // use cheney's algorithm to avoid unbounded recursion
   while (g->cp < g->hp)
-    if (datp(g->cp)) typ(g->cp)->wk(g, (g_word) g->cp, p0, t0);
+    if (datp(g->cp)) t_wk[typ(g->cp)](g, (g_word) g->cp, p0, t0);
     else for (g->cp += 2; g->cp[-2]; g->cp++)
       g->cp[-2] = cp(g, g->cp[-2], p0, t0);
 
@@ -138,7 +138,7 @@ NoInline g_word cp(g_core *f, g_word x, g_word *p0, g_word *t0) {
   // if it contains a pointer to the new space then return the pointer
   if (!nump(x) && within((g_word*) f, x, (g_word*) f + f->len)) return x;
   // if it's data then call the copy function
-  if (x == (g_word) data) return typ(src)->cp(f, (g_word) src, p0, t0);
+  if (x == (g_word) data) return t_cp[typ(src)](f, (g_word) src, p0, t0);
   // it's a thread, find the end to find the head
   struct g_tag *t = ttag(src);
   g_cell *ini = t->head,

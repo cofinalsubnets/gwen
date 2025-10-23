@@ -11,15 +11,6 @@ g_core *g_strof(g_core *f, const char *cs) {
     memcpy(o->text, cs, bytes); }
   return f; }
 
-
-g_type str_type = {
-  .xx = xx_str,
-  .cp = cp_str,
-  .wk = wk_str,
-  .eq = eq_str,
-  .ap = self,
-  .em = em_str, };
-
 g_word cp_str(g_core* v, g_word x, g_word *p0, g_word *t0) {
   string *src = str(x);
   size_t len = sizeof(string) + src->len;

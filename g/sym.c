@@ -50,13 +50,6 @@ g_word cp_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
 uintptr_t xx_sym(g_core *v, g_word _);
 void wk_sym(g_core *f, g_word x, g_word *p0, g_word *t0);
 g_core * em_sym(g_core *f, g_file o, g_word x);
-g_type sym_type = {
-  .xx = xx_sym,
-  .cp = cp_sym,
-  .wk = wk_sym,
-  .eq = neql,
-  .em = em_sym,
-  .ap = self, };
 
 uintptr_t xx_sym(g_core *v, g_word _) { return sym(_)->code; }
 
