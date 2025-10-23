@@ -36,7 +36,7 @@ enum g_var {
 // above the lower core. during operation the active core switches between upper
 // and lower cores, and sometimes is transparently relocated to the lower core
 // of a different pair.
-struct g_core {
+struct g {
   g_word *hp, *sp; // heap and stack pointers
   struct g_symbol *symbols; // symbol tree
   union { // concrete state variables

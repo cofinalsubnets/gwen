@@ -79,7 +79,7 @@ g_core *g_ini_dynamic(g_malloc_t *ma, g_free_t *fr) {
 // - fr: free function pointer
 // - len0: initial semispace size in words (== total_space_size / 2)
 // - f: core pointer
-static struct g_core *g_ini_0(g_core *f, g_malloc_t *ma, g_free_t *fr, size_t len0) {
+static struct g *g_ini_0(g_core *f, g_malloc_t *ma, g_free_t *fr, size_t len0) {
   if (f == NULL                            || // fail if pointer is null
       g_code_of(f)                         || //   or if pointer is not word aligned
       len0 * sizeof(g_word) < sizeof(g_core)) //   or if space is not large enough

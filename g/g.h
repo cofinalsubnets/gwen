@@ -5,7 +5,7 @@
 
 typedef intptr_t g_word;
 typedef union g_cell g_cell;
-typedef struct g_core g_core;
+typedef struct g g_core;
 typedef void
   *g_malloc_t(g_core*, size_t),
    g_free_t(g_core*, void*);
@@ -74,7 +74,7 @@ extern const char g_boot_sequence[];
 #define Continue() f
 #endif
 
-#define g_core_of(f) ((struct g_core*)((g_word)(f)&~(sizeof(g_word)-1)))
+#define g_core_of(f) ((struct g*)((g_word)(f)&~(sizeof(g_word)-1)))
 #define g_code_of(f) ((enum g_status)((g_word)(f)&(sizeof(g_word)-1)))
 #define g_ok(f) (g_code_of(f) == g_status_ok)
 #define g_putnum(_) (((g_word)(_)<<1)|1)
