@@ -1,9 +1,8 @@
 #ifndef _g_k_h
 #define _g_k_h
-#include "limine.h"
+#include "limine/limine.h"
 #include "i.h"
-#include "libc_internal.h"
-#include "fb.h"
+extern const char digits[];
 void k_reset(void), arch_init(void);
 uint8_t key_get(void);
 
@@ -26,8 +25,8 @@ typedef struct g_cb {
   uint16_t rows, cols, cx, cy; } g_cb;
 
 void
-  *kmalloc(size_t),
-  kfree(void*),
+  *malloc(size_t),
+  free(void*),
   g_fb32_log(g_fb32*, const char*),
   g_fb32_log_c(g_fb32*, const char *msg, uint32_t, uint32_t),
   g_fb32_log_char(g_fb32*, char),

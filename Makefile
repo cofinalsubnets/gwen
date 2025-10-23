@@ -147,14 +147,14 @@ serve:
 
 ARCH=$(shell uname -m)
 a=$(ARCH)
-k_c=$(share_c) $(font_c) $(wildcard k/libc/*.c) $(wildcard k/*.c) $(wildcard k/$a/*.c)
-k_h=$(share_h) $(font_h) $(wildcard k/libc/*.h) $(wildcard k/*.h) $(wildcard k/$a/*.h)
-k_S=$(wildcard k/*.S) $(wildcard k/$a/*.S)
-k_asm=$(wildcard k/*.asm) $(wildcard k/$a/*.asm)
+k_c=$(share_c) $(font_c) $(wildcard k/*.c) $(wildcard k/arch/$a/*.c)
+k_h=$(share_h) $(font_h) $(wildcard k/*.h) $(wildcard k/arch/$a/*.h)
+k_S=$(wildcard k/*.S) $(wildcard k/arch/$a/*.S)
+k_asm=$(wildcard k/*.asm) $(wildcard k/arch/$a/*.asm)
 k_o=$(addprefix bin/k_$a/, $(k_c:.c=.o) $(k_S:.S=.o) $(k_asm:.asm=.o))
 
 NASMFLAGS := -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
-kldflags := -static -nostdlib --gc-sections -T k/$a/$a.lds -z max-page-size=0x1000
+kldflags := -static -nostdlib --gc-sections -T k/arch/$a/$a.lds -z max-page-size=0x1000
 kcflags:=-std=gnu17 -g -O2 -pipe\
 	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
@@ -163,12 +163,12 @@ kcflags:=-std=gnu17 -g -O2 -pipe\
 	-nostdinc -ffreestanding -fno-lto -fno-PIC -ffunction-sections -fdata-sections
 kcppflags := \
     -I k/ \
+		-I k/include/ \
 		-I bin/ \
 		-I g/ \
-		-I k/libc/ \
 		-I g/font/ \
 		-Dg_target=g_target_os \
-    -isystem k/libc/ \
+    -isystem k/include/ \
     $(kcppflags) \
     -DLIMINE_API_REVISION=3
 
@@ -241,7 +241,7 @@ ifeq ($(ARCH),loongarch64)
         -m elf64loongarch
 endif
 
-bin/$n-$a.k: Makefile k/$a/$a.lds $(k_o)
+bin/$n-$a.k: Makefile k/arch/$a/$a.lds $(k_o)
 	@echo LD $@
 	@mkdir -p "$(dir $@)"
 	@$(LD) $(kldflags) $(k_o) -o $@
@@ -259,19 +259,19 @@ bin/k_$a/%.o: k/%.S $(share_h) Makefile bin/boot.h
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-bin/k_$a/k/$a/%.o: k/$a/%.asm
+bin/k_$a/k/arch/$a/%.o: k/arch/$a/%.asm
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
 	@nasm $(NASMFLAGS) $< -o $@
 
 
-bin/$n-$a.iso: bin/$n-$a.k dl/limine/limine k/limine.conf
+bin/$n-$a.iso: bin/$n-$a.k dl/limine/limine k/limine/limine.conf
 	@echo MK $@
 	@rm -rf iso_root
 	@mkdir -p iso_root/boot
 	@cp $< iso_root/boot/kernel
 	@mkdir -p iso_root/boot/limine
-	@cp k/limine.conf iso_root/boot/limine/
+	@cp k/limine/limine.conf iso_root/boot/limine/
 	@mkdir -p iso_root/EFI/BOOT
 	@cp dl/limine/limine-uefi-cd.bin iso_root/boot/limine/
 ifeq ($a,x86_64)
@@ -310,7 +310,7 @@ ifeq ($a,loongarch64)
 endif
 	@rm -rf iso_root
 
-bin/$n-$a.hdd: bin/$n-$a.iso limine/limine k/limine.conf
+bin/$n-$a.hdd: bin/$n-$a.iso limine/limine k/limine/limine.conf
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
@@ -323,7 +323,7 @@ endif
 	@mformat -i $@@@1M
 	@mmd -i $@@@1M ::/EFI ::/EFI/BOOT ::/boot ::/boot/limine
 	@mcopy -i $@@@1M $< ::/boot/kernel
-	@mcopy -i $@@@1M k/limine.conf ::/boot/limine
+	@mcopy -i $@@@1M k/limine/limine.conf ::/boot/limine
 ifeq ($a,x86_64)
 	@mcopy -i $@@@1M dl/limine/limine-bios.sys ::/boot/limine
 	@mcopy -i $@@@1M dl/limine/BOOTX64.EFI ::/EFI/BOOT
@@ -416,3 +416,9 @@ dl/limine/limine:
 	@rm -rf dl/limine
 	@$(git_clone_limine)
 	@make -sC dl/limine
+
+.PHONY: all
+all: bin/$n-$a.k bin/host/$n bin/host/lib$n.so bin/pd/$n.pdx
+
+bin/pd/%:
+	@make -C pd ../$@

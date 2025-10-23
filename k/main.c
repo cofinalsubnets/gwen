@@ -1,5 +1,190 @@
 #include "k.h"
-#include "log.h"
+#include "font.h"
+#include <stdarg.h>
+
+#define kb_code_lshift 0x2a
+#define kb_code_rshift 0x36
+#define kb_code_extend 0xe0
+#define kb_code_delete 0x53
+#define kb_code_ctl 0x1d
+#define kb_code_alt 0x38
+#define kb_flag_rshift 1
+#define kb_flag_lshift 2
+#define kb_flag_rctl   4
+#define kb_flag_lctl   8
+#define kb_flag_ralt   16
+#define kb_flag_lalt   32
+#define kb_flag_extend 128
+#define kb_flag_alt (kb_flag_lalt|kb_flag_ralt)
+#define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
+#define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
+
+uint8_t key_get(void) {
+  uint8_t r = K.kb.k;
+  K.kb.k = 0;
+  return r; }
+
+static void key_put(uint8_t c) {
+  static const uint8_t
+    kb2ascii[128] = {
+       0,  27, '1',  '2', '3', '4', '5', '6',
+     '7', '8', '9',  '0', '-', '=',   8,   9,
+     'q', 'w', 'e',  'r', 't', 'y', 'u', 'i',
+     'o', 'p', '[',  ']',  10,   0, 'a', 's',
+     'd', 'f', 'g',  'h', 'j', 'k', 'l', ';',
+    '\'', '`',   0, '\\', 'z', 'x', 'c', 'v',
+     'b', 'n', 'm',  ',', '.', '/',   0, '*',
+       0, ' ' },
+    shift_kb2ascii[128] = {
+       0,  27, '!',  '@', '#', '$', '%', '^',
+     '&', '*', '(',  ')', '_', '+',   8,   9,
+     'Q', 'W', 'E',  'R', 'T', 'Y', 'U', 'I',
+     'O', 'P', '{',  '}',  10,   0, 'A', 'S',
+     'D', 'F', 'G',  'H', 'J', 'K', 'L', ':',
+     '"', '~',   0,  '|', 'Z', 'X', 'C', 'V',
+     'B', 'N', 'M',  '<', '>', '?',   0, '*',
+       0, ' ' };
+  if (K.kb.k == 0) K.kb.k = 
+    (K.kb.f & (kb_flag_lshift | kb_flag_rshift) ? shift_kb2ascii : kb2ascii)[c]; }
+
+void kb_int(uint8_t code) {
+  if (code == kb_code_extend) {
+    K.kb.f |= kb_flag_extend;
+    return; }
+  if (K.kb.f & kb_flag_extend) {
+    K.kb.f &= ~kb_flag_extend;
+    if (code < 128) switch (code) {
+      case kb_code_alt: K.kb.f |= kb_flag_ralt; break;
+      case kb_code_ctl: K.kb.f |= kb_flag_rctl; break;
+      case kb_code_delete:
+        if (K.kb.f & kb_flag_ctl & kb_flag_alt) k_reset();
+        break;
+      default: }
+    else switch (code - 128) {
+      case kb_code_alt: K.kb.f &= ~kb_flag_ralt; break;
+      case kb_code_ctl: K.kb.f &= ~kb_flag_rctl; break;
+      default: } }
+  else {
+    if (code < 128) switch (code) {
+      case kb_code_lshift: K.kb.f |= kb_flag_lshift; break;
+      case kb_code_rshift: K.kb.f |= kb_flag_rshift; break;
+      case kb_code_alt:    K.kb.f |= kb_flag_lalt;   break;
+      case kb_code_ctl:    K.kb.f |= kb_flag_lctl;   break;
+      default: key_put(code); }
+    else switch (code - 128) {
+      case kb_code_lshift: K.kb.f &= ~kb_flag_lshift; break;
+      case kb_code_rshift: K.kb.f &= ~kb_flag_rshift; break;
+      case kb_code_alt:    K.kb.f &= ~kb_flag_lalt;   break;
+      case kb_code_ctl:    K.kb.f &= ~kb_flag_lctl;   break;
+      default: } } }
+void g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px) {
+  fb->_[row * fb->pitch / 4 + col] = px; }
+
+// add a scale parameter to this
+void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg) {
+  for (int r = 0; r < 8; r++) {
+    uint8_t o = bmp[r];
+    for (int c = 0; c < 8; c++, o <<= 1) {
+      fb->_[(row + r) * fb->pitch / 4 + col + c] = o & 128 ? fg : bg; } } }
+
+void g_fb32_char(g_fb32 *fb, size_t row, size_t col, uint8_t c, uint32_t fg, uint32_t bg) {
+  g_fb32_bmp_8x8(fb, row, col, cga_8x8[c], fg, bg); }
+
+void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
+  size_t h = fb->height, w = fb->width;
+  for (; *msg; msg++) {
+    int c = *msg;
+    g_fb32_char(fb, row, col, c, fg, bg);
+    col += 8;
+    if (col >= w)
+      col %= w,
+      row += 8,
+      row %= h; } }
+
+void k_cur_msg(const char *msg, uint32_t fg, uint32_t bg) {
+  size_t h = K.fb.height / 8, w = K.fb.width / 8;
+  for (; *msg; msg++) {
+    int c = *msg;
+    if (c == '\n') K.fb.cur_x = 0, K.fb.cur_y = (K.fb.cur_y + 1) % h;
+    else {
+      g_fb32_bmp_8x8(&K.fb, K.fb.cur_y * 8, K.fb.cur_x * 8, cga_8x8[c], fg, bg);
+      K.fb.cur_x += 1;
+      if (K.fb.cur_x >= w)
+        K.fb.cur_x %= w,
+        K.fb.cur_y += 1,
+        K.fb.cur_y %= h; } } }
+
+void g_fb32_draw_cb(g_fb32 *fb, g_cb *cb) {
+}
+
+void g_fb32_set_cursor(g_fb32 *fb, size_t x, size_t y) {
+  fb->cur_x = x % fb->width;
+  fb->cur_y = y % fb->height; }
+
+void g_fb32_ini(g_fb32 *b, uint32_t *_, size_t width, size_t height, size_t pitch) {
+  b->_ = _;
+  b->width = width;
+  b->height = height;
+  b->pitch = pitch;
+  b->cur_x = b->cur_y = 0; }
+
+static void g_fb32_log_n_r(g_fb32 *fb, uintptr_t n, uintptr_t base) {
+  if (n) g_fb32_log_n(fb, n, base); }
+
+void g_fb32_log_n(g_fb32 *fb, uintptr_t n, uintptr_t base) {
+  uintptr_t dig = n % base;
+  g_fb32_log_n_r(fb, n / base, base);
+  const char d[2] = {digits[dig], 0};
+  g_fb32_log(fb, d); }
+
+void g_fb32_log(g_fb32 *fb, const char *msg) {
+  g_fb32_log_c(fb, msg, 0xffeeddcc, 0); }
+void g_fb32_log_char_c(g_fb32 *fb, char c, uint32_t fg, uint32_t bg) {
+  char s[2] = {c, 0};
+  g_fb32_log_c(fb, s, fg, bg); }
+void g_fb32_log_char(g_fb32 *fb, char c) {
+  g_fb32_log_char_c(fb, c, 0xffeeddcc, 0); }
+void 
+  k_log(const char *msg),
+  k_log_c(const char *msg, uint32_t fg, uint32_t bg),
+  k_log_n(uintptr_t n, uintptr_t base),
+  k_logf(const char *fmt, ...),
+  k_log_char(char);
+
+void k_log_c(const char *msg, uint32_t fg, uint32_t bg) {
+  k_cur_msg(msg, fg, bg); }
+
+void k_log_char(char c) {
+  char s[2] = {c, 0};
+  k_log(s); }
+
+void k_log(const char *msg) {
+  k_log_c(msg, 0xffeeddcc, 0); }
+
+static void k_log_n_r(uintptr_t n, uintptr_t base) {
+  if (n) k_log_n(n, base); }
+
+void k_log_n(uintptr_t n, uintptr_t base) {
+  uintptr_t dig = n % base;
+  k_log_n_r(n / base, base);
+  const char d[2] = {digits[dig], 0};
+  k_log(d); }
+
+void k_logf(const char *fmt, ...) {
+  va_list xs;
+  va_start(xs, fmt);
+  while (*fmt) {
+    char c = *fmt++;
+    if (c != '%') k_log_char(c);
+    else re:
+      switch (c = *fmt++) {
+      case 0: return;
+      default: k_log_char(c); break;
+      case 'l': goto re;
+      case 'd': k_log_n(va_arg(xs, uintptr_t), 10); break;
+      case 'x': k_log_n(va_arg(xs, uintptr_t), 16); break;
+      case 'o': k_log_n(va_arg(xs, uintptr_t), 8); break;
+      case 'b': k_log_n(va_arg(xs, uintptr_t), 2); break; } } }
 
 #define g_static_size (1<<20)
 
