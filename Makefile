@@ -91,7 +91,7 @@ installs=\
   $(dest)/g/man/man1/$n.1\
   $(dest)/lib/$n.a\
   $(dest)/lib/lib$n.so\
-  $(dest)/include/$n.h\
+  $(dest)/include/$x.h\
   $(vimdest)/ftdetect/$n.vim\
   $(vimdest)/syntax/$n.vim
 install: $(installs)
@@ -99,7 +99,7 @@ uninstall:
 	@echo RM $(abspath $(installs))
 	@rm -f $(installs)
 
-$(dest)/include/$n.h: g/$n.h
+$(dest)/include/$x.h: g/$x.h
 	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
 $(dest)/lib/$n.a: bin/h/$n.a
