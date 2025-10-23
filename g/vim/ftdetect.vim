@@ -1,1 +1,1 @@
-au BufRead,BufNewFile *.mi set filetype=mitty
+au BufRead,BufNewFile *.g set filetype=glisp

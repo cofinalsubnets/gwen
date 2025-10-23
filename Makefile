@@ -1,5 +1,5 @@
-n=mitty
-x=mi
+n=gl
+x=g
 m=bin/h/$n
 l=bin/h/lcat
 a?=$(shell uname -m)
