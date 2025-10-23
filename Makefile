@@ -2,10 +2,13 @@ n=mitty
 x=mi
 m=bin/host/$n
 l=bin/host/lcat
-.PHONY: test
+ARCH=$(shell uname -m)
+.PHONY: test all
 test: bin/host/$n
 	@echo MI test
 	@$m test/*.$x
+
+all: bin/$n-$(ARCH).k bin/host/$n bin/host/lib$n.so bin/pd/$n.pdx
 
 #build
 target ?= host
@@ -145,7 +148,6 @@ serve:
 	darkhttpd .
 
 
-ARCH=$(shell uname -m)
 a=$(ARCH)
 k_c=$(share_c) $(font_c) $(wildcard k/*.c) $(wildcard k/arch/$a/*.c)
 k_h=$(share_h) $(font_h) $(wildcard k/*.h) $(wildcard k/arch/$a/*.h)
@@ -153,7 +155,6 @@ k_S=$(wildcard k/*.S) $(wildcard k/arch/$a/*.S)
 k_asm=$(wildcard k/*.asm) $(wildcard k/arch/$a/*.asm)
 k_o=$(addprefix bin/k_$a/, $(k_c:.c=.o) $(k_S:.S=.o) $(k_asm:.asm=.o))
 
-NASMFLAGS := -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 kldflags := -static -nostdlib --gc-sections -T k/arch/$a/$a.lds -z max-page-size=0x1000
 kcflags:=-std=gnu17 -g -O2 -pipe\
 	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
@@ -172,80 +173,48 @@ kcppflags := \
     $(kcppflags) \
     -DLIMINE_API_REVISION=3
 
-kcc=$(CC) $(kcflags) $(kcppflags)
-# Architecture specific internal flags.
-ifeq ($(ARCH),x86_64)
-    ifeq ($(CC_IS_CLANG),1)
-        override kcc += \
-            -target x86_64-unknown-none-elf
-    endif
-    override kcflags += \
-        -m64 \
-        -march=x86-64 \
-        -mabi=sysv \
-        -mno-80387 \
-        -mno-mmx \
-        -mno-sse \
-        -mno-sse2 \
-        -mno-red-zone \
-        -mcmodel=kernel
-    override kldflags += \
-        -m elf_x86_64
-    override NASMFLAGS := \
-        -f elf64 \
-        $(NASMFLAGS)
+ifeq ($(CC_IS_CLANG),1)
+kcc_if_clang=-target $a-unknown-none-elf
+else
 endif
+kcflags_x86_64=\
+	-m64 \
+	-march=x86-64 \
+	-mabi=sysv \
+	-mno-80387 \
+	-mno-mmx \
+	-mno-sse \
+	-mno-sse2 \
+	-mno-red-zone \
+	-mcmodel=kernel
+kcflags_aarch64=\
+	-mcpu=generic \
+	-march=armv8-a+nofp+nosimd \
+	-mgeneral-regs-only
+kcflags_riscv64=\
+	-march=rv64imac\
+	-mabi=lp64 \
+	-mno-relax
+kcflags_loongarch64=\
+	-march=loongarch64 \
+	-mabi=lp64s \
+	-mfpu=none \
+	-msimd=none
+kldflags_x86_64=-m elf_x86_64
+kldflags_aarch64=-m aarch64elf
+kldflags_riscv64=-m elf64lriscv --no-relax
+kldflags_loongarch64=-m elf64loongarch
 
-ifeq ($(ARCH),aarch64)
-    ifeq ($(CC_IS_CLANG),1)
-        override kcc += \
-            -target aarch64-unknown-none-elf
-    endif
-    override kcflags += \
-        -mcpu=generic \
-        -march=armv8-a+nofp+nosimd \
-        -mgeneral-regs-only
-    override kldflags += \
-        -m aarch64elf
-endif
-
-ifeq ($(ARCH),riscv64)
-    ifeq ($(CC_IS_CLANG),1)
-        override kcc += \
-            -target riscv64-unknown-none-elf
-        override kcflags += \
-            -march=rv64imac
-    else
-        override kcflags += \
-            -march=rv64imac_zicsr_zifencei
-    endif
-    override kcflags += \
-        -mabi=lp64 \
-        -mno-relax
-    override kldflags += \
-        -m elf64lriscv \
-        --no-relax
-endif
-
-ifeq ($(ARCH),loongarch64)
-    ifeq ($(CC_IS_CLANG),1)
-        override kcc += \
-            -target loongarch64-unknown-none-elf
-    endif
-    override kcflags += \
-        -march=loongarch64 \
-        -mabi=lp64s \
-        -mfpu=none \
-        -msimd=none
-    override kldflags += \
-        -m elf64loongarch
-endif
+kcc=$(CC) $(kcflags) $(kcflags_$a) $(kcppflags) $(kcc_if_clang)
+kcc_loongarch64=-target loongarch64-unknown-none-elf
+kcc_riscv64=-target riscv64-unknown-none-elf
+kcc_aarch64=-target aarch64-unknown-none-elf
+k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 
 bin/$n-$a.k: Makefile k/arch/$a/$a.lds $(k_o)
 	@echo LD $@
 	@mkdir -p "$(dir $@)"
 	@$(LD) $(kldflags) $(k_o) -o $@
-
 
 bin/k_$a/%.o: %.c Makefile $(share_h) bin/boot.h
 	@echo CC $@
@@ -262,141 +231,66 @@ bin/k_$a/%.o: k/%.S $(share_h) Makefile bin/boot.h
 bin/k_$a/k/arch/$a/%.o: k/arch/$a/%.asm
 	@echo AS $@
 	@mkdir -p "$(dir $@)"
-	@nasm $(NASMFLAGS) $< -o $@
+	@nasm $< -o $@ $(k_nasmflags)
 
+k_xorriso_x86_64=\
+	 	-b boot/limine/limine-bios-cd.bin \
+		-no-emul-boot -boot-load-size 4 -boot-info-table
+k_xorriso=xorriso -as mkisofs -quiet -R -r -J\
+	-hfsplus -apm-block-size 2048\
+	--efi-boot boot/limine/limine-uefi-cd.bin\
+	-efi-boot-part --efi-boot-image --protective-msdos-label\
+	$(k_xorriso_$a)
 
 bin/$n-$a.iso: bin/$n-$a.k dl/limine/limine k/limine/limine.conf
 	@echo MK $@
-	@rm -rf iso_root
-	@mkdir -p iso_root/boot
-	@cp $< iso_root/boot/kernel
-	@mkdir -p iso_root/boot/limine
-	@cp k/limine/limine.conf iso_root/boot/limine/
-	@mkdir -p iso_root/EFI/BOOT
-	@cp dl/limine/limine-uefi-cd.bin iso_root/boot/limine/
-ifeq ($a,x86_64)
-	@cp dl/limine/limine-bios.sys dl/limine/limine-bios-cd.bin iso_root/boot/limine/
-	@cp dl/limine/BOOTX64.EFI dl/limine/BOOTIA32.EFI iso_root/EFI/BOOT/
-	@xorriso -as mkisofs -quiet -R -r -J -b boot/limine/limine-bios-cd.bin \
-		-no-emul-boot -boot-load-size 4 -boot-info-table -hfsplus \
-		-apm-block-size 2048 --efi-boot boot/limine/limine-uefi-cd.bin \
-		-efi-boot-part --efi-boot-image --protective-msdos-label \
-		iso_root -o $@
+	@rm -rf bin/iso_root
+	@mkdir -p bin/iso_root/boot
+	@cp $< bin/iso_root/boot/kernel
+	@mkdir -p bin/iso_root/boot/limine
+	@cp k/limine/limine.conf bin/iso_root/boot/limine/
+	@mkdir -p bin/iso_root/EFI/BOOT
+	@cp dl/limine/limine-uefi-cd.bin bin/iso_root/boot/limine/
+	@cp dl/limine/limine-bios.sys dl/limine/limine-bios-cd.bin bin/iso_root/boot/limine/
+	@cp dl/limine/BOOTX64.EFI dl/limine/BOOTIA32.EFI bin/iso_root/EFI/BOOT/
+	@cp dl/limine/BOOTAA64.EFI bin/iso_root/EFI/BOOT/
+	@cp dl/limine/BOOTRISCV64.EFI bin/iso_root/EFI/BOOT/
+	@cp dl/limine/BOOTLOONGARCH64.EFI bin/iso_root/EFI/BOOT/
+	$(k_xorriso) bin/iso_root -o $@
 	@dl/limine/limine bios-install $@
-endif
-ifeq ($a,aarch64)
-	@cp -v dl/limine/BOOTAA64.EFI iso_root/EFI/BOOT/
-	@xorriso -as mkisofs -quiet -R -r -J \
-		-hfsplus -apm-block-size 2048 \
-		--efi-boot boot/limine/limine-uefi-cd.bin \
-		-efi-boot-part --efi-boot-image --protective-msdos-label \
-		iso_root -o $@
-endif
-ifeq ($a,riscv64)
-	@cp -v dl/limine/BOOTRISCV64.EFI iso_root/EFI/BOOT/
-	@xorriso -as mkisofs -R -r -J \
-		-hfsplus -apm-block-size 2048 \
-		--efi-boot boot/limine/limine-uefi-cd.bin \
-		-efi-boot-part --efi-boot-image --protective-msdos-label \
-		iso_root -o $@
-endif
-ifeq ($a,loongarch64)
-	@cp -v dl/limine/BOOTLOONGARCH64.EFI iso_root/EFI/BOOT/
-	@xorriso -as mkisofs -R -r -J \
-		-hfsplus -apm-block-size 2048 \
-		--efi-boot boot/limine/limine-uefi-cd.bin \
-		-efi-boot-part --efi-boot-image --protective-msdos-label \
-		iso_root -o $@
-endif
-	@rm -rf iso_root
+	@rm -rf bin/iso_root
 
-bin/$n-$a.hdd: bin/$n-$a.iso limine/limine k/limine/limine.conf
+bin/$n-$a.hdd: bin/$n-$a.k dl/limine/limine k/limine/limine.conf
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
-ifeq ($a,x86_64)
-	@PATH=$$PATH:/usr/sbin:/sbin sgdisk $@ -n 1:2048 -t 1:ef00 -m 1
-	@dl/limine/limine bios-install $@ 2>&1 >/dev/null
-else
 	@PATH=$$PATH:/usr/sbin:/sbin sgdisk $@ -n 1:2048 -t 1:ef00
-endif
 	@mformat -i $@@@1M
 	@mmd -i $@@@1M ::/EFI ::/EFI/BOOT ::/boot ::/boot/limine
 	@mcopy -i $@@@1M $< ::/boot/kernel
 	@mcopy -i $@@@1M k/limine/limine.conf ::/boot/limine
-ifeq ($a,x86_64)
 	@mcopy -i $@@@1M dl/limine/limine-bios.sys ::/boot/limine
 	@mcopy -i $@@@1M dl/limine/BOOTX64.EFI ::/EFI/BOOT
 	@mcopy -i $@@@1M dl/limine/BOOTIA32.EFI ::/EFI/BOOT
-endif
-ifeq ($a,aarch64)
 	@mcopy -i $@@@1M dl/limine/BOOTAA64.EFI ::/EFI/BOOT
-endif
-ifeq ($a,riscv64)
 	@mcopy -i $@@@1M dl/limine/BOOTRISCV64.EFI ::/EFI/BOOT
-endif
-ifeq ($a,loongarch64)
 	@mcopy -i $@@@1M dl/limine/BOOTLOONGARCH64.EFI ::/EFI/BOOT
-endif
 
-.PHONY: run run-hdd
+k_qemu_x86_64=-M q35
+k_qemu_risc=-M virt -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
+k_qemu_loongarch64=$(k_qemu_risc) -cpu la464
+k_qemu_aarch64=$(k_qemu_risc) -cpu=cortex-a72
+k_qemu_riscv64=$(k_qemu_risc) -cpu=rv64
+k_qemu=qemu-system-$a -m 2G $(k_qemu_$a)\
+	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-$a.fd,readonly=on
+
+.PHONY: run run-hdd run-$a run-hdd-$a
 run: run-$a
 run-hdd: run-hdd-$a
-QEMUFLAGS := -m 2G
-qemu-x86_64=qemu-system-x86_64 $(QEMUFLAGS)\
-	-M q35\
-	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-x86_64.fd,readonly=on
-.PHONY: run-x86_64 run-hdd-x86_64
-run-x86_64: bin/$n-$a.iso dl/ovmf/ovmf-code-$a.fd
-	$(qemu-x86_64) -cdrom $<
-run-hdd-x86_64: bin/$n-$a.hdd dl/ovmf/ovmf-code-$a.fd
-	$(qemu-x86_64) -hda $<
-
-qemu-aarch64=qemu-system-aarch64 $(QEMUFLAGS)\
-		-M virt \
-		-cpu cortex-a72 \
-		-device ramfb \
-		-device qemu-xhci \
-		-device usb-kbd \
-		-device usb-mouse \
-		-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-aarch64.fd,readonly=on
-
-.PHONY: run-aarch64 run-hdd-aarch64
-run-aarch64: dl/ovmf/ovmf-code-aarch64.fd $n-aarch64.iso
-	$(qemu-aarch64) -cdrom $n-aarch64.iso
-run-hdd-aarch64: dl/ovmf/ovmf-code-aarch64.fd $n-aarch64.hdd
-	$(qemu-aarch64) -hda $n-aarch64.hdd
-
-qemu-riscv64=qemu-system-riscv64 $(QEMUFLAGS)\
-	-M virt \
-	-cpu rv64 \
-	-device ramfb \
-	-device qemu-xhci \
-	-device usb-kbd \
-	-device usb-mouse \
-	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-riscv64.fd,readonly=on
-
-.PHONY: run-riscv64 run-hdd-riscv64
-run-riscv64: dl/ovmf/ovmf-code-riscv64.fd $n-riscv64.iso
-	$(qemu-riscv64) -cdrom $n-riscv64.iso
-run-hdd-riscv64: dl/ovmf/ovmf-code-riscv64.fd $n-riscv64.hdd
-	$(qemu-riscv64) -hda $n-riscv64.hdd
-
-qemu-loongarch64=qemu-system-loongarch64 $(QEMUFLAGS)\
-	-M virt \
-	-cpu la464 \
-	-device ramfb \
-	-device qemu-xhci \
-	-device usb-kbd \
-	-device usb-mouse \
-	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-loongarch64.fd,readonly=on
-
-.PHONY: run-loongarch64 run-hdd-loongarch64
-run-loongarch64: dl/ovmf/ovmf-code-loongarch64.fd bin/$n-loongarch64.iso
-	$(qemu-loongarch64) -cdrom $n-$a.iso
-
-run-hdd-loongarch64: dl/ovmf/ovmf-code-loongarch64.fd bin/$n-loongarch64.hdd
-	$(qemu-loongarch64) -hda $n-$a.hdd
+run-$a: bin/$n-$a.iso dl/ovmf/ovmf-code-$a.fd
+	$(k_qemu) -cdrom $<
+run-hdd-$a: bin/$n-$a.hdd dl/ovmf/ovmf-code-$a.fd
+	$(k_qemu) -hda $<
 
 dl/ovmf/ovmf-code-%.fd:
 	@echo MK ovmf
@@ -416,9 +310,5 @@ dl/limine/limine:
 	@rm -rf dl/limine
 	@$(git_clone_limine)
 	@make -sC dl/limine
-
-.PHONY: all
-all: bin/$n-$a.k bin/host/$n bin/host/lib$n.so bin/pd/$n.pdx
-
 bin/pd/%:
 	@make -C pd ../$@
