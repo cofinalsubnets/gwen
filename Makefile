@@ -20,7 +20,6 @@ target ?= host
 share_h=$(wildcard g/*.h)
 share_c=$(wildcard g/*.c)
 font_c=$(wildcard g/font/*.c)
-font_h=$(wildcard g/font/*.h)
 host_o=$(addprefix bin/h/, $(share_c:.c=.o) sys.o)
 flags:= -std=gnu17 -g -O2 -pipe\
  	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
@@ -146,7 +145,7 @@ serve:
 .PHONY: clean distclean valg perf repl serve
 
 k_c=$(share_c) $(font_c) $(wildcard k/*.c) $(wildcard k/arch/$a/*.c)
-k_h=$(share_h) $(font_h) $(wildcard k/*.h) $(wildcard k/arch/$a/*.h)
+k_h=$(share_h) $(wildcard k/*.h) $(wildcard k/arch/$a/*.h)
 k_S=$(wildcard k/*.S) $(wildcard k/arch/$a/*.S)
 k_asm=$(wildcard k/*.asm) $(wildcard k/arch/$a/*.asm)
 k_o=$(addprefix bin/k_$a/, $(k_c:.c=.o) $(k_S:.S=.o) $(k_asm:.asm=.o))
@@ -163,7 +162,6 @@ kcppflags := \
 	-I k/include/ \
 	-I bin/ \
 	-I g/ \
-	-I g/font/ \
 	-Dg_target=g_target_os \
 	-isystem k/include/ \
 	$(kcppflags) \
@@ -310,7 +308,7 @@ pd_as=$(pd_gcc) -x assembler-with-cpp
 pd_opt=-O2 -falign-functions=16 -fomit-frame-pointer
 pd_lds=$(patsubst ~%,$(HOME)%,$(pd_sdk)/C_API/buildsupport/link_map.ld)
 pd_fpu=-mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
-pd_incdir=$(patsubst %,-I %, pd $(pd_sdk)/C_API g g/font bin)
+pd_incdir=$(patsubst %,-I %, pd $(pd_sdk)/C_API g bin)
 pd_defs =-DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_target=g_target_pd
 pd_heap =8388208
 pd_stack=4194304
