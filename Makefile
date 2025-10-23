@@ -1,13 +1,13 @@
 n=mitty
 x=mi
-m=bin/host/$n
-l=bin/host/lcat
+m=bin/h/$n
+l=bin/h/lcat
 a?=$(shell uname -m)
-test: bin/host/$n
+test: bin/h/$n
 	@echo LI test
-	@$m test/*.$x
+	@$m t/*.$x
 all: all_host all_pd all_k
-all_host: bin/host/$n bin/host/lib$n.so bin/host/$n.1
+all_host: bin/h/$n bin/h/lib$n.so bin/h/$n.1
 all_pd: bin/pd/$n.pdx
 all_k: bin/$n-$a.k
 .PHONY: test all all_host all_pd all_k
@@ -20,62 +20,62 @@ share_h=$(wildcard g/*.h)
 share_c=$(wildcard g/*.c)
 font_c=$(wildcard g/font/*.c)
 font_h=$(wildcard g/font/*.h)
-host_o=$(addprefix bin/host/, $(share_c:.c=.o) sys.o)
+host_o=$(addprefix bin/h/, $(share_c:.c=.o) sys.o)
 flags:= -std=gnu17 -g -O2 -pipe\
  	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
  	-fno-exceptions -fno-asynchronous-unwind-tables -fno-stack-clash-protection\
  	-fcf-protection=none\
 	-flto -fpic
-cc=$(CC) $(flags) -Ig/ -Ihost/ -Ibin/ \
+cc=$(CC) $(flags) -Ig/ -Ih/ -Ibin/ \
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
 	 -D g_target=g_target_$(target)
 
-bin/host/$n: bin/host/main.o bin/host/$n.a
+bin/h/$n: bin/h/main.o bin/h/$n.a
 	@echo LD $@
 	@mkdir -p $(dir $@)
 	@$(cc) -o $@ $^
 
-bin/host/lcat: bin/host/lcat.o bin/host/$n.a
+bin/h/lcat: bin/h/lcat.o bin/h/$n.a
 	@echo LD $@
 	@mkdir -p $(dir $@)
 	@$(cc) -o $@ $^
 
-bin/host/$n.a: $(host_o)
+bin/h/$n.a: $(host_o)
 	@echo AR $@
 	@mkdir -p $(dir $@)
 	@ar rcs $@ $^
 
-bin/host/lib$n.so: $(host_o)
+bin/h/lib$n.so: $(host_o)
 	@echo LD $@
 	@mkdir -p $(dir $@)
 	@$(cc) -shared -o $@ $^
 
-bin/host/%.o: %.c $(share_h) Makefile
+bin/h/%.o: %.c $(share_h) Makefile
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(cc) -c $< -o $@
 
-bin/host/%.o: host/%.c $(share_h) Makefile
+bin/h/%.o: h/%.c $(share_h) Makefile
 	@echo CC $@
 	@mkdir -p $(dir $@)
-	@$(cc) -c -Ibin/host $< -o $@
+	@$(cc) -c -Ibin/h $< -o $@
 
-bin/host/main.o: host/main.c bin/host/main.h bin/boot.h $(share_h) Makefile
+bin/h/main.o: h/main.c bin/h/main.h bin/boot.h $(share_h) Makefile
 	@echo CC $@
 	@mkdir -p $(dir $@)
-	@$(cc) -c -Ibin/host $< -o $@
+	@$(cc) -c -Ibin/h $< -o $@
 
 # sed command to escape lisp text into C string format
-bin/boot.h: bin/host/lcat host/lcat.sed g/boot.$x
+bin/boot.h: bin/h/lcat h/lcat.sed g/boot.$x
 	@echo LI $@
-	@$< < g/boot.$x | sed -f host/lcat.sed >$@
+	@$< < g/boot.$x | sed -f h/lcat.sed >$@
 
-bin/host/main.h: bin/host/lcat host/lcat.sed host/main.$x
+bin/h/main.h: bin/h/lcat h/lcat.sed h/main.$x
 	@echo LI $@
-	@$< < host/main.$x | sed -f host/lcat.sed > $@
+	@$< < h/main.$x | sed -f h/lcat.sed > $@
 
-bin/host/$n.1: bin/host/$n host/manpage.$x
+bin/h/$n.1: bin/h/$n h/manpage.$x
 	@echo LI $@
 	@$^ > $@
 
@@ -102,16 +102,16 @@ uninstall:
 $(dest)/include/$n.h: g/$n.h
 	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
-$(dest)/lib/$n.a: bin/host/$n.a
+$(dest)/lib/$n.a: bin/h/$n.a
 	@echo CP $(abspath $@)
 	@install -D -m 755 $< $@
-$(dest)/lib/lib$n.so: bin/host/lib$n.so
+$(dest)/lib/lib$n.so: bin/h/lib$n.so
 	@echo CP $(abspath $@)
 	@install -D -m 755 $< $@
-$(dest)/bin/$n: bin/host/$n
+$(dest)/bin/$n: bin/h/$n
 	@echo CP $(abspath $@)
 	@install -D -m 755 -s $< $@
-$(dest)/g/man/man1/$n.1: bin/host/$n.1
+$(dest)/g/man/man1/$n.1: bin/h/$n.1
 	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
 $(vimdest)/ftdetect/$n.vim: g/vim/ftdetect.vim
@@ -128,16 +128,16 @@ distclean:
 	@echo RM bin dl
 	@rm -rf `git check-ignore * */*`
 # valgrind detects some memory errors
-valg: bin/host/$n
-	valgrind --error-exitcode=1 $m test/*.$x
+valg: bin/h/$n
+	valgrind --error-exitcode=1 $m t/*.$x
 # profiling on linux
-perf.data: bin/host/$n
-	perf record $m test/*.$x
+perf.data: bin/h/$n
+	perf record $m t/*.$x
 perf: perf.data
 	perf report
 flamegraph.svg: perf.data
 	flamegraph --perfdata $^
-repl: bin/host/$n
+repl: bin/h/$n
 	rlwrap $m
 serve:
 	darkhttpd .
