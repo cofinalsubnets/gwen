@@ -218,7 +218,6 @@ void kmain(void) {
 
   // framebuffer init
   if (!fb_req.response || !fb_req.response->framebuffer_count) for (;;) k_stop();
-
   struct limine_framebuffer *fb0 = fb_req.response->framebuffers[0];
   g_fb32_ini(&K.fb, fb0->address, fb0->width, fb0->height, fb0->pitch);
   intptr_t x0 = K.fb.width / 2,
@@ -234,7 +233,6 @@ void kmain(void) {
 
   // mem init
   if (!memmap_req.response || !hhdm_req.response) for (;;) k_stop();
-
   struct limine_memmap_entry **rr = memmap_req.response->entries;
   uint64_t hhdm = hhdm_req.response->offset,
            n = memmap_req.response->entry_count,
@@ -242,11 +240,11 @@ void kmain(void) {
            nbs = 0;
   K.free = kgetmem(hhdm, n, rr, &nbs, &nrs);
   K.used = NULL;
-  k_logf("%dK %dr\n", nbs >> 10, nrs);
+  k_logf("%dK %dR\n", nbs >> 10, nrs);
 
   // lisp init
-  static g_word g_static_pool[g_static_size];
-  g_core *f = K.f = please(g_evals_(g_ini_static(sizeof(g_static_pool), g_static_pool),
+  static intptr_t g_static_pool[g_static_size];
+  struct g *f = K.f = please(g_evals_(g_ini_static(sizeof(g_static_pool), g_static_pool),
 #include "boot.h"
   ), 0);
   k_logf("f@0x%x\n", (uintptr_t) f);
@@ -254,7 +252,6 @@ void kmain(void) {
     " pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",
     f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (g_word*) f + f->len - f->sp);
 
-  k_logf("%d ticks ok.\n", K.ticks);
-  for (;;) {
-    k_log_char(key_get());
-    k_stop(); } }
+  // main loop
+  for (k_logf("%d ticks ok.\n", K.ticks);; k_stop())
+    k_log_char(key_get()); }

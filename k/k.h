@@ -49,6 +49,6 @@ extern struct k {
     struct mem *next;
     uint8_t _[];
   } *free, *used;
-  g_core *f;
+  struct g *f;
   struct { uint8_t k, f; } kb; } K;
 #endif

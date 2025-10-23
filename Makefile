@@ -300,12 +300,6 @@ dl/limine/limine:
 	@make -sC dl/limine
 
 pd_sdk=$(PLAYDATE_SDK_PATH)
-ifeq ($(pd_sdk),)
-	pd_sdk = $(shell egrep '^\s*SDKRoot' ~/.Playdate/config | head -n 1 | cut -c9-)
-	ifeq ($(pd_sdk),)
-		$(error SDK path not found; set ENV value PLAYDATE_SDK_PATH)
-	endif
-endif
 pd_src=$(wildcard pd/*.c) $(share_c) $(font_c)
 pd_gcc=arm-none-eabi-gcc
 pd_cc=$(pd_gcc) -g3
