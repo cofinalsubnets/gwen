@@ -1,7 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "i.h"
+#include "g.h"
+#include <stdlib.h>
+#include "pd_api.h"
 #include "font.h"
+extern PlaydateAPI *Pd;
+
+void
+  g_fb_clear(void),
+  g_fb_putc(char),
+  g_fb_puts(const char*),
+  g_fb_set_cursor(int, int);
 
 static g_vm_t g_buttons, g_cursor_h, g_cursor_v, theta, g_get_glyph, g_put_glyph, g_fps, g_clear;
 #define NROWS 30
@@ -49,7 +58,7 @@ static int update(void *userdata) {
 
 static int g_update(void *userdata) {
 	Pd = userdata;
-  G = g_evals_(G, "(update 0)");
+  G = g_pop(g_evals(G, "(update 0)"), 1);
 	return 1; }
 
 void g_dbg(struct g *f) {
@@ -147,7 +156,7 @@ static struct g *g_pd_init(void) {
   return f; }
 
 // this works in the simulator but currently either crashes or times out on real systems
-static void g_boot_cb(void *u) { G = g_evals_(G, boot); }
+static void g_boot_cb(void *u) { G = g_pop(g_evals(G, boot), 1); }
 
 static void cb_clear(struct cb *c) {
   uint32_t rows = c->rows, cols = c->cols;
@@ -205,6 +214,13 @@ static void enter_mode(int m) {
         synth = Pd->sound->synth->newSynth();
         Pd->sound->synth->setWaveform(synth, waveforms[active_waveform]); } } }
 
+void g_printf(struct g_out *o, const char*fmt, ...) {
+}
+void g_putc(struct g_out *o, int c) {
+}
+int g_getc(struct g_in *) { return 0; }
+int g_ungetc(struct g_in*, int c) { return c; }
+int g_eof(struct g_in*) { return 1; }
 
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
   Pd = pd;
@@ -293,7 +309,7 @@ static int synth_update(void* userdata) {
 
 #include <time.h>
 #include <unistd.h>
-NoInline uintptr_t g_sys_clock(void) {
+NoInline uintptr_t g_clock(void) {
   return Pd->system->getCurrentTimeMilliseconds(); }
 
 Vm(g_fps) {

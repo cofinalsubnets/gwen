@@ -1,5 +1,18 @@
-#include "i.h"
+#include "g.h"
 #include <stdarg.h>
+#define pop1 g_pop1
+#define strp g_strp
+#define twop g_twop
+#define tblp g_tblp
+#define symp g_symp
+static Inline struct g *g_run(struct g *f) {
+#if g_tco
+  if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
+#else
+  while (g_ok(f)) f = f->ip->ap(f);
+  f = g_code_of(f) == g_status_eof ? g_core_of(f) : f;
+#endif
+  return f; }
 enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
 #define nil g_nil
 #define str(_) ((struct g_string*)(_))
@@ -79,14 +92,16 @@ typedef intptr_t g_cp_t(struct g*, intptr_t, intptr_t*, intptr_t*);
 typedef void g_wk_t(struct g*, intptr_t, intptr_t*, intptr_t*);
 typedef bool g_id_t(struct g*, intptr_t, intptr_t);
 typedef struct g
-  *g_em_t(struct g*, g_file, intptr_t),
+  *g_em_t(struct g*, struct g_out*, intptr_t),
   *g_pp_t(struct g*, intptr_t);
+
 static int
   read_char(struct g_in *i);
 static void
-  transmit(struct g*, g_file,intptr_t);
+  transmit(struct g*,struct g_out*,intptr_t);
 static g_vm_t
-  symnom,
+  data, self, dot,
+  symnom, read0, prc,
   gensym, pairp, fixnump, symbolp, stringp,
   band, bor, bxor, bsr, bsl, bnot,
   ssub, sget, slen, scat,
@@ -113,7 +128,7 @@ static struct g
   *g_have(struct g*, uintptr_t),
   *g_cells(struct g*, size_t),
   *g_hash_put(struct g*),
-  *em_tbl(struct g*, g_file, intptr_t),
+  *em_tbl(struct g*, struct g_out*, intptr_t),
   *g_buf_new(struct g*),
   *g_buf_grow(struct g*);
 static g_cp_t cp_two, cp_tbl, cp_str, cp_sym;
@@ -122,23 +137,26 @@ static g_id_t neql, eq_two, eq_str;
 static g_em_t em_two, em_sym, em_str, em_tbl;
 static g_xx_t xx_two, xx_tbl, xx_sym, xx_str;
 
-static Inline int p_in_getc(struct g_in *i) { return i->getc(i); }
-static Inline int p_in_ungetc(struct g_in *i, int c) { return i->ungetc(i, c); }
-static Inline int p_in_eof(struct g_in *i) { return i->eof(i); }
+static struct g_out g_stdout = { g_printf, g_putc };
+static struct g_out g_stderr = { g_printf, g_putc };
+static struct g_in g_stdin = { g_getc, g_ungetc, g_eof };
 
 
+#ifndef EOF
+#define EOF -1
+#endif
 struct g *g_readsi(struct g *f, struct g_in* i) {
   intptr_t n = 0;
   for (int c; g_ok(f); n++) {
     c = read_char(i);
     if (c == EOF || c == ')') break;
-    p_in_ungetc(i, c);
+    i->ungetc(i, c);
     f = g_read1i(f, i); }
   for (f = g_push(f, 1, nil); n--; f = g_cons_r(f));
   return f; }
 
 Vm(dot) {
-  transmit(f, g_stdout, Sp[0]);
+  transmit(f, f->out, Sp[0]);
   Ip += 1;
   return Continue(); }
 
@@ -178,7 +196,7 @@ struct g *g_cells(struct g*f, uintptr_t n) {
   return f; }
 
 struct g *g_write1(struct g *f) {
-  return transmit(f, g_stdout, f->sp[0]), f; }
+  return transmit(f, f->out, f->sp[0]), f; }
 
 struct g *g_read1i(struct g*f, struct g_in* i) {
   if (!g_ok(f)) return f;
@@ -193,20 +211,20 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
       f = g_buf_new(f);
       for (size_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (struct g_string *b = str(f->sp[0]); n < lim; b->text[n++] = c)
-          if ((c = p_in_getc(i)) == EOF || c == '"' ||
-               (c == '\\' && (c = p_in_getc(i)) == EOF))
+          if ((c = i->getc(i)) == EOF || c == '"' ||
+               (c == '\\' && (c = i->getc(i)) == EOF))
             return b->len = n, f;
       return f;
     default:
-      p_in_ungetc(i, c);
+      i->ungetc(i, c);
       f = g_buf_new(f);
       for (uintptr_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (struct g_string *b = str(f->sp[0]); n < lim; b->text[n++] = c)
-          switch (c = p_in_getc(i)) {
+          switch (c = i->getc(i)) {
             default: continue;
             case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
             case '(': case ')': case '"': case '\'': case EOF:
-              p_in_ungetc(i, c);
+              i->ungetc(i, c);
               b->len = n;
               b->text[n] = 0; // zero terminate for strtol ; n < lim so this is safe
               char *e;
@@ -225,7 +243,6 @@ enum g_status g_fin(struct g *f) {
 static void g_libc_free(struct g *f, void *n)        { return free(n); }
 static void *g_libc_malloc(struct g *f, uintptr_t n) { return malloc(n); }
 
-struct g *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
 static Inline size_t b2w(size_t b) {
   size_t q = b / sizeof(intptr_t),
          r = b % sizeof(intptr_t);
@@ -271,10 +288,10 @@ static void ini_sym(struct g_symbol *y, struct g_string *nom, uintptr_t code) {
   y->ap = data; y->typ = g_ty_sym; y->nom = nom; y->code = code; y->l = y->r = 0; }
 static void ini_anon(struct g_symbol *y, uintptr_t code) {
   y->ap = data; y->typ = g_ty_sym; y->nom = 0; y->code = code; }
-bool twop(intptr_t _) { return homp(_) && typ(_) == g_ty_two; }
-bool strp(intptr_t _) { return homp(_) && typ(_) == g_ty_str; }
-bool tblp(intptr_t _) { return homp(_) && typ(_) == g_ty_tbl; }
-bool symp(intptr_t _) { return homp(_) && typ(_) == g_ty_sym; }
+bool g_twop(intptr_t _) { return homp(_) && typ(_) == g_ty_two; }
+bool g_strp(intptr_t _) { return homp(_) && typ(_) == g_ty_str; }
+bool g_tblp(intptr_t _) { return homp(_) && typ(_) == g_ty_tbl; }
+bool g_symp(intptr_t _) { return homp(_) && typ(_) == g_ty_sym; }
 
 static Inline struct g_tag { union x *null, *head, end[]; } *ttag(union x *k) {
   while (k->x) k++;
@@ -284,7 +301,6 @@ static void *bump(struct g *f, uintptr_t n) {
   void *x = f->hp;
   f->hp += n;
   return x; }
-
 
 static struct g *mo_c(struct g *f, uintptr_t n) {
   f = g_cells(f, n + Width(struct g_tag));
@@ -416,9 +432,6 @@ static Vm(g_yield) {
   Ip = Ip[1].m;
   Pack(f);
   return encode(f, YieldStatus); }
-
-struct g *g_eval(struct g *f) {
-  return g_run(g_ana(f, g_yield)); }
 
 NoInline struct g *g_apply(struct g *f) {
   f = mo_c(f, 3);
@@ -789,10 +802,8 @@ struct g *g_evals(struct g *f, const char *s) {
   f = g_read1s(f, "(:(r x y)(? y(r(ev'ev(A y))(B y))x)r)");
   f = g_push(f, 4, nil, f->quote, nil, nil);
   f = g_cons_r(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_readss(f, s))))));
-  return g_eval(f); }
+  return g_run(g_ana(f, g_yield)); }
 
-struct g *g_eval_(struct g *f)                 { return g_pop(g_eval(f), 1); }
-struct g *g_evals_(struct g *f, const char *s) { return g_pop(g_evals(f, s), 1); }
 Vm(defglob) {
   Have(3);
   Sp -= 3;
@@ -810,28 +821,28 @@ Vm(defglob) {
   Ip += 2;
   return Continue(); }
 
-Vm(drop1) { return
+static Vm(drop1) { return
   Ip += 1,
   Sp += 1,
   Continue(); }
 
-Vm(free_variable) {
+static Vm(free_variable) {
   intptr_t y = Ip[1].x,
            v = g_hash_get(f, y, f->dict, y); // see if it's defined now...
   Ip[0].ap = imm;
   Ip[1].x = v;
   return Continue(); }
 
-Vm(late_bind) {
+static Vm(late_bind) {
   intptr_t v = AB(Ip[1].x);
   Ip[0].ap = imm;
   Ip[1].x = v;
   return Continue(); }
 
-Vm(data) { return
+static Vm(data) { return
   Ap(t_ap[typ(Ip)], f); }
 
-Vm(self) {
+static Vm(self) {
   intptr_t x = word(Ip);
   Sp += 1;
   Ip = cell(Sp[0]);
@@ -946,9 +957,9 @@ uintptr_t hash(struct g *f, intptr_t x) {
   intptr_t len = (union x*) t - t->head;
   return mix ^ (mix * len); }
 
-static struct g *em_tbl(struct g *f, g_file o, intptr_t x) {
+static struct g *em_tbl(struct g *f, struct g_out *o, intptr_t x) {
   struct g_table *t = (struct g_table*) x;
-  g_fprintf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x);
+  o->printf(o, "#table:%ld/%ld@%lx", (long) t->len, (long) t->cap, (long) x);
   return f; }
 
 static void wk_tbl(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
@@ -1166,7 +1177,7 @@ Vm(gensym) {
   Have(req);
   symbol *y = (symbol*) Hp;
   Hp += req;
-  ini_anon(y, g_sys_clock());
+  ini_anon(y, g_clock());
   Sp[0] = word(y);
   Ip += 1;
   return Continue(); }
@@ -1190,10 +1201,10 @@ intptr_t cp_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
 void wk_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
-struct g *em_sym(struct g *f, g_file o, intptr_t x) {
+struct g *em_sym(struct g *f, struct g_out *o, intptr_t x) {
   struct g_string* s = sym(x)->nom;
-  if (s) for (uintptr_t i = 0; i < s->len; g_fputc(s->text[i++], o));
-  else g_fprintf(o, "#sym@%lx", (long) x);
+  if (s) for (uintptr_t i = 0; i < s->len; o->putc(o, s->text[i++]));
+  else o->printf(o, "#sym@%lx", (long) x);
   return f; }
 
 Vm(symbolp) { return
@@ -1220,13 +1231,13 @@ intptr_t cp_str(struct g *v, intptr_t x, intptr_t *p0, intptr_t *t0) {
 void wk_str(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += Width(struct g_string) + b2w(str(x)->len); }
 
-struct g *em_str(struct g *v, g_file o, intptr_t _) {
+struct g *em_str(struct g *v, struct g_out *o, intptr_t _) {
   size_t len = str(_)->len;
   const char *text = str(_)->text;
-  g_fputc('"', o);
-  for (char c; len--; g_fputc(c, o))
-    if ((c = *text++) == '\\' || c == '"') g_fputc('\\', o);
-  g_fputc('"', o);
+  o->putc(o, '"');
+  for (char c; len--; o->putc(o, c))
+    if ((c = *text++) == '\\' || c == '"') o->putc(o, '\\');
+  o->putc(o, '"');
   return v; }
 
 uintptr_t xx_str(struct g *v, intptr_t _) {
@@ -1328,13 +1339,13 @@ uintptr_t xx_two(struct g *f, intptr_t x) {
   uintptr_t hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-struct g *em_two(struct g *f, g_file o, intptr_t x) {
+struct g *em_two(struct g *f, struct g_out *o, intptr_t x) {
   if (A(x) == word(f->quote) && twop(B(x)))
-    g_fputc('\'', o),
+    o->putc(o,'\''),
     transmit(f, o, AB(x));
-  else for (g_fputc('(', o);; g_fputc(' ', o)) {
+  else for (o->putc(o, '(');; o->putc(o, ' ')) {
     transmit(f, o, A(x));
-    if (!twop(x = B(x))) { g_fputc(')', o); break; } }
+    if (!twop(x = B(x))) { o->putc(o, ')'); break; } }
   return f; }
 
 Vm(car) { return
@@ -1408,7 +1419,7 @@ struct g *g_gc(struct g *f) { return please(f, 0); }
 //   |                          `------'
 //   t0                  gc time (this cycle)
 static NoInline struct g *please(struct g *f, uintptr_t req0) {
-  uintptr_t t0 = f->t0, t1 = g_sys_clock(),
+  uintptr_t t0 = f->t0, t1 = g_clock(),
             len0 = f->len;
   intptr_t *w = (intptr_t*) f, *w0 = f->pool;
   struct g *g = (struct g*) (w == w0 ? w0 + len0 : w0);
@@ -1436,8 +1447,7 @@ static NoInline struct g *please(struct g *f, uintptr_t req0) {
   return g; }
 
 static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
-  g->free = f->free;
-  g->malloc = f->malloc;
+  memcpy(g, f, sizeof(struct g));
   g->pool = p1;
   g->len = len1;
   uintptr_t len0 = f->len;
@@ -1471,7 +1481,7 @@ static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f
     else for (g->cp += 2; g->cp[-2]; g->cp++)
       g->cp[-2] = cp(g, g->cp[-2], p0, t0);
 
-  g->t0 = g_sys_clock();
+  g->t0 = g_clock();
   return g; }
 
 NoInline intptr_t cp(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
@@ -1494,12 +1504,30 @@ NoInline intptr_t cp(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   return (intptr_t) (dst + (src - ini)); }
 
 static Vm(sysclock) {
-  Sp[0] = putnum(g_sys_clock());
+  Sp[0] = putnum(g_clock());
   Ip += 1;
   return Continue(); }
 
 static Vm(nullp) {
   Sp[0] = nilp(Sp[0]) ? putnum(-1) : nil;
+  Ip += 1;
+  return Continue(); }
+
+static Vm(prc) {
+  f->out->putc(f->out, g_getnum(*Sp));
+  Ip += 1;
+  return Continue(); }
+static Vm(read0) {
+  Pack(f);
+  f = g_read1i(f, f->in);
+  if (g_code_of(f) == g_status_eof) return // no error but end of file
+    f = g_core_of(f),
+    Unpack(f),
+    Ip += 1,
+    Continue();
+  f = g_cons_l(f);
+  if (!g_ok(f)) return f;
+  Unpack(f);
   Ip += 1;
   return Continue(); }
 
@@ -1517,7 +1545,7 @@ static Vm(nullp) {
   _(bif_band, "&", S2(band)) _(bif_bor, "|", S2(bor)) _(bif_bxor, "^", S2(bxor))\
   _(bif_cons, "X", S2(cons)) _(bif_car, "A", S1(car)) _(bif_cdr, "B", S1(cdr)) \
   _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \
-  _(bif_dot, ".", S1(dot))\
+  _(bif_dot, ".", S1(dot)) _(bif_read, "read", S1(read0)) _(bif_putc, "putc", S1(prc))\
   _(bif_sym, "sym", S1(gensym)) _(bif_nom, "nom", S1(symnom))\
   _(bif_thd, "thd", S1(thda)) _(bif_peek, "peek", S1(peek)) _(bif_poke, "poke", S2(poke)) _(bif_trim, "trim", S1(trim)) _(bif_seek, "seek", S2(seek)) \
   _(bif_tnew, "tnew", S1(tnew)) _(bif_tkeys, "tkeys", S1(tkeys)) _(bif_tlen, "tlen", S1(tlen)) _(bif_tset, "tset", S3(tset)) _(bif_tget, "tget", S3(tget)) _(bif_tdel, "tdel", S3(tdel))\
@@ -1555,30 +1583,49 @@ struct g *g_defines(struct g*f, uintptr_t len, struct g_def *defs) {
 static void *g_static_malloc(struct g *f, size_t n) { return NULL; }
 static void g_static_free(struct g *f, void*x) {}
 
-static struct g *g_ini_0(struct g*, g_malloc_t*, g_free_t*, uintptr_t);
-struct g *g_ini_static(uintptr_t n, void *f) { return g_ini_0(f, g_static_malloc, g_static_free, n / (2 * sizeof(intptr_t))); }
-struct g *g_ini_dynamic(g_malloc_t *ma, g_free_t *fr) {
-  const size_t len0 = 1 << 10;
-  return g_ini_0(ma(NULL, 2 * len0 * sizeof(intptr_t)), ma, fr, len0); }
+static struct g
+*g_ini_0(struct g*,
+         uintptr_t,
+         void *(*)(struct g*, uintptr_t),
+         void (*)(struct g*, void*),
+         struct g_in*,
+         struct g_out*,
+         struct g_out*);
+
+struct g *g_ini_static(uintptr_t nbytes, void *f) {
+  uintptr_t len0 = nbytes / (2 * sizeof(intptr_t));
+  return g_ini_0(f, len0, NULL, NULL, NULL, NULL, NULL); }
+
+static const size_t g_len0 = 1 << 10;
+struct g *g_ini_dynamic(void *(*ma)(struct g*, uintptr_t), void (*fr)(struct g*, void*)) {
+  return g_ini_0(NULL, g_len0, ma, fr, NULL, NULL, NULL); }
+struct g *g_ini(void) {
+  return g_ini_0(NULL, g_len0, g_libc_malloc, g_libc_free, NULL, NULL, NULL); }
+
+
 // this is the general initialization function. arguments are
+// - f: core pointer
+// - len0: initial semispace size in words (== total_space_size / 2)
 // - ma: malloc function pointer
 // - fr: free function pointer
-// - len0: initial semispace size in words (== total_space_size / 2)
-// - f: core pointer
-static struct g *g_ini_0(struct g *f, g_malloc_t *ma, g_free_t *fr, uintptr_t len0) {
-  if (f == NULL    ||                           // fail if pointer is null
-      g_code_of(f) ||                           //   or if pointer is not word aligned
-      len0 * sizeof(intptr_t) < sizeof(struct g)) //   or if space is not large enough
-    return encode(NULL, g_status_oom);
+static struct g *g_ini_0(struct g *f, uintptr_t len0, void *(*ma)(struct g*, uintptr_t), void (*fr)(struct g*, void*), struct g_in *in, struct g_out*out, struct g_out*err) {
+  uintptr_t len0B = 2 * sizeof(intptr_t) * len0;
+  if (len0B < 2 * sizeof(struct g)) return encode(NULL, g_status_oom);
+  if (f == NULL) f = ma(f, len0B);
+  if (f == NULL) return encode(NULL, g_status_oom);
+  if (!g_ok(f)) return fr(f, f), f; // it's misaligned -- if this happens free it to be polite
   memset(f, 0, sizeof(struct g));
-  f->pool = (intptr_t*) f;
   f->len = len0;
-  f->malloc = ma;
-  f->free = fr;
+  f->pool = (intptr_t*) f;
+  f->malloc = ma ? ma : g_static_malloc;
+  f->free = fr ? fr : g_static_free;
+  f->in = in ? in : &g_stdin;
+  f->out = out ? out : &g_stdout;
+  f->err = err ? err : &g_stderr;
   f->hp = f->end;
   f->sp = (intptr_t*) f + len0;
   f->ip = bif_stop;
-  f->t0 = g_sys_clock(); // this goes right before first allocation so gc always sees initialized t0
+  f->t0 = g_clock(); // this goes right before first allocation so gc always sees initialized t0
   f = g_symof(f, ":");
   f = g_symof(f, "?");
   f = g_symof(f, "`");
@@ -1642,9 +1689,9 @@ NoInline struct g *g_readss(struct g *f, const char *cs) {
 //
 // get the next significant character from the stream
 static int read_char(struct g_in *i) {
-  for (int c;;) switch (c = p_in_getc(i)) {
+  for (int c;;) switch (c = i->getc(i)) {
     default: return c;
-    case '#': case ';': while (!p_in_eof(i) && (c = p_in_getc(i)) != '\n' && c != '\r');
+    case '#': case ';': while (!i->eof(i) && (c = i->getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 static struct g *g_buf_new(struct g *f) {
   f = g_cells(f, Width(struct g_string) + 1);
@@ -1665,10 +1712,10 @@ static struct g *g_buf_grow(struct g *f) {
     f->sp[0] = (intptr_t) o; }
   return f; }
 
-static void transmit(struct g *f, g_file out, intptr_t x) {
-  if (nump(x)) g_fprintf(out, "%ld", (long) getnum(x));
+static void transmit(struct g *f, struct g_out *out, intptr_t x) {
+  if (nump(x)) out->printf(out, "%ld", (long) getnum(x));
   else if (datp(x)) t_em[typ(x)](f, out, x);
-  else g_fprintf(out, "#%lx", (long) x); }
+  else out->printf(out, "#%lx", (long) x); }
 
 static Vm(seek) { return
   Sp[1] = word(((union x*) Sp[1]) + getnum(Sp[0])),
@@ -1705,3 +1752,6 @@ static Vm(trim) {
   ttag(k)->head = k;
   Ip += 1;
   return Continue(); }
+
+struct g *g_read1(struct g *f) {
+  return g_read1i(f, f->in); }

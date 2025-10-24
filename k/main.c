@@ -2,6 +2,19 @@
 #include "font.h"
 #include <stdarg.h>
 
+void g_printf(struct g_out*, const char *fmt, ...) {
+  va_list xs;
+  va_start(xs, fmt);
+  k_vlogf(fmt, xs);
+  va_end(xs); }
+void g_putc(struct g_out*, int c) {
+  k_log_char(c); }
+
+int g_getc(struct g_in*) { return 0; }
+int g_ungetc(struct g_in*, int c) { return c; }
+int g_eof(struct g_in*) { return 1; }
+uintptr_t g_clock(void) { return K.ticks; }
+
 #define kb_code_lshift 0x2a
 #define kb_code_rshift 0x36
 #define kb_code_extend 0xe0
@@ -170,9 +183,14 @@ void k_log_n(uintptr_t n, uintptr_t base) {
   const char d[2] = {digits[dig], 0};
   k_log(d); }
 
+
 void k_logf(const char *fmt, ...) {
   va_list xs;
   va_start(xs, fmt);
+  k_vlogf(fmt, xs);
+  va_end(xs); }
+
+void k_vlogf(const char *fmt, va_list xs) {
   while (*fmt) {
     char c = *fmt++;
     if (c != '%') k_log_char(c);
@@ -244,9 +262,9 @@ void kmain(void) {
 
   // lisp init
   static intptr_t g_static_pool[g_static_size];
-  struct g *f = K.f = g_gc(g_evals_(g_ini_static(sizeof(g_static_pool), g_static_pool),
+  struct g *f = K.f = g_gc(g_pop(g_evals(g_ini_static(sizeof(g_static_pool), g_static_pool),
 #include "boot.h"
-  ));
+  ), 1));
   k_logf("f@0x%x\n", (uintptr_t) f);
   if (f && g_ok(f)) k_logf(
     " pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",

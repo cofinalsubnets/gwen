@@ -6,7 +6,6 @@ global arch_init
 global key_buffer
 global key_buffer_idx
 global k_reset
-global g_sys_clock
 extern K
 global resume
 extern kb_int
@@ -93,10 +92,6 @@ align 8
 resume:
   ret
 
-align 8
-g_sys_clock:
-  mov rax, [rel K]
-  ret
 
 align 8
 timer_isr:

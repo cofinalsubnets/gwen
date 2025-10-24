@@ -1,7 +1,8 @@
 #ifndef _g_k_h
 #define _g_k_h
 #include "limine/limine.h"
-#include "i.h"
+#include "g.h"
+#include <stdarg.h>
 extern const char digits[];
 void k_reset(void), arch_init(void);
 uint8_t key_get(void);
@@ -51,4 +52,5 @@ extern struct k {
   } *free, *used;
   struct g *f;
   struct { uint8_t k, f; } kb; } K;
+void k_logf(const char*, ...), k_vlogf(const char*, va_list), k_log_char(char);
 #endif

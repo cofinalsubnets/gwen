@@ -332,7 +332,7 @@ bin/pd/Source/pdex.%: bin/pd/pdex.%
 	@echo CP $@
 	@mkdir -p $(dir $@)
 	@cp $< $@
-bin/pd/%.o : %.c | bin/boot.h pd/sys.h
+bin/pd/%.o : %.c | bin/boot.h
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I pd -I bin $(pd_incdir) $< -o $@
@@ -343,7 +343,7 @@ bin/pd/pdex.elf: $(pd_o) $(pd_lds)
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
-bin/pd/pdex.so: $(pd_src) | pd/sys.h
+bin/pd/pdex.so: $(pd_src)
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o bin/pd/pdex.so $(pd_src)
