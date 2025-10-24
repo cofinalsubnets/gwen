@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <stddef.h>
 struct g;
+struct g_def {
+  const char *n;
+  union x *x; };
 enum g_status {
   g_status_ok  = 0,
   g_status_oom = 1,
@@ -22,7 +25,7 @@ struct g
   *g_readss(struct g*, const char*),
   *g_evals(struct g*, const char*),
   *g_evals_(struct g*, const char*),
-  *g_define(struct g*, const char*),
+  *g_defines(struct g*, uintptr_t, struct g_def*),
   *g_eval(struct g*),
   *g_eval_(struct g*),
   *g_apply(struct g*),

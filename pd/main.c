@@ -3,6 +3,19 @@
 #include "i.h"
 #include "font.h"
 
+static g_vm_t g_buttons, g_cursor_h, g_cursor_v, theta, g_get_glyph, g_put_glyph, g_fps, g_clear;
+#define NROWS 30
+#define NCOLS 50
+struct cb {
+  uint32_t rows, cols, row, col;
+  uint8_t cb[NROWS][NCOLS];
+} BB = { NROWS, NCOLS, 0, 0, };
+#define ROWS (BB.rows)
+#define COLS (BB.cols)
+#define Row (BB.row)
+#define Col (BB.col)
+static void random_life(struct cb*);
+
 static bool show_cursor;
 static const char boot[] =
 #include "boot.h"
@@ -11,10 +24,8 @@ static const char boot[] =
 struct g *G = NULL;
 PlaydateAPI *Pd;
 
-uint8_t gb[ROWS][COLS];
-static void random_life(void);
 
-static void draw_gb(void);
+static void draw_gb(struct cb*);
 
 #define draw_mode 0
 #define synth_mode 1
@@ -33,7 +44,7 @@ static int update(void *userdata) {
     life_update,
     g_update, };
   int r = update_modes[mode](userdata);
-  draw_gb();
+  draw_gb(&BB);
   return r; }
 
 static int g_update(void *userdata) {
@@ -42,26 +53,17 @@ static int g_update(void *userdata) {
 	return 1; }
 
 void g_dbg(struct g *f) {
-  if (!g_ok(f) || !f)
-    Pd->system->logToConsole("f@%lx\n", f);
-  else Pd->system->logToConsole(
-      "f@%lx\n"
-      " pool@%lx\n"
-      " len=%ld\n"
-      " allocd=%ld\n"
-      " height=%ld\n"
-      ,
-      f,
-      f->pool,
-      f->len,
-      f->hp - f->end,
-      (intptr_t*) f + f->len - f->sp
-      ); }
+  if (!g_ok(f) || !f) return Pd->system->logToConsole("f@%lx\n", f);
+  intptr_t
+    allocd = f->hp - f->sp,
+    height = (intptr_t*) f + f->len - f->sp;
+  Pd->system->logToConsole("f@%lx\n pool@%lx\n len=%ld\n allocd=%ld\n height=%ld\n",
+                            f,   f->pool,   f->len,      allocd,      height); }
 
 static Vm(fb_get) {
   size_t row = g_getnum(Sp[0]),
          col = g_getnum(Sp[1]);
-  *++Sp = g_putnum(gb[row % ROWS][col % COLS]);
+  *++Sp = g_putnum(BB.cb[row % BB.rows][col % BB.cols]);
   Ip += 1;
   return Continue(); }
 
@@ -69,12 +71,12 @@ static Vm(fb_put) {
   size_t row = g_getnum(Sp[0]),
          col = g_getnum(Sp[1]);
   char b = g_getnum(Sp[2]);
-  gb[row % ROWS][col % COLS] = b;
+  BB.cb[row % BB.rows][col % BB.cols] = b;
   Sp += 2;
   Ip += 1;
   return Continue(); }
 
-static const union x
+static union x
   bif_cur_h[] = { {g_cursor_h}, {ret0}},
   bif_cur_v[] = { {g_cursor_v}, {ret0}},
   bif_theta[] = { {theta}, {ret0}},
@@ -100,10 +102,7 @@ void *gg_malloc(struct g *f, size_t n) {
 void gg_free(struct g *f, void*x) {
   Pd->system->realloc(x, 0); }
 
-static struct {
-  const char *n;
-  const union x *v;
-} defs[] = {
+static struct g_def defs[] = {
   {"cursor_h", bif_cur_h},
   {"cursor_v", bif_cur_v},
   {"get_angle", bif_theta},
@@ -113,18 +112,14 @@ static struct {
   {"fb_put", bif_fb_put},
   {"fb_get", bif_fb_get},
   {"get_fps", bif_fps},
-  {"get_buttons", bif_buttons},
-};
+  {"get_buttons", bif_buttons}, };
 
 static struct g *g_pd_init(void) {
   struct g *f;
   f = g_ini_dynamic(gg_malloc, gg_free);
   g_dbg(f);
-  for (int i = 0; i < LEN(defs); i++)
-    f = g_define(g_push(f, 1, defs[i].v), defs[i].n);
+  f = g_defines(f, LEN(defs), defs);
   g_dbg(f);
-
-//  f = g_evals(f, boot);
 
   const char prog[] = "(,"
    "(fb_put 1 1 99)"
@@ -151,15 +146,21 @@ static struct g *g_pd_init(void) {
   g_dbg(f);
   return f; }
 
-static void g_boot_cb(void *u) {
-  G = g_evals_(G, boot); }
+// this works in the simulator but currently either crashes or times out on real systems
+static void g_boot_cb(void *u) { G = g_evals_(G, boot); }
 
+static void cb_clear(struct cb *c) {
+  uint32_t rows = c->rows, cols = c->cols;
+  for (int i = 0; i < rows; i++)
+    for (int j = 0; j < cols; j++)
+      c->cb[i][j] = 0; }
+
+void g_fb_clear(void) { cb_clear(&BB); }
 static void g_reset_cb(void *id) {
-  g_fb_clear();
+  cb_clear(&BB);
   g_fin(G);
   G = g_pd_init();
-  mode = 0;
-}
+  mode = 0; }
 
 PDSynth *synth;
 PlaydateAPI *Pd;
@@ -171,8 +172,7 @@ static SoundWaveform waveforms[] = {
   kWaveformSawtooth,
   kWaveformPOPhase,
   kWaveformPODigital,
-  kWaveformPOVosim,
-};
+  kWaveformPOVosim, };
 static int active_waveform = 0;
 static float freq = 1000, freq_max = 20000, freq_min = 20, vol = 0.5;
 static PDSynthSignal *signal;
@@ -184,20 +184,21 @@ static void leave_mode(int m) {
       Pd->sound->synth->freeSynth(synth);
     default: } }
 
-static void random_life(void) {
-  for (int i = 0; i < ROWS; i++)
-    for (int j = 0; j < COLS; j++)
-      gb[i][j] = rand() & 1 ? live_char : dead_char; }
+static void random_life(struct cb*c) {
+  uint32_t rows = c->rows, cols = c->cols;
+  for (uint32_t i = 0; i < rows; i++)
+    for (uint32_t j = 0; j < cols; j++)
+      c->cb[i][j] = rand() & 1 ? live_char : dead_char; }
 
 static void enter_mode(int m) {
   if (m != mode) {
     leave_mode(mode);
     switch (mode = m) {
       case draw_mode: show_cursor = true;
-      default: g_fb_clear(); break;
+      default: cb_clear(&BB); break;
       case life_mode:
         show_cursor = false;
-        random_life();
+        random_life(&BB);
         break;
       case synth_mode:
         show_cursor = false;
@@ -221,38 +222,24 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
 
 	return 0; }
 
-int Row = 0, Col = 0;
+void cb_putc(struct cb *cb, char c) {
+  uintptr_t rows = cb->rows, cols = cb->cols;
+  if (c == '\n') cb->row += 1, cb->row %= rows, cb->col = 0;
+  else cb->cb[cb->row][cb->col] = c,
+    cb->col += 1, cb->col %= cols,
+    cb->row = cb->col ? cb->row : (cb->row + 1 % rows); }
+void cb_puts(struct cb *cb, const char *s) { for (int i; (i = *s++); cb_putc(cb, i)); }
+void g_fb_putc(char c) { cb_putc(&BB, c); }
+void g_fb_puts(const char *s) { cb_puts(&BB, s); }
 
-
-void g_fb_set_cursor(int row, int col) {
-  Row = row % ROWS;
-  Col = col % COLS; }
-
-int g_fb_row(void) { return Row; }
-int g_fb_col(void) { return Col; }
-
-void g_fb_putc(char c) {
-  if (c == '\n') Row += 1, Row %= ROWS, Col = 0;
-  else gb[Row][Col] = c,
-    Col += 1, Col %= COLS,
-    Row = Col ? Row : (Row + 1 % ROWS); }
-
-void g_fb_puts(const char *s) {
-  for (int i; (i = *s++); g_fb_putc(i)); }
-
-void g_fb_clear(void) {
-  for (int i = 0; i < ROWS; i++)
-    for (int j = 0; j < COLS; j++)
-      gb[i][j] = 0;
-  g_fb_set_cursor(0, 0); }
-
-static void draw_gb(void) {
+static void draw_gb(struct cb *c) {
   uint8_t *frame = Pd->graphics->getFrame();
-  for (int i = 0; i < ROWS; i++)
-    for (int j = 0; j < COLS; j++) {
-      uint8_t *glyph = cga_8x8[gb[i][j]];
+  uint32_t rows = c->rows, cols = c->cols;
+  for (int i = 0; i < rows; i++)
+    for (int j = 0; j < cols; j++) {
+      uint8_t *glyph = cga_8x8[c->cb[i][j]];
       for (int k = 0; k < 8; k++)
-        frame[52 * (8 * i + k) + j] = show_cursor && i == Row && j == Col ? ~glyph[k] : glyph[k]; }
+        frame[52 * (8 * i + k) + j] = show_cursor && i == c->row && j == c->col ? ~glyph[k] : glyph[k]; }
   Pd->graphics->markUpdatedRows(0, LCD_ROWS); }
 
 static void shift_waveform(int n) {
@@ -263,24 +250,24 @@ static void shift_waveform(int n) {
 static int life_update(void *userdata) {
   PDButtons current, pushed, released;
   Pd->system->getButtonState(&current, &pushed, &released);
-  if (pushed & (kButtonA|kButtonB)) random_life();
-  uint8_t db[ROWS][COLS];
+  if (pushed & (kButtonA|kButtonB)) random_life(&BB);
+  uint8_t db[NROWS][NCOLS];
   for (int i = 0; i < ROWS; i++)
     for (int j = 0; j < COLS; j++) {
       int i_1 = i-1<0?ROWS-1:i-1,
           i1  = i+1==ROWS?0:i+1,
           j_1 = j-1<0?COLS-1:j-1,
           j1  = j+1==COLS?0:j+1,
-          n = (gb[i_1][j_1] == live_char ? 1 : 0)
-            + (gb[i_1][j] == live_char ? 1 : 0)
-            + (gb[i_1][j1] == live_char ? 1 : 0)
-            + (gb[i][j_1] == live_char ? 1 : 0)
-            + (gb[i][j1] == live_char ? 1 : 0)
-            + (gb[i1][j_1] == live_char ? 1 : 0)
-            + (gb[i1][j] == live_char ? 1 : 0)
-            + (gb[i1][j1] == live_char ? 1 : 0);
-      db[i][j] = n == 3 || (n == 2 && gb[i][j] == live_char) ? live_char : dead_char; }
-  memcpy(gb, db, sizeof(db));
+          n = (BB.cb[i_1][j_1] == live_char ? 1 : 0)
+            + (BB.cb[i_1][j] == live_char ? 1 : 0)
+            + (BB.cb[i_1][j1] == live_char ? 1 : 0)
+            + (BB.cb[i][j_1] == live_char ? 1 : 0)
+            + (BB.cb[i][j1] == live_char ? 1 : 0)
+            + (BB.cb[i1][j_1] == live_char ? 1 : 0)
+            + (BB.cb[i1][j] == live_char ? 1 : 0)
+            + (BB.cb[i1][j1] == live_char ? 1 : 0);
+      db[i][j] = n == 3 || (n == 2 && BB.cb[i][j] == live_char) ? live_char : dead_char; }
+  memcpy(BB.cb, db, sizeof(db));
   return 1; }
 
 static int synth_update(void* userdata) {
@@ -303,3 +290,52 @@ static int synth_update(void* userdata) {
   if (pushed & kButtonRight) shift_waveform(1);
 
 	return 1; }
+
+#include <time.h>
+#include <unistd.h>
+NoInline uintptr_t g_sys_clock(void) {
+  return Pd->system->getCurrentTimeMilliseconds(); }
+
+Vm(g_fps) {
+  float fps = Pd->display->getFPS();
+  int i = (int) fps;
+  Sp[0] = g_putnum(i);
+  Ip += 1;
+  return Continue(); }
+
+static NoInline int gbs(void) {
+  PDButtons a=0, b=0, c=0;
+  Pd->system->getButtonState(&a, &b, &c);
+  return a; }
+Vm(g_buttons) { return
+  Sp[0] = g_putnum(gbs()),
+  Ip += 1,
+  Continue(); }
+
+Vm(g_cursor_h) {
+  int n = g_getnum(Sp[0]);
+  Col += n;
+  while (Col >= COLS) Col -= COLS;
+  while (Col < 0) Col += COLS;
+  Ip += 1;
+  return Continue(); }
+Vm(g_cursor_v) {
+  int n = g_getnum(Sp[0]);
+  Row += n;
+  while (Row >= ROWS) Row -= ROWS;
+  while (Row < 0) Row += ROWS;
+  Ip += 1;
+  return Continue(); }
+
+Vm(theta) {
+  float t = Pd->system->getCrankChange();
+  int delta = (int) (256 * t / 360.0f);
+  Sp[0] = g_putnum(delta);
+  Ip += 1;
+  return Continue(); }
+
+void cb_put_glyph(struct cb *cb, uint8_t c) { cb->cb[cb->row][cb->col] = c; }
+uint8_t cb_get_glyph(struct cb *cb) { return cb->cb[cb->row][cb->col]; }
+Vm(g_get_glyph) { return Sp[0] = g_putnum(cb_get_glyph(&BB)), Ip += 1, Continue(); }
+Vm(g_put_glyph) { return cb_put_glyph(&BB, g_getnum(Sp[0])), Ip += 1, Continue(); }
+Vm(g_clear) { return cb_clear(&BB), Ip += 1, Continue(); }

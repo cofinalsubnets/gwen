@@ -1,5 +1,4 @@
 ; the expressions in this file are intended to be evaluated before anything else
-
 (:
  prelude '( ; a list of expressions to be evaluated in order
   (: true -1 false 0 not nilp

@@ -1539,7 +1539,7 @@ static struct g *g_symof(struct g *f, const char *nom) {
 static struct g *g_ini_def(struct g *f, const char *k, intptr_t v) {
   return g_hash_put(g_symof(g_push(f, 1, v), k)); }
 
-struct g *g_define(struct g *f, const char *s) {
+static struct g *g_define(struct g *f, const char *s) {
   if (g_ok(f)) f = g_intern(g_strof(g_push(f, 1, f->dict), s));
   if (!g_ok(f)) return f;
   intptr_t w = f->sp[1];
@@ -1547,6 +1547,10 @@ struct g *g_define(struct g *f, const char *s) {
   f->sp[2] = w;
   return g_pop(g_hash_put(f), 1); }
 
+struct g *g_defines(struct g*f, uintptr_t len, struct g_def *defs) {
+  for (uintptr_t i = 0; i < len; i++)
+    f = g_define(g_push(f, 1, defs[i].x), defs[i].n);
+  return f; }
 
 static void *g_static_malloc(struct g *f, size_t n) { return NULL; }
 static void g_static_free(struct g *f, void*x) {}

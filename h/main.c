@@ -55,30 +55,33 @@ static union x
   bif_putc[] = {{prc}, {ret0}},
   bif_readf[] = {{readf}, {ret0}};
 
-static void report(struct g *f) {
-  enum g_status s = g_code_of(f);
-  f = g_core_of(f);
-  switch (s) {
-    case g_status_oom:
-      fprintf(stderr, "# oom@%ldB\n", !f ? 0 : f->len * sizeof(intptr_t) * 2);
-    default: }; }
+static struct g *report(struct g *f) {
+  if (!g_ok(f)) {
+    enum g_status s = g_code_of(f);
+    f = g_core_of(f);
+    fprintf(stderr, "# f@%lx ", (uintptr_t) f);
+    if (s == g_status_oom)
+      fprintf(stderr, "oom@%ldB", !f ? 0 : f->len * sizeof(intptr_t) * 2);
+    else fprintf(stderr, "error %d", s);
+    fprintf(stderr, "\n"); }
+  return f; }
 
-int main(int argc, const char **argv) {
-  static struct { const char *n; union x *v; } defs[] = {
-    {"isatty", bif_isatty},
-    {"readf", bif_readf},
-    {"read", bif_read},
-    {"putc", bif_putc}, };
-  struct g *f = g_ini();
-  for (uintptr_t i = 0; i < LEN(defs); i++)
-    f = g_define(g_push(f, 1, defs[i].v), defs[i].n);
-  f = g_evals(f,
+static const char *main_prog =
 #include "boot.h"
 #include "main.h"
-  );
+;
+
+static struct g_def defs[] = {
+  {"isatty", bif_isatty},
+  {"readf", bif_readf},
+  {"read", bif_read},
+  {"putc", bif_putc}, };
+
+int main(int argc, const char **argv) {
+  struct g *f = g_ini();
+  f = g_defines(f, LEN(defs), defs);
+  f = g_evals(f, main_prog);
   while (*argv) f = g_strof(f, *argv++);
   f = g_push(f, 1, g_nil);
   while (argc--) f = g_cons_r(f);
-  f = g_apply(f);
-  report(f);
-  return g_fin(f); }
+  return g_fin(report(g_apply(f))); }

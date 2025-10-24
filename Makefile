@@ -6,12 +6,11 @@ a?=$(shell uname -m)
 test: bin/h/$n
 	@echo GL test
 	@$m t/*.$x
-
-all: all_host all_pd all_k
-all_host: bin/h/$n bin/h/lib$n.so bin/h/$n.1
-all_pd: bin/pd/$n.pdx
-all_k: bin/$n-$a.k
-.PHONY: test all all_host all_pd all_k
+all: h k pd
+h: bin/h/$n bin/h/lib$n.so bin/h/$n.1
+k: bin/$n-$a.k
+pd: bin/$n.pdx
+.PHONY: test all h k pd
 
 #build
 target ?= host
@@ -326,14 +325,14 @@ pd_ldflags=\
 	-nostartfiles $(pd_mcflags) -T$(pd_lds)\
  	-Wl,-Map=bin/pd/pdex.map,--cref,--gc-sections,--no-warn-mismatch,--emit-relocs
 
-bin/pd/$n.pdx: bin/pd/Source/pdex.elf bin/pd/Source/pdex.so
+bin/$n.pdx: bin/pd/Source/pdex.elf bin/pd/Source/pdex.so
 	@echo PD $@
 	@$(pd_sdk)/bin/pdc -sdkpath $(pd_sdk) bin/pd/Source $@
 bin/pd/Source/pdex.%: bin/pd/pdex.%
 	@echo CP $@
 	@mkdir -p $(dir $@)
 	@cp $< $@
-bin/pd/%.o : %.c | bin/boot.h
+bin/pd/%.o : %.c | bin/boot.h pd/sys.h
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I pd -I bin $(pd_incdir) $< -o $@
@@ -344,7 +343,7 @@ bin/pd/pdex.elf: $(pd_o) $(pd_lds)
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
-bin/pd/pdex.so: $(pd_src)
+bin/pd/pdex.so: $(pd_src) | pd/sys.h
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o bin/pd/pdex.so $(pd_src)
