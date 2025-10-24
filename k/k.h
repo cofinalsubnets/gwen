@@ -7,7 +7,7 @@ extern const char digits[];
 void k_reset(void), arch_init(void);
 uint8_t key_get(void);
 
-static Inline void k_stop(void) { asm volatile (
+static g_inline void k_stop(void) { asm volatile (
 #if defined (__x86_64__)
   "hlt"
 #elif defined (__aarch64__) || defined (__riscv)

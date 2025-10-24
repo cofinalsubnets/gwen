@@ -192,6 +192,7 @@ kcflags_loongarch64=\
 	-mabi=lp64s \
 	-mfpu=none \
 	-msimd=none
+
 kldflags_x86_64=-m elf_x86_64
 kldflags_aarch64=-m aarch64elf
 kldflags_riscv64=-m elf64lriscv --no-relax
@@ -309,13 +310,9 @@ pd_lds=$(patsubst ~%,$(HOME)%,$(pd_sdk)/C_API/buildsupport/link_map.ld)
 pd_fpu=-mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
 pd_incdir=$(patsubst %,-I %, pd $(pd_sdk)/C_API g bin)
 pd_defs =-DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_tco=0
-pd_heap =8388208
-pd_stack=4194304
-pd_adefs=-D__HEAP_SIZE=$(pd_heap) -D__STACK_SIZE=$(pd_stack)
 pd_src +=$(pd_sdk)/C_API/buildsupport/setup.c
 pd_o=$(addprefix bin/pd/, $(pd_src:.c=.o))
 pd_mcflags=-mthumb -mcpu=cortex-m7 $(pd_fpu)
-pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst) $(pd_adefs)
 pd_cpflags=\
 	$(pd_mcflags) $(pd_opt) $(pd_defs)\
  	-gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas\
@@ -336,6 +333,9 @@ bin/pd/%.o : %.c | bin/boot.h
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I pd -I bin $(pd_incdir) $< -o $@
+pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst)\
+  -D__HEAP_SIZE=8388208 \
+ 	-D__STACK_SIZE=4194304
 bin/pd/%.o : %.s
 	@echo AS $@
 	@$(pd_as) -c $(pd_asflags) $< -o $@
@@ -349,6 +349,6 @@ bin/pd/pdex.so: $(pd_src)
 	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o bin/pd/pdex.so $(pd_src)
 .PRECIOUS: bin/pd/%elf
 
-.PHONY: sloc
-sloc:
+.PHONY: cloc
+cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k pacman pd t vim

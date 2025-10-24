@@ -60,7 +60,7 @@ static struct g_def defs[] = {
 
 int main(int argc, const char **argv) {
   struct g *f = g_ini();
-  f = g_defines(f, LEN(defs), defs);
+  f = g_defns(f, LEN(defs), defs);
   f = g_evals(f, main_prog);
   while (*argv) f = g_strof(f, *argv++);
   f = g_push(f, 1, g_nil);

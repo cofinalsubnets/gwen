@@ -127,7 +127,7 @@ static struct g *g_pd_init(void) {
   struct g *f;
   f = g_ini_dynamic(gg_malloc, gg_free);
   g_dbg(f);
-  f = g_defines(f, LEN(defs), defs);
+  f = g_defns(f, LEN(defs), defs);
   g_dbg(f);
 
   const char prog[] = "(,"
@@ -309,7 +309,7 @@ static int synth_update(void* userdata) {
 
 #include <time.h>
 #include <unistd.h>
-NoInline uintptr_t g_clock(void) {
+g_noinline uintptr_t g_clock(void) {
   return Pd->system->getCurrentTimeMilliseconds(); }
 
 Vm(g_fps) {
@@ -319,7 +319,7 @@ Vm(g_fps) {
   Ip += 1;
   return Continue(); }
 
-static NoInline int gbs(void) {
+static g_noinline int gbs(void) {
   PDButtons a=0, b=0, c=0;
   Pd->system->getButtonState(&a, &b, &c);
   return a; }

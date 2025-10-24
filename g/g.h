@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
 // thanks !!
 struct g
   *g_ini(void),
@@ -21,22 +22,22 @@ struct g_def {
   union x *x; };
 
 struct g
+  *g_gc(struct g*),
   *g_read1(struct g*),
   *g_write1(struct g*),
-  *g_read1s(struct g*, const char*),
-  *g_readss(struct g*, const char*),
   *g_evals(struct g*, const char*),
-  *g_defines(struct g*, uintptr_t, struct g_def*),
+  *g_defns(struct g*, uintptr_t, struct g_def*),
   *g_apply(struct g*),
   *g_push(struct g*, uintptr_t, ...),
   *g_pop(struct g*, uintptr_t),
   *g_strof(struct g*, const char*),
-  *g_intern(struct g*),
-  *g_tbl(struct g*),
-  *g_gc(struct g*),
   *g_cons_l(struct g*),
   *g_cons_r(struct g*);
-bool g_twop(intptr_t), g_strp(intptr_t), g_tblp(intptr_t), g_symp(intptr_t);
+
+bool g_twop(intptr_t),
+     g_strp(intptr_t),
+     g_tblp(intptr_t),
+     g_symp(intptr_t);
 
 #ifndef g_tco
 #define g_tco 1
@@ -73,15 +74,17 @@ struct g_out {
        (*putc)(struct g_out*, int); };
 
 union x { g_vm_t *ap; intptr_t x; union x *m; uintptr_t typ; };
+
 struct g {
-  intptr_t *hp, *sp; // heap and stack pointers
-  union x *ip;
-  struct g_symbol *symbols;
-  intptr_t *pool; // lower core address
-  uintptr_t len;  // length of half of pool
+  intptr_t     *hp, // heap pointer
+               *sp; // stack pointer
+  union x *ip;      // instruction pointer
+  struct g_symbol
+    *symbols;       // symbol tree
+  intptr_t *pool;   // lower core address
+  uintptr_t len;    // length of core data
   struct g_mem_root *safe;
-  union { uintptr_t t0;    // end of last gc timestamp
-          intptr_t *cp; }; // copy pointer
+  union { uintptr_t t0; intptr_t *cp; }; // copy pointer
   struct g_in *in;
   struct g_out *out, *err;
   void *(*malloc)(struct g*, size_t),
@@ -96,40 +99,35 @@ struct g_string {
   uintptr_t len;
   char text[]; };
 
-uintptr_t g_clock(void); // used by garbage collector
-struct g *g_read1i(struct g*, struct g_in*),
-         *g_readsi(struct g*, struct g_in*);
-
-g_vm_t ret0, curry;
-
-// client may defines these
-int g_getc(struct g_in*),
-    g_ungetc(struct g_in*, int),
-    g_eof(struct g_in*);
-
-void g_printf(struct g_out*, const char*, ...),
-     g_putc(struct g_out*, int);
-
-void *malloc(size_t), free(void*),
-     *memcpy(void *restrict, const void*restrict, size_t),
-     *memset(void*, int, size_t);
-
-long strtol(const char*restrict, char**restrict, int);
-size_t strlen(const char*);
-int strncmp(const char*, const char*, size_t);
-
 #define g_core_of(f) ((struct g*)((intptr_t)(f)&~(sizeof(intptr_t)-1)))
 #define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))
 #define g_ok(f) (g_code_of(f) == g_status_ok)
 #define g_putnum(_) (((intptr_t)(_)<<1)|1)
 #define g_getnum(_) ((intptr_t)(_)>>1)
 #define g_nil g_putnum(0)
-#define g_inline inline __attribute__((always_inline))
-#define Inline g_inline
-#define g_noinline __attribute__((noinline))
-#define NoInline g_noinline
+#define g_pop1(f) (*(f)->sp++)
 #define LEN(_) (sizeof(_)/sizeof(*_))
 #define MIN(_,__) ((_)<(__)?(_):(__))
 #define MAX(_,__) ((_)>(__)?(_):(__))
-#define g_pop1(f) (*(f)->sp++)
+#define g_inline inline __attribute__((always_inline))
+#define g_noinline __attribute__((noinline))
+
+// user gets these
+g_vm_t ret0, curry;
+
+// user gives these
+uintptr_t g_clock(void); // used by garbage collector
+struct g *g_read1i(struct g*, struct g_in*),
+         *g_readsi(struct g*, struct g_in*);
+int g_getc(struct g_in*),
+    g_ungetc(struct g_in*, int),
+    g_eof(struct g_in*);
+void g_printf(struct g_out*, const char*, ...),
+     g_putc(struct g_out*, int);
+void *malloc(size_t), free(void*),
+     *memcpy(void *restrict, const void*restrict, size_t),
+     *memset(void*, int, size_t);
+long strtol(const char*restrict, char**restrict, int);
+size_t strlen(const char*);
+int strncmp(const char*, const char*, size_t);
 #endif
