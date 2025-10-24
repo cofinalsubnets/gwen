@@ -114,10 +114,10 @@ $(dest)/bin/$n: bin/h/$n
 $(dest)/g/man/man1/$n.1: bin/h/$n.1
 	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
-$(vimdest)/ftdetect/$n.vim: g/vim/ftdetect.vim
+$(vimdest)/ftdetect/$n.vim: vim/ftdetect.vim
 	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
-$(vimdest)/syntax/$n.vim: g/vim/syntax.vim
+$(vimdest)/syntax/$n.vim: vim/syntax.vim
 	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
 
