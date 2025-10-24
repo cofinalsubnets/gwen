@@ -1,4 +1,3 @@
-#define g_target g_target_pd
 #include "i.h"
 #include <time.h>
 #include <unistd.h>

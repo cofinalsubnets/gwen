@@ -309,7 +309,7 @@ pd_opt=-O2 -falign-functions=16 -fomit-frame-pointer
 pd_lds=$(patsubst ~%,$(HOME)%,$(pd_sdk)/C_API/buildsupport/link_map.ld)
 pd_fpu=-mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
 pd_incdir=$(patsubst %,-I %, pd $(pd_sdk)/C_API g bin)
-pd_defs =-DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_target=g_target_pd
+pd_defs =-DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dg_tco=0
 pd_heap =8388208
 pd_stack=4194304
 pd_adefs=-D__HEAP_SIZE=$(pd_heap) -D__STACK_SIZE=$(pd_stack)
@@ -347,5 +347,5 @@ bin/pd/pdex.elf: $(pd_o) $(pd_lds)
 bin/pd/pdex.so: $(pd_src)
 	@echo CC $@
 	@mkdir -p $(dir $@)
-	@gcc -g -shared -fPIC -lm -Dg_target=g_target_pd -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o bin/pd/pdex.so $(pd_src)
+	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o bin/pd/pdex.so $(pd_src)
 .PRECIOUS: bin/pd/%elf

@@ -32,9 +32,4 @@ g_vm_t g_buttons,
        g_put_glyph,
        g_fps,
        g_clear;
-
-
-static Inline struct g*g_run(struct g*f) {
-  while (g_ok(f)) f = f->ip->ap(f);
-  return g_code_of(f) == g_status_eof ? g_core_of(f) : f; }
 #endif

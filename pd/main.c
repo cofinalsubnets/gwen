@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#define g_target g_target_pd
 #include "i.h"
 #include "font.h"
 
@@ -9,7 +8,7 @@ static const char boot[] =
 #include "boot.h"
 ;
 
-g_core *G = NULL;
+struct g *G = NULL;
 PlaydateAPI *Pd;
 
 uint8_t gb[ROWS][COLS];
@@ -42,7 +41,7 @@ static int g_update(void *userdata) {
   G = g_evals_(G, "(update 0)");
 	return 1; }
 
-void g_dbg(g_core*f) {
+void g_dbg(struct g *f) {
   if (!g_ok(f) || !f)
     Pd->system->logToConsole("f@%lx\n", f);
   else Pd->system->logToConsole(
@@ -60,16 +59,16 @@ void g_dbg(g_core*f) {
       ); }
 
 static Vm(fb_get) {
-  size_t row = getnum(Sp[0]),
-         col = getnum(Sp[1]);
+  size_t row = g_getnum(Sp[0]),
+         col = g_getnum(Sp[1]);
   *++Sp = g_putnum(gb[row % ROWS][col % COLS]);
   Ip += 1;
   return Continue(); }
 
 static Vm(fb_put) {
-  size_t row = getnum(Sp[0]),
-         col = getnum(Sp[1]);
-  char b = getnum(Sp[2]);
+  size_t row = g_getnum(Sp[0]),
+         col = g_getnum(Sp[1]);
+  char b = g_getnum(Sp[2]);
   gb[row % ROWS][col % COLS] = b;
   Sp += 2;
   Ip += 1;
@@ -95,15 +94,15 @@ static void g_screen_cb(void *ud) {
   Pd->system->logToConsole("mode=%d", m);
   enter_mode(m); }
 
-void *gg_malloc(g_core*f, size_t n) {
+void *gg_malloc(struct g *f, size_t n) {
   return Pd->system->realloc(NULL, n); }
 
-void gg_free(g_core*f, void*x) {
+void gg_free(struct g *f, void*x) {
   Pd->system->realloc(x, 0); }
 
 static struct {
   const char *n;
-  const g_cell *v;
+  const union x *v;
 } defs[] = {
   {"cursor_h", bif_cur_h},
   {"cursor_v", bif_cur_v},
@@ -117,8 +116,8 @@ static struct {
   {"get_buttons", bif_buttons},
 };
 
-static g_core *g_pd_init(void) {
-  g_core *f;
+static struct g *g_pd_init(void) {
+  struct g *f;
   f = g_ini_dynamic(gg_malloc, gg_free);
   g_dbg(f);
   for (int i = 0; i < LEN(defs); i++)
@@ -208,7 +207,6 @@ static void enter_mode(int m) {
 
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
   Pd = pd;
-  g_core *f;
   switch (event) {
     case kEventInit:
       G = g_pd_init();
