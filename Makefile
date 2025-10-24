@@ -348,3 +348,7 @@ bin/pd/pdex.so: $(pd_src)
 	@mkdir -p $(dir $@)
 	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o bin/pd/pdex.so $(pd_src)
 .PRECIOUS: bin/pd/%elf
+
+.PHONY: sloc
+sloc:
+	cloc --by-file --force-lang=Lisp,$x g h js k pacman pd t vim
