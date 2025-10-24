@@ -131,12 +131,12 @@ distclean:
 valg: bin/h/$n
 	valgrind --error-exitcode=1 $m t/*.$x
 # profiling on linux
-perf.data: bin/h/$n
-	perf record $m t/*.$x
-perf: perf.data
-	perf report
-flamegraph.svg: perf.data
-	flamegraph --perfdata $^
+bin/perf.data: bin/h/$n
+	perf record -o $@ $m t/*.$x
+perf: bin/perf.data
+	perf report -i $<
+bin/flamegraph.svg: bin/perf.data
+	flamegraph -o $@ --perfdata $<
 repl: bin/h/$n
 	rlwrap $m
 serve:
