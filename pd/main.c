@@ -56,13 +56,13 @@ void g_dbg(g_core*f) {
       f->pool,
       f->len,
       f->hp - f->end,
-      (g_word*) f + f->len - f->sp
+      (intptr_t*) f + f->len - f->sp
       ); }
 
 static Vm(fb_get) {
   size_t row = getnum(Sp[0]),
          col = getnum(Sp[1]);
-  *++Sp = putnum(gb[row % ROWS][col % COLS]);
+  *++Sp = g_putnum(gb[row % ROWS][col % COLS]);
   Ip += 1;
   return Continue(); }
 
@@ -75,7 +75,7 @@ static Vm(fb_put) {
   Ip += 1;
   return Continue(); }
 
-static const union g_cell
+static const union x
   bif_cur_h[] = { {g_cursor_h}, {ret0}},
   bif_cur_v[] = { {g_cursor_v}, {ret0}},
   bif_theta[] = { {theta}, {ret0}},
@@ -84,8 +84,8 @@ static const union g_cell
   bif_clear[] = {{g_clear}, {ret0}},
   bif_buttons[] = {{g_buttons}, {ret0}},
   bif_fps[] = {{g_fps}, {ret0}},
-  bif_fb_get[] = { {curry}, {.x = putnum(2)}, {fb_get}, {ret0}},
-  bif_fb_put[] = { {curry}, {.x = putnum(3)}, {fb_put}, {ret0}};
+  bif_fb_get[] = { {curry}, {.x = g_putnum(2)}, {fb_get}, {ret0}},
+  bif_fb_put[] = { {curry}, {.x = g_putnum(3)}, {fb_put}, {ret0}};
 
 static PDMenuItem *screen_menu_item;
 
@@ -121,7 +121,6 @@ static g_core *g_pd_init(void) {
   g_core *f;
   f = g_ini_dynamic(gg_malloc, gg_free);
   g_dbg(f);
-#define LEN(x) (sizeof(x)/sizeof(*x))
   for (int i = 0; i < LEN(defs); i++)
     f = g_define(g_push(f, 1, defs[i].v), defs[i].n);
   g_dbg(f);

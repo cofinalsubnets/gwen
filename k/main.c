@@ -244,13 +244,13 @@ void kmain(void) {
 
   // lisp init
   static intptr_t g_static_pool[g_static_size];
-  struct g *f = K.f = please(g_evals_(g_ini_static(sizeof(g_static_pool), g_static_pool),
+  struct g *f = K.f = g_gc(g_evals_(g_ini_static(sizeof(g_static_pool), g_static_pool),
 #include "boot.h"
-  ), 0);
+  ));
   k_logf("f@0x%x\n", (uintptr_t) f);
   if (f && g_ok(f)) k_logf(
     " pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",
-    f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (g_word*) f + f->len - f->sp);
+    f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (intptr_t*) f + f->len - f->sp);
 
   // main loop
   for (k_logf("%d ticks ok.\n", K.ticks);; k_stop())

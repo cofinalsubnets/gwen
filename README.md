@@ -13,33 +13,49 @@ an executable, or an operating system on various platforms.
 | <code>&#96;</code> | `quote`  |
 | <code>&#92;</code> | `lambda` |
 
-`define` and `set!` forms are not present. a `:` form at top level with
-no body is considered global definition. in all contexts a `:` form
-with no body has the value of its last defined variable. `:` supports
-recursive function definitions and syntactic sugar for functions similar
-to scheme's `define`. bindings other than functions are evaluated
-sequentially, and prior bindings within the same form can be referred to
-and shadowed in the obvious way.
+the internal syntax of forms is generally simplified compared to scheme by omitting
+redundant grouping parentheses.
 
-the syntax of some of the forms is simplified (less parentheses)
-gwen compared to scheme.
+### definitions
 
-| g                              | scheme                      |
-|--------------------------------|-----------------------------|
-| `(? a b c d e)`                | `(cond (a b) (c d) (#t e))` |
-| `(: a b c d e)`                | `(letrec  ((a b) (c d)) e)` |
-| <code>(&#92; a b c d e)</code> | `(lambda (a b c d) e)`      |
+| g               | scheme                      |
+|-----------------|-----------------------------|
+| `(: a b c d e)` | `(letrec  ((a b) (c d)) e)` |
 
-in conditionals only `0` is false. this is equivalent to `#f` and `'()`
-in scheme. dotted pairs are not read nor displayed (an atom in cdr is
-always omitted from display).
+`:` takes any number of name/definition pairs followed by a final expression. if the
+final expression is omitted then it becomes the final name. if a name is omitted then
+the value of the expression is 0.  a `:` form at top level with no body is a global
+definition.  definitions are evaluated in order with repeated names being shadowed in
+subsequent values. the value of the `:` expression is the value of the final expression
+in the context of all of the definitions. `:` supports similar list based syntactic
+sugar for function definitions as `define` in scheme.
 
+### conditionals
 
-argument evaluation order for function expressions can be variable.
-if you need a specific order of evaluation, use `,`, `:`, or nested applications.
+| g               | scheme                      |
+|-----------------|-----------------------------|
+| `(? a b c d e)` | `(cond (a b) (c d) (#t e))` |
 
-unlike other lisp dialects, since functions always act as if applied to one
-value at a time, there are no nullary functions, and the value of a singleton list
+the only false value in a conditional is 0.
+
+### lambdas
+
+| g                              | scheme                 |
+|--------------------------------|------------------------|
+| <code>(&#92; a b c d e)</code> | `(lambda (a b c d) e)` |
+
+argument evaluation order for function expressions can be variable. for
+specific order use `,`, `:`, or nested applications.
+
+### function expressions
+
+| g     | scheme |
+|-------|--------|
+| f     | f      |
+| (f)   | f      |
+| (f 0) | `(f)`  |
+
+since functions always act as if applied to one value at a time, there are no nullary functions, and the value of a singleton list
 is the value of the head of the list. nullary functions are simulated by ignoring
 the argument to a unary function. variadic functions can be simulated using macros
 or implemented with various methods.

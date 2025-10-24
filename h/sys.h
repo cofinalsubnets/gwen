@@ -8,7 +8,14 @@ typedef FILE *g_file;
 #define g_stderr stderr
 #define g_fprintf fprintf
 #define g_fputc putc
-g_vm p_isatty, readf, read0;
-static Inline g_core *g_run(g_core *f) {
+static Inline struct g *g_run(struct g *f) {
   return !g_ok(f) ? f : f->ip->ap(f, f->ip, f->hp, f->sp); }
+NoInline struct g *g_read1f(struct g *f, g_file i);
+int p_file_getc(struct g_input *i);
+int p_file_ungetc(struct g_input *i, int c);
+int p_file_eof(struct g_input *i);
+typedef struct file_input {
+  struct g_input in;
+  g_file file;
+} file_input;
 #endif

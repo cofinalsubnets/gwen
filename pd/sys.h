@@ -24,17 +24,17 @@ void
 
 int g_fb_row(void), g_fb_col(void);
 
-g_vm g_buttons,
-     g_cursor_h,
-     g_cursor_v,
-     theta,
-     g_get_glyph,
-     g_put_glyph,
-     g_fps,
-     g_clear;
+g_vm_t g_buttons,
+       g_cursor_h,
+       g_cursor_v,
+       theta,
+       g_get_glyph,
+       g_put_glyph,
+       g_fps,
+       g_clear;
 
 
-static Inline g_core *g_run(g_core *f) {
+static Inline struct g*g_run(struct g*f) {
   while (g_ok(f)) f = f->ip->ap(f);
   return g_code_of(f) == g_status_eof ? g_core_of(f) : f; }
 #endif

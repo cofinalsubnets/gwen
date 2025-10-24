@@ -2,15 +2,17 @@
 #define gw_h
 #include <stdint.h>
 #include <stddef.h>
-
-typedef intptr_t g_word;
-typedef union g_cell g_cell;
+typedef union x g_cell;
 typedef struct g g_core;
+enum g_status {
+  g_status_ok  = 0,
+  g_status_oom = 1,
+  g_status_err = 2,
+  g_status_eof = 3, } g_fin(struct g*);
 typedef void
   *g_malloc_t(g_core*, size_t),
    g_free_t(g_core*, void*);
-
-g_core
+struct g
   *g_ini(void),
   *g_ini_dynamic(g_malloc_t*, g_free_t*),
   *g_ini_static(size_t, void*),
@@ -29,17 +31,18 @@ g_core
   *g_strof(g_core*, const char*),
   *g_intern(g_core*),
   *g_tbl(g_core*),
+  *g_gc(struct g*),
   *g_cons_l(g_core*),
   *g_cons_r(g_core*);
 
-enum g_status {
-  g_status_ok  = 0,
-  g_status_oom = 1,
-  g_status_err = 2,
-  g_status_eof = 3,
-} g_fin(g_core*);
-
 extern const char g_boot_sequence[];
+
+#define g_core_of(f) ((struct g*)((intptr_t)(f)&~(sizeof(intptr_t)-1)))
+#define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))
+#define g_ok(f) (g_code_of(f) == g_status_ok)
+#define g_putnum(_) (((intptr_t)(_)<<1)|1)
+#define g_getnum(_) ((intptr_t)(_)>>1)
+#define g_nil g_putnum(0)
 
 #define g_target_host 0
 #define g_target_pd 1
@@ -56,14 +59,14 @@ extern const char g_boot_sequence[];
 #define g_tco 0
 #endif
 #if g_tco
-#define Vm(n, ...) g_core *n(g_core *f, g_cell *Ip, g_word *Hp, g_word *Sp, ##__VA_ARGS__)
+#define Vm(n, ...) struct g*n(struct g*f, union x*Ip, intptr_t *Hp, intptr_t *Sp, ##__VA_ARGS__)
 #define YieldStatus g_status_ok
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
 #define Continue() Ap(Ip->ap, f)
 #else
-#define Vm(n, ...) g_core *n(g_core *f, ##__VA_ARGS__)
+#define Vm(n, ...) struct g*n(struct g*f, ##__VA_ARGS__)
 #define YieldStatus g_status_eof
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
 #define Hp f->hp
@@ -73,11 +76,4 @@ extern const char g_boot_sequence[];
 #define Unpack(f) ((void)0)
 #define Continue() f
 #endif
-
-#define g_core_of(f) ((struct g*)((g_word)(f)&~(sizeof(g_word)-1)))
-#define g_code_of(f) ((enum g_status)((g_word)(f)&(sizeof(g_word)-1)))
-#define g_ok(f) (g_code_of(f) == g_status_ok)
-#define g_putnum(_) (((g_word)(_)<<1)|1)
-#define g_getnum(_) ((g_word)(_)>>1)
-#define g_nil g_putnum(0)
 #endif

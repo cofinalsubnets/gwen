@@ -9,7 +9,7 @@ NoInline uintptr_t g_sys_clock(void) {
 Vm(g_fps) {
   float fps = Pd->display->getFPS();
   int i = (int) fps;
-  Sp[0] = putnum(i);
+  Sp[0] = g_putnum(i);
   Ip += 1;
   return Continue(); }
 
@@ -18,42 +18,42 @@ static NoInline int gbs(void) {
   Pd->system->getButtonState(&a, &b, &c);
   return a; }
 Vm(g_buttons) {
-  Sp[0] = putnum(gbs());
+  Sp[0] = g_putnum(gbs());
   Ip += 1;
   return Continue(); }
 
 Vm(g_cursor_h) {
-  int n = getnum(Sp[0]);
+  int n = g_getnum(Sp[0]);
   Col += n;
   while (Col >= COLS) Col -= COLS;
   while (Col < 0) Col += COLS;
   Ip += 1;
   return Continue(); }
 Vm(g_cursor_v) {
-  int n = getnum(Sp[0]);
+  int n = g_getnum(Sp[0]);
   Row += n;
   while (Row >= ROWS) Row -= ROWS;
   while (Row < 0) Row += ROWS;
   Ip += 1;
   return Continue(); }
 Vm(curc) {
-  gb[Row][Col] = getnum(Sp[0]);
+  gb[Row][Col] = g_getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 
 Vm(theta) {
   float t = Pd->system->getCrankChange();
   int delta = (int) (256 * t / 360.0f);
-  Sp[0] = putnum(delta);
+  Sp[0] = g_putnum(delta);
   Ip += 1;
   return Continue(); }
 
 Vm(g_get_glyph) {
-  Sp[0] = putnum(gb[Row][Col]);
+  Sp[0] = g_putnum(gb[Row][Col]);
   Ip += 1;
   return Continue(); }
 Vm(g_put_glyph) {
-  gb[Row][Col] = getnum(Sp[0]);
+  gb[Row][Col] = g_getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 

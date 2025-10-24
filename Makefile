@@ -27,7 +27,7 @@ flags:= -std=gnu17 -g -O2 -pipe\
  	-fno-exceptions -fno-asynchronous-unwind-tables -fno-stack-clash-protection\
  	-fcf-protection=none\
 	-flto -fpic
-cc=$(CC) $(flags) -Ig/ -Ih/ -Ibin/ \
+cc=$(CC) $(flags) -I. -Ig/ -Ih/ -Ibin/ \
 	 -D g_version='"$(shell git rev-parse HEAD)"'\
 	 -D g_target=g_target_$(target)
 
