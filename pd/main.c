@@ -5,6 +5,9 @@
 #include "pd_api.h"
 #include "font.h"
 extern PlaydateAPI *Pd;
+#define Sp f->sp
+#define Hp f->hp
+#define Ip f->ip
 
 void
   g_fb_clear(void),
@@ -69,14 +72,14 @@ void g_dbg(struct g *f) {
   Pd->system->logToConsole("f@%lx\n pool@%lx\n len=%ld\n allocd=%ld\n height=%ld\n",
                             f,   f->pool,   f->len,      allocd,      height); }
 
-static Vm(fb_get) {
+static g_vm(fb_get) {
   size_t row = g_getnum(Sp[0]),
          col = g_getnum(Sp[1]);
   *++Sp = g_putnum(BB.cb[row % BB.rows][col % BB.cols]);
   Ip += 1;
   return Continue(); }
 
-static Vm(fb_put) {
+static g_vm(fb_put) {
   size_t row = g_getnum(Sp[0]),
          col = g_getnum(Sp[1]);
   char b = g_getnum(Sp[2]);
@@ -312,7 +315,7 @@ static int synth_update(void* userdata) {
 g_noinline uintptr_t g_clock(void) {
   return Pd->system->getCurrentTimeMilliseconds(); }
 
-Vm(g_fps) {
+g_vm(g_fps) {
   float fps = Pd->display->getFPS();
   int i = (int) fps;
   Sp[0] = g_putnum(i);
@@ -323,19 +326,19 @@ static g_noinline int gbs(void) {
   PDButtons a=0, b=0, c=0;
   Pd->system->getButtonState(&a, &b, &c);
   return a; }
-Vm(g_buttons) { return
+g_vm(g_buttons) { return
   Sp[0] = g_putnum(gbs()),
   Ip += 1,
   Continue(); }
 
-Vm(g_cursor_h) {
+g_vm(g_cursor_h) {
   int n = g_getnum(Sp[0]);
   Col += n;
   while (Col >= COLS) Col -= COLS;
   while (Col < 0) Col += COLS;
   Ip += 1;
   return Continue(); }
-Vm(g_cursor_v) {
+g_vm(g_cursor_v) {
   int n = g_getnum(Sp[0]);
   Row += n;
   while (Row >= ROWS) Row -= ROWS;
@@ -343,7 +346,7 @@ Vm(g_cursor_v) {
   Ip += 1;
   return Continue(); }
 
-Vm(theta) {
+g_vm(theta) {
   float t = Pd->system->getCrankChange();
   int delta = (int) (256 * t / 360.0f);
   Sp[0] = g_putnum(delta);
@@ -352,6 +355,6 @@ Vm(theta) {
 
 void cb_put_glyph(struct cb *cb, uint8_t c) { cb->cb[cb->row][cb->col] = c; }
 uint8_t cb_get_glyph(struct cb *cb) { return cb->cb[cb->row][cb->col]; }
-Vm(g_get_glyph) { return Sp[0] = g_putnum(cb_get_glyph(&BB)), Ip += 1, Continue(); }
-Vm(g_put_glyph) { return cb_put_glyph(&BB, g_getnum(Sp[0])), Ip += 1, Continue(); }
-Vm(g_clear) { return cb_clear(&BB), Ip += 1, Continue(); }
+g_vm(g_get_glyph) { return Sp[0] = g_putnum(cb_get_glyph(&BB)), Ip += 1, Continue(); }
+g_vm(g_put_glyph) { return cb_put_glyph(&BB, g_getnum(Sp[0])), Ip += 1, Continue(); }
+g_vm(g_clear) { return cb_clear(&BB), Ip += 1, Continue(); }

@@ -44,51 +44,46 @@ bool g_twop(intptr_t),
 #endif
 
 #if g_tco
-#define Vm(n, ...) struct g *n(struct g *f, union x *Ip, intptr_t *Hp, intptr_t *Sp, ##__VA_ARGS__)
-#define YieldStatus g_status_ok
+#define g_vm(n, ...) struct g *n(struct g *f, union x *Ip, intptr_t *Hp, intptr_t *Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
+#define Continue() Ap(Ip->ap, f)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
 #define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
-#define Continue() Ap(Ip->ap, f)
 #else
-#define Vm(n, ...) struct g *n(struct g *f, ##__VA_ARGS__)
-#define YieldStatus g_status_eof
+#define g_vm(n, ...) struct g *n(struct g *f, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
-#define Hp f->hp
-#define Sp f->sp
-#define Ip f->ip
-#define Pack(f) ((void)0)
-#define Unpack(f) ((void)0)
 #define Continue() f
 #endif
-
-typedef Vm(g_vm_t);
-
+typedef g_vm(g_vm_t);
 struct g_in {
   int (*getc)(struct g_in*),
       (*ungetc)(struct g_in*, int),
       (*eof)(struct g_in*); };
-
 struct g_out {
   void (*printf)(struct g_out*, const char*, ...),
        (*putc)(struct g_out*, int); };
-
-union x { g_vm_t *ap; intptr_t x; union x *m; uintptr_t typ; };
+union x {
+  g_vm_t *ap;
+  intptr_t x;
+  union x *m;
+  uintptr_t typ; };
 
 struct g {
-  intptr_t     *hp, // heap pointer
-               *sp; // stack pointer
-  union x *ip;      // instruction pointer
-  struct g_symbol
-    *symbols;       // symbol tree
-  intptr_t *pool;   // lower core address
-  uintptr_t len;    // length of core data
+  // vm state
+  union x *ip;
+  intptr_t *hp, *sp;
+  struct g_symbol *symbols; // symbol tree
+  // memory state
+  uintptr_t len;  // length of core data
+  intptr_t *pool; // lower core address
   struct g_mem_root { intptr_t *ptr; struct g_mem_root *next; } *safe;
   union { uintptr_t t0; intptr_t *cp; }; // copy pointer
-  struct g_in *in;
-  struct g_out *out, *err;
   void *(*malloc)(struct g*, size_t),
         (*free)(struct g*, void*);
+  // main i/o connections
+  struct g_in *in;
+  struct g_out *out, *err;
+  // variables
   struct g_table *dict, *macro;
   struct g_symbol *quote, *begin, *let, *cond, *lambda;
   intptr_t end[]; }; // end of struct == initial heap pointer for this core

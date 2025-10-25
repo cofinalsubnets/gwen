@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static Vm(p_isatty) {
+static g_vm(p_isatty) {
   Sp[0] = isatty(g_getnum(Sp[0])) ? g_putnum(-1) : g_nil;
   Ip += 1;
   return Continue(); }
@@ -31,7 +31,7 @@ static g_noinline struct g *readf_noinline(struct g *f) {
   fclose(i);
   return f; }
 
-Vm(readf) {
+g_vm(readf) {
   struct g_string *s = (struct g_string*) Sp[0];
   if (!g_strp(Sp[0]) || s->len > 255) return
     Sp[0] = g_nil,
