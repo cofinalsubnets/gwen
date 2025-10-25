@@ -1,62 +1,27 @@
 #include "g.h"
-#include <stdarg.h>
-static struct g
-  *g_intern(struct g*),
-  *g_tbl(struct g*),
-  *g_read1s(struct g*, const char*),
-  *g_readss(struct g*, const char*);
-struct g *g_read1(struct g *f) {
-  return g_read1i(f, f->in); }
-
-#define symp g_symp
-static g_inline struct g *g_run(struct g *f) {
-#if g_tco
-  if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
-#else
-  while (g_ok(f)) f = f->ip->ap(f);
-  f = g_code_of(f) == g_status_eof ? g_core_of(f) : f;
-#endif
+static void *g_libc_malloc(struct g *f, uintptr_t n) { return malloc(n); }
+static void g_libc_free(struct g *f, void *n)        { return free(n); }
+static void *g_static_malloc(struct g *f, size_t n)  { return NULL; }
+static void g_static_free(struct g *f, void*x)       {}
+static struct g *g_define(struct g *f, const char *s);
+struct g *g_defns(struct g*f, uintptr_t len, struct g_def *defs) {
+  for (uintptr_t i = 0; i < len; i++) f = g_define(g_push(f, 1, defs[i].x), defs[i].n);
   return f; }
-enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
-#define odd(_) ((uintptr_t)(_)&1)
-#define even(_) !odd(_)
-#define dict_of(_) (_)->dict
-#define encode(f, s) ((struct g*)((intptr_t)(f)|(s)))
-#define nilp(_) (word(_)==g_nil)
-#define A(o) two(o)->a
-#define B(o) two(o)->b
-#define AB(o) A(B(o))
-#define AA(o) A(A(o))
-#define BA(o) B(A(o))
-#define BB(o) B(B(o))
-#define push1(f, _) (*--(f)->sp=(_))
-#define cell(_) ((union x*)(_))
-#define sym(_) ((struct g_symbol*)(_))
-#define two(_) ((struct g_pair*)(_))
-#define tbl(_) ((struct g_table*)(_))
-#define ptr(_) ((intptr_t*)(_))
-#define word(_) ((intptr_t)(_))
-#define Width(_) b2w(sizeof(_))
-#define datp(_) (cell(_)->ap==data)
-#define typ(_) cell(_)[1].typ
-#define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
-#define MM(f,r) ((f->safe=&((struct g_mem_root){(intptr_t*)(r),f->safe})))
-#define UM(f) (f->safe=f->safe->next)
-#define mix ((uintptr_t)2708237354241864315)
-#define None() (Sp == Hp)
-#define Any() (Sp > Hp)
-#define Got(n) (((uintptr_t)(Sp - Hp)) >= (n))
-#define Get(n) Ap(gc, f, n)
-#define Have1() do { if (None()) return Get(1); } while (0)
-#define Have(n) do { if (!Got(n)) return Get(n); } while (0)
-#define within(a, b, c) (word(a)<=word(b)&&word(b)<word(c))
-#define owns(f, x) within((intptr_t*)f, x, (intptr_t*)f + f->len)
-_Static_assert(sizeof(union x) == sizeof(intptr_t));
-_Static_assert(-1 >> 1 == -1, "sign extended shift");
 
-struct g_mem_root { // linked list of pointers to values saved by C functions
-  intptr_t *ptr; // pointer to C stack value
-  struct g_mem_root *next; };
+#define typ(_) cell(_)[1].typ
+#define cell(_) ((union x*)(_))
+static g_vm_t
+  data, self, dot,
+  symnom, read0, prc,
+  gensym, pairp, fixnump, symbolp, stringp,
+  band, bor, bxor, bsr, bsl, bnot,
+  ssub, sget, slen, scat,
+  cons, car, cdr,
+  lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
+  seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
+  defglob, drop1, imm, ref,
+  free_variable, ev0,
+  cond, jump, ap, tap, apn, tapn, ret, late_bind;
 
 typedef struct g_symbol {
   g_vm_t *ap;
@@ -75,6 +40,153 @@ typedef struct g_pair {
   uintptr_t typ;
   intptr_t a, b;
 } g_pair;
+static struct g *g_ini_0(struct g *f, uintptr_t words, void *(*ma)(struct g*, uintptr_t), void (*fr)(struct g*, void*), struct g_in *in, struct g_out*out, struct g_out*err);
+static Vm(gc, uintptr_t);
+static struct g
+  *please(struct g*, uintptr_t),
+  *g_ana(struct g*, g_vm_t*),
+  *g_cells(struct g*, size_t),
+  *g_hash_put(struct g*),
+  *em_tbl(struct g*, struct g_out*, intptr_t),
+  *g_buf_new(struct g*),
+  *g_buf_grow(struct g*),
+  *g_intern(struct g*),
+  *g_tbl(struct g*),
+  *g_read1s(struct g*, const char*),
+  *g_readss(struct g*, const char*);
+static void
+  transmit(struct g*,struct g_out*,intptr_t);
+static g_vm_t g_yield;
+
+#include <stdarg.h>
+
+struct g *g_gc(struct g *f) { return please(f, 0); }
+struct g *g_read1(struct g *f) { return g_read1i(f, f->in); }
+struct g *g_write1(struct g *f) { return transmit(f, f->out, f->sp[0]), f; }
+struct g *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
+
+g_inline struct g *g_pop(struct g *f, uintptr_t m) {
+  return !g_ok(f) ? f : (f->sp += m, f); }
+
+struct g *g_ini_static(uintptr_t nbytes, void *f) {
+  uintptr_t len0 = nbytes / (2 * sizeof(intptr_t));
+  return g_ini_0(f, len0, NULL, NULL, NULL, NULL, NULL); }
+
+struct g *g_ini_dynamic(void *(*ma)(struct g*, uintptr_t), void (*fr)(struct g*, void*)) {
+  uintptr_t len0 = 1 << 10;
+  struct g *f = ma(NULL, 2 * len0 * sizeof(intptr_t));
+  return g_ini_0(f, len0, ma, fr, NULL, NULL, NULL); }
+
+enum g_status g_fin(struct g *f) {
+  enum g_status s = g_code_of(f);
+  if ((f = g_core_of(f))) f->free(f, f->pool);
+  return s; }
+
+static g_inline struct g *g_run(struct g *f) {
+#if g_tco
+  if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
+#else
+  while (g_ok(f)) f = f->ip->ap(f);
+  f = g_code_of(f) == g_status_eof ? g_core_of(f) : f;
+#endif
+  return f; }
+
+struct g *g_evals(struct g *f, const char *s) {
+  f = g_read1s(f, "(:(r x y)(? y(r(ev'ev(A y))(B y))x)r)");
+  f = g_push(f, 4, g_nil, f->quote, g_nil, g_nil);
+  f = g_cons_r(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_readss(f, s))))));
+  return g_run(g_ana(f, g_yield)); }
+
+#define pop1 g_pop1
+#define Width(_) b2w(sizeof(_))
+
+static g_inline size_t b2w(size_t b) {
+  size_t q = b / sizeof(intptr_t), r = b % sizeof(intptr_t);
+  return q + (r ? 1 : 0); }
+
+static g_inline struct g_tag { union x *null, *head, end[]; } *ttag(union x *k) {
+  while (k->x) k++;
+  return (struct g_tag*) k; }
+
+static struct g *mo_c(struct g *f, uintptr_t n) {
+  f = g_cells(f, n + Width(struct g_tag));
+  if (g_ok(f)) {
+    union x *k = (union x*) f->sp[0];
+    struct g_tag *t = (struct g_tag*) (k + n);
+    t->null = NULL;
+    t->head = k; }
+  return f; }
+
+g_noinline struct g *g_apply(struct g *f) {
+  f = mo_c(f, 3);
+  if (g_ok(f)) {
+    union x *k = (union x*) pop1(f);
+    k[0].ap = ap;
+    k[1].ap = g_yield;
+    k[2].m = f->ip;
+    f->ip = k;
+    f = g_run(f); }
+  return f; }
+#define odd(_) ((uintptr_t)(_)&1)
+#define even(_) !odd(_)
+enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
+g_inline bool g_twop(intptr_t _) { return even(_) && typ(_) == g_ty_two; }
+g_inline bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str; }
+g_inline bool g_tblp(intptr_t _) { return even(_) && typ(_) == g_ty_tbl; }
+g_inline bool g_symp(intptr_t _) { return even(_) && typ(_) == g_ty_sym; }
+static g_inline void ini_pair(struct g_pair *w, intptr_t a, intptr_t b) {
+  w->ap = data; w->typ = g_ty_two; w->a = a; w->b = b; }
+static g_inline void ini_table(struct g_table *t, uintptr_t len, uintptr_t cap, struct entry**tab) {
+  t->ap = data; t->typ = g_ty_tbl; t->len = len; t->cap = cap; t->tab = tab; }
+static g_inline void ini_str(struct g_string *s, uintptr_t len) {
+  s->ap = data; s->typ = g_ty_str; s->len = len; }
+static g_inline void ini_sym(struct g_symbol *y, struct g_string *nom, uintptr_t code) {
+  y->ap = data; y->typ = g_ty_sym; y->nom = nom; y->code = code; y->l = y->r = 0; }
+static g_inline void ini_anon(struct g_symbol *y, uintptr_t code) {
+  y->ap = data; y->typ = g_ty_sym; y->nom = 0; y->code = code; }
+
+
+
+struct g *g_strof(struct g *f, const char *cs) {
+  uintptr_t bytes = strlen(cs),
+            words = b2w(bytes),
+            req = Width(struct g_string) + words;
+  f = g_cells(f, req);
+  if (g_ok(f)) {
+    struct g_string *o = (struct g_string*) f->sp[0];
+    ini_str(o, bytes);
+    memcpy(o->text, cs, bytes); }
+  return f; }
+
+#define symp g_symp
+#define dict_of(_) (_)->dict
+#define encode(f, s) ((struct g*)((intptr_t)(f)|(s)))
+#define nilp(_) (word(_)==g_nil)
+#define A(o) two(o)->a
+#define B(o) two(o)->b
+#define AB(o) A(B(o))
+#define AA(o) A(A(o))
+#define BA(o) B(A(o))
+#define BB(o) B(B(o))
+#define push1(f, _) (*--(f)->sp=(_))
+#define sym(_) ((struct g_symbol*)(_))
+#define two(_) ((struct g_pair*)(_))
+#define tbl(_) ((struct g_table*)(_))
+#define ptr(_) ((intptr_t*)(_))
+#define word(_) ((intptr_t)(_))
+#define datp(_) (cell(_)->ap==data)
+#define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
+#define MM(f,r) ((f->safe=&((struct g_mem_root){(intptr_t*)(r),f->safe})))
+#define UM(f) (f->safe=f->safe->next)
+#define mix ((uintptr_t)2708237354241864315)
+#define Got(n) (((uintptr_t)(Sp - Hp)) >= (n))
+#define Get(n) Ap(gc, f, n)
+#define Have1() do { if (Sp == Hp) return Get(1); } while (0)
+#define Have(n) do { if (!Got(n)) return Get(n); } while (0)
+#define within(a, b, c) (word(a)<=word(b)&&word(b)<word(c))
+#define owns(f, x) within((intptr_t*)f, x, (intptr_t*)f + f->len)
+_Static_assert(sizeof(union x) == sizeof(intptr_t));
+_Static_assert(-1 >> 1 == -1, "sign extended shift");
 struct d {
   int32_t type, rank;
   intptr_t shape[]; };
@@ -98,20 +210,6 @@ typedef struct g
 
 static int
   read_char(struct g_in *i);
-static void
-  transmit(struct g*,struct g_out*,intptr_t);
-static g_vm_t
-  data, self, dot,
-  symnom, read0, prc,
-  gensym, pairp, fixnump, symbolp, stringp,
-  band, bor, bxor, bsr, bsl, bnot,
-  ssub, sget, slen, scat,
-  cons, car, cdr,
-  lt, le, eq, gt, ge, tset, tget, tdel, tnew, tkeys, tlen,
-  seek, peek, poke, trim, thda, add, sub, mul, quot, rem,
-  defglob, drop1, imm, ref,
-  free_variable, ev0,
-  cond, jump, ap, tap, apn, tapn, ret, late_bind;
 static bool
   neql(struct g*,intptr_t, intptr_t),
   eql(struct g*, intptr_t, intptr_t);
@@ -122,24 +220,15 @@ static intptr_t
 static uintptr_t
   hash(struct g*,intptr_t);
 
-static Vm(gc, uintptr_t);
-static struct g
-  *please(struct g*, uintptr_t),
-  *g_ana(struct g*, g_vm_t*),
-  *g_have(struct g*, uintptr_t),
-  *g_cells(struct g*, size_t),
-  *g_hash_put(struct g*),
-  *em_tbl(struct g*, struct g_out*, intptr_t),
-  *g_buf_new(struct g*),
-  *g_buf_grow(struct g*);
 
-static struct g_out g_stdout = { g_printf, g_putc };
-static struct g_out g_stderr = { g_printf, g_putc };
 static struct g_in g_stdin = { g_getc, g_ungetc, g_eof };
+static struct g_out g_stdout = { g_printf, g_putc },
+                    g_stderr = { g_printf, g_putc };
 
 #ifndef EOF
 #define EOF -1
 #endif
+
 struct g *g_readsi(struct g *f, struct g_in* i) {
   intptr_t n = 0;
   for (int c; g_ok(f); n++) {
@@ -150,14 +239,10 @@ struct g *g_readsi(struct g *f, struct g_in* i) {
   for (f = g_push(f, 1, g_nil); n--; f = g_cons_r(f));
   return f; }
 
-Vm(dot) {
+static Vm(dot) {
   transmit(f, f->out, Sp[0]);
   Ip += 1;
   return Continue(); }
-
-struct g *g_pop(struct g *f, uintptr_t m) {
-  if (g_ok(f)) f->sp += m;
-  return f; }
 
 static struct g *g_pushr(struct g *f, uintptr_t m, uintptr_t n, va_list xs) {
   if (n == m) return please(f, m);
@@ -169,6 +254,8 @@ static struct g *g_pushr(struct g *f, uintptr_t m, uintptr_t n, va_list xs) {
   return f; }
 
 #define avail(f) ((uintptr_t)(f->sp-f->hp))
+static g_inline struct g *g_have(struct g *f, uintptr_t n) {
+  return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
 struct g *g_push(struct g *f, uintptr_t m, ...) {
   if (!g_ok(f)) return f;
   va_list xs;
@@ -178,8 +265,8 @@ struct g *g_push(struct g *f, uintptr_t m, ...) {
   else for (f->sp -= m; n < m; f->sp[n++] = va_arg(xs, intptr_t));
   va_end(xs);
   return f; }
-struct g *g_have(struct g *f, uintptr_t n) {
-  return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
+
+
 struct g *g_cells(struct g*f, uintptr_t n) {
   f = g_have(f, n + 1);
   if (g_ok(f)) {
@@ -188,8 +275,6 @@ struct g *g_cells(struct g*f, uintptr_t n) {
     *--f->sp = word(k); }
   return f; }
 
-struct g *g_write1(struct g *f) {
-  return transmit(f, f->out, f->sp[0]), f; }
 
 struct g *g_read1i(struct g*f, struct g_in* i) {
   if (!g_ok(f)) return f;
@@ -228,16 +313,6 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
       return f; } }
 
 
-enum g_status g_fin(struct g *f) {
-  enum g_status s = g_code_of(f);
-  if ((f = g_core_of(f))) f->free(f, f->pool);
-  return s; }
-
-
-static g_inline size_t b2w(size_t b) {
-  size_t q = b / sizeof(intptr_t),
-         r = b % sizeof(intptr_t);
-  return q + (r ? 1 : 0); }
 
 static g_cp_t cp_two, cp_tbl, cp_str, cp_sym;
 static g_wk_t wk_two, wk_tbl, wk_str, wk_sym;
@@ -274,57 +349,10 @@ static g_id_t *t_id[] = {
   [g_ty_sym] = neql,
   [g_ty_tbl] = neql,
   [g_ty_str] = eq_str, };
-
-static g_inline void ini_pair(struct g_pair *w, intptr_t a, intptr_t b) {
-  w->ap = data;
-  w->typ = g_ty_two;
-  w->a = a;
-  w->b = b; }
-
-static g_inline void ini_table(struct g_table *t, uintptr_t len, uintptr_t cap, struct entry**tab) {
-  t->ap = data;
-  t->typ = g_ty_tbl;
-  t->len = len;
-  t->cap = cap;
-  t->tab = tab; }
-
-static g_inline void ini_str(struct g_string *s, uintptr_t len) {
-  s->ap = data;
-  s->typ = g_ty_str;
-  s->len = len; }
-
-static g_inline void ini_sym(struct g_symbol *y, struct g_string *nom, uintptr_t code) {
-  y->ap = data;
-  y->typ = g_ty_sym;
-  y->nom = nom;
-  y->code = code;
-  y->l = y->r = 0; }
-
-static g_inline void ini_anon(struct g_symbol *y, uintptr_t code) {
-  y->ap = data; y->typ = g_ty_sym; y->nom = 0; y->code = code; }
-
-bool g_twop(intptr_t _) { return even(_) && typ(_) == g_ty_two; }
-bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str; }
-bool g_tblp(intptr_t _) { return even(_) && typ(_) == g_ty_tbl; }
-bool g_symp(intptr_t _) { return even(_) && typ(_) == g_ty_sym; }
-
-static g_inline struct g_tag { union x *null, *head, end[]; } *ttag(union x *k) {
-  while (k->x) k++;
-  return (struct g_tag*) k; }
-
 static void *bump(struct g *f, uintptr_t n) {
   void *x = f->hp;
   f->hp += n;
   return x; }
-
-static struct g *mo_c(struct g *f, uintptr_t n) {
-  f = g_cells(f, n + Width(struct g_tag));
-  if (g_ok(f)) {
-    union x *k = (union x*) f->sp[0];
-    struct g_tag *t = (struct g_tag*) (k + n);
-    t->null = NULL;
-    t->head = k; }
-  return f; }
 
 #define twop g_twop
 static intptr_t assq(struct g *f, intptr_t l, intptr_t k) {
@@ -339,9 +367,6 @@ static size_t llen(intptr_t l) {
   size_t n = 0;
   while (twop(l)) n++, l = B(l);
   return n; }
-
-static g_inline bool lambp(struct g *f, intptr_t x) {
-  return twop(x) && A(x) == (intptr_t) f->lambda; }
 
 static struct g *append(struct g *f) {
   uintptr_t i = 0;
@@ -361,7 +386,6 @@ static intptr_t reverse(struct g *f, intptr_t l) {
   for (intptr_t m; twop(l);) m = l, l = B(l), B(m) = n, n = m;
   return n; }
 
-#define pop1 g_pop1
 static struct g *enscope(struct g *f, struct env *par, intptr_t args, intptr_t imps) {
   f = g_push(f, 3, args, imps, par);
   f = mo_c(f, Width(env));
@@ -375,7 +399,6 @@ static struct g *enscope(struct g *f, struct env *par, intptr_t args, intptr_t i
 static g_inline struct g *g_cons_2(struct g *f, intptr_t a, intptr_t b) {
   return g_cons_l(g_push(f, 2, a, b)); }
 
-static struct g *ana_seq(struct g*, struct env**, intptr_t, intptr_t);
 #define Ana(n, ...) struct g *n(struct g *f, struct env **c, intptr_t x, ##__VA_ARGS__)
 #define Cata(n, ...) struct g *n(struct g *f, struct env **c, size_t m, ##__VA_ARGS__)
 typedef Ana(ana);
@@ -419,6 +442,7 @@ static g_noinline Vm(curry2) {
   Ip = cell(*Sp);
   Sp[0] = word(k);
   return Continue(); }
+
 // FIXME curry should be different functions for n = 2 and n > 2.
 Vm(curry) {
   union x *k = cell(Hp), *j = k;
@@ -447,6 +471,7 @@ static Vm(jump) { return
 static Vm(cond) { return
   Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2,
   Continue(); }
+
 // load instructions
 //
 // push an immediate value
@@ -461,17 +486,6 @@ static Vm(g_yield) { return
   Ip = Ip[1].m,
   Pack(f),
   encode(f, YieldStatus); }
-
-g_noinline struct g *g_apply(struct g *f) {
-  f = mo_c(f, 3);
-  if (g_ok(f)) {
-    union x *k = (union x*) pop1(f);
-    k[0].ap = ap;
-    k[1].ap = g_yield;
-    k[2].m = f->ip;
-    f->ip = k;
-    f = g_run(f); }
-  return f; }
 
 static Vm(ev0) { return
   Ip += 1,
@@ -584,24 +598,23 @@ static Cata(cata_ix) {
   intptr_t x = pop1(f);
   return cata_ix_(f, c, m, i, x); }
 
-static uintptr_t arity_of(env *c) { return llen(c->args) + llen(c->imps); }
 static Cata(cata_curry) {
-  uintptr_t ar = arity_of((struct env*) pop1(f));
-  return
-    ar == 1
-    ?
-    pull(f, c, m) :
-    cata_ix_(f, c, m, curry, g_putnum(ar)) ; }
+  struct env *e = (struct env*) pop1(f);
+  uintptr_t ar = llen(e->args) + llen(e->imps);
+  return ar == 1 ?  pull(f, c, m) : cata_ix_(f, c, m, curry, g_putnum(ar)) ; }
 
 static Cata(cata_ret) {
-  uintptr_t ar = arity_of((struct env*) pop1(f));
+  struct env *e = (struct env*) pop1(f);
+  uintptr_t ar = llen(e->args) + llen(e->imps);
   return cata_ix_(f, c, m, ret, g_putnum(ar)); }
 
-static struct g *ana_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp);
+static struct g *ana_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp),
+                *ana_seq(struct g*, struct env**, intptr_t, intptr_t);
+
 static Ana(analyze) {
   if (!g_ok(f)) return f;
   // is it a variable?
-  if (symp(x)) for (struct env *d = *c;; d = d->par) {
+  if (g_symp(x)) for (struct env *d = *c;; d = d->par) {
     if (nilp(d)) { // free variable?
       intptr_t y = g_hash_get(f, 0, dict_of(f), x);
       if (y) return ana_ix(f, imm, y);
@@ -623,18 +636,13 @@ static Ana(analyze) {
         f = g_cons_2(f, x, (*c)->imps);
         if (g_ok(f)) x = pop1(f), (*c)->imps = x, x = A(x); }
       return g_push(f, 3, cata_var, x, (*c)->stack); } }
-
-  // if it's not a variable or a list then it evals to itself
+  // if it's not a variable and it's not a list (pair) then it evals to itself
   if (!twop(x)) return ana_ix(f, imm, x);
-
-  // it's a list
   intptr_t a = A(x), b = B(x);
-
   // singleton list?
   if (!twop(b)) return analyze(f, c, a); // value of first element
-
   // special form?
-  if (symp(a)) {
+  if (g_symp(a)) {
     struct g_symbol *y = sym(a);
     if (y == f->quote) return ana_ix(f, imm, !twop(b) ? b : A(b));
     if (y == f->let) return !twop(B(b)) ? analyze(f, c, A(b)) :
@@ -644,13 +652,11 @@ static Ana(analyze) {
                                g_ok(f) ? analyze(f, c, pop1(f)) : 0;
     if (y == f->cond) return !twop(B(b)) ? analyze(f, c, A(b)) :
                                            ana_if(f, c, b); }
-
   // macro?
   intptr_t mac = g_hash_get(f, 0, f->macro, a);
   if (mac) return
     f = g_apply(g_push(f, 2 , b, mac)),
     g_ok(f) ? analyze(f, c, pop1(f)) : f;
-
   // application.
   return avec(f, a, f = ana_ap_args(f, c, b)),
          analyze(f, c, a); }
@@ -733,7 +739,9 @@ static intptr_t ldels(struct g *f, intptr_t lam, intptr_t l) {
   if (!assq(f, lam, A(l))) B(l) = m, m = l;
   return m; }
 
-#define BBA(o) B(BA(o))
+static g_inline bool lambp(struct g *f, intptr_t x) {
+  return twop(x) && A(x) == (intptr_t) f->lambda; }
+
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
 static struct g *ana_let(struct g *f, struct env **b, intptr_t exp) {
@@ -762,7 +770,7 @@ static struct g *ana_let(struct g *f, struct env **b, intptr_t exp) {
     def = pop1(f);
     nom = pop1(f);
     // if it's a lambda compile it and record in lam list
-    if (lambp(f, e)) {
+    if (twop(e) && f->lambda == (struct g_symbol*) A(e)) {
       f = g_push(f, 2, d, lam);
       f = g_cons_l(g_cons_r(ana_lambda(f, c, g_nil, B(e))));
       if (!g_ok(f)) return forget();
@@ -783,6 +791,7 @@ static struct g *ana_let(struct g *f, struct env **b, intptr_t exp) {
   long j;
   do for (j = 0, d = lam; twop(d); d = B(d)) // for each bound function variable
     for (e = lam; twop(e); e = B(e)) // for each bound function variable
+#define BBA(o) B(BA(o))
       if (d != e && memq(f, BBA(e), AA(d))) // if you need this function
         for (v = BBA(d); twop(v); v = B(v)) { // then you need its variables
           intptr_t vars = BBA(e), var = A(v);
@@ -829,11 +838,6 @@ static struct g *ana_let(struct g *f, struct env **b, intptr_t exp) {
   f = analyze(f, b, exp);
   return forget(); }
 
-struct g *g_evals(struct g *f, const char *s) {
-  f = g_read1s(f, "(:(r x y)(? y(r(ev'ev(A y))(B y))x)r)");
-  f = g_push(f, 4, g_nil, f->quote, g_nil, g_nil);
-  f = g_cons_r(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_readss(f, s))))));
-  return g_run(g_ana(f, g_yield)); }
 
 Vm(defglob) {
   Have(3);
@@ -1216,45 +1220,33 @@ Vm(gensym) {
 
 Vm(symnom) {
   intptr_t y = Sp[0];
-  y = symp(y) && ((symbol*)y)->nom ? word(((symbol*)y)->nom) : g_nil;
+  y = g_symp(y) && ((symbol*)y)->nom ? word(((symbol*)y)->nom) : g_nil;
   Sp[0] = y;
   Ip += 1;
   return Continue(); }
 
-uintptr_t xx_sym(struct g *v, intptr_t _) { return sym(_)->code; }
+static uintptr_t xx_sym(struct g *v, intptr_t _) { return sym(_)->code; }
 
-intptr_t cp_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static intptr_t cp_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   g_symbol *src = sym(x), *dst;
   if (src->nom) dst = g_intern_r(f, (struct g_string*) cp(f, word(src->nom), p0, t0), &f->symbols);
   else dst = bump(f, Width(symbol) - 2),
        ini_anon(dst, src->code);
   return (intptr_t) (src->ap = (g_vm_t*) dst); }
 
-void wk_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static void wk_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
-struct g *em_sym(struct g *f, struct g_out *o, intptr_t x) {
+static struct g *em_sym(struct g *f, struct g_out *o, intptr_t x) {
   struct g_string* s = sym(x)->nom;
   if (s) for (uintptr_t i = 0; i < s->len; o->putc(o, s->text[i++]));
   else o->printf(o, "#sym@%lx", (long) x);
   return f; }
 
-Vm(symbolp) { return
-  Sp[0] = symp(Sp[0]) ? g_putnum(-1) : g_nil,
+static Vm(symbolp) { return
+  Sp[0] = g_symp(Sp[0]) ? g_putnum(-1) : g_nil,
   Ip += 1,
   Continue(); }
-
-struct g *g_strof(struct g *f, const char *cs) {
-  uintptr_t bytes = strlen(cs),
-            words = b2w(bytes),
-            req = Width(struct g_string) + words;
-  f = g_cells(f, req);
-  if (g_ok(f)) {
-    struct g_string *o = (struct g_string*) f->sp[0];
-    ini_str(o, bytes);
-    memcpy(o->text, cs, bytes); }
-  return f; }
-
 intptr_t cp_str(struct g *v, intptr_t x, intptr_t *p0, intptr_t *t0) {
   struct g_string *src = (struct g_string*) x;
   size_t len = sizeof(struct g_string) + src->len;
@@ -1366,11 +1358,11 @@ void wk_two(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   A(x) = cp(f, A(x), p0, t0);
   B(x) = cp(f, B(x), p0, t0); }
 
-uintptr_t xx_two(struct g *f, intptr_t x) {
+static uintptr_t xx_two(struct g *f, intptr_t x) {
   uintptr_t hc = hash(f, A(x)) * hash(f, B(x));
   return hc ^ mix; }
 
-struct g *em_two(struct g *f, struct g_out *o, intptr_t x) {
+static struct g *em_two(struct g *f, struct g_out *o, intptr_t x) {
   if (A(x) == word(f->quote) && twop(B(x)))
     o->putc(o,'\''),
     transmit(f, o, AB(x));
@@ -1379,11 +1371,11 @@ struct g *em_two(struct g *f, struct g_out *o, intptr_t x) {
     if (!twop(x = B(x))) { o->putc(o, ')'); break; } }
   return f; }
 
-Vm(car) { return
+static Vm(car) { return
   Sp[0] = twop(Sp[0]) ? A(Sp[0]) : Sp[0],
   Ip++,
   Continue(); }
-Vm(cdr) { return
+static Vm(cdr) { return
   Sp[0] = twop(Sp[0]) ? B(Sp[0]) : g_nil,
   Ip++,
   Continue(); }
@@ -1423,20 +1415,55 @@ static g_noinline bool eql_neq(struct g *f, intptr_t a, intptr_t b) { return
   t_id[typ(a)](f, a, b); }
 
 // default equality method for things that are only equal to themselves
-static bool neql(struct g *f, intptr_t a, intptr_t b) { return false; }
-
+static bool neql(struct g *f, intptr_t a, intptr_t b) {
+  return false; }
 static bool eql(struct g *f, intptr_t a, intptr_t b) {
   return a == b || eql_neq(f, a, b); }
-
-g_noinline Vm(gc, uintptr_t n) {
+static g_noinline Vm(gc, uintptr_t n) {
   Pack(f);
   f = please(f, n);
   if (g_ok(f)) return Unpack(f), Continue();
   return f; }
 
-static struct g *copy_core(struct g*, intptr_t*, uintptr_t, struct g*);
 
-struct g *g_gc(struct g *f) { return please(f, 0); }
+static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
+  memcpy(g, f, sizeof(struct g));
+  g->pool = p1;
+  g->len = len1;
+  uintptr_t len0 = f->len;
+  intptr_t
+    *p0 = (intptr_t*) f,
+    *t0 = (intptr_t*) f + len0, // source pool top
+    *t1 = (intptr_t*) g + len1, // target pool top
+    ht = t0 - f->sp; // stack height
+
+  // reset stack, heap, symbols
+  g->sp = t1 - ht;
+  g->hp = g->cp = g->end;
+  g->symbols = 0;
+  // copy variables
+  g->ip = (union x*) cp(g, (intptr_t) f->ip, p0, t0);
+  g->dict = (struct g_table*) cp(g, (intptr_t) f->dict, p0, t0);
+  g->macro = (struct g_table*) cp(g, (intptr_t) f->macro, p0, t0);
+  g->quote = (struct g_symbol*) cp(g, (intptr_t) f->quote, p0, t0);
+  g->begin = (struct g_symbol*) cp(g, (intptr_t) f->begin, p0, t0);
+  g->let = (struct g_symbol*) cp(g, (intptr_t) f->let, p0, t0);
+  g->cond = (struct g_symbol*) cp(g, (intptr_t) f->cond, p0, t0);
+  g->lambda = (struct g_symbol*) cp(g, (intptr_t) f->lambda, p0, t0);
+  // copy stack
+  for (int n = 0; n < ht; n++) g->sp[n] = cp(g, f->sp[n], p0, t0);
+  // copy saved values
+  for (struct g_mem_root *r = g->safe = f->safe; r; r = r->next)
+    *r->ptr = cp(g, *r->ptr, p0, t0);
+  // use cheney's algorithm to avoid unbounded recursion
+  while (g->cp < g->hp)
+    if (datp(g->cp)) t_wk[typ(g->cp)](g, (intptr_t) g->cp, p0, t0);
+    else for (g->cp += 2; g->cp[-2]; g->cp++)
+      g->cp[-2] = cp(g, g->cp[-2], p0, t0);
+
+  g->t0 = g_clock();
+  return g; }
+
 
 // keep v between
 #define v_lo 8
@@ -1475,44 +1502,6 @@ static g_noinline struct g *please(struct g *f, uintptr_t req0) {
     return encode(f, g_status_oom); }
   g = copy_core(g, (intptr_t*) g, len1, f);
   f->free(f, f->pool);
-  return g; }
-
-static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
-  memcpy(g, f, sizeof(struct g));
-  g->pool = p1;
-  g->len = len1;
-  uintptr_t len0 = f->len;
-  intptr_t
-    *p0 = (intptr_t*) f,
-    *t0 = (intptr_t*) f + len0, // source pool top
-    *t1 = (intptr_t*) g + len1, // target pool top
-    ht = t0 - f->sp; // stack height
-
-  // reset stack, heap, symbols
-  g->sp = t1 - ht;
-  g->hp = g->cp = g->end;
-  g->symbols = 0;
-  // copy variables
-  g->ip = (union x*) cp(g, (intptr_t) f->ip, p0, t0);
-  g->dict = (struct g_table*) cp(g, (intptr_t) f->dict, p0, t0);
-  g->macro = (struct g_table*) cp(g, (intptr_t) f->macro, p0, t0);
-  g->quote = (struct g_symbol*) cp(g, (intptr_t) f->quote, p0, t0);
-  g->begin = (struct g_symbol*) cp(g, (intptr_t) f->begin, p0, t0);
-  g->let = (struct g_symbol*) cp(g, (intptr_t) f->let, p0, t0);
-  g->cond = (struct g_symbol*) cp(g, (intptr_t) f->cond, p0, t0);
-  g->lambda = (struct g_symbol*) cp(g, (intptr_t) f->lambda, p0, t0);
-  // copy stack
-  for (int n = 0; n < ht; n++) g->sp[n] = cp(g, f->sp[n], p0, t0);
-  // copy saved values
-  for (struct g_mem_root *r = g->safe = f->safe; r; r = r->next)
-    *r->ptr = cp(g, *r->ptr, p0, t0);
-  // use cheney's algorithm to avoid unbounded recursion
-  while (g->cp < g->hp)
-    if (datp(g->cp)) t_wk[typ(g->cp)](g, (intptr_t) g->cp, p0, t0);
-    else for (g->cp += 2; g->cp[-2]; g->cp++)
-      g->cp[-2] = cp(g, g->cp[-2], p0, t0);
-
-  g->t0 = g_clock();
   return g; }
 
 g_noinline intptr_t cp(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
@@ -1595,9 +1584,6 @@ static const struct { const char *n; g_vm_t *i; } i_dict[] = { insts(i_entry) };
 static struct g *g_symof(struct g *f, const char *nom) {
   return g_intern(g_strof(f, nom)); }
 
-static struct g *g_ini_def(struct g *f, const char *k, intptr_t v) {
-  return g_hash_put(g_symof(g_push(f, 1, v), k)); }
-
 static struct g *g_define(struct g *f, const char *s) {
   if (g_ok(f)) f = g_intern(g_strof(g_push(f, 1, f->dict), s));
   if (!g_ok(f)) return f;
@@ -1605,16 +1591,6 @@ static struct g *g_define(struct g *f, const char *s) {
   f->sp[1] = f->sp[2];
   f->sp[2] = w;
   return g_pop(g_hash_put(f), 1); }
-
-struct g *g_defns(struct g*f, uintptr_t len, struct g_def *defs) {
-  for (uintptr_t i = 0; i < len; i++)
-    f = g_define(g_push(f, 1, defs[i].x), defs[i].n);
-  return f; }
-
-static void *g_libc_malloc(struct g *f, uintptr_t n) { return malloc(n); }
-static void g_libc_free(struct g *f, void *n)        { return free(n); }
-static void *g_static_malloc(struct g *f, size_t n)  { return NULL; }
-static void g_static_free(struct g *f, void*x)       {}
 
 
 // this is the general initialization function. arguments are
@@ -1659,34 +1635,25 @@ static struct g *g_ini_0(
     f->quote = sym(pop1(f)),
     f->cond = sym(pop1(f)),
     f->let = sym(pop1(f));
-  f = g_tbl(f); // dict
-  f = g_tbl(f); // macro
+  f = g_tbl(g_tbl(f)); // dict and macro tables
   if (g_ok(f))
     f->macro = tbl(f->sp[0]),
     f->dict = tbl(f->sp[1]),
     f = g_symof(f, "macros"),
     f = g_hash_put(f),
-    f = g_ini_def(f, "globals", (intptr_t) f->dict);
+    f = g_hash_put(g_symof(g_push(f, 1, (intptr_t) f->dict), "globals"));
   for (size_t i = 0; i < LEN(bifff); i++)
-    f = g_ini_def(f, bifff[i].n, (intptr_t) bifff[i].x);
+    f = g_hash_put(g_symof(g_push(f, 1, (intptr_t) bifff[i].x), bifff[i].n));
   for (size_t i = 0; i < LEN(i_dict); i++)
-    f = g_ini_def(f, i_dict[i].n, (intptr_t) i_dict[i].i);
+    f = g_hash_put(g_symof(g_push(f, 1, (intptr_t) i_dict[i].i), i_dict[i].n));
   return g_pop(f, 1); }
 
-struct g *g_ini_static(uintptr_t nbytes, void *f) {
-  uintptr_t len0 = nbytes / (2 * sizeof(intptr_t));
-  return g_ini_0(f, len0, NULL, NULL, NULL, NULL, NULL); }
-struct g *g_ini_dynamic(void *(*ma)(struct g*, uintptr_t), void (*fr)(struct g*, void*)) {
-  uintptr_t len0 = 1 << 10;
-  struct g *f = ma(NULL, 2 * len0 * sizeof(intptr_t));
-  return g_ini_0(f, len0, ma, fr, NULL, NULL, NULL); }
-
-struct g *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
 struct ti {
   struct g_in in;
   const char *text;
   uintptr_t i; };
-g_noinline struct g *g_read1s(struct g *f, const char *cs) {
+
+static g_noinline struct g *g_read1s(struct g *f, const char *cs) {
   f = g_readss(f, cs);
   if (g_ok(f)) f->sp[0] = A(f->sp[0]);
   return f; }
@@ -1708,7 +1675,7 @@ static int p_text_eof(struct g_in *i) {
   struct ti *t = (struct ti*) i;
   return !t->text[t->i]; }
 
-g_noinline struct g *g_readss(struct g *f, const char *cs) {
+static g_noinline struct g *g_readss(struct g *f, const char *cs) {
   struct ti t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
   f = g_readsi(f, (struct g_in*) &t);
   return f; }

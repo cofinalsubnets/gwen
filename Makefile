@@ -352,3 +352,6 @@ bin/pd/pdex.so: $(pd_src)
 .PHONY: cloc
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k pacman pd t vim
+
+cat: clean all test
+.PHONY: cat

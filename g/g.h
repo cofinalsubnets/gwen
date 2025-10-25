@@ -83,7 +83,7 @@ struct g {
     *symbols;       // symbol tree
   intptr_t *pool;   // lower core address
   uintptr_t len;    // length of core data
-  struct g_mem_root *safe;
+  struct g_mem_root { intptr_t *ptr; struct g_mem_root *next; } *safe;
   union { uintptr_t t0; intptr_t *cp; }; // copy pointer
   struct g_in *in;
   struct g_out *out, *err;
