@@ -9,6 +9,10 @@
 #define Sp f->sp
 #define Ip f->ip
 #endif
+static struct g *g_cons_stack(struct g *f, int i, int j),
+                *g_read1i(struct g*, struct g_in*);
+struct g *g_cons_l(struct g *f) { return g_cons_stack(f, 0, 1); }
+struct g *g_cons_r(struct g *f) { return g_cons_stack(f, 1, 0); }
 static void *g_libc_malloc(struct g *f, uintptr_t n) { return malloc(n); }
 static void g_libc_free(struct g *f, void *n)        { return free(n); }
 static void *g_static_malloc(struct g *f, size_t n)  { return NULL; }
@@ -330,36 +334,19 @@ static g_id_t neql, eq_two, eq_str;
 static g_em_t em_two, em_sym, em_str, em_tbl;
 static g_xx_t xx_two, xx_tbl, xx_sym, xx_str;
 static g_cp_t *t_cp[] = {
-  [g_ty_two] = cp_two,
-  [g_ty_sym] = cp_sym,
-  [g_ty_str] = cp_str,
-  [g_ty_tbl] = cp_tbl, };
+  [g_ty_two] = cp_two, [g_ty_sym] = cp_sym, [g_ty_str] = cp_str, [g_ty_tbl] = cp_tbl, };
 static g_wk_t *t_wk[] = {
-  [g_ty_two] = wk_two,
-  [g_ty_sym] = wk_sym,
-  [g_ty_tbl] = wk_tbl,
-  [g_ty_str] = wk_str, };
+  [g_ty_two] = wk_two, [g_ty_sym] = wk_sym, [g_ty_tbl] = wk_tbl, [g_ty_str] = wk_str, };
 static g_xx_t *t_xx[] = {
-  [g_ty_two] = xx_two,
-  [g_ty_sym] = xx_sym,
-  [g_ty_str] = xx_str,
-  [g_ty_tbl] = xx_tbl, };
+  [g_ty_two] = xx_two, [g_ty_sym] = xx_sym, [g_ty_str] = xx_str, [g_ty_tbl] = xx_tbl, };
 static g_em_t *t_em[] = {
-  [g_ty_two] = em_two,
-  [g_ty_tbl] = em_tbl,
-  [g_ty_sym] = em_sym,
-  [g_ty_str] = em_str, };
+  [g_ty_two] = em_two, [g_ty_tbl] = em_tbl, [g_ty_sym] = em_sym, [g_ty_str] = em_str, };
 static g_vm_t *t_ap[] = {
-  [g_ty_two] = self,
-  [g_ty_tbl] = self,
-  [g_ty_sym] = self,
-  [g_ty_str] = self, };
+  [g_ty_two] = self, [g_ty_tbl] = self, [g_ty_sym] = self, [g_ty_str] = self, };
 static g_id_t *t_id[] = {
-  [g_ty_two] = eq_two,
-  [g_ty_sym] = neql,
-  [g_ty_tbl] = neql,
-  [g_ty_str] = eq_str, };
-static void *bump(struct g *f, uintptr_t n) {
+  [g_ty_two] = eq_two, [g_ty_sym] = neql, [g_ty_tbl] = neql, [g_ty_str] = eq_str, };
+
+static g_inline void *bump(struct g *f, uintptr_t n) {
   void *x = f->hp;
   f->hp += n;
   return x; }
@@ -1206,7 +1193,7 @@ struct g*g_intern(struct g*f) {
   if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_string*) f->sp[0], &f->symbols);
   return f; }
 
-g_vm(nomsym) {
+static g_vm(nomsym) {
   Have(Width(struct g_symbol));
   symbol *y;
   Pack(f);
@@ -1354,16 +1341,16 @@ g_vm(stringp) { return
   Continue(); }
 
 // FIXME could overflow the stack -- use off pool for this
-bool eq_two(struct g *f, intptr_t x, intptr_t y) {
+static bool eq_two(struct g *f, intptr_t x, intptr_t y) {
   return eql(f, A(x), A(y)) && eql(f, B(x), B(y)); }
 
-intptr_t cp_two(struct g*v, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static intptr_t cp_two(struct g*v, intptr_t x, intptr_t *p0, intptr_t *t0) {
   struct g_pair *src = (struct g_pair*) x,
                 *dst = bump(v, Width(struct g_pair));
   ini_pair(dst, src->a, src->b);
   return word(src->ap = (g_vm_t*) dst); }
 
-void wk_two(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static void wk_two(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += Width(struct g_pair);
   A(x) = cp(f, A(x), p0, t0);
   B(x) = cp(f, B(x), p0, t0); }
@@ -1390,7 +1377,7 @@ static g_vm(cdr) { return
   Ip++,
   Continue(); }
 
-g_vm(cons) {
+static g_vm(cons) {
   Have(Width(g_pair));
   struct g_pair *w = (struct g_pair*) Hp;
   ini_pair(w, Sp[0], Sp[1]);
@@ -1400,7 +1387,7 @@ g_vm(cons) {
   Ip++;
   return Continue(); }
 
-g_vm(pairp) { return
+static g_vm(pairp) { return
   Sp[0] = twop(Sp[0]) ? g_putnum(-1) : g_nil,
   Ip++,
   Continue(); }
@@ -1414,8 +1401,6 @@ static struct g *g_cons_stack(struct g *f, int i, int j) {
     *++f->sp = (intptr_t) p; }
   return f; }
 
-struct g *g_cons_l(struct g *f) { return g_cons_stack(f, 0, 1); }
-struct g *g_cons_r(struct g *f) { return g_cons_stack(f, 1, 0); }
 
 static g_noinline bool eql_neq(struct g *f, intptr_t a, intptr_t b) { return
   even(a | b) &&
