@@ -38,14 +38,29 @@ struct g_vec {
             rank,
             shape[]; };
 static g_vm_t data;
+#include <stdarg.h>
 #define vlen(_)((struct g_vec*)(_))->shape[0]
 #define vtxt(_) ((char*)(((struct g_vec*)(_))->shape+1))
-#define txt(_) ((str_type*)(_))->text
 #define len(_) ((str_type*)(_))->len
+#define txt(_) ((str_type*)(_))->text
+static g_inline void g_ini_vec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
+  v->ap = data; v->type = type; v->rank = rank;
+  uintptr_t *shape = v->shape;
+  va_list xs;
+  va_start(xs, rank);
+  while (rank--) *shape++ = va_arg(xs, uintptr_t);
+  va_end(xs); }
 static g_inline void g_ini_vstr(struct g_vec *v, uintptr_t len) {
-  v->ap = data; v->type = g_vt_char; v->rank = 1; vlen(v) = len; }
+  g_ini_vec(v, g_vt_char, 1, len); }
 static g_inline void ini_str(str_type *s, uintptr_t len) {
   s->ap = data; s->typ = g_ty_str; len(s) = len; }
+static g_inline bool vec_strp(struct g_vec *s) { return s->type == g_vt_char && s->rank == 1; }
+#define cell(_) ((union x*)(_))
+#define typ(_) cell(_)[1].typ
+#define odd(_) ((uintptr_t)(_)&1)
+#define even(_) !odd(_)
+static g_inline bool _g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_vec && vec_strp((void*)_); }
+g_inline bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str; }
 
 static const size_t vt_size[] = {
   [g_vt_u8]  = 1, [g_vt_i8]  = 1, [g_vt_f8]  = 1,
@@ -66,8 +81,6 @@ struct g *g_defns(struct g*f, uintptr_t len, struct g_def *defs) {
   for (uintptr_t i = 0; i < len; i++) f = g_define(g_push(f, 1, defs[i].x), defs[i].n);
   return f; }
 
-#define typ(_) cell(_)[1].typ
-#define cell(_) ((union x*)(_))
 static g_vm_t
   data, self, dot,
   symnom, read0, prc,
@@ -186,12 +199,7 @@ g_noinline struct g *g_apply(struct g *f) {
     f->ip = k;
     f = g_run(f); }
   return f; }
-#define odd(_) ((uintptr_t)(_)&1)
-#define even(_) !odd(_)
 g_inline bool g_twop(intptr_t _) { return even(_) && typ(_) == g_ty_two; }
-static g_inline bool vec_strp(struct g_vec *s) { return s->type == g_vt_char && s->rank == 1; }
-static g_inline bool _g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_vec && vec_strp((void*)_); }
-g_inline bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str; }
 g_inline bool g_tblp(intptr_t _) { return even(_) && typ(_) == g_ty_tbl; }
 g_inline bool g_symp(intptr_t _) { return even(_) && typ(_) == g_ty_sym; }
 static g_inline void ini_pair(struct g_pair *w, intptr_t a, intptr_t b) {
@@ -445,15 +453,16 @@ static struct g *em_str(struct g *v, struct g_out *o, intptr_t _) {
     if ((c = *text++) == '\\' || c == '"') o->putc(o, '\\');
   o->putc(o, '"');
   return v; }
+
 static struct g *em_vec(struct g *f, struct g_out *o, intptr_t x) {
   struct g_vec *v = (struct g_vec*) x;
   if (!vec_strp(v)) {
     uintptr_t rank = v->rank, *shape = v->shape;
-    o->printf(o, "#vec@%lx:%ld:%ld", (long) x, (long) v->type, (long) v->rank);
-    for (uintptr_t i = rank, *j = shape; i--; o->printf(o, ":%ld", (long) *j++)); }
+    o->printf(o, "#vec@%lx:%ld.%ld", (long) x, (long) v->type, (long) v->rank);
+    for (uintptr_t i = rank, *j = shape; i--; o->printf(o, ".%ld", (long) *j++)); }
   else {
-    uintptr_t *shape = v->shape, len = shape[0];
-    uint8_t *text = (uint8_t*) (shape + 1);
+    uintptr_t len = vlen(v);
+    char *text = vtxt(v);
     o->putc(o, '"');
     for (char c; len--; o->putc(o, c))
       if ((c = *text++) == '\\' || c == '"') o->putc(o, '\\');
