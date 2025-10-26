@@ -20,10 +20,12 @@ static int p_file_eof(struct g_in *i) {
   return feof((fi)->file); }
 
 static g_noinline struct g *readf_noinline(struct g *f) {
-  struct g_string *s = (struct g_string*) g_pop1(f);
+  intptr_t x = g_pop1(f);
+  uint8_t *text = g_str_txt(x);
+  uintptr_t len = g_str_len(x);
   char n[256]; // :)
-  memcpy(n, s->text, s->len);
-  n[s->len] = 0;
+  memcpy(n, text, len);
+  n[len] = 0;
   FILE *i = fopen(n, "r");
   if (!i) return g_push(f, 1, g_nil);
   struct fi fi = {{p_file_getc, p_file_ungetc, p_file_eof}, i};
@@ -32,8 +34,7 @@ static g_noinline struct g *readf_noinline(struct g *f) {
   return f; }
 
 g_vm(readf) {
-  struct g_string *s = (struct g_string*) Sp[0];
-  if (!g_strp(Sp[0]) || s->len > 255) return
+  if (!g_strp(Sp[0]) || g_str_len(Sp[0]) > 255) return
     Sp[0] = g_nil,
     Ip += 1,
     Continue();

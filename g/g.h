@@ -90,12 +90,6 @@ enum g_status {
   g_status_eof = 3,
 } g_fin(struct g*);
 
-struct g_string {
-  g_vm_t *ap;
-  intptr_t typ;
-  uintptr_t len;
-  char text[]; };
-
 // user gives these
 uintptr_t g_clock(void); // used by garbage collector
 struct g *g_readsi(struct g*, struct g_in*);
@@ -133,4 +127,6 @@ struct g
   *g_strof(struct g*, const char*),
   *g_cons_l(struct g*),
   *g_cons_r(struct g*);
+uintptr_t g_str_len(intptr_t);
+char *g_str_txt(intptr_t);
 #endif

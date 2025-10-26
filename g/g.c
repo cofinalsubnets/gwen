@@ -51,6 +51,12 @@ static g_vm_t
   free_variable, ev0,
   cond, jump, ap, tap, apn, tapn, ret, late_bind;
 
+
+struct g_string {
+  g_vm_t *ap;
+  intptr_t typ;
+  uintptr_t len;
+  char text[]; };
 typedef struct g_symbol {
   g_vm_t *ap;
   uintptr_t typ;
@@ -184,6 +190,9 @@ static g_inline void ini_anon(struct g_symbol *y, uintptr_t code) {
 
 #define txt(_) ((struct g_string*)(_))->text
 #define len(_) ((struct g_string*)(_))->len
+g_inline uintptr_t g_str_len(intptr_t x) { return len(x); }
+g_inline char *g_str_txt(intptr_t x) { return txt(x); }
+
 struct g *g_strof(struct g *f, const char *cs) {
   uintptr_t bytes = strlen(cs),
             words = b2w(bytes),
@@ -1815,3 +1824,4 @@ static g_vm(trim) {
   ttag(k)->head = k;
   Ip += 1;
   return Continue(); }
+
