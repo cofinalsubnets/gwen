@@ -339,7 +339,7 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
         for (struct g_string *b = (struct g_string*) f->sp[0]; n < lim; txt(b)[n++] = c)
           if ((c = i->getc(i)) == EOF || c == '"' ||
                (c == '\\' && (c = i->getc(i)) == EOF))
-            return b->len = n, f;
+            return len(b) = n, f;
       return f;
     default:
       i->ungetc(i, c);
@@ -1344,14 +1344,12 @@ static uintptr_t hashbs(size_t len, void *_) {
   return h; }
 
 static uintptr_t xx_str(struct g *v, intptr_t _) { return hashbs(len(_), txt(_)); }
+static bool eq_str(struct g *f, intptr_t a, intptr_t b) {
+  return len(a) == len(b) && 0 == strncmp(txt(a), txt(b), len(a)); }
 
 static uintptr_t xx_vec(struct g *f, intptr_t _) {
   struct g_vec *v = (struct g_vec*) _;
   return hashbs(vector_total_bytes(v), v); }
-
-bool eq_str(struct g *f, intptr_t x, intptr_t y) {
-  struct g_string *a = ((struct g_string*)x), *b = (struct g_string*)y;
-  return a->len == b->len && 0 == strncmp(a->text, b->text, a->len); }
 
 g_vm(slen) { return
   Sp[0] = g_strp(Sp[0]) ? g_putnum(len(Sp[0])) : g_nil,
@@ -1375,7 +1373,7 @@ g_vm(ssub) {
       t = ((struct g_string*)Hp);
       Hp += req;
       ini_str(t, j - i);
-      memcpy(t->text, s->text + i, j - i);
+      memcpy(txt(t), txt(s) + i, j - i);
       Sp[2] = (intptr_t) t; } }
   return Ip += 1,
          Sp += 2,
@@ -1388,7 +1386,7 @@ g_vm(sget) {
     uintptr_t i = g_getnum(Sp[1]);
     i = MIN(i, len(s) - 1);
     i = MAX(i, 0);
-    Sp[1] = g_putnum(s->text[i]); }
+    Sp[1] = g_putnum(txt(s)[i]); }
   return Ip += 1,
          Sp += 1,
          Continue(); }
@@ -1724,7 +1722,7 @@ static struct g *g_ini_0(
 
 struct ti {
   struct g_in in;
-  const char *text;
+  const char *t;
   uintptr_t i; };
 
 static g_noinline struct g *g_read1s(struct g *f, const char *cs) {
@@ -1734,7 +1732,7 @@ static g_noinline struct g *g_read1s(struct g *f, const char *cs) {
 
 static int p_text_getc(struct g_in *i) {
   struct ti *t = ((struct ti*) i);
-  char c = t->text[t->i];
+  char c = t->t[t->i];
   if (c) t->i++;
   return c ? c : EOF; }
 
@@ -1743,11 +1741,11 @@ static int p_text_ungetc(struct g_in *i, int _) {
   uintptr_t idx = t->i;
   idx = idx ? idx - 1 : idx;
   t->i = idx;
-  return t->text[idx]; }
+  return t->t[idx]; }
 
 static int p_text_eof(struct g_in *i) {
   struct ti *t = (struct ti*) i;
-  return !t->text[t->i]; }
+  return !t->t[t->i]; }
 
 static g_noinline struct g *g_readss(struct g *f, const char *cs) {
   struct ti t = {{p_text_getc, p_text_ungetc, p_text_eof}, cs, 0};
@@ -1780,7 +1778,7 @@ static struct g *g_buf_grow(struct g *f) {
     struct g_string *o = (struct g_string*) f->hp;
     f->hp += req;
     ini_str(o, 2 * len);
-    memcpy(o->text, txt(f->sp[0]), len);
+    memcpy(txt(o), txt(f->sp[0]), len);
     f->sp[0] = (intptr_t) o; }
   return f; }
 
