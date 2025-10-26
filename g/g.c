@@ -54,6 +54,11 @@ typedef struct g_pair {
   uintptr_t typ;
   intptr_t a, b;
 } g_pair;
+struct g_vec {
+  g_vm_t *ap;
+  uintptr_t type,
+            rank,
+            shape[]; };
 static struct g *g_ini_0(struct g *f, uintptr_t words, void *(*ma)(struct g*, uintptr_t), void (*fr)(struct g*, void*), struct g_in *in, struct g_out*out, struct g_out*err);
 static g_vm(gc, uintptr_t);
 static struct g
@@ -143,7 +148,7 @@ g_noinline struct g *g_apply(struct g *f) {
   return f; }
 #define odd(_) ((uintptr_t)(_)&1)
 #define even(_) !odd(_)
-enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
+enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, g_ty_vec, };
 g_inline bool g_twop(intptr_t _) { return even(_) && typ(_) == g_ty_two; }
 g_inline bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str; }
 g_inline bool g_tblp(intptr_t _) { return even(_) && typ(_) == g_ty_tbl; }
@@ -233,6 +238,8 @@ static intptr_t
   cp_tbl(struct g*,intptr_t,intptr_t*,intptr_t*);
 static uintptr_t
   hash(struct g*,intptr_t);
+static g_cp_t cp_vec;
+static g_wk_t wk_vec;
 
 
 static struct g_in g_stdin = { g_getc, g_ungetc, g_eof };
@@ -328,23 +335,17 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
 
 
 
-static g_cp_t cp_two, cp_tbl, cp_str, cp_sym;
-static g_wk_t wk_two, wk_tbl, wk_str, wk_sym;
-static g_id_t neql, eq_two, eq_str;
-static g_em_t em_two, em_sym, em_str, em_tbl;
-static g_xx_t xx_two, xx_tbl, xx_sym, xx_str;
-static g_cp_t *t_cp[] = {
-  [g_ty_two] = cp_two, [g_ty_sym] = cp_sym, [g_ty_str] = cp_str, [g_ty_tbl] = cp_tbl, };
-static g_wk_t *t_wk[] = {
-  [g_ty_two] = wk_two, [g_ty_sym] = wk_sym, [g_ty_tbl] = wk_tbl, [g_ty_str] = wk_str, };
-static g_xx_t *t_xx[] = {
-  [g_ty_two] = xx_two, [g_ty_sym] = xx_sym, [g_ty_str] = xx_str, [g_ty_tbl] = xx_tbl, };
-static g_em_t *t_em[] = {
-  [g_ty_two] = em_two, [g_ty_tbl] = em_tbl, [g_ty_sym] = em_sym, [g_ty_str] = em_str, };
-static g_vm_t *t_ap[] = {
-  [g_ty_two] = self, [g_ty_tbl] = self, [g_ty_sym] = self, [g_ty_str] = self, };
-static g_id_t *t_id[] = {
-  [g_ty_two] = eq_two, [g_ty_sym] = neql, [g_ty_tbl] = neql, [g_ty_str] = eq_str, };
+static g_cp_t cp_two, cp_tbl, cp_str, cp_sym, cp_vec;
+static g_wk_t wk_two, wk_tbl, wk_str, wk_sym, wk_vec;
+static g_id_t neql, eq_two, eq_str, eq_vec;
+static g_em_t em_two, em_sym, em_str, em_tbl, em_vec;
+static g_xx_t xx_two, xx_tbl, xx_sym, xx_str, xx_vec;
+static g_cp_t *t_cp[] = { [g_ty_vec] = cp_vec, [g_ty_two] = cp_two, [g_ty_sym] = cp_sym, [g_ty_str] = cp_str, [g_ty_tbl] = cp_tbl, };
+static g_wk_t *t_wk[] = { [g_ty_vec] = wk_vec, [g_ty_two] = wk_two, [g_ty_sym] = wk_sym, [g_ty_tbl] = wk_tbl, [g_ty_str] = wk_str, };
+static g_xx_t *t_xx[] = { [g_ty_vec] = xx_vec, [g_ty_two] = xx_two, [g_ty_sym] = xx_sym, [g_ty_str] = xx_str, [g_ty_tbl] = xx_tbl, };
+static g_em_t *t_em[] = { [g_ty_vec] = em_vec, [g_ty_two] = em_two, [g_ty_tbl] = em_tbl, [g_ty_sym] = em_sym, [g_ty_str] = em_str, };
+static g_vm_t *t_ap[] = { [g_ty_vec] = self,   [g_ty_two] = self,   [g_ty_tbl] = self,   [g_ty_sym] = self,   [g_ty_str] = self, };
+static g_id_t *t_id[] = { [g_ty_vec] = eq_vec, [g_ty_two] = eq_two, [g_ty_sym] = neql,   [g_ty_tbl] = neql,   [g_ty_str] = eq_str, };
 
 static g_inline void *bump(struct g *f, uintptr_t n) {
   void *x = f->hp;
@@ -1244,15 +1245,69 @@ static g_vm(symbolp) { return
   Sp[0] = g_symp(Sp[0]) ? g_putnum(-1) : g_nil,
   Ip += 1,
   Continue(); }
-intptr_t cp_str(struct g *v, intptr_t x, intptr_t *p0, intptr_t *t0) {
+
+static intptr_t cp_two(struct g*v, intptr_t x, intptr_t *p0, intptr_t *t0) {
+  struct g_pair *src = (struct g_pair*) x,
+                *dst = bump(v, Width(struct g_pair));
+  ini_pair(dst, src->a, src->b);
+  return word(src->ap = (g_vm_t*) dst); }
+
+enum g_vec_types {
+  g_vt_u8,  g_vt_i8,
+  g_vt_u16, g_vt_i16,
+  g_vt_u32, g_vt_i32,
+  g_vt_u64, g_vt_i64,
+  g_vt_f8,  g_vt_f16,
+  g_vt_f32, g_vt_f64, };
+
+static const size_t vt_size[] = {
+  [g_vt_u8]  = 1, [g_vt_i8]  = 1, [g_vt_f8]  = 1,
+  [g_vt_u16] = 2, [g_vt_i16] = 2, [g_vt_f16] = 2,
+  [g_vt_u32] = 4, [g_vt_i32] = 4, [g_vt_f32] = 4,
+  [g_vt_u64] = 8, [g_vt_i64] = 8, [g_vt_f64] = 8, };
+
+static intptr_t cp_str(struct g *v, intptr_t x, intptr_t *p0, intptr_t *t0) {
   struct g_string *src = (struct g_string*) x;
   size_t len = sizeof(struct g_string) + src->len;
   return (intptr_t) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
-void wk_str(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static uintptr_t vector_data_bytes(struct g_vec *v) {
+  uintptr_t len = vt_size[v->type],
+            rank = v->rank,
+            *shape = v->shape;
+  while (rank--) len *= *shape++;
+  return len; }
+
+static uintptr_t vector_total_bytes(struct g_vec *v) {
+  return sizeof(struct g_vec) + v->rank * sizeof(intptr_t) + vector_data_bytes(v); }
+
+static intptr_t cp_vec(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+  struct g_vec *src = (struct g_vec*) x;
+  uintptr_t bytes = vector_total_bytes(src),
+            rank = src->rank,
+            *shape = src->shape,
+            len = vt_size[src->type];
+  struct g_vec *dst = bump(f, b2w(bytes));
+  for (uintptr_t i = rank; i--; len *= *shape++);
+  memcpy(dst, src, bytes);
+  return (intptr_t) (src->ap = (g_vm_t*) dst); }
+
+
+static void wk_vec(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+  f->cp += b2w(vector_total_bytes((struct g_vec*) x)); }
+
+
+static void wk_str(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += Width(struct g_string) + b2w(((struct g_string*) x)->len); }
 
-struct g *em_str(struct g *v, struct g_out *o, intptr_t _) {
+static struct g *em_vec(struct g *f, struct g_out *o, intptr_t x) {
+  struct g_vec *v = (struct g_vec*) x;
+  o->printf(o, "#vec@%lx:%ld:%ld", (long) x, (long) v->type, (long) v->rank);
+  for (uintptr_t i = v->rank, *j = v->shape; i--; o->printf(o, ":%ld", (long) *j++));
+//  if (v->type == g_vt_u8 && g->rank == 1) { }
+  return f; }
+
+static struct g *em_str(struct g *v, struct g_out *o, intptr_t _) {
   size_t len = ((struct g_string*)_)->len;
   const char *text = ((struct g_string*)_)->text;
   o->putc(o, '"');
@@ -1261,11 +1316,19 @@ struct g *em_str(struct g *v, struct g_out *o, intptr_t _) {
   o->putc(o, '"');
   return v; }
 
-uintptr_t xx_str(struct g *v, intptr_t _) {
-  uintptr_t len = ((struct g_string*)_)->len, h = 2166136261;
-  unsigned char *bs = (unsigned char*) ((struct g_string*)_)->text;
+static uintptr_t hashbs(size_t len, void *_) {
+  uint8_t *bs = _;
+  uintptr_t h = 2166136261;
   while (len--) h ^= *bs++, h *= 16777619;
   return h; }
+
+static uintptr_t xx_str(struct g *v, intptr_t _) {
+  struct g_string *s = (struct g_string*) _;
+  return hashbs(s->len, s->text); }
+
+static uintptr_t xx_vec(struct g *f, intptr_t _) {
+  struct g_vec *v = (struct g_vec*) _;
+  return hashbs(vector_total_bytes(v), v); }
 
 bool eq_str(struct g *f, intptr_t x, intptr_t y) {
   struct g_string *a = ((struct g_string*)x), *b = (struct g_string*)y;
@@ -1344,11 +1407,9 @@ g_vm(stringp) { return
 static bool eq_two(struct g *f, intptr_t x, intptr_t y) {
   return eql(f, A(x), A(y)) && eql(f, B(x), B(y)); }
 
-static intptr_t cp_two(struct g*v, intptr_t x, intptr_t *p0, intptr_t *t0) {
-  struct g_pair *src = (struct g_pair*) x,
-                *dst = bump(v, Width(struct g_pair));
-  ini_pair(dst, src->a, src->b);
-  return word(src->ap = (g_vm_t*) dst); }
+static bool eq_vec(struct g *f, intptr_t x, intptr_t y) {
+  struct g_vec *a = (struct g_vec*) x, *b = (struct g_vec*) y;
+  return 0 == memcmp(a, b, vector_total_bytes(a)); }
 
 static void wk_two(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += Width(struct g_pair);

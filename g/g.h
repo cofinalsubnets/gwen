@@ -109,7 +109,9 @@ void *malloc(size_t), free(void*),
      *memset(void*, int, size_t);
 long strtol(const char*restrict, char**restrict, int);
 size_t strlen(const char*);
-int strncmp(const char*, const char*, size_t);
+int strncmp(const char*, const char*, size_t),
+    memcmp(const void*, const void*, size_t);
+
 
 // user gets these
 g_vm_t ret0, curry;
