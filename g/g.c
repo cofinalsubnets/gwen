@@ -9,6 +9,11 @@
 #define Sp f->sp
 #define Ip f->ip
 #endif
+
+typedef struct g_string
+  str_type;
+#define str_type_width (Width(str_type))
+
 enum g_vec_types {
   g_vt_u8,  g_vt_i8,
   g_vt_u16, g_vt_i16,
@@ -196,7 +201,7 @@ g_inline char *g_str_txt(intptr_t x) { return txt(x); }
 struct g *g_strof(struct g *f, const char *cs) {
   uintptr_t bytes = strlen(cs),
             words = b2w(bytes),
-            req = Width(struct g_string) + words;
+            req = str_type_width + words;
   f = g_cells(f, req);
   if (g_ok(f)) {
     struct g_string *o = (struct g_string*) f->sp[0];
@@ -1279,6 +1284,9 @@ static intptr_t cp_two(struct g*v, intptr_t x, intptr_t *p0, intptr_t *t0) {
   ini_pair(dst, src->a, src->b);
   return word(src->ap = (g_vm_t*) dst); }
 
+static void wk_str(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+  f->cp += str_type_width + b2w(len(x)); }
+
 static intptr_t cp_str(struct g *v, intptr_t x, intptr_t *p0, intptr_t *t0) {
   struct g_string *src = (struct g_string*) x;
   size_t len = sizeof(struct g_string) + len(src);
@@ -1309,9 +1317,6 @@ static intptr_t cp_vec(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
 static void wk_vec(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += b2w(vector_total_bytes((struct g_vec*) x)); }
 
-
-static void wk_str(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
-  f->cp += Width(struct g_string) + b2w(len(x)); }
 
 static struct g *em_vec(struct g *f, struct g_out *o, intptr_t x) {
   struct g_vec *v = (struct g_vec*) x;
@@ -1368,7 +1373,7 @@ g_vm(ssub) {
     j = MIN(j, (intptr_t) len(s));
     if (i == j) Sp[2] = g_nil;
     else {
-      size_t req = Width(struct g_string) + b2w(j - i);
+      size_t req = str_type_width + b2w(j - i);
       Have(req);
       t = ((struct g_string*)Hp);
       Hp += req;
@@ -1403,7 +1408,7 @@ g_vm(scat) {
 
   struct g_string *x = ((struct g_string*)a), *y = ((struct g_string*)b);
   uintptr_t len = len(x) + len(y),
-            req = Width(struct g_string) + b2w(len);
+            req = str_type_width + b2w(len);
   Have(req);
   struct g_string *z = ((struct g_string*)Hp);
   return Hp += req,
@@ -1764,7 +1769,7 @@ static int read_char(struct g_in *i) {
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
 static struct g *g_buf_new(struct g *f) {
-  f = g_cells(f, Width(struct g_string) + 1);
+  f = g_cells(f, str_type_width + 1);
   if (g_ok(f)) {
     struct g_string *o = (struct g_string*) f->sp[0];
     ini_str(o, sizeof(intptr_t)); }
@@ -1772,7 +1777,7 @@ static struct g *g_buf_new(struct g *f) {
 
 static struct g *g_buf_grow(struct g *f) {
   size_t len = len(f->sp[0]),
-         req = Width(struct g_string) + 2 * b2w(len);
+         req = str_type_width + 2 * b2w(len);
   f = g_have(f, req);
   if (g_ok(f)) {
     struct g_string *o = (struct g_string*) f->hp;

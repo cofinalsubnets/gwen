@@ -21,7 +21,7 @@ static int p_file_eof(struct g_in *i) {
 
 static g_noinline struct g *readf_noinline(struct g *f) {
   intptr_t x = g_pop1(f);
-  uint8_t *text = g_str_txt(x);
+  char *text = g_str_txt(x);
   uintptr_t len = g_str_len(x);
   char n[256]; // :)
   memcpy(n, text, len);
