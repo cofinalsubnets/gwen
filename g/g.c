@@ -10,9 +10,11 @@
 #define Ip f->ip
 #endif
 
-typedef struct g_string
-  str_type;
-#define str_type_width (Width(str_type))
+typedef
+struct g_string { g_vm_t *ap; intptr_t typ; uintptr_t len; char text[]; }
+str_type;
+#define str_add 0
+#define str_type_width (Width(str_type) + str_add)
 
 enum g_vec_types {
   g_vt_u8,  g_vt_i8,
@@ -57,15 +59,10 @@ static g_vm_t
   cond, jump, ap, tap, apn, tapn, ret, late_bind;
 
 
-struct g_string {
-  g_vm_t *ap;
-  intptr_t typ;
-  uintptr_t len;
-  char text[]; };
 typedef struct g_symbol {
   g_vm_t *ap;
   uintptr_t typ;
-  struct g_string *nom;
+  str_type *nom;
   uintptr_t code;
   struct g_symbol *l, *r; } g_symbol, symbol;
 typedef struct g_table {
@@ -184,17 +181,17 @@ static g_inline void ini_pair(struct g_pair *w, intptr_t a, intptr_t b) {
   w->ap = data; w->typ = g_ty_two; w->a = a; w->b = b; }
 static g_inline void ini_table(struct g_table *t, uintptr_t len, uintptr_t cap, struct entry**tab) {
   t->ap = data; t->typ = g_ty_tbl; t->len = len; t->cap = cap; t->tab = tab; }
-static g_inline void ini_str(struct g_string *s, uintptr_t len) {
+static g_inline void ini_str(str_type *s, uintptr_t len) {
   s->ap = data; s->typ = g_ty_str; s->len = len; }
-static g_inline void ini_sym(struct g_symbol *y, struct g_string *nom, uintptr_t code) {
+static g_inline void ini_sym(struct g_symbol *y, str_type *nom, uintptr_t code) {
   y->ap = data; y->typ = g_ty_sym; y->nom = nom; y->code = code; y->l = y->r = 0; }
 static g_inline void ini_anon(struct g_symbol *y, uintptr_t code) {
   y->ap = data; y->typ = g_ty_sym; y->nom = 0; y->code = code; }
 
 
 
-#define txt(_) ((struct g_string*)(_))->text
-#define len(_) ((struct g_string*)(_))->len
+#define txt(_) ((str_type*)(_))->text
+#define len(_) ((str_type*)(_))->len
 g_inline uintptr_t g_str_len(intptr_t x) { return len(x); }
 g_inline char *g_str_txt(intptr_t x) { return txt(x); }
 
@@ -204,7 +201,7 @@ struct g *g_strof(struct g *f, const char *cs) {
             req = str_type_width + words;
   f = g_cells(f, req);
   if (g_ok(f)) {
-    struct g_string *o = (struct g_string*) f->sp[0];
+    str_type *o = (str_type*) f->sp[0];
     ini_str(o, bytes);
     memcpy(txt(o), cs, bytes); }
   return f; }
@@ -341,7 +338,7 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
     case '"':  
       f = g_buf_new(f);
       for (size_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
-        for (struct g_string *b = (struct g_string*) f->sp[0]; n < lim; txt(b)[n++] = c)
+        for (str_type *b = (str_type*) f->sp[0]; n < lim; txt(b)[n++] = c)
           if ((c = i->getc(i)) == EOF || c == '"' ||
                (c == '\\' && (c = i->getc(i)) == EOF))
             return len(b) = n, f;
@@ -350,7 +347,7 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
       i->ungetc(i, c);
       f = g_buf_new(f);
       for (uintptr_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
-        for (struct g_string *b = (struct g_string*) f->sp[0]; n < lim; txt(b)[n++] = c)
+        for (str_type *b = (str_type*) f->sp[0]; n < lim; txt(b)[n++] = c)
           switch (c = i->getc(i)) {
             default: continue;
             case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
@@ -367,14 +364,19 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
 
 
 
-static g_cp_t cp_two, cp_tbl, cp_str, cp_sym, cp_vec;
-static g_wk_t wk_two, wk_tbl, wk_str, wk_sym, wk_vec;
-static g_id_t neql, eq_two, eq_str, eq_vec;
-static g_em_t em_two, em_sym, em_str, em_tbl, em_vec;
-static g_xx_t xx_two, xx_tbl, xx_sym, xx_str, xx_vec;
-static g_cp_t *t_cp[] = { [g_ty_vec] = cp_vec, [g_ty_two] = cp_two, [g_ty_sym] = cp_sym, [g_ty_str] = cp_str, [g_ty_tbl] = cp_tbl, };
+static g_cp_t cp_two, cp_tbl, cp_sym, cp_vec;
+static g_wk_t wk_two, wk_tbl, wk_sym, wk_vec;
+static g_id_t neql, eq_two, eq_vec;
+static g_em_t em_two, em_sym, em_tbl, em_vec;
+static g_xx_t xx_two, xx_tbl, xx_sym, xx_vec;
+static g_cp_t cp_str;
+static g_wk_t wk_str;
+static g_id_t eq_str;
+static g_xx_t xx_str;
+static g_em_t em_str;
+static g_cp_t *t_cp[] = { [g_ty_vec] = cp_vec, [g_ty_two] = cp_two, [g_ty_sym] = cp_sym, [g_ty_tbl] = cp_tbl, [g_ty_str] = cp_str, };
 static g_wk_t *t_wk[] = { [g_ty_vec] = wk_vec, [g_ty_two] = wk_two, [g_ty_sym] = wk_sym, [g_ty_tbl] = wk_tbl, [g_ty_str] = wk_str, };
-static g_xx_t *t_xx[] = { [g_ty_vec] = xx_vec, [g_ty_two] = xx_two, [g_ty_sym] = xx_sym, [g_ty_str] = xx_str, [g_ty_tbl] = xx_tbl, };
+static g_xx_t *t_xx[] = { [g_ty_vec] = xx_vec, [g_ty_two] = xx_two, [g_ty_sym] = xx_sym, [g_ty_tbl] = xx_tbl, [g_ty_str] = xx_str, };
 static g_em_t *t_em[] = { [g_ty_vec] = em_vec, [g_ty_two] = em_two, [g_ty_tbl] = em_tbl, [g_ty_sym] = em_sym, [g_ty_str] = em_str, };
 static g_vm_t *t_ap[] = { [g_ty_vec] = self,   [g_ty_two] = self,   [g_ty_tbl] = self,   [g_ty_sym] = self,   [g_ty_str] = self, };
 static g_id_t *t_id[] = { [g_ty_vec] = eq_vec, [g_ty_two] = eq_two, [g_ty_sym] = neql,   [g_ty_tbl] = neql,   [g_ty_str] = eq_str, };
@@ -1208,13 +1210,13 @@ g_vm(tkeys) {
   Sp[0] = list;
   Ip += 1;
   return Continue(); }
-static struct g_symbol *g_intern_r(struct g *v, struct g_string *b, struct g_symbol **y) {
+static struct g_symbol *g_intern_r(struct g *v, str_type *b, struct g_symbol **y) {
   struct g_symbol *z = *y;
   if (!z) return // found an empty spot, insert new symbol
     z = bump(v, Width(struct g_symbol)),
     ini_sym(z, b, hash(v, g_putnum(hash(v, (intptr_t) b)))),
     *y = z;
-  struct g_string *a = z->nom;
+  str_type *a = z->nom;
   int i = len(a) < len(b) ? -1 :
           len(a) > len(b) ? 1 :
           strncmp(txt(a), txt(b), len(a));
@@ -1223,14 +1225,14 @@ static struct g_symbol *g_intern_r(struct g *v, struct g_string *b, struct g_sym
 
 struct g*g_intern(struct g*f) {
   f = g_have(f, Width(struct g_symbol));
-  if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_string*) f->sp[0], &f->symbols);
+  if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (str_type*) f->sp[0], &f->symbols);
   return f; }
 
 static g_vm(nomsym) {
   Have(Width(struct g_symbol));
   symbol *y;
   Pack(f);
-  y = g_intern_r(f, (struct g_string*) f->sp[0], &f->symbols),
+  y = g_intern_r(f, (str_type*) f->sp[0], &f->symbols),
   Unpack(f);
   Sp[0] = word(y);
   Ip += 1;
@@ -1259,7 +1261,7 @@ static uintptr_t xx_sym(struct g *v, intptr_t _) { return sym(_)->code; }
 
 static intptr_t cp_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   g_symbol *src = sym(x), *dst;
-  if (src->nom) dst = g_intern_r(f, (struct g_string*) cp(f, word(src->nom), p0, t0), &f->symbols);
+  if (src->nom) dst = g_intern_r(f, (str_type*) cp(f, word(src->nom), p0, t0), &f->symbols);
   else dst = bump(f, Width(symbol) - 2),
        ini_anon(dst, src->code);
   return (intptr_t) (src->ap = (g_vm_t*) dst); }
@@ -1268,7 +1270,7 @@ static void wk_sym(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += Width(symbol) - (sym(x)->nom ? 0 : 2); }
 
 static struct g *em_sym(struct g *f, struct g_out *o, intptr_t x) {
-  struct g_string* s = sym(x)->nom;
+  str_type* s = sym(x)->nom;
   if (s) for (uintptr_t i = 0; i < len(s); o->putc(o, txt(s)[i++]));
   else o->printf(o, "#sym@%lx", (long) x);
   return f; }
@@ -1288,8 +1290,8 @@ static void wk_str(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += str_type_width + b2w(len(x)); }
 
 static intptr_t cp_str(struct g *v, intptr_t x, intptr_t *p0, intptr_t *t0) {
-  struct g_string *src = (struct g_string*) x;
-  size_t len = sizeof(struct g_string) + len(src);
+  str_type *src = (str_type*) x;
+  size_t len = sizeof(str_type) + len(src);
   return (intptr_t) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
 
 static uintptr_t vector_data_bytes(struct g_vec *v) {
@@ -1364,7 +1366,7 @@ g_vm(slen) { return
 g_vm(ssub) {
   if (!g_strp(Sp[0])) Sp[2] = g_nil;
   else {
-    struct g_string *s = ((struct g_string*)Sp[0]), *t;
+    str_type *s = ((str_type*)Sp[0]), *t;
     intptr_t i = odd(Sp[1]) ? g_getnum(Sp[1]) : 0,
              j = odd(Sp[2]) ? g_getnum(Sp[2]) : 0;
     i = MAX(i, 0);
@@ -1375,7 +1377,7 @@ g_vm(ssub) {
     else {
       size_t req = str_type_width + b2w(j - i);
       Have(req);
-      t = ((struct g_string*)Hp);
+      t = ((str_type*)Hp);
       Hp += req;
       ini_str(t, j - i);
       memcpy(txt(t), txt(s) + i, j - i);
@@ -1387,7 +1389,7 @@ g_vm(ssub) {
 g_vm(sget) {
   if (!g_strp(Sp[0])) Sp[1] = g_nil;
   else {
-    struct g_string *s = ((struct g_string*)Sp[0]);
+    str_type *s = ((str_type*)Sp[0]);
     uintptr_t i = g_getnum(Sp[1]);
     i = MIN(i, len(s) - 1);
     i = MAX(i, 0);
@@ -1406,11 +1408,11 @@ g_vm(scat) {
                        Ip += 1,
                        Continue();
 
-  struct g_string *x = ((struct g_string*)a), *y = ((struct g_string*)b);
+  str_type *x = ((str_type *)a), *y = ((str_type*)b);
   uintptr_t len = len(x) + len(y),
             req = str_type_width + b2w(len);
   Have(req);
-  struct g_string *z = ((struct g_string*)Hp);
+  str_type *z = (str_type*)Hp;
   return Hp += req,
          ini_str(z, len),
          memcpy(txt(z), txt(x), len(x)),
@@ -1771,7 +1773,7 @@ static int read_char(struct g_in *i) {
 static struct g *g_buf_new(struct g *f) {
   f = g_cells(f, str_type_width + 1);
   if (g_ok(f)) {
-    struct g_string *o = (struct g_string*) f->sp[0];
+    str_type*o = (str_type*) f->sp[0];
     ini_str(o, sizeof(intptr_t)); }
   return f; }
 
@@ -1780,7 +1782,7 @@ static struct g *g_buf_grow(struct g *f) {
          req = str_type_width + 2 * b2w(len);
   f = g_have(f, req);
   if (g_ok(f)) {
-    struct g_string *o = (struct g_string*) f->hp;
+    str_type *o = (str_type*) f->hp;
     f->hp += req;
     ini_str(o, 2 * len);
     memcpy(txt(o), txt(f->sp[0]), len);
