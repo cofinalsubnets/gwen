@@ -12,22 +12,10 @@
 
 enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
 
-typedef
-struct g_string {
-  g_vm_t *ap;
-  uintptr_t typ;
-  uintptr_t type, rank, len;
-  char text[]; }
-str_type;
-#define str_add 0
+typedef struct g_vec str_type;
+#define str_add 1
 #define str_type_width (Width(str_type) + str_add)
 
-struct g_vec {
-  g_vm_t *ap;
-  uintptr_t typ,
-            type,
-            rank,
-            shape[]; };
 
 
 static g_vm_t data;
@@ -216,6 +204,9 @@ static const size_t vt_size[] = {
   [g_vt_u32] = 4, [g_vt_i32] = 4, [g_vt_f32] = 4,
   [g_vt_u64] = 8, [g_vt_i64] = 8, [g_vt_f64] = 8, };
 
+g_inline uintptr_t g_fixed_size(enum g_vec_type t) {
+  return vt_size[t]; }
+
 struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
   uintptr_t len = vt_size[type];
   va_list xs;
@@ -224,7 +215,9 @@ struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
   va_end(xs);
   f = g_cells(f, b2w(sizeof(struct g_vec) + rank * sizeof(intptr_t) + len));
   va_start(xs, rank);
-  ini_vec((void*) f->sp[0], type, rank, xs);
+  struct g_vec *v = (struct g_vec*) f->sp[0];
+  ini_vecv(v, type, rank, xs);
+  memset(v->shape + rank, 0, len);
   va_end(xs);
   return f; }
 

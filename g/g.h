@@ -139,7 +139,13 @@ enum g_vec_type {
   g_vt_f8,  g_vt_f16,
   g_vt_f32, g_vt_f64, };
 #define g_vt_char g_vt_i8
+uintptr_t g_fixed_size(enum g_vec_type);
 
-struct g_vec;
+struct g_vec {
+  g_vm_t *ap;
+  uintptr_t typ,
+            type,
+            rank,
+            shape[]; };
 uintptr_t vector_total_bytes(struct g_vec *);
 #endif
