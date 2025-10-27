@@ -10,7 +10,7 @@
 #define Ip f->ip
 #endif
 
-enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, g_ty_vec, };
+enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
 
 typedef
 struct g_string {
@@ -29,14 +29,6 @@ struct g_vec {
             rank,
             shape[]; };
 
-enum g_vec_types {
-  g_vt_u8,  g_vt_i8,
-  g_vt_u16, g_vt_i16,
-  g_vt_u32, g_vt_i32,
-  g_vt_u64, g_vt_i64,
-  g_vt_f8,  g_vt_f16,
-  g_vt_f32, g_vt_f64, };
-#define g_vt_char g_vt_i8
 
 static g_vm_t data;
 #include <stdarg.h>
@@ -44,34 +36,31 @@ static g_vm_t data;
 #define vtxt(_) ((char*)(((struct g_vec*)(_))->shape+1))
 #define len(_) vlen(_)
 #define txt(_) vtxt(_)
-static void g_ini_vec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
-  v->ap = data; v->typ = g_ty_vec; v->type = type; v->rank = rank;
+
+static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
   uintptr_t *shape = v->shape;
+  v->ap = data;
+  v->typ = g_ty_str;
+  v->type = type;
+  v->rank = rank;
+  while (rank--) *shape++ = va_arg(xs, uintptr_t); }
+static void ini_vec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
   va_list xs;
   va_start(xs, rank);
-  while (rank--) *shape++ = va_arg(xs, uintptr_t);
+  ini_vecv(v, type, rank, xs);
   va_end(xs); }
 
 static g_inline void ini_str(str_type *s, uintptr_t len) {
-  s->ap = data,
-    s->typ = g_ty_str,
-    s->type = g_vt_char,
-    s->rank = 1,
-    vlen(s) = len; }
+  ini_vec((struct g_vec*) s, g_vt_char, 1, len); }
 
 static g_inline bool vec_strp(struct g_vec *s) { return s->type == g_vt_char && s->rank == 1; }
 #define cell(_) ((union x*)(_))
 #define typ(_) cell(_)[1].typ
 #define odd(_) ((uintptr_t)(_)&1)
 #define even(_) !odd(_)
-static g_inline bool _g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_vec && vec_strp((void*)_); }
-g_inline bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str; }
-
-static const size_t vt_size[] = {
-  [g_vt_u8]  = 1, [g_vt_i8]  = 1, [g_vt_f8]  = 1,
-  [g_vt_u16] = 2, [g_vt_i16] = 2, [g_vt_f16] = 2,
-  [g_vt_u32] = 4, [g_vt_i32] = 4, [g_vt_f32] = 4,
-  [g_vt_u64] = 8, [g_vt_i64] = 8, [g_vt_f64] = 8, };
+g_inline bool g_strp(intptr_t _) { return
+  even(_) &&
+  typ(_) == g_ty_str && vec_strp((struct g_vec*)_); }
 
 static struct g *g_cons_stack(struct g *f, int i, int j),
                 *g_read1i(struct g*, struct g_in*);
@@ -220,6 +209,24 @@ static g_inline void ini_anon(struct g_symbol *y, uintptr_t code) {
 
 g_inline uintptr_t g_str_len(intptr_t x) { return len(x); }
 g_inline char *g_str_txt(intptr_t x) { return txt(x); }
+
+static const size_t vt_size[] = {
+  [g_vt_u8]  = 1, [g_vt_i8]  = 1, [g_vt_f8]  = 1,
+  [g_vt_u16] = 2, [g_vt_i16] = 2, [g_vt_f16] = 2,
+  [g_vt_u32] = 4, [g_vt_i32] = 4, [g_vt_f32] = 4,
+  [g_vt_u64] = 8, [g_vt_i64] = 8, [g_vt_f64] = 8, };
+
+struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
+  uintptr_t len = vt_size[type];
+  va_list xs;
+  va_start(xs, rank);
+  for (uintptr_t i = rank; i--; len *= va_arg(xs, uintptr_t));
+  va_end(xs);
+  f = g_cells(f, b2w(sizeof(struct g_vec) + rank * sizeof(intptr_t) + len));
+  va_start(xs, rank);
+  ini_vec((void*) f->sp[0], type, rank, xs);
+  va_end(xs);
+  return f; }
 
 struct g *g_strof(struct g *f, const char *cs) {
   uintptr_t bytes = strlen(cs),
@@ -395,34 +402,19 @@ static g_inline void *bump(struct g *f, uintptr_t n) {
   f->hp += n;
   return x; }
 
-static uintptr_t vector_data_bytes(struct g_vec *v) {
-  uintptr_t len = vt_size[v->type],
-            rank = v->rank,
-            *shape = v->shape;
-  while (rank--) len *= *shape++;
-  return len; }
-
-
-static uintptr_t vector_total_bytes(struct g_vec *v) {
-  return sizeof(struct g_vec) + v->rank * sizeof(intptr_t) + vector_data_bytes(v); }
 
 static g_cp_t cp_two, cp_tbl, cp_sym, cp_vec;
 static g_wk_t wk_two, wk_tbl, wk_sym, wk_vec;
 static g_id_t neql, eq_two, eq_vec;
 static g_em_t em_two, em_sym, em_tbl, em_vec;
 static g_xx_t xx_two, xx_tbl, xx_sym, xx_vec;
-static g_cp_t cp_str;
-static g_wk_t wk_str;
-static g_id_t eq_str;
-static g_xx_t xx_str;
-static struct g *em_str(struct g *v, struct g_out *o, intptr_t _);
 
-static g_cp_t *t_cp[] = { [g_ty_vec] = cp_vec, [g_ty_two] = cp_two, [g_ty_sym] = cp_sym, [g_ty_tbl] = cp_tbl, [g_ty_str] = cp_str, };
-static g_wk_t *t_wk[] = { [g_ty_vec] = wk_vec, [g_ty_two] = wk_two, [g_ty_sym] = wk_sym, [g_ty_tbl] = wk_tbl, [g_ty_str] = wk_str, };
-static g_xx_t *t_xx[] = { [g_ty_vec] = xx_vec, [g_ty_two] = xx_two, [g_ty_sym] = xx_sym, [g_ty_tbl] = xx_tbl, [g_ty_str] = xx_str, };
-static g_em_t *t_em[] = { [g_ty_vec] = em_vec, [g_ty_two] = em_two, [g_ty_tbl] = em_tbl, [g_ty_sym] = em_sym, [g_ty_str] = em_str, };
-static g_vm_t *t_ap[] = { [g_ty_vec] = self,   [g_ty_two] = self,   [g_ty_tbl] = self,   [g_ty_sym] = self,   [g_ty_str] = self, };
-static g_id_t *t_id[] = { [g_ty_vec] = eq_vec, [g_ty_two] = eq_two, [g_ty_sym] = neql,   [g_ty_tbl] = neql,   [g_ty_str] = eq_str, };
+static g_cp_t *t_cp[] = { [g_ty_two] = cp_two, [g_ty_sym] = cp_sym, [g_ty_tbl] = cp_tbl, [g_ty_str] = cp_vec, };
+static g_wk_t *t_wk[] = { [g_ty_two] = wk_two, [g_ty_sym] = wk_sym, [g_ty_tbl] = wk_tbl, [g_ty_str] = wk_vec, };
+static g_xx_t *t_xx[] = { [g_ty_two] = xx_two, [g_ty_sym] = xx_sym, [g_ty_tbl] = xx_tbl, [g_ty_str] = xx_vec, };
+static g_em_t *t_em[] = { [g_ty_two] = em_two, [g_ty_tbl] = em_tbl, [g_ty_sym] = em_sym, [g_ty_str] = em_vec, };
+static g_vm_t *t_ap[] = { [g_ty_two] = self,   [g_ty_tbl] = self,   [g_ty_sym] = self,   [g_ty_str] = self, };
+static g_id_t *t_id[] = { [g_ty_two] = eq_two, [g_ty_sym] = neql,   [g_ty_tbl] = neql,   [g_ty_str] = eq_vec, };
 
 
 static uintptr_t hashbs(size_t len, void *_) {
@@ -431,44 +423,27 @@ static uintptr_t hashbs(size_t len, void *_) {
   while (len--) h ^= *bs++, h *= 16777619;
   return h; }
 
-static bool eq_str(struct g *f, intptr_t a, intptr_t b) {
-  return len(a) == len(b) && 0 == strncmp(txt(a), txt(b), len(a)); }
-
-static uintptr_t xx_str(struct g *v, intptr_t _) {
-  return hashbs(len(_), txt(_)); }
+static uintptr_t vector_data_bytes(struct g_vec *v) {
+  uintptr_t len = vt_size[v->type],
+            rank = v->rank,
+            *shape = v->shape;
+  while (rank--) len *= *shape++;
+  return len; }
+uintptr_t vector_total_bytes(struct g_vec *v) {
+  return sizeof(struct g_vec) + v->rank * sizeof(intptr_t) + vector_data_bytes(v); }
 static uintptr_t xx_vec(struct g *f, intptr_t _) {
   struct g_vec *v = (struct g_vec*) _;
   return hashbs(vector_total_bytes(v), v); }
 
-static intptr_t cp_str(struct g *v, intptr_t x, intptr_t *p0, intptr_t *t0) {
-  str_type *src = (str_type*) x;
-  size_t len = sizeof(str_type) + len(src);
-  return (intptr_t) (src->ap = memcpy(bump(v, b2w(len)), src, len)); }
-
 static intptr_t cp_vec(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   struct g_vec *src = (struct g_vec*) x;
-  uintptr_t bytes = vector_total_bytes(src),
-            rank = src->rank,
-            *shape = src->shape,
-            len = vt_size[src->type];
+  uintptr_t bytes = vector_total_bytes(src);
   struct g_vec *dst = bump(f, b2w(bytes));
-  for (uintptr_t i = rank; i--; len *= *shape++);
-  memcpy(dst, src, bytes);
-  return (intptr_t) (src->ap = (g_vm_t*) dst); }
+  src->ap = memcpy(dst, src, bytes);
+  return (intptr_t) dst; }
 
-static void wk_str(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
-  f->cp += str_type_width + b2w(len(x)); }
 static void wk_vec(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   f->cp += b2w(vector_total_bytes((struct g_vec*) x)); }
-
-static struct g *em_str(struct g *v, struct g_out *o, intptr_t _) {
-  size_t len = len(_);
-  const char *text = txt(_);
-  o->putc(o, '"');
-  for (char c; len--; o->putc(o, c))
-    if ((c = *text++) == '\\' || c == '"') o->putc(o, '\\');
-  o->putc(o, '"');
-  return v; }
 
 static struct g *em_vec(struct g *f, struct g_out *o, intptr_t x) {
   struct g_vec *v = (struct g_vec*) x;

@@ -129,4 +129,17 @@ struct g
   *g_cons_r(struct g*);
 uintptr_t g_str_len(intptr_t);
 char *g_str_txt(intptr_t);
+struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...);
+
+enum g_vec_type {
+  g_vt_u8,  g_vt_i8,
+  g_vt_u16, g_vt_i16,
+  g_vt_u32, g_vt_i32,
+  g_vt_u64, g_vt_i64,
+  g_vt_f8,  g_vt_f16,
+  g_vt_f32, g_vt_f64, };
+#define g_vt_char g_vt_i8
+
+struct g_vec;
+uintptr_t vector_total_bytes(struct g_vec *);
 #endif
