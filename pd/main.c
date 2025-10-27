@@ -4,11 +4,51 @@
 #include <stdlib.h>
 #include "pd_api.h"
 #include "font.h"
+#include "cb.h"
 #define Sp f->sp
 #define Hp f->hp
 #define Ip f->ip
 #define NROWS 30
 #define NCOLS 50
+#define base_ref(n) ((intptr_t*)kgl + kgl->len)[-1 - (n)]
+#define cb_size_bytes(r, c) (5 * sizeof(intptr_t) + (r) * (c))
+#define g_default_mode g_mode_life
+#define show_cursor 1
+#define kcb bcb
+#define kpd (K.pd)
+#define kgl (K.g)
+#define bcb ((struct cb*)g_str_txt((intptr_t)(struct g_vec*)base_ref(0)))
+
+enum g_mode {
+  g_mode_life,
+  g_mode_synth,
+  g_mode_draw,
+  N_modes };
+static struct K {
+  PlaydateAPI *pd;
+  struct g *g;
+  PDSynth *synth;
+  PDMenuItem *mode_menu_item;
+  enum g_mode mode;
+  int active_waveform, synth_mode;
+  float synth_time, freq, freq_max, freq_min, vol;
+  struct {
+    PDButtons current, pushed, released; } b;
+} K;
+
+
+static void g_update(void), g_synth_update(void), life_update(void);
+static void g_synth_ini(void), draw_gb(void), g_draw_ini(void), g_synth_ini(void), g_life_ini(void);
+static void g_nop(void) {}
+static const struct {
+  void (*ini)(void);
+  void (*update)(void);
+  void (*fin)(void);
+} modes[N_modes] = {
+  [g_mode_synth] = { g_synth_ini, g_synth_update, g_nop },
+  [g_mode_life] = { g_life_ini, life_update, g_nop },
+  [g_mode_draw] = { g_draw_ini, g_update, g_nop }, };
+
 
 static void reset(PlaydateAPI *pd);
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
@@ -17,99 +57,42 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
     default: }
 	return 0; }
 
+static void get_buttons(void) {
+  kpd->system->getButtonState(&K.b.current, &K.b.pushed, &K.b.released); }
+
+static void draw_char_buffer(struct cb *c, uint8_t font[][8], uint8_t *frame);
+static int update(void *_) {
+  get_buttons();
+  if (K.b.pushed & kButtonUp)
+    modes[K.mode++].fin(),
+    K.mode %= N_modes,
+    modes[K.mode].ini();
+  else if (K.b.pushed & kButtonDown)
+    modes[K.mode].fin(),
+    K.mode = K.mode ? K.mode - 1 : N_modes - 1,
+    modes[K.mode].ini();
+  else {
+    // run the update function for the current mode
+    modes[K.mode].update(); }
+  draw_char_buffer(kcb, cga_8x8, kpd->graphics->getFrame());
+  kpd->graphics->markUpdatedRows(0, LCD_ROWS);
+  return 1; }
+
+static void draw_char_buffer(struct cb *c, uint8_t font[][8], uint8_t *frame) {
+  uint32_t rows = c->rows, cols = c->cols;
+  for (int i = 0; i < rows; i++)
+    for (int j = 0; j < cols; j++)
+      for (uint8_t k = 0, *glyph = font[c->cb[i * cols + j]], g; k < 8; k++)
+        frame[52 * (8 * i + k) + j] = (c->flag & show_cursor) && i == c->row && j == c->col ? ~glyph[k] : glyph[k]; }
+
+
 
 static const SoundWaveform waveforms[] = {
   kWaveformSquare, kWaveformTriangle, kWaveformSine, kWaveformNoise,
   kWaveformSawtooth, kWaveformPOPhase, kWaveformPODigital, kWaveformPOVosim, };
 
-static int g_update(void*), g_synth_update(void*), life_update(void*);
-static void g_synth_ini(void), draw_gb(void), g_draw_ini(void), g_synth_ini(void), g_life_ini(void);
-static void g_nop(void) {}
-
-enum g_mode {
-  g_mode_synth,
-  g_mode_life,
-  g_mode_draw,
-  N_modes };
-
-static const struct {
-  void (*ini)(void);
-  int (*update)(void*);
-  void (*fin)(void);
-} modes[N_modes] = {
-  [g_mode_synth] = { g_synth_ini, g_synth_update, g_nop },
-  [g_mode_life] = { g_life_ini, life_update, g_nop },
-  [g_mode_draw] = { g_draw_ini, g_update, g_nop }, };
 
 
-#define base_ref(n) ((intptr_t*)kgl + kgl->len)[-1 - (n)]
-#define cb_size_bytes(r, c) (5 * sizeof(intptr_t) + (r) * (c))
-#define g_default_mode g_mode_synth
-#define show_cursor 1
-#define kcb bcb
-#define kpd (K.pd)
-#define kgl (K.g)
-#define bcb ((struct cb*)g_str_txt((intptr_t)(struct g_vec*)base_ref(0)))
-struct cb {
-  uintptr_t rows, cols, row, col, flag;
-  uint8_t cb[NROWS * NCOLS]; };
-
-static struct K {
-  PlaydateAPI *pd;
-  struct g *g;
-  PDSynth *synth;
-  PDMenuItem *mode_menu_item;
-  intptr_t g_cb;
-  enum g_mode mode;
-  int active_waveform, synth_mode;
-  float synth_time, freq, freq_max, freq_min, vol;
-  struct {
-    PDButtons current, pushed, released; } b;
-} K;
-
-static void cb_line_feed(struct cb *c) {
-  c->col = 0;
-  c->row++;
-  if (c->row == c->rows) c->row = 0; }
-
-static void cb_put_char(struct cb *c, char i) {
-  c->cb[c->row * c->cols + c->col] = i;
-  c->col++;
-  if (c->col == c->cols) cb_line_feed(c); }
-
-static void put_char(char i) {
-  return cb_put_char(kcb, i); }
-
-void cb_log_n(struct cb *c, uintptr_t n, uintptr_t base) {
-  static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-  uintptr_t d = n % base;
-  if (n) cb_log_n(c, n / base, base);
-  cb_put_char(c, digits[d]); }
-
-void cb_vlogf(struct cb *cb, const char *fmt, va_list xs) {
-  while (*fmt) {
-    char c = *fmt++;
-    if (c != '%') cb_put_char(cb, c);
-    else re:
-      switch (c = *fmt++) {
-      case 0: return;
-      default: cb_put_char(cb, c); break;
-      case 'l': goto re;
-      case 'd': cb_log_n(cb, va_arg(xs, uintptr_t), 10); break;
-      case 'x': cb_log_n(cb, va_arg(xs, uintptr_t), 16); break;
-      case 'o': cb_log_n(cb, va_arg(xs, uintptr_t), 8); break;
-      case 'b': cb_log_n(cb, va_arg(xs, uintptr_t), 2); break; } } }
-
-void k_logf(const char *fmt, ...) {
-  va_list xs;
-  va_start(xs, fmt);
-  cb_vlogf(kcb, fmt, xs);
-  va_end(xs); }
-
-static void cb_fill(struct cb*, uint8_t);
-
-static void get_buttons(void) {
-  kpd->system->getButtonState(&K.b.current, &K.b.pushed, &K.b.released); }
 
 void
   g_fb_set_cursor(int, int);
@@ -129,24 +112,7 @@ static void g_draw_ini(void) {
   kcb->row = kcb->col = 0;
   cb_fill(kcb, 0); }
 
-static void draw_char_buffer(struct cb *c, uint8_t font[][8], uint8_t *frame) {
-  uint32_t rows = c->rows, cols = c->cols;
-  for (int i = 0; i < rows; i++)
-    for (int j = 0; j < cols; j++)
-      for (uint8_t k = 0, *glyph = font[c->cb[i * cols + j]], g; k < 8; k++)
-        frame[52 * (8 * i + k) + j] = (c->flag & show_cursor) && i == c->row && j == c->col ? ~glyph[k] : glyph[k]; }
-
-static int update(void *u) {
-  // run the update function for the current mode
-  int r = modes[K.mode].update(u);
-  draw_char_buffer(kcb, cga_8x8, kpd->graphics->getFrame());
-  kpd->graphics->markUpdatedRows(0, LCD_ROWS);
-  return r; }
-
-
-static int g_update(void *userdata) {
-  kgl = g_pop(g_evals(kgl, "(update 0)"), 1);
-	return 1; }
+static void g_update(void) { kgl = g_pop(g_evals(kgl, "(update 0)"), 1); }
 
 void g_dbg(struct g *f) {
   if (!g_ok(f) || !f) return kpd->system->logToConsole("f@%lx\n", f);
@@ -218,12 +184,6 @@ const char g_init_prog[] = "(,"
  "))))"
  ")";
 
-static void cb_fill(struct cb *c, uint8_t _) {
-  uint32_t rows = c->rows, cols = c->cols;
-  for (uint32_t i = 0; i < rows; i++)
-    for (uint32_t j = 0; j < cols; j++)
-      c->cb[i * cols + j] = _; }
-
 static void g_set_mode(void *ud) {
   int m = kpd->system->getMenuItemValue(K.mode_menu_item);
   if (m != K.mode) modes[K.mode].fin(), modes[K.mode = m].ini(); }
@@ -235,7 +195,7 @@ static void reset(PlaydateAPI *pd) {
   pd->sound->synth->freeSynth(K.synth);
   K.synth = pd->sound->synth->newSynth();
   pd->system->removeAllMenuItems();
-  static const char *options[] = { [g_mode_synth] = "timer", [g_mode_life] = "life", [g_mode_draw] = "draw" };
+  static const char *options[] = { [g_mode_life] = "life", [g_mode_synth] = "timer",  [g_mode_draw] = "draw" };
   K.mode_menu_item = pd->system->addOptionsMenuItem("mode", options, LEN(options), g_set_mode, NULL);
   pd->system->addMenuItem("reset", g_reset_cb, NULL);
   pd->system->addMenuItem("boot", g_boot_cb, NULL);
@@ -245,26 +205,12 @@ static void reset(PlaydateAPI *pd) {
   f = g_defns(f, LEN(defs), defs);
   f = g_evals(f, g_init_prog);
   f = g_pop(f, 1);
-  f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb));
+  f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
   g_dbg(kgl = f);
-  struct g_vec *bv = (struct g_vec*) base_ref(0);
-  bcb->rows = NROWS, bcb->cols = NCOLS;
-  pd->system->logToConsole("sizeof(struct cb) = %d\n", sizeof(struct cb));
-  pd->system->logToConsole("vec@0x%lx:%ld.%ld\n",
-      (long) bv, (long) bv->rank, (long) bv->shape[0]);
-  pd->system->logToConsole("cb@0x%lx:%ldx%ld\n",
-      (long) bcb, (long) bcb->rows, bcb->cols);
+  kcb->rows = NROWS, kcb->cols = NCOLS;
   modes[K.mode = 0].ini();
   pd->system->setUpdateCallback(update, pd); }
 
-static void cb_cur(struct cb *c, uint32_t row, uint32_t col) {
-  c->row = row % c->rows, c->col = col % c->cols; }
-static void cb_mv_cur(struct cb *c, uint32_t dr, uint32_t dc) {
-  cb_cur(c, c->row + dr, c->col + dc); }
-
-static void k_clear(void) {
-  kcb->row = kcb->col = 0;
-  cb_fill(kcb, 0); }
 
 
 static void random_life(void) {
@@ -304,8 +250,7 @@ static void shift_waveform(int n) {
   kpd->sound->synth->setWaveform(K.synth, waveforms[K.active_waveform]); }
 
 
-static int life_update(void *userdata) {
-  get_buttons();
+static void life_update(void) {
   if (K.b.pushed & (kButtonA | kButtonB)) random_life();
   uint8_t db[NROWS][NCOLS];
   for (int i = 0; i < NROWS; i++)
@@ -323,12 +268,10 @@ static int life_update(void *userdata) {
             + (kcb->cb[i1*NCOLS+j] == live_char ? 1 : 0)
             + (kcb->cb[i1*NCOLS+j1] == live_char ? 1 : 0);
       db[i][j] = n == 3 || (n == 2 && kcb->cb[i*NCOLS+j] == live_char) ? live_char : dead_char; }
-  memcpy(kcb->cb, db, sizeof(db));
-  return 1; }
+  memcpy(kcb->cb, db, sizeof(db)); }
 
 
-static int g_synth_update(void* userdata) {
-  get_buttons();
+static void g_synth_update(void) {
   switch (K.synth_mode) {
     case 0:
       if (K.b.pushed & (kButtonA | kButtonB)) K.synth_time = 1, K.synth_mode = 1;
@@ -338,7 +281,7 @@ static int g_synth_update(void* userdata) {
         K.freq *= 1 + kpd->system->getCrankChange() / 360.0f;
         if (K.b.pushed & kButtonLeft) shift_waveform(-1);
         if (K.b.pushed & kButtonRight) shift_waveform(1); }
-      return 1;
+      return;
     case 1:
       if (K.b.pushed & (kButtonA | kButtonB)) K.synth_mode = 2;
       else {
@@ -347,8 +290,8 @@ static int g_synth_update(void* userdata) {
         if (K.synth_time > NROWS * NCOLS) K.synth_time = NROWS * NCOLS;
         cb_cur(kcb, 0, 0);
         cb_fill(kcb, dead_char);
-        for (int i = (int) K.synth_time; i; i--) put_char(live_char); }
-      return 1;
+        for (int i = (int) K.synth_time; i; i--) cb_put_char(kcb, live_char); }
+      return;
     case 2:
       if (K.b.pushed & (kButtonA | kButtonB)) K.synth_mode = 1;
       else {
@@ -356,9 +299,9 @@ static int g_synth_update(void* userdata) {
         if (K.synth_time <= 0) K.synth_mode = 0;
         cb_cur(kcb, 0, 0);
         cb_fill(kcb, dead_char);
-        for (int i = (int) K.synth_time; i; i--) put_char(live_char); }
+        for (int i = (int) K.synth_time; i; i--) cb_put_char(kcb, live_char); }
     default:
-      return 1; } }
+      return; } }
 
 #include <time.h>
 #include <unistd.h>
@@ -372,7 +315,6 @@ g_vm(g_fps) {
   Ip += 1;
   return Continue(); }
 g_vm(g_buttons) { return
-  get_buttons(),
   Sp[0] = g_putnum(K.b.current),
   Ip += 1,
   Continue(); }
@@ -402,4 +344,7 @@ static uint8_t cb_get_glyph(struct cb *cb) {
   return cb->cb[cb->row*cb->cols+cb->col]; }
 g_vm(g_get_glyph) { return Sp[0] = g_putnum(cb_get_glyph(kcb)), Ip += 1, Continue(); }
 g_vm(g_put_glyph) { return cb_put_glyph(kcb, g_getnum(Sp[0])), Ip += 1, Continue(); }
-g_vm(g_clear) { return k_clear(), Ip += 1, Continue(); }
+g_vm(g_clear) {
+  kcb->row = kcb->col = 0;
+  cb_fill(kcb, 0);
+  return Ip += 1, Continue(); }

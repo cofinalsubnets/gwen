@@ -1,19 +1,11 @@
 #include "k.h"
 #include "font.h"
+#include "cb.h"
 #include <stdarg.h>
-
-void g_printf(struct g_out*, const char *fmt, ...) {
-  va_list xs;
-  va_start(xs, fmt);
-  k_vlogf(fmt, xs);
-  va_end(xs); }
-void g_putc(struct g_out*, int c) {
-  k_log_char(c); }
-
-int g_getc(struct g_in*) { return 0; }
-int g_ungetc(struct g_in*, int c) { return c; }
-int g_eof(struct g_in*) { return 1; }
-uintptr_t g_clock(void) { return K.ticks; }
+int rand(void);
+void srand(unsigned int);
+static void random_life(void);
+static void life_update(void);
 
 #define kb_code_lshift 0x2a
 #define kb_code_rshift 0x36
@@ -31,6 +23,26 @@ uintptr_t g_clock(void) { return K.ticks; }
 #define kb_flag_alt (kb_flag_lalt|kb_flag_ralt)
 #define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
+#define kgl (K.g)
+#define base_ref(n) ((intptr_t*)kgl + kgl->len)[-1 - (n)]
+#define bcb ((struct cb*)g_str_txt((intptr_t)(struct g_vec*)base_ref(0)))
+#define kcb bcb
+
+void g_printf(struct g_out*, const char *fmt, ...) {
+  va_list xs;
+  va_start(xs, fmt);
+  cb_vlogf(bcb, fmt, xs);
+  va_end(xs); }
+
+void g_putc(struct g_out*, int c) {
+  k_log_char(c); }
+
+int g_getc(struct g_in*) { return 0; }
+int g_ungetc(struct g_in*, int c) { return c; }
+int g_eof(struct g_in*) { return 1; }
+uintptr_t g_clock(void) { return K.ticks; }
+
+static void draw_char_buffer(g_fb32 *fb, struct cb *c);
 
 uint8_t key_get(void) {
   uint8_t r = K.kb.k;
@@ -103,6 +115,16 @@ void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t f
 void g_fb32_char(g_fb32 *fb, size_t row, size_t col, uint8_t c, uint32_t fg, uint32_t bg) {
   g_fb32_bmp_8x8(fb, row, col, cga_8x8[c], fg, bg); }
 
+#define show_cursor 1
+static void draw_char_buffer(g_fb32 *fb, struct cb *c) {
+  uint32_t rows = c->rows, cols = c->cols;
+  for (uint32_t i = 0; i < rows; i++)
+    for (uint32_t j = 0; j < cols; j++) {
+      uint8_t g = c->cb[i * cols + j];
+      uint32_t fg = 0xffffffff, bg = 0;
+      if ((c->flag & show_cursor) && i == c->row && j == c->col) fg = ~fg, bg = ~bg;
+      g_fb32_char(fb, i*8, j*8, g, fg, bg); } }
+
 void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
   size_t h = fb->height, w = fb->width;
   for (; *msg; msg++) {
@@ -157,6 +179,7 @@ void g_fb32_log_char_c(g_fb32 *fb, char c, uint32_t fg, uint32_t bg) {
   g_fb32_log_c(fb, s, fg, bg); }
 void g_fb32_log_char(g_fb32 *fb, char c) {
   g_fb32_log_char_c(fb, c, 0xffeeddcc, 0); }
+
 void 
   k_log(const char *msg),
   k_log_c(const char *msg, uint32_t fg, uint32_t bg),
@@ -168,43 +191,17 @@ void k_log_c(const char *msg, uint32_t fg, uint32_t bg) {
   k_cur_msg(msg, fg, bg); }
 
 void k_log_char(char c) {
-  char s[2] = {c, 0};
-  k_log(s); }
+  cb_put_char(bcb, c); }
 
 void k_log(const char *msg) {
-  k_log_c(msg, 0xffeeddcc, 0); }
-
-static void k_log_n_r(uintptr_t n, uintptr_t base) {
-  if (n) k_log_n(n, base); }
-
+  cb_log(bcb, msg); }
 void k_log_n(uintptr_t n, uintptr_t base) {
-  uintptr_t dig = n % base;
-  k_log_n_r(n / base, base);
-  const char d[2] = {digits[dig], 0};
-  k_log(d); }
-
-
+  cb_log_n(bcb, n, base); }
 void k_logf(const char *fmt, ...) {
   va_list xs;
   va_start(xs, fmt);
-  k_vlogf(fmt, xs);
+  cb_vlogf(bcb, fmt, xs);
   va_end(xs); }
-
-void k_vlogf(const char *fmt, va_list xs) {
-  while (*fmt) {
-    char c = *fmt++;
-    if (c != '%') k_log_char(c);
-    else re:
-      switch (c = *fmt++) {
-      case 0: return;
-      default: k_log_char(c); break;
-      case 'l': goto re;
-      case 'd': k_log_n(va_arg(xs, uintptr_t), 10); break;
-      case 'x': k_log_n(va_arg(xs, uintptr_t), 16); break;
-      case 'o': k_log_n(va_arg(xs, uintptr_t), 8); break;
-      case 'b': k_log_n(va_arg(xs, uintptr_t), 2); break; } } }
-
-#define g_static_size (1<<20)
 
 __attribute__((used, section(".limine_requests_start")))
 static volatile LIMINE_REQUESTS_START_MARKER;
@@ -247,7 +244,8 @@ void kmain(void) {
         intptr_t dx = x - x0, dy = y - y0;
         if (dx * dx + dy * dy < rad * rad)
           g_fb32_px(&K.fb, y, x, color * (uintptr_t) &K); }
-  k_logf("%dx%dp %dx%dc\n", K.fb.width, K.fb.height, K.fb.width >> 3, K.fb.height >> 3);
+  uintptr_t cols = K.fb.width >> 3, rows = K.fb.height >> 3;
+ // k_logf("%dx%dp %dx%dc\n", K.fb.width, K.fb.height, cols, rows);
 
   // mem init
   if (!memmap_req.response || !hhdm_req.response) for (;;) k_stop();
@@ -258,18 +256,59 @@ void kmain(void) {
            nbs = 0;
   K.free = kgetmem(hhdm, n, rr, &nbs, &nrs);
   K.used = NULL;
-  k_logf("%dK %dR\n", nbs >> 10, nrs);
+//  k_logf("%dK %dR\n", nbs >> 10, nrs);
 
   // lisp init
-  static intptr_t g_static_pool[g_static_size];
-  struct g *f = K.f = g_gc(g_pop(g_evals(g_ini_static(sizeof(g_static_pool), g_static_pool),
+  static intptr_t g_static_pool[1<<23];
+  struct g *f = g_gc(g_pop(g_evals(g_ini_static(sizeof(g_static_pool), g_static_pool),
 #include "boot.h"
   ), 1));
-  k_logf("f@0x%x\n", (uintptr_t) f);
-  if (f && g_ok(f)) k_logf(
-    " pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",
-    f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (intptr_t*) f + f->len - f->sp);
+  f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + rows * cols);
+  K.g = f;
+  if (f && g_ok(f))
+    bcb->rows = rows, bcb->cols = cols,
+    k_logf(
+     "f@0x%x\n pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",
+    (uintptr_t) f, f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (intptr_t*) f + f->len - f->sp);
+  else for (;;) k_stop();
 
+  k_logf("%d ticks ok.\n", K.ticks);
+  srand(K.ticks);
+  random_life();
   // main loop
-  for (k_logf("%d ticks ok.\n", K.ticks);; k_stop())
-    k_log_char(key_get()); }
+  for (;;)
+    life_update(),
+    draw_char_buffer(&K.fb, bcb),
+    k_stop(); }
+
+#define live_char 0xb2
+#define dead_char 0xb0
+static void random_life(void) {
+  uint32_t rows = kcb->rows, cols = kcb->cols;
+  for (uint32_t i = 0; i < rows; i++)
+    for (uint32_t j = 0; j < cols; j++)
+      kcb->cb[i* cols + j] = rand() & 1 ? live_char : dead_char; }
+
+static void life_update(void) {
+  intptr_t rows = bcb->rows, cols = bcb->cols;
+  kgl = g_vec0(kgl, g_vt_u8, 1, rows * cols);
+  if (!g_ok(kgl)) return;
+  uint8_t *db = (uint8_t*) g_str_txt(base_ref(1));
+
+  for (int i = 0; i < rows; i++)
+    for (int j = 0; j < cols; j++) {
+      int i_1 = i-1<0?rows-1:i-1,
+          i1  = i+1==rows?0:i+1,
+          j_1 = j-1<0?cols-1:j-1,
+          j1  = j+1==cols?0:j+1,
+          n = (kcb->cb[i_1 * cols + j_1] == live_char ? 1 : 0)
+            + (kcb->cb[i_1 * cols + j] == live_char ? 1 : 0)
+            + (kcb->cb[i_1 * cols + j1] == live_char ? 1 : 0)
+            + (kcb->cb[i * cols + j_1] == live_char ? 1 : 0)
+            + (kcb->cb[i * cols + j1] == live_char ? 1 : 0)
+            + (kcb->cb[i1*cols+j_1] == live_char ? 1 : 0)
+            + (kcb->cb[i1*cols+j] == live_char ? 1 : 0)
+            + (kcb->cb[i1*cols+j1] == live_char ? 1 : 0);
+      db[i * cols + j] = n == 3 || (n == 2 && kcb->cb[i*cols+j] == live_char) ? live_char : dead_char; }
+  memcpy(kcb->cb, db, rows * cols);
+  kgl = g_pop(kgl, 1); }

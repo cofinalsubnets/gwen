@@ -50,7 +50,7 @@ extern struct k {
     struct mem *next;
     uint8_t _[];
   } *free, *used;
-  struct g *f;
+  struct g *g;
   struct { uint8_t k, f; } kb; } K;
 void k_logf(const char*, ...), k_vlogf(const char*, va_list), k_log_char(char);
 #endif

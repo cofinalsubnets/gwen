@@ -148,4 +148,6 @@ struct g_vec {
             rank,
             shape[]; };
 uintptr_t vector_total_bytes(struct g_vec *);
+#define topof(g) ((intptr_t*)(g) + (g)->len)
+#define topref(g, n) topof(g)[-1-(n)]
 #endif
