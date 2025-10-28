@@ -254,12 +254,12 @@ void kmain(void) {
   K.g = f;
   if (f && g_ok(f))
     bcb->rows = rows, bcb->cols = cols,
-    g_printf(&g_stdout,
+    g_printf(f, &g_stdout,
      "f@0x%x\n pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",
     (uintptr_t) f, f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (intptr_t*) f + f->len - f->sp);
   else for (;;) k_stop();
 
-  g_printf(&g_stdout, "%d ticks ok.\n", K.ticks);
+  g_printf(K.g, &g_stdout, "%d ticks ok.\n", K.ticks);
   srand(K.ticks);
   //random_life();
   // main loop

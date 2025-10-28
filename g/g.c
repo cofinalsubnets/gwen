@@ -102,7 +102,7 @@ static g_inline struct g *g_intern(struct g*f) {
   f = g_have(f, Width(struct g_atom));
   if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
   return f; }
-static void g_putx(struct g*, struct g_out*, intptr_t);
+static struct g*g_putx(struct g*, struct g_out*, intptr_t);
 static g_vm_t g_yield;
 static void *g_libc_malloc(struct g *f, uintptr_t n) { return malloc(n); }
 static void g_libc_free(struct g *f, void *n)        { return free(n); }
@@ -1567,46 +1567,47 @@ static int read_char(struct g_in *i) {
     case '#': case ';': while (!i->eof(i) && (c = i->getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-void g_putn(struct g_out*o, uintptr_t n, uintptr_t base) {
+struct g* g_putn(struct g*f, struct g_out*o, uintptr_t n, uintptr_t base) {
   static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
   uintptr_t d = n % base;
-  if (n / base) g_putn(o, n / base, base);
-  g_putc(o, digits[d]); }
+  if (n / base) f = g_putn(f, o, n / base, base);
+  return g_putc(f, o, digits[d]); }
 
-static void g_putx(struct g *f, struct g_out *o, intptr_t x) {
-  if (odd(x)) g_printf(o, "%d", (uintptr_t) g_getnum(x));
-  else if (!datp(x)) g_printf(o, "#%lx", (long) x);
+static struct g* g_putx(struct g *f, struct g_out *o, intptr_t x) {
+  if (odd(x)) return g_printf(f, o, "%d", (uintptr_t) g_getnum(x));
+  else if (!datp(x)) return g_printf(f, o, "#%lx", (long) x);
   else switch (typ(x)) {
     case g_ty_two:
       if (A(x) == word(f->quote) && twop(B(x))) return
-        o->putc(o,'\''),
+        f = g_putc(f, o,'\''),
         g_putx(f, o, AB(x));
-      for (o->putc(o, '(');; o->putc(o, ' ')) {
-        g_putx(f, o, A(x));
-        if (!twop(x = B(x))) return (void) o->putc(o, ')'); }
+      for (f = g_putc(f, o, '(');; f = g_putc(f, o, ' ')) {
+        f = g_putx(f, o, A(x));
+        if (!twop(x = B(x))) return g_putc(f, o, ')'); }
     case g_ty_tbl: return
-      g_printf(o, "#table:%d/%d@%x",
+      g_printf(f, o, "#table:%d/%d@%x",
           (intptr_t) tbl(x)->len,
           (intptr_t) tbl(x)->cap,
           (intptr_t) x);
     case g_ty_sym: {
       struct g_vec * s = sym(x)->nom;
-      if (s) for (uintptr_t i = 0; i < len(s); o->putc(o, txt(s)[i++]));
-      else g_printf(o, "#sym@%x", (intptr_t) x);
-      return; }
+      if (s) for (uintptr_t i = 0; i < len(s); f = g_putc(f, o, txt(s)[i++]));
+      else f = g_printf(f, o, "#sym@%x", (intptr_t) x);
+      return f; }
     case g_ty_str: default: {
       struct g_vec *v = (struct g_vec*) x;
       if (!vec_strp(v)) {
         uintptr_t rank = v->rank, *shape = v->shape;
-        g_printf(o, "#vec@%x:%d.%d", (intptr_t) x, (intptr_t) v->type, (intptr_t) v->rank);
-        for (uintptr_t i = rank, *j = shape; i--; g_printf(o, ".%d", (intptr_t) *j++)); }
+        f = g_printf(f, o, "#vec@%x:%d.%d", (intptr_t) x, (intptr_t) v->type, (intptr_t) v->rank);
+        for (uintptr_t i = rank, *j = shape; i--; f = g_printf(f, o, ".%d", (intptr_t) *j++)); }
       else {
         uintptr_t len = vlen(v);
         char *text = vtxt(v);
-        o->putc(o, '"');
-        for (char c; len--; o->putc(o, c))
-          if ((c = *text++) == '\\' || c == '"') o->putc(o, '\\');
-        o->putc(o, '"'); } ; } } }
+        f = g_putc(f, o, '"');
+        for (char c; len--; f = g_putc(f, o, c))
+          if ((c = *text++) == '\\' || c == '"') f = g_putc(f, o, '\\');
+        f = g_putc(f, o, '"'); }
+      return f; } } }
 
 
 static g_vm(seek) { return
@@ -1680,7 +1681,7 @@ g_noinline struct g *g_reads(struct g *f, const char*s) {
   struct ti t = {{p_text_getc, p_text_ungetc, p_text_eof}, s, 0};
   return g_readsi(f, (void*) &t); }
 
-void g_write1(struct g *f) { g_putx(f, f->out, f->sp[0]); }
+struct g *g_write1(struct g *f) { return g_putx(f, f->out, f->sp[0]); }
 struct g *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
 
 struct g *g_defns(struct g*f, uintptr_t len, struct g_def *defs) {
@@ -1735,23 +1736,27 @@ static g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
     f = pull(f, &c, 0));
   return f; }
 
-void g_putc(struct g_out *o, int c) { o->putc(o, c); }
-static void gvprintf(struct g_out*o, const char *fmt, va_list xs) {
+g_inline struct g*g_putc(struct g*f, struct g_out *o, int c) { 
+  return o->putc(o, c), f; }
+
+static struct g* gvprintf(struct g*f, struct g_out*o, const char *fmt, va_list xs) {
   while (*fmt) {
     char c = *fmt++;
-    if (c != '%') g_putc(o, c);
+    if (c != '%') f = g_putc(f, o, c);
     else re:
       switch (c = *fmt++) {
-      case 0: return;
-      default: g_putc(o, c); break;
+      case 0: return f;
       case 'l': goto re;
-      case 'd': g_putn(o, va_arg(xs, uintptr_t), 10); break;
-      case 'x': g_putn(o, va_arg(xs, uintptr_t), 16); break;
-      case 'o': g_putn(o, va_arg(xs, uintptr_t), 8); break;
-      case 'b': g_putn(o, va_arg(xs, uintptr_t), 2); break; } } }
+      default: f = g_putc(f, o, c); break;
+      case 'd': f = g_putn(f, o, va_arg(xs, uintptr_t), 10); break;
+      case 'x': f = g_putn(f, o, va_arg(xs, uintptr_t), 16); break;
+      case 'o': f = g_putn(f, o, va_arg(xs, uintptr_t), 8); break;
+      case 'b': f = g_putn(f, o, va_arg(xs, uintptr_t), 2); break; } }
+  return f; }
 
-void g_printf(struct g_out *o, const char*fmt, ...) {
+struct g*g_printf(struct g *f, struct g_out *o, const char*fmt, ...) {
   va_list xs;
   va_start(xs, fmt);
-  gvprintf(o, fmt, xs);
-  va_end(xs); }
+  f = gvprintf(f, o, fmt, xs);
+  va_end(xs);
+  return f; }

@@ -113,9 +113,7 @@ int g_getc(struct g_in*),
     strncmp(const char*, const char*, size_t),
     memcmp(const void*, const void*, size_t);
 void g_stdout_putc(struct g_out *o, int c);
-void g_printf(struct g_out*, const char*, ...),
-     g_putc(struct g_out*, int),
-     g_putn(struct g_out*, uintptr_t, uintptr_t),
+void
      *malloc(size_t), free(void*),
      *memcpy(void *restrict, const void*restrict, size_t),
      *memset(void*, int, size_t);
@@ -132,8 +130,11 @@ uintptr_t g_fixed_size(enum g_vec_type),
           g_str_len(intptr_t),
           vector_total_bytes(struct g_vec *);
 
-void g_write1(struct g*);
+struct g *g_printf(struct g*, struct g_out*, const char*, ...),
+     *g_putc(struct g*, struct g_out*, int),
+     *g_putn(struct g*, struct g_out*, uintptr_t, uintptr_t);
 struct g
+  *g_write1(struct g*),
   *g_eval(struct g*),
   *g_read1i(struct g*f, struct g_in*),
   *g_readsi(struct g*, struct g_in*),
@@ -161,5 +162,5 @@ static g_inline struct g *g_evals(struct g *f, const char *s) { return
   f = g_ok(f) ? g_push(f, 3, g_nil, f->quote, g_nil) : f,
   g_eval(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_reads(f, s)))))); }
 static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, f->in); }
-#define g_log1(f) (g_write1(f),g_putc(f->out, '\n'))
+#define g_log1(f) (g_write1(f),g_putc(f, f->out, '\n'))
 #endif

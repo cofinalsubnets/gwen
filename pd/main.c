@@ -119,6 +119,7 @@ static const char boot[] =
 
 
 void g_stdout_putc(struct g_out *o, int c) {
+
   if (kgl) cb_put_char(kcb, c); }
 
 static void g_update(void) {
@@ -196,24 +197,26 @@ const char g_init_prog[] = "(,"
  ")";
 static void g_boot_cb(void *u) { kgl = g_pop(g_evals(kgl, boot), 1); }
 
-static void ggvprintf(struct g_out*o, const char *fmt, va_list xs) {
+static struct g *ggvprintf(struct g*f, struct g_out*o, const char *fmt, va_list xs) {
   while (*fmt) {
     char c = *fmt++;
-    if (c != '%') g_putc(o, c);
+    if (c != '%') f = g_putc(f, o, c);
     else re:
       switch (c = *fmt++) {
-      case 0: return;
-      default: g_putc(o, c); break;
+      case 0: return f;
+      default: f = g_putc(f, o, c); break;
       case 'l': goto re;
-      case 'd': g_putn(o, va_arg(xs, uintptr_t), 10); break;
-      case 'x': g_putn(o, va_arg(xs, uintptr_t), 16); break;
-      case 'o': g_putn(o, va_arg(xs, uintptr_t), 8); break;
-      case 'b': g_putn(o, va_arg(xs, uintptr_t), 2); break; } } }
-void gg_printf(struct g_out*o, const char*fmt, ...) {
+      case 'd': f = g_putn(f, o, va_arg(xs, uintptr_t), 10); break;
+      case 'x': f = g_putn(f, o, va_arg(xs, uintptr_t), 16); break;
+      case 'o': f = g_putn(f, o, va_arg(xs, uintptr_t), 8); break;
+      case 'b': f = g_putn(f, o, va_arg(xs, uintptr_t), 2); break; } }
+  return f; }
+struct g*gg_printf(struct g*f, struct g_out*o, const char*fmt, ...) {
   va_list xs;
   va_start(xs, fmt);
-  ggvprintf(o, fmt, xs);
-  va_end(xs); }
+  f = ggvprintf(f, o, fmt, xs);
+  va_end(xs);
+  return f; }
 static void g_draw_ini(void) {
   cb_fill(kcb, 0);
   cb_cur(kcb, 0, 0);
@@ -225,7 +228,7 @@ static void g_draw_ini(void) {
     allocd = f->hp - (intptr_t*) f,
     stackd = (intptr_t*) f + f->len - f->sp;
 
-  gg_printf(&g_stdout, "\nf@%x\n pool@%x\n len=%d\n allocd=%d\n stackd=%d\n",
+  f = gg_printf(f, &g_stdout, "\nf@%x\n pool@%x\n len=%d\n allocd=%d\n stackd=%d\n",
    (uintptr_t)f,   (uintptr_t)f->pool,   (uintptr_t) f->len,      (uintptr_t) allocd,      (uintptr_t) stackd); }
 static void reset(PlaydateAPI *pd) {
   kpd = pd;
