@@ -312,14 +312,15 @@ void kmain(void) {
   mem_init(&K);
   lisp_init(&K);
   cputn(K.ticks, 10, yellow);
-  cputs(" ticks ok\n", yellow);
+  cputs(" ticks \x01\n", yellow);
+
   srand(K.ticks);
   // main loop
   for (;;) {
     cb_fill(gcb(K.g), 0);
     cb_cur(gcb(K.g), K.fb.cur_y, K.fb.cur_x);
     k_evals(
-      "(puts\"\x01 gwen lisp \")(putn(clock 0)10)(puts\"\n\")"
+      "(puts\"\x02 gwen lisp \")(putn(clock 0)10)(puts\"\n\")"
       "(: i(sysinfo 0)f(A i)pool(AB i)len(A(BB i))allocd(AB(BB i))stackd(A(BB(BB i)))"
      " (,"
       "(puts\"f@\")(putn f 16)"
