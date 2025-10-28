@@ -13,13 +13,16 @@
 #define Ip f->ip
 #define NROWS 30
 #define NCOLS 50
-#define base_ref(n) ((intptr_t*)kgl + kgl->len)[-1 - (n)]
 #define cb_size_bytes(r, c) (5 * sizeof(intptr_t) + (r) * (c))
 #define show_cursor 1
-#define kcb bcb
 #define kpd (K.pd)
 #define kgl (K.g)
+#define base_ref(n) topref(kgl, n)
 #define bcb ((struct cb*)g_str_txt((intptr_t)(struct g_vec*)base_ref(0)))
+#define kcb bcb
+#define cb_slot(f) (f)->v[7]
+#define _jcb(f) ((struct cb*)cb_slot(f))
+#define jcb _jcb(kgl)
 
 struct mode {
   void (*ini)(void),
@@ -29,13 +32,13 @@ struct mode {
   intptr_t data[]; };
 static struct mode
   _synth, _log, _life;
-static void g_update(void), g_synth_update(void), g_life_update(void);
-static void g_synth_ini(void), draw_gb(void), g_draw_ini(void), g_synth_ini(void), g_life_ini(void);
+static void g_log_update(void), g_synth_update(void), g_life_update(void);
+static void g_synth_ini(void), draw_gb(void), g_log_ini(void), g_synth_ini(void), g_life_ini(void);
 static void g_nop(void) {}
 static struct  mode
  _life = { g_life_ini, g_life_update, g_nop, &_log, &_synth},
  _synth = { g_synth_ini, g_synth_update, g_nop, &_life, &_log },
- _log = { g_draw_ini, g_update, g_nop, &_synth, &_life};
+ _log = { g_log_ini, g_log_update, g_nop, &_synth, &_life};
 
 struct mode *K_mode = &_life;
 enum g_mode {
@@ -112,29 +115,41 @@ void
 static g_vm_t g_buttons, g_cursor_h, g_cursor_v, theta, g_get_glyph, g_put_glyph, g_fps, g_clear;
 static void random_life(void);
 
-static const char boot[] =
-#include "boot.h"
-;
 
 
 
-void g_stdout_putc(struct g_out *o, int c) {
+struct g*g_stdout_putc(struct g*f, struct g_out *o, int c) { return
+  kgl = f,
+  cb_put_char(kcb, c),
+  f; }
 
-  if (kgl) cb_put_char(kcb, c); }
 
-static void g_update(void) {
-//  cb_cur(kcb, 0, 0);
-//  kgl = g_pop(g_evals(kgl, "(update 0)"), 1);
-}
+static void g_log_update(void) {
+  cb_fill(kcb, 0);
+  cb_cur(kcb, 0, 0);
+  kgl = g_pop(g_evals(kgl,
+    "(: (AB x) (A (B x)) (BB x) (B (B x))"
+       "i (sysinfo 0) f (A i) pool (AB i) len (A (BB i)) allocd (AB (BB i)) stackd (A (BB (BB i)))"
+   " (,"
+    "(puts \"\x01 gwen lisp\n\nf@\")"
+    "(putn f 16)"
+    "(puts\"\n pool=\") (putn pool 16)" 
+    "(puts\"\n len=\") (putn len 10)"
+    "(puts\"\n allocd=\") (putn allocd 10)"
+    "(puts\"\n stackd=\") (putn stackd 10)"
+    "(puts \"\n\ncrank: \") (putn (crank_angle 0) 10) (puts \"\xf8\")"
+    "(puts \"\nbuttons: \") (putn (get_buttons 0) 2)"
+    ")"
+    ")"
+    ), 1); }
 
-void g_dbg(struct g *f) {
-  if (!g_ok(f) || !f) return kpd->system->logToConsole("f@%lx\n", f);
-  intptr_t
-    allocd = f->hp - (intptr_t*) f,
-    stackd = (intptr_t*) f + f->len - f->sp;
-  kpd->system->logToConsole("f@%lx\n pool@%lx\n len=%ld\n allocd=%ld\n stackd=%ld\n",
-                            f,   f->pool,   f->len,      allocd,      stackd); }
 
+static g_vm(crank_angle) {
+  int d = kpd->system->isCrankDocked();
+  float a = kpd->system->getCrankAngle();
+  Sp[0] = d ? g_nil : g_putnum((int)a%360);
+  Ip += 1;
+  return Continue(); }
 static g_vm(fb_get) {
   size_t row = g_getnum(Sp[0]),
          col = g_getnum(Sp[1]);
@@ -160,14 +175,10 @@ static union x
   bif_clear[] = {{g_clear}, {ret0}},
   bif_buttons[] = {{g_buttons}, {ret0}},
   bif_fps[] = {{g_fps}, {ret0}},
+  bif_crank_angle[] = {{crank_angle}, {ret0}},
   bif_fb_get[] = { {curry}, {.x = g_putnum(2)}, {fb_get}, {ret0}},
   bif_fb_put[] = { {curry}, {.x = g_putnum(3)}, {fb_put}, {ret0}};
 
-
-static void *gg_malloc(struct g *f, size_t n) { return
-  kpd->system->realloc(NULL, n); }
-static void gg_free(struct g *f, void*x) {
-  kpd->system->realloc(x, 0); }
 
 static struct g_def defs[] = {
   {"cursor_h", bif_cur_h},
@@ -179,6 +190,7 @@ static struct g_def defs[] = {
   {"fb_put", bif_fb_put},
   {"fb_get", bif_fb_get},
   {"get_fps", bif_fps},
+  {"crank_angle", bif_crank_angle},
   {"get_buttons", bif_buttons}, };
 
 const char g_init_prog[] = "(,"
@@ -195,7 +207,6 @@ const char g_init_prog[] = "(,"
  ")"
  "))))"
  ")";
-static void g_boot_cb(void *u) { kgl = g_pop(g_evals(kgl, boot), 1); }
 
 static struct g *ggvprintf(struct g*f, struct g_out*o, const char *fmt, va_list xs) {
   while (*fmt) {
@@ -217,37 +228,32 @@ struct g*gg_printf(struct g*f, struct g_out*o, const char*fmt, ...) {
   f = ggvprintf(f, o, fmt, xs);
   va_end(xs);
   return f; }
-static void g_draw_ini(void) {
-  cb_fill(kcb, 0);
-  cb_cur(kcb, 0, 0);
-  kcb->flag |= show_cursor;
-  struct g *f = kgl;
-  f = g_pop(g_evals(f, "(puts \"\x01 gwen lisp\n\")"), 1);
-  kgl = f;
-  intptr_t
-    allocd = f->hp - (intptr_t*) f,
-    stackd = (intptr_t*) f + f->len - f->sp;
-
-  f = gg_printf(f, &g_stdout, "\nf@%x\n pool@%x\n len=%d\n allocd=%d\n stackd=%d\n",
-   (uintptr_t)f,   (uintptr_t)f->pool,   (uintptr_t) f->len,      (uintptr_t) allocd,      (uintptr_t) stackd); }
+static void g_log_ini(void) { kcb->flag |= show_cursor; }
 static void reset(PlaydateAPI *pd) {
   kpd = pd;
   K_mode->fin();
   pd->sound->synth->freeSynth(K.synth);
   K.synth = pd->sound->synth->newSynth();
   pd->system->removeAllMenuItems();
-  pd->system->addMenuItem("boot", g_boot_cb, NULL);
-  g_fin(kgl);
-  struct g *f;
-  f = g_ini_dynamic(gg_malloc, gg_free);
+
+  static intptr_t g_static_pool[1<<20];
+  struct g*f = g_ini_static(sizeof(g_static_pool), g_static_pool);
   f = g_defns(f, LEN(defs), defs);
   f = g_pop(g_evals(f, g_init_prog), 1);
   f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
-//  f = g_pop(g_evals(f, boot), 1); // boot XXX crashes real playdate
+  //if (g_ok(f)) cb_slot(f) = *f->sp++;
+
+/*
+  f = g_pop(g_evals(f, 
+        "(: t0 (clock 0))"
+#include "boot.h"
+        "(: t1 (clock 0))"
+        ), 1); // boot XXX crashes real playdate
+*/
   kgl = f;
   kcb->rows = NROWS, kcb->cols = NCOLS;
 
-  (K_mode = &_life)->ini(); }
+  (K_mode = &_log)->ini(); }
 
 
 
@@ -325,7 +331,7 @@ static void g_synth_update(void) {
       if (K.b.pushed & (kButtonA | kButtonB)) K.synth_mode = 2;
       else {
         K.synth_time *= (1 + 11 * kpd->system->getCrankChange() / 360.0f);
-        if (K.synth_time <= 0) K.synth_time = 0.01f;
+        if (K.synth_time < 0.1f) K.synth_time = 0.1f;
         if (K.synth_time > NROWS * NCOLS) K.synth_time = NROWS * NCOLS;
         cb_cur(kcb, 0, 0);
         cb_fill(kcb, 0);

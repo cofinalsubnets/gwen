@@ -34,8 +34,7 @@
       (? (p a) (X (X a (A m)) (B m))
                (X (A m) (X a (B m))))))
      (.. x) (, (. x) (putc 10) x)
-     (llen l) (? (twop l) (+ 1 (llen (B l))))
-     (puts s) ((: (f n l) (? (= n l) s (, (putc (sget s n)) (f (+ n 1) l)))) 0 (slen s)))
+     (llen l) (? (twop l) (+ 1 (llen (B l)))))
 
   (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
   (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))

@@ -103,7 +103,7 @@ static g_inline struct g *g_intern(struct g*f) {
   if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
   return f; }
 static struct g*g_putx(struct g*, struct g_out*, intptr_t);
-static g_vm_t g_yield;
+static g_vm_t g_yield, sysinfo;
 static void *g_libc_malloc(struct g *f, uintptr_t n) { return malloc(n); }
 static void g_libc_free(struct g *f, void *n)        { return free(n); }
 static void *g_static_malloc(struct g *f, size_t n)  { return NULL; }
@@ -1292,7 +1292,6 @@ static g_inline bool eql(struct g *f, intptr_t a, intptr_t b) {
 
 
 
-#define _gc_copy_(g, x, p0, t0) (void*) gc_copy(g, (intptr_t) (x), p0, t0)
 static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
   memcpy(g, f, sizeof(struct g));
   uintptr_t len0 = f->len;
@@ -1308,9 +1307,9 @@ static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f
   g->sp = sp1;
   g->hp = g->cp = g->end;
   g->symbols = 0;
-#define g_vars(_) _(ip) _(dict) _(macro) _(quote) _(begin) _(let) _(cond) _(lambda)
-#define g_copy_var(_) g->_ = _gc_copy_(g, g->_, p0, t0);
-  g_vars(g_copy_var);
+  g->ip = cell(gc_copy(g, word(g->ip), p0, t0));
+  for (uintptr_t i = 0; i < g_nvars; i++)
+    g->v[i] = gc_copy(g, g->v[i], p0, t0);
   for (intptr_t n = 0; n < h; n++)
     sp1[n] = gc_copy(g, sp0[n], p0, t0);
   for (struct g_mem_root *s = g->safe; s; s = s->next)
@@ -1450,7 +1449,35 @@ static g_vm(nullp) {
   return Continue(); }
 
 static g_vm(prc) {
-  f->out->putc(f->out, g_getnum(*Sp));
+  f = g_putc(f, f->out, g_getnum(*Sp));
+  Ip += 1;
+  return Continue(); }
+
+static g_vm(sysinfo) {
+  const uintptr_t req = 5 * Width(struct g_pair);
+  Have(req);
+  struct g_pair *si = (struct g_pair*) Hp;
+  Hp += req;
+  Sp[0] = word(si);
+  ini_pair(si, g_putnum(f), word(si + 1));
+  ini_pair(si + 1, g_putnum(f->pool), word(si + 2));
+  ini_pair(si + 2, g_putnum(f->len), word(si + 3));
+  ini_pair(si + 3, g_putnum(Hp - (intptr_t*) f), word(si + 4));
+  ini_pair(si + 4, g_putnum(topof(f) - Sp), g_nil);
+  Ip += 1;
+  return Continue(); }
+
+static g_vm(putn) {
+  uintptr_t n = g_getnum(Sp[0]), b = g_getnum(Sp[1]);
+  f = g_putn(f, f->out, n, b);
+  Sp[1] = Sp[0];
+  Sp += 1;
+  Ip += 1;
+  return Continue(); }
+static g_vm(g_puts) {
+  if (strp(Sp[0])) {
+    struct g_vec *s = (struct g_vec*) Sp[0];
+    for (uintptr_t i = 0; i < len(s); f = g_putc(f, f->out, txt(s)[i++])); }
   Ip += 1;
   return Continue(); }
 
@@ -1480,7 +1507,9 @@ static g_vm(read0) {
   _(bif_cons, "X", S2(cons)) _(bif_car, "A", S1(car)) _(bif_cdr, "B", S1(cdr)) \
   _(bif_sget, "sget", S2(sget)) _(bif_ssub, "ssub", S3(ssub)) _(bif_slen, "slen", S1(slen)) _(bif_scat, "scat", S2(scat)) \
   _(bif_dot, ".", S1(dot)) _(bif_read, "read", S1(read0)) _(bif_putc, "putc", S1(prc))\
+  _(bif_prn, "putn", S2(putn)) _(bif_puts, "puts", S1(g_puts))\
   _(bif_sym, "sym", S1(gensym)) _(bif_nom, "nom", S1(symnom))\
+  _(bif_addr, "sysinfo", S1(sysinfo))\
   _(bif_thd, "thd", S1(thda)) _(bif_peek, "peek", S1(peek)) _(bif_poke, "poke", S2(poke)) _(bif_trim, "trim", S1(trim)) _(bif_seek, "seek", S2(seek)) \
   _(bif_tnew, "tnew", S1(tnew)) _(bif_tkeys, "tkeys", S1(tkeys)) _(bif_tlen, "tlen", S1(tlen)) _(bif_tset, "tset", S3(tset)) _(bif_tget, "tget", S3(tget)) _(bif_tdel, "tdel", S3(tdel))\
   _(bif_twop, "twop", S1(pairp)) _(bif_strp, "strp", S1(stringp)) _(bif_symp, "symp", S1(symbolp)) _(bif_nump, "nump", S1(fixnump)) _(bif_nilp, "nilp", S1(nullp))\
@@ -1737,7 +1766,7 @@ static g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
   return f; }
 
 g_inline struct g*g_putc(struct g*f, struct g_out *o, int c) { 
-  return o->putc(o, c), f; }
+  return o->putc(f, o, c); }
 
 static struct g* gvprintf(struct g*f, struct g_out*o, const char *fmt, va_list xs) {
   while (*fmt) {

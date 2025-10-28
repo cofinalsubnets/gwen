@@ -62,23 +62,29 @@ struct g {
         (*eof)(struct g_in*);
   } *in;                                 // 10
   struct g_out {
-    void (*putc)(struct g_out*, int);
+    struct g *(*putc)(struct g*, struct g_out*, int);
   } *out,                                // 11
     *err;                                // 12
-  struct g_table {
-    g_vm_t *ap;
-    intptr_t typ;
-    uintptr_t len, cap;
-    struct entry { intptr_t key, val; struct entry *next; } **tab;
-  } *dict,                               // 13
-    *macro;                              // 14
-  struct g_atom *quote,                  // 15
-                  *begin,                // 16
-                  *let,                  // 17
-                  *cond,                 // 18
-                  *lambda;               // 19
+  union {
+#define g_nvars 16
+    intptr_t v[g_nvars];
+    struct {
+      struct g_table {
+        g_vm_t *ap;
+        intptr_t typ;
+        uintptr_t len, cap;
+        struct entry { intptr_t key, val; struct entry *next; } **tab;
+      } *dict,                           // 13
+        *macro;                          // 14
+      struct g_atom *quote,              // 15
+                    *begin,            // 16
+                    *let,              // 17
+                    *cond,             // 18
+                    *lambda;           // 19
+      intptr_t u[]; }; };
   intptr_t end[]; };                     // 20 end of struct == initial heap pointer
 
+_Static_assert(sizeof(struct g) == (13 + g_nvars) * sizeof(intptr_t));
 
 
 struct g_def {
@@ -112,7 +118,7 @@ int g_getc(struct g_in*),
     g_eof(struct g_in*),
     strncmp(const char*, const char*, size_t),
     memcmp(const void*, const void*, size_t);
-void g_stdout_putc(struct g_out *o, int c);
+struct g*g_stdout_putc(struct g*,struct g_out *o, int c);
 void
      *malloc(size_t), free(void*),
      *memcpy(void *restrict, const void*restrict, size_t),

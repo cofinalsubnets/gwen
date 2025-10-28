@@ -28,8 +28,10 @@ static void life_update(void);
 #define bcb ((struct cb*)g_str_txt((intptr_t)(struct g_vec*)base_ref(0)))
 #define kcb bcb
 
-void g_stdout_putc(struct g_out*, int c) {
-  if (kgl) k_log_char(c); }
+struct g*g_stdout_putc(struct g*f, struct g_out*, int c) { return
+  kgl = f,
+  k_log_char(c),
+  f; }
 
 int g_getc(struct g_in*) { return 0; }
 int g_ungetc(struct g_in*, int c) { return c; }
@@ -252,14 +254,23 @@ void kmain(void) {
   ), 1);
   f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + rows * cols);
   K.g = f;
-  if (f && g_ok(f))
-    bcb->rows = rows, bcb->cols = cols,
-    g_printf(f, &g_stdout,
-     "f@0x%x\n pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",
-    (uintptr_t) f, f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (intptr_t*) f + f->len - f->sp);
+  if (f && g_ok(f)) bcb->rows = rows, bcb->cols = cols;
   else for (;;) k_stop();
 
-  g_printf(K.g, &g_stdout, "%d ticks ok.\n", K.ticks);
+  f = g_evals(f, 
+    "(puts \"\x01 gwen lisp \")"
+   "(putn (clock 0) 10) (puts \" ticks ok\n\n\")"
+    "(: i (sysinfo 0) f (A i) pool (AB i) len (A (BB i)) allocd (AB (BB i)) stackd (A (BB (BB i)))"
+   " (,"
+    "(puts \"f@\") (putn f 16)"
+    "(puts\"\n pool=\") (putn pool 16)" 
+    "(puts\"\n len=\") (putn len 10)"
+    "(puts\"\n allocd=\") (putn allocd 10)"
+    "(puts\"\n stackd=\") (putn stackd 10)"
+    "(puts \"\n\")"
+    ")"
+    ")");
+
   srand(K.ticks);
   //random_life();
   // main loop
