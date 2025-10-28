@@ -16,6 +16,9 @@
 #define g_vm(n, ...) struct g *n(struct g *f, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, ##__VA_ARGS__)
 #define Continue() f
+#define Hp f->hp
+#define Sp f->sp
+#define Ip f->ip
 #endif
 #define g_core_of(f) ((struct g*)((intptr_t)(f)&~(sizeof(intptr_t)-1)))
 #define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))

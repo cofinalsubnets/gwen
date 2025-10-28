@@ -46,9 +46,6 @@ g_inline bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str && vec_s
 #define g_status_yield g_status_eof
 #define Pack(f) ((void)0)
 #define Unpack(f) ((void)0)
-#define Hp f->hp
-#define Sp f->sp
-#define Ip f->ip
 #endif
 #define symp g_symp
 #define dict_of(_) (_)->dict
