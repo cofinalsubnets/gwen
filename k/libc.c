@@ -53,9 +53,10 @@ void *memchr(const void *s, int c, size_t n) {
   return NULL; }
 
 
-const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 static const char spaces[] = " \n\t\v\r\f";
 
+#define LEN(_) (sizeof(_)/sizeof(*_))
 int isspace( int c ) {
   for (long unsigned int i = 0; i < LEN(spaces); i++)
     if (c == spaces[i]) return 1;

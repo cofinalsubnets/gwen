@@ -59,19 +59,19 @@ struct g {
   union { uintptr_t t0; intptr_t *cp; }; // 7 copy pointer / timestamp
   void *(*malloc)(struct g*, size_t),    // 8
        (*free)(struct g*, void*);        // 9
-  struct g_in {
-    int (*getc)(struct g_in*),
-        (*ungetc)(struct g_in*, int),
-        (*eof)(struct g_in*);
-  } *in;                                 // 10
-  struct g_out {
-    struct g *(*putc)(struct g*, struct g_out*, int);
-  } *out,                                // 11
-    *err;                                // 12
-  union {
 #define g_nvars 16
+  union {
     intptr_t v[g_nvars];
     struct {
+      struct g_in {
+        int (*getc)(struct g_in*),
+            (*ungetc)(struct g_in*, int),
+            (*eof)(struct g_in*);
+      } *in;                                 // 10
+      struct g_out {
+        struct g *(*putc)(struct g*, struct g_out*, int);
+      } *out,                                // 11
+        *err;                                // 12
       struct g_table {
         g_vm_t *ap;
         intptr_t typ;
@@ -87,7 +87,7 @@ struct g {
       intptr_t u[]; }; };
   intptr_t end[]; };                     // 20 end of struct == initial heap pointer
 
-_Static_assert(sizeof(struct g) == (13 + g_nvars) * sizeof(intptr_t));
+_Static_assert(sizeof(struct g) == (10 + g_nvars) * sizeof(intptr_t));
 
 
 struct g_def {

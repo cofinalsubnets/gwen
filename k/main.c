@@ -1,11 +1,64 @@
-#include "k.h"
+#include "limine/limine.h"
+#include "g.h"
+#include <stdarg.h>
+#include <limits.h>
+void k_reset(void), arch_init(void);
+uint8_t key_get(void);
+
+static g_inline void k_stop(void) { asm volatile (
+#if defined (__x86_64__)
+  "hlt"
+#elif defined (__aarch64__) || defined (__riscv)
+  "wfi"
+#elif defined (__loongarch64)
+  "idle 0"
+#endif
+  ); }
+
+typedef struct g_fb32 {
+  volatile uint32_t *_;
+  uint16_t width, height, pitch, cur_x, cur_y; } g_fb32;
+
+typedef struct g_cb {
+  struct { uint8_t c0, c1, rgb[2][3]; } *cb;
+  uint16_t rows, cols, cx, cy; } g_cb;
+
+void
+  *malloc(size_t),
+  free(void*),
+  g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px),
+  g_fb32_ini(g_fb32*, uint32_t *_, size_t width, size_t height, size_t pitch),
+  g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg);
+void
+  g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg),
+  k_cur_msg(const char *msg, uint32_t fg, uint32_t bg);
+
+extern struct k {
+  uint64_t ticks;
+  g_cb cb;
+  g_fb32 fb;
+  struct mem {
+    uintptr_t len;
+    struct mem *next;
+    uint8_t _[];
+  } *free, *used;
+  struct g *g;
+  struct { uint8_t k, f; } kb; } K;
+void k_logf(const char*, ...), k_vlogf(const char*, va_list), k_log_char(char);
 #include "font.h"
 #include "cb.h"
 #include <stdarg.h>
+__attribute__((used, section(".limine_requests_start")))
+static volatile LIMINE_REQUESTS_START_MARKER;
+#define _L __attribute__((used, section(".limine_requests"))) static volatile
+_L LIMINE_BASE_REVISION(3);
+_L struct limine_memmap_request memmap_req = { .id = LIMINE_MEMMAP_REQUEST, .revision = 0 };
+_L struct limine_hhdm_request hhdm_req = { .id = LIMINE_HHDM_REQUEST, .revision = 0 };
+_L struct limine_framebuffer_request fb_req = { .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0 };
+__attribute__((used, section(".limine_requests_end")))
+static volatile LIMINE_REQUESTS_END_MARKER;
 int rand(void);
 void srand(unsigned int);
-static void random_life(void);
-static void life_update(void);
 
 #define kb_code_lshift 0x2a
 #define kb_code_rshift 0x36
@@ -23,14 +76,12 @@ static void life_update(void);
 #define kb_flag_alt (kb_flag_lalt|kb_flag_ralt)
 #define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
-#define kgl (K.g)
-#define base_ref(n) ((intptr_t*)kgl + kgl->len)[-1 - (n)]
-#define bcb ((struct cb*)g_str_txt((intptr_t)(struct g_vec*)base_ref(0)))
-#define kcb bcb
+#define gcb(f) ((struct cb*)g_str_txt((f)->u[0]))
+#define kcb gcb(K.g)
 
 struct g*g_stdout_putc(struct g*f, struct g_out*, int c) { return
-  kgl = f,
-  k_log_char(c),
+  K.g = f,
+  cb_put_char(gcb(f), c),
   f; }
 
 int g_getc(struct g_in*) { return 0; }
@@ -117,9 +168,10 @@ static void draw_char_buffer(g_fb32 *fb, struct cb *c) {
   for (uint32_t i = 0; i < rows; i++)
     for (uint32_t j = 0; j < cols; j++) {
       uint8_t g = c->cb[i * cols + j];
-      uint32_t fg = 0xffffffff, bg = 0;
-      if ((c->flag & show_cursor) && i == c->row && j == c->col) fg = ~fg, bg = ~bg;
-      g_fb32_char(fb, i*8, j*8, g, fg, bg); } }
+      if (g) {
+        uint32_t fg = 0xffffffff, bg = 0;
+        if ((c->flag & show_cursor) && i == c->row && j == c->col) fg = ~fg, bg = ~bg;
+        g_fb32_char(fb, i*8, j*8, g, fg, bg); } } }
 
 void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
   size_t h = fb->height, w = fb->width;
@@ -145,12 +197,34 @@ void k_cur_msg(const char *msg, uint32_t fg, uint32_t bg) {
         K.fb.cur_y += 1,
         K.fb.cur_y %= h; } } }
 
-void g_fb32_draw_cb(g_fb32 *fb, g_cb *cb) {
-}
+static void cputs(const char *s, uint32_t fg) {
+  k_cur_msg(s, fg, 0); }
 
-void g_fb32_set_cursor(g_fb32 *fb, size_t x, size_t y) {
-  fb->cur_x = x % fb->width;
-  fb->cur_y = y % fb->height; }
+#define blue 0xff
+#define green 0xff00
+#define red 0xff0000
+#define cyan (blue|green)
+#define yellow (red|green)
+#define white (yellow|blue)
+#define magenta (red|blue)
+#define black 0
+
+static void k_puts(const char *s) {
+  cputs(s, white); }
+
+static void cputc(int c, uint32_t fg) {
+  char s[2] = { c, 0 };
+  cputs(s, fg); }
+
+static const char g_digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+void cputn(uintptr_t n, uintptr_t base, uint32_t fg) {
+  uintptr_t d = n % base;
+  if (n / base) cputn(n / base, base, fg);
+  cputc(g_digits[d], fg); }
+
+static void k_putn(uintptr_t n, uintptr_t base) {
+  cputn(n, base, white); }
+
 
 void g_fb32_ini(g_fb32 *b, uint32_t *_, size_t width, size_t height, size_t pitch) {
   b->_ = _;
@@ -158,52 +232,6 @@ void g_fb32_ini(g_fb32 *b, uint32_t *_, size_t width, size_t height, size_t pitc
   b->height = height;
   b->pitch = pitch;
   b->cur_x = b->cur_y = 0; }
-
-static void g_fb32_log_n_r(g_fb32 *fb, uintptr_t n, uintptr_t base) {
-  if (n) g_fb32_log_n(fb, n, base); }
-
-void g_fb32_log_n(g_fb32 *fb, uintptr_t n, uintptr_t base) {
-  uintptr_t dig = n % base;
-  g_fb32_log_n_r(fb, n / base, base);
-  const char d[2] = {digits[dig], 0};
-  g_fb32_log(fb, d); }
-
-void g_fb32_log(g_fb32 *fb, const char *msg) {
-  g_fb32_log_c(fb, msg, 0xffeeddcc, 0); }
-void g_fb32_log_char_c(g_fb32 *fb, char c, uint32_t fg, uint32_t bg) {
-  char s[2] = {c, 0};
-  g_fb32_log_c(fb, s, fg, bg); }
-void g_fb32_log_char(g_fb32 *fb, char c) {
-  g_fb32_log_char_c(fb, c, 0xffeeddcc, 0); }
-
-void 
-  k_log(const char *msg),
-  k_log_c(const char *msg, uint32_t fg, uint32_t bg),
-  k_log_n(uintptr_t n, uintptr_t base),
-  k_log_char(char);
-#define k_logf(...) g_printf(&g_stdout, __VA_ARGS__)
-
-void k_log_c(const char *msg, uint32_t fg, uint32_t bg) {
-  k_cur_msg(msg, fg, bg); }
-
-void k_log_char(char c) {
-  cb_put_char(bcb, c); }
-
-void k_log(const char *msg) {
-  cb_log(bcb, msg); }
-void k_log_n(uintptr_t n, uintptr_t base) {
-  cb_log_n(bcb, n, base); }
-
-__attribute__((used, section(".limine_requests_start")))
-static volatile LIMINE_REQUESTS_START_MARKER;
-#define _L __attribute__((used, section(".limine_requests"))) static volatile
-_L LIMINE_BASE_REVISION(3);
-_L struct limine_memmap_request memmap_req = { .id = LIMINE_MEMMAP_REQUEST, .revision = 0 };
-_L struct limine_hhdm_request hhdm_req = { .id = LIMINE_HHDM_REQUEST, .revision = 0 };
-_L struct limine_framebuffer_request fb_req = { .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0 };
-__attribute__((used, section(".limine_requests_end")))
-static volatile LIMINE_REQUESTS_END_MARKER;
-
 
 static struct mem *kgetmem(uint64_t hhdm, uint64_t n, struct limine_memmap_entry **rr, uint64_t *nbs, uint64_t *nrs) {
   if (!n) return NULL;
@@ -217,96 +245,91 @@ static struct mem *kgetmem(uint64_t hhdm, uint64_t n, struct limine_memmap_entry
     return m; }
   return next; }
 
-
-struct k K;
-void kmain(void) {
-  arch_init(); // arch specific init
-
+static void fb_init(struct k*k) {
   // framebuffer init
-  if (!fb_req.response || !fb_req.response->framebuffer_count) for (;;) k_stop();
+  if (!fb_req.response || !fb_req.response->framebuffer_count)
+    for (;;) k_stop();
   struct limine_framebuffer *fb0 = fb_req.response->framebuffers[0];
-  g_fb32_ini(&K.fb, fb0->address, fb0->width, fb0->height, fb0->pitch);
-  intptr_t x0 = K.fb.width / 2,
-           y0 = K.fb.height / 2,
+  g_fb32_ini(&k->fb, fb0->address, fb0->width, fb0->height, fb0->pitch);
+  intptr_t x0 = k->fb.width / 2,
+           y0 = k->fb.height / 2,
            rad = MIN(x0, y0);
   for (uint32_t color = 0xff0000, step = color / rad; rad; color -= step, rad--)
     for (intptr_t x = x0 - rad; x <= x0 + rad; x++)
       for (intptr_t y = y0 - rad; y <= y0 + rad; y++) {
         intptr_t dx = x - x0, dy = y - y0;
         if (dx * dx + dy * dy < rad * rad)
-          g_fb32_px(&K.fb, y, x, color * (uintptr_t) &K); }
-  uintptr_t cols = K.fb.width >> 3, rows = K.fb.height >> 3;
+          g_fb32_px(&k->fb, y, x, color * (uintptr_t) k); }
+  cputn(k->fb.width, 10, cyan);
+  cputs("x", cyan);
+  cputn(k->fb.height, 10, cyan);
+  k_puts(" ");
+  cputn(k->fb.width>>3, 10, cyan);
+  cputs("x", cyan);
+  cputn(k->fb.height>>3, 10, cyan);
+  k_puts("\n"); }
 
-  // mem init
+static void mem_init(struct k*k) {
   if (!memmap_req.response || !hhdm_req.response) for (;;) k_stop();
   struct limine_memmap_entry **rr = memmap_req.response->entries;
   uint64_t hhdm = hhdm_req.response->offset,
            n = memmap_req.response->entry_count,
            nrs = 0,
            nbs = 0;
-  K.free = kgetmem(hhdm, n, rr, &nbs, &nrs);
-  K.used = NULL;
+  k->free = kgetmem(hhdm, n, rr, &nbs, &nrs);
+  k->used = NULL;
+  if (nbs >= 1<<22)
+    cputn(nbs>>20, 10, magenta), cputs("MiB in ", magenta);
+  else if (nbs >= 1<<16)
+    cputn(nbs>>10, 10, magenta), cputs("KiB in ", magenta);
+  else
+    k_putn(nbs, 10), cputs("B in ", magenta);
+  cputn(nrs, 10, magenta), cputs(" regions\n", magenta); }
 
-  // lisp init
+static void lisp_init(struct k*k) {
+  uintptr_t cols = k->fb.width >> 3, rows = k->fb.height >> 3;
   static intptr_t g_static_pool[1<<23];
-  struct g *f = g_pop(g_evals(g_ini_static(sizeof(g_static_pool), g_static_pool),
+  struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
+  static const char b[] =
 #include "boot.h"
-  ), 1);
-  f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + rows * cols);
-  K.g = f;
-  if (f && g_ok(f)) bcb->rows = rows, bcb->cols = cols;
-  else for (;;) k_stop();
+  ;
+  f = g_evals(f, b);
+  f = g_vec0(g_pop(f, 1), g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + rows * cols);
+  if (!f || !g_ok(f)) for (;;) k_stop();
+  f->u[0] = g_pop1(f);
+  f->u[1] = (intptr_t) k;
+  struct cb *c = gcb(f);
+  c->rows = rows, c->cols = cols;
+  k->g = f; }
 
-  f = g_evals(f, 
-    "(puts \"\x01 gwen lisp \")"
-   "(putn (clock 0) 10) (puts \" ticks ok\n\n\")"
-    "(: i (sysinfo 0) f (A i) pool (AB i) len (A (BB i)) allocd (AB (BB i)) stackd (A (BB (BB i)))"
-   " (,"
-    "(puts \"f@\") (putn f 16)"
-    "(puts\"\n pool=\") (putn pool 16)" 
-    "(puts\"\n len=\") (putn len 10)"
-    "(puts\"\n allocd=\") (putn allocd 10)"
-    "(puts\"\n stackd=\") (putn stackd 10)"
-    "(puts \"\n\")"
-    ")"
-    ")");
+static void k_evals(const char *s) {
+  K.g = g_pop(g_evals(K.g, s), 1); }
 
+struct k K;
+void kmain(void) {
+  arch_init(); // arch specific init
+  fb_init(&K);
+  mem_init(&K);
+  lisp_init(&K);
+  cputn(K.ticks, 10, yellow);
+  cputs(" ticks ok\n", yellow);
   srand(K.ticks);
-  //random_life();
   // main loop
-  for (;;)
-  //  life_update(),
-    draw_char_buffer(&K.fb, bcb),
-    k_stop(); }
-
-#define live_char 0xb2
-#define dead_char 0xb0
-static void random_life(void) {
-  uint32_t rows = kcb->rows, cols = kcb->cols;
-  for (uint32_t i = 0; i < rows; i++)
-    for (uint32_t j = 0; j < cols; j++)
-      kcb->cb[i* cols + j] = rand() & 1 ? live_char : dead_char; }
-
-static void life_update(void) {
-  intptr_t rows = bcb->rows, cols = bcb->cols;
-  kgl = g_vec0(kgl, g_vt_u8, 1, rows * cols);
-  if (!g_ok(kgl)) return;
-  uint8_t *db = (uint8_t*) g_str_txt(base_ref(1));
-
-  for (int i = 0; i < rows; i++)
-    for (int j = 0; j < cols; j++) {
-      int i_1 = i-1<0?rows-1:i-1,
-          i1  = i+1==rows?0:i+1,
-          j_1 = j-1<0?cols-1:j-1,
-          j1  = j+1==cols?0:j+1,
-          n = (kcb->cb[i_1 * cols + j_1] == live_char ? 1 : 0)
-            + (kcb->cb[i_1 * cols + j] == live_char ? 1 : 0)
-            + (kcb->cb[i_1 * cols + j1] == live_char ? 1 : 0)
-            + (kcb->cb[i * cols + j_1] == live_char ? 1 : 0)
-            + (kcb->cb[i * cols + j1] == live_char ? 1 : 0)
-            + (kcb->cb[i1*cols+j_1] == live_char ? 1 : 0)
-            + (kcb->cb[i1*cols+j] == live_char ? 1 : 0)
-            + (kcb->cb[i1*cols+j1] == live_char ? 1 : 0);
-      db[i * cols + j] = n == 3 || (n == 2 && kcb->cb[i*cols+j] == live_char) ? live_char : dead_char; }
-  memcpy(kcb->cb, db, rows * cols);
-  kgl = g_pop(kgl, 1); }
+  for (;;) {
+    cb_fill(gcb(K.g), 0);
+    cb_cur(gcb(K.g), K.fb.cur_y, K.fb.cur_x);
+    k_evals(
+      "(puts\"\x01 gwen lisp \")(putn(clock 0)10)(puts\"\n\")"
+      "(: i(sysinfo 0)f(A i)pool(AB i)len(A(BB i))allocd(AB(BB i))stackd(A(BB(BB i)))"
+     " (,"
+      "(puts\"f@\")(putn f 16)"
+      "(puts\"         \n pool=\")(putn pool 16)" 
+      "(puts\"         \n len=\")(putn len 10)"
+      "(puts\"         \n allocd=\")(putn allocd 10)"
+      "(puts\"         \n stackd=\")(putn stackd 10)"
+      "(puts\"\n\")"
+      ")"
+      ")"
+    );
+    draw_char_buffer(&K.fb, gcb(K.g));
+    k_stop(); } }

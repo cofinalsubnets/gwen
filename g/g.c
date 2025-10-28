@@ -1593,11 +1593,11 @@ static int read_char(struct g_in *i) {
     case '#': case ';': while (!i->eof(i) && (c = i->getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
+static const char g_digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 struct g* g_putn(struct g*f, struct g_out*o, uintptr_t n, uintptr_t base) {
-  static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
   uintptr_t d = n % base;
   if (n / base) f = g_putn(f, o, n / base, base);
-  return g_putc(f, o, digits[d]); }
+  return g_putc(f, o, g_digits[d]); }
 
 static struct g* g_putx(struct g *f, struct g_out *o, intptr_t x) {
   if (odd(x)) return g_printf(f, o, "%d", (uintptr_t) g_getnum(x));
