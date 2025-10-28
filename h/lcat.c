@@ -1,4 +1,5 @@
 #include "g.h"
+#include "sys.h"
 #include <stdio.h>
 
 int main(void) {

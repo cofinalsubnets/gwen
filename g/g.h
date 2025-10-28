@@ -3,30 +3,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-// thanks !!
-struct g {
-  union x  *ip;                          // 0
-  intptr_t *hp,                          // 1
-           *sp;                          // 2
-  struct g_symbol *symbols;              // 3 symbol tree
-  uintptr_t len;                         // 4 length of core data
-  intptr_t *pool;                        // 5 lower core address
-  struct g_mem_root *safe;               // 6
-  union { uintptr_t t0; intptr_t *cp; }; // 7 copy pointer / timestamp
-  void *(*malloc)(struct g*, size_t),    // 8
-       (*free)(struct g*, void*);        // 9
-  struct g_in  *in;                      // 10
-  struct g_out *out,                     // 11
-               *err;                     // 12
-  struct g_table *dict,                  // 13
-                 *macro;                 // 14
-  struct g_symbol *quote,                // 15
-                  *begin,                // 16
-                  *let,                  // 17
-                  *cond,                 // 18
-                  *lambda;               // 19
-  intptr_t end[]; };                     // 20 end of struct == initial heap pointer
-
 #ifndef g_tco
 #define g_tco 1
 #endif
@@ -51,85 +27,68 @@ struct g {
 #define LEN(_) (sizeof(_)/sizeof(*_))
 #define MIN(_,__) ((_)<(__)?(_):(__))
 #define MAX(_,__) ((_)>(__)?(_):(__))
-#define g_inline inline __attribute__((always_inline))
-#define g_noinline __attribute__((noinline))
-
-struct g_in {
-  int (*getc)(struct g_in*),
-      (*ungetc)(struct g_in*, int),
-      (*eof)(struct g_in*); };
-
-struct g_out {
-  void (*printf)(struct g_out*, const char*, ...),
-       (*putc)(struct g_out*, int); };
-
-struct g_mem_root {
-  intptr_t *ptr;
-  struct g_mem_root *next; };
-
+// thanks !!
+union x;
 typedef g_vm(g_vm_t);
+struct g {
+  union x {
+    g_vm_t *ap;
+    intptr_t x;
+    union x *m;
+    intptr_t typ; } *ip;                 // 0
+  intptr_t *hp,                          // 1
+           *sp;                          // 2
+  struct g_atom {
+    g_vm_t *ap;
+    intptr_t typ;
+    struct g_vec {
+      g_vm_t *ap;
+      intptr_t typ;
+      uintptr_t type, rank, shape[]; } *nom;
+    uintptr_t code;
+    struct g_atom *l, *r;
+  } *symbols;                            // 3 
+  uintptr_t len;                         // 4 length of core data
+  intptr_t *pool;                        // 5 lower core address
+  struct g_mem_root {
+    intptr_t *ptr;
+    struct g_mem_root *next; } *safe;    // 6
+  union { uintptr_t t0; intptr_t *cp; }; // 7 copy pointer / timestamp
+  void *(*malloc)(struct g*, size_t),    // 8
+       (*free)(struct g*, void*);        // 9
+  struct g_in {
+    int (*getc)(struct g_in*),
+        (*ungetc)(struct g_in*, int),
+        (*eof)(struct g_in*);
+  } *in;                                 // 10
+  struct g_out {
+    void (*putc)(struct g_out*, int);
+  } *out,                                // 11
+    *err;                                // 12
+  struct g_table {
+    g_vm_t *ap;
+    intptr_t typ;
+    uintptr_t len, cap;
+    struct entry { intptr_t key, val; struct entry *next; } **tab;
+  } *dict,                               // 13
+    *macro;                              // 14
+  struct g_atom *quote,                  // 15
+                  *begin,                // 16
+                  *let,                  // 17
+                  *cond,                 // 18
+                  *lambda;               // 19
+  intptr_t end[]; };                     // 20 end of struct == initial heap pointer
+
+
+
 struct g_def {
   const char *n;
   union x *x; };
-
-union x {
-  g_vm_t *ap;
-  intptr_t x;
-  union x *m;
-  intptr_t typ; };
 
 struct g
   *g_ini(void),
   *g_ini_static(uintptr_t, void*),
   *g_ini_dynamic(void *(*)(struct g*, uintptr_t), void (*)(struct g*, void*));
-
-enum g_status {
-  g_status_ok  = 0,
-  g_status_oom = 1,
-  g_status_err = 2,
-  g_status_eof = 3,
-} g_fin(struct g*);
-
-// user gives these
-uintptr_t g_clock(void); // used by garbage collector
-struct g *g_readsi(struct g*, struct g_in*);
-int g_getc(struct g_in*),
-    g_ungetc(struct g_in*, int),
-    g_eof(struct g_in*);
-void g_printf(struct g_out*, const char*, ...),
-     g_putc(struct g_out*, int);
-void *malloc(size_t), free(void*),
-     *memcpy(void *restrict, const void*restrict, size_t),
-     *memset(void*, int, size_t);
-long strtol(const char*restrict, char**restrict, int);
-size_t strlen(const char*);
-int strncmp(const char*, const char*, size_t),
-    memcmp(const void*, const void*, size_t);
-
-
-// user gets these
-g_vm_t ret0, curry;
-
-bool g_twop(intptr_t),
-     g_strp(intptr_t),
-     g_tblp(intptr_t),
-     g_symp(intptr_t);
-
-struct g
-  *g_gc(struct g*),
-  *g_read1(struct g*),
-  *g_write1(struct g*),
-  *g_evals(struct g*, const char*),
-  *g_defns(struct g*, uintptr_t, struct g_def*),
-  *g_apply(struct g*),
-  *g_push(struct g*, uintptr_t, ...),
-  *g_pop(struct g*, uintptr_t),
-  *g_strof(struct g*, const char*),
-  *g_cons_l(struct g*),
-  *g_cons_r(struct g*);
-uintptr_t g_str_len(intptr_t);
-char *g_str_txt(intptr_t);
-struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...);
 
 enum g_vec_type {
   g_vt_u8,  g_vt_i8,
@@ -138,16 +97,69 @@ enum g_vec_type {
   g_vt_u64, g_vt_i64,
   g_vt_f8,  g_vt_f16,
   g_vt_f32, g_vt_f64, };
-#define g_vt_char g_vt_i8
-uintptr_t g_fixed_size(enum g_vec_type);
 
-struct g_vec {
-  g_vm_t *ap;
-  uintptr_t typ,
-            type,
-            rank,
-            shape[]; };
-uintptr_t vector_total_bytes(struct g_vec *);
-#define topof(g) ((intptr_t*)(g) + (g)->len)
-#define topref(g, n) topof(g)[-1-(n)]
+enum g_status {
+  g_status_ok  = 0,
+  g_status_oom = 1,
+  g_status_err = 2,
+  g_status_eof = 3,
+} g_fin(struct g*);
+
+
+uintptr_t g_clock(void); // used by garbage collector
+int g_getc(struct g_in*),
+    g_ungetc(struct g_in*, int),
+    g_eof(struct g_in*),
+    strncmp(const char*, const char*, size_t),
+    memcmp(const void*, const void*, size_t);
+void g_stdout_putc(struct g_out *o, int c);
+void g_printf(struct g_out*, const char*, ...),
+     g_putc(struct g_out*, int),
+     g_putn(struct g_out*, uintptr_t, uintptr_t),
+     *malloc(size_t), free(void*),
+     *memcpy(void *restrict, const void*restrict, size_t),
+     *memset(void*, int, size_t);
+long strtol(const char*restrict, char**restrict, int);
+size_t strlen(const char*);
+
+char *g_str_txt(intptr_t);
+g_vm_t ret0, curry;
+
+bool g_twop(intptr_t), g_strp(intptr_t), g_tblp(intptr_t), g_symp(intptr_t);
+
+#define g_vt_char g_vt_i8
+uintptr_t g_fixed_size(enum g_vec_type),
+          g_str_len(intptr_t),
+          vector_total_bytes(struct g_vec *);
+
+void g_write1(struct g*);
+struct g
+  *g_eval(struct g*),
+  *g_read1i(struct g*f, struct g_in*),
+  *g_readsi(struct g*, struct g_in*),
+  *g_reads(struct g*, const char*),
+  *g_defns(struct g*, uintptr_t, struct g_def*),
+  *g_push(struct g*, uintptr_t, ...),
+  *g_pop(struct g*, uintptr_t),
+  *g_strof(struct g*, const char*),
+  *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...),
+  *g_cons_l(struct g*),
+  *g_cons_r(struct g*);
+
+extern struct g_in g_stdin;
+extern struct g_out g_stdout;
+#define g_inline inline __attribute__((always_inline))
+#define g_noinline __attribute__((noinline))
+static g_inline intptr_t *topof(struct g*f) { return (intptr_t*) f + f->len; }
+static g_inline intptr_t topref(struct g*f, uintptr_t n) { return topof(f)[-1-n]; }
+static g_inline struct g *g_enlist(struct g*f) { return g_cons_r(g_push(f, 1, g_nil)); }
+static g_inline struct g *g_quote(struct g*f) { return
+  f = g_enlist(f),
+  g_ok(f) ? g_cons_l(g_push(f, 1, f->quote)) : f; }
+static g_inline struct g *g_evals(struct g *f, const char *s) { return
+  f = g_eval(g_reads(f, "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)")),
+  f = g_ok(f) ? g_push(f, 3, g_nil, f->quote, g_nil) : f,
+  g_eval(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_reads(f, s)))))); }
+static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, f->in); }
+#define g_log1(f) (g_write1(f),g_putc(f->out, '\n'))
 #endif

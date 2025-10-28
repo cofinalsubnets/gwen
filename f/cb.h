@@ -11,5 +11,5 @@ cb_put_char(struct cb*, char),
   cb_log_n(struct cb*, uintptr_t n, uintptr_t base),
   cb_fill(struct cb*, uint8_t),
      cb_cur(struct cb*, uint32_t row, uint32_t col),
-     cb_mv_cur(struct cb*, uint32_t, uint32_t);
+     cb_mv_cur(struct cb*, int32_t, int32_t);
 

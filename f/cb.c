@@ -7,8 +7,8 @@ void cb_fill(struct cb *c, uint8_t _) {
       c->cb[i * cols + j] = _; }
 void cb_cur(struct cb *c, uint32_t row, uint32_t col) {
   c->row = row % c->rows, c->col = col % c->cols; }
-void cb_mv_cur(struct cb *c, uint32_t dr, uint32_t dc) {
-  cb_cur(c, c->row + dr, c->col + dc); }
+void cb_mv_cur(struct cb *c, int32_t dr, int32_t dc) {
+  cb_cur(c, dr + c->row, dc + c->col); }
 
 void cb_log_n(struct cb *c, uintptr_t n, uintptr_t base) {
   static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";

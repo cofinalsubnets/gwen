@@ -28,14 +28,8 @@ static void life_update(void);
 #define bcb ((struct cb*)g_str_txt((intptr_t)(struct g_vec*)base_ref(0)))
 #define kcb bcb
 
-void g_printf(struct g_out*, const char *fmt, ...) {
-  va_list xs;
-  va_start(xs, fmt);
-  cb_vlogf(bcb, fmt, xs);
-  va_end(xs); }
-
-void g_putc(struct g_out*, int c) {
-  k_log_char(c); }
+void g_stdout_putc(struct g_out*, int c) {
+  if (kgl) k_log_char(c); }
 
 int g_getc(struct g_in*) { return 0; }
 int g_ungetc(struct g_in*, int c) { return c; }
@@ -184,8 +178,8 @@ void
   k_log(const char *msg),
   k_log_c(const char *msg, uint32_t fg, uint32_t bg),
   k_log_n(uintptr_t n, uintptr_t base),
-  k_logf(const char *fmt, ...),
   k_log_char(char);
+#define k_logf(...) g_printf(&g_stdout, __VA_ARGS__)
 
 void k_log_c(const char *msg, uint32_t fg, uint32_t bg) {
   k_cur_msg(msg, fg, bg); }
@@ -197,11 +191,6 @@ void k_log(const char *msg) {
   cb_log(bcb, msg); }
 void k_log_n(uintptr_t n, uintptr_t base) {
   cb_log_n(bcb, n, base); }
-void k_logf(const char *fmt, ...) {
-  va_list xs;
-  va_start(xs, fmt);
-  cb_vlogf(bcb, fmt, xs);
-  va_end(xs); }
 
 __attribute__((used, section(".limine_requests_start")))
 static volatile LIMINE_REQUESTS_START_MARKER;
@@ -245,7 +234,6 @@ void kmain(void) {
         if (dx * dx + dy * dy < rad * rad)
           g_fb32_px(&K.fb, y, x, color * (uintptr_t) &K); }
   uintptr_t cols = K.fb.width >> 3, rows = K.fb.height >> 3;
- // k_logf("%dx%dp %dx%dc\n", K.fb.width, K.fb.height, cols, rows);
 
   // mem init
   if (!memmap_req.response || !hhdm_req.response) for (;;) k_stop();
@@ -256,28 +244,27 @@ void kmain(void) {
            nbs = 0;
   K.free = kgetmem(hhdm, n, rr, &nbs, &nrs);
   K.used = NULL;
-//  k_logf("%dK %dR\n", nbs >> 10, nrs);
 
   // lisp init
   static intptr_t g_static_pool[1<<23];
-  struct g *f = g_gc(g_pop(g_evals(g_ini_static(sizeof(g_static_pool), g_static_pool),
+  struct g *f = g_pop(g_evals(g_ini_static(sizeof(g_static_pool), g_static_pool),
 #include "boot.h"
-  ), 1));
+  ), 1);
   f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + rows * cols);
   K.g = f;
   if (f && g_ok(f))
     bcb->rows = rows, bcb->cols = cols,
-    k_logf(
+    g_printf(&g_stdout,
      "f@0x%x\n pool=0x%x\n len=%d\n ip=0x%x\n allocd=%d\n stackd=%d\n",
     (uintptr_t) f, f->pool, f->len, f->ip, (uintptr_t) (f->hp - f->end), (intptr_t*) f + f->len - f->sp);
   else for (;;) k_stop();
 
-  k_logf("%d ticks ok.\n", K.ticks);
+  g_printf(&g_stdout, "%d ticks ok.\n", K.ticks);
   srand(K.ticks);
-  random_life();
+  //random_life();
   // main loop
   for (;;)
-    life_update(),
+  //  life_update(),
     draw_char_buffer(&K.fb, bcb),
     k_stop(); }
 
