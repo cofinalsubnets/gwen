@@ -79,14 +79,11 @@ void srand(unsigned int);
 #define gcb(f) ((struct cb*)g_str_txt((f)->u[0]))
 #define kcb gcb(K.g)
 
-struct g*g_stdout_putc(struct g*f, struct g_out*, int c) { return
-  K.g = f,
-  cb_put_char(gcb(f), c),
-  f; }
+void g_stdout_putc(int c) { return cb_put_char(gcb(K.g), c); }
 
-int g_stdin_getc(struct g_in*) { return 0; }
-int g_stdin_ungetc(struct g_in*, int c) { return c; }
-int g_stdin_eof(struct g_in*) { return 1; }
+int g_stdin_getc(void) { return 0; }
+int g_stdin_ungetc(int c) { return c; }
+int g_stdin_eof(void) { return 1; }
 uintptr_t g_clock(void) { return K.ticks; }
 
 static void draw_char_buffer(g_fb32 *fb, struct cb *c);

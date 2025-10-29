@@ -63,32 +63,34 @@ struct g {
   union {
     intptr_t v[g_nvars];
     struct {
-      struct g_in {
-        int (*getc)(struct g_in*),
-            (*ungetc)(struct g_in*, int),
-            (*eof)(struct g_in*);
-      } *in;                                 // 10
-      struct g_out {
-        struct g *(*putc)(struct g*, struct g_out*, int);
-      } *out,                                // 11
-        *err;                                // 12
       struct g_table {
         g_vm_t *ap;
         intptr_t typ;
         uintptr_t len, cap;
-        struct entry { intptr_t key, val; struct entry *next; } **tab;
-      } *dict,                           // 13
-        *macro;                          // 14
-      struct g_atom *quote,              // 15
-                    *begin,            // 16
-                    *let,              // 17
-                    *cond,             // 18
-                    *lambda;           // 19
+        struct g_entry {
+          intptr_t key, val;
+          struct g_entry *next;
+        } **tab;
+      } *dict,
+        *macro;
+      struct g_atom *quote,
+                    *begin,
+                    *let,
+                    *cond,
+                    *lambda;
       intptr_t u[]; }; };
   intptr_t end[]; };                     // 20 end of struct == initial heap pointer
 
 _Static_assert(sizeof(struct g) == (10 + g_nvars) * sizeof(intptr_t));
 
+struct g_in {
+  int (*getc)(struct g_in*),
+      (*ungetc)(struct g_in*, int),
+      (*eof)(struct g_in*);
+};
+struct g_out {
+  struct g *(*putc)(struct g*, struct g_out*, int);
+};
 
 struct g_def {
   const char *n;
@@ -116,12 +118,12 @@ enum g_status {
 
 
 uintptr_t g_clock(void); // used by garbage collector
-int g_stdin_getc(struct g_in*),
-    g_stdin_ungetc(struct g_in*, int),
-    g_stdin_eof(struct g_in*),
+int g_stdin_getc(void),
+    g_stdin_ungetc(int),
+    g_stdin_eof(void),
     strncmp(const char*, const char*, size_t),
     memcmp(const void*, const void*, size_t);
-struct g*g_stdout_putc(struct g*,struct g_out *o, int c);
+void g_stdout_putc(int c);
 void
      *malloc(size_t), free(void*),
      *memcpy(void *restrict, const void*restrict, size_t),
@@ -170,6 +172,6 @@ static g_inline struct g *g_evals(struct g *f, const char *s) { return
   f = g_eval(g_reads(f, "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)")),
   f = g_ok(f) ? g_push(f, 3, g_nil, f->quote, g_nil) : f,
   g_eval(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_reads(f, s)))))); }
-static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, f->in); }
+static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, &g_stdin); }
 #define g_log1(f) (g_write1(f),g_putc(f, f->out, '\n'))
 #endif

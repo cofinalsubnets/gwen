@@ -25,6 +25,7 @@ struct k {
          (*fin)(struct k*);
     intptr_t data[];
   } *mode; };
+static struct k K;
 
 static g_inline void kbuttons(struct k*k) {
   k->pd->system->getButtonState(&k->b.current, &k->b.pushed, &k->b.released); }
@@ -62,8 +63,8 @@ static struct g_def defs[] = {
   {"get_buttons", bif_buttons}, };
 
 
-struct g*g_stdout_putc(struct g*f, struct g_out *o, int c) {
-  return cb_put_char(gcb(f), c), f; }
+void g_stdout_putc(int c) {
+  cb_put_char(gcb(K.g), c); }
 
 
 static void g_nop(struct k*) {}
@@ -89,7 +90,6 @@ static struct  mode
 
 static void k_boot(struct k*);
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
-  static struct k K;
   struct k *k = &K;
   switch (event) {
     case kEventInit:
@@ -272,6 +272,6 @@ static g_vm(ls_root) {
   if (!g_ok(f)) return f;
   return f->sp[1] = f->sp[0], f->sp++, f->ip++, Continue(); }
 
-int g_stdin_getc(struct g_in *) { return 0; }
-int g_stdin_ungetc(struct g_in*, int c) { return c; }
-int g_stdin_eof(struct g_in*) { return 1; }
+int g_stdin_getc(void) { return 0; }
+int g_stdin_ungetc(int c) { return c; }
+int g_stdin_eof(void) { return 1; }
