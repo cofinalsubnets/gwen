@@ -84,11 +84,11 @@ static struct {
 #define kcb ((struct cb*)&_kcb)
 
 
-void g_stdout_putc(int c) { cb_put_char(kcb, c); }
+void g_stdout_putc(struct g*_, int c) { cb_put_char(kcb, c); }
 
-int g_stdin_getc(void) { return cb_getc(kcb); }
-int g_stdin_ungetc(int c) { return cb_ungetc(kcb, c); }
-int g_stdin_eof(void) { return cb_eof(kcb); }
+int g_stdin_getc(struct g*) { return cb_getc(kcb); }
+int g_stdin_ungetc(struct g*, int c) { return cb_ungetc(kcb, c); }
+int g_stdin_eof(struct g*) { return cb_eof(kcb); }
 uintptr_t g_clock(void) { return K.ticks; }
 
 static void draw_char_buffer(g_fb32 *fb, struct cb *c);
@@ -311,9 +311,9 @@ static void lisp_init(struct k*k) {
   cputs(" = ", yellow);
   cputn(t1 - t0, 10, yellow);
   cputs(" ticks \x01\n", yellow);
-//  f = g_vec0(g_pop(f, 1), g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
+  //f = g_vec0(g_pop(f, 1), g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
   if (!f || !g_ok(f)) for (;;) k_stop();
-  f->u[1] = (intptr_t) k;
+  //f->u[0] = g_pop1(f);
   struct cb *c = kcb;
   c->rows = NROWS, c->cols = NCOLS;
   k->g = f; }

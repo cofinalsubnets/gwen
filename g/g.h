@@ -84,9 +84,9 @@ struct g {
 _Static_assert(sizeof(struct g) == (10 + g_nvars) * sizeof(intptr_t));
 
 struct g_in {
-  int (*getc)(struct g_in*),
-      (*ungetc)(struct g_in*, int),
-      (*eof)(struct g_in*);
+  int (*getc)(struct g*, struct g_in*),
+      (*ungetc)(struct g*, struct g_in*, int),
+      (*eof)(struct g*, struct g_in*);
 };
 struct g_out {
   struct g *(*putc)(struct g*, struct g_out*, int);
@@ -116,12 +116,12 @@ enum g_status {
 
 
 uintptr_t g_clock(void); // used by garbage collector
-int g_stdin_getc(void),
-    g_stdin_ungetc(int),
-    g_stdin_eof(void),
+int g_stdin_getc(struct g*),
+    g_stdin_ungetc(struct g*, int),
+    g_stdin_eof(struct g*),
     strncmp(const char*, const char*, size_t),
     memcmp(const void*, const void*, size_t);
-void g_stdout_putc(int c);
+void g_stdout_putc(struct g*, int c);
 void
      *malloc(size_t), free(void*),
      *memcpy(void *restrict, const void*restrict, size_t),
@@ -139,9 +139,10 @@ uintptr_t g_fixed_size(enum g_vec_type),
           g_str_len(intptr_t),
           vector_total_bytes(struct g_vec *);
 
-struct g *g_printf(struct g*, struct g_out*, const char*, ...),
-     *g_putc(struct g*, struct g_out*, int),
-     *g_putn(struct g*, struct g_out*, uintptr_t, uintptr_t);
+struct g
+  *g_printf(struct g*, struct g_out*, const char*, ...),
+  *g_putc(struct g*, struct g_out*, int),
+  *g_putn(struct g*, struct g_out*, uintptr_t, uintptr_t);
 struct g
   *g_ana(struct g*, g_vm_t),
   *g_write1(struct g*),

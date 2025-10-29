@@ -133,13 +133,13 @@ enum g_status g_fin(struct g *f) {
 #endif
 struct ti { struct g_in in; const char *t; uintptr_t i; } ;
 #define ti(x) ((struct ti*)(x))
-static int p_text_eof(struct g_in *i) {
+static int p_text_eof(struct g*_, struct g_in *i) {
   return !ti(i)->t[ti(i)->i]; }
-static int p_text_getc(struct g_in *i) {
+static int p_text_getc(struct g*_, struct g_in *i) {
   char c = ti(i)->t[ti(i)->i];
   if (c) ti(i)->i++;
   return c ? c : EOF; }
-static int p_text_ungetc(struct g_in *i, int _) {
+static int p_text_ungetc(struct g*_f, struct g_in *i, int _) {
   uintptr_t idx = ti(i)->i;
   idx = idx ? idx - 1 : idx;
   ti(i)->i = idx;
@@ -194,7 +194,7 @@ typedef struct g
   *g_pp_t(struct g*, intptr_t);
 
 static int
-  read_char(struct g_in *i);
+  read_char(struct g*, struct g_in *i);
 static bool eql(struct g*, intptr_t, intptr_t);
 static intptr_t
   gc_copy(struct g*,intptr_t,intptr_t*,intptr_t*),
@@ -227,7 +227,7 @@ static struct g *g_buf_grow(struct g *f) {
 
 struct g *g_read1i(struct g*f, struct g_in* i) {
   if (!g_ok(f)) return f;
-  int c = read_char(i);
+  int c = read_char(f, i);
   size_t n = 0;
   switch (c) {
     case '(':  return g_readsi(f, i);
@@ -238,20 +238,20 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
       f = g_buf_new(f);
       for (size_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
-          if ((c = i->getc(i)) == EOF || c == '"' ||
-               (c == '\\' && (c = i->getc(i)) == EOF))
+          if ((c = i->getc(f, i)) == EOF || c == '"' ||
+               (c == '\\' && (c = i->getc(f, i)) == EOF))
             return len(b) = n, f;
       return f;
     default:
-      i->ungetc(i, c);
+      i->ungetc(f, i, c);
       f = g_buf_new(f);
       for (uintptr_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
-          switch (c = i->getc(i)) {
+          switch (c = i->getc(f, i)) {
             default: continue;
             case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
             case '(': case ')': case '"': case '\'': case EOF:
-              i->ungetc(i, c);
+              i->ungetc(f, i, c);
               len(b) = n;
               txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
               char *e;
@@ -264,9 +264,9 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
 struct g *g_readsi(struct g *f, struct g_in* i) {
   intptr_t n = 0;
   for (int c; g_ok(f); n++) {
-    c = read_char(i);
+    c = read_char(f, i);
     if (c == EOF || c == ')') break;
-    i->ungetc(i, c);
+    i->ungetc(f, i, c);
     f = g_read1i(f, i); }
   for (f = g_push(f, 1, g_nil); n--; f = g_cons_r(f));
   return f; }
@@ -1581,10 +1581,10 @@ static struct g *g_ini_0(
 //
 //
 // get the next significant character from the stream
-static int read_char(struct g_in *i) {
-  for (int c;;) switch (c = i->getc(i)) {
+static int read_char(struct g*f, struct g_in *i) {
+  for (int c;;) switch (c = i->getc(f, i)) {
     default: return c;
-    case '#': case ';': while (!i->eof(i) && (c = i->getc(i)) != '\n' && c != '\r');
+    case '#': case ';': while (!i->eof(f, i) && (c = i->getc(f, i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
 struct g* g_putn(struct g*f, struct g_out*o, uintptr_t n, uintptr_t base) {
@@ -1665,17 +1665,17 @@ static g_vm(trim) {
   Ip += 1;
   return Continue(); }
 
-static int _stdin_getc(struct g_in*) {
-  return g_stdin_getc(); }
-static int _stdin_ungetc(struct g_in*, int c) {
-  return g_stdin_ungetc(c); }
-static int _stdin_eof(struct g_in*) {
-  return g_stdin_eof(); }
+static int _stdin_getc(struct g*f, struct g_in*) {
+  return g_stdin_getc(f); }
+static int _stdin_ungetc(struct g*f, struct g_in*, int c) {
+  return g_stdin_ungetc(f, c); }
+static int _stdin_eof(struct g*f, struct g_in*) {
+  return g_stdin_eof(f); }
 
 struct g_in g_stdin = { _stdin_getc, _stdin_ungetc, _stdin_eof };
 
 static struct g*_stdout_putc(struct g *f, struct g_out *_o, int c) {
-  g_stdout_putc(c);
+  g_stdout_putc(f, c);
   return f; }
 
 struct g_out g_stdout = { _stdout_putc };

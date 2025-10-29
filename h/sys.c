@@ -11,13 +11,13 @@ g_noinline uintptr_t g_clock(void) {
   int s = clock_gettime(CLOCK_REALTIME, &ts);
   return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
 
-void g_stdout_putc(int c) { putchar(c); }
+void g_stdout_putc(struct g*_, int c) { putchar(c); }
 
-int g_stdin_getc(void) {
+int g_stdin_getc(struct g*_) {
   return getc(stdin); }
-int g_stdin_ungetc(int c) {
+int g_stdin_ungetc(struct g*_, int c) {
   return ungetc(c, stdin); }
-int g_stdin_eof(void) {
+int g_stdin_eof(struct g*_) {
   return feof(stdin); }
 int p_file_getc(struct g_in *i) {
   struct fi *fi = (struct fi*) i;

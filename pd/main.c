@@ -7,8 +7,8 @@
 #include <stdarg.h>
 #include <time.h>
 #include <unistd.h>
-#define gk(g) ((struct k*)(g)->u[1])
-#define kcb ((struct cb*)&_kcb)
+#define gcb(g) ((struct cb*)g_str_txt((g)->u[0]))
+#define kcb gcb(K.g)
 #define NROWS 30
 #define NCOLS 50
 #define show_cursor_flag 1
@@ -23,28 +23,24 @@ struct k {
     intptr_t data[];
   } *mode; };
 static struct k K;
-static struct {
-  uint8_t rows, cols, row, col, rr, rc, flag, flag2, cb[NROWS * NCOLS];
-} _kcb = { NROWS, NCOLS, 0, 0, 0, 0, 0, 0, {0}};
 
 static int k_update(void *_) {
-  struct k *k = &K;
-  k->pd->system->setAutoLockDisabled(0); 
-  k->pd->system->getButtonState(&k->b.current, &k->b.pushed, &k->b.released);
-  if (k->b.pushed & (kButtonUp | kButtonDown))
-    k->mode->fin(),
-    k->mode = k->b.pushed & kButtonUp ? k->mode->next : k->mode->prev,
-    k->mode->ini();
-  k->mode->update();
+  K.pd->system->setAutoLockDisabled(0); 
+  K.pd->system->getButtonState(&K.b.current, &K.b.pushed, &K.b.released);
+  if (K.b.pushed & (kButtonUp | kButtonDown))
+    K.mode->fin(),
+    K.mode = K.b.pushed & kButtonUp ? K.mode->next : K.mode->prev,
+    K.mode->ini();
+  K.mode->update();
   // draw the screen
   struct cb *c = kcb;
-  uint8_t *frame = k->pd->graphics->getFrame();
+  uint8_t *frame = K.pd->graphics->getFrame();
   uint32_t rows = c->rows, cols = c->cols;
   for (int i = 0; i < rows; i++)
     for (int j = 0; j < cols; j++)
       for (uint8_t b = 0, *glyph = cga_8x8[c->cb[i * cols + j]], g; b < 8; b++)
         frame[52 * (8 * i + b) + j] = (c->flag & show_cursor_flag) && i == c->row && j == c->col ? ~glyph[b] : glyph[b];
-  k->pd->graphics->markUpdatedRows(0, LCD_ROWS);
+  K.pd->graphics->markUpdatedRows(0, LCD_ROWS);
   return 1; }
 
 static unsigned int (*clockfp)(void);
@@ -100,31 +96,27 @@ static void gg_eval(const char *s) {
 
 static void k_boot(void);
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
-  struct k *k = &K;
   switch (event) {
     case kEventInit:
       clockfp = pd->system->getCurrentTimeMilliseconds;
-      k->pd = pd;
-      k->mode = &_log;
+      K.pd = pd;
+      K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
       static intptr_t g_static_pool[1<<20];
       struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
       f = g_defs(f, LEN(defs), defs);
-      k->g = g_pop(g_evals(f, "(: t0(clock 0))"), 1);
-      //k_boot(k);
-      f = g_pop(g_evals(k->g, "(: t1(clock 0))"), 1);
+      f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
       if (g_ok(f)) {
-        f->u[1] = (intptr_t) k;
-        struct cb *c = kcb;
+        f->u[0] = g_pop1(f);
+        struct cb *c = gcb(f);
         c->rows = NROWS, c->cols = NCOLS;
-        k->g = f;
-        k->mode->ini();
-        pd->system->setUpdateCallback(k_update, k); }
+        K.g = f;
+        K.mode->ini();
+        pd->system->setUpdateCallback(k_update, NULL); }
     default: return 0; } }
 
 static void k_eval(const char *s) { K.g = g_pop(g_evals(K.g, s), 1); }
 static void g_log_update(void) {
-  struct k*k = &K;
   struct cb *c = kcb;
   c->row = c->col = c->rr = c->rc = 0;
   cb_fill(c, 0);
@@ -132,7 +124,7 @@ static void g_log_update(void) {
     "(: (AB x) (A (B x)) (BB x) (B (B x))"
        "i (sysinfo 0) f (A i) pool (AB i) len (A (BB i)) allocd (AB (BB i)) stackd (A (BB (BB i)))"
    " (,"
-    "(puts\"\x03 \")(putn(-(clock 0)t0)10)"
+    "(puts\"\x03 \")(putn(clock 0)10)"
     "(puts\"\n\n@\")""(putn pool 16)" 
     "(puts\"\n@\")""(putn f 16)"
     "(puts\"\n#\")"
@@ -150,8 +142,8 @@ static void g_log_update(void) {
 
 
 static g_vm(crank_angle) {
-  int d = gk(f)->pd->system->isCrankDocked();
-  float a = gk(f)->pd->system->getCrankAngle();
+  int d = K.pd->system->isCrankDocked();
+  float a = K.pd->system->getCrankAngle();
   Sp[0] = d ? g_nil : g_putnum((int)a%360);
   Ip += 1;
   return Continue(); }
@@ -218,8 +210,7 @@ static void draw_wave(void) {
 
 
 static void g_synth_ini(void) {
-  struct k*k = &K;
-  struct synth_mode *m = mode(k);
+  struct synth_mode *m = (void*) K.mode;
   m->submode = 1;
   struct cb *c = kcb;
   c->flag &= ~show_cursor_flag;
@@ -228,8 +219,7 @@ static void g_synth_ini(void) {
 
 
 static void g_life_update(void) {
-  struct k*k=&K;
-  if (k->b.pushed & (kButtonA | kButtonB)) random_life();
+  if (K.b.pushed & (kButtonA | kButtonB)) random_life();
   struct cb *c = kcb;
   uint8_t db[NROWS][NCOLS];
   for (int i = 0; i < NROWS; i++)
@@ -250,28 +240,27 @@ static void g_life_update(void) {
   memcpy(c->cb, db, sizeof(db)); }
 
 static void g_synth_update(void) {
-  struct k*k=&K;
   struct cb*cb = kcb;
-  struct synth_mode *m = mode(k);
+  struct synth_mode *m = (void*) K.mode;
   switch (m->submode) {
     case 0:
-      if (k->b.pushed & (kButtonA | kButtonB)) m->synth_time = 1, m->submode = 1;
+      if (K.b.pushed & (kButtonA | kButtonB)) m->synth_time = 1, m->submode = 1;
       else {
-        k->pd->sound->synth->playNote(m->synth, m->freq, 100, 1.0f/20, 0);
-        m->freq *= 1 + k->pd->system->getCrankChange() / 360.0f;
-        if (k->b.pushed & (kButtonLeft | kButtonRight)) {
+        K.pd->sound->synth->playNote(m->synth, m->freq, 100, 1.0f/20, 0);
+        m->freq *= 1 + K.pd->system->getCrankChange() / 360.0f;
+        if (K.b.pushed & (kButtonLeft | kButtonRight)) {
 
-          uintptr_t i = m->active_waveform + (k->b.pushed & kButtonLeft ? -1 : 1),
+          uintptr_t i = m->active_waveform + (K.b.pushed & kButtonLeft ? -1 : 1),
                     l = LEN(synth_waveforms);
           i = i == l ? 0 : i > l ? l - 1 : i;
           m->active_waveform = i;
-          k->pd->sound->synth->setWaveform(m->synth, synth_waveforms[i]); }
+          K.pd->sound->synth->setWaveform(m->synth, synth_waveforms[i]); }
         draw_wave(); }
       return;
     case 1:
-      if (k->b.pushed & (kButtonA | kButtonB)) m->submode = 2;
+      if (K.b.pushed & (kButtonA | kButtonB)) m->submode = 2;
       else {
-        m->synth_time *= (1 + 11 * k->pd->system->getCrankChange() / 360.0f);
+        m->synth_time *= (1 + 11 * K.pd->system->getCrankChange() / 360.0f);
         if (m->synth_time < 0.1f) m->synth_time = 0.1f;
         if (m->synth_time > NROWS * NCOLS) m->synth_time = NROWS * NCOLS;
         cb_cur(cb, 0, 0);
@@ -280,9 +269,9 @@ static void g_synth_update(void) {
           cb_put_char(cb, 0x9); }
       return;
     case 2:
-      if (k->b.pushed & (kButtonA | kButtonB)) m->submode = 1;
+      if (K.b.pushed & (kButtonA | kButtonB)) m->submode = 1;
       else {
-        k->pd->system->setAutoLockDisabled(1); 
+        K.pd->system->setAutoLockDisabled(1); 
         m->synth_time -= 1.0f/30;
         if (m->synth_time <= 0) m->submode = 0;
         else {
@@ -294,41 +283,41 @@ static void g_synth_update(void) {
       return; } }
 
 static g_vm(g_buttons) { return
-  Sp[0] = g_putnum(gk(f)->b.current),
+  Sp[0] = g_putnum(K.b.current),
   Ip += 1,
   Continue(); }
 
-static void ls_cb(const char *p, void *_k) {
-  struct k*k = _k;
-  k->g = g_cons_l(g_strof(k->g, p)); }
+static void ls_cb(const char *p, void *_) {
+  K.g = g_cons_l(g_strof(K.g, p)); }
 
 static g_vm(ls_root) {
   f = g_push(f, 1, g_nil);
   if (g_ok(f)) {
-    struct k *k = &K;
-    k->g = f;
-    k->pd->file->listfiles("/", ls_cb, k, 0);
-    f = k->g; }
+    K.g = f;
+    K.pd->file->listfiles("/", ls_cb, NULL, 0);
+    f = K.g; }
   if (!g_ok(f)) return f;
   return f->sp[1] = f->sp[0], f->sp++, f->ip++, Continue(); }
 
-static g_vm(cur_row) { return Sp[0] = g_putnum(kcb->row), Ip++, Continue(); }
-static g_vm(cur_col) { return Sp[0] = g_putnum(kcb->col), Ip++, Continue(); }
+static g_vm(cur_row) { return Sp[0] = g_putnum(gcb(f)->row), Ip++, Continue(); }
+static g_vm(cur_col) { return Sp[0] = g_putnum(gcb(f)->col), Ip++, Continue(); }
 static g_vm(cur_set) {
   uintptr_t r = g_getnum(Sp[0]), c = g_getnum(Sp[1]);
-  r %= kcb->rows, c %= kcb->cols;
-  kcb->row = r, kcb->col = c;
+  struct cb *cb = gcb(f);
+  r %= cb->rows, c %= cb->cols;
+  cb->row = r, cb->col = c;
   Sp += 1;
   Ip += 1;
   return Continue(); }
 static g_vm(cur_put) {
-  kcb->cb[kcb->row * kcb->cols + kcb->col] = g_getnum(Sp[0]);
+  struct cb *cb = gcb(f);
+  cb->cb[cb->row * cb->cols + cb->col] = g_getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 
-void g_stdout_putc(int c) { cb_put_char(kcb, c); }
-int g_stdin_getc(void) {
-  struct cb *cb = kcb;
+void g_stdout_putc(struct g*f, int c) { cb_put_char(gcb(f), c); }
+int g_stdin_getc(struct g*f) {
+  struct cb *cb = gcb(f);
   return cb_getc(cb); }
-int g_stdin_ungetc(int c) { return cb_ungetc(kcb, c); }
-int g_stdin_eof(void) { return cb_eof(kcb); }
+int g_stdin_ungetc(struct g*f, int c) { return cb_ungetc(gcb(f), c); }
+int g_stdin_eof(struct g*f) { return cb_eof(gcb(f)); }
