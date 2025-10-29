@@ -76,14 +76,19 @@ void srand(unsigned int);
 #define kb_flag_alt (kb_flag_lalt|kb_flag_ralt)
 #define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
-#define gcb(f) ((struct cb*)g_str_txt((f)->u[0]))
-#define kcb gcb(K.g)
+#define NROWS 30
+#define NCOLS 50
+static struct {
+  uint8_t rows, cols, row, col, rr, rc, flag, flag2, cb[NROWS * NCOLS];
+} _kcb = { NROWS, NCOLS, 0, 0, 0, 0, 0, 0, {0}};
+#define kcb ((struct cb*)&_kcb)
 
-void g_stdout_putc(int c) { return cb_put_char(gcb(K.g), c); }
 
-int g_stdin_getc(void) { return 0; }
-int g_stdin_ungetc(int c) { return c; }
-int g_stdin_eof(void) { return 1; }
+void g_stdout_putc(int c) { cb_put_char(kcb, c); }
+
+int g_stdin_getc(void) { return cb_getc(kcb); }
+int g_stdin_ungetc(int c) { return cb_ungetc(kcb, c); }
+int g_stdin_eof(void) { return cb_eof(kcb); }
 uintptr_t g_clock(void) { return K.ticks; }
 
 static void draw_char_buffer(g_fb32 *fb, struct cb *c);
@@ -160,15 +165,33 @@ void g_fb32_char(g_fb32 *fb, size_t row, size_t col, uint8_t c, uint32_t fg, uin
   g_fb32_bmp_8x8(fb, row, col, cga_8x8[c], fg, bg); }
 
 #define show_cursor 1
+#define blue 0xff
+#define green 0xff00
+#define red 0xff0000
+#define cyan (blue|green)
+#define yellow (red|green)
+#define white (yellow|blue)
+#define magenta (red|blue)
+#define black 0
+#define console_bg 0x4b4f58
+#define console_fg 0xe9edf0
+#define console_cur 0x6ba7a2
+#define console_sel 0xc3e4e0
 static void draw_char_buffer(g_fb32 *fb, struct cb *c) {
-  uint32_t rows = c->rows, cols = c->cols;
-  for (uint32_t i = 0; i < rows; i++)
-    for (uint32_t j = 0; j < cols; j++) {
+  int32_t rows = c->rows, cols = c->cols,
+          raddr = cols * c->rr + c->rc,
+          waddr = cols * c->row + c->col;
+
+  for (int32_t i = 0; i < rows; i++)
+    for (int32_t j = 0; j < cols; j++) {
       uint8_t g = c->cb[i * cols + j];
-      if (g) {
-        uint32_t fg = 0xffffffff, bg = 0;
-        if ((c->flag & show_cursor) && i == c->row && j == c->col) fg = ~fg, bg = ~bg;
-        g_fb32_char(fb, i*8, j*8, g, fg, bg); } } }
+      uint32_t fg = console_fg, bg = console_bg;
+      uint32_t addr = i * cols + j;
+      if (raddr <= addr && addr < waddr)
+        fg = console_sel;
+      if ((c->flag & show_cursor) && i == c->row && j == c->col)
+        fg = bg, bg = console_cur;
+      g_fb32_char(fb, i*8, j*8, g, fg, bg); } }
 
 void g_fb32_msg(g_fb32 *fb, size_t row, size_t col, const char *msg, uint32_t fg, uint32_t bg) {
   size_t h = fb->height, w = fb->width;
@@ -197,17 +220,8 @@ void k_cur_msg(const char *msg, uint32_t fg, uint32_t bg) {
 static void cputs(const char *s, uint32_t fg) {
   k_cur_msg(s, fg, 0); }
 
-#define blue 0xff
-#define green 0xff00
-#define red 0xff0000
-#define cyan (blue|green)
-#define yellow (red|green)
-#define white (yellow|blue)
-#define magenta (red|blue)
-#define black 0
-
 static void k_puts(const char *s) {
-  cputs(s, white); }
+  cputs(s, console_fg); }
 
 static void cputc(int c, uint32_t fg) {
   char s[2] = { c, 0 };
@@ -220,7 +234,7 @@ void cputn(uintptr_t n, uintptr_t base, uint32_t fg) {
   cputc(g_digits[d], fg); }
 
 static void k_putn(uintptr_t n, uintptr_t base) {
-  cputn(n, base, white); }
+  cputn(n, base, console_fg); }
 
 
 void g_fb32_ini(g_fb32 *b, uint32_t *_, size_t width, size_t height, size_t pitch) {
@@ -284,19 +298,25 @@ static void mem_init(struct k*k) {
   cputn(nrs, 10, magenta), cputs(" regions\n", magenta); }
 
 static void lisp_init(struct k*k) {
-  uintptr_t cols = k->fb.width >> 3, rows = k->fb.height >> 3;
   static intptr_t g_static_pool[1<<23];
   struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
+  cputs("\x01 lisp init -", yellow);
+  uintptr_t t0 = K.ticks, t1;
+  cputn(t0, 10, yellow);
+  cputs(" + ", yellow);
   static const char b[] =
 #include "boot.h"
   ;
-  f = g_evals(f, b);
-  f = g_vec0(g_pop(f, 1), g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + rows * cols);
+  f = g_pop(g_evals(f, b), 1);
+  cputn(t1 = K.ticks, 10, yellow);
+  cputs(" = ", yellow);
+  cputn(t1 - t0, 10, yellow);
+  cputs(" ticks \x01\n", yellow);
+//  f = g_vec0(g_pop(f, 1), g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
   if (!f || !g_ok(f)) for (;;) k_stop();
-  f->u[0] = g_pop1(f);
   f->u[1] = (intptr_t) k;
-  struct cb *c = gcb(f);
-  c->rows = rows, c->cols = cols;
+  struct cb *c = kcb;
+  c->rows = NROWS, c->cols = NCOLS;
   k->g = f; }
 
 static void k_evals(const char *s) {
@@ -308,26 +328,25 @@ void kmain(void) {
   fb_init(&K);
   mem_init(&K);
   lisp_init(&K);
-  cputn(K.ticks, 10, yellow);
-  cputs(" ticks \x01\n", yellow);
 
   srand(K.ticks);
+  kcb->flag |= show_cursor;
   // main loop
   for (;;) {
-    cb_fill(gcb(K.g), 0);
-    cb_cur(gcb(K.g), K.fb.cur_y, K.fb.cur_x);
+    cb_fill(kcb, 0);
+    cb_cur(kcb, 0, 0);
     k_evals(
       "(puts\"\x02 gwen lisp \")(putn(clock 0)10)(puts\"\n\")"
       "(: i(sysinfo 0)f(A i)pool(AB i)len(A(BB i))allocd(AB(BB i))stackd(A(BB(BB i)))"
      " (,"
-      "(puts\"f@\")(putn f 16)"
-      "(puts\"         \n pool=\")(putn pool 16)" 
-      "(puts\"         \n len=\")(putn len 10)"
-      "(puts\"         \n allocd=\")(putn allocd 10)"
-      "(puts\"         \n stackd=\")(putn stackd 10)"
+      "(puts\"@\")(putn f 16)"
+      "(puts\"\n@\")(putn pool 16)" 
+      "(puts\"\n#\")(putn len 10)"
+      "(puts\".\")(putn stackd 10)"
+      "(puts\".\")(putn allocd 10)"
       "(puts\"\n\")"
       ")"
       ")"
     );
-    draw_char_buffer(&K.fb, gcb(K.g));
+    draw_char_buffer(&K.fb, kcb);
     k_stop(); } }

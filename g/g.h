@@ -132,7 +132,7 @@ long strtol(const char*restrict, char**restrict, int);
 size_t strlen(const char*);
 
 char *g_str_txt(intptr_t);
-g_vm_t ret0, curry;
+g_vm_t ret0, curry, g_yield;
 
 bool g_twop(intptr_t), g_strp(intptr_t), g_tblp(intptr_t), g_symp(intptr_t);
 
@@ -145,6 +145,7 @@ struct g *g_printf(struct g*, struct g_out*, const char*, ...),
      *g_putc(struct g*, struct g_out*, int),
      *g_putn(struct g*, struct g_out*, uintptr_t, uintptr_t);
 struct g
+  *g_ana(struct g*, g_vm_t),
   *g_write1(struct g*),
   *g_eval(struct g*),
   *g_read1i(struct g*f, struct g_in*),

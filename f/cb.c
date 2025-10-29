@@ -1,3 +1,4 @@
+#include "g.h"
 #include "cb.h"
 
 void cb_fill(struct cb *c, uint8_t _) {
@@ -30,20 +31,34 @@ void cb_vlogf(struct cb *cb, const char *fmt, va_list xs) {
       case 'o': cb_log_n(cb, va_arg(xs, uintptr_t), 8); break;
       case 'b': cb_log_n(cb, va_arg(xs, uintptr_t), 2); break; } } }
 
+
 static void cb_line_feed(struct cb *c) {
   c->col = 0;
-  c->row++;
-  if (c->row == c->rows) c->row = 0; }
+  if (++c->row == c->rows) c->row = 0; }
 #define tab_width 8
 void cb_put_char(struct cb *c, char i) {
   if (i == '\n') return cb_line_feed(c);
-  if (i == '\t') {
-    c->col += tab_width;
-    c->col -= c->col % tab_width; }
-  else {
-    c->cb[c->row * c->cols + c->col] = i;
-    c->col++; }
-  if (c->col >= c->cols) cb_line_feed(c); }
+  c->cb[c->row * c->cols + c->col] = i;
+  if (++c->col == c->cols) cb_line_feed(c); }
 
 void cb_log(struct cb *c, const char *msg) {
   while (*msg) cb_put_char(c, *msg++); }
+
+int cb_ungetc(struct cb *c, int i) {
+  int row = c->rr, col = c->rc;
+  if (c->rc-- == 0) {
+    c->rc = c->cols - 1;
+    if (c->rr-- == 0) c->rr = c->rows - 1; }
+  c->cb[c->rr * c->cols + c->rc] = i;
+  return i; }
+int cb_eof(struct cb *c) {
+  return c->row == c->rr && c->col == c->rc; }
+int cb_getc(struct cb *c) {
+  if (cb_eof(c)) return -1;
+  int i = c->cb[c->rr * c->cols + c->rc];
+  if (++c->rc == c->cols) {
+    c->rc = 0;
+    if (++c->rr == c->rows) c->rr = 0; }
+  return i; }
+
+

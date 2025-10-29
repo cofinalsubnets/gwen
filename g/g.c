@@ -89,9 +89,10 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 
 static void gc_walk(struct g*g, intptr_t *p0, intptr_t *t0);
 
+struct g
+  *g_ana(struct g*, g_vm_t*);
 static struct g
   *please(struct g*, uintptr_t),
-  *g_ana(struct g*, g_vm_t*),
   *g_hash_put(struct g*),
   *g_intern(struct g*),
   *g_tbl(struct g*);
@@ -100,7 +101,7 @@ static g_inline struct g *g_intern(struct g*f) {
   if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
   return f; }
 static struct g*g_putx(struct g*, struct g_out*, intptr_t);
-static g_vm_t g_yield, sysinfo;
+static g_vm_t sysinfo;
 static void *g_libc_malloc(struct g *f, uintptr_t n) { return malloc(n); }
 static void g_libc_free(struct g *f, void *n)        { return free(n); }
 static void *g_static_malloc(struct g *f, size_t n)  { return NULL; }
@@ -445,7 +446,7 @@ static g_vm(imm) {
   Ip += 2;
   return Continue(); }
 
-static g_vm(g_yield) { return
+g_vm(g_yield) { return
   Ip = Ip[1].m,
   Pack(f),
   encode(f, g_status_yield); }
@@ -1756,7 +1757,7 @@ g_inline struct g *g_pop(struct g *f, uintptr_t m) {
   return !g_ok(f) ? f : (f->sp += m, f); }
 
 // keep this separate and g_noinline so g_eval can be tail call optimized if possible
-static g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
+g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
   f = enscope(f, (struct env*) g_nil, g_nil, g_nil);
   if (!g_ok(f)) return f;
   struct env *c = (struct env*) g_pop1(f);

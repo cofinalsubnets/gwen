@@ -23,9 +23,9 @@ distclean:
 	@echo RM $b dl
 	@rm -rf `git check-ignore * */*`
 valg: $b/h/$n
-	@cat $t | valgrind --error-exitcode=1 $m
+	@cat $t | $(lib) valgrind --error-exitcode=1 b/h/$n
 $b/perf.data: $b/h/$n
-	cat $t | perf record -o $@ $m
+	cat $t | $(lib) perf record -o $@ b/h/$n
 perf: $b/perf.data
 	perf report -i $<
 $b/flamegraph.svg: $b/perf.data
