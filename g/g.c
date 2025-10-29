@@ -1672,7 +1672,7 @@ static g_vm(trim) {
   Ip += 1;
   return Continue(); }
 
-struct g_in g_stdin = { g_getc, g_ungetc, g_eof };
+struct g_in g_stdin = { g_stdin_getc, g_stdin_ungetc, g_stdin_eof };
 struct g_out g_stdout = { g_stdout_putc };
 struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
   uintptr_t len = vt_size[type];

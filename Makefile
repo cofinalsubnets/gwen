@@ -1,14 +1,17 @@
 n=gl
 x=g
 b=b
-m=$b/h/$n
-l=$b/h/lcat
+lib=LD_LIBRARY_PATH=$b/h:$(LD_LIBRARY_PATH)
+m=$(lib) $b/h/$n
+l=$(lib) $b/h/lcat
 a?=$(shell uname -m)
+
+t=$(sort $(wildcard t/*.$x))
 
 .PHONY: test all h k pd clean distclean valg perf repl cloc cat catr
 test: $b/h/$n
 	@echo GL test
-	@$m t/*.$x
+	@cat $t | $m
 all: h k pd
 h: $b/h/$n $b/h/lib$n.so $b/h/$n.1
 k: $b/$n-$a.k
@@ -20,15 +23,15 @@ distclean:
 	@echo RM $b dl
 	@rm -rf `git check-ignore * */*`
 valg: $b/h/$n
-	valgrind --error-exitcode=1 $m t/*.$x
+	@cat $t | valgrind --error-exitcode=1 $m
 $b/perf.data: $b/h/$n
-	perf record -o $@ $m t/*.$x
+	cat $t | perf record -o $@ $m
 perf: $b/perf.data
 	perf report -i $<
 $b/flamegraph.svg: $b/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: $b/h/$n
-	rlwrap $m
+	cat h/repl.g | $(lib) $<
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test
@@ -106,25 +109,25 @@ pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst)\
   -D__HEAP_SIZE=8388208 \
  	-D__STACK_SIZE=4194304
 
-$b/h/$n: $b/h/main.o $b/h/$n.a
+$b/h/$n: $b/h/main.o $b/h/lib$n.so
 	@echo LD $@
 	@mkdir -p $(dir $@)
 	@$(cc) -o $@ $^
 
-$b/h/lcat: $b/h/lcat.o $b/h/$n.a
+$b/h/lcat: $b/h/lcat.o $b/h/lib$n.so
 	@echo LD $@
 	@mkdir -p $(dir $@)
 	@$(cc) -o $@ $^
 
-$b/h/$n.a: $(h_o)
+$b/h/lib$n.a: $(h_o)
 	@echo AR $@
 	@mkdir -p $(dir $@)
 	@ar rcs $@ $^
 
-$b/h/lib$n.so: $(h_o)
+$b/h/lib$n.so: $b/h/lib$n.a
 	@echo LD $@
 	@mkdir -p $(dir $@)
-	@$(cc) -shared -o $@ $^
+	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive
 
 $b/h/%.o: %.c $(g_h) Makefile
 	@echo CC $@
@@ -136,7 +139,7 @@ $b/h/%.o: h/%.c $(g_h) Makefile
 	@mkdir -p $(dir $@)
 	@$(cc) -c -I$b/h $< -o $@
 
-$b/h/main.o: h/main.c $b/h/main.h $b/boot.h $(g_h) Makefile
+$b/h/main.o: h/main.c $b/boot.h $(g_h) Makefile
 	@echo CC $@
 	@mkdir -p $(dir $@)
 	@$(cc) -c -I$b/h $< -o $@
@@ -144,15 +147,11 @@ $b/h/main.o: h/main.c $b/h/main.h $b/boot.h $(g_h) Makefile
 # sed command to escape lisp text into C string format
 $b/boot.h: $b/h/lcat h/lcat.sed g/boot.$x
 	@echo GL $@
-	@$< < g/boot.$x | sed -f h/lcat.sed >$@
-
-$b/h/main.h: $b/h/lcat h/lcat.sed h/main.$x
-	@echo GL $@
-	@$< < h/main.$x | sed -f h/lcat.sed > $@
+	@$l < g/boot.$x | sed -f h/lcat.sed >$@
 
 $b/h/$n.1: $b/h/$n h/manpage.$x
 	@echo GL $@
-	@$^ > $@
+	@$m < h/manpage.$x > $@
 
 $b/$n-$a.k: Makefile k/arch/$a/$a.lds $(k_o)
 	@echo LD $@
@@ -288,7 +287,7 @@ DESTDIR ?= $(HOME)/
 installs=\
  	$(DESTDIR)/$(PREFIX)/$b/$n\
   $(DESTDIR)/$(PREFIX)/g/man/man1/$n.1\
-  $(DESTDIR)/$(PREFIX)/lib/$n.a\
+  $(DESTDIR)/$(PREFIX)/lib/lib$n.a\
   $(DESTDIR)/$(PREFIX)/lib/lib$n.so\
   $(DESTDIR)/$(PREFIX)/include/$x.h\
   $(DESTDIR)/$(VIMPREFIX)/ftdetect/$n.vim\
@@ -303,7 +302,7 @@ uninstall:
 $(DESTDIR)/$(PREFIX)/include/$x.h: g/$x.h
 	@echo CP $(abspath $@)
 	@install -D -m 644 $< $@
-$(DESTDIR)/$(PREFIX)/lib/$n.a: $b/h/$n.a
+$(DESTDIR)/$(PREFIX)/lib/lib$n.a: $b/h/lib$n.a
 	@echo CP $(abspath $@)
 	@install -D -m 755 $< $@
 $(DESTDIR)/$(PREFIX)/lib/lib$n.so: $b/h/lib$n.so

@@ -116,9 +116,9 @@ enum g_status {
 
 
 uintptr_t g_clock(void); // used by garbage collector
-int g_getc(struct g_in*),
-    g_ungetc(struct g_in*, int),
-    g_eof(struct g_in*),
+int g_stdin_getc(struct g_in*),
+    g_stdin_ungetc(struct g_in*, int),
+    g_stdin_eof(struct g_in*),
     strncmp(const char*, const char*, size_t),
     memcmp(const void*, const void*, size_t);
 struct g*g_stdout_putc(struct g*,struct g_out *o, int c);

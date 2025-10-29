@@ -272,6 +272,6 @@ static g_vm(ls_root) {
   if (!g_ok(f)) return f;
   return f->sp[1] = f->sp[0], f->sp++, f->ip++, Continue(); }
 
-int g_getc(struct g_in *) { return 0; }
-int g_ungetc(struct g_in*, int c) { return c; }
-int g_eof(struct g_in*) { return 1; }
+int g_stdin_getc(struct g_in *) { return 0; }
+int g_stdin_ungetc(struct g_in*, int c) { return c; }
+int g_stdin_eof(struct g_in*) { return 1; }

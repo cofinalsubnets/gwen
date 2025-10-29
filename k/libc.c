@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <limits.h>
-#include "k.h"
 
 void *malloc(size_t n) { return NULL; }
 void free(void*x) { }
