@@ -78,20 +78,18 @@ void srand(unsigned int);
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
 #define NROWS 30
 #define NCOLS 50
-static struct {
-  uint8_t rows, cols, row, col, rr, rc, flag, flag2, cb[NROWS * NCOLS];
-} _kcb = { NROWS, NCOLS, 0, 0, 0, 0, 0, 0, {0}};
-#define kcb ((struct cb*)&_kcb)
+#define gcb(f) ((struct cb*)g_str_txt((f)->u[0]))
+#define kcb gcb(K.g)
 
 
-void g_stdout_putc(struct g*_, int c) { cb_put_char(kcb, c); }
+void g_stdout_putc(struct g*f, int c) { cb_put_char(gcb(f), c); }
 
-int g_stdin_getc(struct g*) { return cb_getc(kcb); }
-int g_stdin_ungetc(struct g*, int c) { return cb_ungetc(kcb, c); }
-int g_stdin_eof(struct g*) { return cb_eof(kcb); }
+int g_stdin_getc(struct g*f) { return cb_getc(gcb(f)); }
+int g_stdin_ungetc(struct g*f, int c) { return cb_ungetc(gcb(f), c); }
+int g_stdin_eof(struct g*f) { return cb_eof(gcb(f)); }
 uintptr_t g_clock(void) { return K.ticks; }
 
-static void draw_char_buffer(g_fb32 *fb, struct cb *c);
+static void draw_char_buffer(void);
 
 uint8_t key_get(void) {
   uint8_t r = K.kb.k;
@@ -177,7 +175,9 @@ void g_fb32_char(g_fb32 *fb, size_t row, size_t col, uint8_t c, uint32_t fg, uin
 #define console_fg 0xe9edf0
 #define console_cur 0x6ba7a2
 #define console_sel 0xc3e4e0
-static void draw_char_buffer(g_fb32 *fb, struct cb *c) {
+static void draw_char_buffer(void) {
+  g_fb32 *fb = &K.fb;
+  struct cb *c = gcb(K.g);
   uint8_t rows = c->rows, cols = c->cols,
           raddr = cols * c->rr + c->rc,
           waddr = cols * c->row + c->col;
@@ -255,39 +255,39 @@ static struct mem *kgetmem(uint64_t hhdm, uint64_t n, struct limine_memmap_entry
     return m; }
   return next; }
 
-static void fb_init(struct k*k) {
+static void fb_init(void) {
   // framebuffer init
   if (!fb_req.response || !fb_req.response->framebuffer_count)
     for (;;) k_stop();
   struct limine_framebuffer *fb0 = fb_req.response->framebuffers[0];
-  g_fb32_ini(&k->fb, fb0->address, fb0->width, fb0->height, fb0->pitch);
-  intptr_t x0 = k->fb.width / 2,
-           y0 = k->fb.height / 2,
+  g_fb32_ini(&K.fb, fb0->address, fb0->width, fb0->height, fb0->pitch);
+  intptr_t x0 = K.fb.width / 2,
+           y0 = K.fb.height / 2,
            rad = MIN(x0, y0);
   for (uint32_t color = 0xff0000, step = color / rad; rad; color -= step, rad--)
     for (intptr_t x = x0 - rad; x <= x0 + rad; x++)
       for (intptr_t y = y0 - rad; y <= y0 + rad; y++) {
         intptr_t dx = x - x0, dy = y - y0;
         if (dx * dx + dy * dy < rad * rad)
-          g_fb32_px(&k->fb, y, x, color * (uintptr_t) k); }
-  cputn(k->fb.width, 10, cyan);
+          g_fb32_px(&K.fb, y, x, color * (uintptr_t) &K); }
+  cputn(K.fb.width, 10, cyan);
   cputs("x", cyan);
-  cputn(k->fb.height, 10, cyan);
+  cputn(K.fb.height, 10, cyan);
   k_puts(" ");
-  cputn(k->fb.width>>3, 10, cyan);
+  cputn(K.fb.width>>3, 10, cyan);
   cputs("x", cyan);
-  cputn(k->fb.height>>3, 10, cyan);
+  cputn(K.fb.height>>3, 10, cyan);
   k_puts("\n"); }
 
-static void mem_init(struct k*k) {
+static void mem_init(void) {
   if (!memmap_req.response || !hhdm_req.response) for (;;) k_stop();
   struct limine_memmap_entry **rr = memmap_req.response->entries;
   uint64_t hhdm = hhdm_req.response->offset,
            n = memmap_req.response->entry_count,
            nrs = 0,
            nbs = 0;
-  k->free = kgetmem(hhdm, n, rr, &nbs, &nrs);
-  k->used = NULL;
+  K.free = kgetmem(hhdm, n, rr, &nbs, &nrs);
+  K.used = NULL;
   if (nbs >= 1<<22)
     cputn(nbs>>20, 10, magenta), cputs("MiB in ", magenta);
   else if (nbs >= 1<<16)
@@ -296,7 +296,7 @@ static void mem_init(struct k*k) {
     k_putn(nbs, 10), cputs("B in ", magenta);
   cputn(nrs, 10, magenta), cputs(" regions\n", magenta); }
 
-static void lisp_init(struct k*k) {
+static void lisp_init(void) {
   static intptr_t g_static_pool[1<<23];
   struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
   cputs("\x01 lisp init -", yellow);
@@ -307,35 +307,36 @@ static void lisp_init(struct k*k) {
 #include "boot.h"
   ;
   f = g_pop(g_evals(f, b), 1);
+  f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
+  if (!f || !g_ok(f)) for (;;) k_stop();
   cputn(t1 = K.ticks, 10, yellow);
   cputs(" = ", yellow);
   cputn(t1 - t0, 10, yellow);
   cputs(" ticks \x01\n", yellow);
-  //f = g_vec0(g_pop(f, 1), g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
-  if (!f || !g_ok(f)) for (;;) k_stop();
-  //f->u[0] = g_pop1(f);
-  struct cb *c = kcb;
+  f->u[0] = g_pop1(f);
+  struct cb *c = gcb(f);
   c->rows = NROWS, c->cols = NCOLS;
-  k->g = f; }
+  c->flag |= show_cursor;
+  K.g = f; }
 
 static void k_evals(const char *s) {
   K.g = g_pop(g_evals(K.g, s), 1); }
 
 struct k K;
 void kmain(void) {
+  K.ticks = 0;
   arch_init(); // arch specific init
-  fb_init(&K);
-  mem_init(&K);
-  lisp_init(&K);
-
+  fb_init();
+  mem_init();
+  lisp_init();
   srand(K.ticks);
-  kcb->flag |= show_cursor;
   // main loop
   for (;;) {
-    cb_fill(kcb, 0);
-    cb_cur(kcb, 0, 0);
+    struct cb *c = kcb;
+    cb_fill(c, 0);
+    cb_cur(c, 0, 0);
     k_evals(
-      "(puts\"\x02 gwen lisp \")(putn(clock 0)10)(puts\"\n\")"
+      "(puts\"\x02 gwen lisp \") (putn (clock 0) 10) (puts\"\n\")"
       "(: i(sysinfo 0)f(A i)pool(AB i)len(A(BB i))allocd(AB(BB i))stackd(A(BB(BB i)))"
      " (,"
       "(puts\"@\")(putn f 16)"
@@ -347,5 +348,5 @@ void kmain(void) {
       ")"
       ")"
     );
-    draw_char_buffer(&K.fb, kcb);
+    draw_char_buffer();
     k_stop(); } }
