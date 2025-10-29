@@ -39,7 +39,7 @@ static int k_update(void *_) {
   for (int i = 0; i < rows; i++)
     for (int j = 0; j < cols; j++)
       for (uint8_t b = 0, *glyph = cga_8x8[c->cb[i * cols + j]], g; b < 8; b++)
-        frame[52 * (8 * i + b) + j] = (c->flag & show_cursor_flag) && i == c->row && j == c->col ? ~glyph[b] : glyph[b];
+        frame[52 * (8 * i + b) + j] = (c->flag & show_cursor_flag) && i == c->row && j == c->col && K.g == K.g->pool ? ~glyph[b] : glyph[b];
   K.pd->graphics->markUpdatedRows(0, LCD_ROWS);
   return 1; }
 

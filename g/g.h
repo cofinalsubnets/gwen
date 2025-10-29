@@ -34,6 +34,8 @@
 union x;
 typedef g_vm(g_vm_t);
 struct g {
+  struct g *pool;                        // 5 lower core address
+  uintptr_t len;                         // 4 length of core data
   union x {
     g_vm_t *ap;
     intptr_t x;
@@ -51,8 +53,6 @@ struct g {
     uintptr_t code;
     struct g_atom *l, *r;
   } *symbols;                            // 3 
-  uintptr_t len;                         // 4 length of core data
-  intptr_t *pool;                        // 5 lower core address
   struct g_mem_root {
     intptr_t *ptr;
     struct g_mem_root *next; } *safe;    // 6

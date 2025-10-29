@@ -1288,6 +1288,8 @@ static g_inline bool eql(struct g *f, intptr_t a, intptr_t b) {
 
 static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
   memcpy(g, f, sizeof(struct g));
+  g->pool = (void*) p1;
+  g->len = len1;
   uintptr_t len0 = f->len;
   intptr_t
     *p0 = (intptr_t*) f,
@@ -1296,8 +1298,6 @@ static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f
     *sp0 = f->sp,
     h = t0 - sp0,
     *sp1 = t1 - h; // stack height
-  g->pool = p1;
-  g->len = len1;
   g->sp = sp1;
   g->hp = g->cp = g->end;
   g->symbols = 0;
@@ -1327,9 +1327,9 @@ static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f
 static g_noinline struct g *please(struct g *f, uintptr_t req0) {
   uintptr_t t0 = f->t0, t1 = g_clock(),
             len0 = f->len;
-  intptr_t *w = (intptr_t*) f, *w0 = f->pool;
+  intptr_t *w = (intptr_t*) f, *w0 = (void*) f->pool;
   struct g *g = (struct g*) (w == w0 ? w0 + len0 : w0);
-  f = copy_core(g, f->pool, f->len, f);
+  f = copy_core(g, (void*) f->pool, f->len, f);
   uintptr_t t2 = f->t0,      // get and set last gc end time
             req = req0 + len0 - avail(f),
             v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
@@ -1349,7 +1349,7 @@ static g_noinline struct g *please(struct g *f, uintptr_t req0) {
     if (req <= len0) return f;
     return encode(f, g_status_oom); }
   g = copy_core(g, (intptr_t*) g, len1, f);
-  f->free(f, f->pool);
+  f->free(f, (void*) f->pool);
   return g; }
 
 static void gc_walk(struct g*g, intptr_t *p0, intptr_t *t0) {
@@ -1543,7 +1543,7 @@ static struct g *g_ini_0(
 
   memset(f, 0, sizeof(struct g));
   f->len = words;
-  f->pool = (intptr_t*) f;
+  f->pool = (void*) f;
   f->malloc = ma ? ma : g_static_malloc;
   f->free = fr ? fr : g_static_free;
   f->hp = f->end;

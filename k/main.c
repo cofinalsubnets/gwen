@@ -189,7 +189,7 @@ static void draw_char_buffer(void) {
       uint8_t addr = i * cols + j;
       if (raddr <= addr && addr < waddr)
         fg = console_sel;
-      if ((c->flag & show_cursor) && i == c->row && j == c->col)
+      if ((c->flag & show_cursor) && i == c->row && j == c->col && K.g == K.g->pool)
         fg = bg, bg = console_cur;
       g_fb32_char(fb, i*8, j*8, g, fg, bg); } }
 
@@ -243,18 +243,6 @@ void g_fb32_ini(g_fb32 *b, uint32_t *_, size_t width, size_t height, size_t pitc
   b->pitch = pitch;
   b->cur_x = b->cur_y = 0; }
 
-static struct mem *kgetmem(uint64_t hhdm, uint64_t n, struct limine_memmap_entry **rr, uint64_t *nbs, uint64_t *nrs) {
-  if (!n) return NULL;
-  struct limine_memmap_entry *r = *rr;
-  struct mem *next = kgetmem(hhdm, n-1, rr+1, nbs, nrs);
-  if (r && r->type == 0 && r->length >= sizeof(struct mem) && r->base + r->length - 1 < 1l<<32) {
-    struct mem *m = (struct mem*) (hhdm + r->base);
-    *nrs += 1;
-    *nbs += m->len = r->length;
-    m->next = next;
-    return m; }
-  return next; }
-
 static void fb_init(void) {
   // framebuffer init
   if (!fb_req.response || !fb_req.response->framebuffer_count)
@@ -282,11 +270,21 @@ static void fb_init(void) {
 static void mem_init(void) {
   if (!memmap_req.response || !hhdm_req.response) for (;;) k_stop();
   struct limine_memmap_entry **rr = memmap_req.response->entries;
-  uint64_t hhdm = hhdm_req.response->offset,
+  uintptr_t hhdm = hhdm_req.response->offset,
            n = memmap_req.response->entry_count,
            nrs = 0,
            nbs = 0;
-  K.free = kgetmem(hhdm, n, rr, &nbs, &nrs);
+  K.free = NULL;
+  for (uintptr_t i = n; i; i--) {
+    struct limine_memmap_entry *r = rr[i];
+    if (!r || r->type != 0 || r->length < sizeof(struct mem) || r->base + r->length - 1 >= 1l<<32)
+      continue;
+    struct mem *m = (struct mem*) (hhdm + r->base);
+    nrs += 1;
+    nbs += m->len = r->length;
+    m->next = K.free;
+    K.free = m; }
+
   K.used = NULL;
   if (nbs >= 1<<22)
     cputn(nbs>>20, 10, magenta), cputs("MiB in ", magenta);
@@ -338,7 +336,7 @@ void kmain(void) {
     k_evals(
       "(puts\"\x02 gwen lisp \") (putn (clock 0) 10) (puts\"\n\")"
       "(: i(sysinfo 0)f(A i)pool(AB i)len(A(BB i))allocd(AB(BB i))stackd(A(BB(BB i)))"
-     " (,"
+     "(,"
       "(puts\"@\")(putn f 16)"
       "(puts\"\n@\")(putn pool 16)" 
       "(puts\"\n#\")(putn len 10)"
