@@ -1,5 +1,6 @@
 #ifndef _g_h
 #define _g_h
+// thanks !!
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -20,6 +21,7 @@
 #define Sp f->sp
 #define Ip f->ip
 #endif
+
 #define g_core_of(f) ((struct g*)((intptr_t)(f)&~(sizeof(intptr_t)-1)))
 #define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))
 #define g_ok(f) (g_code_of(f) == g_status_ok)
@@ -30,7 +32,7 @@
 #define LEN(_) (sizeof(_)/sizeof(*_))
 #define MIN(_,__) ((_)<(__)?(_):(__))
 #define MAX(_,__) ((_)>(__)?(_):(__))
-// thanks !!
+
 union x;
 typedef g_vm(g_vm_t);
 struct g {

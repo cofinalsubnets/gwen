@@ -200,13 +200,13 @@ static void draw_wave(void) {
     case kWaveformSine: w = sine_wave; break;
     default: w = noise_wave; }
   cb_fill(kcb, 0);
-  uintptr_t off = g_clock();
+  uintptr_t off = g_clock() >> 5;
   for (int i = 0; i < NCOLS; i++) {
     float x = -0.5f + (float) i / NCOLS,
           y = w(x*m->freq + off);
     int r = y * NROWS;
     if (r >= NROWS) r = NROWS - 1;
-    kcb->cb[i + r * NCOLS] = 0xdb; } }
+    kcb->cb[i + r * NCOLS] = 0x7; } }
 
 
 static void g_synth_ini(void) {
