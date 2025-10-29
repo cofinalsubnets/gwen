@@ -12,10 +12,9 @@ void cb_mv_cur(struct cb *c, int32_t dr, int32_t dc) {
   cb_cur(c, dr + c->row, dc + c->col); }
 
 void cb_log_n(struct cb *c, uintptr_t n, uintptr_t base) {
-  static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-  uintptr_t d = n % base;
-  if (n / base) cb_log_n(c, n / base, base);
-  cb_put_char(c, digits[d]); }
+  uintptr_t q = n / base, r = n % base;
+  if (q) cb_log_n(c, q, base);
+  cb_put_char(c, g_digits[r]); }
 
 void cb_vlogf(struct cb *cb, const char *fmt, va_list xs) {
   while (*fmt) {
@@ -35,7 +34,6 @@ void cb_vlogf(struct cb *cb, const char *fmt, va_list xs) {
 static void cb_line_feed(struct cb *c) {
   c->col = 0;
   if (++c->row == c->rows) c->row = 0; }
-#define tab_width 8
 void cb_put_char(struct cb *c, char i) {
   if (i == '\n') return cb_line_feed(c);
   c->cb[c->row * c->cols + c->col] = i;
@@ -45,7 +43,6 @@ void cb_log(struct cb *c, const char *msg) {
   while (*msg) cb_put_char(c, *msg++); }
 
 int cb_ungetc(struct cb *c, int i) {
-  int row = c->rr, col = c->rc;
   if (c->rc-- == 0) {
     c->rc = c->cols - 1;
     if (c->rr-- == 0) c->rr = c->rows - 1; }

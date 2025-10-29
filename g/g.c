@@ -1587,11 +1587,10 @@ static int read_char(struct g_in *i) {
     case '#': case ';': while (!i->eof(i) && (c = i->getc(i)) != '\n' && c != '\r');
     case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-static const char g_digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 struct g* g_putn(struct g*f, struct g_out*o, uintptr_t n, uintptr_t base) {
-  uintptr_t d = n % base;
-  if (n / base) f = g_putn(f, o, n / base, base);
-  return g_putc(f, o, g_digits[d]); }
+  uintptr_t q = n / base, r = n % base;
+  if (q) f = g_putn(f, o, q, base);
+  return g_putc(f, o, g_digits[r]); }
 
 static struct g* g_putx(struct g *f, struct g_out *o, intptr_t x) {
   if (odd(x)) return g_printf(f, o, "%d", (uintptr_t) g_getnum(x));
@@ -1717,15 +1716,17 @@ g_noinline struct g *g_reads(struct g *f, const char*s) {
 struct g *g_write1(struct g *f) { return g_putx(f, &g_stdout, f->sp[0]); }
 struct g *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
 
-struct g *g_defns(struct g*f, uintptr_t len, struct g_def *defs) {
-  for (uintptr_t i = 0; i < len; i++) {
-    const char *s = defs[i].n;
-    f = g_intern(g_strof(g_push(f, 2, f->dict, defs[i].x), s));
-    if (g_ok(f)) {
+struct g *g_def(struct g*f, const char*s, intptr_t x) {
+  f = g_intern(g_strof(g_push(f, 2, f->dict, x), s));
+  if (g_ok(f)) {
       intptr_t w = f->sp[1];
       f->sp[1] = f->sp[2];
       f->sp[2] = w;
-      f = g_pop(g_hash_put(f), 1); } }
+      f = g_pop(g_hash_put(f), 1); }
+  return f; }
+
+struct g *g_defs(struct g*f, uintptr_t len, struct g_def *defs) {
+  for (uintptr_t i = 0; i < len; i++) f = g_def(f, defs[i].n, defs[i].x);
   return f; }
 
 struct g *g_push(struct g *f, uintptr_t m, ...) {

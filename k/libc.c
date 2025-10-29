@@ -1,3 +1,4 @@
+#include "g.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <limits.h>
@@ -52,7 +53,7 @@ void *memchr(const void *s, int c, size_t n) {
   return NULL; }
 
 
-static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+static const char digits[] = g_digits;
 static const char spaces[] = " \n\t\v\r\f";
 
 #define LEN(_) (sizeof(_)/sizeof(*_))

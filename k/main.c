@@ -178,7 +178,7 @@ void g_fb32_char(g_fb32 *fb, size_t row, size_t col, uint8_t c, uint32_t fg, uin
 #define console_cur 0x6ba7a2
 #define console_sel 0xc3e4e0
 static void draw_char_buffer(g_fb32 *fb, struct cb *c) {
-  int32_t rows = c->rows, cols = c->cols,
+  uint8_t rows = c->rows, cols = c->cols,
           raddr = cols * c->rr + c->rc,
           waddr = cols * c->row + c->col;
 
@@ -186,7 +186,7 @@ static void draw_char_buffer(g_fb32 *fb, struct cb *c) {
     for (int32_t j = 0; j < cols; j++) {
       uint8_t g = c->cb[i * cols + j];
       uint32_t fg = console_fg, bg = console_bg;
-      uint32_t addr = i * cols + j;
+      uint8_t addr = i * cols + j;
       if (raddr <= addr && addr < waddr)
         fg = console_sel;
       if ((c->flag & show_cursor) && i == c->row && j == c->col)
@@ -227,11 +227,10 @@ static void cputc(int c, uint32_t fg) {
   char s[2] = { c, 0 };
   cputs(s, fg); }
 
-static const char g_digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 void cputn(uintptr_t n, uintptr_t base, uint32_t fg) {
-  uintptr_t d = n % base;
-  if (n / base) cputn(n / base, base, fg);
-  cputc(g_digits[d], fg); }
+  uintptr_t q = n / base, r = n % base;
+  if (q) cputn(q, base, fg);
+  cputc(g_digits[r], fg); }
 
 static void k_putn(uintptr_t n, uintptr_t base) {
   cputn(n, base, console_fg); }

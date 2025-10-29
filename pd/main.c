@@ -59,13 +59,13 @@ static union x
   bif_cur_set[] = {{curry}, {.x=g_putnum(2)}, {cur_set}, {ret0}},
   bif_crank_angle[] = {{crank_angle}, {ret0}};
 static struct g_def defs[] = {
-  {"cur_row", bif_cur_row},
-  {"cur_col", bif_cur_col},
-  {"cur_set", bif_cur_set},
-  {"cur_put", bif_cur_put},
-  {"ls_root", bif_ls_root},
-  {"crank_angle", bif_crank_angle},
-  {"get_buttons", bif_buttons}, };
+  {"cur_row", (intptr_t) bif_cur_row},
+  {"cur_col", (intptr_t) bif_cur_col},
+  {"cur_set", (intptr_t) bif_cur_set},
+  {"cur_put", (intptr_t) bif_cur_put},
+  {"ls_root", (intptr_t) bif_ls_root},
+  {"crank_angle", (intptr_t) bif_crank_angle},
+  {"get_buttons", (intptr_t) bif_buttons}, };
 
 
 
@@ -109,7 +109,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       _synth.synth = pd->sound->synth->newSynth();
       static intptr_t g_static_pool[1<<20];
       struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
-      f = g_defns(f, LEN(defs), defs);
+      f = g_defs(f, LEN(defs), defs);
       k->g = g_pop(g_evals(f, "(: t0(clock 0))"), 1);
       //k_boot(k);
       f = g_pop(g_evals(k->g, "(: t1(clock 0))"), 1);

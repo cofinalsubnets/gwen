@@ -92,9 +92,7 @@ struct g_out {
   struct g *(*putc)(struct g*, struct g_out*, int);
 };
 
-struct g_def {
-  const char *n;
-  union x *x; };
+struct g_def { const char *n; intptr_t x; };
 
 struct g
   *g_ini(void),
@@ -151,7 +149,8 @@ struct g
   *g_read1i(struct g*f, struct g_in*),
   *g_readsi(struct g*, struct g_in*),
   *g_reads(struct g*, const char*),
-  *g_defns(struct g*, uintptr_t, struct g_def*),
+  *g_def(struct g*, const char*, intptr_t),
+  *g_defs(struct g*, uintptr_t, struct g_def*),
   *g_push(struct g*, uintptr_t, ...),
   *g_pop(struct g*, uintptr_t),
   *g_strof(struct g*, const char*),
@@ -175,4 +174,5 @@ static g_inline struct g *g_evals(struct g *f, const char *s) { return
   g_eval(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_reads(f, s)))))); }
 static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, &g_stdin); }
 #define g_log1(f) (g_write1(f),g_putc(f, f->out, '\n'))
+#define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 #endif

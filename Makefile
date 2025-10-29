@@ -35,7 +35,6 @@ repl: $b/h/$n
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test
-catr: cat run
 
 #build
 # c files and headers
@@ -285,7 +284,7 @@ PREFIX ?= .local/
 VIMPREFIX ?= .vim/
 DESTDIR ?= $(HOME)/
 installs=\
- 	$(DESTDIR)/$(PREFIX)/$b/$n\
+ 	$(DESTDIR)/$(PREFIX)/bin/$n\
   $(DESTDIR)/$(PREFIX)/g/man/man1/$n.1\
   $(DESTDIR)/$(PREFIX)/lib/lib$n.a\
   $(DESTDIR)/$(PREFIX)/lib/lib$n.so\
@@ -304,11 +303,11 @@ $(DESTDIR)/$(PREFIX)/include/$x.h: g/$x.h
 	@install -D -m 644 $< $@
 $(DESTDIR)/$(PREFIX)/lib/lib$n.a: $b/h/lib$n.a
 	@echo CP $(abspath $@)
-	@install -D -m 755 $< $@
+	@install -D -m 644 $< $@
 $(DESTDIR)/$(PREFIX)/lib/lib$n.so: $b/h/lib$n.so
 	@echo CP $(abspath $@)
 	@install -D -m 755 $< $@
-$(DESTDIR)/$(PREFIX)/$b/$n: $b/h/$n
+$(DESTDIR)/$(PREFIX)/bin/$n: $b/h/$n
 	@echo CP $(abspath $@)
 	@install -D -m 755 -s $< $@
 $(DESTDIR)/$(PREFIX)/g/man/man1/$n.1: $b/h/$n.1
