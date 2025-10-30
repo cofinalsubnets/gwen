@@ -2,7 +2,6 @@
 #include "cb.h"
 
 void cb_fill(struct cb *c, uint8_t _) {
-  uint32_t rows = c->rows, cols = c->cols;
   for (uint32_t i = 0, j = c->rows * c->cols; i < j; i++)
     c->cb[i] = _; }
 void cb_cur(struct cb *c, uint32_t row, uint32_t col) {
@@ -29,25 +28,29 @@ void cb_vlogf(struct cb *cb, const char *fmt, va_list xs) {
 
 
 static void cb_line_feed(struct cb *c) {
-  uintptr_t p = c->wpos + c->cols;
-  p -= p % c->cols;
-  p %= c->rows * c->cols;
-  c->wpos = p; }
+  uintptr_t rs = c->rows, cs = c->cols,
+            p = 1 + c->wpos / cs;
+  c->wpos = cs * (p == rs ? 0 : p); }
 
 void cb_put_char(struct cb *c, char i) {
-  if (i == '\n') return cb_line_feed(c);
+  if (i == '\b') {
+    if (c->wpos != c->rpos) c->wpos--;
+    return; }
   c->cb[c->wpos] = i;
+  if (i == '\n') return cb_line_feed(c);
   if (++c->wpos == c->cols * c->rows) c->wpos = 0; }
 
 void cb_log(struct cb *c, const char *msg) {
   while (*msg) cb_put_char(c, *msg++); }
 
 int cb_ungetc(struct cb *c, int i) {
-  if (c->rpos-- == 0)
-    c->rpos = c->cols * c->rows - 1;
-  return c->cb[c->rpos] = i; }
+  uint16_t r = c->rpos;
+  r = r > 0 ? r - 1 : c->cols * c->rows - 1;
+  return r == c->wpos ? -1 : (c->cb[c->rpos = r] = i); }
+
 int cb_eof(struct cb *c) {
   return c->rpos == c->wpos; }
+
 int cb_getc(struct cb *c) {
   if (c->rpos == c->wpos) return -1;
   int i = c->cb[c->rpos];

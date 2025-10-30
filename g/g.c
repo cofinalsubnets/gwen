@@ -228,38 +228,39 @@ static struct g *g_buf_grow(struct g *f) {
 struct g *g_read1i(struct g*f, struct g_in* i) {
   if (!g_ok(f)) return f;
   int c = read_char(f, i);
-  size_t n = 0;
   switch (c) {
     case '(':  return g_readsi(f, i);
     case ')':  return g_push(f, 1, g_nil);
     case EOF:  return encode(f, g_status_eof);
     case '\'': return g_quote(g_read1i(f, i));
-    case '"':  
+    case '"':   {
+      size_t n = 0;
       f = g_buf_new(f);
       for (size_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
           if ((c = i->getc(f, i)) == EOF || c == '"' ||
                (c == '\\' && (c = i->getc(f, i)) == EOF))
             return len(b) = n, f;
-      return f;
-    default:
-      i->ungetc(f, i, c);
+      return f; }
+    default: {
+      uintptr_t n = 1, lim = sizeof(intptr_t);
       f = g_buf_new(f);
-      for (uintptr_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
-        for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
-          switch (c = i->getc(f, i)) {
-            default: continue;
-            case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
-            case '(': case ')': case '"': case '\'': case EOF:
-              i->ungetc(f, i, c);
-              len(b) = n;
-              txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
-              char *e;
-              long j = strtol(txt(b), &e, 0);
-              if (*e == 0) f->sp[0] = g_putnum(j);
-              else f = g_intern(f);
-              return f; }
-      return f; } }
+      if (g_ok(f))
+        for (g_str_txt(f->sp[0])[0] = c; g_ok(f); f = g_buf_grow(f), lim *= 2)
+          for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
+            switch (c = i->getc(f, i)) {
+              default: continue;
+              case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
+              case '(': case ')': case '"': case '\'': case EOF:
+                i->ungetc(f, i, c);
+                len(b) = n;
+                txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
+                char *e;
+                long j = strtol(txt(b), &e, 0);
+                if (*e == 0) f->sp[0] = g_putnum(j);
+                else f = g_intern(f);
+                return f; }
+      return f; } } }
 
 struct g *g_readsi(struct g *f, struct g_in* i) {
   intptr_t n = 0;
@@ -1457,7 +1458,7 @@ static g_vm(sysinfo) {
   ini_pair(si + 1, g_putnum(f->pool), word(si + 2));
   ini_pair(si + 2, g_putnum(f->len), word(si + 3));
   ini_pair(si + 3, g_putnum(Hp - (intptr_t*) f), word(si + 4));
-  ini_pair(si + 4, g_putnum(topof(f) - Sp), g_nil);
+  ini_pair(si + 4, g_putnum((intptr_t*) f + f->len - Sp), g_nil);
   Ip += 1;
   return Continue(); }
 
@@ -1585,7 +1586,7 @@ static int read_char(struct g*f, struct g_in *i) {
   for (int c;;) switch (c = i->getc(f, i)) {
     default: return c;
     case '#': case ';': while (!i->eof(f, i) && (c = i->getc(f, i)) != '\n' && c != '\r');
-    case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
+    case 0: case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
 struct g* g_putn(struct g*f, struct g_out*o, uintptr_t n, uintptr_t base) {
   uintptr_t q = n / base, r = n % base;
@@ -1713,7 +1714,9 @@ g_noinline struct g *g_reads(struct g *f, const char*s) {
   struct ti t = {{p_text_getc, p_text_ungetc, p_text_eof}, s, 0};
   return g_readsi(f, (void*) &t); }
 
-struct g *g_write1(struct g *f) { return g_putx(f, &g_stdout, f->sp[0]); }
+struct g *g_write1o(struct g *f, struct g_out *o) {
+  if (!g_ok(f)) return f;
+  return g_putx(f, o, f->sp[0]); }
 struct g *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
 
 struct g *g_def(struct g*f, const char*s, intptr_t x) {

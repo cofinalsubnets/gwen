@@ -2,10 +2,10 @@ extern k_log_char
 
 global keyboard_isr
 global timer_isr
-global arch_init
+global kinit
 global key_buffer
 global key_buffer_idx
-global k_reset
+global kreset
 extern K
 global resume
 extern kb_int
@@ -73,10 +73,10 @@ scan_ascii:
 scan_ascii_end:
 align 8
 isrs:
-  times 32 dq k_reset
+  times 32 dq kreset
   times  1 dq timer_isr
   times  1 dq keyboard_isr
-  times 14 dq k_reset
+  times 14 dq kreset
 
 align 8
 isr_types:
@@ -106,7 +106,7 @@ align 8
 keyboard_isr:
   push15
   in al, 0x60
-  movzx edi, al
+  movzx rdi, al
   call kb_int
   mov al, 0x20
   out 0x20, al
@@ -114,7 +114,7 @@ keyboard_isr:
   iretq
 
 align 8
-arch_init:
+kinit:
   ; populate IDT
   lea rdi, [rel idt]
   lea rcx, [rel isrs]
@@ -184,7 +184,7 @@ arch_init:
   sti
   ret
 
-k_reset:
+kreset:
   push 0
   push 0
   lidt [rsp]

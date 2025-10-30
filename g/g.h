@@ -147,10 +147,10 @@ struct g
   *g_putn(struct g*, struct g_out*, uintptr_t, uintptr_t);
 struct g
   *g_ana(struct g*, g_vm_t),
-  *g_write1(struct g*),
   *g_eval(struct g*),
-  *g_read1i(struct g*f, struct g_in*),
+  *g_read1i(struct g*, struct g_in*),
   *g_readsi(struct g*, struct g_in*),
+  *g_write1o(struct g*, struct g_out*),
   *g_reads(struct g*, const char*),
   *g_def(struct g*, const char*, intptr_t),
   *g_defs(struct g*, uintptr_t, struct g_def*),
@@ -165,8 +165,6 @@ extern struct g_in g_stdin;
 extern struct g_out g_stdout;
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
-static g_inline intptr_t *topof(struct g*f) { return (intptr_t*) f + f->len; }
-static g_inline intptr_t topref(struct g*f, uintptr_t n) { return topof(f)[-1-n]; }
 static g_inline struct g *g_enlist(struct g*f) { return g_cons_r(g_push(f, 1, g_nil)); }
 static g_inline struct g *g_quote(struct g*f) { return
   f = g_enlist(f),
@@ -175,7 +173,10 @@ static g_inline struct g *g_evals(struct g *f, const char *s) { return
   f = g_eval(g_reads(f, "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)")),
   f = g_ok(f) ? g_push(f, 3, g_nil, f->quote, g_nil) : f,
   g_eval(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_reads(f, s)))))); }
+static g_inline struct g *g_write1(struct g *f) { return g_write1o(f, &g_stdout); }
 static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, &g_stdin); }
 #define g_log1(f) (g_write1(f),g_putc(f, f->out, '\n'))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
+static g_inline struct g *g_eval_(struct g*f) { return g_pop(g_eval(f), 1); }
+static g_inline struct g *g_evals_(struct g*f, const char*s) { return g_pop(g_evals(f, s), 1); }
 #endif
