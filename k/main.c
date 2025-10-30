@@ -178,18 +178,15 @@ void g_fb32_char(g_fb32 *fb, size_t row, size_t col, uint8_t c, uint32_t fg, uin
 static void draw_char_buffer(void) {
   g_fb32 *fb = &K.fb;
   struct cb *c = gcb(K.g);
-  uint8_t rows = c->rows, cols = c->cols,
-          raddr = cols * c->rr + c->rc,
-          waddr = cols * c->row + c->col;
+  uint8_t rows = c->rows, cols = c->cols;
 
-  for (int32_t i = 0; i < rows; i++)
-    for (int32_t j = 0; j < cols; j++) {
-      uint8_t g = c->cb[i * cols + j];
+  for (uint8_t i = 0; i < rows; i++)
+    for (uint8_t j = 0; j < cols; j++) {
+      uint16_t addr = i * cols + j;
+      uint8_t g = c->cb[addr];
       uint32_t fg = console_fg, bg = console_bg;
-      uint8_t addr = i * cols + j;
-      if (raddr <= addr && addr < waddr)
-        fg = console_sel;
-      if ((c->flag & show_cursor) && i == c->row && j == c->col && K.g == K.g->pool)
+//      if (c->rpos <= addr && addr < c->wpos) fg = console_sel;
+      if ((c->flag & show_cursor) && c->wpos == addr && K.g == K.g->pool)
         fg = bg, bg = console_cur;
       g_fb32_char(fb, i*8, j*8, g, fg, bg); } }
 

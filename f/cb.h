@@ -1,7 +1,8 @@
 #include <stdint.h>
 #include <stdarg.h>
 struct cb {
-  uint16_t row, col, rr, rc, flag; uint8_t rows, cols, cb[]; };
+  uint16_t rpos, wpos, flag;
+  uint8_t rows, cols, cb[]; };
 
 void
   cb_log(struct cb*, const char*),

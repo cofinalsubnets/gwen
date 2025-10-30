@@ -37,9 +37,11 @@ static int k_update(void *_) {
   uint8_t *frame = K.pd->graphics->getFrame();
   uint32_t rows = c->rows, cols = c->cols;
   for (int i = 0; i < rows; i++)
-    for (int j = 0; j < cols; j++)
-      for (uint8_t b = 0, *glyph = cga_8x8[c->cb[i * cols + j]], g; b < 8; b++)
-        frame[52 * (8 * i + b) + j] = (c->flag & show_cursor_flag) && i == c->row && j == c->col && K.g == K.g->pool ? ~glyph[b] : glyph[b];
+    for (int j = 0; j < cols; j++) {
+      uint16_t off = i * cols + j;
+      for (uint8_t b = 0, *glyph = cga_8x8[c->cb[off]], g; b < 8; b++)
+        frame[52 * (8 * i + b) + j] = (c->flag & show_cursor_flag) && off == c->wpos && K.g == K.g->pool ? ~glyph[b] : glyph[b];
+    }
   K.pd->graphics->markUpdatedRows(0, LCD_ROWS);
   return 1; }
 
@@ -121,19 +123,18 @@ static void g_log_update(void) {
   cb_cur(c, 0, 0);
   cb_fill(c, 0);
   k_eval(
-    "(: (AB x) (A (B x)) (BB x) (B (B x))"
-       "i (sysinfo 0) f (A i) pool (AB i) len (A (BB i)) allocd (AB (BB i)) stackd (A (BB (BB i)))"
-   " (,"
+    "(: i(sysinfo 0)f(A i)pool(A(B i))len(A(B(B i)))allocd(A(B(B(B i))))stackd(A(B(B(B(B i)))))"
+    "(,"
     "(puts\"\x03 \")(putn(clock 0)10)"
     "(puts\"\n\n@\")""(putn pool 16)" 
     "(puts\"\n@\")""(putn f 16)"
     "(puts\"\n#\")"
-    "(putn stackd 10)"
-    "(puts\".\")"
     "(putn len 10)"
-    "(puts\".\")""(putn allocd 10)"
-    "(puts \"\n\ncrank: \") (putn (crank_angle 0) 10) (puts \"\xf8\")"
-    "(puts \"\nbuttons: \") (putn (get_buttons 0) 2)))"
+    "(puts\".\")"
+    "(putn stackd 10)"
+    "(puts\".\")""(putn allocd 10)))"
+    "(puts\"\n\ncrank: \")(putn(crank_angle 0)10)(puts\"\xf8\")"
+    "(puts\"\nbuttons: \")(putn(get_buttons 0)2)"
     "(puts\"\n\nroot folder contents:\n\")(.(ls_root 0))"
     "(: (cputc r1 c1 c) (: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set r1 c1) (cur_put c) (cur_set r0 c0))))"
     "(: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set 0 44) (puts\"life \x18\") (cur_set 29 44) (puts\"time \x19\") (cur_set r0 c0)))"
@@ -299,19 +300,18 @@ static g_vm(ls_root) {
   if (!g_ok(f)) return f;
   return f->sp[1] = f->sp[0], f->sp++, f->ip++, Continue(); }
 
-static g_vm(cur_row) { return Sp[0] = g_putnum(gcb(f)->row), Ip++, Continue(); }
-static g_vm(cur_col) { return Sp[0] = g_putnum(gcb(f)->col), Ip++, Continue(); }
+static g_vm(cur_row) { return Sp[0] = g_putnum(gcb(f)->wpos / gcb(f)->cols), Ip++, Continue(); }
+static g_vm(cur_col) { return Sp[0] = g_putnum(gcb(f)->wpos % gcb(f)->cols), Ip++, Continue(); }
 static g_vm(cur_set) {
   uintptr_t r = g_getnum(Sp[0]), c = g_getnum(Sp[1]);
   struct cb *cb = gcb(f);
-  r %= cb->rows, c %= cb->cols;
-  cb->row = r, cb->col = c;
+  cb_cur(cb, r, c);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 static g_vm(cur_put) {
   struct cb *cb = gcb(f);
-  cb->cb[cb->row * cb->cols + cb->col] = g_getnum(Sp[0]);
+  cb->cb[cb->wpos] = g_getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 
