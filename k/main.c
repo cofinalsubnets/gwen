@@ -294,57 +294,52 @@ static void mem_init(void) {
     k_putn(nbs, 10), cputs("B in ", magenta);
   cputn(nrs, 10, magenta), cputs(" regions\n", magenta); }
 
+static const char boot[] =
+#include "boot.h"
+,
+  frame1[] =
+   "(puts\"\x03 \")(putn(clock 0)10)"
+    "(: i(sysinfo 0)f(A i)pool(AB i)len(A(BB i))allocd(AB(BB i))stackd(A(BB(BB i)))"
+   "(,"
+    "(puts\"\n@\")(putn f 16)"
+    "(puts\"\n@\")(putn pool 16)"
+    "(puts\"\n#\")""(putn len 10)"
+    "(puts\".\")""(putn stackd 10)"
+    "(puts\".\")""(putn allocd 10)"
+    "(puts\"\n\")"
+    "))";
+
+static void k_frame(const char *s);
 static void lisp_init(void) {
+  cputs("\x01 lisp init", yellow);
   static intptr_t g_static_pool[1<<23];
   struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
-  cputs("\x01 lisp init -", yellow);
-  uintptr_t t0 = K.ticks, t1;
-  cputn(t0, 10, yellow);
-  cputs(" + ", yellow);
-  static const char b[] =
-#include "boot.h"
-  ;
-  f = g_pop(g_evals(f, b), 1);
   f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
-  if (!f || !g_ok(f)) for (;;) k_stop();
-  cputn(t1 = K.ticks, 10, yellow);
-  cputs(" = ", yellow);
-  cputn(t1 - t0, 10, yellow);
-  cputs(" ticks \x01\n", yellow);
-  f->u[0] = g_pop1(f);
-  struct cb *c = gcb(f);
-  c->rows = NROWS, c->cols = NCOLS;
-  c->flag |= show_cursor;
-  K.g = f; }
+  if (g_ok(f)) {
+    f->u[0] = g_pop1(f);
+    struct cb *c = gcb(f);
+    c->rows = NROWS, c->cols = NCOLS;
+    c->flag |= show_cursor;
+    K.g = f;
+    k_frame(frame1);
+    K.g = f = g_pop(g_evals(K.g, boot), 1); }
+  if (!g_ok(f)) for (;;) k_stop();
+  k_frame(frame1); }
 
 static void k_evals(const char *s) {
   K.g = g_pop(g_evals(K.g, s), 1); }
 
+static void k_frame(const char *s) {
+  struct cb *c = kcb;
+  cb_fill(c, 0);
+  cb_cur(c, 0, 0);
+  k_evals(s);
+  draw_char_buffer(); }
 struct k K;
 void kmain(void) {
-  K.ticks = 0;
-  arch_init(); // arch specific init
+  arch_init();
   fb_init();
   mem_init();
   lisp_init();
   srand(K.ticks);
-  // main loop
-  for (;;) {
-    struct cb *c = kcb;
-    cb_fill(c, 0);
-    cb_cur(c, 0, 0);
-    k_evals(
-      "(puts\"\x02 gwen lisp \") (putn (clock 0) 10) (puts\"\n\")"
-      "(: i(sysinfo 0)f(A i)pool(AB i)len(A(BB i))allocd(AB(BB i))stackd(A(BB(BB i)))"
-     "(,"
-      "(puts\"@\")(putn f 16)"
-      "(puts\"\n@\")(putn pool 16)" 
-      "(puts\"\n#\")(putn len 10)"
-      "(puts\".\")(putn stackd 10)"
-      "(puts\".\")(putn allocd 10)"
-      "(puts\"\n\")"
-      ")"
-      ")"
-    );
-    draw_char_buffer();
-    k_stop(); } }
+  for (;; k_stop()) k_frame(frame1); }

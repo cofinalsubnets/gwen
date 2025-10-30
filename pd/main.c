@@ -118,7 +118,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
 static void k_eval(const char *s) { K.g = g_pop(g_evals(K.g, s), 1); }
 static void g_log_update(void) {
   struct cb *c = kcb;
-  c->row = c->col = c->rr = c->rc = 0;
+  cb_cur(c, 0, 0);
   cb_fill(c, 0);
   k_eval(
     "(: (AB x) (A (B x)) (BB x) (B (B x))"
