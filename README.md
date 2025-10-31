@@ -1,6 +1,6 @@
-# g lisp
+# gwen lisp
 
-g lisp is a lisp dialect and environment that can be built as a C library,
+gwen lisp is a lisp dialect and environment that can be built as a C library,
 an executable, or an operating system on various platforms.
 
 ## g lisp vs. scheme
