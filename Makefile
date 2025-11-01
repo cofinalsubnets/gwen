@@ -10,17 +10,17 @@ t=$(sort $(wildcard t/*.$x))
 
 .PHONY: test all h k pd clean distclean valg perf repl cloc cat catr
 test: $b/h/$n
-	@echo GL test
+	@echo TEST
 	@cat $t | $m
 all: h k pd
 h: $b/h/$n $b/h/lib$n.so $b/h/$n.1
 k: $b/$n-$a.k
 pd: $b/$n.pdx
 clean:
-	@echo RM $b
+	@echo RM	$b
 	@rm -rf $b
 distclean:
-	@echo RM $b dl
+	@echo RM	$b dl
 	@rm -rf `git check-ignore * */*`
 valg: $b/h/$n
 	@cat $t | $(lib) valgrind --error-exitcode=1 b/h/$n
@@ -109,96 +109,96 @@ pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst)\
  	-D__STACK_SIZE=4194304
 
 $b/h/$n: $b/h/main.o $b/h/lib$n.so
-	@echo LD $@
+	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -o $@ $^
 
 $b/h/lcat: $b/h/lcat.o $b/h/lib$n.so
-	@echo LD $@
+	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -o $@ $^
 
 $b/h/lib$n.a: $(h_o)
-	@echo AR $@
+	@echo AR	$@
 	@mkdir -p $(dir $@)
 	@ar rcs $@ $^
 
 $b/h/lib$n.so: $b/h/lib$n.a
-	@echo LD $@
+	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive
 
 $b/h/%.o: %.c $(g_h) Makefile
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -c $< -o $@
 
 $b/h/%.o: h/%.c $(g_h) Makefile
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -c -I$b/h $< -o $@
 
 $b/h/main.o: h/main.c $b/boot.h $(g_h) Makefile
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -c -I$b/h $< -o $@
 
 # sed command to escape lisp text into C string format
 $b/boot.h: $b/h/lcat h/lcat.sed g/boot.$x
-	@echo GL $@
+	@echo GEN	$@
 	@$l < g/boot.$x | sed -f h/lcat.sed >$@
 
 $b/h/$n.1: $b/h/$n h/manpage.$x
-	@echo GL $@
+	@echo GEN	$@
 	@$m < h/manpage.$x > $@
 
 $b/$n-$a.k: Makefile k/arch/$a/$a.lds $(k_o)
-	@echo LD $@
+	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(LD) $(kldflags) $(k_o) -o $@
 
 $b/k/$a/%.o: %.c Makefile $(g_h) $b/boot.h
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 $b/k/$a/g/cga_8x8.o: f/cga_8x8.c
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 $b/k/$a/%.o: k/%.S $(g_h) Makefile
-	@echo AS $@
+	@echo AS	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 $b/k/$a/k/arch/$a/%.o: k/arch/$a/%.asm
-	@echo AS $@
+	@echo AS	$@
 	@mkdir -p "$(dir $@)"
 	@nasm $< -o $@ $(k_nasmflags)
 
 $b/$n.pdx: $b/pd/Source/pdex.elf $b/pd/Source/pdex.so
-	@echo PD $@
+	@echo PDC	$@
 	@$(pd_sdk)/bin/pdc -sdkpath $(pd_sdk) $b/pd/Source $@
 
 $b/pd/Source/pdex.%: $b/pd/pdex.%
-	@echo CP $@
+	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
 
 $b/pd/%.o : %.c | $b/boot.h
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I pd -I b -I f $(pd_incdir) $< -o $@
 
 $b/pd/%.o : %.s
-	@echo AS $@
+	@echo AS	$@
 	@$(pd_as) -c $(pd_asflags) $< -o $@
 
 $b/pd/pdex.elf: $(pd_o) $(pd_lds)
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
 
 $b/pd/pdex.so: $(pd_src)
-	@echo CC $@
+	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o $b/pd/pdex.so $(pd_src)
 
@@ -295,27 +295,27 @@ installs=\
 .PHONY: install uninstall
 install: $(installs)
 uninstall:
-	@echo RM $(abspath $(installs))
+	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
 $(DESTDIR)/$(PREFIX)/include/$x.h: g/$x.h
-	@echo CP $(abspath $@)
+	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 $(DESTDIR)/$(PREFIX)/lib/lib$n.a: $b/h/lib$n.a
-	@echo CP $(abspath $@)
+	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 $(DESTDIR)/$(PREFIX)/lib/lib$n.so: $b/h/lib$n.so
-	@echo CP $(abspath $@)
+	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
 $(DESTDIR)/$(PREFIX)/bin/$n: $b/h/$n
-	@echo CP $(abspath $@)
+	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 $(DESTDIR)/$(PREFIX)/g/man/man1/$n.1: $b/h/$n.1
-	@echo CP $(abspath $@)
+	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 $(DESTDIR)/$(VIMPREFIX)/ftdetect/$n.vim: vim/ftdetect.vim
-	@echo CP $(abspath $@)
+	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 $(DESTDIR)/$(VIMPREFIX)/syntax/$n.vim: vim/syntax.vim
-	@echo CP $(abspath $@)
+	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
