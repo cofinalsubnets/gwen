@@ -24,9 +24,6 @@ typedef struct g_cb {
   uint16_t rows, cols, cx, cy; } g_cb;
 
 static void g_fb32_cur_msg(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg);
-void
-  *malloc(size_t),
-  free(void*);
 static void
   g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px),
   g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg);
@@ -41,7 +38,7 @@ extern struct k {
     uintptr_t len;
     struct mem *next;
     uintptr_t _[];
-  } *free, *used;
+  } *free;
   struct g *g;
   struct { uint8_t k, f; } kb; } K;
 void k_logf(const char*, ...), k_vlogf(const char*, va_list), k_log_char(char);
@@ -257,7 +254,7 @@ static void meminit(void) {
            n = memmap_req.response->entry_count,
            nrs = 0,
            nbs = 0;
-  K.free = K.used = NULL;
+  K.free = NULL;
   for (uintptr_t i = n; i; i--) {
     struct limine_memmap_entry *r = rr[i];
     if (!r || // null entry
@@ -283,26 +280,24 @@ static g_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }
 
 static void *kmallocw(uintptr_t n) {
+  if (!n) return NULL;
   void *p = NULL;
-  if (n) {
-    struct mem *r = NULL, *t;
-    while (K.free && K.free->len < n + 2 * Width(struct mem))
-      t = K.free,
-      K.free = t->next,
-      t->next = r,
-      r = t;
-    if (K.free)
-      K.free->len -= n + Width(struct mem),
-      //t = (struct mem*) (K.free->_ + K.free->len),
-      t = after(K.free),
-      t->len = Width(struct mem) + n,
-      t->next = NULL, // not using this yet
-      p = t->_;
-    while (r)
-      t = r,
-      r = t->next,
-      t->next = K.free,
-      K.free = t; }
+  struct mem *r = NULL, *t;
+  while (K.free && K.free->len < n + 2 * Width(struct mem))
+    t = K.free,
+    K.free = t->next,
+    t->next = r,
+    r = t;
+  if (K.free)
+    K.free->len -= n + Width(struct mem),
+    t = after(K.free),
+    t->len = Width(struct mem) + n,
+    p = t->_;
+  while (r)
+    t = r,
+    r = t->next,
+    t->next = K.free,
+    K.free = t;
   return p; }
 
 static void kfree(void *p) {
@@ -313,10 +308,12 @@ static void kfree(void *p) {
     K.free = t->next,
     t->next = r,
     r = t;
-  for (m->next = K.free, K.free = m; r; t = r, r = t->next, t->next = K.free, K.free = t)
-    if (K.free->next == after(K.free))
-      K.free->len += K.free->next->len,
-      K.free->next = K.free->next->next; }
+  for (;; m = r, r = r->next) {
+    if (K.free != after(m)) m->next = K.free;
+    else m->len += K.free->len,
+         m->next = K.free->next;
+    K.free = m;
+    if (!r) return; } }
 
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
@@ -333,6 +330,17 @@ static void kdrawfb(void) {
   cputs(".", white), cputn((intptr_t*)K.g + K.g->len - K.g->sp, 10, white);
   cputs(".", white), cputn(K.g->hp - (intptr_t*)K.g, 10, white);
   cputs("    \n", white);
+
+  uintptr_t rs = 0, ws = 0;
+  for (struct mem *r = K.free; r; r = r->next)
+    rs += 1, ws += r->len;
+  cputn(rs, 10, white);
+  cputs("R ", white);
+  cputn(ws, 10, white);
+  cputs("W", white);
+  for (struct mem *r = K.free; r; r = r->next)
+    cputs("\n ", white), cputn((uintptr_t) r, 16, white),
+    cputs("-", white), cputn((uintptr_t) after(r), 16, white);
 
   struct cb *c = gcb(K.g);
   uint32_t
@@ -387,14 +395,13 @@ static void kreadg(void) {
   uint8_t c = getkey();
   if (c) g_stdout_putc(K.g, c);
   if (c == '\n') {
-    uintptr_t w0 = kcb->wpos, n = 0;
-    while (g_ok(K.g = g_read1(K.g)) && kcb->rpos < w0) {
-      K.g = g_eval(K.g);
-      K.g = g_write1(K.g);
-      n += 1;
-      g_stdout_putc(K.g, '\n'); }
+    uintptr_t w0 = kcb->wpos, h0 = (intptr_t*)K.g + K.g->len - K.g->sp;
+    while (g_ok(K.g = g_read1(K.g)) && kcb->rpos < w0)
+      g_stdout_putc(K.g = g_write1(g_eval(K.g)), '\n');
     if (g_code_of(K.g) == g_status_eof) K.g = g_core_of(K.g);
-    K.g = g_pop(g_evals(K.g, ps1), 1 + n);
+    K.g = g_evals(K.g, ps1);
+    if (g_ok(K.g))
+      K.g->sp = (intptr_t*)K.g + K.g->len - h0;
     ksetrpos(); } }
 
 void kmain(void) { for (fbinit(), meminit(), kinit(), ginit();; kdrawfb(), kreadg(), kstop()); }
