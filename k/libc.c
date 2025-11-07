@@ -3,9 +3,6 @@
 #include <stddef.h>
 #include <limits.h>
 
-void *malloc(size_t n) { return NULL; }
-void free(void*x) { }
-
 #define unsign(x) ((unsigned char)(x))
 // this file includes functions adapted from the original limine c template
 // and also from github.com/DevSolar/pdclib

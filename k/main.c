@@ -40,7 +40,7 @@ extern struct k {
   struct mem {
     uintptr_t len;
     struct mem *next;
-    uint8_t _[];
+    uintptr_t _[];
   } *free, *used;
   struct g *g;
   struct { uint8_t k, f; } kb; } K;
@@ -260,11 +260,14 @@ static void meminit(void) {
   K.free = K.used = NULL;
   for (uintptr_t i = n; i; i--) {
     struct limine_memmap_entry *r = rr[i];
-    if (!r || r->type != 0 || r->length < sizeof(struct mem) || r->base + r->length - 1 >= 1l<<32)
+    if (!r || // null entry
+        r->type != 0 || // type != 0 (usable)
+        r->length < sizeof(struct mem) || r->base + r->length - 1 >= 1l<<32)
       continue;
     struct mem *m = (struct mem*) (hhdm + r->base);
     nrs += 1;
-    nbs += m->len = r->length;
+    nbs += r->length;
+    m->len = r->length / sizeof(uintptr_t);
     m->next = K.free;
     K.free = m; }
 
@@ -275,6 +278,48 @@ static void meminit(void) {
     cputn(nbs>>10, 10, mem_color), cputs("KiB ", mem_color);
   else
     cputn(nbs, 10, mem_color), cputs("B ", mem_color); }
+
+static g_inline struct mem *after(struct mem *r) {
+  return (struct mem*) ((uintptr_t*) r + r->len); }
+
+static void *kmallocw(uintptr_t n) {
+  void *p = NULL;
+  if (n) {
+    struct mem *r = NULL, *t;
+    while (K.free && K.free->len < n + 2 * Width(struct mem))
+      t = K.free,
+      K.free = t->next,
+      t->next = r,
+      r = t;
+    if (K.free)
+      K.free->len -= n + Width(struct mem),
+      //t = (struct mem*) (K.free->_ + K.free->len),
+      t = after(K.free),
+      t->len = Width(struct mem) + n,
+      t->next = NULL, // not using this yet
+      p = t->_;
+    while (r)
+      t = r,
+      r = t->next,
+      t->next = K.free,
+      K.free = t; }
+  return p; }
+
+static void kfree(void *p) {
+  if (!p) return;
+  struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
+  while (K.free && K.free < m)
+    t = K.free,
+    K.free = t->next,
+    t->next = r,
+    r = t;
+  for (m->next = K.free, K.free = m; r; t = r, r = t->next, t->next = K.free, K.free = t)
+    if (K.free->next == after(K.free))
+      K.free->len += K.free->next->len,
+      K.free->next = K.free->next->next; }
+
+void *malloc(size_t n) { return kmallocw(b2w(n)); }
+void free(void *x) { return kfree(x); }
 
 static void kdrawfb(void) {
   K.fb.cur_x = 0;
@@ -318,8 +363,7 @@ static void ksetrpos(void) {
 
 #define ps1 "(puts\"  ; \")"
 static void ginit(void) {
-  static intptr_t g_static_pool[1<<23];
-  struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
+  struct g *f = g_ini();
   K.g = f = g_def(f, "reset", (intptr_t) bif_reset);
   K.g = f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
   if (g_ok(f)) {

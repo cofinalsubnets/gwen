@@ -1,8 +1,5 @@
 #include "g.h"
 #include <stdarg.h>
-static g_inline size_t b2w(size_t b) {
-  size_t q = b / sizeof(intptr_t), r = b % sizeof(intptr_t);
-  return q + (r ? 1 : 0); }
 static g_vm_t data;
 enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
 static g_inline void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
@@ -83,7 +80,6 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define vtxt(_) ((char*)(((struct g_vec*)(_))->shape+1))
 #define len(_) vlen(_)
 #define txt(_) vtxt(_)
-#define Width(_) b2w(sizeof(_))
 #define avail(f) ((uintptr_t)(f->sp-f->hp))
 
 

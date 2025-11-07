@@ -22,6 +22,7 @@
 #define Ip f->ip
 #endif
 
+#define Width(_) b2w(sizeof(_))
 #define g_core_of(f) ((struct g*)((intptr_t)(f)&~(sizeof(intptr_t)-1)))
 #define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))
 #define g_ok(f) (g_code_of(f) == g_status_ok)
@@ -179,4 +180,7 @@ static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, &g_stdin); }
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 static g_inline struct g *g_eval_(struct g*f) { return g_pop(g_eval(f), 1); }
 static g_inline struct g *g_evals_(struct g*f, const char*s) { return g_pop(g_evals(f, s), 1); }
+static g_inline size_t b2w(size_t b) {
+  size_t q = b / sizeof(intptr_t), r = b % sizeof(intptr_t);
+  return q + (r ? 1 : 0); }
 #endif
