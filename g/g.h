@@ -31,8 +31,8 @@
 #define g_nil g_putnum(0)
 #define g_pop1(f) (*(f)->sp++)
 #define LEN(_) (sizeof(_)/sizeof(*_))
-#define MIN(_,__) ((_)<(__)?(_):(__))
-#define MAX(_,__) ((_)>(__)?(_):(__))
+#define MIN(p,q) ((p)<(q)?(p):(q))
+#define MAX(p,q) ((p)>(q)?(p):(q))
 
 union x;
 typedef g_vm(g_vm_t);
@@ -54,8 +54,7 @@ struct g {
       intptr_t typ;
       uintptr_t type, rank, shape[]; } *nom;
     uintptr_t code;
-    struct g_atom *l, *r;
-  } *symbols;                            // 3 
+    struct g_atom *l, *r; } *symbols;    // 3 
   struct g_mem_root {
     intptr_t *ptr;
     struct g_mem_root *next; } *safe;    // 6
@@ -89,18 +88,12 @@ _Static_assert(sizeof(struct g) == (10 + g_nvars) * sizeof(intptr_t));
 struct g_in {
   int (*getc)(struct g*, struct g_in*),
       (*ungetc)(struct g*, struct g_in*, int),
-      (*eof)(struct g*, struct g_in*);
-};
+      (*eof)(struct g*, struct g_in*); };
+
 struct g_out {
-  struct g *(*putc)(struct g*, struct g_out*, int);
-};
+  struct g *(*putc)(struct g*, struct g_out*, int); };
 
 struct g_def { const char *n; intptr_t x; };
-
-struct g
-  *g_ini(void),
-  *g_ini_static(uintptr_t, void*),
-  *g_ini_dynamic(void *(*)(struct g*, uintptr_t), void (*)(struct g*, void*));
 
 enum g_vec_type {
   g_vt_u8,  g_vt_i8,
@@ -118,14 +111,15 @@ enum g_status {
 } g_fin(struct g*);
 
 
-uintptr_t g_clock(void); // used by garbage collector
+#define g_vt_char g_vt_i8
+uintptr_t vector_total_bytes(struct g_vec *),
+          g_clock(void); // used by garbage collector
 int g_stdin_getc(struct g*),
     g_stdin_ungetc(struct g*, int),
     g_stdin_eof(struct g*),
     strncmp(const char*, const char*, size_t),
     memcmp(const void*, const void*, size_t);
-void g_stdout_putc(struct g*, int c);
-void
+void g_stdout_putc(struct g*, int c),
      *malloc(size_t), free(void*),
      *memcpy(void *restrict, const void*restrict, size_t),
      *memset(void*, int, size_t);
@@ -137,18 +131,15 @@ g_vm_t ret0, curry, g_yield;
 
 bool g_twop(intptr_t), g_strp(intptr_t), g_tblp(intptr_t), g_symp(intptr_t);
 
-#define g_vt_char g_vt_i8
-uintptr_t g_fixed_size(enum g_vec_type),
-          g_str_len(intptr_t),
-          vector_total_bytes(struct g_vec *);
-
 struct g
+  *g_ini(void),
+  *g_ini_static(uintptr_t, void*),
+  *g_ini_dynamic(void *(*)(struct g*, uintptr_t), void (*)(struct g*, void*)),
   *g_printf(struct g*, struct g_out*, const char*, ...),
-  *g_putc(struct g*, struct g_out*, int),
-  *g_putn(struct g*, struct g_out*, uintptr_t, uintptr_t);
-struct g
+  *g_putn(struct g*, struct g_out*, intptr_t, uintptr_t),
   *g_ana(struct g*, g_vm_t),
   *g_eval(struct g*),
+  *g_evals(struct g*, const char*),
   *g_read1i(struct g*, struct g_in*),
   *g_readsi(struct g*, struct g_in*),
   *g_write1o(struct g*, struct g_out*),
@@ -156,7 +147,6 @@ struct g
   *g_def(struct g*, const char*, intptr_t),
   *g_defs(struct g*, uintptr_t, struct g_def*),
   *g_push(struct g*, uintptr_t, ...),
-  *g_pop(struct g*, uintptr_t),
   *g_strof(struct g*, const char*),
   *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...),
   *g_cons_l(struct g*),
@@ -166,21 +156,19 @@ extern struct g_in g_stdin;
 extern struct g_out g_stdout;
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
-static g_inline struct g *g_enlist(struct g*f) { return g_cons_r(g_push(f, 1, g_nil)); }
-static g_inline struct g *g_quote(struct g*f) { return
-  f = g_enlist(f),
-  g_ok(f) ? g_cons_l(g_push(f, 1, f->quote)) : f; }
-static g_inline struct g *g_evals(struct g *f, const char *s) { return
-  f = g_eval(g_reads(f, "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)")),
-  f = g_ok(f) ? g_push(f, 3, g_nil, f->quote, g_nil) : f,
-  g_eval(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_reads(f, s)))))); }
 static g_inline struct g *g_write1(struct g *f) { return g_write1o(f, &g_stdout); }
 static g_inline struct g *g_read1(struct g *f) { return g_read1i(f, &g_stdin); }
 #define g_log1(f) (g_write1(f),g_putc(f, f->out, '\n'))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
+static g_inline struct g *g_pop(struct g*f, uintptr_t m) {
+  if (g_ok(f)) f->sp += m;
+  return f; }
 static g_inline struct g *g_eval_(struct g*f) { return g_pop(g_eval(f), 1); }
 static g_inline struct g *g_evals_(struct g*f, const char*s) { return g_pop(g_evals(f, s), 1); }
-static g_inline size_t b2w(size_t b) {
-  size_t q = b / sizeof(intptr_t), r = b % sizeof(intptr_t);
-  return q + (r ? 1 : 0); }
+static g_inline size_t b2w(size_t b) { size_t q = b / sizeof(intptr_t), r = b % sizeof(intptr_t);
+                                       return q + (r ? 1 : 0); }
+static g_inline struct g*g_putc(struct g*f, struct g_out *o, int c) { return o->putc(f, o, c); }
+static g_inline int g_getc(struct g*f, struct g_in *i) { return i->getc(f, i); }
+static g_inline int g_ungetc(struct g*f, struct g_in *i, int c) { return i->ungetc(f, i, c); }
+static g_inline int g_eof(struct g*f, struct g_in *i) { return i->eof(f, i); }
 #endif

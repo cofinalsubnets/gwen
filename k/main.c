@@ -1,11 +1,11 @@
 #include "limine/limine.h"
 #include "g.h"
+#include "font.h"
 #include <stdarg.h>
 #include <limits.h>
 void kreset(void), kinit(void);
-static uint8_t getkey(void);
 
-static g_inline void kstop(void) { asm volatile (
+static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
   "hlt"
 #elif defined (__aarch64__) || defined (__riscv)
@@ -23,14 +23,7 @@ typedef struct g_cb {
   struct { uint8_t c0, c1, rgb[2][3]; } *cb;
   uint16_t rows, cols, cx, cy; } g_cb;
 
-static void g_fb32_cur_msg(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg);
-static void
-  g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px),
-  g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg);
-void
-  k_cur_msg(const char *msg, uint32_t fg, uint32_t bg);
-
-extern struct k {
+struct k {
   uint64_t ticks;
   g_cb cb;
   g_fb32 fb;
@@ -41,8 +34,25 @@ extern struct k {
   } *free;
   struct g *g;
   struct { uint8_t k, f; } kb; } K;
+static g_inline void g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px) {
+  fb->_[row * fb->pitch / 4 + col] = px; }
+static void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg) {
+  for (int r = 0; r < 8; r++)
+    for (int o = bmp[r], c = 7; c >= 0; c--, o >>= 1)
+      g_fb32_px(fb, row + r, col + c, o & 1 ? fg : bg); }
+static void g_fb32_cur_msg(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg) {
+  size_t h = fb->height / 8, w = fb->width / 8;
+  for (int c; (c = *msg++);)
+    if (c == '\n') fb->cur_x = 0, fb->cur_y = (fb->cur_y + 1) % h;
+    else {
+      g_fb32_bmp_8x8(fb, fb->cur_y * 8, fb->cur_x * 8, cga_8x8[c], fg, bg);
+      K.fb.cur_x += 1;
+      if (fb->cur_x >= w)
+        fb->cur_x %= w,
+        fb->cur_y += 1,
+        fb->cur_y %= h; } }
+
 void k_logf(const char*, ...), k_vlogf(const char*, va_list), k_log_char(char);
-#include "font.h"
 #include "cb.h"
 #include <stdarg.h>
 __attribute__((used, section(".limine_requests_start")))
@@ -52,6 +62,10 @@ _L LIMINE_BASE_REVISION(3);
 _L struct limine_memmap_request memmap_req = { .id = LIMINE_MEMMAP_REQUEST, .revision = 0 };
 _L struct limine_hhdm_request hhdm_req = { .id = LIMINE_HHDM_REQUEST, .revision = 0 };
 _L struct limine_framebuffer_request fb_req = { .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0 };
+_L struct limine_date_at_boot_request date_req = { .id = LIMINE_DATE_AT_BOOT_REQUEST, .revision = 0 };
+_L struct limine_executable_address_request addr_req = { .id = LIMINE_EXECUTABLE_ADDRESS_REQUEST, .revision = 0 };
+_L struct limine_efi_system_table_request systbl_req = { .id = LIMINE_EFI_SYSTEM_TABLE_REQUEST, .revision = 0 };
+_L struct limine_executable_cmdline_request cmdline_req = { .id = LIMINE_EXECUTABLE_CMDLINE_REQUEST, .revision = 0 };
 __attribute__((used, section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER;
 int rand(void);
@@ -76,8 +90,6 @@ void srand(unsigned int);
 #define NROWS 64
 #define NCOLS 64
 #define gcb(f) ((struct cb*)g_str_txt((f)->u[0]))
-#define kcb gcb(K.g)
-
 
 void g_stdout_putc(struct g*f, int c) { cb_put_char(gcb(f), c); }
 
@@ -114,13 +126,8 @@ static void cputn(uintptr_t n, uintptr_t base, uint32_t fg) {
 #define font_width 8
 #define font_height font_width
 
-uint8_t getkey(void) {
-  uint8_t r = K.kb.k;
-  K.kb.k = 0;
-  return r; }
-
 static void key_ext(uint8_t c) {
-  struct cb *cb = kcb;
+  struct cb *cb = gcb(K.g);
   uint16_t r = cb->rpos,
            w = cb->wpos,
            cs = cb->cols;
@@ -193,27 +200,8 @@ void kb_int(const uint8_t code) {
       case kb_code_ctl:    K.kb.f &= ~kb_flag_lctl;   break;
       default: } }
   cputn(code, 10, color); }
-static g_inline void g_fb32_px(g_fb32 *fb, size_t row, size_t col, uint32_t px) {
-  fb->_[row * fb->pitch / 4 + col] = px; }
-
 // add a scale parameter to this
-static void g_fb32_bmp_8x8(g_fb32 *fb, size_t row, size_t col, uint8_t *bmp, uint32_t fg, uint32_t bg) {
-  for (int r = 0; r < 8; r++) {
-    uint8_t o = bmp[r];
-    for (int c = 0; c < 8; c++, o <<= 1) {
-      fb->_[(row + r) * fb->pitch / 4 + col + c] = o & 128 ? fg : bg; } } }
 
-static void g_fb32_cur_msg(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg) {
-  size_t h = fb->height / 8, w = fb->width / 8;
-  for (int c; (c = *msg++);)
-    if (c == '\n') fb->cur_x = 0, fb->cur_y = (fb->cur_y + 1) % h;
-    else {
-      g_fb32_bmp_8x8(fb, fb->cur_y * 8, fb->cur_x * 8, cga_8x8[c], fg, bg);
-      K.fb.cur_x += 1;
-      if (fb->cur_x >= w)
-        fb->cur_x %= w,
-        fb->cur_y += 1,
-        fb->cur_y %= h; } }
 #define px_color cyan
 #define reg_color magenta
 #define mem_color yellow
@@ -221,7 +209,7 @@ static void g_fb32_cur_msg(g_fb32 *fb, const char *msg, uint32_t fg, uint32_t bg
 static void fbinit(void) {
   // framebuffer init
   if (!fb_req.response || !fb_req.response->framebuffer_count)
-    for (;;) kstop(); // we have no way to indicate this so just stop
+    for (;;) kwait(); // we have no way to indicate this so just stop
   struct limine_framebuffer *fb0 = fb_req.response->framebuffers[0];
   K.fb._ = fb0->address;
   K.fb.width = fb0->width;
@@ -237,18 +225,13 @@ static void fbinit(void) {
         intptr_t dx = x - x0, dy = y - y0;
         if (dx * dx + dy * dy < rad * rad)
           g_fb32_px(&K.fb, y, x, color * (uintptr_t) &K); }
-  static const char g_display_name[] = "GwempleOS ";
-  for (uint32_t i = 0, lim = LEN(g_display_name), c; i < lim; i++) {
-    c = i % 3;
-    c = c == 0 ? cyan : c == 1 ? magenta : yellow;
-    cputc(g_display_name[i], c); }
   cputn(K.fb.width, 10, px_color);
   cputs("x", cyan);
   cputn(K.fb.height, 10, px_color);
   cputs(" ", cyan); }
 
 static void meminit(void) {
-  if (!memmap_req.response || !hhdm_req.response) for (;;) kstop();
+  if (!memmap_req.response || !hhdm_req.response) for (;;) kwait();
   struct limine_memmap_entry **rr = memmap_req.response->entries;
   uintptr_t hhdm = hhdm_req.response->offset,
            n = memmap_req.response->entry_count,
@@ -318,37 +301,25 @@ static void kfree(void *p) {
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
-static void kdrawfb(void) {
+static void kdraw(void) {
   K.fb.cur_x = 0;
   K.fb.cur_y = 1;
   uint32_t color = g_ok(K.g) ? white : red;
   cputs("\03 ", red), cputn(K.ticks, 10, color);
-  if (color == red) for (cputs(" # g is not ok # code ", red), cputn(g_code_of(K.g), 10, red);; kstop());
+  if (color == red) for (cputs(" # g code ", red), cputn(g_code_of(K.g), 10, red);; kwait());
   cputs("\n@", white), cputn((uintptr_t) K.g, 16, white);
   cputs("\n@", white), cputn((uintptr_t) K.g->pool, 16, white);
   cputs("\n#", white), cputn(K.g->len, 10, white);
   cputs(".", white), cputn((intptr_t*)K.g + K.g->len - K.g->sp, 10, white);
   cputs(".", white), cputn(K.g->hp - (intptr_t*)K.g, 10, white);
   cputs("    \n", white);
-
-  uintptr_t rs = 0, ws = 0;
-  for (struct mem *r = K.free; r; r = r->next)
-    rs += 1, ws += r->len;
-  cputn(rs, 10, white);
-  cputs("R ", white);
-  cputn(ws, 10, white);
-  cputs("W", white);
-  for (struct mem *r = K.free; r; r = r->next)
-    cputs("\n ", white), cputn((uintptr_t) r, 16, white),
-    cputs("-", white), cputn((uintptr_t) after(r), 16, white);
-
   struct cb *c = gcb(K.g);
   uint32_t
     rows = c->rows, cols = c->cols,
-    p_width = cols * font_width,
-    p_height = rows * font_height,
-    voff = (K.fb.height - p_height) / 2,
-    hoff = (K.fb.width - p_width) / 2;
+    wpx = cols * font_width,
+    hpx = rows * font_height,
+    dh = (K.fb.height - hpx) / 2,
+    dw = (K.fb.width - wpx) / 2;
   for (uint8_t i = 0; i < rows; i++)
     for (uint8_t j = 0; j < cols; j++) {
       uint16_t addr = i * cols + j;
@@ -357,51 +328,36 @@ static void kdrawfb(void) {
       if (c->rpos <= addr && addr < c->wpos) fg = console_sel;
       if ((c->flag & show_cursor) && c->wpos == addr && K.ticks & 64)
         fg = bg, bg = console_cur;
-      g_fb32_bmp_8x8(&K.fb, voff + i*8, hoff + j*8, cga_8x8[g == '\n' ? 0 : g], fg, bg); } }
+      g_fb32_bmp_8x8(&K.fb, dh + i*8, dw + j*8, cga_8x8[g == '\n' ? 0 : g], fg, bg); } }
 
-static g_vm(g_reset) {
-  kreset();
-  return f; }
+static g_vm(g_reset) { return kreset(), f; }
 static union x bif_reset[] = {{g_reset}};
 
-static void ksetrpos(void) {
-  if (g_ok(K.g)) {
-    struct cb *c = kcb;
+static g_inline void k_eval(const char*s) {
+  if (g_ok(K.g = g_evals_(K.g, s))) {
+    struct cb *c = gcb(K.g);
     c->rpos = c->wpos; } }
 
-#define ps1 "(puts\"  ; \")"
+#define prompt "  ; "
 static void ginit(void) {
   struct g *f = g_ini();
   K.g = f = g_def(f, "reset", (intptr_t) bif_reset);
   K.g = f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
-  if (g_ok(f)) {
-    
-    f->u[0] = g_pop1(f);
-    struct cb *c = gcb(f);
-    c->rows = NROWS, c->cols = NCOLS;
-    c->flag |= show_cursor;
-    K.g = g_pop(g_evals(f,
-      "(: t0(clock 0))"
-      "(puts\"\x02 \")"
+  if (!g_ok(f)) return;
+  f->u[0] = g_pop1(f); // this makes the next line valid
+  struct cb *c = gcb(f); // this macro uses value in f->u[0]
+  c->rows = NROWS, c->cols = NCOLS, c->flag |= show_cursor;
+  k_eval(
+    "(puts\"\x02 \")"
 #include "boot.h"
-      "(putn(clock 0)10)"
-      "(puts\"\n\")"
-      ps1
-    ), 1);
-    ksetrpos(); } }
-
-struct k K;
-static void kreadg(void) {
-  uint8_t c = getkey();
+    "(:(kreads _)(:(rr x)(: r(read x)(? r(X(A r)(rr x))))(each(rr 0)(\\ r(,(.(ev'ev r))(putc 10))))))"
+    "(putn(clock 0)10)(puts\"\n"prompt"\")"); }
+static void kread(void) {
+  uint8_t c = K.kb.k;
+  K.kb.k = 0;
   if (c) g_stdout_putc(K.g, c);
-  if (c == '\n') {
-    uintptr_t w0 = kcb->wpos, h0 = (intptr_t*)K.g + K.g->len - K.g->sp;
-    while (g_ok(K.g = g_read1(K.g)) && kcb->rpos < w0)
-      g_stdout_putc(K.g = g_write1(g_eval(K.g)), '\n');
-    if (g_code_of(K.g) == g_status_eof) K.g = g_core_of(K.g);
-    K.g = g_evals(K.g, ps1);
-    if (g_ok(K.g))
-      K.g->sp = (intptr_t*)K.g + K.g->len - h0;
-    ksetrpos(); } }
+  if (c == '\n') k_eval("(kreads 0)(puts\""prompt"\")"); }
 
-void kmain(void) { for (fbinit(), meminit(), kinit(), ginit();; kdrawfb(), kreadg(), kstop()); }
+void kmain(void) {
+  kinit(), fbinit(), meminit(), ginit();
+  for (;;) kdraw(), kread(), kwait(); }

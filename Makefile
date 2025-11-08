@@ -14,7 +14,7 @@ test: $b/h/$n
 	@cat $t | $m
 all: h k pd
 h: $b/h/$n $b/h/lib$n.so $b/h/$n.1
-k: $b/$n-$a.k
+k: $b/$n-$a.elf
 pd: $b/$n.pdx
 clean:
 	@echo RM	$b
@@ -31,7 +31,7 @@ perf: $b/perf.data
 $b/flamegraph.svg: $b/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: $b/h/$n
-	cat h/repl.g | $(lib) $<
+	@which rlwrap >/dev/null && $(lib) rlwrap $< -i || $(lib) $< -i
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test
@@ -152,7 +152,7 @@ $b/h/$n.1: $b/h/$n h/manpage.$x
 	@echo GEN	$@
 	@$m < h/manpage.$x > $@
 
-$b/$n-$a.k: Makefile k/arch/$a/$a.lds $(k_o)
+$b/$n-$a.elf: Makefile k/arch/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(LD) $(kldflags) $(k_o) -o $@
@@ -213,7 +213,7 @@ k_xorriso=xorriso -as mkisofs -quiet -R -r -J\
 	-efi-boot-part --efi-boot-image --protective-msdos-label\
 	$(k_xorriso_$a)
 
-$b/$n-$a.iso: $b/$n-$a.k dl/limine/limine k/limine/limine.conf
+$b/$n-$a.iso: $b/$n-$a.elf dl/limine/limine k/limine/limine.conf
 	@echo MK $@
 	@rm -rf $b/iso_root
 	@mkdir -p $b/iso_root/boot
@@ -231,7 +231,7 @@ $b/$n-$a.iso: $b/$n-$a.k dl/limine/limine k/limine/limine.conf
 	@dl/limine/limine bios-install $@
 	@rm -rf $b/iso_root
 
-$b/$n-$a.hdd: $b/$n-$a.k dl/limine/limine k/limine/limine.conf
+$b/$n-$a.hdd: $b/$n-$a.elf dl/limine/limine k/limine/limine.conf
 	@echo MK $@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
@@ -306,7 +306,7 @@ $(DESTDIR)/$(PREFIX)/lib/lib$n.a: $b/h/lib$n.a
 	@install -D -m 644 $< $@
 $(DESTDIR)/$(PREFIX)/lib/lib$n.so: $b/h/lib$n.so
 	@echo CP	$(abspath $@)
-	@install -D -m 755 $< $@
+	@install -D -m 755 -s $< $@
 $(DESTDIR)/$(PREFIX)/bin/$n: $b/h/$n
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@

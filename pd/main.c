@@ -90,11 +90,7 @@ static struct  mode
   _log  = { (void*) &_synth, &_life, g_log_ini, g_log_update, g_nop, };
 
 static void gg_eval(const char *s) {
-  struct g *f = g_reads(K.g, s);
-  K.g = f = g_ana(f, g_yield);
-  while (g_ok(f)) K.g = f = f->ip->ap(f);
-  f = g_code_of(f) == g_status_eof ? g_core_of(f) : f;
-  K.g = g_pop(f, 1); }
+  K.g = g_pop(g_eval(g_reads(K.g, s)), 1); }
 
 static void k_boot(void);
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
@@ -117,12 +113,11 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
         pd->system->setUpdateCallback(k_update, NULL); }
     default: return 0; } }
 
-static void k_eval(const char *s) { K.g = g_pop(g_evals(K.g, s), 1); }
 static void g_log_update(void) {
   struct cb *c = kcb;
   cb_cur(c, 0, 0);
   cb_fill(c, 0);
-  k_eval(
+  K.g = g_evals_(K.g,
     "(: i(sysinfo 0)f(A i)pool(A(B i))len(A(B(B i)))allocd(A(B(B(B i))))stackd(A(B(B(B(B i)))))"
     "(,"
     "(puts\"\x03 \")(putn(clock 0)10)"
@@ -138,7 +133,6 @@ static void g_log_update(void) {
     "(puts\"\n\nroot folder contents:\n\")(.(ls_root 0))"
     "(: (cputc r1 c1 c) (: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set r1 c1) (cur_put c) (cur_set r0 c0))))"
     "(: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set 0 44) (puts\"life \x18\") (cur_set 29 44) (puts\"time \x19\") (cur_set r0 c0)))"
-                             
     ); }
 
 
@@ -150,12 +144,6 @@ static g_vm(crank_angle) {
   return Continue(); }
 static void g_log_ini(void) { kcb->flag |= show_cursor_flag; }
 static struct g*g_boot(struct g*f);
-/*
-static void k_boot(void) {
-  k_eval(
-#include "boot.h"
-    ); }
-    */
 
 
 
@@ -173,12 +161,7 @@ static void g_life_ini(void) {
   random_life(); }
 
 static const SoundWaveform synth_waveforms[] = {
-  kWaveformSine,
-  kWaveformSquare,
-  kWaveformNoise,
-  //kWaveformTriangle,
-  //kWaveformSawtooth,
-};
+  kWaveformSine, kWaveformSquare, kWaveformNoise, };
 static float square_wave(float), tri_wave(float), sine_wave(float), noise_wave(float),
              saw_wave(float);
 
@@ -250,7 +233,6 @@ static void g_synth_update(void) {
         K.pd->sound->synth->playNote(m->synth, m->freq, 100, 1.0f/20, 0);
         m->freq *= 1 + K.pd->system->getCrankChange() / 360.0f;
         if (K.b.pushed & (kButtonLeft | kButtonRight)) {
-
           uintptr_t i = m->active_waveform + (K.b.pushed & kButtonLeft ? -1 : 1),
                     l = LEN(synth_waveforms);
           i = i == l ? 0 : i > l ? l - 1 : i;

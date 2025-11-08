@@ -1,5 +1,11 @@
 #include "g.h"
 #include <stdarg.h>
+
+static g_inline struct g *g_enlist(struct g*f) { return
+  g_cons_r(g_push(f, 1, g_nil)); }
+static g_inline struct g *g_quote(struct g*f) { return
+  g_ok(f = g_enlist(f)) ? g_cons_l(g_push(f, 1, f->quote)) : f; }
+
 static g_vm_t data;
 enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
 static g_inline void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
@@ -85,8 +91,6 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 
 static void gc_walk(struct g*g, intptr_t *p0, intptr_t *t0);
 
-struct g
-  *g_ana(struct g*, g_vm_t*);
 static struct g
   *please(struct g*, uintptr_t),
   *g_hash_put(struct g*),
@@ -165,9 +169,6 @@ static const size_t vt_size[] = {
   [g_vt_u32] = 4, [g_vt_i32] = 4, [g_vt_f32] = 4,
   [g_vt_u64] = 8, [g_vt_i64] = 8, [g_vt_f64] = 8, };
 
-g_inline uintptr_t g_fixed_size(enum g_vec_type t) {
-  return vt_size[t]; }
-
 struct d {
   int32_t type, rank;
   intptr_t shape[]; };
@@ -234,8 +235,8 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
       f = g_buf_new(f);
       for (size_t lim = sizeof(intptr_t); g_ok(f); f = g_buf_grow(f), lim *= 2)
         for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
-          if ((c = i->getc(f, i)) == EOF || c == '"' ||
-               (c == '\\' && (c = i->getc(f, i)) == EOF))
+          if ((c = g_getc(f, i)) == EOF || c == '"' ||
+               (c == '\\' && (c = g_getc(f, i)) == EOF))
             return len(b) = n, f;
       return f; }
     default: {
@@ -244,11 +245,11 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
       if (g_ok(f))
         for (g_str_txt(f->sp[0])[0] = c; g_ok(f); f = g_buf_grow(f), lim *= 2)
           for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
-            switch (c = i->getc(f, i)) {
+            switch (c = g_getc(f, i)) {
               default: continue;
               case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
               case '(': case ')': case '"': case '\'': case EOF:
-                i->ungetc(f, i, c);
+                g_ungetc(f, i, c);
                 len(b) = n;
                 txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
                 char *e;
@@ -263,7 +264,7 @@ struct g *g_readsi(struct g *f, struct g_in* i) {
   for (int c; g_ok(f); n++) {
     c = read_char(f, i);
     if (c == EOF || c == ')') break;
-    i->ungetc(f, i, c);
+    g_ungetc(f, i, c);
     f = g_read1i(f, i); }
   for (f = g_push(f, 1, g_nil); n--; f = g_cons_r(f));
   return f; }
@@ -1506,19 +1507,15 @@ static g_vm(read0) {
   _(bif_twop, "twop", S1(pairp)) _(bif_strp, "strp", S1(stringp)) _(bif_symp, "symp", S1(symbolp)) _(bif_nump, "nump", S1(fixnump)) _(bif_nilp, "nilp", S1(nullp))\
   _(bif_ev, "ev", S1(ev0))
 #define built_in_function(n, _, d) static const union x n[] = d;
-#define biff(b, n, _) {n, b},
 bifs(built_in_function);
-static g_vm(g_stop) { return Pack(f), f; }
-static union x bif_stop[] = { {g_stop} };
-static const struct { const char *n; const union x *x; } bifff[] = { bifs(biff) };
 #define insts(_) _(free_variable) _(ret) _(ap) _(tap) _(apn) _(tapn) _(jump) _(cond) _(ref) _(imm) _(drop1) _(curry) _(defglob) _(late_bind) _(ret0)
-#define i_entry(i) {"i_"#i,i},
-static const struct { const char *n; g_vm_t *i; } i_dict[] = { insts(i_entry) };
+#define biff(b, n, _) {n, (intptr_t)b},
+#define i_entry(i) {"i_"#i,(intptr_t) i},
 
 static struct g *g_symof(struct g *f, const char *nom) {
   return g_intern(g_strof(f, nom)); }
 
-
+static g_vm(g_stop) { return Pack(f), f; }
 // this is the general initialization function. arguments are
 // - f: core pointer
 // - len0: initial semispace size in words (== total_space_size / 2)
@@ -1533,11 +1530,8 @@ static struct g *g_ini_0(
     struct g_out*out,
     struct g_out*err) {
   if (!g_ok(f)) return f;
-  if (f == NULL) return encode(NULL, g_status_oom);
-
-  // least allowed size = 2 * size of struct g
-  if (words * sizeof(intptr_t) < sizeof(struct g)) return encode(NULL, g_status_oom);
-
+  if (f == NULL) return encode(f, g_status_oom);
+  if (words * sizeof(intptr_t) < sizeof(struct g)) return encode(f, g_status_oom);
   memset(f, 0, sizeof(struct g));
   f->len = words;
   f->pool = (void*) f;
@@ -1545,31 +1539,30 @@ static struct g *g_ini_0(
   f->free = fr ? fr : g_static_free;
   f->hp = f->end;
   f->sp = (intptr_t*) f + words;
+  static union x bif_stop[] = { {g_stop} };
   f->ip = bif_stop;
   f->t0 = g_clock(); // this goes right before first allocation so gc always sees initialized t0
+  f = g_tbl(g_tbl(f)); // dict and macro tables
   f = g_symof(f, ":");
   f = g_symof(f, "?");
   f = g_symof(f, "`");
   f = g_symof(f, ",");
   f = g_symof(f, "\\");
-  if (g_ok(f)) // these must be in reverse order from above
+  if (g_ok(f)) { // these must be in reverse order from above
     f->lambda = sym(g_pop1(f)),
     f->begin = sym(g_pop1(f)),
     f->quote = sym(g_pop1(f)),
     f->cond = sym(g_pop1(f)),
     f->let = sym(g_pop1(f));
-  f = g_tbl(g_tbl(f)); // dict and macro tables
-  if (g_ok(f))
-    f->macro = tbl(f->sp[0]),
-    f->dict = tbl(f->sp[1]),
-    f = g_symof(f, "macros"),
-    f = g_hash_put(f),
-    f = g_hash_put(g_symof(g_push(f, 1, (intptr_t) f->dict), "globals"));
-  for (size_t i = 0; i < LEN(bifff); i++)
-    f = g_hash_put(g_symof(g_push(f, 1, (intptr_t) bifff[i].x), bifff[i].n));
-  for (size_t i = 0; i < LEN(i_dict); i++)
-    f = g_hash_put(g_symof(g_push(f, 1, (intptr_t) i_dict[i].i), i_dict[i].n));
-  return g_pop(f, 1); }
+    f->macro = tbl(g_pop1(f)),
+    f->dict = tbl(g_pop1(f));
+    struct g_def defs[] = {
+      {"globals", (intptr_t) f->dict, },
+      {"macros", (intptr_t) f->macro, }, };
+    f = g_defs(f, 2, defs);
+    static const struct g_def g_defs0[] = { bifs(biff) insts(i_entry) };
+    f = g_defs(f, LEN(g_defs0), (void*) g_defs0); }
+  return f; }
 
 
 
@@ -1579,12 +1572,13 @@ static struct g *g_ini_0(
 //
 // get the next significant character from the stream
 static int read_char(struct g*f, struct g_in *i) {
-  for (int c;;) switch (c = i->getc(f, i)) {
+  for (int c;;) switch (c = g_getc(f, i)) {
     default: return c;
-    case '#': case ';': while (!i->eof(f, i) && (c = i->getc(f, i)) != '\n' && c != '\r');
+    case '#': case ';': while (!g_eof(f, i) && (c = g_getc(f, i)) != '\n' && c != '\r');
     case 0: case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
-struct g* g_putn(struct g*f, struct g_out*o, uintptr_t n, uintptr_t base) {
+struct g* g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base) {
+  if (n < 0) f = g_putc(f, o, '-'), n = -n;
   uintptr_t q = n / base, r = n % base;
   if (q) f = g_putn(f, o, q, base);
   return g_putc(f, o, g_digits[r]); }
@@ -1751,10 +1745,7 @@ g_inline struct g *g_strof(struct g *f, const char *cs) {
     memcpy(txt(o), cs, bytes); }
   return f; }
 
-g_inline uintptr_t g_str_len(intptr_t x) { return len(x); }
 g_inline char *g_str_txt(intptr_t x) { return txt(x); }
-g_inline struct g *g_pop(struct g *f, uintptr_t m) {
-  return !g_ok(f) ? f : (f->sp += m, f); }
 
 // keep this separate and g_noinline so g_eval can be tail call optimized if possible
 g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
@@ -1768,9 +1759,6 @@ g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
     f = analyze(f, &c, x),
     f = pull(f, &c, 0));
   return f; }
-
-g_inline struct g*g_putc(struct g*f, struct g_out *o, int c) { 
-  return o->putc(f, o, c); }
 
 static struct g* gvprintf(struct g*f, struct g_out*o, const char *fmt, va_list xs) {
   while (*fmt) {
@@ -1787,9 +1775,14 @@ static struct g* gvprintf(struct g*f, struct g_out*o, const char *fmt, va_list x
       case 'b': f = g_putn(f, o, va_arg(xs, uintptr_t), 2); break; } }
   return f; }
 
-struct g*g_printf(struct g *f, struct g_out *o, const char*fmt, ...) {
+struct g *g_printf(struct g *f, struct g_out *o, const char*fmt, ...) {
   va_list xs;
   va_start(xs, fmt);
   f = gvprintf(f, o, fmt, xs);
   va_end(xs);
   return f; }
+
+struct g *g_evals(struct g *f, const char *s) { return
+  f = g_eval(g_reads(f, "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)")),
+  f = g_ok(f) ? g_push(f, 3, g_nil, f->quote, g_nil) : f,
+  g_eval(g_cons_r(g_cons_l(g_cons_r(g_cons_l(g_reads(f, s)))))); }
