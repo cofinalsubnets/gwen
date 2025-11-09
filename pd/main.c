@@ -7,10 +7,10 @@
 #include <stdarg.h>
 #include <time.h>
 #include <unistd.h>
-#define gcb(g) ((struct cb*)g_str_txt((g)->u[0]))
-#define kcb gcb(K.g)
 #define NROWS 30
 #define NCOLS 50
+static uint8_t _kcb[sizeof(struct cb) + NROWS * NCOLS];
+#define kcb ((struct cb*)&_kcb)
 #define show_cursor_flag 1
 #define mode(k) ((void*)k->mode)
 struct k {
@@ -21,7 +21,8 @@ struct k {
     struct mode *prev, *next;
     void (*ini)(void), (*update)(void), (*fin)(void);
     intptr_t data[];
-  } *mode; };
+  } *mode;
+  struct cb *cb; };
 static struct k K;
 
 static int k_update(void *_) {
@@ -36,12 +37,13 @@ static int k_update(void *_) {
   struct cb *c = kcb;
   uint8_t *frame = K.pd->graphics->getFrame();
   uint32_t rows = c->rows, cols = c->cols;
-  for (int i = 0; i < rows; i++)
-    for (int j = 0; j < cols; j++) {
-      uint16_t off = i * cols + j;
-      for (uint8_t b = 0, *glyph = cga_8x8[c->cb[off]], g; b < 8; b++)
-        frame[52 * (8 * i + b) + j] = (c->flag & show_cursor_flag) && off == c->wpos && K.g == K.g->pool ? ~glyph[b] : glyph[b];
-    }
+  for (uint8_t i = 0; i < rows; i++)
+    for (uint8_t j = 0; j < cols; j++) {
+      uint16_t pos = i * cols + j;
+      uint8_t g = c->cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
+      bool invert = (c->flag & show_cursor_flag) && pos == c->wpos && g_clock() & 512;
+      for (uint8_t b = 0, g; b < 8; b++)
+        frame[52 * (8 * i + b) + j] = invert ? ~bmp[b] : bmp[b]; }
   K.pd->graphics->markUpdatedRows(0, LCD_ROWS);
   return 1; }
 
@@ -64,9 +66,6 @@ static struct g_def defs[] = {
   {"ls_root", (intptr_t) bif_ls_root},
   {"crank_angle", (intptr_t) bif_crank_angle},
   {"get_buttons", (intptr_t) bif_buttons}, };
-
-
-
 
 static void g_nop(void) {}
 static void
@@ -92,31 +91,31 @@ static struct  mode
 static void gg_eval(const char *s) {
   K.g = g_pop(g_eval(g_reads(K.g, s)), 1); }
 
+static void *g_pd_malloc(struct g*, uintptr_t n) {
+  return K.pd->system->realloc(NULL, n); }
+
+static void g_pd_free(struct g*, void*x) {
+  K.pd->system->realloc(x, 0); }
+
 static void k_boot(void);
 int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
   switch (event) {
     case kEventInit:
       clockfp = pd->system->getCurrentTimeMilliseconds;
+      kcb->rows = NROWS, kcb->cols = NCOLS;
       K.pd = pd;
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
-      static intptr_t g_static_pool[1<<20];
-      struct g *f = g_ini_static(sizeof(g_static_pool), g_static_pool);
-      f = g_defs(f, LEN(defs), defs);
-      f = g_vec0(f, g_vt_u8, 1, (uintptr_t) sizeof(struct cb) + NROWS * NCOLS);
-      if (g_ok(f)) {
-        f->u[0] = g_pop1(f);
-        struct cb *c = gcb(f);
-        c->rows = NROWS, c->cols = NCOLS;
-        K.g = f;
-        K.mode->ini();
-        pd->system->setUpdateCallback(k_update, NULL); }
+      K.g = g_ini_dynamic(g_pd_malloc, g_pd_free);
+      K.g = g_defs(K.g, LEN(defs), defs);
+      if (g_ok(K.g))
+        K.mode->ini(),
+        pd->system->setUpdateCallback(k_update, NULL);
     default: return 0; } }
 
 static void g_log_update(void) {
-  struct cb *c = kcb;
-  cb_cur(c, 0, 0);
-  cb_fill(c, 0);
+  cb_cur(kcb, 0, 0);
+  cb_fill(kcb, 0);
   K.g = g_evals_(K.g,
     "(: i(sysinfo 0)f(A i)pool(A(B i))len(A(B(B i)))allocd(A(B(B(B i))))stackd(A(B(B(B(B i)))))"
     "(,"
@@ -150,11 +149,10 @@ static struct g*g_boot(struct g*f);
 #define live_char 0xdb
 #define dead_char 0x00
 static void random_life(void) {
-  struct cb *c = kcb;
-  uint32_t rows = c->rows, cols = c->cols;
+  uint32_t rows = kcb->rows, cols = kcb->cols;
   for (uint32_t i = 0; i < rows; i++)
     for (uint32_t j = 0; j < cols; j++)
-      c->cb[i* cols + j] = rand() & 1 ? live_char : dead_char; }
+      kcb->cb[i* cols + j] = rand() & 1 ? live_char : dead_char; }
 
 static void g_life_ini(void) {
   kcb->flag &= ~show_cursor_flag;
@@ -196,10 +194,9 @@ static void draw_wave(void) {
 static void g_synth_ini(void) {
   struct synth_mode *m = (void*) K.mode;
   m->submode = 1;
-  struct cb *c = kcb;
-  c->flag &= ~show_cursor_flag;
-  cb_cur(c, 0, 0);
-  cb_fill(c, 0); }
+  kcb->flag &= ~show_cursor_flag;
+  cb_cur(kcb, 0, 0);
+  cb_fill(kcb, 0); }
 
 
 static void g_life_update(void) {
@@ -249,7 +246,7 @@ static void g_synth_update(void) {
         cb_cur(cb, 0, 0);
         cb_fill(cb, 0);
         for (int i = (int) m->synth_time; i; i--)
-          cb_put_char(cb, 0x9); }
+          cb_putc(cb, 0x9); }
       return;
     case 2:
       if (K.b.pushed & (kButtonA | kButtonB)) m->submode = 1;
@@ -261,7 +258,7 @@ static void g_synth_update(void) {
           cb_cur(cb, 0, 0);
           cb_fill(cb, 0);
           for (int i = (int) m->synth_time; i; i--)
-            cb_put_char(cb, 0x9); } }
+            cb_putc(cb, 0x9); } }
     default:
       return; } }
 
@@ -282,24 +279,20 @@ static g_vm(ls_root) {
   if (!g_ok(f)) return f;
   return f->sp[1] = f->sp[0], f->sp++, f->ip++, Continue(); }
 
-static g_vm(cur_row) { return Sp[0] = g_putnum(gcb(f)->wpos / gcb(f)->cols), Ip++, Continue(); }
-static g_vm(cur_col) { return Sp[0] = g_putnum(gcb(f)->wpos % gcb(f)->cols), Ip++, Continue(); }
+static g_vm(cur_row) { return Sp[0] = g_putnum(kcb->wpos / kcb->cols), Ip++, Continue(); }
+static g_vm(cur_col) { return Sp[0] = g_putnum(kcb->wpos % kcb->cols), Ip++, Continue(); }
 static g_vm(cur_set) {
   uintptr_t r = g_getnum(Sp[0]), c = g_getnum(Sp[1]);
-  struct cb *cb = gcb(f);
-  cb_cur(cb, r, c);
+  cb_cur(kcb, r, c);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 static g_vm(cur_put) {
-  struct cb *cb = gcb(f);
-  cb->cb[cb->wpos] = g_getnum(Sp[0]);
+  kcb->cb[kcb->wpos] = g_getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 
-void g_stdout_putc(struct g*f, int c) { cb_put_char(gcb(f), c); }
-int g_stdin_getc(struct g*f) {
-  struct cb *cb = gcb(f);
-  return cb_getc(cb); }
-int g_stdin_ungetc(struct g*f, int c) { return cb_ungetc(gcb(f), c); }
-int g_stdin_eof(struct g*f) { return cb_eof(gcb(f)); }
+void g_stdout_putc(struct g*f, int c) { cb_putc(kcb, c); }
+int g_stdin_getc(struct g*f) { return cb_getc(kcb); }
+int g_stdin_ungetc(struct g*f, int c) { return cb_ungetc(kcb, c); }
+int g_stdin_eof(struct g*f) { return cb_eof(kcb); }

@@ -3,15 +3,10 @@
 struct cb {
   uint16_t rpos, wpos, flag;
   uint8_t rows, cols, cb[]; };
-
 void
-  cb_log(struct cb*, const char*),
-  cb_put_char(struct cb*, char),
-  cb_vlogf(struct cb*, const char*, va_list),
-  cb_log_n(struct cb*, uintptr_t n, uintptr_t base),
+  cb_putc(struct cb*, char),
   cb_fill(struct cb*, uint8_t),
-  cb_cur(struct cb*, uint32_t row, uint32_t col),
-  cb_mv_cur(struct cb*, int32_t, int32_t);
+  cb_cur(struct cb*, uint32_t row, uint32_t col);
 int
   cb_getc(struct cb*),
   cb_ungetc(struct cb*, int),
