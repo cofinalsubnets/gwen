@@ -16,7 +16,7 @@ struct k {
   struct g_fb32 {
     volatile uint32_t *_;
     uint16_t width, height, pitch;
-  } *fb;
+  } fb;
   struct { uint8_t k, f; } kb;
 } K;
 void kreset(void), kinit(void);
@@ -161,29 +161,23 @@ void kb_int(const uint8_t code) {
 #define mem_color yellow
 
 static void fbinit(void) {
-  K.fb = NULL;
-  if (fb_req.response &&
-      fb_req.response->framebuffer_count &&
-      (K.fb = malloc(sizeof(struct g_fb32)))) {
-    struct limine_framebuffer *lfb = fb_req.response->framebuffers[0];
-    fb->_ = lfb->address;
-    fb->width = lfb->width;
-    fb->height = lfb->height;
-    fb->pitch = lfb->pitch; } }
+  if (!fb_req.response && !fb_req.response->framebuffer_count) kreset();
+  struct limine_framebuffer *f = fb_req.response->framebuffers[0];
+  K.fb._ = f->address;
+  K.fb.width = f->width;
+  K.fb.height = f->height;
+  K.fb.pitch = f->pitch; }
 
 static void meminit(void) {
-  K.free = NULL;
-  if (memmap_req.response && hhdm_req.response) {
-    struct limine_memmap_entry **rr = memmap_req.response->entries;
-    uintptr_t hhdm = hhdm_req.response->offset,
-             n = memmap_req.response->entry_count;
-    for (uintptr_t i = n; i; i--) {
-      struct limine_memmap_entry *r = rr[i];
-      if (!r || r->type != 0) continue;
-      struct mem *m = (struct mem*) (hhdm + r->base);
-      m->len = r->length / sizeof(uintptr_t);
-      m->next = K.free;
-      K.free = m; } } }
+  if (!memmap_req.response || !hhdm_req.response) kreset();
+  struct limine_memmap_entry *r, **rr = memmap_req.response->entries;
+  uintptr_t hhdm = hhdm_req.response->offset,
+            n = memmap_req.response->entry_count;
+  while (n--) if ((r = rr[n])->type == 0) {
+    struct mem *m = (struct mem*) (hhdm + r->base);
+    m->len = r->length / sizeof(uintptr_t);
+    m->next = K.free;
+    K.free = m; } }
 
 static g_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }
@@ -228,30 +222,29 @@ void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
 static void kdraw(void) {
-  struct cb *c = K.cb;
-  uint8_t rows = c->rows, cols = c->cols;
-  for (uint8_t i = 0; i < rows; i++)
-    for (uint8_t j = 0; j < cols; j++) {
+  uintptr_t p = K.fb.pitch / 4;
+  for (uint8_t i = 0, rows = K.cb->rows; i < rows; i++)
+    for (uint8_t j = 0, cols = K.cb->cols; j < cols; j++) {
       uint16_t pos = i * cols + j;
-      uint8_t g = c->cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
-      bool select = c->rpos <= pos && pos < c->wpos,
-           invert = (c->flag & show_cursor) && c->wpos == pos && K.ticks & 64;
+      uint8_t g = K.cb->cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
+      bool select = K.cb->rpos <= pos && pos < K.cb->wpos,
+           invert = K.cb->flag & show_cursor && K.cb->wpos == pos && K.ticks & 64;
       uint32_t fg = select ? console_sel : console_fg, bg = console_bg;
       if (invert) fg ^= bg, bg ^= fg, fg ^= bg;
-      size_t y = i * font_y, x = j * font_x;
+      uintptr_t y = i * font_y, x = j * font_x;
       for (uint8_t r = 0; r < font_y; r++)
-        for (uint8_t o = bmp[r], c = font_x; c--;)
-          K.fb->_[(y + r) * K.fb->pitch / 4 + (x + c)] = o & 128 >> c ? fg : bg; } }
+        for (uint8_t o = bmp[r], c = font_x; c--; o >>= 1)
+          K.fb._[(y + r) * p + x + c] = o & 1 ? fg : bg; } }
 
 static void cbinit(void) {
-  const uintptr_t rows = K.fb->height / font_y,
-                  cols = K.fb->width / font_x;
+  const uintptr_t rows = K.fb.height / font_y,
+                  cols = K.fb.width / font_x;
   struct cb *cb = malloc(sizeof(struct cb) + rows * cols);
   if (!cb) kreset();
   cb->rows = rows, cb->cols = cols;
   cb->rpos = cb->wpos = 0;
   cb->flag = show_cursor;
-  memset(cb->cb, 0, rows * cols);
+  cb_fill(cb, 0);
   K.cb = cb; }
 
 static g_vm(g_reset) { return kreset(), f; }

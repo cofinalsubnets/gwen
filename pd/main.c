@@ -2,18 +2,19 @@
 #include "g.h"
 #include "font.h"
 #include "cb.h"
+#include <limits.h>
+#include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <time.h>
 #include <unistd.h>
 #define NROWS 30
 #define NCOLS 50
-static uint8_t _kcb[sizeof(struct cb) + NROWS * NCOLS];
-#define kcb ((struct cb*)&_kcb)
+#define kcb (&K.cb)
 #define show_cursor_flag 1
 #define mode(k) ((void*)k->mode)
-struct k {
+static struct k {
   struct g *g;
   PlaydateAPI *pd;
   struct { PDButtons current, pushed, released; } b;
@@ -22,8 +23,10 @@ struct k {
     void (*ini)(void), (*update)(void), (*fin)(void);
     intptr_t data[];
   } *mode;
-  struct cb *cb; };
-static struct k K;
+  union {
+    struct cb cb;
+    uint8_t cb_bytes[sizeof(struct cb) + NROWS * NCOLS]; };
+} K;
 
 static int k_update(void *_) {
   K.pd->system->setAutoLockDisabled(0); 
@@ -34,15 +37,13 @@ static int k_update(void *_) {
     K.mode->ini();
   K.mode->update();
   // draw the screen
-  struct cb *c = kcb;
   uint8_t *frame = K.pd->graphics->getFrame();
-  uint32_t rows = c->rows, cols = c->cols;
-  for (uint8_t i = 0; i < rows; i++)
-    for (uint8_t j = 0; j < cols; j++) {
+  for (uint8_t i = 0, rows = K.cb.rows; i < rows; i++)
+    for (uint8_t j = 0, cols = K.cb.cols; j < cols; j++) {
       uint16_t pos = i * cols + j;
-      uint8_t g = c->cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
-      bool invert = (c->flag & show_cursor_flag) && pos == c->wpos && g_clock() & 512;
-      for (uint8_t b = 0, g; b < 8; b++)
+      uint8_t g = K.cb.cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
+      bool invert = (K.cb.flag & show_cursor_flag) && pos == K.cb.wpos && g_clock() & 512;
+      for (uint8_t b = 0; b < 8; b++)
         frame[52 * (8 * i + b) + j] = invert ? ~bmp[b] : bmp[b]; }
   K.pd->graphics->markUpdatedRows(0, LCD_ROWS);
   return 1; }
@@ -168,12 +169,10 @@ static float square_wave(float x) {
   return (float) (i & 1); }
 static float sine_wave(float x) {
   return (sinf(x) + 1.0f) / 2.0f; }
-#include <limits.h>
 static float noise_wave(float x) {
   int r = rand();
   return (float) r / (float) RAND_MAX; }
 
-#include <math.h>
 static void draw_wave(void) {
   struct synth_mode *m = (void*) K.mode;
   static float (*w)(float);
