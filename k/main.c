@@ -247,8 +247,7 @@ static union x
   bif_draw[] = {{draw}, {ret0}},
   bif_key[] = {{key}, {ret0}},
   bif_wait[] = {{wait}, {ret0}},
-  bif_setrpos[] = {{setrpos}, {ret0}}
-  ;
+  bif_setrpos[] = {{setrpos}, {ret0}};
 
 static struct g_def defs[] = {
   {"setrpos", (intptr_t) bif_setrpos},
@@ -301,5 +300,5 @@ void kmain(void) {
     "(:(ps1 _)(setrpos(puts\"  ; \"))"
       "(rs x)(? x(X(A x)(rs(read 0))))"
       "(ep x)(,(.(ev x))(putc 10))"
-      "(go k)(,(draw 0)(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep)))(go(key(wait 0))))"
-     "(reset(go(key(putn(clock(puts\"\x02 \"))10)(ps1(putc 10))))))"); }
+      "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep))))))))"
+     "(reset(go(key(ps1(,(putn(clock(puts\"\x02 \"))10)(putc 10)))))))"); }
