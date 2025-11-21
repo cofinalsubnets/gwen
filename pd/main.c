@@ -89,9 +89,6 @@ static struct  mode
   _life  = { &_log, (void*) &_synth, g_life_ini, g_life_update, g_nop, },
   _log  = { (void*) &_synth, &_life, g_log_ini, g_log_update, g_nop, };
 
-static void gg_eval(const char *s) {
-  K.g = g_pop(g_eval(g_reads(K.g, s)), 1); }
-
 static void *g_pd_malloc(struct g*, uintptr_t n) {
   return K.pd->system->realloc(NULL, n); }
 

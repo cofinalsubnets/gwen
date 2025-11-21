@@ -112,8 +112,7 @@ enum g_status {
 
 
 #define g_vt_char g_vt_i8
-uintptr_t vector_total_bytes(struct g_vec *),
-          g_clock(void); // used by garbage collector
+uintptr_t g_clock(void); // used by garbage collector
 int g_stdin_getc(struct g*),
     g_stdin_ungetc(struct g*, int),
     g_stdin_eof(struct g*),
@@ -126,7 +125,6 @@ void g_stdout_putc(struct g*, int c),
 long strtol(const char*restrict, char**restrict, int);
 size_t strlen(const char*);
 
-char *g_str_txt(intptr_t);
 g_vm_t ret0, curry, g_yield;
 
 bool g_twop(intptr_t), g_strp(intptr_t), g_tblp(intptr_t), g_symp(intptr_t);
@@ -137,18 +135,15 @@ struct g
   *g_ini_dynamic(void *(*)(struct g*, uintptr_t), void (*)(struct g*, void*)),
   *g_printf(struct g*, struct g_out*, const char*, ...),
   *g_putn(struct g*, struct g_out*, intptr_t, uintptr_t),
-  *g_ana(struct g*, g_vm_t),
   *g_eval(struct g*),
   *g_evals(struct g*, const char*),
   *g_read1i(struct g*, struct g_in*),
   *g_readsi(struct g*, struct g_in*),
   *g_write1o(struct g*, struct g_out*),
-  *g_reads(struct g*, const char*),
   *g_def(struct g*, const char*, intptr_t),
   *g_defs(struct g*, uintptr_t, struct g_def*),
   *g_push(struct g*, uintptr_t, ...),
   *g_strof(struct g*, const char*),
-  *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...),
   *g_cons_l(struct g*),
   *g_cons_r(struct g*);
 

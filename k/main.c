@@ -13,13 +13,13 @@ struct k {
   } *free;
   struct g *g;
   struct cb *cb;
-  struct g_fb32 {
+  struct {
     volatile uint32_t *_;
     uint16_t width, height, pitch;
   } fb;
   struct { uint8_t k, f; } kb;
 } K;
-void kreset(void), kinit(void);
+void kreset(void), archinit(void);
 
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
@@ -88,56 +88,54 @@ uintptr_t g_clock(void) { return K.ticks; }
 #define font_x 8
 #define font_y 8
 
-static void key_ext(uint8_t c) {
-  struct cb *cb = K.cb;
-  uint16_t r = cb->rpos,
-           w = cb->wpos,
-           cs = cb->cols;
-  switch (c) {
-    case 75: w -= 1; break;
-    case 77: w += 1; break;
-    case 72: w -= cs; break;
-    case 80: w += cs; break; }
-  w %= cb->rows * cs;
-  w = MAX(w, r);
-  cb->wpos = w; }
+static const uint8_t
+  kb2ascii[] = {
+     0,  27, '1',  '2', '3', '4', '5', '6',
+   '7', '8', '9',  '0', '-', '=',   8,   9,
+   'q', 'w', 'e',  'r', 't', 'y', 'u', 'i',
+   'o', 'p', '[',  ']',  10,   0, 'a', 's',
+   'd', 'f', 'g',  'h', 'j', 'k', 'l', ';',
+  '\'', '`',   0, '\\', 'z', 'x', 'c', 'v',
+   'b', 'n', 'm',  ',', '.', '/',   0, '*',
+     0, ' ' },
+  shift_kb2ascii[] = {
+     0,  27, '!',  '@', '#', '$', '%', '^',
+   '&', '*', '(',  ')', '_', '+',   8,   9,
+   'Q', 'W', 'E',  'R', 'T', 'Y', 'U', 'I',
+   'O', 'P', '{',  '}',  10,   0, 'A', 'S',
+   'D', 'F', 'G',  'H', 'J', 'K', 'L', ':',
+   '"', '~',   0,  '|', 'Z', 'X', 'C', 'V',
+   'B', 'N', 'M',  '<', '>', '?',   0, '*',
+     0, ' ' };
 
-static void key_put(uint8_t c) {
-  static const uint8_t
-    kb2ascii[] = {
-       0,  27, '1',  '2', '3', '4', '5', '6',
-     '7', '8', '9',  '0', '-', '=',   8,   9,
-     'q', 'w', 'e',  'r', 't', 'y', 'u', 'i',
-     'o', 'p', '[',  ']',  10,   0, 'a', 's',
-     'd', 'f', 'g',  'h', 'j', 'k', 'l', ';',
-    '\'', '`',   0, '\\', 'z', 'x', 'c', 'v',
-     'b', 'n', 'm',  ',', '.', '/',   0, '*',
-       0, ' ' },
-    shift_kb2ascii[] = {
-       0,  27, '!',  '@', '#', '$', '%', '^',
-     '&', '*', '(',  ')', '_', '+',   8,   9,
-     'Q', 'W', 'E',  'R', 'T', 'Y', 'U', 'I',
-     'O', 'P', '{',  '}',  10,   0, 'A', 'S',
-     'D', 'F', 'G',  'H', 'J', 'K', 'L', ':',
-     '"', '~',   0,  '|', 'Z', 'X', 'C', 'V',
-     'B', 'N', 'M',  '<', '>', '?',   0, '*',
-       0, ' ' };
-  if (K.kb.k == 0) {
-    const uint8_t *map = (K.kb.f & (kb_flag_lshift | kb_flag_rshift) ? shift_kb2ascii : kb2ascii);
-    c = c >= LEN(kb2ascii) ? c : map[c];
-    K.kb.k = c; } }
+_Static_assert(LEN(kb2ascii) == LEN(shift_kb2ascii));
 
+#define kb_code_left 75
+#define kb_code_right 77
+#define kb_code_up 72
+#define kb_code_down 80
 void kb_int(const uint8_t code) {
-  if (code == kb_code_extend) return (void) (K.kb.f |= kb_flag_extend);
-  if (K.kb.f & kb_flag_extend) {
+  if (code == kb_code_extend) K.kb.f |= kb_flag_extend;
+  else if (K.kb.f & kb_flag_extend) {
     K.kb.f &= ~kb_flag_extend;
+    uint16_t r = K.cb->rpos,
+             w = K.cb->wpos,
+             cs = K.cb->cols;
     if (code < 128) switch (code) {
       case kb_code_alt: K.kb.f |= kb_flag_ralt; return;
       case kb_code_ctl: K.kb.f |= kb_flag_rctl; return;
       case kb_code_delete:
         if (K.kb.f & kb_flag_ctl & kb_flag_alt) kreset();
         return;
-      default: return key_ext(code); }
+      case kb_code_left: w -= 1; goto move_cursor;
+      case kb_code_right: w += 1; goto move_cursor;
+      case kb_code_up: w -= cs; goto move_cursor;
+      case kb_code_down: w += cs; 
+      move_cursor:
+        w %= K.cb->rows * cs;
+        w = MAX(w, r);
+        K.cb->wpos = w;
+      default: return; }
     else switch (code - 128) {
       case kb_code_alt: K.kb.f &= ~kb_flag_ralt; return;
       case kb_code_ctl: K.kb.f &= ~kb_flag_rctl; return;
@@ -148,7 +146,10 @@ void kb_int(const uint8_t code) {
       case kb_code_rshift: K.kb.f |= kb_flag_rshift; return;
       case kb_code_alt:    K.kb.f |= kb_flag_lalt;   return;
       case kb_code_ctl:    K.kb.f |= kb_flag_lctl;   return;
-      default: return key_put(code); }
+      default:
+        if (!K.kb.k) K.kb.k = code >= LEN(kb2ascii) ? code :
+          (K.kb.f & (kb_flag_lshift | kb_flag_rshift) ? shift_kb2ascii : kb2ascii)[code];
+        return; }
     else switch (code - 128) {
       case kb_code_lshift: K.kb.f &= ~kb_flag_lshift; return;
       case kb_code_rshift: K.kb.f &= ~kb_flag_rshift; return;
@@ -159,25 +160,6 @@ void kb_int(const uint8_t code) {
 #define px_color cyan
 #define reg_color magenta
 #define mem_color yellow
-
-static void fbinit(void) {
-  if (!fb_req.response && !fb_req.response->framebuffer_count) kreset();
-  struct limine_framebuffer *f = fb_req.response->framebuffers[0];
-  K.fb._ = f->address;
-  K.fb.width = f->width;
-  K.fb.height = f->height;
-  K.fb.pitch = f->pitch; }
-
-static void meminit(void) {
-  if (!memmap_req.response || !hhdm_req.response) kreset();
-  struct limine_memmap_entry *r, **rr = memmap_req.response->entries;
-  uintptr_t hhdm = hhdm_req.response->offset,
-            n = memmap_req.response->entry_count;
-  while (n--) if ((r = rr[n])->type == 0) {
-    struct mem *m = (struct mem*) (hhdm + r->base);
-    m->len = r->length / sizeof(uintptr_t);
-    m->next = K.free;
-    K.free = m; } }
 
 static g_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }
@@ -221,8 +203,14 @@ static void kfree(void *p) {
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
-static void kdraw(void) {
-  uintptr_t p = K.fb.pitch / 4;
+
+static g_vm(g_reset) { return kreset(), f; }
+
+static g_inline void k_eval(const char*s) {
+  if (g_ok(K.g = g_evals_(K.g, s))) K.cb->rpos = K.cb->wpos; }
+
+static g_vm(draw) {
+  // draw framebuffer
   for (uint8_t i = 0, rows = K.cb->rows; i < rows; i++)
     for (uint8_t j = 0, cols = K.cb->cols; j < cols; j++) {
       uint16_t pos = i * cols + j;
@@ -234,47 +222,84 @@ static void kdraw(void) {
       uintptr_t y = i * font_y, x = j * font_x;
       for (uint8_t r = 0; r < font_y; r++)
         for (uint8_t o = bmp[r], c = font_x; c--; o >>= 1)
-          K.fb._[(y + r) * p + x + c] = o & 1 ? fg : bg; } }
+          K.fb._[(y + r) * K.fb.pitch + x + c] = o & 1 ? fg : bg; }
+  Ip += 1;
+  return Continue(); }
 
-static void cbinit(void) {
+static g_vm(wait) {
+  kwait();
+  Ip += 1;
+  return Continue(); }
+
+static g_vm(key) {
+    Sp[0] = g_putnum(K.kb.k);
+    K.kb.k = 0;
+    Ip += 1;
+    return Continue(); }
+
+static g_vm(setrpos) {
+  K.cb->rpos = K.cb->wpos;
+  Ip += 1;
+  return Continue(); }
+
+static union x
+  bif_reset[] = {{g_reset}},
+  bif_draw[] = {{draw}, {ret0}},
+  bif_key[] = {{key}, {ret0}},
+  bif_wait[] = {{wait}, {ret0}},
+  bif_setrpos[] = {{setrpos}, {ret0}}
+  ;
+
+static struct g_def defs[] = {
+  {"setrpos", (intptr_t) bif_setrpos},
+  {"reset", (intptr_t) bif_reset},
+  {"draw", (intptr_t) bif_draw},
+  {"key", (intptr_t) bif_key},
+  {"wait", (intptr_t) bif_wait}, };
+
+static bool meminit(void) {
+  if (!memmap_req.response || !hhdm_req.response) return false;
+  struct mem *m;
+  struct limine_memmap_entry *r, **rr = memmap_req.response->entries;
+  uintptr_t hhdm = hhdm_req.response->offset,
+            n = memmap_req.response->entry_count;
+  while (n--) if ((r = rr[n])->type == 0)
+    m = (struct mem*) (hhdm + r->base),
+    m->len = r->length / sizeof(uintptr_t),
+    m->next = K.free,
+    K.free = m;
+  return true; }
+
+static bool fbinit(void) {
+  if (!fb_req.response || !fb_req.response->framebuffer_count) return false;
+  struct limine_framebuffer *f = fb_req.response->framebuffers[0];
+  K.fb._ = f->address;
+  K.fb.width = f->width;
+  K.fb.height = f->height;
+  K.fb.pitch = f->pitch >> 2;
+  return true; }
+
+static bool cbinit(void) {
   const uintptr_t rows = K.fb.height / font_y,
                   cols = K.fb.width / font_x;
-  struct cb *cb = malloc(sizeof(struct cb) + rows * cols);
-  if (!cb) kreset();
-  cb->rows = rows, cb->cols = cols;
-  cb->rpos = cb->wpos = 0;
-  cb->flag = show_cursor;
-  cb_fill(cb, 0);
-  K.cb = cb; }
+  K.cb = malloc(sizeof(struct cb) + rows * cols);
+  if (!K.cb) return false;
+  K.cb->rows = rows, K.cb->cols = cols;
+  K.cb->rpos = K.cb->wpos = 0;
+  K.cb->flag = show_cursor;
+  cb_fill(K.cb, 0);
+  return true; }
 
-static g_vm(g_reset) { return kreset(), f; }
-static union x bif_reset[] = {{g_reset}};
-
-static g_inline void k_eval(const char*s) {
-  if (g_ok(K.g = g_evals_(K.g, s))) K.cb->rpos = K.cb->wpos; }
-
-#define prompt "  ; "
-static void ginit(void) {
-  K.g = g_def(g_ini(), "reset", (intptr_t) bif_reset);
-  k_eval(
-    "(puts\"\x02 \")"
-#include "boot.h"
-    "(:(kreads _)(:(rr x)(: r(read x)(? r(X(A r)(rr x))))(each(rr 0)(\\ r(,(.(ev'ev r))(putc 10))))))"
-    "(putn(clock 0)10)(puts\"\n"prompt"\")"); }
-
-static void kread(void) {
-  uint8_t c = K.kb.k;
-  K.kb.k = 0;
-  if (c) g_stdout_putc(K.g, c);
-  if (c == '\n') k_eval("(kreads 0)(puts\""prompt"\")"); }
+static bool kinit(void) {
+  archinit();
+  return meminit() && fbinit() && cbinit(); }
 
 void kmain(void) {
-  kinit();
-  meminit();
-  fbinit();
-  cbinit();
-  ginit();
-  for (;;)
-    kdraw(),
-    kread(),
-    kwait(); }
+  if (!kinit()) for (;;) kwait();
+  g_evals(g_defs(g_ini(), LEN(defs), defs),
+#include "boot.h"
+    "(:(ps1 _)(setrpos(puts\"  ; \"))"
+      "(rs x)(? x(X(A x)(rs(read 0))))"
+      "(ep x)(,(.(ev x))(putc 10))"
+      "(go k)(,(draw 0)(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep)))(go(key(wait 0))))"
+     "(reset(go(key(putn(clock(puts\"\x02 \"))10)(ps1(putc 10))))))"); }

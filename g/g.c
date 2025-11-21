@@ -1,6 +1,7 @@
 #include "g.h"
 #include <stdarg.h>
 
+static struct g *g_ana(struct g *f, g_vm_t *y);
 static g_inline struct g *g_enlist(struct g*f) { return
   g_cons_r(g_push(f, 1, g_nil)); }
 static g_inline struct g *g_quote(struct g*f) { return
@@ -8,7 +9,7 @@ static g_inline struct g *g_quote(struct g*f) { return
 
 static g_vm_t data;
 enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
-static g_inline void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
+static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
   uintptr_t *shape = v->shape;
   v->ap = data;
   v->typ = g_ty_str;
@@ -23,7 +24,8 @@ static void ini_vec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
   va_start(xs, rank);
   ini_vecv(v, type, rank, xs);
   va_end(xs); }
-static g_inline void ini_str(struct g_vec *s, uintptr_t len) { ini_vec((struct g_vec*) s, g_vt_char, 1, len); }
+static void ini_str(struct g_vec *s, uintptr_t len) {
+  ini_vec((struct g_vec*) s, g_vt_char, 1, len); }
 struct g_pair {
   g_vm_t *ap;
   uintptr_t typ;
@@ -186,9 +188,6 @@ typedef uintptr_t g_xx_t(struct g*, intptr_t);
 typedef intptr_t g_cp_t(struct g*, intptr_t, intptr_t*, intptr_t*);
 typedef void g_wk_t(struct g*, intptr_t, intptr_t*, intptr_t*);
 typedef bool g_id_t(struct g*, intptr_t, intptr_t);
-typedef struct g
-  *g_em_t(struct g*, struct g_out*, intptr_t),
-  *g_pp_t(struct g*, intptr_t);
 
 static int
   read_char(struct g*, struct g_in *i);
@@ -243,12 +242,12 @@ struct g *g_read1i(struct g*f, struct g_in* i) {
       uintptr_t n = 1, lim = sizeof(intptr_t);
       f = g_buf_new(f);
       if (g_ok(f))
-        for (g_str_txt(f->sp[0])[0] = c; g_ok(f); f = g_buf_grow(f), lim *= 2)
+        for (txt(f->sp[0])[0] = c; g_ok(f); f = g_buf_grow(f), lim *= 2)
           for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
             switch (c = g_getc(f, i)) {
               default: continue;
               case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
-              case '(': case ')': case '"': case '\'': case EOF:
+              case '(': case ')': case '"': case '\'': case 0 : case EOF:
                 g_ungetc(f, i, c);
                 len(b) = n;
                 txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
@@ -294,7 +293,7 @@ static uintptr_t vector_data_bytes(struct g_vec *v) {
             *shape = v->shape;
   while (rank--) len *= *shape++;
   return len; }
-uintptr_t vector_total_bytes(struct g_vec *v) {
+static uintptr_t vector_total_bytes(struct g_vec *v) {
   return sizeof(struct g_vec) + v->rank * sizeof(intptr_t) + vector_data_bytes(v); }
 
 #define twop g_twop
@@ -339,7 +338,7 @@ static struct g *enscope(struct g *f, struct env *par, intptr_t args, intptr_t i
   if (g_ok(f)) {
     union x *k = (union x*) f->hp;
     f->hp += n + Width(struct g_tag);
-    *--f->sp = word(k);
+    *--f->sp = (intptr_t) k;
     struct g_tag *t = (struct g_tag*) (k + n);
     t->null = NULL;
     t->head = k;
@@ -355,7 +354,7 @@ static struct g *enscope(struct g *f, struct env *par, intptr_t args, intptr_t i
 static g_inline struct g *g_cons_2(struct g *f, intptr_t a, intptr_t b) {
   return g_cons_l(g_push(f, 2, a, b)); }
 
-static g_inline struct g *g_cons_stack(struct g *f, int i, int j) {
+static g_noinline struct g *g_cons_stack(struct g *f, int i, int j) {
   f = g_have(f, Width(struct g_pair));
   if (g_ok(f)) {
     struct g_pair *p = (struct g_pair*) f->hp;
@@ -363,8 +362,8 @@ static g_inline struct g *g_cons_stack(struct g *f, int i, int j) {
     f->hp += Width(struct g_pair);
     *++f->sp = (intptr_t) p; }
   return f; }
-struct g *g_cons_l(struct g *f) { return g_cons_stack(f, 0, 1); }
-struct g *g_cons_r(struct g *f) { return g_cons_stack(f, 1, 0); }
+g_inline struct g *g_cons_l(struct g *f) { return g_cons_stack(f, 0, 1); }
+g_inline struct g *g_cons_r(struct g *f) { return g_cons_stack(f, 1, 0); }
 
 #define Ana(n, ...) struct g *n(struct g *f, struct env **c, intptr_t x, ##__VA_ARGS__)
 #define Cata(n, ...) struct g *n(struct g *f, struct env **c, size_t m, ##__VA_ARGS__)
@@ -1671,7 +1670,7 @@ static struct g*_stdout_putc(struct g *f, struct g_out *_o, int c) {
 
 struct g_out g_stdout = { _stdout_putc };
 
-struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
+static struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
   uintptr_t len = vt_size[type];
   va_list xs;
   va_start(xs, rank);
@@ -1688,6 +1687,12 @@ struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
     ini_vecv(v, type, rank, xs);
     memset(v->shape + rank, 0, len);
     va_end(xs); }
+  return f; }
+
+struct g *g_strof(struct g *f, const char *cs) {
+  uintptr_t len = strlen(cs);
+  f = g_vec0(f, g_vt_char, 1, len);
+  if (g_ok(f)) memcpy(txt(f->sp[0]), cs, len);
   return f; }
 
 struct g *g_ini_static(uintptr_t nbytes, void *f) {
@@ -1707,6 +1712,7 @@ g_noinline struct g *g_reads(struct g *f, const char*s) {
 struct g *g_write1o(struct g *f, struct g_out *o) {
   if (!g_ok(f)) return f;
   return g_putx(f, o, f->sp[0]); }
+
 struct g *g_ini(void) { return g_ini_dynamic(g_libc_malloc, g_libc_free); }
 
 struct g *g_def(struct g*f, const char*s, intptr_t x) {
@@ -1732,23 +1738,9 @@ struct g *g_push(struct g *f, uintptr_t m, ...) {
   va_end(xs);
   return f; }
 
-g_inline struct g *g_strof(struct g *f, const char *cs) {
-  uintptr_t bytes = strlen(cs),
-            words = b2w(bytes),
-            req = str_type_width + words;
-  f = g_have(f, req + 1);
-  if (g_ok(f)) {
-    struct g_vec *o = (struct g_vec*) f->hp;
-    f->hp += req;
-    *--f->sp = word(o);
-    ini_str(o, bytes);
-    memcpy(txt(o), cs, bytes); }
-  return f; }
 
-g_inline char *g_str_txt(intptr_t x) { return txt(x); }
-
-// keep this separate and g_noinline so g_eval can be tail call optimized if possible
-g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
+// don't inline this so callers can tail call optimize
+static g_noinline struct g *g_ana(struct g *f, g_vm_t *y) {
   f = enscope(f, (struct env*) g_nil, g_nil, g_nil);
   if (!g_ok(f)) return f;
   struct env *c = (struct env*) g_pop1(f);

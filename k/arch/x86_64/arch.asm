@@ -1,13 +1,8 @@
-extern k_log_char
-
 global keyboard_isr
 global timer_isr
-global kinit
-global key_buffer
-global key_buffer_idx
+global archinit
 global kreset
 extern K
-global resume
 extern kb_int
 
 %define INTERRUPT 0x8e
@@ -66,11 +61,6 @@ kbq_len:
   resb 1
 
 section .rodata
-
-align 8
-scan_ascii:
-  db 0,27,"1234567890-=",8,9,"qwertyuiop[]",10,0,"asdfghjkl;'`",0,"\zxcvbnm,./",0,"*",0," "
-scan_ascii_end:
 align 8
 isrs:
   times 32 dq kreset
@@ -89,12 +79,9 @@ isr_types:
 section .text
 
 align 8
-resume:
-  ret
-
-
-align 8
 timer_isr:
+; this is basically minimal. increment tick counter and reopen timer interrupts.
+; if we want to do more we will probably need to push/pop15.
   inc qword [rel K]
   push rax
   mov al, 0x20
@@ -114,7 +101,7 @@ keyboard_isr:
   iretq
 
 align 8
-kinit:
+archinit:
   ; populate IDT
   lea rdi, [rel idt]
   lea rcx, [rel isrs]
