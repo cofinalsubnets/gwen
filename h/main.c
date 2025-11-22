@@ -5,18 +5,20 @@
 #include <stdio.h>
 
 int main(int argc, const char **argv) {
-  struct g *f = g_ini();
-  while (*argv) f = g_strof(f, *argv++);
-  f = g_push(f, 1, g_nil);
-  while (argc--) f = g_cons_r(f);
-  if (g_ok(f))
-    f = g_def(f, "argv", g_pop1(f)),
-    f = g_evals(f,
+  struct g *f = gini();
+  while (*argv) f = gstrof(f, *argv++);
+  f = gpush(f, 1, gnil);
+  while (argc--) f = gconsr(f);
+  f = gdef1(f, "argv");
+  f = gevals_(f,
 #include "boot.h"
-      "(?(memq\"-i\"(B argv))"
-"(:(repl p)(: r(,(puts p)(read 0))(? r(,(.(ev'ev(A r)))(putc 10)(repl p))))(repl\"    \"))"
-      "((:(R _)(: r(read _)(? r(,(ev'ev(A r))(R _)))))0))");
-  if (!g_ok(f)) {
+  );
+  f = gevals_(f,
+    isatty(STDIN_FILENO) ? 
+    "(:(repl p)(: r(,(puts p)(read 0))(? r(,(.(ev(A r)))(putc 10)(repl p))))(repl\" ;; \"))" :
+    "((:(R _)(: r(read _)(? r(,(ev'ev(A r))(R _)))))0)");
+
+  if (!gokp(f)) {
     enum g_status s = g_code_of(f);
     f = g_core_of(f);
     fprintf(stderr, "# f@%lx ", (uintptr_t) f);
@@ -24,4 +26,5 @@ int main(int argc, const char **argv) {
       fprintf(stderr, "oom@%ldB", !f ? 0 : f->len * sizeof(intptr_t) * 2);
     else fprintf(stderr, "error %d", s);
     fprintf(stderr, "\n"); }
-  return g_fin(f); }
+  return gfin(f); }
+

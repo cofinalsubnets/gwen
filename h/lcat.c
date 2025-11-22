@@ -3,12 +3,12 @@
 #include <stdio.h>
 
 int main(void) {
-  struct g *f = g_ini();
-  if (g_ok(f = g_read1(f)))
-    g_write1(f),
-    f = g_pop(f, 1);
-  while (g_ok(f = g_read1(f)))
+  struct g *f = gini();
+  if (gokp(f = gread1(f)))
+    gwrite1(f),
+    f = gpop(f, 1);
+  while (gokp(f = gread1(f)))
     putchar(' '),
-    g_write1(f),
-    f = g_pop(f, 1);
-  return g_fin(f); }
+    gwrite1(f),
+    f = gpop(f, 1);
+  return gfin(f); }

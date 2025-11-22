@@ -31,7 +31,7 @@ perf: $b/perf.data
 $b/flamegraph.svg: $b/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: $b/h/$n
-	@which rlwrap >/dev/null && $(lib) rlwrap $< -i || $(lib) $< -i
+	@which rlwrap >/dev/null && $(lib) rlwrap $< || $(lib) $<
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test

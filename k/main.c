@@ -19,7 +19,8 @@ struct k {
   } fb;
   struct { uint8_t k, f; } kb;
 } K;
-void kreset(void), archinit(void);
+void kreset(void);
+bool archinit(void);
 
 static g_inline void kwait(void) { asm volatile (
 #if defined (__x86_64__)
@@ -85,8 +86,6 @@ uintptr_t g_clock(void) { return K.ticks; }
 #define console_fg 0xe9edf0
 #define console_cur 0x6ba7a2
 #define console_sel 0xc3e4e0
-#define font_x 8
-#define font_y 8
 
 static const uint8_t
   kb2ascii[] = {
@@ -206,9 +205,8 @@ void free(void *x) { return kfree(x); }
 
 static g_vm(g_reset) { return kreset(), f; }
 
-static g_inline void k_eval(const char*s) {
-  if (g_ok(K.g = g_evals_(K.g, s))) K.cb->rpos = K.cb->wpos; }
-
+#define font_x 8
+#define font_y 8
 static g_vm(draw) {
   // draw framebuffer
   for (uint8_t i = 0, rows = K.cb->rows; i < rows; i++)
@@ -283,22 +281,20 @@ static bool cbinit(void) {
                   cols = K.fb.width / font_x;
   K.cb = malloc(sizeof(struct cb) + rows * cols);
   if (!K.cb) return false;
-  K.cb->rows = rows, K.cb->cols = cols;
+  K.cb->rows = rows;
+  K.cb->cols = cols;
   K.cb->rpos = K.cb->wpos = 0;
   K.cb->flag = show_cursor;
   cb_fill(K.cb, 0);
   return true; }
 
-static bool kinit(void) {
-  archinit();
-  return meminit() && fbinit() && cbinit(); }
-
 void kmain(void) {
-  if (!kinit()) for (;;) kwait();
-  g_evals(g_defs(g_ini(), LEN(defs), defs),
+  if (archinit() && meminit() && fbinit() && cbinit())
+    gfin(gevals(gdefs(gini(), LEN(defs), defs),
 #include "boot.h"
-    "(:(ps1 _)(setrpos(puts\"  ; \"))"
-      "(rs x)(? x(X(A x)(rs(read 0))))"
-      "(ep x)(,(.(ev x))(putc 10))"
-      "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep))))))))"
-     "(reset(go(key(ps1(,(putn(clock(puts\"\x02 \"))10)(putc 10)))))))"); }
+      "(:(ps1 _)(setrpos(puts\"  ; \"))"
+        "(rs x)(? x(X(A x)(rs(read 0))))"
+        "(ep x)(,(.(ev x))(putc 10))"
+        "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep))))))))"
+       "(go(key(ps1(,(putn(clock(puts\"\x02 \"))10)(putc 10))))))"));
+  kreset(); }

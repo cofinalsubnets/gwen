@@ -169,6 +169,7 @@ archinit:
 
   ; enable interrupts
   sti
+  mov al, 1
   ret
 
 kreset:
