@@ -47,7 +47,7 @@ g_cflags=-std=gnu17 -g -O2 -pipe\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
  	-fno-exceptions -fno-asynchronous-unwind-tables -fno-stack-clash-protection\
  	-fcf-protection=none
-cc=$(CC) $(g_cflags) -flto -fpic -I. -Ig/ -Ih/ -I$b/
+cc=$(CC) $(g_cflags) -fpic -I. -Ig/ -Ih/ -I$b/
 
 k_c=$(g_c) $(f_c) $(wildcard k/*.c) $(wildcard k/arch/$a/*.c)
 k_h=$(g_h) $(wildcard k/*.h) $(wildcard k/arch/$a/*.h)
