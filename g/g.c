@@ -124,10 +124,8 @@ static g_vm_t
 
 
 
-enum g_status gfin(struct g *f) {
-  enum g_status s = g_code_of(f);
-  if ((f = g_core_of(f))) f->free(f, f->pool);
-  return s; }
+void gfin(struct g *f) {
+  if ((f = g_core_of(f))) f->free(f, f->pool); }
 
 #ifndef EOF
 #define EOF -1
@@ -912,12 +910,12 @@ g_vm(ret) {
   Sp[n] = Sp[0];
   Sp += n;
   return Continue(); }
+
 g_vm(ret0) { return
   Ip = cell(Sp[1]),
   Sp[1] = Sp[0],
   Sp += 1,
   Continue(); }
-
 
 #define op(nom, n, x) g_vm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 op(add, 2, (Sp[0]+Sp[1]-1)|1)
@@ -1035,11 +1033,9 @@ static struct g_entry *table_delete_r(
   intptr_t *v,
   struct g_entry *e) { return
     !e ? e :
-    eql(f, e->key, k) ? (t->len--,
-                         *v = e->val,
-                         e->next) :
-    (e->next = table_delete_r(f, t, k, v, e->next),
-     e); }
+    eql(f, e->key, k) ?
+     (t->len--, *v = e->val, e->next) :
+    (e->next = table_delete_r(f, t, k, v, e->next), e); }
 
 static g_noinline intptr_t table_delete(struct g *f, struct g_table *t, intptr_t k, intptr_t v) {
   uintptr_t idx = index_of_key(f, t, k);
@@ -1165,8 +1161,6 @@ static g_vm(symnom) {
   Sp[0] = y;
   Ip += 1;
   return Continue(); }
-
-
 
 static g_vm(symbolp) { return
   Sp[0] = g_symp(Sp[0]) ? gputnum(-1) : g_nil,
@@ -1619,7 +1613,6 @@ static struct g* gfputx(struct g *f, struct g_out *o, intptr_t x) {
           if ((c = *text++) == '\\' || c == '"') f = gputc(f, o, '\\');
         f = gputc(f, o, '"'); }
       return f; } } }
-
 
 static g_vm(seek) { return
   Sp[1] = word(((union x*) Sp[1]) + ggetnum(Sp[0])),

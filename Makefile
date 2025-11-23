@@ -128,17 +128,17 @@ $b/h/lib$n.so: $b/h/lib$n.a
 	@mkdir -p $(dir $@)
 	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive
 
-$b/h/%.o: %.c $(g_h) Makefile
+$b/h/%.o: %.c $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -c $< -o $@
 
-$b/h/%.o: h/%.c $(g_h) Makefile
+$b/h/%.o: h/%.c $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -c -I$b/h $< -o $@
 
-$b/h/main.o: h/main.c $b/boot.h $(g_h) Makefile
+$b/h/main.o: h/main.c $b/boot.h $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(cc) -c -I$b/h $< -o $@
@@ -152,12 +152,12 @@ $b/h/$n.1: $b/h/$n h/manpage.$x
 	@echo GEN	$@
 	@$m < h/manpage.$x > $@
 
-$b/$n-$a.elf: Makefile k/arch/$a/$a.lds $(k_o)
+$b/$n-$a.elf: k/arch/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(LD) $(kldflags) $(k_o) -o $@
 
-$b/k/$a/%.o: %.c Makefile $(g_h) $b/boot.h
+$b/k/$a/%.o: %.c $(g_h) $b/boot.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -165,7 +165,7 @@ $b/k/$a/g/cga_8x8.o: f/cga_8x8.c
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
-$b/k/$a/%.o: k/%.S $(g_h) Makefile
+$b/k/$a/%.o: k/%.S $(g_h)
 	@echo AS	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

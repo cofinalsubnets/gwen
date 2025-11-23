@@ -105,7 +105,7 @@ enum g_vec_type {
   g_vt_f8,  g_vt_f16,
   g_vt_f32, g_vt_f64, };
 
-enum g_status gfin(struct g*);
+void gfin(struct g*);
 
 
 #define g_vt_char g_vt_i8

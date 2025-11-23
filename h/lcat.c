@@ -5,10 +5,12 @@
 int main(void) {
   struct g *f = gini();
   if (gokp(f = gread1(f)))
-    gwrite1(f),
+    f = gwrite1(f),
     f = gpop(f, 1);
   while (gokp(f = gread1(f)))
     putchar(' '),
     gwrite1(f),
     f = gpop(f, 1);
-  return gfin(f); }
+  enum g_status s = g_code_of(f);
+  gfin(g_core_of(f));
+  return s; }
