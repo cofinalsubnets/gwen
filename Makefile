@@ -42,7 +42,7 @@ g_h=$(wildcard g/*.h)
 g_c=$(wildcard g/*.c)
 f_c=$(wildcard f/*.c)
 h_o=$(addprefix $b/h/, $(g_c:.c=.o) sys.o)
-g_cflags=-std=gnu17 -g -O2 -pipe\
+g_cflags=-std=gnu23 -g -O2 -pipe\
  	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
  	-fno-exceptions -fno-asynchronous-unwind-tables -fno-stack-clash-protection\
@@ -252,7 +252,7 @@ k_qemu_risc=-M virt -device ramfb -device qemu-xhci -device usb-kbd -device usb-
 k_qemu_loongarch64=$(k_qemu_risc) -cpu la464
 k_qemu_aarch64=$(k_qemu_risc) -cpu cortex-a72
 k_qemu_riscv64=$(k_qemu_risc) -cpu rv64
-k_qemu=qemu-system-$a -m 2G $(k_qemu_$a)\
+k_qemu=qemu-system-$a -m 256M $(k_qemu_$a)\
 	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-$a.fd,readonly=on
 
 run: run-$a

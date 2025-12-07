@@ -80,11 +80,11 @@ struct synth_mode {
   struct mode mode;
   PDSynth *synth;
   int active_waveform, submode;
-  float synth_time, freq;
+  float synth_time, set_time, freq;
 };
 static struct mode _life, _log;
 static struct synth_mode
-  _synth = { { &_life, &_log, g_synth_ini, g_synth_update, g_nop, }, NULL, 0, 1, 1, 237 };
+  _synth = { { &_life, &_log, g_synth_ini, g_synth_update, g_nop, }, NULL, 0, 1, 1, 1, 237 };
 static struct  mode
   _life  = { &_log, (void*) &_synth, g_life_ini, g_life_update, g_nop, },
   _log  = { (void*) &_synth, &_life, g_log_ini, g_log_update, g_nop, };
@@ -221,7 +221,7 @@ static void g_synth_update(void) {
   struct synth_mode *m = (void*) K.mode;
   switch (m->submode) {
     case 0:
-      if (K.b.pushed & (kButtonA | kButtonB)) m->synth_time = 1, m->submode = 1;
+      if (K.b.pushed & (kButtonA | kButtonB)) m->synth_time = m->set_time, m->submode = 1;
       else {
         K.pd->sound->synth->playNote(m->synth, m->freq, 100, 1.0f/20, 0);
         m->freq *= 1 + K.pd->system->getCrankChange() / 360.0f;
@@ -234,7 +234,7 @@ static void g_synth_update(void) {
         draw_wave(); }
       return;
     case 1:
-      if (K.b.pushed & (kButtonA | kButtonB)) m->submode = 2;
+      if (K.b.pushed & (kButtonA | kButtonB)) m->set_time = m->synth_time, m->submode = 2;
       else {
         m->synth_time *= (1 + 11 * K.pd->system->getCrankChange() / 360.0f);
         if (m->synth_time < 0.1f) m->synth_time = 0.1f;
@@ -247,10 +247,10 @@ static void g_synth_update(void) {
     case 2:
       if (K.b.pushed & (kButtonA | kButtonB)) m->submode = 1;
       else {
-        K.pd->system->setAutoLockDisabled(1); 
         m->synth_time -= 1.0f/30;
         if (m->synth_time <= 0) m->submode = 0;
         else {
+          K.pd->system->setAutoLockDisabled(1); 
           cb_cur(cb, 0, 0);
           cb_fill(cb, 0);
           for (int i = (int) m->synth_time; i; i--)

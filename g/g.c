@@ -7,6 +7,9 @@ static g_inline struct g *g_enlist(struct g*f) { return
 static g_inline struct g *gquote(struct g*f) { return
   g_ok(f = g_enlist(f)) ? gconsl(gpush(f, 1, f->quote)) : f; }
 
+static g_inline struct g *g_enc(struct g*f, enum g_status s) {
+  return (struct g*) ((uintptr_t) f | s); }
+
 static g_vm_t data;
 enum g_ty { g_ty_two, g_ty_str, g_ty_sym, g_ty_tbl, };
 static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
@@ -54,8 +57,6 @@ bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str && vec_strp((stru
 #endif
 #define symp g_symp
 #define dict_of(_) (_)->dict
-static g_inline struct g *g_ret(struct g*f, enum g_status s) {
-  return f->ret(f, s); }
 #define nilp(_) (word(_)==g_nil)
 #define A(o) two(o)->a
 #define B(o) two(o)->b
@@ -224,7 +225,7 @@ struct g *gfread1(struct g*f, struct g_in* i) {
   switch (c) {
     case '(':  return greadsi(f, i);
     case ')':  return gpush(f, 1, g_nil);
-    case EOF:  return g_ret(f, g_status_eof);
+    case EOF:  return g_enc(f, g_status_eof);
     case '\'': return gquote(gfread1(f, i));
     case '"':   {
       size_t n = 0;
@@ -442,7 +443,7 @@ static g_vm(imm) {
 g_vm(g_yield) { return
   Ip = Ip[1].m,
   Pack(f),
-  g_ret(f, g_status_yield); }
+  g_enc(f, g_status_yield); }
 
 static g_vm(ev0) { return
   Ip += 1,
@@ -1302,23 +1303,23 @@ static struct g *copy_core(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f
   return g->t0 = g_clock(), g; }
 
 
-// keep v between
-#define v_lo 8
-// and
-#define v_hi (v_lo << 6)
-// where
-//   v = (t2 - t0) / (t2 - t1)
-//       non-gc running time     t1    t2
-//   ,.........................,/      |
-//   -----------------------------------
-//   |                          `------'
-//   t0                  gc time (this cycle)
 static g_noinline struct g *please(struct g *f, uintptr_t req0) {
   uintptr_t t0 = f->t0, t1 = g_clock(),
             len0 = f->len;
   intptr_t *w = (intptr_t*) f, *w0 = (void*) f->pool;
   struct g *g = (struct g*) (w == w0 ? w0 + len0 : w0);
   f = copy_core(g, (void*) f->pool, f->len, f);
+  // keep v between
+#define v_lo 8
+  // and
+#define v_hi 512
+  // where
+  //   v = (t2 - t0) / (t2 - t1)
+  //       non-gc running time     t1    t2
+  //   ,.........................,/      |
+  //   -----------------------------------
+  //   |                          `------'
+  //   t0                  gc time (this cycle)
   uintptr_t t2 = f->t0,      // get and set last gc end time
             req = req0 + len0 - avail(f),
             v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
@@ -1334,9 +1335,7 @@ static g_noinline struct g *please(struct g *f, uintptr_t req0) {
 
   // allocate a new pool with target size
   g = f->malloc(f, len1 * 2 * sizeof(intptr_t));
-  if (!g) {
-    if (req <= len0) return f;
-    return g_ret(f, g_status_oom); }
+  if (!g) return g_enc(f, req <= len0 ? g_status_ok : g_status_oom);
   g = copy_core(g, (intptr_t*) g, len1, f);
   f->free(f, (void*) f->pool);
   return g; }
@@ -1506,15 +1505,13 @@ bifs(built_in_function);
 static struct g *gsymof(struct g *f, const char *nom) {
   return gintern(gstrof(f, nom)); }
 
-static struct g *g_enc(struct g*f, enum g_status s) {
-  return (struct g*) ((uintptr_t) f | s); }
-
 static g_vm(g_stop) { return Pack(f), f; }
 // this is the general initialization function. arguments are
 // - f: core pointer
 // - len0: initial semispace size in words (== total_space_size / 2)
 // - ma: malloc function pointer
 // - fr: free function pointer
+static const struct g_def g_defs0[] = { bifs(biff) insts(i_entry) };
 static struct g *gini0(
     struct g *f,
     uintptr_t words,
@@ -1524,14 +1521,13 @@ static struct g *gini0(
     struct g_out*out,
     struct g_out*err) {
   if (!g_ok(f)) return f;
-  if (f == NULL) return g_ret(f, g_status_oom);
-  if (words * sizeof(intptr_t) < sizeof(struct g)) return g_ret(f, g_status_oom);
+  if (f == NULL) return g_enc(f, g_status_oom);
+  if (words * sizeof(intptr_t) < sizeof(struct g)) return g_enc(f, g_status_oom);
   memset(f, 0, sizeof(struct g));
   f->len = words;
   f->pool = (void*) f;
   f->malloc = ma ? ma : g_static_malloc;
   f->free = fr ? fr : g_static_free;
-  f->ret = g_enc;
   f->hp = f->end;
   f->sp = (intptr_t*) f + words;
   static union x bif_stop[] = { {g_stop} };
@@ -1544,18 +1540,17 @@ static struct g *gini0(
   f = gsymof(f, ",");
   f = gsymof(f, "\\");
   if (g_ok(f)) { // these must be in reverse order from above
-    f->lambda = sym(gpop1(f)),
-    f->begin = sym(gpop1(f)),
-    f->quote = sym(gpop1(f)),
-    f->cond = sym(gpop1(f)),
+    f->lambda = sym(gpop1(f));
+    f->begin = sym(gpop1(f));
+    f->quote = sym(gpop1(f));
+    f->cond = sym(gpop1(f));
     f->let = sym(gpop1(f));
-    f->macro = tbl(gpop1(f)),
+    f->macro = tbl(gpop1(f));
     f->dict = tbl(gpop1(f));
     struct g_def defs[] = {
       {"globals", (intptr_t) f->dict, },
       {"macros", (intptr_t) f->macro, }, };
     f = gdefs(f, 2, defs);
-    static const struct g_def g_defs0[] = { bifs(biff) insts(i_entry) };
     f = gdefs(f, LEN(g_defs0), (void*) g_defs0); }
   return f; }
 
@@ -1591,9 +1586,9 @@ static struct g* gfputx(struct g *f, struct g_out *o, intptr_t x) {
         if (!twop(x = B(x))) return gputc(f, o, ')'); }
     case g_ty_tbl: return
       gfprintf(f, o, "#table:%d/%d@%x",
-          (intptr_t) tbl(x)->len,
-          (intptr_t) tbl(x)->cap,
-          (intptr_t) x);
+        (intptr_t) tbl(x)->len,
+        (intptr_t) tbl(x)->cap,
+        (intptr_t) x);
     case g_ty_sym: {
       struct g_vec * s = sym(x)->nom;
       if (s) for (uintptr_t i = 0; i < len(s); f = gputc(f, o, txt(s)[i++]));

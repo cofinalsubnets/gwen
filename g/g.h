@@ -69,7 +69,6 @@ struct g {
   union { uintptr_t t0; intptr_t *cp; }; // 7 copy pointer / timestamp
   void *(*malloc)(struct g*, size_t),    // 8
        (*free)(struct g*, void*);        // 9
-  struct g *(*ret)(struct g*, enum g_status);
   union {
 #define g_nvars 16
     intptr_t v[g_nvars];
