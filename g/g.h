@@ -38,20 +38,22 @@
 #define MAX(p,q) ((p)>(q)?(p):(q))
 
 union x;
+typedef intptr_t g_word;
 typedef g_vm(g_vm_t);
 enum g_status {
   g_status_ok  = 0,
   g_status_oom = 1,
   g_status_err = 2,
   g_status_eof = 3, };
+
 struct g {
   union x {
     g_vm_t *ap;
-    intptr_t x;
+    g_word x;
     union x *m;
-    intptr_t typ; } *ip;                 // 0
-  intptr_t *hp,                          // 1
-           *sp;                          // 2
+    g_word typ; } *ip;                 // 0
+  g_word *hp,                          // 1
+         *sp;                          // 2
   struct g_atom {
     g_vm_t *ap;
     intptr_t typ;
@@ -86,45 +88,35 @@ struct g {
       intptr_t u[]; }; };
   intptr_t end[]; };
 
-extern struct g_in {
+struct g_in {
   int (*getc)(struct g*, struct g_in*),
       (*ungetc)(struct g*, struct g_in*, int),
-      (*eof)(struct g*, struct g_in*);
-} g_stdin;;
-extern struct g_out {
-  struct g *(*putc)(struct g*, struct g_out*, int); } g_stdout;
+      (*eof)(struct g*, struct g_in*); };
 
-struct g_def { const char *n; intptr_t x; };
+struct g_out {
+  struct g *(*putc)(struct g*, struct g_out*, int); };
 
-enum g_vec_type {
-  g_vt_u8,  g_vt_i8,
-  g_vt_u16, g_vt_i16,
-  g_vt_u32, g_vt_i32,
-  g_vt_u64, g_vt_i64,
-  g_vt_f8,  g_vt_f16,
-  g_vt_f32, g_vt_f64, };
+struct g_def { char const *n; intptr_t x; };
 
-void gfin(struct g*);
-
+enum g_status gfin(struct g*);
 
 #define g_vt_char g_vt_i8
-uintptr_t g_clock(void); // used by garbage collector
-int g_stdin_getc(struct g*),
-    g_stdin_ungetc(struct g*, int),
-    g_stdin_eof(struct g*),
-    strncmp(const char*, const char*, size_t),
-    memcmp(const void*, const void*, size_t);
-void g_stdout_putc(struct g*, int c),
-     *malloc(size_t), free(void*),
-     *memcpy(void *restrict, const void*restrict, size_t),
-     *memset(void*, int, size_t);
-long strtol(const char*restrict, char**restrict, int);
-size_t strlen(const char*);
-
-g_vm_t ret0, curry, g_yield;
-
-bool gtwop(intptr_t), gstrp(intptr_t), gtblp(intptr_t), gsymp(intptr_t);
-
+uintptr_t
+  g_clock(void); // used by garbage collector
+int
+  g_stdin_getc(struct g*),
+  g_stdin_ungetc(struct g*, int),
+  g_stdin_eof(struct g*),
+  strncmp(char const*, char const*, size_t),
+  memcmp(void const*, void const*, size_t);
+void
+  g_stdout_putc(struct g*, int c),
+  *malloc(size_t), free(void*),
+  *memcpy(void*restrict, void const*restrict, size_t),
+  *memset(void*, int, size_t);
+long strtol(char const*restrict, char**restrict, int);
+size_t strlen(char const*);
+g_vm_t ret0, curry;
 struct g
   *gini(void),
   *ginis(uintptr_t, void*),
@@ -137,17 +129,17 @@ struct g
   *greadsi(struct g*, struct g_in*),
   *gfwrite1(struct g*, struct g_out*),
   *gdef1(struct g*, const char*),
-  *gdef(struct g*, const char*, intptr_t),
+  *gdef(struct g*, const char*, g_word),
   *gdefs(struct g*, uintptr_t, struct g_def*),
   *gpush(struct g*, uintptr_t, ...),
   *gstrof(struct g*, const char*),
+  *gwrite1(struct g*),
+  *gread1(struct g*),
   *gconsl(struct g*),
   *gconsr(struct g*);
 
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
-static g_inline struct g *gwrite1(struct g *f) { return gfwrite1(f, &g_stdout); }
-static g_inline struct g *gread1(struct g *f) { return gfread1(f, &g_stdin); }
 #define g_log1(f) (g_write1(f),gputc(f, f->out, '\n'))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 static g_inline struct g *gpop(struct g*f, uintptr_t m) {
@@ -155,8 +147,9 @@ static g_inline struct g *gpop(struct g*f, uintptr_t m) {
   return f; }
 static g_inline struct g *geval_(struct g*f) { return gpop(geval(f), 1); }
 static g_inline struct g *gevals_(struct g*f, const char*s) { return gpop(gevals(f, s), 1); }
-static g_inline size_t b2w(size_t b) { size_t q = b / sizeof(intptr_t), r = b % sizeof(intptr_t);
-                                       return q + (r ? 1 : 0); }
+static g_inline size_t b2w(size_t b) {
+  size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
+  return q + (r ? 1 : 0); }
 static g_inline struct g*gputc(struct g*f, struct g_out *o, int c) { return o->putc(f, o, c); }
 static g_inline int ggetc(struct g*f, struct g_in *i) { return i->getc(f, i); }
 static g_inline int gungetc(struct g*f, struct g_in *i, int c) { return i->ungetc(f, i, c); }

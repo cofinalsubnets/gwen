@@ -1,7 +1,7 @@
 (: ; self evaluator test
  evr '(: ; expression for the evaluator
   (meta-eval x) (?
-   (symp x) (\ l (l x))
+   (nomp x) (\ l (l x))
    (not (twop x)) (const x)
    (: x0 (A x) a (B x)
     (? (= x0 '`) (const (A a))

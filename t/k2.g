@@ -6,7 +6,7 @@
   (loop k (A d) (B d)))
  (dict-get d k) (: x (dict-has d k) (? x (A x)))
  (dict-set d k v) (X (X k (A d)) (X v (B d)))
- (anon? x) (&& (symp x) (nilp (nom x)))
+ (anon? x) (&& (nomp x) (nilp (nom x)))
  (var? x) (&& (twop x) (anon? (B x)))
  (var x) (X x (sym 0))
  empty-dict '(0)

@@ -17,15 +17,15 @@ int main(int argc, const char **argv) {
   f = gdef1(f, "argv");
   f = gevals_(f, boot);
   f = gevals_(f, isatty(STDIN_FILENO) ? repl : rel);
-  if (gokp(f)) return gfin(f), g_status_ok;
   enum g_status s = g_code_of(f);
-  f = g_core_of(f);
-  if (!f) fprintf(stderr, "# f@0 %d\n", s);
-  else fprintf(stderr, "# f@%lx %lx.%ld.%ld.%ld\n",
-    (long unsigned) f,
-    (long unsigned) f->pool,
-    f->len,
-    f->hp - (intptr_t*) f,
-    (intptr_t*) f + f->len - f->sp);
+  if (s != g_status_ok) {
+    f = g_core_of(f);
+    if (!f) fprintf(stderr, "# f@0 %d\n", s);
+    else fprintf(stderr, "# f@%lx %lx.%ld.%ld.%ld\n",
+      (long unsigned) f,
+      (long unsigned) f->pool,
+      f->len,
+      f->hp - (intptr_t*) f,
+      (intptr_t*) f + f->len - f->sp); }
   gfin(f);
   return s; }

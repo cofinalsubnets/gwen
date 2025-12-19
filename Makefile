@@ -108,11 +108,6 @@ pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst)\
   -D__HEAP_SIZE=8388208 \
  	-D__STACK_SIZE=4194304
 
-$b/h/$n: $b/h/main.o $b/h/lib$n.so
-	@echo LD	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -o $@ $^
-
 $b/h/lcat: $b/h/lcat.o $b/h/lib$n.so
 	@echo LD	$@
 	@mkdir -p $(dir $@)
@@ -143,6 +138,11 @@ $b/h/main.o: h/main.c $b/boot.h $(g_h)
 	@mkdir -p $(dir $@)
 	@$(cc) -c -I$b/h $< -o $@
 
+$b/h/$n: $b/h/main.o $b/h/lib$n.so
+	@echo LD	$@
+	@mkdir -p $(dir $@)
+	@$(cc) -o $@ -l$n -Lb/h $<
+
 # sed command to escape lisp text into C string format
 $b/boot.h: $b/h/lcat h/lcat.sed g/boot.$x
 	@echo GEN	$@
@@ -161,14 +161,17 @@ $b/k/$a/%.o: %.c $(g_h) $b/boot.h
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
+
 $b/k/$a/g/cga_8x8.o: f/cga_8x8.c
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
+
 $b/k/$a/%.o: k/%.S $(g_h)
 	@echo AS	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
+
 $b/k/$a/k/arch/$a/%.o: k/arch/$a/%.asm
 	@echo AS	$@
 	@mkdir -p "$(dir $@)"
@@ -301,21 +304,27 @@ uninstall:
 $(DESTDIR)/$(PREFIX)/include/$x.h: g/$x.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
+
 $(DESTDIR)/$(PREFIX)/lib/lib$n.a: $b/h/lib$n.a
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
+
 $(DESTDIR)/$(PREFIX)/lib/lib$n.so: $b/h/lib$n.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
+
 $(DESTDIR)/$(PREFIX)/bin/$n: $b/h/$n
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
+
 $(DESTDIR)/$(PREFIX)/g/man/man1/$n.1: $b/h/$n.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
+
 $(DESTDIR)/$(VIMPREFIX)/ftdetect/$n.vim: vim/ftdetect.vim
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
+
 $(DESTDIR)/$(VIMPREFIX)/syntax/$n.vim: vim/syntax.vim
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@

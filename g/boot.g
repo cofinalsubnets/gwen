@@ -89,7 +89,7 @@
          (? (< i 0) i (+ (llen imp) i)))))
 
     (ana c x)
-     (? (symp x)  (ana_sym c x)
+     (? (nomp x)  (ana_sym c x)
         (atomp x) (imm x)
         (: a (A x) b (B x) (?
          (= a '` ) (imm (A b))

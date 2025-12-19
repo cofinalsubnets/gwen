@@ -139,6 +139,7 @@ static g_vm(crank_angle) {
   Sp[0] = d ? g_nil : gputnum((int)a%360);
   Ip += 1;
   return Continue(); }
+
 static void g_log_ini(void) { kcb->flag |= show_cursor_flag; }
 static struct g*g_boot(struct g*f);
 
