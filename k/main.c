@@ -240,7 +240,7 @@ static g_vm(setrpos) {
   Ip += 1;
   return Continue(); }
 
-static union x
+static union u
   bif_reset[] = {{g_reset}},
   bif_draw[] = {{draw}, {ret0}},
   bif_key[] = {{key}, {ret0}},

@@ -51,7 +51,7 @@ static int k_update(void *_) {
 static unsigned int (*clockfp)(void);
 g_noinline uintptr_t g_clock(void) { return clockfp ? clockfp() : 0; }
 static g_vm_t crank_angle, g_buttons, ls_root, cur_row, cur_col, cur_put, cur_set;
-static union x
+static union u
   bif_ls_root[] = {{ls_root}, {ret0}},
   bif_buttons[] = {{g_buttons}, {ret0}},
   bif_cur_row[] = {{cur_row}, {ret0}},

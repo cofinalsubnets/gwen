@@ -4,23 +4,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#ifndef g_tco
-#define g_tco 1
-#endif
-#if g_tco
-#define g_vm(n, ...) struct g *n(struct g *f, union x *Ip, intptr_t *Hp, intptr_t *Sp, ##__VA_ARGS__)
-#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
-#define Continue() Ap(Ip->ap, f)
-#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
-#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
-#else
-#define g_vm(n, ...) struct g *n(struct g *f, ##__VA_ARGS__)
-#define Ap(g, f, ...) g(f, ##__VA_ARGS__)
-#define Continue() f
-#define Hp f->hp
-#define Sp f->sp
-#define Ip f->ip
-#endif
 
 #define Width(_) b2w(sizeof(_))
 #define g_core_of(f) ((struct g*)((intptr_t)(f)&~(sizeof(intptr_t)-1)))
@@ -37,8 +20,22 @@
 #define MIN(p,q) ((p)<(q)?(p):(q))
 #define MAX(p,q) ((p)>(q)?(p):(q))
 
-union x;
-typedef intptr_t g_word;
+#ifndef g_tco
+#define g_tco 1
+#endif
+#ifndef g_float
+#define g_float 0
+#endif
+
+typedef intptr_t g_num, g_word;
+struct g;
+union u;
+
+#if g_tco
+#define g_vm(n, ...) struct g *n(struct g *f, union u *Ip, g_num *Hp, g_num *Sp, ##__VA_ARGS__)
+#else
+#define g_vm(n, ...) struct g *n(struct g *f, ##__VA_ARGS__)
+#endif
 typedef g_vm(g_vm_t);
 enum g_status {
   g_status_ok  = 0,
@@ -47,27 +44,25 @@ enum g_status {
   g_status_eof = 3, };
 
 struct g {
-  union x {
+  union u {
     g_vm_t *ap;
     g_word x;
-    union x *m;
-    g_word typ; } *ip;                 // 0
-  g_word *hp,                          // 1
-         *sp;                          // 2
+    union u *m;
+    g_word typ; } *ip;
+  g_word *hp, *sp;
   struct g_atom {
     g_vm_t *ap;
     intptr_t typ;
     struct g_vec {
       g_vm_t *ap;
-      intptr_t typ;
-      uintptr_t type, rank, shape[]; } *nom;
+      uintptr_t typ, type, rank, shape[]; } *nom;
     uintptr_t code;
     struct g_atom *l, *r; } *symbols;    // 3 
   uintptr_t len;                         // 4 length of core data
   struct g *pool;                        // 5 lower core address
-  struct g_mem_root {
+  struct g_root {
     intptr_t *ptr;
-    struct g_mem_root *next; } *safe;    // 6
+    struct g_root *next; } *root;    // 6
   union { uintptr_t t0; intptr_t *cp; }; // 7 copy pointer / timestamp
   void *(*malloc)(struct g*, size_t),    // 8
        (*free)(struct g*, void*);        // 9
@@ -142,7 +137,7 @@ struct g
 #define g_noinline __attribute__((noinline))
 #define g_log1(f) (g_write1(f),gputc(f, f->out, '\n'))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
-static g_inline struct g *gpop(struct g*f, uintptr_t m) {
+static g_inline struct g *gpop(struct g *f, uintptr_t m) {
   if (g_ok(f)) f->sp += m;
   return f; }
 static g_inline struct g *geval_(struct g*f) { return gpop(geval(f), 1); }
@@ -154,4 +149,32 @@ static g_inline struct g*gputc(struct g*f, struct g_out *o, int c) { return o->p
 static g_inline int ggetc(struct g*f, struct g_in *i) { return i->getc(f, i); }
 static g_inline int gungetc(struct g*f, struct g_in *i, int c) { return i->ungetc(f, i, c); }
 static g_inline int geof(struct g*f, struct g_in *i) { return i->eof(f, i); }
+
+#if g_f64
+#define g_gnum(_) (_)
+#define g_pnum(_) (_)
+#else
+static g_inline g_num g_gnum(g_num n) {
+  return n >> 1; }
+static g_inline g_num g_pnum(g_num n) {
+  return (n << 1) | 1; }
+static g_inline g_num *g_ptr(g_num n) {
+  return (g_num*) n; }
+#endif
+
+#if g_tco
+#define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
+#define Continue() Ap(Ip->ap, f)
+#define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
+#define Unpack(f) (Ip = f->ip, Hp = f->hp, Sp = f->sp)
+#else
+#define Ap(g, f, ...) g(f, ##__VA_ARGS__)
+#define Continue() f
+#define Hp f->hp
+#define Sp f->sp
+#define Ip f->ip
+#define Pack(f) ((void)0)
+#define Unpack(f) ((void)0)
+#endif
+
 #endif
