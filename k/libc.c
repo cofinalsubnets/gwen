@@ -49,9 +49,9 @@ void *memchr(const void *s, int c, size_t n) {
     if (*p == (int) c) return (void*) p;
   return NULL; }
 
-
-static const char digits[] = g_digits;
-static const char spaces[] = " \n\t\v\r\f";
+static char const
+  digits[] = g_digits,
+  spaces[] = " \n\t\v\r\f";
 
 #define LEN(_) (sizeof(_)/sizeof(*_))
 int isspace( int c ) {

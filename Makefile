@@ -3,7 +3,6 @@ x=g
 b=b
 lib=LD_LIBRARY_PATH=$b/h:$(LD_LIBRARY_PATH)
 m=$(lib) $b/h/$n
-l=$(lib) $b/h/lcat
 a?=$(shell uname -m)
 
 t=$(sort $(wildcard t/*.$x))
@@ -11,7 +10,7 @@ t=$(sort $(wildcard t/*.$x))
 .PHONY: test all h k pd clean distclean valg perf repl cloc cat catr
 test: $b/h/$n
 	@echo TEST
-	@cat $t | $m
+	@cat g/boot.g $t | $m
 all: h k pd
 h: $b/h/$n $b/h/lib$n.so $b/h/$n.1
 k: $b/$n-$a.elf
@@ -23,15 +22,15 @@ distclean:
 	@echo RM	$b dl
 	@rm -rf `git check-ignore * */*`
 valg: $b/h/$n
-	@cat $t | $(lib) valgrind --error-exitcode=1 b/h/$n
-$b/perf.data: $b/h/$n
-	cat $t | $(lib) perf record -o $@ b/h/$n
+	@cat g/boot.g $t | $(lib) valgrind --error-exitcode=1 b/h/$n
+b/perf.data: $b/h/$n
+	cat g/boot.g $t | $(lib) perf record -o $@ b/h/$n
 perf: $b/perf.data
 	perf report -i $<
-$b/flamegraph.svg: $b/perf.data
+b/flamegraph.svg: $b/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: $b/h/$n
-	@which rlwrap >/dev/null && $(lib) rlwrap $< || $(lib) $<
+	@cat g/boot.g h/repl.g - | $(lib) $<
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test
@@ -41,7 +40,7 @@ cat: clean all test
 g_h=$(wildcard g/*.h)
 g_c=$(wildcard g/*.c)
 f_c=$(wildcard f/*.c)
-h_o=$(addprefix $b/h/, $(g_c:.c=.o) sys.o)
+h_o=$(addprefix $b/h/, $(g_c:.c=.o))
 g_cflags=-std=gnu23 -g -O2 -pipe\
  	-Wall -Wextra -Wstrict-prototypes -Wno-unused-parameter -Wno-shift-negative-value\
 	-falign-functions -fomit-frame-pointer -fno-stack-check -fno-stack-protector\
@@ -83,6 +82,71 @@ kcc_riscv64=-target riscv64-unknown-none-elf
 kcc_aarch64=-target aarch64-unknown-none-elf
 k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 
+
+b/h/lib$n.a: $(h_o)
+	@echo AR	$@
+	@mkdir -p $(dir $@)
+	@ar rcs $@ $^
+
+b/h/lib$n.so: $b/h/lib$n.a
+	@echo LD	$@
+	@mkdir -p $(dir $@)
+	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive
+
+b/h/%.o: %.c $(g_h)
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(cc) -c $< -o $@
+
+b/h/%.o: h/%.c $(g_h)
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(cc) -c -I$b/h $< -o $@
+
+$b/h/main.o: h/main.c $(g_h)
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(cc) -c -I$b/h $< -o $@
+
+$b/h/$n: $b/h/main.o $b/h/lib$n.so
+	@echo LD	$@
+	@mkdir -p $(dir $@)
+	@$(cc) -o $@ -l$n -Lb/h $<
+
+# sed command to escape lisp text into C string format
+$b/boot.h: $b/h/$n h/lcat.sed g/boot.$x
+	@echo GEN	$@
+	@cat g/boot.$x h/lcat.$x g/boot.$x | $(lib) b/h/$n | sed -f h/lcat.sed >$@
+
+$b/h/$n.1: $b/h/$n h/manpage.$x
+	@echo GEN	$@
+	@$m < h/manpage.$x > $@
+
+$b/$n-$a.elf: k/arch/$a/$a.lds $(k_o)
+	@echo LD	$@
+	@mkdir -p "$(dir $@)"
+	@$(LD) $(kldflags) $(k_o) -o $@
+
+$b/k/$a/%.o: %.c $(g_h) $b/boot.h
+	@echo CC	$@
+	@mkdir -p "$(dir $@)"
+	@$(kcc) -c $< -o $@
+
+b/k/$a/g/cga_8x8.o: f/cga_8x8.c
+	@echo CC	$@
+	@mkdir -p "$(dir $@)"
+	@$(kcc) -c $< -o $@
+
+b/k/$a/%.o: k/%.S $(g_h)
+	@echo AS	$@
+	@mkdir -p "$(dir $@)"
+	@$(kcc) -c $< -o $@
+
+b/k/$a/k/arch/$a/%.o: k/arch/$a/%.asm
+	@echo AS	$@
+	@mkdir -p "$(dir $@)"
+	@nasm $< -o $@ $(k_nasmflags)
+
 pd_sdk=$(PLAYDATE_SDK_PATH)
 pd_src=$(wildcard pd/*.c) $(g_c) $(f_c)
 pd_gcc=arm-none-eabi-gcc
@@ -108,99 +172,30 @@ pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst)\
   -D__HEAP_SIZE=8388208 \
  	-D__STACK_SIZE=4194304
 
-$b/h/lcat: $b/h/lcat.o $b/h/lib$n.so
-	@echo LD	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -o $@ $^
-
-$b/h/lib$n.a: $(h_o)
-	@echo AR	$@
-	@mkdir -p $(dir $@)
-	@ar rcs $@ $^
-
-$b/h/lib$n.so: $b/h/lib$n.a
-	@echo LD	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -shared -o $@ -Wl,--whole-archive $^ -Wl,--no-whole-archive
-
-$b/h/%.o: %.c $(g_h)
-	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -c $< -o $@
-
-$b/h/%.o: h/%.c $(g_h)
-	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -c -I$b/h $< -o $@
-
-$b/h/main.o: h/main.c $b/boot.h $(g_h)
-	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -c -I$b/h $< -o $@
-
-$b/h/$n: $b/h/main.o $b/h/lib$n.so
-	@echo LD	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -o $@ -l$n -Lb/h $<
-
-# sed command to escape lisp text into C string format
-$b/boot.h: $b/h/lcat h/lcat.sed g/boot.$x
-	@echo GEN	$@
-	@$l < g/boot.$x | sed -f h/lcat.sed >$@
-
-$b/h/$n.1: $b/h/$n h/manpage.$x
-	@echo GEN	$@
-	@$m < h/manpage.$x > $@
-
-$b/$n-$a.elf: k/arch/$a/$a.lds $(k_o)
-	@echo LD	$@
-	@mkdir -p "$(dir $@)"
-	@$(LD) $(kldflags) $(k_o) -o $@
-
-$b/k/$a/%.o: %.c $(g_h) $b/boot.h
-	@echo CC	$@
-	@mkdir -p "$(dir $@)"
-	@$(kcc) -c $< -o $@
-
-$b/k/$a/g/cga_8x8.o: f/cga_8x8.c
-	@echo CC	$@
-	@mkdir -p "$(dir $@)"
-	@$(kcc) -c $< -o $@
-
-$b/k/$a/%.o: k/%.S $(g_h)
-	@echo AS	$@
-	@mkdir -p "$(dir $@)"
-	@$(kcc) -c $< -o $@
-
-$b/k/$a/k/arch/$a/%.o: k/arch/$a/%.asm
-	@echo AS	$@
-	@mkdir -p "$(dir $@)"
-	@nasm $< -o $@ $(k_nasmflags)
-
-$b/$n.pdx: $b/pd/Source/pdex.elf $b/pd/Source/pdex.so
+b/$n.pdx: $b/pd/Source/pdex.elf $b/pd/Source/pdex.so
 	@echo PDC	$@
 	@$(pd_sdk)/bin/pdc -sdkpath $(pd_sdk) $b/pd/Source $@
 
-$b/pd/Source/pdex.%: $b/pd/pdex.%
+b/pd/Source/pdex.%: $b/pd/pdex.%
 	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
 
-$b/pd/%.o : %.c | $b/boot.h
+b/pd/%.o : %.c | $b/boot.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) -c $(pd_cpflags) -I pd -I b -I f $(pd_incdir) $< -o $@
 
-$b/pd/%.o : %.s
+b/pd/%.o : %.s
 	@echo AS	$@
 	@$(pd_as) -c $(pd_asflags) $< -o $@
 
-$b/pd/pdex.elf: $(pd_o) $(pd_lds)
+b/pd/pdex.elf: $(pd_o) $(pd_lds)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(pd_cc) $(pd_o) $(pd_ldflags) -o $@
 
-$b/pd/pdex.so: $(pd_src)
+b/pd/pdex.so: $(pd_src)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o $b/pd/pdex.so $(pd_src)
@@ -286,14 +281,19 @@ dl/limine/limine:
 PREFIX ?= .local/
 VIMPREFIX ?= .vim/
 DESTDIR ?= $(HOME)/
+d=$(DESTDIR)/$(PREFIX)
+v=$(DESTDIR)/$(VIMPREFIX)
 installs=\
- 	$(DESTDIR)/$(PREFIX)/bin/$n\
-  $(DESTDIR)/$(PREFIX)/g/man/man1/$n.1\
-  $(DESTDIR)/$(PREFIX)/lib/lib$n.a\
-  $(DESTDIR)/$(PREFIX)/lib/lib$n.so\
-  $(DESTDIR)/$(PREFIX)/include/$x.h\
-  $(DESTDIR)/$(VIMPREFIX)/ftdetect/$n.vim\
-  $(DESTDIR)/$(VIMPREFIX)/syntax/$n.vim
+ 	$d/bin/$n\
+		$d/bin/$nsh\
+  $d/g/man/man1/$n.1\
+		$d/lib/$n/boot.$x\
+		$d/lib/$n/repl.$x\
+  $d/lib/lib$n.a\
+  $d/lib/lib$n.so\
+  $d/include/$x.h\
+  $v/ftdetect/$n.vim\
+  $v/syntax/$n.vim
 
 .PHONY: install uninstall
 install: $(installs)
@@ -301,30 +301,42 @@ uninstall:
 	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
-$(DESTDIR)/$(PREFIX)/include/$x.h: g/$x.h
+$d/include/$x.h: g/$x.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$(DESTDIR)/$(PREFIX)/lib/lib$n.a: $b/h/lib$n.a
+$d/lib/$n/boot.$x: g/boot.g
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$(DESTDIR)/$(PREFIX)/lib/lib$n.so: $b/h/lib$n.so
+$d/lib/$n/%.$x: h/%.$x
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+
+$d/lib/lib$n.a: $b/h/lib$n.a
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+
+$d/lib/lib$n.so: $b/h/lib$n.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$(DESTDIR)/$(PREFIX)/bin/$n: $b/h/$n
+$d/bin/$n: $b/h/$n
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$(DESTDIR)/$(PREFIX)/g/man/man1/$n.1: $b/h/$n.1
+$d/bin/$nsh: h/$nsh
+	@echo CP	$(abspath $@)
+	@install -D -m 755 $< $@
+
+$d/g/man/man1/$n.1: $b/h/$n.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$(DESTDIR)/$(VIMPREFIX)/ftdetect/$n.vim: vim/ftdetect.vim
+$v/ftdetect/$n.vim: vim/ftdetect.vim
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
-$(DESTDIR)/$(VIMPREFIX)/syntax/$n.vim: vim/syntax.vim
+$v/syntax/$n.vim: vim/syntax.vim
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@

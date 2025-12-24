@@ -1,5 +1,5 @@
 #include "pd_api.h"
-#include "g.h"
+#include "../g/g.h"
 #include "font.h"
 #include "cb.h"
 #include <limits.h>
@@ -52,13 +52,13 @@ static unsigned int (*clockfp)(void);
 g_noinline uintptr_t g_clock(void) { return clockfp ? clockfp() : 0; }
 static g_vm_t crank_angle, g_buttons, ls_root, cur_row, cur_col, cur_put, cur_set;
 static union u
-  bif_ls_root[] = {{ls_root}, {ret0}},
-  bif_buttons[] = {{g_buttons}, {ret0}},
-  bif_cur_row[] = {{cur_row}, {ret0}},
-  bif_cur_col[] = {{cur_col}, {ret0}},
-  bif_cur_put[] = {{cur_put}, {ret0}},
-  bif_cur_set[] = {{curry}, {.x=gputnum(2)}, {cur_set}, {ret0}},
-  bif_crank_angle[] = {{crank_angle}, {ret0}};
+  bif_ls_root[] = {{ls_root}, {gvmret0}},
+  bif_buttons[] = {{g_buttons}, {gvmret0}},
+  bif_cur_row[] = {{cur_row}, {gvmret0}},
+  bif_cur_col[] = {{cur_col}, {gvmret0}},
+  bif_cur_put[] = {{cur_put}, {gvmret0}},
+  bif_cur_set[] = {{gvmcurry}, {.x=gputnum(2)}, {cur_set}, {gvmret0}},
+  bif_crank_angle[] = {{crank_angle}, {gvmret0}};
 static struct g_def defs[] = {
   {"cur_row", (intptr_t) bif_cur_row},
   {"cur_col", (intptr_t) bif_cur_col},
@@ -89,10 +89,10 @@ static struct  mode
   _life  = { &_log, (void*) &_synth, g_life_ini, g_life_update, g_nop, },
   _log  = { (void*) &_synth, &_life, g_log_ini, g_log_update, g_nop, };
 
-static void *g_pd_malloc(struct g*, uintptr_t n) {
+static void *g_pd_malloc(size_t n, struct g*) {
   return K.pd->system->realloc(NULL, n); }
 
-static void g_pd_free(struct g*, void*x) {
+static void g_pd_free(void*x, struct g*) {
   K.pd->system->realloc(x, 0); }
 
 static void k_boot(void);
@@ -115,11 +115,10 @@ static void g_log_update(void) {
   cb_cur(kcb, 0, 0);
   cb_fill(kcb, 0);
   K.g = gevals_(K.g,
-    "(: i(sysinfo 0)f(A i)pool(A(B i))len(A(B(B i)))allocd(A(B(B(B i))))stackd(A(B(B(B(B i)))))"
+    "(: i(gvminfo 0)f(A i)len(A(B i))allocd(A(B(B i)))stackd(A(B(B(B i))))"
     "(,"
     "(puts\"\x03 \")(putn(clock 0)10)"
-    "(puts\"\n\n@\")""(putn pool 16)" 
-    "(puts\"\n@\")""(putn f 16)"
+    "(puts\"\n\nf@\")""(putn f 16)"
     "(puts\"\n#\")"
     "(putn len 10)"
     "(puts\".\")"
@@ -289,7 +288,8 @@ static g_vm(cur_put) {
   Ip += 1;
   return Continue(); }
 
-void g_stdout_putc(struct g*f, int c) { cb_putc(kcb, c); }
-int g_stdin_getc(struct g*f) { return cb_getc(kcb); }
-int g_stdin_ungetc(struct g*f, int c) { return cb_ungetc(kcb, c); }
-int g_stdin_eof(struct g*f) { return cb_eof(kcb); }
+int gputc(struct g*f, int c) { return cb_putc(kcb, c), c; }
+int gflush(struct g*f) { return 0; }
+int ggetc(struct g*f) { return cb_getc(kcb); }
+int gungetc(struct g*f, int c) { return cb_ungetc(kcb, c); }
+int geof(struct g*f) { return cb_eof(kcb); }

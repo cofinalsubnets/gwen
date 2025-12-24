@@ -4,21 +4,22 @@
 #include <stdarg.h>
 #include <limits.h>
 
-struct k {
-  uint64_t ticks;
-  struct mem {
-    uintptr_t len;
-    struct mem *next;
-    uintptr_t _[];
-  } *free;
-  struct g *g;
-  struct cb *cb;
-  struct {
-    volatile uint32_t *_;
-    uint16_t width, height, pitch;
-  } fb;
-  struct { uint8_t k, f; } kb;
-} K;
+uint64_t kticks;
+
+static struct mem {
+  struct mem *next;
+  uintptr_t len;
+  uintptr_t _[];
+} *kmem;
+
+static struct cb *kcb;
+
+static struct {
+  volatile uint32_t *_;
+  uint16_t width, height, pitch; } kfb;
+
+static struct { uint8_t k, f; } kkb;
+
 void kreset(void);
 bool archinit(void);
 
@@ -67,11 +68,12 @@ void srand(unsigned int);
 #define kb_flag_alt (kb_flag_lalt|kb_flag_ralt)
 #define kb_flag_ctl (kb_flag_lctl|kb_flag_rctl)
 #define kb_flag_shift (kb_flag_lshift|kb_flag_rshift)
-void g_stdout_putc(struct g*f, int c) { cb_putc(K.cb, c); }
-int g_stdin_getc(struct g*f) { return cb_getc(K.cb); }
-int g_stdin_ungetc(struct g*f, int c) { return cb_ungetc(K.cb, c); }
-int g_stdin_eof(struct g*f) { return cb_eof(K.cb); }
-uintptr_t g_clock(void) { return K.ticks; }
+void g_stdout_putc(struct g*f, int c) { cb_putc(kcb, c); }
+int gputc(struct g*f, int c) { return cb_putc(kcb, c), c; }
+int ggetc(struct g*f) { return cb_getc(kcb); }
+int gungetc(struct g*f, int c) { return cb_ungetc(kcb, c); }
+int geof(struct g*f) { return cb_eof(kcb); }
+uintptr_t g_clock(void) { return kticks; }
 
 #define show_cursor 1
 #define blue 0xff
@@ -114,46 +116,46 @@ _Static_assert(LEN(kb2ascii) == LEN(shift_kb2ascii));
 #define kb_code_up 72
 #define kb_code_down 80
 void kb_int(const uint8_t code) {
-  if (code == kb_code_extend) K.kb.f |= kb_flag_extend;
-  else if (K.kb.f & kb_flag_extend) {
-    K.kb.f &= ~kb_flag_extend;
-    uint16_t r = K.cb->rpos,
-             w = K.cb->wpos,
-             cs = K.cb->cols;
+  if (code == kb_code_extend) kkb.f |= kb_flag_extend;
+  else if (kkb.f & kb_flag_extend) {
+    kkb.f &= ~kb_flag_extend;
+    uint16_t r = kcb->rpos,
+             w = kcb->wpos,
+             cs = kcb->cols;
     if (code < 128) switch (code) {
-      case kb_code_alt: K.kb.f |= kb_flag_ralt; return;
-      case kb_code_ctl: K.kb.f |= kb_flag_rctl; return;
+      case kb_code_alt: kkb.f |= kb_flag_ralt; return;
+      case kb_code_ctl: kkb.f |= kb_flag_rctl; return;
       case kb_code_delete:
-        if (K.kb.f & kb_flag_ctl & kb_flag_alt) kreset();
+        if (kkb.f & kb_flag_ctl & kb_flag_alt) kreset();
         return;
       case kb_code_left: w -= 1; goto move_cursor;
       case kb_code_right: w += 1; goto move_cursor;
       case kb_code_up: w -= cs; goto move_cursor;
       case kb_code_down: w += cs; 
       move_cursor:
-        w %= K.cb->rows * cs;
+        w %= kcb->rows * cs;
         w = MAX(w, r);
-        K.cb->wpos = w;
+        kcb->wpos = w;
       default: return; }
     else switch (code - 128) {
-      case kb_code_alt: K.kb.f &= ~kb_flag_ralt; return;
-      case kb_code_ctl: K.kb.f &= ~kb_flag_rctl; return;
+      case kb_code_alt: kkb.f &= ~kb_flag_ralt; return;
+      case kb_code_ctl: kkb.f &= ~kb_flag_rctl; return;
       default: return; } }
   else {
     if (code < 128) switch (code) {
-      case kb_code_lshift: K.kb.f |= kb_flag_lshift; return;
-      case kb_code_rshift: K.kb.f |= kb_flag_rshift; return;
-      case kb_code_alt:    K.kb.f |= kb_flag_lalt;   return;
-      case kb_code_ctl:    K.kb.f |= kb_flag_lctl;   return;
+      case kb_code_lshift: kkb.f |= kb_flag_lshift; return;
+      case kb_code_rshift: kkb.f |= kb_flag_rshift; return;
+      case kb_code_alt:    kkb.f |= kb_flag_lalt;   return;
+      case kb_code_ctl:    kkb.f |= kb_flag_lctl;   return;
       default:
-        if (!K.kb.k) K.kb.k = code >= LEN(kb2ascii) ? code :
-          (K.kb.f & (kb_flag_lshift | kb_flag_rshift) ? shift_kb2ascii : kb2ascii)[code];
+        if (!kkb.k) kkb.k = code >= LEN(kb2ascii) ? code :
+          (kkb.f & (kb_flag_lshift | kb_flag_rshift) ? shift_kb2ascii : kb2ascii)[code];
         return; }
     else switch (code - 128) {
-      case kb_code_lshift: K.kb.f &= ~kb_flag_lshift; return;
-      case kb_code_rshift: K.kb.f &= ~kb_flag_rshift; return;
-      case kb_code_alt:    K.kb.f &= ~kb_flag_lalt;   return;
-      case kb_code_ctl:    K.kb.f &= ~kb_flag_lctl;   return;
+      case kb_code_lshift: kkb.f &= ~kb_flag_lshift; return;
+      case kb_code_rshift: kkb.f &= ~kb_flag_rshift; return;
+      case kb_code_alt:    kkb.f &= ~kb_flag_lalt;   return;
+      case kb_code_ctl:    kkb.f &= ~kb_flag_lctl;   return;
       default: return; } } }
 
 #define px_color cyan
@@ -167,36 +169,36 @@ static void *kmallocw(uintptr_t n) {
   if (!n) return NULL;
   void *p = NULL;
   struct mem *r = NULL, *t;
-  while (K.free && K.free->len < n + 2 * Width(struct mem))
-    t = K.free,
-    K.free = t->next,
+  while (kmem && kmem->len < n + 2 * Width(struct mem))
+    t = kmem,
+    kmem = t->next,
     t->next = r,
     r = t;
-  if (K.free)
-    K.free->len -= n + Width(struct mem),
-    t = after(K.free),
+  if (kmem)
+    kmem->len -= n + Width(struct mem),
+    t = after(kmem),
     t->len = Width(struct mem) + n,
     p = t->_;
   while (r)
     t = r,
     r = t->next,
-    t->next = K.free,
-    K.free = t;
+    t->next = kmem,
+    kmem = t;
   return p; }
 
 static void kfree(void *p) {
   if (!p) return;
   struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
-  while (K.free && K.free < m)
-    t = K.free,
-    K.free = t->next,
+  while (kmem && kmem < m)
+    t = kmem,
+    kmem = t->next,
     t->next = r,
     r = t;
   for (;; m = r, r = r->next) {
-    if (K.free != after(m)) m->next = K.free;
-    else m->len += K.free->len,
-         m->next = K.free->next;
-    K.free = m;
+    if (kmem != after(m)) m->next = kmem;
+    else m->len += kmem->len,
+         m->next = kmem->next;
+    kmem = m;
     if (!r) return; } }
 
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
@@ -209,18 +211,18 @@ static g_vm(g_reset) { return kreset(), f; }
 #define font_y 8
 static g_vm(draw) {
   // draw framebuffer
-  for (uint8_t i = 0, rows = K.cb->rows; i < rows; i++)
-    for (uint8_t j = 0, cols = K.cb->cols; j < cols; j++) {
+  for (uint8_t i = 0, rows = kcb->rows; i < rows; i++)
+    for (uint8_t j = 0, cols = kcb->cols; j < cols; j++) {
       uint16_t pos = i * cols + j;
-      uint8_t g = K.cb->cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
-      bool select = K.cb->rpos <= pos && pos < K.cb->wpos,
-           invert = K.cb->flag & show_cursor && K.cb->wpos == pos && K.ticks & 64;
+      uint8_t g = kcb->cb[pos], *bmp = cga_8x8[g == '\n' ? 0 : g];
+      bool select = kcb->rpos <= pos && pos < kcb->wpos,
+           invert = kcb->flag & show_cursor && kcb->wpos == pos && kticks & 64;
       uint32_t fg = select ? console_sel : console_fg, bg = console_bg;
       if (invert) fg ^= bg, bg ^= fg, fg ^= bg;
       uintptr_t y = i * font_y, x = j * font_x;
       for (uint8_t r = 0; r < font_y; r++)
         for (uint8_t o = bmp[r], c = font_x; c--; o >>= 1)
-          K.fb._[(y + r) * K.fb.pitch + x + c] = o & 1 ? fg : bg; }
+          kfb._[(y + r) * kfb.pitch + x + c] = o & 1 ? fg : bg; }
   Ip += 1;
   return Continue(); }
 
@@ -230,25 +232,23 @@ static g_vm(wait) {
   return Continue(); }
 
 static g_vm(key) {
-    Sp[0] = g_putnum(K.kb.k);
-    K.kb.k = 0;
+    Sp[0] = g_putnum(kkb.k);
+    kkb.k = 0;
     Ip += 1;
     return Continue(); }
 
-static g_vm(setrpos) {
-  K.cb->rpos = K.cb->wpos;
-  Ip += 1;
-  return Continue(); }
+int gflush(struct g*f) {
+ kcb->rpos = kcb->wpos;
+ return 0; }
+
 
 static union u
   bif_reset[] = {{g_reset}},
-  bif_draw[] = {{draw}, {ret0}},
-  bif_key[] = {{key}, {ret0}},
-  bif_wait[] = {{wait}, {ret0}},
-  bif_setrpos[] = {{setrpos}, {ret0}};
+  bif_draw[] = {{draw}, {gvmret0}},
+  bif_key[] = {{key}, {gvmret0}},
+  bif_wait[] = {{wait}, {gvmret0}};
 
 static struct g_def defs[] = {
-  {"setrpos", (intptr_t) bif_setrpos},
   {"reset", (intptr_t) bif_reset},
   {"draw", (intptr_t) bif_draw},
   {"key", (intptr_t) bif_key},
@@ -263,36 +263,36 @@ static bool meminit(void) {
   while (n--) if ((r = rr[n])->type == 0)
     m = (struct mem*) (hhdm + r->base),
     m->len = r->length / sizeof(uintptr_t),
-    m->next = K.free,
-    K.free = m;
+    m->next = kmem,
+    kmem = m;
   return true; }
 
 static bool fbinit(void) {
   if (!fb_req.response || !fb_req.response->framebuffer_count) return false;
   struct limine_framebuffer *f = fb_req.response->framebuffers[0];
-  K.fb._ = f->address;
-  K.fb.width = f->width;
-  K.fb.height = f->height;
-  K.fb.pitch = f->pitch >> 2;
+  kfb._ = f->address;
+  kfb.width = f->width;
+  kfb.height = f->height;
+  kfb.pitch = f->pitch >> 2;
   return true; }
 
 static bool cbinit(void) {
-  const uintptr_t rows = K.fb.height / font_y,
-                  cols = K.fb.width / font_x;
-  K.cb = malloc(sizeof(struct cb) + rows * cols);
-  if (!K.cb) return false;
-  K.cb->rows = rows;
-  K.cb->cols = cols;
-  K.cb->rpos = K.cb->wpos = 0;
-  K.cb->flag = show_cursor;
-  cb_fill(K.cb, 0);
+  const uintptr_t rows = kfb.height / font_y,
+                  cols = kfb.width / font_x;
+  kcb = malloc(sizeof(struct cb) + rows * cols);
+  if (!kcb) return false;
+  kcb->rows = rows;
+  kcb->cols = cols;
+  kcb->rpos = kcb->wpos = 0;
+  kcb->flag = show_cursor;
+  cb_fill(kcb, 0);
   return true; }
 
 void kmain(void) {
   if (archinit() && meminit() && fbinit() && cbinit())
     gfin(gevals(gdefs(gini(), LEN(defs), defs),
 #include "boot.h"
-      "(:(ps1 _)(setrpos(puts\"  ; \"))"
+      "(:(ps1 _)(puts\" ;; \")"
         "(rs x)(? x(X(A x)(rs(read 0))))"
         "(ep x)(,(.(ev x))(putc 10))"
         "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep))))))))"

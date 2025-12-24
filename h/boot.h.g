@@ -1,0 +1,8 @@
+(putc 34)
+(: (go c)
+    (? (&& c (!= c -1))
+     (, (putc c)
+        (? (= c 92) (putc c))
+        (go (getc 0))))
+ (go (getc 0)))
+(putc 34)

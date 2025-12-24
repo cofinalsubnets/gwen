@@ -28,13 +28,11 @@
 #endif
 
 typedef intptr_t g_num, g_word;
-struct g;
 union u;
-
 #if g_tco
-#define g_vm(n, ...) struct g *n(struct g *f, union u *Ip, g_num *Hp, g_num *Sp, ##__VA_ARGS__)
+#define g_vm(n, ...) struct g *n(struct g *restrict f, union u *Ip, g_num *Hp, g_num *restrict Sp, ##__VA_ARGS__)
 #else
-#define g_vm(n, ...) struct g *n(struct g *f, ##__VA_ARGS__)
+#define g_vm(n, ...) struct g *n(struct g *restrict f, ##__VA_ARGS__)
 #endif
 typedef g_vm(g_vm_t);
 enum g_status {
@@ -46,16 +44,15 @@ enum g_status {
 struct g {
   union u {
     g_vm_t *ap;
-    g_word x;
-    union u *m;
-    g_word typ; } *ip;
-  g_word *hp, *sp;
+    g_num x, typ;
+    union u *m; } *ip;
+  g_num *hp, *sp;
   struct g_atom {
     g_vm_t *ap;
-    intptr_t typ;
+    g_num typ;
     struct g_vec {
       g_vm_t *ap;
-      uintptr_t typ, type, rank, shape[]; } *nom;
+      g_num typ, type, rank, shape[]; } *nom;
     uintptr_t code;
     struct g_atom *l, *r; } *symbols;    // 3 
   uintptr_t len;                         // 4 length of core data
@@ -63,15 +60,15 @@ struct g {
   struct g_root {
     intptr_t *ptr;
     struct g_root *next; } *root;    // 6
-  union { uintptr_t t0; intptr_t *cp; }; // 7 copy pointer / timestamp
-  void *(*malloc)(struct g*, size_t),    // 8
-       (*free)(struct g*, void*);        // 9
+  union { uintptr_t t0; g_num *cp; }; // 7 copy pointer / timestamp
+  void *(*malloc)(size_t, struct g*),    // 8
+       (*free)(void*, struct g*);        // 9
   union {
 #define g_nvars 16
     intptr_t v[g_nvars];
     struct {
-      struct g_table { g_vm_t *ap; intptr_t typ; uintptr_t len, cap;
-        struct g_entry { intptr_t key, val; struct g_entry *next; } **tab;
+      struct g_tab { g_vm_t *ap; intptr_t typ; uintptr_t len, cap;
+        struct g_kvs { intptr_t key, val; struct g_kvs *next; } **tab;
       } *dict,
         *macro;
       struct g_atom
@@ -79,52 +76,52 @@ struct g {
         *begin,
         *let,
         *cond,
-        *lambda;
+        *lambda,
+        *eval;
       intptr_t u[]; }; };
   intptr_t end[]; };
 
 struct g_in {
   int (*getc)(struct g*, struct g_in*),
-      (*ungetc)(struct g*, struct g_in*, int),
+      (*ungetc)(struct g*, int, struct g_in*),
       (*eof)(struct g*, struct g_in*); };
 
 struct g_out {
-  struct g *(*putc)(struct g*, struct g_out*, int); };
+  int (*putc)(struct g*, int, struct g_out*),
+      (*flush)(struct g*); };
 
 struct g_def { char const *n; intptr_t x; };
 
 enum g_status gfin(struct g*);
 
-#define g_vt_char g_vt_i8
-uintptr_t
-  g_clock(void); // used by garbage collector
+g_vm_t gvmret0, gvmcurry;
+
+#define g_vt_char g_vt_u8
+uintptr_t g_clock(void); // used by garbage collector
 int
-  g_stdin_getc(struct g*),
-  g_stdin_ungetc(struct g*, int),
-  g_stdin_eof(struct g*),
+  gfprintf(struct g*, struct g_out*, const char*, ...),
+  gfwrite1(struct g*, struct g_out*),
+  ggetc(struct g*),
+  gungetc(struct g*, int),
+  geof(struct g*),
+  gputc(struct g*, int),
+  gflush(struct g*),
   strncmp(char const*, char const*, size_t),
   memcmp(void const*, void const*, size_t);
 void
-  g_stdout_putc(struct g*, int c),
   *malloc(size_t), free(void*),
   *memcpy(void*restrict, void const*restrict, size_t),
   *memset(void*, int, size_t);
 long strtol(char const*restrict, char**restrict, int);
 size_t strlen(char const*);
-g_vm_t ret0, curry;
 struct g
   *gini(void),
-  *ginis(uintptr_t, void*),
-  *ginid(void *(*)(struct g*, uintptr_t), void (*)(struct g*, void*)),
-  *gfprintf(struct g*, struct g_out*, const char*, ...),
-  *gputn(struct g*, struct g_out*, intptr_t, uintptr_t),
-  *geval(struct g*),
+  *ginid(void *(*)(size_t, struct g*), void (*)(void*, struct g*)),
   *gevals(struct g*, const char*),
   *gfread1(struct g*, struct g_in*),
   *greadsi(struct g*, struct g_in*),
-  *gfwrite1(struct g*, struct g_out*),
   *gdef1(struct g*, const char*),
-  *gdef(struct g*, const char*, g_word),
+  *gdef(struct g*, const char*, g_num),
   *gdefs(struct g*, uintptr_t, struct g_def*),
   *gpush(struct g*, uintptr_t, ...),
   *gstrof(struct g*, const char*),
@@ -135,22 +132,16 @@ struct g
 
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
-#define g_log1(f) (g_write1(f),gputc(f, f->out, '\n'))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 static g_inline struct g *gpop(struct g *f, uintptr_t m) {
   if (g_ok(f)) f->sp += m;
   return f; }
-static g_inline struct g *geval_(struct g*f) { return gpop(geval(f), 1); }
 static g_inline struct g *gevals_(struct g*f, const char*s) { return gpop(gevals(f, s), 1); }
 static g_inline size_t b2w(size_t b) {
-  size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
+  size_t q = b / sizeof(g_num), r = b % sizeof(g_num);
   return q + (r ? 1 : 0); }
-static g_inline struct g*gputc(struct g*f, struct g_out *o, int c) { return o->putc(f, o, c); }
-static g_inline int ggetc(struct g*f, struct g_in *i) { return i->getc(f, i); }
-static g_inline int gungetc(struct g*f, struct g_in *i, int c) { return i->ungetc(f, i, c); }
-static g_inline int geof(struct g*f, struct g_in *i) { return i->eof(f, i); }
 
-#if g_f64
+#if g_float
 #define g_gnum(_) (_)
 #define g_pnum(_) (_)
 #else
@@ -158,8 +149,6 @@ static g_inline g_num g_gnum(g_num n) {
   return n >> 1; }
 static g_inline g_num g_pnum(g_num n) {
   return (n << 1) | 1; }
-static g_inline g_num *g_ptr(g_num n) {
-  return (g_num*) n; }
 #endif
 
 #if g_tco
@@ -176,5 +165,4 @@ static g_inline g_num *g_ptr(g_num n) {
 #define Pack(f) ((void)0)
 #define Unpack(f) ((void)0)
 #endif
-
 #endif

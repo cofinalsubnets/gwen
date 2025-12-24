@@ -51,7 +51,7 @@
   eval '(:- eval
     (em1 i k n) (p1 i (k (+ 1 n)))
     (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
-    imm (em2 i_imm) p0 poke
+    imm (em2 gvmpushk) p0 poke
     (p1 x k) (poke x (seek -1 k))
     (eval x) (: c (scop 0 (L 0) 0) (ana c x (thd0 c) 0 0))
 ;; functions for working with variable scope records
@@ -69,18 +69,18 @@
      _ (tset t 'imp imp)
      t)
 ;; thread initializer
-    (thd0 c n) (p1 i_ret (p0 (arity c) (seek (+ 1 n) (thd (+ 2 n)))))
+    (thd0 c n) (p1 gvmret (p0 (arity c) (seek (+ 1 n) (thd (+ 2 n)))))
 ;; import a variable into this scope
     (import c v) (? (not (toplp c)) (cpush c 'imp v))
 
     (em_ap k n) (:
      j (k (+ 1 n))
-     (? (= (peek j) i_ret) (p0 i_tap j)
-                           (p1 i_ap j)))
+     (? (= (peek j) ret) (p0 gvmtap j)
+                           (p1 gvmap j)))
     (em_apn n k m) (:
      j (k (+ 2 m))
-     (? (= (peek j) i_ret) (p1 i_tapn (p0 n j))
-                           (p1 i_apn (p1 n j))))
+     (? (= (peek j) gvmret) (p1 gvmtapn (p0 n j))
+                           (p1 gvmapn (p1 n j))))
     (stkidx d x)
       (: imp (impof d)
          i (lidx x imp)
@@ -128,17 +128,17 @@
      (pop_alt c k n) (:
       j (k (+ 2 n))
       alt (cpop c 'alt)
-      (p1 i_cond (p1 alt j)))
+      (p1 gvmcond (p1 alt j)))
 
      (peek_end c k n) (:
       j (k (+ 3 n))
       a (cpeek c 'end)
       i (peek a)
-      (?  (|| (= i i_ret) (= i i_tap))
+      (?  (|| (= i gvmret) (= i gvmtap))
            (p1 i (p1 (peek (seek 1 a)) j))
-          (= i i_tapn)
+          (= i gvmtapn)
            (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j)))
-          (p1 i_jump (p1 a j)))))
+          (p1 gvmjump (p1 a j)))))
 
     (ana_apl n c b) (:
      (loop c b)
@@ -160,7 +160,7 @@
      (? (atomp x) (imm 0)
       (co (ana c (A x))
           (? (atomp (B x)) id
-           (co (em1 i_drop1)
+           (co (em1 gvmdrop1)
                (ana_seq c (B x))))))
 
    (ana_sym c x) (:- (ana_sym_r c)
@@ -170,23 +170,23 @@
             y (tget a0 globals x) ; check global scope
           (? (!= y a0) (imm y) ; if it's there use that
            (, (import c x) ; if it's not there... do something
-              (em2 i_free_variable x))))
+              (em2 gvmfreev x))))
        ; else...
       (: (cata_var c) (:
           i (llen (stkof c))
           (\ j m (:
            k (j (+ 2 m))
            i (+ i (stkidx c x))
-           (p1 i_ref (p1 i k)))))
+           (p1 gvmpushr (p1 i k)))))
          lam (lamof d)
          stk (stkof d)
          lfd (assq x lam)
        (? lfd ; local function def?
-            (: a1 (em2 i_late_bind lfd)
+            (: a1 (em2 gvmlazyb lfd)
                a2 (ana_apl 0 c (BB lfd))
              (>=> a2 a1))
          (memq x stk) ; is it bound on a let stack in this scope?
-          (? (= c d) (em2 i_ref (lidx x stk))
+          (? (= c d) (em2 gvmpushr (lidx x stk))
                      (, (import c x)
                         (cata_var c)))
         (<= 0 (stkidx d x)) ; is it bound as a closure or argument variable?
@@ -202,7 +202,7 @@
      d (scop c arg imp)
      k (ana d x (thd0 d))
      ar (arity d)
-     k (trim ((? (> ar 1) (em2 i_curry ar) id) k 0))
+     k (trim ((? (> ar 1) (em2 gvmcurry ar) id) k 0))
      imp (impof d)
      (X k imp))
 
@@ -272,7 +272,7 @@
                             (set_cdr qa x))
                          d)
           a1 (ana c d)
-          a2 (? (&& (toplp c) even) (em2 i_defglob n) id)
+          a2 (? (&& (toplp c) even) (em2 gvmdefglob n) id)
           a3 (lls n (B nds))
           (>=> a3 a2 a1)))
       s0 (stkof c)
@@ -299,7 +299,4 @@
  t1 (clock 0)
  _ (tset globals 'boot_ms (- t1 t0))
  _ (tset globals 'ev e2) ; redefine eval
- ; delete initialization specific variables
- (e2 '(: i (filter (\ y (= "i_" (ssub (nom y) 0 2))) (tkeys globals))
-         p '(prelude eval macros peek poke seek trim thd globals)
-       (each (cat i p) (tdel 0 globals)))))
+ _)

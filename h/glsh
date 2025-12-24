@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+gprefix=${gprefix:-$HOME/.local}
+args=("$0")
+cat $gprefix/lib/gl/boot.g $gprefix/lib/gl/repl.g - | $gprefix/bin/gl "${args[@]:1}"

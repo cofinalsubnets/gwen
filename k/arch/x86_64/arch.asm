@@ -2,7 +2,7 @@ global keyboard_isr
 global timer_isr
 global archinit
 global kreset
-extern K
+extern kticks
 extern kb_int
 
 %define INTERRUPT 0x8e
@@ -82,7 +82,7 @@ align 8
 timer_isr:
 ; this is basically minimal. increment tick counter and reopen timer interrupts.
 ; if we want to do more we will probably need to push/pop15.
-  inc qword [rel K]
+  inc qword [rel kticks]
   push rax
   mov al, 0x20
   out 0x20, al
