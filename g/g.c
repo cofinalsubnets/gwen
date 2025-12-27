@@ -194,7 +194,7 @@ typedef struct env {
     alts, ends; } env;
 
 static int
-  readc(struct g*, struct g_in *i);
+  gigetc(struct g*, struct g_in *i);
 static bool eql(struct g*, intptr_t, intptr_t);
 static intptr_t
   ggccp(struct g*,intptr_t,intptr_t*,intptr_t*),
@@ -259,7 +259,7 @@ static g_inline struct g *gfreadstring(struct g*f, struct g_in*i, int c) {
 
 struct g *gfread1(struct g*f, struct g_in* i) {
   if (!g_ok(f)) return f;
-  int c = readc(f, i);
+  int c = gigetc(f, i);
   switch (c) {
     case '(':  return greadsi(f, i);
     case ')': case EOF:  return g_enc(f, g_status_eof);
@@ -270,7 +270,7 @@ struct g *gfread1(struct g*f, struct g_in* i) {
 struct g *greadsi(struct g *f, struct g_in* i) {
   intptr_t n = 0;
   for (int c; g_ok(f); n++) {
-    c = readc(f, i);
+    c = gigetc(f, i);
     if (c == EOF || c == ')') break;
     giungetc(f, i, c);
     f = gfread1(f, i); }
@@ -1313,9 +1313,9 @@ static g_noinline struct g *please(struct g *f, uintptr_t req0) {
   struct g *g = (struct g*) (w == w0 ? w0 + len0 : w0);
   f = ggccpg(g, (void*) f->pool, f->len, f);
   // keep v between
-#define v_lo 8
+#define v_lo 4
   // and
-#define v_hi 512
+#define v_hi 8
   // where
   //   v = (t2 - t0) / (t2 - t1)
   //       non-gc running time     t1    t2
@@ -1569,11 +1569,11 @@ static struct g *gini0(
 //
 //
 // get the next significant character from the stream
-static int readc(struct g*f, struct g_in *i) {
-  for (int c;;) switch (c = gfgetc(f, i)) {
-    default: return c;
-    case '#': case ';': while (!gfeof(f, i) && (c = gfgetc(f, i)) != '\n' && c != '\r');
-    case 0: case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
+static int gigetc(struct g*f, struct g_in *i) {
+ for (int c;;) switch (c = gfgetc(f, i)) {
+  default: return c;
+  case '#': case ';': while (!gfeof(f, i) && (c = gfgetc(f, i)) != '\n' && c != '\r');
+  case 0: case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
 static int gfputn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base) {
  if (n < 0) gfputc(f, '-', o), n = -n;
@@ -1616,41 +1616,41 @@ static int gfputx(struct g *f, struct g_out *o, intptr_t x) {
     r = gfputc(f, '"', o); }
    return r; } } }
 
-static g_vm(seek) { return
-  Sp[1] = word(cell(Sp[1]) + ggetnum(Sp[0])),
-  Sp += 1,
-  Ip += 1,
-  Continue(); }
+static g_vm(seek) {
+ Sp[1] = word(cell(Sp[1]) + ggetnum(Sp[0]));
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
 
-static g_vm(peek) { return
-  Sp[0] = cell(Sp[0])->x,
-  Ip += 1,
-  Continue(); }
+static g_vm(peek) {
+ Sp[0] = cell(Sp[0])->x;
+ Ip += 1;
+ return Continue(); }
 
-static g_vm(poke) { return
-  cell(Sp[1])->x = Sp[0],
-  Sp += 1,
-  Ip += 1,
-  Continue(); }
+static g_vm(poke) {
+ cell(Sp[1])->x = Sp[0];
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
 
 static g_vm(thda) {
-  size_t n = ggetnum(Sp[0]);
-  Have(n + Width(struct g_tag));
-  union u *k = (union u*) Hp;
-  struct g_tag *t = (struct g_tag*) (k + n);
-  Hp += n + Width(struct g_tag);
-  t->null = NULL;
-  t->head = k;
-  memset(k, -1, n * sizeof(g_word));
-  Sp[0] = word(k);
-  Ip += 1;
-  return Continue(); }
+ size_t n = ggetnum(Sp[0]);
+ Have(n + Width(struct g_tag));
+ union u *k = (union u*) Hp;
+ struct g_tag *t = (struct g_tag*) (k + n);
+ Hp += n + Width(struct g_tag);
+ t->null = NULL;
+ t->head = k;
+ memset(k, -1, n * sizeof(g_word));
+ Sp[0] = word(k);
+ Ip += 1;
+ return Continue(); }
 
 static g_vm(trim) {
-  union u *k = cell(Sp[0]);
-  ttag(k)->head = k;
-  Ip += 1;
-  return Continue(); }
+ union u *k = cell(Sp[0]);
+ ttag(k)->head = k;
+ Ip += 1;
+ return Continue(); }
 
 static struct g_in g_stdin = {
  (void*) ggetc,
