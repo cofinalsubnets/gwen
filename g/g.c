@@ -6,8 +6,9 @@
 static struct g_in g_stdin;
 static struct g_out g_stdout;
 
-g_inline struct g *gwrite1(struct g *f) { return gfwrite1(f, &g_stdout), f; }
-g_inline struct g *gread1(struct g *f) { return gfread1(f, &g_stdin); }
+static struct g *gread1i(struct g*f, struct g_in* i);
+static g_inline struct g *gwrite1(struct g *f) { return gfwrite1(f, &g_stdout), f; }
+static g_inline struct g *gread1(struct g *f) { return gread1i(f, &g_stdin); }
 
 static int gfputn(struct g*, struct g_out*, intptr_t, uintptr_t);
 static g_inline int gfgetc(struct g*f, struct g_in *i) { return i->getc(f, i); }
@@ -257,25 +258,38 @@ static g_inline struct g *gfreadstring(struct g*f, struct g_in*i, int c) {
        return len(b) = n, f;
  return f; }
 
-struct g *gfread1(struct g*f, struct g_in* i) {
-  if (!g_ok(f)) return f;
-  int c = gigetc(f, i);
-  switch (c) {
-    case '(':  return greadsi(f, i);
-    case ')': case EOF:  return g_enc(f, g_status_eof);
-    case '\'': return gquote(gfread1(f, i));
-    case '"':   return gfreadstring(f, i, c);
-    default: return gfreadatom(f, i, c); } }
 
-struct g *greadsi(struct g *f, struct g_in* i) {
+////
+/// " the parser "
+//
+//
+// get the next significant character from the stream
+static int gigetc(struct g*f, struct g_in *i) {
+ for (int c;;) switch (c = gfgetc(f, i)) {
+  default: return c;
+  case '#': case ';': while (!gfeof(f, i) && (c = gfgetc(f, i)) != '\n' && c != '\r');
+  case 0: case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
+
+
+static struct g *greadsi(struct g *f, struct g_in* i) {
   intptr_t n = 0;
   for (int c; g_ok(f); n++) {
     c = gigetc(f, i);
     if (c == EOF || c == ')') break;
     giungetc(f, i, c);
-    f = gfread1(f, i); }
+    f = gread1i(f, i); }
   for (f = gpush(f, 1, g_nil); n--; f = gconsr(f));
   return f; }
+
+static struct g *gread1i(struct g*f, struct g_in* i) {
+  if (!g_ok(f)) return f;
+  int c = gigetc(f, i);
+  switch (c) {
+    case '(':  return greadsi(f, i);
+    case ')': case EOF:  return g_enc(f, g_status_eof);
+    case '\'': return gquote(gread1i(f, i));
+    case '"':   return gfreadstring(f, i, c);
+    default: return gfreadatom(f, i, c); } }
 
 static g_vm(gvmdot) {
   gfputx(f, &g_stdout, Sp[0]);
@@ -1481,7 +1495,7 @@ static g_vm(gvmgetc) {
 
 static g_vm(gvmread) {
  Pack(f);
- f = gfread1(f, &g_stdin);
+ f = gread1i(f, &g_stdin);
  if (g_code_of(f) == g_status_eof) return // no error but end of file
   f = g_core_of(f),
   Unpack(f),
@@ -1563,17 +1577,6 @@ static struct g *gini0(
       {"macros", (intptr_t) f->macro, }, };
     f = gdefs(f, 2, defs); }
   return f; }
-
-////
-/// " the parser "
-//
-//
-// get the next significant character from the stream
-static int gigetc(struct g*f, struct g_in *i) {
- for (int c;;) switch (c = gfgetc(f, i)) {
-  default: return c;
-  case '#': case ';': while (!gfeof(f, i) && (c = gfgetc(f, i)) != '\n' && c != '\r');
-  case 0: case ' ': case '\t': case '\n': case '\r': case '\f': continue; } }
 
 static int gfputn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base) {
  if (n < 0) gfputc(f, '-', o), n = -n;
@@ -1711,18 +1714,17 @@ int gfwrite1(struct g *f, struct g_out *o) {
 
 struct g *gini(void) { return ginid((void*) malloc, (void*) free); }
 
+
 struct g *gdef1(struct g*f, const char*s) {
-  return g_ok(f) ? gdef(f, s, gpop1(f)) : f; }
+ if (!g_ok(f)) return f;
+ struct g_def d = {s, gpop1(f)};
+ return gdefs(f, 1, &d); }
 
 struct g *gdefs(struct g*f, uintptr_t n, struct g_def *defs) {
   if (g_ok(f)) f = gpush(f, 1, f->dict);
   while (n--)
     f = gtabput(gintern(gstrof(gpush(f, 1, defs[n].x), defs[n].n)));
   return f; }
-
-struct g *gdef(struct g*f, const char*s, intptr_t x) {
-  struct g_def d = {s, x};
-  return gdefs(f, 1, &d); }
 
 struct g *gpush(struct g *f, uintptr_t m, ...) {
   if (!g_ok(f)) return f;

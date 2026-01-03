@@ -109,7 +109,8 @@ int
   strncmp(char const*, char const*, size_t),
   memcmp(void const*, void const*, size_t);
 void
-  *malloc(size_t), free(void*),
+  *malloc(size_t),
+  free(void*),
   *memcpy(void*restrict, void const*restrict, size_t),
   *memset(void*, int, size_t);
 long strtol(char const*restrict, char**restrict, int);
@@ -118,15 +119,10 @@ struct g
   *gini(void),
   *ginid(void *(*)(size_t, struct g*), void (*)(void*, struct g*)),
   *gevals(struct g*, const char*),
-  *gfread1(struct g*, struct g_in*),
-  *greadsi(struct g*, struct g_in*),
   *gdef1(struct g*, const char*),
-  *gdef(struct g*, const char*, g_num),
   *gdefs(struct g*, uintptr_t, struct g_def*),
   *gpush(struct g*, uintptr_t, ...),
   *gstrof(struct g*, const char*),
-  *gwrite1(struct g*),
-  *gread1(struct g*),
   *gconsl(struct g*),
   *gconsr(struct g*);
 
@@ -136,9 +132,11 @@ struct g
 static g_inline struct g *gpop(struct g *f, uintptr_t m) {
   if (g_ok(f)) f->sp += m;
   return f; }
-static g_inline struct g *gevals_(struct g*f, const char*s) { return gpop(gevals(f, s), 1); }
+static g_inline struct g *gevals_(struct g*f, const char*s) {
+ return gpop(gevals(f, s), 1); }
 static g_inline size_t b2w(size_t b) {
-  size_t q = b / sizeof(g_num), r = b % sizeof(g_num);
+  size_t q = b / sizeof(g_num),
+         r = b % sizeof(g_num);
   return q + (r ? 1 : 0); }
 
 #if g_float
