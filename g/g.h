@@ -129,11 +129,14 @@ struct g
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
+
 static g_inline struct g *gpop(struct g *f, uintptr_t m) {
   if (g_ok(f)) f->sp += m;
   return f; }
+
 static g_inline struct g *gevals_(struct g*f, const char*s) {
  return gpop(gevals(f, s), 1); }
+
 static g_inline size_t b2w(size_t b) {
   size_t q = b / sizeof(g_num),
          r = b % sizeof(g_num);
