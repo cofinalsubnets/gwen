@@ -31,7 +31,7 @@ int gflush(struct g*) {
 int main(int argc, char const **argv) {
  struct g *f;
  for (f = gini(); *argv; f = gstrof(f, *argv++));
- for (f = gpush(f, 1, gnil); argc--; f = gconsr(f));
+ for (f = gpush(f, 1, g_nil); argc--; f = gxr(f));
  f = gdef1(f, "argv");
  f = gevals_(f, "((:(go _)(: r(read _)(? r(,(ev'ev(A r))(go _)))))0)");
  enum g_status s = g_code_of(f);

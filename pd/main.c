@@ -106,7 +106,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       _synth.synth = pd->sound->synth->newSynth();
       K.g = ginid(g_pd_malloc, g_pd_free);
       K.g = gdefs(K.g, LEN(defs), defs);
-      if (gokp(K.g))
+      if (g_ok(K.g))
         K.mode->ini(),
         pd->system->setUpdateCallback(k_update, NULL);
     default: return 0; } }
@@ -264,11 +264,11 @@ static g_vm(g_buttons) { return
   Continue(); }
 
 static void ls_cb(const char *p, void *_) {
-  K.g = gconsl(gstrof(K.g, p)); }
+  K.g = gxl(gstrof(K.g, p)); }
 
 static g_vm(ls_root) {
   f = gpush(f, 1, g_nil);
-  if (gokp(f)) {
+  if (g_ok(f)) {
     K.g = f;
     K.pd->file->listfiles("/", ls_cb, NULL, 0);
     f = K.g; }
