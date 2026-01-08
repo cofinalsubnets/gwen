@@ -1306,35 +1306,28 @@ static struct g *ggccpg(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
 
 
 static g_noinline struct g *please(struct g *f, uintptr_t req0) {
-  uintptr_t t0 = f->t0,
-            t1 = g_clock(),
-            len0 = f->len;
-  intptr_t *w = (intptr_t*) f,
-           *w0 = (void*) f->pool;
-  struct g *g = (struct g*) (w == w0 ? w0 + len0 : w0);
+  uintptr_t const
+   t0 = f->t0,
+   t1 = g_clock(),
+   len0 = f->len;
+  struct g *g = f != f->pool ? f->pool :
+   (struct g*) (cell(f) + f->len);
   f = ggccpg(g, (void*) f->pool, f->len, f);
-  // keep v between
-#define v_lo 4
-  // and
-#define v_hi 8
-  // where
-  //   v = (t2 - t0) / (t2 - t1)
-  //       non-gc running time     t1    t2
-  //   ,.........................,/      |
-  //   -----------------------------------
-  //   |                          `------'
-  //   t0                  gc time (this cycle)
-  uintptr_t t2 = f->t0,      // get and set last gc end time
-            req = req0 + len0 - avail(f),
-            v = t2 == t1 ?  v_hi : (t2 - t0) / (t2 - t1),
-            len1 = len0;
+  uintptr_t const
+   v_lo = 8,
+   v_hi = 64,
+   req = req0 + len0 - avail(f);
+  uintptr_t
+   len1 = len0,
+   t2 = f->t0,
+   v = t2 == t1 ? v_hi : (t2 - t0) / (t2 - t1);
 
-#define too_small (len1 < req || v < v_lo)
-#define grow() (len1<<=1,v<<=1)
-#define too_big (len1 >> 1 > req && v > v_hi)
-#define shrink() (len1>>=1,v>>=1)
-  if      (too_big) do shrink(); while (too_big);   // too big -> calculate smaller size
-  else if (too_small) do grow(); while (too_small); // too small -> calculate bigger size
+  if (len1 < req || v < v_lo)
+    do len1 <<= 1, v <<= 1;
+    while (len1 < req || v < v_lo);    // too small -> calculate bigger size
+  else if (len1 > 2 * req && v > v_hi)
+    do len1 >>= 1, v >>= 1;
+    while (len1 > 2 * req && v > v_hi); // too big -> calculate smaller size
   else return f;                                    // just right -> all done
 
   // allocate a new pool with target size

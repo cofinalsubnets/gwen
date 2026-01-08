@@ -13,7 +13,7 @@ test: b/h/$n
 all: h k pd
 h: b/h/$n b/h/lib$n.so b/h/$n.1
 k: b/k/$n-$a.elf
-pd: b/$n.pdx
+pd: b/pd/$n.pdx
 clean:
 	@echo RM	b
 	@rm -rf b
@@ -171,7 +171,7 @@ pd_asflags=$(pd_mcflags) $(pd_opt) -g3 -gdwarf-2 -Wa,-amhls=$(<:.s=.lst)\
   -D__HEAP_SIZE=8388208 \
  	-D__STACK_SIZE=4194304
 
-b/$n.pdx: b/pd/Source/pdex.elf b/pd/Source/pdex.so
+b/pd/$n.pdx: b/pd/Source/pdex.elf b/pd/Source/pdex.so
 	@echo PDC	$@
 	@$(pd_sdk)/bin/pdc -sdkpath $(pd_sdk) b/pd/Source $@
 
@@ -198,6 +198,10 @@ b/pd/pdex.so: $(pd_src)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@gcc -g -shared -fPIC -lm -Dg_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 $(pd_incdir) -o b/pd/pdex.so $(pd_src)
+
+sim: b/pd/$n.pdx
+	@$(pd_sdk)/bin/PlaydateSimulator $^
+.PHONY: sim
 
 .PRECIOUS: b/pd/%elf
 
