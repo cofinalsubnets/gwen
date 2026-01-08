@@ -244,9 +244,9 @@ int gflush(struct g*f) {
 
 static union u
   bif_reset[] = {{g_kreset}},
-  bif_draw[] = {{draw}, {gvmret0}},
-  bif_key[] = {{key}, {gvmret0}},
-  bif_wait[] = {{wait}, {gvmret0}};
+  bif_draw[] = {{draw}, {g_vm_ret0}},
+  bif_key[] = {{key}, {g_vm_ret0}},
+  bif_wait[] = {{wait}, {g_vm_ret0}};
 
 static bool meminit(void) {
   if (!memmap_req.response || !hhdm_req.response) return false;
@@ -291,7 +291,7 @@ static struct g_def defs[] = {
 
 void kmain(void) {
   if (archinit() && meminit() && fbinit() && cbinit())
-    gevals_(gdefs(gini(), defs),
+    g_evals_(g_defs(g_ini(), defs),
 #include "boot.h"
       "(:(ps1 _)(puts\" ;; \")"
         "(rs x)(? x(X(A x)(rs(read 0))))"

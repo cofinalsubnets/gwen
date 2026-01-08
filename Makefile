@@ -1,12 +1,11 @@
 n=gl
 x=g
-libpath=LD_LIBRARY_PATH=b/h:$(LD_LIBRARY_PATH)
-m=$(libpath) b/h/$n
+m=b/h/$n
 a?=$(shell uname -m)
 
 t=$(sort $(wildcard t/*.$x))
 
-.PHONY: test all h k pd clean distclean valg perf repl cloc cat
+.PHONY: test all h k pd clean distclean
 test: b/h/$n
 	@echo TEST
 	@cat g/boot.g $t | $m
@@ -15,24 +14,31 @@ h: b/h/$n b/h/lib$n.so b/h/$n.1
 k: b/k/$n-$a.elf
 pd: b/pd/$n.pdx
 clean:
-	@echo RM	b
-	@rm -rf b
+	rm -rf b
 distclean:
-	@echo RM	b dl
-	@rm -rf `git check-ignore * */*`
+	rm -rf b dl
+
+.PHONY: valg perf repl cloc cat
 valg: b/h/$n
-	@cat g/boot.g $t | $(libpath) valgrind --error-exitcode=1 b/h/$n
+	cat g/boot.g $t | valgrind --error-exitcode=1 b/h/$n
 b/perf.data: b/h/$n
-	cat g/boot.g $t | $(libpath) perf record -o $@ b/h/$n
+	cat g/boot.g $t | perf record -o $@ b/h/$n
 perf: b/perf.data
 	perf report -i $<
 b/flamegraph.svg: b/perf.data
 	flamegraph -o $@ --perfdata $<
 repl: b/h/$n
-	@cat g/boot.g h/repl.g - | $(libpath) $<
+	@cat g/boot.g h/repl.g - | $<
 cloc:
 	cloc --by-file --force-lang=Lisp,$x g h js k p pd t vim
 cat: clean all test
+.PHONY: disasm debug
+disasm: b/h/$n
+	rizin -A $^
+gdb: b/h/$n
+	gdb $^
+
+
 
 #build
 # c files and headers
@@ -66,20 +72,15 @@ b/h/%.o: h/%.c $(g_h)
 	@mkdir -p $(dir $@)
 	@$(cc) -c -Ib/h $< -o $@
 
-b/h/main.o: h/main.c $(g_h)
+b/h/$n: h/main.c b/h/lib$n.a
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(cc) -c -Ib/h $< -o $@
-
-b/h/$n: b/h/main.o b/h/lib$n.so
-	@echo LD	$@
-	@mkdir -p $(dir $@)
-	@$(cc) -o $@ -l$n -Lb/h $<
+	@$(cc) -o $@ $^
 
 # sed command to escape lisp text into C string format
 b/boot.h: b/h/$n h/lcat.sed g/boot.$x
 	@echo GEN	$@
-	@cat g/boot.$x h/lcat.$x g/boot.$x | $(libpath) b/h/$n | sed -f h/lcat.sed >$@
+	@cat g/boot.$x h/lcat.$x g/boot.$x |  b/h/$n | sed -f h/lcat.sed >$@
 
 b/h/$n.1: b/h/$n h/manpage.$x
 	@echo GEN	$@

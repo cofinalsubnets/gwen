@@ -5,17 +5,6 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdarg.h>
-// some libc functions we use
-int
-  strncmp(char const*, char const*, size_t),
-  memcmp(void const*, void const*, size_t);
-void
-  *malloc(size_t),
-  free(void*),
-  *memcpy(void*restrict, void const*restrict, size_t),
-  *memset(void*, int, size_t);
-long strtol(char const*restrict, char**restrict, int);
-size_t strlen(char const*);
 
 #define Width(_) b2w(sizeof(_))
 #define g_width Width
@@ -111,8 +100,7 @@ struct g {
      *macro;
    struct g_atom
     *quote,
-    *lambda,
-    *eval;
+    *lambda;
    intptr_t u[]; }; };
  intptr_t end[]; };
 
@@ -127,7 +115,21 @@ struct g_out {
  int (*putc)(struct g*, int, struct g_out*),
      (*flush)(struct g*); };
 
-g_vm_t gvmret0, gvmcurry;
+// some libc functions we use
+int
+ strncmp(char const*, char const*, size_t),
+ memcmp(void const*, void const*, size_t);
+
+void
+ *malloc(size_t),
+ free(void*),
+ *memcpy(void*restrict, void const*restrict, size_t),
+ *memset(void*, int, size_t);
+
+long
+ strtol(char const*restrict, char**restrict, int);
+
+g_vm_t g_vm_ret0, g_vm_curry;
 
 uintptr_t
  g_clock(void); // used by garbage collector
@@ -135,7 +137,6 @@ uintptr_t
 int
  gvfprintf(struct g*, struct g_out*, char const*, va_list),
  gfprintf(struct g*, struct g_out*, const char*, ...),
- gfwrite1(struct g*, struct g_out*),
  ggetc(struct g*),
  gungetc(struct g*, int),
  geof(struct g*),
@@ -143,17 +144,19 @@ int
  gflush(struct g*);
 
 struct g
- *gini(void),
- *ginid(void *(*)(size_t, struct g*), void (*)(void*, struct g*)),
- *gevals_(struct g*, const char*),
- *gdef1(struct g*, const char*),
- *gdefs(struct g*, struct g_def const*),
- *gpush(struct g*, uintptr_t, ...),
- *gstrof(struct g*, const char*),
+ *g_inid(void *(*)(size_t, struct g*), void (*)(void*, struct g*)),
+ *g_evals_(struct g*, const char*),
+ *g_def1(struct g*, const char*),
+ *g_defs(struct g*, struct g_def const*),
+ *g_push(struct g*, uintptr_t, ...),
+ *g_strof(struct g*, const char*),
  *gxl(struct g*),
  *gxr(struct g*);
 
 enum g_status gfin(struct g*);
+
+static g_inline struct g *g_ini(void) {
+ return g_inid((void*) malloc, (void*) free); }
 
 static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_num),

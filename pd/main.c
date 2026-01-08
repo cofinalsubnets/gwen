@@ -52,13 +52,13 @@ static unsigned int (*clockfp)(void);
 g_noinline uintptr_t g_clock(void) { return clockfp ? clockfp() : 0; }
 static g_vm_t crank_angle, g_buttons, ls_root, cur_row, cur_col, cur_put, cur_set;
 static union u
-  bif_ls_root[] = {{ls_root}, {gvmret0}},
-  bif_buttons[] = {{g_buttons}, {gvmret0}},
-  bif_cur_row[] = {{cur_row}, {gvmret0}},
-  bif_cur_col[] = {{cur_col}, {gvmret0}},
-  bif_cur_put[] = {{cur_put}, {gvmret0}},
-  bif_cur_set[] = {{gvmcurry}, {.x=gputnum(2)}, {cur_set}, {gvmret0}},
-  bif_crank_angle[] = {{crank_angle}, {gvmret0}};
+  bif_ls_root[] = {{ls_root}, {g_vm_ret0}},
+  bif_buttons[] = {{g_buttons}, {g_vm_ret0}},
+  bif_cur_row[] = {{cur_row}, {g_vm_ret0}},
+  bif_cur_col[] = {{cur_col}, {g_vm_ret0}},
+  bif_cur_put[] = {{cur_put}, {g_vm_ret0}},
+  bif_cur_set[] = {{g_vm_curry}, {.x=gputnum(2)}, {cur_set}, {g_vm_ret0}},
+  bif_crank_angle[] = {{crank_angle}, {g_vm_ret0}};
 static struct g_def defs[] = {
   {"cur_row", (intptr_t) bif_cur_row},
   {"cur_col", (intptr_t) bif_cur_col},
@@ -105,8 +105,8 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.pd = pd;
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
-      K.g = ginid(g_pd_malloc, g_pd_free);
-      K.g = gdefs(K.g, defs);
+      K.g = g_inid(g_pd_malloc, g_pd_free);
+      K.g = g_defs(K.g, defs);
       if (g_ok(K.g))
         K.mode->ini(),
         pd->system->setUpdateCallback(k_update, NULL);
@@ -115,8 +115,8 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
 static void g_log_update(void) {
   cb_cur(kcb, 0, 0);
   cb_fill(kcb, 0);
-  K.g = gevals_(K.g,
-    "(: i(gvminfo 0)f(A i)len(A(B i))allocd(A(B(B i)))stackd(A(B(B(B i))))"
+  K.g = g_evals_(K.g,
+    "(: i(vminfo 0)f(A i)len(A(B i))allocd(A(B(B i)))stackd(A(B(B(B i))))"
     "(,"
     "(puts\"\x03 \")(putn(clock 0)10)"
     "(puts\"\n\nf@\")""(putn f 16)"
@@ -265,10 +265,10 @@ static g_vm(g_buttons) { return
   Continue(); }
 
 static void ls_cb(const char *p, void *_) {
-  K.g = gxl(gstrof(K.g, p)); }
+  K.g = gxl(g_strof(K.g, p)); }
 
 static g_vm(ls_root) {
-  f = gpush(f, 1, g_nil);
+  f = g_push(f, 1, g_nil);
   if (g_ok(f)) {
     K.g = f;
     K.pd->file->listfiles("/", ls_cb, NULL, 0);

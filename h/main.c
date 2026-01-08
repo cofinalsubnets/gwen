@@ -30,10 +30,10 @@ int gflush(struct g*) {
 
 int main(int argc, char const **argv) {
  struct g *f;
- for (f = gini(); *argv; f = gstrof(f, *argv++));
- for (f = gpush(f, 1, g_nil); argc--; f = gxr(f));
- f = gdef1(f, "argv");
- f = gevals_(f, "((:(go _)(: r(read _)(? r(,(ev'ev(A r))(go _)))))0)");
+ for (f = g_ini(); *argv; f = g_strof(f, *argv++));
+ for (f = g_push(f, 1, g_nil); argc--; f = gxr(f));
+ f = g_def1(f, "argv");
+ f = g_evals_(f, "((:(go _)(: r(read _)(? r(,(ev'ev(A r))(go _)))))0)");
  enum g_status s = g_code_of(f);
  if (s != g_status_ok) {
   f = g_core_of(f);
@@ -44,5 +44,5 @@ int main(int argc, char const **argv) {
    f->len,
    f->hp - (intptr_t*) f,
    (intptr_t*) f + f->len - f->sp); }
- gfin(f);
+ //gfin(f);
  return s; }
