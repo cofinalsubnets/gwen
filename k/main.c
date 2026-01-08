@@ -20,7 +20,7 @@ static struct {
 
 static struct { uint8_t k, f; } kkb;
 
-void kreset(void);
+void k_reset(void);
 bool archinit(void);
 
 static g_inline void kwait(void) { asm volatile (
@@ -126,7 +126,7 @@ void kb_int(const uint8_t code) {
       case kb_code_alt: kkb.f |= kb_flag_ralt; return;
       case kb_code_ctl: kkb.f |= kb_flag_rctl; return;
       case kb_code_delete:
-        if (kkb.f & kb_flag_ctl & kb_flag_alt) kreset();
+        if (kkb.f & kb_flag_ctl & kb_flag_alt) k_reset();
         return;
       case kb_code_left: w -= 1; goto move_cursor;
       case kb_code_right: w += 1; goto move_cursor;
@@ -205,7 +205,7 @@ void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
 
-static g_vm(g_reset) { return kreset(), f; }
+static g_vm(g_kreset) { return k_reset(), f; }
 
 #define font_x 8
 #define font_y 8
@@ -243,16 +243,10 @@ int gflush(struct g*f) {
 
 
 static union u
-  bif_reset[] = {{g_reset}},
+  bif_reset[] = {{g_kreset}},
   bif_draw[] = {{draw}, {gvmret0}},
   bif_key[] = {{key}, {gvmret0}},
   bif_wait[] = {{wait}, {gvmret0}};
-
-static struct g_def defs[] = {
-  {"reset", (intptr_t) bif_reset},
-  {"draw", (intptr_t) bif_draw},
-  {"key", (intptr_t) bif_key},
-  {"wait", (intptr_t) bif_wait}, };
 
 static bool meminit(void) {
   if (!memmap_req.response || !hhdm_req.response) return false;
@@ -288,13 +282,22 @@ static bool cbinit(void) {
   cb_fill(kcb, 0);
   return true; }
 
+static struct g_def defs[] = {
+  {"reset", (intptr_t) bif_reset},
+  {"draw", (intptr_t) bif_draw},
+  {"key", (intptr_t) bif_key},
+  {"wait", (intptr_t) bif_wait},
+  {0}, };
+
 void kmain(void) {
   if (archinit() && meminit() && fbinit() && cbinit())
-    gfin(gevals(gdefs(gini(), LEN(defs), defs),
+    gevals_(gdefs(gini(), defs),
 #include "boot.h"
       "(:(ps1 _)(puts\" ;; \")"
         "(rs x)(? x(X(A x)(rs(read 0))))"
         "(ep x)(,(.(ev x))(putc 10))"
         "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep))))))))"
-       "(go(key(ps1(,(putn(clock(puts\"\x02 \"))10)(putc 10))))))"));
-  kreset(); }
+       "(go(key(ps1(,(putn(clock(puts\"\x02 \"))10)(putc 10))))))");
+   // */
+
+  k_reset(); }

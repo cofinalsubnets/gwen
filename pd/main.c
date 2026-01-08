@@ -66,7 +66,8 @@ static struct g_def defs[] = {
   {"cur_put", (intptr_t) bif_cur_put},
   {"ls_root", (intptr_t) bif_ls_root},
   {"crank_angle", (intptr_t) bif_crank_angle},
-  {"get_buttons", (intptr_t) bif_buttons}, };
+  {"get_buttons", (intptr_t) bif_buttons},
+  {0}, };
 
 static void g_nop(void) {}
 static void
@@ -105,7 +106,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
       K.g = ginid(g_pd_malloc, g_pd_free);
-      K.g = gdefs(K.g, LEN(defs), defs);
+      K.g = gdefs(K.g, defs);
       if (g_ok(K.g))
         K.mode->ini(),
         pd->system->setUpdateCallback(k_update, NULL);

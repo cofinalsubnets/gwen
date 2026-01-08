@@ -1,7 +1,7 @@
 global keyboard_isr
 global timer_isr
 global archinit
-global kreset
+global k_reset
 extern kticks
 extern kb_int
 
@@ -63,10 +63,10 @@ kbq_len:
 section .rodata
 align 8
 isrs:
-  times 32 dq kreset
+  times 32 dq k_reset
   times  1 dq timer_isr
   times  1 dq keyboard_isr
-  times 14 dq kreset
+  times 14 dq k_reset
 
 align 8
 isr_types:
@@ -172,7 +172,7 @@ archinit:
   mov al, 1
   ret
 
-kreset:
+k_reset:
   push 0
   push 0
   lidt [rsp]

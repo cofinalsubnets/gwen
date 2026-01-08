@@ -111,9 +111,6 @@ struct g {
      *macro;
    struct g_atom
     *quote,
-    *begin,
-    *let,
-    *cond,
     *lambda,
     *eval;
    intptr_t u[]; }; };
@@ -121,22 +118,20 @@ struct g {
 
 struct g_def { char const *n; intptr_t x; };
 
-g_vm_t gvmret0, gvmcurry;
-// global data definitions
-
-extern struct g_in {
+struct g_in {
  int (*getc)(struct g*, struct g_in*),
      (*ungetc)(struct g*, int, struct g_in*),
-     (*eof)(struct g*, struct g_in*);
-} g_stdin;
+     (*eof)(struct g*, struct g_in*); };
 
-extern struct g_out {
+struct g_out {
  int (*putc)(struct g*, int, struct g_out*),
-     (*flush)(struct g*);
-} g_stdout;
+     (*flush)(struct g*); };
+
+g_vm_t gvmret0, gvmcurry;
 
 uintptr_t
  g_clock(void); // used by garbage collector
+
 int
  gvfprintf(struct g*, struct g_out*, char const*, va_list),
  gfprintf(struct g*, struct g_out*, const char*, ...),
@@ -148,27 +143,17 @@ int
  gflush(struct g*);
 
 struct g
- *g_reset(void),
  *gini(void),
  *ginid(void *(*)(size_t, struct g*), void (*)(void*, struct g*)),
- *gevals(struct g*, const char*),
+ *gevals_(struct g*, const char*),
  *gdef1(struct g*, const char*),
- *gdefs(struct g*, uintptr_t, struct g_def*),
+ *gdefs(struct g*, struct g_def const*),
  *gpush(struct g*, uintptr_t, ...),
  *gstrof(struct g*, const char*),
  *gxl(struct g*),
  *gxr(struct g*);
 
-enum g_status
- glisp(char const*, ...),
- gfin(struct g*);
-
-static g_inline struct g *gpop(struct g *f, uintptr_t m) {
- if (g_ok(f)) f->sp += m;
- return f; }
-
-static g_inline struct g *gevals_(struct g*f, const char*s) {
- return gpop(gevals(f, s), 1); }
+enum g_status gfin(struct g*);
 
 static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_num),
