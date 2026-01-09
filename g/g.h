@@ -148,7 +148,7 @@ struct g
  *g_evals_(struct g*, const char*),
  *g_def1(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*),
- *g_push(struct g*, uintptr_t, ...),
+ *g_push(struct g*, intptr_t, ...),
  *g_strof(struct g*, const char*),
  *gxl(struct g*),
  *gxr(struct g*);

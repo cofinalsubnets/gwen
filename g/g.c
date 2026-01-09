@@ -37,7 +37,19 @@ static void inivecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs)
 
 static struct g_atom *g_intern_r(struct g*, struct g_vec*, struct g_atom**);
 
-static struct g *g_have(struct g *f, uintptr_t n);
+#define vlen(_)((struct g_vec*)(_))->shape[0]
+#define vtxt(_) ((char*)(((struct g_vec*)(_))->shape+1))
+#define len(_) vlen(_)
+#define txt(_) vtxt(_)
+#define avail(f) ((f->sp-f->hp))
+static struct g
+  *please(struct g*, uintptr_t),
+  *g_tput(struct g*),
+  *g_intern(struct g*),
+  *g_tnew(struct g*);
+static struct g *g_have(struct g *f, intptr_t n) {
+ return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
+
 static void inivec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
   va_list xs;
   va_start(xs, rank);
@@ -106,11 +118,6 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 
 #define str_type_width (Width(struct g_vec) + 1)
 
-#define vlen(_)((struct g_vec*)(_))->shape[0]
-#define vtxt(_) ((char*)(((struct g_vec*)(_))->shape+1))
-#define len(_) vlen(_)
-#define txt(_) vtxt(_)
-#define avail(f) ((uintptr_t)(f->sp-f->hp))
 static g_inline bool twop(g_num _) { return even(_) && typ(_) == g_ty_two; }
 static g_inline bool tabp(g_num _) { return even(_) && typ(_) == g_ty_tbl; }
 static g_inline bool symp(g_num _) { return even(_) && typ(_) == g_ty_nom; }
@@ -118,14 +125,11 @@ static g_inline bool nump(g_num _) { return odd(_); }
 static g_inline bool vec_strp(struct g_vec *s) { return s->type == g_vt_char && s->rank == 1; }
 static bool g_strp(intptr_t _) { return even(_) && typ(_) == g_ty_str && vec_strp((struct g_vec*)_); }
 
-static struct g
-  *please(struct g*, uintptr_t),
-  *g_tput(struct g*),
-  *g_intern(struct g*),
-  *g_tnew(struct g*);
+
 static struct g *g_symof(struct g *f, char const *nom) {
   return g_intern(g_strof(f, nom)); }
-static g_inline struct g *g_intern(struct g*f) {
+
+static struct g *g_intern(struct g*f) {
   f = g_have(f, Width(struct g_atom));
   if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
   return f; }
@@ -181,8 +185,6 @@ typedef struct env {
     lams,  // alist // known function definitions
     alts, ends; } env;
 
-static int
-  g_r_getc(struct g*, struct g_in *i);
 static bool eql(struct g*, intptr_t, intptr_t);
 static intptr_t
   g_gc_cp(struct g*,intptr_t,intptr_t*,intptr_t*),
@@ -351,9 +353,6 @@ static g_noinline struct g *enscope(struct g *f, struct env *par, intptr_t args,
 
 static struct g *gx2(struct g *f, intptr_t a, intptr_t b) {
   return gxl(g_push(f, 2, a, b)); }
-
-static struct g *g_have(struct g *f, uintptr_t n) {
- return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
 
 static g_noinline struct g *gx_(struct g *f, int i, int j) {
  f = g_have(f, Width(struct g_pair));
@@ -567,12 +566,13 @@ static Cata(g_c1curry) {
   g_c1ix_(f, c, m, g_vm_curry, gputnum(ar)) ; }
 
 static Cata(g_c1ret) {
-  struct env *e = (struct env*) g_pop1(f);
-  uintptr_t ar = llen(e->args) + llen(e->imps);
-  return g_c1ix_(f, c, m, g_vm_ret, gputnum(ar)); }
+ struct env *e = (struct env*) g_pop1(f);
+ uintptr_t ar = llen(e->args) + llen(e->imps);
+ return g_c1ix_(f, c, m, g_vm_ret, gputnum(ar)); }
 
-static struct g *g_c0lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp),
-                *g_c0seq(struct g*, struct env**, intptr_t, intptr_t);
+static struct g
+ *g_c0lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp),
+ *g_c0seq(struct g*, struct env**, intptr_t, intptr_t);
 
 static g_noinline Ana(analyze) {
   if (!g_ok(f)) return f;
@@ -966,51 +966,51 @@ static g_inline uintptr_t index_of_key(struct g *f, struct g_tab *t, intptr_t k)
  return (t->cap - 1) & g_hash(f, k); }
 
 g_noinline struct g *g_tput(struct g *f) {
-  struct g_tab *t = (struct g_tab*) f->sp[2];
-  intptr_t v = f->sp[1],
-           k = f->sp[0];
-  uintptr_t i = index_of_key(f, t, k);
-  struct g_kvs *e = t->tab[i];
-  while (e && !eql(f, k, e->key)) e = e->next;
+ struct g_tab *t = (struct g_tab*) f->sp[2];
+ intptr_t v = f->sp[1],
+          k = f->sp[0];
+ uintptr_t i = index_of_key(f, t, k);
+ struct g_kvs *e = t->tab[i];
+ while (e && !eql(f, k, e->key)) e = e->next;
 
-  if (e) return e->val = v, f->sp += 2, f;
+ if (e) return e->val = v, f->sp += 2, f;
 
-  f = g_have(f, Width(struct g_kvs) + 1);
-  if (!g_ok(f)) return f;
-  e = bump(f, Width(struct g_kvs));
-  t = (struct g_tab*) f->sp[2];
-  k = f->sp[0];
-  v = f->sp[1];
+ f = g_have(f, Width(struct g_kvs) + 1);
+ if (!g_ok(f)) return f;
+ e = bump(f, Width(struct g_kvs));
+ t = (struct g_tab*) f->sp[2];
+ k = f->sp[0];
+ v = f->sp[1];
 
-  e->key = k;
-  e->val = v;
-  e->next = t->tab[i];
-  t->tab[i] = e;
+ e->key = k;
+ e->val = v;
+ e->next = t->tab[i];
+ t->tab[i] = e;
 
-  intptr_t cap0 = t->cap,
-           load = ++t->len / cap0;
+ intptr_t cap0 = t->cap,
+          load = ++t->len / cap0;
 
-  if (load < 2) return f->sp += 2, f;
+ if (load < 2) return f->sp += 2, f;
 
-  // grow the table
-  intptr_t cap1 = 2 * cap0;
-  struct g_kvs **tab0, **tab1;
+ // grow the table
+ intptr_t cap1 = 2 * cap0;
+ struct g_kvs **tab0, **tab1;
 
-  f = g_have(f, cap1 + 1);
-  if (!g_ok(f)) return f;
-  tab1 = bump(f, cap1);
-  t = (struct g_tab*) f->sp[2];
-  tab0 = t->tab;
-  memset(tab1, 0, cap1 * sizeof(intptr_t));
-  for (t->cap = cap1, t->tab = tab1; cap0--;)
-    for (struct g_kvs *e, *es = tab0[cap0]; es;
-      e = es,
-      es = es->next,
-      i = (cap1-1) & g_hash(f, e->key),
-      e->next = tab1[i],
-      tab1[i] = e);
+ f = g_have(f, cap1 + 1);
+ if (!g_ok(f)) return f;
+ tab1 = bump(f, cap1);
+ t = (struct g_tab*) f->sp[2];
+ tab0 = t->tab;
+ memset(tab1, 0, cap1 * sizeof(intptr_t));
+ for (t->cap = cap1, t->tab = tab1; cap0--;)
+  for (struct g_kvs *e, *es = tab0[cap0]; es;
+   e = es,
+   es = es->next,
+   i = (cap1-1) & g_hash(f, e->key),
+   e->next = tab1[i],
+   tab1[i] = e);
 
-  return f->sp += 2, f; }
+ return f->sp += 2, f; }
 
   
 static struct g_kvs *gtabdelr(
@@ -1637,23 +1637,19 @@ struct g *g_def1(struct g*f, char const *s) {
  struct g_def d[] = {{s, g_pop1(f)}, {0}};
  return g_defs(f, d); }
 
-static struct g*g_pop(struct g*f, size_t n) {
- if (g_ok(f)) f->sp += n;
- return f; }
-
 struct g *g_defs(struct g*f, struct g_def const*defs) {
  if (!g_ok(f)) return f;
  f = g_push(f, 1, f->dict);
  for (int n = 0; defs[n].n; n++)
   f = g_tput(g_intern(g_strof(g_push(f, 1, defs[n].x), defs[n].n)));
- f = g_pop(f, 1);
+ if (g_ok(f)) f->sp++;
  return f; }
 
-struct g *g_push(struct g *f, uintptr_t m, ...) {
+struct g *g_push(struct g *f, intptr_t m, ...) {
  if (!g_ok(f)) return f;
  va_list xs;
  va_start(xs, m);
- uintptr_t n = 0;
+ intptr_t n = 0;
  if (avail(f) < m) f = g_pushr(f, m, n, xs);
  else for (f->sp -= m; n < m; f->sp[n++] = va_arg(xs, intptr_t));
  va_end(xs);
