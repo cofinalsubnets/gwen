@@ -28,6 +28,9 @@ int geof(struct g*_) {
 int gflush(struct g*) {
  return fflush(stdout); }
 
+void *g_malloc(struct g*f, size_t n) { return malloc(n); }
+void g_free(struct g*f, void *p) { free(p); }
+
 int main(int argc, char const **argv) {
  struct g *f;
  for (f = g_ini(); *argv; f = g_strof(f, *argv++));

@@ -203,6 +203,8 @@ static void kfree(void *p) {
 
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
+void *g_malloc(struct g*f, size_t n) { return kmallocw(b2w(n)); }
+void g_free(struct g*f, void *x) { kfree(x); }
 
 
 static g_vm(g_kreset) { return k_reset(), f; }

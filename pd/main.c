@@ -90,10 +90,12 @@ static struct  mode
   _life  = { &_log, (void*) &_synth, g_life_ini, g_life_update, g_nop, },
   _log  = { (void*) &_synth, &_life, g_log_ini, g_log_update, g_nop, };
 
-static void *g_pd_malloc(size_t n, struct g*) {
+// using the non-static g_malloc/g_free functions
+// somehow doesn't link correctly but it works fine
+// if you use static functions
+static void *_malloc(struct g*, size_t n) {
   return K.pd->system->realloc(NULL, n); }
-
-static void g_pd_free(void*x, struct g*) {
+static void _free(struct g*, void *x) {
   K.pd->system->realloc(x, 0); }
 
 static void k_boot(void);
@@ -105,8 +107,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.pd = pd;
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
-      K.g = g_inid(g_pd_malloc, g_pd_free);
-      K.g = g_defs(K.g, defs);
+      K.g = g_defs(g_inid(_malloc, _free), defs);
       if (g_ok(K.g))
         K.mode->ini(),
         pd->system->setUpdateCallback(k_update, NULL);

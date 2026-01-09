@@ -88,8 +88,8 @@ struct g {
   intptr_t *ptr;
   struct g_root *next; } *root;
  union { uintptr_t t0; g_num *cp; };
- void *(*malloc)(size_t, struct g*),
-      (*free)(void*, struct g*);
+ void *(*malloc)(struct g*, size_t),
+      (*free)(struct g*, void*);
  union {
 #define g_nvars 16
   intptr_t v[g_nvars];
@@ -121,8 +121,8 @@ int
  memcmp(void const*, void const*, size_t);
 
 void
- *malloc(size_t),
- free(void*),
+ *g_malloc(struct g*, size_t),
+ g_free(struct g*, void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memset(void*, int, size_t);
 
@@ -144,7 +144,7 @@ int
  gflush(struct g*);
 
 struct g
- *g_inid(void *(*)(size_t, struct g*), void (*)(void*, struct g*)),
+ *g_inid(void *(*)(struct g*, size_t), void (*)(struct g*, void*)),
  *g_evals_(struct g*, const char*),
  *g_def1(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*),
@@ -156,7 +156,7 @@ struct g
 enum g_status gfin(struct g*);
 
 static g_inline struct g *g_ini(void) {
- return g_inid((void*) malloc, (void*) free); }
+ return g_inid(g_malloc, g_free); }
 
 static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_num),

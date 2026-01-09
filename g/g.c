@@ -152,7 +152,7 @@ static g_vm_t
 enum g_status gfin(struct g *f) {
   enum g_status s = g_code_of(f);
   f = g_core_of(f);
-  if (f) f->free(f->pool, f);
+  if (f) f->free(f, f->pool);
   return s; }
 
 static struct g *g_eval(struct g *f) {
@@ -1335,10 +1335,10 @@ static g_noinline struct g *please(struct g *f, uintptr_t req0) {
   while (len1 > 2 * req && v > v_hi);
  else return f->t0 = t2, f; // else right size -> all done
  // allocate a new pool with target size
- g = f->malloc(len1 * 2 * sizeof(g_num), f);
+ g = f->malloc(f, len1 * 2 * sizeof(g_num));
  if (!g) return encode(f, req <= len0 ? g_status_ok : g_status_oom);
  g = g_gc_cpg(g, (g_num*) g, len1, f);
- f->free(f->pool, f);
+ f->free(f, f->pool);
  return g->t0 = g_clock(), g; }
 
 
@@ -1499,8 +1499,8 @@ static struct g_def const g_defs0[] = { bifs(biff) insts(i_entry) {0}};
 static g_noinline struct g *g_ini0(
  struct g *restrict f,
  uintptr_t words,
- void *(*ma)(size_t, struct g*),
- void (*fr)(void*, struct g*))
+ void *(*ma)(struct g*, size_t),
+ void (*fr)(struct g*, void*))
 {
  if (!g_ok(f)) return f;
  if (f == NULL || words * sizeof(g_word) < 2 * sizeof(struct g))
@@ -1627,9 +1627,9 @@ struct g *g_strof(struct g *f, char const *cs) {
  if (g_ok(f)) memcpy(txt(f->sp[0]), cs, len);
  return f; }
 
-struct g *g_inid(void *(*ma)(size_t, struct g*), void (*fr)(void*, struct g*)) {
+struct g *g_inid(void *(*ma)(struct g*, size_t), void (*fr)(struct g*, void*)) {
  uintptr_t len0 = 1 << 10;
- struct g *f = ma(2 * len0 * sizeof(g_word), NULL);
+ struct g *f = ma(NULL, 2 * len0 * sizeof(g_word));
  return g_ini0(f, len0, ma, fr); }
 
 struct g *g_def1(struct g*f, char const *s) {
