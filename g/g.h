@@ -23,7 +23,6 @@
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
-#define g_vt_char g_vt_u8
 #define LEN(_) (sizeof(_)/sizeof(*_))
 #define MIN(p,q) ((p)<(q)?(p):(q))
 #define MAX(p,q) ((p)>(q)?(p):(q))
@@ -62,11 +61,6 @@ typedef intptr_t
 union u;
 
 typedef g_vm(g_vm_t);
-enum g_status {
- g_status_ok  = 0,
- g_status_oom = 1,
- g_status_err = 2,
- g_status_eof = 3, };
 
 struct g {
  union u {
@@ -80,8 +74,8 @@ struct g {
   struct g_vec {
    g_vm_t *ap;
    g_num typ, type, rank, shape[]; } *nom;
- uintptr_t code;
- struct g_atom *l, *r; } *symbols;
+  uintptr_t code;
+  struct g_atom *l, *r; } *symbols;
  uintptr_t len;
  struct g *pool;
  struct g_root {
@@ -90,17 +84,18 @@ struct g {
  union { uintptr_t t0; g_num *cp; };
  void *(*malloc)(struct g*, size_t),
       (*free)(struct g*, void*);
- union {
 #define g_nvars 16
+ union {
   intptr_t v[g_nvars];
   struct {
-   struct g_tab { g_vm_t *ap; intptr_t typ; uintptr_t len, cap;
-    struct g_kvs { intptr_t key, val; struct g_kvs *next; } **tab;
-   } *dict,
-     *macro;
-   struct g_atom
-    *quote,
-    *lambda;
+   struct g_tab {
+    g_vm_t *ap;
+    intptr_t typ;
+    uintptr_t len, cap;
+    struct g_kvs {
+     intptr_t key, val;
+     struct g_kvs *next; } **tab; } *dict, *macro;
+   struct g_atom *quote, *lambda;
    intptr_t u[]; }; };
  intptr_t end[]; };
 
@@ -115,19 +110,11 @@ struct g_out {
  int (*putc)(struct g*, int, struct g_out*),
      (*flush)(struct g*); };
 
-// some libc functions we use
-int
- strncmp(char const*, char const*, size_t),
- memcmp(void const*, void const*, size_t);
-
-void
- *g_malloc(struct g*, size_t),
- g_free(struct g*, void*),
- *memcpy(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
-
-long
- strtol(char const*restrict, char**restrict, int);
+enum g_status {
+ g_status_ok  = 0,
+ g_status_oom = 1,
+ g_status_err = 2,
+ g_status_eof = 3, } g_fin(struct g*);
 
 g_vm_t g_vm_ret0, g_vm_curry;
 
@@ -144,7 +131,8 @@ int
  gflush(struct g*);
 
 struct g
- *g_inid(void *(*)(struct g*, size_t), void (*)(struct g*, void*)),
+ *g_ini(void),
+ *g_ini_m(void *(*)(struct g*, size_t), void (*)(struct g*, void*)),
  *g_evals_(struct g*, const char*),
  *g_def1(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*),
@@ -153,13 +141,10 @@ struct g
  *gxl(struct g*),
  *gxr(struct g*);
 
-enum g_status gfin(struct g*);
-
-static g_inline struct g *g_ini(void) {
- return g_inid(g_malloc, g_free); }
 
 static g_inline size_t b2w(size_t b) {
- size_t q = b / sizeof(g_num),
-        r = b % sizeof(g_num);
+ size_t
+  q = b / sizeof(g_num),
+  r = b % sizeof(g_num);
  return q + (r ? 1 : 0); }
 #endif

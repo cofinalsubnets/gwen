@@ -13,23 +13,11 @@ g_noinline uintptr_t g_clock(void) {
  int s = clock_gettime(CLOCK_REALTIME, &ts);
  return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
 
-int gputc(struct g*f, int c) {
- return putc(c, stdout); }
-
-int ggetc(struct g*f) {
- return getc(stdin); }
-
-int gungetc(struct g*_, int c) {
- return ungetc(c, stdin); }
-
-int geof(struct g*_) {
- return feof(stdin); }
-
-int gflush(struct g*) {
- return fflush(stdout); }
-
-void *g_malloc(struct g*f, size_t n) { return malloc(n); }
-void g_free(struct g*f, void *p) { free(p); }
+int gputc(struct g*f, int c) { return putc(c, stdout); }
+int ggetc(struct g*f) { return getc(stdin); }
+int gungetc(struct g*_, int c) { return ungetc(c, stdin); }
+int geof(struct g*_) { return feof(stdin); }
+int gflush(struct g*) { return fflush(stdout); }
 
 int main(int argc, char const **argv) {
  struct g *f;

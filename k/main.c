@@ -49,8 +49,6 @@ _L struct limine_efi_system_table_request systbl_req = { .id = LIMINE_EFI_SYSTEM
 _L struct limine_executable_cmdline_request cmdline_req = { .id = LIMINE_EXECUTABLE_CMDLINE_REQUEST, .revision = 0 };
 __attribute__((used, section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER;
-int rand(void);
-void srand(unsigned int);
 
 #define kb_code_lshift 0x2a
 #define kb_code_rshift 0x36
@@ -203,9 +201,6 @@ static void kfree(void *p) {
 
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
-void *g_malloc(struct g*f, size_t n) { return kmallocw(b2w(n)); }
-void g_free(struct g*f, void *x) { kfree(x); }
-
 
 static g_vm(g_kreset) { return k_reset(), f; }
 

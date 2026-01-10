@@ -107,7 +107,7 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.pd = pd;
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
-      K.g = g_defs(g_inid(_malloc, _free), defs);
+      K.g = g_defs(g_ini_m(_malloc, _free), defs);
       if (g_ok(K.g))
         K.mode->ini(),
         pd->system->setUpdateCallback(k_update, NULL);
