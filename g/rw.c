@@ -40,6 +40,7 @@ static int g_r_getc(struct g*f, struct g_in *i) {
    continue; } }
 
 long strtol(char const*restrict, char**restrict, int);
+
 struct g *g_read1(struct g*f, struct g_in* i) {
  if (!g_ok(f)) return f;
  int c = g_r_getc(f, i);
