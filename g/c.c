@@ -104,12 +104,8 @@ g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
   f; }
 
 #define Kp (f->ip)
-//#include <assert.h>
-//#include <stdio.h>
 static Cata(g_c1_yield) {
  uintptr_t l = g_getnum((*c)->len);
-// printf("m=%ld l=%ld\n", m, l);
-// assert(m <= l);
  f = g_have(f, l + Width(struct g_tag));
  if (g_ok(f)) {
   union u *k = bump(f, l + Width(struct g_tag));
@@ -136,12 +132,8 @@ static Cata(g_c1_apn) {
  g_num arity = g_pop1(f);
  f = pull(f, c);
  if (g_ok(f)) {
-  if (g_getnum(arity) == 1) {
-   if (Kp[0].ap == g_vm_ret) Kp[0].ap = g_vm_tap;
-   else Kp -= 1, Kp[0].ap = g_vm_ap; }
-  else {
-   if (Kp[0].ap == g_vm_ret) Kp -= 1, Kp[0].ap = g_vm_tapn, Kp[1].x = arity;
-   else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; } }
+  if (Kp[0].ap == g_vm_ret) Kp -= 1, Kp[0].ap = g_vm_tapn, Kp[1].x = arity;
+  else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; }
  return f; }
 
 static Cata(g_c1_ix_, g_vm_t *i, g_num x) {
