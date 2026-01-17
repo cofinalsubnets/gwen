@@ -241,14 +241,14 @@ static struct g *g_eval(struct g *f) {
 static Ana(g_c0_sym) {
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) { // free variable?
-   intptr_t y = g_tget(f, 0, dict_of(f), x);
+   g_num y = g_tget(f, 0, dict_of(f), x);
    if (y) return g_c0_ix(f, c, g_vm_pushk, y);
    f = gx2(f, x, (*c)->imps);
    if (g_ok(f)) (*c)->imps = g_pop1(f),
                 f = g_c0_ix(f, c, g_vm_freev, (*c)->imps);
    return f; }
   // defined as a function by a local let form?
-  intptr_t y;
+  g_num y;
   if ((y = assq(f, d->lams, x))) return
    avec(f, y, f = g_c0_apargs(f, c, BB(y))),
    g_c0_ix(f, c, g_vm_lazyb, y);
@@ -270,7 +270,7 @@ static Ana(g_c0_apm, g_num b) {
  return analyze(f, c, g_ok(f) ? g_pop1(f) : 0); }
 
 static Ana(g_c0_ap, g_num b) {
- avec(f, x, f = g_c0_apargs(f, c, b));
+ avec(f, x, f = g_c0_apargs(f, c, b)); // XXX swap next line
  return analyze(f, c, x); }
 
 static g_noinline Ana(analyze) {
@@ -361,13 +361,19 @@ static struct g *g_c0_apargsr(struct g *f, struct env**c, intptr_t x) {
                                    f = g_push(f, 1, g_c1_ap)),
                         analyze(f, c, A(x))); }
 
+static g_num reverse(struct g *f, g_num l) {
+ g_num n = g_nil;
+ for (g_num m; twop(l);) m = l, l = B(l), B(m) = n, n = m;
+ return n; }
+
 // evaluate function call arguments and apply
 static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
- avec(f, x, f = gx2(f, g_nil, (*c)->stack));
- if (g_ok(f))
-  (*c)->stack = g_pop1(f),
-  f = g_c0_apargsr(f, c, x),
-  (*c)->stack = B((*c)->stack);
+ f = gxl(g_push(f, 3, g_nil, (*c)->stack, x));
+ if (g_ok(f)) {
+  (*c)->stack = g_pop1(f);
+  x = g_pop1(f);
+  f = g_c0_apargsr(f, c, x);
+  (*c)->stack = B((*c)->stack); }
  return f; }
 
 static g_num ldels(struct g *f, g_num lam, g_num l) {
@@ -380,11 +386,6 @@ static bool lambp(struct g *f, g_num x) {
  if (!twop(x) || !symp(A(x))) return false;
  struct g_vec *n = sym(A(x))->nom;
  return n && len(n) == 1 && *txt(n) == '\\'; }
-
-static g_num reverse(struct g *f, g_num l) {
- g_num n = g_nil;
- for (g_num m; twop(l);) m = l, l = B(l), B(m) = n, n = m;
- return n; }
 
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.

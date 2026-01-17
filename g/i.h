@@ -117,7 +117,12 @@ static g_inline struct g *encode(struct g*f, enum g_status s) {
 
 extern struct g_in g_stdin;
 extern struct g_out g_stdout;
-int gfputx(struct g *f, struct g_out *o, intptr_t x);
+int gfputx(struct g *f, struct g_out *o, g_num x);
+static g_inline g_num gdbg(struct g*f, g_num x) {
+ gfputx(f, &g_stdout, x);
+ gputc(f, '\n');
+ return x; }
+
 struct g
  *g_tnew(struct g*),
  *g_intern(struct g*),
