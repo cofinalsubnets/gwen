@@ -348,23 +348,27 @@ static Ana(g_c0_if) {
  f = g_c0_if_r(f, c, x);
  return g_push(f, 1, g_c1_if_pop_exit); }
 
-static struct g *g_c0_seq(struct g*f, struct env**c, intptr_t a, intptr_t b) {
+static struct g *g_c0_seq(struct g*f, struct env**c, g_num a, g_num b) {
  if (g_ok(f) && twop(b))
   avec(f, a,
    f = g_c0_seq(f, c, A(b), B(b)),
    f = g_c0_i(f, c, g_vm_drop1));
  return analyze(f, c, a); }
 
-static struct g *g_c0_apargsr(struct g *f, struct env**c, intptr_t x) {
- return !twop(x) ? f : (avec(f, x, incl(*c, 1),
-                                   f = g_c0_apargsr(f, c, B(x)),
-                                   f = g_push(f, 1, g_c1_ap)),
-                        analyze(f, c, A(x))); }
 
-static g_num reverse(struct g *f, g_num l) {
- g_num n = g_nil;
- for (g_num m; twop(l);) m = l, l = B(l), B(m) = n, n = m;
- return n; }
+static struct g *g_c0_apn(struct g*f, struct env**c, intptr_t ar) {
+ if (ar == 1) {
+  incl(*c, 1);
+  return g_push(f, 1, g_c1_ap); }
+ else {
+  incl(*c, 2);
+  return g_push(f, 2, g_c1_apn, g_putnum(ar)); } }
+
+static struct g *g_c0_apargsr(struct g *f, struct env**c, g_num x) {
+ if (!twop(x)) return f;
+ avec(f, x, f = g_c0_apargsr(f, c, B(x)),
+            f = g_c0_apn(f, c, 1));
+ return analyze(f, c, A(x)); }
 
 // evaluate function call arguments and apply
 static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
@@ -387,12 +391,17 @@ static bool lambp(struct g *f, g_num x) {
  struct g_vec *n = sym(A(x))->nom;
  return n && len(n) == 1 && *txt(n) == '\\'; }
 
+static g_num reverse(struct g *f, g_num l) {
+ g_num n = g_nil;
+ for (g_num m; twop(l);) m = l, l = B(l), B(m) = n, n = m;
+ return n; }
+
 // this is the longest function in the whole C implementation :(
 // it handles the let special form in a way to support sequential and recursive binding.
 static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  if (!twop(B(exp))) return analyze(f, b, A(exp));
  struct g_root *mm = f->root;
-#define forget() ((f)->root=(mm),f)
+#define forget() (g_core_of(f)->root=(mm),f)
  MM(f, &exp);
  f = enscope(f, *b, (*b)->args, (*b)->imps);
  if (!g_ok(f)) return forget();
@@ -458,18 +467,13 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  exp = g_pop1(f);
 
  // all the code emissions are below here (??)
- incl(*b, 2);
- intptr_t ll = llen(nom);
- f = ll > 1 ? g_push(f, 2, g_c1_apn, gputnum(ll)) :
-              g_push(f, 1, g_c1_ap);
+ f = g_c0_apn(f, b, llen(nom));
  f = gx2(f, g_nil, (*b)->stack); // push function stack rep
  (*b)->stack = g_pop1(f);
  nom = reverse(f, nom); // put in literal order
  for (v = nom; g_ok(f) && twop(B(v)); v = B(v)) { // push initial variable stack reps
   f = gx2(f, A(v), (*b)->stack);
   if (g_ok(f)) (*b)->stack = g_pop1(f); }
-
-
  nom = reverse(f, nom); // back to reverse order
  for (; twop(nom); nom = B(nom), def = B(def)) {
   if (lambp(f, A(def))) {
@@ -482,7 +486,6 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
    if (!g_ok(f)) return forget(); }
   f = analyze(f, b, A(def));
   (*b)->stack = B((*b)->stack); }
-
  f = analyze(f, b, exp);
  return forget(); }
 
