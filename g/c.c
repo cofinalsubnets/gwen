@@ -24,7 +24,7 @@ struct env {
 typedef Ana(ana);
 typedef Cata(cata);
 static ana analyze, g_c0_if, g_c0_let, g_c0_apargs;
-static cata pull, g_c1_i, g_c1_ix, g_c1_var, g_c1_ap, g_c1_yield, g_c1_ret;
+static cata pull, g_c1_i, g_c1_ix, g_c1_var, g_c1_ap, g_c1_yield, g_c1_ret, g_c1_alloc;
 
 #define incl(e, n) ((e)->len += ((n)<<1))
 // generic instruction ana handlers
@@ -100,11 +100,12 @@ g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
    avec(f, x,
     f = g_c0_ix(f, &c, y, word(f->ip))),
    f = analyze(f, &c, x),
+   f = g_c1_alloc(f, &c),
    f = pull(f, &c)),
   f; }
 
 #define Kp (f->ip)
-static Cata(g_c1_yield) {
+static Cata(g_c1_alloc) {
  uintptr_t l = g_getnum((*c)->len);
  f = g_have(f, l + Width(struct g_tag));
  if (g_ok(f)) {
@@ -114,6 +115,9 @@ static Cata(g_c1_yield) {
   t->head = k;
   memset(k, -1, l * sizeof(g_num));
   Kp = k + l; }
+ return f; }
+
+static Cata(g_c1_yield) {
  return f; }
 
 static Cata(g_c1_if_pop_exit) {
@@ -279,7 +283,9 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
   f = analyze(f, &d, exp),
   f = g_push(f, 2, g_c1_curry, d),
   ip = f->ip,
-  avec(f, ip, f = pull(f, &d));
+  avec(f, ip,
+   f = g_c1_alloc(f, &d),
+   f = pull(f, &d));
 
  if (g_ok(f))
   k = f->ip,
@@ -339,7 +345,8 @@ static Ana(g_c0_if) {
  if (!twop(B(x))) return analyze(f, c, A(x));
  return
   avec(f, x, f = g_push(f, 1, g_c1_if_push_exit)),
-  g_push(g_c0_if_r(f, c, x), 1, g_c1_if_pop_exit); }
+  f = g_c0_if_r(f, c, x),
+  g_push(f, 1, g_c1_if_pop_exit); }
 
 static struct g *g_c0_seq(struct g*f, struct env**c, intptr_t a, intptr_t b) {
  if (g_ok(f) && twop(b))
@@ -449,6 +456,7 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  if (!g_ok(f)) return forget();
  exp = g_pop1(f);
 
+ // all the code emissions are below here (??)
  intptr_t ll = llen(nom);
  f = ll > 1 ? (incl(*b, 2), g_push(f, 2, g_c1_apn, gputnum(ll))) :
               (incl(*b, 1), g_push(f, 1, g_c1_ap));
