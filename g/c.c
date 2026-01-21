@@ -83,6 +83,7 @@ static size_t llen(g_num l) {
  while (twop(l)) n++, l = B(l);
  return n; }
 
+#define rrr 0
 static struct g
  *g_c0_lambda(struct g*, struct env**, g_num, g_num),
  *g_c0_seq(struct g*, struct env**, g_num);
@@ -95,16 +96,18 @@ g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
  g_num x = f->sp[0];
  return
   f->sp[0] = (g_num) g_c1_yield,
-   // XXX reverse
-   // avec(f, c,
-   // f = analyze(f, &c, x),
-   // f = g_c0_ix(f, &c, y, word(f->ip)),
-   // f = g_c1(f, &c)),
+#if rrr
+    avec(f, c,
+    f = analyze(f, &c, x),
+    f = g_c0_ix(f, &c, y, word(f->ip)),
+    f = g_c1(f, &c)),
+#else
   avec(f, c,
    avec(f, x,
     f = g_c0_ix(f, &c, y, word(f->ip))),
    f = analyze(f, &c, x),
    f = g_c1(f, &c)),
+#endif
   f; }
 
 #define Kp (f->ip)
@@ -120,33 +123,58 @@ static Cata(g_c1) {
   Kp = k + l; }
  return pull(f, c); }
 
+
 static Cata(g_c1_yield) {
  return f; }
 
 static Cata(g_c1_if_pop_exit) {
+#if !rrr
   f = pull(f, c);
+#endif
   (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
+#if rrr
+  return pull(f, c); }
+#else
   return f; }
+#endif
 
 static Cata(g_c1_ap) {
+#if !rrr
  f = pull(f, c);
+#endif
  if (Kp[0].ap == g_vm_ret) Kp[0].ap = g_vm_tap;
  else Kp -= 1, Kp[0].ap = g_vm_ap;
+#if rrr
+ return pull(f, c); }
+#else
  return f; }
+#endif
 
 static Cata(g_c1_apn) {
  g_num arity = g_pop1(f);
+#if !rrr
  f = pull(f, c);
+#endif
  if (Kp[0].ap == g_vm_ret) Kp -= 1, Kp[0].ap = g_vm_tapn, Kp[1].x = arity;
  else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity;
+#if rrr
+ return pull(f, c); }
+#else
  return f; }
+#endif
 
 static Cata(g_c1_ix_, g_vm_t *i, g_num x) {
+#if !rrr
  avec(f, x, f = pull(f, c));
+#endif
  Kp -= 2,
  Kp[0].ap = i,
  Kp[1].x = x;
+#if rrr
+ return pull(f, c); }
+#else
  return f; }
+#endif
 
 static Cata(g_c1_var_2) {
  g_num var = g_pop1(f),
@@ -173,9 +201,15 @@ static g_inline Cata(pull) {
 
 static Cata(g_c1_i) {
  g_vm_t *i = (g_vm_t*) g_pop1(f);
+#if !rrr
  f = pull(f, c);
+#endif
  Kp -= 1, Kp[0].ap = i;
+#if rrr
+ return pull(f, c); }
+#else
  return f; }
+#endif
 
 static Cata(g_c1_ix) {
  g_vm_t *i = (g_vm_t*) g_pop1(f);
@@ -194,28 +228,48 @@ static Cata(g_c1_ret) {
  return g_c1_ix_(f, c, g_vm_ret, gputnum(ar)); }
 
 static Cata(g_c1_if_push_branch) {
+#if !rrr
  f = pull(f, c);
+#endif
  f = gx2(f, (g_num) Kp, (*c)->alts);
  if (g_ok(f)) (*c)->alts = g_pop1(f);
+#if rrr
+ return pull(f, c); }
+#else
  return f; }
+#endif
 
 static Cata(g_c1_if_push_exit) {
+#if !rrr
  f = pull(f, c);
+#endif
  f = gx2(f, (g_num) Kp, (*c)->ends);
  if (g_ok(f)) (*c)->ends = g_pop1(f);
+#if rrr
+ return pull(f, c);
+#else
  return f; }
+#endif
 
 
 static Cata(g_c1_if_pop_branch) {
+#if !rrr
  f = pull(f, c);
+#endif
  Kp -= 2,
  Kp[0].ap = g_vm_cond,
  Kp[1].x = A((*c)->alts);
  (*c)->alts = B((*c)->alts);
+#if rrr
+ return pull(f, c); }
+#else
  return f; }
+#endif
 
 static Cata(g_c1_if_jump_out) {
+#if !rrr
  f = pull(f, c);
+#endif
  union u *a = cell(A((*c)->ends));
  if (a->ap == g_vm_ret || a->ap == g_vm_tap)
   Kp = memcpy(Kp - 2, a, 2 * sizeof(g_num));
@@ -225,7 +279,11 @@ static Cata(g_c1_if_jump_out) {
   Kp -= 2,
   Kp[0].ap = g_vm_jump,
   Kp[1].x = (g_num) a;
+#if rrr
+ return pull(f, c); }
+#else
  return f; }
+#endif
 
 static struct g *g_eval(struct g *f) {
  f = g_c0(f, g_vm_yieldk);
@@ -248,11 +306,13 @@ static Ana(g_c0_sym) {
   // defined as a function by a local let form?
   g_num y;
   if ((y = assq(f, d->lams, x))) {
-   // XXX reverse
-   // avec(f, y, f = g_c0_ix(f, c, g_vm_lazyb, y));
-   // return g_c0_apargs(f, c, BB(y)); }
+#if rrr
+    avec(f, y, f = g_c0_ix(f, c, g_vm_lazyb, y));
+    return g_c0_apargs(f, c, BB(y)); }
+#else
    avec(f, y, f = g_c0_apargs(f, c, BB(y)));
    return g_c0_ix(f, c, g_vm_lazyb, y); }
+#endif
   // non function definition from local let form?
   if (memq(f, d->stack, x)) {
    incl(*c,2);
@@ -271,11 +331,13 @@ static Ana(g_c0_apm, g_num b) {
  return analyze(f, c, g_ok(f) ? g_pop1(f) : 0); }
 
 static Ana(g_c0_ap, g_num b) {
- // XXX reverse
- // avec(f, b, f = analyze(f, c, x));
- // return g_c0_apargs(f, c, b); }
+#if rrr
+  avec(f, b, f = analyze(f, c, x));
+  return g_c0_apargs(f, c, b); }
+#else
  avec(f, x, f = g_c0_apargs(f, c, b));
  return analyze(f, c, x); }
+#endif
 
 static g_noinline Ana(analyze) {
  if (!g_ok(f)) return f; // error...
@@ -320,13 +382,15 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
   f->sp[0] = word(g_c1_yield);
   incl(d, 4);
 
-  // XXX reverse
-  // f = g_push(f, 3, exp, g_c1_curry, d);
-  // f = analyze(f, &d, g_ok(f) ? g_pop1(f) : 0);
-  // f = g_push(f, 2, g_c1_ret, d);
+#if rrr
+   f = g_push(f, 3, exp, g_c1_curry, d);
+   f = analyze(f, &d, g_ok(f) ? g_pop1(f) : g_nil);
+   f = g_push(f, 2, g_c1_ret, d);
+#else
   avec(f, exp, f = g_push(f, 2, g_c1_ret, d));
   f = analyze(f, &d, exp);
   f = g_push(f, 2, g_c1_curry, d);
+#endif
 
   ip = f->ip;
   avec(f, ip, f = g_c1(f, &d)); }
@@ -342,54 +406,63 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
 static Ana(g_c0_if_r) {
  incl(*c, 5);
  if (!twop(x)) {
-  // XXX reverse
-  // f = analyze(f, c, g_nil);
-  // return g_push(ff, 1, g_c1_if_jump_out); }
+#if rrr
+   f = analyze(f, c, g_nil);
+   return g_push(ff, 1, g_c1_if_jump_out); }
+#else
   f = g_push(f, 1, g_c1_if_jump_out);
   return analyze(f, c, g_nil); }
+#endif
  if (!twop(B(x))) {
-  // XXX reverse
-  // f = analyze(f, c, A(x));
-  // return g_push(f, 1, g_c1_if_jump_out); }
+#if rrr
+   f = analyze(f, c, A(x));
+   return g_push(f, 1, g_c1_if_jump_out); }
+#else
   f = g_push(f, 2, A(x), g_c1_if_jump_out);
   return analyze(f, c, g_pop1(f)); }
-  // reverse
-  // avec(f, x,
-  // f = analyze(f, c, A(x)),
-  // f = g_push(f, 1, g_c1_if_pop_branch),
-  // f = analyze(f, c, AB(x)),
-  // f = g_push(f, 2, g_c1_if_jump_out, g_c1_push_branch));
-  // return g_c0_if_r(f, c, BB(x)); }
+#endif
+#if rrr
+   avec(f, x,
+   f = analyze(f, c, A(x)),
+   f = g_push(f, 1, g_c1_if_pop_branch),
+   f = analyze(f, c, AB(x)),
+   f = g_push(f, 2, g_c1_if_jump_out, g_c1_push_branch));
+   return g_c0_if_r(f, c, BB(x)); }
+#else
  avec(f, x,
   f = g_c0_if_r(f, c, BB(x)),
   f = g_push(f, 2, g_c1_if_jump_out, g_c1_if_push_branch),
   f = analyze(f, c, AB(x)),
   f = g_push(f, 1, g_c1_if_pop_branch));
  return analyze(f, c, A(x)); }
+#endif
 
 static Ana(g_c0_if) {
  if (!twop(B(x))) return analyze(f, c, A(x));
- // XXX reverse
- // f = g_push(f, 2, x, g_c1_pop_exit);
- // f = g_c0_if_r(f, c, g_ok(f) ? g_pop1(f) : 0);
- // return g_push(f, 1, g_c1_if_push_exit); }
+#if rrr
+  f = g_push(f, 2, x, g_c1_pop_exit);
+  f = g_c0_if_r(f, c, g_ok(f) ? g_pop1(f) : 0);
+  return g_push(f, 1, g_c1_if_push_exit); }
+#else
  avec(f, x, f = g_push(f, 1, g_c1_if_push_exit));
  f = g_c0_if_r(f, c, x);
  return g_push(f, 1, g_c1_if_pop_exit); }
+#endif
 
 static struct g *g_c0_seq(struct g*f, struct env**c, g_num b) {
- // XXX reverse
- //
- // MM(f, &b);
- // while (twop(B(b)))
- //  f = analyze(f, c, A(b)),
- //  f = g_c0_i(f, c, g_vm_drop1),
- //  b = B(b);
- // UM(f);
- //
+#if rrr
+  MM(f, &b);
+  while (twop(B(b)))
+   f = analyze(f, c, A(b)),
+   f = g_c0_i(f, c, g_vm_drop1),
+   b = B(b);
+  UM(f);
+#else
+ 
  if (twop(B(b))) {
   avec(f, b, f = g_c0_seq(f, c, B(b)));
   f = g_c0_i(f, c, g_vm_drop1); }
+#endif
 
  return analyze(f, c, A(b)); }
 
@@ -399,7 +472,6 @@ static struct g *g_c0_apn(struct g*f, struct env**c, intptr_t ar) {
   g_push(f, 1, g_c1_ap) :
   g_push(f, 2, g_c1_apn, g_putnum(ar)); }
 
-// XXX reverse
 static struct g *g_c0_apargsl(struct g *f, struct env**c, g_num x) {
  MM(f, &x);
  while (twop(x))
@@ -408,6 +480,7 @@ static struct g *g_c0_apargsl(struct g *f, struct env**c, g_num x) {
   x = B(x);
  UM(f);
  return f; }
+
 static struct g *g_c0_apargsr(struct g *f, struct env**c, g_num x) {
  if (!twop(x)) return f;
  avec(f, x, f = g_c0_apargsr(f, c, B(x)),
@@ -419,7 +492,11 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
  if (g_ok(f)) {
   (*c)->stack = g_pop1(f);
   x = g_pop1(f);
+#if rrr
+  f = g_c0_apargsl(f, c, x);
+#else
   f = g_c0_apargsr(f, c, x);
+#endif
   (*c)->stack = B((*c)->stack); }
  return f; }
 
@@ -525,14 +602,17 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  f = gx2(f, g_nil, (*b)->stack); // push function stack rep
  (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
 
- // XXX reverse
- // f = analyze(f, b, exp);
- // nom = reverse(f, nom), def = reverse(f, def);
- // for (; twop(nom); nom = B(nom), def = B(def))
- //  f = analyze(f, b, A(def)),
- //  f = global_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
- //  f = gx2(f, A(nom), (*b)->stack),
- //  (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
+#if rrr
+  f = analyze(f, b, exp);
+  nom = reverse(f, nom), def = reverse(f, def);
+  for (; twop(nom); nom = B(nom), def = B(def))
+   f = analyze(f, b, A(def)),
+   f = global_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
+   f = gx2(f, A(nom), (*b)->stack),
+   (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
+  f = g_c0_apn(f, b, ll);
+#else
+
  f = g_c0_apn(f, b, ll);
  nom = reverse(f, nom); // put in literal order
  for (v = nom; g_ok(f) && twop(B(v)); v = B(v)) // push initial variable stack reps
@@ -543,10 +623,8 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
   f = global_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
   f = analyze(f, b, A(def)),
   (*b)->stack = B((*b)->stack);
-
- // XXX reverse
- // f = g_c0_apn(f, b, ll);
  f = analyze(f, b, exp);
+#endif
  return forget(); }
 
 
