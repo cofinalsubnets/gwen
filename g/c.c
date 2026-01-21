@@ -85,7 +85,7 @@ static size_t llen(g_num l) {
 
 static struct g
  *g_c0_lambda(struct g*, struct env**, g_num, g_num),
- *g_c0_seq(struct g*, struct env**, g_num, g_num);
+ *g_c0_seq(struct g*, struct env**, g_num);
 
 // don't inline this so callers can tail call optimize
 g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
@@ -287,7 +287,7 @@ static g_noinline Ana(analyze) {
  if (symp(a) && nom(a)->nom && len(nom(a)->nom) == 1) switch (*txt(nom(a)->nom)) {
   case '`': return g_c0_ix(f, c, g_vm_pushk, !twop(b) ? b : A(b));
   case ':': return g_c0_let(f, c, b);
-  case ',': return g_c0_seq(f, c, A(b), B(b));
+  case ',': return g_c0_seq(f, c, b);
   case '?': return g_c0_if(f, c, b);
   case '\\': return f = g_c0_lambda(f, c, g_nil, b),
                     analyze(f, c, g_ok(f) ? g_pop1(f) : 0); }
@@ -358,7 +358,7 @@ static Ana(g_c0_if_r) {
   // f = analyze(f, c, A(x)),
   // f = g_push(f, 1, g_c1_if_pop_branch),
   // f = analyze(f, c, AB(x)),
-  // f = g_push(f, 2, g_c1_if_push_branch, g_c1_if_jump_out));
+  // f = g_push(f, 2, g_c1_if_jump_out, g_c1_push_branch));
   // return g_c0_if_r(f, c, BB(x)); }
  avec(f, x,
   f = g_c0_if_r(f, c, BB(x)),
@@ -377,16 +377,21 @@ static Ana(g_c0_if) {
  f = g_c0_if_r(f, c, x);
  return g_push(f, 1, g_c1_if_pop_exit); }
 
-static struct g *g_c0_seq(struct g*f, struct env**c, g_num a, g_num b) {
+static struct g *g_c0_seq(struct g*f, struct env**c, g_num b) {
  // XXX reverse
- // avec(f, b, f = analyze(f, c, a), f = g_c0_i(f, c, g_vm_drop1));
- // return g_ok(f) && twop(b) ? g_c0_seq(f, c, A(b), B(b)) : f }
- if (g_ok(f) && twop(b))
-  avec(f, a,
-   f = g_c0_seq(f, c, A(b), B(b)),
-   f = g_c0_i(f, c, g_vm_drop1));
- return analyze(f, c, a); }
+ //
+ // MM(f, &b);
+ // while (twop(B(b)))
+ //  f = analyze(f, c, A(b)),
+ //  f = g_c0_i(f, c, g_vm_drop1),
+ //  b = B(b);
+ // UM(f);
+ //
+ if (twop(B(b))) {
+  avec(f, b, f = g_c0_seq(f, c, B(b)));
+  f = g_c0_i(f, c, g_vm_drop1); }
 
+ return analyze(f, c, A(b)); }
 
 static struct g *g_c0_apn(struct g*f, struct env**c, intptr_t ar) {
  incl(*c, 2);
