@@ -398,12 +398,12 @@ static g_vm(gputs) {
          Continue(); }
 
 static g_vm(g_vm_getc) {
-  Pack(f);
-  int i = ggetc(f);
-  Unpack(f);
-  Sp[0] = gputnum(i);
-  Ip += 1;
-  return Continue(); }
+ Pack(f);
+ int i = ggetc(f);
+ Unpack(f);
+ Sp[0] = gputnum(i);
+ Ip += 1;
+ return Continue(); }
 
 #define S1(i) {{i}, {g_vm_ret0}}
 #define S2(i) {{g_vm_curry},{.x=gputnum(2)},{i}, {g_vm_ret0}}
@@ -461,42 +461,6 @@ g_noinline struct g *g_ini_m(
  f = g_defs(f, defs);
  f = g_defs(f, g_defs0);
  return f; }
-
-g_vm(g_vm_seek) { return
- Sp[1] = word(cell(Sp[1]) + ggetnum(Sp[0])),
- Sp += 1,
- Ip += 1,
- Continue(); }
-
-g_vm(g_vm_peek) { return
- Sp[0] = cell(Sp[0])->x,
- Ip += 1,
- Continue(); }
-
-g_vm(g_vm_poke) { return
- cell(Sp[1])->x = Sp[0],
- Sp += 1,
- Ip += 1,
- Continue(); }
-
-g_vm(thda) {
- size_t n = ggetnum(Sp[0]);
- Have(n + Width(struct g_tag));
- union u *k = (union u*) Hp;
- struct g_tag *t = (struct g_tag*) (k + n);
- Hp += n + Width(struct g_tag);
- t->null = NULL;
- t->head = k;
- memset(k, -1, n * sizeof(g_word));
- Sp[0] = word(k);
- Ip += 1;
- return Continue(); }
-
-g_vm(trim) {
- union u *k = cell(Sp[0]);
- return ttag(k)->head = k,
-        Ip += 1,
-        Continue(); }
 
 static struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
  uintptr_t len = vt_size[type];
