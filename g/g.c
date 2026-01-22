@@ -132,11 +132,6 @@ g_vm(g_vm_pushk) {
  Ip += 2;
  return Continue(); }
 
-g_vm(g_vm_yieldk) { return
- Ip = Ip[1].m,
- Pack(f),
- encode(f, g_status_yield); }
-
 g_vm(g_vm_eval) { return
  Ip++,
  Pack(f),

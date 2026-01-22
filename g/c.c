@@ -22,7 +22,7 @@ struct env {
 #define Cata(n, ...) struct g *n(struct g *f, struct env **c, ##__VA_ARGS__)
 typedef Ana(ana);
 typedef Cata(cata);
-static ana analyze, g_c0_if, g_c0_let, g_c0_apargs;
+static ana analyze, g_c0_let, g_c0_apargs;
 static cata g_c1_i, g_c1_ix, g_c1_var, g_c1_yield, g_c1_ret, g_c1;
 static g_inline Cata(pull) { return ((cata*) g_pop1(f))(f, c); }
 
@@ -98,12 +98,12 @@ g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
  return
   f->sp[0] = (g_num) g_c1_yield,
   avec(f, c,
-#if rrr
-   f = analyze(f, &c, x),
-   f = g_c0_ix(f, &c, y, word(f->ip)),
-#else
+#if !rrr
    avec(f, x, f = g_c0_ix(f, &c, y, word(f->ip))),
+#endif
    f = analyze(f, &c, x),
+#if rrr
+   f = g_c0_ix(f, &c, y, word(f->ip)),
 #endif
    f = g_c1(f, &c)),
   f; }
@@ -125,33 +125,31 @@ static Cata(g_c1) {
 static Cata(g_c1_yield) {
  return f; }
 
-static Cata(g_c1_if_pop_exit) {
+static Cata(g_c1_cond_pop_exit) {
 #if !rrr
   f = pull(f, c);
 #endif
   (*c)->ends = B((*c)->ends); // pops cond expression exit address off env stack ends
 #if rrr
-  return pull(f, c); }
-#else
-  return f; }
+  f = pull(f, c);
 #endif
+  return f; }
 
 static Cata(g_c1_apn) {
  g_num arity = g_pop1(f);
 #if !rrr
  f = pull(f, c);
 #endif
- if (g_getnum(arity) > 1) {
-  if (Kp[0].ap == g_vm_ret) Kp -= 1, Kp[0].ap = g_vm_tapn, Kp[1].x = arity;
-  else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; }
- else {
+ if (g_getnum(arity) == 1) {
   if (Kp[0].ap == g_vm_ret) Kp[0].ap = g_vm_tap;
   else Kp -= 1, Kp[0].ap = g_vm_ap; }
+ else {
+  if (Kp[0].ap == g_vm_ret) Kp -= 1, Kp[0].ap = g_vm_tapn, Kp[1].x = arity;
+  else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; }
 #if rrr
- return pull(f, c); }
-#else
- return f; }
+ f = pull(f, c);
 #endif
+ return f; }
 
 static Cata(g_c1_ix_, g_vm_t *i, g_num x) {
 #if !rrr
@@ -161,10 +159,9 @@ static Cata(g_c1_ix_, g_vm_t *i, g_num x) {
  Kp[0].ap = i,
  Kp[1].x = x;
 #if rrr
- return pull(f, c); }
-#else
- return f; }
+ f = pull(f, c);
 #endif
+ return f; }
 
 static Cata(g_c1_var_2) {
  g_num var = g_pop1(f),
@@ -177,13 +174,13 @@ static Cata(g_c1_var_2) {
 
 // emit stack g_vm_pushrerence instruction
 static Cata(g_c1_var) {
- g_num l, v = g_pop1(f), // variable name
+ g_num l, v = g_pop1(f),
           i = llen(g_pop1(f)); // stack inset
  for (l = (*c)->imps; !nilp(l); l = B(l), i++)
-  if (eql(f, v, A(l))) goto out;
+  if (eql(f, v, A(l))) goto end;
  for (l = (*c)->args; !nilp(l); l = B(l), i++)
-  if (eql(f, v, A(l))) goto out;
-out:
+  if (eql(f, v, A(l))) goto end;
+end:
  return g_c1_ix_(f, c, g_vm_pushr, gputnum(i)); }
 
 
@@ -194,10 +191,9 @@ static Cata(g_c1_i) {
 #endif
  Kp -= 1, Kp[0].ap = i;
 #if rrr
- return pull(f, c); }
-#else
- return f; }
+ f = pull(f, c);
 #endif
+ return f; }
 
 static Cata(g_c1_ix) {
  g_vm_t *i = (g_vm_t*) g_pop1(f);
@@ -215,32 +211,30 @@ static Cata(g_c1_ret) {
  uintptr_t ar = llen(e->args) + llen(e->imps);
  return g_c1_ix_(f, c, g_vm_ret, gputnum(ar)); }
 
-static Cata(g_c1_if_push_branch) {
+static Cata(g_c1_cond_push_branch) {
 #if !rrr
  f = pull(f, c);
 #endif
  f = gx2(f, (g_num) Kp, (*c)->alts);
- if (g_ok(f)) (*c)->alts = g_pop1(f);
+ (*c)->alts = g_ok(f) ? g_pop1(f) : g_nil;
 #if rrr
- return pull(f, c); }
-#else
- return f; }
+ f = pull(f, c);
 #endif
+ return f; }
 
-static Cata(g_c1_if_push_exit) {
+static Cata(g_c1_cond_push_exit) {
 #if !rrr
  f = pull(f, c);
 #endif
  f = gx2(f, (g_num) Kp, (*c)->ends);
- if (g_ok(f)) (*c)->ends = g_pop1(f);
+ (*c)->ends = g_ok(f) ? g_pop1(f) : g_nil;
 #if rrr
- return pull(f, c); }
-#else
- return f; }
+ f = pull(f, c);
 #endif
+ return f; }
 
 
-static Cata(g_c1_if_pop_branch) {
+static Cata(g_c1_cond_pop_branch) {
 #if !rrr
  f = pull(f, c);
 #endif
@@ -249,38 +243,40 @@ static Cata(g_c1_if_pop_branch) {
  Kp[1].x = A((*c)->alts);
  (*c)->alts = B((*c)->alts);
 #if rrr
- return pull(f, c); }
-#else
- return f; }
+ f = pull(f, c);
 #endif
+ return f; }
 
-static Cata(g_c1_if_jump_out) {
+static Cata(g_c1_cond_exit) {
 #if !rrr
  f = pull(f, c);
 #endif
  union u *a = cell(A((*c)->ends));
  if (a->ap == g_vm_ret || a->ap == g_vm_tap)
-  Kp = memcpy(Kp - 2, a, 2 * sizeof(g_num));
+  Kp = memcpy(Kp - 2, a, 2 * sizeof(*Kp));
  else if (a->ap == g_vm_tapn)
-  Kp = memcpy(Kp - 3, a, 3 * sizeof(g_num));
+  Kp = memcpy(Kp - 3, a, 3 * sizeof(*Kp));
  else
-  Kp -= 2,
-  Kp[0].ap = g_vm_jump,
-  Kp[1].x = (g_num) a;
+  Kp -= 2, Kp[0].ap = g_vm_jump, Kp[1].x = (g_num) a;
 #if rrr
- return pull(f, c); }
-#else
- return f; }
+ f = pull(f, c);
 #endif
+ return f; }
+
+static g_vm(g_vm_yieldk) { return
+ Ip = Ip[1].m,
+ Pack(f),
+ encode(f, g_status_yield); }
 
 static struct g *g_eval(struct g *f) {
  f = g_c0(f, g_vm_yieldk);
 #if g_tco
- return g_ok(f) ? f->ip->ap(f, f->ip, f->hp, f->sp) : f; }
+ if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
 #else
  while (g_ok(f)) f = f->ip->ap(f);
- return g_code_of(f) == g_status_eof ? g_core_of(f) : f; }
+ if (g_code_of(f) == g_status_eof) f = g_core_of(f);
 #endif
+ return f; }
 
 static Ana(g_c0_sym) {
  for (struct env *d = *c;; d = d->par) {
@@ -295,12 +291,13 @@ static Ana(g_c0_sym) {
   g_num y;
   if ((y = assq(f, d->lams, x))) {
 #if rrr
-    avec(f, y, f = g_c0_ix(f, c, g_vm_lazyb, y));
-    return g_c0_apargs(f, c, BB(y)); }
+   avec(f, y, f = g_c0_ix(f, c, g_vm_lazyb, y));
+   f = g_c0_apargs(f, c, BB(y));
 #else
    avec(f, y, f = g_c0_apargs(f, c, BB(y)));
-   return g_c0_ix(f, c, g_vm_lazyb, y); }
+   f = g_c0_ix(f, c, g_vm_lazyb, y);
 #endif
+   return f; }
   // non function definition from local let form?
   if (memq(f, d->stack, x)) {
    incl(*c, 2);
@@ -312,6 +309,7 @@ static Ana(g_c0_sym) {
     x = g_ok(f) ? A((*c)->imps = g_pop1(f)) : g_nil; }
    incl(*c, 2);
    return g_push(f, 3, g_c1_var, x, (*c)->stack); } } }
+static Ana(g_c0_cond_r);
 
 static g_noinline Ana(analyze) {
  if (!g_ok(f)) return f; // error...
@@ -322,23 +320,36 @@ static g_noinline Ana(analyze) {
  if (!twop(b)) return analyze(f, c, a); // value of first element
  if (symp(a) && nom(a)->nom && len(nom(a)->nom) == 1) switch (*txt(nom(a)->nom)) {
   case '`': return g_c0_ix(f, c, g_vm_pushk, !twop(b) ? b : A(b));
-  case ':': return g_c0_let(f, c, b);
   case ',': return g_c0_seq(f, c, b);
-  case '?': return g_c0_if(f, c, b);
-  case '\\': return f = g_c0_lambda(f, c, g_nil, b),
-                    analyze(f, c, g_ok(f) ? g_pop1(f) : 0); }
-
- if ((x = g_tget(f, 0, f->macro, a))) {
-  f = g_push(f, 5, b, g_nil ,f->quote, g_nil, x);
-  f = g_eval(gxr(gxl(gxr(gxl(f)))));
-  return analyze(f, c, g_ok(f) ? g_pop1(f) : 0); }
+  case '?': return !twop(B(b)) ? analyze(f, c, A(b)) :
 #if rrr
-  avec(f, b, f = analyze(f, c, a));
-  return g_c0_apargs(f, c, b); }
+   (f = g_push(f, 2, b, g_c1_cond_pop_exit),
+    f = g_c0_cond_r(f, c, g_ok(f) ? g_pop1(f) : g_nil),
+    g_push(f, 1, g_c1_cond_push_exit));
 #else
- avec(f, a, f = g_c0_apargs(f, c, b));
- return analyze(f, c, a); }
+   (f = g_push(f, 2, b, g_c1_cond_push_exit),
+    f = g_c0_cond_r(f, c, g_ok(f) ? g_pop1(f) : g_nil),
+    g_push(f, 1, g_c1_cond_pop_exit));
 #endif
+  case '\\':
+   f = g_c0_lambda(f, c, g_nil, b);
+   return analyze(f, c, g_ok(f) ? g_pop1(f) : 0);
+  case ':': return g_c0_let(f, c, b); }
+
+ if ((x = g_tget(f, 0, f->macro, a))) return
+  f = g_push(f, 5, b, g_nil ,f->quote, g_nil, x),
+  f = g_eval(gxr(gxl(gxr(gxl(f))))),
+  analyze(f, c, g_ok(f) ? g_pop1(f) : 0);
+ 
+ return
+#if rrr
+  avec(f, b, f = analyze(f, c, a)),
+  f = g_c0_apargs(f, c, b),
+#else
+  avec(f, a, f = g_c0_apargs(f, c, b)),
+  f = analyze(f, c, a),
+#endif
+  f; }
 
 
 static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp) {
@@ -386,49 +397,39 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
 
  return UM(f), f; }
 
-static Ana(g_c0_if_r) {
- incl(*c, 5);
+static Ana(g_c0_cond_exit) {
+ incl(*c, 3);
 #if rrr
- for (MM(f, &x);; x = BB(x)) {
-  if (!twop(x)) return UM(f),
-   f = analyze(f, c, g_nil),
-   g_push(f, 1, g_c1_if_jump_out);
-  if (!twop(B(x))) return UM(f),
-   f = analyze(f, c, A(x)),
-   g_push(f, 1, g_c1_if_jump_out);
-  avec(f, x,
-   f = analyze(f, c, A(x)),
-   f = g_push(f, 1, g_c1_if_pop_branch),
-   f = analyze(f, c, AB(x)),
-   f = g_push(f, 1, g_c1_if_jump_out),
-   f = g_push(f, 1, g_c1_if_push_branch)); } }
+ return g_push(analyze(f, c, x), 1, g_c1_cond_exit); }
 #else
- if (!twop(x)) return
-  f = g_push(f, 1, g_c1_if_jump_out),
-  analyze(f, c, g_nil);
- if (!twop(B(x))) return
-  f = g_push(f, 2, A(x), g_c1_if_jump_out),
-  analyze(f, c, g_pop1(f)); 
- avec(f, x,
-  f = g_c0_if_r(f, c, BB(x)),
-  f = g_push(f, 1, g_c1_if_push_branch),
-  f = g_push(f, 1, g_c1_if_jump_out),
-  f = analyze(f, c, AB(x)),
-  f = g_push(f, 1, g_c1_if_pop_branch));
- return analyze(f, c, A(x)); }
+ avec(f, x, f = g_push(f, 1, g_c1_cond_exit));
+ return analyze(f, c, x); }
 #endif
 
-static Ana(g_c0_if) {
- if (!twop(B(x))) return analyze(f, c, A(x));
+static Ana(g_c0_cond_r) {
 #if rrr
- f = g_push(f, 2, x, g_c1_if_pop_exit);
- f = g_c0_if_r(f, c, g_ok(f) ? g_pop1(f) : g_nil);
- return g_push(f, 1, g_c1_if_push_exit); }
+ for (MM(f, &x);; x = BB(x))
+  if (!twop(x)) return UM(f), g_c0_cond_exit(f, c, g_nil);
+  else if (!twop(B(x))) return UM(f), g_c0_cond_exit(f, c, A(x));
+  else
+   incl(*c, 5),
+   f = analyze(f, c, A(x)),
+   f = g_push(f, 1, g_c1_cond_pop_branch),
+   f = g_c0_cond_exit(f, c, AB(x)),
+   f = g_push(f, 1, g_c1_cond_push_branch); }
 #else
- f = g_push(f, 2, x, g_c1_if_push_exit);
- f = g_c0_if_r(f, c, g_ok(f) ? g_pop1(f) : g_nil);
- return g_push(f, 1, g_c1_if_pop_exit); }
+ if (!twop(x)) return g_c0_cond_exit(f, c, g_nil);
+ else if (!twop(B(x))) return g_c0_cond_exit(f, c, A(x));
+ else return
+  incl(*c, 5),
+  avec(f, x,
+   f = g_c0_cond_r(f, c, BB(x)),
+   f = g_push(f, 1, g_c1_cond_push_branch),
+   f = g_c0_cond_exit(f, c, AB(x)),
+   f = g_push(f, 1, g_c1_cond_pop_branch)),
+  analyze(f, c, A(x)); }
 #endif
+
 
 static struct g *g_c0_seq(struct g*f, struct env**c, g_num b) {
 #if rrr
@@ -464,15 +465,14 @@ static struct g *g_c0_apargsr(struct g *f, struct env**c, g_num x) {
 
 static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
  f = gxl(g_push(f, 3, g_nil, (*c)->stack, x));
- if (g_ok(f)) {
-  (*c)->stack = g_pop1(f);
-  x = g_pop1(f);
+ if (g_ok(f))
+  (*c)->stack = g_pop1(f),
 #if rrr
-  f = g_c0_apargsl(f, c, x);
+  f = g_c0_apargsl(f, c, g_pop1(f)),
 #else
-  f = g_c0_apargsr(f, c, x);
+  f = g_c0_apargsr(f, c, g_pop1(f)),
 #endif
-  (*c)->stack = B((*c)->stack); }
+  (*c)->stack = B((*c)->stack);
  return f; }
 
 static g_num ldels(struct g *f, g_num lam, g_num l) {
@@ -527,9 +527,11 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
    lam = g_pop1(f); }
   exp = BB(exp); }
 
- // if there's no body then evaluate the name of the last definition
- bool even = !twop(exp); // we check this again later to make global bindings at top level
- if (even) {
+ intptr_t ll = llen(nom);
+ bool odd = twop(exp),
+      even = !odd,
+      top_def = even && nilp((*b)->args); // we check this again later to make global bindings at top level
+ if (even) { // if there's no body then evaluate the name of the last definition
   f = gx2(f, A(nom), g_nil);
   if (!g_ok(f)) return forget();
   exp = g_pop1(f); }
@@ -538,22 +540,20 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  // for each function f with closure C(f)
  // for each function g with closure C(g)
  // if f in C(g) then C(g) include C(f)
- long j;
+ g_num j, vars, var;
  do for (j = 0, d = lam; twop(d); d = B(d)) // for each bound function variable
-  for (e = lam; twop(e); e = B(e)) // for each bound function variable
-#define BBA(o) B(BA(o))
-   if (d != e && memq(f, BBA(e), AA(d))) // if you need this function
-    for (v = BBA(d); twop(v); v = B(v)) { // then you need its variables
-     intptr_t vars = BBA(e), var = A(v);
-     if (!memq(f, vars, var)) { // only add if it's not already there
-      f = gx2(f, var, vars);
-      if (!g_ok(f)) return forget();
-      j++, BBA(e) = g_pop1(f); } }
+  for (e = lam; twop(e); e = B(e)) if (d != e) // for each other bound function variable
+   if (memq(f, BB(A(e)), AA(d))) // if you need this function
+    for (v = BB(A(d)); twop(v); v = B(v)) // then you need its variables
+     if (!memq(f, vars = BB(A(e)), var = A(v))) // only add if it's not already there
+      j++,
+      f = gx2(f, var, vars),
+      BB(A(e)) = g_ok(f) ? g_pop1(f) : g_nil;
  while (j);
 
  // now delete defined functions from the closure variable lists
  // they will be bound lazily when the function runs
- for (e = lam; twop(e); BBA(e) = ldels(f, lam, BBA(e)), e = B(e));
+ for (e = lam; twop(e); BB(A(e)) = ldels(f, lam, BB(A(e))), e = B(e));
 
  (*c)->lams = lam;
  f = append(gxl(g_push(f, 3, f->lambda, nom, exp)));
@@ -564,8 +564,6 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  //
  // all the code emissions are below here (??)
  //
- intptr_t ll = llen(nom);
- bool global_def = even && nilp((*b)->args);
 
  for (e = nom, v = def; twop(e); e = B(e), v = B(v))
   if (lambp(f, A(v))) {
@@ -575,16 +573,18 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
    A(v) = B(d) = g_pop1(f); }
 
 #if rrr
-  f = analyze(f, b, exp);
-  f = gx2(f, g_nil, (*b)->stack); // push function stack rep
-  (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
-  nom = reverse(f, nom), def = reverse(f, def);
-  for (; twop(nom); nom = B(nom), def = B(def))
-   f = analyze(f, b, A(def)),
-   f = global_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
-   f = gx2(f, A(nom), (*b)->stack),
-   (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
-  f = g_c0_apn(f, b, ll);
+ f = analyze(f, b, exp);
+ f = gx2(f, g_nil, (*b)->stack); // push function stack rep
+ (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
+ nom = reverse(f, nom), def = reverse(f, def);
+ while (twop(nom))
+  f = analyze(f, b, A(def)),
+  f = top_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
+  f = gx2(f, A(nom), (*b)->stack),
+  (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil,
+  nom = B(nom), def = B(def);
+ f = g_c0_apn(f, b, ll);
+ if (g_ok(f)) while (ll--) (*b)->stack = B((*b)->stack);
 #else
  f = g_c0_apn(f, b, ll);
  f = gx2(f, g_nil, (*b)->stack); // push function stack rep
@@ -594,10 +594,11 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
   f = gx2(f, A(v), (*b)->stack),
   (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
  nom = reverse(f, nom); // back to reverse order
- for (; twop(nom); nom = B(nom), def = B(def))
-  f = global_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
+ while (twop(nom))
+  f = top_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
   f = analyze(f, b, A(def)),
-  (*b)->stack = B((*b)->stack);
+  (*b)->stack = B((*b)->stack),
+  nom = B(nom), def = B(def);
  f = analyze(f, b, exp);
 #endif
  return forget(); }

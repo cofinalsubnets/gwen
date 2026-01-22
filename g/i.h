@@ -11,7 +11,7 @@ g_vm(g_vm_gc, uintptr_t);
 struct g *g_c0(struct g *f, g_vm_t *y);
 g_vm_t
   g_vm_putn, g_vm_nomsym,
-  g_vm_info, g_vm_yieldk, g_vm_dot,
+  g_vm_info, g_vm_dot,
   g_vm_symnom, g_vm_read, g_vm_putc,
   g_vm_gensym, g_vm_twop, g_vm_nump, g_vm_symp, g_vm_strp, g_vm_tabp,
   g_vm_band, g_vm_bor, g_vm_bxor, g_vm_bsr, g_vm_bsl, g_vm_bnot,
