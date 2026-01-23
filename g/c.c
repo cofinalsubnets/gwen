@@ -92,39 +92,41 @@ g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
  struct env *c = (void*) ptr(g_pop1(f));
  g_num x = f->sp[0];
  f->sp[0] = (g_num) g_c1_yield;
- avec(f, c,
+ MM(f, &c);
 #if !rrr
-  avec(f, x, f = g_c0_ix(f, &c, y, word(f->ip))),
+ avec(f, x, f = g_c0_ix(f, &c, y, word(f->ip)));
 #endif
-  f = analyze(f, &c, x),
+ f = analyze(f, &c, x);
 #if rrr
-  f = g_c0_ix(f, &c, y, word(f->ip)),
+ f = g_c0_ix(f, &c, y, word(f->ip));
 #endif
-  f = g_c1(f, &c));
- return f; }
+ f = g_c1(f, &c);
+ return UM(f), f; }
 
-static union u *clip(union u *k) { return ttag(k)->head = k; }
+static union u *clip(union u *k) {
+ return ttag(k)->head = k; }
+
 g_vm(trim) {
  clip(cell(Sp[0]));
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_seek) { return
- Sp[1] = word(cell(Sp[1]) + ggetnum(Sp[0])),
- Sp += 1,
- Ip += 1,
- Continue(); }
+g_vm(g_vm_seek) {
+ Sp[1] = word(cell(Sp[1]) + ggetnum(Sp[0]));
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
 
-g_vm(g_vm_peek) { return
- Sp[0] = cell(Sp[0])->x,
- Ip += 1,
- Continue(); }
+g_vm(g_vm_peek) {
+ Sp[0] = cell(Sp[0])->x;
+ Ip += 1;
+ return Continue(); }
 
-g_vm(g_vm_poke) { return
- cell(Sp[1])->x = Sp[0],
- Sp += 1,
- Ip += 1,
- Continue(); }
+g_vm(g_vm_poke) {
+ cell(Sp[1])->x = Sp[0];
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
 
 g_vm(thda) {
  size_t n = ggetnum(Sp[0]);
@@ -183,6 +185,18 @@ static Cata(g_c1_apn) {
 #endif
  return f; }
 
+static Cata(g_c1_var_, g_num i) {
+#if !rrr
+ f = pull(f, c);
+#endif
+ Kp -= 2;
+ Kp[0].ap = g_vm_pushr;
+ Kp[1].x = gputnum(i);
+#if rrr
+ f = pull(f, c);
+#endif
+ return f; }
+
 static Cata(g_c1_var_2) {
  g_num var = g_pop1(f),
        stack = g_pop1(f),
@@ -190,58 +204,52 @@ static Cata(g_c1_var_2) {
  while (twop(stack))
   if (eql(f, A(stack), var)) break;
   else stack = B(stack), i++;
-#if !rrr
- f = pull(f, c);
-#endif
- Kp -= 2;
- Kp[0].ap = g_vm_pushr;
- Kp[1].x = gputnum(i);
-#if rrr
- f = pull(f, c);
-#endif
- return f; }
+ return g_c1_var_(f, c, i); }
 
 // emit stack g_vm_pushrerence instruction
 static Cata(g_c1_var) {
  g_num l, v = g_pop1(f),
           i = llen(g_pop1(f)); // stack inset
  for (l = (*c)->imps; !nilp(l); l = B(l), i++)
-  if (eql(f, v, A(l))) goto end;
+  if (eql(f, v, A(l))) return g_c1_var_(f, c, i);
  for (l = (*c)->args; !nilp(l); l = B(l), i++)
-  if (eql(f, v, A(l))) goto end;
-end:
-#if !rrr
- f = pull(f, c);
-#endif
- Kp -= 2;
- Kp[0].ap = g_vm_pushr;
- Kp[1].x = gputnum(i);
-#if rrr
- f = pull(f, c);
-#endif
- return f; }
+  if (eql(f, v, A(l))) return g_c1_var_(f, c, i);
+ return g_c1_var_(f, c, i); }
 
 
 static Cata(g_c1_i) {
- g_vm_t *i = (g_vm_t*) g_pop1(f);
+ g_vm_t *i = (void*) g_pop1(f);
 #if !rrr
  f = pull(f, c);
 #endif
- Kp -= 1, Kp[0].ap = i;
+ Kp -= 1;
+ Kp[0].ap = i;
 #if rrr
  f = pull(f, c);
 #endif
  return f; }
 
 static Cata(g_c1_ix) {
- g_vm_t *i = (g_vm_t*) g_pop1(f);
+ g_vm_t *i = (void*) g_pop1(f);
  g_num x = g_pop1(f);
 #if !rrr
  avec(f, x, f = pull(f, c));
 #endif
- Kp -= 2,
- Kp[0].ap = i,
+ Kp -= 2;
+ Kp[0].ap = i;
  Kp[1].x = x;
+#if rrr
+ f = pull(f, c);
+#endif
+ return f; }
+
+static Cata(g_c1_ar, g_vm_t *i, g_num ar) {
+#if !rrr
+ f = pull(f, c);
+#endif
+ Kp -= 2;
+ Kp[0].ap = i;
+ Kp[1].x = gputnum(ar);
 #if rrr
  f = pull(f, c);
 #endif
@@ -251,30 +259,12 @@ static Cata(g_c1_curry) {
  struct env *e = (void*) g_pop1(f);
  uintptr_t ar = llen(e->args) + llen(e->imps);
  if (ar == 1) return pull(f, c);
-#if !rrr
- f = pull(f, c);
-#endif
- Kp -= 2,
- Kp[0].ap = g_vm_curry,
- Kp[1].x = gputnum(ar);
-#if rrr
- f = pull(f, c);
-#endif
- return f; }
+ return g_c1_ar(f, c, g_vm_curry, ar); }
 
 static Cata(g_c1_ret) {
  struct env *e = (struct env*) g_pop1(f);
  uintptr_t ar = llen(e->args) + llen(e->imps);
-#if !rrr
- f = pull(f, c);
-#endif
- Kp -= 2,
- Kp[0].ap = g_vm_ret,
- Kp[1].x = gputnum(ar);
-#if rrr
- f = pull(f, c);
-#endif
- return f; }
+ return g_c1_ar(f, c, g_vm_ret, ar); }
 
 static Cata(g_c1_cond_push_branch) {
 #if !rrr
@@ -353,15 +343,16 @@ static Ana(g_c0_sym) {
    return f; }
   // defined as a function by a local let form?
   g_num y;
-  if ((y = assq(f, d->lams, x))) {
+  if ((y = assq(f, d->lams, x))) return
+   avec(f, y,
 #if rrr
-   avec(f, y, f = g_c0_ix(f, c, g_vm_lazyb, y));
-   f = g_c0_apargs(f, c, BB(y));
+    f = g_c0_ix(f, c, g_vm_lazyb, y),
+    f = g_c0_apargs(f, c, BB(y))
 #else
-   avec(f, y, f = g_c0_apargs(f, c, BB(y)));
-   f = g_c0_ix(f, c, g_vm_lazyb, y);
+    f = g_c0_apargs(f, c, BB(y)),
+    f = g_c0_ix(f, c, g_vm_lazyb, y)
 #endif
-   return f; }
+   ), f;
   // non function definition from local let form?
   if (memq(f, d->stack, x)) {
    incl(*c, 2);
@@ -386,24 +377,24 @@ static g_noinline Ana(analyze) {
   case ',':
    return g_c0_seq(f, c, b);
   case '`':
-   return g_c0_ix(f, c, g_vm_pushk, !twop(b) ? b : A(b));
+   return g_c0_ix(f, c, g_vm_pushk, !twop(b) ? g_nil : A(b));
   case '\\':
    f = g_c0_lambda(f, c, g_nil, b);
    return analyze(f, c, g_ok(f) ? g_pop1(f) : 0);
   case ':':
    return g_c0_let(f, c, b);
   case '?':
-   return !twop(B(b)) ? analyze(f, c, A(b)) :
+   return !twop(B(b)) ? analyze(f, c, A(b)) : (
 #if rrr
-   (f = g_push(f, 2, b, g_c1_cond_pop_exit),
-    f = g_c0_cond_r(f, c, g_ok(f) ? g_pop1(f) : g_nil),
-    g_push(f, 1, g_c1_cond_push_exit));
+   f = g_push(f, 2, b, g_c1_cond_pop_exit),
+   f = g_c0_cond_r(f, c, g_ok(f) ? g_pop1(f) : g_nil),
+   g_push(f, 1, g_c1_cond_push_exit)
 #else
-   (f = g_push(f, 2, b, g_c1_cond_push_exit),
-    f = g_c0_cond_r(f, c, g_ok(f) ? g_pop1(f) : g_nil),
-    g_push(f, 1, g_c1_cond_pop_exit));
+   f = g_push(f, 2, b, g_c1_cond_push_exit),
+   f = g_c0_cond_r(f, c, g_ok(f) ? g_pop1(f) : g_nil),
+   g_push(f, 1, g_c1_cond_pop_exit)
 #endif
- }
+   ); }
 
  if ((x = g_tget(f, 0, f->macro, a))) return
   f = g_push(f, 5, b, g_nil ,f->quote, g_nil, x),
@@ -421,48 +412,43 @@ static g_noinline Ana(analyze) {
 
 
 static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp) {
- f = enscope(f, *c, exp, imps);
- if (!g_ok(f)) return f;
- struct env *d = (struct env*) g_pop1(f);
- MM(f, &d);
- g_num x = d->args;
-
- // push exp args onto stack
- if (!twop(x)) f = g_push(f, 2, g_nil, g_nil);
- else {
-  MM(f, &x);
-  int n = 0;
-  while (twop(B(x))) f = g_push(f, 1, A(x)), n++, x = B(x);
-  f = g_push(f, 1, g_nil);
-  while (n--) f = gxr(f);
-  UM(f);
-  f = g_push(f, 1, A(x)); }
-
  union u *k, *ip;
+ struct env *d = NULL;
+ MM(f, &d); MM(f, &exp);
+ f = enscope(f, *c, exp, imps);
+
  if (g_ok(f)) {
-  exp = g_pop1(f);
+  d = (struct env*) g_pop1(f);
+  exp = d->args;
+  int n = 0; // push exp args onto stack
+  for (; twop(B(exp)); exp = B(exp), n++)
+   f = g_push(f, 1, A(exp));
+  for (f = g_push(f, 1, g_nil); n--; f = gxr(f));
+  exp = A(exp); }
+
+ if (g_ok(f)) {
   d->args = f->sp[0];
-  f->sp[0] = word(g_c1_yield);
+  f->sp[0] = (g_num) g_c1_yield;
   incl(d, 4);
 #if rrr
-  f = g_push(f, 3, exp, g_c1_curry, d);
-  f = analyze(f, &d, g_ok(f) ? g_pop1(f) : g_nil);
+  f = g_push(f, 2, g_c1_curry, d);
+#else
+  f = g_push(f, 2, g_c1_ret, d);
+#endif
+  f = analyze(f, &d, exp);
+#if rrr
   f = g_push(f, 2, g_c1_ret, d);
 #else
-  f = g_push(f, 3, exp, g_c1_ret, d);
-  f = analyze(f, &d, g_ok(f) ? g_pop1(f) : g_nil);
   f = g_push(f, 2, g_c1_curry, d);
 #endif
 
   ip = f->ip;
   avec(f, ip, f = g_c1(f, &d)); }
 
- if (g_ok(f))
-  k = f->ip,
-  f->ip = ip,
+ if (g_ok(f)) k = f->ip, f->ip = ip,
   f = gxl(g_push(f, 2, k, d->imps));
 
- return UM(f), f; }
+ return UM(f), UM(f), f; }
 
 static Ana(g_c0_cond_exit) {
  incl(*c, 3);
@@ -498,7 +484,6 @@ static Ana(g_c0_cond_r) {
   analyze(f, c, A(x)); }
 #endif
 
-
 static struct g *g_c0_seq(struct g*f, struct env**c, g_num b) {
 #if rrr
   for (MM(f, &b); twop(B(b)); b = B(b))
@@ -517,22 +502,6 @@ static struct g *g_c0_apn(struct g*f, struct env**c, intptr_t ar) {
  incl(*c, 2);
  return g_push(f, 2, g_c1_apn, g_putnum(ar)); }
 
-static struct g *g_c0_apargsr(struct g *f, struct env**c, g_num x);
-
-static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
- f = gxl(g_push(f, 3, g_nil, (*c)->stack, x));
- if (g_ok(f)) {
-  (*c)->stack = g_pop1(f);
-#if rrr
-  x = g_pop1(f);
-  MM(f, &x);
-  while (twop(x)) f = g_c0_apn(analyze(f, c, A(x)), c, 1), x = B(x);
-  UM(f);
-#else
-  f = g_c0_apargsr(f, c, g_pop1(f));
-#endif
-  (*c)->stack = B((*c)->stack); }
- return f; }
 static struct g *g_c0_apargsr(struct g *f, struct env**c, g_num x) {
  if (!twop(x)) return f;
  g_num y = A(x);
@@ -542,6 +511,20 @@ static struct g *g_c0_apargsr(struct g *f, struct env**c, g_num x) {
  UM(f);
  return analyze(f, c, y); }
 
+static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
+ f = gxl(g_push(f, 3, g_nil, (*c)->stack, x));
+ if (g_ok(f)) {
+  (*c)->stack = g_pop1(f);
+#if rrr
+  for (x = g_pop1(f), MM(f, &x); twop(x); x = B(x))
+   f = g_c0_apn(analyze(f, c, A(x)), c, 1);
+  UM(f);
+#else
+  f = g_c0_apargsr(f, c, g_pop1(f));
+#endif
+  (*c)->stack = B((*c)->stack); }
+ return f; }
+
 static g_num ldels(struct g *f, g_num lam, g_num l) {
  if (!twop(l)) return g_nil;
  g_num m = ldels(f, lam, B(l));
@@ -549,7 +532,7 @@ static g_num ldels(struct g *f, g_num lam, g_num l) {
  return m; }
 
 static bool lambp(struct g *f, g_num x) {
- if (!twop(x) || !symp(A(x))) return false;
+ if (!twop(x) || !symp(A(x)) || !twop(B(x))) return false;
  struct g_vec *n = sym(A(x))->nom;
  return n && len(n) == 1 && *txt(n) == '\\'; }
 
@@ -642,7 +625,7 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
 #if rrr
  f = analyze(f, b, exp);
  f = gxl(g_push(f, 2, g_nil, (*b)->stack)); // push function stack rep
- (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
+ e = (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil;
  nom = reverse(nom), def = reverse(def);
  while (twop(nom))
   f = analyze(f, b, A(def)),
@@ -650,8 +633,8 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
   f = gxl(g_push(f, 2, A(nom), (*b)->stack)),
   (*b)->stack = g_ok(f) ? g_pop1(f) : g_nil,
   nom = B(nom), def = B(def);
+ (*b)->stack = e;
  f = g_c0_apn(f, b, ll);
- if (g_ok(f)) while (ll--) (*b)->stack = B((*b)->stack);
 #else
  f = g_c0_apn(f, b, ll);
  f = gxl(g_push(f, 2, g_nil, (*b)->stack)); // push function stack rep
