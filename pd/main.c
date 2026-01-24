@@ -108,16 +108,8 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
       K.g = g_defs(g_ini_m(_malloc, _free), defs);
-      if (g_ok(K.g))
-        K.mode->ini(),
-        pd->system->setUpdateCallback(k_update, NULL);
-    default: return 0; } }
-
-static void g_log_update(void) {
-  cb_cur(kcb, 0, 0);
-  cb_fill(kcb, 0);
   K.g = g_evals_(K.g,
-    "(: i(vminfo 0)f(A i)len(A(B i))allocd(A(B(B i)))stackd(A(B(B(B i))))"
+    "(: (log zzz) (,(: i(vminfo 0)f(A i)len(A(B i))allocd(A(B(B i)))stackd(A(B(B(B i))))"
     "(,"
     "(puts\"\x03 \")(putn(clock 0)10)"
     "(puts\"\n\nf@\")""(putn f 16)"
@@ -130,8 +122,17 @@ static void g_log_update(void) {
     "(puts\"\nbuttons: \")(putn(get_buttons 0)2)"
     "(puts\"\n\nroot folder contents:\n\")(.(ls_root 0))"
     "(: (cputc r1 c1 c) (: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set r1 c1) (cur_put c) (cur_set r0 c0))))"
-    "(: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set 0 44) (puts\"life \x18\") (cur_set 29 44) (puts\"time \x19\") (cur_set r0 c0)))"
-    ); }
+    "(: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set 0 44) (puts\"life \x18\") (cur_set 29 44) (puts\"time \x19\") (cur_set r0 c0))))"
+    );
+      if (g_ok(K.g))
+        K.mode->ini(),
+        pd->system->setUpdateCallback(k_update, NULL);
+    default: return 0; } }
+
+static void g_log_update(void) {
+  cb_cur(kcb, 0, 0);
+  cb_fill(kcb, 0);
+  K.g = g_evals_(K.g, "(log 0)"); }
 
 
 static g_vm(crank_angle) {
