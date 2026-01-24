@@ -413,14 +413,18 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
    (*c)->stack = B((*c)->stack);
    f = g_c0_i(analyze(f, c, A(x)), c, i);
    return UM(f), f; }
-  else if (l > 1 && ar == l) {
-   if (g_ok(f = g_c0_apn(g_c0_apargsr(f, c, x), c, l))) {
-    if (cell(f->sp[2])[3].ap == g_vm_ret0) {
-     g_vm_t *i = cell(f->sp[2])[2].ap;
-
-    } else while (l--) (*c)->stack = B((*c)->stack);
-   } }
-   else while (twop(x)) f = g_c0_apn(analyze(f, c, A(x)), c, 1), x = B(x);
+  else if (ar == l && l > 1 &&
+   cell(f->sp[2])[3].ap == g_vm_ret0) {
+    g_vm_t *i = cell(f->sp[2])[2].ap;
+    f->sp += 3;
+    (*c)->stack = B((*c)->stack);
+    f = g_c0_i(g_c0_apargsr(f, c, x), c, i);
+    if (g_ok(f)) while (l--) (*c)->stack = B((*c)->stack);
+    return UM(f), f;
+   }
+  else if (ar == l && l > 1) 
+    for (f = g_c0_apn(g_c0_apargsr(f, c, x), c, l); l--; (*c)->stack = g_ok(f) ? B((*c)->stack) : g_nil);
+  else while (twop(x)) f = g_c0_apn(analyze(f, c, A(x)), c, 1), x = B(x);
   UM(f);
   (*c)->stack = B((*c)->stack); }
  return f; }
