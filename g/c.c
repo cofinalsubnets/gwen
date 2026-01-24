@@ -403,14 +403,24 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
   (*c)->stack = g_pop1(f);
   x = g_pop1(f);
   intptr_t l = llen(x);
+  bool immfp = f->sp[0] == (g_num) g_c1_ix && f->sp[1] == (g_num) g_vm_pushk && even(f->sp[2]);
+  intptr_t ar = immfp && cell(f->sp[2])->ap == g_vm_curry ?  g_getnum(cell(f->sp[2])[1].x) : 1;
   MM(f, &x);
-  if (l > 1 && f->sp[0] == (g_num) g_c1_ix && f->sp[1] == (g_num) g_vm_pushk
-    && even(f->sp[2]) && cell(f->sp[2])->ap == g_vm_curry &&
-    g_getnum(cell(f->sp[2])[1].x) == l) {
-   f = g_c0_apargsr(f, c, x);
-   f = g_c0_apn(f, c, l);
-   if (g_ok(f)) while (l--) (*c)->stack = B((*c)->stack); }
-  else while (twop(x)) f = g_c0_apn(analyze(f, c, A(x)), c, 1), x = B(x);
+  if (l == 1 && immfp && cell(f->sp[2])[1].ap == g_vm_ret0) {
+
+   g_vm_t *i = cell(f->sp[2])->ap;
+   f->sp += 3;
+   (*c)->stack = B((*c)->stack);
+   f = g_c0_i(analyze(f, c, A(x)), c, i);
+   return UM(f), f; }
+  else if (l > 1 && ar == l) {
+   if (g_ok(f = g_c0_apn(g_c0_apargsr(f, c, x), c, l))) {
+    if (cell(f->sp[2])[3].ap == g_vm_ret0) {
+     g_vm_t *i = cell(f->sp[2])[2].ap;
+
+    } else while (l--) (*c)->stack = B((*c)->stack);
+   } }
+   else while (twop(x)) f = g_c0_apn(analyze(f, c, A(x)), c, 1), x = B(x);
   UM(f);
   (*c)->stack = B((*c)->stack); }
  return f; }
