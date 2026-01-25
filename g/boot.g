@@ -51,7 +51,7 @@
   eval '(:- eval
     (em1 i k n) (p1 i (k (+ 1 n)))
     (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
-    imm (em2 g_vm_pushk) p0 poke
+    imm (em2 g_vm_quote) p0 poke
     (p1 x k) (poke x (seek -1 k))
     (eval x) (: c (scop 0 (L 0) 0) (ana c x (thd0 c) 0 0))
 ;; functions for working with variable scope records
@@ -177,7 +177,7 @@
           (\ j m (:
            k (j (+ 2 m))
            i (+ i (stkidx c x))
-           (p1 g_vm_pushr (p1 i k)))))
+           (p1 g_vm_arg (p1 i k)))))
          lam (lamof d)
          stk (stkof d)
          lfd (assq x lam)
@@ -186,7 +186,7 @@
                a2 (ana_apl 0 c (BB lfd))
              (>=> a2 a1))
          (memq x stk) ; is it bound on a let stack in this scope?
-          (? (= c d) (em2 g_vm_pushr (lidx x stk))
+          (? (= c d) (em2 g_vm_arg (lidx x stk))
                      (, (import c x)
                         (cata_var c)))
         (<= 0 (stkidx d x)) ; is it bound as a closure or argument variable?

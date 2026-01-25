@@ -124,8 +124,7 @@ g_vm(g_vm_cond) {
 
 // load instructions
 //
-// push an g_vm_pushkediate value
-g_vm(g_vm_pushk) {
+g_vm(g_vm_quote) {
  Have1();
  Sp -= 1;
  Sp[0] = Ip[1].x;
@@ -147,7 +146,7 @@ g_vm(g_vm_data) {
 
 
 // push a value from the stack
-g_vm(g_vm_pushr) {
+g_vm(g_vm_arg) {
  Have1();
  return Sp[-1] = Sp[ggetnum(Ip[1].x)],
         Sp -= 1,
@@ -424,7 +423,7 @@ static g_vm(g_vm_getc) {
  _(bif_ev, "ev", S1(g_vm_eval))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
-#define insts(_) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn) _(g_vm_jump) _(g_vm_cond) _(g_vm_pushr) _(g_vm_pushk) _(g_vm_drop1) _(g_vm_curry) _(g_vm_defglob) _(g_vm_lazyb) _(g_vm_ret0)
+#define insts(_) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn) _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_drop1) _(g_vm_curry) _(g_vm_defglob) _(g_vm_lazyb) _(g_vm_ret0)
 #define biff(b, n, _) {n, (intptr_t) b},
 #define i_entry(i) {#i, (intptr_t) i},
 

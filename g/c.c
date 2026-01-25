@@ -170,7 +170,7 @@ static Cata(g_c1_apn) {
 
 static Cata(g_c1_var_, g_num i) {
  Kp -= 2;
- Kp[0].ap = g_vm_pushr;
+ Kp[0].ap = g_vm_arg;
  Kp[1].x = gputnum(i);
  f = pull(f, c);
  return f; }
@@ -184,7 +184,6 @@ static Cata(g_c1_var_2) {
   else stack = B(stack), i++;
  return g_c1_var_(f, c, i); }
 
-// emit stack g_vm_pushrerence instruction
 static Cata(g_c1_var) {
  g_num l, v = g_pop1(f),
           i = llen(g_pop1(f)); // stack inset
@@ -273,7 +272,7 @@ static struct g *g_eval(struct g *f) {
  return f; }
 
 g_vm(g_vm_lazyb) { return
- Ip[0].ap = g_vm_pushk,
+ Ip[0].ap = g_vm_quote,
  Ip[1].x = AB(Ip[1].x),
  Continue(); }
 
@@ -284,7 +283,7 @@ static Ana(g_c0_var) {
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) { // free variable?
    if ((y = g_tget(f, 0, dict_of(f), x)))
-    return g_c0_ix(f, c, g_vm_pushk, y);
+    return g_c0_ix(f, c, g_vm_quote, y);
    f = gxl(g_push(f, 2, x, (*c)->imps));
    f = g_c0_ix(f, c, g_vm_freev, (*c)->imps = g_ok(f) ? g_pop1(f) : g_nil);
    return f; }
@@ -307,7 +306,7 @@ static Ana(g_c0_var) {
 static g_noinline Ana(analyze) {
  if (!g_ok(f)) return f; // error...
  if (symp(x)) return g_c0_var(f, c, x); // variable
- if (!twop(x)) return g_c0_ix(f, c, g_vm_pushk, x); // self quoting expression
+ if (!twop(x)) return g_c0_ix(f, c, g_vm_quote, x); // self quoting expression
  g_num a = A(x), b = B(x);
  // singleton list?
  if (!twop(b)) return analyze(f, c, a); // value of first element
@@ -318,7 +317,7 @@ static g_noinline Ana(analyze) {
      f = g_c0_i(analyze(f, c, A(b)), c, g_vm_drop1);
     return UM(f), analyze(f, c, A(b));
    case '`':
-    return g_c0_ix(f, c, g_vm_pushk, !twop(b) ? g_nil : A(b));
+    return g_c0_ix(f, c, g_vm_quote, !twop(b) ? g_nil : A(b));
    case '\\': return
     f = g_c0_lambda(f, c, g_nil, b),
     analyze(f, c, g_ok(f) ? g_pop1(f) : 0);
@@ -403,7 +402,7 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
   (*c)->stack = g_pop1(f);
   x = g_pop1(f);
   intptr_t l = llen(x);
-  bool immfp = f->sp[0] == (g_num) g_c1_ix && f->sp[1] == (g_num) g_vm_pushk && even(f->sp[2]);
+  bool immfp = f->sp[0] == (g_num) g_c1_ix && f->sp[1] == (g_num) g_vm_quote && even(f->sp[2]);
   intptr_t ar = immfp && cell(f->sp[2])->ap == g_vm_curry ?  g_getnum(cell(f->sp[2])[1].x) : 1;
   MM(f, &x);
   if (l == 1 && immfp && // inline a unary bif
@@ -561,7 +560,7 @@ g_vm(g_vm_defglob) {
 g_vm(g_vm_drop1) { return Ip++, Sp++, Continue(); }
 
 g_vm(g_vm_freev) { return
- Ip[0].ap = g_vm_pushk,
+ Ip[0].ap = g_vm_quote,
  Ip[1].x = g_tget(f, Ip[1].x, f->dict, Ip[1].x),
  Continue(); }
 

@@ -20,7 +20,7 @@ g_vm_t
   g_vm_lt, g_vm_le, g_vm_eq, g_vm_gt, g_vm_ge,
   g_vm_tset, g_vm_tget, g_vm_tdel, g_vm_tnew, g_vm_tkeys, g_vm_tlen,
   g_vm_seek, g_vm_peek, g_vm_poke, trim, thda, g_vm_add, g_vm_sub, g_vm_mul, g_vm_quot, g_vm_rem,
-  g_vm_defglob, g_vm_drop1, g_vm_pushk, g_vm_pushr,
+  g_vm_defglob, g_vm_drop1, g_vm_quote, g_vm_arg,
   g_vm_freev, g_vm_eval,
   g_vm_cond, g_vm_jump, g_vm_ap, g_vm_tap, g_vm_apn, g_vm_tapn, g_vm_ret, g_vm_lazyb;
 
