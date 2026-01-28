@@ -1,11 +1,4 @@
 #include "i.h"
-int
- memcmp(void const*, void const*, size_t);
-void
- *malloc(size_t),
- free(void*),
- *memcpy(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
 static struct g *grbufn(struct g *f) {
  f = g_have(f, str_type_width + 2);
  if (g_ok(f)) {

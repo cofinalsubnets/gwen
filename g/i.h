@@ -131,4 +131,11 @@ struct g
 bool eql(struct g*, intptr_t, intptr_t);
 int g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base);
 uintptr_t g_hash(struct g*, g_num), g_vec_bytes(struct g_vec*);
+int
+ memcmp(void const*, void const*, size_t);
+void
+ *malloc(size_t),
+ free(void*),
+ *memcpy(void*restrict, void const*restrict, size_t),
+ *memset(void*, int, size_t);
 #endif
