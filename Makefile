@@ -255,20 +255,21 @@ k_qemu_loongarch64=$(k_qemu_risc) -cpu la464
 k_qemu_aarch64=$(k_qemu_risc) -cpu cortex-a72
 k_qemu_riscv64=$(k_qemu_risc) -cpu rv64
 k_qemu=qemu-system-$a -m 256M $(k_qemu_$a)\
-	-drive if=pflash,unit=0,format=raw,file=dl/ovmf/ovmf-code-$a.fd,readonly=on
+	-drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
 run: run-$a
 run-hdd: run-hdd-$a
-run-$a: b/$n-$a.iso dl/ovmf/ovmf-code-$a.fd
+run-$a: b/$n-$a.iso dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -cdrom $<
-run-hdd-$a: b/$n-$a.hdd dl/ovmf/ovmf-code-$a.fd
+run-hdd-$a: b/$n-$a.hdd dl/edk2-ovmf/ovmf-code-$a.fd
 	$(k_qemu) -hda $<
 .PHONY: run run-hdd run-$a run-hdd-$a
 
-dl/ovmf/ovmf-code-%.fd:
+dl/edk2-ovmf/ovmf-code-%.fd:
 	@echo MK ovmf
-	@mkdir -p dl/ovmf
-	@curl -sLo $@ https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/$(notdir $@)
+	@mkdir -p dl
+	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C dl -xf -
+#	@curl -sLo $@ https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/$(notdir $@)
 	@case "$a" in \
 		aarch64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
 		riscv64) dd if=/dev/zero of=$@ bs=1 count=0 seek=33554432 2>/dev/null;; \

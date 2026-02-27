@@ -68,23 +68,27 @@
     (arity c) (+ (llen (argof c)) (llen (impof c)))
 ;; thread initializer
 
-    (ana c x) (:-
-    (? (symp x)  (ana_sym_r c x)
-        (atomp x) (em2 g_vm_quote x)
-        (: a (A x) b (B x) (?
-         (= a '` ) (em2 g_vm_quote (A b))
-         (= a '? ) (ana_if  c b)
-         (= a '\ ) (? (atomp b)     (em2 g_vm_quote 0)
-                      (atomp (B b)) (ana c (A b))
-                      (ana c (ana_ll c 0 b)))
-         (= a ': ) (ana_let c b)
-         (= a ', ) (ana_seq c b)
-         (atomp b) (ana c a)
-         (: m (tget 0 macros a) (? m
-          (ana c (m b))
-          (: a0 (ana c a)
-             a1 (ana_apl 0 c b)
-           (co a0 a1)))))))
+    (ana c x) (:- (?
+     (symp x)  (ana_sym_r c x)
+     (atomp x) (em2 g_vm_quote x)
+     (: a (A x) b (B x) (?
+      (= a '` ) (em2 g_vm_quote (A b))
+      (= a '? ) (ana_if  c b)
+      (= a '\ ) (? (atomp b)     (em2 g_vm_quote 0)
+                   (atomp (B b)) (ana c (A b))
+                   (ana c (ana_ll c 0 b)))
+      (= a ': ) (ana_let c b)
+      (= a ', ) (ana_seq c b)
+      (atomp b) (ana c a)
+      (: m (tget 0 macros a) (? m
+       (ana c (m b))
+       (ana_ap a b))))))
+
+     (ana_ap a b)
+     (: a0 (ana c a)
+        a1 (ana_apl 0 c b)
+      (co a0 a1))
+
      (toplp c) (nilp (parof c))
      (parof c) (tget 0 c 'par)
      (em1 i k n) (p1 i (k (+ 1 n)))
