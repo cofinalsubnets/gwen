@@ -11,18 +11,19 @@ g_vm(g_vm_gc, uintptr_t);
 struct g *g_c0(struct g *f, g_vm_t *y);
 g_vm_t
   g_vm_putn, g_vm_nomsym,
-  g_vm_info, g_vm_dot,
+  g_vm_info, g_vm_dot, g_vm_clock, g_vm_nilp,
   g_vm_symnom, g_vm_read, g_vm_putc,
   g_vm_gensym, g_vm_twop, g_vm_nump, g_vm_symp, g_vm_strp, g_vm_tabp,
   g_vm_band, g_vm_bor, g_vm_bxor, g_vm_bsr, g_vm_bsl, g_vm_bnot,
   g_vm_ssub, g_vm_sget, g_vm_slen, g_vm_scat,
-  g_vm_cons, g_vm_car, g_vm_cdr,
+  g_vm_cons, g_vm_car, g_vm_cdr, g_vm_puts, g_vm_getc,
   g_vm_lt, g_vm_le, g_vm_eq, g_vm_gt, g_vm_ge,
   g_vm_tset, g_vm_tget, g_vm_tdel, g_vm_tnew, g_vm_tkeys, g_vm_tlen,
   g_vm_seek, g_vm_peek, g_vm_poke, trim, thda, g_vm_add, g_vm_sub, g_vm_mul, g_vm_quot, g_vm_rem,
   g_vm_defglob, g_vm_drop1, g_vm_quote, g_vm_arg,
   g_vm_freev, g_vm_eval,
   g_vm_cond, g_vm_jump, g_vm_ap, g_vm_tap, g_vm_apn, g_vm_tapn, g_vm_ret, g_vm_lazyb;
+struct g_atom *g_intern_r(struct g*, struct g_vec*, struct g_atom **y);
 
 static g_inline void *bump(struct g *f, uintptr_t n) {
  void *x = f->hp;
@@ -92,6 +93,8 @@ enum g_vec_type {
 #define g_vect_char g_vect_u8
 #define avail(f) ((f->sp-f->hp))
 static g_inline bool vec_strp(struct g_vec *s) { return s->type == g_vect_char && s->rank == 1; }
+static g_inline bool g_strp(g_num _) {
+ return even(_) && typ(_) == vec_class && vec_strp((struct g_vec*)_); }
 #ifndef EOF
 #define EOF -1
 #endif
@@ -138,4 +141,16 @@ void
  free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memset(void*, int, size_t);
+
+#define opf(nom, op) g_vm(nom) {\
+ intptr_t a = ggetnum(Sp[0]), b = ggetnum(Sp[1]);\
+ *++Sp = gputnum(a op b);\
+ return Ip++, Continue(); }
+#define op0f(nom, op) g_vm(nom) {\
+ intptr_t a = ggetnum(Sp[0]), b = ggetnum(Sp[1]);\
+ *++Sp = b == 0 ? g_nil : gputnum(a op b);\
+ return Ip++, Continue(); }
+#define op(nom, n, x) g_vm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
+#define op1(nom, i, x) g_vm(nom) { Sp[0] = (x); Ip += i; return Continue(); }
+#define op11(nom, x) op1(nom, 1, x)
 #endif

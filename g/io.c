@@ -1,4 +1,6 @@
 #include "i.h"
+struct g_in g_stdin = { .getc = (void*) ggetc, .ungetc = (void*) gungetc, .eof = (void*) geof };
+struct g_out g_stdout = { .putc = (void*) gputc, .flush = (void*) gflush };
 static struct g *grbufn(struct g *f) {
  f = g_have(f, str_type_width + 2);
  if (g_ok(f)) {
@@ -82,17 +84,16 @@ struct g *g_reads(struct g *f, struct g_in* i) {
  for (f = g_push(f, 1, g_nil); n--; f = gxr(f));
  return f; }
 
-g_vm(g_vm_dot) { return
- gfputx(f, &g_stdout, Sp[0]),
- Ip += 1,
- Continue(); }
+g_vm(g_vm_dot) {
+ gfputx(f, &g_stdout, Sp[0]);
+ Ip += 1;
+ return Continue(); }
 
 int g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base) {
  if (n < 0) o->putc(f, '-', o), n = -n;
  uintptr_t q = n / base, r = n % base;
  if (q) g_putn(f, o, q, base);
  return o->putc(f, g_digits[r], o); }
-
 
 int gvfprintf(struct g*f, struct g_out*o, char const *fmt, va_list xs) {
  int c;
@@ -115,29 +116,33 @@ int gfprintf(struct g *f, struct g_out *o, char const *fmt, ...) {
  va_end(xs);
  return r; }
 
-int gfputx(struct g *f, struct g_out *o, intptr_t x) {
- if (odd(x))
-  return gfprintf(f, o, "%d", (g_num) ggetnum(x));
- else if (!datp(x))
-  return gfprintf(f, o, "#%lx", (long) x);
- int r = 0;
+typedef int g_wr_t(struct g*, struct g_out*, intptr_t);
+static g_wr_t g_em_two, g_em_vec, g_em_sym, g_em_tab;
+static g_wr_t *emitters[] = {
+  [two_class] = g_em_two,
+  [vec_class] = g_em_vec,
+  [tbl_class] = g_em_tab,
+  [sym_class] = g_em_sym, };
 
- if (typ(x) == two_class) {
+static int g_em_tab(struct g*f, struct g_out*o, intptr_t x) {
+ struct g_tab *t = tbl(x);
+ return gfprintf(f, o, "#tab:%d/%d@%x", t->len, t->cap, x); }
+static int g_em_sym(struct g*f, struct g_out*o, intptr_t x) {
+  int r = 0;
+  struct g_vec * s = sym(x)->nom;
+  if (s && vec_strp(s)) for (intptr_t i = 0; i < len(s); r = o->putc(f, txt(s)[i++], o));
+  else r = gfprintf(f, o, "#sym@%x", (intptr_t) x);
+  return r; }
+static int g_em_two(struct g*f, struct g_out*o, intptr_t x) {
   if (A(x) == word(f->quote) && twop(B(x))) return
    o->putc(f, '\'', o),
    gfputx(f, o, AB(x));
   for (o->putc(f, '(', o);; o->putc(f, ' ', o)) {
    gfputx(f, o, A(x));
    if (!twop(x = B(x))) return o->putc(f, ')', o); } }
- else if (typ(x) == tbl_class) {
-   struct g_tab *t = tbl(x);
-   return gfprintf(f, o, "#tab:%d/%d@%x", t->len, t->cap, x); }
- else if (typ(x) == sym_class) {
-  struct g_vec * s = sym(x)->nom;
-  if (s && vec_strp(s)) for (intptr_t i = 0; i < len(s); r = o->putc(f, txt(s)[i++], o));
-  else r = gfprintf(f, o, "#sym@%x", (intptr_t) x);
-  return r; }
- else {
+
+static int g_em_vec(struct g*f, struct g_out*o, intptr_t x) {
+  int r = 0;
   struct g_vec *v = vec(x);
   if (!vec_strp(v)) {
    intptr_t rank = v->rank, *shape = v->shape;
@@ -150,7 +155,12 @@ int gfputx(struct g *f, struct g_out *o, intptr_t x) {
    for (char c; len--; o->putc(f, c, o))
     if ((c = *text++) == '\\' || c == '"') o->putc(f, '\\', o);
    r = o->putc(f, '"', o); }
-  return r; } }
+  return r; }
+
+int gfputx(struct g *f, struct g_out *o, intptr_t x) {
+ return nump(x) ? gfprintf(f, o, "%d", (g_num) ggetnum(x)) :
+        datp(x) ? emitters[typ(x)](f, o, x) :
+                  gfprintf(f, o, "#%lx", (long) x); }
 
 g_vm(g_vm_read) {
  Pack(f);
@@ -173,3 +183,24 @@ g_vm(g_vm_putn) {
   Sp += 1;
   Ip += 1;
   return Continue(); }
+
+g_vm(g_vm_puts) {
+ if (g_strp(Sp[0])) {
+  struct g_vec *s = vec(Sp[0]);
+  for (intptr_t i = 0; i < len(s);) gputc(f, txt(s)[i++]);
+  gflush(f); }
+ Ip += 1;
+ return Continue(); }
+
+g_vm(g_vm_getc) {
+ Pack(f);
+ int i = ggetc(f);
+ Unpack(f);
+ Sp[0] = gputnum(i);
+ Ip += 1;
+ return Continue(); }
+
+g_vm(g_vm_putc) {
+ gputc(f, ggetnum(*Sp));
+ Ip += 1;
+ return Continue(); }

@@ -1,26 +1,19 @@
 #include "i.h"
-static g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom **y);
-int
- memcmp(void const*, void const*, size_t);
-void
- *malloc(size_t),
- free(void*),
- *memcpy(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
-static struct g
- *please(struct g*, uintptr_t);
+
+static struct g *please(struct g*, uintptr_t);
+
 g_noinline g_vm(g_vm_gc, uintptr_t n) {
   Pack(f);
   f = please(f, n);
   if (g_ok(f)) return Unpack(f), Continue();
   return f; }
 
-static intptr_t
-  g_gc_cp(struct g*,intptr_t,intptr_t*,intptr_t*);
+static intptr_t g_gc_cp(struct g*,intptr_t,intptr_t*,intptr_t*);
 
 #define cp(...) g_gc_cp(__VA_ARGS__)
 struct g *g_have(struct g *f, intptr_t n) {
  return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
+
 static struct g *g_pushr(struct g *f, uintptr_t m, uintptr_t n, va_list xs) {
  if (n == m) return please(f, m);
  intptr_t x = va_arg(xs, intptr_t);
@@ -80,6 +73,7 @@ static g_noinline struct g *g_gc_cpg(struct g*g, intptr_t *p1, uintptr_t len1, s
      e = e->next); }
   else g->cp += b2w(g_vec_bytes((struct g_vec*) g->cp));
  return g; }
+
 g_noinline struct g *please(struct g *f, uintptr_t req0) {
  uintptr_t const
   t0 = f->t0, // end of last gc period
@@ -110,6 +104,49 @@ g_noinline struct g *please(struct g *f, uintptr_t req0) {
  f->free(f, f->pool);
  return g->t0 = g_clock(), g; }
 
+typedef intptr_t g_cp_t(struct g*, intptr_t, intptr_t*, intptr_t*);
+static g_cp_t g_cp_two, g_cp_vec, g_cp_sym, g_cp_tab;
+static g_cp_t *copiers[] = {
+  [two_class] = g_cp_two,
+  [vec_class] = g_cp_vec,
+  [sym_class] = g_cp_sym,
+  [tbl_class] = g_cp_tab, };
+
+static intptr_t g_cp_two(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+ struct g_pair *src = two(x),
+               *dst = bump(f, Width(struct g_pair));
+ ini_two(dst, src->a, src->b);
+ src->ap = (g_vm_t*) dst;
+ return word(dst); }
+
+static intptr_t g_cp_vec(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+ struct g_vec *src = vec(x);
+ uintptr_t bytes = g_vec_bytes(src);
+ struct g_vec *dst = bump(f, b2w(bytes));
+ src->ap = memcpy(dst, src, bytes);
+ return word(dst); }
+
+static intptr_t g_cp_sym(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+ struct g_atom *src = sym(x), *dst;
+ if (src->nom) dst = g_intern_r(f, (struct g_vec*) g_gc_cp(f, word(src->nom), p0, t0), &f->symbols);
+ else dst = bump(f, Width(struct g_atom) - 2),
+      ini_anon(dst, src->code);
+ return (intptr_t) (src->ap = (g_vm_t*) dst); }
+
+static intptr_t g_cp_tab(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+ struct g_tab *src = tbl(x);
+ uintptr_t len = src->len, cap = src->cap;
+ struct g_tab *dst = bump(f, Width(struct g_tab) + cap + Width(struct g_kvs) * len);
+ struct g_kvs **tab = (struct g_kvs**) (dst + 1),
+              *dd = (struct g_kvs*) (tab + cap);
+ ini_tab(dst, len, cap, tab);
+ src->ap = (g_vm_t*) dst;
+ for (struct g_kvs *d, *s, *last; cap--; tab[cap] = last)
+   for (s = src->tab[cap], last = NULL; s;
+     d = dd++, d->key = s->key, d->val = s->val, d->next = last,
+     last = d, s = s->next);
+ return word(dst); }
+
 
 static g_noinline intptr_t g_gc_cp(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
   // if it's a number or it's outside managed memory then return it
@@ -130,68 +167,4 @@ static g_noinline intptr_t g_gc_cp(struct g *f, intptr_t x, intptr_t *p0, intptr
    for (union u*s = ini; (d->x = s->x); s++->x = (intptr_t) d++);
    ((struct g_tag*) d)->head = dst;
    return (intptr_t) (dst + (src - ini)); }
-  x = (intptr_t) src;
-  if (typ(src) == two_class){
-   struct g_pair *src = two(x),
-                 *dst = bump(f, Width(struct g_pair));
-   ini_two(dst, src->a, src->b);
-   src->ap = (g_vm_t*) dst;
-   return word(dst); }
-  if (typ(src) == sym_class) {
-   struct g_atom *src = sym(x), *dst;
-   if (src->nom) dst = g_intern_r(f, (struct g_vec*) g_gc_cp(f, word(src->nom), p0, t0), &f->symbols);
-   else dst = bump(f, Width(struct g_atom) - 2),
-        ini_anon(dst, src->code);
-   return (intptr_t) (src->ap = (g_vm_t*) dst); }
-  if (typ(src) == tbl_class) {
-   struct g_tab *src = tbl(x);
-   uintptr_t len = src->len, cap = src->cap;
-   struct g_tab *dst = bump(f, Width(struct g_tab) + cap + Width(struct g_kvs) * len);
-   struct g_kvs **tab = (struct g_kvs**) (dst + 1),
-                *dd = (struct g_kvs*) (tab + cap);
-   ini_tab(dst, len, cap, tab);
-   src->ap = (g_vm_t*) dst;
-   for (struct g_kvs *d, *s, *last; cap--; tab[cap] = last)
-     for (s = src->tab[cap], last = NULL; s;
-       d = dd++, d->key = s->key, d->val = s->val, d->next = last,
-       last = d, s = s->next);
-   return word(dst); }
-  else {
-   struct g_vec *src = vec(x);
-   uintptr_t bytes = g_vec_bytes(src);
-   struct g_vec *dst = bump(f, b2w(bytes));
-   src->ap = memcpy(dst, src, bytes);
-   return word(dst); } }
-
-
-struct g *g_intern(struct g*f) {
-  f = g_have(f, Width(struct g_atom));
-  if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
-  return f; }
-
-static g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom **y) {
- struct g_atom *z = *y;
- if (!z) return // found an empty spot, insert new symbol
-  z = bump(v, Width(struct g_atom)),
-  z->ap = g_vm_data,
-  z->typ = sym_class,
-  z->nom = b,
-  z->code = g_hash(v, gputnum(g_hash(v, (intptr_t) b))),
-  z->l = z->r = 0,
-  *y = z;
- struct g_vec *a = z->nom;
- int i = len(a) < len(b) ? -1 :
-         len(a) > len(b) ? 1 :
-         memcmp(txt(a), txt(b), len(a));
- return i == 0 ? z :
-  g_intern_r(v, b, i < 0 ? &z->l : &z->r); }
-
-g_vm(g_vm_nomsym) {
- Have(Width(struct g_atom));
- struct g_atom *y;
- Pack(f);
- y = g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols),
- Unpack(f);
- Sp[0] = word(y);
- Ip += 1;
- return Continue(); }
+  return copiers[typ(src)](f, (intptr_t) src, p0, t0); }

@@ -1,12 +1,5 @@
 #include "i.h"
 // some libc functions we use
-int
- memcmp(void const*, void const*, size_t);
-void
- *malloc(size_t),
- free(void*),
- *memcpy(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
 g_vm(g_vm_tnew) {
  Have(Width(struct g_tab) + 1);
  struct g_tab *t = (struct g_tab*) Hp;
@@ -17,6 +10,10 @@ g_vm(g_vm_tnew) {
  Sp[0] = (intptr_t) t;
  Ip++;
  return Continue(); }
+
+op11(g_vm_tabp, tabp(Sp[0]) ? gputnum(-1) : g_nil)
+void ini_tab(struct g_tab *t, uintptr_t len, uintptr_t cap, struct g_kvs**tab) {
+  t->ap = g_vm_data; t->typ = tbl_class; t->len = len; t->cap = cap; t->tab = tab; }
 
 // relies on table capacity being a power of 2
 static g_inline uintptr_t index_of_key(struct g *f, struct g_tab *t, intptr_t k) {
@@ -160,28 +157,32 @@ struct g *g_tnew(struct g*f) {
   tab[0] = 0, ini_tab(t, 0, 1, tab); }
  return f; }
 
-// general g_hashing method...
-uintptr_t g_hash(struct g *f, intptr_t x) {
- if (nump(x)) {
-  int const shift = sizeof(g_num) * 4;
-  return x *= mix, (x << shift) | (x >> shift); }
- else if (!datp(x)) {
-  if (!owns(f, x)) return mix ^ (mix * x);
-  // it's a function, g_hash by length
-  struct g_tag *t = ttag((void*)x);
-  intptr_t len = (union u*) t - t->head;
-  return mix ^ (mix * len); }
- else if (typ(x) == two_class)
-  return mix ^ (g_hash(f, A(x)) * g_hash(f, B(x)));
- else if (typ(x) == sym_class)
-  return sym(x)->code;
- else if (typ(x) == tbl_class)
-  return mix;
- else {
+typedef uintptr_t g_xx_t(struct g*, intptr_t x);
+static g_xx_t g_xx_two, g_xx_vec, g_xx_sym, g_xx_tab;
+
+static uintptr_t g_xx_two(struct g*f, intptr_t x) {
+  return mix ^ (g_hash(f, A(x)) * g_hash(f, B(x))); }
+static uintptr_t g_xx_sym(struct g*f, intptr_t x) {
+  return sym(x)->code; }
+static uintptr_t g_xx_tab(struct g*f, intptr_t x) {
+  return mix; }
+static uintptr_t g_xx_vec(struct g*f, intptr_t x) {
   void *_ = (void*) x;
   uintptr_t len = g_vec_bytes(_), h = 2166136261;
   for (uint8_t *bs = _; len--; h ^= *bs++, h *= 16777619);
-  return h; } }
+  return h; }
+static g_xx_t *hashers[] = {
+  [two_class] = g_xx_two,
+  [vec_class] = g_xx_vec,
+  [tbl_class] = g_xx_tab,
+  [sym_class] = g_xx_sym, };
 
-
-
+#define SHIFT (sizeof(intptr_t)<<2)
+// general g_hashing method...
+uintptr_t g_hash(struct g *f, intptr_t x) {
+ if (nump(x)) return (x*mix << SHIFT) | (x*mix >> SHIFT);
+ if (datp(x)) return hashers[typ(x)](f, x);
+ // it's a function, hash by length
+ uintptr_t r = mix, *y = (uintptr_t *)x;
+ while (*y++) r ^= r * mix;
+ return r; }

@@ -1,11 +1,4 @@
 #include "i.h"
-int
- memcmp(void const*, void const*, size_t);
-void
- *malloc(size_t),
- free(void*),
- *memcpy(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
 
 // function state using this type
 struct env {
@@ -589,3 +582,7 @@ g_noinline struct g *g_evals_(struct g*f, char const*s) {
  f = g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i))))));
  if (g_ok(f)) f->sp++;
  return f; }
+
+struct g_tag *ttag(union u *k) {
+  while (k->x) k++;
+  return (struct g_tag*) k; }
