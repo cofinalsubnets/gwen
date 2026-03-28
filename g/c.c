@@ -147,8 +147,7 @@ static Cata(g_c1_yield) { return f; }
 
 static Cata(g_c1_cond_pop_exit) {
  (*c)->exits = B((*c)->exits); // pops cond expression exit address off env stack exits
- f = pull(f, c);
- return f; }
+ return pull(f, c); }
 
 static Cata(g_c1_apn) {
  g_num arity = g_pop1(f);
@@ -158,15 +157,13 @@ static Cata(g_c1_apn) {
  else {
   if (Kp[0].ap == g_vm_ret) Kp -= 1, Kp[0].ap = g_vm_tapn, Kp[1].x = arity;
   else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; }
- f = pull(f, c);
- return f; }
+ return pull(f, c); }
 
 static Cata(g_c1_var_, g_num i) {
  Kp -= 2;
  Kp[0].ap = g_vm_arg;
  Kp[1].x = gputnum(i);
- f = pull(f, c);
- return f; }
+ return pull(f, c); }
 
 static Cata(g_c1_var_2) {
  g_num var = g_pop1(f),
@@ -191,8 +188,7 @@ static Cata(g_c1_i) {
  g_vm_t *i = (void*) g_pop1(f);
  Kp -= 1;
  Kp[0].ap = i;
- f = pull(f, c);
- return f; }
+ return pull(f, c); }
 
 static Cata(g_c1_ix) {
  g_vm_t *i = (void*) g_pop1(f);
@@ -200,15 +196,13 @@ static Cata(g_c1_ix) {
  Kp -= 2;
  Kp[0].ap = i;
  Kp[1].x = x;
- f = pull(f, c);
- return f; }
+ return pull(f, c); }
 
 static Cata(g_c1_ar, g_vm_t *i, g_num ar) {
  Kp -= 2;
  Kp[0].ap = i;
  Kp[1].x = gputnum(ar);
- f = pull(f, c);
- return f; }
+ return pull(f, c); }
 
 static Cata(g_c1_curry) {
  struct env *e = (void*) g_pop1(f);
@@ -544,11 +538,11 @@ g_vm(g_vm_defglob) {
  Sp[2] = (g_num) t;
  Pack(f);
  f = g_tput(f);
- return !g_ok(f) ? f :
-  (Unpack(f),
-   Sp += 1,
-   Ip += 2,
-   Continue()); }
+ if (!g_ok(f)) return f;
+ Unpack(f);
+ Sp += 1;
+ Ip += 2;
+ return Continue(); }
 
 g_vm(g_vm_drop1) { return Ip++, Sp++, Continue(); }
 

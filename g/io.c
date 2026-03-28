@@ -119,27 +119,27 @@ int gfprintf(struct g *f, struct g_out *o, char const *fmt, ...) {
 typedef int g_wr_t(struct g*, struct g_out*, intptr_t);
 static g_wr_t g_em_two, g_em_vec, g_em_sym, g_em_tab;
 static g_wr_t *emitters[] = {
-  [two_class] = g_em_two,
-  [vec_class] = g_em_vec,
-  [tbl_class] = g_em_tab,
-  [sym_class] = g_em_sym, };
+ [two_class] = g_em_two,
+ [vec_class] = g_em_vec,
+ [tbl_class] = g_em_tab,
+ [sym_class] = g_em_sym, };
 
 static int g_em_tab(struct g*f, struct g_out*o, intptr_t x) {
  struct g_tab *t = tbl(x);
  return gfprintf(f, o, "#tab:%d/%d@%x", t->len, t->cap, x); }
 static int g_em_sym(struct g*f, struct g_out*o, intptr_t x) {
-  int r = 0;
-  struct g_vec * s = sym(x)->nom;
-  if (s && vec_strp(s)) for (intptr_t i = 0; i < len(s); r = o->putc(f, txt(s)[i++], o));
-  else r = gfprintf(f, o, "#sym@%x", (intptr_t) x);
-  return r; }
+ int r = 0;
+ struct g_vec * s = sym(x)->nom;
+ if (s && vec_strp(s)) for (intptr_t i = 0; i < len(s); r = o->putc(f, txt(s)[i++], o));
+ else r = gfprintf(f, o, "#sym@%x", (intptr_t) x);
+ return r; }
 static int g_em_two(struct g*f, struct g_out*o, intptr_t x) {
-  if (A(x) == word(f->quote) && twop(B(x))) return
-   o->putc(f, '\'', o),
-   gfputx(f, o, AB(x));
-  for (o->putc(f, '(', o);; o->putc(f, ' ', o)) {
-   gfputx(f, o, A(x));
-   if (!twop(x = B(x))) return o->putc(f, ')', o); } }
+ if (A(x) == word(f->quote) && twop(B(x))) return
+  o->putc(f, '\'', o),
+  gfputx(f, o, AB(x));
+ for (o->putc(f, '(', o);; o->putc(f, ' ', o)) {
+  gfputx(f, o, A(x));
+  if (!twop(x = B(x))) return o->putc(f, ')', o); } }
 
 static int g_em_vec(struct g*f, struct g_out*o, intptr_t x) {
   int r = 0;
@@ -177,12 +177,12 @@ g_vm(g_vm_read) {
         Continue(); }
 
 g_vm(g_vm_putn) {
-  uintptr_t n = ggetnum(Sp[0]), b = ggetnum(Sp[1]);
-  g_putn(f, &g_stdout, n, b);
-  Sp[1] = Sp[0];
-  Sp += 1;
-  Ip += 1;
-  return Continue(); }
+ uintptr_t n = ggetnum(Sp[0]), b = ggetnum(Sp[1]);
+ g_putn(f, &g_stdout, n, b);
+ Sp[1] = Sp[0];
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
 
 g_vm(g_vm_puts) {
  if (g_strp(Sp[0])) {

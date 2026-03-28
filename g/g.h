@@ -52,16 +52,9 @@
 #endif
 
 // ok
-
-// integer default
-typedef intptr_t
- g_num, g_word;
-
-// any type
+typedef intptr_t g_num, g_word;
 union u;
-
 typedef g_vm(g_vm_t);
-
 struct g {
  union u {
   g_vm_t *ap;
@@ -114,16 +107,19 @@ enum g_status {
  g_status_ok  = 0,
  g_status_oom = 1,
  g_status_err = 2,
- g_status_eof = 3, } g_fin(struct g*);
+ g_status_eof = 3,
+} g_fin(struct g*);
+
+static g_inline intptr_t g_pop1(struct g*f) { return *f->sp++; }
+static g_inline size_t b2w(size_t b) {
+ size_t q = b / sizeof(g_num), r = b % sizeof(g_num);
+ return q + (r ? 1 : 0); }
 
 g_vm_t g_vm_ret0, g_vm_curry;
 
-uintptr_t
- g_clock(void); // used by garbage collector
+uintptr_t g_clock(void); // used by garbage collector
 
 int
- gvfprintf(struct g*, struct g_out*, char const*, va_list),
- gfprintf(struct g*, struct g_out*, const char*, ...),
  ggetc(struct g*),
  gungetc(struct g*, int),
  geof(struct g*),
@@ -134,17 +130,9 @@ struct g
  *g_ini(void),
  *g_ini_m(void *(*)(struct g*, size_t), void (*)(struct g*, void*)),
  *g_evals_(struct g*, const char*),
- *g_def1(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*),
  *g_push(struct g*, intptr_t, ...),
  *g_strof(struct g*, const char*),
  *gxl(struct g*),
  *gxr(struct g*);
-
-
-static g_inline size_t b2w(size_t b) {
- size_t
-  q = b / sizeof(g_num),
-  r = b % sizeof(g_num);
- return q + (r ? 1 : 0); }
 #endif

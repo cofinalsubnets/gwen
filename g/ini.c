@@ -42,7 +42,7 @@ bifs(built_in_function);
 
 static g_vm(g_vm_yield) { return Pack(f), f; }
 static union u yield[] = { {g_vm_yield} };
-static struct g_def const g_defs0[] = { bifs(biff) insts(i_entry) {0}};
+static struct g_def const def1[] = { bifs(biff) insts(i_entry) {0}};
 g_noinline struct g *g_ini_m(
  void *(*ma)(struct g*, size_t),
  void (*fr)(struct g*, void*))
@@ -64,24 +64,14 @@ g_noinline struct g *g_ini_m(
  if (!g_ok(f)) return f;
  f->quote = nom(g_pop1(f));
  f->lambda = nom(g_pop1(f));
- f->macro = tbl(g_pop1(f));
- f->dict = tbl(g_pop1(f));
- struct g_def defs[] = {
-  {"globals", (intptr_t) f->dict, },
-  {"macros", (intptr_t) f->macro, },
-  {0}, };
- f = g_defs(f, defs);
- f = g_defs(f, g_defs0);
- return f; }
+ intptr_t m = g_pop1(f), d = g_pop1(f);
+ f->macro = tbl(m), f->dict = tbl(d);
+ struct g_def def0[] = { {"globals", d, }, {"macros", m, }, {0}, };
+ return g_defs(g_defs(f, def0), def1); }
 
 static void *g_libc_malloc(struct g*f, size_t n) { return malloc(n); }
 static void g_libc_free(struct g*f, void *x) { free(x); }
 struct g *g_ini(void) { return g_ini_m(g_libc_malloc, g_libc_free); }
-
-struct g *g_def1(struct g*f, char const *s) {
- if (!g_ok(f)) return f;
- struct g_def d[] = {{s, g_pop1(f)}, {0}};
- return g_defs(f, d); }
 
 struct g *g_defs(struct g*f, struct g_def const*defs) {
  if (!g_ok(f)) return f;
