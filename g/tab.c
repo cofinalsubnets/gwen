@@ -12,8 +12,6 @@ g_vm(g_vm_tnew) {
  return Continue(); }
 
 op11(g_vm_tabp, tabp(Sp[0]) ? gputnum(-1) : g_nil)
-void ini_tab(struct g_tab *t, uintptr_t len, uintptr_t cap, struct g_kvs**tab) {
-  t->ap = g_vm_data; t->typ = tbl_class; t->len = len; t->cap = cap; t->tab = tab; }
 
 // relies on table capacity being a power of 2
 static g_inline uintptr_t index_of_key(struct g *f, struct g_tab *t, intptr_t k) {

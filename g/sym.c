@@ -1,9 +1,7 @@
 #include "i.h"
-void ini_anon(struct g_atom *y, uintptr_t code) {
-  y->ap = g_vm_data; y->typ = sym_class; y->nom = 0; y->code = code; }
 
 g_vm(g_vm_gensym) {
- if (g_strp(Sp[0])) return Ap(g_vm_nomsym, f);
+ if (strp(Sp[0])) return Ap(g_vm_nomsym, f);
  uintptr_t const req = Width(struct g_atom) - 2;
  Have(req);
  struct g_atom *y = (struct g_atom*) Hp;
@@ -22,9 +20,9 @@ g_vm(g_vm_symnom) {
 
 op11(g_vm_symp, symp(Sp[0]) ? gputnum(-1) : g_nil)
 struct g *g_intern(struct g*f) {
-  f = g_have(f, Width(struct g_atom));
-  if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
-  return f; }
+ f = g_have(f, Width(struct g_atom));
+ if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
+ return f; }
 
 g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom **y) {
  struct g_atom *z = *y;

@@ -11,8 +11,6 @@ g_vm(g_vm_cons) {
  *++Sp = word(w);
  Ip++;
  return Continue(); }
-void ini_two(struct g_pair *w, intptr_t a, intptr_t b) {
-  w->ap = g_vm_data; w->typ = two_class; w->a = a; w->b = b; }
 
 g_noinline struct g *gxl(struct g *f) {
  f = g_have(f, Width(struct g_pair));

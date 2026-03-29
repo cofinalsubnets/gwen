@@ -1,21 +1,11 @@
 #include "i.h"
 #include <stdarg.h>
 
-// some libc functions we use
-int
- memcmp(void const*, void const*, size_t);
-void
- *malloc(size_t),
- free(void*),
- *memcpy(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
-
 enum g_status g_fin(struct g *f) {
   enum g_status s = g_code_of(f);
   f = g_core_of(f);
   if (f) f->free(f, f->pool);
   return s; }
-
 
 #define S1(i) {{i}, {g_vm_ret0}}
 #define S2(i) {{g_vm_curry},{.x=gputnum(2)},{i}, {g_vm_ret0}}
@@ -62,9 +52,9 @@ g_noinline struct g *g_ini_m(
  f = g_tnew(g_tnew(f)); // dict and macro tables
  f = g_intern(g_strof(g_intern(g_strof(f, "\\")), "`"));
  if (!g_ok(f)) return f;
- f->quote = nom(g_pop1(f));
- f->lambda = nom(g_pop1(f));
- intptr_t m = g_pop1(f), d = g_pop1(f);
+ f->quote = nom(pop1(f));
+ f->lambda = nom(pop1(f));
+ intptr_t m = pop1(f), d = pop1(f);
  f->macro = tbl(m), f->dict = tbl(d);
  struct g_def def0[] = { {"globals", d, }, {"macros", m, }, {0}, };
  return g_defs(g_defs(f, def0), def1); }

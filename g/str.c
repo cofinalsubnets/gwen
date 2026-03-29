@@ -1,9 +1,9 @@
 #include "i.h"
-op11(g_vm_slen, g_strp(Sp[0]) ? gputnum(len(Sp[0])) : g_nil)
-op11(g_vm_strp, g_strp(Sp[0]) ? gputnum(-1) : g_nil)
+op11(g_vm_slen, strp(Sp[0]) ? gputnum(len(Sp[0])) : g_nil)
+op11(g_vm_strp, strp(Sp[0]) ? gputnum(-1) : g_nil)
 
 g_vm(g_vm_ssub) {
- if (!g_strp(Sp[0])) Sp[2] = g_nil;
+ if (!strp(Sp[0])) Sp[2] = g_nil;
  else {
   struct g_vec*s = ((struct g_vec*)Sp[0]), *t;
   intptr_t i = odd(Sp[1]) ? ggetnum(Sp[1]) : 0,
@@ -26,7 +26,7 @@ g_vm(g_vm_ssub) {
  return Continue(); }
 
 g_vm(g_vm_sget) {
- if (!g_strp(Sp[0])) Sp[1] = g_nil;
+ if (!strp(Sp[0])) Sp[1] = g_nil;
  else {
   struct g_vec *s = (struct g_vec*) Sp[0];
   intptr_t i = ggetnum(Sp[1]);
@@ -39,8 +39,8 @@ g_vm(g_vm_sget) {
 
 g_vm(g_vm_scat) {
  intptr_t a = Sp[0], b = Sp[1];
- if (!g_strp(a)) Sp += 1;
- else if (!g_strp(b)) Sp[1] = a, Sp += 1;
+ if (!strp(a)) Sp += 1;
+ else if (!strp(b)) Sp[1] = a, Sp += 1;
  else {
   struct g_vec
    *x = vec(a),
@@ -79,14 +79,11 @@ static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs
  v->rank = rank;
  while (rank--) *shape++ = va_arg(xs, uintptr_t); }
 
-static void ini_vec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
+void ini_vec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
   va_list xs;
   va_start(xs, rank);
   ini_vecv(v, type, rank, xs);
   va_end(xs); }
-
-void ini_str(struct g_vec *s, uintptr_t len) {
-  ini_vec((struct g_vec*) s, g_vect_char, 1, len); }
 
 static struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
  uintptr_t len = vt_size[type];
