@@ -20,7 +20,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_sget, "sget", S2(g_vm_sget)) _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_slen, "slen", S1(g_vm_slen)) _(bif_scat, "scat", S2(g_vm_scat)) \
  _(bif_g_vm_dot, ".", S1(g_vm_dot)) _(bif_read, "read", S1(g_vm_read)) _(bif_getc, "getc", S1(g_vm_getc))\
  _(bif_putc, "putc", S1(g_vm_putc)) _(bif_prn, "putn", S2(g_vm_putn)) _(bif_puts, "puts", S1(g_vm_puts))\
- _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(thda)) _(bif_g_vm_peek, "peek", S1(g_vm_peek)) _(bif_g_vm_poke, "poke", S2(g_vm_poke)) _(bif_trim, "trim", S1(trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
+ _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda)) _(bif_g_vm_peek, "peek", S1(g_vm_peek)) _(bif_g_vm_poke, "poke", S2(g_vm_poke)) _(bif_trim, "trim", S1(g_vm_trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
  _(bif_tabnew, "tnew", S1(g_vm_tnew)) _(bif_tabkeys, "tkeys", S1(g_vm_tkeys)) _(bif_tablen, "tlen", S1(g_vm_tlen)) _(bif_tset, "tset", S3(g_vm_tset)) _(bif_tabget, "tget", S3(g_vm_tget)) _(bif_tabdel, "tdel", S3(g_vm_tdel))\
  _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp)) _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tabp, "tabp", S1(g_vm_tabp)) _(bif_nump, "nump", S1(g_vm_nump)) _(bif_nilp, "nilp", S1(g_vm_nilp))\
  _(bif_ev, "ev", S1(g_vm_eval))

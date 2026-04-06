@@ -1,21 +1,14 @@
 #include "i.h"
 
-static struct g *please(struct g*, uintptr_t);
-
-g_noinline g_vm(g_vm_gc, uintptr_t n) {
-  Pack(f);
-  f = please(f, n);
-  if (g_ok(f)) return Unpack(f), Continue();
-  return f; }
 
 static intptr_t g_gc_cp(struct g*,intptr_t,intptr_t*,intptr_t*);
 
 #define cp(...) g_gc_cp(__VA_ARGS__)
 struct g *g_have(struct g *f, intptr_t n) {
- return !g_ok(f) || avail(f) >= n ? f : please(f, n); }
+ return !g_ok(f) || avail(f) >= n ? f : g_please(f, n); }
 
 static struct g *g_pushr(struct g *f, uintptr_t m, uintptr_t n, va_list xs) {
- if (n == m) return please(f, m);
+ if (n == m) return g_please(f, m);
  intptr_t x = va_arg(xs, intptr_t);
  MM(f, &x);
  f = g_pushr(f, m, n + 1, xs);
@@ -74,7 +67,7 @@ static g_noinline struct g *g_gc_cpg(struct g*g, intptr_t *p1, uintptr_t len1, s
   else g->cp += b2w(g_vec_bytes((struct g_vec*) g->cp));
  return g; }
 
-g_noinline struct g *please(struct g *f, uintptr_t req0) {
+g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
  uintptr_t const
   t0 = f->t0, // end of last gc period
   t1 = g_clock(), // end of current non-gc period

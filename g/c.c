@@ -89,43 +89,6 @@ g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
  f = g_c0_ix(f, &c, y, word(f->ip));
  return UM(f), f = g_c1(f, &c), UM(f), f; }
 
-static g_inline union u *clip(union u *k) { return ttag(k)->head = k; }
-
-g_vm(trim) {
- clip(cell(Sp[0]));
- Ip += 1;
- return Continue(); }
-
-g_vm(g_vm_seek) {
- Sp[1] = word(cell(Sp[1]) + getnum(Sp[0]));
- Sp += 1;
- Ip += 1;
- return Continue(); }
-
-g_vm(g_vm_peek) {
- Sp[0] = cell(Sp[0])->x;
- Ip += 1;
- return Continue(); }
-
-g_vm(g_vm_poke) {
- cell(Sp[1])->x = Sp[0];
- Sp += 1;
- Ip += 1;
- return Continue(); }
-
-g_vm(thda) {
- size_t n = getnum(Sp[0]);
- Have(n + Width(struct g_tag));
- union u *k = (union u*) Hp;
- Hp += n + Width(struct g_tag);
- struct g_tag *t = (void*) (k + n);
- t->null = NULL;
- t->head = k;
- memset(k, -1, n * sizeof(g_word));
- Sp[0] = word(k);
- Ip += 1;
- return Continue(); }
-
 
 #define Kp (f->ip)
 static Cata(g_c1) {
@@ -209,28 +172,15 @@ static Cata(g_c1_curry) {
  if (ar == 1) return pull(f, c);
  return g_c1_ar(f, c, g_vm_curry, ar); }
 
+#define C1(n, ...) static Cata(n) { return __VA_ARGS__, pull(f, c); }
 static Cata(g_c1_ret) {
  struct env *e = (struct env*) pop1(f);
  uintptr_t ar = llen(e->args) + llen(e->imps);
  return g_c1_ar(f, c, g_vm_ret, ar); }
 
-static Cata(g_c1_cond_push_branch) {
- f = gxl(g_push(f, 2, Kp, (*c)->branches));
- (*c)->branches = g_ok(f) ? pop1(f) : nil;
- return pull(f, c); }
-
-static Cata(g_c1_cond_push_exit) {
- f = gxl(g_push(f, 2, Kp, (*c)->exits));
- (*c)->exits = g_ok(f) ? pop1(f) : nil;
- return pull(f, c); }
-
-
-static Cata(g_c1_cond_pop_branch) {
- Kp -= 2,
- Kp[0].ap = g_vm_cond,
- Kp[1].x = A((*c)->branches);
- (*c)->branches = B((*c)->branches);
- return pull(f, c); }
+C1(g_c1_cond_push_branch, f = gxl(g_push(f, 2, Kp, (*c)->branches)), (*c)->branches = g_ok(f) ? pop1(f) : nil)
+C1(g_c1_cond_push_exit, f = gxl(g_push(f, 2, Kp, (*c)->exits)), (*c)->exits = g_ok(f) ? pop1(f) : nil)
+C1(g_c1_cond_pop_branch, Kp -= 2, Kp[0].ap = g_vm_cond, Kp[1].x = A((*c)->branches), (*c)->branches = B((*c)->branches))
 
 static Cata(g_c1_cond_exit) {
  union u *a = cell(A((*c)->exits));
@@ -412,9 +362,9 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
    return UM(f), f; }
 
   bool is_n_ary_bif =
-    call_arity > 1 &&
-    value_arity == call_arity &&
-    cell(f->sp[2])[3].ap == g_vm_ret0;
+   call_arity > 1 &&
+   value_arity == call_arity &&
+   cell(f->sp[2])[3].ap == g_vm_ret0;
 
   if (is_n_ary_bif) {
     g_vm_t *i = cell(f->sp[2])[2].ap;

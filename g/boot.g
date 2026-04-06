@@ -11,8 +11,11 @@
      (BA x) (B (A x)) (BB x) (B (B x))
      car A cdr B caar AA cadr AB cdar BA cddr BB
      inc (+ 1) dec (+ -1) :: (tset macros)
-     (id x) x (const x y) x (co f g x) (f (g x))
-     (flip f x y) (f y x) (diag f x) (f x x)
+     (id x) x
+     (const x _) x
+     (co f g x) (f (g x))
+     (flip f x y) (f y x)
+     (diag f x) (f x x)
      (map f l) (? (twop l) (X (f (A l)) (map f (B l))))
      (foldl z f l) (? (twop l) (foldl (f z (A l)) f (B l)) z)
      (foldr z f l) (? (twop l) (f (A l) (foldr z f (B l))) z)
@@ -25,6 +28,7 @@
      (ldel x l) (? (twop l) (? (= (A l) x) (B l) (X (A l) (ldel x (B l)))))
      (all f l) (? (twop l) (? (f (A l)) (all f (B l))) -1)
      (any f l) (? (twop l) (? (f (A l)) -1 (any f (B l))))
+     catmap (co (foldr 0) (co cat))
      (cat a b) (foldr b X a)
      (assq x l) (? l (? (= x (A (A l))) (A l) (assq x (B l))))
      (lidx x) ((: (f n l) (? (twop l) (? (= x (A l)) n (f (+ 1 n) (B l))) -1)) 0)
@@ -45,15 +49,12 @@
   (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
   (:: '>>= (\ l (X (last l) (init l))))
   (:: '|> (foldl1 (\ m f (L f m ))))
-  (:: '>=> (\ g (: y (sym 0) (L '\ y (foldl y (\ x f (L f x)) g)))))
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g))))))
  ; end of prelude
 
  ; next is an expression for the evaluator. this is evaluated three
  ; times by different init stages.
-  evaluator '(:- ; expression for the eval function
-    (\ x (: c (scop 0 (L 0) 0) (ana c x (thd0 c) 0 0)))
-
+  evaluator '(:- (\ x (: c (scop 0 (L 0) 0) (ana c x (thd0 c) 0 0)))
     (scop par arg imp) (:
      t (tnew 0)
      _ (tset t 'par par)
@@ -112,11 +113,10 @@
               (co (em1 g_vm_drop1) (ana_seq c (B x))))
         (co a0 a1)))
     ;ana_if is a bit complicated
-    (ana_if c b) (:-
-     (: a0 (pop 'end)
-        a1 (ana_if_r b)
-        a2 (push 'end)
-      (>=> a2 a1 a0))
+    (ana_if c b) (:- (: a0 (pop 'end)
+                        a1 (ana_if_r b)
+                        a2 (push 'end)
+                      (<=< a0 a1 a2))
      ; where
      (pop y k n) (: j (k n) (, (cpop y) j))
      (push y k n) (cpush y (k n))
@@ -134,19 +134,17 @@
            (= i g_vm_tapn)
             (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j)))
            (p1 g_vm_jump (p1 a j))))
-     (?
-      (atomp b) (em2 g_vm_quote 0)
-      (atomp (B b))
-       (: a0 (ana c (A b))
-          a1 peek_end
-        (>=> a1 a0))
-      (: a0 (ana c (A b))
-         a1 pop_alt
-         a2 (ana c (AB b))
-         a3 peek_end
-         a4 (push 'alt)
-         a5 (ana_if_r (BB b))
-       (>=> a5 a4 a3 a2 a1 a0)))))
+     (? (atomp b) (em2 g_vm_quote 0)
+        (atomp (B b)) (: a0 (ana c (A b))
+                         a1 peek_end
+                         (<=< a0 a1))
+        (: a0 (ana c (A b))
+           a1 pop_alt
+           a2 (ana c (AB b))
+           a3 peek_end
+           a4 (push 'alt)
+           a5 (ana_if_r (BB b))
+         (<=< a0 a1 a2 a3 a4 a5)))))
 
     (ana_apl n c b) (:
      (loop b)
@@ -154,7 +152,7 @@
        (: a0 (ana c (A b))
           a1 em_ap
           a2 (loop (B b))
-        (>=> a2 a1 a0)))
+        (<=< a0 a1 a2)))
      _ (cpush 'stk n)
      a (loop b)
      _ (cpop 'stk)
@@ -191,9 +189,9 @@
        ; local function def?
        (?
         lfd
-         (: a1 (em2 g_vm_lazyb lfd)
-            a2 (ana_apl 0 c (BB lfd))
-          (>=> a2 a1))
+         (: a0 (em2 g_vm_lazyb lfd)
+            a1 (ana_apl 0 c (BB lfd))
+          (<=< a0 a1))
          ; is it bound on a let stack in this scope?
         (memq x stk)
          (? (= c d)
@@ -283,17 +281,17 @@
                             x (ana_ll q (BB qa) (B d))
                             (set_cdr qa x))
                          d)
-          a1 (ana c d)
-          a2 (? (&& (toplp c) even) (em2 g_vm_defglob n) id)
-          a3 (lls n (B nds))
-          (>=> a3 a2 a1)))
+          a0 (ana c d)
+          a1 (? (&& (toplp c) even) (em2 g_vm_defglob n) id)
+          a2 (lls n (B nds))
+          (<=< a0 a1 a2)))
       s0 (tget 0 c 'stk)
       n  (llen noms)
-      a1 (ana c llam)
-      a2 (lls -1 (zip (rev noms) (rev defs)))
-      a3 (? (> n 1) (em_apn n) em_ap)
+      a0 (ana c llam)
+      a1 (lls -1 (zip (rev noms) (rev defs)))
+      a2 (? (> n 1) (em_apn n) em_ap)
       _ (tset c 'stk s0)
-      (>=> a3 a2 a1))))))
+      (<=< a0 a1 a2))))))
 
 
  ; helper to evaluate each prelude expression in order

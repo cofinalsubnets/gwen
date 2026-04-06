@@ -48,7 +48,6 @@
      (var? y) (sun (ext-s s y x))
      (&& (twop x) (twop y)
      (et (est (A x) (A y)) (est (B x) (B y)) s))))
- (catmap f x) (? (twop x) (cat (f (A x)) (catmap f (B x))))
  (Run n ks g) (:
   (walk* u s) (?
    (var? u) (: t (has-s s u) (? t (walk* (A t) s) u))

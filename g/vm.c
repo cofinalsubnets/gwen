@@ -138,3 +138,43 @@ g_vm(g_vm_ret0) { return
  Sp += 1,
  Continue(); }
 
+g_noinline g_vm(g_vm_gc, uintptr_t n) {
+  Pack(f);
+  f = g_please(f, n);
+  if (g_ok(f)) return Unpack(f), Continue();
+  return f; }
+
+g_vm(g_vm_trim) {
+ clip(cell(Sp[0]));
+ Ip += 1;
+ return Continue(); }
+
+g_vm(g_vm_seek) {
+ Sp[1] = word(cell(Sp[1]) + getnum(Sp[0]));
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
+
+g_vm(g_vm_peek) {
+ Sp[0] = cell(Sp[0])->x;
+ Ip += 1;
+ return Continue(); }
+
+g_vm(g_vm_poke) {
+ cell(Sp[1])->x = Sp[0];
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
+
+g_vm(g_vm_thda) {
+ size_t n = getnum(Sp[0]);
+ Have(n + Width(struct g_tag));
+ union u *k = (union u*) Hp;
+ Hp += n + Width(struct g_tag);
+ struct g_tag *t = (void*) (k + n);
+ t->null = NULL;
+ t->head = k;
+ memset(k, -1, n * sizeof(g_word));
+ Sp[0] = word(k);
+ Ip += 1;
+ return Continue(); }

@@ -21,7 +21,7 @@ g_vm(g_vm_symnom) {
 op11(g_vm_symp, symp(Sp[0]) ? gputnum(-1) : g_nil)
 struct g *g_intern(struct g*f) {
  f = g_have(f, Width(struct g_atom));
- if (g_ok(f)) f->sp[0] = (intptr_t) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
+ if (g_ok(f)) f->sp[0] = (g_word) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
  return f; }
 
 g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom **y) {
