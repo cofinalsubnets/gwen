@@ -24,7 +24,7 @@
      (filter p l) (? (twop l) (: m (filter p (B l)) (? (p (A l)) (X (A l) m) m)))
      (init l) (? (B l) (X (A l) (init (B l))))
      (last l) (? (B l) (last (B l)) (A l))
-     (each l f) (? (twop l) (, (f (A l)) (each (B l) f)))
+     (each l f) (? (twop l) (: _ (f (A l)) (each (B l) f)))
      (ldel x l) (? (twop l) (? (= (A l) x) (B l) (X (A l) (ldel x (B l)))))
      (all f l) (? (twop l) (? (f (A l)) (all f (B l))) -1)
      (any f l) (? (twop l) (? (f (A l)) -1 (any f (B l))))
@@ -40,7 +40,7 @@
      (part p) (foldr '(0) (\ a m
       (? (p a) (X (X a (A m)) (B m))
                (X (A m) (X a (B m))))))
-     (.. x) (, (. x) (putc 10) x)
+     (.. x) (: _ (. x) _ (putc 10) x)
      (llen l) (? (twop l) (+ 1 (llen (B l)))))
   ; here are some macro definitions
   (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
@@ -49,6 +49,8 @@
   (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
   (:: '>>= (\ l (X (last l) (init l))))
   (:: '|> (foldl1 (\ m f (L f m ))))
+  (:: ', (\ l
+   (X ': (foldr (L (last l)) (\ l r (X '_ (X l r))) (init l)))))
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g))))))
  ; end of prelude
 
@@ -73,13 +75,13 @@
      (symp x)  (ana_sym_r c x)
      (atomp x) (em2 g_vm_quote x)
      (: a (A x) b (B x) (?
+      (nilp (twop b)) (ana c a)
       (= a '` ) (em2 g_vm_quote (A b))
       (= a '? ) (ana_if  c b)
       (= a '\ ) (? (atomp b)     (em2 g_vm_quote 0)
                    (atomp (B b)) (ana c (A b))
                    (ana c (ana_ll c 0 b)))
       (= a ': ) (ana_let c b)
-      (= a ', ) (ana_seq c b)
       (atomp b) (ana c a)
       (: m (tget 0 macros a) (? m
        (ana c (m b))

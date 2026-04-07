@@ -76,26 +76,26 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
  struct g *g = f == f->pool ? (struct g*) (cell(f) + f->len) : f->pool;
  f = g_gc_cpg(g, (void*) f->pool, f->len, f);
  uintptr_t const
-  v_lo = 8,
-  v_hi = 64,
-  req = req0 + len0 - avail(f);
+  v_f = 2, // 2 or 3 seem like good values
+  req = req0 + len0 - avail(f),
+  t2 = g_clock();
  uintptr_t
   len1 = len0,
-  t2 = g_clock(),
-  v = t2 == t1 ? v_hi : (t2 - t0) / (t2 - t1);
- if (len1 < req || v < v_lo) // if too small
+  v = t2 == t1 ? 1 << 2 * v_f : (t2 - t0) / (t2 - t1);
+ if (len1 < req || v < 1 << v_f) // if too small
   do len1 <<= 1, v <<= 1; // then grow
-  while (len1 < req || v < v_lo);
- else if (len1 > 2 * req && v > v_hi) // else if too big
+  while (len1 < req || v < 1 << v_f);
+ else if (len1 > 2 * req && v > 1 << 2 * v_f) // else if too big
   do len1 >>= 1, v >>= 1; // then shrink
-  while (len1 > 2 * req && v > v_hi);
+  while (len1 > 2 * req && v > 1 << 2 * v_f);
  else return f->t0 = t2, f; // else right size -> all done
- // allocate a new pool with target size
- g = f->malloc(f, len1 * 2 * sizeof(g_num));
- if (!g) return encode(f, req <= len0 ? g_status_ok : g_status_oom);
- g = g_gc_cpg(g, (g_num*) g, len1, f);
- f->free(f, f->pool);
- return g->t0 = g_clock(), g; }
+ return // allocate a new pool with target size
+  !(g = f->malloc(f, len1 * 2 * sizeof(word))) ?
+   encode(f, req <= len0 ? g_status_ok : g_status_oom) :
+   (g = g_gc_cpg(g, (word*) g, len1, f),
+    f->free(f, f->pool),
+    g->t0 = g_clock(),
+    g); }
 
 typedef intptr_t g_cp_t(struct g*, intptr_t, intptr_t*, intptr_t*);
 static g_cp_t g_cp_two, g_cp_vec, g_cp_sym, g_cp_tab;

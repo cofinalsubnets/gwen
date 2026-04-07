@@ -248,10 +248,6 @@ static g_noinline Ana(analyze) {
  if (!twop(b)) return analyze(f, c, a); // value of first element
  if (symp(a) && nom(a)->nom && len(nom(a)->nom) == 1)
   switch (*txt(nom(a)->nom)) {
-   case ',':
-    for (MM(f, &b); twop(B(b)); b = B(b))
-     f = g_c0_i(analyze(f, c, A(b)), c, g_vm_drop1);
-    return UM(f), analyze(f, c, A(b));
    case '`':
     return g_c0_ix(f, c, g_vm_quote, !twop(b) ? nil : A(b));
    case '\\': return
@@ -263,14 +259,12 @@ static g_noinline Ana(analyze) {
     f = g_push(f, 2, b, g_c1_cond_pop_exit);
     f = g_c0_cond_r(f, c, g_ok(f) ? pop1(f) : nil);
     return g_push(f, 1, g_c1_cond_push_exit); }
-
- if ((x = g_tget(f, 0, f->macro, a))) return
-  f = g_push(f, 5, b, nil ,f->quote, nil, x),
-  f = g_eval(gxr(gxl(gxr(gxl(f))))),
-  analyze(f, c, g_ok(f) ? pop1(f) : 0);
- return
-  avec(f, b, f = analyze(f, c, a)),
-  g_c0_apargs(f, c, b); }
+ return ((x = g_tget(f, 0, f->macro, a))) ?
+  (f = g_push(f, 5, b, nil ,f->quote, nil, x),
+   f = g_eval(gxr(gxl(gxr(gxl(f))))),
+   analyze(f, c, g_ok(f) ? pop1(f) : 0)) :
+  (avec(f, b, f = analyze(f, c, a)),
+   g_c0_apargs(f, c, b)); }
 
 
 static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp) {
@@ -288,17 +282,19 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
   for (f = g_push(f, 1, nil); n--; f = gxr(f));
   exp = A(exp); }
 
- if (g_ok(f)) {
-  d->args = f->sp[0];
-  f->sp[0] = (g_num) g_c1_yield;
-  incl(d, 4);
-  f = g_push(f, 2, g_c1_curry, d);
-  f = analyze(f, &d, exp);
-  f = g_push(f, 2, g_c1_ret, d);
-  ip = f->ip;
-  avec(f, ip, f = g_c1(f, &d)); }
+ if (g_ok(f))
+  d->args = f->sp[0],
+  f->sp[0] = (g_num) g_c1_yield,
+  incl(d, 4),
+  f = g_push(f, 2, g_c1_curry, d),
+  f = analyze(f, &d, exp),
+  f = g_push(f, 2, g_c1_ret, d),
+  ip = f->ip,
+  avec(f, ip, f = g_c1(f, &d));
 
- if (g_ok(f)) k = f->ip, f->ip = ip,
+ if (g_ok(f))
+  k = f->ip,
+  f->ip = ip,
   f = gxl(g_push(f, 2, k, d->imps));
 
  return UM(f), UM(f), f; }
@@ -339,11 +335,11 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
   x = pop1(f);
   intptr_t call_arity = llen(x);
   bool is_immediate_function =
-    f->sp[0] == (g_num) g_c1_ix    &&
-    f->sp[1] == (g_num) g_vm_quote &&
-    even(f->sp[2]);
+   f->sp[0] == (g_num) g_c1_ix    &&
+   f->sp[1] == (g_num) g_vm_quote &&
+   even(f->sp[2]);
   intptr_t value_arity =
-    is_immediate_function && cell(f->sp[2])->ap == g_vm_curry
+   is_immediate_function && cell(f->sp[2])->ap == g_vm_curry
     ? getnum(cell(f->sp[2])[1].x)
     : 1;
   MM(f, &x);
@@ -383,11 +379,6 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
   (*c)->stack = B((*c)->stack); }
  return f; }
 
-static g_num ldels(struct g *f, g_num lam, g_num l) {
- if (!twop(l)) return nil;
- g_num m = ldels(f, lam, B(l));
- if (!assq(f, lam, A(l))) B(l) = m, m = l;
- return m; }
 
 static bool lambp(struct g *f, g_num x) {
  if (!twop(x) || !symp(A(x)) || !twop(B(x))) return false;
@@ -399,7 +390,8 @@ static g_num reverse(g_num l) {
  for (g_num m; twop(l); m = l, l = B(l), B(m) = n, n = m);
  return n; }
 
-// this is the longest function in the whole C implementation :(
+static g_num ldels(struct g *f, g_num lam, g_num l);
+// this is the longest C function :(
 // it handles the let special form in a way to support sequential and recursive binding.
 static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  if (!twop(B(exp))) return analyze(f, b, A(exp));
@@ -410,8 +402,8 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
  if (!g_ok(f)) return forget();
  struct env *q = (struct env*) pop1(f), **c = &q;
  // lots of variables :(
- g_num nom = nil, def = nil, lam = nil,
-       v = nil, d = nil, e = nil;
+ word nom = nil, def = nil, lam = nil,
+      v = nil, d = nil, e = nil;
  MM(f, &nom), MM(f, &def), MM(f, &lam);
  MM(f, &d); MM(f, &e); MM(f, &v); MM(f, &q);
 
@@ -487,10 +479,16 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
   f = top_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
   f = gxl(g_push(f, 2, A(nom), (*b)->stack)),
   (*b)->stack = g_ok(f) ? pop1(f) : nil;
- (*b)->stack = e;
- f = g_c0_apn(f, b, ll);
- return forget(); }
+ return
+  (*b)->stack = e,
+  f = g_c0_apn(f, b, ll),
+  forget(); }
 
+static g_num ldels(struct g *f, g_num lam, g_num l) {
+ if (!twop(l)) return nil;
+ g_num m = ldels(f, lam, B(l));
+ if (!assq(f, lam, A(l))) B(l) = m, m = l;
+ return m; }
 
 g_vm(g_vm_defglob) {
  Have(3);
@@ -498,16 +496,16 @@ g_vm(g_vm_defglob) {
  struct g_tab *t = dict_of(f);
  g_num k = Ip[1].x,
        v = Sp[3];
- Sp[0] = k;
- Sp[1] = v;
- Sp[2] = (g_num) t;
- Pack(f);
- f = g_tput(f);
- if (!g_ok(f)) return f;
- Unpack(f);
- Sp += 1;
- Ip += 2;
- return Continue(); }
+ return
+  Sp[0] = k,
+  Sp[1] = v,
+  Sp[2] = (g_num) t,
+  Pack(f),
+  !g_ok(f = g_tput(f)) ? f :
+   (Unpack(f),
+    Sp += 1,
+    Ip += 2,
+    Continue()); }
 
 g_vm(g_vm_drop1) { return Ip++, Sp++, Continue(); }
 
@@ -517,24 +515,21 @@ g_vm(g_vm_freev) { return
  Continue(); }
 
 struct ti { struct g_in in; char const *t; uintptr_t i; } ;
-static int p_text_eof(struct g*f, struct g_in *j) {
- struct ti *i = (struct ti*) j;
+static int p_text_eof(struct g*f, struct ti *i) {
  return !i->t[i->i]; }
 
-static int p_text_getc(struct g*f, struct g_in *j) {
- struct ti *i = (struct ti*) j;
+static int p_text_getc(struct g*f, struct ti *i) {
  char c = i->t[i->i];
  if (c) i->i++;
  return c ? c : EOF; }
 
-static int p_text_ungetc(struct g*f, int _, struct g_in *j) {
- struct ti *i = (struct ti*) j;
+static int p_text_ungetc(struct g*f, int _, struct ti *i) {
  uintptr_t idx = i->i;
- return i->t[i->i = idx ? idx - 1 : idx]; }
+ return i->t[i->i = i->i ? idx - 1 : idx]; }
 
 g_noinline struct g *g_evals_(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
- struct ti i = {{p_text_getc, p_text_ungetc, p_text_eof}, t, 0};
+ struct ti i = {{(void*)p_text_getc, (void*)p_text_ungetc, (void*)p_text_eof}, t, 0};
  f = g_eval(g_reads(f, (void*) &i));
  f = g_push(f, 3, nil, g_ok(f) ? f->quote : NULL, nil);
  i.t = s, i.i = 0;

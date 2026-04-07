@@ -1,6 +1,6 @@
 ; generates a manual page
 (: 
- (putln s) (, (puts s) (putc 10))
+ (putln s) (: _ (puts s) (putc 10))
  concat (foldl "" scat)
  sec "1"
  nom "gl"
