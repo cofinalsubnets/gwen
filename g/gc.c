@@ -1,7 +1,23 @@
 #include "i.h"
 
 
-static intptr_t g_gc_cp(struct g*,intptr_t,intptr_t*,intptr_t*);
+static intptr_t g_gc_cp(struct g*,intptr_t,intptr_t const *,intptr_t const*);
+
+typedef void g_wk_t(struct g*, intptr_t*, intptr_t const*, intptr_t const*);
+static g_wk_t g_wk_two, g_wk_vec, g_wk_sym, g_wk_tab;
+static g_wk_t *wks[] = {
+  [two_q] = g_wk_two,
+  [vec_q] = g_wk_vec,
+  [sym_q] = g_wk_sym,
+  [tbl_q] = g_wk_tab, };
+
+typedef intptr_t g_cp_t(struct g*, intptr_t, intptr_t const*, intptr_t const*);
+static g_cp_t g_cp_two, g_cp_vec, g_cp_sym, g_cp_tab;
+static g_cp_t *copiers[] = {
+  [two_q] = g_cp_two,
+  [vec_q] = g_cp_vec,
+  [sym_q] = g_cp_sym,
+  [tbl_q] = g_cp_tab, };
 
 #define cp(...) g_gc_cp(__VA_ARGS__)
 struct g *g_have(struct g *f, intptr_t n) {
@@ -31,11 +47,10 @@ static g_noinline struct g *g_gc_cpg(struct g*g, intptr_t *p1, uintptr_t len1, s
  g->pool = (void*) p1;
  g->len = len1;
  uintptr_t len0 = f->len;
- g_word
-  *p0 = ptr(f),
-  *t0 = ptr(f) + len0, // source top
-  *sp0 = f->sp,
-  h = t0 - sp0; // stack height
+ word const *p0 = ptr(f),
+            *t0 = ptr(f) + len0, // source top
+            *sp0 = f->sp;
+ word h = t0 - sp0; // stack height
  g->sp = ptr(g) + len1 - h;
  g->hp = g->cp = g->end;
  g->ip = cell(g_gc_cp(g, word(g->ip), p0, t0));
@@ -47,25 +62,28 @@ static g_noinline struct g *g_gc_cpg(struct g*g, intptr_t *p1, uintptr_t len1, s
  for (struct g_root *s = g->root; s; s = s->next)
   *s->ptr = g_gc_cp(g, *s->ptr, p0, t0);
  while (g->cp < g->hp)
-  if (!datp(g->cp)) for (g->cp += 2; g->cp[-2]; g->cp++)
+  if (datp(g->cp)) wks[typ(g->cp)](g, g->cp, p0, t0);
+  else for (g->cp += 2; g->cp[-2]; g->cp++)
    g->cp[-2] = g_gc_cp(g, g->cp[-2], p0, t0);
-  else if (typ(g->cp) == sym_class)
-   g->cp += Width(struct g_atom) - (((struct g_atom*) g->cp)->nom ? 0 : 2);
-  else if (typ(g->cp) == two_class) {
-   struct g_pair *w = (void*) g->cp;
-   g->cp += Width(struct g_pair);
-   w->a = g_gc_cp(g, w->a, p0, t0);
-   w->b = g_gc_cp(g, w->b, p0, t0); }
-  else if (typ(g->cp) == tbl_class) {
-   struct g_tab *t = (void*) g->cp;
-   g->cp += Width(struct g_tab) + t->cap + t->len * Width(struct g_kvs);
-   for (intptr_t i = 0, lim = t->cap; i < lim; i++)
-    for (struct g_kvs*e = t->tab[i]; e;
-     e->key = g_gc_cp(g, e->key, p0, t0),
-     e->val = g_gc_cp(g, e->val, p0, t0),
-     e = e->next); }
-  else g->cp += b2w(g_vec_bytes((struct g_vec*) g->cp));
  return g; }
+
+static void g_wk_vec(struct g*g, intptr_t *x, intptr_t const*p0, intptr_t const *t0) {
+ g->cp += b2w(g_vec_bytes((struct g_vec*) g->cp)); }
+static void g_wk_two(struct g*g, intptr_t *x, intptr_t const *p0, intptr_t const*t0) {
+ struct g_pair *w = (void*) g->cp;
+ g->cp += Width(struct g_pair);
+ w->a = g_gc_cp(g, w->a, p0, t0);
+ w->b = g_gc_cp(g, w->b, p0, t0); }
+static void g_wk_tab(struct g*g, intptr_t *x, intptr_t const*p0, intptr_t const*t0) {
+ struct g_tab *t = (void*) g->cp;
+ g->cp += Width(struct g_tab) + t->cap + t->len * Width(struct g_kvs);
+ for (intptr_t i = 0, lim = t->cap; i < lim; i++)
+  for (struct g_kvs*e = t->tab[i]; e;
+   e->key = g_gc_cp(g, e->key, p0, t0),
+   e->val = g_gc_cp(g, e->val, p0, t0),
+   e = e->next); }
+static void g_wk_sym(struct g*g, intptr_t *x, intptr_t const*p0, intptr_t const*t0) {
+ g->cp += Width(struct g_atom) - (((struct g_atom*) g->cp)->nom ? 0 : 2); }
 
 g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
  uintptr_t const
@@ -77,17 +95,19 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
  f = g_gc_cpg(g, (void*) f->pool, f->len, f);
  uintptr_t const
   v_f = 2, // 2 or 3 seem like good values
+  v_lo = 1 << v_f,
+  v_hi = v_lo << v_f,
   req = req0 + len0 - avail(f),
   t2 = g_clock();
  uintptr_t
   len1 = len0,
-  v = t2 == t1 ? 1 << 2 * v_f : (t2 - t0) / (t2 - t1);
- if (len1 < req || v < 1 << v_f) // if too small
+  v = t2 == t1 ? v_hi : (t2 - t0) / (t2 - t1);
+ if (len1 < req || v < v_lo) // if too small
   do len1 <<= 1, v <<= 1; // then grow
-  while (len1 < req || v < 1 << v_f);
- else if (len1 > 2 * req && v > 1 << 2 * v_f) // else if too big
+  while (len1 < req || v < v_lo);
+ else if (len1 > 2 * req && v > v_hi) // else if too big
   do len1 >>= 1, v >>= 1; // then shrink
-  while (len1 > 2 * req && v > 1 << 2 * v_f);
+  while (len1 > 2 * req && v > v_hi);
  else return f->t0 = t2, f; // else right size -> all done
  return // allocate a new pool with target size
   !(g = f->malloc(f, len1 * 2 * sizeof(word))) ?
@@ -97,36 +117,29 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
     g->t0 = g_clock(),
     g); }
 
-typedef intptr_t g_cp_t(struct g*, intptr_t, intptr_t*, intptr_t*);
-static g_cp_t g_cp_two, g_cp_vec, g_cp_sym, g_cp_tab;
-static g_cp_t *copiers[] = {
-  [two_class] = g_cp_two,
-  [vec_class] = g_cp_vec,
-  [sym_class] = g_cp_sym,
-  [tbl_class] = g_cp_tab, };
 
-static intptr_t g_cp_two(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static intptr_t g_cp_two(struct g*f, intptr_t x, intptr_t const *p0, intptr_t const*t0) {
  struct g_pair *src = two(x),
                *dst = bump(f, Width(struct g_pair));
  ini_two(dst, src->a, src->b);
  src->ap = (g_vm_t*) dst;
  return word(dst); }
 
-static intptr_t g_cp_vec(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static intptr_t g_cp_vec(struct g*f, intptr_t x, intptr_t const*p0, intptr_t const*t0) {
  struct g_vec *src = vec(x);
  uintptr_t bytes = g_vec_bytes(src);
  struct g_vec *dst = bump(f, b2w(bytes));
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
-static intptr_t g_cp_sym(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static intptr_t g_cp_sym(struct g*f, intptr_t x, intptr_t const*p0, intptr_t const*t0) {
  struct g_atom *src = sym(x), *dst;
  if (src->nom) dst = g_intern_r(f, (struct g_vec*) g_gc_cp(f, word(src->nom), p0, t0), &f->symbols);
  else dst = bump(f, Width(struct g_atom) - 2),
       ini_anon(dst, src->code);
  return (intptr_t) (src->ap = (g_vm_t*) dst); }
 
-static intptr_t g_cp_tab(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static intptr_t g_cp_tab(struct g*f, intptr_t x, intptr_t const*p0, intptr_t const*t0) {
  struct g_tab *src = tbl(x);
  uintptr_t len = src->len, cap = src->cap;
  struct g_tab *dst = bump(f, Width(struct g_tab) + cap + Width(struct g_kvs) * len);
@@ -141,7 +154,7 @@ static intptr_t g_cp_tab(struct g*f, intptr_t x, intptr_t *p0, intptr_t *t0) {
  return word(dst); }
 
 
-static g_noinline intptr_t g_gc_cp(struct g *f, intptr_t x, intptr_t *p0, intptr_t *t0) {
+static g_noinline intptr_t g_gc_cp(struct g *f, intptr_t x, intptr_t const *p0, intptr_t const *t0) {
   // if it's a number or it's outside managed memory then return it
   if (odd(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
   union u *src = cell(x);

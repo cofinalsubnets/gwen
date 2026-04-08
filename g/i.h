@@ -19,7 +19,6 @@ enum g_vec_type {
  g_vect_f32, g_vect_f64, };
 struct g
  *g_please(struct g*, uintptr_t),
- *g_c0(struct g *f, g_vm_t *y),
  *g_have(struct g*, intptr_t),
  *g_tput(struct g *f),
  *g_tnew(struct g*),

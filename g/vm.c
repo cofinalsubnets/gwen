@@ -66,12 +66,6 @@ g_vm(g_vm_quote) {
  Ip += 2;
  return Continue(); }
 
-g_vm(g_vm_eval) {
- Ip++;
- Pack(f);
- f = g_c0(f, g_vm_jump);
- return g_ok(f) ? (Unpack(f), Continue()) : f; }
-
 g_vm(g_vm_data) {
  intptr_t x = word(Ip);
  Sp += 1;

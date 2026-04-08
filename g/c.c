@@ -1,4 +1,5 @@
 #include "i.h"
+static struct g *g_c0(struct g *f, g_vm_t *y);
 
 // function state using this type
 struct env {
@@ -74,11 +75,10 @@ static size_t llen(g_num l) {
  while (twop(l)) n++, l = B(l);
  return n; }
 
-static struct g
- *g_c0_lambda(struct g*, struct env**, g_num, g_num);
+static struct g *g_c0_lambda(struct g*, struct env**, g_num, g_num);
 
 // don't inline this so callers can tail call optimize
-g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
+static g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
  f = enscope(f, (struct env*) nil, nil, nil);
  if (!g_ok(f)) return f;
  struct env *c = (void*) ptr(pop1(f));
@@ -107,9 +107,9 @@ static Cata(g_c1) {
 
 static Cata(g_c1_yield) { return f; }
 
-static Cata(g_c1_cond_pop_exit) {
- (*c)->exits = B((*c)->exits); // pops cond expression exit address off env stack exits
- return pull(f, c); }
+static Cata(g_c1_cond_pop_exit) { return
+ (*c)->exits = B((*c)->exits), // pops cond expression exit address off env stack exits
+ pull(f, c); }
 
 static Cata(g_c1_apn) {
  g_num arity = pop1(f);
@@ -121,11 +121,11 @@ static Cata(g_c1_apn) {
   else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; }
  return pull(f, c); }
 
-static Cata(g_c1_var_, g_num i) {
- Kp -= 2;
- Kp[0].ap = g_vm_arg;
- Kp[1].x = putnum(i);
- return pull(f, c); }
+static Cata(g_c1_var_, g_num i) { return
+ Kp -= 2,
+ Kp[0].ap = g_vm_arg,
+ Kp[1].x = putnum(i),
+ pull(f, c); }
 
 static Cata(g_c1_var_2) {
  num var = pop1(f),
@@ -160,17 +160,16 @@ static Cata(g_c1_ix) {
  Kp[1].x = x;
  return pull(f, c); }
 
-static Cata(g_c1_ar, g_vm_t *i, g_num ar) {
- Kp -= 2;
- Kp[0].ap = i;
- Kp[1].x = putnum(ar);
- return pull(f, c); }
+static Cata(g_c1_ar, g_vm_t *i, g_num ar) { return
+ Kp -= 2,
+ Kp[0].ap = i,
+ Kp[1].x = putnum(ar),
+ pull(f, c); }
 
 static Cata(g_c1_curry) {
  struct env *e = (void*) pop1(f);
  uintptr_t ar = llen(e->args) + llen(e->imps);
- if (ar == 1) return pull(f, c);
- return g_c1_ar(f, c, g_vm_curry, ar); }
+ return ar == 1 ? pull(f, c) : g_c1_ar(f, c, g_vm_curry, ar); }
 
 #define C1(n, ...) static Cata(n) { return __VA_ARGS__, pull(f, c); }
 static Cata(g_c1_ret) {
@@ -217,16 +216,14 @@ static Ana(g_c0_cond_r);
 static Ana(g_c0_var) {
  g_num y;
  for (struct env *d = *c;; d = d->par) {
-  if (nilp(d)) { // free variable?
-   if ((y = g_tget(f, 0, dict_of(f), x)))
-    return g_c0_ix(f, c, g_vm_quote, y);
-   f = gxl(g_push(f, 2, x, (*c)->imps));
-   f = g_c0_ix(f, c, g_vm_freev, (*c)->imps = g_ok(f) ? pop1(f) : nil);
-   return f; }
+  if (nilp(d)) return (y = g_tget(f, 0, dict_of(f), x)) ?
+   g_c0_ix(f, c, g_vm_quote, y) :
+   (f = gxl(g_push(f, 2, x, (*c)->imps)),
+    f = g_c0_ix(f, c, g_vm_freev, (*c)->imps = g_ok(f) ? pop1(f) : nil),
+    f);
   // lambda definition of local let form?
-  if ((y = assq(f, d->lams, x))) return
-   f = g_c0_ix(f, c, g_vm_lazyb, y),
-   g_c0_apargs(f, c, BB(f->sp[2]));
+  if ((y = assq(f, d->lams, x))) return f = g_c0_ix(f, c, g_vm_lazyb, y),
+                                        g_c0_apargs(f, c, BB(f->sp[2]));
   // other definition of local let form?
   if (memq(f, d->stack, x)) return
    incl(*c, 2),
@@ -520,12 +517,10 @@ static int p_text_eof(struct g*f, struct ti *i) {
 
 static int p_text_getc(struct g*f, struct ti *i) {
  char c = i->t[i->i];
- if (c) i->i++;
- return c ? c : EOF; }
+ return c ? (i->i++, c) : EOF; }
 
 static int p_text_ungetc(struct g*f, int _, struct ti *i) {
- uintptr_t idx = i->i;
- return i->t[i->i = i->i ? idx - 1 : idx]; }
+ return i->t[i->i = i->i ? i->i - 1 : i->i]; }
 
 g_noinline struct g *g_evals_(struct g*f, char const*s) {
  static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
@@ -536,3 +531,9 @@ g_noinline struct g *g_evals_(struct g*f, char const*s) {
  f = g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i))))));
  if (g_ok(f)) f->sp++;
  return f; }
+
+g_vm(g_vm_eval) {
+ Ip++;
+ Pack(f);
+ f = g_c0(f, g_vm_jump);
+ return g_ok(f) ? (Unpack(f), Continue()) : f; }
