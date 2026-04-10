@@ -48,9 +48,8 @@
   (:: '|| (\ l (: (or l) (? l (: y (sym 0) (L ': y (A l) (L '? y y (or (B l)))))) (or l))))
   (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
   (:: '>>= (\ l (X (last l) (init l))))
-  (:: '|> (foldl1 (\ m f (L f m ))))
-  (:: ', (\ l
-   (X ': (foldr (L (last l)) (\ l r (X '_ (X l r))) (init l)))))
+  (:: '|> (foldl1 (\ m f (L f m))))
+  (:: ', (\ l (X ': (foldr (L (last l)) (\ l r (X '_ (X l r))) (init l)))))
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g))))))
  ; end of prelude
 
@@ -69,7 +68,8 @@
     (argof c) (tget 0 c 'arg)
     (impof c) (tget 0 c 'imp)
     (arity c) (+ (llen (argof c)) (llen (impof c)))
-;; thread initializer
+    (toplp c) (nilp (parof c))
+    (parof c) (tget 0 c 'par)
 
     (ana c x) (:- (?
      (symp x)  (ana_sym_r c x)
@@ -85,16 +85,11 @@
       (atomp b) (ana c a)
       (: m (tget 0 macros a) (? m
        (ana c (m b))
-       (ana_ap a b))))))
+       (: a0 (ana c a)
+          a1 (ana_apl 0 c b)
+        (<=< a0 a1)))))))
 
-     (ana_ap a b)
-     (: a0 (ana c a)
-        a1 (ana_apl 0 c b)
-      (co a0 a1))
 
-     (toplp c) (nilp (parof c))
-     (parof c) (tget 0 c 'par)
-     (em1 i k n) (p1 i (k (+ 1 n)))
      (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
      (cpeek k) (A (tget 0 c k))
      (cpush k v) (, (tset c k (X v (tget 0 c k))) v)
@@ -106,14 +101,7 @@
      (em_apn n k m) (:
       j (k (+ 2 m))
       (? (= (peek j) g_vm_ret) (p1 g_vm_tapn (poke n j))
-                            (p1 g_vm_apn (p1 n j))))
-     ; ana_seq is recursive but pretty simple
-     (ana_seq c x)
-      (? (atomp x) (em2 g_vm_quote 0)
-       (: a0 (ana c (A x))
-          a1 (? (atomp (B x)) id
-              (co (em1 g_vm_drop1) (ana_seq c (B x))))
-        (co a0 a1)))
+                               (p1 g_vm_apn (p1 n j))))
     ;ana_if is a bit complicated
     (ana_if c b) (:- (: a0 (pop 'end)
                         a1 (ana_if_r b)
@@ -139,7 +127,7 @@
      (? (atomp b) (em2 g_vm_quote 0)
         (atomp (B b)) (: a0 (ana c (A b))
                          a1 peek_end
-                         (<=< a0 a1))
+                       (<=< a0 a1))
         (: a0 (ana c (A b))
            a1 pop_alt
            a2 (ana c (AB b))
@@ -169,7 +157,9 @@
           (? (< i 0) i (+ (llen imp) i)))))
 
      (import v)
-      (? (not (toplp c)) (cpush 'imp v))
+      (? (&& (not (toplp c))
+             (not (memq v (tget 0 c 'imp))))
+       (cpush 'imp v))
 
      (cata_var c) (:
          i (llen (tget 0 c 'stk))
@@ -209,14 +199,11 @@
 
 
     (ana_ll c imp exp) (:
-     arg (init exp)
-     x (last exp)
-     d (scop c arg imp)
-     k (ana d x (thd0 d))
+     d (scop c (init exp) imp)
+     k (ana d (last exp) (thd0 d))
      ar (arity d)
-     k (trim ((? (> ar 1) (em2 g_vm_curry ar) id) k 0))
-     imp (impof d)
-     (X k imp))
+     k ((? (> ar 1) (em2 g_vm_curry ar) id) k 0)
+     (X (trim k) (impof d)))
 
 
     (ana_let c b) (?
@@ -267,9 +254,7 @@
         n (cl 0 l l l)
         l))
 
-
-      lnoms (map A lams)
-      (ldd ll) (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) lnoms)))
+      (ldd ll) (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) (map A lams))))
       clams (map ldd lams)
       llam (X '\ (cat noms (L exp)))
       _ (tset q 'lam clams)
@@ -297,7 +282,7 @@
 
 
  ; helper to evaluate each prelude expression in order
- (go e a) (? a (, (e (A a)) (go e (B a))))
+ (go e a) (? a (: _ (e (A a)) (go e (B a))))
 
  # init process
  t0 (clock 0)      ; start time
