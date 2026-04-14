@@ -377,20 +377,20 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
  return f; }
 
 
-static bool lambp(struct g *f, g_num x) {
+static bool lambp(struct g *f, word x) {
  if (!twop(x) || !symp(A(x)) || !twop(B(x))) return false;
  struct g_vec *n = sym(A(x))->nom;
  return n && len(n) == 1 && *txt(n) == '\\'; }
 
-static g_num reverse(g_num l) {
- g_num n = nil;
- for (g_num m; twop(l); m = l, l = B(l), B(m) = n, n = m);
+static g_num reverse(word l) {
+ word n = nil;
+ for (word m; twop(l); m = l, l = B(l), B(m) = n, n = m);
  return n; }
 
-static g_num ldels(struct g *f, g_num lam, g_num l);
+static g_num ldels(struct g *f, word lam, word l);
 // this is the longest C function :(
 // it handles the let special form in a way to support sequential and recursive binding.
-static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
+static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
  if (!twop(B(exp))) return analyze(f, b, A(exp));
  struct g_root *mm = f->root;
 #define forget() (g_core_of(f)->root=(mm),f)
@@ -483,7 +483,7 @@ static struct g *g_c0_let(struct g *f, struct env **b, g_num exp) {
 
 static g_num ldels(struct g *f, g_num lam, g_num l) {
  if (!twop(l)) return nil;
- g_num m = ldels(f, lam, B(l));
+ word m = ldels(f, lam, B(l));
  if (!assq(f, lam, A(l))) B(l) = m, m = l;
  return m; }
 
@@ -491,18 +491,14 @@ g_vm(g_vm_defglob) {
  Have(3);
  Sp -= 3;
  struct g_tab *t = dict_of(f);
- g_num k = Ip[1].x,
-       v = Sp[3];
- return
-  Sp[0] = k,
-  Sp[1] = v,
-  Sp[2] = (g_num) t,
-  Pack(f),
-  !g_ok(f = g_tput(f)) ? f :
-   (Unpack(f),
-    Sp += 1,
-    Ip += 2,
-    Continue()); }
+ word k = Ip[1].x, v = Sp[3];
+ Sp[0] = k, Sp[1] = v, Sp[2] = (g_num) t;
+ Pack(f);
+ if (!g_ok(f = g_tput(f))) return f;
+ Unpack(f);
+ Sp += 1;
+ Ip += 2;
+ return Continue(); }
 
 g_vm(g_vm_drop1) { return Ip++, Sp++, Continue(); }
 
@@ -532,8 +528,8 @@ g_noinline struct g *g_evals_(struct g*f, char const*s) {
  if (g_ok(f)) f->sp++;
  return f; }
 
-g_vm(g_vm_eval) {
- Ip++;
- Pack(f);
- f = g_c0(f, g_vm_jump);
- return g_ok(f) ? (Unpack(f), Continue()) : f; }
+g_vm(g_vm_eval) { return
+ Ip++,
+ Pack(f),
+ f = g_c0(f, g_vm_jump),
+ g_ok(f) ? (Unpack(f), Continue()) : f; }

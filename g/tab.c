@@ -4,12 +4,13 @@ g_vm(g_vm_tnew) {
  Have(Width(struct g_tab) + 1);
  struct g_tab *t = (struct g_tab*) Hp;
  struct g_kvs **tab = (struct g_kvs**) (t + 1);
- Hp += Width(struct g_tab) + 1;
- tab[0] = 0;
- ini_tab(t, 0, 1, tab);
- Sp[0] = (intptr_t) t;
- Ip++;
- return Continue(); }
+ return
+  Hp += Width(struct g_tab) + 1,
+  tab[0] = 0,
+  ini_tab(t, 0, 1, tab),
+  Sp[0] = (intptr_t) t,
+  Ip++,
+  Continue(); }
 
 op11(g_vm_tabp, tabp(Sp[0]) ? gputnum(-1) : g_nil)
 
@@ -106,15 +107,10 @@ g_vm(g_vm_tget) { return
 
 g_vm(g_vm_tset) {
  if (tabp(Sp[0])) {
-  g_num t = Sp[0],
-        k = Sp[1],
-        v = Sp[2];
-  Sp[0] = k;
-  Sp[1] = v;
-  Sp[2] = t;
+  word t = Sp[0], k = Sp[1], v = Sp[2];
+  Sp[0] = k, Sp[1] = v, Sp[2] = t;
   Pack(f);
-  f = g_tput(f);
-  if (!g_ok(f)) return f;
+  if (!g_ok(f = g_tput(f))) return f;
   Unpack(f); }
  return Ip += 1,
         Continue(); }
@@ -146,7 +142,7 @@ g_vm(g_vm_tkeys) {
  Ip += 1;
  return Continue(); }
 
-struct g *g_tnew(struct g*f) {
+struct g *mktbl(struct g*f) {
  f = g_have(f, Width(struct g_tab) + 2);
  if (g_ok(f)) {
   struct g_tab *t = bump(f, Width(struct g_tab) + 1);
@@ -159,21 +155,21 @@ typedef uintptr_t g_xx_t(struct g*, intptr_t x);
 static g_xx_t g_xx_two, g_xx_vec, g_xx_sym, g_xx_tab;
 
 static uintptr_t g_xx_two(struct g*f, intptr_t x) {
-  return mix ^ (g_hash(f, A(x)) * g_hash(f, B(x))); }
+ return mix ^ (g_hash(f, A(x)) * g_hash(f, B(x))); }
 static uintptr_t g_xx_sym(struct g*f, intptr_t x) {
-  return sym(x)->code; }
+ return sym(x)->code; }
 static uintptr_t g_xx_tab(struct g*f, intptr_t x) {
-  return mix; }
+ return mix; }
 static uintptr_t g_xx_vec(struct g*f, intptr_t x) {
-  void *_ = (void*) x;
-  uintptr_t len = g_vec_bytes(_), h = 2166136261;
-  for (uint8_t *bs = _; len--; h ^= *bs++, h *= 16777619);
-  return h; }
+ void *_ = (void*) x;
+ uintptr_t len = g_vec_bytes(_), h = 2166136261;
+ for (uint8_t *bs = _; len--; h ^= *bs++, h *= 16777619);
+ return h; }
 static g_xx_t *hashers[] = {
-  [two_class] = g_xx_two,
-  [vec_class] = g_xx_vec,
-  [tbl_class] = g_xx_tab,
-  [sym_class] = g_xx_sym, };
+ [two_class] = g_xx_two,
+ [vec_class] = g_xx_vec,
+ [tbl_class] = g_xx_tab,
+ [sym_class] = g_xx_sym, };
 
 #define SHIFT (sizeof(intptr_t)<<2)
 // general g_hashing method...

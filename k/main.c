@@ -290,10 +290,10 @@ void kmain(void) {
   if (archinit() && meminit() && fbinit() && cbinit())
     g_evals_(g_defs(g_ini(), defs),
 #include "boot.h"
-      "(:(ps1 _)(puts\" ;; \")"
-        "(rs x)(? x(X(A x)(rs(read 0))))"
+      "(:(ps1 _)(puts\" ;; \")E(sym())"
+        "(rs x)(?(= x E)0(X(A x)(rs(read E))))"
         "(ep x)(,(.(ev x))(putc 10))"
-        "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read 0))ep))))))))"
+        "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read E))ep))))))))"
        "(go(key(ps1(,(putn(clock(puts\"\x02 \"))10)(putc 10))))))");
    // */
 

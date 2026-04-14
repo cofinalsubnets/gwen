@@ -25,8 +25,9 @@ int main(int argc, char const **argv) {
  for (f = g_push(f, 1, g_nil); argc--; f = gxr(f));
  if (g_ok(f)) {
   struct g_def d[] = {{"argv", g_pop1(f)}, {0}};
-  f = g_defs(f, d); }
- f = g_evals_(f, "((:(go _)(: r(read _)(? r(,(ev'ev(A r))(go _)))))0)");
+  static char const p[] =
+   "(:(g e)(: r(read e)(?(= e r)0(: _(ev'ev r)(g e))))(g(sym 0)))";
+  f = g_evals_(g_defs(f, d), p); }
  enum g_status s = g_code_of(f);
  if (s != g_status_ok) {
   f = g_core_of(f);

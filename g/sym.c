@@ -5,23 +5,25 @@ g_vm(g_vm_gensym) {
  uintptr_t const req = Width(struct g_atom) - 2;
  Have(req);
  struct g_atom *y = (struct g_atom*) Hp;
- Hp += req;
- ini_anon(y, g_clock());
- Sp[0] = word(y);
- Ip += 1;
- return Continue(); }
+ return
+  Hp += req,
+  ini_anon(y, g_clock()),
+  Sp[0] = word(y),
+  Ip += 1,
+  Continue(); }
 
 g_vm(g_vm_symnom) {
  intptr_t y = Sp[0];
- y = symp(y) && sym(y)->nom ? word(sym(y)->nom) : g_nil;
- Sp[0] = y;
- Ip += 1;
- return Continue(); }
+ return
+  y = symp(y) && sym(y)->nom ? word(sym(y)->nom) : g_nil,
+  Sp[0] = y,
+  Ip += 1,
+  Continue(); }
 
 op11(g_vm_symp, symp(Sp[0]) ? gputnum(-1) : g_nil)
 struct g *g_intern(struct g*f) {
  f = g_have(f, Width(struct g_atom));
- if (g_ok(f)) f->sp[0] = (g_word) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
+ if (g_ok(f)) f->sp[0] = (word) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
  return f; }
 
 g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom **y) {
@@ -44,9 +46,10 @@ g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom
 g_vm(g_vm_nomsym) {
  Have(Width(struct g_atom));
  struct g_atom *y;
- Pack(f);
- y = g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols),
- Unpack(f);
- Sp[0] = word(y);
- Ip += 1;
- return Continue(); }
+ return
+  Pack(f),
+  y = g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols),
+  Unpack(f),
+  Sp[0] = word(y),
+  Ip += 1,
+  Continue(); }

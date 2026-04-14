@@ -1,4 +1,7 @@
-(: (go l) (: x (read 0) (? x (, (? l (puts " "))
-                                (. (A x))
-                                (go x))))
+(: eof (sym 0)
+  (go l) (: x (read eof)
+   (? (= x eof) 0
+    (: _ (? l (puts " "))
+       _ (. x)
+     (go (+ 1 l)))))
  (go 0))

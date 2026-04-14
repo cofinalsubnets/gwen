@@ -33,10 +33,7 @@ bifs(built_in_function);
 static g_vm(g_vm_yield) { return Pack(f), f; }
 static union u yield[] = { {g_vm_yield} };
 static struct g_def const def1[] = { bifs(biff) insts(i_entry) {0}};
-g_noinline struct g *g_ini_m(
- void *(*ma)(struct g*, size_t),
- void (*fr)(struct g*, void*))
-{
+g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  uintptr_t const len0 = 1 << 10;
  struct g *f = ma(NULL, 2 * len0 * sizeof(g_word));
  if (f == NULL) return encode(f, g_status_oom);
@@ -46,15 +43,15 @@ g_noinline struct g *g_ini_m(
  f->malloc = ma;
  f->free = fr;
  f->hp = f->end;
- f->sp = (intptr_t*) f + len0;
+ f->sp = (word*) f + len0;
  f->ip = yield;
  f->t0 = g_clock(); // this goes right before first allocation so gc always sees initialized t0
- f = g_tnew(g_tnew(f)); // dict and macro tables
+ f = mktbl(mktbl(f)); // dict and macro tables
  f = g_intern(g_strof(g_intern(g_strof(f, "\\")), "`"));
  if (!g_ok(f)) return f;
  f->quote = nom(pop1(f));
  f->lambda = nom(pop1(f));
- intptr_t m = pop1(f), d = pop1(f);
+ word m = pop1(f), d = pop1(f);
  f->macro = tbl(m), f->dict = tbl(d);
  struct g_def def0[] = { {"globals", d, }, {"macros", m, }, {0}, };
  return g_defs(g_defs(f, def0), def1); }

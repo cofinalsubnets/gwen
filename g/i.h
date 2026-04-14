@@ -21,7 +21,7 @@ struct g
  *g_please(struct g*, uintptr_t),
  *g_have(struct g*, intptr_t),
  *g_tput(struct g *f),
- *g_tnew(struct g*),
+ *mktbl(struct g*),
  *g_intern(struct g*),
  *g_reads(struct g*, struct g_in*),
  *g_read1(struct g*f, struct g_in* i);

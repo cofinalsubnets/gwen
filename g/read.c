@@ -2,8 +2,7 @@
 struct g_in g_stdin = { .getc = (void*) ggetc, .ungetc = (void*) gungetc, .eof = (void*) geof };
 struct g_out g_stdout = { .putc = (void*) gputc, .flush = (void*) gflush };
 static struct g *grbufn(struct g *f) {
- f = g_have(f, str_type_width + 2);
- if (g_ok(f)) {
+ if (g_ok(f = g_have(f, str_type_width + 2))) {
   union u *k = bump(f, str_type_width + 1);
   *--f->sp = word(k);
   struct g_vec *o = (struct g_vec*) k;
@@ -13,8 +12,7 @@ static struct g *grbufn(struct g *f) {
 static struct g *grbufg(struct g *f) {
  size_t len = len(f->sp[0]),
         req = str_type_width + 2 * b2w(len);
- f = g_have(f, req);
- if (g_ok(f)) {
+ if (g_ok(f = g_have(f, req))) {
   struct g_vec *o = bump(f, req);
   ini_str(o, 2 * len);
   memcpy(txt(o), txt(f->sp[0]), len);
@@ -56,8 +54,7 @@ struct g *g_read1(struct g*f, struct g_in* i) {
    return f; } }
 
  uintptr_t n = 1, lim = sizeof(intptr_t);
- f = grbufn(f);
- if (g_ok(f))
+ if (g_ok(f = grbufn(f)))
   for (txt(f->sp[0])[0] = c; g_ok(f); f = grbufg(f), lim *= 2)
    for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
     switch (c = i->getc(f, i)) {
@@ -84,21 +81,20 @@ struct g *g_reads(struct g *f, struct g_in* i) {
  for (f = g_push(f, 1, g_nil); n--; f = gxr(f));
  return f; }
 
-
-
 g_vm(g_vm_read) {
- Pack(f);
- f = g_read1(f, &g_stdin);
- if (g_code_of(f) == g_status_eof) return // no error but end of file
-  f = g_core_of(f),
-  Unpack(f),
-  Ip += 1,
-  Continue();
- f = gxl(f);
- if (!g_ok(f)) return f;
- return Unpack(f),
-        Ip += 1,
-        Continue(); }
+ switch (Pack(f), g_code_of(f = g_read1(f, &g_stdin))) {
+  default: return f;
+  case g_status_eof:
+   f = g_core_of(f); // nothing to read
+   Unpack(f);
+   Ip += 1;
+   return Continue();
+  case g_status_ok:
+   Unpack(f);
+   Sp[1] = Sp[0];
+   Sp += 1;
+   Ip += 1;
+   return Continue(); } }
 
 g_vm(g_vm_getc) {
  Pack(f);

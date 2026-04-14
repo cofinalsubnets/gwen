@@ -103,6 +103,9 @@ struct g_out {
  int (*putc)(struct g*, int, struct g_out*),
      (*flush)(struct g*); };
 
+typedef void *g_malloc_t(struct g*, size_t);
+typedef void g_free_t(struct g*, void*);
+
 enum g_status {
  g_status_ok  = 0,
  g_status_oom = 1,
@@ -128,7 +131,7 @@ int
 
 struct g
  *g_ini(void),
- *g_ini_m(void *(*)(struct g*, size_t), void (*)(struct g*, void*)),
+ *g_ini_m(g_malloc_t*, g_free_t*),
  *g_evals_(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*),
  *g_push(struct g*, intptr_t, ...),
