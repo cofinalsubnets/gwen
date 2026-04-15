@@ -31,7 +31,7 @@ g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom
  if (!z) return // found an empty spot, insert new symbol
   z = bump(v, Width(struct g_atom)),
   z->ap = g_vm_data,
-  z->typ = sym_class,
+  z->typ = sym_q,
   z->nom = b,
   z->code = g_hash(v, gputnum(g_hash(v, (intptr_t) b))),
   z->l = z->r = 0,

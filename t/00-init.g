@@ -10,7 +10,7 @@
      (puts reset))
 
    test-state (tnew 0)
-   test-set (tset test-state)
+   (test-set k v) (set k v test-state)
    test-get (tget 0 test-state))
 (:: 'assert (\ l
 (:

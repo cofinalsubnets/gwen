@@ -4,7 +4,7 @@ static struct g *g_c0(struct g *f, g_vm_t *y);
 // function state using this type
 struct env {
   struct env *par;
-  g_num
+  word
    args,  // list  // function positional arguments
    imps,  // list  // closure variables
    stack, // list  // current values on stack
@@ -23,7 +23,7 @@ static g_inline Cata(pull) { return ((cata*) pop1(f))(f, c); }
 
 #define incl(e, n) ((e)->len += ((n)<<1))
 // generic instruction ana handlers
-static struct g *g_c0_ix(struct g *f, struct env **c, g_vm_t *i, g_num x) {
+static struct g *g_c0_ix(struct g *f, struct env **c, g_vm_t *i, word x) {
  incl(*c, 2);
  return g_push(f, 3, g_c1_ix, i, x); }
 
@@ -31,7 +31,7 @@ static struct g *g_c0_i(struct g *f, struct env **c, g_vm_t *i) {
  incl(*c, 1);
  return g_push(f, 2, g_c1_i, i); }
 
-static g_noinline struct g *enscope(struct g *f, struct env *par, g_num args, g_num imps) {
+static g_noinline struct g *enscope(struct g *f, struct env *par, word args, word imps) {
  f = g_push(f, 3, args, imps, par);
  uintptr_t n = Width(struct env);
  f = g_have(f, n + Width(struct g_tag));
@@ -45,21 +45,21 @@ static g_noinline struct g *enscope(struct g *f, struct env *par, g_num args, g_
   c->args = f->sp[0],
   c->imps = f->sp[1],
   c->par = (struct env*) f->sp[2];
-  f->sp[2] = (g_num) c,
+  f->sp[2] = (word) c,
   f->sp += 2; }
  return f; }
 
-static g_num memq(struct g *f, g_num l, g_num k) {
+static word memq(struct g *f, word l, word k) {
  for (; twop(l); l = B(l)) if (eql(f, k, A(l))) return l;
  return 0; }
 
-static g_num assq(struct g *f, g_num l, g_num k) {
+static word assq(struct g *f, word l, word k) {
  for (; twop(l); l = B(l)) if (eql(f, k, AA(l))) return A(l);
  return 0; }
 
 static struct g *append(struct g *f) {
  uintptr_t i = 0;
- for (g_num l; g_ok(f) && twop(f->sp[0]); i++)
+ for (word l; g_ok(f) && twop(f->sp[0]); i++)
   l = B(f->sp[0]),
   f->sp[0] = A(f->sp[0]),
   f = g_push(f, 1, l);
@@ -70,20 +70,20 @@ static struct g *append(struct g *f) {
  if (g_ok(f)) f->sp[1] = f->sp[0], f->sp++;
  return f; }
 
-static size_t llen(g_num l) {
+static size_t llen(word l) {
  size_t n = 0;
  while (twop(l)) n++, l = B(l);
  return n; }
 
-static struct g *g_c0_lambda(struct g*, struct env**, g_num, g_num);
+static struct g *g_c0_lambda(struct g*, struct env**, word, word);
 
 // don't inline this so callers can tail call optimize
 static g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
  f = enscope(f, (struct env*) nil, nil, nil);
  if (!g_ok(f)) return f;
  struct env *c = (void*) ptr(pop1(f));
- g_num x = f->sp[0];
- f->sp[0] = (g_num) g_c1_yield;
+ word x = f->sp[0];
+ f->sp[0] = (word) g_c1_yield;
  MM(f, &c); MM(f, &x);
  f = analyze(f, &c, x);
  f = g_c0_ix(f, &c, y, word(f->ip));
@@ -98,7 +98,7 @@ static Cata(g_c1) {
   union u *k = bump(f, l + Width(struct g_tag));
   struct g_tag *t = (void*) (k + l);
   t->null = NULL;
-  t->head = memset(k, -1, l * sizeof(g_num));
+  t->head = memset(k, -1, l * sizeof(word));
   Kp = (void*) t;
   f = pull(f, c); }
  if (g_ok(f)) clip(f->ip);
@@ -112,7 +112,7 @@ static Cata(g_c1_cond_pop_exit) { return
  pull(f, c); }
 
 static Cata(g_c1_apn) {
- g_num arity = pop1(f);
+ word arity = pop1(f);
  if (arity == g_putnum(1)) {
   if (Kp[0].ap == g_vm_ret) Kp[0].ap = g_vm_tap;
   else Kp -= 1, Kp[0].ap = g_vm_ap; }
@@ -121,7 +121,7 @@ static Cata(g_c1_apn) {
   else Kp -= 2, Kp[0].ap = g_vm_apn, Kp[1].x = arity; }
  return pull(f, c); }
 
-static Cata(g_c1_var_, g_num i) { return
+static Cata(g_c1_var_, word i) { return
  Kp -= 2,
  Kp[0].ap = g_vm_arg,
  Kp[1].x = putnum(i),
@@ -137,8 +137,8 @@ static Cata(g_c1_var_2) {
  return g_c1_var_(f, c, i); }
 
 static Cata(g_c1_var) {
- g_num l, v = pop1(f),
-          i = llen(pop1(f)); // stack inset
+ word l, v = pop1(f),
+         i = llen(pop1(f)); // stack inset
  for (l = (*c)->imps; !nilp(l); l = B(l), i++)
   if (eql(f, v, A(l))) return g_c1_var_(f, c, i);
  for (l = (*c)->args; !nilp(l); l = B(l), i++)
@@ -154,13 +154,13 @@ static Cata(g_c1_i) {
 
 static Cata(g_c1_ix) {
  g_vm_t *i = (void*) pop1(f);
- g_num x = pop1(f);
+ word x = pop1(f);
  Kp -= 2;
  Kp[0].ap = i;
  Kp[1].x = x;
  return pull(f, c); }
 
-static Cata(g_c1_ar, g_vm_t *i, g_num ar) { return
+static Cata(g_c1_ar, g_vm_t *i, word ar) { return
  Kp -= 2,
  Kp[0].ap = i,
  Kp[1].x = putnum(ar),
@@ -188,7 +188,7 @@ static Cata(g_c1_cond_exit) {
  else if (a->ap == g_vm_tapn)
   Kp = memcpy(Kp - 3, a, 3 * sizeof(*Kp));
  else
-  Kp -= 2, Kp[0].ap = g_vm_jump, Kp[1].x = (g_num) a;
+  Kp -= 2, Kp[0].ap = g_vm_jump, Kp[1].x = (word) a;
  return pull(f, c); }
 
 static g_vm(g_vm_yieldk) { return
@@ -196,7 +196,7 @@ static g_vm(g_vm_yieldk) { return
  Pack(f),
  encode(f, g_status_yield); }
 
-static struct g *g_eval(struct g *f) {
+static struct g *gev(struct g *f) {
  f = g_c0(f, g_vm_yieldk);
 #if g_tco
  if (g_ok(f)) f = f->ip->ap(f, f->ip, f->hp, f->sp);
@@ -214,7 +214,7 @@ g_vm(g_vm_lazyb) { return
 static Ana(g_c0_cond_r);
 
 static Ana(g_c0_var) {
- g_num y;
+ word y;
  for (struct env *d = *c;; d = d->par) {
   if (nilp(d)) return (y = g_tget(f, 0, dict_of(f), x)) ?
    g_c0_ix(f, c, g_vm_quote, y) :
@@ -240,9 +240,11 @@ static g_noinline Ana(analyze) {
  if (!g_ok(f)) return f; // error...
  if (symp(x)) return g_c0_var(f, c, x); // variable
  if (!twop(x)) return g_c0_ix(f, c, g_vm_quote, x); // self quoting expression
- g_num a = A(x), b = B(x);
- // singleton list?
- if (!twop(b)) return analyze(f, c, a); // value of first element
+ // it is a pair
+ word a = A(x), b = B(x);
+ // singleton list has value of element
+ if (!twop(b)) return analyze(f, c, a);
+ // if it is a special form then do that
  if (symp(a) && nom(a)->nom && len(nom(a)->nom) == 1)
   switch (*txt(nom(a)->nom)) {
    case '`':
@@ -256,12 +258,14 @@ static g_noinline Ana(analyze) {
     f = g_push(f, 2, b, g_c1_cond_pop_exit);
     f = g_c0_cond_r(f, c, g_ok(f) ? pop1(f) : nil);
     return g_push(f, 1, g_c1_cond_push_exit); }
- return ((x = g_tget(f, 0, f->macro, a))) ?
-  (f = g_push(f, 5, b, nil ,f->quote, nil, x),
-   f = g_eval(gxr(gxl(gxr(gxl(f))))),
-   analyze(f, c, g_ok(f) ? pop1(f) : 0)) :
-  (avec(f, b, f = analyze(f, c, a)),
-   g_c0_apargs(f, c, b)); }
+
+ // if it is a macro then apply the macro and analyze the result
+ if ((x = g_tget(f, 0, f->macro, a))) return
+  f = gev(gxr(gxl(gxr(gxl(g_push(f, 5, b, nil ,f->quote, nil, x)))))),
+  analyze(f, c, g_ok(f) ? pop1(f) : 0);
+ return // apply function to arguments
+  avec(f, b, f = analyze(f, c, a)),
+  g_c0_apargs(f, c, b); }
 
 
 static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp) {
@@ -281,7 +285,7 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
 
  if (g_ok(f))
   d->args = f->sp[0],
-  f->sp[0] = (g_num) g_c1_yield,
+  f->sp[0] = (word) g_c1_yield,
   incl(d, 4),
   f = g_push(f, 2, g_c1_curry, d),
   f = analyze(f, &d, exp),
@@ -316,9 +320,9 @@ static struct g *g_c0_apn(struct g*f, struct env**c, intptr_t ar) {
  incl(*c, 2);
  return g_push(f, 2, g_c1_apn, putnum(ar)); }
 
-static struct g *g_c0_apargsr(struct g *f, struct env **c, g_num x) {
+static struct g *g_c0_apargsr(struct g *f, struct env **c, word x) {
  if (twop(x)) {
-  g_num y = A(x);
+  word y = A(x);
   avec(f, y, f = g_c0_apargsr(f, c, B(x)));
   f = analyze(f, c, y);
   f = gxl(g_push(f, 2, nil, (*c)->stack));
@@ -332,8 +336,8 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
   x = pop1(f);
   intptr_t call_arity = llen(x);
   bool is_immediate_function =
-   f->sp[0] == (g_num) g_c1_ix    &&
-   f->sp[1] == (g_num) g_vm_quote &&
+   f->sp[0] == (word) g_c1_ix    &&
+   f->sp[1] == (word) g_vm_quote &&
    even(f->sp[2]);
   intptr_t value_arity =
    is_immediate_function && cell(f->sp[2])->ap == g_vm_curry
@@ -342,9 +346,9 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
   MM(f, &x);
 
   bool is_unary_bif =
-    call_arity == 1 &&
-    is_immediate_function &&
-    cell(f->sp[2])[1].ap == g_vm_ret0;
+   call_arity == 1 &&
+   is_immediate_function &&
+   cell(f->sp[2])[1].ap == g_vm_ret0;
 
   // inline a unary bif
   if (is_unary_bif) {
@@ -382,12 +386,12 @@ static bool lambp(struct g *f, word x) {
  struct g_vec *n = sym(A(x))->nom;
  return n && len(n) == 1 && *txt(n) == '\\'; }
 
-static g_num reverse(word l) {
+static word reverse(word l) {
  word n = nil;
  for (word m; twop(l); m = l, l = B(l), B(m) = n, n = m);
  return n; }
 
-static g_num ldels(struct g *f, word lam, word l);
+static word ldels(struct g *f, word lam, word l);
 // this is the longest C function :(
 // it handles the let special form in a way to support sequential and recursive binding.
 static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
@@ -435,7 +439,7 @@ static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
  // for each function f with closure C(f)
  // for each function g with closure C(g)
  // if f in C(g) then C(g) include C(f)
- g_num j, vars, var;
+ word j, vars, var;
  do for (j = 0, d = lam; twop(d); d = B(d)) // for each bound function variable
   for (e = lam; twop(e); e = B(e)) if (d != e) // for each other bound function variable
    if (memq(f, BB(A(e)), AA(d))) // if you need this function
@@ -466,8 +470,8 @@ static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
    f = g_c0_lambda(f, c, BB(d), BA(v));
    if (!g_ok(f)) return forget();
    A(v) = B(d) = pop1(f); }
- nom = reverse(nom); // put in literal order
 
+ nom = reverse(nom); // put in literal order
  f = analyze(f, b, exp);
  f = gxl(g_push(f, 2, nil, e = (*b)->stack)); // push function stack rep
  (*b)->stack = g_ok(f) ? pop1(f) : nil;
@@ -481,7 +485,7 @@ static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
   f = g_c0_apn(f, b, ll),
   forget(); }
 
-static g_num ldels(struct g *f, g_num lam, g_num l) {
+static word ldels(struct g *f, word lam, word l) {
  if (!twop(l)) return nil;
  word m = ldels(f, lam, B(l));
  if (!assq(f, lam, A(l))) B(l) = m, m = l;
@@ -492,7 +496,7 @@ g_vm(g_vm_defglob) {
  Sp -= 3;
  struct g_tab *t = dict_of(f);
  word k = Ip[1].x, v = Sp[3];
- Sp[0] = k, Sp[1] = v, Sp[2] = (g_num) t;
+ Sp[0] = k, Sp[1] = v, Sp[2] = (word) t;
  Pack(f);
  if (!g_ok(f = g_tput(f))) return f;
  Unpack(f);
@@ -507,29 +511,24 @@ g_vm(g_vm_freev) { return
  Ip[1].x = g_tget(f, Ip[1].x, f->dict, Ip[1].x),
  Continue(); }
 
-struct ti { struct g_in in; char const *t; uintptr_t i; } ;
-static int p_text_eof(struct g*f, struct ti *i) {
- return !i->t[i->i]; }
-
-static int p_text_getc(struct g*f, struct ti *i) {
- char c = i->t[i->i];
- return c ? (i->i++, c) : EOF; }
-
-static int p_text_ungetc(struct g*f, int _, struct ti *i) {
- return i->t[i->i = i->i ? i->i - 1 : i->i]; }
-
-g_noinline struct g *g_evals_(struct g*f, char const*s) {
- static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
- struct ti i = {{(void*)p_text_getc, (void*)p_text_ungetc, (void*)p_text_eof}, t, 0};
- f = g_eval(g_reads(f, (void*) &i));
- f = g_push(f, 3, nil, g_ok(f) ? f->quote : NULL, nil);
- i.t = s, i.i = 0;
- f = g_eval(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i))))));
- if (g_ok(f)) f->sp++;
- return f; }
-
 g_vm(g_vm_eval) { return
  Ip++,
  Pack(f),
  f = g_c0(f, g_vm_jump),
- g_ok(f) ? (Unpack(f), Continue()) : f; }
+ !g_ok(f) ? f : (Unpack(f),
+                 Continue()); }
+
+struct ti { struct g_in in; char const *t; word i; } ;
+static int _eof(struct g*f, struct ti *i) { return !i->t[i->i]; }
+static int _getc(struct g*f, struct ti *i) { return _eof(f, i) ? EOF : i->t[i->i++]; }
+static int _ungetc(struct g*f, int _, struct ti *i) { return i->t[i->i = i->i ? i->i - 1 : i->i]; }
+g_noinline struct g *g_evals_(struct g*f, char const*s) {
+ static char const *t = "((:(e a b)(? b(e(ev'ev(A b))(B b))a)e)0)";
+ struct ti i = {{(void*)_getc, (void*)_ungetc, (void*)_eof}, t, 0};
+ f = gev(g_reads(f, (void*) &i));
+ f = g_push(f, 3, nil, g_ok(f) ? f->quote : NULL, nil);
+ i.t = s, i.i = 0;
+ f = gev(gxr(gxl(gxr(gxl(g_reads(f, (void*) &i))))));
+ if (g_ok(f)) f->sp++;
+ return f; }
+

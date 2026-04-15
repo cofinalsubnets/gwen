@@ -13,7 +13,7 @@
  has-s dict-has
  ext-s dict-set
  (unord-eq a b) (&&
-  (= (llen a) (llen b))
+  (= (len a) (len b))
   (all (flip memq a) b))
  (sX x s n m y) (y x s)
  (sno n m y) (n sno)

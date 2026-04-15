@@ -56,6 +56,7 @@ const gw = (() => {
         ["B", a=>!isArray(a)||a.length<2?0:a.slice(1)],
         ["tget", z=>t=>k=>t instanceof Map && t.has(k) ? t.get(k) : z],
         ["tset", t=>k=>v=>t instanceof Map ? t.set(k, v) : v],
+        ["set",  k=>v=>t=>t instanceof Map ? t.set(k, v) : v],
         ["tnew", _=>new Map()],
         ["tlen", t=>t instanceof Map ? t.size : 0],
         ["tdel", z=>t=>k=>t instanceof Map && t.has(k) ? (z = t.get(k), t.delete(k), z) : z],

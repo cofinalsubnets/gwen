@@ -108,38 +108,54 @@ int eventHandler(PlaydateAPI* pd, PDSystemEvent event, uint32_t arg) {
       K.mode = &_log;
       _synth.synth = pd->sound->synth->newSynth();
       K.g = g_evals_(g_defs(g_ini_m(_malloc, _free), defs),
-    "(: (log zzz) (,(: i(vminfo 0)f(A i)len(A(B i))allocd(A(B(B i)))stackd(A(B(B(B i))))"
-    "(,"
-    "(puts\"\x03 \")(putn(clock 0)10)"
-    "(puts\"\n\nf@\")""(putn f 16)"
-    "(puts\"\n#\")"
-    "(putn len 10)"
-    "(puts\".\")"
-    "(putn stackd 10)"
-    "(puts\".\")""(putn allocd 10)))"
-    "(puts\"\n\ncrank: \")(putn(crank_angle 0)10)(puts\"\xf8\")"
-    "(puts\"\nbuttons: \")(putn(get_buttons 0)2)"
-    "(puts\"\n\nroot folder contents:\n\")(.(ls_root 0))"
-    "(: (cputc r1 c1 c) (: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set r1 c1) (cur_put c) (cur_set r0 c0))))"
-    "(: r0 (cur_row 0) c0 (cur_col 0) (, (cur_set 0 44) (puts\"life \x18\") (cur_set 29 44) (puts\"time \x19\") (cur_set r0 c0))))"
+    "(: (log _)(: "
+    "i(vminfo 0)"
+    "f(A i)"
+    "len(A(B i))"
+    "allocd(A(B(B i)))"
+    "stackd(A(B(B(B i))))"
+    "_(puts\"\x03 \")"
+    "_(putn(clock 0)10)"
+    "_(puts\"\n\nf@\")"
+    "_(putn f 16)"
+    "_(puts\"\n#\")"
+    "_(putn len 10)"
+    "_(puts\".\")"
+    "_(putn stackd 10)"
+    "_(puts\".\")"
+    "_(putn allocd 10)"
+    "_(puts\"\n\ncrank: \")"
+    "_(putn(crank_angle 0)10)"
+    "_(puts\"\xf8\")"
+    "_(puts\"\nbuttons: \")"
+    "_(putn(get_buttons 0)2)"
+    "_(puts\"\n\nroot folder contents:\n\")"
+    "_(.(ls_root 0))"
+    "r0(cur_row 0)"
+    "c0(cur_col 0)"
+    "_(cur_set 0 44)"
+    "_(puts\"life \x18\")"
+    "_(cur_set 29 44)"
+    "_(puts\"time \x19\")"
+    "_(cur_set r0 c0)))"
     );
-      if (g_ok(K.g))
-        K.mode->ini(),
-        pd->system->setUpdateCallback(k_update, NULL);
+    if (g_ok(K.g))
+      K.mode->ini(),
+      pd->system->setUpdateCallback(k_update, NULL);
     default: return 0; } }
 
 static void g_log_update(void) {
-  cb_cur(kcb, 0, 0);
-  cb_fill(kcb, 0);
-  K.g = g_evals_(K.g, "(log 0)"); }
+ cb_cur(kcb, 0, 0);
+ cb_fill(kcb, 0);
+ K.g = g_evals_(K.g, "(log 0)"); }
 
 
 static g_vm(crank_angle) {
-  int d = K.pd->system->isCrankDocked();
-  float a = K.pd->system->getCrankAngle();
-  Sp[0] = d ? g_nil : gputnum((int)a%360);
-  Ip += 1;
-  return Continue(); }
+ int d = K.pd->system->isCrankDocked();
+ float a = K.pd->system->getCrankAngle();
+ Sp[0] = d ? g_nil : gputnum((int)a%360);
+ Ip += 1;
+ return Continue(); }
 
 static void g_log_ini(void) { kcb->flag |= show_cursor_flag; }
 static struct g*g_boot(struct g*f);
@@ -149,14 +165,14 @@ static struct g*g_boot(struct g*f);
 #define live_char 0xdb
 #define dead_char 0x00
 static void random_life(void) {
-  uint32_t rows = kcb->rows, cols = kcb->cols;
-  for (uint32_t i = 0; i < rows; i++)
-    for (uint32_t j = 0; j < cols; j++)
-      kcb->cb[i* cols + j] = rand() & 1 ? live_char : dead_char; }
+ uint32_t rows = kcb->rows, cols = kcb->cols;
+ for (uint32_t i = 0; i < rows; i++)
+  for (uint32_t j = 0; j < cols; j++)
+   kcb->cb[i* cols + j] = rand() & 1 ? live_char : dead_char; }
 
 static void g_life_ini(void) {
-  kcb->flag &= ~show_cursor_flag;
-  random_life(); }
+ kcb->flag &= ~show_cursor_flag;
+ random_life(); }
 
 static const SoundWaveform synth_waveforms[] = {
   kWaveformSine, kWaveformSquare, kWaveformNoise, };

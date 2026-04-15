@@ -64,10 +64,10 @@ static int g_em_two(struct g*f, struct g_out*o, intptr_t x) {
   if (!twop(x = B(x))) return o->putc(f, ')', o); } }
 
 static int (*emitters[])(struct g*, struct g_out*, word) = {
- [two_class] = g_em_two,
- [vec_class] = (void*) g_em_vec,
- [tbl_class] = (void*) g_em_tab,
- [sym_class] = (void*) g_em_sym, };
+ [two_q] = g_em_two,
+ [vec_q] = (void*) g_em_vec,
+ [tbl_q] = (void*) g_em_tab,
+ [sym_q] = (void*) g_em_sym, };
 
 static int gfputx(struct g *f, struct g_out *o, intptr_t x) {
  return nump(x) ? gfprintf(f, o, "%d", (g_num) ggetnum(x)) :

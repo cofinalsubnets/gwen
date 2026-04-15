@@ -105,15 +105,12 @@ g_vm(g_vm_tget) { return
  Ip += 1,
  Continue(); }
 
-g_vm(g_vm_tset) {
- if (tabp(Sp[0])) {
-  word t = Sp[0], k = Sp[1], v = Sp[2];
-  Sp[0] = k, Sp[1] = v, Sp[2] = t;
+g_vm(g_vm_tset2) {
+ if (tabp(Sp[2])) {
   Pack(f);
   if (!g_ok(f = g_tput(f))) return f;
   Unpack(f); }
- return Ip += 1,
-        Continue(); }
+ return Ip += 1, Continue(); }
 
 g_vm(g_vm_tdel) {
  if (tabp(Sp[1])) Sp[2] = gtabdel(f, (struct g_tab*) Sp[1], Sp[2], Sp[0]);
@@ -151,25 +148,21 @@ struct g *mktbl(struct g*f) {
   tab[0] = 0, ini_tab(t, 0, 1, tab); }
  return f; }
 
-typedef uintptr_t g_xx_t(struct g*, intptr_t x);
-static g_xx_t g_xx_two, g_xx_vec, g_xx_sym, g_xx_tab;
-
-static uintptr_t g_xx_two(struct g*f, intptr_t x) {
- return mix ^ (g_hash(f, A(x)) * g_hash(f, B(x))); }
-static uintptr_t g_xx_sym(struct g*f, intptr_t x) {
- return sym(x)->code; }
-static uintptr_t g_xx_tab(struct g*f, intptr_t x) {
+static uintptr_t g_xx_two(struct g*f, struct g_pair *w) {
+ return mix ^ (g_hash(f, w->a) * g_hash(f, w->b)); }
+static uintptr_t g_xx_sym(struct g*f, struct g_atom *y) {
+ return y->code; }
+static uintptr_t g_xx_tab(struct g*f, struct g_tab *_) {
  return mix; }
-static uintptr_t g_xx_vec(struct g*f, intptr_t x) {
- void *_ = (void*) x;
+static uintptr_t g_xx_vec(struct g*f, void *_) {
  uintptr_t len = g_vec_bytes(_), h = 2166136261;
  for (uint8_t *bs = _; len--; h ^= *bs++, h *= 16777619);
  return h; }
-static g_xx_t *hashers[] = {
- [two_class] = g_xx_two,
- [vec_class] = g_xx_vec,
- [tbl_class] = g_xx_tab,
- [sym_class] = g_xx_sym, };
+static uintptr_t (*hashers[])(struct g*, word) = {
+ [two_q] = (void*) g_xx_two,
+ [vec_q] = (void*) g_xx_vec,
+ [tbl_q] = (void*) g_xx_tab,
+ [sym_q] = (void*) g_xx_sym, };
 
 #define SHIFT (sizeof(intptr_t)<<2)
 // general g_hashing method...

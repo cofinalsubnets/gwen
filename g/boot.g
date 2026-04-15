@@ -10,12 +10,11 @@
      (AA x) (A (A x)) (AB x) (A (B x))
      (BA x) (B (A x)) (BB x) (B (B x))
      car A cdr B caar AA cadr AB cdar BA cddr BB
-     inc (+ 1) dec (+ -1) :: (tset macros)
+     inc (+ 1) dec (+ -1) (:: a b) (set a b macros)
      (id x) x
      (const x _) x
      (co f g x) (f (g x))
      (flip f x y) (f y x)
-     (diag f x) (f x x)
      (map f l) (? (twop l) (X (f (A l)) (map f (B l))))
      (foldl z f l) (? (twop l) (foldl (f z (A l)) f (B l)) z)
      (foldr z f l) (? (twop l) (f (A l) (foldr z f (B l))) z)
@@ -39,9 +38,7 @@
      (take n l) (? n (X (A l) (take (- n 1) (B l))))
      (part p) (foldr '(0) (\ a m
       (? (p a) (X (X a (A m)) (B m))
-               (X (A m) (X a (B m))))))
-     (.. x) (: _ (. x) _ (putc 10) x)
-     (llen l) (? (twop l) (+ 1 (llen (B l)))))
+               (X (A m) (X a (B m)))))))
   ; here are some macro definitions
   (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
   (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))
@@ -58,42 +55,43 @@
   evaluator '(:- (\ x (: c (scop 0 (L 0) 0) (ana c x (thd0 c) 0 0)))
     (scop par arg imp) (:
      t (tnew 0)
-     _ (tset t 'par par)
-     _ (tset t 'arg arg)
-     _ (tset t 'imp imp)
+     _ (set 'par par t)
+     _ (set 'arg arg t)
+     _ (set 'imp imp t)
      t)
     (p1 x k) (poke x (seek -1 k))
+    (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
     (thd0 c n) (p1 g_vm_ret (poke (arity c) (seek (+ 1 n) (thd (+ 2 n)))))
 ;; functions for working with variable scope records
     (argof c) (tget 0 c 'arg)
     (impof c) (tget 0 c 'imp)
-    (arity c) (+ (llen (argof c)) (llen (impof c)))
+    (arity c) (+ (len (argof c)) (len (impof c)))
     (toplp c) (nilp (parof c))
     (parof c) (tget 0 c 'par)
+    kim (em2 g_vm_quote)
 
     (ana c x) (:- (?
-     (symp x)  (ana_sym_r c x)
-     (atomp x) (em2 g_vm_quote x)
+     (symp x)  (ava c x)
+     (atomp x) (kim x)
      (: a (A x) b (B x) (?
       (nilp (twop b)) (ana c a)
-      (= a '` ) (em2 g_vm_quote (A b))
-      (= a '? ) (ana_if  c b)
-      (= a '\ ) (? (atomp b)     (em2 g_vm_quote 0)
+      (= a '` ) (kim (A b))
+      (= a '? ) (aco  c b)
+      (= a '\ ) (? (atomp b)     (kim 0)
                    (atomp (B b)) (ana c (A b))
-                   (ana c (ana_ll c 0 b)))
-      (= a ': ) (ana_let c b)
+                   (ana c (ala c 0 b)))
+      (= a ': ) (ale c b)
       (atomp b) (ana c a)
-      (: m (tget 0 macros a) (? m
-       (ana c (m b))
-       (: a0 (ana c a)
-          a1 (ana_apl 0 c b)
-        (<=< a0 a1)))))))
+      (: m (tget 0 macros a)
+       (? m (ana c (m b))
+        (: p (ana c a)
+           q (ana_apl 0 c b)
+         (co p q)))))))
 
 
-     (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
      (cpeek k) (A (tget 0 c k))
-     (cpush k v) (, (tset c k (X v (tget 0 c k))) v)
-     (cpop k) (: s (tget 0 c k) _ (tset c k (B s)) (A s))
+     (cpush k v) (, (set k (X v (tget 0 c k)) c) v)
+     (cpop k) (: s (tget 0 c k) _ (set k (B s) c) (A s))
      (em_ap k n) (:
       j (k (+ 1 n))
       (? (= (peek j) ret) (poke g_vm_tap j)
@@ -102,15 +100,15 @@
       j (k (+ 2 m))
       (? (= (peek j) g_vm_ret) (p1 g_vm_tapn (poke n j))
                                (p1 g_vm_apn (p1 n j))))
-    ;ana_if is a bit complicated
-    (ana_if c b) (:- (: a0 (pop 'end)
-                        a1 (ana_if_r b)
+    ;aco is a bit complicated
+    (aco c b) (:- (: a0 (pop 'end)
+                        a1 (aco_r b)
                         a2 (push 'end)
                       (<=< a0 a1 a2))
      ; where
      (pop y k n) (: j (k n) (, (cpop y) j))
      (push y k n) (cpush y (k n))
-     (ana_if_r b) (:
+     (aco_r b) (:
       (pop_alt k n) (:
        j (k (+ 2 n))
        alt (cpop 'alt)
@@ -124,7 +122,7 @@
            (= i g_vm_tapn)
             (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j)))
            (p1 g_vm_jump (p1 a j))))
-     (? (atomp b) (em2 g_vm_quote 0)
+     (? (atomp b) (kim 0)
         (atomp (B b)) (: a0 (ana c (A b))
                          a1 peek_end
                        (<=< a0 a1))
@@ -133,7 +131,7 @@
            a2 (ana c (AB b))
            a3 peek_end
            a4 (push 'alt)
-           a5 (ana_if_r (BB b))
+           a5 (aco_r (BB b))
          (<=< a0 a1 a2 a3 a4 a5)))))
 
     (ana_apl n c b) (:
@@ -148,13 +146,13 @@
      _ (cpop 'stk)
      a)
 
-    (ana_sym_r d x) (:
+    (ava d x) (:
      (stki d)
        (: imp (impof d)
           i (lidx x imp)
         (? (>= i 0) i
          (: i (lidx x (argof d))
-          (? (< i 0) i (+ (llen imp) i)))))
+          (? (< i 0) i (+ (len imp) i)))))
 
      (import v)
       (? (&& (not (toplp c))
@@ -162,7 +160,7 @@
        (cpush 'imp v))
 
      (cata_var c) (:
-         i (llen (tget 0 c 'stk))
+         i (len (tget 0 c 'stk))
          (\ j m (:
           k (j (+ 2 m))
           i (+ i (stki c))
@@ -171,7 +169,7 @@
      (? (nilp d) ; outside all lexical scopes?
          (: a0 (sym 0)
             y (tget a0 globals x) ; check global scope
-          (? (!= y a0) (em2 g_vm_quote y) ; if it's there use that
+          (? (!= y a0) (kim y) ; if it's there use that
            (, (import x) ; if it's not there... do something
               (em2 g_vm_freev x))))
 
@@ -195,10 +193,10 @@
          (, (? (!= c d) (import x))
             (cata_var c))
         ; else recur
-        (ana_sym_r (parof d) x)))))
+        (ava (parof d) x)))))
 
 
-    (ana_ll c imp exp) (:
+    (ala c imp exp) (:
      d (scop c (init exp) imp)
      k (ana d (last exp) (thd0 d))
      ar (arity d)
@@ -206,8 +204,8 @@
      (X (trim k) (impof d)))
 
 
-    (ana_let c b) (?
-     (atomp b)     (em2 g_vm_quote 0)
+    (ale c b) (?
+     (atomp b)     (kim 0)
      (atomp (B b)) (ana c (A b))
      (:- (l1 0 0 (A b) (AB b) (BB b))
         q (scop c (argof c) (impof c))
@@ -236,7 +234,7 @@
           (atomp n) a
           (nilp (lambp (A d))) (ll a (B n) (B d))
           (: k (A n)
-             v (ana_ll q 0 (BA d)) ; first pass ..
+             v (ala q 0 (BA d)) ; first pass ..
              a (X (X k v) a)
            (ll a (B n) (B d))))))
        (cl n l l1 l2) (?
@@ -257,7 +255,7 @@
       (ldd ll) (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) (map A lams))))
       clams (map ldd lams)
       llam (X '\ (cat noms (L exp)))
-      _ (tset q 'lam clams)
+      _ (set 'lam clams q)
       (lls n nds) (, (cpush 'stk n)
                      (ll nds))
       (ll nds) (? (nilp nds) id
@@ -265,7 +263,7 @@
           n (A nd)
           d (B nd)
           d (? (lambp d) (: qa (assq n clams)
-                            x (ana_ll q (BB qa) (B d))
+                            x (ala q (BB qa) (B d))
                             (set_cdr qa x))
                          d)
           a0 (ana c d)
@@ -273,17 +271,16 @@
           a2 (lls n (B nds))
           (<=< a0 a1 a2)))
       s0 (tget 0 c 'stk)
-      n  (llen noms)
+      n  (len noms)
       a0 (ana c llam)
       a1 (lls -1 (zip (rev noms) (rev defs)))
       a2 (? (> n 1) (em_apn n) em_ap)
-      _ (tset c 'stk s0)
+      _ (set 'stk s0 c)
       (<=< a0 a1 a2))))))
 
 
  ; helper to evaluate each prelude expression in order
  (go e a) (? a (: _ (e (A a)) (go e (B a))))
-
  # init process
  t0 (clock 0)      ; start time
  e0 ev             ; stage 0 evaluator (C level)
@@ -292,6 +289,6 @@
  _ (go e1 prelude) ; stage 2 prelude (eval'd by G)
  e2 (e1 evaluator) ; stage 2 evaluator (eval'd by G)
  t1 (clock 0)      ; end time
- _ (tset globals 'boot_ms (- t1 t0))
- _ (tset globals 'ev e2) ; redefine eval
+ _ (set 'boot_ms (- t1 t0) globals)
+ _ (set 'ev e2 globals) ; redefine eval
  _)

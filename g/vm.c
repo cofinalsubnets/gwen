@@ -172,3 +172,13 @@ g_vm(g_vm_thda) {
  Sp[0] = word(k);
  Ip += 1;
  return Continue(); }
+
+g_vm(g_vm_len) {
+  word x = Sp[0], l = 0;
+  if (!nump(x) && datp(x)) switch (typ(x)) {
+    case tbl_q: l = tbl(x)->len; break;
+    case vec_q: l = vec(x)->shape[0]; break;
+    case two_q: do l++, x = B(x); while (twop(x)); }
+  Sp[0] = putnum(l);
+  Ip += 1;
+  return Continue(); }

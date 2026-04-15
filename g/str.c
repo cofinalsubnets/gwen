@@ -1,5 +1,4 @@
 #include "i.h"
-op11(g_vm_slen, strp(Sp[0]) ? gputnum(len(Sp[0])) : g_nil)
 op11(g_vm_strp, strp(Sp[0]) ? gputnum(-1) : g_nil)
 
 g_vm(g_vm_ssub) {
@@ -74,7 +73,7 @@ uintptr_t g_vec_bytes(struct g_vec *v) {
 static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
  intptr_t *shape = v->shape;
  v->ap = g_vm_data;
- v->typ = vec_class;
+ v->typ = vec_q;
  v->type = type;
  v->rank = rank;
  while (rank--) *shape++ = va_arg(xs, uintptr_t); }

@@ -1,21 +1,21 @@
 #include "i.h"
 
-static intptr_t g_gc_cp(struct g*,intptr_t,intptr_t const *,intptr_t const*);
+static word gcp(struct g*, word, word const *, word const *);
 
-static void g_wk_vec(struct g*g, struct g_vec *v, intptr_t const*p0, intptr_t const *t0) {
+static void g_wk_vec(struct g*g, struct g_vec *v, word const*p0, word const *t0) {
  g->cp += b2w(g_vec_bytes(v)); }
 
-static void g_wk_two(struct g*g, struct g_pair *w, intptr_t const *p0, intptr_t const*t0) {
+static void g_wk_two(struct g*g, struct g_pair *w, word const *p0, word const*t0) {
  g->cp += Width(struct g_pair);
- w->a = g_gc_cp(g, w->a, p0, t0);
- w->b = g_gc_cp(g, w->b, p0, t0); }
+ w->a = gcp(g, w->a, p0, t0);
+ w->b = gcp(g, w->b, p0, t0); }
 
-static void g_wk_tab(struct g*g, struct g_tab *t, intptr_t const*p0, intptr_t const*t0) {
+static void g_wk_tab(struct g*g, struct g_tab *t, word const*p0, word const*t0) {
  g->cp += Width(struct g_tab) + t->cap + t->len * Width(struct g_kvs);
  for (intptr_t i = 0, lim = t->cap; i < lim; i++)
   for (struct g_kvs*e = t->tab[i]; e;
-   e->key = g_gc_cp(g, e->key, p0, t0),
-   e->val = g_gc_cp(g, e->val, p0, t0),
+   e->key = gcp(g, e->key, p0, t0),
+   e->val = gcp(g, e->val, p0, t0),
    e = e->next); }
 
 static void g_wk_sym(struct g*g, struct g_atom *y, intptr_t const*p0, intptr_t const*t0) {
@@ -42,7 +42,7 @@ static intptr_t g_cp_vec(struct g*f, struct g_vec *src, intptr_t const*p0, intpt
 
 static intptr_t g_cp_sym(struct g*f, struct g_atom *src, intptr_t const*p0, intptr_t const*t0) {
  struct g_atom *dst;
- if (src->nom) dst = g_intern_r(f, (struct g_vec*) g_gc_cp(f, word(src->nom), p0, t0), &f->symbols);
+ if (src->nom) dst = g_intern_r(f, (struct g_vec*) gcp(f, word(src->nom), p0, t0), &f->symbols);
  else dst = bump(f, Width(struct g_atom) - 2),
       ini_anon(dst, src->code);
  return (intptr_t) (src->ap = (g_vm_t*) dst); }
@@ -66,7 +66,7 @@ static intptr_t (*copiers[])(struct g*, word, word const*, word const*) = {
  [sym_q] = (void*) g_cp_sym,
  [tbl_q] = (void*) g_cp_tab, };
 
-#define cp(...) g_gc_cp(__VA_ARGS__)
+#define cp(...) gcp(__VA_ARGS__)
 struct g *g_have(struct g *f, intptr_t n) {
  return !g_ok(f) || avail(f) >= n ? f : g_please(f, n); }
 
@@ -89,7 +89,7 @@ struct g *g_push(struct g *f, intptr_t m, ...) {
  va_end(xs);
  return f; }
 
-static g_noinline struct g *g_gc_cpg(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
+static g_noinline struct g *gcg(struct g*g, intptr_t *p1, uintptr_t len1, struct g *f) {
  memcpy(g, f, sizeof(struct g));
  g->pool = (void*) p1;
  g->len = len1;
@@ -100,18 +100,18 @@ static g_noinline struct g *g_gc_cpg(struct g*g, intptr_t *p1, uintptr_t len1, s
  word h = t0 - sp0; // stack height
  g->sp = ptr(g) + len1 - h;
  g->hp = g->cp = g->end;
- g->ip = cell(g_gc_cp(g, word(g->ip), p0, t0));
+ g->ip = cell(gcp(g, word(g->ip), p0, t0));
  g->symbols = 0;
  for (uintptr_t i = 0; i < g_nvars; i++)
-  g->v[i] = g_gc_cp(g, g->v[i], p0, t0);
+  g->v[i] = gcp(g, g->v[i], p0, t0);
  for (intptr_t n = 0; n < h; n++)
-  g->sp[n] = g_gc_cp(g, sp0[n], p0, t0);
+  g->sp[n] = gcp(g, sp0[n], p0, t0);
  for (struct g_root *s = g->root; s; s = s->next)
-  *s->ptr = g_gc_cp(g, *s->ptr, p0, t0);
+  *s->ptr = gcp(g, *s->ptr, p0, t0);
  while (g->cp < g->hp)
   if (datp(g->cp)) wks[typ(g->cp)](g, g->cp, p0, t0);
   else for (g->cp += 2; g->cp[-2]; g->cp++)
-   g->cp[-2] = g_gc_cp(g, g->cp[-2], p0, t0);
+   g->cp[-2] = gcp(g, g->cp[-2], p0, t0);
  return g; }
 
 g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
@@ -121,7 +121,7 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
   len0 = f->len;
  // find alternate pool
  struct g *g = f == f->pool ? (struct g*) (cell(f) + f->len) : f->pool;
- f = g_gc_cpg(g, (void*) f->pool, f->len, f);
+ f = gcg(g, (void*) f->pool, f->len, f);
  uintptr_t const
   v_f = 2, // 2 or 3 seem like good values
   v_lo = 1 << v_f,
@@ -141,12 +141,12 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
  return // allocate a new pool with target size
   !(g = f->malloc(f, len1 * 2 * sizeof(word))) ?
    encode(f, req <= len0 ? g_status_ok : g_status_oom) :
-   (g = g_gc_cpg(g, (word*) g, len1, f),
+   (g = gcg(g, (word*) g, len1, f),
     f->free(f, f->pool),
     g->t0 = g_clock(),
     g); }
 
-static g_noinline intptr_t g_gc_cp(struct g *f, intptr_t x, intptr_t const *p0, intptr_t const *t0) {
+static g_noinline intptr_t gcp(struct g *f, intptr_t x, intptr_t const *p0, intptr_t const *t0) {
   // if it's a number or it's outside managed memory then return it
   if (odd(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
   union u *src = cell(x);
