@@ -74,7 +74,7 @@
       (= a '\ ) (? (atomp b)     (kim 0)
                    (atomp (B b)) (ana c (A b))
                                  (ana c (ala c 0 b)))
-      (= a ': ) (foldl1 id (ale b))
+      (= a ': ) (foldl1 id (ale (A b) (B b)))
       (: m (get 0 a macros)
        (? m (ana c (m b))
             (app a b))))))
@@ -161,72 +161,59 @@
 
 
     ; let expression analyzer (the most complicated one)
-    (ale b) (?
-     (atomp b)     (L kim 0)
-     (atomp (B b)) (L ana c (A b))
-     (:- (L l1 0 0 (A b) (AB b) (BB b))
-        q (sco c (get 0 'arg c) (get 0 'imp c))
-        (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[ weh
-        (lambp x) (? (twop x) (= '\ (A x)))
+    (ale a b) (?
+     (atomp b) (L ana c a)
+     (:- (L l1 0 0 a (A b) (B b))
+      q (sco c (get 0 'arg c) (get 0 'imp c))
+      (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[ weh
+      (lambp x) (? (twop x) (= '\ (A x)))
+       ;; l1 pass nom def and value expressions to l2
+       ; l1 collects bindings and passes them with the body expression to l2
+       (l1 ns ds n d rest) (:
         (desug n d) (? (atomp n) (X n d)
                        (desug (A n) (X '\ (cat (B n) (L d)))))
-     ;; l1 pass nom def and value expressions to l2
-     ; l1 collects bindings and passes them with the body expression to l2
-     (l1 noms defs nom def rest) (:
-      nd (desug nom def)
-      noms (X (A nd) noms)
-      defs (X (B nd) defs)
-      (? (atomp rest)     (l2 noms defs (A nd)   1)
-         (atomp (B rest)) (l2 noms defs (A rest) 0)
-                          (l1 noms defs (A rest) (AB rest) (BB rest))))
-     ;; l2 find closures and revise lambda defs then emit eval/apply
-     ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
-     (l2 noms defs exp even) (:
-
-      lams (:- (cl 0 l l l)
-
-       l (>>= 0 noms defs (: (ll a n d) (?
-          (atomp n) a
-          (nilp (lambp (A d))) (ll a (B n) (B d))
-          (: k (A n)
-             v (ala q 0 (BA d)) ; first pass ..
-             a (X (X k v) a)
-           (ll a (B n) (B d))))))
-       (cl n l l1 l2) (?
-        (&& l1 l2 (!= l1 l2) (memq (AA l1) (BB (A l2))))
-         (>>= n (BB (A l1)) (: (ll n v)
-          (? (nilp v) (cl n l l1 (B l2))
+         nd (desug n d) ns (X (A nd) ns) ds (X (B nd) ds)
+        (? (atomp rest)     (l2 ns ds (A nd)   1)
+           (atomp (B rest)) (l2 ns ds (A rest) 0)
+                            (l1 ns ds (A rest) (AB rest) (BB rest))))
+     (l2 noms defs exp even) (:- (cl 0 l l l)
+       (jj a n d) (? (atomp n) a (nilp (lambp (A d))) (jj a (B n) (B d)) (: k (A n) v (ala q 0 (BA d)) a (X (X k v) a) (jj a (B n) (B d))))
+       l (jj 0 noms defs)
+       (cl n l k1 k2) (?
+        (&& k1 k2 (!= k1 k2) (memq (AA k1) (BB (A k2))))
+         (>>= n (BB (A k1)) (: (kk n v)
+          (? (nilp v) (cl n l k1 (B k2))
            (: var (A v)
-              vars (B (BA l2))
+              vars (B (BA k2))
               n (? (memq var vars) n
-                 (, (set_cdr (BA l2) (X var vars))
+                 (, (set_cdr (BA k2) (X var vars))
                     (+ 1 n)))
-              (ll n (B v))))))
-        l2 (cl n l l1 (B l2))
-        l1 (cl n l (B l1) l)
+              (kk n (B v))))))
+        k2 (cl n l k1 (B k2))
+        k1 (cl n l (B k1) l)
         n (cl 0 l l l)
-        l))
+        (l3 noms defs exp even l)))
+     (l3 noms defs exp even lams) (:
 
-      (ldd ll) (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) (map A lams))))
-      clams (map ldd lams)
-      _ (put 'lam clams q)
-      (lls n nds) (: 0 (put 'stk (X n (get 0 'stk c)) c)
-                       (ll nds))
+
+      (ldd l) (X (A l) (X (AB l) (foldl (BB l) (flip ldel) (map A lams))))
+      lams (map ldd lams)
+      _ (put 'lam lams q)
       (ll nds) (? (nilp nds) id
-       (: nd (A nds)
-          n (A nd)
-          d (B nd)
-          d (? (lambp d) (: qa (assq n clams)
+       (: nd (A nds) n (A nd) d (B nd)
+          d (? (lambp d) (: qa (assq (A nd) lams)
                             x (ala q (BB qa) (B d))
                             (set_cdr qa x))
                          d)
           f (ana c d)
           g (? (&& (nilp (get 0 'par c)) even) (em2 g_vm_defglob n) id)
-          h (lls n (B nds))
+          _ (put 'stk (X n (get 0 'stk c)) c)
+          h (ll (B nds))
           (\ x (f (g (h x))))))
       s (get 0 'stk c)
       f (ana c (X '\ (cat noms (L exp))))
-      g (lls -1 (zip (rev noms) (rev defs)))
+      _ (put 'stk (X -1 (get 0 'stk c)) c)
+      g (ll (zip (rev noms) (rev defs)))
       h (kapn (len noms))
       _ (put 'stk s c)
       (\ x (f (g (h x))))))))))
