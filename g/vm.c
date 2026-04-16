@@ -12,7 +12,7 @@ g_vm(g_vm_info) {
  Ip += 1;
  return Continue(); }
 
-op11(g_vm_clock, gputnum(g_clock()))
+op11(g_vm_clock, gputnum(g_clock() - getnum(Sp[0])))
 static g_vm(g_vm_uncurry) {
   Have1();
   *--Sp = Ip[1].x;
@@ -101,7 +101,7 @@ g_vm(g_vm_tap) {
 // apply to multiple arguments
 g_vm(g_vm_apn) {
  size_t n = ggetnum(Ip[1].x);
- union u*ra = Ip + 2; // return address
+ union u *ra = Ip + 2; // return address
  // this instruction is only emitted when the callee is known to be a function
  // so putting a value off the stack into Ip is safe. the +2 is cause we leave
  // the currying instruction in there... should be skipped in compiler instead FIXME

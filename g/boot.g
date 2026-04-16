@@ -45,7 +45,6 @@
   (:: '|| (\ l (: (or l) (? l (: y (sym 0) (L ': y (A l) (L '? y y (or (B l)))))) (or l))))
   (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
   (:: '>>= (\ l (X (last l) (init l))))
-  (:: '|> (foldl1 (\ m f (L f m))))
   (:: ', (\ l (X ': (foldr (L (last l)) (\ l r (X '_ (X l r))) (init l)))))
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
   
@@ -176,29 +175,27 @@
         (? (atomp rest)     (l2 ns ds (A nd)   1)
            (atomp (B rest)) (l2 ns ds (A rest) 0)
                             (l1 ns ds (A rest) (AB rest) (BB rest))))
-     (l2 noms defs exp even) (:- (cl 0 l l l)
-       (jj a n d) (? (atomp n) a (nilp (lambp (A d))) (jj a (B n) (B d)) (: k (A n) v (ala q 0 (BA d)) a (X (X k v) a) (jj a (B n) (B d))))
-       l (jj 0 noms defs)
-       (cl n l k1 k2) (?
-        (&& k1 k2 (!= k1 k2) (memq (AA k1) (BB (A k2))))
-         (>>= n (BB (A k1)) (: (kk n v)
-          (? (nilp v) (cl n l k1 (B k2))
-           (: var (A v)
-              vars (B (BA k2))
-              n (? (memq var vars) n
-                 (, (set_cdr (BA k2) (X var vars))
-                    (+ 1 n)))
-              (kk n (B v))))))
-        k2 (cl n l k1 (B k2))
-        k1 (cl n l (B k1) l)
-        n (cl 0 l l l)
-        (l3 noms defs exp even l)))
-     (l3 noms defs exp even lams) (:
 
+     (l2 ns ds exp even) (:- (cl 0 l l l)
+      (jj a n d) (? (atomp n) a (nilp (lambp (A d))) (jj a (B n) (B d)) (: k (A n) v (ala q 0 (BA d)) a (X (X k v) a) (jj a (B n) (B d))))
+      l (jj 0 ns ds)
+      (cl n l k1 k2) (?
+       (&& k1 k2 (!= k1 k2) (memq (AA k1) (BB (A k2))))
+        (>>= n (BB (A k1)) (: (kk n v)
+         (? (nilp v) (cl n l k1 (B k2))
+          (: var (A v)
+             vars (B (BA k2))
+             n (? (memq var vars) n
+                (: _ (set_cdr (BA k2) (X var vars))
+                 (+ 1 n)))
+             (kk n (B v))))))
+       k2 (cl n l k1 (B k2))
+       k1 (cl n l (B k1) l)
+       n (cl 0 l l l)
+       (l3 ns ds exp even
+        (map (\ x (X (A x) (X (AB x) (foldl (BB x) (flip ldel) (map A l))))) l))))
 
-      (ldd l) (X (A l) (X (AB l) (foldl (BB l) (flip ldel) (map A lams))))
-      lams (map ldd lams)
-      _ (put 'lam lams q)
+     (l3 ns ds exp even lams) (:
       (ll nds) (? (nilp nds) id
        (: nd (A nds) n (A nd) d (B nd)
           d (? (lambp d) (: qa (assq (A nd) lams)
@@ -210,15 +207,15 @@
           _ (put 'stk (X n (get 0 'stk c)) c)
           h (ll (B nds))
           (\ x (f (g (h x))))))
+      _ (put 'lam lams q)
       s (get 0 'stk c)
-      f (ana c (X '\ (cat noms (L exp))))
+      f (ana c (X '\ (cat ns (L exp))))
       _ (put 'stk (X -1 (get 0 'stk c)) c)
-      g (ll (zip (rev noms) (rev defs)))
-      h (kapn (len noms))
+      g (ll (zip (rev ns) (rev ds)))
+      h (kapn (len ns))
       _ (put 'stk s c)
       (\ x (f (g (h x))))))))))
  (go e z a) (? a (go e (e (A a)) (B a)) z)
- # init process
  t0 (clock 0)
  e (go (go ev 0 egg) 0 egg)
- (put 'boot_ms (- (clock 0) t0) (put 'ev e globals)))
+ (put 'boot_ms (clock t0) (put 'ev e globals)))

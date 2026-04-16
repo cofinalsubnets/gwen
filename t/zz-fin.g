@@ -1,6 +1,6 @@
 (putc 10)
 (. (test-get 'count)) (puts " tests in ")
-(: ms (- (clock 0) test_t0)
+(: ms (clock test_t0)
    s  (/ ms 1000)
    ms (% ms 1000)
    p (? (< ms 10) ".00" (< ms 100) ".0" ".")

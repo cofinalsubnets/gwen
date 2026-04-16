@@ -146,16 +146,16 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
     g->t0 = g_clock(),
     g); }
 
-static g_noinline intptr_t gcp(struct g *f, intptr_t x, intptr_t const *p0, intptr_t const *t0) {
+static g_noinline intptr_t gcp(struct g *f, word x, word const *p0, word const *t0) {
  // if it's a number or it's outside managed memory then return it
- if (odd(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
+ if (nump(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
  union u *src = cell(x);
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer
  if (even(x) && ptr(f) <= ptr(x)
              && ptr(x) < ptr(f) + f->len) return x;
  // if it's data then call the copy function
- if (x != (intptr_t) g_vm_data) {
+ if (x != (word) g_vm_data) {
   // it's a thread, find the end to find the head
   struct g_tag *t = ttag(src);
   union u *ini = t->head,

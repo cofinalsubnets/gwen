@@ -16,7 +16,7 @@ syn keyword PFunc twop nump nomp tblp strp nilp homp ev not
 syn keyword PFunc str scat ssub sym nom putc co atomp
 syn keyword PFunc tnew thas tkeys tdel memq assq set put get new
 syn keyword PFunc + - ~ ! * / % . ,
-syn keyword PMacro L vprintf >>= \|> >=> <=< :- ,
+syn keyword PMacro L vprintf >>= >=> <=< :- ,
 syn keyword PMacro && \|\| \| & ^ << >>
 syn keyword PBool true false
 
