@@ -12,8 +12,8 @@
 #define g_code_of(f) ((enum g_status)((intptr_t)(f)&(sizeof(intptr_t)-1)))
 #define g_ok(f) (g_code_of(f) == g_status_ok)
 
-#define g_putnum(_) (((g_num)(_)<<1)|1)
-#define g_getnum(_) ((g_num)(_)>>1)
+#define g_putnum(_) (((g_word)(_)<<1)|1)
+#define g_getnum(_) ((g_word)(_)>>1)
 
 #define gputnum g_putnum
 #define ggetnum g_getnum
@@ -35,7 +35,7 @@
 #endif
 
 #if g_tco
-#define g_vm(n, ...) struct g *n(struct g *restrict f, union u *Ip, g_num *Hp, g_num *restrict Sp, ##__VA_ARGS__)
+#define g_vm(n, ...) struct g *n(struct g *restrict f, union u *Ip, g_word *Hp, g_word *restrict Sp, ##__VA_ARGS__)
 #define Ap(g, f, ...) g(f, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Continue() Ap(Ip->ap, f)
 #define Pack(f) (f->ip = Ip, f->hp = Hp, f->sp = Sp)
@@ -52,18 +52,18 @@
 #endif
 
 // ok
-typedef intptr_t g_num, g_word;
+typedef intptr_t g_word;
 union u;
 typedef g_vm(g_vm_t);
 struct g {
  union u {
   g_vm_t *ap;
-  g_num x, typ;
+  g_word x, typ;
   union u *m; } *ip;
- g_num *hp, *sp;
+ g_word *hp, *sp;
  struct g_atom {
   g_vm_t *ap;
-  g_num typ;
+  g_word typ;
   struct g_vec {
    g_vm_t *ap;
    uintptr_t typ, type, rank, shape[]; } *nom;
@@ -74,7 +74,7 @@ struct g {
  struct g_root {
   intptr_t *ptr;
   struct g_root *next; } *root;
- union { uintptr_t t0; g_num *cp; };
+ union { uintptr_t t0; g_word *cp; };
  void *(*malloc)(struct g*, size_t),
       (*free)(struct g*, void*);
 #define g_nvars 16
@@ -115,7 +115,7 @@ enum g_status {
 
 static g_inline intptr_t g_pop1(struct g*f) { return *f->sp++; }
 static g_inline size_t b2w(size_t b) {
- size_t q = b / sizeof(g_num), r = b % sizeof(g_num);
+ size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
  return q + (r ? 1 : 0); }
 
 g_vm_t g_vm_ret0, g_vm_curry;

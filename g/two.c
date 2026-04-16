@@ -21,7 +21,7 @@ g_noinline struct g *gxl(struct g *f) {
  return f; }
 
 struct g *gxr(struct g *f) {
- g_word x = f->sp[0];
+ word x = f->sp[0];
  f->sp[0] = f->sp[1];
  f->sp[1] = x;
  return gxl(f); }

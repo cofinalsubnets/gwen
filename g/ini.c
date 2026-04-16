@@ -47,7 +47,7 @@ static union u yield[] = { {g_vm_yield} };
 static struct g_def const def1[] = { bifs(biff) insts(i_entry) {0}};
 g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  uintptr_t const len0 = 1 << 10;
- struct g *f = ma(NULL, 2 * len0 * sizeof(g_word));
+ struct g *f = ma(NULL, 2 * len0 * sizeof(word));
  if (f == NULL) return encode(f, g_status_oom);
  memset(f, 0, sizeof(struct g));
  f->len = len0;

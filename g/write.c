@@ -70,7 +70,7 @@ static int (*emitters[])(struct g*, struct g_out*, word) = {
  [sym_q] = (void*) g_em_sym, };
 
 static int gfputx(struct g *f, struct g_out *o, intptr_t x) {
- return nump(x) ? gfprintf(f, o, "%d", (g_num) ggetnum(x)) :
+ return nump(x) ? gfprintf(f, o, "%d", ggetnum(x)) :
         datp(x) ? emitters[typ(x)](f, o, x) :
                   gfprintf(f, o, "#%lx", (long) x); }
 
@@ -99,4 +99,3 @@ g_vm(g_vm_dot) {
  gfputx(f, &g_stdout, Sp[0]);
  Ip += 1;
  return Continue(); }
-

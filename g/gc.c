@@ -147,22 +147,22 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
     g); }
 
 static g_noinline intptr_t gcp(struct g *f, intptr_t x, intptr_t const *p0, intptr_t const *t0) {
-  // if it's a number or it's outside managed memory then return it
-  if (odd(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
-  union u *src = cell(x);
-  x = src->x; // get its contents
-  // if it contains a pointer to the new space then return the pointer
-  if (even(x) && ptr(f) <= ptr(x)
-              && ptr(x) < ptr(f) + f->len) return x;
-  // if it's data then call the copy function
-  if (x != (intptr_t) g_vm_data) {
-   // it's a thread, find the end to find the head
-   struct g_tag *t = ttag(src);
-   union u *ini = t->head,
-           *d = bump(f, t->end - ini),
-           *dst = d;
-   // copy source contents to dest and write dest addresses to source
-   for (union u*s = ini; (d->x = s->x); s++->x = (intptr_t) d++);
-   ((struct g_tag*) d)->head = dst;
-   return (intptr_t) (dst + (src - ini)); }
-  return copiers[typ(src)](f, (intptr_t) src, p0, t0); }
+ // if it's a number or it's outside managed memory then return it
+ if (odd(x) || ptr(x) < p0 || ptr(x) >= t0) return x;
+ union u *src = cell(x);
+ x = src->x; // get its contents
+ // if it contains a pointer to the new space then return the pointer
+ if (even(x) && ptr(f) <= ptr(x)
+             && ptr(x) < ptr(f) + f->len) return x;
+ // if it's data then call the copy function
+ if (x != (intptr_t) g_vm_data) {
+  // it's a thread, find the end to find the head
+  struct g_tag *t = ttag(src);
+  union u *ini = t->head,
+          *d = bump(f, t->end - ini),
+          *dst = d;
+  // copy source contents to dest and write dest addresses to source
+  for (union u*s = ini; (d->x = s->x); s++->x = (intptr_t) d++);
+  ((struct g_tag*) d)->head = dst;
+  return (intptr_t) (dst + (src - ini)); }
+ return copiers[typ(src)](f, (intptr_t) src, p0, t0); }

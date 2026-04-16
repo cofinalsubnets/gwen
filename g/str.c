@@ -52,7 +52,7 @@ uintptr_t g_vec_bytes(struct g_vec *v) {
            rank = v->rank,
            *shape = v->shape;
  while (rank--) len *= *shape++;
- return sizeof(struct g_vec) + v->rank * sizeof(g_num) + len; }
+ return sizeof(struct g_vec) + v->rank * sizeof(word) + len; }
 
 static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
  uintptr_t *shape = v->shape;
@@ -74,7 +74,7 @@ static struct g *g_vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
  va_start(xs, rank);
  for (uintptr_t i = rank; i--; len *= va_arg(xs, uintptr_t));
  va_end(xs);
- uintptr_t nbytes = sizeof(struct g_vec) + rank * sizeof(g_word) + len,
+ uintptr_t nbytes = sizeof(struct g_vec) + rank * sizeof(word) + len,
            ncells = b2w(nbytes);
  f = g_have(f, ncells + 1);
  if (g_ok(f)) {

@@ -114,13 +114,13 @@ g_vm(g_vm_tapn) {
  size_t n = ggetnum(Ip[1].x),
         r = ggetnum(Ip[2].x);
  Ip = cell(Sp[n]) + 2;
- g_num *o = Sp;
+ word *o = Sp;
  for (Sp += r + 1; n--; Sp[n] = o[n]);
  return Continue(); }
 
 // return
 g_vm(g_vm_ret) {
- g_num n = ggetnum(Ip[1].x) + 1;
+ word n = ggetnum(Ip[1].x) + 1;
  Ip = cell(Sp[n]);
  Sp[n] = Sp[0];
  Sp += n;
@@ -168,7 +168,7 @@ g_vm(g_vm_thda) {
  struct g_tag *t = (void*) (k + n);
  t->null = NULL;
  t->head = k;
- memset(k, -1, n * sizeof(g_word));
+ memset(k, -1, n * sizeof(word));
  Sp[0] = word(k);
  Ip += 1;
  return Continue(); }

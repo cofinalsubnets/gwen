@@ -26,8 +26,8 @@ intptr_t g_tget(struct g *f, intptr_t zero, struct g_tab *t, intptr_t k) {
 
 g_noinline struct g *g_tput(struct g *f) {
  struct g_tab *t = (struct g_tab*) f->sp[2];
- g_num v = f->sp[1],
-       k = f->sp[0];
+ word v = f->sp[1],
+      k = f->sp[0];
  uintptr_t i = index_of_key(f, t, k);
  struct g_kvs *e = t->tab[i];
  while (e && !eql(f, k, e->key)) e = e->next;

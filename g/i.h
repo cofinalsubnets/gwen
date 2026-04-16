@@ -5,7 +5,7 @@ _Static_assert(sizeof(union u) == sizeof(intptr_t));
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
 struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
 enum q { two_q, vec_q, sym_q, tbl_q, };
-typedef g_num num, word;
+typedef g_word num, word;
 enum g_vec_type { g_vect_u8, };
 struct g
  *g_please(struct g*, uintptr_t),
@@ -40,7 +40,7 @@ static g_inline union u *clip(union u *k) { return ttag(k)->head = k; }
 bool eqv(struct g*, word, word); // this is for checking equality of non-identical values
 static g_inline bool eql(struct g *f, word a, word b) { return a == b || eqv(f, a, b); }
 
-uintptr_t g_hash(struct g*, g_num), g_vec_bytes(struct g_vec*);
+uintptr_t g_hash(struct g*, word), g_vec_bytes(struct g_vec*);
 int
  memcmp(void const*, void const*, size_t),
  g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base);
@@ -72,7 +72,7 @@ intptr_t g_tget(struct g*,intptr_t, struct g_tab*,intptr_t);
 #define word(_) num(_)
 #define datp(_) (cell(_)->ap==g_vm_data)
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
-#define MM(f,r) ((f->root=&((struct g_root){(g_num*)(r),f->root})))
+#define MM(f,r) ((f->root=&((struct g_root){(word*)(r),f->root})))
 #define UM(f) (f->root=f->root->next)
 #define mix ((uintptr_t)2708237354241864315)
 
@@ -114,17 +114,17 @@ intptr_t g_tget(struct g*,intptr_t, struct g_tab*,intptr_t);
 #define putnum g_putnum
 #define g_strp strp
 
-static g_inline struct g_vec *vec(g_num n) { return (struct g_vec*) n; }
-static g_inline struct g_tab *tbl(g_num n) { return (struct g_tab*) n; }
-static g_inline struct g_pair *two(g_num n) { return (struct g_pair*) n; }
-static g_inline struct g_atom *sym(g_num n) { return (struct g_atom*) n; }
-static g_inline bool twop(g_num _) { return even(_) && typ(_) == two_q; }
-static g_inline bool tblp(g_num _) { return even(_) && typ(_) == tbl_q; }
-static g_inline bool symp(g_num _) { return even(_) && typ(_) == sym_q; }
-static g_inline bool nump(g_num _) { return odd(_); }
+static g_inline struct g_vec *vec(word n) { return (struct g_vec*) n; }
+static g_inline struct g_tab *tbl(word n) { return (struct g_tab*) n; }
+static g_inline struct g_pair *two(word n) { return (struct g_pair*) n; }
+static g_inline struct g_atom *sym(word n) { return (struct g_atom*) n; }
+static g_inline bool twop(word _) { return even(_) && typ(_) == two_q; }
+static g_inline bool tblp(word _) { return even(_) && typ(_) == tbl_q; }
+static g_inline bool symp(word _) { return even(_) && typ(_) == sym_q; }
+static g_inline bool nump(word _) { return odd(_); }
 static g_inline bool vec_strp(struct g_vec *s) { return
  s->type == g_vect_char && s->rank == 1; }
-static g_inline bool strp(g_num _) { return
+static g_inline bool strp(word _) { return
  even(_) && typ(_) == vec_q && vec_strp((struct g_vec*)_); }
 static g_inline struct g *encode(struct g*f, enum g_status s) { return
  (struct g*) ((uintptr_t) f | s); }

@@ -16,7 +16,7 @@ static struct g *grbufg(struct g *f) {
   struct g_vec *o = bump(f, req);
   ini_str(o, 2 * len);
   memcpy(txt(o), txt(f->sp[0]), len);
-  f->sp[0] = (g_num) o; }
+  f->sp[0] = (word) o; }
  return f; }
 
 ////
@@ -34,7 +34,7 @@ static int g_r_getc(struct g*f, struct g_in *i) {
 
 long strtol(char const*restrict, char**restrict, int);
 
-struct g *g_read1(struct g*f, struct g_in* i) {
+struct g *g_read1(struct g*f, struct g_in *i) {
  if (!g_ok(f)) return f;
  int c = g_r_getc(f, i);
  switch (c) {
@@ -46,7 +46,7 @@ struct g *g_read1(struct g*f, struct g_in* i) {
   case '"': {
    size_t n = 0;
    f = grbufn(f);
-   for (size_t lim = sizeof(g_word); g_ok(f); f = grbufg(f), lim *= 2)
+   for (size_t lim = sizeof(word); g_ok(f); f = grbufg(f), lim *= 2)
     for (struct g_vec *b = (struct g_vec*) f->sp[0]; n < lim; txt(b)[n++] = c)
      if ((c = i->getc(f, i)) == EOF || c == '"' ||
          (c == '\\' && (c =i->getc(f, i)) == EOF))
