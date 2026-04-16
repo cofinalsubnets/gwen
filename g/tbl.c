@@ -12,7 +12,7 @@ g_vm(g_vm_tnew) {
   Ip++,
   Continue(); }
 
-op11(g_vm_tabp, tabp(Sp[0]) ? gputnum(-1) : g_nil)
+op11(g_vm_tblp, tblp(Sp[0]) ? gputnum(-1) : g_nil)
 
 // relies on table capacity being a power of 2
 static g_inline uintptr_t index_of_key(struct g *f, struct g_tab *t, intptr_t k) {
@@ -99,33 +99,42 @@ static g_noinline intptr_t gtabdel(struct g *f, struct g_tab *t, intptr_t k, int
    coll = x; }
  return v; }
 
-g_vm(g_vm_tget) { return
- Sp[2] = g_tget(f, Sp[0], tbl(Sp[1]), Sp[2]),
- Sp += 2,
- Ip += 1,
- Continue(); }
+g_vm(g_vm_tget2) {
+  word z = Sp[0], k = Sp[1], x = Sp[2], n;
+  if (even(x) && datp(x)) switch (typ(x)) {
+    case tbl_q: z = g_tget(f, z, tbl(x), k); break;
+    case vec_q:
+      if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(x))
+        z = putnum(txt(x)[n]);
+      break;
+    case two_q:
+      if (nump(k) && (n = getnum(k)) >= 0) {
+       while (n-- && twop(x = B(x)));
+       if (twop(x)) z = A(x); } }
+  return Sp[2] = z, Sp += 2, Ip += 1, Continue(); }
 
 g_vm(g_vm_tset2) {
- if (tabp(Sp[2])) {
+ if (tblp(Sp[2])) {
   Pack(f);
   if (!g_ok(f = g_tput(f))) return f;
   Unpack(f); }
+ else Sp += 2;
  return Ip += 1, Continue(); }
 
 g_vm(g_vm_tdel) {
- if (tabp(Sp[1])) Sp[2] = gtabdel(f, (struct g_tab*) Sp[1], Sp[2], Sp[0]);
+ if (tblp(Sp[1])) Sp[2] = gtabdel(f, (struct g_tab*) Sp[1], Sp[2], Sp[0]);
  Sp += 2;
  Ip += 1;
  return Continue(); }
 
 g_vm(g_vm_tlen) { return
- Sp[0] = tabp(Sp[0]) ? gputnum(((struct g_tab*)Sp[0])->len) : g_nil,
+ Sp[0] = tblp(Sp[0]) ? gputnum(((struct g_tab*)Sp[0])->len) : g_nil,
  Ip += 1,
  Continue(); }
 
 g_vm(g_vm_tkeys) {
  intptr_t list = g_nil;
- if (tabp(Sp[0])) {
+ if (tblp(Sp[0])) {
   struct g_tab *t = (struct g_tab*) Sp[0];
   intptr_t len = t->len;
   Have(len * Width(struct g_pair));

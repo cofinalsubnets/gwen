@@ -66,7 +66,7 @@ struct g {
   g_num typ;
   struct g_vec {
    g_vm_t *ap;
-   g_num typ, type, rank, shape[]; } *nom;
+   uintptr_t typ, type, rank, shape[]; } *nom;
   uintptr_t code;
   struct g_atom *l, *r; } *symbols;
  uintptr_t len;

@@ -1,12 +1,10 @@
 #include "i.h"
 
-static g_noinline bool eql_cont(struct g *f, intptr_t a, intptr_t b) {
- if (!(even(a | b) && cell(a)->ap == g_vm_data && cell(b)->ap == g_vm_data && typ(a) == typ(b))) return false;
- intptr_t t = typ(a);
- // FIXME could overflow the stack -- use off pool for this
- if (t == two_q) return eql(f, A(a), A(b)) && eql(f, B(a), B(b));
- if (t == vec_q) return 0 == memcmp(vec(a), vec(b), g_vec_bytes(vec(a)));
+// this is called to check for equivalence when a != b
+g_noinline bool eqv(struct g *f, word a, word b) {
+ if (0 == ((a | b) & 1) && datp(a) && datp(b) && typ(a) == typ(b)) switch (typ(a)) {
+  case two_q: return eql(f, A(a), A(b)) && eql(f, B(a), B(b));
+  case vec_q: {
+   size_t la = g_vec_bytes(vec(a)), lb = g_vec_bytes(vec(b));
+   return la == lb && memcmp(vec(a), vec(b), la) == 0; } }
  return false; }
-
-g_inline bool eql(struct g *f, intptr_t a, intptr_t b) {
- return a == b || eql_cont(f, a, b); }

@@ -24,18 +24,6 @@ g_vm(g_vm_ssub) {
  Sp += 2;
  return Continue(); }
 
-g_vm(g_vm_sget) {
- if (!strp(Sp[0])) Sp[1] = g_nil;
- else {
-  struct g_vec *s = (struct g_vec*) Sp[0];
-  intptr_t i = ggetnum(Sp[1]);
-  i = MIN(i, len(s) - 1);
-  i = MAX(i, 0);
-  Sp[1] = gputnum(txt(s)[i]); }
- return Ip += 1,
-        Sp += 1,
-        Continue(); }
-
 g_vm(g_vm_scat) {
  intptr_t a = Sp[0], b = Sp[1];
  if (!strp(a)) Sp += 1;
@@ -56,22 +44,18 @@ g_vm(g_vm_scat) {
   memcpy(txt(z) + len(x), txt(y), len(y));
   Sp[1] = word(z); }
  return Ip++, Continue(); }
-static size_t const vt_size[] = {
-  [g_vect_u8]  = 1, [g_vect_i8]  = 1, [g_vect_f8]  = 1,
-  [g_vect_u16] = 2, [g_vect_i16] = 2, [g_vect_f16] = 2,
-  [g_vect_u32] = 4, [g_vect_i32] = 4, [g_vect_f32] = 4,
-  [g_vect_u64] = 8, [g_vect_i64] = 8, [g_vect_f64] = 8, };
+static size_t const vt_size[] = { [g_vect_u8]  = 1, };
 
 
 uintptr_t g_vec_bytes(struct g_vec *v) {
- intptr_t len = vt_size[v->type],
-          rank = v->rank,
-          *shape = v->shape;
+ uintptr_t len = vt_size[v->type],
+           rank = v->rank,
+           *shape = v->shape;
  while (rank--) len *= *shape++;
  return sizeof(struct g_vec) + v->rank * sizeof(g_num) + len; }
 
 static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
- intptr_t *shape = v->shape;
+ uintptr_t *shape = v->shape;
  v->ap = g_vm_data;
  v->typ = vec_q;
  v->type = type;

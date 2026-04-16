@@ -9,9 +9,9 @@
      (putc 27)
      (puts reset))
 
-   test-state (tnew 0)
-   (test-set k v) (set k v test-state)
-   test-get (tget 0 test-state))
+   test-state (new 0)
+   (test-set k v) (put k v test-state)
+   (test-get k) (get 0 k test-state))
 (:: 'assert (\ l
 (:
  (report x v) (,

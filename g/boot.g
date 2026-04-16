@@ -2,7 +2,7 @@
 ; there are three let bindings
  ; the prelude is a list of the standard library definitions.
  ; it is evaluated twice during different phases of initialization.
- prelude '(
+ egg '(
   ; these are all data and function definitions
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
@@ -10,7 +10,7 @@
      (AA x) (A (A x)) (AB x) (A (B x))
      (BA x) (B (A x)) (BB x) (B (B x))
      car A cdr B caar AA cadr AB cdar BA cddr BB
-     inc (+ 1) dec (+ -1) (:: a b) (set a b macros)
+     inc (+ 1) dec (+ -1) (:: a b) (put a b macros)
      (id x) x
      (const x _) x
      (co f g x) (f (g x))
@@ -47,168 +47,125 @@
   (:: '>>= (\ l (X (last l) (init l))))
   (:: '|> (foldl1 (\ m f (L f m))))
   (:: ', (\ l (X ': (foldr (L (last l)) (\ l r (X '_ (X l r))) (init l)))))
-  (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g))))))
+  (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
+  
  ; end of prelude
 
  ; next is an expression for the evaluator. this is evaluated three
  ; times by different init stages.
-  evaluator '(:- (\ x (: c (scop 0 (L 0) 0) (ana c x (thd0 c) 0 0)))
-    (scop par arg imp) (:
-     t (tnew 0)
-     _ (set 'par par t)
-     _ (set 'arg arg t)
-     _ (set 'imp imp t)
-     t)
+  (:- (\ x (: c (sco 0 (L 0) 0) (ana c x (k0 c) 0 0)))
+    (sco p a i) (put 'val (new 0) (put 'par p (put 'imp i (put 'arg a (new 0)))))
     (p1 x k) (poke x (seek -1 k))
-    (em2 i x k n) (p1 i (p1 x (k (+ 2 n))))
-    (thd0 c n) (p1 g_vm_ret (poke (arity c) (seek (+ 1 n) (thd (+ 2 n)))))
+    (p2 i x k) (poke i (seek -1 (poke x (seek -1 k))))
+    (em1 x k n) (p1 x (k (+ 1 n)))
+    (em2 i x k n) (p2 i x (k (+ 2 n)))
+    (k0 c n) (p1 g_vm_ret (poke (arity c) (seek (+ 1 n) (thd (+ 2 n)))))
 ;; functions for working with variable scope records
-    (argof c) (tget 0 c 'arg)
-    (impof c) (tget 0 c 'imp)
-    (arity c) (+ (len (argof c)) (len (impof c)))
-    (toplp c) (nilp (parof c))
-    (parof c) (tget 0 c 'par)
-    kim (em2 g_vm_quote)
+    (arity c) (+ (len (get 0 'arg c)) (len (get 0 'imp c)))
 
     (ana c x) (:- (?
-     (symp x)  (ava c x)
+     
+     (symp x)  (foldl1 id (ava c x))
      (atomp x) (kim x)
      (: a (A x) b (B x) (?
-      (nilp (twop b)) (ana c a)
+      (atomp b) (ana c a)
       (= a '` ) (kim (A b))
-      (= a '? ) (aco  c b)
+      (= a '? ) (foldl1 id (aco c b))
       (= a '\ ) (? (atomp b)     (kim 0)
                    (atomp (B b)) (ana c (A b))
-                   (ana c (ala c 0 b)))
-      (= a ': ) (ale c b)
-      (atomp b) (ana c a)
-      (: m (tget 0 macros a)
+                                 (ana c (ala c 0 b)))
+      (= a ': ) (foldl1 id (ale b))
+      (: m (get 0 a macros)
        (? m (ana c (m b))
-        (: p (ana c a)
-           q (ana_apl 0 c b)
-         (co p q)))))))
+            (app a b))))))
+    kim (em2 g_vm_quote)
 
-
-     (cpeek k) (A (tget 0 c k))
-     (cpush k v) (, (set k (X v (tget 0 c k)) c) v)
-     (cpop k) (: s (tget 0 c k) _ (set k (B s) c) (A s))
-     (em_ap k n) (:
-      j (k (+ 1 n))
-      (? (= (peek j) ret) (poke g_vm_tap j)
-                          (p1 g_vm_ap j)))
-     (em_apn n k m) (:
-      j (k (+ 2 m))
-      (? (= (peek j) g_vm_ret) (p1 g_vm_tapn (poke n j))
-                               (p1 g_vm_apn (p1 n j))))
-    ;aco is a bit complicated
-    (aco c b) (:- (: a0 (pop 'end)
-                        a1 (aco_r b)
-                        a2 (push 'end)
-                      (<=< a0 a1 a2))
-     ; where
-     (pop y k n) (: j (k n) (, (cpop y) j))
-     (push y k n) (cpush y (k n))
-     (aco_r b) (:
-      (pop_alt k n) (:
-       j (k (+ 2 n))
-       alt (cpop 'alt)
-       (p1 g_vm_cond (p1 alt j)))
-      (peek_end k n) (:
-       j (k (+ 3 n))
-       a (cpeek 'end)
-       i (peek a)
-       (?  (|| (= i g_vm_ret) (= i g_vm_tap))
-            (p1 i (p1 (peek (seek 1 a)) j))
-           (= i g_vm_tapn)
-            (p1 i (p1 (peek (seek 1 a)) (p1 (peek (seek 2 a)) j)))
-           (p1 g_vm_jump (p1 a j))))
-     (? (atomp b) (kim 0)
-        (atomp (B b)) (: a0 (ana c (A b))
-                         a1 peek_end
-                       (<=< a0 a1))
-        (: a0 (ana c (A b))
-           a1 pop_alt
-           a2 (ana c (AB b))
-           a3 peek_end
-           a4 (push 'alt)
-           a5 (aco_r (BB b))
-         (<=< a0 a1 a2 a3 a4 a5)))))
-
-    (ana_apl n c b) (:
-     (loop b)
-      (? (atomp b) id
-       (: a0 (ana c (A b))
-          a1 em_ap
-          a2 (loop (B b))
-        (<=< a0 a1 a2)))
-     _ (cpush 'stk n)
-     a (loop b)
-     _ (cpop 'stk)
+    (app a b) (: f (ana c a) g (aplr 0 b) (\ x (f (g x))))
+    (aplr n b) (:
+     (l b) (? (atomp b) id
+            (: f (ana c (A b))
+               g (l (B b))
+             (\ x (f (kapn 1 (g x))))))
+     _ (put 'stk (X n (get 0 'stk c)) c)
+     a (l b)
+     _ (put 'stk (B (get 0 'stk c)) c)
      a)
 
-    (ava d x) (:
-     (stki d)
-       (: imp (impof d)
-          i (lidx x imp)
-        (? (>= i 0) i
-         (: i (lidx x (argof d))
-          (? (< i 0) i (+ (len imp) i)))))
+   (kapn n k m) (: j (k (+ 2 m))
+                 (? (= (peek j) g_vm_ret)
+                  (? (> n 1) (p1 g_vm_tapn (poke n j)) (poke g_vm_tap j))
+                  (? (> n 1) (p2 g_vm_apn n j)    (p1 g_vm_ap j))))
 
-     (import v)
-      (? (&& (not (toplp c))
-             (not (memq v (tget 0 c 'imp))))
-       (cpush 'imp v))
+    ;aco is a bit complicated
+    (aco c) (:-
+     ;; enlist as a thunk
+     (flip co (flip X 0) (X (\ b (: f (acr b) (\ k n (:
+      k (f (\ n (: k (k n) _ (put 'end (X k (get 0 'end c)) c) k)) n)
+      _ (put 'end (B (get 0 'end c)) c)
+      k))))))
+     (acr b) (:-
+     (? (atomp b) (kim 0)
+        (atomp (B b)) (co (ana c (A b)) peek_end)
+        (: f (ana c (A b))
+           g (ana c (AB b))
+           h (acr (BB b))
+         (\ x (f (\ n (:
+          j (flip g (+ n 2) (peek_end (\ n
+             (: k (h x n) _ (put 'alt (X k (get 0 'alt c)) c) k))))
+          s (get 0 'alt c)
+          _ (put 'alt (B s) c)
+          (p2 g_vm_cond (A s) j)))))))
+     (peek_end k n) (: j (k (+ 3 n)) a (A (get 0 'end c)) i (peek a)
+      (? (|| (= i g_vm_ret) (= i g_vm_tap)) (p2 i (peek (seek 1 a)) j)
+         (= i g_vm_tapn) (p2 i (peek (seek 1 a)) (p1 (peek (seek 2 a)) j))
+         (p2 g_vm_jump a j)))))
+
+    ; variable expression analyzer
+    (ava d x) (:-
+     (? (nilp d) ; outside all lexical scopes?
+         (: z (sym 0)
+            y (get z x globals) ; check global scope
+          (? (!= y z) (L kim y) ; if it's there use that
+           (: _ (? (get 0'par c) (put 'imp (X x (get 0 'imp c)) c))
+            (L em2 g_vm_freev x))))
+
+      (: lfd (assq x (get 0 'lam d))
+       (? lfd (: p (em2 g_vm_lazyb lfd)
+                 q (aplr 0 (BB lfd))
+               (L co p q))
+          (: stk (get 0 'stk d)
+           (? (memq x stk)
+               (? (= c d)
+                (L em2 g_vm_arg (lidx x stk))
+                (: _ (&& (get 0 'par c) (put 'imp (X x (get 0 'imp c)) c))
+                 (L cata_var c)))
+              (<= 0 (stki d)) ; is it bound as a closure or argument variable?
+               (: _ (&& (!= c d) (get 0 'par c) (put 'imp (X x (get 0 'imp c)) c))
+                (L cata_var c))
+              (ava (get 0 'par d) x))))))
+
+     (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
 
      (cata_var c) (:
-         i (len (tget 0 c 'stk))
-         (\ j m (:
-          k (j (+ 2 m))
-          i (+ i (stki c))
-          (p1 g_vm_arg (p1 i k)))))
-
-     (? (nilp d) ; outside all lexical scopes?
-         (: a0 (sym 0)
-            y (tget a0 globals x) ; check global scope
-          (? (!= y a0) (kim y) ; if it's there use that
-           (, (import x) ; if it's not there... do something
-              (em2 g_vm_freev x))))
-
-      (: ; else...
-         stk (tget 0 d 'stk)
-         lfd (assq x (tget 0 d 'lam))
-       ; local function def?
-       (?
-        lfd
-         (: a0 (em2 g_vm_lazyb lfd)
-            a1 (ana_apl 0 c (BB lfd))
-          (<=< a0 a1))
-         ; is it bound on a let stack in this scope?
-        (memq x stk)
-         (? (= c d)
-          (em2 g_vm_arg (lidx x stk))
-          (, (import x)
-             (cata_var c)))
-        ; is it bound as a closure or argument variable?
-        (<= 0 (stki d))
-         (, (? (!= c d) (import x))
-            (cata_var c))
-        ; else recur
-        (ava (parof d) x)))))
+      i (len (get 0 'stk c))
+      (\ j m (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k)))))
 
 
+    ; lambda analyzer
     (ala c imp exp) (:
-     d (scop c (init exp) imp)
-     k (ana d (last exp) (thd0 d))
-     ar (arity d)
-     k ((? (> ar 1) (em2 g_vm_curry ar) id) k 0)
-     (X (trim k) (impof d)))
+     d (sco c (init exp) imp)
+     k (ana d (last exp) (k0 d))
+     a (arity d)
+     k ((? (= a 1) k (em2 g_vm_curry a k)) 0)
+     (X (trim k) (get 0 'imp d)))
 
 
-    (ale c b) (?
-     (atomp b)     (kim 0)
-     (atomp (B b)) (ana c (A b))
-     (:- (l1 0 0 (A b) (AB b) (BB b))
-        q (scop c (argof c) (impof c))
+    ; let expression analyzer (the most complicated one)
+    (ale b) (?
+     (atomp b)     (L kim 0)
+     (atomp (B b)) (L ana c (A b))
+     (:- (L l1 0 0 (A b) (AB b) (BB b))
+        q (sco c (get 0 'arg c) (get 0 'imp c))
         (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[ weh
         (lambp x) (? (twop x) (= '\ (A x)))
         (desug n d) (? (atomp n) (X n d)
@@ -217,13 +174,11 @@
      ; l1 collects bindings and passes them with the body expression to l2
      (l1 noms defs nom def rest) (:
       nd (desug nom def)
-      nom (A nd)
-      def (B nd)
-      noms (X nom noms)
-      defs (X def defs)
-      (? (atomp rest)     (l2 noms defs nom      1)
+      noms (X (A nd) noms)
+      defs (X (B nd) defs)
+      (? (atomp rest)     (l2 noms defs (A nd)   1)
          (atomp (B rest)) (l2 noms defs (A rest) 0)
-         (l1 noms defs (A rest) (AB rest) (BB rest))))
+                          (l1 noms defs (A rest) (AB rest) (BB rest))))
      ;; l2 find closures and revise lambda defs then emit eval/apply
      ; l2 finds closures for all local functions and passes a lambda expression for the body to l3
      (l2 noms defs exp even) (:
@@ -254,10 +209,9 @@
 
       (ldd ll) (X (A ll) (X (AB ll) (foldl (BB ll) (flip ldel) (map A lams))))
       clams (map ldd lams)
-      llam (X '\ (cat noms (L exp)))
-      _ (set 'lam clams q)
-      (lls n nds) (, (cpush 'stk n)
-                     (ll nds))
+      _ (put 'lam clams q)
+      (lls n nds) (: 0 (put 'stk (X n (get 0 'stk c)) c)
+                       (ll nds))
       (ll nds) (? (nilp nds) id
        (: nd (A nds)
           n (A nd)
@@ -266,29 +220,18 @@
                             x (ala q (BB qa) (B d))
                             (set_cdr qa x))
                          d)
-          a0 (ana c d)
-          a1 (? (&& (toplp c) even) (em2 g_vm_defglob n) id)
-          a2 (lls n (B nds))
-          (<=< a0 a1 a2)))
-      s0 (tget 0 c 'stk)
-      n  (len noms)
-      a0 (ana c llam)
-      a1 (lls -1 (zip (rev noms) (rev defs)))
-      a2 (? (> n 1) (em_apn n) em_ap)
-      _ (set 'stk s0 c)
-      (<=< a0 a1 a2))))))
-
-
- ; helper to evaluate each prelude expression in order
- (go e a) (? a (: _ (e (A a)) (go e (B a))))
+          f (ana c d)
+          g (? (&& (nilp (get 0 'par c)) even) (em2 g_vm_defglob n) id)
+          h (lls n (B nds))
+          (\ x (f (g (h x))))))
+      s (get 0 'stk c)
+      f (ana c (X '\ (cat noms (L exp))))
+      g (lls -1 (zip (rev noms) (rev defs)))
+      h (kapn (len noms))
+      _ (put 'stk s c)
+      (\ x (f (g (h x))))))))))
+ (go e z a) (? a (go e (e (A a)) (B a)) z)
  # init process
- t0 (clock 0)      ; start time
- e0 ev             ; stage 0 evaluator (C level)
- _ (go e0 prelude) ; stage 1 prelude (eval'd by C)
- e1 (e0 evaluator) ; stage 1 evaluator (eval'd by C);
- _ (go e1 prelude) ; stage 2 prelude (eval'd by G)
- e2 (e1 evaluator) ; stage 2 evaluator (eval'd by G)
- t1 (clock 0)      ; end time
- _ (set 'boot_ms (- t1 t0) globals)
- _ (set 'ev e2 globals) ; redefine eval
- _)
+ t0 (clock 0)
+ e (go (go ev 0 egg) 0 egg)
+ (put 'boot_ms (- (clock 0) t0) (put 'ev e globals)))

@@ -25,9 +25,9 @@
    (nilp a) (let-loop (X 0 0) b m)
    (nilp (B a)) (meta-eval (A a) (b m))
    (desugar (A a) (AB a) (\ k v
-    (: t (tnew 0) get (tget 0 t) (put v) (set 0 v t)
-     (let-loop (BB a) (\ l (, (put (meta-eval v (b l))) l))
-                        (\ x (? (= x k) (get 0) (m x))))))))
+    (: t (new 0) (Get k) (get 0 k t) (Put v) (put 0 v t)
+     (let-loop (BB a) (\ l (, (Put (meta-eval v (b l))) l))
+                        (\ x (? (= x k) (Get 0) (m x))))))))
 
   (desugar k v c)
    (? (twop k) (desugar (A k) (X '\ (cat (B k) (X v 0))) c)

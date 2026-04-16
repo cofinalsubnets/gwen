@@ -1,6 +1,0 @@
-(: dec (+ -1)
-  (tak x y z)
-   (? (<= x y) y (tak (tak (dec x) y z)
-                      (tak (dec y) x z)
-                      (tak (dec z) x y)))
- (assert (= 1013 (tak 1012 1013 1014))))

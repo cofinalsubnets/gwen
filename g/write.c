@@ -36,9 +36,9 @@ static int g_em_tab(struct g*f, struct g_out*o, struct g_tab *t) {
 static int g_em_vec(struct g*f, struct g_out*o, struct g_vec *v) {
   int r = 0;
   if (!vec_strp(v)) {
-   intptr_t type = v->type, rank = v->rank, *shape = v->shape;
+   uintptr_t type = v->type, rank = v->rank, *shape = v->shape;
    r = gfprintf(f, o, "#vec@%x:%d.%d", v, type, rank);
-   for (intptr_t i = rank, *j = shape; i--; r = gfprintf(f, o, ".%d", (intptr_t) *j++)); }
+   for (uintptr_t i = rank, *j = shape; i--; r = gfprintf(f, o, ".%d", (intptr_t) *j++)); }
   else {
    uintptr_t len = vlen(v);
    char *text = vtxt(v);
@@ -51,7 +51,7 @@ static int g_em_vec(struct g*f, struct g_out*o, struct g_vec *v) {
 static int g_em_sym(struct g*f, struct g_out*o, struct g_atom *y) {
  int r = 0;
  struct g_vec *s = y->nom;
- if (s && vec_strp(s)) for (intptr_t i = 0; i < len(s); r = o->putc(f, txt(s)[i++], o));
+ if (s && vec_strp(s)) for (uintptr_t i = 0; i < len(s); r = o->putc(f, txt(s)[i++], o));
  else r = gfprintf(f, o, "#sym@%x", y);
  return r; }
 
@@ -82,7 +82,7 @@ g_vm(g_vm_putc) {
 g_vm(g_vm_puts) {
  if (strp(Sp[0])) {
   struct g_vec *s = vec(Sp[0]);
-  for (intptr_t i = 0; i < len(s);) gputc(f, txt(s)[i++]);
+  for (uintptr_t i = 0; i < len(s);) gputc(f, txt(s)[i++]);
   gflush(f); }
  Ip += 1;
  return Continue(); }

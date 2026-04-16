@@ -17,13 +17,24 @@ enum g_status g_fin(struct g *f) {
  _(bif_bnot, "~", S1(g_vm_bnot)) _(bif_bsl, "<<", S2(g_vm_bsl)) _(bif_bsr, ">>", S2(g_vm_bsr))\
  _(bif_band, "&", S2(g_vm_band)) _(bif_bor, "|", S2(g_vm_bor)) _(bif_bxor, "^", S2(g_vm_bxor))\
  _(bif_cons, "X", S2(g_vm_cons)) _(bif_g_vm_car, "A", S1(g_vm_car)) _(bif_g_vm_cdr, "B", S1(g_vm_cdr)) \
- _(bif_sget, "sget", S2(g_vm_sget)) _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
+ _(bif_ssub, "ssub", S3(g_vm_ssub)) _(bif_scat, "scat", S2(g_vm_scat)) \
  _(bif_g_vm_dot, ".", S1(g_vm_dot)) _(bif_read, "read", S1(g_vm_read)) _(bif_getc, "getc", S1(g_vm_getc))\
  _(bif_putc, "putc", S1(g_vm_putc)) _(bif_prn, "putn", S2(g_vm_putn)) _(bif_puts, "puts", S1(g_vm_puts))\
- _(bif_sym, "sym", S1(g_vm_gensym)) _(bif_nom, "nom", S1(g_vm_symnom)) _(bif_thd, "thd", S1(g_vm_thda)) _(bif_g_vm_peek, "peek", S1(g_vm_peek)) _(bif_g_vm_poke, "poke", S2(g_vm_poke)) _(bif_trim, "trim", S1(g_vm_trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
+ _(bif_sym, "sym", S1(g_vm_gensym))\
+ _(bif_nom, "nom", S1(g_vm_symnom))\
+ _(bif_thd, "thd", S1(g_vm_thda)) _(bif_g_vm_peek, "peek", S1(g_vm_peek)) _(bif_g_vm_poke, "poke", S2(g_vm_poke)) _(bif_trim, "trim", S1(g_vm_trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
  _(bif_len, "len", S1(g_vm_len))\
- _(bif_tset2, "set", S3(g_vm_tset2)) _(bif_tabnew, "tnew", S1(g_vm_tnew)) _(bif_tabkeys, "tkeys", S1(g_vm_tkeys)) _(bif_tabget, "tget", S3(g_vm_tget)) _(bif_tabdel, "tdel", S3(g_vm_tdel))\
- _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp)) _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tabp, "tabp", S1(g_vm_tabp)) _(bif_nump, "nump", S1(g_vm_nump)) _(bif_nilp, "nilp", S1(g_vm_nilp))\
+ _(bif_get, "get", S3(g_vm_tget2))\
+ _(bif_put, "put", S3(g_vm_tset2))\
+ _(bif_tnew, "new", S1(g_vm_tnew))\
+ _(bif_tabkeys, "tkeys", S1(g_vm_tkeys))\
+ _(bif_tabdel, "tdel", S3(g_vm_tdel))\
+ _(bif_twop, "twop", S1(g_vm_twop))\
+ _(bif_strp, "strp", S1(g_vm_strp))\
+ _(bif_symp, "symp", S1(g_vm_symp))\
+ _(bif_tblp, "tblp", S1(g_vm_tblp))\
+ _(bif_nump, "nump", S1(g_vm_nump))\
+ _(bif_nilp, "nilp", S1(g_vm_nilp))\
  _(bif_ev, "ev", S1(g_vm_eval))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);

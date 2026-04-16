@@ -4,5 +4,6 @@
    (!= a b) (~ (= a b))
  (assert (!= s0 s1)
          (!= s0 s2)
-         (!= s1 s2)))
-(assert (= 'asdf (sym "asdf")))
+         (!= s1 s2)
+         (= 'asdf (sym "asdf"))
+         (= "asdf" (nom 'asdf))))
