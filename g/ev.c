@@ -15,7 +15,7 @@ struct env {
 #define Cata(n, ...) struct g *n(struct g *f, struct env **c, ##__VA_ARGS__)
 typedef Ana(ana);
 typedef Cata(cata);
-static ana analyze, g_c0_let, g_c0_apargs;
+static ana analyze, g_c0_let, g_c0_apply;
 static cata g_c1_i, g_c1_ix, g_c1_var, g_c1_yield, g_c1_ret, g_c1;
 static g_inline Cata(pull) { return ((cata*) pop1(f))(f, c); }
 
@@ -217,8 +217,9 @@ static Ana(g_c0_var) {
     f = g_c0_ix(f, c, g_vm_freev, (*c)->imps = g_ok(f) ? pop1(f) : nil),
     f);
   // lambda definition of local let form?
-  if ((y = assq(f, d->lams, x))) return f = g_c0_ix(f, c, g_vm_lazyb, y),
-                                        g_c0_apargs(f, c, BB(f->sp[2]));
+  if ((y = assq(f, d->lams, x))) return
+    f = g_c0_ix(f, c, g_vm_lazyb, y),
+    g_c0_apply(f, c, BB(f->sp[2]));
   // other definition of local let form?
   if (memq(f, d->stack, x)) return
    incl(*c, 2),
@@ -260,7 +261,7 @@ static g_noinline Ana(analyze) {
   analyze(f, c, g_ok(f) ? pop1(f) : 0);
  return // apply function to arguments
   avec(f, b, f = analyze(f, c, a)),
-  g_c0_apargs(f, c, b); }
+  g_c0_apply(f, c, b); }
 
 
 static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_t exp) {
@@ -315,20 +316,14 @@ static struct g *g_c0_apn(struct g*f, struct env**c, intptr_t ar) {
  incl(*c, 2);
  return g_push(f, 2, g_c1_apn, putnum(ar)); }
 
-static struct g *g_c0_apargsr(struct g *f, struct env **c, word x) {
- if (twop(x)) {
-  word y = A(x);
-  avec(f, y, f = g_c0_apargsr(f, c, B(x)));
-  f = analyze(f, c, y);
-  f = gxl(g_push(f, 2, nil, (*c)->stack));
-  if (g_ok(f)) (*c)->stack = pop1(f); }
- return f; }
-
-static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
+static struct g *g_c0_apr2l(struct g *f, struct env **c, word x);
+// TODO move optimizations to self
+static struct g *g_c0_apply(struct g *f, struct env **c, intptr_t x) {
  f = gxl(g_push(f, 3, nil, (*c)->stack, x));
  if (g_ok(f)) {
   (*c)->stack = pop1(f);
   x = pop1(f);
+
   intptr_t call_arity = llen(x);
   bool is_immediate_function =
    f->sp[0] == (word) g_c1_ix    &&
@@ -359,22 +354,31 @@ static struct g *g_c0_apargs(struct g *f, struct env **c, intptr_t x) {
    cell(f->sp[2])[3].ap == g_vm_ret0;
 
   if (is_n_ary_bif) {
-    g_vm_t *i = cell(f->sp[2])[2].ap;
-    f->sp += 3;
-    (*c)->stack = B((*c)->stack);
-    f = g_c0_i(g_c0_apargsr(f, c, x), c, i);
-    if (g_ok(f)) while (call_arity--) (*c)->stack = B((*c)->stack);
-    return UM(f), f; }
+   g_vm_t *i = cell(f->sp[2])[2].ap;
+   f->sp += 3;
+   (*c)->stack = B((*c)->stack);
+   f = g_c0_i(g_c0_apr2l(f, c, x), c, i);
+   if (g_ok(f)) while (call_arity--) (*c)->stack = B((*c)->stack);
+   return UM(f), f; }
   bool is_n_ary_ap =
-    value_arity == call_arity && call_arity > 1;
+   value_arity == call_arity && call_arity > 1;
   if (is_n_ary_ap) // one right-to-left n-ary application
-   for (f = g_c0_apn(g_c0_apargsr(f, c, x), c, call_arity); call_arity--; (*c)->stack = g_ok(f) ? B((*c)->stack) : nil);
+   for (f = g_c0_apn(g_c0_apr2l(f, c, x), c, call_arity); call_arity--; (*c)->stack = g_ok(f) ? B((*c)->stack) : nil);
   else // n left-to-right unary application
    while (twop(x)) f = g_c0_apn(analyze(f, c, A(x)), c, 1), x = B(x);
   UM(f);
   (*c)->stack = B((*c)->stack); }
  return f; }
 
+
+static struct g *g_c0_apr2l(struct g *f, struct env **c, word x) {
+ if (twop(x)) {
+  word y = A(x);
+  avec(f, y, f = g_c0_apr2l(f, c, B(x)));
+  f = analyze(f, c, y);
+  f = gxl(g_push(f, 2, nil, (*c)->stack));
+  if (g_ok(f)) (*c)->stack = pop1(f); }
+ return f; }
 
 static bool lambp(struct g *f, word x) {
  if (!twop(x) || !symp(A(x)) || !twop(B(x))) return false;

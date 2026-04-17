@@ -13,7 +13,7 @@ g_vm(g_vm_info) {
  return Continue(); }
 
 op11(g_vm_clock, gputnum(g_clock() - getnum(Sp[0])))
-static g_vm(g_vm_uncurry) {
+g_vm(g_vm_uncurry) {
   Have1();
   *--Sp = Ip[1].x;
   Ip = Ip[2].m;
