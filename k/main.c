@@ -291,10 +291,10 @@ void kmain(void) {
     g_evals_(g_defs(g_ini(), defs),
 #include "boot.h"
       "(:(ps1 _)(puts\" ;; \")E(sym())"
-        "(rs x)(?(= x E)0(X(A x)(rs(read E))))"
-        "(ep x)(,(.(ev x))(putc 10))"
-        "(go k)(go(key(wait(draw(,(? k(putc k))(?(= k 10)(ps1(each(rs(read E))ep))))))))"
-       "(go(key(ps1(,(putn(clock(,(puts\"\x02 \")0))10)(putc 10))))))");
+        "(rs x)(?(= x E)0(X x(rs(read E))))"
+        "(ep x)(: _(.(ev x))(putc 10))"
+        "(go k)(go(key(wait(draw(: _(? k(putc k))(?(= k 10)(ps1(each(rs(read E))ep))))))))"
+       "(go(key(ps1(: _(putn(clock(: _ (puts\"\x02 \")0))10)(putc 10))))))");
    // */
 
   k_reset(); }

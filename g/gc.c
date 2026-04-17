@@ -102,16 +102,12 @@ static g_noinline struct g *gcg(struct g*g, intptr_t *p1, uintptr_t len1, struct
  g->hp = g->cp = g->end;
  g->ip = cell(gcp(g, word(g->ip), p0, t0));
  g->symbols = 0;
- for (uintptr_t i = 0; i < g_nvars; i++)
-  g->v[i] = gcp(g, g->v[i], p0, t0);
- for (intptr_t n = 0; n < h; n++)
-  g->sp[n] = gcp(g, sp0[n], p0, t0);
- for (struct g_root *s = g->root; s; s = s->next)
-  *s->ptr = gcp(g, *s->ptr, p0, t0);
+ for (word i = 0; i < g_nvars; i++) g->v[i] = gcp(g, g->v[i], p0, t0);
+ for (word n = 0; n < h; n++) g->sp[n] = gcp(g, sp0[n], p0, t0);
+ for (struct g_root *s = g->root; s; s = s->next) *s->ptr = gcp(g, *s->ptr, p0, t0);
  while (g->cp < g->hp)
   if (datp(g->cp)) wks[typ(g->cp)](g, g->cp, p0, t0);
-  else for (g->cp += 2; g->cp[-2]; g->cp++)
-   g->cp[-2] = gcp(g, g->cp[-2], p0, t0);
+  else for (g->cp += 2; g->cp[-2]; g->cp++) g->cp[-2] = gcp(g, g->cp[-2], p0, t0);
  return g; }
 
 g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
@@ -123,9 +119,8 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
  struct g *g = f == f->pool ? (struct g*) (cell(f) + f->len) : f->pool;
  f = gcg(g, (void*) f->pool, f->len, f);
  uintptr_t const
-  v_f = 2, // 2 or 3 seem like good values
-  v_lo = 1 << v_f,
-  v_hi = v_lo << v_f,
+  v_lo = 4,
+  v_hi = v_lo * v_lo,
   req = req0 + len0 - avail(f),
   t2 = g_clock();
  uintptr_t
@@ -139,12 +134,12 @@ g_noinline struct g *g_please(struct g *f, uintptr_t req0) {
   while (len1 > 2 * req && v > v_hi);
  else return f->t0 = t2, f; // else right size -> all done
  return // allocate a new pool with target size
-  !(g = f->malloc(f, len1 * 2 * sizeof(word))) ?
-   encode(f, req <= len0 ? g_status_ok : g_status_oom) :
-   (g = gcg(g, (word*) g, len1, f),
-    f->free(f, f->pool),
-    g->t0 = g_clock(),
-    g); }
+  !(g = f->malloc(f, len1 * 2 * sizeof(word))) ? // if malloc fails but pool is big enough
+   encode(f, req <= len0 ? g_status_ok : g_status_oom) : // we can still report success
+  (g = gcg(g, (word*) g, len1, f),
+   f->free(f, f->pool),
+   g->t0 = g_clock(),
+   g); }
 
 static g_noinline intptr_t gcp(struct g *f, word x, word const *p0, word const *t0) {
  // if it's a number or it's outside managed memory then return it
@@ -152,17 +147,13 @@ static g_noinline intptr_t gcp(struct g *f, word x, word const *p0, word const *
  union u *src = cell(x);
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer
- if (even(x) && ptr(f) <= ptr(x)
-             && ptr(x) < ptr(f) + f->len) return x;
+ if (even(x) && ptr(f) <= ptr(x) && ptr(x) < ptr(f) + f->len) return x;
  // if it's data then call the copy function
- if (x != (word) g_vm_data) {
-  // it's a thread, find the end to find the head
-  struct g_tag *t = ttag(src);
-  union u *ini = t->head,
-          *d = bump(f, t->end - ini),
-          *dst = d;
-  // copy source contents to dest and write dest addresses to source
-  for (union u*s = ini; (d->x = s->x); s++->x = (intptr_t) d++);
-  ((struct g_tag*) d)->head = dst;
-  return (intptr_t) (dst + (src - ini)); }
- return copiers[typ(src)](f, (intptr_t) src, p0, t0); }
+ if (x == (word) g_vm_data) return copiers[typ(src)](f, (word) src, p0, t0);
+ // it's a thread, find the end to find the head
+ struct g_tag *t = ttag(src);
+ union u *ini = t->head, *d = bump(f, t->end - ini), *dst = d;
+ // copy source contents to dest and write dest addresses to source
+ for (union u*s = ini; (d->x = s->x); s++->x = (word) d++);
+ ((struct g_tag*) d)->head = dst;
+ return (word) (dst + (src - ini)); }

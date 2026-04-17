@@ -3,15 +3,13 @@ static struct g *g_c0(struct g *f, g_vm_t *y);
 
 // function state using this type
 struct env {
-  struct env *par;
-  word
-   args,  // list  // function positional arguments
-   imps,  // list  // closure variables
-   stack, // list  // current values on stack
-   lams,  // alist // known function definitions
-   len,      // num // thread length accumulator
-   branches, // stack for conditional expression branches
-   exits; }; // stack for conditional expression exits
+  struct env *par; // enclosing scope
+  word args, imps, // positional and closure variables
+   stack, // computed arguments and let bindings on stack
+   lams, // lambdas defined in a local let form
+   len,  // thread length accumulator
+   branches, // stack for conditional alternate branch addresses
+   exits; }; // stach for conditional exit addresses
 
 #define Ana(n, ...) struct g *n(struct g *f, struct env **c, intptr_t x, ##__VA_ARGS__)
 #define Cata(n, ...) struct g *n(struct g *f, struct env **c, ##__VA_ARGS__)
@@ -23,13 +21,11 @@ static g_inline Cata(pull) { return ((cata*) pop1(f))(f, c); }
 
 #define incl(e, n) ((e)->len += ((n)<<1))
 // generic instruction ana handlers
-static struct g *g_c0_ix(struct g *f, struct env **c, g_vm_t *i, word x) {
- incl(*c, 2);
- return g_push(f, 3, g_c1_ix, i, x); }
+static g_inline struct g *g_c0_ix(struct g *f, struct env **c, g_vm_t *i, word x) { 
+ return incl(*c, 2), g_push(f, 3, g_c1_ix, i, x); }
 
-static struct g *g_c0_i(struct g *f, struct env **c, g_vm_t *i) {
- incl(*c, 1);
- return g_push(f, 2, g_c1_i, i); }
+static g_inline struct g *g_c0_i(struct g *f, struct env **c, g_vm_t *i) {
+ return incl(*c, 1), g_push(f, 2, g_c1_i, i); }
 
 static g_noinline struct g *enscope(struct g *f, struct env *par, word args, word imps) {
  f = g_push(f, 3, args, imps, par);
@@ -144,7 +140,6 @@ static Cata(g_c1_var) {
  for (l = (*c)->args; !nilp(l); l = B(l), i++)
   if (eql(f, v, A(l))) return g_c1_var_(f, c, i);
  return g_c1_var_(f, c, i); }
-
 
 static Cata(g_c1_i) {
  g_vm_t *i = (void*) pop1(f);

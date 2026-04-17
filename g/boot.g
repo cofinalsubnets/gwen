@@ -4,48 +4,52 @@
  ; it is evaluated twice during different phases of initialization.
  egg '(
   ; these are all data and function definitions
+  (: (co f g x) (f (g x))
+     (id x) x
+     (const x _) x
+     (flip f x y) (f y x))
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
      (AA x) (A (A x)) (AB x) (A (B x))
      (BA x) (B (A x)) (BB x) (B (B x))
-     car A cdr B caar AA cadr AB cdar BA cddr BB
-     inc (+ 1) dec (+ -1) (:: a b) (put a b macros)
-     (id x) x
-     (const x _) x
-     (co f g x) (f (g x))
-     (flip f x y) (f y x)
-     (map f l) (? (twop l) (X (f (A l)) (map f (B l))))
-     (foldl z f l) (? (twop l) (foldl (f z (A l)) f (B l)) z)
-     (foldr z f l) (? (twop l) (f (A l) (foldr z f (B l))) z)
-     (foldl1 f l) (foldl (A l) f (B l))
+     caar AA cadr AB cdar BA cddr BB
+     caaar (co car caar) caadr (co car cadr)
+     cadar (co car cdar) caddr (co car cddr)
+     cdaar (co cdr caar) cdadr (co cdr cadr)
+     cddar (co cdr cdar) cdddr (co cdr cddr)
+     inc (+ 1) dec (+ -1) (:: a b) (put a b macros))
+  (: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
+     (foldl z f l) (? (twop l) (foldl (f z (car l)) f (cdr l)) z)
+     (foldr z f l) (? (twop l) (f (car l) (foldr z f (cdr l))) z)
+     (foldl1 f l) (foldl (car l) f (cdr l))
      (foldr1 f l) (foldr (last l) f (init l))
-     (filter p l) (? (twop l) (: m (filter p (B l)) (? (p (A l)) (X (A l) m) m)))
-     (init l) (? (B l) (X (A l) (init (B l))))
-     (last l) (? (B l) (last (B l)) (A l))
-     (each l f) (? (twop l) (: _ (f (A l)) (each (B l) f)))
-     (ldel x l) (? (twop l) (? (= (A l) x) (B l) (X (A l) (ldel x (B l)))))
-     (all f l) (? (twop l) (? (f (A l)) (all f (B l))) -1)
-     (any f l) (? (twop l) (? (f (A l)) -1 (any f (B l))))
+     (filter p l) (? (twop l) (: m (filter p (cdr l)) (? (p (car l)) (cons (car l) m) m)))
+     (init l) (? (cdr l) (cons (car l) (init (cdr l))))
+     (last l) (? (cdr l) (last (cdr l)) (car l))
+     (each l f) (? (twop l) (: _ (f (car l)) (each (cdr l) f)))
+     (ldel x l) (? (twop l) (? (= (car l) x) (cdr l) (cons (car l) (ldel x (cdr l)))))
+     (all f l) (? (twop l) (? (f (car l)) (all f (cdr l))) -1)
+     (any f l) (? (twop l) (? (f (car l)) -1 (any f (cdr l))))
      catmap (co (foldr 0) (co cat))
-     (cat a b) (foldr b X a)
-     (assq x l) (? l (? (= x (A (A l))) (A l) (assq x (B l))))
-     (lidx x) ((: (f n l) (? (twop l) (? (= x (A l)) n (f (+ 1 n) (B l))) -1)) 0)
+     (cat a b) (foldr b cons a)
+     (assq x l) (? l (? (= x (caar l)) (car l) (assq x (cdr l))))
+     (lidx x) ((: (f n l) (? (twop l) (? (= x (car l)) n (f (+ 1 n) (cdr l))) -1)) 0)
      (memq x) (any (= x))
-     (zip a b) (? (twop a) (? (twop b) (X (X (A a) (A b)) (zip (B a) (B b)))))
-     rev (foldl 0 (flip X))
-     (drop n l) (? n (drop (- n 1) (B l)) l)
-     (take n l) (? n (X (A l) (take (- n 1) (B l))))
+     (zip a b) (? (twop a) (? (twop b) (cons (cons (car a) (car b)) (zip (cdr a) (cdr b)))))
+     rev (foldl 0 (flip cons))
+     (drop n l) (? n (drop (- n 1) (cdr l)) l)
+     (take n l) (? n (cons (car l) (take (- n 1) (cdr l))))
      (part p) (foldr '(0) (\ a m
-      (? (p a) (X (X a (A m)) (B m))
-               (X (A m) (X a (B m)))))))
+      (? (p a) (cons (cons a (car m)) (cdr m))
+               (cons (car m) (cons a (cdr m)))))))
   ; here are some macro definitions
-  (:: 'L (foldr 0 (\ a l (X X (X a (X l 0))))))
-  (:: '&& (\ l (: (and l) (? (B l) (X '? (X (A l) (X (and (B l)) 0))) (A l)) (? l (and l) -1))))
-  (:: '|| (\ l (: (or l) (? l (: y (sym 0) (L ': y (A l) (L '? y y (or (B l)))))) (or l))))
-  (:: ':- (\ a (X ': (cat (B a) (X (A a) 0)))))
-  (:: '>>= (\ l (X (last l) (init l))))
-  (:: ', (\ l (X ': (foldr (L (last l)) (\ l r (X '_ (X l r))) (init l)))))
+  (:: 'L (foldr 0 (\ a l (cons cons (cons a (cons l 0))))))
+  (:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) -1))))
+  (:: '|| (\ l (: (or l) (? l (: y (sym 0) (L ': y (car l) (L '? y y (or (cdr l)))))) (or l))))
+  (:: ':- (\ a (cons ': (cat (cdr a) (cons (car a) 0)))))
+  (:: '>>= (\ l (cons (last l) (init l))))
+  (:: ', (\ l (cons ': (foldr (L (last l)) (\ l r (cons '_ (cons l r))) (init l)))))
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
   
  ; end of prelude
@@ -63,58 +67,55 @@
     (arity c) (+ (len (get 0 'arg c)) (len (get 0 'imp c)))
 
     (ana c x) (:- (?
-     
      (symp x)  (foldl1 id (ava c x))
      (atomp x) (kim x)
-     (: a (A x) b (B x) (?
+     (: a (car x) b (cdr x) (?
       (atomp b) (ana c a)
-      (= a '` ) (kim (A b))
+      (= a '` ) (kim (car b))
       (= a '? ) (foldl1 id (aco c b))
-      (= a '\ ) (? (atomp b)     (kim 0)
-                   (atomp (B b)) (ana c (A b))
-                                 (ana c (ala c 0 b)))
-      (= a ': ) (foldl1 id (ale (A b) (B b)))
-      (: m (get 0 a macros)
-       (? m (ana c (m b))
-            (app a b))))))
+      (= a '\ ) (? (atomp (cdr b)) (ana c (car b))
+                                   (ana c (ala c 0 b)))
+      (= a ': ) (foldl1 id (ale (car b) (cdr b)))
+      (: m (get 0 a macros) (? m (ana c (m b))
+                                 (app a b))))))
     kim (em2 g_vm_quote)
 
     (app a b) (: f (ana c a) g (aplr 0 b) (\ x (f (g x))))
     (aplr n b) (:
      (l b) (? (atomp b) id
-            (: f (ana c (A b))
-               g (l (B b))
+            (: f (ana c (car b))
+               g (l (cdr b))
              (\ x (f (kapn 1 (g x))))))
-     _ (put 'stk (X n (get 0 'stk c)) c)
+     _ (put 'stk (cons n (get 0 'stk c)) c)
      a (l b)
-     _ (put 'stk (B (get 0 'stk c)) c)
+     _ (put 'stk (cdr (get 0 'stk c)) c)
      a)
 
    (kapn n k m) (: j (k (+ 2 m))
                  (? (= (peek j) g_vm_ret)
                   (? (> n 1) (p1 g_vm_tapn (poke n j)) (poke g_vm_tap j))
-                  (? (> n 1) (p2 g_vm_apn n j)    (p1 g_vm_ap j))))
+                  (? (> n 1) (p2 g_vm_apn n j) (p1 g_vm_ap j))))
 
     ;aco is a bit complicated
     (aco c) (:-
      ;; enlist as a thunk
-     (flip co (flip X 0) (X (\ b (: f (acr b) (\ k n (:
-      k (f (\ n (: k (k n) _ (put 'end (X k (get 0 'end c)) c) k)) n)
-      _ (put 'end (B (get 0 'end c)) c)
+     (flip co (flip cons 0) (cons (\ b (: f (acr b) (\ k n (:
+      k (f (\ n (: k (k n) _ (put 'end (cons k (get 0 'end c)) c) k)) n)
+      _ (put 'end (cdr (get 0 'end c)) c)
       k))))))
      (acr b) (:-
      (? (atomp b) (kim 0)
-        (atomp (B b)) (co (ana c (A b)) peek_end)
-        (: f (ana c (A b))
-           g (ana c (AB b))
-           h (acr (BB b))
+        (atomp (cdr b)) (co (ana c (car b)) peek_end)
+        (: f (ana c (car b))
+           g (ana c (cadr b))
+           h (acr (cddr b))
          (\ x (f (\ n (:
           j (flip g (+ n 2) (peek_end (\ n
-             (: k (h x n) _ (put 'alt (X k (get 0 'alt c)) c) k))))
+             (: k (h x n) _ (put 'alt (cons k (get 0 'alt c)) c) k))))
           s (get 0 'alt c)
-          _ (put 'alt (B s) c)
-          (p2 g_vm_cond (A s) j)))))))
-     (peek_end k n) (: j (k (+ 3 n)) a (A (get 0 'end c)) i (peek a)
+          _ (put 'alt (cdr s) c)
+          (p2 g_vm_cond (car s) j)))))))
+     (peek_end k n) (: j (k (+ 3 n)) a (car (get 0 'end c)) i (peek a)
       (? (|| (= i g_vm_ret) (= i g_vm_tap)) (p2 i (peek (seek 1 a)) j)
          (= i g_vm_tapn) (p2 i (peek (seek 1 a)) (p1 (peek (seek 2 a)) j))
          (p2 g_vm_jump a j)))))
@@ -125,21 +126,21 @@
          (: z (sym 0)
             y (get z x globals) ; check global scope
           (? (!= y z) (L kim y) ; if it's there use that
-           (: _ (? (get 0'par c) (put 'imp (X x (get 0 'imp c)) c))
+           (: _ (? (get 0'par c) (put 'imp (cons x (get 0 'imp c)) c))
             (L em2 g_vm_freev x))))
 
       (: lfd (assq x (get 0 'lam d))
        (? lfd (: p (em2 g_vm_lazyb lfd)
-                 q (aplr 0 (BB lfd))
+                 q (aplr 0 (cddr lfd))
                (L co p q))
           (: stk (get 0 'stk d)
            (? (memq x stk)
                (? (= c d)
                 (L em2 g_vm_arg (lidx x stk))
-                (: _ (&& (get 0 'par c) (put 'imp (X x (get 0 'imp c)) c))
+                (: _ (&& (get 0 'par c) (put 'imp (cons x (get 0 'imp c)) c))
                  (L cata_var c)))
               (<= 0 (stki d)) ; is it bound as a closure or argument variable?
-               (: _ (&& (!= c d) (get 0 'par c) (put 'imp (X x (get 0 'imp c)) c))
+               (: _ (&& (!= c d) (get 0 'par c) (put 'imp (cons x (get 0 'imp c)) c))
                 (L cata_var c))
               (ava (get 0 'par d) x))))))
 
@@ -149,73 +150,72 @@
       i (len (get 0 'stk c))
       (\ j m (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k)))))
 
-
     ; lambda analyzer
     (ala c imp exp) (:
      d (sco c (init exp) imp)
      k (ana d (last exp) (k0 d))
      a (arity d)
      k ((? (= a 1) k (em2 g_vm_curry a k)) 0)
-     (X (trim k) (get 0 'imp d)))
-
+     (cons (trim k) (get 0 'imp d)))
 
     ; let expression analyzer (the most complicated one)
     (ale a b) (?
      (atomp b) (L ana c a)
-     (:- (L l1 0 0 a (A b) (B b))
+     (:- (L l1 0 0 a (car b) (cdr b))
       q (sco c (get 0 'arg c) (get 0 'imp c))
       (set_cdr p x) (, (poke x (seek 3 p)) x) ; :[ weh
-      (lambp x) (? (twop x) (= '\ (A x)))
-       ;; l1 pass nom def and value expressions to l2
-       ; l1 collects bindings and passes them with the body expression to l2
-       (l1 ns ds n d rest) (:
-        (desug n d) (? (atomp n) (X n d)
-                       (desug (A n) (X '\ (cat (B n) (L d)))))
-         nd (desug n d) ns (X (A nd) ns) ds (X (B nd) ds)
-        (? (atomp rest)     (l2 ns ds (A nd)   1)
-           (atomp (B rest)) (l2 ns ds (A rest) 0)
-                            (l1 ns ds (A rest) (AB rest) (BB rest))))
+      (lambp x) (? (twop x) (= '\ (car x)))
+      ;; l1 pass nom def and value expressions to l2
+      ; l1 collects bindings and passes them with the body expression to l2
+     (l1 ns ds n d rest) (:
+      (desug n d) (? (atomp n) (cons n d)
+                     (desug (car n) (cons '\ (cat (cdr n) (L d)))))
+       nd (desug n d) ns (cons (car nd) ns) ds (cons (cdr nd) ds)
+      (? (atomp rest)     (l2 ns ds (car nd)   1)
+         (atomp (cdr rest)) (l2 ns ds (car rest) 0)
+                          (l1 ns ds (car rest) (cadr rest) (cddr rest))))
 
      (l2 ns ds exp even) (:- (cl 0 l l l)
-      (jj a n d) (? (atomp n) a (nilp (lambp (A d))) (jj a (B n) (B d)) (: k (A n) v (ala q 0 (BA d)) a (X (X k v) a) (jj a (B n) (B d))))
+      (jj a n d) (? (atomp n) a (nilp (lambp (car d))) (jj a (cdr n) (cdr d))
+       (: k (car n) v (ala q 0 (cdar d)) a (cons (cons k v) a) (jj a (cdr n) (cdr d))))
       l (jj 0 ns ds)
       (cl n l k1 k2) (?
-       (&& k1 k2 (!= k1 k2) (memq (AA k1) (BB (A k2))))
-        (>>= n (BB (A k1)) (: (kk n v)
-         (? (nilp v) (cl n l k1 (B k2))
-          (: var (A v)
-             vars (B (BA k2))
+       (&& k1 k2 (!= k1 k2) (memq (caar k1) (cddar k2)))
+        (>>= n (cddar k1) (: (kk n v)
+         (? (nilp v) (cl n l k1 (cdr k2))
+          (: var (car v)
+             vars (cddar k2)
              n (? (memq var vars) n
-                (: _ (set_cdr (BA k2) (X var vars))
+                (: _ (set_cdr (cdar k2) (cons var vars))
                  (+ 1 n)))
-             (kk n (B v))))))
-       k2 (cl n l k1 (B k2))
-       k1 (cl n l (B k1) l)
+             (kk n (cdr v))))))
+       k2 (cl n l k1 (cdr k2))
+       k1 (cl n l (cdr k1) l)
        n (cl 0 l l l)
        (l3 ns ds exp even
-        (map (\ x (X (A x) (X (AB x) (foldl (BB x) (flip ldel) (map A l))))) l))))
+        (map (\ x (cons (car x) (cons (cadr x) (foldl (cddr x) (flip ldel) (map car l))))) l))))
 
      (l3 ns ds exp even lams) (:
       (ll nds) (? (nilp nds) id
-       (: nd (A nds) n (A nd) d (B nd)
-          d (? (lambp d) (: qa (assq (A nd) lams)
-                            x (ala q (BB qa) (B d))
+       (: nd (car nds) n (car nd) d (cdr nd)
+          d (? (lambp d) (: qa (assq (car nd) lams)
+                            x (ala q (cddr qa) (cdr d))
                             (set_cdr qa x))
                          d)
           f (ana c d)
           g (? (&& (nilp (get 0 'par c)) even) (em2 g_vm_defglob n) id)
-          _ (put 'stk (X n (get 0 'stk c)) c)
-          h (ll (B nds))
+          _ (put 'stk (cons n (get 0 'stk c)) c)
+          h (ll (cdr nds))
           (\ x (f (g (h x))))))
       _ (put 'lam lams q)
       s (get 0 'stk c)
-      f (ana c (X '\ (cat ns (L exp))))
-      _ (put 'stk (X -1 (get 0 'stk c)) c)
+      f (ana c (cons '\ (cat ns (L exp))))
+      _ (put 'stk (cons -1 (get 0 'stk c)) c)
       g (ll (zip (rev ns) (rev ds)))
       h (kapn (len ns))
       _ (put 'stk s c)
       (\ x (f (g (h x))))))))))
- (go e z a) (? a (go e (e (A a)) (B a)) z)
+ (go e z a) (? a (go e (e (car a)) (cdr a)) z)
  t0 (clock 0)
  e (go (go ev 0 egg) 0 egg)
  (put 'boot_ms (clock t0) (put 'ev e globals)))
