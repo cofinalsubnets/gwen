@@ -312,62 +312,59 @@ static Ana(g_c0_cond_r) { return
    f = g_c0_cond_r(f, c, BB(x))), f); }
 
 
-static struct g *g_c0_apn(struct g*f, struct env**c, intptr_t ar) {
- incl(*c, 2);
- return g_push(f, 2, g_c1_apn, putnum(ar)); }
-
 static struct g *g_c0_apr2l(struct g *f, struct env **c, word x);
 // TODO move optimizations to self
 static struct g *g_c0_apply(struct g *f, struct env **c, intptr_t x) {
+ bool is_immediate_function =
+  f->sp[0] == (word) g_c1_ix &&
+  f->sp[1] == (word) g_vm_quote &&
+  even(f->sp[2]);
+ intptr_t
+   call_arity = llen(x),
+   value_arity =
+    is_immediate_function && cell(f->sp[2])->ap == g_vm_curry ?
+     getnum(cell(f->sp[2])[1].x) :
+     1;
+ bool is_unary_bif =
+  call_arity == 1 &&
+  is_immediate_function &&
+  cell(f->sp[2])[1].ap == g_vm_ret0,
+  is_n_ary_ap = value_arity == call_arity && call_arity > 1,
+  is_n_ary_bif = is_n_ary_ap && cell(f->sp[2])[3].ap == g_vm_ret0;
+  // inline a unary bif
+ if (is_unary_bif) {
+  g_vm_t *i = cell(f->sp[2])->ap;
+  f->sp += 3;
+  f = g_c0_i(analyze(f, c, A(x)), c, i);
+  return f; }
+
+ if (is_n_ary_bif) {
+  g_vm_t *i = cell(f->sp[2])[2].ap;
+  f->sp += 3;
+  f = g_c0_i(g_c0_apr2l(f, c, x), c, i);
+  if (g_ok(f)) while (call_arity--) (*c)->stack = B((*c)->stack);
+  return f; }
+
  f = gxl(g_push(f, 3, nil, (*c)->stack, x));
  if (g_ok(f)) {
-  (*c)->stack = pop1(f);
-  x = pop1(f);
-
-  intptr_t call_arity = llen(x);
-  bool is_immediate_function =
-   f->sp[0] == (word) g_c1_ix    &&
-   f->sp[1] == (word) g_vm_quote &&
-   even(f->sp[2]);
-  intptr_t value_arity =
-   is_immediate_function && cell(f->sp[2])->ap == g_vm_curry
-    ? getnum(cell(f->sp[2])[1].x)
-    : 1;
+  (*c)->stack = pop1(f), x = pop1(f);
   MM(f, &x);
-
-  bool is_unary_bif =
-   call_arity == 1 &&
-   is_immediate_function &&
-   cell(f->sp[2])[1].ap == g_vm_ret0;
-
-  // inline a unary bif
-  if (is_unary_bif) {
-   g_vm_t *i = cell(f->sp[2])->ap;
-   f->sp += 3;
-   (*c)->stack = B((*c)->stack);
-   f = g_c0_i(analyze(f, c, A(x)), c, i);
-   return UM(f), f; }
-
-  bool is_n_ary_bif =
-   call_arity > 1 &&
-   value_arity == call_arity &&
-   cell(f->sp[2])[3].ap == g_vm_ret0;
-
-  if (is_n_ary_bif) {
-   g_vm_t *i = cell(f->sp[2])[2].ap;
-   f->sp += 3;
-   (*c)->stack = B((*c)->stack);
-   f = g_c0_i(g_c0_apr2l(f, c, x), c, i);
-   if (g_ok(f)) while (call_arity--) (*c)->stack = B((*c)->stack);
-   return UM(f), f; }
-  bool is_n_ary_ap =
-   value_arity == call_arity && call_arity > 1;
-  if (is_n_ary_ap) // one right-to-left n-ary application
-   for (f = g_c0_apn(g_c0_apr2l(f, c, x), c, call_arity); call_arity--; (*c)->stack = g_ok(f) ? B((*c)->stack) : nil);
-  else // n left-to-right unary application
-   while (twop(x)) f = g_c0_apn(analyze(f, c, A(x)), c, 1), x = B(x);
+  // one right-to-left n-ary application
+  if (is_n_ary_ap)
+   for (f = g_c0_apr2l(f, c, x),
+        incl(*c, 2),
+        f = g_push(f, 2, g_c1_apn, putnum(call_arity));
+        call_arity--;
+        (*c)->stack = g_ok(f) ? B((*c)->stack) : nil);
+  // n left-to-right unary application
+  else while (twop(x))
+   f = analyze(f, c, A(x)),
+   incl(*c, 2),
+   f = g_push(f, 2, g_c1_apn, putnum(1)),
+   x = B(x);
   UM(f);
   (*c)->stack = B((*c)->stack); }
+
  return f; }
 
 
@@ -481,7 +478,8 @@ static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
   (*b)->stack = g_ok(f) ? pop1(f) : nil;
  return
   (*b)->stack = e,
-  f = g_c0_apn(f, b, ll),
+  incl(*b, 2),
+  f = g_push(f, 2, g_c1_apn, putnum(ll)),
   forget(); }
 
 static word ldels(struct g *f, word lam, word l) {

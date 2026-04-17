@@ -87,24 +87,30 @@
                       (= a ': ) (ale (car b) (cdr b))
                       (: m (get 0 a macros) (? m (ana c (m b)) (app a b))))))
 
-    (app a b) (: f (ana c a) ; analyze function expression
+    (app a b) (:
+                 f (ana c a) ; analyze function expression
                  ca (len b)
                  i (immf f)
                  va (? (nump i) 1
                        (!= (peek i) g_vm_curry) 1
                        (peek (seek 1 i)))
+                 ; unary bif?
                  ub (&& i (= ca 1) (= g_vm_ret0 (peek (seek 1 i))))
+                 ; n-ary ap?
                  na (&& (> ca 1) (= ca va))
+                 ; n-ary bif?
                  nb (&& na (= g_vm_ret0 (peek (seek 3 i))))
-                 (? ub
-                 (co (ana c (A b)) (em1 (peek i))) (:
-                 _ (put 'stk (cons 0 (get 0 'stk c)) c) ; stack rep of previously analyzed function
-                 g (?  nb (apl2r b)
-                       na (apl2r b)
-                    (apl2r b))
-                 _ (put 'stk (cdr (get 0 'stk c)) c)
-                 (\ x (f (g x))))))
+                 ; what to do
+                 (? ub (co (ana c (A b)) (em1 (peek i)))
+;                    nb (co (foldr id co (map (ana c) b)) (em1 (peek (seek 2 i))))
+                  (: _ (put 'stk (cons 0 (get 0 'stk c)) c) ; stack rep of previously analyzed function
+                     g (? nb (apl2r b)
+                          na (apl2r b)
+                        (apl2r b))
+                     _ (put 'stk (cdr (get 0 'stk c)) c)
+                     (\ x (f (g x))))))
    (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (\ x (f (kapn 1 (g x))))))
+   (apr2l n b) (co (?- id (twop b) (: f (ana c (car b)) g (apr2l n (cdr b)) (\ x (g (f x))))) (kapn n))
    (kapn n k m)
     (: j (k (+ 2 m))
      (? (= (peek j) g_vm_ret)
