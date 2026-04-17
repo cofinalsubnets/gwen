@@ -88,8 +88,6 @@
                       (: m (get 0 a macros) (? m (ana c (m b)) (app a b))))))
 
     (app a b) (: f (ana c a) ; analyze function expression
-                 _ (put 'stk (cons 0 (get 0 'stk c)) c) ; stack rep of previously analyzed function
-                 ; r2l optimize here
                  ca (len b)
                  i (immf f)
                  va (? (nump i) 1
@@ -98,12 +96,14 @@
                  ub (&& i (= ca 1) (= g_vm_ret0 (peek (seek 1 i))))
                  na (&& (> ca 1) (= ca va))
                  nb (&& na (= g_vm_ret0 (peek (seek 3 i))))
-                 g (?  ub (apl2r b)
-                       nb (apl2r b)
+                 (? ub
+                 (co (ana c (A b)) (em1 (peek i))) (:
+                 _ (put 'stk (cons 0 (get 0 'stk c)) c) ; stack rep of previously analyzed function
+                 g (?  nb (apl2r b)
                        na (apl2r b)
                     (apl2r b))
                  _ (put 'stk (cdr (get 0 'stk c)) c)
-                 (\ x (f (g x))))
+                 (\ x (f (g x))))))
    (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (\ x (f (kapn 1 (g x))))))
    (kapn n k m)
     (: j (k (+ 2 m))
