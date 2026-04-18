@@ -37,7 +37,7 @@ g_vm(g_vm_scat) {
   ini_str(z, len);
   memcpy(txt(z), txt(x), len(x));
   memcpy(txt(z) + len(x), txt(y), len(y));
-  Sp[1] = word(z); }
+  *++Sp = word(z); }
  return Ip++, Continue(); }
 
 static size_t const vt_size[] = { [g_vect_u8]  = 1, };

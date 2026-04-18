@@ -99,17 +99,22 @@
                  na (&& (> ca 1) (= ca va))
                  ; n-ary bif?
                  nb (&& na (= g_vm_ret0 (peek 3 i)))
+                 s (get 0 'stk c)
                  ; what to do
                  (? ub (co (ana c (A b)) (em1 (peek 0 i)))
-;                    nb (co (foldr id co (map (ana c) b)) (em1 (peek (seek 2 i))))
-                  (: _ (put 'stk (cons 0 (get 0 'stk c)) c) ; stack rep of previously analyzed function
+                    nb (: k (apr2l b) _ (put 'stk s c) (co k (em1 (peek 2 i))))
+                  (: _ (put 'stk (cons 0 s) c) ; stack rep of previously analyzed function
                      g (? nb (apl2r b)
                           na (apl2r b)
                         (apl2r b))
-                     _ (put 'stk (cdr (get 0 'stk c)) c)
+                     _ (put 'stk s c)
                      (co f g))))
    (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (co f (co (kapn 1) g))))
-   (apr2l b) (?- id (twop b) (: f (ana c (car b)) g (apr2l (cdr b)) (co g f)))
+   (apr2l b) (?- id (twop b)
+    (: g (apr2l (cdr b))
+       f (ana c (car b))
+       _ (put 'stk (cons 0 (get 0 'stk c)) c)
+     (co g f)))
    (kapn n k m)
     (: j (k (+ 2 m))
      (? (= (peek 0 j) g_vm_ret)
