@@ -1,57 +1,6 @@
 #include "g.h"
 _Static_assert(sizeof(union u) == sizeof(intptr_t));
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
-struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
-enum q { two_q, vec_q, sym_q, tbl_q, };
-typedef g_word num, word;
-enum g_vec_type { g_vect_u8, };
-static struct g
- *g_please(struct g*, uintptr_t),
- *g_have(struct g*, intptr_t),
- *g_tput(struct g *f),
- *mktbl(struct g*),
- *g_intern(struct g*),
- *g_reads(struct g*, struct g_in*),
- *g_read1(struct g*f, struct g_in* i);
-static g_vm(g_vm_gc, uintptr_t);
-static g_vm_t
- g_vm_data,  g_vm_putn,   g_vm_nomsym, g_vm_info, g_vm_dot,    g_vm_clock,
- g_vm_nilp,  g_vm_symnom, g_vm_read,   g_vm_putc, g_vm_gensym, g_vm_twop,
- g_vm_len, g_vm_tget2,
- g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,
- g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
- g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
- g_vm_getc,  g_vm_lt,     g_vm_le,     g_vm_eq,   g_vm_gt,     g_vm_ge,
- g_vm_tset2, g_vm_tdel,   g_vm_tnew,   g_vm_tkeys,
- g_vm_uncurry, g_vm_poke2, g_vm_peek2,
- g_vm_seek,  g_vm_trim,   g_vm_thda,   g_vm_add,
- g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,    g_vm_drop1,
- g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
- g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb;
-static struct g_atom *g_intern_r(struct g*, struct g_vec*, struct g_atom **y);
-static g_inline struct g_tag { union u *null, *head, end[]; } *ttag(union u *k) {
- while (k->x) k++;
- return (struct g_tag*) k; }
-static g_inline union u *clip(union u *k) { return ttag(k)->head = k; }
-
-// equality comparisons inline the fast identity check
-static g_noinline bool eqv(struct g*, word, word); // this is for checking equality of non-identical values
-static g_inline bool eql(struct g *f, word a, word b) { return a == b || eqv(f, a, b); }
-
-uintptr_t g_hash(struct g*, word), g_vec_bytes(struct g_vec*);
-int
- memcmp(void const*, void const*, size_t);
-static int
- g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base);
-static void
- ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
-void
- *malloc(size_t),
- free(void*),
- *memcpy(void*restrict, void const*restrict, size_t),
- *memset(void*, int, size_t);
-static word g_tget(struct g*, word, struct g_tab*, word);
-
 #define dict_of(_) (_)->dict
 #define nilp(_) (word(_)==g_nil)
 #define A(o) two(o)->a
@@ -113,6 +62,53 @@ static word g_tget(struct g*, word, struct g_tab*, word);
 #define getnum g_getnum
 #define putnum g_putnum
 #define g_strp strp
+
+struct g_pair { g_vm_t *ap; uintptr_t typ; intptr_t a, b; };
+enum q { two_q, vec_q, sym_q, tbl_q, };
+typedef g_word num, word;
+enum g_vec_type { g_vect_u8, };
+static struct g
+ *g_please(struct g*, uintptr_t),
+ *g_have(struct g*, intptr_t),
+ *g_tput(struct g *f),
+ *mktbl(struct g*),
+ *g_intern(struct g*),
+ *g_reads(struct g*, struct g_in*),
+ *g_read1(struct g*f, struct g_in* i);
+static g_vm(g_vm_gc, uintptr_t);
+static g_vm_t
+ g_vm_data,  g_vm_putn,   g_vm_nomsym, g_vm_info, g_vm_dot,    g_vm_clock,
+ g_vm_nilp,  g_vm_symnom, g_vm_read,   g_vm_putc, g_vm_gensym, g_vm_twop,
+ g_vm_len, g_vm_tget2,
+ g_vm_nump,  g_vm_symp,   g_vm_strp,   g_vm_tblp, g_vm_band,   g_vm_bor,
+ g_vm_bxor,  g_vm_bsr,    g_vm_bsl,    g_vm_bnot, g_vm_ssub,
+ g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
+ g_vm_getc,  g_vm_lt,     g_vm_le,     g_vm_eq,   g_vm_gt,     g_vm_ge,
+ g_vm_tset2, g_vm_tdel,   g_vm_tnew,   g_vm_tkeys,
+ g_vm_uncurry, g_vm_poke2, g_vm_peek2,
+ g_vm_seek,  g_vm_trim,   g_vm_thda,   g_vm_add,
+ g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,    g_vm_drop1,
+ g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
+ g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb;
+static struct g_atom *g_intern_r(struct g*, struct g_vec*, struct g_atom **y);
+static g_inline struct g_tag { union u *null, *head, end[]; } *ttag(union u *k) {
+ while (k->x) k++;
+ return (struct g_tag*) k; }
+static g_inline union u *clip(union u *k) { return ttag(k)->head = k; }
+
+// equality comparisons inline the fast identity check
+static g_noinline bool eqv(struct g*, word, word); // this is for checking equality of non-identical values
+static g_inline bool eql(struct g *f, word a, word b) { return a == b || eqv(f, a, b); }
+
+static uintptr_t g_hash(struct g*, word), g_vec_bytes(struct g_vec*);
+static int
+ g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base);
+static void ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
+int memcmp(void const*, void const*, size_t);
+void *malloc(size_t), free(void*),
+ *memcpy(void*restrict, void const*restrict, size_t),
+ *memset(void*, int, size_t);
+static word g_tget(struct g*, word, struct g_tab*, word);
 
 static g_inline struct g_vec *vec(word n) { return (struct g_vec*) n; }
 static g_inline struct g_tab *tbl(word n) { return (struct g_tab*) n; }
@@ -817,10 +813,10 @@ static uintptr_t (*hashers[])(struct g*, word) = {
  [tbl_q] = (void*) g_xx_tab,
  [sym_q] = (void*) g_xx_sym, };
 
-#define SHIFT (sizeof(intptr_t)<<2)
 // general g_hashing method...
-uintptr_t g_hash(struct g *f, intptr_t x) {
- if (nump(x)) return (x*mix << SHIFT) | (x*mix >> SHIFT);
+static uintptr_t g_hash(struct g *f, intptr_t x) {
+ int const shift = sizeof(word) << 2;
+ if (nump(x)) return (x*mix << shift) | (x*mix >> shift);
  if (datp(x)) return hashers[typ(x)](f, x);
  // it's a function, hash by length
  uintptr_t r = mix, *y = (uintptr_t *)x;
