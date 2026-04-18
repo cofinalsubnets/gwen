@@ -23,7 +23,10 @@ enum g_status g_fin(struct g *f) {
  _(bif_putc, "putc", S1(g_vm_putc)) _(bif_prn, "putn", S2(g_vm_putn)) _(bif_puts, "puts", S1(g_vm_puts))\
  _(bif_sym, "sym", S1(g_vm_gensym))\
  _(bif_nom, "nom", S1(g_vm_symnom))\
- _(bif_thd, "thd", S1(g_vm_thda)) _(bif_g_vm_peek, "peek", S1(g_vm_peek)) _(bif_g_vm_poke, "poke", S2(g_vm_poke)) _(bif_trim, "trim", S1(g_vm_trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
+ _(bif_thd, "thd", S1(g_vm_thda))\
+  _(bif_peek, "peek", S1(g_vm_peek)) _(bif_poke, "poke", S2(g_vm_poke))\
+  _(bif_peek2, "peek2", S2(g_vm_peek2)) _(bif_poke2, "poke2", S3(g_vm_poke2))\
+  _(bif_trim, "trim", S1(g_vm_trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
  _(bif_len, "len", S1(g_vm_len))\
  _(bif_get, "get", S3(g_vm_tget2))\
  _(bif_put, "put", S3(g_vm_tset2))\

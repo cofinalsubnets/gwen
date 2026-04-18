@@ -160,6 +160,20 @@ g_vm(g_vm_poke) {
  Ip += 1;
  return Continue(); }
 
+g_vm(g_vm_peek2) {
+ Sp[1] = (cell(Sp[1]) + getnum(Sp[0]))->x;
+ Sp += 1;
+ Ip += 1;
+ return Continue(); }
+
+g_vm(g_vm_poke2) {
+ union u *c = cell(Sp[2]) + getnum(Sp[1]);
+ c->x = Sp[0];
+ Sp[2] = (word) c;
+ Sp += 2;
+ Ip += 1;
+ return Continue(); }
+
 g_vm(g_vm_thda) {
  size_t n = getnum(Sp[0]);
  Have(n + Width(struct g_tag));

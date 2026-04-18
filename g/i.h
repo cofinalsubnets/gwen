@@ -25,6 +25,7 @@ g_vm_t
  g_vm_slen,  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_lt,     g_vm_le,     g_vm_eq,   g_vm_gt,     g_vm_ge,
  g_vm_tset2, g_vm_uncurry,
+ g_vm_poke2, g_vm_peek2,
  g_vm_tdel,   g_vm_tnew, g_vm_tkeys,  g_vm_tlen,
  g_vm_seek,  g_vm_peek,   g_vm_poke,   g_vm_trim, g_vm_thda,   g_vm_add,
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,    g_vm_drop1,
