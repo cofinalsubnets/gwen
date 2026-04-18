@@ -86,29 +86,24 @@
                       (= a ': ) (ale (car b) (cdr b))
                       (: m (get 0 a macros) (? m (ana c (m b)) (app a b))))))
 
-    (app a b) (:
-                 f (ana c a) ; analyze function expression
-                 ca (len b)
-                 i (immf f)
-                 va (? (nump i) 1
+    (app a b) (: f (ana c a) ; analyze function expression
+                 ca (len b)                                  ; call arity
+                 i (immf f)                                  ; immediate function value
+                 fa (? (nump i) 1
                        (!= (peek 0 i) g_vm_curry) 1
-                       (peek 1 i))
-                 ; unary bif?
-                 ub (&& i (= ca 1) (= g_vm_ret0 (peek 1 i)))
-                 ; n-ary ap?
-                 na (&& (> ca 1) (= ca va))
-                 ; n-ary bif?
-                 nb (&& na (= g_vm_ret0 (peek 3 i)))
-                 s (get 0 'stk c)
-                 ; what to do
-                 (? ub (co (ana c (A b)) (em1 (peek 0 i)))
-                    nb (: k (apr2l b)
+                       (peek 1 i))                           ; function arity
+                 ub (&& i (= ca 1) (= g_vm_ret0 (peek 1 i))) ; unary bif?
+                 na (&& (> ca 1) (= ca fa))                  ; n-ary ap?
+                 nb (&& na (= g_vm_ret0 (peek 3 i)))         ; n-ary bif?
+                 s (get 0 'stk c)                            ; original stack
+                 (? ub (co (ana c (A b)) (em1 (peek 0 i)))   ; inline unary bif
+                    nb (: k (apr2l b)                        ; inline n-ary bif
                           _ (put 'stk s c)
-                        (co k (em1 (peek 2 i))))
-                  (: _ (put 'stk (cons 0 s) c) ; stack rep of previously analyzed function
-                     g (? na (: k (apr2l b) (co k (kapn ca)))
-                             (apl2r b))
-                     _ (put 'stk s c)
+                    (co k (em1 (peek 2 i))))
+                  (: _ (put 'stk (cons 0 s) c) ; push stack rep of previously analyzed function (f)
+                     g (? na (: k (apr2l b) (co k (kapn ca))) ; r2l n-ary call
+                             (apl2r b))                       ; l2r unary calls
+                     _ (put 'stk s c)                         ; restore original stack
                      (co f g))))
    (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (co f (co (kapn 1) g))))
    (apr2l b) (?- id (twop b)
