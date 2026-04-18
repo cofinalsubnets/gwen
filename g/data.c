@@ -182,3 +182,173 @@ uintptr_t g_hash(struct g *f, intptr_t x) {
  uintptr_t r = mix, *y = (uintptr_t *)x;
  while (*y++) r ^= r * mix;
  return r; }
+
+
+op11(g_vm_car, twop(Sp[0]) ? A(Sp[0]) : Sp[0])
+op11(g_vm_cdr, twop(Sp[0]) ? B(Sp[0]) : g_nil)
+op11(g_vm_twop, twop(Sp[0]) ? gputnum(-1) : g_nil)
+g_vm(g_vm_cons) {
+ Have(Width(struct g_pair));
+ struct g_pair *w = (struct g_pair*) Hp;
+ Hp += Width(struct g_pair);
+ ini_two(w, Sp[0], Sp[1]);
+ *++Sp = word(w);
+ Ip++;
+ return Continue(); }
+
+g_noinline struct g *gxl(struct g *f) {
+ f = g_have(f, Width(struct g_pair));
+ if (g_ok(f)) {
+  struct g_pair *p = bump(f, Width(struct g_pair));
+  ini_two(p, f->sp[0], f->sp[1]);
+  *++f->sp = (intptr_t) p; }
+ return f; }
+
+struct g *gxr(struct g *f) {
+ word x = f->sp[0];
+ f->sp[0] = f->sp[1];
+ f->sp[1] = x;
+ return gxl(f); }
+
+op11(g_vm_strp, strp(Sp[0]) ? gputnum(-1) : g_nil)
+
+g_vm(g_vm_ssub) {
+ if (!strp(Sp[0])) Sp[2] = g_nil;
+ else {
+  struct g_vec*s = (struct g_vec*) Sp[0], *t;
+  intptr_t i = odd(Sp[1]) ? ggetnum(Sp[1]) : 0,
+           j = odd(Sp[2]) ? ggetnum(Sp[2]) : 0;
+  i = MAX(i, 0);
+  i = MIN(i, (word) len(s));
+  j = MAX(j, i);
+  j = MIN(j, (word) len(s));
+  if (i == j) Sp[2] = g_nil;
+  else {
+   size_t req = str_type_width + b2w(j - i);
+   Have(req);
+   t = (struct g_vec*) Hp;
+   Hp += req;
+   ini_str(t, j - i);
+   memcpy(txt(t), txt(s) + i, j - i);
+   Sp[2] = (word) t; } }
+ return Ip += 1, Sp += 2, Continue(); }
+
+g_vm(g_vm_scat) {
+ intptr_t a = Sp[0], b = Sp[1];
+ if (!strp(a)) Sp += 1;
+ else if (!strp(b)) Sp[1] = a, Sp += 1;
+ else {
+  struct g_vec *x = vec(a), *y = vec(b), *z;
+  uintptr_t
+   len = len(x) + len(y),
+   req = str_type_width + b2w(len);
+  Have(req);
+  z = (struct g_vec*) Hp;
+  Hp += req;
+  ini_str(z, len);
+  memcpy(txt(z), txt(x), len(x));
+  memcpy(txt(z) + len(x), txt(y), len(y));
+  *++Sp = word(z); }
+ return Ip++, Continue(); }
+
+static size_t const vt_size[] = { [g_vect_u8]  = 1, };
+
+uintptr_t g_vec_bytes(struct g_vec *v) {
+ uintptr_t len = vt_size[v->type],
+           rank = v->rank,
+           *shape = v->shape;
+ while (rank--) len *= *shape++;
+ return sizeof(struct g_vec) + v->rank * sizeof(word) + len; }
+
+static void ini_vecv(struct g_vec *v, uintptr_t type, uintptr_t rank, va_list xs) {
+ uintptr_t *shape = v->shape;
+ v->ap = g_vm_data;
+ v->typ = vec_q;
+ v->type = type;
+ v->rank = rank;
+ while (rank--) *shape++ = va_arg(xs, uintptr_t); }
+
+void ini_vec(struct g_vec *v, uintptr_t type, uintptr_t rank, ...) {
+ va_list xs;
+ va_start(xs, rank);
+ ini_vecv(v, type, rank, xs);
+ va_end(xs); }
+
+static struct g *vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
+ uintptr_t len = vt_size[type];
+ va_list xs;
+ va_start(xs, rank);
+ for (uintptr_t i = rank; i--; len *= va_arg(xs, uintptr_t));
+ va_end(xs);
+ uintptr_t nbytes = sizeof(struct g_vec) + rank * sizeof(word) + len,
+           ncells = b2w(nbytes);
+ f = g_have(f, ncells + 1);
+ if (g_ok(f)) {
+  struct g_vec *v = bump(f, ncells);
+  *--f->sp = word(v);
+  va_start(xs, rank);
+  ini_vecv(v, type, rank, xs);
+  memset(v->shape + rank, 0, len);
+  va_end(xs); }
+ return f; }
+
+struct g *g_strof(struct g *f, char const *cs) {
+ uintptr_t len = 0;
+ for (char const *ks = cs; *ks++; len++);
+ f = vec0(f, g_vect_char, 1, len);
+ if (g_ok(f)) memcpy(txt(f->sp[0]), cs, len);
+ return f; }
+
+g_vm(g_vm_gensym) {
+ if (strp(Sp[0])) return Ap(g_vm_nomsym, f);
+ uintptr_t const req = Width(struct g_atom) - 2;
+ Have(req);
+ struct g_atom *y = (struct g_atom*) Hp;
+ return
+  Hp += req,
+  ini_anon(y, g_clock()),
+  Sp[0] = word(y),
+  Ip += 1,
+  Continue(); }
+
+g_vm(g_vm_symnom) {
+ intptr_t y = Sp[0];
+ return
+  y = symp(y) && sym(y)->nom ? word(sym(y)->nom) : g_nil,
+  Sp[0] = y,
+  Ip += 1,
+  Continue(); }
+
+op11(g_vm_symp, symp(Sp[0]) ? gputnum(-1) : g_nil)
+struct g *g_intern(struct g*f) {
+ f = g_have(f, Width(struct g_atom));
+ if (g_ok(f)) f->sp[0] = (word) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
+ return f; }
+
+g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struct g_atom **y) {
+ struct g_atom *z = *y;
+ if (!z) return // found an empty spot, insert new symbol
+  z = bump(v, Width(struct g_atom)),
+  z->ap = g_vm_data,
+  z->typ = sym_q,
+  z->nom = b,
+  z->code = g_hash(v, gputnum(g_hash(v, (intptr_t) b))),
+  z->l = z->r = 0,
+  *y = z;
+ struct g_vec *a = z->nom;
+ int i = len(a) < len(b) ? -1 :
+         len(a) > len(b) ? 1 :
+         memcmp(txt(a), txt(b), len(a));
+ return i == 0 ? z :
+  g_intern_r(v, b, i < 0 ? &z->l : &z->r); }
+
+g_vm(g_vm_nomsym) {
+ Have(Width(struct g_atom));
+ struct g_atom *y;
+ return
+  Pack(f),
+  y = g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols),
+  Unpack(f),
+  Sp[0] = word(y),
+  Ip += 1,
+  Continue(); }

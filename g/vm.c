@@ -1,4 +1,34 @@
 #include "i.h"
+
+// this is called to check for equivalence when a != b
+g_noinline bool eqv(struct g *f, word a, word b) {
+ if (0 == ((a | b) & 1) && datp(a) && datp(b) && typ(a) == typ(b)) switch (typ(a)) {
+  case two_q: return eql(f, A(a), A(b)) && eql(f, B(a), B(b));
+  case vec_q: {
+   size_t la = g_vec_bytes(vec(a)), lb = g_vec_bytes(vec(b));
+   return la == lb && memcmp(vec(a), vec(b), la) == 0; } }
+ return false; }
+
+opf(g_vm_bsr, >>)
+opf(g_vm_bsl, <<)
+opf(g_vm_mul, *)
+
+op0f(g_vm_quot, /)
+op0f(g_vm_rem, %)
+op(g_vm_add, 2, (Sp[0]+Sp[1]-1)|1)
+op(g_vm_sub, 2, (Sp[0]-Sp[1])|1)
+op(g_vm_eq, 2, eql(f, Sp[0], Sp[1]) ? gputnum(-1) : g_nil)
+op(g_vm_lt, 2, Sp[0] < Sp[1] ? gputnum(-1) : g_nil)
+op(g_vm_le, 2, Sp[0] <= Sp[1] ? gputnum(-1) : g_nil)
+op(g_vm_gt, 2, Sp[0] > Sp[1] ? gputnum(-1) : g_nil)
+op(g_vm_ge, 2, Sp[0] >= Sp[1] ? gputnum(-1) : g_nil)
+op(g_vm_bnot, 1, ~Sp[0] | 1)
+op(g_vm_band, 2, (Sp[0] & Sp[1]) | 1)
+op(g_vm_bor, 2, (Sp[0] | Sp[1]) | 1)
+op(g_vm_bxor, 2, (Sp[0] ^ Sp[1]) | 1)
+op(g_vm_nump, 1, odd(Sp[0]) ? gputnum(-1) : g_nil)
+op11(g_vm_nilp, nilp(Sp[0]) ? gputnum(-1) : g_nil)
+
 g_vm(g_vm_info) {
  size_t const req = 4 * Width(struct g_pair);
  Have(req);
