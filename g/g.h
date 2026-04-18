@@ -1,6 +1,5 @@
 #ifndef _g_h
 #define _g_h
-// thanks !!
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -51,7 +50,7 @@
 #define Unpack(f) ((void)0)
 #endif
 
-// ok
+// ok thanks
 typedef intptr_t g_word;
 union u;
 typedef g_vm(g_vm_t);

@@ -71,9 +71,6 @@
      (= a g_vm_curry) (?- f (= g_vm_uncurry (peek 2 f))
                             (proto (seek -2 (peek 4 f)))))))
     (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
-    (immv f) (? (= kim (proto f))
-              (peek 3 f))
-    (immf f) (: v (immv f) (? (nump v) 0 v))
     (ana c x) (:- (? (symp x)  (ava c x)
                      (atomp x) (kim x)
                      (: a (car x) b (cdr x) (?
@@ -86,7 +83,8 @@
 
     (app a b) (: f (ana c a) ; analyze function expression
                  ca (len b)                                  ; call arity
-                 i (immf f)                                  ; immediate function value
+                 i (? (= kim (proto f)) (peek 3 f))
+                 i (? (nump i) 0 i)
                  fa (? (nump i) 1
                        (!= (peek 0 i) g_vm_curry) 1
                        (peek 1 i))                           ; function arity
@@ -138,9 +136,7 @@
          g (ana c (cadr b))
          h (acr (cddr b))
        (\ x (f (\ n
-        (: k (\ n (: k (h x n)
-                     _ (put 'alt (cons k (get 0 'alt c)) c)
-                     k))
+        (: k (\ n (: k (h x n) _ (put 'alt (cons k (get 0 'alt c)) c) k))
            j (g (acx k) (+ 2 n))
            s (get 0 'alt c)
            _ (put 'alt (cdr s) c)
