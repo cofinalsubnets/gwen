@@ -102,11 +102,12 @@
                  s (get 0 'stk c)
                  ; what to do
                  (? ub (co (ana c (A b)) (em1 (peek 0 i)))
-                    nb (: k (apr2l b) _ (put 'stk s c) (co k (em1 (peek 2 i))))
+                    nb (: k (apr2l b)
+                          _ (put 'stk s c)
+                        (co k (em1 (peek 2 i))))
                   (: _ (put 'stk (cons 0 s) c) ; stack rep of previously analyzed function
-                     g (? nb (apl2r b)
-                          na (apl2r b)
-                        (apl2r b))
+                     g (? na (: k (apr2l b) (co k (kapn ca)))
+                             (apl2r b))
                      _ (put 'stk s c)
                      (co f g))))
    (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (co f (co (kapn 1) g))))
