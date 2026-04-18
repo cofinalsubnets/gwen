@@ -90,6 +90,10 @@ static g_vm_t
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,    g_vm_drop1,
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
  g_vm_ap,    g_vm_tap,    g_vm_apn,    g_vm_tapn, g_vm_ret,    g_vm_lazyb;
+static uintptr_t g_hash(struct g*, word), g_vec_bytes(struct g_vec*);
+static int g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base);
+static void ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
+static word g_tget(struct g*, word, struct g_tab*, word);
 static struct g_atom *g_intern_r(struct g*, struct g_vec*, struct g_atom **y);
 static g_inline struct g_tag { union u *null, *head, end[]; } *ttag(union u *k) {
  while (k->x) k++;
@@ -100,15 +104,10 @@ static g_inline union u *clip(union u *k) { return ttag(k)->head = k; }
 static g_noinline bool eqv(struct g*, word, word); // this is for checking equality of non-identical values
 static g_inline bool eql(struct g *f, word a, word b) { return a == b || eqv(f, a, b); }
 
-static uintptr_t g_hash(struct g*, word), g_vec_bytes(struct g_vec*);
-static int
- g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base);
-static void ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memset(void*, int, size_t);
-static word g_tget(struct g*, word, struct g_tab*, word);
 
 static g_inline struct g_vec *vec(word n) { return (struct g_vec*) n; }
 static g_inline struct g_tab *tbl(word n) { return (struct g_tab*) n; }
