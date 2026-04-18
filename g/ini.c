@@ -24,20 +24,12 @@ enum g_status g_fin(struct g *f) {
  _(bif_sym, "sym", S1(g_vm_gensym))\
  _(bif_nom, "nom", S1(g_vm_symnom))\
  _(bif_thd, "thd", S1(g_vm_thda))\
-  _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2))\
-  _(bif_trim, "trim", S1(g_vm_trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
- _(bif_len, "len", S1(g_vm_len))\
- _(bif_get, "get", S3(g_vm_tget2))\
- _(bif_put, "put", S3(g_vm_tset2))\
+ _(bif_peek, "peek", S2(g_vm_peek2)) _(bif_poke, "poke", S3(g_vm_poke2)) _(bif_trim, "trim", S1(g_vm_trim)) _(bif_g_vm_seek, "seek", S2(g_vm_seek)) \
+ _(bif_len, "len", S1(g_vm_len)) _(bif_get, "get", S3(g_vm_tget2)) _(bif_put, "put", S3(g_vm_tset2))\
  _(bif_tnew, "new", S1(g_vm_tnew))\
  _(bif_tabkeys, "tkeys", S1(g_vm_tkeys))\
  _(bif_tabdel, "tdel", S3(g_vm_tdel))\
- _(bif_twop, "twop", S1(g_vm_twop))\
- _(bif_strp, "strp", S1(g_vm_strp))\
- _(bif_symp, "symp", S1(g_vm_symp))\
- _(bif_tblp, "tblp", S1(g_vm_tblp))\
- _(bif_nump, "nump", S1(g_vm_nump))\
- _(bif_nilp, "nilp", S1(g_vm_nilp))\
+ _(bif_twop, "twop", S1(g_vm_twop)) _(bif_strp, "strp", S1(g_vm_strp)) _(bif_symp, "symp", S1(g_vm_symp)) _(bif_tblp, "tblp", S1(g_vm_tblp)) _(bif_nump, "nump", S1(g_vm_nump)) _(bif_nilp, "nilp", S1(g_vm_nilp))\
  _(bif_ev, "ev", S1(g_vm_eval))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
@@ -53,16 +45,9 @@ g_noinline struct g *g_ini_m(g_malloc_t *ma, g_free_t *fr) {
  struct g *f = ma(NULL, 2 * len0 * sizeof(word));
  if (f == NULL) return encode(f, g_status_oom);
  memset(f, 0, sizeof(struct g));
- f->len = len0;
- f->pool = (void*) f;
- f->malloc = ma;
- f->free = fr;
- f->hp = f->end;
- f->sp = (word*) f + len0;
- f->ip = yield;
- f->t0 = g_clock(); // this goes right before first allocation so gc always sees initialized t0
- f = mktbl(mktbl(f)); // dict and macro tables
- f = g_intern(g_strof(g_intern(g_strof(f, "\\")), "`"));
+ f->len = len0, f->pool = (void*) f, f->malloc = ma, f->free = fr;
+ f->hp = f->end, f->sp = (word*) f + len0, f->ip = yield, f->t0 = g_clock();
+ f = g_intern(g_strof(g_intern(g_strof(mktbl(mktbl(f)), "\\")), "`"));
  if (!g_ok(f)) return f;
  f->quote = nom(pop1(f));
  f->lambda = nom(pop1(f));

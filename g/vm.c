@@ -156,8 +156,8 @@ g_vm(g_vm_peek2) {
  return Continue(); }
 
 g_vm(g_vm_poke2) {
- union u *c = cell(Sp[2]) + getnum(Sp[1]);
- c->x = Sp[0];
+ union u *c = cell(Sp[2]) + getnum(Sp[0]);
+ c->x = Sp[1];
  Sp[2] = (word) c;
  Sp += 2;
  Ip += 1;

@@ -52,16 +52,6 @@
   (:: '>>= (\ l (cons (last l) (init l))))
   (:: ', (\ l (cons ': (foldr (L (last l)) (\ l r (cons '_ (cons l r))) (init l)))))
   (:: '<=< (\ g (: y (sym 0) (L '\ y (foldr y (\ f x (L f x)) g)))))
-  (:
-    (proto f) (? (nump f) f (: a (peek 0 f) (?- f
-     (= a g_vm_uncurry) (proto (seek -2 (peek 2 f)))
-     (= a g_vm_curry) (?- f (= g_vm_uncurry (peek 2 f))
-                            (proto (seek -2 (peek 4 f)))))))
-    (kim x k n) (poke g_vm_quote -1 (poke x -1 (k (+ 2 n))))
-    (immv f) (? (= kim (proto f))
-              (peek 3 f))
-    (immf f) (: v (immv f) (? (nump v) 0 v))
-    )
   
  ; end of prelude
 
@@ -69,13 +59,21 @@
  ; times by different init stages.
   (:- (\ x (: c (sco 0 (L 0) 0) (ana c x (k0 c) 0 0)))
     (sco p a i) (put 'val (new 0) (put 'par p (put 'imp i (put 'arg a (new 0)))))
-    (p2 i x k) (poke i -1 (poke x -1 k))
-    (em1 x k n) (poke x -1 (k (+ 1 n)))
+    (p2 i x k) (poke -1 i (poke -1 x k))
+    (em1 x k n) (poke -1 x (k (+ 1 n)))
     (em2 i x k n) (p2 i x (k (+ 2 n)))
     ; thread allocator
-    (k0 c n) (poke g_vm_ret -1 (poke (arity c) (+ 1 n) (thd (+ 2 n))))
+    (k0 c n) (poke -1 g_vm_ret (poke (+ 1 n) (arity c) (thd (+ 2 n))))
 ;; functions for working with variable scope records
     (arity c) (+ (len (get 0 'arg c)) (len (get 0 'imp c)))
+    (proto f) (? (nump f) f (: a (peek 0 f) (?- f
+     (= a g_vm_uncurry) (proto (seek -2 (peek 2 f)))
+     (= a g_vm_curry) (?- f (= g_vm_uncurry (peek 2 f))
+                            (proto (seek -2 (peek 4 f)))))))
+    (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
+    (immv f) (? (= kim (proto f))
+              (peek 3 f))
+    (immf f) (: v (immv f) (? (nump v) 0 v))
     (ana c x) (:- (? (symp x)  (ava c x)
                      (atomp x) (kim x)
                      (: a (car x) b (cdr x) (?
@@ -114,8 +112,8 @@
    (kapn n k m)
     (: j (k (+ 2 m))
      (? (= (peek 0 j) g_vm_ret)
-      (? (> n 1) (poke g_vm_tapn -1 (poke n 0 j)) (poke g_vm_tap 0 j))
-      (? (> n 1) (p2 g_vm_apn n j) (poke g_vm_ap -1 j))))
+      (? (> n 1) (poke -1 g_vm_tapn (poke 0 n j)) (poke 0 g_vm_tap j))
+      (? (> n 1) (p2 g_vm_apn n j) (poke -1 g_vm_ap j))))
 
     ;aco is a bit complicated
     (aco c b) (:-
@@ -131,7 +129,7 @@
       (? (|| (= i g_vm_ret) (= i g_vm_tap))
           (p2 i (peek 1 a) j)
          (= i g_vm_tapn)
-          (p2 i (peek 1 a) (poke (peek 2 a) -1 j))
+          (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
          (p2 g_vm_jump a j)))
      (acr b) (?
       (atomp b)       (kim 0)
@@ -186,7 +184,7 @@
      (atomp b) (ana c a)
      (:- (l1 0 0 a (car b) (cdr b))
       q (sco c (get 0 'arg c) (get 0 'imp c))
-      (set_cdr p x) (: _ (poke x 3 p) x) ; :[ weh
+      (set_cdr p x) (: _ (poke 3 x p) x) ; :[ weh
       (lambp x) (? (twop x) (= '\ (car x)))
       ;; l1 pass nom def and value expressions to l2
       ; l1 collects bindings and passes them with the body expression to l2
