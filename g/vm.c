@@ -149,17 +149,6 @@ g_vm(g_vm_seek) {
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_peek) {
- Sp[0] = cell(Sp[0])->x;
- Ip += 1;
- return Continue(); }
-
-g_vm(g_vm_poke) {
- cell(Sp[1])->x = Sp[0];
- Sp += 1;
- Ip += 1;
- return Continue(); }
-
 g_vm(g_vm_peek2) {
  Sp[1] = (cell(Sp[1]) + getnum(Sp[0]))->x;
  Sp += 1;
