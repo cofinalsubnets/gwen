@@ -1,3 +1,33 @@
+
+(: s0 (sym .)
+   s1 (sym .)
+   s2 (sym .)
+   (!= a b) (~ (= a b))
+ (assert (!= s0 s1)
+         (!= s0 s2)
+         (!= s1 s2)
+         (= 'asdf (sym "asdf"))
+         (= "asdf" (nom 'asdf))))
+(:
+ t (new .)
+ (Put k v) (put k v t)
+ Del (tdel 0 t)
+ (Get k) (get 0 k t)
+ _ (Put 1 2)
+ _ (Put 2 3)
+ _ (Put 3 4)
+ _ (Put 't 'f)
+ _ (assert
+    (= 4 (len t))
+    (= 4 (len (tkeys t))))
+ _ (Del 2)
+ _ (Del 't)
+ _ (assert
+    (= 2 (len t))
+    (= 2 (len (tkeys t)))
+    (: (lll t) (foldl 0 (\ l k (X k (X (Get k) l))) (tkeys t))
+     (= (* 2 (len t)) (len (lll t))))))
+
 (:
  (stripPrefix p s) (? (= p (ssub s 0 (len p))) (ssub s (len p) (len s)))
  (lit l y n s) ((\ ss (? ss (y ss (X l 0)) (n s))) (stripPrefix l s))

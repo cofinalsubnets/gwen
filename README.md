@@ -1,53 +1,51 @@
 # gwen lisp
 
-gwen lisp is a lisp dialect and environment that can be built as a C library,
-an executable, or an operating system on various platforms.
+gwen lisp is a lisp dialect and environment that can be built as a library,
+an executable, or for bare metal on various platforms. it has four special forms
 
-## gwen lisp vs. scheme
-
-gwen lisp has five basic special forms that all have scheme equivalents.
-
-| gwen               |  scheme  |
+| gwen               |  scheme equivalent |
 |--------------------|----------|
-| `,`                | `begin`  |
 | `?`                | `cond`   |
-| `:`                | `letrec` |
+| `:`                | `let`    |
 | <code>&#96;</code> | `quote`  |
 | <code>&#92;</code> | `lambda` |
 
-the internal syntax of forms is generally simplified compared to scheme by omitting
-many grouping parentheses and assigning reasonable default behavior to syntax edge
-cases.
-
-### definitions
+## : (let)
 
 | gwen            | scheme                      |
 |-----------------|-----------------------------|
-| `(: a b c d e)` | `(letrec  ((a b) (c d)) e)` |
+| `(: a b c d e)` | `(let  ((a b) (c d)) e)` |
 
-`:` takes any number of name/definition pairs followed by a final expression. if the
-final expression is omitted then it becomes the final name. if no name is given then
-the value of the expression is 0.  a `:` form at top level with no body is a global
-definition.  definitions are evaluated in order with repeated names shadowing prior
-values. the value of the `:` expression is the value of the final expression in the
-context of all of the definitions. `:` supports similar list based syntactic sugar
-for function definitions as `define` in scheme.
+takes any number of name/definition pairs followed by a final expression. if the
+final expression is omitted then the last name given becomes the final expression.
+if a final expression is omitted at top level that is considered a global definition.
+definitions are evaluated sequentially and recursion is supported. shadowing variables
+by redefining them within the same or an enclosed let expression works in the expected
+way. scheme-like syntactic sugar for defining lambdas is supported. `:` is also used
+for sequencing by assigning to an ignored variable.
 
-### conditionals
+## ? (cond)
 
 | gwen            | scheme                      |
 |-----------------|-----------------------------|
 | `(? a b c d e)` | `(cond (a b) (c d) (#t e))` |
 
-the only false value in a conditional is 0.
+the only false value in a conditional is 0. if a default branch is
+omitted then it becomes 0.
 
-### lambdas
+### &#92; (lambda)
 
 | gwen                           | scheme                 |
 |--------------------------------|------------------------|
 | <code>(&#92; a b c d e)</code> | `(lambda (a b c d) e)` |
 
+lambdas are defined over exactly one expression. use `:` if you
+need sequencing.
+
 ### function expressions
+
+in gwen lisp every function is unary. zero-argument "thunks" must be simulated by passing and ignoring an arbitrary
+value (usually `0` or equivalently `()`).
 
 | gwen  | scheme |
 |-------|--------|
@@ -55,8 +53,7 @@ the only false value in a conditional is 0.
 | (f)   | f      |
 | (f 0) | `(f)`  |
 
-sequencing of subexpressions is not guaranteed. for specific
-order you can use `:` or `,`.
+argument evaluation order is not guaranteed. use `:` for specific ordering.
 
 since functions always act as if applied to one value at a time, there are no nullary
 functions, and the value of a singleton list is the value of the head of the list.

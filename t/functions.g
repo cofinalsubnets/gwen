@@ -1,3 +1,20 @@
+(: (f m n) 
+    (: m+ (+ m) n+ (+ n)
+              (g a) (? (< a 0) a (h (n+ a)))
+              (h a) (? (< a 0) a (g (m+ a)))
+              h)
+   f3 (f -3)
+   f37 (f3 -7)
+ (assert (= -1 (f37 99)) (= -7 (f37 33))))
+
+(assert
+ (= 1 (1 2))
+ (= 2 (2 1))
+ (= 2 ((\ f n (f n)) 2 3))
+ (= 'a ('a 'b 'c 'd))
+ (= 'a ((\ a b c d (a b c d)) 'a 'b 'c 'd))
+ (= 3 (foldl + id '(1 2 3 4 5 6)))
+ (= 11 (foldl + id '(6 5 4 3 2 1))))
 ; basic arithmetic
 (: 0? (= 0)
 (assert
@@ -56,3 +73,7 @@
    six (mul two three)
    seven (add one six)
  (assert (= 420 (mul two (mul five (mul six seven)) (+ 1) 0))))
+
+; fibonacci
+(: (fib n) (? (> 3 n) 1 (+ (fib (+ -1 n)) (fib (+ -2 n))))
+ (assert (= 2178309 (fib 32))))
