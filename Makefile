@@ -298,7 +298,8 @@ installs=\
   $d/lib/lib$n.so\
   $d/include/$x.h\
   $v/ftdetect/$n.vim\
-  $v/syntax/$n.vim
+  $v/syntax/$n.vim\
+  $v/ftplugin/$n.vim
 
 .PHONY: install uninstall
 install: $(installs)
@@ -343,5 +344,9 @@ $v/ftdetect/$n.vim: vim/ftdetect.vim
 	@install -D -m 644 $< $@
 
 $v/syntax/$n.vim: vim/syntax.vim
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+
+$v/ftplugin/$n.vim: vim/ftplugin.vim
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
