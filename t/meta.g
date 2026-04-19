@@ -3,8 +3,8 @@
   (meta-eval x) (?
    (symp x) (\ l (l x))
    (not (twop x)) (const x)
-   (: x0 (A x) a (B x)
-    (? (= x0 '`) (const (A a))
+   (: x0 (car x) a (cdr x)
+    (? (= x0 '`) (const (car a))
        (= x0 ',) (foldl 0 (\ a b l (, (a l) (b l)))
                           (map meta-eval a))
        (= x0 '\) (foldr (meta-eval (last a))
@@ -16,28 +16,29 @@
         (\ l (foldl id id (map (\ x (x l)) y)))))))
 
   (cond-loop a f) (?
-   (nilp a) (cond-loop (X 0 0) f)
-   (nilp (B a)) (f (meta-eval (A a)))
-   (: ant (meta-eval (A a)) con (meta-eval (AB a))
-    (cond-loop (BB a) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
+   (nilp a) (cond-loop (cons 0 0) f)
+   (nilp (cdr a)) (f (meta-eval (car a)))
+   (: ant (meta-eval (car a)) con (meta-eval (cadr a))
+    (cond-loop (cddr a) (\ alt (f (\ l (? (ant l) (con l) (alt l))))))))
 
   (let-loop a b m) (?
-   (nilp a) (let-loop (X 0 0) b m)
-   (nilp (B a)) (meta-eval (A a) (b m))
-   (desugar (A a) (AB a) (\ k v
+   (nilp a) (let-loop (cons 0 0) b m)
+   (nilp (cdr a)) (meta-eval (car a) (b m))
+   (desugar (car a) (cadr a) (\ k v
     (: t (new 0) (Get k) (get 0 k t) (Put v) (put 0 v t)
-     (let-loop (BB a) (\ l (, (Put (meta-eval v (b l))) l))
+     (let-loop (cddr a) (\ l (, (Put (meta-eval v (b l))) l))
                         (\ x (? (= x k) (Get 0) (m x))))))))
 
   (desugar k v c)
-   (? (twop k) (desugar (A k) (X '\ (cat (B k) (X v 0))) c)
+   (? (twop k) (desugar (car k) (cons '\ (cat (cdr k) (X v 0))) c)
                (c k v))
   ;return
   meta-eval)
  meta-eval (ev evr)
  expr '((\ a b (: c (+ a 9) d (+ c b) (* c d))) 4 5)
  G ev
- (, (assert (= 234 (ev expr)))
-    (assert (= 234 (meta-eval expr G)))
-    (assert (= 234 (meta-eval evr G expr G)))
-    (assert (= 234 (meta-eval evr G evr G expr G)))))
+ (assert
+ (= 234 (ev expr))
+    (= 234 (meta-eval expr G))
+    (= 234 (meta-eval evr G expr G))
+    (= 234 (meta-eval evr G evr G expr G))))

@@ -24,6 +24,7 @@
      (foldr z f l) (? (twop l) (f (car l) (foldr z f (cdr l))) z))
   (: (foldl1 f l) (foldl (car l) f (cdr l))
      (foldr1 f l) (foldr (last l) f (init l))
+     (ap f) (foldl f id)
      (filter p l) (? (twop l) (: m (filter p (cdr l)) (? (p (car l)) (cons (car l) m) m)))
      (init l) (? (cdr l) (cons (car l) (init (cdr l))))
      (last l) (? (cdr l) (last (cdr l)) (car l))
@@ -43,9 +44,7 @@
      (part p) (foldr '(0) (\ a m (? (p a) (cons (cons a (car m)) (cdr m))
                                           (cons (car m) (cons a (cdr m)))))))
   ; here are some macro definitions
-  (: l (foldr 0 (\ a l (cons cons (cons a (cons l 0))))) (:
-   _ (:: 'L l)
-   _ (:: 'list l)))
+  (: l (foldr 0 (\ a l (cons cons (cons a (cons l 0))))) (: _ (:: 'L l) _ (:: 'list l)))
   (:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) -1))))
   (:: '|| (\ l (: (or l) (? l (: y (sym 0) (list ': y (car l) (list '? y y (or (cdr l)))))) (or l))))
   (:: ':- (\ a (cons ': (cat (cdr a) (cons (car a) 0)))))
@@ -53,13 +52,12 @@
   (:: '>>= (\ l (cons (last l) (init l))))
   (:: ', (\ l (cons ': (foldr (list (last l)) (\ l r (cons '_ (cons l r))) (init l)))))
   (:: '<=< (\ g (: y (sym 0) (list '\ y (foldr y (\ f x (list f x)) g)))))
-  
  ; end of prelude
 
  ; next is an expression for the evaluator. this is evaluated three
  ; times by different init stages.
   (:- (\ x (: c (sco 0 (list 0) 0) (ana c x (k0 c) 0 0)))
-    (sco p a i) (put 'val (new 0) (put 'par p (put 'imp i (put 'arg a (new 0)))))
+    (sco p a i) (put 'par p (put 'imp i (put 'arg a (new 0))))
     (p2 i x k) (poke -1 i (poke -1 x k))
     (em1 x k n) (poke -1 x (k (+ 1 n)))
     (em2 i x k n) (poke -1 i (poke -1 x (k (+ 2 n))))
@@ -150,7 +148,6 @@
                            (q (len (get 0 'stk c)))))
             (<= 0 (stki d)) (: _ (&& (!= c d) (get 0 'par c) (push 'imp x))
                              (q (len (get 0 'stk c)))))))))
-
 
     ; lambda analyzer
     (ali c imp exp) (:

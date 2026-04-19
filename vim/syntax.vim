@@ -4,7 +4,7 @@ if exists("b:current_syntax")
   finish
 endif
 
-syn iskeyword @,!,37-38,42-57,:,60-63,\,`,|,~,^
+syn iskeyword @,!,37-38,42-57,:,60-63,_,\,`,|,~,^
 
 " The four special forms: cond, let, quote, lambda
 syn keyword PForm ? : \\ `
@@ -28,8 +28,6 @@ syn keyword PMacro && \|\| \| & ^ << >>
 " Boolean constants
 syn keyword PBool true false
 
-" Wildcard / throwaway binding
-syn match PWild /\<_\>/
 
 " Quoted atoms: 'foo
 syn match PAtomMark "'"
@@ -61,12 +59,11 @@ hi def link PNumber         Number
 hi def link PParenError     Error
 hi def link PString         String
 hi def link PBool           Boolean
-hi def link PWild           Special
 
 " Rainbow parentheses — each nesting level gets its own colour.
 " Each region contains the cluster plus the next level; level 9 wraps to 0.
 " Toggle with \r (or :GwRainbow) — controlled by g:gw_rainbow (default: 1).
-syn cluster PListCluster contains=PAtom,PAtomMark,PBool,PWild,PComment,PCommentTodo,PFunc,PNumber,PSymbol,PForm,PString,PMacro
+syn cluster PListCluster contains=PAtom,PAtomMark,PBool,PComment,PCommentTodo,PFunc,PNumber,PSymbol,PForm,PString,PMacro
 
 if !exists("g:gw_rainbow")
   let g:gw_rainbow = 0

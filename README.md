@@ -1,13 +1,13 @@
 # gwen lisp
 
-gwen lisp is a lisp dialect and environment that can be built as a library,
-an executable, or for bare metal on various platforms. in gwen lisp:
+Gwen lisp is a lisp dialect and environment that can be built as a library,
+an executable, or for bare metal on various platforms. In Gwen lisp:
 
 - every expression has a value (there are no runtime errors)
 - every value is a function (data are their own constant functions)
 - every function is unary (via currying)
 
-there are four special forms:
+There are four special forms:
 
 | gwen               |  scheme equivalent |
 |--------------------|----------|
@@ -16,19 +16,15 @@ there are four special forms:
 | <code>&#96;</code> | `quote`  |
 | <code>&#92;</code> | `lambda` |
 
-## : (let)
+## &#96; (quote)
 
-| gwen            | scheme                      |
-|-----------------|-----------------------------|
-| `(: a b c d e)` | `(let  ((a b) (c d)) e)` |
+| gwen  | scheme |
+|-------|--------|
+| <code>(&#96; x)</code> | `(quote x)` |
 
-takes any number of name/definition pairs followed by a final expression. if the
-final expression is omitted then the last name given becomes the final expression.
-if a final expression is omitted at top level that is considered a global definition.
-definitions are evaluated sequentially and recursion is supported. shadowing variables
-by redefining them within the same or an enclosed let expression works in the expected
-way. scheme-like syntactic sugar for defining lambdas is supported. `:` is also used
-for sequencing by assigning to an ignored variable.
+
+- like `quote` in other lisp
+- <code>(&#96; x) = 'x</code>
 
 ## ? (cond)
 
@@ -36,8 +32,28 @@ for sequencing by assigning to an ignored variable.
 |-----------------|-----------------------------|
 | `(? a b c d e)` | `(cond (a b) (c d) (#t e))` |
 
-the only false value in a conditional is 0. if a default branch is
-omitted then it becomes 0.
+- like `cond` in other lisp
+- `(? 0 a b) = b`
+- `(? x a b) = a ; x != 0`
+- `(? x a) = (? x a 0)`
+- `(? x) = x`
+
+
+## : (let)
+
+
+| gwen            | scheme                      |
+|-----------------|-----------------------------|
+| `(: a b c d e)` | `(let  ((a b) (c d)) e)` |
+
+- like `let` in scheme (but see below)
+- `(: a) = a`
+- `(: a b) = (: a b a) ; at toplevel this is also a global definition`
+- `(: (a f b) (f b)) = (: a (\ f b (f b)))`
+- `(: a 1 a (+ 1 a) a) = 2`
+- recursive functions are supported like `letrec` in scheme
+- evaluation is sequential like `let*` in scheme
+- `:` sequencing idiom: `(: _ (do 1) _ (do 2) (do 3))`
 
 ## &#92; (lambda)
 
@@ -45,30 +61,54 @@ omitted then it becomes 0.
 |--------------------------------|------------------------|
 | <code>(&#92; a b c d e)</code> | `(lambda (a b c d) e)` |
 
-lambdas are defined over exactly one expression. use `:` if you need sequencing.
+- like `lambda` in other lisp, but multiple arguments with one body expression, not one argument list with multiple body expressions.
+- `(\ x) = x`
+- use `:` for sequencing multiple expressions in one function body.
 
-## &#96; (quote)
+## evaluation
 
-| gwen  | scheme |
-|-------|--------|
-| <code>(&#96; x)</code> | `(quote x)` |
+Gwen lisp is Scheme-like with lexical scope and a single namespace for functions and values, and it uses four
+special forms with easy Scheme equivalents.  However, its evaluation procedure is different, similar to Haskell,
+though Gwen lisp is dynamically typed. Functions are curried, and data implicitly act as their own constant functions.
+Therefore in Gwen lisp every value is a one-argument function and lists are evaluated by left-to-right application, or
+equivalently a left fold by the identity function..
 
-this one similar to scheme :)
+- `(f) = f`
+- `(f x y z) = (((f x) y) z) = (ap f (list x y z)) = (foldl f id (list x y z))`
 
-## function expressions
+However, this is only a conceptual description; in reality Gwen lisp may use different evaluation order for optimization
+reasons. Therefore if you need specific evaluation order for function arguments you must use the sequencing form `(: a (f 0) b (g 0) (c a b))`
 
-in gwen lisp every function is unary. zero-argument "thunks" must be simulated by passing and ignoring an arbitrary
-value (usually `0` or equivalently `()`).
+Nullary and variadic functions used in other languages can be replicated in Gwen lisp. For nullary functions, simply pass
+an argument and ignore it. Conventionally `0` or `()` is used for this purpose in code. Variadic functions may either be
+simulated with macros, or written using sentinels.
 
-| gwen  | scheme |
-|-------|--------|
-| f     | f      |
-| (f)   | f      |
-| (f 0) | `(f)`  |
 
-argument evaluation order is not guaranteed. use `:` for specific ordering.
+## code examples
 
-since functions always act as if applied to one value at a time, there are no nullary
-functions, and the value of a singleton list is the value of the head of the list.
-nullary functions are simulated by ignoring the argument to a unary function. variadic
-functions can be simulated using macros or implemented with sentinels.
+### variadic function using a sentinel
+
+```
+(: end (sym 0)
+   (li k x) (? (= end x) (k 0) (li (\ z (k (cons x z)))))
+   lis (li id)
+ (lis 1 2 3 4 5 end)) ; = '(1 2 3 4 5)
+```
+
+### church numerals
+
+```
+(: (add a b f x) (a f (b f x))
+   (mul a b f) (a (b f))
+   (zero a b) b
+   one (zero zero)
+   two (add one one)
+   three (add one two)
+   four (add two two)
+   five (add two three)
+   six (mul two three)
+   seven (add one six)
+ (assert (= 420 (mul two (mul five (mul six seven)) (+ 1) 0))))
+```
+
+
