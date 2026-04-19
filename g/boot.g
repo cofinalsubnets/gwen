@@ -12,8 +12,8 @@
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
      (AA x) (A (A x)) (AB x) (A (B x))
-     (BA x) (B (A x)) (BB x) (B (B x))
-     caar AA cadr AB cdar BA cddr BB
+     (BA x) (B (A x)) (BB x) (B (B x)))
+  (: caar AA cadr AB cdar BA cddr BB
      caaar (co car caar) caadr (co car cadr)
      cadar (co car cdar) caddr (co car cddr)
      cdaar (co cdr caar) cdadr (co cdr cadr)
@@ -21,8 +21,8 @@
      inc (+ 1) dec (+ -1) (:: a b) (put a b macros))
   (: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
      (foldl z f l) (? (twop l) (foldl (f z (car l)) f (cdr l)) z)
-     (foldr z f l) (? (twop l) (f (car l) (foldr z f (cdr l))) z)
-     (foldl1 f l) (foldl (car l) f (cdr l))
+     (foldr z f l) (? (twop l) (f (car l) (foldr z f (cdr l))) z))
+  (: (foldl1 f l) (foldl (car l) f (cdr l))
      (foldr1 f l) (foldr (last l) f (init l))
      (filter p l) (? (twop l) (: m (filter p (cdr l)) (? (p (car l)) (cons (car l) m) m)))
      (init l) (? (cdr l) (cons (car l) (init (cdr l))))
@@ -31,18 +31,17 @@
      (ldel x l) (? (twop l) (? (= (car l) x) (cdr l) (cons (car l) (ldel x (cdr l)))))
      (all f l) (? (twop l) (? (f (car l)) (all f (cdr l))) -1)
      (any f l) (? (twop l) (? (f (car l)) -1 (any f (cdr l))))
-     catmap (co (foldr 0) (co cat))
-     (cat a b) (foldr b cons a)
+     (cat a b) (foldr b cons a))
+  (: catmap (co (foldr 0) (co cat))
      (assq x l) (? l (? (= x (caar l)) (car l) (assq x (cdr l))))
      (lidx x) ((: (f n l) (? (twop l) (? (= x (car l)) n (f (+ 1 n) (cdr l))) -1)) 0)
-     (memq x) (any (= x))
+     memq (co any =)
      (zip a b) (? (twop a) (? (twop b) (cons (cons (car a) (car b)) (zip (cdr a) (cdr b)))))
      rev (foldl 0 (flip cons))
      (drop n l) (? n (drop (- n 1) (cdr l)) l)
      (take n l) (? n (cons (car l) (take (- n 1) (cdr l))))
-     (part p) (foldr '(0) (\ a m
-      (? (p a) (cons (cons a (car m)) (cdr m))
-               (cons (car m) (cons a (cdr m)))))))
+     (part p) (foldr '(0) (\ a m (? (p a) (cons (cons a (car m)) (cdr m))
+                                          (cons (car m) (cons a (cdr m)))))))
   ; here are some macro definitions
   (:: 'L (foldr 0 (\ a l (cons cons (cons a (cons l 0))))))
   (:: '&& (\ l (: (and l) (? (cdr l) (cons '? (cons (car l) (cons (and (cdr l)) 0))) (car l)) (? l (and l) -1))))
@@ -63,13 +62,13 @@
     (em1 x k n) (poke -1 x (k (+ 1 n)))
     (em2 i x k n) (p2 i x (k (+ 2 n)))
     ; thread allocator
-    (k0 c n) (poke -1 g_vm_ret (poke (+ 1 n) (arity c) (thd (+ 2 n))))
+    (k0 c n) (poke -1 g_vm_ret (poke (+ 1 n) (ary c) (thd (+ 2 n))))
 ;; functions for working with variable scope records
-    (arity c) (+ (len (get 0 'arg c)) (len (get 0 'imp c)))
-    (proto f) (? (nump f) f (: a (peek 0 f) (?- f
-     (= a g_vm_uncurry) (proto (seek -2 (peek 2 f)))
+    (ary c) (+ (len (get 0 'arg c)) (len (get 0 'imp c)))
+    (pro f) (? (nump f) f (: a (peek 0 f) (?- f
+     (= a g_vm_uncurry) (pro (seek -2 (peek 2 f)))
      (= a g_vm_curry) (?- f (= g_vm_uncurry (peek 2 f))
-                            (proto (seek -2 (peek 4 f)))))))
+                            (pro (seek -2 (peek 4 f)))))))
     (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
     (ana c x) (:- (? (symp x)  (ava c x)
                      (atomp x) (kim x)
@@ -83,7 +82,7 @@
 
     (app a b) (: f (ana c a) ; analyze function expression
                  ca (len b)                                  ; call arity
-                 i (? (= kim (proto f)) (peek 3 f))
+                 i (? (= kim (pro f)) (peek 3 f))
                  i (? (nump i) 0 i)
                  fa (? (nump i) 1
                        (!= (peek 0 i) g_vm_curry) 1
@@ -124,23 +123,22 @@
       j (k (+ 3 n))
       a (car (get 0 'end c))
       i (peek 0 a)
-      (? (|| (= i g_vm_ret) (= i g_vm_tap))
-          (p2 i (peek 1 a) j)
-         (= i g_vm_tapn)
-          (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
-         (p2 g_vm_jump a j)))
+      (? (| (= g_vm_ret i) (= g_vm_tap i)) (p2 i (peek 1 a) j)
+         (= i g_vm_tapn)                   (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
+                                           (p2 g_vm_jump a j)))
      (acr b) (?
       (atomp b)       (kim 0)
       (atomp (cdr b)) (co (ana c (car b)) acx)
       (: f (ana c (car b))
          g (ana c (cadr b))
          h (acr (cddr b))
-       (\ x (f (\ n
-        (: k (\ n (: k (h x n) _ (put 'alt (cons k (get 0 'alt c)) c) k))
-           j (g (acx k) (+ 2 n))
-           s (get 0 'alt c)
-           _ (put 'alt (cdr s) c)
-           (p2 g_vm_cond (car s) j))))))))
+         (? (= kim (pro f)) (? (peek 3 f) g h) ; skip dead code
+          (\ x (f (\ n
+           (: k (\ n (: k (h x n) _ (put 'alt (cons k (get 0 'alt c)) c) k))
+              j (g (acx k) (+ 2 n))
+              s (get 0 'alt c)
+              _ (put 'alt (cdr s) c)
+              (p2 g_vm_cond (car s) j)))))))))
 
     ; variable expression analyzer
     (ava d x)
@@ -161,7 +159,7 @@
              q (\ i j m (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k)))
            (?- (ava (get 0 'par d) x)
             (memq x stk) (? (= c d) (em2 g_vm_arg (lidx x stk))
-                          (: _ (&& (get 0 'par c) (put 'imp (cons x (get 0 'imp c)) c))
+                          (: _ (? (get 0 'par c) (put 'imp (cons x (get 0 'imp c)) c))
                            (q (len (get 0 'stk c)))))
             (<= 0 (stki d)) (: _ (&& (!= c d) (get 0 'par c) (put 'imp (cons x (get 0 'imp c)) c))
                              (q (len (get 0 'stk c)))))))))
@@ -171,7 +169,7 @@
     (ala c imp exp) (:
      d (sco c (init exp) imp)
      k (ana d (last exp) (k0 d))
-     a (arity d)
+     a (ary d)
      k (trim ((? (= a 1) k (em2 g_vm_curry a k)) 0))
      (cons k (get 0 'imp d)))
 

@@ -57,7 +57,7 @@ static union u
   bif_cur_row[] = {{cur_row}, {g_vm_ret0}},
   bif_cur_col[] = {{cur_col}, {g_vm_ret0}},
   bif_cur_put[] = {{cur_put}, {g_vm_ret0}},
-  bif_cur_set[] = {{g_vm_curry}, {.x=gputnum(2)}, {cur_set}, {g_vm_ret0}},
+  bif_cur_set[] = {{g_vm_curry}, {.x=g_putnum(2)}, {cur_set}, {g_vm_ret0}},
   bif_crank_angle[] = {{crank_angle}, {g_vm_ret0}};
 static struct g_def defs[] = {
   {"cur_row", (intptr_t) bif_cur_row},
@@ -153,7 +153,7 @@ static void g_log_update(void) {
 static g_vm(crank_angle) {
  int d = K.pd->system->isCrankDocked();
  float a = K.pd->system->getCrankAngle();
- Sp[0] = d ? g_nil : gputnum((int)a%360);
+ Sp[0] = d ? g_nil : g_putnum((int)a%360);
  Ip += 1;
  return Continue(); }
 
@@ -277,7 +277,7 @@ static void g_synth_update(void) {
       return; } }
 
 static g_vm(g_buttons) { return
-  Sp[0] = gputnum(K.b.current),
+  Sp[0] = g_putnum(K.b.current),
   Ip += 1,
   Continue(); }
 
@@ -293,16 +293,16 @@ static g_vm(ls_root) {
   if (!g_ok(f)) return f;
   return f->sp[1] = f->sp[0], f->sp++, f->ip++, Continue(); }
 
-static g_vm(cur_row) { return Sp[0] = gputnum(kcb->wpos / kcb->cols), Ip++, Continue(); }
-static g_vm(cur_col) { return Sp[0] = gputnum(kcb->wpos % kcb->cols), Ip++, Continue(); }
+static g_vm(cur_row) { return Sp[0] = g_putnum(kcb->wpos / kcb->cols), Ip++, Continue(); }
+static g_vm(cur_col) { return Sp[0] = g_putnum(kcb->wpos % kcb->cols), Ip++, Continue(); }
 static g_vm(cur_set) {
-  uintptr_t r = ggetnum(Sp[0]), c = ggetnum(Sp[1]);
+  uintptr_t r = g_getnum(Sp[0]), c = g_getnum(Sp[1]);
   cb_cur(kcb, r, c);
   Sp += 1;
   Ip += 1;
   return Continue(); }
 static g_vm(cur_put) {
-  kcb->cb[kcb->wpos] = ggetnum(Sp[0]);
+  kcb->cb[kcb->wpos] = g_getnum(Sp[0]);
   Ip += 1;
   return Continue(); }
 

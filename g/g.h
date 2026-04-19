@@ -14,10 +14,7 @@
 #define g_putnum(_) (((g_word)(_)<<1)|1)
 #define g_getnum(_) ((g_word)(_)>>1)
 
-#define gputnum g_putnum
-#define ggetnum g_getnum
-
-#define g_nil gputnum(0)
+#define g_nil g_putnum(0)
 #define gnil g_nil
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
@@ -28,9 +25,6 @@
 
 #ifndef g_tco
 #define g_tco 1
-#endif
-#ifndef g_float
-#define g_float 0
 #endif
 
 #if g_tco

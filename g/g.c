@@ -1,7 +1,6 @@
 #include "g.h"
 _Static_assert(sizeof(union u) == sizeof(intptr_t));
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
-#define dict_of(_) (_)->dict
 #define nilp(_) (word(_)==g_nil)
 #define A(o) two(o)->a
 #define B(o) two(o)->b
@@ -9,11 +8,8 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define AA(o) A(A(o))
 #define BA(o) B(A(o))
 #define BB(o) B(B(o))
-#define push1(f, _) (*--(f)->sp=(_))
-#define vlen(_)((struct g_vec*)(_))->shape[0]
-#define vtxt(_) ((char*)(((struct g_vec*)(_))->shape+1))
-#define len(_) vlen(_)
-#define txt(_) vtxt(_)
+#define len(_)((struct g_vec*)(_))->shape[0]
+#define txt(_) ((char*)(((struct g_vec*)(_))->shape+1))
 #define avail(f) ((f->sp-f->hp))
 #define nom(_) sym(_)
 #define ptr(_) ((num*)(_))
@@ -46,12 +42,12 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define str_type_width (Width(struct g_vec) + 1)
 
 #define opf(nom, op) g_vm(nom) {\
- intptr_t a = ggetnum(Sp[0]), b = ggetnum(Sp[1]);\
- *++Sp = gputnum(a op b);\
+ intptr_t a = getnum(Sp[0]), b = getnum(Sp[1]);\
+ *++Sp = putnum(a op b);\
  return Ip++, Continue(); }
 #define op0f(nom, op) g_vm(nom) {\
- intptr_t a = ggetnum(Sp[0]), b = ggetnum(Sp[1]);\
- *++Sp = b == 0 ? g_nil : gputnum(a op b);\
+ intptr_t a = getnum(Sp[0]), b = getnum(Sp[1]);\
+ *++Sp = b == 0 ? g_nil : putnum(a op b);\
  return Ip++, Continue(); }
 #define op(nom, n, x) g_vm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
 #define op1(nom, i, x) g_vm(nom) { Sp[0] = (x); Ip += i; return Continue(); }
@@ -93,7 +89,7 @@ static g_vm_t
 static uintptr_t g_hash(struct g*, word), g_vec_bytes(struct g_vec*);
 static int g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base);
 static void ini_vec(struct g_vec*, uintptr_t, uintptr_t, ...);
-static word g_tget(struct g*, word, struct g_tab*, word);
+static word g_tget(struct g*, word, word, struct g_tab*);
 static struct g_atom *g_intern_r(struct g*, struct g_vec*, struct g_atom **y);
 static g_inline struct g_tag { union u *null, *head, end[]; } *ttag(union u *k) {
  while (k->x) k++;
@@ -108,15 +104,16 @@ int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memset(void*, int, size_t);
+long strtol(char const*restrict, char**restrict, int);
 
-static g_inline struct g_vec *vec(word n) { return (struct g_vec*) n; }
-static g_inline struct g_tab *tbl(word n) { return (struct g_tab*) n; }
-static g_inline struct g_pair *two(word n) { return (struct g_pair*) n; }
-static g_inline struct g_atom *sym(word n) { return (struct g_atom*) n; }
+#define vec(_) ((struct g_vec*)(_))
+#define tbl(_) ((struct g_tab*)(_))
+#define nump odd
+#define two(_) ((struct g_pair*)(_))
+#define sym(_) ((struct g_atom*)(_))
 static g_inline bool twop(word _) { return even(_) && typ(_) == two_q; }
 static g_inline bool tblp(word _) { return even(_) && typ(_) == tbl_q; }
 static g_inline bool symp(word _) { return even(_) && typ(_) == sym_q; }
-static g_inline bool nump(word _) { return odd(_); }
 static g_inline bool vec_strp(struct g_vec *s) { return
   s->type == g_vect_char && s->rank == 1; }
 static g_inline bool strp(word _) { return
@@ -320,7 +317,7 @@ static Cata(g_c1_var_2);
 static Ana(g_c0_var) {
  word y;
  for (struct env *d = *c;; d = d->par) {
-  if (nilp(d)) return (y = g_tget(f, 0, dict_of(f), x)) ?
+  if (nilp(d)) return (y = g_tget(f, 0, x, f->dict)) ?
    g_c0_ix(f, c, g_vm_quote, y) :
    (f = gxl(g_push(f, 2, x, (*c)->imps)),
     f = g_c0_ix(f, c, g_vm_freev, (*c)->imps = g_ok(f) ? pop1(f) : nil),
@@ -386,7 +383,7 @@ static g_noinline Ana(analyze) {
      f = g_c0_cond_r(f, c, g_ok(f) ? pop1(f) : nil),
      g_push(f, 1, g_c1_cond_push_exit)); }
  // if it is a macro then apply the macro and analyze the result
- return (x = g_tget(f, 0, f->macro, a)) ?
+ return (x = g_tget(f, 0, a, f->macro)) ?
   (f = gev(gxr(gxl(gxr(gxl(g_push(f, 5, b, nil ,f->quote, nil, x)))))),
    analyze(f, c, g_ok(f) ? pop1(f) : 0)) :
   (avec(f, b, f = analyze(f, c, a)),
@@ -613,10 +610,10 @@ static word ldels(struct g *f, word lam, word l) {
  if (!assq(f, lam, A(l))) B(l) = m, m = l;
  return m; }
 
-g_vm(g_vm_defglob) {
+static g_vm(g_vm_defglob) {
  Have(3);
  Sp -= 3;
- struct g_tab *t = dict_of(f);
+ struct g_tab *t = f->dict;
  word k = Ip[1].x, v = Sp[3];
  Sp[0] = k, Sp[1] = v, Sp[2] = (word) t;
  Pack(f);
@@ -630,7 +627,7 @@ g_vm(g_vm_drop1) { return Ip++, Sp++, Continue(); }
 
 g_vm(g_vm_freev) { return
  Ip[0].ap = g_vm_quote,
- Ip[1].x = g_tget(f, Ip[1].x, f->dict, Ip[1].x),
+ Ip[1].x = g_tget(f, nil, Ip[1].x, f->dict),
  Continue(); }
 
 g_vm(g_vm_eval) { return
@@ -668,7 +665,7 @@ g_vm(g_vm_tnew) {
   Ip++,
   Continue(); }
 
-op11(g_vm_tblp, tblp(Sp[0]) ? gputnum(-1) : g_nil)
+op11(g_vm_tblp, tblp(Sp[0]) ? putnum(-1) : g_nil)
 
 // relies on table capacity being a power of 2
 static g_inline uintptr_t index_of_key(struct g *f, struct g_tab *t, intptr_t k) {
@@ -744,7 +741,7 @@ static g_noinline intptr_t gtabdel(struct g *f, struct g_tab *t, intptr_t k, int
 g_vm(g_vm_tget2) {
   word z = Sp[0], k = Sp[1], x = Sp[2], n;
   if (even(x) && datp(x)) switch (typ(x)) {
-    case tbl_q: z = g_tget(f, z, tbl(x), k); break;
+    case tbl_q: z = g_tget(f, z, k, tbl(x)); break;
     case vec_q:
       if (nump(k) && (n = getnum(k)) >= 0 && n < (word) len(x))
         z = putnum(txt(x)[n]);
@@ -768,7 +765,7 @@ g_vm(g_vm_tdel) {
  return Sp += 2, Ip += 1, Continue(); }
 
 g_vm(g_vm_tlen) { return
- Sp[0] = tblp(Sp[0]) ? gputnum(((struct g_tab*)Sp[0])->len) : g_nil,
+ Sp[0] = tblp(Sp[0]) ? putnum(((struct g_tab*)Sp[0])->len) : g_nil,
  Ip += 1, Continue(); }
 
 g_vm(g_vm_tkeys) {
@@ -825,7 +822,7 @@ static uintptr_t g_hash(struct g *f, intptr_t x) {
 
 op11(g_vm_car, twop(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(g_vm_cdr, twop(Sp[0]) ? B(Sp[0]) : g_nil)
-op11(g_vm_twop, twop(Sp[0]) ? gputnum(-1) : g_nil)
+op11(g_vm_twop, twop(Sp[0]) ? putnum(-1) : g_nil)
 g_vm(g_vm_cons) {
  Have(Width(struct g_pair));
  struct g_pair *w = (struct g_pair*) Hp;
@@ -849,14 +846,14 @@ struct g *gxr(struct g *f) {
  f->sp[1] = x;
  return gxl(f); }
 
-op11(g_vm_strp, strp(Sp[0]) ? gputnum(-1) : g_nil)
+op11(g_vm_strp, strp(Sp[0]) ? putnum(-1) : g_nil)
 
 g_vm(g_vm_ssub) {
  if (!strp(Sp[0])) Sp[2] = g_nil;
  else {
   struct g_vec*s = (struct g_vec*) Sp[0], *t;
-  intptr_t i = odd(Sp[1]) ? ggetnum(Sp[1]) : 0,
-           j = odd(Sp[2]) ? ggetnum(Sp[2]) : 0;
+  intptr_t i = odd(Sp[1]) ? getnum(Sp[1]) : 0,
+           j = odd(Sp[2]) ? getnum(Sp[2]) : 0;
   i = MAX(i, 0);
   i = MIN(i, (word) len(s));
   j = MAX(j, i);
@@ -958,7 +955,7 @@ g_vm(g_vm_symnom) {
   Ip += 1,
   Continue(); }
 
-op11(g_vm_symp, symp(Sp[0]) ? gputnum(-1) : g_nil)
+op11(g_vm_symp, symp(Sp[0]) ? putnum(-1) : g_nil)
 static struct g *g_intern(struct g*f) {
  f = g_have(f, Width(struct g_atom));
  if (g_ok(f)) f->sp[0] = (word) g_intern_r(f, (struct g_vec*) f->sp[0], &f->symbols);
@@ -971,7 +968,7 @@ static  g_noinline struct g_atom *g_intern_r(struct g *v, struct g_vec *b, struc
   z->ap = g_vm_data,
   z->typ = sym_q,
   z->nom = b,
-  z->code = g_hash(v, gputnum(g_hash(v, (intptr_t) b))),
+  z->code = g_hash(v, putnum(g_hash(v, (intptr_t) b))),
   z->l = z->r = 0,
   *y = z;
  struct g_vec *a = z->nom;
@@ -1023,7 +1020,6 @@ static int g_r_getc(struct g*f, struct g_in *i) {
   case 0: case ' ': case '\t': case '\n': case '\r': case '\f':
    continue; } }
 
-long strtol(char const*restrict, char**restrict, int);
 
 static struct g *g_read1(struct g*f, struct g_in *i) {
  if (!g_ok(f)) return f;
@@ -1057,7 +1053,7 @@ static struct g *g_read1(struct g*f, struct g_in *i) {
       txt(b)[n] = 0; // zero terminate for strtol ; n < lim so this is safe
       char *e;
       long j = strtol(txt(b), &e, 0);
-      if (*e == 0) f->sp[0] = gputnum(j);
+      if (*e == 0) f->sp[0] = putnum(j);
       else f = g_intern(f);
       return f; }
  return f; }
@@ -1072,7 +1068,7 @@ static struct g *g_reads(struct g *f, struct g_in* i) {
  for (f = g_push(f, 1, g_nil); n--; f = gxr(f));
  return f; }
 
-g_vm(g_vm_read) {
+static g_vm(g_vm_read) {
  switch (Pack(f), g_code_of(f = g_read1(f, &g_stdin))) {
   default: return f;
   case g_status_eof:
@@ -1087,15 +1083,15 @@ g_vm(g_vm_read) {
    Ip += 1;
    return Continue(); } }
 
-g_vm(g_vm_getc) {
+static g_vm(g_vm_getc) {
  Pack(f);
  int i = ggetc(f);
  Unpack(f);
- Sp[0] = gputnum(i);
+ Sp[0] = putnum(i);
  Ip += 1;
  return Continue(); }
 
-int g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base) {
+static int g_putn(struct g *f, struct g_out *o, intptr_t n, uintptr_t base) {
  if (n < 0) o->putc(f, '-', o), n = -n;
  uintptr_t q = n / base, r = n % base;
  if (q) g_putn(f, o, q, base);
@@ -1135,8 +1131,8 @@ static int g_em_vec(struct g*f, struct g_out*o, struct g_vec *v) {
    r = gfprintf(f, o, "#vec@%x:%d.%d", v, type, rank);
    for (uintptr_t i = rank, *j = shape; i--; r = gfprintf(f, o, ".%d", (intptr_t) *j++)); }
   else {
-   uintptr_t len = vlen(v);
-   char *text = vtxt(v);
+   uintptr_t len = len(v);
+   char *text = txt(v);
    o->putc(f, '"', o);
    for (char c; len--; o->putc(f, c, o))
     if ((c = *text++) == '\\' || c == '"') o->putc(f, '\\', o);
@@ -1165,13 +1161,13 @@ static int (*emitters[])(struct g*, struct g_out*, word) = {
  [sym_q] = (void*) g_em_sym, };
 
 static int gfputx(struct g *f, struct g_out *o, intptr_t x) {
- return nump(x) ? gfprintf(f, o, "%d", ggetnum(x)) :
+ return nump(x) ? gfprintf(f, o, "%d", getnum(x)) :
         datp(x) ? emitters[typ(x)](f, o, x) :
                   gfprintf(f, o, "#%lx", (long) x); }
 
 
 g_vm(g_vm_putc) {
- gputc(f, ggetnum(*Sp));
+ gputc(f, getnum(*Sp));
  Ip += 1;
  return Continue(); }
 g_vm(g_vm_puts) {
@@ -1183,7 +1179,7 @@ g_vm(g_vm_puts) {
  return Continue(); }
 
 g_vm(g_vm_putn) {
- uintptr_t n = ggetnum(Sp[0]), b = ggetnum(Sp[1]);
+ uintptr_t n = getnum(Sp[0]), b = getnum(Sp[1]);
  g_putn(f, &g_stdout, n, b);
  Sp[1] = Sp[0];
  Sp += 1;
@@ -1213,17 +1209,17 @@ op0f(g_vm_quot, /)
 op0f(g_vm_rem, %)
 op(g_vm_add, 2, (Sp[0]+Sp[1]-1)|1)
 op(g_vm_sub, 2, (Sp[0]-Sp[1])|1)
-op(g_vm_eq, 2, eql(f, Sp[0], Sp[1]) ? gputnum(-1) : g_nil)
-op(g_vm_lt, 2, Sp[0] < Sp[1] ? gputnum(-1) : g_nil)
-op(g_vm_le, 2, Sp[0] <= Sp[1] ? gputnum(-1) : g_nil)
-op(g_vm_gt, 2, Sp[0] > Sp[1] ? gputnum(-1) : g_nil)
-op(g_vm_ge, 2, Sp[0] >= Sp[1] ? gputnum(-1) : g_nil)
+op(g_vm_eq, 2, eql(f, Sp[0], Sp[1]) ? putnum(-1) : g_nil)
+op(g_vm_lt, 2, Sp[0] < Sp[1] ? putnum(-1) : g_nil)
+op(g_vm_le, 2, Sp[0] <= Sp[1] ? putnum(-1) : g_nil)
+op(g_vm_gt, 2, Sp[0] > Sp[1] ? putnum(-1) : g_nil)
+op(g_vm_ge, 2, Sp[0] >= Sp[1] ? putnum(-1) : g_nil)
 op(g_vm_bnot, 1, ~Sp[0] | 1)
 op(g_vm_band, 2, (Sp[0] & Sp[1]) | 1)
 op(g_vm_bor, 2, (Sp[0] | Sp[1]) | 1)
 op(g_vm_bxor, 2, (Sp[0] ^ Sp[1]) | 1)
-op(g_vm_nump, 1, odd(Sp[0]) ? gputnum(-1) : g_nil)
-op11(g_vm_nilp, nilp(Sp[0]) ? gputnum(-1) : g_nil)
+op(g_vm_nump, 1, odd(Sp[0]) ? putnum(-1) : g_nil)
+op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : g_nil)
 
 g_vm(g_vm_info) {
  size_t const req = 4 * Width(struct g_pair);
@@ -1231,14 +1227,14 @@ g_vm(g_vm_info) {
  struct g_pair *si = (struct g_pair*) Hp;
  Hp += req;
  Sp[0] = word(si);
- ini_two(si, gputnum(f), word(si + 1));
- ini_two(si + 1, gputnum(f->len), word(si + 2));
- ini_two(si + 2, gputnum(Hp - ptr(f)), word(si + 3));
- ini_two(si + 3, gputnum(ptr(f) + f->len - Sp), g_nil);
+ ini_two(si, putnum(f), word(si + 1));
+ ini_two(si + 1, putnum(f->len), word(si + 2));
+ ini_two(si + 2, putnum(Hp - ptr(f)), word(si + 3));
+ ini_two(si + 3, putnum(ptr(f) + f->len - Sp), g_nil);
  Ip += 1;
  return Continue(); }
 
-op11(g_vm_clock, gputnum(g_clock() - getnum(Sp[0])))
+op11(g_vm_clock, putnum(g_clock() - getnum(Sp[0])))
 g_vm(g_vm_uncurry) {
   Have1();
   *--Sp = Ip[1].x;
@@ -1247,7 +1243,7 @@ g_vm(g_vm_uncurry) {
 
 g_vm(g_vm_curry) {
  union u *k = (union u*) Hp, *j = k;
- uintptr_t n = ggetnum(Ip[1].x);
+ uintptr_t n = getnum(Ip[1].x);
  size_t S = 3 + Width(struct g_tag);
 
  if (n == 2) {
@@ -1263,7 +1259,7 @@ g_vm(g_vm_curry) {
   Have(S);
   j += 2;
   k[0].ap = g_vm_curry;
-  k[1].x = gputnum(n - 1);
+  k[1].x = putnum(n - 1);
   j[0].ap = g_vm_uncurry;
   j[1].x = *Sp++;
   j[2].m = Ip + 2;
@@ -1303,7 +1299,7 @@ g_vm(g_vm_data) {
 // push a value from the stack
 g_vm(g_vm_arg) {
  Have1();
- Sp[-1] = Sp[ggetnum(Ip[1].x)];
+ Sp[-1] = Sp[getnum(Ip[1].x)];
  Sp -= 1;
  Ip += 2;
  return Continue(); }
@@ -1319,14 +1315,14 @@ g_vm(g_vm_ap) {
 // tail call
 g_vm(g_vm_tap) {
  intptr_t x = Sp[0], j = Sp[1];
- Sp += ggetnum(Ip[1].x) + 1;
+ Sp += getnum(Ip[1].x) + 1;
  if (even(j)) Ip = cell(j), Sp[0] = x;
  else Sp += 1, Ip = cell(Sp[0]), Sp[0] = j;
  return Continue(); }
 
 // apply to multiple arguments
 g_vm(g_vm_apn) {
- size_t n = ggetnum(Ip[1].x);
+ size_t n = getnum(Ip[1].x);
  union u *ra = Ip + 2; // return address
  // this instruction is only emitted when the callee is known to be a function
  // so putting a value off the stack into Ip is safe. the +2 is cause we leave
@@ -1337,8 +1333,8 @@ g_vm(g_vm_apn) {
 
 // tail call
 g_vm(g_vm_tapn) {
- size_t n = ggetnum(Ip[1].x),
-        r = ggetnum(Ip[2].x);
+ size_t n = getnum(Ip[1].x),
+        r = getnum(Ip[2].x);
  Ip = cell(Sp[n]) + 2;
  word *o = Sp;
  for (Sp += r + 1; n--; Sp[n] = o[n]);
@@ -1346,7 +1342,7 @@ g_vm(g_vm_tapn) {
 
 // return
 g_vm(g_vm_ret) {
- word n = ggetnum(Ip[1].x) + 1;
+ word n = getnum(Ip[1].x) + 1;
  Ip = cell(Sp[n]);
  Sp[n] = Sp[0];
  Sp += n;
@@ -1439,7 +1435,6 @@ static void (*wks[])(struct g*, word*, intptr_t const*, intptr_t const*) = {
  [vec_q] = (void*) g_wk_vec,
  [sym_q] = (void*) g_wk_sym,
  [tbl_q] = (void*) g_wk_tab, };
-
 
 static intptr_t g_cp_two(struct g*f, struct g_pair *src, intptr_t const *p0, intptr_t const*t0) {
  struct g_pair *dst = bump(f, Width(struct g_pair));
@@ -1580,8 +1575,8 @@ enum g_status g_fin(struct g *f) {
   return s; }
 
 #define S1(i) {{i}, {g_vm_ret0}}
-#define S2(i) {{g_vm_curry},{.x=gputnum(2)},{i}, {g_vm_ret0}}
-#define S3(i) {{g_vm_curry},{.x=gputnum(3)},{i}, {g_vm_ret0}}
+#define S2(i) {{g_vm_curry},{.x=putnum(2)},{i}, {g_vm_ret0}}
+#define S3(i) {{g_vm_curry},{.x=putnum(3)},{i}, {g_vm_ret0}}
 #define bifs(_) \
  _(bif_clock, "clock", S1(g_vm_clock)) _(bif_addr, "vminfo", S1(g_vm_info))\
  _(bif_add, "+", S2(g_vm_add)) _(bif_sub, "-", S2(g_vm_sub)) _(bif_mul, "*", S2(g_vm_mul)) _(bif_quot, "/", S2(g_vm_quot)) _(bif_rem, "%", S2(g_vm_rem)) \
@@ -1640,7 +1635,7 @@ struct g *g_defs(struct g*f, struct g_def const*defs) {
  if (g_ok(f)) f->sp++;
  return f; }
 
-static word g_tget(struct g *f, word zero, struct g_tab *t, word k) {
+static word g_tget(struct g *f, word zero, word k, struct g_tab *t) {
  uintptr_t i = index_of_key(f, t, k);
  struct g_kvs *e = t->tab[i];
  while (e && !eql(f, k, e->key)) e = e->next;
