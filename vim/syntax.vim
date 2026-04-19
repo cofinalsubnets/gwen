@@ -36,7 +36,7 @@ syn match PAtomMark "'"
 syn match PAtom "'[^ \t()]\+" contains=PAtomMark
 
 " Numbers (integer literals, possibly negative)
-syn match PNumber "\(-\d\+\|\d\+\)"
+syn match PNumber "\<-\?\d\+\>"
 
 " Strings
 syn region PString start='"' skip='\\\\\|\\"' end='"'
