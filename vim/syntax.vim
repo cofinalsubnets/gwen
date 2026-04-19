@@ -10,13 +10,14 @@ syn iskeyword @,!,37-38,42-47,:,60-63,\,`,|,~,^
 syn keyword PForm ? : \\ `
 syn keyword PFunc < <= = >= > !=
 syn keyword PFunc X A B AA AB BA BB car cdr cons caar cadr cdar cddr
+syn keyword PFunc caaar caadr cadar caddr cdaar cdadr cddar cdddr
 syn keyword PFunc foldl foldr map filter id const cat each all any init last rev take drop catmap
 syn keyword PFunc :: inc dec flip diag part len ldel puts zip lidx
 syn keyword PFunc twop nump nomp tblp strp nilp homp ev not
 syn keyword PFunc str scat ssub sym nom putc co atomp
 syn keyword PFunc tnew thas tkeys tdel memq assq set put get new
 syn keyword PFunc + - ~ ! * / % . ,
-syn keyword PMacro L vprintf >>= >=> <=< :- ?- ,
+syn keyword PMacro L list vprintf >>= >=> <=< :- ?- ,
 syn keyword PMacro && \|\| \| & ^ << >>
 syn keyword PBool true false
 
