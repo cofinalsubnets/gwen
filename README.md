@@ -33,6 +33,7 @@ There are four special forms:
 | `(? a b c d e)` | `(cond (a b) (c d) (#t e))` |
 
 - like `cond` in other lisp
+- `0` is the sole false value
 - `(? 0 a b) = b`
 - `(? x a b) = a ; x != 0`
 - `(? x a) = (? x a 0)`
@@ -48,7 +49,7 @@ There are four special forms:
 
 - like `let` in scheme (but see below)
 - `(: a) = a`
-- `(: a b) = (: a b a)` at toplevel this is also a global definition
+- `(: a b) = (: a b a) ; at toplevel this is also a global definition`
 - `(: (a f b) (f b)) = (: a (\ f b (f b)))`
 - `(: a 1 a (+ 1 a) a) = 2`
 - recursive functions are supported like `letrec` in scheme
@@ -72,7 +73,7 @@ special forms with easy Scheme equivalents.  However, its evaluation process is 
 though Gwen lisp is dynamically typed. Functions are curried, and data implicitly act as their own constant functions.
 Therefore in Gwen lisp every value is a one-argument function and lists are evaluated by left-to-right application.
 
-- `(f x y z) = (((f x) y) z) = (ap f (list x y z)) = (foldl f id (list x y z))` modulo side effects
+- `(f x y z) = (((f x) y) z) = (ap f (list x y z)) = (foldl f id (list x y z)) ; modulo side effects`
 
 However, this is only a conceptual description; in reality Gwen lisp may use different evaluation order for optimization
 reasons. Therefore if you need specific evaluation order for function arguments you should use the sequencing form `:`
