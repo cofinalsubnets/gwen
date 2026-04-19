@@ -10,7 +10,7 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define BB(o) B(B(o))
 #define len(_)((struct g_vec*)(_))->shape[0]
 #define txt(_) ((char*)(((struct g_vec*)(_))->shape+1))
-#define avail(f) ((f->sp-f->hp))
+#define avail(f) ((uintptr_t)(f->sp-f->hp))
 #define nom(_) sym(_)
 #define ptr(_) ((num*)(_))
 #define num(_) ((num)(_))
@@ -27,7 +27,6 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define cell(_) ((union u*)(_))
 
 #define g_vect_char g_vect_u8
-#define avail(f) ((f->sp-f->hp))
 #ifndef EOF
 #define EOF -1
 #endif
@@ -65,7 +64,7 @@ typedef g_word num, word;
 enum g_vec_type { g_vect_u8, };
 static struct g
  *g_please(struct g*, uintptr_t),
- *g_have(struct g*, intptr_t),
+ *g_have(struct g*, uintptr_t),
  *g_tput(struct g *f),
  *mktbl(struct g*),
  *g_intern(struct g*),
@@ -81,7 +80,7 @@ static g_vm_t
  g_vm_scat,   g_vm_cons,   g_vm_car,  g_vm_cdr,    g_vm_puts,
  g_vm_getc,  g_vm_lt,     g_vm_le,     g_vm_eq,   g_vm_gt,     g_vm_ge,
  g_vm_tset2, g_vm_tdel,   g_vm_tnew,   g_vm_tkeys,
- g_vm_uncurry, g_vm_poke2, g_vm_peek2,
+ g_vm_unc, g_vm_poke2, g_vm_peek2,
  g_vm_seek,  g_vm_trim,   g_vm_thda,   g_vm_add,
  g_vm_sub,   g_vm_mul,    g_vm_quot,   g_vm_rem,  g_vm_arg,    g_vm_drop1,
  g_vm_quote, g_vm_freev,  g_vm_eval,   g_vm_cond, g_vm_jump,   g_vm_defglob,
@@ -267,10 +266,10 @@ static Cata(g_c1_ar, g_vm_t *i, word ar) { return
  Kp[1].x = putnum(ar),
  pull(f, c); }
 
-static Cata(g_c1_curry) {
+static Cata(g_c1_cur) {
  struct env *e = (void*) pop1(f);
  uintptr_t ar = llen(e->args) + llen(e->imps);
- return ar == 1 ? pull(f, c) : g_c1_ar(f, c, g_vm_curry, ar); }
+ return ar == 1 ? pull(f, c) : g_c1_ar(f, c, g_vm_cur, ar); }
 
 #define C1(n, ...) static Cata(n) { return __VA_ARGS__, pull(f, c); }
 static Cata(g_c1_ret) {
@@ -408,7 +407,7 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
   d->args = f->sp[0],
   f->sp[0] = (word) g_c1_yield,
   incl(d, 4),
-  f = g_push(f, 2, g_c1_curry, d),
+  f = g_push(f, 2, g_c1_cur, d),
   f = analyze(f, &d, exp),
   f = g_push(f, 2, g_c1_ret, d),
   ip = f->ip,
@@ -444,7 +443,7 @@ static struct g *g_c0_apply(struct g *f, struct env **c, intptr_t x) {
  intptr_t
    call_arity = llen(x),
    value_arity =
-    is_immediate_function && cell(f->sp[2])->ap == g_vm_curry ?
+    is_immediate_function && cell(f->sp[2])->ap == g_vm_cur ?
      getnum(cell(f->sp[2])[1].x) :
      1;
  bool is_unary_bif =
@@ -1235,20 +1234,20 @@ g_vm(g_vm_info) {
  return Continue(); }
 
 op11(g_vm_clock, putnum(g_clock() - getnum(Sp[0])))
-g_vm(g_vm_uncurry) {
+g_vm(g_vm_unc) {
   Have1();
   *--Sp = Ip[1].x;
   Ip = Ip[2].m;
   return Continue(); }
 
-g_vm(g_vm_curry) {
+g_vm(g_vm_cur) {
  union u *k = (union u*) Hp, *j = k;
  uintptr_t n = getnum(Ip[1].x);
  size_t S = 3 + Width(struct g_tag);
 
  if (n == 2) {
   Have(S);
-  j[0].ap = g_vm_uncurry;
+  j[0].ap = g_vm_unc;
   j[1].x = *Sp++;
   j[2].m = Ip + 2;
   j[3].x = 0;
@@ -1258,9 +1257,9 @@ g_vm(g_vm_curry) {
   S += 2;
   Have(S);
   j += 2;
-  k[0].ap = g_vm_curry;
+  k[0].ap = g_vm_cur;
   k[1].x = putnum(n - 1);
-  j[0].ap = g_vm_uncurry;
+  j[0].ap = g_vm_unc;
   j[1].x = *Sp++;
   j[2].m = Ip + 2;
   j[3].x = 0;
@@ -1475,25 +1474,25 @@ static intptr_t (*copiers[])(struct g*, word, word const*, word const*) = {
  [tbl_q] = (void*) g_cp_tab, };
 
 #define cp(...) gcp(__VA_ARGS__)
-static struct g *g_have(struct g *f, intptr_t n) {
+static struct g *g_have(struct g *f, uintptr_t n) {
  return !g_ok(f) || avail(f) >= n ? f : g_please(f, n); }
 
 static struct g *g_pushr(struct g *f, uintptr_t m, uintptr_t n, va_list xs) {
  if (n == m) return g_please(f, m);
- intptr_t x = va_arg(xs, intptr_t);
+ word x = va_arg(xs, word);
  MM(f, &x);
  f = g_pushr(f, m, n + 1, xs);
  UM(f);
  if (g_ok(f)) *--f->sp = x;
  return f; }
 
-struct g *g_push(struct g *f, intptr_t m, ...) {
+struct g *g_push(struct g *f, uintptr_t m, ...) {
  if (!g_ok(f)) return f;
  va_list xs;
  va_start(xs, m);
- intptr_t n = 0;
+ uintptr_t n = 0;
  if (avail(f) < m) f = g_pushr(f, m, n, xs);
- else for (f->sp -= m; n < m; f->sp[n++] = va_arg(xs, intptr_t));
+ else for (f->sp -= m; n < m; f->sp[n++] = va_arg(xs, word));
  va_end(xs);
  return f; }
 
@@ -1501,7 +1500,7 @@ static g_noinline struct g *gcg(struct g*g, intptr_t *p1, uintptr_t len1, struct
  memcpy(g, f, sizeof(struct g));
  g->pool = (void*) p1;
  g->len = len1;
- uintptr_t len0 = f->len;
+ uintptr_t const len0 = f->len;
  word const *p0 = ptr(f),
             *t0 = ptr(f) + len0, // source top
             *sp0 = f->sp;
@@ -1570,13 +1569,12 @@ static g_noinline intptr_t gcp(struct g *f, word x, word const *p0, word const *
 
 enum g_status g_fin(struct g *f) {
   enum g_status s = g_code_of(f);
-  f = g_core_of(f);
-  if (f) f->free(f, f->pool);
+  if ((f = g_core_of(f))) f->free(f, f->pool);
   return s; }
 
 #define S1(i) {{i}, {g_vm_ret0}}
-#define S2(i) {{g_vm_curry},{.x=putnum(2)},{i}, {g_vm_ret0}}
-#define S3(i) {{g_vm_curry},{.x=putnum(3)},{i}, {g_vm_ret0}}
+#define S2(i) {{g_vm_cur},{.x=putnum(2)},{i}, {g_vm_ret0}}
+#define S3(i) {{g_vm_cur},{.x=putnum(3)},{i}, {g_vm_ret0}}
 #define bifs(_) \
  _(bif_clock, "clock", S1(g_vm_clock)) _(bif_addr, "vminfo", S1(g_vm_info))\
  _(bif_add, "+", S2(g_vm_add)) _(bif_sub, "-", S2(g_vm_sub)) _(bif_mul, "*", S2(g_vm_mul)) _(bif_quot, "/", S2(g_vm_quot)) _(bif_rem, "%", S2(g_vm_rem)) \
@@ -1600,7 +1598,7 @@ enum g_status g_fin(struct g *f) {
  _(bif_ev, "ev", S1(g_vm_eval))
 #define built_in_function(n, _, d) static union u const n[] = d;
 bifs(built_in_function);
-#define insts(_) _(g_vm_uncurry) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn) _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_drop1) _(g_vm_curry) _(g_vm_defglob) _(g_vm_lazyb) _(g_vm_ret0)
+#define insts(_) _(g_vm_unc) _(g_vm_freev) _(g_vm_ret) _(g_vm_ap) _(g_vm_tap) _(g_vm_apn) _(g_vm_tapn) _(g_vm_jump) _(g_vm_cond) _(g_vm_arg) _(g_vm_quote) _(g_vm_drop1) _(g_vm_cur) _(g_vm_defglob) _(g_vm_lazyb) _(g_vm_ret0)
 #define biff(b, n, _) {n, (intptr_t) b},
 #define i_entry(i) {#i, (intptr_t) i},
 

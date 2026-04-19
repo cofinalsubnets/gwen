@@ -57,7 +57,7 @@ static union u
   bif_cur_row[] = {{cur_row}, {g_vm_ret0}},
   bif_cur_col[] = {{cur_col}, {g_vm_ret0}},
   bif_cur_put[] = {{cur_put}, {g_vm_ret0}},
-  bif_cur_set[] = {{g_vm_curry}, {.x=g_putnum(2)}, {cur_set}, {g_vm_ret0}},
+  bif_cur_set[] = {{g_vm_cur}, {.x=g_putnum(2)}, {cur_set}, {g_vm_ret0}},
   bif_crank_angle[] = {{crank_angle}, {g_vm_ret0}};
 static struct g_def defs[] = {
   {"cur_row", (intptr_t) bif_cur_row},

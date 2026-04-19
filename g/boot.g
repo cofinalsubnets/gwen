@@ -61,13 +61,11 @@
     (p2 i x k) (poke -1 i (poke -1 x k))
     (em1 x k n) (poke -1 x (k (+ 1 n)))
     (em2 i x k n) (p2 i x (k (+ 2 n)))
-    ; thread allocator
     (k0 c n) (poke -1 g_vm_ret (poke (+ 1 n) (ary c) (thd (+ 2 n))))
-;; functions for working with variable scope records
     (ary c) (+ (len (get 0 'arg c)) (len (get 0 'imp c)))
     (pro f) (? (nump f) f (: a (peek 0 f) (?- f
-     (= a g_vm_uncurry) (pro (seek -2 (peek 2 f)))
-     (= a g_vm_curry) (?- f (= g_vm_uncurry (peek 2 f))
+     (= a g_vm_unc) (pro (seek -2 (peek 2 f)))
+     (= a g_vm_cur) (?- f (= g_vm_unc (peek 2 f))
                             (pro (seek -2 (peek 4 f)))))))
     (kim x k n) (poke -1 g_vm_quote (poke -1 x (k (+ 2 n))))
     (ana c x) (:- (? (symp x)  (ava c x)
@@ -80,12 +78,14 @@
                       (= a ': ) (ale (car b) (cdr b))
                       (: m (get 0 a macros) (? m (ana c (m b)) (app a b))))))
 
+    (push k x) (: _ (put k (cons x (get 0 k c)) c) x)
+    (pop k) (: x (get 0 k c) _ (put k (cdr x) c) (car x))
     (app a b) (: f (ana c a) ; analyze function expression
                  ca (len b)                                  ; call arity
                  i (? (= kim (pro f)) (peek 3 f))
                  i (? (nump i) 0 i)
                  fa (? (nump i) 1
-                       (!= (peek 0 i) g_vm_curry) 1
+                       (!= (peek 0 i) g_vm_cur) 1
                        (peek 1 i))                           ; function arity
                  ub (&& i (= ca 1) (= g_vm_ret0 (peek 1 i))) ; unary bif?
                  na (&& (> ca 1) (= ca fa))                  ; n-ary ap?
@@ -94,37 +94,28 @@
                  (? ub (co (ana c (A b)) (em1 (peek 0 i)))   ; inline unary bif
                     nb (: k (apr2l b)                        ; inline n-ary bif
                           _ (put 'stk s c)
-                    (co k (em1 (peek 2 i))))
-                  (: _ (put 'stk (cons 0 s) c) ; push stack rep of previously analyzed function (f)
-                     g (? na (: k (apr2l b) (co k (kapn ca))) ; r2l n-ary call
-                             (apl2r b))                       ; l2r unary calls
-                     _ (put 'stk s c)                         ; restore original stack
+                          (co k (em1 (peek 2 i))))
+                  (: _ (push 'stk 0) ; push stack rep of previously analyzed function (f)
+                     g (? na (co (apr2l b) (kap ca))        ; r2l n-ary call
+                             (apl2r b))                      ; l2r unary calls
+                     _ (put 'stk s c)                        ; restore original stack
                      (co f g))))
-   (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (co f (co (kapn 1) g))))
-   (apr2l b) (?- id (twop b)
-    (: g (apr2l (cdr b))
-       f (ana c (car b))
-       _ (put 'stk (cons 0 (get 0 'stk c)) c)
-     (co g f)))
-   (kapn n k m)
+   (apl2r b) (?- id (twop b) (: f (ana c (car b)) g (apl2r (cdr b)) (co f (co (kap 1) g))))
+   (apr2l b) (?- id (twop b) (: g (apr2l (cdr b)) f (ana c (car b)) _ (push 'stk 0) (co g f)))
+   (kap n k m)
     (: j (k (+ 2 m))
      (? (= (peek 0 j) g_vm_ret)
       (? (> n 1) (poke -1 g_vm_tapn (poke 0 n j)) (poke 0 g_vm_tap j))
       (? (> n 1) (p2 g_vm_apn n j) (poke -1 g_vm_ap j))))
 
     ;aco is a bit complicated
-    (aco c b) (:-
-     (>>= (acr b) (\ f k n (: k (f (\ n (: k (k n)
-                                           _ (put 'end (cons k (get 0 'end c)) c)
-                                           k)) n)
-                              _ (put 'end (cdr (get 0 'end c)) c)
-                              k)))
+    (aco c b) (:- (: f (acr b) (\ k n (: k (f (co (push 'end) k) n) _ (pop 'end) k)))
      (acx k n) (: ; jump out
       j (k (+ 3 n))
       a (car (get 0 'end c))
       i (peek 0 a)
       (? (| (= g_vm_ret i) (= g_vm_tap i)) (p2 i (peek 1 a) j)
-         (= i g_vm_tapn)                   (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
+         (= g_vm_tapn i)                   (p2 i (peek 1 a) (poke -1 (peek 2 a) j))
                                            (p2 g_vm_jump a j)))
      (acr b) (?
       (atomp b)       (kim 0)
@@ -132,13 +123,11 @@
       (: f (ana c (car b))
          g (ana c (cadr b))
          h (acr (cddr b))
-         (? (= kim (pro f)) (? (peek 3 f) g h) ; skip dead code
+         (? (= kim (pro f)) (? (peek 3 f) g h)
           (\ x (f (\ n
-           (: k (\ n (: k (h x n) _ (put 'alt (cons k (get 0 'alt c)) c) k))
+           (: k (co (push 'alt) (h x))
               j (g (acx k) (+ 2 n))
-              s (get 0 'alt c)
-              _ (put 'alt (cdr s) c)
-              (p2 g_vm_cond (car s) j)))))))))
+              (p2 g_vm_cond (pop 'alt) j)))))))))
 
     ; variable expression analyzer
     (ava d x)
@@ -146,22 +135,22 @@
          (: z (sym 0)
             y (get z x globals) ; check global scope
           (? (!= y z) (kim y) ; if it's there use that
-           (: _ (? (get 0'par c) (put 'imp (cons x (get 0 'imp c)) c))
+           (: _ (? (get 0 'par c) (push 'imp x))
             (em2 g_vm_freev x))))
       (: lfd (assq x (get 0 'lam d))
        (? lfd (: p (em2 g_vm_lazyb lfd)
-                 _ (put 'stk (cons 0 (get 0 'stk c)) c)
+                 _ (push 'stk 0)
                  q (apl2r (cddr lfd))
-                 _ (put 'stk (cdr (get 0 'stk c)) c)
+                 _ (pop 'stk)
                (co p q))
           (: stk (get 0 'stk d)
              (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
              q (\ i j m (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k)))
            (?- (ava (get 0 'par d) x)
             (memq x stk) (? (= c d) (em2 g_vm_arg (lidx x stk))
-                          (: _ (? (get 0 'par c) (put 'imp (cons x (get 0 'imp c)) c))
+                          (: _ (? (get 0 'par c) (push 'imp x))
                            (q (len (get 0 'stk c)))))
-            (<= 0 (stki d)) (: _ (&& (!= c d) (get 0 'par c) (put 'imp (cons x (get 0 'imp c)) c))
+            (<= 0 (stki d)) (: _ (&& (!= c d) (get 0 'par c) (push 'imp x))
                              (q (len (get 0 'stk c)))))))))
 
 
@@ -170,7 +159,7 @@
      d (sco c (init exp) imp)
      k (ana d (last exp) (k0 d))
      a (ary d)
-     k (trim ((? (= a 1) k (em2 g_vm_curry a k)) 0))
+     k (trim ((? (= a 1) k (em2 g_vm_cur a k)) 0))
      (cons k (get 0 'imp d)))
 
     ; let expression analyzer (the most complicated one)
@@ -183,9 +172,9 @@
       ;; l1 pass nom def and value expressions to l2
       ; l1 collects bindings and passes them with the body expression to l2
      (l1 ns ds n d rest) (:
-      (desug n d) (? (atomp n) (cons n d)
-                     (desug (car n) (cons '\ (cat (cdr n) (L d)))))
-       nd (desug n d) ns (cons (car nd) ns) ds (cons (cdr nd) ds)
+      (dsug n d) (? (atomp n) (cons n d)
+                     (dsug (car n) (cons '\ (cat (cdr n) (L d)))))
+       nd (dsug n d) ns (cons (car nd) ns) ds (cons (cdr nd) ds)
       (? (atomp rest)       (l2 ns ds (car nd)   1)
          (atomp (cdr rest)) (l2 ns ds (car rest) 0)
                             (l1 ns ds (car rest) (cadr rest) (cddr rest))))
@@ -217,16 +206,16 @@
                             x (ala q (cddr qa) (cdr d))
                             (set_cdr qa x)))
           f (ana c d)
-          g (?- id (&& (nilp (get 0 'par c)) even) (em2 g_vm_defglob n))
-          _ (put 'stk (cons n (get 0 'stk c)) c)
+          g (?- id (&& even (nilp (get 0 'par c))) (em2 g_vm_defglob n))
+          _ (push 'stk n)
           h (ll (cdr nds))
           (\ x (f (g (h x))))))
       _ (put 'lam lams q)
       s (get 0 'stk c)
       f (ana c (cons '\ (cat ns (L exp))))
-      _ (put 'stk (cons -1 (get 0 'stk c)) c)
+      _ (push 'stk 0)
       g (ll (zip (rev ns) (rev ds)))
-      h (kapn (len ns))
+      h (kap (len ns))
       _ (put 'stk s c)
       (\ x (f (g (h x))))))))))
  (go e z a) (? a (go e (e (car a)) (cdr a)) z)

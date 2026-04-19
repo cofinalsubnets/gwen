@@ -111,7 +111,7 @@ static g_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(g_word), r = b % sizeof(g_word);
  return q + (r ? 1 : 0); }
 
-g_vm_t g_vm_ret0, g_vm_curry;
+g_vm_t g_vm_ret0, g_vm_cur;
 
 uintptr_t g_clock(void); // used by garbage collector
 
@@ -127,7 +127,7 @@ struct g
  *g_ini_m(g_malloc_t*, g_free_t*),
  *g_evals_(struct g*, const char*),
  *g_defs(struct g*, struct g_def const*),
- *g_push(struct g*, intptr_t, ...),
+ *g_push(struct g*, uintptr_t, ...),
  *g_strof(struct g*, const char*),
  *gxl(struct g*),
  *gxr(struct g*);

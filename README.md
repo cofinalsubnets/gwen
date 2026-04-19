@@ -1,7 +1,13 @@
 # gwen lisp
 
 gwen lisp is a lisp dialect and environment that can be built as a library,
-an executable, or for bare metal on various platforms. it has four special forms
+an executable, or for bare metal on various platforms. in gwen lisp:
+
+- every expression has a value (there are no runtime errors)
+- every value is a function (data are their own constant functions)
+- every function is unary (via currying)
+
+there are four special forms:
 
 | gwen               |  scheme equivalent |
 |--------------------|----------|
@@ -33,16 +39,23 @@ for sequencing by assigning to an ignored variable.
 the only false value in a conditional is 0. if a default branch is
 omitted then it becomes 0.
 
-### &#92; (lambda)
+## &#92; (lambda)
 
 | gwen                           | scheme                 |
 |--------------------------------|------------------------|
 | <code>(&#92; a b c d e)</code> | `(lambda (a b c d) e)` |
 
-lambdas are defined over exactly one expression. use `:` if you
-need sequencing.
+lambdas are defined over exactly one expression. use `:` if you need sequencing.
 
-### function expressions
+## &#96; (quote)
+
+| gwen  | scheme |
+|-------|--------|
+| <code>(&#96; x)</code> | `(quote x)` |
+
+this one similar to scheme :)
+
+## function expressions
 
 in gwen lisp every function is unary. zero-argument "thunks" must be simulated by passing and ignoring an arbitrary
 value (usually `0` or equivalently `()`).
@@ -58,4 +71,4 @@ argument evaluation order is not guaranteed. use `:` for specific ordering.
 since functions always act as if applied to one value at a time, there are no nullary
 functions, and the value of a singleton list is the value of the head of the list.
 nullary functions are simulated by ignoring the argument to a unary function. variadic
-functions can be simulated using macros or implemented with various methods.
+functions can be simulated using macros or implemented with sentinels.
