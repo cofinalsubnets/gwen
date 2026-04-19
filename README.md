@@ -1,13 +1,9 @@
 # gwen lisp
 
 Gwen lisp is a lisp dialect and environment that can be built as a library,
-an executable, or for bare metal on various platforms. In Gwen lisp:
+an executable, or for bare metal on various platforms.
 
-- every expression has a value (there are no runtime errors)
-- every value is a function (data are their own constant functions)
-- every function is unary (via currying)
-
-There are four special forms:
+In Gwen lisp every value is a one argument function.  There are four special forms:
 
 | gwen               |  scheme equivalent |
 |--------------------|----------|
@@ -39,9 +35,7 @@ There are four special forms:
 - `(? x a) = (? x a 0)`
 - `(? x) = x`
 
-
 ## : (let)
-
 
 | gwen            | scheme                      |
 |-----------------|-----------------------------|

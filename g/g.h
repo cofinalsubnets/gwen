@@ -15,7 +15,6 @@
 #define g_getnum(_) ((g_word)(_)>>1)
 
 #define g_nil g_putnum(0)
-#define gnil g_nil
 #define g_inline inline __attribute__((always_inline))
 #define g_noinline __attribute__((noinline))
 #define g_digits "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -48,6 +47,8 @@
 typedef intptr_t g_word;
 union u;
 typedef g_vm(g_vm_t);
+typedef void *g_malloc_t(struct g*, size_t);
+typedef void g_free_t(struct g*, void*);
 struct g {
  union u {
   g_vm_t *ap;
@@ -68,8 +69,8 @@ struct g {
   intptr_t *ptr;
   struct g_root *next; } *root;
  union { uintptr_t t0; g_word *cp; };
- void *(*malloc)(struct g*, size_t),
-      (*free)(struct g*, void*);
+ g_malloc_t *malloc;
+ g_free_t *free;
 #define g_nvars 16
  union {
   intptr_t v[g_nvars];
@@ -95,9 +96,6 @@ struct g_in {
 struct g_out {
  int (*putc)(struct g*, int, struct g_out*),
      (*flush)(struct g*); };
-
-typedef void *g_malloc_t(struct g*, size_t);
-typedef void g_free_t(struct g*, void*);
 
 enum g_status {
  g_status_ok  = 0,

@@ -91,13 +91,16 @@
 </head>
 <body>
   <header>
-    <h1>gwen</h1>
-    <a href="https://github.com/2178309/gwen">source</a>
-    <a href="https://github.com/2178309/gwen/blob/main/js/gw.js">gw.js</a>
+    <h1>gwen lisp</h1>
+    <p>This is a demo interpreter for
+      <a href="https://github.com/2178309/gwen">gwen lisp</a> running
+      in your browser. The JavaScript code can be found
+      <a href="https://github.com/2178309/gwen/blob/main/js/gw.js">here</a>.
+    </p>
   </header>
 
   <details>
-    <summary>special forms</summary>
+    <summary>special form reference</summary>
     <table>
       <tr><th>gwen</th><th>meaning</th></tr>
       <tr><td><code>(\ x body)</code></td><td>lambda</td></tr>
@@ -190,7 +193,7 @@
       }
     });
 
-    input.value = '(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 20))';
+    input.value = '(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 32))';
     resize();
     input.focus();
   </script>

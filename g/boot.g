@@ -1,8 +1,4 @@
-(:
-; there are three let bindings
- ; the prelude is a list of the standard library definitions.
- ; it is evaluated twice during different phases of initialization.
- egg '(
+(: egg '(
   ; these are all data and function definitions
   (: (co f g x) (f (g x))
      (id x) x
@@ -52,10 +48,8 @@
   (:: '>>= (\ l (cons (last l) (init l))))
   (:: ', (\ l (cons ': (foldr (list (last l)) (\ l r (cons '_ (cons l r))) (init l)))))
   (:: '<=< (\ g (: y (sym 0) (list '\ y (foldr y (\ f x (list f x)) g)))))
- ; end of prelude
 
- ; next is an expression for the evaluator. this is evaluated three
- ; times by different init stages.
+  ; last is an expression for the evaluator. this is evaluated twice by different init stages.
   (:- (\ x (: c (sco 0 (list 0) 0) (ana c x (k0 c) 0 0)))
     (sco p a i) (put 'par p (put 'imp i (put 'arg a (new 0))))
     (p2 i x k) (poke -1 i (poke -1 x k))
@@ -74,7 +68,7 @@
                       (atomp b) (ana c a)
                       (= a '` ) (kim (car b))
                       (= a '? ) (aco b)
-                      (= a '\ ) (ana c (? (atomp (cdr b)) (car b) (ali c 0 b)))
+                      (= a '\ ) (ana c (? (atomp (cdr b)) (car b) (ala c 0 b)))
                       (= a ': ) (ale (car b) (cdr b))
                       (: m (get 0 a macros)
                        (? m (ana c (m b)) (app a b))))))
@@ -150,7 +144,7 @@
                              (q (len (get 0 'stk c)))))))))
 
     ; lambda analyzer
-    (ali c imp exp) (:
+    (ala c imp exp) (:
      d (sco c (init exp) imp)
      k (ana d (last exp) (k0 d))
      a (ary d)
@@ -176,7 +170,7 @@
 
      (l2 ns ds exp even) (:- (cl 0 l l l)
       (jj a n d) (? (atomp n) a (nilp (lambp (car d))) (jj a (cdr n) (cdr d))
-       (: k (car n) v (ali q 0 (cdar d)) a (cons (cons k v) a) (jj a (cdr n) (cdr d))))
+       (: k (car n) v (ala q 0 (cdar d)) a (cons (cons k v) a) (jj a (cdr n) (cdr d))))
       l (jj 0 ns ds)
       (cl n l k1 k2) (?
        (&& k1 k2 (!= k1 k2) (memq (caar k1) (cddar k2)))
@@ -198,7 +192,7 @@
       (ll nds) (? (nilp nds) id
        (: nd (car nds) n (car nd) d (cdr nd)
           d (?- d (lambp d) (: qa (assq (car nd) lams)
-                               x (ali q (cddr qa) (cdr d))
+                               x (ala q (cddr qa) (cdr d))
                              (set_cdr qa x)))
           f (ana c d)
           g (?- id (&& even (nilp (get 0 'par c))) (em2 g_vm_defglob n))
