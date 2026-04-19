@@ -11,9 +11,9 @@ There are four special forms:
 
 | gwen               |  scheme equivalent |
 |--------------------|----------|
+| <code>&#96;</code> | `quote`  |
 | `?`                | `cond`   |
 | `:`                | `let`    |
-| <code>&#96;</code> | `quote`  |
 | <code>&#92;</code> | `lambda` |
 
 ## &#96; (quote)
