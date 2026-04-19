@@ -1,57 +1,198 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>p.js demo</title>
-    <style>
-      * { line-height: 1.4em; font-family: monospace,sans-serif; }
-      body { margin: 1em; max-width: 60em; background: hsl(220, 90%, 80%); color: #222; }
-      a:hover { text-decoration: none; }
-      ul > li { list-style-type: "— "; }
-      ul { padding-left: 2em; }
-      table { border: 1px solid black; border-collapse: collapse; }
-      td, th { border: 1px solid black; padding: 0.5em;}
-      textarea { margin-top: 1em; margin-bottom: 1em; }
-    </style>
-    <script src='js/gw.js'></script>
-    <script>
-      window.addEventListener('load', () => {
-        const input = document.getElementById('input'),
-              button = document.getElementById('eval'),
-              { show, eval, read } = gw;
-        button.addEventListener('click', () => {
-          try {
-            alert(show(eval(read(input.value))));
-          } catch (e) {
-            alert(e);
-          }
-        });
-      });
-    </script>
-  </head>
-  <body>
-    <h1>gw.js demo</h1>
-    <p>this is an interpreter for gwen written in javascript</p>
-    <ul>
-      <li><a href="https://github.com/cofinalsubnets/gwen">gwen</a></li>
-      <li><a href="https://github.com/cofinalsubnets/gwen/blob/main/js/gw.js">gw.js</a></li>
-    </ul>
-    <p>type an expression in the text box below and press eval...</p>
-    <p>there are five special forms that are pretty close to their scheme counterparts:</p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gwen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: #111318;
+      color: #c8ccd4;
+      font: 14px/1.5 monospace;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75em;
+      padding: 1em;
+    }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 1.5em;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1em; color: #7eb8f7; }
+    header a { color: #7eb8f7; text-underline-offset: 3px; }
+    header a:hover { text-decoration: none; }
+
+    details { flex-shrink: 0; color: #666; }
+    details summary { cursor: pointer; color: #888; user-select: none; }
+    details summary:hover { color: #aaa; }
+    details[open] summary { margin-bottom: 0.4em; }
+    table { border-collapse: collapse; margin-top: 0.25em; }
+    td, th { padding: 0.1em 1.5em 0.1em 0; text-align: left; }
+    th { color: #555; font-weight: normal; }
+    code { color: #e5c07b; }
+
+    #terminal {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0a0b0e;
+      border: 1px solid #2a2d35;
+      border-radius: 4px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    #output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75em 1em;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6em;
+    }
+
+    .entry .src { color: #61afef; white-space: pre-wrap; word-break: break-all; }
+    .entry .src::before { content: '> '; color: #3b4048; }
+    .entry .val { color: #98c379; white-space: pre-wrap; padding-left: 2ch; }
+    .entry .err { color: #e06c75; white-space: pre-wrap; padding-left: 2ch; }
+
+    #input-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 0.5em 1em;
+      border-top: 1px solid #1e2128;
+      gap: 0.5em;
+      flex-shrink: 0;
+    }
+    #input-row::before {
+      content: '>';
+      color: #3b4048;
+      padding-top: 1px;
+      flex-shrink: 0;
+    }
+    #input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #61afef;
+      font: inherit;
+      resize: none;
+      overflow: hidden;
+      line-height: 1.5;
+    }
+  </style>
+  <script src="js/gw.js"></script>
+</head>
+<body>
+  <header>
+    <h1>gwen</h1>
+    <a href="https://github.com/2178309/gwen">source</a>
+    <a href="https://github.com/2178309/gwen/blob/main/js/gw.js">gw.js</a>
+  </header>
+
+  <details>
+    <summary>special forms</summary>
     <table>
-      <thead>
-        <tr><th scope=col>gwen</th><th scope=col>scheme</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><code>`</code></td><td><code>quote</code></td></tr>
-        <tr><td><code>?</code></td><td><code>cond</code></td></tr>
-        <tr><td><code>\</code></td><td><code>lambda</code></td></tr>
-        <tr><td><code>:</code></td><td><code>let*</code></td></tr>
-        <tr><td><code>,</code></td><td><code>begin</code></td></tr>
-      </tbody>
+      <tr><th>gwen</th><th>meaning</th></tr>
+      <tr><td><code>(\ x body)</code></td><td>lambda</td></tr>
+      <tr><td><code>(: x val ... body)</code></td><td>let (sequential)</td></tr>
+      <tr><td><code>(? c a b)</code></td><td>cond (only 0 is false)</td></tr>
+      <tr><td><code>(` x)</code></td><td>quote</td></tr>
     </table>
-    <textarea type='text' rows=6 cols=80 id='input'>(: (fib n) (? (&lt; n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 20))</textarea>
-    <div><button id='eval'>eval</button></button>
-  </body>
+  </details>
+
+  <div id="terminal">
+    <div id="output"></div>
+    <div id="input-row">
+      <textarea id="input" rows="1" autofocus spellcheck="false" autocomplete="off"></textarea>
+    </div>
+  </div>
+
+  <script>
+    const { read, show, eval: geval } = gw;
+    const output = document.getElementById('output');
+    const input  = document.getElementById('input');
+
+    const hist = [];
+    let histIdx = -1, draft = '';
+
+    // Returns true when s has balanced parens and quotes (safe to eval).
+    function balanced(s) {
+      let depth = 0, str = false;
+      for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (str)        { if (c === '\\') i++; else if (c === '"') str = false; }
+        else if (c === ';') { while (i + 1 < s.length && s[i+1] !== '\n') i++; }
+        else if (c === '"') str = true;
+        else if (c === '(') depth++;
+        else if (c === ')') { if (--depth < 0) return true; } // unmatched — let eval report the error
+      }
+      return depth === 0 && !str;
+    }
+
+    function resize() {
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    }
+
+    function run(src) {
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+
+      const srcEl = document.createElement('div');
+      srcEl.className = 'src';
+      srcEl.textContent = src;
+      entry.appendChild(srcEl);
+
+      const resEl = document.createElement('div');
+      try {
+        resEl.className = 'val';
+        resEl.textContent = show(geval(read(src)));
+      } catch(e) {
+        resEl.className = 'err';
+        resEl.textContent = e.message || String(e);
+      }
+      entry.appendChild(resEl);
+      output.appendChild(entry);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    input.addEventListener('input', resize);
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const src = input.value.trim();
+        if (!src) { e.preventDefault(); return; }
+        if (!balanced(src)) return; // add newline naturally
+        e.preventDefault();
+        hist.unshift(src);
+        histIdx = -1; draft = '';
+        run(src);
+        input.value = ''; resize();
+
+      } else if (e.key === 'ArrowUp') {
+        if (input.value.slice(0, input.selectionStart).includes('\n')) return;
+        e.preventDefault();
+        if (histIdx === -1) draft = input.value;
+        if (histIdx < hist.length - 1) { input.value = hist[++histIdx]; resize(); }
+
+      } else if (e.key === 'ArrowDown') {
+        if (input.value.slice(input.selectionEnd).includes('\n')) return;
+        e.preventDefault();
+        if (histIdx > 0)       { input.value = hist[--histIdx]; resize(); }
+        else if (histIdx === 0) { histIdx = -1; input.value = draft; resize(); }
+      }
+    });
+
+    input.value = '(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 20))';
+    resize();
+    input.focus();
+  </script>
+</body>
 </html>
