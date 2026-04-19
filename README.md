@@ -48,7 +48,7 @@ There are four special forms:
 
 - like `let` in scheme (but see below)
 - `(: a) = a`
-- `(: a b) = (: a b a) ; at toplevel this is also a global definition`
+- `(: a b) = (: a b a)` at toplevel this is also a global definition
 - `(: (a f b) (f b)) = (: a (\ f b (f b)))`
 - `(: a 1 a (+ 1 a) a) = 2`
 - recursive functions are supported like `letrec` in scheme
@@ -68,21 +68,28 @@ There are four special forms:
 ## evaluation
 
 Gwen lisp is Scheme-like with lexical scope and a single namespace for functions and values, and it uses four
-special forms with easy Scheme equivalents.  However, its evaluation procedure is different, similar to Haskell,
+special forms with easy Scheme equivalents.  However, its evaluation process is different, closer to Haskell,
 though Gwen lisp is dynamically typed. Functions are curried, and data implicitly act as their own constant functions.
-Therefore in Gwen lisp every value is a one-argument function and lists are evaluated by left-to-right application, or
-equivalently a left fold by the identity function..
+Therefore in Gwen lisp every value is a one-argument function and lists are evaluated by left-to-right application.
 
-- `(f) = f`
-- `(f x y z) = (((f x) y) z) = (ap f (list x y z)) = (foldl f id (list x y z))`
+- `(f x y z) = (((f x) y) z) = (ap f (list x y z)) = (foldl f id (list x y z))` modulo side effects
 
 However, this is only a conceptual description; in reality Gwen lisp may use different evaluation order for optimization
-reasons. Therefore if you need specific evaluation order for function arguments you must use the sequencing form `(: a (f 0) b (g 0) (c a b))`
+reasons. Therefore if you need specific evaluation order for function arguments you should use the sequencing form `:`
 
-Nullary and variadic functions used in other languages can be replicated in Gwen lisp. For nullary functions, simply pass
-an argument and ignore it. Conventionally `0` or `()` is used for this purpose in code. Variadic functions may either be
-simulated with macros, or written using sentinels.
+```
+(: y (f 0) ; eval second argument first
+   x (g 0) ; eval first argument second
+ (c x y))
+```
 
+A singleton list has the value of its element, rather than representing a 0-argument function call like in other lisps.
+
+- `(f) = f`
+
+Nullary and variadic functions aren't distinct features in Gwen lisp, but can be replicated with unary functions.
+For nullary functions, just pass an argument and ignore it. Conventionally `0` or `()` is used for this purpose in code.
+Variadic functions can either be simulated with macros, or written using sentinels.
 
 ## code examples
 
@@ -110,5 +117,4 @@ simulated with macros, or written using sentinels.
    seven (add one six)
  (assert (= 420 (mul two (mul five (mul six seven)) (+ 1) 0))))
 ```
-
 
