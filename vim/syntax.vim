@@ -10,8 +10,8 @@ syn iskeyword @,!,37-38,42-57,:,60-63,_,\,`,|,~,^
 syn keyword PForm ? : \\ `
 
 " Built-in functions
-syn keyword PFunc X A B AA AB BA BB car cdr cons
-syn keyword PFunc caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
+syn keyword PFunc X A B AA AB BA BB AAA AAB ABA ABB BAA BAB BBA BBB
+syn keyword PFunc cons car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
 syn keyword PFunc foldl foldr foldl1 foldr1 map filter id const cat each
 syn keyword PFunc all any init last rev take drop catmap
 syn keyword PFunc inc dec flip diag part len ldel puts zip lidx memq assq

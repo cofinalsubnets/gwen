@@ -7,13 +7,18 @@
   (: true -1 false 0 not nilp
      (atomp x) (nilp (twop x))
      (!= a b) (? (= a b) 0 -1)
-     (AA x) (A (A x)) (AB x) (A (B x))
-     (BA x) (B (A x)) (BB x) (B (B x)))
-  (: caar AA cadr AB cdar BA cddr BB
-     caaar (co car caar) caadr (co car cadr)
-     cadar (co car cdar) caddr (co car cddr)
-     cdaar (co cdr caar) cdadr (co cdr cadr)
-     cddar (co cdr cdar) cdddr (co cdr cddr)
+     AA (co A A) AB (co A B)
+     BA (co B A) BB (co B B))
+  (: AAA (co A AA) AAB (co A AB)
+     ABA (co A BA) ABB (co A BB)
+     BAA (co B AA) BAB (co B AB)
+     BBA (co B BA) BBB (co B BB))
+  (: cons X car A cdr B
+     caar AA cadr AB cdar BA cddr BB
+     caaar AAA caadr AAB
+     cadar ABA caddr ABB
+     cdaar BAA cdadr BAB
+     cddar BBA cdddr BBB
      inc (+ 1) dec (+ -1) (:: a b) (put a b macros))
   (: (map f l) (? (twop l) (cons (f (car l)) (map f (cdr l))))
      (foldl z f l) (? (twop l) (foldl (f z (car l)) f (cdr l)) z)

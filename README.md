@@ -44,11 +44,12 @@ In Gwen lisp every value is a one argument function.  There are four special for
 - like `let` in scheme (but see below)
 - `(: a) = a`
 - `(: a b) = (: a b a) ; at toplevel this is also a global definition`
-- `(: (a f b) (f b)) = (: a (\ f b (f b)))`
-- `(: a 1 a (+ 1 a) a) = 2`
+- `(: (a f b) (f b)) = (: a (\ f b (f b))) ; syntact sugar for lambdas`
+- `(: a 1 a (+ 1 a) a) = 2 ; variable shadowing works`
 - recursive functions are supported like `letrec` in scheme
 - evaluation is sequential like `let*` in scheme
-- `:` sequencing idiom: `(: _ (do 1) _ (do 2) (do 3))`
+- assignments are immutable (some data are mutable)
+- also used for sequencing `(: _ (do this) _ (then do that) (final value))`
 
 ## &#92; (lambda)
 
@@ -56,20 +57,20 @@ In Gwen lisp every value is a one argument function.  There are four special for
 |--------------------------------|------------------------|
 | <code>(&#92; a b c d e)</code> | `(lambda (a b c d) e)` |
 
-- like `lambda` in other lisp, but multiple arguments with one body expression, not one argument list with multiple body expressions.
+- like `lambda` in other lisp, but multiple arguments and one body expression, not one argument list and multiple body expressions
 - `(\ x) = x`
-- use `:` for sequencing multiple expressions in one function body.
+- use `:` for sequencing multiple expressions in one function body
 
 ## evaluation
 
-Gwen lisp is Scheme-like with lexical scope and a single namespace for functions and values, and it uses four
-special forms with easy Scheme equivalents.  However, its evaluation process is different, closer to Haskell,
+Gwen lisp has Scheme-like lexical scope and a single namespace for functions and values, and uses four
+special forms with easy Scheme equivalents.  However, the evaluation procedure is different, more similar to Haskell,
 though Gwen lisp is dynamically typed. Functions are curried, and data implicitly act as their own constant functions.
-Therefore in Gwen lisp every value is a one-argument function and lists are evaluated by left-to-right application.
+Therefore in Gwen lisp every value is a one-argument function. Lists are evaluated by left-to-right application:
 
-- `(f x y z) = (((f x) y) z) = (ap f (list x y z)) = (foldl f id (list x y z)) ; modulo side effects`
+- `(f x y z) = (((f x) y) z) = (foldl f id (list x y z)) ; modulo side effects`
 
-However, this is only a conceptual description; in reality Gwen lisp may use different evaluation order for optimization
+However, this is only a conceptual description. Internally Gwen lisp may use different evaluation order for optimization
 reasons. Therefore if you need specific evaluation order for function arguments you should use the sequencing form `:`
 
 ```
