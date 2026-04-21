@@ -14,9 +14,9 @@ h: b/h/$n b/h/lib$n.so b/h/$n.1
 k: b/k/$n-$a.elf
 pd: b/pd/$n.pdx
 clean:
-	rm -rf b
-distclean:
-	rm -rf b dl
+	rm -rf b `git check-ignore esp/*`
+distclean: clean
+	rm -rf dl
 
 .PHONY: valg perf repl cloc cat
 valg: b/h/$n

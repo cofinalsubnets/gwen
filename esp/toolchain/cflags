@@ -1,0 +1,7 @@
+-Wno-frame-address
+-Wno-shift-negative-value
+-mlongcalls
+-fno-builtin-memcpy
+-fno-builtin-memset
+-fno-builtin-bzero
+-specs=picolibc.specs
