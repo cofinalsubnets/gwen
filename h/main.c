@@ -10,8 +10,8 @@
 // noinline this because it leaks a stack address
 g_noinline uintptr_t g_clock(void) {
  struct timespec ts;
- int s = clock_gettime(CLOCK_REALTIME, &ts);
- return s ? -1 : ts.tv_sec  * 1000 + ts.tv_nsec / 1000000; }
+ int s = clock_gettime(CLOCK_MONOTONIC, &ts);
+ return s ? -1 : ts.tv_sec  * 1e3 + ts.tv_nsec / 1e6; }
 
 int gputc(struct g*f, int c) { return putc(c, stdout); }
 int ggetc(struct g*f) { return getc(stdin); }
