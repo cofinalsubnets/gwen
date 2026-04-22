@@ -1160,12 +1160,12 @@ static int gfputx(struct g *f, struct g_out *o, intptr_t x) {
         datp(x) ? emitters[typ(x)](f, o, x) :
                   gfprintf(f, o, "#%lx", (long) x); }
 
-
-g_vm(g_vm_putc) {
+static g_vm(g_vm_putc) {
  gputc(f, getnum(*Sp));
  Ip += 1;
  return Continue(); }
 g_vm(g_vm_puts) {
+
  if (strp(Sp[0])) {
   struct g_vec *s = vec(Sp[0]);
   for (uintptr_t i = 0; i < len(s);) gputc(f, txt(s)[i++]);
@@ -1173,7 +1173,7 @@ g_vm(g_vm_puts) {
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_putn) {
+static g_vm(g_vm_putn) {
  uintptr_t n = getnum(Sp[0]), b = getnum(Sp[1]);
  g_putn(f, &g_stdout, n, b);
  Sp[1] = Sp[0];
@@ -1181,14 +1181,14 @@ g_vm(g_vm_putn) {
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_dot) {
+static g_vm(g_vm_dot) {
  gfputx(f, &g_stdout, Sp[0]);
  Ip += 1;
  return Continue(); }
 
 
 // this is called to check for equivalence when a != b
-g_noinline bool eqv(struct g *f, word a, word b) {
+static g_noinline bool eqv(struct g *f, word a, word b) {
  if (0 == ((a | b) & 1) && datp(a) && datp(b) && typ(a) == typ(b)) switch (typ(a)) {
   case two_q: return eql(f, A(a), A(b)) && eql(f, B(a), B(b));
   case vec_q: {
@@ -1216,7 +1216,7 @@ op(g_vm_bxor, 2, (Sp[0] ^ Sp[1]) | 1)
 op(g_vm_nump, 1, odd(Sp[0]) ? putnum(-1) : g_nil)
 op11(g_vm_nilp, nilp(Sp[0]) ? putnum(-1) : g_nil)
 
-g_vm(g_vm_info) {
+static g_vm(g_vm_info) {
  size_t const req = 4 * Width(struct g_pair);
  Have(req);
  struct g_pair *si = (struct g_pair*) Hp;
@@ -1230,7 +1230,7 @@ g_vm(g_vm_info) {
  return Continue(); }
 
 op11(g_vm_clock, putnum(g_clock() - getnum(Sp[0])))
-g_vm(g_vm_unc) {
+static g_vm(g_vm_unc) {
   Have1();
   *--Sp = Ip[1].x;
   Ip = Ip[2].m;
@@ -1266,24 +1266,24 @@ g_vm(g_vm_cur) {
  Sp[0] = word(k);
  return Continue(); }
 
-g_vm(g_vm_jump) {
+static g_vm(g_vm_jump) {
  Ip = Ip[1].m;
  return Continue(); }
 
-g_vm(g_vm_cond) {
+static g_vm(g_vm_cond) {
  Ip = nilp(*Sp++) ? Ip[1].m : Ip + 2;
  return Continue(); }
 
 // load instructions
 //
-g_vm(g_vm_quote) {
+static g_vm(g_vm_quote) {
  Have1();
  Sp -= 1;
  Sp[0] = Ip[1].x;
  Ip += 2;
  return Continue(); }
 
-g_vm(g_vm_data) {
+static g_vm(g_vm_data) {
  intptr_t x = word(Ip);
  Sp += 1;
  Ip = cell(Sp[0]);
@@ -1292,7 +1292,7 @@ g_vm(g_vm_data) {
 
 
 // push a value from the stack
-g_vm(g_vm_arg) {
+static g_vm(g_vm_arg) {
  Have1();
  Sp[-1] = Sp[getnum(Ip[1].x)];
  Sp -= 1;
@@ -1301,14 +1301,14 @@ g_vm(g_vm_arg) {
 
 // call and return
 // apply function to one argument
-g_vm(g_vm_ap) {
+static g_vm(g_vm_ap) {
  union u *k;
  if (odd(Sp[1])) Ip++, Sp++;
  else k = cell(Sp[1]), Sp[1] = word(Ip + 1), Ip = k;
  return Continue(); }
 
 // tail call
-g_vm(g_vm_tap) {
+static g_vm(g_vm_tap) {
  intptr_t x = Sp[0], j = Sp[1];
  Sp += getnum(Ip[1].x) + 1;
  if (even(j)) Ip = cell(j), Sp[0] = x;
@@ -1316,7 +1316,7 @@ g_vm(g_vm_tap) {
  return Continue(); }
 
 // apply to multiple arguments
-g_vm(g_vm_apn) {
+static g_vm(g_vm_apn) {
  size_t n = getnum(Ip[1].x);
  union u *r = Ip + 2; // return address
  // this instruction is only emitted when the callee is known to be a function
@@ -1327,7 +1327,7 @@ g_vm(g_vm_apn) {
  return Continue(); }
 
 // tail call
-g_vm(g_vm_tapn) {
+static g_vm(g_vm_tapn) {
  size_t n = getnum(Ip[1].x),
         r = getnum(Ip[2].x);
  Ip = cell(Sp[n]) + 2;
@@ -1336,7 +1336,7 @@ g_vm(g_vm_tapn) {
  return Continue(); }
 
 // return
-g_vm(g_vm_ret) {
+static g_vm(g_vm_ret) {
  word n = getnum(Ip[1].x) + 1;
  Ip = cell(Sp[n]);
  Sp[n] = Sp[0];
@@ -1349,30 +1349,30 @@ g_vm(g_vm_ret0) { return
  Sp += 1,
  Continue(); }
 
-g_noinline g_vm(g_vm_gc, uintptr_t n) {
+static g_noinline g_vm(g_vm_gc, uintptr_t n) {
   Pack(f);
   f = g_please(f, n);
   if (g_ok(f)) return Unpack(f), Continue();
   return f; }
 
-g_vm(g_vm_trim) {
+static g_vm(g_vm_trim) {
  clip(cell(Sp[0]));
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_seek) {
+static g_vm(g_vm_seek) {
  Sp[1] = word(cell(Sp[1]) + getnum(Sp[0]));
  Sp += 1;
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_peek2) {
+static g_vm(g_vm_peek2) {
  Sp[1] = (cell(Sp[1]) + getnum(Sp[0]))->x;
  Sp += 1;
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_poke2) {
+static g_vm(g_vm_poke2) {
  union u *c = cell(Sp[2]) + getnum(Sp[0]);
  c->x = Sp[1];
  Sp[2] = (word) c;
@@ -1380,7 +1380,7 @@ g_vm(g_vm_poke2) {
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_thda) {
+static g_vm(g_vm_thda) {
  size_t n = getnum(Sp[0]);
  Have(n + Width(struct g_tag));
  union u *k = (union u*) Hp;
@@ -1393,7 +1393,7 @@ g_vm(g_vm_thda) {
  Ip += 1;
  return Continue(); }
 
-g_vm(g_vm_len) {
+static g_vm(g_vm_len) {
   word x = Sp[0], l = 0;
   if (!nump(x) && datp(x)) switch (typ(x)) {
     case tbl_q: l = tbl(x)->len; break;
@@ -1469,7 +1469,6 @@ static intptr_t (*copiers[])(struct g*, word, word const*, word const*) = {
  [sym_q] = (void*) g_cp_sym,
  [tbl_q] = (void*) g_cp_tab, };
 
-#define cp(...) gcp(__VA_ARGS__)
 static struct g *g_have(struct g *f, uintptr_t n) {
  return !g_ok(f) || avail(f) >= n ? f : g_please(f, n); }
 

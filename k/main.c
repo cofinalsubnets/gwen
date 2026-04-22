@@ -124,7 +124,7 @@ void kb_int(const uint8_t code) {
       case kb_code_alt: kkb.f |= kb_flag_ralt; return;
       case kb_code_ctl: kkb.f |= kb_flag_rctl; return;
       case kb_code_delete:
-        if (kkb.f & kb_flag_ctl & kb_flag_alt) k_reset();
+        if (kkb.f & kb_flag_ctl && kkb.f & kb_flag_alt) k_reset();
         return;
       case kb_code_left: w -= 1; goto move_cursor;
       case kb_code_right: w += 1; goto move_cursor;
