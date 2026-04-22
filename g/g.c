@@ -17,8 +17,8 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define word(_) num(_)
 #define datp(_) (cell(_)->ap==g_vm_data)
 #define avec(f, y, ...) (MM(f,&(y)),(__VA_ARGS__),UM(f))
-#define MM(f,r) ((f->root=&((struct g_root){(word*)(r),f->root})))
-#define UM(f) (f->root=f->root->next)
+#define MM(f,r) ((g_core_of(f)->root=&((struct g_root){(word*)(r),g_core_of(f)->root})))
+#define UM(f) (g_core_of(f)->root=g_core_of(f)->root->next)
 #define mix ((uintptr_t) 0x9e3779b97f4a7c15)
 
 #define odd(_) ((uintptr_t)(_)&1)
@@ -151,7 +151,7 @@ typedef Ana(ana);
 typedef Cata(cata);
 static ana analyze, g_c0_let, g_c0_apply;
 static cata g_c1_i, g_c1_ix, g_c1_var, g_c1_yield, g_c1_ret, g_c1;
-static g_inline Cata(pull) { return ((cata*) pop1(f))(f, c); }
+static g_inline Cata(pull) { return g_ok(f) ? ((cata*) pop1(f))(f, c) : f; }
 
 #define incl(e, n) ((e)->len += ((n)<<1))
 // generic instruction ana handlers
@@ -210,9 +210,9 @@ static g_noinline struct g *g_c0(struct g *f, g_vm_t *y) {
  word x = f->sp[0];
  f->sp[0] = (word) g_c1_yield;
  MM(f, &c); MM(f, &x);
- f = analyze(f, &c, x);
- f = g_c0_ix(f, &c, y, word(f->ip));
- return UM(f), f = g_c1(f, &c), UM(f), f; }
+ if (g_ok(f = analyze(f, &c, x))) f = g_c0_ix(f, &c, y, word(f->ip));
+ if (g_ok(f = g_c1(f, &c))) UM(f), UM(f);
+ return f; }
 
 
 #define Kp (f->ip)
@@ -311,7 +311,6 @@ static g_vm(g_vm_lazyb) { return
  Ip[1].x = AB(Ip[1].x),
  Continue(); }
 
-
 static Cata(g_c1_var_2);
 static Ana(g_c0_var) {
  word y;
@@ -322,9 +321,10 @@ static Ana(g_c0_var) {
     f = g_c0_ix(f, c, g_vm_freev, (*c)->imps = g_ok(f) ? pop1(f) : nil),
     f);
   // lambda definition of local let form?
-  if ((y = assq(f, d->lams, x))) return
-    f = g_c0_ix(f, c, g_vm_lazyb, y),
-    g_c0_apply(f, c, BB(f->sp[2]));
+  if ((y = assq(f, d->lams, x))) {
+    if (g_ok(f = g_c0_ix(f, c, g_vm_lazyb, y)))
+      f = g_c0_apply(f, c, BB(f->sp[2]));
+    return f; }
   // other definition of local let form?
   if (memq(f, d->stack, x)) return
    incl(*c, 2),
@@ -412,15 +412,15 @@ static struct g *g_c0_lambda(struct g *f, struct env **c, intptr_t imps, intptr_
   for (f = g_push(f, 1, nil); n--; f = gxr(f));
   exp = A(exp); }
 
- if (g_ok(f))
-  d->args = f->sp[0],
-  f->sp[0] = (word) g_c1_yield,
-  incl(d, 4),
-  f = g_push(f, 2, g_c1_cur, d),
-  f = analyze(f, &d, exp),
-  f = g_push(f, 2, g_c1_ret, d),
-  ip = f->ip,
-  avec(f, ip, f = g_c1(f, &d));
+ if (g_ok(f)) {
+  d->args = f->sp[0];
+  f->sp[0] = (word) g_c1_yield;
+  incl(d, 4);
+  f = g_push(f, 2, g_c1_cur, d);
+  f = analyze(f, &d, exp);
+  if (g_ok(f = g_push(f, 2, g_c1_ret, d)))
+    ip = f->ip,
+    avec(f, ip, f = g_c1(f, &d)); }
 
  if (g_ok(f)) k = f->ip, f->ip = ip, f = gxl(g_push(f, 2, k, d->imps));
 
@@ -445,55 +445,47 @@ static Ana(g_c0_cond_r) { return
 static struct g *g_c0_apr2l(struct g *f, struct env **c, word x);
 // TODO move optimizations to self
 static struct g *g_c0_apply(struct g *f, struct env **c, intptr_t x) {
- bool is_immediate_function =
+ if (!g_ok(f)) return f;
+ bool imfp =
   f->sp[0] == (word) g_c1_ix &&
   f->sp[1] == (word) g_vm_quote &&
   even(f->sp[2]);
  intptr_t
-   call_arity = llen(x),
-   value_arity =
-    is_immediate_function && cell(f->sp[2])->ap == g_vm_cur ?
+   ca = llen(x),
+   va =
+    imfp && cell(f->sp[2])->ap == g_vm_cur ?
      getnum(cell(f->sp[2])[1].x) :
      1;
- bool is_unary_bif =
-  call_arity == 1 &&
-  is_immediate_function &&
-  cell(f->sp[2])[1].ap == g_vm_ret0,
-  is_n_ary_ap = value_arity == call_arity && call_arity > 1,
-  is_n_ary_bif = is_n_ary_ap && cell(f->sp[2])[3].ap == g_vm_ret0;
-  // inline a unary bif
- if (is_unary_bif) {
+ bool b1p = ca == 1 && imfp && cell(f->sp[2])[1].ap == g_vm_ret0,
+      anp = va == ca && ca > 1,
+      bnp = anp && cell(f->sp[2])[3].ap == g_vm_ret0;
+
+ if (b1p) { // inline an instruction
   g_vm_t *i = cell(f->sp[2])->ap;
   f->sp += 3;
   f = g_c0_i(analyze(f, c, A(x)), c, i);
   return f; }
 
- if (is_n_ary_bif) {
+ if (bnp) { // inline a curried instruction
   g_vm_t *i = cell(f->sp[2])[2].ap;
   f->sp += 3;
-  f = g_c0_i(g_c0_apr2l(f, c, x), c, i);
-  if (g_ok(f)) while (call_arity--) (*c)->stack = B((*c)->stack);
+  f = g_c0_i(g_c0_apr2l(f, c, x), c, i); // r2l arg eval
+  if (g_ok(f)) while (ca--) (*c)->stack = B((*c)->stack);
   return f; }
 
- f = gxl(g_push(f, 3, nil, (*c)->stack, x));
- if (g_ok(f)) {
-  (*c)->stack = pop1(f), x = pop1(f);
-  MM(f, &x);
-  // one right-to-left n-ary application
-  if (is_n_ary_ap)
-   for (f = g_c0_apr2l(f, c, x),
-        incl(*c, 2),
-        f = g_push(f, 2, g_c1_apn, putnum(call_arity));
-        call_arity--;
-        (*c)->stack = g_ok(f) ? B((*c)->stack) : nil);
-  // n left-to-right unary application
-  else while (twop(x))
+ if (g_ok(f = gxl(g_push(f, 3, nil, (*c)->stack, x)))) {
+  (*c)->stack = pop1(f), x = pop1(f), MM(f, &x);
+  if (anp) { // r2l 1 n-ary ap
+   f = g_c0_apr2l(f, c, x),
+   incl(*c, 2),
+   f = g_push(f, 2, g_c1_apn, putnum(ca));
+   if (g_ok(f)) while (ca--) (*c)->stack = B((*c)->stack); }
+  else while (twop(x)) // l2r n 1-ary ap
    f = analyze(f, c, A(x)),
    incl(*c, 2),
    f = g_push(f, 2, g_c1_apn, putnum(1)),
    x = B(x);
-  UM(f);
-  (*c)->stack = B((*c)->stack); }
+  UM(f), (*c)->stack = B((*c)->stack); }
 
  return f; }
 
@@ -507,16 +499,15 @@ static struct g *g_c0_apr2l(struct g *f, struct env **c, word x) {
   if (g_ok(f)) (*c)->stack = pop1(f); }
  return f; }
 
-static bool lambp(struct g *f, word x) {
- if (!twop(x) || !symp(A(x)) || !twop(B(x))) return false;
- struct g_vec *n = sym(A(x))->nom;
- return n && len(n) == 1 && *txt(n) == '\\'; }
+static g_inline bool lambp(struct g *f, word x) {
+  struct g_vec *n;
+  return twop(x) && symp(A(x)) && twop(B(x)) &&
+    (n = sym(A(x))->nom) && len(n) == 1 && txt(n)[0] == '\\'; }
 
-static word reverse(word l) {
- word n = nil;
- for (word m; twop(l); m = l, l = B(l), B(m) = n, n = m);
+static g_inline word reverse(word l) {
+ word m, n = nil;
+ while (twop(l)) m = l, l = B(l), B(m) = n, n = m;
  return n; }
-
 
 static word ldels(struct g *f, word lam, word l);
 // this is the longest C function :(
@@ -554,10 +545,9 @@ static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
   exp = BB(exp); }
 
  intptr_t ll = llen(nom);
- bool odd = twop(exp),
-      even = !odd,
-      top_def = even && nilp((*b)->args); // we check this again later to make global bindings at top level
- if (even) { // if there's no body then evaluate the name of the last definition
+ bool oddp = twop(exp),
+      globp = !oddp && nilp((*b)->args); // we check this again later to make global bindings at top level
+ if (!oddp) { // if there's no body then evaluate the name of the last definition
   f = gxl(g_push(f, 2, A(nom), nil));
   if (!g_ok(f)) return forget();
   exp = pop1(f); }
@@ -604,7 +594,7 @@ static struct g *g_c0_let(struct g *f, struct env **b, word exp) {
  (*b)->stack = g_ok(f) ? pop1(f) : nil;
  for (def = reverse(def); twop(nom); nom = B(nom), def = B(def))
   f = analyze(f, b, A(def)),
-  f = top_def ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
+  f = globp ? g_c0_ix(f, b, g_vm_defglob, A(nom)) : f,
   f = gxl(g_push(f, 2, A(nom), (*b)->stack)),
   (*b)->stack = g_ok(f) ? pop1(f) : nil;
  return
@@ -678,6 +668,7 @@ static g_inline uintptr_t index_of_key(struct g *f, struct g_tab *t, intptr_t k)
  return (t->cap - 1) & g_hash(f, k); }
 
 static g_noinline struct g *g_tput(struct g *f) {
+ if (!g_ok(f)) return f;
  struct g_tab *t = (struct g_tab*) f->sp[2];
  word v = f->sp[1], k = f->sp[0];
  uintptr_t i = index_of_key(f, t, k);
