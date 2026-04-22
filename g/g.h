@@ -71,7 +71,7 @@ struct g {
  union { uintptr_t t0; g_word *cp; };
  g_malloc_t *malloc;
  g_free_t *free;
-#define g_nvars 16
+#define g_nvars 8
  union {
   intptr_t v[g_nvars];
   struct {
@@ -82,7 +82,6 @@ struct g {
     struct g_kvs {
      intptr_t key, val;
      struct g_kvs *next; } **tab; } *dict, *macro;
-   struct g_atom *quote, *lambda;
    intptr_t u[]; }; };
  intptr_t end[]; };
 
