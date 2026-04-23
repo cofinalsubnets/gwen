@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>gwen lisp (wasm)</title>
+  <style>
+    body { font-family: monospace; max-width: 60em; margin: 2em auto; padding: 0 1em; }
+    h1 { margin-bottom: .25em; }
+    header p { margin-top: 0; color: #555; }
+    #terminal { border: 1px solid #ccc; padding: .75em; min-height: 20em; }
+    #output { white-space: pre-wrap; }
+    .entry { margin-bottom: .5em; }
+    .src { color: #06c; }
+    .src::before { content: "> "; color: #888; }
+    .val { color: #080; }
+    .err { color: #c00; }
+    #input-row { display: flex; align-items: flex-start; }
+    #input-row::before { content: "> "; color: #888; padding-right: .25em; }
+    #input { flex: 1; border: none; font-family: inherit; font-size: inherit;
+             resize: none; overflow: hidden; line-height: 1.5; outline: none; }
+    #status { color: #888; font-size: .9em; }
+  </style>
+  <script src="gwen.js"></script>
+</head>
+<body>
+  <header>
+    <h1>gwen lisp (wasm)</h1>
+    <p id="status">loading…</p>
+  </header>
+
+  <div id="terminal">
+    <div id="output"></div>
+    <div id="input-row">
+      <textarea id="input" rows="1" autofocus spellcheck="false"
+                autocomplete="off" disabled></textarea>
+    </div>
+  </div>
+
+  <script>
+  (async () => {
+    const status = document.getElementById('status');
+    const output = document.getElementById('output');
+    const input  = document.getElementById('input');
+
+    const t0 = performance.now();
+    const M = await GwenModule();
+    const init  = M.cwrap('gwen_init',      'number', []);
+    const eval_ = M.cwrap('gwen_eval',      'number', ['string']);
+    const oPtr  = M.cwrap('gwen_out_ptr',   'number', []);
+    const oLen  = M.cwrap('gwen_out_len',   'number', []);
+    const oRst  = M.cwrap('gwen_out_reset', null,     []);
+
+    const s = init();
+    if (s !== 0) { status.textContent = 'init failed (status ' + s + ')'; return; }
+    status.textContent = `ready (${(performance.now()-t0).toFixed(0)} ms)`;
+    input.disabled = false; input.focus();
+
+    const dec = new TextDecoder();
+    function drain() {
+      const p = oPtr(), n = oLen();
+      const bytes = M.HEAPU8.subarray(p, p + n);
+      const text = dec.decode(bytes);
+      oRst();
+      return text;
+    }
+
+    const hist = [];
+    let histIdx = -1, draft = '';
+
+    function balanced(s) {
+      let depth = 0, str = false;
+      for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (str)            { if (c === '\\') i++; else if (c === '"') str = false; }
+        else if (c === ';') { while (i+1 < s.length && s[i+1] !== '\n') i++; }
+        else if (c === '"') str = true;
+        else if (c === '(') depth++;
+        else if (c === ')') { if (--depth < 0) return true; }
+      }
+      return depth === 0 && !str;
+    }
+
+    function resize() {
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    }
+
+    function run(src) {
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+
+      const srcEl = document.createElement('div');
+      srcEl.className = 'src';
+      srcEl.textContent = src;
+      entry.appendChild(srcEl);
+
+      const st = eval_('(. ' + src + ')');
+      const out = drain();
+
+      const resEl = document.createElement('div');
+      resEl.className = st === 0 ? 'val' : 'err';
+      resEl.textContent = st === 0
+        ? out
+        : (out ? out + '\n' : '') + ['ok','oom','err','eof'][st];
+      entry.appendChild(resEl);
+      output.appendChild(entry);
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    input.addEventListener('input', resize);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const src = input.value.trim();
+        if (!src) { e.preventDefault(); return; }
+        if (!balanced(src)) return;
+        e.preventDefault();
+        hist.unshift(src);
+        histIdx = -1; draft = '';
+        run(src);
+        input.value = ''; resize();
+      } else if (e.key === 'ArrowUp') {
+        if (input.value.slice(0, input.selectionStart).includes('\n')) return;
+        e.preventDefault();
+        if (histIdx === -1) draft = input.value;
+        if (histIdx < hist.length - 1) { input.value = hist[++histIdx]; resize(); }
+      } else if (e.key === 'ArrowDown') {
+        if (input.value.slice(input.selectionEnd).includes('\n')) return;
+        e.preventDefault();
+        if (histIdx > 0)       { input.value = hist[--histIdx]; resize(); }
+        else if (histIdx === 0) { histIdx = -1; input.value = draft; resize(); }
+      }
+    });
+
+    input.value = '(: (fib n) (? (< n 3) 1 (+ (fib (- n 1)) (fib (- n 2)))) (fib 32))';
+    resize();
+  })();
+  </script>
+</body>
+</html>

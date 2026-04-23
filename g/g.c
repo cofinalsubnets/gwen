@@ -130,8 +130,13 @@ static g_inline void ini_tab(struct g_tab *t, size_t len, size_t cap, struct g_k
 static g_inline void ini_two(struct g_pair *w, intptr_t a, intptr_t b) {
   w->ap = g_vm_data; w->typ = two_q; w->a = a; w->b = b; }
 
-static struct g_in g_stdin = { .getc = (void*) ggetc, .ungetc = (void*) gungetc, .eof = (void*) geof };
-static struct g_out g_stdout = { .putc = (void*) gputc, .flush = (void*) gflush };
+static int g_stdin_getc  (struct g *f, struct g_in *_)        { return ggetc(f); }
+static int g_stdin_ungetc(struct g *f, int c, struct g_in *_) { return gungetc(f, c); }
+static int g_stdin_eof   (struct g *f, struct g_in *_)        { return geof(f); }
+static int g_stdout_putc (struct g *f, int c, struct g_out *_){ return gputc(f, c); }
+
+static struct g_in  g_stdin  = { g_stdin_getc, g_stdin_ungetc, g_stdin_eof };
+static struct g_out g_stdout = { g_stdout_putc, gflush };
 
 static struct g *g_c0(struct g *f, g_vm_t *y);
 
