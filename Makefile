@@ -14,7 +14,7 @@ h: b/h/$n b/h/lib$n.so b/h/$n.1
 k: b/k/$n-$a.elf
 pd: b/pd/$n.pdx
 clean:
-	rm -rf b `git check-ignore esp/*`
+	rm -rf b `git check-ignore esp/* wasm/*`
 distclean: clean
 	rm -rf dl
 
