@@ -124,12 +124,12 @@
               j (g (acx k) (+ 2 n))
               (p2 g_vm_cond (pop 'alt) j)))))))))
 
+    Z (sym 0)
     ; variable expression analyzer
     (ava d x)
      (? (nilp d) ; outside all lexical scopes?
-         (: z (sym 0)
-            y (get z x globals) ; check global scope
-          (? (!= y z) (kim y) ; if it's there use that
+         (: y (get Z x globals) ; check global scope
+          (? (!= y Z) (kim y) ; if it's there use that
            (: _ (? (get 0 'par c) (push 'imp x))
             (em2 g_vm_freev x))))
       (: lfd (assq x (get 0 'lam d))
@@ -138,14 +138,14 @@
                  q (apl2r (cddr lfd))
                  _ (pop 'stk)
                (co p q))
-          (: stk (get 0 'stk d)
+          (: s (get 0 'stk d)
              (stki d) (lidx x (cat (get 0 'imp d) (get 0 'arg d)))
-             q (\ i j m (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k)))
+             (q i j m) (: k (j (+ 2 m)) (p2 g_vm_arg (+ i (stki c)) k))
            (?- (ava (get 0 'par d) x)
-            (memq x stk) (? (= c d) (em2 g_vm_arg (lidx x stk))
+            (memq x s) (? (= c d) (em2 g_vm_arg (lidx x s))
                           (: _ (? (get 0 'par c) (push 'imp x))
                            (q (len (get 0 'stk c)))))
-            (<= 0 (stki d)) (: _ (&& (!= c d) (get 0 'par c) (push 'imp x))
+            (>= (stki d) 0) (: _ (&& (!= c d) (get 0 'par c) (push 'imp x))
                              (q (len (get 0 'stk c)))))))))
 
     ; lambda analyzer
@@ -174,9 +174,21 @@
                             (l1 ns ds (car rest) (cadr rest) (cddr rest))))
 
      (l2 ns ds exp even) (:- (cl 0 l l l)
-      (jj a n d) (? (atomp n) a (nilp (lambp (car d))) (jj a (cdr n) (cdr d))
-       (: k (car n) v (ala q 0 (cdar d)) a (cons (cons k v) a) (jj a (cdr n) (cdr d))))
-      l (jj 0 ns ds)
+      s (get 0 'stk c)
+      _ (push 'stk 0)
+      (jj a n d) (?
+       (atomp n) a
+       (nilp (lambp (car d)))
+        (:
+        _ (push 'stk (car n))
+        (jj a (cdr n) (cdr d)))
+       (: k (car n)
+          v (ala q 0 (cdar d))
+          a (cons (cons k v) a)
+        _ (push 'stk k)
+        (jj a (cdr n) (cdr d))))
+      l (jj 0 (rev ns) (rev ds))
+      _ (put 'stk s c)
       (cl n l k1 k2) (?
        (&& k1 k2 (!= k1 k2) (memq (caar k1) (cddar k2)))
         (>>= n (cddar k1) (: (kk n v)

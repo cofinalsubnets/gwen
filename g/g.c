@@ -316,7 +316,11 @@ static g_vm(g_vm_lazyb) { return
  Ip[1].x = AB(Ip[1].x),
  Continue(); }
 
-static Cata(g_c1_var_2);
+
+static word lidx(struct g*f, word x, word l) {
+ word i = 0;
+ for (; twop(l); i++, l = B(l)) if (eql(f, x, A(l))) return i;
+ return -1; }
 static Ana(g_c0_var) {
  if (!g_ok(f)) return f;
  word y;
@@ -333,8 +337,7 @@ static Ana(g_c0_var) {
     return f; }
   // other definition of local let form?
   if (memq(f, d->stack, x)) return
-   incl(*c, 2),
-   g_push(f, 3, g_c1_var_2, x, d->stack);
+    g_c0_ix(f, c, g_vm_arg, putnum(lidx(f, x, d->stack)));
   // closure or lambda argument?
   if (memq(f, d->imps, x) || memq(f, d->args, x)) {
    incl(*c, 2);
@@ -356,14 +359,6 @@ out:
         Kp[1].x = putnum(i),
         pull(f, c); }
 
-static Cata(g_c1_var_2) {
- word i = 0;
- for (word v = pop1(f), s = pop1(f); twop(s); s = B(s), i++)
-  if (eql(f, A(s), v)) break;
- return Kp -= 2,
-        Kp[0].ap = g_vm_arg,
-        Kp[1].x = putnum(i),
-        pull(f, c); }
 
 static g_inline struct g *symof(char const *n, struct g *f) {
   return g_intern(g_strof(f, n)); }
