@@ -27,6 +27,11 @@ void *memmove(void *dest, void const *src, size_t n) {
     for (size_t i = n; i > 0; i--) pdest[i-1] = psrc[i-1];
   return dest; }
 
+size_t strlen(char const *c) {
+  size_t len = 0;
+  while (*c++) len++;
+  return len; }
+
 int memcmp(void const *s1, void const *s2, size_t n) {
   const uint8_t *p1 = s1, *p2 = s2;
   for (size_t i = 0; i < n; i++)

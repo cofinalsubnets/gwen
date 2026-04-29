@@ -22,7 +22,7 @@
     (= 4 (len (tkeys t))))
  _ (Del 2)
  _ (Del 't)
- _ (assert
+ (assert
     (= 2 (len t))
     (= 2 (len (tkeys t)))
     (: (lll t) (foldl 0 (\ l k (X k (X (Get k) l))) (tkeys t))

@@ -104,6 +104,7 @@ void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memset(void*, int, size_t);
 long strtol(char const*restrict, char**restrict, int);
+size_t strlen(char const*);
 
 #define vec(_) ((struct g_vec*)(_))
 #define tbl(_) ((struct g_tab*)(_))
@@ -919,8 +920,7 @@ static struct g *vec0(struct g*f, uintptr_t type, uintptr_t rank, ...) {
  return f; }
 
 struct g *g_strof(struct g *f, char const *cs) {
- uintptr_t len = 0;
- for (char const *ks = cs; *ks++; len++);
+ uintptr_t len = strlen(cs);
  f = vec0(f, g_vect_char, 1, len);
  if (g_ok(f)) memcpy(txt(f->sp[0]), cs, len);
  return f; }
@@ -1147,8 +1147,8 @@ static g_vm(g_vm_putc) {
  gputc(f, getnum(*Sp));
  Ip += 1;
  return Continue(); }
-g_vm(g_vm_puts) {
 
+static g_vm(g_vm_puts) {
  if (strp(Sp[0])) {
   struct g_vec *s = vec(Sp[0]);
   for (uintptr_t i = 0; i < len(s);) gputc(f, txt(s)[i++]);
