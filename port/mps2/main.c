@@ -19,7 +19,6 @@
 // traps via bkpt 0xAB; qemu answers in r0.
 uintptr_t sh_call(uintptr_t op, uintptr_t arg);
 #define SH_WRITEC 0x03           // arg = &byte
-#define SH_READC  0x07           // arg = 0; answers the byte (blocking)
 #define SH_CLOCK  0x10           // centiseconds since start
 #define SH_EXIT_X 0x20           // arg = {0x20026, code}: qemu exits with code
 
@@ -47,23 +46,46 @@ void fault_report(uintptr_t *frame) {    // frame: r0 r1 r2 r3 r12 lr pc xPSR
   sh_putc('\n');
   m7_exit(98); }
 
+// --- console input: CMSDK APB UART0 ---------------------------------------
+// Output rides semihosting (sh_putc, unbuffered and free), but INPUT needs a
+// pollable source -- semihosting READC blocks the whole VM with no readiness
+// probe, so the honest ai_ready(0) below reads UART0's RX-full flag instead.
+// qemu maps UART0 at 0x40004000 and feeds it from -serial; the gate's
+// </dev/null run simply never sees RX full.
+#define UART0_BASE 0x40004000u
+#define UREG(o) (*(volatile uint32_t *)(UART0_BASE + (o)))
+static void uart_init(void) { UREG(0x10) = 16; UREG(0x08) = 3; }   // min bauddiv; TX+RX enable
+static int uart_rx_ready(void) { return !!(UREG(0x04) & 2); }      // STATE bit1 = RX full
+static int uart_getc(void) {
+  while (!uart_rx_ready()) ;
+  return (int) (UREG(0x00) & 0xff); }
+
 // --- cooperative waits ----------------------------------------------------
 // The teensy shapes: no IRQs, so spin against an ai_clock deadline (ms;
 // 0 means forever). Under qemu the spin costs nothing real.
 void ai_sleep(uintptr_t ms) {
-  if (!ms) for (;;) ;                        // infinite: park (no wfi -- a spin costs qemu nothing)
+  if (!ms) { for (;;) if (uart_rx_ready()) return; }   // wait forever -- but wake on input
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-bool ai_ready(int fd) { return fd >= 0; }   // semihosting READC just blocks
+// the readiness law (host/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// ready -- a string port waits on nothing external, and answering "not ready"
+// parks its task on a wait no scheduler can satisfy (lvm_sound's park law
+// spins sound -> yield -> sound forever: the Enter-key freeze, walled here
+// and on teensy silicon alike). fd 0 is the honest poll; others nominal.
+bool ai_ready(int fd) { return fd ? 1 : uart_rx_ready(); }
 
 void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
-  return; }                                  // any fd is "ready": the read blocks
+  uintptr_t start = ai_clock();
+  for (;;) {
+    for (int i = 0; i < n; i++) if (ai_ready(fds[i])) return;
+    if (ms && ai_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------
-// Console bytes through semihosting; a negative READC answer latches EOF
-// (qemu's stdin ran dry -- the </dev/null gate run).
+// Console bytes in from UART0 (pollable, never EOF -- a live wire), out
+// through semihosting. The eof_seen machinery stays for the vt's shape but
+// nothing latches it.
 static struct ai *fd_getc(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
@@ -71,9 +93,7 @@ static struct ai *fd_getc(struct ai *g) {
     fc->b = getcharm(i->ungetc_buf);
     i->ungetc_buf = putcharm(EOF);
     return g; }
-  intptr_t c = (intptr_t) sh_call(SH_READC, 0);
-  if (c < 0) { i->eof_seen = putcharm(true); fc->b = EOF; return g; }
-  fc->b = (int) c;
+  fc->b = uart_getc();
   return g; }
 
 static struct ai *fd_ungetc(struct ai *g, int c) {
@@ -171,6 +191,7 @@ void free(void *p) {
 // then the driver tail: assert a few spec laws over the hatched image and
 // exit with the verdict. 42 = the egg hatched and the laws hold on the M7.
 int main(void) {
+  uart_init();
   for (char const *s = "\n; love/mps2 -- baking the egg on the M7\n"; *s; s++)
     sh_putc(*s);
   freelist = (struct mem*) POOL;
