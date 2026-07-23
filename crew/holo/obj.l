@@ -163,11 +163,31 @@
                                 (: r <rs
                                    (go >rs (? (member? <>r '(movw16 movt16 abs32)) (add <>>r acc) acc))))
                  (rev (go drel (go trel ()))))
-       nloc (tally locfns)
+       ; STATIC DATA whose address rides a movw/movt pair has the SAME truncation:
+       ; the split fields each carry the whole signed addend, so a section offset
+       ; past 32K composes an address missing its middle bits -- the teensy boot's
+       ; silent banner: main.o's 384K pool pushed its string offsets past 0x60000
+       ; and every la'd string pointed 384K low. each referenced static-data label
+       ; gets a LOCAL OBJECT symbol (st_value = its section offset, addend 0).
+       ; abs32 fields stay on the section path -- a 32-bit field carries any offset.
+       gset (: t (tablet 0) (go gs) (? !(two? gs) t (: _ (pin t (intern <gs) 1) (go >gs)))
+               (go globnames))
+       locdat (: seen (tablet 0)
+                 (add lbl acc) (? (! (|| (o-has? dlabels lbl) (o-has? nlabels lbl))) acc
+                                  (o-has? gset lbl) acc
+                                  (o-has? seen lbl) acc
+                                  (: _ (pin seen lbl 1) (lbl >< acc)))
+                 (go rs acc) (? !(two? rs) acc
+                                (: r <rs
+                                   (go >rs (? (member? <>r '(movw16 movt16)) (add <>>r acc) acc))))
+                 (rev (go drel (go trel ()))))
+       nlocf (tally locfns) nlocd (tally locdat)
+       nloc (nlocf + nlocd)
        nfun (tally funcnames) nglob (tally globnames)
        fstart (4 + nloc) gstart (fstart + nfun) estart (gstart + nglob)
-       locidx (: t (tablet 0) (go ls i) (? !(two? ls) t (: _ (pin t <ls (4 + i)) (go >ls (i + 1))))
-                 (go locfns 0))
+       locidx (: t (tablet 0)
+                 (go ls i) (? !(two? ls) i (: _ (pin t <ls i) (go >ls (i + 1))))
+                 (: i2 (go locfns 4) _ (go locdat i2) t))
        extidx (: t (tablet 0) (go es i) (? !(two? es) t (: _ (pin t <es (estart + i)) (go >es (i + 1))))
                   (go exts 0))
        fnidx (: t (tablet 0) (go fs i) (? !(two? fs) t (: _ (pin t (intern <fs) (fstart + i)) (go >fs (i + 1))))
@@ -218,7 +238,8 @@
            (go rs bytes))
        tbytes (bakemw (bakeabs tbytes0 trel) trel)
        dbytes (bakeabs dbytes0 drel)
-       symnames ((map (\ s (string s)) locfns) + funcnames + globnames + (map (\ s (string s)) exts))
+       symnames ((map (\ s (string s)) locfns) + (map (\ s (string s)) locdat)
+                 + funcnames + globnames + (map (\ s (string s)) exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
        (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
@@ -232,6 +253,12 @@
                                          ((o-sym32 (nthr stroffs i) 0 2 1
                                                       ((peep tlabels <ls 0) | 1)) >< acc)))   ; STB_LOCAL STT_FUNC, +thumb bit
                     (go locfns 0 ()))
+           dsyms (: (go ls i acc) (? !(two? ls) (catall (rev acc))          ; STB_LOCAL STT_OBJECT in .data/ai_nifs, plain value
+                                     (go >ls (i + 1)
+                                         ((? (o-has? dlabels <ls)
+                                             (o-sym32 (nthr stroffs (nlocf + i)) 0 1 2 (peep dlabels <ls 0))
+                                             (o-sym32 (nthr stroffs (nlocf + i)) 0 1 3 (peep nlabels <ls 0))) >< acc)))
+                    (go locdat 0 ()))
            fsyms (: (go fs i acc) (? !(two? fs) (catall (rev acc))
                                      (go >fs (i + 1)
                                          ((o-sym32 (nthr stroffs (nloc + i))
@@ -250,7 +277,7 @@
                       (o-sym32 0 0 3 1 0)              ; .text section symbol
                       (o-sym32 0 0 3 2 0)              ; .data
                       (o-sym32 0 0 3 3 0)              ; ai_nifs
-                      lsyms fsyms gsyms esyms)))
+                      lsyms dsyms fsyms gsyms esyms)))
        nsym ((4 + nloc) + (nfun + (nglob + (tally exts))))
        ; -- .rel.text: R_ARM_THM_CALL for each external/weak `bl` (internal ones resolved in place). --
        reltext (: (go rs acc)
