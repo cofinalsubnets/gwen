@@ -7,7 +7,12 @@
 ;   manage -> tile, maximize add/remove (the _NET_WM_STATE stamp both ways),
 ;   super+btn1 move EXACT, super+btn3 resize EXACT, the float holds the input
 ;   focus, a second client tiles while the float rides, _NET_CLOSE_WINDOW
-;   kills it (no WM_DELETE_WINDOW advertised -> the KillClient fallback).
+;   kills it (no WM_DELETE_WINDOW advertised -> the KillClient fallback),
+;   a Qt-style withdraw (real unmap then the ICCCM synthetic) leaves a
+;   fullscreen float UNMAPPED and a re-show re-manages it (the telegram
+;   media-viewer zombie: the crossing's render must not resurrect it),
+;   the unmap ledger: lux's own hides (switch, minimize) never evict, a
+;   RUDE client unmap with no courtesy synthetic does (xmonad's rule).
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
 (: (probe dpy)
@@ -122,6 +127,84 @@
       s3 (connectu dpy)
       sc3 (x-setup s3 ())
       _ (waitp "w2-felled" (\ u (! (any (\ k (= k w2)) (x-querytree s3 root)))) 100)
+
+      ; --- 5b. the withdraw race (the telegram media-viewer zombie): a client
+      ;     hides a fullscreen float Qt-style -- a REAL unmap, then the ICCCM
+      ;     synthetic UnmapNotify. The real unmap's pointer crossing renders
+      ;     while the float is still in the sheaf, so the render re-maps it;
+      ;     the withdraw must leave the window UNMAPPED anyway, and a re-show
+      ;     must arrive as a fresh MapRequest and re-manage fullscreen. ---
+      a-fs (x-intern s "_NET_WM_STATE_FULLSCREEN")
+      wt (+ w1 1)                                                                ; a TILE under the pointer: the crossing into a tile is the
+      _ (mkwin s wt root)                                                        ; rendering branch (a float's crossing only fmarks)
+      _ (waitp "wt-tiled" (\ u (< 600 (nthl (x-getgeom s wt) 2))) 100)
+      wv (+ w1 2)
+      _ (: _ (x-w8 s 1) _ (x-w8 s 0) _ (x-w16 s 9)                               ; create (unmapped): white 300x200 toplevel
+           _ (x-w32 s wv) _ (x-w32 s root)
+           _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 300) _ (x-w16 s 200)
+           _ (x-w16 s 1) _ (x-w16 s 1) _ (x-w32 s 0)
+           _ (x-w32 s 2) _ (x-w32 s 16777215) (x-flush s))
+      _ (: _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s 7) _ (x-w32 s wv)               ; _NET_WM_STATE = [FULLSCREEN] BEFORE the map (Qt showFullScreen)
+           _ (x-w32 s a-st) _ (x-w32 s 4) _ (x-w8 s 32) _ (x-w8 s 0)
+           _ (x-w16 s 0) _ (x-w32 s 1) _ (x-w32 s a-fs) (x-flush s))
+      (mapv u) (: _ (x-w8 s 8) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s wv) (x-flush s))
+      (mstv u) (cap (x-attrs s wv))                                              ; 2 = viewable, 0 = unmapped
+      _ (fake 6 0 30 20) _ (rest 80)                                             ; park the pointer over the BARE tile (the w1 float, dragged
+                                                                                 ; off its near-fullscreen tiled rect, leaves only this strip):
+                                                                                 ; the withdraw's crossing must land in the TILE to render
+      _ (mapv ())
+      _ (waitp "wv-fullscreen" (\ u (< 600 (nthl (x-getgeom s wv) 2))) 50)
+      (withdraw u) (: _ (x-unmap s wv)                                           ; the real unmap, then the courtesy synthetic to the root
+                      _ (x-w8 s 25) _ (x-w8 s 0) _ (x-w16 s 11) _ (x-w32 s root) _ (x-w32 s 1572864)
+                      _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s 0) _ (x-w32 s root) _ (x-w32 s wv)
+                      _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 0)
+                      (x-flush s))
+      _ (withdraw ())
+      _ (waitp "wv-withdraw-unstamped" (\ u (! (two? (x-getprop-atoms s wv (x-intern s "WM_STATE"))))) 50)
+      _ (rest 300)                                                               ; let any resurrecting render land before the read
+      _ (waitp "wv-withdraw-unmapped" (\ u (= 0 (mstv ()))) 50)
+      _ (mapv ())
+      _ (waitp "wv-reshow-fullscreen" (\ u (&& (= 2 (mstv ()))
+                                               (&& (< 600 (nthl (x-getgeom s wv) 2))
+                                                   (two? (x-getprop-atoms s wv (x-intern s "WM_STATE")))))) 50)
+      _ (withdraw ())                                                            ; leave it withdrawn: the moor leg leans on nothing here
+      _ (waitp "wv-rewithdraw" (\ u (= 0 (mstv ()))) 50)
+
+      ; --- 5c. the unmap ledger (xmonad's waitingUnmap): lux's OWN hides --
+      ;     workspace switch, minimize -- echo back counted and must NOT evict;
+      ;     a RUDE client unmap (no ICCCM courtesy synthetic at all) must ---
+      a-cd (x-intern s "_NET_CURRENT_DESKTOP")
+      a-aw (x-intern s "_NET_ACTIVE_WINDOW")
+      a-ic (x-intern s "WM_CHANGE_STATE")
+      a-li (x-intern s "_NET_CLIENT_LIST")
+      wr (+ w1 3)
+      _ (: _ (x-w8 s 1) _ (x-w8 s 0) _ (x-w16 s 9)                               ; a plain tile
+           _ (x-w32 s wr) _ (x-w32 s root)
+           _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 300) _ (x-w16 s 200)
+           _ (x-w16 s 1) _ (x-w16 s 1) _ (x-w32 s 0)
+           _ (x-w32 s 2) _ (x-w32 s 16777215) (x-flush s))
+      (mapr u) (: _ (x-w8 s 8) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s wr) (x-flush s))
+      (mstr u) (cap (x-attrs s wr))
+      (known? u) (any (\ k (= k wr)) (x-getprop-atoms s root a-li))
+      _ (mapr ())
+      _ (waitp "wr-tiled" (\ u (known? ())) 50)
+      _ (cmsg root a-cd 1 0 0)                                                   ; our hide: the switch away...
+      _ (waitp "wr-switch-hidden" (\ u (= 0 (mstr ()))) 50)
+      _ (must "wr-switch-keeps" (known? ()))                                     ; ...counted, NOT a withdraw
+      _ (cmsg root a-cd 0 0 0)
+      _ (waitp "wr-switch-back" (\ u (= 2 (mstr ()))) 50)
+      _ (cmsg wr a-ic 3 0 0)                                                     ; our hide: iconify (the layout drops it)...
+      _ (waitp "wr-minimized" (\ u (= 0 (mstr ()))) 50)
+      _ (must "wr-minimize-keeps" (known? ()))                                   ; ...counted too
+      _ (cmsg wr a-aw 0 0 0)                                                     ; a pager activates: restore
+      _ (waitp "wr-restored" (\ u (= 2 (mstr ()))) 50)
+      _ (x-unmap s wr) _ (x-flush s)                                             ; the RUDE hide: a raw client unmap, NO synthetic --
+      _ (waitp "wr-rude-evicts" (\ u (! (known? ()))) 50)                        ; an unowed real unmap IS the withdraw
+      _ (waitp "wr-rude-unstamped" (\ u (! (two? (x-getprop-atoms s wr (x-intern s "WM_STATE"))))) 50)
+      _ (rest 300)                                                               ; let any resurrecting render land before the read
+      _ (must "wr-rude-unmapped" (= 0 (mstr ())))
+      _ (mapr ())                                                                ; and the re-show re-manages
+      _ (waitp "wr-remanaged" (\ u (&& (known? ()) (= 2 (mstr ())))) 50)
 
       ; --- 6. LAST, the moor: the live repl evals, survives a scare, CHANGES state
       ;     (msg! 'next-layout flips the ||| index -- read back through the

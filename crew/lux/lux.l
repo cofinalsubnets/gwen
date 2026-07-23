@@ -121,6 +121,18 @@
    (nth l i) (? (< i 1) (cap l) (nth (cup l) (- i 1)))
    scrn (L 0 0 wpx hpx)
    (trect u) (ewmh-rect scrn wpx hpx)                                            ; the tiling rect: screen minus dock struts (sup+b flips)
+
+   ; --- the unmap ledger (xmonad's mapped + waitingUnmap): map!/hide! track our
+   ;     own INTENT at send time -- mapd holds the windows we have mapped, owed
+   ;     counts the unmap echoes we're owed back. A real UnmapNotify with no
+   ;     echo owed is the CLIENT's own unmap: a withdraw, whether or not the
+   ;     ICCCM courtesy synthetic ever comes (a toolkit that skips it still
+   ;     gets evicted instead of a window that can never disappear). ---
+   mapd (tablet 8) owed (tablet 8)
+   (map! w) (: _ (pin mapd w 1) (x-map s w))
+   (hide! w) (: _ (? (peep mapd w 0) (pin owed w (+ 1 (peep owed w 0))) 0)       ; only a mapped window echoes -- an unmap of the
+                _ (pull mapd w 0) (x-unmap s w))                                 ; already-hidden fires no event, so no count
+   (unled! w) (: _ (pull mapd w 0) (pull owed w 0))                              ; the window left management: clear its ledger
    (render sh lay ff)                                                            ; ask the layout for placements, configure them, unmap the dropped
     (: z (wsget sh (wscur sh)) f (? ff ff (zfoc z))                              ; ff: the float holding the keyboard, else the tiled top
        pls (cap (lay-tile lay (trect ()) z)) placed (map cap pls)
@@ -129,13 +141,13 @@
                       _ (x-borderpix s w (? (= w f) fpix npix))                  ; focusedBorderColor / normalBorderColor
                       (x-configure s w (nth t 1) (nth t 2)                       ; the border sits OUTSIDE the frame: shave it off
                                    (mx2 1 (- (nth t 3) (* 2 bw))) (mx2 1 (- (nth t 4) (* 2 bw)))))) pls)
-       _ (map (\ w (? (any (\ p (= p w)) placed) 0 (x-unmap s w))) (wsrow sh))   ; windows the layout dropped (Full/minimize): hide them
-       _ (map (\ w (x-map s w)) placed)                                          ; (re)map placed -- a no-op on the already-mapped
+       _ (map (\ w (? (any (\ p (= p w)) placed) 0 (hide! w))) (wsrow sh))       ; windows the layout dropped (Full/minimize): hide them
+       _ (map (\ w (map! w)) placed)                                             ; (re)map placed -- a no-op on the already-mapped
        _ (map (\ fp (: w (cap fp) fr (caup fp)                                   ; floating windows AT HOME HERE: place, map, raise above the tiles
                         bw (? (= fr scrn) 0 lux-border)                         ; a fullscreen float (the whole screen is its rect) wears no border
                         _ (x-border s w bw) _ (x-borderpix s w (? (= w f) fpix npix))
                         _ (x-configure s w (nth fr 0) (nth fr 1) (nth fr 2) (nth fr 3))
-                        _ (x-map s w) (x-raise s w))) (wsvisfl sh))
+                        _ (map! w) (x-raise s w))) (wsvisfl sh))
        (x-flush s))
    (refocus sh) (? (wsfoc sh) (: _ (x-focus s (wsfoc sh)) (x-flush s)) 0)        ; focus the current top -- only when it is mapped/viewable
    (fmark sh pf w) (: _ (x-borderpix s w fpix) p (? pf pf (wsfoc sh))            ; keyboard to float w sans re-render: it wears the focused
@@ -145,10 +157,10 @@
    (switch sh lay t)                                                             ; view: hide the leaving row + floats, show the arriving
     (? (|| (= t (wscur sh)) (! (wsknown? sh t))) sh
        (: old (wsrow sh) oldf (map cap (wsvisfl sh)) sh2 (wsview sh t)
-          _ (map (\ w (x-map s w)) (wsrow sh2))
+          _ (map (\ w (map! w)) (wsrow sh2))
           _ (render sh2 lay ())
-          _ (map (\ w (x-unmap s w)) old)
-          _ (map (\ w (x-unmap s w)) oldf) _ (x-flush s)
+          _ (map (\ w (hide! w)) old)
+          _ (map (\ w (hide! w)) oldf) _ (x-flush s)
           _ (line (+ "lux: view " (+ (show t) (+ " " (show (wsrow sh2))))))
           sh2))
    (msg-or old new) (? new new old)                                              ; keep the old layout when a message is unhandled (())
@@ -181,7 +193,7 @@
           (= k 'shift) (: t (caup a) sh2 (shiftwin sh fw t)                      ; the effective focus emigrates -- a float by its home
                           ff2 (? (&& (! (= sh2 sh)) (= ffoc fw)) () ffoc)
                           _ (render sh2 lay ff2)
-                          _ (? (= sh2 sh) 0 (: _ (x-unmap s fw) (x-flush s)))    ; it moved (always off this view): hide the emigrant
+                          _ (? (= sh2 sh) 0 (: _ (hide! fw) (x-flush s)))        ; it moved (always off this view): hide the emigrant
                           _ (line (+ "lux: sent " (+ (show fw) (+ " -> " (show t)))))
                           (loop sh2 lay hist ff2))
           (= k 'spawn) (: p (spawn (caup a)) _ (line (+ "lux: spawn " (+ (cap (caup a)) (+ " " (show p)))))
@@ -293,7 +305,7 @@
                    (? (wsknownw? sh2 win)                                        ; managed (tiled or floated) -> place it
                       (: _ (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))   ; the ICCCM stamp: a restart finds us even hidden
                          _ (watch win)
-                         _ (render sh2 lay ffoc2) _ (x-map s win)
+                         _ (render sh2 lay ffoc2) _ (map! win)
                          _ (? (wsfloating? sh2 win) (x-focus s win) 0)          ; a freshly-mapped float (a dialog) takes the keyboard at once
                          _ (x-flush s)
                          _ (line (+ "lux: + " (+ (show win) (+ " " (show (wsrow sh2)))))) (loop sh2 lay hist ffoc2))
@@ -304,21 +316,26 @@
                          _ (line (+ "lux: ignore " (show win))) (loop sh2 lay hist ffoc))))
                 (= code 19) (: _ (? (= win (wsfoc sh)) (: _ (x-focus s win) (x-flush s)) 0) (loop sh lay hist ffoc))   ; MapNotify: focus if it's the top
                 (= code 17)                                                      ; DestroyNotify: unmanage + tile
-                (: _ (ewmh-untrack win)
+                (: _ (ewmh-untrack win) _ (unled! win)
                    (? (! (wsknownw? sh win)) (loop sh lay hist ffoc)
                       (: sh2 (evict sh win) ffoc2 (? (= win ffoc) () ffoc)
                          _ (render sh2 lay ffoc2)
                          _ (line (+ "lux: - " (+ (show win) (+ " " (show (wsrow sh2))))))
                          (loop sh2 lay hist ffoc2))))
-                (= code 18)                                                     ; UnmapNotify: only a SYNTHETIC one (the send-event bit on the
-                (? (|| (< (cap (ev-raw e)) 128) (! (wsknownw? sh win)))          ; raw byte -- x-decode strips it) is a client WITHDRAWING
-                   (loop sh lay hist ffoc)                                       ; (ICCCM 4.1.4); a real one is our own workspace unmap
-                   (: _ (ewmh-untrack win)
-                      _ (x-delprop s win (x-intern s "WM_STATE"))                ; unstamp: a restart must NOT re-adopt the withdrawn (the
-                      sh2 (evict sh win) ffoc2 (? (= win ffoc) () ffoc)
-                      _ (render sh2 lay ffoc2) _ (x-flush s)                     ; tray ghost); a re-map arrives as a fresh MapRequest
-                      _ (line (+ "lux: withdraw " (show win)))
-                      (loop sh2 lay hist ffoc2)))
+                (= code 18)                                                     ; UnmapNotify: xmonad's waitingUnmap rule. Our own hides echo
+                (? (! (wsknownw? sh win)) (loop sh lay hist ffoc)                ; back COUNTED (the owed ledger); a synthetic (send-event bit
+                   (: syn (< 127 (cap (ev-raw e))) p (peep owed win 0)           ; on the raw byte) is a withdraw (ICCCM 4.1.4) -- and so is a
+                      (? (&& (! syn) (< 0 p))                                    ; real one we're owed NO echo for: the CLIENT unmapped it,
+                         (: _ (pin owed win (- p 1)) (loop sh lay hist ffoc))    ; courtesy synthetic or not
+                         (: _ (ewmh-untrack win)
+                            _ (x-delprop s win (x-intern s "WM_STATE"))          ; unstamp: a restart must NOT re-adopt the withdrawn (the
+                            sh2 (evict sh win) ffoc2 (? (= win ffoc) () ffoc)
+                            _ (x-unmap s win)                                    ; a crossing's render in the event gap may have re-mapped it
+                                                                                 ; (telegram's media viewer) -- withdrawn means UNMAPPED, so say so
+                            _ (unled! win)
+                            _ (render sh2 lay ffoc2) _ (x-flush s)               ; tray ghost); a re-map arrives as a fresh MapRequest
+                            _ (line (+ "lux: withdraw " (show win)))
+                            (loop sh2 lay hist ffoc2)))))
                 (= code 7)                                                      ; EnterNotify: focus follows the pointer (normal crossings
                 (: pkt (ev-raw e) w (u32 pkt 12)                                 ; only -- the window is the EVENT field, byte 12)
                    (? (|| (! (= (nthl pkt 30) 0)) (= (ev-detail e) 2))           ; mode Grab/Ungrab or detail Inferior: not a real entry
@@ -397,7 +414,7 @@
                          (? (= sh2 sh) (loop sh lay hist ffoc)                   ; unknown window/tag (or sticky 0xffffffff): a no-op
                             (: ff2 (? (&& (= ffoc cw) (! (= t (wscur sh2)))) () ffoc)
                                _ (render sh2 lay ff2)                            ; arriving on the current view: render maps it...
-                               _ (? (= t (wscur sh2)) 0 (: _ (x-unmap s cw) (x-flush s)))   ; ...leaving it: hide the emigrant
+                               _ (? (= t (wscur sh2)) 0 (: _ (hide! cw) (x-flush s)))   ; ...leaving it: hide the emigrant
                                _ (line (+ "lux: sent " (+ (show cw) (+ " -> " (show t)))))
                                (loop sh2 lay hist ff2))))
                       (= ty (ewmh-atom "_NET_ACTIVE_WINDOW"))                    ; a pager activates: restore if minimized, view its tag, focus
@@ -423,8 +440,9 @@
    sh0 (foldl (\ ss w (wsview (admit (wsview ss (adopt-tag w)) w) (cap lux-tags))) (sheaf lux-tags) kids)
    _ (map (\ w (x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))) kids)
    _ (map (\ w (watch w)) kids)                                                 ; survivors get the mouse wires too
+   _ (map (\ w (? (x-manageable? s w) (pin mapd w 1) 0)) kids)                   ; seed the ledger: the viewable adoptees are mapped
    _ (? (two? kids) (: _ (render sh0 lux-layout ())
-                       _ (map (\ w (? (any (\ x (= x w)) (wsrow sh0)) 0 (x-unmap s w))) (wstiled sh0))   ; adopted onto a HIDDEN tag: hide it
+                       _ (map (\ w (? (any (\ x (= x w)) (wsrow sh0)) 0 (hide! w))) (wstiled sh0))   ; adopted onto a HIDDEN tag: hide it
                        _ (x-flush s)                                             ; now, or it lingers painted over workspace 1 (the WM_STATE
                        _ (refocus sh0) (line (+ "lux: adopted " (show kids)))) 0)   ; stamp keeps it adoptable through the NEXT restart)
    _ (twirl (\ u (lux-moor (lux-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
