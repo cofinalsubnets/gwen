@@ -40,6 +40,39 @@
 #define CCM_CCGR1 (CCM_BASE + 0x6Cu)   // GPT1 gates (CG10 bus, CG11 serial)
 #define CCM_CCGR3 (CCM_BASE + 0x74u)   // LPUART6 gate (CG3)
 #define CCM_CSCDR1 (CCM_BASE + 0x24u)  // UART_CLK_SEL (bit6) + UART_CLK_PODF[5:0]
+
+// --- CCM: the ARM-PLL path (600 MHz core) ---------------------------------
+// core = 24 MHz * DIV_SELECT / 2 / (ARM_PODF+1); 600 = 24*100/2/2. The dance
+// (PJRC clockspeed.c shape): park periph_clk on the osc, retune PLL1, switch
+// back. Every mux/divider write handshakes through CDHIPR.
+#define CCM_CCSR   (CCM_BASE + 0x0Cu)
+#define CCM_CACRR  (CCM_BASE + 0x10u)  // ARM_PODF[2:0] = divide-minus-one
+#define CCM_CBCDR  (CCM_BASE + 0x14u)
+#define CCM_CBCMR  (CCM_BASE + 0x18u)
+#define CCM_CDHIPR (CCM_BASE + 0x48u)
+#define CCSR_PLL1_SW_CLK_SEL (1u << 2)     // 1 = step_clk, 0 = pll1_main
+#define CBCDR_PERIPH_CLK_SEL (1u << 25)    // 1 = periph_clk2 (the parking lane)
+#define CBCDR_AHB_PODF_MASK  (7u << 10)    // 0 = /1
+#define CBCDR_IPG_PODF_MASK  (3u << 8)     // 3 = /4 (IPG tops out at 150 MHz)
+#define CBCDR_IPG_PODF_DIV4  (3u << 8)
+#define CBCMR_PRE_PERIPH_MASK (3u << 18)
+#define CBCMR_PRE_PERIPH_PLL1 (3u << 18)   // 3 = the divided ARM PLL
+#define CBCMR_PERIPH_CLK2_MASK (3u << 12)
+#define CBCMR_PERIPH_CLK2_OSC  (1u << 12)  // 24 MHz osc while parked
+#define CDHIPR_ARM_PODF_BUSY       (1u << 16)
+#define CDHIPR_PERIPH_CLK_SEL_BUSY (1u << 5)
+#define CDHIPR_AHB_PODF_BUSY       (1u << 1)
+#define CCM_ANALOG_PLL_ARM (CCM_ANALOG_BASE + 0x00u)
+#define PLL_ARM_LOCK      (1u << 31)
+#define PLL_ARM_ENABLE    (1u << 13)
+#define PLL_ARM_POWERDOWN (1u << 12)
+
+// --- DCDC: the core supply (600 MHz wants 1.25 V) -------------------------
+#define DCDC_REG0 0x40080000u
+#define DCDC_REG3 0x4008000Cu
+#define DCDC_REG0_STS_DC_OK (1u << 31)     // output settled at target
+#define DCDC_REG3_TRG_MASK 0x1Fu           // V = 0.8 + TRG * 0.025
+#define DCDC_TRG_1V25 18u
 #define CCGR_ON(cg) (3u << (2u * (cg)))   // clock running in all modes
 #define CSCDR1_UART_CLK_SEL_OSC (1u << 6) // 1 = 24 MHz osc, 0 = pll3 / 6 (80 MHz)
 #define CSCDR1_UART_CLK_PODF_MASK 0x3Fu

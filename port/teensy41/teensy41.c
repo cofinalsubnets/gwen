@@ -69,21 +69,45 @@ void cmain(void) {
   REG(SCB_CPACR) |= (0xFu << 20);
   arm_dsb_isb();
   caches_init();
+  clocks_init();          // pure MMIO, no .data/.bss reads -- so the big copy
+                          // below already runs at 600 MHz
   // .data from its flash load address into OCRAM2; zero .bss.
   for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;
-  clocks_init();
   serial_init();
   main();
   for (;;) arm_wfi(); }
 
 // --- clocks ---------------------------------------------------------------
-// Scaffold policy: leave the ARM core on the ROM's clock and only set up the
-// two roots this frontend reads -- the LPUART clock (24 MHz osc) and GPT1
-// (24 MHz osc). Bringing the M7 up to 600 MHz via ARM_PLL is a documented
-// TODO (README); it does not change the console or the timebase math.
+// The ARM core to 600 MHz (the ROM boots it at ~396), plus the two roots
+// this frontend reads -- the LPUART clock (24 MHz osc) and GPT1 (24 MHz
+// osc). Both ride the crystal, so the core retune changes neither the
+// console baud nor the timebase math.
 void clocks_init(void) {
+  // Voltage BEFORE speed: DCDC core supply to 1.25 V, wait for it to settle.
+  REG(DCDC_REG3) = (REG(DCDC_REG3) & ~DCDC_REG3_TRG_MASK) | DCDC_TRG_1V25;
+  while (!(REG(DCDC_REG0) & DCDC_REG0_STS_DC_OK)) {}
+  // Park periph_clk on the 24 MHz osc while the ARM PLL retunes.
+  REG(CCM_CBCMR) = (REG(CCM_CBCMR) & ~CBCMR_PERIPH_CLK2_MASK) | CBCMR_PERIPH_CLK2_OSC;
+  REG(CCM_CBCDR) |= CBCDR_PERIPH_CLK_SEL;
+  while (REG(CCM_CDHIPR) & CDHIPR_PERIPH_CLK_SEL_BUSY) {}
+  // ARM PLL: 24 MHz * 100 / 2 = 1200 MHz, then the core divider /2 = 600.
+  REG(CCM_ANALOG_PLL_ARM) = PLL_ARM_POWERDOWN;
+  REG(CCM_ANALOG_PLL_ARM) = PLL_ARM_ENABLE | 100u;
+  while (!(REG(CCM_ANALOG_PLL_ARM) & PLL_ARM_LOCK)) {}
+  REG(CCM_CCSR) &= ~CCSR_PLL1_SW_CLK_SEL;        // core rides pll1_main
+  REG(CCM_CACRR) = 1u;                            // /2
+  while (REG(CCM_CDHIPR) & CDHIPR_ARM_PODF_BUSY) {}
+  // AHB /1 (600 MHz), IPG /4 (150 MHz, its ceiling); pre-periph = the
+  // divided ARM PLL; then un-park.
+  REG(CCM_CBCDR) = (REG(CCM_CBCDR) & ~(CBCDR_AHB_PODF_MASK | CBCDR_IPG_PODF_MASK))
+                 | CBCDR_IPG_PODF_DIV4;
+  while (REG(CCM_CDHIPR) & CDHIPR_AHB_PODF_BUSY) {}
+  REG(CCM_CBCMR) = (REG(CCM_CBCMR) & ~CBCMR_PRE_PERIPH_MASK) | CBCMR_PRE_PERIPH_PLL1;
+  REG(CCM_CBCDR) &= ~CBCDR_PERIPH_CLK_SEL;
+  while (REG(CCM_CDHIPR) & CDHIPR_PERIPH_CLK_SEL_BUSY) {}
+
   // Gate LPUART6 (CCGR3 CG3) and GPT1 (CCGR1 CG10/CG11) on.
   REG(CCM_CCGR3) |= CCGR_ON(3);
   REG(CCM_CCGR1) |= CCGR_ON(GPT1_CCGR_BUS) | CCGR_ON(GPT1_CCGR_SERIAL);

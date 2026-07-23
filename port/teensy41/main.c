@@ -205,6 +205,22 @@ int main(void) {
   // adapter wiring) the moment the board resets, before any love runs.
   for (char const *s = "\r\n; love/teensy41 -- baking the egg\r\n"; *s; s++)
     serial_putc(*s);
+  // self-reported core clock: derive MHz from the LIVE mux state (not from
+  // what clocks_init intended) -- pll1 path only; anything else prints the
+  // rom-path face so a silently-failed retune is visible on every boot.
+  { uint32_t mhz = 0;
+    if (!(REG(CCM_CBCDR) & CBCDR_PERIPH_CLK_SEL)
+        && (REG(CCM_CBCMR) & CBCMR_PRE_PERIPH_MASK) == CBCMR_PRE_PERIPH_PLL1
+        && !(REG(CCM_CCSR) & CCSR_PLL1_SW_CLK_SEL))
+      mhz = 24u * (REG(CCM_ANALOG_PLL_ARM) & 0x7Fu) / 2u
+          / ((REG(CCM_CACRR) & 7u) + 1u)
+          / (((REG(CCM_CBCDR) >> 10) & 7u) + 1u);
+    for (char const *s = "; core "; *s; s++) serial_putc(*s);
+    if (mhz) { char b[8]; int n = 0;
+      do { b[n++] = '0' + mhz % 10u; mhz /= 10u; } while (mhz);
+      while (n) serial_putc(b[--n]);
+      for (char const *s = " MHz\r\n"; *s; s++) serial_putc(*s); }
+    else for (char const *s = "on the ROM path\r\n"; *s; s++) serial_putc(*s); }
   uint32_t psram_mb = psram_init();
   { char const *s = psram_mb ? "; psram arena up\r\n" : "; NO psram -- ocram fallback\r\n";
     for (; *s; s++) serial_putc(*s); }
