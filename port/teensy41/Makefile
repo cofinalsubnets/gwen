@@ -22,7 +22,8 @@ te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
 lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 
 objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/ctype.o $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o
+  $(R)/$(o)/ctype.o $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
+  $(R)/$(o)/love-img.o
 
 .PHONY: teensy41 flash clean
 teensy41: $(R)/$(o)/love.hex
@@ -64,6 +65,20 @@ $(R)/$(o)/boot.o: boot.S
 	@echo AS	$@
 	@mkdir -p $(R)/$(o)
 	@$(AS) -c boot.S -o $@
+
+# the baked heap image: port/mps2's qemu baker dumps it (build-time bake);
+# ld -b binary wraps the blob with _binary_love_img_{start,end} symbols and
+# teensy41.lds places it in flash (.image). FORCE keeps the delegation live
+# (the mps2 makefile's own deps decide whether the qemu bake re-runs).
+$(R)/out/mps2/love.img: FORCE
+	@$(MAKE) --no-print-directory -C $(R)/port/mps2 img
+FORCE:
+
+$(R)/$(o)/love-img.o: $(R)/out/mps2/love.img
+	@echo IMG	$@
+	@mkdir -p $(R)/$(o)
+	@cp $< $(R)/$(o)/love.img
+	@cd $(R)/$(o) && $(LD) -r -b binary love.img -o love-img.o
 
 $(R)/$(o)/love.elf: $(objs) teensy41.lds
 	@echo LD	$@

@@ -185,6 +185,122 @@ void free(void *p) {
     freelist = m;
     if (!r) return; } }
 
+#ifdef WAKER
+// --- the waker (-D WAKER): the CROSS-BINARY wake proof ----------------------
+// a DIFFERENT binary from the baker (different main.o, different layout):
+// read love.img back through semihosting, wake it, run the driver laws.
+// exit 42 = a portable image wakes outside its baking binary.
+#define SH_OPEN  0x01
+#define SH_CLOSE 0x02
+#define SH_READ  0x06
+#define SH_FLEN  0x0C
+static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
+int main(void) {
+  sh_puts("\n; love/mps2 waker -- cross-binary wake\n");
+  // arena at +8MB: BREAK the baker-twin address luck -- a woken value that
+  // secretly depends on the baker's pool base must die here, not on silicon
+  freelist = (struct mem*) (POOL + (8u << 20));
+  freelist->next = NULL;
+  freelist->len = ((8u << 20) - 64) / sizeof(uintptr_t);
+  static const char impath[] = "out/mps2/love.img";
+  uintptr_t o[3] = { (uintptr_t) impath, 1, sizeof impath - 1 };   // mode 1 = "rb"
+  intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);
+  if (fd < 0) { sh_puts("; no love.img\n"); m7_exit(3); }
+  uintptr_t fl[1] = { (uintptr_t) fd };
+  uintptr_t len = sh_call(SH_FLEN, (uintptr_t) fl);
+  sh_puts("; image bytes "); sh_hex(len); sh_putc('\n');
+  // carve the read buffer off the TOP of the pool; the freelist keeps the rest
+  char *buf = (char*) POOL + (8u << 20) + (8u << 20) - ((len + 63u) & ~63u);
+  freelist->len = ((8u << 20) - 64 - ((len + 63u) & ~63u)) / sizeof(uintptr_t);
+  uintptr_t rd[3] = { (uintptr_t) fd, (uintptr_t) buf, len };
+  if (sh_call(SH_READ, (uintptr_t) rd)) { sh_puts("; short read\n"); m7_exit(4); }
+  uintptr_t cl[1] = { (uintptr_t) fd };
+  sh_call(SH_CLOSE, (uintptr_t) cl);
+  struct ai *g = ai_image_load(buf, len);
+  if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
+  g = ai_defn(g, defs, countof(defs));
+  if (ai_ok(g)) ai_core_of(g)->budget = freelist->len / 4;
+  struct ai *r = ai_evals_(g,
+    "(: ok (&& ((3 2) = 8)"
+    "      (&& ('(2 3 4) = (map (+ 1) '(1 2 3)))"
+    "      (&& (6 = $'(1 2 3))"
+    "      (&& (lit? ev)"
+    "          ((2 3 4) = 262144)))))"
+    "   _ (putc 10) _ (puts \"; the image woke -- love on the M7\") _ (putc 10)"
+    "   (m7exit (? ok 42 1)))");
+  if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+  ai_fin(r);
+  m7_exit(2);
+  return 0; }
+#else
+#ifdef BAKER
+// --- the baker (-D BAKER): the bake as a BUILD-TIME event -------------------
+// bake the corpus on the emulated M7, then DUMP the heap image to a host file
+// via semihosting -- the teensy embeds the blob in flash and WAKES from it
+// (its egg lane stays as the fallback). No port nifs are installed before the
+// bake and the absolute guard rejects everything, so the image is fully
+// SYMBOLIC (heap offsets + lvm/immortal table indices): wakeable in any
+// binary compiled from the same love.c at the same word size.
+#define SH_OPEN  0x01
+#define SH_WRITE 0x05
+#define SH_CLOSE 0x02
+extern uintptr_t (*ai_image_absguard)(uintptr_t);
+extern uintptr_t ai_image_bad[8], ai_image_nbad;
+static uintptr_t img_reject_all(uintptr_t v) { (void) v; return 0; }
+static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
+int main(void) {
+  sh_puts("\n; love/mps2 baker -- baking the corpus\n");
+  freelist = (struct mem*) POOL;
+  freelist->next = NULL;
+  freelist->len = POOL_BYTES / sizeof(uintptr_t);
+  struct ai *g = ai_ini();          // NO ai_defn: a port nif in the book would
+                                    // ride into the image as a dead absolute
+  if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
+  struct ai *r = ai_evals_(g, "("
+#include "egg.h"
+    ai_egg_pre
+#include "prel.h"
+    " "
+#include "ev.h"
+    ai_egg_post
+#include "bao.h"
+    "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
+  if (!ai_ok(r)) {
+    if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
+    m7_exit(3); }
+  ai_image_absguard = img_reject_all;   // ANY kept absolute refuses the dump
+  uintptr_t len = 0;
+  void *img = ai_image_save(r, &len);
+  if (!img) {
+    sh_puts("; dump REFUSED -- absolutes in the heap (off, val, ap):\n");
+    for (uintptr_t i = 0; i < ai_image_nbad; i++) {
+      sh_hex(ai_image_bad[4 * i]); sh_putc(' ');
+      sh_hex(ai_image_bad[4 * i + 1]); sh_putc(' ');
+      sh_hex(ai_image_bad[4 * i + 2]); sh_putc('\n'); }
+    m7_exit(4); }
+  // round-trip PROOF before the file exists: wake the buffer we just dumped
+  // and run a law through the woken heap. (same-binary wake -- the cross-
+  // binary truth is the teensy's -- but it catches every codec desync here.)
+  struct ai *g2 = ai_image_load(img, len);
+  if (!g2) { sh_puts("; round-trip load FAILED\n"); m7_exit(7); }
+  struct ai *r2 = ai_evals_(g2,
+    "(: _ (? ((3 2) = 8) (puts \"; round-trip ok\") (puts \"; ROUND-TRIP BROKEN\"))"
+    "   _ (putc 10) 0)");
+  if (!ai_ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
+  static const char impath[] = "out/mps2/love.img";
+  uintptr_t o[3] = { (uintptr_t) impath, 5, sizeof impath - 1 };
+  intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);
+  if (fd < 0) { sh_puts("; SYS_OPEN failed: "); sh_hex((uintptr_t) fd);
+                sh_puts(" len "); sh_hex(len); sh_putc('\n'); m7_exit(5); }
+  uintptr_t w[3] = { (uintptr_t) fd, (uintptr_t) img, len };
+  if (sh_call(SH_WRITE, (uintptr_t) w)) m7_exit(6);
+  uintptr_t c[1] = { (uintptr_t) fd };
+  sh_call(SH_CLOSE, (uintptr_t) c);
+  sh_puts("; image dumped\n");
+  m7_exit(0);
+  return 0; }
+#else
+
 // --- entry ----------------------------------------------------------------
 // start.S enabled the FPU; qemu loaded .data/.bss straight into RAM. Bake the
 // egg (compile the compiler with the C evaluator, recompile it with itself),
@@ -220,3 +336,5 @@ int main(void) {
   ai_fin(r);
   m7_exit(2);                                // fell out of the driver: loud
   return 0; }
+#endif
+#endif

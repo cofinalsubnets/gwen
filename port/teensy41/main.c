@@ -124,6 +124,11 @@ static union u const
   nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {ai_gpio_dir}, {lvm_ret0}},
   nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {ai_gpio_put}, {lvm_ret0}};
 
+// the baked heap image, embedded by ld -b binary (see the Makefile + .image
+// in teensy41.lds). FILE scope: mooncc emits no relocation for a block-scope
+// extern array (the address materializes as garbage -- silicon-diagnosed).
+extern const char _binary_love_img_start[], _binary_love_img_end[];
+
 static struct ai_def defs[] = {
   {"gpio_init", (intptr_t) nif_gpio_init},
   {"gpio_dir",  (intptr_t) nif_gpio_dir},
@@ -203,7 +208,7 @@ int main(void) {
   gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
   // a raw banner straight to the LPUART: proves the console path (mux, baud,
   // adapter wiring) the moment the board resets, before any love runs.
-  for (char const *s = "\r\n; love/teensy41 -- baking the egg\r\n"; *s; s++)
+  for (char const *s = "\r\n; love/teensy41\r\n"; *s; s++)
     serial_putc(*s);
   // self-reported core clock: derive MHz from the LIVE mux state (not from
   // what clocks_init intended) -- pll1 path only; anything else prints the
@@ -235,14 +240,33 @@ int main(void) {
     arena_words = sizeof pool / sizeof(uintptr_t); }
   freelist->next = NULL;
   freelist->len = arena_words;
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  // WAKE-FIRST: the flash carries a heap image (qemu-baked at build time by
+  // port/mps2's baker -- fully symbolic, so this differently-linked binary
+  // may wake it). A good image skips the ~55 s on-device bake; any problem
+  // answers NULL and the egg lane below bakes from source as always.
+  struct ai *g = ai_image_load(_binary_love_img_start,
+                               (uintptr_t)(_binary_love_img_end - _binary_love_img_start));
+  int woke = g != NULL;
+  { char const *s = woke ? "; image awake\r\n" : "; no image -- baking the egg\r\n";
+    for (; *s; s++) serial_putc(*s); }
+  if (!woke) g = ai_ini();
+  g = ai_defn(g, defs, countof(defs));
   // BOUND the collector to the arena (the Appel knob -- gen_please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A
   // quarter of the arena leaves the double-buffered resize and free-list
   // fragmentation their room.
   if (ai_ok(g)) ai_core_of(g)->budget = arena_words / 4;
-  struct ai *r = ai_evals_(g, "("
+  // The LED is the status channel while the console has no adapter: solid on
+  // = still baking/waking, OFF = the shell is at its prompt, fast blink
+  // (below) = fatal. 3 is LED_BIT (GPIO2_IO03 = pin 13). the tail runs AFTER
+  // the bake/wake, so its `puts` marks the exact moment love is up.
+#define TE_TAIL(banner) \
+    "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
+    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) (shell 0))"
+  struct ai *r = woke
+    ? ai_evals_(g, TE_TAIL("; image hatched -- shell up"))
+    : ai_evals_(g, "("
 #include "egg.h"
     ai_egg_pre
 #include "prel.h"
@@ -250,13 +274,7 @@ int main(void) {
 #include "ev.h"
     ai_egg_post
 #include "bao.h"
-    // The LED is the status channel while the console has no adapter: solid on
-    // = still baking the egg, OFF = the egg hatched and the shell is at its
-    // prompt, fast blink (below) = fatal. 3 is LED_BIT (GPIO2_IO03 = pin 13).
-    // this tail runs AFTER the egg double-bake, so its `puts` marks the exact
-    // moment the bake completes (baking-vs-hung is otherwise invisible).
-    "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)"
-    "    _ (putc 10) _ (puts \"; egg hatched -- shell up\") _ (putc 10) (shell 0))");
+    TE_TAIL("; egg hatched -- shell up") ")");
   // The shell only returns on a fatal error: honest face, then blink it out.
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r);

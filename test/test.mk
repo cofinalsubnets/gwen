@@ -718,6 +718,21 @@ test_mps2: host out/host$(hsuf)/mooncc
 	  timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel out/mps2/love.elf </dev/null; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL love-on-M7 boot (got $$a, want 42 = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)"; exit 1; }; \
 	  echo "test_mps2: love (all-mooncc thumb2) boots on qemu Cortex-M7 -- egg baked on-device, laws hold, exit 42"
+# test_mps2_wake -- the IMAGE lane: the baker bakes the corpus on qemu's M7 and
+# dumps a fully-symbolic heap image (build-time bake); the WAKER -- a different
+# binary, arena deliberately offset -- wakes it and re-runs the driver laws.
+# The gate that finally wakes a mooncc image (and the teensy's build rides the
+# same love.img).
+.PHONY: test_mps2_wake
+test_mps2_wake: host out/host$(hsuf)/mooncc
+	@echo MPS2WAKE out/mps2/waker.elf
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1 || ! command -v qemu-system-arm >/dev/null 2>&1; then \
+	   echo "test_mps2_wake: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/mps2 img ../../out/mps2/waker.elf || { echo "FAIL mps2 waker build"; exit 1; }; \
+	  test -s out/mps2/love.img || { echo "test_mps2_wake: empty image (no qemu at bake), skipped"; exit 0; }; \
+	  timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel out/mps2/waker.elf </dev/null; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL image wake (got $$a, want 42)"; exit 1; }; \
+	  echo "test_mps2_wake: the qemu-baked image WAKES in a different binary -- laws hold, exit 42"
 # test_thumb2sp -- the SP-only-FPU face (the playdate's STM32F746): f64
 # arithmetic SOFTENS to __aeabi_* libgcc calls while the 64-bit transfers keep
 # the d-reg value model. Gated on qemu's mps2-an386 -- a Cortex-M4 whose

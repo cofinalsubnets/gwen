@@ -344,6 +344,7 @@ struct ai
 // reconstructs a fresh g from such a buffer, or NULL on any mismatch (the caller boots
 // normally). The host wraps these with file I/O (host/image.c). Buffer-based so a
 // freestanding frontend can load a baked image with no filesystem.
+void ai_image_note(uintptr_t stage);   // wake-progress hook, weak no-op; a port bringing the wake up on new metal overrides it
 void *ai_image_save(struct ai*, uintptr_t *outlen);
 void *ai_image_save_(struct ai*, uintptr_t *outlen);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);

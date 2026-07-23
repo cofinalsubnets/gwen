@@ -19,9 +19,46 @@ lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_ver
 objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
   $(R)/$(o)/ctype.o $(R)/$(o)/main.o $(R)/$(o)/start.o
 
-.PHONY: mps2 clean
+baker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
+  $(R)/$(o)/ctype.o $(R)/$(o)/main-baker.o $(R)/$(o)/start.o
+
+.PHONY: mps2 img clean
 mps2: $(R)/$(o)/love.elf
 default: mps2
+
+# the BAKED HEAP IMAGE (love.img): main.c's -D BAKER face bakes the corpus on
+# qemu's M7 and dumps the image through semihosting -- the bake as a build-time
+# event (the teensy embeds the blob and wakes from it). No qemu -> an empty
+# image, and the device's egg lane bakes from source as always.
+img: $(R)/$(o)/love.img
+
+$(R)/$(o)/main-baker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2_cc) -D BAKER -c port/mps2/main.c $(o)/main-baker.o
+
+$(R)/$(o)/baker.elf: $(baker_objs) mps2.lds
+	@echo LD	$@
+	@$(LD) -T mps2.lds $(baker_objs) -o $@
+
+waker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
+  $(R)/$(o)/ctype.o $(R)/$(o)/main-waker.o $(R)/$(o)/start.o
+
+$(R)/$(o)/main-waker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2_cc) -D WAKER -c port/mps2/main.c $(o)/main-waker.o
+
+$(R)/$(o)/waker.elf: $(waker_objs) mps2.lds
+	@echo LD	$@
+	@$(LD) -T mps2.lds $(waker_objs) -o $@
+
+$(R)/$(o)/love.img: $(R)/$(o)/baker.elf
+	@echo BAKE	$@ "(qemu M7)"
+	@if command -v qemu-system-arm >/dev/null 2>&1; then \
+	   cd $(R) && timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic \
+	     -kernel $(o)/baker.elf </dev/null && test -s $(o)/love.img; \
+	 else : > $@; echo "img: no qemu-system-arm -- empty image (device egg-boots)"; fi
 
 clean:
 	rm -rf $(R)/$(o)

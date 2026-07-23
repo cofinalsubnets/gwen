@@ -89,6 +89,7 @@
 #define LPUART_BAUD_SBR(n)  ((n) & 0x1FFFu)       // baud modulo divisor
 #define LPUART_BAUD_BOTHEDGE (1u << 17)
 #define LPUART_STAT_TDRE (1u << 23)               // TX data register empty
+#define LPUART_STAT_TC   (1u << 22)               // transmit COMPLETE (shifter drained)
 #define LPUART_STAT_RDRF (1u << 21)               // RX data register full
 #define LPUART_STAT_OR   (1u << 19)               // RX overrun: latches and HALTS reception until cleared
 #define LPUART_CTRL_TE   (1u << 19)

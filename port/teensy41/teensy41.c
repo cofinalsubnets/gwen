@@ -29,7 +29,18 @@ void hardfault_report(uint32_t *frame) {
   ai_fault.pc  = frame[6]; ai_fault.psr = frame[7];
   ai_fault.sp  = (uint32_t)(uintptr_t) frame;
   ai_fault.magic = 0xFA017EDu;
-  for (;;) arm_bkpt(); }
+  // say it on the wire while we still can (serial is polled, no IRQs needed);
+  // the bootloader chip resets us shortly after the bkpt, and RAM re-zeroes.
+  // CFSR/BFAR/MMFAR classify the fault (precise bus faults carry the address).
+  { static const char hx[] = "0123456789abcdef";
+    const char *tags[6] = { "\r\n; FAULT pc=", " lr=", " sp=", " cfsr=", " bfar=", " mmfar=" };
+    uint32_t v[6] = { frame[6], frame[5], (uint32_t)(uintptr_t) frame,
+                      REG(0xE000ED28u), REG(0xE000ED38u), REG(0xE000ED34u) };
+    for (int k = 0; k < 6; k++) {
+      for (const char *s = tags[k]; *s; s++) serial_putc(*s);
+      for (int b = 28; b >= 0; b -= 4) serial_putc(hx[(v[k] >> b) & 15]); }
+    serial_putc('\r'); serial_putc('\n'); }
+  for (;;) {} }   // idle, report delivered (a bkpt here would re-enter DebugMon)
 
 // --- caches ----------------------------------------------------------------
 // XIP with the caches off fetches EVERY instruction over the 60 MHz QSPI: the
@@ -67,6 +78,10 @@ static void caches_init(void) {
 void cmain(void) {
   // FPU on (CP10/CP11 full access) before any float-typed code runs.
   REG(SCB_CPACR) |= (0xFu << 20);
+  // debug monitor ON: a bkpt with no debugger otherwise ESCALATES to lockup
+  // (mute -- the supervisor just resets us). With MON_EN it vectors to the
+  // fault reporter instead, so every __builtin_trap NAMES its pc on the wire.
+  REG(0xE000EDFCu) |= (1u << 16);
   arm_dsb_isb();
   caches_init();
   clocks_init();          // pure MMIO, no .data/.bss reads -- so the big copy

@@ -61,7 +61,9 @@ vectors:
   .word default_handler         @ 6  UsageFault
   .word 0, 0, 0, 0              @ 7..10 reserved
   .word default_handler         @ 11 SVCall
-  .word default_handler         @ 12 DebugMon
+  .word isr_hardfault           @ 12 DebugMon: with DEMCR.MON_EN a bkpt (a
+                                @ __builtin_trap, a contract guard) lands HERE
+                                @ and REPORTS instead of locking up mute
   .word 0                       @ 13 reserved
   .word default_handler         @ 14 PendSV
   .word default_handler         @ 15 SysTick
@@ -76,6 +78,9 @@ cstartup:
 
 .text
 @ HardFault: hand the active stack's exception frame to hardfault_report (C).
+@ The reporter runs on a FRESH stack (__stack_top__): if the fault WAS a stack
+@ overflow (or SP is garbage), pushing the reporter's frame on the old MSP
+@ double-faults into lockup and the report never reaches the wire.
 .thumb_func
 .global isr_hardfault
 isr_hardfault:
@@ -83,6 +88,8 @@ isr_hardfault:
   ite eq
   mrseq r0, msp
   mrsne r0, psp
+  ldr r1, =__stack_top__
+  mov sp, r1
   b hardfault_report
 
 .thumb_func

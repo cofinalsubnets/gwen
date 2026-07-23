@@ -48,6 +48,15 @@ SECTIONS {
     . = ALIGN(4);
   } > FLASH
 
+  /* The baked heap image (qemu-baked by port/mps2's baker, embedded whole).
+   * Stays in flash -- the wake copies the blob into the PSRAM major pool.
+   * Placed BEFORE .data so this rule (not .data's) claims love-img.o's
+   * payload; 8-aligned for the image header's uint64 fields. */
+  .image : {
+    . = ALIGN(8);
+    *love-img.o(.data .data.*)
+  } > FLASH
+
   /* .data: VMA in OCRAM2, LMA in flash. cstartup copies it. */
   . = ALIGN(4);
   .data : {
@@ -73,7 +82,7 @@ SECTIONS {
 
   /* boot_data.length: how much of flash the ROM treats as the image. */
   __image_size__ = SIZEOF(.flashconfig) + SIZEOF(.ivt) + SIZEOF(.vectors)
-                 + SIZEOF(.text) + SIZEOF(.rodata) + SIZEOF(.data);
+                 + SIZEOF(.text) + SIZEOF(.rodata) + SIZEOF(.image) + SIZEOF(.data);
 
   /DISCARD/ : {
     *(.eh_frame*)
