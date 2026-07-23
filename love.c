@@ -5368,21 +5368,15 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen) {
 // ready, 3 blob in pool, 0x100+k walk progress (per 64K words), 5 walk
 // done, 6 roots done.
 __attribute__((weak)) void ai_image_note(uintptr_t stage) { (void) stage; }
-struct ai *ai_image_load(void const *buf, uintptr_t len) {
+struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
  struct image_hdr H;
- ai_image_note(0x10);
  if (len < sizeof H) return NULL;
- ai_image_note(0x11);
  memcpy(&H, buf, sizeof H);
- ai_image_note(0x12);
- if (H.magic != IMAGE_MAGIC) return NULL;
- ai_image_note(0x13);
- if (H.wordsize != sizeof(word) || H.arch != IMAGE_ARCH) return NULL;
- ai_image_note(0x14);
+ if (H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word) || H.arch != IMAGE_ARCH) return NULL;
  uintptr_t nw = H.nwords, bytes = nw * sizeof(word);
  if (len < sizeof H + bytes) return NULL;                // truncated buffer
  ai_image_note(1);
- struct ai *g = ai_ini();
+ struct ai *g = ai_ini_m(al);
  if (!g) return NULL;
  if (nw > g->major_len) {                                // grow the major pool to fit the image
   g->alloc(g, g->major_pool, 0);
@@ -5432,6 +5426,7 @@ struct ai *ai_image_load(void const *buf, uintptr_t len) {
  // sp stays at ai_ini's topof(g) (empty AI stack); the dispatch re-establishes ip
  g->major_live0 = nw, g->since_major = 0;
  return g; }
+struct ai *ai_image_load(void const *buf, uintptr_t len) { return ai_image_load_m(buf, len, ai_libc_alloc); }
 
 // ============================================================================
 // sym

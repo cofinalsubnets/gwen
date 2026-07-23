@@ -348,6 +348,7 @@ void ai_image_note(uintptr_t stage);   // wake-progress hook, weak no-op; a port
 void *ai_image_save(struct ai*, uintptr_t *outlen);
 void *ai_image_save_(struct ai*, uintptr_t *outlen);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
+struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
 // the terminal scare face: print ";; a b\n" (show forms) to the err port from
 // the stashed condition data and answer 1; the bare scare (nil nil -- oom,

@@ -23,6 +23,14 @@ void pdg_log(const char *s) { PD->system->logToConsole("%s", s); }
 unsigned char *pdg_frame(void) { return PD->graphics->getFrame(); }
 void pdg_mark_updated(void) { PD->graphics->markUpdatedRows(0, LCD_ROWS); }
 void pdg_set_update(int (*cb)(void *)) { PD->system->setUpdateCallback(cb, NULL); }
+// read a whole bundled data file into buf (<= cap bytes); -1 = no file.
+// the wake image rides the pdx this way (kFileRead reads the bundle).
+int pdg_file_read(const char *path, void *buf, unsigned cap) {
+  SDFile *f = PD->file->open(path, kFileRead);
+  if (!f) return -1;
+  int n = PD->file->read(f, buf, cap);
+  PD->file->close(f);
+  return n; }
 
 int eventHandler(PlaydateAPI *pd, PDSystemEvent event, uint32_t arg) {
   if (event != kEventInit) return 0;

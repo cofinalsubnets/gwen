@@ -202,7 +202,11 @@ int main(void) {
   freelist = (struct mem*) (POOL + (8u << 20));
   freelist->next = NULL;
   freelist->len = ((8u << 20) - 64) / sizeof(uintptr_t);
+#ifdef BAKER_RUNE
+  static const char impath[] = "out/mps2/love-pd.img";
+#else
   static const char impath[] = "out/mps2/love.img";
+#endif
   uintptr_t o[3] = { (uintptr_t) impath, 1, sizeof impath - 1 };   // mode 1 = "rb"
   intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);
   if (fd < 0) { sh_puts("; no love.img\n"); m7_exit(3); }
@@ -225,7 +229,12 @@ int main(void) {
     "      (&& ('(2 3 4) = (map (+ 1) '(1 2 3)))"
     "      (&& (6 = $'(1 2 3))"
     "      (&& (lit? ev)"
+#ifdef BAKER_RUNE
+    "      (&& (! ((from ()) = ()))"            // the module registry is live: rune registered
+    "          ((2 3 4) = 262144))))))"
+#else
     "          ((2 3 4) = 262144)))))"
+#endif
     "   _ (putc 10) _ (puts \"; the image woke -- love on the M7\") _ (putc 10)"
     "   (m7exit (? ok 42 1)))");
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
@@ -263,7 +272,19 @@ int main(void) {
     " "
 #include "ev.h"
     ai_egg_post
+#ifdef BAKER_RUNE
+    // the PLAYDATE corpus: rune (registered module) + the cas workbench, no
+    // bao -- the device has no shell, the crank is the interface. cas's
+    // crank/pushed/cur_set refs stay symbolic (unbound here); the device
+    // defn's them post-wake and the book resolves them live.
+#include "rune.h"
+    " "
+#include "runeseal.h"
+    " "
+#include "cas.h"
+#else
 #include "bao.h"
+#endif
     "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
     if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
@@ -287,7 +308,11 @@ int main(void) {
     "(: _ (? ((3 2) = 8) (puts \"; round-trip ok\") (puts \"; ROUND-TRIP BROKEN\"))"
     "   _ (putc 10) 0)");
   if (!ai_ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
+#ifdef BAKER_RUNE
+  static const char impath[] = "out/mps2/love-pd.img";
+#else
   static const char impath[] = "out/mps2/love.img";
+#endif
   uintptr_t o[3] = { (uintptr_t) impath, 5, sizeof impath - 1 };
   intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);
   if (fd < 0) { sh_puts("; SYS_OPEN failed: "); sh_hex((uintptr_t) fd);

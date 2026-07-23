@@ -81,9 +81,22 @@ $(o)/cas.h: cas.l $(R)/tools/lcat.l | $(m)
 	@$(m) $(R)/tools/lcat.l cas.l > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
 	  || { rm -f $@.tmp; echo "FAIL: $@ empty"; exit 1; }
 
-$(o)/$n.pdx: $(o)/Source/pdex.elf $(o)/Source/pdex.so
+$(o)/$n.pdx: $(o)/Source/pdex.elf $(o)/Source/pdex.so $(o)/Source/love-pd.img
 	@echo PDC	$@
 	@$(pd_sdk)/bin/pdc -sdkpath $(pd_sdk) $(o)/Source $@
+
+# the qemu-baked heap image rides the pdx as a data file; port/mps2's imgpd
+# bakes AND wake-checks it (FORCE keeps the delegation live -- mps2's own
+# deps decide whether the bake re-runs). An empty image ships too: the
+# device just egg-boots (and the 64-bit sim always does).
+$(R)/out/mps2/love-pd.img: FORCE
+	@$(MAKE) --no-print-directory -C $(R)/port/mps2 imgpd
+FORCE:
+
+$(o)/Source/love-pd.img: $(R)/out/mps2/love-pd.img
+	@echo IMG	$@
+	@mkdir -p $(dir $@)
+	@cp $< $@
 
 $(o)/Source/pdex.%: $(o)/pdex.%
 	@echo CP	$@

@@ -39,7 +39,11 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   if (ms) while (ai_clock() - start < ms) ;
 }
-bool ai_ready(int fd) { return fd >= 0; }
+// the readiness law (host/main.c, the teensy's Enter-freeze lesson): a
+// NEGATIVE fd is ALWAYS ready -- a string port waits on nothing external.
+// fd 0 (the console buffer) answers instantly too (data or EOF), so every
+// fd is honestly ready here.
+bool ai_ready(int fd) { (void) fd; return 1; }
 void ai_wait_fds(int const *fds, int n, uintptr_t ms) { ai_sleep(ms); }
 
 // --- port vtable: both ports ride the console buffer -----------------------
@@ -149,18 +153,35 @@ void love_init(void) {
   pdg_log("love: init");
   cb_open(kcb, NROWS, NCOLS);
   kcb->flag |= cb_lnm | cb_wrap;   // console discipline + autowrap the long forms
-  // first light before the bake: the egg takes a while on the device, and a
-  // blank LCD reads as a hang
-  for (char const *s = "; love/playdate -- baking the egg"; *s; s++)
+  // WAKE-FIRST: the pdx bundles the qemu-baked heap image (love-pd.img --
+  // egg + rune + cas, wake-checked at build time). A good wake skips the
+  // minutes-long on-device bake the OS watchdog would kill anyway; any
+  // problem answers NULL and the egg lane below bakes from source (the
+  // 64-bit simulator refuses the 32-bit image this way BY DESIGN).
+  struct ai *g0 = NULL;
+  { enum { imgcap = 2u << 20 };
+    void *ib = pdg_realloc(NULL, imgcap);
+    int n = ib ? pdg_file_read("love-pd.img", ib, imgcap) : -1;
+    if (n > 0) g0 = ai_image_load_m(ib, (uintptr_t) n, pd_alloc);
+    if (ib) pdg_realloc(ib, 0); }
+  int woke = g0 != NULL;
+  pdg_log(woke ? "love: image awake" : "love: no image -- baking the egg");
+  for (char const *s = woke ? "; love/playdate -- image awake"
+                            : "; love/playdate -- baking the egg"; *s; s++)
     cb_putc(kcb, *s);
   blit();
-  struct ai *g = ai_defn(ai_ini_m(pd_alloc), defs, countof(defs));
+  struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs));
   pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the
   // transient peak is double the budget -- 8 MB here, and the simulator
   // emulates the device heap exactly (a budget of half OOMed it).
   if (ai_ok(g)) ai_core_of(g)->budget = (4u << 20) / sizeof(ai_word);
+  if (woke) {
+    K.g = g;
+    pdg_log("love: woke -- workbench up");
+    if (ai_ok(K.g)) pdg_set_update(k_update);
+    return; }
   K.g = ai_evals_(g, "("
 #include "egg.h"
     ai_egg_pre
