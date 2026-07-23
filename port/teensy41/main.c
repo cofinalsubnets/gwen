@@ -11,6 +11,7 @@
 // exactly as it drives the kernel's.
 #include "../../love.h"
 #include "teensy41.h"
+#include "psram.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -23,11 +24,16 @@
 // WFE on -- a tight poll keeps (key)/timed sleeps re-checking readiness. Same
 // shape as the host's poll_wait, minus the kernel.
 void ai_sleep(uintptr_t ms) {
-  if (!ms) { for (;;) arm_wfi(); }   // infinite: park (reset to exit)
+  if (!ms) { for (;;) if (serial_rx_ready()) return; }   // wait forever -- but wake on input
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-bool ai_ready(int fd) { return fd == 0 ? serial_rx_ready() : fd >= 0; }
+// the readiness law (host/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// ready -- a string port waits on nothing external, and answering "not ready"
+// parks its task on a wait no scheduler can satisfy (lvm_sound's park law
+// spins sound -> yield -> sound forever: the Enter-key freeze that walled
+// first-silicon interactive). fd 0 is the honest poll; other fds are nominal.
+bool ai_ready(int fd) { return fd ? 1 : serial_rx_ready(); }
 
 void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
@@ -181,10 +187,13 @@ void free(void *p) {
 // cstartup (teensy41.c) has set up the FPU, .data/.bss, VTOR, clocks, and the
 // console before calling us. The bootstrap egg compiles the love compiler with
 // the C evaluator, recompiles it with itself, installs it, then we run the
-// shell -- identical to host/free, just smaller. The arena is sized to leave
-// headroom for the stack under __stack_top__; if the self-hosting double-bake
-// OOMs on real silicon, shrink the budget, move the arena to PSRAM
-// (0x70000000), or trim the egg.
+// shell -- identical to host/free, just smaller. The arena of FIRST resort is
+// the 16 MB external PSRAM (psram.c brings up FlexSPI2; pattern-tested clean
+// on this board 2026-07-22) -- the same arena size the qemu-M7 port bakes in;
+// the old 384 KB OCRAM2 pool starved the bake (the first-silicon blocker: a
+// live set past the budget faults INSIDE the collector -- solid LED, then the
+// bootloader chip's 7-blink as the locked core trips its supervision). The
+// OCRAM pool stays as the no-PSRAM fallback.
 static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed: naturally aligned (mooncc parses no post-declarator attribute)
 
 int main(void) {
@@ -196,16 +205,27 @@ int main(void) {
   // adapter wiring) the moment the board resets, before any love runs.
   for (char const *s = "\r\n; love/teensy41 -- baking the egg\r\n"; *s; s++)
     serial_putc(*s);
-  freelist = (struct mem*) pool;
+  uint32_t psram_mb = psram_init();
+  { char const *s = psram_mb ? "; psram arena up\r\n" : "; NO psram -- ocram fallback\r\n";
+    for (; *s; s++) serial_putc(*s); }
+  uintptr_t arena_words;
+  if (psram_mb) {
+    // 64 B shy of the region edge: a one-past read at a block boundary must
+    // stay inside the region (the mps2 port's bus-fault lesson)
+    freelist = (struct mem*) 0x70000000u;
+    arena_words = ((psram_mb << 20) - 64u) / sizeof(uintptr_t); }
+  else {
+    freelist = (struct mem*) pool;
+    arena_words = sizeof pool / sizeof(uintptr_t); }
   freelist->next = NULL;
-  freelist->len = sizeof pool / sizeof(uintptr_t);
+  freelist->len = arena_words;
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
   // BOUND the collector to the arena (the Appel knob -- gen_please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A
   // quarter of the arena leaves the double-buffered resize and free-list
   // fragmentation their room.
-  if (ai_ok(g)) ai_core_of(g)->budget = sizeof pool / sizeof(ai_word) / 4;
+  if (ai_ok(g)) ai_core_of(g)->budget = arena_words / 4;
   struct ai *r = ai_evals_(g, "("
 #include "egg.h"
     ai_egg_pre

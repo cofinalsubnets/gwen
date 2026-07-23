@@ -57,9 +57,12 @@
 #define LPUART_BAUD_BOTHEDGE (1u << 17)
 #define LPUART_STAT_TDRE (1u << 23)               // TX data register empty
 #define LPUART_STAT_RDRF (1u << 21)               // RX data register full
+#define LPUART_STAT_OR   (1u << 19)               // RX overrun: latches and HALTS reception until cleared
 #define LPUART_CTRL_TE   (1u << 19)
 #define LPUART_CTRL_RE   (1u << 18)
 #define LPUART_FIFO_TXFE (1u << 7)                // enable TX FIFO
+#define LPUART_FIFO_RXFLUSH (1u << 14)            // flush the RX FIFO (write-1)
+#define LPUART_STAT_ERR  ((1u << 19) | (1u << 18) | (1u << 17) | (1u << 16))   // OR | NF | FE | PF, all write-1-clear
 #define LPUART_FIFO_RXFE (1u << 3)                // enable RX FIFO
 
 // --- IOMUXC pad mux (only the two console pads + the LED pad) -------------
@@ -93,6 +96,7 @@
 #define GPT_CR_EN     (1u << 0)
 #define GPT_CR_ENMOD  (1u << 1)
 #define GPT_CR_CLKSRC_24M (5u << 6)   // crystal oscillator (24 MHz)
+#define GPT_CR_EN_24M (1u << 10)       // the crystal path's OWN enable -- without it CNT sits at 0
 #define GPT_CR_FRR    (1u << 9)        // free-run (no compare reset)
 #define GPT_CR_SWR    (1u << 15)       // software reset
 #define GPT1_CCGR_BUS    10            // CCGR1 CG10

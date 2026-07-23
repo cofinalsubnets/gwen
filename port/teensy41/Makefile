@@ -22,7 +22,7 @@ te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
 lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 
 objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/ctype.o $(R)/$(o)/teensy41.o $(R)/$(o)/main.o $(R)/$(o)/boot.o
+  $(R)/$(o)/ctype.o $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o
 
 .PHONY: teensy41 flash clean
 teensy41: $(R)/$(o)/love.hex
@@ -85,3 +85,26 @@ $(R)/$(o)/love.hex: $(R)/$(o)/love.elf
 # Flash a connected Teensy 4.1 (tap the on-board button to enter the bootloader):
 flash: $(R)/$(o)/love.hex
 	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/love.hex
+
+# PSRAM smoke test (bake-free fast iteration): probe + pattern-test the
+# FlexSPI2 PSRAM chips, report over serial. `make psramtest` then
+# `make flashpsram` (or teensy_loader_cli by hand on psram-test.hex).
+pt_objs = $(R)/$(o)/psram.o $(R)/$(o)/psram-test.o $(R)/$(o)/teensy41.o $(R)/$(o)/boot.o
+$(R)/$(o)/psram.o: psram.c psram.h teensy41.h
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(te_cc) -c port/teensy41/psram.c $(o)/psram.o
+$(R)/$(o)/psram-test.o: psram-test.c psram.h teensy41.h
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(te_cc) -c port/teensy41/psram-test.c $(o)/psram-test.o
+$(R)/$(o)/psram-test.elf: $(pt_objs) teensy41.lds
+	@echo LD	$@
+	@$(LD) -T teensy41.lds $(pt_objs) -o $@
+$(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf
+	@echo HEX	$@
+	@$(OBJCOPY) -O ihex $< $@
+.PHONY: psramtest flashpsram
+psramtest: $(R)/$(o)/psram-test.hex
+flashpsram: $(R)/$(o)/psram-test.hex
+	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/psram-test.hex

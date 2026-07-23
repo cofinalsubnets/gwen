@@ -5,7 +5,7 @@
 // the crt0, the HardFault shim, and the barrier/wfi/bkpt helpers live in
 // boot.S: exact flash sections and bare instructions, gas-assembled. The
 // FlexSPI/IVT lore (wrong-offset first-silicon stories) rides boot.S now.
-#include "../../love.h"
+#include <stdint.h>
 #include "teensy41.h"
 
 // Linker-provided bounds (teensy41.lds) + the boot.S vector table.
@@ -97,7 +97,7 @@ void clocks_init(void) {
   REG(GPT1_CR) = GPT_CR_SWR;
   while (REG(GPT1_CR) & GPT_CR_SWR) {}
   REG(GPT1_PR) = 24u - 1u;
-  REG(GPT1_CR) = GPT_CR_CLKSRC_24M | GPT_CR_FRR | GPT_CR_ENMOD;
+  REG(GPT1_CR) = GPT_CR_CLKSRC_24M | GPT_CR_EN_24M | GPT_CR_FRR | GPT_CR_ENMOD;
   REG(GPT1_CR) |= GPT_CR_EN; }
 
 // --- LPUART6 console ------------------------------------------------------
@@ -119,17 +119,45 @@ void serial_init(void) {
   REG(LPUART_CTRL) = 0;                           // disable while configuring
   REG(LPUART_BAUD) = LPUART_BAUD_OSR(16) | LPUART_BAUD_SBR(13) | LPUART_BAUD_BOTHEDGE;
   REG(LPUART_FIFO) |= LPUART_FIFO_TXFE | LPUART_FIFO_RXFE;
-  REG(LPUART_CTRL) = LPUART_CTRL_TE | LPUART_CTRL_RE; }
+  REG(LPUART_CTRL) = LPUART_CTRL_TE | LPUART_CTRL_RE;
+  // the RX pad floats until the mux above lands, and boot-window noise can
+  // wedge the FIFO (garbage in flight at enable): flush RX, clear every
+  // error flag, drain anything already latched -- start CLEAN
+  REG(LPUART_FIFO) |= LPUART_FIFO_RXFLUSH;
+  REG(LPUART_STAT) = LPUART_STAT_ERR;
+  while (REG(LPUART_STAT) & LPUART_STAT_RDRF) (void) REG(LPUART_DATA); }
+
+// The RX FIFO is 4 deep and the editor answers every received char with a
+// ~20-byte redraw at the same baud, so a paste outruns the hardware 20:1 --
+// no polling discipline can save it at the FIFO. The soft ring absorbs the
+// difference: serial_putc's TDRE stalls are exactly where inbound bytes died,
+// so the pump runs there (and in every RX poll). A latched overrun both
+// halts reception AND desyncs the FIFO pointers (Kinetis-lineage block), so
+// the recovery is save-what's-readable, RXFLUSH, clear every error flag.
+static uint8_t  rx_ring[1024];
+static uint32_t rx_w, rx_r;
+static void rx_pump(void) {
+  for (;;) {
+    if (REG(LPUART_STAT) & LPUART_STAT_OR) {
+      while (REG(LPUART_STAT) & LPUART_STAT_RDRF)
+        rx_ring[rx_w++ & 1023u] = REG(LPUART_DATA) & 0xff;
+      REG(LPUART_FIFO) |= LPUART_FIFO_RXFLUSH;
+      REG(LPUART_STAT) = LPUART_STAT_ERR;
+      continue; }
+    if (!(REG(LPUART_STAT) & LPUART_STAT_RDRF)) return;
+    rx_ring[rx_w++ & 1023u] = REG(LPUART_DATA) & 0xff; } }
 
 void serial_putc(int c) {
-  while (!(REG(LPUART_STAT) & LPUART_STAT_TDRE)) {}
+  while (!(REG(LPUART_STAT) & LPUART_STAT_TDRE)) rx_pump();
   REG(LPUART_DATA) = (uint32_t)(c & 0xff); }
 
-int serial_rx_ready(void) { return !!(REG(LPUART_STAT) & LPUART_STAT_RDRF); }
+int serial_rx_ready(void) {
+  rx_pump();
+  return rx_w != rx_r; }
 
 int serial_getc(void) {
-  while (!(REG(LPUART_STAT) & LPUART_STAT_RDRF)) {}
-  return REG(LPUART_DATA) & 0xff; }
+  while (rx_w == rx_r) rx_pump();
+  return rx_ring[rx_r++ & 1023u]; }
 
 // --- clock: milliseconds since boot (GPT1 counts microseconds) -----------
 uintptr_t ai_clock(void) { return REG(GPT1_CNT) / 1000u; }
