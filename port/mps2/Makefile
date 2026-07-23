@@ -10,6 +10,7 @@
 R := ../..
 o = out/mps2
 MOONCC = out/host/mooncc
+mc = $(R)/out/host/mooncc
 AS = arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16
 LD = arm-none-eabi-ld
 
@@ -32,7 +33,7 @@ default: mps2
 # image, and the device's egg lane bakes from source as always.
 img: $(R)/$(o)/love.img
 
-$(R)/$(o)/main-baker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+$(R)/$(o)/main-baker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -D BAKER -c port/mps2/main.c $(o)/main-baker.o
@@ -44,7 +45,7 @@ $(R)/$(o)/baker.elf: $(baker_objs) mps2.lds
 waker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
   $(R)/$(o)/ctype.o $(R)/$(o)/main-waker.o $(R)/$(o)/start.o
 
-$(R)/$(o)/main-waker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+$(R)/$(o)/main-waker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -D WAKER -c port/mps2/main.c $(o)/main-waker.o
@@ -69,12 +70,12 @@ pd_lib_h = $(lib_h) out/lib/rune.h out/lib/runeseal.h
 $(R)/out/playdate/cas.h:
 	@$(MAKE) -C $(R)/port/playdate ../../out/playdate/cas.h
 
-$(R)/$(o)/main-baker-pd.o: main.c $(R)/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h
+$(R)/$(o)/main-baker-pd.o: main.c $(R)/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate -c port/mps2/main.c $(o)/main-baker-pd.o
 
-$(R)/$(o)/main-waker-pd.o: main.c $(R)/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h
+$(R)/$(o)/main-waker-pd.o: main.c $(R)/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate -c port/mps2/main.c $(o)/main-waker-pd.o
@@ -97,6 +98,56 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 	        || { echo "FAIL pd image wake-check"; rm -f $(o)/love-pd.img; exit 1; }; }; \
 	 else : > $@; echo "imgpd: no qemu-system-arm -- empty image (device egg-boots)"; fi
 
+# --- the thumb1 face: the SAME port compiled `mooncc -t thumb1` (ARMv6-M, the
+# RP2040's ISA). v6-M code is a strict subset of ARMv7E-M, so qemu's M7 runs it
+# natively -- no RP2040 machine exists in qemu; the microbit differential legs
+# prove the v6-M encoding floor, this proves the whole runtime. ai_tco=0: v6-M
+# has no sibcalls (the pop-pc epilogue), so the VM rides the trampoline -- the
+# same lane the clang rp2040 build uses. The __aeabi soft-float/64-bit helpers
+# come from gcc's v6-m multilib (the exact set the rp2040 port links).
+mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Iout/lib
+t1_lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
+
+t1_objs = $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/mem-t1.o $(R)/$(o)/str-t1.o \
+  $(R)/$(o)/ctype-t1.o $(R)/$(o)/main-t1.o $(R)/$(o)/start.o
+
+.PHONY: mps2t1
+mps2t1: $(R)/$(o)/love-t1.elf
+
+$(R)/$(o)/love-t1.o: $(R)/love.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2t1_cc) -c love.c $(o)/love-t1.o
+
+$(R)/$(o)/am-t1.o: $(R)/crew/moon/lib/math/am.c $(mc)
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(MOONCC) -t thumb1 -Icrew/moon/lib/math -Icrew/moon/include -c crew/moon/lib/math/am.c $(o)/am-t1.o
+
+$(R)/$(o)/mem-t1.o: $(R)/libc/mem.c $(R)/love.h $(mc)
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2t1_cc) -c libc/mem.c $(o)/mem-t1.o
+
+$(R)/$(o)/str-t1.o: $(R)/libc/str.c $(R)/love.h $(mc)
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2t1_cc) -c libc/str.c $(o)/str-t1.o
+
+$(R)/$(o)/ctype-t1.o: $(R)/libc/ctype.c $(R)/love.h $(mc)
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2t1_cc) -c libc/ctype.c $(o)/ctype-t1.o
+
+$(R)/$(o)/main-t1.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
+	@echo MOON	$@
+	@mkdir -p $(R)/$(o)
+	@cd $(R) && $(mps2t1_cc) -c port/mps2/main.c $(o)/main-t1.o
+
+$(R)/$(o)/love-t1.elf: $(t1_objs) mps2.lds
+	@echo LD	$@
+	@$(LD) -T mps2.lds $(t1_objs) $(t1_lg) -o $@
+
 clean:
 	rm -rf $(R)/$(o)
 
@@ -104,12 +155,12 @@ clean:
 $(addprefix $(R)/,$(lib_h)):
 	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
 
-$(R)/$(o)/love.o: $(R)/love.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+$(R)/$(o)/love.o: $(R)/love.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -c love.c $(o)/love.o
 
-$(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c
+$(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t thumb2 -Icrew/moon/lib/math -Icrew/moon/include -c crew/moon/lib/math/am.c $(o)/am.o
@@ -119,7 +170,7 @@ $(R)/$(o)/%.o: $(R)/libc/%.c $(R)/love.h
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -c libc/$*.c $(o)/$*.o
 
-$(R)/$(o)/main.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h))
+$(R)/$(o)/main.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -c port/mps2/main.c $(o)/main.o

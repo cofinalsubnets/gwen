@@ -519,6 +519,14 @@
       `("t1.shlv"    "8840"              '((shlv r0 r1)))              ; lsls r0, r0, r1 (count in r1)
       `("t1.shrv"    "c840"              '((shrv r0 r1)))              ; lsrs r0, r0, r1
       `("t1.sarv"    "0841"              '((sarv r0 r1)))              ; asrs r0, r0, r1
+      `("t1.shrv.r2" "d040"              '((shrv r0 r2)))              ; lsrs r0, r0, r2 (any low count reg)
+      ;; the carry family (the pair kit): ADCS commutes on d==b; SBCS d==b borrows a saved scratch
+      ;; (push/pop/hi-MOV never touch the carry). the f4 logicals commute on d==b the same way.
+      `("t1.adc"     "5941"              '((adc r1 r3 r1)))            ; adcs r1, r3 (d==b commutes)
+      `("t1.sbc"     "1a468a41"          '((sbc r2 r3 r1)))            ; mov r2,r3 ; sbcs r2,r1
+      `("t1.sbc.db"  "01b408461946814101bc" '((sbc r1 r3 r1)))         ; push{r0};mov r0,r1;mov r1,r3;sbcs r1,r0;pop{r0}
+      `("t1.ors"     "0843"              '((ors r0 r0 r1)))            ; orrs r0, r1
+      `("t1.and.db"  "1040"              '((and r0 r2 r0)))            ; ands r0, r2 (d==b commutes)
       `("t1.lea0"    "bd46"              '((lea sp fp 0)))             ; mov sp, r7 (fp=r7 on v6-M; lea #0 rides the sp-legal MOV)
       `("t1.leasp"   "04a8"              '((lea r0 sp 16)))            ; add r0, sp, #16
       `("t1.leaa3"   "081d"              '((lea r0 r1 4)))             ; adds r0, r1, #4
@@ -535,18 +543,23 @@
       `("t1.pushlr"  "00b5"              '((push lr)))                 ; push {lr}
       `("t1.pop"     "10bc"              '((pop r4)))                  ; pop {r4}
       `("t1.poppc"   "00bd"              '((pop pc)))                  ; pop {pc}
-      `("t1.set"     "012000d00020"      '((set eq r0)))              ; movs r0,#1 ; beq .+0 ; movs r0,#0
+      `("t1.set"     "01d0002000e00120"  '((set eq r0)))              ; beq .one ; movs r0,#0 ; b .end ; .one: movs r0,#1 (branch FIRST: movs sets N/Z on v6-M)
+      ;; the far/hi memory lane: out-of-reach imm5 offsets and hi registers synthesize the address.
+      `("t1.ld.far"  "802008440068"      '((ld r0 r1 128)))           ; movs r0,#128 ; add r0,r1 ; ldr r0,[r0]
+      `("t1.ld.hi"   "01b4082020440068844601bc" '((ld r12 r4 8)))     ; push{r0};movs r0,#8;add r0,r4;ldr r0,[r0];mov r12,r0;pop{r0}
+      `("t1.st.far"  "04b4c8220a44106004bc" '((st r1 200 r0)))         ; push{r2};movs r2,#200;add r2,r1;str r0,[r2];pop{r2}
       `("t1.jmpr"    "1847"              '((jmpr r3)))                 ; bx r3
       `("t1.callr"   "9847"              '((callr r3)))                ; blx r3
       `("t1.ret"     "7047"              '((ret)))                     ; bx lr
       `("t1.sys"     "00df"              '((sys)))                     ; svc #0
       `("t1.nop"     "00bf"              '((nop)))                     ; nop
       `("t1.trap"    "00be"              '((trap)))                    ; bkpt #0
-      ;; branches: forward and backward, the halfword-scaled offset scrambled into imm11/imm8/BL fields.
-      `("t1.jmp.fwd" "00e000bf"          '((jmp l) (nop) (label l)))   ; b #0   -> past the nop
-      `("t1.jmp.bwd" "00bffde7"          '((label l) (nop) (jmp l)))   ; b #-6  -> back to l
-      `("t1.br.fwd"  "00d000bf"          '((br eq l) (nop) (label l))) ; beq #0
-      `("t1.br.bwd"  "00bffdd1"          '((label l) (nop) (br ne l))) ; bne #-6
+      ;; branches: every LABEL branch is WIDE (BL, +-16MB; lr is dead mid-frame) -- the short
+      ;; B/Bcc can't cross a big function. br = the inverted-Bcc hop over the BL.
+      `("t1.jmp.fwd" "00f001f800bf"      '((jmp l) (nop) (label l)))   ; bl .+2 -> past the nop
+      `("t1.jmp.bwd" "00bffff7fdff"      '((label l) (nop) (jmp l)))   ; bl .-6 -> back to l
+      `("t1.br.fwd"  "01d100f001f800bf"  '((br eq l) (nop) (label l))) ; bne .+4 (hop) ; bl l
+      `("t1.br.bwd"  "00bf01d0fff7fcff"  '((label l) (nop) (br ne l))) ; beq .+4 (hop) ; bl l
       `("t1.call.fwd" "00f001f800bf"     '((call l) (nop) (label l)))  ; bl #2
       ;; a whole trivial leaf end to end: r0 = r0 + r1 ; return.
       `("t1.leaf"    "40187047"          '((add r0 r0 r1) (ret)))      ; adds r0,r0,r1 ; bx lr

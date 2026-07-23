@@ -656,8 +656,8 @@
                           (: sk (nlab g ".u")
                              _ (vmflush g)
                              (fs + `(`('br 'p sk) `('br 'eq lbl) `('label sk))))))
-                   (pair? g (vty c))                     ; pair truth: either word nonzero
-                    ((vfs c) + `(`('ors 'r12 'r0 'r1) `('br cc lbl)))
+                   (pair? g (vty c))                     ; pair truth: either word nonzero (v6-M: no r12 dest; r0 is dead past the branch)
+                    ((vfs c) + `(`('ors (? (v6m? g) 'r0 'r12) 'r0 'r1) `('br cc lbl)))
                    (: fs ((vfs c) + `(`('cmp (vreg c) 0) `('br cc lbl)))
                       _ (rfree g (vreg c))
                       fs))))))
@@ -702,23 +702,29 @@
    (pst base off) `(`('st base off 'r0) `('st base (off + 4) 'r1))
    ; flags := (la:lb) - (ra:rb), for a NORMALIZED relation (lt/ge; gt/le swap operands first).
    ; eq/ne OR the two word-differences instead (la is dead after its read: it takes the hi diff).
-   (pcmpf op la lb ra rb)
-    (? (member? op '(eq ne))
+   ; v6-M: no r12-dest ALU exists, so the differences land IN la:lb -- every call site's left pair
+   ; is dead past the compare (a branch consumes it; prel's set overwrites r0 after the flags).
+   (pcmpf g op la lb ra rb)
+    (? (v6m? g)
+       (? (member? op '(eq ne))
+          `(`('subs la la ra) `('sbcs lb lb rb) `('ors la la lb))
+          `(`('subs la la ra) `('sbcs lb lb rb)))
+       (member? op '(eq ne))
        `(`('subs 'r12 la ra) `('sbc la lb rb) `('ors 'r12 'r12 la))
        `(`('subs 'r12 la ra) `('sbcs 'r12 lb rb)))
    ; a pair relation as (cc forms), operands lhs r2:r3 / rhs r0:r1 (the shuttle shape):
    ; gt/le compute the SWAPPED difference and flip to lt/ge; signedness picks lt/below via scc.
-   (prel op unsg)
-    (? (member? op '(eq ne)) `(op (pcmpf op 'r2 'r3 'r0 'r1))
-       (member? op '(lt ge)) `((scc op unsg) (pcmpf op 'r2 'r3 'r0 'r1))
-       `((scc (? (op = 'gt) 'lt 'ge) unsg) (pcmpf op 'r0 'r1 'r2 'r3)))
+   (prel g op unsg)
+    (? (member? op '(eq ne)) `(op (pcmpf g op 'r2 'r3 'r0 'r1))
+       (member? op '(lt ge)) `((scc op unsg) (pcmpf g op 'r2 'r3 'r0 'r1))
+       `((scc (? (op = 'gt) 'lt 'ge) unsg) (pcmpf g op 'r0 'r1 'r2 'r3)))
    ; the pair BRANCH: cbranch's twin of prel -- cc 'ne branches when (la:lb OP ra:rb) holds,
    ; cc 'eq when it does not (the negated relation keeps the same operand order: !lt = ge).
    (pbrf g op unsg la lb ra rb cc lbl)
     (: o2 (? (cc = 'ne) op (negrel op))
-       (? (member? o2 '(eq ne)) ((pcmpf o2 la lb ra rb) + `(`('br o2 lbl)))
-          (member? o2 '(lt ge)) ((pcmpf o2 la lb ra rb) + `(`('br (scc o2 unsg) lbl)))
-          ((pcmpf o2 ra rb la lb) + `(`('br (scc (? (o2 = 'gt) 'lt 'ge) unsg) lbl)))))
+       (? (member? o2 '(eq ne)) ((pcmpf g o2 la lb ra rb) + `(`('br o2 lbl)))
+          (member? o2 '(lt ge)) ((pcmpf g o2 la lb ra rb) + `(`('br (scc o2 unsg) lbl)))
+          ((pcmpf g o2 ra rb la lb) + `(`('br (scc (? (o2 = 'gt) 'lt 'ge) unsg) lbl)))))
    ; a pair shift by a CONSTANT count (kind 'shl/'shr/'sar), value on the protocol; in-place.
    (pshiftc kind c)
     (? (c < 1) ()
@@ -738,7 +744,10 @@
    ; a pair shift by a VARIABLE count in r2 (0..63), value on the protocol. branchy: the big
    ; lane (count >= 32) moves one word across; the small lane composes the carry-over through
    ; r12 (count 0 skips -- a 32-c shift at c=0 would be UNPREDICTABLE). labels via nlab.
+   ; v6-M: no r12 ALU dest and no free low temp -> libgcc's helper (count in r2, the same staging).
    (pshiftv g kind)
+    (? (v6m? g)
+       `(`('call (? (kind = 'shl) '__aeabi_llsl (kind = 'shr) '__aeabi_llsr '__aeabi_lasr)))
     (: lb (nlab g ".pb") ls (nlab g ".ps") ld (nlab g ".pd")
        _ (vmflush g)
        one (? (kind = 'shl) `(`('mov 'r1 'r0) `('shlv 'r1 'r2) `('li 'r0 0))
@@ -752,12 +761,15 @@
                    `('shrv 'r0 'r2) `('or 'r0 'r0 'r12) `(hop 'r1 'r2))))
        (`(`('cmp 'r2 32) `('br 'ae lb) `('cmp 'r2 0) `('br 'eq ld))
         + sm + `(`('jmp ld) `('label lb) `('sub 'r2 'r2 32))
-        + one + `(`('label ld))))
+        + one + `(`('label ld)))))
    ; the 64-bit float bridges (VFP on AArch32 converts only through 32 bits). llong -> double:
    ; hi rides the U-converter and scales by 2^32 (exact -- hi*2^32 is representable), lo adds
    ; exactly, ONE rounding total; the signed face negates the pair in, the double out (INT64_MIN
    ; survives: its u64 face IS 2^63). value r0:r1 -> f0.
+   ; v6-M: the whole bridge is one libgcc call (pair already rides r0:r1, the arg protocol).
    (cvtlld g sgn)
+    (? (v6m? g)
+       `(`('call (? sgn '__aeabi_ul2d '__aeabi_l2d)) `('movqxr 'f0 'r0))
     (: lu (nlab g ".lu") ld (nlab g ".ld")
        _ (vmflush g)
        u2d `(`('cvtui2sd 'f0 'r1)
@@ -770,11 +782,15 @@
            + u2d
            + `(`('li 'r2 0) `('li 'r3 0) `('movqxr 'f1 'r2)           ; 0.0 - d
               `('subsd 'f1 'f0) `('movsd 'f0 'f1) `('jmp ld) `('label lu))
-           + u2d + `(`('label ld)))))
+           + u2d + `(`('label ld))))))
    ; double -> llong, toward zero: peel sign/exponent off the PATTERN, rebuild the 53-bit
    ; integer mantissa as a pair, shift it into place (the variable pair shifters), refix the
    ; sign. |d| < 1 answers 0; out-of-range is UB and shifts to garbage like the hardware would.
-   (cvtdll g)
+   ; v6-M: one libgcc call (f0 -> the r0:r1 arg pair; toward-zero like the peel, which is
+   ; sign-blind bit arithmetic -- only the libcall face needs the target's signedness).
+   (cvtdll g usg)
+    (? (v6m? g)
+       `(`('movqrx 'r0 'f0) `('call (? usg '__aeabi_d2ulz '__aeabi_d2lz)))
     (: l1 (nlab g ".d1") lr (nlab g ".dr") ls (nlab g ".ds") ld (nlab g ".dd")
        _ (vmflush g)
        (`(`('movqrx 'r0 'f0)
@@ -792,7 +808,7 @@
         + `(`('label ls) `('ld 'r2 'sp 0) `('add 'sp 'sp 16)
            `('cmp 'r2 0) `('br 'eq ld)
            `('li 'r2 0) `('li 'r3 0) `('subs 'r0 'r2 'r0) `('sbc 'r1 'r3 'r1)
-           `('label ld))))
+           `('label ld)))))
 
    ; a fresh frame temp of type ty -> its (negative) offset. bumps the frame's
    ; high-water like a local; used to give a compound literal a home.
@@ -1123,7 +1139,7 @@
                  (&& (flo? tgt) (! (flo? (vty r)))) (mkv 'double 'r0 (asflo g r))  ; int -> double
                  (&& (! (flo? tgt)) (flo? (vty r)))                              ; double -> int, then narrow
                   (? (pair? g tgt)                                               ; double -> llong: the pattern peel
-                      (mkv tgt 'r0 ((vfs r) + (cvtdll g)))
+                      (mkv tgt 'r0 ((vfs r) + (cvtdll g (usg? tgt))))
                      (&& (t32? g) (usg? tgt))                                    ; t32 unsigned: the U-converter
                       (mkv tgt 'r0 ((vfs r) + `(`('cvttsd2ui 'r0 'f0)) + (cvt tgt 'r0)))
                      (mkv tgt 'r0 ((asint g r) + (cvt tgt 'r0))))
@@ -1150,7 +1166,7 @@
                                                        `('subs 'r0 'r2 'r0) `('sbc 'r1 'r3 'r1))))
                      (<>e = 'bnot)
                       (mkv (vty r) 'r0 ((tor0 g r) + `(`('not 'r0) `('not 'r1))))
-                     (mkv 'long 'r0 ((tor0 g r) + `(`('ors 'r12 'r0 'r1) `('set 'eq 'r0)))))
+                     (mkv 'long 'r0 ((tor0 g r) + `(`('ors (? (v6m? g) 'r0 'r12) 'r0 'r1) `('set 'eq 'r0)))))
                  ; -1ULL stays unsigned; a SUB-64 unsigned re-narrows after
                  ; neg/~ (the model keeps unsigned intermediates canonically
                  ; zero-extended: -1u must wrap at 32 bits, not ride 64)
@@ -1225,8 +1241,8 @@
               (? (bad? lv) 'bad
                  (: _ (pin g 'fesc 1)                                       ; the va_list HOLDS frame addresses: no sibcalls here
                     (mkv 'long 'r0 (cat (tor0 g lv)
-                      (? (t32? g)   ; AAPCS32: __ap = the first anonymous word, past the named regs and named overflow
-                         `(`('lea 'r1 'r4 (8 + ((* 4 ngp) + nov))) `('st 'r0 0 'r1))
+                      (? (t32? g)   ; AAPCS32: __ap = the first anonymous word, past the push cells + named regs + named overflow
+                         `(`('lea 'r1 'r4 ((ovb g) + ((* 4 ngp) + nov))) `('st 'r0 0 'r1))
                          (a64? g)
                          `(`('lea 'r1 'r4 ((ovb g) + (* 8 nov))) `('st 'r0 0 'r1)   ; __stack = fp+32 + named overflow
                             `('lea 'r1 'r4 (rsa + 64))  `('st 'r0 8 'r1)            ; __gr_top (past x0..x7)
@@ -1362,8 +1378,11 @@
                          (: lz (nlab g ".cz") ld (nlab g ".czd")
                             _ (vmflush g)
                             (mkv 'long 'r0 ((asll g e1) +
-                              `(`('cmp 'r1 0) `('br 'eq lz) `('clz 'r0 'r1) `('jmp ld)
-                                 `('label lz) `('clz 'r0 'r0) `('add 'r0 'r0 32) `('label ld)))))
+                              (? (v6m? g)   ; no CLZ on v6-M: libgcc's __clzsi2 (arg/result r0)
+                                 `(`('cmp 'r1 0) `('br 'eq lz) `('mov 'r0 'r1) `('call '__clzsi2) `('jmp ld)
+                                    `('label lz) `('call '__clzsi2) `('add 'r0 'r0 32) `('label ld))
+                                 `(`('cmp 'r1 0) `('br 'eq lz) `('clz 'r0 'r1) `('jmp ld)
+                                    `('label lz) `('clz 'r0 'r0) `('add 'r0 'r0 32) `('label ld))))))
                         (mkv 'long 'r0 ((asint g e1) +
                                         (? (a64? g) `(`('raw `(0 16 192 218)))                    ; clz x0, x0
                                            `(`('raw `(72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
@@ -1371,7 +1390,11 @@
                   (: e1 (cgexpr g env <args)
                      (? (bad? e1) 'bad
                         (mkv 'long 'r0 (cat (asflo g e1)
-                                  (? (t32? g)                 ; |hi| == 0x7FF00000 and lo == 0, over the pair
+                                  (? (v6m? g)                 ; the r12-free twin: the diffs land in r1 (dead past the set)
+                                     `(`('movqrx 'r0 'f0) `('li 'r2 2147483647) `('and 'r1 'r1 'r2)
+                                        `('li 'r2 2146435072) `('subs 'r1 'r1 'r2)
+                                        `('ors 'r1 'r1 'r0) `('set 'eq 'r0))
+                                     (t32? g)                 ; |hi| == 0x7FF00000 and lo == 0, over the pair
                                      `(`('movqrx 'r0 'f0) `('li 'r2 2147483647) `('and 'r1 'r1 'r2)
                                         `('li 'r2 2146435072) `('subs 'r12 'r1 'r2)
                                         `('ors 'r12 'r12 'r0) `('set 'eq 'r0))
@@ -1396,6 +1419,12 @@
                             `(`('raw (opb + `(15 144 193 72 15 182 201))))          ; op; seto cl; movzx rcx,cl
                             (! (bi = "__builtin_mul_overflow"))
                              `(`((? (bi = "__builtin_add_overflow") 'adds 'subs) 'r0 'r0 'r1) `('set 'vs 'r1))
+                            (v6m? g)                          ; no SMULL: sign-widen both words through __aeabi_lmul,
+                             (cat (spush 'r3)                 ; then hi vs lo>>31. r3 = the &t address -- saved around the call
+                              (cat `(`('mov 'r2 'r1) `('mov 'r1 'r0) `('sar 'r1 31)
+                                     `('mov 'r3 'r2) `('sar 'r3 31) `('call '__aeabi_lmul)
+                                     `('mov 'r2 'r0) `('sar 'r2 31) `('subs 'r1 'r1 'r2) `('set 'ne 'r1))
+                               (spop 'r3)))
                             (t32? g)                          ; SMULL, then hi vs lo>>31 (no 64-bit regs)
                              `(`('smull 'r0 'r2 'r0 'r1) `('mov 'r12 'r0) `('sar 'r12 31)
                                 `('subs 'r1 'r2 'r12) `('set 'ne 'r1))
@@ -1436,6 +1465,7 @@
                     cr (call-fixed g env head args direct ptys rt variadic)
                     (? (bad? cr) 'bad
                        (! (stru? (vty cr))) cr
+                       (&& (v6m? g) (4 < (tsz g (vty cr)))) cr   ; v6-M MEMORY return: the sret temp's address in r0 IS the struct value
                        (sse2? g (vty cr))              ; a two-double struct result: park the xmm pair in a fresh slot, answer its address
                         (: toff (0 - ((peep g 'off 0) + 16))
                            _ (pin g 'off ((peep g 'off 0) + 16))
@@ -1545,6 +1575,15 @@
                     ; d-pairs; an 8B one-sse blob = the packed S-pair, bit-identical); a <=4B int one
                     ; rides r0's word. mixed/int-pair 8..16B stays deferred -- refuse LOUD.
                     (? (&& (t32? g) (&& va? (stru? aty))) 'bad   ; a t32 VARIADIC call rides the base PCS: no d-reg composites -- refuse LOUD
+                       (&& (v6m? g) (sse2? g aty))       ; v6-M: a POSITION-0 16B composite rides r0-r3 whole (the
+                        (? (gpc = 0)                     ;  base-ABI words); any later start would SPLIT -- deferred
+                           (kls >as (i + 1) 4 xmmc ovc
+                                (link `(`('g4 0)
+                                         ((tor0 g a) +
+                                          `(`('sub 'sp 'sp 16) `('ld 'r1 'r0 12) `('st 'sp 12 'r1) `('ld 'r1 'r0 8) `('st 'sp 8 'r1)
+                                             `('ld 'r1 'r0 4) `('st 'sp 4 'r1) `('ld 'r1 'r0 0) `('st 'sp 0 'r1))))
+                                      acc))
+                           'bad)
                        (&& (t32? g) (&& (stru? aty)
                            (! (|| (sse2? g aty)
                                   (|| (&& (id? (aone g aty) 'sse) ((tsz g aty) = 8))
@@ -1616,13 +1655,36 @@
                                    (t32? g) (aval + `(`('st 'sp ovc 'r0)))
                                    (aval + `(`('push 'r0))))
                           (? (&& (t32? g) (&& va? wd2)) 'bad   ; a t32 VARIADIC call rides the base PCS: no d-reg doubles -- refuse LOUD
+                             (&& (v6m? g) (id? aty 'float))    ; v6-M base ABI: a bare float arg is ONE WORD (binary32,
+                              (: av1 ((asflo g a)              ;  the gcc shape -- ai_flo_t IS float on a 32-bit love)
+                                      + `(`('cvtsd2ss 'f0 'f0) `('movqrx 'r0 'f0)))
+                                 (? (gpc < (ngp g))
+                                    (kls >as (i + 1) (gpc + 1) xmmc ovc
+                                         (link `(`('g gpc) (av1 + (spush 'r0))) acc))
+                                    (kls >as (i + 1) gpc xmmc (ovc + 4)
+                                         (link `(`('ov ovc 4) (av1 + `(`('st 'sp ovc 'r0)))) acc))))
+                             (&& (v6m? g) wd2)             ; v6-M base ABI: a double/8B-blob arg is an even-odd gp
+                              (: gpe (& (gpc + 1) -2)      ;  pair (aval already lands r0:r1), else the 8-aligned stack
+                                 (? ((gpe + 2) <= (ngp g))
+                                     (kls >as (i + 1) (gpe + 2) xmmc ovc
+                                          (link `(`('g2 gpe) (aval + spush2)) acc))
+                                     (: ov8 (& (ovc + 7) -8)
+                                        (kls >as (i + 1) 4 xmmc (ov8 + 8)
+                                             (link `(`('ov ov8 8)
+                                                      (aval + `(`('st 'sp ov8 'r0) `('st 'sp (ov8 + 4) 'r1))))
+                                                   acc)))))
                              (&& wd2 (xmmc < 8)) (kls >as (i + 1) gpc (xmmc + 1) ovc (link `(`('x xmmc) rpush) acc))
                              (&& (t32? g) wd2) 'bad         ; a t32 fp/blob OVERFLOW arg (9+ doubles): the 4-byte slot can't carry it -- refuse LOUD
                              (&& (! wd2) (gpc < (ngp g))) (kls >as (i + 1) (gpc + 1) xmmc ovc (link `(`('g gpc) rpush) acc))
                              (t32? g) (kls >as (i + 1) gpc xmmc (ovc + 4) (link `(`('ov ovc 4) opush) acc))
                              (kls >as (i + 1) gpc xmmc (ovc + 1) (link `(`('ov ovc) opush) acc)))))))))))
+       ; v6-M MEMORY return (AAPCS32 base): a >4-byte composite result fills a caller temp
+       ; whose address rides the IMPLICIT first argument (r0) -- args start at gpc 1, the
+       ; address materializes fresh right before the call and again after it (the result)
+       sr6 (&& (v6m? g) (&& (stru? ret) (4 < (tsz g ret))))
+       sroff (? sr6 (ntmp g ret) 0)
        _ (pin g 'argseal ((peep g 'argseal 0) + 1))     ; the vmap seals across the staging (see vmon?)
-       kr (kls ags 0 0 0 0 ())
+       kr (kls ags 0 (? sr6 1 0) 0 0 ())
        _ (pin g 'argseal ((peep g 'argseal 0) - 1))
        (? (bad? kr) 'bad
           (: ov? (\ kent ((cap (cap kent)) = 'ov))
@@ -1630,7 +1692,7 @@
                                      (go1 >l1 (? (ov? <l1) (link <l1 acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, REVERSED (deepest pushes first)
              rgr (: (go2 l2 acc2) (? (! (two? l2)) acc2
-                                     (go2 >l2 (? (member? (cap (cap (cap l2))) '(g g2 x x2 p2))
+                                     (go2 >l2 (? (member? (cap (cap (cap l2))) '(g g2 g4 x x2 p2))
                                                       (link <l2 acc2) acc2)))
                     (go2 kr ()))                          ; PUSHING register entries, reversed (pops run forward)
              (pushcat l3 acc3) (? (! (two? l3)) acc3 (pushcat >l3 (acc3 + (caup (cap l3)))))
@@ -1646,6 +1708,10 @@
                                                           (<kc = 'g2)   ; the t32 pair: both words off one cell
                                                            `(`('ld (nthr (argr g) <>kc) 'sp 0)
                                                               `('ld (nthr (argr g) (<>kc + 1)) 'sp 4)
+                                                              `('add 'sp 'sp 16))
+                                                          (<kc = 'g4)   ; the v6-M whole-composite quad: r0-r3 off one cell
+                                                           `(`('ld 'r0 'sp 0) `('ld 'r1 'sp 4)
+                                                              `('ld 'r2 'sp 8) `('ld 'r3 'sp 12)
                                                               `('add 'sp 'sp 16))
                                                           (&& (t32? g) (<kc = 'x))   ; a t32 double pops STRAIGHT into its d-reg
                                                            `(`('ldsd (xmmreg <>kc) 'sp 0) `('add 'sp 'sp 16))
@@ -1728,11 +1794,22 @@
                     (go7 kr ()))
              (? dir
                  (: _ (vmflush g)                          ; the call clobbers every pool reg
-                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + `(`('call (intern <>hd))) + clean + relods)))
+                    ; v6-M base ABI: a double result arrives in r0:r1, a bare float as one word
+                    ; (binary32 in r0 -- widen it) -- either lands on the f0 fiction
+                    fres (? (! (&& (v6m? g) (flo? ret))) ()
+                            (id? ret 'float) `(`('movqxr 'f0 'r0) `('cvtss2sd 'f0 'f0))
+                            `(`('movqxr 'f0 'r0)))
+                    srlea (? sr6 `(`('lea 'r0 'r4 sroff)) ())   ; the sret address in, then back out as the result
+                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srlea + `(`('call (intern <>hd))) + fres + srlea + clean + relods)))
                 (: hr (cgexpr g env hd)                   ; a function-pointer value: park (x64 rbx; arm64 x15), callr
                    pk (pkr g)
                    _ (vmflush g)                          ; the call clobbers every pool reg
+                   fres (? (! (&& (v6m? g) (flo? (fnret (vty hr))))) ()
+                           (id? (fnret (vty hr)) 'float) `(`('movqxr 'f0 'r0) `('cvtss2sd 'f0 'f0))
+                           `(`('movqxr 'f0 'r0)))
                    (? (bad? hr) 'bad
+                      (&& (v6m? g) (&& (stru? (fnret (vty hr)))   ; a MEMORY-returning callee behind a POINTER: the
+                          (4 < (tsz g (fnret (vty hr)))))) 'bad   ; implicit-arg shift wasn't staged -- refuse LOUD
                       ; t32: r12 is ALSO the far-mem/pair scratch, so a register park dies to any
                       ; far frame offset in the ez emissions -- park in a frame slot instead and
                       ; reload r12 as the LAST thing before the call (the far lane loading it is
@@ -1741,7 +1818,7 @@
                       (t32? g)
                        (: pko (ntmp g 'long)
                           (mkv (fnret (vty hr)) 'r0 (cat pf (cat (tor0 g hr) (cat `(`('st 'r4 pko 'r0))
-                                    (spills + ezf + pops + setal + `(`('ld pk 'r4 pko) `('callr pk)) + clean + relods))))))
+                                    (spills + ezf + pops + setal + `(`('ld pk 'r4 pko) `('callr pk)) + fres + clean + relods))))))
                       (mkv (fnret (vty hr)) 'r0 (cat pf (cat (tor0 g hr) (cat `(`('mov pk 'r0))
                                 (spills + ezf + pops + setal + `(`('callr pk)) + clean + relods)))))))))))
    (cgbin g env e wnt)
@@ -1808,18 +1885,32 @@
                                  ; unsigned / and % ride the backend's restoring expansion, relations
                                  ; ride subs/sbcs (prel). signed pair divide stays refused.
                                  (: mid2 ((asll g av) + spush2 + (asll g b) + (spop2 'r2 'r3))
+                                    ; v6-M divide staging: numerator (the LEFT) lands r0:r1, denominator r2:r3
+                                    ; (the __aeabi_(u)ldivmod protocol); mov is the hi-form, flag-silent
+                                    mid2d ((asll g av) + spush2 + (asll g b)
+                                           + `(`('mov 'r2 'r0) `('mov 'r3 'r1)) + (spop2 'r0 'r1))
                                     rt (ubin ta tb)
                                     (? (op = '+) (mkv rt 'r0 (mid2 + `(`('adds 'r0 'r2 'r0) `('adc 'r1 'r3 'r1))))
                                        (op = '-) (mkv rt 'r0 (mid2 + `(`('subs 'r0 'r2 'r0) `('sbc 'r1 'r3 'r1))))
-                                       (op = '*) (mkv rt 'r0 (mid2 + `(`('imul 'r3 'r3 'r0) `('mla 'r3 'r2 'r1 'r3)
-                                                                       `('umull 'r0 'r12 'r2 'r0) `('add 'r1 'r12 'r3))))
+                                       (op = '*)
+                                        (? (v6m? g)   ; no UMULL/MLA on v6-M: libgcc's exact helper (commutative, either staging)
+                                           (mkv rt 'r0 (mid2 + `(`('call '__aeabi_lmul))))
+                                           (mkv rt 'r0 (mid2 + `(`('imul 'r3 'r3 'r0) `('mla 'r3 'r2 'r1 'r3)
+                                                                 `('umull 'r0 'r12 'r2 'r0) `('add 'r1 'r12 'r3)))))
                                        (op = '&) (mkv rt 'r0 (mid2 + `(`('and 'r0 'r2 'r0) `('and 'r1 'r3 'r1))))
                                        (op = '|) (mkv rt 'r0 (mid2 + `(`('or 'r0 'r2 'r0) `('or 'r1 'r3 'r1))))
                                        (op = '^) (mkv rt 'r0 (mid2 + `(`('xor 'r0 'r2 'r0) `('xor 'r1 'r3 'r1))))
-                                       (op = '/) (? unsg (mkv rt 'r0 (mid2 + `(`('udivll)))) 'bad)
-                                       (op = '%) (? unsg (mkv rt 'r0 (mid2 + `(`('uremll)))) 'bad)
+                                       (op = '/)
+                                        (? (v6m? g)   ; quotient rides out in r0:r1; the SIGNED face works too (__aeabi_ldivmod)
+                                           (mkv rt 'r0 (mid2d + `(`('call (? unsg '__aeabi_uldivmod '__aeabi_ldivmod)))))
+                                           unsg (mkv rt 'r0 (mid2 + `(`('udivll)))) 'bad)
+                                       (op = '%)
+                                        (? (v6m? g)   ; the remainder rides r2:r3 -> the protocol pair
+                                           (mkv rt 'r0 (mid2d + `(`('call (? unsg '__aeabi_uldivmod '__aeabi_ldivmod))
+                                                                  `('mov 'r0 'r2) `('mov 'r1 'r3))))
+                                           unsg (mkv rt 'r0 (mid2 + `(`('uremll)))) 'bad)
                                        (member? op '(eq ne lt le gt ge))
-                                        (: cf (prel op unsg)
+                                        (: cf (prel g op unsg)
                                            (mkv 'long 'r0 (mid2 + <>cf + `(`('set <cf 'r0)))))
                                        'bad))
                                 (op = '+)
@@ -1992,8 +2083,117 @@
    sf-save `(`('sub 'sp 'sp 32) `('st 'sp 0 'r0) `('st 'sp 4 'r1) `('st 'sp 8 'r2) `('st 'sp 12 'r3))
    sf-rest `(`('ld 'r0 'sp 0) `('ld 'r1 'sp 4) `('ld 'r2 'sp 8) `('ld 'r3 'sp 12) `('add 'sp 'sp 32))
    (sf-slot r) (? (id? r 'r0) 0 (id? r 'r1) 4 (id? r 'r2) 8 (id? r 'r3) 12 -1)
+   ; the v6-M SOFT-DOUBLE pass: no FPU registers AT ALL (the M0+/RP2040 face). the f0/f1/f15
+   ; fiction rewrites onto the three frame cells cgfn pinned (fc0/fc1/fc15 -- r4-negative ir1
+   ; slots; t16slots turns them positive later). every f64 arithmetic/compare/convert lowers
+   ; to its __aeabi_* call (sp64's exact helpers and fused-compare dance); the TRANSFERS --
+   ; no vldr/vstr/vmov exists -- become word loads/stores through a saved low temp (r3, or r2
+   ; when the base IS r3; push/pop and plain mem ops never touch flags, so a transfer between
+   ; a cmp and its consumer stays sound). an sp-based transfer offsets across the temp's
+   ; 16-byte save cell; the cells mirror register semantics 1:1 WITHIN a function -- every
+   ; cross-function f-reg convention (args/params/returns/results) was re-routed onto gp
+   ; pairs upstream (the base ABI), so no cell ever crosses a frame. residue scares LOUD.
+   (fcell g f) (? (id? f 'f0) (peep g 'fc0 0) (id? f 'f1) (peep g 'fc1 0)
+                  (id? f 'f15) (peep g 'fc15 0) (scare 'soften6-freg f))
+   (nxr r) (? (id? r 'r0) 'r1 (id? r 'r1) 'r2 (id? r 'r2) 'r3 (scare 'soften6-pair r))
+   (pl6 g f lo) (: c (fcell g f) `(`('ld lo 'r4 c) `('ld (nxr lo) 'r4 (c + 4))))   ; cell -> gp pair
+   (ps6 g f lo) (: c (fcell g f) `(`('st 'r4 c lo) `('st 'r4 (c + 4) (nxr lo))))   ; gp pair -> cell
+   (m2c g f base off)                                ; [base+off] -> cell (a softened ldsd)
+    (: c (fcell g f) tmp (? (id? base 'r3) 'r2 'r3) o2 (? (id? base 'sp) (off + 16) off)
+       `(`('sub 'sp 'sp 16) `('st 'sp 0 tmp)
+          `('ld tmp base o2) `('st 'r4 c tmp) `('ld tmp base (o2 + 4)) `('st 'r4 (c + 4) tmp)
+          `('ld tmp 'sp 0) `('add 'sp 'sp 16)))
+   (c2m g base off f)                                ; cell -> [base+off] (a softened stsd)
+    (: c (fcell g f) tmp (? (id? base 'r3) 'r2 'r3) o2 (? (id? base 'sp) (off + 16) off)
+       `(`('sub 'sp 'sp 16) `('st 'sp 0 tmp)
+          `('ld tmp 'r4 c) `('st base o2 tmp) `('ld tmp 'r4 (c + 4)) `('st base (o2 + 4) tmp)
+          `('ld tmp 'sp 0) `('add 'sp 'sp 16)))
+   (w2c g f base off)                                ; [base+off] -> cell LOW word (a softened ldss)
+    (: c (fcell g f) tmp (? (id? base 'r3) 'r2 'r3) o2 (? (id? base 'sp) (off + 16) off)
+       `(`('sub 'sp 'sp 16) `('st 'sp 0 tmp)
+          `('ld tmp base o2) `('st 'r4 c tmp)
+          `('ld tmp 'sp 0) `('add 'sp 'sp 16)))
+   (c2w g base off f)                                ; cell LOW word -> [base+off] (a softened stss)
+    (: c (fcell g f) tmp (? (id? base 'r3) 'r2 'r3) o2 (? (id? base 'sp) (off + 16) off)
+       `(`('sub 'sp 'sp 16) `('st 'sp 0 tmp)
+          `('ld tmp 'r4 c) `('st base o2 tmp)
+          `('ld tmp 'sp 0) `('add 'sp 'sp 16)))
+   (soften6 g fs)
+    (: (go l)
+        (? (! (two? l)) ()
+           (: f <l r >l
+              (? (! (two? f)) (link f (go r))
+                 (: op <f
+                    h9 (peep sf-bin op ())
+                    (? h9                             ; (op fD fS): fD = fD op fS, through the cells
+                        (cat sf-save
+                         (cat (pl6 g <>f 'r0)
+                          (cat (pl6 g <>>f 'r2)
+                           (cat `(`('call h9))
+                            (cat (ps6 g <>f 'r0)
+                             (cat sf-rest (go r)))))))
+                       (op = 'movsd)                  ; cell -> cell, through the saved temp
+                        (: cd (fcell g <>f) cs (fcell g <>>f)
+                           (cat `(`('sub 'sp 'sp 16) `('st 'sp 0 'r3)
+                                  `('ld 'r3 'r4 cs) `('st 'r4 cd 'r3)
+                                  `('ld 'r3 'r4 (cs + 4)) `('st 'r4 (cd + 4) 'r3)
+                                  `('ld 'r3 'sp 0) `('add 'sp 'sp 16))
+                                (go r)))
+                       (op = 'ldsd) (cat (m2c g <>f <>>f <>>>f) (go r))
+                       (op = 'stsd) (cat (c2m g <>f <>>f <>>>f) (go r))
+                       (op = 'ldss) (cat (w2c g <>f <>>f <>>>f) (go r))
+                       (op = 'stss) (cat (c2w g <>f <>>f <>>>f) (go r))
+                       (op = 'movqrx) (cat (pl6 g <>>f <>f) (go r))
+                       (op = 'movqxr) (cat (ps6 g <>f <>>f) (go r))
+                       (member? op '(cvtsi2sd cvtui2sd))   ; (op fD rS)
+                        (: sl (sf-slot <>>f)
+                           (cat sf-save
+                            (cat (? (sl < 0) `(`('mov 'r0 <>>f)) `(`('ld 'r0 'sp sl)))
+                             (cat `(`('call (? (op = 'cvtsi2sd) '__aeabi_i2d '__aeabi_ui2d)))
+                              (cat (ps6 g <>f 'r0)
+                               (cat sf-rest (go r)))))))
+                       (member? op '(cvttsd2si cvttsd2ui))   ; (op rD fS)
+                        (: sl (sf-slot <>f)
+                           (cat sf-save
+                            (cat (pl6 g <>>f 'r0)
+                             (cat `(`('call (? (op = 'cvttsd2si) '__aeabi_d2iz '__aeabi_d2uiz)))
+                              (cat (? (sl < 0) `(`('mov <>f 'r0)) `(`('st 'sp sl 'r0)))   ; through the save slot: the restore lands it
+                               (cat sf-rest (go r)))))))
+                       (op = 'cvtss2sd)               ; (op fD fS): float bits off the source cell's low word
+                        (: cs (fcell g <>>f)
+                           (cat sf-save
+                            (cat `(`('ld 'r0 'r4 cs) `('call '__aeabi_f2d))
+                             (cat (ps6 g <>f 'r0)
+                              (cat sf-rest (go r))))))
+                       (op = 'cvtsd2ss)               ; (op fD fS): the narrowed word lands the dest cell's low
+                        (: cd (fcell g <>f)
+                           (cat sf-save
+                            (cat (pl6 g <>>f 'r0)
+                             (cat `(`('call '__aeabi_d2f) `('st 'r4 cd 'r0))
+                              (cat sf-rest (go r))))))
+                       (op = 'ucomisd)
+                        (: args (cat sf-save (cat (pl6 g <>f 'r0) (pl6 g <>>f 'r2)))
+                           n1 (? (two? r) <r ())
+                           (? (&& (two? n1) (id? <n1 'br))
+                               (: hs (sf-cc <>n1)
+                                  _ (? (two? hs) 0 (scare 'soften6-cc n1))
+                                  (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('br <>hs <>>n1)))
+                                       (go >r)))
+                              (&& (two? n1) (id? <n1 'set))
+                               (: n2 (? (two? >r) <>r ())
+                                  n3 (? (&& (two? >r) (two? (cup (cup r)))) <>>r ())
+                                  dance (&& (two? n2) (&& (id? <n2 'set) (&& (member? <>n2 '(p np))
+                                                          (&& (two? n3) (member? <n3 '(and or))))))
+                                  hs (sf-cc <>n1)
+                                  _ (? (two? hs) 0 (scare 'soften6-cc n1))
+                                  (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('set <>hs <>>n1)))
+                                       (go (? dance (cup (cup (cup r))) >r))))
+                              (scare 'soften6-ucomisd n1)))
+                       (link f (go r)))))))
+       (go fs))
    (soften g fs)
-    (? (! (sp64? g)) fs
+    (? (v6m? g) (soften6 g fs)
+       (! (sp64? g)) fs
        (: (go l)
            (? (! (two? l)) ()
               (: f <l r >l
@@ -2054,6 +2254,12 @@
    ; here (the backend numbers it). r4 is the BOTTOM base (see t16slots): pushed just under fp,
    ; popped just before it. mov sp,fp is framesize-independent, so this pins as g 'epi.
    epi-t16 `(`('lea 'sp 'fp 0) `('pop 'r4) `('pop 'fp) `('pop 'pc))
+   ; the v6-M VARARG twin: POP reaches r0..r7/pc only (no pop-into-lr, and pop-pc
+   ; couldn't drop the r0-r3 block after it) -- so the return address pops into r3
+   ; (caller-saved, never a return value: r0/r1 carry those) and BX r3 returns
+   ; after the 16-byte block drops. bit0 of the pushed lr is already set (BL set
+   ; it), so the BX stays in Thumb state.
+   epi-t16va `(`('lea 'sp 'fp 0) `('pop 'r4) `('pop 'fp) `('pop 'r3) `('add 'sp 'sp 16) `('jmpr 'r3))
    ; the arm64 RETARGET: gen speaks r4 for the frame base throughout, but x4
    ; is ALSO an AAPCS argument register -- so the rename is by POSITION, not
    ; by symbol: only the operand slot where r4 means "the frame base" (a
@@ -3763,7 +3969,18 @@
                    rt (? il (peep g 'inlrt 'long)                        ; the INLINED function's return type
                          (cap (peep (g 'sigs) (g 'fn) `('long ()))))    ; else the current function's
                    (? (bad? r) 'bad
-                      (flo? rt) ((asflo g r) + epj)                    ; a double return leaves f0 (xmm0; never inline -- gated)
+                      (flo? rt)                                        ; a double return leaves f0 (xmm0; never inline -- gated);
+                       ((asflo g r)                                    ; v6-M base ABI carries a double out on the r0:r1 pair,
+                        + (? (! (v6m? g)) ()                           ; a bare float as ONE WORD (binary32 in r0)
+                             (id? rt 'float) `(`('cvtsd2ss 'f0 'f0) `('movqrx 'r0 'f0))
+                             `(`('movqrx 'r0 'f0)))
+                        + epj)
+                      (&& (v6m? g) (stru? rt))             ; v6-M composite returns: >4B fills the caller's temp
+                       (? (4 < (tsz g rt))                 ; through the saved sret pointer (MEMORY, the base ABI);
+                          ((tor0 g r)                      ; <=4B rides its word in r0
+                           + `(`('ld 'r1 'r4 (peep g 'sret 0)))
+                           + (bcopy g 0 (tsz g rt) ()) + epj)
+                          ((tor0 g r) + `(`('ld 'r0 'r0 0)) + epj))
                       (&& (t32? g) (&& (stru? rt)          ; t32 returns: the d-pair HFA, the 8B sse blob (d0),
                           (! (|| (sse2? g rt)              ; and the <=4B int one (r0); mixed/int-pair refuse LOUD
                                  (|| (&& (id? (aone g rt) 'sse) ((tsz g rt) = 8))
@@ -4028,6 +4245,11 @@
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     (: params <>>f
        _ (pin g 'off 8)                              ; slot -8 = saved r3 (see epi)
+       ; v6-M has no FPU registers at all: the f0/f1/f15 fiction lives in three 8-byte frame
+       ; CELLS, allocated up front; soften6 rewrites every f-op onto them (task: cells mirror
+       ; the register semantics 1:1, so any staging valid in d-regs is valid in cells)
+       _ (? (v6m? g) (: _ (pin g 'fc0 (ntmp g 'double)) _ (pin g 'fc1 (ntmp g 'double))
+                        _ (pin g 'fc15 (ntmp g 'double)) 0) 0)
        _ (pin g 'fesc ())                            ; fresh escape flag (the sibcall gate reads it)
        _ (pin g 'inlining ())                        ; fresh inline-depth flag
        _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
@@ -4039,7 +4261,7 @@
        vararg (? (two? sig) (nthr sig 2) ())
        ; the epilogue is per-FN: a thumb2 vararg fn drops its r0-r3 push block on
        ; the way out (epi-t32va); everyone else keeps the target default
-       _ (pin g 'epi (? (&& vararg (&& (t32? g) (! (v6m? g)))) epi-t32va
+       _ (pin g 'epi (? (&& vararg (t32? g)) (? (v6m? g) epi-t16va epi-t32va)
                         (v6m? g) epi-t16 (arm? g) epi-a64 epi))
        fb9 (fbase g)                                 ; the frame base the RANKERS see: post-build ir1 (r4, or fp once a4ized)
        ; spill each param from its SysV register: integers from r6 r5 r2 r1 r7 r8
@@ -4048,10 +4270,28 @@
        (spill ps gpi xmmi ovi env acc)
         (? (! (two? ps)) `(acc env)
            (: p <ps pty <>p
-              (? (&& (t32? g) (&& (stru? pty)           ; t32 params: the d-pair HFA, the 8B sse blob, the <=4B int
+              (? (&& (v6m? g) (sse2? g pty))            ; v6-M: a POSITION-0 16B composite arrives whole in r0-r3
+                  (? (gpi = 0)                          ;  (the caller's g4 lane); any later start splits -- deferred
+                     (: off (0 - ((peep g 'off 0) + 16))
+                        _ (pin g 'off ((peep g 'off 0) + 16))
+                        (spill >ps 4 xmmi ovi (link `(<p off pty) env)
+                               (acc + `(`('st 'r4 off 'r0) `('st 'r4 (off + 4) 'r1)
+                                        `('st 'r4 (off + 8) 'r2) `('st 'r4 (off + 12) 'r3)))))
+                     'bad)
+                 (&& (t32? g) (&& (stru? pty)           ; t32 params: the d-pair HFA, the 8B sse blob, the <=4B int
                      (! (|| (sse2? g pty)               ; one (the gp lane's word store IS its <=4 bytes);
                             (|| (&& (id? (aone g pty) 'sse) ((tsz g pty) = 8))   ; mixed/int-pair composites refuse LOUD
                                 (&& (id? (aone g pty) 'int) ((tsz g pty) <= 4))))))) 'bad
+                 (&& (v6m? g) (&& (stru? pty) (id? (aone g pty) 'sse)))   ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
+                  (: gpe (& (gpi + 1) -2)
+                     (? ((gpe + 2) <= (ngp g))
+                         (: off (0 - ((peep g 'off 0) + 8))
+                            _ (pin g 'off ((peep g 'off 0) + 8))
+                            (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
+                                   (acc + `(`('st 'r4 off (nthr (argr g) gpe))
+                                            `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
+                        (: ov8 (& (ovi + 7) -8)
+                           (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (stru? pty) (two? (aeb2 g pty)))   ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
                   (: cls (aeb2 g pty) c0 <cls c1 <>cls
                      ; the register FILE per eightbyte -- 'g gp / 'x xmm. SysV (x64) picks
@@ -4083,6 +4323,23 @@
                      (? (t32? g) 'bad                   ; t32 stack blob params: deferred, refuse LOUD
                         (spill >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc)))
                  (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair / >16B stays ahead; a small INT one rides the gp lane
+                 (&& (v6m? g) (id? pty 'float))         ; v6-M base ABI: a bare float param is ONE WORD
+                  (? (gpi < (ngp g))                    ;  (binary32 bits in a gp reg / a 4-byte caller slot);
+                     (: off (0 - ((peep g 'off 0) + 8)) ;  clval's fldf 'float widens it on read
+                        _ (pin g 'off ((peep g 'off 0) + 8))
+                        (spill >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
+                               (acc + `(`('st 'r4 off (nthr (argr g) gpi))))))
+                     (spill >ps gpi xmmi (ovi + 4) (link `(<p ((ovb g) + ovi) pty) env) acc))
+                 (&& (v6m? g) (flo? pty))               ; v6-M base ABI: a double param IS a gp pair
+                  (: gpe (& (gpi + 1) -2)               ;  (no FPU regs exist) -- spill both words, or
+                     (? ((gpe + 2) <= (ngp g))          ;  read the 8-aligned caller stack
+                         (: off (0 - ((peep g 'off 0) + 8))
+                            _ (pin g 'off ((peep g 'off 0) + 8))
+                            (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
+                                   (acc + `(`('st 'r4 off (nthr (argr g) gpe))
+                                            `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
+                        (: ov8 (& (ovi + 7) -8)
+                           (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (flo? pty) (xmmi < 8))
                   (: off (0 - ((peep g 'off 0) + 8))
                      _ (pin g 'off ((peep g 'off 0) + 8))
@@ -4148,22 +4405,21 @@
                      (? (7 < gpi) (cls >qs gpi vri (ov + 1) (link `(<p ((ovb g) + (* 8 ov)) pty) env))
                         (cls >qs (gpi + 1) vri ov (link `(<p (rsa + (* 8 gpi)) pty) env))))))
            (cls ps 0 0 0 ()))
-       ; a VARIADIC function (AAPCS32, thumb2): no save area of its own -- the
-       ; prologue pushed r0-r3 just under the caller's stack args, one contiguous
-       ; word array from fp+8. a named register param is addressed INSIDE the push
-       ; block (fp+8+4i), a named overflow param past it (fp+24+). va_start reads
-       ; back vagp/vaov. WORD named params only (love.c's shape: pointers and
-       ; uintptr_t); doubles/pairs/structs refuse LOUD. v6-M: pop-pc can't drop
-       ; the block -- refuse whole.
+       ; a VARIADIC function (AAPCS32, thumb2 + v6m): no save area of its own --
+       ; the prologue pushed r0-r3 just under the caller's stack args, one
+       ; contiguous word array past the push cells ((ovb g): thumb2 lr/fp = 8,
+       ; v6m lr/fp/r4 = 12). a named register param is addressed INSIDE the push
+       ; block (fp+ovb+4i), a named overflow param past it (fp+ovb+16+). va_start
+       ; reads back vagp/vaov. WORD named params only (love.c's shape: pointers
+       ; and uintptr_t); doubles/pairs/structs refuse LOUD.
        (vaspill-t32 ps)
-        (? (v6m? g) 'bad
-           (: (cls qs gpi ov env)
-               (? (! (two? qs)) (: _ (pin g 'vagp gpi) _ (pin g 'vaov ov) `(() env))
-                  (: p <qs pty <>p
-                     (? (|| (flo? pty) (|| (llt? pty) (stru? pty))) 'bad
-                        (3 < gpi) (cls >qs gpi (ov + 4) (link `(<p (24 + ov) pty) env))
-                        (cls >qs (gpi + 1) ov (link `(<p (8 + (* 4 gpi)) pty) env)))))
-              (cls ps 0 0 ())))
+        (: (cls qs gpi ov env)
+            (? (! (two? qs)) (: _ (pin g 'vagp gpi) _ (pin g 'vaov ov) `(() env))
+               (: p <qs pty <>p
+                  (? (|| (flo? pty) (|| (llt? pty) (stru? pty))) 'bad
+                     (3 < gpi) (cls >qs gpi (ov + 4) (link `(<p (((ovb g) + 16) + ov) pty) env))
+                     (cls >qs (gpi + 1) ov (link `(<p ((ovb g) + (* 4 gpi)) pty) env)))))
+           (cls ps 0 0 ()))
        ; -- register-homed params (the leaf lane). a gp param that is an 8-byte
        ; scalar (long/ulong/pointer) whose address never escapes can live in a
        ; CALLER-SAVED, non-scratch register for the whole function instead of a
@@ -4319,8 +4575,12 @@
                          (sibcall g
                           (soften g
                           (cat (? (v6m? g)   ; v6m: extra push r4 (bottom base), planted AFTER the sub; fp stays at top
-                                  `(`('label (intern <>f)) `('push 'lr) `('push 'fp) `('push 'r4)
-                                     `('lea 'fp 'sp 0) `('sub 'sp 'sp frame) `('lea 'r4 'sp 0))
+                                  (cat `(`('label (intern <>f)))
+                                   (cat (? vararg   ; vararg v6m: r0-r3 land above lr/fp/r4, contiguous with the caller stack args
+                                           `(`('push 'r3) `('push 'r2) `('push 'r1) `('push 'r0))
+                                           ())
+                                        `(`('push 'lr) `('push 'fp) `('push 'r4)
+                                           `('lea 'fp 'sp 0) `('sub 'sp 'sp frame) `('lea 'r4 'sp 0))))
                                   (cat `(`('label (intern <>f)))
                                    (cat (? (&& vararg (t32? g))   ; vararg t32: r0-r3 land under fp/lr,
                                            `(`('push 'r3) `('push 'r2) `('push 'r1) `('push 'r0))   ; contiguous with the caller stack args
@@ -4451,9 +4711,17 @@
        _ (pin g 'vuniv ()) _ (vmflush g)            ; vmap off for the ir1 build (no universe yet)
        _ (pin g 'hasasm ())                         ; fresh per fn: an asm statement pins it (homing off)
        _ (pin g 'argseal 0)                         ; fresh per fn: the vmap's staging seal depth
+       ; v6-M MEMORY return: this fn's >4B composite result fills the address the caller
+       ; passed as the implicit first arg (r0) -- save it in its own slot, params start at
+       ; gp 1. the ret lane reads g 'sret back; reset per fn (stale pins would misroute).
+       srt (? (two? sig) <sig 'long)
+       sr6f (&& (v6m? g) (&& (stru? srt) (4 < (tsz g srt))))
+       _ (? sr6f (pin g 'sret (ntmp g 'long)) (pin g 'sret ()))
        sp1 (? (&& vararg (a64? g)) (vaspill-a64 params)
               (&& vararg (t32? g)) (vaspill-t32 params)
-              vararg (vaspill params) (spill params 0 0 0 () ()))
+              vararg (vaspill params)
+              sr6f (spill params 1 0 0 () `(`('st 'r4 (peep g 'sret 0) 'r0)))
+              (spill params 0 0 0 () ()))
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
        ride (? (|| vararg (|| (peep g 'fesc ()) (hascall? ir1))) () (rideset ir1 params 0 ()))

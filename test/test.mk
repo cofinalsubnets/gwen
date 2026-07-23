@@ -636,7 +636,44 @@ test_thumb1: host out/host$(hsuf)/mooncc
 	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harness.o $$d/lib.o -o $$d/t1.elf || { echo "FAIL ld thumb1 objects"; exit 1; }; \
 	  timeout 30 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1.elf </dev/null; a=$$?; \
 	  [ $$a -eq 127 ] || { echo "FAIL thumb1 -c link+run (got $$a, want 127 = addto(40+50) then addto(-17/5 + -17%%5)=85 + s->x=30 + arr[3]=12; a wrong struct offset misreads s->x, a wrong leax scale/base misreads arr[3])"; exit 1; }; \
-	  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax indexed array vs gcc), ld binds, runs on qemu Cortex-M0"
+	  cp test/thumb1/libv.c test/thumb1/harnessv.c $$d/; \
+	  $(ho)/mooncc -t thumb1 -c $$d/libv.c $$d/libv.o || { echo "FAIL mooncc -t thumb1 -c libv"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -ffreestanding -O2 -c $$d/harnessv.c -o $$d/harnessv.o || { echo "FAIL gcc harnessv"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessv.o $$d/libv.o -o $$d/t1v.elf || { echo "FAIL ld thumb1 vararg objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1v.elf </dev/null; a=$$?; \
+	  [ $$a -eq 7 ] || { echo "FAIL thumb1 varargs (got $$a, want 7 = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessv.c; the pop-r3/bx epilogue or the r0-r3 push block over lr/fp/r4 is the usual suspect)"; exit 1; }; \
+	  cp test/thumb2/lib64.c test/thumb2/harness64.c $$d/; \
+	  $(ho)/mooncc -t thumb1 -c $$d/lib64.c $$d/lib64.o || { echo "FAIL mooncc -t thumb1 -c lib64"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -ffreestanding -O2 -c $$d/harness64.c -o $$d/harness64.o || { echo "FAIL gcc harness64"; exit 1; }; \
+	  lg=`arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harness64.o $$d/lib64.o $$lg -o $$d/t1p.elf || { echo "FAIL ld thumb1 pair objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1p.elf </dev/null; a=$$?; \
+	  [ $$a -eq 45 ] || { echo "FAIL thumb1 64-bit pairs (got $$a, want 45 = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c; the v6-M lanes ride ADCS/SBCS inline + __aeabi_lmul/(u)ldivmod/shift libcalls)"; exit 1; }; \
+	  cp test/thumb2/libd.c test/thumb2/harnessd.c $$d/; \
+	  $(ho)/mooncc -t thumb1 -c $$d/libd.c $$d/libd.o || { echo "FAIL mooncc -t thumb1 -c libd"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -ffreestanding -O2 -c $$d/harnessd.c -o $$d/harnessd.o || { echo "FAIL gcc harnessd"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessd.o $$d/libd.o $$lg -o $$d/t1d.elf || { echo "FAIL ld thumb1 double objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1d.elf </dev/null; a=$$?; \
+	  [ $$a -eq 45 ] || { echo "FAIL thumb1 soft doubles (got $$a, want 45 = every differential check vs gcc's base-ABI soft float; 100+n names the first miss -- see test/thumb2/harnessd.c; doubles ride gp pairs at every seam, f0/f1/f15 are frame cells inside a fn (soften6))"; exit 1; }; \
+	  cp test/thumb2/harnessam.c $$d/; \
+	  $(ho)/mooncc -t thumb1 -Icrew/moon/lib/math -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o || { echo "FAIL mooncc -t thumb1 -c am.c"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -ffreestanding -O2 -c $$d/harnessam.c -o $$d/harnessam.o || { echo "FAIL gcc harnessam"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessam.o $$d/am.o $$lg -o $$d/t1am.elf || { echo "FAIL ld thumb1 am objects"; exit 1; }; \
+	  timeout 60 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1am.elf </dev/null; a=$$?; \
+	  [ $$a -eq 9 ] || { echo "FAIL thumb1 am.c (got $$a, want 9 = the seven transcendentals BIT-IDENTICAL to the host am floor through the shared __aeabi soft float, incl. the Payne-Hanek big-argument reduction)"; exit 1; }; \
+	  cp test/thumb1/libf.c test/thumb1/harnessf.c $$d/; \
+	  $(ho)/mooncc -t thumb1 -c $$d/libf.c $$d/libf.o || { echo "FAIL mooncc -t thumb1 -c libf"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -ffreestanding -O2 -c $$d/harnessf.c -o $$d/harnessf.o || { echo "FAIL gcc harnessf"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnessf.o $$d/libf.o $$lg -o $$d/t1f.elf || { echo "FAIL ld thumb1 float objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1f.elf </dev/null; a=$$?; \
+	  [ $$a -eq 7 ] || { echo "FAIL thumb1 bare floats (got $$a, want 7 = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessf.c; a bare float is ONE WORD on v6-M (ai_flo_t IS float on a 32-bit love -- the widened-pair mismatch here kept the egg from hatching))"; exit 1; }; \
+	  cp test/thumb1/libzn.c test/thumb1/harnesszn.c $$d/; \
+	  $(ho)/mooncc -t thumb1 -c $$d/libzn.c $$d/libzn.o || { echo "FAIL mooncc -t thumb1 -c libzn"; exit 1; }; \
+	  arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -ffreestanding -O2 -c $$d/harnesszn.c -o $$d/harnesszn.o || { echo "FAIL gcc harnesszn"; exit 1; }; \
+	  arm-none-eabi-ld -T $$d/link.ld $$d/start.o $$d/harnesszn.o $$d/libzn.o $$lg -o $$d/t1z.elf || { echo "FAIL ld thumb1 composite objects"; exit 1; }; \
+	  timeout 30 qemu-system-arm -M microbit -semihosting -nographic -kernel $$d/t1z.elf </dev/null; a=$$?; \
+	  [ $$a -eq 9 ] || { echo "FAIL thumb1 composites (got $$a, want 9 = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnesszn.c; the MEMORY-return (sret) lane and the position-0 16B r0-r3 quad are the featured shapes)"; exit 1; }; \
+	  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + composites vs gcc), ld binds, runs on qemu Cortex-M0"
 # test_thumb2 -- the thumb1 gate's ARMv7E-M twin, ON THE DEVICE CPU (qemu mps2-an500 is a
 # Cortex-M7 -- the Teensy 4.1 / Playdate silicon). the featured lane is `la`, thumb2's
 # MOVW/MOVT absolute pair (movw16/movt16 -> R_ARM_THM_MOVW_ABS_NC/MOVT_ABS): every binding
@@ -718,6 +755,21 @@ test_mps2: host out/host$(hsuf)/mooncc
 	  timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel out/mps2/love.elf </dev/null; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL love-on-M7 boot (got $$a, want 42 = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)"; exit 1; }; \
 	  echo "test_mps2: love (all-mooncc thumb2) boots on qemu Cortex-M7 -- egg baked on-device, laws hold, exit 42"
+# test_mps2_t1 -- LOVE ON THE RP2040'S ISA: the same port compiled end to end by
+# mooncc -t thumb1 (ARMv6-M -- the Cortex-M0+/RP2040 instruction set, ai_tco=0's
+# trampoline, soft floats through libgcc's v6-m __aeabi set). v6-M code is a
+# strict subset of ARMv7E-M, so qemu's M7 executes it natively (no RP2040
+# machine exists in qemu; the microbit legs prove the v6-M encoding floor).
+# The egg bakes from source on the emulated core; exit 42 = hatched + laws held.
+.PHONY: test_mps2_t1
+test_mps2_t1: host out/host$(hsuf)/mooncc
+	@echo MPS2T1 out/mps2/love-t1.elf
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1 || ! command -v qemu-system-arm >/dev/null 2>&1; then \
+	   echo "test_mps2_t1: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/mps2 mps2t1 || { echo "FAIL mps2t1 build"; exit 1; }; \
+	  timeout 600 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel out/mps2/love-t1.elf </dev/null; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL love-on-v6M boot (got $$a, want 42 = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)"; exit 1; }; \
+	  echo "test_mps2_t1: love (all-mooncc thumb1/ARMv6-M, the RP2040 ISA) boots -- egg baked on-device, laws hold, exit 42"
 # test_mps2_wake -- the IMAGE lane: the baker bakes the corpus on qemu's M7 and
 # dumps a fully-symbolic heap image (build-time bake); the WAKER -- a different
 # binary, arena deliberately offset -- wakes it and re-runs the driver laws.
