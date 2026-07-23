@@ -76,6 +76,11 @@ static void caches_init(void) {
 
 // boot.S's cstartup established our stack and falls in here.
 void cmain(void) {
+  // FIRST LIGHT, before anything that can hang: a cold boot that dies in
+  // clock bring-up must still show the LED (an all-dark board with working
+  // HalfKay was the first-cold-boot face -- every earlier boot was a WARM
+  // reset riding the previous session's clock/DCDC state).
+  gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
   // FPU on (CP10/CP11 full access) before any float-typed code runs.
   REG(SCB_CPACR) |= (0xFu << 20);
   // debug monitor ON: a bkpt with no debugger otherwise ESCALATES to lockup
@@ -99,29 +104,44 @@ void cmain(void) {
 // this frontend reads -- the LPUART clock (24 MHz osc) and GPT1 (24 MHz
 // osc). Both ride the crystal, so the core retune changes neither the
 // console baud nor the timebase math.
+// bounded register wait: cold-boot reset state can leave a handshake bit
+// stuck where the warm-reset path (riding the previous session's state)
+// sailed through -- an unbounded spin here is an all-dark board. ~10 ms at
+// any core clock; 0 = gave up.
+static int wait_reg(uint32_t addr, uint32_t mask, int want_set) {
+  for (uint32_t i = 0; i < 4000000u; i++) {
+    uint32_t v = REG(addr) & mask;
+    if (want_set ? v != 0 : v == 0) return 1; }
+  return 0; }
+
 void clocks_init(void) {
   // Voltage BEFORE speed: DCDC core supply to 1.25 V, wait for it to settle.
+  // EVERY wait is BOUNDED: a timeout bails back toward the ROM clock -- a
+  // board that cannot reach 600 MHz must still BOOT (the banner self-report
+  // says which path won).
   REG(DCDC_REG3) = (REG(DCDC_REG3) & ~DCDC_REG3_TRG_MASK) | DCDC_TRG_1V25;
-  while (!(REG(DCDC_REG0) & DCDC_REG0_STS_DC_OK)) {}
+  if (!wait_reg(DCDC_REG0, DCDC_REG0_STS_DC_OK, 1)) return;   // no settled supply: stay on the ROM clock
   // Park periph_clk on the 24 MHz osc while the ARM PLL retunes.
   REG(CCM_CBCMR) = (REG(CCM_CBCMR) & ~CBCMR_PERIPH_CLK2_MASK) | CBCMR_PERIPH_CLK2_OSC;
   REG(CCM_CBCDR) |= CBCDR_PERIPH_CLK_SEL;
-  while (REG(CCM_CDHIPR) & CDHIPR_PERIPH_CLK_SEL_BUSY) {}
+  if (!wait_reg(CCM_CDHIPR, CDHIPR_PERIPH_CLK_SEL_BUSY, 0)) return;
   // ARM PLL: 24 MHz * 100 / 2 = 1200 MHz, then the core divider /2 = 600.
   REG(CCM_ANALOG_PLL_ARM) = PLL_ARM_POWERDOWN;
   REG(CCM_ANALOG_PLL_ARM) = PLL_ARM_ENABLE | 100u;
-  while (!(REG(CCM_ANALOG_PLL_ARM) & PLL_ARM_LOCK)) {}
+  if (!wait_reg(CCM_ANALOG_PLL_ARM, PLL_ARM_LOCK, 1)) {       // PLL never locked: un-park and live slow
+    REG(CCM_CBCDR) &= ~CBCDR_PERIPH_CLK_SEL;
+    return; }
   REG(CCM_CCSR) &= ~CCSR_PLL1_SW_CLK_SEL;        // core rides pll1_main
   REG(CCM_CACRR) = 1u;                            // /2
-  while (REG(CCM_CDHIPR) & CDHIPR_ARM_PODF_BUSY) {}
+  wait_reg(CCM_CDHIPR, CDHIPR_ARM_PODF_BUSY, 0);
   // AHB /1 (600 MHz), IPG /4 (150 MHz, its ceiling); pre-periph = the
   // divided ARM PLL; then un-park.
   REG(CCM_CBCDR) = (REG(CCM_CBCDR) & ~(CBCDR_AHB_PODF_MASK | CBCDR_IPG_PODF_MASK))
                  | CBCDR_IPG_PODF_DIV4;
-  while (REG(CCM_CDHIPR) & CDHIPR_AHB_PODF_BUSY) {}
+  wait_reg(CCM_CDHIPR, CDHIPR_AHB_PODF_BUSY, 0);
   REG(CCM_CBCMR) = (REG(CCM_CBCMR) & ~CBCMR_PRE_PERIPH_MASK) | CBCMR_PRE_PERIPH_PLL1;
   REG(CCM_CBCDR) &= ~CBCDR_PERIPH_CLK_SEL;
-  while (REG(CCM_CDHIPR) & CDHIPR_PERIPH_CLK_SEL_BUSY) {}
+  wait_reg(CCM_CDHIPR, CDHIPR_PERIPH_CLK_SEL_BUSY, 0);
 
   // Gate LPUART6 (CCGR3 CG3) and GPT1 (CCGR1 CG10/CG11) on.
   REG(CCM_CCGR3) |= CCGR_ON(3);
