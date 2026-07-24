@@ -53,7 +53,7 @@ love_h = $(wildcard $R/*.h)
 # the core rides with its math floor (crew/moon/lib/math/am.c -- our own
 # transcendentals; love.c's ai_* defines resolve there, no libm anywhere)
 love_c = $R/love.c $R/crew/moon/lib/math/am.c
-f_c = $(wildcard $R/port/quay/*.c)
+f_c = $(wildcard $R/crew/quay/*.c)
 c_c = $(wildcard $R/libc/*.c)
 
 # -std spelling: clang accepts `gnu23` only from ~clang 18 (Xcode 16). Older Apple

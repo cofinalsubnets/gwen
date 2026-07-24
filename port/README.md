@@ -1,8 +1,8 @@
 # port -- the freestanding targets of the love lisp
 
-Every non-host target, plus the packaging recipes. Each device port is
-self-contained (own Makefile, `R := ../..` back to the repo root); the qemu
-boot gates live in test/test.mk and ride `make test_all`.
+Every non-host target. Each device port is self-contained (own Makefile,
+`R := ../..` back to the repo root); the qemu boot gates live in
+test/test.mk and ride `make test_all`.
 
 ## inle/
 
@@ -36,12 +36,6 @@ arm-none-eabi-gcc for link/pack), booting a qemu-baked love-pd.img; cas.l is
 the rune workbench face. Simulator-verified; sideloading is the human step.
 See playdate/README.md.
 
-## quay/
-
-Not a device port: the shared character-cell screen engine (quay.c/h + the
-bitmap fonts) that the host terminal (host/cb.c, by unity include) and the
-inle kernel both ride.
-
 ## rp2040/
 
 PARKED. The ISA half landed -- love boots ARMv6-M via `mooncc -t thumb1`
@@ -58,10 +52,3 @@ FlexSPI NOR behind the config block + IVT, LPUART6 console on pins 0/1 at
 115200, image boot (a build-time qemu bake wakes in ~1 s where the on-device
 egg bake took ~55 s). `make` / `make flash` (teensy_loader_cli). See
 teensy41/README.md.
-
-## archlinux/
-
-Arch Linux package (`PKGBUILD`, `love-git`): clones the GitHub repo, builds
-the host CLI, runs `make test` as the check, installs via the main
-Makefile's `install` target. The host package, kept here so every
-downstream packaging recipe lives under port/.

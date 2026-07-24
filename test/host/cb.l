@@ -1,4 +1,4 @@
-; --- test/host/cb.l: a vttest-lite for quay's console screen (host/cb.c + port/quay/quay.c) ---
+; --- test/host/cb.l: a vttest-lite for quay's console screen (host/cb.c + crew/quay/quay.c) ---
 ; NOT in the test/*.l corpus on purpose: the screen nifs (screen/scribe/glass/gaze/reply)
 ; live in host/cb.c, which the final `love` links but love0 does NOT -- and love0 bakes the
 ; whole corpus, so a corpus test would read these names as missing and fail love0's

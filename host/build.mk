@@ -164,8 +164,8 @@ $(ho)/love.o $(ho)/0/love.o: out/lib/love_version.h
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
 # main.c` did), recompile it when any baked header changes.
 $(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
-# host/cb.c rides port/quay/quay.c by unity include -- recompile when the engine moves.
-$(ho)/host/cb.o: port/quay/quay.c port/quay/quay.h
+# host/cb.c rides crew/quay/quay.c by unity include -- recompile when the engine moves.
+$(ho)/host/cb.o: crew/quay/quay.c crew/quay/quay.h
 
 # host/main.c (auto-globbed into $(host_o)) carries main() + the egg, assembled
 # inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c

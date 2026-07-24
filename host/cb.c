@@ -1,5 +1,5 @@
 // host/cb.c -- quay's console-screen nifs: the terminal emulator's engine.
-// port/quay's struct cb (the VT parser + cell grid, the same C the kernel
+// crew/quay's struct cb (the VT parser + cell grid, the same C the kernel
 // console runs) hosted INSIDE a cask, so the love side owns allocation and
 // lifetime (the GC moves and reclaims the screen like any value) and the C
 // side stays a pure byte machine re-derived from the cask on every call.
@@ -24,9 +24,9 @@
 #include <fcntl.h>    // O_NONBLOCK (swig)
 #include <errno.h>
 #include <string.h>   // memcpy (swig's rbuf drain)
-#include "../port/quay/quay.c"
-#include "../port/quay/moderndos_8x16.c"   // the builtin glyphs (host links no font objects)
-#include "../port/quay/cga_8x8.c"
+#include "../crew/quay/quay.c"
+#include "../crew/quay/moderndos_8x16.c"   // the builtin glyphs (host links no font objects)
+#include "../crew/quay/cga_8x8.c"
 
 // Re-derive the struct cb from a cask arg, or 0 if it isn't one / doesn't
 // hold a sane screen. The cask is OPEN DATA -- the love side can pin any byte

@@ -52,7 +52,7 @@ kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
 kldflags := -static -nostdlib --gc-sections -T $(R)/port/inle/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
-  -I. -I$(R)/out/host -Iout/lib -I$(R)/port/quay -I$(R) -I$(R)/port/inle \
+  -I. -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/port/inle \
   -Ilibc \
   -isystem c \
   $(kcppflags) \
@@ -87,7 +87,7 @@ $(ko)/love-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
 
-# Shared C sources (love.c, port/quay/, c/) + per-arch port//.
+# Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h)
 	@echo CC	$@
