@@ -2994,7 +2994,8 @@ static struct ai_zn ai_net(struct ai *g, word x) {
           ai_flo_t s = (n.re < 0) != (d.re < 0) ? -1.0 : 1.0;
           ai_flo_t v = n.re / d.re;
           if (v != v) v = s;                                   // inf/inf (two giant bignums): sign carries
-          else if (v == 0 && n.re != 0) v = s * 1e-300;        // underflow: a live sign never reads as the floor
+          else if (v == 0 && n.re != 0)                        // underflow: a live sign never reads as the floor
+            v = s * (ai_flo_t) (Bits == 64 ? 1e-300 : 1e-37);  // (the rescue must be nonzero at ai_flo_t's width)
           return zn(v, 0); } } }                               // a malformed payload falls through to the hom
     return ai_net(g, coin_load(x)); }
   if (!datp(x)) return zn(1, 0);                                // opaque but present (fn / port): truthy
@@ -7798,43 +7799,51 @@ static intptr_t galaxy_tie(struct ai_vec *va, struct ai_vec *vb) {
   if (ea.re != eb.re) return ea.re < eb.re ? -1 : 1;
   if (ea.im != eb.im) return ea.im < eb.im ? -1 : 1; }
  return 0; }
-// a RATIO coin's order is its VALUE's. the exact tier: word-sized integer
-// components cross-multiply in 128-bit (64-bit targets; a 32-bit build guards to
-// the 31-bit square root instead), so near-equal rationals order right where the
-// double quotient would tie. bignum components, float components, or a
-// scalar/complex/galaxy other side fall to the sign-exact net quotients.
-static ai_inline bool ratio_iview(word x, intptr_t *n, intptr_t *d) {
+// a RATIO coin's order is its VALUE's. the exact tier: components that fit a
+// SIGNED 64-BIT integer (fixnum, wide box, or -- on a 32-bit word -- a 1-2 limb
+// bignum; on a 64-bit word every bignum exceeds int64 by canonical demotion)
+// cross-multiply exactly, so near-equal rationals order right where the float
+// quotient would tie. wider components, float components, or a scalar/complex/
+// galaxy other side fall to the sign-exact net quotients.
+static ai_inline bool ratio_ifit(word x, int64_t *v) {
+ if (charmp(x) || widep(x)) return *v = toint(x), true;
+ if (!bigp(x)) return false;
+ struct ai_big *b = (struct ai_big*) x;
+ int n = big_nlimbs(x);
+ if (n * limb_bits > 64) return false;
+ uint64_t m = b->limb[n-1];
+ for (int i = n - 2; i >= 0; i--) m = (m << (limb_bits - 1) << 1) | b->limb[i];
+ bool neg = b->slen < 0;
+ if (m > (uint64_t) INT64_MAX + neg) return false;
+ return *v = (int64_t) (neg ? 0 - m : m), true; }
+static ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
  if (coinp(x)) { word p = coin_load(x);
   if (!chainp(p) || !chainp(B(p))) return false;
-  word nn = A(p), dd = A(B(p));
-  if (!(charmp(nn) || widep(nn)) || !(charmp(dd) || widep(dd))) return false;
-  return *n = toint(nn), *d = toint(dd), *d != 0; }
- if (charmp(x) || widep(x)) return *n = toint(x), *d = 1, true;
- return false; }
+  return ratio_ifit(A(p), n) && ratio_ifit(A(B(p)), d) && *d != 0; }
+ return ratio_ifit(x, n) && (*d = 1, true); }
 #if !defined(__SIZEOF_INT128__)
-// word x word -> double-word magnitude product from half-word partials -- the exact
-// cross-multiply for builds without __int128 (mooncc's love-raw; any width).
-static ai_inline void ratio_mag_mul(uintptr_t a, uintptr_t b, uintptr_t *hi, uintptr_t *lo) {
- const int h = (int) (sizeof(uintptr_t) * 4);
- uintptr_t mask = ((uintptr_t) 1 << h) - 1;
- uintptr_t a0 = a & mask, a1 = a >> h, b0 = b & mask, b1 = b >> h;
- uintptr_t p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1;
- uintptr_t mid = (p00 >> h) + (p01 & mask) + (p10 & mask);
- *lo = (p00 & mask) | (mid << h);
- *hi = p11 + (p01 >> h) + (p10 >> h) + (mid >> h); }
+// u64 x u64 -> 128-bit magnitude product from 32-bit half-word partials -- the exact
+// cross-multiply for builds without __int128 (mooncc's love-raw; the thumb ports).
+static ai_inline void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
+ uint64_t mask = 0xFFFFFFFFu;
+ uint64_t a0 = a & mask, a1 = a >> 32, b0 = b & mask, b1 = b >> 32;
+ uint64_t p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1;
+ uint64_t mid = (p00 >> 32) + (p01 & mask) + (p10 & mask);
+ *lo = (p00 & mask) | (mid << 32);
+ *hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32); }
 #endif
-static ai_inline bool ratio_xcmp(intptr_t n1, intptr_t d1, intptr_t n2, intptr_t d2, intptr_t *c) {
+static ai_inline bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2, intptr_t *c) {
  intptr_t s = (d1 < 0) != (d2 < 0) ? -1 : 1;
 #if defined(__SIZEOF_INT128__)
  __int128 l = (__int128) n1 * d2, r = (__int128) n2 * d1;
  return *c = l == r ? 0 : (l < r ? -s : s), true;
 #else
  // exact sign + magnitude: |n1|*|d2| vs |n2|*|d1| as double-word pairs, signs on top.
- uintptr_t la = n1 < 0 ? (uintptr_t) 0 - (uintptr_t) n1 : (uintptr_t) n1;
- uintptr_t lb = d2 < 0 ? (uintptr_t) 0 - (uintptr_t) d2 : (uintptr_t) d2;
- uintptr_t ra = n2 < 0 ? (uintptr_t) 0 - (uintptr_t) n2 : (uintptr_t) n2;
- uintptr_t rb = d1 < 0 ? (uintptr_t) 0 - (uintptr_t) d1 : (uintptr_t) d1;
- uintptr_t lhi, llo, rhi, rlo;
+ uint64_t la = n1 < 0 ? (uint64_t) 0 - (uint64_t) n1 : (uint64_t) n1;
+ uint64_t lb = d2 < 0 ? (uint64_t) 0 - (uint64_t) d2 : (uint64_t) d2;
+ uint64_t ra = n2 < 0 ? (uint64_t) 0 - (uint64_t) n2 : (uint64_t) n2;
+ uint64_t rb = d1 < 0 ? (uint64_t) 0 - (uint64_t) d1 : (uint64_t) d1;
+ uint64_t lhi, llo, rhi, rlo;
  ratio_mag_mul(la, lb, &lhi, &llo);
  ratio_mag_mul(ra, rb, &rhi, &rlo);
  bool zl = !(lhi | llo), zr = !(rhi | rlo);
@@ -7859,7 +7868,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
  if (nomp(a)) return mint_cmp(g, a, b);                    // mint band: () < bare mints < named syms
  if (ra == 2) {                                            // number band: stars + galaxies, ordered by net
   if (coinp(a) || coinp(b)) {                              // a RATIO coin in the band (cmp_rank read its
-   intptr_t n1, d1, n2, d2, c;                             // mode-2 die): integer components -> EXACT
+   int64_t n1, d1, n2, d2; intptr_t c;                     // mode-2 die): int64-fitting components -> EXACT
    if (ratio_iview(a, &n1, &d1) && ratio_iview(b, &n2, &d2)
        && ratio_xcmp(n1, d1, n2, d2, &c)) return c;
    struct ai_zn za = ai_net(g, a), zb = ai_net(g, b);      // else the sign-exact quotients
