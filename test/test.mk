@@ -860,6 +860,26 @@ test_teensy41: host out/host$(hsuf)/mooncc
 	   echo "test_teensy41: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_teensy41: love (all-mooncc thumb2) links against the XIP flash map, boot image verified"
+# test_nucleo446 -- the Nucleo-F446RE firmware BOOT gate: the whole port (arch
+# backend + main + am) compiled by mooncc -t thumb2sp (the F446's Cortex-M4 has
+# the single-precision FPv4 FPU -- the playdate's target), then the -D QSMOKE
+# face BOOTS on qemu's STM32F405 cousin (netduinoplus2: same USART2/RCC map),
+# runs the on-board self-check battery over the emulated USART2, and leaves
+# through semihosting with the tally. This exercises the port's OWN vectors/
+# crt0/clock-fallback/USART2 driver, not just the ISA (that floor is
+# test_thumb2sp); 100+n names the first miss, 98 a fault. The silicon flash
+# stays a human step (make -C port/nucleo446 flash).
+.PHONY: test_nucleo446
+test_nucleo446: host out/host$(hsuf)/mooncc
+	@echo NUCLEO446 out/nucleo446/smoke.elf
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1 || ! command -v qemu-system-arm >/dev/null 2>&1; then \
+	   echo "test_nucleo446: no arm-none-eabi toolchain / qemu-system-arm, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C port/nucleo446 smoke || { echo "FAIL nucleo446 smoke build"; exit 1; }; \
+	  timeout 60 qemu-system-arm -M netduinoplus2 -semihosting -nographic -monitor none \
+	    -serial null -serial stdio -kernel out/nucleo446/smoke.elf </dev/null; a=$$?; \
+	  [ $$a -eq 28 ] || { echo "FAIL nucleo446 smoke (got $$a, want 28; 100+n first miss, 98 fault)"; exit 1; }; \
+	  echo "test_nucleo446: mooncc -t thumb2sp firmware boots the F4 (28 on-board checks green on qemu)"
 # moon-tar -- the userland cousin of test_raw: build GNU tar 1.13 (a real third-
 # party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
 # prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar
