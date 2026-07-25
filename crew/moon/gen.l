@@ -2555,6 +2555,7 @@
    (kok? v) (&& (0 <= v) (v < kmax))
    (cfoldir fs0)
     (: (fresh z9) (tablet 0)                        ; reg/slot/cell -> (1 K) const | (2 rX) copy-of-register | ()
+       blunt9 (vshops + unops)                      ; folded bluntly (see their arm below)
        (rv t k) (peep t k ())
        (rset t k v) (pin t k v)
        (kn? v) (&& (two? v) (<v = 1))          ; a known CONSTANT (never let a copy reach arithmetic)
@@ -2755,16 +2756,9 @@
                       (: _ (? (<>f = 'r4) (rset sl <>>f ()) (rset ce cur ()))
                          (go r 1 cur rg sl ce ci (link f acc)))
                      (go r 1 cur rg (fresh 0) ce ci (link f acc)))
-                 (member? op >ldops9)                ; the full-word ld has its own arm above
-                  (: _ (defr ci rg sl ce <>f)
-                     (go r 1 cur rg sl ce ci (link f acc)))
-                 (member? op '(lea lean la movqrx cvttsd2si set))
-                  (: _ (defr ci rg sl ce (? (op = 'set) <>>f <>f))
-                     (go r 1 cur rg sl ce ci (link f acc)))
-                 (member? op xops)                   ; indexed forms: the dest is new, sp/frame state stands
-                  (: _ (defr ci rg sl ce <>f)
-                     (go r 1 cur rg sl ce ci (link f acc)))
-                 (member? op '(div rem udiv urem shlv shrv sarv neg not sx1 sx2 sx4 zx1 zx2 zx4))
+                 (member? op blunt9)                 ; DELIBERATELY blunter than rdsp's write set (the
+                  ; dest + r1 would do): the r0..r3 clamp is frozen where the old lump left it --
+                  ; widening it is a precision change, gated on its own run
                   (: _ (defr ci rg sl ce 'r0) _ (defr ci rg sl ce 'r1) _ (defr ci rg sl ce 'r2) _ (defr ci rg sl ce 'r3)
                      (go r 1 cur rg sl ce ci (link f acc)))
                  (op = 'cmp)                         ; paired with its br/set consumer
@@ -2785,12 +2779,17 @@
                                   _ (rset rg d `(1 k))
                                   (go >r 1 cur rg sl ce ci (link `('li d k) acc)))))
                         (go r 1 cur rg sl ce ci (link f acc))))
-                 (op = 'test)                        ; flags only, writes nothing: every record stands
-                  (go r 1 cur rg sl ce ci (link f acc))
-                 (member? op '(movqxr ucomisd ldsd ldss cvtsi2sd cvtss2sd cvtsd2ss addsd subsd mulsd divsd movsd))
-                  (go r 1 cur rg sl ce ci (link f acc)) ; the xmm lane leaves gp state alone
-                 ; anything else: assume nothing survives
-                 (go r 1 cur (fresh 0) (fresh 0) (fresh 0) (fresh 0) (link f acc)))))
+                 ; every other tabled op writes exactly rdsp's defs -- fold through the
+                 ; write set (empty defs leave every record standing: test, the xmm lane;
+                 ; the div protocol clobbers its r0..r3); off the table, assume nothing
+                 ; survives. the table's defs are REGISTER effects only -- a memory-writing
+                 ; op needs its own arm above, as the stores have.
+                 (: rd (rdsp f)
+                    (? (id? rd 'bar)
+                        (go r 1 cur (fresh 0) (fresh 0) (fresh 0) (fresh 0) (link f acc))
+                       (: _ ((: (dfs ds) (? (! (two? ds)) 1
+                                            (: _ (defr ci rg sl ce <ds) (dfs >ds))) dfs) <>rd)
+                          (go r 1 cur rg sl ce ci (link f acc))))))))
        (go fs0 1 0 (fresh 0) (fresh 0) (fresh 0) (fresh 0) ()))
 
    ; dead CELLS: after the copy folds a spush cell whose load folded away is
