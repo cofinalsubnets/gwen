@@ -22,7 +22,7 @@
 ; the byte plumbing: every v6-M instruction is ONE 16-bit halfword EXCEPT BL (two halfwords, hi first,
 ; each le16 -- same trap thumb2.l documents). `t16` emits one narrow halfword; `t32` the BL pair.
 
-(enter ())   ; self-bracket (see crew/holo/x64.l): loads in its own scope, registers into holo's `backends`
+(enter ())   ; self-bracket: loads in its own scope, registers into holo's `backends`
 (: ;; -- registers: abstract number = hardware number for r0..r12; sp/lr/pc/fp named. (shared shape
    ;;    with thumb2.l -- could be factored to an arm32-common, but it's ~15 lines, little leverage.) --
    t1-regs (tablet 0)

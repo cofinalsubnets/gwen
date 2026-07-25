@@ -74,9 +74,9 @@
    ; pooled abs32 field carries S's section offset there, since REL has no addend column).
    (o-take l n) (? !(two? l) () (n < 1) () (<l >< (o-take >l (n - 1))))
    (o-drop l n) (? (n < 1) l !(two? l) l (o-drop >l (n - 1)))
-   (o-put32 bytes off val) (catall `((o-take bytes off) (le32 val) (o-drop bytes (off + 4))))
    ; splice pre-encoded bytes (a re-encoded instruction) in at OFF -- the movw16/movt16 addend bake.
    (o-putbs bytes off bs) (catall `((o-take bytes off) bs (o-drop bytes (off + (tally bs)))))
+   (o-put32 bytes off val) (o-putbs bytes off (le32 val))
 
    ; the externals: labels referenced by a relocation but defined in NO
    ; section -- each needs an UNDEF symbol. unique, first-seen order.
@@ -217,13 +217,7 @@
        ; carries its offset as the addend (BOTH fields carry the FULL value -- the linker reads each
        ; field as a whole signed addend, so this only fits under 32K; a static FN never rides here,
        ; it has its local symbol above).
-       (mwloc lbl)
-        (? (o-has? globidx lbl) `((peep globidx lbl 0) 0)
-           (o-has? fnidx lbl)   `((peep fnidx lbl 0) 0)
-           (o-has? locidx lbl)  `((peep locidx lbl 0) 0)
-           (o-has? dlabels lbl) `(2 (peep dlabels lbl 0))
-           (o-has? nlabels lbl) `(3 (peep nlabels lbl 0))
-           `((peep extidx lbl 0) 0))
+       (mwloc lbl) (a32loc lbl 0)
        ; REL keeps the addend IN the imm16 scatter: re-encode each section-bound movw16/movt16 with
        ; its half of the addend (patch-with does the scatter; the linker adds S on top).
        (bakemw bytes rs)
@@ -242,7 +236,6 @@
                  + funcnames + globnames + (map (\ s (string s)) exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
-       (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
        ; -- the symbol table. a FUNC symbol's value carries the THUMB BIT (bit 0): a
        ; cross-object R_ARM_THM_CALL folds it into T, so the callee is entered in
        ; Thumb state -- vital on M0 (no ARM state at all). data OBJECT syms stay even.
@@ -250,28 +243,28 @@
        symbytes
         (: lsyms (: (go ls i acc) (? !(two? ls) (catall (rev acc))
                                      (go >ls (i + 1)
-                                         ((o-sym32 (nthr stroffs i) 0 2 1
+                                         ((o-sym32 (at stroffs i) 0 2 1
                                                       ((peep tlabels <ls 0) | 1)) >< acc)))   ; STB_LOCAL STT_FUNC, +thumb bit
                     (go locfns 0 ()))
            dsyms (: (go ls i acc) (? !(two? ls) (catall (rev acc))          ; STB_LOCAL STT_OBJECT in .data/ai_nifs, plain value
                                      (go >ls (i + 1)
                                          ((? (o-has? dlabels <ls)
-                                             (o-sym32 (nthr stroffs (nlocf + i)) 0 1 2 (peep dlabels <ls 0))
-                                             (o-sym32 (nthr stroffs (nlocf + i)) 0 1 3 (peep nlabels <ls 0))) >< acc)))
+                                             (o-sym32 (at stroffs (nlocf + i)) 0 1 2 (peep dlabels <ls 0))
+                                             (o-sym32 (at stroffs (nlocf + i)) 0 1 3 (peep nlabels <ls 0))) >< acc)))
                     (go locdat 0 ()))
            fsyms (: (go fs i acc) (? !(two? fs) (catall (rev acc))
                                      (go >fs (i + 1)
-                                         ((o-sym32 (nthr stroffs (nloc + i))
+                                         ((o-sym32 (at stroffs (nloc + i))
                                                       (? (member? <fs wknames) 2 1)   ; STB_WEAK vs STB_GLOBAL
                                                       2 1 ((peep tlabels (intern <fs) 0) | 1)) >< acc)))  ; STT_FUNC, +thumb bit
                     (go funcnames 0 ()))
            gsyms (: (go gs i acc) (? !(two? gs) (catall (rev acc))
                                      (go >gs (i + 1)
-                                         ((o-sym32 (nthr stroffs (nloc + (nfun + i))) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
+                                         ((o-sym32 (at stroffs (nloc + (nfun + i))) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
                     (go globnames 0 ()))
            esyms (: (go es i acc) (? !(two? es) (catall (rev acc))
                                      (go >es (i + 1)
-                                         ((o-sym32 (nthr stroffs (nloc + ((nfun + nglob) + i))) 1 0 0 0) >< acc)))
+                                         ((o-sym32 (at stroffs (nloc + ((nfun + nglob) + i))) 1 0 0 0) >< acc)))
                     (go exts 0 ()))
            (catall `((o-sym32 0 0 0 0 0)              ; NULL
                       (o-sym32 0 0 3 1 0)              ; .text section symbol
@@ -309,7 +302,7 @@
        shnames `(".text" ".data" "ai_nifs" ".symtab" ".strtab" ".rel.text" ".rel.data" ".shstrtab")
        shstr (o-strtab shnames)
        shstrblob <shstr shoffs <>shstr
-       (shname i) (nthr shoffs i)
+       (shname i) (at shoffs i)
        ; -- file layout: 52-byte header, section contents packed tight, then the SHT. --
        h-sz 52
        t-off h-sz               t-sz (tally tbytes)
@@ -390,7 +383,6 @@
        symnames (funcnames + globnames + (map (\ s (string s)) exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
-       (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
 
        ; -- the symbol table: locals (NULL + 2 section syms) then the globals --
        ; (each accumulator links 24-byte entries REVERSED and catalls once --
@@ -398,17 +390,17 @@
        symbytes
         (: fsyms (: (go fs i acc) (? !(two? fs) (catall (rev acc))
                                      (go >fs (i + 1)
-                                         ((o-sym (nthr stroffs i)
+                                         ((o-sym (at stroffs i)
                                                       (? (member? <fs wknames) 2 1)   ; STB_WEAK: a strong def elsewhere wins
                                                       2 1 (peep tlabels (intern <fs) 0)) >< acc)))
                     (go funcnames 0 ()))
            gsyms (: (go gs i acc) (? !(two? gs) (catall (rev acc))
                                      (go >gs (i + 1)
-                                         ((o-sym (nthr stroffs (nfun + i)) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
+                                         ((o-sym (at stroffs (nfun + i)) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
                     (go globnames 0 ()))
            esyms (: (go es i acc) (? !(two? es) (catall (rev acc))
                                      (go >es (i + 1)
-                                         ((o-sym (nthr stroffs ((nfun + nglob) + i)) 1 0 0 0) >< acc)))
+                                         ((o-sym (at stroffs ((nfun + nglob) + i)) 1 0 0 0) >< acc)))
                     (go exts 0 ()))
            (catall `((o-sym 0 0 0 0 0)                 ; the NULL symbol
                       (o-sym 0 0 3 1 0)                  ; .text section symbol (STT_SECTION)
@@ -488,7 +480,7 @@
        shnames `(".text" ".data" "ai_nifs" ".symtab" ".strtab" ".rela.text" ".rela.data" ".rela.ai_nifs" ".shstrtab")
        shstr (o-strtab shnames)
        shstrblob <shstr shoffs <>shstr
-       (shname i) (nthr shoffs i)
+       (shname i) (at shoffs i)
 
        ; -- file layout: header, then section contents packed tight, then the SHT.
        ; the linker reads each section by (sh_offset, sh_size), so no in-file

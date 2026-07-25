@@ -48,6 +48,7 @@
            ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)))
 
    (rn r) (: e (peep arm64-regs r -1) (? (e < 0) (scare 'badreg r) e))
+   (reg-eq a b) ((rn a) = (rn b))   ; own the name: a free read here would leak onto x64's register file
 
    ;; (li d imm): MOVZ the low 16 bits, then MOVK each higher nonzero 16-bit lane (hw = lane index). the
    ;; lane extract is //% not &/>> -- a movz constant can be a full 64-bit word >= 2^63 (a BIGNUM in love,

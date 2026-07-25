@@ -15,7 +15,6 @@
 ; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). moon.l drives it:
 ; `mooncc a.o b.c -o prog`.
 (:
-   (ld-at l i) (? (i < 1) <l (ld-at >l (i - 1)))
    ; little-endian reads off a byte-indexable text; a u64 field can carry a
    ; signed value (a RELA addend), so sg64 folds the high half back down
    (rle16 s i) ((s i) + (256 * (s (i + 1))))
@@ -70,12 +69,12 @@
        cl (class 1 () ())
        symt <cl
        _ (? (two? symt) 0 (scare 'link-no-symtab id))
-       stro (rle64 s ((sh (ld-at symt 2)) + 24))       ; .strtab offset, via symtab's link
+       stro (rle64 s ((sh (at symt 2)) + 24))       ; .strtab offset, via symtab's link
        syms (tablet 0) _ (pin ob 'syms syms)
-       nsym ((ld-at symt 1) // 24)
+       nsym ((at symt 1) // 24)
        _ (pin ob 'nsym nsym)
        _ (: (go i) (? (nsym <= i) 0
-                      (: e ((ld-at symt 0) + (i * 24))
+                      (: e ((at symt 0) + (i * 24))
                          info (s (e + 4))
                          _ (pin syms i `((ld-cstr s (stro + (rle32 s e)))
                                           (info >> 4) (info & 15)
@@ -84,9 +83,9 @@
             (go 0))
        relas (map (\ r (: tag (peep secmap <r ())
                           _ (? tag 0 (scare 'link-rela-target id))
-                          n ((ld-at r 2) // 24)
+                          n ((at r 2) // 24)
                           (es i acc) (? (i < 0) acc
-                                        (: e ((ld-at r 1) + (i * 24))
+                                        (: e ((at r 1) + (i * 24))
                                            (es (i - 1)
                                                (`((rle64 s e) (rle32 s (e + 8))
                                                         (rle32 s (e + 12)) (sg64 (rle64 s (e + 16)))) >< acc))))
@@ -104,9 +103,9 @@
         (? !(two? os) cur
            (: ob <os se (peep (peep ob 'sects 0) tag ())
               (? !(two? se) (one tag cur >os)
-                 (: a (ld-align (ld-at se 2) cur)
+                 (: a (ld-align (at se 2) cur)
                     _ (pin ob (ld-key tag) a)
-                    (one tag (a + (ld-at se 1)) >os)))))
+                    (one tag (a + (at se 1)) >os)))))
        t1 (one 'text (base + 120) objs)
        d1 (one 'data t1 objs)
        n0 (ld-align 16 d1)
@@ -120,17 +119,17 @@
        (one ob i)
         (? ((peep ob 'nsym 0) <= i) 0
            (: sy (peep (peep ob 'syms 0) i ())
-              bind (ld-at sy 1) shx (ld-at sy 3)
+              bind (at sy 1) shx (at sy 3)
               (? (|| (shx = 0) !(member? bind '(1 2))) (one ob (i + 1))
                  (: nm <sy
                     tag (peep (peep ob 'secmap 0) shx ())
                     _ (? tag 0 (scare 'link-sym-section nm))
-                    a ((peep ob (ld-key tag) 0) + (ld-at sy 4))
+                    a ((peep ob (ld-key tag) 0) + (at sy 4))
                     w (bind = 2)
                     old (peep glo nm ())
                     _ (? !(two? old) (pin glo nm `(a w))
                          w 0                                   ; incoming weak: the standing def keeps
-                         (ld-at old 1) (pin glo nm `(a w))    ; strong replaces weak
+                         (at old 1) (pin glo nm `(a w))    ; strong replaces weak
                          (scare 'link-dup nm))
                     (one ob (i + 1))))))
        _ (: (each os) (? !(two? os) 0 (: _ (one <os 1) (each >os)))
@@ -157,17 +156,17 @@
    ; order (obj.l's walk order) -- pieces come out as text snips + byte lists.
    (ldpatch ob tag base glo n0 n1 r0 r1 relbox)
     (: s (peep ob 'src 0) se (peep (peep ob 'sects 0) tag ())
-       off0 (ld-at se 0) sz (ld-at se 1)
+       off0 (at se 0) sz (at se 1)
        (ent es) (? !(two? es) ()
                    (id? <<es tag) ><es
                    (ent >es))
        (go pos es acc)
         (? !(two? es) (rev ((snip s pos (off0 + sz)) >< acc))
-           (: e <es ro <e kind (ld-at e 1) ad (ld-at e 3)
+           (: e <es ro <e kind (at e 1) ad (at e 3)
               _ (? ((pos - off0) <= ro) 0 (scare 'link-unsorted (peep ob 'id 0)))
-              sy (peep (peep ob 'syms 0) (ld-at e 2) ())
-              sv (? ((ld-at sy 2) = 3)                 ; STT_SECTION: the section's base
-                    (: stag (peep (peep ob 'secmap 0) (ld-at sy 3) ())
+              sy (peep (peep ob 'syms 0) (at e 2) ())
+              sv (? ((at sy 2) = 3)                 ; STT_SECTION: the section's base
+                    (: stag (peep (peep ob 'secmap 0) (at sy 3) ())
                        _ (? stag 0 (scare 'link-sym-section (peep ob 'id 0)))
                        (peep ob (ld-key stag) 0))
                     (ldres glo n0 n1 r0 r1 <sy))
@@ -203,7 +202,7 @@
    ; set -- the entry count of the -pie relocation table (8 bytes each).
    (ld-nabs objs)
     (foldl (\ a ob (foldl (\ a2 tr
-              (foldl (\ a3 e (? (member? (ld-at e 1) '(1 257)) (a3 + 1) a3)) a2 >tr))
+              (foldl (\ a3 e (? (member? (at e 1) '(1 257)) (a3 + 1) a3)) a2 >tr))
               a (peep ob 'relas ())))
        0 objs)
 
@@ -233,7 +232,7 @@
               (? !(two? se) (emit tag cur >os acc)
                  (: b (peep ob (ld-key tag) 0)
                     pad (? (cur < b) `((ld-zeros (b - cur))) ())
-                    (emit tag (b + (ld-at se 1)) >os
+                    (emit tag (b + (at se 1)) >os
                           (acc + pad + (ldpatch ob tag b glo n0 end r0 r1 relbox)))))))
        et (emit 'text (base + 120) objs ())
        ed (emit 'data <et objs >et)
