@@ -2090,137 +2090,98 @@
        `(`('sub 'sp 'sp 16) `('st 'sp 0 tmp)
           `('ld tmp 'r4 c) `('st base o2 tmp)
           `('ld tmp 'sp 0) `('add 'sp 'sp 16)))
-   (soften6 g fs)
-    (: (go l)
-        (? (! (two? l)) ()
-           (: f <l r >l
-              (? (! (two? f)) (link f (go r))
-                 (: op <f
-                    h9 (peep sf-bin op ())
-                    (? h9                             ; (op fD fS): fD = fD op fS, through the cells
-                        (cat sf-save
-                         (cat (pl6 g <>f 'r0)
-                          (cat (pl6 g <>>f 'r2)
-                           (cat `(`('call h9))
-                            (cat (ps6 g <>f 'r0)
-                             (cat sf-rest (go r)))))))
-                       (op = 'movsd)                  ; cell -> cell, through the saved temp
-                        (: cd (fcell g <>f) cs (fcell g <>>f)
-                           (cat `(`('sub 'sp 'sp 16) `('st 'sp 0 'r3)
-                                  `('ld 'r3 'r4 cs) `('st 'r4 cd 'r3)
-                                  `('ld 'r3 'r4 (cs + 4)) `('st 'r4 (cd + 4) 'r3)
-                                  `('ld 'r3 'sp 0) `('add 'sp 'sp 16))
-                                (go r)))
-                       (op = 'ldsd) (cat (m2c g <>f <>>f <>>>f) (go r))
-                       (op = 'stsd) (cat (c2m g <>f <>>f <>>>f) (go r))
-                       (op = 'ldss) (cat (w2c g <>f <>>f <>>>f) (go r))
-                       (op = 'stss) (cat (c2w g <>f <>>f <>>>f) (go r))
-                       (op = 'movqrx) (cat (pl6 g <>>f <>f) (go r))
-                       (op = 'movqxr) (cat (ps6 g <>f <>>f) (go r))
-                       (member? op '(cvtsi2sd cvtui2sd))   ; (op fD rS)
-                        (: sl (sf-slot <>>f)
-                           (cat sf-save
-                            (cat (? (sl < 0) `(`('mov 'r0 <>>f)) `(`('ld 'r0 'sp sl)))
-                             (cat `(`('call (? (op = 'cvtsi2sd) '__aeabi_i2d '__aeabi_ui2d)))
-                              (cat (ps6 g <>f 'r0)
-                               (cat sf-rest (go r)))))))
-                       (member? op '(cvttsd2si cvttsd2ui))   ; (op rD fS)
-                        (: sl (sf-slot <>f)
-                           (cat sf-save
-                            (cat (pl6 g <>>f 'r0)
-                             (cat `(`('call (? (op = 'cvttsd2si) '__aeabi_d2iz '__aeabi_d2uiz)))
-                              (cat (? (sl < 0) `(`('mov <>f 'r0)) `(`('st 'sp sl 'r0)))   ; through the save slot: the restore lands it
-                               (cat sf-rest (go r)))))))
-                       (op = 'cvtss2sd)               ; (op fD fS): float bits off the source cell's low word
-                        (: cs (fcell g <>>f)
-                           (cat sf-save
-                            (cat `(`('ld 'r0 'r4 cs) `('call '__aeabi_f2d))
-                             (cat (ps6 g <>f 'r0)
-                              (cat sf-rest (go r))))))
-                       (op = 'cvtsd2ss)               ; (op fD fS): the narrowed word lands the dest cell's low
-                        (: cd (fcell g <>f)
-                           (cat sf-save
-                            (cat (pl6 g <>>f 'r0)
-                             (cat `(`('call '__aeabi_d2f) `('st 'r4 cd 'r0))
-                              (cat sf-rest (go r))))))
-                       (op = 'ucomisd)
-                        (: args (cat sf-save (cat (pl6 g <>f 'r0) (pl6 g <>>f 'r2)))
-                           n1 (? (two? r) <r ())
-                           (? (&& (two? n1) (id? <n1 'br))
-                               (: hs (sf-cc <>n1)
-                                  _ (? (two? hs) 0 (scare 'soften6-cc n1))
-                                  (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('br <>hs <>>n1)))
-                                       (go >r)))
-                              (&& (two? n1) (id? <n1 'set))
-                               (: n2 (? (two? >r) <>r ())
-                                  n3 (? (&& (two? >r) (two? (cup (cup r)))) <>>r ())
-                                  dance (&& (two? n2) (&& (id? <n2 'set) (&& (member? <>n2 '(p np))
-                                                          (&& (two? n3) (member? <n3 '(and or))))))
-                                  hs (sf-cc <>n1)
-                                  _ (? (two? hs) 0 (scare 'soften6-cc n1))
-                                  (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('set <>hs <>>n1)))
-                                       (go (? dance (cup (cup (cup r))) >r))))
-                              (scare 'soften6-ucomisd n1)))
-                       (link f (go r)))))))
-       (go fs))
+   ; ONE walker serves both soft-double faces; the TRANSFER KIT is the whole
+   ; difference. v6m: a double lives in its frame cell -- gd/pd ride pl6/ps6,
+   ; the single-word bits read/write the cell low directly, movsd copies
+   ; cell-to-cell through the saved temp, and the raw f-memory ops (ldsd &c,
+   ; no vldr exists) soften too. sp64: a double lives in its d-register --
+   ; gd/pd are movqrx/movqxr, the single-word bits bounce through the save
+   ; cell's spare word, movsd bounces the pair (no VMOV.F64 on SP), and
+   ; f-memory ops stay (the FPU loads/stores fine, it just can't ARITH f64).
    (soften g fs)
-    (? (v6m? g) (soften6 g fs)
-       (! (sp64? g)) fs
-       (: (go l)
-           (? (! (two? l)) ()
-              (: f <l r >l
-                 (? (! (two? f)) (link f (go r))
-                    (: op <f
-                       h9 (peep sf-bin op ())
-                       (? h9                          ; (op fD fS): fD = fD op fS
-                           (cat sf-save
-                            (cat `(`('movqrx 'r0 <>f) `('movqrx 'r2 <>>f) `('call h9) `('movqxr <>f 'r0))
-                             (cat sf-rest (go r))))
-                          (op = 'movsd)               ; no VMOV.F64 on SP: bounce the pair, no call
-                           (cat `(`('sub 'sp 'sp 16) `('stsd 'sp 0 <>>f) `('ldsd <>f 'sp 0) `('add 'sp 'sp 16))
-                                (go r))
-                          (member? op '(cvtsi2sd cvtui2sd))   ; (op fD rS)
-                           (: sl (sf-slot <>>f)
+    (: w6 (v6m? g)
+       (? (! (|| w6 (sp64? g))) fs
+          (: (gd d9 lo) (? w6 (pl6 g d9 lo) `(`('movqrx lo d9)))   ; double -> the gp pair at lo
+             (pd d9) (? w6 (ps6 g d9 'r0) `(`('movqxr d9 'r0)))   ; the r0:r1 pair -> double
+             (gs d9) (? w6 `(`('ld 'r0 'r4 (fcell g d9)))         ; SINGLE bits -> r0
+                        `(`('stss 'sp 16 d9) `('ld 'r0 'sp 16)))
+             (ps d9) (? w6 `(`('st 'r4 (fcell g d9) 'r0))         ; r0 -> the single's home
+                        `(`('st 'sp 16 'r0) `('ldss d9 'sp 16)))
+             (mv dD dS)                                           ; movsd: double -> double
+              (? w6 (: cd (fcell g dD) cs (fcell g dS)
+                       `(`('sub 'sp 'sp 16) `('st 'sp 0 'r3)
+                         `('ld 'r3 'r4 cs) `('st 'r4 cd 'r3)
+                         `('ld 'r3 'r4 (cs + 4)) `('st 'r4 (cd + 4) 'r3)
+                         `('ld 'r3 'sp 0) `('add 'sp 'sp 16)))
+                 `(`('sub 'sp 'sp 16) `('stsd 'sp 0 dS) `('ldsd dD 'sp 0) `('add 'sp 'sp 16)))
+             scc (? w6 'soften6-cc 'soften-cc)
+             suc (? w6 'soften6-ucomisd 'soften-ucomisd)
+             (go l)
+              (? (! (two? l)) ()
+                 (: f <l r >l
+                    (? (! (two? f)) (link f (go r))
+                       (: op <f
+                          h9 (peep sf-bin op ())
+                          (? h9                             ; (op fD fS): fD = fD op fS
                               (cat sf-save
-                               (cat (? (sl < 0) `(`('mov 'r0 <>>f)) `(`('ld 'r0 'sp sl)))
-                                (cat `(`('call (? (op = 'cvtsi2sd) '__aeabi_i2d '__aeabi_ui2d)) `('movqxr <>f 'r0))
-                                 (cat sf-rest (go r))))))
-                          (member? op '(cvttsd2si cvttsd2ui))   ; (op rD fS)
-                           (: sl (sf-slot <>f)
+                               (cat (gd <>f 'r0)
+                                (cat (gd <>>f 'r2)
+                                 (cat `(`('call h9))
+                                  (cat (pd <>f)
+                                   (cat sf-rest (go r)))))))
+                             (op = 'movsd) (cat (mv <>f <>>f) (go r))
+                             (&& w6 (op = 'ldsd)) (cat (m2c g <>f <>>f <>>>f) (go r))
+                             (&& w6 (op = 'stsd)) (cat (c2m g <>f <>>f <>>>f) (go r))
+                             (&& w6 (op = 'ldss)) (cat (w2c g <>f <>>f <>>>f) (go r))
+                             (&& w6 (op = 'stss)) (cat (c2w g <>f <>>f <>>>f) (go r))
+                             (&& w6 (op = 'movqrx)) (cat (pl6 g <>>f <>f) (go r))
+                             (&& w6 (op = 'movqxr)) (cat (ps6 g <>f <>>f) (go r))
+                             (member? op '(cvtsi2sd cvtui2sd))   ; (op fD rS)
+                              (: sl (sf-slot <>>f)
+                                 (cat sf-save
+                                  (cat (? (sl < 0) `(`('mov 'r0 <>>f)) `(`('ld 'r0 'sp sl)))
+                                   (cat `(`('call (? (op = 'cvtsi2sd) '__aeabi_i2d '__aeabi_ui2d)))
+                                    (cat (pd <>f)
+                                     (cat sf-rest (go r)))))))
+                             (member? op '(cvttsd2si cvttsd2ui))   ; (op rD fS)
+                              (: sl (sf-slot <>f)
+                                 (cat sf-save
+                                  (cat (gd <>>f 'r0)
+                                   (cat `(`('call (? (op = 'cvttsd2si) '__aeabi_d2iz '__aeabi_d2uiz)))
+                                    (cat (? (sl < 0) `(`('mov <>f 'r0)) `(`('st 'sp sl 'r0)))   ; through the save slot: the restore lands it
+                                     (cat sf-rest (go r)))))))
+                             (op = 'cvtss2sd)               ; (op fD fS): single bits in, a pair out
                               (cat sf-save
-                               (cat `(`('movqrx 'r0 <>>f) `('call (? (op = 'cvttsd2si) '__aeabi_d2iz '__aeabi_d2uiz)))
-                                (cat (? (sl < 0) `(`('mov <>f 'r0)) `(`('st 'sp sl 'r0)))   ; through the save slot: the restore lands it
-                                 (cat sf-rest (go r))))))
-                          (op = 'cvtss2sd)            ; (op fD fS): float bits out via the bounce slot
-                           (cat sf-save
-                            (cat `(`('stss 'sp 16 <>>f) `('ld 'r0 'sp 16)
-                                   `('call '__aeabi_f2d) `('movqxr <>f 'r0))
-                             (cat sf-rest (go r))))
-                          (op = 'cvtsd2ss)            ; (op fD fS)
-                           (cat sf-save
-                            (cat `(`('movqrx 'r0 <>>f) `('call '__aeabi_d2f)
-                                   `('st 'sp 16 'r0) `('ldss <>f 'sp 16))
-                             (cat sf-rest (go r))))
-                          (op = 'ucomisd)
-                           (: args (sf-save + `(`('movqrx 'r0 <>f) `('movqrx 'r2 <>>f)))
-                              n1 (? (two? r) <r ())
-                              (? (&& (two? n1) (id? <n1 'br))
-                                  (: hs (sf-cc <>n1)
-                                     _ (? (two? hs) 0 (scare 'soften-cc n1))
-                                     (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('br <>hs <>>n1)))
-                                          (go >r)))
-                                 (&& (two? n1) (id? <n1 'set))
-                                  (: n2 (? (two? >r) <>r ())
-                                     n3 (? (&& (two? >r) (two? (cup (cup r)))) <>>r ())
-                                     dance (&& (two? n2) (&& (id? <n2 'set) (&& (member? <>n2 '(p np))
-                                                             (&& (two? n3) (member? <n3 '(and or))))))
-                                     hs (sf-cc <>n1)
-                                     _ (? (two? hs) 0 (scare 'soften-cc n1))
-                                     (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('set <>hs <>>n1)))
-                                          (go (? dance (cup (cup (cup r))) >r))))
-                                 (scare 'soften-ucomisd n1)))
-                          (link f (go r)))))))
-          (go fs)))
+                               (cat (gs <>>f)
+                                (cat `(`('call '__aeabi_f2d))
+                                 (cat (pd <>f)
+                                  (cat sf-rest (go r))))))
+                             (op = 'cvtsd2ss)               ; (op fD fS): a pair in, the narrowed word home
+                              (cat sf-save
+                               (cat (gd <>>f 'r0)
+                                (cat `(`('call '__aeabi_d2f))
+                                 (cat (ps <>f)
+                                  (cat sf-rest (go r))))))
+                             (op = 'ucomisd)
+                              (: args (cat sf-save (cat (gd <>f 'r0) (gd <>>f 'r2)))
+                                 n1 (? (two? r) <r ())
+                                 (? (&& (two? n1) (id? <n1 'br))
+                                     (: hs (sf-cc <>n1)
+                                        _ (? (two? hs) 0 (scare scc n1))
+                                        (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('br <>hs <>>n1)))
+                                             (go >r)))
+                                    (&& (two? n1) (id? <n1 'set))
+                                     (: n2 (? (two? >r) <>r ())
+                                        n3 (? (&& (two? >r) (two? (cup (cup r)))) <>>r ())
+                                        dance (&& (two? n2) (&& (id? <n2 'set) (&& (member? <>n2 '(p np))
+                                                                (&& (two? n3) (member? <n3 '(and or))))))
+                                        hs (sf-cc <>n1)
+                                        _ (? (two? hs) 0 (scare scc n1))
+                                        (cat (args + `(`('call <hs) `('cmp 'r0 0)) + sf-rest + `(`('set <>hs <>>n1)))
+                                             (go (? dance (cup (cup (cup r))) >r))))
+                                    (scare suc n1)))
+                             (link f (go r)))))))
+             (go fs))))
    ; the v6-M twin: ARMv6-M POP restores r0..r7 and PC but NOT LR, so the return folds into
    ; `pop {pc}` (the pushed lr lands straight in pc) -- no separate lr-restore + bx. fp is r7
    ; here (the backend numbers it). r4 is the BOTTOM base (see t16slots): pushed just under fp,
@@ -4216,7 +4177,7 @@
     (: params <>>f
        _ (pin g 'off 8)                              ; slot -8 = saved r3 (see epi)
        ; v6-M has no FPU registers at all: the f0/f1/f15 fiction lives in three 8-byte frame
-       ; CELLS, allocated up front; soften6 rewrites every f-op onto them (task: cells mirror
+       ; CELLS, allocated up front; soften (the v6m face) rewrites every f-op onto them (cells mirror
        ; the register semantics 1:1, so any staging valid in d-regs is valid in cells)
        _ (? (v6m? g) (: _ (pin g 'fc0 (ntmp g 'double)) _ (pin g 'fc1 (ntmp g 'double))
                         _ (pin g 'fc15 (ntmp g 'double)) 0) 0)
