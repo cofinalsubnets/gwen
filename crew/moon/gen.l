@@ -2193,6 +2193,24 @@
    ; after the 16-byte block drops. bit0 of the pushed lr is already set (BL set
    ; it), so the BX stays in Thumb state.
    epi-t16va `(`('lea 'sp 'fp 0) `('pop 'r4) `('pop 'fp) `('pop 'r3) `('add 'sp 'sp 16) `('jmpr 'r3))
+   ; --- the ISA families: the one place an op's membership is stated. every
+   ; IR pass reads these -- the derived base/disp tablets (a4ize/t16slots/
+   ; unframe re-address through them), rdsp (the dataflow view), and the
+   ; member? sites in the sweeps. a new op joins its family HERE and every
+   ; pass follows; an op off every list stays opaque (the safe default). ---
+   ldops9 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)          ; the gp loads (full + narrow)
+   gstops '(st st1 st2 st4)                         ; the gp stores
+   fldops '(ldsd ldss) fstops '(stsd stss)          ; the f-memory pair
+   stops9 (gstops + fstops)                         ; every plain store (gp head first)
+   leaops '(lea lean)                               ; the address makes (lean: consumed by its own use)
+   xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
+   stxops '(stx stxb)                               ; the indexed stores
+   aluops '(add sub and or xor imul)
+   divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
+   vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
+   unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
+   xmmops '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)   ; xmm-only: no gp effect
+   barops '(call callr raw sys)                     ; the opaque barriers
    ; the arm64 RETARGET: gen speaks r4 for the frame base throughout, but x4
    ; is ALSO an AAPCS argument register -- so the rename is by POSITION, not
    ; by symbol: only the operand slot where r4 means "the frame base" (a
@@ -2200,10 +2218,8 @@
    ; 5th argument (a spill's source, a pop's target) and stays. the arm64
    ; prologue/epilogue say fp outright.
    a4base (: t (tablet 0)
-             _ (foldl (\ _ o (pin t o 2)) 0
-                  '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldsd ldss ldx leax ldxb lea lean))
-             _ (foldl (\ _ o (pin t o 1)) 0
-                  '(st st1 st2 st4 stsd stss stx stxb))
+             _ (foldl (\ _ o (pin t o 2)) 0 (ldops9 + fldops + xops + leaops))
+             _ (foldl (\ _ o (pin t o 1)) 0 (stops9 + stxops))
              t)
    (a4ize fs)
     (: (swap f i bp)
@@ -2358,10 +2374,10 @@
    ; the VM faults on its own slots when the run returns -- and r4 never
    ; joins any pool (a native clobbers it on every VM-reaching call). --
    uoff (: t (tablet 0)
-           _ (foldl (\ _ o (pin t o 3)) 0 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4 ldsd ldss lea lean))
-           _ (foldl (\ _ o (pin t o 5)) 0 '(ldx ldxb leax))
-           _ (foldl (\ _ o (pin t o 2)) 0 '(st st1 st2 st4 stsd stss))
-           _ (foldl (\ _ o (pin t o 4)) 0 '(stx stxb))
+           _ (foldl (\ _ o (pin t o 3)) 0 (ldops9 + fldops + leaops))
+           _ (foldl (\ _ o (pin t o 5)) 0 xops)
+           _ (foldl (\ _ o (pin t o 2)) 0 stops9)
+           _ (foldl (\ _ o (pin t o 4)) 0 stxops)
            t)
    (unframe g fs)
     (: a64 (a64? g)
@@ -2384,8 +2400,8 @@
        ; r3 no longer bails: scan's r3f keeps the save and every restore as
        ; sp slots instead. --
        sv3 (&& (! a64) ((nthr body0 0) = '(st r4 -8 r3)))
-       wina '(mov li lea lean leax ldx ldxb add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4 st st1 st2 st4 cmp test)
-       wind '(mov li lea lean leax ldx ldxb add sub and or xor imul ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
+       wind (('(mov li) + leaops) + (xops + (aluops + ldops9)))
+       wina ((wind + gstops) + '(cmp test))
        (squeeze l)
         (? (! (two? l)) ()
            (: f <l r >l
@@ -2601,7 +2617,7 @@
                               (: rg2 (joint <>pd rg) sl2 (joint <>>pd sl)
                                  ce2 (? (<pd = cur) (joint <>>>pd ce) (fresh 0))
                                  (go r 1 <pd rg2 sl2 ce2 (mkci rg2 sl2 ce2) acc2))))))
-                 (member? op '(call callr raw sys))
+                 (member? op barops)
                   (go r 1 cur (fresh 0) (fresh 0) (fresh 0) (fresh 0) (link f acc))
                  (op = 'jmp)                         ; drop the dead tail; a jmp to the very next label falls through
                   (: r2 (swallow r)
@@ -2700,18 +2716,18 @@
                      _ (rset rg <>f v)
                      _ (crec ci v 'g <>f)
                      (go r 1 (cur - 8) rg sl ce ci (link f acc)))
-                 (member? op '(st1 st2 st4 stsd stss))
+                 (member? op >stops9)                ; the full-word st has its own arm above
                   (? (member? <>f '(r4 sp))
                       (: _ (? (<>f = 'r4) (rset sl <>>f ()) (rset ce cur ()))
                          (go r 1 cur rg sl ce ci (link f acc)))
                      (go r 1 cur rg (fresh 0) ce ci (link f acc)))
-                 (member? op '(ld1 ld2 ld4 ldu1 ldu2 ldu4))
+                 (member? op >ldops9)                ; the full-word ld has its own arm above
                   (: _ (defr ci rg sl ce <>f)
                      (go r 1 cur rg sl ce ci (link f acc)))
                  (member? op '(lea lean la movqrx cvttsd2si set))
                   (: _ (defr ci rg sl ce (? (op = 'set) <>>f <>f))
                      (go r 1 cur rg sl ce ci (link f acc)))
-                 (member? op '(leax ldx ldxb))       ; indexed forms: the dest is new, sp/frame state stands
+                 (member? op xops)                   ; indexed forms: the dest is new, sp/frame state stands
                   (: _ (defr ci rg sl ce <>f)
                      (go r 1 cur rg sl ce ci (link f acc)))
                  (member? op '(div rem udiv urem shlv shrv sarv neg not sx1 sx2 sx4 zx1 zx2 zx4))
@@ -2797,15 +2813,15 @@
                      (scan r (i + 1) >stk sw)
                      (<>f = 'r4) (scan r (i + 1) stk sw)   ; the epilogue's frame pop: path exit
                      'no)
-                 (&& (member? <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (<>>f = 'sp))
+                 (&& (member? <f ldops9) (<>>f = 'sp))
                   (? (&& (two? stk) (&& (cap (cap stk)) (<>>>f = 0)))
                      (: stx (cap (cap stk))
                         _ (pin cand stx ())              ; loaded: the store lives
                         _ (pin clds stx (link i (peep clds stx ())))
                         (scan r (i + 1) stk sw))
                      'no)
-                 (&& (member? <f '(st st1 st2 st4 stsd stss)) (<>f = 'sp)) 'no
-                 (&& (member? <f '(ldsd ldss)) (<>>f = 'sp)) 'no
+                 (&& (member? <f stops9) (<>f = 'sp)) 'no
+                 (&& (member? <f fldops) (<>>f = 'sp)) 'no
                  (: _ (? (|| (<f = 'raw) (member? 'sp >f)) (dirt stk) ())
                     (scan r (i + 1) stk sw)))))
        ok (scan fs 0 () ())
@@ -2962,7 +2978,7 @@
                  (pears >l (n + 1) (link `(<>f <>>f) acc))
                  (pears >l (n + 1) acc))))
        (callish l) (? (! (two? l)) ()
-                      (: f <l (? (&& (two? f) (member? <f '(call callr raw sys))) 1 (callish >l))))
+                      (: f <l (? (&& (two? f) (member? <f barops)) 1 (callish >l))))
        (ok? H A l seen)
         (? (! (two? l)) 1
            (: f <l
@@ -3021,9 +3037,9 @@
        (scan l) (? (! (two? l)) 1
                    (: f <l
                       _ (? (! (two? f)) ()
-                           (member? <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4))
+                           (member? <f ldops9)
                             (? (<>>f = 'r4) (pin used <>>>f 1) ())
-                           (member? <f '(ldsd ldss))
+                           (member? <f fldops)
                             (? (<>>f = 'r4) (pin used <>>>f 1) ())
                            (member? <f '(lea lean))
                             (? (<>>f = 'r4) (pin esc 'y 1) ())
@@ -3032,7 +3048,7 @@
        _ (scan fs)
        (drop l) (? (! (two? l)) ()
                    (: f <l
-                      (? (&& (two? f) (&& (member? <f '(st st1 st2 st4 stsd stss))
+                      (? (&& (two? f) (&& (member? <f stops9)
                              (&& (<>f = 'r4) (! (peep used <>>f ())))))
                          (drop >l)
                          (link f (drop >l)))))
@@ -3052,7 +3068,6 @@
    ; addr insn beside the re-based load -- whichever order leaves every read
    ; pre-clobber -- for the deaddef rerun to harvest. two passes chain the
    ; mov through a folded add. x64 only (the a64 lane rides raw forms).
-   ldops9 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
    ; a register DIES on the straight-line suffix when an insn overwrites it
    ; before any read -- a label/branch/call/unknown op ends the certainty
    (dies? rd l)
@@ -4416,8 +4431,8 @@
         (? (! (two? fs)) n
            (: f <fs
               hit (? (! (two? f)) ()
-                     (member? <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (&& (<>>f = fb9) (member? <>>>f offs))
-                     (member? <f '(st st1 st2 st4)) (&& (<>f = fb9) (member? <>>f offs))
+                     (member? <f ldops9) (&& (<>>f = fb9) (member? <>>>f offs))
+                     (member? <f gstops) (&& (<>f = fb9) (member? <>>f offs))
                      ())
               (nreads >fs offs (? hit (n + 1) n))))
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
@@ -4494,7 +4509,7 @@
        (rst-stoff fs A)                             ; A's entry spill-store (base off) | 'no
         (? (! (two? fs)) 'no
            (: f <fs
-              (? (&& (two? f) (&& (member? <f '(st st1 st2 st4)) (id? <>>>f A))) `(<>f <>>f)
+              (? (&& (two? f) (&& (member? <f gstops) (id? <>>>f A))) `(<>f <>>f)
                  (rst-stoff >fs A))))
        (rst-defok fs A boff)                        ; every def of A is a reload from boff -> 1 | ()
         (? (! (two? fs)) 1
@@ -4504,7 +4519,7 @@
                     (? (id? rd 'bar)
                         (? (member? <f '(label jmp br ret jmpr)) (rst-defok >fs A boff) ())
                        (! (member? A <>rd)) (rst-defok >fs A boff)
-                       (&& (member? <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4))
+                       (&& (member? <f ldops9)
                            (&& (id? <>f A) (&& (id? <>>f <boff) (id? <>>>f <>boff))))
                         (rst-defok >fs A boff)
                        ())))))
@@ -4528,8 +4543,8 @@
         (? (! (two? fs)) n
            (: f2 <fs
               hit (? (! (two? f2)) ()
-                     (member? <f2 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) (&& (<>>f2 = fb9) (<>>>f2 = off))
-                     (member? <f2 '(st st1 st2 st4)) (&& (<>f2 = fb9) (<>>f2 = off))
+                     (member? <f2 ldops9) (&& (<>>f2 = fb9) (<>>>f2 = off))
+                     (member? <f2 gstops) (&& (<>f2 = fb9) (<>>f2 = off))
                      ())
               (ntouch >fs off (? hit (n + 1) n))))
        ; only 'lea marks a slot address-taken (the & lane, a struct/va temp) --
