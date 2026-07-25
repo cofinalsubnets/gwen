@@ -868,6 +868,157 @@
                  (mkv ty 'r0 (fill + `(`('lea 'r0 'r4 off))))))   ; a real lea: the temp's address is the value (& pins via the addr lane, a call blocks via the window)
           'bad))
 
+   ; -- the gcc builtins love.c reaches -- x64 as short raw splices, arm64
+   ; as neutral IR (its ops cover them) or one raw word (clz):
+   ; trap = ud2 / brk; inf/nanf = IEEE constants into f0; expect =
+   ; its value (the hint drops); clear_cache = nothing (coherent on
+   ; x86; qemu-user keeps arm64 honest -- real-metal arm64 is the
+   ; nolibc rung's business); clzll = bsr+xor / clz; isinf =
+   ; bits<<1 == inf<<1; the overflow trio = the op + the overflow
+   ; flag (seto / set vs, mul via mulo's smulh check), result
+   ; stored through arg3, the flag the value.
+   (cgbuiltin g env bi args)                       ; a builtin call -> its value | 'bad; not one -> 'no
+    (? (bi = "__builtin_trap") (? (arm? g) (mkv 'long 'r0 `(`('trap)))
+                                  (mkv 'long 'r0 `(`('raw `(15 11)))))
+       (bi = "__builtin_inf")
+        (? (t32? g) (mkv 'double 'r0 `(`('li 'r0 0) `('li 'r1 2146435072) `('movqxr 'f0 'r0)))
+           (mkv 'double 'r0 `(`('li 'r0 9218868437227405312) `('movqxr 'f0 'r0))))
+       (|| (bi = "__builtin_nanf") (bi = "__builtin_nan"))   ; both take a (ignored) tag string; one quiet-NaN pattern
+        (? (t32? g) (mkv 'double 'r0 `(`('li 'r0 0) `('li 'r1 2146959360) `('movqxr 'f0 'r0)))
+           (mkv 'double 'r0 `(`('li 'r0 9221120237041090560) `('movqxr 'f0 'r0))))
+       (bi = "__builtin_expect") (cgexpr g env <args)
+       (bi = "__builtin___clear_cache")
+        ; x86 keeps I-cache coherent with D-cache: nothing to do. arm64
+        ; does NOT (qemu-user is coherent, metal is not): the architectural
+        ; sequence -- dc cvau each D-line, dsb, ic ivau each I-line, dsb+isb,
+        ; strides read off CTR_EL0 (DminLine[19:16] / IminLine[3:0], log2
+        ; words). the system insns ride raw words (llvm-mc-checked), and the
+        ; variable stride shift too (IR shlv wants its count in r1 -- r1
+        ; holds `end` here).
+        ; scratch = r2/r3/r9/r15 ONLY: r9 rides the pool (dead here by
+        ; callish? parking + vmflush), r15 the callr park (live only at a
+        ; tail), r2/r3 arg regs past their args. NEVER r10-r14 -- those are
+        ; the a64 param/local HOMES, resident across the whole fn and only
+        ; spilled around real calls (this lane clobbering the r10 home was
+        ; a boot segfault the day lvm_nif first passed the homing gate).
+        (? (! (a64? g)) (mkv 'long 'r0 ())
+           (: e1 (cgexpr g env <args)
+              e2 (cgexpr g env <>args)
+              _ (vmflush g)                 ; labels join + the splice clobbers pool regs
+              lb (nlab g ".ccd") db (nlab g ".ccdd")
+              li9 (nlab g ".cci") di (nlab g ".ccid")
+              (? (|| (bad? e1) (bad? e2)) 'bad
+                 (mkv 'long 'r0
+                   (cat (asint g e1) (cat (spush 'r0)
+                    (cat (asint g e2) (cat (`(`('mov 'r1 'r0)) + (spop 'r0))
+                     `(`('raw `(34 0 59 213))          ; mrs x2, ctr_el0
+                        `('li 'r9 15)
+                        `('and 'r15 'r2 'r9)
+                        `('li 'r3 4)
+                        `('raw `(111 32 207 154))      ; lsl x15, x3, x15 -- isize
+                        `('shr 'r2 16)
+                        `('and 'r2 'r2 'r9)
+                        `('raw `(98 32 194 154))       ; lsl x2, x3, x2 -- dsize
+                        `('sub 'r3 'r2 1)
+                        `('not 'r3)
+                        `('and 'r9 'r0 'r3)            ; begin & ~(dsize-1)
+                        `('label lb)
+                        `('cmp 'r9 'r1)
+                        `('br 'ae db)
+                        `('raw `(41 123 11 213))       ; dc cvau, x9
+                        `('add 'r9 'r9 'r2)
+                        `('jmp lb)
+                        `('label db)
+                        `('raw `(159 59 3 213))        ; dsb ish
+                        `('sub 'r3 'r15 1)
+                        `('not 'r3)
+                        `('and 'r9 'r0 'r3)            ; begin & ~(isize-1)
+                        `('label li9)
+                        `('cmp 'r9 'r1)
+                        `('br 'ae di)
+                        `('raw `(41 117 11 213))       ; ic ivau, x9
+                        `('add 'r9 'r9 'r15)
+                        `('jmp li9)
+                        `('label di)
+                        `('raw `(159 59 3 213))        ; dsb ish
+                        `('raw `(223 63 3 213)))))))))))   ; isb
+       (bi = "__builtin_clzll")
+        (: e1 (cgexpr g env <args)
+           (? (bad? e1) 'bad
+              (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
+               (: lz (nlab g ".cz") ld (nlab g ".czd")
+                  _ (vmflush g)
+                  (mkv 'long 'r0 ((asll g e1) +
+                    (? (v6m? g)   ; no CLZ on v6-M: libgcc's __clzsi2 (arg/result r0)
+                       `(`('cmp 'r1 0) `('br 'eq lz) `('mov 'r0 'r1) `('call '__clzsi2) `('jmp ld)
+                          `('label lz) `('call '__clzsi2) `('add 'r0 'r0 32) `('label ld))
+                       `(`('cmp 'r1 0) `('br 'eq lz) `('clz 'r0 'r1) `('jmp ld)
+                          `('label lz) `('clz 'r0 'r0) `('add 'r0 'r0 32) `('label ld))))))
+              (mkv 'long 'r0 ((asint g e1) +
+                              (? (a64? g) `(`('raw `(0 16 192 218)))                    ; clz x0, x0
+                                 `(`('raw `(72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
+       (bi = "__builtin_isinf")
+        (: e1 (cgexpr g env <args)
+           (? (bad? e1) 'bad
+              (mkv 'long 'r0 (cat (asflo g e1)
+                        (? (v6m? g)                 ; the r12-free twin: the diffs land in r1 (dead past the set)
+                           `(`('movqrx 'r0 'f0) `('li 'r2 2147483647) `('and 'r1 'r1 'r2)
+                              `('li 'r2 2146435072) `('subs 'r1 'r1 'r2)
+                              `('ors 'r1 'r1 'r0) `('set 'eq 'r0))
+                           (t32? g)                 ; |hi| == 0x7FF00000 and lo == 0, over the pair
+                           `(`('movqrx 'r0 'f0) `('li 'r2 2147483647) `('and 'r1 'r1 'r2)
+                              `('li 'r2 2146435072) `('subs 'r12 'r1 'r2)
+                              `('ors 'r12 'r12 'r0) `('set 'eq 'r0))
+                           (a64? g)
+                           `(`('movqrx 'r0 'f0) `('shl 'r0 1) `('li 'r1 18437736874454810624)
+                              `('cmp 'r0 'r1) `('set 'eq 'r0))
+                           (cat `(`('movqrx 'r0 'f0) `('raw `(72 209 224)) `('li 'r1 18437736874454810624))   ; shl rax,1; rcx = inf<<1
+                                `(`('raw `(72 57 200 15 148 192 72 15 182 192)))))))))     ; cmp; sete al; movzx rax,al
+       (member? bi '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
+        (: e1 (cgexpr g env <args)
+           e2 (cgexpr g env <>args)
+           ; the &t arg is consumed by the splice's own store -- argpos,
+           ; like a call arg (else every overflow user loses sibcalls)
+           e3 (: _ (? (member? (cap (cauup args)) '(addr var)) (pin g 'argpos 1) ())
+                 (cgexpr g env <>>args))
+           _ (pin g 'argpos ())
+           opb (? (bi = "__builtin_add_overflow") `(72 1 200)      ; add rax,rcx
+                  (bi = "__builtin_sub_overflow") `(72 41 200)     ; sub rax,rcx
+                  `(72 15 175 193))                                ; imul rax,rcx
+           ; the op leaves r0 the result, r1 the overflow bit
+           ovf (? (! (arm? g))
+                  `(`('raw (opb + `(15 144 193 72 15 182 201))))          ; op; seto cl; movzx rcx,cl
+                  (! (bi = "__builtin_mul_overflow"))
+                   `(`((? (bi = "__builtin_add_overflow") 'adds 'subs) 'r0 'r0 'r1) `('set 'vs 'r1))
+                  (v6m? g)                          ; no SMULL: sign-widen both words through __aeabi_lmul,
+                   (cat (spush 'r3)                 ; then hi vs lo>>31. r3 = the &t address -- saved around the call
+                    (cat `(`('mov 'r2 'r1) `('mov 'r1 'r0) `('sar 'r1 31)
+                           `('mov 'r3 'r2) `('sar 'r3 31) `('call '__aeabi_lmul)
+                           `('mov 'r2 'r0) `('sar 'r2 31) `('subs 'r1 'r1 'r2) `('set 'ne 'r1))
+                     (spop 'r3)))
+                  (t32? g)                          ; SMULL, then hi vs lo>>31 (no 64-bit regs)
+                   `(`('smull 'r0 'r2 'r0 'r1) `('mov 'r12 'r0) `('sar 'r12 31)
+                      `('subs 'r1 'r2 'r12) `('set 'ne 'r1))
+                  (: lo (nlab g ".vo") l2 (nlab g ".vd")
+                     `(`('mulo 'r0 'r0 'r1 'r2 lo) `('li 'r1 0) `('jmp l2)
+                        `('label lo) `('li 'r1 1) `('label l2))))
+           ; &t's frame lea must not open the sibs WINDOW: the x64 raw
+           ; splice resets it as a call boundary, but arm64's neutral IR
+           ; is no boundary -- the open window reached every lvm ap's
+           ; Continue and silently declined its tail (74k C frames at
+           ; boot, the raw-arm64 stack gone). the address is consumed
+           ; by the splice's own store, so it reads lean here; x64 IR
+           ; stays untouched (byte-identity).
+           e3f (? (arm? g) (relean (tor0 g e3)) (tor0 g e3))
+           _ (vmflush g)                    ; the a64 mulo lane's labels join
+           (? (|| (bad? e1) (|| (bad? e2) (bad? e3))) 'bad
+              (mkv 'long 'r0 (cat (asint g e1) (cat (spush 'r0)
+                        (cat (asint g e2) (cat (spush 'r0)
+                         (cat e3f (cat (`(`('mov 'r3 'r0)) + (spop 'r1) + (spop 'r0))
+                          (cat ovf
+                               `(`('st 'r3 0 'r0) `('mov 'r0 'r1))))))))))))
+       'no)
+
    ; -- expressions: answers a value tuple | 'bad. g 'want is the DESTINATION
    ; HINT: pinned by a consumer that knows where the value must land (an asn
    ; into a home, a ret's r0), consumed by the TOP node only (cleared here, so
@@ -1274,154 +1425,8 @@
            ; each pushed to the machine stack, then popped reversed into place.
            (: head <>e args <>>e
               bi (? (<head = 'var) <>head ())
-              (? ; the gcc builtins love.c reaches -- x64 as short raw splices, arm64
-                 ; as neutral IR (its ops cover them) or one raw word (clz):
-                 ; trap = ud2 / brk; inf/nanf = IEEE constants into f0; expect =
-                 ; its value (the hint drops); clear_cache = nothing (coherent on
-                 ; x86; qemu-user keeps arm64 honest -- real-metal arm64 is the
-                 ; nolibc rung's business); clzll = bsr+xor / clz; isinf =
-                 ; bits<<1 == inf<<1; the overflow trio = the op + the overflow
-                 ; flag (seto / set vs, mul via mulo's smulh check), result
-                 ; stored through arg3, the flag the value.
-                 (bi = "__builtin_trap") (? (arm? g) (mkv 'long 'r0 `(`('trap)))
-                                            (mkv 'long 'r0 `(`('raw `(15 11)))))
-                 (bi = "__builtin_inf")
-                  (? (t32? g) (mkv 'double 'r0 `(`('li 'r0 0) `('li 'r1 2146435072) `('movqxr 'f0 'r0)))
-                     (mkv 'double 'r0 `(`('li 'r0 9218868437227405312) `('movqxr 'f0 'r0))))
-                 (|| (bi = "__builtin_nanf") (bi = "__builtin_nan"))   ; both take a (ignored) tag string; one quiet-NaN pattern
-                  (? (t32? g) (mkv 'double 'r0 `(`('li 'r0 0) `('li 'r1 2146959360) `('movqxr 'f0 'r0)))
-                     (mkv 'double 'r0 `(`('li 'r0 9221120237041090560) `('movqxr 'f0 'r0))))
-                 (bi = "__builtin_expect") (cgexpr g env <args)
-                 (bi = "__builtin___clear_cache")
-                  ; x86 keeps I-cache coherent with D-cache: nothing to do. arm64
-                  ; does NOT (qemu-user is coherent, metal is not): the architectural
-                  ; sequence -- dc cvau each D-line, dsb, ic ivau each I-line, dsb+isb,
-                  ; strides read off CTR_EL0 (DminLine[19:16] / IminLine[3:0], log2
-                  ; words). the system insns ride raw words (llvm-mc-checked), and the
-                  ; variable stride shift too (IR shlv wants its count in r1 -- r1
-                  ; holds `end` here).
-                  ; scratch = r2/r3/r9/r15 ONLY: r9 rides the pool (dead here by
-                  ; callish? parking + vmflush), r15 the callr park (live only at a
-                  ; tail), r2/r3 arg regs past their args. NEVER r10-r14 -- those are
-                  ; the a64 param/local HOMES, resident across the whole fn and only
-                  ; spilled around real calls (this lane clobbering the r10 home was
-                  ; a boot segfault the day lvm_nif first passed the homing gate).
-                  (? (! (a64? g)) (mkv 'long 'r0 ())
-                     (: e1 (cgexpr g env <args)
-                        e2 (cgexpr g env <>args)
-                        _ (vmflush g)                 ; labels join + the splice clobbers pool regs
-                        lb (nlab g ".ccd") db (nlab g ".ccdd")
-                        li9 (nlab g ".cci") di (nlab g ".ccid")
-                        (? (|| (bad? e1) (bad? e2)) 'bad
-                           (mkv 'long 'r0
-                             (cat (asint g e1) (cat (spush 'r0)
-                              (cat (asint g e2) (cat (`(`('mov 'r1 'r0)) + (spop 'r0))
-                               `(`('raw `(34 0 59 213))          ; mrs x2, ctr_el0
-                                  `('li 'r9 15)
-                                  `('and 'r15 'r2 'r9)
-                                  `('li 'r3 4)
-                                  `('raw `(111 32 207 154))      ; lsl x15, x3, x15 -- isize
-                                  `('shr 'r2 16)
-                                  `('and 'r2 'r2 'r9)
-                                  `('raw `(98 32 194 154))       ; lsl x2, x3, x2 -- dsize
-                                  `('sub 'r3 'r2 1)
-                                  `('not 'r3)
-                                  `('and 'r9 'r0 'r3)            ; begin & ~(dsize-1)
-                                  `('label lb)
-                                  `('cmp 'r9 'r1)
-                                  `('br 'ae db)
-                                  `('raw `(41 123 11 213))       ; dc cvau, x9
-                                  `('add 'r9 'r9 'r2)
-                                  `('jmp lb)
-                                  `('label db)
-                                  `('raw `(159 59 3 213))        ; dsb ish
-                                  `('sub 'r3 'r15 1)
-                                  `('not 'r3)
-                                  `('and 'r9 'r0 'r3)            ; begin & ~(isize-1)
-                                  `('label li9)
-                                  `('cmp 'r9 'r1)
-                                  `('br 'ae di)
-                                  `('raw `(41 117 11 213))       ; ic ivau, x9
-                                  `('add 'r9 'r9 'r15)
-                                  `('jmp li9)
-                                  `('label di)
-                                  `('raw `(159 59 3 213))        ; dsb ish
-                                  `('raw `(223 63 3 213)))))))))))   ; isb
-                 (bi = "__builtin_clzll")
-                  (: e1 (cgexpr g env <args)
-                     (? (bad? e1) 'bad
-                        (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
-                         (: lz (nlab g ".cz") ld (nlab g ".czd")
-                            _ (vmflush g)
-                            (mkv 'long 'r0 ((asll g e1) +
-                              (? (v6m? g)   ; no CLZ on v6-M: libgcc's __clzsi2 (arg/result r0)
-                                 `(`('cmp 'r1 0) `('br 'eq lz) `('mov 'r0 'r1) `('call '__clzsi2) `('jmp ld)
-                                    `('label lz) `('call '__clzsi2) `('add 'r0 'r0 32) `('label ld))
-                                 `(`('cmp 'r1 0) `('br 'eq lz) `('clz 'r0 'r1) `('jmp ld)
-                                    `('label lz) `('clz 'r0 'r0) `('add 'r0 'r0 32) `('label ld))))))
-                        (mkv 'long 'r0 ((asint g e1) +
-                                        (? (a64? g) `(`('raw `(0 16 192 218)))                    ; clz x0, x0
-                                           `(`('raw `(72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
-                 (bi = "__builtin_isinf")
-                  (: e1 (cgexpr g env <args)
-                     (? (bad? e1) 'bad
-                        (mkv 'long 'r0 (cat (asflo g e1)
-                                  (? (v6m? g)                 ; the r12-free twin: the diffs land in r1 (dead past the set)
-                                     `(`('movqrx 'r0 'f0) `('li 'r2 2147483647) `('and 'r1 'r1 'r2)
-                                        `('li 'r2 2146435072) `('subs 'r1 'r1 'r2)
-                                        `('ors 'r1 'r1 'r0) `('set 'eq 'r0))
-                                     (t32? g)                 ; |hi| == 0x7FF00000 and lo == 0, over the pair
-                                     `(`('movqrx 'r0 'f0) `('li 'r2 2147483647) `('and 'r1 'r1 'r2)
-                                        `('li 'r2 2146435072) `('subs 'r12 'r1 'r2)
-                                        `('ors 'r12 'r12 'r0) `('set 'eq 'r0))
-                                     (a64? g)
-                                     `(`('movqrx 'r0 'f0) `('shl 'r0 1) `('li 'r1 18437736874454810624)
-                                        `('cmp 'r0 'r1) `('set 'eq 'r0))
-                                     (cat `(`('movqrx 'r0 'f0) `('raw `(72 209 224)) `('li 'r1 18437736874454810624))   ; shl rax,1; rcx = inf<<1
-                                          `(`('raw `(72 57 200 15 148 192 72 15 182 192)))))))))     ; cmp; sete al; movzx rax,al
-                 (member? bi '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
-                  (: e1 (cgexpr g env <args)
-                     e2 (cgexpr g env <>args)
-                     ; the &t arg is consumed by the splice's own store -- argpos,
-                     ; like a call arg (else every overflow user loses sibcalls)
-                     e3 (: _ (? (member? (cap (cauup args)) '(addr var)) (pin g 'argpos 1) ())
-                           (cgexpr g env <>>args))
-                     _ (pin g 'argpos ())
-                     opb (? (bi = "__builtin_add_overflow") `(72 1 200)      ; add rax,rcx
-                            (bi = "__builtin_sub_overflow") `(72 41 200)     ; sub rax,rcx
-                            `(72 15 175 193))                                ; imul rax,rcx
-                     ; the op leaves r0 the result, r1 the overflow bit
-                     ovf (? (! (arm? g))
-                            `(`('raw (opb + `(15 144 193 72 15 182 201))))          ; op; seto cl; movzx rcx,cl
-                            (! (bi = "__builtin_mul_overflow"))
-                             `(`((? (bi = "__builtin_add_overflow") 'adds 'subs) 'r0 'r0 'r1) `('set 'vs 'r1))
-                            (v6m? g)                          ; no SMULL: sign-widen both words through __aeabi_lmul,
-                             (cat (spush 'r3)                 ; then hi vs lo>>31. r3 = the &t address -- saved around the call
-                              (cat `(`('mov 'r2 'r1) `('mov 'r1 'r0) `('sar 'r1 31)
-                                     `('mov 'r3 'r2) `('sar 'r3 31) `('call '__aeabi_lmul)
-                                     `('mov 'r2 'r0) `('sar 'r2 31) `('subs 'r1 'r1 'r2) `('set 'ne 'r1))
-                               (spop 'r3)))
-                            (t32? g)                          ; SMULL, then hi vs lo>>31 (no 64-bit regs)
-                             `(`('smull 'r0 'r2 'r0 'r1) `('mov 'r12 'r0) `('sar 'r12 31)
-                                `('subs 'r1 'r2 'r12) `('set 'ne 'r1))
-                            (: lo (nlab g ".vo") l2 (nlab g ".vd")
-                               `(`('mulo 'r0 'r0 'r1 'r2 lo) `('li 'r1 0) `('jmp l2)
-                                  `('label lo) `('li 'r1 1) `('label l2))))
-                     ; &t's frame lea must not open the sibs WINDOW: the x64 raw
-                     ; splice resets it as a call boundary, but arm64's neutral IR
-                     ; is no boundary -- the open window reached every lvm ap's
-                     ; Continue and silently declined its tail (74k C frames at
-                     ; boot, the raw-arm64 stack gone). the address is consumed
-                     ; by the splice's own store, so it reads lean here; x64 IR
-                     ; stays untouched (byte-identity).
-                     e3f (? (arm? g) (relean (tor0 g e3)) (tor0 g e3))
-                     _ (vmflush g)                    ; the a64 mulo lane's labels join
-                     (? (|| (bad? e1) (|| (bad? e2) (bad? e3))) 'bad
-                        (mkv 'long 'r0 (cat (asint g e1) (cat (spush 'r0)
-                                  (cat (asint g e2) (cat (spush 'r0)
-                                   (cat e3f (cat (`(`('mov 'r3 'r0)) + (spop 'r1) + (spop 'r0))
-                                    (cat ovf
-                                         `(`('st 'r3 0 'r0) `('mov 'r0 'r1))))))))))))
+              bv (cgbuiltin g env bi args)
+              (? (! (id? bv 'no)) bv
                  (: inlf (? (peep g 'inlining ()) ()
                             (! (<head = 'var)) ()
                             (! (bad? (vent g env <>head))) ()   ; a local/global shadows the name
