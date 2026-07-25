@@ -278,6 +278,17 @@
    ; shuttle holds r0/r1, and args only load at the pops)
    (imby g rX sz) (? (arm? g) `(`('li 'r3 sz) `('imul rX rX 'r3)) `(`('imul rX rX sz)))   ; arm mul (a64/t32/v6-M) has no imm form
    (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))   ; an 8-byte gp scalar: what a register home can carry
+   ; the homable-param fold, spelled once for its five readers (pgo/homes?/
+   ; nhomable/uhomes/rideset): a float/sse param rides its own lane and spends
+   ; no gp seat; the walk stops folding at the home limit; hx folds each
+   ; homable seat -- (hx acc gpi param) -> acc
+   (homefold g ps gpi acc hx)
+    (? (! (two? ps)) acc
+       (: pty (caup (cap ps))
+          (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (homefold g >ps gpi acc hx)
+             ((nhome g) <= gpi) acc
+             (homable? pty) (homefold g >ps (gpi + 1) (hx acc gpi (cap ps)) hx)
+             (homefold g >ps (gpi + 1) acc hx))))
    ; -- the immediate lane: the left value already in r0, a compile-time constant
    ; on the right -> ONE imm-form op (holo's add/sub/imul/and/or/xor/cmp take a
    ; signed-32 immediate), no operand-stack shuttle -- 6 insns and a memory
@@ -3695,14 +3706,8 @@
        (pdcl ps) (? (! (two? ps)) ()
                     (: _ (pin dcl (cap (cap ps)) (1 + (peep dcl (cap (cap ps)) 0)))
                        (pdcl >ps)))
-       ; -- the universe: nhomable's gp walk for the param NAMES, plus the locals --
-       (pgo ps gpi acc)
-        (? (! (two? ps)) acc
-           (: pty (caup (cap ps))
-              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (pgo >ps gpi acc)
-                 ((nhome g) <= gpi) acc
-                 (homable? pty) (pgo >ps (gpi + 1) (link (cap (cap ps)) acc))
-                 (pgo >ps (gpi + 1) acc))))
+       ; -- the universe: the homable gp walk for the param NAMES, plus the locals --
+       (pgo ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (link (cap p9) a2)))
        _ (pdcl params)
        _ (prel items)
        _ (pexl items)
@@ -4406,26 +4411,14 @@
        ; so a callee (glazed or not) only ever sees its own ABI registers. a
        ; &param deopts the whole regen (clval on a regv answers 'bad) back to ir1.
        (homereg gpi) (nthr (hregs g) gpi)
-       (homes? ps gpi)                              ; does any gp param qualify for a register home?
-        (? (! (two? ps)) ()
-           (: pty (caup (cap ps))
-              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (homes? >ps gpi)
-                 ((nhome g) <= gpi) ()
-                 (homable? pty) 1
-                 (homes? >ps (gpi + 1)))))
+       (homes? ps gpi) (0 < (nhomable ps gpi 0))    ; does any gp param qualify for a register home?
        (anyop? fs op) (? (! (two? fs)) () (: f <fs (? (&& (two? f) (<f = op)) 1 (anyop? >fs op))))
        (hascall? fs) (|| (anyop? fs 'call) (anyop? fs 'callr))
        ; the non-leaf PAYOFF gate: homing saves one frame load per param READ but
        ; costs a spill+reload PER HOME around every remaining call -- worth it
        ; only where reads dominate (the hot dispatch shape: many reads, a call
        ; or two). counted on the post-sibcall ir1: tail calls already cost nothing.
-       (nhomable ps gpi n)
-        (? (! (two? ps)) n
-           (: pty (caup (cap ps))
-              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (nhomable >ps gpi n)
-                 ((nhome g) <= gpi) n
-                 (homable? pty) (nhomable >ps (gpi + 1) (n + 1))
-                 (nhomable >ps (gpi + 1) n))))
+       (nhomable ps gpi n) (homefold g ps gpi n (\ n2 i9 p9 (n2 + 1)))
        (ncalls fs n) (? (! (two? fs)) n
                         (: f <fs
                            (ncalls >fs (? (&& (two? f) (member? <f '(call callr))) (n + 1) n))))
@@ -4496,12 +4489,7 @@
                             (body + `(`('li 'r0 0)) + epi)))))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
-       (uhomes ps gpi acc)
-        (? (|| (! (two? ps)) ((nhome g) <= gpi)) acc
-           (: pty (caup (cap ps))
-              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (uhomes >ps gpi acc)
-                 (homable? pty) (uhomes >ps (gpi + 1) (link (homereg gpi) acc))
-                 (uhomes >ps (gpi + 1) acc))))
+       (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (link (homereg i9) a2)))
        ; -- the RIDE analysis (freeing a pass-through param's home): a param
        ; whose home register (r9/r10 on x64; every gp home on a64) differs from
        ; its arrival register and whose ARRIVAL register the body never uses as
@@ -4532,14 +4520,9 @@
                        ())))))
        (rst-ok fs A) (: bo (rst-stoff fs A) (? (id? bo 'no) () (rst-defok fs A bo)))
        (rideset fs ps gpi acc)                      ; the rideable gp indices
-        (? (|| (! (two? ps)) ((nhome g) <= gpi)) acc
-           (: pty (caup (cap ps))
-              (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (rideset fs >ps gpi acc)
-                 (homable? pty)
-                  (rideset fs >ps (gpi + 1)
-                     (? (&& (! (id? (nthr (argr g) gpi) (homereg gpi))) (rst-ok fs (nthr (argr g) gpi)))
-                        (link gpi acc) acc))
-                 (rideset fs >ps (gpi + 1) acc))))
+        (homefold g ps gpi acc
+         (\ a2 i9 p9 (? (&& (! (id? (nthr (argr g) i9) (homereg i9))) (rst-ok fs (nthr (argr g) i9)))
+                        (link i9 a2) a2)))
        ; -- the LOCALS picker: rank the homable locals ir1 recorded (cgdecl's
        ; hook) by residual frame touches, drop any whose slot is lea/lean'd
        ; (address taken), gate each on touches beating the per-call wrap, and
