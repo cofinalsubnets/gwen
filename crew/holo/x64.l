@@ -25,11 +25,13 @@
            ('r5 >< 6) ('r6 >< 7) ('r7 >< 8) ('r8 >< 9)  ('r9 >< 10)
            ('r10 >< 11) ('r11 >< 12) ('r12 >< 13) ('r13 >< 14) ('r14 >< 15)))
 
-   ;; -- the ALU table: op -> (rr-opcode  imm-/digit  commutative?). --
-   x64-alu (tabof
+   ;; -- the ALU table: op -> (rr-opcode  imm-/digit  commutative?). the row list stays
+   ;; bound: the emitter tablet below pins the whole group off it. --
+   x64-alu-rows
         `(('add >< `(1 0 1)) ('or >< `(9 1 1)) ('and >< `(33 4 1))
            ('sub >< `(41 5 0)) ('xor >< `(49 6 1))
-           ('adds >< `(1 0 1)) ('subs >< `(41 5 0))))    ; flag-setting -- x86 add/sub already set OF; pair with (br vs/vc ..)
+           ('adds >< `(1 0 1)) ('subs >< `(41 5 0)))    ; flag-setting -- x86 add/sub already set OF; pair with (br vs/vc ..)
+   x64-alu (tabof x64-alu-rows)
 
    ;; -- condition codes: IR name -> the 0F 8x opcode low byte. --
    x64-cc (tabof
@@ -246,13 +248,14 @@
    x64-xregs (fregs 16)                                                             ; f0..f15 -> 0..15
    (xrn r) (look x64-xregs r 'badxreg)
    ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
-   x64-sse (tabof
+   x64-sse-rows
         `(`('movupd 102 16) `('movsd 242 16) `('movhlps 0 18) `('unpcklpd 102 20)
            `('mulpd 102 89) `('addpd 102 88) `('subpd 102 92) `('divpd 102 94)
            `('mulsd 242 89) `('addsd 242 88) `('subsd 242 92) `('divsd 242 94)
            `('xorpd 102 87) `('pcmpeqd 102 118) `('andpd 102 84) `('psubq 102 251)
            `('cvtss2sd 243 90) `('cvtsd2ss 242 90)                                    ; F3/F2 0F 5A /r  widen/narrow single<->double (the `float` lane)
-           `('ucomisd 102 46)))                                                       ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
+           `('ucomisd 102 46))                                                        ; 66 0F 2E /r  ucomisd xmm,xmm (sets flags)
+   x64-sse (tabof x64-sse-rows)
    (xrex w r b) (? (|| (w = 1) (|| (r >= 8) (b >= 8))) `((rex w (hi r) 0 (hi b))) ())   ; REX only when needed
    (emit-sse op d s)                                                                     ; xmm <- xmm two-address
       (: meta (peep x64-sse op 0) pfx (at meta 0) opc (at meta 1) dn (xrn d) sn (xrn s)
@@ -281,79 +284,43 @@
    (emit-ldss d base disp)                                                               ; (ldss f base disp)  xmm(d) <- [base+disp] (low 32)
       (: dn (xrn d) (catall `(`(243) (xrex 0 dn (rn base)) `(15 16) (mem dn base disp))))
 
-   ;; the dispatch: one IR form -> its byte/fixup chunk.
-   (x64-lower ins)
-      (: op <ins
-         (? (op = 'li)   (emit-li   (at ins 1) (at ins 2))
-            (op = 'mov)  (emit-mov  (at ins 1) (at ins 2))
-            (op = 'cmp)  (emit-cmp  (at ins 1) (at ins 2))
-            (op = 'imul) (emit-imul (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld)   (emit-ld   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st)   (emit-st   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'lea)  (emit-lea  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'lean) (emit-lea  (at ins 1) (at ins 2) (at ins 3))    ; cc's CONSUMED frame address (an lvalue's own store eats it) -- same bytes, invisible to the sibcall escape gate
-            (op = 'ldx)  (emit-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldx d base index scale disp)
-            (op = 'stx)  (emit-stx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (stx base index scale disp s)
-            (op = 'leax) (emit-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (leax d base index scale disp)
-            (op = 'ld1)  (emit-ld1  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld2)  (emit-ld2  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld4)  (emit-ld4  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st1)  (emit-st1  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st2)  (emit-st2  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st4)  (emit-st4  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu1) (emit-ldu1 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu2) (emit-ldu2 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu4) (emit-ldu4 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'sx1)  (emit-sx 1 (at ins 1))
-            (op = 'sx2)  (emit-sx 2 (at ins 1))
-            (op = 'sx4)  (emit-sx 4 (at ins 1))
-            (op = 'zx1)  (emit-zx 1 (at ins 1))
-            (op = 'zx2)  (emit-zx 2 (at ins 1))
-            (op = 'zx4)  (emit-zx 4 (at ins 1))
-            (member? op '(shlv shrv sarv)) (emit-shiftv op (at ins 1) (at ins 2))
-            (op = 'ldxb) (emit-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldxb d base index scale disp) -- zero-extend byte load
-            (op = 'stxb) (emit-stxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (stxb base index scale disp s) -- low-byte store
-            (op = 'test) (emit-test (at ins 1) (at ins 2))
-            (member? op '(shl shr sar rol ror)) (emit-shift op (at ins 1) (at ins 2))
-            (op = 'push) (emit-push (at ins 1))
-            (op = 'pop)  (emit-pop  (at ins 1))
-            (op = 'neg)  (emit-un 247 3 (at ins 1))
-            (op = 'not)  (emit-un 247 2 (at ins 1))
-            (op = 'inc)  (emit-un 255 0 (at ins 1))
-            (op = 'dec)  (emit-un 255 1 (at ins 1))
-            (op = 'jmp)  (emit-jmp  (at ins 1))
-            (op = 'br)   (emit-br   (at ins 1) (at ins 2))
-            (op = 'jmp8) (emit-jmp8 (at ins 1))
-            (op = 'br8)  (emit-br8  (at ins 1) (at ins 2))
-            (op = 'jmpr) (emit-jmpr (at ins 1))
-            (op = 'callr) (emit-callr (at ins 1))
-            (op = 'mulo) (emit-mulo (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (mulo d a b t lbl)
-            (op = 'set)  (emit-set  (at ins 1) (at ins 2))
-            (op = 'div)  (emit-div 0 1 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'rem)  (emit-div 1 1 (at ins 1) (at ins 2) (at ins 3))                      ; (rem d a b t) -- t ignored on x86 (rdx)
-            (op = 'udiv) (emit-div 0 0 (at ins 1) (at ins 2) (at ins 3))                      ; unsigned: xor rdx + div (/6)
-            (op = 'urem) (emit-div 1 0 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'call) (emit-call (at ins 1))
-            (op = 'la)   (emit-la   (at ins 1) (at ins 2))
-            (op = 'lar)  (emit-la   (at ins 1) (at ins 2))   ; near pc-rel address == la on x86 (rip-rel lea, already translation-invariant); arm64 differs (ADR vs ADRP)
-            (op = 'ret)  `(195)
-            (op = 'sys)  `(15 5)
-            (op = 'nop)  `(144)
-            (op = 'trap) `(204)
-            (op = 'raw)  (at ins 1)                                                       ; splice pre-encoded bytes verbatim (no fixups)
-            (two? (peep x64-sse op ())) (emit-sse op (at ins 1) (at ins 2))               ; xmm<-xmm (movupd/movsd/mulpd/addpd/subpd/.../psubq/unpcklpd/movhlps)
-            (op = 'cmppd)    (emit-cmppd    (at ins 1) (at ins 2) (at ins 3))
-            (op = 'movmskpd) (emit-movmskpd (at ins 1) (at ins 2))                        ; (movmskpd gp xmm)
-            (op = 'cvtsi2sd) (emit-cvtsi2sd (at ins 1) (at ins 2))                        ; (cvtsi2sd xmm gp)
-            (op = 'cvttsd2si) (emit-cvttsd2si (at ins 1) (at ins 2))                      ; (cvttsd2si gp xmm)  gp <- (int)xmm
-            (op = 'movqxr)   (emit-movqxr   (at ins 1) (at ins 2))                        ; (movqxr xmm gp)  xmm <- gp
-            (op = 'movqrx)   (emit-movqrx   (at ins 1) (at ins 2))                        ; (movqrx gp xmm)  gp <- xmm
-            (op = 'stsd)     (emit-stsd     (at ins 1) (at ins 2) (at ins 3))             ; (stsd base disp xmm)  [base+disp] <- xmm
-            (op = 'ldsd)     (emit-ldsd     (at ins 1) (at ins 2) (at ins 3))             ; (ldsd xmm base disp)  xmm <- [base+disp]
-            (op = 'stss)     (emit-stss     (at ins 1) (at ins 2) (at ins 3))             ; (stss base disp xmm)  [base+disp] <- xmm (4-byte single)
-            (op = 'ldss)     (emit-ldss     (at ins 1) (at ins 2) (at ins 3))             ; (ldss xmm base disp)  xmm <- [base+disp] (4-byte single)
-            (two? (peep x64-alu op ())) (emit-alu op (at ins 1) (at ins 2) (at ins 3))
-            (scare 'bad-op op)))
+   ;; the dispatch: an EMITTER TABLET, operand shapes in holo.l's ir-arity. a row is a
+   ;; partial application where the form fixes early arguments ((emit-sx 1), (emit-div 0 1),
+   ;; (emit-shift 'shl)); a nullary row is its bytes outright; `raw` splices its operand
+   ;; verbatim -- the identity, the numeral 1. the alu/sse groups pin off their row lists.
+   x64-emitters (tabof
+        `(('li >< emit-li) ('mov >< emit-mov) ('cmp >< emit-cmp) ('imul >< emit-imul)
+           ('ld >< emit-ld) ('st >< emit-st)
+           ('lea >< emit-lea) ('lean >< emit-lea)             ; lean: cc's CONSUMED frame address -- same bytes, invisible to the sibcall escape gate
+           ('ldx >< emit-ldx) ('stx >< emit-stx) ('leax >< emit-leax)
+           ('ldxb >< emit-ldxb) ('stxb >< emit-stxb)
+           ('ld1 >< emit-ld1) ('ld2 >< emit-ld2) ('ld4 >< emit-ld4)
+           ('st1 >< emit-st1) ('st2 >< emit-st2) ('st4 >< emit-st4)
+           ('ldu1 >< emit-ldu1) ('ldu2 >< emit-ldu2) ('ldu4 >< emit-ldu4)
+           ('sx1 >< (emit-sx 1)) ('sx2 >< (emit-sx 2)) ('sx4 >< (emit-sx 4))
+           ('zx1 >< (emit-zx 1)) ('zx2 >< (emit-zx 2)) ('zx4 >< (emit-zx 4))
+           ('shlv >< (emit-shiftv 'shlv)) ('shrv >< (emit-shiftv 'shrv)) ('sarv >< (emit-shiftv 'sarv))
+           ('shl >< (emit-shift 'shl)) ('shr >< (emit-shift 'shr)) ('sar >< (emit-shift 'sar))
+           ('rol >< (emit-shift 'rol)) ('ror >< (emit-shift 'ror))
+           ('test >< emit-test) ('push >< emit-push) ('pop >< emit-pop)
+           ('neg >< (emit-un 247 3)) ('not >< (emit-un 247 2)) ('inc >< (emit-un 255 0)) ('dec >< (emit-un 255 1))
+           ('jmp >< emit-jmp) ('br >< emit-br) ('jmp8 >< emit-jmp8) ('br8 >< emit-br8)
+           ('jmpr >< emit-jmpr) ('callr >< emit-callr)
+           ('mulo >< emit-mulo) ('set >< emit-set)
+           ('div >< (emit-div 0 1)) ('udiv >< (emit-div 0 0))
+           ('rem >< (\ d a b t (emit-div 1 1 d a b)))        ; (rem d a b t) -- the scratch t is rdx's job on x86
+           ('urem >< (\ d a b t (emit-div 1 0 d a b)))
+           ('call >< emit-call)
+           ('la >< emit-la) ('lar >< emit-la)                ; lar == la on x86 (rip-rel lea, already translation-invariant); arm64 differs (ADR vs ADRP)
+           ('cmppd >< emit-cmppd) ('movmskpd >< emit-movmskpd)
+           ('cvtsi2sd >< emit-cvtsi2sd) ('cvttsd2si >< emit-cvttsd2si)
+           ('movqxr >< emit-movqxr) ('movqrx >< emit-movqrx)
+           ('stsd >< emit-stsd) ('ldsd >< emit-ldsd) ('stss >< emit-stss) ('ldss >< emit-ldss)
+           ('raw >< 1)
+           ('ret >< `(195)) ('sys >< `(15 5)) ('nop >< `(144)) ('trap >< `(204))))
+   _ (foldl (\ _ p (pin x64-emitters <p (emit-alu <p))) 0 x64-alu-rows)
+   _ (foldl (\ _ p (pin x64-emitters <p (emit-sse <p))) 0 x64-sse-rows)
+   (x64-lower ins) (: f lower-via (? (lit? f) (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; two relocation kinds: rel32, a 32-bit pc-relative field measured from the END of the field
    ;; (branches, la); and abs64, an 8-byte ABSOLUTE address of the label (a pointer baked into data --

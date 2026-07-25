@@ -95,6 +95,43 @@
    (fregs n)   (: t (tablet 0) _ (foldl (\ _ i (pin t (intern ("f" + (show i))) i)) 0 (jot n)) t)
    (look tab k tag) (: e (peep tab k -1) (? (e < 0) (scare tag k) e))
 
+   ;; -- the IR's operand counts, one neutral table (the header's forms made executable).
+   ;; a backend keeps an EMITTER tablet (op -> emitter, each row partial-applied to
+   ;; everything but its IR operands; an arity-0 row IS its chunk) and its 'lower is the
+   ;; two-line lower-via shim -- so the op -> operand-shape mapping lives HERE, once,
+   ;; instead of four hand-kept dispatch chains. --
+   ir-arity (tabof
+        `(('ret >< 0) ('sys >< 0) ('nop >< 0) ('trap >< 0) ('udivll >< 0) ('uremll >< 0)
+           ('sx1 >< 1) ('sx2 >< 1) ('sx4 >< 1) ('zx1 >< 1) ('zx2 >< 1) ('zx4 >< 1)
+           ('push >< 1) ('pop >< 1) ('neg >< 1) ('not >< 1) ('inc >< 1) ('dec >< 1)
+           ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)
+           ('li >< 2) ('mov >< 2) ('cmp >< 2) ('test >< 2) ('set >< 2) ('br >< 2) ('br8 >< 2)
+           ('la >< 2) ('lar >< 2) ('clz >< 2)
+           ('shl >< 2) ('shr >< 2) ('sar >< 2) ('rol >< 2) ('ror >< 2)
+           ('shlv >< 2) ('shrv >< 2) ('sarv >< 2)
+           ('movupd >< 2) ('movsd >< 2) ('movhlps >< 2) ('unpcklpd >< 2)
+           ('mulpd >< 2) ('addpd >< 2) ('subpd >< 2) ('divpd >< 2)
+           ('mulsd >< 2) ('addsd >< 2) ('subsd >< 2) ('divsd >< 2)
+           ('xorpd >< 2) ('pcmpeqd >< 2) ('andpd >< 2) ('psubq >< 2)
+           ('cvtss2sd >< 2) ('cvtsd2ss >< 2) ('ucomisd >< 2) ('movmskpd >< 2)
+           ('cvtsi2sd >< 2) ('cvtui2sd >< 2) ('cvttsd2si >< 2) ('cvttsd2ui >< 2)
+           ('movqxr >< 2) ('movqrx >< 2)
+           ('add >< 3) ('sub >< 3) ('and >< 3) ('or >< 3) ('xor >< 3) ('imul >< 3)
+           ('adds >< 3) ('subs >< 3) ('adc >< 3) ('adcs >< 3) ('sbc >< 3) ('sbcs >< 3) ('ors >< 3)
+           ('div >< 3) ('udiv >< 3)
+           ('ld >< 3) ('st >< 3) ('lea >< 3) ('lean >< 3)
+           ('ld1 >< 3) ('ld2 >< 3) ('ld4 >< 3) ('st1 >< 3) ('st2 >< 3) ('st4 >< 3)
+           ('ldu1 >< 3) ('ldu2 >< 3) ('ldu4 >< 3)
+           ('stsd >< 3) ('ldsd >< 3) ('stss >< 3) ('ldss >< 3) ('cmppd >< 3)
+           ('rem >< 4) ('urem >< 4) ('umull >< 4) ('smull >< 4) ('mla >< 4)
+           ('ldx >< 5) ('stx >< 5) ('leax >< 5) ('ldxb >< 5) ('stxb >< 5) ('mulo >< 5)))
+   (applyn f ins n i) (? (i > n) f (applyn (f (at ins i)) ins n (i + 1)))
+   (lower-via ems ins)
+      (: op <ins  f (peep ems op 'no)
+         _ (? (id? f 'no) (scare 'bad-op op) 0)
+         n (look ir-arity op 'bad-op)
+         (? (n = 0) f (applyn f ins n 1)))
+
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }. --
    backends (tablet 0)
    (defbackend name be) (pin backends name be)
