@@ -688,6 +688,13 @@
    (pld base off) (? (id? base 'r0) `(`('ld 'r1 base (off + 4)) `('ld 'r0 base off))
                      `(`('ld 'r0 base off) `('ld 'r1 base (off + 4))))
    (pst base off) `(`('st base off 'r0) `('st base (off + 4) 'r1))
+   ; the pair ++/-- tail: old rides r0:r1, the sign-widened step lands in r2:r3,
+   ; the stepped pair stores back through base+off (base never r0..r3)
+   (ppost base off sv)
+    `(`('li 'r2 (& sv 4294967295))
+      `('li 'r3 (? (sv < 0) 4294967295 0))
+      `('adds 'r2 'r0 'r2) `('adc 'r3 'r1 'r3)
+      `('st base off 'r2) `('st base (off + 4) 'r3))
    ; flags := (la:lb) - (ra:rb), for a NORMALIZED relation (lt/ge; gt/le swap operands first).
    ; eq/ne OR the two word-differences instead (la is dead after its read: it takes the hi diff).
    ; v6-M: no r12-dest ALU exists, so the differences land IN la:lb -- every call site's left pair
@@ -1081,12 +1088,8 @@
                  (&& (two? rv) (&& (<rv = 'loc)
                      (: t9 <>>rv (! (|| (stru? t9) (|| (arr? t9) (|| (flo? t9) (bitf? t9))))))))
                   (: ty <>>rv off <>rv stp (? (ptr? ty) (tsz g <>ty) 1)
-                     (? (pair? g ty)                 ; a pair ++/--: old rides r0:r1, the step a pair in r2:r3
-                        (mkv ty 'r0 ((pld 'r4 off)
-                          + `(`('li 'r2 (& (* stp <>>e) 4294967295))
-                             `('li 'r3 (? ((* stp <>>e) < 0) 4294967295 0))
-                             `('adds 'r2 'r0 'r2) `('adc 'r3 'r1 'r3)
-                             `('st 'r4 off 'r2) `('st 'r4 (off + 4) 'r3))))
+                     (? (pair? g ty)
+                        (mkv ty 'r0 ((pld 'r4 off) + (ppost 'r4 off (* stp <>>e))))
                         (mkv ty 'r0 `(`((ldop ty) 'r0 'r4 off)
                                        `('add 'r1 'r0 (* stp <>>e))
                                        `((stop ty) 'r4 off 'r1)))))
@@ -1098,11 +1101,7 @@
                        (bitf? ty) 'bad             ; bitfield ++/-- -- refuse (rare; use `f = f + 1`)
                        (pair? g ty)
                         (mkv ty 'r0 (cat (vfs lv)
-                               (`(`('mov 'r12 'r0)) + (pld 'r12 0)
-                                + `(`('li 'r2 (& (* stp <>>e) 4294967295))
-                                   `('li 'r3 (? ((* stp <>>e) < 0) 4294967295 0))
-                                   `('adds 'r2 'r0 'r2) `('adc 'r3 'r1 'r3)
-                                   `('st 'r12 0 'r2) `('st 'r12 4 'r3)))))
+                               (`(`('mov 'r12 'r0)) + (pld 'r12 0) + (ppost 'r12 0 (* stp <>>e)))))
                        (mkv ty 'r0 (cat (vfs lv)
                               `(`('mov 'r2 'r0)
                                  `((ldop ty) 'r0 'r2 0)
