@@ -64,13 +64,15 @@
 
    (thumb-mov d s) (: dn (rn d) sn (rn s) (t32 (0xEA4F0000 | ((dn << 8) | sn))))   ; MOV.W Rd, Rm (ORR Rd,Rn=15,Rm)
 
-   ;; -- ALU register form (wide, three-address): op -> the hw1 base (S=0). d = a OP b. --
-   thumb-alu (tabof
+   ;; -- ALU register form (wide, three-address): op -> the hw1 base (S=0). d = a OP b.
+   ;; the row list stays bound: the emitter tablet below pins the group off it. --
+   thumb-alu-rows
         `(('add >< 0xEB00) ('sub >< 0xEBA0) ('and >< 0xEA00) ('or >< 0xEA40) ('xor >< 0xEA80)
            ('adds >< 0xEB10) ('subs >< 0xEBB0)                 ; the S-variant: set the flags
            ('adc >< 0xEB40) ('adcs >< 0xEB50)                  ; the carry family -- the 64-bit
            ('sbc >< 0xEB60) ('sbcs >< 0xEB70)                  ;   pair lanes (moon rung 3)
-           ('ors >< 0xEA50)))                                  ; ORRS: pair equality / pair truth
+           ('ors >< 0xEA50))                                   ; ORRS: pair equality / pair truth
+   thumb-alu (tabof thumb-alu-rows)
    (thumb-alu-rrr base d a b)                                 ; hw1 = base|Rn(a); hw2 = Rd<<8 | Rm(b)
       (: dn (rn d) an (rn a) bn (rn b) (t32 (((base | an) << 16) | ((dn << 8) | bn))))
    ;; add/sub #imm12 via ADDW/SUBW (T4): a plain 12-bit unsigned; a negative flips the op.
@@ -300,86 +302,46 @@
    (thumb-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))    ; BX Rm
    (thumb-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))    ; BLX Rm
 
-   (thumb-lower ins)
-      (: op <ins
-         (? (op = 'li)   (thumb-li   (at ins 1) (at ins 2))
-            (op = 'mov)  (thumb-mov  (at ins 1) (at ins 2))
-            (op = 'cmp)  (thumb-cmp  (at ins 1) (at ins 2))
-            (op = 'imul) (thumb-imul (at ins 1) (at ins 2) (at ins 3))
-            (op = 'umull) (thumb-umull (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'smull) (thumb-smull (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'mla)  (thumb-mla  (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'addsd) (thumb-addsd (at ins 1) (at ins 2))
-            (op = 'subsd) (thumb-subsd (at ins 1) (at ins 2))
-            (op = 'mulsd) (thumb-mulsd (at ins 1) (at ins 2))
-            (op = 'divsd) (thumb-divsd (at ins 1) (at ins 2))
-            (op = 'movsd) (thumb-movsd (at ins 1) (at ins 2))
-            (op = 'ucomisd) (thumb-ucomisd (at ins 1) (at ins 2))
-            (op = 'cvtsi2sd) (thumb-cvtsi2sd (at ins 1) (at ins 2))
-            (op = 'cvtui2sd) (thumb-cvtui2sd (at ins 1) (at ins 2))
-            (op = 'cvttsd2si) (thumb-cvttsd2si (at ins 1) (at ins 2))
-            (op = 'cvttsd2ui) (thumb-cvttsd2ui (at ins 1) (at ins 2))
-            (op = 'movqxr) (thumb-movqxr (at ins 1) (at ins 2))
-            (op = 'movqrx) (thumb-movqrx (at ins 1) (at ins 2))
-            (op = 'stsd) (thumb-stsd (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldsd) (thumb-ldsd (at ins 1) (at ins 2) (at ins 3))
-            (op = 'stss) (thumb-stss (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldss) (thumb-ldss (at ins 1) (at ins 2) (at ins 3))
-            (op = 'cvtss2sd) (thumb-cvtss2sd (at ins 1) (at ins 2))
-            (op = 'cvtsd2ss) (thumb-cvtsd2ss (at ins 1) (at ins 2))
-            (op = 'clz)  (thumb-clz  (at ins 1) (at ins 2))
-            (op = 'udivll) (t2-udivmod 'div)
-            (op = 'uremll) (t2-udivmod 'rem)
-            (op = 'ld)   (thumb-ld   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st)   (thumb-st   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld1)  (thumb-ld1  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld2)  (thumb-ld2  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld4)  (thumb-ld4  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st1)  (thumb-st1  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st2)  (thumb-st2  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st4)  (thumb-st4  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu1) (thumb-ldu1 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu2) (thumb-ldu2 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu4) (thumb-ld4  (at ins 1) (at ins 2) (at ins 3))   ; 32-bit zero-extend == word load here
-            (op = 'sx1)  (thumb-sx 1 (at ins 1))
-            (op = 'sx2)  (thumb-sx 2 (at ins 1))
-            (op = 'sx4)  (thumb-sx 4 (at ins 1))
-            (op = 'zx1)  (thumb-zx 1 (at ins 1))
-            (op = 'zx2)  (thumb-zx 2 (at ins 1))
-            (op = 'zx4)  (thumb-zx 4 (at ins 1))
-            (member? op '(shlv shrv sarv)) (thumb-shiftv op (at ins 1) (at ins 2))
-            (op = 'lea)  (thumb-lea  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'lean) (thumb-lea  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'la)   (thumb-la   (at ins 1) (at ins 2))
-            (op = 'lapool) (thumb-lapool (at ins 1))
-            (op = 'leax) (thumb-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'ldx)  (thumb-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'ldxb) (thumb-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'push) (thumb-push (at ins 1))
-            (op = 'pop)  (thumb-pop  (at ins 1))
-            (op = 'neg)  (thumb-neg  (at ins 1))
-            (op = 'not)  (thumb-not  (at ins 1))
-            (op = 'inc)  (thumb-inc  (at ins 1))
-            (op = 'dec)  (thumb-dec  (at ins 1))
-            (op = 'jmp)  (thumb-jmp  (at ins 1))
-            (op = 'br)   (thumb-br   (at ins 1) (at ins 2))
-            (op = 'jmpr) (thumb-jmpr (at ins 1))
-            (op = 'callr) (thumb-callr (at ins 1))
-            (op = 'set)  (thumb-set  (at ins 1) (at ins 2))
-            (member? op '(shl shr sar rol ror)) (thumb-shift op (at ins 1) (at ins 2))
-            (op = 'test) (thumb-test (at ins 1) (at ins 2))
-            (op = 'div)  (thumb-div  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'rem)  (thumb-rem  (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'udiv) (thumb-udiv (at ins 1) (at ins 2) (at ins 3))
-            (op = 'urem) (thumb-urem (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'call) (thumb-call (at ins 1))
-            (op = 'raw)  (at ins 1)                            ; splice pre-encoded bytes verbatim
-            (op = 'ret)  (t16 0x4770)                          ; BX lr
-            (op = 'sys)  (t16 0xDF00)                          ; SVC #0
-            (op = 'nop)  (t16 0xBF00)
-            (op = 'trap) (t16 0xBE00)                          ; BKPT #0
-            (imm? (peep thumb-alu op ())) (thumb-aluop op (at ins 1) (at ins 2) (at ins 3))   ; add/sub/and/or/xor/adds/subs
-            (scare 'bad-op op)))
+   ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
+   ;; nullaries their halfwords outright, `raw` the identity. the alu group pins off its rows.
+   thumb-emitters (tabof
+        `(('li >< thumb-li) ('mov >< thumb-mov) ('cmp >< thumb-cmp) ('imul >< thumb-imul)
+           ('umull >< thumb-umull) ('smull >< thumb-smull) ('mla >< thumb-mla)
+           ('addsd >< thumb-addsd) ('subsd >< thumb-subsd) ('mulsd >< thumb-mulsd)
+           ('divsd >< thumb-divsd) ('movsd >< thumb-movsd) ('ucomisd >< thumb-ucomisd)
+           ('cvtsi2sd >< thumb-cvtsi2sd) ('cvtui2sd >< thumb-cvtui2sd)
+           ('cvttsd2si >< thumb-cvttsd2si) ('cvttsd2ui >< thumb-cvttsd2ui)
+           ('movqxr >< thumb-movqxr) ('movqrx >< thumb-movqrx)
+           ('stsd >< thumb-stsd) ('ldsd >< thumb-ldsd) ('stss >< thumb-stss) ('ldss >< thumb-ldss)
+           ('cvtss2sd >< thumb-cvtss2sd) ('cvtsd2ss >< thumb-cvtsd2ss)
+           ('clz >< thumb-clz)
+           ('udivll >< (t2-udivmod 'div)) ('uremll >< (t2-udivmod 'rem))   ; nullary: the whole expansion
+           ('ld >< thumb-ld) ('st >< thumb-st)
+           ('ld1 >< thumb-ld1) ('ld2 >< thumb-ld2) ('ld4 >< thumb-ld4)
+           ('st1 >< thumb-st1) ('st2 >< thumb-st2) ('st4 >< thumb-st4)
+           ('ldu1 >< thumb-ldu1) ('ldu2 >< thumb-ldu2)
+           ('ldu4 >< thumb-ld4)                              ; 32-bit zero-extend == word load here
+           ('sx1 >< (thumb-sx 1)) ('sx2 >< (thumb-sx 2)) ('sx4 >< (thumb-sx 4))
+           ('zx1 >< (thumb-zx 1)) ('zx2 >< (thumb-zx 2)) ('zx4 >< (thumb-zx 4))
+           ('shlv >< (thumb-shiftv 'shlv)) ('shrv >< (thumb-shiftv 'shrv)) ('sarv >< (thumb-shiftv 'sarv))
+           ('shl >< (thumb-shift 'shl)) ('shr >< (thumb-shift 'shr)) ('sar >< (thumb-shift 'sar))
+           ('rol >< (thumb-shift 'rol)) ('ror >< (thumb-shift 'ror))
+           ('lea >< thumb-lea) ('lean >< thumb-lea)
+           ('la >< thumb-la) ('lapool >< thumb-lapool)
+           ('leax >< thumb-leax) ('ldx >< thumb-ldx) ('ldxb >< thumb-ldxb)
+           ('push >< thumb-push) ('pop >< thumb-pop)
+           ('neg >< thumb-neg) ('not >< thumb-not) ('inc >< thumb-inc) ('dec >< thumb-dec)
+           ('jmp >< thumb-jmp) ('br >< thumb-br) ('jmpr >< thumb-jmpr) ('callr >< thumb-callr)
+           ('set >< thumb-set) ('test >< thumb-test)
+           ('div >< thumb-div) ('rem >< thumb-rem) ('udiv >< thumb-udiv) ('urem >< thumb-urem)
+           ('call >< thumb-call)
+           ('raw >< 1)
+           ('ret >< (t16 0x4770))                            ; BX lr
+           ('sys >< (t16 0xDF00))                            ; SVC #0
+           ('nop >< (t16 0xBF00))
+           ('trap >< (t16 0xBE00))))                         ; BKPT #0
+   _ (foldl (\ _ p (pin thumb-emitters <p (thumb-aluop <p))) 0 thumb-alu-rows)
+   (thumb-lower ins) (: f lower-via (? (lit? f) (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation. Thumb pc reads as (site + 4), and the branch fields hold a /2 (halfword) offset
    ;; scrambled across S/J1/J2. patch computes the byte offset O = target-(site+4) then packs it.
