@@ -256,6 +256,8 @@
                    (|| (usg? ta) (usg? tb)) 'ulong 'long)
    (scc op unsg) (? (! unsg) op (op = 'lt) 'below (op = 'gt) 'above (op = 'le) 'be (op = 'ge) 'ae op)
    (rflip op) (? (op = 'lt) 'gt (op = 'gt) 'lt (op = 'le) 'ge (op = 'ge) 'le op)      ; MIRRORED (n < x reads x > n): constant-on-the-left
+   (irop op) (? (op = '+) 'add (op = '-) 'sub (op = '*) 'imul                         ; C op -> IR mnemonic; not one of the six -> 'no
+                (op = '&) 'and (op = '|) 'or (op = '^) 'xor 'no)
    (negrel op) (? (op = 'eq) 'ne (op = 'ne) 'eq (op = 'lt) 'ge (op = 'ge) 'lt (op = 'le) 'gt 'le)   ; NEGATED: branch-if-false
    (fits32? v) (&& (-2147483648 <= v) (v <= 2147483647))    ; holo's ALU/cmp/imul immediates ride le32
    (tsz g ty) (? (ptr? ty) (wsize g)
@@ -321,8 +323,7 @@
                  _ (? (id? rd rA) () (rfree g rA))
                  (mkv 'ulong rd fs)))
           (: sn (? (&& (ptr? aty) (member? op '(+ -))) (* n (tsz g <>aty)) n)
-             iop (? (op = '+) 'add (op = '-) 'sub (op = '*) 'imul
-                    (op = '&) 'and (op = '|) 'or (op = '^) 'xor 'no)
+             iop (irop op)
              icl (? (member? op '(+ -)) 'addsub (op = '*) 'mul 'log)
              (? (id? iop 'no) 'no
                 (! (immok g icl sn)) 'no
@@ -1885,9 +1886,9 @@
                                            (mkv rt 'r0 (mid2 + `(`('call '__aeabi_lmul))))
                                            (mkv rt 'r0 (mid2 + `(`('imul 'r3 'r3 'r0) `('mla 'r3 'r2 'r1 'r3)
                                                                  `('umull 'r0 'r12 'r2 'r0) `('add 'r1 'r12 'r3)))))
-                                       (op = '&) (mkv rt 'r0 (mid2 + `(`('and 'r0 'r2 'r0) `('and 'r1 'r3 'r1))))
-                                       (op = '|) (mkv rt 'r0 (mid2 + `(`('or 'r0 'r2 'r0) `('or 'r1 'r3 'r1))))
-                                       (op = '^) (mkv rt 'r0 (mid2 + `(`('xor 'r0 'r2 'r0) `('xor 'r1 'r3 'r1))))
+                                       (member? op '(& | ^))
+                                        (: w9 (irop op)
+                                           (mkv rt 'r0 (mid2 + `(`(w9 'r0 'r2 'r0) `(w9 'r1 'r3 'r1)))))
                                        (op = '/)
                                         (? (v6m? g)   ; quotient rides out in r0:r1; the SIGNED face works too (__aeabi_ldivmod)
                                            (mkv rt 'r0 (mid2d + `(`('call (? unsg '__aeabi_uldivmod '__aeabi_ldivmod)))))
@@ -1935,12 +1936,9 @@
                                                       (`(`('sub 'r1 'r1 'r0)) + back))))
                                     pb 'bad
                                     (mkv 'long 'r0 (mid + `(`('sub 'r1 'r1 'r0)) + back)))
-                                (: tail (? (op = '*) `(`('imul 'r1 'r1 'r0))
+                                (: tail (? (member? op '(* & | ^)) `(`((irop op) 'r1 'r1 'r0))
                                            (op = '/) `(`((? unsg 'udiv 'div) 'r1 'r1 'r0))
                                            (op = '%) `(`((? unsg 'urem 'rem) 'r1 'r1 'r0 'r3))
-                                           (op = '&) `(`('and 'r1 'r1 'r0))
-                                           (op = '|) `(`('or 'r1 'r1 'r0))
-                                           (op = '^) `(`('xor 'r1 'r1 'r0))
                                            'bad)
                                    (? (! (bad? tail))
                                       (mkv (ubin ta tb) 'r0 (mid + tail + back))
@@ -2010,8 +2008,7 @@
                                             _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
                                             (mkv 'long rd fs))
                                         (member? op '(+ - * & | ^))
-                                         (: iop2 (? (op = '+) 'add (op = '-) 'sub (op = '*) 'imul
-                                                    (op = '&) 'and (op = '|) 'or 'xor)
+                                         (: iop2 (irop op)
                                             rd (? (&& wnt (! (id? wnt rB))) wnt (rdst g rA))
                                             ; holo reorders a commutative rd==rb; sub CANNOT (alias-dst) --
                                             ; a borrowed left + dry pool can land rd on rB's r0
