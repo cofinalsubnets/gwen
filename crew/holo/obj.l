@@ -103,6 +103,12 @@
               (go >ns (off + (tally bs)) ((rev bs) + bacc) (off >< offs))))
        (go names 1 `(0) ()))
 
+   ; the index kit both emitters lean on: a name-set tablet (interned -> 1), a list
+   ; pinned elem -> i0+i (the symbol-index maps), and map-with-index.
+   (o-names ns) (: t (tablet 0) (go ws) (? !(two? ws) t (: _ (pin t (intern <ws) 1) (go >ws))) (go ns))
+   (o-idx ls i0) (: t (tablet 0) (go es i) (? !(two? es) t (: _ (pin t <es i) (go >es (i + 1)))) (go ls i0))
+   (o-mapi f ls) (: (go l i acc) (? !(two? l) (rev acc) (go >l (i + 1) ((f i <l) >< acc))) (go ls 0 ()))
+
    ; -- ELF32 / EM_ARM (the thumb backends). the 32-bit cousin of the emitter below:
    ; a 52-byte header, 16-byte symbols, and REL (not RELA) relocations -- ARM's ABI
    ; keeps the addend IN the field, so a surviving thumb branch carries its base
@@ -130,8 +136,7 @@
        _ (? (machine = 0) (scare 'no-elf-machine target) 0)
        be (peep backends target ())
        rset '(b bcc bl)                              ; thumb internal branches are pc-relative -> resolve in place
-       wkset (: t (tablet 0) (go ws) (? !(two? ws) t (: _ (pin t (intern <ws) 1) (go >ws)))
-                (go wknames))
+       wkset (o-names wknames)
        tp (: r laylax (? (lit? r) (r textforms be 0 (tablet 0) wkset) (scare 'holo-bake-stale 'laylax)))
        dp (lay dataforms be 0 () (tablet 0))
        np (lay nifforms be 0 () (tablet 0))
@@ -152,8 +157,7 @@
        ; qemu-M7 boot's pc hijack: a cata popped as 0x14ab instead of 0x114ab).
        ; each referenced .text label gets its own LOCAL FUNC symbol instead, thumb
        ; bit in st_value like the globals, addend 0 -- the gcc convention.
-       fnset (: t (tablet 0) (go fs) (? !(two? fs) t (: _ (pin t (intern <fs) 1) (go >fs)))
-                (go funcnames))
+       fnset (o-names funcnames)
        locfns (: seen (tablet 0)
                  (add lbl acc) (? (! (o-has? tlabels lbl)) acc
                                   (o-has? fnset lbl) acc
@@ -170,8 +174,7 @@
        ; and every la'd string pointed 384K low. each referenced static-data label
        ; gets a LOCAL OBJECT symbol (st_value = its section offset, addend 0).
        ; abs32 fields stay on the section path -- a 32-bit field carries any offset.
-       gset (: t (tablet 0) (go gs) (? !(two? gs) t (: _ (pin t (intern <gs) 1) (go >gs)))
-               (go globnames))
+       gset (o-names globnames)
        locdat (: seen (tablet 0)
                  (add lbl acc) (? (! (|| (o-has? dlabels lbl) (o-has? nlabels lbl))) acc
                                   (o-has? gset lbl) acc
@@ -185,15 +188,10 @@
        nloc (nlocf + nlocd)
        nfun (tally funcnames) nglob (tally globnames)
        fstart (4 + nloc) gstart (fstart + nfun) estart (gstart + nglob)
-       locidx (: t (tablet 0)
-                 (go ls i) (? !(two? ls) i (: _ (pin t <ls i) (go >ls (i + 1))))
-                 (: i2 (go locfns 4) _ (go locdat i2) t))
-       extidx (: t (tablet 0) (go es i) (? !(two? es) t (: _ (pin t <es (estart + i)) (go >es (i + 1))))
-                  (go exts 0))
-       fnidx (: t (tablet 0) (go fs i) (? !(two? fs) t (: _ (pin t (intern <fs) (fstart + i)) (go >fs (i + 1))))
-                (go funcnames 0))
-       globidx (: t (tablet 0) (go gs i) (? !(two? gs) t (: _ (pin t (intern <gs) (gstart + i)) (go >gs (i + 1))))
-                  (go globnames 0))
+       locidx (o-idx (locfns + locdat) 4)
+       extidx (o-idx exts estart)
+       fnidx (o-idx (map intern funcnames) fstart)
+       globidx (o-idx (map intern globnames) gstart)
        ; an abs32 pool target -> (symidx field). a defined global / a function address binds its OWN
        ; symbol (addend rides the field, usually 0); a referenced STATIC fn its LOCAL symbol (above);
        ; a .data/ai_nifs static or string binds the SECTION symbol with its offset in the field
@@ -241,31 +239,21 @@
        ; Thumb state -- vital on M0 (no ARM state at all). data OBJECT syms stay even.
        ; the referenced-static LOCAL FUNC syms lead (symtab sh_info = first global). --
        symbytes
-        (: lsyms (: (go ls i acc) (? !(two? ls) (catall (rev acc))
-                                     (go >ls (i + 1)
-                                         ((o-sym32 (at stroffs i) 0 2 1
-                                                      ((peep tlabels <ls 0) | 1)) >< acc)))   ; STB_LOCAL STT_FUNC, +thumb bit
-                    (go locfns 0 ()))
-           dsyms (: (go ls i acc) (? !(two? ls) (catall (rev acc))          ; STB_LOCAL STT_OBJECT in .data/ai_nifs, plain value
-                                     (go >ls (i + 1)
-                                         ((? (o-has? dlabels <ls)
-                                             (o-sym32 (at stroffs (nlocf + i)) 0 1 2 (peep dlabels <ls 0))
-                                             (o-sym32 (at stroffs (nlocf + i)) 0 1 3 (peep nlabels <ls 0))) >< acc)))
-                    (go locdat 0 ()))
-           fsyms (: (go fs i acc) (? !(two? fs) (catall (rev acc))
-                                     (go >fs (i + 1)
-                                         ((o-sym32 (at stroffs (nloc + i))
-                                                      (? (member? <fs wknames) 2 1)   ; STB_WEAK vs STB_GLOBAL
-                                                      2 1 ((peep tlabels (intern <fs) 0) | 1)) >< acc)))  ; STT_FUNC, +thumb bit
-                    (go funcnames 0 ()))
-           gsyms (: (go gs i acc) (? !(two? gs) (catall (rev acc))
-                                     (go >gs (i + 1)
-                                         ((o-sym32 (at stroffs (nloc + (nfun + i))) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
-                    (go globnames 0 ()))
-           esyms (: (go es i acc) (? !(two? es) (catall (rev acc))
-                                     (go >es (i + 1)
-                                         ((o-sym32 (at stroffs (nloc + ((nfun + nglob) + i))) 1 0 0 0) >< acc)))
-                    (go exts 0 ()))
+        (: lsyms (catall (o-mapi (\ i ls (o-sym32 (at stroffs i) 0 2 1
+                                             ((peep tlabels ls 0) | 1)))                  ; STB_LOCAL STT_FUNC, +thumb bit
+                                 locfns))
+           dsyms (catall (o-mapi (\ i ls (? (o-has? dlabels ls)                           ; STB_LOCAL STT_OBJECT in .data/ai_nifs, plain value
+                                            (o-sym32 (at stroffs (nlocf + i)) 0 1 2 (peep dlabels ls 0))
+                                            (o-sym32 (at stroffs (nlocf + i)) 0 1 3 (peep nlabels ls 0))))
+                                 locdat))
+           fsyms (catall (o-mapi (\ i fs (o-sym32 (at stroffs (nloc + i))
+                                             (? (member? fs wknames) 2 1)                 ; STB_WEAK vs STB_GLOBAL
+                                             2 1 ((peep tlabels (intern fs) 0) | 1)))     ; STT_FUNC, +thumb bit
+                                 funcnames))
+           gsyms (catall (o-mapi (\ i gs (o-sym32 (at stroffs (nloc + (nfun + i))) 1 1 2 (peep dlabels (intern gs) 0)))
+                                 globnames))
+           esyms (catall (o-mapi (\ i e (o-sym32 (at stroffs (nloc + ((nfun + nglob) + i))) 1 0 0 0))
+                                 exts))
            (catall `((o-sym32 0 0 0 0 0)              ; NULL
                       (o-sym32 0 0 3 1 0)              ; .text section symbol
                       (o-sym32 0 0 3 2 0)              ; .data
@@ -273,31 +261,23 @@
                       lsyms dsyms fsyms gsyms esyms)))
        nsym ((4 + nloc) + (nfun + (nglob + (tally exts))))
        ; -- .rel.text: R_ARM_THM_CALL for each external/weak `bl` (internal ones resolved in place). --
-       reltext (: (go rs acc)
-                   (? !(two? rs) (catall (rev acc))
-                      (: r <rs off <r k <>r lbl <>>r aux <>>>r
-                         (? (id? k 'bl)
-                             (: sym (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
-                                (go >rs ((o-rel32 off sym r-thm-call) >< acc)))
-                            (id? k 'b)               ; a B.W tail-jump to an external/weak fn
-                             (: sym (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
-                                (go >rs ((o-rel32 off sym r-thm-jump24) >< acc)))
-                            (id? k 'abs32)
-                             (: sl (a32loc lbl aux) (go >rs ((o-rel32 off <sl r-arm-abs32) >< acc)))
-                            (member? k '(movw16 movt16))
-                             (: sl (mwloc lbl)
-                                (go >rs ((o-rel32 off <sl (? (id? k 'movw16) r-thm-movw r-thm-movt)) >< acc)))
-                            (scare 'obj32-text-reloc k))))
-                  (go trel ()))
+       (fnsym lbl) (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
+       reltext (catall (map (\ r
+                  (: off <r k <>r lbl <>>r aux <>>>r
+                     (? (id? k 'bl) (o-rel32 off (fnsym lbl) r-thm-call)
+                        (id? k 'b)  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
+                        (id? k 'abs32) (: sl (a32loc lbl aux) (o-rel32 off <sl r-arm-abs32))
+                        (member? k '(movw16 movt16))
+                         (: sl (mwloc lbl) (o-rel32 off <sl (? (id? k 'movw16) r-thm-movw r-thm-movt)))
+                        (scare 'obj32-text-reloc k))))
+                 trel))
        ntrel (tally trel)
        ; -- .rel.data: R_ARM_ABS32 for each data pointer (int *p = &g; a string-literal char *). --
-       reldata (: (go rs acc)
-                   (? !(two? rs) (catall (rev acc))
-                      (: r <rs off <r k <>r lbl <>>r aux <>>>r
-                         (? (id? k 'abs32)
-                             (: sl (a32loc lbl aux) (go >rs ((o-rel32 off <sl r-arm-abs32) >< acc)))
-                            (scare 'obj32-data-reloc k))))
-                  (go drel ()))
+       reldata (catall (map (\ r
+                  (: off <r k <>r lbl <>>r aux <>>>r
+                     (? (id? k 'abs32) (: sl (a32loc lbl aux) (o-rel32 off <sl r-arm-abs32))
+                        (scare 'obj32-data-reloc k))))
+                 drel))
        ndrel (tally drel)
        shnames `(".text" ".data" "ai_nifs" ".symtab" ".strtab" ".rel.text" ".rel.data" ".shstrtab")
        shstr (o-strtab shnames)
@@ -351,8 +331,7 @@
        ; in-place resolve would pin them to the local body, and the linker could
        ; never redirect to a strong override. built before lay: the relaxer needs
        ; it too (a shortened branch could never survive as a relocation).
-       wkset (: t (tablet 0) (go ws) (? !(two? ws) t (: _ (pin t (intern <ws) 1) (go >ws)))
-                (go wknames))
+       wkset (o-names wknames)
        ; the relaxing layout -- obj.l is tree-fresh in the kore/mooncc cats while the holo
        ; book rides the running binary's BAKE, and the build pairs them structurally (the
        ; wake shims exec the sibling love; crew/build.mk). a bake too old to carry laylax
@@ -374,10 +353,8 @@
        ; -- symbol indices: NULL, .text/.data/ai_nifs section syms, then funcs, globs, exts --
        nfun (tally funcnames) nglob (tally globnames)
        fstart 4 gstart (4 + nfun) estart ((4 + nfun) + nglob)
-       extidx (: t (tablet 0) (go es i) (? !(two? es) t (: _ (pin t <es (estart + i)) (go >es (i + 1))))
-                  (go exts 0))
-       fnidx (: t (tablet 0) (go fs i) (? !(two? fs) t (: _ (pin t (intern <fs) (fstart + i)) (go >fs (i + 1))))
-                (go funcnames 0))                    ; interned fn name -> its symbol index (weak-target relocs bind here)
+       extidx (o-idx exts estart)
+       fnidx (o-idx (map intern funcnames) fstart)   ; interned fn name -> its symbol index (weak-target relocs bind here)
 
        ; -- .strtab: every symbol's name (funcs, globs, exts as spellings) --
        symnames (funcnames + globnames + (map (\ s (string s)) exts))
@@ -385,23 +362,16 @@
        strblob <str stroffs <>str
 
        ; -- the symbol table: locals (NULL + 2 section syms) then the globals --
-       ; (each accumulator links 24-byte entries REVERSED and catalls once --
-       ; a cat per entry re-copies the whole table)
+       ; (one catall per table -- a cat per entry re-copies it)
        symbytes
-        (: fsyms (: (go fs i acc) (? !(two? fs) (catall (rev acc))
-                                     (go >fs (i + 1)
-                                         ((o-sym (at stroffs i)
-                                                      (? (member? <fs wknames) 2 1)   ; STB_WEAK: a strong def elsewhere wins
-                                                      2 1 (peep tlabels (intern <fs) 0)) >< acc)))
-                    (go funcnames 0 ()))
-           gsyms (: (go gs i acc) (? !(two? gs) (catall (rev acc))
-                                     (go >gs (i + 1)
-                                         ((o-sym (at stroffs (nfun + i)) 1 1 2 (peep dlabels (intern <gs) 0)) >< acc)))
-                    (go globnames 0 ()))
-           esyms (: (go es i acc) (? !(two? es) (catall (rev acc))
-                                     (go >es (i + 1)
-                                         ((o-sym (at stroffs ((nfun + nglob) + i)) 1 0 0 0) >< acc)))
-                    (go exts 0 ()))
+        (: fsyms (catall (o-mapi (\ i fs (o-sym (at stroffs i)
+                                             (? (member? fs wknames) 2 1)   ; STB_WEAK: a strong def elsewhere wins
+                                             2 1 (peep tlabels (intern fs) 0)))
+                                 funcnames))
+           gsyms (catall (o-mapi (\ i gs (o-sym (at stroffs (nfun + i)) 1 1 2 (peep dlabels (intern gs) 0)))
+                                 globnames))
+           esyms (catall (o-mapi (\ i e (o-sym (at stroffs ((nfun + nglob) + i)) 1 0 0 0))
+                                 exts))
            (catall `((o-sym 0 0 0 0 0)                 ; the NULL symbol
                       (o-sym 0 0 3 1 0)                  ; .text section symbol (STT_SECTION)
                       (o-sym 0 0 3 2 0)                  ; .data section symbol
@@ -417,61 +387,51 @@
        ; including .text targets (a page delta never resolves inside a .o).
        ; data: an abs64 pointer -> the abs64 type via the target's section
        ; symbol + offset, or an external symbol. --
+       ; a label -> (symidx base-addend): a weak fn binds its OWN symbol (base 0, so the
+       ; linker can redirect), a section-bound label its section symbol + offset, anything
+       ; else its UNDEF. the reloc emitters compose their own addend on the base.
+       (secsym lbl)
+        (? (o-has? wkset lbl)   `((peep fnidx lbl 0) 0)
+           (o-has? tlabels lbl) `(1 (peep tlabels lbl 0))
+           (o-has? dlabels lbl) `(2 (peep dlabels lbl 0))
+           (o-has? nlabels lbl) `(3 (peep nlabels lbl 0))
+           `((peep extidx lbl 0) 0))
        reltext
         (? !a64
-           (: (go rs acc)
-               (? !(two? rs) (catall (rev acc))
-                  (: r <rs off <r lbl <>>r pv <>>>>r
-                     (? (o-has? wkset lbl)               ; a weak-defined fn: bind its OWN symbol (overridable)
-                         (go >rs ((o-rela off (peep fnidx lbl 0) r-plt32 -4) >< acc))
-                        (o-has? dlabels lbl)
-                         (go >rs ((o-rela off 2 r-pc32 ((peep dlabels lbl 0) - 4)) >< acc))
-                        (o-has? nlabels lbl)
-                         (go >rs ((o-rela off 3 r-pc32 ((peep nlabels lbl 0) - 4)) >< acc))
-                        ; an external ref: a call/jmp (E8/E9 precedes the disp field) -> PLT32;
-                        ; an la/lea address-of (its modrm precedes) -> PC32 -- external DATA
-                        ; like `stdout` needs the data reloc, not a PLT stub (the -c crash).
-                        (go >rs ((o-rela off (peep extidx lbl 0)
-                                             (? (member? pv '(232 233)) r-plt32 r-pc32) -4) >< acc)))))
-              (go trel ()))
-           (: (go rs acc)
-               (? !(two? rs) (catall (rev acc))
-                  (: r <rs off <r k <>r lbl <>>r aux <>>>r
-                     (? (member? k '(adrp21 addlo12))
-                         (: ty (? (id? k 'adrp21) ra-pghi21 ra-lo12)
-                            (? (o-has? wkset lbl)
-                                (go >rs ((o-rela off (peep fnidx lbl 0) ty 0) >< acc))
-                               (o-has? tlabels lbl)
-                                (go >rs ((o-rela off 1 ty (peep tlabels lbl 0)) >< acc))
-                               (o-has? dlabels lbl)
-                                (go >rs ((o-rela off 2 ty (peep dlabels lbl 0)) >< acc))
-                               (o-has? nlabels lbl)
-                                (go >rs ((o-rela off 3 ty (peep nlabels lbl 0)) >< acc))
-                               (go >rs ((o-rela off (peep extidx lbl 0) ty 0) >< acc))))
-                        (id? k 'b26)
-                         (: ty (? (aux = 2483027968) ra-call26 ra-jump26)   ; 0x94000000 = bl
-                            (? (o-has? wkset lbl)
-                                (go >rs ((o-rela off (peep fnidx lbl 0) ty 0) >< acc))
-                               (go >rs ((o-rela off (peep extidx lbl 0) ty 0) >< acc))))
-                        (scare 'obj-a64-fix k))))
-              (go trel ())))
+           (catall (map (\ r
+              (: off <r lbl <>>r pv <>>>>r
+                 (? (o-has? wkset lbl)                ; a weak-defined fn: bind its OWN symbol (overridable)
+                     (o-rela off (peep fnidx lbl 0) r-plt32 -4)
+                    (o-has? dlabels lbl)
+                     (o-rela off 2 r-pc32 ((peep dlabels lbl 0) - 4))
+                    (o-has? nlabels lbl)
+                     (o-rela off 3 r-pc32 ((peep nlabels lbl 0) - 4))
+                    ; an external ref: a call/jmp (E8/E9 precedes the disp field) -> PLT32;
+                    ; an la/lea address-of (its modrm precedes) -> PC32 -- external DATA
+                    ; like `stdout` needs the data reloc, not a PLT stub (the -c crash).
+                    (o-rela off (peep extidx lbl 0)
+                            (? (member? pv '(232 233)) r-plt32 r-pc32) -4))))
+              trel))
+           (catall (map (\ r
+              (: off <r k <>r lbl <>>r aux <>>>r
+                 (? (member? k '(adrp21 addlo12))
+                     (: sl (secsym lbl)
+                        (o-rela off <sl (? (id? k 'adrp21) ra-pghi21 ra-lo12) <>sl))
+                    (id? k 'b26)
+                     (: ty (? (aux = 2483027968) ra-call26 ra-jump26)   ; 0x94000000 = bl
+                        (? (o-has? wkset lbl) (o-rela off (peep fnidx lbl 0) ty 0)
+                           (o-rela off (peep extidx lbl 0) ty 0)))
+                    (scare 'obj-a64-fix k))))
+              trel)))
        ; an abs64 pointer out of a DATA-class section (.data or ai_nifs): via the
        ; target's section symbol + its offset, or an external's own symbol
        rabs (? a64 ra-abs64 r-64)
        (reldat1 rs)
-        (: (go rs2 acc)
-            (? !(two? rs2) (catall (rev acc))
-               (: r <rs2 off <r lbl <>>r ad <>>>r   ; ad = the constant byte offset (&arr[i])
-                  (? (o-has? wkset lbl)               ; a weak fn's address in data: via its symbol too
-                      (go >rs2 ((o-rela off (peep fnidx lbl 0) rabs ad) >< acc))
-                     (o-has? tlabels lbl)
-                      (go >rs2 ((o-rela off 1 rabs ((peep tlabels lbl 0) + ad)) >< acc))
-                     (o-has? dlabels lbl)
-                      (go >rs2 ((o-rela off 2 rabs ((peep dlabels lbl 0) + ad)) >< acc))
-                     (o-has? nlabels lbl)
-                      (go >rs2 ((o-rela off 3 rabs ((peep nlabels lbl 0) + ad)) >< acc))
-                     (go >rs2 ((o-rela off (peep extidx lbl 0) rabs ad) >< acc)))))
-           (go rs ()))
+        (catall (map (\ r
+           (: off <r lbl <>>r ad <>>>r               ; ad = the constant byte offset (&arr[i])
+              sl (secsym lbl)
+              (o-rela off <sl rabs (<>sl + ad))))
+           rs))
        reldata (reldat1 drel)
        relnif  (reldat1 nrel)
        ntrel (tally trel) ndrel (tally drel) nnrel (tally nrel)
