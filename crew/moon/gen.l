@@ -804,13 +804,14 @@
                   off (0 - ((peep g 'off 0) + span))
                   _ (pin g 'off ((peep g 'off 0) + span))
                   off)
-   ; load a value from the address in r0, by type -- the deref/clit value tail
+   ; load a value from the address in r0, by type -- the dot/deref/clit value tail
    ; (arrays and functions decay to the address; a struct has no register value)
-   (loadval ty addrf)
+   (loadval g ty addrf)
     (? (arr? ty) (mkv `('ptr <>ty) 'r0 addrf)
        (fn? ty) (mkv `('ptr ty) 'r0 addrf)
        (stru? ty) (mkv ty 'r0 addrf)                 ; a struct value IS its address (the pair reps read through it)
        (flo? ty) (mkv 'double 'r0 (addrf + (fldf ty 'f0 'r0 0)))
+       (pair? g ty) (mkv ty 'r0 (addrf + (pld 'r0 0)))
        (mkv ty 'r0 (addrf + `(`((ldop ty) 'r0 'r0 0)))))
    ; the fill code for a compound literal at frame offset off: an aggregate zeroes
    ; then fills (cgfill), a scalar unwraps its single-element brace and stores.
@@ -909,12 +910,7 @@
                                  + `(`((uldop usz) 'r0 'r0 0))
                                  + (? (hi > 0) `(`('shl 'r0 hi)) ())
                                  + (? (lo > 0) `(`((? sgn 'sar 'shr) 'r0 lo)) ()))))
-                       (arr? ty) (mkv `('ptr <>ty) 'r0 (vfs r))
-                       (fn? ty) (mkv `('ptr ty) 'r0 (vfs r))     ; a fn-pointer member is its address
-                       (stru? ty) (mkv ty 'r0 (vfs r))    ; a struct member's value is its address (the sse2 rep)
-                       (flo? ty) (mkv 'double 'r0 ((vfs r) + (fldf ty 'f0 'r0 0)))
-                       (pair? g ty) (mkv ty 'r0 ((vfs r) + (pld 'r0 0)))
-                       (mkv ty 'r0 ((vfs r) + `(`((ldop ty) 'r0 'r0 0))))))))
+                       (loadval g ty (vfs r))))))
           (k = 'var)
            (: en (vent g env <>e)
               (? (bad? en)
@@ -964,14 +960,7 @@
                  'bad))
           (k = 'deref)
            (: r (clval g env e)                     ; clval already walked the pointer
-              (? (bad? r) 'bad
-                 (: ty (vty r)
-                    (? (arr? ty) (mkv `('ptr <>ty) 'r0 (vfs r))   ; pointee array: decay again
-                       (fn? ty) (mkv `('ptr ty) 'r0 (vfs r))           ; *fp -- a function is its address
-                       (stru? ty) (mkv ty 'r0 (vfs r))                  ; *p as a struct value: the address rides
-                       (flo? ty) (mkv 'double 'r0 ((vfs r) + (fldf ty 'f0 'r0 0)))
-                       (pair? g ty) (mkv ty 'r0 ((vfs r) + (pld 'r0 0)))
-                       (mkv ty 'r0 ((vfs r) + `(`((ldop ty) 'r0 'r0 0))))))))
+              (? (bad? r) 'bad (loadval g (vty r) (vfs r))))
           (k = 'asn)
            (: rv (? ((cap (caup e)) = 'var) (vent g env (caup (caup e))) 'bad)
               (? (&& (two? rv) (<rv = 'regv))   ; store into a register-homed scalar (param or local)
@@ -1484,7 +1473,7 @@
                        'bad))))))
           (k = 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
-              (? (bad? lv) 'bad (loadval (vty lv) (vfs lv))))
+              (? (bad? lv) 'bad (loadval g (vty lv) (vfs lv))))
           (k = 'bin) (cgbin g env e wnt)
           'bad))
    ; a TARGETABLE gp register argument: pure and single-emission, reading only
