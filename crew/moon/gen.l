@@ -3915,6 +3915,12 @@
        _ (pin g 'vuniv ()) _ (vmflush g)             ; vmap off (no universe)
        _ (pin g 'lhome ())                           ; locals-homing map (cgdecl's hook reads it)
        (pin g 'homes ()))                            ; non-leaf home set (call-fixed + sibs read it)
+   ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
+   ; and wraps per-call off the liveness (av9, alive's answer)
+   (rgset g lh9 av9)
+    (: _ (pin g 'vuniv (cauup av9)) _ (vmflush g)    ; the vmap rides the regen (univ known)
+       _ (pin g 'homes ()) _ (pin g 'lhome lh9)
+       (pin g 'livtab (cap av9)))
    ; the per-BUILD counters, spelled once: build arms them fresh on each of
    ; its (up to two) runs per fn
    (bldreset g)
@@ -4624,9 +4630,7 @@
        (regen hp)
         (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
            _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
-           _ (pin g 'vuniv (cauup av)) _ (vmflush g)   ; the vmap rides the regen (univ known)
-           _ (pin g 'homes ()) _ (pin g 'lhome lh)
-           _ (pin g 'livtab (cap av))
+           _ (rgset g lh av)
            ir2 (build (spill hp params 0 0 0 () ()))
            _ (rgreset g)
            (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
