@@ -411,15 +411,17 @@
 ; zero point on a bare scare (the shell's default help is welp with a face). a missing name
 ; raises (scare 'missing nom) -- ONE LAW AT EVERY DEPTH: a `:` binding read before its pin,
 ; (missing t k) on a tablet miss, all the same condition; a closure captures its free globals at
-; CREATION, so a lambda's missing read fires at the define, not the call. numeral counts are
-; CAPPED by the `apcap` box ((pin apcap 0 n) retunes). in anger: test/help.l, test/missing.l,
-; test/apcap.l.
+; CREATION, so a lambda's missing read fires at the define, not the call. numeral COMPOSE
+; counts are CAPPED by the `apcap` box; the numeric power lane caps the RESULT instead
+; (~ exponent * log2|base| bits against the box as a word budget), so a size-fixed or
+; growthless base runs free ((pin apcap 0 n) retunes both). in anger: test/help.l,
+; test/missing.l, test/apcap.l.
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
  !(rest 0) (4 = (tally (seed 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
- (book? apcap) (1048576 = (apcap 0))              ; the count ceiling, a tunable box
+ (book? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
  (: st (seed 7) ((cap (random st 0)) = (cap (random st 0)))))
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
 (: help welp)

@@ -115,24 +115,38 @@
    (whole? n) (| (charm? n) (| (sun? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; b ** k by exact squaring (O(log k)); k>=0. The lone home of integer power --
    ; (k b) numeral application routes here, so `**` is unneeded.
-   ; the count ceiling: a PUBLIC tunable box. a numeral compose count or exact-power
-   ; exponent above it raises (scare 'apcap k) instead of allocating O(k) -- so
-   ; (bignum f) asks for help where it would oom. retune at runtime: (pin apcap 0 n).
+   ; the ceiling: a PUBLIC tunable box. a numeral compose count above it raises
+   ; (scare 'apcap k) instead of allocating O(k) -- so (bignum f) asks for help
+   ; where it would oom. retune at runtime: (pin apcap 0 n).
    apcap (pin (tablet 0) 0 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
-   ; does the count/exponent k top the apcap box? the shared predicate. each site
+   ; does the count/exponent k top the apcap box? the cheap gate. each site
    ; keeps its own (scare 'apcap k) as the cond RESULT, so a recovering help's value
    ; (e.g. (capped k)) becomes the result directly -- no thunk, no allocation on the
    ; hot num-ap path; the only duplication is the trivial, identical scare.
    (apover k) (< (peep apcap 0 0) k)
+   ; the numeric lane guards the RESULT, not the count: past apover only an exact
+   ; base beyond +-1 can grow -- a gem/twin/tray result is size-fixed and |b| <= 1
+   ; spins in place, so those run free at any exponent. an exact |b| >= 2 conjures
+   ; ~ m*log2|b| bits, and powover reads the box as a WORD budget (64 bits a word:
+   ; the stock 2^20 box allows an 8MB number) -- so (2000000 2) runs deliberate
+   ; while the slipped tower ((10 9 8) = 8^(9^10)) still scares. all cold: apover
+   ; said no on every power under the count cap before log is ever asked.
+   (powover b m) (? (apover m)
+                    (? (whole? b)
+                       (: a (abs b)
+                          (? (< a 2) 0
+                             (< (* 64 (peep apcap 0 0)) (* m (/ (log a) (log 2))))))
+                       0)
+                    0)
    ; x ** n across the whole tower. array exponent -> elementwise power (broadcasts
    ; via the vmap2 engine, float result); integer exponent -> exact squaring, with
    ; a NEGATIVE integer giving the reciprocal power (so (-1 x) == (/ 1 x) and
    ; (sqrt x) == ((/ 1 2) x)); otherwise power, which carries a complex lane
    ; (w^z = exp(z Log w)) and a real lane.
    (powg x n) (? (tray? n) (power x n)
-                 (whole? n) (: m (? (< n 0) (- 0 n) n)
-                             (? (apover m) (scare 'apcap m)
+                 (whole? n) (: m (abs n)
+                             (? (powover x m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                  (power x n))
    ; Church-numeral application generalized across the whole tower. n is the
@@ -159,11 +173,13 @@
         ; numeral powers it through its own * -- ipow is generic, the exact squaring
         ; rides the die's mul. only whole exponents mean anything off the closed
         ; tower (a negative rides coin division, slot 8 -- unpinned, (); a non-whole
-        ; answers (), the undefined-op law). unflagged coins keep composing below.
+        ; answers (), the undefined-op law). an open star has no size to read, so
+        ; this lane keeps the plain COUNT cap where powg refines by result size.
+        ; unflagged coins keep composing below.
         (starred? x) (? (coin? x) (= 1 (-> (die-of x) 7 0)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
                         (starred? x)
-                        (? (whole? n) (: m (? (< n 0) (- 0 n) n)
+                        (? (whole? n) (: m (abs n)
                                          (? (apover m) (scare 'apcap m)
                                             (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                            ())
