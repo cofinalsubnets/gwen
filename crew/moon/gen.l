@@ -4587,7 +4587,6 @@
        ; caller-saved register to pool (a pooled r6 clobbered gcc callers SILENTLY).
        tpool (? (t32? g) () opool)
        _ (pin g 'pool0 tpool) _ (pin g 'pool tpool)
-       _ (pin g 'vuniv ()) _ (vmflush g)            ; vmap off for the ir1 build (no universe yet)
        _ (pin g 'hasasm ())                         ; fresh per fn: an asm statement pins it (homing off)
        _ (pin g 'argseal 0)                         ; fresh per fn: the vmap's staging seal depth
        ; v6-M MEMORY return: this fn's >4B composite result fills the address the caller
