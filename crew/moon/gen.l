@@ -4607,18 +4607,26 @@
        lr (? av (lpick ir1 (caup av) (cauup av)) ())
        lh (? (two? lr) <lr ())
        lp0 (? (two? lr) <>lr hpool)
+       ; the REGEN dance, once: reset the accumulators and the frame to the
+       ; ir1 snapshot, pin the analyses' channels (the vmap universe, the
+       ; locals homes, the livtab -- per-call wrap sets; tail calls still
+       ; stage through call-fixed), rebuild under the spill policy hp, then
+       ; clear every channel (the wrap set dies with this fn). a 'bad ir2
+       ; deopts: ir1 stands, its accumulators restored.
+       (regen hp)
+        (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
+           _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
+           _ (pin g 'vuniv (cauup av)) _ (vmflush g)   ; the vmap rides the regen (univ known)
+           _ (pin g 'homes ()) _ (pin g 'lhome lh)
+           _ (pin g 'livtab (cap av))
+           ir2 (build (spill hp params 0 0 0 () ()))
+           _ (pin g 'livtab ())
+           _ (pin g 'vuniv ()) _ (vmflush g)
+           _ (pin g 'lhome ()) _ (pin g 'homes ())
+           (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
        irf (? (bad? ir1) 'bad
           (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
-           (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
-              _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
-              _ (pin g 'vuniv (cauup av)) _ (vmflush g)   ; the vmap rides the regen (univ known)
-              _ (pin g 'homes ()) _ (pin g 'lhome lh)
-              _ (pin g 'livtab (cap av))             ; tail calls still stage through call-fixed
-              ir2 (build (spill 'ride params 0 0 0 () ()))
-              _ (pin g 'livtab ())
-              _ (pin g 'vuniv ()) _ (vmflush g)
-              _ (pin g 'lhome ()) _ (pin g 'homes ())
-              (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
+           (regen 'ride)
           ; calls remain: home + spill, where reads beat the wraps -- FN-WIDE,
           ; all homable params or none. per-param verdicts were built and
           ; measured BOTH ways 2026-07-16 and lost interleaved: pruning a
@@ -4630,18 +4638,7 @@
           ; lane's home-them-all 'ride policy). the fn-wide gate stands.
           (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)
                           ((* 2 (* nc nh)) < (nreads ir1 (pslots <>sp1 ()) 0))))
-             (? (|| pp lh)
-                (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
-                   _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
-                   _ (pin g 'vuniv (cauup av)) _ (vmflush g)   ; the vmap rides the regen (univ known)
-                   _ (pin g 'homes ()) _ (pin g 'lhome lh)
-                   _ (pin g 'livtab (cap av))        ; per-call wrap sets for the homes
-                   ir2 (build (? pp (spill 'shadow params 0 0 0 () ()) (spill () params 0 0 0 () ())))
-                   _ (pin g 'livtab ())
-                   _ (pin g 'vuniv ()) _ (vmflush g)
-                   _ (pin g 'lhome ()) _ (pin g 'homes ())   ; the wrap set dies with this fn
-                   (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
-                ir1)))
+             (? (|| pp lh) (regen (? pp 'shadow ())) ir1)))
        (? (bad? irf) irf (unhome g (jr0 (unframe g irf)))))
 
    ; the data tail: globals in declaration order, then the string table
