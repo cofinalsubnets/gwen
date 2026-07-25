@@ -258,6 +258,11 @@
    (rflip op) (? (op = 'lt) 'gt (op = 'gt) 'lt (op = 'le) 'ge (op = 'ge) 'le op)      ; MIRRORED (n < x reads x > n): constant-on-the-left
    (irop op) (? (op = '+) 'add (op = '-) 'sub (op = '*) 'imul                         ; C op -> IR mnemonic; not one of the six -> 'no
                 (op = '&) 'and (op = '|) 'or (op = '^) 'xor 'no)
+   ; the NaN-honest ==/!= settle after ucomisd: UNORDERED (PF=1 on x64) must
+   ; read false for every relation and true only for != -- == ANDs the ordered
+   ; bit in, != ORs the parity bit (the truth lands in r0, r1 the scratch)
+   fsete `(`('set 'eq 'r0) `('set 'np 'r1) `('and 'r0 'r0 'r1))
+   fsetn `(`('set 'ne 'r0) `('set 'p 'r1) `('or 'r0 'r0 'r1))
    (negrel op) (? (op = 'eq) 'ne (op = 'ne) 'eq (op = 'lt) 'ge (op = 'ge) 'lt (op = 'le) 'gt 'le)   ; NEGATED: branch-if-false
    (fits32? v) (&& (-2147483648 <= v) (v <= 2147483647))    ; holo's ALU/cmp/imul immediates ride le32
    (tsz g ty) (? (ptr? ty) (wsize g)
@@ -419,9 +424,8 @@
    (ctest g env e)
     (: r (cgexpr g env e)
        (? (bad? r) 'bad
-          (flo? (vty r))                             ; d != 0.0, NaN-honest: unordered is NONZERO (true), so `or` in the parity bit
-           (mkv 'long 'r0 (cat (vfs r) `(`('li 'r1 0) `('movqxr 'f1 'r1) `('ucomisd 'f0 'f1)
-                                          `('set 'ne 'r0) `('set 'p 'r1) `('or 'r0 'r0 'r1))))
+          (flo? (vty r))                             ; d != 0.0, NaN-honest: unordered is NONZERO (true) -- fsetn
+           (mkv 'long 'r0 (cat (vfs r) (`(`('li 'r1 0) `('movqxr 'f1 'r1) `('ucomisd 'f0 'f1)) + fsetn)))
           r))
    ; -- the predicate splice: a call to an inline-table fn whose whole body is
    ; one `return E` with E already a BIT by shape (!/&&/||/relational -- a 0/1,
@@ -1295,9 +1299,8 @@
                            `(`('li 'r0 0) `('movqxr 'f1 'r0)))
                      (? (<>e = 'neg)                 ; -d = 0.0 - d
                          (mkv 'double 'r0 (cat (vfs r) (z1 + `(`('subsd 'f1 'f0) `('movsd 'f0 'f1)))))
-                        (<>e = 'not)                 ; !d = (d == 0.0), NaN-honest: !NaN is false (eq AND ordered)
-                         (mkv 'long 'r0 (cat (vfs r) (z1 + `(`('ucomisd 'f0 'f1) `('set 'eq 'r0)
-                                                             `('set 'np 'r1) `('and 'r0 'r0 'r1)))))
+                        (<>e = 'not)                 ; !d = (d == 0.0), NaN-honest: !NaN is false -- fsete
+                         (mkv 'long 'r0 (cat (vfs r) (z1 + (`(`('ucomisd 'f0 'f1)) + fsete))))
                         'bad))                           ; ~ on a double is invalid
                  (pair? g (vty r))                     ; unary on the pair
                   (? (<>e = 'neg)
@@ -1966,20 +1969,15 @@
                                    ; explicitly. arm64: FCMP's gt/ge are unordered-false natively
                                    ; (HI/HS would read C, which unordered SETS -- true, wrong), and
                                    ; p/np alias vs/vc in the backend, so eq/ne ride whole.
-                                   (member? op '(lt le))
-                                    (mkv 'long 'r0 (cat mid `(`('ucomisd 'f0 'f1)
-                                                               `('set (? (arm? g) (? (op = 'lt) 'gt 'ge)
-                                                                         (? (op = 'lt) 'above 'ae)) 'r0))))
-                                   (member? op '(gt ge))
-                                    (mkv 'long 'r0 (cat mid `(`('ucomisd 'f1 'f0)
-                                                               `('set (? (arm? g) (? (op = 'gt) 'gt 'ge)
-                                                                         (? (op = 'gt) 'above 'ae)) 'r0))))
+                                   (member? op '(lt le gt ge))   ; lt/le compare SWAPPED so the sense rides gt/ge
+                                    (: swp (member? op '(lt le))
+                                       (mkv 'long 'r0 (cat mid `(`('ucomisd (? swp 'f0 'f1) (? swp 'f1 'f0))
+                                                                  `('set (? (member? op '(lt gt)) (? (arm? g) 'gt 'above)
+                                                                            (arm? g) 'ge 'ae) 'r0)))))
                                    (op = 'eq)
-                                    (mkv 'long 'r0 (cat mid `(`('ucomisd 'f1 'f0) `('set 'eq 'r0)
-                                                               `('set 'np 'r1) `('and 'r0 'r0 'r1))))
+                                    (mkv 'long 'r0 (cat mid (`(`('ucomisd 'f1 'f0)) + fsete)))
                                    (op = 'ne)
-                                    (mkv 'long 'r0 (cat mid `(`('ucomisd 'f1 'f0) `('set 'ne 'r0)
-                                                               `('set 'p 'r1) `('or 'r0 'r0 'r1))))
+                                    (mkv 'long 'r0 (cat mid (`(`('ucomisd 'f1 'f0)) + fsetn)))
                                    'bad))
                             ; the REGISTER lane: both values live, 3-address combine
                             (: pa (ptr? ta) pb (ptr? tb)
