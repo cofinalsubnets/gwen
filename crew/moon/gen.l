@@ -798,12 +798,12 @@
            `('li 'r2 0) `('li 'r3 0) `('subs 'r0 'r2 'r0) `('sbc 'r1 'r3 'r1)
            `('label ld)))))
 
-   ; a fresh frame temp of type ty -> its (negative) offset. bumps the frame's
-   ; high-water like a local; used to give a compound literal a home.
-   (ntmp g ty) (: span (& ((tsz g ty) + 7) -8)
-                  off (0 - ((peep g 'off 0) + span))
-                  _ (pin g 'off ((peep g 'off 0) + span))
+   ; a fresh n-byte frame cell -> its (negative) offset. bumps the frame's
+   ; high-water like a local; ntmp sizes one for a type (a compound literal's home).
+   (nslot g n) (: off (0 - ((peep g 'off 0) + n))
+                  _ (pin g 'off ((peep g 'off 0) + n))
                   off)
+   (ntmp g ty) (nslot g (& ((tsz g ty) + 7) -8))
    ; load a value from the address in r0, by type -- the dot/deref/clit value tail
    ; (arrays and functions decay to the address; a struct has no register value)
    (loadval g ty addrf)
@@ -1444,8 +1444,7 @@
                        (! (stru? (vty cr))) cr
                        (&& (v6m? g) (4 < (tsz g (vty cr)))) cr   ; v6-M MEMORY return: the sret temp's address in r0 IS the struct value
                        (sse2? g (vty cr))              ; a two-double struct result: park the xmm pair in a fresh slot, answer its address
-                        (: toff (0 - ((peep g 'off 0) + 16))
-                           _ (pin g 'off ((peep g 'off 0) + 16))
+                        (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         (cat (fstf g 'double 'r4 toff (xmmreg 0))
                                          (cat (fstf g 'double 'r4 (toff + 8) (xmmreg 1))
@@ -1454,20 +1453,17 @@
                            (! (|| (&& (id? (aone g (vty cr)) 'sse) ((tsz g (vty cr)) = 8))
                                   (&& (id? (aone g (vty cr)) 'int) ((tsz g (vty cr)) <= 4))))) 'bad
                        (ipair? g (vty cr))             ; a two-int struct result: park rax:rdx (arm64 x0:x1) the same way
-                        (: toff (0 - ((peep g 'off 0) + 16))
-                           _ (pin g 'off ((peep g 'off 0) + 16))
+                        (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         `(`('st 'r4 toff 'r0) `('st 'r4 (toff + 8) (ip2 g))
                                            `('lea 'r0 'r4 toff)))))
                        (id? (aone g (vty cr)) 'sse)    ; a small SSE aggregate result: park xmm0
-                        (: toff (0 - ((peep g 'off 0) + 16))
-                           _ (pin g 'off ((peep g 'off 0) + 16))
+                        (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         (cat (fstf g 'double 'r4 toff (xmmreg 0))
                                              `(`('lea 'r0 'r4 toff))))))
                        (id? (aone g (vty cr)) 'int)    ; a small INT aggregate result: park rax
-                        (: toff (0 - ((peep g 'off 0) + 16))
-                           _ (pin g 'off ((peep g 'off 0) + 16))
+                        (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         `(`('st 'r4 toff 'r0) `('lea 'r0 'r4 toff)))))
                        'bad))))))
@@ -3453,8 +3449,7 @@
               ty <>p
               init <>>p
               span (& ((tsz g ty) + 7) -8)
-              off (0 - ((peep g 'off 0) + span))
-              _ (pin g 'off ((peep g 'off 0) + span))
+              off (nslot g span)
               hreg (? (|| (peep g 'inlining ()) (! (homable? ty))) ()
                       (: sq (1 + (peep g 'dseq 0))
                          _ (pin g 'dseq sq)
@@ -4248,8 +4243,7 @@
            (: p <ps pty <>p
               (? (&& (v6m? g) (sse2? g pty))            ; v6-M: a POSITION-0 16B composite arrives whole in r0-r3
                   (? (gpi = 0)                          ;  (the caller's g4 lane); any later start splits -- deferred
-                     (: off (0 - ((peep g 'off 0) + 16))
-                        _ (pin g 'off ((peep g 'off 0) + 16))
+                     (: off (nslot g 16)
                         (spill >ps 4 xmmi ovi (link `(<p off pty) env)
                                (acc + `(`('st 'r4 off 'r0) `('st 'r4 (off + 4) 'r1)
                                         `('st 'r4 (off + 8) 'r2) `('st 'r4 (off + 12) 'r3)))))
@@ -4261,8 +4255,7 @@
                  (&& (v6m? g) (&& (stru? pty) (id? (aone g pty) 'sse)))   ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
                   (: gpe (& (gpi + 1) -2)
                      (? ((gpe + 2) <= (ngp g))
-                         (: off (0 - ((peep g 'off 0) + 8))
-                            _ (pin g 'off ((peep g 'off 0) + 8))
+                         (: off (nslot g 8)
                             (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
                                    (acc + `(`('st 'r4 off (nthr (argr g) gpe))
                                             `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
@@ -4281,8 +4274,7 @@
                      (? (|| ((ngp g) < (gpi + gpn)) (8 < (xmmi + xmn)))   ; not enough regs -> the WHOLE aggregate goes to memory (2 stack eightbytes)
                          (? (t32? g) 'bad               ; t32 stack HFA params (9+ doubles): deferred, refuse LOUD
                             (spill >ps gpi xmmi (ovi + 2) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
-                         (: off (0 - ((peep g 'off 0) + 16))
-                            _ (pin g 'off ((peep g 'off 0) + 16))
+                         (: off (nslot g 16)
                             st0 (? (id? f0 'g) `(`('st 'r4 off (nthr (argr g) gpi))) (fstf g 'double 'r4 off (xmmreg xmmi)))
                             gp1 (? (id? f0 'g) (gpi + 1) gpi)
                             xm1 (? (id? f0 'x) (xmmi + 1) xmmi)
@@ -4292,8 +4284,7 @@
                             (spill >ps gp2 xm2 ovi (link `(<p off pty) env) (cat acc (cat st0 st1))))))
                  (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
                   (? (xmmi < 8)
-                     (: off (0 - ((peep g 'off 0) + 8))
-                        _ (pin g 'off ((peep g 'off 0) + 8))
+                     (: off (nslot g 8)
                         (spill >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                                (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
                      (? (t32? g) 'bad                   ; t32 stack blob params: deferred, refuse LOUD
@@ -4301,31 +4292,27 @@
                  (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair / >16B stays ahead; a small INT one rides the gp lane
                  (&& (v6m? g) (id? pty 'float))         ; v6-M base ABI: a bare float param is ONE WORD
                   (? (gpi < (ngp g))                    ;  (binary32 bits in a gp reg / a 4-byte caller slot);
-                     (: off (0 - ((peep g 'off 0) + 8)) ;  clval's fldf 'float widens it on read
-                        _ (pin g 'off ((peep g 'off 0) + 8))
+                     (: off (nslot g 8) ;  clval's fldf 'float widens it on read
                         (spill >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
                                (acc + `(`('st 'r4 off (nthr (argr g) gpi))))))
                      (spill >ps gpi xmmi (ovi + 4) (link `(<p ((ovb g) + ovi) pty) env) acc))
                  (&& (v6m? g) (flo? pty))               ; v6-M base ABI: a double param IS a gp pair
                   (: gpe (& (gpi + 1) -2)               ;  (no FPU regs exist) -- spill both words, or
                      (? ((gpe + 2) <= (ngp g))          ;  read the 8-aligned caller stack
-                         (: off (0 - ((peep g 'off 0) + 8))
-                            _ (pin g 'off ((peep g 'off 0) + 8))
+                         (: off (nslot g 8)
                             (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
                                    (acc + `(`('st 'r4 off (nthr (argr g) gpe))
                                             `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
                         (: ov8 (& (ovi + 7) -8)
                            (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (flo? pty) (xmmi < 8))
-                  (: off (0 - ((peep g 'off 0) + 8))
-                     _ (pin g 'off ((peep g 'off 0) + 8))
+                  (: off (nslot g 8)
                      (spill >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                             (acc + (fstf g pty 'r4 off (xmmreg xmmi)))))
                  (pair? g pty)                          ; a pair param: an even-odd register pair spills
                   (: gpe (& (gpi + 1) -2)               ;  both words; else the 8-aligned stack (gp closes)
                      (? ((gpe + 2) <= (ngp g))
-                         (: off (0 - ((peep g 'off 0) + 8))
-                            _ (pin g 'off ((peep g 'off 0) + 8))
+                         (: off (nslot g 8)
                             (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
                                    (acc + `(`('st 'r4 off (nthr (argr g) gpe))
                                             `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
@@ -4333,8 +4320,7 @@
                            (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (t32? g) (flo? pty)) 'bad          ; a t32 double param past d7: the 4-byte slot can't carry it -- refuse LOUD
                  (&& (! (flo? pty)) (gpi < (ngp g)))
-                  (: off (0 - ((peep g 'off 0) + 8))
-                     _ (pin g 'off ((peep g 'off 0) + 8))
+                  (: off (nslot g 8)
                      (spill >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
                             (acc + `(`('st 'r4 off (nthr (argr g) gpi))))))
                  ; an overflow param reads off the caller's block: 8-byte slots (x64/a64), 4-byte on t32
@@ -4347,8 +4333,7 @@
        ; g's rsa / vagp / vaxmm. the xmm registers are saved unconditionally (safe
        ; -- reading an xmm never faults -- so no `al` guard is needed on this side).
        (vaspill ps)
-        (: rsa (0 - ((peep g 'off 0) + 176))
-           _ (pin g 'off ((peep g 'off 0) + 176))
+        (: rsa (nslot g 176)
            _ (pin g 'rsa rsa)
            savegp (: (go i acc) (? (5 < i) acc (go (i + 1) (acc + `(`('st 'r4 (rsa + (* 8 i)) (nthr argregs i)))))) (go 0 ()))
            savex  (: (go i acc) (? (7 < i) acc (go (i + 1) (acc + `(`('stsd 'r4 (rsa + 48 + (* 16 i)) (xmmreg i)))))) (go 0 ()))
@@ -4367,8 +4352,7 @@
        ; params are addressed INSIDE the area; named overflow params ride the
        ; caller stack ((ovb g)+). va_start reads back rsa / vagp / vaxmm / vaov.
        (vaspill-a64 ps)
-        (: rsa (0 - ((peep g 'off 0) + 192))
-           _ (pin g 'off ((peep g 'off 0) + 192))
+        (: rsa (nslot g 192)
            _ (pin g 'rsa rsa)
            savegp (: (go i acc) (? (7 < i) acc (go (i + 1) (acc + `(`('st 'r4 (rsa + (* 8 i)) (nthr argregs-a64 i)))))) (go 0 ()))
            savevr (: (go i acc) (? (7 < i) acc (go (i + 1) (acc + (fstf g 'double 'r4 (rsa + 64 + (* 16 i)) (xmmreg i))))) (go 0 ()))
@@ -4416,22 +4400,19 @@
            (: p <ps pty <>p
               (? (sse2? g pty)
                   (? (6 < xmmi) 'bad
-                     (: off (0 - ((peep g 'off 0) + 16))
-                        _ (pin g 'off ((peep g 'off 0) + 16))
+                     (: off (nslot g 16)
                         (spillr >ps gpi (xmmi + 2) ovi (link `(<p off pty) env)
                                (cat acc (cat (fstf g 'double 'r4 off (xmmreg xmmi))
                                              (fstf g 'double 'r4 (off + 8) (xmmreg (xmmi + 1))))))))
                  (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
                   (? (xmmi < 8)
-                     (: off (0 - ((peep g 'off 0) + 8))
-                        _ (pin g 'off ((peep g 'off 0) + 8))
+                     (: off (nslot g 8)
                         (spillr >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                                (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
                      (spillr >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
                  (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED / >16B ahead; small INT rides the gp lane (never homable)
                  (&& (flo? pty) (xmmi < 8))
-                  (: off (0 - ((peep g 'off 0) + 8))
-                     _ (pin g 'off ((peep g 'off 0) + 8))
+                  (: off (nslot g 8)
                      (spillr >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                             (acc + (fstf g pty 'r4 off (xmmreg xmmi)))))
                  (&& (! (flo? pty)) (gpi < (ngp g)))
@@ -4443,8 +4424,7 @@
                          mv (? (home = inc) () `(`('mov home inc)))
                          (spillr >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
                                 (acc + mv)))
-                     (: off (0 - ((peep g 'off 0) + 8))
-                        _ (pin g 'off ((peep g 'off 0) + 8))
+                     (: off (nslot g 8)
                         (spillr >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
                                (acc + `(`('st 'r4 off (nthr (argr g) gpi)))))))
                  (spillr >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))))
@@ -4465,35 +4445,30 @@
            (: p <ps pty <>p
               (? (sse2? g pty)
                   (? (6 < xmmi) 'bad
-                     (: off (0 - ((peep g 'off 0) + 16))
-                        _ (pin g 'off ((peep g 'off 0) + 16))
+                     (: off (nslot g 16)
                         (spillr2 >ps gpi (xmmi + 2) ovi (link `(<p off pty) env)
                                (cat acc (cat (fstf g 'double 'r4 off (xmmreg xmmi))
                                              (fstf g 'double 'r4 (off + 8) (xmmreg (xmmi + 1))))))))
                  (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
                   (? (xmmi < 8)
-                     (: off (0 - ((peep g 'off 0) + 8))
-                        _ (pin g 'off ((peep g 'off 0) + 8))
+                     (: off (nslot g 8)
                         (spillr2 >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                                (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
                      (spillr2 >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
                  (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED / >16B ahead; small INT rides the gp lane (never homable)
                  (&& (flo? pty) (xmmi < 8))
-                  (: off (0 - ((peep g 'off 0) + 8))
-                     _ (pin g 'off ((peep g 'off 0) + 8))
+                  (: off (nslot g 8)
                      (spillr2 >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                             (acc + (fstf g pty 'r4 off (xmmreg xmmi)))))
                  (&& (! (flo? pty)) (gpi < (ngp g)))
                   (? (&& (homable? pty) (gpi < (nhome g)))
                       (: home (homereg gpi) inc (nthr (argr g) gpi)
-                         off (0 - ((peep g 'off 0) + 8))
-                         _ (pin g 'off ((peep g 'off 0) + 8))
+                         off (nslot g 8)
                          _ (pin g 'homes (link `(home off <p) (peep g 'homes ())))
                          mv (? (home = inc) () `(`('mov home inc)))
                          (spillr2 >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
                                 (acc + mv)))
-                     (: off (0 - ((peep g 'off 0) + 8))
-                        _ (pin g 'off ((peep g 'off 0) + 8))
+                     (: off (nslot g 8)
                         (spillr2 >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
                                (acc + `(`('st 'r4 off (nthr (argr g) gpi)))))))
                  (spillr2 >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))))
