@@ -13,8 +13,7 @@
 
 (: elf-base 4194304                                            ; 0x400000, the classic ET_EXEC base
    elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr (catall is in holo.l)
-   elf-machines (tablet 0)
-   _ (foldl (\ _ p (pin elf-machines <p >p)) 0
+   elf-machines (tabof
         `(('x64 >< 62) ('amd64 >< 62) ('arm64 >< 183) ('aarch64 >< 183)
            ('thumb1 >< 40) ('thumb2 >< 40) ('thumb2sp >< 40) ('cortex-m0 >< 40) ('cortex-m7 >< 40) ('arm >< 40)))  ; EM_ARM
 

@@ -88,6 +88,13 @@
    (item-len x) (? (fix? x) (fix-w x) 1)              ; a byte is 1; a fixup is its field width
    (chunk-len l) (foldl (\ a x (a + (item-len x))) 0 l)
 
+   ;; -- the little table kit every backend leans on: `tabof` builds a tablet from
+   ;; ('k >< v) pairs (the register/cc/opcode tables), `fregs` the f0..fN-1 float
+   ;; file, and `look` is the guarded read (a miss scares with the caller's tag). --
+   (tabof prs) (: t (tablet 0) _ (foldl (\ _ p (pin t <p >p)) 0 prs) t)
+   (fregs n)   (: t (tablet 0) _ (foldl (\ _ i (pin t (intern ("f" + (show i))) i)) 0 (jot n)) t)
+   (look tab k tag) (: e (peep tab k -1) (? (e < 0) (scare tag k) e))
+
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }. --
    backends (tablet 0)
    (defbackend name be) (pin backends name be)

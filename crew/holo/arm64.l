@@ -21,8 +21,7 @@
    ;; abstract number = hardware x-number (identity), so x15..x18 are simply ABSENT: x16/x17 are the
    ;; IP0/IP1 scratch (the indexed stores borrow x16) and x18 is platform-reserved. r19..r28 are the
    ;; CALLEE-SAVED bank -- a glaze's args + OVF anchor live here so they survive nested `bl` (call) sites.
-   arm64-regs (tablet 0)
-   _ (foldl (\ _ p (pin arm64-regs <p >p)) 0
+   arm64-regs (tabof
         `(('sp >< 31) ('fp >< 29) ('lr >< 30)
            ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
            ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
@@ -31,15 +30,13 @@
            ('r25 >< 25) ('r26 >< 26) ('r27 >< 27) ('r28 >< 28)))
 
    ;; -- ALU: op -> (reg-reg base word . imm base word | 0 if no immediate form). --
-   arm64-alu (tablet 0)
-   _ (foldl (\ _ p (pin arm64-alu <p >p)) 0
+   arm64-alu (tabof
         `(('add >< `(0x8B000000 0x91000000)) ('sub >< `(0xCB000000 0xD1000000))
            ('and >< `(0x8A000000 0)) ('or >< `(0xAA000000 0)) ('xor >< `(0xCA000000 0))
            ('adds >< `(0xAB000000 0xB1000000)) ('subs >< `(0xEB000000 0xF1000000))))   ; the S-variant: set NZCV
 
    ;; -- condition codes: IR name -> the A64 cond field (B.cond bits[3:0]). --
-   arm64-cc (tablet 0)
-   _ (foldl (\ _ p (pin arm64-cc <p >p)) 0
+   arm64-cc (tabof
         `(('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
            ('vs >< 6) ('vc >< 7)
            ; p/np (x86 parity: ucomisd's unordered bit) alias VS/VC -- FCMP
@@ -47,7 +44,7 @@
            ('p >< 6) ('np >< 7)
            ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)))
 
-   (rn r) (: e (peep arm64-regs r -1) (? (e < 0) (scare 'badreg r) e))
+   (rn r) (look arm64-regs r 'badreg)
    (reg-eq a b) ((rn a) = (rn b))   ; own the name: a free read here would leak onto x64's register file
 
    ;; (li d imm): MOVZ the low 16 bits, then MOVK each higher nonzero 16-bit lane (hw = lane index). the
@@ -187,7 +184,7 @@
    ;; a code address inside a runtime-mmap'd W^X blob (the glaze's call-out resume point) -- a cask offset is
    ;; word- not page-aligned, so ADRP+ADD would compute the wrong page. x86's la (rip-rel lea) is already this.
    (arm64-lar d label)   (: dn (rn d) `((fix 4 'adr21 label (0x10000000 | dn))))
-   (arm64-br cond label) (: cc (peep arm64-cc cond -1) _ (? (cc < 0) (scare 'badcc cond) 0)
+   (arm64-br cond label) (: cc (look arm64-cc cond 'badcc)
                             `((fix 4 'b19 label (0x54000000 | cc))))
    ;; jmpr: BR Xn -- branch to the address held in a register (the glaze's Continue / deopt tail).
    (arm64-jmpr d) (: dn (rn d) (le32 (0xD61F0000 | (dn << 5))))
@@ -208,7 +205,7 @@
    ;; set: d <- (cond) ? 1 : 0  --  CSET Xd, cond = CSINC Xd, xzr, xzr, invert(cond); inverting a
    ;; cond is XOR 1 (the A64 cond encoding pairs eq/ne, vs/vc, lt/ge, gt/le on bit 0).
    (arm64-set cond d)
-      (: cc (peep arm64-cc cond -1) _ (? (cc < 0) (scare 'badcc cond) 0) dn (rn d)
+      (: cc (look arm64-cc cond 'badcc) dn (rn d)
          (le32 (0x9A9F07E0 | (((cc ^ 1) << 12) | dn))))
    ;; shifts/rotates by an immediate (the tag math -- sar/shr by 1; the map hash's rol by 32). LSL/LSR
    ;; are UBFM, ASR is SBFM, ROR is EXTR Xd,Xn,Xn,#c; ROL #c = ROR #(64-c) (aarch64 has no ROL).
@@ -263,12 +260,10 @@
    ;;    from the GPRs. the IR carries the SSE mnemonics (addsd/movsd/...) two-address (d = op(d,s)); we
    ;;    map each to the arm64 scalar-double form, repeating d as the first source where arm64 is
    ;;    three-address. type=01 (double) throughout; every word was objdump-checked.
-   arm64-fregs (tablet 0)
-   _ (foldl (\ _ i (pin arm64-fregs (intern ("f" + (show i))) i)) 0 (jot 32))                  ; f0..f31 -> 0..31 (v16+ = the pure
+   arm64-fregs (fregs 32)                                                                      ; f0..f31 -> 0..31 (v16+ = the pure
                                                                                                ; temps: no arg, no callee-saved half)
-   (frn r) (: e (peep arm64-fregs r -1) (? (e < 0) (scare 'badfreg r) e))
-   arm64-fp3 (tablet 0)                                                                         ; SSE arith mnemonic -> the scalar-double base word (Dd = Dn OP Dm)
-   _ (foldl (\ _ p (pin arm64-fp3 <p >p)) 0
+   (frn r) (look arm64-fregs r 'badfreg)
+   arm64-fp3 (tabof                                                                            ; SSE arith mnemonic -> the scalar-double base word (Dd = Dn OP Dm)
         `(('addsd >< 0x1E602800) ('subsd >< 0x1E603800) ('mulsd >< 0x1E600800) ('divsd >< 0x1E601800)))
    (arm64-fp3op op d s) (: dn (frn d) sn (frn s) (le32 ((peep arm64-fp3 op 0) | ((sn << 16) | ((dn << 5) | dn)))))   ; Dd = Dd OP Ds
    (arm64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (0x1E604000 | ((sn << 5) | dn))))           ; FMOV Dd, Ds

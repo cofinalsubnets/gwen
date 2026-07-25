@@ -23,17 +23,15 @@
 
 (: ;; -- registers. abstract number = hardware number for r0..r12; sp/lr/pc/fp are named. r12 (IP) is
    ;;    the AAPCS intra-call scratch; the indexed stores borrow it as an unnamed address temp. --
-   thumb-regs (tablet 0)
-   _ (foldl (\ _ p (pin thumb-regs <p >p)) 0
+   thumb-regs (tabof
         `(('sp >< 13) ('lr >< 14) ('pc >< 15) ('fp >< 11)
            ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
            ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
            ('r10 >< 10) ('r11 >< 11) ('r12 >< 12)))
-   (rn r) (: e (peep thumb-regs r -1) (? (e < 0) (scare 'badreg r) e))
+   (rn r) (look thumb-regs r 'badreg)
 
    ;; -- condition codes: IR name -> the AArch32 cond field (same 4-bit encoding aarch64 uses). --
-   thumb-cc (tablet 0)
-   _ (foldl (\ _ p (pin thumb-cc <p >p)) 0
+   thumb-cc (tabof
         `(('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
            ('vs >< 6) ('vc >< 7) ('p >< 6) ('np >< 7)
            ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)))
@@ -67,8 +65,7 @@
    (thumb-mov d s) (: dn (rn d) sn (rn s) (t32 (0xEA4F0000 | ((dn << 8) | sn))))   ; MOV.W Rd, Rm (ORR Rd,Rn=15,Rm)
 
    ;; -- ALU register form (wide, three-address): op -> the hw1 base (S=0). d = a OP b. --
-   thumb-alu (tablet 0)
-   _ (foldl (\ _ p (pin thumb-alu <p >p)) 0
+   thumb-alu (tabof
         `(('add >< 0xEB00) ('sub >< 0xEBA0) ('and >< 0xEA00) ('or >< 0xEA40) ('xor >< 0xEA80)
            ('adds >< 0xEB10) ('subs >< 0xEBB0)                 ; the S-variant: set the flags
            ('adc >< 0xEB40) ('adcs >< 0xEB50)                  ; the carry family -- the 64-bit
@@ -236,7 +233,7 @@
    ;; set: d <- (cond) ? 1 : 0, via an IT block. MOV d,#0 ; IT cond ; MOV d,#1 (the conditional one).
    ;; MOVW reaches all of r0..r12 (the narrow MOV only r0..r7), so use it uniformly.
    (thumb-set cond d)
-      (: cc (peep thumb-cc cond -1) _ (? (cc < 0) (scare 'badcc cond) 0)
+      (: cc (look thumb-cc cond 'badcc)
          (catall `((thumb-movw d 0) (t16 (0xBF08 | (cc << 4))) (thumb-movw d 1))))
 
    ;; -- scalar-double VFP (moon rung 4): f0..f15 -> d0..d15 (fpv5-d16, the M7's FPU). the IR
@@ -246,9 +243,8 @@
    ;; f15 is RESERVED on this target. movqxr/movqrx move a GP PAIR (a 64-bit pattern on a
    ;; 32-bit target): the named gp register is the LOW word, register+1 the high -- one VMOV.
    ;; every encoding below was checked against llvm-mc --triple=thumbv7em-none-eabihf. --
-   thumb-fregs (tablet 0)
-   _ (foldl (\ _ i (pin thumb-fregs (intern ("f" + (show i))) i)) 0 (jot 16))
-   (frn r) (: e (peep thumb-fregs r -1) (? (e < 0) (scare 'badfreg r) e))
+   thumb-fregs (fregs 16)
+   (frn r) (look thumb-fregs r 'badfreg)
    (t2-fp3 hi lo d m) (: dn (frn d) mn (frn m) (t32 (((hi | dn) << 16) | ((dn << 12) | (lo | mn)))))
    (thumb-addsd d m) (t2-fp3 0xEE30 0xB00 d m)                ; VADD.F64 Dd, Dd, Dm
    (thumb-subsd d m) (t2-fp3 0xEE30 0xB40 d m)                ; VSUB.F64
@@ -299,7 +295,7 @@
    ;; one (br) rides T3, and BL (call) rides T1 -- all 32-bit, all 4-byte fixups.
    (thumb-jmp  label) `((fix 4 'b   label 0))
    (thumb-call label) `((fix 4 'bl  label 0))
-   (thumb-br cond label) (: cc (peep thumb-cc cond -1) _ (? (cc < 0) (scare 'badcc cond) 0)
+   (thumb-br cond label) (: cc (look thumb-cc cond 'badcc)
                             `((fix 4 'bcc label cc)))
    (thumb-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))    ; BX Rm
    (thumb-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))    ; BLX Rm

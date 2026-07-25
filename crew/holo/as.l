@@ -93,13 +93,11 @@
    (as-regn o) (at o 1)                                       ; its encoding number
 
    ;; the ALU group: mnemonic -> (rr-opcode  imm-ext). reg field carries the source (AT&T src,dst).
-   as-alu (tablet 0)
-   _ (foldl (\ _ p (pin as-alu <p >p)) 0
+   as-alu (tabof
         `(('add >< `(1 0)) ('or >< `(9 1)) ('and >< `(33 4)) ('sub >< `(41 5))
            ('xor >< `(49 6)) ('cmp >< `(57 7))))
    ;; the condition codes: jcc mnemonic -> 0F 8x low byte.
-   as-cc (tablet 0)
-   _ (foldl (\ _ p (pin as-cc <p >p)) 0
+   as-cc (tabof
         `(('je >< 132) ('jz >< 132) ('jne >< 133) ('jnz >< 133) ('jl >< 140) ('jge >< 141)
            ('jle >< 142) ('jg >< 143) ('jb >< 130) ('jc >< 130) ('jae >< 131) ('jnc >< 131)
            ('jbe >< 134) ('ja >< 135) ('js >< 136) ('jns >< 137) ('jo >< 128) ('jno >< 129)

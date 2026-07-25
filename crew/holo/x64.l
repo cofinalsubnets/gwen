@@ -19,23 +19,20 @@
 ; read them by mutation-visible reference, the way tele's tape is defined before its users.
 
 (: ;; -- the register file: abstract name -> x86 encoding number (rsp kept aside as sp). --
-   x64-regs (tablet 0)
-   _ (foldl (\ _ p (pin x64-regs <p >p)) 0
+   x64-regs (tabof
         `(('sp >< 4)
            ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 5)
            ('r5 >< 6) ('r6 >< 7) ('r7 >< 8) ('r8 >< 9)  ('r9 >< 10)
            ('r10 >< 11) ('r11 >< 12) ('r12 >< 13) ('r13 >< 14) ('r14 >< 15)))
 
    ;; -- the ALU table: op -> (rr-opcode  imm-/digit  commutative?). --
-   x64-alu (tablet 0)
-   _ (foldl (\ _ p (pin x64-alu <p >p)) 0
+   x64-alu (tabof
         `(('add >< `(1 0 1)) ('or >< `(9 1 1)) ('and >< `(33 4 1))
            ('sub >< `(41 5 0)) ('xor >< `(49 6 1))
            ('adds >< `(1 0 1)) ('subs >< `(41 5 0))))    ; flag-setting -- x86 add/sub already set OF; pair with (br vs/vc ..)
 
    ;; -- condition codes: IR name -> the 0F 8x opcode low byte. --
-   x64-cc (tablet 0)
-   _ (foldl (\ _ p (pin x64-cc <p >p)) 0
+   x64-cc (tabof
         `(('eq >< 132) ('ne >< 133) ('lt >< 140) ('ge >< 141)
            ('le >< 142) ('gt >< 143) ('below >< 130) ('ae >< 131)
            ('be >< 134) ('above >< 135) ('s >< 136) ('ns >< 137)
@@ -48,7 +45,7 @@
    (sib sc ix bs)   ((sc << 6) | (((ix & 7) << 3) | (bs & 7)))
    (hi n) (n >> 3)                                                  ; the REX extension bit of a reg
    (lo n) (n & 7)                                                   ; its low 3 bits (the ModRM field)
-   (rn r) (: e (peep x64-regs r -1) (? (e < 0) (scare 'badreg r) e))
+   (rn r) (look x64-regs r 'badreg)
 
    ;; -- reg<-reg and reg<-imm32 forms, shared by mov/the ALU/cmp. --
    ;; alu-rr: OPCODE /r with ModRM.reg = source, ModRM.rm = dest (the AT&T `op %src,%dst`).
@@ -210,7 +207,7 @@
 
    ;; control transfer. call/jmp are E8/E9 cd; a conditional is 0F 8x cd. each leaves a rel32 fixup
    ;; the driver fills once the target label's address is known.
-   (jcc-op c) (: o (peep x64-cc c -1) (? (o < 0) (scare 'badcc c) o))
+   (jcc-op c) (look x64-cc c 'badcc)
    (emit-call label)     `(232 (fix 4 'rel32 label 0))
    ;; the address of a label: RIP-relative lea -- the rel32 measures from the
    ;; end of its own field, exactly x64-patch's convention, so data placed by
@@ -259,12 +256,10 @@
    ;;    f0..f15 -> 0..15 (so the GP file is untouched); a `raw` escape splices pre-encoded bytes
    ;;    (the cold derive/preload sequences the float emitter already produces). every encoding here
    ;;    was objdump-checked. REX is emitted only when an operand is r>=8/xmm>=8 or REX.W is needed. --
-   x64-xregs (tablet 0)
-   _ (foldl (\ _ i (pin x64-xregs (intern ("f" + (show i))) i)) 0 (jot 16))         ; f0..f15 -> 0..15
-   (xrn r) (: e (peep x64-xregs r -1) (? (e < 0) (scare 'badxreg r) e))
+   x64-xregs (fregs 16)                                                             ; f0..f15 -> 0..15
+   (xrn r) (look x64-xregs r 'badxreg)
    ;; the xmm binop table: op -> (prefix opcode). prefix 102=66 / 242=F2 / 0=none. modrm.reg=d, rm=s.
-   x64-sse (tablet 0)
-   _ (foldl (\ _ p (pin x64-sse <p >p)) 0
+   x64-sse (tabof
         `(`('movupd 102 16) `('movsd 242 16) `('movhlps 0 18) `('unpcklpd 102 20)
            `('mulpd 102 89) `('addpd 102 88) `('subpd 102 92) `('divpd 102 94)
            `('mulsd 242 89) `('addsd 242 88) `('subsd 242 92) `('divsd 242 94)

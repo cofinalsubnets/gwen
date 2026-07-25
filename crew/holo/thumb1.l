@@ -25,25 +25,23 @@
 (enter ())   ; self-bracket: loads in its own scope, registers into holo's `backends`
 (: ;; -- registers: abstract number = hardware number for r0..r12; sp/lr/pc/fp named. (shared shape
    ;;    with thumb2.l -- could be factored to an arm32-common, but it's ~15 lines, little leverage.) --
-   t1-regs (tablet 0)
-   _ (foldl (\ _ p (pin t1-regs <p >p)) 0
+   t1-regs (tabof
         `(('sp >< 13) ('lr >< 14) ('pc >< 15) ('fp >< 7)   ; fp=r7: the Thumb frame pointer (a LOW reg, so slot
            ;; loads reach it with the imm5 form -- r11 could not; moon speaks 'fp, this backend numbers it)
            ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
            ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
            ('r10 >< 10) ('r11 >< 11) ('r12 >< 12)))
-   (rn r) (: e (peep t1-regs r -1) (? (e < 0) (scare 'badreg r) e))
+   (rn r) (look t1-regs r 'badreg)
    (reg-eq a b) ((rn a) = (rn b))
    (lo? r) ((rn r) <= 7)                 ; a "low" register -- the only ones most 16-bit ops reach
    (need-lo r why) (? (lo? r) 0 (scare why r))   ; guard: v6-M op wants r0..r7
 
    ;; -- condition codes: IR name -> the 4-bit AArch32 cond field (same encoding aarch64/thumb2 use). --
-   t1-cc (tablet 0)
-   _ (foldl (\ _ p (pin t1-cc <p >p)) 0
+   t1-cc (tabof
         `(('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
            ('vs >< 6) ('vc >< 7) ('p >< 6) ('np >< 7)
            ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)))
-   (ccn c) (: e (peep t1-cc c -1) (? (e < 0) (scare 'badcc c) e))
+   (ccn c) (look t1-cc c 'badcc)
 
    ;; -- emit. one narrow halfword; t32 is the BL pair (hi halfword first, each little-endian). --
    (t16 w) (le16 (w & 65535))
@@ -105,8 +103,7 @@
                          ((? (fop = 'add) t1-add-rrr t1-sub-rrr) d a s) (t1-pop s))))))
    ;; the two-address logicals + mul (format-4, low regs): Rd = Rd OP Rm. every f4 op here is
    ;; COMMUTATIVE (and/or/xor/mul), so d==b just swaps the operand read; else mov-first when d != a.
-   t1-f4 (tablet 0)
-   _ (foldl (\ _ p (pin t1-f4 <p >p)) 0 `(('and >< 0x4000) ('or >< 0x4300) ('xor >< 0x4040) ('imul >< 0x4340)))
+   t1-f4 (tabof `(('and >< 0x4000) ('or >< 0x4300) ('xor >< 0x4040) ('imul >< 0x4340)))
    (t1-alu2 op d a b)
       (: base (peep t1-f4 op 0)
          dn (rn d)
