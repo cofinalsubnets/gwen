@@ -2211,6 +2211,40 @@
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
    xmmops '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)   ; xmm-only: no gp effect
    barops '(call callr raw sys)                     ; the opaque barriers
+   ; rdsp: the table's dataflow view of one form -- what it reads, what it
+   ; defines, whether it's droppable when its defs die. deaddef/jr0/unhome/
+   ; dies?/rst-defok walk it; cfoldir folds through its write set. an op off
+   ; the table answers 'bar (assume everything).
+   (rdsp f)                                         ; -> (L reads defs pure?) | 'bar
+    (: op <f
+       (rg1 x) (? (charm? x) () `(x))
+       (? (op = 'li) `(() `(<>f) 1)
+          (op = 'mov) `(`(<>>f) `(<>f) 1)
+          (member? op aluops)
+           (? (<>f = 'sp) `(() () ())      ; sp motion touches no gp register
+              `(((rg1 <>>f) + (rg1 <>>>f)) `(<>f) 1))
+          (op = 'push) `(`(<>f) () ())
+          (op = 'pop) `(() `(<>f) ())
+          (member? op '(shl shr sar rol ror)) `(`(<>f) `(<>f) 1)
+          (member? op ldops9) `(`(<>>f) `(<>f) 1)
+          (member? op gstops) `(`(<>f <>>>f) () ())
+          (member? op leaops) `(`(<>>f) `(<>f) 1)
+          (member? op xops) `(`(<>>f <>>>f) `(<>f) 1)
+          (op = 'la) `(() `(<>f) 1)
+          (op = 'set) `(() `(<>>f) 1)
+          (member? op '(cmp test)) `(((rg1 <>f) + (rg1 <>>f)) () ())
+          (member? op unops) `(`(<>f) `(<>f) 1)
+          (op = 'movqxr) `(`(<>>f) () ())
+          (op = 'movqrx) `(() `(<>f) 1)
+          (op = 'cvtsi2sd) `(`(<>>f) () ())
+          (op = 'cvttsd2si) `(() `(<>f) ())
+          (member? op fldops) `(`(<>>f) () ())
+          (member? op fstops) `(`(<>f) () ())
+          (member? op xmmops) `(() () ())
+          (member? op divops)
+           `(((rg1 <>>f) + (rg1 <>>>f)) `('r0 'r1 'r2 'r3) ())
+          (member? op vshops) `(`(<>f <>>f) `(<>f 'r1) ())
+          'bar))
    ; the arm64 RETARGET: gen speaks r4 for the frame base throughout, but x4
    ; is ALSO an AAPCS argument register -- so the rename is by POSITION, not
    ; by symbol: only the operand slot where r4 means "the frame base" (a
@@ -2880,37 +2914,6 @@
    ; chains this way. one backward walk; every control edge (label, transfer,
    ; call, raw, sys) resets the dead set (everything assumed live across it);
    ; an op outside the tables does the same. dead_before = (dead + defs) - reads.
-   (rdsp f)                                         ; -> (L reads defs pure?) | 'bar
-    (: op <f
-       (rg1 x) (? (charm? x) () `(x))
-       (? (op = 'li) `(() `(<>f) 1)
-          (op = 'mov) `(`(<>>f) `(<>f) 1)
-          (member? op '(add sub and or xor imul))
-           (? (<>f = 'sp) `(() () ())      ; sp motion touches no gp register
-              `(((rg1 <>>f) + (rg1 <>>>f)) `(<>f) 1))
-          (op = 'push) `(`(<>f) () ())
-          (op = 'pop) `(() `(<>f) ())
-          (member? op '(shl shr sar rol ror)) `(`(<>f) `(<>f) 1)
-          (member? op '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)) `(`(<>>f) `(<>f) 1)
-          (member? op '(st st1 st2 st4)) `(`(<>f <>>>f) () ())
-          (member? op '(lea lean)) `(`(<>>f) `(<>f) 1)
-          (member? op '(leax ldx ldxb)) `(`(<>>f <>>>f) `(<>f) 1)
-          (op = 'la) `(() `(<>f) 1)
-          (op = 'set) `(() `(<>>f) 1)
-          (member? op '(cmp test)) `(((rg1 <>f) + (rg1 <>>f)) () ())
-          (member? op '(neg not)) `(`(<>f) `(<>f) 1)
-          (member? op '(sx1 sx2 sx4 zx1 zx2 zx4)) `(`(<>f) `(<>f) 1)
-          (op = 'movqxr) `(`(<>>f) () ())
-          (op = 'movqrx) `(() `(<>f) 1)
-          (op = 'cvtsi2sd) `(`(<>>f) () ())
-          (op = 'cvttsd2si) `(() `(<>f) ())
-          (member? op '(ldsd ldss)) `(`(<>>f) () ())
-          (member? op '(stsd stss)) `(`(<>f) () ())
-          (member? op '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)) `(() () ())
-          (member? op '(div rem udiv urem))
-           `(((rg1 <>>f) + (rg1 <>>>f)) `('r0 'r1 'r2 'r3) ())
-          (member? op '(shlv shrv sarv)) `(`(<>f <>>f) `(<>f 'r1) ())
-          'bar))
    (deaddef fs)
     (: (go l dead acc)                               ; l already REVERSED; acc rebuilds forward
         (? (! (two? l)) acc
