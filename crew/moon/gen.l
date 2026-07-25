@@ -3670,14 +3670,16 @@
    ; cgsdecl entries do (stq below, the dseq protocol: a splice never ticks,
    ; reset per build); the walk numbers DOWN from the prepass total, so the
    ; child-reversed backward order lands forward pre-order numbers, and a
-   ; livtab miss reads 'all (the blanket wrap): any desync degrades, never
-   ; miscompiles. loops seed with everything the loop reads (the back edge,
+   ; livtab miss reads 'all (the blanket wrap); a drifted walk is caught
+   ; LOUD (the zero-landing check here, the lsq = total check at the regen).
+   ; loops seed with everything the loop reads (the back edge,
    ; no fixpoint -- a post-back-edge read is textually in the loop; a goto
    ; ESCAPES the loop, so as a loop use it reads the whole universe); a label
    ; is a backward no-op (what's live there is what's read after it).
-   ; answers (livtab cross univ): livtab sq -> wrapset, cross name -> static
-   ; call crossings (a universe member at cross 0 rides every call for free),
-   ; univ the analyzed names -- a gate must never trust cross for an outsider.
+   ; answers (livtab cross univ total): livtab sq -> wrapset, cross name ->
+   ; static call crossings (a universe member at cross 0 rides every call for
+   ; free), univ the analyzed names -- a gate must never trust cross for an
+   ; outsider -- total the statement count (the regen's numbering guard).
    (alive g f)
     (: params <>>f
        items (caup (caup (cuup f)))
@@ -3901,10 +3903,13 @@
                  (k = 'asm) (: sq (tick ()) _ (rec sq univ w9) univ)   ; homing is off anyway (hasasm)
                  (: _ (tick ()) out))))             ; nop tdef
        ; -- run: liveout at the fn end is empty; the counter descends from the
-       ; prepass total so lst's numbers land forward pre-order --
+       ; prepass total so lst's numbers land forward pre-order. pre and lst
+       ; disagreeing on the statement set is a compiler bug: the counter must
+       ; land exactly on zero, or alive answers () (the ineligible shape --
+       ; every wrap stays blanket) --
        _ (pin n9 'q (peep n9 'n 0))
        _ (litems items () () () 1)
-       `(liv crs univ))
+       (? (0 = (peep n9 'q 0)) `(liv crs univ (peep n9 'n 0)) ()))
    ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this
    ; counter and pin the statement's wrapset (g 'stwrap) off g 'livtab -- a
    ; miss (or no livtab at all) pins 'all, the blanket wrap. an inline splice
@@ -4639,7 +4644,11 @@
            _ (rgset g lh av)
            ir2 (build (spill hp params 0 0 0 () ()))
            _ (rgreset g)
-           (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
+           ; the numbering guard: the build's forward ticks must land exactly
+           ; on alive's total, or the wrap sets keyed by statement number
+           ; landed on the wrong statements -- deopt to ir1, whole
+           (? (|| (bad? ir2) (&& (two? av) (! ((peep g 'lsq 0) = (nthr av 3)))))
+              (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
        irf (? (bad? ir1) 'bad
           (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
            (regen `('ride ride))
