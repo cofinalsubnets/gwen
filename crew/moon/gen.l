@@ -3908,6 +3908,13 @@
           w (? lt (peep lt q 'all) 'all)
           _ (pin g 'stwrap w)
           w))
+   ; the per-BUILD counters, spelled once: build arms them fresh on each of
+   ; its (up to two) runs per fn
+   (bldreset g)
+    (: _ (pin g 'dseq 0)                             ; the locals-homing decl sequence
+       _ (pin g 'lrec ())
+       _ (pin g 'lsq 0)                              ; the alive statement counter
+       (pin g 'stwrap 'all))
 
    (cgstmt g env s)
     (: _ (psreset g)                                 ; a statement never carries a live operand in (vmap pins do)
@@ -4432,10 +4439,7 @@
               (nreads >fs offs (? hit (n + 1) n))))
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
         (? (bad? sp0) 'bad
-           (: _ (pin g 'dseq 0)                     ; the locals-homing decl sequence, fresh per build
-              _ (pin g 'lrec ())
-              _ (pin g 'lsq 0)                      ; the alive statement counter, fresh per build
-              _ (pin g 'stwrap 'all)
+           (: _ (bldreset g)
               body (cgitems g <>sp0 (caup (caup (cuup f))) ())
               (? (bad? body) 'bad
                  (: frame (& ((peep g 'off 0) + 15) -16)
