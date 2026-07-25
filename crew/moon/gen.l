@@ -3644,6 +3644,22 @@
                                      (? (bad? osf) 'bad
                                         (lf + (pops ops9 asgn ()) + body + (opush ops9 asgn ()) + osf)))))))))))))
 
+   ; the statement CHILD MAP, one source of truth: which sub-forms of a
+   ; statement are themselves statements, in forward (tick) order -- a for's
+   ; init only when it declares (an expr init is the for node's own business).
+   ; alive's prepass counts by it, scasel scans by it; cgstmt's walk must
+   ; agree node for node (the numbering protocol below).
+   (stkids s)
+    (: k <s
+       (? (k = 'blk) <>s
+          (k = 'if) (? (two? <>>>s) `(<>>s <>>>s) `(<>>s))
+          (k = 'while) `(<>>s)
+          (k = 'do) `(<>s)
+          (k = 'for) (: ini <>s bod (cauup (cuup s))
+                        (? (&& (two? ini) (member? <ini '(decl sdecl))) `(ini bod) `(bod)))
+          (k = 'switch) <>>s
+          ()))
+
    ; -- alive: which homable names still matter across each call (the homing
    ; regens' liveness). one backward statement-grain walk over the fn body,
    ; sets tiny name lists over a universe fixed up front: homable params +
@@ -3675,7 +3691,8 @@
                      (pexl >e)))
        (pexl l) (? (! (two? l)) () (: _ (pex <l) (pexl >l)))
        ; -- prepass: the tick total, declaration counts, homable locals
-       ; (ticks mirror lst's below, statement for statement) --
+       ; (ticks mirror lst's below, statement for statement; the child walk
+       ; is stkids', the shared map) --
        (pre s)
         (? (! (two? s)) ()
            (: k <s
@@ -3688,15 +3705,7 @@
                                         (pin n9 'loc (link <p (peep n9 'loc ()))) ())
                                    (go >ps)))
                      (go <>s))
-                 (k = 'blk) (prel <>s)
-                 (k = 'if) (: _ (pre <>>s) (? (two? <>>>s) (pre <>>>s) ()))
-                 (k = 'while) (pre <>>s)
-                 (k = 'do) (pre <>s)
-                 (k = 'for) (: ini <>s
-                               _ (? (&& (two? ini) (member? <ini '(decl sdecl))) (pre ini) ())
-                               (pre (cauup (cuup s))))
-                 (k = 'switch) (prel <>>s)
-                 ())))
+                 (prel (stkids s)))))
        (prel l) (? (! (two? l)) () (: _ (pre <l) (prel >l)))
        (pdcl ps) (? (! (two? ps)) ()
                     (: _ (pin dcl (cap (cap ps)) (1 + (peep dcl (cap (cap ps)) 0)))
@@ -4124,20 +4133,16 @@
 
    ; scan a switch body for its case/default labels at ANY depth, pinning value->label
    ; (and 'dflt->label) into `tab` and returning the (value label) pairs for the
-   ; dispatch. recurses through blocks / if / loops but STOPS at a nested switch (whose
-   ; cases belong to IT) -- so a case ties to its NEAREST enclosing switch, per C. the
-   ; container shapes mirror cgstmt's, so scasel finds exactly the labels cgstmt emits.
+   ; dispatch. recurses through stkids (the shared child map) but STOPS at a nested
+   ; switch (whose cases belong to IT) -- so a case ties to its NEAREST enclosing
+   ; switch, per C.
    (scasel g it tab acc)
     (? (! (two? it)) acc
        (: k <it
           (? (k = 'case)  (: lab (nlab g ".k") _ (pin tab <>it lab) (link (L <>it lab) acc))
              (k = 'dflt)  (: lab (nlab g ".k") _ (pin tab 'dflt lab) acc)
-             (k = 'blk)   (scasel-l g <>it tab acc)               ; ('blk items)
-             (k = 'if)    (scasel g <>>>it tab (scasel g <>>it tab acc))  ; then + else
-             (k = 'while) (scasel g <>>it tab acc)                ; ('while cond body)
-             (k = 'do)    (scasel g <>it tab acc)                 ; ('do body cond)
-             (k = 'for)   (scasel g (cauup (cuup it)) tab acc)    ; ('for init cnd stp body)
-             acc)))                                                ; a nested switch / any leaf: not ours
+             (k = 'switch) acc                                    ; a nested switch owns its labels
+             (scasel-l g (stkids it) tab acc))))
    (scasel-l g l tab acc) (? (! (two? l)) acc (scasel-l g >l tab (scasel g <l tab acc)))
 
    ; -- the inline lane (the b2w problem): a SMALL function splices its whole
