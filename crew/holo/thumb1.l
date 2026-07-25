@@ -310,66 +310,39 @@
    (t1-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))       ; BX Rm
    (t1-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))       ; BLX Rm
 
-   (t1-lower ins)
-      (: op <ins
-         (? (op = 'li)    (t1-li    (at ins 1) (at ins 2))
-            (op = 'mov)   (t1-movr  (at ins 1) (at ins 2))
-            (op = 'cmp)   (t1-cmp   (at ins 1) (at ins 2))
-            (op = 'test)  (t1-test  (at ins 1) (at ins 2))
-            (member? op '(add adds)) (t1-addsub 'add (at ins 1) (at ins 2) (at ins 3))   ; every ALU op sets flags on v6-M: adds/subs ARE add/sub
-            (member? op '(sub subs)) (t1-addsub 'sub (at ins 1) (at ins 2) (at ins 3))
-            (member? op '(adc adcs)) (t1-adc (at ins 1) (at ins 2) (at ins 3))
-            (member? op '(sbc sbcs)) (t1-sbc (at ins 1) (at ins 2) (at ins 3))
-            (member? op '(and or xor imul)) (t1-alu2 op (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ors)   (t1-alu2 'or (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld)    (t1-ld    (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld4)   (t1-ld    (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu4)  (t1-ld    (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st)    (t1-st    (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st4)   (t1-st    (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu1)  (t1-ldb   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu2)  (t1-ldh   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld1)   (t1-lds1  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld2)   (t1-lds2  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st1)   (t1-stb   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st2)   (t1-sth   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'sx1)   (t1-sx 1  (at ins 1))
-            (op = 'sx2)   (t1-sx 2  (at ins 1))
-            (op = 'sx4)   (t1-sx 4  (at ins 1))
-            (op = 'zx1)   (t1-zx 1  (at ins 1))
-            (op = 'zx2)   (t1-zx 2  (at ins 1))
-            (op = 'zx4)   (t1-zx 4  (at ins 1))
-            (member? op '(shl shr sar)) (t1-shift op (at ins 1) (at ins 2))
-            (op = 'ror)   (scare 'v6m-no-ror-imm op)           ; RORS is register-only on v6-M
-            (member? op '(shlv shrv sarv)) (t1-shiftv op (at ins 1) (at ins 2))
-            (op = 'lea)   (t1-lea   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'lean)  (t1-lea   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'leax)  (t1-leax  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'ldx)   (t1-ldx   (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'ldxb)  (t1-ldxb  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'push)  (t1-push  (at ins 1))
-            (op = 'pop)   (t1-pop   (at ins 1))
-            (op = 'neg)   (t1-neg   (at ins 1))
-            (op = 'not)   (t1-not   (at ins 1))
-            (op = 'inc)   (t1-inc   (at ins 1))
-            (op = 'dec)   (t1-dec   (at ins 1))
-            (op = 'set)   (t1-set   (at ins 1) (at ins 2))
-            (op = 'jmp)   (t1-jmp   (at ins 1))
-            (op = 'br)    (t1-br    (at ins 1) (at ins 2))
-            (op = 'jmpr)  (t1-jmpr  (at ins 1))
-            (op = 'callr) (t1-callr (at ins 1))
-            (op = 'call)  (t1-call  (at ins 1))
-            (op = 'div)   (t1-div   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'rem)   (t1-rem   (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'udiv)  (t1-udiv  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'urem)  (t1-urem  (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'lapool) (t1-lapool (at ins 1))
-            (op = 'raw)   (at ins 1)                           ; splice pre-encoded bytes verbatim
-            (op = 'ret)   (t16 0x4770)                         ; BX lr
-            (op = 'sys)   (t16 0xDF00)                         ; SVC #0
-            (op = 'nop)   (t16 0xBF00)
-            (op = 'trap)  (t16 0xBE00)                         ; BKPT #0
-            (scare 'bad-op op)))
+   ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
+   ;; nullaries their halfwords outright, `raw` the identity. every ALU op sets flags on
+   ;; v6-M, so adds/subs ARE add/sub and the S-names alias their plain rows.
+   t1-emitters (tabof
+        `(('li >< t1-li) ('mov >< t1-movr) ('cmp >< t1-cmp) ('test >< t1-test)
+           ('add >< (t1-addsub 'add)) ('adds >< (t1-addsub 'add))
+           ('sub >< (t1-addsub 'sub)) ('subs >< (t1-addsub 'sub))
+           ('adc >< t1-adc) ('adcs >< t1-adc) ('sbc >< t1-sbc) ('sbcs >< t1-sbc)
+           ('and >< (t1-alu2 'and)) ('or >< (t1-alu2 'or)) ('ors >< (t1-alu2 'or))
+           ('xor >< (t1-alu2 'xor)) ('imul >< (t1-alu2 'imul))
+           ('ld >< t1-ld) ('ld4 >< t1-ld) ('ldu4 >< t1-ld)
+           ('st >< t1-st) ('st4 >< t1-st)
+           ('ldu1 >< t1-ldb) ('ldu2 >< t1-ldh) ('ld1 >< t1-lds1) ('ld2 >< t1-lds2)
+           ('st1 >< t1-stb) ('st2 >< t1-sth)
+           ('sx1 >< (t1-sx 1)) ('sx2 >< (t1-sx 2)) ('sx4 >< (t1-sx 4))
+           ('zx1 >< (t1-zx 1)) ('zx2 >< (t1-zx 2)) ('zx4 >< (t1-zx 4))
+           ('shl >< (t1-shift 'shl)) ('shr >< (t1-shift 'shr)) ('sar >< (t1-shift 'sar))
+           ('ror >< (\ d c (scare 'v6m-no-ror-imm 'ror)))     ; RORS is register-only on v6-M
+           ('shlv >< (t1-shiftv 'shlv)) ('shrv >< (t1-shiftv 'shrv)) ('sarv >< (t1-shiftv 'sarv))
+           ('lea >< t1-lea) ('lean >< t1-lea)
+           ('leax >< t1-leax) ('ldx >< t1-ldx) ('ldxb >< t1-ldxb)
+           ('push >< t1-push) ('pop >< t1-pop)
+           ('neg >< t1-neg) ('not >< t1-not) ('inc >< t1-inc) ('dec >< t1-dec)
+           ('set >< t1-set)
+           ('jmp >< t1-jmp) ('br >< t1-br) ('jmpr >< t1-jmpr) ('callr >< t1-callr) ('call >< t1-call)
+           ('div >< t1-div) ('rem >< t1-rem) ('udiv >< t1-udiv) ('urem >< t1-urem)
+           ('lapool >< t1-lapool)
+           ('raw >< 1)
+           ('ret >< (t16 0x4770))                             ; BX lr
+           ('sys >< (t16 0xDF00))                             ; SVC #0
+           ('nop >< (t16 0xBF00))
+           ('trap >< (t16 0xBE00))))                          ; BKPT #0
+   (t1-lower ins) (: f lower-via (? (lit? f) (f t1-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation. Thumb pc reads as (site + 4); branch fields hold a /2 (halfword) offset.
    ;;   b   (T2, unconditional, 2 bytes): 0xE000 | imm11               range +-2046
