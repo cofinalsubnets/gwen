@@ -4237,13 +4237,19 @@
        ; spill each param from its SysV register: integers from r6 r5 r2 r1 r7 r8
        ; (<=6), doubles from f0..f7 (<=8), SEPARATE counters. an OVERFLOW param
        ; already sits on the caller stack -- addressed at rbp+16+8k, no store.
-       (spill ps gpi xmmi ovi env acc)
+       ; hp is the HOME POLICY over the eligible gp params (x64/a64 regens only):
+       ; () spills every one to its slot; 'ride homes in a register (or rides
+       ; the arrival, the leaf lane); 'shadow homes AND takes a frame slot (the
+       ; spill shadow in g 'homes, the non-leaf lane). under a policy the exotic
+       ; composites (mixed/int-pair/xmm-exhausted 16B) answer 'bad -- the regen
+       ; deopts to ir1 rather than growing a memory lane the gate never counted.
+       (spill hp ps gpi xmmi ovi env acc)
         (? (! (two? ps)) `(acc env)
            (: p <ps pty <>p
               (? (&& (v6m? g) (sse2? g pty))            ; v6-M: a POSITION-0 16B composite arrives whole in r0-r3
                   (? (gpi = 0)                          ;  (the caller's g4 lane); any later start splits -- deferred
                      (: off (nslot g 16)
-                        (spill >ps 4 xmmi ovi (link `(<p off pty) env)
+                        (spill hp >ps 4 xmmi ovi (link `(<p off pty) env)
                                (acc + `(`('st 'r4 off 'r0) `('st 'r4 (off + 4) 'r1)
                                         `('st 'r4 (off + 8) 'r2) `('st 'r4 (off + 12) 'r3)))))
                      'bad)
@@ -4255,76 +4261,94 @@
                   (: gpe (& (gpi + 1) -2)
                      (? ((gpe + 2) <= (ngp g))
                          (: off (nslot g 8)
-                            (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
+                            (spill hp >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
                                    (acc + `(`('st 'r4 off (nthr (argr g) gpe))
                                             `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
                         (: ov8 (& (ovi + 7) -8)
-                           (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
+                           (spill hp >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (stru? pty) (two? (aeb2 g pty)))   ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
-                  (: cls (aeb2 g pty) c0 <cls c1 <>cls
-                     ; the register FILE per eightbyte -- 'g gp / 'x xmm. SysV (x64) picks
-                     ; by the eightbyte's class; AAPCS64 (arm64) sends a non-HFA composite
-                     ; wholly in X regs, only an all-float HFA in V regs.
-                     hfa (&& (id? c0 'sse) (id? c1 'sse))
-                     f0 (? (a64? g) (? hfa 'x 'g) (? (id? c0 'sse) 'x 'g))
-                     f1 (? (a64? g) (? hfa 'x 'g) (? (id? c1 'sse) 'x 'g))
-                     gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
-                     xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
-                     (? (|| ((ngp g) < (gpi + gpn)) (8 < (xmmi + xmn)))   ; not enough regs -> the WHOLE aggregate goes to memory (2 stack eightbytes)
-                         (? (t32? g) 'bad               ; t32 stack HFA params (9+ doubles): deferred, refuse LOUD
-                            (spill >ps gpi xmmi (ovi + 2) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
-                         (: off (nslot g 16)
-                            st0 (? (id? f0 'g) `(`('st 'r4 off (nthr (argr g) gpi))) (fstf g 'double 'r4 off (xmmreg xmmi)))
-                            gp1 (? (id? f0 'g) (gpi + 1) gpi)
-                            xm1 (? (id? f0 'x) (xmmi + 1) xmmi)
-                            st1 (? (id? f1 'g) `(`('st 'r4 (off + 8) (nthr (argr g) gp1))) (fstf g 'double 'r4 (off + 8) (xmmreg xm1)))
-                            gp2 (? (id? f1 'g) (gp1 + 1) gp1)
-                            xm2 (? (id? f1 'x) (xm1 + 1) xm1)
-                            (spill >ps gp2 xm2 ovi (link `(<p off pty) env) (cat acc (cat st0 st1))))))
+                  (? (&& hp (! (sse2? g pty))) 'bad     ; a policy homes gp scalars only -- mixed/int-pair 16B deopts
+                     (: cls (aeb2 g pty) c0 <cls c1 <>cls
+                        ; the register FILE per eightbyte -- 'g gp / 'x xmm. SysV (x64) picks
+                        ; by the eightbyte's class; AAPCS64 (arm64) sends a non-HFA composite
+                        ; wholly in X regs, only an all-float HFA in V regs.
+                        hfa (&& (id? c0 'sse) (id? c1 'sse))
+                        f0 (? (a64? g) (? hfa 'x 'g) (? (id? c0 'sse) 'x 'g))
+                        f1 (? (a64? g) (? hfa 'x 'g) (? (id? c1 'sse) 'x 'g))
+                        gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
+                        xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
+                        (? (|| ((ngp g) < (gpi + gpn)) (8 < (xmmi + xmn)))   ; not enough regs -> the WHOLE aggregate goes to memory (2 stack eightbytes)
+                            (? hp 'bad                  ; under a policy: deopt, not a fresh memory lane
+                               (t32? g) 'bad            ; t32 stack HFA params (9+ doubles): deferred, refuse LOUD
+                               (spill hp >ps gpi xmmi (ovi + 2) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
+                            (: off (nslot g 16)
+                               st0 (? (id? f0 'g) `(`('st 'r4 off (nthr (argr g) gpi))) (fstf g 'double 'r4 off (xmmreg xmmi)))
+                               gp1 (? (id? f0 'g) (gpi + 1) gpi)
+                               xm1 (? (id? f0 'x) (xmmi + 1) xmmi)
+                               st1 (? (id? f1 'g) `(`('st 'r4 (off + 8) (nthr (argr g) gp1))) (fstf g 'double 'r4 (off + 8) (xmmreg xm1)))
+                               gp2 (? (id? f1 'g) (gp1 + 1) gp1)
+                               xm2 (? (id? f1 'x) (xm1 + 1) xm1)
+                               (spill hp >ps gp2 xm2 ovi (link `(<p off pty) env) (cat acc (cat st0 st1)))))))
                  (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
                   (? (xmmi < 8)
                      (: off (nslot g 8)
-                        (spill >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
+                        (spill hp >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                                (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
                      (? (t32? g) 'bad                   ; t32 stack blob params: deferred, refuse LOUD
-                        (spill >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc)))
+                        (spill hp >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc)))
                  (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair / >16B stays ahead; a small INT one rides the gp lane
                  (&& (v6m? g) (id? pty 'float))         ; v6-M base ABI: a bare float param is ONE WORD
                   (? (gpi < (ngp g))                    ;  (binary32 bits in a gp reg / a 4-byte caller slot);
                      (: off (nslot g 8) ;  clval's fldf 'float widens it on read
-                        (spill >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
+                        (spill hp >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
                                (acc + `(`('st 'r4 off (nthr (argr g) gpi))))))
-                     (spill >ps gpi xmmi (ovi + 4) (link `(<p ((ovb g) + ovi) pty) env) acc))
+                     (spill hp >ps gpi xmmi (ovi + 4) (link `(<p ((ovb g) + ovi) pty) env) acc))
                  (&& (v6m? g) (flo? pty))               ; v6-M base ABI: a double param IS a gp pair
                   (: gpe (& (gpi + 1) -2)               ;  (no FPU regs exist) -- spill both words, or
                      (? ((gpe + 2) <= (ngp g))          ;  read the 8-aligned caller stack
                          (: off (nslot g 8)
-                            (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
+                            (spill hp >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
                                    (acc + `(`('st 'r4 off (nthr (argr g) gpe))
                                             `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
                         (: ov8 (& (ovi + 7) -8)
-                           (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
+                           (spill hp >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (flo? pty) (xmmi < 8))
                   (: off (nslot g 8)
-                     (spill >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
+                     (spill hp >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
                             (acc + (fstf g pty 'r4 off (xmmreg xmmi)))))
                  (pair? g pty)                          ; a pair param: an even-odd register pair spills
                   (: gpe (& (gpi + 1) -2)               ;  both words; else the 8-aligned stack (gp closes)
                      (? ((gpe + 2) <= (ngp g))
                          (: off (nslot g 8)
-                            (spill >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
+                            (spill hp >ps (gpe + 2) xmmi ovi (link `(<p off pty) env)
                                    (acc + `(`('st 'r4 off (nthr (argr g) gpe))
                                             `('st 'r4 (off + 4) (nthr (argr g) (gpe + 1)))))))
                         (: ov8 (& (ovi + 7) -8)
-                           (spill >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
+                           (spill hp >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (t32? g) (flo? pty)) 'bad          ; a t32 double param past d7: the 4-byte slot can't carry it -- refuse LOUD
                  (&& (! (flo? pty)) (gpi < (ngp g)))
-                  (: off (nslot g 8)
-                     (spill >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
-                            (acc + `(`('st 'r4 off (nthr (argr g) gpi))))))
+                  (? (&& hp (&& (homable? pty) (gpi < (nhome g))))
+                      (? (id? hp 'ride)                 ; the leaf lane: home in a register, moving from the
+                         (: inc (nthr (argr g) gpi)     ; incoming arg reg if it differs -- but a rideable param
+                            ; rides its ARRIVAL register: no home reserved, no entry
+                            ; mov, its home register freed to the pool
+                            home (? (member? gpi (peep g 'ride ())) inc (homereg gpi))
+                            mv (? (home = inc) () `(`('mov home inc)))
+                            (spill hp >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
+                                   (acc + mv)))
+                         (: home (homereg gpi)          ; the non-leaf lane: home + the spill shadow
+                            inc (nthr (argr g) gpi)
+                            off (nslot g 8)
+                            _ (pin g 'homes (link `(home off <p) (peep g 'homes ())))
+                            mv (? (home = inc) () `(`('mov home inc)))
+                            (spill hp >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
+                                   (acc + mv))))
+                     (: off (nslot g 8)
+                        (spill hp >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
+                               (acc + `(`('st 'r4 off (nthr (argr g) gpi)))))))
                  ; an overflow param reads off the caller's block: 8-byte slots (x64/a64), 4-byte on t32
-                 (t32? g) (spill >ps gpi xmmi (ovi + 4) (link `(<p ((ovb g) + ovi) pty) env) acc)
-                 (spill >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))))
+                 (t32? g) (spill hp >ps gpi xmmi (ovi + 4) (link `(<p ((ovb g) + ovi) pty) env) acc)
+                 (spill hp >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))))
        ; a VARIADIC function (SysV): a 176-byte register SAVE AREA holds the 6 gp
        ; arg registers (@ +0, step 8) and 8 xmm registers (@ +48, step 16, low 8
        ; bytes each). named register-passed params are addressed INSIDE the area;
@@ -4393,40 +4417,12 @@
        ; taken), there is no raw `sys` (rcx/r11 are syscall-clobbered), and it is
        ; not variadic. decided by GENERATING first, then regenerating with the
        ; register env if the gate holds. --
+       ; the 'shadow policy is the NON-LEAF lane: each home ALSO takes a frame
+       ; slot (its spill shadow) recorded in g 'homes -- call-fixed spills the
+       ; homes there just before every remaining call's pops and reloads after,
+       ; so a callee (glazed or not) only ever sees its own ABI registers. a
+       ; &param deopts the whole regen (clval on a regv answers 'bad) back to ir1.
        (homereg gpi) (nthr (hregs g) gpi)
-       (spillr ps gpi xmmi ovi env acc)             ; like spill, but home eligible gp params in registers
-        (? (! (two? ps)) `(acc env)
-           (: p <ps pty <>p
-              (? (sse2? g pty)
-                  (? (6 < xmmi) 'bad
-                     (: off (nslot g 16)
-                        (spillr >ps gpi (xmmi + 2) ovi (link `(<p off pty) env)
-                               (cat acc (cat (fstf g 'double 'r4 off (xmmreg xmmi))
-                                             (fstf g 'double 'r4 (off + 8) (xmmreg (xmmi + 1))))))))
-                 (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
-                  (? (xmmi < 8)
-                     (: off (nslot g 8)
-                        (spillr >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
-                               (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
-                     (spillr >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
-                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED / >16B ahead; small INT rides the gp lane (never homable)
-                 (&& (flo? pty) (xmmi < 8))
-                  (: off (nslot g 8)
-                     (spillr >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
-                            (acc + (fstf g pty 'r4 off (xmmreg xmmi)))))
-                 (&& (! (flo? pty)) (gpi < (ngp g)))
-                  (? (&& (homable? pty) (gpi < (nhome g)))   ; home in a register: move from the incoming arg reg if it differs
-                      (: inc (nthr (argr g) gpi)
-                         ; a rideable param rides its ARRIVAL register -- no home
-                         ; reserved, no entry mov, its home register freed to the pool
-                         home (? (member? gpi (peep g 'ride ())) inc (homereg gpi))
-                         mv (? (home = inc) () `(`('mov home inc)))
-                         (spillr >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
-                                (acc + mv)))
-                     (: off (nslot g 8)
-                        (spillr >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
-                               (acc + `(`('st 'r4 off (nthr (argr g) gpi)))))))
-                 (spillr >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))))
        (homes? ps gpi)                              ; does any gp param qualify for a register home?
         (? (! (two? ps)) ()
            (: pty (caup (cap ps))
@@ -4434,43 +4430,6 @@
                  ((nhome g) <= gpi) ()
                  (homable? pty) 1
                  (homes? >ps (gpi + 1)))))
-       ; -- the NON-LEAF lane: like spillr, but each home ALSO takes a frame slot
-       ; (its spill shadow) recorded in g 'homes -- call-fixed spills the homes
-       ; there just before every remaining call's pops and reloads after, so a
-       ; callee (glazed or not) only ever sees its own ABI registers. a &param
-       ; deopts the whole regen (clval on a regv answers 'bad) back to ir1. --
-       (spillr2 ps gpi xmmi ovi env acc)
-        (? (! (two? ps)) `(acc env)
-           (: p <ps pty <>p
-              (? (sse2? g pty)
-                  (? (6 < xmmi) 'bad
-                     (: off (nslot g 16)
-                        (spillr2 >ps gpi (xmmi + 2) ovi (link `(<p off pty) env)
-                               (cat acc (cat (fstf g 'double 'r4 off (xmmreg xmmi))
-                                             (fstf g 'double 'r4 (off + 8) (xmmreg (xmmi + 1))))))))
-                 (&& (stru? pty) (id? (aone g pty) 'sse))   ; a small SSE aggregate: one xmm into an 8-byte slot
-                  (? (xmmi < 8)
-                     (: off (nslot g 8)
-                        (spillr2 >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
-                               (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
-                     (spillr2 >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
-                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED / >16B ahead; small INT rides the gp lane (never homable)
-                 (&& (flo? pty) (xmmi < 8))
-                  (: off (nslot g 8)
-                     (spillr2 >ps gpi (xmmi + 1) ovi (link `(<p off pty) env)
-                            (acc + (fstf g pty 'r4 off (xmmreg xmmi)))))
-                 (&& (! (flo? pty)) (gpi < (ngp g)))
-                  (? (&& (homable? pty) (gpi < (nhome g)))
-                      (: home (homereg gpi) inc (nthr (argr g) gpi)
-                         off (nslot g 8)
-                         _ (pin g 'homes (link `(home off <p) (peep g 'homes ())))
-                         mv (? (home = inc) () `(`('mov home inc)))
-                         (spillr2 >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
-                                (acc + mv)))
-                     (: off (nslot g 8)
-                        (spillr2 >ps (gpi + 1) xmmi ovi (link `(<p off pty) env)
-                               (acc + `(`('st 'r4 off (nthr (argr g) gpi)))))))
-                 (spillr2 >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))))
        (anyop? fs op) (? (! (two? fs)) () (: f <fs (? (&& (two? f) (<f = op)) 1 (anyop? >fs op))))
        (hascall? fs) (|| (anyop? fs 'call) (anyop? fs 'callr))
        ; the non-leaf PAYOFF gate: homing saves one frame load per param READ but
@@ -4570,7 +4529,7 @@
        ; the param's OWN spill slot (its staging restores); any other def (the
        ; shuttle's spop/la/ld scratch, a div/shift clobber) bars the ride. an
        ; opaque bar op (raw/sys/call) bars it too. leaf lane only -- ride is
-       ; empty under a call, so spillr2/spill never meet a freed home. --
+       ; empty under a call, so no spill policy ever meets a freed home. --
        (rst-stoff fs A)                             ; A's entry spill-store (base off) | 'no
         (? (! (two? fs)) 'no
            (: f <fs
@@ -4670,12 +4629,12 @@
        sp1 (? (&& vararg (a64? g)) (vaspill-a64 params)
               (&& vararg (t32? g)) (vaspill-t32 params)
               vararg (vaspill params)
-              sr6f (spill params 1 0 0 () `(`('st 'r4 (peep g 'sret 0) 'r0)))
-              (spill params 0 0 0 () ()))
+              sr6f (spill () params 1 0 0 () `(`('st 'r4 (peep g 'sret 0) 'r0)))
+              (spill () params 0 0 0 () ()))
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
        ride (? (|| vararg (|| (peep g 'fesc ()) (hascall? ir1))) () (rideset ir1 params 0 ()))
-       _ (pin g 'ride ride)                          ; spillr reads it: a rideable param binds to its arrival
+       _ (pin g 'ride ride)                          ; the 'ride policy reads it: a rideable param binds to its arrival
        hpool (: rh (map (\ k (homereg k)) ride)      ; the freed homes rejoin the pool for locals
                 uh (filter (\ q (! (member? q rh))) (uhomes params 0 ()))
                 (filter (\ q (! (member? q uh))) tpool))
@@ -4694,7 +4653,7 @@
               _ (pin g 'vuniv (cauup av)) _ (vmflush g)   ; the vmap rides the regen (univ known)
               _ (pin g 'homes ()) _ (pin g 'lhome lh)
               _ (pin g 'livtab (cap av))             ; tail calls still stage through call-fixed
-              ir2 (build (spillr params 0 0 0 () ()))
+              ir2 (build (spill 'ride params 0 0 0 () ()))
               _ (pin g 'livtab ())
               _ (pin g 'vuniv ()) _ (vmflush g)
               _ (pin g 'lhome ()) _ (pin g 'homes ())
@@ -4707,7 +4666,7 @@
           ; pure win), and adding zero-cross homes outside the gate is 8/8
           ; slower (the regen trades operand-pool registers for the homes;
           ; returning unhomed regs to the pool then collides with the leaf
-          ; lane's home-them-all spillr). the fn-wide gate stands.
+          ; lane's home-them-all 'ride policy). the fn-wide gate stands.
           (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)
                           ((* 2 (* nc nh)) < (nreads ir1 (pslots <>sp1 ()) 0))))
              (? (|| pp lh)
@@ -4716,7 +4675,7 @@
                    _ (pin g 'vuniv (cauup av)) _ (vmflush g)   ; the vmap rides the regen (univ known)
                    _ (pin g 'homes ()) _ (pin g 'lhome lh)
                    _ (pin g 'livtab (cap av))        ; per-call wrap sets for the homes
-                   ir2 (build (? pp (spillr2 params 0 0 0 () ()) (spill params 0 0 0 () ())))
+                   ir2 (build (? pp (spill 'shadow params 0 0 0 () ()) (spill () params 0 0 0 () ())))
                    _ (pin g 'livtab ())
                    _ (pin g 'vuniv ()) _ (vmflush g)
                    _ (pin g 'lhome ()) _ (pin g 'homes ())   ; the wrap set dies with this fn
