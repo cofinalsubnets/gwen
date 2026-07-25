@@ -128,21 +128,15 @@
          md (? (&& (disp = 0) !((lo bn) = 5)) 0 (? (fits8 disp) 1 2))
          dispb (? (md = 0) () (? (md = 1) `((byte disp)) (le32 disp)))
          (`((modrm md (lo regf) 4) (sib sc ixn bn)) + dispb))
-   (emit-ldx d base index scale disp)                              ; 0x8B mov r64, [base+index*scale+disp]
-      (: dn (rn d) bn (rn base) ixn (rn index)
-         (`((rex 1 (hi dn) (hi ixn) (hi bn)) 139) + (memx dn base index scale disp)))
-   (emit-stx base index scale disp s)                              ; 0x89 mov [base+index*scale+disp], r64
-      (: sn (rn s) bn (rn base) ixn (rn index)
-         (`((rex 1 (hi sn) (hi ixn) (hi bn)) 137) + (memx sn base index scale disp)))
-   (emit-leax d base index scale disp)                             ; 0x8D lea r64, [base+index*scale+disp]
-      (: dn (rn d) bn (rn base) ixn (rn index)
-         (`((rex 1 (hi dn) (hi ixn) (hi bn)) 141) + (memx dn base index scale disp)))
-   (emit-ldxb d base index scale disp)                             ; 0F B6 movzx r64, BYTE [base+index*scale+disp]  (zero-extend)
-      (: dn (rn d) bn (rn base) ixn (rn index)
-         (`((rex 1 (hi dn) (hi ixn) (hi bn)) 15 182) + (memx dn base index scale disp)))
-   (emit-stxb base index scale disp s)                             ; 0x88 mov BYTE [base+index*scale+disp], sl  (REX.W=0; REX present forces spl/sil.. not ah/ch.. for s 4-7)
-      (: sn (rn s) bn (rn base) ixn (rn index)
-         (`((rex 0 (hi sn) (hi ixn) (hi bn)) 136) + (memx sn base index scale disp)))
+   ;; the indexed family's shared core, REX.W + opcode per face (as x64-mem below).
+   (x64-memx w opc regf base index scale disp)
+      (: fn (rn regf) bn (rn base) ixn (rn index)
+         (((rex w (hi fn) (hi ixn) (hi bn)) >< opc) + (memx fn base index scale disp)))
+   (emit-ldx d base index scale disp)  (x64-memx 1 `(139) d base index scale disp)     ; 8B    mov r64, [base+index*scale+disp]
+   (emit-stx base index scale disp s)  (x64-memx 1 `(137) s base index scale disp)     ; 89    mov [base+index*scale+disp], r64
+   (emit-leax d base index scale disp) (x64-memx 1 `(141) d base index scale disp)     ; 8D    lea r64, [base+index*scale+disp]
+   (emit-ldxb d base index scale disp) (x64-memx 1 `(15 182) d base index scale disp)  ; 0F B6 movzx r64, BYTE (zero-extend)
+   (emit-stxb base index scale disp s) (x64-memx 0 `(136) s base index scale disp)     ; 88    mov BYTE, sl (REX.W=0; REX present forces spl/sil.. not ah/ch.. for s 4-7)
 
    ;; a memory operand [base+disp]: ModRM (+ SIB for an rsp/r12 base) (+ displacement). picks the
    ;; shortest disp form, and forces a 0-disp byte for an rbp/r13 base (its disp-less slot is taken).
@@ -152,32 +146,25 @@
          head (? (blo = 4) `((modrm md (lo regf) 4) (sib 0 4 blo)) `((modrm md (lo regf) blo)))
          dispb (? (md = 0) () (? (md = 1) `((byte disp)) (le32 disp)))
          (head + dispb))
-   (emit-ld d base off)                                             ; 0x8B mov r64, [base+off]
-      (: dn (rn d) bn (rn base) (`((rex 1 (hi dn) 0 (hi bn)) 139) + (mem dn base off)))
-   (emit-st base off s)                                             ; 0x89 mov [base+off], r64
-      (: sn (rn s) bn (rn base) (`((rex 1 (hi sn) 0 (hi bn)) 137) + (mem sn base off)))
-   (emit-lea d base off)                                            ; 0x8D lea r64, [base+off]
-      (: dn (rn d) bn (rn base) (`((rex 1 (hi dn) 0 (hi bn)) 141) + (mem dn base off)))
+   ;; one core for the whole [base+off] family: prefix bytes, the REX.W bit, the opcode
+   ;; bytes -- each face below is a partial spelling of it (mnemonics in the comments).
+   (x64-mem pfx w opc regf base off)
+      (: fn (rn regf) bn (rn base)
+         (pfx + (((rex w (hi fn) 0 (hi bn)) >< opc) + (mem fn base off))))
+   (emit-ld d base off)   (x64-mem () 1 `(139) d base off)      ; 8B     mov r64, [base+off]
+   (emit-st base off s)   (x64-mem () 1 `(137) s base off)      ; 89     mov [base+off], r64
+   (emit-lea d base off)  (x64-mem () 1 `(141) d base off)      ; 8D     lea r64, [base+off]
    ;; the sized loads (SIGN-extending -- C's char/short/int) and stores (truncating).
-   (emit-ld1 d base off)                                            ; 0F BE movsx r64, BYTE [base+off]
-      (: dn (rn d) bn (rn base) (`((rex 1 (hi dn) 0 (hi bn)) 15 190) + (mem dn base off)))
-   (emit-ld2 d base off)                                            ; 0F BF movsx r64, WORD [base+off]
-      (: dn (rn d) bn (rn base) (`((rex 1 (hi dn) 0 (hi bn)) 15 191) + (mem dn base off)))
-   (emit-ld4 d base off)                                            ; 63 movsxd r64, DWORD [base+off]
-      (: dn (rn d) bn (rn base) (`((rex 1 (hi dn) 0 (hi bn)) 99) + (mem dn base off)))
+   (emit-ld1 d base off)  (x64-mem () 1 `(15 190) d base off)   ; 0F BE  movsx r64, BYTE
+   (emit-ld2 d base off)  (x64-mem () 1 `(15 191) d base off)   ; 0F BF  movsx r64, WORD
+   (emit-ld4 d base off)  (x64-mem () 1 `(99) d base off)       ; 63     movsxd r64, DWORD
    ;; the ZERO-extending sized loads (C's unsigned char/short/int). ldu4 is a plain 32-bit mov (REX.W=0), which zeroes the top.
-   (emit-ldu1 d base off)                                           ; 0F B6 movzx r64, BYTE [base+off]
-      (: dn (rn d) bn (rn base) (`((rex 1 (hi dn) 0 (hi bn)) 15 182) + (mem dn base off)))
-   (emit-ldu2 d base off)                                           ; 0F B7 movzx r64, WORD [base+off]
-      (: dn (rn d) bn (rn base) (`((rex 1 (hi dn) 0 (hi bn)) 15 183) + (mem dn base off)))
-   (emit-ldu4 d base off)                                           ; 8B mov r32, DWORD [base+off] (zero-extends)
-      (: dn (rn d) bn (rn base) (`((rex 0 (hi dn) 0 (hi bn)) 139) + (mem dn base off)))
-   (emit-st1 base off s)                                            ; 88 mov BYTE [base+off], s8 (REX present: spl/sil, never ah/ch)
-      (: sn (rn s) bn (rn base) (`((rex 0 (hi sn) 0 (hi bn)) 136) + (mem sn base off)))
-   (emit-st2 base off s)                                            ; 66 89 mov WORD [base+off], s16
-      (: sn (rn s) bn (rn base) (`(102 (rex 0 (hi sn) 0 (hi bn)) 137) + (mem sn base off)))
-   (emit-st4 base off s)                                            ; 89 mov DWORD [base+off], s32
-      (: sn (rn s) bn (rn base) (`((rex 0 (hi sn) 0 (hi bn)) 137) + (mem sn base off)))
+   (emit-ldu1 d base off) (x64-mem () 1 `(15 182) d base off)   ; 0F B6  movzx r64, BYTE
+   (emit-ldu2 d base off) (x64-mem () 1 `(15 183) d base off)   ; 0F B7  movzx r64, WORD
+   (emit-ldu4 d base off) (x64-mem () 0 `(139) d base off)      ; 8B     mov r32, DWORD (zero-extends)
+   (emit-st1 base off s)  (x64-mem () 0 `(136) s base off)      ; 88     mov BYTE, s8 (REX present: spl/sil, never ah/ch)
+   (emit-st2 base off s)  (x64-mem `(102) 0 `(137) s base off)  ; 66 89  mov WORD, s16
+   (emit-st4 base off s)  (x64-mem () 0 `(137) s base off)      ; 89     mov DWORD, s32
    ;; in-register sign extension (the C casts): movsx/movsxd reg64 <- reg's low w bytes
    (emit-sx w d)
       (: dn (rn d)

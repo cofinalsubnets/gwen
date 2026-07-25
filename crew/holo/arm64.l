@@ -118,23 +118,20 @@
             (? (l1 = 0) () (le32 (0xF2A00000 | ((l1 << 5) | 16))))                   ; movk x16, l1, lsl 16
             (le32 ((? (off < 0) 0xCB000000 0x8B000000) | ((16 << 16) | ((bn << 5) | 16))))   ; add/sub x16, base, x16
             (le32 (ubase | ((16 << 5) | dt))))))                                     ; op Rt, [x16, #0]
-   (arm64-mem-r lbase ubase dt bn off)                       ; raw-encoding variant (dt/bn already encodings; for x16-based stores)
-      (? (&& (0 = (off % 8)) (&& (off >= 0) ((off // 8) <= 4095)))
-         (le32 (ubase | (((off // 8) << 10) | ((bn << 5) | dt))))
+   ;; ONE memory core, encodings in hand: LDR/STR scaled imm12 (units = the access width)
+   ;; else LDUR/STUR unscaled imm9 else the far x16 build. every face -- word, sized,
+   ;; fp -- is a spelling of it.
+   (arm64-mem-raw lbase ubase sc dt bn off)
+      (? (&& (0 = (off % sc)) (&& (off >= 0) ((off // sc) <= 4095)))
+         (le32 (ubase | (((off // sc) << 10) | ((bn << 5) | dt))))
          (? (&& (off >= -256) (off <= 255))
             (le32 (lbase | (((off & 511) << 12) | ((bn << 5) | dt))))
             (arm64-far ubase dt bn off)))
+   (arm64-mem-r lbase ubase dt bn off) (arm64-mem-raw lbase ubase 8 dt bn off)   ; word units (the x16-based stores)
    (arm64-mem lbase ubase d base off) (arm64-mem-r lbase ubase (rn d) (rn base) off)
    (arm64-ld d base off)   (arm64-mem 0xF8400000 0xF9400000 d base off)
    (arm64-st base off s)   (arm64-mem 0xF8000000 0xF9000000 s base off)
-   ;; the sized family: scaled-imm12 units follow the access width, not 8
-   (arm64-mem-sz lbase ubase sc d base off)
-      (: dt (rn d) bn (rn base)
-         (? (&& (0 = (off % sc)) (&& (off >= 0) ((off // sc) <= 4095)))
-            (le32 (ubase | (((off // sc) << 10) | ((bn << 5) | dt))))
-            (? (&& (off >= -256) (off <= 255))
-               (le32 (lbase | (((off & 511) << 12) | ((bn << 5) | dt))))
-               (arm64-far ubase dt bn off))))
+   (arm64-mem-sz lbase ubase sc d base off) (arm64-mem-raw lbase ubase sc (rn d) (rn base) off)
    (arm64-ld1 d base off) (arm64-mem-sz 0x38800000 0x39800000 1 d base off)   ; ldrsb/ldursb Xt
    (arm64-ld2 d base off) (arm64-mem-sz 0x78800000 0x79800000 2 d base off)   ; ldrsh/ldursh Xt
    (arm64-ld4 d base off) (arm64-mem-sz 0xB8800000 0xB9800000 4 d base off)   ; ldrsw/ldursw Xt
@@ -272,22 +269,15 @@
    (arm64-fcvtzs g d) (: gn (rn g) dn (frn d) (le32 (0x9E780000 | ((dn << 5) | gn))))           ; FCVTZS Xg, Dd  (double -> signed int, toward zero)
    (arm64-fmovxr d g) (: dn (frn d) gn (rn g) (le32 (0x9E670000 | ((gn << 5) | dn))))           ; FMOV Dd, Xg   (gpr bits -> fpr)  == movqxr
    (arm64-fmovrx g d) (: gn (rn g) dn (frn d) (le32 (0x9E660000 | ((dn << 5) | gn))))           ; FMOV Xg, Dd   (fpr -> gpr bits)  == movqrx
-   ;; fp memory takes the same three lanes as the integer ops: LDR/STR scaled, LDUR/STUR unscaled
-   ;; (a frame slot's negative offset), then the far x16 build (fmem-sz mirrors arm64-mem-sz with
-   ;; the V=1 base words).
-   (arm64-fmem-sz lbase ubase sc tn bn off)
-      (? (&& (0 = (off % sc)) (&& (off >= 0) ((off // sc) <= 4095)))
-         (le32 (ubase | (((off // sc) << 10) | ((bn << 5) | tn))))
-         (? (&& (off >= -256) (off <= 255))
-            (le32 (lbase | (((off & 511) << 12) | ((bn << 5) | tn))))
-            (arm64-far ubase tn bn off)))
-   (arm64-fst base disp s) (arm64-fmem-sz 0xFC000000 0xFD000000 8 (frn s) (rn base) disp)   ; STR/STUR Ds, [base, #disp]
-   (arm64-fld d base disp) (arm64-fmem-sz 0xFC400000 0xFD400000 8 (frn d) (rn base) disp)   ; LDR/LDUR Dd, [base, #disp]
+   ;; fp memory takes the same three lanes as the integer ops -- arm64-mem-raw with the
+   ;; V=1 base words.
+   (arm64-fst base disp s) (arm64-mem-raw 0xFC000000 0xFD000000 8 (frn s) (rn base) disp)   ; STR/STUR Ds, [base, #disp]
+   (arm64-fld d base disp) (arm64-mem-raw 0xFC400000 0xFD400000 8 (frn d) (rn base) disp)   ; LDR/LDUR Dd, [base, #disp]
    ;; the 4-byte single lane (the C `float` slot): widen/narrow via FCVT, load/store an S-register (disp a multiple of 4).
    (arm64-fcvt-widen  d s) (: dn (frn d) sn (frn s) (le32 (0x1E22C000 | ((sn << 5) | dn))))            ; FCVT Dd, Ss  (single -> double)  == cvtss2sd
    (arm64-fcvt-narrow d s) (: dn (frn d) sn (frn s) (le32 (0x1E624000 | ((sn << 5) | dn))))            ; FCVT Sd, Ds  (double -> single)  == cvtsd2ss
-   (arm64-fsts base disp s) (arm64-fmem-sz 0xBC000000 0xBD000000 4 (frn s) (rn base) disp)  ; STR/STUR Ss, [base, #disp]
-   (arm64-flds d base disp) (arm64-fmem-sz 0xBC400000 0xBD400000 4 (frn d) (rn base) disp)  ; LDR/LDUR Sd, [base, #disp]
+   (arm64-fsts base disp s) (arm64-mem-raw 0xBC000000 0xBD000000 4 (frn s) (rn base) disp)  ; STR/STUR Ss, [base, #disp]
+   (arm64-flds d base disp) (arm64-mem-raw 0xBC400000 0xBD400000 4 (frn d) (rn base) disp)  ; LDR/LDUR Sd, [base, #disp]
    (arm64-xorpd d s) (: dn (frn d) sn (frn s) (le32 (0x2E201C00 | ((sn << 16) | ((dn << 5) | dn)))))   ; EOR Vd.8B, Vd.8B, Vs.8B (zero a double when d==s; the grid's fvar-init)
 
    (arm64-lower ins)
