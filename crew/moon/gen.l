@@ -3908,6 +3908,13 @@
           w (? lt (peep lt q 'all) 'all)
           _ (pin g 'stwrap w)
           w))
+   ; the regen channels' NEUTRAL state, spelled once: per-fn entry and the
+   ; regen teardown ride the same reset (a wrap set dies with its fn)
+   (rgreset g)
+    (: _ (pin g 'livtab ())                          ; liveness (set only for a wrap-bearing regen)
+       _ (pin g 'vuniv ()) _ (vmflush g)             ; vmap off (no universe)
+       _ (pin g 'lhome ())                           ; locals-homing map (cgdecl's hook reads it)
+       (pin g 'homes ()))                            ; non-leaf home set (call-fixed + sibs read it)
    ; the per-BUILD counters, spelled once: build arms them fresh on each of
    ; its (up to two) runs per fn
    (bldreset g)
@@ -4213,9 +4220,7 @@
        _ (pin g 'fesc ())                            ; fresh escape flag (the sibcall gate reads it)
        _ (pin g 'inlining ())                        ; fresh inline-depth flag
        _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
-       _ (pin g 'homes ())                           ; fresh non-leaf home set (call-fixed + sibs read it)
-       _ (pin g 'lhome ())                           ; fresh locals-homing map (cgdecl's hook reads it)
-       _ (pin g 'livtab ())                          ; fresh liveness (set only for a wrap-bearing regen)
+       _ (rgreset g)                                 ; fresh regen channels
        _ (pin g 'fn <>f)
        sig (peep (g 'sigs) <>f ())
        vararg (? (two? sig) (nthr sig 2) ())
@@ -4624,9 +4629,7 @@
            _ (pin g 'homes ()) _ (pin g 'lhome lh)
            _ (pin g 'livtab (cap av))
            ir2 (build (spill hp params 0 0 0 () ()))
-           _ (pin g 'livtab ())
-           _ (pin g 'vuniv ()) _ (vmflush g)
-           _ (pin g 'lhome ()) _ (pin g 'homes ())
+           _ (rgreset g)
            (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
        irf (? (bad? ir1) 'bad
           (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
