@@ -103,9 +103,7 @@
        (: e9 (assoc nm (peep g 'vmap ()))
           (? (two? e9) <>e9 ())))
    (vmdrop g nm)
-    (: (cut l) (? (! (two? l)) ()
-                  (: e9 <l (? (id? <e9 nm) (cut >l) (link e9 (cut >l)))))
-       m2 (cut (peep g 'vmap ()))
+    (: m2 (filter (\ e9 (! (id? <e9 nm))) (peep g 'vmap ()))
        ; NOT `pins`: that is a prel MACRO (chained tablet pins) and a macro
        ; expands at head position over any local binding -- the collision
        ; silently answered the map itself and every register guard went blind
@@ -136,10 +134,7 @@
    (psreset g)
     (: vp (peep g 'vpin ())
        (? (! (two? vp)) (pin g 'pool (peep g 'pool0 ()))
-          (: (cut l) (? (! (two? l)) ()
-                        (member? <l vp) (cut >l)
-                        (link <l (cut >l)))
-             (pin g 'pool (cut (peep g 'pool0 ()))))))
+          (pin g 'pool (filter (\ r9 (! (member? r9 vp))) (peep g 'pool0 ())))))
    ; -- the TARGET seam: g 'tgt ('x64 | 'arm64 | 'thumb2) picks the ABI shapes;
    ; the IR stays neutral. arm64 (AAPCS64): args ride r0..r7 (8 gp), the frame
    ; base retargets to fp (x29) at the end of build (a4ize -- r4 is x4, a CALLER-
@@ -291,7 +286,6 @@
    ; shape; signed stays a real div -- C rounds toward zero, sar toward -inf).
    ; answers (ty forms) | 'no (the caller falls back to the shuttle). --
    (pow2? n) (&& (0 < n) (0 = (& n (n - 1))))
-   (lg2v n) (: (go k v) (? (v <= 1) k (go (k + 1) (>> v 1))) (go 0 n))
    (immop g op av aty n wnt)                        ; av the LEFT value tuple; wnt the advisory destination
     (: rA (vreg av)
        (? (llt? aty) 'no                            ; a pair never rides the immediate lane
@@ -306,9 +300,9 @@
            (? (! (&& (usg? aty) (pow2? n))) 'no
               (op = '/) (? (n = 1) (mkv 'ulong rA (vfs av))
                            (? (wr? g rA)
-                              (mkv 'ulong rA ((vfs av) + `(`('shr rA (lg2v n)))))
+                              (mkv 'ulong rA ((vfs av) + `(`('shr rA (lg2 n)))))
                               (: rd (? wnt wnt (rdst g rA))   ; a borrowed home shifts a COPY (no 3-address shr)
-                                 (mkv 'ulong rd ((vfs av) + `(`('mov rd rA) `('shr rd (lg2v n))))))))
+                                 (mkv 'ulong rd ((vfs av) + `(`('mov rd rA) `('shr rd (lg2 n))))))))
               (n = 1) (mkv 'ulong 'r0 ((vdrop g av) + `(`('li 'r0 0))))
               (! (immok g 'log (n - 1))) 'no             ; t32 has no simple AND-imm: materialize (the register path)
               (: rd (? wnt wnt (rdst g rA))
@@ -342,21 +336,18 @@
    ; a load widens (ldss + cvtss2sd) and a store narrows (cvtsd2ss + stss). fldf/
    ; fstf pick the lane by the DECLARED type; every loaded float types 'double.
    (flo? ty) (|| (ty = 'double) (ty = 'float))
+   (fenc ax bias mant)                              ; positive finite -> biased-exponent * mant + mantissa fraction
+    (: eu ((: (go e) (? (((e + 1) 2.0) <= ax) (go (e + 1)) e)) (int (/ (log ax) (log 2.0))))
+       e  ((: (go e) (? (ax < (e 2.0)) (go (e - 1)) e)) eu)
+       (+ (* (e + bias) mant) (int (* ((/ ax (e 2.0)) - 1.0) (0.0 + mant)))))
    (fbits x)                                        ; finite double -> its IEEE-754 bits as the SIGNED i64 pattern
-    (? (x = 0.0) 0                                  ; (the sign bit would make a BIG, and le8s/imnum walk i64 patterns)
-       (: s (? (x < 0.0) 1 0) ax (? (x < 0.0) (0.0 - x) x)
-          eu ((: (go e) (? (((e + 1) 2.0) <= ax) (go (e + 1)) e)) (int (/ (log ax) (log 2.0))))
-          e  ((: (go e) (? (ax < (e 2.0)) (go (e - 1)) e)) eu)
-          m (+ (* (e + 1023) 4503599627370496)
-               (int (* ((/ ax (e 2.0)) - 1.0) 4503599627370496.0)))
-          (? (0 < s) (m - 9223372036854775808) m)))
+    (? (x = 0.0) 0                                  ; (the sign bit would make a BIG, and les/imnum walk i64 patterns)
+       (: m (fenc (? (x < 0.0) (0.0 - x) x) 1023 4503599627370496)
+          (? (x < 0.0) (m - 9223372036854775808) m)))
    (fbits32 x)                                      ; finite double -> its IEEE-754 SINGLE (u32) bits (a `float` image)
     (? (x = 0.0) 0
-       (: s (? (x < 0.0) 1 0) ax (? (x < 0.0) (0.0 - x) x)
-          eu ((: (go e) (? (((e + 1) 2.0) <= ax) (go (e + 1)) e)) (int (/ (log ax) (log 2.0))))
-          e  ((: (go e) (? (ax < (e 2.0)) (go (e - 1)) e)) eu)
-          (+ (* s 2147483648) (+ (* (e + 127) 8388608)
-             (int (* ((/ ax (e 2.0)) - 1.0) 8388608.0))))))
+       (+ (* (? (x < 0.0) 1 0) 2147483648)
+          (fenc (? (x < 0.0) (0.0 - x) x) 127 8388608)))
    (fldf ty freg base off)                          ; load a float/double from [base+off] into freg (widen if float)
     (? (ty = 'float) `(`('ldss freg base off) `('cvtss2sd freg freg))
        `(`('ldsd freg base off)))
@@ -661,13 +652,10 @@
                    (: fs ((vfs c) + `(`('cmp (vreg c) 0) `('br cc lbl)))
                       _ (rfree g (vreg c))
                       fs))))))
-   ; 8 little-endian bytes of a constant (the global initializer image)
-   (le8s v) (: (go i acc) (? (7 < i) (rev acc)
-                             (go (i + 1) (link (& (>> v (* 8 i)) 255) acc)))
-              (go 0 ()))
-   (le4s v) (: (go i acc) (? (3 < i) (rev acc)
-                             (go (i + 1) (link (& (>> v (* 8 i)) 255) acc)))
-              (go 0 ()))
+   ; n little-endian bytes of a constant (the global initializer image)
+   (les n v) (: (go i acc) (? (n <= i) (rev acc)
+                              (go (i + 1) (link (& (>> v (* 8 i)) 255) acc)))
+               (go 0 ()))
    (zeros n) (? (n < 1) () (link 0 (zeros (n - 1))))
    ; a straight-line block copy of sz bytes, src address in r0, dest in r1,
    ; r2 the scratch -- 8 at a time, then a byte tail (struct = struct copies)
@@ -2293,7 +2281,6 @@
    ; cell, now a positive offset from a stable low base. frame-LINK forms carry offset 0, never < 0,
    ; so they keep fp. runs AFTER a4ize (which named the base fp), v6m only. r4 is free post-a4ize
    ; (the build-time r4 frame-base all became fp; v6-M has 4 arg regs r0..r3, so r4 is never the 5th).
-   (elg l i) (? (i < 1) <l (elg >l (i - 1)))          ; 0-based accessor (gen.l's scope lacks moon.l's `el`)
    (t16reb f i bp fr)
     (? (! (two? f)) f
        (link (? (i = bp) 'r4 (i = (bp + 1)) (fr + <f) <f) (t16reb >f (i + 1) bp fr)))
@@ -2301,7 +2288,7 @@
     (? (! (two? fs)) ()
        (: f <fs
           bp (? (two? f) (peep a4base <f -1) -1)
-          (link (? (&& (bp >= 0) (&& (id? (elg f bp) 'fp) ((elg f (bp + 1)) < 0))) (t16reb f 0 bp fr) f)
+          (link (? (&& (bp >= 0) (&& (id? (nthr f bp) 'fp) ((nthr f (bp + 1)) < 0))) (t16reb f 0 bp fr) f)
                 (t16slots >fs fr))))
    ; v6m has no MOVW/MOVT to build an address, so an (la Rd lbl) becomes a literal-pool load: align to
    ; a word, LDR Rd,[pc,#0], hop the pooled abs32 word (the backend's lapool), and lay the word as an
@@ -2384,7 +2371,6 @@
               (: h (assoc <>f hs)
                  (? (&& (two? h) (<>h = <>>>f)) (skiprel >fs hs) fs))
              fs)))
-   (dropf l n) (? (n < 1) l (dropf >l (n - 1)))
    (sibs g fs lw el hs ej crf)
     (? (! (two? fs)) ()
        (: f <fs r >fs
@@ -2393,7 +2379,7 @@
                                             (f = crf))))
           rr (? cand (skiprel r hs) r)
           (? (&& cand (epim? rr ej))
-              ((sibjmp g f) + (sibs g (dropf rr (tally ej)) () el hs ej crf))
+              ((sibjmp g f) + (sibs g (drop (tally ej) rr) () el hs ej crf))
              (&& cand (lbl-epi? rr ej))
               ((sibjmp g f) + (sibs g rr () el hs ej crf))
              (&& cand (: nx <rr (&& (two? nx) (&& (<nx = 'jmp) (peep el <>nx ())))))
@@ -2441,7 +2427,7 @@
        sf (nthr fs (? a64 4 3))
        K (? (&& (two? sf) (&& (<sf = 'sub) (&& (<>sf = 'sp) (&& (<>>sf = 'sp) (charm? <>>>sf)))))
             <>>>sf ())
-       body0 (dropf fs (? a64 5 4))
+       body0 (drop (? a64 5 4) fs)
        ; -- the PARK lane (x64): a callr sib parks its target in r3 and unparks
        ; with (mov r10 r3); when everything between them (folded-away staging,
        ; or a few surviving arg movs) neither mentions r3 nor rewrites the
@@ -2472,10 +2458,10 @@
                               (win >w (n + 1)))))
                     k (win r 0)
                     (? (id? k 'no) (link f (squeeze r))
-                       (: (take w n) (? (n < 1) (link `('mov 'r10 X) (squeeze (dropf w 1)))
+                       (: (take w n) (? (n < 1) (link `('mov 'r10 X) (squeeze (drop 1 w)))
                                         (link <w (take >w (n - 1))))
                           (take r k)))))))
-       body (: b2 (? sv3 (dropf body0 1) body0) (? a64 b2 (squeeze b2)))
+       body (: b2 (? sv3 (drop 1 body0) body0) (? a64 b2 (squeeze b2)))
        (epi3? l9)                                    ; l9 opens with a restore run -> its length | ()
         (? a64 (? (&& ((nthr l9 0) = '(lea sp fp 0)) (&& ((nthr l9 1) = '(pop fp)) ((nthr l9 2) = '(pop lr)))) 3 ())
            (&& ((nthr l9 0) = '(mov sp r4)) ((nthr l9 1) = '(pop r4))) 2
@@ -2492,7 +2478,7 @@
        (scan l D vs r3f live)                        ; -> 'no | (needs-sub r3-in-use)
         (? (! (two? l)) `(vs r3f)
            (: n3 (epi3? l)
-              (? n3 (scan (dropf l n3) 0 vs r3f live)
+              (? n3 (scan (drop n3 l) 0 vs r3f live)
                  (: f <l
                     (? (! (two? f)) (scan >l D vs r3f live)
                        (<f = 'label)
@@ -2546,7 +2532,7 @@
                  (: n3 (epi3? l)
                     (? n3 ((? r3f `(`('ld 'r3 'sp ((K + D) - 8))) ())
                            + ((? vs `(`('add 'sp 'sp (K9 + D))) (? (0 < D) `(`('add 'sp 'sp D)) ()))
-                              + (rw (dropf l n3) 0)))
+                              + (rw (drop n3 l) 0)))
                        (: f <l
                           (? (! (two? f)) (link f (rw >l D))
                              (<f = 'label) (link f (rw >l (peep labt <>f D)))
@@ -3400,15 +3386,16 @@
               (op = '/) (? (b = 0.0) 'bad (/ a b))
               'bad))
        'bad)
+   (fim ty v)                                       ; a float value's IEEE image as ty: 4 single bytes | 8 double bytes
+    (? (ty = 'float) (les 4 (fbits32 v)) (les 8 (fbits v)))
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (? (! (two? ini)) (zeros (tsz g ty))
-       (<ini = 'flo) (? (ty = 'float) (le4s (fbits32 <>ini))    ; a float literal -> 4 IEEE single bytes
-                             (flo? ty) (le8s (fbits <>ini)) 'bad)     ; a double literal -> 8 IEEE bytes
-       (<ini = 'num) (? (aggish? ty) 'bad (ty = 'float) (le4s (fbits32 (0.0 + <>ini)))
-                             (flo? ty) (le8s (fbits (0.0 + <>ini))) (imnum g ty <>ini))
+       (<ini = 'flo) (? (flo? ty) (fim ty <>ini) 'bad)
+       (<ini = 'num) (? (aggish? ty) 'bad
+                             (flo? ty) (fim ty (0.0 + <>ini)) (imnum g ty <>ini))
        (&& (flo? ty) (member? <ini '(bin un cast)))   ; a const float expression: fold, then image
         (: v (ffold ini)
-           (? (bad? v) 'bad (ty = 'float) (le4s (fbits32 v)) (le8s (fbits v))))
+           (? (bad? v) 'bad (fim ty v)))
        (&& (<ini = 'str) (arr? ty))
         (: t <>ini n (tsz g ty)
            (bs i acc) (? (n <= i) (rev acc) (bs (i + 1) (link (? (i < (tally t)) (t i) 0) acc)))
