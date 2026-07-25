@@ -29,11 +29,13 @@
            ('r19 >< 19) ('r20 >< 20) ('r21 >< 21) ('r22 >< 22) ('r23 >< 23) ('r24 >< 24)
            ('r25 >< 25) ('r26 >< 26) ('r27 >< 27) ('r28 >< 28)))
 
-   ;; -- ALU: op -> (reg-reg base word . imm base word | 0 if no immediate form). --
-   arm64-alu (tabof
+   ;; -- ALU: op -> (reg-reg base word . imm base word | 0 if no immediate form). the row
+   ;; list stays bound: the emitter tablet below pins the group off it. --
+   arm64-alu-rows
         `(('add >< `(0x8B000000 0x91000000)) ('sub >< `(0xCB000000 0xD1000000))
            ('and >< `(0x8A000000 0)) ('or >< `(0xAA000000 0)) ('xor >< `(0xCA000000 0))
-           ('adds >< `(0xAB000000 0xB1000000)) ('subs >< `(0xEB000000 0xF1000000))))   ; the S-variant: set NZCV
+           ('adds >< `(0xAB000000 0xB1000000)) ('subs >< `(0xEB000000 0xF1000000)))   ; the S-variant: set NZCV
+   arm64-alu (tabof arm64-alu-rows)
 
    ;; -- condition codes: IR name -> the A64 cond field (B.cond bits[3:0]). --
    arm64-cc (tabof
@@ -280,79 +282,43 @@
    (arm64-flds d base disp) (arm64-mem-raw 0xBC400000 0xBD400000 4 (frn d) (rn base) disp)  ; LDR/LDUR Sd, [base, #disp]
    (arm64-xorpd d s) (: dn (frn d) sn (frn s) (le32 (0x2E201C00 | ((sn << 16) | ((dn << 5) | dn)))))   ; EOR Vd.8B, Vd.8B, Vs.8B (zero a double when d==s; the grid's fvar-init)
 
-   (arm64-lower ins)
-      (: op <ins
-         (? (op = 'li)   (arm64-li   (at ins 1) (at ins 2))
-            (op = 'mov)  (arm64-mov  (at ins 1) (at ins 2))
-            (op = 'cmp)  (arm64-cmp  (at ins 1) (at ins 2))
-            (op = 'imul) (arm64-imul (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld)   (arm64-ld   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st)   (arm64-st   (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld1)  (arm64-ld1  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld2)  (arm64-ld2  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ld4)  (arm64-ld4  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st1)  (arm64-st1  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st2)  (arm64-st2  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'st4)  (arm64-st4  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu1) (arm64-ldu1 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu2) (arm64-ldu2 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'ldu4) (arm64-ldu4 (at ins 1) (at ins 2) (at ins 3))
-            (op = 'sx1)  (arm64-sx 1 (at ins 1))
-            (op = 'sx2)  (arm64-sx 2 (at ins 1))
-            (op = 'sx4)  (arm64-sx 4 (at ins 1))
-            (op = 'zx1)  (arm64-zx 1 (at ins 1))
-            (op = 'zx2)  (arm64-zx 2 (at ins 1))
-            (op = 'zx4)  (arm64-zx 4 (at ins 1))
-            (member? op '(shlv shrv sarv)) (arm64-shiftv op (at ins 1) (at ins 2))
-            (op = 'lea)  (arm64-lea  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'lean) (arm64-lea  (at ins 1) (at ins 2) (at ins 3))   ; a consumed lea (x64 tells them apart for the escape gate)
-            (op = 'push) (arm64-push (at ins 1))
-            (op = 'pop)  (arm64-pop  (at ins 1))
-            (op = 'neg)  (arm64-neg  (at ins 1))
-            (op = 'not)  (arm64-not  (at ins 1))
-            (op = 'inc)  (arm64-inc  (at ins 1))
-            (op = 'dec)  (arm64-dec  (at ins 1))
-            (op = 'jmp)  (arm64-jmp  (at ins 1))
-            (op = 'br)   (arm64-br   (at ins 1) (at ins 2))
-            (op = 'jmpr) (arm64-jmpr (at ins 1))
-            (op = 'callr) (arm64-callr (at ins 1))
-            (op = 'mulo) (arm64-mulo (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (mulo d a b t lbl)
-            (op = 'set)  (arm64-set  (at ins 1) (at ins 2))
-            (member? op '(shl shr sar rol ror)) (arm64-shift op (at ins 1) (at ins 2))
-            (op = 'test) (arm64-test (at ins 1) (at ins 2))
-            (op = 'div)  (arm64-div  (at ins 1) (at ins 2) (at ins 3))
-            (op = 'rem)  (arm64-rem  (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'udiv) (arm64-udiv (at ins 1) (at ins 2) (at ins 3))
-            (op = 'urem) (arm64-urem (at ins 1) (at ins 2) (at ins 3) (at ins 4))
-            (op = 'ldx)  (arm64-ldx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'stx)  (arm64-stx  (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'ldxb) (arm64-ldxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (ldxb d base index scale disp) -- zero-extend byte load
-            (op = 'stxb) (arm64-stxb (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))   ; (stxb base index scale disp s) -- low-byte store
-            (op = 'leax) (arm64-leax (at ins 1) (at ins 2) (at ins 3) (at ins 4) (at ins 5))
-            (op = 'call) (arm64-call (at ins 1))
-            (op = 'la)   (arm64-la   (at ins 1) (at ins 2))
-            (op = 'lar)  (arm64-lar  (at ins 1) (at ins 2))
-            (op = 'raw)  (at ins 1)                                   ; splice pre-encoded bytes verbatim (no fixups)
-            (op = 'movsd)    (arm64-fmov   (at ins 1) (at ins 2))                 ; -- scalar-double FP --
-            (member? op '(addsd subsd mulsd divsd)) (arm64-fp3op op (at ins 1) (at ins 2))
-            (op = 'ucomisd)  (arm64-fcmp   (at ins 1) (at ins 2))
-            (op = 'cvtsi2sd) (arm64-scvtf  (at ins 1) (at ins 2))
-            (op = 'cvttsd2si) (arm64-fcvtzs (at ins 1) (at ins 2))
-            (op = 'movqxr)   (arm64-fmovxr (at ins 1) (at ins 2))
-            (op = 'movqrx)   (arm64-fmovrx (at ins 1) (at ins 2))
-            (op = 'stsd)     (arm64-fst    (at ins 1) (at ins 2) (at ins 3))      ; (stsd base disp f)
-            (op = 'ldsd)     (arm64-fld    (at ins 1) (at ins 2) (at ins 3))      ; (ldsd f base disp)
-            (op = 'cvtss2sd) (arm64-fcvt-widen  (at ins 1) (at ins 2))           ; (cvtss2sd d s)  single -> double
-            (op = 'cvtsd2ss) (arm64-fcvt-narrow (at ins 1) (at ins 2))           ; (cvtsd2ss d s)  double -> single
-            (op = 'stss)     (arm64-fsts   (at ins 1) (at ins 2) (at ins 3))      ; (stss base disp f)  4-byte single
-            (op = 'ldss)     (arm64-flds   (at ins 1) (at ins 2) (at ins 3))      ; (ldss f base disp)  4-byte single
-            (op = 'xorpd)    (arm64-xorpd  (at ins 1) (at ins 2))                 ; zero a double (d==s)
-            (op = 'ret)  (le32 0xD65F03C0)                     ; ret x30
-            (op = 'sys)  (le32 0xD4000001)                     ; svc #0
-            (op = 'nop)  (le32 0xD503201F)
-            (op = 'trap) (le32 0xD4200000)                     ; brk #0
-            (two? (peep arm64-alu op ())) (arm64-aluop op (at ins 1) (at ins 2) (at ins 3))
-            (scare 'bad-op op)))
+   ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
+   ;; nullaries their words outright, `raw` the identity. the alu group pins off its rows.
+   arm64-emitters (tabof
+        `(('li >< arm64-li) ('mov >< arm64-mov) ('cmp >< arm64-cmp) ('imul >< arm64-imul)
+           ('ld >< arm64-ld) ('st >< arm64-st)
+           ('ld1 >< arm64-ld1) ('ld2 >< arm64-ld2) ('ld4 >< arm64-ld4)
+           ('st1 >< arm64-st1) ('st2 >< arm64-st2) ('st4 >< arm64-st4)
+           ('ldu1 >< arm64-ldu1) ('ldu2 >< arm64-ldu2) ('ldu4 >< arm64-ldu4)
+           ('sx1 >< (arm64-sx 1)) ('sx2 >< (arm64-sx 2)) ('sx4 >< (arm64-sx 4))
+           ('zx1 >< (arm64-zx 1)) ('zx2 >< (arm64-zx 2)) ('zx4 >< (arm64-zx 4))
+           ('shlv >< (arm64-shiftv 'shlv)) ('shrv >< (arm64-shiftv 'shrv)) ('sarv >< (arm64-shiftv 'sarv))
+           ('shl >< (arm64-shift 'shl)) ('shr >< (arm64-shift 'shr)) ('sar >< (arm64-shift 'sar))
+           ('rol >< (arm64-shift 'rol)) ('ror >< (arm64-shift 'ror))
+           ('lea >< arm64-lea) ('lean >< arm64-lea)          ; a consumed lea (x64 tells them apart for the escape gate)
+           ('push >< arm64-push) ('pop >< arm64-pop)
+           ('neg >< arm64-neg) ('not >< arm64-not) ('inc >< arm64-inc) ('dec >< arm64-dec)
+           ('jmp >< arm64-jmp) ('br >< arm64-br) ('jmpr >< arm64-jmpr) ('callr >< arm64-callr)
+           ('mulo >< arm64-mulo) ('set >< arm64-set) ('test >< arm64-test)
+           ('div >< arm64-div) ('rem >< arm64-rem) ('udiv >< arm64-udiv) ('urem >< arm64-urem)
+           ('ldx >< arm64-ldx) ('stx >< arm64-stx) ('leax >< arm64-leax)
+           ('ldxb >< arm64-ldxb) ('stxb >< arm64-stxb)
+           ('call >< arm64-call) ('la >< arm64-la) ('lar >< arm64-lar)
+           ('movsd >< arm64-fmov)                            ; -- scalar-double FP --
+           ('addsd >< (arm64-fp3op 'addsd)) ('subsd >< (arm64-fp3op 'subsd))
+           ('mulsd >< (arm64-fp3op 'mulsd)) ('divsd >< (arm64-fp3op 'divsd))
+           ('ucomisd >< arm64-fcmp) ('cvtsi2sd >< arm64-scvtf) ('cvttsd2si >< arm64-fcvtzs)
+           ('movqxr >< arm64-fmovxr) ('movqrx >< arm64-fmovrx)
+           ('stsd >< arm64-fst) ('ldsd >< arm64-fld) ('stss >< arm64-fsts) ('ldss >< arm64-flds)
+           ('cvtss2sd >< arm64-fcvt-widen) ('cvtsd2ss >< arm64-fcvt-narrow)
+           ('xorpd >< arm64-xorpd)                           ; zero a double (d==s)
+           ('raw >< 1)
+           ('ret >< (le32 0xD65F03C0))                       ; ret x30
+           ('sys >< (le32 0xD4000001))                       ; svc #0
+           ('nop >< (le32 0xD503201F))
+           ('trap >< (le32 0xD4200000))))                    ; brk #0
+   _ (foldl (\ _ p (pin arm64-emitters <p (arm64-aluop <p))) 0 arm64-alu-rows)
+   (arm64-lower ins) (: f lower-via (? (lit? f) (f arm64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation: the offset is (target - site)/4, ORed into the base word `aux`.
    (arm64-patch kind target site width aux)
