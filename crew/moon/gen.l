@@ -4239,11 +4239,13 @@
        ; (<=6), doubles from f0..f7 (<=8), SEPARATE counters. an OVERFLOW param
        ; already sits on the caller stack -- addressed at rbp+16+8k, no store.
        ; hp is the HOME POLICY over the eligible gp params (x64/a64 regens only):
-       ; () spills every one to its slot; 'ride homes in a register (or rides
-       ; the arrival, the leaf lane); 'shadow homes AND takes a frame slot (the
-       ; spill shadow in g 'homes, the non-leaf lane). under a policy the exotic
-       ; composites (mixed/int-pair/xmm-exhausted 16B) answer 'bad -- the regen
-       ; deopts to ir1 rather than growing a memory lane the gate never counted.
+       ; () spills every one to its slot; ('ride ridelist) homes in a register
+       ; (or rides the arrival, the leaf lane -- the list says which); 'shadow
+       ; homes AND takes a frame slot (the spill shadow in g 'homes, the
+       ; non-leaf lane). under a policy the exotic composites (mixed/int-pair/
+       ; xmm-exhausted 16B) answer 'bad -- the regen deopts to ir1 rather than
+       ; growing a memory lane the gate never counted.
+       (pol? h9) (|| (two? h9) (id? h9 'shadow))     ; a live policy (only the ride one is a list)
        (spill hp ps gpi xmmi ovi env acc)
         (? (! (two? ps)) `(acc env)
            (: p <ps pty <>p
@@ -4268,7 +4270,7 @@
                         (: ov8 (& (ovi + 7) -8)
                            (spill hp >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (stru? pty) (two? (aeb2 g pty)))   ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
-                  (? (&& hp (! (sse2? g pty))) 'bad     ; a policy homes gp scalars only -- mixed/int-pair 16B deopts
+                  (? (&& (pol? hp) (! (sse2? g pty))) 'bad   ; a policy homes gp scalars only -- mixed/int-pair 16B deopts
                      (: cls (aeb2 g pty) c0 <cls c1 <>cls
                         ; the register FILE per eightbyte -- 'g gp / 'x xmm. SysV (x64) picks
                         ; by the eightbyte's class; AAPCS64 (arm64) sends a non-HFA composite
@@ -4279,7 +4281,7 @@
                         gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
                         xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
                         (? (|| ((ngp g) < (gpi + gpn)) (8 < (xmmi + xmn)))   ; not enough regs -> the WHOLE aggregate goes to memory (2 stack eightbytes)
-                            (? hp 'bad                  ; under a policy: deopt, not a fresh memory lane
+                            (? (pol? hp) 'bad           ; under a policy: deopt, not a fresh memory lane
                                (t32? g) 'bad            ; t32 stack HFA params (9+ doubles): deferred, refuse LOUD
                                (spill hp >ps gpi xmmi (ovi + 2) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
                             (: off (nslot g 16)
@@ -4328,12 +4330,12 @@
                            (spill hp >ps 4 xmmi (ov8 + 8) (link `(<p ((ovb g) + ov8) pty) env) acc))))
                  (&& (t32? g) (flo? pty)) 'bad          ; a t32 double param past d7: the 4-byte slot can't carry it -- refuse LOUD
                  (&& (! (flo? pty)) (gpi < (ngp g)))
-                  (? (&& hp (&& (homable? pty) (gpi < (nhome g))))
-                      (? (id? hp 'ride)                 ; the leaf lane: home in a register, moving from the
+                  (? (&& (pol? hp) (&& (homable? pty) (gpi < (nhome g))))
+                      (? (two? hp)                      ; the leaf lane: home in a register, moving from the
                          (: inc (nthr (argr g) gpi)     ; incoming arg reg if it differs -- but a rideable param
                             ; rides its ARRIVAL register: no home reserved, no entry
                             ; mov, its home register freed to the pool
-                            home (? (member? gpi (peep g 'ride ())) inc (homereg gpi))
+                            home (? (member? gpi <>hp) inc (homereg gpi))
                             mv (? (home = inc) () `(`('mov home inc)))
                             (spill hp >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
                                    (acc + mv)))
@@ -4609,7 +4611,6 @@
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
        ride (? (|| vararg (|| (peep g 'fesc ()) (hascall? ir1))) () (rideset ir1 params 0 ()))
-       _ (pin g 'ride ride)                          ; the 'ride policy reads it: a rideable param binds to its arrival
        hpool (: rh (map (\ k (homereg k)) ride)      ; the freed homes rejoin the pool for locals
                 uh (filter (\ q (! (member? q rh))) (uhomes params 0 ()))
                 (filter (\ q (! (member? q uh))) tpool))
@@ -4636,7 +4637,7 @@
            (? (bad? ir2) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
        irf (? (bad? ir1) 'bad
           (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
-           (regen 'ride)
+           (regen `('ride ride))
           ; calls remain: home + spill, where reads beat the wraps -- FN-WIDE,
           ; all homable params or none. per-param verdicts were built and
           ; measured BOTH ways 2026-07-16 and lost interleaved: pruning a
