@@ -12,12 +12,15 @@
 ; (a maximal run) -- love has no regex. crew/cook/cook.l grew this set (kept private to dodge the old "leak
 ; collides with egg globals" worry -- now only `sat`/$ actually collide, and none of these do); it and
 ; crew/sat/dimacs.l now share THIS copy. `parse` requires the whole input consumed; `runp` is the lenient
-; twin (keeps the payload, ignores trailing slack).
+; twin (keeps the payload, ignores trailing slack). An EMPTY payload is the UNIT, never the 0 nil-tail
+; fossil: `cat` propagates whatever tail it is handed, so a single 0 from eps/opt/skip/many rides all the
+; way out and `=` tells the two terminators apart -- a payload that should equal a map-built list would
+; not. The unit is the only nil that leaves here.
 ; the module span opens here: the trailer at the bottom sweeps the combinators into
 ; the `parse` book and the overlay internals into `overlay` (measured, never listed).
 (: post-mark (names ()))
 
-(: eps (\ s y n (y s 0))
+(: eps (\ s y n (y s ()))
    (lit l) (\ s y n
       (? (&& (<= (tally l) (tally s)) (= l (snip s 0 (tally l))))
          (y (snip s (tally l) (tally s)) `(l)) (n s)))
@@ -30,12 +33,12 @@
    (alt a b) (\ s y n (a s y (\ _ (b s y n))))
    (seq a b) (\ s y n (a s (\ s1 p1 (b s1 (\ s2 p2 (y s2 (cat p1 p2))) n)) n))
    (seqs l)  (foldr seq eps l)
-   (opt a)   (\ s y n (a s y (\ _ (y s 0))))
-   (skip a)  (\ s y n (a s (\ s1 _ (y s1 0)) n))
+   (opt a)   (\ s y n (a s y (\ _ (y s ()))))
+   (skip a)  (\ s y n (a s (\ s1 _ (y s1 ())) n))
    (pmap f a) (\ s y n (a s (\ s1 x (y s1 (f x))) n))
    (many a)  (\ s y n
       (a s (\ s1 p1 (many a s1 (\ s2 p2 (y s2 (cat p1 p2))) (\ _ (y s1 p1))))
-           (\ _ (y s 0))))
+           (\ _ (y s ()))))
    (parse p s) (p s (\ r x (? (= 0 (tally r)) x ())) (\ _ ()))     ; STRICT: whole input must parse
    (runp p s)  (p s (\ r x x) (\ _ ())))                           ; LENIENT: keep the payload, ignore trailing slack
 
