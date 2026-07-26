@@ -15,7 +15,7 @@
 ; run STANDALONE, base-ev/jitgroupir/.. are unbound -> ()=zero point -> (base-ev '(..))=const-1=1 SILENTLY
 ; skips every block, yet the final top-level "ok" still prints (a false pass -- the const-1 trap). assert
 ; the harness names are bound so a wrong invocation SCARES `;; assert (lit? base-ev)` instead.
-; the assembler and the glaze live in MODULES now (the registry via crew/holo/seal.l;
+; the assembler and the glaze live in MODULES now (the registry via holo's (leave ());
 ; the glaze book via love/glaze/export.l): this stream cat-loads post-boot, so nothing
 ; folded for it -- bind every internal it drives through the accessors, bare-global
 ; reads both (bcat stands in for the glaze's private byte-concat helper).

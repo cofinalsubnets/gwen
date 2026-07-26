@@ -3,7 +3,7 @@
 ; BOTH compilers, like prel/ev. Its whole surface is ONE public name: `holo`, a book --
 ; reached through the module registry: (from 'holo) answers the opaque accessor, so
 ; (A 'assemble) is the call and the internals live one probe away (holo.l opens a named
-; scope, seal.l closes it, leave registers: namespacing, not hiding).
+; scope, a later (leave ()) closes it and registers: namespacing, not hiding).
 ; NOT in the kernel/wasm frontends (a host-only bake, like the parser combinators), so
 ; guard on its presence: (from 'holo) answers () where it was never baked -- no
 ; helpless-read warning. and the HOST bakes its NATIVE backend only (mooncc.image carries

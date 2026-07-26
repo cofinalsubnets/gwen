@@ -278,9 +278,7 @@ int main(void) {
     // crank/pushed/cur_set refs stay symbolic (unbound here); the device
     // defn's them post-wake and the book resolves them live.
 #include "rune.h"
-    " "
-#include "runeseal.h"
-    " "
+    " "                                                //   (rune.l seals itself at its foot)
 #include "cas.h"
 #else
 #include "bao.h"

@@ -20,9 +20,10 @@
 ; so reduction folds top powers down with no division anywhere.
 
 ; the module scope opens here: every binding below lands in this layer,
-; mutually visible by bare name; crew/rune/seal.l closes it, which REGISTERS
-; it as the module `rune` -- a consumer either (use 'rune) and reads bare,
-; or reaches one member through the accessor: (from 'rune 'deriv).
+; mutually visible by bare name; the (leave ()) at the foot of this file
+; closes it, which REGISTERS it as the module `rune` -- a consumer either
+; (use 'rune) and reads bare, or reaches one member through the accessor:
+; (from 'rune 'deriv).
 (enter 'rune)
 
 ; --- the polynomial ring ---------------------------------------------------
@@ -1060,3 +1061,6 @@
                                  (vshift (vscale (vlast v) xd) (tally v - (tally xd + 1))))))
    (kmul xd a b) (vrem xd (vmul a b))
    (knum d c) (vpad `((q c 1)) d))
+
+; the module scope closes here -- the layer is REGISTERED as `rune`.
+(leave ())

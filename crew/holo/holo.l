@@ -47,7 +47,7 @@
 ; file is what makes the IR neutral: each backend maps r0..r14/sp onto its own encoding.
 
 ; the module scope opens here: everything crew/holo/{holo,x64,arm64,thumb2}.l binds lands in this
-; layer, mutually visible by bare name; crew/holo/seal.l closes the layer, which REGISTERS it as
+; layer, mutually visible by bare name; a (leave ()) after the last backend closes the layer, which REGISTERS it as
 ; the module `holo` -- a consumer either (use 'holo) and reads bare, or probes one member through
 ; the accessor: (from 'holo 'assemble). a test cat-stream simply never seals: the stream rides the
 ; open layer and reads everything bare.

@@ -65,7 +65,7 @@ $(R)/$(o)/love.img: $(R)/$(o)/baker.elf
 # (-D BAKER_RUNE), and a qemu wake-check (waker-pd) BEFORE the pdx ships it.
 imgpd: $(R)/$(o)/love-pd.img
 
-pd_lib_h = $(lib_h) out/lib/rune.h out/lib/runeseal.h
+pd_lib_h = $(lib_h) out/lib/rune.h
 
 $(R)/out/playdate/cas.h:
 	@$(MAKE) -C $(R)/port/playdate ../../out/playdate/cas.h
