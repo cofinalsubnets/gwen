@@ -6,9 +6,9 @@
 (: iop (nom 'iop)
    apx (nom 'apx))
 
-; gone: avb's not-in-book sentinel (the `(peep book x gone)` default). A TOP-LEVEL GLOBAL
-; for the SAME reason as iop/apx -- it is folded into avb as a kim constant at compile time
-; (it lives in the book when avb compiles), then mopped. As a :- block LOCAL it failed
+; gone: avw's not-in-book sentinel (the `(peep book x gone)` default). A TOP-LEVEL GLOBAL
+; for the SAME reason as iop/apx -- it is folded into avw as a kim constant at compile time
+; (it lives in the book when avw compiles), then mopped. As a :- block LOCAL it failed
 ; capture in the 2-sat egg (ev1 mis-resolved the ref -> ev2's avb did `lvm_index gone`,
 ; missing the book at runtime -> () degrade: a global genuinely bound to () then mis-analyzed
 ; as a free import). A global resolves identically in every bootstrap generation.
@@ -92,7 +92,7 @@
   ;   kap n    -- an n-ary apply (peeps the continuation for lvm_ret -> a tail call)
   ;   aco      -- a cond (below);  k0/k0s -- thread terminators (start a thread)
   ; fuse/spa/spq are THIS backend's peepholes (fuse an operand into a following ap/tap;
-  ; zero-operand opcodes for the hot arg/quote values). ava/avb resolve a variable to one
+  ; zero-operand opcodes for the hot arg/quote values). ava (avw, the scope walker) resolves a variable to one
   ; of karg (a local, at its [imps args] frame slot) / kim (a global constant) / em2 lvm_index.
   ; This is the THREADED (bytecode) backend -- the portable default that every target runs
   ; (host, kernel, wasm, aarch64, and the little ones: playdate, teensy). A NATIVE backend
@@ -443,24 +443,22 @@
                    q (apl2r c >(cof lfd))
                    _ (pop c 'stk)
                  (p * q))
-  ; variable expression analyzer
-  (ava c x)
-   (: lfd (assoc x (c 'lam))
-    (? (two? lfd) (lz c lfd c)
-       (: s (c 'stk)
-          (stki d) (lidx x (d 'imp + d 'arg))
-          (q i j m) (karg (i + stki c) j m)
-        (?- (avb c (c 'par) x)
-         (member? x s) (karg (lidx x s))
-         (stki c >= 0) (q (tally (c 'stk)))))))
-
-  (avb c d x)
+  ; variable expression analyzer -- ONE walker: resolve x against scope d, emitting into c's
+  ; frame; d starts at c (ava, the seed) and climbs 'par. three lanes per scope: a letrec
+  ; lambda sibling ('lam) -> lz; the let stack / the [imps args] frame -> karg; else the
+  ; parent. a hit in an ENCLOSING scope (home false) also pushes x onto c's imports -- the
+  ; capture -- and that push is the memo: the next reference finds x in c's OWN frame and
+  ; resolves local, so an import lands once per name. the home scope pushes nothing.
+  (ava c x) (avw c c x)
+  (shadowed? c d x) (: far (d 'far)
+   (book? far && 0 <= peep far x -1 && !(member? x ((d 'par) 'stk))))
+  (avw c d x)
    (? (nil? d) ; outside all lexical scopes?
        (: y (gv x gone) ; check global scope (the layered walk)
         (? !(id? y gone) (kim y) ; if it's there use that
          (: _ (? (c 'par) (push c 'imp x))
           (em2 lvm_index x))))
-    (: lfd (assoc x (d 'lam))
+    (: lfd (assoc x (d 'lam)) home (id? d c)
      (? (two? lfd) (lz c lfd d)
         ; the shadow guard: d's let BINDS x ('far keys every binding name and is
         ; pinned before the closures phase) but x is neither in 'lam yet (a
@@ -471,18 +469,18 @@
         ; 'lam. escaping here applied a same-named outer sibling's imports
         ; MID-weave, past the fixcaps fixpoint, so every self-site of the
         ; enclosing lambda under-applied -- the recursion answered a truthy
-        ; partial, silently.
-        (: far (d 'far)
-         (? (book? far && 0 <= peep far x -1 && !(member? x ((d 'par) 'stk)))
-            (: _ (? (c 'par) (push c 'imp x)) (em2 lvm_index x))
-            (: s (d 'stk)
-               (stki d) (lidx x (d 'imp + d 'arg))
-               (q i j m) (karg (i + stki c) j m)
-             (?- (avb c (d 'par) x)
-              (member? x s) (: _ (? (c 'par) (push c 'imp x))
-                             (q (tally (c 'stk))))
-              (stki d >= 0) (: _ (? (c 'par) (push c 'imp x))
-                               (q (tally (c 'stk)))))))))))
+        ; partial, silently. (!home keeps the 'far read off the hot local
+        ; path; a lambda scope carries no 'far anyway, so home never shadows.)
+        (!home && shadowed? c d x)
+          (: _ (? (c 'par) (push c 'imp x)) (em2 lvm_index x))
+        (: s (d 'stk)
+           (stki d2) (lidx x (d2 'imp + d2 'arg))
+           (q i j m) (karg (i + stki c) j m)
+         (?- (avw c (d 'par) x)
+          (member? x s) (? home (karg (lidx x s))
+                           (: _ (? (c 'par) (push c 'imp x)) (q (tally (c 'stk)))))
+          (stki d >= 0) (? home (q (tally (c 'stk)))
+                           (: _ (? (c 'par) (push c 'imp x)) (q (tally (c 'stk))))))))))
   ; lambda analyzer
   (ala c imp exp) (:
    d (sco c (init exp) imp)

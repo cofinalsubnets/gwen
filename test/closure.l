@@ -112,7 +112,7 @@
 ; yet pinned -- and applied the sibling's import row MID-weave, past the fixcaps
 ; fixpoint, so every recursive (zap x) inside zap's own body under-applied: a
 ; truthy PARTIAL, the body never ran, silently (rm -r walked a tree and deleted
-; nothing). avb's shadow guard ('far keys every binding name) now stops the
+; nothing). avw's shadow guard ('far keys every binding name) now stops the
 ; escape, and weave scares 'imports-grew if a frozen import row ever grows again.
 (: rq (cap (L 1))
    (zap q)
