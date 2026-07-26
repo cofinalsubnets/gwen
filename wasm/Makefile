@@ -40,7 +40,9 @@ all: love.js
 ../out/lib/prel.h: ../love/prel.l
 ../out/lib/ev.h: ../love/ev.l
 ../out/lib/uu.h: ../love/uu.l
-../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/love_version.h:
+../out/lib/q.h: ../love/q.l
+../out/lib/kanren.h: ../love/kanren.l
+../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/q.h ../out/lib/kanren.h ../out/lib/love_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
 # love.o bakes the version string (love_version.h, via love.c's __has_include), so
@@ -67,7 +69,7 @@ $(o)/love.o: ../love.c $(g_h) $(o)/love_version.h
 love.js: $(objs)
 	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
-$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h $(g_h)
+$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/q.h ../out/lib/kanren.h $(g_h)
 	@mkdir -p $(dir $@)
 	$(emcc) $(CFLAGS) -c $< -o $@
 

@@ -480,8 +480,10 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "holo0.h"                                     //   and the uu kernel (love/uu.l, sweep at its tail), baked into the
 #include "x640.h"                                     //   bootstrap so the corpus can test them under c0 AND the self-hosted
 #include "arm640.h"                                   //   ev. Globals persist across the egg warm below, so one eval here
-#include "seal0.h"                                    //   serves both corpus passes. seal.l closes holo.l's scope layer as
+    "(leave ())"                                     //   serves both corpus passes. the (leave ()) closes holo.l's scope layer as
 #include "uu0.h"                                       //   the `holo` book.
+#include "q0.h"                                        // the optional library layers (love/q.l, love/kanren.l) -- not part of
+#include "kanren0.h"                                   //   prel, but the corpus asserts on both, so love0 carries them too
   );
   g = ai_evals_(g, "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))");   // string -> charlist, for the runner
   g = ai_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
@@ -558,12 +560,15 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "prel.h"
 #include "ev.h"
     "))"
+#include "q.h"                                          // the OPTIONAL library layers, each its own love/*.l so prel stays the
+#include "kanren.h"                                     //   language: q (rationals) then kanren (unification) -- kanren BEFORE
+                                                        //   post, whose overlay half reads unify/ufail?/var out of it
 #include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
 #include "uu.h"                                          // uu's NbE kernel (love/uu.l, sweep at its tail) -- one global name, the
                                                          //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
 #include "holo.h"                                         // the crew/holo/ assembler -- a post-egg language SERVICE, built as a
 #if defined(__x86_64__)                                  //   scope MODULE: holo.l opens a named layer ((enter 'holo)), the core +
-#include "x64.h"                                         //   the NATIVE backend load into it, and seal.l's (leave ()) REGISTERS
+#include "x64.h"                                         //   the NATIVE backend load into it, and the (leave ()) below REGISTERS
 #elif defined(__aarch64__)                               //   the layer as the module `holo` -- orth stays clean; (use 'holo)
 #include "arm64.h"                                       //   splices it, (from 'holo 'assemble) probes it. native-ONLY here: the
 #endif                                                   //   glaze emits for the running arch, mooncc.image carries ALL backends
@@ -571,7 +576,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
                                                          //   at runtime ((enter ()) (use 'holo) <backend.l> (leave ()) -- the
                                                          //   test_glaze/test_raw_arm64 recipes), and love0 keeps every backend so
                                                          //   the corpus's cross-arch asserts still run under both its compilers.
-#include "seal.h"
+    "(leave ())"                                         // ..the seal: one form, so it rides as a literal, not a file
 #include "bao.h"
   );
   // welow (church+HOF lowering, book['welow]) is a USER-code pass. A JIT must NOT lower its own

@@ -219,6 +219,16 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; indexed jump picks a lane that widens only as far as the operands need (array, complex, bignum,
 ; float, ...). the VM is tail-threaded over a two-space copying collector; out-of-pool constants are
 ; immortal. the love/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/love), the
-; freestanding kernel (x86_64/aarch64), and wasm. build codegen lives in love under tools/; the C is
-; freestanding, -Wall -Wextra -Werror.
+; freestanding kernel (x86_64/aarch64), and wasm. PREL IS THE LANGUAGE AND STAYS MINIMAL -- a library
+; is its OWN love/*.l and each frontend includes the ones it wants. drop a .l in love/ and mk/lib.mk
+; lcats it to out/lib/<name>.h automatically -- but the BOOT STRING is hand-assembled per frontend,
+; and there are FIVE sites, not three: host/main.c (twice -- the egg lane, and love0's own with the
+; sed-wrapped <name>0.h twins, which need a gl0_h entry), wasm/host.c (its OWN boot string, easy to
+; miss -- the corpus caught it), port/inle/kmain.c, port/playdate/main.c. Each wants a header dep too
+; (host/build.mk, wasm/Makefile, port/inle/kernel.mk, port/playdate/Makefile). so q (rationals) and
+; kanren (unification) ride the host, love0, wasm, the K_TEST kernel and the playdate rune workbench,
+; while a shipped kernel carries neither. ⚠ a post-egg layer cannot add an
+; OPERATOR: `operators` is mopped at birth, so the grammar closes when the egg hatches (any all-punct
+; head is infix-dyadic at house grip anyway -- the table holds only the exceptions). build codegen
+; lives in love under tools/; the C is freestanding, -Wall -Wextra -Werror.
 ```

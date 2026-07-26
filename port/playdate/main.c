@@ -189,10 +189,12 @@ void love_init(void) {
     " "
 #include "ev.h"
     ai_egg_post
+#include "q.h"                                         // the optional library layers rune stands on: q is its coefficient
+    " "                                                //   field, kanren its matcher's unifier -- both out of prel now, so
+#include "kanren.h"                                    //   this frontend names what it needs
+    " "
 #include "rune.h"
-    " "
-#include "runeseal.h"
-    " "
+    " "                                                //   (rune.l seals itself at its foot)
 #include "cas.h"
     "0)");
   pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");

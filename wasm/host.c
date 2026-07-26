@@ -20,6 +20,8 @@ static const char boot_ai[] = "("
 #include "ev.h"
   ai_egg_post
 #include "uu.h"   // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files ride the `uu` book here too
+#include "q.h"    // the optional library layers (love/q.l, love/kanren.l) -- out of prel, so this
+#include "kanren.h"  //   frontend names them: the corpus asserts on both
 ;
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the

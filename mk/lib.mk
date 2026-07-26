@@ -18,8 +18,8 @@ lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # both its compilers. Both .h flavors are still GENERATED for both backends (love0
 # needs them; the host simply includes one). asm_h = lcat headers (host love);
 # asm0_h = sed-wrapped raw source (love0, the bootstrap -- can't lcat its own sources).
-holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/seal.h
-asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h out/lib/seal0.h
+holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h
+asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h
 # the glaze (native JIT, love/glaze/{emit,auto}.l): baked to raw-text headers (sed_lit,
 # like asm0 -- no lcat reader round-trip). Evaled ONLY before a --bake (x86-gated
 # in main.c), so a normal boot never pays the ~810 ms; the baked snapshot then carries
@@ -33,7 +33,7 @@ glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h out/lib/hook.h
 # are baked in so love0 self-tests both compilers in one run (see main.c). The final
 # l uses the canonicalized lcat headers from the rule below instead.
 sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/tests0.h $(asm0_h)
+gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/q0.h out/lib/kanren0.h out/lib/tests0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 # lcat a .l source into its C-string header, ATOMICALLY: generate to a temp, require it
@@ -55,14 +55,10 @@ out/lib/x64.h: crew/holo/x64.l tools/lcat.l
 	$(lcat_h)
 out/lib/arm64.h: crew/holo/arm64.l tools/lcat.l
 	$(lcat_h)
-out/lib/seal.h: crew/holo/seal.l tools/lcat.l
-	$(lcat_h)
 # crew/rune/ the CAS rides the same lcat pipeline for device frontends that
-# bake it behind the egg (port/playdate's workbench). runeseal.h, not seal.h --
-# that name is holo's.
+# bake it behind the egg (port/playdate's workbench). rune.l seals itself at its
+# foot, so there is no second header for the module boundary.
 out/lib/rune.h: crew/rune/rune.l tools/lcat.l
-	$(lcat_h)
-out/lib/runeseal.h: crew/rune/seal.l tools/lcat.l
 	$(lcat_h)
 # love0's sed-wrapped raw source of the same three (no interpreter -- the l reader
 # strips ; comments at read time), baked into the bootstrap so the corpus can test
@@ -76,10 +72,6 @@ out/lib/x640.h: crew/holo/x64.l
 	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/arm640.h: crew/holo/arm64.l
-	@mkdir -p out/lib
-	@echo AI	$@
-	@$(sed_lit) $< > $@
-out/lib/seal0.h: crew/holo/seal.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@
@@ -143,4 +135,4 @@ out/lib/love_version.h: force_version
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running love0, so re-lay
 # them whenever love0 changes. (The old "edit a .h => make clean or love0 hangs" gum is
 # cleaned: love0's own objects already depend on $(love_h), so love0 can't go stale.)
-$(lib_h) $(holo_h) out/lib/rune.h out/lib/runeseal.h: $(love0)
+$(lib_h) $(holo_h) out/lib/rune.h: $(love0)
