@@ -53,11 +53,19 @@
    ; would be quadratic across chunks; `(string buf)` is how a cask becomes one (`snip`
    ; does not reach into a cask, and swig always fills from offset 0, so a partial read
    ; cannot be resumed into the same buffer).
+   ; the buffer is sized to the FILE, not to a round number. a fixed 64K cask means
+   ; allocating and `string`-copying 64K to serve a 2K stylesheet -- 30x the copying the
+   ; file needs, and it measured as two thirds of the read: 500 reads of papel.css went
+   ; 33ms -> 10ms, of moon.html 90ms -> 30ms, byte for byte the same. the loop still
+   ; handles a short read (the buffer is REUSED, not resumed -- each chunk is copied out
+   ; before the next swig), so a file that grows under us is read whole anyway.
    swigp        (member? 'swig (names ()))       ; ⚠ pinned BEFORE gulp reads it
-   (gulp f)     (: q (open f "r")
+   (gulp f)     (: sz (fsize f)
+                   n (? sz sz 0)
+                   q (open f "r")
                    (? (! q) ()
                       (! swigp) (: s (slurp q) _ (close q) s)          ; no cb.c: the slow lane still works
-                      (: j (jug 0) buf (cask 65536)
+                      (: j (jug 0) buf (cask (? (0 < n) n 4096))
                          (go _) (: k (swig q buf)
                                    (? (0 < k) (: _ (say j (snip (string buf) 0 k)) (go ()))
                                       (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
@@ -66,13 +74,32 @@
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
    ; "" and () are both nothing. `=` is the one thing that tells them apart.
    (got? x)     (! (x = ()))
-   ; read a \n-terminated line off a port, dropping a trailing \r. () at EOF, so the
-   ; caller can tell "a blank line" (the header terminator) from "the peer went away".
-   (rdline p)   ((: (g acc) (: ch (see p)
-                                (? (ch = -1) (? (0 < tally acc) acc ())
-                                   (ch = 10) (? (&& (0 < tally acc) ((acc (tally acc - 1)) = 13))
-                                                (snip acc 0 (tally acc - 1)) acc)
-                                   (g (acc + ch))))) "")
+   (sub? s t)   (: n (tally s) m (tally t)
+                   ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+   ; the whole request head in ONE gulp, the same way a body is read. reading it a
+   ; character at a time was the single biggest thing left between kiosko and darkhttpd:
+   ; ~51us a request, because `(acc + ch)` reallocates the string on EVERY byte, so a
+   ; line is quadratic in its own length and a request is ~140 allocations. darkhttpd
+   ; does one recv() into a stack buffer and scans it (darkhttpd.c poll_recv_request).
+   ;
+   ; the terminator is a blank line -- \r\n\r\n, and \n\n too, because a client that
+   ; omits the carriage returns is still asking a question and would otherwise hang here
+   ; until it gave up. the CAP is deliberate: without it a peer that never sends a blank
+   ; line makes us read until it feels like stopping.
+   reqcap       32768
+   (reqblk c)   (: buf (cask 2048)
+                   (go acc)
+                   (? (|| (sub? acc "\r\n\r\n") (sub? acc "\n\n")) acc
+                      (reqcap < tally acc) acc
+                      (: k (swig c buf)
+                         (? (0 < k) (go (acc + (snip (string buf) 0 k)))
+                            (: ch (see c) (? (ch = -1) acc (go (acc + ch)))))))
+                   (go ""))
+   ; the request line: up to the first newline, without its carriage return.
+   (line1 s)    (: n (tally s)
+                   (go i) (? (&& (i < n) (! ((s i) = 10))) (go (i + 1)) i)
+                   e (go 0)
+                   (snip s 0 (? (&& (0 < e) ((s (e - 1)) = 13)) (e - 1) e)))
    ; the first space-separated word of s, and everything after it
    (word1 s)    (: n (tally s)
                    (go i) (? (&& (i < n) (! ((s i) = 32))) (go (i + 1)) i)
@@ -162,14 +189,14 @@
       (reply c 200 "OK" "text/html; charset=utf-8" body head?)))
 
 ; --- serving one request --------------------------------------------------------------
-; the whole method: read the line, guard it, find the file, answer. the header block is
-; read and dropped -- we need nothing from it, but draining it lets the peer finish its
-; write before we close, which is the difference between a clean close and a reset.
-(: (drain c) ((: (g k) (: l (rdline c) (? (! (got? l)) k (0 = tally l) k (&& (k < 100) (g (k + 1)))))) 0)
-   (serve1 root c)
-   (: line (rdline c)
-      _ (drain c)
-      (? (! (got? line)) 0                                    ; the peer went away
+; the whole method: take the request head in one gulp, read its first line, guard it, find
+; the file, answer. the headers are read and dropped -- we need nothing from any of them,
+; but consuming them lets the peer finish its write before we close, which is the
+; difference between a clean close and a reset.
+(: (serve1 root c)
+   (: blk (reqblk c)
+      line (line1 blk)
+      (? (0 = tally blk) 0                                    ; the peer went away
          (: meth (word1 line)
             raw (word1 (after1 line))
             head? (meth = "HEAD")
@@ -200,20 +227,29 @@
                      (: _ (say err ("kiosko: " + show <l + " " + (<>l) + " " + (nth l 2)))
                         (put err 10)))
    ; `await` parks THIS task on the listener until a client is pending; `accept` then
-   ; returns at once, the session is spun as its own task, and we re-park. the session
-   ; tasks are deliberate orphans -- a server runs forever, so there is no one to catch them.
+   ; returns at once, the session is spun as its own task, and we re-park.
    ;
+   ; and the finished sessions are REAPED. a session task that nobody catches is not free:
+   ; it stays on the scheduler's list, which the scheduler then walks on every switch, so a
+   ; server that never reaps gets steadily slower at the one thing it does -- measured, 4581
+   ; req/s falling to 3652 over 2400 requests, and still falling. `catch` alone cannot be the
+   ; answer (it BLOCKS, and blocking the accept loop on one client would serialise the
+   ; server); `back?` asks whether a task has finished without waiting, so each pass through
+   ; the loop collects the ones that are done and keeps the ones that are not.
+   (reap ps)  (filter (\ p (? (back? p) (: _ (catch p) 0) 1)) ps)
    ; `before` is a thunk run once per accepted client, before the request is served, or ()
    ; for none. it is how a generator turns this into a DEV SERVER without kiosko learning
    ; anything: the hook regenerates, kiosko still only knows a directory. it runs in the
    ; accept task, not the session task, so two clients cannot regenerate at once.
-   (accept-loop root l quiet before)
+   (accept-loop root l quiet before live)
    (: _ (await l)
       c (accept l)
-      _ (? c (: _ (? before (before ()) 0)
-                (twirl (\ _ (: r (serve1 root c) _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ()))
-           0)
-      (accept-loop root l quiet before))
+      ps (reap live)
+      ps (? c (: _ (? before (before ()) 0)
+                 (link (twirl (\ _ (: r (serve1 root c) _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ())
+                       ps))
+            ps)
+      (accept-loop root l quiet before ps))
    ; the entry. `root` is a directory (no trailing slash), `port` a fixnum, `before` a thunk
    ; or (). answers () when the port cannot be taken, so a caller can say something better
    ; than we can. ⚠ all four operands, always -- three would hand back a CLOSURE, which is
@@ -223,7 +259,7 @@
       l (listen port)
       (? l (: _ (? quiet 0 (: _ (say err ("kiosko: serving " + r + " on http://127.0.0.1:" + show port + "/"))
                               (put err 10)))
-              _ (accept-loop r l quiet before)
+              _ (accept-loop r l quiet before ())
               _ (close l) 1)
          ())))
 

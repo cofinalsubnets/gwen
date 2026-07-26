@@ -97,6 +97,23 @@
       ((code (ask "PUT / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405")
       ((code (ask "DELETE / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405"))
 
+   ; --- how the request ARRIVES -------------------------------------------------------------
+   ; the head is taken in one `swig` gulp now, not a character at a time, and that puts two
+   ; new ways to hang in the read: a client whose blank line has no carriage returns, and a
+   ; request that arrives in PIECES (swig answers 0 mid-request and only a `see` can park
+   ; for the rest). both would wedge the connection rather than fail an assert, so they are
+   ; here -- a hang is the failure mode, and the gate has to be the thing that finds it.
+   _ (assert ((code (ask "GET /index.html HTTP/1.1\nHost: x\n\n")) = "200"))     ; LF only
+   split (: c (connect "127.0.0.1" port)
+            _ (say c "GET /index.htm")
+            _ (flush c)
+            _ (say c "l HTTP/1.1\r\nHost: x\r\n\r\n")
+            _ (flush c)
+            r (slurp c)
+            _ (close c)
+            r)
+   _ (assert ((code split) = "200") (sub? split "<h1>root</h1>"))
+
    ; --- paths ------------------------------------------------------------------------------
    _ (assert
       ((code (get "/")) = "200")                       ; the root directory's index.html
