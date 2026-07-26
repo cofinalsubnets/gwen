@@ -313,7 +313,7 @@
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their halfwords outright, `raw` the identity. every ALU op sets flags on
    ;; v6-M, so adds/subs ARE add/sub and the S-names alias their plain rows.
-   t1-emitters (tabof
+   t1-emitters (emsof
         `(('li >< t1-li) ('mov >< t1-movr) ('cmp >< t1-cmp) ('test >< t1-test)
            ('add >< (t1-addsub 'add)) ('adds >< (t1-addsub 'add))
            ('sub >< (t1-addsub 'sub)) ('subs >< (t1-addsub 'sub))

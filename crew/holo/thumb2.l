@@ -9,7 +9,7 @@
 ; in memory, each halfword little-endian. so word W = (hw1<<16)|hw2 lays as le16(hw1) ++ le16(hw2) --
 ; NOT le32(W). `t32` does exactly that; `t16` is one narrow halfword.
 ;
-; the layout stays byte-granular (holo.l's chunk-len counts bytes, a fixup carries its byte width), so
+; the layout stays byte-granular (holo.l's revonto counts bytes, a fixup carries its byte width), so
 ; the mixed 16/32 widths just fall out -- each lowered form reports its own length, no special-casing.
 ;
 ; register file: abstract r0..r12 -> hardware r0..r12 (identity); sp->13, lr->14, pc->15, fp->11. we
@@ -304,7 +304,7 @@
 
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their halfwords outright, `raw` the identity. the alu group pins off its rows.
-   thumb-emitters (tabof
+   thumb-emitters (emsof
         `(('li >< thumb-li) ('mov >< thumb-mov) ('cmp >< thumb-cmp) ('imul >< thumb-imul)
            ('umull >< thumb-umull) ('smull >< thumb-smull) ('mla >< thumb-mla)
            ('addsd >< thumb-addsd) ('subsd >< thumb-subsd) ('mulsd >< thumb-mulsd)
@@ -340,7 +340,7 @@
            ('sys >< (t16 0xDF00))                            ; SVC #0
            ('nop >< (t16 0xBF00))
            ('trap >< (t16 0xBE00))))                         ; BKPT #0
-   _ (foldl (\ _ p (pin thumb-emitters <p (thumb-aluop <p))) 0 thumb-alu-rows)
+   _ (foldl (\ _ p (emrow thumb-emitters <p (thumb-aluop <p))) 0 thumb-alu-rows)
    (thumb-lower ins) (: f lower-via (? (lit? f) (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation. Thumb pc reads as (site + 4), and the branch fields hold a /2 (halfword) offset

@@ -288,7 +288,7 @@
    ;; partial application where the form fixes early arguments ((emit-sx 1), (emit-div 0 1),
    ;; (emit-shift 'shl)); a nullary row is its bytes outright; `raw` splices its operand
    ;; verbatim -- the identity, the numeral 1. the alu/sse groups pin off their row lists.
-   x64-emitters (tabof
+   x64-emitters (emsof
         `(('li >< emit-li) ('mov >< emit-mov) ('cmp >< emit-cmp) ('imul >< emit-imul)
            ('ld >< emit-ld) ('st >< emit-st)
            ('lea >< emit-lea) ('lean >< emit-lea)             ; lean: cc's CONSUMED frame address -- same bytes, invisible to the sibcall escape gate
@@ -318,8 +318,8 @@
            ('stsd >< emit-stsd) ('ldsd >< emit-ldsd) ('stss >< emit-stss) ('ldss >< emit-ldss)
            ('raw >< 1)
            ('ret >< `(195)) ('sys >< `(15 5)) ('nop >< `(144)) ('trap >< `(204))))
-   _ (foldl (\ _ p (pin x64-emitters <p (emit-alu <p))) 0 x64-alu-rows)
-   _ (foldl (\ _ p (pin x64-emitters <p (emit-sse <p))) 0 x64-sse-rows)
+   _ (foldl (\ _ p (emrow x64-emitters <p (emit-alu <p))) 0 x64-alu-rows)
+   _ (foldl (\ _ p (emrow x64-emitters <p (emit-sse <p))) 0 x64-sse-rows)
    (x64-lower ins) (: f lower-via (? (lit? f) (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; two relocation kinds: rel32, a 32-bit pc-relative field measured from the END of the field

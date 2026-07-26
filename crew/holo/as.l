@@ -185,8 +185,9 @@
                            (member? mn '(".text" ".data" ".section" ".p2align" ".align" ".type" ".size" ".file" ".ident"))
                            (go >lines addr items)                ; M1: single .text section, ignore layout dirs
                            (scare 'as-directive mn)))
-                     (: mn (intern (as-mnem raw)) chunk (as-instr mn (as-ops (as-rest raw)))
-                        (go >lines (addr + (chunk-len chunk)) ((rev chunk) + items))))))
+                     (: mn (intern (as-mnem raw))
+                        r (revonto (as-instr mn (as-ops (as-rest raw))) items 0)
+                        (go >lines (addr + <r) >r)))))
          (go (as-lines src) 0 ()))
 
    ;; --- resolve intra-section fixups (near rel32) to final .text bytes, and the hex for goldens. ---

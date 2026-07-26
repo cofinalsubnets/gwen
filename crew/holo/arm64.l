@@ -284,7 +284,7 @@
 
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their words outright, `raw` the identity. the alu group pins off its rows.
-   arm64-emitters (tabof
+   arm64-emitters (emsof
         `(('li >< arm64-li) ('mov >< arm64-mov) ('cmp >< arm64-cmp) ('imul >< arm64-imul)
            ('ld >< arm64-ld) ('st >< arm64-st)
            ('ld1 >< arm64-ld1) ('ld2 >< arm64-ld2) ('ld4 >< arm64-ld4)
@@ -317,7 +317,7 @@
            ('sys >< (le32 0xD4000001))                       ; svc #0
            ('nop >< (le32 0xD503201F))
            ('trap >< (le32 0xD4200000))))                    ; brk #0
-   _ (foldl (\ _ p (pin arm64-emitters <p (arm64-aluop <p))) 0 arm64-alu-rows)
+   _ (foldl (\ _ p (emrow arm64-emitters <p (arm64-aluop <p))) 0 arm64-alu-rows)
    (arm64-lower ins) (: f lower-via (? (lit? f) (f arm64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation: the offset is (target - site)/4, ORed into the base word `aux`.

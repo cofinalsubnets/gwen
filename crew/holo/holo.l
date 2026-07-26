@@ -86,7 +86,13 @@
    (fix-l x)  (at x 3)
    (fix-a x)  (at x 4)
    (item-len x) (? (fix? x) (fix-w x) 1)              ; a byte is 1; a fixup is its field width
-   (chunk-len l) (foldl (\ a x (a + (item-len x))) 0 l)
+   ;; -- fold a freshly lowered chunk onto the REVERSED item stream, answering (len . items).
+   ;; the obvious spelling -- measure the chunk, then (rev it), then (+) that copy onto items
+   ;; -- walks the chunk THREE times and conses it TWICE; this walks once and conses once. the
+   ;; layout passes run it per instruction, so it is the assembler's hottest loop, and halving
+   ;; its garbage is what the embedded targets feel (measured: -52% of the assemble's words). --
+   (revonto l items n) (? !(two? l) (n >< items)
+                          (revonto >l (<l >< items) (n + (item-len <l))))
 
    ;; -- the little table kit every backend leans on: `tabof` builds a tablet from
    ;; ('k >< v) pairs (the register/cc/opcode tables), `fregs` the f0..fN-1 float
@@ -96,10 +102,10 @@
    (look tab k tag) (: e (peep tab k -1) (? (e < 0) (scare tag k) e))
 
    ;; -- the IR's operand counts, one neutral table (the header's forms made executable).
-   ;; a backend keeps an EMITTER tablet (op -> emitter, each row partial-applied to
-   ;; everything but its IR operands; an arity-0 row IS its chunk) and its 'lower is the
-   ;; two-line lower-via shim -- so the op -> operand-shape mapping lives HERE, once,
-   ;; instead of four hand-kept dispatch chains. --
+   ;; a backend keeps an EMITTER tablet, each row partial-applied to everything but its IR
+   ;; operands (an arity-0 row IS its chunk), and its 'lower is the two-line lower-via shim
+   ;; -- so the op -> operand-shape mapping lives HERE, once, instead of four hand-kept
+   ;; dispatch chains. `emsof` below stamps the count onto each row at bake time. --
    ir-arity (tabof
         `(('ret >< 0) ('sys >< 0) ('nop >< 0) ('trap >< 0) ('udivll >< 0) ('uremll >< 0)
            ('sx1 >< 1) ('sx2 >< 1) ('sx4 >< 1) ('zx1 >< 1) ('zx2 >< 1) ('zx4 >< 1)
@@ -125,12 +131,25 @@
            ('stsd >< 3) ('ldsd >< 3) ('stss >< 3) ('ldss >< 3) ('cmppd >< 3)
            ('rem >< 4) ('urem >< 4) ('umull >< 4) ('smull >< 4) ('mla >< 4)
            ('ldx >< 5) ('stx >< 5) ('leax >< 5) ('ldxb >< 5) ('stxb >< 5) ('mulo >< 5)))
-   (applyn f ins n i) (? (i > n) f (applyn (f (at ins i)) ins n (i + 1)))
+   ;; an emitter ROW is (arity . emitter): `emsof` builds a backend's tablet from the same
+   ;; ('op >< f) pairs `tabof` takes, stamping each row with its operand count off ir-arity,
+   ;; and `emrow` pins one (the alu/sse groups). so ir-arity is read at BAKE time, once per
+   ;; op, and lowering reads arity and emitter in a SINGLE lookup.
+   (emsof prs) (: t (tablet 0) _ (foldl (\ _ p (emrow t <p >p)) 0 prs) t)
+   (emrow t op f) (pin t op ((look ir-arity op 'bad-op) >< f))
+   ;; feed the emitter its operands, left to right, straight off the form's own tail -- where
+   ;; an index-per-operand walked the list again for each one. `n` counts the row's declared
+   ;; arity down and must reach zero exactly as the operands run out: a form carrying the
+   ;; wrong count SCARES here instead of answering a PARTIAL APPLICATION, which would lay as
+   ;; zero bytes -- a silent hole in the output, the one failure this assembler can least
+   ;; afford. (it caught a hand-written x64 golden that was short its ignored scratch operand.)
+   (feed f l n op) (? (two? l) (? (n < 1) (scare 'arity-skew op) (feed (f <l) >l (n - 1) op))
+                      (n = 0) f
+                      (scare 'arity-skew op))
    (lower-via ems ins)
-      (: op <ins  f (peep ems op 'no)
-         _ (? (id? f 'no) (scare 'bad-op op) 0)
-         n (look ir-arity op 'bad-op)
-         (? (n = 0) f (applyn f ins n 1)))
+      (: op <ins  r (peep ems op 'no)
+         _ (? (id? r 'no) (scare 'bad-op op) 0)
+         (feed >r >ins <r op))
 
    ;; -- the backend registry. a backend is a tablet { 'lower 'patch }. --
    backends (tablet 0)
@@ -160,10 +179,10 @@
             (? (<ins = 'label)
                (: _ (pin labels (at ins 1) addr) (lay >prog be addr items labels))
                (<ins = 'align)
-               (: pad (pad-to be addr (at ins 1))
-                  (lay >prog be (addr + (tally pad)) ((rev pad) + items) labels))
-               (: chunk (lower-with be ins)
-                  (lay >prog be (addr + (chunk-len chunk)) ((rev chunk) + items) labels)))))
+               (: r (revonto (pad-to be addr (at ins 1)) items 0)
+                  (lay >prog be (addr + <r) >r labels))
+               (: r (revonto (lower-with be ins) items 0)
+                  (lay >prog be (addr + <r) >r labels)))))
 
    ;; -- pass two: stream the items out, resolving each fixup against the now-known labels. --
    (resolve items labels be addr)
@@ -198,10 +217,11 @@
    (laylax prog be at0 labels longs)
       (? !(peep be 'short 0) (lay prog be at0 () labels)
          (: spots (tablet 0) eras (tablet 0)
-            ;; pass one: lower each form once, cache (len . chunk) -- the length rides along
-            ;; so pass two never re-walks a chunk (item-len per byte is the cost that counts
-            ;; for a hot assembling client). labels ride (0 . ()); pessimistic addresses +
-            ;; align epochs pin beside the internal labels.
+            ;; pass one: lower each form once, cache (len . REVERSED chunk) -- the length rides
+            ;; along so pass two never re-walks a chunk (item-len per byte is the cost that
+            ;; counts for a hot assembling client), and the reversal is already paid, since
+            ;; pass two splices onto a reversed stream. labels ride (0 . ()); pessimistic
+            ;; addresses + align epochs pin beside the internal labels.
             (plumb p addr era acc)
                (? !(two? p) (rev acc)
                   (: ins <p
@@ -209,10 +229,10 @@
                         (: _ (pin spots (at ins 1) addr) _ (pin eras (at ins 1) era)
                            (plumb >p addr era ((0 >< ()) >< acc)))
                         (<ins = 'align)
-                        (: pad (pad-to be addr (at ins 1))  k (tally pad)
-                           (plumb >p (addr + k) (era + 1) ((k >< pad) >< acc)))
-                        (: c (lower-with be ins)  k (chunk-len c)
-                           (plumb >p (addr + k) era ((k >< c) >< acc))))))
+                        (: r (revonto (pad-to be addr (at ins 1)) () 0)
+                           (plumb >p (addr + <r) (era + 1) (r >< acc)))
+                        (: r (revonto (lower-with be ins) () 0)
+                           (plumb >p (addr + <r) era (r >< acc))))))
             chunks (plumb prog at0 0 ())
             ;; the short branch is 2 bytes, so its rel8 measures from addr+2 -- forward spans
             ;; shrink toward it, backward spans shrink toward zero, both stay inside [-128,127].
@@ -239,7 +259,7 @@
                         (&& (<ins = 'br) (near? (at ins 2) pa era))
                         (: sc (lower-with be `('br8 (at ins 1) (at ins 2)))
                            (stitch >p >cs (pa + k) (fa + 2) era ((rev sc) + items)))
-                        (stitch >p >cs (pa + k) (fa + k) era ((rev c) + items)))))
+                        (stitch >p >cs (pa + k) (fa + k) era (c + items)))))   ; c is cached REVERSED
             (stitch prog chunks at0 at0 0 ())))
 
    ;; -- assemble PROG for TARGET. returns a tablet { 'bytes 'labels }; `holo-bytes` is the

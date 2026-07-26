@@ -72,7 +72,7 @@
       `("zx2.hi"      "4d0fb7c0"              '((zx2 r7)))           ; movzx r8, r8w
       `("zx4"         "408bdb"                '((zx4 r3)))           ; mov ebx, ebx (zero-extends)
       `("udiv"        "52564889d831d248f734244883c4085a4889c3"      '((udiv r3 r3 r5)))   ; xor rdx + div (unsigned)
-      `("urem"        "52564889d831d248f734244889d04883c4085a4889c3" '((urem r3 r3 r5)))  ; unsigned rem (rdx)
+      `("urem"        "52564889d831d248f734244889d04883c4085a4889c3" '((urem r3 r3 r5 r2)))  ; unsigned rem (rdx; the scratch t is rdx's job here, ignored)
       `("shlv"        "48d3e0"                '((shlv r0 r1)))       ; shl rax, cl
       `("shrv.hi"     "49d3e8"                '((shrv r7 r1)))       ; shr r8, cl
       `("sarv"        "48d3fb"                '((sarv r3 r1)))       ; sar rbx, cl
