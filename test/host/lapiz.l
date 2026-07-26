@@ -49,6 +49,20 @@ continued on a second line"
 no language tag
 ```"
       "---"
+      "---
+title: LOVE
+section: 1
+manual: love manual
+---
+
+# NAME
+
+love \\- a curried lisp"
+      "-l *lib*
+:   load **lib** first
+
+--emit
+:   transpile it"
       "# everything
 
 a paragraph, then a list:
@@ -92,6 +106,11 @@ the [end](e).")
     ((mdread "```c\nx\n```\n") = '((fence "c" "x\n")))
     ((mdread "[t](u)") = '((para ((link ((text "t")) "u")))))
     ((mdread "---\n") = '((rule)))
+    ((mdread "t\n:   b\n") = '((deflist ((((text "t")) ((text "b")))))))
+    ((mdread "---\ntitle: L\n---\n") = '((meta ((title "L") (section "") (date "") (source "") (manual "")))))
+    ; two blank-separated lists of one kind are ONE list (markdown's loose-list rule,
+    ; and the only spelling roff has) -- `bmrg`, the block twin of `mrg`
+    ((mdread "- a\n\n- b\n") = '((bullets (((text "a")) ((text "b"))))))
     ; a paragraph that would re-read as a block wears ONE backslash; the escape leaf takes it off
     ((nrm "- a") = "- a\n")
     ((nrm "\\- a") = "\\- a\n")
@@ -106,6 +125,74 @@ the [end](e).")
     ((ht->md "<p>5 &lt; 6 &amp; 7</p>") = "5 < 6 & 7\n")
     ((md->ht "5 < 6 & 7") = "<p>5 &lt; 6 &amp; 7</p>"))
 
+ ; --- the roff surface: law 1 on the MAN-PAGE-SHAPED docs ---------------------
+ ; roff is a smaller surface, so its law is stated over its domain -- meta, head 1-2,
+ ; para, fence with no language, quote, bullets, numbers, deflist, and text/strong/
+ ; em/code inline. every one of those appears below.
+ _ (: rfcorpus
+    (L "# NAME" "## OPTIONS" "plain paragraph text" "a *b* **c** `d`"
+       "- one
+- two"
+       "1. first
+2. second"
+       "-l *lib*
+:   load **lib** first
+--emit
+:   transpile it"
+       "> an indented note with `code`"
+       "```
+literal
+block
+```"
+       "---
+title: LOVE
+section: 1
+manual: love manual
+---
+
+# NAME
+
+love \\- a curried lisp
+
+## OPTIONS
+
+-l *lib*
+:   load **lib** before the file
+
+- a bullet
+- another
+
+> a note
+
+```
+some literal
+```")
+    _ (map (\ s (: d (mdread s)
+                   (assert (d = (rfread (rfshow d)))        ; LAW 1, the roff surface
+                           (! (t0? (rfread (rfshow d))))))) rfcorpus)
+
+    ; ..and OUTSIDE the domain rfshow stays total while rfread normalizes. each loss is
+    ; pinned here, so it is a stated property of the surface and not a surprise.
+    (rfrt s) (rfread (rfshow (mdread s)))
+    _ (assert
+       ((rfrt "### deep") = '((head 2 ((text "deep")))))              ; .SH/.SS and no more
+       ((rfrt "```c\nx\n```\n") = '((fence "" "x\n")))                ; .EX/.EE has no language slot
+       ((rfrt "---\n") = ())                                          ; a man page has no rule
+       ((rfrt "[t](u)") = '((para ((text "t \\(lau\\(ra")))))          ; a link flattens to the man idiom
+       ; ..and the domain-shaped neighbours of each are untouched
+       ((rfrt "## deep") = '((head 2 ((text "deep")))))
+       ((rfrt "```\nx\n```\n") = '((fence "" "x\n"))))
+
+    ; the surface TABLE is the whole of conversion: six pairings, no pairwise code
+    _ (assert
+       ((convert 'md 'ht "# hi") = "<h1>hi</h1>")
+       ((convert 'md 'rf "# hi") = ".SH hi\n")
+       ((convert 'rf 'md ".SH hi\n") = "# hi\n")
+       ((convert 'ht 'rf "<h1>hi</h1>") = ".SH hi\n")
+       ((convert 'md 'ht "# hi") = (md->ht "# hi"))
+       ((md->rf "# NAME") = ".SH NAME\n"))
+    0)
+
  ; --- a real document: README.md through the lens, laws and all ----------------
  _ (: src (: q (open "README.md" "r") (slurp q))
       d (mdread src)
@@ -115,6 +202,6 @@ the [end](e).")
          (d = (htread (htshow d)))
          (! (t0? d))))
 
- _ (puts "crew/lapiz: ok -- the document lens (markdown <-> html), laws 1 + 2
+ _ (puts "crew/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain
 ")
  0)

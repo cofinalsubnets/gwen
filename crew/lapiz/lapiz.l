@@ -1,16 +1,19 @@
-; lapiz -- the document lens: two surfaces over one middle. markdown <-> html today.
+; lapiz -- the document lens: SURFACES over one middle. markdown, html and roff(man).
 ;
 ; a markdown file and an html file can say the same thing; a LENS is the pair of maps that
 ; carries each to the other and back without drift. lapiz gets that by refusing to translate
 ; directly: there is ONE middle -- a plain love AST -- and a READER and a SHOWER per surface,
 ;
-;     markdown --mdread--> AST --htshow--> html
-;     html     --htread--> AST --mdshow--> markdown
+;     markdown --mdread--> AST --htshow--> html      (and every other pairing, from the
+;     html     --htread--> AST --rfshow--> roff       same six functions -- see `convert`)
+;     roff     --rfread--> AST --mdshow--> markdown
 ;
-; so md->ht is just (htshow (mdread s)) and ht->md is (mdshow (htread s)), and a THIRD surface
-; is its own reader/shower pair and nothing else -- it never learns about the other two, and it
-; arrives already able to convert both ways with everything present. that is the whole shape of
-; a pandoc-ish converter, and where this one is headed.
+; so md->ht is just (htshow (mdread s)). three surfaces make SIX conversions and there is no
+; pairwise code for any of them: a conversion is one surface's reader and another's shower, so
+; the `surfaces` table is the whole of it and a fourth adds a row. roff was added third and
+; touched neither of the others -- except where it SHOULD, by pressing two nodes the middle was
+; missing (meta, deflist), which then made markdown and html richer too. that is the trade a
+; surface is allowed to ask for; anything else it must do alone.
 ;
 ; both readers are built from the PARSER COMBINATORS in the post-egg layer love/post.l (a parser
 ; is (\ s y n): a string s, a success continuation y = (rest payload), a failure continuation
@@ -34,14 +37,27 @@
 ;
 ; --- the middle ---
 ; a doc is a list of BLOCKS:
-;   ('head N inl)  ('para inl)  ('fence lang text)  ('quote doc)
-;   ('bullets (inl ..))  ('numbers (inl ..))  ('rule)
+;   ('meta ((key value) ..))  ('head N inl)  ('para inl)  ('fence lang text)  ('quote doc)
+;   ('bullets (inl ..))  ('numbers (inl ..))  ('deflist ((term-inl body-inl) ..))  ('rule)
 ; an inl is a list of SPANS:
 ;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)
-; an inl is NORMAL when no two texts are adjacent (the readers merge as they go, `mrg`) --
-; without that, law 1 fails on the AST even though both surfaces read the same. and every list
-; here ends in the UNIT: a 0 tail is a fossil, and `=` tells the two terminators apart, so a
-; single fossil fails law 1 on nothing but the nil.
+; ('meta ..) is document-level and lives at the HEAD of the doc (markdown spells it as front
+; matter, and a `---` anywhere else is a rule); its keys are the canonical five, always all
+; five, absent ones empty -- see `mnorm`.
+; a doc is NORMAL when no two texts are adjacent in an inl (`mrg`) and no two lists of one kind
+; are adjacent in the doc (`bmrg`); every reader lands on that. without it law 1 fails on an AST
+; that reads the same through every surface but is spelled two ways. and every list here ends in
+; the UNIT: a 0 tail is a fossil, and `=` tells the two terminators apart, so a single fossil
+; fails law 1 on nothing but the nil.
+;
+; --- the roff DOMAIN ---
+; roff's man macros are a SMALLER surface, and saying where is part of the job. law 1 holds on
+; man-page-shaped docs: meta, head 1-2, para, fence with an empty language, quote, bullets,
+; numbers, deflist, and text/strong/em/code inline. outside that rfshow stays total and rfread
+; normalizes in four ways, each one asserted by the gate rather than left to be found:
+;   a head at 3+ lands at 2 (roff has .SH and .SS and no more), a fence language is dropped
+;   (.EX/.EE has no slot), a rule vanishes (man pages have none), and a link flattens to its
+;   text with the url trailing in \(la..\(ra -- the man idiom for one.
 
 ; the module scope opens here: every binding below lands in this layer, mutually visible by
 ; bare name; the (leave ()) at the foot of this file closes it, which REGISTERS it as the module
@@ -90,13 +106,39 @@
    (spec? c) (member? c '(92 42 96 91 93))                     ; \ * ` [ ] -- where an inline span can start
    (ord? c)  (! (spec? c)))
 
+; --- the meta record: document-level fields, one CANONICAL shape ---
+; every reader runs `mnorm`, so a meta block always carries the same five keys in the same
+; order, absent ones empty. That is what lets a shower emit only the fields that are FILLED
+; and still round-trip: the reader fills the rest back in with "". Values are single-line.
+; ⚠ the key is INTERNED, not `nom`ed: `nom` mints a FRESH symbol that is neither `id?` nor
+; `=` to the literal of the same spelling, so a meta read from one surface would compare
+; unequal to the same meta read from another -- law 1 failing on the key, not the value.
+(: metakeys '(title section date source manual)
+   (mget kvs k) (? (! (two? kvs)) "" (: p <kvs (? (id? <p k) <>p (mget >kvs k))))
+   (mnorm kvs)  (map (\ k `(k (mget kvs k))) metakeys)
+   (mfilled kvs) (filter (\ p (0 < tally <>p)) kvs))
+
 ; --- normalizing an inl: adjacent texts are ONE text (the AST is the fixed point, so this matters) ---
 (: (mrg l) (? (! (two? l)) ()
               (! (two? >l)) (link <l ())
               (: a <l b <>l
                  (? (&& (id? <a 'text) (id? <b 'text)) (mrg (link `('text (<>a + <>b)) >>l))
                     (link a (mrg >l)))))
-   (plain l) (strcat (map (\ x <>x) l)))                       ; an inl of pure texts back to a string
+   ; ..and the same at BLOCK level: two adjacent lists of one kind are ONE list. markdown's
+   ; own loose-list rule says so (`- a` blank `- b` is one list), html would spell them as two
+   ; <ul>s, and roff cannot separate two `.TP` runs at all -- so the normal form is "no two
+   ; adjacent bullets/numbers/deflists" and every reader lands on it. Without this the roff
+   ; surface silently merges a pair that the markdown surface kept apart, and law 1 fails on
+   ; a document that looks right in all three.
+   (bmrg l) (? (! (two? l)) ()
+               (! (two? >l)) (link <l ())
+               (: a <l b <>l
+                  (? (&& (id? <a <b) (member? <a '(bullets numbers deflist)))
+                     (bmrg (link `(<a (cat <>a <>b)) >>l))
+                     (link a (bmrg >l)))))
+   (plain l) (strcat (map (\ x <>x) l))                        ; an inl of pure texts back to a string
+   (dpair l) (? (! (two? l)) () (! (two? >l)) () (link `(<l <>l) (dpair >>l)))   ; a flat t/b payload into pairs
+   (zipm ks vs) (? (! (two? ks)) () (! (two? vs)) () (link `(<ks <vs) (zipm >ks >vs))))
 
 ; ---------------------------------------------------------------- markdown, read
 ; inline. the text leaf stops at every sigil, so a construct is never swallowed; a sigil that
@@ -119,7 +161,8 @@
    blankline (skip (seqs `((span sp?) (lit "\n"))))
    headmark  (seqs `((lit "#") (span hash?) (lit " ")))
    nummark   (seqs `((one dig?) (span dig?) (lit ". ")))
-   starter   (alts `(headmark nummark (lit "```") (lit ">") (lit "- ") (lit "---")))   ; what a paragraph must not be
+   defmark   (lit ":   ")                                                        ; the definition-list body marker
+   starter   (alts `(headmark nummark defmark (lit "```") (lit ">") (lit "- ") (lit "---")))   ; what a paragraph must not be
 
    (b-rule s y n)  ((tag (\ _ `('rule)) (seqs `((lit "---") (skip (span sp?)) (lit "\n")))) s y n)
    (b-head s y n)  ((tag (\ p `('head (1 + tally (nthl p 1)) (mdinl (nthl p 3))))
@@ -134,14 +177,29 @@
    (o-item s y n)  ((seqs `((skip (one dig?)) (skip (span dig?)) (skip (lit ". ")) (span nonl?) eol)) s y n)
    (b-bullets s y n) ((tag (\ p `('bullets (map mdinl p))) (many1 u-item)) s y n)
    (b-numbers s y n) ((tag (\ p `('numbers (map mdinl p))) (many1 o-item)) s y n)
+   ; a definition-list item: a TERM line (itself no block opener), then its `:   ` body line.
+   ; tried before b-para -- a term line reads as a paragraph line until the body line proves
+   ; otherwise, and the failure backtracks, so b-para picks up an ordinary paragraph. blocks
+   ; are always blank-line separated by every shower, so a paragraph never swallows a term.
+   (d-term s y n)  ((tag (\ p (strcat p)) (seqs `((notp blankline) (notp starter) (one nonl?) (span nonl?) eol))) s y n)
+   (d-body s y n)  ((seqs `((skip defmark) (span nonl?) eol)) s y n)
+   (d-item s y n)  ((tag (\ p `((mdinl <p) (mdinl <>p))) (seq d-term d-body)) s y n)
+   (b-deflist s y n) ((tag (\ p `('deflist p)) (many1 d-item)) s y n)
    ; a paragraph line must be neither blank nor a block opener -- and must eat A CHARACTER
    ; (`one nonl?` before the span), else `many` spins forever on the empty tail.
    (p-line s y n)  ((tag (\ p (strcat p))                      ; ..`tag` does the wrapping; f yields the ELEMENT
                          (seqs `((notp blankline) (notp starter) (one nonl?) (span nonl?) eol))) s y n)
    (b-para s y n)  ((tag (\ p `('para (mdinl (joins p " ")))) (many1 p-line)) s y n)
    (mdblock s y n) ((seqs `((skip (many blankline))
-                            (alts `(b-rule b-head b-fence b-quote b-bullets b-numbers b-para)))) s y n)
-   (mdread t) (runp (seqs `((many mdblock) (skip (many blankline)))) (endnl t)))
+                            (alts `(b-rule b-head b-fence b-quote b-bullets b-numbers b-deflist b-para)))) s y n)
+   ; YAML-ish FRONT MATTER, the markdown face of the meta block: head-only (a `---` fence
+   ; anywhere else is a rule), so it is read before the block loop and shown before it.
+   (kvline s y n)  ((tag (\ p `((intern <p) (nthl p 1)))
+                         (seqs `((span (\ c (&& (nonl? c) (! (c = 58))))) (skip (lit ": ")) (span nonl?) eol))) s y n)
+   (b-meta s y n)  ((tag (\ p `('meta (mnorm p)))
+                         (seqs `((skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))
+                                 (many kvline) (skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))))) s y n)
+   (mdread t) (bmrg (runp (seqs `((opt b-meta) (many mdblock) (skip (many blankline)))) (endnl t))))
 
 ; ---------------------------------------------------------------- markdown, show
 (: (mq s) ((: (g i acc) (? (i < tally s) (: c (s i) (g (i + 1) (acc + (? (spec? c) "\\" "") + (string c)))) acc)) 0 "")
@@ -158,6 +216,8 @@
    (shield s) (? (two? (runp starter (endnl s))) ("\\" + s) s)
    (qpre s)   (strcat (map (\ ln (? (0 < tally ln) ("> " + ln + "\n") ">\n")) (splitnl s)))
    (nlist l i) (? (! (two? l)) "" ((show i) + ". " + mdi <l + "\n" + nlist >l (i + 1)))
+   (mfront kvs) ("---\n" + (strcat (map (\ p ((string <p) + ": " + <>p + "\n")) (mfilled kvs))) + "---\n")
+   (mdefs l)    (strcat (map (\ it (mdi <it + "\n:   " + mdi <>it + "\n")) l))
    (mdb x) (: t <x
               (? (id? t 'head)    (rep "#" <>x + " " + mdi (nthl x 2) + "\n")
                  (id? t 'para)    (shield (mdi <>x) + "\n")
@@ -165,6 +225,8 @@
                  (id? t 'quote)   (qpre (mdshow <>x))
                  (id? t 'bullets) (strcat (map (\ i ("- " + mdi i + "\n")) <>x))
                  (id? t 'numbers) (nlist <>x 1)
+                 (id? t 'deflist) (mdefs <>x)
+                 (id? t 'meta)    (mfront <>x)
                  (id? t 'rule)    "---\n"
                  ""))
    (mdshow d) (joins (map mdb d) "\n"))                        ; each block ends in \n, so \n between = a blank line
@@ -182,6 +244,8 @@
                   (id? t 'link)   ("<a href=\"" + hq (nthl x 2) + "\">" + hti <>x + "</a>")
                   ""))
    (hitems l t) ((joins (map (\ i ("<li>" + hti i + "</li>")) l) "\n") + "\n</" + t + ">")
+   (hmeta kvs)  (joins (map (\ p ("<meta name=\"" + (string <p) + "\" content=\"" + hq <>p + "\">")) (mfilled kvs)) "\n")
+   (hdefs l)    ("<dl>\n" + (joins (map (\ it ("<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>")) l) "\n") + "\n</dl>")
    (htb x) (: t <x  h (? (id? t 'head) ("h" + show <>x) "")
               (? (id? t 'head)    ("<" + h + ">" + hti (nthl x 2) + "</" + h + ">")
                  (id? t 'para)    ("<p>" + hti <>x + "</p>")
@@ -190,6 +254,8 @@
                  (id? t 'quote)   ("<blockquote>\n" + htshow <>x + "\n</blockquote>")
                  (id? t 'bullets) ("<ul>\n" + hitems <>x "ul")
                  (id? t 'numbers) ("<ol>\n" + hitems <>x "ol")
+                 (id? t 'deflist) (hdefs <>x)
+                 (id? t 'meta)    (hmeta <>x)
                  (id? t 'rule)    "<hr>"
                  ""))
    (htshow d) (joins (map htb d) "\n"))
@@ -225,12 +291,101 @@
    (h-li s y n)    ((seqs `(hws (wrapt "li" (pack htinl)))) s y n)
    (h-ul s y n)    ((tag (\ p `('bullets p)) (wrapt "ul" (many h-li))) s y n)
    (h-ol s y n)    ((tag (\ p `('numbers p)) (wrapt "ol" (many h-li))) s y n)
-   (h-block s y n) ((seqs `(hws (alts `(h-rule h-head h-fence h-quote h-ul h-ol h-para)))) s y n)
-   (htread t) (runp (seqs `((many h-block) hws)) t))
+   (h-meta1 s y n) ((tag (\ p `((intern <p) (plain (runp (many (alts `(hent htext))) <>p))))
+                          (seqs `(hws (skip (lit "<meta name=\"")) (span (\ c (! (c = 34))))
+                                  (skip (lit "\" content=\"")) (span (\ c (! (c = 34)))) (skip (lit "\">"))))) s y n)
+   (h-meta s y n)  ((tag (\ p `('meta (mnorm p))) (many1 h-meta1)) s y n)
+   (h-dt s y n)    ((seqs `(hws (wrapt "dt" (pack htinl)) hws (wrapt "dd" (pack htinl)))) s y n)
+   (h-dl s y n)    ((tag (\ p `('deflist (dpair p))) (wrapt "dl" (many h-dt))) s y n)
+   (h-block s y n) ((seqs `(hws (alts `(h-rule h-head h-fence h-quote h-ul h-ol h-dl h-meta h-para)))) s y n)
+   (htread t) (bmrg (runp (seqs `((many h-block) hws)) t)))
+
+; ---------------------------------------------------------------- roff (man), show
+; the third surface, and a SMALLER one: roff's man macros carry sections two deep, literal
+; blocks with no language, and no rule or hyperlink at all. so the ROFF DOMAIN is the
+; man-page-shaped docs -- meta, head 1-2, para, fence with empty lang, quote, bullets,
+; numbers, deflist; text/strong/em/code inline. Law 1 holds THERE. Outside it rfshow stays
+; total and rfread normalizes in four stated ways, each asserted by the gate rather than
+; left to be discovered: head >=3 lands at 2, a fence language is dropped, a rule vanishes,
+; and a link flattens to its text with the url in \(la..\(ra (the man idiom for one).
+(: (rq s) ((: (g i acc) (? (i < tally s)
+                           (: c (s i) (g (i + 1) (acc + (? (c = 92) "\\e" (string c)))))
+                           acc)) 0 "")
+   (rline s) (? (&& (0 < tally s) (|| ((s 0) = 46) ((s 0) = 39))) ("\\&" + s) s)   ; a leading . or ' is text
+   (rfi l)  (strcat (map rfi1 l))
+   (rfi1 x) (: t <x
+               (? (id? t 'text)   (rq <>x)
+                  (id? t 'code)   ("\\f(CR" + rq <>x + "\\fR")     ; CR, not the deprecated CW: groff warns on that
+                  (id? t 'strong) ("\\fB" + rfi <>x + "\\fR")
+                  (id? t 'em)     ("\\fI" + rfi <>x + "\\fR")
+                  (id? t 'link)   (rfi <>x + " \\(la" + rq (nthl x 2) + "\\(ra")
+                  ""))
+   (rth kvs)   (".TH" + (strcat (map (\ k (" \"" + (mget kvs k) + "\"")) metakeys)) + "\n")
+   (rnums l i) (? (! (two? l)) "" (".IP \"" + (show i) + ".\" 4\n" + (rline (rfi <l)) + "\n" + rnums >l (i + 1)))
+   (rdefs l)   (strcat (map (\ it (".TP\n" + (rline (rfi <it)) + "\n" + (rline (rfi <>it)) + "\n")) l))
+   (rfb x) (: t <x
+              (? (id? t 'meta)    (rth <>x)
+                 (id? t 'head)    ((<>x < 2 ? ".SH " ".SS ") + rfi (nthl x 2) + "\n")
+                 (id? t 'para)    (".PP\n" + (rline (rfi <>x)) + "\n")
+                 (id? t 'fence)   (".EX\n" + (strcat (map (\ ln ((rline (rq ln)) + "\n")) (splitnl (nthl x 2)))) + ".EE\n")
+                 (id? t 'quote)   (".RS\n" + rfshow <>x + ".RE\n")
+                 (id? t 'bullets) (strcat (map (\ i (".IP \\(bu 2\n" + (rline (rfi i)) + "\n")) <>x))
+                 (id? t 'numbers) (rnums <>x 1)
+                 (id? t 'deflist) (rdefs <>x)
+                 ""))                                        ; a rule has no roff form: it vanishes
+   (rfshow d) (strcat (map rfb d)))
+
+; ---------------------------------------------------------------- roff (man), read
+(: rfesc?  (\ c (! (c = 92)))                                  ; ordinary inline text runs to the next \
+   (runesc s y n)  ((tag (\ _ `('text "\\")) (lit "\\e")) s y n)
+   (runamp s y n)  ((tag (\ p `('text (string <p))) (seq (lit "\\&") (one chr?))) s y n)
+   (rtext s y n)   ((tag (\ p `('text (strcat p))) (seq (one rfesc?) (span rfesc?))) s y n)
+   (rfont o t s y n) ((tag (\ p `(t <p)) (seqs `((skip (lit o)) (pack (rinls)) (skip (lit "\\fR"))))) s y n)
+   (rstrong s y n) ((rfont "\\fB" 'strong) s y n)
+   (rem s y n)     ((rfont "\\fI" 'em) s y n)
+   (rcode s y n)   ((tag (\ p `('code (plain <p))) (seqs `((skip (lit "\\f(CR")) (pack (many (alts `(runesc rtext)))) (skip (lit "\\fR"))))) s y n)
+   ; ..a `\` that starts none of the above is a roff escape we do not model (\(la, \(bu):
+   ; it reads as literal text, one char at a time, and `mrg` glues it back on -- the same
+   ; fallback the markdown surface gives an unclaimed sigil. Without it the reader stops
+   ; dead at the first such escape and drops the rest of the line.
+   (rchar s y n)   ((tag (\ p `('text (string <p))) (one chr?)) s y n)
+   (rspan s y n)   ((alts `(runamp runesc rcode rstrong rem rtext rchar)) s y n)
+   (rinls s y n)   ((pmap mrg (many (seq (notp (lit "\\fR")) rspan))) s y n)
+   (rfinl s)       (mrg (runp (many rspan) s))
+
+   rfline    (seqs `((span nonl?) (skip (lit "\n"))))         ; one text line, raw
+   (rmac m)  (seqs `((skip (lit m)) (skip (span sp?)) (span nonl?) (skip (lit "\n"))))
+   (r-th s y n)   ((tag (\ p `('meta (mnorm (zipm metakeys p))))
+                        (seqs `((skip (lit ".TH")) (many rquoted) (skip (span sp?)) (skip (lit "\n"))))) s y n)
+   (rquoted s y n) ((seqs `((skip (span sp?)) (skip (lit "\"")) (span (\ c (! (c = 34)))) (skip (lit "\"")))) s y n)
+   (r-sh s y n)   ((tag (\ p `('head 1 (rfinl <p))) (rmac ".SH")) s y n)
+   (r-ss s y n)   ((tag (\ p `('head 2 (rfinl <p))) (rmac ".SS")) s y n)
+   (r-pp s y n)   ((tag (\ p `('para (rfinl <p))) (seqs `((skip (lit ".PP\n")) rfline))) s y n)
+   (r-ex s y n)   ((tag (\ p `('fence "" (strcat (map (\ ln (ln + "\n")) p))))
+                        (seqs `((skip (lit ".EX\n")) (many (seq (notp (lit ".EE")) rfline)) (skip (lit ".EE\n"))))) s y n)
+   (r-rs s y n)   ((tag (\ p `('quote p)) (seqs `((skip (lit ".RS\n")) (many r-block) (skip (lit ".RE\n"))))) s y n)
+   (r-bu s y n)   ((seqs `((skip (lit ".IP \\(bu 2\n")) rfline)) s y n)
+   (r-ul s y n)   ((tag (\ p `('bullets (map rfinl p))) (many1 r-bu)) s y n)
+   (r-no s y n)   ((seqs `((skip (lit ".IP \"")) (skip (span (\ c (! (c = 34))))) (skip (lit "\" 4\n")) rfline)) s y n)
+   (r-ol s y n)   ((tag (\ p `('numbers (map rfinl p))) (many1 r-no)) s y n)
+   (r-tp s y n)   ((tag (\ p `((rfinl <p) (rfinl <>p))) (seqs `((skip (lit ".TP\n")) rfline rfline))) s y n)
+   (r-dl s y n)   ((tag (\ p `('deflist p)) (many1 r-tp)) s y n)
+   (r-block s y n) ((alts `(r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl)) s y n)
+   (rfread t) (bmrg (runp (many r-block) t)))
 
 ; ---------------------------------------------------------------- the lens
-(: (md->ht s) (htshow (mdread s))
-   (ht->md s) (mdshow (htread s)))
+; three surfaces, six conversions -- but no pairwise code: a conversion is a reader from
+; one and a shower from the other, so the table is the whole of it. a fourth surface adds
+; a row and nothing else.
+(: surfaces `(`('md mdread mdshow) `('ht htread htshow) `('rf rfread rfshow))
+   (srow k)   ((: (g l) (? (! (two? l)) () (id? <<l k) <l (g >l))) surfaces)
+   (reader-of k) (<>(srow k))
+   (shower-of k) (nthl (srow k) 2)
+   (convert from to s) ((shower-of to) ((reader-of from) s))
+   (md->ht s) (htshow (mdread s))
+   (ht->md s) (mdshow (htread s))
+   (md->rf s) (rfshow (mdread s))
+   (rf->md s) (mdshow (rfread s)))
 
 ; the module scope closes here -- the layer is REGISTERED as `lapiz`. a later surface joins the
 ; sealed module the runtime way: (enter ()) (use 'lapiz) <surface.l> (leave ()).
