@@ -67,8 +67,12 @@
 ;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`), rune (the symbolic algebra engine, crew/rune/ -- exact multivariate polys +
 ;   Q[x]/(m) on the q coin; polys STRIKE AS COINS (die + - *, net-mode 1: !p is "zero poly");
-;   a REGISTERED MODULE like holo (rune.l enters, seal.l seals; (use 'rune) or (from 'rune 'deriv));
-;   its gate test/host/rune.l verifies the 2026 jacobian-conjecture disproof whole). apps
+;   a REGISTERED MODULE like holo, sealed at its own foot; its gate test/host/rune.l verifies the
+;   2026 jacobian-conjecture disproof whole), and the DOCUMENT chain, three modules deep: lapiz (the
+;   markdown/html/roff lens, crew/lapiz/ -- one AST, a reader+shower per surface; it writes the man
+;   pages), papel (the static site, crew/papel/ -- lapiz for the rendering, cook for the staleness,
+;   `make site`), kiosko (the static web server, crew/kiosko/ -- listen/accept/twirl, a task per
+;   client; `papel -s PORT` hands it out/site with a regenerate hook, so it is a dev server). apps
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); love.c/love.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable
 ;   ones install on PATH via `make install`.

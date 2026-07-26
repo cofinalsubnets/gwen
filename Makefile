@@ -25,7 +25,7 @@ love0 = out/host/love0
 export LOVE_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
-.PHONY: host kernel wasm love0
+.PHONY: host kernel wasm love0 site site-serve
 .PHONY: test test_host test_all test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_extract test_arm64 test_thumb1 test_thumb2 test_wake
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest lint fmt fmt-check
 
@@ -99,6 +99,18 @@ fmt-check: $(ho)/love
 crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
 	@echo AI	$@
 	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
+
+# site: this tree's own docs as a browsable site -- README.md + doc/*.md through
+# papel (crew/papel/papel.l), which is lapiz for the markdown and cook for the
+# staleness, so a second `make site` writes nothing. `make site-serve` builds it
+# and hands out/site to kiosko, regenerating before each request: edit a .md,
+# reload, see it. There is no out/site rule -- papel IS the incremental build,
+# and make must not second-guess which pages are stale.
+site: host
+	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc
+site-serve: host
+	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(PORT) README.md doc
+PORT ?= 8080
 
 # ====================================================================
 # wasm (own Makefile)

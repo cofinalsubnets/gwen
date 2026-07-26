@@ -17,6 +17,8 @@ installs = \
   $d/bin/mooncc \
   $d/bin/moonfmt \
   $d/bin/cook \
+  $d/bin/papel \
+  $d/bin/kiosko \
   $d/bin/ain \
   $d/bin/lux \
   $d/bin/bao \
@@ -82,6 +84,22 @@ $d/bin/ai: $d/bin/love
 # then it discovers a Makefile/Cookfile/Cards.l in the cwd. Installed as a SYMLINK
 # to the source so edits to crew/cook/cook.l are picked up without a reinstall.
 $d/bin/cook: crew/cook/cook.l
+	@echo LN	$(abspath $@)
+	@mkdir -p $(@D)
+	@ln -sf $(abspath $<) $@
+
+# papel: the static site generator (crew/papel/papel.l), and kiosko the static web
+# server (crew/kiosko/kiosko.l). Same shebang + SYMLINK mechanism as cook. papel READS
+# its siblings (lapiz for the markdown, cook for the staleness) rather than being -l'd
+# alongside them -- two tool files cannot both be -l'd, since each one's seat would fire
+# on the other's command line -- and it finds them by READLINK'ing this very symlink back
+# to the source tree, so the link on PATH and the crew directory need not be neighbours.
+$d/bin/papel: crew/papel/papel.l
+	@echo LN	$(abspath $@)
+	@mkdir -p $(@D)
+	@ln -sf $(abspath $<) $@
+
+$d/bin/kiosko: crew/kiosko/kiosko.l
 	@echo LN	$(abspath $@)
 	@mkdir -p $(@D)
 	@ln -sf $(abspath $<) $@

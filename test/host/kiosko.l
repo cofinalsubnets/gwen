@@ -1,0 +1,121 @@
+; --- test/host/kiosko.l: the newsstand, over a real socket ---
+; NOT in the test/*.l corpus: the socket nifs live in host/net.c, which love0 does not
+; link, and this loads a crew file and splices its module.
+;
+; the whole thing runs in ONE process, the way test/host/net.l does: a server task
+; twirled onto a listener, the client in the main task, the two interleaving through the
+; cooperative scheduler. so these are real HTTP responses off a real socket, not a call
+; to `serve1` with a pretend port.
+;
+; what is asserted is kiosko's whole contract, and the security half of it first:
+;   GUARD    a `..` SEGMENT is 403 -- percent-encoded too, which is the form that
+;            actually gets tried. a file honestly named `a..b` is NOT an escape and is
+;            served, so the guard is a segment test and not a substring test.
+;   METHOD   GET and HEAD; a HEAD carries the length of the body it does not send.
+;   PATHS    a query string is cut, a percent-escape is decoded, a directory redirects
+;            to its slashed form and then answers index.html, or a listing without one.
+;   TYPES    the extension picks the Content-Type; an unknown one is octet-stream.
+;   404      a missing file, and nothing else, is 404.
+;
+; run:  cat test/00-init.l test/host/kiosko.l | out/host/love
+
+(reads (open "crew/kiosko/kiosko.l" "r"))     ; ..which seals itself at its foot
+(use 'kiosko)
+
+(assert
+ (member? 'kiosko (from ()))
+ (member? 'serve1 (from 'kiosko 'keys))
+ (lit? (from 'kiosko 'kiosko-main))
+ (! (from 'kiosco)))
+
+; --- the shelf ------------------------------------------------------------------------
+(: dir "/tmp/kioskotest"
+   (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))
+   _ (run `("rm" "-rf" dir))
+   _ (mkdir dir 493)
+   _ (mkdir (dir + "/sub") 493)
+   _ (mkdir (dir + "/bare") 493)
+   _ (put-file "index.html" "<h1>root</h1>")
+   _ (put-file "a.css" "body{color:red}")
+   _ (put-file "odd name.txt" "spaced")
+   _ (put-file "a..b" "not an escape")
+   _ (put-file "blob.zzz" "unknown")
+   _ (put-file "sub/index.html" "<h1>sub</h1>")
+   _ (put-file "bare/one.txt" "listed")
+
+   ; --- one request, one connection: the client half -------------------------------------
+   ; kiosko answers with Connection: close, so slurping to EOF is the whole response and
+   ; there is no framing to get wrong on this side.
+   port 7431
+   l (listen port)
+   _ (assert (lit? l))
+   ; the server task is kiosko's own accept loop in miniature -- `await` parks it on the
+   ; listener (a bare `accept` would BLOCK the whole process, and the client below would
+   ; never get to run), then serve1 answers one request. it stops on a flag rather than a
+   ; count, so adding an assert below does not silently hang the run.
+   stop (tablet 0)
+   srv (twirl (\ _ ((: (g k) (: _ (await l)
+                                c (accept l)
+                                _ (? c (: _ (serve1 dir c) _ (seal c 1) (close c)) 0)
+                                (? (peep stop 0 0) 1 (g (k + 1))))) 0)) 0)
+   (ask req) (: c (connect "127.0.0.1" port)
+                _ (say c req)
+                _ (flush c)
+                r (slurp c)                            ; Connection: close -- EOF frames it
+                _ (close c)
+                r)
+   (get p)   (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\n\r\n"))
+   (code r)  (: n (tally r) ((: (g i) (? (&& (i < n) (! ((r i) = 32))) (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
+   (sub? s t) (: n (tally s) m (tally t)
+                 ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+
+   ; --- THE GUARD, first ------------------------------------------------------------------
+   _ (assert
+      ((code (get "/../../etc/passwd")) = "403")
+      ((code (get "/sub/../../etc/passwd")) = "403")
+      ((code (get "/%2e%2e/%2e%2e/etc/passwd")) = "403")   ; ..the form that is actually tried
+      ((code (get "..")) = "403")                          ; unrooted
+      ; and it is a SEGMENT test: a file whose name merely contains .. is ordinary
+      ((code (get "/a..b")) = "200")
+      (sub? (get "/a..b") "not an escape"))
+
+   ; --- methods ---------------------------------------------------------------------------
+   hd (ask "HEAD /index.html HTTP/1.1\r\nHost: x\r\n\r\n")
+   _ (assert
+      ((code (get "/index.html")) = "200")
+      ((code hd) = "200")
+      (sub? hd "Content-Length: 13")     ; HEAD reports the body it does not send
+      (! (sub? hd "<h1>root</h1>"))
+      ((code (ask "PUT / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405")
+      ((code (ask "DELETE / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405"))
+
+   ; --- paths ------------------------------------------------------------------------------
+   _ (assert
+      ((code (get "/")) = "200")                       ; the root directory's index.html
+      (sub? (get "/") "<h1>root</h1>")
+      (sub? (get "/index.html?v=2") "<h1>root</h1>")   ; a query string is cut
+      (sub? (get "/odd%20name.txt") "spaced")          ; ..and an escape is decoded
+      ((code (get "/sub")) = "301")                    ; a directory redirects to its slash
+      (sub? (get "/sub") "Location: /sub/")
+      (sub? (get "/sub/") "<h1>sub</h1>")
+      (sub? (get "/bare/") "one.txt")                  ; no index.html -> a listing
+      ((code (get "/nope.html")) = "404"))
+
+   ; --- content types -------------------------------------------------------------------
+   _ (assert
+      (sub? (get "/index.html") "Content-Type: text/html")
+      (sub? (get "/a.css") "Content-Type: text/css")
+      (sub? (get "/blob.zzz") "Content-Type: application/octet-stream")
+      ; every answer is framed the same way, which is what lets the client above just slurp
+      (sub? (get "/a.css") "Connection: close")
+      (sub? (get "/a.css") "Content-Length: 15"))
+
+   ; raise the flag, then one last request to let the loop see it and return
+   _ (pin stop 0 1)
+   _ (assert ((code (get "/index.html")) = "200"))
+   _ (catch srv)                                       ; no orphan task
+   _ (close l)
+
+   _ (puts "crew/kiosko: ok -- the static web server (guard, methods, paths, types)
+")
+   0)
