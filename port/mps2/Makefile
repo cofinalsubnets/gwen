@@ -151,8 +151,15 @@ $(R)/$(o)/love-t1.elf: $(t1_objs) mps2.lds
 clean:
 	rm -rf $(R)/$(o)
 
-# the lcat lib headers come from the root's own rules (on love0), on demand
-$(addprefix $(R)/,$(lib_h)):
+# the lcat lib headers come from the root's own rules (on love0), on demand.
+# FORCE, and the pd set too: a prerequisite-less rule only fires when the target
+# is MISSING, so a stale header was served forever -- and out/lib/rune.h was not
+# even in the delegated set, so it had no rule at all (a missing one died with
+# "No rule to make target", an existing one silently froze). see the same note in
+# port/playdate/Makefile.
+.PHONY: FORCE
+FORCE:
+$(addprefix $(R)/,$(sort $(lib_h) $(pd_lib_h))): FORCE
 	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
 
 $(R)/$(o)/love.o: $(R)/love.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)

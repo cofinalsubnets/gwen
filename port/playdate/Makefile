@@ -65,12 +65,21 @@ sim: $(o)/$n.pdx
 clean:
 	rm -rf $(o)
 
-# delegate the lib headers and the host binary (which lcats cas.l) to the root
-$(lib_hs):
+# delegate the lib headers and the host binary (which lcats cas.l) to the root.
+# each one needs FORCE: a rule with NO prerequisites fires only when its target
+# is MISSING, so an existing-but-STALE header was served forever and the root's
+# own up-to-date check never got asked. out/lib/rune.h froze that way -- nothing
+# else in the tree regenerates it -- and when crew/rune/rune.l grew the
+# (leave ()) that registers the module, the baked image kept the sealless
+# header and the workbench died on `;; no-module rune`. the root decides
+# staleness; our job is only to ask it every time.
+.PHONY: FORCE
+FORCE:
+$(lib_hs): FORCE
 	@$(MAKE) -C $(R) out/lib/$(@F)
-$(m):
+$(m): FORCE
 	@$(MAKE) -C $(R) out/host/love
-$(MOONCC):
+$(MOONCC): FORCE
 	@$(MAKE) -C $(R) out/host/mooncc
 
 # cas.l -> C string literal, atomically (a 0-byte header would silently drop
