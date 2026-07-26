@@ -582,11 +582,6 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     "(leave ())"                                         // ..the seal: one form, so it rides as a literal, not a file
 #include "bao.h"
   );
-  // welow (church+HOF lowering, book['welow]) is a USER-code pass. A JIT must NOT lower its own
-  // source during self-bake: the glaze REASONS about the very church/HOF forms welow rewrites, so
-  // lowering its source changes its behavior (a group's __outer tail miscompiles -> wrong capture).
-  // Turn welow off across the toolchain's own post-egg load, restore it below so user code still lowers.
-  g = ai_evals_(g, "(: wsave welow welow 0)");
 #ifdef AI_GLAZED
   g = ai_evals_(g,
       "(use 'holo)"
@@ -596,7 +591,6 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "hook.h"
       "(leave ())");
 #endif
-  g = ai_evals_(g, "(: welow wsave)(pull book 'wsave 0)");   // toolchain baked -> welow back on for USER code; the scratch nom unpinned
 
   if (bake) {                                            // --bake: snapshot the post-warm heap, then exit
 #ifdef AI_GLAZED

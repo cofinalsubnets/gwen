@@ -789,7 +789,7 @@
           (map (\ e (dsubx (ren + (drm nms env)) e)) x))
        (map (\ e (dsubx env e)) x))
    (dsub old new B) (dsubx `((link old new)) B)                              ; substitute old->new in B, capture-avoiding
-   ; the define-sugar DECLINE guard (twin of ev.l's welow): a sugared : binder ((g z..) B) is a LIST --
+   ; the define-sugar DECLINE guard: a sugared : binder ((g z..) B) is a LIST --
    ; dsubx never renames it -- so a beta whose argument carries a colliding free name would capture.
    ; DECLINE such a beta: the redex stays source -- a missed inline, never a miscompile.
    (dsyms e) (? (nom? e) `(e) (atom? e) () (dquote? e) () (foldl (\ a x (a + (dsyms x))) () e))

@@ -35,8 +35,7 @@
    qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
    njit-amble (glaze 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
-   ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt). The pre-analysis
-   ; LOWERING hook (book['welow], church + HOF) now lives PRE-EGG in love/ev.l -- the sole welow, no shadow here.
+   ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt).
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e
                                (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps <>e) (exprn ps <>>e))
