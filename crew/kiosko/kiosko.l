@@ -59,17 +59,40 @@
    ; 33ms -> 10ms, of moon.html 90ms -> 30ms, byte for byte the same. the loop still
    ; handles a short read (the buffer is REUSED, not resumed -- each chunk is copied out
    ; before the next swig), so a file that grows under us is read whole anyway.
+   ; ..and it asks for ONE BYTE MORE than `stat` said, which is the whole trick. on a
+   ; regular file `read` comes up short only at end of file, so a read short of the buffer
+   ; PROVES we have all of it -- and then the answer is two copies and one syscall, with no
+   ; jug and no loop. asking for exactly `n` would not prove anything: a full buffer is not
+   ; evidence of the end, and a file that GREW between the stat and the read would be handed
+   ; back truncated, with a Content-Length computed off the truncation so nothing downstream
+   ; could notice. that is not hypothetical here -- kiosko's whole job is serving a
+   ; directory that papel is rewriting underneath it.
+   ;
+   ; so a full buffer falls through to the general loop, which appends until the reads stop.
+   ; the loop is also the lane for anything whose stat size is a lie (a /proc file, a fifo),
+   ; and for k <= 0, where `see` is what tells "not ready yet" from "end of file".
    swigp        (member? 'swig (names ()))       ; ⚠ pinned BEFORE gulp reads it
    (gulp f)     (: sz (fsize f)
                    n (? sz sz 0)
                    q (open f "r")
                    (? (! q) ()
                       (! swigp) (: s (slurp q) _ (close q) s)          ; no cb.c: the slow lane still works
-                      (: j (jug 0) buf (cask (? (0 < n) n 4096))
-                         (go _) (: k (swig q buf)
-                                   (? (0 < k) (: _ (say j (snip (string buf) 0 k)) (go ()))
-                                      (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
-                         _ (go ()) _ (close q) (slurp j))))
+                      (: buf (cask (? (0 < n) (n + 1) 4096))
+                         k (swig q buf)
+                         ; ⚠ `0 < n` GATES the fast path, and it is not a formality: the
+                         ; short-read proof is "stat said n and we read fewer than n+1",
+                         ; which says nothing when stat's n was 0. a procfs file is
+                         ; generated on demand -- it reports size 0 and answers a SHORT
+                         ; READ that is not the end (/proc/cpuinfo handed back 3288 of its
+                         ; 26322 bytes). anything stat cannot size goes round the loop.
+                         (? (&& (0 < n) (&& (0 < k) (k < tally buf)))
+                            (: s (snip (string buf) 0 k) _ (close q) s)
+                            (: j (jug 0)
+                               _ (? (0 < k) (say j (snip (string buf) 0 k)) 0)
+                               (go _) (: k2 (swig q buf)
+                                         (? (0 < k2) (: _ (say j (snip (string buf) 0 k2)) (go ()))
+                                            (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
+                               _ (go ()) _ (close q) (slurp j))))))
    ; ⚠ `got?`, not `lit?`: lit? asks "is this a FUNCTION", and a string is not one, so
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
    ; "" and () are both nothing. `=` is the one thing that tells them apart.

@@ -135,6 +135,23 @@
                   ((tally body) = (tally big))
                   (body = big)))                               ; ..and byte-for-byte, not just as long
 
+   ; --- the read's SLOW lane, which no served file reaches any more --------------------
+   ; `gulp` proves it has the whole file from a SHORT READ: the buffer is one byte larger
+   ; than stat said, and on a regular file read comes up short only at the end. that means
+   ; no ordinary file goes round the loop now -- so the loop needs a test of its own, or it
+   ; rots as the fallback nobody runs. and it is a real fallback: the proof says nothing
+   ; when stat's size was 0, because a procfs file is generated on demand and answers short
+   ; reads that are NOT the end. /proc/cpuinfo handed back 3288 of its 26322 bytes the one
+   ; time the fast path was let near it. /proc/self/environ is stable, and on most machines
+   ; larger than the 4096 fallback buffer, so it also crosses a chunk boundary.
+   _ (: e (gulp "/proc/self/environ")
+        r (: q (open "/proc/self/environ" "r") (slurp q))
+        big (gulp "/proc/cpuinfo")
+        bigr (: q (open "/proc/cpuinfo" "r") (slurp q))
+        (assert (0 < tally e)
+                (e = r)                                   ; byte for byte, through the loop
+                ((tally big) = (tally bigr))))            ; ..and nothing truncated at 4096
+
    ; --- content types -------------------------------------------------------------------
    _ (assert
       (sub? (get "/index.html") "Content-Type: text/html")
