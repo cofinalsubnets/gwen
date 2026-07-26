@@ -180,7 +180,7 @@
 ; ============================================================================
 ; the kanren machinery rides the `kanren` MODULE book now (love/prel.l), and the
 ; glaze helpers this spike leaned on ride the `glaze` book
-(: subst (kanren 'subst)  nthl (glaze 'nthl)  base-ev (glaze 'base-ev))
+(: subst (from 'kanren 'subst)  nthl (glaze 'nthl)  base-ev (glaze 'base-ev))
 
 (: ; --- the KINDS domain, as a value (reproduces kinds.l) ---
    (rank k)  (? (id? k 'bot) 0 (id? k 'charm) 1 (id? k 'whole) 2 (id? k 'real) 3 (id? k 'cplx) 4 (id? k 'top) 5 -1)

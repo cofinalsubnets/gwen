@@ -50,7 +50,7 @@
 ;     inside `ov-eng`; only ov-*/overlay-*/the ev rebind leak. See overlay.l for the domain shape (a map
 ;     #('join J 'tr T 'litdie L 'dice D)) and sigs ((name (param-dies..) result-die)..).
 (: ov-both
-    (: subst (kanren 'subst)                          ; through the kanren module book (unify/ufail?/var stay global)
+    (: subst (from 'kanren 'subst)                    ; through the kanren module (unify/ufail?/var stay global)
        (ov-nthl l n)     (? (= n 0) (cap l) (ov-nthl (cup l) (- n 1)))   ; nth (nthl is glaze-layer, absent in post.l)
        (ov-sigof sigs nm) (? (atom? sigs) () (id? nm (caap sigs)) (cap sigs) (ov-sigof (cup sigs) nm))
        (ov-look env x)    (? (atom? env) 'bot (: p (cap env) (? (id? x (cap p)) (cup p) (ov-look (cup env) x))))

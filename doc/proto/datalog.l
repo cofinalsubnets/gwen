@@ -13,7 +13,7 @@
 ; cycle" stance as the seminaive saturation itself.
 
 ; the kanren machinery rides the `kanren` MODULE book now (love/prel.l)
-(: walk (kanren 'walk)  var? (kanren 'var?))
+(: walk (from 'kanren 'walk)  var? (from 'kanren 'var?))
 
 (:
  ; ---- terms: a var is (v . name); consts are syms/nums; atoms are lists ----
