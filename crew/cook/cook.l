@@ -84,11 +84,17 @@
    ; whose recipe comes from a pattern rule). The first item ever registered is the
    ; default ticket. card = (ingredients orderonly . steps); orderonly prereqs are
    ; built-if-missing but never make a target stale (make's `| prereqs`).
+   ; ⚠ the merge DEDUPES. a prerequisite named twice is named once (make agrees), and
+   ; without that a caller who re-registers the same recipe grows the card without bound:
+   ; papel's dev server calls `build` per source change, and its index card climbed 28
+   ; ingredients per rebuild -- 2828 after a hundred -- which `prep` then walks every pass.
+   ; unbounded memory and quadratic time, from a tool that looked idle.
+   (adds a b) (foldl (\ acc x (? (member? x acc) acc (acc + `(x)))) a b)
    (reg item ing oo steps)
    (: prev (peep cards item ())
       (? prev
-         (pin cards item (link (<prev + ing)
-                               (link (<>prev + oo)
+         (pin cards item (link (adds <prev ing)
+                               (link (adds <>prev oo)
                                      (? (two? steps) steps >>prev))))
          (: _ (pin cards item (link ing (link oo steps)))
              _ (? (peep check 0 0) 0 (pin check 0 item)) item)))

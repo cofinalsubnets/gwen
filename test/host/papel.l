@@ -117,6 +117,16 @@ Only a paragraph, so the title has to come from the meta block.
    r4 (refresh conf box)
    _ (assert (0 = r1) (0 = r2) (2 = r3) (0 = r4))
 
+   ; ..and re-registering must not GROW the card. `build` declares its recipes every call,
+   ; and cook's merge used to append prerequisites each time -- so a dev server that
+   ; rebuilds per source change climbed 28 ingredients a rebuild, forever, and `prep`
+   ; walked all of them. unbounded memory and quadratic time out of a server sitting idle.
+   cards (from 'cook 'cards)
+   (icount _) (tally (cap (peep cards (dir + "/site/index.html") ())))
+   n0 (icount ())
+   _ ((: (again k) (? (k < 6) (: _ (build conf) (again (k + 1))) 0)) 0)
+   _ (assert (0 < n0) (n0 = (icount ())))
+
    one (get-file "site/one.html")
    two (get-file "site/two.html")
    three (get-file "site/three.html")

@@ -40,6 +40,28 @@
                                     (rev (link (snip s st (tally s)) acc)))) 0 0 ())
    (dir? p)     (two? (readdir p))
    (fsize p)    (: st (stat p) (? (two? st) <st ()))
+   ; read a whole file, in CHUNKS. prel's `slurp` draws one character at a time off the
+   ; port, ~50ns a byte, and for a static server that is the entire cost of a response:
+   ; a 66K page took 9.7ms to serve, of which 3.3ms was the read and ~0 the write (`say`
+   ; is already one write(2) stroke). `swig` is the chunk lane a per-byte `see` cannot be
+   ; -- it drains the port's own pending run first, then reads the fd -- and it takes 66K
+   ; from 3.3ms to 0.25ms.
+   ;
+   ; the protocol is swig's: 0 means NOTHING WAITING OR EOF, and only a `see` tells those
+   ; apart (it parks on a slow fd, and answers -1 at the end). the byte it returns is a
+   ; real byte and has to be kept. a jug collects the pieces, since appending to a string
+   ; would be quadratic across chunks; `(string buf)` is how a cask becomes one (`snip`
+   ; does not reach into a cask, and swig always fills from offset 0, so a partial read
+   ; cannot be resumed into the same buffer).
+   swigp        (member? 'swig (names ()))       ; ⚠ pinned BEFORE gulp reads it
+   (gulp f)     (: q (open f "r")
+                   (? (! q) ()
+                      (! swigp) (: s (slurp q) _ (close q) s)          ; no cb.c: the slow lane still works
+                      (: j (jug 0) buf (cask 65536)
+                         (go _) (: k (swig q buf)
+                                   (? (0 < k) (: _ (say j (snip (string buf) 0 k)) (go ()))
+                                      (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
+                         _ (go ()) _ (close q) (slurp j))))
    ; ⚠ `got?`, not `lit?`: lit? asks "is this a FUNCTION", and a string is not one, so
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
    ; "" and () are both nothing. `=` is the one thing that tells them apart.
@@ -164,14 +186,13 @@
                                            + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
                                  _ (flush c) `(301 meth raw))
                               (fsize (full + "index.html"))
-                              (: q (open (full + "index.html") "r")
-                                 _ (reply c 200 "OK" "text/html; charset=utf-8" (slurp q) head?)
-                                 _ (close q) `(200 meth raw))
+                              (: b (gulp (full + "index.html"))
+                                 _ (reply c 200 "OK" "text/html; charset=utf-8" b head?)
+                                 `(200 meth raw))
                               (: _ (listing c root p head?) `(200 meth raw)))
                            (! (fsize full)) (: _ (oops c 404 "Not Found" head?) `(404 meth raw))
-                           (: q (open full "r")
-                              (? q (: _ (reply c 200 "OK" (mime full) (slurp q) head?)
-                                      _ (close q) `(200 meth raw))
+                           (: b (gulp full)
+                              (? (got? b) (: _ (reply c 200 "OK" (mime full) b head?) `(200 meth raw))
                                  (: _ (oops c 403 "Forbidden" head?) `(403 meth raw)))))))))))))
 
 ; --- the loop ---------------------------------------------------------------------------

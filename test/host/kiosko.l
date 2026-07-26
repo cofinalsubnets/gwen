@@ -42,6 +42,14 @@
    _ (put-file "blob.zzz" "unknown")
    _ (put-file "sub/index.html" "<h1>sub</h1>")
    _ (put-file "bare/one.txt" "listed")
+   ; a file BIGGER THAN ONE CHUNK. kiosko reads in 64K gulps off `swig`, and every way
+   ; that can go wrong -- a dropped tail, a doubled chunk, a byte lost at the seam where
+   ; swig answers 0 and a single `see` carries the next byte -- shows up only past the
+   ; first buffer. the body is checked whole, not just its length, so a reordering counts.
+   big (: (rep s n) (? (n < 1) "" (s + rep s (n - 1)))
+          line "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n"
+          (rep line 3000))                              ; 64 bytes x 3000 = 192000
+   _ (put-file "big.txt" big)
 
    ; --- one request, one connection: the client half -------------------------------------
    ; kiosko answers with Connection: close, so slurping to EOF is the whole response and
@@ -100,6 +108,15 @@
       (sub? (get "/sub/") "<h1>sub</h1>")
       (sub? (get "/bare/") "one.txt")                  ; no index.html -> a listing
       ((code (get "/nope.html")) = "404"))
+
+   ; --- a body past the chunk boundary ----------------------------------------------------
+   bigr (get "/big.txt")
+   _ (: i ((: (g k) (? (&& (k < tally bigr) (! ((snip bigr k (k + 4)) = "\r\n\r\n"))) (g (k + 1)) k)) 0)
+        body (snip bigr (i + 4) (tally bigr))
+        _ (assert ((tally big) = 192000)                       ; the fixture is really 3 chunks
+                  (sub? bigr "Content-Length: 192000")
+                  ((tally body) = (tally big))
+                  (body = big)))                               ; ..and byte-for-byte, not just as long
 
    ; --- content types -------------------------------------------------------------------
    _ (assert
