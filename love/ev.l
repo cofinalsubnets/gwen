@@ -223,9 +223,11 @@
            (napof v >x) (apx >< 1 >< x)
            (apx >< 0 >< x)))))
    ; cprop: the partial-evaluation pre-pass. it threads a static VALUE env `se` (name . const-form)
-   ; and (1) propagates a constant-bound var to its value, (2) FOLDS a pure-op call on constant args
-   ; via the op's first-class nif (foldc -- NOT via (book op): these ops are compiler-inlined, not
-   ; runtime book keys, so (book '+) is not the nif). it does NOT prune conds (wxc does that,
+   ; and (1) propagates a constant-bound var to its value, (2) FOLDS a pure-fn call on constant
+   ; args -- gv resolves the nif (probed id?-identical to the first-class value; the old hand
+   ; table said otherwise and was wrong) and pureset, the same curated effect-free set feels'
+   ; purity gates read, is the fold license; a bnd-shadowed head never folds (a binder spelled
+   ; like an op still shadows -- the alpha law). it does NOT prune conds (wxc does that,
    ; correctly, downstream) and it does NOT unfold recursion: the in-compiler bounded-unfold proved
    ; near-inert on this VM (cheap calls -> no measurable win; see doc/proto/interp-spec.l). true
    ; interpreter specialization -- the 1st Futamura projection, ~8x on that yardstick -- lives in the
@@ -238,10 +240,6 @@
    (cbake v) (? (charm? v) v `('\ v))                                                ; folded value -> source
    (kval v) (? (atom? v) v <>v)                                                  ; a const FORM -> its value
    (allk as) (all propk? as)                                                       ; all args constant?
-   opval `(`('+ (+)) `('- (-)) `('* (*)) `('// (//)) `('% (%))         ; pure ops -> first-class nif. the value rides
-           `('= (=)) `('< (<)) `('<= (<=)) `('> (>)) `('>= (>=))       ; in parens: bare it would capture its left neighbor
-           `('! (nil?)) `('nil? (nil?)))
-   (opget h) (: e (assq h opval) (? (atom? e) 0 <>e))                       ; h's nif, 0 (a charm) on miss
    (foldc o as) (cbake (foldl (\ g a (g a)) o (map kval as)))                 ; apply the nif to the consts
    ; --- the known-lambda INLINER (cprop's beta-reduction lane) ----------------------------
    ; beta-reduce an application whose (resolved) head is a statically-known lambda. SOUND by
@@ -330,7 +328,8 @@
              (? (&& (< 0 fl) (lambp hr) (allp as se))
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
-                (nom? h && !(charm? (opget h)) && allk as) (foldc (opget h) as)     ; pure-op on consts -> fold (as before)
+                (nom? h && allk as && !(member? h bnd) && pure-head? h)               ; pure-fn on consts -> fold. bnd-guarded: a binder
+                  (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
                 (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
    (wx (cprop x () 64 0 0) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
