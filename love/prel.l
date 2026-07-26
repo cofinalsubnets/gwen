@@ -28,29 +28,28 @@
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
    (names _ ) (keys book)
-   ; -- the scope-layer door (the abyss) + the MODULE REGISTRY (the `mods` nif: g->mods, a lazy
-   ;    singleton tablet, name -> module-book). the chain model: TOP is always the defglob target;
-   ;    under it a use-stack; orth last. `(enter 'holo)` pushes a fresh layer as the head, stashing
-   ;    the pre-enter chain AND the name under a reserved CHARM key (31337 -- a charm can never
-   ;    collide with a name, the macro-table-at-nil trick); `(enter ())` opens an ANONYMOUS scratch
-   ;    scope. `(use 'holo)` splices the registered module just BELOW the head (its names resolve
-   ;    on the walk but can never shadow your layer; a book value splices directly; a missing name
-   ;    scares 'no-module -- a silent ()-splice would be a silent no-op). `(leave ())` on an entered
-   ;    scope unwinds to the pre-enter chain, REGISTERS a named layer in mods, and answers the book;
-   ;    a BARE leave (top never entered -- no charm) truncates the chain to its head: the use-stack
-   ;    clears. `(from 'holo)` answers an OPAQUE accessor closure over the module -- (from 'holo
-   ;    'assemble) currys to a member, (from 'holo 'keys) introspects, (from ()) lists the
-   ;    registered names, a missing module answers () (the presence guard); the raw tablet stays
-   ;    closure-private. all take an operand (love has no nullary fns -- fire with the unit). --
+   ; the scope-layer door (the abyss) + the MODULE REGISTRY (`mods`: g->mods, a lazy singleton
+   ; tablet, name -> module-book). TOP is always the defglob target, under it a use-stack, orth
+   ; last; every verb takes an operand (love has no nullary fns -- fire with the unit).
+   ; enter: push a fresh layer as the head, stashing the pre-enter chain AND the name under the
+   ; reserved CHARM key 31337 (a charm can never collide with a name); (enter ()) is anonymous.
    (enter nm) (: F (tablet 0) _ (pin F 31337 (link (books ()) nm)) _ (setbook (link F (books ()))) ())
+   ; use: splice a registered module just BELOW the head -- its names resolve on the walk but never
+   ; shadow yours. a book value splices directly; a missing name scares 'no-module, since a silent
+   ; ()-splice would be a silent no-op.
    (use m)    (: b (? (book? m) m
                       (: r (peep (mods ()) m ()) (? (nil? r) (scare (\ no-module) m) r)))
                  (setbook (link (cap (books ())) (link b (cup (books ()))))))
+   ; leave: unwind to the pre-enter chain, REGISTER the layer under its name, answer the book. a
+   ; BARE leave (top never entered, so no charm) truncates to the head -- the use-stack clears.
    (leave _)  (: F (cap (books ())) s (peep F 31337 ())
                  (? (two? s)
                     (: _ (pull F 31337 0) _ (setbook (cap s))
                        _ (? (nil? (cup s)) 0 (pin (mods ()) (cup s) F)) F)
                     (setbook (link F ()))))
+   ; from: an OPAQUE accessor over the module -- currying reaches a member, 'keys introspects,
+   ; (from ()) lists the registry, a missing module answers () (the presence guard). the raw
+   ; tablet stays closure-private.
    (from k)   (? (nil? k) (keys (mods ()))
                  (: m (peep (mods ()) k ())
                     (? (nil? m) ()
@@ -81,12 +80,12 @@
 ; X link; cap/cup -- the chain's two projections, the matched pair the string diagrams bend
 ; (lineage: cap/cup <- cap/cbp <- car/cdr) -- and the caap..cuuup compounds above are the
 ; primitives; the older names are gone.
-(: (:: a b) (pin macros a b) ;; FIXME needs a way better api
-   putc (put out) ;; FIXME rename to avoid f prefix
-   puts (say out) ;; FIXME rm f prefix
-   (putn n) (putbn out n 10) ;; FIXME rm f prefix and make preferred base user configurable
-   putx (print out) ;; FIXME rm f prefix
-   (getc _) (see in)) ;; FIXME rm f prefix
+(: (:: a b) (pin macros a b)
+   putc (put out)
+   puts (say out)
+   (putn n) (putbn out n 10)
+   putx (print out)
+   (getc _) (see in))
 ; the accessor aliases are plain globals too, so escaping works like (+)/'+ --
 ; ((->) t k d) peeps.
 ; fixnum-as-function application, pinned on book for the VM's apply path: applying a
@@ -161,6 +160,10 @@
    ; compiled like any lambda; k past the cache falls back to numfn. The hot case (2/3) hits hand-written
    ; `twice`/`thrice` speed. They + num-ap sit in this nested (body-HAVING) `:`, so they are LOCAL -- num-ap
    ; captures them as siblings, they never reach the book, no mop entry. pre-operators: prefix only.
+   ; dechurch takes the numeral applications it can SEE -- (3 (+ 1) x) unrolls to nested (+ 1 ..) at
+   ; compile time -- so what reaches here is exactly what it can't: a numeral over a runtime function.
+   ; that lane wants the cache; a counting iterative applier measured 22% slower at k=2/3 and 45%
+   ; slower across k=2..8, since the cached body is k straight-line applications with no loop.
    _ (: cmp2 (\ f (\ x (f (f x))))
         cmp3 (\ f (\ x (f (f (f x)))))
         cmp4 (\ f (\ x (f (f (f (f x))))))
@@ -168,6 +171,8 @@
         cmp6 (\ f (\ x (f (f (f (f (f (f x))))))))
         cmp7 (\ f (\ x (f (f (f (f (f (f (f x)))))))))
         cmp8 (\ f (\ x (f (f (f (f (f (f (f (f x))))))))))
+        ; FREQUENCY-ORDERED, and that is why it stays a chain: k=2/3 (the hot case) answers in one
+        ; or two ~9ns compares where a tablet peep is ~47ns flat in size -- a table pays past k=6.
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
         ; an OPEN star: a coin whose die pins slot 7 is numeric BY DECLARATION, so a
         ; numeral powers it through its own * -- ipow is generic, the exact squaring
@@ -257,11 +262,14 @@
    ; growing fact-map, descends for a shrinking candidate set). The measure is snapshot BEFORE the step,
    ; so a step that mutates the state IN PLACE (and returns it) is detected by the pre/post size delta.
    (monofix st step size) (: b (size st) nx (step st) (? (= (size nx) b) nx (monofix nx step size)))
+
    ; kconst: the one constant-form recognizer -- a present (1 . value) iff e is a constant form (a
    ; non-symbol atom or a (\ v) quote of one), else () (no fact, NOT a number -- absence is the unit).
    ; The compiler's constant queries are projections of it across scopes that can't otherwise share
    ; (feels' cval, cprop's propk?, wxc's cst) -- one fact, many readers. (No `&&`: it is a macro defined
-   ; later in prel, and a single-pass bootstrap can't expand a forward macro.)
+   ; later in prel, and a single-pass bootstrap can't expand a forward macro.) It could live in ev.l
+   ; instead -- all three readers are there and nothing else in the corpus touches it -- unlike
+   ; monofix above, which the glaze reads bare from its own post-egg compile.
    (kconst e) (? (nom? e) ()                                                    ; a variable -> no fact
                  (atom? e) (link 1 e)                                           ; a literal -> (1 . itself)
                  (id? (cap e) '\) (? (atom? (cuup e)) (link 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
@@ -356,17 +364,17 @@
 ; operand iff its grip >= the frame's grip (op-steal), so equal grips stay right-associative (the
 ; conservative-extension case, today's flat read) and a tighter operator climbs in.
 (: operators
-   (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
-      (L (L '! (link 'nil? 1)) (L '. (link 'dot 1))                               ; arity-1 sigils: grip inert (prefix folds on fill)
-         (L '** (link 2 70))                                                      ; apply -- flip-apply, tightest infix (a ** b = (b a)); glued a**b unaffected (not in monadics)
-         (L '* (link 2 60)) (L '/ (link 2 60)) (L '% (link 2 60))                 ; multiplicative
-         (L '+ (link 2 50)) (L '- (link 2 50))                                    ; additive
-         (L '= (link 2 40)) (L '< (link 2 40)) (L '<= (link 2 40)) (L '> (link 2 40)) (L '>= (link 2 40)) ; comparison
-         (L '| (link 2 30)) (L '& (link 2 30)) (L '&& (link 2 30)) (L '|| (link 2 30))                    ; logical (&& || also macros; the row pins the grip below comparison)
-         (L '>< (link 2 25))                                                      ; cons -- the loosest builder
-         (L '<- (link 'pin (link 3 20))) (L '-> (link 'peep (link 3 20)))         ; assignment aliases
-         (L '? (link 3 10))                                                       ; cond
-         (L '$ (link 2 5)))))                                                     ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
+   (foldl (\ t p (pin t (cap p) (cup p))) (tablet 0)
+      (L (link '! (link 'nil? 1)) (link '. (link 'dot 1))                         ; arity-1 sigils: grip inert (prefix folds on fill)
+         (link '** (link 2 70))                                                   ; apply -- flip-apply, tightest infix (a ** b = (b a)); glued a**b unaffected (not in monadics)
+         (link '* (link 2 60)) (link '/ (link 2 60)) (link '% (link 2 60))        ; multiplicative
+         (link '+ (link 2 50)) (link '- (link 2 50))                              ; additive
+         (link '= (link 2 40)) (link '< (link 2 40)) (link '<= (link 2 40)) (link '> (link 2 40)) (link '>= (link 2 40)) ; comparison
+         (link '| (link 2 30)) (link '& (link 2 30)) (link '&& (link 2 30)) (link '|| (link 2 30)) ; logical (&& || also macros; the row pins the grip below comparison)
+         (link '>< (link 2 25))                                                   ; cons -- the loosest builder
+         (link '<- (link 'pin (link 3 20))) (link '-> (link 'peep (link 3 20)))   ; assignment aliases
+         (link '? (link 3 10))                                                    ; cond
+         (link '$ (link 2 5)))))                                                  ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
 ; the VALENCE LAW's table: a glued operator run is MONADIC (the reader emits
 ; (mono (run datum))); spaced, the run keeps its dyadic/infix life. each entry
 ; maps a run-piece to its monadic word; a run factors greedily (longest
@@ -375,6 +383,8 @@
 ; unfactorable run falls back to the plain application.
 (: monadics
    (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
+   ; << and >> earn their rows by SPEED, not by reach: without them the greedy factor splits >>x
+   ; into > then >, which composes to the same cuup -- the entry makes it one call instead of two.
       `('(< cap) '(> cup) '(<< caap) '(>> cuup) '(+ net) '(* prod)
         '(| abs) '(- negate) '(/ reciprocal) '(% fraction) '(? bit)
         '($ saturate)
@@ -384,9 +394,16 @@
 ; takes the positional valence. a token that doesn't factor is a plain
 ; symbol. so != factors to ! and = ((a != b) = (nil? (= a b))) while &&,
 ; >>=, :-, ?- (two-led or unmatched) stay atomic names.
-(: (op-punc-byte c) (? (&& (<= 48 c) (<= c 57)) 0
+; everything from here down to the SECOND (seal-hooks) is the opfix machinery itself, so it stays
+; PREFIX: the first bootstrap pass compiles prel with no opfix on the book (it is pinned and sealed
+; at the foot of this block), so an infix form in here reads as a raw application and love0's lcat
+; dies. past that seal the new style is free.
+; the four ranges are DISJOINT -- 97..122 lower, 48..57 digits, 65..90 upper, 95 underscore -- so no
+; test implies another, and they run COMMONEST-FIRST: op-puncp bails on a symbol's first byte, and
+; that byte is usually a lowercase letter.
+(: (op-punc-byte c) (? (&& (<= 97 c) (<= c 122)) 0
+                       (&& (<= 48 c) (<= c 57)) 0
                        (&& (<= 65 c) (<= c 90)) 0
-                       (&& (<= 97 c) (<= c 122)) 0
                        (= c 95) 0
                        1)
    ; cheap prefilter: only an all-punct symbol can factor
@@ -419,7 +436,9 @@
                   (: e (op-ent (intern (snip nm i (+ i k))))
                      (? (two? e) (link k e) (go (- k 1))))))
      (- n i))
-   ; factor symbol s -> a list of (name . arity) entries, or 0
+   ; factor symbol s -> a list of (name . arity) entries, else nothing. every no-match falls off the
+   ; end of its `?` to the UNIT: the one consumer (op-w, below) reads the answer with two?, so an
+   ; omitted else says "does not factor" without leaving a 0-fossil in a do-nothing slot.
    (opfactor s)
     (: nm (string s) n (tally nm)
        ((: (go i)
@@ -428,10 +447,7 @@
                  (? (two? m) (: k (cap m) e (cup m)
                          (? (= (+ i k) n) (link e ())        ; the last factor: any arity
                             (= (caup e) 1) (: r (go (+ i k)) ; non-last factors must be arity one
-                                             (? (two? r) (link e r) 0))
-                            0))
-                    0))
-              0))
+                                             (? (two? r) (link e r)))))))))
         0))
    ; longest prefix of nm[i..n) that has a monadic meaning -> (len . word),
    ; or 0. monadics first, then an operators entry at arity ONE (the legacy
@@ -470,6 +486,9 @@
 (: (op-fr o ch nm nd g gt) (link o (link ch (link nm (link nd (link g gt)))))
    (op-fro f) (cap f) (op-frc f) (caup f) (op-frn f) (cauup f)
    (op-frd f) (cap (cuuup f)) (op-frgrip f) (cap (cup (cuuup f))) (op-frg f) (cup (cup (cuuup f)))
+   ; a frame is only ever rebuilt with a new need + got -- orig, chain, name and grip are fixed
+   ; the moment the operator is read -- so the walk says which two slots move and nothing else.
+   (op-frw f nd g) (op-fr (op-fro f) (op-frc f) (op-frn f) nd (op-frgrip f) g)
    ; wrap the chain of arity-one names around a folded form
    (op-fin ch x) (? (two? ch) (link (cap ch) (link (op-fin (cup ch) x) ())) x)
    ; fold a collected span (out, reversed) into ONE operand: a lone datum stays
@@ -499,8 +518,7 @@
     (? (atom? pend) (link (link d out) pend)
        (: f (cap pend)
           (? (< 0 (op-frd f))
-             (: f2 (op-fr (op-fro f) (op-frc f) (op-frn f)
-                          (- (op-frd f) 1) (op-frgrip f) (link d (op-frg f)))
+             (: f2 (op-frw f (- (op-frd f) 1) (link d (op-frg f)))
                 ; (nil? ..), not !: this block is pre-opfix (the bootstrap restriction)
                 (? (&& (= 0 (op-frd f2)) (nil? (nom? (op-frn f2))))
                    (op-del (op-fold f2) out (cup pend))
@@ -508,8 +526,7 @@
              (: op (cap (op-frg f))                          ; the frame's last (right) operand
                 nx (? (= 0 (op-frd f)) (link op (link d ())) ; lone -> wrap into (op d)
                       (cat op (link d ())))                  ; span -> append d
-                f2 (op-fr (op-fro f) (op-frc f) (op-frn f)
-                          -1 (op-frgrip f) (link nx (cup (op-frg f))))
+                f2 (op-frw f -1 (link nx (cup (op-frg f))))
                 (link out (link f2 (cup pend)))))))
    ; take a left operand for an incoming operator of grip g -> `(. (out' . pend')), or 0.
    ; a FILLED top frame: g >= its grip re-arms (need 1) and yields its last operand (the C reader's
@@ -525,9 +542,7 @@
              (? (< g (op-frgrip f))
                 (: r (op-del (op-fold f) out (cup pend)) (op-steal g (cap r) (cup r)))
                 (link (cap (op-frg f))
-                      (link out (link (op-fr (op-fro f) (op-frc f) (op-frn f)
-                                             1 (op-frgrip f) (cup (op-frg f)))
-                                      (cup pend)))))
+                      (link out (link (op-frw f 1 (cup (op-frg f))) (cup pend)))))
              0))
        (two? out) (link (op-span out) (link () pend))
        0)
@@ -679,7 +694,6 @@
 (:: 'let (\ a (link ': a)))
 (:: 'if (\ a (link '? a)))
 (:: 'cond (\ a (link '? a)))
-; `(quote x)` -> `(\ x)`: the CL/Scheme name for the one-arg-lambda quote (`'x` sugar).
 (:: 'quote (\ a (link '\ a)))
 
 ; --- assert / suite: the strict checkers, baked so they work with NO harness ---
@@ -795,6 +809,9 @@
 ; answers () -- the undefined-op law, and the fence that keeps a foreign operand (a
 ; chain of coins, say) from dragging gcd into a loop. `reduce`/`ok?` are local
 ; plumbing; q is the only name this leaks.
+; it sits in prel because post.l is HOST-ONLY (main.c is the one frontend that evals it) and rune
+; rides q everywhere -- port/playdate bakes rune.h with no post, so a move would take the CAS
+; workbench with it. the same tie holds the kanren block below.
 (: q (: reduce (\ n d (? (= 0 n) (L 0 1)                        ; gcd out, sign on num, den > 0
                         (: g (gcd (abs n) (abs d)) s (? (< d 0) -1 1)
                            (L (// (* s n) g) (// (* s d) g)))))
@@ -807,6 +824,9 @@
                    0)
         st #(0 'q 7 1 6 2)                                      ; slot 7: a rational IS a star;
                                                                 ; slot 6 mode 2: C truth by VALUE
+        ; `#(..)` IS the pins macro -- it expands to nested pins -- but the methods cannot ride the
+        ; literal: each names `st` back, and a self-referential bind compiles here yet fails in the
+        ; love0 lane ((q 1 2) + (q 1 3) came out unequal to (q 5 6)). bind the die, THEN pin onto it.
         _ (pin st 1 (\ a b (: x (load a) y (load b)             ; (n1 d1) + (n2 d2)
               (? (&& (ok? x) (ok? y))
                  (coin st (reduce (+ (* (cap x) (caup y)) (* (cap y) (caup x))) (* (caup x) (caup y))))
@@ -837,6 +857,8 @@
 ; (conjunction) -- so a relation is a polynomial in unifications (see the ring).
 ; the module span opens here: the trailer below (names ()) sweeps everything this
 ; section leaks into the `kanren` book, keeping the public few on the global book.
+; post would be the natural home, but it is host-only and rune's matcher unifies on this -- same
+; tie as q above, so kanren stays where every frontend can reach it.
 (: kanren-mark (names ()))
 (: (dict_has d k) (: (loop k ks vs) (? ks (? (= k (cap ks)) vs (loop k (cup ks) (cup vs)))) (loop k (cap d) (cup d)))
    (dict_set d k v) (link (link k (cap d)) (link v (cup d)))
@@ -983,6 +1005,9 @@
 ; flat-list adapter for c0 (ev.c): a `:` binding list (n1 d1 .. [body]) -> the
 ; rewritten list, or the input unchanged. even (body-less) lets and lets that
 ; need no boxing pass through verbatim.
+; it sits last because it needs boxfix-core and dsug above, not because it is optional: love.c
+; interns "boxfix" and calls it off the book, so c0 compiles prel itself through this -- it must
+; exist before ev.l does. ev.l's feel calls the same one, which is the point (one pass, both lanes).
 (: (boxfix fs) (:
    (ev l) (? (atom? l) 1 (atom? (cup l)) 0 (ev (cuup l)))
    (bpr fs) (? (atom? (cup fs)) (link 0 (cap fs))
