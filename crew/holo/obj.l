@@ -28,7 +28,10 @@
 
    (o-has? tab k) !(id? (peep tab k 'no) 'no)    ; is key k bound in the tablet?
    (o-strbytes s) (: (go i acc) (? (i < 0) acc (go (i - 1) ((s i) >< acc)))
-                     (go ((tally s) - 1) ()))       ; a string -> its byte list
+                     (go ((tally s) - 1) ()))       ; a string -> its byte list. this one
+                     ; is a real ENCODE, not a bytes-through-text leak: an ELF string
+                     ; table holds NAMES, which are text. when the charm widens this
+                     ; becomes an explicit utf-8 encode (doc/proto/widen.md).
 
    ; walk an assembled section's items (bytes + fixups) -> (bytes relocs). a fixup
    ; is resolved in place when the section may (text-internal, a kind in rset --

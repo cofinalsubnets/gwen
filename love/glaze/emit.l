@@ -36,7 +36,7 @@
    ; arith, the float lanes cgf/jitfr, the grid kernels gridn/grid2), assembled per target. The old byte
    ; blobs (deopt/guard/guardz/fetch/untag/fxv/epilogue) are gone -- their IR twins are deoptbody/ldeopt/
    ; zdeopt/fxvir/loopepi, which serve BOTH x86 and arm64.
-   (emit l) (: b (cask (tally l)) _ ((: (go i x) (? (two? x) (: _ (pin b i <x) (go (i + 1) >x)) ())) 0 l) b)
+   (emit l) (cask l)                       ; the charlist lane fills in C -- this was a pin per byte
    ; (jit '(\ x E)) -- compile an arithmetic single-arg closure to native.
    (jit lam) (jitir lam 'x64)  ; arity-1 leaf -> the neutral-IR lane (cgir)
    ; argix finds a param var's frame index in ps (shared with the IR lane's fxir/cgir).

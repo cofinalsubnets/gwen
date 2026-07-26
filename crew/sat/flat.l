@@ -681,8 +681,7 @@
        (say j "0\n"))
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep ((from 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
-       c (cask (tally bs))
-       _ (foldl (\ i b (: _ (pin c i b) (i + 1))) 0 bs)
+       c (cask bs)                                           ; the charlist lane fills in C
        (nif c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
     (? !(&& (lit? nif) (id? (intern love-arch) 'x64)) ()

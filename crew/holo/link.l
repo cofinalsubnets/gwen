@@ -242,11 +242,12 @@
        hdr (elf64-hdr (? pie 3 2) base (peep <objs 'tbase 0) (r1 - base) mach)
        (hdr >< (>en + tail + (? pie `(rtab) ()))))
 
-   ; write a piece list to a file, raw (texts pass through; byte lists pack).
-   ; an explicit left walk: map runs its effects right-to-left.
+   ; write a piece list to a file, raw (texts pass through; byte lists pack into a
+   ; CASK -- the byte array, not a string that happens to hold bytes today; see
+   ; doc/proto/widen.md). an explicit left walk: map runs its effects right-to-left.
    (ld-write path ps)
     (: q (open path "w")
        (go l) (? !(two? l) (close q)
-                 (: _ (say q (: p <l (? (string? p) p (string p))))
+                 (: _ (say q (: p <l (? (string? p) p (cask p))))
                     (go >l)))
        (go ps)))

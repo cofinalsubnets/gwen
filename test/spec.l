@@ -335,12 +335,17 @@
  (0 = @0) (nil? (rank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
  (book? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
 
-; --- buffers --- (cask n) mutable zeroed bytes; peep/pin a byte 0..255; `$` nets the charms
-; (a zeroed cask is nothing); pour; identity equality.
+; --- buffers --- (cask n) mutable zeroed bytes; (cask charlist) a cask HOLDING those bytes
+; (the lane `string` wears for a charlist -- the bulk way in, so a byte blob never needs a
+; string to ride); peep/pin a byte 0..255; `$` nets the charms (a zeroed cask is nothing);
+; pour; identity equality.
 (assert
  (: b (cask 3) _ (pin b 0 65) (65 = (peep b 0 0))) (0 = $(cask 4)) (4 = (tally (cask 4)))
  !(cask 3) (65 = (: b (cask 1) _ (pin b 0 65) $b))  ; zeroed -> nothing; bytes are charms (lockstep at bufs)
  (: b (cask 1) _ (pin b 0 257) (1 = (peep b 0 0))) (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (68 = (peep b 3 0)))
+ (: b (cask '(200 65 0 255)) (&& (4 = (tally b)) (&& (200 = (peep b 0 0)) (255 = (peep b 3 0)))))   ; the charlist lane: high bytes and an embedded NUL ride
+ (: b (cask '(65 66)) ("AB" = (string b)))          ; ... and it reads back as those bytes (identity equality, so compare CONTENT)
+ ("" = (cask ())) ("" = (cask 0))                   ; no empty cask: both empties ARE ""
  !((cask 2) = (cask 2)))
 
 ; --- reader operators --- reading is STRUCTURAL and environment-free: the reader knows tokens,

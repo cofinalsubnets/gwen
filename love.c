@@ -4855,20 +4855,27 @@ lvm(lvm_snip) {
 // generic thread path and the cheney sound forwards its backing-string pointer.
 lvm(lvm_buf) {
  return Ip = cell(*++Sp), *Sp = putcharm(1), Continue(); }
-// (buf n) — allocate a zeroed n-byte mutable buf. n<=0 / non-numeric -> the empty
+// (buf n) — allocate a zeroed n-byte mutable buf. (buf charlist) — allocate one HOLDING
+// those bytes, the lane `string` has always had for a charlist: it is the only BULK way
+// into a cask, and without it the sole bulk byte path in the system ran through a string
+// (filling by pin costs ~20x). n<=0 / non-numeric -> the empty
 // string singleton EmptyString, so NO empty buf object ever exists (an un-writable 0-byte
 // buf IS ""); this lets ai_nilp drop its buf branch (every real buf has len>=1, truthy).
 // Two heap objects under one Have (so no GC sees a half-built buf): the backing ai_str
 // holding the bytes, and the length-2 wrapper thread [lvm_buf, str, terminator].
 lvm(lvm_bufnew) {
- intptr_t n = charmp(Sp[0]) ? getcharm(Sp[0]) : 0;
+ bool listp = chainp(Sp[0]);
+ intptr_t n = charmp(Sp[0]) ? getcharm(Sp[0]) : listp ? (intptr_t) llen(Sp[0]) : 0;
  if (n <= 0) return Sp[0] = EmptyString, Ip++, Continue();   // no empty buf: it is ""
  uintptr_t sreq = str_type_width + b2w(n),
            breq = Width(struct ai_buf) + Width(struct ai_tag);
  Have(sreq + breq);
  struct ai_str *s = ini_str((struct ai_str*) Hp, n);
  Hp += sreq;
- memset(txt(s), 0, n);
+ if (listp) {                                                // the charlist lane, mirroring lvm_string's
+  word y = Sp[0];                                            // re-read post-Have, like the buf lane there
+  for (uintptr_t i = 0; i < (uintptr_t) n; y = B(y)) txt(s)[i++] = (char) getcharm(A(y)); }
+ else memset(txt(s), 0, n);
  union u *k = (union u*) Hp;
  Hp += breq;
  ((struct ai_buf*) k)->ap = lvm_buf;

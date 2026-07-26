@@ -52,5 +52,7 @@
          res)
    (elf64 target mkprog data) (elf64-at elf-base target mkprog data)
 
-   ;; write a byte list to a file (length-counted, so embedded NULs survive).
-   (write-bytes path bs) (: q (open path "w") _ (say q (string bs)) (close q)))
+   ;; write a byte list to a file. the blob rides a CASK, not a string: a cask is the
+   ;; byte array and says raw, where a string is text that merely happens to be bytes
+   ;; today (doc/proto/widen.md -- every ELF used to go out through one).
+   (write-bytes path bs) (: q (open path "w") _ (say q (cask bs)) (close q)))
