@@ -560,111 +560,26 @@
         (loop () () 0 ()))
 
    ; (bao a) -- the interactive entry the host frontend launches. `(bao 0)` is
-   ; exactly the baked shell (an arg is taken: love has no nullary calls); `(bao 'test)`
-   ; runs the private unit battery (boot/baotest.l gates it -- the selftest stays
-   ; closure-private, off the book). `wrap` is reachable from the bao prompt; the
-   ; editor-as-line-reader (edraw) and the debug `help` are the later modes (crew/bao.md).
-   (bao a) (? (a = 'test) (bao-selftest ()) (shell ()))
+   ; exactly the baked shell (an arg is taken: love has no nullary calls).
+   ; `wrap` is reachable from the bao prompt; the editor-as-line-reader (edraw)
+   ; and the debug `help` are the later modes (crew/bao.md).
+   ;
+   ; `(bao 'parts)` is the TEST DOOR: an opaque accessor over the editor primitives,
+   ; the same shape `from` hands back for a module -- (B 'edleft) reaches one,
+   ; (B 'keys) lists them, anything else answers 0. test/host/baotest.l writes the
+   ; battery against it, so the CHECKS live with the tests while the NAMES stay
+   ; closure-private, off the book. The tablet is built ON THE CALL, so a shell that
+   ; never asks never pays for it.
+   (bao a) (? (a = 'parts)
+              (: p #('edleft edleft 'edright edright 'edbsp edbsp 'eddel eddel
+                     'edhome edhome 'edend edend 'edtop edtop 'edbot edbot
+                     'edup edup 'eddown eddown 'uphist uphist 'downhist downhist
+                     'detach detach 'emptybuf emptybuf 'mkframe mkframe
+                     'parses parses 'joinln joinln 'flatten flatten
+                     'splitat splitat 'parseall parseall)
+                 (\ q (? (id? q 'keys) (keys p) (peep p q 0))))
+              (shell ()))
 
-   ; --- the editor self-test, run from inside the closure (so it reaches the
-   ; private ed* / parseall / history helpers that USED to be corpus globals).
-   ; it cannot USE the test harness `assert` (a macro absent at bake time, when
-   ; this closure compiles), so it instead COMPUTES the whole battery of boolean
-   ; checks and returns them as a flat list; boot/baotest.l (a bao-loaded test)
-   ; gates that list through the real `assert`. k4/k7 pack the CPS continuation's
-   ; (u l r d [hu hd cur]) arguments into a comparable list, exactly as the old
-   ; test/repl.l did. (the formerly-leaked names are now reached HERE, not in the
-   ; corpus -- that is the namespace cleanup.)
-   (k4 u l r d) (u >< l >< r >< d)
-   (k7 u l r d hu hd cur) (u >< l >< r >< d >< hu >< hd >< cur)
-   (bao-selftest _) `(
-     ; --- edleft / edright / edbsp / eddel / edhome / edend ---
-     ((k4 () '(1) '(2 3) ()) = (edleft k4 () '(2 1) '(3) ()))
-     ((k4 () '(2 1) () `('(3))) = (edleft k4 `('(1 2)) () '(3) ()))
-     ((k4 () () '(1 2) ()) = (edleft k4 () () '(1 2) ()))
-     ((k4 () '(1) '(2 3) ()) = (edright k4 () () '(1 2 3) ()))
-     ((k4 `('(1 2)) () '(3 4) ()) = (edright k4 () '(2 1) () `('(3 4))))
-     ((k4 () '(2 1) () ()) = (edright k4 () '(2 1) () ()))
-     ((k4 () '(1) '(3) ()) = (edbsp k4 () '(2 1) '(3) ()))
-     ((k4 () '(2 1) '(3) ()) = (edbsp k4 `('(1 2)) () '(3) ()))
-     ((k4 () () '(1) ()) = (edbsp k4 () () '(1) ()))
-     ((k4 () '(1) '(3) ()) = (eddel k4 () '(1) '(2 3) ()))
-     ((k4 () '(1) '(2 3) ()) = (eddel k4 () '(1) () `('(2 3))))
-     ((k4 () '(1) () ()) = (eddel k4 () '(1) () ()))
-     ((k4 () () '(1 2 3) ()) = (edhome k4 () '(2 1) '(3) ()))
-     ((k4 () '(3 2 1) () ()) = (edend k4 () '(2 1) '(3) ()))
-     ; --- edtop / edbot ---
-     ((k4 () () '(1 2 3) ()) = (edtop k4 () '(2 1) '(3) ()))
-     ((k4 () '(3 2 1) () ()) = (edbot k4 () '(2 1) '(3) ()))
-     ((k4 () () '(1) `('(2) '(3))) = (edtop k4 `('(2) '(1)) '(3) () ()))
-     ((k4 `('(2) '(1)) '(3) () ()) = (edbot k4 () '(1) () `('(2) '(3))))
-     ((k4 () () '(1) `('(8 9) '(4))) = (edtop k4 `('(1)) '(8) '(9) `('(4))))
-     ; --- edup / eddown ---
-     ((k4 () '(1) '(2 3 4) `('(5 6))) = (edup k4 `('(1 2 3 4)) '(5) '(6) ()))
-     ((k4 () '(2 1) () `('(3 4 5 6))) = (edup k4 `('(1 2)) '(4 3) '(5 6) ()))
-     ((k4 () '(1) '(2) ()) = (edup k4 () '(1) '(2) ()))
-     ((k4 `('(5 6)) '(1) '(2 3 4) ()) = (eddown k4 () '(5) '(6) `('(1 2 3 4))))
-     ((k4 () '(1) '(2) ()) = (eddown k4 () '(1) '(2) ()))
-     ; --- joinln / flatten / splitat ---
-     (() = (joinln ()))
-     ('(1 2 3) = (joinln `('(1 2 3))))
-     ('(1 10 2) = (joinln `('(1) '(2))))
-     ('(1 2 10 3 10 4 5) = (joinln `('(1 2) '(3) '(4 5))))
-     ('(1 2 3) = (flatten () '(2 1) '(3) ()))
-     ('(1 10 2) = (flatten `('(1)) '(2) () ()))
-     ('(1 10 2 10 3) = (flatten `('(1)) '(2) () `('(3))))
-     (('(2 1) >< '(3 4)) = (splitat link () 2 '(1 2 3 4)))
-     (('(2 1) >< ()) = (splitat link () 5 '(1 2)))
-     ((() >< '(1 2 3)) = (splitat link () 0 '(1 2 3)))
-     ; --- mkframe / detach / emptybuf / parses ---
-     (`(() '(1) ()) = (mkframe () '(1) () ()))
-     ('(((1)) (2 3) (4) (5)) = (mkframe `('(1)) '(2 3) '(4) `('(5))))
-     (() = (detach () ()))
-     (: cur (mkframe () '(1) () ()) (`(cur) = (detach () cur)))
-     (: cur (mkframe () '(1) () ()) old (mkframe () '(9) () ())
-        (`(cur old) = (detach `(old) cur)))
-     (emptybuf () () () ())
-     !(emptybuf () '(1) () ())
-     !(emptybuf `('(1)) () () ())
-     !(emptybuf () () '(1) ())
-     !(emptybuf () () () `('(1)))
-     (parses () `(49) () ())
-     !(parses () () () ())
-     !(parses () `(40) () ())
-     (parses `(`(40)) `(41) () ())
-     ; --- uphist / downhist ---
-     (: cur (mkframe () '(1) () ()) old (mkframe () '(9) () ())
-        ((k7 () '(9) () () () `(cur) old) = (uphist k7 () '(1) () () `(old) () cur)))
-     (: old (mkframe () '(9) () ())
-        ((k7 () '(9) () () () () old) = (uphist k7 () () () () `(old) () ())))
-     (: cur (mkframe () `(49) () ())
-        ((k7 () () () () () `(cur) ()) = (uphist k7 () `(49) () () () () cur)))
-     (: cur (mkframe () `(40) () ())
-        ((k7 () `(40) () () () () cur) = (uphist k7 () `(40) () () () () cur)))
-     ((k7 () `(49) () () () () ()) = (uphist k7 () `(49) () () () () ()))
-     (: cur (mkframe () '(1) () ()) new (mkframe () '(9) () ())
-        ((k7 () '(9) () () `(cur) () new) = (downhist k7 () '(1) () () () `(new) cur)))
-     (: new (mkframe () '(9) () ())
-        ((k7 () '(9) () () () () new) = (downhist k7 () () () () () `(new) ())))
-     (: cur (mkframe () `(49) () ())
-        ((k7 () () () () `(cur) () ()) = (downhist k7 () `(49) () () () () cur)))
-     ; --- parseall: a line is ONE expression; floats; the more-sentinel ---
-     ; a SINGLE datum is returned as-is in a one-list (no extra wrap), so a leading
-     ; monadic stays fused: "+(-3)" -> (mono (+ (-3))) -> -3, not the head-position (+ -3).
-     ('((1 2 3)) = (parseall '(49 32 50 32 51)))           ; "1 2 3" -> the application
-     ('((1 2)) = (parseall '(40 49 32 50 41)))             ; "(1 2)" -> the one form, as-is
-     (-3 = (ev <(parseall '(43 40 45 51 41))))             ; "+(-3)" -> monadic net = -3 (the bug fix)
-     (() = (parseall ()))
-     !(two? (parseall '(40 49)))
-     (1.5 = <(parseall '(49 46 53)))
-     (1000.0 = <(parseall '(49 101 51)))
-     (nom? <(parseall '(49 46 50 46 51)))
-     ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
-     !(two? (parseall '(40 43 32 49)))                  ; "(+ 1" unclosed
-     (two? (parseall '(49 32 43)))                      ; "1 +" complete (the curry partial)
-     (two? (parseall '(49 32 63 32 39 97)))             ; "1 ? 'a" complete (curried cond)
-     (two? (parseall '(40 43 32 49 32 50 41)))          ; "(+ 1 2)" closed
-     (two? (parseall '(49 32 61 32 49))))               ; "1 = 1"
 
    ; the body: the public entry points, defglob'd below. everything above stays
    ; closure-private (off the book), which is what stops the ed* editor + repl
@@ -673,8 +588,9 @@
 
  ; defglob the public surface out of the export list (book is mopped post-egg, so
  ; a top-level body-less (: ..) is the only way to add a global; the privates above
- ; -- including bao-selftest, reached via (bao 'test) -- never reach it). the holder
- ; is `_` (the previous line's value, by the sequence law), so it never leaks either.
+ ; never reach it -- the battery in test/host/baotest.l reads them through the
+ ; (bao 'parts) door instead). the holder is `_` (the previous line's value, by
+ ; the sequence law), so it never leaks either.
  shell <_
  welp  <>_
  edraw <>>_
