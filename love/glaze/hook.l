@@ -72,7 +72,13 @@
    ; body over ps; deopt -> e. non-qualifying -> e unchanged.
    (natjit e s a gv farq lams)
     (: ps (init >s)  body (last >s)
-       (? (&& (two? s) (two? >>s) (exprn ps body))         ; >=1 param, a body, leaf grammar
+       (? !(all name? ps) e                                ; a NAMELESS (mint) frame -- bsub's fresh binders, boxfix's
+                                                           ; cells -- declines every lane. mints only reach emission at
+                                                           ; all since cprop emits walked heads; the lanes were written
+                                                           ; for NAMED frames and name?/nil? seams bite (adesug's net-0
+                                                           ; unwrap was a real miscompile). bytecode is always sound,
+                                                           ; and this is exactly the coverage the lanes had before.
+          (&& (two? s) (two? >>s) (exprn ps body))         ; >=1 param, a body, leaf grammar
           (: _ (pin fires () (1 + (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
              (nif (emit (peep (assemble arch (coreir arch ps body (deoptir arch (? (a = 1) 0 1)))) 'bytes 0)) e s a))
           ; FLOAT-RESULT leaf -- (\ x <fexpr>) that BOXES a gem (auto-ev's qualfr/jitfr lane).

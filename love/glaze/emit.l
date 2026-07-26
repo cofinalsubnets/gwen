@@ -464,7 +464,10 @@
    (adesug env e)
     (? (aquote? e) e
        !(two? e) e
-       (nil? >e) (adesug env <e)
+       (atom? >e) (adesug env <e)                       ; the (X) singleton -- EMPTINESS, never nil?: a tail of
+                                                        ; NAMELESS mints (bsub's fresh binders) NETS to 0, and the
+                                                        ; net test unwrapped (\ m1 m2 m2) to bare \ -- a quote-shaped
+                                                        ; wreck amble then compiled as the constant \ (miscompile)
        (: op0 <e
           vn (? (|| (name? op0) (two? op0)) 0 (aopn op0 aopv))
           op (? (&& vn !(member? vn env)) vn op0)
