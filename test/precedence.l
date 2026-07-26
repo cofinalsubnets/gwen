@@ -55,6 +55,38 @@
  (13 = ((+ 1) $ (+ 2) $ 10))                          ; right-assoc: ((+ 1) ((+ 2) 10)) = ((+ 1) 12)
  (0 = $-5) (3 = $2.9)                                 ; glued $x is UNCHANGED -- saturate, not weak-apply
 
+ ; --- the FIXITY DOOR: (fixity nm v) declares an operator's shape at run time and answers the row
+ ; it replaced, in the shape it takes -- so (fixity nm (fixity nm new)) restores exactly. every
+ ; assert here RESTORES inside its own form: the corpus is read form by form, so a live row would
+ ; change how the NEXT form parses. the table is read live, so `opfix` shows the change at once. ---
+ (: was (fixity '<+> '(2 60 1))                       ; haskell's `infixl 7 <+>`
+    tree (opfix '(a <+> b <+> c))
+    _ (fixity '<+> was)
+    (&& (was = ()) (tree = '(<+> (<+> a b) c))))      ; undeclared before; left-handed after
+ (: _ (fixity '<+> '(2 60))                           ; `infixr 7` -- the hand defaults right
+    tree (opfix '(a <+> b <+> c))
+    _ (fixity '<+> ())
+    (tree = '(<+> a (<+> b c))))
+ (: _ (fixity '<+> '(2 60 1))
+    prev (fixity '<+> ())                             ; () CLEARS, and answers what it cleared
+    (&& (prev = '(2 60 1)) ((opfix '(a <+> b * c)) = '(<+> a (* b c)))))   ; back to house grip
+ ((fixity '<+> ()) = ())                              ; clearing an absent row is a no-op answering ()
+ (: _ (fixity '=: '(pin 3 20 0))                      ; the nom-led ALIAS form, like <- itself
+    tree (opfix '(t =: k v))
+    _ (fixity '=: ())
+    (tree = '(pin t k v)))
+ (: was (fixity '+ '(2 70 1))                         ; a CORE operator can be re-gripped ..
+    tree (opfix '(a + b * c))
+    _ (fixity '+ was)                                 ; .. and put back
+    (&& (tree = '(* (+ a b) c)) ((opfix '(a + b * c)) = '(+ a (* b c)))))
+ ; a shape op-ent refuses is ROLLED BACK and scared -- never pinned, because a bad row does not
+ ; error, it silently demotes its operator to the fresh-punct default.
+ (!(catch (\ _ (fixity '^^ '(0 60 1)))))              ; arity 0
+ (!(catch (\ _ (fixity '^^ '(9 60 1)))))              ; arity 8+
+ (!(catch (\ _ (fixity '^^ '(2 zzz 1)))))             ; a grip that is not a charm
+ (!(catch (\ _ (fixity 'plain '(2 60 1)))))           ; and the name must be an all-punct sigil
+ ((opfix '(x ^^ y ^^ z)) = '(^^ x (^^ y z)))          ; the table survived all four intact
+
  ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.
  ; a mutable tablet witnesses the non-evaluation (kept LOCAL in a body-having `:`). ---
  (: t (tablet 0) _ (pin t 0 0)

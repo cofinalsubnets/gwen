@@ -428,8 +428,14 @@
    ; downstream sees the difference. an out-of-range arity or a malformed tail answers 0 (not a
    ; table operator), which is what a fresh punct symbol gets anyway.
    (op-ar? n) (&& (charm? n) (< 0 n) (< n 8))
+   ; the grip/hand tail, dotted OR as a plain list -- the table writes (2 60 . 1) but `fixity`'s
+   ; caller writes '(2 60 1), and the door should not make anyone count dots.
    (op-gh v)  (? (charm? v) (link v 0)                                       ; a grip alone: right-handed
-                 (&& (two? v) (charm? (cap v)) (charm? (cup v))) v           ; (grip . hand)
+                 (nil? (two? v)) 0
+                 (nil? (charm? (cap v))) 0
+                 (charm? (cup v)) v                                          ; (grip . hand), dotted
+                 (&& (two? (cup v)) (charm? (caup v))) (link (cap v) (caup v))  ; (grip hand), a list
+                 (atom? (cup v)) (link (cap v) 0)                            ; (grip), a list
                  0)
    (op-ent k) (: v (operators k)
                  (? (charm? v) (? (op-ar? v) (link k (link v (link 27 0))) 0)
@@ -680,6 +686,31 @@
 ; -- haskell-like weak-binding application (loosest grip). glued $x stays saturate, a different valence.
 (: (** a b) (b a))
 (: $ 1)
+; the FIXITY DOOR -- the one sanctioned write into the compile table, and the only way to reach
+; `operators` at all once birth mops the nom (this closure captures it; nothing else can).
+; (fixity nm v) pins v as nm's row and answers the row it REPLACED, in the same shape it takes --
+; so (fixity nm (fixity nm new)) restores exactly, and a non-() answer tells you someone declared
+; that operator before you did. () clears the row (0 is nil and arity 0 is no arity, so both read
+; as "no row"), which is also what an absent row answers -- the round trip closes on nothing.
+; v is any shape op-ent normalizes: a bare arity at house grip, (arity grip), (arity grip hand),
+; or the nom-led alias forms -- dotted or as plain lists, since op-gh takes both. so
+; (fixity '<+> '(2 60 1)) is haskell's `infixl 7 <+>` and '(2 60) is `infixr 7`.
+; a shape op-ent REFUSES is rolled back and scared rather than pinned: a bad row does not error, it
+; silently demotes its operator to the fresh-punct default, which on a core operator is a poisoned
+; compiler with no message.
+; opfix reads the table LIVE on every lookup, so a declaration governs every form compiled AFTER it
+; and none of the ones already folded -- the same rule a haskell fixity declaration has.
+; it is GLOBAL, deliberately (revisable): an operator's grip is part of its meaning, so a module
+; that coins <+> wants its consumers to read (a <+> b * c) the way it does -- haskell exports fixity
+; for the same reason. use the save/restore pair above if you want a scope-local grammar.
+(: (fixity nm v)
+   (? !(nom? nm) (scare 'bad-fixity nm)
+      (: old (operators -> nm ())
+         (? !v (: _ (pull operators nm 0) old)                       ; () clears the row
+            (: _ (operators <- nm v)
+               (? (two? (op-ent nm)) old                             ; op-ent itself is the acceptor
+                  (: _ (!old ? (pull operators nm 0) (operators <- nm old))
+                     (scare 'bad-fixity nm))))))))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;

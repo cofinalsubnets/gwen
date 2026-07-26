@@ -320,8 +320,23 @@ proof, not the assumption.
   Namespace assignment still rides the scope-layer door
   ([`prel.l`](../love/prel.l): *"a new arity or alias waits for the scope-layer
   door"*).
-- user-declarable grips (an operator declaring its own level at the scope-layer
-  door, not a hardcoded band).
+- ~~user-declarable grips~~ LANDED 2026-07-25 as **`fixity`**, the one sanctioned
+  write into the compile table and the only reach onto `operators` once birth mops
+  the nom (the closure captures it). `(fixity nm v)` pins nm's row and answers the
+  row it replaced *in the shape it takes*, so `(fixity nm (fixity nm new))`
+  restores exactly, `()` both clears a row and reports an absent one, and a
+  non-`()` answer says someone declared that operator before you. `op-ent` itself
+  is the acceptor: a shape it refuses is rolled back and scared rather than
+  pinned, because a bad row does not error — it silently demotes its operator to
+  the fresh-punct default, which on a core operator is a poisoned compiler with no
+  message. `'(2 60 1)` is `infixl 7`, `'(2 60)` is `infixr 7`, a bare `2` is the
+  house grip, and the nom-led forms alias.
+
+  **It is global, deliberately (revisable).** An operator's grip is part of its
+  meaning, so a module that coins `<+>` wants its consumers to read
+  `(a <+> b * c)` the way it does — Haskell exports fixity for the same reason.
+  The save/restore pair covers a scope-local grammar, and wiring it to
+  `enter`/`leave` stays available without changing this API.
 
 ## resolved (were open)
 

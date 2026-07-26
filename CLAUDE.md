@@ -235,7 +235,9 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; mopped nif means taking it off egg.l's mop list (rng did: rand-next/randf-next stay now, since the
 ; wrapper that owned them shipped out of prel). ⚠ and a post-egg layer cannot add an
 ; OPERATOR: `operators` is mopped at birth, so the grammar closes when the egg hatches (any all-punct
-; head is infix-dyadic at house grip anyway -- the table holds only the exceptions; user-declared
-; fixity would be the scope-layer door, doc/precedence.md §deferred). build codegen
+; head is infix-dyadic at house grip anyway -- the table holds only the exceptions). `fixity` is the
+; one door left onto the table: (fixity '<+> '(2 60 1)) is haskell's `infixl 7`, it answers the row
+; it replaced so (fixity nm (fixity nm new)) restores, and a refused shape rolls back and SCARES --
+; a bad row would silently demote its operator to the house default. build codegen
 ; lives in love under tools/; the C is freestanding, -Wall -Wextra -Werror.
 ```

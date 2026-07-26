@@ -350,8 +350,12 @@
 ; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
 ; when spaced, fused to its datum as (mono (run datum)) when GLUED mid-list. code then factors
 ; sigils at COMPILE time via `opfix` against the ONE `operators` table (symbol -> arity, or
-; (name . arity) an alias; the DEFAULT is dyadic, so a fresh punct operator needs no entry --
-; the tables themselves are book-private since birth, the egg mops them). the FACTORIZATION
+; (name . arity) an alias; the DEFAULT is dyadic at house grip, right-handed, so a fresh punct
+; operator needs no entry -- the tables themselves are book-private since birth, the egg mops them,
+; and `fixity` is the one door left onto them: (fixity nm v) pins nm's row and answers the row it
+; REPLACED in the same shape, so (fixity nm (fixity nm new)) restores and () both clears a row and
+; reports an absent one. a shape the table refuses is rolled back and SCARED, never pinned. the
+; table is read live, so a declaration governs every form compiled after it -- haskell's rule). the FACTORIZATION
 ; LAW: greedy longest-prefix, no backtracking; every factor but the last is arity ONE; the last
 ; takes the positional valence -- with a left operand it captures the whole APPLICATION SPAN on
 ; that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
@@ -376,6 +380,8 @@
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the LEFT hand: ((1 - 2) - 3), ((8 / 4) / 2)
+ (: was (fixity '<+> '(2 60 1)) t (opfix '(a <+> b <+> c)) _ (fixity '<+> was)   ; the fixity door,
+    (&& (was = ()) (t = '(<+> (<+> a b) c))))     ;   restored inside the form: the next one reparses
  ('(1 2 3) = 1 >< 2 >< '(3))                     ; ... while a right-handed band still folds right
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
