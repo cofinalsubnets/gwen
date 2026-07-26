@@ -104,6 +104,19 @@ Only a paragraph, so the title has to come from the meta block.
    n3 (build conf)
    _ (assert (n1 = 5) (n2 = 0) (n3 = 2))
 
+   ; --- and the dev-server gate over it -------------------------------------------
+   ; `refresh` is what the server calls per request: a source fingerprint, and `build`
+   ; only when it moved. it must never answer work for an untouched tree (that was the
+   ; 1.5s page load), and must never MISS a real edit (that would be a dev server that
+   ; ignores you). the second is the one that matters, so it is checked both ways.
+   box (tablet 0)
+   r1 (refresh conf box)                                 ; first look -- nothing remembered yet
+   r2 (refresh conf box)
+   _ (: s (get-file "src/two.md") q (open (dir + "/src/two.md") "w") _ (say q s) (close q))
+   r3 (refresh conf box)
+   r4 (refresh conf box)
+   _ (assert (0 = r1) (0 = r2) (2 = r3) (0 = r4))
+
    one (get-file "site/one.html")
    two (get-file "site/two.html")
    three (get-file "site/three.html")

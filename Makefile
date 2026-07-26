@@ -109,8 +109,11 @@ crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
 site: host
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc
 site-serve: host
-	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(PORT) README.md doc
-PORT ?= 8080
+	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc
+# NOT `PORT` -- test/test.mk already claims that one for nettest (7390), is included
+# first, and `?=` on a set variable is a no-op, so `make site-serve` quietly served
+# the site on nettest's port.
+SITEPORT ?= 8080
 
 # ====================================================================
 # wasm (own Makefile)

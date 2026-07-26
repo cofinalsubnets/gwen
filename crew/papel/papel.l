@@ -298,6 +298,24 @@ table{border-collapse:collapse}
    ; every output also depends on THIS FILE, since the template and the stylesheet live in
    ; it; edit either and the whole site is correctly out of date. (only when the file is
    ; really there -- cook quits on an ingredient that exists neither on disk nor as a rule.)
+   ; the DEV-SERVER gate. cook's `date` shells out to stat(1) once per node of the
+   ; graph, which is invisible when the steps are compilers and is the entire cost when
+   ; they are not: a no-op rebuild is ~60 forks, and it made a page take 1.5s to serve
+   ; against 0.6ms of actual serving. so before calling `build` at all, take a cheap
+   ; fingerprint of the sources -- one `stat` NIF call each, no fork -- and only call it
+   ; when that changed. answers what `build` answers, 0 when nothing did.
+   ;
+   ; comparing against a REMEMBERED fingerprint rather than against the outputs is what
+   ; makes this safe to be coarse. the nif's mtime is milliseconds, so an edit landing in
+   ; the same millisecond as our reading could be missed once -- but the very next
+   ; request compares against that same reading and sees it. and `build` itself is
+   ; untouched, so the decision that actually matters stays cook's, at cook's resolution.
+   ; mtime AND size, because an edit can preserve either one alone.
+   (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (? (two? st) ((<>st) + <st) 0)))
+                                   (sources conf)))
+   (refresh conf box) (: f (fprint conf)
+                         (? (f = (peep box 'f -1)) 0 (: _ (pin box 'f f) (build conf))))
+
    (build conf)
    (: out (peep conf 'out "out/site")
       srcs (sources conf)
@@ -358,15 +376,18 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       ; markdown is. the whole integration is a directory, a port, and a thunk.
       ;
       ; the thunk is what makes it a DEV SERVER rather than a viewer: kiosko runs it before
-      ; each client, and it is just `build` again -- which is cook, so an unchanged site
-      ; costs a stat per page and an edited one re-renders exactly what changed, between
-      ; hitting save and hitting reload. quiet, because a rebuild per request is not news.
+      ; each client, and it is `refresh` -- a fingerprint of the sources, and `build` only
+      ; when that moved. so an unchanged page load costs nothing and an edited one
+      ; re-renders exactly what changed, between hitting save and hitting reload. quiet,
+      ; because a rebuild per request is not news. the box carries the last fingerprint,
+      ; seeded from the build we just did so the first request is not a false alarm.
       port (peep c 'serve 0)
       _ (? port
            (: _ (want 'kiosko "kiosko/kiosko.l")
               q (peep c 'quiet 0)
               _ (pin c 'quiet 1)
-              _ (? ((from 'kiosko 'serve) (peep c 'out "out/site") port q (\ _ (build c))) 0
+              box (: t (tablet 0) _ (pin t 'f (fprint c)) t)
+              _ (? ((from 'kiosko 'serve) (peep c 'out "out/site") port q (\ _ (refresh c box))) 0
                    (: _ (say err ("papel: cannot listen on :" + show port)) _ (put err 10) (quit 1))))
            0)
       (quit 0))
