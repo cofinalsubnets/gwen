@@ -77,7 +77,7 @@
 (: L (from 'lapiz)
    mdread (L 'mdread)  htshow (L 'htshow)  htb (L 'htb)  hti (L 'hti)  hq (L 'hq)  mget (L 'mget)
    C (from 'cook)
-   recipe (C 'recipe)  prep (C 'prep))
+   recipe (C 'recipe)  prepped (C 'prepped))
 
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
 (: (nth l k)     (? (k = 0) <l (nth >l (k - 1)))
@@ -333,12 +333,10 @@ table{border-collapse:collapse}
       own? (peep known "index.md" 0)                 ; a real index.md wins; papel adds none
       _ (? own? 0 (recipe idx (srcs + dep) `((\ _ (windex conf srcs idx)))))
       _ (recipe 'site (dsts + `(sheet) + (? own? () `(idx))) ())
-      ; cook's own `cook` prints its verdict; papel wants the NUMBER, so it drives `prep`
-      ; directly. $ of a map is its key count, and cook marks an item shipped only when the
-      ; recipe really advanced its mtime -- so this is exactly "files written".
-      shipped (tablet 0)
-      _ (prep 'site (tablet 0) shipped)
-      n $shipped
+      ; cook's own `cook` prints its verdict; papel wants the NUMBER, so it takes the
+      ; quiet entry. $ of a map is its key count, and cook marks an item shipped only when
+      ; the recipe really advanced its mtime -- so this is exactly "files written".
+      n $(prepped 'site)
       _ (? (peep conf 'quiet 0) 0
            (: _ (puts (? (0 < n) ("papel: " + show n + " written to " + out + "/")
                            ("papel: " + out + "/ is up to date")))

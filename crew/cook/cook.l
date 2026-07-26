@@ -63,8 +63,17 @@
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
    pgen (tablet 0)         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), installed by the Makefile importer (() until then)
 
+   dates (tablet 0)        ; the date cache: item -> mtime | 'gone (known absent) | 0 (unknown)
+   fresh (tablet 0)        ; a 1-cell box: is that cache still trustworthy? (see `warm`)
+
    ; string -> charlist, so a captured stat string can be read as a port.
    (s2cl s) ((: (g i) (? (i < (tally s)) (link (peep s i 0) (g (1 + i))))) 0)
+
+   ; the lines of s, the trailing newline contributing none.
+   (splitnl s) ((: (g i st acc) (? (i < tally s)
+                                   (? ((s i) = 10) (g (i + 1) (i + 1) (link (snip s st i) acc))
+                                      (g (i + 1) st acc))
+                                   (rev (? (st < i) (link (snip s st i) acc) acc)))) 0 0 ())
 
    ; "a b c" from ("a" "b" "c"); "" from the empty list.
    (join sep l) (? (two? l) (foldl (\ a x (a + sep + x)) <l >l) "")
@@ -91,10 +100,52 @@
    ; (status . output) once stat actually executed; status 0 means the file is
    ; there and `output` is its %.Y date (nanosecond resolution), which reads
    ; straight back as a number -- the sub-second part defeats same-second races.
+   ; (a nanosecond is the point: love HAS a `stat` nif, but it reports milliseconds,
+   ; and an mtime cook cannot tell apart from its target's is an edit cook never
+   ; rebuilds. so this stays on stat(1), and gets fast a different way -- see `warm`.)
+   (date1 item)
+   (: r (run `("sh" "-c" "stat -c %.Y \"$0\" 2>/dev/null" item))   ; %.Y: nanosecond float; stderr silenced (a miss is normal)
+      (? (&& (two? r) (0 = <r)) (sound (tap (s2cl >r)) ()) ()))
    (date item)
    (? (nom? item) ()
-      (: r (run `("sh" "-c" "stat -c %.Y \"$0\" 2>/dev/null" item))   ; %.Y: nanosecond float; stderr silenced (a miss is normal)
-         (? (&& (two? r) (0 = <r)) (sound (tap (s2cl >r)) ()) ()))))
+      (: c (? (peep fresh 0 0) (peep dates item 0) 0)
+         (? c c (date1 item))))
+
+   ; --- warming the cache: one stat for the whole graph -------------------------
+   ; `date` is called two or three times per node, so a prep pass over an N-item graph
+   ; SPAWNS A SHELL ~2N times. that is invisible when the steps are compilers and it is
+   ; the whole cost when there is nothing to do: 29 pages, no work, 350ms of pure fork.
+   ; one `stat` over every item at once answers the same question in ~2ms.
+   ;
+   ; ONE stat, not a shell loop over N of them -- a `for f; do stat ..; done` is one fork
+   ; for the shell and then N more for stat, which is the thing being fixed. so the format
+   ; carries the name: `%.Y %n`, split at the FIRST space, since an mtime never holds one
+   ; and everything after it is the name exactly as it was passed. a name containing a
+   ; NEWLINE would break that, and is refused up front rather than parsed wrongly.
+   ;
+   ; the cache holds only POSITIVE observations. a file stat did not report is left
+   ; unknown, not recorded as absent, so a fork or a stat that fails outright can only
+   ; cost speed: `date` forks for whatever is missing from the cache, exactly as before.
+   (warm _)
+   (: _ (each (keys dates) (\ k (pin dates k 0)))
+      _ (pin fresh 0 0)
+      seen (tablet 0)
+      (note d) (? (nom? d) 0 (pin seen d 1))
+      _ (each (keys cards) (\ k (: _ (note k)
+                                   c (peep cards k ())
+                                   (? (two? c) (: _ (each <c note) (each <>c note)) 0))))
+      fs (keys seen)
+      (nlp s) ((: (g i) (? (i < tally s) (? ((s i) = 10) 1 (g (i + 1))) 0)) 0)
+      (? (! (two? fs)) 0
+         (any nlp fs) 0                                    ; a newline in a name: do not guess
+         (: r (run (`("sh" "-c" "stat -c \"%.Y %n\" \"$@\" 2>/dev/null" "sh") + fs))
+            _ (each (splitnl (? (two? r) >r ""))
+                    (\ ln (: n (tally ln)
+                             i ((: (g j) (? (&& (j < n) (! ((ln j) = 32))) (g (j + 1)) j)) 0)
+                             (? ((i + 1) < n)
+                                (pin dates (snip ln (i + 1) n) (sound (tap (s2cl (snip ln 0 i))) ()))
+                                0))))
+            (? (0 < $dates) (pin fresh 0 1) 0)))))
 
 ; --- prepping an item up to date ---------------------------------------------
 ; one cook call carries two books: `done` memoizes each item's settled age so a
@@ -145,8 +196,13 @@
                _ (pin done item ta)
                ta))))
 
-   ; run a recipe: each step in order.
-   (recur item steps) (each steps (\ step (step1 step)))
+   ; run a recipe: each step in order. and DROP the warmed date cache: a step may write
+   ; anything, not only its own target (make's two-outputs-one-recipe idiom writes a
+   ; sibling), so the only sound rule is that no cached date survives a recipe. from here
+   ; on the pass forks per item exactly as it always did -- which is the right trade,
+   ; because a pass that ran a recipe is already paying for a compiler, and a pass that
+   ; ran none (the up-to-date `make`, the dev server's page load) never gets here.
+   (recur item steps) (: _ (each steps (\ step (step1 step))) (pin fresh 0 0))
 
    ; one step. a list HEADED BY THE SYMBOL `exec` -- (exec PROG ARGS..) -- is an
    ; INTERACTIVE step: it runs via the `exec` nif, which REPLACES cook and inherits
@@ -200,10 +256,16 @@
 
 ; --- the entry points ----------------------------------------------------------
 
-(: (cook item)                                ; prep item up to date and report
+; prep item up to date, QUIETLY, and answer the tablet of items whose recipe actually
+; advanced their file. `cook` prints a verdict off it; a caller that wants the number
+; takes `$` of it (papel's build does). this is also the one place `warm` belongs -- the
+; cache is per-pass, so it is filled by the outermost call and by nothing else.
+(: (prepped item)
+   (: shipped (tablet 0) _ (warm ()) _ (prep item (tablet 0) shipped) shipped)
+
+   (cook item)                                ; prep item up to date and report
    (? (! item) (: _ (say err "cook: nothing to cook") _ (put err 10) (quit 1))
-      (: shipped (tablet 0)
-         _ (prep item (tablet 0) shipped)
+      (: shipped (prepped item)
          ; $ of a map is its key count: how many items actually ran a recipe.
          (? (0 < $shipped)
             (: _ (puts ("cook: cooked " + (show item))) (putc 10))

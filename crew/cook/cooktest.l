@@ -177,6 +177,34 @@
    dgc (: r (run `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile"))) (? (two? r) (cup r) ""))
    _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
 
+   ; ------------------------------------------------- the warmed date cache
+   ; cook fills a date cache with ONE `stat` over the whole graph, because shelling out
+   ; per node made an up-to-date pass ~2N forks. that cache is only sound until the first
+   ; recipe runs -- a step may write anything, not only its own target -- so `recur` drops
+   ; it. this is the fixture that fails if anyone ever narrows that to "drop just my own
+   ; target": `first` writes a file it does not own, and `second` must see the new one.
+   ;
+   ; the order matters. shared.txt and second both exist and second is NEWER, so a stale
+   ; cache says second is up to date and skips it. only a re-read after `first` ran shows
+   ; shared.txt overtaking it.
+   ; (⚠ every path in a fixture recipe must be ABSOLUTE: cook runs from the project root,
+   ;  not from `dir`, so a bare `> out.txt` writes into the repo.)
+   (D f) (+ dir f)
+   _ (sh (+ "echo OLD > " (+ (D "/shared.txt") (+ " && sleep 0.01 && echo STALE > " (D "/second")))))
+   sidesrc (mk `(".PHONY: all first"
+                 (+ "all: first " (D "/second"))
+                 "first:" (+ "\techo NEW > " (D "/shared.txt"))
+                 (+ (D "/second: ") (D "/shared.txt"))
+                 (+ "\tcp " (+ (D "/shared.txt") (+ " " (D "/second"))))))
+   _ (write-file (D "/Makefile") sidesrc)
+   _ (: r (run `(love "-l" "crew/cook/cook.l" (D "/Makefile") "all")) 0)
+   side (: r (sh (+ "cat " (D "/second"))) (? (two? r) (cup r) ""))
+   _ (ok "a recipe's side-effect write invalidates the date cache" (has side "NEW"))
+
+   ; (the cache's OTHER rule -- it records only what stat actually reported, never a miss
+   ;  -- has no fixture here, and deliberately: from a Makefile there is no way to make
+   ;  `stat` itself fail, which is the case it guards. it costs speed, never an answer.)
+
    ; ---------------------------------------------------------------- summary
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))
