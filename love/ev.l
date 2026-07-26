@@ -151,28 +151,40 @@
     (: h <x (?
      (h = x) x
      (h = '\) (? (atom? >>x) x                          ; quote
-                (: r (lp x)                                     ; opfix (op-flat-ol) already flattened nested lambdas at the source, shared with c0
-                   lam ('\ >< <r + `((wx >r (<r + bnd))))
-                   _ (push c 'src (>lam >< x))         ; tagged-body -> surface src for ala
-                   lam))
+                (wxl1 c x (lp x) bnd))                 ; opfix (op-flat-ol) already flattened nested lambdas at the source, shared with c0
      (h = ':) (? (atom? >x) ':                      ; (:) = the head read -- (f)==f at zero operands, a missing name (c0 agrees)
-                 (atom? >>x) (': >< `((wx <>x bnd)))
-                 (link ': (wxl (boxfix >x) bnd)))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
+                 (atom? >>x) (keep x (keep1 >x (wx <>x bnd)) ':)
+                 (keep x (wxl (boxfix >x) bnd) ':))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
+                                                       ;   (it passes an unboxed let VERBATIM, so identity rides through)
      (h = '?) (? (atom? >x) '?                      ; (?) likewise: the empty form is the head's value
-                 ('? >< (wxc >x bnd)))
+                 (keep x (wxc >x bnd) '?))
      ; macro head? expand, then re-walk -- unless a binder SHADOWS the name (the bnd walk only
      ; on a macro hit). this lane LOOKS dead (cprop expands first, same guard) but is LIVE: cprop's
      ; inliner REVERT rebuilds (h >< as) with the RAW head, resurrecting unexpanded macros inside
      ; it (kanren's (vel .. (zz ..)) delay shapes) -- this lane is the net. probed, not a guess.
      (: m (? (nom? h) (macros h) 0)
       (? (m && !(member? h bnd)) (wx (m >x) bnd)
-         (fold (map (\ e (wx e bnd)) x) bnd)))))
+         (fold (mapi (\ e (wx e bnd)) x) bnd)))))
+   ; --- the identity kit: unchanged -> the ORIGINAL, no copy --------------------------------
+   ; cprop/wx hand back the input tree wherever nothing rewrote, so an untouched subtree costs
+   ; zero allocation (and fold/apx/'src share its spine -- the compiled image slims too). the
+   ; shape law is love-alloc's: a `:`-bound non-tail call pays ~112b where an arg/tail-position
+   ; call is FREE -- so every walk result rides to its comparison as a sibling-call ARGUMENT,
+   ; never a fresh binding (the binding-style twin of this kit measured a net LOSS).
+   (keep x r h) (? (id? r >x) x (h >< r))                        ; the walked tail vs the original
+   (keep1 b e) (? (id? e <b) b `(e))                             ; the one-element list
+   (keep3 b p q r) (? (id? p <b && id? q <>b && id? r >>b) b (p >< q >< r))   ; the three-slot spine
+   (mapi f x) (? (atom? x) x (mapi2 x (f <x) (mapi f >x)))      ; the identity-preserving map
+   (mapi2 x e r) (? (id? e <x && id? r >x) x (e >< r))
+   (relam x r b) (? (id? b >r) x ('\ >< <r + `(b)))              ; \ rebuild; r = (lp x), b the walked body (lp's body IS (last x))
+   (wxl1 c x r bnd) (wxl2 c x (relam x r (wx >r (<r + bnd))))   ; wx's \ lane, framed for arg-position walks
+   (wxl2 c x lam) (: _ (push c 'src (>lam >< x)) lam)            ; tagged-body -> surface src for ala (stash even on identity: keeps the assoc order)
    (wxl bs bnd) (wxb bs (ln bs + bnd))        ; a let's names all shadow throughout
    (wxb bs bnd) (?
     (atom? bs) bs
-    (atom? >bs) `((wx <bs bnd))
+    (atom? >bs) (keep1 bs (wx <bs bnd))
     (: nd (dsug <bs <>bs)               ; desugar (f a..) so wx's \ adds params to bnd
-     (<nd >< wx >nd bnd >< wxb >>bs bnd)))
+     (keep3 bs <nd (wx >nd bnd) (wxb >>bs bnd))))
    ; cflip: the nil?-flip peephole on a cond clause list. since the cond tests g_false == nil?,
    ; (? (nil? e) c [el]) and (? e [el] c) are equal -- flipping the branches drops the nil? wrapper
    ; (and lets cst then fold a now-bare constant test). fires ONLY on an EXACT (nil? e) test in a
@@ -193,9 +205,9 @@
                  0))
    (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (cflip bs))
     (? (atom? fb) `(())                           ; clauses ran out: implicit () else (nil-ontology)
-       (atom? >fb) `((wx <fb bnd))      ; the lone else
+       (atom? >fb) (keep1 fb (wx <fb bnd))      ; the lone else
        (: t (wx <fb bnd) k (cst t)               ; walk the test; is it a static constant?
-        (? (atom? k) (t >< wx <>fb bnd >< wxc >>fb bnd)   ; unknown -> keep the clause
+        (? (atom? k) (keep3 fb t (wx <>fb bnd) (wxc >>fb bnd))   ; unknown -> keep the clause
            >k   (wxc >>fb bnd)               ; statically FALSE -> drop this clause, try the rest
                      `((wx <>fb bnd))))))     ; statically TRUE  -> this result IS the cond, drop rest
    ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
@@ -292,32 +304,32 @@
        (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
           (? (two? rest) (bd2 >< rest) bd2))))
    (cplam x se fl op bnd) (? (atom? >>x) x                                       ; (\ v) quote -> leave
-    (: r (lp x) ps <r ('\ >< ps + `((cprop >r (rmkeys ps se) fl 0 (ps + bnd))))))   ; the body is a value -> op 0
+    (: r (lp x) (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd)))))          ; the body is a value -> op 0
    (cpbinds bs se fl op bnd) (?
     (atom? bs) bs
-    (atom? >bs) (list (cprop <bs se fl op bnd))                              ; the let's BODY inherits the let's op
+    (atom? >bs) (keep1 bs (cprop <bs se fl op bnd))                              ; the let's BODY inherits the let's op
     (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd)       ; a binding value is a value -> op 0
        se2 (? (propk? v1 || inlinable? nm v1)                                      ; a const OR a known pure lambda enters se
               (`(nm v1) >< rmq nm se) (rmq nm se))
-       (nm >< v1 >< cpbinds >>bs se2 fl op bnd)))
+       (keep3 bs nm v1 (cpbinds >>bs se2 fl op bnd))))
    ; bnd: the lexical binder set (\ params + : names), one-scope. its ONE reader is the macro
    ; lane: a locally-bound name is an ordinary variable, never a macro head (the shadow law;
    ; se can't stand in for it -- absence from se doesn't distinguish local from global).
    (cprop x se fl op bnd) (: h <x (?
     (h = x) (? (nom? x) (: e (assq x se) (? (atom? e) x <>e)) x)               ; const/known-lambda var -> value
     (h = '\) (cplam x se fl op bnd)
-    (h = ':) (': >< (cpbinds >x se fl op (cat (ln >x) bnd)))       ; a let's names all shadow throughout (one scope)
-    (h = '?) ('? >< (map (\ e (cprop e se fl op bnd)) >x))              ; no prune here -- wxc does it
+    (h = ':) (keep x (cpbinds >x se fl op (cat (ln >x) bnd)) ':)       ; a let's names all shadow throughout (one scope)
+    (h = '?) (keep x (mapi (\ e (cprop e se fl op bnd)) >x) '?)              ; no prune here -- wxc does it
     (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on RAW args -- a structural
        (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd)                  ; macro (assert's quoted msg, a two?/cap probe) must
-          (: as (map (\ e (cprop e se fl 0 bnd)) >x)                              ; ARGS are values -> op 0 (escape mode)
+          (: as (mapi (\ e (cprop e se fl 0 bnd)) >x)                              ; ARGS are values -> op 0 (escape mode)
              hr (? (nom? h) (: e (assq h se) (? (atom? e) h <>e)) (cprop h se fl 1 bnd)) ; HEAD is consumed -> op 1
              (? (&& (< 0 fl) (lambp hr) (allp as se))
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
-                     (? (op || !(lambp red)) red (h >< as)))                      ; escaping lambda result -> REVERT (keep the closure).
+                     (? (op || !(lambp red)) red (keep x as h)))                      ; escaping lambda result -> REVERT (keep the closure).
                                                                                   ; the RAW h may hold unexpanded macros -- wx's lane catches them
                 (nom? h && !(charm? (opget h)) && allk as) (foldc (opget h) as)     ; pure-op on consts -> fold (as before)
-                (h >< as)))))))                                                       ; else rebuild with the RAW head (source unchanged)
+                (keep x as h)))))))                                                   ; args untouched -> the ORIGINAL call (the raw head either way)
    (wx (cprop x () 64 0 0) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
   ; nom? literal (the `()` a (\ _ ()) / failed parse / `('x) tail evaluates to).
