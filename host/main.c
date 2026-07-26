@@ -548,7 +548,7 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
 #endif
   if (argp) return ai_evals_(g, cli);
   if (!replp) return ai_evals_(g, "(reads in)");         // non-tty stdin: the stream shell (love/bao.l) drinks the in port
-  return ai_evals_(g, "(bao 0)"); }                      // a tty: bao (the baked shell core) is DEFINE-ONLY -- installs
+  return ai_evals_(g, "((from 'bao 'bao) 0)"); }                      // a tty: bao (the baked shell core) is DEFINE-ONLY -- installs
                                                          //   (bao _)/shell/... but never launches, so one image serves a
                                                          //   pipe and the self-test too; the frontend fires it here.
 

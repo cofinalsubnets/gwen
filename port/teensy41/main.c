@@ -263,7 +263,7 @@ int main(void) {
   // the bake/wake, so its `puts` marks the exact moment love is up.
 #define TE_TAIL(banner) \
     "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
-    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) (shell 0))"
+    "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((from 'bao 'shell) 0))"
   struct ai *r = woke
     ? ai_evals_(g, TE_TAIL("; image hatched -- shell up"))
     : ai_evals_(g, "("

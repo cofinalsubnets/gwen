@@ -564,7 +564,7 @@ void kmain(void) {
  // `sip` is the verb that draws ONE unit -- see the vessel frame in love/prel.l.)
  "(reads (tap ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))"
 #else
- "(shell 0)"
+ "((from 'bao 'shell) 0)"
 #endif
   );
   // a terminal scare gets the honest face on the serial console before reset

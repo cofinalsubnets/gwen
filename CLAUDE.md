@@ -212,8 +212,9 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; every hot lvm_* pointer, and finally the `book` itself. compiled references were folded, so only the
 ; noms die; noms the printer/reader/expanders EMIT (spread link pin tablet mono list ..) stay, as do
 ; the C-resolved hooks (num-ap add mul help). the shell core (love/bao.l) needs no mopping: its internals
-; are closure-private, only its entry points (shell/welp/edraw/edln/wrap/bao + the stream shell zev/zevs)
-; are globals.
+; are closure-private, and it is a REGISTERED MODULE -- the USER VERBS (read reads welp wrap) re-pin
+; globally at its foot, the PLUMBING (shell bao edraw edln) stays sealed: every frontend launcher
+; evals ((from 'bao 'bao) 0) / ((from 'bao 'shell) 0), and (from 'bao 'keys) is the manifest.
 ; demo:
 (lit? ev)            ; true    ev is installed in the image
 born                 ; a fixnum (the hatch time) post-egg; unbound pre-egg

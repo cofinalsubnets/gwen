@@ -18,7 +18,7 @@
 ; k4/k7 pack the CPS continuation's (u l r d [hu hd cur]) arguments into a
 ; comparable list, exactly as the old test/repl.l did.
 
-(: B (bao 'parts)
+(: B ((from 'bao 'bao) 'parts)
    edleft (B 'edleft)     edright (B 'edright)   edbsp (B 'edbsp)       eddel (B 'eddel)
    edhome (B 'edhome)     edend (B 'edend)       edtop (B 'edtop)       edbot (B 'edbot)
    edup (B 'edup)         eddown (B 'eddown)     uphist (B 'uphist)     downhist (B 'downhist)
