@@ -158,13 +158,11 @@
                                                        ;   (it passes an unboxed let VERBATIM, so identity rides through)
      (h = '?) (? (atom? >x) '?                      ; (?) likewise: the empty form is the head's value
                  (keep x (wxc >x bnd) '?))
-     ; macro head? expand, then re-walk -- unless a binder SHADOWS the name (the bnd walk only
-     ; on a macro hit). this lane LOOKS dead (cprop expands first, same guard) but is LIVE: cprop's
-     ; inliner REVERT rebuilds (h >< as) with the RAW head, resurrecting unexpanded macros inside
-     ; it (kanren's (vel .. (zz ..)) delay shapes) -- this lane is the net. probed, not a guess.
-     (: m (? (nom? h) (macros h) 0)
-      (? (m && !(member? h bnd)) (wx (m >x) bnd)
-         (fold (mapi (\ e (wx e bnd)) x) bnd)))))
+     ; no macro lane: cprop's output is MACRO-FREE -- cprop expands every nom-headed call (the
+     ; same shadow guard this lane carried) and emits COMPOUND heads walked (h2, below), which
+     ; closed the old revert leak (raw heads resurrecting kanren's (vel .. (zz ..)) shapes).
+     ; probed dead before deletion: zero hits across host corpus, love0 x2, and the glaze.
+     (fold (mapi (\ e (wx e bnd)) x) bnd)))
    ; --- the identity kit: unchanged -> the ORIGINAL, no copy --------------------------------
    ; cprop/wx hand back the input tree wherever nothing rewrote, so an untouched subtree costs
    ; zero allocation (and fold/apx/'src share its spine -- the compiled image slims too). the
@@ -172,6 +170,7 @@
    ; call is FREE -- so every walk result rides to its comparison as a sibling-call ARGUMENT,
    ; never a fresh binding (the binding-style twin of this kit measured a net LOSS).
    (keep x r h) (? (id? r >x) x (h >< r))                        ; the walked tail vs the original
+   (keep2 x h r) (? (id? h <x && id? r >x) x (h >< r))           ; walked head AND tail vs the original
    (keep1 b e) (? (id? e <b) b `(e))                             ; the one-element list
    (keep3 b p q r) (? (id? p <b && id? q <>b && id? r >>b) b (p >< q >< r))   ; the three-slot spine
    (mapi f x) (? (atom? x) x (mapi2 x (f <x) (mapi f >x)))      ; the identity-preserving map
@@ -324,12 +323,15 @@
        (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd)                  ; macro (assert's quoted msg, a two?/cap probe) must
           (: as (mapi (\ e (cprop e se fl 0 bnd)) >x)                              ; ARGS are values -> op 0 (escape mode)
              hr (? (nom? h) (: e (assq h se) (? (atom? e) h <>e)) (cprop h se fl 1 bnd)) ; HEAD is consumed -> op 1
+             h2 (? (nom? h) h hr)                                                 ; the emitted head: a nom stays a nom (small; ana resolves
+                                                                                  ; it) -- a COMPOUND head goes out WALKED, so cprop's output
+                                                                                  ; is macro-free everywhere and wx needs no macro lane (the
+                                                                                  ; revert used to leak the raw macro-bearing head; probed)
              (? (&& (< 0 fl) (lambp hr) (allp as se))
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
-                     (? (op || !(lambp red)) red (keep x as h)))                      ; escaping lambda result -> REVERT (keep the closure).
-                                                                                  ; the RAW h may hold unexpanded macros -- wx's lane catches them
+                     (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
                 (nom? h && !(charm? (opget h)) && allk as) (foldc (opget h) as)     ; pure-op on consts -> fold (as before)
-                (keep x as h)))))))                                                   ; args untouched -> the ORIGINAL call (the raw head either way)
+                (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
    (wx (cprop x () 64 0 0) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
   ; nom? literal (the `()` a (\ _ ()) / failed parse / `('x) tail evaluates to).
