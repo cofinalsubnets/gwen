@@ -178,7 +178,7 @@ some literal
        ((rfrt "### deep") = '((head 2 ((text "deep")))))              ; .SH/.SS and no more
        ((rfrt "```c\nx\n```\n") = '((fence "" "x\n")))                ; .EX/.EE has no language slot
        ((rfrt "---\n") = ())                                          ; a man page has no rule
-       ((rfrt "[t](u)") = '((para ((text "t \\(lau\\(ra")))))          ; a link flattens to the man idiom
+       ((rfrt "[t](u)") = '((para ((text "t ⟨u⟩")))))                 ; a link flattens to the man idiom
        ; ..and the domain-shaped neighbours of each are untouched
        ((rfrt "## deep") = '((head 2 ((text "deep")))))
        ((rfrt "```\nx\n```\n") = '((fence "" "x\n"))))
@@ -193,14 +193,31 @@ some literal
        ((md->rf "# NAME") = ".SH NAME\n"))
     0)
 
- ; --- a real document: README.md through the lens, laws and all ----------------
- _ (: src (: q (open "README.md" "r") (slurp q))
-      d (mdread src)
-      (assert
-         (0 < tally d)                         ; it parsed
-         (d = (mdread (mdshow d)))             ; LAW 1 on 13KB of real markdown
-         (d = (htread (htshow d)))
-         (! (t0? d))))
+ ; --- real documents through the lens, laws and all ---------------------------
+ ; README.md, and the two man pages -- which are WRITTEN in markdown and generated
+ ; into roff by this module (tools/mkman.l), so their law 1 is load-bearing: it is
+ ; what keeps doc/*.md and the shipped doc/*.1 from being able to disagree.
+ _ (: (slurpf f) (: q (open f "r") (slurp q))
+      _ (map (\ f (: d (mdread (slurpf f))
+                     (assert
+                        (0 < tally d)                    ; it parsed
+                        (d = (mdread (mdshow d)))        ; LAW 1 on real markdown
+                        (d = (htread (htshow d)))
+                        (! (t0? d)))))
+             (L "README.md" "doc/love.md" "doc/cook.md"))
+      ; ..and the roff law only on the MAN PAGES: README.md is deliberately outside the
+      ; roff domain (deep headings, fence languages, links, rules), which is the domain
+      ; doing its job rather than a failure.
+      _ (map (\ f (: d (mdread (slurpf f))
+                     (assert (d = (rfread (rfshow d))))))   ; LAW 1 on the roff the build ships
+             (L "doc/love.md" "doc/cook.md"))
+      ; the man pages are man-page-shaped: every block is in the roff domain, so the
+      ; generated page loses nothing (verified against groff by hand, byte-identical
+      ; to the hand-written pages these replaced).
+      _ (map (\ f (: d (mdread (slurpf f))
+                     (assert (id? 'meta (cap (cap d)))    ; a .TH, and it leads
+                             (! (member? 'rule (map cap d)))))) (L "doc/love.md" "doc/cook.md"))
+      0)
 
  _ (puts "crew/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain
 ")

@@ -118,8 +118,21 @@
    (mnorm kvs)  (map (\ k `(k (mget kvs k))) metakeys)
    (mfilled kvs) (filter (\ p (0 < tally <>p)) kvs))
 
+; --- the roff glyph table, read BOTH ways: rfread decodes \(em to the character, rq encodes
+; it back. so it must be a BIJECTION -- no two names may share a character, which is why the
+; three quote escapes (\(aq \(oq \(cq, all an apostrophe) are absent. encoding matters: groff
+; reads its input as latin-1 unless preconv ran, so a raw UTF-8 character in the source
+; renders as MOJIBAKE, not as itself.
+(: rglyphs '(("em" "—") ("en" "–") ("bu" "•") ("la" "⟨") ("ra" "⟩") ("mi" "−"))
+   (glyph n)   ((: (g l) (? (! (two? l)) ("\\(" + n) ((<<l) = n) (<>(<l)) (g >l))) rglyphs)
+   (rqat s i)  ((: (g l) (? (! (two? l)) ()                    ; does a glyph start at i? -> (name len)
+                            (: gl (<>(<l)) n (tally gl)
+                               (? (&& ((i + n) <= tally s) (gl = (snip s i (i + n)))) `((<(<l)) n) (g >l)))))
+                rglyphs))
+
 ; --- normalizing an inl: adjacent texts are ONE text (the AST is the fixed point, so this matters) ---
 (: (mrg l) (? (! (two? l)) ()
+              (: h <l (&& (id? <h 'text) (0 = tally <>h))) (mrg >l)   ; a \& contributes an EMPTY text: drop it
               (! (two? >l)) (link <l ())
               (: a <l b <>l
                  (? (&& (id? <a 'text) (id? <b 'text)) (mrg (link `('text (<>a + <>b)) >>l))
@@ -308,10 +321,22 @@
 ; total and rfread normalizes in four stated ways, each asserted by the gate rather than
 ; left to be discovered: head >=3 lands at 2, a fence language is dropped, a rule vanishes,
 ; and a link flattens to its text with the url in \(la..\(ra (the man idiom for one).
-(: (rq s) ((: (g i acc) (? (i < tally s)
-                           (: c (s i) (g (i + 1) (acc + (? (c = 92) "\\e" (string c)))))
-                           acc)) 0 "")
+(: (rq s) ((: (g i acc)
+              (? (! (i < tally s)) acc
+                 (: hit (rqat s i)
+                    (? (two? hit) (g (i + (nthl hit 1)) (acc + "\\(" + <hit))
+                       (: c (s i) (g (i + 1) (acc + (? (c = 92) "\\e" (c = 45) "\\-" (string c)))))))))
+           0 "")
    (rline s) (? (&& (0 < tally s) (|| ((s 0) = 46) ((s 0) = 39))) ("\\&" + s) s)   ; a leading . or ' is text
+   ; roff DOUBLE-SPACES after a period that ends an input line, so a paragraph emitted as one
+   ; long line loses its sentence spacing. break it one sentence per line -- the idiomatic man
+   ; source shape, and lossless: the reader fills the lines back with a single space.
+   (rsent s) ((: (g i st acc)
+                 (? (! (i < tally s)) (revcat (link (rline (snip s st i)) acc) ())
+                    (&& ((s i) = 46) (&& ((i + 1) < tally s) ((s (i + 1)) = 32)))
+                      (g (i + 2) (i + 2) (link (rline (snip s st (i + 1))) acc))
+                    (g (i + 1) st acc))) 0 0 ())
+   (rfill s) (strcat (map (\ ln (ln + "\n")) (rsent s)))
    (rfi l)  (strcat (map rfi1 l))
    (rfi1 x) (: t <x
                (? (id? t 'text)   (rq <>x)
@@ -322,13 +347,13 @@
                   ""))
    (rth kvs)   (".TH" + (strcat (map (\ k (" \"" + (mget kvs k) + "\"")) metakeys)) + "\n")
    (rnums l i) (? (! (two? l)) "" (".IP \"" + (show i) + ".\" 4\n" + (rline (rfi <l)) + "\n" + rnums >l (i + 1)))
-   (rdefs l)   (strcat (map (\ it (".TP\n" + (rline (rfi <it)) + "\n" + (rline (rfi <>it)) + "\n")) l))
+   (rdefs l)   (strcat (map (\ it (".TP\n" + (rline (rfi <it)) + "\n" + (rfill (rfi <>it)))) l))
    (rfb x) (: t <x
               (? (id? t 'meta)    (rth <>x)
                  (id? t 'head)    ((<>x < 2 ? ".SH " ".SS ") + rfi (nthl x 2) + "\n")
-                 (id? t 'para)    (".PP\n" + (rline (rfi <>x)) + "\n")
+                 (id? t 'para)    (".PP\n" + (rfill (rfi <>x)))
                  (id? t 'fence)   (".EX\n" + (strcat (map (\ ln ((rline (rq ln)) + "\n")) (splitnl (nthl x 2)))) + ".EE\n")
-                 (id? t 'quote)   (".RS\n" + rfshow <>x + ".RE\n")
+                 (id? t 'quote)   (".PP\n.RS\n" + rfshow <>x + ".RE\n")   ; the .PP spaces the display
                  (id? t 'bullets) (strcat (map (\ i (".IP \\(bu 2\n" + (rline (rfi i)) + "\n")) <>x))
                  (id? t 'numbers) (rnums <>x 1)
                  (id? t 'deflist) (rdefs <>x)
@@ -336,41 +361,98 @@
    (rfshow d) (strcat (map rfb d)))
 
 ; ---------------------------------------------------------------- roff (man), read
-(: rfesc?  (\ c (! (c = 92)))                                  ; ordinary inline text runs to the next \
-   (runesc s y n)  ((tag (\ _ `('text "\\")) (lit "\\e")) s y n)
-   (runamp s y n)  ((tag (\ p `('text (string <p))) (seq (lit "\\&") (one chr?))) s y n)
+; roff FILLS, and that shapes this whole half: consecutive input lines join with a SPACE,
+; a font macro's arguments join with NOTHING (the alternating .BR/.RB/.IR/.RI) or with a
+; space (.B/.I) -- all three probed under groff, not remembered. so a PARAGRAPH is a RUN of
+; lines, each contributing an inl fragment, and the block macros are what end a run. that is
+; why this reader is line-oriented where the html one is tag-oriented: the surface is. it
+; reads the MACRO forms a hand-written page uses (.B/.I/.BR/.RB/.IR/.RI), not just the inline
+; escapes rfshow emits -- doc/*.md were converted from hand-written pages by this reader.
+(: rfesc? (\ c (! (c = 92)))                                    ; ordinary inline text runs to the next \
+   rclose    (alts `((lit "\\fR") (lit "\\fP")))                ; \fP is "previous font" -- same thing here
+   (rgl s y n)     ((tag (\ p `('text (glyph ((string <p) + (string <>p)))))
+                         (seqs `((skip (lit "\\(")) (one chr?) (one chr?)))) s y n)
+   (resc s y n)    ((alts `((tag (\ _ `('text "\\")) (lit "\\e"))
+                            (tag (\ _ `('text "-")) (lit "\\-"))
+                            (tag (\ _ `('text "")) (lit "\\&"))     ; zero-width: mrg drops it
+                            (tag (\ _ `('text " ")) (lit "\\ "))
+                            rgl)) s y n)
    (rtext s y n)   ((tag (\ p `('text (strcat p))) (seq (one rfesc?) (span rfesc?))) s y n)
-   (rfont o t s y n) ((tag (\ p `(t <p)) (seqs `((skip (lit o)) (pack (rinls)) (skip (lit "\\fR"))))) s y n)
+   ; ..a \ that starts none of the above is an escape we do not model: it reads as literal
+   ; text one char at a time and `mrg` glues it back on -- the same fallback the markdown
+   ; surface gives an unclaimed sigil. Without it the reader stops dead at the first one.
+   (rchar s y n)   ((tag (\ p `('text (string <p))) (one chr?)) s y n)
+   (rfont o t s y n) ((tag (\ p `(t <p)) (seqs `((skip (lit o)) (pack (rinls)) (skip rclose)))) s y n)
    (rstrong s y n) ((rfont "\\fB" 'strong) s y n)
    (rem s y n)     ((rfont "\\fI" 'em) s y n)
-   (rcode s y n)   ((tag (\ p `('code (plain <p))) (seqs `((skip (lit "\\f(CR")) (pack (many (alts `(runesc rtext)))) (skip (lit "\\fR"))))) s y n)
-   ; ..a `\` that starts none of the above is a roff escape we do not model (\(la, \(bu):
-   ; it reads as literal text, one char at a time, and `mrg` glues it back on -- the same
-   ; fallback the markdown surface gives an unclaimed sigil. Without it the reader stops
-   ; dead at the first such escape and drops the rest of the line.
-   (rchar s y n)   ((tag (\ p `('text (string <p))) (one chr?)) s y n)
-   (rspan s y n)   ((alts `(runamp runesc rcode rstrong rem rtext rchar)) s y n)
-   (rinls s y n)   ((pmap mrg (many (seq (notp (lit "\\fR")) rspan))) s y n)
+   (rcode s y n)   ((tag (\ p `('code (plain <p)))
+                         (seqs `((skip (alts `((lit "\\f(CR") (lit "\\f(CW"))))   ; CW is groff-deprecated, still read
+                                 (pack (many (seq (notp rclose) (alts `(resc rtext rchar))))) (skip rclose)))) s y n)
+   (rspan s y n)   ((alts `(resc rcode rstrong rem rtext rchar)) s y n)
+   (rinls s y n)   ((pmap mrg (many (seq (notp rclose) rspan))) s y n)
    (rfinl s)       (mrg (runp (many rspan) s))
+   (rplain s)      (plain (mrg (runp (many (alts `(resc rtext rchar))) s))))   ; escapes only, no fonts
 
-   rfline    (seqs `((span nonl?) (skip (lit "\n"))))         ; one text line, raw
-   (rmac m)  (seqs `((skip (lit m)) (skip (span sp?)) (span nonl?) (skip (lit "\n"))))
-   (r-th s y n)   ((tag (\ p `('meta (mnorm (zipm metakeys p))))
-                        (seqs `((skip (lit ".TH")) (many rquoted) (skip (span sp?)) (skip (lit "\n"))))) s y n)
-   (rquoted s y n) ((seqs `((skip (span sp?)) (skip (lit "\"")) (span (\ c (! (c = 34)))) (skip (lit "\"")))) s y n)
-   (r-sh s y n)   ((tag (\ p `('head 1 (rfinl <p))) (rmac ".SH")) s y n)
-   (r-ss s y n)   ((tag (\ p `('head 2 (rfinl <p))) (rmac ".SS")) s y n)
-   (r-pp s y n)   ((tag (\ p `('para (rfinl <p))) (seqs `((skip (lit ".PP\n")) rfline))) s y n)
-   (r-ex s y n)   ((tag (\ p `('fence "" (strcat (map (\ ln (ln + "\n")) p))))
-                        (seqs `((skip (lit ".EX\n")) (many (seq (notp (lit ".EE")) rfline)) (skip (lit ".EE\n"))))) s y n)
-   (r-rs s y n)   ((tag (\ p `('quote p)) (seqs `((skip (lit ".RS\n")) (many r-block) (skip (lit ".RE\n"))))) s y n)
-   (r-bu s y n)   ((seqs `((skip (lit ".IP \\(bu 2\n")) rfline)) s y n)
-   (r-ul s y n)   ((tag (\ p `('bullets (map rfinl p))) (many1 r-bu)) s y n)
-   (r-no s y n)   ((seqs `((skip (lit ".IP \"")) (skip (span (\ c (! (c = 34))))) (skip (lit "\" 4\n")) rfline)) s y n)
-   (r-ol s y n)   ((tag (\ p `('numbers (map rfinl p))) (many1 r-no)) s y n)
-   (r-tp s y n)   ((tag (\ p `((rfinl <p) (rfinl <>p))) (seqs `((skip (lit ".TP\n")) rfline rfline))) s y n)
+; the font MACROS: which fonts to cycle through, and whether the arguments take a space.
+(: (rargs s)                                                  ; a macro's arguments, bare or "quoted"
+   ((: (g i acc)
+       (? (! (i < tally s)) (rev acc)
+          ((s i) = 32) (g (i + 1) acc)
+          ((s i) = 34) (: j ((: (h k) (? (&& (k < tally s) (! ((s k) = 34))) (h (k + 1)) k)) (i + 1))
+                          (g (j + 1) (link (snip s (i + 1) j) acc)))
+          (: j ((: (h k) (? (&& (k < tally s) (! ((s k) = 32))) (h (k + 1)) k)) i)
+             (g j (link (snip s i j) acc))))) 0 ())
+   fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
+              (".RI" (text em) 0) (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
+   (macinfo m) ((: (g l) (? (! (two? l)) () ((<<l) = m) (>(<l)) (g >l))) fontmacs)
+   (wrapf f l)   (? (id? f 'strong) `(`('strong l)) (id? f 'em) `(`('em l)) l)
+   (allplain? l) (? (! (two? l)) 1 (id? <<l 'text) (allplain? >l) 0)
+   (argl a f)    (: l (rfinl a) (? (allplain? l) (wrapf f l) l))     ; an explicit \f inside the arg wins
+   (argls as fs i sp) (? (! (two? as)) ()
+                         (: h (argl <as (nthl fs (i % tally fs)))
+                            (? (! (two? >as)) h
+                               (cat h (cat (? sp `(`('text " ")) ()) (argls >as fs (i + 1) sp))))))
+   (imacl line) (: a (rargs line) m (? (two? a) <a "") info (macinfo m)
+                   (? (two? info) (mrg (argls (rargs (snip line (tally m) (tally line))) <info (nthl info 1) 0))
+                      (rfinl line)))
+   (linl line)  (? (&& (0 < tally line) ((line 0) = 46)) (imacl line) (rfinl line)))
+
+; the block layer: a run of fill lines is a paragraph, a block macro ends it.
+(: blockmac (alts `((lit ".TH") (lit ".SH") (lit ".SS") (lit ".PP") (lit ".LP") (lit ".TP")
+                    (lit ".RS") (lit ".RE") (lit ".EX") (lit ".EE") (lit ".IP") (lit ".br") (lit ".nf") (lit ".fi")))
+   rfline    (seqs `((span nonl?) (skip (lit "\n"))))
+   (rmacl m) (seqs `((skip (lit m)) (skip (span sp?)) (span nonl?) (skip (lit "\n"))))
+   (r-fline s y n)  ((tag (\ p (linl (strcat p)))
+                          (seqs `((notp blockmac) (one nonl?) (span nonl?) (skip (lit "\n"))))) s y n)
+   (joinfr l) (? (! (two? l)) () (! (two? >l)) <l (cat <l (cat `(`('text " ")) (joinfr >l))))
+   (r-filled s y n) ((tag (\ p (mrg (joinfr p))) (many1 r-fline)) s y n)
+
+   (r-th s y n)   ((tag (\ p `('meta (mnorm (zipm metakeys (rargs <p))))) (rmacl ".TH")) s y n)
+   (r-sh s y n)   ((tag (\ p `('head 1 (rfinl (joins (rargs <p) " ")))) (rmacl ".SH")) s y n)
+   (r-ss s y n)   ((tag (\ p `('head 2 (rfinl (joins (rargs <p) " ")))) (rmacl ".SS")) s y n)
+   ; a .PP with no filled run behind it is an EMPTY paragraph (the pages use one to space a
+   ; display); `opt` gives it an empty payload, so it contributes no block at all.
+   (r-pp s y n)   ((seqs `((skip (alts `((lit ".PP") (lit ".LP")))) (skip (span nonl?)) (skip (lit "\n"))
+                           (opt (tag (\ p `('para <p)) r-filled)))) s y n)
+   (r-para s y n) ((tag (\ p `('para <p)) r-filled) s y n)      ; text with no .PP -- after a .SH
+   (r-tp s y n)   ((tag (\ p `(<p <>p))
+                        (seqs `((skip (lit ".TP")) (skip (span nonl?)) (skip (lit "\n")) r-fline r-filled))) s y n)
    (r-dl s y n)   ((tag (\ p `('deflist p)) (many1 r-tp)) s y n)
-   (r-block s y n) ((alts `(r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl)) s y n)
+   (r-bu s y n)   ((seqs `((skip (lit ".IP \\(bu")) (skip (span nonl?)) (skip (lit "\n")) r-filled)) s y n)
+   (r-ul s y n)   ((tag (\ p `('bullets p)) (many1 r-bu)) s y n)
+   (r-no s y n)   ((seqs `((skip (lit ".IP")) (skip (span nonl?)) (skip (lit "\n")) r-filled)) s y n)
+   (r-ol s y n)   ((tag (\ p `('numbers p)) (many1 r-no)) s y n)
+   (r-ex s y n)   ((tag (\ p `('fence "" (strcat (map (\ ln ((rplain ln) + "\n")) p))))
+                         (seqs `((skip (alts `((lit ".EX") (lit ".nf")))) (skip (span nonl?)) (skip (lit "\n"))
+                                 (many (seq (notp (alts `((lit ".EE") (lit ".fi")))) rfline))
+                                 (skip (alts `((lit ".EE") (lit ".fi")))) (skip (span nonl?)) (skip (lit "\n"))))) s y n)
+   (r-rs s y n)   ((tag (\ p `('quote p))
+                         (seqs `((skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
+                                 (many r-block)
+                                 (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))))) s y n)
+   (r-br s y n)    ((skip (seqs `((lit ".br") (span nonl?) (lit "\n")))) s y n)   ; a break ends the run
+   (r-blank s y n) ((skip (seqs `((span sp?) (lit "\n")))) s y n)
+   (r-block s y n) ((alts `(r-blank r-br r-th r-sh r-ss r-pp r-ex r-rs r-ul r-ol r-dl r-para)) s y n)
    (rfread t) (bmrg (runp (many r-block) t)))
 
 ; ---------------------------------------------------------------- the lens

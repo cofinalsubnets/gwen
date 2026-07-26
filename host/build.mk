@@ -185,15 +185,18 @@ $(ho)/ai: $(ho)/love
 	@echo LN	$@
 	@ln -sf love $@
 
-$(ho)/love.1: doc/love.1 out/lib/love_version.h
-	@echo SED	$@
+# the man pages are WRITTEN in doc/*.md and generated here through the lapiz lens
+# (tools/mkman.l): one source, so the roff cannot drift from the prose. the generated
+# roff renders byte-identically to the hand-written pages it replaced.
+$(ho)/love.1: doc/love.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
+	@echo LOVE	$@
 	@mkdir -p $(dir $@)
 	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/love_version.h); \
-	 sed "s/@VERSION@/$$v/" doc/love.1 > $@
+	 $(ho)/love -l crew/lapiz/lapiz.l tools/mkman.l doc/love.md | sed "s/@VERSION@/$$v/" > $@
 
-$(ho)/cook.1: doc/cook.1 out/lib/love_version.h
-	@echo SED	$@
+$(ho)/cook.1: doc/cook.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
+	@echo LOVE	$@
 	@mkdir -p $(dir $@)
 	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/love_version.h); \
-	 sed "s/@VERSION@/$$v/" doc/cook.1 > $@
+	 $(ho)/love -l crew/lapiz/lapiz.l tools/mkman.l doc/cook.md | sed "s/@VERSION@/$$v/" > $@
 
