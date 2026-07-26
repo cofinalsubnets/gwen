@@ -160,8 +160,12 @@
                  (link ': (wxl (boxfix >x) bnd)))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
      (h = '?) (? (atom? >x) '?                      ; (?) likewise: the empty form is the head's value
                  ('? >< (wxc >x bnd)))
-     (: m (? (nom? h) (macros h) 0)                     ; macro head? expand, then re-walk -- unless a binder
-      (? (m && !(member? h bnd)) (wx (m >x) bnd)   ;   SHADOWS the name (the bnd walk only on a macro hit)
+     ; macro head? expand, then re-walk -- unless a binder SHADOWS the name (the bnd walk only
+     ; on a macro hit). this lane LOOKS dead (cprop expands first, same guard) but is LIVE: cprop's
+     ; inliner REVERT rebuilds (h >< as) with the RAW head, resurrecting unexpanded macros inside
+     ; it (kanren's (vel .. (zz ..)) delay shapes) -- this lane is the net. probed, not a guess.
+     (: m (? (nom? h) (macros h) 0)
+      (? (m && !(member? h bnd)) (wx (m >x) bnd)
          (fold (map (\ e (wx e bnd)) x) bnd)))))
    (wxl bs bnd) (wxb bs (ln bs + bnd))        ; a let's names all shadow throughout
    (wxb bs bnd) (?
@@ -180,9 +184,6 @@
         (atom? >rest) `(e <rest c)        ; (nil? e) c el -> (e el c)
         bs))
     bs)
-   ; cst: a post-wx test that is a compile-time CONSTANT -> (1 . falsy?), else 0. mirrors feels'
-   ; cval (a non-symbol atom, or a (\ v) quote of one); the cond tests g_false == nil?, so the
-   ; constant's truth is exactly nil? of its value -- a folded test prunes its dead branch.
    ; cst: re-read the shared `kconst` (const? . value, prel) as (const? . falsy?) -- the constant's truth
    ; is exactly nil? of its value, so a folded test prunes its dead branch. One recognizer (kconst) across
    ; scopes that can't otherwise share (feels' cval was the same logic; cprop's propk? is the const? bit).
@@ -223,17 +224,14 @@
    (propk? v) <(kconst v)   ; a constant FORM? -- the const? bit of the shared kconst recognizer (prel; cf. cst, the falsy projection)
    (assq k se) (? (atom? se) 0 (id? k <<se) <se (assq k >se))
    (rmq k se) (? (atom? se) () (id? k <<se) (rmq k >se) (<se >< rmq k >se))
-   (strip ps se) (? (atom? ps) se (strip (cup ps) (rmq (cap ps) se)))                 ; kill all params
-   (cnul? l) (! (two? l))                                                             ; end-of-spine (NOT net)
    (cbake v) (? (charm? v) v `('\ v))                                                ; folded value -> source
    (kval v) (? (atom? v) v <>v)                                                  ; a const FORM -> its value
-   (allk as) (? (cnul? as) 1 (? (propk? <as) (allk >as) 0))                 ; all args constant?
+   (allk as) (all propk? as)                                                       ; all args constant?
    opval `(`('+ (+)) `('- (-)) `('* (*)) `('// (//)) `('% (%))         ; pure ops -> first-class nif. the value rides
            `('= (=)) `('< (<)) `('<= (<=)) `('> (>)) `('>= (>=))       ; in parens: bare it would capture its left neighbor
            `('! (nil?)) `('nil? (nil?)))
-   (inop k s) (? (cnul? s) 0 (id? k <<s) 1 (inop k >s))                     ; is k a key of the op table?
-   (opget h) (: e (assq h opval) (? (atom? e) 0 <>e))
-   (foldc h as) (cbake (foldl (\ g a (g a)) (opget h) (map kval as)))                 ; apply the nif to the consts
+   (opget h) (: e (assq h opval) (? (atom? e) 0 <>e))                       ; h's nif, 0 (a charm) on miss
+   (foldc o as) (cbake (foldl (\ g a (g a)) o (map kval as)))                 ; apply the nif to the consts
    ; --- the known-lambda INLINER (cprop's beta-reduction lane) ----------------------------
    ; beta-reduce an application whose (resolved) head is a statically-known lambda. SOUND by
    ; three gates: the lambda is INLINABLE (non-recursive, body is bsub-safe `simple?`, and
@@ -250,7 +248,7 @@
    ; REVERT to the un-inlined source, preserving the capturing closure. ((twice (adder i)) i)
    ; collapses to 3i (a value -> fine); ((\ n ..) 5) stays a capturing closure (it escapes).
    (pure-head? h) !!(peep pureset (gv h ()) 0)                                    ; h's global value is a KNOWN PURE fn (the lifted ~50-fn set)
-   (allp as se) (? (cnul? as) 1 (? (purep <as se) (allp >as se) 0))          ; all args effect-free?
+   (allp as se) (all (\ a (purep a se)) as)                                  ; all args effect-free?
    (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
     (h = a) 1                                                                         ; nom / number / string
     (h = '\) 1                                                                  ; a lambda value (pure to build)
@@ -294,7 +292,7 @@
        (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
           (? (two? rest) (bd2 >< rest) bd2))))
    (cplam x se fl op bnd) (? (atom? >>x) x                                       ; (\ v) quote -> leave
-    (: r (lp x) ps <r ('\ >< ps + `((cprop >r (strip ps se) fl 0 (ps + bnd))))))   ; the body is a value -> op 0
+    (: r (lp x) ps <r ('\ >< ps + `((cprop >r (rmkeys ps se) fl 0 (ps + bnd))))))   ; the body is a value -> op 0
    (cpbinds bs se fl op bnd) (?
     (atom? bs) bs
     (atom? >bs) (list (cprop <bs se fl op bnd))                              ; the let's BODY inherits the let's op
@@ -316,8 +314,9 @@
              hr (? (nom? h) (: e (assq h se) (? (atom? e) h <>e)) (cprop h se fl 1 bnd)) ; HEAD is consumed -> op 1
              (? (&& (< 0 fl) (lambp hr) (allp as se))
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
-                     (? (op || !(lambp red)) red (h >< as)))                      ; escaping lambda result -> REVERT (keep the closure)
-                (nom? h && inop h opval && allk as) (foldc h as)                    ; pure-op on consts -> fold (as before)
+                     (? (op || !(lambp red)) red (h >< as)))                      ; escaping lambda result -> REVERT (keep the closure).
+                                                                                  ; the RAW h may hold unexpanded macros -- wx's lane catches them
+                (nom? h && !(charm? (opget h)) && allk as) (foldc (opget h) as)     ; pure-op on consts -> fold (as before)
                 (h >< as)))))))                                                       ; else rebuild with the RAW head (source unchanged)
    (wx (cprop x () 64 0 0) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a
@@ -336,8 +335,11 @@
                (a = ': ) (ale c <b >b)
                (a = iop) (iap c b)
                (a = apx) (apxh c b)
-               (: m (macros a)
-                (? m (ana c (m b)) (app c a b))))))
+               (app c a b))))     ; a VALUE head: ala's (entry . imports) -- apply the built
+                                  ; closure to its captured imports. never a macro (feel
+                                  ; expands every nom-headed call; wx's lane is the net for
+                                  ; cprop's revert), so no (macros a) consult here -- probed
+                                  ; dead on every lane (host boot + corpus, love0 x2, glaze).
   (push c k x) (: _ (pin c k (x >< c k)) x)
   (pop c k) (: x (c k) _ (pin c k >x) <x)
   (iap c b) (: op <b as >b                       ; (iop op . args) -> inline the vm op
