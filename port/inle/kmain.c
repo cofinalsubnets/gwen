@@ -554,9 +554,10 @@ void kmain(void) {
 #include "uu.h"                                        // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files
 #include "bao.h"                                       //   drive it through the `uu` book on this target too
 #ifdef K_TEST
-#include "q.h"                                         // the optional library layers, test build ONLY: the corpus asserts on
-#include "kanren.h"                                    //   q and kanren, a booting kernel wants neither -- so the shipped
-                                                       //   image carries no rationals and no unifier (~65K of heap)
+#include "coin.h"                                      // the optional library layers, test build ONLY: the corpus asserts on
+#include "rng.h"                                       //   coin, rng, q and kanren, a booting kernel wants none of them -- so
+#include "q.h"                                         //   the shipped image carries no ring/monoid, no random stream, no
+#include "kanren.h"                                    //   rationals and no unifier (~65K of heap for the last two alone)
  // test build: drink the baked `tests` string (string -> charlist -> tap port)
  // through reads (love/bao.l) -- the same stream shell as the host's stdin runner.
  // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;

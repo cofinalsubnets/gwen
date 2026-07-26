@@ -33,7 +33,7 @@ glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h out/lib/hook.h
 # are baked in so love0 self-tests both compilers in one run (see main.c). The final
 # l uses the canonicalized lcat headers from the rule below instead.
 sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/q0.h out/lib/kanren0.h out/lib/tests0.h $(asm0_h)
+gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/tests0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 # lcat a .l source into its C-string header, ATOMICALLY: generate to a temp, require it

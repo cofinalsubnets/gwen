@@ -163,7 +163,7 @@ $(ho)/love.o $(ho)/0/love.o: out/lib/love_version.h
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
 # main.c` did), recompile it when any baked header changes.
-$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
+$(ho)/host/main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 # host/cb.c rides crew/quay/quay.c by unity include -- recompile when the engine moves.
 $(ho)/host/cb.o: crew/quay/quay.c crew/quay/quay.h
 
@@ -173,7 +173,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/quay.h
 # one link rule, two names: `love` (canonical) and `love.cand` (the CANDIDATE -- the next
 # generation built at a side path nothing executes, so the RELINK can never hit
 # ETXTBSY no matter who is running `love`; see the candidate target below).
-$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
+$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags)

@@ -663,28 +663,6 @@
 ; -- haskell-like weak-binding application (loosest grip). glued $x stays saturate, a different valence.
 (: (** a b) (b a))
 (: $ 1)
-; the RNG, two layers over the pure C steps (seed -> a fresh 256-bit state; C holds
-; no state). FUNCTIONAL (reproducible): (random st n) draws once -> (value . st'),
-; value's TYPE by n -- float -> float in [0,n), positive int -> int in [0,n), n <= 0
-; -> a full-width int. GLOBAL (hidden stream on book ('rng-state), lazily clock-seeded):
-; (rand n) -> int in [0,n) (n<=0 full-width); (randf n) -> float in [0,n) (n<=0 -> [0,1)).
-; rng-get/rng-set are the stream's PUBLIC plumbing -- (rng-set (seed n)) pins it, making
-; rand/randf reproducible (a bad state answers 0, the stream unchanged); rng-get reads it.
-(: (random st n) (? (gem? n) (: r (randf-next st) (link (* n (cap r)) (cup r)))
-                    (< 0 n)  (: r (rand-next st)  (link (% (cap r) n) (cup r)))
-                    (rand-next st))
-   (rng-get _) (: st (peep book 'rng-state 0)
-                  (? (tray? st) st (: f (seed (clock 0)) _ (pin book 'rng-state f) f)))
-   ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
-   ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
-   ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (tray? st) (= 1 (rank st)) (= 4 (tally st)) (= (tier (seed 0)) (tier st)))
-                   (: _ (pin book 'rng-state st) st)
-                   0)
-   (rand n) (: r (rand-next (rng-get 0)) _ (pin book 'rng-state (cup r))
-               (? (&& (charm? n) (< 0 n)) (% (cap r) n) (cap r)))
-   (randf n) (: r (randf-next (rng-get 0)) _ (pin book 'rng-state (cup r))
-               (? (&& (constellation? n) (< 0 n)) (* n (cap r)) (cap r))))
 ; readability / lisp-compat aliases by head-symbol substitution.
 ; do/begin/progn sequence side effects and return the last (identical to the
 ; current `,` macro -> `(: _ a _ b ... last)`); let -> the `:` let form;
@@ -768,31 +746,6 @@
 (: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (tray (a-type d) sh d))
                         (\ x (a-coll sh (- n 1) (link x acc))))
    (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
-
-; --- newtypes: a DIE strikes COINS -- user kinds that ride +/* with ()-identity ---
-; a COIN (coin?) is struck from a die over a payload; the die is the type descriptor (a
-; monoid/ring -- a map of slot->method); die-of reads it back. + and * dispatch through
-; the KHot lane to the die's plus/times, run over the LOADED payloads and re-struck; ()
-; stays their identity for free (the mint-identity hoist sits above the +/* matrix).
-; net/=/</show default over the payload in the C core, so $/truth, value-equality, sort
-; and the (name payload) show form all work with no extra ceremony. plus/times take
-; payloads. (ring 'z5 plus times) / (monoid 'z5 plus) -> a constructor: payload -> coin.
-; `-` rides slot 5 and `/` slot 8 for a die that pins them (ring/monoid pin none;
-; q pins both): unpinned, they answer (), the undefined-op law. slot 6 is the NET
-; MODE, a fixnum: absent/0 nets the payload (the hom); 1 nets by TALLY -- the
-; count, never negative -- so a die over signed content (a ledger, a polynomial)
-; can make its coins' truth read "has any", not "sums green". slot 7 truthy
-; declares the die's coins STARS: numeral application powers them through their
-; own * (num-ap's open fork) instead of composing them as functions.
-; LIVES HERE, below the #(..) `hash` macro: a macro must precede its use in the prel,
-; since the bootstrap c0 is a single forward pass (no macro hoist). slot 0 = show-name.
-(: (ring name plus times) (:
-      d #(0 name)                                                ; the die; slot 0 = show-name
-      _ (pin d 1 (\ a b (coin d (plus (load a) (load b)))))      ; slot 1 = +
-      _ (? times (pin d 2 (\ a b (coin d (times (load a) (load b))))) 0)  ; slot 2 = * (a monoid has none)
-      (\ p (coin d p)))                                          ; the ctor: payload -> coin
-   (monoid name plus) (ring name plus 0))                        ; a monoid is a ring with no product
-
 
 ; recursive-value boxing for `:` (the letrec* "capture by location" fix).
 ; ONE SCOPE: every name bound in a `:` resolves locally over the whole form.

@@ -89,7 +89,7 @@ $(ko)/love-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
 
 # Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h out/lib/q.h out/lib/kanren.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

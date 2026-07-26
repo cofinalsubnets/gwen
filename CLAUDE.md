@@ -225,10 +225,15 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; and there are FIVE sites, not three: host/main.c (twice -- the egg lane, and love0's own with the
 ; sed-wrapped <name>0.h twins, which need a gl0_h entry), wasm/host.c (its OWN boot string, easy to
 ; miss -- the corpus caught it), port/inle/kmain.c, port/playdate/main.c. Each wants a header dep too
-; (host/build.mk, wasm/Makefile, port/inle/kernel.mk, port/playdate/Makefile). so q (rationals) and
-; kanren (unification) ride the host, love0, wasm, the K_TEST kernel and the playdate rune workbench,
-; while a shipped kernel carries neither. ⚠ a post-egg layer cannot add an
+; (host/build.mk, wasm/Makefile, port/inle/kernel.mk, port/playdate/Makefile). the four so far: coin
+; (ring/monoid over the C coin lane), rng (the random stream), q (rationals), kanren (unification) --
+; all four ride the host, love0, wasm and the K_TEST kernel (the corpus asserts on each); the playdate
+; workbench takes only q + kanren, what rune stands on; a shipped kernel takes none. ⚠ a layer may
+; only lean on what SURVIVES BIRTH -- the egg mops its internals just before the hatch, so wrapping a
+; mopped nif means taking it off egg.l's mop list (rng did: rand-next/randf-next stay now, since the
+; wrapper that owned them shipped out of prel). ⚠ and a post-egg layer cannot add an
 ; OPERATOR: `operators` is mopped at birth, so the grammar closes when the egg hatches (any all-punct
-; head is infix-dyadic at house grip anyway -- the table holds only the exceptions). build codegen
+; head is infix-dyadic at house grip anyway -- the table holds only the exceptions; user-declared
+; fixity would be the scope-layer door, doc/precedence.md §deferred). build codegen
 ; lives in love under tools/; the C is freestanding, -Wall -Wextra -Werror.
 ```

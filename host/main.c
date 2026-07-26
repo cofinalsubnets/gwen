@@ -482,8 +482,10 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "arm640.h"                                   //   ev. Globals persist across the egg warm below, so one eval here
     "(leave ())"                                     //   serves both corpus passes. the (leave ()) closes holo.l's scope layer as
 #include "uu0.h"                                       //   the `holo` book.
-#include "q0.h"                                        // the optional library layers (love/q.l, love/kanren.l) -- not part of
-#include "kanren0.h"                                   //   prel, but the corpus asserts on both, so love0 carries them too
+#include "coin0.h"                                     // the optional library layers (love/coin.l, love/rng.l, love/q.l,
+#include "rng0.h"                                      //   love/kanren.l) -- not part of prel, but the corpus asserts on all
+#include "q0.h"                                        //   four, so love0 carries them too. these land BEFORE the egg and their
+#include "kanren0.h"                                   //   globals persist across the warm, so one eval serves both corpus passes
   );
   g = ai_evals_(g, "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))");   // string -> charlist, for the runner
   g = ai_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
@@ -560,9 +562,10 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "prel.h"
 #include "ev.h"
     "))"
-#include "q.h"                                          // the OPTIONAL library layers, each its own love/*.l so prel stays the
-#include "kanren.h"                                     //   language: q (rationals) then kanren (unification) -- kanren BEFORE
-                                                        //   post, whose overlay half reads unify/ufail?/var out of it
+#include "coin.h"                                       // the OPTIONAL library layers, each its own love/*.l so prel stays the
+#include "rng.h"                                        //   language: coin (ring/monoid over the C coin lane), rng (the random
+#include "q.h"                                          //   stream), q (rationals), then kanren (unification) -- kanren BEFORE
+#include "kanren.h"                                     //   post, whose overlay half reads unify/ufail?/var out of it
 #include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
 #include "uu.h"                                          // uu's NbE kernel (love/uu.l, sweep at its tail) -- one global name, the
                                                          //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
