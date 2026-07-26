@@ -4748,16 +4748,25 @@ static ai_noinline uintptr_t hash_two(struct ai *g, word x) {
   if (w == base) return h; } }
 
 // general hashing method...
+// The anchor an out-of-pool ap hashes AGAINST. Its address moves with every other
+// main-program address (one load-base delta shifts them together), so the OFFSET is
+// what stays put. Hashing the raw address instead would be stable within a run but
+// not across a bake/wake: a bucket index computed at bake time would miss at wake,
+// and every nif-keyed table (feels, pureset) would silently read empty -- the woken
+// compiler folding no arithmetic and inlining no nif-bodied lambda, while `=` on the
+// same nifs kept answering true. The offset also makes the index deterministic per build.
+static const char hash_base[1] = {0};
 struct arib; static uintptr_t shash(struct ai *g, word x, struct arib *env);  // α-invariant source hash
 static bool clo_nfhash(struct ai *g, word x, uintptr_t *out);  // partial-app -> capture-substitution normal-form hash (the beta bridge)
 uintptr_t hash(struct ai *g, intptr_t x) {
  if (charmp(x)) return rot(x*mix);
  if (!datp(x)) {
-   // out-of-pool (static nif): stable distinct address. in-pool: a compiled lambda
+   // out-of-pool (static nif): its distinct offset from hash_base (see there -- the
+   // address alone would not survive a wake). in-pool: a compiled lambda
    // parks its source \-expr one cell before the entry (the tag head points there) and
    // hashes it α-invariantly (so the order agrees with `=`'s α-equivalence); else by
    // length. All GC-stable (buckets survive copy).
-   if (!in_heap(g, x)) return rot(x * mix);             // a tenured closure lives in the major pool, still in-heap
+   if (!in_heap(g, x)) return rot((x - (intptr_t) hash_base) * mix);   // a tenured closure lives in the major pool, still in-heap
    union u *k = cell(x); struct ai_tag *tg = ttag(g, k);
    if (tag_head(tg) < k) return shash(g, k[-1].x, 0);   // no-capture lambda: α-invariant source hash
    uintptr_t nf;                                        // partial-app over a SOURCED base: hash its capture-substitution
