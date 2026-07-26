@@ -689,8 +689,8 @@
 ; termination is the rule set's burden. a named symbol is a (name . mint)
 ; chain -- the SAME shape as a var -- so mark and rewrite treat noms as
 ; atoms, never walking into them.
-(: sew (kanren 'subst)
-   mnil (kanren 'empty_dict)
+(: sew (from 'kanren 'subst)
+   mnil (from 'kanren 'empty_dict)
    (match p x) (: r (unify mnil p x) (ufail? r ? () r))
    (vlook v ps) (? (0 = tally ps) ()
                    (<(<ps) = v) >(<ps)

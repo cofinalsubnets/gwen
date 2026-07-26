@@ -1,11 +1,11 @@
-; kanren -- the machinery lives in love/prel.l, swept into the `kanren` MODULE book
-; (unify + its ufail/ufail? contract and the macro-emitted var/s_plus/s_star/===
-; stay global; walk/est/query/streams/rel ride the book). this file is the assert
-; suite + the relational-algebra demo. ONE body-having `:` -- the book binds and
-; `unord_eq` (an unordered list equality; search order is not specified) stay LOCAL,
-; per the corpus law: a leak here would poison love0's pass-2 re-sweep mark (the
-; egg warm re-runs the prel sweep; a session global shadows a module name in it).
-(: K kanren
+; kanren -- the machinery lives in love/kanren.l, a REGISTERED MODULE (unify + its
+; ufail/ufail? contract and the macro-emitted var/s_plus/s_star/=== stay global;
+; walk/est/query/streams/rel ride the registry -- (from 'kanren) is the curried
+; accessor). this file is the assert suite + the relational-algebra demo. ONE
+; body-having `:` -- the accessor binds and `unord_eq` (an unordered list equality;
+; search order is not specified) stay LOCAL, per the corpus law (and the registry
+; retired the old re-sweep-mark poisoning hazard outright).
+(: K (from 'kanren)
    est (K 'est)  query (K 'query)  rel (K 'rel)  sX (K 'sX)  slist (K 'slist)
    smap (K 'smap)  sno (K 'sno)  stake (K 'stake)  walk (K 'walk)
    (unord_eq a b) (&& (= (sat a) (sat b)) (all (flip member? a) b))
