@@ -41,3 +41,14 @@
  (= 'b  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 3)))  ; ... fall-through to the else
  (= 'a  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 9)))  ; ... first clause still wins
  (id? () (: (f x) (? (nil? x) 'z) (f 5))))         ; no-else cond falls to the zero point () (nil-ontology)
+
+; --- the inliner's under-saturated beta --- a known lambda applied SHORT of its params
+; substitutes the given args and answers a \ of the rest -- so curried HOFs collapse
+; statically when consumed (op=1), and still REVERT at value position (the escape law).
+(: (usadd a b) (a + b)
+   (us3 a b c) (a + b + c)
+   (ustw f x) (f (f x))
+   (assert
+    (15 = (: (g i) ((ustw (usadd i)) i) (g 5)))          ; the doc's promise: collapses to first-order
+    (7 = ((ustw (us3 1 2)) 1))                           ; two params short, then cascaded
+    (9 = (: h (usadd 4) (h (h 1))))))                    ; value position: the partial REVERTS, still right

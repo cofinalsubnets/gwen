@@ -247,9 +247,11 @@
    ; CLOSED -- every free var a global, so it means the same at the call site), the args are
    ; PURE (`allp` -- so duplicating/dropping them is unobservable), and a FUEL bound caps the
    ; reduction cascade (omega-style self-application would otherwise loop). The cascade runs
-   ; through cprop's normal recursion: (adder i) reduces to a lambda VALUE, which becomes
-   ; (twice ..)'s arg, whose body's f-applications then reduce -- collapsing curried HOFs to
-   ; first-order arithmetic the back end (and the glaze) can take native. See doc/proto/inl.l.
+   ; through cprop's normal recursion: (adder i) reduces to a lambda VALUE (an UNDER-SATURATED
+   ; call substitutes the given args and answers a \ of the REST -- currying, statically),
+   ; which becomes (twice ..)'s arg, whose body's f-applications then reduce -- collapsing
+   ; curried HOFs to first-order arithmetic the back end (and the glaze) can take native.
+   ; See doc/proto/inl.l.
    ; SOUNDNESS, the subtle part: beta IS NOT bridged by `=` on closures (the spec), so a
    ; beta-PRODUCED closure must never ESCAPE to where =/id?/show could observe it. So we
    ; thread an operator-position flag `op`: a beta result that is itself a lambda is committed
@@ -297,7 +299,9 @@
        (map (\ e (bsub (ren + rmkeys nms env) e)) x))
     (map (\ e (bsub env e)) x))
    (beta lam as) (: r (lp lam) ps <r np (tally ps)                               ; apply a lambda to args (curried)
-    (? (tally as < np) (lam >< as)                                                 ; under-saturated -> leave a partial
+    (? (tally as < np)                                                             ; under-saturated -> substitute the given,
+       (bsub (zip ps as) ('\ >< (drop (tally as) ps) + `((last lam))))             ;   answer a \ of the REST (bsub's \ case
+                                                                                   ;   renames the rest fresh -> capture-free)
        (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
           (? (two? rest) (bd2 >< rest) bd2))))
    (cplam x se fl op bnd) (? (atom? >>x) x                                       ; (\ v) quote -> leave
@@ -325,7 +329,7 @@
                                                                                   ; it) -- a COMPOUND head goes out WALKED, so cprop's output
                                                                                   ; is macro-free everywhere and wx needs no macro lane (the
                                                                                   ; revert used to leak the raw macro-bearing head; probed)
-             (? (&& (< 0 fl) (lambp hr) (allp as se))
+             (? (&& (< 0 fl) (lambp hr) (two? as) (allp as se))                        ; two? as: (f) is f -- nothing to substitute
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h)               ; pure-fn on consts -> fold. bnd-guarded: a binder
