@@ -42,12 +42,21 @@
 ; Cookfile, or a -f FILE) is love source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
 
-; the combinators live in the `parse` MODULE book (love/post.l): bind the shared set --
-; `parse` itself rebound LAST, so the earlier reads get the book (the sequence law).
+; cook is a REGISTERED MODULE: everything below binds in the `cook` layer, and the
+; foot seals it. only the seat (the very foot of this file) sits outside, so loading
+; this file adds NOTHING to the book -- a consumer reaches in with (use 'cook) or
+; (from 'cook 'recipe). before this, cook leaked 32 globals, `join` `date` `check`
+; `one` `span` `pick` among them -- and CLOBBERED `parse`, so a cat that put cook
+; ahead of another post.l consumer handed it cook's strict runner instead of the book.
+(enter 'cook)
+
+; the combinators live in the `parse` MODULE book (love/post.l): bind the shared set.
+; `pstrict` is post.l's `parse` (the strict runner that must consume the whole input);
+; it is NOT named `parse` -- that name stays the book, for us and for everyone after.
 (: P parse
    eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
    seq (P 'seq)  seqs (P 'seqs)  opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
-   many (P 'many)  runp (P 'runp)  parse (P 'parse))
+   many (P 'many)  runp (P 'runp)  pstrict (P 'parse))
 
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
@@ -245,8 +254,8 @@
    ; resolved cards can be SHOWN back as a Cookfile (see emit-cookfile below).
    emitp (tablet 0)
 
-   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) now live in the POST-EGG
-   ;    layer love/post.l, baked once after the egg; this body-having `:` just reads them as outer globals.
+   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/pstrict) live in the POST-EGG
+   ;    layer love/post.l, baked once after the egg; this body-having `:` reads them off the cook layer.
 
    ; -- character classes and string utilities --
    (chws c)     (|| (c = 32) (c = 9))
@@ -350,8 +359,8 @@
                   (w = "ifndef") `('ifndef rest)
                   (w = "else") `('else rest)
                   (w = "endif") `('endif)
-                  (: a (parse assignP t) (? (two? a) (link 'assign a)
-                     (: r (parse ruleP t) (? (two? r) (link 'rule r) `('skip))))))))))
+                  (: a (pstrict assignP t) (? (two? a) (link 'assign a)
+                     (: r (pstrict ruleP t) (? (two? r) (link 'rule r) `('skip))))))))))
 
    ; -- nested-paren-aware variable expansion + make functions --
    ; the index of the ) that matches the ( just opened, counting nested $(..).
@@ -755,8 +764,14 @@
    ; read a Makefile (or re-read the chosen file) as l source. A Makefile is
    ; imported and its recipes cooked; a Cookfile is read and evaluated -- it drives
    ; cook itself, the ticket read live by (ticket 0) from the tickets box.
+   ;
+   ; it SPLICES ITS OWN LAYER first, and owns that for every caller (the seat, kore's
+   ; dispatcher, a host embedding cook): a Cookfile is love source read at RUNTIME, so
+   ; its bare (recipe ..) (cook-all 0) (ticket 0) only resolve on the module walk. one
+   ; (use 'cook), at the one place that needs it -- a caller just needs the closure.
    (cook-main as)
-   (: opt (parse-args as)
+   (: _ (use 'cook)
+      opt (parse-args as)
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)
       emit? (peep opt 'emit 0)
@@ -785,23 +800,30 @@
 
    cook-main)
 
-   cook-main _
+   cook-main _)
 
-   ; the SEAT (tools/ain.l's shape): fire cook-main iff this very file -- or the
-   ; installed `cook` symlink -- sits in the program seat of the real command line
-   ; (positional program or a -l preload), taking the args AFTER the seat. cmdline
-   ; is the full C argv, never rebound, so the read is the same in both load
-   ; orders; inside the multi-call `kore` nothing matches and kore's dispatcher calls
-   ; cook-main itself. body-having: the seat machinery leaks nothing.
-   _ (: (bn p) (: n (tally p)
-                  (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
-                  (go 0 0))
-        (me? w) (: b (bn w) (|| (b = "cook") (b = "cook.l")))
-        (seat a) (? (! (two? a)) ()
-                    (<a = "-l") (? (two? >a)
-                                        (? (me? <>a) (link 1 >>a) (seat >>a))
-                                        ())
-                    (me? <a) (link 1 >a)
-                    ())
-        s (seat >cmdline)
-        (? (two? s) (cook-main >s) ())))
+; seal the layer: the whole of cook is now off the book, reachable only as the
+; module. everything below this line is ordinary top-level love again.
+(leave ())
+
+; the SEAT (tools/ain.l's shape): fire cook-main iff this very file -- or the
+; installed `cook` symlink -- sits in the program seat of the real command line
+; (positional program or a -l preload), taking the args AFTER the seat. cmdline
+; is the full C argv, never rebound, so the read is the same in both load
+; orders; inside the multi-call `kore` nothing matches and kore's dispatcher calls
+; cook-main itself. body-having: the seat machinery leaks nothing.
+;
+; it sits OUTSIDE the layer, so it reaches cook-main the way any consumer does --
+; (from 'cook 'cook-main), the opaque accessor. cook-main splices the layer itself.
+(: (bn p) (: n (tally p)
+             (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+             (go 0 0))
+   (me? w) (: b (bn w) (|| (b = "cook") (b = "cook.l")))
+   (seat a) (? (! (two? a)) ()
+               (<a = "-l") (? (two? >a)
+                                   (? (me? <>a) (link 1 >>a) (seat >>a))
+                                   ())
+               (me? <a) (link 1 >a)
+               ())
+   s (seat >cmdline)
+   (? (two? s) ((from 'cook 'cook-main) >s) ()))

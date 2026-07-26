@@ -57,7 +57,7 @@
    ; the registry: name -> main (aliases share)
    applets #('diff diff-main
              'nc ain-main 'ain ain-main
-             'make cook-main 'cook cook-main
+             'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook is a MODULE (no bare name to fold)
              'as as-main
              'cat cat-main 'echo echo-main
              'head head-main 'tail tail-main
