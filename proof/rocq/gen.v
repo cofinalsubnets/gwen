@@ -248,21 +248,23 @@ Theorem gen_103 : (nomp Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
 Theorem gen_104 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (7 = 1 + 2 * 3) *)
 Theorem gen_105 : (Z.eqb 7 (Z.add 1 (Z.mul 2 3))) = true.  Proof. vm_compute. reflexivity. Qed.
+(* (-4 = 1 - 2 - 3) *)
+Theorem gen_106 : (Z.eqb (-4) (Z.sub (Z.sub 1 2) 3)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (3 = abs -3) *)
-Theorem gen_106 : (Z.eqb 3 (Z.abs (-3))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_107 : (Z.eqb 3 (Z.abs (-3))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (66 = (2 + 3 4)) *)
-Theorem gen_107 : (Z.eqb 66 (Z.add 2 (appZ 3 4))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_108 : (Z.eqb 66 (Z.add 2 (appZ 3 4))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (6 = +'(1 2 3)) *)
-Theorem gen_108 : (Z.eqb 6 (asum [1;2;3])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_109 : (Z.eqb 6 (asum [1;2;3])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (-1 = +'(-2 1)) *)
-Theorem gen_109 : (Z.eqb (-1) (asum [(-2);1])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_110 : (Z.eqb (-1) (asum [(-2);1])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (24 = *'(1 2 3 4)) *)
-Theorem gen_110 : (Z.eqb 24 (aprod [1;2;3;4])) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_111 : (Z.eqb 24 (aprod [1;2;3;4])) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (5 = |-5) *)
-Theorem gen_111 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_112 : (Z.eqb 5 (Z.abs (-5))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (3 = (+ 1 2)) *)
-Theorem gen_112 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_113 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (20 = ((hash 1 10 2 20) -> 2 0)) *)
-Theorem gen_113 : (Z.eqb 20 (hget [(1, 10);(2, 20)] 2 0)) = true.  Proof. vm_compute. reflexivity. Qed.
+Theorem gen_114 : (Z.eqb 20 (hget [(1, 10);(2, 20)] 2 0)) = true.  Proof. vm_compute. reflexivity. Qed.
 
-(* 113 theorems generated from 620 asserts seen *)
+(* 114 theorems generated from 624 asserts seen *)

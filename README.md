@@ -8,10 +8,11 @@ operator is iterated by a non-negative integer (a green charm) -- iteration is i
 function action. all recursion lives on the heap.
 
 the surface adds sigils -- all-punctuation symbols -- read as infix or prefix
-operators by placement: a right-associative superset over the parenthesized core,
-and the two mix freely. an infix operator takes its plain meaning in function
-position, and wrapping a sigil in parens converts it back to left-associative:
-`3 = ((+) 1 2)`. the core is applicative, curried, untyped lambda calculus (though
+operators by placement: a precedence-and-associativity superset over the
+parenthesized core, and the two mix freely. arithmetic folds left, as everywhere
+else (`1 - 2 - 3` is -4); the other bands fold right. an infix operator takes its
+plain meaning in function position, and wrapping a sigil in parens hands it back
+as a plain curried function: `3 = ((+) 1 2)`. the core is applicative, curried, untyped lambda calculus (though
 applicative order may vary). it stays internally sound because every operator is
 total and every thread yields cooperatively regardless of user program behavior;
 one uniform mechanism handles conditions such as OOM.

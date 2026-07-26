@@ -51,7 +51,11 @@
    (try n) (? (0 < n)
             (: rw (4 + roll sb 7) rh (3 + roll sb 4)
                (? (|| (w <= rw + 2) (h <= rh + 2)) (try (n - 1))
-                (: x (1 + roll sb (w - rw + 1)) y (1 + roll sb (h - rh + 1))
+                ; the span a room of width rw can start at, keeping a 1-cell border: x is
+                ; 1 + roll(w - rw - 1), so the far edge lands at w-2 at worst. (this read `+ 1`
+                ; while the additive band folded RIGHT and w - (rw + 1) is the same number --
+                ; the hand made the arithmetic say what it means.)
+                (: x (1 + roll sb (w - rw - 1)) y (1 + roll sb (h - rh - 1))
                    rm `(x y rw rh)
                    (? (apart? rm (d 'rooms))
                     (: _ (carve x y rw rh)

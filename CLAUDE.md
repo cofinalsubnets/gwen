@@ -120,7 +120,9 @@
 ; --- everything is a function --- (f x y) == ((f x) y) and (f) == f, so application is just
 ; left-to-right currying. numbers are church numerals, a list of numbers an exponential tower, and
 ; data self-applies (indexes). asserts in spec.l read INFIX -- (3 = 1 + 2) is ((= 3 (+ 1 2))),
-; folding right-associatively, sound by (f) == f (spec.l's reader-operators section). the two pillars:
+; folding by GRIP and, at equal grip, by the operator's HAND -- arithmetic is LEFT-handed
+; ((1 - 2 - 3) is -4), everything else right -- sound by (f) == f (spec.l's reader-operators
+; section). the two pillars:
 ; demo:
 (0 5)                ; 1       0 is const-1
 (1 5)                ; 5       1 is the identity

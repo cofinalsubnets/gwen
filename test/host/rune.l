@@ -186,6 +186,30 @@
     ((refac (pfac bigz)) = bigz)))               ; constant + two quadratics + linear:
                                                  ; the whole pipeline, rebuilt exact
 
+; --- the LEADING COEFFICIENT distribution, univariate ------------------------
+; every case above is monic where it counts: q1..q4/x6/phi5 have lc 1, and bigz's
+; (gc 6) is CONTENT, which pint strips -- so its primitive part is monic too. that
+; leaves pdeep's monic reduction untested in the only place it does arithmetic.
+; pdeep substitutes y = L*x to make g monic: G(y) = L^(n-1) * g(y/L), so the
+; coefficient of x^e is scaled by L^(n-1-e) (msub1), zassenhaus factors the monic
+; G, and msub2 maps each factor back by L^e. the exponent is the whole trick, and
+; it only bites when the PRIMITIVE part has lc /= +-1 -- so this case needs a
+; degree-4 rootless polynomial whose lc survives pint.
+; (2x^2+3)(3x^2+2) = 6x^4 + 13x^2 + 6 is exactly that: content 1, lc 6, and
+; positive for every real x, so rroots strips nothing and the whole degree-4
+; remainder goes to pdeep. under a wrong exponent pfac answers a NON-factorization
+; (n-1+e gives 6(x^4 + 2808x^2 + 1)), which the rebuild law below catches.
+(: lc1 (padd (pmul (gc 2) (pmul gx gx)) (gc 3))   ; 2x^2 + 3, irreducible over Q
+   lc2 (padd (pmul (gc 3) (pmul gx gx)) (gc 2)))  ; 3x^2 + 2, ditto
+(assert
+ (6 = (mco <(pmul lc1 lc2)))                     ; the lc really is 6 -- not content pint would strip
+ (4 = (pdeg (pmul lc1 lc2)))                     ; ... and degree 4, so pdeep runs
+ ((proots (pmul lc1 lc2)) = ())                  ; no rational roots: nothing strips before pdeep
+ ((pfac (pmul lc1 lc2))
+  = `((gc 6) (padd (pmul gx gx) (gc (q 3 2))) (padd (pmul gx gx) (gc (q 2 3)))))  ; 6(x^2+3/2)(x^2+2/3)
+ ((refac (pfac (pmul lc1 lc2))) = (pmul lc1 lc2)))  ; THE exponent's guard: a wrong L power
+                                                 ; rebuilds to something else entirely
+
 ; --- bivariate factorization: hensel in y, the lead distributed --------------
 ; pfac dispatches on arity: an arity-2 poly factors by evaluation at a good
 ; point, the univariate pipeline on the image, and a hensel lift in powers
@@ -715,8 +739,8 @@
 (assert
  ((unfix '(+ (* 2 x) 1)) = '(2 * x + 1))
  ((unfix '(* 2 (+ x 1))) = '(2 * (x + 1)))            ; a looser right child wraps
- ((unfix '(- (- 10 4) 3)) = '((10 - 4) - 3))          ; a left child wraps at its own band
- ((unfix '(- 10 (- 4 3))) = '(10 - 4 - 3))            ; ... the right rides the fold bare
+ ((unfix '(- (- 10 4) 3)) = '(10 - 4 - 3))            ; the additive band folds LEFT, so a left child rides bare
+ ((unfix '(- 10 (- 4 3))) = '(10 - (4 - 3)))          ; ... and the right child is the one that wraps
  ((unfix '(+ (sin x) 1)) = '(sin x + 1))              ; application binds tightest
  ((unfix '(f (+ x 1) y)) = '(f (x + 1) y))            ; compound arguments wrap
  ((unfix (pemit (padd (pmul rx rx) ry) '(x y z))) = '(x ** 2 + y))  ; a poly, rendered

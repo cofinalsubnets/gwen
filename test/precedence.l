@@ -1,19 +1,24 @@
-; precedence (grip) -- infix that binds like schoolbook math, a REFINEMENT of the right-to-left
-; default (doc/precedence.md). each operator's table entry carries a GRIP; an incoming operator steals
-; a pending filled operand iff its grip >= the frame's grip (op-steal), so a TIGHTER operator climbs in
-; and EQUAL grips stay right-associative -- the conservative-extension case, byte-identical to the old
-; flat read. bands: multiplicative 60, additive 50, comparison 40, logical 30, house 27 (coined ops),
-; cons 25, assignment 20, cond 10. we assert BOTH the factored TREE (via the live `opfix`, the source
-; pass both compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping
-; is observable in the result.
+; precedence (grip) and associativity (hand) -- infix that binds like schoolbook math
+; (doc/precedence.md). each operator's table entry carries a GRIP and a HAND; an incoming operator
+; steals a pending filled operand iff its grip beats the frame's, so a TIGHTER operator climbs in,
+; and EQUAL grip goes to the incomer's hand: RIGHT-handed steals (its band folds right), LEFT-handed
+; yields (its band folds left). ARITHMETIC IS LEFT-HANDED -- (1 - 2 - 3) is -4, as everywhere else --
+; and everything else stays right, which is the flat fold the surface started with. bands:
+; multiplicative 60, additive 50, comparison 40, logical 30, house 27 (coined ops), cons 25,
+; assignment 20, cond 10. we assert BOTH the factored TREE (via the live `opfix`, the source pass both
+; compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping is
+; observable in the result.
 (assert
  ; --- the tree: opfix factors a quoted form; quote interiors stay data, so '(2 * 3 + 4) is the raw
  ; datum list and (opfix ..) is the factored tree itself (a lone folded clause splices up, no wrapper). ---
  ((opfix '(2 * 3 + 4)) = '(+ (* 2 3) 4))            ; * tighter than + -- schoolbook
  ((opfix '(a * b + c)) = '(+ (* a b) c))            ; the tighter op on the LEFT climbs in
  ((opfix '(a + b * c)) = '(+ a (* b c)))            ; and on the right steals
- ((opfix '(a + b + c)) = '(+ a (+ b c)))            ; equal grip -> right-assoc preserved (conservative extension)
- ((opfix '(10 - 2 - 3)) = '(- 10 (- 2 3)))          ; same, subtraction: right-assoc not left
+ ((opfix '(a + b + c)) = '(+ (+ a b) c))            ; equal grip, LEFT hand -> the additive band folds left
+ ((opfix '(10 - 2 - 3)) = '(- (- 10 2) 3))          ; same, subtraction -- the reading every other language has
+ ((opfix '(a / b / c)) = '(/ (/ a b) c))            ; the multiplicative band is left-handed too
+ ((opfix '(a >< b >< c)) = '(>< a (>< b c)))        ; but cons stays RIGHT-handed -- a builder folds right
+ ((opfix '(a <+> b <+> c)) = '(<+> a (<+> b c)))    ; and a coined operator defaults to the right hand at house grip
  ((opfix '(3 = 1 + 2)) = '(= 3 (+ 1 2)))            ; + (50) over = (40): the spec.l infix-assert law holds
  ((opfix '(a < b && c < d)) = '(&& (< a b) (< c d))) ; && (30) below comparison (40)
  ((opfix '(a < b || c < d)) = '(|| (< a b) (< c d))) ; || likewise
@@ -38,7 +43,9 @@
  (10 = (2 * 3 + 4))                                   ; (+ (* 2 3) 4); the old flat read was (* 2 (+ 3 4)) = 14
  (14 = (2 * (3 + 4)))                                 ; parens override
  (7 = (1 + 2 * 3))
- (11 = (10 - 2 - 3))                                  ; right-assoc (10 - (2 - 3)); left-assoc would be 5
+ (5 = (10 - 2 - 3))                                   ; left hand: ((10 - 2) - 3); the right hand would read 11
+ (1 = (8 / 4 / 2))                                    ; ((8 / 4) / 2); the right hand would read 4
+ (3 = (2 - 3 + 4))                                    ; the band folds left as one run: ((2 - 3) + 4)
  (1 = (3 = 1 + 2))                                    ; the assert relation itself, unparenthesized
  (1 = (0 < 5 && 5 < 10))                              ; (&& (< 0 5) (< 5 10)) -- both true
  ('big = (1 < 2 ? 'big 'small))                       ; the C-ternary value

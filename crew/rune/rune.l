@@ -1018,18 +1018,23 @@
 ; the inverse of opfix, as a FORM: unfix renders a core term as low-paren
 ; infix source -- a value, not text; show prints it, ev runs it, and
 ; (opfix (unfix t)) = t is the round-trip law the gate asserts over a corpus.
-; the grammar, probed: bands are C-like (* / above + -, ** above both), the
-; fold within a band is right-associative, application binds tightest. so a
-; LEFT child wraps at its parent's band and below ((- (- 10 4) 3) renders
-; ((10 - 4) - 3)), a RIGHT child wraps only strictly below it (the fold IS
-; right-associative), an application splices bare unless its head is an
-; operator, and application arguments wrap whenever compound. `operators` is
-; mopped post-egg, so ugrip carries the bands rune renders; an op off the
-; table stays prefix, which reads back unchanged.
-(: ugrip '((+ 1) (- 1) (* 2) (/ 2) (** 3))
+; the grammar, probed: bands are C-like (* / above + -, ** above both),
+; arithmetic folds LEFT within its band, ** folds right, application binds
+; tightest. the wrap rule follows the HAND: the child on the folding side wraps
+; only strictly below its parent's band (the fold already nests that way), the
+; other child wraps at the band and below. so (- (- 10 4) 3) renders 10 - 4 - 3
+; while (- 10 (- 4 3)) renders 10 - (4 - 3). an application splices bare unless
+; its head is an operator, and application arguments wrap whenever compound.
+; `operators` is mopped post-egg, so ugrip carries the bands AND hands rune
+; renders (grip . hand, 1 = left); an op off the table stays prefix, which reads
+; back unchanged.
+(: ugrip '((+ 1 1) (- 1 1) (* 2 1) (/ 2 1) (** 3 0))
    (glook o gs) (? (0 = tally gs) ()
                    (<(<gs) = o) <>(<gs)
                    (glook o >gs))
+   (hlook o gs) (? (0 = tally gs) 0
+                   (<(<gs) = o) <>>(<gs)
+                   (hlook o >gs))
    (ophead? x) (nom? <x ? (glook <x ugrip ? 1 0) 0)
    (infix3? t) (3 = tally t ? (ophead? t) 0)
    (uxw x) (? (nom? x) x (two? x) (unfix x) x)
@@ -1040,8 +1045,9 @@
                 (unfix x))
    (unfix t) (? (nom? t) t
                 !(two? t) t
-                (infix3? t) (: g (glook <t ugrip)
-                               (uxs <>t (g + 1) + `(<t) + uxs <>(>t) g))
+                (infix3? t) (: g (glook <t ugrip) h (hlook <t ugrip)
+                               (uxs <>t (h ? g (g + 1)) + `(<t)
+                                + uxs <>(>t) (h ? (g + 1) g)))
                 (link (uxw <t) (map uxw >t))))
 
 ; --- the field Q[x]/(m) ----------------------------------------------------

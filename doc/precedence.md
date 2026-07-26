@@ -65,9 +65,13 @@ degenerate case, and any file that touches only equal-grip operators is
 byte-unchanged. This is the property the spec.l infix-assert law leans on
 (see §Risks).
 
-The deferred left-assoc bit (namespace assignment, §later) is the same guard
-with `>` instead of `≥` at that operator's level: equal grip stops stealing, so
-it nests left. Grip and associativity compose in one predicate.
+**Associativity landed 2026-07-25 as the HAND.** The guard above is exactly it:
+an entry carries a hand alongside its grip, and `op-steal` tests
+`(? h (<= g (op-frgrip f)) (< g (op-frgrip f)))` — a RIGHT-handed incomer steals
+at equal grip (its band folds right), a LEFT-handed one yields, so the pending
+frame folds first and its band folds left. Grip and associativity compose in one
+predicate, as predicted. Arithmetic (`* / %` at 60, `+ -` at 50) is left-handed;
+every other band, and every coined operator at house grip, stays right.
 
 ## what changes, precisely
 
@@ -303,8 +307,8 @@ proof, not the assumption.
   reads the left without firing the scare).
 - `><` vs. the house default and the bands: `a + b >< c` groups `(>< (+ a b) c)`;
   a coined operator against `><` (`a ~ b >< c` → `(>< (~ a b) c)`).
-- Left-assoc is out of scope here; add a placeholder assert that a same-grip
-  chain stays right-associative (the conservative-extension guarantee).
+- The hand: a same-grip arithmetic chain folds LEFT (`(opfix '(a + b + c))` =
+  `'(+ (+ a b) c)`), a same-grip `><`/`$`/coined chain folds RIGHT.
 - `make test` (host + love0 bootstrap, both) with **zero edits to existing
   asserts** is the acceptance bar. Then `make test_all`.
 - Idempotence assert: `(op-core (op-core form)) = (op-core form)` on the mixed
@@ -312,11 +316,10 @@ proof, not the assumption.
 
 ## deferred (not this doc)
 
-- **left-associative operators / namespace assignment.** The `>`-vs-`≥` bit and
-  the fold-on-fill path in `op-del`. This is the [[namespace-modules]] phase-2
-  scope-layer-door work ([`prel.l:280`](../love/prel.l): *"a new arity or alias
-  waits for the scope-layer door"*). Precedence lands first; assignment rides the
-  same guard later.
+- ~~**left-associative operators.**~~ LANDED 2026-07-25 as the hand (see above).
+  Namespace assignment still rides the scope-layer door
+  ([`prel.l`](../love/prel.l): *"a new arity or alias waits for the scope-layer
+  door"*).
 - user-declarable grips (an operator declaring its own level at the scope-layer
   door, not a hardcoded band).
 

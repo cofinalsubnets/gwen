@@ -177,14 +177,17 @@
 
 ; --- list*list is the cartesian product --- the semiring product whose `+` is cat: each
 ; pair a proper 2-list (love bj), so `tally` is the homomorphism (tally(a*b)=ta*tb). infix `*`
-; is right-associative, so a*b*c nests right. RIGHT-distributivity ((a+b)*c=a*c+b*c) holds on
+; is LEFT-handed, so a*b*c nests left and the pairs come out ((a b) c) -- the product is not
+; associative on the nose (the pairing shape follows the parse; the multiset is the same either
+; way), so this is the one law the hand is visible in. RIGHT-distributivity ((a+b)*c=a*c+b*c) holds on
 ; the nose (the outer loop ranges the LEFT operand); LEFT-distributivity holds only up to a
 ; permutation (intrinsic to ordered pairs -- same multiset, different order). `net` is NOT the
 ; `*` measure (it's not multiplicative); `tally` is. () stays the * UNIT (identity), not the
 ; cartesian annihilator -- the unit law preempts the empty-operand lane.
 (assert
  (('(1 2) * '(3 4)) = '((1 3) (1 4) (2 3) (2 4)))                ; the product: every ordered pairing
- (('(1 2) * '(3 4) * '(5 6)) = '((1 (3 5)) (1 (3 6)) (1 (4 5)) (1 (4 6)) (2 (3 5)) (2 (3 6)) (2 (4 5)) (2 (4 6))))  ; right-assoc nests right
+ (('(1 2) * '(3 4) * '(5 6)) = '(((1 3) 5) ((1 3) 6) ((1 4) 5) ((1 4) 6) ((2 3) 5) ((2 3) 6) ((2 4) 5) ((2 4) 6)))  ; the left hand nests left
+ (('(1 2) * ('(3 4) * '(5 6))) = '((1 (3 5)) (1 (3 6)) (1 (4 5)) (1 (4 6)) (2 (3 5)) (2 (3 6)) (2 (4 5)) (2 (4 6))))  ; ... and parens still buy the other shape
  (6 = tally ('(1 2) * '(3 4 5))) ((tally ('(1 2) * '(3 4 5))) = (tally '(1 2)) * (tally '(3 4 5)))   ; tally is the homomorphism
  ((('(1 2) + '(8 9)) * '(3 4)) = (('(1 2) * '(3 4)) + ('(8 9) * '(3 4))))    ; right-distributive on the nose
  (!(('(1 2) * ('(3 4) + '(5 6))) = (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; left-distrib FAILS as ordered lists ...
@@ -352,7 +355,8 @@
 ; LAW: greedy longest-prefix, no backtracking; every factor but the last is arity ONE; the last
 ; takes the positional valence -- with a left operand it captures the whole APPLICATION SPAN on
 ; that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
-; (= (a b) (c d)), (5 = abs -3) is (= 5 (abs -3))), nesting RIGHT-associatively by grip;
+; (= (a b) (c d)), (5 = abs -3) is (= 5 (abs -3))), nesting by GRIP and, at equal grip, by the
+; operator's HAND -- arithmetic is LEFT-handed ((1 - 2 - 3) is -4) and everything else RIGHT;
 ; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work, and a token that doesn't
 ; factor stays atomic (&& >>= :- ?-). a sigil at one binds TIGHTEST; the CURRY LAW folds operands
 ; missing at the end of a list to the partial application. the VALENCE LAW: glued is monadic,
@@ -371,6 +375,8 @@
  ("(dot x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; opfix factors -- a lone folded clause splices up (cmp via show: internal forms stay 0-tailed); quotes stay data
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
+ (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the LEFT hand: ((1 - 2) - 3), ((8 / 4) / 2)
+ ('(1 2 3) = 1 >< 2 >< '(3))                     ; ... while a right-handed band still folds right
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
