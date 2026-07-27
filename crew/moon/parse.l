@@ -208,6 +208,7 @@
                 ; and the SysV (sse sse) / one-sse ABI all ride the struct lanes
                 _ (pin (t 'stag) "__cplx_double" '((("re" 0 double) ("im" 8 double)) 16 8))
                 _ (pin (t 'stag) "__cplx_float" '((("re" 0 float) ("im" 4 float)) 8 4))
+                _ (pin t 'vlan 0)                   ; the VLA decl-site counter (stamps each site's slot index)
                 t)
    ; does a type begin here?
    (tkbty? ps t)
@@ -354,6 +355,9 @@
    ; parsed by pexpr and folded by cfold. only the first (outer) dim may be [] (size 0).
    ; a parameter's [static n] / [const n] (C99 6.7.6.3) drops its quals -- the
    ; parameter decays to a pointer, so the promise costs nothing.
+   ; a dim that will not fold is a RUNTIME dim (C99 VLA), carried as ('vdim expr)
+   ; -- the consumers judge: a local decl allocates, a pointee scales at runtime,
+   ; sizeof multiplies; anywhere else the varr type refuses downstream.
    (adims ps ts2 acc) (? (! (peekp ts2 "[")) `((rev acc) ts2)
                          (: t2 (pquals >ts2)
                             (? (peekp t2 "]") (adims ps >t2 (link 0 acc))
@@ -361,9 +365,16 @@
                                   (? (! (two? er)) ()
                                      (: dv (cfold <er)
                                         rest (want <>er "]")
-                                        (? (&& (charm? dv) (two? rest)) (adims ps rest (link dv acc)) ())))))))
-   ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3)
-   (mkarr ety dims) (? (! (two? dims)) ety `('arr (mkarr ety >dims) <dims))
+                                        (? (! (two? rest)) ()
+                                           (charm? dv) (adims ps rest (link dv acc))
+                                           (adims ps rest (link `('vdim <er) acc)))))))))
+   ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3);
+   ; a 'vdim dim lays ('varr elt expr) instead
+   (mkarr ety dims) (? (! (two? dims)) ety
+                       (: d <dims
+                          (? (&& (two? d) (id? <d 'vdim)) `('varr (mkarr ety >dims) <>d)
+                             `('arr (mkarr ety >dims) d))))
+   (varr? ty) (&& (two? ty) (<ty = 'varr))
    ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
    ; INSIDE w (the wrap-so-far: eventual-pointee -> declared type), so the type
    ; grows inside-out; the name's OWN (params) ride out as dat (a fn DEF binds
@@ -758,9 +769,15 @@
                  (? (&& (peekp r1 "(") (tkbty? ps (cap (pquals >r1))))    ; sizeof(const T) too
                      (: tr (pcty ps >r1)           ; sizeof ( type-name ) -- folds to a constant now
                         rest (? (two? tr) (want <>tr ")") ())
-                        (? (two? rest) `(`('num (tsz ps <tr)) rest) ()))
+                        (? (! (two? rest)) ()
+                           ; sizeof of a VLA TYPE (struct T[n+1], if_nameindex's malloc):
+                           ; the runtime multiply dim * sizeof(elt)
+                           (varr? <tr) `(`('bin '* (cauup (cap tr)) `('num (tsz ps (caup (cap tr))))) rest)
+                           `(`('num (tsz ps <tr)) rest)))
                     (: r (punary ps r1)                 ; sizeof unary-expr | sizeof(expr) -- gen sizes from the type
-                       (? (two? r) (: ty (ptype ps <r) (? ty `(`('num (tsz ps ty)) <>r) `(`('szof <r) <>r))) ()))))
+                       (? (two? r) (: ty (ptype ps <r)
+                                      (? (&& ty (! (varr? ty)))   ; a VLA's size is RUNTIME: defer to gen's szof
+                                         `(`('num (tsz ps ty)) <>r) `(`('szof <r) <>r))) ()))))
              (tp? t "*") (: r (punary ps >ts)
                             (? (two? r) `(`('deref <r) <>r) ()))
              (tp? t "&") (: r (punary ps >ts)
@@ -1017,9 +1034,17 @@
                 (: (one ts2)
                     (: dr (pdtor ps ts2 base)
                        (? (! (two? dr)) ()
-                          (: name (cap (cap dr)) ty (caup (cap dr))
+                          (: name (cap (cap dr)) ty0 (caup (cap dr))
+                             ; a VLA local: stamp the decl SITE's slot index onto the
+                             ; type (gen's prescan keys its ptr/size slots by it); an
+                             ; initializer or a `static` VLA refuses (invalid C)
+                             ty (? (! (varr? ty0)) ty0
+                                   (: ix (peep ps 'vlan 0)
+                                      _ (pin ps 'vlan (ix + 1))
+                                      (ty0 + `(ix))))
                              ts3 <>dr
-                             (? (peekp ts3 "=")
+                             (? (&& (varr? ty) (|| stat (peekp ts3 "="))) ()
+                                (peekp ts3 "=")
                                 (: r (pinit ps >ts3)
                                    (? (! (two? r)) ()
                                       (: ini <r
