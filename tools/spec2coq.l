@@ -20,8 +20,17 @@
 ;     (symbol never = string).
 ;   * a KIND lattice (value tags) for the type predicates (fixp/chainp/strp/..) and
 ;     the band order (symbol < string < number < chain < map); cross-band = is false.
-; Left to the hand-written laws: the float/complex tier (not vm_compute-able, the
-; honest misses) and the universally-quantified LAWS. Untranslatable asserts are
+;   * GAUSSIAN twins (exact complex over Z as (re,im) pairs): twin/conj/i literals,
+;     + - * and negation, = numeric within the band, order and SIGN lex on (re,im),
+;     $ the magnitude of a lex-positive twin (Z.sqrt -- the corpus is pythagorean).
+;   * LAMBDAS as de Bruijn terms: function = is alpha + structural (never eta/beta),
+;     so two lambda literals compare by lteqb on their ltm translations; < answers
+;     nothing, a closure nets 1, and a closure never = a plain nom.
+;   * id? on literals and the UNIT-reading forms ((:) (?) (\) '(), a fallen-through
+;     cond, && / || landing on nothing): interned noms and charms are id?-equal by
+;     value, fresh allocations (quoted lists, lambdas) never are, () is not 0.
+; Left to the hand-written laws: the FLOAT tier and transcendental complex (not
+; vm_compute-able, the honest misses) and the universally-quantified LAWS. Untranslatable asserts are
 ; SKIPPED and COUNTED -- never silently dropped (the trailing comment reports it).
 ; Z not nat: (3 3 3) = 3^27 would blow up unary-nat vm_compute.
 ; Reads test/spec.l, writes Coq to `out`.  Run: out/host/love tools/spec2coq.l > proof/rocq/gen.v
@@ -135,6 +144,103 @@
                     (id? h '*) ("(srep (Z.to_nat " + (tv (e3 x)) + ") " + (ttl (e2 x)) + ")")
                     (ttl (e2 x)))))                     ; intern / string: the spelling itself
 
+   ; -- gaussian twins: exact complex over Z as (re im) pairs -- conj negates im, the
+   ;    unit rides every dyadic, and the SIGN (so the order too) is LEX on (re, im);
+   ;    $ of a lex-positive twin is its magnitude (the corpus instances are pythagorean)
+   (twinv? x) (&& (two? x) (id? (cap x) 'twin) (len3? x) (charm? (e2 x)) (charm? (e3 x)))
+   ; a twin/conj/i anywhere in the term: the GATE into the gaussian lane (a bare charm
+   ; or unit is gaussian-coercible, but only in gaussian company)
+   (hasg? x) (? (nom? x) (member? x '(i twin conj)) (two? x) (| (hasg? (cap x)) (hasg? (cup x))) 0)
+   (gneg? x) (&& (two? x) (un2? x) (two? (cap x))
+                 (: s (cap x) (&& (un2? s) (id? (cap s) '-) (id? (e2 s) 0))))   ; ((- 0) g): negation
+   (gz? x) (? (twinv? x) 1  (id? x 'i) 1  (charm? x) 1  (unit? x) 1
+              (! (two? x)) 0
+              (gneg? x) (gz? (e2 x))
+              (: h (cap x)
+                 (? (&& (id? h 'conj) (un2? x)) (gz? (e2 x))
+                    (&& (member? h '(+ - *)) (len3? x)) (&& (gz? (e2 x)) (gz? (e3 x)))
+                    0)))
+   (tg x) (? (twinv? x) ("(" + (tv (e2 x)) + ", " + (tv (e3 x)) + ")")
+             (id? x 'i) "(0, 1)"
+             (charm? x) ("(" + (tv x) + ", 0)")
+             (gneg? x) ("(gsub (0, 0) " + (tg (e2 x)) + ")")
+             (: h (cap x)
+                (? (id? h 'conj) ("(gconj " + (tg (e2 x)) + ")")
+                   (unit? (e2 x)) (tg (e3 x))                     ; the unit RIDES: the twin side is the answer
+                   (unit? (e3 x)) (tg (e2 x))
+                   (id? h '+) ("(gadd " + (tg (e2 x)) + " " + (tg (e3 x)) + ")")
+                   (id? h '-) ("(gsub " + (tg (e2 x)) + " " + (tg (e3 x)) + ")")
+                   ("(gmul " + (tg (e2 x)) + " " + (tg (e3 x)) + ")"))))
+   ; a (list ..) / (array n ..) of gaussian elements: its net is the gadd fold
+   (gels x) (? (id? (cap x) 'array) (cup (cup x)) (cup x))
+   (allg? l) (? (two? l) (&& (gz? (cap l)) (allg? (cup l))) 1)
+   (glist? x) (&& (two? x) (| (id? (cap x) 'list) (&& (id? (cap x) 'array) (charm? (e2 x))))
+                  (two? (gels x)) (allg? (gels x)))
+   (tgsum l) (? (two? (cup l)) ("(gadd " + (tg (cap l)) + " " + (tgsum (cup l)) + ")") (tg (cap l)))
+
+   ; -- lambdas as DATA: love's function = is alpha + structural (no eta/beta/numeral
+   ;    bridge), so a lambda literal translates to a de Bruijn term (ltm) and alpha-
+   ;    equality is lteqb, plain structural equality on the indices. a bound param is
+   ;    its LV depth, a free nom or operator head interns to an LO index (ltab), a
+   ;    literal is LN; quote data and special forms in a body stay out
+   ltab (tablet 0) lc (tablet 0)
+   (lidx nm) (? (peep ltab nm 0) (peep ltab nm 0)
+                (: n (+ 1 (peep lc 0 0)) _ (pin lc 0 n) _ (pin ltab nm n) n))
+   (idxof nm l k) (? (! (two? l)) -1 (id? (cap l) nm) k (idxof nm (cup l) (+ 1 k)))
+   colon (intern ":") qm (intern "?")
+   (lt x env) (? (charm? x) ("(LN " + (tv x) + ")")
+                 (nom? x) (: p (idxof x env 0)
+                             (? (>= p 0) ("(LV " + (show p) + ")")
+                                ("(LO " + (show (lidx x)) + ")")))
+                 (lamform? x) (ltlam (cup x) () env)
+                 (! (two? x)) 0
+                 (member? (cap x) (list bs colon qm)) 0
+                 (: r (lt (cap x) env) (? r (ltap r (cup x) env) 0)))
+   (ltap acc args env) (? (! (two? args)) acc
+                          (: r (lt (cap args) env)
+                             (? r (ltap ("(LAp " + acc + " " + r + ")") (cup args) env) 0)))
+   ; params then body: the LAST param is the innermost binder (LV 0 in the body)
+   (ltlam rest ps env) (? (two? (cup rest))
+                          (? (nom? (cap rest)) (ltlam (cup rest) (link (cap rest) ps) env) 0)
+                          (: r (lt (cap rest) (cat ps env))
+                             (? r (llwrap r (tally ps)) 0)))
+   (llwrap s n) (? (< 0 n) (llwrap ("(LLam " + s + ")") (- n 1)) s)
+
+   ; -- forms that READ the unit: (:) (?) (\) and '(), a cond whose literal tests all
+   ;    fail with no else, a map over (), && / || landing on nothing (the and-or-unit law)
+   (qempty? x) (&& (two? x) (id? (cap x) bs) (un2? x) (id? (e2 x) ()))   ; '()
+   (nothing? x) (| (id? x 0) (id? x ()))
+   (condu? l) (? (! (two? l)) 1                                  ; pairs exhausted, no else: the unit
+                 (! (two? (cup l))) 0                            ; a lone else would answer
+                 (&& (nothing? (cap l)) (condu? (cup (cup l)))))
+   (andu? l) (? (! (two? l)) 0
+                (nothing? (cap l)) 1
+                (charm? (cap l)) (andu? (cup l))
+                0)
+   (allnothing? l) (? (two? l) (&& (nothing? (cap l)) (allnothing? (cup l))) 1)
+   (unitv? x) (? (id? x ()) 1  (qempty? x) 1
+                 (! (two? x)) 0
+                 (: h (cap x)
+                    (? (! (two? (cup x))) (member? h (list colon qm bs))   ; (:) (?) (\): an empty form reads its head
+                       (id? h qm) (condu? (cup x))
+                       (id? h '&&) (andu? (cup x))
+                       (id? h '||) (allnothing? (cup x))
+                       (&& (id? h 'map) (len3? x)) (id? (e3 x) ())
+                       0)))
+   ; id? on LITERALS: noms intern (spelling decides), a charm is its tagged word, every
+   ; unit-reading form is THE one unit; a quoted nonempty list or a lambda is a FRESH
+   ; allocation, never id?-equal to another; and the unit is id?-distinct from 0
+   (qplist? x) (&& (two? x) (id? (cap x) bs) (un2? x) (two? (e2 x)))
+   (idv a b) (? (&& (qnom? a) (qnom? b)) (? (id? (e2 a) (e2 b)) "true" "false")
+                (&& (unitv? a) (unitv? b)) "true"
+                (&& (charm? a) (charm? b)) (? (id? a b) "true" "false")
+                (| (&& (unitv? a) (charm? b)) (&& (charm? a) (unitv? b))) "false"
+                (| (&& (unitv? a) (qnom? b)) (&& (qnom? a) (unitv? b))) "false"
+                (&& (qplist? a) (qplist? b)) "false"
+                (&& (lamform? a) (lamform? b)) "false"
+                (| (&& (lamform? a) (charm? b)) (&& (charm? a) (lamform? b))) "false"
+                0)
+
    ; the KIND of a collection value -- arrays BROADCAST elementwise, lists APPEND
    (arr? x) (| (arrv? x) (| (iotav? x)
               (&& (two? x) (len3? x) (: h (cap x)
@@ -212,7 +318,7 @@
                                                     (&& (wz? (e2 x)) (wz? (e3 x))) ; a big operand answers (), off the Z model
                                                     (&& (intv? (e2 x)) (intv? (e3 x)))))
                                (shiftf h)    (&& (len3? x) (charm? (e2 x)) (charm? (e3 x)))
-                               (id? h 'saturate) (&& (un2? x) (| (intv? (e2 x)) (| (listv? (e2 x)) (| (hashv? (e2 x)) (qnlist? (e2 x))))))
+                               (id? h 'saturate) (&& (un2? x) (| (intv? (e2 x)) (| (listv? (e2 x)) (| (hashv? (e2 x)) (| (qnlist? (e2 x)) (| (lamform? (e2 x)) (&& (hasg? (e2 x)) (glist? (e2 x)))))))))
                                (id? h 'peep)  (&& (len4? x) (| (hashv? (e2 x)) (listv? (e2 x))) (intv? (e3 x)) (intv? (e4 x)))
                                (lop? h)       (&& (un2? x) (| (listv? (e2 x)) (qnlist? (e2 x))))
                                (id? h 'abs)   (&& (un2? x) (intv? (e2 x)))
@@ -242,7 +348,9 @@
              (: h (cap x) b (binop h)
                 (? b ("(" + b + " " + (tv (e2 x)) + " " + (tv (e3 x)) + ")")   ; (Z.add a b) / (Z.gcd a b)
                    (shiftf h) ("(" + (shiftf h) + " " + (tv (e2 x)) + " " + (tv (e3 x)) + ")")
-                   (id? h 'saturate) (? (hashv? (e2 x)) ("(Z.of_nat (length " + (th (e2 x)) + "))")  ; $hash = key count
+                   (id? h 'saturate) (? (lamform? (e2 x)) "1"                        ; a closure nets 1
+                                        (&& (hasg? (e2 x)) (glist? (e2 x))) ("(gsat " + (tgsum (gels (e2 x))) + ")")
+                                        (hashv? (e2 x)) ("(Z.of_nat (length " + (th (e2 x)) + "))")  ; $hash = key count
                                         (| (listv? (e2 x)) (qnlist? (e2 x))) ("(Z.max 0 (asum " + (tl (e2 x)) + "))")
                                         ("(Z.max 0 " + (tv (e2 x)) + ")"))  ; $list / $int
                    (id? h 'net)   ("(asum " + (tl (e2 x)) + ")")   ; net/+list -- the sum
@@ -267,11 +375,13 @@
                        (spine ("(appZ " + acc + " " + (tv (cap rest)) + ")") (cup rest)) acc)
 
    ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable
-   (tk x) (? (intv? x) (? (&& (concrete-int? x) (! (charm? (ev x)))) "Vbot" "Vz")  ; a concrete overflow (big) is unmodellable -> skip
+   (tk x) (? (unitv? x) "Vunit"                                        ; () and every form that reads it
+             (intv? x) (? (&& (concrete-int? x) (! (charm? (ev x)))) "Vbot" "Vz")  ; a concrete overflow (big) is unmodellable -> skip
              (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
              (two? x) (: h (cap x)
                         (? (id? h bs) (tkq (e2 x))                     ; '(..) or 'x
                            (id? h 'twin) "Vcx"                         ; ~(re im)
+                           (id? h 'conj) "Vcx"                         ; conj always answers a twin
                            (id? h 'hash) "Vmap"                        ; #(..)
                            (| (id? h 'tuple) (id? h 'iota)) "Varr"     ; @(..) / (iota n)
                            "Vbot"))
@@ -285,7 +395,7 @@
    ; cross-kind ORDER: symbol<string<number<chain<map by band; same band stays value/lex
    (ordop? h) (| (id? h '<) (| (id? h '<=) (| (id? h '>) (id? h '>=))))
    (litband x) (: t (tk x)
-                 (? (= t "Vbot") -1
+                 (? (= t "Vbot") -1  (= t "Vunit") -1                 ; the unit stays out of the band order
                     (= t "Vsym") 0 (= t "Vstr") 1
                     (| (= t "Vz") (| (= t "Vflo") (| (= t "Vcx") (= t "Varr")))) 2
                     (= t "Vpair") 3 (= t "Vmap") 4  9))
@@ -303,6 +413,10 @@
                 (? (id? h 'nil?) (: a (e2 f)
                                    (? (intv? a)  ("(Z.leb " + (tv a) + " 0)")
                                       (listv? a) ("(Z.leb (asum " + (tl a) + ") 0)")  ; !list: net <= 0
+                                      (unitv? a) "true"                               ; the unit is nothing
+                                      (lamform? a) "false"                            ; a closure nets 1: something
+                                      (&& (hasg? a) (gz? a)) ("(negb (gpos " + (tg a) + "))")       ; a twin is true iff LEX-positive
+                                      (&& (hasg? a) (glist? a)) ("(negb (gpos " + (tgsum (gels a)) + "))")
                                       (: p (tp a) (? p ("(negb " + p + ")") 0))))
                    (kpred h)  (: t (tk (e2 f)) (? (= t "Vbot") 0 ("(" + (kpred h) + " " + t + ")")))  ; (charm? 5), (two? '(..))..
                    (id? h 'member?) (? (&& (len3? f) (intv? (e2 f)) (lst? (e3 f)))
@@ -312,8 +426,18 @@
                    (id? h 'any) (? (&& (len3? f) (lst? (e3 f)) (tfb (e2 f)))
                                    ("(existsb " + (tfb (e2 f)) + " " + (tl (e3 f)) + ")") 0)
                    (! (len3? f)) 0
+                   (id? h 'id?) (idv (e2 f) (e3 f))                   ; id? on literals: the verdict, or 0 (skip)
                    (id? h '=) (? (&& (intv? (e2 f)) (intv? (e3 f)))   ("(Z.eqb " + (tv (e2 f)) + " " + (tv (e3 f)) + ")")
                                  (&& (listv? (e2 f)) (listv? (e3 f))) ("(leqb " + (tl (e2 f)) + " " + (tl (e3 f)) + ")")  ; list/array =
+                                 ; gaussian =: numeric within the band, so a zero-im twin equals its charm
+                                 (&& (| (hasg? (e2 f)) (hasg? (e3 f))) (gz? (e2 f)) (gz? (e3 f)))
+                                   ("(geqb " + (tg (e2 f)) + " " + (tg (e3 f)) + ")")
+                                 ; lambda =: alpha + structural on the de Bruijn terms
+                                 (&& (lamform? (e2 f)) (lamform? (e3 f)))
+                                   (: a (lt (e2 f) ()) b (lt (e3 f) ())
+                                      (? (&& a b) ("(lteqb " + a + " " + b + ")") 0))
+                                 ; no eta: a literal closure never = a plain nom (a nif/ap value)
+                                 (| (&& (lamform? (e2 f)) (nom? (e3 f))) (&& (nom? (e2 f)) (lamform? (e3 f)))) "false"
                                  ; the unit lanes: a mint rides an OP like a unit but never STANDS as an
                                  ; = side itself (two mints are distinct; only a literal () compares)
                                  (&& (! (mintv? (e2 f))) (! (mintv? (e3 f)))
@@ -328,6 +452,15 @@
                                  (&& (>= (litband (e2 f)) 0) (>= (litband (e3 f)) 0)
                                      (! (= (litband (e2 f)) (litband (e3 f))))) "false"         ; cross-band = is false
                                  0)
+                   ; gaussian ordering is LEX on (re, im)
+                   (&& (ordop? h) (| (hasg? (e2 f)) (hasg? (e3 f))) (gz? (e2 f)) (gz? (e3 f)))
+                     (: a (tg (e2 f)) b (tg (e3 f))
+                        (? (id? h '<)  ("(gltb " + a + " " + b + ")")
+                           (id? h '>)  ("(gltb " + b + " " + a + ")")
+                           (id? h '<=) ("(negb (gltb " + b + " " + a + "))")
+                                       ("(negb (gltb " + a + " " + b + "))")))
+                   ; functions carry no strict order: < and > answer nothing
+                   (&& (| (id? h '<) (id? h '>)) (lamform? (e2 f)) (lamform? (e3 f))) "false"
                    (xband? f) (xband f)                               ; cross-kind ordering: symbol<string<number<chain<map
                    (&& (ordop? h) (lst? (e2 f)) (lst? (e3 f)))        ; same-band chain/string order is LEX
                      (: a (tl (e2 f)) b (tl (e3 f))
@@ -388,7 +521,9 @@
      "   gen-only (no spec.v twin): amin, leqb, the TOTAL vaddt (spec.v's vadd is option-" (string 10)
      "   valued for its shape-mismatch law), vquot, hget, the syntactic kind lattice," (string 10)
      "   the word shifts (count mod 64), the option-lifted UNIT lane (None rides through" (string 10)
-     "   uop/ulop -- () the identity of every dyadic), insertion sort, and lex order. *)" (string 10)
+     "   uop/ulop -- () the identity of every dyadic), insertion sort, lex order, the" (string 10)
+     "   gaussian twins (exact complex over Z; sign and order LEX on (re, im)), and the" (string 10)
+     "   de Bruijn lambda terms (function = is alpha + structural: lteqb). *)" (string 10)
      "From Stdlib Require Import ZArith List." (string 10)
      "Require Import spec." (string 10)
      "Import ListNotations." (string 10)
@@ -415,8 +550,22 @@
      "Definition insort := insortby Z.leb." (string 10)
      ; same-band chain/string order: lexicographic, a proper prefix sorts first
      "Fixpoint lexltb (a b:list Z) : bool := match a,b with nil,nil=>false | nil,_=>true | _,nil=>false | x::a',y::b' => orb (Z.ltb x y) (andb (Z.eqb x y) (lexltb a' b')) end." (string 10)
+     ; gaussian twins: exact complex over Z as (re, im) pairs; the sign (and the order) is LEX
+     "Definition gadd (a b:Z*Z):Z*Z := (fst a + fst b, snd a + snd b)." (string 10)
+     "Definition gsub (a b:Z*Z):Z*Z := (fst a - fst b, snd a - snd b)." (string 10)
+     "Definition gmul (a b:Z*Z):Z*Z := (fst a * fst b - snd a * snd b, fst a * snd b + snd a * fst b)." (string 10)
+     "Definition gconj (a:Z*Z):Z*Z := (fst a, - snd a)." (string 10)
+     "Definition geqb (a b:Z*Z):bool := andb (Z.eqb (fst a) (fst b)) (Z.eqb (snd a) (snd b))." (string 10)
+     "Definition gltb (a b:Z*Z):bool := orb (Z.ltb (fst a) (fst b)) (andb (Z.eqb (fst a) (fst b)) (Z.ltb (snd a) (snd b)))." (string 10)
+     "Definition gpos (a:Z*Z):bool := gltb (0,0) a." (string 10)
+     ; $ of a twin: its magnitude when lex-positive, else the 0 floor (corpus instances are pythagorean, so Z.sqrt is exact)
+     "Definition gsat (a:Z*Z):Z := if gpos a then Z.sqrt (fst a*fst a + snd a*snd a) else 0." (string 10)
+     ; de Bruijn lambda terms: love compares functions by ALPHA + structure (no eta/beta/numeral bridge),
+     ; which is plain structural equality on the de Bruijn form
+     "Inductive ltm := LV (n:nat) | LO (o:Z) | LN (z:Z) | LAp (f a:ltm) | LLam (b:ltm)." (string 10)
+     "Fixpoint lteqb (a b:ltm):bool := match a,b with LV n,LV m=>Nat.eqb n m | LO n,LO m=>Z.eqb n m | LN n,LN m=>Z.eqb n m | LAp f x,LAp g y=>andb (lteqb f g) (lteqb x y) | LLam s,LLam t=>lteqb s t | _,_=>false end." (string 10)
      ; the KIND lattice: a value's tag, for the type predicates (a literal's kind is syntactic; vkind/vband avoid spec.v's value/band)
-     "Inductive vkind := Vz | Vflo | Vcx | Vstr | Vsym | Vpair | Vmap | Varr | Vbot." (string 10)
+     "Inductive vkind := Vz | Vflo | Vcx | Vstr | Vsym | Vpair | Vmap | Varr | Vunit | Vbot." (string 10)
      "Definition fixp  v := match v with Vz   => true | _ => false end." (string 10)
      "Definition flop  v := match v with Vflo => true | _ => false end." (string 10)
      "Definition comp  v := match v with Vcx  => true | _ => false end." (string 10)
@@ -431,7 +580,7 @@
      "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end." (string 10)
      "Definition atomp v := match v with Vpair => false | _ => true end." (string 10)
      "Definition lamp  v := match v with Vmap => true | _ => false end." (string 10)   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
-     "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vbot => 9 end." (string 10) (string 10))))
+     "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vunit|Vbot => 9 end." (string 10) (string 10))))
    _ (say err ("spec2coq: UNMODELED asserts (seen but never proved) --" + (string 10)))
    _ (walk (forms "test/spec.l"))
    _ (. ((string 10) + "(* " + (show (peep nt 0 0)) + " theorems generated from " + (show (peep ns 0 0)) + " asserts seen *)" + (string 10)))
