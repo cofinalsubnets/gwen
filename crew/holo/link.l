@@ -45,7 +45,7 @@
    ;   'secs               section index -> (lane off size align), the placed ones
    ;   'lanes              lane -> its section indices, ASCENDING (header order)
    ;   'drops              section index -> 1, the ones ruled out (see `class`)
-   ;   'syms / 'nsym       symbol index -> (name bind typ shndx value)
+   ;   'syms / 'nsym       symbol index -> (name bind typ shndx value size)
    ;   'relas              ((secidx (off kind symidx addend)..) ..)
    ; layout pins 'base -- section index -> load address -- on it later. keying
    ; the bases by INDEX, not by lane, is what lets a lane hold more than one
@@ -120,7 +120,8 @@
                          info (s (e + 4))
                          _ (pin syms i `((ld-cstr s (stro + (rle32 s e)))
                                           (info >> 4) (info & 15)
-                                          (rle16 s (e + 6)) (rle64 s (e + 8))))
+                                          (rle16 s (e + 6)) (rle64 s (e + 8))
+                                          (rle64 s (e + 16))))
                          (go (i + 1))))
             (go 0))
        ; a .rela whose TARGET was dropped is dropped with it (gcc's
@@ -292,6 +293,52 @@
                   (bs >< ((snip s pos (off0 + ro)) >< acc)))))
        (go off0 (ent (peep ob 'relas ())) ()))
 
+   ; a 24-byte Elf64_Sym and a 64-byte Elf64_Shdr. the symbol is obj.l's o-sym
+   ; with st_size carried instead of zeroed: a foreign object reports real
+   ; function extents, and they are worth keeping once we have somewhere to put them.
+   (ld-sym nameoff bind typ shndx value size)
+    (catall `((le32 nameoff) `(((bind << 4) | typ) 0) (le16 shndx) (le64 value) (le64 size)))
+   (ld-shdr nm ty fl ad off sz lk inf al es)
+    (catall `((le32 nm) (le32 ty) (le64 fl) (le64 ad) (le64 off) (le64 sz)
+              (le32 lk) (le32 inf) (le64 al) (le64 es)))
+
+   ; THE EXECUTABLE'S SYMBOL TABLE -- what makes `nm`, a labeled `objdump -d` and
+   ; a gdb `break main` work on a binary of ours. every DEFINED symbol across the
+   ; set, read back out of the objects that carried it: locals FIRST (ELF requires
+   ; that, and .symtab's sh_info names the first global), then the globals that WON
+   ; the link -- a weak definition a strong one replaced is skipped, because glo
+   ; already holds the winner and two entries for one name at two addresses would
+   ; be a lie. st_size rides through from the object: ours say 0 (holo lays labels,
+   ; not extents), and a size-0 symbol is bounded by the next one, which is what
+   ; every reader already does for a stripped-but-symboled binary.
+   ; lanesx maps a lane to its section index in the image. -> (bytes strs nlocal)
+   (ldstab objs glo lanesx)
+    (: (one ob acc)
+        (: bs (peep ob 'base 0) secs (peep ob 'secs 0) syms (peep ob 'syms 0)
+           (go i a)
+            (? ((peep ob 'nsym 0) <= i) a
+               (: sy (peep syms i ())
+                  nm <sy bind (at sy 1) typ (at sy 2) shx (at sy 3)
+                  se (peep secs shx ())
+                  ad ((peep bs shx 0) + (at sy 4))
+                  won (: r (peep glo nm ()) (? (two? r) (ad = <r) 0))
+                  (go (i + 1)
+                      (? (|| !(two? se) (|| (0 = (tally nm))
+                              (|| !(member? typ '(0 1 2)) !(member? bind '(0 1 2)))))
+                          a                             ; undefined, unnamed, a FILE/SECTION marker, or dropped
+                         (&& (0 < bind) !won) a         ; a weak def that a strong one replaced
+                         (`(nm bind typ (peep lanesx <se 0) ad (at sy 5)) >< a)))))
+           (go 1 acc))
+       all (foldl (\ a ob (one ob a)) () objs)
+       locs (filter (\ e ((at e 1) = 0)) all)
+       ord (locs + (filter (\ e (0 < (at e 1))) all))
+       str (o-strtab (map (\ e <e) ord))
+       ; index 0 is the reserved NULL entry, and it counts as a local
+       `(((ld-zeros 24) + (catall (o-mapi (\ i e (ld-sym (at <>str i) (at e 1) (at e 2)
+                                                         (at e 3) (at e 4) (at e 5)))
+                                          ord)))
+         <str (1 + (tally locs))))
+
    ; count the abs64 (R_X86_64_64 / R_AARCH64_ABS64) data relocations across the
    ; set -- the entry count of the -pie relocation table (8 bytes each).
    (ld-nabs objs rv)
@@ -358,8 +405,34 @@
        en (emit 'nifs <ed objs >ed)
        tail (? (<en < r0) `((ld-zeros (r0 - <en))) ())      ; nif tail + table alignment in one pad
        rtab (? pie (catall (map (\ o (le64 o)) (rev (peep relbox 0 ())))) ())
-       hdr (elf64-hdr (? pie 3 2) base ent (r1 - base) (bend - base) mach)
-       (hdr >< (>en + tail + (? pie `(rtab) ()))))
+       ; -- the section headers and the symbol table, laid PAST p_filesz. nothing
+       ; here is SHF_ALLOC, so the kernel maps not a byte of it and the program is
+       ; the same program; nm, objdump and gdb read exactly this. we describe the
+       ; image as the five lanes we laid it in, so a symbol lands in the section
+       ; it actually lives in and `nm` classifies it T/R/D/B without guessing.
+       fsz (r1 - base)                                      ; the loaded bytes: p_filesz
+       lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 5)))
+       st (ldstab objs glo lanesx)
+       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".bss"
+                         ".symtab" ".strtab" ".shstrtab"))
+       (snm k) (at <>shstr k)
+       symo (ld-align 8 fsz) symz (tally <st)
+       stro (symo + symz) strz (tally <>st)
+       ssto (stro + strz) sstz (tally <shstr)
+       shto (ld-align 8 (ssto + sstz))
+       sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)                                   ; the reserved null header
+                     (ld-shdr (snm 0) 1 6 (base + 120) 120 (<et - (base + 120)) 0 0 16 0)
+                     (ld-shdr (snm 1) 1 2 <et (<et - base) (<eo - <et) 0 0 16 0)
+                     (ld-shdr (snm 2) 1 3 <eo (<eo - base) (<ed - <eo) 0 0 16 0)
+                     (ld-shdr (snm 3) 1 3 <ed (<ed - base) (<en - <ed) 0 0 16 0)
+                     (ld-shdr (snm 4) 8 3 r1 fsz (bend - r1) 0 0 16 0)               ; NOBITS: an offset, no bytes
+                     (ld-shdr (snm 5) 2 0 0 symo symz 7 (at st 2) 8 24)              ; link=.strtab info=first global
+                     (ld-shdr (snm 6) 3 0 0 stro strz 0 0 1 0)
+                     (ld-shdr (snm 7) 3 0 0 ssto sstz 0 0 1 0)))
+       hdr (elf64-hdr (? pie 3 2) base ent fsz (bend - base) mach `(shto 9 8))
+       (hdr >< (>en + tail + (? pie `(rtab) ())
+                + `((ld-zeros (symo - fsz)) <st <>st <shstr
+                    (ld-zeros (shto - (ssto + sstz))) sht))))
 
    ; write a piece list to a file, raw (texts pass through; byte lists pack into a
    ; CASK -- the byte array, not a string that happens to hold bytes today; see

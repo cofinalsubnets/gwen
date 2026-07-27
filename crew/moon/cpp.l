@@ -412,6 +412,9 @@
                ; FLT_MAX exactly: (2 - 2^-23) * 2^127 = 2^128 - 2^104, double-exact
                ; (love.c's 32-bit dtoa branch reads it; gcc predefines it everywhere)
                _ (pin t "__FLT_MAX__" `('obj `((tok 'flo ((2.0 - (/ 1.0 8388608.0)) * (127 2.0)) 0))))
+               ; ..and the DOUBLE twin, (2 - 2^-52) * 2^1023, built the same exact way
+               ; (love.c's dtoa reads it as its finite ceiling)
+               _ (pin t "__DBL_MAX__" `('obj `((tok 'flo ((2.0 - (/ 1.0 4503599627370496.0)) * (1023 2.0)) 0))))
                ; bool/true/false BUILTIN (C23-style, no <stdbool.h> needed): modern C
                ; (gnulib, gzip) uses them bare. bool stays cc's int (the old stdbool.h
                ; choice) -- an int keyword token; true/false the 1/0 constants.
