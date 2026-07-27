@@ -31,6 +31,7 @@
    ; is not textual -- anywhere later it scared `;; missing spush2` on every
    ; image bake. the t32 pair push; spop2 lives with the other pair helpers.
    spush2 '((sub sp sp 16) (st sp 0 r0) (st sp 4 r1))   ; a VALUE (nullary defines quote -- the (f) trap)
+   cxdty '(struct "__cplx_double")                      ; the seeded complex-double tag (a VALUE: it must lead the book, like spush2 -- eager fold order is not textual)
    ; the gen state g (a tablet): 'n the label counter, 'off the frame's
    ; high-water offset, 'brk/'cnt the loop label stacks, 'glob the global
    ; table (name -> (label ty init)), 'globs the emission order, 'strs the
@@ -390,6 +391,10 @@
    ; result -> f0 as a double. t32: an unsigned word rides the U-converter (no 64-bit widen
    ; dodge on a 32-bit target); a pair source is the deferred cvtllsd (backend scares LOUD).
    (asflo g r) (? (flo? (vty r)) (vfs r)
+                  (gcplx? (vty r))                  ; complex -> real reads re (C's implicit conversion)
+                   ((tor0 g r) + (? (id? (cxb (vty r)) 'float)
+                                    '((ldss f0 r0 0) (cvtss2sd f0 f0))
+                                    '((ldsd f0 r0 0))))
                   (&& (t32? g) (llt? (vty r))) ((tor0 g r) + (cvtlld g (usg? (vty r))))
                   (&& (t32? g) (usg? (vty r))) ((tor0 g r) + `(`('cvtui2sd 'f0 'r0)))
                   ((tor0 g r) + `(`('cvtsi2sd 'f0 'r0))))
@@ -1194,11 +1199,23 @@
                   (: rl (clval g env <>>e)      ; an rvalue struct (a call's temp) is its address too
                      rv (? (bad? rl) (cgexpr g env <>>e) rl)
                      (? (bad? rv) 'bad
+                        ; a REAL into a complex lvalue converts: re the value, im zero
+                        (&& (gcplx? (vty lv)) (! (stru? (vty rv))))
+                         (: b (cxb (vty lv))
+                            (mkv (vty lv) 'r0
+                               (cat (vfs lv) (cat (spush 'r0)
+                                ((asflo g rv) + (spop 'r1) + (fstf g b 'r1 0 'f0)
+                                 + '((li r2 0))
+                                 + (? (id? b 'float) '((st4 r1 4 r2)) '((st r1 8 r2))))))))
                         (! (stru? (vty rv))) 'bad
                         (mkv (vty lv) 'r0
                            (cat (vfs lv) (cat (spush 'r0)
                             (cat (tor0 g rv) (cat (spop 'r1)
-                             (bcopy g 0 (tsz g (vty lv)) ()))))))))
+                             ; a complex width flip converts componentwise; else bytes
+                             (? (&& (gcplx? (vty lv)) (&& (gcplx? (vty rv))
+                                    (! ((caup (vty lv)) = (caup (vty rv))))))
+                                (cxcopy g (vty rv))
+                                (bcopy g 0 (tsz g (vty lv)) ())))))))))
                  (flo? (vty lv))                     ; a float/double store (addr in r1, value in f0; narrow if float)
                   (: r (cgexpr g env <>>e)
                      (? (bad? r) 'bad
@@ -1302,6 +1319,13 @@
           (k = 'un)
            (: r (cgexpr g env <>>e)
               (? (bad? r) 'bad
+                 (&& (gcplx? (vty r)) (id? <>e 'neg))  ; -z: both components flip through the complex lane
+                  (: pa (cxpark g r)
+                     (? (bad? pa) 'bad
+                        (cxout g (? (id? (cxb (vty r)) 'float) (vty r) cxdty)
+                           (<>pa + `(`('ldsd 'f0 'r4 <pa) `('ldsd 'f1 'r4 (<pa + 8))
+                                     '(xorpd f4 f4) '(subsd f4 f0) '(movsd f0 f4)
+                                     '(xorpd f4 f4) '(subsd f4 f1) '(movsd f1 f4))))))
                  (flo? (vty r))                        ; unary on a double
                   (: z1 (? (t32? g) `(`('li 'r0 0) `('li 'r1 0) `('movqxr 'f1 'r0))   ; 0.0 (the t32 pair)
                            `(`('li 'r0 0) `('movqxr 'f1 'r0)))
@@ -1821,6 +1845,77 @@
                                     (spills + ezf + pops + setal + `(`('ld pk 'r4 pko) `('callr pk)) + fres + clean + relods))))))
                       (mkv (fnret (vty hr)) 'r0 (cat pf (cat (tor0 g hr) (cat `(`('mov pk 'r0))
                                 (spills + ezf + pops + setal + `(`('callr pk)) + clean + relods)))))))))))
+   ; -- the C99 complex lane (x64): a complex value is its seeded two-member
+   ; struct (gcplx?, parse's canon lays the tags), so it flows everywhere a
+   ; struct value flows -- copy, member, call, return. ARITHMETIC runs here:
+   ; each side MATERIALIZES into a double-pair frame temp (the other side's
+   ; evaluation may call; float components widen on the way in), f0..f3 then
+   ; carry (a.re a.im b.re b.im), the op combines into (f0 f1), and the
+   ; result lands in a fresh temp whose ADDRESS is the answer. divide is the
+   ; textbook formula (gcc's __divdc3 adds Smith recovery; musl's own complex
+   ; code guards its edge cases upstream). --
+   (cxb ty) (? ((caup ty) = "__cplx_float") 'float 'double)
+   ; park a VALUE REC as a double-pair temp -> (off forms srcty) | 'bad
+   (cxpark g rv)
+    (: off (ntmp g cxdty)
+       ty (vty rv)
+       (? (gcplx? ty)
+           (? (id? (cxb ty) 'float)
+               `(off ((tor0 g rv) +
+                      `('(ldss f2 r0 0) '(cvtss2sd f2 f2) `('stsd 'r4 off 'f2)
+                        '(ldss f2 r0 4) '(cvtss2sd f2 f2) `('stsd 'r4 (off + 8) 'f2)))
+                 ty)
+              `(off ((tor0 g rv) +
+                     `('(ld r2 r0 0) `('st 'r4 off 'r2)
+                       '(ld r2 r0 8) `('st 'r4 (off + 8) 'r2)))
+                ty))
+          (stru? ty) 'bad
+          `(off ((asflo g rv) +
+                 `(`('stsd 'r4 off 'f0) '(li r2 0) `('st 'r4 (off + 8) 'r2)))
+            ty)))
+   ; evaluate an EXPR and park it -> (off forms srcty) | 'bad
+   (cxmat g env x)
+    (: rl (clval g env x)
+       rv (? (&& (! (bad? rl)) (stru? (vty rl))) rl (cgexpr g env x))
+       (? (bad? rv) 'bad (cxpark g rv)))
+   (cxload oa ob) `(`('ldsd 'f0 'r4 oa) `('ldsd 'f1 'r4 (oa + 8))
+                    `('ldsd 'f2 'r4 ob) `('ldsd 'f3 'r4 (ob + 8)))
+   (cxarith op)                                     ; f0..f3 = (a.re a.im b.re b.im) -> (re im) in (f0 f1)
+    (? (op = '+) '((addsd f0 f2) (addsd f1 f3))
+       (op = '-) '((subsd f0 f2) (subsd f1 f3))
+       (op = '*)
+        '((movsd f4 f0) (movsd f5 f1)
+          (mulsd f0 f2) (mulsd f5 f3) (subsd f0 f5)                 ; re = ac - bd
+          (mulsd f4 f3) (mulsd f1 f2) (addsd f1 f4))                ; im = bc + ad
+       (op = '/)
+        '((movsd f4 f2) (mulsd f4 f2)                               ; c^2
+          (movsd f5 f3) (mulsd f5 f3) (addsd f4 f5)                 ; den = c^2 + d^2
+          (movsd f5 f0) (mulsd f5 f2)                               ; ac
+          (movsd f6 f1) (mulsd f6 f3) (addsd f5 f6)                 ; ac + bd
+          (divsd f5 f4)                                              ; re
+          (mulsd f1 f2) (mulsd f0 f3) (subsd f1 f0)                 ; bc - ad
+          (divsd f1 f4) (movsd f0 f5))
+       ())
+   ; the (f0 f1) result into a fresh rt-typed temp; the temp's address answers
+   (cxout g rt fs)
+    (: ro (ntmp g rt)
+       st (? (id? (cxb rt) 'float)
+             ((fstf g 'float 'r4 ro 'f0) + (fstf g 'float 'r4 (ro + 4) 'f1))
+             `(`('stsd 'r4 ro 'f0) `('stsd 'r4 (ro + 8) 'f1)))
+       (mkv rt 'r0 (fs + (st + `(`('lea 'r0 'r4 ro))))))
+   (cgcx g env op a rhs)                            ; the LEFT already evaluated (a value rec)
+    (? (! (id? (peep g 'tgt 'x64) 'x64)) 'bad
+       (: arith (cxarith op)
+          (? (! (two? arith)) 'bad
+             (: pa (cxpark g a)
+                (? (bad? pa) 'bad
+                   (: mb (cxmat g env rhs)
+                      (? (bad? mb) 'bad
+                         (: tb (cauup mb)
+                            rt (? (&& (gcplx? (vty a)) (&& (id? (cxb (vty a)) 'float)
+                                      (&& (gcplx? tb) (id? (cxb tb) 'float))))
+                                  '(struct "__cplx_float") cxdty)
+                            (cxout g rt (<>pa + (<>mb + ((cxload <pa <mb) + arith))))))))))))
    (cgbin g env e wnt)
     (: op <>e
        lhs <>>e rhs <>>>e
@@ -1831,6 +1926,7 @@
        ; memory shuttle (shut).
        a (cgexpr g env lhs)
        (? (bad? a) 'bad
+          (gcplx? (vty a)) (cgcx g env op a rhs)    ; a complex left: the complex lane (parse lifted a real RIGHT already)
           ; a constant count rides the immediate shift; a variable count
           ; rides shlv/sarv with the count PINNED to r1 (holo's contract)
           (&& (member? op '(shl shr)) (pair? g (vty a)))    ; a pair shift keeps the left type
@@ -3158,6 +3254,10 @@
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
    (aggish? ty) (arr? ty || stru? ty)
+   ; the seeded C99 complex tags (parse's canon lays them): a complex is C's
+   ; SCALAR -- brace elision never descends into its components, and a single
+   ; expr item initializes the WHOLE value (real -> complex converts)
+   (gcplx? ty) (&& (stru? ty) (member? <>ty `("__cplx_double" "__cplx_float")))
    (elval it) (? (member? <it '(dfield didx)) <>>it it)   ; the value of an item
    (fidx fields name) (: (go l i) (? !(two? l) 0 (<<l = name) i (go >l (i + 1)))
                           (go fields 0))
@@ -3182,7 +3282,7 @@
    (normelt g ty desig dh dk val l)                 ; one element of type ty from item stream l -> (item rest)
     (? (arr? ty && (!(ptr? <>ty) && ((two? val) && (id? <val 'str))))
         `(<l >l)                                    ; a string IS a char array's whole element -- never an elision run
-       (aggish? ty && !(initval? val))          ; ELIDE: fill ty from the run starting at val
+       (aggish? ty && (!(gcplx? ty) && !(initval? val)))   ; ELIDE: fill ty from the run starting at val (never into a complex -- a scalar)
         (: pr (normfill g ty (link val >l))
            w `('init <pr)
            `((? desig (redesig dh dk w) w) <>pr))
@@ -3245,6 +3345,7 @@
                   val (elval it)
                   eoff (off + (* ci esz))
                   r (? (&& (aggish? elt) (<val = 'init)) (cgfill g env eoff elt val)
+                       (&& (stru? elt) (! (<val = 'str))) (cgsfill g env eoff elt val)
                        (cgstore g env eoff elt val))
                   (? (bad? r) 'bad (fill >l (ci + 1) (acc + r)))))
            (fill <>ini 0 ()))
@@ -3259,10 +3360,40 @@
                   (? (bad? fe) 'bad
                      (: foff (off + <>fe) fty <>>fe
                         r (? (&& (aggish? fty) (<val = 'init)) (cgfill g env foff fty val)
+                             (&& (stru? fty) (! (<val = 'str))) (cgsfill g env foff fty val)
                              (cgstore g env foff fty val))
                         (? (bad? r) 'bad (fill >l (ci + 1) (acc + r)))))))
            (fill <>ini 0 ()))
        'bad))
+   ; a complex width flip, src address in r0, dest in r1: convert componentwise
+   ; (a blind block copy would read the WRONG byte shapes)
+   (cxcopy g sty)
+    (? (id? (cxb sty) 'float)
+        '((ldss f2 r0 0) (cvtss2sd f2 f2) (stsd r1 0 f2)
+          (ldss f2 r0 4) (cvtss2sd f2 f2) (stsd r1 8 f2))
+        '((ldsd f2 r0 0) (cvtsd2ss f2 f2) (stss r1 0 f2)
+          (ldsd f2 r0 8) (cvtsd2ss f2 f2) (stss r1 4 f2)))
+   ; a struct member/element from a struct-valued EXPRESSION (the union pun's
+   ; {(_Complex t)(x)} -- a whole-struct item, not a brace): source address in
+   ; r0 (clval for an lvalue, cgexpr for an rvalue temp), block copy into the
+   ; frame slot -- a complex width flip converts instead. a complex member also
+   ; takes a REAL expr ({3.0} -- C converts): re gets the value, im a zero
+   ; image. the source evaluates FIRST (it may call); the tail stores cannot.
+   (cgsfill g env foff fty val)
+    (: rl (clval g env val)
+       rv (? (&& (! (bad? rl)) (stru? (vty rl))) rl (cgexpr g env val))
+       (? (bad? rv) 'bad
+          (stru? (vty rv))
+           (: mv ((tor0 g rv) + `(`('lea 'r1 'r4 foff)))
+              (? (&& (gcplx? fty) (&& (gcplx? (vty rv)) (! ((caup fty) = (caup (vty rv))))))
+                 (mv + (cxcopy g (vty rv)))
+                 (mv + (bcopy g 0 (tsz g fty) ()))))
+          (gcplx? fty)
+           (: b (cxb fty)
+              ((asflo g rv) + ((fstf g b 'r4 foff 'f0)
+               + ('((li r2 0))
+                  + (? (b = 'float) `(`('st4 'r4 (foff + 4) 'r2)) `(`('st 'r4 (foff + 8) 'r2)))))))
+          'bad))
 
    ; -- GLOBAL init (a constant byte image, where a scalar is little-endian
    ; bytes, an aggregate a placement flatten, and a POINTER an abs64 fixup --
