@@ -19,10 +19,16 @@
 ; adjacent edits with no stable line between them share a run and conflict --
 ; textbook diff3, the same call git makes.
 ;
-; loads after crew/kore/{text,diff}.l in the reef cat (it captures lines/unlines
-; and myers at its define -- the capture law). the round trip through lines is
+; reef is a REGISTERED MODULE and this file OPENS the layer -- (enter 'reef) here,
+; (leave ()) at the foot of reef.l, holo's split-across-files shape. everything in
+; both files binds in the `reef` layer, so the cat adds nothing to the book; a
+; consumer reaches in with (from 'reef ..). loads after crew/kore/{text,diff}.l,
+; which stay global (they are kore's, shared). it captures lines/unlines and myers
+; at its define -- the capture law. the round trip through lines is
 ; exact on newline-terminated text; a final unterminated line gains its newline,
 ; text.l's one normalization, and it only ever touches a path already diverged.
+(enter 'reef)
+
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)
    (m3grab m a) (? (&& (two? m) ((<<m) = 'add)) (m3grab >m (link <><m a)) `(m (rev a)))
@@ -69,7 +75,7 @@
 
    ; THE ENTRY: three texts + the two side labels -> (mergedtext nconflicts).
    ; nconflicts is 0 when the merge came out clean.
-   (rmerge base ours theirs ol tl)
+   (diff3 base ours theirs ol tl)
     (: b (lines base)
        bp (m3base b)
        op (m3parts (myers b (lines ours)))

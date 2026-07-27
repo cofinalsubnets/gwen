@@ -80,7 +80,10 @@
 ;   pilot): a new top-level book on struct ai (g->mods, the lazy-singleton `mods` nif) maps name ->
 ;   module-book. the chain model: TOP is always the defglob target; under it a use-stack; orth last.
 ;   (enter 'holo) opens a named scope (crew/holo/holo.l) -- binds land in the layer, mutually
-;   visible; (leave ()) (crew/holo/seal.l) unwinds and REGISTERS the layer as the module. a consumer
+;   visible; (leave ()) unwinds and REGISTERS the layer as the module, always at the FOOT OF A REAL
+;   FILE: rune/cook/bao/kanren/reef at their own foot, holo after its last backend
+;   (crew/holo/thumb1.l). a gate that wants the internals JOINS the sealed module -- (enter ())
+;   (use 'reef), the shape a backend uses. a consumer
 ;   either (use 'holo) -- splice BELOW the top, bare names resolve on the walk but never shadow
 ;   yours, cleared by a bare (leave ()) (main.c brackets the glaze load this way; a cat leads with
 ;   it, crew/kore/asbook.l) -- or (from 'holo 'assemble), the OPAQUE accessor: currying reaches a
