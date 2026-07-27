@@ -189,6 +189,7 @@
                 _ (pin t 'svars (tablet 0))         ; top-level `static` globals: internal linkage, never exported
                 _ (pin t 'sects (tablet 0))         ; global name -> its __attribute__((section "..")) string
                 _ (pin t 'locals (tablet 0))        ; local/param name -> its declared type (for parse-time sizeof folding)
+                _ (pin t 'globals (tablet 0))       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
                 t)
    ; does a type begin here?
    (tkbty? ps t)
@@ -238,7 +239,8 @@
    (ptype ps e)
     (? (! (two? e)) ()
        (: k <e
-          (? (k = 'var) (peep (ps 'locals) <>e ())
+          (? (k = 'var) (: lt (peep (ps 'locals) <>e ())   ; locals shadow; a file-scope name falls through
+                           (? lt lt (peep (ps 'globals) <>e ())))
              (k = 'dot) (: bt (ptype ps <>e) (? (stru? bt) (fldty ps bt <>>e) ()))
              (k = 'deref) (: it (ptype ps <>e)
                              (? (ptr? it) <>it (arr? it) <>it
@@ -1307,7 +1309,12 @@
        ; note the completed form's staticness/section per declared name, then
        ; clear the stashes for the next form
        (note f)
-        (: st (peep ps 'curstat ()) sc (peep ps 'cursect ())
+        (: _ (? (member? <f '(gdecl xdecl))         ; register file-scope names -> types (ptype's global fallback)
+                (: (gogl prs) (? (! (two? prs)) 1
+                                 (: _ (pin (ps 'globals) (cap (cap prs)) (caup (cap prs))) (gogl >prs)))
+                   (gogl <>f))
+                ())
+           st (peep ps 'curstat ()) sc (peep ps 'cursect ())
            _ (? (&& st (member? <f '(fn proto))) (pin (ps 'sfns) <>f 1) ())
            _ (? (&& (<f = 'gdecl) (|| st sc))
                 (: (go2 prs) (? (! (two? prs)) 1
