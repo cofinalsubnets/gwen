@@ -308,8 +308,10 @@
    ; a RUN of [const-expr] / [] suffixes -> (dims rest) | (). the dimension is any
    ; integer CONSTANT expression -- a literal, an enum constant, `64 / limb_bits` --
    ; parsed by pexpr and folded by cfold. only the first (outer) dim may be [] (size 0).
+   ; a parameter's [static n] / [const n] (C99 6.7.6.3) drops its quals -- the
+   ; parameter decays to a pointer, so the promise costs nothing.
    (adims ps ts2 acc) (? (! (peekp ts2 "[")) `((rev acc) ts2)
-                         (: t2 >ts2
+                         (: t2 (pquals >ts2)
                             (? (peekp t2 "]") (adims ps >t2 (link 0 acc))
                                (: er (pexpr ps t2)
                                   (? (! (two? er)) ()
