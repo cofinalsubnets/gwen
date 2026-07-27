@@ -1082,12 +1082,32 @@
                                 (link `('locals nm old) shadows))
    (bindlocs ps ents shadows) (? (! (two? ents)) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (? (&& (two? form) (member? <form '(decl sdecl))) <>form ())   ; a block decl's entries, () otherwise
+   ; a BLOCK-scope typedef (sqlite's LOGFUNC_t): pin each declarator into ps
+   ; 'types like tdeflist, but SAVE the old binding on the block's shadow list
+   ; ('none = fresh) so unshadow restores C scope. -> (rest sh2) | (); the
+   ; typedef is a pure parse-time binding, no AST form.
+   (btdefs ps base ts sh)
+    (: dr (pdtor ps ts base)
+       (? (! (two? dr)) ()
+          (: nm (cap (cap dr))
+             old (peep (ps 'types) nm 'none)
+             _ (pin (ps 'types) nm (caup (cap dr)))
+             sh2 (link `('types nm old) sh)
+             af <>dr
+             (? (peekp af ",") (btdefs ps base >af sh2)
+                (peekp af ";") `(>af sh2)
+                ()))))
    (pblock ps ts)
     (: ts0 (want ts "{")
        (? (! (two? ts0)) ()
           (: (items ts2 acc sh)
               (? (! (two? ts2)) (: _ (unshadow ps sh) ())
                  (tp? <ts2 "}") (: _ (unshadow ps sh) `(`('blk (rev acc)) >ts2))
+                 (tkw? <ts2 'typedef)
+                  (: br (pbty ps >ts2)
+                     r (? (two? br) (btdefs ps <br <>br sh) ())
+                     (? (! (two? r)) (: _ (unshadow ps sh) ())
+                        (items <r acc <>r)))
                  (: r (? (tkbty? ps (cap (pquals ts2))) (pdecl ps ts2) (pstmt ps ts2))
                     (? (! (two? r)) (: _ (unshadow ps sh) ())
                        (items <>r (link <r acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) sh))))))
