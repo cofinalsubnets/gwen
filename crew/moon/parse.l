@@ -233,6 +233,52 @@
    (fldty ps sty nm) (: e (peep (ps 'stag) <>sty ())     ; the type of member nm off a struct type
                         (? (! (two? e)) ()
                            (: f (assoc nm <e) (? (two? f) <>>f ()))))
+   (fmof ps sty nm) (? (! (stru? sty)) ()               ; a member's (byte-offset ty) off a struct type
+                       (: e (peep (ps 'stag) <>sty ())
+                          (? (! (two? e)) ()
+                             (: f (assoc nm <e) (? (two? f) `(<>f <>>f) ())))))
+   ; &((T*)0)->fld (and a.b chains over it) folds to the member's byte offset --
+   ; the offsetof idiom, which sqlite carries as its own macro. the chain must
+   ; GROUND in a deref of a null pointer cast; anything else stays an address.
+   (nulloff ps e)
+    (: (ground b)                                    ; -> (byte-offset struct-ty) | ()
+        (? (! (two? b)) ()
+           (<b = 'deref)
+            (: c <>b
+               (? (! (&& (two? c) (<c = 'cast))) ()
+                  (: ty <>c v (cfold <>>c)
+                     (? (&& (ptr? ty) (&& (charm? v) (v = 0))) `(0 <>ty) ()))))
+           (<b = 'dot)
+            (: gr (ground <>b)
+               (? (! (two? gr)) ()
+                  (: f (fmof ps <>gr <>>b)
+                     (? (two? f) `((<gr + <f) <>f) ()))))
+           ())
+       ; a null-grounded pointer VALUE -> (byte-address stride) | (): the cast
+       ; ((T*)K), and + arithmetic over it scaled by the pointee (sqlite's
+       ; SQLITE_INT_TO_PTR is &((char*)0)[X]). anything not grounded in a
+       ; constant null cast stays an address.
+       (pval x)
+        (? (! (two? x)) ()
+           (&& (<x = 'cast) (ptr? <>x))
+            (: ty <>x
+               v (cfold <>>x)
+               (? (charm? v) `(v (tsz ps <>ty)) ()))
+           (&& (<x = 'bin) (id? <>x '+))
+            (: pa (pval <>>x)
+               (? (two? pa)
+                  (: n (cfold <>>>x) (? (charm? n) `((<pa + (* n <>pa)) <>pa) ()))
+                  (: pb (pval <>>>x)
+                     (? (! (two? pb)) ()
+                        (: n (cfold <>>x) (? (charm? n) `((<pb + (* n <>pb)) <>pb) ()))))))
+           ())
+       (? (&& (two? e) (<e = 'deref))                ; &*(ptr-expr): the pointer's own value
+           (: pv (pval <>e) (? (two? pv) <pv ()))
+          (! (&& (two? e) (<e = 'dot))) ()
+          (: gr (ground <>e)
+             (? (! (two? gr)) ()
+                (: f (fmof ps <>gr <>>e)
+                   (? (two? f) (<gr + <f) ()))))))
    (ptrarg ps e) (? (! (&& (two? e) (<e = 'bin))) ()     ; the ptr/arr operand of a `bin + ptr idx` (a[i] desugars so)
                     (: a (ptype ps <>>e) b (ptype ps <>>>e)
                        (? (|| (ptr? a) (arr? a)) a (|| (ptr? b) (arr? b)) b ())))
@@ -595,7 +641,9 @@
              (tp? t "*") (: r (punary ps >ts)
                             (? (two? r) `(`('deref <r) <>r) ()))
              (tp? t "&") (: r (punary ps >ts)
-                            (? (two? r) `(`('addr <r) <>r) ()))
+                            (? (! (two? r)) ()
+                               (: n (nulloff ps <r)   ; the offsetof idiom folds to a constant
+                                  (? (charm? n) `(`('num n) <>r) `(`('addr <r) <>r)))))
              (tp? t "+") (punary ps >ts)
              (tp? t "-") (: r (punary ps >ts)
                             (? (two? r) `(`('un 'neg <r) <>r) ()))
