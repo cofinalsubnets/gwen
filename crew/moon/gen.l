@@ -252,8 +252,11 @@
    ; the MEMORY class: an aggregate PAST 16 bytes (aclass answers ()). SysV
    ; passes it wholly on the stack -- the caller lays its eightbytes in the
    ; overflow block, and the callee's copy IS that memory, addressed off the
-   ; incoming frame. an over-aligned one (16+) refuses: its block would need
-   ; its own alignment rule. x64 only (AAPCS64 differs).
+   ; incoming frame. x64 only (AAPCS64 differs). the 16+-alignment guard below
+   ; is defensive and UNREACHABLE today -- cc ignores __attribute__((aligned)),
+   ; and no scalar it knows aligns past 8, so no tag can ask for more; it will
+   ; matter the day alignment is honored (an over-aligned block wants its own
+   ; rule), which is why it refuses rather than laying a wrong ABI.
    (amem? g ty) (&& (stru? ty) (&& (! (aclass g ty)) (&& (! (arm? g)) (! (t32? g)))))
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (? (two? e) (cauup e) 8))   ; a struct tag's alignment
    (aslots g ty) (>> (& ((tsz g ty) + 7) -8) 3)                            ; its eightbyte count

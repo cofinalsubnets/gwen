@@ -666,7 +666,8 @@
 ; break against gcc that only bit multi-declarator lines). and the by-value
 ; struct rep: a <=16-byte struct rides calls by its SysV eightbyte classes -- one
 ; eightbyte in a gp/xmm reg, two eightbytes (int/sse in any mix) in a register
-; pair; returned, passed, copied. a >16-byte (MEMORY) struct still refuses.
+; pair; returned, passed, copied. a >16-byte one is MEMORY class: it rides the
+; overflow block whole, and returns through the caller's hidden pointer.
 (: (cgn src) (: r (cparse (caup (clex src)))
                 (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (stg src) (: r (cparse (caup (clex src))) (peep (cauup r) "S" ()))
@@ -677,7 +678,9 @@
          '((("a" 0 char) ("b" 1 char) ("c" 4 int) ("d" 8 int)) 12 4))
       (two? (cgn "struct S { double re, im; }; static struct S mk(double a, double b){ struct S z = {a,b}; return z; } static double re(struct S z){ return z.re; } int main(){ return (int)re(mk(41.0, 1.0)) + 1; }"))
       (two? (cgn "struct T { int x, y, z; } t; struct T id(struct T a); int main(){ return id(t).x; }"))   ; a 9..16B two-eightbyte struct (int:int) now rides calls
-      (! (cgn "struct B { long a, b, c; } b; long f(struct B x); int main(){ return (int)f(b); }"))))       ; a >16B (MEMORY) by-value struct still refuses
+      (two? (cgn "struct B { long a, b, c; } b; long f(struct B x); int main(){ return (int)f(b); }"))       ; a >16B MEMORY struct passes on the stack
+      (two? (cgn "struct B { long a, b, c; }; struct B mk(long k); struct B g(long k){ return mk(k); } int main(){ return (int)g(1).a; }"))   ; ..and returns through the hidden pointer
+      (two? (cgn "struct B { long a, b, c; } b; long f(int q, struct B x, int r); int main(){ return (int)f(1, b, 2); }"))))   ; ..behind register args
 
 ; -- the gen tail: every name a comma-list prototype registers is callable (the
 ; sig sweep pins mproto siblings, which have no proto form of their own), and &f
@@ -708,6 +711,11 @@
    (hasraw fs) (? (! (two? fs)) ()
                   (: f2 <fs
                      (? (&& (two? f2) (&& (= <f2 'raw) (= <>f2 want))) 1 (hasraw >fs))))
+   g2 (cgn "void o(unsigned char v, unsigned short p) { asm volatile(\"outb\" : : \"r0\"(v), \"r2\"(p)); } int main() { o(1, 2); return 0; }")
+   want2 (hb 'x64 (asm-text "outb"))
+   (hasraw2 fs) (? (! (two? fs)) ()
+                   (: f2 <fs
+                      (? (&& (two? f2) (&& (= <f2 'raw) (= <>f2 want2))) 1 (hasraw2 >fs))))
    (assert
       (= (cast "void f() { asm(\"sys\"); }")
          '(prog ((fn "f" () (blk ((asm "sys" () () ())))))))
@@ -717,6 +725,10 @@
                                        (("r" (var "v")) ("i" (num 3)))
                                        ("memory"))))))))
       (two? g1) (hasraw (caup g1))
+      ; the PORT I/O ops (musl's bits/io.h rides them): register-contracted
+      ; like `sys`, so the template is bare and the operands only pin -- the
+      ; assembled body is exactly the opcode bytes
+      (two? g2) (hasraw2 (caup g2))
       (! (cgn "int main() { long v; asm(\"li %0, 1\" : \"=q\"(v)); return 0; }"))
       (! (cgn "int main() { asm(\"sys\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
       (! (cgn "int main() { asm(\"sys\" : : \"r4\"(1)); return 0; }"))
