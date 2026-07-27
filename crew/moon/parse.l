@@ -449,7 +449,23 @@
    ; type unit boundary to avoid straddling it -- the SysV/gcc x86 packing. its
    ; stored (unit-byte-offset bitoff) let gen load the aligned word and extract.
    (bfmem? m) (two? (cup (cup m)))                  ; a member pair carrying a width: (name ty width)
-   (playout ps ms uni)                              ; -> (fields size align)
+   ; a trailing __attribute__((..)) run on a struct BODY: consume it, reading
+   ; whether `packed` rides inside (x86_64 epoll_event -- the kernel ABI needs
+   ; the packed layout, so skipping the attribute would mislay `data` at 8)
+   (pattpk ts)
+    (? (! (&& (two? ts) (&& ((tkk <ts) = 'id) ((tkv <ts) = "__attribute__")))) `(0 ts)
+       (: r >ts
+          (? (! (peekp r "(")) `(0 ts)
+             (: (scan s d pk)
+                 (? (|| (! (two? s)) (d < 1)) `(pk s)
+                    (peekp s "(") (scan >s (d + 1) pk)
+                    (peekp s ")") (scan >s (d - 1) pk)
+                    (&& ((tkk <s) = 'id) (member? (tkv <s) `("packed" "__packed__"))) (scan >s d 1)
+                    (scan >s d pk))
+                r2 (scan >r 1 0)
+                nx (pattpk <>r2)
+                `((| <r2 <nx) <>nx)))))
+   (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
     (: (go l bit mx acc)
         (? (! (two? l))
            (: a2 (? (mx < 1) 1 mx)
@@ -469,7 +485,7 @@
                           (go >l (bit2 + w) nmx (? name (link fld acc) acc)))))
                  (! name)                            ; the anonymous struct/union splice (name absent, no width)
                  (: inner (peep (ps 'stag) <>ty 0)
-                    ia <>>inner
+                    ia (? pk 1 <>>inner)
                     isz <>inner
                     sbit (? uni 0 (aup bit (ia * 8)))
                     at (>> sbit 3)
@@ -479,7 +495,7 @@
                     nmx (? (mx < ia) ia mx)
                     nbit (? uni (? (bit < (isz * 8)) (isz * 8) bit) (sbit + (isz * 8)))
                     (go >l nbit nmx (spl <inner acc)))
-                 (: a (talign ps ty)
+                 (: a (? pk 1 (talign ps ty))
                     sz (tsz ps ty)
                     abit (? uni 0 (aup bit (a * 8)))
                     at (>> abit 3)
@@ -512,9 +528,10 @@
                     (: tag2 (? tag tag (panon ps))
                        mr (pmembers ps >ts3 ())
                        (? (! (two? mr)) ()
-                          (: lay (playout ps <mr uni)
+                          (: pa (pattpk <>mr)          ; a trailing __attribute__((packed)) lays align-1
+                             lay (playout ps <mr uni <pa)
                              _ (pin (ps 'stag) tag2 lay)
-                             `(`('struct tag2) <>mr))))
+                             `(`('struct tag2) <>pa))))
                     (? tag `(`('struct tag) ts3) ())))
              (tkw? t 'enum)
               (: ts2 >ts
