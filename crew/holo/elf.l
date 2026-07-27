@@ -21,7 +21,9 @@
    ;; the 120-byte header for a single R+X load segment at `base` covering the whole file.
    ;; etype = 2 (ET_EXEC, fixed base) or 3 (ET_DYN, a static-PIE the kernel loads at a random
    ;; base -- the mooncc `-pie` path, whose data pointers self-relocate at startup).
-   (elf64-hdr etype base entry filesz machine)
+   ;; memsz >= filesz: the excess is .bss, address space the kernel hands over already
+   ;; zeroed. an image with no .bss passes filesz for both, and the segment is exactly its file.
+   (elf64-hdr etype base entry filesz memsz machine)
       (catall `(
          `(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
          (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
@@ -30,7 +32,7 @@
          (le16 1) (le16 0) (le16 0) (le16 0)                   ; e_phnum=1, no section headers
          (le32 1) (le32 7) (le64 0)                            ; PT_LOAD, flags RWX -- globals ride the one segment as labeled raw data (cc stage 3); split segments arrive with the .o seam
          (le64 base) (le64 base)                               ; p_vaddr, p_paddr
-         (le64 filesz) (le64 filesz) (le64 4096)))             ; p_filesz, p_memsz, p_align
+         (le64 filesz) (le64 memsz) (le64 4096)))              ; p_filesz, p_memsz, p_align
 
    ;; build a complete executable image for TARGET, loaded at `base`. `mkprog` is (\ dataddr -> IR);
    ;; `data` is the byte list appended after the code. returns a tablet { 'bytes 'entry 'dataddr }.
@@ -47,7 +49,7 @@
          code (holo-bytes-at target (mkprog dataddr) org)
          filesz (elf-hdr + (tally code) + (tally data))
          entry (base + elf-hdr)
-         img (catall `((elf64-hdr 2 base entry filesz machine) code data))
+         img (catall `((elf64-hdr 2 base entry filesz filesz machine) code data))
          res (tablet 0)
          _ (pin res 'bytes img) _ (pin res 'entry entry) _ (pin res 'dataddr dataddr)
          res)

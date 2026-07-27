@@ -466,7 +466,15 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	  $(moonrun) $(ho)/.nf2.c $(ho)/.nf1.c -o $(ho)/.lnk5 > /dev/null 2>&1 || { echo "FAIL mooncc link ai_nifs"; exit 1; }; \
 	  $(ho)/.lnk5; a=$$?; \
 	  [ $$a -eq 42 ] || { echo "FAIL ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $$a want 42)"; exit 1; }; \
-	  echo "mooncc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets) ok"; \
+	  printf 'long bigbuf[4096];\nint zed;\nstatic const char *const nms[]={"zero","one","two"};\nconst long tbl[4]={3,5,7,9};\nlong fill(long n){long i;for(i=0;i<n;i++)bigbuf[i]=i+1;zed=(int)bigbuf[n-1];return bigbuf[0]+bigbuf[n-1];}\nconst char *nm(int i){return nms[i];}\nlong tb(int i){return tbl[i];}\n' > $(ho)/.fgn.c; \
+	  printf 'extern long bigbuf[];extern int zed;long fill(long);const char*nm(int);long tb(int);\nstatic int eq(const char*a,const char*b){while(*a&&*a==*b){a++;b++;}return *a==*b;}\nint main(void){if(zed||bigbuf[5]||bigbuf[4095])return 1;if(!eq(nm(1),"one"))return 2;if(tb(3)!=9)return 3;long s=fill(9);return (int)(s+zed+23);}\n' > $(ho)/.fgnm.c; \
+	  for m in -fno-pie -fPIE; do \
+	    $$cc_g -O0 $$m -c -o $(ho)/.fgn.o $(ho)/.fgn.c; \
+	    $(moonrun) $(ho)/.fgnm.c $(ho)/.fgn.o -o $(ho)/.fgnx > /dev/null 2>&1 || { echo "FAIL mooncc link foreign .o ($$m)"; exit 1; }; \
+	    $(ho)/.fgnx; a=$$?; \
+	    [ $$a -eq 42 ] || { echo "FAIL foreign gcc .o link $$m (.bss arrives zeroed + .rodata/.data.rel.ro + abs32 relocs, got $$a want 42)"; exit 1; }; \
+	  done; \
+	  echo "mooncc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, a FOREIGN gcc .o whole) ok"; \
 	else echo "mooncc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The rung-2 self-host gate ([[love-distro]]): compile love.c AND every host/*.c with
 # mooncc (gcc/clang only LINKS), then run the whole corpus through the all-mooncc
