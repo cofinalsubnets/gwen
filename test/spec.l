@@ -256,11 +256,13 @@
 ; never the operator. the GROWING lane is a star's + - * // %: exact forever, climbing
 ; charm -> sun -> big. the WORD lane is fixed-width two's complement, and it is exactly
 ; where the rep IS a machine word: (1) the bitwise ops << >> & | ^ always, even on a star
-; (see arithmetic), and (2) an INTEGER TRAY's cells, a galaxy being contiguous limbs. so a
-; galaxy's + - * WRAP where a star's grow, and a big operand TRUNCATES into the cell
-; instead of refusing. this is the lattice's ALGEBRA reading, not an exception to it:
-; Z/2^w is the strongest +/* theory contiguous limbs afford, the way Z is the strongest a
-; star affords. a gem-tray is NOT in the word lane -- floats saturate to ieee-inf.
+; (see arithmetic), and (2) a WORD-CELLED tray's cells -- a z-tray being contiguous limbs.
+; so a z-tray's + - * WRAP where a star's grow, and a big operand TRUNCATES into the cell
+; instead of refusing. the rule is the REP, not the kind: an OBJECT tray boxes every cell,
+; so a galaxy of bigs routes through the promoting scalar lane and stays EXACT. this is
+; the lattice's ALGEBRA reading, not an exception to it: Z/2^w is the strongest +/* theory
+; contiguous limbs afford, the way Z is the strongest boxed cells afford. a gem-tray is
+; NOT in the word lane either -- floats saturate to ieee-inf.
 (assert
  (6 = (tally (star-tray '(2 3) 0))) (2 = (rank (star-tray '(2 3) 0))) ('(2 3) = (shape (star-tray '(2 3) 0)))
  (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
@@ -279,6 +281,8 @@
  (@(8 9) = (@(3 4) + ((200 2) + 5)))              ; a big TRUNCATES into the cell (2^200 = 0 mod 2^w)
  (star-tray = (tier (@(3 4) + (200 2))))          ; ...and the result never leaves the tray band
  (big? (3 + (200 2)))                             ; where the STAR lane grows exact instead
+ (: o (array '(2) (200 2) (200 2))                ; ...as does an OBJECT tray: boxed cells, not limbs
+    (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))   ; exact round trip at 2^200
  (? word ("@(ieee-inf ieee-inf)" = (show (@(1.0e308 1.0e308) * @(10.0 10.0)))) 1)  ; a gem-tray SATURATES, never wraps
  (? word (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
  (? word (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
