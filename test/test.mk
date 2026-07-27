@@ -1113,6 +1113,27 @@ test_big: host
 	  proof/rocq/bigref.ml proof/rocq/bigref.mli proof/rocq/big_drive proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
 	  out/.big_oracle.l
 endif
+# test_mx: the +/* dispatch matrices as DATA, their shape machine-checked.
+# tools/mxdump.c (a TU including love.c whole -- the tables are static by
+# design, so the dump reads them out of the same compilation) prints kind and
+# lane names; tools/mx2coq.l DERIVES the band partition from row+column
+# equality and generates proof/rocq/mx.v: the 256-cell tables factor through
+# the band quotient with nothing left over, dispatch commutes on the reachable
+# square (KMint never indexes -- the unit early-out), and the diagonal reads
+# the lattice. Regenerated every run, so the tables cannot drift from the
+# theorems. Needs coqc (the dump itself needs only $(CC)); no-ops without.
+ifeq ($(COQC),)
+test_mx:
+	@echo "test_mx: skipped (needs coqc)"
+else
+test_mx: host
+	@echo TEST proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
+	@$(CC) $(ai_cflags) -o out/.mxdump tools/mxdump.c $R/crew/moon/lib/math/am.c
+	@out/.mxdump > out/.mx.l
+	@$m tools/mx2coq.l > proof/rocq/mx.v
+	@cd proof/rocq && $(COQC) -q mx.v >/dev/null
+	@rm -f out/.mxdump out/.mx.l proof/rocq/mx.vo proof/rocq/mx.vok proof/rocq/mx.vos proof/rocq/mx.glob proof/rocq/.mx.aux
+endif
 # the PROVE rung of the holo encoder ladder: machine-checked reference x86-64
 # encoders, each proving decode inverts encode (axiom-free, vm_compute over the
 # finite domain), extracted to OCaml, then differentially checked BYTE-IDENTICAL

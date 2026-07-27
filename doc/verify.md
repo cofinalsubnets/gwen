@@ -25,6 +25,7 @@ every run, so none of it can drift quietly.
 | proof/lean/uugen.lean | the SAME uu corpus through Lean 4 -- a second, unrelated kernel | test_uulean |
 | proof/rocq/extract.v | the differential oracle's normalizer BUILT ON spec.v's proven subst/shift, extracted to OCaml | test_extract |
 | proof/rocq/big.v | the bignum lane's reference: stdlib binary Z + a PROVEN decimal codec (parse_print), extracted; big_drive fuzzes love's reader/limbs/printer against it | test_big |
+| proof/rocq/mx.v | GENERATED from love.c's +/* dispatch matrices (dumped by tools/mxdump.c): the 256-cell tables factor through the derived band quotient, dispatch commutes, the diagonal reads the lattice | test_mx |
 | proof/rocq/enc.v encmem.v encli.v | reference x86-64 encoders, decode inverts encode, byte-identical against holo | test_encver |
 
 every .v holds the axiom audit: no Axiom, no Admitted, no classical/funext escape
@@ -70,9 +71,11 @@ limbs, reader/printer, c0, nifs -- is what can't leave; the big shrink already
 happened a layer down, when moon + holo pushed gcc/glibc/ld out), so the work
 is VERIFYING pieces against references, the encoder-ladder shape. the bignum
 lane is bridged now (big.v -- it caught abs-of-INTPTR_MIN wrapping on its first
-run); the next such rungs are the dispatch tables as data (dump through a nif,
-generate the lattice/monotonicity checks) and the GC copy loop (no-lost-object /
-no-double-copy in gc.v's vocabulary, a debug-build gate as the instance-check).
+run), and the +/* dispatch matrices are owned as data (mx.v -- band
+factorization, dispatch commutativity, the diagonal-is-the-lattice reading,
+regenerated from the C tables every run); the next such rung is the GC copy
+loop (no-lost-object / no-double-copy in gc.v's vocabulary, a debug-build gate
+as the instance-check).
 
 ## the open seams, ranked
 
