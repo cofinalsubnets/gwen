@@ -1,19 +1,19 @@
-; crew/reef/reeftest.l -- the reef gate: a sandbox store driven end to end
+; crew/seed/seedtest.l -- the seed gate: a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
-; `make test_reef`: cat test/00-init.l $(reeffiles) THIS | out/host/love -- host
+; `make test_seed`: cat test/00-init.l $(seedfiles) THIS | out/host/love -- host
 ; nifs (sha256, readdir, chdir), so it stays OFF the corpus like the other
 ; hostnif tests. the make target clears the sandbox first; cwd is the repo
-; root, and everything here happens inside out/host/.reeftest.
-; reef is a sealed module, so the gate JOINS it the documented way: an anonymous
-; layer with reef spliced below (the backend-joins-holo shape). every internal
+; root, and everything here happens inside out/host/.seedtest.
+; seed is a sealed module, so the gate JOINS it the documented way: an anonymous
+; layer with seed spliced below (the backend-joins-holo shape). every internal
 ; then reads bare, and the test's own helpers stay in the top layer.
 (enter ())
-(use 'reef)
+(use 'seed)
 
 (: _ (mkdir "out" 493) _ (mkdir "out/host" 493)
-   _ (mkdir "out/host/.reeftest" 493)
-   cd (chdir "out/host/.reeftest")
-   _ (? (! cd) () (: _ (puts "reeftest: chdir failed\n") (quit 1)))
+   _ (mkdir "out/host/.seedtest" 493)
+   cd (chdir "out/host/.seedtest")
+   _ (? (! cd) () (: _ (puts "seedtest: chdir failed\n") (quit 1)))
    ; the same-text equality for list-shaped store values
    (seq a b) ((show a) = (show b))
    ; the tree: two files, one ignored dir
@@ -23,10 +23,10 @@
    _ (mkdir "junk" 493)
    _ (lay "junk/x" "never\n")
    _ (mk ())
-   _ (lay ".reef/ignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
-   p1 (reef-record "first")
+   _ (lay ".seed/ignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
+   p1 (seed-record "first")
    s1 (snap ())
-   again (reef-record "again"))
+   again (seed-record "again"))
 
 (assert
  (64 = (tally p1))                                     ; a real content address
@@ -35,14 +35,14 @@
  ("a.txt" = <<s1)                                      ; path-sorted
  ((blob <><s1) = "one\ntwo\nthree\n")               ; the blob rides its hash
  (! again)                                             ; a clean tree records nothing
- (p1 = (sha256 <>(look (".reef/patch/" + p1)))))    ; the id IS the file's hash
+ (p1 = (sha256 <>(look (".seed/patch/" + p1)))))    ; the id IS the file's hash
 
 ; mutate: one changed, one born, one dead
 (: _ (lay "a.txt" "one\ntwo point five\nthree\n")
    _ (lay "c.txt" "born\n")
    _ (unlink "sub/b.txt")
-   nd (reef-diff ())
-   p2 (reef-record "second")
+   nd (seed-diff ())
+   p2 (seed-record "second")
    f2 (patch p2))
 
 (assert
@@ -52,18 +52,18 @@
  (seq (tips ()) `(p2))                              ; p1 is no longer maximal
  (! (member? "sub/b.txt" (: (go m acc) (? (two? m) (go >m (link <<m acc)) acc)
                             (go (snap ()) ()))))    ; the death left the snap
- (0 = (reef-diff ())))                                 ; recorded = working again
+ (0 = (seed-diff ())))                                 ; recorded = working again
 
 ; a patch of only births depends on nothing: a second tip (the DAG, locally)
 (: _ (lay "d.txt" "free\n")
-   p3 (reef-record "third")
+   p3 (seed-record "third")
    f3 (patch p3))
 
 (assert
  (! (fld f3 'deps))                                 ; no context anywhere
  (2 = (tally (tips ())))                            ; two maximal patches
  (member? p2 (tips ())) (member? p3 (tips ()))
- (3 = (reef-log ())))                                  ; three patches told
+ (3 = (seed-log ())))                                  ; three patches told
 
 ; --- sync: a peer nest (built inside ./pr, ignored) shares d.txt's births and
 ;     adds its own, plus edits a.txt on a common base. union it in: the store
@@ -75,12 +75,12 @@
    _ (lay "d.txt" "free\n")                            ; same births as p3 -> dedups
    _ (lay "peer.txt" "from the other machine\n")       ; the peer's own file
    _ (mk ())
-   pp (reef-record "peer work")
+   pp (seed-record "peer work")
    _ (chdir "..")
-   nbefore (tally (readdir ".reef/patch"))
+   nbefore (tally (readdir ".seed/patch"))
    pdirty (dirty ())                                   ; the main tree is clean pre-sync
-   got (reef-sync "pr")
-   nafter (tally (readdir ".reef/patch")))
+   got (seed-sync "pr")
+   nafter (tally (readdir ".seed/patch")))
 
 (assert
  (0 = pdirty)                                             ; clean, so sync will materialize
@@ -91,8 +91,8 @@
  (4 = got)                                                ; p1 p2 p3 + the peer's pp
  ((<>(look "peer.txt")) = "from the other machine\n")  ; materialized into the working tree
  ((<>(look "a.txt")) = "one\ntwo point five\nthree\n") ; local edits untouched
- (0 = (reef-diff ()))                                     ; working tree == the recomputed snap
- (! (reef-record "noop")))                                ; ...so nothing is left to record
+ (0 = (seed-diff ()))                                     ; working tree == the recomputed snap
+ (! (seed-record "noop")))                                ; ...so nothing is left to record
 
 ; --- an EMPTY file is content, not absence. it slurps to () -- the zero point --
 ;     so a scan that reads the net hashes it to () and it never reaches the snap:
@@ -101,13 +101,13 @@
 ;     the snap under the honest empty digest, and materialize 0-byte through a
 ;     sync (where blob presence is likewise the wrapper, never the net) ---
 (: _ (lay "e.txt" "")
-   pe (reef-record "an empty file")
+   pe (seed-record "an empty file")
    esnap (: (go m) (? (! (two? m)) () ("e.txt" = <<m) <m (go >m)) (go (snap ())))
    clean (dirty ())
    _ (mkdir "nest2" 493)
    _ (chdir "nest2")
    _ (mk ())
-   got2 (reef-sync "..")
+   got2 (seed-sync "..")
    et (look "e.txt")
    _ (chdir ".."))
 
@@ -116,7 +116,7 @@
  (two? esnap)                                             ; ...and reached the snap
  ((<>esnap) = (sha256 ""))                                ; ...under the honest empty digest
  (0 = clean)                                              ; ...so the tree came back clean
- (! (reef-record "noop"))                                 ; ...and stays clean -- no junk tip
+ (! (seed-record "noop"))                                 ; ...and stays clean -- no junk tip
  (0 < got2)                                               ; the fresh nest took the whole store
  (two? et)                                                ; ...materializing e.txt: present...
  (0 = (tally <>et)))                                      ; ...and 0 bytes
@@ -131,25 +131,25 @@
    _ (chdir "mrg/a")
    _ (lay "f" "one\ntwo\nthree\nfour\nfive\n")
    _ (mk ())
-   _ (reef-record "the base")
+   _ (seed-record "the base")
    _ (mkdir "../b" 493) _ (chdir "../b") _ (mk ())
-   _ (reef-sync "../a")
+   _ (seed-sync "../a")
    ; a moves the head, b moves the tail -- one file, disjoint regions
-   _ (chdir "../a") _ (lay "f" "ONE\ntwo\nthree\nfour\nfive\n") _ (reef-record "a: the head")
-   _ (chdir "../b") _ (lay "f" "one\ntwo\nthree\nfour\nFIVE\n") _ (reef-record "b: the tail")
-   gotm (reef-sync "../a")
+   _ (chdir "../a") _ (lay "f" "ONE\ntwo\nthree\nfour\nfive\n") _ (seed-record "a: the head")
+   _ (chdir "../b") _ (lay "f" "one\ntwo\nthree\nfour\nFIVE\n") _ (seed-record "b: the tail")
+   gotm (seed-sync "../a")
    mtext (<>(look "f"))
-   cfm (<>(derive-snap (readdir ".reef/patch")))
+   cfm (<>(derive-snap (readdir ".seed/patch")))
    ; now both move the SAME line -- a real overlap
-   _ (chdir "../a") _ (lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n") _ (reef-record "a: two")
-   _ (chdir "../b") _ (lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n") _ (reef-record "b: two")
-   gotc (reef-sync "../a")
+   _ (chdir "../a") _ (lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n") _ (seed-record "a: two")
+   _ (chdir "../b") _ (lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n") _ (seed-record "b: two")
+   gotc (seed-sync "../a")
    ctext (<>(look "f"))
-   cfc (<>(derive-snap (readdir ".reef/patch")))
+   cfc (<>(derive-snap (readdir ".seed/patch")))
    ; the resolution is just a record
    _ (lay "f" "ONE\nRESOLVED\nthree\nfour\nFIVE\n")
-   _ (reef-record "resolve the overlap")
-   cfr (<>(derive-snap (readdir ".reef/patch")))
+   _ (seed-record "resolve the overlap")
+   cfr (<>(derive-snap (readdir ".seed/patch")))
    ndirty (dirty ())
    _ (chdir "../.."))
 
@@ -168,13 +168,13 @@
 ; --- the two sides that cannot line-merge: a delete meeting an edit keeps the
 ;     CONTENT (a deletion would be the one lossy answer), and flags it ---
 (: _ (chdir "mrg/a")
-   _ (lay "g" "keep\nme\n") _ (reef-record "g is born")
-   _ (chdir "../b") _ (reef-sync "../a")
-   _ (chdir "../a") _ (unlink "g") _ (reef-record "a: g dies")
-   _ (chdir "../b") _ (lay "g" "keep\nme too\n") _ (reef-record "b: g edited")
-   gotd (reef-sync "../a")
+   _ (lay "g" "keep\nme\n") _ (seed-record "g is born")
+   _ (chdir "../b") _ (seed-sync "../a")
+   _ (chdir "../a") _ (unlink "g") _ (seed-record "a: g dies")
+   _ (chdir "../b") _ (lay "g" "keep\nme too\n") _ (seed-record "b: g edited")
+   gotd (seed-sync "../a")
    gtext (look "g")
-   cfd (<>(derive-snap (readdir ".reef/patch")))
+   cfd (<>(derive-snap (readdir ".seed/patch")))
    _ (chdir "../.."))
 
 (assert
@@ -189,12 +189,12 @@
 ;     end needed no attendance. a peer that is dirty takes no push at all (its
 ;     store is left whole, never half-fed) and sync says so ---
 (: _ (mkdir "mrg/c" 493) _ (chdir "mrg/c") _ (mk ())
-   _ (lay "shared" "base\n") _ (reef-record "c: the base")
+   _ (lay "shared" "base\n") _ (seed-record "c: the base")
    _ (mkdir "../d" 493) _ (chdir "../d") _ (mk ())
-   _ (reef-sync "../c")
-   _ (lay "d-only" "from d\n") _ (reef-record "d: its own file")
-   _ (chdir "../c") _ (lay "c-only" "from c\n") _ (reef-record "c: its own file")
-   gotx (reef-sync "../d")                               ; ONE sync, run from c
+   _ (seed-sync "../c")
+   _ (lay "d-only" "from d\n") _ (seed-record "d: its own file")
+   _ (chdir "../c") _ (lay "c-only" "from c\n") _ (seed-record "c: its own file")
+   gotx (seed-sync "../d")                               ; ONE sync, run from c
    csnap (snap ()) cdirty (dirty ())
    dhere (look "d-only")                              ; d's file walked in
    _ (chdir "../d")
@@ -202,10 +202,10 @@
    chere (look "c-only")                              ; ...and c's walked out, unattended
    _ (lay "scratch" "unrecorded\n")                   ; now dirty the peer
    _ (chdir "../c")
-   nb4 (tally (readdir ".reef/patch"))
-   _ (lay "late" "late work\n") _ (reef-record "c: late")
-   goty (reef-sync "../d")
-   dstore (tally (readdir "../d/.reef/patch"))
+   nb4 (tally (readdir ".seed/patch"))
+   _ (lay "late" "late work\n") _ (seed-record "c: late")
+   goty (seed-sync "../d")
+   dstore (tally (readdir "../d/.seed/patch"))
    _ (chdir "../.."))
 
 (assert
@@ -216,16 +216,16 @@
  (0 = goty)                                              ; a DIRTY peer refuses the push
  (dstore = nb4))                                         ; ...and its store is left whole, not half-fed
 
-; --- hatch: build the recorded source into a native seed, ledgered by patch
+; --- hatch: build the recorded source into a native germ, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
 ;     default ignore, so the build output never dirties the tree); a re-hatch of
-;     the same head with the same recipe is a reproducibility audit -- the seed
+;     the same head with the same recipe is a VIABILITY test -- the germ
 ;     must reproduce. (the real love recipe is `make`; the shape is identical.) ---
-(: _ (lay ".reef/hatch"
-       (show '(hatch (recipe "sh" "-c" "mkdir -p out; printf reef-seed > out/seed.bin") (out "out/seed.bin"))))
-   hid (reef-hatch ())
+(: _ (lay ".seed/hatch"
+       (show '(hatch (recipe "sh" "-c" "mkdir -p out; printf seed-germ > out/germ.bin") (out "out/germ.bin"))))
+   hid (seed-hatch ())
    led (hatched ())
-   again (reef-hatch ())
+   again (seed-hatch ())
    led2 (hatched ()))
 
 (assert
@@ -234,9 +234,9 @@
  (1 = (tally led))                                     ; one derivation ledgered...
  (hid = (<<led))                                       ; ...keyed by the patchset id
  ((<><led) = (arch ()))                             ; ...with this machine's arch (second field)
- (64 = (tally (<>><led)))                              ; ...and a real seed fingerprint (third)
+ (64 = (tally (<>><led)))                              ; ...and a real germ fingerprint (third)
  (hid = again)                                         ; same head + recipe -> same patchset id
  (2 = (tally led2))                                    ; a second, auditable hatch
- ((<>><led2) = (<>><led)))                             ; ...and the seed reproduced bit-for-bit
+ ((<>><led2) = (<>><led)))                             ; ...and the germ stayed VIABLE, bit for bit
 
-(: _ (puts "reef: ok") _ (putc 10) 0)
+(: _ (puts "seed: ok") _ (putc 10) 0)

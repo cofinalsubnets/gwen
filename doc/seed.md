@@ -1,12 +1,12 @@
-# reef — the vcs and the distro, one verb set
+# seed — the vcs and the distro, one verb set
 
 Status: **the MVP verb set is live** (2026-07-14): `record` · `sync` · **`hatch`** ·
-`log` · `diff` over the content-addressed store — [`crew/reef/reef.l`](../crew/reef/reef.l),
-gated by `make test_reef`; a hunk is test/patch.l's proven `chg` at file grain
+`log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
+gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
 (slot = path, context = old content hash).
 
 - **`sync PEER`** **exchanges** patch sets with a peer nest (a directory holding a
-  `.reef/`) — it is not a fetch: pull the blobs + patches we lack, push the ones
+  `.seed/`) — it is not a fetch: pull the blobs + patches we lack, push the ones
   the peer lacks (content-addressed, so a union in either direction just fills
   gaps), then **settle both nests** — re-derive tips + snap from the *whole* patch
   set (order-free — the DAG is a pure function of its patches) and materialize
@@ -19,7 +19,7 @@ gated by `make test_reef`; a hunk is test/patch.l's proven `chg` at file grain
   (two nests reach the same content) is silent. Same-path divergence **merges**:
   the incoming hunk names the content hash it expected, so the common ancestor is
   already in the store and the three sides go to a diff3 line merge
-  ([`crew/reef/merge.l`](../crew/reef/merge.l)) — disjoint edits to one file both
+  ([`crew/seed/merge.l`](../crew/seed/merge.l)) — disjoint edits to one file both
   survive, and only a true overlap lands in `<<<<<<<` markers naming both
   patches, whereupon sync reports and exits 1. The resolution is an ordinary
   `record`, so no new verb: the fix is a patch like any other, and it settles the
@@ -27,27 +27,28 @@ gated by `make test_reef`; a hunk is test/patch.l's proven `chg` at file grain
   those keep the **content** (never the deletion), name both blobs, and flag.
 - **`hatch [CMD..]`** is the derivation — the local-rebuild path of §2. It hatches
   the *recorded* state (a dirty tree refuses), runs the nest's build recipe (`CMD..`
-  or a `.reef/hatch` config `(hatch (recipe ..) (out PATH))`; for love the recipe is
-  `make`), fingerprints the output as the **seed**, and ledgers `(psid arch seed
-  time)` in `.reef/hatched` keyed by the patch-set id (`sha256` of the sorted tips
+  or a `.seed/hatch` config `(hatch (recipe ..) (out PATH))`; for love the recipe is
+  `make`), fingerprints the output as the **germ**, and ledgers `(psid arch germ
+  time)` in `.seed/hatched` keyed by the patch-set id (`sha256` of the sorted tips
   = the head DAG state). So re-hatching the same head with the same recipe is a
-  **reproducibility audit**: a seed that doesn't match the prior hatch raises a
-  NON-REPRODUCIBLE flag (a warning, not a stop). The recipe + its output path are
+  **viability test** — a genebank runs one on every stored accession, and this is
+  the same act: a germ that doesn't match the prior hatch raises a NOT-VIABLE flag
+  (a warning, not a stop). The recipe + its output path are
   opaque to hatch — it runs an argv and hashes a file — the way the store is opaque
   to what a hunk's old/new mean.
 
-`cut` / `undo` reserve-the-names; the cached-fetch (CDN substituter) side of hatch
+`bank` / `undo` reserve-the-names; the cached-fetch (CDN substituter) side of hatch
 is deferred with public distribution (§Deferred). The rest of this doc is the
 design brief from the 2026-07-14 session. The **interface** layer over the model in [`doc/hatch.md`](hatch.md)
 (the patch DAG, the hatch derivation, the nest, refs) and the machinery in
 [`port/inle/{serve,drive,patch}.l`](../port/inle/patch.l) (the dock — adopt +
 two-generation re-exec). hatch.md says *what the objects are*; this says *what
-you type*. `reef` is the crew name (🪸 coral); the command name is provisional —
-see §Naming.
+you type*. `seed` is the crew name (🌱, the spirit of the Svalbard Global Seed
+Vault); the command name is provisional — see §Naming.
 
 ## the one principle
 
-reef is a version control system **and** a distribution/install system, and the
+seed is a version control system **and** a distribution/install system, and the
 thesis of hatch.md is that these are the *same act*: **installing is
 cloning-and-hatching a local checkout.** So the design rule is:
 
@@ -67,7 +68,7 @@ out of `sync` + `hatch`, or the two systems have quietly come apart again.
 | **`sync`** | union patch sets with another nest (peer *or* URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
 | **`apply`** | pull a specific patch/ref out of the local store into the working tree | checkout / cherry-pick (any dep-consistent subset is valid) | select which release a nest realizes |
 | **`hatch`** | `(patch set, arch)` → native binary in the nest | — | the derivation; cached-default, local-rebuild fallback |
-| **`cut`** | freeze the current single-tip head → a named, immutable release | tag | the unit you propagate/clone |
+| **`bank`** | freeze the current single-tip head → a named, immutable release | tag | the unit you propagate/clone |
 | **`log`** | view the DAG + tips + refs | inspect | inspect |
 | **`diff`** | working tree vs a ref, or ref vs ref | inspect | inspect |
 | **`undo`** | add the *inverse* patch — revert as growth, never deletion | revert | rollback-by-superset |
@@ -98,53 +99,66 @@ diverge (§"this is a personal multi-machine sync tool"). So the cut needs exact
 
 That is the difference from the first sketch (`record` / `log` / `apply` /
 `diff`): it swaps in **`sync`**, because the actual payoff is peer union between
-laptop and desktop, which local `apply` never reaches. `cut` / `undo` and the
+laptop and desktop, which local `apply` never reaches. `bank` / `undo` and the
 install/upgrade front-doors are **reserve-the-names, land-later** — enough to
 prove the model, not the whole distro story.
 
-## why reef (the metaphor earns the invariants)
+## why seed (the metaphor earns the invariants)
 
-`reef` is not decoration; it names two properties of the model more accurately
-than "tree" did.
+`seed` is not decoration; a seed vault names the model's two hardest invariants
+more accurately than "tree" or "reef" did.
 
-- **No root, no trunk.** hatch.md kills the privileged trunk — `main` dissolves,
-  no linear canonical history, any dep-consistent subset is a valid source, and
-  divergent tips with no order between them are *normal*, not a merge chore. A
-  *tree* implies exactly the root-and-trunk hierarchy the design rejects (it's
-  git's mental model). A **reef** is a rootless colony that accretes in every
-  direction with many growth tips — the DAG, not a chain.
-- **Accretion is the inverse-patch law.** The core discipline is "removal is an
-  inverse patch, never a deletion; the patch set only ever grows," which is what
-  makes the default channel R₀ ⊆ R₁ ⊆ R₂ … well-defined (⊆ total). A reef only
-  builds up — even a rollback is a *new layer* of growth, never erosion. The
-  metaphor carries the single most important invariant for free.
+- **Append-only cold storage is the inverse-patch law.** The core discipline is
+  "removal is an inverse patch, never a deletion; the patch set only ever grows,"
+  which is what makes the default channel R₀ ⊆ R₁ ⊆ R₂ … well-defined (⊆ total).
+  That is a seed vault's literal operating principle: Svalbard never withdraws
+  and discards, it only ever accepts more, and a depositor retains what they put
+  in. Even a rollback is a new deposit, never an erasure. The metaphor carries
+  the single most important invariant for free.
+- **Distribution *is* cloning.** hatch.md's thesis is that installing and
+  cloning-and-hatching are one act. A seed vault exists for exactly that: it is
+  the duplicate backup the world's genebanks restore *from*, and a restore is
+  not a special operation — it is the same exchange running the other way. That
+  is `install = sync <url> + hatch`, almost verbatim.
+- **What is stored is not what runs.** The vault holds **germplasm**, not
+  plants; the germ has to be taken somewhere and grown before it is a living
+  thing. That is exactly the type distinction §2 insists on — source is
+  content-addressed by the patch set, the native binary is a *derivation* of
+  `(patch set, arch)` and cannot live in the VCS as a patch. The metaphor makes
+  the one type error we must not commit obvious on sight.
 
-And it deepens the 🪸 coral persona instead of sitting beside it: a reef is a
-coral colony, so the verbs get a coherent flavor rather than a stranded one —
-patches **bud**, you **graft** one in, a release is a **cutting** you propagate
-(install = grow a frag of the reef elsewhere = clone-and-hatch). Coral is
-literally propagated by cuttings and grafts, so `cut` (freeze a release) *is* the
-unit you clone — one word, both meanings.
+And the vocabulary comes with it rather than being invented for it: what a vault
+keeps is a **germ**, what it does to one is a **viability test**, and to freeze a
+release is to **bank** it — one word for putting a thing somewhere safe and for
+the institution that keeps it.
 
-The one thing traded: `tree` read as "version control" on sight; `reef` leans on
+The one thing traded: `tree` read as "version control" on sight; `seed` leans on
 the persona to carry that. Since the model isn't a tree and the persona does the
 work anyway, that's the right trade.
 
 ## naming
 
-- **`reef`** — the crew name / system (🪸 coral; colony = the whole patch DAG).
-  No `tree(1)` collision (the reason to move off `tree`). The *command* name is
-  still open: `reef <verb>` reads fine; whether the bare install command is
-  `reef <url>` or a friendlier alias is a small later call.
-- **verb flavor.** Plain (`record` / `apply` / `cut`) is primary for
-  discoverability. A coral-flavored set is available if wanted: `bud` (a patch
-  buds off) / `graft` (bring one in) / `cut` (the cutting = release = clone
-  unit) / tips (already the doc's word for the growth ends). gwen picks the
-  flavor — naming's her call under the freeze.
-- **the local home.** hatch.md floats `nest` / `roost` / `seed`, leaning on the
-  egg/hatch/born bootstrap cluster. The reef metaphor offers `frag` (aquarist
-  term for a propagated coral piece) or a local `head` if metaphor-unity is
-  wanted; the two clusters meet cleanly at the install seam, so either works.
+- **`seed`** — the crew name / system (🌱, the spirit of the Svalbard Global Seed
+  Vault). No `seed(1)` collision, the same box `tree` failed. The *command* name
+  is still open: `seed <verb>` reads fine; whether the bare install command is
+  `seed <url>` or a friendlier alias is a small later call.
+- **the germ.** The build output is a `germ` (was "seed", which collided with the
+  tool the moment the tool took that name — and *germplasm* is what a vault
+  actually conserves, so the rename is toward the domain, not away). The audit
+  over it is **viable** / NOT VIABLE.
+- **`hatch` stays.** It is not a plant word, and that is deliberate: egg / hatch
+  / `born` is love's own bootstrap cluster, and hatch.md's whole claim is that
+  the installer *re-runs the hatch* on your machine. The vault half is `sync`;
+  `hatch` is the bootstrap half; install is the two composed. Two clusters
+  meeting at the install seam, which is where they always met.
+- **verb flavor.** Plain (`record` / `apply` / `bank`) is primary for
+  discoverability. `spin` was wanted for a vault-flavored set and is **not
+  available** — love.c registers a nif under that string and the egg mops the
+  nom, so it reads free on the book while the table entry stands.
+- **the local home.** hatch.md floats `nest` / `roost`. A vault would say
+  **box** (Svalbard stores one sealed box per depositor) — but the two clusters
+  meet cleanly at the install seam, so either works. gwen picks; naming's her
+  call under the freeze.
 
 ## open forks
 
@@ -155,12 +169,12 @@ work anyway, that's the right trade.
    rather than needing a directional pair.
 2. **Does a nest need an explicit `pick`/`use` to switch its live ref, or is that
    just `apply <ref>`?** Lean fold-into-`apply`, skip the verb.
-3. **the command surface** — bare `reef <url>` as install, or a front-of-house
+3. **the command surface** — bare `seed <url>` as install, or a front-of-house
    alias. Deferred with the toolchain-multiplexer question in hatch.md.
 
 ## where it lives
 
-`crew/reef/` + a book (the holo/kore all-the-way-down precedent). The dock
+`crew/seed/` + a book (the holo/kore all-the-way-down precedent). The dock
 cluster ([`port/inle/`](../port/inle/), memory `the-dock`) already does the hard
 half — apply a patch, gate it (rebuild + `make test`, red reverts), adopt it
 (re-exec onto the new generation). `hatch` is that machinery pointed at a

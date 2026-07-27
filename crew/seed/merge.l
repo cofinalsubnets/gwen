@@ -1,4 +1,4 @@
-; crew/reef/merge.l -- diff3: the three-way line merge reef falls to when two
+; crew/seed/merge.l -- diff3: the three-way line merge seed falls to when two
 ; patches write ONE path from a shared base. the base is free: a hunk records the
 ; content hash it expected (its `old`), so the common ancestor is already in the
 ; store -- no ancestry search, just a blob read.
@@ -19,15 +19,15 @@
 ; adjacent edits with no stable line between them share a run and conflict --
 ; textbook diff3, the same call git makes.
 ;
-; reef is a REGISTERED MODULE and this file OPENS the layer -- (enter 'reef) here,
-; (leave ()) at the foot of reef.l, holo's split-across-files shape. everything in
-; both files binds in the `reef` layer, so the cat adds nothing to the book; a
-; consumer reaches in with (from 'reef ..). loads after crew/kore/{text,diff}.l,
+; seed is a REGISTERED MODULE and this file OPENS the layer -- (enter 'seed) here,
+; (leave ()) at the foot of seed.l, holo's split-across-files shape. everything in
+; both files binds in the `seed` layer, so the cat adds nothing to the book; a
+; consumer reaches in with (from 'seed ..). loads after crew/kore/{text,diff}.l,
 ; which stay global (they are kore's, shared). it captures lines/unlines and myers
 ; at its define -- the capture law. the round trip through lines is
 ; exact on newline-terminated text; a final unterminated line gains its newline,
 ; text.l's one normalization, and it only ever touches a path already diverged.
-(enter 'reef)
+(enter 'seed)
 
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)

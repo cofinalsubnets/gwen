@@ -1,4 +1,4 @@
-// host/hash.c -- content addressing for the reef (crew/reef/): sha-256 over a
+// host/hash.c -- content addressing for the seed (crew/seed/): sha-256 over a
 // string's bytes. Host-only, auto-globbed + AI_NIF-registered (no love.c/love.h/
 // main.c edit), the fs.c discipline:
 //

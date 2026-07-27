@@ -1,10 +1,10 @@
-; crew/reef/reef.l -- the reef: the patch-set vcs (doc/reef.md the interface,
+; crew/seed/seed.l -- the seed: the patch-set vcs (doc/seed.md the interface,
 ; doc/hatch.md the model, test/patch.l + proof/rocq/patch.v the laws). this cut
 ; is the MVP's local half: `record` (working changes -> a patch in the store),
 ; `log`, `diff`; `sync` rides the same store next (patches + blobs are immutable
 ; content-addressed files, so union = copy what's missing + re-derive tips).
 ;
-; the store (.reef/ at the working root):
+; the store (.seed/ at the working root):
 ;   blob/<sha256>    file content, immutable
 ;   patch/<sha256>   one patch, immutable -- (patch (note S) (time MS)
 ;                    (deps ID..) (hunks (PATH OLD NEW)..)), id = sha256 of the
@@ -12,7 +12,7 @@
 ;                    is deterministic and the address honest
 ;   tips             the maximal patches (the growth ends) -- (ID ..)
 ;   snap             the recorded state -- ((PATH CHASH PATCHID) ..) path-sorted
-;   ignore           optional: one path prefix per line, atop (".reef" ".git" "out")
+;   ignore           optional: one path prefix per line, atop (".seed" ".git" "out")
 ;
 ; a hunk is the PROVEN named-slot patch (test/patch.l's chg): slot = the path,
 ; context = the old content hash, value = the new -- () for absent (a birth or a
@@ -22,7 +22,7 @@
 ; context. finer-than-file hunks slot in later (the sequence slices are proven
 ; too); the store format doesn't care what a hunk's old/new mean.
 ;
-; loads after crew/kore/text.l (lines) + crew/kore/diff.l (udiff) in the reef
+; loads after crew/kore/text.l (lines) + crew/kore/diff.l (udiff) in the seed
 ; cat. body-less top-level `:` (the tool shape): the engine leaks into the cat's
 ; scope; the SEAT form at the tail is the only thing that fires as a program.
 (:
@@ -36,20 +36,20 @@
                   (? q (: r (sound q ()) _ (close q) (? (two? r) r ())) ()))
 
    ; --- the store ---
-   (mk _) (: _ (mkdir ".reef" 493) _ (mkdir ".reef/blob" 493) _ (mkdir ".reef/patch" 493) ())
-   (snap _) (form ".reef/snap")                            ; ((path chash pid) ..) sorted
-   (tips _) (form ".reef/tips")                            ; (id ..)
-   (blob h) (: t (look (".reef/blob/" + h)) (? (two? t) <>t ()))
-   (keep s) (: h (sha256 s) _ (lay (".reef/blob/" + h) s) h)
-   (patch id) (form (".reef/patch/" + id))
+   (mk _) (: _ (mkdir ".seed" 493) _ (mkdir ".seed/blob" 493) _ (mkdir ".seed/patch" 493) ())
+   (snap _) (form ".seed/snap")                            ; ((path chash pid) ..) sorted
+   (tips _) (form ".seed/tips")                            ; (id ..)
+   (blob h) (: t (look (".seed/blob/" + h)) (? (two? t) <>t ()))
+   (keep s) (: h (sha256 s) _ (lay (".seed/blob/" + h) s) h)
+   (patch id) (form (".seed/patch/" + id))
    (fld f k) (: (go m) (? (! (two? m)) ()                     ; a patch field's tail
                              (&& (two? <m) (id? <<m k)) ><m
                              (go >m))
                    (go >f))
 
-   ; --- ignores: path prefixes; a line in .reef/ignore adds to the built-ins ---
-   igs0 '(".reef" ".git" "out")
-   (igs _) (: t (look ".reef/ignore")
+   ; --- ignores: path prefixes; a line in .seed/ignore adds to the built-ins ---
+   igs0 '(".seed" ".git" "out")
+   (igs _) (: t (look ".seed/ignore")
                  (? (two? t) (igs0 + (filter (\ l (0 < (tally l))) (lines <>t)))
                     igs0))
    (ign? p igs) (? (! (two? igs)) 0
@@ -92,13 +92,13 @@
              (scan ps >sn (link `((<e) (<>e) ()) acc)))))     ; snap-only: dead
 
    ; --- record ---
-   (reef-record note)
+   (seed-record note)
     (: _ (mk ())
        sn (snap ())
        st (tablet 0)                                             ; path -> (chash pid)
        _ (: (go m) (? (two? m) (: _ (pin st <<m ><m) (go >m)) ()) (go sn))
        hunks (scan (sort (walk () (igs ()) ())) sn ())
-       (? (! (two? hunks)) (: _ (puts "reef: nothing to record\n") ())
+       (? (! (two? hunks)) (: _ (puts "seed: nothing to record\n") ())
           (: ; the blobs: keep every hunk's new content
              _ (: (go m) (? (two? m)
                             (: h <m _ (? (! <>>h) () (keep <>(look <h))) (go >m))
@@ -117,11 +117,11 @@
              ptext (show (list 'patch (list 'note note) (list 'time (clock 0))
                                (link 'deps deps) (link 'hunks hunks)))
              pid (sha256 ptext)
-             _ (lay (".reef/patch/" + pid) ptext)
-             _ (lay ".reef/snap" (show (snap+ sn hunks pid ())))
+             _ (lay (".seed/patch/" + pid) ptext)
+             _ (lay ".seed/snap" (show (snap+ sn hunks pid ())))
              tp (filter (\ t (! (member? t deps))) (tips ()))
-             _ (lay ".reef/tips" (show (sort (link pid tp))))
-             _ (puts ("reef: recorded " + (snip pid 0 12) + " (" + (show (tally hunks)) + " paths)\n"))
+             _ (lay ".seed/tips" (show (sort (link pid tp))))
+             _ (puts ("seed: recorded " + (snip pid 0 12) + " (" + (show (tally hunks)) + " paths)\n"))
              pid)))
 
    ; --- snap under a patch's hunks (both path-sorted) ---
@@ -140,7 +140,7 @@
    (ins e l) (? (! (two? l)) `(e)                             ; insert desc by time (seat 0)
                    ((<<l) <= <e) (link e l)
                    (link <l (ins e >l)))
-   (reef-log _)
+   (seed-log _)
     (: tp (tips ())
        (go m acc)
         (? (! (two? m)) acc
@@ -150,7 +150,7 @@
                                       (cap (fld f 'note))
                                       (tally (fld f 'hunks)))
                                 acc)))))
-       es (go (readdir ".reef/patch") ())
+       es (go (readdir ".seed/patch") ())
        (pr m)
         (? (! (two? m)) ()
            (: e <m id <>e
@@ -164,7 +164,7 @@
        (tally es))
 
    ; --- diff: working tree vs the recorded state, unified; answers how many differ ---
-   (reef-diff _)
+   (seed-diff _)
     (: sn (snap ())
        hunks (scan (sort (walk () (igs ()) ())) sn ())
        (pr m n)
@@ -183,14 +183,14 @@
    ;     content-addressed, so the union is just "copy what's missing"; then
    ;     re-derive tips + snap from the WHOLE patch set (order-free -- the DAG is
    ;     a pure function of its patches) and materialize the merged snap onto a
-   ;     clean working tree. peer = a directory holding a .reef/ (a peer or a
+   ;     clean working tree. peer = a directory holding a .seed/ (a peer or a
    ;     cutting); same-path divergence warns and the topo-latest write wins ---
    (dirty _) (tally (scan (sort (walk () (igs ()) ())) (snap ()) ()))
    ; one direction of the store exchange: copy the sha256-named files `to` lacks,
    ; verifying every address on the way. a nest root is "." or a peer path.
    ; answers (ncopied nfailed) -- a failed write is a peer we cannot push to.
    (copy sub from to)
-    (: fd (from + "/.reef/" + sub + "/") td (to + "/.reef/" + sub + "/")
+    (: fd (from + "/.seed/" + sub + "/") td (to + "/.seed/" + sub + "/")
        (go m n bad)
         (? (! (two? m)) `(n bad)
            (: h <m
@@ -199,7 +199,7 @@
                  (: t (look (fd + h))
                     (? (! (two? t)) (go >m n bad)
                        (! ((sha256 <>t) = h))
-                          (: _ (say err ("reef: bad address " + h + "\n")) (go >m n (bad + 1)))
+                          (: _ (say err ("seed: bad address " + h + "\n")) (go >m n (bad + 1)))
                        (lay (td + h) <>t) (go >m (n + 1) bad)
                        (go >m n (bad + 1)))))))
        (go (readdir fd) 0 0))
@@ -208,8 +208,8 @@
    ; nest we stand in -- both ends of a sync run it. answers (npatches nfiles conflicts)
    (settle _)
     (: oldsnap (snap ())
-       ids (readdir ".reef/patch")
-       _ (lay ".reef/tips" (show (derive-tips ids)))
+       ids (readdir ".seed/patch")
+       _ (lay ".seed/tips" (show (derive-tips ids)))
        dr (derive-snap ids)
        newsnap <dr
        ; the derive replays the WHOLE set every time, so a merge settled long ago
@@ -218,7 +218,7 @@
        ix (: (go m t) (? (two? m) (: _ (pin t <<m <><m) (go >m t)) t))
        op (ix oldsnap (tablet 0)) np (ix newsnap (tablet 0))
        cfs (filter (\ e (|| (0 < (<>e)) (! ((peep op <e ()) = (peep np <e ()))))) (<>dr))
-       _ (lay ".reef/snap" (show newsnap))
+       _ (lay ".seed/snap" (show newsnap))
        nf (mater oldsnap newsnap)
        `((tally ids) nf cfs))
    (derive-tips ids)                                          ; the ids nobody depends on
@@ -248,14 +248,14 @@
    ; --- a diverged write: two patches wrote one path from a shared base. the
    ;     base is FREE -- the incoming hunk names the content hash it expected --
    ;     so the three-way merge has all three sides in the store and most
-   ;     divergence resolves itself (crew/reef/merge.l). answers
+   ;     divergence resolves itself (crew/seed/merge.l). answers
    ;     (chash nconflicts note): nconflicts 0 is a clean merge, and the note is
    ;     what the report tells. a side that is ABSENT (a delete meeting an edit)
    ;     or BINARY cannot line-merge: keep the CONTENT, never the deletion, and
    ;     call it a conflict -- the loser stays addressable in the store ---
    (bin? s) (: n (tally s) (go i) (? (n <= i) 0 ((s i) = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
-   (bl h) (? (! h) `(1 "") (look (".reef/blob/" + h)))     ; (1 text) | () -- presence, not net
+   (bl h) (? (! h) `(1 "") (look (".seed/blob/" + h)))     ; (1 text) | () -- presence, not net
    (mend old curh nw curpid pid)
     (: bw (bl old) ow (bl curh) tw (bl nw)
        (? (! nw) `(curh 1 ("kept the edit -- " + (sh pid) + " deletes what " + (sh curpid) + " wrote"))
@@ -303,9 +303,9 @@
     (: np (tablet 0)
        _ (: (go m) (? (two? m) (: _ (pin np <<m <><m) (go >m)) ()) (go newsnap))
        w (: (go m n) (? (! (two? m)) n
-              (: e <m p <e ch <>e bl (look (".reef/blob/" + ch))   ; presence, not net: an empty blob is real
+              (: e <m p <e ch <>e bl (look (".seed/blob/" + ch))   ; presence, not net: an empty blob is real
                  cur (look p) curh (? (two? cur) (sha256 <>cur) ())
-                 (? (! (two? bl)) (: _ (say err ("reef: missing blob " + ch + "\n")) (go >m n))
+                 (? (! (two? bl)) (: _ (say err ("seed: missing blob " + ch + "\n")) (go >m n))
                     (curh = ch) (go >m n)
                     (: _ (mkparents p) _ (lay p <>bl) (go >m (n + 1))))))
             (go newsnap 0))
@@ -320,10 +320,10 @@
    ; "distribution == cloning" claim made good. the peer's half needs its tree
    ; CLEAN and writable; when it is not we still pull (always safe) and say so,
    ; leaving the peer's store untouched rather than half-fed.
-   (reef-sync peer)
+   (seed-sync peer)
     (: _ (mk ())
        (? (0 < (dirty ()))
-          (: _ (say err "reef: working tree has changes; record or revert first\n") 0)
+          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
           (: home (cwd 0)
              ; chdir answers () on success and -errno on failure -- BOTH nil, and
              ; () even sorts BELOW 0, so neither `!` nor `< 0` tells them apart.
@@ -331,7 +331,7 @@
              pd (: c (chdir peer)
                    (? (charm? c) -1
                       (: _ (mk ()) d (dirty ()) _ (chdir home) d)))
-             (? (pd < 0) (: _ (say err ("reef: cannot reach " + peer + "\n")) 0)
+             (? (pd < 0) (: _ (say err ("seed: cannot reach " + peer + "\n")) 0)
                 (: inb (copy "blob" peer ".") inp (copy "patch" peer ".")
                    ; the push: only onto a clean peer, and only if every write lands
                    out1 (? (0 = pd) (copy "blob" "." peer) `(0 0))
@@ -342,92 +342,92 @@
                    nleft (: (go m n) (? (! (two? m)) n
                               (: e <m p <e k <>e
                                  _ (say (? (0 = k) out err)
-                                        ("reef: " + (? (0 = k) "merged " "CONFLICT in ") + p
+                                        ("seed: " + (? (0 = k) "merged " "CONFLICT in ") + p
                                          + " -- " + (<>>e) + "\n"))
                                  (go >m (? (0 = k) n (n + 1)))))
                             (go (<>>st) 0))
                    pst (? (! pushed) ()                          ; settle the far end too
                           (: c (chdir peer) r (settle ()) _ (chdir home) r))
-                   _ (puts ("reef: synced -- " + (show <st) + " patches ("
+                   _ (puts ("seed: synced -- " + (show <st) + " patches ("
                             + (show <inp) + " in, " + (show <out2) + " out), "
                             + (show (<inb + <out1)) + " blobs, " + (show (<>st)) + " files here"
                             + (? (two? pst) (", " + (show (<>pst)) + " files there") "")
                             + (? (0 = nleft) "" (", " + (show nleft) + " conflicted")) + "\n"))
                    _ (? pushed ()
-                        (say err ("reef: pulled only -- the peer "
+                        (say err ("seed: pulled only -- the peer "
                                   + (? (0 < pd) "has unrecorded changes" "would not take the write")
                                   + "; run sync from its side to finish\n")))
                    _ (? (0 = nleft) ()
-                        (say err "reef: settle the flagged paths, then record -- the resolution is a patch\n"))
+                        (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
                    (? (&& pushed (0 = nleft)) <st 0))))))
 
-   ; --- hatch: (source_tree, arch) -> a native seed. the local derivation
+   ; --- hatch: (source_tree, arch) -> a native GERM. the local derivation
    ;     (doc/hatch.md's fallback path: rebuild from a present binary). we hatch
    ;     the RECORDED state -- a dirty tree refuses -- run the nest's build recipe,
-   ;     fingerprint the output as the SEED, and ledger it keyed by (patchset,
+   ;     fingerprint the output as the GERM, and ledger it keyed by (patchset,
    ;     arch). the patchset id is the hash of the sorted tips = the head DAG
    ;     state, so hatching the same head with the same recipe twice is a
-   ;     reproducibility audit: a seed that doesn't match the prior hatch is a
-   ;     NON-REPRODUCIBLE flag, not a silent divergence. the recipe + its output
+   ;     VIABILITY TEST: a germ that doesn't match the prior hatch is a
+   ;     NOT-VIABLE flag, not a silent divergence. the recipe + its output
    ;     path are opaque to hatch (it just runs an argv and hashes a file), the
    ;     way the store is opaque to what a hunk's old/new mean; for love the recipe
-   ;     is `make`, for a test a one-line stub. config in .reef/hatch:
+   ;     is `make`, for a test a one-line stub. config in .seed/hatch:
    ;       (hatch (recipe "make" "candidate") (out "out/host/love")) ---
-   (hatched _) (form ".reef/hatched")                     ; ((psid arch seed time)..) newest-first | ()
+   (hatched _) (form ".seed/hatched")                     ; ((psid arch germ time)..) newest-first | ()
    (hatch-find led psid arch)                                ; the last hatch of this (psid,arch) | ()
     (? (! (two? led)) ()
        (: r <led (? (&& ((<r) = psid) ((<>r) = arch)) r (hatch-find >led psid arch))))
    (arch _) (: u (run (list "uname" "-m")) ls (lines (cup u)) (? (two? ls) <ls "unknown"))
-   (reef-hatch argv)
+   (seed-hatch argv)
     (: _ (mk ())
        (? (0 < (dirty ()))
-          (: _ (say err "reef: working tree has changes; record or revert before hatching\n") ())
+          (: _ (say err "seed: working tree has changes; record or revert before hatching\n") ())
           (: tp (tips ())
-             (? (! (two? tp)) (: _ (say err "reef: nothing recorded to hatch\n") ())
-                (: cfg (form ".reef/hatch")
+             (? (! (two? tp)) (: _ (say err "seed: nothing recorded to hatch\n") ())
+                (: cfg (form ".seed/hatch")
                    rc (? (two? argv) argv (fld cfg 'recipe))
-                   (? (! (two? rc)) (: _ (say err "reef: no build recipe (pass one, or set .reef/hatch)\n") ())
+                   (? (! (two? rc)) (: _ (say err "seed: no build recipe (pass one, or set .seed/hatch)\n") ())
                       (: psid (sha256 (show (sort tp))) ar (arch ())
-                         _ (puts ("reef: hatching " + (snip psid 0 12) + " (arch " + ar + ") -- " + (show rc) + "\n"))
+                         _ (puts ("seed: hatching " + (snip psid 0 12) + " (arch " + ar + ") -- " + (show rc) + "\n"))
                          st (cap (run rc))
-                         (? (! (0 = st)) (: _ (say err ("reef: build failed (status " + (show st) + ")\n")) ())
+                         (? (! (0 = st)) (: _ (say err ("seed: build failed (status " + (show st) + ")\n")) ())
                             (: outp (: o (fld cfg 'out) (? (two? o) <o ()))
-                               seed (? (! outp) () (: t (look outp) (? (two? t) (sha256 <>t) ())))
+                               germ (? (! outp) () (: t (look outp) (? (two? t) (sha256 <>t) ())))
                                prior (hatch-find (hatched ()) psid ar)
-                               _ (? (&& (two? prior) (&& seed (<>>prior)))
-                                    (? ((<>>prior) = seed) (puts "reef: reproducible -- the seed matches the prior hatch\n")
-                                       (say err "reef: NON-REPRODUCIBLE -- this patch set hatched to a different seed!\n"))
+                               _ (? (&& (two? prior) (&& germ (<>>prior)))
+                                    (? ((<>>prior) = germ) (puts "seed: viable -- the germ matches the prior hatch\n")
+                                       (say err "seed: NOT VIABLE -- this patch set hatched to a different germ!\n"))
                                     ())
-                               _ (lay ".reef/hatched" (show (link (list psid ar seed (clock 0)) (hatched ()))))
-                               _ (puts ("reef: hatched " + (snip psid 0 12) + " -> seed "
-                                        + (? seed (snip seed 0 12) "(none)") + "\n"))
+                               _ (lay ".seed/hatched" (show (link (list psid ar germ (clock 0)) (hatched ()))))
+                               _ (puts ("seed: hatched " + (snip psid 0 12) + " -> germ "
+                                        + (? germ (snip germ 0 12) "(none)") + "\n"))
                                psid))))))))))
 
 ; --- the CLI face: usage + the verb dispatcher. these live in the LAYER
 ;     (cook-main's shape), so the seat in seal.l reaches them the way any
-;     consumer does -- (from 'reef 'reef-main) ---
+;     consumer does -- (from 'seed 'seed-main) ---
 (:
-   (usage _) (: _ (say err "reef -- the patch-set vcs (doc/reef.md)
-usage: reef VERB ..
-  record [NOTE]   working changes -> a patch in the store (.reef/)
-  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .reef/):
+   (usage _) (: _ (say err "seed -- the patch-set vcs (doc/seed.md)
+usage: seed VERB ..
+  record [NOTE]   working changes -> a patch in the store (.seed/)
+  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .seed/):
                   pull what it has, push what it lacks, settle BOTH trees to
                   the union. two patches on one path three-way merge; a true
                   overlap lands in markers and exits 1 -- resolve, then record
-  hatch [CMD..]   build the recorded source into a native seed (the recipe is
-                  CMD.. or .reef/hatch), fingerprint + ledger it by patch set
+  hatch [CMD..]   build the recorded source into a native germ (the recipe is
+                  CMD.. or .seed/hatch), fingerprint + ledger it by patch set
   log             the patches, newest first (* marks a tip)
   diff            working tree vs the recorded state (unified; exit 1 on change)
 ")
                 (quit 2))
-   (reef-main as)
+   (seed-main as)
     (? (! (two? as)) (usage ())
        (: v <as
-          (? (v = "record") (: _ (reef-record (? (two? >as) <>as "")) (quit 0))
-             (v = "sync") (? (two? >as) (: r (reef-sync <>as) (quit (? r 0 1))) (usage ()))
-             (v = "hatch") (: r (reef-hatch >as) (quit (? r 0 1)))
-             (v = "log") (: _ (reef-log ()) (quit 0))
-             (v = "diff") (: n (reef-diff ()) (quit (? (0 < n) 1 0)))
+          (? (v = "record") (: _ (seed-record (? (two? >as) <>as "")) (quit 0))
+             (v = "sync") (? (two? >as) (: r (seed-sync <>as) (quit (? r 0 1))) (usage ()))
+             (v = "hatch") (: r (seed-hatch >as) (quit (? r 0 1)))
+             (v = "log") (: _ (seed-log ()) (quit 0))
+             (v = "diff") (: n (seed-diff ()) (quit (? (0 < n) 1 0)))
              (usage ()))))
 )
 
@@ -435,17 +435,17 @@ usage: reef VERB ..
 ; module. the seat below is ordinary top-level love again.
 (leave ())
 
-; the SEAT (cook.l's shape): fire reef-main iff this file -- or the installed
-; `reef` binary -- sits in the program seat of the real command line (the
+; the SEAT (cook.l's shape): fire seed-main iff this file -- or the installed
+; `seed` binary -- sits in the program seat of the real command line (the
 ; positional program or a -l preload), taking the args AFTER the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load orders
 ; and the cat stays quiet under any other name -- which is why the gate can cat
-; this file and have nothing fire. it reaches reef-main the way any consumer
-; does, through (from 'reef 'reef-main). body-having: the seat leaks nothing.
+; this file and have nothing fire. it reaches seed-main the way any consumer
+; does, through (from 'seed 'seed-main). body-having: the seat leaks nothing.
 (: (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   (me? w) (: b (bn w) (|| (b = "reef") (b = "reef.l")))
+   (me? w) (: b (bn w) (|| (b = "seed") (b = "seed.l")))
    (seat a) (? (! (two? a)) ()
                (<a = "-l") (? (two? >a)
                               (? (me? <>a) (link 1 >>a) (seat >>a))
@@ -453,4 +453,4 @@ usage: reef VERB ..
                (me? <a) (link 1 >a)
                ())
    s (seat >cmdline)
-   (? (two? s) ((from 'reef 'reef-main) >s) ()))
+   (? (two? s) ((from 'seed 'seed-main) >s) ()))

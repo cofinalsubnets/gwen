@@ -63,7 +63,7 @@
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
 ;   parallel: lux (the X11 window manager, crew/lux/), inle (the freestanding kernel, port/inle/),
-;   reef (the patch-set vcs, crew/reef/ + host/hash.c -- doc/reef.md, `make test_reef`), moon (the C
+;   seed (the patch-set vcs, crew/seed/ + host/hash.c -- doc/seed.md, `make test_seed`), moon (the C
 ;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`), rune (the symbolic algebra engine, crew/rune/ -- exact multivariate polys +
 ;   Q[x]/(m) on the q coin; polys STRIKE AS COINS (die + - *, net-mode 1: !p is "zero poly");
@@ -81,9 +81,9 @@
 ;   module-book. the chain model: TOP is always the defglob target; under it a use-stack; orth last.
 ;   (enter 'holo) opens a named scope (crew/holo/holo.l) -- binds land in the layer, mutually
 ;   visible; (leave ()) unwinds and REGISTERS the layer as the module, always at the FOOT OF A REAL
-;   FILE: rune/cook/bao/kanren/reef at their own foot, holo after its last backend
+;   FILE: rune/cook/bao/kanren/seed at their own foot, holo after its last backend
 ;   (crew/holo/thumb1.l). a gate that wants the internals JOINS the sealed module -- (enter ())
-;   (use 'reef), the shape a backend uses. a consumer
+;   (use 'seed), the shape a backend uses. a consumer
 ;   either (use 'holo) -- splice BELOW the top, bare names resolve on the walk but never shadow
 ;   yours, cleared by a bare (leave ()) (main.c brackets the glaze load this way; a cat leads with
 ;   it, crew/kore/asbook.l) -- or (from 'holo 'assemble), the OPAQUE accessor: currying reaches a

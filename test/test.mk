@@ -146,14 +146,14 @@ test_lux: host
 	  cat out/host/.test_lux.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/lux/law: StackSet" out/host/.test_lux.out; } \
 	    || { echo "FAIL lux (exit $$r)"; exit 1; }
-.PHONY: test_reef
-test_reef: host out/host$(hsuf)/reef
-	@echo "REEF crew/reef/{reef,reeftest}.l"; \
-	  rm -rf out/host/.reeftest; \
-	  cat test/00-init.l $(reeffiles) crew/reef/reeftest.l | $m > out/host/.test_reef.out 2>&1; r=$$?; \
-	  cat out/host/.test_reef.out; \
-	  { [ $$r -eq 0 ] && grep -q "reef: ok" out/host/.test_reef.out; } \
-	    || { echo "FAIL reef (exit $$r)"; exit 1; }
+.PHONY: test_seed
+test_seed: host out/host$(hsuf)/seed
+	@echo "SEED crew/seed/{seed,seedtest}.l"; \
+	  rm -rf out/host/.seedtest; \
+	  cat test/00-init.l $(seedfiles) crew/seed/seedtest.l | $m > out/host/.test_seed.out 2>&1; r=$$?; \
+	  cat out/host/.test_seed.out; \
+	  { [ $$r -eq 0 ] && grep -q "seed: ok" out/host/.test_seed.out; } \
+	    || { echo "FAIL seed (exit $$r)"; exit 1; }
 # the kore smokes drive the BAKED image (`--wake kore.image`), not the cold cat --
 # ~0.02s vs ~0.75s per spawn across the ~68 tool runs below (the mooncc.image precedent).
 # the argv0-symlink smoke execs the real `$(ho)/kore` shim (it proves the shim's

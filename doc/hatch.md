@@ -1,6 +1,8 @@
 # hatch — distribution is cloning, install is a local rebuild
 
-Status: **design / brainstorm, not started.** Pick-up doc from the 2026-07-13 session.
+Status: **design / brainstorm.** Pick-up doc from the 2026-07-13 session; the model
+below is now partly built — see [`doc/seed.md`](seed.md) for what `seed` does today.
+The artifact this doc calls a *germ* was a "seed" until the VCS took that name.
 Companion to the dock ([`port/inle/{serve,drive,patch}.l`](../port/inle/patch.l), the
 adopt + two-generation re-exec machinery) and the bootstrap (the *egg*, [`love/egg.l`](../love/egg.l)).
 `hatch` is a **working name** — see §Naming.
@@ -30,7 +32,7 @@ Naming the category, because it decides what we're copying:
   and drops PATH shims. This is *front-of-house* we may grow into later (`love +tip …`), not
   what we build first.
 - **source-based installer / bootstrapper** (Gentoo `emerge`, Nix, `ghcup compile`) — ships
-  a seed, rebuilds on the target machine. This is the axis we're on.
+  a germ, rebuilds on the target machine. This is the axis we're on.
 - at its root, the classic **stage0 bootstrap** — how GCC 3-stages itself. We already do
   this in `make test` (double-bake the egg); the "installer" is that bootstrap pointed at a
   remote source.
@@ -59,7 +61,7 @@ do exactly this.
 `hatch : (source_tree, arch) → native binary`.
 
 This is the type error to keep straight: **source is content-addressed by the patch set;
-the native binary is a *derivation* of `(patch set, arch)`, not itself a patch.** So a seed
+the native binary is a *derivation* of `(patch set, arch)`, not itself a patch.** So a germ
 cannot literally live "in" the VCS as a patch. It is either:
 
 - **rebuilt locally** by an already-present binary (the fallback path — chicken/egg needs a
@@ -67,7 +69,7 @@ cannot literally live "in" the VCS as a patch. It is either:
 - **fetched as a cached build output** keyed by `(patchset-hash, arch)` — the default.
 
 **Default is cached, fallback is local hatch.** For any gate-green patch set, CI bakes a
-deterministic seed per arch and caches it; a client normally fetches that. The fallback
+deterministic germ per arch and caches it; a client normally fetches that. The fallback
 rebuilds locally when the cache is cold or distrusted.
 
 Two properties make cached-by-default safe rather than a trust compromise:
@@ -78,7 +80,7 @@ Two properties make cached-by-default safe rather than a trust compromise:
   *detectable*, not a matter of trust. This is Nix's substituter story with real
   bit-reproducibility underneath, which Nix mostly lacks.
 - **cache population = the gate.** A patch set becomes cacheable exactly when it passes the
-  gate (green + reproducible). "gate-green," "has cached seeds," and "selectable by users"
+  gate (green + reproducible). "gate-green," "has cached germs," and "selectable by users"
   are **one status**, not three.
 
 ### 3. nest — the local home
@@ -87,10 +89,10 @@ The hatched binary lands in a **nest**: the local install/checkout directory. A 
 is pinned and read-only; a dev's nest is writable and tracks a channel. Upgrading a nest is
 the dock's existing move — see §What we already have.
 
-### stage −1: the one out-of-band seed
+### stage −1: the one out-of-band germ
 
 To run the VCS at all you need *a* native binary already. So there is exactly **one dumb
-https GET** — the first seed, per arch — and everything after it self-hosts through the VCS.
+https GET** — the first germ, per arch — and everything after it self-hosts through the VCS.
 "Distribution == cloning" holds in steady state; the bootstrap has a single download under
 it. Tiny, rare, worth naming so it doesn't surprise us.
 
@@ -172,5 +174,5 @@ different source of the patch set.
 `hatch` (the act — download the egg, it hatches locally) and `nest` (the local home) lean on
 the vocabulary that already exists: **egg / hatch / born** is the bootstrap cluster; the
 installer literally re-runs the hatch on the user's machine. Alternatives floated: `roost`
-(the local home), `seed` (the stage−1 artifact). All provisional — honor the rename freeze;
+(the local home), `germ` (the stage−1 artifact). All provisional — honor the rename freeze;
 gwen names it.

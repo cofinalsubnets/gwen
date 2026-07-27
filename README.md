@@ -185,9 +185,9 @@ on the front page):
   wrapper. [love/bao.l](love/bao.l) + [host/pty.c](host/pty.c)
 - 🐀 **salt** -- the build system: cook, a gnu make clone that reads a real Makefile.
   [crew/cook/](crew/cook/)
-- 🪸 **reef** -- the vcs: a patch-set version control folded together with the
+- 🪸 **seed** -- the vcs: a patch-set version control folded together with the
   installer -- record/log/diff/sync over a content-addressed patch DAG.
-  [crew/reef/](crew/reef/) + [doc/reef.md](doc/reef.md)
+  [crew/seed/](crew/seed/) + [doc/seed.md](doc/seed.md)
 - 🐐 **mow** -- the grass chewer: the two-gen, two-space copying garbage collector.
 - 🕷️ **holo** -- the assembler: an amd64/arm64 assembler (short for holophrasm), the
   glaze's back end. [crew/holo/](crew/holo/)

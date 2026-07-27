@@ -1,4 +1,4 @@
-# crew/build.mk -- the crew app builds (kore/mooncc/reef scripts + mooncc.image)
+# crew/build.mk -- the crew app builds (kore/mooncc/seed scripts + mooncc.image)
 #
 # Fragment of the root Makefile (split out 2026-07-15). Included by ./Makefile,
 # which is invoked from the project root; paths resolve from there. Shared vars
@@ -62,12 +62,12 @@ out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
 	   echo 'exec "$$h/love" --wake "$$h/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
 	@chmod 755 $@
-# reef: the patch-set vcs (crew/reef/reef.l over the kore text+diff floor;
-# doc/reef.md). its own catted shebang script, the mooncc precedent.
-reeffiles = crew/kore/text.l crew/kore/diff.l crew/reef/merge.l crew/reef/reef.l
-out/host$(hsuf)/reef: $(reeffiles)
+# seed: the patch-set vcs (crew/seed/seed.l over the kore text+diff floor;
+# doc/seed.md). its own catted shebang script, the mooncc precedent.
+seedfiles = crew/kore/text.l crew/kore/diff.l crew/seed/merge.l crew/seed/seed.l
+out/host$(hsuf)/seed: $(seedfiles)
 	@echo AI	$(abspath $@)
-	@{ echo '#!/usr/bin/env -S love'; cat $(reeffiles); } > $@
+	@{ echo '#!/usr/bin/env -S love'; cat $(seedfiles); } > $@
 	@chmod 755 $@
 # the mooncc image: the compiler baked WARM (the live bake, doc/snapshot.md). The
 # cat loads under a NEUTRAL name so moon.l's tail SEAT stays quiet, then the bake
