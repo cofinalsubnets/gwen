@@ -8,9 +8,9 @@
 ; is the FIRST object's text -- the driver leads with a crt0 object built by
 ; objelf itself, so `main` resolves through the same reloc path as everything
 ; else. our own objects only: a foreign .o (gcc's .eh_frame / .bss / comdat
-; zoo) scares off honestly, never drops a section. two targets, like obj.l
-; (x86-64 field relocs REPLACE their field; aarch64 ones OR bits into the
-; instruction word the placeholder carries).
+; zoo) scares off honestly, never drops a section. the targets are obj.l's
+; (x86-64 field relocs REPLACE their field; aarch64 and riscv64 ones OR bits
+; into the instruction word(s) the placeholder carries).
 ; loads after crew/holo/obj.l in the mooncc cat -- reads elf-base / elf-machines /
 ; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). moon.l drives it:
 ; `mooncc a.o b.c -o prog`.
@@ -154,7 +154,10 @@
    ; section base; a named one resolves through the book (so a weak def's
    ; callers meet the strong override). entries arrive in ascending offset
    ; order (obj.l's walk order) -- pieces come out as text snips + byte lists.
-   (ldpatch ob tag base glo n0 n1 r0 r1 relbox)
+   ; rv flags an EM_RISCV link: riscv's reloc numbers live in their own namespace
+   ; and R_RISCV_64 is 2 -- the same number as R_X86_64_PC32 -- so the kind
+   ; dispatch below switches on the machine, never on the number alone.
+   (ldpatch ob tag base glo n0 n1 r0 r1 relbox rv)
     (: s (peep ob 'src 0) se (peep (peep ob 'sects 0) tag ())
        off0 (at se 0) sz (at se 1)
        (ent es) (? !(two? es) ()
@@ -177,17 +180,32 @@
                     (&& ((at sy 1) = 2) (&& ((at sy 3) = 0)
                          (! (two? (peep glo <sy ()))))) 0
                     (ldres glo n0 n1 r0 r1 <sy))
-              w (? (member? kind '(1 257)) 8 4)
+              abs64? (? rv (kind = 2) (member? kind '(1 257)))   ; R_RISCV_64 / R_X86_64_64 / R_AARCH64_ABS64
+              w (? abs64? 8 (&& rv (kind = 19)) 8 4)             ; CALL_PLT spans the auipc pair
               ; -pie: this abs64 site holds a base-0 offset (base is 0), so record its
               ; load-address for the startup relocator to add the real base to.
-              _ (? (&& relbox (member? kind '(1 257)))
+              _ (? (&& relbox abs64?)
                     (pin relbox 0 ((base + ro) >< (peep relbox 0 ()))) 0)
-              _ (? (member? kind '(1 2 4 257 275 277 282 283)) 0 (scare 'link-reloc kind))
+              _ (? (? rv (member? kind '(2 17 19)) (member? kind '(1 2 4 257 275 277 282 283)))
+                   0 (scare 'link-reloc kind))
               _ (? ((ro + w) <= sz) 0 (scare 'link-oob (peep ob 'id 0)))
-              ; the aarch64 field kinds patch BITS of the instruction word the
+              ; the aarch64/riscv field kinds patch BITS of the instruction word the
               ; placeholder carries -- read it back and OR the field in
-              wd (? (member? kind '(1 257)) 0 (rle32 s (off0 + ro)))
-              bs (? (member? kind '(1 257)) (le64 (sv + ad))   ; R_X86_64_64 / R_AARCH64_ABS64: S + A outright
+              wd (? abs64? 0 (rle32 s (off0 + ro)))
+              bs (? abs64? (le64 (sv + ad))                      ; the abs64 three: S + A outright
+                    (&& rv (kind = 17))                          ; R_RISCV_JAL: S+A-P into jal's j-imm
+                     (: v ((sv + ad) - (base + ro))
+                        _ (? (&& (-1048576 <= v) (v <= 1048575)) 0 (scare 'link-range <sy))
+                        u (v & 2097151)
+                        (le32 (wd | ((((u >> 20) & 1) << 31) | ((((u >> 1) & 1023) << 21)
+                                     | ((((u >> 11) & 1) << 20) | (((u >> 12) & 255) << 12)))))))
+                    (&& rv (kind = 19))                          ; R_RISCV_CALL_PLT: S+A-P as hi20 + signed lo12
+                     (: v ((sv + ad) - (base + ro))
+                        low (v & 4095) lo (? (low > 2047) (low - 4096) low)
+                        hi ((v - lo) // 4096)
+                        _ (? (&& (-524288 <= hi) (hi <= 524287)) 0 (scare 'link-range <sy))
+                        ((le32 (wd | ((hi & 1048575) << 12)))
+                         + (le32 ((rle32 s (off0 + (ro + 4))) | ((lo & 4095) << 20)))))
                     (member? kind '(2 4))
                      (: v ((sv + ad) - (base + ro))     ; PC32/PLT32: S + A - P
                         _ (? (ld-fits32 v) 0 (scare 'link-range <sy))
@@ -207,9 +225,9 @@
 
    ; count the abs64 (R_X86_64_64 / R_AARCH64_ABS64) data relocations across the
    ; set -- the entry count of the -pie relocation table (8 bytes each).
-   (ld-nabs objs)
+   (ld-nabs objs rv)
     (foldl (\ a ob (foldl (\ a2 tr
-              (foldl (\ a3 e (? (member? (at e 1) '(1 257)) (a3 + 1) a3)) a2 >tr))
+              (foldl (\ a3 e (? (? rv ((at e 1) = 2) (member? (at e 1) '(1 257))) (a3 + 1) a3)) a2 >tr))
               a (peep ob 'relas ())))
        0 objs)
 
@@ -224,10 +242,11 @@
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
        objs (map (\ p (ld-read <p <>p mach)) srcs)
+       rv (mach = 243)                          ; EM_RISCV: its own reloc-number namespace (see ldpatch)
        base (? pie 0 elf-base)
        lay (ldlay objs base)
        end <lay n0 <>lay
-       nrel (? pie (ld-nabs objs) 0)
+       nrel (? pie (ld-nabs objs rv) 0)
        r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
        r1 (r0 + (8 * nrel))
        relbox (? pie (: t (tablet 0) _ (pin t 0 ()) t) ())    ; abs64 site accumulator (pie only)
@@ -246,7 +265,7 @@
                  (: b (peep ob (ld-key tag) 0)
                     pad (? (cur < b) `((ld-zeros (b - cur))) ())
                     (emit tag (b + (at se 1)) >os
-                          (acc + pad + (ldpatch ob tag b glo n0 end r0 r1 relbox)))))))
+                          (acc + pad + (ldpatch ob tag b glo n0 end r0 r1 relbox rv)))))))
        et (emit 'text (base + 120) objs ())
        ed (emit 'data <et objs >et)
        en (emit 'nifs <ed objs >ed)

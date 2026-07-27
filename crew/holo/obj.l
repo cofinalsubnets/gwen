@@ -8,7 +8,8 @@
 ; elsewhere (R_X86_64_PLT32), a data pointer to a label (R_X86_64_64). intra-.text
 ; branches and calls stay pc-relative and resolve internally (both ends ride .text
 ; and move together). aarch64 rides the same walk with its own reloc vocabulary
-; (CALL26/JUMP26, the ADRP/ADD pair, ABS64) -- see the type table and reltext.
+; (CALL26/JUMP26, the ADRP/ADD pair, ABS64) -- see the type table and reltext --
+; and riscv64 likewise (CALL_PLT over the auipc pair, JAL, R_RISCV_64).
 ; loads after crew/holo/elf.l in the au cat -- reads elf-machines / write-bytes
 ; bare, and the assembler internals bare too: the cat leads with (use 'holo)
 ; (crew/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
@@ -25,6 +26,13 @@
    ra-call26 283                                    ; R_AARCH64_CALL26          ... into bl's imm26
    ra-pghi21 275                                    ; R_AARCH64_ADR_PREL_PG_HI21  page(S+A)-page(P) into adrp
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
+   ; ... and riscv64. the backend's 8-byte 'pcrel (one fixup across the auipc
+   ; pair) maps whole onto CALL_PLT: S+A-P split hi20-into-auipc / lo12-into-the-
+   ; second-word -- and jalr/addi/ld share the I-form imm field, so the ONE type
+   ; serves call and la alike (the placeholder carries both base words).
+   rr-64    2                                       ; R_RISCV_64        S + A  (⚠ collides with R_X86_64_PC32: link.l dispatches by machine)
+   rr-jal   17                                      ; R_RISCV_JAL       S + A - P into jal's j-imm
+   rr-call  19                                      ; R_RISCV_CALL_PLT  S + A - P across the auipc pair
 
    (o-has? tab k) !(id? (peep tab k 'no) 'no)    ; is key k bound in the tablet?
    (o-strbytes s) (: (go i acc) (? (i < 0) acc (go (i - 1) ((s i) >< acc)))
@@ -54,7 +62,10 @@
                         bs (patch-with be k tgt off w (fix-a x))
                         (o-walk be >items labels wkset internal? rset (off + w)
                                 ((rev bs) + bacc) racc))
-                    (: fill (? (member? k '(b26 b19 adrp21 addlo12)) (le32 (fix-a x))
+                    (: fill (? (member? k '(b26 b19 adrp21 addlo12 j21)) (le32 (fix-a x))
+                               ; a surviving riscv 'pcrel: the aux packs BOTH base words (auipc low,
+                               ; the I-insn high) -- lay them as the 8-byte placeholder CALL_PLT patches
+                               (id? k 'pcrel) ((le32 ((fix-a x) % 4294967296)) + (le32 ((fix-a x) // 4294967296)))
                                ; ARM is REL, not RELA: the addend rides IN the field. a surviving thumb
                                ; branch holds its base encoding with the -4 PIPELINE addend baked in (the
                                ; field is pc=instr+4 relative, but the reloc's P is the instr address, so
@@ -326,8 +337,12 @@
     (? (arm32? target)
        (objelf32 target textforms dataforms funcnames globnames wknames nifforms)
     (: a64 (member? target '(arm64 aarch64))
-       _ (? (|| (id? target 'x64) a64) 0 (scare 'obj-target target))
-       rset (? a64 '(b26 b19) '(rel32 rel8))         ; the in-place-resolvable kinds (translation-invariant)
+       rv (member? target '(riscv64 rv64))
+       _ (? (|| (id? target 'x64) (|| a64 rv)) 0 (scare 'obj-target target))
+       ; the in-place-resolvable kinds (translation-invariant). riscv's BOTH label
+       ; kinds are pure byte deltas (auipc is byte pc-relative by nature -- no page
+       ; math), so intra-.text la/call/jmp all resolve inside the .o.
+       rset (? a64 '(b26 b19) rv '(j21 pcrel) '(rel32 rel8))
        machine (peep elf-machines target 0)
        be (peep backends target ())
        ; a WEAK-defined function's callers must go through a RELOCATION -- an
@@ -412,7 +427,18 @@
            (o-has? nlabels lbl) `(3 (peep nlabels lbl 0))
            `((peep extidx lbl 0) 0))
        reltext
-        (? !a64
+        (? rv
+           ; riscv: every surviving text fixup is one of the two label kinds --
+           ; a 'pcrel pair (call/la, CALL_PLT) or a wide branch's 'j21 (JAL),
+           ; both S+A-P via the target's section symbol + offset (or its own
+           ; symbol when weak/external -- secsym's rule).
+           (catall (map (\ r
+              (: off <r k <>r lbl <>>r
+                 (? (id? k 'pcrel) (: sl (secsym lbl) (o-rela off <sl rr-call <>sl))
+                    (id? k 'j21)   (: sl (secsym lbl) (o-rela off <sl rr-jal <>sl))
+                    (scare 'obj-rv-fix k))))
+              trel))
+           !a64
            (catall (map (\ r
               (: off <r lbl <>>r pv <>>>>r
                  (? (&& (o-has? wkset lbl) (o-has? fnidx lbl))   ; a weak-defined fn: bind its OWN symbol (overridable)
@@ -441,7 +467,7 @@
               trel)))
        ; an abs64 pointer out of a DATA-class section (.data or ai_nifs): via the
        ; target's section symbol + its offset, or an external's own symbol
-       rabs (? a64 ra-abs64 r-64)
+       rabs (? a64 ra-abs64 rv rr-64 r-64)
        (reldat1 rs)
         (catall (map (\ r
            (: off <r lbl <>>r ad <>>>r               ; ad = the constant byte offset (&arr[i])
