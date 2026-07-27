@@ -9,9 +9,16 @@ gated by `make test_reef`; a hunk is test/patch.l's proven `chg` at file grain
   copy the missing blobs + patches (content-addressed, so the union just fills
   gaps), re-derive tips + snap from the *whole* patch set (order-free — the DAG
   is a pure function of its patches), then materialize the merged snap onto a
-  **clean** working tree (a dirty tree refuses, exit 1). Same-path divergence
-  warns and the topo-latest write wins; a *convergent* write (two nests reach the
-  same content) is silent.
+  **clean** working tree (a dirty tree refuses, exit 1). A *convergent* write
+  (two nests reach the same content) is silent. Same-path divergence **merges**:
+  the incoming hunk names the content hash it expected, so the common ancestor is
+  already in the store and the three sides go to a diff3 line merge
+  ([`crew/reef/merge.l`](../crew/reef/merge.l)) — disjoint edits to one file both
+  survive, and only a true overlap lands in `<<<<<<<` markers naming both
+  patches, whereupon sync reports and exits 1. The resolution is an ordinary
+  `record`, so no new verb: the fix is a patch like any other, and it settles the
+  clash for good. A delete meeting an edit, or a binary file, cannot line-merge —
+  those keep the **content** (never the deletion), name both blobs, and flag.
 - **`hatch [CMD..]`** is the derivation — the local-rebuild path of §2. It hatches
   the *recorded* state (a dirty tree refuses), runs the nest's build recipe (`CMD..`
   or a `.reef/hatch` config `(hatch (recipe ..) (out PATH))`; for love the recipe is

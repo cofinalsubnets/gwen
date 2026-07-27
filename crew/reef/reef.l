@@ -222,24 +222,55 @@
               (: _ (: (mk m) (? (two? m) (: _ (pin have <m 1) (mk >m)) ()) (mk b))
                  (pass (acc + b)))))
        (pass ()))
-   (rf-derive-snap ids)                                          ; fold the DAG -> ((path chash pid)..) sorted
-    (: order (rf-topo ids) snap (tablet 0)
+   ; --- a diverged write: two patches wrote one path from a shared base. the
+   ;     base is FREE -- the incoming hunk names the content hash it expected --
+   ;     so the three-way merge has all three sides in the store and most
+   ;     divergence resolves itself (crew/reef/merge.l). answers
+   ;     (chash nconflicts note): nconflicts 0 is a clean merge, and the note is
+   ;     what the report tells. a side that is ABSENT (a delete meeting an edit)
+   ;     or BINARY cannot line-merge: keep the CONTENT, never the deletion, and
+   ;     call it a conflict -- the loser stays addressable in the store ---
+   (rf-bin? s) (: n (tally s) (go i) (? (n <= i) 0 ((s i) = 0) 1 (go (i + 1))) (go 0))
+   (rf-sh h) (? h (snip h 0 12) "()")
+   (rf-bl h) (? (! h) `(1 "") (rf-look (".reef/blob/" + h)))     ; (1 text) | () -- presence, not net
+   (rf-merge old curh nw curpid pid)
+    (: bw (rf-bl old) ow (rf-bl curh) tw (rf-bl nw)
+       (? (! nw) `(curh 1 ("kept the edit -- " + (rf-sh pid) + " deletes what " + (rf-sh curpid) + " wrote"))
+          (! curh) `(nw 1 ("kept the edit -- " + (rf-sh pid) + " writes what was deleted here"))
+          (! (&& (two? ow) (two? tw)))
+             `(curh 1 ("a blob is missing, cannot merge -- kept " + (rf-sh curh)))
+          (: bt (? (two? bw) <>bw "") ot <>ow tt <>tw
+             (? (|| (rf-bin? bt) (|| (rf-bin? ot) (rf-bin? tt)))
+                `(curh 1 ("binary, cannot merge -- kept " + (rf-sh curh) + ", incoming " + (rf-sh nw)))
+                (: r (rmerge bt ot tt ("recorded (" + (rf-sh curpid) + ")")
+                                      ("incoming (" + (rf-sh pid) + ")"))
+                   mh (rf-keep <r) n (<>r)
+                   (? (0 = n) `(mh 0 "both sides kept")
+                      `(mh n ((show n) + " region" + (? (1 = n) "" "s") + " left in markers"))))))))
+   (rf-derive-snap ids)                                          ; fold the DAG -> (snap conflicts)
+    (: order (rf-topo ids) snap (tablet 0) cf (tablet 0)
        _ (: (go m) (? (! (two? m)) ()
                (: pid <m f (rf-patch pid)
                   _ (: (h1 hs) (? (! (two? hs)) ()
                           (: h <hs p <h old <>h nw <>>h
                              cur (peep snap p ()) curh (? (two? cur) <cur ())
-                             _ (? (curh = old) ()                        ; wrote onto the expected base
-                                  (nw = curh) ()                        ; ...or converges to the same content
-                                  (say err ("reef: divergence on " + p + "\n")))
-                             _ (? (! nw) (pull snap p 0) (pin snap p (list nw pid)))
+                             curpid (? (two? cur) <>cur ())
+                             _ (? (|| (curh = old) (nw = curh))    ; the expected base, or convergent
+                                  (: _ (pull cf p 0)               ; a later patch can settle an earlier clash
+                                     (? (! nw) (pull snap p 0) (pin snap p (list nw pid))))
+                                  (: m (rf-merge old curh nw curpid pid)
+                                     _ (pin snap p (list <m pid))
+                                     _ (pin cf p (list (<>m) (<>>m)))
+                                     ()))
                              (h1 >hs)))
                        (h1 (rf-fld f 'hunks)))
                   (go >m)))
             (go order))
        (: (em ps a) (? (! (two? ps)) (rev a)
             (: p <ps e (peep snap p ()) (em >ps (link (list p <e <>e) a))))
-          (em (sort (keys snap)) ())))
+          (cm ps a) (? (! (two? ps)) (rev a)
+            (: p <ps e (peep cf p ()) (cm >ps (link (list p <e <>e) a))))
+          `((em (sort (keys snap)) ()) (cm (sort (keys cf)) ()))))
    (rf-mkparents p)                                              ; mkdir every "/"-prefix of a nested path
     (: (go i) (? (< i (tally p))
                  (: _ (? ((p i) = 47) (mkdir (snip p 0 i) 493) ()) (go (i + 1)))
@@ -267,12 +298,24 @@
              nb (rf-sync-dir "blob" peer) np (rf-sync-dir "patch" peer)
              ids (readdir ".reef/patch")
              _ (rf-lay ".reef/tips" (show (rf-derive-tips ids)))
-             newsnap (rf-derive-snap ids)
+             dr (rf-derive-snap ids)
+             newsnap <dr cfs <>dr
              _ (rf-lay ".reef/snap" (show newsnap))
              nc (rf-mater oldsnap newsnap)
+             ; the divergence report: a clean merge is news, a marker is a stop
+             nleft (: (go m n) (? (! (two? m)) n
+                        (: e <m p <e k <>e
+                           _ (say (? (0 = k) out err)
+                                  ("reef: " + (? (0 = k) "merged " "CONFLICT in ") + p
+                                   + " -- " + (<>>e) + "\n"))
+                           (go >m (? (0 = k) n (n + 1)))))
+                      (go cfs 0))
              _ (puts ("reef: synced -- " + (show (tally ids)) + " patches (" + (show np)
-                      + " new), " + (show nb) + " blobs, " + (show nc) + " files updated\n"))
-             (tally ids))))
+                      + " new), " + (show nb) + " blobs, " + (show nc) + " files updated"
+                      + (? (0 = nleft) "" (", " + (show nleft) + " conflicted")) + "\n"))
+             _ (? (0 = nleft) ()
+                  (say err "reef: settle the flagged paths, then record -- the resolution is a patch\n"))
+             (? (0 = nleft) (tally ids) 0))))
 
    ; --- hatch: (source_tree, arch) -> a native seed. the local derivation
    ;     (doc/hatch.md's fallback path: rebuild from a present binary). we hatch
@@ -333,7 +376,9 @@
 usage: reef VERB ..
   record [NOTE]   working changes -> a patch in the store (.reef/)
   sync PEER       union a peer nest's store (a dir holding .reef/), then
-                  re-derive tips + snap and materialize onto a clean tree
+                  re-derive tips + snap and materialize onto a clean tree.
+                  two patches on one path three-way merge; a true overlap
+                  lands in markers and exits 1 -- resolve, then record
   hatch [CMD..]   build the recorded source into a native seed (the recipe is
                   CMD.. or .reef/hatch), fingerprint + ledger it by patch set
   log             the patches, newest first (* marks a tip)

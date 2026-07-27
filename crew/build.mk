@@ -64,7 +64,7 @@ out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
 	@chmod 755 $@
 # reef: the patch-set vcs (crew/reef/reef.l over the kore text+diff floor;
 # doc/reef.md). its own catted shebang script, the mooncc precedent.
-reeffiles = crew/kore/text.l crew/kore/diff.l crew/reef/reef.l
+reeffiles = crew/kore/text.l crew/kore/diff.l crew/reef/merge.l crew/reef/reef.l
 out/host$(hsuf)/reef: $(reeffiles)
 	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(reeffiles); } > $@

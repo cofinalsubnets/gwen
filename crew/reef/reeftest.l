@@ -17,7 +17,7 @@
    _ (mkdir "junk" 493)
    _ (rf-lay "junk/x" "never\n")
    _ (rf-mk ())
-   _ (rf-lay ".reef/ignore" "junk\npr\nnest2\n")        ; junk/ + the two nests we sync with
+   _ (rf-lay ".reef/ignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
    p1 (reef-record "first")
    s1 (rf-snap ())
    again (reef-record "again"))
@@ -114,6 +114,68 @@
  (0 < got2)                                               ; the fresh nest took the whole store
  (two? et)                                                ; ...materializing e.txt: present...
  (0 = (tally <>et)))                                      ; ...and 0 bytes
+
+; --- divergence on ONE path is a MERGE, not a coin flip. the incoming hunk
+;     names the base it expected, so all three sides sit in the store: disjoint
+;     edits to one file BOTH survive (the case that used to drop a side by hash
+;     order), a true overlap lands in markers and sync answers 0, and the
+;     resolution is an ordinary record -- after which the clash is settled for
+;     good. two nests under an ignored parent so the outer walk never sees them ---
+(: _ (mkdir "mrg" 493) _ (mkdir "mrg/a" 493)
+   _ (chdir "mrg/a")
+   _ (rf-lay "f" "one\ntwo\nthree\nfour\nfive\n")
+   _ (rf-mk ())
+   _ (reef-record "the base")
+   _ (mkdir "../b" 493) _ (chdir "../b") _ (rf-mk ())
+   _ (reef-sync "../a")
+   ; a moves the head, b moves the tail -- one file, disjoint regions
+   _ (chdir "../a") _ (rf-lay "f" "ONE\ntwo\nthree\nfour\nfive\n") _ (reef-record "a: the head")
+   _ (chdir "../b") _ (rf-lay "f" "one\ntwo\nthree\nfour\nFIVE\n") _ (reef-record "b: the tail")
+   gotm (reef-sync "../a")
+   mtext (<>(rf-look "f"))
+   cfm (<>(rf-derive-snap (readdir ".reef/patch")))
+   ; now both move the SAME line -- a real overlap
+   _ (chdir "../a") _ (rf-lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n") _ (reef-record "a: two")
+   _ (chdir "../b") _ (rf-lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n") _ (reef-record "b: two")
+   gotc (reef-sync "../a")
+   ctext (<>(rf-look "f"))
+   cfc (<>(rf-derive-snap (readdir ".reef/patch")))
+   ; the resolution is just a record
+   _ (rf-lay "f" "ONE\nRESOLVED\nthree\nfour\nFIVE\n")
+   _ (reef-record "resolve the overlap")
+   cfr (<>(rf-derive-snap (readdir ".reef/patch")))
+   ndirty (rf-dirty ())
+   _ (chdir "../.."))
+
+(assert
+ (mtext = "ONE\ntwo\nthree\nfour\nFIVE\n")               ; BOTH disjoint edits survived
+ (0 < gotm)                                              ; ...and it was not a conflict
+ (1 = (tally cfm)) (0 = (<><cfm))                        ; one merge, zero regions unresolved
+ (0 = gotc)                                              ; the overlap DID conflict: sync answers 0
+ (1 = (<><cfc))                                          ; ...one region
+ (member? "=======" (lines ctext))                       ; ...and the markers are in the file
+ (member? "A-TWO" (lines ctext))                         ; ...carrying BOTH sides, neither lost
+ (member? "B-TWO" (lines ctext))
+ (! cfr)                                                 ; the record settled it -- nothing left
+ (0 = ndirty))                                           ; ...and the tree matches the snap
+
+; --- the two sides that cannot line-merge: a delete meeting an edit keeps the
+;     CONTENT (a deletion would be the one lossy answer), and flags it ---
+(: _ (chdir "mrg/a")
+   _ (rf-lay "g" "keep\nme\n") _ (reef-record "g is born")
+   _ (chdir "../b") _ (reef-sync "../a")
+   _ (chdir "../a") _ (unlink "g") _ (reef-record "a: g dies")
+   _ (chdir "../b") _ (rf-lay "g" "keep\nme too\n") _ (reef-record "b: g edited")
+   gotd (reef-sync "../a")
+   gtext (rf-look "g")
+   cfd (<>(rf-derive-snap (readdir ".reef/patch")))
+   _ (chdir "../.."))
+
+(assert
+ (0 = gotd)                                              ; a delete against an edit is a conflict
+ (two? gtext)                                            ; the file is STILL THERE...
+ ((<>gtext) = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
+ (1 = (tally (filter (\ e ("g" = <e)) cfd))))            ; ...and g is named in the report
 
 ; --- hatch: build the recorded source into a native seed, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
