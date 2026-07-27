@@ -1,6 +1,7 @@
 #ifndef _AI_SYS_STAT_H
 #define _AI_SYS_STAT_H
-#include <time.h>   /* struct timespec */
+#include <time.h>       /* struct timespec */
+#include <sys/types.h>  /* mode_t etc -- POSIX says stat.h provides them (busybox leans on it) */
 #ifdef __aarch64__
 /* the asm-generic kernel struct stat (aarch64): 128 bytes, st_mode before
  * st_nlink and both 32-bit -- what newfstatat fills verbatim */

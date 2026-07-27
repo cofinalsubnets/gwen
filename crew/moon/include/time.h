@@ -1,6 +1,8 @@
 #ifndef _AI_TIME_H
 #define _AI_TIME_H
 typedef long time_t;
+typedef long clock_t;
+#define CLOCKS_PER_SEC 1000000
 struct timespec { long tv_sec; long tv_nsec; };
 /* glibc layout -- a hosted (cc-built) object links libc's localtime, so the
    field order + the two GNU extensions (tm_gmtoff/tm_zone) must match. */
@@ -21,4 +23,5 @@ unsigned long strftime(char*, unsigned long, char const*, struct tm const*);
 int clock_gettime(int, struct timespec*);
 int nanosleep(struct timespec const*, struct timespec*);
 time_t time(time_t*);
+clock_t clock(void);
 #endif

@@ -25,6 +25,7 @@
 #include <signal.h>
 #include <setjmp.h>
 #include <poll.h>
+#include <locale.h>
 #include <time.h>
 #include <utime.h>
 #include <dirent.h>
@@ -272,6 +273,8 @@ int isprint(int c) { return c >= 32 && c < 127; }
 int iscntrl(int c) { return (c >= 0 && c < 32) || c == 127; }
 int ispunct(int c) { return isprint(c) && c != 32 && !isalnum(c); }
 int tolower(int c) { return (c >= 65 && c <= 90) ? c + 32 : c; }
+int toupper(int c) { return (c >= 97 && c <= 122) ? c - 32 : c; }
+int isgraph(int c) { return c > 32 && c < 127; }
 char *strchr(char const *s, int c) { for (;; s++) { if (*s == (char) c) return (char *) s; if (!*s) return 0; } }
 /* the classic table (errno 1..34), the range real packages print; past it the
  * number speaks for itself. the texts are the canonical POSIX ones -- m4's
@@ -298,6 +301,39 @@ int strcasecmp(char const *a, char const *b) {
 int strncasecmp(char const *a, char const *b, size_t n) {
   while (n && *a && tolower((unsigned char) *a) == tolower((unsigned char) *b)) { a++; b++; n--; }
   return n ? tolower((unsigned char) *a) - tolower((unsigned char) *b) : 0; }
+int strcoll(char const *a, char const *b) { return strcmp(a, b); }   /* the "C" locale IS strcmp */
+char *strstr(char const *h, char const *n) {
+  size_t nl = strlen(n);
+  if (!nl) return (char *) h;
+  for (; *h; h++)
+    if (*h == *n && !strncmp(h, n, nl)) return (char *) h;
+  return 0; }
+char *strpbrk(char const *s, char const *set) {
+  for (; *s; s++) if (strchr(set, *s)) return (char *) s;
+  return 0; }
+char *strtok(char *s, char const *sep) {
+  static char *nxt;
+  if (!s) s = nxt;
+  if (!s) return 0;
+  s += strspn(s, sep);
+  if (!*s) { nxt = 0; return 0; }
+  char *e = s + strcspn(s, sep);
+  if (*e) { *e = 0; nxt = e + 1; } else nxt = 0;
+  return s; }
+char *strncat(char *d, char const *s, size_t n) {
+  char *p = d + strlen(d);
+  while (n-- && *s) *p++ = *s++;
+  *p = 0;
+  return d; }
+char *strdup(char const *s) {
+  size_t n = strlen(s) + 1;
+  char *d = malloc(n);
+  if (d) memcpy(d, s, n);
+  return d; }
+void *memchr(void const *p, int c, size_t n) {
+  unsigned char const *s = p;
+  for (; n; n--, s++) if (*s == (unsigned char) c) return (void *) s;
+  return 0; }
 
 /* ---- the plain syscall tail: one line each ---- */
 long read(int fd, void *b, long n) { return er(sc3(NR_read, fd, (long) b, n)); }
@@ -383,6 +419,10 @@ int mount(char const *src, char const *tgt, char const *ty, unsigned long fl, vo
   return (int) er(sc5(NR_mount, (long) src, (long) tgt, (long) ty, (long) fl, (long) d)); }
 int unshare(int fl) { return (int) er(sc1(NR_unshare, fl)); }
 int clock_gettime(int ck, struct timespec *ts) { return (int) er(sc2(NR_clock_gettime, ck, (long) ts)); }
+long clock(void) {                                 /* CLOCKS_PER_SEC is 1e6; clock 2 = CLOCK_PROCESS_CPUTIME_ID */
+  struct timespec ts;
+  if (clock_gettime(2, &ts) < 0) return -1;
+  return ts.tv_sec * 1000000 + ts.tv_nsec / 1000; }
 long pwrite(int fd, void const *b, unsigned long n, long off) { return er(sc4(NR_pwrite64, fd, (long) b, (long) n, off)); }
 int memfd_create(char const *name, unsigned int fl) { return (int) er(sc2(NR_memfd_create, (long) name, fl)); }
 int utimensat(int dfd, char const *p, struct timespec const *ts, int fl) {
@@ -426,6 +466,16 @@ struct tm *gmtime(time_t const *tp) {
   return &tm; }
 struct tm *localtime(time_t const *tp) { return gmtime(tp); }
 static void __d2(char *p, int v) { p[0] = (char) (48 + v / 10 % 10); p[1] = (char) (48 + v % 10); }
+double difftime(time_t a, time_t b) { return (double) (a - b); }
+time_t mktime(struct tm *tm) {                     /* the exact inverse of gmtime (UTC -- no tz, like localtime) */
+  long y = tm->tm_year + 1900, m = tm->tm_mon + 1, d = tm->tm_mday;
+  y -= m <= 2;
+  long era = (y >= 0 ? y : y - 399) / 400;
+  long yoe = y - era * 400;
+  long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;   /* Hinnant days-from-civil */
+  long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  long days = era * 146097 + doe - 719468;
+  return days * 86400 + tm->tm_hour * 3600L + tm->tm_min * 60L + tm->tm_sec; }
 char *asctime(struct tm const *tm) {
   static char b[26];
   static char const *wd = "SunMonTueWedThuFriSat";
@@ -447,6 +497,43 @@ char *asctime(struct tm const *tm) {
   b[24] = 10; b[25] = 0;
   return b; }
 char *ctime(time_t const *tp) { return asctime(gmtime(tp)); }
+/* strftime: the everyday conversions (lua's os.date; %c is the asctime lay).
+ * unknown specifiers echo literally; answers 0 when the buffer runs out. */
+size_t strftime(char *s, size_t max, char const *fmt, struct tm const *tm) {
+  static char const *wdl = "Sunday\0   Monday\0   Tuesday\0  Wednesday\0Thursday\0 Friday\0   Saturday";
+  static char const *mol = "January\0  February\0 March\0    April\0    May\0      June\0     "
+                           "July\0     August\0   September\0October\0  November\0 December";
+  size_t n = 0;
+  char b[26];
+  for (; *fmt; fmt++) {
+    char const *p = 0;
+    int v = -1, w = 2;
+    if (*fmt != '%') { if (n + 1 >= max) return 0; s[n++] = *fmt; continue; }
+    fmt++;
+    switch (*fmt) {
+      case 'Y': v = tm->tm_year + 1900; w = 4; break;
+      case 'y': v = (tm->tm_year + 1900) % 100; break;
+      case 'm': v = tm->tm_mon + 1; break;
+      case 'd': v = tm->tm_mday; break;
+      case 'H': v = tm->tm_hour; break;
+      case 'M': v = tm->tm_min; break;
+      case 'S': v = tm->tm_sec; break;
+      case 'j': v = tm->tm_yday + 1; w = 3; break;
+      case 'p': p = tm->tm_hour < 12 ? "AM" : "PM"; break;
+      case 'a': memcpy(b, wdl + tm->tm_wday * 10, 3); b[3] = 0; p = b; break;
+      case 'A': p = wdl + tm->tm_wday * 10; break;
+      case 'b': memcpy(b, mol + tm->tm_mon * 10, 3); b[3] = 0; p = b; break;
+      case 'B': p = mol + tm->tm_mon * 10; break;
+      case 'c': { char *a = asctime(tm); memcpy(b, a, 24); b[24] = 0; p = b; break; }
+      case 'x': { snprintf(b, sizeof b, "%02d/%02d/%02d", tm->tm_mon + 1, tm->tm_mday, (tm->tm_year + 1900) % 100); p = b; break; }
+      case 'X': { snprintf(b, sizeof b, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec); p = b; break; }
+      case '%': p = "%"; break;
+      default:  b[0] = '%'; b[1] = *fmt; b[2] = 0; p = b; break; }
+    if (v >= 0) { snprintf(b, sizeof b, w == 4 ? "%04d" : w == 3 ? "%03d" : "%02d", v); p = b; }
+    if (p) { size_t l = strlen(p); if (n + l >= max) return 0; memcpy(s + n, p, l); n += l; } }
+  if (n >= max) return 0;
+  s[n] = 0;
+  return n; }
 void *mmap(void *a, long n, int prot, int fl, int fd, long off) {
   long r = sc6(NR_mmap, (long) a, n, prot, fl, fd, off);
   if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return (void *) -1; }
@@ -578,6 +665,8 @@ long atol(char const *s) {
   if (*s == '-') { sign = -1; s++; } else if (*s == '+') s++;
   while (*s >= '0' && *s <= '9') { v = v * 10 + (*s - '0'); s++; }
   return sign * v; }
+int abs(int v) { return v < 0 ? -v : v; }
+long labs(long v) { return v < 0 ? -v : v; }
 
 /* ---- env ---- */
 char *getenv(char const *k) {
@@ -628,6 +717,7 @@ struct _IO_FILE {
   int wr;                                    /* open for writing */
   int line;                                  /* flush on newline */
   int err;
+  int eof;                                   /* a read hit end-of-file (feof) */
   int heap;                                  /* buf and FILE both off malloc (fopen) */
   int pid;                                   /* popen's child, for pclose's wait */
   int un;                                    /* ungetc's pushback byte + 1 (0 = none) */
@@ -660,6 +750,12 @@ void setbuf(FILE *f, char *buf) {          /* NULL = unbuffered (m4 -e); else a 
   __fdrain(f);
   if (buf) { f->buf = (unsigned char *) buf; f->cap = 8192; f->line = 0; }
   else f->cap = 0; }
+int setvbuf(FILE *f, char *buf, int mode, size_t size) {
+  __fdrain(f);
+  if (mode == _IONBF) { f->cap = 0; f->line = 0; return 0; }
+  if (buf && size) { f->buf = (unsigned char *) buf; f->cap = (int) size; }
+  f->line = mode == _IOLBF;
+  return 0; }
 int fputc(int c, FILE *f) {
   unsigned char b = (unsigned char) c;
   if (!f->cap) { if (__wall(f->fd, &b, 1) < 0) { f->err = 1; return EOF; } return b; }
@@ -685,7 +781,7 @@ size_t fread(void *p, size_t sz, size_t n, FILE *f) {
   while (got < total) {
     long k = read(f->fd, d + got, (long) (total - got));
     if (k < 0) { if (__errno_v == EINTR) continue; f->err = 1; break; }
-    if (k == 0) break;
+    if (k == 0) { f->eof = 1; break; }
     got += (size_t) k; }
   return sz ? got / sz : 0; }
 FILE *fopen(char const *path, char const *mode) {
@@ -709,9 +805,22 @@ int fclose(FILE *f) {
   if (close(f->fd) < 0) r = EOF;
   if (f->heap) free(f);
   return r; }
+FILE *freopen(char const *path, char const *mode, FILE *f) {
+  __fdrain(f);                                     /* the stream KEEPS its FILE (and its buffer) -- only the fd turns over */
+  close(f->fd);
+  int fl = O_RDONLY, wr = 0;
+  if (mode[0] == 'w') { fl = O_WRONLY | O_CREAT | O_TRUNC; wr = 1; }
+  else if (mode[0] == 'a') { fl = O_WRONLY | O_CREAT | O_APPEND; wr = 1; }
+  for (char const *m = mode + 1; *m; m++)
+    if (*m == '+') { fl = (fl & ~3) | O_RDWR; wr = 1; }
+  int fd = open(path, fl, 438);
+  if (fd < 0) return 0;
+  f->fd = fd; f->wr = wr; f->err = 0; f->eof = 0; f->un = 0; f->len = 0; f->pid = 0;
+  return f; }
 int fseek(FILE *f, long off, int wh) {
   if (__fdrain(f)) return -1;
   f->un = 0;                                 /* ISO: a seek discards the pushback */
+  f->eof = 0;                                /* and clears the end-of-file flag */
   return lseek(f->fd, off, wh) < 0 ? -1 : 0; }
 void rewind(FILE *f) {
   if (fseek(f, 0, 0) == 0) f->err = 0; }
@@ -892,7 +1001,7 @@ char *fgets(char *buf, int n, FILE *f) {
   while (i < n - 1) {
     char c;
     long k = read(f->fd, &c, 1);
-    if (k <= 0) { if (i == 0) return 0; break; }
+    if (k <= 0) { if (k == 0) f->eof = 1; if (i == 0) return 0; break; }
     buf[i++] = c;
     if (c == 10) break; }
   buf[i] = 0;
@@ -1084,6 +1193,69 @@ long strtol(char const *s, char **endptr, int base) {
   if (endptr) *endptr = (char *) (any ? p : s);
   return any ? sign * rc : 0; }
 double atof(char const *s) { return strtod(s, 0); }
+/* the libc math faces over the am floor (am.c's seven transcendentals ride
+ * m_am.o in every ladder link); the rest are exact derivations. tan and the
+ * arc trio are DERIVED (a few ulp looser than a dedicated kernel) -- enough
+ * for the ladder; a consumer that measures gets its own am kernel. */
+double am_sqrt(double), am_exp(double), am_log(double);
+double am_sin(double), am_cos(double), am_atan2(double, double), am_pow(double, double);
+double sqrt(double x) { return am_sqrt(x); }
+double exp(double x) { return am_exp(x); }
+double log(double x) { return am_log(x); }
+double sin(double x) { return am_sin(x); }
+double cos(double x) { return am_cos(x); }
+double tan(double x) { return am_sin(x) / am_cos(x); }
+double pow(double x, double y) { return am_pow(x, y); }
+double atan2(double y, double x) { return am_atan2(y, x); }
+double atan(double x) { return am_atan2(x, 1.0); }
+double asin(double x) { return am_atan2(x, am_sqrt(1.0 - x * x)); }
+double acos(double x) { return am_atan2(am_sqrt(1.0 - x * x), x); }
+double log2(double x) { return am_log(x) * 1.4426950408889634; }
+double log10(double x) { return am_log(x) * 0.4342944819032518; }
+double sinh(double x) { double e = am_exp(x); return (e - 1.0 / e) / 2.0; }
+double cosh(double x) { double e = am_exp(x); return (e + 1.0 / e) / 2.0; }
+double tanh(double x) { double e = am_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
+double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
+static double __trunc9(double x) {                 /* |x| < 2^52 assumed */
+  double t = (double) (long) x;
+  return t; }
+double floor(double x) {
+  if (x != x || x >= 9007199254740992.0 || x <= -9007199254740992.0) return x;
+  double t = __trunc9(x);
+  return t > x ? t - 1.0 : t; }
+double ceil(double x) {
+  if (x != x || x >= 9007199254740992.0 || x <= -9007199254740992.0) return x;
+  double t = __trunc9(x);
+  return t < x ? t + 1.0 : t; }
+double fmod(double x, double y) {
+  if (y == 0.0 || x != x || y != y) return 0.0 / 0.0;
+  double q = x / y;
+  if (q >= 9007199254740992.0 || q <= -9007199254740992.0) return 0.0;   /* quotient past exact-int: stance */
+  double r = x - __trunc9(q) * y;
+  return r; }
+/* frexp/ldexp: exact exponent surgery on the IEEE bits (no math floor needed) */
+double frexp(double x, int *e) {
+  union { double d; unsigned long u; } b;
+  b.d = x;
+  int ex = (int) ((b.u >> 52) & 2047);
+  *e = 0;
+  if (ex == 2047 || x == 0) return x;              /* inf/nan/0 ride through, *e 0 */
+  if (ex == 0) {                                   /* denormal: normalize by 2^64 first */
+    b.d = x * 18446744073709551616.0;
+    ex = (int) ((b.u >> 52) & 2047) - 64; }
+  *e = ex - 1022;
+  b.u = (b.u & 0x800ffffffffffffful) | 0x3fe0000000000000ul;
+  return b.d; }
+static double __e2d(int n) {                       /* 2^n for normal n */
+  union { double d; unsigned long u; } b;
+  b.u = ((unsigned long) (n + 1023)) << 52;
+  return b.d; }
+double ldexp(double x, int n) {                    /* x * 2^n, clamped through the rim in steps */
+  if (n > 1023) { x *= __e2d(1023); n -= 1023;
+    if (n > 1023) { x *= __e2d(1023); n -= 1023; if (n > 1023) n = 1023; } }
+  else if (n < -1022) { x *= __e2d(-969); n += 969;
+    if (n < -1022) { x *= __e2d(-969); n += 969; if (n < -1022) n = -1022; } }
+  return x * __e2d(n); }
 double strtod(char const *s, char **end) {
   char const *p = s;
   int sign = 1;
@@ -1212,6 +1384,15 @@ FILE *tmpfile(void) {
   FILE *f = fopen(buf, "w+");
   if (f) unlink(buf);
   return f; }
+int remove(char const *p) {                        /* the ISO face: unlink, a directory falls to rmdir */
+  int r = unlink(p);
+  return r == 0 ? 0 : rmdir(p); }
+char *tmpnam(char *s) {                            /* the ISO face over mktemp (lua's os.tmpname) */
+  static char b[20];
+  if (!s) s = b;
+  strcpy(s, "/tmp/aiXXXXXX");
+  mktemp(s);
+  return s[0] ? s : 0; }
 /* mktemp: fill the trailing XXXXXX from the pid and bump until the name is
  * free (racy by design -- the caller opens it; m4's diversion files). */
 char *mktemp(char *tmpl) {
@@ -1227,6 +1408,11 @@ char *mktemp(char *tmpl) {
   return tmpl; }
 /* one fixed "C" locale, so setlocale just answers its name. */
 char *setlocale(int cat, char const *loc) { (void) cat; (void) loc; return (char *) "C"; }
+struct lconv *localeconv(void) {                   /* the C locale's table: "." and empties */
+  static struct lconv c = { (char *) ".", (char *) "", (char *) "",
+    (char *) "", (char *) "", (char *) "", (char *) "", (char *) "",
+    (char *) "", (char *) "", 127, 127, 127, 127, 127, 127, 127, 127 };
+  return &c; }
 
 /* getc/fputs/ferror over the unbuffered read streams; fscanf reads char-by-char
  * (no ungetc, so it consumes the field terminator -- tar's lone use is "%d"). */
@@ -1234,14 +1420,17 @@ int getc(FILE *f) {
   unsigned char c;
   if (f->un) { int r = f->un - 1; f->un = 0; return r; }
   long k = read(f->fd, &c, 1);
-  if (k <= 0) { if (k < 0) f->err = 1; return EOF; }
+  if (k <= 0) { if (k < 0) f->err = 1; else f->eof = 1; return EOF; }
   return c; }
 int ungetc(int c, FILE *f) {
   if (c == EOF || f->un) return EOF;
   f->un = (c & 255) + 1;
+  f->eof = 0;
   return c & 255; }
 int fputs(char const *s, FILE *f) { size_t n = strlen(s); return fwrite(s, 1, n, f) == n ? 0 : EOF; }
 int ferror(FILE *f) { return f->err; }
+int feof(FILE *f) { return f->eof; }
+void clearerr(FILE *f) { f->err = 0; f->eof = 0; }
 /* sscanf, the string twin, %d only (m4 builtin.c's lone use: a divert number). */
 int sscanf(char const *s, char const *fmt, ...) {
   va_list ap; va_start(ap, fmt);

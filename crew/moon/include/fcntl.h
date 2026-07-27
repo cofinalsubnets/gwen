@@ -29,6 +29,20 @@
 #define F_SETFL          4
 #define F_DUPFD_CLOEXEC 1030   /* F_LINUX_SPECIFIC_BASE (1024) + 6 */
 #define FD_CLOEXEC       1
+/* POSIX record locks (sqlite's whole locking story rides these) */
+#define F_GETLK          5
+#define F_SETLK          6
+#define F_SETLKW         7
+#define F_RDLCK          0
+#define F_WRLCK          1
+#define F_UNLCK          2
+struct flock {
+  short l_type;
+  short l_whence;
+  long  l_start;
+  long  l_len;
+  int   l_pid;
+};
 int open(char const*, int, ...);
 int openat(int, char const*, int, ...);
 int creat(char const*, unsigned int);

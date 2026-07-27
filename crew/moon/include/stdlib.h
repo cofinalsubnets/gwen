@@ -30,6 +30,7 @@ long  strtoll(char const*, char**, int);
 unsigned long strtoull(char const*, char**, int);
 double strtod(char const*, char**);
 int   system(char const*);
+int   abs(int);
 long  labs(long);
 /* the pty quartet lives here in glibc (stdlib.h, not pty.h) */
 int   posix_openpt(int);
