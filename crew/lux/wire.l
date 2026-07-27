@@ -193,6 +193,8 @@
                               (: _ (x-w8 s 33) _ (x-w8 s 1) _ (x-w16 s 4) _ (x-w32 s root)
                                  _ (x-w16 s mods) _ (x-w8 s kc) _ (x-w8 s 1) _ (x-w8 s 1)
                                  _ (x-w8 s 0) _ (x-w8 s 0) (x-w8 s 0)))
+   (x-ungrabkeys s root) (: _ (x-w8 s 34) _ (x-w8 s 0) _ (x-w16 s 3)             ; UngrabKey AnyKey/AnyModifier: a regrab starts clean
+                            _ (x-w32 s root) _ (x-w16 s 32768) (x-w16 s 0))
 
    ; --- AllocNamedColor (85): a color NAME -> a pixel (the config's border colors) ---
    (x-color s cmap nm)

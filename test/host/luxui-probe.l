@@ -250,6 +250,55 @@
       _ (nudge ())
       _ (must "moor-refuses" (= "11" (ask "(+ 5 6)")))
       _ (must "moor-standing" (= i0 (ask chidx)))
+
+      ; --- 7. keybindings under a lock modifier: super+space (next-layout,
+      ;     read back through the moor's snapshot like leg 6) must fire with
+      ;     NumLock OFF -- and just the same with NumLock ON: a lock bit rides
+      ;     the KeyPress state, so the grab must cover the variant or every
+      ;     chord goes dead while plain typing sails on (the 2026-07-27
+      ;     symptom) ---
+      kmn (x-keymap s (scr-mink sc) (scr-maxk sc) (L 32 65407))                   ; space, Num_Lock
+      spk (peep kmn 32 0) nlk (peep kmn 65407 0)
+      _ (must "space-keycode" (< 0 spk)) _ (must "numlock-keycode" (< 0 nlk))
+      (chord u) (: _ (fake 2 sk 0 0) _ (rest 60) _ (fake 2 spk 0 0) _ (rest 60)
+                   _ (fake 3 spk 0 0) _ (rest 60) _ (fake 3 sk 0 0) (rest 100))
+      (numlock u) (: _ (fake 2 nlk 0 0) _ (rest 60) _ (fake 3 nlk 0 0) (rest 100))
+      _ (chord ())
+      _ (waitp "chord-flips" (\ u (! (= i0 (ask chidx)))) 50)                     ; the machinery works bare...
+      _ (numlock ())                                                              ; ...now latch NumLock
+      _ (chord ())
+      _ (waitp "chord-under-numlock" (\ u (= i0 (ask chidx))) 50)                 ; and the chord must still land (flip back to i0)
+      _ (numlock ())                                                              ; restore
+
+      ; --- 8. MappingNotify: poke one unused keycode's mapping (a stand-in for
+      ;     setxkbmap / a keyboard replug) -- lux re-resolves and regrabs, and
+      ;     the chord still lands ---
+      _ (: _ (x-w8 s 100) _ (x-w8 s 1) _ (x-w16 s 3) _ (x-w8 s 255) _ (x-w8 s 1)   ; ChangeKeyboardMapping: keycode 255 -> NoSymbol
+           _ (x-w16 s 0) _ (x-w32 s 0) (x-flush s))
+      _ (rest 200)                                                               ; let the regrab land
+      _ (chord ())
+      _ (waitp "chord-after-remap" (\ u (! (= i0 (ask chidx)))) 50)
+      _ (chord ())
+      _ (waitp "chord-after-remap-back" (\ u (= i0 (ask chidx))) 50)
+
+      ; --- 9. the back door: (lux-restart ()) over the moor execs in place.
+      ;     the old generation is marked through its lux-cell; the reborn moor
+      ;     answers with a FRESH cell (the marker gone), the SAME pid (exec),
+      ;     and the windows adopted. one connection per poll: a try that lands
+      ;     on the dying generation just answers wrong and is retried ---
+      (askonce q) (: p (connectu rsock)
+                     (? (! (lit? p)) ()
+                        (: _ (say p q) _ (say p "\n") _ (flush p)
+                           r (: (go acc) (: ch (see p)
+                                            (? (|| (= ch -1) (= ch 10)) acc (go (+ acc (+ "" ch)))))
+                                (go ""))
+                           _ (close p) r)))
+      _ (ask "(pin lux-cell 'gen 'old)")
+      pid0 (ask "(getpid 0)")
+      _ (say rc "(lux-restart ())\n") _ (flush rc)
+      _ (waitp "restart-reborn" (\ u (= "()" (askonce "(peep lux-cell 'gen ())"))) 100)
+      _ (waitp "restart-same-pid" (\ u (= pid0 (askonce "(getpid 0)"))) 50)
+      _ (waitp "restart-adopts" (\ u (any (\ k (= k wr)) (x-getprop-atoms s root a-li))) 100)
       _ (close rc)
 
       _ (close s3) _ (close s)

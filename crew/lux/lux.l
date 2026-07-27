@@ -22,7 +22,12 @@
 ; haven painter's law, absolute); with layout.l's open dispatch lane,
 ; (lay! (L my-closure state..)) swaps in a layout written at the prompt.
 ; The socket is an EVAL SERVER -- $XDG_RUNTIME_DIR (0700) when set, /tmp
-; otherwise (a socket refuses connect without write permission).
+; otherwise (a socket refuses connect without write permission). The socket
+; is also the BACK DOOR when the chords are dead or an install went in:
+;   echo '(lux-restart ())' | nc -U $XDG_RUNTIME_DIR/lux-<n>.sock
+; execs the script in place (same pid; the adoption sweep keeps every
+; window). The live socket is the one that ACCEPTS; dead generations'
+; leftovers are swept at moor start (lux-sweep).
 (: lux-cell #()
    (lux-st u) (peep lux-cell 'st ())
    ; a change QUEUES; the driver's loop drains at its next X event. On a live
@@ -47,9 +52,41 @@
    ; the moor: shore the socket, twirl a session per client -- read one form
    ; (sound keeps the read protocol), eval through the self-hosted ev, show
    ; the value back. deliberate orphans, like the dock's: lux runs forever.
-   (lux-sock u) (: rd (getenv "XDG_RUNTIME_DIR")
-                    base (? (< 1 (tally rd)) rd "/tmp")
-                    (+ base (+ "/lux-" (+ (lux-dispnum ()) ".sock"))))
+   (lux-rundir u) (: rd (getenv "XDG_RUNTIME_DIR")
+                     (? (< 1 (tally rd)) rd "/tmp"))
+   (lux-sock u) (+ (lux-rundir ()) (+ "/lux-" (+ (lux-dispnum ()) ".sock")))
+   ; the sweep: an exec'd restart and a dead Xephyr session both drop their
+   ; moor fd without unlinking, so lux-*.sock files pile up in the rundir.
+   ; probe every sibling: a refused connect is a dead one, unlink it; a live
+   ; other-display lux answers and keeps its socket.
+   (lux-sweep own)
+    (: dir (lux-rundir ())
+       (sockish? n) (&& (= (snip n 0 4) "lux-")
+                        (= (snip n (- (tally n) 5) (tally n)) ".sock"))
+       (dead? p) (: c (connectu p) (? c (: _ (close c) 0) 1))
+       (go ns acc) (? (! (two? ns)) acc
+                      (: p (+ dir (+ "/" (cap ns)))
+                         (? (&& (! (= p own)) (dead? p)) (: _ (unlink p) (go (cup ns) (link p acc)))
+                            (go (cup ns) acc))))
+       (go (filter sockish? (readdir dir)) ()))
+   ; our script path, either argv shape: plain `love lux` gives (script ..);
+   ; the -l shebang gives the RAW OS argv (love -l script ..) -- the -l operand
+   (lux-self u)
+    (: (go m) (? (! (two? m)) (cap argv)
+                 (= (cap m) "-l") (? (two? (cup m)) (caup m) (cap argv))
+                 (go (cup m)))
+       (go argv))
+   ; restart-in-place FROM THE MOOR -- the door when the chords are dead (a
+   ; wedged driver, an upgraded install): exec drops the CLOEXEC'd sockets,
+   ; the redirect releases, the new generation adopts every window. same pid.
+   ; the exact original argv first (exec is execvp, so `love` re-resolves off
+   ; PATH -- an upgraded binary lands on the FIRST restart, and a dev pile of
+   ; -l modules re-runs whole); the script and /proc/self/exe as fallbacks.
+   (lux-restart u) (: _ (say out "lux: restart over the moor -- exec\n") _ (flush out)
+                      _ (exec argv)
+                      _ (exec (L (lux-self ())))
+                      _ (exec (L "/proc/self/exe" (lux-self ())))
+                      'restart-failed)
    ; the session reads LINES (see parks the TASK -- the reader's park law) and
    ; sounds them off a tap: a memory port keeps the read protocol and cannot
    ; block, where (sound c ..) on the socket itself stalls the WHOLE vm in the
@@ -76,7 +113,10 @@
                                 (go ()))))))
        (go ()))
    (lux-moor path)
-    (: lp (shore path)
+    (: gone (lux-sweep path)
+       _ (? (two? gone) (: _ (say out (+ "lux: swept " (+ (show (tally gone)) " stale socket(s)\n")))
+                           (flush out)) 0)
+       lp (shore path)
        (? (! (lit? lp)) (: _ (say out (+ "lux: no moor at " (+ path "\n"))) (flush out))
           (: _ (say out (+ "lux: moored at " (+ path "\n")))
              _ (flush out)
@@ -109,13 +149,22 @@
    _ (x-cursor s root (+ (scr-idbase sc) 1) (+ (scr-idbase sc) 2))               ; setDefaultCursor xC_left_ptr
    _ (map (\ cmd (spawn cmd)) lux-startup)
 
-   ; --- keyboard: resolve the keymap's keysyms to keycodes, grab every chord ---
-   km (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms lux-keymap))
-   ktab (filter (\ r (> (caup r) 0))                                             ; rows (mods keycode action); keysym absent -> dropped
-                (map (\ r (L (kb-mods r) (peep km (kb-sym r) 0) (kb-act r))) lux-keymap))
-   _ (map (\ r (x-grab s root (cap r) (caup r))) ktab)
-   _ (x-flush s)
-   _ (line (+ "lux: grabbed " (+ (show (tally ktab)) " chords")))
+   ; --- keyboard: resolve the keymap's keysyms to keycodes, grab every chord.
+   ;     each chord is grabbed once per LOCK VARIANT (bare, CapsLock=2, Mod2=16,
+   ;     both): a latched lock rides the KeyPress state and an exact-modifier
+   ;     grab misses it -- every binding dead while plain typing sails on
+   ;     (kmodmask already masks the lock bits back out at match time). the
+   ;     table lives in a cell so MappingNotify can re-resolve and regrab. ---
+   (keys-resolve u) (: km (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms lux-keymap))
+                       (filter (\ r (> (caup r) 0))                              ; rows (mods keycode action); keysym absent -> dropped
+                               (map (\ r (L (kb-mods r) (peep km (kb-sym r) 0) (kb-act r))) lux-keymap)))
+   (keys-grab tab) (: _ (map (\ r (map (\ lm (x-grab s root (| lm (cap r)) (caup r))) '(0 2 16 18))) tab)
+                      (x-flush s))
+   ktabc #()
+   (ktab u) (peep ktabc 0 ())
+   _ (pin ktabc 0 (keys-resolve ()))
+   _ (keys-grab (ktab ()))
+   _ (line (+ "lux: grabbed " (+ (show (tally (ktab ()))) " chords")))
 
    ; --- rendering (the layout engine answers, X obeys) ---
    (nth l i) (? (< i 1) (cap l) (nth (cup l) (- i 1)))
@@ -164,11 +213,6 @@
           _ (line (+ "lux: view " (+ (show t) (+ " " (show (wsrow sh2))))))
           sh2))
    (msg-or old new) (? new new old)                                              ; keep the old layout when a message is unhandled (())
-   (lux-self u)                                                                   ; our script path, either argv shape: plain `love lux`
-    (: (go m) (? (! (two? m)) (cap argv)                                         ; gives (script ..); the -l shebang gives the RAW OS
-                 (= (cap m) "-l") (? (two? (cup m)) (caup m) (cap argv))         ; argv (love -l script ..) -- take the -l operand
-                 (go (cup m)))
-       (go argv))
 
    ; --- do-act: interpret one keys.l action. Returns by looping. ---
    (do-act a sh lay hist ffoc)
@@ -205,11 +249,12 @@
                                      (x-flush s)) 0)                             ; DestroyNotify does the eviction
                          _ (line (+ "lux: kill " (show fw))) (loop sh lay hist ffoc))
           (= k 'quit) (line "lux: quit")                                          ; fall out of the loop
-          (= k 'restart)                                                         ; restart-in-place: exec the SCRIPT (its shebang re-resolves
-          (: _ (line (+ "lux: restart -- exec, pid " (show (getpid 0))))          ; love off PATH, so an upgraded binary is picked up -- exec'ing
-             _ (exec (L (lux-self ())))                                           ; /proc/self/exe pins a deleted build forever); the CLOEXEC'd
-             _ (exec (L "/proc/self/exe" (lux-self ())))                          ; socket drops, the redirect releases, the new generation
-             _ (line "lux: restart failed") (loop sh lay hist ffoc))              ; ADOPTS the survivors (fallback: a dev run sans exec bit)
+          (= k 'restart)                                                         ; restart-in-place: exec the original argv (execvp, so love
+          (: _ (line (+ "lux: restart -- exec, pid " (show (getpid 0))))          ; re-resolves off PATH -- an upgraded binary lands first try,
+             _ (exec argv)                                                        ; and a dev pile of -l modules re-runs whole; exec'ing
+             _ (exec (L (lux-self ())))                                           ; /proc/self/exe would pin a deleted build forever). the
+             _ (exec (L "/proc/self/exe" (lux-self ())))                          ; CLOEXEC'd socket drops, the redirect releases, the new
+             _ (line "lux: restart failed") (loop sh lay hist ffoc))              ; generation ADOPTS the survivors
           (= k 'refresh) (relay sh lay ffoc)
           (= k 'reset-layout) (relay sh lux-layout ffoc)
           (= k 'toggle-struts) (: _ (ewmh-toggle ()) _ (line "lux: toggle struts") (relay sh lay ffoc))
@@ -364,9 +409,16 @@
                             (: sh2 (wsmap sh (zfocto w)) _ (render sh2 lay ()) _ (refocus sh2) (loop sh2 lay hist ()))))))
                 (= code 2)                                                       ; KeyPress: the table answers
                 (: kc (ev-detail e) stm (& (ev-state e) kmodmask)
-                   hit (afind (\ r (&& (= (cap r) stm) (= (caup r) kc))) ktab)
+                   hit (afind (\ r (&& (= (cap r) stm) (= (caup r) kc))) (ktab ()))
                    (? (two? hit) (do-act (nthl hit 2) sh lay hist ffoc)
                       (loop sh lay hist ffoc)))
+                (= code 34)                                                      ; MappingNotify: the keyboard/modifier map changed under us
+                (: rq (nthl (ev-raw e) 4)                                        ; (a replug, setxkbmap, xmodmap) -- stale keycodes would
+                   (? (= rq 2) (loop sh lay hist ffoc)                           ; leave every grab dead; pointer mapping (2) is not ours
+                      (: _ (x-ungrabkeys s root)
+                         tab (keys-resolve ()) _ (pin ktabc 0 tab) _ (keys-grab tab)
+                         _ (line (+ "lux: mapping changed -- regrabbed " (show (tally tab))))
+                         (loop sh lay hist ffoc))))
                 (= code 23)                                                      ; ConfigureRequest: TILED -> the layout answers, and the
                 (? (&& (wsknownw? sh win) (! (wsfloating? sh win)))              ; client is TOLD so -- a synthetic ConfigureNotify with the
                    (: _ (render sh lay ffoc) _ (x-confnotify s win) _ (x-flush s)   ; real geometry (silence leaves VTE drawing a phantom grid)

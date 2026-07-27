@@ -41,6 +41,14 @@
  _ (must 'display (&& (charm? dn) (! (two? (gather (cap xv))))))
  dpy (+ "/tmp/.X11-unix/X" (show dn))
 
+ ; a dead moor socket in the rundir: lux's sweep at moor start must fell it
+ ; (bind + close leaves the file behind, refusing connects -- the shape an
+ ; exec'd restart or a dead Xephyr session leaves)
+ rdir (: rd (getenv "XDG_RUNTIME_DIR") (? (< 1 (tally rd)) rd "/tmp"))
+ stale "lux-luxui-stale.sock"
+ _ (: p (shore (+ rdir (+ "/" stale))) (? p (close p) 0))
+ _ (must 'stale-planted (any (\ n (= n stale)) (readdir rdir)))
+
  ; the real driver, the same module set bin/lux ships (DISPLAY rides env)
  ph (mind `("env" (+ "DISPLAY=:" (show dn))
             "out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
@@ -64,6 +72,7 @@
  _ (echo (cup pr))
  _ (close (cup pr))
  _ (must 'probe-clean (= 0 (cap g)))
+ _ (must 'swept (! (any (\ n (= n stale)) (readdir rdir))))
 
  _ (strike ())
  _ (close (cup ph)) _ (close (cup xv))
