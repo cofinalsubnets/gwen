@@ -244,6 +244,7 @@
                              (? (ptr? it) <>it (arr? it) <>it
                                 (: pt (ptrarg ps <>e) (? (ptr? pt) <>pt (arr? pt) <>pt ()))))
              (k = 'cast) <>e
+             (k = 'str) `('arr 'char ((tally <>e) + 1))   ; a literal IS its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
              ())))
 
    ; -- declarators: stars XOR one array suffix, PLUS the function-pointer
