@@ -3193,12 +3193,14 @@
         (: elt <>ty n <>>ty
            (go l idx acc)
             (? (! (two? l)) `((rev acc) ())
-               (&& (< 0 n) (<= n idx)) `((rev acc) l)  ; array full -> the tail is the rest
                (: it <l
                   desig (<it = 'didx)
-                  ci (? desig <>it idx)
-                  pr (normelt g elt desig 'didx ci (elval it) l)
-                  (go <>pr (ci + 1) (link <pr acc))))
+                  ; full AND plain -> the tail is the rest; a designator may jump BACK
+                  ; ({ [2] = 9, [0] = 1 }), so it never ends the walk
+                  (? (&& (! desig) (&& (< 0 n) (<= n idx))) `((rev acc) l)
+                     (: ci (? desig <>it idx)
+                        pr (normelt g elt desig 'didx ci (elval it) l)
+                        (go <>pr (ci + 1) (link <pr acc))))))
            (go items 0 ()))
        (stru? ty)
         (: fields (cap (peep (g 'stag) <>ty 0))

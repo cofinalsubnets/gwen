@@ -759,17 +759,21 @@
 
    ; an initializer is an assignment-expr OR a brace list. a brace list is
    ; ('init (item..)); an item is a plain initializer, ('dfield name init),
-   ; or ('didx n init) -- designators are single (.field / [const]), and an
+   ; or ('didx n init) -- a designator CHAIN (.a.b = v, .a[i] = v, C99
+   ; 6.7.9) parses as a path and dbuild nests it, coalescing a consecutive
+   ; run that shares its head into ONE sub-init (musl's `.lim[0] = a,
+   ; .lim[1] = b` fills one member's two elements -- split items would
+   ; image the member twice, each zero-padding over the other). an
    ; initializer nests (array of struct, struct of array). trailing comma ok.
    (pinit ps ts)
     (? (peekp ts "{")
         (: (items ts2 acc)
-            (? (peekp ts2 "}") `(`('init (rev acc)) >ts2)
+            (? (peekp ts2 "}") `(`('init (dbuild (rev acc))) >ts2)
                (: it (pinititem ps ts2)
                   (? (! (two? it)) ()
                      (: elem <it ts3 <>it
                         (? (peekp ts3 ",") (items >ts3 (link elem acc))
-                           (peekp ts3 "}") `(`('init (rev (link elem acc))) >ts3)
+                           (peekp ts3 "}") `(`('init (dbuild (rev (link elem acc)))) >ts3)
                            ())))))
            (items >ts ()))
        ; a scalar initializer that FOLDS is its number -- `(Bits>>3)`-style macro
@@ -809,26 +813,48 @@
                          (go >l (ci + 1) (? (mx < (ci + 1)) (ci + 1) mx))))
                   (go items 0 0))))
        ())
-   (pinititem ps ts)
+   ; a designator path: (.name | [const-expr])+ then `=` -> ((('f name)|('i n)..) rest) | ()
+   (pdesigs ps ts acc)
     (? (peekp ts ".")
         (: t2 >ts
            (? (! (&& (two? t2) ((tkk <t2) = 'id))) ()
-              (: name (tkv <t2)
-                 r (want >t2 "=")
-                 (? (! (two? r)) ()
-                    (: v (pinit ps r)
-                       (? (two? v) `(`('dfield name <v) <>v) ()))))))
+              (pdesigs ps >t2 (link `('f (tkv <t2)) acc))))
        (peekp ts "[")
         (: er (pexpr ps >ts)                         ; a designator index: any const-expr ([KMint]=.., [2]=..)
            (? (! (two? er)) ()
               (: n (cfold <er)
                  r1 (want <>er "]")
-                 r2 (? (two? r1) (want r1 "=") ())
-                 (? (! (&& (charm? n) (two? r2))) ()
-                    (: v (pinit ps r2)
-                       (? (two? v) `(`('didx n <v) <>v) ()))))))
+                 (? (&& (charm? n) (two? r1)) (pdesigs ps r1 (link `('i n) acc)) ()))))
+       (! (two? acc)) ()
+       (: r (want ts "=")
+          (? (two? r) `((rev acc) r) ())))
+   ; the item stream carries (path value) pairs (path () = a plain item); dbuild
+   ; folds them into 'dfield/'didx items, one nested init per consecutive
+   ; same-head run, the value DIRECT when a lone path exhausts (today's shape)
+   (dbuild prs)
+    (? (! (two? prs)) ()
+       (: pv <prs path (cap pv) v (caup pv)
+          (? (! (two? path)) (link v (dbuild >prs))
+             (: h <path
+                (grab l acc)                         ; consecutive pairs whose head = h, stripped
+                 (? (! (two? l)) `((rev acc) ())
+                    (: p2 (cap <l)
+                       (? (&& (two? p2) (= <p2 h))
+                          (grab >l (link `((cup p2) (caup <l)) acc))
+                          `((rev acc) l))))
+                gr (grab >prs `(`(>path v)))
+                subs <gr
+                sub (dbuild subs)
+                node (? (&& (! (two? >subs)) (! (two? (cap <subs)))) <sub `('init sub))
+                (link `((? (id? <h 'f) 'dfield 'didx) <>h node) (dbuild <>gr))))))
+   (pinititem ps ts)                                 ; -> ((path value) rest) | ()
+    (? (|| (peekp ts ".") (peekp ts "["))
+        (: dr (pdesigs ps ts ())
+           (? (! (two? dr)) ()
+              (: v (pinit ps <>dr)
+                 (? (two? v) `(`(<dr <v) <>v) ()))))
        (: v (pinit ps ts)
-          (? (two? v) `(<v <>v) ())))
+          (? (two? v) `(`(() <v) <>v) ())))
 
    ; a constant-expression folder (for _Static_assert): an integer | () if the
    ; expression is not a compile-time constant. sizeof/enum already folded to num.
