@@ -26,6 +26,11 @@
 ; compound literal ('clit ty init), an unnamed object filled into a frame
 ; temp whose ADDRESS is the lvalue (so &(struct S){..} and (int){k} work).
 (:
+   ; FIRST binding on purpose: a plain VALUE folds EAGERLY when the baking
+   ; compiler reaches a reader (a lambda resolves lazily), and the fold order
+   ; is not textual -- anywhere later it scared `;; missing spush2` on every
+   ; image bake. the t32 pair push; spop2 lives with the other pair helpers.
+   spush2 '((sub sp sp 16) (st sp 0 r0) (st sp 4 r1))   ; a VALUE (nullary defines quote -- the (f) trap)
    ; the gen state g (a tablet): 'n the label counter, 'off the frame's
    ; high-water offset, 'brk/'cnt the loop label stacks, 'glob the global
    ; table (name -> (label ty init)), 'globs the emission order, 'strs the
@@ -701,7 +706,6 @@
    (pair? g ty) (&& (t32? g) (llt? ty))
    (pwide ty) (? (usg? ty) `(`('li 'r1 0)) `(`('mov 'r1 'r0) `('sar 'r1 31)))   ; widen r0 by its SOURCE signedness
    (asll g v) (? (llt? (vty v)) (tor0 g v) ((tor0 g v) + (pwide (vty v))))      ; land a pair on the protocol
-   spush2 `(`('sub 'sp 'sp 16) `('st 'sp 0 'r0) `('st 'sp 4 'r1))   ; a VALUE (nullary defines quote -- the (f) trap)
    (spop2 ra rb) `(`('ld ra 'sp 0) `('ld rb 'sp 4) `('add 'sp 'sp 16))
    ; pair load/store at base+off. a load whose base is r0 loads the HIGH word first (into r1),
    ; so the low load may then overwrite the base. pst's base must never be r0/r1 (use r2/r4/r12).
