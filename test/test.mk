@@ -1064,6 +1064,32 @@ test_extract: host
 	  proof/rocq/normalizer.ml proof/rocq/normalizer.mli proof/rocq/oracle_drive proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
 	  out/.extract_oracle.l
 endif
+# test_big: the BIGNUM lane vs a Rocq-extracted reference. coqc proves big.v's
+# decimal codec roundtrip (parse_print -- the process-boundary seam) plus the
+# quot-rem/gcd law witnesses, and extracts stdlib's binary Z (an independent
+# rep of love's native limbs / Karatsuba / Knuth-D) with the codec to OCaml.
+# big_drive.ml generates operand pairs -- the charm/sun/word rep edges, then
+# random digit strings up to ~900 digits -- computes each op with the extracted
+# reference, and emits a love program of decimal string comparisons: love's
+# READER, limb arithmetic, and PRINTER all against the proven codec. Found
+# abs-of-INTPTR_MIN wrapping on its first run. Needs coqc + ocamlopt; no-ops
+# without either, like test_extract.
+ifeq ($(and $(COQC),$(OCAMLOPT)),)
+test_big:
+	@echo "test_big: skipped (needs coqc + ocamlopt)"
+else
+test_big: host
+	@echo TEST proof/rocq/big.v "(coqc codec proof + extracted Z ref vs the limb lane)"
+	@cd proof/rocq && $(COQC) -q big.v >/dev/null \
+	  && rm -f bigref.mli && $(OCAMLOPT) -w -a bigref.ml big_drive.ml -o big_drive
+	@proof/rocq/big_drive 2000 1 > out/.big_oracle.l
+	@$m out/.big_oracle.l | grep -q "2000 / 2000 PASS" \
+	  || { echo "BIG ORACLE FAILED:"; $m out/.big_oracle.l; exit 1; }
+	@$m out/.big_oracle.l
+	@rm -f proof/rocq/big.vo proof/rocq/big.vok proof/rocq/big.vos proof/rocq/big.glob proof/rocq/.big.aux \
+	  proof/rocq/bigref.ml proof/rocq/bigref.mli proof/rocq/big_drive proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
+	  out/.big_oracle.l
+endif
 # the PROVE rung of the holo encoder ladder: machine-checked reference x86-64
 # encoders, each proving decode inverts encode (axiom-free, vm_compute over the
 # finite domain), extracted to OCaml, then differentially checked BYTE-IDENTICAL

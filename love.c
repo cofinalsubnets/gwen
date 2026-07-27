@@ -8729,10 +8729,10 @@ lvm(lvm_conj) {
 
 // (abs z): type-aware magnitude. Complex -> sqrt(re^2+im^2) (a float). Real ->
 // |z| in its own tier: fixnum stays fixnum (or boxes if |fix_min| overflows the
-// tag), float stays float, bignum stays bignum (just flips its sign). The lone
-// wart is a wide-int box holding INTPTR_MIN, whose magnitude needs a bignum --
-// rare enough to leave (it re-boxes INTPTR_MIN unchanged), same flavor as the
-// arith INT_MIN/-1 edge.
+// tag), float stays float, bignum stays bignum (just flips its sign). A wide-int
+// box holding INTPTR_MIN promotes to a bignum (the one magnitude the box can't
+// hold), matching the arith lanes' INT_MIN/-1 edge -- the big oracle caught the
+// old wrap here.
 lvm(lvm_abs) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t m = cplx_mod(a);
@@ -8743,6 +8743,12 @@ lvm(lvm_abs) {
  if (flop(a)) { ai_flo_t v = flo_get(a); if (v < 0) v = -v;
   Have(box_req); emit_flo(v); return Sp[0] = _res, Ip++, Continue(); }
  if (widep(a)) { intptr_t n = box_get(a);
+  if (n == INTPTR_MIN) {                              // |INTPTR_MIN| = 2^(W-1): the bignum lane
+   uintptr_t u = (uintptr_t) 1 << (Bits - 1);
+   Have(b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb)));
+   ai_limb lb[wlimbs];
+   for (int i = 0; i < wlimbs; i++) lb[i] = (ai_limb) (u >> (limb_bits * i));
+   return Sp[0] = ai_big_canon(&Hp, lb, wlimbs, false), Ip++, Continue(); }
   Have(box_req); emit_int(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
   return Sp[0] = _res, Ip++, Continue(); }
  if (bigp(a)) {

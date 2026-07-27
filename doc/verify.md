@@ -24,6 +24,7 @@ every run, so none of it can drift quietly.
 | proof/rocq/uugen.v | GENERATED from test/uu.l: terms uu's kernel checked, re-checked by coqc | test_uugen |
 | proof/lean/uugen.lean | the SAME uu corpus through Lean 4 -- a second, unrelated kernel | test_uulean |
 | proof/rocq/extract.v | the differential oracle's normalizer BUILT ON spec.v's proven subst/shift, extracted to OCaml | test_extract |
+| proof/rocq/big.v | the bignum lane's reference: stdlib binary Z + a PROVEN decimal codec (parse_print), extracted; big_drive fuzzes love's reader/limbs/printer against it | test_big |
 | proof/rocq/enc.v encmem.v encli.v | reference x86-64 encoders, decode inverts encode, byte-identical against holo | test_encver |
 
 every .v holds the axiom audit: no Axiom, no Admitted, no classical/funext escape
@@ -62,6 +63,16 @@ same way). the generators (spec2coq.l, uu2coq.l, uu2lean.l) run ON love -- a
 circularity, mitigated by keeping them small and auditable and by the second
 kernel. the C core and both compilers are UNPROVEN; they are held by the bridges
 above plus the corpus on every target. state it this way or not at all.
+
+on the C core specifically (~9k lines), the two levers rank clearly: SHRINKING
+is near its floor (what remains -- allocator, collector, dispatch, VM loop,
+limbs, reader/printer, c0, nifs -- is what can't leave; the big shrink already
+happened a layer down, when moon + holo pushed gcc/glibc/ld out), so the work
+is VERIFYING pieces against references, the encoder-ladder shape. the bignum
+lane is bridged now (big.v -- it caught abs-of-INTPTR_MIN wrapping on its first
+run); the next such rungs are the dispatch tables as data (dump through a nif,
+generate the lattice/monotonicity checks) and the GC copy loop (no-lost-object /
+no-double-copy in gc.v's vocabulary, a debug-build gate as the instance-check).
 
 ## the open seams, ranked
 

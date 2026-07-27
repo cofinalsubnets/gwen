@@ -217,6 +217,7 @@
 ; goes principal (the angle pi*e factored exactly), so the derived sqrt is total: ((/ 1 2) -1) = i.
 (assert
  (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs ~(3 4))) (2 = (int 2.9))
+ ((abs -9223372036854775808) = 9223372036854775808)   ; |sun min| overflows the word: the bignum lane (the big oracle caught the wrap)
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
  (2.0 = ((/ 1 2) 4)) (1024 = (10 2)) (1 = (0 e)) (2.718281828459045 = e))
 
