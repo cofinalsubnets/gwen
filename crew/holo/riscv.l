@@ -153,12 +153,19 @@
          (scare 'rv-badcc cond))
    ;; fp conds compute a 0/1 predicate into x31 (flt/fle/feq write GPRs, quiet on NaN), plus the
    ;; branch SENSE: 1 = taken when x31 is set, 0 = taken when clear (below = NOT ae, etc; p/np
-   ;; check both operands ordered). x86's ucomisd conds map: above/ae/below/be/eq/ne/p/np.
+   ;; check both operands ordered). x86's ucomisd conds map: above/ae/below/be/eq/ne/p/np -- and
+   ;; the SIGNED four read as A64's FCMP condition codes: gt/ge are unordered-FALSE, lt/le their
+   ;; exact complements (unordered-TRUE, so a branch on the NEGATED relation is NaN-honest --
+   ;; the arm-family convention moon's fcmp lanes lean on). so lt == below and le == be here.
    (rv-fp-pred cond fa fb)
       (? (cond = 'above) `((rv-r 0x51 fa fb 1 31 0x53) 1)                    ; flt.d x31, fb, fa
+         (cond = 'gt)    `((rv-r 0x51 fa fb 1 31 0x53) 1)
          (cond = 'be)    `((rv-r 0x51 fa fb 1 31 0x53) 0)
+         (cond = 'le)    `((rv-r 0x51 fa fb 1 31 0x53) 0)                    ; le = !gt (fires on NaN)
          (cond = 'ae)    `((rv-r 0x51 fa fb 0 31 0x53) 1)                    ; fle.d x31, fb, fa
+         (cond = 'ge)    `((rv-r 0x51 fa fb 0 31 0x53) 1)
          (cond = 'below) `((rv-r 0x51 fa fb 0 31 0x53) 0)
+         (cond = 'lt)    `((rv-r 0x51 fa fb 0 31 0x53) 0)                    ; lt = !ge (fires on NaN)
          (cond = 'eq)    `((rv-r 0x51 fb fa 2 31 0x53) 1)                    ; feq.d x31, fa, fb (ordered)
          (cond = 'ne)    `((rv-r 0x51 fb fa 2 31 0x53) 0)
          (cond = 'p)     `((catall `((rv-r 0x51 fa fa 2 31 0x53)             ; x31 = (fa ordered)

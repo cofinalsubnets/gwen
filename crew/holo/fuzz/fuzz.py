@@ -979,7 +979,9 @@ def rv_fldst(rng):
     return ir, chk
 
 RV_FHOP = {'above': ('flt.d', 1, 'beqz'), 'be': ('flt.d', 1, 'bnez'),
+           'gt': ('flt.d', 1, 'beqz'), 'le': ('flt.d', 1, 'bnez'),
            'ae': ('fle.d', 1, 'beqz'), 'below': ('fle.d', 1, 'bnez'),
+           'ge': ('fle.d', 1, 'beqz'), 'lt': ('fle.d', 1, 'bnez'),
            'eq': ('feq.d', 0, 'beqz'), 'ne': ('feq.d', 0, 'bnez')}
 def rv_fcmpbr(rng):
     cond = rng.choice(list(RV_FHOP)); a, b = rv_frand(rng), rv_frand(rng)

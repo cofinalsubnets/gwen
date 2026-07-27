@@ -53,8 +53,10 @@
                 (|| (s = "thumb2") (s = "cortex-m7")) 'thumb2
                 (|| (s = "thumb1") (s = "cortex-m0")) 'thumb1   ; ARMv6-M (RP2040 / Cortex-M0+)
                 (|| (s = "thumb2sp") (s = "playdate")) 'thumb2sp   ; ARMv7E-M with an SP-only FPU (STM32F746): f64 softens to __aeabi_*
-                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb2sp | thumb1)")))
-   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (member? tgt '(thumb2 thumb2sp thumb1)) "__arm__" "__x86_64__")
+                (|| (s = "riscv64") (|| (s = "riscv") (s = "rv64"))) 'riscv64   ; RV64IMFD LP64 (the pine64 ox64 / qemu-virt)
+                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb2sp | thumb1 | riscv64)")))
+   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (member? tgt '(thumb2 thumb2sp thumb1)) "__arm__"
+                    (id? tgt 'riscv64) "__riscv" "__x86_64__")
    ; the diagnostic driver (doc/moon-diag.md): a stage answered a gripe (a cause
    ; it named itself) or a bare bad. a gripe prints "cc: <file>:<line>:<col>: msg"
    ; -- an unknown file takes the source path, an unknown line/col elides; anything
@@ -96,7 +98,7 @@
        _ (? (okv? ps) () (ccdie (deskew ps (tally ds9)) src ("cc: parse error in " + src)))
        ps)
    ; the parser's static/section trio, threaded to the gen as one list
-   (pxtra ps) `((el ps 5) (el ps 6) (el ps 7))
+   (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8))   ; sfns svars sects ALIASES
    ; a standalone static executable (the default): _start + text + data, chmod +x
    (cc-exe src dst is ds tgt)
     (: ps (cc-parse src is ds tgt)
@@ -141,6 +143,15 @@
                `('push 'lr)
                `('call 'main)
                `('li 'r8 93) `('sys))
+   ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
+   ; answer already rides a0); the default __ai_start mirrors arm64's.
+   crt0-rv `(`('lea 'r0 'sp 0)
+              `('call '__ai_start)
+              `('li 'r7 94) `('sys)
+              `('label '__ai_start)
+              `('push 'lr)
+              `('call 'main)
+              `('li 'r7 94) `('sys))
    (cc-link ins dst is ds tgt pie)
     (: srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt)))
                          (doto? f) (: r (uread f)
@@ -148,7 +159,7 @@
                                          (udie 1 ("cc: cannot open " + f))))
                          (udie 2 ("cc: not a .c/.o input: " + f))))
                  ins)
-       c9 (? (id? tgt 'arm64) crt0-a64 crt0)
+       c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
        ps (ldlink tgt pie (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") ()))) srcs))
        _ (ld-write dst ps)
        (chmod dst 493))

@@ -27,7 +27,7 @@ korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew
 # split at the module boundary: the cat ECHOES holo's (leave ()) between the last
 # backend and asbook.l -- one form, so it never earned a file of its own (test.mk's
 # cross-backend recipes have always inlined it the same way).
-moonfiles_holo = crew/kore/text.l crew/kore/core.l crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/thumb1.l
+moonfiles_holo = crew/kore/text.l crew/kore/core.l crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l
 moonfiles_rest = crew/kore/asbook.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/moon.l
 moonfiles = $(moonfiles_holo) $(moonfiles_rest)
 # (`ho` is defined further down, after this rule is READ -- target/prereq names

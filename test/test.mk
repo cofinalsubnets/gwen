@@ -553,6 +553,29 @@ test_raw_bake: test_raw
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_bake.out; } \
 	    || { echo "FAIL woken corpus (exit $$s) -- ai_image_load desync? see [[mooncc-fn-parity]]"; exit 1; }; \
 	  echo "test_raw_bake: the mooncc-PIE binary bakes its own image and WAKES it -- corpus passes on the woken heap"
+# test_riscv -- the riscv64 codegen rung end to end: the whole test/cc battery
+# compiled `mooncc -t riscv64` (EM_RISCV static ELF, the holo riscv backend),
+# run under qemu-riscv64 (user mode), and DIFFERENTIAL against the native x64
+# mooncc build of the same file -- mooncc is its own reference (the frontend is
+# shared, so only codegen can diverge). the three x64-only features
+# (100-complex / 101-vla / 102-bigstruct) are excluded exactly as arm64
+# refuses them. skips clean without qemu-riscv64 or off x86_64.
+.PHONY: test_riscv
+test_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@echo "RISCV test/cc battery (mooncc -t riscv64 vs native x64, under qemu-riscv64)"
+	@if ! command -v qemu-riscv64 >/dev/null 2>&1 || [ "$$(uname -m)" != x86_64 ]; then \
+	   echo "test_riscv: skipped (needs qemu-riscv64 + an x86_64 host)"; exit 0; fi; \
+	  d=$(ho)/riscv; mkdir -p $$d; p=0; \
+	  for f in test/cc/*.c; do b=$$(basename $$f .c); \
+	    case $$b in 100-complex|101-vla|102-bigstruct) continue;; esac; \
+	    $(moonrun) -t riscv64 $$f $$d/rv_$$b > /dev/null 2>&1 || { echo "FAIL riscv compile $$f"; exit 1; }; \
+	    qemu-riscv64 $$d/rv_$$b; a=$$?; \
+	    $(moonrun) $$f $$d/x_$$b > /dev/null 2>&1 || { echo "FAIL x64 compile $$f"; exit 1; }; \
+	    $$d/x_$$b; x=$$?; \
+	    [ $$a -eq $$x ] || { echo "FAIL riscv battery $$f (rv $$a x64 $$x)"; exit 1; }; \
+	    p=$$((p+1)); \
+	  done; \
+	  echo "test_riscv: $$p/$$p battery files agree riscv-vs-x64"
 # test_raw's aarch64 twin (rung D): mooncc -t arm64 lays every object, mksys-arm64
 # the syscall leaf, OUR linker binds, qemu-user runs the corpus over the fresh
 # egg. Runs the WHOLE C-sorted $t (uukind{,law}.l included): the raw binary and

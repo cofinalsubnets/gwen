@@ -27,6 +27,12 @@ typedef struct {                 /* AAPCS32: one running pointer -- the prologue
                                   * stack args, so anonymous WORDS just walk */
   void *__ap;
 } __va_list_tag;
+#elif defined(__riscv)
+typedef struct {                 /* LP64: one running pointer, 8-byte slots --
+                                  * anonymous args ride the GP registers only,
+                                  * laid contiguous with the caller stack args */
+  void *__ap;
+} __va_list_tag;
 #else
 typedef struct {
   int gp_offset;

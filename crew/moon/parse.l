@@ -148,6 +148,31 @@
                     (wscan >s d (|| hit (&& ((tkk <s) = 'id)
                                                  (|| ((tkv <s) = "weak") ((tkv <s) = "__weak__"))))))
                 (wscan >r 1 ())))))
+   ; the declaration's ALIAS attribute: `alias ( "TARGET" )` inside an
+   ; __attribute__ run, anywhere in the form (musl's weak_alias trails it:
+   ; `extern __typeof(old) new __attribute__((__weak__, __alias__("old")))`).
+   ; -> (TARGET weak?) | (). scans to the first depth-0 `;` or `{`, like
+   ; secat?, noting a `weak` in the SAME run -- binding matters: musl's
+   ; exit.c defines __stdio_exit weakly so __stdio_exit.c's real one wins.
+   (aliasat? ts)
+    (: (go s d tgt wk)
+        (? (! (two? s)) (? tgt `(tgt wk) ())
+           (: t <s
+              (? (&& (d < 1) (|| (tp? t ";") (tp? t "{"))) (? tgt `(tgt wk) ())
+                 (tp? t "(") (go >s (d + 1) tgt wk)
+                 (tp? t ")") (go >s (d - 1) tgt wk)
+                 (&& ((tkk t) = 'id)
+                     (|| ((tkv t) = "weak") ((tkv t) = "__weak__")))
+                  (go >s d tgt 1)
+                 (&& ((tkk t) = 'id)
+                     (|| ((tkv t) = "alias") ((tkv t) = "__alias__")))
+                  (: r >s
+                     (? (! (peekp r "(")) (go >s d tgt wk)
+                        (: r2 >r
+                           (? (&& (two? r2) ((tkk <r2) = 'str))
+                              (go >s d (tkv <r2) wk) (go >s d tgt wk)))))
+                 (go >s d tgt wk))))
+       (go ts 0 () ()))
    ; the declaration's section attribute, if any: scan this form's tokens (to
    ; the first depth-0 `;` or `{`) for `section ( "NAME" )` -- inside a
    ; declaration that shape only occurs in an __attribute__. -> NAME | ()
@@ -197,6 +222,7 @@
                 ; gen bakes the va offsets, so only size/align/decay ride the type here
                 _ (pin (t 'stag) "__va_list_tag"
                        (? (member? tgt '(thumb2 thumb2sp thumb1)) '((("__ap" 0 (ptr void))) 4 4)
+                          (id? tgt 'riscv64) '((("__ap" 0 (ptr void))) 8 8)   ; LP64: one walking pointer, 8-byte slots
                           (id? tgt 'arm64)
                            '((("__stack" 0 (ptr void)) ("__gr_top" 8 (ptr void)) ("__vr_top" 16 (ptr void))
                               ("__gr_offs" 24 int) ("__vr_offs" 28 int)) 32 8)
@@ -209,6 +235,7 @@
                 _ (pin (t 'stag) "__cplx_double" '((("re" 0 double) ("im" 8 double)) 16 8))
                 _ (pin (t 'stag) "__cplx_float" '((("re" 0 float) ("im" 4 float)) 8 4))
                 _ (pin t 'vlan 0)                   ; the VLA decl-site counter (stamps each site's slot index)
+                _ (pin t 'alias (tablet 0))         ; __attribute__((alias("t"))) : name -> its target (musl's weak_alias)
                 t)
    ; does a type begin here?
    (tkbty? ps t)
@@ -1386,6 +1413,7 @@
    (ptop ps ts)
     (: _ (? (peep ps 'curstat ()) () (? (leadstatic? ts) (pin ps 'curstat 1) ()))
        _ (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ())))
+       _ (? (peep ps 'curalias ()) () (: al (aliasat? ts) (? al (pin ps 'curalias al) ())))
        (ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") `(`('tdef) >ts)          ; a stray top-level `;` -- an empty declaration
@@ -1514,6 +1542,14 @@
                                                                            (pin (ps 'sigs) <p2
                                                                                 `((? (two? (cup (caup p2))) (caup (caup p2)) 'long) () ()))
                                                                            ())
+                                                                      ; an ALIAS declared through a function TYPE (musl's
+                                                                      ; weak_alias: `extern __typeof(old) new __attribute__
+                                                                      ; ((alias("old")))`) answers a nameless 'tdef, so the
+                                                                      ; name is recorded HERE, where it is still in hand
+                                                                      _ (: al (peep ps 'curalias ())
+                                                                           (? (! (two? al)) ()
+                                                                              (: _ (pin (ps 'alias) <p2 <al)
+                                                                                 (? (caup al) (pin ps 'weaks (link <p2 (ps 'weaks))) ()))))
                                                                       (regs >l)))
                                                        (regs acc))
                                                   vps (: (go2 l a2) (? (! (two? l)) a2
@@ -1566,11 +1602,25 @@
                                    (go2 >prs)))
                    (go2 <>f))
                 ())
+           ; an ALIAS declaration names no storage of its own: it is another
+           ; name for a symbol defined in this TU (musl's weak_alias, 189
+           ; files). record name -> target; cgen lays the extra label.
+           _ (: al (peep ps 'curalias ())
+                (? (! (two? al)) ()
+                   (: nms (? (<f = 'gdecl) (map cap <>f)
+                             (<f = 'proto) `(<>f)
+                             (<f = 'fn) `(<>f) ())
+                      (go3 l) (? (! (two? l)) 1
+                                 (: _ (pin (ps 'alias) <l <al)
+                                    _ (? (caup al) (pin ps 'weaks (link <l (ps 'weaks))) ())
+                                    (go3 >l)))
+                      (go3 nms))))
            _ (pin ps 'curstat ())
+           _ (pin ps 'curalias ())
            (pin ps 'cursect ()))
        (tops ts2 acc)
         (? (! (two? ts2)) `(1 `('prog (rev acc)) (ps 'stag) (ps 'sigs) (ps 'weaks)   ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
-                              (ps 'sfns) (ps 'svars) (ps 'sects))
+                              (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias))
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (link <r acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))

@@ -15,7 +15,8 @@
    elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr (catall is in holo.l)
    elf-machines (tabof
         `(('x64 >< 62) ('amd64 >< 62) ('arm64 >< 183) ('aarch64 >< 183)
-           ('thumb1 >< 40) ('thumb2 >< 40) ('thumb2sp >< 40) ('cortex-m0 >< 40) ('cortex-m7 >< 40) ('arm >< 40)))  ; EM_ARM
+           ('thumb1 >< 40) ('thumb2 >< 40) ('thumb2sp >< 40) ('cortex-m0 >< 40) ('cortex-m7 >< 40) ('arm >< 40)   ; EM_ARM
+           ('riscv64 >< 243) ('rv64 >< 243)))                  ; EM_RISCV
 
    ;; the 120-byte header for a single R+X load segment at `base` covering the whole file.
    ;; etype = 2 (ET_EXEC, fixed base) or 3 (ET_DYN, a static-PIE the kernel loads at a random
