@@ -69,15 +69,6 @@ out/host$(hsuf)/seed: $(seedfiles)
 	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(seedfiles); } > $@
 	@chmod 755 $@
-# grocery: the builder/installer over seed (crew/grocery/grocery.l; doc/hatch.md).
-# seed's files lead the cat because grocery reads the SEALED module at load time
-# -- (from 'seed ..) answers () if the vcs is not registered yet, which would
-# leave every helper unbound and the failure would surface far from its cause.
-groceryfiles = $(seedfiles) crew/grocery/grocery.l
-out/host$(hsuf)/grocery: $(groceryfiles)
-	@echo AI	$(abspath $@)
-	@{ echo '#!/usr/bin/env -S love'; cat $(groceryfiles); } > $@
-	@chmod 755 $@
 # the mooncc image: the compiler baked WARM (the live bake, doc/snapshot.md). The
 # cat loads under a NEUTRAL name so moon.l's tail SEAT stays quiet, then the bake
 # nif snapshots the session. LOVE_NO_IMAGE rides the recipe (exported above), so

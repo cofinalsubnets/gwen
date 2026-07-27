@@ -31,14 +31,15 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   `record`, so no new verb: the fix is a patch like any other, and it settles the
   clash for good. A delete meeting an edit, or a binary file, cannot line-merge —
   those keep the **content** (never the deletion), name both blobs, and flag.
+
 > **The build left, 2026-07-27.** `hatch` used to sit here, and it never touched
 > the patch DAG: it read a config, ran an argv, hashed a file. **How germplasm
-> builds itself is none of the vault's business.** It now lives in
-> [`crew/grocery/`](../crew/grocery/grocery.l) (`make test_grocery`), which asks
-> seed for exactly one thing — `psid`, the name of a head DAG state — and derives
-> everything else itself. Seed stores patches, names source states, and
-> materializes source; what a depositor then *does* with that source is a
-> different job on a different subject.
+> builds itself is none of the vault's business.** It was lifted into its own
+> tool and then that tool was dropped too — the distribution design was not
+> settled enough to be writing code against, and building ahead of it produced a
+> vocabulary nobody could follow. **Seed is a vcs.** The build, the install, and
+> everything downstream start over from a blank page; `psid` is the one hook a
+> future one needs, and it is a vcs concept in its own right.
 
 - **`apply [ID..]`** realizes a dependency-consistent **subset** of the store into
   the working tree. This is git's `checkout` *and* its `cherry-pick`, which are
@@ -70,8 +71,7 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   closure derives the whole patch set from the tips. Re-banking a name at the
   same head is a no-op; at a different head it refuses, because a banked name is
   immutable. `log` shows each ref with its **psid** — `sha256` of the sorted
-  tips, the same id grocery keys its build ledger by, so a release and its goods
-  line up.
+  tips — the name of that release's head DAG state.
   **A ref freezes the tip *set*, not a single tip** — see the note below.
 
 > **Correction to hatch.md.** That doc asks for a *single-tip head* here
@@ -103,17 +103,14 @@ cloning-and-building a local checkout.** The design rule was:
 > primitives** plus one derivation verb, and let the distro front-doors be
 > *named compositions* of those.
 
-**Revised 2026-07-27, and the revision is smaller than it looks.** The *acts*
-stay collapsed — install is still `sync` + a build, and nothing routes users
-down a separate path. What came apart is the *tools*: the derivation verb never
-touched the patch DAG, so it was a guest in seed's file, and keeping it here
-dragged the vault's vocabulary into a field it had no words for. It now lives in
-[`crew/grocery/`](../crew/grocery/grocery.l).
-
-The smell to watch is unchanged, only relocated: if "install" or "upgrade"
-becomes an irreducible verb rather than a composition of `sync` + build + link,
-the collapse has leaked. Two modules is not two systems — the test is whether a
-user ever has to know which one they are talking to.
+**Withdrawn 2026-07-27.** Not falsified — untested. The rule presumes a settled
+picture of what install *is* (where binaries go, what owns them, what the unit
+of distribution is), and that picture never got settled; a derivation verb was
+built on top of the unsettled version twice, and both times the vocabulary went
+somewhere it could not be followed. So this section is a **note to a future
+design**, not a rule in force: the collapse is worth wanting, and the smell to
+watch for is "install" or "upgrade" turning into an irreducible verb rather than
+a composition. Decide what install is *first*.
 
 ## the primitives
 
@@ -136,9 +133,10 @@ exchange isn't.
 
 ## the front-doors (sugar, not primitives)
 
-- **install** = `sync <url>` + `grocery build` into a fresh nest
-- **upgrade** = `sync` (a newer release) + `grocery build`
 - **clone** = `sync` from empty
+
+(**install** and **upgrade** were listed here as `sync` + a build. They are out
+of scope until the build side is designed — see the note above.)
 
 These are named compositions for humans, deliberately *not* new verbs. That they
 compose is the proof the collapse held.

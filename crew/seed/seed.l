@@ -39,9 +39,8 @@
    (mk _) (: _ (mkdir ".seed" 493) _ (mkdir ".seed/blob" 493) _ (mkdir ".seed/patch" 493) ())
    (snap _) (form ".seed/snap")                            ; ((path chash pid) ..) sorted
    (tips _) (form ".seed/tips")                            ; (id ..)
-   ; the PATCH-SET ID: a name for a head DAG state, and the one thing a consumer
-   ; needs to key its own derivations by (crew/grocery/ builds against it). the
-   ; tips are a SET -- sort before hashing or the same head reads two ways.
+   ; the PATCH-SET ID: the name of a head DAG state. the tips are a SET -- sort
+   ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (show (sort tp)))
    (blob h) (: t (look (".seed/blob/" + h)) (? (two? t) <>t ()))
    (keep s) (: h (sha256 s) _ (lay (".seed/blob/" + h) s) h)
@@ -167,9 +166,9 @@
        _ (pr es)
        _ (: (pf m) (? (two? m)
                       (: e <m t (<>e)
-                         ; the psid -- sha256 of the sorted tips, the SAME id crew/grocery
-                         ; keys its build ledger by, so a release and its goods line up
-                         _ (puts ("  " + <e + "  " + (sh (sha256 (show t))) + "  "
+                         ; the psid: the name of this release's head DAG state.
+                         ; a banked ref stores its tips sorted, so the sort is a no-op here
+                         _ (puts ("  " + <e + "  " + (sh (psid t)) + "  "
                                   + (show (tally t)) + " tip" + (? (1 = (tally t)) "" "s") + "\n"))
                          (pf >m)) ())
             (: rs (refs ()) (? (two? rs) (: _ (puts "banked:\n") (pf rs)) ())))

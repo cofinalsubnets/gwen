@@ -154,17 +154,6 @@ test_seed: host out/host$(hsuf)/seed
 	  cat out/host/.test_seed.out; \
 	  { [ $$r -eq 0 ] && grep -q "seed: ok" out/host/.test_seed.out; } \
 	    || { echo "FAIL seed (exit $$r)"; exit 1; }
-# grocery rides seed: the cat is seed's files + grocery.l + the gate, and the gate
-# JOINS both sealed modules. the exit code alone proves nothing (a silent reader
-# stop exits 0), so the "grocery: ok" line is the real gate.
-.PHONY: test_grocery
-test_grocery: host out/host$(hsuf)/grocery
-	@echo "GROCERY crew/grocery/{grocery,grocerytest}.l"; \
-	  rm -rf out/host/.grocerytest; \
-	  cat test/00-init.l $(groceryfiles) crew/grocery/grocerytest.l | $m > out/host/.test_grocery.out 2>&1; r=$$?; \
-	  cat out/host/.test_grocery.out; \
-	  { [ $$r -eq 0 ] && grep -q "grocery: ok" out/host/.test_grocery.out; } \
-	    || { echo "FAIL grocery (exit $$r)"; exit 1; }
 # the kore smokes drive the BAKED image (`--wake kore.image`), not the cold cat --
 # ~0.02s vs ~0.75s per spawn across the ~68 tool runs below (the mooncc.image precedent).
 # the argv0-symlink smoke execs the real `$(ho)/kore` shim (it proves the shim's
@@ -485,7 +474,11 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	    $(ho)/.fgnx; a=$$?; \
 	    [ $$a -eq 42 ] || { echo "FAIL foreign gcc .o link $$m (.bss arrives zeroed + .rodata/.data.rel.ro + abs32 relocs, got $$a want 42)"; exit 1; }; \
 	  done; \
-	  echo "mooncc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, a FOREIGN gcc .o whole) ok"; \
+	  nm $(ho)/.fgnx > $(ho)/.fgn.nm 2>&1 || { echo "FAIL nm on our exe (no symbol table)"; exit 1; }; \
+	  for s in "T main" "T fill" "B bigbuf" "B zed" "R tbl"; do \
+	    grep -q " $$s\$$" $(ho)/.fgn.nm || { echo "FAIL symtab missing '$$s' (nm must classify by the section the symbol lives in)"; exit 1; }; \
+	  done; \
+	  echo "mooncc: cc (laws + return-42 + a $$(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"; \
 	else echo "mooncc: cc (laws only -- x86_64 e2e skipped on $$(uname -m)) ok"; fi
 # The rung-2 self-host gate ([[love-distro]]): compile love.c AND every host/*.c with
 # mooncc (gcc/clang only LINKS), then run the whole corpus through the all-mooncc
