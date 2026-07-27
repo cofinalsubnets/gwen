@@ -39,6 +39,15 @@
 ; is `tally` (text/cask charms, list spine, array cells, map keys: what "length" always was, $ never
 ; was). every value wears a COLOR by its net-sign: GREEN nonnegative (what $ keeps), RED negative,
 ; BLUE the zero floor -- true iff POSITIVE green. the two-measure design: doc/measures.md.
+; ⚠ TRUTH IS A THRESHOLD ON THE NET, NOT A HOMOMORPHISM, and it CANNOT be one. `net` is the
+; hom (it sums); `!!$` thresholds it, and a threshold cannot preserve ring structure. the two
+; connectives pull apart: `*` = AND wants the false set to be an IDEAL, which forces false =
+; {0} (since -1 * -1 = 1, false*false = true under the current rule); `+` = OR wants it closed
+; under +, and since x + -x = 0 in a ring, that forces at most one of {x, -x} true -- a
+; POSITIVE CONE. those two sets differ, so on a ring you may have one or the other, never both.
+; love takes the CONE: net sums, $ clamps once, ! reads the sign -- additive top to bottom. so
+; "negative is false" is the CONSEQUENCE of truth being a measure, not an extra clause. and the
+; logical connective was never `*` anyway: `&&` is (and answers the UNIT on failure).
 (assert
  !0 !"" !(tablet 0) !@0 !() !0.0 !~(0 0)         ; zero / empty -> false
  !-5 !-3.9 !~(-3 4) !~(0 -1)                     ; <= 0 in the total order -> false (complex by re then im)

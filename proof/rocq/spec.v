@@ -211,7 +211,8 @@ Theorem zero_nothing : nilp (Vnum 0) = true.    Proof. reflexivity. Qed.
 Theorem nil_neq_zero : Vnil <> Vnum 0.          Proof. discriminate. Qed.
 Theorem sat_clamps  : forall v, net v <= 0 -> sat v = 0.    Proof. intros v H. unfold sat. lia. Qed.
 
-(* the COLORS, by the order-sign of the net: GREEN nonneg (the kept band, what $ keeps;
+(* the COLORS, by the SIGN of the net (its real part -- not the total order, which
+   parts from truth on the imaginary axis): GREEN nonneg (the kept band, what $ keeps;
    positive green = true), RED neg (below the floor, $ clamps it up), BLUE the floor
    (net 0). green and blue are DUAL, not disjoint: 0 is green by sign AND blue by measure
    -- the overlap where green meets nothing. (Reverts the b601b93b frequency flip.) *)
@@ -969,24 +970,34 @@ Proof. induction a as [|x a IH]; intros [|y b] [|z c]; cbn; try tauto.
 (* ============================================================ *)
 (* Closes on the Z[i] tier above. The real-fragment net (spec.v:174-179) said
    the complex extension was the next slice; here it is. `cnet z = z` (a gem is
-   its own measure); `cnilp` reads falsehood in the total order -- re first, then
-   im -- so it agrees with the real `nilp` (net <= 0) on lifted reals, and
-   phases CANCEL AS VECTORS, never by a tiebreak. Ground-truthed: !~(0 -1),
-   !~(-3 4), !!i, and ~(3 4)+~(-3 4) = ~(0 8) (still true). *)
+   its own measure); `cnilp` gates on the REAL PART, so it agrees with the real
+   `nilp` (net <= 0) on lifted reals, and phases CANCEL AS VECTORS.
+
+   THE GATE IS NOT THE TOTAL ORDER, and this is the one place the two part. It
+   was lexicographic (re, then im) until 2026-07-27, which made `i` true and `-i`
+   false -- but conjugation is a field AUTOMORPHISM, so nothing intrinsic
+   separates them, and C admits no order compatible with its arithmetic at all
+   (in an ordered field every square is >= 0, yet i^2 = -1). Truth cannot rest on
+   which root we named. So a PURE PHASE is BLUE: it has magnitude, but no
+   positive amount. The lexicographic order stays exactly as it was for SORTING,
+   which needs totality and must keep i and -i apart. Ground-truthed: !i,
+   !~(0 -1), !~(-3 4), !!~(3 4). *)
 Definition cnet (z : Zi) : Zi := z.
-Definition cnilp (z : Zi) : bool := (re z <? 0) || ((re z =? 0) && (im z <=? 0)).
+Definition cnilp (z : Zi) : bool := re z <=? 0.
 Theorem cnet_self    : forall z, cnet z = z.                Proof. reflexivity. Qed.
-Theorem i_true       : cnilp I = false.                     Proof. reflexivity. Qed. (* !!i *)
-Theorem negi_false   : cnilp (twin 0 (-1)) = true.          Proof. reflexivity. Qed. (* !~(0 -1) *)
-Theorem neg_re_false : cnilp (twin (-3) 4) = true.          Proof. reflexivity. Qed. (* !~(-3 4): re<0 wins *)
-(* phases cancel AS VECTORS: ~(3 4) + ~(-3 4) nets ~(0 8), still positive (true) *)
+Theorem i_blue       : cnilp I = true.                      Proof. reflexivity. Qed. (* !i: a pure phase *)
+Theorem negi_blue    : cnilp (twin 0 (-1)) = true.          Proof. reflexivity. Qed. (* !~(0 -1) *)
+Theorem neg_re_false : cnilp (twin (-3) 4) = true.          Proof. reflexivity. Qed. (* !~(-3 4): re<0 *)
+Theorem pos_re_true  : cnilp (twin 3 4) = false.            Proof. reflexivity. Qed. (* !!~(3 4) *)
+(* CONJUGATE-BLIND, which the old gate was not: i and -i now agree, as they must *)
+Theorem conj_blind : forall z, cnilp z = cnilp (twin (re z) (- im z)).
+Proof. intro z. unfold cnilp. reflexivity. Qed.
+(* phases cancel AS VECTORS: ~(3 4) + ~(-3 4) nets ~(0 8) -- a pure phase, so BLUE *)
 Theorem phase_vector_add : cadd (twin 3 4) (twin (-3) 4) = twin 0 8.  Proof. reflexivity. Qed.
-Theorem phase_sum_true   : cnilp (cadd (twin 3 4) (twin (-3) 4)) = false.  Proof. reflexivity. Qed.
+Theorem phase_sum_blue   : cnilp (cadd (twin 3 4) (twin (-3) 4)) = true.  Proof. reflexivity. Qed.
 (* the tie-in: cnilp agrees with the real nilp (net <= 0) on lifted reals *)
 Theorem cnilp_real : forall r, cnilp (cof r) = (r <=? 0).
-Proof. intro r. unfold cnilp, cof; cbn.
-  destruct (Z.ltb_spec r 0); destruct (Z.eqb_spec r 0); cbn;
-  try (symmetry; apply Z.leb_le; lia); try (symmetry; apply Z.leb_gt; lia). Qed.
+Proof. reflexivity. Qed.
 
 (* ============================================================ *)
 (* the crew as FACES of `top` (doc/faces.md)                    *)

@@ -441,7 +441,8 @@ static ai_inline word vec_get_obj(struct ai_vec *v, uintptr_t i) {
 static ai_inline void vec_put_obj(struct ai_vec *v, uintptr_t i, word x) {
  ((word*) vec_data(v))[i] = x; }
 
-// Truthiness: x is false iff (= 0 ($ x)) -- the net's sign read in the total order.
+// Truthiness: x is false iff (= 0 ($ x)) -- the net's sign. NOT read in the total
+// order: a twin gem gates on its REAL part, so a pure phase is blue (see zn_false).
 // THE NET'S CODOMAIN IS COMPLEX (ai_net below): a complex scalar nets ITSELF, phase
 // intact; every other scalar nets on the real line; aggregates SUM as complex
 // numbers -- + is total there, so the net is additive EXACTLY, at every rank and
@@ -484,7 +485,7 @@ static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (mintp(x)) return true;                         // a bare point (a mint / the zero point) nets 0 -> nil
   if (coinp(x)) return zn_false(ai_net(g, x));      // a coin's truth is its payload's net (lockstep with ai_net/$)
   if (chainp(x) || namep(x) || packp(x) || flop(x) || widep(x) || Cp(x) || strp(x) || bufp(x))
-    return zn_false(ai_net(g, x));                   // content measures (a nom by its spelling): net <= 0 in the order
+    return zn_false(ai_net(g, x));                   // content measures (a nom by its spelling): the net's real part <= 0
   return false; }                                    // fn / port: present
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
