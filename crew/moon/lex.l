@@ -21,7 +21,7 @@
        kws '(auto break case char const continue default do double else enum
              extern float for goto if inline int long register restrict return
              short signed sizeof static struct switch typedef union unsigned
-             void volatile while)
+             void volatile while _Complex)
        p3 '("<<=" ">>=" "...")
        p2 '("==" "!=" "<=" ">=" "&&" "||" "<<" ">>" "+=" "-=" "*=" "/=" "%="
             "&=" "|=" "^=" "->" "++" "--" "##")
@@ -113,10 +113,16 @@
            j2 <ee exp <>ee
            isflo (|| dot hase)
            j3 (? (&& isflo (&& (j2 < n) (member? (src j2) '(102 70 108 76)))) (j2 + 1) j2)
+           ; gcc's imaginary suffix (i/I/j/J, riding after or before f/l): 1.0fi
+           ; is _Complex_I's spelling (musl complex.h) -- the flag rises to 'imag
+           im (&& isflo (&& (j3 < n) (member? (src j3) '(105 73 106 74))))
+           j4 (? (! im) j3
+                 (: k (j3 + 1)
+                    (? (&& (k < n) (member? (src k) '(102 70 108 76))) (k + 1) k)))
            dxp (exp - fd)
            val (? isflo (? (dxp < 0) (0.0 + (/ mant (ipow 10 (0 - dxp))))
                            (0.0 + (* mant (ipow 10 dxp)))) iv)
-           `(j3 isflo val))
+           `(j4 (? im 'imag isflo) val))
        ; -- hex literals: 0x integer (0xff), OR a hex FLOAT 0x H.H p [+-] D (a binary
        ; exponent, base 2): 0x1.0p-53, 0x1p4, 0x.8p1. i points at the '0'. -> (endj isflo? value). --
        (hxrun j v nd) (? (&& (j < n) (hexd? (src j))) (hxrun (j + 1) ((* 16 v) + (hexv (src j))) (nd + 1)) `(j v nd))
@@ -202,7 +208,8 @@
                  (|| (dig? c) (&& (c = 46) (&& ((i + 1) < n) (dig? (src (i + 1))))))
                   (: r (flolit i)                        ; a digit run, or .digit -- integer or float
                      j2 (? <>r <r (skipsuf <r))    ; an integer eats its u/U/l/L suffix
-                     k (? <>r 'flo (ukind i j2 <>>r))
+                     k (? (id? <>r 'imag) 'iflo    ; the imaginary float (1.0fi): its own kind
+                          <>r 'flo (ukind i j2 <>>r))
                      (go j2 line (link `(k <>>r line) acc)))
                  (< 0 (wpfx i)) (go (+ i (wpfx i)) line acc)   ; drop a wide-literal prefix; the ' or " lexes as usual
                  (idh? c) (: (idr j) (? (&& (j < n) (idc? (src j))) (idr (j + 1)) j)

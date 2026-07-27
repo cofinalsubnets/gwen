@@ -301,6 +301,10 @@
       (= (tn (caup (clex ".25")) 0) (L 'flo 0.25 1))
       (= (tn (caup (clex "1e3")) 0) (L 'flo 1000.0 1))
       (= (tn (caup (clex "2.")) 0) (L 'flo 2.0 1))
+      ; the imaginary suffix (i/j, either order with f/l) is its own kind
+      (= (tn (caup (clex "1.0fi")) 0) (L 'iflo 1.0 1))
+      (= (tn (caup (clex "2.5if")) 0) (L 'iflo 2.5 1))
+      (= (tn (caup (clex ".5i")) 0) (L 'iflo 0.5 1))
       (= (tn (caup (clex "42")) 0) (L 'num 42 1))          ; an integer stays 'num
       ; the parser: a double type and a 'flo primary
       (= (cast "int main() { double d = 1.5; return 0; }")
