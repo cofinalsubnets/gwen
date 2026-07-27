@@ -3363,19 +3363,23 @@
    ; same IEEE doubles as the target, so the fold is the runtime value.
    (ffold e)
     (? (! (two? e)) 'bad
-       (<e = 'flo) <>e
-       (<e = 'num) (0.0 + <>e)
-       (<e = 'cast) (? (flo? <>e) (ffold <>>e) 'bad)
-       (<e = 'un)
-        (: v (ffold <>>e)
-           (? (bad? v) 'bad (<>e = 'neg) (0.0 - v) 'bad))
-       (<e = 'bin)
-        (: op <>e a (ffold <>>e) b (ffold <>>>e)
-           (? (|| (bad? a) (bad? b)) 'bad
-              (op = '+) (a + b) (op = '-) (a - b) (op = '*) (* a b)
-              (op = '/) (? (b = 0.0) 'bad (/ a b))
-              'bad))
-       'bad)
+       ; an int const SUBTREE floats -- musl's exp_data scales its doubles by
+       ; (1 << EXP_TABLE_BITS), powf_data by (double)(1 << POWF_SCALE_BITS)
+       (: iv (icfold e)
+          (? (! (id? iv 'no)) (0.0 + iv)
+             (<e = 'flo) <>e
+             (<e = 'num) (0.0 + <>e)
+             (<e = 'cast) (? (flo? <>e) (ffold <>>e) 'bad)
+             (<e = 'un)
+              (: v (ffold <>>e)
+                 (? (bad? v) 'bad (<>e = 'neg) (0.0 - v) 'bad))
+             (<e = 'bin)
+              (: op <>e a (ffold <>>e) b (ffold <>>>e)
+                 (? (|| (bad? a) (bad? b)) 'bad
+                    (op = '+) (a + b) (op = '-) (a - b) (op = '*) (* a b)
+                    (op = '/) (? (b = 0.0) 'bad (/ a b))
+                    'bad))
+             'bad)))
    (fim ty v)                                       ; a float value's IEEE image as ty: 4 single bytes | 8 double bytes
     (? (ty = 'float) (les 4 (fbits32 v)) (les 8 (fbits v)))
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
