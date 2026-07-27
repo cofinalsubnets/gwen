@@ -83,9 +83,11 @@
    ; them zero-extend loads + unsigned >> / compare / divide). `long long` folds
    ; to 'long on the 64-bit targets (same width); on the 32-bit thumb ABI it is
    ; its own 8-byte type, 'llong/'ullong -- the register pair.
-   tyspec '(char short int long void double float signed unsigned)
+   tyspec '(char short int long void double float signed unsigned _Complex)
    (canon ps specs)
-    (? (member? 'void specs) 'void
+    (? (member? '_Complex specs)                   ; C99 complex: a SEEDED two-member struct
+        (? (member? 'float specs) '(struct "__cplx_float") '(struct "__cplx_double"))
+       (member? 'void specs) 'void
        (member? 'double specs) 'double
        (member? 'float specs) 'float
        (: uns (member? 'unsigned specs)
@@ -201,11 +203,16 @@
                           '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
                              ("reg_save_area" 16 (ptr void))) 24 8)))
                 _ (pin (t 'types) "__builtin_va_list" '(arr (struct "__va_list_tag") 1))
+                ; C99 _Complex, seeded as two-member structs (canon maps the
+                ; specifier run onto these tags): layout, copy, union membership
+                ; and the SysV (sse sse) / one-sse ABI all ride the struct lanes
+                _ (pin (t 'stag) "__cplx_double" '((("re" 0 double) ("im" 8 double)) 16 8))
+                _ (pin (t 'stag) "__cplx_float" '((("re" 0 float) ("im" 4 float)) 8 4))
                 t)
    ; does a type begin here?
    (tkbty? ps t)
     (? (! (two? t)) ()
-       ((tkk t) = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned struct union enum))
+       ((tkk t) = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned _Complex struct union enum))
        ((tkk t) = 'id) (? (member? (tkv t) `("__typeof" "__typeof__")) 1
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
@@ -215,6 +222,7 @@
    (arr? ty) (&& (two? ty) (<ty = 'arr))
    (fn? ty) (&& (two? ty) (<ty = 'fn))
    (stru? ty) (&& (two? ty) (<ty = 'struct))
+   (cplxty? ty) (&& (stru? ty) (member? <>ty `("__cplx_double" "__cplx_float")))   ; a seeded complex
    (bitf? ty) (&& (two? ty) (<ty = 'bitfield))     ; a bitfield member: (bitfield uty bitoff width)
    ; the machine WORD (bytes): a pointer and a gp scalar (long) ride it. 4 on the 32-bit thumb ABI,
    ; 8 otherwise. MUST match gen's (wsize g) (gen.l) -- a divergence mislays every pointer-bearing
