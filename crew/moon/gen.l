@@ -5040,7 +5040,11 @@
               lbl <ge ty <>ge init <>>ge
               bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
               (? (bad? bytes) (: _ (puts (+ ";; CGDATA-BAD " (<gs + ((" " + (show init)) + "\n")))) 'bad)
-                 (globs >gs nif (acc + `(`('label lbl) `('raw bytes)))))))
+                 (: als (: (go l a2) (? (! (two? l)) a2
+                                          (go >l (? ((peep (g 'alias) <l ()) = <gs)
+                                                    (link `('label (intern <l)) a2) a2)))
+                           (go (keys (g 'alias)) ()))   ; a DATA alias (musl's __stdin_used) names the same bytes
+                    (globs >gs nif (acc + als + `(`('label lbl) `('raw bytes))))))))
        (strs ss acc)
         (? (! (two? ss)) acc
            (: p <ss
@@ -5188,6 +5192,12 @@
                           (base + (go3 (keys als) ()))))
              gnames (: (go gs acc) (? (! (two? gs)) (rev acc)
                                       (go >gs (? (loc? <gs) acc (link <gs acc))))
-                       (go (rev (<r 'globs)) ()))
+                       ; an alias onto a global (or a block-scope static) is an
+                       ; OBJECT symbol of its own, at the same bytes
+                       dgl ((rev (<r 'globs)) + (rev (<r 'statics)))
+                       (: base (go (rev (<r 'globs)) ())
+                          (go2 l a2) (? (! (two? l)) a2
+                                        (go2 >l (? (member? (peep als <l ()) dgl) (link <l a2) a2)))
+                          (base + (go2 (keys als) ()))))
              dat <>>r
              `(1 <>r <dat fnames gnames <>dat)))))

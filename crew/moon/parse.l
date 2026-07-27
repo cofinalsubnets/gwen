@@ -173,6 +173,21 @@
                               (go >s d (tkv <r2) wk) (go >s d tgt wk)))))
                  (go >s d tgt wk))))
        (go ts 0 () ()))
+   ; a `weak` attribute ANYWHERE in the declaration -- weakat? reads only a
+   ; LEADING one, but musl writes `extern weak hidden const size_t _DYNAMIC[];`
+   ; (its `weak` macro sits after the storage class). the binding matters even
+   ; for a declaration that defines nothing: a weak UNDEFINED symbol resolves
+   ; to zero at static link, which is how __init_tls tells static from dynamic.
+   (wkany? ts)
+    (: (go s d) (? (! (two? s)) ()
+                   (: t <s
+                      (? (&& (d < 1) (|| (tp? t ";") (tp? t "{"))) ()
+                         (tp? t "(") (go >s (d + 1))
+                         (tp? t ")") (go >s (d - 1))
+                         (&& ((tkk t) = 'id)
+                             (|| ((tkv t) = "weak") ((tkv t) = "__weak__"))) 1
+                         (go >s d))))
+       (go ts 0))
    ; the declaration's section attribute, if any: scan this form's tokens (to
    ; the first depth-0 `;` or `{`) for `section ( "NAME" )` -- inside a
    ; declaration that shape only occurs in an __attribute__. -> NAME | ()
@@ -1414,6 +1429,7 @@
     (: _ (? (peep ps 'curstat ()) () (? (leadstatic? ts) (pin ps 'curstat 1) ()))
        _ (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ())))
        _ (? (peep ps 'curalias ()) () (: al (aliasat? ts) (? al (pin ps 'curalias al) ())))
+       _ (? (peep ps 'curweak ()) () (? (wkany? ts) (pin ps 'curweak 1) ()))
        (ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") `(`('tdef) >ts)          ; a stray top-level `;` -- an empty declaration
@@ -1615,8 +1631,16 @@
                                     _ (? (caup al) (pin ps 'weaks (link <l (ps 'weaks))) ())
                                     (go3 >l)))
                       (go3 nms))))
+           _ (: wk (peep ps 'curweak ())
+                (? (! wk) ()
+                   (: nms (? (member? <f '(gdecl xdecl)) (map cap <>f)
+                             (member? <f '(proto fn)) `(<>f) ())
+                      (go4 l) (? (! (two? l)) 1
+                                 (: _ (pin ps 'weaks (link <l (ps 'weaks))) (go4 >l)))
+                      (go4 nms))))
            _ (pin ps 'curstat ())
            _ (pin ps 'curalias ())
+           _ (pin ps 'curweak ())
            (pin ps 'cursect ()))
        (tops ts2 acc)
         (? (! (two? ts2)) `(1 `('prog (rev acc)) (ps 'stag) (ps 'sigs) (ps 'weaks)   ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
