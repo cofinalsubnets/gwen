@@ -1,7 +1,7 @@
 # seed — the vcs and the distro, one verb set
 
 Status: **the MVP verb set is live** (2026-07-14): `record` · `sync` · **`hatch`** ·
-**`apply`** · **`undo`** · `log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
+**`apply`** · **`undo`** · **`bank`** · `log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
 gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
 (slot = path, context = old content hash).
 
@@ -62,7 +62,26 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   replaced — so later edits survive and only that patch's write is lifted out. A
   true overlap lands in markers and records **nothing**: resolve, then record.
 
-`bank` reserves the name; the cached-fetch (CDN substituter) side of hatch
+- **`bank NAME`** freezes the current head under a name — an immutable release,
+  and the unit you propagate. `apply NAME` then realizes it, since the dep
+  closure derives the whole patch set from the tips. Re-banking a name at the
+  same head is a no-op; at a different head it refuses, because a banked name is
+  immutable. `log` shows each ref with its **psid** — `sha256` of the sorted
+  tips, the same id `hatch` keys its ledger by, so a release and its germ line up.
+  **A ref freezes the tip *set*, not a single tip** — see the note below.
+
+> **Correction to hatch.md.** That doc asks for a *single-tip head* here
+> ("reconcile tips before cutting a release"), and that is git thinking which
+> does not survive this model. Deps are **per path**, so a patch depends only on
+> what it *touched* — an independent birth is never depended upon and stays
+> maximal forever. Two or three tips is what ordinary parallel work looks like,
+> not a fork to repair, and the only way to collapse them is to write a patch
+> touching every path every tip touched, i.e. to edit files to appease the check.
+> So a release freezes the tip **set**, which is the head DAG state whatever its
+> shape — and it is exactly what `hatch` already hashes for its `psid`, which
+> never demanded one tip either.
+
+The cached-fetch (CDN substituter) side of hatch
 is deferred with public distribution (§Deferred). The rest of this doc is the
 design brief from the 2026-07-14 session. The **interface** layer over the model in [`doc/hatch.md`](hatch.md)
 (the patch DAG, the hatch derivation, the nest, refs) and the machinery in
@@ -93,7 +112,7 @@ out of `sync` + `hatch`, or the two systems have quietly come apart again.
 | **`sync`** | union patch sets with another nest (peer *or* URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
 | **`apply`** | pull a specific patch/ref out of the local store into the working tree | checkout / cherry-pick (any dep-consistent subset is valid) | select which release a nest realizes |
 | **`hatch`** | `(patch set, arch)` → native binary in the nest | — | the derivation; cached-default, local-rebuild fallback |
-| **`bank`** | freeze the current single-tip head → a named, immutable release | tag | the unit you propagate/clone |
+| **`bank`** | freeze the current head (its tip **set**) → a named, immutable release | tag | the unit you propagate/clone |
 | **`log`** | view the DAG + tips + refs | inspect | inspect |
 | **`diff`** | working tree vs a ref, or ref vs ref | inspect | inspect |
 | **`undo`** | add the *inverse* patch — revert as growth, never deletion | revert | rollback-by-superset |

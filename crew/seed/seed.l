@@ -161,6 +161,14 @@
               _ (puts "\n")
               (pr >m)))
        _ (pr es)
+       _ (: (pf m) (? (two? m)
+                      (: e <m t (<>e)
+                         ; the psid -- sha256 of the sorted tips, the SAME id hatch
+                         ; keys its ledger by, so a release and its germ line up
+                         _ (puts ("  " + <e + "  " + (sh (sha256 (show t))) + "  "
+                                  + (show (tally t)) + " tip" + (? (1 = (tally t)) "" "s") + "\n"))
+                         (pf >m)) ())
+            (: rs (refs ()) (? (two? rs) (: _ (puts "banked:\n") (pf rs)) ())))
        (tally es))
 
    ; --- diff: working tree vs the recorded state, unified; answers how many differ ---
@@ -377,12 +385,15 @@
    ;     present). apply is a VIEW -- the store never shrinks, and the next sync
    ;     re-derives the whole union. to remove a patch for good you `undo` it,
    ;     which grows an inverse rather than forgetting ---
-   (idpfx pfx)                                                   ; a full id from a prefix: exact | ()
+   (idpfx pfx)                                                   ; one patch from a prefix | ()
     (: n (tally pfx)
        hits (filter (\ i (&& ((tally i) = 64) ((snip i 0 n) = pfx))) (readdir ".seed/patch"))
        (? (1 = (tally hits)) <hits
-          (! (two? hits)) (: _ (say err ("seed: no patch matches " + pfx + "\n")) ())
+          (! (two? hits)) (: _ (say err ("seed: no ref or patch matches " + pfx + "\n")) ())
           (: _ (say err ("seed: " + (show (tally hits)) + " patches match " + pfx + "\n")) ())))
+   (idsof a)                                                     ; a REF -> its whole tip set;
+    (: r (refof a)                                               ; else one patch from a prefix
+       (? (two? r) r (: i (idpfx a) (? i `(i) ()))))
    (closure ids)                                                 ; ids + every dep, transitively
     (: seen (tablet 0)
        (go m) (? (! (two? m)) ()
@@ -398,8 +409,8 @@
        (? (0 < (dirty ()))
           (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
           (: all (readdir ".seed/patch")
-             want (: (go m acc) (? (! (two? m)) (rev acc)
-                       (: i (idpfx <m) (? i (go >m (link i acc)) ())))
+             want (: (go m acc) (? (! (two? m)) acc
+                       (: l (idsof <m) (? (two? l) (go >m (acc + l)) ())))
                      (go args ()))
              (? (&& (two? args) (! (two? want))) 0            ; a prefix failed to resolve; it said so
                 (: ids (? (two? args) (closure want) all)
@@ -412,6 +423,49 @@
                    _ (? (0 = nleft) ()
                         (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
                    (? (0 = nleft) (tally ids) 0))))))
+
+   ; --- bank: freeze the current head under a NAME -- an immutable release, the
+   ;     unit you propagate. git's tag.
+   ;
+   ;     ⚠ hatch.md asks for a SINGLE-TIP head here ("reconcile tips before
+   ;     cutting a release") and that is git thinking that does not survive this
+   ;     model. deps are PER PATH, so a patch only depends on what it TOUCHED --
+   ;     an independent birth is never depended upon and stays maximal forever.
+   ;     three tips is what ordinary parallel work looks like, not a fork to be
+   ;     repaired, and the only way to collapse them is to write a patch touching
+   ;     every path every tip touched, i.e. to edit files to appease the check.
+   ;     so a ref freezes the TIP SET, which is the head DAG state whatever its
+   ;     shape -- the same thing hatch already hashes for its psid, and it never
+   ;     demanded one tip either.
+   ;
+   ;     a banked name is IMMUTABLE: re-banking at the same head is a no-op, at a
+   ;     different head an error. the dep closure derives the patch set from the
+   ;     tips, so `apply NAME` realizes the release and needs nothing stored but
+   ;     the tips. refs are LOCAL for now; propagating them is sync's business and
+   ;     lands with the fetch-a-release half ---
+   (refs _) (form ".seed/refs")                                  ; ((name (id..) time)..) | ()
+   (refof nm) (: (go m) (? (! (two? m)) ()
+                          ((<<m) = nm) (<><m)
+                          (go >m))
+                 (go (refs ())))
+   (seed-bank args)
+    (: _ (mk ())
+       nm (? (two? args) <args "")
+       (? (! (0 < (tally nm)))
+          (: _ (say err "seed: bank needs a name\n") 0)
+          (0 < (dirty ()))
+          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: tp (sort (tips ()))
+             (? (! (two? tp)) (: _ (say err "seed: nothing recorded to bank\n") 0)
+                (: old (refof nm)
+                   (? (&& (two? old) (! ((show old) = (show tp))))
+                      (: _ (say err ("seed: " + nm + " is already banked at a different head"
+                                     + " -- a banked name is immutable\n")) 0)
+                      (two? old) (: _ (puts ("seed: " + nm + " is already banked\n")) 1)
+                      (: _ (lay ".seed/refs" (show (sort (link (list nm tp (clock 0)) (refs ())))))
+                         _ (puts ("seed: banked " + nm + " at " + (show (tally tp)) + " tip"
+                                  + (? (1 = (tally tp)) "" "s") + " -- " + (sh <tp) + "\n"))
+                         1)))))))
 
    ; --- undo: add the INVERSE patch. removal is growth here, never deletion --
    ;     the patch stays, its dependents stay valid, and the store only gets
@@ -529,6 +583,9 @@ usage: seed VERB ..
   apply [ID..]    realize a dep-consistent SUBSET into the working tree (an ID
                   may be a prefix; its deps come along). checkout and cherry-pick
                   are one act here. no ID realizes the whole store -- the way back
+  bank NAME       freeze the current SINGLE-TIP head as an immutable release
+                  (a forked head refuses -- sync to reconcile first). `apply NAME`
+                  then realizes it
   undo ID [NOTE]  add the INVERSE of a patch -- revert as growth, never deletion.
                   a path that moved on since three-way merges instead of being
                   clobbered: P's write is lifted OUT, later edits stay
@@ -543,6 +600,7 @@ usage: seed VERB ..
              (v = "sync") (? (two? >as) (: r (seed-sync <>as) (quit (? r 0 1))) (usage ()))
              (v = "hatch") (: r (seed-hatch >as) (quit (? r 0 1)))
              (v = "apply") (: r (seed-apply >as) (quit (? r 0 1)))
+             (v = "bank") (? (two? >as) (: r (seed-bank >as) (quit (? r 0 1))) (usage ()))
              (v = "undo") (? (two? >as) (: r (seed-undo >as) (quit (? r 0 1))) (usage ()))
              (v = "log") (: _ (seed-log ()) (quit 0))
              (v = "diff") (: n (seed-diff ()) (quit (? (0 < n) 1 0)))

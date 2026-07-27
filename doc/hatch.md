@@ -140,7 +140,9 @@ earns its keep:
 That painless union is the entire payoff of a patch DAG over a linear trunk, and it lands on
 the thing we actually want.
 
-**A release is a snapshot of a single-tip head.** Day to day you have a DAG with occasional
+**A release is a snapshot of a single-tip head.** *(Falsified in practice — see
+`doc/seed.md` §bank: deps are per-path, so independent births stay maximal and a
+multi-tip head is the normal steady state. A release freezes the tip **set**.)* Day to day you have a DAG with occasional
 divergent tips; you **union the tips when you sync**, and *then* cut a release. Because the
 work is append-mostly, successive snapshots come out inclusion-ordered for free — which *is*
 the default channel of §Refs. The one discipline: **reconcile tips before cutting a

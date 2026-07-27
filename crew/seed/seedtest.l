@@ -283,6 +283,40 @@
  (! u3)                                                 ; a true overlap answers 0...
  (n3 = n2))                                             ; ...and records NOTHING -- resolve first
 
+; --- bank: freeze the head under a NAME, immutable. ⚠ hatch.md asks for a
+;     SINGLE-TIP head and that does not survive per-path deps: an independent
+;     birth is never depended upon, so it stays maximal and TWO tips is what
+;     ordinary parallel work looks like, not a fork to repair. a ref freezes the
+;     TIP SET instead -- the head DAG state whatever its shape, and the same
+;     thing hatch hashes for its psid, so a release and its germ line up ---
+(: _ (mkdir "mrg/k" 493) _ (chdir "mrg/k") _ (mk ())
+   _ (lay "a" "1\n") _ (seed-record "a born")
+   _ (lay "b" "2\n") _ (seed-record "b born -- independent, so BOTH stay tips")
+   ntip (tally (tips ()))
+   b1 (seed-bank '("v1"))
+   b2 (seed-bank '("v1"))                                ; the same head again: idempotent
+   r1 (refof "v1")
+   _ (lay "c" "3\n") _ (seed-record "work after the release")
+   b3 (seed-bank '("v1"))                                ; a DIFFERENT head: immutable, refuses
+   b4 (seed-bank '("v2"))
+   n1 (seed-apply '("v1"))                               ; realize the release BY NAME
+   cgone (look "c")
+   n2 (seed-apply '("v2"))
+   cback (look "c")
+   bad (seed-bank '(""))
+   _ (lay "a" "dirty\n") bdirty (seed-bank '("v3"))      ; a dirty tree refuses too
+   _ (lay "a" "1\n")
+   _ (chdir "../.."))
+
+(assert
+ (2 = ntip)                                              ; two independent births, TWO tips -- normal
+ (1 = b1) (1 = b2)                                       ; banked; re-banking the same head is a no-op
+ (2 = (tally r1))                                        ; the ref froze the TIP SET, not one id
+ (! b3) (1 = b4)                                         ; a banked name is IMMUTABLE
+ (2 = n1) (! (two? cgone))                               ; apply BY NAME realized exactly the release
+ (3 = n2) (two? cback)                                   ; ...and the later ref brings c back
+ (! bad) (! bdirty))                                     ; an empty name and a dirty tree both refuse
+
 ; --- hatch: build the recorded source into a native germ, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
 ;     default ignore, so the build output never dirties the tree); a re-hatch of
