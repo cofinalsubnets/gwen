@@ -40,59 +40,65 @@
                                     (rev (link (snip s st (tally s)) acc)))) 0 0 ())
    (dir? p)     (two? (readdir p))
    (fsize p)    (: st (stat p) (? (two? st) <st ()))
-   ; read a whole file, in CHUNKS. prel's `slurp` draws one character at a time off the
-   ; port, ~50ns a byte, and for a static server that is the entire cost of a response:
-   ; a 66K page took 9.7ms to serve, of which 3.3ms was the read and ~0 the write (`say`
-   ; is already one write(2) stroke). `swig` is the chunk lane a per-byte `see` cannot be
-   ; -- it drains the port's own pending run first, then reads the fd -- and it takes 66K
-   ; from 3.3ms to 0.25ms.
+   ; read a whole file. prel's `slurp` draws one character at a time off the port, ~50ns a
+   ; byte, and for a static server that is the entire cost of a response: a 66K page took
+   ; 9.7ms to serve, of which 3.3ms was the read and ~0 the write. `swig` is the chunk lane
+   ; a per-byte `see` cannot be -- it drains the port's own pending run first, then reads
+   ; the fd. THREE lanes, and which one runs is decided by what `stat` can promise.
    ;
-   ; the protocol is swig's: 0 means NOTHING WAITING OR EOF, and only a `see` tells those
-   ; apart (it parks on a slow fd, and answers -1 at the end). the byte it returns is a
-   ; real byte and has to be kept. a jug collects the pieces, since appending to a string
-   ; would be quadratic across chunks; `(string buf)` is how a cask becomes one (`snip`
-   ; does not reach into a cask, and swig always fills from offset 0, so a partial read
-   ; cannot be resumed into the same buffer).
-   ; the buffer is sized to the FILE, not to a round number. a fixed 64K cask means
-   ; allocating and `string`-copying 64K to serve a 2K stylesheet -- 30x the copying the
-   ; file needs, and it measured as two thirds of the read: 500 reads of papel.css went
-   ; 33ms -> 10ms, of moon.html 90ms -> 30ms, byte for byte the same. the loop still
-   ; handles a short read (the buffer is REUSED, not resumed -- each chunk is copied out
-   ; before the next swig), so a file that grows under us is read whole anyway.
-   ; ..and it asks for ONE BYTE MORE than `stat` said, which is the whole trick. on a
-   ; regular file `read` comes up short only at end of file, so a read short of the buffer
-   ; PROVES we have all of it -- and then the answer is two copies and one syscall, with no
-   ; jug and no loop. asking for exactly `n` would not prove anything: a full buffer is not
-   ; evidence of the end, and a file that GREW between the stat and the read would be handed
-   ; back truncated, with a Content-Length computed off the truncation so nothing downstream
-   ; could notice. that is not hypothetical here -- kiosko's whole job is serving a
-   ; directory that papel is rewriting underneath it.
-   ;
-   ; so a full buffer falls through to the general loop, which appends until the reads stop.
-   ; the loop is also the lane for anything whose stat size is a lie (a /proc file, a fifo),
-   ; and for k <= 0, where `see` is what tells "not ready yet" from "end of file".
-   swigp        (member? 'swig (names ()))       ; ⚠ pinned BEFORE gulp reads it
-   (gulp f)     (: sz (fsize f)
-                   n (? sz sz 0)
-                   q (open f "r")
-                   (? (! q) ()
-                      (! swigp) (: s (slurp q) _ (close q) s)          ; no cb.c: the slow lane still works
-                      (: buf (cask (? (0 < n) (n + 1) 4096))
-                         k (swig q buf)
-                         ; ⚠ `0 < n` GATES the fast path, and it is not a formality: the
-                         ; short-read proof is "stat said n and we read fewer than n+1",
-                         ; which says nothing when stat's n was 0. a procfs file is
-                         ; generated on demand -- it reports size 0 and answers a SHORT
-                         ; READ that is not the end (/proc/cpuinfo handed back 3288 of its
-                         ; 26322 bytes). anything stat cannot size goes round the loop.
-                         (? (&& (0 < n) (&& (0 < k) (k < tally buf)))
-                            (: s (snip (string buf) 0 k) _ (close q) s)
-                            (: j (jug 0)
-                               _ (? (0 < k) (say j (snip (string buf) 0 k)) 0)
-                               (go _) (: k2 (swig q buf)
-                                         (? (0 < k2) (: _ (say j (snip (string buf) 0 k2)) (go ()))
-                                            (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
-                               _ (go ()) _ (close q) (slurp j))))))
+   ; the swig protocol, common to all three: 0 means NOTHING WAITING OR EOF, and only a
+   ; `see` tells those apart (it parks on a slow fd, and answers -1 at the end). the byte
+   ; `see` returns is a real byte and has to be kept.
+   swigp        (member? 'swig (names ()))       ; ⚠ pinned BEFORE the lanes read it
+   ; the CHUNK floor: at or above it, handing back the cask beats copying out of it. the
+   ; two lanes below cost two copies of the body against two syscalls, and 8K is where
+   ; those cross on this machine -- measured, 2000 reads: at 4K copying wins 23ms to 26ms,
+   ; at 8K the cask wins 29ms to 32ms, and it only widens (128K: 114ms to 51ms).
+   caskfloor    8192
+   ; --- lane 3, the general one: chunk into a jug until the reads stop. for anything
+   ; `stat` cannot size -- a procfs file, a fifo -- and the fallback whenever a promise
+   ; below turns out to be false. it reopens, because the lanes above have consumed theirs.
+   (gulp-loop f) (: q (open f "r")
+                    (? (! q) ()
+                       (: j (jug 0) buf (cask 65536)
+                          (go _) (: k (swig q buf)
+                                    (? (0 < k) (: _ (say j (snip (string buf) 0 k)) (go ()))
+                                       (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
+                          _ (go ()) _ (close q) (slurp j))))
+   (gulp f)
+   (: sz (fsize f)
+      n (? sz sz 0)
+      ; ⚠ everything below rests on stat's `n`, so a size of 0 buys nothing and goes round
+      ; the loop. this is not a formality: a procfs file is generated on demand -- it
+      ; reports size 0 and answers SHORT READS THAT ARE NOT THE END. /proc/cpuinfo handed
+      ; back 3288 of its 26322 bytes the one time a short read was trusted here.
+      (? (! (0 < n)) (gulp-loop f)
+         (! swigp) (gulp-loop f)                       ; no cb.c: the slow lane still works
+         (: q (open f "r")
+            (? (! q) ()
+               ; --- lane 1, ZERO copies: ask for exactly n, and if we got n, hand back the
+               ; CASK. `say` writes a cask straight out and `tally` gives its length, so
+               ; nothing downstream needs a string at all. the catch is that a full buffer
+               ; is NOT evidence of the end, so the end is proven separately -- a one-byte
+               ; probe, which costs two syscalls and copies nothing. that is the whole
+               ; trade against lane 2, and why it only pays for a body worth copying.
+               (caskfloor <= n)
+               (: buf (cask n)
+                  k (swig q buf)
+                  probe (cask 1)
+                  (? (&& (k = n) (&& (0 = (swig q probe)) (-1 = (see q))))
+                     (: _ (close q) buf)
+                     (: _ (close q) (gulp-loop f))))    ; it grew, or it shrank
+               ; --- lane 2, TWO copies: ask for ONE BYTE MORE than stat said. on a regular
+               ; file `read` comes up short only at the end, so a read short of the buffer
+               ; proves we have all of it in one syscall, with no probe and no jug. for a
+               ; small body that beats lane 1, because two copies of it are cheaper than
+               ; the two syscalls a proof costs.
+               (: buf (cask (n + 1))
+                  k (swig q buf)
+                  (? (&& (0 < k) (k < tally buf))
+                     (: s (snip (string buf) 0 k) _ (close q) s)
+                     (: _ (close q) (gulp-loop f))))))))    ; it grew past its own size
    ; ⚠ `got?`, not `lit?`: lit? asks "is this a FUNCTION", and a string is not one, so
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
    ; "" and () are both nothing. `=` is the one thing that tells them apart.

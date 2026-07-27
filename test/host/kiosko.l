@@ -135,6 +135,27 @@
                   ((tally body) = (tally big))
                   (body = big)))                               ; ..and byte-for-byte, not just as long
 
+   ; --- the LANE BOUNDARY in the read -------------------------------------------------
+   ; `gulp` picks its lane by size: at or above 8K it hands back the CASK it read into
+   ; (zero copies, end-of-file proven by a one-byte probe), below it copies out (two
+   ; copies, end-of-file proven by a short read). so the answer is a cask on one side of
+   ; 8192 and a string on the other -- fine downstream, since `say` writes either and
+   ; `tally` measures either, but it is exactly the kind of seam that serves right on one
+   ; side and wrong on the other. one file each side of the line, byte for byte.
+   under (: (rep s n) (? (n < 1) "" (s + rep s (n - 1))) (rep "abcdefgh" 1023))   ; 8184
+   over  (: (rep s n) (? (n < 1) "" (s + rep s (n - 1))) (rep "abcdefgh" 1025))   ; 8200
+   _ (put-file "under.txt" under)
+   _ (put-file "over.txt" over)
+   _ (: (bodyof r) (: n (tally r)
+                      i ((: (g k) (? (&& (k < n) (! ((snip r k (k + 4)) = "\r\n\r\n"))) (g (k + 1)) k)) 0)
+                      (snip r (i + 4) n))
+        u (get "/under.txt") o (get "/over.txt")
+        (assert ((tally under) = 8184) ((tally over) = 8200)      ; really either side of 8192
+                ((bodyof u) = under)                              ; the copy lane
+                ((bodyof o) = over)                               ; the cask lane
+                (sub? u "Content-Length: 8184")
+                (sub? o "Content-Length: 8200")))
+
    ; --- the read's SLOW lane, which no served file reaches any more --------------------
    ; `gulp` proves it has the whole file from a SHORT READ: the buffer is one byte larger
    ; than stat said, and on a regular file read comes up short only at the end. that means
