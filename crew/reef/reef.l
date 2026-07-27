@@ -186,18 +186,41 @@
    ;     clean working tree. peer = a directory holding a .reef/ (a peer or a
    ;     cutting); same-path divergence warns and the topo-latest write wins ---
    (rf-dirty _) (tally (rf-scan (sort (rf-walk () (rf-igs ()) ())) (rf-snap ()) ()))
-   (rf-sync-dir sub peer)                                        ; copy missing store files, verify the address
-    (: pd (peer + "/.reef/" + sub + "/") ld (".reef/" + sub + "/")
-       (go m n)
-        (? (! (two? m)) n
+   ; one direction of the store exchange: copy the sha256-named files `to` lacks,
+   ; verifying every address on the way. a nest root is "." or a peer path.
+   ; answers (ncopied nfailed) -- a failed write is a peer we cannot push to.
+   (rf-copy sub from to)
+    (: fd (from + "/.reef/" + sub + "/") td (to + "/.reef/" + sub + "/")
+       (go m n bad)
+        (? (! (two? m)) `(n bad)
            (: h <m
-              (? (! (64 = (tally h))) (go >m n)                  ; only the sha256-named files
-                 (rf-look (ld + h)) (go >m n)                    ; already have it
-                 (: t (rf-look (pd + h))
-                    (? (! (two? t)) (go >m n)
-                       ((sha256 <>t) = h) (: _ (rf-lay (ld + h) <>t) (go >m (n + 1)))
-                       (: _ (say err ("reef: bad address " + h + "\n")) (go >m n)))))))
-       (go (readdir pd) 0))
+              (? (! (64 = (tally h))) (go >m n bad)              ; only the sha256-named files
+                 (two? (rf-look (td + h))) (go >m n bad)         ; already there
+                 (: t (rf-look (fd + h))
+                    (? (! (two? t)) (go >m n bad)
+                       (! ((sha256 <>t) = h))
+                          (: _ (say err ("reef: bad address " + h + "\n")) (go >m n (bad + 1)))
+                       (rf-lay (td + h) <>t) (go >m (n + 1) bad)
+                       (go >m n (bad + 1)))))))
+       (go (readdir fd) 0 0))
+   ; bring THIS nest to the state its store implies: re-derive tips + snap from
+   ; the whole patch set and materialize. cwd-relative, so it settles whichever
+   ; nest we stand in -- both ends of a sync run it. answers (npatches nfiles conflicts)
+   (rf-settle _)
+    (: oldsnap (rf-snap ())
+       ids (readdir ".reef/patch")
+       _ (rf-lay ".reef/tips" (show (rf-derive-tips ids)))
+       dr (rf-derive-snap ids)
+       newsnap <dr
+       ; the derive replays the WHOLE set every time, so a merge settled long ago
+       ; recomputes and would be announced forever: a clean merge is news only
+       ; when it moved the file THIS time. an unresolved conflict always is.
+       ix (: (go m t) (? (two? m) (: _ (pin t <<m <><m) (go >m t)) t))
+       op (ix oldsnap (tablet 0)) np (ix newsnap (tablet 0))
+       cfs (filter (\ e (|| (0 < (<>e)) (! ((peep op <e ()) = (peep np <e ()))))) (<>dr))
+       _ (rf-lay ".reef/snap" (show newsnap))
+       nf (rf-mater oldsnap newsnap)
+       `((tally ids) nf cfs))
    (rf-derive-tips ids)                                          ; the ids nobody depends on
     (: dep (tablet 0)
        _ (: (go m) (? (! (two? m)) ()
@@ -290,32 +313,53 @@
               (: p <<m (? (peep np p 0) (go >m n) (: _ (unlink p) (go >m (n + 1))))))
             (go oldsnap 0))
        (w + d))
+   ; sync is the EXCHANGE, and an exchange has two ends: pull what the peer has
+   ; that we lack, push what we have that it lacks, then settle BOTH nests. the
+   ; derive is a pure function of the patch set, so two nests over one union land
+   ; on the same snap -- after a sync the trees are identical, which is the whole
+   ; "distribution == cloning" claim made good. the peer's half needs its tree
+   ; CLEAN and writable; when it is not we still pull (always safe) and say so,
+   ; leaving the peer's store untouched rather than half-fed.
    (reef-sync peer)
     (: _ (rf-mk ())
        (? (0 < (rf-dirty ()))
           (: _ (say err "reef: working tree has changes; record or revert first\n") 0)
-          (: oldsnap (rf-snap ())
-             nb (rf-sync-dir "blob" peer) np (rf-sync-dir "patch" peer)
-             ids (readdir ".reef/patch")
-             _ (rf-lay ".reef/tips" (show (rf-derive-tips ids)))
-             dr (rf-derive-snap ids)
-             newsnap <dr cfs <>dr
-             _ (rf-lay ".reef/snap" (show newsnap))
-             nc (rf-mater oldsnap newsnap)
-             ; the divergence report: a clean merge is news, a marker is a stop
-             nleft (: (go m n) (? (! (two? m)) n
-                        (: e <m p <e k <>e
-                           _ (say (? (0 = k) out err)
-                                  ("reef: " + (? (0 = k) "merged " "CONFLICT in ") + p
-                                   + " -- " + (<>>e) + "\n"))
-                           (go >m (? (0 = k) n (n + 1)))))
-                      (go cfs 0))
-             _ (puts ("reef: synced -- " + (show (tally ids)) + " patches (" + (show np)
-                      + " new), " + (show nb) + " blobs, " + (show nc) + " files updated"
-                      + (? (0 = nleft) "" (", " + (show nleft) + " conflicted")) + "\n"))
-             _ (? (0 = nleft) ()
-                  (say err "reef: settle the flagged paths, then record -- the resolution is a patch\n"))
-             (? (0 = nleft) (tally ids) 0))))
+          (: home (cwd 0)
+             ; chdir answers () on success and -errno on failure -- BOTH nil, and
+             ; () even sorts BELOW 0, so neither `!` nor `< 0` tells them apart.
+             ; the failure is a CHARM; the success is the zero point.
+             pd (: c (chdir peer)
+                   (? (charm? c) -1
+                      (: _ (rf-mk ()) d (rf-dirty ()) _ (chdir home) d)))
+             (? (pd < 0) (: _ (say err ("reef: cannot reach " + peer + "\n")) 0)
+                (: inb (rf-copy "blob" peer ".") inp (rf-copy "patch" peer ".")
+                   ; the push: only onto a clean peer, and only if every write lands
+                   out1 (? (0 = pd) (rf-copy "blob" "." peer) `(0 0))
+                   out2 (? (0 = pd) (rf-copy "patch" "." peer) `(0 0))
+                   pushed (&& (0 = pd) (&& (0 = (<>out1)) (0 = (<>out2))))
+                   st (rf-settle ())
+                   ; the divergence report: a clean merge is news, a marker is a stop
+                   nleft (: (go m n) (? (! (two? m)) n
+                              (: e <m p <e k <>e
+                                 _ (say (? (0 = k) out err)
+                                        ("reef: " + (? (0 = k) "merged " "CONFLICT in ") + p
+                                         + " -- " + (<>>e) + "\n"))
+                                 (go >m (? (0 = k) n (n + 1)))))
+                            (go (<>>st) 0))
+                   pst (? (! pushed) ()                          ; settle the far end too
+                          (: c (chdir peer) r (rf-settle ()) _ (chdir home) r))
+                   _ (puts ("reef: synced -- " + (show <st) + " patches ("
+                            + (show <inp) + " in, " + (show <out2) + " out), "
+                            + (show (<inb + <out1)) + " blobs, " + (show (<>st)) + " files here"
+                            + (? (two? pst) (", " + (show (<>pst)) + " files there") "")
+                            + (? (0 = nleft) "" (", " + (show nleft) + " conflicted")) + "\n"))
+                   _ (? pushed ()
+                        (say err ("reef: pulled only -- the peer "
+                                  + (? (0 < pd) "has unrecorded changes" "would not take the write")
+                                  + "; run sync from its side to finish\n")))
+                   _ (? (0 = nleft) ()
+                        (say err "reef: settle the flagged paths, then record -- the resolution is a patch\n"))
+                   (? (&& pushed (0 = nleft)) <st 0))))))
 
    ; --- hatch: (source_tree, arch) -> a native seed. the local derivation
    ;     (doc/hatch.md's fallback path: rebuild from a present binary). we hatch
@@ -375,10 +419,10 @@
    (usage _) (: _ (say err "reef -- the patch-set vcs (doc/reef.md)
 usage: reef VERB ..
   record [NOTE]   working changes -> a patch in the store (.reef/)
-  sync PEER       union a peer nest's store (a dir holding .reef/), then
-                  re-derive tips + snap and materialize onto a clean tree.
-                  two patches on one path three-way merge; a true overlap
-                  lands in markers and exits 1 -- resolve, then record
+  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .reef/):
+                  pull what it has, push what it lacks, settle BOTH trees to
+                  the union. two patches on one path three-way merge; a true
+                  overlap lands in markers and exits 1 -- resolve, then record
   hatch [CMD..]   build the recorded source into a native seed (the recipe is
                   CMD.. or .reef/hatch), fingerprint + ledger it by patch set
   log             the patches, newest first (* marks a tip)

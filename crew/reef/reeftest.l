@@ -177,6 +177,39 @@
  ((<>gtext) = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
  (1 = (tally (filter (\ e ("g" = <e)) cfd))))            ; ...and g is named in the report
 
+; --- sync is an EXCHANGE, not a fetch: ONE command settles BOTH nests. the
+;     derive is a pure function of the patch set, so two nests over one union
+;     land on the SAME snap -- after a sync the trees are identical and the far
+;     end needed no attendance. a peer that is dirty takes no push at all (its
+;     store is left whole, never half-fed) and sync says so ---
+(: _ (mkdir "mrg/c" 493) _ (chdir "mrg/c") _ (rf-mk ())
+   _ (rf-lay "shared" "base\n") _ (reef-record "c: the base")
+   _ (mkdir "../d" 493) _ (chdir "../d") _ (rf-mk ())
+   _ (reef-sync "../c")
+   _ (rf-lay "d-only" "from d\n") _ (reef-record "d: its own file")
+   _ (chdir "../c") _ (rf-lay "c-only" "from c\n") _ (reef-record "c: its own file")
+   gotx (reef-sync "../d")                               ; ONE sync, run from c
+   csnap (rf-snap ()) cdirty (rf-dirty ())
+   dhere (rf-look "d-only")                              ; d's file walked in
+   _ (chdir "../d")
+   dsnap (rf-snap ()) ddirty (rf-dirty ())
+   chere (rf-look "c-only")                              ; ...and c's walked out, unattended
+   _ (rf-lay "scratch" "unrecorded\n")                   ; now dirty the peer
+   _ (chdir "../c")
+   nb4 (tally (readdir ".reef/patch"))
+   _ (rf-lay "late" "late work\n") _ (reef-record "c: late")
+   goty (reef-sync "../d")
+   dstore (tally (readdir "../d/.reef/patch"))
+   _ (chdir "../.."))
+
+(assert
+ (0 < gotx)                                              ; the exchange went through
+ (two? dhere) (two? chere)                               ; each nest took the other's file
+ ((show csnap) = (show dsnap))                           ; ...and both derived the SAME snap
+ (0 = cdirty) (0 = ddirty)                               ; ...both trees clean, the far end untouched by hand
+ (0 = goty)                                              ; a DIRTY peer refuses the push
+ (dstore = nb4))                                         ; ...and its store is left whole, not half-fed
+
 ; --- hatch: build the recorded source into a native seed, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
 ;     default ignore, so the build output never dirties the tree); a re-hatch of

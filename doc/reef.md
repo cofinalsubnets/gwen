@@ -5,11 +5,17 @@ Status: **the MVP verb set is live** (2026-07-14): `record` · `sync` · **`hatc
 gated by `make test_reef`; a hunk is test/patch.l's proven `chg` at file grain
 (slot = path, context = old content hash).
 
-- **`sync PEER`** unions a peer nest's store (a directory holding a `.reef/`):
-  copy the missing blobs + patches (content-addressed, so the union just fills
-  gaps), re-derive tips + snap from the *whole* patch set (order-free — the DAG
-  is a pure function of its patches), then materialize the merged snap onto a
-  **clean** working tree (a dirty tree refuses, exit 1). A *convergent* write
+- **`sync PEER`** **exchanges** patch sets with a peer nest (a directory holding a
+  `.reef/`) — it is not a fetch: pull the blobs + patches we lack, push the ones
+  the peer lacks (content-addressed, so a union in either direction just fills
+  gaps), then **settle both nests** — re-derive tips + snap from the *whole* patch
+  set (order-free — the DAG is a pure function of its patches) and materialize
+  onto a **clean** working tree (a dirty tree refuses, exit 1). Because the derive
+  is a pure function of the patch set, both ends land on the *same* snap: after
+  one sync the two trees are identical, from whichever side you ran it. The peer's
+  half needs its tree clean and writable; when it is not, sync still pulls (always
+  safe), leaves the peer's store **whole** rather than half-fed, and says so with
+  exit 1. A *convergent* write
   (two nests reach the same content) is silent. Same-path divergence **merges**:
   the incoming hunk names the content hash it expected, so the common ancestor is
   already in the store and the three sides go to a diff3 line merge
@@ -142,9 +148,11 @@ work anyway, that's the right trade.
 
 ## open forks
 
-1. **`sync` unified, or split `push`/`pull`?** Lean unified (it *is* the thesis),
-   but a directional pair reads clearer when a remote is authoritative
-   (fetching a release ≠ pushing to a peer).
+1. ~~**`sync` unified, or split `push`/`pull`?**~~ **Settled: unified.** One
+   `sync` exchanges both ways and settles both ends, which is the thesis made
+   literal. A peer that cannot take the push degrades to a pull and says so, so
+   the authoritative-remote case (fetching a release) falls out of the same verb
+   rather than needing a directional pair.
 2. **Does a nest need an explicit `pick`/`use` to switch its live ref, or is that
    just `apply <ref>`?** Lean fold-into-`apply`, skip the verb.
 3. **the command surface** — bare `reef <url>` as install, or a front-of-house
