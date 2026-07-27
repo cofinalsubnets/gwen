@@ -913,7 +913,7 @@ moon-sqlite: host out/host$(hsuf)/mooncc
 .PHONY: test_holo
 test_holo: host
 	@echo "HOLO crew/holo/holotest.l"; \
-	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/holotest.l | $m > out/host/.test_holo.out 2>&1; r=$$?; \
+	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/holotest.l | $m > out/host/.test_holo.out 2>&1; r=$$?; \
 	  cat out/host/.test_holo.out; \
 	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_holo.out; } \
 	    || { echo "FAIL holo (exit $$r)"; exit 1; }
@@ -1120,7 +1120,7 @@ test_holofuzz:
 	@echo "test_holofuzz: skipped (needs python3)"
 else
 test_holofuzz: host
-	@echo TEST crew/holo/fuzz/fuzz.py "(holo x64+arm64 encoder differential fuzz)"
+	@echo TEST crew/holo/fuzz/fuzz.py "(holo x64+arm64+riscv encoder differential fuzz)"
 	@if command -v objdump >/dev/null 2>&1; then \
 	   $(PYTHON3) crew/holo/fuzz/fuzz.py --arch x64 -n 8 --seed 20250717 --no-llvm \
 	     || { echo "FAIL holofuzz x64 -- a holo encoding disagrees with objdump"; exit 1; }; \
@@ -1129,6 +1129,10 @@ test_holofuzz: host
 	   $(PYTHON3) crew/holo/fuzz/fuzz.py --arch arm64 -n 8 --seed 20250717 \
 	     || { echo "FAIL holofuzz arm64 -- a holo encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (arm64 skipped: no llvm-mc)"; fi
+	@if command -v llvm-mc >/dev/null 2>&1; then \
+	   $(PYTHON3) crew/holo/fuzz/fuzz.py --arch riscv -n 8 --seed 20250717 \
+	     || { echo "FAIL holofuzz riscv -- a holo encoding disagrees with llvm-mc"; exit 1; }; \
+	 else echo "  (riscv skipped: no llvm-mc)"; fi
 endif
 # uu's NbE kernel lives at love/uu.l (mark + kernel + the sweep into the `uu`
 # book at its tail) and bakes post.l-style through the lib_h/%0.h pattern

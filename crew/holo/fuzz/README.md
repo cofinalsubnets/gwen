@@ -47,6 +47,7 @@ every aarch64 instruction is exactly 4 bytes, the decoded-instruction count must
 python3 crew/holo/fuzz/regmap.py                            # verify the abstract-reg -> x86 map
 python3 crew/holo/fuzz/fuzz.py --arch x64  -n 300 --seed 7  # x64, both decoders
 python3 crew/holo/fuzz/fuzz.py --arch arm64 -n 300 --seed 7 # arm64, via llvm-mc
+python3 crew/holo/fuzz/fuzz.py --arch riscv -n 300 --seed 7 # riscv64, via llvm-mc
 python3 crew/holo/fuzz/fuzz.py --arch x64 -n 250 --seed 3 --no-llvm    # faster, objdump only
 python3 crew/holo/fuzz/fuzz.py --arch arm64 --classes ld,st,li -n 500  # a subset
 ```
@@ -71,8 +72,21 @@ neutral IR maps cleanly; the checkers are arch-specific (arm64 is three-address,
 source operand first, ALU immediates are 12-bit, and logical/mul immediates *raise* rather than
 emit — so those are not fuzzed there).
 
+**riscv64 — 27 classes**: `mov_rr`, `li` (the lui/addiw/slli/addi chain, reconstructed and
+compared by value incl. the 32-bit addiw wraparound), three-address `alu_rr` and 12-bit
+`alu_imm`, the **fused flag classes** (riscv has no flags register, so `cmp`/`ucomisd` remember
+their operands and the consumer fuses: `cmpbr`/`cmpbr_imm` check the whole inverted-hop+`jal`
+shape, `setcc` the `slt`/`sltu`/`seqz` forms, `fcmpbr` the `feq`/`flt`/`fle` predicates),
+`ld`/`st` and the sized family, the far-displacement lui+add lane (`ld_far`), synthesized
+index addressing (`ldx`, `stx`), shifts/rotates (`rot` checks the srli/slli/or triple),
+`shiftv`, `unary`, `sxzx`, `divrem`, `jmpr`/`callr`, `pushpop`, `mulo` (the 5-insn
+mulh-vs-sign-fill shape), and the D lane (`fp3`, `fmov`, `fcvt` incl. the `rtz` rounding mode,
+`fldst`). riscv's `sp` (x2) is a general register in every encoding, so it needs no
+out-of-contract barring at all.
+
 Status as of 2026-07-17: **x64 ~32,500 samples / 5 seeds and arm64 ~27,000 / 5 seeds, zero
-encoder discrepancies on either backend.**
+encoder discrepancies on either backend.** 2026-07-27: **riscv64 27,000 samples / 5 seeds,
+zero discrepancies.**
 
 ## Known out-of-contract inputs (not reachable bugs)
 

@@ -2,8 +2,8 @@
 ; hex the assembler emits, and EVERY one was checked against the real toolchain: emit the bytes,
 ; `objdump -d -M intel`, confirm the mnemonic. so this file is the frozen record of that round-trip
 ; -- if a golden drifts, either the encoder broke or the disassembler disagrees, and either is a bug.
-; run: cat crew/holo/{holo,x64,arm64,thumb2,thumb1,text,elf,holotest}.l | out/host/love
-; (exits nonzero on any miss). it gates both backends, the text front-end, and the ELF linker.
+; run: cat crew/holo/{holo,x64,arm64,thumb2,riscv,thumb1,text,elf,holotest}.l | out/host/love
+; (exits nonzero on any miss). it gates every backend, the text front-end, and the ELF linker.
 
 (: pass (tablet 0) _ (pin pass 0 0)
    fail (tablet 0) _ (pin fail 0 0)
@@ -587,6 +587,143 @@
       `("t1.rem"  "ca17c3175140891a5840c01a04b40022202349005241824201d3121a491c5b1ef7d108bc11005940c91a"
                   '((rem r1 r1 r0 r3))))                               ; |a|,|b| ; core ; sign=sa ; refix
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb1 (at t 2))) 0 t1tests)
+
+   ;; -- the riscv backend (crew/holo/riscv.l): the SAME neutral IR, a FIFTH target -- RV64IMFD
+   ;; (the pine64 ox64's C906, qemu -M virt). fixed 32-bit little-endian, three-address, and NO
+   ;; FLAGS REGISTER: cmp/test/ucomisd emit nothing (or an immediate materialization into x30)
+   ;; and REMEMBER their operands; br/set fuse them into beq/blt/slt/feq forms -- so the flag
+   ;; goldens pair the compare with its consumer. label branches are WIDE (thumb1's shape: the
+   ;; inverted fused branch hops a jal); call/la are the auipc pair. every golden was
+   ;; disassembled by `llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d` (mnemonics in
+   ;; the trailing comment). --
+   rvtests `(
+      ;; immediates: addi / lui+addiw (the 32-bit wraparound pair) / the shift-add chunk chain
+      `("rv.li"       "1305c003"          '((li r0 60)))                ; li a0, 60
+      `("rv.li.neg1"  "1305f0ff"          '((li r0 -1)))                ; li a0, -1
+      `("rv.li.t"     "9302c003"          '((li r8 60)))                ; li t0, 60
+      `("rv.li.32"    "375534121b058567"  '((li r0 305419896)))         ; lui a0,74565 ; addiw a0,a0,1656
+      `("rv.li.edge"  "370500801b05f5ff"  '((li r0 2147483647)))        ; lui a0,524288 ; addiw a0,a0,-1 (the wraparound)
+      `("rv.li.big"   "3775e3f91b05c5791315c5001305f5971315c5001305854a1315c500130555c1"
+                       '((li r0 11400714819323198485)))                 ; the hash mult, bignum-safe: lui+addiw+3x(slli 12; addi)
+      `("rv.mov"      "13850600"          '((mov r0 r3)))               ; mv a0, a3
+      `("rv.mov.sp"   "13040100"          '((mov fp sp)))               ; mv s0, sp
+      ;; ALU: native three-address; immediates ride addi/andi/ori/xori, else materialize in x31
+      `("rv.add"      "3385c500"          '((add r0 r1 r2)))            ; add a0, a1, a2
+      `("rv.sub"      "33870741"          '((sub r4 r5 r6)))            ; sub a4, a5, a6
+      `("rv.and"      "33f5c500"          '((and r0 r1 r2)))            ; and a0, a1, a2
+      `("rv.or"       "b3e86200"          '((or r7 r8 r9)))             ; or a7, t0, t1
+      `("rv.xor"      "33c99900"          '((xor r13 r14 r15)))         ; xor s2, s3, s1 (the callee-saved homes)
+      `("rv.mul"      "3385c502"          '((imul r0 r1 r2)))           ; mul a0, a1, a2
+      `("rv.addi"     "13854506"          '((add r0 r1 100)))           ; addi a0, a1, 100
+      `("rv.subi"     "1385c5f9"          '((sub r0 r1 100)))           ; addi a0, a1, -100 (sub flips)
+      `("rv.andi"     "13757500"          '((and r0 r0 7)))             ; andi a0, a0, 7
+      `("rv.addi.big" "b70f01009b8f4f003385f501" '((add r0 r1 65540)))  ; lui t6,16 ; addiw t6,t6,4 ; add a0,a1,t6
+      `("rv.neg"      "3305a040"          '((neg r0)))                  ; neg a0 (sub a0, x0, a0)
+      `("rv.not"      "93c6f6ff"          '((not r3)))                  ; not a3 (xori -1)
+      ;; shifts and rotates (no rotate in the base ISA: srli/slli/or through x31)
+      `("rv.shl"      "13153500"          '((shl r0 3)))                ; slli a0, a0, 3
+      `("rv.sar"      "93d61640"          '((sar r3 1)))                ; srai a3, a3, 1 (the tag math)
+      `("rv.rol"      "935f0502131505023365f501" '((rol r0 32)))        ; srli t6,a0,32 ; slli a0,a0,32 ; or (the map hash)
+      `("rv.shlv"     "3315b500"          '((shlv r0 r1)))              ; sll a0, a0, a1 (count pinned to r1)
+      `("rv.sarv"     "b3d6b640"          '((sarv r3 r1)))              ; sra a3, a3, a1
+      ;; memory: 12-bit offsets ride the instruction; a far one builds base+hi in x31
+      `("rv.ld"       "03358800"          '((ld r0 r6 8)))              ; ld a0, 8(a6)
+      `("rv.st"       "23b4a500"          '((st r1 8 r0)))              ; sd a0, 8(a1)
+      `("rv.ld.neg"   "03b545ed"          '((ld r0 r1 -300)))           ; ld a0, -300(a1)
+      `("rv.ld.far"   "b7ef0100b38fbf0003b50f24" '((ld r0 r1 123456)))  ; lui t6,30 ; add t6,t6,a1 ; ld a0,576(t6)
+      `("rv.ld1"      "030587ff"          '((ld1 r0 r4 -8)))            ; lb a0, -8(a4) (sign-extends)
+      `("rv.ld2"      "83160101"          '((ld2 r3 sp 16)))            ; lh a3, 16(sp)
+      `("rv.ld4"      "8328c7f9"          '((ld4 r7 r4 -100)))          ; lw a7, -100(a4)
+      `("rv.ldu1"     "03458700"          '((ldu1 r0 r4 8)))            ; lbu a0, 8(a4) (zero-extends)
+      `("rv.ldu4"     "83688700"          '((ldu4 r7 r4 8)))            ; lwu a7, 8(a4)
+      `("rv.st1"      "230ca7fe"          '((st1 r4 -8 r0)))            ; sb a0, -8(a4)
+      `("rv.st4"      "232e17f9"          '((st4 r4 -100 r7)))          ; sw a7, -100(a4)
+      `("rv.sx1"      "1315850313558543"  '((sx1 r0)))                  ; slli a0,a0,56 ; srai a0,a0,56
+      `("rv.sx4"      "9b860600"          '((sx4 r3)))                  ; sext.w a3 (one addiw)
+      `("rv.zx1"      "1375f50f"          '((zx1 r0)))                  ; andi a0, a0, 255
+      `("rv.zx4"      "9398080293d80802"  '((zx4 r7)))                  ; slli a7,a7,32 ; srli a7,a7,32
+      ;; indexed addressing: synthesized through x31 (ldx borrows d, stx borrows x30 far)
+      `("rv.ldx"      "931f3500b38f1f0103b58f00" '((ldx r0 r7 r0 8 8))) ; slli t6,a0,3 ; add t6,t6,a7 ; ld a0,8(t6)
+      `("rv.stx"      "931f3500b38f1f0123b45f00" '((stx r7 r0 8 8 r8))) ; slli ; add ; sd t0,8(t6)
+      `("rv.ldxb"     "b30fd50003c50f01"  '((ldxb r0 r3 r0 1 16)))      ; add t6,a0,a3 ; lbu a0,16(t6) (string-lane peep)
+      `("rv.stxb"     "b30fd5002388af00"  '((stxb r3 r0 1 16 r0)))      ; add t6,a0,a3 ; sb a0,16(t6) (cask-lane pin)
+      `("rv.leax"     "b305630093851500"  '((leax r1 r9 r9 1 1)))       ; add a1,t1,t1 ; addi a1,a1,1
+      `("rv.lea"      "130507fe"          '((lea r0 r4 -32)))           ; addi a0, a4, -32
+      ;; the stack pair (16-byte aligned like arm64), and lr by name across nested calls
+      `("rv.push"     "130101ff2330a100"  '((push r0)))                 ; addi sp,sp,-16 ; sd a0,0(sp)
+      `("rv.pop"      "8336010013010101"  '((pop r3)))                  ; ld a3,0(sp) ; addi sp,sp,16
+      `("rv.push.lr"  "130101ff23301100"  '((push lr)))                 ; addi sp,sp,-16 ; sd ra,0(sp)
+      ;; M division: rounds toward zero like x86, never traps; rem/urem ignore the scratch t
+      `("rv.div"      "33451503"          '((div r0 r0 r7)))            ; div a0, a0, a7
+      `("rv.rem"      "33651503"          '((rem r0 r0 r7 r4)))         ; rem a0, a0, a7
+      `("rv.udiv"     "b3d6f602"          '((udiv r3 r3 r5)))           ; divu a3, a3, a5
+      `("rv.urem"     "b3f6f602"          '((urem r3 r3 r5 r2)))        ; remu a3, a3, a5
+      ;; the flag memory in anger: cmp emits nothing (or an imm into x30) and br/set fuse it.
+      ;; every label branch is the INVERTED fused branch hopping a jal (j21 fixup, +-1MB).
+      `("rv.br.eq"    "6314b5006f00800013000000" '((cmp r0 r1) (br eq l) (nop) (label l)))   ; bne a0,a1,+8 ; j l ; nop
+      `("rv.br.bwd"   "130000006304b5006ff09fff" '((label l) (nop) (cmp r0 r1) (br ne l)))   ; beq hop ; j -8
+      `("rv.br.lt"    "6354b5006f004000"  '((cmp r0 r1) (br lt l) (label l)))     ; bge a0,a1,+8 ; j l
+      `("rv.br.above" "63f4a5006f004000"  '((cmp r0 r1) (br above l) (label l)))  ; bgeu a1,a0,+8 (swapped) ; j l
+      `("rv.br.s"     "b30fb54063d40f006f004000" '((cmp r0 r1) (br s l) (label l)))   ; sub t6,a0,a1 ; bgez t6,+8 ; j l
+      `("rv.cmp.z"    "631405006f004000"  '((cmp r0 0) (br eq l) (label l)))      ; bnez a0,+8 ; j l (x0, free)
+      `("rv.cmp.i"    "130fa0026354e5016f004000" '((cmp r0 42) (br lt l) (label l)))   ; li t5,42 ; bge a0,t5,+8 ; j l
+      `("rv.cmp.2br"  "6354b5006f00c0006314b5006f004000"                          ; one cmp, two brs -- the memory persists
+                       '((cmp r0 r1) (br lt l) (br eq l) (label l)))
+      `("rv.test"     "137f150063040f006f004000" '((test r0 1) (br ne l) (label l)))   ; andi t5,a0,1 ; beqz t5,+8 ; j l
+      `("rv.set.eq"   "b34fb50093b61f00"  '((cmp r0 r1) (set eq r3)))             ; xor t6,a0,a1 ; seqz a3,t6
+      `("rv.set.eqz"  "93361500"          '((cmp r0 0) (set eq r3)))              ; seqz a3, a0
+      `("rv.set.lt"   "b326b500"          '((cmp r0 r1) (set lt r3)))             ; slt a3, a0, a1
+      `("rv.set.ge"   "b326b50093c61600"  '((cmp r0 r1) (set ge r3)))             ; slt ; xori a3,a3,1 (the complement)
+      `("rv.set.ab"   "b3b6a500"          '((cmp r0 r1) (set above r3)))          ; sltu a3, a1, a0 (swapped)
+      ;; adds/subs: the op plus its overflow bit computed into x30 ((d^a)&(d^b) / (a^b)&(a^d));
+      ;; br vs/vc read x30's sign, eq/ne/lt read d against x0
+      `("rv.adds.vs"  "138f0500930f05003385ef01b34ff501334fe501337fff0163540f006f004000"
+                       '((adds r0 r0 r1) (br vs l) (label l)))
+      `("rv.subs.vc"  "138f0500930f05003385ef4133cfef01b3cfaf00337fff0163440f006f004000"
+                       '((subs r0 r0 r1) (br vc l) (label l)))
+      ;; mulo: mulh vs the low half's sign fill (t clobbered, != a,b,d), flag-free
+      `("rv.mulo"     "b396c5023385c502935ff5436384f6016f004000" '((mulo r0 r1 r2 r3 l) (label l)))
+      ;; control: jal wide jumps, the auipc pairs (one 8-byte pcrel fixup each), indirect jalr
+      `("rv.jmp"      "6f00800013000000"  '((jmp l) (nop) (label l)))             ; j l ; nop
+      `("rv.call"     "97000000e780c00013000000" '((call l) (nop) (label l)))     ; auipc ra,0 ; jalr 12(ra) ; nop
+      `("rv.jmpr"     "67800700"          '((jmpr r5)))                 ; jr a5
+      `("rv.callr"    "e7800600"          '((callr r3)))                ; jalr a3
+      `("rv.grpfn"    "130101ff2330110097000000e78080013305d5008330010013010101678000001385060067800000"
+                       '((push lr) (call sib) (add r0 r0 r3) (pop lr) (ret) (label sib) (mov r0 r3) (ret)))
+      `("rv.la"       "1705000013050501970800009388880041424300"
+                       '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))       ; auipc+addi pairs: x at +16, +8
+      `("rv.ret"      "67800000"          '((ret)))                     ; ret (jalr x0, 0(ra))
+      `("rv.sys"      "73000000"          '((sys)))                     ; ecall
+      `("rv.trap"     "73001000"          '((trap)))                    ; ebreak
+      `("rv.align"    "678000001300000067800000" '((ret) (align 8) (label x) (ret)))   ; nop pad
+      ;; scalar-double FP (D): f0..f7 -> fa0..fa7, f8..f15 -> ft0..ft7. SSE-named IR two-address;
+      ;; ucomisd joins the flag memory (feq/flt/fle compute the predicate at the br/set)
+      `("rv.movsd"    "5385b522"          '((movsd f0 f1)))             ; fmv.d fa0, fa1
+      `("rv.addsd"    "5375b502"          '((addsd f0 f1)))             ; fadd.d fa0, fa0, fa1
+      `("rv.subsd"    "d3f5a50a"          '((subsd f1 f0)))             ; fsub.d fa1, fa1, fa0
+      `("rv.mulsd"    "5375b512"          '((mulsd f0 f1)))             ; fmul.d fa0, fa0, fa1
+      `("rv.divsd"    "d3f5a51a"          '((divsd f1 f0)))             ; fdiv.d fa1, fa1, fa0
+      `("rv.f.temps"  "53707002"          '((addsd f8 f15)))            ; fadd.d ft0, ft0, ft7 (the temp file)
+      `("rv.cvtsi2sd" "537527d2"          '((cvtsi2sd f0 r4)))          ; fcvt.d.l fa0, a4
+      `("rv.cvttsd2si" "531725c2"         '((cvttsd2si r4 f0)))         ; fcvt.l.d a4, fa0, rtz (toward zero)
+      `("rv.movqxr"   "d30507f2"          '((movqxr f1 r4)))            ; fmv.d.x fa1, a4
+      `("rv.movqrx"   "530705e2"          '((movqrx r4 f0)))            ; fmv.x.d a4, fa0
+      `("rv.cvtss2sd" "53850542"          '((cvtss2sd f0 f1)))          ; fcvt.d.s fa0, fa1
+      `("rv.cvtsd2ss" "d3751540"          '((cvtsd2ss f1 f0)))          ; fcvt.s.d fa1, fa0
+      `("rv.xorpd"    "530700f2"          '((xorpd f4 f4)))             ; fmv.d.x fa4, zero (zero a double)
+      `("rv.stsd"     "2734a600"          '((stsd r2 8 f0)))            ; fsd fa0, 8(a2)
+      `("rv.ldsd"     "87b50600"          '((ldsd f1 r3 0)))            ; fld fa1, 0(a3)
+      `("rv.stss"     "2724a600"          '((stss r2 8 f0)))            ; fsw fa0, 8(a2)
+      `("rv.ldss"     "87a50600"          '((ldss f1 r3 0)))            ; flw fa1, 0(a3)
+      `("rv.fld.far"  "b77ffbffb38fbf0007b50fc2" '((ldsd f0 r1 -300000)))   ; lui ; add ; fld fa0,-992(t6)
+      `("rv.fbr.ab"   "d39fa5a263840f006f004000" '((ucomisd f0 f1) (br above l) (label l)))   ; flt.d t6,fa1,fa0 ; beqz hop ; j
+      `("rv.fbr.be"   "d39fa5a263940f006f004000" '((ucomisd f0 f1) (br be l) (label l)))      ; flt.d ; bnez hop (the complement)
+      `("rv.fbr.p"    "d32fa5a253afb5a2b3ffef0163940f006f004000"                              ; both-ordered check, hop if set
+                       '((ucomisd f0 f1) (br p l) (label l)))
+      `("rv.fset.ab"  "d39fa5a213850f00"  '((ucomisd f0 f1) (set above r0)))      ; flt.d t6,fa1,fa0 ; mv a0,t6
+      `("rv.fset.be"  "d39fa5a213b51f00"  '((ucomisd f0 f1) (set be r0)))         ; flt.d ; seqz a0,t6
+      `("rv.tp"       "13050200"          '((tp r0))))                  ; mv a0, tp (the thread pointer)
+   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'riscv64 (at t 2))) 0 rvtests)
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)

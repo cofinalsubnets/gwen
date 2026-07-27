@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""holo encoder differential fuzzer -- x86-64 + aarch64 (fuzz-first rung of the ladder).
+"""holo encoder differential fuzzer -- x86-64 + aarch64 + riscv64 (fuzz-first rung of the ladder).
 
 For each generated IR form we know the intended instruction. We ask holo to encode it for the
-selected --arch, then DISASSEMBLE the bytes (x64: objdump, cross-checked by llvm-mc; arm64:
-llvm-mc) and verify the decoded instruction matches intent -- automating exactly the manual
+selected --arch, then DISASSEMBLE the bytes (x64: objdump, cross-checked by llvm-mc; arm64 and
+riscv: llvm-mc) and verify the decoded instruction matches intent -- automating exactly the manual
 round-trip the goldens document ("emit the bytes, disassemble, confirm the mnemonic"), extended
 to operands and run over many forms.
 
@@ -16,7 +16,8 @@ import subprocess, tempfile, os, re, sys, random, argparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 AI = f"{ROOT}/out/host/love"
-HOLO = [f"{ROOT}/crew/holo/holo.l", f"{ROOT}/crew/holo/x64.l", f"{ROOT}/crew/holo/arm64.l"]
+HOLO = [f"{ROOT}/crew/holo/holo.l", f"{ROOT}/crew/holo/x64.l", f"{ROOT}/crew/holo/arm64.l",
+        f"{ROOT}/crew/holo/riscv.l"]
 MASK = (1 << 64) - 1
 
 # --- holo abstract reg <-> x86 (probed by regmap.py; canonical 64-bit names) ---
@@ -683,11 +684,350 @@ GENS_ARM = {
  'setcc': a_setcc, 'sx': a_sx,
 }
 
+# ================================================================ riscv lane
+# holo target 'riscv64: RV64IMFD, fixed 32-bit insns, three-address, NO FLAGS -- cmp/test/ucomisd
+# remember their operands and br/set fuse them, so the flag classes fuzz cmp+CONSUMER pairs and
+# check the whole fused shape (inverted hop + jal for br, slt/sltu/feq/flt/fle for set).
+# Disassembled by llvm-mc --triple=riscv64. Registers print as ABI names (a0/t0/s2/fa0..).
+RV_R2ABI = {'r0':'a0','r1':'a1','r2':'a2','r3':'a3','r4':'a4','r5':'a5','r6':'a6','r7':'a7',
+            'r8':'t0','r9':'t1','r10':'t2','r11':'t3','r12':'t4',
+            'r13':'s2','r14':'s3','r15':'s1','sp':'sp','fp':'s0','lr':'ra'}
+RV_ABI2R = {v: k for k, v in RV_R2ABI.items()}
+RV_ABI2R.update({'zero':'zero','t5':'t5','t6':'t6','gp':'gp','tp':'tp'})
+for _i in range(4, 12):
+    RV_ABI2R[f's{_i}'] = f'r{15+_i}'                     # s4..s11 -> r19..r26 (the bank)
+for _i in range(8):
+    RV_ABI2R[f'fa{_i}'] = f'f{_i}'                       # fa0..fa7 -> f0..f7
+    RV_ABI2R[f'ft{_i}'] = f'f{8+_i}'                     # ft0..ft7 -> f8..f15
+for _i in range(8, 12):
+    RV_ABI2R[f'ft{_i}'] = f'f{8+_i}'                     # ft8..ft11 -> f16..f19
+
+def rv_name_to_abs(name):
+    return RV_ABI2R.get(name.strip())
+
+def disasm_rv(hexstr):
+    """riscv64 via llvm-mc; every emitted insn is 4 bytes (no compressed), so
+    len(insns) == len(bytes)/4 is the free consumption check (cf. arm64)."""
+    spaced = " ".join(f"0x{hexstr[i:i+2]}" for i in range(0, len(hexstr), 2))
+    p = subprocess.run(["llvm-mc","--disassemble","--triple=riscv64","--mattr=+m,+f,+d"],
+                       input=spaced, capture_output=True, text=True)
+    insns = []
+    for line in p.stdout.splitlines():
+        line = line.split("#")[0].strip()
+        if not line or line.startswith('.text'): continue
+        if line.startswith(".byte"):
+            insns.append({'mnem': '.byte', 'ops': '', 'nbytes': 4, 'bad': True}); continue
+        parts = line.split(None, 1)
+        insns.append({'mnem': parts[0], 'ops': (parts[1].strip() if len(parts) > 1 else ''),
+                      'nbytes': 4, 'bad': False})
+    want = len(hexstr) // 8
+    if len(insns) != want:
+        insns.append({'mnem': f'<{len(insns)}!={want} insns>', 'ops': '', 'nbytes': 4, 'bad': True})
+    return insns
+
+def parse_mem_rv(op):
+    """'8(a1)' / '-300(t6)' -> dict or None"""
+    m = re.fullmatch(r'\s*(-?(?:0x[0-9a-f]+|\d+))?\((\w+)\)\s*', op)
+    if not m: return None
+    return {'base': m.group(2), 'index': None, 'scale': 1,
+            'disp': int(m.group(1), 0) if m.group(1) else 0}
+
+def imm_val_rv(op):
+    try: return int(op.strip(), 0)
+    except ValueError: return None
+
+RV_GPREGS = list(RV_R2ABI.keys())
+RV_FREGS = [f"f{i}" for i in range(16)]
+def rv_rand(rng): return rng.choice(RV_GPREGS)
+def rv_frand(rng): return rng.choice(RV_FREGS)
+def rv_imm12(rng): return rng.randint(-2048, 2047)
+
+def rv_chk_seq(insns, want):
+    """want: list of (mnem-set, [operand checks]) where a check is ('r', abs) /
+    ('i', val) / ('m', base, disp). Anchors the whole decode."""
+    ins = expect_n(insns, len(want))
+    for i, (mns, opchecks) in zip(ins, want):
+        chk_mnem(i, mns)
+        o = parse_ops(i['ops'])
+        if len(o) != len(opchecks): raise Fail(f"{i['mnem']}: {len(o)} ops != {len(opchecks)} ({i['ops']})")
+        for got, want_c in zip(o, opchecks):
+            if want_c[0] == 'r': chk_reg(got, want_c[1])
+            elif want_c[0] == 'i':
+                if IMM_VAL(got) != want_c[1]: raise Fail(f"imm {got} != {want_c[1]}")
+            elif want_c[0] == 'm': chk_mem(got, want_c[1], want_c[2])
+
+def rv_mov_rr(rng):
+    d, s = rv_rand(rng), rv_rand(rng)
+    def chk(ins): rv_chk_seq(ins, [({'mv'}, [('r',d),('r',s)])])
+    return f"(mov {d} {s})", chk
+
+def rv_li(rng):
+    d = rv_rand(rng)
+    imm = rng.choice([rv_imm12, imm_s32, imm_u32, imm_big,
+                      lambda r: -r.randint(1<<32, (1<<62))])(rng)
+    def chk(insns):
+        if not insns or any(i['bad'] for i in insns): raise Fail("bad li decode")
+        val = 0
+        for i in insns:
+            o = parse_ops(i['ops']); m = i['mnem']
+            if reg_abs(o[0]) != d: raise Fail(f"li dest {o[0]} != {d}")
+            if m == 'li':      val = IMM_VAL(o[1])
+            elif m == 'lui':   v = IMM_VAL(o[1]) << 12; val = v - (1<<32) if v >= (1<<31) else v
+            elif m == 'addiw': val = ((val + IMM_VAL(o[2])) & 0xffffffff); val -= (1<<32) if val >= (1<<31) else 0
+            elif m == 'addi':  val = val + IMM_VAL(o[2])
+            elif m == 'slli':  val = val << IMM_VAL(o[2])
+            else: raise Fail(f"li unexpected mnem {m}")
+        if (val & MASK) != (imm & MASK): raise Fail(f"li value {hex(val & MASK)} != {hex(imm & MASK)}")
+    return f"(li {d} {imm})", chk
+
+RV_ALU = {'add':'add','sub':'sub','and':'and','or':'or','xor':'xor','imul':'mul'}
+def rv_alu_rr(rng):
+    op = rng.choice(list(RV_ALU)); d,a,b = rv_rand(rng), rv_rand(rng), rv_rand(rng)
+    def chk(ins): rv_chk_seq(ins, [({RV_ALU[op]}, [('r',d),('r',a),('r',b)])])
+    return f"({op} {d} {a} {b})", chk
+
+def rv_alu_imm(rng):
+    # imm 1..2046 avoids the alias minefield (mv at 0, zext.b at and 255, not at xor -1)
+    op = rng.choice(['add','sub','and','or','xor']); d,a = rv_rand(rng), rv_rand(rng)
+    imm = rng.randint(1, 2046)
+    if op == 'and' and imm == 255: imm = 254
+    mn = {'add':'addi','sub':'addi','and':'andi','or':'ori','xor':'xori'}[op]
+    want = -imm if op == 'sub' else imm
+    def chk(ins): rv_chk_seq(ins, [({mn}, [('r',d),('r',a),('i',want)])])
+    return f"({op} {d} {a} {imm})", chk
+
+# cond -> the INVERTED hop mnemonic + whether operands swap (taken-form gt/le/above/be swap)
+RV_HOP = {'eq':('bne',0),'ne':('beq',0),'lt':('bge',0),'ge':('blt',0),
+          'gt':('bge',1),'le':('blt',1),'below':('bgeu',0),'ae':('bltu',0),
+          'above':('bgeu',1),'be':('bltu',1)}
+def rv_cmpbr(rng):
+    cond = rng.choice(list(RV_HOP)); a, b = rv_rand(rng), rv_rand(rng)
+    mn, sw = RV_HOP[cond]
+    x, y = (b, a) if sw else (a, b)
+    def chk(ins): rv_chk_seq(ins, [({mn}, [('r',x),('r',y),('i',8)]),
+                                   ({'j'}, [('i',4)])])
+    return f"(cmp {a} {b}) (br {cond} l) (label l)", chk
+
+def rv_cmpbr_imm(rng):
+    cond = rng.choice(list(RV_HOP)); a = rv_rand(rng); imm = rng.randint(1, 2047)
+    mn, sw = RV_HOP[cond]
+    x, y = ('t5', a) if sw else (a, 't5')
+    def chk(ins): rv_chk_seq(ins, [({'li'}, [('r','t5'),('i',imm)]),
+                                   ({mn}, [('r',x),('r',y),('i',8)]),
+                                   ({'j'}, [('i',4)])])
+    return f"(cmp {a} {imm}) (br {cond} l) (label l)", chk
+
+def rv_setcc(rng):
+    cond = rng.choice(['eq','ne','lt','ge','gt','le','below','above','ae','be','s','ns'])
+    a, b, d = rv_rand(rng), rv_rand(rng), rv_rand(rng)
+    XORI1 = ({'xori'}, [('r',d),('r',d),('i',1)])
+    shapes = {
+     'eq':    [({'xor'}, [('r','t6'),('r',a),('r',b)]), ({'seqz'}, [('r',d),('r','t6')])],
+     'ne':    [({'xor'}, [('r','t6'),('r',a),('r',b)]), ({'snez'}, [('r',d),('r','t6')])],
+     'lt':    [({'slt'}, [('r',d),('r',a),('r',b)])],
+     'ge':    [({'slt'}, [('r',d),('r',a),('r',b)]), XORI1],
+     'gt':    [({'slt'}, [('r',d),('r',b),('r',a)])],
+     'le':    [({'slt'}, [('r',d),('r',b),('r',a)]), XORI1],
+     'below': [({'sltu'}, [('r',d),('r',a),('r',b)])],
+     'above': [({'sltu'}, [('r',d),('r',b),('r',a)])],
+     'ae':    [({'sltu'}, [('r',d),('r',a),('r',b)]), XORI1],
+     'be':    [({'sltu'}, [('r',d),('r',b),('r',a)]), XORI1],
+     's':     [({'sub'}, [('r','t6'),('r',a),('r',b)]), ({'sltz'}, [('r',d),('r','t6')])],
+     'ns':    [({'sub'}, [('r','t6'),('r',a),('r',b)]), ({'sltz'}, [('r',d),('r','t6')]), XORI1],
+    }
+    def chk(ins): rv_chk_seq(ins, shapes[cond])
+    return f"(cmp {a} {b}) (set {cond} {d})", chk
+
+RV_LD = {'ld':'ld','ld1':'lb','ld2':'lh','ld4':'lw','ldu1':'lbu','ldu2':'lhu','ldu4':'lwu'}
+RV_ST = {'st':'sd','st1':'sb','st2':'sh','st4':'sw'}
+def rv_ld(rng):
+    op = rng.choice(list(RV_LD)); d, base, off = rv_rand(rng), rv_rand(rng), rv_imm12(rng)
+    def chk(ins): rv_chk_seq(ins, [({RV_LD[op]}, [('r',d),('m',base,off)])])
+    return f"({op} {d} {base} {off})", chk
+
+def rv_st(rng):
+    op = rng.choice(list(RV_ST)); base, off, s = rv_rand(rng), rv_imm12(rng), rv_rand(rng)
+    def chk(ins): rv_chk_seq(ins, [({RV_ST[op]}, [('r',s),('m',base,off)])])
+    return f"({op} {base} {off} {s})", chk
+
+def rv_ld_far(rng):
+    d, base = rv_rand(rng), rv_rand(rng)
+    off = rng.choice([1,-1]) * rng.randint(2048, (1<<31) - 4096)
+    lo = off & 4095; lo = lo - 4096 if lo > 2047 else lo
+    hi = ((off - lo) >> 12) & 0xfffff
+    def chk(ins): rv_chk_seq(ins, [({'lui'}, [('r','t6'),('i',hi)]),
+                                   ({'add'}, [('r','t6'),('r','t6'),('r',base)]),
+                                   ({'ld'}, [('r',d),('m','t6',lo)])])
+    return f"(ld {d} {base} {off})", chk
+
+def rv_ldx(rng):
+    d, base, ix = rv_rand(rng), rv_rand(rng), rv_rand(rng)
+    sc = rng.choice([2,4,8]); dp = rv_imm12(rng)
+    amt = {2:1,4:2,8:3}[sc]
+    def chk(ins): rv_chk_seq(ins, [({'slli'}, [('r','t6'),('r',ix),('i',amt)]),
+                                   ({'add'}, [('r','t6'),('r','t6'),('r',base)]),
+                                   ({'ld'}, [('r',d),('m','t6',dp)])])
+    return f"(ldx {d} {base} {ix} {sc} {dp})", chk
+
+def rv_stx(rng):
+    base, ix, s = rv_rand(rng), rv_rand(rng), rv_rand(rng)
+    sc = rng.choice([2,4,8]); dp = rv_imm12(rng)
+    amt = {2:1,4:2,8:3}[sc]
+    def chk(ins): rv_chk_seq(ins, [({'slli'}, [('r','t6'),('r',ix),('i',amt)]),
+                                   ({'add'}, [('r','t6'),('r','t6'),('r',base)]),
+                                   ({'sd'}, [('r',s),('m','t6',dp)])])
+    return f"(stx {base} {ix} {sc} {dp} {s})", chk
+
+def rv_shift(rng):
+    op = rng.choice(['shl','shr','sar']); mn = {'shl':'slli','shr':'srli','sar':'srai'}[op]
+    d = rv_rand(rng); c = rng.randint(1, 63)
+    def chk(ins): rv_chk_seq(ins, [({mn}, [('r',d),('r',d),('i',c)])])
+    return f"({op} {d} {c})", chk
+
+def rv_rot(rng):
+    op = rng.choice(['rol','ror']); d = rv_rand(rng); c = rng.randint(1, 63)
+    k = c if op == 'ror' else (64 - c) & 63
+    def chk(ins):
+        rv_chk_seq(ins, [({'srli'}, [('r','t6'),('r',d),('i',k)]),
+                         ({'slli'}, [('r',d),('r',d),('i',(64-k)&63)]),
+                         ({'or'}, [('r',d),('r',d),('r','t6')])])
+    return f"({op} {d} {c})", chk
+
+def rv_shiftv(rng):
+    op = rng.choice(['shlv','shrv','sarv']); mn = {'shlv':'sll','shrv':'srl','sarv':'sra'}[op]
+    d = rng.choice([r for r in RV_GPREGS if r != 'r1'])
+    def chk(ins): rv_chk_seq(ins, [({mn}, [('r',d),('r',d),('r','r1')])])
+    return f"({op} {d} r1)", chk
+
+def rv_unary(rng):
+    op = rng.choice(['neg','not','inc','dec']); d = rv_rand(rng)
+    shapes = {'neg': [({'neg'}, [('r',d),('r',d)])],
+              'not': [({'not'}, [('r',d),('r',d)])],
+              'inc': [({'addi'}, [('r',d),('r',d),('i',1)])],
+              'dec': [({'addi'}, [('r',d),('r',d),('i',-1)])]}
+    def chk(ins): rv_chk_seq(ins, shapes[op])
+    return f"({op} {d})", chk
+
+RV_SXZX = {'sx1': [({'slli'},56),({'srai'},56)], 'sx2': [({'slli'},48),({'srai'},48)],
+           'zx2': [({'slli'},48),({'srli'},48)], 'zx4': [({'slli'},32),({'srli'},32)]}
+def rv_sxzx(rng):
+    op = rng.choice(list(RV_SXZX)); d = rv_rand(rng)
+    def chk(ins): rv_chk_seq(ins, [(mns, [('r',d),('r',d),('i',c)]) for mns,c in RV_SXZX[op]])
+    return f"({op} {d})", chk
+
+def rv_divrem(rng):
+    op = rng.choice(['div','udiv','rem','urem']); mn = {'div':'div','udiv':'divu','rem':'rem','urem':'remu'}[op]
+    d,a,b,t = rv_rand(rng), rv_rand(rng), rv_rand(rng), rv_rand(rng)
+    ir = f"({op} {d} {a} {b})" if op in ('div','udiv') else f"({op} {d} {a} {b} {t})"
+    def chk(ins): rv_chk_seq(ins, [({mn}, [('r',d),('r',a),('r',b)])])
+    return ir, chk
+
+def rv_jmpr(rng):
+    d = rv_rand(rng)
+    def chk(ins):
+        if d == 'lr':                       # jalr x0, 0(ra) prints as the `ret` alias
+            i = expect_single(ins); chk_mnem(i, {'ret'})
+        else:
+            rv_chk_seq(ins, [({'jr'}, [('r',d)])])
+    return f"(jmpr {d})", chk
+
+def rv_callr(rng):
+    d = rv_rand(rng)
+    def chk(ins): rv_chk_seq(ins, [({'jalr'}, [('r',d)])])
+    return f"(callr {d})", chk
+
+RV_FP3 = {'addsd':'fadd.d','subsd':'fsub.d','mulsd':'fmul.d','divsd':'fdiv.d'}
+def rv_fp3(rng):
+    op = rng.choice(list(RV_FP3)); d, s = rv_frand(rng), rv_frand(rng)
+    def chk(ins): rv_chk_seq(ins, [({RV_FP3[op]}, [('r',d),('r',d),('r',s)])])
+    return f"({op} {d} {s})", chk
+
+def rv_fmov(rng):
+    d, s = rv_frand(rng), rv_frand(rng)
+    def chk(ins): rv_chk_seq(ins, [({'fmv.d'}, [('r',d),('r',s)])])
+    return f"(movsd {d} {s})", chk
+
+def rv_fcvt(rng):
+    which = rng.choice(['cvtsi2sd','cvttsd2si','movqxr','movqrx'])
+    f, g = rv_frand(rng), rv_rand(rng)
+    shapes = {'cvtsi2sd': (f"(cvtsi2sd {f} {g})", [({'fcvt.d.l'}, [('r',f),('r',g)])]),
+              'cvttsd2si': (f"(cvttsd2si {g} {f})", [({'fcvt.l.d'}, [('r',g),('r',f),('i',None)])]),
+              'movqxr': (f"(movqxr {f} {g})", [({'fmv.d.x'}, [('r',f),('r',g)])]),
+              'movqrx': (f"(movqrx {g} {f})", [({'fmv.x.d'}, [('r',g),('r',f)])])}
+    ir, want = shapes[which]
+    def chk(ins):
+        if which == 'cvttsd2si':   # trailing rtz rounding-mode token
+            i = expect_single(ins); chk_mnem(i, {'fcvt.l.d'}); o = parse_ops(i['ops'])
+            chk_reg(o[0], g); chk_reg(o[1], f)
+            if len(o) != 3 or o[2] != 'rtz': raise Fail(f"fcvt.l.d rm {o[2:]} != rtz")
+        else:
+            rv_chk_seq(ins, want)
+    return ir, chk
+
+def rv_fldst(rng):
+    which = rng.choice(['ldsd','stsd','ldss','stss'])
+    f, base, off = rv_frand(rng), rv_rand(rng), rv_imm12(rng)
+    if which == 'ldsd':
+        ir, want = f"(ldsd {f} {base} {off})", [({'fld'}, [('r',f),('m',base,off)])]
+    elif which == 'stsd':
+        ir, want = f"(stsd {base} {off} {f})", [({'fsd'}, [('r',f),('m',base,off)])]
+    elif which == 'ldss':
+        ir, want = f"(ldss {f} {base} {off})", [({'flw'}, [('r',f),('m',base,off)])]
+    else:
+        ir, want = f"(stss {base} {off} {f})", [({'fsw'}, [('r',f),('m',base,off)])]
+    def chk(ins): rv_chk_seq(ins, want)
+    return ir, chk
+
+RV_FHOP = {'above': ('flt.d', 1, 'beqz'), 'be': ('flt.d', 1, 'bnez'),
+           'ae': ('fle.d', 1, 'beqz'), 'below': ('fle.d', 1, 'bnez'),
+           'eq': ('feq.d', 0, 'beqz'), 'ne': ('feq.d', 0, 'bnez')}
+def rv_fcmpbr(rng):
+    cond = rng.choice(list(RV_FHOP)); a, b = rv_frand(rng), rv_frand(rng)
+    mn, sw, hop = RV_FHOP[cond]
+    x, y = (b, a) if sw else (a, b)
+    def chk(ins): rv_chk_seq(ins, [({mn}, [('r','t6'),('r',x),('r',y)]),
+                                   ({hop}, [('r','t6'),('i',8)]),
+                                   ({'j'}, [('i',4)])])
+    return f"(ucomisd {a} {b}) (br {cond} l) (label l)", chk
+
+def rv_mulo(rng):
+    regs = rng.sample(RV_GPREGS, 4); d, a, b, t = regs
+    def chk(ins): rv_chk_seq(ins, [({'mulh'}, [('r',t),('r',a),('r',b)]),
+                                   ({'mul'}, [('r',d),('r',a),('r',b)]),
+                                   ({'srai'}, [('r','t6'),('r',d),('i',63)]),
+                                   ({'beq'}, [('r',t),('r','t6'),('i',8)]),
+                                   ({'j'}, [('i',4)])])
+    return f"(mulo {d} {a} {b} {t} l) (label l)", chk
+
+def rv_pushpop(rng):
+    if rng.random() < 0.5:
+        s = rv_rand(rng)
+        def chk(ins): rv_chk_seq(ins, [({'addi'}, [('r','sp'),('r','sp'),('i',-16)]),
+                                       ({'sd'}, [('r',s),('m','sp',0)])])
+        return f"(push {s})", chk
+    d = rv_rand(rng)
+    def chk(ins): rv_chk_seq(ins, [({'ld'}, [('r',d),('m','sp',0)]),
+                                   ({'addi'}, [('r','sp'),('r','sp'),('i',16)])])
+    return f"(pop {d})", chk
+
+GENS_RV = {
+ 'mov_rr': rv_mov_rr, 'li': rv_li, 'alu_rr': rv_alu_rr, 'alu_imm': rv_alu_imm,
+ 'cmpbr': rv_cmpbr, 'cmpbr_imm': rv_cmpbr_imm, 'setcc': rv_setcc,
+ 'ld': rv_ld, 'st': rv_st, 'ld_far': rv_ld_far, 'ldx': rv_ldx, 'stx': rv_stx,
+ 'shift': rv_shift, 'rot': rv_rot, 'shiftv': rv_shiftv, 'unary': rv_unary, 'sxzx': rv_sxzx,
+ 'divrem': rv_divrem, 'jmpr': rv_jmpr, 'callr': rv_callr, 'pushpop': rv_pushpop,
+ 'fp3': rv_fp3, 'fmov': rv_fmov, 'fcvt': rv_fcvt, 'fldst': rv_fldst,
+ 'fcmpbr': rv_fcmpbr, 'mulo': rv_mulo,
+}
+
 ARCHES = {
  'x64':  {'target':'x64',   'gens':GENS_X64, 'name_to_abs':name_to_abs,
           'disasm':objdump,  'parse_ops':parse_ops_x64, 'parse_mem':parse_mem_x64, 'llvm':True},
  'arm64':{'target':'arm64', 'gens':GENS_ARM, 'name_to_abs':arm_name_to_abs,
           'disasm':disasm_arm,'parse_ops':parse_ops_arm,'parse_mem':parse_mem_arm,'llvm':False},
+ 'riscv':{'target':'riscv64','gens':GENS_RV, 'name_to_abs':rv_name_to_abs,
+          'disasm':disasm_rv,'parse_ops':parse_ops_x64,'parse_mem':parse_mem_rv,'llvm':False,
+          'imm_val':imm_val_rv},
 }
 
 # ---------------------------------------------------------------- driver
@@ -702,10 +1042,11 @@ def main():
     args = ap.parse_args()
     rng = random.Random(args.seed)
 
-    global NAME_TO_ABS, TARGET_SYM, DISASM, PARSE_OPS, PARSE_MEM
+    global NAME_TO_ABS, TARGET_SYM, DISASM, PARSE_OPS, PARSE_MEM, IMM_VAL
     A = ARCHES[args.arch]
     NAME_TO_ABS, TARGET_SYM = A['name_to_abs'], A['target']
     DISASM, PARSE_OPS, PARSE_MEM = A['disasm'], A['parse_ops'], A['parse_mem']
+    IMM_VAL = A.get('imm_val', imm_val)
     gens = A['gens']; use_llvm2 = A['llvm'] and not args.no_llvm
     classes = list(gens) if args.classes == "all" else args.classes.split(",")
 

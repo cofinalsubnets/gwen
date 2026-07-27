@@ -17,10 +17,12 @@ encode via holo, disassemble the bytes, check the decode matches intent. it is a
 not byte-exact: x86 encoding is non-unique (holo legally picks the 32-bit zero-extend mov, minimal
 disp, redundant rex; arm64 lsl#0 == lsr#0), so registers compare by abstract identity, immediates
 by value, memory structurally. x64 disassembles with objdump (cross-checked by llvm-mc); arm64
-with llvm-mc (host objdump has no aarch64), where every insn is 4 bytes so the instruction count
-is a free consumption check. wide surface (25 x64 classes + 16 arm64), ~32.5k + ~27k samples, zero
-discrepancies. the disassemblers are *trusted* -- this rung grounds holo's decode against the real
-ISA.
+and riscv64 with llvm-mc (host objdump has no aarch64), where every insn is 4 bytes so the
+instruction count is a free consumption check. the riscv lane fuzzes the FUSED shapes -- no flags
+register there, so cmp+br / cmp+set / ucomisd+br pairs check whole sequences (inverted hop + jal,
+slt/feq predicates). wide surface (25 x64 classes + 16 arm64 + 27 riscv), ~32.5k + ~27k + ~27k
+samples, zero discrepancies. the disassemblers are *trusted* -- this rung grounds holo's decode
+against the real ISA.
 
 **rung 2 -- prove** (proof/rocq/enc*.v, `make test_encver`). a machine-checked *reference encoder*
 in Rocq for a slice of the ISA, with `<slice>_roundtrip_ok` proving `decode (encode i) = Some i`
@@ -44,7 +46,7 @@ what rung 1's objdump/llvm cross-check supplies. the honest claim is the composi
 
 | rung | files | domain | check | commit |
 |------|-------|--------|-------|--------|
-| 1 fuzz x64+arm64 | crew/holo/fuzz/ | 25 + 16 classes | decode vs objdump/llvm-mc | `75761e5e` |
+| 1 fuzz x64+arm64+riscv | crew/holo/fuzz/ | 25 + 16 + 27 classes | decode vs objdump/llvm-mc | `75761e5e` |
 | 2a reg-direct | proof/rocq/enc.v | mov + reg-reg ALU, 16x16 x 7 | byte-exact, 1792 | `8ceb2d91` |
 | 2b memory | proof/rocq/encmem.v | ld/st base+disp, ModRM+SIB | byte-exact, 6144 | `c9281f4d` |
 | 2c immediate | proof/rocq/encli.v | `li` 3-way form choice | byte-exact, 320 | `969335e2` |
