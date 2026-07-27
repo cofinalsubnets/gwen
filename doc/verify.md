@@ -73,9 +73,12 @@ repeat: a gate that measures a shape earns a theorem that OWNS the shape.
 
 1. **the evaluator refinement gap.** ev + the glaze touch the proofs only through
    gen.v's asserts and the oracle fuzz. the realistic work is WIDENING both:
-   more spec.l sections through spec2coq (the skip list names what's unmodeled),
-   richer term generation for the extracted oracle. a small-step machine that
-   spec.v's semantics refines to is the ambitious form.
+   more spec.l sections through spec2coq (the skip list names what's unmodeled;
+   the 2026-07-27 widening took it 114 -> 235 of 654 -- the unit lane, text as
+   spelling, word shifts, list functions with their function arguments, predicates
+   as charms), richer term generation for the extracted oracle. still skipped:
+   floats/complex (honest), lambda alpha-equality, id?, the special forms. a
+   small-step machine that spec.v's semantics refines to is the ambitious form.
 2. **moon is the largest unproven trusted component** -- it compiles love.c and
    most of a userland now, checked only by the corpus gates. the encoder ladder
    covers holo's emission, not moon's selection or regalloc. the honest near-term
