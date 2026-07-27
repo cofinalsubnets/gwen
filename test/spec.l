@@ -248,7 +248,12 @@
 ; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. a ONE-CELL array DEMOTES to its lone
 ; scalar (@(5) = 5, (iota 1) = 0): an array exists only at tally >= 2, there is NO rank-0 kind
 ; (rank/tally/shape read nil on a scalar); EMPTIES stay arrays, carrying the reduction units.
-; + - * // < = broadcast numpy-style (`/` promotes the whole result to r on one inexact cell);
+; + - * // < = and the bitwise << >> & | ^ broadcast numpy-style (`/` promotes the whole
+; result to r on one inexact cell); the bitwise five are the WORD LANE, so they ride a
+; z-tray and REFUSE anything else whole -- a gem/twin tray, or an object tray, answers the
+; zero point rather than mapping elementwise (boxed cells are not words, and a big refuses
+; the bits on a star too). masks are the everyday customer: `<` and `>` broadcast to 0/1,
+; and & | ^ combine them;
 ; reduce net/prod/max/min/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
 ; = stays boolean off the mask: a non-numeric operand beside an array, or non-conformant
 ; shapes, read 0 -- never the arithmetic ()-face (a point/text equals only itself).
@@ -286,6 +291,14 @@
  (? word ("@(ieee-inf ieee-inf)" = (show (@(1.0e308 1.0e308) * @(10.0 10.0)))) 1)  ; a gem-tray SATURATES, never wraps
  (? word (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
  (? word (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
+ ; the bitwise five broadcast too -- the word lane, elementwise
+ (@(240 19) = (@(255 16) ^ @(15 3))) (@(15 0) = (@(255 16) & @(15 3))) (@(12 6) = (@(8 4) | @(4 2)))
+ (@(8 16 24) = (@(1 2 3) << 3)) (@(4 -4) = (@(8 -8) >> 1))       ; >> stays ARITHMETIC per cell
+ (@(240 252) = (255 ^ @(15 3))) (@(2 16) = (@(1 1) << @(1 4)))   ; a star broadcasts; counts can be per-cell
+ (@(5 6) = (@(5 6) | ()))                                        ; ...and the unit still rides through
+ (() = (@(1.5 2.5) ^ @(1 1)))                                    ; a GEM tray is not the word lane: refuses
+ (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ...nor an OBJECT tray: boxed cells, not words
+ (: m @(1 3 5 7 9) (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine: the everyday customer
  (: M (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
     (&& ('(2 2) = (shape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 

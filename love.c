@@ -159,7 +159,16 @@ enum ai_vec_type { ai_Z, ai_R, ai_C, ai_O, };
 // vop_fquot is `//` (truncating integer division). Both stay in the arith group
 // (< vop_lt) so `op >= vop_lt` still selects the compare codes.
 enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
+           vop_band, vop_bor, vop_bxor, vop_bsl, vop_bsr,
            vop_lt, vop_le, vop_gt, vop_ge, vop_eq, };
+// The bitwise codes ride the WORD LANE (test/spec.l's width law): they are defined
+// only where the cells ARE machine words, so a float/complex/object operand takes
+// the whole op to the zero point rather than mapping elementwise.
+#define vop_bitp(op) ((op) >= vop_band && (op) <= vop_bsr)
+// A shift count masks to the word. C leaves a count >= width UNDEFINED and every
+// target we ride happens to mask, but an accident is not a law -- so we mask here
+// and the spec can state it.
+#define shmask(n) ((uintptr_t)(n) & (8 * sizeof(intptr_t) - 1))
 word intern_checked(struct ai*, struct ai_str*);
 uintptr_t intern_reserve(struct ai*);
 uintptr_t hash(struct ai*, intptr_t);
@@ -6074,14 +6083,17 @@ bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a & b) | 1, Ip++, Continue();
  avm_unit(a, b);
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_band);
  return Ap(lvm_band_slow, g); }
 lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a | b) | 1, Ip++, Continue();
  avm_unit(a, b);
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bor);
  return Ap(lvm_bor_slow, g); }
 lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a ^ b) | 1, Ip++, Continue();
  avm_unit(a, b);
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bxor);
  return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `nilp`.)
 
@@ -6090,12 +6102,13 @@ lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
 static lvm(lvm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
  if (!(charmp(a) || widep(a)) || !charmp(b)) return *++Sp = ZeroPoint, Ip++, Continue();
  Have(box_req);
- emit_int(toint(a) >> getcharm(b));
+ emit_int(toint(a) >> shmask(getcharm(b)));
  return *++Sp = _res, Ip++, Continue(); }
 lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b))
-  return *++Sp = putcharm(getcharm(a) >> getcharm(b)), Ip++, Continue();
+  return *++Sp = putcharm(getcharm(a) >> shmask(getcharm(b))), Ip++, Continue();
  avm_unit(a, b);
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bsr);
  return Ap(lvm_bsr_slow, g); }
 
 // << : can overflow the tag, so it always runs through the box/demote path
@@ -6103,9 +6116,10 @@ lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
 // allocate). Shift done in uintptr_t for well-defined overflow.
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  avm_unit(a, b);
+ if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bsl);
  if (!(charmp(a) || widep(a)) || !charmp(b)) return *++Sp = ZeroPoint, Ip++, Continue();
  Have(box_req);
- emit_int((intptr_t)((uintptr_t) toint(a) << getcharm(b)));
+ emit_int((intptr_t)((uintptr_t) toint(a) << shmask(getcharm(b))));
  return *++Sp = _res, Ip++, Continue(); }
 
 op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : nil)   // (charm? x): a fixnum -- a charm, the tagged odd word
@@ -7720,6 +7734,11 @@ static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
   case vop_mul: return (intptr_t)((uintptr_t) a * (uintptr_t) b);
   case vop_quot: case vop_fquot: return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a / b;
   case vop_rem:  return (b == 0 || (a == INTPTR_MIN && b == -1)) ? 0 : a % b;
+  case vop_band: return a & b;
+  case vop_bor:  return a | b;
+  case vop_bxor: return a ^ b;
+  case vop_bsl:  return (intptr_t)((uintptr_t) a << shmask(b));
+  case vop_bsr:  return a >> shmask(b);
   default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // vop_add
 static intptr_t vcmp_flo(int op, ai_flo_t a, ai_flo_t b) {
  switch (op) {
@@ -8189,12 +8208,16 @@ lvm(lvm_vbin, int op) {
  // Mixing ai_C with a ai_O object array is unsupported (neither reads the other's
  // element encoding) -- the ai_O lane wins there.
  if (((aarr && vec(a)->type == ai_C) || (barr && vec(b)->type == ai_C) || Cp(a) || Cp(b))
-     && !(aarr && vec(a)->type == ai_O) && !(barr && vec(b)->type == ai_O))
-  return Ap(lvm_cbin, g, op);
+     && !(aarr && vec(a)->type == ai_O) && !(barr && vec(b)->type == ai_O)) {
+  if (vop_bitp(op)) return *++Sp = ZeroPoint, Ip++, Continue();   // no bits on a complex
+  return Ap(lvm_cbin, g, op); }
  if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
   return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // `=` is boolean: undefined face -> 0, not ()
- if ((aarr && vec(a)->type == ai_O) || (barr && vec(b)->type == ai_O))
-  return Ap(lvm_obin, g, op);                     // object array -> promoting lane
+ if ((aarr && vec(a)->type == ai_O) || (barr && vec(b)->type == ai_O)) {
+  // boxed cells are NOT the word lane: a big refuses the bits on a star, so the
+  // object tray refuses them whole rather than answering per-element nil.
+  if (vop_bitp(op)) return *++Sp = ZeroPoint, Ip++, Continue();
+  return Ap(lvm_obin, g, op); }                   // object array -> promoting lane
  uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type
@@ -8203,6 +8226,7 @@ lvm(lvm_vbin, int op) {
  int tb = barr ? (int) vec(b)->type : flop(b) ? (int) ai_R : (int) ai_Z;
  int ct = ta > tb ? ta : tb;
  bool fdom = ct >= ai_R, cmp = op >= vop_lt;
+ if (vop_bitp(op) && fdom) return *++Sp = ZeroPoint, Ip++, Continue();   // no bits on a gem
  uintptr_t n = bshape_n(a, b);                     // conformance + result size
  if (n == (uintptr_t) -1) return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // non-conformant `=` -> 0
  // `/` over an all-integer broadcast promotes the whole result to f64 the moment

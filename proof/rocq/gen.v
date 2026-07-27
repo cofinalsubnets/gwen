@@ -267,4 +267,4 @@ Theorem gen_113 : (Z.eqb 3 (Z.add 1 2)) = true.  Proof. vm_compute. reflexivity.
 (* (20 = ((hash 1 10 2 20) -> 2 0)) *)
 Theorem gen_114 : (Z.eqb 20 (hget [(1, 10);(2, 20)] 2 0)) = true.  Proof. vm_compute. reflexivity. Qed.
 
-(* 114 theorems generated from 641 asserts seen *)
+(* 114 theorems generated from 652 asserts seen *)
