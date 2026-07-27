@@ -5851,6 +5851,14 @@ static lvm(lvm_add_string) {
                   : Ap(lvm_intern, g); }               // interned symbol
 static lvm(lvm_0) {                             // unsupported mix (array <-> string)
  return *++Sp = ZeroPoint, Ip++, Continue(); }
+// the UNIT lane: a bare mint rides through +/* untouched (() + x = x, x * () = x).
+// The dispatchers early-out a mint BEFORE indexing the matrices (the fast path),
+// so these cells are belt and braces -- but they say the TRUE thing, so the
+// matrix stands correct on its own and the whole square is symmetric, KMint
+// included (mx.v checks it; the mint row/col was asymmetric dead cells before).
+static lvm(lvm_bin_unit) {
+ word a = Sp[0], b = Sp[1];
+ return *++Sp = mintp(a) ? b : a, Ip++, Continue(); }
 
 // The fundamental value kind for generic-op dispatch (enum q in love.h): a fixnum is
 // the odd tag (KCharm), a non-data heap pointer is a thread/function (KHot), else ai_typ
@@ -6041,12 +6049,12 @@ static lvm(data_pair_apply) {
 // to a list (foo stays foo). coins are the per-kind override. so [KNom] no longer mirrors
 // [KChain]: the row is ADD_NOM, and the [KNom] COLUMN routes to lvm_add_string off the
 // number/string rows (the chain row keeps add_seq so list+sym adjoins).
-#define ADD_NUM { NUMK(lvm_addn),     [KMint]=lvm_0,       [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_STR { NUMK(lvm_add_string),[KMint]=lvm_0,      [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_NOM { NUMK(lvm_add_string),[KMint]=lvm_0,      [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_MINT { NUMK(lvm_0),       [KMint]=lvm_0,       [KString]=lvm_0,          [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_TWO { NUMK(lvm_add_seq),  [KMint]=lvm_add_seq, [KString]=lvm_add_seq,    [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_H   { NUMK(lvm_addh),     [KMint]=lvm_addh,    [KString]=lvm_addh,       [KChain]=lvm_addh,    [KNom]=lvm_addh,    [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_NUM { NUMK(lvm_addn),     [KMint]=lvm_bin_unit, [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_STR { NUMK(lvm_add_string),[KMint]=lvm_bin_unit, [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_NOM { NUMK(lvm_add_string),[KMint]=lvm_bin_unit, [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_MINT { NUMK(lvm_bin_unit), [KMint]=lvm_bin_unit, [KString]=lvm_bin_unit,  [KChain]=lvm_bin_unit, [KNom]=lvm_bin_unit, [KMap]=lvm_bin_unit, [KHot]=lvm_bin_unit }
+#define ADD_TWO { NUMK(lvm_add_seq),  [KMint]=lvm_bin_unit, [KString]=lvm_add_seq,    [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
+#define ADD_H   { NUMK(lvm_addh),     [KMint]=lvm_bin_unit, [KString]=lvm_addh,       [KChain]=lvm_addh,    [KNom]=lvm_addh,    [KMap]=lvm_addh, [KHot]=lvm_addh }
 static lvm_t *const ai_add_mx[KN][KN] = {
  [KMint]=ADD_MINT, [KNom]=ADD_NOM,
  [KCharm]=ADD_NUM, [KWide]=ADD_NUM, [KFlo]=ADD_NUM, [KCplx]=ADD_NUM, [KBig]=ADD_NUM, [KVec]=ADD_NUM,
@@ -6062,13 +6070,13 @@ static lvm_t *const ai_add_mx[KN][KN] = {
 // `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
 // * count repeats, lambdas/maps compose (Church mul). chain*chain is the CARTESIAN
 // product (lvm_mul_cart -- the KChain row); string*string / sym*sym stay nil.
-#define MUL_NUM { NUMK(lvm_muln),    [KMint]=lvm_0, [KString]=lvm_mul_rep, [KChain]=lvm_mul_rep, [KNom]=lvm_mul_rep, [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_REP { NUMK(lvm_mul_rep), [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,        [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_NUM { NUMK(lvm_muln),    [KMint]=lvm_bin_unit, [KString]=lvm_mul_rep, [KChain]=lvm_mul_rep, [KNom]=lvm_mul_rep, [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_REP { NUMK(lvm_mul_rep), [KMint]=lvm_bin_unit, [KString]=lvm_0,       [KChain]=lvm_0,        [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
 // the KChain row: like MUL_REP (a number repeats the list), but chain*chain is the
 // CARTESIAN product (the semiring lane). string*chain / nom*chain stay nil.
-#define MUL_CHAIN { NUMK(lvm_mul_rep), [KMint]=lvm_0, [KString]=lvm_0,     [KChain]=lvm_mul_cart, [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_MINT { NUMK(lvm_0),      [KMint]=lvm_0, [KString]=lvm_0,       [KChain]=lvm_0,        [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_H   { NUMK(lvm_mulh),    [KMint]=lvm_mulh, [KString]=lvm_mulh, [KChain]=lvm_mulh,     [KNom]=lvm_mulh,    [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_CHAIN { NUMK(lvm_mul_rep), [KMint]=lvm_bin_unit, [KString]=lvm_0,     [KChain]=lvm_mul_cart, [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
+#define MUL_MINT { NUMK(lvm_bin_unit), [KMint]=lvm_bin_unit, [KString]=lvm_bin_unit, [KChain]=lvm_bin_unit, [KNom]=lvm_bin_unit, [KMap]=lvm_bin_unit, [KHot]=lvm_bin_unit }
+#define MUL_H   { NUMK(lvm_mulh),    [KMint]=lvm_bin_unit, [KString]=lvm_mulh, [KChain]=lvm_mulh,     [KNom]=lvm_mulh,    [KMap]=lvm_mulh, [KHot]=lvm_mulh }
 static lvm_t *const ai_mul_mx[KN][KN] = {
  [KMint]=MUL_MINT, [KNom]=MUL_REP,
  [KCharm]=MUL_NUM, [KWide]=MUL_NUM, [KFlo]=MUL_NUM, [KCplx]=MUL_NUM, [KBig]=MUL_NUM, [KVec]=MUL_NUM,
@@ -6095,8 +6103,9 @@ lvm(lvm_add) {
   return *++Sp = putcharm(t), Ip++, Continue();
  // a bare mint -- the zero point () too -- is +'s IDENTITY in every lane (not just on
  // lists): it nets 0, nothing adjoins nothing, so () + x = x + () = x for all x. (mintp is
- // false for a NAMED symbol, so it skips this unit lane and coerces just below.) This
- // subsumes the per-lane mint cells in ai_add_mx (now unreached for a mint).
+ // false for a NAMED symbol, so it skips this unit lane and coerces just below.) The
+ // matrix says the same thing (its mint row/col is lvm_bin_unit), so this is the fast
+ // path, never load-bearing.
  if (mintp(a)) return *++Sp = b, Ip++, Continue();
  if (mintp(b)) return *++Sp = a, Ip++, Continue();
  return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }

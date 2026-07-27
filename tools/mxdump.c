@@ -25,7 +25,8 @@ static char const *const kname[KN] = {
 static char const *lname(lvm_t *f) {
  return f == lvm_addn ? "addn" : f == lvm_add_string ? "add_string"
       : f == lvm_add_seq ? "add_seq" : f == lvm_addh ? "addh"
-      : f == lvm_0 ? "zero" : f == lvm_muln ? "muln"
+      : f == lvm_0 ? "zero" : f == lvm_bin_unit ? "bin_unit"
+      : f == lvm_muln ? "muln"
       : f == lvm_mul_rep ? "mul_rep" : f == lvm_mul_cart ? "mul_cart"
       : f == lvm_mulh ? "mulh" : "UNKNOWN"; }
 

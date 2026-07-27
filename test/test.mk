@@ -576,6 +576,40 @@ test_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	    p=$$((p+1)); \
 	  done; \
 	  echo "test_riscv: $$p/$$p battery files agree riscv-vs-x64"
+# test_raw's riscv64 twin: mooncc -t riscv64 lays every object (the holo riscv
+# backend + the .o/link reloc path), mksys-riscv the syscall leaf (same
+# asm-generic table as arm64), OUR linker binds, qemu-riscv64 (user) runs the
+# whole corpus over the fresh egg. The riscv backend loads into the sealed holo
+# module at runtime for the mksys step (the host bake carries only the native
+# backend); mooncc.image carries all backends already. Opt-in (not in
+# test_all): the qemu corpus costs a minute. Skips without qemu-riscv64.
+.PHONY: test_raw_riscv
+test_raw_riscv: host out/host$(hsuf)/mooncc out/lib/riscv.h
+	@echo RAW-RISCV $(ho)/love-raw-rv
+	@if ! command -v qemu-riscv64 >/dev/null 2>&1; then echo "test_raw_riscv: no qemu-riscv64, skipped"; exit 0; fi; \
+	  d=$(ho)/raw-rv; mkdir -p $$d; rm -f $$d/*.o; \
+	  $(ho)/mooncc -t riscv64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
+	    || { echo "FAIL mooncc -t riscv64 -c love.c"; exit 1; }; \
+	  for f in host/*.c; do b=`basename $$f .c`; \
+	    $(ho)/mooncc -t riscv64 -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	      || { echo "FAIL mooncc -t riscv64 -c $$f"; exit 1; }; done; \
+	  $(ho)/mooncc -t riscv64 -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
+	    || { echo "FAIL mooncc -t riscv64 -c nolibc.c"; exit 1; }; \
+	  for f in crew/moon/lib/math/*.c; do b=`basename $$f .c`; \
+	    $(ho)/mooncc -t riscv64 -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
+	      || { echo "FAIL mooncc -t riscv64 -c $$f"; exit 1; }; done; \
+	  { echo "(enter ()) (use 'holo)"; cat crew/holo/riscv.l; echo "(leave ())"; \
+	    cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
+	    echo "(mksys-riscv \"$$d/sys.o\")"; } | $m \
+	    || { echo "FAIL mksys-riscv sys.o"; exit 1; }; \
+	  $(ho)/mooncc -t riscv64 $$d/*.o -o $(ho)/love-raw-rv \
+	    || { echo "FAIL our-linker bind love-raw-rv"; exit 1; }; \
+	  cat $t \
+	    | LOVE_NO_IMAGE=1 qemu-riscv64 $(ho)/love-raw-rv > $(ho)/.test_raw_rv.out 2>&1; s=$$?; \
+	  tail -1 $(ho)/.test_raw_rv.out; \
+	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_rv.out; } \
+	    || { echo "FAIL raw-riscv corpus (exit $$s)"; exit 1; }; \
+	  echo "test_raw_riscv: the gcc-free riscv64 love -- mooncc objects, mksys-riscv, our linker, corpus under qemu"
 # test_raw's aarch64 twin (rung D): mooncc -t arm64 lays every object, mksys-arm64
 # the syscall leaf, OUR linker binds, qemu-user runs the corpus over the fresh
 # egg. Runs the WHOLE C-sorted $t (uukind{,law}.l included): the raw binary and
@@ -1118,8 +1152,9 @@ endif
 # design, so the dump reads them out of the same compilation) prints kind and
 # lane names; tools/mx2coq.l DERIVES the band partition from row+column
 # equality and generates proof/rocq/mx.v: the 256-cell tables factor through
-# the band quotient with nothing left over, dispatch commutes on the reachable
-# square (KMint never indexes -- the unit early-out), and the diagonal reads
+# the band quotient with nothing left over, dispatch commutes over the WHOLE
+# square (KMint is its own band, the unit lane -- the dispatchers' mint
+# early-out is the fast path, never load-bearing), and the diagonal reads
 # the lattice. Regenerated every run, so the tables cannot drift from the
 # theorems. Needs coqc (the dump itself needs only $(CC)); no-ops without.
 ifeq ($(COQC),)

@@ -4,13 +4,14 @@
 ; matrices as data -- kind names and lane names in enum order -- to out/.mx.l.
 ; This tool reads that dump and emits Coq where the tables' SHAPE becomes
 ; machine-checked, the shape CLAUDE.md carries as prose today:
-;   * the BAND partition is DERIVED, not assumed: reachable kinds (KMint is
-;     dead in the matrices -- the +/* dispatchers early-out a bare mint as the
-;     unit before indexing) are grouped by row+column equality across BOTH
-;     matrices at once, and the factorization theorems check in Coq that the
-;     256-cell tables carry no information beyond that quotient: a band matrix
-;     plus the band assignment ("every gem/array kind routes identically").
-;   * dispatch COMMUTES: mx[a][b] = mx[b][a] on the reachable square -- the
+;   * the BAND partition is DERIVED, not assumed: kinds are grouped by
+;     row+column equality across BOTH matrices at once, and the factorization
+;     theorems check in Coq that the 256-cell tables carry no information
+;     beyond that quotient: a band matrix plus the band assignment ("every
+;     gem/array kind routes identically"). KMint is its own band, the unit
+;     lane whole (the dispatchers early-out a mint first -- the fast path;
+;     the matrix says the same thing, so nothing rests on the early-out).
+;   * dispatch COMMUTES: mx[a][b] = mx[b][a] over the WHOLE square -- the
 ;     lane fn handles orientation, the matrix never does.
 ;   * the diagonal reads the lattice: one lane per band, the algebra ladder.
 ; An UNKNOWN lane in the dump (a pointer the dumper can't name) refuses here,
@@ -32,16 +33,12 @@
    _ (? (any (\ r (member? 'UNKNOWN r)) (cat addm mulm))
         (: _ (say err ("mx2coq: UNKNOWN lane in the dump -- name it in mxdump.c" + nl)) (quit 1)) 0)
 
-   ; reachable kinds: all but KMint (index 0) -- the dispatchers' unit early-out
-   ; means a bare mint never indexes the matrix, so its row/column are dead cells
-   ridx (jot nk) _ (? (id? (cap kinds) 'KMint) 0
-                      (: _ (say err ("mx2coq: KMint is not kind 0 -- the reachability cut moved" + nl)) (quit 1)))
-   ridx (cup ridx)                                      ; 1..15
+   ridx (jot nk)                                        ; every kind -- the whole square
    (cell m i j) (at (at m i) j)
    (rrow m i) (map (\ j (cell m i j)) ridx)
    (rcol m j) (map (\ i (cell m i j)) ridx)
-   ; a kind's dispatch signature: its row AND column in BOTH matrices, restricted
-   ; to the reachable square -- equal signature = same band
+   ; a kind's dispatch signature: its row AND column in BOTH matrices --
+   ; equal signature = same band
    (sig i) (list (rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i))
    (idxin x l k) (? (! (two? l)) -1 ((cap l) = x) k (idxin x (cup l) (+ 1 k)))
    sigs ((: (go is acc) (? (! is) (rev acc)
@@ -90,9 +87,10 @@
 "   cell tables factor through the band quotient with nothing left over, the" nl
 "   dispatch COMMUTES (orientation lives in the lane fn, never the table), and" nl
 "   the diagonal reads the lattice: one lane per band, the algebra ladder." nl
-"   KMint sits outside: the dispatchers early-out a bare mint as the UNIT before" nl
-"   indexing, so its row/column are dead cells (and indeed asymmetric -- dormant)." nl
-"   The theorems close by vm_compute over the reachable square. *)" nl
+"   KMint is its own band, the unit lane whole: the dispatchers early-out a" nl
+"   bare mint as the UNIT before indexing (the fast path), and the matrix says" nl
+"   the same thing (lvm_bin_unit), so nothing rests on the early-out and the" nl
+"   theorems close by vm_compute over the WHOLE square. *)" nl
 "From Stdlib Require Import List Arith." nl
 "Import ListNotations." nl nl)))
 
@@ -103,10 +101,9 @@
          + " | _, _ => false end." + nl + nl))
    _ (. (mxdef "addmx" addm))
    _ (. (mxdef "mulmx" mulm))
-   ; the band assignment (KMint rides band 0 vacuously -- it is outside rk)
    _ (. ("Definition band (k : kind) : nat := match k with "
          + (join (map (\ c ((? (= 0 c) "" " | ") + (bars (\ i (kn i)) (members c)) + " => " + (show c))) (jot nb)))
-         + " | KMint => 0 end." + nl))
+         + " end." + nl))
    _ (. ("Definition rk : list kind := [" + (commas kn ridx) + "]." + nl + nl))
    _ (. (bandb "addb" addm))
    _ (. (bandb "mulb" mulm))
