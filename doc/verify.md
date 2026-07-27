@@ -76,9 +76,12 @@ dispatch commutativity, the diagonal-is-the-lattice reading, regenerated from
 the C tables every run), and the GC copy loop has its theorems (gc.v's drain_*:
 termination, once-per-object, nothing lost, a true fixpoint -- test_gcheck
 re-drives the whole minor scan on a debug build and traps if a second pass
-copies a word; the guard is sabotage-proven). the next such rung is the
-reader/printer round-trip on the full value grammar (big.v covers the decimal
-integers already).
+copies a word; the guard is sabotage-proven). floats ROUND-TRIP exactly now:
+the printer is shortest-roundtrip (exact Steele & White in love.c) and the
+reader is correctly rounded (am_strtod in the math floor, every frontend --
+glibc's strtod left the trusted base), spec.l pins the classic faces. the
+next such rung is the round-trip on the rest of the data grammar (big.v
+covers the decimal integers; strings/symbols/lists remain).
 
 ## the open seams, ranked
 

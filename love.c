@@ -17,7 +17,8 @@
 // transcendentals; fdlibm and -lm both retired). the 32-bit lane computes in
 // binary64 and narrows -- correct within a float ulp for free.
 double am_sin(double), am_cos(double), am_atan2(double, double),
-       am_sqrt(double), am_exp(double), am_log(double), am_pow(double, double);
+       am_sqrt(double), am_exp(double), am_log(double), am_pow(double, double),
+       am_strtod(char const*, char**);   // correctly rounded read: the printer's twin
 #if UINTPTR_MAX == UINT64_MAX
 #define Bits 64
 typedef double ai_flo_t;
@@ -547,7 +548,6 @@ void *malloc(size_t), free(void*),
  *memset(void*, int, size_t);
 long strtol(char const*restrict, char**restrict, int);
 size_t strlen(char const*);
-double strtod(char const *restrict, char **restrict);
 
 // The lean scalar-float box: ap (lvm_flo) then one payload word holding the
 // punned double -- two words, half the rank-0 ai_R vec it replaced. A GC leaf
@@ -3866,52 +3866,114 @@ static ai_inline struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x) {
  c = ai_core_of(g);
  return c->sp = topof(c) - base, g; }               // restore original stack height
 
-// AI slop alert....
-//
+// --- the SHORTEST-ROUNDTRIP float printer (exact Steele & White) -----------
+// a gem prints the fewest digits that read back to exactly its bits. the
+// machinery is EXACT decimal integers on the stack: a float is m * 2^e with a
+// small integer m, so 4m and the two binary-rounding midpoints 4m+-2 (4m-1 at
+// a binade floor, where the gap below halves) at 2^(e-2) are integers whose
+// decimal expansions are finite -- digit arrays under x2/x5 carry walks, no
+// libm, no strtod, no allocation, the same digits on every target. the answer
+// is the least N such that rounding v's digits to N lands strictly inside
+// (lo, hi) -- interval closed when the mantissa is even, since round-to-
+// nearest-even reads a midpoint back to v. the old printer's 15-digit chop
+// conflated neighbors (0.1 + 0.2 printed "0.3") and drifted in its divide-
+// down loop (1.5e308 printed "1.4999..."); exactness retires both.
+
+// digit arrays: base-10, LSB first, no leading zeros; value = digits * 10^scale
+enum { dgmax = sizeof(ai_flo_t) == 4 ? 128 : 800 };   // worst expansion: every x5 step adds < 1 digit
+static void dg_mul2(unsigned char *d, int *n) {
+ int c = 0;
+ for (int i = 0; i < *n; i++) { int t = d[i] * 2 + c; d[i] = t % 10; c = t / 10; }
+ if (c) d[(*n)++] = c; }
+static void dg_mul5(unsigned char *d, int *n) {
+ int c = 0;
+ for (int i = 0; i < *n; i++) { int t = d[i] * 5 + c; d[i] = t % 10; c = t / 10; }
+ if (c) d[(*n)++] = c; }
+static int dg_cmp(unsigned char const *a, int na, unsigned char const *b, int nb) {
+ if (na != nb) return na < nb ? -1 : 1;
+ for (int i = na - 1; i >= 0; i--) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
+ return 0; }
+// expand m * 2^e2 into d; every caller shares one e2, so the scales align and
+// the arrays compare directly as integers
+static void dg_expand(unsigned char *d, int *n, uintptr_t m, int e2) {
+ *n = 0;
+ if (!m) d[(*n)++] = 0;
+ while (m) d[(*n)++] = m % 10, m /= 10;
+ for (; e2 > 0; e2--) dg_mul2(d, n);
+ for (; e2 < 0; e2++) dg_mul5(d, n); }
 
 static struct ai* ai_dtoa2(struct ai*g, ai_flo_t v) {
- int const max_frac = sizeof(ai_flo_t) == 4 ? 7 : 15;
  if (v != v) return ioputs(g, "ieee-nan");
  if (v < 0) g = ioputc(g, '-'), v = -v;
  if (v > dtoa_inf) return ioputs(g, "ieee-inf");
- int exp = 0;
- bool sci = false;
- if (v != 0 && (v >= dtoa_sci_hi || v < dtoa_sci_lo)) {
-  sci = true;
-  while (v >= 10) v /= 10, exp++;
-  while (v < 1)  v *= 10, exp--; }
- // integer part, lsb-first then reversed
- word ip = (word) v;
- ai_flo_t frac = v - (ai_flo_t) ip;
- char ib[24];
- int ib_n = 0;
- if (ip == 0) ib[ib_n++] = '0';
- while (ip) ib[ib_n++] = '0' + ip % 10, ip /= 10;
- while (ib_n > 0) g = ioputc(g, ib[--ib_n]);
- // fractional digits; in non-scientific mode always emit at least ".0"
- // so the result is visually distinguishable from a fixnum.
- bool emit_frac = frac > 0 || !sci;
- if (emit_frac) {
-  char fb[16];
-  int fb_n = 0;
-  for (int i = 0; i < max_frac && frac > 0; i++) {
-   frac *= 10;
-   int d = (int) frac;
-   if (d > 9) d = 9;
-   fb[fb_n++] = '0' + d;
-   frac -= d; }
-  while (fb_n > 0 && fb[fb_n - 1] == '0') fb_n--;
-  if (!sci && fb_n == 0) fb[fb_n++] = '0';      // force "X.0" for ints
-  if (fb_n > 0) {
-   g = ioputc(g, '.');
-   for (int i = 0; i < fb_n; i++) g = ioputc(g, fb[i]); } }
+ if (v == 0) return ioputs(g, "0.0");
+ int const mbits = sizeof(ai_flo_t) == 4 ? 23 : 52;
+ int const ebits = sizeof(ai_flo_t) == 4 ? 8 : 11;
+ int const bias  = sizeof(ai_flo_t) == 4 ? 127 : 1023;
+ uintptr_t bits = ((ai_flo_pun){ .d = v }).u;
+ uintptr_t mant = bits & (((uintptr_t) 1 << mbits) - 1);
+ int be = (int) ((bits >> mbits) & (((uintptr_t) 1 << ebits) - 1));
+ uintptr_t m = be ? mant | ((uintptr_t) 1 << mbits) : mant;   // denormal: no implicit bit
+ int e2 = (be ? be : 1) - bias - mbits;
+ // v, lo, hi at one shared exponent e2-2: lo halves its distance at a binade
+ // floor (mantissa field 0, and a normal above the lowest -- there the gap
+ // below already equals the denormal spacing)
+ bool floorb = be > 1 && mant == 0;
+ unsigned char dv[dgmax], dl[dgmax], dh[dgmax], dc[dgmax];
+ int nv, nl, nh, nc = 0;
+ dg_expand(dv, &nv, 4 * m, e2 - 2);
+ dg_expand(dl, &nl, 4 * m - (floorb ? 1 : 2), e2 - 2);
+ dg_expand(dh, &nh, 4 * m + 2, e2 - 2);
+ bool even = !(m & 1);                       // round-to-nearest-even: midpoints read back to v
+ // the least N whose rounded form sits inside the interval: at each N try the
+ // truncation and the bump (the only N-digit values adjacent to v), nearer one
+ // first; at N = all-of-v's-digits the truncation IS v, strictly inside, so
+ // this terminates
+ for (int N = 1; N <= nv; N++) {
+  int k = nv - N;                            // low digits dropped
+  int first = k > 0 && dv[k - 1] >= 5;       // the nearer candidate leads (a display nicety)
+  for (int t = 0; t < 2; t++) {
+   int up = t ? !first : first;
+   for (int i = 0; i < nv; i++) dc[i] = i < k ? 0 : dv[i];
+   nc = nv;
+   if (up) {                                 // bump: + 10^k, with carry
+    int c = 1;
+    for (int i = k; c && i < nc; i++) { int s = dc[i] + c; dc[i] = s % 10; c = s / 10; }
+    if (c) dc[nc++] = 1; }
+   int cl = dg_cmp(dc, nc, dl, nl), ch = dg_cmp(dc, nc, dh, nh);
+   if ((cl > 0 || (even && cl == 0)) && (ch < 0 || (even && ch == 0))) goto chosen; } }
+chosen:;
+ // dc holds the winner; strip its trailing zeros into significant digits
+ int lead = nc;                              // total digits, before stripping
+ int drop = 0;
+ while (drop < nc - 1 && dc[drop] == 0) drop++;
+ int sig = nc - drop;
+ // decimal exponent: value = dc * 10^scale, scale = the x5 steps taken
+ int scale = e2 - 2 < 0 ? e2 - 2 : 0;
+ int dxp = lead + scale;                     // value = 0.<digits> * 10^dxp
+ char ob[48]; int on = 0;                    // sig <= 17 and |dxp| <= 350: fits
+ bool sci = v >= dtoa_sci_hi || v < dtoa_sci_lo;
  if (sci) {
-  g = ioputc(g, 'e');
-  if (exp < 0) g = ioputc(g, '-'), exp = -exp;
-  char eb[8]; int eb_n = 0;
-  if (exp == 0) eb[eb_n++] = '0';
-  while (exp) eb[eb_n++] = '0' + exp % 10, exp /= 10;
-  while (eb_n > 0) g = ioputc(g, eb[--eb_n]); }
+  ob[on++] = '0' + dc[nc - 1];
+  if (sig > 1) { ob[on++] = '.';
+   for (int i = nc - 2; i >= drop; i--) ob[on++] = '0' + dc[i]; }
+  ob[on++] = 'e';
+  int e = dxp - 1;
+  if (e < 0) ob[on++] = '-', e = -e;
+  char eb[8]; int en = 0;
+  if (!e) eb[en++] = '0';
+  while (e) eb[en++] = '0' + e % 10, e /= 10;
+  while (en) ob[on++] = eb[--en]; }
+ else if (dxp > 0) {                         // 1 <= v < 1e16: point inside or after
+  for (int i = 0; i < dxp; i++) ob[on++] = i < sig ? '0' + dc[nc - 1 - i] : '0';
+  ob[on++] = '.';
+  if (sig > dxp) for (int i = dxp; i < sig; i++) ob[on++] = '0' + dc[nc - 1 - i];
+  else ob[on++] = '0'; }                     // integral: force "X.0", never a fixnum face
+ else {                                      // 1e-4 <= v < 1: leading "0."
+  ob[on++] = '0'; ob[on++] = '.';
+  for (int i = 0; i < -dxp; i++) ob[on++] = '0';
+  for (int i = 0; i < sig; i++) ob[on++] = '0' + dc[nc - 1 - i]; }
+ for (int i = 0; i < on; i++) g = ioputc(g, ob[i]);
  return g; }
 
 // (feof port) — -1 if at end of stream, nil otherwise.
@@ -4042,7 +4104,7 @@ static ai_noinline double strtod_wrap(struct ai*g, word x) {
  char *e, *b = off_pool(g);
  memcpy(b, s->bytes, s->len);
  b[s->len] = 0;
- double r = strtod(b, &e);
+ double r = am_strtod(b, &e);
  return e != b && *e == 0 ? (ai_flo_t) r : (ai_flo_t) NAN; }
 
 // (flo s) — parse a l string as a decimal float. Returns a rank-0
@@ -4438,7 +4500,7 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
       else {
        char c0 = *tx == '+' || *tx == '-' ? tx[1] : *tx;
        if (!(c0 >= '0' && c0 <= '9') && c0 != '.') return intern(g);
-       d = strtod(tx, &e);
+       d = am_strtod(tx, &e);
        if (e == tx || *e != 0) return intern(g); }
       if (ai_ok(g = ai_have(g, flo_req)))
        g->sp[0] = mk_flo(&g->hp, d);

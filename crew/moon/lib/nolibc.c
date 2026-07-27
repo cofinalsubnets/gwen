@@ -1284,33 +1284,13 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
   else if (n < -1022) { x *= __e2d(-969); n += 969;
     if (n < -1022) { x *= __e2d(-969); n += 969; if (n < -1022) n = -1022; } }
   return x * __e2d(n); }
-double strtod(char const *s, char **end) {
-  char const *p = s;
-  int sign = 1;
-  if (*p == '-') { sign = -1; p++; }
-  else if (*p == '+') p++;
-  int any = 0;
-  double v = 0;
-  while (*p >= 48 && *p <= 57) { v = v * 10 + (*p++ - 48); any = 1; }
-  if (*p == '.') {
-    p++;
-    double scale = 0.1;
-    while (*p >= 48 && *p <= 57) { v += (*p++ - 48) * scale; scale *= 0.1; any = 1; } }
-  if (!any) { if (end) *end = (char *) s; return 0; }
-  if (*p == 'e' || *p == 'E') {
-    char const *q = p++;
-    int esign = 1;
-    if (*p == '-') { esign = -1; p++; }
-    else if (*p == '+') p++;
-    if (!(*p >= 48 && *p <= 57)) p = q;
-    else {
-      int e = 0;
-      while (*p >= 48 && *p <= 57) e = e * 10 + (*p++ - 48);
-      double scale = 1;
-      while (e--) scale *= 10;
-      v = esign > 0 ? v * scale : v / scale; } }
-  if (end) *end = (char *) p;
-  return sign * v; }
+/* the math floor's exact reader (crew/moon/lib/math/am.c -- linked wherever
+   nolibc is: the raw love build and the whole moon userland): correctly
+   rounded, so read(show x) = x holds off-glibc too. The naive accumulator
+   that lived here parsed "0.3" one ulp off -- masked until love's printer
+   went shortest-roundtrip, then loud in test_raw. */
+double am_strtod(char const *, char **);
+double strtod(char const *s, char **end) { return am_strtod(s, end); }
 /* the unsigned twin: strtol's digit walk, no sign, wrapping like glibc's. */
 static unsigned long __strtoux(char const *s, char **endptr, int base) {
   char const *p = s;

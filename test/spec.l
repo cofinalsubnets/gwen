@@ -102,7 +102,16 @@
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
- (? word ("1.797693134862316e308" = (show 1.7976931348623157e308)) 1)   ; the WHOLE finite range prints digits -- only true infinity wears ieee-inf
+ (? word ("1.7976931348623157e308" = (show 1.7976931348623157e308)) 1)  ; the WHOLE finite range prints digits -- only true infinity wears ieee-inf
+ ; the printer is SHORTEST-ROUNDTRIP (exact Steele & White): the fewest digits
+ ; that read back to the same gem, so show never conflates neighbors and
+ ; (read (show x)) = x for every finite gem. the word guard: these faces are
+ ; the DOUBLE tier's (a 32-bit ai_flo_t is a float, whose shortest faces differ)
+ (? word ("0.30000000000000004" = (show (0.1 + 0.2))) 1) ("0.3" = (show 0.3))
+ (? word ("5e-324" = (show 5e-324)) 1) (? word ("1e23" = (show 1e23)) 1)
+ ; ... and the READ side is correctly rounded too (am_strtod, the printer's twin
+ ; in the math floor -- every frontend, no glibc): neighbor literals stay distinct
+ (? word !(0.3 = 0.30000000000000004) 1) (? word (0.5 = 0.49999999999999999999) 1)
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  ; bignum // and % ride Knuth-D long division, whose 128/64 step is one `divq` on x86-64 and a
  ; soft divide elsewhere; `show` on a big divides too (the decimal printer), so it checks the same lane.

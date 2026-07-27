@@ -412,3 +412,112 @@ float am_sqrtf(float x) { return (float) am_sqrt(x); }
 float am_expf(float x) { return (float) am_exp(x); }
 float am_logf(float x) { return (float) am_log(x); }
 float am_powf(float x, float y) { return (float) am_pow(x, y); }
+
+
+// -- am_strtod: correctly rounded decimal -> binary64, the READ half of the
+// shortest-roundtrip pair (love.c's printer is the SHOW half; the two share
+// one mental model). a naive seed lands within a bounded ulp distance; the
+// walk then compares the INPUT DIGITS -- exactly, as decimal integers under
+// x2/x5 carry walks, no allocation -- against each candidate's binary
+// rounding interval (the midpoints 4m-2/4m+2, 4m-1 at a binade floor, at
+// 2^(e-2); closed on an even mantissa, the printer's own predicate) and
+// steps one ulp at a time by bit arithmetic until the input falls inside.
+// exact and the same answer on every target: glibc's strtod leaves the
+// trusted base, and the naive accumulators that read "0.3" one ulp off
+// (libc/str.c, crew/moon/lib/nolibc.c) both delegate here now.
+enum { am_dgmax = 800 };   // a boundary expansion: 17 digits + one per x5 step (<= 1076)
+static void am_dgmul(unsigned char *d, int *n, int k) {   // k = 2 or 5
+ int c = 0;
+ for (int i = 0; i < *n; i++) { int t = d[i] * k + c; d[i] = t % 10; c = t / 10; }
+ while (c) d[(*n)++] = c % 10, c /= 10; }
+static void am_dgexp(unsigned char *d, int *n, uint64_t m, int e2) {
+ *n = 0;
+ if (!m) d[(*n)++] = 0;
+ while (m) d[(*n)++] = m % 10, m /= 10;
+ for (; e2 > 0; e2--) am_dgmul(d, n, 2);
+ for (; e2 < 0; e2++) am_dgmul(d, n, 5); }
+// input digits a (LSB first, shifted up by sh virtual zeros, sticky marking a
+// truncated nonzero tail) vs boundary digits b: -1 / 0 / +1
+static int am_dgcmp(unsigned char const *a, int na, int sh, int sticky,
+                    unsigned char const *b, int nb) {
+ if (sh < 0) {                                   // mirrored: shift b instead
+  int r = am_dgcmp(b, nb, -sh, 0, a, na);
+  return r ? -r : (sticky ? 1 : 0); }
+ if (na + sh != nb) return na + sh < nb ? -1 : 1;
+ for (int i = nb - 1; i >= 0; i--) {
+  int da = i >= sh ? a[i - sh] : 0;
+  if (da != b[i]) return da < b[i] ? -1 : 1; }
+ return sticky ? 1 : 0; }
+double am_strtod(char const *s, char **end) {
+ char const *p = s;
+ int sign = 1;
+ if (*p == '-') sign = -1, p++;
+ else if (*p == '+') p++;
+ // significant digits: up to 19 kept exactly (din, LSB first), the rest fold
+ // into a sticky bit and a scale count; fr counts digits after the point
+ unsigned char din[20];
+ int any = 0, pt = 0, fr = 0, nin = 0, extra = 0, sticky = 0;
+ double v0 = 0;
+ for (;; p++) {
+  if (*p == '.' && !pt) { pt = 1; continue; }
+  if (*p < '0' || *p > '9') break;
+  any = 1;
+  if (pt) fr++;
+  if (*p == '0' && !nin) continue;               // leading zeros: scale only (fr keeps them)
+  if (nin < 19) {
+   for (int i = nin; i > 0; i--) din[i] = din[i - 1];
+   din[0] = (unsigned char) (*p - '0');
+   nin++;
+   v0 = v0 * 10 + (*p - '0'); }
+  else extra++, sticky |= *p != '0'; }
+ if (!any) { if (end) *end = (char*) s; return 0; }
+ if (end) *end = (char*) p;
+ int e10 = 0;
+ if (*p == 'e' || *p == 'E') {
+  char const *q = p++;
+  int esign = 1;
+  if (*p == '-') esign = -1, p++;
+  else if (*p == '+') p++;
+  if (!('0' <= *p && *p <= '9')) p = q;
+  else {
+   while ('0' <= *p && *p <= '9') { if (e10 < 100000) e10 = e10 * 10 + (*p - '0'); p++; }
+   e10 *= esign;
+   if (end) *end = (char*) p; } }
+ if (!nin) return sign > 0 ? 0.0 : -0.0;         // all zeros
+ int kk = e10 - fr + extra;                      // value = din x 10^kk exactly (+ sticky)
+ int mag = nin + kk;                             // value in [10^(mag-1), 10^mag)
+ if (mag > 310)  return sign * D_INF;
+ if (mag < -342) return sign > 0 ? 0.0 : -0.0;
+ // the seed: v0 x 10^kk in bounded chunks (gradual under/overflow lands close)
+ { int e = kk;
+   while (e >= 300)  v0 *= 1e300, e -= 300;
+   while (e <= -300) v0 /= 1e300, e += 300;
+   double sc = 1;
+   for (int a = e < 0 ? -e : e; a > 0; a--) sc *= 10;
+   v0 = e < 0 ? v0 / sc : v0 * sc; }
+ db b; b.d = v0;
+ if (b.u >= 0x7ff0000000000000ull) b.u = 0x7fefffffffffffffull;   // seed stays finite
+ unsigned char dg[am_dgmax]; int ndg;
+ for (;;) {
+  uint64_t mant = b.u & ((1ull << 52) - 1);
+  int be = (int) (b.u >> 52);
+  uint64_t m = be ? mant | (1ull << 52) : mant;
+  int e2 = (be ? be : 1) - 1023 - 52;
+  int lo2 = be > 1 && mant == 0;                 // binade floor: the gap below halves
+  int even = !(m & 1);
+  int scb = e2 - 2 < 0 ? e2 - 2 : 0, sh = kk - scb;
+  int cl, ch;
+  if (!m) cl = 1;                                // zero: any positive input clears its floor
+  else {
+   am_dgexp(dg, &ndg, 4 * m - (lo2 ? 1 : 2), e2 - 2);
+   cl = am_dgcmp(din, nin, sh, sticky, dg, ndg); }
+  am_dgexp(dg, &ndg, m ? 4 * m + 2 : 2, e2 - 2);
+  ch = am_dgcmp(din, nin, sh, sticky, dg, ndg);
+  if ((cl > 0 || (cl == 0 && even)) && (ch < 0 || (ch == 0 && even))) break;
+  if (ch >= 0) {                                 // at or past the upper midpoint: up one ulp
+   if (b.u >= 0x7fefffffffffffffull) { b.u = 0x7ff0000000000000ull; break; }
+   b.u++; }
+  else {                                         // under the lower midpoint: down one ulp
+   if (!b.u) break;                              // beneath half the least denormal: zero
+   b.u--; } }
+ return sign * b.d; }

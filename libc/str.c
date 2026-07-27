@@ -6,33 +6,13 @@ size_t strlen(char const *c) {
   while (*c++) len++;
   return len; }
 
+// the math floor's exact reader (crew/moon/lib/math/am.c, linked everywhere):
+// correctly rounded, so read(show x) = x holds off-host too. The old naive
+// accumulator here parsed "0.3" one ulp off -- masked until the printer went
+// shortest-roundtrip, then loud.
+double am_strtod(char const*, char**);
 double strtod(char const *restrict s, char **restrict end) {
- char const *p = s;
- int sign = 1;
- if (*p == '-') sign = -1, p++;
- else if (*p == '+') p++;
- int any = 0;
- double v = 0;
- while ('0' <= *p && *p <= '9') v = v * 10 + (*p++ - '0'), any = 1;
- if (*p == '.') {
-  p++;
-  double scale = 0.1;
-  while ('0' <= *p && *p <= '9') v += (*p++ - '0') * scale, scale *= 0.1, any = 1; }
- if (!any) { if (end) *end = (char*) s; return 0; }
- if (*p == 'e' || *p == 'E') {
-  char const *q = p++;
-  int esign = 1;
-  if (*p == '-') esign = -1, p++;
-  else if (*p == '+') p++;
-  if (!('0' <= *p && *p <= '9')) p = q; // not a real exponent
-  else {
-   int e = 0;
-   while ('0' <= *p && *p <= '9') e = e * 10 + (*p++ - '0');
-   double scale = 1;
-   while (e--) scale *= 10;
-   v = esign > 0 ? v * scale : v / scale; } }
- if (end) *end = (char*) p;
- return sign * v; }
+ return am_strtod(s, (char**) end); }
 
 int isspace(int), tolower(int);
 void *memchr(void const*, int, size_t);
