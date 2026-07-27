@@ -269,42 +269,48 @@
                                         (? (&& (charm? dv) (two? rest)) (adims ps rest (link dv acc)) ())))))))
    ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3)
    (mkarr ety dims) (? (! (two? dims)) ety `('arr (mkarr ety >dims) <dims))
+   ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
+   ; INSIDE w (the wrap-so-far: eventual-pointee -> declared type), so the type
+   ; grows inside-out; the name's OWN (params) ride out as dat (a fn DEF binds
+   ; them). bare = still just a (paren-wrapped) name, cleared by any suffix.
+   ; answers ((name w dat bare) rest).
+   (psufs ps ts name w dat bare)
+    (? (peekp ts "(")
+        (: rp (pparams ps >ts ())
+           (? (! (two? rp)) () (psufs ps <>rp name (\ t (w `('fn t))) (? bare rp dat) ())))
+       (peekp ts "[")
+        (: ar (adims ps ts ())
+           (? (! (two? ar)) () (psufs ps <>ar name (\ t (w (mkarr t <ar))) dat ())))
+       `(`(name w dat bare) ts))
+   ; direct declarator, RECURSIVE: name | ( *.. dtor ) , then suffixes -- covers
+   ; (*name)(params), the redundant (name), (*const p) (quals ride pquals), and
+   ; nested forms (`void (*(*x)(a))(b)`: x a ptr to fn(a) returning a ptr to
+   ; fn(b) returning void). a paren declarator's pointee is what TRAILS its `)`.
+   ; the head may also be EMPTY (abstract: `(*)(params)`). -> ((name w dat bare) rest) | ()
+   (pdirect ps ts)
+    (: (nstars s k) (: s2 (pquals s) (? (peekp s2 "*") (nstars >s2 (k + 1)) `(k s2)))
+       (ptrk k t) (? (k < 1) t (ptrk (k - 1) `('ptr t)))
+       (? (&& (two? ts) ((tkk <ts) = 'id)) (psufs ps >ts (tkv <ts) (\ t t) () 1)
+          (! (peekp ts "(")) (psufs ps ts () (\ t t) () ())
+          (: sr (nstars >ts 0)
+             k <sr t2 <>sr
+             dr (pdirect ps t2)
+             (? (! (two? dr)) ()
+                (: e <dr
+                   r (want <>dr ")")
+                   (? (! (two? r)) ()
+                      (psufs ps r <e (\ t (<>e (ptrk k t))) <>>e (&& <>>>e (k = 0)))))))))
    (pdtor ps ts base)                               ; ps threads to adims for const-expr array dims; -> ((name ty) rest) | ()
     (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s `('ptr ty)) `(ty s)))
        sr (stars ts base)
        ty <sr ts2 (pquals <>sr)           ; attrs may sit before the name
-       (? (peekp ts2 "(")                            ; (*name) or (*name[n]) then (params)
-           (: t3 >ts2
-              (? (! (peekp t3 "*")) ()
-                 (: t4 >t3
-                    (? 1                                    ; the name is OPTIONAL: `(*)(..)` is an ABSTRACT fn pointer
-                       (: name (? (&& (two? t4) ((tkk <t4) = 'id)) (tkv <t4) ())
-                          t5 (? name >t4 t4)
-                          ar (? (peekp t5 "[")                    ; inner [n] on the name -> an ARRAY of the pointers
-                                (: t6 >t5
-                                   (? (! (&& (two? t6) ((tkk <t6) = 'num))) ()
-                                      (: r (want >t6 "]")
-                                         (? (two? r) `('arr (tkv <t6) r) ()))))
-                                (peekp t5 "(")                    ; inner (params) -> the name is a FUNCTION returning the pointer
-                                 (: rp (pparams ps >t5 ()) (? (two? rp) `('fn rp <>rp) ()))   ; keep rp so a fn DEF can bind them
-                                `('none () t5))
-                          (? (! (two? ar)) ()
-                             (: kind <ar dat <>ar t7 <>>ar
-                                r7 (want t7 ")")
-                                ; the pointee comes from what TRAILS the ) : (params) a function, [dims] an
-                                ; array (pointer-to-array), nothing a plain pointer. the name's INNER shape
-                                ; then wraps it -- [n] an array of those pointers, (params) a function returning it.
-                                ; the fn shape carries dat (the parsed params) as a THIRD result element.
-                                mkfin (\ pointee tail
-                                        (: p `('ptr pointee)
-                                           shaped (? (kind = 'arr) `('arr p dat) (kind = 'fn) `('fn p) p)
-                                           `((? (kind = 'fn) `(name shaped dat) `(name shaped)) tail)))
-                                (? (! (two? r7)) ()
-                                   (peekp r7 "(")                        ; (*name..)(params) -- pointee is a FUNCTION
-                                    (: t8 (skipbal >r7 1) (? (two? t8) (mkfin `('fn ty) t8) ()))
-                                   (peekp r7 "[")                        ; (*name..)[dims]  -- pointee is an ARRAY
-                                    (: dr (adims ps r7 ()) (? (two? dr) (mkfin (mkarr ty <dr) <>dr) ()))
-                                   (mkfin ty r7)))))))))
+       (? (peekp ts2 "(")                            ; a parenthesized declarator -- pdirect recurses,
+           ; its wrap lays the declared type over ty; dat (the name's own params)
+           ; rides out as the THIRD result element when the declarator IS a fn
+           (: dr (pdirect ps ts2)
+              (? (! (two? dr)) ()
+                 (: e <dr ty2 (<>e ty) dat <>>e
+                    `((? (two? dat) `(<e ty2 dat) `(<e ty2)) <>dr))))
           (! (&& (two? ts2) ((tkk <ts2) = 'id)))    ; no name: an ABSTRACT declarator (unnamed proto param)
            (? (peekp ts2 "[")                          ; abstract ARRAY `T [n]..` (e.g. `struct timespec const[2]`)
                (: dr (adims ps ts2 ())                 ; -> nested arr of ty; pparams decays it to a pointer
