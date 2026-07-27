@@ -36,11 +36,20 @@
                   (? q (: r (sound q ()) _ (close q) (? (two? r) r ())) ()))
 
    ; --- the store ---
-   (mk _) (: _ (mkdir ".seed" 493) _ (mkdir ".seed/blob" 493) _ (mkdir ".seed/patch" 493) ())
+   (mk _) (: _ (mkdir ".seed" 493) _ (mkdir ".seed/blob" 493) _ (mkdir ".seed/patch" 493)
+             _ (mkdir ".seed/germ" 493) ())
    (snap _) (form ".seed/snap")                            ; ((path chash pid) ..) sorted
    (tips _) (form ".seed/tips")                            ; (id ..)
    (blob h) (: t (look (".seed/blob/" + h)) (? (two? t) <>t ()))
-   (keep s) (: h (sha256 s) _ (lay (".seed/blob/" + h) s) h)
+   (kept d s) (: h (sha256 s) _ (lay (d + h) s) h)         ; content-address into a store dir
+   (keep s) (kept ".seed/blob/" s)
+   ; germs live in their OWN store dir, not among the blobs. two reasons: a germ is
+   ; a DERIVATION, not source, so it must never ride a sync (blobs travel by
+   ; reachability from a patch's hunks -- a germ is named by no patch, so it would
+   ; not travel today, but a future blob gc would collect it); and the split keeps
+   ; `nblob` an honest count of the source store. the file lands 644: a store holds
+   ; content, and the executable bit is put on at install, not here.
+   (germ h) (look (".seed/germ/" + h))                     ; (1 bytes) | () -- presence, not net
    (patch id) (form (".seed/patch/" + id))
    (fld f k) (: (go m) (? (! (two? m)) ()                     ; a patch field's tail
                              (&& (two? <m) (id? <<m k)) ><m
@@ -640,16 +649,23 @@
    ; --- hatch: (source_tree, arch) -> a native GERM. the local derivation
    ;     (doc/hatch.md's fallback path: rebuild from a present binary). we hatch
    ;     the RECORDED state -- a dirty tree refuses -- run the nest's build recipe,
-   ;     fingerprint the output as the GERM, and ledger it keyed by (patchset,
+   ;     KEEP the output in the germ store, and ledger its id keyed by (patchset,
    ;     arch). the patchset id is the hash of the sorted tips = the head DAG
    ;     state, so hatching the same head with the same recipe twice is a
    ;     VIABILITY TEST: a germ that doesn't match the prior hatch is a
    ;     NOT-VIABLE flag, not a silent divergence. the recipe + its output
-   ;     path are opaque to hatch (it just runs an argv and hashes a file), the
+   ;     path are opaque to hatch (it just runs an argv and stores a file), the
    ;     way the store is opaque to what a hunk's old/new mean; for love the recipe
    ;     is `make`, for a test a one-line stub. config in .seed/hatch:
-   ;       (hatch (recipe "make" "candidate") (out "out/host/love")) ---
-   (hatched _) (form ".seed/hatched")                     ; ((psid arch germ time)..) newest-first | ()
+   ;       (hatch (recipe "make" "candidate") (out "out/host/love"))
+   ;     ⚠ the GERM IS THE ARTIFACT -- the bytes you can ship, install and run --
+   ;     and like every other thing in the store it is NAMED BY ITS ID, a sha256.
+   ;     the two are not the same and the code used to conflate them: it hashed
+   ;     the output, called the hash the germ, and kept nothing. that made the
+   ;     ledger a record that a germ once existed, with no way to get it back --
+   ;     so doc/hatch.md's stage -1 (fetch a germ, per arch) had nothing to fetch
+   ;     and a cache had nothing to cache. we keep the bytes now. ---
+   (hatched _) (form ".seed/hatched")                     ; ((psid arch gid time)..) newest-first | ()
    (hatch-find led psid arch)                                ; the last hatch of this (psid,arch) | ()
     (? (! (two? led)) ()
        (: r <led (? (&& ((<r) = psid) ((<>r) = arch)) r (hatch-find >led psid arch))))
@@ -668,15 +684,21 @@
                          st (cap (run rc))
                          (? (! (0 = st)) (: _ (say err ("seed: build failed (status " + (show st) + ")\n")) ())
                             (: outp (: o (fld cfg 'out) (? (two? o) <o ()))
-                               germ (? (! outp) () (: t (look outp) (? (two? t) (sha256 <>t) ())))
+                               ; presence, not net: a build that lays a 0-byte output is a
+                               ; real germ with a real id, and only `look`'s wrapper can
+                               ; tell that apart from an output the recipe never wrote
+                               t (? (! outp) () (look outp))
+                               gid (? (two? t) (kept ".seed/germ/" <>t) ())
+                               _ (? (&& outp (! (two? t)))
+                                    (say err ("seed: the recipe left no " + outp + " -- no germ kept\n")) ())
                                prior (hatch-find (hatched ()) psid ar)
-                               _ (? (&& (two? prior) (&& germ (<>>prior)))
-                                    (? ((<>>prior) = germ) (puts "seed: viable -- the germ matches the prior hatch\n")
+                               _ (? (&& (two? prior) (&& gid (<>>prior)))
+                                    (? ((<>>prior) = gid) (puts "seed: viable -- the germ matches the prior hatch\n")
                                        (say err "seed: NOT VIABLE -- this patch set hatched to a different germ!\n"))
                                     ())
-                               _ (lay ".seed/hatched" (show (link (list psid ar germ (clock 0)) (hatched ()))))
+                               _ (lay ".seed/hatched" (show (link (list psid ar gid (clock 0)) (hatched ()))))
                                _ (puts ("seed: hatched " + (snip psid 0 12) + " -> germ "
-                                        + (? germ (snip germ 0 12) "(none)") + "\n"))
+                                        + (? gid (snip gid 0 12) "(none)") + "\n"))
                                psid))))))))))
 
 ; --- the CLI face: usage + the verb dispatcher. these live in the LAYER

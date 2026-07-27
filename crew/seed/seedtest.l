@@ -351,11 +351,18 @@
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
 ;     default ignore, so the build output never dirties the tree); a re-hatch of
 ;     the same head with the same recipe is a VIABILITY test -- the germ
-;     must reproduce. (the real love recipe is `make`; the shape is identical.) ---
+;     must reproduce. (the real love recipe is `make`; the shape is identical.)
+;     ⚠ the GERM IS THE ARTIFACT and the ledger holds its ID: the recipe's output
+;     is KEPT in the germ store, so a hatch you can only audit becomes a hatch you
+;     can also SHIP -- which is what stage -1 (fetch a germ, per arch) fetches. ---
 (: _ (lay ".seed/hatch"
        (show '(hatch (recipe "sh" "-c" "mkdir -p out; printf seed-germ > out/germ.bin") (out "out/germ.bin"))))
    hid (seed-hatch ())
    led (hatched ())
+   gid (<>><led)
+   gback (germ gid)                                      ; the artifact itself, back out of the store
+   _ (unlink "out/germ.bin")                             ; the build output is gone; the germ is not
+   gafter (germ gid)
    again (seed-hatch ())
    led2 (hatched ()))
 
@@ -365,7 +372,11 @@
  (1 = (tally led))                                     ; one derivation ledgered...
  (hid = (<<led))                                       ; ...keyed by the patchset id
  ((<><led) = (arch ()))                             ; ...with this machine's arch (second field)
- (64 = (tally (<>><led)))                              ; ...and a real germ fingerprint (third)
+ (64 = (tally gid))                                    ; ...and the germ's ID (third field), a sha256
+ (two? gback)                                          ; the GERM ITSELF is kept, not merely its id
+ ((<>gback) = "seed-germ")                             ; ...and comes back byte for byte
+ (gid = (sha256 (<>gback)))                            ; ...under its own id, the way every store entry is
+ (two? gafter)                                         ; ...and it OUTLIVES the build output it came from
  (hid = again)                                         ; same head + recipe -> same patchset id
  (2 = (tally led2))                                    ; a second, auditable hatch
  ((<>><led2) = (<>><led)))                             ; ...and the germ stayed VIABLE, bit for bit
