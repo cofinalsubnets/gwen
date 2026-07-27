@@ -249,6 +249,14 @@
    (ipair? g ty) (acls2 g ty 'int 'int)      ; both INT: rax:rdx (return/result lanes)
    (aone g ty) (: c (aclass g ty) (? (&& (two? c) (! (two? >c))) <c ()))
    (aeb2 g ty) (: c (aclass g ty) (? (&& (two? c) (two? >c)) c ()))   ; a 9..16B aggregate's TWO eightbyte classes (c0 c1), else ()
+   ; the MEMORY class: an aggregate PAST 16 bytes (aclass answers ()). SysV
+   ; passes it wholly on the stack -- the caller lays its eightbytes in the
+   ; overflow block, and the callee's copy IS that memory, addressed off the
+   ; incoming frame. an over-aligned one (16+) refuses: its block would need
+   ; its own alignment rule. x64 only (AAPCS64 differs).
+   (amem? g ty) (&& (stru? ty) (&& (! (aclass g ty)) (&& (! (arm? g)) (! (t32? g)))))
+   (asalign g ty) (: e (peep (g 'stag) <>ty 0) (? (two? e) (cauup e) 8))   ; a struct tag's alignment
+   (aslots g ty) (>> (& ((tsz g ty) + 7) -8) 3)                            ; its eightbyte count
    (fnret ty) (? (! (&& (two? ty) (<ty = 'ptr))) 'long   ; an indirect callee's result type: ('ptr ('fn ret)) | 'long
                  (: ft <>ty (? (&& (fn? ft) (two? >ft)) <>ft 'long)))
    ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same WIDTH as their signed
@@ -1652,7 +1660,19 @@
                                                    `(`('sub 'sp 'sp 16) `('ld 'r1 'r0 8) `('st 'sp 8 'r1) `('ld 'r1 'r0 0) `('st 'sp 0 'r1))
                                                    `(`('ld 'r1 'r0 8) `('push 'r1) `('ld 'r1 'r0 0) `('push 'r1)))))
                                             acc)))))
-                       (&& (stru? aty) (! (aone g aty))) 'bad   ; a MIXED/>16B by-value struct stays ahead
+                       ; a MEMORY-class by-value struct arg (musl's 32-byte
+                       ; cookie_io_functions_t): its eightbytes fill N overflow
+                       ; slots. x64 pushes DEEPEST first, so this pushes the
+                       ; struct's HIGHEST eightbyte first -- offset 0 lands at
+                       ; the block's low address, where the callee reads it.
+                       (amem? g aty)
+                        (? (< 8 (asalign g aty)) 'bad         ; over-aligned MEMORY arg: deferred, refuse LOUD
+                           (: n (aslots g aty)
+                              (mv j acc9) (? (j < 0) acc9
+                                             (mv (j - 1) (acc9 + `(`('ld 'r1 'r0 (* 8 j)) `('push 'r1)))))
+                              (kls >as (i + 1) gpc xmmc (ovc + n)
+                                   (link `(`('ov ovc n) ((tor0 g a) + (mv (n - 1) ()))) acc))))
+                       (&& (stru? aty) (! (aone g aty))) 'bad   ; a MIXED 16B by-value struct stays ahead
                        (pair? g aty)                             ; a pair arg: an even-odd register pair (AAPCS32
                         (: gpe (& (gpc + 1) -2)                  ;  rounds up), else the stack 8-aligned -- and gp
                            (? ((gpe + 2) <= (ngp g))             ;  assignment closes behind a stack arg (C.13)
@@ -1773,7 +1793,13 @@
                                                         (kk = 'p2) (+ n5 (+ (? (id? (nthr ce 1) 'x) 1 0) (? (id? (nthr ce 3) 'x) 1 0)))
                                                         n5))))
                      (go5 kr 0))
-             nov (tally ovr)
+             ; SLOTS, not entries: a MEMORY-class struct arg occupies several
+             ; (its ('ov off n) carries the count; t32's third field is bytes,
+             ; but t32 sizes its block through ovblk's own walk below)
+             nov (: (go8 l8 n8) (? (! (two? l8)) n8
+                                   (: ce (cap (cap l8))
+                                      (go8 >l8 (+ n8 (? (two? (cup (cup ce))) <>>ce 1)))))
+                    (go8 ovr 0))
              padn (? ((& nov 1) = 1) 8 0)                 ; keep sp 16-aligned across the overflow block
              ; t32 slots are BYTE offsets ((ov off sz) entries): the block spans to the highest
              ; slot's end, rounded to 8 (AAPCS32 sp alignment). x64/a64 keep 8-byte slot counts.
@@ -4561,7 +4587,15 @@
                                (acc + (fstf g 'double 'r4 off (xmmreg xmmi)))))
                      (? (t32? g) 'bad                   ; t32 stack blob params: deferred, refuse LOUD
                         (spill hp >ps gpi xmmi (ovi + 1) (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc)))
-                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair / >16B stays ahead; a small INT one rides the gp lane
+                 ; a MEMORY-class param: the caller laid the whole aggregate in
+                 ; the overflow block, and by SysV that memory IS the callee's
+                 ; copy -- so the param binds STRAIGHT to it (no slot, no
+                 ; store), exactly as an overflow scalar binds today
+                 (amem? g pty)
+                  (? (|| (pol? hp) (< 8 (asalign g pty))) 'bad   ; under a policy, or over-aligned: deopt/refuse
+                     (spill hp >ps gpi xmmi (ovi + (aslots g pty))
+                            (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
+                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair stays ahead; a small INT one rides the gp lane
                  (&& (v6m? g) (id? pty 'float))         ; v6-M base ABI: a bare float param is ONE WORD
                   (? (gpi < (ngp g))                    ;  (binary32 bits in a gp reg / a 4-byte caller slot);
                      (: off (nslot g 8) ;  clval's fldf 'float widens it on read
