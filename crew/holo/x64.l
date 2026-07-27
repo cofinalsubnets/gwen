@@ -331,7 +331,16 @@
            ('movqxr >< emit-movqxr) ('movqrx >< emit-movqrx)
            ('stsd >< emit-stsd) ('ldsd >< emit-ldsd) ('stss >< emit-stss) ('ldss >< emit-ldss)
            ('raw >< 1)
-           ('ret >< `(195)) ('sys >< `(15 5)) ('nop >< `(144)) ('trap >< `(204))))
+           ('ret >< `(195)) ('sys >< `(15 5)) ('nop >< `(144)) ('trap >< `(204))
+           ; port i/o: the port ALWAYS rides dx (the immediate-port forms E4..E7
+           ; reach only ports 0..255, so the dx forms are the whole surface), the
+           ; datum al/ax/eax. the string forms take the rep prefix and walk
+           ; rsi (out) / rdi (in) by rcx -- `cld` sets the direction first.
+           ('inb >< `(236)) ('inw >< `(102 237)) ('inl >< `(237))
+           ('outb >< `(238)) ('outw >< `(102 239)) ('outl >< `(239))
+           ('cld >< `(252))
+           ('insb >< `(243 108)) ('insw >< `(102 243 109)) ('insl >< `(243 109))
+           ('outsb >< `(243 110)) ('outsw >< `(102 243 111)) ('outsl >< `(243 111))))
    _ (foldl (\ _ p (emrow x64-emitters <p (emit-alu <p))) 0 x64-alu-rows)
    _ (foldl (\ _ p (emrow x64-emitters <p (emit-sse <p))) 0 x64-sse-rows)
    (x64-lower ins) (: f lower-via (? (lit? f) (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))

@@ -108,6 +108,12 @@
    ;; dispatch chains. `emsof` below stamps the count onto each row at bake time. --
    ir-arity (tabof
         `(('ret >< 0) ('sys >< 0) ('nop >< 0) ('trap >< 0) ('udivll >< 0) ('uremll >< 0)
+           ; x86 PORT I/O, register-contracted like `sys` (dx the port, al/ax/eax
+           ; the datum; the string forms walk rsi/rdi by rcx). zero operands: the
+           ; contract is the register file, not the form.
+           ('inb >< 0) ('inw >< 0) ('inl >< 0) ('outb >< 0) ('outw >< 0) ('outl >< 0)
+           ('cld >< 0)
+           ('insb >< 0) ('insw >< 0) ('insl >< 0) ('outsb >< 0) ('outsw >< 0) ('outsl >< 0)
            ('sx1 >< 1) ('sx2 >< 1) ('sx4 >< 1) ('zx1 >< 1) ('zx2 >< 1) ('zx4 >< 1)
            ('push >< 1) ('pop >< 1) ('neg >< 1) ('not >< 1) ('inc >< 1) ('dec >< 1) ('tp >< 1)
            ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)

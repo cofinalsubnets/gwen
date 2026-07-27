@@ -71,6 +71,11 @@
       `("zx1"         "480fb6c0"              '((zx1 r0)))           ; movzx rax, al
       `("zx2.hi"      "4d0fb7c0"              '((zx2 r7)))           ; movzx r8, r8w
       `("zx4"         "408bdb"                '((zx4 r3)))           ; mov ebx, ebx (zero-extends)
+      ;; port i/o: the dx-port forms, and the rep-prefixed string walks
+      `("io.in"       "ec66eded"              '((inb) (inw) (inl)))
+      `("io.out"      "ee66efef"              '((outb) (outw) (outl)))
+      `("io.str"      "fcf36c66f36df36d"      '((cld) (insb) (insw) (insl)))
+      `("io.strout"   "f36e66f36ff36f"        '((outsb) (outsw) (outsl)))
       ;; tp: the thread pointer -- mov d, fs:[0]
       `("tp"          "64488b042500000000"    '((tp r0)))            ; mov rax, fs:[0]
       `("tp.hi"       "644c8b142500000000"    '((tp r9)))            ; mov r10, fs:[0]
