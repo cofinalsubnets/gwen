@@ -357,22 +357,35 @@
                    out1 (? (0 = pd) (copy "blob" "." peer) `(0 0))
                    out2 (? (0 = pd) (copy "patch" "." peer) `(0 0))
                    pushed (&& (0 = pd) (&& (0 = (<>out1)) (0 = (<>out2))))
+                   ; the refs travel too -- a release is only "the unit you
+                   ; propagate" if the NAME reaches the other nest with it
+                   theirs (form (peer + "/.seed/refs"))
+                   ru (refadd (refs ()) theirs 1)
+                   _ (? (two? <ru) (lay ".seed/refs" (show <ru)) ())
+                   _ (? (! pushed) ()
+                        (: pu (refadd theirs (refs ()) ())
+                           (? (two? <pu) (lay (peer + "/.seed/refs") (show <pu)) ())))
                    st (settle (readdir ".seed/patch"))
                    nleft (tell (<>>st))
+                   nref (<>ru)
                    pst (? (! pushed) ()                          ; settle the far end too
                           (: c (chdir peer) r (settle (readdir ".seed/patch")) _ (chdir home) r))
                    _ (puts ("seed: synced -- " + (show <st) + " patches ("
                             + (show <inp) + " in, " + (show <out2) + " out), "
                             + (show (<inb + <out1)) + " blobs, " + (show (<>st)) + " files here"
                             + (? (two? pst) (", " + (show (<>pst)) + " files there") "")
-                            + (? (0 = nleft) "" (", " + (show nleft) + " conflicted")) + "\n"))
+                            + (? (0 = nleft) "" (", " + (show nleft) + " conflicted"))
+                            + (? (0 = nref) "" (", " + (show nref) + " ref clash"
+                                                + (? (1 = nref) "" "es"))) + "\n"))
                    _ (? pushed ()
                         (say err ("seed: pulled only -- the peer "
                                   + (? (0 < pd) "has unrecorded changes" "would not take the write")
                                   + "; run sync from its side to finish\n")))
                    _ (? (0 = nleft) ()
                         (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
-                   (? (&& pushed (0 = nleft)) <st 0))))))
+                   _ (? (0 = nref) ()
+                        (say err "seed: a banked name is immutable, so each nest kept its own -- rename one, then sync\n"))
+                   (? (&& pushed (&& (0 = nleft) (0 = nref))) <st 0))))))
 
    ; --- apply: realize a dep-consistent SUBSET of the store into the working
    ;     tree. this is git's checkout AND its cherry-pick, which are one act here:
@@ -441,13 +454,31 @@
    ;     a banked name is IMMUTABLE: re-banking at the same head is a no-op, at a
    ;     different head an error. the dep closure derives the patch set from the
    ;     tips, so `apply NAME` realizes the release and needs nothing stored but
-   ;     the tips. refs are LOCAL for now; propagating them is sync's business and
-   ;     lands with the fetch-a-release half ---
+   ;     the tips. refs TRAVEL: sync unions them by name, which is what makes a
+   ;     release the unit you propagate rather than a local bookmark ---
    (refs _) (form ".seed/refs")                                  ; ((name (id..) time)..) | ()
-   (refof nm) (: (go m) (? (! (two? m)) ()
-                          ((<<m) = nm) (<><m)
-                          (go >m))
-                 (go (refs ())))
+   (refof nm) (refof-in (refs ()) nm)
+   ; --- the ref exchange. a ref is a single FILE, not a content-addressed one,
+   ;     so sync cannot gap-fill it the way it does blobs and patches: it has to
+   ;     UNION by name. a name both nests banked to the SAME head is one entry --
+   ;     idempotent, the ordinary case. a name banked to DIFFERENT heads is a
+   ;     genuine human error, since a banked name is immutable and neither nest
+   ;     may unilaterally repoint the other's: so each side KEEPS ITS OWN and the
+   ;     clash is reported. the union is therefore per-side, not one merged set
+   ;     written to both -- writing one set would silently drop a real release.
+   ;     answers (merged nclash) ---
+   (refadd base extra loud)                                     ; loud: only ONE side tells it
+    (: (go m acc n)
+        (? (! (two? m)) `((sort acc) n)
+           (: e <m mine (refof-in base <e)
+              (? (! (two? mine)) (go >m (link e acc) n)          ; theirs alone: take it
+                 ((show mine) = (show (<>e))) (go >m acc n)      ; the same head: already ours
+                 (: _ (? loud (say err ("seed: REF CLASH on " + <e
+                                        + " -- banked to different heads\n")) ())
+                    (go >m acc (n + 1))))))
+       (go extra base 0))
+   (refof-in rs nm) (: (go m) (? (! (two? m)) () ((<<m) = nm) (<><m) (go >m)) (go rs))
+
    (seed-bank args)
     (: _ (mk ())
        nm (? (two? args) <args "")

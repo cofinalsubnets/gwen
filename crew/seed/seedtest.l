@@ -317,6 +317,36 @@
  (3 = n2) (two? cback)                                   ; ...and the later ref brings c back
  (! bad) (! bdirty))                                     ; an empty name and a dirty tree both refuse
 
+; --- refs travel. a release is only "the unit you propagate" if the NAME
+;     reaches the other nest with the patches. a ref is a single FILE, not a
+;     content-addressed one, so sync UNIONS it by name instead of gap-filling.
+;     the same name at the SAME head is idempotent; at DIFFERENT heads it is a
+;     human error, since a banked name is immutable and neither nest may repoint
+;     the other's -- so EACH SIDE KEEPS ITS OWN and the clash is told once ---
+(: _ (mkdir "mrg/r" 493) _ (mkdir "mrg/r/l" 493) _ (chdir "mrg/r/l") _ (mk ())
+   _ (lay "f" "base\n") _ (seed-record "base") _ (seed-bank '("v1"))
+   _ (mkdir "../d" 493) _ (chdir "../d") _ (mk ())
+   got (seed-sync "../l")
+   travelled (refof "v1")                                ; ...it arrived, unbanked here
+   n1 (seed-apply '("v1"))                               ; ...and realizes BY NAME
+   ; now bank the SAME name on each side at DIFFERENT heads
+   _ (lay "g" "d\n") _ (seed-record "d work") _ (seed-bank '("rel"))
+   drel (refof "rel")
+   _ (chdir "../l") _ (lay "h" "l\n") _ (seed-record "l work") _ (seed-bank '("rel"))
+   lrel (refof "rel")
+   clash (seed-sync "../d")
+   lkept (refof "rel")                                   ; l kept ITS rel...
+   _ (chdir "../d") dkept (refof "rel")                  ; ...and d kept ITS
+   _ (chdir "../../.."))
+
+(assert
+ (0 < got) (two? travelled)                              ; the ref crossed with the patches
+ (1 = n1)                                                ; ...and named a release the nest never banked
+ (! ((show drel) = (show lrel)))                         ; the two `rel`s really are different heads
+ (! clash)                                               ; a clash makes sync answer 0
+ ((show lkept) = (show lrel))                            ; each side KEPT ITS OWN -- no silent loss
+ ((show dkept) = (show drel)))
+
 ; --- hatch: build the recorded source into a native germ, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
 ;     default ignore, so the build output never dirties the tree); a re-hatch of

@@ -15,7 +15,13 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   one sync the two trees are identical, from whichever side you ran it. The peer's
   half needs its tree clean and writable; when it is not, sync still pulls (always
   safe), leaves the peer's store **whole** rather than half-fed, and says so with
-  exit 1. A *convergent* write
+  exit 1. **Refs travel too** — a ref is a single file rather than a
+  content-addressed one, so sync **unions it by name** instead of gap-filling:
+  the same name at the same head is idempotent, and the same name at *different*
+  heads is a human error (a banked name is immutable, and neither nest may
+  repoint the other's), so **each side keeps its own** and the clash is reported
+  once. That is what makes a release the unit you propagate rather than a local
+  bookmark. A *convergent* write
   (two nests reach the same content) is silent. Same-path divergence **merges**:
   the incoming hunk names the content hash it expected, so the common ancestor is
   already in the store and the three sides go to a diff3 line merge
