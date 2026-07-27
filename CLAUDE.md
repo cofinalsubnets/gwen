@@ -52,6 +52,15 @@
 ;   do-nothing slot is NOTHING, the unit, not a number (a number would church-exponentiate; the unit
 ;   just rides through). so `(work ())` `(loop ())` `(go ())` for a thunk/loop trigger, never a bare
 ;   0 the callee ignores.
+; * ⚠ NEVER PUT SCRATCH IN AN lvm_ -- no stack buffer, no address-taken local. the VM is
+;   TAIL-THREADED (aps jump, never return), and a frame forces the tail Continue() into a
+;   `ret`, so the op grows the stack EVERY STEP: the fault is a STACK OVERFLOW deep inside
+;   some unrelated test, never a wrong answer. put the body in an `ai_noinline static` helper
+;   taking `g` (rng_canon and host_cwd are the models; Have first, the helper only bumps
+;   g->hp). ⚠⚠ `make vmret` DOES NOT CATCH THIS: it disassembles the GCC build, and gcc
+;   sibcalls the inline form anyway -- so the gate stays green while MOONCC emits the frame,
+;   and only `make test_raw` sees it. so: test_raw is the gate for anything touching an lvm_
+;   body, not just for a new host/*.c.
 ; * ⚠ PRESENCE IS THE WRAPPER, NEVER THE NET -- the costliest recurring bug in this tree, hit
 ;   FOUR times in four different files by two different hands. every nothing is nil by design
 ;   ((), 0, "", @(), the empty read), which is what makes `!` a truth test -- and it means

@@ -8734,6 +8734,21 @@ lvm(lvm_conj) {
 // box holding INTPTR_MIN promotes to a bignum (the one magnitude the box can't
 // hold), matching the arith lanes' INT_MIN/-1 edge -- the big oracle caught the
 // old wrap here.
+// |INTPTR_MIN| needs the bignum lane, and its limb[] scratch must live OUT OF
+// LINE -- rng_canon's precedent, and for the same reason: a stack buffer and the
+// ai_big_canon call force a FRAME in the lvm_, which turns the tail Continue()
+// into a `ret`. The VM is tail-threaded, so an op that returns instead of
+// jumping grows the stack EVERY STEP.
+//
+// ⚠ `make vmret` does NOT catch this: gcc sibcalls the inline form anyway, so
+// the gate stays green while MOONCC emits the frame -- the fault is a raw-build
+// STACK OVERFLOW (a segfault deep in an unrelated test), never a wrong answer.
+// Caller has already Have'd the room; ai_big_canon only bumps g->hp (no GC).
+static ai_noinline word abs_wmin(struct ai *g) {
+ uintptr_t u = (uintptr_t) 1 << (Bits - 1);
+ ai_limb lb[wlimbs];
+ for (int i = 0; i < wlimbs; i++) lb[i] = (ai_limb) (u >> (limb_bits * i));
+ return ai_big_canon(&g->hp, lb, wlimbs, false); }
 lvm(lvm_abs) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t m = cplx_mod(a);
@@ -8745,11 +8760,8 @@ lvm(lvm_abs) {
   Have(box_req); emit_flo(v); return Sp[0] = _res, Ip++, Continue(); }
  if (widep(a)) { intptr_t n = box_get(a);
   if (n == INTPTR_MIN) {                              // |INTPTR_MIN| = 2^(W-1): the bignum lane
-   uintptr_t u = (uintptr_t) 1 << (Bits - 1);
    Have(b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb)));
-   ai_limb lb[wlimbs];
-   for (int i = 0; i < wlimbs; i++) lb[i] = (ai_limb) (u >> (limb_bits * i));
-   return Sp[0] = ai_big_canon(&Hp, lb, wlimbs, false), Ip++, Continue(); }
+   return Sp[0] = abs_wmin(g), Ip++, Continue(); }
   Have(box_req); emit_int(n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
   return Sp[0] = _res, Ip++, Continue(); }
  if (bigp(a)) {
