@@ -257,6 +257,10 @@
    (amem? g ty) (&& (stru? ty) (&& (! (aclass g ty)) (&& (! (arm? g)) (! (t32? g)))))
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (? (two? e) (cauup e) 8))   ; a struct tag's alignment
    (aslots g ty) (>> (& ((tsz g ty) + 7) -8) 3)                            ; its eightbyte count
+   ; a MEMORY-class RETURN: the caller passes a hidden pointer as the implicit
+   ; first gp argument, the callee fills that memory and answers the pointer.
+   ; the v6-M base ABI does it past 4 bytes; SysV past 16 (aclass ()).
+   (sretm? g ty) (&& (stru? ty) (|| (&& (v6m? g) (4 < (tsz g ty))) (amem? g ty)))
    (fnret ty) (? (! (&& (two? ty) (<ty = 'ptr))) 'long   ; an indirect callee's result type: ('ptr ('fn ret)) | 'long
                  (: ft <>ty (? (&& (fn? ft) (two? >ft)) <>ft 'long)))
    ; unsigned scalars ride 'uchar 'ushort 'uint 'ulong -- same WIDTH as their signed
@@ -1510,7 +1514,7 @@
                     cr (call-fixed g env head args direct ptys rt variadic)
                     (? (bad? cr) 'bad
                        (! (stru? (vty cr))) cr
-                       (&& (v6m? g) (4 < (tsz g (vty cr)))) cr   ; v6-M MEMORY return: the sret temp's address in r0 IS the struct value
+                       (sretm? g (vty cr)) cr   ; a MEMORY return: the sret temp's address in r0 IS the struct value
                        (sse2? g (vty cr))              ; a two-double struct result: park the xmm pair in a fresh slot, answer its address
                         (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
@@ -1734,7 +1738,7 @@
        ; v6-M MEMORY return (AAPCS32 base): a >4-byte composite result fills a caller temp
        ; whose address rides the IMPLICIT first argument (r0) -- args start at gpc 1, the
        ; address materializes fresh right before the call and again after it (the result)
-       sr6 (&& (v6m? g) (&& (stru? ret) (4 < (tsz g ret))))
+       sr6 (sretm? g ret)
        sroff (? sr6 (ntmp g ret) 0)
        _ (pin g 'argseal ((peep g 'argseal 0) + 1))     ; the vmap seals across the staging (see vmon?)
        kr (kls ags 0 (? sr6 1 0) 0 0 ())
@@ -1858,8 +1862,12 @@
                     fres (? (! (&& (v6m? g) (flo? ret))) ()
                             (id? ret 'float) `(`('movqxr 'f0 'r0) `('cvtss2sd 'f0 'f0))
                             `(`('movqxr 'f0 'r0)))
-                    srlea (? sr6 `(`('lea 'r0 'r4 sroff)) ())   ; the sret address in, then back out as the result
-                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srlea + `(`('call (intern <>hd))) + fres + srlea + clean + relods)))
+                    ; the hidden sret pointer rides the FIRST ARGUMENT register
+                    ; (rdi on x64, r0 on arm -- not the same register), and the
+                    ; result is the temp's address, materialized fresh in r0
+                    srin (? sr6 `(`('lea (nthr (argr g) 0) 'r4 sroff)) ())
+                    srout (? sr6 `(`('lea 'r0 'r4 sroff)) ())
+                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + `(`('call (intern <>hd))) + fres + srout + clean + relods)))
                 (: hr (cgexpr g env hd)                   ; a function-pointer value: park (x64 rbx; arm64 x15), callr
                    pk (pkr g)
                    _ (vmflush g)                          ; the call clobbers every pool reg
@@ -4236,7 +4244,12 @@
                        ((tor0 g r) + (fldf 'double (xmmreg 0) 'r0 0) + epj)
                       (id? (aone g rt) 'int)                             ; a small INT aggregate (a union rides here): rax
                        ((tor0 g r) + `(`('ld 'r0 'r0 0)) + epj)
-                      (|| (stru? rt) (stru? (vty r))) 'bad               ; a MIXED 16-byte pair or >16 bytes (MEMORY): still refused
+                      (amem? g rt)                                       ; a MEMORY return: fill the caller's temp through
+                       ((tor0 g r)                                       ; the saved hidden pointer, and answer it in rax
+                        + `(`('ld 'r1 'r4 (peep g 'sret 0)))
+                        + (bcopy g 0 (tsz g rt) ())
+                        + `(`('mov 'r0 'r1)) + epj)
+                      (|| (stru? rt) (stru? (vty r))) 'bad               ; a MIXED 16-byte pair: still refused
                       (flo? (vty r)) ((asint g r) + (? il `(`('jmp il)) epj))   ; a double value, an int return -> truncate to r0
                       (pair? g rt) ((asll g r) + (? il `(`('jmp il)) epj))      ; a pair return: r0:r1 (widen a word value)
                       ((tor0 g r) + (? il `(`('jmp il)) epj))))))    ; int -> int, as before (a pair value narrows to its lo)
@@ -4897,25 +4910,26 @@
        ; passed as the implicit first arg (r0) -- save it in its own slot, params start at
        ; gp 1. the ret lane reads g 'sret back; reset per fn (stale pins would misroute).
        srt (? (two? sig) <sig 'long)
-       sr6f (&& (v6m? g) (&& (stru? srt) (4 < (tsz g srt))))
+       sr6f (sretm? g srt)
        _ (? sr6f (pin g 'sret (ntmp g 'long)) (pin g 'sret ()))
        sp1 (? (&& vararg (a64? g)) (vaspill-a64 params)
               (&& vararg (t32? g)) (vaspill-t32 params)
               vararg (vaspill params)
-              sr6f (spill () params 1 0 0 () `(`('st 'r4 (peep g 'sret 0) 'r0)))
+              sr6f (spill () params 1 0 0 () `(`('st 'r4 (peep g 'sret 0) (nthr (argr g) 0))))
               (spill () params 0 0 0 () ()))
        sp1 (? (two? vzf) `((<sp1 + vzf) (caup sp1)) sp1)   ; the VLA size-slot zeroes ride after the spills
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
-       ride (? (|| vararg (|| (peep g 'fesc ()) (hascall? ir1))) () (rideset ir1 params 0 ()))
+       ride (? (|| sr6f (|| vararg (|| (peep g 'fesc ()) (hascall? ir1)))) () (rideset ir1 params 0 ()))
        hpool (: rh (map (\ k (homereg k)) ride)      ; the freed homes rejoin the pool for locals
                 uh (filter (\ q (! (member? q rh))) (uhomes params 0 ()))
                 (filter (\ q (! (member? q uh))) tpool))
-       hm (&& (! vararg) (&& (! (peep g 'hasasm ())) (&& (! (anyop? ir1 'sys)) (homes? params 0))))
+       hm (&& (! vararg) (&& (! sr6f) (&& (! (peep g 'hasasm ()))   ; sr6f: the hidden sret arg shifts every
+                (&& (! (anyop? ir1 'sys)) (homes? params 0)))))            ; param register -- the pickers don't model it
        ; the alive pass runs once per homing-eligible fn: lpick reads cross/
        ; univ (a zero-crossing local homes through calls), the regens pin its
        ; livtab so call-fixed wraps only what a call actually needs
-       av (? (|| vararg (|| (bad? ir1) (|| (peep g 'hasasm ()) (anyop? ir1 'sys)))) () (alive g f))
+       av (? (|| sr6f (|| vararg (|| (bad? ir1) (|| (peep g 'hasasm ()) (anyop? ir1 'sys))))) () (alive g f))
        lr (? av (lpick ir1 (caup av) (cauup av)) ())
        lh (? (two? lr) <lr ())
        lp0 (? (two? lr) <>lr hpool)
