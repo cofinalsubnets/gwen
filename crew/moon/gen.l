@@ -4717,6 +4717,7 @@
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ()) _ (pin t 'cases ())
             _ (pin t 'glob (tablet 0)) _ (pin t 'globs ()) _ (pin t 'strs ()) _ (pin t 'statics ())
+            _ (pin t 'laid (tablet 0))                   ; names already on 'globs (a tentative repeat lays no twin)
             _ (pin t 'fns (tablet 0)) _ (pin t 'inl (tablet 0)) _ (pin t 'cgitems cgitems)
             _ (pin t 'stag stbl) _ (pin t 'sigs sigs)
             _ (pin t 'tgt tgt) _ (pin t 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp)) epi-a64 epi))
@@ -4747,8 +4748,14 @@
                     (one ps)
                      (? (! (two? ps)) (rec >fs)
                         (: p <ps
-                           _ (pin (g 'glob) <p `((intern <p) <>p <>>p))
-                           _ (? xd () (pin g 'globs (link <p (g 'globs))))
+                           old (peep (g 'glob) <p ())
+                           ; C's tentative rule (6.9.2): `int x; int x = 5;` in one TU is ONE
+                           ; object -- an INITIALIZED def always wins the entry; a tentative
+                           ; repeat keeps whatever stands, and lays no second symbol
+                           _ (? (|| (! (two? old)) (two? <>>p))
+                                (pin (g 'glob) <p `((intern <p) <>p <>>p)) ())
+                           _ (? (&& (! xd) (! (peep (g 'laid) <p ())))
+                                (: _ (pin (g 'laid) <p 1) (pin g 'globs (link <p (g 'globs)))) ())
                            (one >ps)))
                     (one <>f)))))
        ok (rec <>ast)
