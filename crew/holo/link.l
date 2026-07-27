@@ -238,12 +238,15 @@
    ; address), collect every abs64 site into a trailing offset table bracketed
    ; by __start_/__stop_ai_rela, and let nolibc's startup add the load base to
    ; each -- the classic static-PIE self-relocation, our own toolchain end to end.
-   (ldlink target pie srcs)
+   ; org: () takes the default base (pie 0 / elf-base); a number lays the image
+   ; THERE -- the bare-metal lane (qemu -M virt wants its RAM base, 0x80000000),
+   ; where `qemu -kernel` loads the segment at p_vaddr and enters at e_entry.
+   (ldlink target pie org srcs)
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
        objs (map (\ p (ld-read <p <>p mach)) srcs)
        rv (mach = 243)                          ; EM_RISCV: its own reloc-number namespace (see ldpatch)
-       base (? pie 0 elf-base)
+       base (? (charm? org) org pie 0 elf-base)
        lay (ldlay objs base)
        end <lay n0 <>lay
        nrel (? pie (ld-nabs objs rv) 0)

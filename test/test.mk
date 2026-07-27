@@ -803,6 +803,23 @@ test_thumb2: host out/host$(hsuf)/mooncc
 # the egg FROM SOURCE on the emulated M7 -- the self-hosting double-bake under
 # emulation -- then the driver tail asserts spec laws over the hatched image and
 # exits 42 through semihosting. 98 = a fault (start.S names the stacked pc/lr).
+# test_virt -- LOVE ITSELF on the bare riscv64 hart: the whole runtime
+# (love.c + am + libc + the port glue) compiled end to end by mooncc
+# -t riscv64 (port/virt/, the qemu sim port for the ox64 arc), start.o laid
+# from holo IR, OUR linker binds -- no foreign toolchain ANYWHERE, the only
+# port that can say so. The boot bakes the egg from source on the emulated
+# hart, then the driver tail asserts spec laws over the hatched image and
+# exits 42 through the sifive test finisher. 98 = a machine trap (the mtvec
+# tail names mcause/mepc on the console). Skips without qemu-system-riscv64.
+.PHONY: test_virt
+test_virt: host out/host$(hsuf)/mooncc
+	@echo VIRT out/virt/love.elf
+	@if ! command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+	   echo "test_virt: no qemu-system-riscv64, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/virt || { echo "FAIL virt build"; exit 1; }; \
+	  timeout 300 qemu-system-riscv64 -M virt -bios none -nographic -kernel out/virt/love.elf </dev/null; a=$$?; \
+	  [ $$a -eq 42 ] || { echo "FAIL love-on-virt boot (got $$a, want 42 = the egg hatched + the driver laws held; 98 = trap, 1 = a law failed)"; exit 1; }; \
+	  echo "test_virt: love (all-mooncc riscv64, our linker, holo start.o) boots on qemu -M virt -- egg baked on-hart, laws hold, exit 42"
 .PHONY: test_mps2
 test_mps2: host out/host$(hsuf)/mooncc
 	@echo MPS2 out/mps2/love.elf

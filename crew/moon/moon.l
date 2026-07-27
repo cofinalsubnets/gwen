@@ -152,7 +152,7 @@
               `('push 'lr)
               `('call 'main)
               `('li 'r7 94) `('sys))
-   (cc-link ins dst is ds tgt pie)
+   (cc-link ins dst is ds tgt pie org)
     (: srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt)))
                          (doto? f) (: r (uread f)
                                       (? (two? r) `(f <>r)
@@ -160,14 +160,29 @@
                          (udie 2 ("cc: not a .c/.o input: " + f))))
                  ins)
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
-       ps (ldlink tgt pie (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") ()))) srcs))
+       ps (ldlink tgt pie org (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") ()))) srcs))
        _ (ld-write dst ps)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-t x64|arm64] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
-   ; the flag scan: -c, -pie, -t tgt / -ttgt, -I dir / -Idir, -D def / -Ddef, -o out;
-   ; every other bare arg is an input, any other dash arg refuses.
-   ; -pie links an ET_DYN static-PIE (the linker slides its abs64 pointers at startup);
-   ; the default is the fixed-base ET_EXEC. -> (c idirs defs out ins tgt pie).
+   usage "usage: mooncc [-c] [-pie] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
+   ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
+   (tonum s)
+    (: n (tally s)
+       hex (&& (2 < n) (&& ((s 0) = 48) (|| ((s 1) = 120) ((s 1) = 88))))
+       (go i acc b) (? (n <= i) acc
+                       (: c (s i)
+                          d (? (&& (48 <= c) (c <= 57)) (c - 48)
+                               (&& (97 <= c) (c <= 102)) (c - 87)
+                               (&& (65 <= c) (c <= 70)) (c - 55)
+                               (udie 2 usage))
+                          _ (? (d < b) 0 (udie 2 usage))
+                          (go (i + 1) ((acc * b) + d) b)))
+       (? hex (go 2 0 16) (go 0 0 10)))
+   ; the flag scan: -c, -pie, -t tgt / -ttgt, -Ttext addr, -I dir / -Idir,
+   ; -D def / -Ddef, -o out; every other bare arg is an input, any other dash
+   ; arg refuses. -pie links an ET_DYN static-PIE (the linker slides its abs64
+   ; pointers at startup); the default is the fixed-base ET_EXEC. -Ttext lays
+   ; the image at addr instead of the classic base (the bare-metal lane; it
+   ; forces the link path like -pie). -> (c idirs defs out ins tgt pie org).
    (glu? a ch) (&& (2 < (tally a)) (&& ((a 0) = 45) ((a 1) = ch)))
    (dirn d) (: n (tally d) (? (n = 0) d ((d (n - 1)) = 47) d (d + "/")))
    (dotc? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 99))))
@@ -177,27 +192,29 @@
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r (n - 1)))
                 ((go 0 0) + "o"))
-   (flags as c is ds o ins t9 p9)
-    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9)
+   (flags as c is ds o ins t9 p9 g9)
+    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9)
        (: a <as r >as
-          (? (a = "-c") (flags r 1 is ds o ins t9 p9)
-             (a = "-pie") (flags r c is ds o ins t9 1)
-             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9) (udie 2 usage))
-             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9) (udie 2 usage))
-             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9) (udie 2 usage))
-             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9) (udie 2 usage))
-             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9)
-             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9)
-             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9)
+          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9)
+             (a = "-pie") (flags r c is ds o ins t9 1 g9)
+             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9 g9) (udie 2 usage))
+             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9 g9) (udie 2 usage))
+             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9) (udie 2 usage))
+             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9) (udie 2 usage))
+             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r)) (udie 2 usage))
+             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9 g9)
+             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9 g9)
+             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9)
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)
-             (flags r c is ds o (link a ins) t9 p9))))
+             (flags r c is ds o (link a ins) t9 p9 g9))))
    (moon-main as)
-    (: f (flags as () () () () () 'x64 ())
-       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6)
+    (: f (flags as () () () () () 'x64 () ())
+       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7)
+       lnk? (|| (lnky? ins) (|| pie (charm? org)))   ; -pie/-Ttext force the link path (crt0 + layout)
        (? (! (two? ins)) (udie 2 usage)
           o (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
                     (: _ (cc-obj <ins o is ds tgt) (quit 0)))
-               (|| (lnky? ins) pie) (: _ (cc-link ins o is ds tgt pie) (quit 0))   ; -pie forces the link path (crt0 + reloc table)
+               lnk? (: _ (cc-link ins o is ds tgt pie org) (quit 0))
                (: _ (cc-exe <ins o is ds tgt) (quit 0)))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
           ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT)
@@ -206,13 +223,13 @@
                   (&& (! (dotc? <>ins))
                       (|| c (&& (! (doto? <ins)) (! (doto? <>ins)))))))
            (: _ (? c (cc-obj <ins <>ins is ds tgt)
-                     pie (cc-link `(<ins) <>ins is ds tgt pie)     ; -pie IN OUT: link the one input, ET_DYN
+                     lnk? (cc-link `(<ins) <>ins is ds tgt pie org)   ; -pie/-Ttext IN OUT: link the one input
                      (cc-exe <ins <>ins is ds tgt)) (quit 0))
           c (: (go l) (? (! (two? l)) (quit 0)
                          (! (dotc? <l)) (udie 2 ("cc: not a .c input: " + <l))
                          (: _ (cc-obj <l (obase <l) is ds tgt) (go >l)))
                (go ins))
-          (|| (lnky? ins) pie) (: _ (cc-link ins "a.out" is ds tgt pie) (quit 0))
+          lnk? (: _ (cc-link ins "a.out" is ds tgt pie org) (quit 0))
           (udie 2 usage))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
