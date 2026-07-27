@@ -1,11 +1,9 @@
 ; tools/gcstat.l -- weigh a GENERATIONAL collector empirically: measure infant
 ; mortality (how much of each collection's scan was already dead) and copy
 ; amplification (how many times the live set gets recopied) on real workloads.
-;
-; needs a -DAI_STAT host (gauge's stat cells read 0 otherwise). build one, then:
-;   clang ... -DAI_STAT ... -o /tmp/love-stat love.c host/*.c -lm
-;   cat tools/gcstat.l | /tmp/love-stat                                   ; interpreted
-;   cat love/glaze/emit.l love/glaze/auto.l tools/gcstat.l | /tmp/love-stat   ; glazed (x86-64)
+; the gauge counters are always on:
+;   cat tools/gcstat.l | out/host/love                                     ; interpreted
+;   cat love/glaze/emit.l love/glaze/auto.l tools/gcstat.l | out/host/love ; glazed (x86-64)
 ;
 ; gauge 0 -> @(len heap stack n_gc max_len max_heap n_seen n_evac):
 ;   mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap.

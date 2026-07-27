@@ -185,6 +185,11 @@ struct ai {
  ai_word *gc_f2lo, *gc_f2hi;              // a SECOND from-space range (0 = unused); a major traces {major ∪ minor} in one pass
  uintptr_t gc_gen;                        // !=0 during a generational collection: bump() targets major_hp, not hp
  uintptr_t n_minor;                       // MINOR collections so far (majors = n_gc - n_minor)
+ uintptr_t minor_hi, major_hi;            // the PAUSE gauge: peak words ONE minor / ONE major copied
+                                          // (a copying collection's pause is its copy volume, so these
+                                          // bound the worst pause in words -- deterministic on every
+                                          // frontend; gauge[14]/[15]. test/host/gcpause.l puts wall ns
+                                          // against them and proves the minor peak flat in the live set).
  uintptr_t since_major, major_live0;      // young words scanned since the last major; major-pool live right after it.
                                           // A major fires once since_major > major_live0 + 4*minor-pool -- majors amortized
                                           // against allocation, so floating dead tenured objects are swept periodically
@@ -329,6 +334,7 @@ void ai_fd_drain(int fd, void const*, uintptr_t);
 struct ai *ai_io_alloc(struct ai *g, int fd);
 
 uintptr_t ai_clock(void); // used by garbage collector
+intptr_t ai_nclock(void); // the fine interval clock (ns); weak ms-degraded default in love.c, hosts override with a real ns source
 void ai_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks`
 // ai_clock() units (ticks=0 means infinite). No input wakeup; the scheduler
 // dispatches to ai_wait_fds when tasks are parked on streams. Default = no-op.

@@ -175,7 +175,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); each tail-jumps to its apply handler
- lvm_putn, lvm_gauge,    lvm_clock, lvm_apof, lvm_seal, lvm_books, lvm_setbook, lvm_mods,
+ lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_books, lvm_setbook, lvm_mods,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -793,7 +793,8 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define compose_thread {{lvm_cur},{.x=putcharm(3)},{lvm_arg0},{lvm_arg2},{lvm_argap},{.x=putcharm(4)},{lvm_tap},{.x=putcharm(3)}}
 #define stack_thread   {{lvm_cur},{.x=putcharm(4)},{lvm_arg0},{lvm_argap},{.x=putcharm(3)},{lvm_arg2},{lvm_argap},{.x=putcharm(4)},{lvm_argap},{.x=putcharm(5)},{lvm_tap},{.x=putcharm(4)}}
 #define nifs(_) \
- _(nif_clock, "clock", s1(lvm_clock)) _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
+ _(nif_clock, "clock", s1(lvm_clock)) _(nif_nclock, "nclock", s1(lvm_nclock)) _(nif_please, "please", s1(lvm_please))\
+ _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
  _(nif_seal, "seal-hooks", s1(lvm_seal)) _(nif_books, "books", s1(lvm_books)) _(nif_setbook, "setbook", s1(lvm_setbook)) _(nif_mods, "mods", s1(lvm_mods))\
  _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
  _(nif_compose, "compose", compose_thread) _(nif_stack, "stack", stack_thread)\
@@ -1392,6 +1393,8 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  uintptr_t copied = major ? (uintptr_t)(g->major_hp - g->major_base) : (uintptr_t)(g->major_hp - before);
  g->n_seen += seen_young;
  g->n_evac += copied;
+ if (major) { if (copied > g->major_hi) g->major_hi = copied; }
+ else if (copied > g->minor_hi) g->minor_hi = copied;
  g->rem_n = 0, g->rem_miss = 0;
  { uintptr_t e = (uintptr_t)(g->major_hp - g->major_base); if (e > g->max_heap) g->max_heap = e; }
  // MINOR resize -- DETERMINISTIC, no wall clock. Keep the GC's COPY OVERHEAD (words copied / words
@@ -4408,6 +4411,42 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
 // ============================================================================
 op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 
+// the fine clock: monotonic nanoseconds, `clock`'s interval twin. clock stays
+// at ms -- the scheduler's scale, safe in a 32-bit word (ns wraps 32 bits every
+// 4.3s, so it can never be the deadline unit) -- and nclock answers for
+// DIFFERENCES: (nclock t) is ns minus t, so time a region with two calls. the
+// weak default degrades to ms*1e6 (every frontend links today); a frontend
+// with a real ns source overrides (host/main.c: CLOCK_MONOTONIC; an MCU's
+// cycle counter or the TSC are later rungs). on a 32-bit target the honest
+// window is the charm's ns range -- an interval clock, not a calendar.
+__attribute__((weak)) intptr_t ai_nclock(void) {
+ return (intptr_t) (ai_clock() * 1000000u); }
+op11(lvm_nclock, putcharm(ai_nclock() - ((Sp[0] & 1) ? getcharm(Sp[0]) : 0)))
+
+// (please x): a collection ON DEMAND -- () asks for a minor, a positive charm
+// for a major (gen_please's amortization rule made due, so the forced path IS
+// the real one); answers the new n_gc. the real-time lever: a loop that knows
+// its idle moment schedules its own pauses there. a forced collection
+// OBSERVES the heap and never STEERS the schedule: the resize window
+// (win_alloc/win_copied/lean) is zeroed for the call -- one out-of-band
+// verdict never confirms a resize, lean needs two in a row -- and put back
+// after, so a probe forcing minors under high-survival churn can't talk the
+// nursery into doubling itself (the pause gauge's first draft ran the pool to
+// oom@8GB through exactly that feedback).
+lvm(lvm_please) {
+ word n = Sp[0];
+ Pack(g);
+ if ((n & 1) && getcharm(n) > 0)
+  g->since_major = g->major_live0 + 4 * (uintptr_t) g->len + 1;
+ uintptr_t wa = g->win_alloc, wc = g->win_copied;
+ intptr_t ln = g->lean;
+ g->win_alloc = g->win_copied = 0, g->lean = 0;
+ if (!ai_ok(g = ai_please(g, 0))) return ghelp(g);
+ g->win_alloc = wa, g->win_copied = wc, g->lean = ln;
+ Unpack(g);
+ Sp[0] = putcharm((intptr_t) g->n_gc);
+ Ip += 1; return Continue(); }
+
 // (gauge 0) -> a rank-1 Z array of VM stats (full machine words, not 62-bit fixnums):
 //   [0] len       pool size (words)
 //   [1] heap      words used from base (core + live heap)
@@ -4424,11 +4463,15 @@ op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
 //  [12] major_cap the major pool's reserved footprint: 2*major_len words (both halves), 0 if non-gen
 //  [13] n_resize  pool reallocations so far (band resizes + forced grows) -- the pool-cliff tell:
 //                 a bench that prints its delta catches remap flapping cold
+//  [14] minor_hi  peak words a single MINOR copied -- the pause gauge: a copying collection's
+//  [15] major_hi  peak words a single MAJOR copied    pause is its copy volume, so these bound the
+//                 worst pause of each kind in words (deterministic; ns = words * the copy rate,
+//                 which test/host/gcpause.l measures on the host)
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap ; young = heap - core.
 // Indices [3..7],[9..12] are the generational instrumentation ([8] is always live). An array (not a list):
 // every field is a charm, so a flat numeric tray is the natural rep -- compact, net/max apply directly.
 lvm(lvm_gauge) {
- enum { N = 14 };
+ enum { N = 16 };
  uintptr_t const bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + N * ai_T[ai_Z];
  Have(b2w(bytes));
  struct ai_vec *v = (struct ai_vec*) Hp;
@@ -4449,6 +4492,8 @@ lvm(lvm_gauge) {
  vec_put_int(v, 8, (intptr_t) (g->major_pool ? g->major_hp - g->major_base : g->minor - (word*) g->end));  // major live (gen), else [end,minor)
  vec_put_int(v, 12, (intptr_t) (g->major_pool ? 2 * g->major_len : 0));  // major pool capacity (both halves), words
  vec_put_int(v, 13, (intptr_t) g->n_resize);
+ vec_put_int(v, 14, (intptr_t) g->minor_hi);
+ vec_put_int(v, 15, (intptr_t) g->major_hi);
  return Sp[0] = word(v), Ip++, Continue(); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. The string-lane glaze

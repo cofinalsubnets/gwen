@@ -17,6 +17,12 @@ ai_noinline uintptr_t ai_clock(void) {
   return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
+// the fine clock's real source (the weak default in love.c degrades to ms*1e6)
+ai_noinline intptr_t ai_nclock(void) {
+  struct timespec ts;
+  return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
+       : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
+
 
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.

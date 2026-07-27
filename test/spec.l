@@ -531,4 +531,12 @@
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.
-(assert (string? (show @(1 2 3))) (charm? (clock 0)) (1 = ((cask 4) 'x)))
+; (nclock t) is clock's fine INTERVAL twin: monotonic ns minus t (ms-degraded where a frontend
+; has no ns source, so monotone everywhere). (please x) is a collection on demand -- () asks for
+; a minor, a positive charm for a major -- answering the collection count, so two asks order
+; strictly; the worst pause of each kind rides gauge[14]/[15] in words (test/host/gcpause.l
+; proves the minor's flat in the live set).
+(assert (string? (show @(1 2 3))) (charm? (clock 0)) (1 = ((cask 4) 'x))
+        (16 = tally (gauge 0)) (0 <= nclock (nclock 0)))
+(: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
+ (assert (c1 < c2)))
