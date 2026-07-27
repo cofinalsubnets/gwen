@@ -102,6 +102,7 @@
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
+ (? word ("1.797693134862316e308" = (show 1.7976931348623157e308)) 1)   ; the WHOLE finite range prints digits -- only true infinity wears ieee-inf
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  ; bignum // and % ride Knuth-D long division, whose 128/64 step is one `divq` on x86-64 and a
  ; soft divide elsewhere; `show` on a big divides too (the decimal printer), so it checks the same lane.

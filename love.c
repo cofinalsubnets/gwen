@@ -777,7 +777,10 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 
 #define fs0(g) (ai_core_of(g)->sp[0])
 #if UINTPTR_MAX > 0xffffffffu
-#define dtoa_inf    1e308
+// the infinity test is > the LARGEST FINITE double, so the whole finite range
+// prints digits -- a 1e308 threshold sent (1e308, DBL_MAX] to "ieee-inf", a
+// finite number wearing infinity's face (the 32-bit branch always had it right)
+#define dtoa_inf    __DBL_MAX__
 #define dtoa_sci_hi 1e16
 #define dtoa_sci_lo 1e-4
 #else
