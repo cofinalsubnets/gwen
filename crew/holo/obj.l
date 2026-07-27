@@ -358,6 +358,8 @@
        fstart 4 gstart (4 + nfun) estart ((4 + nfun) + nglob)
        extidx (o-idx exts estart)
        fnidx (o-idx (map intern funcnames) fstart)   ; interned fn name -> its symbol index (weak-target relocs bind here)
+       gidx (o-idx (map intern globnames) gstart)    ; ..and the DATA twin: a weak GLOBAL (musl's __stdout_used)
+                                                     ; is referenced through its own symbol, not fnidx's miss (index 0)
 
        ; -- .strtab: every symbol's name (funcs, globs, exts as spellings) --
        symnames (funcnames + globnames + (map (\ s (string s)) exts))
@@ -371,9 +373,18 @@
                                              (? (member? fs wknames) 2 1)   ; STB_WEAK: a strong def elsewhere wins
                                              2 1 (peep tlabels (intern fs) 0)))
                                  funcnames))
-           gsyms (catall (o-mapi (\ i gs (o-sym (at stroffs (nfun + i)) 1 1 2 (peep dlabels (intern gs) 0)))
+           ; a DATA symbol honours wknames too: musl's __stdio_exit.c defines
+           ; __stdout_used weakly (aliasing a null dummy) so stdout.c's real one
+           ; wins -- a hardcoded strong binding made that pair a link-dup
+           gsyms (catall (o-mapi (\ i gs (o-sym (at stroffs (nfun + i))
+                                                (? (member? gs wknames) 2 1) 1 2
+                                                (peep dlabels (intern gs) 0)))
                                  globnames))
-           esyms (catall (o-mapi (\ i e (o-sym (at stroffs ((nfun + nglob) + i)) 1 0 0 0))
+           ; an EXTERNAL symbol honours wknames too: a weak undefined reference
+           ; resolves to zero at static link (musl's _DYNAMIC), where a strong
+           ; one is an error -- the binding is the whole difference
+           esyms (catall (o-mapi (\ i e (o-sym (at stroffs ((nfun + nglob) + i))
+                                               (? (o-has? wkset e) 2 1) 0 0 0))
                                  exts))
            (catall `((o-sym 0 0 0 0 0)                 ; the NULL symbol
                       (o-sym 0 0 3 1 0)                  ; .text section symbol (STT_SECTION)
@@ -394,7 +405,8 @@
        ; linker can redirect), a section-bound label its section symbol + offset, anything
        ; else its UNDEF. the reloc emitters compose their own addend on the base.
        (secsym lbl)
-        (? (o-has? wkset lbl)   `((peep fnidx lbl 0) 0)
+        (? (&& (o-has? wkset lbl) (o-has? fnidx lbl)) `((peep fnidx lbl 0) 0)
+           (&& (o-has? wkset lbl) (o-has? gidx lbl))  `((peep gidx lbl 0) 0)
            (o-has? tlabels lbl) `(1 (peep tlabels lbl 0))
            (o-has? dlabels lbl) `(2 (peep dlabels lbl 0))
            (o-has? nlabels lbl) `(3 (peep nlabels lbl 0))
@@ -403,7 +415,7 @@
         (? !a64
            (catall (map (\ r
               (: off <r lbl <>>r pv <>>>>r
-                 (? (o-has? wkset lbl)                ; a weak-defined fn: bind its OWN symbol (overridable)
+                 (? (&& (o-has? wkset lbl) (o-has? fnidx lbl))   ; a weak-defined fn: bind its OWN symbol (overridable)
                      (o-rela off (peep fnidx lbl 0) r-plt32 -4)
                     (o-has? dlabels lbl)
                      (o-rela off 2 r-pc32 ((peep dlabels lbl 0) - 4))
@@ -422,7 +434,8 @@
                         (o-rela off <sl (? (id? k 'adrp21) ra-pghi21 ra-lo12) <>sl))
                     (id? k 'b26)
                      (: ty (? (aux = 2483027968) ra-call26 ra-jump26)   ; 0x94000000 = bl
-                        (? (o-has? wkset lbl) (o-rela off (peep fnidx lbl 0) ty 0)
+                        (? (&& (o-has? wkset lbl) (o-has? fnidx lbl)) (o-rela off (peep fnidx lbl 0) ty 0)
+                           (&& (o-has? wkset lbl) (o-has? gidx lbl)) (o-rela off (peep gidx lbl 0) ty 0)
                            (o-rela off (peep extidx lbl 0) ty 0)))
                     (scare 'obj-a64-fix k))))
               trel)))

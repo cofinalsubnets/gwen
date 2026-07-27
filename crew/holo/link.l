@@ -169,6 +169,13 @@
                     (: stag (peep (peep ob 'secmap 0) (at sy 3) ())
                        _ (? stag 0 (scare 'link-sym-section (peep ob 'id 0)))
                        (peep ob (ld-key stag) 0))
+                    ; a WEAK UNDEFINED symbol resolves to ZERO -- ELF says so, and
+                    ; C leans on it: musl's __init_tls tests `if (_DYNAMIC)` to
+                    ; tell a static link from a dynamic one, and a static link is
+                    ; exactly the one where nothing defines it. only an unresolved
+                    ; STRONG reference is an error.
+                    (&& ((at sy 1) = 2) (&& ((at sy 3) = 0)
+                         (! (two? (peep glo <sy ()))))) 0
                     (ldres glo n0 n1 r0 r1 <sy))
               w (? (member? kind '(1 257)) 8 4)
               ; -pie: this abs64 site holds a base-0 offset (base is 0), so record its
@@ -225,6 +232,12 @@
        r1 (r0 + (8 * nrel))
        relbox (? pie (: t (tablet 0) _ (pin t 0 ()) t) ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
+       ; the ENTRY: ld's rule -- the symbol `_start` when the set defines one,
+       ; else the first object's text (mooncc's own crt0 lane, which names its
+       ; entry __ai_start and relies on being first). a foreign libc brings its
+       ; own _start and must be entered THROUGH it: musl's sets up the stack
+       ; image, tls and stdio before main ever runs.
+       ent (: e (peep glo "_start" ()) (? (two? e) <e (peep <objs 'tbase 0)))
        ; emit in layout order, zero-padding up to each section's base
        (emit tag cur os acc)
         (? !(two? os) (cur >< acc)
@@ -239,7 +252,7 @@
        en (emit 'nifs <ed objs >ed)
        tail (? (<en < r0) `((ld-zeros (r0 - <en))) ())      ; nif tail + table alignment in one pad
        rtab (? pie (catall (map (\ o (le64 o)) (rev (peep relbox 0 ())))) ())
-       hdr (elf64-hdr (? pie 3 2) base (peep <objs 'tbase 0) (r1 - base) mach)
+       hdr (elf64-hdr (? pie 3 2) base ent (r1 - base) mach)
        (hdr >< (>en + tail + (? pie `(rtab) ()))))
 
    ; write a piece list to a file, raw (texts pass through; byte lists pack into a
