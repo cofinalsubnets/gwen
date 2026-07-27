@@ -206,7 +206,8 @@
    (tkbty? ps t)
     (? (! (two? t)) ()
        ((tkk t) = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned struct union enum))
-       ((tkk t) = 'id) (? (peep (ps 'types) (tkv t) 0) 1 ())
+       ((tkk t) = 'id) (? (member? (tkv t) `("__typeof" "__typeof__")) 1
+                          (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
    ; -- the type floor (parse side; gen re-derives with the same stag) --
@@ -297,7 +298,13 @@
     (? (! (two? e)) ()
        (: k <e
           (? (k = 'var) (: lt (peep (ps 'locals) <>e ())   ; locals shadow; a file-scope name falls through
-                           (? lt lt (peep (ps 'globals) <>e ())))
+                           (? lt lt
+                              (: gt (peep (ps 'globals) <>e ())
+                                 (? gt gt
+                                    ; a bare FUNCTION name: its 'sigs row as ('fn rty)
+                                    ; (__typeof(open) -- musl's weak_alias declares through it)
+                                    (: sg (peep (ps 'sigs) <>e ())
+                                       (? (two? sg) `('fn <sg) ()))))))
              (k = 'dot) (: bt (ptype ps <>e) (? (stru? bt) (fldty ps bt <>>e) ()))
              (k = 'deref) (: it (ptype ps <>e)
                              (? (ptr? it) <>it (arr? it) <>it
@@ -523,6 +530,21 @@
                     `('int ts3)))
              (&& ((tkk t) = 'id) (? (peep (ps 'types) (tkv t) 0) 1 ()))
               `((peep (ps 'types) (tkv t) 0) >ts)
+             ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
+             ; type -- a type-name reads pcty, an expression ptype (whose 'sigs lane
+             ; carries musl's weak_alias: `extern __typeof(old) new __attribute__(..)`)
+             (&& ((tkk t) = 'id) (member? (tkv t) `("__typeof" "__typeof__")))
+              (: r1 (want >ts "(")
+                 (? (! (two? r1)) ()
+                    (tkbty? ps <r1)
+                     (: tr (pcty ps r1)
+                        rest (? (two? tr) (want <>tr ")") ())
+                        (? (two? rest) `(<tr rest) ()))
+                    (: er (pasn ps r1)
+                       (? (! (two? er)) ()
+                          (: ty (ptype ps <er)
+                             rest (want <>er ")")
+                             (? (&& ty (two? rest)) `(ty rest) ()))))))
              ()))))
    ; a type-name (casts, sizeof): base + an ABSTRACT declarator -- pdtor covers
    ; stars, arrays, AND the function-pointer form `T (*)(params)` (name = ()).
