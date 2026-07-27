@@ -357,12 +357,16 @@
     (: eu ((: (go e) (? (((e + 1) 2.0) <= ax) (go (e + 1)) e)) (int (/ (log ax) (log 2.0))))
        e  ((: (go e) (? (ax < (e 2.0)) (go (e - 1)) e)) eu)
        (+ (* (e + bias) mant) (int (* ((/ ax (e 2.0)) - 1.0) (0.0 + mant)))))
-   (fbits x)                                        ; finite double -> its IEEE-754 bits as the SIGNED i64 pattern
+   (fbits x)                                        ; double -> its IEEE-754 bits as the SIGNED i64 pattern
     (? (x = 0.0) 0                                  ; (the sign bit would make a BIG, and les/imnum walk i64 patterns)
+       (! (x = x)) 9221120237041090560              ; nan (the quiet pattern) -- fenc's climb never ends on a non-finite
+       ((x + x) = x) (? (x < 0.0) -4503599627370496 9218868437227405312)   ; +-inf (1e999 reads as one)
        (: m (fenc (? (x < 0.0) (0.0 - x) x) 1023 4503599627370496)
           (? (x < 0.0) (m - 9223372036854775808) m)))
-   (fbits32 x)                                      ; finite double -> its IEEE-754 SINGLE (u32) bits (a `float` image)
+   (fbits32 x)                                      ; double -> its IEEE-754 SINGLE (u32) bits (a `float` image)
     (? (x = 0.0) 0
+       (! (x = x)) 2143289344
+       ((x + x) = x) (? (x < 0.0) 4286578688 2139095040)
        (+ (* (? (x < 0.0) 1 0) 2147483648)
           (fenc (? (x < 0.0) (0.0 - x) x) 127 8388608)))
    (fldf ty freg base off)                          ; load a float/double from [base+off] into freg (widen if float)
