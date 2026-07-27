@@ -695,7 +695,13 @@
     (? (&& (two? ini) (<ini = 'str)) ((tally <>ini) + 1)
        (&& (two? ini) (<ini = 'init))
         (: items <>ini
-           (? (&& (arr? elt) (&& (two? items) (allplain? items)))
+           ; { "s" } sizing a char array (6.7.9p14): the string's own count,
+           ; not one item (a lone str on a POINTER elt stays one: char *p[])
+           (? (&& (two? items)
+                  (&& (! (two? >items))
+                      (&& (two? <items) (&& ((cap <items) = 'str) (! (ptr? elt))))))
+               ((tally (caup <items)) + 1)
+              (&& (arr? elt) (&& (two? items) (allplain? items)))
                (: L (arrleaves elt) (? (< 0 L) (// ((tally items) + (L - 1)) L) (tally items)))
                (: (go l i mx)
                    (? (! (two? l)) mx

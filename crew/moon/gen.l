@@ -3164,6 +3164,11 @@
    (unelide g ty ini)                               ; normalize ini against ty
     (? !(initval? ini) ini                        ; a scalar / non-brace: nothing to nest
        !(aggish? ty) ini                           ; a brace on a scalar type: leave (layout unwraps/scares)
+       ; { "s" } on a char array: the optionally-braced string literal (C11
+       ; 6.7.9p14) -- unwrap to the bare literal, the plain lane images it
+       (arr? ty && !(ptr? <>ty) &&
+        (: its <>ini (two? its && !(two? >its) && (two? <its && (id? (cap <its) 'str)))))
+        (cap <>ini)
        (: pr (normfill g ty <>ini) `('init <pr)))     ; <pr = normed items; <>pr (excess) dropped
    (redesig dh dk v) `(dh dk v)   ; ('didx k v) | ('dfield k v)
    (normelt g ty desig dh dk val l)                 ; one element of type ty from item stream l -> (item rest)
@@ -3383,7 +3388,8 @@
            (? (! (id? r 'no)) `(`('fix (wsize g) (? (t32? g) 'abs32 'abs64) <r <>r)) (imgbytes g ty <>>ini)))
        (<ini = 'init)
         (: nini (unelide g ty ini)                     ; normalize elided braces (idempotent)
-         (? (arr? ty)
+         (? (! (id? (cap nini) 'init)) (imgbytes g ty nini)   ; unwrapped ({ "s" } -> the bare literal): re-dispatch
+            (arr? ty)
             (: elt <>ty esz (tsz g elt)
                (place l idx acc)                     ; -> ((off items)..) | 'bad
                 (? (! (two? l)) acc
