@@ -325,6 +325,13 @@
                              (? (ptr? it) <>it (arr? it) <>it
                                 (: pt (ptrarg ps <>e) (? (ptr? pt) <>pt (arr? pt) <>pt ()))))
              (k = 'cast) <>e
+             (k = 'clit) <>e
+             ; a call through a named function: its 'sigs return type (the
+             ; complex promotion below needs clog's answer to type complex)
+             (k = 'call) (? (&& (two? <>e) (id? (cap <>e) 'var))
+                            (: sg (peep (ps 'sigs) (caup <>e) ())
+                               (? (two? sg) <sg ()))
+                            ())
              (k = 'str) `('arr 'char ((tally <>e) + 1))   ; a literal IS its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
@@ -590,6 +597,18 @@
           (: dr (pdtor ps <>br <br)
              (? (two? dr) `((caup (cap dr)) <>dr) ()))))
 
+   ; complex usual-arithmetic conversion (C99 6.3.1.8): exactly one side
+   ; complex, the other arithmetic-real -> the real side rises to {x, 0}
+   ; (a clit, single-eval), so gen's complex lane only meets complex operands
+   (cxwrap ty x) `('clit ty `('init `(x `('flo 0.0))))
+   (mkbin ps op l r)
+    (: tl (ptype ps l) tr (ptype ps r)
+       cl (cplxty? tl) cr (cplxty? tr)
+       (? (&& cl (&& (! cr) (&& tr (! (|| (ptr? tr) (|| (arr? tr) (stru? tr)))))))
+           `('bin op l (cxwrap tl r))
+          (&& cr (&& (! cl) (&& tl (! (|| (ptr? tl) (|| (arr? tl) (stru? tl)))))))
+           `('bin op (cxwrap tr l) r)
+          `('bin op l r)))
    ; one left-associative binary level
    (plevel ps sub ops ts)
     (: r (sub ps ts)
@@ -600,7 +619,7 @@
                  (? (! (two? hit)) `(l ts2)
                     (: r2 (sub ps >ts2)
                        (? (two? r2)
-                          (more `('bin <>hit l <r2) <>r2)
+                          (more (mkbin ps <>hit l <r2) <>r2)
                           ()))))
              (more <r <>r))))
 
@@ -620,6 +639,11 @@
              ((tkk t) = 'llnum)                                 ; 1LL: llong on t32, plain elsewhere
               (? (pst32? ps) `(`('cast 'llong `('num (tkv t))) >ts) `(`('num (tkv t)) >ts))
              ((tkk t) = 'flo) `(`('flo (tkv t)) >ts)
+             ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex
+             ; constant {0, v} -- complex-double: complex FLOATS compute as
+             ; doubles too (the float model), narrowing only at typed stores
+             ((tkk t) = 'iflo)
+              `(`('clit '(struct "__cplx_double") `('init `(`('flo 0.0) `('flo (tkv t))))) >ts)
              ((tkk t) = 'str) `(`('str (tkv t)) >ts)
              ; the varargs builtins (my stdarg.h maps va_* onto these): va_arg's
              ; second operand is a TYPE, so they can't ride the ordinary call path
@@ -713,7 +737,22 @@
                      (: iv (pinit ps rest)
                         (? (two? iv) (ppostfrom ps `('clit <tr <iv) <>iv) ()))
                     (: r (punary ps rest)
-                       (? (two? r) `(`('cast <tr <r) <>r) ()))))
+                       (? (! (two? r)) ()
+                          ; the complex cast lanes (C99 6.3.1.7, musl's creal/__CIMAG):
+                          ; same complex passes through; a width flip converts
+                          ; componentwise; real -> complex is {x, 0}; complex -> real
+                          ; reads .re. (a non-lvalue operand evaluates once per
+                          ; component read -- musl only casts vars and params.)
+                          (: cty <tr
+                             sty (ptype ps <r)
+                             (? (cplxty? cty)
+                                 (? (&& (cplxty? sty) ((caup sty) = (caup cty))) `(<r <>r)
+                                    (cplxty? sty)
+                                     `(`('clit cty `('init `(`('dot <r "re") `('dot <r "im")))) <>r)
+                                    `(`('clit cty `('init `(<r `('flo 0.0)))) <>r))
+                                (&& (cplxty? sty) (! (stru? cty)))
+                                 `(`('cast cty `('dot <r "re")) <>r)
+                                `(`('cast cty <r) <>r)))))))
              (tkw? t 'sizeof)
               (: r1 >ts
                  (? (&& (peekp r1 "(") (tkbty? ps (cap (pquals >r1))))    ; sizeof(const T) too
