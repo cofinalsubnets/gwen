@@ -580,6 +580,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "x64.h"                                         //   the NATIVE backend load into it, and the (leave ()) below REGISTERS
 #elif defined(__aarch64__)                               //   the layer as the module `holo` -- orth stays clean; (use 'holo)
 #include "arm64.h"                                       //   splices it, (from 'holo 'assemble) probes it. native-ONLY here: the
+#elif defined(__riscv)                                   //   (riscv has no glaze yet; the native backend still bakes, so the
+#include "riscv.h"                                       //   corpus's holo asserts run on the love-raw-riscv lane too)
 #endif                                                   //   glaze emits for the running arch, mooncc.image carries ALL backends
                                                          //   (crew/build.mk moonfiles), a test that wants a cross backend loads it
                                                          //   at runtime ((enter ()) (use 'holo) <backend.l> (leave ()) -- the

@@ -18,7 +18,7 @@ lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # both its compilers. Both .h flavors are still GENERATED for both backends (love0
 # needs them; the host simply includes one). asm_h = lcat headers (host love);
 # asm0_h = sed-wrapped raw source (love0, the bootstrap -- can't lcat its own sources).
-holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h
+holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/riscv.h
 asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h
 # the glaze (native JIT, love/glaze/{emit,auto}.l): baked to raw-text headers (sed_lit,
 # like asm0 -- no lcat reader round-trip). Evaled ONLY before a --bake (x86-gated
@@ -54,6 +54,8 @@ out/lib/holo.h: crew/holo/holo.l tools/lcat.l
 out/lib/x64.h: crew/holo/x64.l tools/lcat.l
 	$(lcat_h)
 out/lib/arm64.h: crew/holo/arm64.l tools/lcat.l
+	$(lcat_h)
+out/lib/riscv.h: crew/holo/riscv.l tools/lcat.l
 	$(lcat_h)
 # crew/rune/ the CAS rides the same lcat pipeline for device frontends that
 # bake it behind the egg (port/playdate's workbench). rune.l seals itself at its

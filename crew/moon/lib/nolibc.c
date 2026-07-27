@@ -4,10 +4,11 @@
  * with __sigsetjmp/siglongjmp/__ai_sigret beside it; crew/moon/lib/math/
  * carries the math floor, crew/moon/lib/math/am.c -- ours). One file, mooncc-compiled, our own linker binds it:
  *   mooncc love.o (host objects) nolibc.o (math objects) sys.o -o love
- * Two arches, one body: every call below speaks the modern forms BOTH tables
+ * Three arches, one body: every call below speaks the modern forms both tables
  * carry (openat / newfstatat / ppoll / pipe2 / dup3 / clone / the *at file
- * ops) -- aarch64's asm-generic table dropped the legacy names outright, so
- * the NR block under this comment is the only thing that gates. The shapes
+ * ops) -- the asm-generic table (aarch64 + riscv64, one shared block) dropped
+ * the legacy names outright, so the NR block under this comment is the only
+ * thing that gates. The shapes
  * MATCH crew/moon/include/: struct stat and dirent are the kernel layouts
  * verbatim (stat.h arch-gates the struct), termios rides TCGETS raw the way
  * musl does, and only sigaction needs a real translation (glibc's 152-byte
@@ -49,8 +50,9 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 extern void __ai_sigret(void);
 extern int main(int, char**);
 
-/* ---- the syscall numbers, the one arch gate ---- */
-#ifdef __aarch64__
+/* ---- the syscall numbers, the one arch gate (riscv64 shares aarch64's
+ * asm-generic table verbatim -- one flag, two arches) ---- */
+#if defined(__aarch64__) || defined(__riscv)
 #define NR_getcwd          17
 #define NR_dup3            24
 #define NR_fcntl           25
@@ -1048,7 +1050,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
   memset(&ko, 0, sizeof ko);
   if (a) {
     ka.h = (void *) a->sa_handler;
-#ifdef __aarch64__
+#if defined(__aarch64__) || defined(__riscv)
     ka.flags = (unsigned long) (unsigned int) a->sa_flags;
     ka.restorer = 0;
 #else

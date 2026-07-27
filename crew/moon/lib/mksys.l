@@ -8,8 +8,9 @@
 ;                            love.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
 ;   __ai_sigret              the SA_RESTORER tail (rt_sigreturn) nolibc's sigaction installs
 ; (sqrt stays in C -- crew/moon/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
-; C CAN say has no place here.) two targets, one layer: (mksys dst) lays x64,
-; (mksys-arm64 dst) aarch64 -- both seed mksys-as, which picks the arch's IR table
+; C CAN say has no place here.) three targets, one layer: (mksys dst) lays x64,
+; (mksys-arm64 dst) aarch64, (mksys-riscv dst) riscv64 -- all seed mksys-as, which
+; picks the arch's IR table
 ; (the scaffold is shared; the payloads are irreducibly per-ISA). runs after
 ; crew/holo/{elf,obj}.l in a cat (the mooncc prefix layers; the assembler itself
 ; rides the baked holo book):
@@ -19,6 +20,7 @@
 ; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.
 (: (mksys dst) (mksys-as 'x64 dst)
    (mksys-arm64 dst) (mksys-as 'arm64 dst)
+   (mksys-riscv dst) (mksys-as 'riscv64 dst)
    (mksys-as arch dst)
     (: ir (? (id? arch 'x64)
          '(
@@ -91,6 +93,7 @@
          (li r0 15)                  ; rt_sigreturn
          (sys))
 
+         (id? arch 'arm64)
          ; the aarch64 lane: same four leaves on the asm-generic table. registers are
          ; holo's arm64 file, rN = xN one-to-one (plus fp/lr/sp by name). the jmp_buf
          ; inside the same 25-long buffer: [0..9] x19..x28, [10] fp, [11] sp, [12] lr
@@ -192,5 +195,92 @@
          ; -- __ai_sigret: rt_sigreturn, laid for surface parity (see above).
          (label __ai_sigret)
          (li r8 139)                 ; rt_sigreturn
+         (sys))
+
+         ; the riscv64 lane: the same four leaves on the same asm-generic table
+         ; (rt_sigprocmask 135, rt_sigreturn 139; ecall preserves every register
+         ; but a0, so buf/val stage in t0/t1 and ride through). registers are
+         ; holo's riscv file: r0..r7 = a0..a7, r8/r9 = t0/t1, fp = s0,
+         ; r15/r13/r14 = s1/s2/s3, r19..r26 = s4..s11, lr = ra. the jmp_buf
+         ; inside the 25-long buffer: [0] ra (the return pc), [1] sp,
+         ; [2..13] s0..s11, [14] the signal mask. NO fp slots: the backend's
+         ; fp file is all caller-saved (fa/ft; the fs bank is unmapped), so no
+         ; mooncc-compiled frame can hold a live double in one across a call.
+         '(
+         ; -- __ai_sys: args a0..a6 (n,a..f) -> the kernel's a7=nr, a0..a5.
+         ;    a7 drains n first, then each mov reads the slot ahead of it.
+         (label __ai_sys)
+         (mov r7 r0)                 ; a7 <- n
+         (mov r0 r1)                 ; a0 <- a
+         (mov r1 r2)                 ; a1 <- b
+         (mov r2 r3)                 ; a2 <- c
+         (mov r3 r4)                 ; a3 <- d
+         (mov r4 r5)                 ; a4 <- e
+         (mov r5 r6)                 ; a5 <- f
+         (sys)
+         (ret)                       ; a0 rides out (-errno included; C wraps it)
+
+         ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam,
+         ;    then the current mask into buf[14] (rt_sigprocmask how=0 set=NULL).
+         (label __sigsetjmp)
+         (st r0 0   lr)
+         (st r0 8   sp)
+         (st r0 16  fp)
+         (st r0 24  r15)
+         (st r0 32  r13)
+         (st r0 40  r14)
+         (st r0 48  r19)
+         (st r0 56  r20)
+         (st r0 64  r21)
+         (st r0 72  r22)
+         (st r0 80  r23)
+         (st r0 88  r24)
+         (st r0 96  r25)
+         (st r0 104 r26)
+         (lea r2 r0 112)             ; a2 = &buf[14] (oldset)
+         (li r1 0)                   ; a1 = NULL (read only)
+         (li r0 0)                   ; a0 = SIG_BLOCK
+         (li r3 8)                   ; a3 = sigsetsize
+         (li r7 135)                 ; rt_sigprocmask
+         (sys)
+         (li r0 0)                   ; the first arrival answers 0
+         (ret)
+
+         ; -- siglongjmp(buf, val): the mask FIRST (the fault barrier jumps out
+         ;    of a signal handler), then the file, then ret through the saved ra.
+         (label siglongjmp)
+         (mov r8 r0)                 ; t0 <- buf
+         (mov r9 r1)                 ; t1 <- val
+         (lea r1 r8 112)             ; a1 = &buf[14] (the saved mask)
+         (li r0 2)                   ; a0 = SIG_SETMASK
+         (li r2 0)                   ; a2 = NULL
+         (li r3 8)                   ; a3 = sigsetsize
+         (li r7 135)                 ; rt_sigprocmask
+         (sys)
+         (ld fp  r8 16)
+         (ld r15 r8 24)
+         (ld r13 r8 32)
+         (ld r14 r8 40)
+         (ld r19 r8 48)
+         (ld r20 r8 56)
+         (ld r21 r8 64)
+         (ld r22 r8 72)
+         (ld r23 r8 80)
+         (ld r24 r8 88)
+         (ld r25 r8 96)
+         (ld r26 r8 104)
+         (mov r0 r9)                 ; a0 <- val, 0 lifted to 1 (the setjmp law)
+         (cmp r0 0)
+         (br ne lj-live)
+         (li r0 1)
+         (label lj-live)
+         (ld sp r8 8)                ; the saved sp
+         (ld lr r8 0)                ; the saved return pc
+         (ret)                       ; jalr x0, 0(ra)
+
+         ; -- __ai_sigret: rt_sigreturn, laid for surface parity (riscv's
+         ;    sigaction rides the kernel's vdso trampoline, like aarch64).
+         (label __ai_sigret)
+         (li r7 139)                 ; rt_sigreturn
          (sys)))
        (write-bytes dst (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () ()))))

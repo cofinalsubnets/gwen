@@ -1002,6 +1002,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   #define AI_ARCH "x64"
 #elif defined(__aarch64__)
   #define AI_ARCH "arm64"
+#elif defined(__riscv)
+  #define AI_ARCH "riscv64"
 #else
   #define AI_ARCH "other"
 #endif
@@ -5219,6 +5221,8 @@ static intptr_t image_imm_index(word v) {
 #define IMAGE_ARCH 1
 #elif defined(__aarch64__)
 #define IMAGE_ARCH 2
+#elif defined(__riscv)
+#define IMAGE_ARCH 3
 #else
 #define IMAGE_ARCH 0
 #endif

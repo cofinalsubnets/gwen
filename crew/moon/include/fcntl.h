@@ -10,7 +10,7 @@
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
-#ifdef __aarch64__
+#if defined(__aarch64__) || defined(__riscv)
 #define O_DIRECTORY  16384   /* asm-generic 040000 */
 #define O_NOFOLLOW   32768   /* asm-generic 0100000 */
 #else
