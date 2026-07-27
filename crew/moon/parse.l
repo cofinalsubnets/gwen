@@ -283,6 +283,13 @@
                   (: pb (pval <>>>x)
                      (? (! (two? pb)) ()
                         (: n (cfold <>>x) (? (charm? n) `((<pb + (* n <>pb)) <>pb) ()))))))
+           ; a null-grounded ARRAY member decays to its (constant) address with
+           ; the element stride -- &((T*)0)->ts[i] (musl's ioctl compat table)
+           (<x = 'dot)
+            (: gr (ground x)
+               (? (! (two? gr)) ()
+                  (: ty <>gr
+                     (? (arr? ty) `(<gr (tsz ps <>ty)) ()))))
            ())
        (? (&& (two? e) (<e = 'deref))                ; &*(ptr-expr): the pointer's own value
            (: pv (pval <>e) (? (two? pv) <pv ()))
@@ -311,6 +318,10 @@
                                 (: pt (ptrarg ps <>e) (? (ptr? pt) <>pt (arr? pt) <>pt ()))))
              (k = 'cast) <>e
              (k = 'str) `('arr 'char ((tally <>e) + 1))   ; a literal IS its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
+             ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
+             ; a plain decimal past int32 is a long (suffixed forms arrive cast)
+             (k = 'num) (? (&& (-2147483648 <= <>e) (<>e <= 2147483647)) 'int 'long)
+             (k = 'flo) 'double
              ())))
 
    ; -- declarators: stars XOR one array suffix, PLUS the function-pointer
