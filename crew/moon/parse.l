@@ -190,6 +190,17 @@
                 _ (pin t 'sects (tablet 0))         ; global name -> its __attribute__((section "..")) string
                 _ (pin t 'locals (tablet 0))        ; local/param name -> its declared type (for parse-time sizeof folding)
                 _ (pin t 'globals (tablet 0))       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
+                ; gcc's builtin va_list, seeded so `typedef __builtin_va_list va_list;`
+                ; (musl's alltypes.h) parses: the SAME per-target tag stdarg.h lays --
+                ; gen bakes the va offsets, so only size/align/decay ride the type here
+                _ (pin (t 'stag) "__va_list_tag"
+                       (? (member? tgt '(thumb2 thumb2sp thumb1)) '((("__ap" 0 (ptr void))) 4 4)
+                          (id? tgt 'arm64)
+                           '((("__stack" 0 (ptr void)) ("__gr_top" 8 (ptr void)) ("__vr_top" 16 (ptr void))
+                              ("__gr_offs" 24 int) ("__vr_offs" 28 int)) 32 8)
+                          '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
+                             ("reg_save_area" 16 (ptr void))) 24 8)))
+                _ (pin (t 'types) "__builtin_va_list" '(arr (struct "__va_list_tag") 1))
                 t)
    ; does a type begin here?
    (tkbty? ps t)
@@ -573,6 +584,14 @@
                  ra (? (two? r1) (pasn ps r1) ())
                  rest (? (two? ra) (want <>ra ")") ())
                  (? (two? rest) `(`('vaend <ra) rest) ()))
+             ; va_copy: a va_list is an array of one tag, so the copy IS `*dst = *src`
+             (&& ((tkk t) = 'id) ((tkv t) = "__builtin_va_copy"))
+              (: r1 (want >ts "(")
+                 ra (? (two? r1) (pasn ps r1) ())
+                 r2 (? (two? ra) (want <>ra ",") ())
+                 rb (? (two? r2) (pasn ps r2) ())
+                 rest (? (two? rb) (want <>rb ")") ())
+                 (? (two? rest) `(`('asn `('deref <ra) `('deref <rb)) rest) ()))
              ((tkk t) = 'id)
               (: ev (peep (ps 'enums) (tkv t) ())
                  (? (charm? ev) `(`('num ev) >ts)
