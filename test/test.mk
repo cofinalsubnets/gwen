@@ -969,8 +969,11 @@ endif
 # Machine-check proof/rocq/gc.v -- the generational MINOR is SOUND: under a complete
 # write barrier (rem_complete) the nursery scan reaches every live young object,
 # so no live young is lost (barrier_sound) -- the Coq proof of doc/proto/gengc.l's
-# load-bearing self-check (3b, the barrier is necessary). Axiom-free like spec.v;
-# the C stays connected by the differential oracle + gen_audit. No-op without coqc.
+# load-bearing self-check (3b, the barrier is necessary). And the minor's PAUSE
+# has its shape: work bounded by the nursery alone, survivor set identical under
+# tenure-blind growth (minor_work_bounded / minor_flat -- test/host/gcpause.l is
+# the gauge that instance-checks them). Axiom-free like spec.v; the C stays
+# connected by the differential oracle + gen_audit. No-op without coqc.
 ifeq ($(COQC),)
 test_gc:
 	@echo "test_gc: skipped (needs rocq/coqc)"

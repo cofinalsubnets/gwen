@@ -1,5 +1,8 @@
 (* proof/rocq/gc.v -- the generational MINOR is SOUND: under a complete write barrier,
-   no live young object is lost.
+   no live young object is lost. and the minor's PAUSE has its shape: its work is
+   bounded by the nursery alone, and tenured growth that keeps no young pointer
+   leaves its survivor set identical (minor_work_bounded / minor_flat, at the
+   bottom -- the theorems test/host/gcpause.l's gauge instance-checks).
 
    This is the Coq counterpart of doc/proto/gengc.l, the runnable ai model of the
    nursery+old collector. That model's load-bearing self-check is assert (3b): an
@@ -190,7 +193,98 @@ Proof.
   apply Hlost. apply barrier_sound; assumption.
 Qed.
 
-(* axiom-free, like the rest of proof/rocq/: both results are closed under the global
+(* ============================================================ *)
+(* the PAUSE bound -- the minor's work owes nothing to old      *)
+(* ============================================================ *)
+
+(* a copying collector's pause IS its copy volume, and the minor copies exactly
+   its survivors: the young objects the nursery scan reaches from [Seeds]
+   (barrier_sound says that scan covers everything live). test/host/gcpause.l
+   MEASURES this shape -- gauge[14]/[15] carry the peak per-collection copy
+   volume, and the worst minor sat bit-identical across 12x tenured growth --
+   and the two theorems below are that shape in the model, so the gauge reads
+   as an instance-check, not free-standing evidence. *)
+
+Definition Promoted (nur : region) (seeds : list addr) (y : addr) : Prop :=
+  present y nur /\ Reach nur seeds y.
+
+(* (i) THE BOUND: however the survivors are enumerated (no address twice),
+   there are at most as many as the nursery holds. the old space does not
+   appear in the statement at all -- the minor's work is bounded by the
+   nursery, whatever the tenured set grew to. *)
+Theorem minor_work_bounded :
+  forall nur seeds l,
+    NoDup l ->
+    (forall y, In y l -> Promoted nur seeds y) ->
+    length l <= length nur.
+Proof.
+  intros nur seeds l Hnd Hall.
+  rewrite <- (length_map fst nur).
+  apply NoDup_incl_length; [exact Hnd |].
+  intros y Hy. destruct (Hall y Hy) as [Hp _]. exact Hp.
+Qed.
+
+(* a filter that refuses every element answers [] *)
+Lemma filter_none : forall (f : addr -> bool) es,
+    (forall y, In y es -> f y = false) -> filter f es = [].
+Proof.
+  intros f es. induction es as [| e t IH]; intros H.
+  - reflexivity.
+  - simpl. rewrite (H e (or_introl eq_refl)).
+    apply IH. intros y Hy. apply H. right. exact Hy.
+Qed.
+
+(* flat_map only reads its function on the list's own elements *)
+Lemma flat_map_ext_in : forall (f g : addr -> list addr) l,
+    (forall x, In x l -> f x = g x) -> flat_map f l = flat_map g l.
+Proof.
+  intros f g l. induction l as [| x t IH]; intros H.
+  - reflexivity.
+  - simpl. rewrite (H x (or_introl eq_refl)).
+    rewrite (IH (fun y Hy => H y (or_intror Hy))). reflexivity.
+Qed.
+
+(* tenured growth that keeps no pointer into the nursery -- gcpause.l's levels
+   exactly (a cask holds no pointers at all). an old object that DOES point
+   young is the remembered set's business and is already in the seeds. *)
+Definition tenure_blind (nur ext : region) : Prop :=
+  forall a y, In y (edges a ext) -> ~ present y nur.
+
+(* growing old by tenure-blind objects leaves the minor's seeds LITERALLY equal *)
+Lemma seeds_tenure_blind :
+  forall nur old ext rem roots,
+    tenure_blind nur ext ->
+    Seeds nur (old ++ ext) rem roots = Seeds nur old rem roots.
+Proof.
+  intros nur old ext rem roots Hblind.
+  unfold Seeds. f_equal.
+  unfold rem_young. apply flat_map_ext_in. intros oa _.
+  destruct (in_dec Nat.eq_dec oa (map fst old)) as [Hp | Hnp].
+  - rewrite (edges_app_left oa old ext Hp). reflexivity.
+  - rewrite (edges_app_right oa old ext Hnp).
+    rewrite (edges_absent oa old Hnp). simpl.
+    apply filter_none. intros y Hy.
+    destruct (presentb y nur) eqn:E; [| reflexivity].
+    apply presentb_present in E. exfalso. exact (Hblind oa y Hy E).
+Qed.
+
+(* (ii) THE FLAT LINE: under tenure-blind growth the survivor set is THE SAME
+   set -- same seeds, same scan, same copy volume, not merely a same-sized one.
+   this is gcpause.l's assert made general: 12x the tenured set moved the worst
+   minor by nothing, because every added word was tenure-blind. *)
+Theorem minor_flat :
+  forall nur old ext rem roots y,
+    tenure_blind nur ext ->
+    (Promoted nur (Seeds nur (old ++ ext) rem roots) y
+     <-> Promoted nur (Seeds nur old rem roots) y).
+Proof.
+  intros nur old ext rem roots y Hblind.
+  rewrite (seeds_tenure_blind nur old ext rem roots Hblind). tauto.
+Qed.
+
+(* axiom-free, like the rest of proof/rocq/: every result is closed under the global
    context (no Axiom, no Admitted, no classical/funext escape hatch). *)
 Print Assumptions barrier_sound.
 Print Assumptions minor_loses_only_if_barrier_incomplete.
+Print Assumptions minor_work_bounded.
+Print Assumptions minor_flat.

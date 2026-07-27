@@ -5,7 +5,11 @@
 ; set -- grow the live set 16x and the worst minor stays flat; a MAJOR copies
 ; the live set itself, the honest linear cost. words are the deterministic
 ; measure and carry the asserts; wall ns ride along in the printed table only
-; (machines flake, words don't).
+; (machines flake, words don't). both shapes are THEOREMS in the model first --
+; proof/rocq/gc.v's minor_work_bounded (the minor's work bounded by the nursery
+; alone, old absent from the statement) and minor_flat (the survivor set
+; identical under tenure-blind growth) -- so this gate is the instance-check,
+; not free-standing evidence.
 ;
 ;   gauge[7]  n_evac    Σ words copied over all collections -- a delta around
 ;                       one forced collection is that collection's exact work

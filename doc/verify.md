@@ -19,7 +19,7 @@ every run, so none of it can drift quietly.
 |---|---|---|
 | proof/rocq/spec.v | the core laws, hand-written: church application, net, subst/beta, the order lattice | test_proof |
 | proof/rocq/patch.v | seed's patch groupoid -- the commute laws as theorems | test_proof |
-| proof/rocq/gc.v | the generational minor is SOUND: a complete rem-set barrier loses no live young | test_gc |
+| proof/rocq/gc.v | the generational minor is SOUND (a complete rem-set barrier loses no live young) and its PAUSE has its shape (work bounded by the nursery alone; survivor set identical under tenure-blind growth) | test_gc |
 | proof/rocq/gen.v | GENERATED from test/spec.l: the corpus asserts as vm_compute theorems over spec.v's own model | test_gen |
 | proof/rocq/uugen.v | GENERATED from test/uu.l: terms uu's kernel checked, re-checked by coqc | test_uugen |
 | proof/lean/uugen.lean | the SAME uu corpus through Lean 4 -- a second, unrelated kernel | test_uulean |
@@ -65,23 +65,23 @@ above plus the corpus on every target. state it this way or not at all.
 
 ## the open seams, ranked
 
-1. **the GC's quantitative claim has a gauge but no theorem.** test/host/gcpause.l
-   MEASURES the minor flat in the live set (the worst minor bit-identical across
-   3.7x tenured growth; gauge[14]/[15] carry the peaks). gc.v proves soundness
-   only. the model already holds the missing statement -- minor work bounded by
-   nursery survivors, independent of the old space -- and proving it there turns
-   the gauge from evidence into an instance-check. smallest rung, freshest ground.
-2. **the evaluator refinement gap.** ev + the glaze touch the proofs only through
+one already closed sets the pattern: test/host/gcpause.l MEASURES the minor flat
+in the live set (the worst minor bit-identical across 3.7x tenured growth;
+gauge[14]/[15] carry the peaks), and gc.v's minor_work_bounded / minor_flat state
+the same shape as theorems -- the gauge is the instance-check. the pattern to
+repeat: a gate that measures a shape earns a theorem that OWNS the shape.
+
+1. **the evaluator refinement gap.** ev + the glaze touch the proofs only through
    gen.v's asserts and the oracle fuzz. the realistic work is WIDENING both:
    more spec.l sections through spec2coq (the skip list names what's unmodeled),
    richer term generation for the extracted oracle. a small-step machine that
    spec.v's semantics refines to is the ambitious form.
-3. **moon is the largest unproven trusted component** -- it compiles love.c and
+2. **moon is the largest unproven trusted component** -- it compiles love.c and
    most of a userland now, checked only by the corpus gates. the encoder ladder
    covers holo's emission, not moon's selection or regalloc. the honest near-term
    move is differential (two-binary tree diff, judge.l) aimed at moon-vs-gcc
    output, not a compiler proof.
-4. **the encoder ladder's next rungs** (doc/holo-verify.md): indexed addressing,
+3. **the encoder ladder's next rungs** (doc/holo-verify.md): indexed addressing,
    sized loads, arm64.
-5. **uu whole-corpus integration** -- every corpus file into both export lists;
+4. **uu whole-corpus integration** -- every corpus file into both export lists;
    mechanical, unfinished.
