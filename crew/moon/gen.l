@@ -844,6 +844,7 @@
    ; (arrays and functions decay to the address; a struct has no register value)
    (loadval g ty addrf)
     (? (arr? ty) (mkv `('ptr <>ty) 'r0 addrf)
+       (gvarr? ty) (mkv `('ptr (varel ty)) 'r0 addrf)   ; a VLA row decays to its address (p[i] a char*)
        (fn? ty) (mkv `('ptr ty) 'r0 addrf)
        (stru? ty) (mkv ty 'r0 addrf)                 ; a struct value IS its address (the pair reps read through it)
        (flo? ty) (mkv 'double 'r0 (addrf + (fldf ty 'f0 'r0 0)))
@@ -1061,7 +1062,11 @@
            (: e2 <>e
               lv (clval g env e2)
               ty (? (bad? lv) (: r (cgexpr g env e2) (? (bad? r) 'bad (: _ (rfree g (vreg r)) (vty r)))) (vty lv))
-              (? (bad? ty) 'bad (mkv 'ulong 'r0 `(`('li 'r0 (tsz g ty))))))
+              (? (bad? ty) 'bad
+                 (&& (gvarr? ty) (3 < (tally ty)))   ; sizeof a VLA local: the stashed byte size
+                  (: sl (peep (g 'vslots) (varix ty) ())
+                     (? (! (two? sl)) 'bad (mkv 'ulong 'r0 `(`('ld 'r0 'r4 (caup sl))))))
+                 (mkv 'ulong 'r0 `(`('li 'r0 (tsz g ty))))))
           (k = 'num)
            (? (&& (t32? g) (! (&& (-2147483648 <= <>e) (<>e <= 4294967295))))
               ; a literal past the 32-bit word: the pair (C99 decimal picks long long).
@@ -1116,6 +1121,10 @@
                         (? (<en = 'loc)
                            (: v (mkv `('ptr <>ty) 'r0 `(`('lea 'r0 'r4 <>en))) (? ap? v (escan g v)))
                            (mkv `('ptr <>ty) 'r0 `(`('la 'r0 <>en))))
+                       (gvarr? ty)                   ; a VLA local: its slot HOLDS the block pointer
+                        (? (<en = 'loc)
+                           (mkv `('ptr (varel ty)) 'r0 `(`('ld 'r0 'r4 <>en)))
+                           'bad)
                        (flo? ty)                     ; a float/double loads into f0 (widened if float)
                         (? (<en = 'loc)
                            (mkv 'double 'r0 (fldf ty 'f0 'r4 <>en))
@@ -1855,6 +1864,14 @@
    ; textbook formula (gcc's __divdc3 adds Smith recovery; musl's own complex
    ; code guards its edge cases upstream). --
    (cxb ty) (? ((caup ty) = "__cplx_float") 'float 'double)
+   ; -- the C99 VLA type ('varr elt dim-expr [idx]): a runtime-dim array. a
+   ; LOCAL carries its parse-stamped idx into g 'vslots -> (ptrslot sizeslot);
+   ; a POINTEE (char (*p)[width]) carries just the expr, re-evaluated at each
+   ; scale site. --
+   (gvarr? ty) (&& (two? ty) (<ty = 'varr))
+   (varel ty) (caup ty)                             ; the element type (const-sized)
+   (varn ty) (cauup ty)                             ; the dim EXPRESSION (an AST)
+   (varix ty) (at ty 3)                             ; a decl's slot index (4-long only)
    ; park a VALUE REC as a double-pair temp -> (off forms srcty) | 'bad
    (cxpark g rv)
     (: off (ntmp g cxdty)
@@ -1958,7 +1975,8 @@
           (: ta (vty a)
              ; a constant right rides the immediate lane; a constant LEFT swaps
              ; over (commutative ops) or mirrors (relations, rflip) onto the right
-             imr (? (&& (! (flo? ta)) (<rhs = 'num)) (immop g op a ta <>rhs wnt) 'no)
+             imr (? (&& (! (flo? ta)) (&& (<rhs = 'num) (! (&& (ptr? ta) (gvarr? (caup ta))))))
+                    (immop g op a ta <>rhs wnt) 'no)
              (? (! (id? imr 'no)) imr
                 (: iml? (&& (! (flo? ta)) (&& (<lhs = 'num)
                             (member? op '(+ * & | ^ eq ne lt le gt ge))))
@@ -2011,8 +2029,32 @@
                                        'bad))
                                 (op = '+)
                                  ; ptr + idx at a machine scale is ONE leax (x64 a SIB lea,
-                                 ; a64 an add-shifted) -- the imul/add pair only for odd sizes
+                                 ; a64 an add-shifted) -- the imul/add pair only for odd sizes.
+                                 ; a VLA pointee (char (*p)[width]) scales by a RUNTIME stride:
+                                 ; park both sides, re-evaluate the dim in this env, multiply.
                                  (? (&& pa pb) 'bad
+                                    (&& pa (gvarr? (caup ta)))
+                                     (: vt (caup ta)               ; mid ran: ptr r1, idx r0 -- park before the dim eval
+                                        dv (: pk ((spush 'r1) + (spush 'r0))
+                                              de (cgexpr g env (varn vt))
+                                              (? (bad? de) 'bad
+                                                 (: es (tsz g (varel vt))
+                                                    (cat mid (cat pk (cat (asint g de)
+                                                     (cat (? (1 < es) (imby g 'r0 es) ())
+                                                      (cat (spop 'r2) (cat `(`('imul 'r2 'r2 'r0))
+                                                       (cat (spop 'r1) '((add r1 r1 r2) (mov r0 r1))))))))))))
+                                        (? (bad? dv) 'bad (mkv ta 'r0 dv)))
+                                    (&& pb (gvarr? (caup tb)))
+                                     (: vt (caup tb)
+                                        dv (: pk ((spush 'r0) + (spush 'r1))   ; ptr r0, idx r1 here
+                                              de (cgexpr g env (varn vt))
+                                              (? (bad? de) 'bad
+                                                 (: es (tsz g (varel vt))
+                                                    (cat mid (cat pk (cat (asint g de)
+                                                     (cat (? (1 < es) (imby g 'r0 es) ())
+                                                      (cat (spop 'r2) (cat `(`('imul 'r2 'r2 'r0))
+                                                       (cat (spop 'r1) '((add r1 r1 r2) (mov r0 r1))))))))))))
+                                        (? (bad? dv) 'bad (mkv tb 'r0 dv)))
                                     pa (: sz (tsz g <>ta)
                                           (? (member? sz '(1 2 4 8))
                                              (mkv ta 'r0 (cat mid `(`('leax 'r0 'r1 'r0 sz 0))))
@@ -2087,11 +2129,15 @@
                             (: pa (ptr? ta) pb (ptr? tb)
                                ; a live ptr + live idx at a machine scale: ONE leax, no
                                ; shuttle (lea reads both sources before writing -- any alias)
-                               lxsz (? (! (op = '+)) () (&& pa pb) ()
+                               ; a VLA pointee has no STATIC scale -- the shuttle's
+                               ; lane re-evaluates the dim, so never take the leax
+                               vpt (|| (&& pa (gvarr? (caup ta))) (&& pb (gvarr? (caup tb))))
+                               lxsz (? (! (op = '+)) () (&& pa pb) () vpt ()
                                        pa (: s9 (tsz g <>ta) (? (member? s9 '(1 2 4 8)) s9 ()))
                                        pb (: s9 (tsz g <>tb) (? (member? s9 '(1 2 4 8)) s9 ()))
                                        ())
                                (? (id? ah 'sh) (shut ())
+                                  vpt (shut ())
                                   (&& (|| pa pb) (! lxsz)) (shut ())
                                   (&& (t32? g) (llt? tb)) (shut ())   ; a pair right: the pair shuttle (widen the park)
                                   lxsz
@@ -3583,13 +3629,43 @@
    ; deterministic across pass 1 and the regen (same walk; splices don't
    ; tick, and a mis-target only ever deopts through &-local's 'bad). --
    (cgdecl g env pairs)
-    (: (one ps env2 acc)
+    (: ; -- the C99 VLA local (x64): free any prior instance from this SITE
+       ; first (a loop re-runs the decl; rsp = ptr + rounded size also frees
+       ; everything younger), evaluate the dim, stash the EXACT byte size
+       ; (the szof lane reads it back), then sub sp and stash the block
+       ; pointer. the fn stays out of sibcalls and homing (fesc + hasasm,
+       ; the 'sys precedent) -- nine musl files, perf is not the point. --
+       (vone ps env2 acc p ty)
+        (: sl (peep (g 'vslots) (varix ty) ())
+           (? (! (two? sl)) 'bad
+              (: po <sl so (caup sl)
+                 es (tsz g (varel ty))
+                 _ (pin g 'fesc 1) _ (pin g 'hasasm 1)
+                 _ (vmflush g)
+                 dr (cgexpr g env2 (varn ty))
+                 (? (bad? dr) 'bad
+                    (: lf (nlab g ".vla")
+                       code (`(`('ld 'r0 'r4 so) `('cmp 'r0 0) `('br 'eq lf)
+                               '(add r0 r0 15) '(and r0 r0 -16)
+                               `('ld 'r1 'r4 po) '(add r1 r1 r0) '(mov sp r1)
+                               `('label lf))
+                             + ((asint g dr)
+                                + ((? (1 < es) (imby g 'r0 es) ())
+                                   + `(`('st 'r4 so 'r0)
+                                       '(add r0 r0 15) '(and r0 r0 -16)
+                                       '(sub sp sp r0)
+                                       '(mov r0 sp) `('st 'r4 po 'r0)))))
+                       (one >ps (link `(<p po ty) env2) (acc + code)))))))
+       (one ps env2 acc)
         (? (! (two? ps)) `(acc env2)
            (: _ (psreset g)
               p <ps
               ty <>p
               init <>>p
-              span (& ((tsz g ty) + 7) -8)
+              (? (gvarr? ty)
+                  (? (|| (two? init) (! (id? (peep g 'tgt 'x64) 'x64))) 'bad
+                     (vone ps env2 acc p ty))
+                 (: span (& ((tsz g ty) + 7) -8)
               off (nslot g span)
               hreg (? (|| (peep g 'inlining ()) (! (homable? ty))) ()
                       (: sq (1 + (peep g 'dseq 0))
@@ -3638,7 +3714,7 @@
                        (one >ps env3
                             (cat acc (cat (asint g r)
                                      (cat (cvt ty 'r0)
-                                          `(`((stop ty) 'r4 off 'r0)))))))))))
+                                          `(`((stop ty) 'r4 off 'r0)))))))))))))
        _ (stq g)                                     ; one statement tick for the whole decl
        (one pairs env ()))
 
@@ -4391,6 +4467,29 @@
        _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
        _ (rgreset g)                                 ; fresh regen channels
        _ (pin g 'fn <>f)
+       ; -- C99 VLA prep (x64): scan the body for runtime-dim locals; each
+       ; site takes a POINTER slot + a SIZE slot in the static frame, the size
+       ; slots ZEROED after the param spill (the decl lane's re-execution
+       ; guard reads 0 = never allocated -- a loop re-running the decl frees
+       ; its prior block, and everything younger, before allocating again). --
+       _ (pin g 'vslots (tablet 0))
+       vzf (: (dscan prs a2)
+               (? (! (two? prs)) a2
+                  (: ty9 (caup <prs)
+                     (dscan >prs (? (&& (gvarr? ty9) (3 < (tally ty9)))
+                                    (link (varix ty9) a2) a2))))
+              (vscan x acc)                          ; walk the body for VLA decl sites
+               (? (! (two? x)) acc
+                  (&& (id? <x 'decl) (two? >x)) (dscan <>x acc)
+                  (vlist x acc))
+              (vlist l acc) (? (! (two? l)) acc (vlist >l (vscan <l acc)))
+              idxs (vscan (nthr f 3) ())
+              (mk l a2)
+               (? (! (two? l)) a2
+                  (: po (ntmp g 'long) so (ntmp g 'long)
+                     _ (pin (g 'vslots) <l `(po so))
+                     (mk >l (a2 + `(`('st 'r4 so 'r0))))))
+              (? (! (two? idxs)) () ('((li r0 0)) + (mk idxs ()))))
        sig (peep (g 'sigs) <>f ())
        vararg (? (two? sig) (nthr sig 2) ())
        ; the epilogue is per-FN: a thumb2 vararg fn drops its r0-r3 push block on
@@ -4771,6 +4870,7 @@
               vararg (vaspill params)
               sr6f (spill () params 1 0 0 () `(`('st 'r4 (peep g 'sret 0) 'r0)))
               (spill () params 0 0 0 () ()))
+       sp1 (? (two? vzf) `((<sp1 + vzf) (caup sp1)) sp1)   ; the VLA size-slot zeroes ride after the spills
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
        ride (? (|| vararg (|| (peep g 'fesc ()) (hascall? ir1))) () (rideset ir1 params 0 ()))
