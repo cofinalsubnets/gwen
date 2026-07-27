@@ -167,6 +167,14 @@
    (emit-st1 base off s)  (x64-mem () 0 `(136) s base off)      ; 88     mov BYTE, s8 (REX present: spl/sil, never ah/ch)
    (emit-st2 base off s)  (x64-mem `(102) 0 `(137) s base off)  ; 66 89  mov WORD, s16
    (emit-st4 base off s)  (x64-mem () 0 `(137) s base off)      ; 89     mov DWORD, s32
+   ;; compare-and-swap (the atomic seam): lock cmpxchg [ptr], new. x86 compares
+   ;; [ptr] with the ACCUMULATOR, stores new on equal, and lands the old value in
+   ;; the accumulator either way -- the neutral form (cas racc rnew rptr) carries
+   ;; that operand EXPLICITLY (a future backend homes it anywhere); here racc must
+   ;; be r0 (rax, the wired accumulator) or it refuses. cas4 is the 32-bit face.
+   (emit-cas w acc new ptr)
+      (? (id? acc 'r0) (x64-mem `(240) w `(15 177) new ptr 0)   ; F0 (REX.W) 0F B1
+         (scare 'cas-acc acc))
    ;; in-register sign extension (the C casts): movsx/movsxd reg64 <- reg's low w bytes
    (emit-sx w d)
       (: dn (rn d)
@@ -297,6 +305,7 @@
            ('ld1 >< emit-ld1) ('ld2 >< emit-ld2) ('ld4 >< emit-ld4)
            ('st1 >< emit-st1) ('st2 >< emit-st2) ('st4 >< emit-st4)
            ('ldu1 >< emit-ldu1) ('ldu2 >< emit-ldu2) ('ldu4 >< emit-ldu4)
+           ('cas >< (emit-cas 1)) ('cas4 >< (emit-cas 0))
            ('sx1 >< (emit-sx 1)) ('sx2 >< (emit-sx 2)) ('sx4 >< (emit-sx 4))
            ('zx1 >< (emit-zx 1)) ('zx2 >< (emit-zx 2)) ('zx4 >< (emit-zx 4))
            ('shlv >< (emit-shiftv 'shlv)) ('shrv >< (emit-shiftv 'shrv)) ('sarv >< (emit-shiftv 'sarv))

@@ -126,6 +126,7 @@
            ('adds >< 3) ('subs >< 3) ('adc >< 3) ('adcs >< 3) ('sbc >< 3) ('sbcs >< 3) ('ors >< 3)
            ('div >< 3) ('udiv >< 3)
            ('ld >< 3) ('st >< 3) ('lea >< 3) ('lean >< 3)
+           ('cas >< 3) ('cas4 >< 3)
            ('ld1 >< 3) ('ld2 >< 3) ('ld4 >< 3) ('st1 >< 3) ('st2 >< 3) ('st4 >< 3)
            ('ldu1 >< 3) ('ldu2 >< 3) ('ldu4 >< 3)
            ('stsd >< 3) ('ldsd >< 3) ('stss >< 3) ('ldss >< 3) ('cmppd >< 3)

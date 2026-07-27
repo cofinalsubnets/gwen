@@ -71,6 +71,11 @@
       `("zx1"         "480fb6c0"              '((zx1 r0)))           ; movzx rax, al
       `("zx2.hi"      "4d0fb7c0"              '((zx2 r7)))           ; movzx r8, r8w
       `("zx4"         "408bdb"                '((zx4 r3)))           ; mov ebx, ebx (zero-extends)
+      ;; cas: lock cmpxchg, the accumulator operand wired to r0 (rax)
+      `("cas.rsi"     "f0480fb10e"            '((cas r0 r1 r5)))     ; lock cmpxchg [rsi], rcx
+      `("cas.hi"      "f04d0fb111"            '((cas r0 r9 r8)))     ; lock cmpxchg [r9], r10
+      `("cas4.rdi"    "f0400fb10f"            '((cas4 r0 r1 r6)))    ; lock cmpxchg DWORD [rdi], ecx
+      `("cas4.rbp"    "f0440fb15500"          '((cas4 r0 r9 r4)))    ; lock cmpxchg DWORD [rbp], r10d (forced 0 disp)
       `("udiv"        "52564889d831d248f734244883c4085a4889c3"      '((udiv r3 r3 r5)))   ; xor rdx + div (unsigned)
       `("urem"        "52564889d831d248f734244889d04883c4085a4889c3" '((urem r3 r3 r5 r2)))  ; unsigned rem (rdx; the scratch t is rdx's job here, ignored)
       `("shlv"        "48d3e0"                '((shlv r0 r1)))       ; shl rax, cl
