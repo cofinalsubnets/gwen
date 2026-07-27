@@ -26,7 +26,7 @@
 (: (twice f x) (f (f x)) (assert (12 = (twice (+ 1) 10))))
 (assert
  (id? (:) (?)) (id? (?) (\)) !(:) !(nom? (:))     ; the empty form is the head read, both lanes: the zero point (absence, NOT a nom)
- (id? (:) (? 0 'a)) (id? (:) (map (+ 1) ()))     ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), NOT fixnum 0
+ (id? (:) (? 0 'a)) (id? (:) (map (+ 1) ()))     ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), NOT charm 0
  (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b))     ; one scope: forward read = the condition, the point helpless
  (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
 
@@ -50,11 +50,11 @@
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
- (star? 5) (star? -3.5) (star? ~(2 3)) (star? (62 2))         ; a STAR is a self-netting SCALAR: charm, float, complex, wide
+ (star? 5) (star? -3.5) (star? ~(2 3)) (star? (62 2))         ; a STAR is a self-netting SCALAR: charm, sun, float, complex
  !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a TRAY is NOT a star -- it nets DOWN to a scalar star (net is a fresh sum)
  !(star? "x") !(star? 'a) !(star? '(1 2))                    ; text/symbol/list are not stars -- they net to something else
  (? (charm? 5) (star? 5) 1)                                  ; a CHARM is a star, by spec (net = self)
- (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (star? 5) 1)   ; a CHARM (charm?) is the word-sized star: a fixnum, and every charm is a star
+ (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (? (charm? 5) (star? 5) 1)   ; a CHARM (charm?) is the word-sized star, and every charm is a star
  (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a TRAY is an array of ANY element kind (numbers or objects)
  (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a GALAXY is a NUMERIC tray (a tray of stars); a tray of strings is not
  (galaxy? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
@@ -72,11 +72,15 @@
  (lit? (cask 4)) (lit? cap) (lit? #()) !(lit? '(1)) !(lit? "s") !(lit? 5) !(lit? ()) ; lit? = the top region (map/fn/hot); not data leaves (chains/text/numbers) nor the floor
  (1 = $cap) (1 = $out) (1 = $(tap 0))            ; tops and ports net 1: present, drained or not
  (charm? (: p (twirl (\ x x) 0) _ (catch p) p))  ; a task id is a number, not a handle
- ((64 2) = 2 * (63 2))                           ; fixnum overflow -> exact bignum ((k b) = b**k)
+ ((64 2) = 2 * (63 2))                           ; charm overflow -> exact big ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
-; --- arithmetic --- + - * / // % infix; fixnum fast path, overflow grows fix->wide->bignum;
-; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^; monadics
+; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
+; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^ ride the
+; WORD LANE (the width law, arrays): fixed-width two's complement even on a star -- (<< 1 63) is
+; the SUN -9223372036854775808, wrapped into the sign bit; the shift count masks to the word, so
+; (<< 3 200) is 3 << 8; >> is ARITHMETIC, sign-extending; and a big sits ABOVE the lane, refusing
+; with the zero point. monadics
 ; ride the valence law (-(f x) negate, /4 reciprocal, ...) while sections ((- 0), (/ 1)) stay words.
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
@@ -89,7 +93,11 @@
  ; soft divide elsewhere; `show` on a big divides too (the decimal printer), so it checks the same lane.
  (1267650591354675262013 = (// (100 2) 1000000007)) (976371285 = (100 2) % 1000000007)
  ((100 2) = (// (200 2) (100 2))) ("1267650600228229401496703205376" = (show (100 2)))
- (-2 = (^ 1 -1)) (15 = (8 | 4 | 2 | 1)) (16 = (>> 64 2)) (16 = (<< 2 3)))
+ (-2 = (^ 1 -1)) (15 = (8 | 4 | 2 | 1)) (16 = (>> 64 2)) (16 = (<< 2 3))
+ (768 = (<< 3 200))                              ; the count masks to the word (200 = 8 mod 32 AND mod 64)
+ (-1 = (>> -1 1)) (-4 = (>> -8 1))               ; >> is ARITHMETIC: it sign-extends
+ (() = (& (200 2) 255))                          ; a big is above the word lane -- it refuses
+ (? word (sun? (<< 1 63)) 1))                    ; ...and (<< 1 63) wrapped into the sign bit: a SUN
 
 ; --- order & equality --- < <= > >= total over all values, the TRUE-BLUE bands: POINTS at the
 ; floor (() < bare mints < named noms -- mints by serial, names by name-lex then serial), then
@@ -244,6 +252,15 @@
 ; reduce net/prod/max/min/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
 ; = stays boolean off the mask: a non-numeric operand beside an array, or non-conformant
 ; shapes, read 0 -- never the arithmetic ()-face (a point/text equals only itself).
+; THE WIDTH LAW -- love runs two arithmetic regimes, and the REPRESENTATION picks which,
+; never the operator. the GROWING lane is a star's + - * // %: exact forever, climbing
+; charm -> sun -> big. the WORD lane is fixed-width two's complement, and it is exactly
+; where the rep IS a machine word: (1) the bitwise ops << >> & | ^ always, even on a star
+; (see arithmetic), and (2) an INTEGER TRAY's cells, a galaxy being contiguous limbs. so a
+; galaxy's + - * WRAP where a star's grow, and a big operand TRUNCATES into the cell
+; instead of refusing. this is the lattice's ALGEBRA reading, not an exception to it:
+; Z/2^w is the strongest +/* theory contiguous limbs afford, the way Z is the strongest a
+; star affords. a gem-tray is NOT in the word lane -- floats saturate to ieee-inf.
 (assert
  (6 = (tally (star-tray '(2 3) 0))) (2 = (rank (star-tray '(2 3) 0))) ('(2 3) = (shape (star-tray '(2 3) 0)))
  (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
@@ -258,6 +275,13 @@
  (0 = (net (star-tray '(0) 0))) (1 = (prod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
  ("@()" = (show (star-tray '(0) 0))) (0 = (tally ((star-tray '(0) 0) + 1)))
  (32 = (inner @(1 2 3) @(4 5 6))) (star-tray = (tier (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer
+ ; the width law: a galaxy's cells are machine words, so its arithmetic WRAPS
+ (@(8 9) = (@(3 4) + ((200 2) + 5)))              ; a big TRUNCATES into the cell (2^200 = 0 mod 2^w)
+ (star-tray = (tier (@(3 4) + (200 2))))          ; ...and the result never leaves the tray band
+ (big? (3 + (200 2)))                             ; where the STAR lane grows exact instead
+ (? word ("@(ieee-inf ieee-inf)" = (show (@(1.0e308 1.0e308) * @(10.0 10.0)))) 1)  ; a gem-tray SATURATES, never wraps
+ (? word (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
+ (? word (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
  (: M (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
     (&& ('(2 2) = (shape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
 
