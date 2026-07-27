@@ -26,7 +26,7 @@ is `wint = (< (32 2) max-charm)` (true on the full 64-bit hosted builds).
 
 ## Fixed
 
-- **`rand-next` truncated the 64-bit RNG on a 32-bit word.** The state was
+- **`turn` truncated the 64-bit RNG on a 32-bit word.** The state was
   always 256 bits (raw-byte limbs, a C/8-byte array on a 32-bit word), but the
   *output* was masked with `fix_max` -- word-dependent (2^62-1 native, 2^30-1
   wasm) -- so the draw was cut to ~30 bits and the stream diverged from every

@@ -90,7 +90,7 @@
            (: res (gen g 0 st) t (cap res) st' (cauup res)
               ok (= (ground (ev (render 0 t))) (ground (ev (render 0 (teval t)))))
               (go (- n 1) st' (+ good (? ok 1 0)))))
-      (= n (go n (seed sd) 0)))
+      (= n (go n (wheel sd) 0)))
 
  ; spec.v's reduction theorems, as binary twins (beta_id / beta_const / nested / eta)
  (assert

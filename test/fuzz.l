@@ -32,7 +32,7 @@
  (fz-find n sd g p)
    (: (go n st) (? (< n 1) (link 1 0)
         (: r (g st) (? (p (cap r)) (go (- n 1) (cup r)) (link 0 (cap r)))))
-      (go n (seed sd)))
+      (go n (wheel sd)))
  (fz-ok n sd g p) (cap (fz-find n sd g p)))
 
 ; --- concrete value generators over the numeric tower ---
@@ -180,7 +180,7 @@
  (fz-ok 300 52 fz-s (\ s (= s (+ "" s))))
  (fz-ok 300 53 fz-s (\ s (= s (+ s ""))))
  ; snip: any split reconcatenates to the original; the full snip is the string.
- ; gated: on 32-bit the RNG stream diverges (rand-next truncates the 64-bit word,
+ ; gated: on 32-bit the RNG stream diverges (turn truncates the 64-bit word,
  ; filed), so these draw inputs that trip a real failure -- skip on the wasm shim.
  (? word (fz-ok 300 54 fz-s-i (\ v (= (cap v) (fz-norm (+ (fz-norm (snip (cap v) 0 (cup v)))
                                             (fz-norm (snip (cap v) (cup v) (tally (cap v))))))))) 1)

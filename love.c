@@ -528,7 +528,7 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 // the full 256-bit payload -- Z (one word) on 64-bit, C (two words) on 32-bit.
 #define rng_vt (Bytes == 4 ? ai_C : ai_Z)
 void ai_rng_seed(struct ai_vec*, uint64_t);   // shape an i64 state vec + seed it (SplitMix64)
-lvm_t lvm_rng_seed, lvm_rand_next, lvm_randf_next;
+lvm_t lvm_wheel, lvm_turn, lvm_turnf;
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
@@ -851,8 +851,8 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_fgetc, "see", s1(lvm_fgetc)) _(nif_fungetc, "unsee", s2(lvm_fungetc)) _(nif_feof, "empty?", s1(lvm_feof))\
  _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
- _(nif_rng_seed, "seed", s1(lvm_rng_seed))\
- _(nif_rand_next, "rand-next", s1(lvm_rand_next)) _(nif_randf_next, "randf-next", s1(lvm_randf_next))\
+ _(nif_wheel, "wheel", s1(lvm_wheel))\
+ _(nif_turn, "turn", s1(lvm_turn)) _(nif_turnf, "turnf", s1(lvm_turnf))\
  _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load))\
  _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp))\
  _(nif_calloutdrive, "calloutdrive", s1(lvm_calloutdrive)) _(nif_calloutresume, "calloutresume", s1(lvm_calloutresume))
@@ -6202,7 +6202,7 @@ uintptr_t ai_vec_bytes(struct ai_vec *v) {
 // 64-bit limbs survive on 32-bit ports and a given seed reproduces the same
 // sequence on host/kernel/MCU/WASM/Playdate. C holds no RNG state and never
 // draws: the only primitives are seed (fresh state from a fixnum) and the
-// functional steps rand-next/randf-next (copy the input state, step the copy,
+// functional steps turn/turnf (copy the input state, step the copy,
 // return (value . new-state) -- the input is never mutated). seed + random are
 // the explicit-state surface; the global rand/randf stream (over book['rng-state])
 // is prel lisp riding the same steps. Not a CSPRNG.
@@ -6273,7 +6273,7 @@ static ai_inline struct ai_vec *rng_copy(ai_word **hp, struct ai_vec *src) {
 
 // Canonicalize a 62-bit draw to the smallest integer tier (a fixnum on a 64-bit
 // word, a bignum on a 32-bit one). Out-of-line so its limb[] scratch and the
-// ai_big_canon call don't force a frame in lvm_rand_next -- a frame there would
+// ai_big_canon call don't force a frame in lvm_turn -- a frame there would
 // turn the tail Continue() into a ret and trip `make vmret`. The caller has
 // already Have'd rng_draw_req; ai_big_canon only bumps g->hp (no GC).
 static ai_noinline word rng_canon(struct ai *g, uint64_t r) {
@@ -6281,9 +6281,9 @@ static ai_noinline word rng_canon(struct ai *g, uint64_t r) {
  for (int i = 0; (size_t) i * limb_bits < 64; i++) limb[i] = (ai_limb) (r >> (i * limb_bits)), nl = i + 1;
  return ai_big_canon(&g->hp, limb, nl, false); }
 
-// (seed n): a fresh state vec deterministically seeded from fixnum n. A
+// (wheel n): a fresh state vec deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
-lvm(lvm_rng_seed) {
+lvm(lvm_wheel) {
  word n = Sp[0];
  uint64_t seed = charmp(n) ? (uint64_t) (intptr_t) getcharm(n) : 0;
  Have(rng_vec_req);
@@ -6291,7 +6291,7 @@ lvm(lvm_rng_seed) {
  ai_rng_seed(v, seed);
  return Sp[0] = word(v), Ip++, Continue(); }
 
-// (rand-next st): functional draw -> (value . st'), value a non-negative
+// (turn st): functional draw -> (value . st'), value a non-negative
 // integer of a fixed 62 bits -- the 64-bit host's fixnum width -- so a seed
 // yields the IDENTICAL integer on every target (a fixnum on a 64-bit word, a
 // bignum on a 32-bit one), not a word-width truncation. The draw is split into
@@ -6299,7 +6299,7 @@ lvm(lvm_rng_seed) {
 // (referentially transparent); st' is the stepped copy.
 #define rng_draw_mask (((uint64_t) 1 << 62) - 1)              // 62 bits = 64-bit fix_max
 #define rng_draw_req  (Width(struct ai_big) + b2w((64 / limb_bits) * sizeof(ai_limb)))  // worst case: the 62-bit draw split into native limbs
-lvm(lvm_rand_next) {
+lvm(lvm_turn) {
  word st = Sp[0];
  if (!rng_state_p(st)) return Sp[0] = ZeroPoint, Ip++, Continue();
  Have(rng_vec_req + rng_draw_req + Width(struct ai_chain));
@@ -6313,8 +6313,8 @@ lvm(lvm_rand_next) {
  ini_chain(p, val, word(v));
  return Sp[0] = word(p), Ip++, Continue(); }
 
-// (randf-next st): functional draw -> (float . st'), float in [0,1).
-lvm(lvm_randf_next) {
+// (turnf st): functional draw -> (float . st'), float in [0,1).
+lvm(lvm_turnf) {
  word st = Sp[0], _res;
  if (!rng_state_p(st)) return Sp[0] = ZeroPoint, Ip++, Continue();
  Have(rng_vec_req + box_req + Width(struct ai_chain));

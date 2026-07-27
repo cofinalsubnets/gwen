@@ -910,7 +910,7 @@
                             0)
                        (? (0 = (peep s 'bad 0)) (loop st2) 'unsat))   ; a compaction can prove UNSAT (all-false at level 0)
                  (: v ((peep s 'dec ()) fx)
-                    (? (v = 0) 'sat (loop st)))))) (seed 42)))
+                    (? (v = 0) 'sat (loop st)))))) (wheel 42)))
    (fextract s nvars) (: fx (peep s 'fx ()) vao (peep s 'vao 0)
                          (map (\ v (link v (? (0 = ((getw fx (vao + v)) & 1)) 1 -1))) (rng 1 (nvars + 1))))
    ; --- BVA: bounded variable ADDITION (clause factoring), the preprocessing pass ---

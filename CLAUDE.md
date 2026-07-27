@@ -240,7 +240,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; all four ride the host, love0, wasm and the K_TEST kernel (the corpus asserts on each); the playdate
 ; workbench takes only q + kanren, what rune stands on; a shipped kernel takes none. ⚠ a layer may
 ; only lean on what SURVIVES BIRTH -- the egg mops its internals just before the hatch, so wrapping a
-; mopped nif means taking it off egg.l's mop list (rng did: rand-next/randf-next stay now, since the
+; mopped nif means taking it off egg.l's mop list (rng did: turn/turnf stay now, since the
 ; wrapper that owned them shipped out of prel). ⚠ and a post-egg layer cannot add an
 ; OPERATOR: `operators` is mopped at birth, so the grammar closes when the egg hatches (any all-punct
 ; head is infix-dyadic at house grip anyway -- the table holds only the exceptions). `fixity` is the

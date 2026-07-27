@@ -47,7 +47,7 @@
           ok (&& (= (dold s) a) (= (dnew s) b)
                  (= (dcost s) (- (+ (tally a) (tally b)) (* 2 (lcslen a b)))))
           (? ok (fz (- i 1) (caup lb)) (L 'broke a b))))
-   r (fz 100 (seed 7))
+   r (fz 100 (wheel 7))
    (assert (= r 'ok)))
 
 ; --- patience: the same script contract, anchored -- the projections hold verbatim,
@@ -85,7 +85,7 @@
           ok (&& (= (dold sp) a) (= (dnew sp) b)
                  (! (< (dcost sp) (dcost (myers a b)))))
           (? ok (fzp (- i 1) (caup lb)) (L 'broke a b))))
-   r (fzp 100 (seed 11))
+   r (fzp 100 (wheel 11))
    (assert (= r 'ok)))
 
 ; --- lines/unlines: the text bridge -- split at 10, terminate every line, the round
@@ -245,7 +245,7 @@
                 o (? (dhas (caup r) (cap ss)) 1 0)
                 (? (= e o) (fzr (- i 1) (caup ss))
                    (L 'broke (cap pp) (cap ss)))))))
-   r (fzr 200 (seed 13))
+   r (fzr 200 (wheel 13))
    (assert (= r 'ok)))
 
 ; --- the sed floor (crew/kore/sed.l): the substitution walk to its GNU face,

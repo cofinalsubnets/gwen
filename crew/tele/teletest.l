@@ -109,7 +109,7 @@
         (ok "zero clears grad" (= 0 (grad p))))
 
    ;; end-to-end: a linear layer learns a linear target; the loss collapses
-   _ (: _ (rng-set (seed 1))
+   _ (: _ (rng-set (wheel 1))
         Wt (gem-tray (quote (2 1)) (quote (1.5 -2.0)))
         X  (gem-tray (quote (4 2)) (quote (1.0 0.0  0.0 1.0  1.0 1.0  2.0 -1.0)))
         Y  (inner X Wt)                                  ; the true targets, X @ Wt

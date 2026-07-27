@@ -317,7 +317,7 @@
  (rove _) (: ws (winsize 0)
              r ((&& (two? ws) (7 < <ws)) ? (<ws - 2) 22)
              c ((&& (two? ws) (19 < <>ws)) ? <>ws 80)
-             g (crawl-new (c < 100 ? c 100) r (seed (clock 0)))
+             g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
              _ (raw 1)
              _ (say out "\e[?1049h\e[?25l\e[2J")
              _ (note g "the hold is dark; the pearl waits three decks down")

@@ -464,7 +464,7 @@
 ; back?/cue? ((twirl f x) forks to an id, (catch p) blocks for the result, (rest 0) yields --
 ; always catch an orphan). the RNG is xoshiro256++, two layers: FUNCTIONAL seed/random
 ; (explicit-state, reproducible) and GLOBAL rand/randf (a hidden clock-seeded stream; (rng-set
-; (seed n)) pins it). a global `help` takes every raise as (help s a b) -- s the status word,
+; (wheel n)) pins it). a global `help` takes every raise as (help s a b) -- s the status word,
 ; scare (1) and more (2) bits; `welp` is the FLOOR HANDLER: keeps the read protocol, answers the
 ; zero point on a bare scare (the shell's default help is welp with a face). a missing name
 ; raises (scare 'missing nom) -- ONE LAW AT EVERY DEPTH: a `:` binding read before its pin,
@@ -477,10 +477,10 @@
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
- !(rest 0) (4 = (tally (seed 1))) ((rand 10) < 10) (gem? (randf 0))
+ !(rest 0) (4 = (tally (wheel 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
  (book? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
- (: st (seed 7) ((cap (random st 0)) = (cap (random st 0)))))
+ (: st (wheel 7) ((cap (random st 0)) = (cap (random st 0)))))
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
 (: help welp)
 (assert (id? (:) not-in-the-book) !not-in-the-book)   ; a nom not in the book

@@ -84,7 +84,7 @@
        (: r1 (random st 10) r2 (random (cup r1) 40)
           s2 (fzop (cap r1) (+ 1 (cap r2)) s)
           (? (wssane? s2) (fz (- i 1) (cup r2) s2) (L 'broke (cap r1) (+ 1 (cap r2))))))
-   sF (fz 200 (seed 7) (sheaf '(1 2 3)))
+   sF (fz 200 (wheel 7) (sheaf '(1 2 3)))
    (assert (wssane? sF) (all (\ w (|| (wsfloating? sF w) (wsknown? sF (wstagof sF w)))) (wswins sF))))
 
 ; --- the layout engine (crew/lux/layout.l): geometry is a partition ---

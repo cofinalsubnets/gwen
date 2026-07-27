@@ -12,10 +12,10 @@
 ;
 ; interesting = judge-bug > 0: a crash, a hang, a host!=love0 divergence, or a scare.
 
-(: ;; -- a reproducible RNG in a slot (seed once; no state threading) --
+(: ;; -- a reproducible RNG in a slot (wheel once; no state threading) --
    rng-slot (tablet 0)
-   (rng-init n) (pin rng-slot 0 (seed n))
-   (rng-next n) (: r (random (peep rng-slot 0 (seed 1)) n) _ (pin rng-slot 0 (cup r)) (cap r))
+   (rng-init n) (pin rng-slot 0 (wheel n))
+   (rng-next n) (: r (random (peep rng-slot 0 (wheel 1)) n) _ (pin rng-slot 0 (cup r)) (cap r))
    (jnth l i) (? (= i 0) (cap l) (jnth (cup l) (- i 1)))  ; nth is absent here -- roll our own
    (pick l) (jnth l (rng-next (tally l)))                ; a random element of a list
 

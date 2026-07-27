@@ -90,7 +90,7 @@ syn match LoveAtom "'[^ \t\n()`',;#\"]\+" contains=LoveAtomMark
 syn match LoveListCtor "`"
 
 " Operator sigils -- a punct run that LEADS a token. The reader splits only a
-" leading run; punct inside a name is just the name (rand-next, done?, a*b
+" leading run; punct inside a name is just the name (turn, done?, a*b
 " stay plain -- the lookbehind enforces it). The valence law gives a leading
 " run two lives, and the colour shows which:
 "   SPACED -- dyadic/infix, or the operator as a value: (+ 1 2), a + b, (+)

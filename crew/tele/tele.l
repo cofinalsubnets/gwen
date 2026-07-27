@@ -173,7 +173,7 @@
    (call m x)     ((tl-mfwd m) x)                        ; apply a module to an input node
    (params m)     (tl-mparams m)                         ; the parameter list (for the optimizer)
 
-   ;; weight init: small uniform in [-0.5, 0.5). seed with (rng-set (seed n)).
+   ;; weight init: small uniform in [-0.5, 0.5). seed with (rng-set (wheel n)).
    (tl-randmat r c) (gem-tray (link r (link c ())) (map (\ _ (- (randf 0) 0.5)) (jot (* r c))))
    (tl-zeros n)     (gem-tray (link n ()) 0)
 

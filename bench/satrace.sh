@@ -56,7 +56,7 @@ GEN2='(: (gen2 sd n m)
                   (link (link (? (= 0 (cap s1)) v1 (- 0 v1))
                         (link (? (= 0 (cap s2)) v2 (- 0 v2))
                         (link (? (= 0 (cap s3)) v3 (- 0 v3)) ()))) acc)))))
-     0 (seed sd) ()))'
+     0 (wheel sd) ()))'
 rndm() { awk -v n="$1" 'BEGIN{printf "%d", int(n*4.26+0.5)}'; }
 
 # -- generate the DIMACS once (php re-stated here, the textbook encoding, so the
