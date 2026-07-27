@@ -443,6 +443,16 @@
               (: off <r lbl <>>r pv <>>>>r
                  (? (&& (o-has? wkset lbl) (o-has? fnidx lbl))   ; a weak-defined fn: bind its OWN symbol (overridable)
                      (o-rela off (peep fnidx lbl 0) r-plt32 -4)
+                    ; a weak DATA symbol defined here binds its own symbol too --
+                    ; NOT the .data section. section-relative would nail the
+                    ; reference to THIS object's copy, and the whole point of a
+                    ; weak definition is that a strong one elsewhere replaces it:
+                    ; musl's __stdio_exit reads __stdout_used, which it defines
+                    ; weakly as a null dummy while stdout.c defines the real one.
+                    ; bound to the section, the exit-time flush read its own null
+                    ; and silently dropped everything still buffered.
+                    (&& (o-has? wkset lbl) (o-has? gidx lbl))
+                     (o-rela off (peep gidx lbl 0) r-pc32 -4)
                     (o-has? dlabels lbl)
                      (o-rela off 2 r-pc32 ((peep dlabels lbl 0) - 4))
                     (o-has? nlabels lbl)
