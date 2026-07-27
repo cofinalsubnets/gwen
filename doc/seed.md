@@ -1,7 +1,7 @@
 # seed — the vcs and the distro, one verb set
 
 Status: **the MVP verb set is live** (2026-07-14): `record` · `sync` · **`hatch`** ·
-`log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
+**`apply`** · `log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
 gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
 (slot = path, context = old content hash).
 
@@ -36,6 +36,20 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   (a warning, not a stop). The recipe + its output path are
   opaque to hatch — it runs an argv and hashes a file — the way the store is opaque
   to what a hunk's old/new mean.
+
+- **`apply [ID..]`** realizes a dependency-consistent **subset** of the store into
+  the working tree. This is git's `checkout` *and* its `cherry-pick`, which are
+  one act here rather than two: the tree is a pure function of a patch **set**, so
+  "the state as of P" and "what I have plus P" differ only in the set you name —
+  there is no replay-a-diff-onto-a-foreign-state step, and so nothing for that
+  step to conflict on. An ID may be a prefix (what `log` prints). A named patch
+  drags its **dep closure** along, because a patch may not travel without the
+  patches that wrote its context — leaving one behind would silently realize less
+  than you asked for, since `topo` only readies a patch whose deps are all
+  present. With no ID it realizes the whole store again: the way back. It is a
+  **view** — the store never shrinks, and the next `sync` re-derives the union.
+  To drop a patch for good you `undo` it, growing an inverse rather than
+  forgetting.
 
 `bank` / `undo` reserve-the-names; the cached-fetch (CDN substituter) side of hatch
 is deferred with public distribution (§Deferred). The rest of this doc is the

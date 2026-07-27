@@ -216,6 +216,37 @@
  (0 = goty)                                              ; a DIRTY peer refuses the push
  (dstore = nb4))                                         ; ...and its store is left whole, not half-fed
 
+; --- apply: realize a dep-consistent SUBSET of the store. git's checkout AND
+;     its cherry-pick are ONE act here -- the tree is a pure function of a patch
+;     set, so both are only "name a set", with no replay-onto-a-foreign-state to
+;     conflict. a named patch drags its DEP CLOSURE along: topo silently drops a
+;     patch whose context-writer is absent, so leaving one behind would quietly
+;     realize less than you asked for ---
+(: _ (mkdir "mrg/e" 493) _ (chdir "mrg/e") _ (mk ())
+   _ (lay "a" "v1\n") pa (seed-record "a born")
+   _ (lay "a" "v2\n") pb (seed-record "a edited")
+   _ (lay "b" "x\n")  pc (seed-record "b born -- independent")
+   n1 (seed-apply `(pa))                                 ; checkout: the tree AS OF pa
+   a1 (<>(look "a")) b1 (look "b")
+   n2 (seed-apply `(pa pc))                              ; cherry-pick: pc taken, pb SKIPPED
+   a2 (<>(look "a")) b2 (look "b")
+   n3 (seed-apply `(pb))                                 ; the closure drags pa in behind pb
+   n4 (seed-apply ())                                    ; no id: the way back
+   a4 (<>(look "a"))
+   bad (seed-apply '("deadbeef"))                        ; a prefix that resolves to nothing
+   nstore (tally (readdir ".seed/patch"))                ; read HERE -- the assert runs after the chdir back
+   clean (dirty ())
+   _ (chdir "../.."))
+
+(assert
+ (1 = n1) (a1 = "v1\n") (! (two? b1))                    ; as of pa: a rolled back, b not yet born
+ (2 = n2) (a2 = "v1\n") (two? b2)                        ; pa + pc: pb's edit skipped, pc's birth kept
+ (3 = nstore)                                            ; ...and the STORE never shrank -- apply is a view
+ (2 = n3)                                                ; naming pb alone realized TWO: its dep came
+ (3 = n4) (a4 = "v2\n")                                  ; the way back is the whole store
+ (! bad)                                                 ; an unresolvable prefix answers 0
+ (0 = clean))                                            ; every apply leaves the tree clean
+
 ; --- hatch: build the recorded source into a native germ, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
 ;     default ignore, so the build output never dirties the tree); a re-hatch of

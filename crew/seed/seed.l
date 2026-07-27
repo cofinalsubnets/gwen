@@ -203,12 +203,24 @@
                        (lay (td + h) <>t) (go >m (n + 1) bad)
                        (go >m n (bad + 1)))))))
        (go (readdir fd) 0 0))
-   ; bring THIS nest to the state its store implies: re-derive tips + snap from
-   ; the whole patch set and materialize. cwd-relative, so it settles whichever
-   ; nest we stand in -- both ends of a sync run it. answers (npatches nfiles conflicts)
-   (settle _)
+   ; bring THIS nest to the state a GIVEN patch set implies: re-derive tips +
+   ; snap over those ids and materialize. cwd-relative, so it settles whichever
+   ; nest we stand in -- both ends of a sync run it, over the whole store. the
+   ; ids are a PARAMETER because the tree is a pure function of a patch SET, so
+   ; realizing a subset is the same fold with a shorter list -- which is all
+   ; `apply` is. answers (npatches nfiles conflicts)
+   ; the divergence report a settle owes its caller: a clean merge is news, a
+   ; marker is a stop. answers how many are UNRESOLVED, so the caller's exit code
+   ; can say so -- sync and apply both settle, so both tell it the same way.
+   (tell cfs)
+    (: (go m n) (? (! (two? m)) n
+          (: e <m p <e k <>e
+             _ (say (? (0 = k) out err)
+                    ("seed: " + (? (0 = k) "merged " "CONFLICT in ") + p + " -- " + (<>>e) + "\n"))
+             (go >m (? (0 = k) n (n + 1)))))
+       (go cfs 0))
+   (settle ids)
     (: oldsnap (snap ())
-       ids (readdir ".seed/patch")
        _ (lay ".seed/tips" (show (derive-tips ids)))
        dr (derive-snap ids)
        newsnap <dr
@@ -337,17 +349,10 @@
                    out1 (? (0 = pd) (copy "blob" "." peer) `(0 0))
                    out2 (? (0 = pd) (copy "patch" "." peer) `(0 0))
                    pushed (&& (0 = pd) (&& (0 = (<>out1)) (0 = (<>out2))))
-                   st (settle ())
-                   ; the divergence report: a clean merge is news, a marker is a stop
-                   nleft (: (go m n) (? (! (two? m)) n
-                              (: e <m p <e k <>e
-                                 _ (say (? (0 = k) out err)
-                                        ("seed: " + (? (0 = k) "merged " "CONFLICT in ") + p
-                                         + " -- " + (<>>e) + "\n"))
-                                 (go >m (? (0 = k) n (n + 1)))))
-                            (go (<>>st) 0))
+                   st (settle (readdir ".seed/patch"))
+                   nleft (tell (<>>st))
                    pst (? (! pushed) ()                          ; settle the far end too
-                          (: c (chdir peer) r (settle ()) _ (chdir home) r))
+                          (: c (chdir peer) r (settle (readdir ".seed/patch")) _ (chdir home) r))
                    _ (puts ("seed: synced -- " + (show <st) + " patches ("
                             + (show <inp) + " in, " + (show <out2) + " out), "
                             + (show (<inb + <out1)) + " blobs, " + (show (<>st)) + " files here"
@@ -360,6 +365,53 @@
                    _ (? (0 = nleft) ()
                         (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
                    (? (&& pushed (0 = nleft)) <st 0))))))
+
+   ; --- apply: realize a dep-consistent SUBSET of the store into the working
+   ;     tree. this is git's checkout AND its cherry-pick, which are one act here:
+   ;     the tree is a pure function of a patch SET, so "the state as of P" and
+   ;     "what I have plus P" differ only in the set you name -- there is no
+   ;     replay-a-diff-onto-a-foreign-state step to conflict. a patch may not
+   ;     travel without the patches that wrote its context, so the DEP CLOSURE
+   ;     comes along automatically: naming a subset that leaves a dep behind would
+   ;     otherwise DROP it silently (topo only readies a patch whose deps are all
+   ;     present). apply is a VIEW -- the store never shrinks, and the next sync
+   ;     re-derives the whole union. to remove a patch for good you `undo` it,
+   ;     which grows an inverse rather than forgetting ---
+   (idpfx pfx)                                                   ; a full id from a prefix: exact | ()
+    (: n (tally pfx)
+       hits (filter (\ i (&& ((tally i) = 64) ((snip i 0 n) = pfx))) (readdir ".seed/patch"))
+       (? (1 = (tally hits)) <hits
+          (! (two? hits)) (: _ (say err ("seed: no patch matches " + pfx + "\n")) ())
+          (: _ (say err ("seed: " + (show (tally hits)) + " patches match " + pfx + "\n")) ())))
+   (closure ids)                                                 ; ids + every dep, transitively
+    (: seen (tablet 0)
+       (go m) (? (! (two? m)) ()
+                 (: id <m
+                    (? (peep seen id 0) (go >m)
+                       (: _ (pin seen id 1)
+                          _ (go (fld (patch id) 'deps))
+                          (go >m)))))
+       _ (go ids)
+       (sort (keys seen)))
+   (seed-apply args)
+    (: _ (mk ())
+       (? (0 < (dirty ()))
+          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: all (readdir ".seed/patch")
+             want (: (go m acc) (? (! (two? m)) (rev acc)
+                       (: i (idpfx <m) (? i (go >m (link i acc)) ())))
+                     (go args ()))
+             (? (&& (two? args) (! (two? want))) 0            ; a prefix failed to resolve; it said so
+                (: ids (? (two? args) (closure want) all)
+                   st (settle ids)
+                   nleft (tell (<>>st))
+                   _ (puts ("seed: applied " + (show <st) + " of " + (show (tally all))
+                            + " patches, " + (show (<>st)) + " files updated"
+                            + (? ((tally ids) = (tally all)) " (the whole store)" "")
+                            + (? (0 = nleft) "" (", " + (show nleft) + " conflicted")) + "\n"))
+                   _ (? (0 = nleft) ()
+                        (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
+                   (? (0 = nleft) (tally ids) 0))))))
 
    ; --- hatch: (source_tree, arch) -> a native GERM. the local derivation
    ;     (doc/hatch.md's fallback path: rebuild from a present binary). we hatch
@@ -416,6 +468,9 @@ usage: seed VERB ..
                   overlap lands in markers and exits 1 -- resolve, then record
   hatch [CMD..]   build the recorded source into a native germ (the recipe is
                   CMD.. or .seed/hatch), fingerprint + ledger it by patch set
+  apply [ID..]    realize a dep-consistent SUBSET into the working tree (an ID
+                  may be a prefix; its deps come along). checkout and cherry-pick
+                  are one act here. no ID realizes the whole store -- the way back
   log             the patches, newest first (* marks a tip)
   diff            working tree vs the recorded state (unified; exit 1 on change)
 ")
@@ -426,6 +481,7 @@ usage: seed VERB ..
           (? (v = "record") (: _ (seed-record (? (two? >as) <>as "")) (quit 0))
              (v = "sync") (? (two? >as) (: r (seed-sync <>as) (quit (? r 0 1))) (usage ()))
              (v = "hatch") (: r (seed-hatch >as) (quit (? r 0 1)))
+             (v = "apply") (: r (seed-apply >as) (quit (? r 0 1)))
              (v = "log") (: _ (seed-log ()) (quit 0))
              (v = "diff") (: n (seed-diff ()) (quit (? (0 < n) 1 0)))
              (usage ()))))
