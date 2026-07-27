@@ -4691,7 +4691,7 @@
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
               bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
-              (? (bad? bytes) 'bad
+              (? (bad? bytes) (: _ (puts (+ ";; CGDATA-BAD " (<gs + ((" " + (show init)) + "\n")))) 'bad)
                  (globs >gs nif (acc + `(`('label lbl) `('raw bytes)))))))
        (strs ss acc)
         (? (! (two? ss)) acc
