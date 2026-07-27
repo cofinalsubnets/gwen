@@ -415,7 +415,13 @@
        (: t <ts
           (? (&& ((tkk t) = 'kw) (member? (tkv t) tyspec))     ; a run of type specifiers -> one canonical type
               (: (grab l acc) (? (&& (two? l) (&& ((tkk <l) = 'kw) (member? (tkv <l) tyspec)))
-                                 (grab >l (link (tkv <l) acc)) `((rev acc) l))
+                                 (grab >l (link (tkv <l) acc))
+                                 ; a qualifier INTERLEAVED in the run (`unsigned const char`):
+                                 ; C's declaration specifiers are order-free -- skip and continue
+                                 (: l2 (pquals l)
+                                    (? (&& (two? l2) (&& ((tkk <l2) = 'kw) (member? (tkv <l2) tyspec)))
+                                       (grab l2 acc)
+                                       `((rev acc) l))))
                  r (grab ts ())
                  `((canon ps <r) <>r))
              (|| (tkw? t 'struct) (tkw? t 'union))
