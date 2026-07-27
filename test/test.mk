@@ -901,6 +901,11 @@ moon-m4: host out/host$(hsuf)/mooncc
 .PHONY: moon-lua
 moon-lua: host out/host$(hsuf)/mooncc
 	@LUASRC="$(LUASRC)" ./tools/moon-lua.sh
+# moon-sqlite: point SQLSRC at an extracted sqlite-amalgamation dir; SKIPS
+# cleanly without. Compiles the whole amalgamation + runs the VFS battery.
+.PHONY: moon-sqlite
+moon-sqlite: host out/host$(hsuf)/mooncc
+	@SQLSRC="$(SQLSRC)" ./tools/moon-sqlite.sh
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into love0. The gate greps

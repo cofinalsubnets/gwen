@@ -27,6 +27,7 @@
 #include <poll.h>
 #include <locale.h>
 #include <time.h>
+#include <sys/time.h>
 #include <utime.h>
 #include <dirent.h>
 #include <termios.h>
@@ -76,8 +77,10 @@ extern int main(int, char**);
 #define NR_pipe2           59
 #define NR_getdents64      61
 #define NR_lseek           62
+#define NR_fchown          55
 #define NR_read            63
 #define NR_write           64
+#define NR_pread64         67
 #define NR_pwrite64        68
 #define NR_ppoll           73
 #define NR_signalfd4       74
@@ -85,6 +88,7 @@ extern int main(int, char**);
 #define NR_newfstatat      79
 #define NR_fstat           80
 #define NR_fsync           82
+#define NR_fdatasync       83
 #define NR_utimensat       88
 #define NR_exit_group      94
 #define NR_unshare         97
@@ -130,6 +134,7 @@ extern int main(int, char**);
 #define NR_rt_sigaction    13
 #define NR_rt_sigprocmask  14
 #define NR_ioctl           16
+#define NR_pread64         17
 #define NR_pwrite64        18
 #define NR_getpid          39
 #define NR_setuid         105
@@ -152,6 +157,8 @@ extern int main(int, char**);
 #define NR_kill            62
 #define NR_fcntl           72
 #define NR_fsync           74
+#define NR_fdatasync       75
+#define NR_fchown          93
 #define NR_ftruncate       77
 #define NR_getcwd          79
 #define NR_chdir           80
@@ -376,6 +383,9 @@ int waitpid(int pid, int *st, int opt) { return (int) er(sc4(NR_wait4, pid, (lon
 int kill(pid_t pid, int sig) { return (int) er(sc2(NR_kill, pid, sig)); }
 int raise(int sig) { return kill(getpid(), sig); }
 int fsync(int fd) { return (int) er(sc1(NR_fsync, fd)); }
+int fdatasync(int fd) { return (int) er(sc1(NR_fdatasync, fd)); }
+int fchown(int fd, unsigned int u, unsigned int g) { return (int) er(sc3(NR_fchown, fd, u, g)); }
+int getpagesize(void) { return 4096; }
 int ftruncate(int fd, long n) { return (int) er(sc2(NR_ftruncate, fd, n)); }
 char *getcwd(char *b, unsigned long n) {
   long r = sc2(NR_getcwd, (long) b, (long) n);
@@ -406,6 +416,8 @@ int usleep(unsigned int us) {
   ts.tv_sec = us / 1000000;
   ts.tv_nsec = (long) (us % 1000000) * 1000;
   return (int) er(sc2(NR_nanosleep, (long) &ts, 0)); }
+int nanosleep(struct timespec const *req, struct timespec *rem) {
+  return (int) er(sc2(NR_nanosleep, (long) req, (long) rem)); }
 time_t time(time_t *t) {
   struct timespec ts;
   clock_gettime(0, &ts);                       /* CLOCK_REALTIME */
@@ -424,7 +436,21 @@ long clock(void) {                                 /* CLOCKS_PER_SEC is 1e6; clo
   if (clock_gettime(2, &ts) < 0) return -1;
   return ts.tv_sec * 1000000 + ts.tv_nsec / 1000; }
 long pwrite(int fd, void const *b, unsigned long n, long off) { return er(sc4(NR_pwrite64, fd, (long) b, (long) n, off)); }
+long pread(int fd, void *b, unsigned long n, long off) { return er(sc4(NR_pread64, fd, (long) b, (long) n, off)); }
 int memfd_create(char const *name, unsigned int fl) { return (int) er(sc2(NR_memfd_create, (long) name, fl)); }
+int gettimeofday(struct timeval *tv, void *tz) {
+  struct timespec ts;
+  (void) tz;
+  if (clock_gettime(0, &ts) < 0) return -1;        /* CLOCK_REALTIME */
+  tv->tv_sec = ts.tv_sec;
+  tv->tv_usec = ts.tv_nsec / 1000;
+  return 0; }
+int utimes(char const *p, struct timeval const *tv) {
+  struct timespec ts[2];
+  if (!tv) return utimensat(AT_FDCWD, p, 0, 0);
+  ts[0].tv_sec = tv[0].tv_sec; ts[0].tv_nsec = tv[0].tv_usec * 1000;
+  ts[1].tv_sec = tv[1].tv_sec; ts[1].tv_nsec = tv[1].tv_usec * 1000;
+  return utimensat(AT_FDCWD, p, ts, 0); }
 int utimensat(int dfd, char const *p, struct timespec const *ts, int fl) {
   return (int) er(sc4(NR_utimensat, dfd, (long) p, (long) ts, fl)); }
 int utime(char const *path, struct utimbuf const *t) {
