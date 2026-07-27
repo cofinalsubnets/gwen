@@ -1,6 +1,6 @@
-# seed — the vcs and the distro, one verb set
+# seed — the patch-set vcs
 
-Status: **the MVP verb set is live** (2026-07-14): `record` · `sync` · **`hatch`** ·
+Status: **the MVP verb set is live** (2026-07-14): `record` · `sync` ·
 **`apply`** · **`undo`** · **`bank`** · `log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
 gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
 (slot = path, context = old content hash).
@@ -31,17 +31,14 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   `record`, so no new verb: the fix is a patch like any other, and it settles the
   clash for good. A delete meeting an edit, or a binary file, cannot line-merge —
   those keep the **content** (never the deletion), name both blobs, and flag.
-- **`hatch [CMD..]`** is the derivation — the local-rebuild path of §2. It hatches
-  the *recorded* state (a dirty tree refuses), runs the nest's build recipe (`CMD..`
-  or a `.seed/hatch` config `(hatch (recipe ..) (out PATH))`; for love the recipe is
-  `make`), fingerprints the output as the **germ**, and ledgers `(psid arch germ
-  time)` in `.seed/hatched` keyed by the patch-set id (`sha256` of the sorted tips
-  = the head DAG state). So re-hatching the same head with the same recipe is a
-  **viability test** — a genebank runs one on every stored accession, and this is
-  the same act: a germ that doesn't match the prior hatch raises a NOT-VIABLE flag
-  (a warning, not a stop). The recipe + its output path are
-  opaque to hatch — it runs an argv and hashes a file — the way the store is opaque
-  to what a hunk's old/new mean.
+> **The build left, 2026-07-27.** `hatch` used to sit here, and it never touched
+> the patch DAG: it read a config, ran an argv, hashed a file. **How germplasm
+> builds itself is none of the vault's business.** It now lives in
+> [`crew/grocery/`](../crew/grocery/grocery.l) (`make test_grocery`), which asks
+> seed for exactly one thing — `psid`, the name of a head DAG state — and derives
+> everything else itself. Seed stores patches, names source states, and
+> materializes source; what a depositor then *does* with that source is a
+> different job on a different subject.
 
 - **`apply [ID..]`** realizes a dependency-consistent **subset** of the store into
   the working tree. This is git's `checkout` *and* its `cherry-pick`, which are
@@ -73,7 +70,8 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   closure derives the whole patch set from the tips. Re-banking a name at the
   same head is a no-op; at a different head it refuses, because a banked name is
   immutable. `log` shows each ref with its **psid** — `sha256` of the sorted
-  tips, the same id `hatch` keys its ledger by, so a release and its germ line up.
+  tips, the same id grocery keys its build ledger by, so a release and its goods
+  line up.
   **A ref freezes the tip *set*, not a single tip** — see the note below.
 
 > **Correction to hatch.md.** That doc asks for a *single-tip head* here
@@ -84,13 +82,12 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
 > not a fork to repair, and the only way to collapse them is to write a patch
 > touching every path every tip touched, i.e. to edit files to appease the check.
 > So a release freezes the tip **set**, which is the head DAG state whatever its
-> shape — and it is exactly what `hatch` already hashes for its `psid`, which
-> never demanded one tip either.
+> shape — and it is exactly what `psid` hashes, which never demanded one tip
+> either.
 
-The cached-fetch (CDN substituter) side of hatch
-is deferred with public distribution (§Deferred). The rest of this doc is the
-design brief from the 2026-07-14 session. The **interface** layer over the model in [`doc/hatch.md`](hatch.md)
-(the patch DAG, the hatch derivation, the nest, refs) and the machinery in
+The rest of this doc is the design brief from the 2026-07-14 session. The
+**interface** layer over the model in [`doc/hatch.md`](hatch.md) (the patch DAG,
+the derivation, the nest, refs) and the machinery in
 [`port/inle/{serve,drive,patch}.l`](../port/inle/patch.l) (the dock — adopt +
 two-generation re-exec). hatch.md says *what the objects are*; this says *what
 you type*. `seed` is the crew name (🌱, the spirit of the Svalbard Global Seed
@@ -98,17 +95,25 @@ Vault); the command name is provisional — see §Naming.
 
 ## the one principle
 
-seed is a version control system **and** a distribution/install system, and the
-thesis of hatch.md is that these are the *same act*: **installing is
-cloning-and-hatching a local checkout.** So the design rule is:
+seed used to be a version control system **and** a distribution/install system,
+because the thesis of hatch.md is that these are the *same act*: **installing is
+cloning-and-building a local checkout.** The design rule was:
 
 > Do not design a vcs verb set and a distro verb set. Design the **vcs
-> primitives** plus one derivation verb (`hatch`), and let the distro
-> front-doors be *named compositions* of those.
+> primitives** plus one derivation verb, and let the distro front-doors be
+> *named compositions* of those.
 
-If "install" or "upgrade" turns out to be an irreducible verb of its own, the
-collapse has leaked — that's the smell to watch. install and upgrade must fall
-out of `sync` + `hatch`, or the two systems have quietly come apart again.
+**Revised 2026-07-27, and the revision is smaller than it looks.** The *acts*
+stay collapsed — install is still `sync` + a build, and nothing routes users
+down a separate path. What came apart is the *tools*: the derivation verb never
+touched the patch DAG, so it was a guest in seed's file, and keeping it here
+dragged the vault's vocabulary into a field it had no words for. It now lives in
+[`crew/grocery/`](../crew/grocery/grocery.l).
+
+The smell to watch is unchanged, only relocated: if "install" or "upgrade"
+becomes an irreducible verb rather than a composition of `sync` + build + link,
+the collapse has leaked. Two modules is not two systems — the test is whether a
+user ever has to know which one they are talking to.
 
 ## the primitives
 
@@ -117,7 +122,6 @@ out of `sync` + `hatch`, or the two systems have quietly come apart again.
 | **`record`** | working changes → a patch in the DAG | commit | — |
 | **`sync`** | union patch sets with another nest (peer *or* URL) | the divergent-tips → set-union payoff | clone / pull / fetch-a-release are all this |
 | **`apply`** | pull a specific patch/ref out of the local store into the working tree | checkout / cherry-pick (any dep-consistent subset is valid) | select which release a nest realizes |
-| **`hatch`** | `(patch set, arch)` → native binary in the nest | — | the derivation; cached-default, local-rebuild fallback |
 | **`bank`** | freeze the current head (its tip **set**) → a named, immutable release | tag | the unit you propagate/clone |
 | **`log`** | view the DAG + tips + refs | inspect | inspect |
 | **`diff`** | working tree vs a ref, or ref vs ref | inspect | inspect |
@@ -132,8 +136,8 @@ exchange isn't.
 
 ## the front-doors (sugar, not primitives)
 
-- **install** = `sync <url>` + `hatch` into a fresh nest
-- **upgrade** = `sync` (a newer release) + `hatch`
+- **install** = `sync <url>` + `grocery build` into a fresh nest
+- **upgrade** = `sync` (a newer release) + `grocery build`
 - **clone** = `sync` from empty
 
 These are named compositions for humans, deliberately *not* new verbs. That they

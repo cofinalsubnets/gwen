@@ -96,7 +96,7 @@
 
 ; --- an EMPTY file is content, not absence. it slurps to () -- the zero point --
 ;     so a scan that reads the net hashes it to () and it never reaches the snap:
-;     the tree is dirty FOREVER, every record buds a junk tip, and sync/hatch
+;     the tree is dirty FOREVER, every record buds a junk tip, and sync
 ;     (which both refuse a dirty tree) never run again. it must record, land in
 ;     the snap under the honest empty digest, and materialize 0-byte through a
 ;     sync (where blob presence is likewise the wrapper, never the net) ---
@@ -288,7 +288,7 @@
 ;     birth is never depended upon, so it stays maximal and TWO tips is what
 ;     ordinary parallel work looks like, not a fork to repair. a ref freezes the
 ;     TIP SET instead -- the head DAG state whatever its shape, and the same
-;     thing hatch hashes for its psid, so a release and its germ line up ---
+;     thing psid hashes, so a release and its goods line up ---
 (: _ (mkdir "mrg/k" 493) _ (chdir "mrg/k") _ (mk ())
    _ (lay "a" "1\n") _ (seed-record "a born")
    _ (lay "b" "2\n") _ (seed-record "b born -- independent, so BOTH stay tips")
@@ -346,39 +346,5 @@
  (! clash)                                               ; a clash makes sync answer 0
  ((show lkept) = (show lrel))                            ; each side KEPT ITS OWN -- no silent loss
  ((show dkept) = (show drel)))
-
-; --- hatch: build the recorded source into a native germ, ledgered by patch
-;     set + arch. the recipe is a deterministic stub writing under out/ (a
-;     default ignore, so the build output never dirties the tree); a re-hatch of
-;     the same head with the same recipe is a VIABILITY test -- the germ
-;     must reproduce. (the real love recipe is `make`; the shape is identical.)
-;     ⚠ the GERM IS THE ARTIFACT and the ledger holds its ID: the recipe's output
-;     is KEPT in the germ store, so a hatch you can only audit becomes a hatch you
-;     can also SHIP -- which is what stage -1 (fetch a germ, per arch) fetches. ---
-(: _ (lay ".seed/hatch"
-       (show '(hatch (recipe "sh" "-c" "mkdir -p out; printf seed-germ > out/germ.bin") (out "out/germ.bin"))))
-   hid (seed-hatch ())
-   led (hatched ())
-   gid (<>><led)
-   gback (germ gid)                                      ; the artifact itself, back out of the store
-   _ (unlink "out/germ.bin")                             ; the build output is gone; the germ is not
-   gafter (germ gid)
-   again (seed-hatch ())
-   led2 (hatched ()))
-
-(assert
- (64 = (tally hid))                                    ; the patchset id = sha256 of the sorted tips
- (0 = (dirty ()))                                   ; the build output stayed under ignored out/
- (1 = (tally led))                                     ; one derivation ledgered...
- (hid = (<<led))                                       ; ...keyed by the patchset id
- ((<><led) = (arch ()))                             ; ...with this machine's arch (second field)
- (64 = (tally gid))                                    ; ...and the germ's ID (third field), a sha256
- (two? gback)                                          ; the GERM ITSELF is kept, not merely its id
- ((<>gback) = "seed-germ")                             ; ...and comes back byte for byte
- (gid = (sha256 (<>gback)))                            ; ...under its own id, the way every store entry is
- (two? gafter)                                         ; ...and it OUTLIVES the build output it came from
- (hid = again)                                         ; same head + recipe -> same patchset id
- (2 = (tally led2))                                    ; a second, auditable hatch
- ((<>><led2) = (<>><led)))                             ; ...and the germ stayed VIABLE, bit for bit
 
 (: _ (puts "seed: ok") _ (putc 10) 0)
