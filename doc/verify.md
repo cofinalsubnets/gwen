@@ -19,7 +19,7 @@ every run, so none of it can drift quietly.
 |---|---|---|
 | proof/rocq/spec.v | the core laws, hand-written: church application, net, subst/beta, the order lattice | test_proof |
 | proof/rocq/patch.v | seed's patch groupoid -- the commute laws as theorems | test_proof |
-| proof/rocq/gc.v | the generational minor is SOUND (a complete rem-set barrier loses no live young) and its PAUSE has its shape (work bounded by the nursery alone; survivor set identical under tenure-blind growth) | test_gc |
+| proof/rocq/gc.v | the generational minor is SOUND (a complete rem-set barrier loses no live young), its PAUSE has its shape (work bounded by the nursery alone; survivor set identical under tenure-blind growth), and its COPY LOOP is a terminating, once-per-object, nothing-lost fixpoint (the drain_* theorems; test_gcheck instance-checks the fixpoint on every minor) | test_gc |
 | proof/rocq/gen.v | GENERATED from test/spec.l: the corpus asserts as vm_compute theorems over spec.v's own model | test_gen |
 | proof/rocq/uugen.v | GENERATED from test/uu.l: terms uu's kernel checked, re-checked by coqc | test_uugen |
 | proof/lean/uugen.lean | the SAME uu corpus through Lean 4 -- a second, unrelated kernel | test_uulean |
@@ -71,11 +71,14 @@ limbs, reader/printer, c0, nifs -- is what can't leave; the big shrink already
 happened a layer down, when moon + holo pushed gcc/glibc/ld out), so the work
 is VERIFYING pieces against references, the encoder-ladder shape. the bignum
 lane is bridged now (big.v -- it caught abs-of-INTPTR_MIN wrapping on its first
-run), and the +/* dispatch matrices are owned as data (mx.v -- band
-factorization, dispatch commutativity, the diagonal-is-the-lattice reading,
-regenerated from the C tables every run); the next such rung is the GC copy
-loop (no-lost-object / no-double-copy in gc.v's vocabulary, a debug-build gate
-as the instance-check).
+run), the +/* dispatch matrices are owned as data (mx.v -- band factorization,
+dispatch commutativity, the diagonal-is-the-lattice reading, regenerated from
+the C tables every run), and the GC copy loop has its theorems (gc.v's drain_*:
+termination, once-per-object, nothing lost, a true fixpoint -- test_gcheck
+re-drives the whole minor scan on a debug build and traps if a second pass
+copies a word; the guard is sabotage-proven). the next such rung is the
+reader/printer round-trip on the full value grammar (big.v covers the decimal
+integers already).
 
 ## the open seams, ranked
 

@@ -1287,6 +1287,29 @@ static void gen_minor(struct ai *g) {
  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, g->rem[i], p0, t0);        // major->young edges
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, word(fz->p), p0, t0));
  while (g->cp < g->major_hp) (datp(g->cp) ? evac_data : evac_thread)(g, p0, t0);
+#ifdef AI_GC_CHECK
+ // the fixpoint IS a fixpoint (gc.v's drain_second_pass_copies_nothing,
+ // instanced on every minor): re-drive the WHOLE scan -- roots, rem set, the
+ // promoted window -- and every gcp must be an identity. If major_hp moves,
+ // the first pass LOST an object the mutator can still reach (a scan-window
+ // or walker bug), and we trap right at the collection that lost it instead
+ // of corrupting silently. Debug builds only (make test_gcheck).
+ { word *hp1 = g->major_hp;
+  g->cp = (word*) g->gc_fwd;
+  g->ip = cell(gcp(g, word(g->ip), p0, t0));
+  g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
+  for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);
+  for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, *s, p0, t0);
+  for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, *r->x, p0, t0);
+  if (g->symbols) {
+   if (ai_young(g, g->symbols)) g->symbols = gcp(g, g->symbols, p0, t0);
+   else gen_scan_inplace(g, g->symbols, p0, t0), gen_scan_inplace(g, map_back(g->symbols), p0, t0);
+  }
+  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, g->rem[i], p0, t0);
+  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, word(fz->p), p0, t0));
+  while (g->cp < g->major_hp) (datp(g->cp) ? evac_data : evac_thread)(g, p0, t0);
+  if (g->major_hp != hp1) __builtin_trap(); }
+#endif
  if (g->fz) gen_fz_relocate(g);
  g->hp = g->end;                                              // minor emptied
  g->gc_gen = 0; }

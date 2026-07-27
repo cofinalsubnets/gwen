@@ -1,8 +1,12 @@
 (* proof/rocq/gc.v -- the generational MINOR is SOUND: under a complete write barrier,
-   no live young object is lost. and the minor's PAUSE has its shape: its work is
+   no live young object is lost. the minor's PAUSE has its shape: its work is
    bounded by the nursery alone, and tenured growth that keeps no young pointer
-   leaves its survivor set identical (minor_work_bounded / minor_flat, at the
-   bottom -- the theorems test/host/gcpause.l's gauge instance-checks).
+   leaves its survivor set identical (minor_work_bounded / minor_flat -- the
+   theorems test/host/gcpause.l's gauge instance-checks). and the COPY LOOP has
+   its shape: the Cheney drain terminates, copies each reachable object exactly
+   once, exactly the reachable ones, and is a true fixpoint -- a second pass
+   copies nothing (the drain_* theorems at the bottom; love.c's AI_GC_CHECK
+   build instance-checks the fixpoint on every minor, gate test_gcheck).
 
    This is the Coq counterpart of doc/proto/gengc.l, the runnable ai model of the
    nursery+old collector. That model's load-bearing self-check is assert (3b): an
@@ -25,7 +29,7 @@
 
    Written by Claude (Anthropic), the Opus 4.8 model. *)
 
-From Stdlib Require Import List PeanoNat Bool.
+From Stdlib Require Import List PeanoNat Bool Lia.
 Import ListNotations.
 
 (* ============================================================ *)
@@ -282,9 +286,320 @@ Proof.
   rewrite (seeds_tenure_blind nur old ext rem roots Hblind). tauto.
 Qed.
 
+(* ============================================================ *)
+(* the COPY LOOP -- the drain is a fixpoint that loses nothing  *)
+(* ============================================================ *)
+
+(* gen_minor's drain,
+       while (cp < major_hp) evac_*(g);
+   abstracted: a Cheney worklist. [cp, major_hp) is the GRAY window (copied,
+   not yet scanned), everything before cp is BLACK (scanned), and gcp's
+   forwarding test -- "the first word already points into the forwarding
+   window" -- is exactly "already copied". the model: black and gray are
+   address lists; one step scans the first gray object, copying (GRAYING)
+   each present, not-yet-copied edge target at the moment the edge is read
+   -- gcp, in the model. fuel-bounded with None on fuel-out, so termination
+   is a THEOREM (S (length r) fuel always drains), never a wish. the four
+   shapes proved below:
+     drain_terminates            -- the scan pointer catches the allocation
+                                    pointer: the while loop exits.
+     drain_copies_once           -- NoDup: the forwarding pointer's whole
+                                    job, no object lands in to-space twice.
+     drain_sound / drain_complete -- the survivors are EXACTLY the reachable
+                                    present objects: nothing dead copied,
+                                    nothing live lost.
+     drain_second_pass_copies_nothing -- re-running the scan over the result
+                                    copies not one word. this is the theorem
+                                    love.c's AI_GC_CHECK build instance-checks:
+                                    gen_minor re-runs its whole scan after the
+                                    drain and traps if major_hp moved. *)
+
+Definition inb (b : addr) (l : list addr) : bool := existsb (Nat.eqb b) l.
+
+Lemma inb_in : forall b l, inb b l = true <-> In b l.
+Proof.
+  intros b l. unfold inb. rewrite existsb_exists. split.
+  - intros [x [Hx He]]. apply Nat.eqb_eq in He. subst. exact Hx.
+  - intro H. exists b. split; [exact H | apply Nat.eqb_refl].
+Qed.
+
+(* gcp over one object's out-edges, in order: copy (gray) a target iff it
+   names a from-space object not yet copied -- and the moment it is copied it
+   counts as seen for the NEXT edge (the forwarding pointer is installed
+   before the scan reads on). *)
+Fixpoint graying (r : region) (seen es : list addr) : list addr :=
+  match es with
+  | [] => []
+  | b :: t => if presentb b r && negb (inb b seen)
+              then b :: graying r (b :: seen) t
+              else graying r seen t
+  end.
+
+Lemma graying_sub : forall r es seen b, In b (graying r seen es) -> In b es.
+Proof.
+  intros r es. induction es as [| e t IH]; intros seen b H; simpl in H.
+  - inversion H.
+  - destruct (presentb e r && negb (inb e seen)).
+    + destruct H as [-> | H]; [left; reflexivity | right; eapply IH; exact H].
+    + right. eapply IH. exact H.
+Qed.
+
+Lemma graying_present : forall r es seen b, In b (graying r seen es) -> present b r.
+Proof.
+  intros r es. induction es as [| e t IH]; intros seen b H; simpl in H.
+  - inversion H.
+  - destruct (presentb e r && negb (inb e seen)) eqn:E.
+    + apply andb_prop in E as [Hp _]. destruct H as [-> | H].
+      * apply presentb_present. exact Hp.
+      * eapply IH. exact H.
+    + eapply IH. exact H.
+Qed.
+
+Lemma graying_new : forall r es seen b, In b (graying r seen es) -> ~ In b seen.
+Proof.
+  intros r es. induction es as [| e t IH]; intros seen b H; simpl in H.
+  - inversion H.
+  - destruct (presentb e r && negb (inb e seen)) eqn:E.
+    + apply andb_prop in E as [_ Hn]. destruct H as [-> | H].
+      * intro Hin. apply negb_true_iff in Hn.
+        apply inb_in in Hin. rewrite Hin in Hn. discriminate.
+      * intro Hin. apply (IH (e :: seen) b H). right. exact Hin.
+    + eapply IH. exact H.
+Qed.
+
+Lemma graying_nodup : forall r es seen, NoDup (graying r seen es).
+Proof.
+  intros r es. induction es as [| e t IH]; intros seen; simpl.
+  - constructor.
+  - destruct (presentb e r && negb (inb e seen)) eqn:E.
+    + constructor.
+      * intro Hin. apply graying_new in Hin. apply Hin. left. reflexivity.
+      * apply IH.
+    + apply IH.
+Qed.
+
+(* a present edge target is copied now or was copied before -- never dropped *)
+Lemma graying_covers : forall r es seen b,
+    In b es -> present b r -> In b seen \/ In b (graying r seen es).
+Proof.
+  intros r es. induction es as [| e t IH]; intros seen b Hin Hp; simpl.
+  - inversion Hin.
+  - destruct (presentb e r && negb (inb e seen)) eqn:E.
+    + destruct Hin as [-> | Hin]; [right; left; reflexivity |].
+      destruct (IH (e :: seen) b Hin Hp) as [[-> | Hs] | Hg].
+      * right. left. reflexivity.
+      * left. exact Hs.
+      * right. right. exact Hg.
+    + destruct Hin as [-> | Hin].
+      * left. apply presentb_present in Hp. rewrite Hp in E. simpl in E.
+        apply negb_false_iff in E. apply inb_in. exact E.
+      * exact (IH seen b Hin Hp).
+Qed.
+
+(* if every edge target is dead or already copied, gcp copies nothing *)
+Lemma graying_none : forall r es seen,
+    (forall b, In b es -> presentb b r = false \/ In b seen) ->
+    graying r seen es = [].
+Proof.
+  intros r es. induction es as [| e t IH]; intros seen H; simpl.
+  - reflexivity.
+  - destruct (H e (or_introl eq_refl)) as [Hp | Hs].
+    + rewrite Hp. simpl. apply IH. intros b Hb. destruct (H b (or_intror Hb)); auto.
+    + assert (Hi : inb e seen = true) by (apply inb_in; exact Hs).
+      rewrite Hi. rewrite andb_false_r. apply IH.
+      intros b Hb. destruct (H b (or_intror Hb)); auto.
+Qed.
+
+(* the worklist. gray first: an empty worklist is DONE whatever the fuel --
+   fuel-out (None) can only mean a genuinely unfinished scan. *)
+Fixpoint cheney (r : region) (fuel : nat) (black gray : list addr) : option (list addr) :=
+  match gray with
+  | [] => Some black
+  | a :: gs =>
+    match fuel with
+    | 0 => None
+    | S f => cheney r f (black ++ [a]) (gs ++ graying r (black ++ a :: gs) (edges a r))
+    end
+  end.
+
+(* the drain: gen_minor's whole scan, from the copied roots *)
+Definition drain (r : region) (roots : list addr) : option (list addr) :=
+  cheney r (S (length r)) [] (graying r [] roots).
+
+Lemma NoDup_app_disjoint : forall (l m : list addr),
+    NoDup l -> NoDup m -> (forall x, In x m -> ~ In x l) -> NoDup (l ++ m).
+Proof.
+  induction l as [| a l IH]; intros m Hl Hm Hd; simpl.
+  - exact Hm.
+  - inversion Hl as [| ? ? Hnin Hl']; subst. constructor.
+    + intro Hin. apply in_app_or in Hin. destruct Hin as [Hin | Hin].
+      * exact (Hnin Hin).
+      * apply (Hd a Hin). left. reflexivity.
+    + apply IH; [exact Hl' | exact Hm |].
+      intros x Hx Hin. apply (Hd x Hx). right. exact Hin.
+Qed.
+
+(* one step keeps the copied set duplicate-free: what graying adds is fresh *)
+Lemma step_nodup : forall r black a gs,
+    NoDup (black ++ a :: gs) ->
+    NoDup ((black ++ a :: gs) ++ graying r (black ++ a :: gs) (edges a r)).
+Proof.
+  intros r black a gs Hnd.
+  apply NoDup_app_disjoint; [exact Hnd | apply graying_nodup |].
+  intros x Hx. exact (graying_new _ _ _ _ Hx).
+Qed.
+
+(* the recursion's state, reassociated to the shape step_nodup speaks *)
+Lemma step_shape : forall (black : list addr) a gs G,
+    (black ++ [a]) ++ (gs ++ G) = (black ++ a :: gs) ++ G.
+Proof.
+  intros. rewrite <- !app_assoc. simpl. reflexivity.
+Qed.
+
+(* the master invariant, one induction for every conclusion. P is any
+   property of addresses that holds on the initial copied set and follows
+   edges -- instantiated with (fun _ => True) for the counting facts and
+   with (Reach r roots) for soundness. *)
+Lemma cheney_inv : forall (r : region) (P : addr -> Prop) fuel black gray res,
+    cheney r fuel black gray = Some res ->
+    NoDup (black ++ gray) ->
+    (forall b, In b black -> forall y, In y (edges b r) -> present y r -> In y (black ++ gray)) ->
+    (forall b, In b (black ++ gray) -> P b) ->
+    (forall a y, P a -> In y (edges a r) -> P y) ->
+    NoDup res /\ incl (black ++ gray) res
+    /\ (forall b, In b res -> forall y, In y (edges b r) -> present y r -> In y res)
+    /\ (forall b, In b res -> P b).
+Proof.
+  intros r P fuel. induction fuel as [| f IH]; intros black gray res Hc Hnd Hcl HP Hstep.
+  - destruct gray as [| a gs]; [| discriminate Hc].
+    injection Hc as <-. rewrite app_nil_r in *.
+    repeat split; auto. apply incl_refl.
+  - destruct gray as [| a gs].
+    + injection Hc as <-. rewrite app_nil_r in *.
+      repeat split; auto. apply incl_refl.
+    + simpl in Hc.
+      set (G := graying r (black ++ a :: gs) (edges a r)) in *.
+      assert (Hnd' : NoDup ((black ++ [a]) ++ (gs ++ G))).
+      { rewrite step_shape. apply step_nodup. exact Hnd. }
+      assert (Hcl' : forall b, In b (black ++ [a]) ->
+                forall y, In y (edges b r) -> present y r -> In y ((black ++ [a]) ++ (gs ++ G))).
+      { intros b Hb y Hy Hp. rewrite step_shape.
+        apply in_app_or in Hb. destruct Hb as [Hb | [Heq | []]].
+        - apply in_or_app. left. apply Hcl with (b := b); assumption.
+        - subst b.
+          destruct (graying_covers r (edges a r) (black ++ a :: gs) y Hy Hp) as [Hs | Hg].
+          + apply in_or_app. left. exact Hs.
+          + apply in_or_app. right. exact Hg. }
+      assert (HP' : forall b, In b ((black ++ [a]) ++ (gs ++ G)) -> P b).
+      { intros b Hb. rewrite step_shape in Hb.
+        apply in_app_or in Hb. destruct Hb as [Hb | Hb].
+        - apply HP. exact Hb.
+        - apply graying_sub in Hb. apply Hstep with (a := a); [| exact Hb].
+          apply HP. apply in_or_app. right. left. reflexivity. }
+      destruct (IH _ _ _ Hc Hnd' Hcl' HP' Hstep) as [Hr1 [Hr2 [Hr3 Hr4]]].
+      repeat split; auto.
+      intros x Hx. apply Hr2. rewrite step_shape.
+      apply in_or_app. left. exact Hx.
+Qed.
+
+(* every copied address names a from-space object, so NoDup bounds the copies
+   by the from-space -- which is what lets the fuel argument close *)
+Lemma cheney_enough : forall r fuel black gray,
+    NoDup (black ++ gray) ->
+    incl (black ++ gray) (map fst r) ->
+    length r < fuel + length black ->
+    exists res, cheney r fuel black gray = Some res.
+Proof.
+  intros r fuel. induction fuel as [| f IH]; intros black gray Hnd Hincl Hlen.
+  - destruct gray as [| a gs].
+    + exists black. reflexivity.
+    + exfalso.
+      assert (Hle : length (black ++ a :: gs) <= length (map fst r))
+        by (apply NoDup_incl_length; assumption).
+      rewrite length_app, length_map in Hle. simpl in Hle. lia.
+  - destruct gray as [| a gs].
+    + exists black. reflexivity.
+    + simpl.
+      set (G := graying r (black ++ a :: gs) (edges a r)).
+      apply IH.
+      * rewrite step_shape. apply step_nodup. exact Hnd.
+      * intros x Hx. rewrite step_shape in Hx. apply in_app_or in Hx.
+        destruct Hx as [Hx | Hx]; [apply Hincl; exact Hx |].
+        apply graying_present in Hx. exact Hx.
+      * rewrite length_app. simpl length. lia.
+Qed.
+
+(* (i) TERMINATION: the scan pointer catches the allocation pointer -- the
+   while loop exits, with fuel one more than the from-space could ever need *)
+Theorem drain_terminates : forall r roots, exists res, drain r roots = Some res.
+Proof.
+  intros r roots. unfold drain. apply cheney_enough; simpl.
+  - apply graying_nodup.
+  - intros x Hx. apply graying_present in Hx. exact Hx.
+  - rewrite Nat.add_0_r. apply Nat.lt_succ_diag_r.
+Qed.
+
+(* (ii) NO DOUBLE COPY: the forwarding pointer's whole job -- no from-space
+   object lands in to-space twice, so the survivors are each copied ONCE *)
+Theorem drain_copies_once : forall r roots res,
+    drain r roots = Some res -> NoDup res.
+Proof.
+  intros r roots res Hd.
+  destruct (cheney_inv r (fun _ => True) _ _ _ _ Hd) as [Hnd _]; simpl; auto.
+  - apply graying_nodup.
+  - intros b Hb. inversion Hb.
+Qed.
+
+(* (iii) NOTHING DEAD COPIED: every survivor is reachable from the roots *)
+Theorem drain_sound : forall r roots res y,
+    drain r roots = Some res -> In y res -> Reach r roots y.
+Proof.
+  intros r roots res y Hd Hy.
+  destruct (cheney_inv r (Reach r roots) _ _ _ _ Hd) as [_ [_ [_ HP]]]; simpl; auto.
+  - apply graying_nodup.
+  - intros b Hb. inversion Hb.
+  - intros b Hb. apply R_seed. eapply graying_sub. exact Hb.
+  - intros a b Ha Hb. eapply R_step; eauto.
+Qed.
+
+(* (iv) NOTHING LIVE LOST: every reachable from-space object is a survivor *)
+Theorem drain_complete : forall r roots res y,
+    drain r roots = Some res -> Reach r roots y -> present y r -> In y res.
+Proof.
+  intros r roots res y Hd HR Hp.
+  destruct (cheney_inv r (fun _ => True) _ _ _ _ Hd) as [_ [Hincl [Hcl _]]]; simpl; auto;
+    [apply graying_nodup | intros b Hb; inversion Hb |].
+  induction HR as [y Hin | a y HRa IHa Hedge].
+  - apply Hincl.
+    destruct (graying_covers r roots [] y Hin Hp) as [Hs | Hg]; [inversion Hs | exact Hg].
+  - assert (Hpa : present a r) by (eapply edges_present; exact Hedge).
+    exact (Hcl a (IHa Hpa) y Hedge Hp).
+Qed.
+
+(* (v) THE FIXPOINT IS A FIXPOINT: scanning any survivor's edges against the
+   final copied set grays nothing -- a second pass over the drained heap
+   copies not one word. love.c's AI_GC_CHECK build runs this very check on
+   every minor: re-drive the whole scan, trap if major_hp moved. *)
+Theorem drain_second_pass_copies_nothing : forall r roots res a,
+    drain r roots = Some res -> In a res ->
+    graying r res (edges a r) = [].
+Proof.
+  intros r roots res a Hd Ha.
+  destruct (cheney_inv r (fun _ => True) _ _ _ _ Hd) as [_ [_ [Hcl _]]]; simpl; auto;
+    [apply graying_nodup | intros b Hb; inversion Hb |].
+  apply graying_none. intros b Hb.
+  destruct (presentb b r) eqn:E; [right | left; reflexivity].
+  apply Hcl with (b := a); [exact Ha | exact Hb | apply presentb_present; exact E].
+Qed.
+
 (* axiom-free, like the rest of proof/rocq/: every result is closed under the global
    context (no Axiom, no Admitted, no classical/funext escape hatch). *)
 Print Assumptions barrier_sound.
 Print Assumptions minor_loses_only_if_barrier_incomplete.
 Print Assumptions minor_work_bounded.
 Print Assumptions minor_flat.
+Print Assumptions drain_terminates.
+Print Assumptions drain_copies_once.
+Print Assumptions drain_sound.
+Print Assumptions drain_complete.
+Print Assumptions drain_second_pass_copies_nothing.

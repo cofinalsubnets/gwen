@@ -1046,8 +1046,12 @@ endif
 # load-bearing self-check (3b, the barrier is necessary). And the minor's PAUSE
 # has its shape: work bounded by the nursery alone, survivor set identical under
 # tenure-blind growth (minor_work_bounded / minor_flat -- test/host/gcpause.l is
-# the gauge that instance-checks them). Axiom-free like spec.v; the C stays
-# connected by the differential oracle + gen_audit. No-op without coqc.
+# the gauge that instance-checks them). And the COPY LOOP has its shape: the
+# Cheney drain terminates, copies each reachable object exactly once and only
+# the reachable ones, and is a true fixpoint (drain_* -- test_gcheck is the
+# build that instance-checks the fixpoint on every minor). Axiom-free like
+# spec.v; the C stays connected by the differential oracle + gen_audit. No-op
+# without coqc.
 ifeq ($(COQC),)
 test_gc:
 	@echo "test_gc: skipped (needs rocq/coqc)"
@@ -1174,6 +1178,18 @@ endif
 # early-out is the fast path, never load-bearing), and the diagonal reads
 # the lattice. Regenerated every run, so the tables cannot drift from the
 # theorems. Needs coqc (the dump itself needs only $(CC)); no-ops without.
+# test_gcheck: the copy loop's FIXPOINT instance check. AI_GC_CHECK makes
+# gen_minor re-drive its WHOLE scan after the drain -- roots, rem set, the
+# promoted window -- and trap if the second pass copies a single word: gc.v's
+# drain_second_pass_copies_nothing, instanced on every minor the corpus fires.
+# A trap means the first pass LOST an object the mutator can still reach (a
+# scan-window or walker bug), caught at the collection that lost it instead of
+# corrupting silently. The check build lives in its own tree (out/host/gck),
+# so the fast binary rides clean; needs only $(CC), never skips. The `host`
+# prerequisite keeps the SHARED lanes (love0, the lcat headers) canonical --
+# fresh before the sub-make, so the flag never leaks into them.
+test_gcheck: host
+	@$(MAKE) --no-print-directory hsuf=/gck EXTRA_CFLAGS=-DAI_GC_CHECK test_host
 ifeq ($(COQC),)
 test_mx:
 	@echo "test_mx: skipped (needs coqc)"
