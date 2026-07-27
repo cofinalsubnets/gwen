@@ -200,7 +200,7 @@ on the front page):
 - 🦑 **quay** -- the terminal emulator: a cuttlefish with 256-color skin that likes
   writing screensavers -- and roguelikes: rove plays live on the front page.
   [crew/quay/](crew/quay/)
-- 🐛 **pulchritude** -- the editor: a vi clone. [crew/vi/](crew/vi/)
+- 🪸 **pulchritude** -- the editor: a vi clone. [crew/vi/](crew/vi/)
 
 ### under the hood
 - one word per value: a fixnum is a tagged odd word, anything else is a heap
