@@ -3176,7 +3176,9 @@
        (: pr (normfill g ty <>ini) `('init <pr)))     ; <pr = normed items; <>pr (excess) dropped
    (redesig dh dk v) `(dh dk v)   ; ('didx k v) | ('dfield k v)
    (normelt g ty desig dh dk val l)                 ; one element of type ty from item stream l -> (item rest)
-    (? (aggish? ty && !(initval? val))          ; ELIDE: fill ty from the run starting at val
+    (? (arr? ty && (!(ptr? <>ty) && ((two? val) && (id? <val 'str))))
+        `(<l >l)                                    ; a string IS a char array's whole element -- never an elision run
+       (aggish? ty && !(initval? val))          ; ELIDE: fill ty from the run starting at val
         (: pr (normfill g ty (link val >l))
            w `('init <pr)
            `((? desig (redesig dh dk w) w) <>pr))
