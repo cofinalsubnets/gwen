@@ -40,6 +40,11 @@
                                     (rev (link (snip s st (tally s)) acc)))) 0 0 ())
    (dir? p)     (two? (readdir p))
    (fsize p)    (: st (stat p) (? (two? st) <st ()))
+   ; ⚠ fsize answers () for MISSING and 0 for EMPTY, and both are nil -- so it
+   ; cannot double as an existence test. a 0-byte file is a perfectly good file
+   ; and served 404 for it until `seed` tried to pull an empty blob over http.
+   ; presence is the wrapper, never the net.
+   (fhere? p)   (two? (stat p))
    ; read a whole file. prel's `slurp` draws one character at a time off the port, ~50ns a
    ; byte, and for a static server that is the entire cost of a response: a 66K page took
    ; 9.7ms to serve, of which 3.3ms was the read and ~0 the write. `swig` is the chunk lane
@@ -241,12 +246,12 @@
                               (: _ (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + p
                                            + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
                                  _ (flush c) `(301 meth raw))
-                              (fsize (full + "index.html"))
+                              (fhere? (full + "index.html"))
                               (: b (gulp (full + "index.html"))
                                  _ (reply c 200 "OK" "text/html; charset=utf-8" b head?)
                                  `(200 meth raw))
                               (: _ (listing c root p head?) `(200 meth raw)))
-                           (! (fsize full)) (: _ (oops c 404 "Not Found" head?) `(404 meth raw))
+                           (! (fhere? full)) (: _ (oops c 404 "Not Found" head?) `(404 meth raw))
                            (: b (gulp full)
                               (? (got? b) (: _ (reply c 200 "OK" (mime full) b head?) `(200 meth raw))
                                  (: _ (oops c 403 "Forbidden" head?) `(403 meth raw)))))))))))))

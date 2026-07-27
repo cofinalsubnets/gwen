@@ -64,7 +64,7 @@ out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
 	@chmod 755 $@
 # seed: the patch-set vcs (crew/seed/seed.l over the kore text+diff floor;
 # doc/seed.md). its own catted shebang script, the mooncc precedent.
-seedfiles = crew/kore/text.l crew/kore/diff.l crew/seed/merge.l crew/seed/seed.l
+seedfiles = crew/kore/text.l crew/kore/diff.l crew/seed/merge.l crew/seed/http.l crew/seed/seed.l
 out/host$(hsuf)/seed: $(seedfiles)
 	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(seedfiles); } > $@

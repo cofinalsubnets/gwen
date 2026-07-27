@@ -52,6 +52,18 @@
 ;   do-nothing slot is NOTHING, the unit, not a number (a number would church-exponentiate; the unit
 ;   just rides through). so `(work ())` `(loop ())` `(go ())` for a thunk/loop trigger, never a bare
 ;   0 the callee ignores.
+; * ⚠ PRESENCE IS THE WRAPPER, NEVER THE NET -- the costliest recurring bug in this tree, hit
+;   FOUR times in four different files by two different hands. every nothing is nil by design
+;   ((), 0, "", @(), the empty read), which is what makes `!` a truth test -- and it means
+;   ABSENCE AND EMPTINESS ARE INDISTINGUISHABLE by the value alone. so a "do I have one?" test
+;   written as `(! x)` is WRONG for every legitimate empty: a 0-byte file, an empty blob, "".
+;   it fails SILENTLY and plausibly -- an empty file that never records (seed), a present blob
+;   reported missing (mater), a 0-byte file served 404 (kiosko's `fsize` doubling as an
+;   existence test), a clean revert that empties the file instead (undo's snap read). carry
+;   presence OUT OF BAND: the `(1 x)` wrapper tested with `two?` (seed's `look`/`http-fetch`),
+;   or a separate predicate (`(two? (stat p))`, not `(! (fsize p))`). ⚠ and `two?` is FALSE for
+;   a STRING -- it tests cons pairs -- so it cannot check a string-valued slot either; that is
+;   the same trap wearing its other face.
 ; * quasiquote is GONE: the ` list ctor EVALUATES every element, so QUOTE the literal positions
 ;   instead of unquoting the computed ones (numbers self-eval, so bare). a lisp-primed hand
 ;   writes the inverse convention on reflex -- check every ` twice.

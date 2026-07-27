@@ -333,6 +333,86 @@
               (: p <<m (? (peep np p 0) (go >m n) (: _ (unlink p) (go >m (n + 1))))))
             (go oldsnap 0))
        (w + d))
+   ; --- the http remote: PULL ONLY. the store is content-addressed and
+   ;     immutable, so a remote is a plain static file tree and every fetch is a
+   ;     cacheable GET on a name we already know, sha256-verified on arrival.
+   ;
+   ;     there is no listing endpoint and none is needed: A PATCH IS
+   ;     SELF-DESCRIBING. start at /tips, and each patch names its `deps` (the
+   ;     DAG edges) and its `hunks` (the blob hashes), so the whole reachable
+   ;     store is discovered by walking what we have already read. that falls out
+   ;     of the format rather than being added to it, and it means the far side
+   ;     runs NOTHING -- any static host is a complete remote.
+   ;
+   ;     push would need PUT or an endpoint, so a URL peer is read-only. that is
+   ;     not a new case: sync already degrades to pull-only and says so when a
+   ;     peer will not take a write ---
+   (pull-http base)
+    (: n (tablet 0)
+       seen (tablet 0)
+       (bump k) (pin n k (1 + (peep n k 0)))
+       (getblob h)                                     ; ensure a blob is local
+        (? (! h) 1
+           (two? (look (".seed/blob/" + h))) 1
+           (: b (http-fetch base ("/blob/" + h))
+              (? (! (two? b)) (: _ (say err ("seed: cannot fetch blob " + (sh h) + "\n")) 0)
+                 ((sha256 (<>b)) = h) (: _ (lay (".seed/blob/" + h) (<>b)) _ (bump 'b) 1)
+                 (: _ (say err ("seed: bad address on blob " + (sh h) + "\n")) 0))))
+       (getpatch id)                                   ; ensure a patch is local; answer its form
+        (: local (look (".seed/patch/" + id))
+           (? (two? local) (readform (<>local))
+              (: b (http-fetch base ("/patch/" + id))
+                 (? (! (two? b)) (: _ (say err ("seed: cannot fetch patch " + (sh id) + "\n")) ())
+                    ((sha256 (<>b)) = id) (: _ (lay (".seed/patch/" + id) (<>b)) _ (bump 'p)
+                                              (readform (<>b)))
+                    (: _ (say err ("seed: bad address on patch " + (sh id) + "\n")) ())))))
+       (walk ids ok)                                   ; the transitive closure, by reading as we go
+        (? (! (two? ids)) ok
+           (: id <ids
+              (? (peep seen id 0) (walk >ids ok)
+                 (: _ (pin seen id 1)
+                    f (getpatch id)
+                    (? (! (two? f)) (walk >ids 0)
+                       (: hs (fld f 'hunks)
+                          ; ⚠ FETCH FIRST, THEN COMBINE. `&&` short-circuits, so
+                          ; folding the calls into the accumulator would stop
+                          ; fetching the moment one object failed -- a partial
+                          ; pull that then blames every later object for missing.
+                          bo (: (hb m a) (? (! (two? m)) a
+                                   (: h <m x (getblob (<>h)) y (getblob (<>>h))
+                                      (hb >m (&& a (&& x y)))))
+                                (hb hs 1))
+                          (walk ((fld f 'deps) + >ids) (&& ok bo))))))))
+       tt (http-fetch base "/tips")
+       (? (! (two? tt)) (: _ (say err ("seed: no store at " + base + " (no /tips)\n")) ())
+          (: tips (readform (<>tt))
+             (? (! (two? tips)) (: _ (say err ("seed: " + base + " has no tips\n")) ())
+                (: ok (walk tips 1)
+                   rt (http-fetch base "/refs")             ; the refs ride along
+                   theirs (? (two? rt) (readform (<>rt)) ())
+                   ru (refadd (refs ()) theirs 1)
+                   _ (? (two? <ru) (lay ".seed/refs" (show <ru)) ())
+                   `(ok (peep n 'p 0) (peep n 'b 0) (<>ru)))))))
+
+   (sync-url peer)
+    (: _ (mk ())
+       (? (0 < (dirty ()))
+          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: base (? ((snip peer ((tally peer) - 1) (tally peer)) = "/")
+                     (snip peer 0 ((tally peer) - 1)) peer)      ; one trailing slash, ours to add
+             r (pull-http base)
+             (? (! (two? r)) 0
+                (: st (settle (readdir ".seed/patch"))
+                   nleft (tell (<>>st))
+                   nref (<>>>r)
+                   _ (puts ("seed: pulled -- " + (show <st) + " patches (" + (show (<>r))
+                            + " in), " + (show (<>>r)) + " blobs, " + (show (<>st)) + " files here"
+                            + (? (0 = nleft) "" (", " + (show nleft) + " conflicted"))
+                            + (? (0 = nref) "" (", " + (show nref) + " ref clash")) + "\n"))
+                   _ (? <r () (say err "seed: some objects did not arrive -- the pull is INCOMPLETE\n"))
+                   _ (say err "seed: pulled only -- an http remote takes no push\n")
+                   (? (&& <r (&& (0 = nleft) (0 = nref))) <st 0))))))
+
    ; sync is the EXCHANGE, and an exchange has two ends: pull what the peer has
    ; that we lack, push what we have that it lacks, then settle BOTH nests. the
    ; derive is a pure function of the patch set, so two nests over one union land
@@ -341,6 +421,7 @@
    ; CLEAN and writable; when it is not we still pull (always safe) and say so,
    ; leaving the peer's store untouched rather than half-fed.
    (seed-sync peer)
+    (? (url? peer) (sync-url peer)
     (: _ (mk ())
        (? (0 < (dirty ()))
           (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
@@ -385,7 +466,7 @@
                         (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
                    _ (? (0 = nref) ()
                         (say err "seed: a banked name is immutable, so each nest kept its own -- rename one, then sync\n"))
-                   (? (&& pushed (&& (0 = nleft) (0 = nref))) <st 0))))))
+                   (? (&& pushed (&& (0 = nleft) (0 = nref))) <st 0)))))))
 
    ; --- apply: realize a dep-consistent SUBSET of the store into the working
    ;     tree. this is git's checkout AND its cherry-pick, which are one act here:
@@ -605,7 +686,9 @@
    (usage _) (: _ (say err "seed -- the patch-set vcs (doc/seed.md)
 usage: seed VERB ..
   record [NOTE]   working changes -> a patch in the store (.seed/)
-  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .seed/):
+  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .seed/),
+                  or PULL from an http:// remote -- any static file tree serving
+                  a .seed/ is a complete one, and it takes no push.
                   pull what it has, push what it lacks, settle BOTH trees to
                   the union. two patches on one path three-way merge; a true
                   overlap lands in markers and exits 1 -- resolve, then record
