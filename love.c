@@ -462,8 +462,18 @@ static ai_inline struct ai_str *add_name(struct ai *g, word x);   // a named sym
 struct ai_zn { ai_flo_t re, im; };                     // the net: a complex value
 static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
   struct ai_zn z = {re, im}; return z; }
-static ai_inline bool zn_nonpos(struct ai_zn z) {      // <= 0 in the total order
-  return z.re < 0 || (z.re == 0 && z.im <= 0); }
+// THE TRUTH GATE, and it is NOT the total order -- the one place the two part.
+// A net is nothing unless its REAL part is positive. For a real net that is the
+// order exactly (im == 0 makes the old lexicographic test collapse to re <= 0),
+// so only the IMAGINARY AXIS moves: ~(0 1) was true and ~(0 -1) false, which made
+// truth depend on which root of x^2+1 we named `i` -- conjugation is a field
+// automorphism, so nothing intrinsic separates them, and C admits no order
+// compatible with its arithmetic at all. Phase has no sign. So a pure phase is
+// BLUE, the zero floor: it has magnitude (|z| is still what $ measures once the
+// gate passes) but it is not positively anything. The lexicographic order stays
+// exactly as it was -- sorting needs totality, and `i` and `-i` must still be
+// distinguishable there; truth is a measure question and does not.
+static ai_inline bool zn_false(struct ai_zn z) { return z.re <= 0; }
 static struct ai_zn ai_net(struct ai *, word);         // fwd: aggregates sum their elements
 static intptr_t ai_count(struct ai *, word);           // fwd: tally's C body (net-mode 1 reads it)
 static ai_inline bool ai_nilp(struct ai *g, word x) {
@@ -472,9 +482,9 @@ static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (tabp(x)) return map_len(x) == 0;
   if (bigp(x)) return ((struct ai_big*) x)->slen < 0; // a negative bignum is false
   if (mintp(x)) return true;                         // a bare point (a mint / the zero point) nets 0 -> nil
-  if (coinp(x)) return zn_nonpos(ai_net(g, x));      // a coin's truth is its payload's net (lockstep with ai_net/$)
+  if (coinp(x)) return zn_false(ai_net(g, x));      // a coin's truth is its payload's net (lockstep with ai_net/$)
   if (chainp(x) || namep(x) || packp(x) || flop(x) || widep(x) || Cp(x) || strp(x) || bufp(x))
-    return zn_nonpos(ai_net(g, x));                   // content measures (a nom by its spelling): net <= 0 in the order
+    return zn_false(ai_net(g, x));                   // content measures (a nom by its spelling): net <= 0 in the order
   return false; }                                    // fn / port: present
 
 // Truncation toward zero / float remainder. Pure, freestanding-safe (no libm):
@@ -3042,13 +3052,13 @@ static struct ai_zn ai_net(struct ai *g, word x) {
       return s; } } }
 // The $ operator: the net observed once -- max(0, ceil) of its ORDER-SIGNED
 // MAGNITUDE (a real net is its own magnitude, exactly; a phaseful net takes
-// |z|, signed by zn_nonpos) -- so (nilp x) == (= 0 ($ x)) at every kind and
+// |z|, gated by zn_false) -- so (nilp x) == (= 0 ($ x)) at every kind and
 // rank: a negative real, a non-positive complex, a list or array whose net
-// sums <= 0 in the order all measure 0. Lockstep with ai_nilp.
+// with a non-positive REAL part all measure 0. Lockstep with ai_nilp.
 static intptr_t ai_pin(struct ai *g, word x) {
   if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is nil), exact
   struct ai_zn z = ai_net(g, x);
-  if (zn_nonpos(z)) return 0;
+  if (zn_false(z)) return 0;
   return len_sat(z.im == 0 ? z.re : ai_sqrt(z.re * z.re + z.im * z.im)); }
 lvm(lvm_pin) { Sp[0] = putcharm(ai_pin(g, Sp[0])); Ip += 1; return Continue(); }
 

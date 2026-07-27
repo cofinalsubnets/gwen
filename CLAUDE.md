@@ -179,7 +179,12 @@
 ; negatives cancel). `!` (nil?) reads the net's sign, `$` (sat) is the ONE saturating clamp onto
 ; the green charms (!x == (0 = $x)), and `tally` is the COUNT -- how many, not how much. every
 ; value wears a COLOR by its net-sign: GREEN nonnegative (what $ keeps), RED negative, BLUE the
-; zero floor -- true iff POSITIVE green; every nothing ((), 0, "", @(), #(), ~(0 0)) is blue. no
+; zero floor -- true iff POSITIVE green; every nothing ((), 0, "", @(), #(), ~(0 0)) is blue.
+; a TWIN GEM splits the question: the REAL PART gates, the MAGNITUDE measures ($~(3 4) = 5,
+; conjugate-blind), so a PURE PHASE is blue -- it has magnitude but no positive amount. ⚠ this is
+; the ONE place TRUTH AND THE TOTAL ORDER PART: `i` still SORTS above 0 (sorting needs totality)
+; but nets nothing, because `i` and `-i` are swapped by a field automorphism and C admits no order
+; compatible with its arithmetic -- truth cannot rest on which root we named. no
 ; "truthy"/"falsy": true and false are the bits of `!!$`. the edges and the design: spec.l's
 ; true-and-false section, doc/measures.md.
 ; demo:

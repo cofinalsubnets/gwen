@@ -557,8 +557,12 @@
      "Definition gconj (a:Z*Z):Z*Z := (fst a, - snd a)." (string 10)
      "Definition geqb (a b:Z*Z):bool := andb (Z.eqb (fst a) (fst b)) (Z.eqb (snd a) (snd b))." (string 10)
      "Definition gltb (a b:Z*Z):bool := orb (Z.ltb (fst a) (fst b)) (andb (Z.eqb (fst a) (fst b)) (Z.ltb (snd a) (snd b)))." (string 10)
-     "Definition gpos (a:Z*Z):bool := gltb (0,0) a." (string 10)
-     ; $ of a twin: its magnitude when lex-positive, else the 0 floor (corpus instances are pythagorean, so Z.sqrt is exact)
+     ; the TRUTH GATE is the REAL PART, not the total order -- `gltb` stays
+     ; lexicographic because sorting needs totality, but truth cannot depend on
+     ; which root of x^2+1 we named `i` (conjugation is a field automorphism, and
+     ; C admits no order compatible with its arithmetic). so a pure phase is BLUE.
+     "Definition gpos (a:Z*Z):bool := Z.ltb 0 (fst a)." (string 10)
+     ; $ of a twin: its magnitude once the gate passes, else the 0 floor (corpus instances are pythagorean, so Z.sqrt is exact)
      "Definition gsat (a:Z*Z):Z := if gpos a then Z.sqrt (fst a*fst a + snd a*snd a) else 0." (string 10)
      ; de Bruijn lambda terms: love compares functions by ALPHA + structure (no eta/beta/numeral bridge),
      ; which is plain structural equality on the de Bruijn form

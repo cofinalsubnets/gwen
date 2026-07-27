@@ -32,7 +32,9 @@
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
 ; numbers their value, text its charm sum, lists the sum of element nets, SPINE only). `!` (nil?) reads
-; the net's sign in the total order; `$` (sat) is one saturating clamp, max(0, ceil); !x == (0 = $x).
+; the net's sign; `$` (sat) is one saturating clamp, max(0, ceil); !x == (0 = $x). a twin gem is
+; gated by its REAL part and measured by its MAGNITUDE ($~(3 4) = 5), so a pure phase is BLUE --
+; the TRUTH GATE IS NOT THE TOTAL ORDER, the only place the two part (see the true-and-false asserts).
 ; `$` is the SOLE clamp (a clamped fold is mere composition); the COUNT -- how many, not how much --
 ; is `tally` (text/cask charms, list spine, array cells, map keys: what "length" always was, $ never
 ; was). every value wears a COLOR by its net-sign: GREEN nonnegative (what $ keeps), RED negative,
@@ -40,12 +42,15 @@
 (assert
  !0 !"" !(tablet 0) !@0 !() !0.0 !~(0 0)         ; zero / empty -> false
  !-5 !-3.9 !~(-3 4) !~(0 -1)                     ; <= 0 in the total order -> false (complex by re then im)
- !!5 !!"x" !!'a !!cap !!i !!~(3 -4)              ; positive / nonempty -> true
+ !!5 !!"x" !!'a !!cap !!~(3 4) !!~(3 -4)         ; positive / nonempty -> true (a twin gem by its RE)
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a chain of nothings is nothing, recursively
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
  (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
- (8 = $`(~(3 4) ~(-3 4))) !`(~(0 5) -1)        ; phases sum as vectors; the order signs the TOTAL, once
+ (0 = $`(~(3 4) ~(-3 4))) !`(~(0 5) -1)        ; phases sum as VECTORS, then the total is gated once:
+ !i !~(0 -1) !~(0 8) (0 = $i)                    ; ...and a PURE PHASE is BLUE. `i` and `-i` are swapped by a
+ (i < 5) (~(0 -1) < i)                           ; field automorphism, so truth cannot tell them apart -- but the
+                                                 ; ORDER still must (sorting needs totality). the one place they part.
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
@@ -242,7 +247,11 @@
  (: v (array 2 ~(1 2) ~(3 4)) (&& (twin-tray = (tier v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (net v))
     (~(2 4) = (peep (v + v) 0 0)) (~(2 4) = (peep (~(2 0) * v) 0 0)) !(v < v)
     ($v = $(net v)) ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v))))
- (8 = $(array 2 ~(3 4) ~(-3 4))) (8 = $`(~(3 4) ~(-3 4))))
+ ; the phases sum as VECTORS to ~(0 8) either way -- and a pure phase is BLUE:
+ ; the twin gem is gated by its REAL part, so a sum with no real component
+ ; measures 0 however large its magnitude (the truth gate is not the order)
+ (0 = $(array 2 ~(3 4) ~(-3 4))) (0 = $`(~(3 4) ~(-3 4)))
+ (5 = $(array 2 ~(3 4) ~(0 0))) (~(0.0 8.0) = (net (array 2 ~(3 4) ~(-3 4)))))
 
 ; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
 ; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. a ONE-CELL array DEMOTES to its lone

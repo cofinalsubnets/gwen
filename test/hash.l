@@ -70,7 +70,7 @@
  (= 5 (sat ~(3 -4)))                           ; re>0 sorts above 0 -> ceil|z|
  (= 0 (sat ~(-3 4)))                           ; re<0 sorts below 0 -> 0 (falsy)
  (= 0 (sat ~(0 -1)))                           ; -i: re=0, im<0 -> 0 (falsy)
- (= 1 (sat i))                                  ; i = ~(0 1): re=0, im>0 sorts above 0 -> ceil 1
+ (= 0 (sat i))                                  ; i = ~(0 1): a PURE PHASE is blue -- gated by re, not the order
  (= 7 (sat @(3 4)))                             ; array -> element sum
  (= 0 (sat @(-3 -4)))                           ; a list or array of negatives nets <= 0 -> nothing
  (= 0 (sat '(-2 1))) !'(-2 1)                   ; negatives cancel positives -- net -1 -> 0, falsy

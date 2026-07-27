@@ -132,8 +132,8 @@
  !(nil? @(0 0 5))                    ; one positive element -> true
  (nil? @(0.0 0.0))                      ; all-zero float tuple -> false
  (nil? ~(0 0))                         ; complex 0+0i -> false
- !(nil? ~(0 1))                     ; 0+1i sorts above 0 -> true
- !(nil? i)                           ; the imaginary unit is truthy
+ (nil? ~(0 1))                      ; a PURE PHASE is blue: gated by the real part, not the order
+ (nil? i)                            ; ...so the imaginary unit is nothing, though it still SORTS above 0
 
  ; --- elementwise transcendentals over an array ---
  (aall (= (gem-tray '(2) '(2.0 3.0)) ((/ 1 2) (gem-tray '(2) '(4.0 9.0)))))
