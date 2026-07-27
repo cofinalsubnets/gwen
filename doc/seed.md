@@ -1,7 +1,7 @@
 # seed — the vcs and the distro, one verb set
 
 Status: **the MVP verb set is live** (2026-07-14): `record` · `sync` · **`hatch`** ·
-**`apply`** · `log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
+**`apply`** · **`undo`** · `log` · `diff` over the content-addressed store — [`crew/seed/seed.l`](../crew/seed/seed.l),
 gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
 (slot = path, context = old content hash).
 
@@ -51,7 +51,18 @@ gated by `make test_seed`; a hunk is test/patch.l's proven `chg` at file grain
   To drop a patch for good you `undo` it, growing an inverse rather than
   forgetting.
 
-`bank` / `undo` reserve-the-names; the cached-fetch (CDN substituter) side of hatch
+- **`undo ID [NOTE]`** adds the **inverse** patch. Removal is growth here, never
+  deletion: the patch stays, its dependents stay valid, and the store only ever
+  gets bigger — which is exactly what keeps releases inclusion-ordered and
+  "upgrade = move to a superset" well-defined. So it is git's `revert`, never its
+  `reset`. It works through the working tree and hands off to `record`, so the
+  inverse is a patch like any other and needs no special case downstream. A path
+  that has **moved on** since is three-way merged rather than clobbered — base is
+  what the patch wrote, ours is what the path holds now, theirs is what it
+  replaced — so later edits survive and only that patch's write is lifted out. A
+  true overlap lands in markers and records **nothing**: resolve, then record.
+
+`bank` reserves the name; the cached-fetch (CDN substituter) side of hatch
 is deferred with public distribution (§Deferred). The rest of this doc is the
 design brief from the 2026-07-14 session. The **interface** layer over the model in [`doc/hatch.md`](hatch.md)
 (the patch DAG, the hatch derivation, the nest, refs) and the machinery in

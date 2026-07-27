@@ -413,6 +413,64 @@
                         (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
                    (? (0 = nleft) (tally ids) 0))))))
 
+   ; --- undo: add the INVERSE patch. removal is growth here, never deletion --
+   ;     the patch stays, its dependents stay valid, and the store only gets
+   ;     bigger, which is what keeps releases inclusion-ordered (R0 <= R1 <= R2)
+   ;     and "upgrade = move to a superset" well-defined. so undo is git's
+   ;     `revert`, never its `reset`.
+   ;
+   ;     it works through the WORKING TREE and hands off to `record`: put every
+   ;     path P touched back the way P found it, then record that. record then
+   ;     computes deps, blobs and tips against reality, so the inverse is a patch
+   ;     like any other and needs no special case anywhere downstream.
+   ;
+   ;     the interesting case is a path that MOVED ON since P wrote it. undoing
+   ;     wholesale would silently discard the later work (a hunk is file-grain,
+   ;     so P's hunk IS the whole file). instead it is a three-way merge, and the
+   ;     three sides are already named: base = what P WROTE, ours = what the path
+   ;     holds NOW, theirs = what P REPLACED. that keeps the later edits and lifts
+   ;     out P's, which is what a revert means; a true overlap lands in markers ---
+   (seed-undo args)
+    (: _ (mk ())
+       (? (0 < (dirty ()))
+          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: id (idpfx (? (two? args) <args ""))
+             (? (! id) 0                                       ; idpfx already said why
+                (: hs (fld (patch id) 'hunks)
+                   ix (: (go m t) (? (two? m) (: _ (pin t <<m <><m) (go >m t)) t))
+                   sn (ix (snap ()) (tablet 0))
+                   nc (: (go m n)
+                          (? (! (two? m)) n
+                             (: h <m p <h pold <>h pnew <>>h
+                                cur (peep sn p ())             ; the index maps path -> chash DIRECTLY
+                                (? (cur = pnew)                ; P still owns the path: a clean lift
+                                   (: _ (? (! pold) (unlink p)
+                                           (: _ (mkparents p) (lay p (blob pold))))
+                                      (go >m n))
+                                   ; it moved on -- merge P's write OUT of what is there now
+                                   (: bw (bl pnew) ow (bl cur) tw (bl pold)
+                                      (? (! (&& (two? bw) (&& (two? ow) (two? tw))))
+                                         (: _ (say err ("seed: CONFLICT on " + p
+                                                        + " -- a birth or death moved on; kept what is there\n"))
+                                            (go >m (n + 1)))
+                                         (|| (bin? <>bw) (|| (bin? <>ow) (bin? <>tw)))
+                                         (: _ (say err ("seed: CONFLICT on " + p
+                                                        + " -- binary, cannot merge; kept what is there\n"))
+                                            (go >m (n + 1)))
+                                         (: r (diff3 <>bw <>ow <>tw "here now" ("undone " + (sh id)))
+                                            _ (lay p <r)
+                                            k (<>r)
+                                            _ (? (0 = k) (puts ("seed: merged " + p + " -- the later edits kept\n"))
+                                                 (say err ("seed: CONFLICT in " + p + " -- " + (show k)
+                                                           + " region" + (? (1 = k) "" "s") + " left in markers\n")))
+                                            (go >m (+ n k))))))))
+                        (go hs 0))
+                   _ (? (0 = nc) ()
+                        (say err "seed: settle the flagged paths before recording the undo\n"))
+                   (? (0 < nc) 0
+                      (: r (seed-record ((? (two? >args) <>args "undo ") + (sh id)))
+                         (? r 1 (: _ (puts "seed: nothing to undo -- that patch is already lifted\n") 0)))))))))
+
    ; --- hatch: (source_tree, arch) -> a native GERM. the local derivation
    ;     (doc/hatch.md's fallback path: rebuild from a present binary). we hatch
    ;     the RECORDED state -- a dirty tree refuses -- run the nest's build recipe,
@@ -471,6 +529,9 @@ usage: seed VERB ..
   apply [ID..]    realize a dep-consistent SUBSET into the working tree (an ID
                   may be a prefix; its deps come along). checkout and cherry-pick
                   are one act here. no ID realizes the whole store -- the way back
+  undo ID [NOTE]  add the INVERSE of a patch -- revert as growth, never deletion.
+                  a path that moved on since three-way merges instead of being
+                  clobbered: P's write is lifted OUT, later edits stay
   log             the patches, newest first (* marks a tip)
   diff            working tree vs the recorded state (unified; exit 1 on change)
 ")
@@ -482,6 +543,7 @@ usage: seed VERB ..
              (v = "sync") (? (two? >as) (: r (seed-sync <>as) (quit (? r 0 1))) (usage ()))
              (v = "hatch") (: r (seed-hatch >as) (quit (? r 0 1)))
              (v = "apply") (: r (seed-apply >as) (quit (? r 0 1)))
+             (v = "undo") (? (two? >as) (: r (seed-undo >as) (quit (? r 0 1))) (usage ()))
              (v = "log") (: _ (seed-log ()) (quit 0))
              (v = "diff") (: n (seed-diff ()) (quit (? (0 < n) 1 0)))
              (usage ()))))

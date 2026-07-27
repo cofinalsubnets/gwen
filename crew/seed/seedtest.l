@@ -247,6 +247,42 @@
  (! bad)                                                 ; an unresolvable prefix answers 0
  (0 = clean))                                            ; every apply leaves the tree clean
 
+; --- undo: the INVERSE patch. removal is GROWTH -- the patch stays, its
+;     dependents stay valid, the store only gets bigger, and that is what keeps
+;     releases inclusion-ordered. a path that MOVED ON since is three-way merged
+;     rather than clobbered: base = what the patch wrote, ours = what is there
+;     now, theirs = what it replaced -- so the later edits survive and only that
+;     patch's write is lifted out. a true overlap records NOTHING ---
+(: _ (mkdir "mrg/u" 493) _ (chdir "mrg/u") _ (mk ())
+   _ (lay "f" "one\ntwo\nthree\n") _ (seed-record "base")
+   _ (lay "f" "one\nBAD\nthree\n") pbad (seed-record "the bad edit, line 2")
+   _ (lay "f" "one\nBAD\nTHREE!\n") _ (seed-record "later work, line 3")
+   n0 (tally (readdir ".seed/patch"))
+   u1 (seed-undo `(pbad))
+   ftext (<>(look "f"))
+   n1 (tally (readdir ".seed/patch"))
+   clean (dirty ())
+   _ (lay "g" "born\n") pg (seed-record "g born")       ; a birth undone is a death
+   u2 (seed-undo `(pg))
+   gone (look "g")
+   _ (lay "h" "a\nb\n") _ (seed-record "h base")        ; the OVERLAP: same line, later patch
+   _ (lay "h" "a\nB2\n") pq (seed-record "h -> B2")
+   _ (lay "h" "a\nB3\n") _ (seed-record "h -> B3")
+   n2 (tally (readdir ".seed/patch"))
+   u3 (seed-undo `(pq))
+   n3 (tally (readdir ".seed/patch"))
+   _ (lay "h" "a\nB3\n")                                ; settle the markers by hand
+   _ (chdir "../.."))
+
+(assert
+ (1 = u1)                                               ; the undo landed as a patch
+ (ftext = "one\ntwo\nTHREE!\n")                        ; the bad edit LIFTED, the later work KEPT
+ (n1 = (n0 + 1))                                        ; ...by growing the store, never shrinking it
+ (0 = clean)                                            ; ...and the tree matches the snap after
+ (1 = u2) (! (two? gone))                               ; a birth undone leaves no file
+ (! u3)                                                 ; a true overlap answers 0...
+ (n3 = n2))                                             ; ...and records NOTHING -- resolve first
+
 ; --- hatch: build the recorded source into a native germ, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
 ;     default ignore, so the build output never dirties the tree); a re-hatch of
