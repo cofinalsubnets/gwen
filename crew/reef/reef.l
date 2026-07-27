@@ -27,7 +27,10 @@
 ; scope; the SEAT form at the tail is the only thing that fires as a program.
 (:
    ; --- files ---
-   (rf-look p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 s)) ()))   ; (1 text) | ()
+   ; presence is the (1 _) wrapper, content is always a string: an EMPTY file
+   ; slurps to () -- the zero point -- and `+ ""` folds it back onto the shared
+   ; identity, so a 0-byte file hashes honestly instead of to ().
+   (rf-look p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))  ; (1 text) | ()
    (rf-lay p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) 0))
    (rf-form p) (: q (open p "r")                                 ; the file's one form | ()
                   (? q (: r (sound q ()) _ (close q) (? (two? r) r ())) ()))
@@ -246,11 +249,11 @@
     (: np (tablet 0)
        _ (: (go m) (? (two? m) (: _ (pin np <<m <><m) (go >m)) ()) (go newsnap))
        w (: (go m n) (? (! (two? m)) n
-              (: e <m p <e ch <>e bl (rf-blob ch)
+              (: e <m p <e ch <>e bl (rf-look (".reef/blob/" + ch))   ; presence, not net: an empty blob is real
                  cur (rf-look p) curh (? (two? cur) (sha256 <>cur) ())
-                 (? (! bl) (: _ (say err ("reef: missing blob " + ch + "\n")) (go >m n))
+                 (? (! (two? bl)) (: _ (say err ("reef: missing blob " + ch + "\n")) (go >m n))
                     (curh = ch) (go >m n)
-                    (: _ (rf-mkparents p) _ (rf-lay p bl) (go >m (n + 1))))))
+                    (: _ (rf-mkparents p) _ (rf-lay p <>bl) (go >m (n + 1))))))
             (go newsnap 0))
        d (: (go m n) (? (! (two? m)) n
               (: p <<m (? (peep np p 0) (go >m n) (: _ (unlink p) (go >m (n + 1))))))

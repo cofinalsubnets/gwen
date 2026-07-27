@@ -17,7 +17,7 @@
    _ (mkdir "junk" 493)
    _ (rf-lay "junk/x" "never\n")
    _ (rf-mk ())
-   _ (rf-lay ".reef/ignore" "junk\npr\n")               ; junk/ + the peer we sync from
+   _ (rf-lay ".reef/ignore" "junk\npr\nnest2\n")        ; junk/ + the two nests we sync with
    p1 (reef-record "first")
    s1 (rf-snap ())
    again (reef-record "again"))
@@ -87,6 +87,33 @@
  ((<>(rf-look "a.txt")) = "one\ntwo point five\nthree\n") ; local edits untouched
  (0 = (reef-diff ()))                                     ; working tree == the recomputed snap
  (! (reef-record "noop")))                                ; ...so nothing is left to record
+
+; --- an EMPTY file is content, not absence. it slurps to () -- the zero point --
+;     so a scan that reads the net hashes it to () and it never reaches the snap:
+;     the tree is dirty FOREVER, every record buds a junk tip, and sync/hatch
+;     (which both refuse a dirty tree) never run again. it must record, land in
+;     the snap under the honest empty digest, and materialize 0-byte through a
+;     sync (where blob presence is likewise the wrapper, never the net) ---
+(: _ (rf-lay "e.txt" "")
+   pe (reef-record "an empty file")
+   esnap (: (go m) (? (! (two? m)) () ("e.txt" = <<m) <m (go >m)) (go (rf-snap ())))
+   clean (rf-dirty ())
+   _ (mkdir "nest2" 493)
+   _ (chdir "nest2")
+   _ (rf-mk ())
+   got2 (reef-sync "..")
+   et (rf-look "e.txt")
+   _ (chdir ".."))
+
+(assert
+ (64 = (tally pe))                                        ; the empty file made a real patch
+ (two? esnap)                                             ; ...and reached the snap
+ ((<>esnap) = (sha256 ""))                                ; ...under the honest empty digest
+ (0 = clean)                                              ; ...so the tree came back clean
+ (! (reef-record "noop"))                                 ; ...and stays clean -- no junk tip
+ (0 < got2)                                               ; the fresh nest took the whole store
+ (two? et)                                                ; ...materializing e.txt: present...
+ (0 = (tally <>et)))                                      ; ...and 0 bytes
 
 ; --- hatch: build the recorded source into a native seed, ledgered by patch
 ;     set + arch. the recipe is a deterministic stub writing under out/ (a
