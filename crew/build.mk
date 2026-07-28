@@ -104,7 +104,7 @@ $(ho)/kore.image: $(ho)/.kore-cat.l $m
 	@$m -l $(ho)/.kore-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 # ==== dist: the ONE artifact (self-host rung 3) ====
-# out/dist/love-x86_64 is the download door whole: the default love (mooncc-built,
+# out/dist/love-<arch> is the download door whole: the default love (mooncc-built,
 # static PIE, nolibc) re-baked with the crew warm -- cook + kore + lush (vi and ain ride
 # its cat) + mooncc (all five backends) + seed + kiosko -- and crew/seed/up.l's
 # verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
@@ -129,10 +129,66 @@ out/dist/.dist-cat.l: $(distfiles)
 	@echo AI	$(abspath $@)
 	@mkdir -p out/dist
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
-out/dist/love-x86_64: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
+# the artifact is named for its arch ($a = uname -m): love-x86_64 here,
+# love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
+# the ground it stands on), so `make dist` anywhere bakes that machine's door.
+out/dist/love-$a: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
 	@echo DIST	$(abspath $@)
 	@cp $(ho)/love $@
 	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ --bake
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 .PHONY: dist
-dist: out/dist/love-x86_64
+dist: out/dist/love-$a
+
+# ==== dist_cross: the TWIN artifact (the other elf arch) ====
+# the same door for the machine you are not on: every TU through `mooncc -t`,
+# the twin's mksys leaf, our -pie link -- and the bake RUNS the twin under
+# qemu-user (the one foreign tool here, and only at build time: --bake boots
+# the egg, warms, and seals the twin's own heap, glaze emitting the twin's
+# native code the whole way). so one x86 laptop bakes the pi's download, and
+# a pi with qemu-user bakes the laptop's -- each host can serve both doors.
+ifeq ($a,aarch64)
+xarch = x86_64
+xtgt = x64
+xqemu = qemu-x86_64
+xmksys = mksys
+else
+xarch = aarch64
+xtgt = arm64
+xqemu = qemu-aarch64
+xmksys = mksys-arm64
+endif
+xd = out/dist/x
+moonx = $(moon0) -t $(xtgt)
+xhost_o = $(patsubst host/%.c,$(xd)/host_%.o,$(wildcard host/*.c))
+xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
+xobjs = $(xd)/love.o $(xhost_o) $(xd)/nolibc.o $(xmath_o) $(xd)/sys.o
+$(xd)/love.o: love.c $(love_h) out/host/mooncc0.image
+	@echo MOONX	$@
+	@mkdir -p $(dir $@)
+	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+$(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
+	@echo MOONX	$@
+	@mkdir -p $(dir $@)
+	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+$(xd)/host_main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
+$(xd)/host_cb.o: crew/quay/quay.c crew/quay/quay.h
+$(xd)/nolibc.o: crew/moon/lib/nolibc.c out/host/mooncc0.image
+	@echo MOONX	$@
+	@mkdir -p $(dir $@)
+	@$(moonx) -Icrew/moon/include -c $< $@
+$(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
+	@echo MOONX	$@
+	@mkdir -p $(dir $@)
+	@$(moonx) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
+$(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
+	@echo MOONX	$@
+	@mkdir -p $(dir $@)
+	@$(love0) -l $(ho)/.mksys-cat.l -e '($(xmksys) "$@")' && test -s $@
+out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
+	@echo DIST	$(abspath $@)
+	@$(moonx) -pie $(xobjs) -o $@
+	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l $(xqemu) ./$@ --bake
+	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
+.PHONY: dist_cross
+dist_cross: out/dist/love-$(xarch)

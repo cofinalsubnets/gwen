@@ -208,7 +208,11 @@
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)
              (flags r c is ds o (link a ins) t9 p9 g9))))
    (moon-main as)
-    (: f (flags as () () () () () 'x64 () ())
+    ; the default target is the ground we stand on: love-arch (the C boot's pin)
+    ; names the running binary's arch, so a native mooncc emits native code and
+    ; -t stays what it always was, the CROSS flag. unknown grounds keep x64.
+    (: ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
+       f (flags as () () () () () ntv () ())
        c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7)
        lnk? (|| (lnky? ins) (|| pie (charm? org)))   ; -pie/-Ttext force the link path (crt0 + layout)
        (? (! (two? ins)) (udie 2 usage)

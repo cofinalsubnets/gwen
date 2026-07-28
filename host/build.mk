@@ -227,7 +227,14 @@ $(moon_d)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
 # sys.o is LAID, not compiled: the syscall trampoline + our sigsetjmp/longjmp
 # have no C spelling (crew/moon/lib/mksys.l). love0 runs the lay -- the holo
-# module is registered in its boot, so asbook's (use 'holo) resolves.
+# module is registered in its boot with EVERY backend baked, so the cross
+# entries resolve natively. the entry is per-arch (mksys lays x64), picked by
+# $a (common.mk, uname -m): the moon lane is native on any elf host now.
+ifeq ($a,aarch64)
+mksys_e = mksys-arm64
+else
+mksys_e = mksys
+endif
 mksys_l = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
 $(ho)/.mksys-cat.l: $(mksys_l)
 	@echo AI	$@
@@ -236,7 +243,7 @@ $(ho)/.mksys-cat.l: $(mksys_l)
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(love0) -l $(ho)/.mksys-cat.l -e '(mksys "$@")' && test -s $@
+	@$(love0) -l $(ho)/.mksys-cat.l -e '($(mksys_e) "$@")' && test -s $@
 ifneq ($(STATIC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
