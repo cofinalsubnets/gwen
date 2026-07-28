@@ -101,4 +101,6 @@
     (list "cook" cook-main)
     (list "kore" (\ as (kore-main (link "kore" as))))
     (list "kiosko" kiosko-main)
-    (list "mooncc" moon-main)))
+    (list "mooncc" moon-main)
+    (list "sh" sh-main)                ; lush: the dist answers `love sh ..`, and an
+    (list "lush" sh-main)))            ; sh/lush symlink lands it (the argv0 door)

@@ -251,3 +251,14 @@ korerun kill -9 $sp || fail "kore kill send"
 wait $sp; r=$?; [ $r -eq 137 ] || fail "kore kill effect (rc $r)"
 korerun kill -0 999999 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore kill dead pid (rc $r)"
 echo "kore: process tools (env/sleep/kill/xargs -- GNU-identical output, the exit faces) ok"
+
+# ------------------------------------------------------------------ the shell
+# lush rides the kore cat: `kore sh` (and an sh symlink) IS the shell -- the
+# distro's /bin/sh. one -c through the image wake proves the whole ride:
+# dispatch, compounds, cmdsub.
+korerun sh -c 'if true; then echo "kore-sh $(echo ok)"; fi' > "$o" 2>&1; r=$?
+[ $r -eq 0 ] && [ "$(cat "$o")" = "kore-sh ok" ] || fail "kore sh (exit $r)"
+ln -sf kore "$ho/sh"
+"$ho/sh" -c 'echo via-symlink' > "$o" 2>&1; r=$?
+[ $r -eq 0 ] && [ "$(cat "$o")" = "via-symlink" ] || fail "kore sh symlink (exit $r)"
+echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"

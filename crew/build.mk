@@ -14,7 +14,10 @@
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `kore as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/kore/kore.l
+# lush rides the cat too (before cook.l: cook's $(wildcard) presence-guard then
+# reads sh-glob bare): `kore sh` and a /bin/sh argv0 symlink are the shell --
+# the distro's one-binary userland closes over its own console.
+korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/kore/kore.l
 # mooncc: the C compiler is its OWN app, NOT baked into the kore cat -- a cc edit rebuilds
 # only mooncc (never kore), so an kore rebuild in another session can't tear the compiler.
 # Its own cat: the u-floor (text+core), then asbook splices the boot-registered holo
@@ -68,6 +71,15 @@ out/host$(hsuf)/seed: $(seedfiles)
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(seedfiles); } > $@
 	@chmod 755 $@
+# lush 🐚: the love shell (crew/lush/) -- job control, pipes, redirects over the
+# host/posix.c nifs; also the distro's console shell (mk/distro.mk cats these
+# same parts to /lib/sh.l). its own catted shebang script, the seed precedent;
+# the SEAT in main.l fires on its own basename.
+lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l crew/lush/word.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
+out/host$(hsuf)/lush: $(lushfiles)
+	@echo AI	$(abspath $@)
+	@{ echo '#!/usr/bin/env -S love'; cat $(lushfiles); } > $@
+	@chmod 755 $@
 # the mooncc image: the compiler baked WARM (the live bake, doc/snapshot.md). The
 # cat loads under a NEUTRAL name so moon.l's tail SEAT stays quiet, then the bake
 # nif snapshots the session. LOVE_NO_IMAGE rides the recipe (exported above), so
@@ -93,7 +105,7 @@ $(ho)/kore.image: $(ho)/.kore-cat.l $m
 
 # ==== dist: the ONE artifact (self-host rung 3) ====
 # out/dist/love-x86_64 is the download door whole: the default love (mooncc-built,
-# static PIE, nolibc) re-baked with the crew warm -- cook + kore (vi and ain ride
+# static PIE, nolibc) re-baked with the crew warm -- cook + kore + lush (vi and ain ride
 # its cat) + mooncc (all five backends) + seed + kiosko -- and crew/seed/up.l's
 # verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
 # and cook-installs the nest; `love seed|cook|kore|kiosko|mooncc ..` are the same
@@ -106,7 +118,7 @@ $(ho)/kore.image: $(ho)/.kore-cat.l $m
 # default `love up` origin URL ahead of up.l (unset: up asks for a URL).
 distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l \
-            crew/kore/diff.l tools/ain.l crew/cook/cook.l crew/kore/asbook.l \
+            crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \

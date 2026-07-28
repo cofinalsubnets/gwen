@@ -47,7 +47,7 @@ endif
 # this love resolves here. installed DEREFERENCED (install(1) follows the repo
 # lib/ symlinks), so the nest stands alone; lib/seed.l is the assembly and its
 # seed/ parts ride the slashed-include rung the same way.
-libmods = cook json kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core
+libmods = cook json kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 installs = \
   $d/bin/$(BIN) \
   $d/bin/ai \
@@ -61,8 +61,10 @@ installs = \
   $d/bin/ain \
   $d/bin/lux \
   $d/bin/bao \
+  $d/bin/lush \
   $d/share/man/man1/$(BIN).1 \
   $d/share/man/man1/cook.1 \
+  $d/share/man/man1/lush.1 \
   $d/lib/love/prel.l \
   $d/lib/love/ev.l \
   $d/lib/love/bao.l \
@@ -80,9 +82,10 @@ installs = \
 # manpath. a real PREFIX (a distro) skips these.
 ifeq ($(PREFIX),.love/)
 compat = $(DESTDIR)/.local
-binnames = $(BIN) ai kore seed mooncc moonfmt cook papel kiosko ain lux bao
+binnames = $(BIN) ai kore seed mooncc moonfmt cook papel kiosko ain lux bao lush
 installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
-  $(compat)/share/man/man1/$(BIN).1 $(compat)/share/man/man1/cook.1
+  $(compat)/share/man/man1/$(BIN).1 $(compat)/share/man/man1/cook.1 \
+  $(compat)/share/man/man1/lush.1
 $(compat)/bin/%: $d/bin/%
 	@echo LN	$(abspath $@)
 	@mkdir -p $(@D)
@@ -215,6 +218,15 @@ $d/bin/seed: $(seedfiles)
 	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $(seedfiles); } > $@
 	@chmod 755 $@
 
+# lush 🐚: the love shell (crew/lush/), one catted shebang script, the kore/seed
+# mechanism; the SEAT in main.l fires on its own basename (`lush`, or `sh`
+# through a symlink).
+$d/bin/lush: $(lushfiles)
+	@echo AI	$(abspath $@)
+	@install -d $(dir $@)
+	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $(lushfiles); } > $@
+	@chmod 755 $@
+
 # mooncc: the C compiler, ITS OWN app (doc/moon.md). The installed bin is a WAKE SHIM:
 # it boots the baked mooncc IMAGE next door (--wake, ~ms) and fires moon-main on the
 # args -- the whole-cat re-eval (~1.3 s at every compile) is paid ONCE, at bake.
@@ -266,6 +278,10 @@ $d/share/man/man1/$(BIN).1: $(ho)/love.1
 	@chmod 644 $@
 
 $d/share/man/man1/cook.1: $(ho)/cook.1
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+
+$d/share/man/man1/lush.1: $(ho)/lush.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

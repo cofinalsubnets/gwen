@@ -1,22 +1,130 @@
-; --- test/host/sh.l: the shell's gate -- the lexer/parser pure functions + the job-
-; control nifs (signal / wait's stop lane / sigfd's signal list: doc/posix.md
-; step 4, signals arriving as conditions). the interactive loop needs a pty
-; (probed live, the berth pattern); everything beneath it gates headless here.
+; --- test/host/sh.l: lush's gate -- the lexer / grammar / expansion / glob pure
+; functions, the job-control nifs (signal / wait's stop lane / sigfd's signal
+; list: doc/posix.md step 4, signals arriving as conditions), and the BUILT
+; shell driven end to end through out/host/love (never env's PATH love). the
+; interactive loop needs a pty (probed live, the berth pattern); everything
+; beneath it gates headless here. the parts read bare in cat order; main.l's
+; seat stays quiet under the corpus (no lush on cmdline).
 ; run: cat test/00-init.l test/host/sh.l | out/host/love
-(reads (open "init/sh.l" "r"))
+(reads (open "crew/lush/job.l" "r"))
+(reads (open "crew/lush/lex.l" "r"))
+(reads (open "crew/lush/gram.l" "r"))
+(reads (open "crew/lush/glob.l" "r"))
+(reads (open "crew/lush/word.l" "r"))
+(reads (open "crew/lush/eval.l" "r"))
+(reads (open "crew/lush/line.l" "r"))
+(reads (open "crew/lush/main.l" "r"))
 
-; the lexer: whitespace split, quotes glue, operators are ordinary words
-(assert
- (= '("a" "b" "c") (sh-words "  a b   c "))
- (= '("echo" "x  y") (sh-words "echo 'x  y'"))
- (= '("ab cd") (sh-words "a\"b c\"d"))
- (= '(("a") ("b" "c")) (sh-split '("a" "|" "b" "c")))
- (= '(("cat") "in" "out" 0) (sh-redirs '("cat" "<" "in" ">" "out")))
- (= '(("cat") () "log" 1) (sh-redirs '("cat" ">>" "log")))
- (sh-amp? '("x" "y" "&")) !(sh-amp? '("x" "&y"))
- (= '("x" "y") (sh-drop-amp '("x" "y" "&")))
- (= "a b" (sh-unwords '("a" "b")))
- (= 12 (sh-int "12")))
+; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
+; quotes as segments, # comments, the 'more protocol on an unfinished shape.
+; (the reader has no dotted-pair syntax, so expecteds are BUILT, not quoted.)
+(: lw (\ s (link 'w (L (link 'lit s))))
+   rdt (\ ion o (link 'rd (link ion o)))
+   opt (\ o (link 'op o))
+   (assert
+    (= (L 1 (lw "a") (lw "b")) (sh-lex " a  b "))
+    (= (L 1 (link 'w (L (link 'sq "x  y")))) (sh-lex "'x  y'"))
+    (= (L 1 (link 'w (L (link 'lit "a") (link 'dq (L (link 'lit "b c"))) (link 'lit "d"))))
+       (sh-lex "a\"b c\"d"))
+    (= (L 1 (lw "a") (rdt () ">") (lw "b")) (sh-lex "a>b"))
+    (= (L 1 (lw "x") (rdt (L 2) ">&") (lw "1")) (sh-lex "x 2>&1"))
+    (= (L 1 (lw "a") (opt "&&") (lw "b")) (sh-lex "a&&b"))
+    (= (L 1 (lw "a") (opt ";") (lw "b")) (sh-lex "a; b"))
+    (= (L 1 (lw "a")) (sh-lex "a # rest dies"))
+    (= (L 1 (link 'w (L (link 'var "HOME")))) (sh-lex "$HOME"))
+    (= (L 1 (link 'w (L (link 'dq (L (link 'lit "v=") (link 'var "V")))))) (sh-lex "\"v=$V\""))
+    (= (L 1 (link 'w (L (link 'sub "echo hi")))) (sh-lex "$(echo hi)"))
+    (= (L 1 (link 'w (L (link 'sub "date")))) (sh-lex "`date`"))
+    (id? (cap (sh-lex "echo 'x")) 'more)
+    (id? (cap (sh-lex "echo \\")) 'more)))
+
+; the grammar: pipelines under && under ; -- and & backgrounds only its own
+; and_or; a dangling && is parse-'more (the PS2 lane); compounds refuse politely
+(: pr (sh-parse (cup (sh-lex "a | b && c ; d &")))
+   a (cup pr)
+   (assert (id? (cap pr) 'ok) (id? (cap a) 'seq)
+           (id? (cap (sh-nth a 1)) 'and)
+           (id? (cap (sh-nth (sh-nth a 1) 1)) 'pipe)
+           (id? (cap (sh-nth a 2)) 'bg)))
+(: pr (sh-parse (cup (sh-lex "a | b")))
+   a (cup pr)
+   (assert (id? (cap a) 'pipe) (= 2 (tally (sh-nth a 1)))))
+(: pr (sh-parse (cup (sh-lex "! false")))
+   (assert (id? (cap (cup pr)) 'not)))
+(assert (id? (cap (sh-parse (cup (sh-lex "a &&")))) 'more)
+        (id? (cap (sh-parse (cup (sh-lex "( x )")))) 'ok))
+
+; rung 3: compounds parse (and stay 'more while open), ${..} lexes as vop,
+; heredocs rewrite to <h with the body as the target word
+(: pr (sh-parse (cup (sh-lex "if a; then b; fi")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'if)))
+(: pr (sh-parse (cup (sh-lex "while a; do b; done < f")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'rdr)))
+(: pr (sh-parse (cup (sh-lex "case x in a|b) c;; esac")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'case)))
+(: pr (sh-parse (cup (sh-lex "f() { x; }")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'fun)))
+(assert (id? (cap (sh-parse (cup (sh-lex "if a; then b")))) 'more)
+        (id? (cap (sh-parse (cup (sh-lex "for f in")))) 'more)
+        (= '(1 (w (vop "x" ":-" "y"))) (: r (sh-lex "${x:-y}") r)))
+(: lx (sh-lex "cat <<EOF\nbody\nEOF")
+   t (cup lx)
+   (assert (= 1 (cap lx))
+           (id? (cap (caup t)) 'rd)                      ; (rd () . "<h")
+           (= "<h" (cup (cup (caup t))))))
+
+; rung 3, end to end through the BUILT shell: control flow, functions,
+; positionals, ${}, heredocs, subshells, set -u
+(: r (run (L "out/host/love" "out/host/lush" "-c" "for f in a b; do echo f=$f; done"))
+   (assert (= "f=a\nf=b\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "f() { echo n=$# one=$1; return 3; }; f x y; echo rc=$?"))
+   (assert (= "n=2 one=x\nrc=3\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "case q.l in *.c) echo c;; *.l) echo l;; esac"))
+   (assert (= "l\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "p=a/b.l; echo ${p%.l} ${p#a/} ${U:-dflt} ${#p}"))
+   (assert (= "a/b b.l dflt 5\n" (cup r))))
+(: _ (setenv "LUSH_HD" "quay")
+   r (run (L "out/host/love" "out/host/lush" "-c" "cat <<EOF | tr a-z A-Z\nhd $LUSH_HD\nEOF"))
+   (assert (= "HD QUAY\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "( exit 5 ); echo sub=$?"))
+   (assert (= "sub=5\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"))
+   (assert (! (= 0 (cap r)))))
+
+; expansion: POSIX order -- splitting only over expansion output, quotes
+; shield, an unset var alone is NO field, a quoted empty IS one, glob last
+(: _ (setenv "LUSH_T1" "quay")
+   _ (setenv "LUSH_T2" "a  b")
+   v (\ nm (link 'var nm))
+   (assert
+    (= '("pre-quay") (sh-fields (L (link 'lit "pre-") (v "LUSH_T1"))))
+    (= '("a" "b") (sh-fields (L (v "LUSH_T2"))))
+    (= '("a  b") (sh-fields (L (link 'dq (L (v "LUSH_T2"))))))
+    (= () (sh-fields (L (v "LUSH_NIL_ZZ"))))
+    (= '("") (sh-fields (L (link 'sq ""))))
+    (= '("quay") (sh-fields (L (link 'sub "echo quay"))))
+    (= '("crew/lush/job.l") (sh-fields (L (link 'lit "crew/lush/j*.l"))))
+    (= '("crew/zz*qq") (sh-fields (L (link 'lit "crew/zz*qq"))))
+    (= '("crew/lush/j*.l") (sh-fields (L (link 'sq "crew/lush/j*.l"))))))
+(: _ (pin sh-status () 7)
+   (assert (= '("7") (sh-fields (L (link 'var "?"))))))
+
+; fnmatch + the glob walk: classes, ranges, negation, the mask law
+(assert (sh-match "*.l" "job.l") (! (sh-match "*.l" "job.c"))
+        (sh-match "j??.l" "job.l") (sh-match "[a-j]ob.l" "job.l")
+        (! (sh-match "[!a-j]ob.l" "job.l"))
+        (= '("crew/lush/job.l") (sh-glob "crew/lush/j[m-p]b.l" (sh-ones 19))))
+
+; completion (rung 2): (insert . candidates) -- one path candidate lands its
+; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
+(: r (sh-complete (sh-expl "cat crew/lush/jo"))
+   (assert (two? r) (= "b.l " (slurp (tap (cap r)))) (= '("crew/lush/job.l") (cup r))))
+(: r (sh-complete (sh-expl "cat crew/lus"))
+   (assert (= "h/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
+(: r (sh-complete (sh-expl "cat crew/lu"))
+   (assert (= '("crew/lush" "crew/lux") (cup r))))       ; two ways forward, listed
+(assert (= "ab" (sh-common '("abc" "abd" "ab")))
+        (= "~" (sh-homely (+ "" (getenv "HOME")))))
 
 ; (signal sig 1) ignores: a self-INT that would kill us just fizzles; restore after
 (: me (getpid 0)
@@ -46,24 +154,61 @@
 (assert (= (L 'gotsig 'sigusr1 (getpid 0)) (scare 'sigusr1 (getpid 0))))
 (: help 0)
 
-; --- step 5: env nifs + $ expansion + $? -----------------------------------------
+; env nifs: set, read back through environ's raw K=V, absence unsets
 (assert (id? (setenv "LOVE_SH_T5" "quay") ())
         (= "quay" (getenv "LOVE_SH_T5"))
-        (foldl (\ a e (? a a (= e "LOVE_SH_T5=quay"))) 0 (environ 0))  ; raw K=V shape
-        (= '("echo" "quay") (sh-words "echo $LOVE_SH_T5"))
-        (= '("xquay") (sh-words "x$LOVE_SH_T5"))                       ; glued expansion
-        (= '("pre quay post") (sh-words "\"pre $LOVE_SH_T5 post\""))   ; expands in ".."
-        (= '("$LOVE_SH_T5") (sh-words "'$LOVE_SH_T5'"))                  ; literal in '..'
-        (= '("a") (sh-words "a $LOVE_SH_UNSET_ZZZ"))                   ; unset word drops away
-        (= '("$") (sh-words "$")))                                   ; a lone $ is literal
+        (foldl (\ a e (? a a (= e "LOVE_SH_T5=quay"))) 0 (environ 0)))
 (assert (id? (setenv "LOVE_SH_T5" ()) ())                              ; absence unsets
         (id? (getenv "LOVE_SH_T5") ()))
-; $?: the last foreground status, read back through expansion
-(: _ (sh-run (L "sh" "-c" "exit 7"))
-   (assert (= '("7") (sh-words "$?"))))
-; export, through the shell's own pipeline
-(: _ (sh-run (L "export" "LOVE_SH_T6=pier"))
-   (assert (= "pier" (getenv "LOVE_SH_T6"))
-           (= '("pier") (sh-words "$LOVE_SH_T6"))))
+; $? and export, through the shell's own line entry
+(: _ (sh-line "sh -c 'exit 7'")
+   (assert (= 7 (sh-status ())) (= '("7") (sh-fields (L (link 'var "?"))))))
+(: _ (sh-line "export LOVE_SH_T6=pier")
+   (assert (= "pier" (getenv "LOVE_SH_T6"))))
+
+; the BUILT shell, end to end: pipes, lists, cmdsub, glob, 2>&1 -- driven
+; through out/host/love so the tree's own nifs serve (env's love is the nest's)
+(: r (run (L "out/host/love" "out/host/lush" "-c" "echo a b | tr a-z A-Z"))
+   (assert (= 0 (cap r)) (= "A B\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "false && echo no || echo yes"))
+   (assert (= "yes\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "echo $(echo hi | tr h H) crew/lush/j*.l"))
+   (assert (= "Hi crew/lush/job.l\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "sh -c 'echo e >&2' 2>&1 | tr e E"))
+   (assert (= "E\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "exit 9"))
+   (assert (= 9 (cap r))))
+
+; rung 4: --login reads $HOME/.profile (a scratch HOME keeps the suite
+; hermetic); without the flag the profile stays unread. `return` in a
+; .-sourced file stops that file with its status (the POSIX dot-return).
+(: home0 (+ "" (getenv "HOME"))
+   d "out/host/.lush-t4"
+   _ (mkdir d 493)
+   p (open (+ d "/.profile") "w") _ (say p "LUSH_P4=prof\nexport LUSH_P4\n") _ (close p)
+   p (open (+ d "/rr.sh") "w") _ (say p "echo one\nreturn 5\necho two\n") _ (close p)
+   _ (setenv "HOME" d)
+   r1 (run (L "out/host/love" "out/host/lush" "--login" "-c" "echo p=$LUSH_P4"))
+   r2 (run (L "out/host/love" "out/host/lush" "-c" "echo p=[$LUSH_P4]"))
+   _ (setenv "HOME" home0)
+   r3 (run (L "out/host/love" "out/host/lush" "-c" ". out/host/.lush-t4/rr.sh; echo rc=$?"))
+   (assert (= "p=prof\n" (cup r1))
+           (= "p=[]\n" (cup r2))
+           (= "one\nrc=5\n" (cup r3))))
+; a comment ends at ITS newline, never the input's end (the multi-line -c /
+; buffered-script shape every /etc/profile.d file has)
+(: r (run (L "out/host/love" "out/host/lush" "-c" "# lead\necho a # tail\n# mid\necho b"))
+   (assert (= "a\nb\n" (cup r))))
+; a closer on its OWN LINE: the multi-line subshell in cmdsub, the case item's ;;
+(: r (run (L "out/host/love" "out/host/lush" "-c" "v=$(\n(\necho deep\n)\n)\necho v=$v"))
+   (assert (= "v=deep\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "case x in\na) echo no\n;;\nx) echo yes\n;;\nesac"))
+   (assert (= "yes\n" (cup r))))
+; ${x:-word}: word is QUOTE-AWARE (sh-wordize) -- inner quotes remove, and a
+; quoted pattern char in ${v#pat} is inert (the mask law through the vop)
+(: r (run (L "out/host/love" "out/host/lush" "-c" "echo \"${LUSH_U4:-\"a b\"}\" ${LUSH_U4:-'c d'}"))
+   (assert (= "a b c d\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "v='x*y'; echo ${v#\"x*\"} ${v#x?}"))
+   (assert (= "y y\n" (cup r))))
 
 (puts "sh: ok") (putc 10)

@@ -311,6 +311,24 @@
    _ (ok "an expanded @ is a modifier, not a word"
          (&& (has qm "M5[quiet]") (! (has qm "@echo"))))
 
+   ; ------------------------------------------------------------ SHELL + wildcard
+   ; SHELL picks the shell recipe lines AND $(shell) ride -- observable through
+   ; $0, which lush pins to "lush" in its -c lane (a stock sh answers "sh").
+   ; the repo's own shell is the fixture's shell: make-with-lush, the rung-4
+   ; distro loop closed. $(wildcard) is lush's pure glob at the repo root
+   ; (sorted; a no-match pattern contributes nothing -- nullglob).
+   shl (run-cook (mk `("SHELL := out/host/lush"
+                       "all:"
+                       "\t@echo \"L1[$$0]\""
+                       "\t@echo \"L2[$(shell echo $$0)]\""))
+                 "all")
+   _ (ok "SHELL: recipe lines ride lush"   (has shl "L1[lush]"))
+   _ (ok "SHELL: $(shell) rides lush too"  (has shl "L2[lush]"))
+   wld (run-cook (mk `("all:"
+                       "\t@echo \"WC[$(wildcard crew/lush/jo*.l crew/lush/zz-nope*.q)]\""))
+                 "all")
+   _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[crew/lush/job.l]"))
+
    ; ---------------------------------------------------------------- summary
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))

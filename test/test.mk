@@ -68,7 +68,9 @@ $(havenkm):
 	@if command -v xkbcli >/dev/null 2>&1; then \
 	  echo "KM $@"; xkbcli compile-keymap > $@; \
 	else echo "SKIP $@ (no xkbcli here)"; : > $@; fi
-test_hostnif: host $(smoke) $(havenkm)
+# out/host/lush: test/host/sh.l drives the BUILT shell end to end (via
+# out/host/love, never env's PATH love -- the tree's nifs, not the nest's)
+test_hostnif: host $(smoke) $(havenkm) out/host$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
 	  cat out/host/.test_hostnif.out; \
