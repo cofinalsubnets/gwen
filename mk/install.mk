@@ -36,7 +36,11 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # (a symlink into a source tree is useless off this machine). The pattern matches
 # both shebang forms, leaving a trailing ` -l` alone.
 ifeq ($(BIN),love)
-instool = ln -sf $(abspath $1) $2
+# the chmod repairs the target when the source tree came through seed, which
+# does not carry the executable bit (a git tree's 755 makes it a no-op) --
+# without it the link resolves to a 644 file and every `cook`/`papel` exec
+# answers EACCES.
+instool = ln -sf $(abspath $1) $2 && chmod 755 $(abspath $1)
 instag = LN
 else
 instool = sed '1s|env -S love|env -S $(BIN)|' $1 > $2 && chmod 755 $2
