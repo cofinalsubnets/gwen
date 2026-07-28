@@ -20,13 +20,16 @@
  (nil? (rank 5))                     ; non-tuple -> nil
  (nil? (tier "x"))
 
- ; --- a one-element array DEMOTES to its lone scalar star (no rank-0 / singleton
- ; vec exists): an empty shape (rank 0, one cell) or a rank-1 length-1 array is
- ; just the value, so the array accessors read nil on it like any scalar ---
+ ; --- only a RANK-0 point demotes to its lone scalar star (no rank-0 vec exists,
+ ; which is what keeps the float/wide/complex boxes lean). a rank-1 length-1 array
+ ; STAYS an array: the invariant is RANK, not count, so the surface is continuous
+ ; across every tally rather than an array / scalar / array staircase ---
  (= 0 (star-tray 0 0))                    ; empty shape, zero-filled -> the fixnum 0
  (gem? (gem-tray 0 0)) (= 0.0 (gem-tray 0 0))      ; -> a boxed 0.0
- (= 5 (star-tray '(1) '(5)))              ; rank-1 len-1 -> the fixnum 5
- (= 3.5 @(3.5)) (gem? @(3.5))         ; @(3.5) is the scalar 3.5
+ (tray? (star-tray '(1) '(5)))            ; rank-1 len-1 -> a ONE-CELL ARRAY, not the fixnum 5
+ (5 = (peep (star-tray '(1) '(5)) 0 -1))  ; ...its lone cell reads back
+ (tray? @(3.5)) !(= 3.5 @(3.5))           ; @(3.5) is a one-cell array, never the scalar 3.5
+ (1 = (tally @(3.5))) (1 = (rank @(3.5)))
  (nil? (rank (star-tray 0 0)))           ; a demoted scalar is not a tuple
  (nil? (tally (gem-tray 0 0)))
  (nil? (shape (star-tray 0 0)))

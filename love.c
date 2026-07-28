@@ -398,10 +398,10 @@ static ai_inline bool widep(word _) {
 // explicit Cp branches placed before the real lanes (complex > float > int/big).
 static ai_inline bool Cp(word _) {
   return lamp(_) && cell(_)->ap == lvm_cbox; }
-// A typed array. Since the Stage-3 invariant keeps a vec only at nelem>=2 (a
-// rank-0 point / rank-1-len-1 / empty array demotes or collapses at the build
-// seam), every vec is already rank>=1 -- so arrp coincides with packp; the rank
-// guard is kept as a documented assertion. flop/widep/Cp catch the scalar gems.
+// A typed array. The invariant is RANK, not count: a vec exists at rank>=1 and any
+// tally, and only a rank-0 point demotes at the build seam -- so this guard is
+// LOAD-BEARING, not the documented assertion it used to be when arrp coincided with
+// packp. flop/widep/Cp catch the scalar gems.
 // The elementwise arith/compare lanes divert to lvm_vbin when either operand arrp.
 static ai_inline bool arrp(word _) { return packp(_) && vec(_)->rank >= 1; }
 // A GALAXY: a numeric array (a set of stars). Bands into the number band by its net
@@ -562,8 +562,9 @@ struct ai_wide { lvm_t *ap; intptr_t w; };
 #define wide_req Width(struct ai_wide)
 // Heap words emit_int/emit_flo reserve: a lean float OR wide-int box (both two
 // words -- same shape, distinct ap). Was Width(ai_vec)+1 when these emitted a
-// rank-0 vec; the Stage-2 split made the box lean and the Stage-3 array
-// invariant (nelem>=2) retired the rank-0 vec for good.
+// rank-0 vec; the Stage-2 split made the box lean and collapsing every RANK-0 array
+// at the build seam retired the rank-0 vec for good. (A rank-1-len-1 stays an array
+// and never was the thing this rested on -- the saving is rank-0's alone.)
 #define box_req (flo_req > wide_req ? flo_req : wide_req)
 // The lean complex box: ap (lvm_cbox) then two punned-double payload words
 // (re, im) -- three words vs the five a rank-0 ai_C vec spent. Also a flat GC leaf.
@@ -7653,14 +7654,16 @@ lvm(lvm_tray) {
   if (ty >= ai_R) vec_put_flo(v, i, toflo(e));
   else vec_put_int(v, i, charmp(e) ? (intptr_t) getcharm(e)
                        : flop(e) ? (intptr_t) flo_get(e) : box_get(e)); }
- // Stage-3 array invariant: a vec exists at nelem != 1. A one-element array (a
- // rank-0 point or a rank-1-len-1) demotes to its lone scalar gem -- read elem 0
- // and box it canonically (the same extraction peep does), which is what retires
- // every rank-0 vec (an empty shape is nelem 1). Empty arrays (nelem 0, always
- // rank>=1) stay arrays: the APL empties carry the reduction monoid units and the
- // 0-axis broadcast. Root the built vec first, since the box alloc can GC.
+ // The array invariant is RANK, not count: a vec exists at rank>=1, at any tally.
+ // Only a RANK-0 point (an empty shape) demotes to its lone scalar gem -- read elem 0
+ // and box it canonically (the same extraction peep does), which is what retires every
+ // rank-0 vec and keeps the float/wide/complex boxes lean. A rank-1-len-1 STAYS an
+ // array: it used to collapse too, which left the surface discontinuous -- tally 0 was
+ // an array (the APL empties carry the reduction monoid units and the 0-axis
+ // broadcast), tally 1 was a scalar, tally 2+ an array again. @(5) is now a one-cell
+ // array, not the number 5. Root the built vec first, since the box alloc can GC.
  Sp[2] = word(v);
- if (nelem == 1) {
+ if (rank == 0) {
   if (ty == ai_O) return Sp[2] = vec_get_obj(v, 0), Sp += 2, Ip++, Continue();
   if (ty == ai_C) { Have(cplx_req); v = vec(Sp[2]); ai_flo_t *fp = vec_data(v);
    return Sp[2] = mk_cplx(&Hp, fp[0], fp[1]), Sp += 2, Ip++, Continue(); }
@@ -7676,7 +7679,6 @@ lvm(lvm_iota) {
  word nx = Sp[0];
  if (!charmp(nx) || getcharm(nx) < 0) return Sp[0] = ZeroPoint, Ip++, Continue();
  uintptr_t n = (uintptr_t) getcharm(nx);
- if (n == 1) return Sp[0] = putcharm(0), Ip++, Continue();  // @(0) singleton demotes to the scalar 0
  uintptr_t bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + n * ai_T[ai_Z];
  Have(b2w(bytes));
  struct ai_vec *v = (struct ai_vec*) Hp;

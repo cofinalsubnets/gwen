@@ -140,7 +140,7 @@
  ("(@(1 1) 5 @(2 4))" = (show (sort `(@(2 4) 5 @(1 1)))))  ; nets 2 < 5 < 6, galaxies interleaving with the star
  ("(3 @(1 2))" = (show (sort `(@(1 2) 3))))          ; net tie -> a star seats below a galaxy
  ("(@('a 'b) (7 8))" = (show (sort `(@('a 'b) '(7 8)))))   ; a tray (object array) stays BELOW link (chain is the grammar substrate, seated high)
- (@(5) = 5))                                          ; a one-cell array still demotes to its scalar
+ (tray? @(5)) !(@(5) = 5))                            ; a ONE-CELL array is an array, never its scalar
 
 ; --- comparing functions --- `=` on functions is alpha + structural (binders by position,
 ; free vars by name, captures pairwise); eta/beta not bridged; a number NEVER equals a
@@ -288,9 +288,11 @@
  !(re (top-tray '(2) 0)) !(im (top-tray '(2) 0)))                         ; an object tray is no number
 
 ; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
-; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. a ONE-CELL array DEMOTES to its lone
-; scalar (@(5) = 5, (iota 1) = 0): an array exists only at tally >= 2, there is NO rank-0 kind
-; (rank/tally/shape read nil on a scalar); EMPTIES stay arrays, carrying the reduction units.
+; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. the invariant is RANK, not count:
+; an array exists at RANK >= 1 and ANY tally, so @(5) is a one-cell array and (iota 1) is @(0).
+; only a RANK-0 point demotes to its lone scalar -- there is still NO rank-0 kind, which is what
+; keeps the float/wide/complex boxes lean (rank/tally/shape read nil on a scalar). EMPTIES stay
+; arrays, carrying the reduction units, so the surface is continuous across every tally.
 ; + - * // < = and the bitwise << >> & | ^ broadcast numpy-style (`/` promotes the whole
 ; result to r on one inexact cell); the bitwise five are the WORD LANE, so they ride a
 ; z-tray and REFUSE anything else whole -- a gem/twin tray, or an object tray, answers the
@@ -415,13 +417,16 @@
 ; chain (the zero-point, DISTINCT from the number 0), "" the string, @() the array, #() the
 ; map, ~(0 0) the zero complex, (cask 0) the buffer -- all net 0 -> blue -> false. spelled via
 ; 0/() too: @()/#() are the EMPTIES (the reader emits (iota 0)/(tablet 0)); @0/#0 wrap the
-; VALUE 0 (a 1-cell -> the scalar 0, a box). every nothing is a MASK; () the bare-ish floor.
+; VALUE 0 (a ONE-CELL array, a box) -- both are PRESENT and both still net 0, so the empty
+; and the wrapped zero are told apart by tally, not by truth. every nothing is a MASK;
+; () the bare-ish floor.
 (assert
  !() !0 !"" !@() !#() !~(0 0) !(cask 0)           ; every empty is false (blue)
  (nil? ()) (nil? 0) !(= () 0) !(id? () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
  ("@()" = (show @())) (1 = (rank @())) (0 = (tally @())) (star-tray = (tier @()))  ; @() the empty array, round-trips
  (tablet? #()) (0 = $#()) ("#()" = (show #()))   ; #() the empty map, show round-trips it
- (0 = @0) (nil? (rank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
+ (tray? @0) !(0 = @0) (1 = (rank @0)) (1 = (tally @0))   ; @0 wraps the VALUE 0 -> a ONE-CELL array
+ ("@(0)" = (show @0)) (0 = (peep @0 0 -1))              ; ...which shows and reads back as one
  (tablet? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
 
 ; --- buffers --- (cask n) mutable zeroed bytes; (cask charlist) a cask HOLDING those bytes
