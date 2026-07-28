@@ -302,12 +302,12 @@ table{border-collapse:collapse}
    ; every output also depends on THIS FILE, since the template and the stylesheet live in
    ; it; edit either and the whole site is correctly out of date. (only when the file is
    ; really there -- cook quits on an ingredient that exists neither on disk nor as a rule.)
-   ; the DEV-SERVER gate. cook's `date` shells out to stat(1) once per node of the
-   ; graph, which is invisible when the steps are compilers and is the entire cost when
-   ; they are not: a no-op rebuild is ~60 forks, and it made a page take 1.5s to serve
-   ; against 0.6ms of actual serving. so before calling `build` at all, take a cheap
-   ; fingerprint of the sources -- one `stat` NIF call each, no fork -- and only call it
-   ; when that changed. answers what `build` answers, 0 when nothing did.
+   ; the DEV-SERVER gate. before calling `build` at all, take a cheap fingerprint of
+   ; the sources -- one `stat` nif call each -- and only call it when that changed:
+   ; a no-op `build` still walks the whole recipe graph, and a page should serve in
+   ; the sub-ms its serving actually costs. answers what `build` answers, 0 when
+   ; nothing did. (cook's date is the same stat nif now; the fingerprint keeps the
+   ; per-request path down to the sources alone.)
    ;
    ; comparing against a REMEMBERED fingerprint rather than against the outputs is what
    ; makes this safe to be coarse. the nif's mtime is milliseconds, so an edit landing in

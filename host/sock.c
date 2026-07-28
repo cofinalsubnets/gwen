@@ -418,14 +418,14 @@ static lvm(lvm_wlrecv) {
 // the msghdr/cmsg scratch (cbuf + fds + &mh -> sendmsg) pins the frame, which
 // would defeat the lvm_ ap's tail-jump (make vmret): the body lives in a plain
 // helper so lvm_wlsend stays a thin sibcall. answers the result word.
-static ai_noinline ai_word hv_wlsend_do(ai_word *Sp) {
- intptr_t fd = port_fd(Sp[0]);
- struct ai_str *b = cask_bytes(Sp[1]);
- intptr_t n = (Sp[2] & 1) ? getcharm(Sp[2]) : -1;
+static ai_noinline ai_word hv_wlsend_do(ai_word *sp) {
+ intptr_t fd = port_fd(sp[0]);
+ struct ai_str *b = cask_bytes(sp[1]);
+ intptr_t n = (sp[2] & 1) ? getcharm(sp[2]) : -1;
  ai_word out = putcharm(-1);
  if (fd >= 0 && b && n >= 0 && (uintptr_t) n <= b->len) {
   int fds[8]; int nf = 0;
-  for (ai_word l = Sp[3]; chainp(l) && nf < 8; l = B(l))
+  for (ai_word l = sp[3]; chainp(l) && nf < 8; l = B(l))
       if (A(l) & 1) fds[nf++] = (int) getcharm(A(l));
   char cbuf[CMSG_SPACE(8 * sizeof(int))];
   struct iovec iov = { b->bytes, (size_t) n };

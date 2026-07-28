@@ -161,7 +161,7 @@ test_seed: host out/host$(hsuf)/seed
 # makes an unknown tool usage+quit exactly like the cli, so the exit faces are unchanged.
 korerun = $m --wake $(ho)/kore.image -e '(kore-main (link "kore" (cuup (cup cmdline))))'
 .PHONY: test_kore
-test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
+test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/kore.sh $(ho) $m
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
 .PHONY: test_nest
@@ -239,6 +239,13 @@ test_selfhost: host out/host$(hsuf)/mooncc
 .PHONY: test_raw
 test_raw: host out/host$(hsuf)/mooncc
 	@sh test/gate/raw.sh x64 $(ho) $m $t
+# THE FIXPOINT (self-host rung 2): the default love IS mooncc-built now; this
+# gate has it rebuild ITSELF -- love1 (love0's lane, relinked) bakes its own
+# compiler image, recompiles every TU, links love2, and the two must be
+# byte-identical. In test_all: the self-regeneration is a headline invariant.
+.PHONY: test_fixpoint
+test_fixpoint: host $(love0) out/host/mooncc0.image
+	@sh test/gate/fixpoint.sh $(ho) $(love0)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The
 # procedure lives in test/gate/raw-bake.sh (and the why with it); make keeps the
 # dependency and the file list, whose $(filter-out) drops glaze.l.

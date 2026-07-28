@@ -334,7 +334,12 @@
                       (? (|| !(two? se) (|| (0 = (tally nm))
                               (|| !(member? typ '(0 1 2)) !(member? bind '(0 1 2)))))
                           a                             ; undefined, unnamed, a FILE/SECTION marker, or dropped
-                         (&& (0 < bind) !won) a         ; a weak def that a strong one replaced
+                         ; a weak def a strong one replaced: its BYTES stay laid, so it
+                         ; keeps a symbol -- demoted to LOCAL, naming the dead copy at its
+                         ; own address (glo holds the winner; a global twin would be a lie,
+                         ; but an unnamed span makes nm/vmret charge the bytes to whatever
+                         ; symbol precedes them)
+                         (&& (0 < bind) !won) (`(nm 0 typ (peep lanesx <se 0) ad (at sy 5)) >< a)
                          (`(nm bind typ (peep lanesx <se 0) ad (at sy 5)) >< a)))))
            (go 1 acc))
        all (foldl (\ a ob (one ob a)) () objs)

@@ -2603,16 +2603,35 @@
                        (&& (two? <fs) ((cap (cap fs)) = 'label))
                         (? (epim? >fs ej) 1 (lbl-epi? >fs ej))
                        ())
+   ; a JOIN label (another arm lands here) and then a jmp to a collected
+   ; epilogue label: the call is still in ret position -- labels carry no code
+   ; and the jmp leads to the epilogue -- so it rewrites like the bare-jmp
+   ; case, keeping label + jmp for the arms that join.
+   (lbl-jmp? fs el) (? (! (two? fs)) ()
+                       (: f <fs
+                          (? (&& (two? f) (<f = 'label)) (lbl-jmp? >fs el)
+                             (&& (two? f) (&& (<f = 'jmp) (peep el <>f ()))) 1
+                             ())))
    ; a nested-ternary return leaves each arm as (call F)(jmp JOIN) with JOIN
    ; leading to the epilogue: elabs collects those epilogue labels first, and
    ; a candidate followed by (jmp X), X collected, rewrites too (the dead jmp
    ; drops -- nothing lands mid-instruction).
+   ; ..and a label whose region is one (jmp Y) with Y already collected is an
+   ; epilogue label too (the inline-lane join chains to the shared epilogue) --
+   ; the chain can point FORWARD in the stream, so elabsx iterates elabs to a
+   ; fixpoint (the set only grows, bounded by the fn's labels).
+   (jmp-el? fs t) (? (! (two? fs)) ()
+                     (: f <fs (&& (two? f) (&& (<f = 'jmp) (peep t <>f ())))))
    (elabs fs t ej) (? (! (two? fs)) t
                       (: f <fs
                          _ (? (&& (two? f) (&& (<f = 'label)
-                                               (|| (epim? >fs ej) (lbl-epi? >fs ej))))
+                                               (|| (epim? >fs ej)
+                                                   (|| (lbl-epi? >fs ej) (jmp-el? >fs t)))))
                               (pin t <>f 1) ())
                          (elabs >fs t ej)))
+   (elabsx fs t ej) (: n (tally (keys t))
+                       t2 (elabs fs t ej)
+                       (? ((tally (keys t2)) = n) t2 (elabsx fs t2 ej)))
    (butret es) (? (! (two? >es)) () (link <es (butret >es)))   ; the epilogue's restore forms (the ret drops)
    (sibjmp g f)
     (? (<f = 'call) ((butret (peep g 'epi epi)) + `(`('jmp <>f)))
@@ -2642,10 +2661,12 @@
               ((sibjmp g f) + (sibs g rr () el hs ej crf))
              (&& cand (: nx <rr (&& (two? nx) (&& (<nx = 'jmp) (peep el <>nx ())))))
               ((sibjmp g f) + (sibs g >rr () el hs ej crf))
+             (&& cand (lbl-jmp? rr el))
+              ((sibjmp g f) + (sibs g rr () el hs ej crf))
              (link f (sibs g r (? (&& (two? f) (member? <f '(call callr raw))) () lw2) el hs ej crf)))))   ; raw: a builtin splice consumes its address like a call
    (sibcall g fs) (? (|| (peep g 'fesc ()) (v6m? g)) fs   ; v6m: the pop-pc epilogue can't restore lr for a tail-jmp, so no sibcall (deferred optimization)
                      (: ej (peep g 'epi epi)
-                        (sibs g fs () (elabs fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
+                        (sibs g fs () (elabsx fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
 
    ; -- FRAME ELISION: a fn never needs the frame LINK (the entry push/mov,
    ; the sp-restore pair at every exit), only its SLOTS. the slots re-address
@@ -3324,6 +3345,42 @@
                             (lisweep >l)
                             (link f (lisweep >l)))))
        (? (peep esc 'y ()) fs (lisweep (drop fs))))
+
+   ; dead label regions: the sibcall rewrite splices its jump BEFORE a shared
+   ; epilogue and leaves the label + epi standing for the other arms -- when no
+   ; arm remains, the region is unreachable ink whose `ret` trips vmret's TCO
+   ; gate on our own binaries. a form after an unconditional transfer
+   ; (jmp/jmpr/ret) drops until a label somebody still references; an
+   ; unreferenced label drops with its region. refs collect EVERY symbol
+   ; operand in the fn's stream (a call target, a la word, a br label --
+   ; over-approximate, so a kept label is never wrong). per-fn streams: the
+   ; entry label leads, so position 0 is never dead; another fn's label never
+   ; appears. (switch compiles as compare chains, so no data-side label refs.)
+   ; deadlab iterates to a fixpoint: a dropped region takes its own refs with
+   ; it, exposing the next link of a dead jmp chain.
+   (deadlab fs) (: r (deadlab1 fs) (? ((tally r) = (tally fs)) r (deadlab r)))
+   (deadlab1 fs)
+    (: refs (tablet 0)
+       (note ops) (? (! (two? ops)) 0
+                     (: o <ops
+                        _ (? (nom? o) (pin refs o 1)
+                             (two? o) (note o)      ; nested operands (a raw splice's forms) scan whole
+                             0)
+                        (note >ops)))
+       (scan l) (? (! (two? l)) 0
+                   (: f <l
+                      _ (? (&& (two? f) (! (<f = 'label))) (note >f) 0)
+                      (scan >l)))
+       _ (scan fs)
+       (sweep l dead)
+        (? (! (two? l)) ()
+           (: f <l
+              lbl (&& (two? f) (<f = 'label))
+              (? (&& dead lbl)
+                  (? (peep refs <>f ()) (link f (sweep >l 0)) (sweep >l 1))
+                 dead (sweep >l 1)
+                 (link f (sweep >l (? (&& (two? f) (member? <f '(jmp jmpr ret))) 1 0))))))
+       (sweep fs 0))
 
    ; the addressing fold: an add/lea/mov whose result is consumed as the VERY
    ; NEXT load's base folds into the load's displacement, so the member-access
@@ -5060,7 +5117,11 @@
           (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)
                           ((* 2 (* nc nh)) < (nreads ir1 (pslots <>sp1 ()) 0))))
              (? (|| pp lh) (regen (? pp 'shadow ())) ir1)))
-       (? (bad? irf) irf (unhome g (jr0 (unframe g irf)))))
+       ; deadlab joins unframe in the POST-CHOICE slot: it must never touch the
+       ; ir1 the rankers read -- the dead tail's (li r0 0) is a def of r0 that
+       ; BARS the ride analysis, and sweeping it early let a pass-2 ride clobber
+       ; a live arrival (the a64 boot segfault that placed this line here).
+       (? (bad? irf) irf (unhome g (jr0 (unframe g (deadlab irf))))))
 
    ; the data tail: globals in declaration order, then the string table
    ; -> (dataforms nifforms imgforms) | 'bad. TWO named sections lay in a stream
@@ -5204,8 +5265,10 @@
    ; LOCAL, love.h's inline helpers land in every TU) and global-variable names
    ; (global OBJECT symbols, statics excluded), plus the ai_nifs stream -- the
    ; .o emitter (crew/holo/obj.l) turns the rest (undefined labels,
-   ; cross-section refs) into a symbol table + relocations.
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms) | ()
+   ; cross-section refs) into a symbol table + relocations. the DEFINED static
+   ; functions ride the tail as lnames: obj.l lays them as LOCAL FUNC symbols,
+   ; so nm/gdb/vmret see real function boundaries in a holo-linked binary.
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           (! (two? r)) ()
@@ -5240,5 +5303,11 @@
                           (go2 l a2) (? (! (two? l)) a2
                                         (go2 >l (? (member? (peep als <l ()) dgl) (link <l a2) a2)))
                           (base + (go2 (keys als) ()))))
+             lnames (: (go fs acc) (? (! (two? fs)) (rev acc)
+                                      (: f <fs
+                                         (go >fs (? (&& (<f = 'fn)
+                                                            (! (id? (peep sfns <>f 'no) 'no)))
+                                                         (link <>f acc) acc))))
+                       (go <>ast ()))
              dat <>>r
-             `(1 <>r <dat fnames gnames <>dat <>>dat)))))
+             `(1 <>r <dat fnames gnames <>dat <>>dat lnames)))))

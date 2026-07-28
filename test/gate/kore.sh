@@ -64,7 +64,33 @@ if [ "$(uname -m)" = x86_64 ]; then
   chmod +x "$ho/.kore-as.elf"; "$ho/.kore-as.elf"; r=$?
   [ $r -eq 7 ] || fail "kore as run (exit $r)"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + usage + as ok"
+# ar + ld, over mooncc objects (x86_64; both need the mooncc shim beside us).
+# ar: GNU-shape TO THE BYTE -- same members through binutils ar (D = deterministic,
+# our only mode) and ours, whole archives cmp'd; `ar t` lists alike. ld: lay the
+# same crt0 object mooncc's own link lane synthesizes (crt0/objelf leak from the
+# mooncc cat), then our applet must bind crt0+main+f BYTE-IDENTICAL to mooncc's
+# whole-program link, and the exe must run: 35 + 7 = exit 42.
+if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
+  printf 'int f(void){return 35;}\n' > "$ho/.kore-arf.c"
+  printf 'int f(void);\nint main(void){return f()+7;}\n' > "$ho/.kore-arm.c"
+  "$ho/mooncc" -c "$ho/.kore-arf.c" "$ho/.kore-arf.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c f.c"
+  "$ho/mooncc" -c "$ho/.kore-arm.c" "$ho/.kore-arm.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c main.c"
+  if command -v ar >/dev/null 2>&1; then
+    rm -f "$ho/.kore-gnu.a" "$ho/.kore-our.a"
+    ar rcsD "$ho/.kore-gnu.a" "$ho/.kore-arf.o" "$ho/.kore-arm.o"
+    korerun ar rcs "$ho/.kore-our.a" "$ho/.kore-arf.o" "$ho/.kore-arm.o" || fail "kore ar rcs"
+    cmp -s "$ho/.kore-gnu.a" "$ho/.kore-our.a" || fail "kore ar vs GNU (archive bytes)"
+    ar t "$ho/.kore-gnu.a" > "$g"; korerun ar t "$ho/.kore-our.a" > "$o"; same "ar t"
+  fi
+  "$m" -l "$ho/.mooncc-cat.l" -e '(write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (link "__ai_start" ()) () (link "__ai_start" ()) () () ()))' >/dev/null 2>&1
+  [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
+  "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
+  korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"
+  cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
+  "$ho/.kore-ld.elf"; r=$?
+  [ $r -eq 42 ] || fail "kore ld run (exit $r)"
+fi
+echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld ok"
 
 # ------------------------------------------------------------- the line tools
 printf 'b\na\nc\nb\n' > "$ho/.cu1"; printf 'x y\nz\n' > "$ho/.cu2"

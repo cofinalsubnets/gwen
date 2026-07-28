@@ -114,7 +114,7 @@
     (: ps (cc-parse src is ds tgt)
        ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
        _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
-       (objelf tgt (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5) (el ob 6)))
+       (objelf tgt (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5) (el ob 6) (el ob 7)))
    (cc-obj src dst is ds tgt) (write-bytes dst (cc-objbytes src is ds tgt))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
@@ -160,7 +160,7 @@
                          (udie 2 ("cc: not a .c/.o input: " + f))))
                  ins)
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
-       ps (ldlink tgt pie org (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () ()))) srcs))
+       ps (ldlink tgt pie org (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () ()))) srcs))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."

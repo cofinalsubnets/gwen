@@ -54,11 +54,150 @@
           _ (say err ("as: wrote " + dst)) _ (put err 10)
           (quit 0)))
 
+   ; ar: the classic "!<arch>" archive, GNU shape to the byte. `ar rcs OUT M..`
+   ; writes OUT whole (fresh, like liblove.a's rm-first recipe; deterministic:
+   ; date/uid/gid 0, mode 644 -- binutils' own -D default), WITH the ranlib
+   ; index: the "/" member's big-endian offsets point at member headers, and
+   ; each ELF member's DEFINED globals come through ld-read (crew/holo/link.l)
+   ; -- no ranlib anywhere. member names store as BASENAMES (GNU's rule); a
+   ; >15-char name rides the "//" long-name table (blank numeric fields, GNU's
+   ; spelling). `ar t OUT` lists. (x/d verbs: add when a real script wants them.)
+   (arp w s) (? ((tally s) < w) (arp w (s + " ")) s)          ; ar fields are LEFT-justified
+   (arb4 v) (((("" + ((v >> 24) & 255)) + ((v >> 16) & 255)) + ((v >> 8) & 255)) + (v & 255))
+   (ar-hdr nm date uid gid mode sz)
+    (((((((arp 16 nm) + (arp 12 date)) + (arp 6 uid)) + (arp 6 gid)) + (arp 8 mode)) + (arp 10 (show sz))) + "`\n")
+   (ar-pad s) (? (& (tally s) 1) (s + "\n") s)                ; members lie on even offsets
+   (ar-elf? b) (&& (<= 20 (tally b))
+                   (&& ((b 0) = 127) (&& ((b 1) = 69) (&& ((b 2) = 76) ((b 3) = 70)))))
+   (ar-syms f b)                                              ; an ELF member's defined globals
+    (? (! (ar-elf? b)) ()
+       (: mach ((b 18) + (256 * (b 19)))
+          ob (ld-read f b mach)
+          syms (peep ob 'syms 0) ns (peep ob 'nsym 0)
+          (go i acc) (? (<= ns i) (rev acc)
+                        (: sy (peep syms i ())
+                           keep (&& (two? sy) (&& (member? (at sy 1) '(1 2)) (0 < (at sy 3))))
+                           (go (i + 1) (? keep (link <sy acc) acc))))
+          (go 1 ())))
+   (ar-write dst ms)                                          ; ms: ((basename bytes)..)
+    (: names (map (\ m <m) ms)
+       datas (map (\ m <>m) ms)
+       ; the long-name table: parallel to names, each entry (offset) | ()
+       lofs (: (go l off acc) (? (! (two? l)) (rev acc)
+                                 (: ln (tally <l)
+                                    (? (< ln 16) (go >l off (link () acc))
+                                       (go >l ((off + ln) + 2) (link `(off) acc)))))
+               (go names 0 ()))
+       ltab (: (go ns ls) (? (! (two? ns)) ""
+                             (? (two? <ls) ((<ns + "/\n") + (go >ns >ls)) (go >ns >ls)))
+               (go names lofs))
+       syml (map (\ m (ar-syms <m <>m)) ms)                   ; per-member defined-global names
+       nsym (foldl (+) 0 (map tally syml))
+       strt (foldl (+) "" (map (\ ss (foldl (\ a s ((a + s) + 0)) "" ss)) syml))
+       ; the index pads to even with a NUL that COUNTS in its size field (GNU's
+       ; spelling -- members pad with "\n" excluded from theirs)
+       isz (: z ((4 + (4 * nsym)) + (tally strt)) (z + (& z 1)))
+       ; member header offsets: magic, index hdr + data, "//" (when any), then each
+       m0 ((8 + 60) + isz)
+       m1 (? (tally ltab) ((m0 + 60) + ((tally ltab) + (& (tally ltab) 1))) m0)
+       offs (: (go ds off acc) (? (! (two? ds)) (rev acc)
+                                  (go >ds ((off + 60) + (: z (tally <ds) (z + (& z 1))))
+                                      (link off acc)))
+               (go datas m1 ()))
+       idx (: raw (((arb4 nsym)
+                    + (: (go os ss) (? (! (two? os)) ""
+                                       ((foldl (\ a _ (a + (arb4 <os))) "" <ss) + (go >os >ss)))
+                         (go offs syml)))
+                   + strt)
+              (? (& (tally raw) 1) (raw + 0) raw))
+       body (: (go ns ls ds) (? (! (two? ns)) ""
+                                (: nf (? (two? <ls) ("/" + (show (cap (cap ls)))) (<ns + "/"))
+                                   (((ar-hdr nf "0" "0" "0" "644" (tally <ds)) + (ar-pad <ds))
+                                    + (go >ns >ls >ds))))
+               (go names lofs datas))
+       out ((("!<arch>\n" + ((ar-hdr "/" "0" "0" "0" "0" isz) + idx))
+             + (? (tally ltab) ((ar-hdr "//" "" "" "" "" (tally ltab)) + (ar-pad ltab)) ""))
+            + body)
+       q (open dst "w")
+       _ (? q () (die ("ar: cannot write " + dst)))
+       _ (say q out)
+       (close q))
+   (ar-t p)                                                   ; list member names
+    (: r (uread p) _ (? (two? r) () (die ("ar: cannot open " + p)))
+       b <>r n (tally b)
+       _ (? (&& (<= 8 n) ((snip b 0 8) = "!<arch>\n")) () (die ("ar: not an archive: " + p)))
+       (field s) (: (go k) (? (&& (0 < k) ((s (k - 1)) = 32)) (go (k - 1)) (snip s 0 k)) (go (tally s)))
+       (lname lt off) (: (go k) (? (&& (< k (tally lt)) (! ((lt k) = 10))) (go (k + 1)) k)
+                         e (go off)
+                         (: nm (snip lt off e) z (tally nm)
+                            (? (&& (0 < z) ((nm (z - 1)) = 47)) (snip nm 0 (z - 1)) nm)))
+       (go pos lt) (? (< (n - pos) 60) 0
+                      (: nm (field (snip b pos (pos + 16)))
+                         sz (uatoi (field (snip b (pos + 48) (pos + 58))))
+                         d0 (pos + 60)
+                         nx ((d0 + sz) + (& sz 1))
+                         (? (nm = "/") (go nx lt)
+                            (nm = "//") (go nx (snip b d0 (d0 + sz)))
+                            (: shown (? ((nm 0) = 47) (lname lt (uatoi (snip nm 1 (tally nm))))
+                                        (: z (tally nm) (? ((nm (z - 1)) = 47) (snip nm 0 (z - 1)) nm)))
+                               _ (puts (shown + "\n"))
+                               (go nx lt)))))
+       _ (go 8 "")
+       (quit 0))
+   (ar-main as)
+    (? (! (two? as)) (die "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
+       (: fl <as
+          (? (fl = "t") (? (two? >as) (ar-t <>as) (die "ar: t wants an archive"))
+             (: hasr ((: (go i) (? (< i (tally fl)) (? ((fl i) = 114) 1 (go (i + 1))) 0)) 0)
+                _ (? hasr () (die ("ar: unsupported command " + fl + " (rcs / t)")))
+                _ (? (two? >as) () (die "ar: no archive named"))
+                dst <>as
+                fs >>as
+                _ (? (two? fs) () (die "ar: no members"))
+                ms (map (\ f (: r (uread f)
+                                 (? (two? r) `((ubase f "") <>r) (die ("ar: cannot open " + f)))))
+                        fs)
+                _ (ar-write dst ms)
+                (quit 0)))))
+
+   ; ld: holo's static linker as an applet -- mooncc .o (and any ELF relocatable
+   ; crew/holo/link.l reads) into a static exe, no binutils anywhere; -pie the
+   ; self-relocating ET_DYN, -Ttext the bare-metal org (qemu -kernel's lane).
+   (ld-main as)
+    (: (num s) (: n (tally s)
+                  hex (&& (2 < n) (&& ((s 0) = 48) ((s 1) = 120)))
+                  (go i a) (? (< i n)
+                              (go (i + 1) ((a * (? hex 16 10))
+                                           + (: b (s i)
+                                                (? (&& (<= 48 b) (< b 58)) (b - 48)
+                                                   (&& (<= 97 b) (< b 103)) (b - 87)
+                                                   (&& (<= 65 b) (< b 71)) (b - 55)
+                                                   (die ("ld: bad number " + s))))))
+                              a)
+                  (go (? hex 2 0) 0))
+       (go a fs o pie org tgt)
+        (? (! (two? a)) `((rev fs) o pie org tgt)
+           (<a = "-o")     (? (two? >a) (go >>a fs <>a pie org tgt) (die "ld: -o wants a path"))
+           (<a = "-pie")   (go >a fs o 1 org tgt)
+           (<a = "-t")     (? (two? >a) (go >>a fs o pie org (intern <>a)) (die "ld: -t wants a target"))
+           (<a = "-Ttext") (? (two? >a) (go >>a fs o pie (num <>a) tgt) (die "ld: -Ttext wants an address"))
+           (go >a (link <a fs) o pie org tgt))
+       r (go as () () 0 () 'x64)
+       fs <r o <>r pie <>>r org (at r 3) tgt (at r 4)
+       _ (? (two? fs) () (die "usage: kore ld [-pie] [-t x64|arm64|riscv64] [-Ttext ADDR] A.o.. -o OUT"))
+       _ (? (tally o) () (die "ld: no -o OUT"))
+       srcs (map (\ f (: r2 (uread f) (? (two? r2) `(f <>r2) (die ("ld: cannot open " + f))))) fs)
+       ps (ldlink tgt pie org srcs)
+       _ (ld-write o ps)
+       _ (chmod o 493)
+       (quit 0))
+
    ; the registry: name -> main (aliases share)
    applets #('diff diff-main
              'nc ain-main 'ain ain-main
              'make cook-main 'cook cook-main   ; bare: cook.l precedes this file in the cat, bracket-free, so it folds here
              'as as-main
+             'ar ar-main 'ld ld-main
              'cat cat-main 'echo echo-main
              'head head-main 'tail tail-main
              'wc wc-main 'sort sort-main
@@ -84,6 +223,8 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   nc HOST PORT       netcat; nc -l PORT listens
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
   as TGT IN OUT      assemble IR forms from IN (x64|arm64) into ELF OUT
+  ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)
+  ld A.o.. -o OUT    holo's static linker (-pie, -t x64|arm64|riscv64, -Ttext)
   cat head tail wc sort uniq tee          the line tools (crew/kore/core.l)
   cut tr nl rev                           the field tools
   grep [-nvcl] PAT [F..]                  the BRE matcher (crew/kore/re.l)

@@ -35,4 +35,4 @@
             `('raw mez)
             `('call 'fault_report)
             `('label 'spin2) `('jmp 'spin2))
-       (write-bytes dst (objelf 'riscv64 ir () '("__ai_start") () () () ()))))
+       (write-bytes dst (objelf 'riscv64 ir () '("__ai_start") () () () () ()))))

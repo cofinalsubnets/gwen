@@ -2499,17 +2499,16 @@ static lvm(lvm_numtap) {
 // straight into lvm_addh/lvm_mulh.) Probe + mapget are reads (no Have). Trap if num-ap is
 // missing -- a prel-ordering contract. The prel runs in every warm (and the result rides the
 // egg image), so every runtime ends up sealed.
+// unrolled -- a slot[] array would be an address-taken local, and an lvm_ body
+// must stay frame-free (the sibcall law; see the lvm_ scratch rule).
 lvm(lvm_seal) {
- static char const *const nm[] = {"num-ap", "opfix"};
- static uintptr_t const ln[] = {6, 5};
- ai_word *const slot[] = {&g->hot_numap, &g->hot_opfix};
- for (int i = 0; i < 2; i++) {
-  struct ai_mint *y = sym_probe(g, nm[i], ln[i]);
-  ai_word cur = y ? bookget(g, nil, word(y)) : nil;
-  if (!lamp(cur)) {
-   if (i < 1) __builtin_trap();   // num-ap is a prel-ordering contract
-   continue; }                    // opfix: absent at the FIRST seal (defined later in the prel; the second seal fills it)
-  *slot[i] = cur; }
+ struct ai_mint *y = sym_probe(g, "num-ap", 6);
+ ai_word cur = y ? bookget(g, nil, word(y)) : nil;
+ if (!lamp(cur)) __builtin_trap();  // num-ap is a prel-ordering contract
+ g->hot_numap = cur;
+ y = sym_probe(g, "opfix", 5);
+ cur = y ? bookget(g, nil, word(y)) : nil;
+ if (lamp(cur)) g->hot_opfix = cur; // opfix: absent at the FIRST seal (defined later in the prel; the second seal fills it)
  Sp[0] = nil, Ip += 1;
  return Continue(); }
 

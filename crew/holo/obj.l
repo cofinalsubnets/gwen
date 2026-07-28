@@ -335,11 +335,13 @@
    ; symbols bound them, and imgforms the `.image` bake slot, which link.l lays LAST
    ; of all so `love --bake` can grow it at the tail (host/image.c). funcnames the
    ; DEFINED functions (global FUNC symbols), globnames the global variables (global
-   ; OBJECT symbols); statics reach neither list and stay local labels. -> a byte list.
-   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms)
+   ; OBJECT symbols); locnames the STATIC functions -- LOCAL FUNC symbols, so a
+   ; linked binary's nm/objdump/gdb (and tools/vmret.l's symbol spans) see them;
+   ; static data stays local labels. -> a byte list.
+   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms locnames)
     (? (arm32? target)
        (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)   ; no bake lane on arm32
-          (objelf32 target textforms dataforms funcnames globnames wknames nifforms))
+          (objelf32 target textforms dataforms funcnames globnames wknames nifforms))   ; locnames unrepresented on arm32
     (: a64 (member? target '(arm64 aarch64))
        rv (member? target '(riscv64 rv64))
        _ (? (|| (id? target 'x64) (|| a64 rv)) 0 (scare 'obj-target target))
@@ -375,23 +377,28 @@
        ibytes <iw irel <>iw
        exts (o-exts (trel + drel + (nrel + irel)) tlabels dlabels nlabels ilabels)
 
-       ; -- symbol indices: NULL, .text/.data/ai_nifs/.image section syms, then funcs, globs, exts --
-       nfun (tally funcnames) nglob (tally globnames)
-       fstart 5 gstart (5 + nfun) estart ((5 + nfun) + nglob)
+       ; -- symbol indices: NULL, .text/.data/ai_nifs/.image section syms, then the
+       ; LOCAL statics (ELF wants every local ahead of the first global -- .symtab's
+       ; sh_info points there), then funcs, globs, exts --
+       nloc (tally locnames) nfun (tally funcnames) nglob (tally globnames)
+       fstart (5 + nloc) gstart (fstart + nfun) estart (gstart + nglob)
        extidx (o-idx exts estart)
        fnidx (o-idx (map intern funcnames) fstart)   ; interned fn name -> its symbol index (weak-target relocs bind here)
        gidx (o-idx (map intern globnames) gstart)    ; ..and the DATA twin: a weak GLOBAL (musl's __stdout_used)
                                                      ; is referenced through its own symbol, not fnidx's miss (index 0)
 
-       ; -- .strtab: every symbol's name (funcs, globs, exts as spellings) --
-       symnames (funcnames + globnames + (map (\ s (string s)) exts))
+       ; -- .strtab: every symbol's name (statics, funcs, globs, exts as spellings) --
+       symnames (locnames + funcnames + globnames + (map (\ s (string s)) exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
 
        ; -- the symbol table: locals (NULL + 2 section syms) then the globals --
        ; (one catall per table -- a cat per entry re-copies it)
        symbytes
-        (: fsyms (catall (o-mapi (\ i fs (o-sym (at stroffs i)
+        (: lsyms (catall (o-mapi (\ i ls (o-sym (at stroffs i) 0 2 1   ; STB_LOCAL FUNC in .text
+                                             (peep tlabels (intern ls) 0)))
+                                 locnames))
+           fsyms (catall (o-mapi (\ i fs (o-sym (at stroffs (nloc + i))
                                              (? (member? fs wknames) 2 1)   ; STB_WEAK: a strong def elsewhere wins
                                              2 1 (peep tlabels (intern fs) 0)))
                                  funcnames))
@@ -401,14 +408,14 @@
            ; ..and a global's SECTION is wherever its bytes went: an `.image` one
            ; (the bake slot) lives in section 4, everything else in .data
            gsyms (catall (o-mapi (\ i gs (: k (intern gs) im (o-has? ilabels k)
-                                            (o-sym (at stroffs (nfun + i))
+                                            (o-sym (at stroffs ((nloc + nfun) + i))
                                                    (? (member? gs wknames) 2 1) 1 (? im 4 2)
                                                    (peep (? im ilabels dlabels) k 0))))
                                  globnames))
            ; an EXTERNAL symbol honours wknames too: a weak undefined reference
            ; resolves to zero at static link (musl's _DYNAMIC), where a strong
            ; one is an error -- the binding is the whole difference
-           esyms (catall (o-mapi (\ i e (o-sym (at stroffs ((nfun + nglob) + i))
+           esyms (catall (o-mapi (\ i e (o-sym (at stroffs (((nloc + nfun) + nglob) + i))
                                                (? (o-has? wkset e) 2 1) 0 0 0))
                                  exts))
            (catall `((o-sym 0 0 0 0 0)                 ; the NULL symbol
@@ -416,8 +423,8 @@
                       (o-sym 0 0 3 2 0)                  ; .data section symbol
                       (o-sym 0 0 3 3 0)                  ; ai_nifs section symbol
                       (o-sym 0 0 3 4 0)                  ; .image section symbol
-                      fsyms gsyms esyms)))
-       nsym (5 + nfun + nglob + (tally exts))
+                      lsyms fsyms gsyms esyms)))
+       nsym (5 + nloc + nfun + nglob + (tally exts))
 
        ; -- the relocations. x64 text: an la into .data -> PC32 via the .data
        ; section symbol (idx 2, addend = data offset - 4); a call to an external
@@ -535,7 +542,7 @@
               (sh (shname 1) 1 3 d-off d-sz 0 0 8 0)                       ; 2 .data  PROGBITS ALLOC|WRITE
               (sh (shname 2) 1 3 n-off n-sz 0 0 8 0)                       ; 3 ai_nifs PROGBITS ALLOC|WRITE (__start_/__stop_ bracket it)
               (sh (shname 3) 1 3 i-off i-sz 0 0 16 0)                      ; 4 .image PROGBITS ALLOC|WRITE (the bake slot, laid LAST)
-              (sh (shname 4) 2 0 sym-off sym-sz 6 5 8 24)                  ; 5 .symtab link=.strtab info=first-global(5)
+              (sh (shname 4) 2 0 sym-off sym-sz 6 (5 + nloc) 8 24)         ; 5 .symtab link=.strtab info=first-global
               (sh (shname 5) 3 0 str-off str-sz 0 0 1 0)                   ; 6 .strtab
               (sh (shname 6) 4 0 rt-off rt-sz 5 1 8 24)                    ; 7 .rela.text link=.symtab info=.text
               (sh (shname 7) 4 0 rd-off rd-sz 5 2 8 24)                    ; 8 .rela.data link=.symtab info=.data

@@ -24,7 +24,10 @@ ai_noinline intptr_t ai_nclock(void) {
        : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 
-static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
+// for (;;): the standard noreturn-defensive shape -- moon's stdnoreturn.h defines
+// `noreturn` empty, so mooncc can't cut the fall-through tail itself; the loop
+// leaves no ret for vmret to flag (gcc emits identical code either way).
+static noreturn lvm(lvm_exit) { for (;;) exit(getcharm(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // Returns only when poll succeeds (data ready / deadline elapsed) or fails
 // for a non-EINTR reason.
@@ -447,6 +450,17 @@ static struct ai *env_budget(struct ai *g) {
   if (g && b && atol(b) > 0) g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word));
   return g; }
 
+// --bake [PATH] / --wake PATH: the heap-image snapshot (doc/snapshot.md) -- declared
+// ABOVE the bootstrap split, because love0 links host/image.c too now: it bakes
+// image FILES (the `bake` nif) and wakes them (--wake), which is how the self-host
+// build gets a warm mooncc under love0. The .image-section self-patch stays the
+// full binary's lane.
+extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
+extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
+extern struct ai *image_load(char const*);
+extern uint64_t ai_baked_image[];
+extern uintptr_t ai_baked_image_len;
+
 #ifdef GL_BOOTSTRAP
 // love0: the CLI driver is the sed-wrapped raw text (it can't lcat its own arg
 // ap). Self-test: the whole test corpus, baked in (sed-wrapped), run
@@ -485,6 +499,9 @@ static char const src0_coin[] =
 static char const src0_q[] =
 #include "q0.h"
  ;
+static char const src0_post[] =
+#include "post0.h"
+ ;
 // holo with BOTH cross backends (x64 + arm64), one entry -- the corpus's cross-arch
 // asserts run under both of love0's compilers.
 static char const src0_holo[] =
@@ -499,18 +516,21 @@ static char const src0_holo[] =
 // again through it.
 static struct ai *boot(struct ai *g, bool argp) {
   g = ai_lib_(g, "bao", src0_bao);                     // the source library: both lanes load bao by name;
+  g = ai_lib_(g, "rng", src0_rng);                     //   BOTH lanes get the whole registry -- a build tool's (use 'x)
+  g = ai_lib_(g, "kanren", src0_kanren);               //   (the mooncc cat's (use 'holo)) resolves the same as the
+  g = ai_lib_(g, "uu", src0_uu);                       //   self-test's; an unused entry costs a registration, nothing more
+  g = ai_lib_(g, "coin", src0_coin);
+  g = ai_lib_(g, "q", src0_q);
+  g = ai_lib_(g, "post", src0_post);                   //   post rides love0 now: its splice serves revcat/parse/bake bare,
+  g = ai_lib_(g, "holo", src0_holo);                   //   which the mooncc cat's cpp/gen read (the self-host build lane)
   if (argp) {                                          // a build tool (lcat etc.): bake prel + bao FIRST so the CLI's
     g = ai_evals_(g,                                   // own loader/printer (eval1/bye reach for map/jot/tap/puts/putc)
 #include "prel0.h"                                     // have the prel surface before they load the first file -- else
     "(use 'bao)"                                       // loading prel.l ITSELF misses every prel fn its loader uses.
+    "(use 'kanren)"                                    // kanren before post, as the host boots: post's overlay half
+    "(use 'post)"                                      //   reads unify/ufail bare; post serves revcat/parse/bake
     );
     return ai_evals_(g, cli); }
-  g = ai_lib_(g, "rng", src0_rng);                     //   the self-test also wants the library layers the corpus asserts on
-  g = ai_lib_(g, "kanren", src0_kanren);
-  g = ai_lib_(g, "uu", src0_uu);
-  g = ai_lib_(g, "coin", src0_coin);
-  g = ai_lib_(g, "q", src0_q);
-  g = ai_lib_(g, "holo", src0_holo);
   g = ai_strof(g, tests0);                            // the baked corpus, as a string
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
@@ -564,19 +584,14 @@ static char const cli[] =
 #include "cli.h"
  ;
 
-// --bake [PATH] / --wake PATH: the heap-image snapshot (doc/snapshot.md). `--bake` boots fully,
-// then lays the post-warm image back into the binary's OWN .image section (host/image.c's
-// copy + patch + atomic-rename -- no objcopy, ETXTBSY-proof) and exits; `--bake PATH` writes a
-// plain image file instead (the debug/inspection lane). `--wake PATH` boots from an image file
-// (any mismatch falls back to a normal egg boot). Opt-in flags; a normal run is the same code path.
-extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
-extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
-extern struct ai *image_load(char const*);
+// `--bake` boots fully, then lays the post-warm image back into the binary's OWN
+// .image section (host/image.c's copy + patch + atomic-rename -- no objcopy,
+// ETXTBSY-proof) and exits; `--bake PATH` writes a plain image file instead (the
+// debug/inspection lane). `--wake PATH` boots from an image file (any mismatch
+// falls back to a normal egg boot). Opt-in flags; a normal run is the same code path.
 // The baked post-boot image: a reserve in its own .image section (host/image.c), filled by
 // `love --bake` (the binary boots, snapshots itself, and lays the result back into its own body).
 // Loaded at startup when its magic validates; else a normal egg boot.
-extern uint64_t ai_baked_image[];
-extern uintptr_t ai_baked_image_len;
 // the post-warm dispatch (shared by boot() and the --wake path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // THE SESSION LAYER. Boot is over; from here the base (orth -- prel/ev, the nifs,
@@ -716,23 +731,29 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 
 int main(int argc, char const **argv) {
   struct ai *g = NULL;
-#ifndef GL_BOOTSTRAP
   // --bake [PATH] / --wake PATH must lead the args; strip them (keep argv[0]).
+  // Both lanes now: love0 links host/image.c too, so it wakes an image FILE
+  // (its own mooncc0.image bake -- the self-host build's ~ms compiler starts);
+  // --bake (the self-patch) stays host-only (love0 lays no .image section rule,
+  // and its file bakes ride the `bake` nif from -e).
   char const *image_load_path = NULL, *bake = NULL; // see boot(): "" = self-bake, a path = image file
+#ifndef GL_BOOTSTRAP
   if (argc >= 2 && !strcmp(argv[1], "--bake")) {
    if (argc >= 3) bake = argv[2], argv[2] = argv[0], argv += 2, argc -= 2;
    else bake = "", argv[1] = argv[0], argv += 1, argc -= 1; }
-  else if (argc >= 3 && !strcmp(argv[1], "--wake"))
+  else
+#endif
+  if (argc >= 3 && !strcmp(argv[1], "--wake"))
    image_load_path = argv[2], argv[2] = argv[0], argv += 2, argc -= 2;
   if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
   // AUTO-LOAD: with no image flag, wake the image baked into the binary's own .image section, so a
   // plain `love` is glazed-by-default at ~4 ms cold start instead of the ~230 ms egg eval. Opt out with
   // LOVE_NO_IMAGE (the bench does, to control glazed-vs-interp itself). Any problem -- unbaked, stale,
   // truncated -- makes the load return NULL, so we fall through to the normal egg boot. Never wrong.
+  // (love0's reserve is 2 words and never baked, so its auto-load always falls through.)
   if (!g && !bake && !getenv("LOVE_NO_IMAGE")) {
    if (ai_baked_image_len && (g = ai_image_load(ai_baked_image, ai_baked_image_len)))
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
-#endif
   if (!g) g = ai_ini();
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc > 1;
@@ -750,7 +771,8 @@ int main(int argc, char const **argv) {
     struct ai_def d[] = {{"argv", full_argv}, {"cmdline", full_argv}};
     g = ai_defn(g, d, countof(d));      // re-pins the host nifs (live addresses) into the loaded book too
 #ifdef GL_BOOTSTRAP
-    g = boot(g, argp);
+    if (!image_load_path) g = boot(g, argp);
+    else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
 #else
     if (!image_load_path) g = boot(g, argp, bake);
     else {              // --wake: skip the egg warm, dispatch straight to the program

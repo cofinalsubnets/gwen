@@ -14,7 +14,7 @@
 # for sort), the exit triple, argv[0] dispatch through a `diff` symlink, usage at 2,
 # and (x86_64) `kore as` assembling an exit(7) ELF that RUNS. Gate = the law sentinel
 # AND exit 0 AND the smokes.
-korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/kore/kore.l
+korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/kore/kore.l
 # mooncc: the C compiler is its OWN app, NOT baked into the kore cat -- a cc edit rebuilds
 # only mooncc (never kore), so an kore rebuild in another session can't tear the compiler.
 # Its own cat: the u-floor (text+core), then asbook splices the boot-registered holo
@@ -72,6 +72,14 @@ out/host$(hsuf)/seed: $(seedfiles)
 $(ho)/mooncc.image: $(ho)/.mooncc-cat.l $m
 	@echo AI	$(abspath $@)
 	@$m -l $(ho)/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+# mooncc0.image: the SAME cat baked by LOVE0 (anchor-checked to love0) -- the
+# build-time compiler that breaks the self-host circle: the default out/host/love
+# is mooncc-built now (host/build.mk's moon lane), so its own image cannot drive
+# its build; love0 waking this one can, at the same ~ms cold start. PINNED to
+# out/host like love0 itself.
+out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
+	@echo AI	$(abspath $@)
+	@$(love0) -l out/host/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 # the kore image: the multi-call toolbox baked WARM, the mooncc.image precedent. the
 # cat loads under a NEUTRAL name so kore.l's SEAT me? is false and stays quiet, then
 # the bake snapshots. test_kore wakes it per tool (`--wake kore.image -e '(kore-main

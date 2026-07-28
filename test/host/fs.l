@@ -1,7 +1,8 @@
 ; --- test/host/fs.l: smoke test for the fs nifs (host/posix.c) ---
-; rename/symlink/readlink/chmod/chown/utime/umask link into `love` but NOT love0
-; (which bakes the corpus), so this runs standalone against the built binary,
-; like test/host/init.l -- not in test/*.l. Run (assert comes from test/00-init.l):
+; rename/symlink/readlink/chmod/chown/utime/umask link into `love` AND love0 now
+; (love0 carries the whole host/*.c glob since the self-host promotion); this
+; still runs standalone against the built binary, like test/host/init.l --
+; not in test/*.l. Run (assert comes from test/00-init.l):
 ;   cat test/00-init.l test/host/fs.l | out/host/love
 ; the conventions under test are init.c's posix_ lane: an effect op answers ()
 ; ok | a POSITIVE errno | EINVAL misuse; a value op answers the value | ().

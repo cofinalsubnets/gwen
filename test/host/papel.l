@@ -97,6 +97,12 @@ Only a paragraph, so the title has to come from the meta block.
    n2 (build conf)
    ; rewrite one source byte-for-byte, to advance its mtime. ⚠ READ IT FIRST: `open "w"`
    ; truncates, so reading inside the `say` would write the empty file back.
+   ; ⚠ AND LET THE COARSE CLOCK TICK FIRST (rest 5): the kernel stamps files off a
+   ; ~ms-granular clock, so a rewrite microseconds after the build lands in the SAME
+   ; tick as the outputs and a strict-older mtime compare (cook's, exactly make's)
+   ; reads it fresh. the fork-free stat nif made cook fast enough to hit this; the
+   ; old shell-out date was ~ms per file, an accidental cushion.
+   _ (rest 5)
    _ (: s (get-file "src/one.md") q (open (dir + "/src/one.md") "w") _ (say q s) (close q))
    n3 (build conf)
    _ (assert (n1 = 5) (n2 = 0) (n3 = 2))
@@ -109,6 +115,7 @@ Only a paragraph, so the title has to come from the meta block.
    box (tablet 0)
    r1 (refresh conf box)                                 ; first look -- nothing remembered yet
    r2 (refresh conf box)
+   _ (rest 5)                                       ; same coarse-clock care as one.md above
    _ (: s (get-file "src/two.md") q (open (dir + "/src/two.md") "w") _ (say q s) (close q))
    r3 (refresh conf box)
    r4 (refresh conf box)

@@ -153,12 +153,14 @@ $(ho)/liblove.so: $(ho)/liblove.a
 # depend on those; instead it #includes the sed-wrapped $(gl0_h) (cli0 + the baked
 # prel/ev/egg/repl + the test corpus), all produced without an interpreter --
 # hence -Iout/lib. Per-object into $(ho)/0/ so ccache caches each TU.
+# love0 links the WHOLE host/*.c glob now (main.c among it): the posix nifs and
+# host/image.c's bake/--wake are what let love0 bake and wake mooncc0.image and
+# drive the mooncc-built default `love` (the self-host rung) with CC only here.
 gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -I. -Iout/lib
-love0_o = out/host/0/main.o $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
-out/host/0/main.o: host/main.c $(love_h) $(gl0_h)
-	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(gl0_cc) -c $< -o $@
+love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
+love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
+out/host/0/host/main.o: $(gl0_h)
+out/host/0/host/cb.o: crew/quay/quay.c crew/quay/quay.h
 out/host/0/%.o: $(R)/%.c $(love_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
@@ -190,10 +192,61 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/quay.h
 # one link rule, two names: `love` (canonical) and `love.cand` (the CANDIDATE -- the next
 # generation built at a side path nothing executes, so the RELINK can never hit
 # ETXTBSY no matter who is running `love`; see the candidate target below).
+#
+# ==== the DEFAULT love is MOONCC-BUILT now (self-host rung 2) ====
+# test/gate/raw.sh's lane, promoted: every TU compiles under love0 waking
+# mooncc0.image (mooncc + all holo backends, anchor-checked to love0), our own
+# nolibc + am math + mksys sys.o replace glibc, and holo links it -pie (an
+# ET_DYN loads high, clearing the image codec's index range -- what lets the
+# binary self-bake, test_raw_bake's lesson). CC's remaining jobs here: love0
+# and the liblove.a/.so lane (a shared object wants PIC codegen + the dynamic
+# section, which holo does not lay). STATIC=1 keeps the musl-cc link below --
+# the raw default is already fully static, so the flavor is legacy/opt-in.
+moon0 = $(love0) --wake out/host/mooncc0.image -e '(moon-main (cuup (cup cmdline)))'
+moon_d = $(ho)/moon
+moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
+moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
+moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_d)/nolibc.o $(moon_math_o) $(moon_d)/sys.o
+$(moon_d)/love.o: love.c $(love_h) out/host/mooncc0.image
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+$(moon_d)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+$(moon_d)/host_main.o: out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
+$(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/quay.h
+$(moon_d)/nolibc.o: crew/moon/lib/nolibc.c out/host/mooncc0.image
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -Icrew/moon/include -c $< $@
+$(moon_d)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
+# sys.o is LAID, not compiled: the syscall trampoline + our sigsetjmp/longjmp
+# have no C spelling (crew/moon/lib/mksys.l). love0 runs the lay -- the holo
+# module is registered in its boot, so asbook's (use 'holo) resolves.
+mksys_l = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+$(ho)/.mksys-cat.l: $(mksys_l)
+	@echo AI	$@
+	@cat $(mksys_l) > $@
+$(moon_d)/sys.o: $(ho)/.mksys-cat.l $(love0)
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@$(love0) -l $(ho)/.mksys-cat.l -e '(mksys "$@")' && test -s $@
+ifneq ($(STATIC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags) $(image_ldflags)
+else
+$(ho)/love $(ho)/love.cand: $(moon_o)
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@$(moon0) -pie $(moon_o) -o $@
+endif
 
 # compat: `ai` was the name from 2026-06-15 until the reversion to `love`. The old
 # name stays as a symlink so the doc/proto long tail -- and any external script that

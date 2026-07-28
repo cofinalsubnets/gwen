@@ -19,7 +19,7 @@ files, busybox's multi-call trick natively.
 
 ONE catted script (`out/host/kore`, `bin/kore` installs): the Makefile cats
 
-    text.l core.l fs.l re.l sed.l proc.l diff.l ain.l cook.l asbook.l elf.l kore.l   (korefiles)
+    text.l core.l fs.l re.l sed.l proc.l diff.l ain.l cook.l asbook.l elf.l obj.l link.l kore.l   (korefiles)
 
 behind a `#!/usr/bin/env -S love` shebang. kore.l loads LAST and dispatches off the
 program seat of `cmdline` -- `kore TOOL ARGS..`, or symlink a tool's name to kore
@@ -35,11 +35,11 @@ the file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat -- kore is its door.
 
-## the inventory (38 tools, 40 names)
+## the inventory (40 tools, 42 names)
 
 | where | tools |
 | --- | --- |
-| kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book) |
+| kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link) |
 | tools/ain.l | nc / ain |
 | crew/cook/cook.l | make / cook |
 | core.l, the line tools | cat echo head tail wc sort uniq tee |

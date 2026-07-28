@@ -194,7 +194,7 @@ on the front page):
 - 🍄 **moon** -- the C compiler: mooncc, preprocessor to optimizing backend, holo its
   assembler and linker -- love rebuilds itself gcc/glibc/ld-free. [crew/moon/](crew/moon/)
 - 🦨 **kore** -- the coreutils: one multi-call binary, busybox's trick -- diff, grep,
-  sed, the fs/line/process tools, nc, make, as, vi. [crew/kore/](crew/kore/)
+  sed, the fs/line/process tools, nc, make, as, ar, ld, vi. [crew/kore/](crew/kore/)
 - 🦇 **thom** -- the SAT bat: a CDCL solver. [crew/sat/](crew/sat/)
 - 🦐 **lux** -- the window manager: an xmonad clone. [crew/lux/](crew/lux/)
 - 🦑 **quay** -- the terminal emulator: a cuttlefish with 256-color skin that likes
@@ -225,11 +225,12 @@ on the front page):
   records the hatch time. the same image runs on linux, bare metal
   (x86_64/aarch64 via limine), and wasm.
 - moon is a C compiler, also written in love: a preprocessor, parser, and an
-  optimizing amd64/arm64 backend through the holo assembler. it compiles love's own
-  C runtime -- `love.c` and every `host/*.c` -- and, linked by holo with no
-  gcc/glibc/ld in the loop, the rebuilt `love` passes the whole corpus (`make
-  test_raw`). it builds real third-party C too (gnu tar, m4) and is closing on
-  clang -O2 on the code it emits. [crew/moon/](crew/moon/)
+  optimizing amd64/arm64 backend through the holo assembler. it IS the default
+  build now: the host cc compiles only the bootstrap `love0`, which runs mooncc
+  over `love.c` and every `host/*.c` and lets holo link the result -- no
+  gcc/glibc/ld in the inner loop, and `make test_fixpoint` has the binary
+  rebuild ITSELF byte-identically. it builds real third-party C too (gnu tar,
+  m4) and is closing on clang -O2 on the code it emits. [crew/moon/](crew/moon/)
 - status rides the two pointer tag bits: scare (something is wrong) and more
   (the reader wants more); eof = more|scare. a global `help` function receives
   every raise as `(help s a b)`.

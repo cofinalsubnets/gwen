@@ -1,0 +1,63 @@
+#!/bin/sh
+# test/gate/fixpoint.sh -- the SELF-REGENERATION fixpoint (self-host rung 2).
+# The default out/host/love is mooncc-built already (love0 waking mooncc0.image
+# compiles every TU, holo links -pie). This gate closes the loop: relink that
+# generation as love1, let love1 bake its OWN mooncc image and rebuild every TU
+# with itself, link love2 the same way, and assert love1 == love2 TO THE BYTE.
+# One diff = the fixpoint + the determinism differential + the trusting-trust
+# half in a single compare (the DDC leg proper adds a foreign-compiled love0;
+# the 2026-07-27 audit ran that lane green).
+#
+# make owns the dependency graph (the moon_o objects + mooncc0.image exist);
+# this owns the procedure. NOT set -e: the compile loop reports its own file.
+#
+# usage: fixpoint.sh OUTDIR LOVE0
+set -u
+
+ho=$1
+love0=$2
+d=$ho/fix
+cat=$ho/.mooncc-cat.l
+
+if [ "$(uname -m)" != x86_64 ]; then
+  echo "test_fixpoint: x86-64 only, skipped on $(uname -m)"
+  exit 0
+fi
+
+fail() { echo "FAIL test_fixpoint: $*" >&2; exit 1; }
+
+mkdir -p "$d"
+rm -f "$d"/*.o "$d"/love1 "$d"/love2 "$d"/mooncc1.image
+
+# love1: relink the generation make already compiled (love0's lane, byte-cheap)
+moon0() { "$love0" --wake "$ho/mooncc0.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moon0 -pie "$ho"/moon/love.o "$ho"/moon/host_*.o "$ho"/moon/nolibc.o "$ho"/moon/m_*.o "$ho"/moon/sys.o \
+      -o "$d/love1" || fail "love1 relink"
+
+echo "FIX  $d/love1 rebuilds itself"
+
+# love1 bakes its own compiler image (anchor-checked to love1)...
+LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
+  || fail "love1 bakes mooncc1.image"
+
+# ...and rebuilds every TU with it, in the exact order make links them
+moon1() { "$d/love1" --wake "$d/mooncc1.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moon1 -D ai_tco=1 -I"$ho" -I. -Iout/lib -c love.c "$d/love.o" || fail "love1 mooncc -c love.c"
+for f in host/*.c; do
+  b=$(basename "$f" .c)
+  moon1 -D ai_tco=1 -I"$ho" -I. -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
+done
+moon1 -Icrew/moon/include -c crew/moon/lib/nolibc.c "$d/nolibc.o" || fail "love1 mooncc -c nolibc.c"
+for f in crew/moon/lib/math/*.c; do
+  b=$(basename "$f" .c)
+  moon1 -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
+done
+LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "(mksys \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
+test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
+
+moon1 -pie "$d"/love.o "$d"/host_*.o "$d"/nolibc.o "$d"/m_*.o "$d"/sys.o -o "$d/love2" \
+  || fail "love2 link"
+
+cmp "$d/love1" "$d/love2" || fail "love2 differs from love1 -- the fixpoint broke"
+
+echo "test_fixpoint: love0+mooncc -> love1; love1+mooncc -> love2; byte-identical -- the compiler rebuilds itself exactly"
