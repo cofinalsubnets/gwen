@@ -65,6 +65,15 @@ out/host$(hsuf)/seed: $(seedfiles)
 	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(seedfiles); } > $@
 	@chmod 755 $@
+# lush 🐚: the love shell (crew/lush/) -- job control, pipes, redirects over the
+# host/posix.c nifs; also the distro's console shell (mk/distro.mk cats these
+# same parts to /lib/sh.l). its own catted shebang script, the seed precedent;
+# the SEAT in main.l fires on its own basename.
+lushfiles = crew/lush/job.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
+out/host$(hsuf)/lush: $(lushfiles)
+	@echo AI	$(abspath $@)
+	@{ echo '#!/usr/bin/env -S love'; cat $(lushfiles); } > $@
+	@chmod 755 $@
 # the mooncc image: the compiler baked WARM (the live bake, doc/snapshot.md). The
 # cat loads under a NEUTRAL name so moon.l's tail SEAT stays quiet, then the bake
 # nif snapshots the session. LOVE_NO_IMAGE rides the recipe (exported above), so

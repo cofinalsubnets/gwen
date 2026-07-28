@@ -4,7 +4,8 @@
 # is already solved differently -- rung 4 is a gcc-free, glibc-free static `love`
 # (out/host/love-raw, `make test_raw`). So a bootable system is just PACKAGING what is
 # already green: love as pid 1 (init/boot.l), kore as the busybox-style userland
-# (crew/kore, the $(korefiles) cat), and init/sh.l as the console shell.
+# (crew/kore, the $(korefiles) cat), and lush (crew/lush, the $(lushfiles) cat)
+# as the console shell.
 #
 #   make distro-initramfs   -> out/distro/initramfs.cpio.gz
 #   make distro-run         -> boot it under qemu on a gcc-built stock kernel
@@ -28,7 +29,7 @@ BZIMAGE ?= /boot/vmlinuz-linux
 
 .PHONY: distro-initramfs distro-run distro-smoke
 distro-initramfs: $(distro_img)
-$(distro_img): init/boot.l init/sh.l $(korefiles) $(distro_love)
+$(distro_img): init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@test -n "$(distro_love)" || { echo "distro: need a STATIC love -- run 'make test_raw' (love-raw) or 'make STATIC=1'"; exit 1; }
 	@echo DISTRO	$(abspath $@)  '(base: $(distro_love))'
 	@rm -rf $(distro_root)
@@ -36,7 +37,7 @@ $(distro_img): init/boot.l init/sh.l $(korefiles) $(distro_love)
 	@cp init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@ln -sf love $(distro_root)/bin/ai
-	@cp init/sh.l $(distro_root)/lib/sh.l
+	@cat $(lushfiles) > $(distro_root)/lib/sh.l
 	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
 	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
 	@( cd $(distro_root) && find . | cpio --quiet -o -H newc ) | gzip -9 > $@

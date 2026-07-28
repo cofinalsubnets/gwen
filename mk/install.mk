@@ -23,7 +23,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # this love resolves here. installed DEREFERENCED (install(1) follows the repo
 # lib/ symlinks), so the nest stands alone; lib/seed.l is the assembly and its
 # seed/ parts ride the slashed-include rung the same way.
-libmods = cook kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core
+libmods = cook kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/eval lush/line lush/main
 installs = \
   $d/bin/love \
   $d/bin/ai \
@@ -36,6 +36,7 @@ installs = \
   $d/bin/ain \
   $d/bin/lux \
   $d/bin/bao \
+  $d/bin/lush \
   $d/share/man/man1/love.1 \
   $d/share/man/man1/cook.1 \
   $d/lib/love/prel.l \
@@ -55,7 +56,7 @@ installs = \
 # manpath. a real PREFIX (a distro) skips these.
 ifeq ($(PREFIX),.love/)
 compat = $(DESTDIR)/.local
-binnames = love ai kore mooncc moonfmt cook papel kiosko ain lux bao
+binnames = love ai kore mooncc moonfmt cook papel kiosko ain lux bao lush
 installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
   $(compat)/share/man/man1/love.1 $(compat)/share/man/man1/cook.1
 $(compat)/bin/%: $d/bin/%
@@ -170,6 +171,15 @@ $d/bin/kore: $(korefiles)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(korefiles); } > $@
+	@chmod 755 $@
+
+# lush 🐚: the love shell (crew/lush/), one catted shebang script, the kore/seed
+# mechanism; the SEAT in main.l fires on its own basename (`lush`, or `sh`
+# through a symlink).
+$d/bin/lush: $(lushfiles)
+	@echo AI	$(abspath $@)
+	@install -d $(dir $@)
+	@{ echo '#!/usr/bin/env -S love'; cat $(lushfiles); } > $@
 	@chmod 755 $@
 
 # mooncc: the C compiler, ITS OWN app (doc/moon.md). The installed bin is a WAKE SHIM:

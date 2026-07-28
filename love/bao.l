@@ -525,7 +525,7 @@
         (loop () ()))
 
    ; --- the shell line reader: edraw + command history -------------------------
-   ; edraw is historyless; a command shell (init/sh.l) wants up/down recall. edln
+   ; edraw is historyless; a command shell (lush, crew/lush/) wants up/down recall. edln
    ; keeps a flat history -- past lines as charlists, most-recent first -- and an
    ; index i into it: i = 0 is the live draft (saved in `draft` the instant up
    ; leaves it), i = k recalls the (k-1)th entry. up steps older, down newer;
