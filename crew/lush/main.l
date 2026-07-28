@@ -46,11 +46,22 @@
               (sh-file a (cup args)))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty
-   ; (the cooked fallback). ^D / `exit` ends the shell.
+   ; (the cooked fallback). interactively: install lush-help as the floor IF no
+   ; help is present (the bao door -- peek the book, define through ev so a
+   ; later (: help 0) uninstall is seen), source ~/.lushrc cooked, seed the
+   ; recall from ~/.lush_history. ^D / `exit` ends the shell.
    (sh _) (: _ (signal sig-int 1) _ (signal sig-quit 1) _ (signal sig-tstp 1)
              _ (signal sig-ttou 1) _ (signal sig-ttin 1)
              ok (raw 1)
-             (? (nil? ok) (: _ (pin sh-tty () 1) (sh-loop "" ())) (sh-cooked ""))))
+             (? (nil? ok)
+                (: _ (? !(member? 'help (names ())) (ev `(': 'help lush-help)))
+                   _ (pin sh-tty () 1)
+                   rc (+ (+ "" (getenv "HOME")) "/.lushrc")
+                   _ (? (two? (stat rc))
+                        (: p (open rc "r") _ (raw 0) _ (sh-lines p "") _ (close p) (raw 1))
+                        0)
+                   (sh-loop "" (sh-histload 0)))
+                (sh-cooked ""))))
 
 ; --- the SEAT (kiosko's): fire only when this file IS the program -- the catted
 ; bin (`lush ..`), an sh-named symlink to it, or a -l load of the assembly.

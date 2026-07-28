@@ -498,6 +498,7 @@
    (bev ip) (: c (see ip) e (peep evk c 0)
      (? !(id? e 0) e
         (c = 27) (besc ip)
+        (c = 9) -13                                   ; Tab -> the completion event (edlnc's; others ignore)
         (32 <= c && c < 127 && c)))
 
    ; (edraw ip pr) -- read ONE line off port `ip`, with in-line editing, prompt pr
@@ -537,7 +538,15 @@
    ; (edln ip pr hist) -> 'eof at ^D / port EOF, else (line . nhist): the raw line
    ; (a charlist) and hist with the line pushed on front (blank lines dropped,
    ; capped at 100). thread nhist back in for recall across commands.
-   (edln ip pr hist)
+   ;
+   ; (edlnc ip pr hist comp) is edln + Tab completion: comp takes the text LEFT
+   ; of the cursor (a charlist, in order) and answers (insert . candidates) --
+   ; insert lands at the cursor (a charlist), candidates (strings) print under
+   ; the line when there is more than one way forward, then the renderer
+   ; re-prompts fresh (pra 0: the prompt row is wherever we are). comp ()
+   ; disables the key -- edln IS edlnc with no comp, so every old consumer
+   ; rides unchanged.
+   (edlnc ip pr hist comp)
      (: _ (puts pr) pl (tally pr) hn (tally hist)
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
         (loop l r i draft)
@@ -555,6 +564,18 @@
                             (ln >< nh))
                 (0 < c)  (loop (c >< l) r i draft)
                 (c = -12) (: _ (puts "^C") _ (putc 10) (() >< hist))   ; ^C: abandon the line, hist untouched
+                (c = -13)
+                  (? !comp (loop l r i draft)
+                     (: t (comp (revcat l ()))
+                        (? !(two? t) (loop l r i draft)
+                           (: l2 (foldl (\ a ch (ch >< a)) l <t)
+                              cs >t
+                              _ (? (two? cs && two? >cs)
+                                   (: _ (putc 10)
+                                      _ (puts (foldl (\ a s (? (tally a) (a + "  " + s) s)) "" cs))
+                                      (putc 10))
+                                   0)
+                              (loop l2 r i draft)))))
                 (c = -1) (edleft  km () l r ())
                 (c = -2) (edright km () l r ())
                 (c = -3) (edbsp   km () l r ())
@@ -565,6 +586,7 @@
                 (c = -9) (recall (? (0 < i) (i - 1) i))    ; down: newer
                 (loop l r i draft)))
         (loop () () 0 ()))
+   (edln ip pr hist) (edlnc ip pr hist ())
 
    ; (bao a) -- the interactive entry the host frontend launches. `(bao 0)` is
    ; exactly the baked shell (an arg is taken: love has no nullary calls).
@@ -591,7 +613,7 @@
    ; the body: the public entry points, defglob'd below. everything above stays
    ; closure-private (off the book), which is what stops the ed* editor + repl
    ; internals from leaking into (names ()).
-   `(shell welp edraw wrap bao edln))
+   `(shell welp edraw wrap bao edln edlnc))
 
  ; defglob the public surface out of the export list (book is mopped post-egg, so
  ; a top-level body-less (: ..) is the only way to add a global; the privates above
@@ -603,7 +625,8 @@
  edraw <>>_
  wrap  <>>>_
  bao   <>>>>_
- edln  <>>>>>_)
+ edln  <>>>>>_
+ edlnc <>>>>>>_)
 
 ; bao.l is DEFINE-ONLY -- loading it (egg-bake or `-l love/bao.l`) installs the shell
 ; core but does NOT launch. The frontend launches: host/main.c evals `(bao 0)` on a

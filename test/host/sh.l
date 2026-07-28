@@ -78,6 +78,17 @@
         (! (sh-match "[!a-j]ob.l" "job.l"))
         (= '("crew/lush/job.l") (sh-glob "crew/lush/j[m-p]b.l" (sh-ones 19))))
 
+; completion (rung 2): (insert . candidates) -- one path candidate lands its
+; tail (+ " ", a directory its "/"), the common prefix otherwise; the helpers
+(: r (sh-complete (sh-expl "cat crew/lush/jo"))
+   (assert (two? r) (= "b.l " (slurp (tap (cap r)))) (= '("crew/lush/job.l") (cup r))))
+(: r (sh-complete (sh-expl "cat crew/lus"))
+   (assert (= "h/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
+(: r (sh-complete (sh-expl "cat crew/lu"))
+   (assert (= '("crew/lush" "crew/lux") (cup r))))       ; two ways forward, listed
+(assert (= "ab" (sh-common '("abc" "abd" "ab")))
+        (= "~" (sh-homely (+ "" (getenv "HOME")))))
+
 ; (signal sig 1) ignores: a self-INT that would kill us just fizzles; restore after
 (: me (getpid 0)
    _ (assert (id? (signal sig-int 1) ()))
