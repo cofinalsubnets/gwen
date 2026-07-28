@@ -13,12 +13,8 @@
 ; endpoint, and the walk discovers everything by reading what it already fetched
 ; -- /tips names the heads, each patch names its `deps` and its `hunks`. an
 ; EMPTY blob rides through too, which is the case that found kiosko's 404.
-(reads (open "crew/kore/text.l" "r"))
-(reads (open "crew/kore/diff.l" "r"))
-(reads (open "crew/seed/merge.l" "r"))      ; opens the `seed` layer
-(reads (open "crew/seed/http.l" "r"))
-(reads (open "crew/seed/seed.l" "r"))       ; ..which seals itself at its foot
-(reads (open "crew/kiosko/kiosko.l" "r"))
+(use 'seed)                                 ; the loader: lib/seed.l assembles the whole stack
+(use 'kiosko)
 
 (: SD (from 'seed)
    record (SD 'seed-record) sync (SD 'seed-sync) bank (SD 'seed-bank)

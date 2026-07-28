@@ -381,12 +381,19 @@
 ; registers, and the prior use splices what leave registered. a SLASHED name
 ; ('holo/x64 -- one symbol) is an INCLUDE: its source evals into the CURRENT
 ; head layer, no new layer, no registration -- the door for a module's own
-; subfiles, and for a backend joining a sealed holo. the prior use also keeps
-; the miss scare: no source anywhere ends in its 'no-module.
+; subfiles, and for a backend joining a sealed holo. a STRING is an explicit
+; PATH: that file loads as a module named by its basename sans .l -- the door
+; for a tool that resolves its own siblings (papel's seat-relative want). the
+; prior use also keeps the miss scare: no source anywhere ends in its
+; 'no-module, carrying the name or the path.
 (: use
    (: prior use
       (rdev q) ((: (go e q) (: r (sound q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
       (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
+      (mname s) (: n (tally s)
+                   b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)
+                   e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
+                   (intern (snip s b e)))
       fsopen (peep book 'open ())      ; the host's open nif, read off the base book at prel
                                        ; eval -- a peep, not a nom read, so a fs-less frontend
                                        ; gets () here (no missing raise) and the lane just misses
@@ -395,6 +402,12 @@
                         (nil? fsopen) ()
                         (fsopen (+ (+ "lib/" (string nm)) ".l") "r")))
       (\ m (? (tablet? m) (prior m)
+              (string? m)
+              (: nm (mname m)
+                 (? (tablet? (peep (mods ()) nm ())) (prior nm)
+                    (: q (? (nil? fsopen) () (fsopen m "r"))
+                       (? (nil? q) (prior m)
+                          (: _ (enter nm) _ (rdev q) _ (leave ()) (prior nm))))))
               (tablet? (peep (mods ()) m ())) (prior m)
               (: q (libsrc m)
                  (? (nil? q) (prior m)

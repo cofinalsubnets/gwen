@@ -27,8 +27,10 @@
 ; usage:  kiosko [-p PORT] [-q] [DIR]        (with the `kiosko` script on PATH)
 ;     or: love -l crew/kiosko/kiosko.l [-p PORT] [DIR]
 ; DIR defaults to the working directory, PORT to 8080. it serves until interrupted.
-
-(enter 'kiosko)
+;
+; NO BRACKETS HERE: the runtime supplies the layer. a module consumer says
+; (use 'kiosko) (lib/kiosko.l) or probes (from 'kiosko 'serve) -- papel's -s
+; does; a -l load rides the session layer and the seat reads bare.
 
 ; --- little utils -------------------------------------------------------------------
 (: (nth l k)    (? (k = 0) <l (nth >l (k - 1)))
@@ -308,7 +310,8 @@ usage: kiosko [-p PORT] [-q] [DIR]
                 (quit 0))
    (need h r) (? (two? r) 0 (: _ (say err ("kiosko: " + h + " needs an argument")) _ (put err 10) (quit 2)))
    (kiosko-main as)
-   (: _ (use 'kiosko)
+   (: _ (? (lit? (from 'kiosko)) (use 'kiosko) 0)   ; splice my REGISTERED self if I am one (cook-main's
+                                                    ; guard); on a -l load my names already walk
       box (tablet 0)
       _ (pin box 'port 8080)
       _ (pin box 'root ".")
@@ -329,10 +332,10 @@ usage: kiosko [-p PORT] [-q] [DIR]
 
    kiosko-main _)
 
-(leave ())
-
 ; the SEAT (cook's shape): fire kiosko-main iff this file -- or the installed `kiosko`
-; script -- sits in the program seat of the real command line. body-having, so nothing leaks.
+; script -- sits in the program seat of the real command line. kiosko-main reads BARE:
+; whichever layer holds this file's binds is still the head here. body-having, so
+; nothing leaks.
 (: (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
@@ -342,4 +345,4 @@ usage: kiosko [-p PORT] [-q] [DIR]
                (me? <a) (link 1 >a)
                ())
    s (seat >cmdline)
-   (? (two? s) ((from 'kiosko 'kiosko-main) >s) ()))
+   (? (two? s) (kiosko-main >s) ()))

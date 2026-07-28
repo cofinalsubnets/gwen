@@ -59,12 +59,12 @@
 ;   (.EX/.EE has no slot), a rule vanishes (man pages have none), and a link flattens to its
 ;   text with the url trailing in \(la..\(ra -- the man idiom for one.
 
-; the module scope opens here: every binding below lands in this layer, mutually visible by
-; bare name; the (leave ()) at the foot of this file closes it, which REGISTERS it as the module
-; `lapiz` -- a consumer either (use 'lapiz) and reads bare, or reaches one member through the accessor:
-; (from 'lapiz 'md->ht). the six faces are mdread/mdshow/htread/htshow/md->ht/ht->md; everything
-; else is machinery, reachable for a probe ((from 'lapiz 'keys)) but not meant for the eye.
-(enter 'lapiz)
+; NO BRACKETS HERE: the runtime supplies the layer. a consumer says (use 'lapiz)
+; (lib/lapiz.l) or hands the loader this file's path ((use "crew/lapiz/lapiz.l") --
+; papel's want does), and reads bare down the splice, or reaches one member through
+; the accessor: (from 'lapiz 'md->ht). the six faces are
+; mdread/mdshow/htread/htshow/md->ht/ht->md; everything else is machinery,
+; reachable for a probe ((from 'lapiz 'keys)) but not meant for the eye.
 
 ; the combinators come from the `parse` MODULE book (love/post.l) -- bind the shared set. lapiz
 ; does NOT rebind the global `parse` the way cook and sat/dimacs do (they take the STRICT runner
@@ -469,6 +469,4 @@
    (md->rf s) (rfshow (mdread s))
    (rf->md s) (mdshow (rfread s)))
 
-; the module scope closes here -- the layer is REGISTERED as `lapiz`. a later surface joins the
-; sealed module the runtime way: (enter ()) (use 'lapiz) <surface.l> (leave ()).
-(leave ())
+; a later surface joins the sealed module the runtime way: (use 'lapiz) <surface.l> (leave ()).

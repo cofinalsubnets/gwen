@@ -19,15 +19,15 @@
 ; adjacent edits with no stable line between them share a run and conflict --
 ; textbook diff3, the same call git makes.
 ;
-; seed is a REGISTERED MODULE and this file OPENS the layer -- (enter 'seed) here,
-; (leave ()) at the foot of seed.l, holo's split-across-files shape. everything in
-; both files binds in the `seed` layer, so the cat adds nothing to the book; a
-; consumer reaches in with (from 'seed ..). loads after crew/kore/{text,diff}.l,
-; which stay global (they are kore's, shared). it captures lines/unlines and myers
-; at its define -- the capture law. the round trip through lines is
-; exact on newline-terminated text; a final unterminated line gains its newline,
-; text.l's one normalization, and it only ever touches a path already diverged.
-(enter 'seed)
+; NO BRACKETS HERE: the runtime supplies the layer. a module consumer says
+; (use 'seed) -- lib/seed.l assembles the whole stack (kore text + diff, then
+; merge/http/seed) into one loader-wrapped layer; the standalone script is the
+; same files catted into the session layer, nothing sealed, the seat reading
+; bare. loads after crew/kore/{text,diff}.l either way. it captures
+; lines/unlines and myers at its define -- the capture law. the round trip
+; through lines is exact on newline-terminated text; a final unterminated line
+; gains its newline, text.l's one normalization, and it only ever touches a
+; path already diverged.
 
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)

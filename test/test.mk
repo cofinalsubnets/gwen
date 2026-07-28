@@ -150,7 +150,7 @@ test_lux: host
 test_seed: host out/host$(hsuf)/seed
 	@echo "SEED crew/seed/{seed,seedtest}.l"; \
 	  rm -rf out/host/.seedtest; \
-	  cat test/00-init.l $(seedfiles) crew/seed/seedtest.l | $m > out/host/.test_seed.out 2>&1; r=$$?; \
+	  cat test/00-init.l crew/seed/seedtest.l | $m > out/host/.test_seed.out 2>&1; r=$$?; \
 	  cat out/host/.test_seed.out; \
 	  { [ $$r -eq 0 ] && grep -q "seed: ok" out/host/.test_seed.out; } \
 	    || { echo "FAIL seed (exit $$r)"; exit 1; }

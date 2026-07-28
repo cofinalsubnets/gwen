@@ -185,9 +185,13 @@ void love_init(void) {
   static char const src_kanren[] =
 #include "kanren.h"
   ;
-  g = ai_lib_(g, "kanren", src_kanren);                // kanren is a MODULE now: registered here, loaded
-  K.g = ai_evals_(g, "("                               //   by name below (rune's matcher reads it -- subst
-#include "egg.h"                                       //   through the registry, unify/ufail?/var down the splice)
+  static char const src_rune[] =
+#include "rune.h"
+  ;
+  g = ai_lib_(g, "kanren", src_kanren);                // kanren and rune are MODULES: registered here, loaded
+  g = ai_lib_(g, "rune", src_rune);                    //   by name below (rune's matcher reads kanren -- subst
+  K.g = ai_evals_(g, "("                               //   through the registry, unify/ufail?/var down the splice)
+#include "egg.h"
     ai_egg_pre
 #include "prel.h"
     " "
@@ -197,8 +201,8 @@ void love_init(void) {
     " "                                                //   field, kanren its matcher's unifier -- both out of prel now, so
     "(use 'kanren)"                                    //   this frontend names what it needs
     " "
-#include "rune.h"
-    " "                                                //   (rune.l seals itself at its foot)
+    "(use 'rune)"
+    " "
 #include "cas.h"
     "0)");
   pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");

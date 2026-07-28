@@ -1,13 +1,12 @@
 ; crew/seed/seedtest.l -- the seed gate: a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
-; `make test_seed`: cat test/00-init.l $(seedfiles) THIS | out/host/love -- host
-; nifs (sha256, readdir, chdir), so it stays OFF the corpus like the other
-; hostnif tests. the make target clears the sandbox first; cwd is the repo
-; root, and everything here happens inside out/host/.seedtest.
-; seed is a sealed module, so the gate JOINS it the documented way: an anonymous
-; layer with seed spliced below (the backend-joins-holo shape). every internal
-; then reads bare, and the test's own helpers stay in the top layer.
-(enter ())
+; `make test_seed`: cat test/00-init.l THIS | out/host/love -- host nifs
+; (sha256, readdir, chdir), so it stays OFF the corpus like the other hostnif
+; tests. the make target clears the sandbox first; cwd is the repo root, and
+; everything here happens inside out/host/.seedtest.
+; the use below LOADS seed (lib/seed.l assembles the whole stack) and splices
+; it under the session layer: every internal reads bare, and the test's own
+; helpers stay above in the session.
 (use 'seed)
 
 (: _ (mkdir "out" 493) _ (mkdir "out/host" 493)

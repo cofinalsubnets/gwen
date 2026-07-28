@@ -265,11 +265,17 @@ int main(void) {
   struct ai *g = ai_ini();          // NO ai_defn: a port nif in the book would
                                     // ride into the image as a dead absolute
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
-#ifndef BAKER_RUNE
-  // bao is a MODULE now (no brackets of its own): registered here, loaded by
-  // name below, so the woken image serves ((from 'bao 'shell) 0) -- the teensy
-  // and nucleo launchers. the source string carries no absolutes, so the
-  // absguard stays satisfied.
+#ifdef BAKER_RUNE
+  // rune is a MODULE (no brackets of its own): registered here, loaded by name
+  // below. the source strings carry no absolutes, so the absguard stays satisfied.
+  static char const src_rune[] =
+#include "rune.h"
+  ;
+  g = ai_lib_(g, "rune", src_rune);
+#else
+  // bao is a MODULE (no brackets of its own): registered here, loaded by name
+  // below, so the woken image serves ((from 'bao 'shell) 0) -- the teensy and
+  // nucleo launchers.
   static char const src_bao[] =
 #include "bao.h"
   ;
@@ -287,8 +293,8 @@ int main(void) {
     // bao -- the device has no shell, the crank is the interface. cas's
     // crank/pushed/cur_set refs stay symbolic (unbound here); the device
     // defn's them post-wake and the book resolves them live.
-#include "rune.h"
-    " "                                                //   (rune.l seals itself at its foot)
+    "(use 'rune)"
+    " "
 #include "cas.h"
 #else
     "(use 'bao)"

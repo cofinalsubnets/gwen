@@ -19,8 +19,7 @@
 ;
 ; run:  cat test/00-init.l test/host/kiosko.l | out/host/love
 
-(reads (open "crew/kiosko/kiosko.l" "r"))     ; ..which seals itself at its foot
-(use 'kiosko)
+(use 'kiosko)                                 ; the loader: lib/kiosko.l, one layer, registered, spliced
 
 (assert
  (member? 'kiosko (from ()))

@@ -12,8 +12,7 @@
 ; touching any other. run:
 ;   cat test/00-init.l test/host/lapiz.l | out/host/love
 
-(reads (open "crew/lapiz/lapiz.l" "r"))     ; ..which seals itself at its foot
-(use 'lapiz)
+(use 'lapiz)                                ; the loader: lib/lapiz.l, one layer, registered, spliced
 
 ; --- the module seam: lapiz registered, the splice + accessor both reach -------
 (assert

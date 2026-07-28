@@ -12,8 +12,7 @@
 ;
 ;   cat test/00-init.l test/host/rune.l | out/host/love
 
-(reads (open "crew/rune/rune.l" "r"))     ; ..which seals itself at its foot
-(use 'rune)
+(use 'rune)                               ; the loader: lib/rune.l, one layer, registered, spliced
 
 ; --- the module seam: rune registered, the splice + accessor both reach ----
 (assert

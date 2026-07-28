@@ -3,5 +3,6 @@
 ; holo-bytes ..); this one form resolves them: the registered `holo` module splices
 ; just below the cat's top layer, so those reads fold at each file's own compile while
 ; the cat's own defglobs stay on top, shadow-proof. kore's cat order: .. asbook.l,
-; crew/holo/elf.l, crew/kore/kore.l; mooncc's: a FRESH holo build + seal, then this.
+; crew/holo/elf.l, crew/kore/kore.l; mooncc's: this, then the cross backends join
+; the spliced module (defbackend mutates its table), then elf/obj/link/moon.
 (use 'holo)

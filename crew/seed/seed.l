@@ -640,9 +640,7 @@
                       (: r (seed-record ((? (two? >args) <>args "undo ") + (sh id)))
                          (? r 1 (: _ (puts "seed: nothing to undo -- that patch is already lifted\n") 0))))))))))
 
-; --- the CLI face: usage + the verb dispatcher. these live in the LAYER
-;     (cook-main's shape), so the seat below reaches them the way any
-;     consumer does -- (from 'seed 'seed-main) ---
+; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
    (usage _) (: _ (say err "seed -- the patch-set vcs (doc/seed.md)
 usage: seed VERB ..
@@ -679,17 +677,14 @@ usage: seed VERB ..
              (usage ()))))
 )
 
-; seal the layer: every name above is now off the book, reachable only as the
-; module. the seat below is ordinary top-level love again.
-(leave ())
-
 ; the SEAT (cook.l's shape): fire seed-main iff this file -- or the installed
 ; `seed` binary -- sits in the program seat of the real command line (the
 ; positional program or a -l preload), taking the args AFTER the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load orders
 ; and the cat stays quiet under any other name -- which is why the gate can cat
-; this file and have nothing fire. it reaches seed-main the way any consumer
-; does, through (from 'seed 'seed-main). body-having: the seat leaks nothing.
+; this file and have nothing fire. seed-main reads BARE: whichever layer holds
+; this file's binds (the loader's, or the script's session) is still the head
+; when this form compiles. body-having: the seat leaks nothing.
 (: (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
@@ -701,4 +696,4 @@ usage: seed VERB ..
                (me? <a) (link 1 >a)
                ())
    s (seat >cmdline)
-   (? (two? s) ((from 'seed 'seed-main) >s) ()))
+   (? (two? s) (seed-main >s) ()))
