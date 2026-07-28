@@ -1,0 +1,261 @@
+; lib/json.l -- json, so love can speak to things that are not love. it is the wire
+; format the outside world settled on (language servers, http apis, sway's ipc), and
+; nothing about it is lovely; this file is the translation desk, nothing more.
+; `(use 'json)`, then json-read and json-show.
+;
+; the MAPPING, a BIJECTION in both directions:
+;   null    <-> ()
+;   true    <-> json-true       COINS, not 1 and 0 -- see the note below
+;   false   <-> json-false
+;   number  <-> charm / sun / big / gem     (the celestial ladder; exact where json is)
+;   string  <-> string
+;   array   <-> list, and json-empty for `[]`
+;   object  <-> tablet
+;
+; ⚠ THE EMPTY ARRAY IS NAMED, because it cannot be (): `[]` and `null` would be the SAME
+; VALUE (every nothing here is nil, and an empty list IS the zero point), and the writer
+; would have to pick one -- so a document round-tripped through `[]` came back `null`.
+; json-empty is its own coin, so both directions are exact. it still behaves the way an
+; empty array should: it nets 0 (so `(? v ..)` and `!` read it as empty), tally is 0, and
+; map/each over it do nothing -- a consumer iterating an array never special-cases it.
+; ⚠ NOT @(). a tray cannot carry a json array at all: a one-cell array DEMOTES to its lone
+; scalar, so @(5) IS 5 -- `[5]`, the commonest shape in an lsp message, could not survive
+; the trip, and would silently write as a number. trays are out of the contract entirely
+; and the writer scares on one rather than pretending.
+;   (json-arr xs) turns a possibly-empty list into an array, which is what you want after
+; a map or a filter: a bare () there would write `null`, not `[]`.
+;
+; ⚠ THE BOOLEANS ARE COINS. 1 and 0 cannot round-trip (the writer would emit numbers, and
+; lsp wants `true`). the symbol pair 'true/'false is WORSE than useless: 'false nets its
+; spelling, which is POSITIVE, so `(? v ..)` would take the true branch on false --
+; silent, plausible, and exactly the shape of bug this tree keeps paying for. a coin nets
+; its PAYLOAD, so json-false is blue and `(? v ..)` is simply right, while coin? keeps it
+; a boolean for the writer. that is what coins are for. json-empty rides its OWN die: two
+; coins with payload 0 on the SAME die would be `=`, and the empty array is not false.
+;
+; ⚠ READING CARRIES PRESENCE OUT OF BAND: json-read answers (1 value), or () when the
+; text is not json. test with two?, take the value with <>. it CANNOT be otherwise --
+; null, 0, "", [] and {} are all legitimate documents and every one of them is nothing,
+; so a bare value could never say whether it parsed. (the wrapper law, and the reason it
+; exists.)
+;
+; the reader is plain recursive descent over the string, an index threaded through. each
+; jXXX answers `(value next-index)` or () for "not that" -- pairs, so two? reads presence
+; and a parsed () is still a parse. -1 is the "no digit" sentinel for the same reason a
+; hex digit can legitimately be 0.
+(use 'coin)
+
+(: json-die   #(0 'json-bool)
+   json-true  (coin json-die 1)
+   json-false (coin json-die 0)
+   (json-bool? v) (&& (coin? v) (id? (die-of v) json-die))
+   (json-bool v)  (? v json-true json-false)
+
+   ; the empty array, on its OWN die -- payload 0 so it nets blue like the empty list it
+   ; stands for, but never `=` json-false.
+   json-arr-die   #(0 'json-arr)
+   json-empty     (coin json-arr-die 0)
+   (json-empty? v) (&& (coin? v) (id? (die-of v) json-arr-die))
+   (json-arr xs)   (? (two? xs) xs json-empty)
+
+   ; --- reading --------------------------------------------------------------------
+   (jws s i n)  (? (&& (i < n) (member? (s i) '(32 9 10 13))) (jws s (i + 1) n) i)
+
+   (jdigv c)    (? (&& (48 <= c) (c <= 57)) (c - 48) -1)
+   (jhexv c)    (? (&& (48 <= c) (c <= 57))  (c - 48)
+                   (&& (97 <= c) (c <= 102)) (c - 87)
+                   (&& (65 <= c) (c <= 70))  (c - 55)
+                   -1)
+
+   ; a run of decimals -> `(value end). end = start means there were none, which the
+   ; callers check: json wants at least one digit everywhere it wants a digit.
+   (jdigits s i n) ((: (go k acc)
+                       (? (&& (k < n) (-1 < (jdigv (s k))))
+                          (go (k + 1) ((acc * 10) + (jdigv (s k))))
+                          `(acc k)))
+                    i 0)
+
+   (jhex4 s i n)   ((: (go k acc d)
+                       (? (d = 0)      `(acc k)
+                          (! (k < n))  ()
+                          (: v (jhexv (s k))
+                             (? (v < 0) () (go (k + 1) ((acc * 16) + v) (d - 1))))))
+                    i 0 4)
+
+   ; a code point out as utf-8 bytes, laid down by the byte law (string + charm appends).
+   (jutf8 u) (? (u < 128)   ("" + u)
+                (u < 2048)  ("" + (192 + (u // 64)) + (128 + (u % 64)))
+                (u < 65536) ("" + (224 + (u // 4096)) + (128 + ((u // 64) % 64))
+                                + (128 + (u % 64)))
+                ("" + (240 + (u // 262144)) + (128 + ((u // 4096) % 64))
+                    + (128 + ((u // 64) % 64)) + (128 + (u % 64))))
+
+   ; \uXXXX, with the surrogate pair rejoined. a lone or unpaired surrogate is passed
+   ; through as itself rather than refused -- the text is still json, and refusing a whole
+   ; document over one bad code unit helps nobody.
+   (juni s i n) (: h (jhex4 s i n)
+                   (? (! (two? h)) ()
+                      (: u <h
+                         k <>h
+                         (? (! (&& (55296 <= u) (u <= 56319)))            `((jutf8 u) k)
+                            (! (&& ((k + 1) < n)
+                                   (&& ((s k) = 92) ((s (k + 1)) = 117)))) `((jutf8 u) k)
+                            (: l (jhex4 s (k + 2) n)
+                               (? (! (two? l)) `((jutf8 u) k)
+                                  (: v <l
+                                     (? (&& (56320 <= v) (v <= 57343))
+                                        `((jutf8 (65536 + (((u - 55296) * 1024)
+                                                           + (v - 56320)))) <>l)
+                                        `((jutf8 u) k)))))))))
+
+   ; the byte AFTER the backslash. -1 for "no such escape", never () -- 0 is a fine byte.
+   (jesc s i n) (? (! (i < n)) ()
+                   (: c (s i)
+                      (? (c = 117) (juni s (i + 1) n)
+                         (: b (? (c = 34)  34   (c = 92)  92   (c = 47)  47
+                                 (c = 98)  8    (c = 102) 12   (c = 110) 10
+                                 (c = 114) 13   (c = 116) 9
+                                 -1)
+                            (? (b < 0) () `(("" + b) (i + 1)))))))
+
+   (jstr s i n) ((: (go k acc)
+                     (? (! (k < n)) ()
+                        (: c (s k)
+                           (? (c = 34) `(acc (k + 1))
+                              (c = 92) (: e (jesc s (k + 1) n)
+                                          (? (two? e) (go <>e (acc + <e)) ()))
+                              (c < 32) ()            ; a raw control byte is not json
+                              (go (k + 1) (acc + c))))))
+                 (i + 1) "")
+
+   ; an exponent: optional sign, then at least one digit.
+   (jexp s i n) (: g  (? (&& (i < n) ((s i) = 45)) -1 1)
+                   a  (? (&& (i < n) (member? (s i) '(43 45))) (i + 1) i)
+                   dg (jdigits s a n)
+                   (? (<>dg = a) () `((g * <dg) <>dg)))
+
+   (jpow10 e) (? (e < 0) (1.0 / ((0 - e) 10)) (1.0 * (e 10)))
+
+   ; a whole int stays EXACT (charm -> sun -> big, whatever it needs); anything with a
+   ; fraction or an exponent becomes a gem, which is what json means by those.
+   (jnum s i n) (: neg (&& (i < n) ((s i) = 45))
+                   a   (? neg (i + 1) i)
+                   ip  (jdigits s a n)
+                   iv  <ip
+                   b   <>ip
+                   (? (b = a) ()                       ; a sign with no digits is nothing
+                      (: fd (? (&& (b < n) ((s b) = 46)) (jdigits s (b + 1) n) ())
+                         c  (? (two? fd) <>fd b)
+                         fv (? (two? fd) <fd 0)
+                         fl (? (two? fd) (c - (b + 1)) 0)
+                         ee (&& (c < n) (member? (s c) '(101 69)))
+                         ex (? ee (jexp s (c + 1) n) ())
+                         d  (? (two? ex) <>ex c)
+                         (? (&& (two? fd) (fl = 0)) ()   ; "1." is not json
+                            (&& ee (! (two? ex)))     ()   ; "1e" is not json either
+                            (: sgn (? neg -1 1)
+                               (? (&& (fl = 0) (! ee))
+                                  `((sgn * iv) d)
+                                  (: mant (((iv * (fl 10)) + fv))
+                                     base (((1.0 * sgn) * mant) / (fl 10))
+                                     (? (two? ex) `((base * (jpow10 <ex)) d)
+                                        `(base d)))))))))
+
+   (jlit? s i n w) (: e (i + (tally w)) (&& (e <= n) ((snip s i e) = w)))
+
+   (jlit s i n) (? (jlit? s i n "true")  `(json-true (i + 4))
+                   (jlit? s i n "false") `(json-false (i + 5))
+                   (jlit? s i n "null")  `(() (i + 4))
+                   (jnum s i n))
+
+   (jarr s i n) (: a (jws s (i + 1) n)
+                   (? (&& (a < n) ((s a) = 93)) `(json-empty (a + 1))
+                      ((: (go k acc)
+                          (: r (jval s k n)
+                             (? (! (two? r)) ()
+                                (: e (jws s <>r n)
+                                   (? (! (e < n))    ()
+                                      ((s e) = 44)   (go (e + 1) (link <r acc))
+                                      ((s e) = 93)   `((rev (link <r acc)) (e + 1))
+                                      ())))))
+                       a ())))
+
+   ; a later duplicate key wins, which is what pin does and what every other reader does.
+   (jobj s i n) (: a (jws s (i + 1) n)
+                   (? (&& (a < n) ((s a) = 125)) `((tablet 0) (a + 1))
+                      ((: (go k acc)
+                          (: ks (jws s k n)
+                             (? (! (&& (ks < n) ((s ks) = 34))) ()
+                                (: kr (jstr s ks n)
+                                   (? (! (two? kr)) ()
+                                      (: cn (jws s <>kr n)
+                                         (? (! (&& (cn < n) ((s cn) = 58))) ()
+                                            (: vr (jval s (cn + 1) n)
+                                               (? (! (two? vr)) ()
+                                                  (: _ (pin acc <kr <vr)
+                                                     e (jws s <>vr n)
+                                                     (? (! (e < n))    ()
+                                                        ((s e) = 44)   (go (e + 1) acc)
+                                                        ((s e) = 125)  `(acc (e + 1))
+                                                        ())))))))))))
+                       a (tablet 0))))
+
+   (jval s i n) (: a (jws s i n)
+                   (? (! (a < n)) ()
+                      (: c (s a)
+                         (? (c = 34)  (jstr s a n)
+                            (c = 91)  (jarr s a n)
+                            (c = 123) (jobj s a n)
+                            (jlit s a n)))))
+
+   ; --- the door in ----------------------------------------------------------------
+   ; (1 value), or () -- trailing junk after the document is a refusal, not a shrug.
+   (json-read s) (: n (tally s)
+                    r (jval s 0 n)
+                    (? (! (two? r)) ()
+                       (: e (jws s <>r n) (? (e < n) () `(1 <r)))))
+
+   ; --- writing --------------------------------------------------------------------
+   (jhexd v) ("" + (? (v < 10) (48 + v) (87 + v)))
+
+   ; bytes >= 128 ride out untouched: love strings are byte strings and json is utf-8, so
+   ; already-utf-8 text is already right. only the seven named escapes and the control
+   ; bytes need saying.
+   (jqc c) (? (c = 34) ("" + 92 + 34)
+              (c = 92) ("" + 92 + 92)
+              (c = 10) ("" + 92 + 110)
+              (c = 13) ("" + 92 + 114)
+              (c = 9)  ("" + 92 + 116)
+              (c = 8)  ("" + 92 + 98)
+              (c = 12) ("" + 92 + 102)
+              (c < 32) ((("" + 92 + 117 + 48 + 48) + (jhexd (c // 16))) + (jhexd (c % 16)))
+              ("" + c))
+
+   (jqt s) (: n (tally s)
+              ((: (go k acc) (? (k < n) (go (k + 1) (acc + (jqc (s k)))) (acc + 34)))
+               0 ("" + 34)))
+
+   (jjoin xs) (? (! (two? xs)) ""
+                 ((: (go l acc) (? (two? l) (go >l ((acc + 44) + <l)) acc)) >xs <xs))
+
+   ; show is the whole number lane -- it already lays a charm, a sun, a big and a gem down
+   ; the way json spells them. the GUARD is for what json has no word for: ieee-inf and
+   ; friends show as names, so anything not starting with a digit or a minus becomes null
+   ; rather than riding out as text that no parser would take back.
+   (jnumshow v) (: t (show v)
+                   c (? (0 < (tally t)) (t 0) 0)
+                   (? (|| (c = 45) (&& (48 <= c) (c <= 57))) t "null"))
+
+   (json-show v)
+      (? (string? v)    (jqt v)
+         (json-bool? v) (? v "true" "false")
+         (tablet? v)    ((("" + 123)
+                          + (jjoin (map (\ k ((jqt k) + 58 + (json-show (v k)))) (keys v))))
+                         + ("" + 125))
+         (json-empty? v) ("" + 91 + 93)
+         ; a tray is NOT an array here -- @(5) is already the scalar 5, so a one-element
+         ; array could never survive as one. scare rather than write a plausible lie.
+         (tray? v)      (scare 'json "arrays are lists; json-empty is the empty one" v)
+         (two? v)       ((("" + 91) + (jjoin (map json-show v))) + ("" + 93))
+         (constellation? v) (jnumshow v)
+         "null"))
