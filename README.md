@@ -227,7 +227,8 @@ on the front page):
   (the quoted compiler source) twice -- the C bootstrap compiles the compiler,
   which recompiles itself -- and the hatchling bakes into the binary; `born`
   records the hatch time. the same image runs on linux, bare metal
-  (x86_64/aarch64 via limine), and wasm.
+  (x86_64 on its own PVH boot -- `qemu -kernel`, nothing downloaded -- or via
+  limine, aarch64 via limine), and wasm.
 - moon is a C compiler, also written in love: a preprocessor, parser, and an
   optimizing amd64/arm64 backend through the holo assembler. it IS the default
   build now: the host cc compiles only the bootstrap `love0`, which runs mooncc

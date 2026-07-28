@@ -26,7 +26,9 @@
 ;   lane fell through to garbage and now loops (or reads OOB and segfaults), e.g. a baked lcat header
 ;   came up EMPTY (a failed love0 gen left a 0-byte .h that make thinks is fresh) so `assemble` is
 ;   unbound and the glaze's map lane emits nothing. one bug, two faces -- infinite loop or crash.
-; * `make clean` nukes out/dl (ovmf/limine) -- stash them first if you need the kernel tests.
+; * test_kernel boots `qemu -kernel` on our own PVH bring-up (port/inle/x86_64/boot.S) -- no
+;   downloads. out/dl (ovmf/limine, nuked by `make clean`) only feeds the interactive run-*
+;   lanes and test_kernel_arm64; stash it if you use those.
 ;   editing love.h needs no clean (every object deps on $(love_h), the lcat'd headers re-lay on love0).
 ; * CHECK A .l EDIT for balance before trusting it: `out/host/love tools/ltidy.l <file>` (or `make lint`
 ;   over every tracked .l) -- a .l-aware paren/bracket/brace + unclosed-string scan (`;`/`#!` comments,

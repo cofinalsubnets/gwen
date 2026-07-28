@@ -1,7 +1,10 @@
 ; Driver for `make test_kernel`: boot the headless serial test kernel under qemu,
 ; capture its serial console (the baked corpus runs at boot and prints the usual
 ; "N tests pass" summary, then (exit) quits qemu via isa-debug-exit), and report.
-; Run on the host love, which has the `run` subprocess nif. argv = (this iso ovmf).
+; Run on the host love, which has the `run` subprocess nif.
+; argv = (this file firmware arch): a .elf file boots DIRECT (`qemu -kernel`, the
+; PVH door -- no bootloader, no firmware image, firmware arg ignored, pass "-");
+; anything else is the iso lane (limine cdrom + the firmware as pflash).
 
 (: (sub-at s i t j) (? (>= j (tally t)) 1                    ; does t occur in s at index i?
        (? (= (peep s (+ i j) 0) (peep t j 0)) (sub-at s i t (+ 1 j)) 0))
@@ -16,6 +19,9 @@
    iso  (cap a)
    ovmf (cap (cup a))
    arch (: x (cup (cup a)) (? (two? x) (cap x) "x86_64"))   ; optional 3rd arg; x86_64 by default
+   ; a .elf boots direct: qemu's own loader reads the PVH note and enters our
+   ; boot.S stub -- nothing downloaded, nothing vendored.
+   elf? (: n (tally iso) (&& (> n 4) (sub-at iso (- n 4) ".elf" 0)))
    ; machine + exit channel are per-arch. x86_64 quits qemu by writing the
    ; isa-debug-exit port; 'virt' has no such device, so aarch64 goes out through
    ; ARM semihosting instead -- see k_qemu_exit in each port's arch.c.
@@ -27,11 +33,13 @@
    ; crash point MOVING with unrelated image growth (a budget wall's face, not
    ; a logic bug); and a full green run is ~3min wall under TCG (the kernel's
    ; own summary clock reads ~17s -- don't trust it for the timeout).
+   media (? elf?
+            `("-kernel" iso)
+            `("-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))
+              "-cdrom" iso))
    r    (run (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
              (cat mach
-                  `("-serial" "stdio" "-display" "none" "-no-reboot"
-                    "-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))
-                    "-cdrom" iso))))
+             (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media))))
    out  (cup r)
    ok   (&& (has? out "tests pass") (! (has? out "failed:")))
    (? ok (: _ (puts (lineof out "tests pass")) (putc 10))

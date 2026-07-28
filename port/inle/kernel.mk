@@ -7,7 +7,10 @@
 # ====================================================================
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
 # The inle kernel lives in port/inle/: arch-independent glue is kmain.c + k.h
-# there, per-arch code in port/inle/<a>/ (arch.c, *.S, *.lds). Boots via Limine.
+# there, per-arch code in port/inle/<a>/ (arch.c, *.S, *.lds). TWO boot doors:
+# x86_64 carries its own PVH bring-up (x86_64/boot.S -- `qemu -kernel`, no
+# bootloader/firmware, what test_kernel rides), and the Limine iso/hdd lanes
+# below serve the interactive run-* targets (framebuffer console) + aarch64.
 # ====================================================================
 ko = out/free
 dl = out/dl
@@ -43,7 +46,7 @@ k_asm_o = $(k_asm:$(R)/%.asm=$(k_odir)/%.o)
 k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
 
 # The kernel runs the GENERATIONAL collector (the host default), BOUNDED by g->budget: kmain sums the
-# limine memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob). Without
+# boot memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob). Without
 # that bound the nursery's copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive)
 # sizing then asks kmallocw for a contiguous block bigger than the largest physical RAM range -> OOM.
 # See gen_please (love.c) and the budget wiring (kmain.c).
@@ -222,12 +225,17 @@ out/lib/ktests.h: out/lib/ktests.l $(love0) tools/lcatv.l love/prel.l
 test_arm64: host
 	@./tools/arm64check.sh
 
+# The x86_64 gate boots the ELF DIRECT: `qemu -kernel` reads the PVH ELF note
+# and enters boot.S's own bring-up (page tables, GDT, long mode, kboot) -- no
+# limine, no OVMF, no iso, NOTHING in out/dl. The limine/firmware machinery
+# above stays for the interactive run-* lanes (they want the framebuffer
+# console only a real bootloader hands over) and for test_kernel_arm64.
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	@echo TEST $(ko)/love-$a-test.iso "(serial, headless)"
-	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd $a
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
+	@echo TEST $(ko)/love-$a-test.elf "(serial, headless, -kernel)"
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.elf - $a
 else
 test_kernel:
 	@echo "test_kernel: skipped (host arch $a is not x86_64)"
