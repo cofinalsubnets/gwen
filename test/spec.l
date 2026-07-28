@@ -545,7 +545,10 @@
 ; the layer verbs live on only inside the loader's closures, mopped at birth like books/setbooks.
 ; a module arrives by NAME: (use 'x) splices a registered module just below the top -- its names
 ; resolve on the walk but can never shadow the top's own -- and LOADS it on a miss: the baked
-; source library (ai_lib_), or lib/<x>.l where a filesystem lives. a STRING is an explicit path
+; source library (ai_lib_), or the filesystem walk -- lib/<x>.l off the cwd, then the SEAT
+; rungs, <seat>/../lib/ and its love/ subfolder, the seat being the running binary's own home
+; (readlink /proc/self/exe): PATH picks the love, the love carries its library. a STRING is an
+; explicit path
 ; (the module named by its basename); a SLASHED name ('x/y) INCLUDES lib/x/y.l into the current
 ; head instead, no new layer, no registration. test/host/loader.l is the load law in anger (fs
 ; fixtures, so it lives outside this corpus); here the boot-loaded modules prove the registry

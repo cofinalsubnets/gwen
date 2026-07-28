@@ -544,18 +544,30 @@ void kmain(void) {
   // the module sources, name-keyed (see host/main.c): registered in the source
   // library, loaded by `use` in the boot text below -- one layer per load, leave
   // registers, the splice serves the bare names (the console editor reads bao's).
+  static char const src_uu[] =
+#include "uu.h"
+  ;
   static char const src_bao[] =
 #include "bao.h"
   ;
+  g = ai_lib_(g, "uu", src_uu);
   g = ai_lib_(g, "bao", src_bao);
 #ifdef K_TEST
+  static char const src_coin[] =
+#include "coin.h"
+  ;
   static char const src_rng[] =
 #include "rng.h"
+  ;
+  static char const src_q[] =
+#include "q.h"
   ;
   static char const src_kanren[] =
 #include "kanren.h"
   ;
+  g = ai_lib_(g, "coin", src_coin);
   g = ai_lib_(g, "rng", src_rng);
+  g = ai_lib_(g, "q", src_q);
   g = ai_lib_(g, "kanren", src_kanren);
 #endif
   // load the prel, then run the l read-eval-print loop. its line
@@ -568,22 +580,27 @@ void kmain(void) {
  " "
 #include "ev.h"
  ai_egg_post
-#include "uu.h"                                        // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files
- "(use 'bao)"                                          //   drive it through the `uu` book on this target too
+ "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
+ "(use 'bao)"                                          //   one-name `uu` surface on this target too
 #ifdef K_TEST
-#include "coin.h"                                      // the optional library layers, test build ONLY: the corpus asserts on
+ "(use 'coin)"                                         // the optional library layers, test build ONLY: the corpus asserts on
  "(use 'rng)"                                          //   coin, rng, q and kanren, a booting kernel wants none of them -- so
-#include "q.h"                                         //   the shipped image carries no ring/monoid, no random stream, no
+ "(use 'q)"                                            //   the shipped image carries no ring/monoid, no random stream, no
  "(use 'kanren)"                                       //   rationals and no unifier (~65K of heap for the last two alone)
- // test build: drink the baked `tests` string (string -> charlist -> tap port)
- // through reads (love/bao.l) -- the same stream shell as the host's stdin runner.
- // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;
- // `sip` is the verb that draws ONE unit -- see the vessel frame in love/prel.l.)
- "(reads (tap ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))"
-#else
- "((from 'bao 'shell) 0)"
 #endif
   );
+  // THE SESSION: a fresh writable layer, C-side (the host's run_program shape) --
+  // the shell's defglobs (and the corpus stream's) land here, never in the base.
+  r = ai_layer_(r);
+#ifdef K_TEST
+  // test build: drink the baked `tests` string (string -> charlist -> tap port)
+  // through reads (love/bao.l) -- the same stream shell as the host's stdin runner.
+  // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;
+  // `sip` is the verb that draws ONE unit -- see the vessel frame in love/prel.l.)
+  r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))");
+#else
+  r = ai_evals_(r, "((from 'bao 'shell) 0)");
+#endif
   // a terminal scare gets the honest face on the serial console before reset
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r); }

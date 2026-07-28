@@ -19,15 +19,24 @@ static const char boot_ai[] = "("
   " "
 #include "ev.h"
   ai_egg_post
-#include "uu.h"   // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files ride the `uu` book here too
-#include "coin.h"   // the optional library layers (love/coin.l, love/q.l): out of prel, so this frontend names them
-  "(use 'rng)"      // rng and kanren are MODULES now -- registered in the source library (ai_lib_
-#include "q.h"
-  "(use 'kanren)"   //   in ai_init) and loaded by name; the corpus asserts on all four layers
+  "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered in ai_init, loaded by
+  "(use 'coin)"                   //   name; the corpus asserts on each): the uu kernel keeps its
+  "(use 'rng)"                    //   one-name surface, then coin, rng, q, kanren in the old eval order
+  "(use 'q)"
+  "(use 'kanren)"
 ;
 // the module sources, name-keyed (see host/main.c): registered before boot_ai evals
+static const char src_uu[] =
+#include "uu.h"
+;
+static const char src_coin[] =
+#include "coin.h"
+;
 static const char src_rng[] =
 #include "rng.h"
+;
+static const char src_q[] =
+#include "q.h"
 ;
 static const char src_kanren[] =
 #include "kanren.h"
@@ -100,9 +109,15 @@ int ai_init(void) {
   struct ai_def d[] = {{"exit", (ai_word) nif_exit}};
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);
+  F = ai_lib_(F, "uu", src_uu);
+  F = ai_lib_(F, "coin", src_coin);
   F = ai_lib_(F, "rng", src_rng);
+  F = ai_lib_(F, "q", src_q);
   F = ai_lib_(F, "kanren", src_kanren);
   F = ai_evals_(F, boot_ai);
+  // THE SESSION: a fresh writable layer, C-side -- everything the page ever
+  // feeds through ai_eval defglobs here, never in the base.
+  F = ai_layer_(F);
   return ai_code_of(F); }
 
 EMSCRIPTEN_KEEPALIVE

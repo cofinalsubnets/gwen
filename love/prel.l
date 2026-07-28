@@ -374,10 +374,11 @@
 ; --- the loader: use-on-miss ------------------------------------------------
 ; the `use` up top splices a REGISTERED module. down here -- where tap/map/jot
 ; are bound -- it learns to LOAD one it doesn't have: source from the lib book
-; (name -> text, baked by a frontend via C's ai_lib_) or from lib/<name>.l (the
-; filesystem lane, riding the host's open nif -- captured off the base book by
-; peep, so a fs-less frontend holds () there and the lane just misses: it
-; degrades to the baked table). a load is ONE FRESH LAYER: enter, read-eval
+; (name -> text, baked by a frontend via C's ai_lib_) or from the filesystem
+; WALK -- lib/<name>.l off the cwd (the dev tree), then the seat rungs (the
+; seatlib comment below) -- riding the host's open nif, captured off the base
+; book by peep, so a fs-less frontend holds () there and the lanes just miss:
+; it degrades to the baked table. a load is ONE FRESH LAYER: enter, read-eval
 ; every form (cli.l's
 ; rdev shape -- the (ev 'ev r) indirection late-binds the evaluator), leave
 ; registers, and the prior use splices what leave registered. a SLASHED name
@@ -399,10 +400,31 @@
       fsopen (peep book 'open ())      ; the host's open nif, read off the base book at prel
                                        ; eval -- a peep, not a nom read, so a fs-less frontend
                                        ; gets () here (no missing raise) and the lane just misses
+      ; the SEAT ROOT: where the running binary itself lives (readlink is a host
+      ; nif; /proc/self/exe is already symlink-chased). <seat>/../lib/ is the NEST
+      ; shape -- ~/.love/bin/love finds ~/.love/lib because that is where it is,
+      ; and the dev tree's out/host/love finds <repo>/out/lib the same way -- and
+      ; its love/ subfolder is the FHS shape (/usr/bin/love finds /usr/lib/love).
+      ; PATH picks the love, the love carries its library: no env vars anywhere.
+      ; absent readlink (a fs-less or non-linux frontend), () -- the rungs miss.
+      seatlib (: rl (peep book 'readlink ())
+                 x (? (nil? rl) () (rl "/proc/self/exe"))
+                 (? (string? x)
+                    (: n (tally x)
+                       b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep x k 0)) (+ k 1) r)) r)) 0 0)
+                       (+ (snip x 0 b) "../lib/"))
+                    ()))
+      ; the walk: the baked table, then lib/ off the cwd (the dev tree), then the
+      ; seat root's lib/, then its love/ subfolder
       (libsrc nm) (: s (peep (lib ()) nm ())
                      (? (string? s) (tap (map s (jot (tally s))))
                         (nil? fsopen) ()
-                        (fsopen (+ (+ "lib/" (string nm)) ".l") "r")))
+                        (: f (+ (string nm) ".l")
+                           q (fsopen (+ "lib/" f) "r")
+                           (? q q
+                              (nil? seatlib) ()
+                              (: q2 (fsopen (+ seatlib f) "r")
+                                 (? q2 q2 (fsopen (+ (+ seatlib "love/") f) "r")))))))
       (\ m (? (tablet? m) (prior m)
               (string? m)
               (: nm (mname m)

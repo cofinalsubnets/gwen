@@ -264,17 +264,27 @@ int main(void) {
 #define TE_TAIL(banner) \
     "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
     "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((from 'bao 'shell) 0))"
-  struct ai *r = woke
-    ? ai_evals_(g, TE_TAIL("; image hatched -- shell up"))
-    : ai_evals_(g, "("
+  if (!woke) {
+    // the on-device egg bake: bao is a MODULE (no brackets of its own) --
+    // register the source, load it by name inside the boot form. a woken
+    // image (the mps2 baker's) carries the registration already.
+    static char const src_bao[] =
+#include "bao.h"
+    ;
+    g = ai_lib_(g, "bao", src_bao);
+    g = ai_evals_(g, "("
 #include "egg.h"
     ai_egg_pre
 #include "prel.h"
     " "
 #include "ev.h"
     ai_egg_post
-#include "bao.h"
-    TE_TAIL("; egg hatched -- shell up") ")");
+    "(use 'bao) 0)"); }
+  // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
+  // here, never in the base (bakes carry none; every boot or wake pushes its own).
+  g = ai_layer_(g);
+  struct ai *r = ai_evals_(g, woke ? TE_TAIL("; image hatched -- shell up")
+                                   : TE_TAIL("; egg hatched -- shell up"));
   // The shell only returns on a fatal error: honest face, then blink it out.
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r);
