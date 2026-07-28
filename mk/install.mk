@@ -8,10 +8,34 @@
 PREFIX ?= .local/
 VIMPREFIX ?= .vim/
 DESTDIR ?= $(HOME)/
+# BIN -- the name the interpreter installs under, and the ONE knob for the LÖVE
+# collision: Arch's extra/love owns /usr/bin/love AND man1/love.1 outright, Debian
+# sidesteps it as love-11.5. Nothing below hardcodes the command name any more, so
+# `make install BIN=lovelang` moves the binary, both shim scripts, all six shebangs
+# and the man page together. The default installs byte-identically to before.
+# The PROJECT is still love: lib/love/, liblove, love.h and love/*.l keep the name
+# (data paths, not PATH entries -- the shims find lib/love/ relative to themselves).
+BIN ?= love
+BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
 d = $(DESTDIR)/$(PREFIX)
 v = $(DESTDIR)/$(VIMPREFIX)
+
+# A shebang-carrying source tool installs as a SYMLINK to the source under the
+# default name, so edits land without a reinstall. Under a renamed BIN the file's
+# own `#!/usr/bin/env -S love -l` would re-exec the wrong interpreter, so it
+# installs as a COPY with line 1 rewritten -- which is what a package wants anyway
+# (a symlink into a source tree is useless off this machine). The pattern matches
+# both shebang forms, leaving a trailing ` -l` alone.
+ifeq ($(BIN),love)
+instool = ln -sf $(abspath $1) $2
+instag = LN
+else
+instool = sed '1s|env -S love|env -S $(BIN)|' $1 > $2 && chmod 755 $2
+instag = CP
+endif
+
 installs = \
-  $d/bin/love \
+  $d/bin/$(BIN) \
   $d/bin/ai \
   $d/bin/kore \
   $d/bin/mooncc \
@@ -22,7 +46,7 @@ installs = \
   $d/bin/ain \
   $d/bin/lux \
   $d/bin/bao \
-  $d/share/man/man1/love.1 \
+  $d/share/man/man1/$(BIN).1 \
   $d/share/man/man1/cook.1 \
   $d/lib/love/prel.l \
   $d/lib/love/ev.l \
@@ -66,14 +90,16 @@ $d/lib/liblove.so: $(glibc_ho)/liblove.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-$d/bin/love: $(ho)/love $(ho)/love.baked
+$d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 # compat: `ai` was the name from 2026-06-15 until the reversion to `love`. A
 # script on a user's disk carrying `#!/usr/bin/env -S ai -l` keeps working.
-$d/bin/ai: $d/bin/love
+# (Unclaimed in Debian and the Arch repos as of 2026-07; the AUR's terminal-ai
+# already declares Provides: ai, so this alias is the first to drop in a package.)
+$d/bin/ai: $d/bin/$(BIN)
 	@echo LN	$(abspath $@)
-	@ln -sf love $@
+	@ln -sf $(BIN) $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, so the
 # stripped install keeps it; strip removes only the symbol table -- .text/.rodata vaddrs are
 # unchanged, so the image's lvm-table indices and base-delta still resolve, and a bad match
@@ -84,9 +110,9 @@ $d/bin/ai: $d/bin/love
 # then it discovers a Makefile/Cookfile/Cards.l in the cwd. Installed as a SYMLINK
 # to the source so edits to crew/cook/cook.l are picked up without a reinstall.
 $d/bin/cook: crew/cook/cook.l
-	@echo LN	$(abspath $@)
+	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
-	@ln -sf $(abspath $<) $@
+	@$(call instool,$<,$@)
 
 # papel: the static site generator (crew/papel/papel.l), and kiosko the static web
 # server (crew/kiosko/kiosko.l). Same shebang + SYMLINK mechanism as cook. papel READS
@@ -95,30 +121,34 @@ $d/bin/cook: crew/cook/cook.l
 # on the other's command line -- and it finds them by READLINK'ing this very symlink back
 # to the source tree, so the link on PATH and the crew directory need not be neighbours.
 $d/bin/papel: crew/papel/papel.l
-	@echo LN	$(abspath $@)
+	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
-	@ln -sf $(abspath $<) $@
+	@$(call instool,$<,$@)
 
 $d/bin/kiosko: crew/kiosko/kiosko.l
-	@echo LN	$(abspath $@)
+	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
-	@ln -sf $(abspath $<) $@
+	@$(call instool,$<,$@)
 
 # moonfmt: the C formatter (crew/moon/fmt.l). Same single-file shebang mechanism as
 # cook (`#!/usr/bin/env -S love -l` re-execs the installed `love`; the SEAT inside fires
 # on its own name and quits). Installed as a SYMLINK to the source, so edits to
 # crew/moon/fmt.l are picked up without a reinstall.
 $d/bin/moonfmt: crew/moon/fmt.l
-	@echo LN	$(abspath $@)
+	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
-	@ln -sf $(abspath $<) $@
+	@$(call instool,$<,$@)
 
 # ain: the netcat clone (tools/ain.l). Same shebang-script mechanism as cook
 # (`#!/usr/bin/env -S love -l` re-execs the installed `love` to load it); the SEAT
 # form inside the file finds its own name on the command line and fires.
+# (a COPY, not a symlink like cook -- so it takes the shebang rewrite unconditionally;
+# at the default BIN the sed is an identity and the bytes are unchanged.)
 $d/bin/ain: tools/ain.l
 	@echo CP	$(abspath $@)
-	@install -D -m 755 $< $@
+	@install -d $(@D)
+	@sed '1s|env -S love|env -S $(BIN)|' $< > $@
+	@chmod 755 $@
 
 # kore: the multi-call toolbox -- ONE catted script (busybox's trick), the util
 # picked off the command line (`kore diff A B`, `kore nc H P`, `kore make`, `kore as ..`)
@@ -129,7 +159,7 @@ $d/bin/ain: tools/ain.l
 $d/bin/kore: $(korefiles)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
-	@{ echo '#!/usr/bin/env -S love'; cat $(korefiles); } > $@
+	@{ echo '#!/usr/bin/env -S $(BIN)'; sed 's|^#!/usr/bin/env -S love|#!/usr/bin/env -S $(BIN)|' $(korefiles); } > $@
 	@chmod 755 $@
 
 # mooncc: the C compiler, ITS OWN app (doc/moon.md). The installed bin is a WAKE SHIM:
@@ -145,7 +175,7 @@ $d/bin/mooncc: $(MAKEFILE_LIST)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/love" --wake "$$h/../lib/love/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
+	   echo 'exec "$$h/$(BIN)" --wake "$$h/../lib/love/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
 	@chmod 755 $@
 $d/lib/love/mooncc.image: $(ho)/mooncc.image
 	@echo CP	$(abspath $@)
@@ -158,7 +188,7 @@ luxfiles = crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l cre
 $d/bin/lux: $(luxfiles)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
-	@{ echo '#!/usr/bin/env -S love -l'; cat $(luxfiles); } > $@
+	@{ echo '#!/usr/bin/env -S $(BIN) -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
 
 # bao: the interactive shell. Unlike crew/cook/ain, love/bao.l is DEFINE-ONLY (the
@@ -169,12 +199,16 @@ $d/bin/bao: $(MAKEFILE_LIST)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/love" -l "$$h/../lib/love/bao.l" -e "((from '\''bao '\''bao) 0)" "$$@"'; } > $@
+	   echo 'exec "$$h/$(BIN)" -l "$$h/../lib/love/bao.l" -e "((from '\''bao '\''bao) 0)" "$$@"'; } > $@
 	@chmod 755 $@
 
-$d/share/man/man1/love.1: $(ho)/love.1
+# the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));
+# the other `love`s on that line are the PROJECT and the version string, so they stay.
+$d/share/man/man1/$(BIN).1: $(ho)/love.1
 	@echo CP	$(abspath $@)
-	@install -D -m 644 $< $@
+	@install -d $(@D)
+	@sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
+	@chmod 644 $@
 
 $d/share/man/man1/cook.1: $(ho)/cook.1
 	@echo CP	$(abspath $@)
