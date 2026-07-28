@@ -364,6 +364,73 @@ static lvm(lvm_shutfd) {
  Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
  return Ip++, Continue(); }
 
+// (fdopen fd) -> a PORT over a raw fd -- pipe/openfd's other half, so love reads
+// and writes its own plumbing (a command substitution drains a pipe with slurp, a
+// heredoc body pours in with say). () on a non-charm / negative fd or OOM. The
+// port's GC finalizer owns the fd from here: hand it over, don't fdclose it too.
+ai_noinline static struct ai *host_fdopen(struct ai *g) {
+ ai_word a = g->sp[0];
+ intptr_t fd = (a & 1) ? getcharm(a) : -1;
+ if (fd < 0) return g->sp[0] = ZeroPoint, g;
+ struct ai *r = ai_io_alloc(g, (int) fd);
+ if (!ai_ok(r)) return g->sp[0] = ZeroPoint, g;               // OOM -> nil (cf. sigfd)
+ g = r;
+ return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the fd arg
+static lvm(lvm_fdopen) {
+ Pack(g); g = host_fdopen(g); Unpack(g);     // every failure folds to nil, so no ghelp
+ return Ip++, Continue(); }
+
+// (spawnmap argv fdmap closes pg fg) -> pid | -errno. spawnio generalized: instead
+// of the hardwired in/out/err triple, `fdmap` is a list of (childfd . srcfd) pairs
+// applied IN ORDER in the child -- dup2(srcfd, childfd) for a charm srcfd >= 0,
+// close(childfd) for () -- and each srcfd reads the fd table AS REMAPPED SO FAR,
+// which is exactly the POSIX left-to-right redirection law (`>f 2>&1` maps
+// ((1 . f) (2 . 1)) and the second entry sees the first's work). pg/fg and the
+// closes list ride unchanged from spawnio (the job-control dance + the pipe ends
+// the child must not leak). spawnio stays for its callers; this is the shell's lane.
+ai_noinline static struct ai *host_spawnmap(struct ai *g, intptr_t pg, intptr_t fg) {
+ char **cav;
+ g = argv_marshal(g, &cav);
+ if (!cav) return g;                         // misuse pushed -1, or OOM
+ ai_word fdmap = g->sp[1], closes = g->sp[2];   // re-read post-marshal (ai_have may have GC'd)
+ fflush(NULL);
+ pid_t pid = fork();
+ if (pid < 0) return ai_push(g, 1, putcharm(-errno));
+ if (!pid) {
+  if (pg >= 0) {
+   setpgid(0, (pid_t) pg);                     // 0 leads a fresh group, >0 joins it
+   if (fg) { signal(SIGTTOU, SIG_IGN);          // the handoff, from the background
+    tcsetpgrp(0, pg ? (pid_t) pg : getpid()); } }
+  for (ai_word p = fdmap; chainp(p); p = B(p)) {
+   ai_word e = A(p);
+   if (!chainp(e)) continue;
+   intptr_t cfd = (A(e) & 1) ? getcharm(A(e)) : -1;
+   if (cfd < 0) continue;
+   ai_word sw = B(e);
+   if ((sw & 1) && getcharm(sw) >= 0) dup2((int) getcharm(sw), (int) cfd);
+   else close((int) cfd); }                    // () (or a negative) srcfd closes childfd
+  for (ai_word p = closes; chainp(p); p = B(p)) {
+   intptr_t fd = getcharm(A(p));
+   if (fd > 2) close((int) fd); }
+  sig_dfl_job();                                // undo the shell's ignores (TTOU too)
+  execvp(cav[0], cav);
+  _exit(127); }
+ if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
+ return ai_push(g, 1, putcharm(pid)); }
+static lvm(lvm_spawnmap) {
+ intptr_t pg = (Sp[3] & 1) ? getcharm(Sp[3]) : -1;
+ intptr_t fg = (Sp[4] & 1) ? getcharm(Sp[4]) : 0;
+ Pack(g);
+ g = host_spawnmap(g, pg, fg);               // argv at sp[0], fdmap sp[1], closes sp[2]
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Sp[5] = Sp[0];                              // pid over the 5 args
+ Sp += 5; Ip += 1;
+ return Continue(); }
+
+// (getuid _) -> the real uid, a charm. the shell's # vs $ prompt; always succeeds.
+static lvm(lvm_getuid) { Sp[0] = putcharm((intptr_t) getuid()); return Ip++, Continue(); }
+
 // --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
 // (mkdir path mode) -> mkdir(2). () | -errno | -1 misuse. mode is octal (493 = 0755).
 // also makes cgroup dirs (cgroup-v2 placement is then `open` + `say` the control file).
@@ -529,6 +596,9 @@ static union u const
   nif_openfd[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
   nif_spawnio[] = {{lvm_cur}, {.x = putcharm(7)}, {lvm_spawnio}, {lvm_ret0}},
   nif_shutfd[]  = {{lvm_shutfd}, {lvm_ret0}},
+  nif_fdopen[]  = {{lvm_fdopen}, {lvm_ret0}},
+  nif_spawnmap[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_spawnmap}, {lvm_ret0}},
+  nif_getuid[]  = {{lvm_getuid}, {lvm_ret0}},
   nif_mkdir[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mkdir}, {lvm_ret0}},
   nif_mount[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mount}, {lvm_ret0}},
   nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
@@ -551,6 +621,9 @@ AI_NIF("pipe",  nif_pipe);
 AI_NIF("openfd", nif_openfd);
 AI_NIF("spawnio", nif_spawnio);
 AI_NIF("fdclose", nif_shutfd);
+AI_NIF("fdopen", nif_fdopen);
+AI_NIF("spawnmap", nif_spawnmap);
+AI_NIF("getuid", nif_getuid);
 AI_NIF("mkdir", nif_mkdir);
 AI_NIF("mount", nif_mount);
 AI_NIF("newns", nif_newns);
