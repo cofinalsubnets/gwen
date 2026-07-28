@@ -2,14 +2,28 @@
 #
 # Fragment of the root Makefile (split out 2026-07-15). Included by ./Makefile,
 # which is invoked from the project root; paths resolve from there. Shared vars
-# live in common.mk. Every recipe here is unchanged from the single-file Makefile.
+# live in common.mk.
+#
+# the NEST: the default install is ~/.love, a self-implying home -- the loader's
+# seat walk (love/prel.l) derives <seat>/../lib and its love/ subfolder from the
+# running binary's own path, so ~/.love/bin/love finds ~/.love/lib/love/<x>.l
+# with no configuration and no env vars. ~/.local/bin gets a compat SYMLINK per
+# bin (PATH already knows it; the user edits nothing). a distro overrides
+# PREFIX/DESTDIR (PREFIX=usr/ DESTDIR=$$pkgdir) and the same lib/love/ layout
+# is the walk's FHS rung: /usr/bin/love finds /usr/lib/love/<x>.l -- one
+# layout, both worlds; the compat links are nest-only.
 
 # --- install / uninstall --------------------------------------------
-PREFIX ?= .local/
+PREFIX ?= .love/
 VIMPREFIX ?= .vim/
 DESTDIR ?= $(HOME)/
 d = $(DESTDIR)/$(PREFIX)
 v = $(DESTDIR)/$(VIMPREFIX)
+# the module sources the seat walk serves: (use 'cook) etc from ANY session of
+# this love resolves here. installed DEREFERENCED (install(1) follows the repo
+# lib/ symlinks), so the nest stands alone; lib/seed.l is the assembly and its
+# seed/ parts ride the slashed-include rung the same way.
+libmods = cook kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core
 installs = \
   $d/bin/love \
   $d/bin/ai \
@@ -28,12 +42,31 @@ installs = \
   $d/lib/love/ev.l \
   $d/lib/love/bao.l \
   $d/lib/love/mooncc.image \
+  $(patsubst %,$d/lib/love/%.l,$(libmods)) \
   $d/lib/liblove.a \
   $d/lib/liblove.so \
   $d/include/love.h \
   $v/ftdetect/love.vim \
   $v/syntax/love.vim \
   $v/ftplugin/love.vim
+
+# the PATH door, nest-only: each bin (and man page) gets a ~/.local compat
+# symlink, since ~/.local/bin is already on PATH and ~/.local/share/man on
+# manpath. a real PREFIX (a distro) skips these.
+ifeq ($(PREFIX),.love/)
+compat = $(DESTDIR)/.local
+binnames = love ai kore mooncc moonfmt cook papel kiosko ain lux bao
+installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
+  $(compat)/share/man/man1/love.1 $(compat)/share/man/man1/cook.1
+$(compat)/bin/%: $d/bin/%
+	@echo LN	$(abspath $@)
+	@mkdir -p $(@D)
+	@ln -sf $(abspath $<) $@
+$(compat)/share/man/man1/%.1: $d/share/man/man1/%.1
+	@echo LN	$(abspath $@)
+	@mkdir -p $(@D)
+	@ln -sf $(abspath $<) $@
+endif
 
 install: $(installs)
 uninstall:
@@ -45,6 +78,13 @@ $d/include/love.h: love.h
 	@install -D -m 644 $< $@
 
 $d/lib/love/%.l: love/%.l
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+
+# the crew module sources ride the repo lib/ (this rule is SECOND, so love/%.l
+# wins where both could match -- prel/ev/bao come from love/, the crew set from
+# lib/'s symlinks, dereferenced by install(1))
+$d/lib/love/%.l: lib/%.l
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
@@ -140,11 +180,13 @@ $d/bin/kore: $(korefiles)
 # it IS binary-specific (anchor-checked), so image and binary always install
 # from the same build. Kept OUT of the kore cat so a cc edit never forces an kore
 # rebuild and vice versa.
+# the home comes off the CHASED path (readlink -f): invoked through a ~/.local
+# compat symlink, $0's own dir has no lib/ sibling -- the nest does.
 $d/bin/mooncc: $(MAKEFILE_LIST)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
-	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
+	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'exec "$$h/love" --wake "$$h/../lib/love/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
 	@chmod 755 $@
 $d/lib/love/mooncc.image: $(ho)/mooncc.image
@@ -168,7 +210,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
-	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
+	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'exec "$$h/love" -l "$$h/../lib/love/bao.l" -e "((from 'bao 'bao) 0)" "$$@"'; } > $@
 	@chmod 755 $@
 

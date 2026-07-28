@@ -61,7 +61,15 @@
    root (: me (findme >cmdline)
              tgt (? me (: r (readlink me) (? r r me)) ())
              (? tgt (up (dirof tgt)) "crew/"))                           ; crew/papel/papel.l -> crew/
-   (want nm f) (? (from nm) 1 (: _ (use (root + f)) 1))   ; loader miss = its scare, carrying the path
+   ; want: the sibling module, wherever this papel lives -- beside this file in
+   ; the source tree (root came off our own seat), else by NAME through the
+   ; loader's walk (an installed love's nest: ~/.love/lib/love/<nm>.l). the tree
+   ; lane probes first, so a tree papel running under an installed love reads
+   ; its OWN siblings, never the nest's older copies.
+   (want nm f) (? (from nm) 1
+                  (: q (open (root + f) "r")
+                     (? q (: _ (close q) _ (use (root + f)) 1)
+                        (: _ (use nm) 1))))
    _ (want 'lapiz "lapiz/lapiz.l")
    _ (want 'cook "cook/cook.l"))
 

@@ -407,13 +407,16 @@
       ; its love/ subfolder is the FHS shape (/usr/bin/love finds /usr/lib/love).
       ; PATH picks the love, the love carries its library: no env vars anywhere.
       ; absent readlink (a fs-less or non-linux frontend), () -- the rungs miss.
-      seatlib (: rl (peep book 'readlink ())
-                 x (? (nil? rl) () (rl "/proc/self/exe"))
-                 (? (string? x)
-                    (: n (tally x)
-                       b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep x k 0)) (+ k 1) r)) r)) 0 0)
-                       (+ (snip x 0 b) "../lib/"))
-                    ()))
+      ; READ AT EACH MISS, never captured: a binding here would fold the BUILD
+      ; tree's seat into the loader closure and ride the baked image forever --
+      ; the installed love would walk out/lib instead of its own nest (probed).
+      rlink (peep book 'readlink ())
+      (seatlib _) (: x (? (nil? rlink) () (rlink "/proc/self/exe"))
+                     (? (string? x)
+                        (: n (tally x)
+                           b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep x k 0)) (+ k 1) r)) r)) 0 0)
+                           (+ (snip x 0 b) "../lib/"))
+                        ()))
       ; the walk: the baked table, then lib/ off the cwd (the dev tree), then the
       ; seat root's lib/, then its love/ subfolder
       (libsrc nm) (: s (peep (lib ()) nm ())
@@ -422,9 +425,10 @@
                         (: f (+ (string nm) ".l")
                            q (fsopen (+ "lib/" f) "r")
                            (? q q
-                              (nil? seatlib) ()
-                              (: q2 (fsopen (+ seatlib f) "r")
-                                 (? q2 q2 (fsopen (+ (+ seatlib "love/") f) "r")))))))
+                              (: sl (seatlib 0)
+                                 (? (nil? sl) ()
+                                    (: q2 (fsopen (+ sl f) "r")
+                                       (? q2 q2 (fsopen (+ (+ sl "love/") f) "r")))))))))
       (\ m (? (tablet? m) (prior m)
               (string? m)
               (: nm (mname m)
