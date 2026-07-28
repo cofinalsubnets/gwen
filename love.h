@@ -236,6 +236,11 @@ struct ai {
                   // prel runs of a bootstrap capture the SAME tablet and pre-egg
                   // registrations survive the egg warm). In v0..end, so GC-traced
                   // and image-serialized with no further wiring.
+   ai_word lib;   // the SOURCE LIBRARY book: name -> source text, read by `use`'s
+                  // miss lane (the loader, love/prel.l) so a frontend can bake
+                  // loadable module sources with no filesystem. Filled from C by
+                  // ai_lib_ (each frontend registers what it wants loadable);
+                  // a lazy singleton like mods, and traced/serialized the same way.
    union {
     ai_word x;
     struct ai_io {
@@ -343,7 +348,11 @@ struct ai
  *ai_ini(void),
  *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
  *ai_evals_(struct ai*, const char*),
- *ai_defn(struct ai*, struct ai_def const*, uintptr_t);
+ *ai_defn(struct ai*, struct ai_def const*, uintptr_t),
+ *ai_lib_(struct ai*, char const*, char const*);   // register name -> source text in the
+                                                   // source library (g->lib); `use` loads it
+                                                   // on a miss. A frontend's boot calls this
+                                                   // for each module it bakes.
 
 // the heap-image snapshot CODEC (love.c, stdio-free): save compacts g and serializes
 // {header, blob} into a fresh g->alloc'd buffer (free it with g->alloc(g, buf, 0)); load

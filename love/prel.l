@@ -366,6 +366,38 @@
 (:: '>>= (\ l (link (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
 
+; --- the loader: use-on-miss ------------------------------------------------
+; the `use` up top splices a REGISTERED module. down here -- where tap/map/jot
+; are bound -- it learns to LOAD one it doesn't have: source from the lib book
+; (name -> text, baked by a frontend via C's ai_lib_) or from lib/<name>.l (the
+; filesystem lane, riding the host's open nif -- captured off the base book by
+; peep, so a fs-less frontend holds () there and the lane just misses: it
+; degrades to the baked table). a load is ONE FRESH LAYER: enter, read-eval
+; every form (cli.l's
+; rdev shape -- the (ev 'ev r) indirection late-binds the evaluator), leave
+; registers, and the prior use splices what leave registered. a SLASHED name
+; ('holo/x64 -- one symbol) is an INCLUDE: its source evals into the CURRENT
+; head layer, no new layer, no registration -- the door for a module's own
+; subfiles, and for a backend joining a sealed holo. the prior use also keeps
+; the miss scare: no source anywhere ends in its 'no-module.
+(: use
+   (: prior use
+      (rdev q) ((: (go e q) (: r (sound q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
+      (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
+      fsopen (peep book 'open ())      ; the host's open nif, read off the base book at prel
+                                       ; eval -- a peep, not a nom read, so a fs-less frontend
+                                       ; gets () here (no missing raise) and the lane just misses
+      (libsrc nm) (: s (peep (lib ()) nm ())
+                     (? (string? s) (tap (map s (jot (tally s))))
+                        (nil? fsopen) ()
+                        (fsopen (+ (+ "lib/" (string nm)) ".l") "r")))
+      (\ m (? (tablet? m) (prior m)
+              (tablet? (peep (mods ()) m ())) (prior m)
+              (: q (libsrc m)
+                 (? (nil? q) (prior m)
+                    (slashy? (string m)) (: _ (rdev q) ())
+                    (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
+
 ; --- reader operators: the table + the opfix factor pass --------------------
 ; a SIGIL is a maximal all-punct token (the reader's lexer law); the reader
 ; leaves it a plain symbol. code factors a sigil into a composition of
