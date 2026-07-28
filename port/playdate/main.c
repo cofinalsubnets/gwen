@@ -178,33 +178,39 @@ void love_init(void) {
   // emulates the device heap exactly (a budget of half OOMed it).
   if (ai_ok(g)) ai_core_of(g)->budget = (4u << 20) / sizeof(ai_word);
   if (woke) {
-    K.g = g;
+    K.g = ai_layer_(g);          // the waker opens its own session (the bake carries none)
     pdg_log("love: woke -- workbench up");
     if (ai_ok(K.g)) pdg_set_update(k_update);
     return; }
+  static char const src_q[] =
+#include "q.h"
+  ;
   static char const src_kanren[] =
 #include "kanren.h"
   ;
   static char const src_rune[] =
 #include "rune.h"
   ;
-  g = ai_lib_(g, "kanren", src_kanren);                // kanren and rune are MODULES: registered here, loaded
-  g = ai_lib_(g, "rune", src_rune);                    //   by name below (rune's matcher reads kanren -- subst
-  K.g = ai_evals_(g, "("                               //   through the registry, unify/ufail?/var down the splice)
+  g = ai_lib_(g, "q", src_q);                          // q, kanren and rune are MODULES: registered here, loaded
+  g = ai_lib_(g, "kanren", src_kanren);                //   by name below -- q is rune's coefficient field, kanren
+  g = ai_lib_(g, "rune", src_rune);                    //   its matcher's unifier (subst through the registry,
+  K.g = ai_evals_(g, "("                               //   unify/ufail?/var down the splice)
 #include "egg.h"
     ai_egg_pre
 #include "prel.h"
     " "
 #include "ev.h"
     ai_egg_post
-#include "q.h"                                         // the optional library layers rune stands on: q is its coefficient
-    " "                                                //   field, kanren its matcher's unifier -- both out of prel now, so
-    "(use 'kanren)"                                    //   this frontend names what it needs
+    "(use 'q)"
+    " "
+    "(use 'kanren)"
     " "
     "(use 'rune)"
     " "
 #include "cas.h"
     "0)");
+  // THE SESSION: the crank's evals defglob here, never in the base
+  K.g = ai_layer_(K.g);
   pdg_log(ai_ok(K.g) ? "love: boot eval ok" : "love: boot eval FAILED");
   if (ai_ok(K.g))
     pdg_set_update(k_update);

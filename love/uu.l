@@ -14,12 +14,14 @@
 ;   (let x a b) -- definitional: x binds the VALUE of a, transparent to conv
 ; and any other list is an application spine. (f) == f here too.
 ;
-; BAKED post.l-style on every corpus target (host + love0 + the inle kernel +
-; wasm), and swept at the tail into the ONE `uu` book (the holo/glaze module
-; pattern) -- the surface is (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every
-; internal stays a probe away. the UniMath theorem corpus rides in test/uu.l
-; (and the test/uu*.l ladder over it), binding this surface at its head.
-(: uu-mark (names ()))
+; a MODULE on every corpus target (host + love0 + the inle kernel + wasm): the
+; frontend registers this source (ai_lib_) and its boot says (use 'uu), then
+; rebinds `uu` to the accessor -- (: uu (from 'uu)) -- so the surface stays
+; (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every internal a probe away.
+; the layer IS the module boundary now: the old uu-mark/sweep trailer retired
+; with the brackets. the UniMath theorem corpus rides in test/uu.l (and the
+; test/uu*.l ladder over it), binding this surface at its head; the defn/defq/
+; axm macros land in this layer's macro slot and ride the boot splice.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
 (: GLOB (tablet 0) HELPC (tablet 0)
@@ -388,17 +390,3 @@
    _ (:: 'defq (\ l (? (= 3 (tally l)) (link '(1 defq) l) `('scare `('\ 'uu-defq-arity) `('\ l)))))
    _ (:: 'axm  (\ l (? (= 2 (tally l)) (link '(1 axm)  l) `('scare `('\ 'uu-axm-arity)  `('\ l)))))
    0)
-
-; --- the module boundary: every name the span above leaked since `uu-mark`
-; --- sweeps off the global book into ONE book pinned under `uu`. The span
-; --- defines only NEW names (probed: 55, zero rebinds of pre-existing
-; --- globals), so the book grows by exactly one name: `uu`.
-(: seen (: t (tablet 0) _ (each uu-mark (\ k (pin t k 1))) t)
-   uum (tablet 0)
-   _ (each (names ())
-      (\ k (? (peep seen k 0) 0
-              (: v (peep book k 0) _ (pull book k 0) (pin uum k v)))))
-   _ (pull book 'uu-mark 0)
-   _ (pull uum 'uu-mark 0)
-   _ (pin book 'uu (\ k (? (id? k 'keys) (keys uum) (peep uum k 0))))  ; lookup-only closure: uum private,
-   0)                                                                  ;   unpoisonable; (uu 'keys) introspects

@@ -16,9 +16,12 @@
 ; fossil: `cat` propagates whatever tail it is handed, so a single 0 from eps/opt/skip/many rides all the
 ; way out and `=` tells the two terminators apart -- a payload that should equal a map-built list would
 ; not. The unit is the only nil that leaves here.
-; the module span opens here: the trailer at the bottom sweeps the combinators into
-; the `parse` book and the overlay internals into `overlay` (measured, never listed).
-(: post-mark (names ()))
+; a MODULE now (no brackets: the runtime supplies the layer -- the frontend
+; registers this source and its boot says (use 'post)). the boot then rebinds
+; the two accessors to the union -- (: parse (from 'post) overlay (from 'post))
+; -- and hooks ev through ov-hook below; the old post-mark/sweep trailer
+; retired with the brackets, the layer being the boundary. the ambient splice
+; serves the bare names (overlay-set/overlay-off, revcat, bake).
 
 (: eps (\ s y n (y s ()))
    (lit l) (\ s y n
@@ -103,34 +106,17 @@
    ov-slot     (tablet 0)                          ; install slot: peep 0 -> (DOM SIGS) or ()
    overlay-set (\ dom sigs (pin ov-slot 0 (L dom sigs)))
    overlay-off (\ _ (pin ov-slot 0 ()))
-   ; e0 = the ev captured before the rebind, CLOSURE-PRIVATE (an inner body-having :) --
-   ; it never touches the book. (it was a global `ov-ev0` once; sweeping that nom off the
-   ; book broke the LOADED image -- parked in sigsuspend -- an undiagnosed snapshot-codec
-   ; edge, sidestepped by not having the name at all.)
-   ev (: e0 ev                                     ; the sequence law: reads the PREVIOUS ev (the baked glaze chain)
-         (\ e (: v (peep ov-slot 0 ()) (? (two? v) (: _ (ov-eng (cap v) (caup v) e) (e0 e)) (e0 e))))))
+   ; ov-hook: the ev WRAPPER MAKER. `ev` itself must rebind in ORTH (the whole
+   ; point is that every later (ev 'ev ..) walks into it), and a module layer
+   ; cannot write there -- so the BOOT does it, at exactly this load's old seat
+   ; in the sequence: (: ev ((from 'post 'ov-hook) ev)). e0 = the ev the boot
+   ; hands in, CLOSURE-PRIVATE. (it was a global `ov-ev0` once; sweeping that
+   ; nom off the book broke the LOADED image -- parked in sigsuspend -- an
+   ; undiagnosed snapshot-codec edge, sidestepped by not having the name.)
+   (ov-hook e0)
+     (\ e (: v (peep ov-slot 0 ()) (? (two? v) (: _ (ov-eng (cap v) (caup v) e) (e0 e)) (e0 e)))))
 
-; the MODULE BOUNDARY (the holo/glaze pattern): the span since post-mark sweeps into two
-; books -- the ov-* internals under `overlay`, the combinators under `parse` -- while
-; overlay-set/overlay-off stay the public entry points (and `ev` is a REBIND of a
-; pre-mark name: rebinding is not a new name, so it stays global).
-(: seen (: t (tablet 0) _ (each post-mark (\ k (pin t k 1))) t)
-   pm (tablet 0)
-   ovm (tablet 0)
-   (pre? s p) (&& (<= (tally p) (tally s)) (= p (snip s 0 (tally p))))
-   _ (each (names ())
-      (\ k (? (peep seen k 0) 0
-              (: s (string k)
-                 (? (pre? s "overlay-") 0                       ; the public entry points stay
-                    (: v (peep book k 0) _ (pull book k 0)
-                       _ (? (pre? s "ov-") (pin ovm k v) (pin pm k v)) 0))))))
-   _ (pull book 'post-mark 0)
-   _ (pull pm 'post-mark 0)
-   _ (pin book 'parse (\ k (? (id? k 'keys) (keys pm) (peep pm k 0))))      ; lookup-only closures: pm/ovm
-   _ (pin book 'overlay (\ k (? (id? k 'keys) (keys ovm) (peep ovm k 0))))  ;   stay private + unpoisonable; ('keys) introspects
-   0)
-
-; --- shared list utils, AFTER the sweep so they stay bare globals ---
+; --- shared list utils, bare via the ambient splice ---
 ; revcat: (rev l) glued onto acc in one pass -- the flush of the
 ; reversed-accumulator pattern (a cat per step re-copies the whole
 ; accumulation; link + one revcat keeps it linear). cpp/gen ride it.

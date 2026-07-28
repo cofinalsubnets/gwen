@@ -37,5 +37,23 @@
 
 (: _ (unlink "lib/zz-loadprobe.l") _ (unlink "lib/zz-loadprobe/sub.l")
    _ (rmdir "lib/zz-loadprobe") 0)
+
+; the SEAT rungs: the loader also walks <seat>/../lib/ and its love/ subfolder,
+; the seat being the running binary's own home. this binary is out/host/love,
+; so its rungs are out/lib/ and out/lib/love/ -- fixture there, cwd-lib absent,
+; and the walk must still find both.
+(: _ (mkdir "out/lib/love" 493)
+   _ (: p (open "out/lib/zz-seatprobe.l" "w")
+        _ (say p "(: zz-seat-pin 51)")
+        (close p))
+   _ (: p (open "out/lib/love/zz-fhsprobe.l" "w")
+        _ (say p "(: zz-fhs-pin 52)")
+        (close p)))
+(use 'zz-seatprobe)
+(use 'zz-fhsprobe)
+(assert (51 = (from 'zz-seatprobe 'zz-seat-pin))
+        (52 = (from 'zz-fhsprobe 'zz-fhs-pin)))
+(: _ (unlink "out/lib/zz-seatprobe.l") _ (unlink "out/lib/love/zz-fhsprobe.l")
+   _ (rmdir "out/lib/love") 0)
 (puts "loader: ok")
 (putc 10)

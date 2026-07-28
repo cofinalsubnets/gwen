@@ -106,7 +106,11 @@
 ;   (bare names resolve on the walk, never shadow yours), and on a MISS it loads x -- from the
 ;   SOURCE LIBRARY (g->lib, name -> text, a frontend bakes entries with ai_lib_ -- that is how
 ;   every boot assembles now: register, then "(use 'rng)" etc., the concatenation retired), or
-;   from lib/<x>.l (top-level lib/, symlinks into crew/ + love/) -- one fresh layer, the leave
+;   from the filesystem WALK: lib/<x>.l off the cwd (top-level lib/, symlinks into crew/ +
+;   love/), then <seat>/../lib/<x>.l (the seat = the running binary's home via readlink
+;   /proc/self/exe -- ~/.love/bin/love finds ~/.love/lib, out/host/love finds out/lib), then
+;   its love/ subfolder (/usr/bin/love finds /usr/lib/love). PATH picks the love, the love
+;   carries its library -- no env vars anywhere. one fresh layer, the leave
 ;   inside the loader registers it, then the splice. a STRING is an explicit path (module named
 ;   by its basename -- papel's seat-relative want); a SLASHED name ('holo/x64, one symbol)
 ;   INCLUDES lib/x/y.l into the current head, no layer, no registration (lib/seed.l assembles
@@ -266,17 +270,19 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; immortal. the love/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/love), the
 ; freestanding kernel (x86_64/aarch64), and wasm. PREL IS THE LANGUAGE AND STAYS MINIMAL -- a library
 ; is its OWN love/*.l and each frontend includes the ones it wants. drop a .l in love/ and mk/lib.mk
-; lcats it to out/lib/<name>.h automatically -- the BASE layers (coin the ring/monoid, q the
-; rationals, post, uu) still ride each frontend's hand-assembled boot string, but a MODULE
-; (rng, kanren, bao, holo, rune ..) rides the SOURCE LIBRARY instead: the frontend registers
-; the lcat'd constant (ai_lib_) and its boot text says (use 'x) -- see the MODULES bullet.
-; the embed sites, SIX of them: host/main.c (twice -- the egg lane, and love0's own with the
-; sed-wrapped <name>0.h twins, which need a gl0_h entry), wasm/host.c (its OWN boot string, easy to
-; miss -- the corpus caught it), port/inle/kmain.c, port/playdate/main.c, port/mps2/main.c (the
-; teensy/nucleo baker). Each wants a header dep too (host/build.mk, wasm/Makefile,
-; port/inle/kernel.mk, port/playdate/Makefile). coin/rng/q/kanren ride the host, love0, wasm and
-; the K_TEST kernel (the corpus asserts on each); the playdate workbench takes q + kanren + rune,
-; what the cas stands on; a shipped kernel takes bao alone. ⚠ a layer may
+; lcats it to out/lib/<name>.h automatically -- and EVERY post-egg layer is a MODULE now (coin,
+; rng, q, kanren, post, uu, bao, holo, rune ..): the frontend registers the lcat'd constant
+; (ai_lib_) and its boot text says (use 'x) -- see the MODULES bullet. the boot rebinds the
+; one-name surfaces there too ((: uu (from 'uu)), parse/overlay to (from 'post), and post's
+; ev hook: (: ev ((from 'post 'ov-hook) ev)) -- the hook must land in ORTH, which only the
+; boot can write). the embed sites, SEVEN: host/main.c (twice -- the egg lane, and love0's own
+; with the sed-wrapped <name>0.h twins, which need a gl0_h entry), wasm/host.c, port/inle/kmain.c,
+; port/playdate/main.c, port/mps2/main.c (the teensy/nucleo baker), port/teensy41/main.c (its
+; on-device egg lane). Each wants a header dep too (host/build.mk, wasm/Makefile,
+; port/inle/kernel.mk, port/playdate/Makefile). coin/rng/q/kanren/uu ride the host, love0, wasm
+; and the K_TEST kernel (the corpus asserts on each); the playdate workbench takes q + kanren +
+; rune, what the cas stands on; a shipped kernel takes uu + bao. EVERY frontend opens its
+; session with ai_layer_ after boot (bakers never push; wakers always do). ⚠ a layer may
 ; only lean on what SURVIVES BIRTH -- the egg mops its internals just before the hatch, so wrapping a
 ; mopped nif means taking it off egg.l's mop list (rng did: turn/turnf stay now, since the
 ; wrapper that owned them shipped out of prel). ⚠ and a post-egg layer cannot add an

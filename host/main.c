@@ -476,6 +476,15 @@ static char const src0_rng[] =
 static char const src0_kanren[] =
 #include "kanren0.h"
  ;
+static char const src0_uu[] =
+#include "uu0.h"
+ ;
+static char const src0_coin[] =
+#include "coin0.h"
+ ;
+static char const src0_q[] =
+#include "q0.h"
+ ;
 // holo with BOTH cross backends (x64 + arm64), one entry -- the corpus's cross-arch
 // asserts run under both of love0's compilers.
 static char const src0_holo[] =
@@ -498,6 +507,9 @@ static struct ai *boot(struct ai *g, bool argp) {
     return ai_evals_(g, cli); }
   g = ai_lib_(g, "rng", src0_rng);                     //   the self-test also wants the library layers the corpus asserts on
   g = ai_lib_(g, "kanren", src0_kanren);
+  g = ai_lib_(g, "uu", src0_uu);
+  g = ai_lib_(g, "coin", src0_coin);
+  g = ai_lib_(g, "q", src0_q);
   g = ai_lib_(g, "holo", src0_holo);
   g = ai_strof(g, tests0);                            // the baked corpus, as a string
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
@@ -510,10 +522,10 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'holo)");                                    // the assembler service: load + register..
   g = ai_unsplice_(g);                                 //   ..and the C unsplice keeps it non-ambient, like the host
   g = ai_evals_(g,
-#include "uu0.h"                                       // the uu kernel (love/uu.l, sweep at its tail) and coin eval into
-#include "coin0.h"                                     //   the base. rng and kanren load by name (kanren AFTER q, as
-    "(use 'rng)"                                       //   before). every layer, splice and registry entry persists
-#include "q0.h"                                        //   across the egg warm below, so one load serves both corpus passes
+    "(use 'uu) (: uu (from 'uu))"                      // the library layers, all by name in the old eval order (uu's
+    "(use 'coin)"                                      //   one-name surface rebinds like the host); every layer, splice
+    "(use 'rng)"                                       //   and registry entry persists across the egg warm below, so one
+    "(use 'q)"                                         //   load serves both corpus passes
     "(use 'kanren)"
   );
   g = ai_evals_(g, "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))");   // string -> charlist, for the runner
@@ -603,11 +615,23 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
 // library and loaded by `use` -- one layer per load, leave registers, the splice
 // serves the bare names. The lib entries ride the image too, so a woken session
 // keeps the same registry.
+static char const src_coin[] =
+#include "coin.h"
+ ;
 static char const src_rng[] =
 #include "rng.h"
  ;
+static char const src_q[] =
+#include "q.h"
+ ;
 static char const src_kanren[] =
 #include "kanren.h"
+ ;
+static char const src_post[] =
+#include "post.h"
+ ;
+static char const src_uu[] =
+#include "uu.h"
  ;
 static char const src_bao[] =
 #include "bao.h"
@@ -631,8 +655,12 @@ static char const src_holo[] =
 static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
+  g = ai_lib_(g, "coin", src_coin);
   g = ai_lib_(g, "rng", src_rng);
+  g = ai_lib_(g, "q", src_q);
   g = ai_lib_(g, "kanren", src_kanren);
+  g = ai_lib_(g, "post", src_post);
+  g = ai_lib_(g, "uu", src_uu);
   g = ai_lib_(g, "bao", src_bao);
   g = ai_lib_(g, "holo", src_holo);
   g = ai_evals_(g, "("
@@ -641,13 +669,15 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "prel.h"
 #include "ev.h"
     "))"
-#include "coin.h"                                       // the OPTIONAL library layers, each its own love/*.l so prel stays the
-    "(use 'rng)"                                        //   language: coin (ring/monoid over the C coin lane), rng (the random
-#include "q.h"                                          //   stream), q (rationals), then kanren (unification) -- kanren a
-    "(use 'kanren)"                                     //   REGISTERED module BEFORE post, whose overlay half reads subst
-#include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
-#include "uu.h"                                          // uu's NbE kernel (love/uu.l, sweep at its tail) -- one global name, the
-                                                         //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
+    "(use 'coin)"                                        // the library layers, ALL modules now, in the old eval order: coin
+    "(use 'rng)"                                         //   (ring/monoid over the C coin lane), rng (the random stream), q
+    "(use 'q)"                                           //   (rationals), then kanren (unification) -- registered BEFORE post,
+    "(use 'kanren)"                                      //   whose overlay half reads subst through the registry
+    "(use 'post)"                                        // the parser combinators + the ev-seam overlay: the accessors rebind
+    "(: parse (from 'post) overlay (from 'post)"         //   to the union (every reach is by key), and the ev HOOK lands in
+    "   ev ((from 'post 'ov-hook) ev))"                  //   ORTH here -- a module layer cannot write it, the boot can
+    "(use 'uu)"                                          // uu's NbE kernel: (: uu (from 'uu)) keeps the one-name surface --
+    "(: uu (from 'uu))"                                  //   the corpus + an overlay reach (uu 'vof) through it
     "(use 'holo)"                                        // the crew/holo/ assembler, a post-egg language SERVICE: load + register,
   );                                                     //   then the C unsplice below keeps it NON-AMBIENT -- (use 'holo)
   g = ai_unsplice_(g);                                   //   splices it, (from 'holo 'assemble) probes it. a test that wants a
