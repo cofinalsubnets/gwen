@@ -96,7 +96,8 @@ Two mappings are the elegant ones, and both are *already built*:
 
 1. **fs nifs** — DONE: `stat`/`readdir`/`unlink`/`lseek` (the `posix_` lane in
    host/posix.c, gated in boot/init.l) joined `mkdir`/`chdir`/`cwd`; the
-   `open`/read/write/close path predates them. `stat` answers `(size mtime-ms mode)`
+   `open`/read/write/close path predates them. `stat` answers `(size mtime-ms mode ns)`
+   (ns the whole mtime in nanoseconds, one charm -- cook's build-grade resolution)
    or `()` for absence; `lseek` rides the raw-fd `openfd` lane (ports buffer).
 2. **process nifs** — `fork`/`exec`/`waitpid`/`_exit`/`pipe`/`dup2`/`kill`. The core of
    "use the host as a shell."

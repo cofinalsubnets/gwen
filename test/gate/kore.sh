@@ -96,6 +96,8 @@ hi
 '                cut -c2-4
 pipe "tr"        'hi there
 '                tr a-z A-Z
+pipe "tr class"  'Mixed Case 123
+'                tr '[:lower:]' '[:upper:]'
 pipe "tr pad"    'abcd
 '                tr abcd xy
 pipe "tr -d"     'hello world
@@ -132,7 +134,19 @@ korerun rm -r "$P/a" && [ ! -e "$P/a" ] || fail "kore rm -r"
 korerun mkdir "$P/empty" && korerun rmdir "$P/empty" && [ ! -e "$P/empty" ] || fail "kore rmdir"
 korerun rm "$P/nope" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore rm miss exit"
 korerun rm -f "$P/nope" > /dev/null 2>&1; r=$?; [ $r -eq 0 ] || fail "kore rm -f quiet"
-echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir) ok"
+# the build's fs verbs: install lays parents + mode, cmp answers 0/1/2, readlink
+# chases -f to GNU's canonical answer
+korerun install -D -m 644 "$P/f1" "$P/i/n/dst" && [ "$(stat -c %a "$P/i/n/dst")" = 644 ] \
+  && cmp -s "$P/f1" "$P/i/n/dst" || fail "kore install -D -m"
+korerun install -d "$P/i/d1/d2" && [ -d "$P/i/d1/d2" ] || fail "kore install -d"
+korerun cmp -s "$P/f1" "$P/i/n/dst"; [ $? -eq 0 ] || fail "kore cmp same"
+printf 'other\n' > "$P/i/o"
+korerun cmp -s "$P/f1" "$P/i/o"; [ $? -eq 1 ] || fail "kore cmp differ"
+korerun cmp -s "$P/f1" "$P/i/nope" 2> /dev/null; [ $? -eq 2 ] || fail "kore cmp trouble"
+[ "$(korerun readlink "$P/l1")" = "$(readlink "$P/l1")" ] || fail "kore readlink"
+ln -sf l1 "$P/l2"
+[ "$(korerun readlink -f "$P/l2")" = "$(readlink -f "$P/l2")" ] || fail "kore readlink -f"
+echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink) ok"
 
 # ------------------------------------------------------------------- the greps
 printf 'abc\nxbz\nzzz\n+q\n*r\n' > "$ho/.gr1"; printf 'nope\nbc here\n' > "$ho/.gr2"

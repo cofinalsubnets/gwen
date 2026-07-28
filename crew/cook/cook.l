@@ -62,17 +62,13 @@
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
    pgen (tablet 0)         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), installed by the Makefile importer (() until then)
 
-   dates (tablet 0)        ; the date cache: item -> mtime | 'gone (known absent) | 0 (unknown)
-   fresh (tablet 0)        ; a 1-cell box: is that cache still trustworthy? (see `warm`)
+   origins (tablet 0)      ; make's variable provenance: name -> "default" | "environment"
+                           ; | "file" | "command line" | "override" ($(origin), and the
+                           ; rule that a file assignment never beats a command-line one)
+   clivars (tablet 0)      ; a 1-cell box: the command line's VAR=VAL words, ((name . val) ..)
 
-   ; string -> charlist, so a captured stat string can be read as a port.
+   ; string -> charlist, so a captured string can be read as a port ($(word)'s index).
    (s2cl s) ((: (g i) (? (i < (tally s)) (link (peep s i 0) (g (1 + i))))) 0)
-
-   ; the lines of s, the trailing newline contributing none.
-   (splitnl s) ((: (g i st acc) (? (i < tally s)
-                                   (? ((s i) = 10) (g (i + 1) (i + 1) (link (snip s st i) acc))
-                                      (g (i + 1) st acc))
-                                   (rev (? (st < i) (link (snip s st i) acc) acc)))) 0 0 ())
 
    ; "a b c" from ("a" "b" "c"); "" from the empty list.
    (join sep l) (? (two? l) (foldl (\ a x (a + sep + x)) <l >l) "")
@@ -100,57 +96,13 @@
    ; the public Cookfile API: (recipe item ingredients steps) -- no order-only prereqs.
    (recipe item ingredients steps) (reg item ingredients 0 steps)
 
-   ; the modification time of an item, in seconds, or () (the zero point) when it
-   ; has none: a phony symbol, or a file that is not on disk. run gives back
-   ; (status . output) once stat actually executed; status 0 means the file is
-   ; there and `output` is its %.Y date (nanosecond resolution), which reads
-   ; straight back as a number -- the sub-second part defeats same-second races.
-   ; (a nanosecond is the point: love HAS a `stat` nif, but it reports milliseconds,
-   ; and an mtime cook cannot tell apart from its target's is an edit cook never
-   ; rebuilds. so this stays on stat(1), and gets fast a different way -- see `warm`.)
-   (date1 item)
-   (: r (run `("sh" "-c" "stat -c %.Y \"$0\" 2>/dev/null" item))   ; %.Y: nanosecond float; stderr silenced (a miss is normal)
-      (? (&& (two? r) (0 = <r)) (sound (tap (s2cl >r)) ()) ()))
+   ; the modification time of an item in NANOSECONDS (one charm, the stat nif's
+   ; fourth element -- sub-millisecond, so two writes inside one tick still order),
+   ; or () (the zero point) when it has none: a phony symbol, or a file that is
+   ; not on disk. (this WAS stat(1) through a shell, batch-cached against the ~2N
+   ; forks of a no-work pass; the nif is a syscall, so the cache went with the fork.)
    (date item)
-   (? (nom? item) ()
-      (: c (? (peep fresh 0 0) (peep dates item 0) 0)
-         (? c c (date1 item))))
-
-   ; --- warming the cache: one stat for the whole graph -------------------------
-   ; `date` is called two or three times per node, so a prep pass over an N-item graph
-   ; SPAWNS A SHELL ~2N times. that is invisible when the steps are compilers and it is
-   ; the whole cost when there is nothing to do: 29 pages, no work, 350ms of pure fork.
-   ; one `stat` over every item at once answers the same question in ~2ms.
-   ;
-   ; ONE stat, not a shell loop over N of them -- a `for f; do stat ..; done` is one fork
-   ; for the shell and then N more for stat, which is the thing being fixed. so the format
-   ; carries the name: `%.Y %n`, split at the FIRST space, since an mtime never holds one
-   ; and everything after it is the name exactly as it was passed. a name containing a
-   ; NEWLINE would break that, and is refused up front rather than parsed wrongly.
-   ;
-   ; the cache holds only POSITIVE observations. a file stat did not report is left
-   ; unknown, not recorded as absent, so a fork or a stat that fails outright can only
-   ; cost speed: `date` forks for whatever is missing from the cache, exactly as before.
-   (warm _)
-   (: _ (each (keys dates) (\ k (pin dates k 0)))
-      _ (pin fresh 0 0)
-      seen (tablet 0)
-      (note d) (? (nom? d) 0 (pin seen d 1))
-      _ (each (keys cards) (\ k (: _ (note k)
-                                   c (peep cards k ())
-                                   (? (two? c) (: _ (each <c note) (each <>c note)) 0))))
-      fs (keys seen)
-      (nlp s) ((: (g i) (? (i < tally s) (? ((s i) = 10) 1 (g (i + 1))) 0)) 0)
-      (? (! (two? fs)) 0
-         (any nlp fs) 0                                    ; a newline in a name: do not guess
-         (: r (run (`("sh" "-c" "stat -c \"%.Y %n\" \"$@\" 2>/dev/null" "sh") + fs))
-            _ (each (splitnl (? (two? r) >r ""))
-                    (\ ln (: n (tally ln)
-                             i ((: (g j) (? (&& (j < n) (! ((ln j) = 32))) (g (j + 1)) j)) 0)
-                             (? ((i + 1) < n)
-                                (pin dates (snip ln (i + 1) n) (sound (tap (s2cl (snip ln 0 i))) ()))
-                                0))))
-            (? (0 < $dates) (pin fresh 0 1) 0)))))
+   (? (nom? item) () (: st (stat item) (? (two? st) <>>>st ()))))
 
 ; --- prepping an item up to date ---------------------------------------------
 ; one cook call carries two books: `done` memoizes each item's settled age so a
@@ -201,13 +153,8 @@
                _ (pin done item ta)
                ta))))
 
-   ; run a recipe: each step in order. and DROP the warmed date cache: a step may write
-   ; anything, not only its own target (make's two-outputs-one-recipe idiom writes a
-   ; sibling), so the only sound rule is that no cached date survives a recipe. from here
-   ; on the pass forks per item exactly as it always did -- which is the right trade,
-   ; because a pass that ran a recipe is already paying for a compiler, and a pass that
-   ; ran none (the up-to-date `make`, the dev server's page load) never gets here.
-   (recur item steps) (: _ (each steps (\ step (step1 step))) (pin fresh 0 0))
+   ; run a recipe: each step in order.
+   (recur item steps) (each steps (\ step (step1 step)))
 
    ; one step. a list HEADED BY THE SYMBOL `exec` -- (exec PROG ARGS..) -- is an
    ; INTERACTIVE step: it runs via the `exec` nif, which REPLACES cook and inherits
@@ -263,10 +210,9 @@
 
 ; prep item up to date, QUIETLY, and answer the tablet of items whose recipe actually
 ; advanced their file. `cook` prints a verdict off it; a caller that wants the number
-; takes `$` of it (papel's build does). this is also the one place `warm` belongs -- the
-; cache is per-pass, so it is filled by the outermost call and by nothing else.
+; takes `$` of it (papel's build does).
 (: (prepped item)
-   (: shipped (tablet 0) _ (warm ()) _ (prep item (tablet 0) shipped) shipped)
+   (: shipped (tablet 0) _ (prep item (tablet 0) shipped) shipped)
 
    (cook item)                                ; prep item up to date and report
    (? (! item) (: _ (say err "cook: nothing to cook") _ (put err 10) (quit 1))
@@ -420,6 +366,12 @@
                (? (w = "include") `('inc rest)
                   (w = "-include") `('inc rest)
                   (w = "sinclude") `('inc rest)
+                  ; `override NAME op VAL` assigns past a command-line VAR=VAL;
+                  ; `export NAME [op VAL]` assigns (when an op is there) and hands the
+                  ; final value to the process environment, so recipes inherit it.
+                  (w = "override") (: a (pstrict assignP rest) (? (two? a) (link 'oassign a) `('skip)))
+                  (w = "export") (: a (pstrict assignP rest)
+                                    (? (two? a) (link 'xassign a) `('xname (trim rest))))
                   (w = "ifeq") `('ifeq rest)
                   (w = "ifneq") `('ifneq rest)
                   (w = "ifdef") `('ifdef rest)
@@ -481,17 +433,50 @@
    (chomp s) ((: (g i) (? (&& (0 < i) ((s (i - 1)) = 10)) (g (i - 1)) (snip s 0 i))) (tally s))
    (nl->sp s) ((: (g i acc) (? (i >= (tally s)) acc (g (1 + i) (acc + (? ((s i) = 10) 32 (s i)))))) 0 "")
    (fn-shell cmd) (: r (run `("sh" "-c" cmd)) (? (two? r) (nl->sp (chomp >r)) ""))
-   ; $(wildcard): shell out so glob + no-match (nullglob via [ -e ]) are POSIX.
-   (globsh pat) (: r (run `("sh" "-c" "set +f; for f in $0; do [ -e \"$f\" ] && printf '%s ' \"$f\"; done" pat))
-                   (? (two? r) (split-ws >r) 0))
+   ; $(wildcard), native: a word with no * or ? is an existence test; otherwise the
+   ; LAST path segment is the pattern (the tree's globs are all leaf-shaped), matched
+   ; over readdir -- * a run, ? one char, a leading . only by an explicit . -- and the
+   ; matches SORTED under their directory prefix (glob(3) order, what sh gave before).
+   (globch s) ((: (g i) (? (i >= (tally s)) 0 (|| ((s i) = 42) (|| ((s i) = 63) (g (1 + i)))))) 0)
+   (gmatch p s)
+   ((: (m i j)
+       (? (i >= (tally p)) (j >= (tally s))
+          ((p i) = 42) (|| (m (1 + i) j) (&& (j < (tally s)) (m i (1 + j))))
+          (j >= (tally s)) 0
+          (|| ((p i) = 63) ((p i) = (s j))) (m (1 + i) (1 + j))
+          0))
+    0 0)
+   (glob1 pat)
+   (? (! (globch pat)) (? (exists? pat) `(pat) 0)
+      (: k (mk-lastslash pat)
+         dir (? (0 < k) (snip pat 0 (? (1 < k) (k - 1) k)) ".")
+         pfx (sub pat 0 k)
+         leaf (snip pat k (tally pat))
+         hid (&& (0 < (tally leaf)) ((leaf 0) = 46))
+         ms (filter (\ e (&& (|| hid (! ((e 0) = 46))) (gmatch leaf e)))
+                    (: es (readdir dir) (? (two? es) es ())))
+         (map (\ e (? (0 < (tally pfx)) (pfx + e) e)) (sort ms))))
    (fdir w) (: k (mk-lastslash w) (? (0 < k) (sub w 0 k) "./"))
    (fnotdir w) (sub w (mk-lastslash w) (tally w))
    (flastdot w) (: sl (mk-lastslash w)
                    ((: (g j) (? (j > sl) (? ((w (j - 1)) = 46) (j - 1) (g (j - 1))) (tally w))) (tally w)))
    (fbase w) (: dot (flastdot w) (? (dot < (tally w)) (sub w 0 dot) w))
    (fsuf w)  (: dot (flastdot w) (? (dot < (tally w)) (sub w dot (tally w)) ""))
-   (fabs w) (? (&& (0 < (tally w)) ((w 0) = 47)) w
-              (: r (run `("sh" "-c" "pwd")) (? (two? r) ((chomp >r) + "/" + w) w)))
+   ; make's $(abspath): rooted on the cwd, then LEXICALLY cleaned -- no repeated
+   ; separators, no . or .. components (.. pops a segment; no filesystem asked).
+   (segs s) ((: (g i st acc) (? (i >= (tally s)) (rev (? (st < i) (link (snip s st i) acc) acc))
+                                (? ((s i) = 47) (g (1 + i) (1 + i) (? (st < i) (link (snip s st i) acc) acc))
+                                   (g (1 + i) st acc)))) 0 0 0)
+   (fabs w)
+   (: r (? (&& (0 < (tally w)) ((w 0) = 47)) w
+           (: p (cwd 0) (? (string? p) (p + "/" + w) w)))
+      cl ((: (g l acc) (? (two? l)
+                          (g >l (? (<l = ".") acc
+                                   (<l = "..") (? (two? acc) >acc acc)
+                                   (link <l acc)))
+                          (rev acc)))
+          (segs r) 0)
+      ("/" + (join "/" cl)))
    (dedup l) (? (two? l) (? (two? >l) (? (<l = <>l) (dedup >l) (link <l (dedup >l))) l) l)
    (sortu l) (dedup (sort l))
    (strrep frm to s)
@@ -506,7 +491,18 @@
    funcnames '("shell" "wildcard" "dir" "notdir" "basename" "suffix" "patsubst"
                "subst" "filter" "filter-out" "sort" "strip" "if" "or" "and"
                "addprefix" "addsuffix" "firstword" "lastword" "word" "words"
-               "abspath" "realpath" "call")
+               "abspath" "realpath" "call" "origin")
+   ; $(call fn,a,..): bind $0 (the name) and $1.. to the EXPANDED args, expand
+   ; fn's body, put the old bindings back (a shadowed outer $1 survives).
+   (fn-call args as d)
+   (: fname (trim (nth args 0 ""))
+      body (peep as fname "")
+      n ((: (g l i) (? (two? l) (g >l (1 + i)) i)) args 0)
+      olds ((: (g i acc) (? (i < n) (g (1 + i) (link (link (show i) (peep as (show i) 'cook.undef)) acc)) acc)) 0 0)
+      _ ((: (g i l) (? (two? l) (: _ (pin as (show i) <l) (g (1 + i) >l)) 0)) 0 args)
+      r (expand body as (1 + d))
+      _ (each olds (\ pr (? (nom? >pr) (pull as <pr 0) (pin as <pr >pr))))
+      r)
    (funcp nm) (any (\ f (f = nm)) funcnames)
    (findws s) ((: (g i) (? (i >= (tally s)) i (? (chws (s i)) i (g (1 + i))))) 0)
    (apply-func nm at as d)
@@ -514,7 +510,7 @@
       argl (\ _ (map ex1 (splittop at 44)))     ; comma-split + expand (most funcs); 44 = ,
       rawl (\ _ (splittop at 44))               ; comma-split, NOT expanded (if/or/and)
       (? (nm = "shell")     (fn-shell (ex1 at))
-         (nm = "wildcard")  (join " " (catmap globsh (split-ws (ex1 at))))
+         (nm = "wildcard")  (join " " (catmap glob1 (split-ws (ex1 at))))
          (nm = "dir")       (join " " (map fdir (split-ws (ex1 at))))
          (nm = "notdir")    (join " " (map fnotdir (split-ws (ex1 at))))
          (nm = "basename")  (join " " (map fbase (split-ws (ex1 at))))
@@ -534,8 +530,10 @@
          (nm = "if")        (: a (rawl 0) c (trim (ex1 (nth a 0 ""))) (? (0 < (tally c)) (ex1 (nth a 1 "")) (ex1 (nth a 2 ""))))
          (nm = "or")        (fn-or (rawl 0) as d)
          (nm = "and")       (fn-and (rawl 0) as d)
+         (nm = "call")      (fn-call (argl 0) as d)
+         (nm = "origin")    (peep origins (trim (ex1 at)) "undefined")
          (|| (nm = "abspath") (nm = "realpath")) (join " " (map fabs (split-ws (ex1 at))))
-         ""))                                   ; call / unknown -> empty
+         ""))                                   ; unknown -> empty
 
    ; a group body is a function call ($(name args)), a substitution reference
    ; ($(VAR:from=to)), or a plain variable ($(VAR)).
@@ -584,8 +582,12 @@
    ; already in `as` (the .DEFAULT_GOAL precedent); its default is make's own -c.
    (shflags as) (: f (trim (peep as ".SHELLFLAGS" ""))
                    (? (0 < (tally f)) (split-ws f) `("-c")))
+   ; $(@D): the target's directory sans trailing slash ("." for a bare name), $(@F)
+   ; its basename -- make's D/F faces, pinned beside the plain automatics.
+   (dslash w) (: k (mk-lastslash w) (? (0 < k) (snip w 0 (? (1 < k) (k - 1) k)) "."))
    (expand-steps raws t pr stem as)
    (: _ (pins as "@" t "<" (? (two? pr) <pr "") "^" (join " " pr) "*" stem)
+       _ (pins as "@D" (? (nom? t) "." (dslash t)) "@F" (? (nom? t) (show t) (fnotdir t)))
        fl (shflags as)
        cmds (map (\ raw (expand >>raw as 0)) raws)
        ; .ONESHELL: the WHOLE recipe rides ONE shell, so a recipe reads as a script
@@ -619,14 +621,22 @@
             (link (? (two? ws) <ws "") (? (two? >ws) <>ws "")))))
    (eval-ifeq rest as) (: a (cond-args rest) ((trim (expand <a as 0)) = (trim (expand >a as 0))))
    (eval-ifdef rest as) (0 < (tally (expand (peep as (trim (expand rest as 0)) "") as 0)))
-   (do-assign as nm op val)
-   (: v (trim val)
-      (? (op = "=")   (pin as nm v)
-         (op = ":=")  (pin as nm (expand v as 0))
-         (op = "::=") (pin as nm (expand v as 0))
-         (op = "?=")  (: cur (peep as nm 'cook.undef) (? (nom? cur) (pin as nm v) 0))
-         (op = "+=")  (: o (peep as nm "") (pin as nm (? (0 < (tally o)) (o + " " + v) v)))
-         (pin as nm v)))
+   ; ov nonzero is the `override` directive: the one assignment that beats a
+   ; command-line VAR=VAL (which otherwise silences every file assignment to
+   ; that name, ?= and += included -- make's rule). origins records provenance
+   ; for $(origin); an unfired ?= leaves both value and origin alone.
+   (do-assign as nm op val) (assign1 as nm op val 0)
+   (assign1 as nm op val ov)
+   (? (&& (! ov) ((peep origins nm "undefined") = "command line")) 0
+      (: v (trim val)
+         (org _) (pin origins nm (? ov "override" "file"))
+         (? (op = ":=")  (: _ (pin as nm (expand v as 0)) (org ()))
+            (op = "::=") (: _ (pin as nm (expand v as 0)) (org ()))
+            (op = "?=")  (: cur (peep as nm 'cook.undef)
+                            (? (nom? cur) (: _ (pin as nm v) (org ())) 0))
+            (op = "+=")  (: o (peep as nm "")
+                            _ (pin as nm (? (0 < (tally o)) (o + " " + v) v)) (org ()))
+            (: _ (pin as nm v) (org ())))))
 
    ; -- fold classified lines into a rules list, mutating `as`. The conditional
    ; stack is a list of frames (pon taken active); `on` is the top frame's active
@@ -651,6 +661,12 @@
                 (k = 'rule)   (? on (loop rest (flushr cur rules) (mkrule c) cond)
                                     (loop rest (flushr cur rules) 0 cond))
                 (k = 'assign) (: _ (? on (do-assign as (r1 c) (r2 c) (r3 c)) 0) (loop rest (flushr cur rules) 0 cond))
+                (k = 'oassign) (: _ (? on (assign1 as (r1 c) (r2 c) (r3 c) 1) 0) (loop rest (flushr cur rules) 0 cond))
+                (k = 'xassign) (: _ (? on (: _ (assign1 as (r1 c) (r2 c) (r3 c) 0)
+                                             (setenv (r1 c) (expand (peep as (r1 c) "") as 0))) 0)
+                                  (loop rest (flushr cur rules) 0 cond))
+                (k = 'xname)   (: _ (? on (setenv (r1 c) (expand (peep as (r1 c) "") as 0)) 0)
+                                  (loop rest (flushr cur rules) 0 cond))
                 (k = 'inc)    (? on (: more (catmap file-lines (split-ws (expand (r1 c) as 0)))
                                        (loop (more + rest) (flushr cur rules) 0 cond))
                                     (loop rest (flushr cur rules) 0 cond))
@@ -670,10 +686,25 @@
    (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (say err ("cook: cannot read " + path)) _ (put err 10) (quit 1))))
    (file-lines ip) (map classify (lines (uncont (slurp-of ip))))
 
-   ; seed make's builtin defaults (overridable by the Makefile).
+   ; seed the variable table the way make does: the ENVIRONMENT first (every
+   ; NAME=value, origin "environment" -- $(HOME) and friends expand for real),
+   ; then the builtin defaults for whatever the environment left unsaid, then
+   ; the command line's VAR=VAL words, whose origin silences file assignments.
    (seed-defaults as)
-   (pins as "CC" (: e (getenv "CC") (? (&& (string? e) (0 < (tally e))) e "cc"))
-         "MAKE" "make" "AR" "ar" "RM" "rm -f")
+   (: _ (each (keys origins) (\ k (pull origins k 0)))       ; a fresh provenance per import
+      _ (each (environ 0)
+              (\ e (: i (findc e 0 61)                       ; 61 = =
+                      (? (i < (tally e))
+                         (: nm (snip e 0 i)
+                            _ (pin as nm (sub e (1 + i) (tally e)))
+                            (pin origins nm "environment"))
+                         0))))
+      (dflt nm v) (? (nom? (peep as nm 'cook.undef))
+                     (: _ (pin as nm v) (pin origins nm "default")) 0)
+      _ (dflt "CC" "cc") _ (dflt "MAKE" "make") _ (dflt "AR" "ar") _ (dflt "RM" "rm -f")
+      _ (each (peep clivars 0 ())
+              (\ pr (: _ (pin as <pr >pr) (pin origins <pr "command line"))))
+      as)
 
    ; split a prereq word list at a `|` into (normal . order-only).
    (splitbar ws) ((: (g l acc) (? (! (two? l)) (link (rev acc) 0)
@@ -830,22 +861,32 @@
    ; rest are recipes; with -f, every positional word is a recipe.
    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))
    (version _) (bye ("cook (love " + love-version + ")"))
-   (usage _) (bye ("usage: cook [-f FILE] [--emit] [-v] [-h] [RECIPE ...]\n"
+   (usage _) (bye ("usage: cook [-f FILE] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
                    + "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
                    + "      --emit        transpile a Makefile to a resolved Cookfile, then exit\n"
                    + "  -v, --version     print the version and exit\n"
                    + "  -h, --help        print this help and exit\n"
+                   + "  VAR=VAL           a command-line variable (silences the file's assignments)\n"
                    + "  RECIPE ...        the items to build (default: the first recipe declared)\n"
                    + "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary love source."))
    (need-arg h r) (? (two? r) 0 (: _ (say err ("cook: " + h + " needs an argument")) _ (put err 10) (quit 2)))
-   (parse-args ws)             ; -> a tablet: 'file, 'emit, 'help, 'ver, 'pos (the recipe words, in order)
+   ; a NAME=VAL word (make's command-line variable; NAME:=VAL folds to the same,
+   ; the split point's leading : stripped) -> (name . val), or () for a plain word.
+   (varw w)
+   (: i (findc w 0 61)                                       ; 61 = =
+      (? (|| (i >= (tally w)) (0 = i)) ()
+         (: e (? ((w (i - 1)) = 58) (i - 1) i)               ; 58 = :
+            (? (0 = e) () (link (snip w 0 e) (sub w (1 + i) (tally w)))))))
+   (parse-args ws)             ; -> a tablet: 'file, 'emit, 'help, 'ver, 'var, 'pos (the recipe words, in order)
    ((: (loop ws opt) (? (! (two? ws)) opt
        (: w <ws r >ws
           (? (|| (w = "-f") (w = "--file")) (: _ (need-arg w r) _ (pin opt 'file <r) (loop >r opt))
              (w = "--emit")                                       (: _ (pin opt 'emit 1) (loop r opt))
              (|| (w = "-h") (|| (w = "--help") (w = "help")))      (: _ (pin opt 'help 1) (loop r opt))
              (|| (w = "-v") (|| (w = "--version") (w = "version"))) (: _ (pin opt 'ver 1) (loop r opt))
-             (: _ (pin opt 'pos ((peep opt 'pos ()) + `(w))) (loop r opt))))))
+             (: vw (varw w)
+                (? (two? vw) (: _ (pin opt 'var ((peep opt 'var ()) + `(vw))) (loop r opt))
+                   (: _ (pin opt 'pos ((peep opt 'pos ()) + `(w))) (loop r opt))))))))
     ws (tablet 0))
 
    ; -- cook-main (this form's body ANSWERS it) --
@@ -866,6 +907,7 @@
       opt (parse-args as)
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)
+      _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)

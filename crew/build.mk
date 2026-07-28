@@ -45,7 +45,7 @@ out/host$(hsuf)/.kore-cat.l: $(korefiles)
 out/host$(hsuf)/kore: out/host$(hsuf)/kore.image
 	@echo AI	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
-	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
+	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'n=$$(basename -- "$$0")'; \
 	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(kore-main (link \"$$n\" (cuup (cup cmdline))))" "$$@"'; } > $@
 	@chmod 755 $@

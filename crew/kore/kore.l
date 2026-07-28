@@ -72,6 +72,8 @@
              'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
              'ln ln-main 'touch touch-main
              'pwd pwd-main 'chmod chmod-main
+             'install install-main 'readlink readlink-main
+             'cmp cmp-main
              'grep grep-main 'sed sed-main
              'vi vi-main
              'env env-main 'sleep sleep-main
@@ -89,6 +91,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   env sleep kill xargs                    the process tools (crew/kore/proc.l)
   vi [FILE]                               the editor (crew/vi/)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/kore/fs.l)
+  install readlink cmp                         ... the build's fs verbs
   echo seq yes true false basename dirname     ... and the trivia
 ")
                 (quit 2))

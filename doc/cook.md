@@ -23,7 +23,7 @@ With no **-f**, cook discovers a build file in the current directory, preferring
 
 ## Makefile
 
-cook reads an ordinary **Makefile** directly — a reasonably GNU-make-compatible import: recursive $(**VAR**) expansion and substitution references, the common functions (**$(**shell**),** $(**wildcard**), $(**dir**), $(**patsubst**), $(**filter**), ...), **ifeq**/**ifdef** conditionals, **include**, the **= := ?= +=** assignment flavors, pattern rules and static patterns, order-only prerequisites, and the **$@** **$<** **$^** **$\*** automatic variables. Each recipe line is run through **sh**(1), so pipes, globs and redirections work.
+cook reads an ordinary **Makefile** directly — a reasonably GNU-make-compatible import: recursive $(**VAR**) expansion and substitution references, the common functions (**$(**shell**),** $(**wildcard**), $(**dir**), $(**patsubst**), $(**filter**), $(**call**), $(**origin**), ...), **ifeq**/**ifdef** conditionals, **include**, the **= := ?= +=** assignment flavors with the **override** and **export** directives, pattern rules and static patterns, order-only prerequisites, and the **$@** **$<** **$^** **$\*** **$(@D)** **$(@F)** automatic variables. The variable table seeds as make's does: the environment first, then the builtin defaults, then any *NAME*=*VAL* words from the command line — which silence file assignments to the same name. Each recipe line is run through **sh**(1), so pipes, globs and redirections work.
 
 ## Cookfile
 
@@ -36,7 +36,7 @@ A **Cookfile** is ordinary love source that registers recipes and then calls **c
 > (cook-all 0)
 > ```
 
-A card is (*recipe* *item ingredients steps**):* an *item* is a filename string or a phony symbol, ingredients are the items it needs first, and steps are argv lists (run as subprocesses) or thunks. Item ages come from **stat**(1); a phony symbol owns no file, so it is ageless and always cooks.
+A card is (*recipe* *item ingredients steps**):* an *item* is a filename string or a phony symbol, ingredients are the items it needs first, and steps are argv lists (run as subprocesses) or thunks. Item ages come from the **stat** nif at nanosecond resolution; a phony symbol owns no file, so it is ageless and always cooks.
 
 A Cookfile drives itself: **(cook-all****0)** builds every *recipe* named on the command line (or the default when none), while **(cook****(ticket****0))** builds just the first. **--emit** generates a Cookfile ending in **(cook-all 0)**.
 
@@ -57,6 +57,8 @@ A Cookfile drives itself: **(cook-all****0)** builds every *recipe* named on the
 
 *recipe*
 :   An item to build: a filename, or a phony target named in the build file. Any number may be given (they are built in order); the default is the first recipe declared.
+*NAME*=*VAL*
+:   A command-line variable, as in make: it overrides the environment and silences the build file's own assignments to *NAME* (an **override** directive in the file wins it back).
 
 # EXAMPLES
 

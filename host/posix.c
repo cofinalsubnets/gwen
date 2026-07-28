@@ -410,11 +410,13 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); return Ip++, Continue(); }
 // --- the general POSIX fs surface (the posix_ symbol namespace; doc/posix.md L0,
 // staging step 1) -- these serve any program, not just the supervisor, so their C
 // symbols wear the posix_ prefix; the love names stay the plain POSIX words.
-// (stat path)    -> (size mtime mode) | () -- absence (or unreadability) is nothing.
+// (stat path)    -> (size mtime mode ns) | () -- absence (or unreadability) is nothing.
 //                   size in bytes, mtime in MILLISECONDS (the (clock t) scale), mode
 //                   the raw st_mode charm: kind reads off the S_IFMT bits in love
 //                   ((& mode 61440): 32768 file, 16384 dir, 40960 link) and the
-//                   permission bits ride along.
+//                   permission bits ride along; ns the same mtime whole in NANOSECONDS,
+//                   one charm (fits a fixnum to year 2262) -- the resolution a builder
+//                   wants, where two writes in one millisecond still order (cook).
 // (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
 //                   on failure. NO order promised (readdir order, prepended) -- sort in love.
 // (unlink path)  -> () ok | a POSITIVE errno | EINVAL misuse (the mkdir convention:
@@ -430,12 +432,16 @@ ai_noinline static struct ai *host_posix_stat(struct ai *g) {
   return g->sp[0] = ZeroPoint, g;                             // absent -> the real ()
 #if defined(__APPLE__)
  intptr_t ms = (intptr_t) st.st_mtimespec.tv_sec * 1000 + st.st_mtimespec.tv_nsec / 1000000;
+ intptr_t ns = (intptr_t) st.st_mtimespec.tv_sec * 1000000000 + st.st_mtimespec.tv_nsec;
 #else
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000;
+ intptr_t ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec;
 #endif
- if (!ai_ok(g = ai_have(g, 3 * Width(struct ai_chain)))) return g;
+ if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                putcharm((intptr_t) st.st_mode), ZeroPoint);
+                                putcharm(ns), ZeroPoint);
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+               putcharm((intptr_t) st.st_mode), word(c));
  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)), putcharm(ms), word(c));
  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                putcharm((intptr_t) st.st_size), word(c));

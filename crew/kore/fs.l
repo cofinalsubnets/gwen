@@ -116,11 +116,17 @@
            (quit (? ok 0 1)))
        (? (two? as) (go as 1) (udie 2 "usage: rmdir DIR..")))
 
-   ; -- ln: two names for one thing (-s the pointing kind) --
+   ; -- ln: two names for one thing (-s the pointing kind, -f moves the old name aside) --
    (ln-main as)
-    (: s? (&& (two? as) (<as = "-s"))
-       rest (? s? >as as)
-       _ (? (two? >rest) () (udie 2 "usage: ln [-s] TARGET LINKNAME"))
+    (: (fl a s f rest) (? (! (two? a)) `(s f rest)
+                          (<a = "-s") (fl >a 1 f rest)
+                          (<a = "-f") (fl >a s 1 rest)
+                          (|| (<a = "-sf") (<a = "-fs")) (fl >a 1 1 rest)
+                          `(s f (rest + a)))
+       p (fl as 0 0 ())
+       s? <p f? <>p rest <>>p
+       _ (? (two? >rest) () (udie 2 "usage: ln [-s] [-f] TARGET LINKNAME"))
+       _ (? f? (unlink <>rest) ())
        e (? s? (symlink <rest <>rest) (hardlink <rest <>rest))
        (? (! e) (quit 0) (udie 1 ("ln: cannot link " + <>rest))))
 
@@ -143,4 +149,83 @@
                  (go >a
                      (? (! e) ok (: _ (say err ("chmod: cannot chmod " + <a)) _ (put err 10) 0))))
               (quit (? ok 0 1)))
-          (go >as 1))))
+          (go >as 1)))
+
+   ; -- install: copy with the mode set in the same breath (what the build's
+   ; place-a-file steps say). -d makes directories (with parents, like -p);
+   ; -D lays the destination's parents first; -m OCTAL sets the mode (else 755);
+   ; -s (strip) is ACCEPTED AND NOTED -- no stripper rides kore yet, so the copy
+   ; keeps its symbol table (a fatter install, never a wrong one) --
+   (imkp q)                        ; a tolerant mkdir at every slash (parents only)
+    (: n (tally q)
+       (go k) (? (k < n) (: _ (? (&& (0 < k) ((q k) = 47)) (mkdir (snip q 0 k) 493) ())
+                            (go (k + 1)))
+                 ())
+       (go 1))
+   (install-main as)
+    (: (fl a d D m s fs) (? (! (two? a)) `(d D m s fs)
+                            (<a = "-d") (fl >a 1 D m s fs)
+                            (<a = "-D") (fl >a d 1 m s fs)
+                            (&& (<a = "-m") (two? >a)) (fl >>a d D (uoct <>a) s fs)
+                            (<a = "-s") (fl >a d D m 1 fs)
+                            (fl >a d D m s (fs + `(<a))))
+       p (fl as 0 0 493 0 ())
+       d? <p D? <>p m <>>p s? <>>>p fs <>>>>p
+       _ (? s? (: _ (say err "install: -s noted, not stripped (no kore stripper yet)") (put err 10)) ())
+       (? d? (: (go a ok)
+                 (? (two? a)
+                    (: _ (imkp <a) e (mkdir <a m)
+                       ok2 (? (udirp <a) (: _ (? (! e) (chmod <a m) ()) ok)
+                              (: _ (say err ("install: cannot create " + <a)) _ (put err 10) 0))
+                       (go >a ok2))
+                    (quit (? ok 0 1)))
+                 (? (two? fs) (go fs 1) (udie 2 "usage: install -d DIR..")))
+          (! (two? >fs)) (udie 2 "usage: install [-D] [-m OCTAL] [-s] SRC DST")
+          (: src <fs dst (udest <fs <>fs)
+             _ (? D? (imkp dst) ())
+             _ (ucopy "install" src dst)
+             _ (chmod dst m)
+             (quit 0))))
+
+   ; -- readlink: what a symbolic link says (-f chases to an absolute, clean path) --
+   (rl-abs q) (? (&& (0 < (tally q)) ((q 0) = 47)) q ((cwd ()) + "/" + q))
+   (rl-clean q)                    ; lexically: no // . .. (.. pops a segment)
+    (: n (tally q)
+       (seg i st acc) (? (i < n)
+                         (? ((q i) = 47)
+                            (seg (i + 1) (i + 1) (? (st < i) (link (snip q st i) acc) acc))
+                            (seg (i + 1) st acc))
+                         (rev (? (st < i) (link (snip q st i) acc) acc)))
+       (fold l acc) (? (! (two? l)) (rev acc)
+                       (<l = ".") (fold >l acc)
+                       (<l = "..") (fold >l (? (two? acc) >acc acc))
+                       (fold >l (link <l acc)))
+       ("/" + (ujoinc 47 (fold (seg 0 0 ()) ()))))
+   (rl-chase q n)                  ; follow link upon link (n bounds a cycle)
+    (: t (readlink q)
+       (? (! (two? (stat q))) ()
+          (! (string? t)) q
+          (0 = n) ()
+          (rl-chase (? ((t 0) = 47) t (rl-clean ((rl-abs q) + "/../" + t))) (n - 1))))
+   (readlink-main as)
+    (: f? (&& (two? as) (<as = "-f"))
+       fs (? f? >as as)
+       _ (? (two? fs) () (udie 2 "usage: readlink [-f] PATH"))
+       q <fs
+       r (? f? (: c (rl-chase (rl-clean (rl-abs q)) 40) (? (string? c) c ()))
+            (: t (readlink q) (? (string? t) t ())))
+       (? (string? r) (: _ (say out r) _ (put out 10) _ (flush out) (quit 0)) (quit 1)))
+
+   ; -- cmp: are two files the same bytes (-s says nothing, the exit code answers) --
+   (cmp-main as)
+    (: s? (&& (two? as) (<as = "-s"))
+       fs (? s? >as as)
+       _ (? (two? >fs) () (udie 2 "usage: cmp [-s] A B"))
+       ra (uread <fs) rb (uread <>fs)
+       (? (|| (! (two? ra)) (! (two? rb)))
+          (: _ (? s? () (: _ (say err ("cmp: cannot read " + (? (two? ra) <>fs <fs))) (put err 10)))
+             (quit 2))
+          (<>ra = <>rb) (quit 0)
+          (: _ (? s? () (: _ (say out ((<fs + " ") + (<>fs + " differ")))
+                           _ (put out 10) (flush out)))
+             (quit 1)))))

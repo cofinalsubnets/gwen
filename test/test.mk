@@ -163,6 +163,10 @@ korerun = $m --wake $(ho)/kore.image -e '(kore-main (link "kore" (cuup (cup cmdl
 .PHONY: test_kore
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
 	@sh test/gate/kore.sh $(ho) $m
+# the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
+.PHONY: test_nest
+test_nest: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc.image
+	@sh test/gate/nest.sh $(ho) $m
 # The editor (crew/vi/): the pure modal engine's laws (no tty -- vstep driven
 # byte by byte), then scripted end-to-end passes through the `kore vi` face over a
 # pipe (keys off stdin, frames onto a captured stdout, :wq writes) -- driven through

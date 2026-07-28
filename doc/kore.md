@@ -45,7 +45,7 @@ the file discipline, two shapes:
 | core.l, the line tools | cat echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the trivia | seq yes true false basename dirname |
-| fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod |
+| fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod install readlink cmp |
 | re.l, the matcher | grep (-n -v -c -l) over the lawed BRE engine |
 | sed.l, the editor | sed (-n; s///gp, d, p, q; number/$/regex/range addresses) |
 | proc.l, the processes | env sleep kill xargs |

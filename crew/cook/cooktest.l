@@ -136,6 +136,60 @@
                         "all:" "\techo \"O[$(a)|$(b)]\"")) "all")
    _ (ok "+= and ?=" (has ops "O[base more|keep]"))
 
+   ; ------------------------------------- the environment, the command line, origin
+   ; cook seeds its variable table the way make does: the environment first, then
+   ; the builtin defaults, then the command line's VAR=VAL words -- which SILENCE
+   ; file assignments to the same name, unless the file says `override`. run-cook's
+   ; subprocess inherits this process's environment, so setenv reaches the fixture.
+   (D2 f) (+ dir f)
+   (run-cookv src args)
+   (: _ (write-file (+ dir "/Makefile") src)
+       r (run (`(love "-l" "crew/cook/cook.l" (+ dir "/Makefile")) + args))
+       (? (two? r) (cup r) ""))
+   _ (setenv "COOKT_ENV" "from-env")
+   env (run-cookv (mk `("COOKT_ENV ?= nope"
+                        "fv = infile"
+                        "all:"
+                        "\techo \"N1[$(COOKT_ENV)]\""
+                        "\techo \"N2[$(origin COOKT_ENV) $(origin fv) $(origin COOKT_NO)]\""))
+                  `("all"))
+   _ (ok "environment import (and ?= yields to it)" (has env "N1[from-env]"))
+   _ (ok "$(origin): environment / file / undefined"
+         (has env "N2[environment file undefined]"))
+   _ (setenv "COOKT_ENV" ())
+   cli (run-cookv (mk `("cv = filewins"
+                        "override ov := forced"
+                        "all:"
+                        "\techo \"L[$(cv) $(ov) $(origin cv)]\""))
+                  `("all" "cv=cli" "ov=cli"))
+   _ (ok "a command-line VAR=VAL silences the file assignment"
+         (has cli "L[cli forced command line]"))
+   xp (run-cook (mk `("export EX := exported"
+                      "all:"
+                      "\techo \"X[$$EX]\"")) "all")
+   _ (ok "export hands the value to the recipe's environment" (has xp "X[exported]"))
+   cal (run-cook (mk `("greet = hi-$(1)-$(2)"
+                       "g := $(call greet,a,b)"
+                       "all:"
+                       "\techo \"G[$(g)]\"")) "all")
+   _ (ok "$(call) binds $1..$n over the body" (has cal "G[hi-a-b]"))
+
+   ; ------------------------------------------------- @D/@F, wildcard, abspath
+   adf (run-cook (mk `("all: foo/bar.o"
+                       "foo/bar.o:" "\techo \"D[$(@D) $(@F)]\"")) "foo/bar.o")
+   _ (ok "$(@D) and $(@F)" (has adf "D[foo bar.o]"))
+   _ (sh (+ "mkdir -p " (+ (D2 "/w; touch ") (+ (D2 "/w/b.c ") (+ (D2 "/w/a.c ") (D2 "/w/.h.c"))))))
+   wc (run-cook (mk `((+ "ws := $(wildcard " (+ (D2 "/w/*.c") ")"))
+                      (+ "ex := $(wildcard " (+ (D2 "/w/a.c") ")"))
+                      "no := $(wildcard nothing/here/*.q)"
+                      "all:"
+                      "\techo \"W[$(notdir $(ws))|$(notdir $(ex))|$(no)]\"")) "all")
+   _ (ok "wildcard: sorted glob, no dotfiles, existence word, empty miss"
+         (has wc "W[a.c b.c|a.c|]"))
+   ab (run-cook (mk `("p := $(abspath /x//y/./../z)"
+                      "all:" "\techo \"P[$(p)]\"")) "all")
+   _ (ok "abspath cleans // . .." (has ab "P[/x/z]"))
+
    ; ---------------------------------------------------------------------- emit
    ; --emit transpiles a Makefile to a RESOLVED Cookfile: vars/patterns expanded,
    ; .PHONY targets -> symbols, files -> strings, each recipe line an
@@ -177,16 +231,12 @@
    dgc (: r (run `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile"))) (? (two? r) (cup r) ""))
    _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
 
-   ; ------------------------------------------------- the warmed date cache
-   ; cook fills a date cache with ONE `stat` over the whole graph, because shelling out
-   ; per node made an up-to-date pass ~2N forks. that cache is only sound until the first
-   ; recipe runs -- a step may write anything, not only its own target -- so `recur` drops
-   ; it. this is the fixture that fails if anyone ever narrows that to "drop just my own
-   ; target": `first` writes a file it does not own, and `second` must see the new one.
-   ;
-   ; the order matters. shared.txt and second both exist and second is NEWER, so a stale
-   ; cache says second is up to date and skips it. only a re-read after `first` ran shows
-   ; shared.txt overtaking it.
+   ; ------------------------------------------------- side-effect writes are seen
+   ; a step may write anything, not only its own target (make's two-outputs-one-recipe
+   ; idiom writes a sibling), so an item's date must be read FRESH when its turn comes:
+   ; `first` writes a file it does not own, and `second` must see the new one. (this
+   ; once guarded the warmed stat(1) date cache; the stat nif retired the cache, and
+   ; this fixture is what fails if any date memo ever comes back unsoundly.)
    ; (⚠ every path in a fixture recipe must be ABSOLUTE: cook runs from the project root,
    ;  not from `dir`, so a bare `> out.txt` writes into the repo.)
    (D f) (+ dir f)
