@@ -47,7 +47,7 @@ endif
 # this love resolves here. installed DEREFERENCED (install(1) follows the repo
 # lib/ symlinks), so the nest stands alone; lib/seed.l is the assembly and its
 # seed/ parts ride the slashed-include rung the same way.
-libmods = cook kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core
+libmods = cook json kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core
 installs = \
   $d/bin/$(BIN) \
   $d/bin/ai \
@@ -131,12 +131,11 @@ $d/lib/liblove.so: $(glibc_ho)/liblove.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
-# UNSTRIPPED, deliberately: binutils strip relayouts by section headers, and the
-# mooncc/holo ELF's truth is its segments -- the stripped copy SEGFAULTS at boot
-# (cook's from-scratch nest found it; the make/cook nest diff never ran what it
-# laid). stripping would also drop the symbol table holo lays on purpose (nm and
-# gdb read it). the symtab costs ~2% of a baked binary; a kore/holo stripper
-# that speaks our own layout is the open splinter if that ever matters.
+# UNSTRIPPED, deliberately: stripping would drop the symbol table holo lays on
+# purpose (nm and gdb read it), and it costs ~2% of a baked binary. binutils
+# strip is SAFE on our ELF now -- every loaded byte has a covering section
+# header (link.l's ai_rela; nest.sh strips a copy and runs it to keep it so) --
+# so a user who wants it smaller can strip their own.
 $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@

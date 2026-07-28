@@ -435,10 +435,14 @@
        ; the same program; nm, objdump and gdb read exactly this. we describe the
        ; image as the five lanes we laid it in, so a symbol lands in the section
        ; it actually lives in and `nm` classifies it T/R/D/B without guessing.
+       ; and EVERY loaded byte gets a covering header (ai_rela names the -pie
+       ; table): binutils strip rebuilds a file FROM its sections, so an orphan
+       ; gap comes back as zeros -- the relocator's table gone, the stripped
+       ; binary a segfault at the first unrebased pointer.
        fsz (iend - base)                                    ; the loaded bytes: p_filesz
-       lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 5) ('image >< 6)))
+       lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 6) ('image >< 7)))
        st (ldstab objs glo lanesx)
-       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".bss" ".image"
+       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" "ai_rela" ".bss" ".image"
                          ".symtab" ".strtab" ".shstrtab"))
        (snm k) (at <>shstr k)
        symo (ld-align 8 fsz) symz (tally <st)
@@ -450,12 +454,13 @@
                      (ld-shdr (snm 1) 1 2 <et (<et - base) (<eo - <et) 0 0 16 0)
                      (ld-shdr (snm 2) 1 3 <eo (<eo - base) (<ed - <eo) 0 0 16 0)
                      (ld-shdr (snm 3) 1 3 <ed (<ed - base) (<en - <ed) 0 0 16 0)
-                     (ld-shdr (snm 4) 8 3 r1 (r1 - base) (bend - r1) 0 0 16 0)       ; NOBITS: an offset, no bytes
-                     (ld-shdr (snm 5) 1 3 iaddr (iaddr - base) (iend - iaddr) 0 0 16 0)  ; .image, the grow slot
-                     (ld-shdr (snm 6) 2 0 0 symo symz 8 (at st 2) 8 24)              ; link=.strtab info=first global
-                     (ld-shdr (snm 7) 3 0 0 stro strz 0 0 1 0)
-                     (ld-shdr (snm 8) 3 0 0 ssto sstz 0 0 1 0)))
-       hdr (elf64-hdr (? pie 3 2) base ent fsz (mend - base) mach `(shto 10 9))
+                     (ld-shdr (snm 4) 1 2 r0 (r0 - base) (r1 - r0) 0 0 16 0)         ; ai_rela, the -pie table (empty non-pie)
+                     (ld-shdr (snm 5) 8 3 r1 (r1 - base) (bend - r1) 0 0 16 0)       ; NOBITS: an offset, no bytes
+                     (ld-shdr (snm 6) 1 3 iaddr (iaddr - base) (iend - iaddr) 0 0 16 0)  ; .image, the grow slot
+                     (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)              ; link=.strtab info=first global
+                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
+                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)))
+       hdr (elf64-hdr (? pie 3 2) base ent fsz (mend - base) mach `(shto 11 10))
        (hdr >< (>en + tail + (? pie `(rtab) ()) + >ei
                 + `((ld-zeros (symo - fsz)) <st <>st <shstr
                     (ld-zeros (shto - (ssto + sstz))) sht))))

@@ -38,6 +38,20 @@ env -u LOVE_NO_IMAGE "$T/A/.love/bin/love" -e '(? (2 = (1 + 1)) (quit 0) (quit 1
 LOVE_NO_IMAGE=1 "$T/A/.love/bin/love" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' \
                                                   || fail "the installed love does not answer (egg)"
 
+# and it SURVIVES binutils strip: strip rebuilds a file FROM its section
+# headers, so holo must cover every loaded byte with one -- ai_rela (the -pie
+# reloc table) was once uncovered, came back zeroed, and the stripped binary
+# segfaulted at the first unrebased pointer. installs stay unstripped (the
+# symtab is deliberate: nm/gdb); this keeps a user's own strip safe.
+if command -v strip > /dev/null 2>&1; then
+  cp "$T/A/.love/bin/love" "$T/love-stripped"
+  strip "$T/love-stripped"
+  env -u LOVE_NO_IMAGE "$T/love-stripped" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' \
+                                                  || fail "the STRIPPED love does not answer (wake)"
+  LOVE_NO_IMAGE=1 "$T/love-stripped" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' \
+                                                  || fail "the STRIPPED love does not answer (egg)"
+fi
+
 shape "$T/A" > "$T/sa"; shape "$T/B" > "$T/sb"
 cmp -s "$T/sa" "$T/sb"                            || fail "A vs B: entries/types/modes differ"
 links "$T/A" "$T/A" > "$T/la"; links "$T/B" "$T/B" > "$T/lb"
@@ -52,9 +66,9 @@ PATH="$(pwd)/$K:$PATH" "$love" -l crew/cook/cook.l -f Makefile install DESTDIR="
   > /dev/null 2> "$T/cerr"                        || { cat "$T/cerr"; fail "cook install (kore lane)"; }
 
 # C's only licensed deviation: kore's install -s lands liblove.so unstripped
-# (bin/love installs unstripped in EVERY lane now -- binutils strip breaks the
-# mooncc/holo ELF, see mk/install.mk). everything else must match B byte for
-# byte, and both loves must equal the build artifact.
+# (bin/love installs unstripped in EVERY lane -- the symtab is deliberate, see
+# mk/install.mk). everything else must match B byte for byte, and both loves
+# must equal the build artifact.
 diff -r "$T/B" "$T/C" > "$T/bc" 2>&1
 grep -v -e 'liblove\.so differ' "$T/bc" | grep -q . \
   && { cat "$T/bc"; fail "B vs C: differ beyond liblove.so"; }
