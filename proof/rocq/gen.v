@@ -192,7 +192,7 @@ Theorem gen_63 : (chainp Vpair) = true.  Proof. vm_compute. reflexivity. Qed.
 Theorem gen_64 : (strp Vstr) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (nom? 'x) *)
 Theorem gen_65 : (nomp Vsym) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (book? (hash 1 2)) *)
+(* (tablet? (hash 1 2)) *)
 Theorem gen_66 : (tabp Vmap) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (gem? 1.5) *)
 Theorem gen_67 : (flop Vflo) = true.  Proof. vm_compute. reflexivity. Qed.
@@ -584,7 +584,7 @@ Theorem gen_259 : (leqb [97;98;99;100] ([97;98] ++ [99;100])) = true.  Proof. vm
 Theorem gen_260 : (leqb [97;115;100;102] [97;115;100;102]) = true.  Proof. vm_compute. reflexivity. Qed.
 (* ("asdf" = (string 'asdf)) *)
 Theorem gen_261 : (leqb [97;115;100;102] [97;115;100;102]) = true.  Proof. vm_compute. reflexivity. Qed.
-(* !(book? 5) *)
+(* !(tablet? 5) *)
 Theorem gen_262 : (Z.leb (Z.b2z (tabp Vz)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !() *)
 Theorem gen_263 : true = true.  Proof. vm_compute. reflexivity. Qed.
@@ -606,7 +606,7 @@ Theorem gen_270 : (Z.leb (Z.b2z (ueq None (Some 0))) 0) = true.  Proof. vm_compu
 Theorem gen_271 : (Z.leb (Z.b2z false) 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (0 = (tally (iota 0))) *)
 Theorem gen_272 : (Z.eqb 0 (Z.of_nat (length (iotaZ 0)))) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (book? (hash 0)) *)
+(* (tablet? (hash 0)) *)
 Theorem gen_273 : (tabp Vmap) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (532 = $"hello") *)
 Theorem gen_274 : (Z.eqb 532 (Z.max 0 (asum [104;101;108;108;111]))) = true.  Proof. vm_compute. reflexivity. Qed.

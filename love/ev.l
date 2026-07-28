@@ -39,7 +39,7 @@
             id? gcd modpow abs
             link cap cup caap caup cuap cuup
             dig lidx assoc member? last rev cat
-            charm? nom? two? book? lit? string? nil? gem? twin? atom?
+            charm? nom? two? tablet? lit? string? nil? gem? twin? atom?
             snip string
             re im conj arg gem twin
             sine cosine log power))
@@ -369,7 +369,7 @@
   ; in this scope, keep walking. So a saturated call to a letrec lambda sibling can take
   ; the one-shot n-ary apply (apn/tapn) instead of currying, the same as a book global.
   (falook c h) (?- 0 c
-   (: far (c 'far) a (? (book? far) (peep far h -1) -1)
+   (: far (c 'far) a (? (tablet? far) (peep far h -1) -1)
     (? (0 < a) a (-1 = a) (falook (c 'par) h) 0)))
   ; apxh: (apx nary head . args) -> apply. nary -> r2l arg eval + a single n-ary apply;
   ; else l2r 1-ary chain. kap detects tail vs non-tail by peeking the continuation.
@@ -455,7 +455,7 @@
   ; resolves local, so an import lands once per name. the home scope pushes nothing.
   (ava c x) (avw c c x)
   (shadowed? c d x) (: far (d 'far)
-   (book? far && 0 <= peep far x -1 && !(member? x ((d 'par) 'stk))))
+   (tablet? far && 0 <= peep far x -1 && !(member? x ((d 'par) 'stk))))
   (avw c d x)
    (? (nil? d) ; outside all lexical scopes?
        (: y (gv x gone) ; check global scope (the layered walk)
@@ -524,7 +524,7 @@
   ; keys() per ala measurably taxed every closure build (mooncc compiles ~5% slower).
   (farq k x) (? (nil? k) 0
                (: f (k 'far)
-                  (? (book? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))
+                  (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))
 
   ; --- let analyzer (the hard one) -- letrec* over (: name def .. body). three phases:
   ;   collect  -- the bindings into source-order (name . def) chains, and the body form

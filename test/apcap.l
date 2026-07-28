@@ -4,7 +4,7 @@
 ; exact base beyond +-1 scares only when ~ k*log2|b| bits top the box read as a
 ; WORD budget (64 bits a word) -- a gem or |b| <= 1 base runs free at any
 ; exponent, a deliberate big power fits, the slipped tower still scares.
-(assert (book? apcap) (= 1048576 (apcap 0)) (= 1048576 (peep apcap 0 0)))
+(assert (tablet? apcap) (= 1048576 (apcap 0)) (= 1048576 (peep apcap 0 0)))
 
 ; install a help that answers 'apcap scares with (capped k); anything else
 ; falls through to whatever was installed before (nil pre-help.l: const-1).

@@ -36,7 +36,7 @@
    (tl-push n)  (: _ (pin tl-tape 0 (link n (peep tl-tape 0 ()))) n)
 
    ;; -- nodes --
-   (tl-node? x)  (book? x)                          ; a tele node (a raw constellation is never a tab)
+   (tl-node? x)  (tablet? x)                          ; a tele node (a raw constellation is never a tab)
    (tl-val x)    (peep x 'val 0)
    (node x)      (? (tl-node? x) x (const x))       ; coerce a raw constellation to a const leaf
    (tl-accum n d)(pin n 'grad (+ (peep n 'grad 0) d))   ; cotangent += d (a fresh galaxy)
@@ -168,8 +168,8 @@
    ;; glasses PERSIST across steps (updated in place); each forward builds a fresh
    ;; graph over them (define-by-run), so a held glass trains while the tape resets.
    (tl-mod fwd ps) (: m (tablet 0) _ (pin m 'fwd fwd) _ (pin m 'params ps) m)
-   (tl-mfwd m)    (? (book? m) (peep m 'fwd 0) m)        ; module-or-bare-fn -> its forward
-   (tl-mparams m) (? (book? m) (peep m 'params 0) ())
+   (tl-mfwd m)    (? (tablet? m) (peep m 'fwd 0) m)        ; module-or-bare-fn -> its forward
+   (tl-mparams m) (? (tablet? m) (peep m 'params 0) ())
    (call m x)     ((tl-mfwd m) x)                        ; apply a module to an input node
    (params m)     (tl-mparams m)                         ; the parameter list (for the optimizer)
 

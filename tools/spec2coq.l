@@ -389,7 +389,7 @@
    (tkq q) (? (nom? q) "Vsym" (two? q) "Vpair" (charm? q) "Vz" "Vbot")   ; the quoted datum's kind
    (kpred h) (? (id? h 'charm?) "fixp" (id? h 'gem?) "flop" (id? h 'twin?) "comp"
                 (id? h 'string?) "strp" (id? h 'nom?) "nomp" (id? h 'name?) "namep" (id? h 'two?) "chainp"
-                (id? h 'book?) "tabp" (id? h 'set?) "setp" (id? h 'constellation?) "nump"
+                (id? h 'tablet?) "tabp" (id? h 'set?) "setp" (id? h 'constellation?) "nump"
                 (id? h 'whole?) "whole" (id? h 'atom?) "atomp" (id? h 'packp) "packp"
                 (id? h 'lit?) "lamp" 0)
    ; cross-kind ORDER: symbol<string<number<chain<map by band; same band stays value/lex

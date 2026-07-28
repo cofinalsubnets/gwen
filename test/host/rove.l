@@ -131,7 +131,7 @@
    _ (crawl-turn g 62)
  (assert (2 = g 'lvl) (find (g 'msg) "deck 2" 0)
          (1 = dat (g 'd) (g 'p 'x) (g 'p 'y))    ; moored on the fresh deck's floor
-         (book? (g 'loot))))
+         (tablet? (g 'loot))))
 
 ; the pearl ends the crawl
 (: g (hand-g ())

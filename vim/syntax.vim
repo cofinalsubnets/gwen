@@ -35,7 +35,7 @@ syn keyword LoveFunc net prod tally sat saturate bit
 syn keyword LoveFunc nil? zero? one? two? empty? whole?
 " the celestial predicates
 syn keyword LoveFunc charm? sun? big? gem? twin? star? galaxy? constellation?
-syn keyword LoveFunc atom? nom? name? string? tray? book? hot? lit? id? coin? cue? back?
+syn keyword LoveFunc atom? nom? name? string? tray? tablet? hot? lit? id? coin? cue? back?
 " randomness
 syn keyword LoveFunc rand randf random seed coin rng-get rng-set
 " trays & galaxies

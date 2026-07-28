@@ -2,7 +2,7 @@
 (: t (hash 1 100 2 200 3 300))
 (assert
  ; the constructor builds a working hash
- (book? t) (nil? (book? 5)) (nil? (book? '(1 2)))   ; book?: only maps, not fixnums/lists
+ (tablet? t) (nil? (tablet? 5)) (nil? (tablet? '(1 2)))   ; tablet?: only maps, not fixnums/lists
  (lit? t) (lit? cap) (nil? (lit? 5)) (nil? (lit? 0))  ; lit?: any heap object, not a fixnum/nil
  (= 100 (peep t 1 0))
  (= 200 (peep t 2 0))
@@ -24,10 +24,10 @@
 ; zero-point, distinct from 0. hashes print as #(…), the empty map as #().
 (: ht #(1 100 2 200 3 300))
 (assert
- (book? ht)
+ (tablet? ht)
  (= 100 (peep ht 1 0))
  (= 300 (peep ht 3 0))
- (book? (tablet 0))                              ; the empty hash
+ (tablet? (tablet 0))                              ; the empty hash
  !(tablet 0) !#()                               ; both the empty map (falsy); #() reads to (tablet 0)
  (= 50 (peep (pin (tablet 0) 5 50) 5 0))                ; the empty hash is mutable
  (= 3 (foldl (\ n _ (+ 1 n)) 0 (keys #(1 10 2 20 3 30))))   ; splice builds all entries
@@ -39,7 +39,7 @@
 ; from #() the empty map (one ()-keyed entry vs no entries). key 0 is a MISS now.
 (: bx #0)
 (assert
- (book? #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
+ (tablet? #0) !!#0 (= 1 $#0)                       ; a box is a nonempty 1-entry hash
  (= 0 (peep bx () 9))                           ; the boxed value sits at key () (the unit)
  (= 9 (peep bx 0 9))                            ; ... and key 0 is a MISS (the flip's tell)
  (= 9 (: _ (pin bx () 9) (peep bx () 0)))       ; ... and is mutable in place

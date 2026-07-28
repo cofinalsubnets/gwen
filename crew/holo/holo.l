@@ -278,7 +278,7 @@
    ;; layered on top by `lay`; an address may be negative (a target before the blob). --
    (assemble-at target prog lbls)
       (: be (peep backends target ())
-         _ (? (book? be) 0 (scare 'no-backend target))
+         _ (? (tablet? be) 0 (scare 'no-backend target))
          p (lay prog be 0 () lbls)
          res (tablet 0)
          _ (pin res 'bytes  (resolve <p >p be 0))
@@ -290,7 +290,7 @@
    ;; writes the address outright. elf64 sets ORG to the load vaddr so a data pointer resolves. --
    (assemble-org target prog org)
       (: be (peep backends target ())
-         _ (? (book? be) 0 (scare 'no-backend target))
+         _ (? (tablet? be) 0 (scare 'no-backend target))
          p (laylax prog be org (tablet 0) (tablet 0))
          res (tablet 0)
          _ (pin res 'bytes  (resolve <p >p be org))

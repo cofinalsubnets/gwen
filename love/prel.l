@@ -33,20 +33,20 @@
    ; last; every verb takes an operand (love has no nullary fns -- fire with the unit).
    ; enter: push a fresh layer as the head, stashing the pre-enter chain AND the name under the
    ; reserved CHARM key 31337 (a charm can never collide with a name); (enter ()) is anonymous.
-   (enter nm) (: F (tablet 0) _ (pin F 31337 (link (books ()) nm)) _ (setbook (link F (books ()))) ())
+   (enter nm) (: F (tablet 0) _ (pin F 31337 (link (books ()) nm)) _ (setbooks (link F (books ()))) ())
    ; use: splice a registered module just BELOW the head -- its names resolve on the walk but never
    ; shadow yours. a book value splices directly; a missing name scares 'no-module, since a silent
    ; ()-splice would be a silent no-op.
-   (use m)    (: b (? (book? m) m
+   (use m)    (: b (? (tablet? m) m
                       (: r (peep (mods ()) m ()) (? (nil? r) (scare (\ no-module) m) r)))
-                 (setbook (link (cap (books ())) (link b (cup (books ()))))))
+                 (setbooks (link (cap (books ())) (link b (cup (books ()))))))
    ; leave: unwind to the pre-enter chain, REGISTER the layer under its name, answer the book. a
    ; BARE leave (top never entered, so no charm) truncates to the head -- the use-stack clears.
    (leave _)  (: F (cap (books ())) s (peep F 31337 ())
                  (? (two? s)
-                    (: _ (pull F 31337 0) _ (setbook (cap s))
+                    (: _ (pull F 31337 0) _ (setbooks (cap s))
                        _ (? (nil? (cup s)) 0 (pin (mods ()) (cup s) F)) F)
-                    (setbook (link F ()))))
+                    (setbooks (link F ()))))
    ; from: an OPAQUE accessor over the module -- currying reaches a member, 'keys introspects,
    ; (from ()) lists the registry, a missing module answers () (the presence guard). the raw
    ; tablet stays closure-private.

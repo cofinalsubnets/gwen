@@ -75,10 +75,10 @@
  !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a tray
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? two? book?;
+; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? two? tablet?;
 ; derived constellation? whole? atom?; lit? = a top-region reference (map/fn/hot, ai_kind>=KMap); hot? the opaque cask/port subset.
 (assert
- (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (book? #(1 2))
+ (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? #(1 2))
  (big? (100 2)) ((? word sun? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
@@ -380,13 +380,13 @@
 ; apply ((t k) == (peep t k ()) -- a map is a lookup function, absence the zero point), and
 ; (missing t k) -- a present k answers, a miss is the missing condition (k the payload).
 (assert
- (: b #0 (&& (book? b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
- (book? #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
+ (: b #0 (&& (tablet? b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
+ (tablet? #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
  (10 = (missing #(1 10) 1)) (id? (:) (missing (tablet 0) 'k)) (0 = (missing #(1 0) 1))   ; missing: the conditioned read; presence beats value
  (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (book? (tablet 0)) !(book? 5)
+ ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (tablet? (tablet 0)) !(tablet? 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
  (: t (tablet 0) r (pins t 1 10 2 20) (&& (id? r t) (10 = (t 1)) (20 = (t 2)) (2 = $t)))  ; pins: multi-pin onto a LIVE tablet, returns it (the mutable twin of #(..))
  (: t (pins (tablet 0) 1 10 2) (&& (10 = (t 1)) (1 = $t)))    ; an odd trailing key is dropped
@@ -401,9 +401,9 @@
  !() !0 !"" !@() !#() !~(0 0) !(cask 0)           ; every empty is false (blue)
  (nil? ()) (nil? 0) !(= () 0) !(id? () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
  ("@()" = (show @())) (1 = (rank @())) (0 = (tally @())) (star-tray = (tier @()))  ; @() the empty array, round-trips
- (book? #()) (0 = $#()) ("#()" = (show #()))   ; #() the empty map, show round-trips it
+ (tablet? #()) (0 = $#()) ("#()" = (show #()))   ; #() the empty map, show round-trips it
  (0 = @0) (nil? (rank @0))                      ; @0 wraps the VALUE 0 -> the scalar 0 (a 1-cell demotes)
- (book? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
+ (tablet? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
 
 ; --- buffers --- (cask n) mutable zeroed bytes; (cask charlist) a cask HOLDING those bytes
 ; (the lane `string` wears for a charlist -- the bulk way in, so a byte blob never needs a
@@ -508,7 +508,7 @@
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
  !(rest 0) (4 = (tally (wheel 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
- (book? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
+ (tablet? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
  (: st (wheel 7) ((cap (random st 0)) = (cap (random st 0)))))
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
 (: help welp)
@@ -549,14 +549,14 @@
 (: m1 (: _ (enter 'spec-mod) _ (: (spec-sib x) (+ x 1)) _ (: (spec-pub x) (spec-sib x)) (leave ()))
    a1 (from 'spec-mod)
  (assert
-   (book? m1)                                     ; leave answers the layer book itself
+   (tablet? m1)                                     ; leave answers the layer book itself
    (lit? a1) (nil? (from 'spec-nope))             ; the accessor / the presence guard
    (42 = ((from 'spec-mod 'spec-pub) 41))         ; curried member reach; internals fold post-leave
    (member? 'spec-mod (from ()))                  ; the registry lists it
    (member? 'spec-sib (from 'spec-mod 'keys))     ; 'keys introspects the module
    (: _ (use 'spec-mod) r (ev '(spec-pub 1)) _ (leave ()) (= r 2))   ; splice -> a post-splice compile reads bare -> bare leave clears
    (nil? (from 'spec-mod 'spec-missing))          ; a member miss reads the zero point
-   (: b (: _ (enter ()) _ (: (spec-anon x) x) (leave ())) (&& (book? b) (nil? (from 'spec-anon))))))  ; anonymous scope: a book back, nothing registered
+   (: b (: _ (enter ()) _ (: (spec-anon x) x) (leave ())) (&& (tablet? b) (nil? (from 'spec-anon))))))  ; anonymous scope: a book back, nothing registered
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.
