@@ -508,6 +508,15 @@
        relimg  (reldat1 irel)
        ntrel (tally trel) ndrel (tally drel) nnrel (tally nrel) nirel (tally irel)
 
+       ; .data's placement grain: 8, or the widest ('align n) the stream asks.
+       ; an aligned(N) global (mooncc honoring __attribute__((aligned))) pads
+       ; WITHIN the section (lay, org 0), so the header must ask the linker for
+       ; the section's own start at that N -- or the inner pad aligns nothing.
+       d-al (: (go l a2) (? (! (two? l)) a2
+                            (: f <l
+                               (go >l (? (&& (two? f) (&& (id? <f 'align) ((at f 1) > a2))) (at f 1) a2))))
+              (go dataforms 8))
+
        ; -- the section-name string table --
        shnames `(".text" ".data" "ai_nifs" ".image" ".symtab" ".strtab"
                  ".rela.text" ".rela.data" ".rela.ai_nifs" ".rela.image" ".shstrtab")
@@ -539,7 +548,7 @@
        sht (catall `(
               (o-zeros 64)                                                 ; 0 NULL
               (sh (shname 0) 1 6 t-off t-sz 0 0 16 0)                      ; 1 .text  PROGBITS ALLOC|EXEC
-              (sh (shname 1) 1 3 d-off d-sz 0 0 8 0)                       ; 2 .data  PROGBITS ALLOC|WRITE
+              (sh (shname 1) 1 3 d-off d-sz 0 0 d-al 0)                    ; 2 .data  PROGBITS ALLOC|WRITE (d-al: an aligned(N) global's ask)
               (sh (shname 2) 1 3 n-off n-sz 0 0 8 0)                       ; 3 ai_nifs PROGBITS ALLOC|WRITE (__start_/__stop_ bracket it)
               (sh (shname 3) 1 3 i-off i-sz 0 0 16 0)                      ; 4 .image PROGBITS ALLOC|WRITE (the bake slot, laid LAST)
               (sh (shname 4) 2 0 sym-off sym-sz 6 (5 + nloc) 8 24)         ; 5 .symtab link=.strtab info=first-global

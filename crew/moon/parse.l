@@ -203,6 +203,26 @@
                              (go >s d))
                          (go >s d))))
        (go ts 0))
+   ; the declaration's ALIGNED attribute: `aligned ( N )` (or bare `aligned` --
+   ; gcc's "biggest useful", 16) anywhere in the form, scanned to the first
+   ; depth-0 `;` or `{` like secat?. HONORED, not skipped: cgdata lays the
+   ; global on the boundary and the .o's .data header asks the linker for the
+   ; same -- a skipped aligned(N) would silently MISALIGN (page tables, DMA),
+   ; which is worse than a refusal. N must be a literal number; any other
+   ; argument shape is ignored like the hint attributes. -> N | ()
+   (alignat? ts)
+    (: (go s d) (? (! (two? s)) ()
+                   (: t <s
+                      (? (&& (d < 1) (|| (tp? t ";") (tp? t "{"))) ()
+                         (tp? t "(") (go >s (d + 1))
+                         (tp? t ")") (go >s (d - 1))
+                         (&& ((tkk t) = 'id)
+                             (|| ((tkv t) = "aligned") ((tkv t) = "__aligned__")))
+                          (? (peekp >s "(")
+                             (? (&& (two? >>s) ((tkk <>>s) = 'num)) (tkv <>>s) (go >s d))
+                             16)
+                         (go >s d))))
+       (go ts 0))
    (anyat? ts)                                       ; ANY leading __attribute__((..)): the rest | ()
     (? (! (two? ts)) ()
        (! (&& ((tkk <ts) = 'id) ((tkv <ts) = "__attribute__"))) ()
@@ -230,6 +250,7 @@
                 _ (pin t 'sfns (tablet 0))          ; top-level `static` fn names: LOCAL symbols in the .o
                 _ (pin t 'svars (tablet 0))         ; top-level `static` globals: internal linkage, never exported
                 _ (pin t 'sects (tablet 0))         ; global name -> its __attribute__((section "..")) string
+                _ (pin t 'aligns (tablet 0))        ; global name -> its __attribute__((aligned(N))) boundary
                 _ (pin t 'locals (tablet 0))        ; local/param name -> its declared type (for parse-time sizeof folding)
                 _ (pin t 'globals (tablet 0))       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
                 ; gcc's builtin va_list, seeded so `typedef __builtin_va_list va_list;`
@@ -1448,6 +1469,7 @@
        _ (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ())))
        _ (? (peep ps 'curalias ()) () (: al (aliasat? ts) (? al (pin ps 'curalias al) ())))
        _ (? (peep ps 'curweak ()) () (? (wkany? ts) (pin ps 'curweak 1) ()))
+       _ (? (peep ps 'curalign ()) () (: an (alignat? ts) (? an (pin ps 'curalign an) ())))
        (ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") `(`('tdef) >ts)          ; a stray top-level `;` -- an empty declaration
@@ -1530,7 +1552,7 @@
                                    (? (peekp ts3 "[")
                                       (: dr (adims ps ts3 ())  ; one or more [n]/[] dims (enum consts fold)
                                          (? (! (two? dr)) ()
-                                            (: dims <dr rest0 <>dr
+                                            (: dims <dr rest0 (patt <>dr)   ; an ARRAY declarator carries trailing attributes too
                                                (? (&& (! (two? >dims)) (<dims = 0))   ; a LONE [] -- size from init, or 0 (extern)
                                                    (? (! (peekp rest0 "=")) `(`(nm `('arr t2 0) ()) rest0)   ; no init: incomplete, size 0
                                                       (: ir (pinit ps >rest0)
@@ -1626,13 +1648,14 @@
                                  (: _ (pin (ps 'globals) (cap (cap prs)) (caup (cap prs))) (gogl >prs)))
                    (gogl <>f))
                 ())
-           st (peep ps 'curstat ()) sc (peep ps 'cursect ())
+           st (peep ps 'curstat ()) sc (peep ps 'cursect ()) an (peep ps 'curalign ())
            _ (? (&& st (member? <f '(fn proto))) (pin (ps 'sfns) <>f 1) ())
-           _ (? (&& (<f = 'gdecl) (|| st sc))
+           _ (? (&& (<f = 'gdecl) (|| st (|| sc an)))
                 (: (go2 prs) (? (! (two? prs)) 1
                                 (: nm (cap (cap prs))
                                    _ (? st (pin (ps 'svars) nm 1) ())
                                    _ (? sc (pin (ps 'sects) nm sc) ())
+                                   _ (? an (pin (ps 'aligns) nm an) ())
                                    (go2 >prs)))
                    (go2 <>f))
                 ())
@@ -1659,10 +1682,11 @@
            _ (pin ps 'curstat ())
            _ (pin ps 'curalias ())
            _ (pin ps 'curweak ())
+           _ (pin ps 'curalign ())
            (pin ps 'cursect ()))
        (tops ts2 acc)
         (? (! (two? ts2)) `(1 `('prog (rev acc)) (ps 'stag) (ps 'sigs) (ps 'weaks)   ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
-                              (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias))
+                              (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns))
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (link <r acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))

@@ -5140,12 +5140,17 @@
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
               bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
+              ; an aligned(N) global lands ON its boundary: the pad here places
+              ; it within the stream, and the .o's .data header carries the max
+              ; N so the linker grants the section the same grain (obj.l)
+              an (? (id? want 'data) (peep (g 'aligns) <gs 0) 0)
               (? (bad? bytes) (: _ (puts (+ ";; CGDATA-BAD " (<gs + ((" " + (show init)) + "\n")))) 'bad)
                  (: als (: (go l a2) (? (! (two? l)) a2
                                           (go >l (? ((peep (g 'alias) <l ()) = <gs)
                                                     (link `('label (intern <l)) a2) a2)))
                            (go (keys (g 'alias)) ()))   ; a DATA alias (musl's __stdin_used) names the same bytes
-                    (globs >gs want (acc + als + `(`('label lbl) `('raw bytes))))))))
+                    (globs >gs want (acc + (? (1 < an) `(`('align an)) ())
+                                        + als + `(`('label lbl) `('raw bytes))))))))
        (strs ss acc)
         (? (! (two? ss)) acc
            (: p <ss
@@ -5174,7 +5179,8 @@
             _ (pin t 'stag stbl) _ (pin t 'sigs sigs)
             _ (pin t 'tgt tgt) _ (pin t 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp riscv64)) epi-a64 epi))
             _ (pin t 'sects (? (two? xtra) <>>xtra (tablet 0)))
-            _ (pin t 'alias (? (&& (two? xtra) (3 < (tally xtra))) (nthr xtra 3) (tablet 0))) t)
+            _ (pin t 'alias (? (&& (two? xtra) (3 < (tally xtra))) (nthr xtra 3) (tablet 0)))
+            _ (pin t 'aligns (? (&& (two? xtra) (4 < (tally xtra))) (nthr xtra 4) (tablet 0))) t)
        ; pass 0: every function name -- so a bare use of one is its address (la).
        ; the sig table too: an mproto sibling (`double sin(..), cos(..);`) has a
        ; sig but no proto form of its own. a small single-return definition also

@@ -51,12 +51,9 @@ struct k_boot {
  u8 has_fb; };
 
 static u8 mmap[32768];                 // the UEFI memory map, GetMemoryMap-filled
-// the page tables: pml4 + 2 pdpt + 4 pd + the kernel pd, 4096-aligned BY HAND
-// off a slack buffer (a page table's low 12 bits are its flags, so alignment
-// is the whole contract) -- mooncc has no aligned attribute, and a runtime
-// round-up says the same thing without one.
-static u8 ptbuf[(8 * 512 + 512) * 8];
-static u64 *pt;
+// the page tables: pml4 + 2 pdpt + 4 pd + the kernel pd. a page table's low 12
+// bits are its flags, so the aligned(4096) IS the contract -- mooncc honors it.
+static u64 pt[8 * 512] __attribute__((aligned(4096)));
 
 u64 efi_main(void *handle, void *st) {
  sys = (void **) st;
@@ -153,7 +150,6 @@ u64 efi_main(void *handle, void *st) {
 
  // page tables BEFORE ExitBootServices (say still works): identity + hhdm
  // over the low 4G in 2M pages, and KVMA -> the span the kernel landed in.
- pt = (u64 *) (((u64) ptbuf + 4095) & ~4095ull);
  for (u64 i = 0; i < 8 * 512; i++) pt[i] = 0;
  for (u64 i = 0; i < 2048; i++) pt[3 * 512 + i] = (i << 21) | 0x83;
  for (u64 i = 0; i < 4; i++) pt[512 + i] = (u64) &pt[(3 + i) * 512] | 3;

@@ -84,6 +84,3 @@ usually tiny or empty -- but the section must exist regardless: an image without
 - **OVMF's exception dump is the debugger.** `RIP`/`CR2`/`CR3` in that dump name
   the fault exactly -- reading it settled the above in one boot, where guessing
   at the page tables would have taken many.
-- **`__attribute__((aligned(N)))` on a data declarator does not parse** in mooncc
-  today, so the page tables align by hand off a slack buffer. A skip-the-token
-  fix would silently *mis*align them, which is worse than the error.

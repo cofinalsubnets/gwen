@@ -555,6 +555,12 @@
       (= (cast "int g(void) __attribute__((__nothrow__)){return 0;}")
          (cast "int g(void){return 0;}"))
       (= (cast "int v __attribute__((aligned(8)));")  (cast "int v;"))
+      ; ..an ARRAY declarator carries the trailing run too (the AST is unchanged --
+      ; the aligned(N) itself is HONORED out of band, parse's 'aligns tablet ->
+      ; cgdata's ('align n); the loader's page tables stand on it)
+      (= (cast "int a[16] __attribute__((aligned(64)));") (cast "int a[16];"))
+      (= (cast "int a[2][3] __attribute__((aligned(16))) = {{1,2,3},{4,5,6}};")
+         (cast "int a[2][3] = {{1,2,3},{4,5,6}};"))
       (= (cast "int a __attribute__((unused)), b;")   (cast "int a, b;"))
       (= (cast "extern int x __asm__(\"realx\");")     (cast "extern int x;"))
       (= (cast "int main(void){register int a=3; const int b=4; return a+b;}")

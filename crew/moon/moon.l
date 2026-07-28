@@ -97,8 +97,8 @@
        ps (cparse-t <>pp tgt)                 ; thread the target so parse sizes pointers/longs at the ABI width
        _ (? (okv? ps) () (ccdie (deskew ps (tally ds9)) src ("cc: parse error in " + src)))
        ps)
-   ; the parser's static/section trio, threaded to the gen as one list
-   (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8))   ; sfns svars sects ALIASES
+   ; the parser's static/section tablets, threaded to the gen as one list
+   (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9))   ; sfns svars sects aliases ALIGNS
    ; a standalone static executable (the default): _start + text + data, chmod +x
    (cc-exe src dst is ds tgt)
     (: ps (cc-parse src is ds tgt)
