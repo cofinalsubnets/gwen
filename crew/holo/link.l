@@ -38,7 +38,8 @@
        (|| (nm = ".text") (ld-pre nm ".text.")) 'text
        (|| (nm = ".rodata") (ld-pre nm ".rodata.")) 'rodata
        (|| (nm = ".data") (ld-pre nm ".data.")) 'data
-       (nm = "ai_nifs") 'nifs ())
+       (nm = "ai_nifs") 'nifs
+       (nm = ".image") 'image ())
 
    ; parse one relocatable object (id names it in scares) -> a tablet
    ;   'id 'src            the name and the raw bytes
@@ -108,7 +109,7 @@
        ; the lane lists came out reversed (the walk conses); put each back in
        ; header order, so a lane's pieces lay in the order the object wrote them
        _ (foldl (\ _ l (pin lanes l (rev (peep lanes l ()))))
-                0 '(text rodata data nifs bss))
+                0 '(text rodata data nifs bss image))
        symt <cl
        _ (? (two? symt) 0 (scare 'link-no-symtab id))
        stro (rle64 s ((sh (at symt 2)) + 24))       ; .strtab offset, via symtab's link
@@ -153,6 +154,13 @@
                           _ (pin bs <is a)
                           (go (a + (at se 2)) >is)))
           (ldlay1 lane (go cur (peep (peep ob 'lanes 0) lane ())) >os)))
+
+   ; how many bytes a lane holds in one object. a lane with a NAME is recorded even
+   ; when it is empty (every object carries a zero-size .image), so "does this set
+   ; use the lane at all?" has to weigh the bytes, not count the sections.
+   (ld-lanesz ob lane)
+    (foldl (\ a i (a + (at (peep (peep ob 'secs 0) i ()) 2)))
+           0 (peep (peep ob 'lanes 0) lane ()))
 
    ; assign every section its load address: header first, then all text (each
    ; aligned as its header asks), rodata, data, then the nif region -- 16-aligned
@@ -372,6 +380,17 @@
        ; out to `bend` where its p_filesz stops at r1, and the kernel hands over
        ; the difference already zeroed -- which is the whole meaning of .bss.
        bend (ldlay1 'bss r1 objs)
+       ; .image last of all -- past .bss, on a page, so `love --bake` can GROW it at
+       ; the tail of the file (host/image.c: the section that ENDS the segment is the
+       ; one that can grow without moving anything). It owns file bytes where .bss does
+       ; not, so p_filesz has to reach out over the bss gap and the emit writes it as
+       ; zeros -- free here, where every object is mooncc's and .bss is empty, and the
+       ; price of a foreign .o's real .bss if one ever rides this lane. No .image
+       ; section in the set (every link but love's) and the whole lane costs nothing.
+       img? (0 < (foldl (\ a ob (a + (ld-lanesz ob 'image))) 0 objs))
+       iaddr (? img? (ld-align 4096 bend) r1)
+       iend (? img? (ldlay1 'image iaddr objs) r1)
+       mend (? img? iend bend)                  ; the last address the segment spans
        relbox (? pie (: t (tablet 0) _ (pin t 0 ()) t) ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
        ; the ENTRY: ld's rule -- the symbol `_start` when the set defines one,
@@ -405,15 +424,16 @@
        en (emit 'nifs <ed objs >ed)
        tail (? (<en < r0) `((ld-zeros (r0 - <en))) ())      ; nif tail + table alignment in one pad
        rtab (? pie (catall (map (\ o (le64 o)) (rev (peep relbox 0 ())))) ())
+       ei (? img? (emit 'image r1 objs ()) `(r1))           ; pads r1 -> iaddr over the bss gap
        ; -- the section headers and the symbol table, laid PAST p_filesz. nothing
        ; here is SHF_ALLOC, so the kernel maps not a byte of it and the program is
        ; the same program; nm, objdump and gdb read exactly this. we describe the
        ; image as the five lanes we laid it in, so a symbol lands in the section
        ; it actually lives in and `nm` classifies it T/R/D/B without guessing.
-       fsz (r1 - base)                                      ; the loaded bytes: p_filesz
-       lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 5)))
+       fsz (iend - base)                                    ; the loaded bytes: p_filesz
+       lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 5) ('image >< 6)))
        st (ldstab objs glo lanesx)
-       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".bss"
+       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".bss" ".image"
                          ".symtab" ".strtab" ".shstrtab"))
        (snm k) (at <>shstr k)
        symo (ld-align 8 fsz) symz (tally <st)
@@ -425,12 +445,13 @@
                      (ld-shdr (snm 1) 1 2 <et (<et - base) (<eo - <et) 0 0 16 0)
                      (ld-shdr (snm 2) 1 3 <eo (<eo - base) (<ed - <eo) 0 0 16 0)
                      (ld-shdr (snm 3) 1 3 <ed (<ed - base) (<en - <ed) 0 0 16 0)
-                     (ld-shdr (snm 4) 8 3 r1 fsz (bend - r1) 0 0 16 0)               ; NOBITS: an offset, no bytes
-                     (ld-shdr (snm 5) 2 0 0 symo symz 7 (at st 2) 8 24)              ; link=.strtab info=first global
-                     (ld-shdr (snm 6) 3 0 0 stro strz 0 0 1 0)
-                     (ld-shdr (snm 7) 3 0 0 ssto sstz 0 0 1 0)))
-       hdr (elf64-hdr (? pie 3 2) base ent fsz (bend - base) mach `(shto 9 8))
-       (hdr >< (>en + tail + (? pie `(rtab) ())
+                     (ld-shdr (snm 4) 8 3 r1 (r1 - base) (bend - r1) 0 0 16 0)       ; NOBITS: an offset, no bytes
+                     (ld-shdr (snm 5) 1 3 iaddr (iaddr - base) (iend - iaddr) 0 0 16 0)  ; .image, the grow slot
+                     (ld-shdr (snm 6) 2 0 0 symo symz 8 (at st 2) 8 24)              ; link=.strtab info=first global
+                     (ld-shdr (snm 7) 3 0 0 stro strz 0 0 1 0)
+                     (ld-shdr (snm 8) 3 0 0 ssto sstz 0 0 1 0)))
+       hdr (elf64-hdr (? pie 3 2) base ent fsz (mend - base) mach `(shto 10 9))
+       (hdr >< (>en + tail + (? pie `(rtab) ()) + >ei
                 + `((ld-zeros (symo - fsz)) <st <>st <shstr
                     (ld-zeros (shto - (ssto + sstz))) sht))))
 

@@ -146,30 +146,27 @@ static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
   for (size_t i = 1; i < nsh; i++)
     if (sh[i].sh_name < sh[eh.e_shstrndx].sh_size && !strcmp(str + sh[i].sh_name, ".image")) { si = i; break; }
   if (!si) goto out;                              // no .image section at all
-  for (pi = 0; pi < nph; pi++)
-    if (ph[pi].p_type == PT_LOAD && ph[pi].p_vaddr == sh[si].sh_addr) break;
-  if (pi == nph) goto out;                        // .image does not head a segment of its own
-  // HEAD: every byte that must stay exactly where it is -- the headers, every other
-  // allocated section, and anything non-allocated that happens to sit among them. The
-  // blob starts at the first page past it; the non-allocated tail relays after the blob.
-  head = eh.e_phoff + (uint64_t) nph * sizeof(Elf64_Phdr);
-  if (head < sizeof eh) head = sizeof eh;
+  // The blob goes exactly where the section already sits -- the offset never moves, so
+  // the loader's offset/vaddr congruence is inherited rather than recomputed, and a
+  // rebake lands on its own footprint. What has to be true is only that .image is LAST:
+  // nothing allocated above it, and it ends the segment that carries it, so growing it
+  // grows nothing else. That covers a section alone in the highest PT_LOAD (ld's
+  // --section-start, the gcc/clang lane) and one riding the tail of the single segment
+  // holo lays, with the same arithmetic.
+  off = sh[si].sh_offset;
   for (size_t i = 1; i < nsh; i++) {
     if (i == si || sh[i].sh_type == SHT_NOBITS || !(sh[i].sh_flags & SHF_ALLOC)) continue;
-    if (sh[i].sh_addr > sh[si].sh_addr) goto out; // something allocated ABOVE the image: not the tail
-    if (sh[i].sh_offset + sh[i].sh_size > head) head = sh[i].sh_offset + sh[i].sh_size; }
-  for (int again = 1; again; ) {                  // a non-allocated section straddling the cut joins the head
-    again = 0;
-    for (size_t i = 1; i < nsh; i++)
-      if (sh[i].sh_type != SHT_NOBITS && sh[i].sh_offset < head
-          && sh[i].sh_offset + sh[i].sh_size > head && i != si)
-        head = sh[i].sh_offset + sh[i].sh_size, again = 1; }
-  al = ph[pi].p_align ? ph[pi].p_align : 4096;
-  off = (head + al - 1) / al * al;
-  if ((off - ph[pi].p_vaddr) % al) goto out;      // the loader's offset/vaddr congruence: refuse, never lie
+    if (sh[i].sh_addr > sh[si].sh_addr || sh[i].sh_offset > off) goto out; }
+  for (pi = 0; pi < nph; pi++)
+    if (ph[pi].p_type == PT_LOAD && ph[pi].p_vaddr <= sh[si].sh_addr
+        && sh[si].sh_addr + sh[si].sh_size == ph[pi].p_vaddr + ph[pi].p_memsz) break;
+  if (pi == nph) goto out;                        // .image does not end a segment: not the tail
+  for (size_t i = 0; i < nph; i++)                // ..and no other segment lives above it
+    if (i != pi && ph[i].p_type == PT_LOAD && ph[i].p_vaddr > ph[pi].p_vaddr) goto out;
+  head = off;                                     // everything below the blob stays put, byte for byte
+  al = sh[si].sh_addr - ph[pi].p_vaddr;           // the image's own start within its segment
   if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) { rc = -6; goto out; }
   if ((rc = bake_move(src, dst, 0, 0, head))) goto out;
-  if ((rc = bake_zero(dst, head, off - head))) goto out;
   if (pwrite(dst, buf, len, (off_t) off) != (ssize_t) len) { rc = -6; goto out; }
   cur = off + len;
   for (size_t i = 1; i < nsh; i++) {              // the non-allocated tail, relaid past the blob
@@ -181,8 +178,8 @@ static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
     if ((rc = bake_move(src, dst, sh[i].sh_offset, cur, sh[i].sh_size))) goto out;
     sh[i].sh_offset = cur;
     cur += sh[i].sh_size; }
-  sh[si].sh_offset = off, sh[si].sh_size = len;   // the two records that now describe the image
-  ph[pi].p_offset = off, ph[pi].p_filesz = len, ph[pi].p_memsz = len;
+  sh[si].sh_size = len;                           // the two records that now describe the image
+  ph[pi].p_filesz = ph[pi].p_memsz = al + len;    // .image ends the segment, so its growth is the segment's
   eh.e_shoff = cur = (cur + 7) & ~(uint64_t) 7;
   { uintptr_t l = len;                            // ai_baked_image_len: what main.c hands the codec
     if (pwrite(dst, sh, nsh * sizeof *sh, (off_t) cur) != (ssize_t)(nsh * sizeof *sh)

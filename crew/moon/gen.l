@@ -5063,17 +5063,19 @@
        (? (bad? irf) irf (unhome g (jr0 (unframe g irf)))))
 
    ; the data tail: globals in declaration order, then the string table
-   ; -> (dataforms nifforms) | 'bad. a global pinned to the `ai_nifs` section
-   ; (AI_NIF's registry entries) lays in ITS OWN stream -- the .o emitter puts
-   ; it in a real `ai_nifs` ELF section so the linker's __start_/__stop_
-   ; bracket symbols exist and main()'s boot drain finds the entries. any
-   ; OTHER named section stays in .data (reached by symbol, not by bracket).
+   ; -> (dataforms nifforms imgforms) | 'bad. TWO named sections lay in a stream
+   ; of their own, because for both of them WHERE the bytes land is the point and
+   ; a symbol alone cannot say it: `ai_nifs` (AI_NIF's registry entries) needs the
+   ; linker's __start_/__stop_ bracket around a packed run for main()'s boot drain,
+   ; and `.image` needs to be LAST in the image so `love --bake` can grow it at the
+   ; tail (host/image.c). Any other named section stays in .data, reached by symbol.
    (cgdata g)
     (: sects (peep g 'sects (tablet 0))
-       (nif? nm) (? ((peep sects nm ()) = "ai_nifs") 1 ())   ; canonical 1/() -- the walk compares with id?
-       (globs gs nif acc)
+       (strm nm) (: s (peep sects nm ())                  ; which stream a global belongs to
+                    (? (s = "ai_nifs") 'nifs (s = ".image") 'image 'data))
+       (globs gs want acc)
         (? (! (two? gs)) acc
-           (! (id? (nif? <gs) nif)) (globs >gs nif acc)   ; the other stream's
+           (! (id? (strm <gs) want)) (globs >gs want acc)   ; another stream's
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
               bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
@@ -5082,7 +5084,7 @@
                                           (go >l (? ((peep (g 'alias) <l ()) = <gs)
                                                     (link `('label (intern <l)) a2) a2)))
                            (go (keys (g 'alias)) ()))   ; a DATA alias (musl's __stdin_used) names the same bytes
-                    (globs >gs nif (acc + als + `(`('label lbl) `('raw bytes))))))))
+                    (globs >gs want (acc + als + `(`('label lbl) `('raw bytes))))))))
        (strs ss acc)
         (? (! (two? ss)) acc
            (: p <ss
@@ -5090,11 +5092,12 @@
               t <>p
               (strs >ss (cat acc `(`('label <p)
                                          `('raw ((bts t ((tally t) - 1) ()) + `(0))))))))
-       (: gb (globs (rev (g 'globs)) () ())           ; exported globals, then block-scope statics
-          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) () ()))   ; (local data labels), then strings
-          nb (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) 1 ()))
-          (? (|| (bad? gb) (|| (bad? sb) (bad? nb))) 'bad
-             `((gb + sb + (strs (g 'strs) ())) nb))))
+       (: gb (globs (rev (g 'globs)) 'data ())        ; exported globals, then block-scope statics
+          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) 'data ()))   ; (local data labels), then strings
+          nb (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) 'nifs ()))
+          ib (? (|| (bad? gb) (|| (bad? sb) (bad? nb))) 'bad (globs (rev (g 'globs)) 'image ()))
+          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? nb) (bad? ib)))) 'bad
+             `((gb + sb + (strs (g 'strs) ())) nb ib))))
 
    ; the shared core: build the gen state, then TEXT (the functions, no _start)
    ; and DATA (globals + strings) separately -> (g textforms dataforms) | ().
@@ -5202,7 +5205,7 @@
    ; (global OBJECT symbols, statics excluded), plus the ai_nifs stream -- the
    ; .o emitter (crew/holo/obj.l) turns the rest (undefined labels,
    ; cross-section refs) into a symbol table + relocations.
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           (! (two? r)) ()
@@ -5238,4 +5241,4 @@
                                         (go2 >l (? (member? (peep als <l ()) dgl) (link <l a2) a2)))
                           (base + (go2 (keys als) ()))))
              dat <>>r
-             `(1 <>r <dat fnames gnames <>dat)))))
+             `(1 <>r <dat fnames gnames <>dat <>>dat)))))

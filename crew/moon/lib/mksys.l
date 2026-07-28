@@ -283,4 +283,4 @@
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
-       (write-bytes dst (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () ()))))
+       (write-bytes dst (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () ()))))

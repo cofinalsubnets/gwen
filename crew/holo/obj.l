@@ -94,9 +94,10 @@
 
    ; the externals: labels referenced by a relocation but defined in NO
    ; section -- each needs an UNDEF symbol. unique, first-seen order.
-   (o-exts rels tlabels dlabels nlabels)
+   (o-exts rels tlabels dlabels nlabels ilabels)
     (: seen (tablet 0)
-       (add lbl acc) (? (|| (o-has? tlabels lbl) (|| (o-has? dlabels lbl) (o-has? nlabels lbl))) acc
+       (add lbl acc) (? (|| (o-has? tlabels lbl)
+                            (|| (o-has? dlabels lbl) (|| (o-has? nlabels lbl) (o-has? ilabels lbl)))) acc
                         (o-has? seen lbl) acc
                         (: _ (pin seen lbl 1) (lbl >< acc)))
        (go rs acc) (? !(two? rs) acc (go >rs (add <>><rs acc)))   ; reloc = (off kind label); <>><rs = the label field
@@ -163,7 +164,7 @@
        nbytes <nw nrel <>nw
        _ (? (two? nrel)                             ; an ai_nifs data pointer is rare on thumb1 -- unsupported for now
              (scare 'obj32-nif-reloc-unsupported target) 0)
-       exts (o-exts (trel + drel + nrel) tlabels dlabels nlabels)
+       exts (o-exts (trel + drel + nrel) tlabels dlabels nlabels (tablet 0))
        ; STATIC fns whose addresses survive as relocations (a thumb2 la's movw/movt
        ; pair, a data initializer's abs32 fn pointer -- love.c's ap tables): REL's
        ; in-field addend is 16-bit SIGNED, so a deep .text offset cannot ride it --
@@ -327,15 +328,18 @@
               (le16 8)))                                                  ; e_shstrndx=8
        (catall `(hdr tbytes dbytes nbytes symbytes strblob reltext reldata shstrblob sht)))
 
-   ; build the whole .o image. textforms/dataforms/nifforms are cgen-obj's split
-   ; IR (nifforms = the AI_NIF registry entries, laid in their own `ai_nifs`
-   ; section so the linker's __start_/__stop_ bracket symbols bound them),
-   ; funcnames the DEFINED functions (global FUNC symbols), globnames the global
-   ; variables (global OBJECT symbols); statics reach neither list and stay
-   ; local labels. -> a byte list.
-   (objelf target textforms dataforms funcnames globnames wknames nifforms)
+   ; build the whole .o image. textforms/dataforms/nifforms/imgforms are cgen-obj's
+   ; split IR -- the two named streams are the ones where the ADDRESS is the point
+   ; and a symbol alone cannot say it: nifforms are the AI_NIF registry entries,
+   ; laid in their own `ai_nifs` section so the linker's __start_/__stop_ bracket
+   ; symbols bound them, and imgforms the `.image` bake slot, which link.l lays LAST
+   ; of all so `love --bake` can grow it at the tail (host/image.c). funcnames the
+   ; DEFINED functions (global FUNC symbols), globnames the global variables (global
+   ; OBJECT symbols); statics reach neither list and stay local labels. -> a byte list.
+   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms)
     (? (arm32? target)
-       (objelf32 target textforms dataforms funcnames globnames wknames nifforms)
+       (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)   ; no bake lane on arm32
+          (objelf32 target textforms dataforms funcnames globnames wknames nifforms))
     (: a64 (member? target '(arm64 aarch64))
        rv (member? target '(riscv64 rv64))
        _ (? (|| (id? target 'x64) (|| a64 rv)) 0 (scare 'obj-target target))
@@ -359,18 +363,21 @@
                 (scare 'holo-bake-stale 'laylax)))  ; assemble each section at org 0
        dp (lay dataforms be 0 () (tablet 0))
        np (lay nifforms be 0 () (tablet 0))
-       tlabels >tp dlabels >dp nlabels >np
+       ip (lay imgforms be 0 () (tablet 0))
+       tlabels >tp dlabels >dp nlabels >np ilabels >ip
        tw (o-walk be <tp tlabels wkset 1 rset 0 () ())
        dw (o-walk be <dp dlabels wkset 0 rset 0 () ())
        nw (o-walk be <np nlabels wkset 0 rset 0 () ())
+       iw (o-walk be <ip ilabels wkset 0 rset 0 () ())
        tbytes <tw trel <>tw
        dbytes <dw drel <>dw
        nbytes <nw nrel <>nw
-       exts (o-exts (trel + drel + nrel) tlabels dlabels nlabels)
+       ibytes <iw irel <>iw
+       exts (o-exts (trel + drel + (nrel + irel)) tlabels dlabels nlabels ilabels)
 
-       ; -- symbol indices: NULL, .text/.data/ai_nifs section syms, then funcs, globs, exts --
+       ; -- symbol indices: NULL, .text/.data/ai_nifs/.image section syms, then funcs, globs, exts --
        nfun (tally funcnames) nglob (tally globnames)
-       fstart 4 gstart (4 + nfun) estart ((4 + nfun) + nglob)
+       fstart 5 gstart (5 + nfun) estart ((5 + nfun) + nglob)
        extidx (o-idx exts estart)
        fnidx (o-idx (map intern funcnames) fstart)   ; interned fn name -> its symbol index (weak-target relocs bind here)
        gidx (o-idx (map intern globnames) gstart)    ; ..and the DATA twin: a weak GLOBAL (musl's __stdout_used)
@@ -391,9 +398,12 @@
            ; a DATA symbol honours wknames too: musl's __stdio_exit.c defines
            ; __stdout_used weakly (aliasing a null dummy) so stdout.c's real one
            ; wins -- a hardcoded strong binding made that pair a link-dup
-           gsyms (catall (o-mapi (\ i gs (o-sym (at stroffs (nfun + i))
-                                                (? (member? gs wknames) 2 1) 1 2
-                                                (peep dlabels (intern gs) 0)))
+           ; ..and a global's SECTION is wherever its bytes went: an `.image` one
+           ; (the bake slot) lives in section 4, everything else in .data
+           gsyms (catall (o-mapi (\ i gs (: k (intern gs) im (o-has? ilabels k)
+                                            (o-sym (at stroffs (nfun + i))
+                                                   (? (member? gs wknames) 2 1) 1 (? im 4 2)
+                                                   (peep (? im ilabels dlabels) k 0))))
                                  globnames))
            ; an EXTERNAL symbol honours wknames too: a weak undefined reference
            ; resolves to zero at static link (musl's _DYNAMIC), where a strong
@@ -405,8 +415,9 @@
                       (o-sym 0 0 3 1 0)                  ; .text section symbol (STT_SECTION)
                       (o-sym 0 0 3 2 0)                  ; .data section symbol
                       (o-sym 0 0 3 3 0)                  ; ai_nifs section symbol
+                      (o-sym 0 0 3 4 0)                  ; .image section symbol
                       fsyms gsyms esyms)))
-       nsym (4 + nfun + nglob + (tally exts))
+       nsym (5 + nfun + nglob + (tally exts))
 
        ; -- the relocations. x64 text: an la into .data -> PC32 via the .data
        ; section symbol (idx 2, addend = data offset - 4); a call to an external
@@ -425,6 +436,7 @@
            (o-has? tlabels lbl) `(1 (peep tlabels lbl 0))
            (o-has? dlabels lbl) `(2 (peep dlabels lbl 0))
            (o-has? nlabels lbl) `(3 (peep nlabels lbl 0))
+           (o-has? ilabels lbl) `(4 (peep ilabels lbl 0))
            `((peep extidx lbl 0) 0))
        reltext
         (? rv
@@ -486,10 +498,12 @@
            rs))
        reldata (reldat1 drel)
        relnif  (reldat1 nrel)
-       ntrel (tally trel) ndrel (tally drel) nnrel (tally nrel)
+       relimg  (reldat1 irel)
+       ntrel (tally trel) ndrel (tally drel) nnrel (tally nrel) nirel (tally irel)
 
        ; -- the section-name string table --
-       shnames `(".text" ".data" "ai_nifs" ".symtab" ".strtab" ".rela.text" ".rela.data" ".rela.ai_nifs" ".shstrtab")
+       shnames `(".text" ".data" "ai_nifs" ".image" ".symtab" ".strtab"
+                 ".rela.text" ".rela.data" ".rela.ai_nifs" ".rela.image" ".shstrtab")
        shstr (o-strtab shnames)
        shstrblob <shstr shoffs <>shstr
        (shname i) (at shoffs i)
@@ -501,12 +515,14 @@
        t-off h-sz               t-sz (tally tbytes)
        d-off (t-off + t-sz)     d-sz (tally dbytes)
        n-off (d-off + d-sz)     n-sz (tally nbytes)
-       sym-off (n-off + n-sz)   sym-sz (nsym * 24)
+       i-off (n-off + n-sz)     i-sz (tally ibytes)
+       sym-off (i-off + i-sz)   sym-sz (nsym * 24)
        str-off (sym-off + sym-sz) str-sz (tally strblob)
        rt-off (str-off + str-sz)  rt-sz (ntrel * 24)
        rd-off (rt-off + rt-sz)    rd-sz (ndrel * 24)
        rn-off (rd-off + rd-sz)    rn-sz (nnrel * 24)
-       shs-off (rn-off + rn-sz)   shs-sz (tally shstrblob)
+       ri-off (rn-off + rn-sz)    ri-sz (nirel * 24)
+       shs-off (ri-off + ri-sz)   shs-sz (tally shstrblob)
        sht-off (shs-off + shs-sz)
 
        ; a 64-byte section header
@@ -518,18 +534,21 @@
               (sh (shname 0) 1 6 t-off t-sz 0 0 16 0)                      ; 1 .text  PROGBITS ALLOC|EXEC
               (sh (shname 1) 1 3 d-off d-sz 0 0 8 0)                       ; 2 .data  PROGBITS ALLOC|WRITE
               (sh (shname 2) 1 3 n-off n-sz 0 0 8 0)                       ; 3 ai_nifs PROGBITS ALLOC|WRITE (__start_/__stop_ bracket it)
-              (sh (shname 3) 2 0 sym-off sym-sz 5 4 8 24)                  ; 4 .symtab link=.strtab info=first-global(4)
-              (sh (shname 4) 3 0 str-off str-sz 0 0 1 0)                   ; 5 .strtab
-              (sh (shname 5) 4 0 rt-off rt-sz 4 1 8 24)                    ; 6 .rela.text link=.symtab info=.text
-              (sh (shname 6) 4 0 rd-off rd-sz 4 2 8 24)                    ; 7 .rela.data link=.symtab info=.data
-              (sh (shname 7) 4 0 rn-off rn-sz 4 3 8 24)                    ; 8 .rela.ai_nifs link=.symtab info=ai_nifs
-              (sh (shname 8) 3 0 shs-off shs-sz 0 0 1 0)))                 ; 9 .shstrtab
+              (sh (shname 3) 1 3 i-off i-sz 0 0 16 0)                      ; 4 .image PROGBITS ALLOC|WRITE (the bake slot, laid LAST)
+              (sh (shname 4) 2 0 sym-off sym-sz 6 5 8 24)                  ; 5 .symtab link=.strtab info=first-global(5)
+              (sh (shname 5) 3 0 str-off str-sz 0 0 1 0)                   ; 6 .strtab
+              (sh (shname 6) 4 0 rt-off rt-sz 5 1 8 24)                    ; 7 .rela.text link=.symtab info=.text
+              (sh (shname 7) 4 0 rd-off rd-sz 5 2 8 24)                    ; 8 .rela.data link=.symtab info=.data
+              (sh (shname 8) 4 0 rn-off rn-sz 5 3 8 24)                    ; 9 .rela.ai_nifs link=.symtab info=ai_nifs
+              (sh (shname 9) 4 0 ri-off ri-sz 5 4 8 24)                    ; 10 .rela.image link=.symtab info=.image
+              (sh (shname 10) 3 0 shs-off shs-sz 0 0 1 0)))                ; 11 .shstrtab
 
        hdr (catall `(
               `(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)                     ; e_ident: \x7fELF 64-bit LSB
               (le16 1) (le16 machine) (le32 1)                            ; ET_REL, e_machine, version
               (le64 0) (le64 0) (le64 sht-off)                            ; e_entry=0, e_phoff=0, e_shoff
               (le32 0) (le16 64) (le16 0)                                 ; e_flags, e_ehsize, e_phentsize=0
-              (le16 0) (le16 64) (le16 10)                                ; e_phnum=0, e_shentsize=64, e_shnum=10
-              (le16 9)))                                                  ; e_shstrndx=9
-       (catall `(hdr tbytes dbytes nbytes symbytes strblob reltext reldata relnif shstrblob sht)))))
+              (le16 0) (le16 64) (le16 12)                                ; e_phnum=0, e_shentsize=64, e_shnum=12
+              (le16 11)))                                                 ; e_shstrndx=11
+       (catall `(hdr tbytes dbytes nbytes ibytes symbytes strblob
+                 reltext reldata relnif relimg shstrblob sht)))))

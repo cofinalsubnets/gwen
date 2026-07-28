@@ -121,9 +121,14 @@ Departures from the original plan above, worth noting:
   two-anchor stamp above still holds by construction. That retired a 6 MiB fixed reserve carrying
   2.2 MiB of shipped zeros and a `RESERVE_WORDS` to bump whenever the image outgrew it (7.5 MB → 5.3 MB).
   It has to stay a real allocated section rather than loose bytes at EOF: `strip` (which `install -s`
-  runs) keeps the section and drops a bare trailer. `host/image.c` picks the lane by READING the
-  binary's own section headers, so the mooncc/holo lane — whose linker lays one segment and folds
-  `.image` into `.data` — still fills a reserve in place, and neither lane is told which it is.
+  runs) keeps the section and drops a bare trailer. The rule `host/image.c` checks is only that
+  `.image` ENDS the segment carrying it, which covers both shapes with the same arithmetic: a section
+  alone in the highest `PT_LOAD` (ld/lld) and one riding the tail of the single segment holo lays
+  (`love-raw` 8.3 MB → 1.9 MB unbaked). It reads that off the binary's own section headers rather than
+  a build flag, so neither lane is told which it is, and a linker that lays `.image` anywhere else
+  falls back to filling a reserve in place. For the mooncc lane the bytes had to become a real section
+  first: `.image` is now a fourth stream through cgdata → objelf → the `image` lane in link.l, beside
+  `ai_nifs` — the other named section whose whole point is WHERE it lands.
 - **The glaze bake is the corpus eval, not a split assert-free lib.** `--bake` evals the glaze
   (emit.l+auto.l, x86-gated) before dumping; the asserts' transient natives die in `gen_major`. emit.l's
   self-test fixtures were wrapped local (they'd leaked as globals); auto.l's `memo` cache is cleared
