@@ -205,8 +205,7 @@ int image_bake(struct ai *g) {
   if (src < 0 || fstat(src, &st)) { if (src >= 0) close(src); return -6; }
   int rc = bake_tail(src, tmp, buf, len, bl.off, st.st_mode & 07777);
   if (rc > 0) {
-    fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image."
-                    " The link wants -Wl,--section-start=.image=... (host/build.mk)\n");
+    fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
     rc = -3; }
   close(src);
   if (!rc && rename(tmp, exe)) rc = -6;           // the adopt: atomic, a new inode

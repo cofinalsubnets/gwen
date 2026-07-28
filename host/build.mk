@@ -50,9 +50,12 @@ endif
 # lane, riding the tail of its single segment), so both toolchains bake alike.
 # The flag is GNU-ld/lld spelling. Nothing here is conditional on mach-o because NOTHING
 # in this file builds there: host/image.c includes <link.h> and calls dl_iterate_phdr,
-# neither of which macOS has, and a mach-o section attribute needs `segment,section`.
-# Whoever wants the mac host back owes image.c a mach-o lane (_dyld_get_image_header +
-# _NSGetExecutablePath), not a reserve -- a reserve would not have helped it either.
+# neither of which Darwin has, and a mach-o section attribute needs `segment,section`.
+# A mac lane is writable -- getsectbyname + _NSGetExecutablePath are the easy half of it,
+# and `-segaddr` places a segment high -- but on Apple silicon every executable carries at
+# least an ad-hoc signature over its own bytes, so a self-patching binary has to re-sign
+# itself before it can exec again. That is the real wall, and it is not one a reserve
+# would have got around either.
 image_ldflags = -Wl,--section-start=.image=0x2000000
 # STATIC=1 links a fully static `love` against musl (and skips liblove.so, which a
 # static build can't produce) -- the OPT-IN portable-binary lane (was briefly
