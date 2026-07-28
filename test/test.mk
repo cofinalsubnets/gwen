@@ -552,19 +552,7 @@ test_raw: host out/host$(hsuf)/mooncc
 # Opt-in (not test_all): needs the -pie toolchain. x86-64 only.
 .PHONY: test_raw_bake
 test_raw_bake: test_raw
-	@echo BAKE-WAKE $(ho)/love-raw-pie
-	@if [ "`uname -m`" != x86_64 ]; then echo "test_raw_bake: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
-	  d=$(ho)/raw; \
-	  $(ho)/mooncc -pie $$d/*.o -o $(ho)/love-raw-pie \
-	    || { echo "FAIL -pie link love-raw-pie"; exit 1; }; \
-	  cp $(ho)/love-raw-pie $(ho)/love-raw-baked; \
-	  $(ho)/love-raw-baked --bake >/dev/null 2>&1 \
-	    || { echo "FAIL --bake (mooncc-PIE binary refused to snapshot its own image)"; exit 1; }; \
-	  cat $(filter-out %/glaze.l,$t) | $(ho)/love-raw-baked > $(ho)/.test_raw_bake.out 2>&1; s=$$?; \
-	  tail -1 $(ho)/.test_raw_bake.out; \
-	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw_bake.out; } \
-	    || { echo "FAIL woken corpus (exit $$s) -- ai_image_load desync? see [[mooncc-fn-parity]]"; exit 1; }; \
-	  echo "test_raw_bake: the mooncc-PIE binary bakes its own image and WAKES it -- corpus passes on the woken heap"
+	@$m test/gate/raw-bake.l $(ho) $(filter-out %/glaze.l,$t)
 # test_riscv -- the riscv64 codegen rung end to end: the whole test/cc battery
 # compiled `mooncc -t riscv64` (EM_RISCV static ELF, the holo riscv backend),
 # run under qemu-riscv64 (user mode), and DIFFERENTIAL against the native x64
