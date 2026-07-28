@@ -36,7 +36,9 @@
      (: ts2 (skipnl ts)
         (? !ts2 (link 'ok ())
            (: r (plist ts2)
-              (? (id? (cap r) 'stop) (link 'err (+ "unexpected " (litw (cap (cup r)))))
+              (? (id? (cap r) 'stop)
+                   (: t (cap (cup r)) w (litw t)
+                      (link 'err (+ "unexpected " (? (tally w) w (+ "" (cup t))))))
                  (bad? r) r
                  (cup r) (link 'err "trailing tokens")
                  (link 'ok (cap r))))))
@@ -89,6 +91,9 @@
      (? (! (two? ts)) (link 'more 'compound)
         (: t (cap ts) w (litw t)
            (? (sh-smem? w stopw) (link 'stop ts)
+              ; a closer OP at command position stops the list too -- it is how a
+              ; multi-line subshell's `)` (or a case item's `;;`) lands on its own line
+              (|| (tk-op? t ")") (tk-op? t ";;")) (link 'stop ts)
               (= w "if") (pif (cup ts))
               (= w "while") (ploop 'while (cup ts))
               (= w "until") (ploop 'until (cup ts))

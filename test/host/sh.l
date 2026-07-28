@@ -179,4 +179,36 @@
 (: r (run (L "out/host/love" "out/host/lush" "-c" "exit 9"))
    (assert (= 9 (cap r))))
 
+; rung 4: --login reads $HOME/.profile (a scratch HOME keeps the suite
+; hermetic); without the flag the profile stays unread. `return` in a
+; .-sourced file stops that file with its status (the POSIX dot-return).
+(: home0 (+ "" (getenv "HOME"))
+   d "out/host/.lush-t4"
+   _ (mkdir d 493)
+   p (open (+ d "/.profile") "w") _ (say p "LUSH_P4=prof\nexport LUSH_P4\n") _ (close p)
+   p (open (+ d "/rr.sh") "w") _ (say p "echo one\nreturn 5\necho two\n") _ (close p)
+   _ (setenv "HOME" d)
+   r1 (run (L "out/host/love" "out/host/lush" "--login" "-c" "echo p=$LUSH_P4"))
+   r2 (run (L "out/host/love" "out/host/lush" "-c" "echo p=[$LUSH_P4]"))
+   _ (setenv "HOME" home0)
+   r3 (run (L "out/host/love" "out/host/lush" "-c" ". out/host/.lush-t4/rr.sh; echo rc=$?"))
+   (assert (= "p=prof\n" (cup r1))
+           (= "p=[]\n" (cup r2))
+           (= "one\nrc=5\n" (cup r3))))
+; a comment ends at ITS newline, never the input's end (the multi-line -c /
+; buffered-script shape every /etc/profile.d file has)
+(: r (run (L "out/host/love" "out/host/lush" "-c" "# lead\necho a # tail\n# mid\necho b"))
+   (assert (= "a\nb\n" (cup r))))
+; a closer on its OWN LINE: the multi-line subshell in cmdsub, the case item's ;;
+(: r (run (L "out/host/love" "out/host/lush" "-c" "v=$(\n(\necho deep\n)\n)\necho v=$v"))
+   (assert (= "v=deep\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "case x in\na) echo no\n;;\nx) echo yes\n;;\nesac"))
+   (assert (= "yes\n" (cup r))))
+; ${x:-word}: word is QUOTE-AWARE (sh-wordize) -- inner quotes remove, and a
+; quoted pattern char in ${v#pat} is inert (the mask law through the vop)
+(: r (run (L "out/host/love" "out/host/lush" "-c" "echo \"${LUSH_U4:-\"a b\"}\" ${LUSH_U4:-'c d'}"))
+   (assert (= "a b c d\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "v='x*y'; echo ${v#\"x*\"} ${v#x?}"))
+   (assert (= "y y\n" (cup r))))
+
 (puts "sh: ok") (putc 10)

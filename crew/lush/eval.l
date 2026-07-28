@@ -123,7 +123,8 @@
      (? (! (two? args)) (cmderr ". wants a file")
         (: f (cap args)
            (? (two? (stat f))
-              (: p (open f "r") _ (sh-lines p "") _ (close p) (sh-status ()))
+              (: _ (pin sh-retf () 0)            ; a stale interactive `return` must not clip the file
+                 p (open f "r") _ (sh-lines p "") _ (close p) (sh-status ()))
               (cmderr (+ f ": not found")))))
    (sh-localb args)
      (: _ (each args (\ w (: p (sh-eqpos w 0)
@@ -468,14 +469,22 @@
               0)
            (: full (? (tally buf) (+ buf (+ "\n" line)) line)
               r (sh-line full)
-              (? (two? r) (sh-lines port full) (sh-lines port "")))))
+              (? (two? r) (sh-lines port full)
+                 (sh-retf ()) (: _ (pin sh-retf () 0) 0)   ; dot-return: stop THIS file
+                 (sh-lines port "")))))
    (sh-parse-line src)
      (: lx (sh-lex src)
         (? (id? (cap lx) 'more) lx (sh-parse (cup lx))))
    (sh-eval-top src a)
      (: _ (pin sh-curline () src)
         s (sh-eval a)
-        (? (charm? s) s 0))                     ; a stray brk/cnt/ret at top: swallow
+        (? (charm? s) s
+           ; a `return` that reached the top: flag it so the READING loop stops
+           ; its file (POSIX dot-return; sh-lines clears the flag) -- $? is the
+           ; return's own. a stray brk/cnt still swallows.
+           (&& (two? s) (id? (cap s) 'ret))
+             (: _ (pin sh-retf () 1) _ (pin sh-status () (cup s)) (cup s))
+           0))
    (sh-line src)
      (: pr (sh-parse-line src)
         (? (id? (cap pr) 'more) pr

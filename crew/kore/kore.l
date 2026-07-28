@@ -13,6 +13,7 @@
 ;   kore sed [-n] SCRIPT [F..]        the stream editor (crew/kore/sed.l)
 ;   kore env|sleep|kill|xargs        the process tools (crew/kore/proc.l)
 ;   kore vi [FILE]                   the editor (crew/vi/)
+;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/moon.md.)
 ;
 ; loads LAST in the kore cat, when every tool main is already defined; the tool files'
@@ -75,7 +76,13 @@
              'grep grep-main 'sed sed-main
              'vi vi-main
              'env env-main 'sleep sleep-main
-             'kill kill-main 'xargs xargs-main)
+             'kill kill-main 'xargs xargs-main
+             ; the shell: lush's parts precede this file in the cat, so sh-main
+             ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
+             ; symlink usually through lush's OWN seat, which fires first at
+             ; cat load on an sh/lush basename -- this row serves the image
+             ; wake, where only kore-main dispatches)
+             'sh sh-main 'lush sh-main)
    (usage _) (: _ (say err "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
@@ -88,6 +95,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   sed [-n] SCRIPT [F..]                   the stream editor (s///gp, d, p, q, addresses)
   env sleep kill xargs                    the process tools (crew/kore/proc.l)
   vi [FILE]                               the editor (crew/vi/)
+  sh [-c CMD | FILE]                      the shell, lush (crew/lush/)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/kore/fs.l)
   echo seq yes true false basename dirname     ... and the trivia
 ")

@@ -21,6 +21,7 @@
    sh-jobs (tablet 0)
    sh-njob #0
    sh-tty #0                                   ; 1 = interactive: jobs get their own pgrp + the tty
+   sh-login #0                                 ; 1 = a login shell (--login, or a -argv0 seat): profiles read
    ; interactive spawns lead a fresh process group (pg 0) and the first stage takes
    ; the terminal (fg 1) -- a job in its OWN group is what makes ^Z real (a stop to
    ; an orphaned group is discarded, and the shell's group is orphaned under a
@@ -36,6 +37,7 @@
    sh-eflag #0 sh-uflag #0 sh-xflag #0         ; set -e / -u / -x
    sh-lastbg #0                                ; $!: the last background pid
    sh-noe #0                                   ; errexit guard depth (conds, && || arms)
+   sh-retf #0                                  ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on
    ; the shared floor: eval's `.`/read builtins and the loops all drink from it

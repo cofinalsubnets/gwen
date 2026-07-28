@@ -244,15 +244,15 @@
           (: _ (say err ("cook: cannot run " + (join " " step)))
              _ (put err 10) (quit 1))))
 
-   ; run one make recipe line (via sh -c), make-style: echo the RAW command
-   ; (the expanded line, not the `sh -c` wrapper) unless @ silent, STREAM its
+   ; run one make recipe line (via SHELL -c, default sh), make-style: echo the
+   ; RAW command (the expanded line, not the shell wrapper) unless @ silent, STREAM its
    ; stdout as it is produced, and on a nonzero exit either carry on (- ignore,
    ; with a note to err) or abort. The Makefile path's analogue of `shell`, and
    ; the one that carries a recursive $(MAKE) -- the whole reason it must stream.
-   (sh-line silent ignore flags cmd)
+   (sh-line silent ignore sh flags cmd)
    (: _ (? silent 0 (: _ (puts cmd) (putc 10)))
        _ (flush out)
-       r (runt ((`("sh") + flags) + `(cmd)))
+       r (runt ((`(sh) + flags) + `(cmd)))
        ec (? (two? r) <r -1)
        (? (0 = ec) 0
           (! (two? r)) (: _ (say err ("cook: cannot run " + cmd)) _ (put err 10) (quit 1))
@@ -308,6 +308,28 @@
 ; order-only prereqs, and the $@ $< $^ $* automatics. Each recipe LINE runs via
 ; ("sh" "-c" line). See crew/cook/cooktest.l.
 ;
+; $(wildcard) prefers PURE LOVE: lush's glob (crew/lush/glob.l, the mask law)
+; over readdir/stat -- no /bin/sh underneath, so `kore make` globs before a
+; shell exists. riding a cat that carries the lush parts (kore's), the name is
+; already aboard; a standalone -l load splices lib/lush/glob.l off the cwd --
+; BEFORE the importer below compiles, so its bare sh-glob read folds (the
+; capture law). both probes ride the book: a bare read of an unbound nom
+; scares, and a use miss is fatal in file mode. where neither lands (a dev
+; binary on a foreign cwd -- no lib/ to walk), globw below keeps the POSIX
+; shell-out lane. the verdict pins HERE, before the importer compiles: once a
+; form reading sh-glob bare has compiled, the nom shows on the book (its
+; missing cell) and a late (names ()) probe would lie.
+(? (member? 'sh-glob (names ())) 0
+   (two? (stat "lib/lush/glob.l")) (use 'lush/glob)
+   0)
+; cook-glob: the pathname glob, a CLOSURE when lush's glob is aboard, () when
+; not (the importer then keeps its POSIX shell-out lane). built through ev so
+; sh-glob is never read bare in a session without it -- even a dead branch's
+; compile would scare on the unbound nom.
+(: cook-glob (? (member? 'sh-glob (names ()))
+                (ev '(\ pat (sh-glob pat (sh-ones (tally pat)))))
+                ()))
+
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
 ; names leak to the global scope. The form reads outer globals (the post.l
 ; combinators, recipe, cook, ticket, the prel) freely; its body ANSWERS cook-main
@@ -480,18 +502,20 @@
    ; -- function helpers --
    (chomp s) ((: (g i) (? (&& (0 < i) ((s (i - 1)) = 10)) (g (i - 1)) (snip s 0 i))) (tally s))
    (nl->sp s) ((: (g i acc) (? (i >= (tally s)) acc (g (1 + i) (acc + (? ((s i) = 10) 32 (s i)))))) 0 "")
-   (fn-shell cmd) (: r (run `("sh" "-c" cmd)) (? (two? r) (nl->sp (chomp >r)) ""))
-   ; $(wildcard): shell out so glob + no-match (nullglob via [ -e ]) are POSIX.
+   (fn-shell sh cmd) (: r (run `(sh "-c" cmd)) (? (two? r) (nl->sp (chomp >r)) ""))
+   ; $(wildcard): lush's glob (cook-glob, all chars live; sorted matches, ()
+   ; when none -- nullglob); without it (the head-comment's foreign-cwd case)
+   ; the shell-out lane serves.
    (globsh pat) (: r (run `("sh" "-c" "set +f; for f in $0; do [ -e \"$f\" ] && printf '%s ' \"$f\"; done" pat))
                    (? (two? r) (split-ws >r) 0))
+   (globw pat) (? (lit? cook-glob) (cook-glob pat) (globsh pat))
    (fdir w) (: k (mk-lastslash w) (? (0 < k) (sub w 0 k) "./"))
    (fnotdir w) (sub w (mk-lastslash w) (tally w))
    (flastdot w) (: sl (mk-lastslash w)
                    ((: (g j) (? (j > sl) (? ((w (j - 1)) = 46) (j - 1) (g (j - 1))) (tally w))) (tally w)))
    (fbase w) (: dot (flastdot w) (? (dot < (tally w)) (sub w 0 dot) w))
    (fsuf w)  (: dot (flastdot w) (? (dot < (tally w)) (sub w dot (tally w)) ""))
-   (fabs w) (? (&& (0 < (tally w)) ((w 0) = 47)) w
-              (: r (run `("sh" "-c" "pwd")) (? (two? r) ((chomp >r) + "/" + w) w)))
+   (fabs w) (? (&& (0 < (tally w)) ((w 0) = 47)) w ((cwd 0) + "/" + w))
    (dedup l) (? (two? l) (? (two? >l) (? (<l = <>l) (dedup >l) (link <l (dedup >l))) l) l)
    (sortu l) (dedup (sort l))
    (strrep frm to s)
@@ -513,8 +537,8 @@
    (: ex1 (\ x (expand x as (1 + d)))
       argl (\ _ (map ex1 (splittop at 44)))     ; comma-split + expand (most funcs); 44 = ,
       rawl (\ _ (splittop at 44))               ; comma-split, NOT expanded (if/or/and)
-      (? (nm = "shell")     (fn-shell (ex1 at))
-         (nm = "wildcard")  (join " " (catmap globsh (split-ws (ex1 at))))
+      (? (nm = "shell")     (fn-shell (shname as) (ex1 at))
+         (nm = "wildcard")  (join " " (catmap globw (split-ws (ex1 at))))
          (nm = "dir")       (join " " (map fdir (split-ws (ex1 at))))
          (nm = "notdir")    (join " " (map fnotdir (split-ws (ex1 at))))
          (nm = "basename")  (join " " (map fbase (split-ws (ex1 at))))
@@ -584,9 +608,13 @@
    ; already in `as` (the .DEFAULT_GOAL precedent); its default is make's own -c.
    (shflags as) (: f (trim (peep as ".SHELLFLAGS" ""))
                    (? (0 < (tally f)) (split-ws f) `("-c")))
+   ; ..and SHELL picks the shell itself (a Makefile saying SHELL := lush runs
+   ; its recipes -- and its $(shell) calls -- under lush), default sh.
+   (shname as) (: s (trim (peep as "SHELL" "")) (? (0 < (tally s)) s "sh"))
    (expand-steps raws t pr stem as)
    (: _ (pins as "@" t "<" (? (two? pr) <pr "") "^" (join " " pr) "*" stem)
        fl (shflags as)
+       sn (shname as)
        cmds (map (\ raw (expand >>raw as 0)) raws)
        ; .ONESHELL: the WHOLE recipe rides ONE shell, so a recipe reads as a script
        ; instead of a run of \-joined lines. make's rule -- the @/- modifiers of the
@@ -599,14 +627,14 @@
                 (&& (two? raws) !(any execp cmds)))
        (? one?
           (: r0 <raws
-             (? (peep emitp 0 0) `(((`("sh") + fl) + `((join "\n" cmds))))
-                `((\ _ (sh-line <r0 <>r0 fl (join "\n" cmds))))))
+             (? (peep emitp 0 0) `(((`(sn) + fl) + `((join "\n" cmds))))
+                `((\ _ (sh-line <r0 <>r0 sn fl (join "\n" cmds))))))
           (map (\ raw (: cmd (expand >>raw as 0)
                           (? (execp cmd)
-                             (? (peep emitp 0 0) (link 'exec `("sh" "-c" cmd))
-                                (\ _ (do-exec `("sh" "-c" cmd))))
-                             (peep emitp 0 0) ((`("sh") + fl) + `(cmd))
-                             (\ _ (sh-line <raw <>raw fl cmd))))) raws)))
+                             (? (peep emitp 0 0) (link 'exec `(sn "-c" cmd))
+                                (\ _ (do-exec `(sn "-c" cmd))))
+                             (peep emitp 0 0) ((`(sn) + fl) + `(cmd))
+                             (\ _ (sh-line <raw <>raw sn fl cmd))))) raws)))
 
    ; -- conditionals & assignment ops over the variable table `as` --
    (unquote-str s) (? (&& ((tally s) >= 2) (|| ((s 0) = 34) ((s 0) = 39))) (snip s 1 ((tally s) - 1)) s)

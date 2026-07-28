@@ -59,10 +59,12 @@
       (fm 0 0))
 
    ; pattern -> components split on / (every /, quoted or not, is a path break)
+   ; (core `rev`, not job.l's sh-rev: this part stands ALONE -- cook includes
+   ; just the glob via (use 'lush/glob) for $(wildcard))
    (sh-psplit t m)
      (: n (tally t)
         (go i st acc)
-          (? (= i n) (sh-rev (link (link (snip t st i) (snip m st i)) acc))
+          (? (= i n) (rev (link (link (snip t st i) (snip m st i)) acc))
              (? (= (t i) 47)
                 (go (+ i 1) (+ i 1) (link (link (snip t st i) (snip m st i)) acc))
                 (go (+ i 1) st acc)))

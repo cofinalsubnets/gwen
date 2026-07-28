@@ -90,7 +90,9 @@
 ;   Q[x]/(m) on the q coin; polys STRIKE AS COINS (die + - *, net-mode 1: !p is "zero poly");
 ;   a REGISTERED MODULE like holo, loaded by (use 'rune); its gate test/host/rune.l verifies the
 ;   2026 jacobian-conjecture disproof whole), lush (the command shell 🐚, crew/lush/ -- a cowrie on
-;   the quay; job control over host/posix.c, the distro's console shell, gate test/host/sh.l), and
+;   the quay; job control over host/posix.c, the distro's console shell AND its /bin/sh -- lush
+;   rides the kore cat, so `kore sh` and an sh symlink land it; --login reads the profiles;
+;   cook's $(wildcard) + SHELL honor stand on it; gate test/host/sh.l, man page doc/lush.md), and
 ;   the DOCUMENT chain, three modules deep: lapiz (the
 ;   markdown/html/roff lens, crew/lapiz/ -- one AST, a reader+shower per surface; it writes the man
 ;   pages), papel (the static site, crew/papel/ -- lapiz for the rendering, cook for the staleness,

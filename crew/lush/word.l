@@ -10,7 +10,7 @@
 ; environment; the positionals and specials ($@ $* $# $? $$ $0-9) live here,
 ; and "$@" in quotes fields one positional each (the passthrough law).
 ; ${x:-y} and kin ride ('vop . (name op text)) -- text re-enters through
-; sh-dollarize at use. ('sub . text) runs through the box sh-subeval -- eval.l
+; sh-wordize (quote-aware) at use. ('sub . text) runs through the box sh-subeval -- eval.l
 ; pins the evaluator there at load (word compiles before eval exists).
 
 (: sh-subeval #0
@@ -50,7 +50,7 @@
    (sh-setvar nm v)                             ; an exported name stays exported
      (? (string? (getenv nm)) (setenv nm v) (pin sh-vars nm v))
 
-   ; --- ${name<op>text}: the word text re-enters through sh-dollarize ----------
+   ; --- ${name<op>text}: the word text re-enters through sh-wordize ------------
    (sh-textof segs)                             ; segs -> ONE string (no split/glob)
      (foldl (\ a sg (: k (cap sg)
                        (+ a (? (id? k 'lit) (cup sg)
@@ -61,7 +61,7 @@
                                (id? k 'sub) (sh-runsub (cup sg))
                                ""))))
             "" segs)
-   (sh-voptext text) (sh-textof (sh-dollarize text))
+   (sh-voptext text) (sh-textof (sh-wordize text))
    (sh-vopseg sg) (: p (cup sg) (sh-vop (sh-nth p 0) (sh-nth p 1) (sh-nth p 2)))
    (sh-vop nm op text)
      (? (= op "len") (show (tally (sh-vval nm)))
@@ -93,7 +93,7 @@
                        (link (+ (cap a) t) (+ (cup a) (sh-mrep (tally t) live)))))
             (link "" "") segs)
    (sh-vstrip v o text)
-     (: pw (sh-patmask (sh-dollarize text))
+     (: pw (sh-patmask (sh-wordize text))
         pt (cap pw) pm (cup pw) n (tally v)
         (? (= o "#")  (: (go i) (? (< n i) v
                                    (? (sh-fmatch pt pm (snip v 0 i)) (snip v i n) (go (+ i 1))))

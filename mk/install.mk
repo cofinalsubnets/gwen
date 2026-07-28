@@ -39,6 +39,7 @@ installs = \
   $d/bin/lush \
   $d/share/man/man1/love.1 \
   $d/share/man/man1/cook.1 \
+  $d/share/man/man1/lush.1 \
   $d/lib/love/prel.l \
   $d/lib/love/ev.l \
   $d/lib/love/bao.l \
@@ -58,7 +59,8 @@ ifeq ($(PREFIX),.love/)
 compat = $(DESTDIR)/.local
 binnames = love ai kore mooncc moonfmt cook papel kiosko ain lux bao lush
 installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
-  $(compat)/share/man/man1/love.1 $(compat)/share/man/man1/cook.1
+  $(compat)/share/man/man1/love.1 $(compat)/share/man/man1/cook.1 \
+  $(compat)/share/man/man1/lush.1
 $(compat)/bin/%: $d/bin/%
 	@echo LN	$(abspath $@)
 	@mkdir -p $(@D)
@@ -229,6 +231,10 @@ $d/share/man/man1/love.1: $(ho)/love.1
 	@install -D -m 644 $< $@
 
 $d/share/man/man1/cook.1: $(ho)/cook.1
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+
+$d/share/man/man1/lush.1: $(ho)/lush.1
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 

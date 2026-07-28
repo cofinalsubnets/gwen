@@ -217,3 +217,9 @@ $(ho)/cook.1: doc/cook.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.
 	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/love_version.h); \
 	 $(ho)/love tools/mkman.l doc/cook.md | sed "s/@VERSION@/$$v/" > $@
 
+$(ho)/lush.1: doc/lush.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
+	@echo LOVE	$@
+	@mkdir -p $(dir $@)
+	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/love_version.h); \
+	 $(ho)/love tools/mkman.l doc/lush.md | sed "s/@VERSION@/$$v/" > $@
+

@@ -40,6 +40,8 @@ $(distro_img): init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
 	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
 	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
+	@ln -sf kore $(distro_root)/bin/sh
+	@ln -sf kore $(distro_root)/bin/lush
 	@( cd $(distro_root) && find . | cpio --quiet -o -H newc ) | gzip -9 > $@
 	@echo "  packed $$(gzip -l $@ | awk 'NR==2{print $$2}') bytes -> $@"
 
