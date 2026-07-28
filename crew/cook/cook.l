@@ -250,10 +250,10 @@
    ; stdout as it is produced, and on a nonzero exit either carry on (- ignore,
    ; with a note to err) or abort. The Makefile path's analogue of `shell`, and
    ; the one that carries a recursive $(MAKE) -- the whole reason it must stream.
-   (sh-line silent ignore cmd)
+   (sh-line silent ignore flags cmd)
    (: _ (? silent 0 (: _ (puts cmd) (putc 10)))
        _ (flush out)
-       r (runt `("sh" "-c" cmd))
+       r (runt ((`("sh") + flags) + `(cmd)))
        ec (? (two? r) <r -1)
        (? (0 = ec) 0
           (! (two? r)) (: _ (say err ("cook: cannot run " + cmd)) _ (put err 10) (quit 1))
@@ -581,14 +581,33 @@
    ; thunk that runs it make-style via sh-line, carrying the @/- flags. An
    ; exec-prefixed line instead becomes an (exec "sh" "-c" cmd) interactive step
    ; (serialized as such under --emit, run via the exec nif otherwise).
+   ; the shell a recipe line rides. .SHELLFLAGS is a plain make VARIABLE, so it is
+   ; already in `as` (the .DEFAULT_GOAL precedent); its default is make's own -c.
+   (shflags as) (: f (trim (peep as ".SHELLFLAGS" ""))
+                   (? (0 < (tally f)) (split-ws f) `("-c")))
    (expand-steps raws t pr stem as)
    (: _ (pins as "@" t "<" (? (two? pr) <pr "") "^" (join " " pr) "*" stem)
-       (map (\ raw (: cmd (expand >>raw as 0)
-                       (? (execp cmd)
-                          (? (peep emitp 0 0) (link 'exec `("sh" "-c" cmd))
-                             (\ _ (do-exec `("sh" "-c" cmd))))
-                          (peep emitp 0 0) `("sh" "-c" cmd)
-                          (\ _ (sh-line <raw <>raw cmd))))) raws))
+       fl (shflags as)
+       cmds (map (\ raw (expand >>raw as 0)) raws)
+       ; .ONESHELL: the WHOLE recipe rides ONE shell, so a recipe reads as a script
+       ; instead of a run of \-joined lines. make's rule -- the @/- modifiers of the
+       ; FIRST line govern the lot. ⚠ with plain -c only the LAST line's status is
+       ; checked, so a failing middle line passes SILENTLY; a oneshell Makefile wants
+       ; .SHELLFLAGS := -ec, and that is the shape this tree's own Makefile sets.
+       ; An `exec` line still wants a process of its own (it REPLACES cook to inherit
+       ; the tty), so a recipe carrying one stays per-line.
+       one? (&& (0 < (tally (peep as ".ONESHELL" "")))
+                (&& (two? raws) !(any execp cmds)))
+       (? one?
+          (: r0 <raws
+             (? (peep emitp 0 0) `(((`("sh") + fl) + `((join "\n" cmds))))
+                `((\ _ (sh-line <r0 <>r0 fl (join "\n" cmds))))))
+          (map (\ raw (: cmd (expand >>raw as 0)
+                          (? (execp cmd)
+                             (? (peep emitp 0 0) (link 'exec `("sh" "-c" cmd))
+                                (\ _ (do-exec `("sh" "-c" cmd))))
+                             (peep emitp 0 0) ((`("sh") + fl) + `(cmd))
+                             (\ _ (sh-line <raw <>raw fl cmd))))) raws)))
 
    ; -- conditionals & assignment ops over the variable table `as` --
    (unquote-str s) (? (&& ((tally s) >= 2) (|| ((s 0) = 34) ((s 0) = 39))) (snip s 1 ((tally s) - 1)) s)
@@ -672,6 +691,10 @@
                _ (each rules (\ r (: tg (expand-words `(<r) as)
                     (? (any (\ t (t = ".PHONY")) tg)
                        (each (expand-words `(<>r) as) (\ p (pin ps p 1))) 0)))) ps)
+      ; .ONESHELL is a TARGET, not a variable, but what it governs is recipe
+      ; expansion -- so record it where expand-steps already looks: `as`.
+      _ (each rules (\ r (? (any (\ t (t = ".ONESHELL")) (expand-words `(<r) as))
+                            (pin as ".ONESHELL" "1") 0)))
       (mk-item nm) (? (peep phony nm 0) (intern nm) nm)
       patbox (tablet 0)        ; accumulates implicit pattern rules: (tgtpat prs oos . raws)
       _ (each rules (\ r

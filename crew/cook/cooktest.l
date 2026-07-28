@@ -205,6 +205,37 @@
    ;  -- has no fixture here, and deliberately: from a Makefile there is no way to make
    ;  `stat` itself fail, which is the case it guards. it costs speed, never an answer.)
 
+   ; ------------------------------------------------------- .ONESHELL / .SHELLFLAGS
+   ; make runs each recipe line in its OWN shell, which is why a recipe with any
+   ; state has to be one \-joined line. .ONESHELL hands the whole recipe to one
+   ; shell instead, so a variable set on one line is live on the next -- the single
+   ; observable that tells the two apart, and the reason a recipe can read as a
+   ; script. Differential against GNU make, not just against itself.
+   one (run-cook (mk `(".ONESHELL:"
+                       ".SHELLFLAGS := -ec"
+                       "all:"
+                       "\tx=hello"
+                       "\techo \"O1[$$x world]\"")) "all")
+   _ (ok ".ONESHELL: one shell for the whole recipe" (has one "O1[hello world]"))
+   ; ..and WITHOUT it the default still holds: separate shells, so x is gone
+   sep (run-cook (mk `("all:"
+                       "\tx=hello"
+                       "\techo \"O2[$$x world]\"")) "all")
+   _ (ok "no .ONESHELL: a line still gets its own shell" (has sep "O2[ world]"))
+   ; ⚠ with one shell, a plain -c checks only the LAST line's status, so a failing
+   ; middle line would pass SILENTLY. -e is what keeps a recipe honest: the third
+   ; line must never run. The recipe is SILENCED (@ on the first line governs the
+   ; lot) because a one-shell recipe is echoed WHOLE -- an un-silenced echo would
+   ; print the text of the third line and the assertion would read its own echo.
+   ec (run-cook (mk `(".ONESHELL:"
+                      ".SHELLFLAGS := -ec"
+                      "all:"
+                      "\t@echo O3-one"
+                      "\tfalse"
+                      "\techo O3-three")) "all")
+   _ (ok ".SHELLFLAGS -ec: a failing middle line stops the recipe"
+         (&& (has ec "O3-one") (! (has ec "O3-three"))))
+
    ; ---------------------------------------------------------------- summary
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))
