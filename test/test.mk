@@ -539,20 +539,13 @@ test_raw: host out/host$(hsuf)/mooncc
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_raw.out; } \
 	    || { echo "FAIL all-raw corpus (exit $$s)"; exit 1; }; \
 	  echo "test_raw: love.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes"
-# test_raw_bake -- the WAKE half of the gcc-free image cycle. mooncc could never bake
-# before (an EXEC's low load address collides the codec's pointer/fixnum index range);
-# a -pie ET_DYN loads high and clears it. Reuses test_raw's raw objects, links them
-# PIE, bakes the post-warm image into the binary's OWN .image (host/image.c self-patch),
-# then WAKES that image and runs the corpus over the woken heap. This is the ONLY gate
-# that exercises ai_image_load on a mooncc binary -- the seam where [[mooncc-fn-parity]]
-# hid (an odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot
-# gate; the fix aligns fns to even in gen.l). glaze.l is EXCLUDED: the bake pulls the
-# nif/nifx seam off the book (host/main.c), so (lit? nif) cannot hold on a woken heap
-# -- the gcc build fails it identically, so it is not a mooncc regression.
+# test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The
+# procedure lives in test/gate/raw-bake.sh (and the why with it); make keeps the
+# dependency and the file list, whose $(filter-out) drops glaze.l.
 # Opt-in (not test_all): needs the -pie toolchain. x86-64 only.
 .PHONY: test_raw_bake
 test_raw_bake: test_raw
-	@$m test/gate/raw-bake.l $(ho) $(filter-out %/glaze.l,$t)
+	@sh test/gate/raw-bake.sh $(ho) $(filter-out %/glaze.l,$t)
 # test_riscv -- the riscv64 codegen rung end to end: the whole test/cc battery
 # compiled `mooncc -t riscv64` (EM_RISCV static ELF, the holo riscv backend),
 # run under qemu-riscv64 (user mode), and DIFFERENTIAL against the native x64
