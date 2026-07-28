@@ -25,9 +25,9 @@
 (: glaze-mark (names ()))
 
 (: ; the glaze consumes the crew/holo/ assembler by BARE NAME -- host/main.c brackets this whole
-   ; load with (use 'holo) .. (leave ()), so assemble/assemble-at resolve through the spliced
+   ; load with (use 'holo) .. ai_unsplice_, so assemble/assemble-at resolve through the spliced
    ; module at compile and FOLD (the capture law): every glaze closure is self-contained after
-   ; the leave. (the byte-piece concat helper is `bcat` -- it must NEVER be named `holo`: this :
+   ; the unsplice. (the byte-piece concat helper is `bcat` -- it must NEVER be named `holo`: this :
    ; is body-less, its bindings leak to orth, and a `holo` binding once clobbered the module.)
    (le8 n) (: u (? (n < 0) (n + 18446744073709551616) n)                            ; two's-complement; & is broken on
               ((: (go i) (? (i < 8) (link ((u // (i 256)) % 256) (go (i + 1))) ())) 0))   ; a bignum >= 2^63, so use //% (n -> 8 LE bytes)

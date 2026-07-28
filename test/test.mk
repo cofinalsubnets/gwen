@@ -103,13 +103,13 @@ test_doc: host
 ifeq ($a,x86_64)
 test_glaze: host
 	@echo "GLAZE test/glaze-x86.l (emit + auto)"; \
-	  { echo "(use 'holo)"; cat crew/holo/x64.l crew/holo/arm64.l; echo "(leave ())"; \
+	  { echo "(use 'holo)"; cat crew/holo/x64.l crew/holo/arm64.l; \
 	    cat test/glaze-x86.l; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
 	  echo "GLAZE love/glaze/hook.l"; \
-	  { echo "(use 'holo)"; cat love/glaze/hook.l; printf '\n(leave ())(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	  { echo "(use 'holo)"; cat love/glaze/hook.l; printf '\n(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "glaze-hook-ran" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze/hook (exit $$r)"; exit 1; }
@@ -610,7 +610,7 @@ test_raw_riscv: host out/host$(hsuf)/mooncc out/lib/riscv.h
 	  for f in crew/moon/lib/math/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -t riscv64 -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
 	      || { echo "FAIL mooncc -t riscv64 -c $$f"; exit 1; }; done; \
-	  { echo "(use 'holo)"; cat crew/holo/riscv.l; echo "(leave ())"; \
+	  { echo "(use 'holo)"; cat crew/holo/riscv.l; \
 	    cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys-riscv \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys-riscv sys.o"; exit 1; }; \
@@ -645,7 +645,7 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 	  for f in crew/moon/lib/math/*.c; do b=`basename $$f .c`; \
 	    $(ho)/mooncc -t arm64 -Icrew/moon/lib/math -Icrew/moon/include -c $$f $$d/m_$$b.o \
 	      || { echo "FAIL mooncc -t arm64 -c $$f"; exit 1; }; done; \
-	  { echo "(use 'holo)"; cat crew/holo/arm64.l; echo "(leave ())"; \
+	  { echo "(use 'holo)"; cat crew/holo/arm64.l; \
 	    cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l; \
 	    echo "(mksys-arm64 \"$$d/sys.o\")"; } | $m \
 	    || { echo "FAIL mksys-arm64 sys.o"; exit 1; }; \

@@ -535,35 +535,32 @@
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !spin 1)                        ;  hence the born guards)
-        (? born !operators 1) (? born !monadics 1) (? born !pureset 1))  ; the compile tables too (2026-07-07)
+        (? born !operators 1) (? born !monadics 1) (? born !pureset 1)  ; the compile tables too (2026-07-07)
+        (? born !enter 1) (? born !leave 1) (? born !lib 1))  ; the layer door + the source library: the runtime's, off the surface
 (: help 0)
 
-; --- modules --- the scope-layer door + the registry. (enter 'name) opens a named scope: binds
-; land in the layer, mutually visible; (leave ()) unwinds, REGISTERS the layer as the module, and
-; answers its book. (enter ()) is an anonymous scratch scope (leave answers the book, registers
-; nothing). (use 'name) splices a registered module just BELOW the top -- its names resolve on the
-; walk but can never shadow the top's own, and it is cleared by LEAVING the layer it was spliced
-; into -- so a `use` is scoped by its enclosing scope, the way a binding is. (a bare (leave ()) --
-; the head carrying no enter stash -- pops whatever sits just below the head: the exact inverse
-; of `use`, so a use .. leave pair brackets cleanly. the session layer IS entered, so a stray
-; bare leave in a session still unwinds it -- pair your leaves.) `use` also LOADS a module it
-; doesn't have -- the lib table or lib/<name>.l, one fresh layer per load, leave registering --
-; and a SLASHED name ('x/y) INCLUDES into the current head instead: test/host/loader.l is that
-; law in anger (fs fixtures, so it lives outside this corpus).
+; --- modules --- one layer per load, the registry, and `use` the loader -- all the runtime's.
+; there is NO enter/leave on the surface: the runtime opens a fresh layer around every module
+; load and around the session itself (the base is read-only because it is never the head), and
+; the layer verbs live on only inside the loader's closures, mopped at birth like books/setbooks.
+; a module arrives by NAME: (use 'x) splices a registered module just below the top -- its names
+; resolve on the walk but can never shadow the top's own -- and LOADS it on a miss: the baked
+; source library (ai_lib_), or lib/<x>.l where a filesystem lives. a STRING is an explicit path
+; (the module named by its basename); a SLASHED name ('x/y) INCLUDES lib/x/y.l into the current
+; head instead, no new layer, no registration. test/host/loader.l is the load law in anger (fs
+; fixtures, so it lives outside this corpus); here the boot-loaded modules prove the registry
+; surface, since every corpus frontend registers rng and kanren (bao too, except the wasm
+; shim, whose test harness feeds bao.l bare -- the page is its own repl).
 ; (from 'name) is the OPAQUE accessor -- currying reaches a member, 'keys introspects, a
-; missing module answers () (the presence guard), (from ()) lists the registered names. binds
-; here stay LOCAL (body-having :) so the egg's pass-2 mark stays clean.
-(: m1 (: _ (enter 'spec-mod) _ (: (spec-sib x) (+ x 1)) _ (: (spec-pub x) (spec-sib x)) (leave ()))
-   a1 (from 'spec-mod)
- (assert
-   (tablet? m1)                                     ; leave answers the layer book itself
-   (lit? a1) (nil? (from 'spec-nope))             ; the accessor / the presence guard
-   (42 = ((from 'spec-mod 'spec-pub) 41))         ; curried member reach; internals fold post-leave
-   (member? 'spec-mod (from ()))                  ; the registry lists it
-   (member? 'spec-sib (from 'spec-mod 'keys))     ; 'keys introspects the module
-   (: _ (enter ()) _ (use 'spec-mod) r (ev '(spec-pub 1)) _ (leave ()) (= r 2))   ; splice -> a post-splice compile reads bare -> leaving the layer clears it
-   (nil? (from 'spec-mod 'spec-missing))          ; a member miss reads the zero point
-   (: b (: _ (enter ()) _ (: (spec-anon x) x) (leave ())) (&& (tablet? b) (nil? (from 'spec-anon))))))  ; anonymous scope: a book back, nothing registered
+; missing module answers () (the presence guard), (from ()) lists the registered names.
+(assert
+  (lit? (from 'rng)) (lit? (from 'kanren))                      ; boot-loaded, registered
+  (member? 'kanren (from ())) (member? 'rng (from ()))          ; the registry lists them
+  (nil? (from 'spec-nope))                                      ; the presence guard
+  (member? 'walk (from 'kanren 'keys))                          ; 'keys introspects the internals
+  (8 = ((from 'kanren 'subst) '(()) 8))                         ; curried member reach
+  (nil? (from 'kanren 'spec-missing))                           ; a member miss reads the zero point
+  (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.

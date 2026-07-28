@@ -5752,6 +5752,28 @@ struct ai *ai_lib_(struct ai *g, char const *nm, char const *src) {
  g = ai_mapput(intern(ai_strof(ai_strof(g, src), nm)));
  if (ai_ok(g)) ai_core_of(g)->sp++;
  return g; }
+// push a fresh writable LAYER as the head of the book chain -- the runtime's own
+// enter, now that the nom is mopped at birth: the session's scope, every defglob's
+// target. no stash and no macro slot (`::` creates one on demand); reads walk down
+// as ever, so the base is read-only for the plainest reason -- never the head.
+struct ai *ai_layer_(struct ai *g) {
+ if (!ai_ok(g)) return g;
+ if (!ai_ok(g = map_new(g))) return g;                 // sp[0] = the fresh layer map
+ g = gxr(ai_push(g, 1, ai_core_of(g)->book));          // (layer . chain)
+ if (!ai_ok(g)) return g;
+ ai_core_of(g)->book = *ai_core_of(g)->sp;
+ return ai_pop(g, 1); }
+// drop the link just below the head -- the runtime's own bare leave, the exact
+// inverse of one `use`: boot brackets a non-ambient module load (holo) with
+// ai_evals_("(use 'x)") .. ai_unsplice_. nothing below the head is a no-op.
+struct ai *ai_unsplice_(struct ai *g) {
+ if (!ai_ok(g)) return g;
+ word bk = ai_core_of(g)->book;
+ if (!chainp(B(bk))) return g;
+ g = gxl(ai_push(g, 2, A(bk), B(B(bk))));              // (head . below-the-neighbour)
+ if (!ai_ok(g)) return g;
+ ai_core_of(g)->book = *ai_core_of(g)->sp;
+ return ai_pop(g, 1); }
 op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : nil)  // the SURFACE chainp = a real compound list (formp): a named symbol is (name . mint) but counts as an atom
 lvm(lvm_link) {
  Have(Width(struct ai_chain));

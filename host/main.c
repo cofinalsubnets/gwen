@@ -507,10 +507,12 @@ static struct ai *boot(struct ai *g, bool argp) {
   );
   g = ai_evals_(g,
     "(use 'bao)"                                       // bao (the shell core): loaded, registered, spliced
-    "(use 'holo) (leave ())"                           // the assembler service: load + register + unsplice (non-ambient,
-#include "uu0.h"                                       //   like the host); the uu kernel (love/uu.l, sweep at its tail) and
-#include "coin0.h"                                     //   coin eval into the base. rng and kanren load by name (kanren AFTER
-    "(use 'rng)"                                       //   q, as before). every layer, splice and registry entry persists
+    "(use 'holo)");                                    // the assembler service: load + register..
+  g = ai_unsplice_(g);                                 //   ..and the C unsplice keeps it non-ambient, like the host
+  g = ai_evals_(g,
+#include "uu0.h"                                       // the uu kernel (love/uu.l, sweep at its tail) and coin eval into
+#include "coin0.h"                                     //   the base. rng and kanren load by name (kanren AFTER q, as
+    "(use 'rng)"                                       //   before). every layer, splice and registry entry persists
 #include "q0.h"                                        //   across the egg warm below, so one load serves both corpus passes
     "(use 'kanren)"
   );
@@ -580,8 +582,9 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // LEAKS ... so the other files see this vocabulary") still resolves.
   //
   // --bake exits before run_program, so the image carries the base with no session
-  // layer on top; each woken session pushes its own.
-  g = ai_evals_(g, "(enter ())");
+  // layer on top; each woken session pushes its own. C-side: enter is a mopped nom
+  // now, and a stashless layer is exactly what a session is.
+  g = ai_layer_(g);
 #ifdef AI_GLAZED
   // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
   // module book) and the natjit creation hook cleared. The forensics twin of LOVE_NO_IMAGE.
@@ -645,11 +648,12 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
 #include "uu.h"                                          // uu's NbE kernel (love/uu.l, sweep at its tail) -- one global name, the
                                                          //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
-    "(use 'holo) (leave ())"                             // the crew/holo/ assembler, a post-egg language SERVICE: load + register
-                                                         //   + unsplice, so holo stays NON-AMBIENT -- (use 'holo) splices it,
-                                                         //   (from 'holo 'assemble) probes it. a test that wants a cross backend
-                                                         //   joins it at runtime ((use 'holo) <backend.l> (leave ()) -- the
+    "(use 'holo)"                                        // the crew/holo/ assembler, a post-egg language SERVICE: load + register,
+  );                                                     //   then the C unsplice below keeps it NON-AMBIENT -- (use 'holo)
+  g = ai_unsplice_(g);                                   //   splices it, (from 'holo 'assemble) probes it. a test that wants a
+                                                         //   cross backend joins it at runtime ((use 'holo) <backend.l> -- the
                                                          //   test_glaze/test_raw_arm64 recipes), mooncc's cat joins ALL of them
+  g = ai_evals_(g,
     "(use 'bao)"                                         // the shell core: loaded, registered, spliced (read/reads/welp/wrap bare)
   );
 #ifdef AI_GLAZED
@@ -659,7 +663,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "auto.h"
 #include "gexport.h"
 #include "hook.h"
-      "(leave ())");
+      );
+  g = ai_unsplice_(g);
 #endif
 
   if (bake) {                                            // --bake: snapshot the post-warm heap, then exit

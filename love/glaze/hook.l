@@ -26,7 +26,7 @@
 (: fires #0                                                                  ; probe counter: how many closures the hook native-backed (natjit writes, fired? reads)
    natjit
     (: arch (intern love-arch)                                                ; the runtime CPU target ('x64 / 'arm64), evaluated at boot on the actual binary -- so the SAME baked hook.h emits x64 on the x86 host and aarch64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
-                                                                            ; `assemble` below reads BARE: main.c brackets this load with (use 'holo) .. (leave ()), so it folds at compile (the capture law)
+                                                                            ; `assemble` below reads BARE: main.c brackets this load with (use 'holo) .. ai_unsplice_, so it folds at compile (the capture law)
    emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   the glaze names through its book (love/glaze/export.l) -- this stream cat-loads
    loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
    loopinfo-n (glaze 'loopinfo-n)  njit-loop-n (glaze 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges

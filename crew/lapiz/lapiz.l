@@ -469,4 +469,4 @@
    (md->rf s) (rfshow (mdread s))
    (rf->md s) (mdshow (rfread s)))
 
-; a later surface joins the sealed module the runtime way: (use 'lapiz) <surface.l> (leave ()).
+; a later surface joins the sealed module the runtime way: (use 'lapiz), then its own text.

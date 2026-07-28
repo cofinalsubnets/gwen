@@ -29,6 +29,8 @@
    ; the scope-layer door (the abyss) + the MODULE REGISTRY (`mods`: g->mods, a lazy singleton
    ; tablet, name -> module-book). TOP is always the defglob target, under it a use-stack, orth
    ; last; every verb takes an operand (love has no nullary fns -- fire with the unit).
+   ; enter/leave are the RUNTIME'S: mopped at birth like books/setbooks, alive only inside the
+   ; loader's closures (and C's ai_layer_/ai_unsplice_ twins). use and from are the public face.
    ; enter: push a fresh layer as the head, stashing the pre-enter chain AND the name under the
    ; reserved CHARM key 31337 (a charm can never collide with a name); (enter ()) is anonymous.
    ; enter: a fresh layer, and it gets its OWN MACRO TABLE (the nil key -- `()` and
