@@ -169,7 +169,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/love" -l "$$h/../lib/love/bao.l" -e "((from 'bao 'bao) 0)" "$$@"'; } > $@
+	   echo 'exec "$$h/love" -l "$$h/../lib/love/bao.l" -e "((from '\''bao '\''bao) 0)" "$$@"'; } > $@
 	@chmod 755 $@
 
 $d/share/man/man1/love.1: $(ho)/love.1
