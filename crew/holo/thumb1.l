@@ -374,4 +374,3 @@
    _ (pin t1 'nop `(0 191))                    ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb1 t1)
    _ (defbackend 'cortex-m0 t1))
-(leave ())

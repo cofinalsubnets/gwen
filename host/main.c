@@ -476,6 +476,13 @@ static char const src0_rng[] =
 static char const src0_kanren[] =
 #include "kanren0.h"
  ;
+// holo with BOTH cross backends (x64 + arm64), one entry -- the corpus's cross-arch
+// asserts run under both of love0's compilers.
+static char const src0_holo[] =
+#include "holo0.h"
+#include "x640.h"
+#include "arm640.h"
+ ;
 
 // With args, run the build tool (lcat / gen_data) through the CLI driver.
 // With no args, self-test: eval prel, load bao (the shell core) as a module, and run
@@ -491,6 +498,7 @@ static struct ai *boot(struct ai *g, bool argp) {
     return ai_evals_(g, cli); }
   g = ai_lib_(g, "rng", src0_rng);                     //   the self-test also wants the library layers the corpus asserts on
   g = ai_lib_(g, "kanren", src0_kanren);
+  g = ai_lib_(g, "holo", src0_holo);
   g = ai_strof(g, tests0);                            // the baked corpus, as a string
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
@@ -499,14 +507,11 @@ static struct ai *boot(struct ai *g, bool argp) {
   );
   g = ai_evals_(g,
     "(use 'bao)"                                       // bao (the shell core): loaded, registered, spliced
-#include "holo0.h"                                     // the crew/holo/ assembler service (neutral core + both backends)
-#include "x640.h"                                     //   and the uu kernel (love/uu.l, sweep at its tail), baked into the
-#include "arm640.h"                                   //   bootstrap so the corpus can test them under c0 AND the self-hosted
-    "(leave ())"                                     //   ev. Globals persist across the egg warm below, so one eval here
-#include "uu0.h"                                       //   serves both corpus passes. the (leave ()) closes holo.l's scope layer as
-#include "coin0.h"                                     //   the `holo` book. rng and kanren load by name (kanren AFTER q, as
-    "(use 'rng)"                                       //   before); their layers, splices and registry entries persist across
-#include "q0.h"                                        //   the warm like every global, so one load serves both corpus passes
+    "(use 'holo) (leave ())"                           // the assembler service: load + register + unsplice (non-ambient,
+#include "uu0.h"                                       //   like the host); the uu kernel (love/uu.l, sweep at its tail) and
+#include "coin0.h"                                     //   coin eval into the base. rng and kanren load by name (kanren AFTER
+    "(use 'rng)"                                       //   q, as before). every layer, splice and registry entry persists
+#include "q0.h"                                        //   across the egg warm below, so one load serves both corpus passes
     "(use 'kanren)"
   );
   g = ai_evals_(g, "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))");   // string -> charlist, for the runner
@@ -604,6 +609,20 @@ static char const src_kanren[] =
 static char const src_bao[] =
 #include "bao.h"
  ;
+// holo, the crew/holo/ assembler: ONE entry = the arch-neutral core plus the NATIVE
+// backend (C string concatenation; the glaze emits for the running arch only --
+// mooncc's cat joins the cross backends at its own build, and love0 bakes x64+arm64
+// so the corpus's cross-arch asserts run under both its compilers).
+static char const src_holo[] =
+#include "holo.h"
+#if defined(__x86_64__)
+#include "x64.h"
+#elif defined(__aarch64__)
+#include "arm64.h"
+#elif defined(__riscv)
+#include "riscv.h"
+#endif
+ ;
 
 // bake: NULL = no snapshot; "" = --bake (patch the binary's own .image); else --bake PATH (write an image file).
 static struct ai *boot(struct ai *g, bool argp, char const *bake) {
@@ -612,6 +631,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   g = ai_lib_(g, "rng", src_rng);
   g = ai_lib_(g, "kanren", src_kanren);
   g = ai_lib_(g, "bao", src_bao);
+  g = ai_lib_(g, "holo", src_holo);
   g = ai_evals_(g, "("
 #include "egg.h"
     "'("
@@ -625,19 +645,11 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "post.h"                                       // the post-egg layer (parser combinators, ...), evaled ONCE after the egg
 #include "uu.h"                                          // uu's NbE kernel (love/uu.l, sweep at its tail) -- one global name, the
                                                          //   `uu` book; the corpus + an overlay reach (uu 'vof) through it
-#include "holo.h"                                         // the crew/holo/ assembler -- a post-egg language SERVICE, built as a
-#if defined(__x86_64__)                                  //   scope MODULE: holo.l opens a named layer ((enter 'holo)), the core +
-#include "x64.h"                                         //   the NATIVE backend load into it, and the (leave ()) below REGISTERS
-#elif defined(__aarch64__)                               //   the layer as the module `holo` -- orth stays clean; (use 'holo)
-#include "arm64.h"                                       //   splices it, (from 'holo 'assemble) probes it. native-ONLY here: the
-#elif defined(__riscv)                                   //   (riscv has no glaze yet; the native backend still bakes, so the
-#include "riscv.h"                                       //   corpus's holo asserts run on the love-raw-riscv lane too)
-#endif                                                   //   glaze emits for the running arch, mooncc.image carries ALL backends
-                                                         //   (crew/build.mk moonfiles), a test that wants a cross backend loads it
-                                                         //   at runtime ((use 'holo) <backend.l> -- the test_glaze/test_raw_arm64
-                                                         //   recipes ride the session layer), and love0 keeps every backend so
-                                                         //   the corpus's cross-arch asserts still run under both its compilers.
-    "(leave ())"                                         // ..the seal: one form, so it rides as a literal, not a file
+    "(use 'holo) (leave ())"                             // the crew/holo/ assembler, a post-egg language SERVICE: load + register
+                                                         //   + unsplice, so holo stays NON-AMBIENT -- (use 'holo) splices it,
+                                                         //   (from 'holo 'assemble) probes it. a test that wants a cross backend
+                                                         //   joins it at runtime ((use 'holo) <backend.l> (leave ()) -- the
+                                                         //   test_glaze/test_raw_arm64 recipes), mooncc's cat joins ALL of them
     "(use 'bao)"                                         // the shell core: loaded, registered, spliced (read/reads/welp/wrap bare)
   );
 #ifdef AI_GLAZED
