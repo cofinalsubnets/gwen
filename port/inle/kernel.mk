@@ -241,6 +241,56 @@ test_kernel:
 	@echo "test_kernel: skipped (host arch $a is not x86_64)"
 endif
 
+# --- the UEFI door: our own BOOTX64.EFI ------------------------------------
+# No limine, no gnu-efi, no foreign toolchain: mooncc compiles the loader
+# (port/inle/uefi/loader.c -- read love.elf off the ESP, fill kboot from the
+# UEFI memmap + GOP framebuffer, ExitBootServices, page tables, jump kmain),
+# mkefi.l lays the ms_abi<->SysV seam in holo IR, and holo's PE lane
+# (crew/holo/pe.l) links the PE32+ the firmware runs. The ESP is two files.
+# This is the LAPTOP door -- the one that replaces limine on real hardware.
+uefi_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
+  $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/crew/holo/pe.l \
+  $R/port/inle/uefi/mkefi.l
+$(ko)/uefi$(ksuf)/loader.o: $R/port/inle/uefi/loader.c $(ho)/mooncc
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@$(ho)/mooncc -c $< $@
+$(ko)/uefi$(ksuf)/BOOTX64.EFI: $(ko)/uefi$(ksuf)/loader.o $(uefi_l) $m
+	@echo PE	$@
+	@mkdir -p $(dir $@)
+	@{ echo "(use 'holo)"; cat $(uefi_l); echo '(mkboot "$@" (list "$<"))'; } | $m
+# the ESP: BOOTX64.EFI at the removable-media path the firmware looks for, and
+# the kernel beside it (the loader opens "love.elf" on its own volume).
+$(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI: $(ko)/uefi$(ksuf)/BOOTX64.EFI
+	@echo CP	$@
+	@mkdir -p $(dir $@)
+	@cp $< $@
+$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf).elf
+	@echo CP	$@
+	@mkdir -p $(dir $@)
+	@cp $< $@
+.PHONY: uefi
+uefi: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf
+	@echo "uefi: out/free/esp is an ESP -- copy it to a FAT32 partition, or"
+	@echo "      qemu-system-x86_64 -drive format=raw,file=fat:rw:$(ko)/esp ..."
+
+# test_uefi -- the whole laptop door under qemu: OUR BOOTX64.EFI loads the
+# K_TEST kernel, the corpus runs over serial. Needs firmware (any OVMF build);
+# gated on the file being PRESENT so the gate never downloads -- rung 4's whole
+# point is that `make test_all` fetches nothing. Fetch it once by hand with
+# `make out/dl/edk2-ovmf/ovmf-code-x86_64.fd` and this lane starts running.
+OVMF_X64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-x86_64.fd)
+.PHONY: test_uefi
+ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)
+test_uefi:
+	@echo "test_uefi: skipped (x86_64 + $(dl)/edk2-ovmf/ovmf-code-x86_64.fd needed)"
+else
+test_uefi: host $(R)/tools/ktest.l
+	@$(MAKE) -s K_TEST=1 $(ko)/esp-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-test/love.elf
+	@echo TEST $(ko)/esp-test "(serial, headless, our own BOOTX64.EFI)"
+	@$m $(R)/tools/ktest.l $(ko)/esp-test $(OVMF_X64) x86_64
+endif
+
 # The aarch64 twin of test_kernel: cross-build the K_TEST kernel and run the same
 # corpus under full-TCG qemu-system-aarch64 (~45s). In test_all because the lane
 # needs a gate that RUNS it -- the aarch64 kernel silently stopped LINKING once,

@@ -2,9 +2,11 @@
 ; capture its serial console (the baked corpus runs at boot and prints the usual
 ; "N tests pass" summary, then (exit) quits qemu via isa-debug-exit), and report.
 ; Run on the host love, which has the `run` subprocess nif.
-; argv = (this file firmware arch): a .elf file boots DIRECT (`qemu -kernel`, the
-; PVH door -- no bootloader, no firmware image, firmware arg ignored, pass "-");
-; anything else is the iso lane (limine cdrom + the firmware as pflash).
+; argv = (this file firmware arch), and the FILE picks the door: a .elf boots
+; DIRECT (`qemu -kernel`, the PVH door -- no bootloader, no firmware image at
+; all, so pass "-" for the firmware); a DIRECTORY is an ESP served as a FAT
+; volume (the uefi door -- our own BOOTX64.EFI + love.elf); anything else is
+; the iso lane (limine cdrom). the last two take the firmware as pflash.
 
 (: (sub-at s i t j) (? (>= j (tally t)) 1                    ; does t occur in s at index i?
        (? (= (peep s (+ i j) 0) (peep t j 0)) (sub-at s i t (+ 1 j)) 0))
@@ -22,6 +24,12 @@
    ; a .elf boots direct: qemu's own loader reads the PVH note and enters our
    ; boot.S stub -- nothing downloaded, nothing vendored.
    elf? (: n (tally iso) (&& (> n 4) (sub-at iso (- n 4) ".elf" 0)))
+   ; a DIRECTORY is an ESP: qemu fakes a FAT volume over it and the firmware
+   ; runs EFI/BOOT/BOOTX64.EFI -- ours, the uefi door. (stat's mode is at 2;
+   ; S_IFDIR is 0040000 under the 0170000 type mask.)
+   dir? (: st (stat iso)                          ; (size mtime mode ..) -- `at` is not bound here
+           m (? (two? st) (cap (cup (cup st))) 0)
+           (= 16384 (& m 61440)))
    ; machine + exit channel are per-arch. x86_64 quits qemu by writing the
    ; isa-debug-exit port; 'virt' has no such device, so aarch64 goes out through
    ; ARM semihosting instead -- see k_qemu_exit in each port's arch.c.
@@ -33,10 +41,10 @@
    ; crash point MOVING with unrelated image growth (a budget wall's face, not
    ; a logic bug); and a full green run is ~3min wall under TCG (the kernel's
    ; own summary clock reads ~17s -- don't trust it for the timeout).
-   media (? elf?
-            `("-kernel" iso)
-            `("-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))
-              "-cdrom" iso))
+   fw   `("-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on")))
+   media (? elf? `("-kernel" iso)
+            dir? (fw + `("-drive" (+ "format=raw,file=fat:rw:" iso)))
+            (fw + `("-cdrom" iso)))
    r    (run (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
              (cat mach
              (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media))))
