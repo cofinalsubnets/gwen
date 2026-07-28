@@ -27,7 +27,6 @@
    zero? nil?                                  ; zero? aliases nil? (the net-to-zero test)
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
-   (names _ ) (keys book)
    ; the scope-layer door (the abyss) + the MODULE REGISTRY (`mods`: g->mods, a lazy singleton
    ; tablet, name -> module-book). TOP is always the defglob target, under it a use-stack, orth
    ; last; every verb takes an operand (love has no nullary fns -- fire with the unit).
@@ -292,6 +291,15 @@
    (member? x l) (? (two? l) (? (= x (cap l)) 1 (member? x (cup l))) 0)   ; any of (= x); first-order so the glaze's point-= grammar closes it (auto.l re-declares this exact body)
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) ())
+   ; names: every nom VISIBLE from here -- the WHOLE layer chain, not just the
+   ; base. it used to be (keys book), which reads one map (orth) and so cannot
+   ; see anything defined inside a scope layer; ev.l's `feels` already walks the
+   ; chain this way. a nom in two layers is ONE name (the upper shadows on the
+   ; bookget walk), so fold through a tablet to dedup -- `pin` answers the
+   ; collection, which is what makes the fold read straight. lives down here, not
+   ; up with the other predicates, so catmap/foldl are bound when it compiles: a
+   ; forward reference would ride lvm_index and never fold.
+   (names _) (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ()))))
    (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1 (iota its array twin); a section of tally, off the `*` glyph -- monadic `*` is prod now
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
