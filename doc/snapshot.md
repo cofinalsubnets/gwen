@@ -125,8 +125,10 @@ Departures from the original plan above, worth noting:
   `.image` ENDS the segment carrying it, which covers both shapes with the same arithmetic: a section
   alone in the highest `PT_LOAD` (ld/lld) and one riding the tail of the single segment holo lays
   (`love-raw` 8.3 MB → 1.9 MB unbaked). It reads that off the binary's own section headers rather than
-  a build flag, so neither lane is told which it is, and a linker that lays `.image` anywhere else
-  falls back to filling a reserve in place. For the mooncc lane the bytes had to become a real section
+  a build flag, so neither lane is told which it is, and a link that lays `.image` anywhere else is
+  refused loudly with the flag it wants — there is no reserve to fall back to, and no `__APPLE__`
+  lane either (`image.c` needs `<link.h>` + `dl_iterate_phdr`, so it does not build on mach-o at all;
+  a mac host owes it `_NSGetExecutablePath`). For the mooncc lane the bytes had to become a real section
   first: `.image` is now a fourth stream through cgdata → objelf → the `image` lane in link.l, beside
   `ai_nifs` — the other named section whose whole point is WHERE it lands.
 - **The glaze bake is the corpus eval, not a split assert-free lib.** `--bake` evals the glaze
