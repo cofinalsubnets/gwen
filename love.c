@@ -8756,7 +8756,14 @@ static ai_noinline void cbin_fill(struct ai_vec *r, word a, word b, int op, bool
   ai_flo_t ar, love, br, bi, re, im;
   cbin_part(aarr, va, sar, sai, oa, &ar, &love);
   cbin_part(barr, vb, sbr, sbi, ob, &br, &bi);
-  if (cmp) vec_put_int(r, p, (ar == br && love == bi) ? 1 : 0);
+  if (cmp) {                                   // (re,im) LEXICOGRAPHIC -- the same order
+   int t;                                      // cmp3's complex arm gives a scalar pair
+   if (op == vop_eq) t = ar == br && love == bi;   // kept exact (a NaN is equal to nothing)
+   else {
+    int c = ar < br ? -1 : ar > br ? 1 : love < bi ? -1 : love > bi ? 1 : 0;
+    t = op == vop_lt ? c < 0 : op == vop_le ? c <= 0
+      : op == vop_gt ? c > 0 : c >= 0; }        // vop_ge
+   vec_put_int(r, p, t ? 1 : 0); }
   else {
    cplx_op(op, ar, love, br, bi, &re, &im);
    rf[2*p] = re; rf[2*p+1] = im; }
@@ -8765,12 +8772,15 @@ static ai_noinline void cbin_fill(struct ai_vec *r, word a, word b, int op, bool
 lvm(lvm_cbin, int op) {
  word a = Sp[0], b = Sp[1];
  bool aarr = arrp(a), barr = arrp(b);
- // operand: array / complex scalar / real number. %, // and the orderings are
- // undefined on complex; only `=` survives among the comparisons (-> a mask).
+ // operand: array / complex scalar / real number. % and // stay undefined on complex,
+ // but the ORDERINGS hold: a complex scalar already sorts (cmp3's (re,im) lexicographic
+ // arm -- sorting needs totality), so a complex tray answers the same mask a gem tray
+ // does. A TRAY FOLLOWS ITS SCALAR; the lane refusing an order the scalar lane provides
+ // was the anomaly. (vop_eq no longer arrives -- `=` is whole-array, see arr_eq.)
  if (!(aarr || Cp(a) || isnum(a)) || !(barr || Cp(b) || isnum(b))
-     || op == vop_rem || op == vop_fquot || (op >= vop_lt && op != vop_eq))
+     || op == vop_rem || op == vop_fquot)
   return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // `=` is boolean: undefined face -> 0, not ()
- bool cmp = op == vop_eq;
+ bool cmp = op >= vop_lt;
  uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b);
  if (n == (uintptr_t) -1) return *++Sp = op == vop_eq ? nil : ZeroPoint, Ip++, Continue();   // non-conformant `=` -> 0

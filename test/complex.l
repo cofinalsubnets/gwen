@@ -112,8 +112,10 @@
 ; --- step 7b: full-rank complex arrays (packed (re,im) g_C tuples) -----------
 ; a complex value packs two floats per element into a `c` array (type code c = 2,
 ; the tier between r and o). twin-tray/array/@ all build them (a-type infers c);
-; `get` returns a ~(re im) box; + - * / broadcast in the complex domain; `=` ->
-; a 0/1 mask, the orderings -> nil; net/prod fold complex; aall/aany lift the
+; `get` returns a ~(re im) box; + - * / broadcast in the complex domain; `=` is
+; whole-array (a boolean) and the orderings broadcast to a 0/1 mask by the same
+; (re,im) lexicographic order the scalars sort by; % and // stay undefined on
+; complex; net/prod fold complex; aall/aany lift the
 ; 0+0i-is-falsy rule. (body-less `:` -> ca-* leak to global, reused in roundtrip.l)
 (: ca-z (twin-tray '(3) 0)                             ; zero-filled: three 0+0i
    ca-v (twin-tray '(2) `(~(1 2) ~(3 4)))        ; explicit packed chain
@@ -149,11 +151,17 @@
  (= ~(11 2) (peep (+ @(10 20) ca-v) 0 0))        ; z @(10 20) lifts to (10,0)/(20,0)
  (= ~(23 4) (peep (+ ca-v @(10 20)) 1 0))
 
- ; --- `=` over complex arrays -> a BOOLEAN (whole-array); orderings/% -> nil ---
+ ; --- `=` over complex arrays -> a BOOLEAN (whole-array); the ORDERINGS -> a mask ---
  (= ca-v ca-v)
  !(= ca-v (twin-tray '(2) `(~(9 9) ~(3 4))))    ; one cell differs -> false, never a mask
  (aall (= ca-v ca-v))                           ; aall is the identity on the boolean
- (nil? (< ca-v ca-v))   (nil? (> ca-v ca-v))   (nil? (% ca-v ca-v))
+ ; a complex tray orders exactly as its cells do -- (re,im) lexicographic, the order that
+ ; makes `sort` total (cmp3). A TRAY FOLLOWS ITS SCALAR; these once answered nil.
+ (aall (= @(1 0) (< ca-v (twin-tray '(2) `(~(1 5) ~(0 0))))))   ; re tie -> im 2<5 ; 3>0
+ (aall (= @(0 1) (> ca-v (twin-tray '(2) `(~(1 5) ~(0 0))))))
+ (aall (<= ca-v ca-v))   (aall (>= ca-v ca-v))
+ (aall (= @(1 0) (< ca-v ~(2 0))))              ; a complex scalar broadcasts
+ (nil? (% ca-v ca-v))   (nil? (// ca-v ca-v))   ; % and // stay undefined on complex
 
  ; --- reductions: complex sum / product; max/min unordered -> nil ---
  (= ~(4 6) (net ca-v))                         ; (1+2i)+(3+4i)
