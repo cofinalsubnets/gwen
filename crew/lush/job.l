@@ -28,6 +28,7 @@
    (sh-pgm _) (? (sh-tty ()) 0 (0 - 1))
    (sh-fgm _) (? (sh-tty ()) 1 0)
    sh-status #0                                ; $?: the last foreground status
+   sh-curline #0                               ; the source line under eval (job display)
 
    (sh-unwords ws) (foldl (\ a w (? (tally a) (+ (+ a " ") w) w)) "" ws)
    (sh-addjob pids state cmd)
@@ -78,7 +79,4 @@
            (: _ (each (sh-nth j 0) (\ p (still p sig-cont)))
               _ (pin sh-jobs n (L (sh-nth j 0) 'running (sh-nth j 2)))
               _ (puts (sh-jobline n (sh-jobs n)))
-              0)))
-   ; a trailing "&" (its own word, like the other operators) backgrounds the line
-   (sh-amp? ws) (? !ws 0 (? (two? (cup ws)) (sh-amp? (cup ws)) (= "&" (cap ws))))
-   (sh-drop-amp ws) (? (two? (cup ws)) (link (cap ws) (sh-drop-amp (cup ws))) ()))
+              0))))

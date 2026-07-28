@@ -69,7 +69,7 @@ out/host$(hsuf)/seed: $(seedfiles)
 # host/posix.c nifs; also the distro's console shell (mk/distro.mk cats these
 # same parts to /lib/sh.l). its own catted shebang script, the seed precedent;
 # the SEAT in main.l fires on its own basename.
-lushfiles = crew/lush/job.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
+lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l crew/lush/word.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
 out/host$(hsuf)/lush: $(lushfiles)
 	@echo AI	$(abspath $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(lushfiles); } > $@
