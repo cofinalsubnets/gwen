@@ -74,18 +74,16 @@ int image_dump(struct ai *g, char const *path) {
 // original -- a new inode, so anything still executing keeps the old one. Same build =
 // same layout, so the codec's anchor/refsym guards hold by construction.
 //
-// TWO LANES, picked by reading the binary's own ELF, never by a build flag: the image
-// is bytes we have to PUT somewhere, and where it can go is a property of the file.
-//  * GROW (bake_tail) -- .image is the last allocated thing, alone in the highest
-//    PT_LOAD (host/build.mk's --section-start). The blob is APPENDED at the first page
-//    past every other allocated byte and the one phdr + one shdr that name it are
-//    rewritten to say so. No reserve, no ceiling. Nothing else moves -- no vaddr
-//    changes at all -- so the anchor/refsym deltas the wake checks still hold.
-//  * RESERVE (bake_reserve) -- .image is a fixed array somewhere in the middle: fill it
-//    in place, zero the rest, and error if the image outgrew it. The older shape, still
-//    what the mooncc/holo lane lays until its linker grows the tail segment too.
-// A binary laid for GROW takes the grow lane; anything else falls back, so one bake
-// serves both and neither lane needs to be told which it is.
+// The image is bytes we have to PUT somewhere, and .image is laid LAST so there is room:
+// the blob is APPENDED where the section already sits and the one phdr + one shdr that
+// name it are rewritten to say how far it now reaches. No reserve, no ceiling. Nothing
+// else in the file moves -- no vaddr changes at all -- so the anchor/refsym deltas the
+// wake checks still hold. What bake_tail requires is read off the binary's own section
+// headers, never told to it by a build flag, and it is one thing: .image ENDS the segment
+// that carries it. True of a section alone in the highest PT_LOAD (host/build.mk's
+// --section-start, ld and lld both) and of one riding the tail of the single segment holo
+// lays. A link that laid it anywhere else is refused LOUDLY -- there is nowhere to grow,
+// and quietly booting the egg forever is not a kindness.
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
 struct bake_at { uintptr_t addr, off; int found; };
@@ -108,18 +106,7 @@ static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n)
     z += w; }
   return 0;
 }
-static int bake_zero(int dst, uint64_t doff, uint64_t n) {
-  memset(bake_buf, 0, sizeof bake_buf < n ? sizeof bake_buf : (size_t) n);
-  for (uint64_t z = 0; z < n; ) {
-    size_t w = n - z < sizeof bake_buf ? (size_t)(n - z) : sizeof bake_buf;
-    if (pwrite(dst, bake_buf, w, (off_t)(doff + z)) != (ssize_t) w) return -6;
-    z += w; }
-  return 0;
-}
-
-// the GROW lane. 0 laid, >0 "this binary is not laid for growth -- take the reserve",
-// <0 a real failure. Everything it needs it reads out of the file: no build flag says
-// which shape this is, the section headers do.
+// lay the image. 0 done, >0 "this binary is not laid for growth", <0 a real failure.
 static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
                      uint64_t lenoff, mode_t mode) {
   Elf64_Ehdr eh;
@@ -194,26 +181,6 @@ static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
   return rc;
 }
 
-// the RESERVE lane: the image lands INSIDE a fixed array, and an image too big for it
-// is an error with the one knob to turn. `off` is the reserve's file offset.
-static int bake_reserve(int src, char const *tmp, void const *buf, uintptr_t len,
-                        uint64_t off, mode_t mode) {
-  struct stat st;
-  int dst, rc;
-  if (len > ai_baked_image_len) {
-    fprintf(stderr, "love: image %lu > .image reserve %lu -- bump RESERVE_WORDS in host/image_baked.c\n",
-            (unsigned long) len, (unsigned long) ai_baked_image_len);
-    return -3; }
-  if (fstat(src, &st)) return -6;
-  if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) return -6;
-  rc = bake_move(src, dst, 0, 0, (uint64_t) st.st_size);   // the whole exe; the running inode stays untouched
-  if (!rc && pwrite(dst, buf, len, (off_t) off) != (ssize_t) len) rc = -6;
-  if (!rc) rc = bake_zero(dst, off + len, ai_baked_image_len - len);   // zero the rest of the reserve
-  if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
-  if (close(dst)) rc = -6;
-  return rc;
-}
-
 int image_bake(struct ai *g) {
   image_guard_arm();
   uintptr_t len = 0;
@@ -222,14 +189,12 @@ int image_bake(struct ai *g) {
   // twin the cell carries (ai_image_redir); the bake stays correct, so there is
   // nothing to announce. only a REFUSED bake (below) is worth a word.
   if (!buf) { image_guard_report(); return -2; }
-  // both lanes patch by FILE OFFSET, and the offsets come from the running program's
-  // own phdrs (dl_iterate_phdr, first object) -- the one place a live address and a
-  // file position are known to name the same byte.
-  struct bake_at b = { (uintptr_t) ai_baked_image, 0, 0 };
+  // ai_baked_image_len is patched by FILE OFFSET, and the offset comes from the running
+  // program's own phdrs (dl_iterate_phdr, first object) -- the one place a live address
+  // and a file position are known to name the same byte.
   struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
-  dl_iterate_phdr(bake_phdr, &b);
   dl_iterate_phdr(bake_phdr, &bl);
-  if (!b.found || !bl.found) return -5;
+  if (!bl.found) return -5;
   char exe[4096], tmp[4104];
   ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
   if (n <= 0) return -6;
@@ -239,7 +204,10 @@ int image_bake(struct ai *g) {
   int src = open(exe, O_RDONLY);
   if (src < 0 || fstat(src, &st)) { if (src >= 0) close(src); return -6; }
   int rc = bake_tail(src, tmp, buf, len, bl.off, st.st_mode & 07777);
-  if (rc > 0) rc = bake_reserve(src, tmp, buf, len, b.off, st.st_mode & 07777);
+  if (rc > 0) {
+    fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image."
+                    " The link wants -Wl,--section-start=.image=... (host/build.mk)\n");
+    rc = -3; }
   close(src);
   if (!rc && rename(tmp, exe)) rc = -6;           // the adopt: atomic, a new inode
   if (rc) unlink(tmp);

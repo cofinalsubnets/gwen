@@ -522,7 +522,7 @@ test_raw: host out/host$(hsuf)/mooncc
 	  $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
 	    || { echo "FAIL mooncc -c love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $(ho)/mooncc -D ai_tco=1 -D AI_IMAGE_TAIL=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
+	    $(ho)/mooncc -D ai_tco=1 -I$(ho) -I. -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/nolibc.c $$d/nolibc.o \
 	    || { echo "FAIL mooncc -c nolibc.c"; exit 1; }; \

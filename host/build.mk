@@ -27,7 +27,7 @@ host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
 # host_cc: STATIC picks musl-clang unless CC was set explicitly (the musl-gcc
 # fallback below); love0 and the lib tools stay on plain $(CC) either way.
 host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
-hcc = $(host_cc) $(ai_cflags) $(image_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
+hcc = $(host_cc) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # whole-archive flag differs by linker (ld64 vs GNU ld); ai_typ is now a plain
 # compare in love.h, so there is no data.ld / generated data.h on any platform.
 ifeq ($(shell uname -s),Darwin)
@@ -46,13 +46,14 @@ endif
 # what --section-start buys -- ld gives a section at a far address a PT_LOAD to itself,
 # above .bss and alone in it. 0x2000000 (32 MiB) clears .bss (~8 MiB) with room to grow
 # and is page-aligned, which the loader's offset/vaddr congruence needs; an overlap is a
-# LOUD ld error, never a silent one. mach-o has neither the flag nor --bake at all
-# (image_bake is /proc/self/exe + dl_iterate_phdr), so the mac lane keeps the reserve --
-# as does the mooncc/holo lane, until its own linker lays the same shape.
-ifneq ($(shell uname -s),Darwin)
-image_cflags = -DAI_IMAGE_TAIL
+# LOUD ld error, never a silent one. holo lays the same shape its own way (link.l's image
+# lane, riding the tail of its single segment), so both toolchains bake alike.
+# The flag is GNU-ld/lld spelling. Nothing here is conditional on mach-o because NOTHING
+# in this file builds there: host/image.c includes <link.h> and calls dl_iterate_phdr,
+# neither of which macOS has, and a mach-o section attribute needs `segment,section`.
+# Whoever wants the mac host back owes image.c a mach-o lane (_dyld_get_image_header +
+# _NSGetExecutablePath), not a reserve -- a reserve would not have helped it either.
 image_ldflags = -Wl,--section-start=.image=0x2000000
-endif
 # STATIC=1 links a fully static `love` against musl (and skips liblove.so, which a
 # static build can't produce) -- the OPT-IN portable-binary lane (was briefly
 # the Linux default; demoted 2026-07-07, the why lives in common.mk's flavor
@@ -87,7 +88,7 @@ endif
 force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
-	@printf '%s\n' '$(host_cc) $(host_ldflags) $(image_cflags) $(image_ldflags)' > $@.tmp
+	@printf '%s\n' '$(host_cc) $(host_ldflags) $(image_ldflags)' > $@.tmp
 	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
 host: $(ho)/love $(ho)/ai $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
