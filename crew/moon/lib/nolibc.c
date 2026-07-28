@@ -1134,7 +1134,7 @@ unsigned int htonl(unsigned int v) {
 unsigned int ntohl(unsigned int v) { return htonl(v); }
 
 /* ---- getaddrinfo, the numeric slice: dotted-quad IPv4 + localhost + a decimal
- * port -- exactly what the host seam speaks (host/net.c resolves numbers; DNS
+ * port -- exactly what the host seam speaks (host/sock.c resolves numbers; DNS
  * stays a post-rung nicety). one malloc'd block carries result + address. ---- */
 struct __sain { unsigned short fam; unsigned short port; unsigned int addr; char pad[8]; };   /* sockaddr_in, 16 bytes */
 struct __gai { struct addrinfo ai; struct __sain sa; };

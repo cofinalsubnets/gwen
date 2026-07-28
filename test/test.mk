@@ -1014,7 +1014,7 @@ test_as: host
 	    || { echo "FAIL as (exit $$r)"; exit 1; }
 # ain's two-process loopback gate: a server and a client over real TCP on
 # 127.0.0.1, full-duplex, asserting each side received what the other sent (the
-# socket nifs in host/net.c + the pump loops in tools/ain.l). In `test_all`
+# socket nifs in host/sock.c + the pump loops in tools/ain.l). In `test_all`
 # (the thorough gate) but NOT the fast `test` -- it needs two live processes and
 # a free loopback port. It is the ONLY net gate that drives the real
 # `love tools/ain.l` cli path: the in-process `test/host/net.l` smoke (in

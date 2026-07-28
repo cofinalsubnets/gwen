@@ -1,5 +1,5 @@
 ; crew/haven/drm.l -- the metal's vocabulary: DRM/KMS spoken in love over two
-; nifs (host/drm.c: a generic ioctl with the struct in a cask, and an offset
+; nifs (host/mem.c: a generic ioctl with the struct in a cask, and an offset
 ; mmap for dumb buffers). enumeration needs no master and runs beside a live
 ; X server; the modeset half (drm-master, drm-set) needs the card free -- a
 ; vt of one's own, or vkms. loads after crew/haven/wire.l (the cask u32s).

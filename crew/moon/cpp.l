@@ -403,7 +403,7 @@
                ; stay the portable 32-bit branch and the lone `divq` __asm__
                ; (guarded && limb_bits == 64) stays out of reach.
                ; and Linux is the OS under every cc-built object (raw syscalls,
-               ; ELF, the host seam) -- without it host/init.c's signalfd source
+               ; ELF, the host seam) -- without it host/posix.c's signalfd source
                ; silently compiled OUT of the selfhost binary (a rung-2 wart)
                _ (pin t "__linux__" `('obj `((tok 'num 1 0))))
                ; gcc's limit predefines, the ones the host seam reads

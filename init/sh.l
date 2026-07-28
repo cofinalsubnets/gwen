@@ -2,7 +2,7 @@
 ; reads a line, runs real programs via spawn + wait -- inherited stdio, so output is
 ; LIVE and the command owns the terminal (not captured like `run`). this is the shell
 ; init execs on the console: the pid1 story end to end (init -> sh -> real programs).
-; it rides the host/init.c job-control nifs (spawn/wait/chdir/cwd) + getenv, plus the
+; it rides the host/posix.c job-control nifs (spawn/wait/chdir/cwd) + getenv, plus the
 ; v2 plumbing (pipe/openfd/spawnio/fdclose) for | < > >>. run:
 ;   out/host/love -l init/sh.l -e "(sh 0)"
 ; line editing on a real tty is bao's own editor (`edln`, the baked shell core):

@@ -10,7 +10,7 @@
 ;     green task and a crash is a `scare` the watchdog `help` welps to () (the SAME
 ;     shape recovery inle uses), so the dep graph / restart policy / checkpoint run
 ;     with no OS processes. (the oneshot lane here is already real via the `run` nif.)
-;   (real 0) -- the REAL supervisor: services are OS processes. host/init.c adds the
+;   (real 0) -- the REAL supervisor: services are OS processes. host/posix.c adds the
 ;     two missing primitives -- (spawn argv) forks+execs and returns a pid to track,
 ;     (hear _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
 ;     same supervisor shape, now over real children. (demos 0) ends by calling it.
@@ -19,7 +19,7 @@
 ; (the file only DEFINES -- a plain load prints nothing; -l preloads it into the shared
 ; global scope so the -e call finds `demos`/`real`.)
 ;
-; what an ACTUAL pid1 still needs is small and core-clean (host/init.c via the AI_NIF
+; what an ACTUAL pid1 still needs is small and core-clean (host/posix.c via the AI_NIF
 ; glob, no love.c/love.h edit -- the same discipline as ain/bao). DONE: fork/execve +
 ; the non-blocking waitpid reaper (spawn/hear). REMAINING: signalfd (SIGCHLD/SIGTERM
 ; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
@@ -107,7 +107,7 @@
 ; log the fault to the journal here). mirrors repl.l's shell-help, quieter.
 (: help (\ s a b (? (more? s) (welp s a b) (welp s a b))))
 
-; --- the REAL supervisor (needs host/init.c: spawn + hear; kill via bao's `still`) ---
+; --- the REAL supervisor (needs host/posix.c: spawn + hear; kill via bao's `still`) ---
 ; the same supervisor, now over OS PROCESSES. spawn each unit (a pid to track), then
 ; poll `hear` -- the SIGCHLD core -- mapping each dead pid back to its unit and
 ; restarting on a NONZERO exit per policy. on metal this poll is driven by signalfd
@@ -147,7 +147,7 @@
         _ (rloop units pids tries (tally units) 500)
         (note "-- all real children reaped --")))
 
-; --- the PERCEIVE lane (Linux: host/init.c sigfd/sigtake + the core `await`) ---
+; --- the PERCEIVE lane (Linux: host/posix.c sigfd/sigtake + the core `await`) ---
 ; the supervisor's perceive becomes a real PARK on a signalfd, not a poll loop.
 ; (await sig) cooperatively yields until a signal lands; the scheduler folds the
 ; parked sigfd and a heartbeat TASK's timer into ONE ai_wait_fds -- the {nic, clock}

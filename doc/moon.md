@@ -84,7 +84,7 @@ object (the bare call-main tail every small link gets), and nolibc overrides
 it STRONG to unpack argv/envp/auxv before main -- no link-time flag anywhere,
 the weak machinery IS the switch. `make test_raw` (opt-in, x86-64) runs the
 whole corpus over the fresh egg: 2899 tests green. two cc gaps surfaced and
-were closed on the way: cpp now predefines `__linux__` (host/init.c's signalfd
+were closed on the way: cpp now predefines `__linux__` (host/posix.c's signalfd
 source was silently compiling OUT of the selfhost binary, a latent rung-2
 wart), and `open()` is variadic in unistd.h (it clashed with fcntl.h's shape).
 one gap noted, not closed (nothing needs it yet): an image-time `&arr[i]`

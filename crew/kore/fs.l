@@ -1,8 +1,8 @@
 ; crew/kore/fs.l -- the fs tools of kore: ls, cp, mv, rm, mkdir, rmdir, ln,
 ; touch, pwd, chmod. every tool a <name>-main dispatched by kore (crew/kore/kore.l),
 ; same as core.l -- a toolbox, no seat, kore is its door. loads after core.l in the
-; cat and rides its u-floor (udie, uread, ubase); the effects ride host/fs.c +
-; init.c's posix_ lane (stat readdir unlink mkdir rename symlink hardlink rmdir
+; cat and rides its u-floor (udie, uread, ubase); the effects ride host/posix.c's
+; posix_ lane (stat readdir unlink mkdir rename symlink hardlink rmdir
 ; chmod utime cwd), whose convention shapes every loop here: an effect op nets
 ; truthy exactly when something went wrong. a body-less top-level `:` leaking
 ; uoct (lawed in law.l) and the mains.

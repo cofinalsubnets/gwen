@@ -1,4 +1,4 @@
-; --- test/host/lux.l: a runnable smoke test for lux's socket nif (host/lux.c) ---
+; --- test/host/lux.l: a runnable smoke test for lux's socket nif (host/sock.c) ---
 ; Standalone against the built binary, like test/host/net.l and for the same reason
 ; (host/*.c links the final `love` only; love0 bakes the corpus without it):
 ;

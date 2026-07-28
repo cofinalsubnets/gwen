@@ -537,7 +537,7 @@ static char const cli[] =
 extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
 extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
 extern struct ai *image_load(char const*);
-// The baked post-boot image: a reserve in its own .image section (host/image_baked.c), filled by
+// The baked post-boot image: a reserve in its own .image section (host/image.c), filled by
 // `love --bake` (the binary boots, snapshots itself, and lays the result back into its own body).
 // Loaded at startup when its magic validates; else a normal egg boot.
 extern uint64_t ai_baked_image[];

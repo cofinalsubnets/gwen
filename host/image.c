@@ -84,8 +84,17 @@ int image_dump(struct ai *g, char const *path) {
 // --section-start, ld and lld both) and of one riding the tail of the single segment holo
 // lays. A link that laid it anywhere else is refused LOUDLY -- there is nowhere to grow,
 // and quietly booting the egg forever is not a kindness.
-extern uint64_t ai_baked_image[];
-extern uintptr_t ai_baked_image_len;
+// the in-binary home of the post-boot heap image (doc/snapshot.md): the binary
+// loads ITS OWN dump at startup (main.c) -- identical layout by construction, so
+// the codec's same-binary +delta relocation just works. Sentinel-initialized (not
+// {0}) so it lands in PROGBITS, patchable in place, never .bss. The section is
+// laid LAST -- alone in the highest segment on the host (host/build.mk's
+// --section-start), riding the tail of the single segment holo lays -- so the
+// bake GROWS it: nothing is pre-allocated and there is no ceiling; this stub
+// exists only to give the section an address.
+#define RESERVE_WORDS 2u
+__attribute__((section(".image"))) uint64_t ai_baked_image[RESERVE_WORDS] = {1};
+uintptr_t ai_baked_image_len = RESERVE_WORDS * 8u;
 struct bake_at { uintptr_t addr, off; int found; };
 static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
   struct bake_at *b = d;

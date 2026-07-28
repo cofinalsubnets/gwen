@@ -34,7 +34,7 @@ POSIX surface as nifs, exactly like ain's `connect`/`listen`/`accept`:
 > (auto-globbed — no love.c/love.h/main.c edit; main.c is core). The fd→port path is
 > free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
 > read/write then come free via getc/putc. The general-POSIX nifs wear the
-> `posix_` C-symbol prefix (host/init.c: `lvm_posix_stat` &c); the love names stay
+> `posix_` C-symbol prefix (host/posix.c: `lvm_posix_stat` &c); the love names stay
 > the plain POSIX words.
 
 The payoff: **the love shell becomes a real shell whose external commands are the
@@ -95,7 +95,7 @@ Two mappings are the elegant ones, and both are *already built*:
 ## Staging (L0)
 
 1. **fs nifs** — DONE: `stat`/`readdir`/`unlink`/`lseek` (the `posix_` lane in
-   host/init.c, gated in boot/init.l) joined `mkdir`/`chdir`/`cwd`; the
+   host/posix.c, gated in boot/init.l) joined `mkdir`/`chdir`/`cwd`; the
    `open`/read/write/close path predates them. `stat` answers `(size mtime-ms mode)`
    or `()` for absence; `lseek` rides the raw-fd `openfd` lane (ports buffer).
 2. **process nifs** — `fork`/`exec`/`waitpid`/`_exit`/`pipe`/`dup2`/`kill`. The core of

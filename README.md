@@ -179,10 +179,10 @@ on the front page):
 - 🕊 **gwen** -- the synthesist.
 - 🐈 **ain** -- the netcat: an openbsd netcat clone in ~70 lines -- `ain host port` a
   TCP client, `ain -l port` a server, bytes pumping both ways with no select loop.
-  [tools/ain.l](tools/ain.l) + [host/net.c](host/net.c)
+  [tools/ain.l](tools/ain.l) + [host/sock.c](host/sock.c)
 - 🐕 **bao** -- the shell: an rlwrap clone. raw `love` shrinks to a read/eval/write
   filter and bao is the editor + history + fault-face on top, doubling as a pty
-  wrapper. [love/bao.l](love/bao.l) + [host/pty.c](host/pty.c)
+  wrapper. [love/bao.l](love/bao.l) + [host/posix.c](host/posix.c)
 - 🐀 **salt** -- the build system: cook, a gnu make clone that reads a real Makefile.
   [crew/cook/](crew/cook/)
 - 🪸 **seed** -- the vcs: a patch-set version control folded together with the

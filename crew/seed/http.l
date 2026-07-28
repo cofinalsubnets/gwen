@@ -1,5 +1,5 @@
 ; crew/seed/http.l -- the smallest HTTP/1.1 GET that can walk a store, over the
-; `connect` socket floor (host/net.c, the same one tools/ain.l dials with).
+; `connect` socket floor (host/sock.c, the same one tools/ain.l dials with).
 ;
 ; it is a CLIENT only, and only GET: a seed remote needs nothing else. the store
 ; is content-addressed and immutable, so every fetch is a plain cacheable GET on

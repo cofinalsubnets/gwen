@@ -1,16 +1,17 @@
-// host/net.c -- the ain socket nifs. Host-only (links main.c), auto-globbed
-// + auto-registered via AI_NIF; no love.c/love.h/main.c edit. Every nif mirrors
-// main.c's lvm_open: produce an OS fd, hand it to ai_io_alloc (love.c) -> a heap
-// port carrying a close finalizer. Once an fd is a port, READ AND WRITE COME
-// FREE through the existing fgetc/fputc machinery (the fgetc read path even
-// yields cooperatively on a not-ready fd), so a socket nif only has to make the
-// fd. That is the whole netcat core: connect/listen/accept give you the ports,
-// the two .l pump loops (tools/ain.l) shuttle bytes, and shutdown half-closes
-// so a stdin-EOF lets the peer see EOF.
+// host/sock.c -- every socket nif, both address families: TCP/UDP (ain's
+// netcat core and inle's oracle wire), unix-domain connect (lux's X display
+// door) and listen (haven's shore), and SCM_RIGHTS fd-passing (wayland's
+// ancillary data). Host-only, auto-globbed + AI_NIF-registered (no
+// love.c/love.h/main.c edit). Every stream nif mirrors main.c's lvm_open:
+// produce an OS fd, hand it to ai_io_alloc (love.c) -> a heap port carrying a
+// close finalizer. Once an fd is a port, READ AND WRITE COME FREE through the
+// existing fgetc/fputc machinery (the fgetc read path even yields
+// cooperatively on a not-ready fd), so a socket nif only has to make the fd.
 //
-// Blocking is intentional here: ain is one-shot, so a blocking getaddrinfo /
-// connect / accept is acceptable (the doc's Stage 1). The fgetc/fputc traffic
-// that follows is what interleaves cooperatively, not these setup calls.
+// Blocking is intentional in the TCP setup calls: ain is one-shot, so a
+// blocking getaddrinfo / connect / accept is acceptable (the doc's Stage 1).
+// The fgetc/fputc traffic that follows is what interleaves cooperatively.
+#define _GNU_SOURCE     // SOCK_CLOEXEC, the SCM_RIGHTS glue
 #include "love.h"
 #include <unistd.h>
 #include <stdio.h>
@@ -18,6 +19,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -32,12 +34,20 @@
 // inle's UDP wire (port/inle/x86_64/net.c) caps a datagram at one ethernet MTU.
 #define DG_MAX 1472
 
-// Is Sp-slot x a heap stream port? Same inline check main.c's lvm_close uses:
-// an even (heap) word whose first slot is the lvm_port_io discriminator. A
-// macro so it reads as one test at each use; lvm_port_io is declared in love.h.
-#define portp(x) (((x) & 1) == 0 && ((union u*) (x))->ap == lvm_port_io)
-// the backing OS fd of a known port, as a plain int.
-#define port_fd(x) ((int) getcharm(((struct ai_io*) (x))->fd))
+// Pull a live OS fd out of a port arg, or -1 if it isn't a port. Same inline
+// "is x a port" as main.c's lvm_close: an even (heap) word whose first slot is
+// the lvm_port_io discriminator (declared in love.h). A closed port carries the
+// -3 sentinel; we hand that straight back and the syscall answers EBADF.
+static intptr_t port_fd(ai_word x) {
+ if ((x & 1) == 0 && ((union u*) x)->ap == lvm_port_io)
+    return getcharm(((struct ai_io*) x)->fd);
+ return -1; }
+
+// a cask's (or string's) backing bytes, or 0 -- the wl lanes take either.
+static struct ai_str *cask_bytes(ai_word x) {
+ if (x & 1) return 0;
+ if (((union u*) x)->ap == lvm_buf) return ((struct ai_buf*) x)->str;
+ return ai_strp(x) ? (struct ai_str*) x : 0; }
 
 // (connect host port) -- TCP client. Resolve `host` (a string: name or dotted
 // quad) through getaddrinfo against the decimal `port` (a fixnum 0..65535),
@@ -123,8 +133,7 @@ static lvm(lvm_listen) {
 // nothing else to do until the first client arrives, and the pump tasks are
 // only spawned afterwards. nil on misuse / accept() failure.
 static lvm(lvm_accept) {
- if (!portp(Sp[0])) goto fail;
- int lfd = port_fd(Sp[0]);
+ int lfd = (int) port_fd(Sp[0]);
  if (lfd < 0) goto fail;
  int fd = accept(lfd, NULL, NULL);
  if (fd < 0) goto fail;
@@ -147,10 +156,10 @@ static lvm(lvm_accept) {
 // after a stdin-EOF, so the peer sees EOF on its read instead of a hung
 // half-open socket. Returns the port (chainable); a no-op on misuse.
 static lvm(lvm_shutdown) {
- if (portp(Sp[0]) && oddp(Sp[1])) {
-  int fd = port_fd(Sp[0]);
+ int fd = (int) port_fd(Sp[0]);
+ if (fd >= 0 && oddp(Sp[1])) {
   intptr_t how = getcharm(Sp[1]);
-  if (fd >= 0 && how >= 0 && how <= 2) shutdown(fd, (int) how); }
+  if (how >= 0 && how <= 2) shutdown(fd, (int) how); }
  // stack: [s, how, ...] -> [s, ...]
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
@@ -212,8 +221,7 @@ ai_noinline static struct dgram call_udprecv(int fd, char *buf, size_t cap) {
                           | (uintptr_t) ntohs(peer.sin_port) }; }
 
 static lvm(lvm_udprecv) {
- if (!portp(Sp[0])) goto fail;
- int fd = port_fd(Sp[0]);
+ int fd = (int) port_fd(Sp[0]);
  if (fd < 0) goto fail;
  static char buf[DG_MAX];
  struct dgram d = call_udprecv(fd, buf, sizeof buf);
@@ -256,8 +264,8 @@ ai_noinline static ssize_t call_udpsend(int fd, uintptr_t peerfix, void const *p
  return w; }
 
 static lvm(lvm_udpsend) {
- if (!portp(Sp[0]) || !oddp(Sp[1]) || !ai_strp(Sp[2])) goto fail;
- int fd = port_fd(Sp[0]);
+ if (!oddp(Sp[1]) || !ai_strp(Sp[2])) goto fail;
+ int fd = (int) port_fd(Sp[0]);
  if (fd < 0) goto fail;
  struct ai_str *s = str(Sp[2]);
  ssize_t w = call_udpsend(fd, getcharm(Sp[1]), txt(s), len(s));
@@ -286,3 +294,169 @@ AI_NIF("seal", nif_shutdown);
 AI_NIF("udp-bind", nif_udpbind);
 AI_NIF("udp-recv", nif_udprecv);
 AI_NIF("udp-send", nif_udpsend);
+// --- unix-domain connect: lux's X display door ----------------------------------
+// (connectu path) -- connect to a unix-domain stream socket and wrap the fd as a
+// port | nil. The load-bearing case is an X display socket (/tmp/.X11-unix/X<n>):
+// real X servers listen only there, so lux's wire codec (doc/proto/x11.l lineage)
+// needs this one door the TCP nifs can't open.
+ai_noinline static int call_connectu(struct ai_str *pv) {
+ struct sockaddr_un a;
+ if (pv->len == 0 || pv->len >= sizeof a.sun_path) return -1;
+ memset(&a, 0, sizeof a);
+ a.sun_family = AF_UNIX;
+ memcpy(a.sun_path, pv->bytes, pv->len);
+ int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+ if (fd < 0) return -1;
+ if (connect(fd, (struct sockaddr*) &a, sizeof a)) { close(fd); return -1; }
+ cloexec(fd);
+ return fd; }
+
+static lvm(lvm_connectu) {
+ if (!ai_strp(Sp[0])) goto fail;
+ int fd = call_connectu((struct ai_str*) Sp[0]);
+ if (fd < 0) goto fail;
+ Pack(g);
+ struct ai *r = ai_io_alloc(g, fd);
+ if (!ai_ok(r)) { close(fd); goto fail; }
+ g = r;
+ Unpack(g);
+ // stack: [port, path, ...] -> [port, ...]
+ Sp[1] = Sp[0];
+ Sp += 1; Ip += 1;
+ return Continue();
+ fail:
+ Sp[0] = ai_nil; Ip += 1;
+ return Continue(); }
+
+static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
+AI_NIF("connectu", nif_connectu);
+// --- haven's plumbing: the unix listener + SCM_RIGHTS fd-passing ----------------
+// the door compositor clients knock on, and sendmsg/recvmsg with ancillary fds
+// (wayland passes shared-memory fds this way). The buffers those fds name ride
+// the memfd/mapfd nifs (host/mem.c).
+//
+//   (shore path)          -> a listening unix port | () ; unlinks stale first
+//                            (accept/await/close ride the core port nifs)
+//   (wl-recv port b)      -> (n fd..) one recvmsg into cask b, fds in order;
+//                            (0) at eof; () = nothing there / misuse
+//   (wl-send port b n fds)-> () | errno ; sendmsg of b's first n bytes with
+//                            the fd charms in the list as SCM_RIGHTS
+
+// (shore path): bind + listen a unix stream socket at path.
+// leaves EXACTLY ONE net value above the path on every non-OOM path (the
+// port, or the zero point), so lvm_shore collapses uniformly -- pty.c's law.
+ai_noinline static struct ai *hv_shore(struct ai *g, ai_word pw) {
+ struct ai_str *p = cask_bytes(pw);
+ struct sockaddr_un a = {0};
+ if (!p || p->len + 1 > sizeof a.sun_path) return ai_push(g, 1, ZeroPoint);
+ a.sun_family = AF_UNIX;
+ memcpy(a.sun_path, p->bytes, p->len);
+ unlink(a.sun_path);
+ int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+ if (fd < 0) return ai_push(g, 1, ZeroPoint);
+ if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, 8)) {
+  close(fd);
+  return ai_push(g, 1, ZeroPoint); }
+ struct ai *r = ai_io_alloc(g, fd);
+ if (!ai_ok(r)) close(fd);
+ return r; }
+
+static lvm(lvm_shore) {
+ Pack(g);
+ g = hv_shore(g, g->sp[0]);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Sp[1] = Sp[0];
+ Sp += 1; Ip += 1; return Continue(); }
+
+// (wl-recv port b): one nonblocking recvmsg; the byte count then the fds,
+// as a list. () = EAGAIN or misuse; (0) = the peer hung up.
+ai_noinline static struct ai *hv_recv(struct ai *g) {
+ intptr_t fd = port_fd(g->sp[0]);
+ struct ai_str *b = cask_bytes(g->sp[1]);
+ if (fd < 0 || !b || !b->len) { g->sp[0] = ZeroPoint; return g; }
+ char cbuf[CMSG_SPACE(8 * sizeof(int))];
+ struct iovec iov = { b->bytes, b->len };
+ struct msghdr mh = {0};
+ mh.msg_iov = &iov, mh.msg_iovlen = 1;
+ mh.msg_control = cbuf, mh.msg_controllen = sizeof cbuf;
+ ssize_t n = recvmsg((int) fd, &mh, MSG_DONTWAIT | MSG_CMSG_CLOEXEC);
+ if (n < 0) { g->sp[0] = ZeroPoint; return g; }
+ int fds[8], nf = 0;
+  // glibc's CMSG_NXTHDR compares size_t with ptrdiff_t inside the macro
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+ for (struct cmsghdr *c = CMSG_FIRSTHDR(&mh); c; c = CMSG_NXTHDR(&mh, c))
+    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS
+        && (size_t) c->cmsg_len > (size_t) CMSG_LEN(0)) {
+  size_t k = ((size_t) c->cmsg_len - (size_t) CMSG_LEN(0)) / sizeof(int);
+  for (size_t i = 0; i < k && nf < 8; i++)
+        memcpy(&fds[nf++], (char*) CMSG_DATA(c) + i * sizeof(int), sizeof(int)); }
+#pragma GCC diagnostic pop
+ if (!ai_ok(g = ai_have(g, (uintptr_t) (nf + 1) * Width(struct ai_chain)))) return g;
+ ai_word tail = ZeroPoint;
+ for (int i = nf; i-- > 0;) {
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                   putcharm(fds[i]), tail);
+  tail = word(w); }
+ struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(n), tail);
+ g->sp[0] = word(w);
+ return g; }
+
+static lvm(lvm_wlrecv) {
+ Pack(g);
+ g = hv_recv(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Sp[1] = Sp[0];
+ Sp += 1; Ip += 1; return Continue(); }
+
+// (wl-send port b n fds): sendmsg of the cask's first n bytes, the fd
+// charms riding as SCM_RIGHTS. Retries partial writes without the fds
+// (they travel with the first byte, per the protocol's custom).
+// the msghdr/cmsg scratch (cbuf + fds + &mh -> sendmsg) pins the frame, which
+// would defeat the lvm_ ap's tail-jump (make vmret): the body lives in a plain
+// helper so lvm_wlsend stays a thin sibcall. answers the result word.
+static ai_noinline ai_word hv_wlsend_do(ai_word *Sp) {
+ intptr_t fd = port_fd(Sp[0]);
+ struct ai_str *b = cask_bytes(Sp[1]);
+ intptr_t n = (Sp[2] & 1) ? getcharm(Sp[2]) : -1;
+ ai_word out = putcharm(-1);
+ if (fd >= 0 && b && n >= 0 && (uintptr_t) n <= b->len) {
+  int fds[8]; int nf = 0;
+  for (ai_word l = Sp[3]; chainp(l) && nf < 8; l = B(l))
+      if (A(l) & 1) fds[nf++] = (int) getcharm(A(l));
+  char cbuf[CMSG_SPACE(8 * sizeof(int))];
+  struct iovec iov = { b->bytes, (size_t) n };
+  struct msghdr mh = {0};
+  mh.msg_iov = &iov, mh.msg_iovlen = 1;
+  if (nf) {
+   mh.msg_control = cbuf, mh.msg_controllen = CMSG_SPACE((size_t) nf * sizeof(int));
+   struct cmsghdr *c = CMSG_FIRSTHDR(&mh);
+   c->cmsg_level = SOL_SOCKET, c->cmsg_type = SCM_RIGHTS;
+   c->cmsg_len = CMSG_LEN((size_t) nf * sizeof(int));
+   memcpy(CMSG_DATA(c), fds, (size_t) nf * sizeof(int)); }
+  out = ZeroPoint;
+  uintptr_t i = 0;
+  while (i < (uintptr_t) n) {
+   ssize_t k = sendmsg((int) fd, &mh, 0);
+   if (k < 0) {
+    if (errno == EINTR) continue;
+    out = putcharm(errno);
+    break; }
+   i += (uintptr_t) k;
+   iov.iov_base = b->bytes + i, iov.iov_len = (size_t) n - i;
+   mh.msg_control = 0, mh.msg_controllen = 0; } }
+ return out; }
+static lvm(lvm_wlsend) {
+ Sp[3] = hv_wlsend_do(Sp);
+ Sp += 3; Ip += 1; return Continue(); }
+
+static union u const
+  nif_shore[]   = {{lvm_shore}, {lvm_ret0}},
+  nif_wlrecv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wlrecv}, {lvm_ret0}},
+  nif_wlsend[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_wlsend}, {lvm_ret0}};
+AI_NIF("shore", nif_shore);
+AI_NIF("wl-recv", nif_wlrecv);
+AI_NIF("wl-send", nif_wlsend);

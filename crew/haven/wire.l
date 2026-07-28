@@ -3,7 +3,7 @@
 ; flattened to words (a string carries its length, NUL included, and pads to
 ; the word). shared by both shores: haven parses requests and ships events,
 ; skiff the mirror image. the fds never touch these bytes -- they ride the
-; socket as SCM_RIGHTS (wl-send / wl-recv, host/haven.c) and queue up beside
+; socket as SCM_RIGHTS (wl-send / wl-recv, host/sock.c) and queue up beside
 ; the byte stream, popped in arrival order.
 ;
 ; a body-LESS `:` -- all of it leaks; no name here shadows a nif.

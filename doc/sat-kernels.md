@@ -331,7 +331,7 @@ kissat ~4000 and the rest behind. the per-row composition, MEASURED (uuf150-01):
   no-nif engine, and the `fknob` differential oracle — outputs byte-identical
   kernel vs twin vs the old tablet pass). flat100-1 fbva 12 → 4.2ms, the
   three-instance row 57 → 16ms — inside the field's band; the sat gate itself
-  dropped 3.3 → 2.4s. host/word.c (`peepw`/`pinw`, cask word slots in one
+  dropped 3.3 → 2.4s. host/mem.c (`peepw`/`pinw`, cask word slots in one
   dispatch) rode along and made ALL interpreted twins ~2.7× faster.
 * php8 sits 1.5ms behind cadical.
 

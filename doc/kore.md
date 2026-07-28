@@ -65,9 +65,9 @@ the file discipline, two shapes:
   proc.l's udur/uwords.
   `ueach` is the cat walk every whole-input tool rides (files or stdin, `-`
   reads stdin, a miss complains on err and the exit code remembers).
-* **the nif lane.** fs effects ride host/init.c + host/fs.c (app-glob AI_NIF,
+* **the nif lane.** fs effects ride host/posix.c (app-glob AI_NIF,
   no core edit), init.c's posix_ conventions: an effect op answers () ok | a
-  POSITIVE errno | EINVAL misuse; a value op answers the value | (). host/fs.c
+  POSITIVE errno | EINVAL misuse; a value op answers the value | (). host/posix.c
   holds rename symlink readlink chmod chown utime umask rmdir hardlink
   (`link` the word belongs to the chain ctor). boot/fs.l smokes them in
   test_hostnif.

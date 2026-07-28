@@ -1,33 +1,31 @@
-// host/init.c -- the init (pid-1 supervisor) nifs: SPAWN a process without
-// waiting + REAP an arbitrary dead child WITH its pid. Host-only, auto-globbed +
-// AI_NIF-registered (no love.c/love.h/main.c edit), the same discipline as net.c
-// (ain) / pty.c (bao). These are the two primitives a supervisor needs that the
-// existing nifs miss: run/exec/mind all BLOCK or REPLACE, and pty.c's `gather`
-// reaps a KNOWN pid (handing back only the status). init/init.l drives REAL
-// processes with these plus bao's generic `still` (kill): spawn returns a pid to
-// track, hear is the SIGCHLD core (poll it, map the pid back to a unit, restart
-// per policy). On a real pid1 hear also collects reparented orphans (waitpid(-1)).
-//
-//   (spawn argv)  -> child pid (a fixnum) | a NEGATIVE fixnum (-errno / -1 misuse)
-//   (hear _)      -> (pid . status) of one reaped child
-//                  | ()                 none pending
-//                  | a NEGATIVE fixnum  (-errno, e.g. -ECHILD: no children left)
+// host/posix.c -- the POSIX surface, in one place: process (spawn/reap/wait/
+// signal, the pid-1 supervisor's primitives and the shell's job control), fs
+// effects and values (stat/readdir/rename/chmod/..), the environment, pipes and
+// raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). Host-only,
+// auto-globbed + AI_NIF-registered (no love.c/love.h/main.c edit). The
+// conventions, kept throughout:
+//   effect ops answer () ok | a POSITIVE errno | EINVAL misuse
+//   value ops answer the value | () absence (or a NEGATIVE -errno where a
+//   pid/fd/offset result must stay tellable from failure)
 //
 // argv marshaling mirrors host_exec (main.c): a chain of strings -> a NUL-
 // terminated char** in the uncommitted heap gap at Hp (GC-invisible, holds no l
-// pointers, consumed before any further alloc), valid across the fork. The wait-
-// status decode is shared with bao via host/proc.h (proc_status).
-#define _GNU_SOURCE     // unshare / CLONE_* for newns (mirrors pty.c)
+// pointers, consumed before any further alloc), valid across the fork -- ONE
+// copy here (argv_marshal) shared by spawn, spawnio and mind; main.c keeps its
+// own (main.c is CORE, an app file can't reach in).
+#define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
-#include "proc.h"
-#include <unistd.h>     // fork execvp _exit read close getuid/getgid
-#include <stdio.h>      // fflush
-#include <stdlib.h>     // setenv/unsetenv (the env nifs)
+#include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
+#include <stdio.h>      // fflush, rename
+#include <stdlib.h>     // setenv/unsetenv, posix_openpt grantpt unlockpt ptsname
 #include <string.h>     // memcpy
 #include <errno.h>
-#include <signal.h>     // sigprocmask, SIGCHLD/SIGTERM (sigfd)
-#include <fcntl.h>      // open, O_* (openfd, for shell redirects)
-#include <sys/stat.h>   // mkdir, stat
+#include <signal.h>     // sigprocmask kill, SIGCHLD/SIGTERM (sigfd)
+#include <fcntl.h>      // open, O_*, AT_FDCWD, FD_CLOEXEC
+#include <sys/stat.h>   // mkdir, stat, chmod, umask, utimensat UTIME_NOW
+#include <sys/wait.h>   // waitpid, WIF* (proc_status)
+#include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ struct winsize
+#include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
 #if defined(__linux__)
 #include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo (Linux only)
@@ -35,25 +33,43 @@
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
 #endif
 
-// is Sp-slot x a heap stream port, and its backing fd -- as in net.c.
-#define portp(x) (((x) & 1) == 0 && ((union u*) (x))->ap == lvm_port_io)
-#define port_fd(x) ((int) getcharm(((struct ai_io*) (x))->fd))
+// A wait(2) status word -> the value a reaper hands back: the exit code, or
+// 128+signal for a signalled death (the shell convention), or -1 for the
+// (shouldn't-happen) neither case. The way host_run (main.c) decodes it -- the
+// one copy every reaper here shares, so they agree on what an exit code MEANS.
+static inline int proc_status(int st) {
+ return WIFEXITED(st) ? WEXITSTATUS(st)
+       : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1; }
 
-// the child side of the ignore dance: a disposition set to SIG_IGN SURVIVES exec,
-// so a shell that ignores the job-control signals must undo that in every child
-// between fork and exec -- or ^C could never kill anything it launches.
-static void sig_dfl_job(void) {
- signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL);
- signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL); }
+// Pull a live OS fd out of a port arg, or -1 if it isn't a port. Same inline
+// "is x a port" as main.c's lvm_close: a heap word whose discriminator is the
+// port vtable. A closed port carries the -3 sentinel; we hand that straight back
+// to the syscall, which fails with EBADF -- the honest answer.
+static intptr_t port_fd(ai_word x) {
+ if ((x & 1) == 0 && ((union u*) x)->ap == lvm_port_io)
+    return getcharm(((struct ai_io*) x)->fd);
+ return -1; }
 
-// (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
-// a pid (positive) from a failure (negative) without a second value). fork +
-// execvp; the parent returns immediately -- NON-BLOCKING, unlike run (waits +
-// captures) and exec (replaces in place). The child inherits init's stdio (a real
-// pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next hear.
-ai_noinline static struct ai *host_spawn(struct ai *g, ai_word argv) {
- intptr_t argc = 0;
- uintptr_t total = 0;
+// copy a love string into a NUL-terminated C buffer; false on non-string / too long.
+static bool str_cbuf(ai_word x, char *buf, size_t cap) {
+ if (!ai_strp(x)) return false;
+ struct ai_str *s = (struct ai_str*) x;
+ if ((size_t) s->len >= cap) return false;
+ memcpy(buf, s->bytes, s->len);
+ buf[s->len] = 0;
+ return true; }
+
+// The argv marshal: the chain of strings at g->sp[0] -> argc+1 char** + the
+// NUL-joined byte blob, laid in the uncommitted heap gap at Hp -- GC-invisible,
+// holds no l pointers, valid across a fork, consumed (execvp'd) before any
+// further allocation. Called with g Packed. Two failure faces: a misuse (non-
+// string element / empty argv) pushes putcharm(-1) and leaves *cavp NULL (the
+// caller returns g as-is, the -1 already the net value); OOM returns !ok g
+// (*cavp NULL too, so `if (!*cavp) return g` covers both).
+static struct ai *argv_marshal(struct ai *g, char ***cavp) {
+ *cavp = NULL;
+ ai_word argv = g->sp[0];
+ intptr_t argc = 0; uintptr_t total = 0;
  for (ai_word p = argv; chainp(p); p = B(p)) {
   if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));   // misuse: non-string argv
   argc++, total += len(A(p)) + 1; }
@@ -70,6 +86,35 @@ ai_noinline static struct ai *host_spawn(struct ai *g, ai_word argv) {
    cav[i] = blob + off;
    off += len(s) + 1; }
   cav[argc] = NULL; }
+ *cavp = cav;
+ return g; }
+
+// --- the supervisor pair: spawn without waiting, reap any dead child ------------
+// (spawn argv)  -> child pid (a fixnum) | a NEGATIVE fixnum (-errno / -1 misuse)
+// (hear _)      -> (pid . status) of one reaped child
+//                | ()                 none pending
+//                | a NEGATIVE fixnum  (-errno, e.g. -ECHILD: no children left)
+// init/init.l drives REAL processes with these plus the generic `still` (kill):
+// spawn returns a pid to track, hear is the SIGCHLD core (poll it, map the pid
+// back to a unit, restart per policy). On a real pid1 hear also collects
+// reparented orphans (waitpid(-1)).
+
+// the child side of the ignore dance: a disposition set to SIG_IGN SURVIVES exec,
+// so a shell that ignores the job-control signals must undo that in every child
+// between fork and exec -- or ^C could never kill anything it launches.
+static void sig_dfl_job(void) {
+ signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL);
+ signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL); }
+
+// (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
+// a pid (positive) from a failure (negative) without a second value). fork +
+// execvp; the parent returns immediately -- NON-BLOCKING, unlike run (waits +
+// captures) and exec (replaces in place). The child inherits init's stdio (a real
+// pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next hear.
+ai_noinline static struct ai *host_spawn(struct ai *g) {
+ char **cav;
+ g = argv_marshal(g, &cav);
+ if (!cav) return g;                                         // misuse pushed -1, or OOM
  fflush(NULL);                                               // flush now, not twice in the child
  pid_t pid = fork();
  if (pid < 0) return ai_push(g, 1, putcharm(-errno));
@@ -78,7 +123,7 @@ ai_noinline static struct ai *host_spawn(struct ai *g, ai_word argv) {
 
 static lvm(lvm_spawn) {
  Pack(g);
- g = host_spawn(g, Sp[0]);
+ g = host_spawn(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];                                              // pid over argv
@@ -156,8 +201,8 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  return g; }
 
 static lvm(lvm_sigtake) {
- if (!portp(Sp[0])) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
- int fd = port_fd(Sp[0]);
+ int fd = (int) port_fd(Sp[0]);
+ if (fd < 0) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
  Pack(g);
  g = host_sigtake(g, fd);
  if (!ai_ok(g)) return ghelp(g);
@@ -205,15 +250,6 @@ static lvm(lvm_posix_signal) {
  Sp[1] = host_posix_signal(Sp[0], Sp[1]);
  Sp += 1; return Ip++, Continue(); }
 
-
-// copy a love string into a NUL-terminated C buffer; false on non-string / too long.
-static bool str_cbuf(ai_word x, char *buf, size_t cap) {
- if (!ai_strp(x)) return false;
- struct ai_str *s = (struct ai_str*) x;
- if ((size_t) s->len >= cap) return false;
- memcpy(buf, s->bytes, s->len);
- buf[s->len] = 0;
- return true; }
 
 ai_noinline static ai_word host_chdir(ai_word arg) {
  char buf[4096];
@@ -280,23 +316,10 @@ static lvm(lvm_openfd) {
 
 ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int err,
                                             intptr_t pg, intptr_t fg) {
- ai_word argv = g->sp[0];
- intptr_t argc = 0; uintptr_t total = 0;
- for (ai_word p = argv; chainp(p); p = B(p)) {
-  if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));
-  argc++, total += len(A(p)) + 1; }
- if (!argc) return ai_push(g, 1, putcharm(-1));
- if (!ai_ok(g = ai_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
- argv = g->sp[0];                            // re-root post-ai_have (closes too, below)
- ai_word closes = g->sp[4];
- char **cav = (char**) g->hp;
- char *blob = (char*) (g->hp + (argc + 1));
- { uintptr_t off = 0; intptr_t i = 0;
-  for (ai_word p = argv; chainp(p); p = B(p), i++) {
-   struct ai_str *s = str(A(p));
-   memcpy(blob + off, txt(s), len(s)); blob[off + len(s)] = 0;
-   cav[i] = blob + off; off += len(s) + 1; }
-  cav[argc] = NULL; }
+ char **cav;
+ g = argv_marshal(g, &cav);
+ if (!cav) return g;                         // misuse pushed -1, or OOM
+ ai_word closes = g->sp[4];                  // re-read post-marshal (ai_have may have GC'd)
  fflush(NULL);
  pid_t pid = fork();
  if (pid < 0) return ai_push(g, 1, putcharm(-errno));
@@ -539,3 +562,358 @@ AI_NIF("signal",  nif_posix_signal);
 AI_NIF("ttyfg",   nif_posix_ttyfg);
 AI_NIF("setenv",  nif_posix_setenv);
 AI_NIF("environ", nif_posix_environ);
+// --- the rest of the fs surface: the effect ops the fs tools ride ---------------
+// (mv, ln, touch, chmod, chown -- crew/kore/fs.l and friends).
+//   (rename old new)      -> () | errno | EINVAL   (mv's heart; same filesystem)
+//   (symlink target path) -> () | errno | EINVAL   (path becomes a link TO target)
+//   (readlink path)       -> the target string | ()
+//   (chmod path mode)     -> () | errno | EINVAL   (mode the raw permission charm)
+//   (chown path uid gid)  -> () | errno | EINVAL   (-1 leaves that id alone)
+//   (utime path ms)       -> () | errno | EINVAL   (mtime AND atime on the stat
+//                            scale, MILLISECONDS; a non-charm ms reads "now")
+//   (umask mask)          -> the PREVIOUS mask | -1 misuse (always succeeds)
+//   (rmdir path)          -> () | errno | EINVAL   (the empty-directory unlink)
+//   (hardlink old new)    -> () | errno | EINVAL   (link(2); `link` the word is
+//                            the chain ctor, the most spoken name in the prel,
+//                            so the nif wears the long form)
+ai_noinline static ai_word host_posix_rename(ai_word ow, ai_word nw) {
+ char o[4096], n[4096];
+ if (!str_cbuf(ow, o, sizeof o) || !str_cbuf(nw, n, sizeof n)) return putcharm(EINVAL);
+ return rename(o, n) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_rename) {
+ Sp[1] = host_posix_rename(Sp[0], Sp[1]);
+ Sp += 1; return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_symlink(ai_word tw, ai_word pw) {
+ char t[4096], p[4096];
+ if (!str_cbuf(tw, t, sizeof t) || !str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
+ return symlink(t, p) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_symlink) {
+ Sp[1] = host_posix_symlink(Sp[0], Sp[1]);
+ Sp += 1; return Ip++, Continue(); }
+
+ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
+ char p[4096], b[4096];
+ if (!str_cbuf(g->sp[0], p, sizeof p)) return g->sp[0] = ZeroPoint, g;
+ ssize_t n = readlink(p, b, sizeof b - 1);
+ if (n < 0) return g->sp[0] = ZeroPoint, g;
+ b[n] = 0;
+ if (!ai_ok(g = ai_strof(g, b))) return g;                    // pushes: target over path
+ g->sp[1] = g->sp[0];
+ g->sp += 1;
+ return g; }
+static lvm(lvm_posix_readlink) {
+ Pack(g); g = host_posix_readlink(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_chmod(ai_word pw, ai_word mw) {
+ char p[4096];
+ if (!str_cbuf(pw, p, sizeof p) || !(mw & 1)) return putcharm(EINVAL);
+ return chmod(p, (mode_t) getcharm(mw)) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_chmod) {
+ Sp[1] = host_posix_chmod(Sp[0], Sp[1]);
+ Sp += 1; return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_chown(ai_word pw, ai_word uw, ai_word gw) {
+ char p[4096];
+ if (!str_cbuf(pw, p, sizeof p) || !(uw & 1) || !(gw & 1)) return putcharm(EINVAL);
+ return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_chown) {
+ Sp[2] = host_posix_chown(Sp[0], Sp[1], Sp[2]);
+ Sp += 2; return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
+ char p[4096];
+ if (!str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
+ struct timespec ts[2];
+ if (msw & 1) {
+  intptr_t ms = getcharm(msw);
+  ts[0].tv_sec = ts[1].tv_sec = (time_t) (ms / 1000);
+  ts[0].tv_nsec = ts[1].tv_nsec = (long) (ms % 1000) * 1000000;
+ } else
+  ts[0].tv_sec = ts[1].tv_sec = 0, ts[0].tv_nsec = ts[1].tv_nsec = UTIME_NOW;
+ return utimensat(AT_FDCWD, p, ts, 0) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_utime) {
+ Sp[1] = host_posix_utime(Sp[0], Sp[1]);
+ Sp += 1; return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_rmdir(ai_word pw) {
+ char p[4096];
+ if (!str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
+ return rmdir(p) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); return Ip++, Continue(); }
+
+ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
+ char o[4096], n[4096];
+ if (!str_cbuf(ow, o, sizeof o) || !str_cbuf(nw, n, sizeof n)) return putcharm(EINVAL);
+ return link(o, n) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_posix_hardlink) {
+ Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
+ Sp += 1; return Ip++, Continue(); }
+
+static lvm(lvm_posix_umask) {
+ Sp[0] = (Sp[0] & 1) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
+                     : putcharm(-1);
+ return Ip++, Continue(); }
+
+static union u const
+  nif_posix_rename[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rename}, {lvm_ret0}},
+  nif_posix_symlink[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_symlink}, {lvm_ret0}},
+  nif_posix_readlink[] = {{lvm_posix_readlink}, {lvm_ret0}},
+  nif_posix_chmod[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_chmod}, {lvm_ret0}},
+  nif_posix_chown[]    = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_chown}, {lvm_ret0}},
+  nif_posix_utime[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_utime}, {lvm_ret0}},
+  nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
+  nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
+  nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}};
+AI_NIF("rename",   nif_posix_rename);
+AI_NIF("symlink",  nif_posix_symlink);
+AI_NIF("readlink", nif_posix_readlink);
+AI_NIF("chmod",    nif_posix_chmod);
+AI_NIF("chown",    nif_posix_chown);
+AI_NIF("utime",    nif_posix_utime);
+AI_NIF("umask",    nif_posix_umask);
+AI_NIF("rmdir",    nif_posix_rmdir);
+AI_NIF("hardlink", nif_posix_hardlink);
+// --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
+// spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
+// it, and read/write its window size. The keystone, (mind argv), is host_run
+// (main.c) with the stdout PIPE swapped for a pty pair: the same argv marshal +
+// close-on-exec errno-pipe handshake, but the child's 0/1/2 become the pty SLAVE
+// and the parent keeps the MASTER as a heap port (ai_io_alloc). So bao's editor
+// talks to any program over the master the way a terminal would.
+//
+//   (mind argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
+//   (reap pid)         -> (status)   exited (a PAIR, truthy even at status 0)
+//                       | ()         still running
+//                       | errno      waitpid error (e.g. ECHILD)
+//   (kill pid sig)     -> () ok | errno   (caller passes (0 - pid) for the group)
+//   (winsize _)        -> (rows . cols) of the controlling tty (stdout), or ()
+//   (setwinsize p r c) -> () ok | errno   push a size onto a master port
+//
+// (winsize) takes a dummy arg (ignored, like getpid): a bare (winsize) is the
+// function itself -- (f) == f at zero operands -- so the call is (winsize 0).
+
+// Workhorse for (mind argv), called with g Packed; argv is the single arg and
+// the sole GC root at g->sp[0]. Leaves EXACTLY ONE net value above argv on every
+// non-OOM path (so lvm_ptyrun collapses uniformly, cf. host_run): the
+// (pid . master-port) chain on success, an errno/-1 fixnum otherwise. Returns a
+// not-ok g only on OOM (lvm_ptyrun routes that to ghelp).
+ai_noinline static struct ai *host_ptyrun(struct ai *g) {
+  // NO l allocation between the marshal and the fork: openpt/grantpt/unlockpt/
+  // ptsname/pipe don't touch the heap, so the uncommitted gap holds.
+ char **cav;
+ g = argv_marshal(g, &cav);
+ if (!cav) return g;                               // misuse pushed -1, or OOM
+
+  // open the master, unlock the slave, copy the slave path (ptsname's buffer is
+  // static -- snapshot it for the child, which inherits the snapshot across fork).
+ int mfd = posix_openpt(O_RDWR | O_NOCTTY);
+ if (mfd < 0) return ai_push(g, 1, putcharm(errno));
+ if (grantpt(mfd) || unlockpt(mfd)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(e)); }
+ char sname[128];
+ { char const *p = ptsname(mfd);
+  if (!p || strlen(p) >= sizeof sname) { close(mfd); return ai_push(g, 1, putcharm(p ? ENAMETOOLONG : errno)); }
+  memcpy(sname, p, strlen(p) + 1); }
+
+  // close-on-exec errno pipe: child writes its setup/exec errno here; a clean
+  // exec closes the write end -> parent reads EOF (childerr stays 0).
+ int ep[2];
+ if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(e)); }
+ fcntl(ep[1], F_SETFD, FD_CLOEXEC);
+
+ pid_t pid = fork();
+ if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, putcharm(e)); }
+ if (!pid) {                                       // child
+  close(mfd); close(ep[0]);
+  int e;
+  if (setsid() < 0) { e = errno; goto childfail; }
+  int sfd = open(sname, O_RDWR);                  // opening a tty in a fresh session claims it as ctty
+  if (sfd < 0) { e = errno; goto childfail; }
+  ioctl(sfd, TIOCSCTTY, 0);                       // belt-and-braces; harmless if already ctty
+  dup2(sfd, 0); dup2(sfd, 1); dup2(sfd, 2);
+  if (sfd > 2) close(sfd);
+  execvp(cav[0], cav);
+  e = errno;
+  childfail:
+  { ssize_t w = write(ep[1], &e, sizeof e); (void) w; }
+  _exit(127); }
+
+ close(ep[1]);                                     // parent
+ int childerr = 0; ssize_t r;
+ do r = read(ep[0], &childerr, sizeof childerr); while (r < 0 && errno == EINTR);
+ close(ep[0]);
+ if (childerr) {                                   // setup/exec failed in the child
+  close(mfd);
+  int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+  return ai_push(g, 1, putcharm(childerr)); }
+
+  // success: master -> heap port (pushes it to sp[0]; argv slides to sp[1]).
+ struct ai *io = ai_io_alloc(g, mfd);
+ if (!ai_ok(io)) {                                 // OOM: tear the child down, then ghelp
+  kill(pid, SIGKILL);
+  int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+  close(mfd);
+  return io; }
+ g = io;
+ if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;   // port at sp[0] kept as a root
+ struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(pid), g->sp[0]);
+ g->sp[0] = word(w);                               // [(pid . port), argv]
+ return g; }
+
+static lvm(lvm_ptyrun) {
+ Pack(g);
+ g = host_ptyrun(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Sp[1] = Sp[0];                                    // result over argv
+ Sp += 1; Ip += 1;
+ return Continue(); }
+
+// Workhorse for (reap pid), called with g Packed and pid at g->sp[0]. The &st
+// waitpid + the chain alloc live here (off the wrapper's frame so lvm_reap's
+// Continue() tail-jumps, cf. host_ptyrun). Leaves exactly one net value at sp[0]:
+// the (status) one-element list, () still-running, or an errno fixnum. Returns a
+// not-ok g only on OOM (lvm_reap routes that to ghelp).
+ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
+ intptr_t pid = (pidw & 1) ? getcharm(pidw) : 0;
+ int st;
+ pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
+ if (r == 0) { g->sp[0] = ai_nil; return g; }            // still running
+ if (r < 0)  { g->sp[0] = putcharm(errno); return g; }   // waitpid error
+ if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+ struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(proc_status(st)), ZeroPoint);   // a REAL ()-tailed list, not the charm-0 fossil
+ g->sp[0] = word(w);
+ return g; }
+
+// (reap pid): non-blocking wait. A reaped child returns its decoded status as a
+// ONE-ELEMENT LIST so the result is a present chain even at status 0 -- a caller
+// polling in a loop tells "exited 0" (a pair) from "still running" (()) without
+// the two collapsing to the same blue. A bare fixnum means waitpid itself erred.
+static lvm(lvm_reap) {
+ Pack(g);
+ g = host_reap(g, Sp[0]);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Ip += 1; return Continue(); }
+
+// (kill pid sig): POSIX kill(2). A negative pid (the caller writes (0 - pid),
+// never -pid -- that lexes as a kebab name) signals the process group. Returns
+// () on success, the errno fixnum on failure.
+static lvm(lvm_kill) {
+ intptr_t pid = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
+ intptr_t sig = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+ Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(errno) : ai_nil;
+ Sp += 1; Ip += 1; return Continue(); }
+
+// Workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
+// The &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
+// (cf. host_ptyrun). Overwrites sp[0] with (rows . cols), or () if stdout isn't a
+// tty. Returns a not-ok g only on OOM (lvm_winsize routes that to ghelp).
+ai_noinline static struct ai *host_winsize(struct ai *g) {
+ struct winsize ws;
+ if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = ai_nil; return g; }
+ if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+ struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(ws.ws_row), putcharm(ws.ws_col));
+ g->sp[0] = word(w);
+ return g; }
+
+// (winsize): the controlling tty's size as (rows . cols), read off stdout; () if
+// stdout isn't a tty (ioctl fails). The size to MIRROR onto a wrapped child.
+static lvm(lvm_winsize) {
+ Pack(g);
+ g = host_winsize(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ Ip += 1; return Continue(); }
+
+// (setwinsize port rows cols): push a window size onto a master port; the kernel
+// raises SIGWINCH on the slave's foreground group. () on success, errno on
+// failure (incl. a non-port / closed port -> EBADF).
+// The &ws ioctl for (setwinsize), off lvm_setwinsize's frame so its Continue()
+// tail-jumps. Returns 0 or the errno.
+ai_noinline static int host_setwinsize(intptr_t fd, intptr_t row, intptr_t col) {
+ struct winsize ws = {0};
+ ws.ws_row = (unsigned short) row;
+ ws.ws_col = (unsigned short) col;
+ return ioctl((int) fd, TIOCSWINSZ, &ws) ? errno : 0; }
+
+static lvm(lvm_setwinsize) {
+ intptr_t fd  = port_fd(Sp[0]);
+ intptr_t row = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+ intptr_t col = (Sp[2] & 1) ? getcharm(Sp[2]) : 0;
+ int rc = host_setwinsize(fd, row, col);
+ Sp[2] = rc ? putcharm(rc) : ai_nil;
+ Sp += 2; Ip += 1; return Continue(); }
+
+// (ptyecho port on): toggle the pty's input ECHO. on = 0 / () clears it so a
+// line-editing wrapper (bao's edraw) owns the echo and the child's cooked-mode
+// echo doesn't double it; a truthy `on` restores it. ICANON is left intact -- the
+// child still reads whole lines and sees VEOF. tcsetattr on the master fd sets the
+// shared pty termios. () on success, errno on failure (non-port / closed -> EBADF).
+// The &t tcget/tcsetattr for (ptyecho), off lvm_ptyecho's frame so its Continue()
+// tail-jumps. Returns 0 or the errno (EBADF for a non-port / closed fd).
+ai_noinline static int host_ptyecho(intptr_t fd, intptr_t on) {
+ struct termios t;
+ if (fd < 0) return EBADF;
+ if (tcgetattr((int) fd, &t)) return errno;
+ if (on) t.c_lflag |= ECHO; else t.c_lflag &= ~(tcflag_t) ECHO;
+ return tcsetattr((int) fd, TCSANOW, &t) ? errno : 0; }
+
+static lvm(lvm_ptyecho) {
+ intptr_t fd = port_fd(Sp[0]);
+ intptr_t on = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+ int rc = host_ptyecho(fd, on);
+ Sp[1] = rc ? putcharm(rc) : ai_nil;
+ Sp += 1; Ip += 1; return Continue(); }
+
+// (raw on): own the interactive terminal discipline on stdin (fd 0). A truthy
+// `on` puts the tty in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is
+// the SOLE echo; on = 0 / () restores the cooked termios captured at the first
+// raw-on. bao's (shell _) calls (raw 1) because the bin/bao launch
+// (love -l bao.l -e "(bao 0)") passes argv, so main.c's argp path skips raw_mode --
+// without this the kernel tty echo doubles every line the editor draws. The cooked
+// baseline is captured ONCE (a re-raw, e.g. main.c's no-arg path already raw'd,
+// never re-saves a raw state) and restored on exit via atexit. () on success,
+// errno on failure (stdin not a tty).
+static struct termios raw_cooked;
+static int raw_have_cooked = 0;
+static void raw_restore(void) {
+ if (raw_have_cooked) tcsetattr(STDIN_FILENO, TCSANOW, &raw_cooked); }
+// All the &t termios work + the capture-once/atexit state for (raw on), off
+// lvm_raw's frame so its Continue() tail-jumps. Returns 0 or the errno.
+ai_noinline static int host_raw(intptr_t on) {
+ struct termios t;
+ if (tcgetattr(STDIN_FILENO, &t)) return errno;
+ if (!on) { raw_restore(); return 0; }
+ if (!raw_have_cooked) { raw_cooked = t; raw_have_cooked = 1; atexit(raw_restore); }
+ t.c_lflag &= ~(tcflag_t) (ICANON | ECHO | ISIG | IEXTEN);
+ t.c_iflag &= ~(tcflag_t) (IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+ t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0;
+ return tcsetattr(STDIN_FILENO, TCSANOW, &t) ? errno : 0; }
+static lvm(lvm_raw) {
+ intptr_t on = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
+ int rc = host_raw(on);
+ Sp[0] = rc ? putcharm(rc) : ai_nil;
+ Ip += 1; return Continue(); }
+
+static union u const
+  nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
+  nif_ptyrun[]     = {{lvm_ptyrun}, {lvm_ret0}},
+  nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
+  nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
+  nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
+  nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
+  nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
+AI_NIF("mind", nif_ptyrun);
+AI_NIF("gather", nif_reap);
+AI_NIF("still", nif_kill);
+AI_NIF("winsize", nif_winsize);
+AI_NIF("setwinsize", nif_setwinsize);
+AI_NIF("ptyecho", nif_ptyecho);
+AI_NIF("raw", nif_raw);

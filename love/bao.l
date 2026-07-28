@@ -429,7 +429,7 @@
 
    ; --- the host-only pty wrapper (wrap) ---
    ; reachable from the bao prompt to pty-wrap a host program -- (wrap (L
-   ; "python3")). it uses the pty nifs (ptyrun, gather) which live in host/pty.c
+   ; "python3")). it uses the pty nifs (ptyrun, gather) which live in host/posix.c
    ; and are NOT present in love0 or the kernel -- there mind/gather are the
    ; want-stubs, so (wrap ..) answers a clean (). on the host they are the live
    ; nifs. NOTE: drives the real in/out tty fds, so it is exercised

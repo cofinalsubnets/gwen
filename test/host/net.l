@@ -1,6 +1,6 @@
-; --- test/host/net.l: a runnable smoke test for ain's socket nifs (host/net.c) ---
+; --- test/host/net.l: a runnable smoke test for ain's socket nifs (host/sock.c) ---
 ; NOT in the test/*.l corpus on purpose: the socket nifs (connect/listen/accept/
-; seal) live in host/net.c, which the final `love` links but love0 does NOT -- and
+; seal) live in host/sock.c, which the final `love` links but love0 does NOT -- and
 ; love0 bakes the whole corpus, so a corpus test would read these names as missing
 ; and fail love0's self-test. So this is verified the host-nif way: standalone,
 ; against the built binary. Run it (the assert macro comes from test/00-init.l):

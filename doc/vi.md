@@ -52,5 +52,5 @@ as need arises, in rough order: `.` (the repeat -- record the last change's
 byte string, replay it), visual mode (a span-selection over the same
 operators), :s ranges over re.l (sed's engine is right there), named
 registers, tab-stop-aware rendering + horizontal scroll, and the pty smoke
-(drive the face under a real terminal via host/pty.c like boot/baoedit.l).
+(drive the face under a real terminal via host/posix.c like boot/baoedit.l).
 after vi: rung 3, the chibicc-class C compiler.

@@ -1,5 +1,5 @@
 ; --- test/host/seedhttp.l: seed pulling a store over a real socket ---
-; NOT in the test/*.l corpus: the socket nifs live in host/net.c, which love0 does
+; NOT in the test/*.l corpus: the socket nifs live in host/sock.c, which love0 does
 ; not link, and this loads two crew files and splices their modules.
 ;
 ; the whole thing runs in ONE process, test/host/kiosko.l's shape: kiosko twirled

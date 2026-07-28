@@ -38,7 +38,7 @@
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
 (:
-   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (host/word.c) when
+   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (host/mem.c) when
    ; they are in the book, the byte path as the portable twin (freestanding targets
    ; have no host glob) -- picked once at bind time ---------------------------------
    getw (? (lit? peepw) peepw
