@@ -155,7 +155,9 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 enum ai_vec_type { ai_Z, ai_R, ai_C, ai_O, };
 // Elementwise dyadic opcodes for lvm_vbin (kernel/arr.c). The five arith codes
 // match the arith slow aps; the five compare codes (>= vop_lt) produce a
-// 0/1 bool array. vop_eq is `=` over arrays (whole-array eq is `(aall (= a b))`).
+// 0/1 bool array. `<` and `>` are the MASK MAKERS; vop_eq is NOT reached from `=`
+// any more (arr_eq answers that as a boolean -- see the note there), and its arms
+// below are kept only because the opcode table is shared machinery.
 // vop_quot is `/` (true division: float when a element divides inexactly);
 // vop_fquot is `//` (truncating integer division). Both stay in the arith group
 // (< vop_lt) so `op >= vop_lt` still selects the compare codes.
@@ -6787,6 +6789,48 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
   b = *--w, a = *--w; } }
 ai_noinline bool eqv(struct ai *g, word a, word b) { return eqv_at(g, a, b, off_pool(g)); }
 
+// Whole-array `=`. `=` answers {0,1} on EVERY kind -- a number, a string, a list, a
+// point -- and an array is no exception: equal iff the shapes match and every cell is
+// equal. It is NOT the elementwise mask. `<` and `>` are the mask makers (test/spec.l's
+// arrays section), and routing `=` through them made a PREDICATE silently mean "some
+// cell matched": (assert (@(2 4 7) = @(2 4 6))) used to pass, and only failed when NO
+// cell matched. An equality that is true of unequal things is worse than useless in the
+// one place equality is load-bearing.
+// Cells compare ACROSS TIERS, the way (= 5 5.0) is true, so a z-tray equals a gem-tray
+// of the same values. Object cells go through eqv -- eqv's own KVec arm memcmps the raw
+// words, which compares POINTERS for a boxed cell, so a tray of equal strings would read
+// unequal. An object tray never equals a numeric one: boxed cells and packed limbs are
+// different representations, and reading one as the other would have to allocate.
+static ai_noinline bool arr_eq(struct ai *g, word a, word b) {
+ if (!arrp(a) || !arrp(b)) return false;            // an array is never a scalar
+ struct ai_vec *va = vec(a), *vb = vec(b);
+ if (va->rank != vb->rank) return false;
+ for (uintptr_t k = 0; k < va->rank; k++)
+  if (va->shape[k] != vb->shape[k]) return false;   // same shape, not merely conformant
+ uintptr_t n = vec_nelem(va);
+ bool oa = va->type == ai_O, ob = vb->type == ai_O;
+ if (oa || ob) {
+  if (oa != ob) return false;
+  for (uintptr_t i = 0; i < n; i++)
+   if (!eqv(g, vec_get_obj(va, i), vec_get_obj(vb, i))) return false;
+  return true; }
+ if (va->type == ai_C || vb->type == ai_C) {        // (re,im) per cell; a real reads as (r,0)
+  ai_flo_t const *pa = vec_data(va), *pb = vec_data(vb);
+  for (uintptr_t i = 0; i < n; i++) {
+   ai_flo_t are = va->type == ai_C ? pa[2*i] : vec_get_flo(va, i);
+   ai_flo_t aim = va->type == ai_C ? pa[2*i+1] : 0;
+   ai_flo_t bre = vb->type == ai_C ? pb[2*i] : vec_get_flo(vb, i);
+   ai_flo_t bim = vb->type == ai_C ? pb[2*i+1] : 0;
+   if (are != bre || aim != bim) return false; }
+  return true; }
+ if (va->type == ai_Z && vb->type == ai_Z) {        // exact: no double round-trip
+  for (uintptr_t i = 0; i < n; i++)
+   if (vec_get_int(va, i) != vec_get_int(vb, i)) return false;
+  return true; }
+ for (uintptr_t i = 0; i < n; i++)                  // a float on either side: as doubles
+  if (vec_get_flo(va, i) != vec_get_flo(vb, i)) return false;
+ return true; }
+
 // (= a b) — value-equality with numeric promotion across the numeric tower
 // (fixnum / boxed float / boxed wide int). With a float operand we compare as
 // doubles (a box widens via box_get); otherwise eql handles it — two equal
@@ -6812,9 +6856,12 @@ lvm(lvm_eq) {
   bool r = a == b;
   if (Ip[1].ap == lvm_cond) return Sp += 2, Ip = r ? Ip + 3 : Ip[2].m, Continue();
   return Sp[1] = r ? putcharm(1) : nil, Sp++, Ip++, Continue(); }
- // Over a rank>=1 array, `=` is elementwise -> a 0/1 bool array (whole-array
- // equality is `(aall (= a b))`). Rank-0 boxes stay scalar (handled below).
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_eq);
+ // Over a rank>=1 array, `=` is WHOLE-ARRAY equality -> a boolean, like every other
+ // kind (arr_eq). The mask lives on `<` and `>`. Rank-0 boxes stay scalar (below).
+ if (arrp(a) || arrp(b)) {
+  bool r = arr_eq(g, a, b);
+  Sp[1] = r ? putcharm(1) : nil;
+  return Sp++, Ip++, Continue(); }
  // Complex equality: equal iff re and im match. A real operand reads as (r, 0),
  // so the cross-real case `(= (cplx 2 0) 2)` is true (numeric widening, like
  // `(= 2 2.0)`); a non-numeric operand makes it false. Done before the float

@@ -298,8 +298,11 @@
 ; the bits on a star too). masks are the everyday customer: `<` and `>` broadcast to 0/1,
 ; and & | ^ combine them;
 ; reduce net/prod/max/min/aall; contract inner (+.x) / outer (o.x); empty reductions = units.
-; = stays boolean off the mask: a non-numeric operand beside an array, or non-conformant
-; shapes, read 0 -- never the arithmetic ()-face (a point/text equals only itself).
+; `=` is a BOOLEAN on EVERY kind, arrays included -- whole-array equality: same shape, every
+; cell equal, comparing ACROSS TIERS the way (= 5 5.0) is true. it is NOT a mask; `<` and `>`
+; are the mask makers. (an elementwise `=` made a PREDICATE mean "some cell matched", so
+; (assert (@(2 4 7) = @(2 4 6))) passed.) a non-numeric operand beside an array, or a shape
+; mismatch, reads 0 -- never the arithmetic ()-face (a point/text equals only itself).
 ; THE WIDTH LAW -- love runs two arithmetic regimes, and the REPRESENTATION picks which,
 ; never the operator. the GROWING lane is a star's + - * // %: exact forever, climbing
 ; charm -> sun -> big. the WORD lane is fixed-width two's complement, and it is exactly
@@ -321,7 +324,9 @@
  (aall (@(2.0 3.0) = ((/ 1 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = (// @(7 11) 2))
  (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = (show @(10 20 30)))
  (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
- (0 = (@(1 2 3) = @(1 2))) (0 = ('sym = @(1 2 3))) (0 = ("ab" = @(1 2)))   ; = boolean off the mask
+ (0 = (@(1 2 3) = @(1 2))) (0 = ('sym = @(1 2 3))) (0 = ("ab" = @(1 2)))   ; a shape/kind mismatch is 0
+ (@(1 2 3) = @(1 2 3)) !(@(1 2 3) = @(1 2 9))                              ; whole-array `=`, a boolean
+ (@(1 2) = (gem-tray '(2) '(1.0 2.0)))                                     ; ...across tiers, like (= 5 5.0)
  (0 = (net (star-tray '(0) 0))) (1 = (prod (star-tray '(0) 0))) (aall (star-tray '(0) 0))
  ("@()" = (show (star-tray '(0) 0))) (0 = (tally ((star-tray '(0) 0) + 1)))
  (32 = (inner @(1 2 3) @(4 5 6))) (star-tray = (tier (outer @(1 2) @(3 4))))   ; +.x dot ; o.x outer

@@ -91,7 +91,7 @@
  !(sat (< (star-tray '(3) '(10 20 30)) 5))
  (aall (= (star-tray '(3) '(1 0 1)) (< (star-tray '(3) '(1 5 2)) 3)))
  (= star-tray (tier (< (star-tray '(3) 0) 1)))               ; bool array is z
- ; whole-array equality is (aall (= a b))
+ ; whole-array equality is just (= a b) -- `=` answers {0,1} on every kind
  (aall (= (star-tray '(2) '(5 6)) (star-tray '(2) '(5 6))))
  !(aall (= (star-tray '(2) '(5 6)) (star-tray '(2) '(5 7))))
 

@@ -149,10 +149,10 @@
  (= ~(11 2) (peep (+ @(10 20) ca-v) 0 0))        ; z @(10 20) lifts to (10,0)/(20,0)
  (= ~(23 4) (peep (+ ca-v @(10 20)) 1 0))
 
- ; --- `=` over complex arrays -> a 0/1 mask; orderings/% -> nil ---
- (= 1 (peep (= ca-v ca-v) 0 0))
- (= 0 (peep (= ca-v (twin-tray '(2) `(~(9 9) ~(3 4)))) 0 0))
- (aall (= ca-v ca-v))
+ ; --- `=` over complex arrays -> a BOOLEAN (whole-array); orderings/% -> nil ---
+ (= ca-v ca-v)
+ !(= ca-v (twin-tray '(2) `(~(9 9) ~(3 4))))    ; one cell differs -> false, never a mask
+ (aall (= ca-v ca-v))                           ; aall is the identity on the boolean
  (nil? (< ca-v ca-v))   (nil? (> ca-v ca-v))   (nil? (% ca-v ca-v))
 
  ; --- reductions: complex sum / product; max/min unordered -> nil ---

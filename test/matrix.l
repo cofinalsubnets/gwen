@@ -254,9 +254,10 @@
  (= (100 2) (100 2))                    ; bignum = bignum
  (= ~(2 0) 2)                                ; complex bridges a real (im 0)
  !(= ~(2 1) 2)                            ; ...but not when im != 0
- (aall (= @(1 2) @(1 2)))                     ; array = array -> mask
- (= 1 (peep (= @(1 9) @(1 8)) 0 0))            ; elementwise: first elem equal
- (= 0 (peep (= @(1 9) @(1 8)) 1 0))
+ (= @(1 2) @(1 2))                            ; array = array -> a BOOLEAN, like every kind
+ !(= @(1 9) @(1 8))                           ; ...one cell differs -> false, never a mask
+ !(= @(1 2) @(1 2 3))                         ; ...a shape mismatch is false too
+ (= @(1 2) (gem-tray '(2) '(1.0 2.0)))        ; ...cells compare across tiers, like (= 5 5.0)
  (= 'ef 'ef)   !(= 'ef 'gh)                ; symbol identity
  (= "ab" "ab")                                ; string structural eq
  (= '(1 2) '(1 2))                            ; list structural eq
