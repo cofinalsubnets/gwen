@@ -1009,19 +1009,37 @@
                 (<e = 'cast) (member? <>e '(uchar ushort uint ulong ullong))
                 (<e = 'bin) (uext? <>>e)
                 ())
+   ; the folder carries no types, so it reads them off the CASTS the literal
+   ; lane already emits (`1u` parses as ('cast 'uint ..)). that is enough to
+   ; answer the one question that matters here: is this expression's C type
+   ; `unsigned int`, whose `+ - * <<` must WRAP at 32 bits where a love integer
+   ; would just keep growing? it is, when a uint reaches the root and nothing
+   ; 64-bit does. everything else folds unbounded exactly as before -- signed
+   ; overflow is UB, and a 64-bit result already IS the word pattern.
+   (w64c? e) (? (! (two? e)) ()
+                (<e = 'cast) (member? <>e '(long ulong llong ullong))
+                (<e = 'bin) (|| (w64c? <>>e) (w64c? <>>>e))
+                (<e = 'un) (w64c? <>>e)
+                ())
+   (uic? e) (? (! (two? e)) ()
+               (<e = 'cast) (id? <>e 'uint)
+               (<e = 'bin) (|| (uic? <>>e) (uic? <>>>e))
+               (<e = 'un) (uic? <>>e)
+               ())
+   (u32w e v) (? (&& (uic? e) (! (w64c? e))) (& v 4294967295) v)
    (cfold e)
     (? (! (two? e)) ()
        (<e = 'num) <>e
        (<e = 'bin)
         (: op <>e a (cfold <>>e) b (cfold <>>>e)
            (? (|| (! (cint? a)) (! (cint? b))) ()
-              (op = '+) (a + b) (op = '-) (a - b) (op = '*) (* a b)
+              (op = '+) (u32w e (a + b)) (op = '-) (u32w e (a - b)) (op = '*) (u32w e (* a b))
               (op = '/) (? (b = 0) () (// a b)) (op = '%) (? (b = 0) () (a - (* (// a b) b)))
               (op = 'eq) (? (a = b) 1 0) (op = 'ne) (? (a = b) 0 1)
               (op = 'lt) (? (a < b) 1 0) (op = 'le) (? (a <= b) 1 0)
               (op = 'gt) (? (b < a) 1 0) (op = 'ge) (? (b <= a) 1 0)
               (op = '&) (& a b) (op = '|) (| a b) (op = '^) (^ a b)
-              (op = 'shl) (<< a b)
+              (op = 'shl) (u32w e (<< a b))
               (op = 'shr) (? (uext? <>>e) (& (>> a b) ((<< 1 (64 - b)) - 1)) (>> a b))
               ()))
        (<e = 'un)

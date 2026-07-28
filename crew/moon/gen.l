@@ -279,6 +279,28 @@
    (llt? ty) (|| (ty = 'llong) (ty = 'ullong))
    (ubin ta tb) (? (|| (llt? ta) (llt? tb)) (? (|| (usg? ta) (usg? tb)) 'ullong 'llong)
                    (|| (usg? ta) (usg? tb)) 'ulong 'long)
+   ; ..and `ubin` deliberately WIDENS: it answers the accumulator's type, not
+   ; C's. that is right for every op whose result cannot leave its operands'
+   ; range, and wrong for the four that CAN carry past bit 31 -- `+ - * <<` on
+   ; a 32-bit unsigned result, which C wraps and a 64-bit register does not.
+   ; (`& | ^` cannot carry; `/ %` cannot grow; a 64-bit result has nothing to
+   ; narrow to.) the usual arithmetic conversions promote everything narrower
+   ; than int TO int, so `unsigned int` is the only sub-word type a binary
+   ; result can wear. signed overflow is UB and the model lets a signed
+   ; intermediate ride 64-bit sign-extended, so only the unsigned face re-narrows
+   ; -- exactly what the unary lane has always done (see renar, its twin). on
+   ; t32 the accumulator IS 32 bits and the wrap is free, so this is 64-bit only.
+   ; the TYPE must be right for EVERY integer binary op, not just the carrying
+   ; four: `&` cannot carry, but if `(x & -x)` reads back as 'ulong then the
+   ; multiply wrapped around it sees a 64-bit operand and skips its own narrow.
+   ; so rbin corrects ubin's answer everywhere, and only + - * << also re-narrow.
+   (u32? g ty) (&& (! (t32? g)) (id? ty 'uint))
+   (u32bin? g ta tb)
+    (&& (! (|| (ptr? ta) (ptr? tb)))
+        (&& (! (|| (member? ta '(long ulong llong ullong))
+                   (member? tb '(long ulong llong ullong))))
+            (|| (u32? g ta) (u32? g tb))))
+   (rbin g ta tb) (? (u32bin? g ta tb) 'uint (ubin ta tb))
    (scc op unsg) (? (! unsg) op (op = 'lt) 'below (op = 'gt) 'above (op = 'le) 'be (op = 'ge) 'ae op)
    (rflip op) (? (op = 'lt) 'gt (op = 'gt) 'lt (op = 'le) 'ge (op = 'ge) 'le op)      ; MIRRORED (n < x reads x > n): constant-on-the-left
    (irop op) (? (op = '+) 'add (op = '-) 'sub (op = '*) 'imul                         ; C op -> IR mnemonic; not one of the six -> 'no
@@ -341,26 +363,30 @@
               'no)
           (member? op '(/ %))
            (? (! (&& (usg? aty) (pow2? n))) 'no
-              (op = '/) (? (n = 1) (mkv 'ulong rA (vfs av))
+              (op = '/) (? (n = 1) (mkv (rbin g aty aty) rA (vfs av))
                            (? (wr? g rA)
-                              (mkv 'ulong rA ((vfs av) + `(`('shr rA (lg2 n)))))
+                              (mkv (rbin g aty aty) rA ((vfs av) + `(`('shr rA (lg2 n)))))
                               (: rd (? wnt wnt (rdst g rA))   ; a borrowed home shifts a COPY (no 3-address shr)
-                                 (mkv 'ulong rd ((vfs av) + `(`('mov rd rA) `('shr rd (lg2 n))))))))
-              (n = 1) (mkv 'ulong 'r0 ((vdrop g av) + `(`('li 'r0 0))))
+                                 (mkv (rbin g aty aty) rd ((vfs av) + `(`('mov rd rA) `('shr rd (lg2 n))))))))
+              (n = 1) (mkv (rbin g aty aty) 'r0 ((vdrop g av) + `(`('li 'r0 0))))
               (! (immok g 'log (n - 1))) 'no             ; t32 has no simple AND-imm: materialize (the register path)
               (: rd (? wnt wnt (rdst g rA))
                  fs ((vfs av) + `(`('and rd rA (n - 1))))
                  _ (? (id? rd rA) () (rfree g rA))
-                 (mkv 'ulong rd fs)))
+                 (mkv (rbin g aty aty) rd fs)))
           (: sn (? (&& (ptr? aty) (member? op '(+ -))) (* n (tsz g <>aty)) n)
              iop (irop op)
              icl (? (member? op '(+ -)) 'addsub (op = '*) 'mul 'log)
+             ; the constant arrived as a bare number, its C type spent -- so it
+             ; reads as `int`, which is what an unsuffixed literal is. that makes
+             ; `uint op <lit>` a uint, and it must wrap (see u32bin? above).
+             u32 (&& (member? op '(+ - *)) (u32bin? g aty 'int))
              (? (id? iop 'no) 'no
                 (! (immok g icl sn)) 'no
-                (: rt (? (ptr? aty) aty (ubin aty 'long))
+                (: rt (? (ptr? aty) aty (rbin g aty 'int))
                    (? (&& (sn = 0) (member? op '(+ -))) (mkv rt rA (vfs av))
                       (: rd (? wnt wnt (rdst g rA))
-                         fs ((vfs av) + `(`(iop rd rA sn)))
+                         fs ((vfs av) + `(`(iop rd rA sn)) + (? u32 `(`('zx4 rd)) ()))
                          _ (? (id? rd rA) () (rfree g rA))
                          (mkv rt rd fs))))))))
    (ldop ty) (? (ty = 'char) 'ld1 (ty = 'short) 'ld2 (ty = 'int) 'ld4
@@ -2020,20 +2046,26 @@
                                                 (pshiftv g kind)))))))))))
           (member? op '(shl shr))
            (: uL (usg? (vty a))                             ; a `>>` on an unsigned left operand is LOGICAL (shr, not sar)
-              rt (? uL 'ulong 'long)                        ; the shift result keeps the left operand's signedness
+              ; `<<` is the fourth carrying op: a 32-bit unsigned left shifts
+              ; bits straight out of its type, so it re-narrows like + - * do.
+              ; `>>` never can -- a logical right shift of an already-canonical
+              ; value stays inside it -- so only shl asks.
+              u32 (&& (op = 'shl) (u32? g (vty a)))
+              (nar r) (? u32 `(`('zx4 r)) ())
+              rt (? (u32? g (vty a)) 'uint uL 'ulong 'long) ; the shift result keeps the left operand's type
               iop (? (op = 'shl) 'shl (? uL 'shr 'sar))
               vop (? (op = 'shl) 'shlv (? uL 'shrv 'sarv))
               (? (<rhs = 'num)
                   (? (wr? g (vreg a))
-                     (mkv rt (vreg a) ((vfs a) + `(`(iop (vreg a) <>rhs))))
+                     (mkv rt (vreg a) ((vfs a) + `(`(iop (vreg a) <>rhs)) + (nar (vreg a))))
                      (: rd (? wnt wnt (rdst g (vreg a)))    ; a borrowed home shifts a COPY (no 3-address shift)
-                        (mkv rt rd ((vfs a) + `(`('mov rd (vreg a)) `(iop rd <>rhs))))))
+                        (mkv rt rd ((vfs a) + `(`('mov rd (vreg a)) `(iop rd <>rhs)) + (nar rd)))))
                  (: b (cgexpr g env rhs)
                     (? (bad? b) 'bad
                        (mkv rt 'r0 (cat (tor0 g a)
                               (cat (spush 'r0)
                                (cat (tor0 g b) (cat `(`('mov 'r1 'r0)) (cat (spop 'r0)
-                                                `(`(vop 'r0 'r1))))))))))))
+                                                (`(`(vop 'r0 'r1)) + (nar 'r0))))))))))))
           (: ta (vty a)
              ; a constant right rides the immediate lane; a constant LEFT swaps
              ; over (commutative ops) or mirrors (relations, rflip) onto the right
@@ -2055,6 +2087,9 @@
                              pa (ptr? ta) pb (ptr? tb)
                              unsg (|| (usg? ta) (usg? tb))            ; either operand unsigned -> unsigned divide
                              cunsg (|| unsg (|| pa pb))               ; a POINTER relational compares UNSIGNED too (C: addresses are unsigned; matters where a pointer sets bit 63)
+                             u32 (u32bin? g ta tb)                    ; a 32-bit unsigned result wraps -- see u32bin?
+                             nar (? u32 `(`('zx4 'r0)) ())            ; the shuttle always lands in r0 (back)
+                             nty (? u32 'uint 'long)
                              (? (&& (t32? g) (&& (! (|| pa pb)) (|| (llt? ta) (llt? tb))))
                                  ; the PAIR shuttle: both sides widen to r0:r1, left pops to r2:r3;
                                  ; +,-,* and the logicals combine 3-address through the carry family,
@@ -2127,7 +2162,7 @@
                                              (mkv tb 'r0 (cat mid `(`('leax 'r0 'r0 'r1 sz 0))))
                                              (mkv tb 'r0 (cat mid (cat (? (1 < sz) (imby g 'r1 sz) ())
                                                       (`(`('add 'r1 'r1 'r0)) + back))))))
-                                    (mkv 'long 'r0 (mid + `(`('add 'r1 'r1 'r0)) + back)))
+                                    (mkv nty 'r0 (mid + `(`('add 'r1 'r1 'r0)) + back + nar)))
                                 (op = '-)
                                  (? (&& pa pb)
                                      (? ((tsz g <>ta) = (tsz g <>tb))
@@ -2146,13 +2181,15 @@
                                                              (imby g 'r0 (tsz g <>ta)) ())
                                                       (`(`('sub 'r1 'r1 'r0)) + back))))
                                     pb 'bad
-                                    (mkv 'long 'r0 (mid + `(`('sub 'r1 'r1 'r0)) + back)))
+                                    (mkv nty 'r0 (mid + `(`('sub 'r1 'r1 'r0)) + back + nar)))
                                 (: tail (? (member? op '(* & | ^)) `(`((irop op) 'r1 'r1 'r0))
                                            (op = '/) `(`((? unsg 'udiv 'div) 'r1 'r1 'r0))
                                            (op = '%) `(`((? unsg 'urem 'rem) 'r1 'r1 'r0 'r3))
                                            'bad)
+                                   m32 (&& u32 (op = '*))              ; only the multiply here can carry
                                    (? (! (bad? tail))
-                                      (mkv (ubin ta tb) 'r0 (mid + tail + back))
+                                      (mkv (rbin g ta tb) 'r0
+                                           (mid + tail + back + (? m32 nar ())))
                                       (member? op '(eq ne lt le gt ge))
                                        (mkv 'long 'r0 (mid + `(`('cmp 'r1 'r0) `('set (scc op cunsg) 'r0))))
                                       'bad))))
@@ -2220,12 +2257,13 @@
                                         (member? op '(+ - * & | ^))
                                          (: iop2 (irop op)
                                             rd (? (&& wnt (! (id? wnt rB))) wnt (rdst g rA))
+                                            u32 (&& (member? op '(+ - *)) (u32bin? g ta tb))
                                             ; holo reorders a commutative rd==rb; sub CANNOT (alias-dst) --
                                             ; a borrowed left + dry pool can land rd on rB's r0
                                             (? (&& (op = '-) (id? rd rB)) (shut ())
-                                               (: fs (pre + `(`(iop2 rd rA rB)))
+                                               (: fs (pre + `(`(iop2 rd rA rB)) + (? u32 `(`('zx4 rd)) ()))
                                                   _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
-                                                  (mkv (ubin ta tb) rd fs))))
+                                                  (mkv (rbin g ta tb) rd fs))))
                                         (shut ())))))))))))))
 
    ; r3 (rbx) is CALLEE-SAVED under SysV and gen leans on it (callr park, the
