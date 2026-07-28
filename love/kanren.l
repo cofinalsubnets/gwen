@@ -61,10 +61,6 @@
           (pins d 1 (\ A B (coin d (\ s (s_plus ((load A) s) ((load B) s)))))
                   2 (\ A B (coin d (\ s (s_star ((load A) s) (load B)))))))
    rel (coin g-die))                     ; wrap a goal as a ring element
-(:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 <x `('\ s n m y `(m `(x2 s))))))  ; delay a goal (inverse-eta)
-(:: 'et (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_star (a s) b)) a b)) x r))))   ; conj of goals
-(:: 'vel (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_plus (a s) (b s))) a b)) x r)))) ; disj of goals
-(:: '\\ (\ a (link (link '\ a) (map (\ a `(var `('\ a))) (init a)))))                             ; lambda w/ fresh logic vars
 (: === (\ u v (rel (est u v))))                       ; the relation's infix unify -- and it needs no
 ; row in prel's `operators`: that table holds only the EXCEPTIONS, and any all-punct head is already
 ; infix-dyadic at house grip. (It did pin one while this lived in prel. A post-egg layer could not
@@ -84,3 +80,15 @@
    s_plus (from 'kanren 's_plus)
    s_star (from 'kanren 's_star))
 (: === (from 'kanren '===))
+
+; the GOAL LANGUAGE re-declares below the seal, for the same reason the values
+; above re-pin: `::` now writes the head layer's macro table, so defined inside
+; the module these four would stay private -- and et/vel/\\/zz are how you WRITE
+; a kanren program, public surface, not internals. down here the head is orth, so
+; they land where every consumer reads them bare. they must follow the value
+; re-pins: their expansions emit var/s_plus/s_star into the CALLER's scope (the
+; emit law), and those names have to be reachable there.
+(:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 <x `('\ s n m y `(m `(x2 s))))))  ; delay a goal (inverse-eta)
+(:: 'et (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_star (a s) b)) a b)) x r))))   ; conj of goals
+(:: 'vel (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_plus (a s) (b s))) a b)) x r)))) ; disj of goals
+(:: '\\ (\ a (link (link '\ a) (map (\ a `(var `('\ a))) (init a)))))                             ; lambda w/ fresh logic vars

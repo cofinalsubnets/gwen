@@ -14,7 +14,6 @@
    (co f x y) (f y x)                ; co: the argument-transpose (so `co compose` reads as reverse-compose)
    flip co                           ; flip stays an alias for co (minimize the blast)
    sat saturate)                     ; `saturate` is the canonical name now (the `$` sigil factors to it); `sat` is the short alias
-(: macros (peep book 0 0))
 (: : () ? () \ ())
 (: pi 3.141592653589793
    tau (* 2 pi) ;; no infix here
@@ -32,7 +31,12 @@
    ; last; every verb takes an operand (love has no nullary fns -- fire with the unit).
    ; enter: push a fresh layer as the head, stashing the pre-enter chain AND the name under the
    ; reserved CHARM key 31337 (a charm can never collide with a name); (enter ()) is anonymous.
-   (enter nm) (: F (tablet 0) _ (pin F 31337 (link (books ()) nm)) _ (setbooks (link F (books ()))) ())
+   ; enter: a fresh layer, and it gets its OWN MACRO TABLE (the nil key -- `()` and
+   ; the charm 0 are the same word, so this is love.c's book[nil] slot). every book
+   ; carries its macros; macroget already walks the chain's macro slots and skips a
+   ; layer without one, so that walk finally has something to find.
+   (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (books ()) nm))
+                 _ (setbooks (link F (books ()))) ())
    ; use: splice a registered module just BELOW the head -- its names resolve on the walk but never
    ; shadow yours. a book value splices directly; a missing name scares 'no-module, since a silent
    ; ()-splice would be a silent no-op.
@@ -79,7 +83,30 @@
 ; X link; cap/cup -- the chain's two projections, the matched pair the string diagrams bend
 ; (lineage: cap/cup <- cap/cbp <- car/cdr) -- and the caap..cuuup compounds above are the
 ; primitives; the older names are gone.
-(: (:: a b) (pin macros a b)
+; ::  defines a macro in THE HEAD LAYER's table -- the book you are writing into,
+; the same one a plain `:` would defglob to. no boot special case is wanted or
+; needed: during boot the head IS orth, so prel's own macros and uu's defn/defq/axm
+; land there because that is where they are being written; after run_program pushes
+; the session layer they land there; inside a module they stay in the module. it
+; used to pin a tablet CAPTURED from orth at prel's own compile (and then mopped),
+; so `::` could only ever write the base -- a macro defined inside a sealed module
+; escaped to everyone, and two modules defining one name clobbered each other with
+; the winner decided by load order. the (tablet 0) fallback is for a layer built
+; before this rule existed; enter makes one now.
+(: ; macros: look a macro up across the LAYER CHAIN -- the love twin of love.c's
+   ; macroget, and it has to stay in step with it. each book carries its own table
+   ; at the nil key; a layer without one is skipped; 0 is the no-macro answer. it
+   ; used to BE the table -- one tablet captured from orth at prel's own compile --
+   ; which is why a macro could only ever be global.
+   ; ⚠ prefix-only, nifs only: this is the PRE-OPERATORS ZONE (no infix, and `!`
+   ; is an unbound nom until opfix exists) -- so nil?, not !.
+   (macros k) (: (go c) (? (nil? (two? c)) 0
+                           (: m (peep (cap c) 0 ())
+                              (? (tablet? m) (: v (peep m k 0) (? v v (go (cup c))))
+                                 (go (cup c)))))
+                 (go (books ())))
+   (:: a b) (: F (cap (books ())) m (peep F 0 ())
+               (pin (? (tablet? m) m (: t (tablet 0) _ (pin F 0 t) t)) a b))
    putc (put out)
    puts (say out)
    (putn n) (putbn out n 10)
@@ -839,7 +866,7 @@
     (: h (cap x) (?
       (id? h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
       (id? h ':) (wl v (cup x) (cat (ln (cup x)) bnd) u dm)
-      (: m (? (nom? h) (peep macros h 0) 0) (? (&& m (nil? (member? h bnd))) (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
+      (: m (? (nom? h) (macros h) 0) (? (&& m (nil? (member? h bnd))) (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
    (wl v bs bnd u dm) (?
     (atom? bs) 0
     (atom? (cup bs)) (w v (cap bs) bnd u dm)
@@ -865,7 +892,7 @@
     (: h (cap x) (?
       (id? h '\) (? (atom? (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r) (cat (cap r) bnd)))))))
       (id? h ':) (: ns (ln (cup x)) (link ': (subl (rmc cs ns) (cup x) (cat ns bnd))))
-      (: m (? (nom? h) (peep macros h 0) 0) (? (&& m (nil? (member? h bnd))) (sub cs (m (cup x)) bnd) (map (\ e (sub cs e bnd)) x))))))
+      (: m (? (nom? h) (macros h) 0) (? (&& m (nil? (member? h bnd))) (sub cs (m (cup x)) bnd) (map (\ e (sub cs e bnd)) x))))))
    (subl cs bs bnd) (?
     (atom? bs) bs
     (atom? (cup bs)) (list (sub cs (cap bs) bnd))
