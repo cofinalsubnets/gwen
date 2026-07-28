@@ -52,6 +52,7 @@ installs = \
   $d/bin/$(BIN) \
   $d/bin/ai \
   $d/bin/kore \
+  $d/bin/seed \
   $d/bin/mooncc \
   $d/bin/moonfmt \
   $d/bin/cook \
@@ -79,7 +80,7 @@ installs = \
 # manpath. a real PREFIX (a distro) skips these.
 ifeq ($(PREFIX),.love/)
 compat = $(DESTDIR)/.local
-binnames = $(BIN) ai kore mooncc moonfmt cook papel kiosko ain lux bao
+binnames = $(BIN) ai kore seed mooncc moonfmt cook papel kiosko ain lux bao
 installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
   $(compat)/share/man/man1/$(BIN).1 $(compat)/share/man/man1/cook.1
 $(compat)/bin/%: $d/bin/%
@@ -130,9 +131,15 @@ $d/lib/liblove.so: $(glibc_ho)/liblove.so
 	@echo CP	$(abspath $@)
 	@install -D -m 755 -s $< $@
 
+# UNSTRIPPED, deliberately: binutils strip relayouts by section headers, and the
+# mooncc/holo ELF's truth is its segments -- the stripped copy SEGFAULTS at boot
+# (cook's from-scratch nest found it; the make/cook nest diff never ran what it
+# laid). stripping would also drop the symbol table holo lays on purpose (nm and
+# gdb read it). the symtab costs ~2% of a baked binary; a kore/holo stripper
+# that speaks our own layout is the open splinter if that ever matters.
 $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 	@echo CP	$(abspath $@)
-	@install -D -m 755 -s $< $@
+	@install -D -m 755 $< $@
 # compat: `ai` was the name from 2026-06-15 until the reversion to `love`. A
 # script on a user's disk carrying `#!/usr/bin/env -S ai -l` keeps working.
 # (Unclaimed in Debian and the Arch repos as of 2026-07; the AUR's terminal-ai
@@ -140,10 +147,8 @@ $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 $d/bin/ai: $d/bin/$(BIN)
 	@echo LN	$(abspath $@)
 	@ln -sf $(BIN) $@
-# the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, so the
-# stripped install keeps it; strip removes only the symbol table -- .text/.rodata vaddrs are
-# unchanged, so the image's lvm-table indices and base-delta still resolve, and a bad match
-# just falls back to a normal egg boot).
+# the boot image travels INSIDE the binary (.image is an allocated PROGBITS
+# section), so the plain-copy install keeps the ~4ms wake.
 
 # cook: the build tool (crew/cook/cook.l) installed as an executable `cook` on PATH.
 # Its `#!/usr/bin/env -S love -l` shebang re-execs the installed `love` to load it,
@@ -200,6 +205,15 @@ $d/bin/kore: $(korefiles)
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN)'; sed 's|^#!/usr/bin/env -S love|#!/usr/bin/env -S $(BIN)|' $(korefiles); } > $@
+	@chmod 755 $@
+
+# seed: the patch-set vcs -- its own catted script (out/host/seed's shape; the
+# sources carry no shebangs, so the interpreter line then the plain cat). its
+# SEAT fires on the installed name, the same as the build-tree script's.
+$d/bin/seed: $(seedfiles)
+	@echo AI	$(abspath $@)
+	@install -d $(dir $@)
+	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $(seedfiles); } > $@
 	@chmod 755 $@
 
 # mooncc: the C compiler, ITS OWN app (doc/moon.md). The installed bin is a WAKE SHIM:

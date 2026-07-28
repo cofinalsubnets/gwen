@@ -231,6 +231,7 @@ $(moon_d)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 mksys_l = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
 $(ho)/.mksys-cat.l: $(mksys_l)
 	@echo AI	$@
+	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@echo MOON	$@

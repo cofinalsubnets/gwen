@@ -167,6 +167,15 @@ test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/
 .PHONY: test_nest
 test_nest: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc.image
 	@sh test/gate/nest.sh $(ho) $m
+# the dist artifact (self-host rung 3): test_dist smokes the verb rail on the
+# baked one-file binary (seconds; test_all); test_up runs the WHOLE download
+# door -- origin recorded, kiosko serving it, `love up` cooking a scratch nest
+# from source -- and is OPT-IN (minutes, the moon-userland shape).
+.PHONY: test_dist test_up
+test_dist: out/dist/love-x86_64
+	@sh test/gate/dist.sh smoke out/dist/love-x86_64
+test_up: out/dist/love-x86_64
+	@sh test/gate/dist.sh up out/dist/love-x86_64
 # The editor (crew/vi/): the pure modal engine's laws (no tty -- vstep driven
 # byte by byte), then scripted end-to-end passes through the `kore vi` face over a
 # pipe (keys off stdin, frames onto a captured stdout, :wq writes) -- driven through

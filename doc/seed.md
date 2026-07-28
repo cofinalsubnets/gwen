@@ -112,6 +112,16 @@ design**, not a rule in force: the collapse is worth wanting, and the smell to
 watch for is "install" or "upgrade" turning into an irreducible verb rather than
 a composition. Decide what install is *first*.
 
+**Settled 2026-07-28 (self-host rung 3).** Install is `sync` + `cook install`:
+binaries go in the `~/.love` nest, `make install`'s layout owns them, and the
+unit of distribution is a `.seed/` store any static host serves. The
+composition lives *outside* seed's verb set — `love up [URL]`
+(crew/seed/up.l, a verb of the dist artifact's rail, not of seed) syncs
+`~/.love/src` and cook-installs the nest; run again, it is the upgrade. That
+install stayed a composition of `sync` and a build is the withdrawn rule
+holding after all — it just needed the build side (cook-native install,
+rung 1) to exist first. Gate: test/gate/dist.sh (`make test_up`).
+
 ## the primitives
 
 | verb | does | vcs hat | distro hat |
@@ -134,9 +144,10 @@ exchange isn't.
 ## the front-doors (sugar, not primitives)
 
 - **clone** = `sync` from empty
-
-(**install** and **upgrade** were listed here as `sync` + a build. They are out
-of scope until the build side is designed — see the note above.)
+- **install** and **upgrade** = `sync` + `cook install`, one composition for
+  both: `love up` (see the settlement note above). `love down` is its twin —
+  the nest and its `~/.local` links removed, with seed refusing for unrecorded
+  work in `~/.love/src`.
 
 These are named compositions for humans, deliberately *not* new verbs. That they
 compose is the proof the collapse held.

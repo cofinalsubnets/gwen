@@ -41,6 +41,7 @@ moonfiles = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/x64.l
 # the program name, so the argv[0]-symlink dispatch (`diff` -> kore) still lands.
 out/host$(hsuf)/.kore-cat.l: $(korefiles)
 	@echo AI	$(abspath $@)
+	@mkdir -p $(dir $@)
 	@cat $(korefiles) > $@
 out/host$(hsuf)/kore: out/host$(hsuf)/kore.image
 	@echo AI	$(abspath $@)
@@ -51,6 +52,7 @@ out/host$(hsuf)/kore: out/host$(hsuf)/kore.image
 	@chmod 755 $@
 out/host$(hsuf)/.mooncc-cat.l: $(moonfiles)
 	@echo AI	$(abspath $@)
+	@mkdir -p $(dir $@)
 	@cat $(moonfiles) > $@
 out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
 	@echo AI	$(abspath $@)
@@ -63,6 +65,7 @@ out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
 seedfiles = crew/kore/text.l crew/kore/diff.l crew/seed/merge.l crew/seed/http.l crew/seed/seed.l
 out/host$(hsuf)/seed: $(seedfiles)
 	@echo AI	$(abspath $@)
+	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $(seedfiles); } > $@
 	@chmod 755 $@
 # the mooncc image: the compiler baked WARM (the live bake, doc/snapshot.md). The
@@ -87,3 +90,37 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 $(ho)/kore.image: $(ho)/.kore-cat.l $m
 	@echo AI	$(abspath $@)
 	@$m -l $(ho)/.kore-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+
+# ==== dist: the ONE artifact (self-host rung 3) ====
+# out/dist/love-x86_64 is the download door whole: the default love (mooncc-built,
+# static PIE, nolibc) re-baked with the crew warm -- cook + kore (vi and ain ride
+# its cat) + mooncc (all five backends) + seed + kiosko -- and crew/seed/up.l's
+# verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
+# and cook-installs the nest; `love seed|cook|kore|kiosko|mooncc ..` are the same
+# binary being multi-call. the bake rides --bake's own lane (main.c's
+# LOVE_BAKE_LOAD evals the cat ahead of the cache-empty + seal), so the artifact
+# is the default binary with a bigger image -- no session layer, same sealing.
+# member order is the scope: kore's floor first, asbook before the backends
+# (defbackend mutates the spliced holo), every main before kore.l's applet
+# table, up.l LAST so the verbs close over the lot. DIST_ORIGIN pins the
+# default `love up` origin URL ahead of up.l (unset: up asks for a URL).
+distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
+            crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l \
+            crew/kore/diff.l tools/ain.l crew/cook/cook.l crew/kore/asbook.l \
+            crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
+            crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
+            crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
+            crew/moon/gen.l crew/moon/moon.l crew/kore/kore.l crew/seed/merge.l \
+            crew/seed/http.l crew/seed/seed.l crew/kiosko/kiosko.l crew/seed/up.l
+DIST_ORIGIN ?=
+out/dist/.dist-cat.l: $(distfiles)
+	@echo AI	$(abspath $@)
+	@mkdir -p out/dist
+	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
+out/dist/love-x86_64: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
+	@echo DIST	$(abspath $@)
+	@cp $(ho)/love $@
+	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ --bake
+	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
+.PHONY: dist
+dist: out/dist/love-x86_64

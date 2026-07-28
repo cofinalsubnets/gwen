@@ -30,6 +30,14 @@ make -s install DESTDIR="$T/A/" > /dev/null       || fail "make install"
 "$love" -l crew/cook/cook.l -f Makefile install DESTDIR="$T/B/" > /dev/null \
                                                   || fail "cook install"
 
+# the nest ANSWERS: run what was laid, on both boot paths (image wake + egg).
+# a stripped mooncc/holo ELF once segfaulted here while the A/B trees compared
+# EQUAL -- both lanes stripped it the same way. never only diff what you can run.
+env -u LOVE_NO_IMAGE "$T/A/.love/bin/love" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' \
+                                                  || fail "the installed love does not answer (wake)"
+LOVE_NO_IMAGE=1 "$T/A/.love/bin/love" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' \
+                                                  || fail "the installed love does not answer (egg)"
+
 shape "$T/A" > "$T/sa"; shape "$T/B" > "$T/sb"
 cmp -s "$T/sa" "$T/sb"                            || fail "A vs B: entries/types/modes differ"
 links "$T/A" "$T/A" > "$T/la"; links "$T/B" "$T/B" > "$T/lb"
@@ -43,12 +51,13 @@ for t in install sed ln cat chmod mkdir tr; do ln -sf "$(pwd)/$ho/kore" "$K/$t";
 PATH="$(pwd)/$K:$PATH" "$love" -l crew/cook/cook.l -f Makefile install DESTDIR="$T/C/" \
   > /dev/null 2> "$T/cerr"                        || { cat "$T/cerr"; fail "cook install (kore lane)"; }
 
-# C's only licensed deviation: the -s targets land unstripped (bin/ai is the same
-# binary seen through its symlink -- diff -r follows links). everything else must
-# match B byte for byte, and the -s pair must equal the build artifacts.
+# C's only licensed deviation: kore's install -s lands liblove.so unstripped
+# (bin/love installs unstripped in EVERY lane now -- binutils strip breaks the
+# mooncc/holo ELF, see mk/install.mk). everything else must match B byte for
+# byte, and both loves must equal the build artifact.
 diff -r "$T/B" "$T/C" > "$T/bc" 2>&1
-grep -v -e 'bin/love differ' -e 'bin/ai differ' -e 'liblove\.so differ' "$T/bc" | grep -q . \
-  && { cat "$T/bc"; fail "B vs C: differ beyond the -s targets"; }
+grep -v -e 'liblove\.so differ' "$T/bc" | grep -q . \
+  && { cat "$T/bc"; fail "B vs C: differ beyond liblove.so"; }
 cmp -s "$ho/love" "$T/C/.love/bin/love"           || fail "C: bin/love is not the unstripped binary"
 cmp -s "$ho/liblove.so" "$T/C/.love/lib/liblove.so" || fail "C: liblove.so is not the unstripped library"
 links "$T/B" "$T/B" > "$T/lb2"; links "$T/C" "$T/C" > "$T/lc"

@@ -86,7 +86,10 @@
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
 ;   parallel: lux (the X11 window manager, crew/lux/), inle (the freestanding kernel, port/inle/),
-;   seed (the patch-set vcs, crew/seed/ + host/hash.c -- doc/seed.md, `make test_seed`), moon (the C
+;   seed (the patch-set vcs, crew/seed/ + host/hash.c -- doc/seed.md, `make test_seed`; crew/seed/up.l
+;   is the dist artifact's up/down verbs + verb table -- `make dist` bakes out/dist/love-x86_64, the
+;   one-file download door, gated by test_dist (smoke, in test_all) + test_up (the whole door,
+;   opt-in)), moon (the C
 ;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`), rune (the symbolic algebra engine, crew/rune/ -- exact multivariate polys +
 ;   Q[x]/(m) on the q coin; polys STRIKE AS COINS (die + - *, net-mode 1: !p is "zero poly");

@@ -529,6 +529,7 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'bao)"                                       // loading prel.l ITSELF misses every prel fn its loader uses.
     "(use 'kanren)"                                    // kanren before post, as the host boots: post's overlay half
     "(use 'post)"                                      //   reads unify/ufail bare; post serves revcat/parse/bake
+    "(: verbs ())"                                     // the CLI's verb rail reads `verbs`: bound-empty = no verbs, quietly
     );
     return ai_evals_(g, cli); }
   g = ai_strof(g, tests0);                            // the baked corpus, as a string
@@ -620,6 +621,21 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // sees it -- the knob governs a session, not the baked artifact.
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, "(: ev (glaze 'base-ev) natjit ())");
 #endif
+  // the ARGV[0] DOOR of the verb rail (love/cli.l has the positional door): when the
+  // binary was invoked under a verb's name -- a `seed` symlink onto the dist artifact
+  // -- that verb fires on the args, even at argc 1 (a bare `seed` wants its usage),
+  // which is exactly where the cli never runs. `verbs` is pinned () by every boot, so
+  // a plain binary walks an empty table and falls straight through; only a bake whose
+  // cat rebound the table (crew/seed/up.l) ever dispatches here.
+  g = ai_evals_(g,
+    "(: s (cap cmdline) n (tally s)"
+    "   (sx w) (: m (tally w)"                       // s ends in w, whole or at a / boundary
+    "      (? (< n m) ()"
+    "         (: (go i) (? (= i m) 1 (? (= (s (+ (- n m) i)) (w i)) (go (+ i 1)) ()))"
+    "            (? (go 0) (? (= n m) 1 (= (s (- (- n m) 1)) 47)) ()))))"
+    "   (fnd t) (? (two? t) (? (sx (cap (cap t))) (cap (cup (cap t))) (fnd (cup t))) ())"
+    "   f (fnd verbs)"
+    "   (? f (: _ (f (cup cmdline)) (quit 0)) 0))");
   if (argp) return ai_evals_(g, cli);
   if (!replp) return ai_evals_(g, "(reads in)");         // non-tty stdin: the stream shell (love/bao.l) drinks the in port
   return ai_evals_(g, "((from 'bao 'bao) 0)"); }                      // a tty: bao (the baked shell core) is DEFINE-ONLY -- installs
@@ -700,7 +716,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
                                                          //   test_glaze/test_raw_arm64 recipes), mooncc's cat joins ALL of them
   g = ai_evals_(g,
     "(use 'bao)"                                         // the shell core: loaded, registered, spliced (read/reads/welp/wrap bare)
-  );
+    "(: verbs ())"                                       // the CLI's verb rail reads `verbs`: bound-EMPTY here, so a plain binary
+  );                                                     //   answers no verbs quietly; a dist bake's cat rebinds it with the table
 #ifdef AI_GLAZED
   g = ai_evals_(g,
       "(use 'holo)"
@@ -713,6 +730,19 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #endif
 
   if (bake) {                                            // --bake: snapshot the post-warm heap, then exit
+    // LOVE_BAKE_LOAD: read-eval one more .l file before the snapshot -- the dist
+    // artifact's door (crew/build.mk): the crew cats + the verb table go in WARM,
+    // ahead of the same cache-empty + seal every bake gets, and the image still
+    // carries no session layer. a raise in the cat is helpless here (no shell
+    // help), so a broken cat is a LOUD failed bake, never a quiet artifact.
+    char const *xtra = getenv("LOVE_BAKE_LOAD");
+    if (xtra) {
+      char xb[4352];
+      snprintf(xb, sizeof xb,
+        "(: q (open \"%s\" \"r\")"
+        " (? q (reads q) (: _ (say err \"love: --bake: cannot open %s\") _ (put err 10) (quit 1))))",
+        xtra, xtra);
+      g = ai_evals_(g, xb); }
 #ifdef AI_GLAZED
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
     // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots

@@ -286,6 +286,31 @@
    _ (ok ".SHELLFLAGS -ec: a failing middle line stops the recipe"
          (&& (has ec "O3-one") (! (has ec "O3-three"))))
 
+   ; ------------------------------------------------------- multi-target rules
+   ; `a b: src` is ONE rule registered under BOTH targets (the Makefile's
+   ; love/love.cand link rule is this shape). the target span runs to the colon,
+   ; BLANKS INCLUDED -- the old span stopped at whitespace, so the whole line
+   ; classified 'skip and every multi-target rule silently vanished; a built
+   ; tree masked it, since an existing output reads as a source leaf. asking
+   ; cook for the SECOND target is what proves the registration went wide.
+   _ (sh (+ "echo x > " (D "/msrc")))
+   _ (run-cook (mk `((+ (D "/m1.out ") (+ (D "/m2.out: ") (D "/msrc")))
+                     (+ "\techo M4 > " (D "/m1.out"))
+                     (+ "\techo M4 > " (D "/m2.out"))))
+               (D "/m2.out"))
+   m2 (: r (sh (+ "cat " (D "/m2.out"))) (? (two? r) (cup r) ""))
+   _ (ok "a multi-target rule registers every target" (has m2 "M4"))
+
+   ; --------------------------------------------------- modifiers via expansion
+   ; make reads the @/-/+ prefixes AFTER expansion (the `Q = @` verbose-build
+   ; idiom; mk/lib.mk's lcat_h leads with @ from inside the variable) -- an
+   ; expanded @ silences the line, it never reaches the shell as a word.
+   qm (run-cook (mk `("Q = @"
+                      "all:"
+                      "\t$(Q)echo M5[quiet]")) "all")
+   _ (ok "an expanded @ is a modifier, not a word"
+         (&& (has qm "M5[quiet]") (! (has qm "@echo"))))
+
    ; ---------------------------------------------------------------- summary
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))

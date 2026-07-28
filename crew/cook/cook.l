@@ -275,7 +275,12 @@
    (digitp c)   (&& (48 <= c) (c <= 57))
    (alphap c)   (|| (&& (65 <= c) (c <= 90)) (&& (97 <= c) (c <= 122)))
    (namech c)   (|| (alphap c) (|| (digitp c) (|| (c = 95) (c = 46))))
-   (notcolon c) (&& (! (chws c)) (! (c = 58)))
+   ; notcolon ADMITS whitespace: a rule's target text runs to the first colon,
+   ; and `a.out b.out: src` is one rule with two targets -- excluding blanks here
+   ; made every multi-target rule classify as 'skip, SILENTLY, and the built
+   ; tree masked it (an existing output is a source leaf). assignP runs first,
+   ; so assignment lines never reach this span.
+   (notcolon c) (! (c = 58))
    (anyc c)     1
    (ltrim s) (: i ((: (g j) (? (&& (j < (tally s)) (chws (s j))) (g (1 + j)) j)) 0)
                (snip s i (tally s)))
@@ -589,7 +594,10 @@
    (: _ (pins as "@" t "<" (? (two? pr) <pr "") "^" (join " " pr) "*" stem)
        _ (pins as "@D" (? (nom? t) "." (dslash t)) "@F" (? (nom? t) (show t) (fnotdir t)))
        fl (shflags as)
-       cmds (map (\ raw (expand >>raw as 0)) raws)
+       ; make reads the @/-/+ modifiers AFTER expansion too (the $(Q)-as-@
+       ; verbose-build idiom; mk/lib.mk's lcat_h leads with @ from inside the
+       ; variable) -- so re-strip the EXPANDED line and fold its flags in.
+       cmds (map (\ raw (>>(parse-mods (expand >>raw as 0)))) raws)
        ; .ONESHELL: the WHOLE recipe rides ONE shell, so a recipe reads as a script
        ; instead of a run of \-joined lines. make's rule -- the @/- modifiers of the
        ; FIRST line govern the lot. ⚠ with plain -c only the LAST line's status is
@@ -603,12 +611,13 @@
           (: r0 <raws
              (? (peep emitp 0 0) `(((`("sh") + fl) + `((join "\n" cmds))))
                 `((\ _ (sh-line <r0 <>r0 fl (join "\n" cmds))))))
-          (map (\ raw (: cmd (expand >>raw as 0)
+          (map (\ raw (: e (parse-mods (expand >>raw as 0))
+                          sil (|| <raw <e) ign (|| <>raw <>e) cmd >>e
                           (? (execp cmd)
                              (? (peep emitp 0 0) (link 'exec `("sh" "-c" cmd))
                                 (\ _ (do-exec `("sh" "-c" cmd))))
                              (peep emitp 0 0) ((`("sh") + fl) + `(cmd))
-                             (\ _ (sh-line <raw <>raw fl cmd))))) raws)))
+                             (\ _ (sh-line sil ign fl cmd))))) raws)))
 
    ; -- conditionals & assignment ops over the variable table `as` --
    (unquote-str s) (? (&& ((tally s) >= 2) (|| ((s 0) = 34) ((s 0) = 39))) (snip s 1 ((tally s) - 1)) s)

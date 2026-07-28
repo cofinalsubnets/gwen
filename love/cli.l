@@ -7,7 +7,16 @@
 ;   --                  end of options: the next arg is the program, the rest are its args
 ;   <file>              load the file (a program)
 ; with no program (no -e, no file), read-eval stdin to EOF. Loaded by main.c when args are
-; present. `pre` handles leading -l preloads + -v/-h and returns (kind . rest); the global
+; present.
+;
+; the VERB RAIL: `verbs` -- ((NAME FN) ..), pinned () by every boot and rebound
+; with the table by an artifact's bake (the dist lane's cat, crew/seed/up.l) --
+; turns a first positional NAME into (FN args). a verb wins over a same-named
+; file; `love -- up` and `love ./up` still read the file. the table's OTHER door
+; -- argv[0] naming a verb (a `seed` symlink onto the artifact) -- lives in
+; main.c's run_program: it must fire even at argc 1, where this file never runs.
+;
+; `pre` handles leading -l preloads + -v/-h and returns (kind . rest); the global
 ; argv is then rebound (top-level (: argv ..) DEFGLOB -- book is mopped post-egg, so a
 ; pin/peep on it is a no-op; defglob writes g->book directly) to the program's view
 ; (program . args). cli.l is compiled by c0 BEFORE -l loads prel, so the always-run path
@@ -50,18 +59,23 @@
                (+ "  --                end of options; the rest are files\n"
                   "with no program (no -e, no FILE), read-eval stdin to EOF.")))))))
     (need h t) (? (two? t) 0 (: _ (say err (+ "love: " (+ h " needs an argument"))) (quit 2)))
-    (pre a) (? (two? a)                              ; -> (kind . rest): 'eval code.args / 'file prog.args / 'stdin
+    (vfind h t) (? (two? t)                          ; the verb table walk: NAME -> FN, () on a miss
+                   (? (= h (cap (cap t))) (cap (cup (cap t))) (vfind h (cup t)))
+                   ())
+    (pre a) (? (two? a)                              ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin
      (: h (cap a) t (cup a) (?
       (| (= h "-l") (= h "--load"))    (: _ (need h t) _ (load1 (cap t)) (pre (cup t)))
       (| (= h "-v") (= h "--version")) (version 0)
       (| (= h "-h") (= h "--help"))    (usage 0)
       (| (= h "-e") (= h "--eval"))    (: _ (need h t) (link 'eval t))
       (= h "--")                        (? (two? t) (link 'file t) (link 'stdin ()))
-      (link 'file a)))                  ; a positional file is the program
+      (: f (vfind h verbs)              ; a positional: a baked verb first, else the program file
+         (? f (link 'verb (link f a)) (link 'file a)))))
      (link 'stdin ()))
     p (pre (cup argv))                  ; runs -l preloads + -v/-h; the program kind
-    av (? (= (cap p) 'eval) (cup (cup p)) (cup p))   ; the program's view of argv
-    run (\ _ (? (= (cap p) 'eval) (eval1 (caup p))   ; the dispatch thunk: -e code / a file / stdin
+    av (? (| (= (cap p) 'eval) (= (cap p) 'verb)) (cup (cup p)) (cup p))   ; the program's view of argv
+    run (\ _ (? (= (cap p) 'eval) (eval1 (caup p))   ; the dispatch thunk: -e code / a verb / a file / stdin
+              (= (cap p) 'verb) (: _ ((caup p) (cup (cuup p))) (quit 0))   ; FN takes the args after the name
               (= (cap p) 'file) (load1 (caup p))
               (rdev in)))
     (link p (link av (link run ()))))   ; the body: return (parsed program-argv run)
