@@ -176,7 +176,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); each tail-jumps to its apply handler
- lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_books, lvm_setbooks, lvm_mods,
+ lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -809,7 +809,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define nifs(_) \
  _(nif_clock, "clock", s1(lvm_clock)) _(nif_nclock, "nclock", s1(lvm_nclock)) _(nif_please, "please", s1(lvm_please))\
  _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
- _(nif_seal, "seal-hooks", s1(lvm_seal)) _(nif_books, "books", s1(lvm_books)) _(nif_setbooks, "setbooks", s1(lvm_setbooks)) _(nif_mods, "mods", s1(lvm_mods))\
+ _(nif_seal, "seal-hooks", s1(lvm_seal)) _(nif_books, "books", s1(lvm_books)) _(nif_setbooks, "setbooks", s1(lvm_setbooks)) _(nif_mods, "mods", s1(lvm_mods)) _(nif_lib, "lib", s1(lvm_lib))\
  _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
  _(nif_compose, "compose", compose_thread) _(nif_stack, "stack", stack_thread)\
  _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
@@ -941,6 +941,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->scare_a = g->scare_b = nil;        // v0..end is GC-walked: raw 0 is not a value
  g->hot_numap = g->hot_opfix = nil;   // unsealed: hot_hook traps until (seal-hooks) fills them
  g->mods = nil;                       // the module registry: lazily created by the first (mods _) read
+ g->lib = nil;                        // the source library: same lazy shape ((lib _) / ai_lib_)
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
  g->minor = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
  // generational setup: a remembered set (old objects holding a young pointer) + the MAJOR pool (a
@@ -5726,6 +5727,53 @@ lvm(lvm_mods) {
   Hp += nb + 3;
   g->mods = (word) h; }
  return Sp[0] = g->mods, Ip++, Continue(); }
+// (lib _): the SOURCE LIBRARY book (g->lib) -- name -> source text, read by `use`'s miss
+// lane (the loader) so a frontend can bake loadable modules with no filesystem. Filled
+// from C by ai_lib_ below. The same lazy-singleton shape as mods, for the same reason.
+lvm(lvm_lib) {
+ if (g->lib == nil) {
+  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
+  Have(nb + 3);
+  union u *b = map_fill_back((union u*) Hp, cap), *h = (union u*) (Hp + nb);
+  h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
+  Hp += nb + 3;
+  g->lib = (word) h; }
+ return Sp[0] = g->lib, Ip++, Continue(); }
+// register name -> source text in the library, from C (a frontend's boot). The love-side
+// twin of ai_defn: push the singleton, the value (the source, as a string), the interned
+// name; ai_mapput leaves the map on the stack, dropped here.
+struct ai *ai_lib_(struct ai *g, char const *nm, char const *src) {
+ if (!ai_ok(g)) return g;
+ if (ai_core_of(g)->lib == nil) {
+  if (!ai_ok(g = map_new(g))) return g;                // pushes the fresh map
+  ai_core_of(g)->lib = *ai_core_of(g)->sp;
+  ai_core_of(g)->sp++; }
+ g = ai_push(g, 1, ai_core_of(g)->lib);
+ g = ai_mapput(intern(ai_strof(ai_strof(g, src), nm)));
+ if (ai_ok(g)) ai_core_of(g)->sp++;
+ return g; }
+// push a fresh writable LAYER as the head of the book chain -- the runtime's own
+// enter, now that the nom is mopped at birth: the session's scope, every defglob's
+// target. no stash and no macro slot (`::` creates one on demand); reads walk down
+// as ever, so the base is read-only for the plainest reason -- never the head.
+struct ai *ai_layer_(struct ai *g) {
+ if (!ai_ok(g)) return g;
+ if (!ai_ok(g = map_new(g))) return g;                 // sp[0] = the fresh layer map
+ g = gxr(ai_push(g, 1, ai_core_of(g)->book));          // (layer . chain)
+ if (!ai_ok(g)) return g;
+ ai_core_of(g)->book = *ai_core_of(g)->sp;
+ return ai_pop(g, 1); }
+// drop the link just below the head -- the runtime's own bare leave, the exact
+// inverse of one `use`: boot brackets a non-ambient module load (holo) with
+// ai_evals_("(use 'x)") .. ai_unsplice_. nothing below the head is a no-op.
+struct ai *ai_unsplice_(struct ai *g) {
+ if (!ai_ok(g)) return g;
+ word bk = ai_core_of(g)->book;
+ if (!chainp(B(bk))) return g;
+ g = gxl(ai_push(g, 2, A(bk), B(B(bk))));              // (head . below-the-neighbour)
+ if (!ai_ok(g)) return g;
+ ai_core_of(g)->book = *ai_core_of(g)->sp;
+ return ai_pop(g, 1); }
 op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : nil)  // the SURFACE chainp = a real compound list (formp): a named symbol is (name . mint) but counts as an atom
 lvm(lvm_link) {
  Have(Width(struct ai_chain));

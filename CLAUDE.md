@@ -88,7 +88,7 @@
 ;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
 ;   `make test_raw`), rune (the symbolic algebra engine, crew/rune/ -- exact multivariate polys +
 ;   Q[x]/(m) on the q coin; polys STRIKE AS COINS (die + - *, net-mode 1: !p is "zero poly");
-;   a REGISTERED MODULE like holo, sealed at its own foot; its gate test/host/rune.l verifies the
+;   a REGISTERED MODULE like holo, loaded by (use 'rune); its gate test/host/rune.l verifies the
 ;   2026 jacobian-conjecture disproof whole), and the DOCUMENT chain, three modules deep: lapiz (the
 ;   markdown/html/roff lens, crew/lapiz/ -- one AST, a reader+shower per surface; it writes the man
 ;   pages), papel (the static site, crew/papel/ -- lapiz for the rendering, cook for the staleness,
@@ -97,26 +97,35 @@
 ;   add nifs through the host/*.c glob + AI_NIF (no core edit); love.c/love.h/host/main.c are CORE -- an
 ;   app session needing a core change stops and asks the core thread, never reaches in. the runnable
 ;   ones install on PATH via `make install`.
-; * MODULES: a baked service keeps its names off the global book. the REGISTRY model (holo, the
-;   pilot): a new top-level book on struct ai (g->mods, the lazy-singleton `mods` nif) maps name ->
-;   module-book. the chain model: TOP is always the defglob target; under it a use-stack; orth last.
-;   (enter 'holo) opens a named scope (crew/holo/holo.l) -- binds land in the layer, mutually
-;   visible; (leave ()) unwinds and REGISTERS the layer as the module, always at the FOOT OF A REAL
-;   FILE: rune/cook/bao/kanren/seed at their own foot, holo after its last backend
-;   (crew/holo/thumb1.l). a gate that wants the internals JOINS the sealed module -- (enter ())
-;   (use 'seed), the shape a backend uses. a consumer
-;   either (use 'holo) -- splice BELOW the top, bare names resolve on the walk but never shadow
-;   yours, cleared by a bare (leave ()) (main.c brackets the glaze load this way; a cat leads with
-;   it, crew/kore/asbook.l) -- or (from 'holo 'assemble), the OPAQUE accessor: currying reaches a
-;   member, 'keys introspects, a missing module answers () (the presence guard), (from ()) lists the
-;   registry. a test cat just never seals and reads the open layer bare; a backend joins a SEALED
-;   holo at runtime: (enter ()) (use 'holo) <backend.l> (leave ()). the older MARK/SWEEP model
-;   remains for the glaze (love/glaze/export.l diffs (names ()) across glaze-mark/glaze-load; the
-;   surface is (glaze 'loopinfo)). baked consumers FOLD their bare refs at their own compile (the
-;   capture law); post-boot STREAMS fold nothing -- they use/from at their head ((names ()) fell
-;   820 -> 322; an app never leans on another module's leaks -- lux learned this). the laws live in
-;   spec.l's modules section. ⚠ a body-less-`:` binding whose name COLLIDES with a module nom (a
-;   `holo` helper) leaks and CLOBBERS the binding -- the one bug that walled the holo conversion.
+; * MODULES: a baked service keeps its names off the global book, and the LAYERS ARE THE
+;   RUNTIME'S -- no user-facing enter/leave (mopped at birth; C twins ai_layer_/ai_unsplice_
+;   serve the boot). the chain model: TOP is always the defglob target; under it a use-stack;
+;   orth last, read-only because it is never the head again -- run_program pushes the SESSION
+;   layer (ai_layer_), so a script, a repl line and a whole catted app land there, one load =
+;   one layer. `use` IS the loader: (use 'x) splices a registered module just below the top
+;   (bare names resolve on the walk, never shadow yours), and on a MISS it loads x -- from the
+;   SOURCE LIBRARY (g->lib, name -> text, a frontend bakes entries with ai_lib_ -- that is how
+;   every boot assembles now: register, then "(use 'rng)" etc., the concatenation retired), or
+;   from lib/<x>.l (top-level lib/, symlinks into crew/ + love/) -- one fresh layer, the leave
+;   inside the loader registers it, then the splice. a STRING is an explicit path (module named
+;   by its basename -- papel's seat-relative want); a SLASHED name ('holo/x64, one symbol)
+;   INCLUDES lib/x/y.l into the current head, no layer, no registration (lib/seed.l assembles
+;   seed's stack this way). module files carry NO brackets; their macros land in their own
+;   book's macro slot and RIDE THE SPLICE (macroget walks the chain), which also retires the
+;   emit-law re-pins -- kanren's zz/et/vel/\\ and var/s_plus/s_star all arrive by (use 'kanren),
+;   and the boot splices keep rng/kanren/bao ambient so the corpus reads rand/unify/reads bare.
+;   a tool's SEAT reads its main BARE (whichever layer holds the file's binds is the head at
+;   its foot); cook/kiosko/papel self-splice presence-guarded. (from 'holo 'assemble) is the
+;   OPAQUE accessor: currying reaches a member, 'keys introspects, a missing module answers ()
+;   (the presence guard), (from ()) lists the registry. holo registers NON-ambient ((use 'holo)
+;   then ai_unsplice_); a cross backend joins by (use 'holo) + its text (defbackend mutates
+;   holo's table -- mooncc's cat does all five). the older MARK/SWEEP model remains for the
+;   glaze (love/glaze/export.l diffs (names ()) across glaze-mark/glaze-load; the surface is
+;   (glaze 'loopinfo)). baked consumers FOLD their bare refs at their own compile (the capture
+;   law) -- so LOAD ORDER IS THE SCOPE: a use must precede its readers' compiles. the laws live
+;   in spec.l's modules section + test/host/loader.l. ⚠ a body-less-`:` binding whose name
+;   COLLIDES with a module nom (a `holo` helper) leaks and CLOBBERS the binding -- the one bug
+;   that walled the holo conversion.
 
 ; --- vocabulary & house style --- the words here are a VOCABULARY -- never "terminology" or
 ; "nomenclature"; a vocabulary is living and chosen, warm not clinical. the style is COZY:
@@ -257,14 +266,17 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; immortal. the love/ layer (prel ev bao cli egg) drips into every frontend: the host (out/host/love), the
 ; freestanding kernel (x86_64/aarch64), and wasm. PREL IS THE LANGUAGE AND STAYS MINIMAL -- a library
 ; is its OWN love/*.l and each frontend includes the ones it wants. drop a .l in love/ and mk/lib.mk
-; lcats it to out/lib/<name>.h automatically -- but the BOOT STRING is hand-assembled per frontend,
-; and there are FIVE sites, not three: host/main.c (twice -- the egg lane, and love0's own with the
+; lcats it to out/lib/<name>.h automatically -- the BASE layers (coin the ring/monoid, q the
+; rationals, post, uu) still ride each frontend's hand-assembled boot string, but a MODULE
+; (rng, kanren, bao, holo, rune ..) rides the SOURCE LIBRARY instead: the frontend registers
+; the lcat'd constant (ai_lib_) and its boot text says (use 'x) -- see the MODULES bullet.
+; the embed sites, SIX of them: host/main.c (twice -- the egg lane, and love0's own with the
 ; sed-wrapped <name>0.h twins, which need a gl0_h entry), wasm/host.c (its OWN boot string, easy to
-; miss -- the corpus caught it), port/inle/kmain.c, port/playdate/main.c. Each wants a header dep too
-; (host/build.mk, wasm/Makefile, port/inle/kernel.mk, port/playdate/Makefile). the four so far: coin
-; (ring/monoid over the C coin lane), rng (the random stream), q (rationals), kanren (unification) --
-; all four ride the host, love0, wasm and the K_TEST kernel (the corpus asserts on each); the playdate
-; workbench takes only q + kanren, what rune stands on; a shipped kernel takes none. ⚠ a layer may
+; miss -- the corpus caught it), port/inle/kmain.c, port/playdate/main.c, port/mps2/main.c (the
+; teensy/nucleo baker). Each wants a header dep too (host/build.mk, wasm/Makefile,
+; port/inle/kernel.mk, port/playdate/Makefile). coin/rng/q/kanren ride the host, love0, wasm and
+; the K_TEST kernel (the corpus asserts on each); the playdate workbench takes q + kanren + rune,
+; what the cas stands on; a shipped kernel takes bao alone. ⚠ a layer may
 ; only lean on what SURVIVES BIRTH -- the egg mops its internals just before the hatch, so wrapping a
 ; mopped nif means taking it off egg.l's mop list (rng did: turn/turnf stay now, since the
 ; wrapper that owned them shipped out of prel). ⚠ and a post-egg layer cannot add an

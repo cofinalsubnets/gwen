@@ -36,7 +36,7 @@ default: virt
 $(R)/$(o)/start.o: mkstart.l $(R)/crew/holo/riscv.l $(R)/crew/holo/obj.l $(R)/crew/holo/elf.l $(lv)
 	@echo START	$@
 	@mkdir -p $(R)/$(o)
-	@cd $(R) && { echo "(enter ()) (use 'holo)"; cat crew/holo/riscv.l; echo "(leave ())"; \
+	@cd $(R) && { echo "(use 'holo)"; cat crew/holo/riscv.l; \
 	  cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l port/virt/mkstart.l; \
 	  echo '(mkstart "$(o)/start.o")'; } | out/host/love
 

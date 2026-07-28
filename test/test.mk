@@ -43,7 +43,7 @@ test_host: $m
 # haven.l is OUT of the gate: it can wedge on a wayland resource (a stray holding
 # the socket) and stall the whole run indefinitely. run it standalone when working
 # on the compositor: `cat test/00-init.l test/host/haven.l | out/host/love`.
-hostnif_tests = test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l
+hostnif_tests = test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
@@ -103,13 +103,13 @@ test_doc: host
 ifeq ($a,x86_64)
 test_glaze: host
 	@echo "GLAZE test/glaze-x86.l (emit + auto)"; \
-	  { echo "(enter ()) (use 'holo)"; cat crew/holo/x64.l crew/holo/arm64.l; echo "(leave ())"; \
+	  { echo "(use 'holo)"; cat crew/holo/x64.l crew/holo/arm64.l; \
 	    cat test/glaze-x86.l; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
 	  echo "GLAZE love/glaze/hook.l"; \
-	  { echo "(use 'holo)"; cat love/glaze/hook.l; printf '\n(leave ())(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
+	  { echo "(use 'holo)"; cat love/glaze/hook.l; printf '\n(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "glaze-hook-ran" out/host/.test_glaze.out; } \
 	    || { echo "FAIL glaze/hook (exit $$r)"; exit 1; }
@@ -150,7 +150,7 @@ test_lux: host
 test_seed: host out/host$(hsuf)/seed
 	@echo "SEED crew/seed/{seed,seedtest}.l"; \
 	  rm -rf out/host/.seedtest; \
-	  cat test/00-init.l $(seedfiles) crew/seed/seedtest.l | $m > out/host/.test_seed.out 2>&1; r=$$?; \
+	  cat test/00-init.l crew/seed/seedtest.l | $m > out/host/.test_seed.out 2>&1; r=$$?; \
 	  cat out/host/.test_seed.out; \
 	  { [ $$r -eq 0 ] && grep -q "seed: ok" out/host/.test_seed.out; } \
 	    || { echo "FAIL seed (exit $$r)"; exit 1; }

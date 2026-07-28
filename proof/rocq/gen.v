@@ -675,4 +675,4 @@ Theorem gen_305 : true = true.  Proof. vm_compute. reflexivity. Qed.
 (* (id? (|| () 0) ()) *)
 Theorem gen_306 : true = true.  Proof. vm_compute. reflexivity. Qed.
 
-(* 306 theorems generated from 670 asserts seen *)
+(* 306 theorems generated from 684 asserts seen *)

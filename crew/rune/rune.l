@@ -19,12 +19,11 @@
 ; the field is given not by m but by XD -- x^d rewritten as an element --
 ; so reduction folds top powers down with no division anywhere.
 
-; the module scope opens here: every binding below lands in this layer,
-; mutually visible by bare name; the (leave ()) at the foot of this file
-; closes it, which REGISTERS it as the module `rune` -- a consumer either
-; (use 'rune) and reads bare, or reaches one member through the accessor:
-; (from 'rune 'deriv).
-(enter 'rune)
+; NO BRACKETS HERE: the runtime supplies the layer. a consumer says
+; (use 'rune) -- the loader finds this file (lib/rune.l on the host, the
+; baked source a device registered) and loads it as one fresh layer, leave
+; registers it, the splice serves the bare names; or reaches one member
+; through the accessor, (from 'rune 'deriv).
 
 ; --- the polynomial ring ---------------------------------------------------
 (: (mco m) <m
@@ -1067,6 +1066,3 @@
                                  (vshift (vscale (vlast v) xd) (tally v - (tally xd + 1))))))
    (kmul xd a b) (vrem xd (vmul a b))
    (knum d c) (vpad `((q c 1)) d))
-
-; the module scope closes here -- the layer is REGISTERED as `rune`.
-(leave ())

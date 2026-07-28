@@ -22,10 +22,7 @@
 ; (⚠ through STDIN, as the gate does -- `love test/host/papel.l` would seat a file
 ;  whose basename is papel.l, and papel's own seat would fire on it.)
 
-(reads (open "crew/lapiz/lapiz.l" "r"))     ; ..each seals itself at its foot
-(reads (open "crew/cook/cook.l" "r"))
-(reads (open "crew/papel/papel.l" "r"))
-(use 'papel)
+(use 'papel)                                ; the loader: lib/papel.l -- papel wants lapiz + cook itself
 
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
 (assert

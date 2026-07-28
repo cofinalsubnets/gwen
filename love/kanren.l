@@ -10,11 +10,14 @@
 ; tree, and `walk_star` mu-marks a back-edge to reify it without looping. a goal
 ; is (\ s stream); est/=== unify, + interleaves (disjunction), * binds
 ; (conjunction) -- so a relation is a polynomial in unifications (see the ring).
-; the module span opens here: a REGISTERED MODULE (the holo/rune pattern) -- enter
-; opens the layer, the foot seals it into the registry and re-pins the public few
-; on the global book. internals answer to (from 'kanren ..) -- subst, walk, query,
-; the dict kit; (from 'kanren 'keys) introspects.
-(enter 'kanren)
+; a REGISTERED MODULE with NO BRACKETS: the runtime supplies the layer -- a
+; frontend registers this source (ai_lib_) and its boot says (use 'kanren),
+; which loads, registers and splices in one motion. the splice serves every
+; bare consumer (unify/ufail?/var/s_plus/s_star/===, and the goal macros'
+; expansions); internals answer to (from 'kanren ..) -- subst, walk, query,
+; the dict kit; (from 'kanren 'keys) introspects. love/post.l's overlay half
+; reads subst through the registry, so kanren must be REGISTERED before post
+; evals (boot order, not just splice order).
 (: (dict_has d k) (: (loop k ks vs) (? ks (? (= k <ks) vs (loop k >ks >vs))) (loop k <d >d))
    (dict_set d k v) ((k >< <d) >< v >< >d)
    empty_dict '(())
@@ -61,26 +64,16 @@
           (pins d 1 (\ A B (coin d (\ s (s_plus ((load A) s) ((load B) s)))))
                   2 (\ A B (coin d (\ s (s_star ((load A) s) (load B)))))))
    rel (coin g-die))                     ; wrap a goal as a ring element
-(:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 <x `('\ s n m y `(m `(x2 s))))))  ; delay a goal (inverse-eta)
-(:: 'et (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_star (a s) b)) a b)) x r))))   ; conj of goals
-(:: 'vel (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_plus (a s) (b s))) a b)) x r)))) ; disj of goals
-(:: '\\ (\ a (link (link '\ a) (map (\ a `(var `('\ a))) (init a)))))                             ; lambda w/ fresh logic vars
 (: === (\ u v (rel (est u v))))                       ; the relation's infix unify -- and it needs no
 ; row in prel's `operators`: that table holds only the EXCEPTIONS, and any all-punct head is already
 ; infix-dyadic at house grip. (It did pin one while this lived in prel. A post-egg layer could not
 ; anyway -- `operators` is mopped at birth, so the operator GRAMMAR closes when the egg hatches.)
-; the kanren MODULE BOUNDARY: (leave ()) seals the layer into the registry -- every
-; binding since (enter 'kanren) folds off the global book, reachable as (from 'kanren
-; 'walk) etc. then the PUBLIC keepers re-pin globally: `unify` (the compiler-grade
-; core) with its ufail/ufail? contract, and the names the goal macros + the ===
-; operator EMIT into user code (var, s_plus, s_star, ===) -- the emit law, the same
-; reason the egg keeps spread/link/mono (post.l's overlay reads unify/ufail?/var
-; bare too). re-evals (the egg warm) re-register: idempotent.
-(leave ())
-(: unify (from 'kanren 'unify)
-   ufail (from 'kanren 'ufail)
-   ufail? (from 'kanren 'ufail?)
-   var (from 'kanren 'var)
-   s_plus (from 'kanren 's_plus)
-   s_star (from 'kanren 's_star))
-(: === (from 'kanren '===))
+; the GOAL LANGUAGE: `::` writes the head layer's macro table, so these four
+; live in kanren's own book -- and a consumer's (use 'kanren) splice carries
+; them: macroget walks the chain's macro slots, so et/vel/\\/zz expand at the
+; caller, and the names their expansions EMIT (var, s_plus, s_star) resolve
+; down the same splice (the emit law, served by the walk instead of re-pins).
+(:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 <x `('\ s n m y `(m `(x2 s))))))  ; delay a goal (inverse-eta)
+(:: 'et (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_star (a s) b)) a b)) x r))))   ; conj of goals
+(:: 'vel (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_plus (a s) (b s))) a b)) x r)))) ; disj of goals
+(:: '\\ (\ a (link (link '\ a) (map (\ a `(var `('\ a))) (init a)))))                             ; lambda w/ fresh logic vars

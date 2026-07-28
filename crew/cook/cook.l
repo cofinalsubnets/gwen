@@ -42,13 +42,12 @@
 ; Cookfile, or a -f FILE) is love source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
 
-; cook is a REGISTERED MODULE: everything below binds in the `cook` layer, and the
-; foot seals it. only the seat (the very foot of this file) sits outside, so loading
-; this file adds NOTHING to the book -- a consumer reaches in with (use 'cook) or
-; (from 'cook 'recipe). before this, cook leaked 32 globals, `join` `date` `check`
-; `one` `span` `pick` among them -- and CLOBBERED `parse`, so a cat that put cook
-; ahead of another post.l consumer handed it cook's strict runner instead of the book.
-(enter 'cook)
+; NO BRACKETS HERE: the runtime supplies the layer. a module consumer says
+; (use 'cook) (lib/cook.l) or probes (from 'cook 'recipe); riding a cat (kore's),
+; everything binds in the cat's session layer instead -- never orth. before cook
+; was a module it leaked 32 globals into the base, `join` `date` `check` `one`
+; `span` `pick` among them -- and CLOBBERED `parse`, so a cat that put cook ahead
+; of another post.l consumer handed it cook's strict runner instead of the book.
 
 ; the combinators live in the `parse` MODULE book (love/post.l): bind the shared set.
 ; `pstrict` is post.l's `parse` (the strict runner that must consume the whole input);
@@ -861,7 +860,9 @@
    ; its bare (recipe ..) (cook-all 0) (ticket 0) only resolve on the module walk. one
    ; (use 'cook), at the one place that needs it -- a caller just needs the closure.
    (cook-main as)
-   (: _ (use 'cook)
+   (: _ (? (lit? (from 'cook)) (use 'cook) 0)   ; splice my REGISTERED self if I am one (the module
+                                                ; path); riding a cat, my names already walk -- the
+                                                ; presence guard keeps the loader out of it
       opt (parse-args as)
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)
@@ -893,10 +894,6 @@
 
    cook-main _)
 
-; seal the layer: the whole of cook is now off the book, reachable only as the
-; module. everything below this line is ordinary top-level love again.
-(leave ())
-
 ; the SEAT (tools/ain.l's shape): fire cook-main iff this very file -- or the
 ; installed `cook` symlink -- sits in the program seat of the real command line
 ; (positional program or a -l preload), taking the args AFTER the seat. cmdline
@@ -904,8 +901,8 @@
 ; orders; inside the multi-call `kore` nothing matches and kore's dispatcher calls
 ; cook-main itself. body-having: the seat machinery leaks nothing.
 ;
-; it sits OUTSIDE the layer, so it reaches cook-main the way any consumer does --
-; (from 'cook 'cook-main), the opaque accessor. cook-main splices the layer itself.
+; cook-main reads BARE: whichever layer holds this file's binds (the loader's, or
+; a cat's session) is still the head here. cook-main splices its registered self.
 (: (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
@@ -917,4 +914,4 @@
                (me? <a) (link 1 >a)
                ())
    s (seat >cmdline)
-   (? (two? s) ((from 'cook 'cook-main) >s) ()))
+   (? (two? s) (cook-main >s) ()))

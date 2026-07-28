@@ -78,9 +78,8 @@ done
 # sealed holo module and load its backend first -- the host bake carries only the
 # native one, where mooncc.image carries them all.
 { if [ -n "$backend" ]; then
-    echo "(enter ()) (use 'holo)"
+    echo "(use 'holo)"
     cat "$backend"
-    echo "(leave ())"
   fi
   cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l \
       crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l

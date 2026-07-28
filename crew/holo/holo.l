@@ -46,12 +46,14 @@
 ; ALU ops take a register or an immediate in the same slot with no syntax. the abstract register
 ; file is what makes the IR neutral: each backend maps r0..r14/sp onto its own encoding.
 
-; the module scope opens here: everything crew/holo/{holo,x64,arm64,thumb2}.l binds lands in this
-; layer, mutually visible by bare name; a (leave ()) after the last backend closes the layer, which REGISTERS it as
-; the module `holo` -- a consumer either (use 'holo) and reads bare, or probes one member through
-; the accessor: (from 'holo 'assemble). a test cat-stream simply never seals: the stream rides the
-; open layer and reads everything bare.
-(enter 'holo)
+; NO BRACKETS HERE: the runtime supplies the layer. a frontend registers this file
+; PLUS the backends it wants as ONE lib entry under 'holo (C string concatenation
+; at the ai_lib_ site -- the host takes its native backend, love0 takes x64+arm64),
+; and its boot says (use 'holo) then ai_unsplice_, so holo registers without staying
+; AMBIENT: a consumer either (use 'holo) and reads bare, or probes one member through
+; the accessor, (from 'holo 'assemble). a backend outside the entry joins at runtime
+; the same way every cat does: (use 'holo), then the backend text -- its defs land in
+; the caller's layer, and defbackend mutates holo's own table.
 
 (: ;; -- a 0-based list accessor (prel has none; `nth` is not bound -- it absorbs as the zero
    ;; point). instruction forms read their operands through this. --

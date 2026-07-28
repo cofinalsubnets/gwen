@@ -14,7 +14,6 @@
    (co f x y) (f y x)                ; co: the argument-transpose (so `co compose` reads as reverse-compose)
    flip co                           ; flip stays an alias for co (minimize the blast)
    sat saturate)                     ; `saturate` is the canonical name now (the `$` sigil factors to it); `sat` is the short alias
-(: macros (peep book 0 0))
 (: : () ? () \ ())
 (: pi 3.141592653589793
    tau (* 2 pi) ;; no infix here
@@ -27,13 +26,19 @@
    zero? nil?                                  ; zero? aliases nil? (the net-to-zero test)
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
-   (names _ ) (keys book)
    ; the scope-layer door (the abyss) + the MODULE REGISTRY (`mods`: g->mods, a lazy singleton
    ; tablet, name -> module-book). TOP is always the defglob target, under it a use-stack, orth
    ; last; every verb takes an operand (love has no nullary fns -- fire with the unit).
+   ; enter/leave are the RUNTIME'S: mopped at birth like books/setbooks, alive only inside the
+   ; loader's closures (and C's ai_layer_/ai_unsplice_ twins). use and from are the public face.
    ; enter: push a fresh layer as the head, stashing the pre-enter chain AND the name under the
    ; reserved CHARM key 31337 (a charm can never collide with a name); (enter ()) is anonymous.
-   (enter nm) (: F (tablet 0) _ (pin F 31337 (link (books ()) nm)) _ (setbooks (link F (books ()))) ())
+   ; enter: a fresh layer, and it gets its OWN MACRO TABLE (the nil key -- `()` and
+   ; the charm 0 are the same word, so this is love.c's book[nil] slot). every book
+   ; carries its macros; macroget already walks the chain's macro slots and skips a
+   ; layer without one, so that walk finally has something to find.
+   (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (books ()) nm))
+                 _ (setbooks (link F (books ()))) ())
    ; use: splice a registered module just BELOW the head -- its names resolve on the walk but never
    ; shadow yours. a book value splices directly; a missing name scares 'no-module, since a silent
    ; ()-splice would be a silent no-op.
@@ -41,12 +46,15 @@
                       (: r (peep (mods ()) m ()) (? (nil? r) (scare (\ no-module) m) r)))
                  (setbooks (link (cap (books ())) (link b (cup (books ()))))))
    ; leave: unwind to the pre-enter chain, REGISTER the layer under its name, answer the book. a
-   ; BARE leave (top never entered, so no charm) truncates to the head -- the use-stack clears.
+   ; BARE leave (top never entered, so no charm) pops whatever sits just below the head -- the
+   ; exact inverse of `use`, so a use .. leave pair brackets cleanly (the glaze load rides this).
+   ; with nothing below, a no-op. UNPAIRED it pops your downstairs neighbor whatever that is, so
+   ; a bare leave belongs only where a use put something there first.
    (leave _)  (: F (cap (books ())) s (peep F 31337 ())
                  (? (two? s)
                     (: _ (pull F 31337 0) _ (setbooks (cap s))
                        _ (? (nil? (cup s)) 0 (pin (mods ()) (cup s) F)) F)
-                    (setbooks (link F ()))))
+                    (setbooks (link F (cup (cup (books ())))))))
    ; from: an OPAQUE accessor over the module -- currying reaches a member, 'keys introspects,
    ; (from ()) lists the registry, a missing module answers () (the presence guard). the raw
    ; tablet stays closure-private.
@@ -80,7 +88,30 @@
 ; X link; cap/cup -- the chain's two projections, the matched pair the string diagrams bend
 ; (lineage: cap/cup <- cap/cbp <- car/cdr) -- and the caap..cuuup compounds above are the
 ; primitives; the older names are gone.
-(: (:: a b) (pin macros a b)
+; ::  defines a macro in THE HEAD LAYER's table -- the book you are writing into,
+; the same one a plain `:` would defglob to. no boot special case is wanted or
+; needed: during boot the head IS orth, so prel's own macros and uu's defn/defq/axm
+; land there because that is where they are being written; after run_program pushes
+; the session layer they land there; inside a module they stay in the module. it
+; used to pin a tablet CAPTURED from orth at prel's own compile (and then mopped),
+; so `::` could only ever write the base -- a macro defined inside a sealed module
+; escaped to everyone, and two modules defining one name clobbered each other with
+; the winner decided by load order. the (tablet 0) fallback is for a layer built
+; before this rule existed; enter makes one now.
+(: ; macros: look a macro up across the LAYER CHAIN -- the love twin of love.c's
+   ; macroget, and it has to stay in step with it. each book carries its own table
+   ; at the nil key; a layer without one is skipped; 0 is the no-macro answer. it
+   ; used to BE the table -- one tablet captured from orth at prel's own compile --
+   ; which is why a macro could only ever be global.
+   ; ⚠ prefix-only, nifs only: this is the PRE-OPERATORS ZONE (no infix, and `!`
+   ; is an unbound nom until opfix exists) -- so nil?, not !.
+   (macros k) (: (go c) (? (nil? (two? c)) 0
+                           (: m (peep (cap c) 0 ())
+                              (? (tablet? m) (: v (peep m k 0) (? v v (go (cup c))))
+                                 (go (cup c)))))
+                 (go (books ())))
+   (:: a b) (: F (cap (books ())) m (peep F 0 ())
+               (pin (? (tablet? m) m (: t (tablet 0) _ (pin F 0 t) t)) a b))
    putc (put out)
    puts (say out)
    (putn n) (putbn out n 10)
@@ -292,6 +323,19 @@
    (member? x l) (? (two? l) (? (= x (cap l)) 1 (member? x (cup l))) 0)   ; any of (= x); first-order so the glaze's point-= grammar closes it (auto.l re-declares this exact body)
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) ())
+   ; names: every nom VISIBLE from here -- the WHOLE layer chain, not just the
+   ; base. it used to be (keys book), which reads one map (orth) and so cannot
+   ; see anything defined inside a scope layer; ev.l's `feels` already walks the
+   ; chain this way. a nom in two layers is ONE name (the upper shadows on the
+   ; bookget walk), so fold through a tablet to dedup -- `pin` answers the
+   ; collection, which is what makes the fold read straight. lives down here, not
+   ; up with the other predicates, so catmap/foldl are bound when it compiles: a
+   ; forward reference would ride lvm_index and never fold.
+   ; ..and NOMS only: a layer's keys are not all names. orth carries its macro
+   ; table under the nil key (love.c's book[nil]), and a scope layer stashes its
+   ; unwind chain under a charm -- both were reported as "names", the first since
+   ; forever. `names` answers what you could WRITE, so the bookkeeping stays out.
+   (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ())))))
    (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1 (iota its array twin); a section of tally, off the `*` glyph -- monadic `*` is prod now
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
@@ -326,6 +370,51 @@
 (:: '?- (\ a (link '? (cat (cup a) (link (cap a) ())))))
 (:: '>>= (\ l (link (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
+
+; --- the loader: use-on-miss ------------------------------------------------
+; the `use` up top splices a REGISTERED module. down here -- where tap/map/jot
+; are bound -- it learns to LOAD one it doesn't have: source from the lib book
+; (name -> text, baked by a frontend via C's ai_lib_) or from lib/<name>.l (the
+; filesystem lane, riding the host's open nif -- captured off the base book by
+; peep, so a fs-less frontend holds () there and the lane just misses: it
+; degrades to the baked table). a load is ONE FRESH LAYER: enter, read-eval
+; every form (cli.l's
+; rdev shape -- the (ev 'ev r) indirection late-binds the evaluator), leave
+; registers, and the prior use splices what leave registered. a SLASHED name
+; ('holo/x64 -- one symbol) is an INCLUDE: its source evals into the CURRENT
+; head layer, no new layer, no registration -- the door for a module's own
+; subfiles, and for a backend joining a sealed holo. a STRING is an explicit
+; PATH: that file loads as a module named by its basename sans .l -- the door
+; for a tool that resolves its own siblings (papel's seat-relative want). the
+; prior use also keeps the miss scare: no source anywhere ends in its
+; 'no-module, carrying the name or the path.
+(: use
+   (: prior use
+      (rdev q) ((: (go e q) (: r (sound q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
+      (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
+      (mname s) (: n (tally s)
+                   b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)
+                   e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
+                   (intern (snip s b e)))
+      fsopen (peep book 'open ())      ; the host's open nif, read off the base book at prel
+                                       ; eval -- a peep, not a nom read, so a fs-less frontend
+                                       ; gets () here (no missing raise) and the lane just misses
+      (libsrc nm) (: s (peep (lib ()) nm ())
+                     (? (string? s) (tap (map s (jot (tally s))))
+                        (nil? fsopen) ()
+                        (fsopen (+ (+ "lib/" (string nm)) ".l") "r")))
+      (\ m (? (tablet? m) (prior m)
+              (string? m)
+              (: nm (mname m)
+                 (? (tablet? (peep (mods ()) nm ())) (prior nm)
+                    (: q (? (nil? fsopen) () (fsopen m "r"))
+                       (? (nil? q) (prior m)
+                          (: _ (enter nm) _ (rdev q) _ (leave ()) (prior nm))))))
+              (tablet? (peep (mods ()) m ())) (prior m)
+              (: q (libsrc m)
+                 (? (nil? q) (prior m)
+                    (slashy? (string m)) (: _ (rdev q) ())
+                    (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
 
 ; --- reader operators: the table + the opfix factor pass --------------------
 ; a SIGIL is a maximal all-punct token (the reader's lexer law); the reader
@@ -827,7 +916,7 @@
     (: h (cap x) (?
       (id? h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
       (id? h ':) (wl v (cup x) (cat (ln (cup x)) bnd) u dm)
-      (: m (? (nom? h) (peep macros h 0) 0) (? (&& m (nil? (member? h bnd))) (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
+      (: m (? (nom? h) (macros h) 0) (? (&& m (nil? (member? h bnd))) (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
    (wl v bs bnd u dm) (?
     (atom? bs) 0
     (atom? (cup bs)) (w v (cap bs) bnd u dm)
@@ -853,7 +942,7 @@
     (: h (cap x) (?
       (id? h '\) (? (atom? (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r) (cat (cap r) bnd)))))))
       (id? h ':) (: ns (ln (cup x)) (link ': (subl (rmc cs ns) (cup x) (cat ns bnd))))
-      (: m (? (nom? h) (peep macros h 0) 0) (? (&& m (nil? (member? h bnd))) (sub cs (m (cup x)) bnd) (map (\ e (sub cs e bnd)) x))))))
+      (: m (? (nom? h) (macros h) 0) (? (&& m (nil? (member? h bnd))) (sub cs (m (cup x)) bnd) (map (\ e (sub cs e bnd)) x))))))
    (subl cs bs bnd) (?
     (atom? bs) bs
     (atom? (cup bs)) (list (sub cs (cap bs) bnd))

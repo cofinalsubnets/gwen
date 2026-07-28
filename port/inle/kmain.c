@@ -541,6 +541,23 @@ void kmain(void) {
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
 #endif
+  // the module sources, name-keyed (see host/main.c): registered in the source
+  // library, loaded by `use` in the boot text below -- one layer per load, leave
+  // registers, the splice serves the bare names (the console editor reads bao's).
+  static char const src_bao[] =
+#include "bao.h"
+  ;
+  g = ai_lib_(g, "bao", src_bao);
+#ifdef K_TEST
+  static char const src_rng[] =
+#include "rng.h"
+  ;
+  static char const src_kanren[] =
+#include "kanren.h"
+  ;
+  g = ai_lib_(g, "rng", src_rng);
+  g = ai_lib_(g, "kanren", src_kanren);
+#endif
   // load the prel, then run the l read-eval-print loop. its line
   // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard
   // and serial input both arrive as ANSI escape sequences the l edev decodes.
@@ -552,12 +569,12 @@ void kmain(void) {
 #include "ev.h"
  ai_egg_post
 #include "uu.h"                                        // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files
-#include "bao.h"                                       //   drive it through the `uu` book on this target too
+ "(use 'bao)"                                          //   drive it through the `uu` book on this target too
 #ifdef K_TEST
 #include "coin.h"                                      // the optional library layers, test build ONLY: the corpus asserts on
-#include "rng.h"                                       //   coin, rng, q and kanren, a booting kernel wants none of them -- so
+ "(use 'rng)"                                          //   coin, rng, q and kanren, a booting kernel wants none of them -- so
 #include "q.h"                                         //   the shipped image carries no ring/monoid, no random stream, no
-#include "kanren.h"                                    //   rationals and no unifier (~65K of heap for the last two alone)
+ "(use 'kanren)"                                       //   rationals and no unifier (~65K of heap for the last two alone)
  // test build: drink the baked `tests` string (string -> charlist -> tap port)
  // through reads (love/bao.l) -- the same stream shell as the host's stdin runner.
  // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;

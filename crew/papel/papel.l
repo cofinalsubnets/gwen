@@ -33,19 +33,18 @@
 ; and doc/). OUT defaults to out/site. papel writes OUT/<name>.html per source, OUT/
 ; papel.css, and OUT/index.html -- the last only when no source is itself an index.md.
 
-(enter 'papel)
+; NO BRACKETS HERE: the runtime supplies the layer (a module consumer says
+; (use 'papel); a -l load rides the session layer, where the seat reads bare).
 
 ; --- the modules papel stands on ---------------------------------------------------------
-; papel reads its siblings ITSELF rather than being handed them: two tool files cannot both
+; papel loads its siblings ITSELF rather than being handed them: two tool files cannot both
 ; be -l'd, since each one's seat would fire on the other's command line, so the `papel`
 ; script -l's this file alone. the crew root comes off our own seat word, which means an
-; installed script pointing at the source tree finds its siblings wherever that tree is.
-; a module already registered (the gate, a host embedding) is left alone.
-;
-; this all happens INSIDE the layer, and reading a module from inside one is fine: enter/
-; leave nest, so lapiz's own (leave ()) closes lapiz and hands us back our own layer. it
-; also keeps these six names off the book -- `root` and `bn` are exactly the kind of name
-; a leak makes dangerous, and `want` is wanted again below for kiosko.
+; installed script pointing at the source tree finds its siblings wherever that tree is --
+; `want` hands the loader that PATH ((use "crew/lapiz/lapiz.l")), which loads it as a
+; module and splices it. a module already registered (the gate, a host embedding) is
+; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
+; they stay wherever this file's layer is -- never orth.
 (: (bn p)   (: n (tally p)
                (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
                (go 0 0))
@@ -62,10 +61,7 @@
    root (: me (findme >cmdline)
              tgt (? me (: r (readlink me) (? r r me)) ())
              (? tgt (up (dirof tgt)) "crew/"))                           ; crew/papel/papel.l -> crew/
-   (want nm f) (? (from nm) 1
-                  (: q (open (root + f) "r")
-                     (? q (: _ (reads q) 1)
-                        (: _ (scare 'papel ("papel wants the " + (show nm) + " module: cannot read " + root + f)) 0))))
+   (want nm f) (? (from nm) 1 (: _ (use (root + f)) 1))   ; loader miss = its scare, carrying the path
    _ (want 'lapiz "lapiz/lapiz.l")
    _ (want 'cook "cook/cook.l"))
 
@@ -356,7 +352,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
                 (quit 0))
    (need h r) (? (two? r) 0 (: _ (say err ("papel: " + h + " needs an argument")) _ (put err 10) (quit 2)))
    (papel-main as)
-   (: _ (use 'papel)
+   (: _ (? (lit? (from 'papel)) (use 'papel) 0)   ; splice my REGISTERED self if I am one (cook-main's
+                                                  ; guard); on a -l load my names already walk
       c (conf0 ())
       (loop ws) (? (! (two? ws)) 0
                    (: w <ws r >ws
@@ -393,12 +390,10 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 
    papel-main _)
 
-(leave ())
-
 ; the SEAT (cook's shape): fire papel-main iff this file -- or the installed `papel`
 ; script -- sits in the program seat of the real command line, on the args after it.
-; body-having, so the machinery leaks nothing; and it reaches papel-main the way any
-; consumer does, through the accessor.
+; body-having, so the machinery leaks nothing; papel-main reads BARE -- whichever
+; layer holds this file's binds is still the head here.
 (: (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
@@ -408,4 +403,4 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
                (me? <a) (link 1 >a)
                ())
    s (seat >cmdline)
-   (? (two? s) ((from 'papel 'papel-main) >s) ()))
+   (? (two? s) (papel-main >s) ()))
