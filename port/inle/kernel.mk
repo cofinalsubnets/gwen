@@ -7,10 +7,11 @@
 # ====================================================================
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
 # The inle kernel lives in port/inle/: arch-independent glue is kmain.c + k.h
-# there, per-arch code in port/inle/<a>/ (arch.c, *.S, *.lds). TWO boot doors:
-# x86_64 carries its own PVH bring-up (x86_64/boot.S -- `qemu -kernel`, no
-# bootloader/firmware, what test_kernel rides), and the Limine iso/hdd lanes
-# below serve the interactive run-* targets (framebuffer console) + aarch64.
+# there, per-arch code in port/inle/<a>/ (arch.c, *.S, *.lds). Each arch
+# carries its own `qemu -kernel` bring-up (x86_64/boot.S's PVH stub, what
+# test_kernel rides; aarch64/boot.S's EL1 MMU stub, what test_kernel_arm64
+# rides -- no bootloader/firmware on either), and the Limine iso/hdd lanes
+# below serve the interactive run-* targets (framebuffer console).
 # ====================================================================
 ko = out/free
 dl = out/dl
@@ -305,9 +306,9 @@ test_kernel_arm64:
 	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64 + a clang KCC)"
 else
 test_kernel_arm64: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.iso $(dl)/edk2-ovmf/ovmf-code-aarch64.fd
-	@echo TEST $(ko)/love-aarch64-test.iso "(serial, headless, TCG)"
-	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.iso $(dl)/edk2-ovmf/ovmf-code-aarch64.fd aarch64
+	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.elf
+	@echo TEST $(ko)/love-aarch64-test.elf "(serial, headless, TCG, -kernel)"
+	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
 endif
 
 # --- wasm headless test (wired into test_all; emcc + node) -----------------
