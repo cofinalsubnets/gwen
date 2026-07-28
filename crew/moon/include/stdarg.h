@@ -13,6 +13,13 @@
 #ifndef _CC_STDARG_H
 #define _CC_STDARG_H
 
+/* under a real gcc/clang (the freestanding kernel lane rides these headers too)
+ * the va_list type is the COMPILER'S: its __builtin_va_* insist on their own
+ * __va_list_tag, so the hand layouts below would be rejected, not just wrong.
+ * mooncc predefines neither __GNUC__ nor __clang__, so this forks clean. */
+#if defined(__GNUC__) || defined(__clang__)
+typedef __builtin_va_list va_list;
+#else
 #ifdef __aarch64__
 typedef struct {
   void *__stack;                 /* the next anonymous arg on the caller stack */
@@ -43,10 +50,15 @@ typedef struct {
 #endif
 
 typedef __va_list_tag va_list[1];
+#endif
 
 #define va_start(ap, last) __builtin_va_start(ap, last)
 #define va_arg(ap, type)   __builtin_va_arg(ap, type)
 #define va_end(ap)         __builtin_va_end(ap)
+#if defined(__GNUC__) || defined(__clang__)
+#define va_copy(dst, src)  __builtin_va_copy(dst, src)
+#else
 #define va_copy(dst, src)  ((dst)[0] = (src)[0])
+#endif
 
 #endif
