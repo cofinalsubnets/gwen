@@ -69,13 +69,23 @@ int image_dump(struct ai *g, char const *path) {
 
 // image_bake -- the SELF-bake: lay the post-warm image into the running binary's own
 // .image section on disk (what the Makefile's objdump/truncate/objcopy pipeline did).
-// The reserve's file offset comes from the program headers (dl_iterate_phdr: the first
-// entry is the main program; the reserve is PROGBITS, so it sits inside a PT_LOAD's
-// filesz). ETXTBSY-proof by the adopt pattern (port/inle/serve.l): you cannot write your
-// own executing file, so copy it, pwrite the blob at the offset (zero-padding the rest of
-// the reserve, like the old truncate pad), fsync, and atomically RENAME over the original
-// -- a new inode, so anything still executing keeps the old one. Same build = same
-// layout, so the codec's anchor/refsym guards hold by construction.
+// ETXTBSY-proof by the adopt pattern (port/inle/serve.l): you cannot write your own
+// executing file, so copy it, lay the blob in, fsync, and atomically RENAME over the
+// original -- a new inode, so anything still executing keeps the old one. Same build =
+// same layout, so the codec's anchor/refsym guards hold by construction.
+//
+// TWO LANES, picked by reading the binary's own ELF, never by a build flag: the image
+// is bytes we have to PUT somewhere, and where it can go is a property of the file.
+//  * GROW (bake_tail) -- .image is the last allocated thing, alone in the highest
+//    PT_LOAD (host/build.mk's --section-start). The blob is APPENDED at the first page
+//    past every other allocated byte and the one phdr + one shdr that name it are
+//    rewritten to say so. No reserve, no ceiling. Nothing else moves -- no vaddr
+//    changes at all -- so the anchor/refsym deltas the wake checks still hold.
+//  * RESERVE (bake_reserve) -- .image is a fixed array somewhere in the middle: fill it
+//    in place, zero the rest, and error if the image outgrew it. The older shape, still
+//    what the mooncc/holo lane lays until its linker grows the tail segment too.
+// A binary laid for GROW takes the grow lane; anything else falls back, so one bake
+// serves both and neither lane needs to be told which it is.
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
 struct bake_at { uintptr_t addr, off; int found; };
@@ -88,6 +98,125 @@ static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
       b->off = p->p_offset + (b->addr - lo), b->found = 1; }
   return 1;                                       // stop after the first object: the main program
 }
+static char bake_buf[1 << 20];                    // the copy/pad scratch, shared by both lanes
+// move n bytes src@soff -> dst@doff. the two lanes only ever shuttle bytes.
+static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n) {
+  for (uint64_t z = 0; z < n; ) {
+    size_t w = n - z < sizeof bake_buf ? (size_t)(n - z) : sizeof bake_buf;
+    if (pread(src, bake_buf, w, (off_t)(soff + z)) != (ssize_t) w) return -6;
+    if (pwrite(dst, bake_buf, w, (off_t)(doff + z)) != (ssize_t) w) return -6;
+    z += w; }
+  return 0;
+}
+static int bake_zero(int dst, uint64_t doff, uint64_t n) {
+  memset(bake_buf, 0, sizeof bake_buf < n ? sizeof bake_buf : (size_t) n);
+  for (uint64_t z = 0; z < n; ) {
+    size_t w = n - z < sizeof bake_buf ? (size_t)(n - z) : sizeof bake_buf;
+    if (pwrite(dst, bake_buf, w, (off_t)(doff + z)) != (ssize_t) w) return -6;
+    z += w; }
+  return 0;
+}
+
+// the GROW lane. 0 laid, >0 "this binary is not laid for growth -- take the reserve",
+// <0 a real failure. Everything it needs it reads out of the file: no build flag says
+// which shape this is, the section headers do.
+static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
+                     uint64_t lenoff, mode_t mode) {
+  Elf64_Ehdr eh;
+  Elf64_Shdr *sh = NULL;
+  Elf64_Phdr *ph = NULL;
+  char *str = NULL;
+  size_t nsh, nph, si = 0, pi;
+  uint64_t head, off, cur, al;
+  int dst = -1, rc = 1;
+  if (pread(src, &eh, sizeof eh, 0) != (ssize_t) sizeof eh) return -6;
+  if (memcmp(eh.e_ident, ELFMAG, SELFMAG) || eh.e_ident[EI_CLASS] != ELFCLASS64
+      || eh.e_shentsize != sizeof(Elf64_Shdr) || eh.e_phentsize != sizeof(Elf64_Phdr)
+      || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
+  nsh = eh.e_shnum, nph = eh.e_phnum;
+  sh = malloc(nsh * sizeof *sh), ph = malloc(nph * sizeof *ph);
+  if (!sh || !ph) { rc = -6; goto out; }
+  if (pread(src, sh, nsh * sizeof *sh, (off_t) eh.e_shoff) != (ssize_t)(nsh * sizeof *sh)
+      || pread(src, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph))
+    { rc = -6; goto out; }
+  if (!(str = malloc(sh[eh.e_shstrndx].sh_size + 1))) { rc = -6; goto out; }
+  if (pread(src, str, sh[eh.e_shstrndx].sh_size, (off_t) sh[eh.e_shstrndx].sh_offset)
+      != (ssize_t) sh[eh.e_shstrndx].sh_size) { rc = -6; goto out; }
+  str[sh[eh.e_shstrndx].sh_size] = 0;
+  for (size_t i = 1; i < nsh; i++)
+    if (sh[i].sh_name < sh[eh.e_shstrndx].sh_size && !strcmp(str + sh[i].sh_name, ".image")) { si = i; break; }
+  if (!si) goto out;                              // no .image section at all
+  for (pi = 0; pi < nph; pi++)
+    if (ph[pi].p_type == PT_LOAD && ph[pi].p_vaddr == sh[si].sh_addr) break;
+  if (pi == nph) goto out;                        // .image does not head a segment of its own
+  // HEAD: every byte that must stay exactly where it is -- the headers, every other
+  // allocated section, and anything non-allocated that happens to sit among them. The
+  // blob starts at the first page past it; the non-allocated tail relays after the blob.
+  head = eh.e_phoff + (uint64_t) nph * sizeof(Elf64_Phdr);
+  if (head < sizeof eh) head = sizeof eh;
+  for (size_t i = 1; i < nsh; i++) {
+    if (i == si || sh[i].sh_type == SHT_NOBITS || !(sh[i].sh_flags & SHF_ALLOC)) continue;
+    if (sh[i].sh_addr > sh[si].sh_addr) goto out; // something allocated ABOVE the image: not the tail
+    if (sh[i].sh_offset + sh[i].sh_size > head) head = sh[i].sh_offset + sh[i].sh_size; }
+  for (int again = 1; again; ) {                  // a non-allocated section straddling the cut joins the head
+    again = 0;
+    for (size_t i = 1; i < nsh; i++)
+      if (sh[i].sh_type != SHT_NOBITS && sh[i].sh_offset < head
+          && sh[i].sh_offset + sh[i].sh_size > head && i != si)
+        head = sh[i].sh_offset + sh[i].sh_size, again = 1; }
+  al = ph[pi].p_align ? ph[pi].p_align : 4096;
+  off = (head + al - 1) / al * al;
+  if ((off - ph[pi].p_vaddr) % al) goto out;      // the loader's offset/vaddr congruence: refuse, never lie
+  if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) { rc = -6; goto out; }
+  if ((rc = bake_move(src, dst, 0, 0, head))) goto out;
+  if ((rc = bake_zero(dst, head, off - head))) goto out;
+  if (pwrite(dst, buf, len, (off_t) off) != (ssize_t) len) { rc = -6; goto out; }
+  cur = off + len;
+  for (size_t i = 1; i < nsh; i++) {              // the non-allocated tail, relaid past the blob
+    uint64_t a;
+    if (i == si || sh[i].sh_type == SHT_NOBITS || (sh[i].sh_flags & SHF_ALLOC)) continue;
+    if (sh[i].sh_offset < head) continue;         // it rode along inside the head
+    a = sh[i].sh_addralign ? sh[i].sh_addralign : 1;
+    cur = (cur + a - 1) / a * a;
+    if ((rc = bake_move(src, dst, sh[i].sh_offset, cur, sh[i].sh_size))) goto out;
+    sh[i].sh_offset = cur;
+    cur += sh[i].sh_size; }
+  sh[si].sh_offset = off, sh[si].sh_size = len;   // the two records that now describe the image
+  ph[pi].p_offset = off, ph[pi].p_filesz = len, ph[pi].p_memsz = len;
+  eh.e_shoff = cur = (cur + 7) & ~(uint64_t) 7;
+  { uintptr_t l = len;                            // ai_baked_image_len: what main.c hands the codec
+    if (pwrite(dst, sh, nsh * sizeof *sh, (off_t) cur) != (ssize_t)(nsh * sizeof *sh)
+        || pwrite(dst, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph)
+        || pwrite(dst, &eh, sizeof eh, 0) != (ssize_t) sizeof eh
+        || pwrite(dst, &l, sizeof l, (off_t) lenoff) != (ssize_t) sizeof l) rc = -6; }
+ out:
+  if (dst >= 0) {
+    if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
+    if (close(dst)) rc = -6; }
+  free(sh), free(ph), free(str);
+  return rc;
+}
+
+// the RESERVE lane: the image lands INSIDE a fixed array, and an image too big for it
+// is an error with the one knob to turn. `off` is the reserve's file offset.
+static int bake_reserve(int src, char const *tmp, void const *buf, uintptr_t len,
+                        uint64_t off, mode_t mode) {
+  struct stat st;
+  int dst, rc;
+  if (len > ai_baked_image_len) {
+    fprintf(stderr, "love: image %lu > .image reserve %lu -- bump RESERVE_WORDS in host/image_baked.c\n",
+            (unsigned long) len, (unsigned long) ai_baked_image_len);
+    return -3; }
+  if (fstat(src, &st)) return -6;
+  if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) return -6;
+  rc = bake_move(src, dst, 0, 0, (uint64_t) st.st_size);   // the whole exe; the running inode stays untouched
+  if (!rc && pwrite(dst, buf, len, (off_t) off) != (ssize_t) len) rc = -6;
+  if (!rc) rc = bake_zero(dst, off + len, ai_baked_image_len - len);   // zero the rest of the reserve
+  if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
+  if (close(dst)) rc = -6;
+  return rc;
+}
+
 int image_bake(struct ai *g) {
   image_guard_arm();
   uintptr_t len = 0;
@@ -96,13 +225,14 @@ int image_bake(struct ai *g) {
   // twin the cell carries (ai_image_redir); the bake stays correct, so there is
   // nothing to announce. only a REFUSED bake (below) is worth a word.
   if (!buf) { image_guard_report(); return -2; }
-  if (len > ai_baked_image_len) {
-    fprintf(stderr, "love: image %lu > .image reserve %lu -- bump RESERVE_WORDS in host/image_baked.c\n",
-            (unsigned long) len, (unsigned long) ai_baked_image_len);
-    return -3; }
+  // both lanes patch by FILE OFFSET, and the offsets come from the running program's
+  // own phdrs (dl_iterate_phdr, first object) -- the one place a live address and a
+  // file position are known to name the same byte.
   struct bake_at b = { (uintptr_t) ai_baked_image, 0, 0 };
+  struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
   dl_iterate_phdr(bake_phdr, &b);
-  if (!b.found) return -5;
+  dl_iterate_phdr(bake_phdr, &bl);
+  if (!b.found || !bl.found) return -5;
   char exe[4096], tmp[4104];
   ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
   if (n <= 0) return -6;
@@ -111,20 +241,9 @@ int image_bake(struct ai *g) {
   struct stat st;
   int src = open(exe, O_RDONLY);
   if (src < 0 || fstat(src, &st)) { if (src >= 0) close(src); return -6; }
-  int dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700);
-  if (dst < 0) return close(src), -6;
-  static char cbuf[1 << 20];                      // copy the whole exe; the running inode stays untouched
-  for (ssize_t r; (r = read(src, cbuf, sizeof cbuf)) > 0;)
-    if (write(dst, cbuf, (size_t) r) != r) return close(src), close(dst), unlink(tmp), -6;
+  int rc = bake_tail(src, tmp, buf, len, bl.off, st.st_mode & 07777);
+  if (rc > 0) rc = bake_reserve(src, tmp, buf, len, b.off, st.st_mode & 07777);
   close(src);
-  int rc = pwrite(dst, buf, len, (off_t) b.off) == (ssize_t) len ? 0 : -6;
-  for (uintptr_t z = len; !rc && z < ai_baked_image_len; ) {          // zero the rest of the reserve
-    size_t w = ai_baked_image_len - z < sizeof cbuf ? (size_t)(ai_baked_image_len - z) : sizeof cbuf;
-    memset(cbuf, 0, w);
-    if (pwrite(dst, cbuf, w, (off_t)(b.off + z)) != (ssize_t) w) rc = -6;
-    z += w; }
-  if (!rc && (fchmod(dst, st.st_mode & 07777) || fsync(dst))) rc = -6;
-  if (close(dst)) rc = -6;
   if (!rc && rename(tmp, exe)) rc = -6;           // the adopt: atomic, a new inode
   if (rc) unlink(tmp);
   return rc;

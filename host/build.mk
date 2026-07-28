@@ -27,7 +27,7 @@ host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
 # host_cc: STATIC picks musl-clang unless CC was set explicitly (the musl-gcc
 # fallback below); love0 and the lib tools stay on plain $(CC) either way.
 host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
-hcc = $(host_cc) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
+hcc = $(host_cc) $(ai_cflags) $(image_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # whole-archive flag differs by linker (ld64 vs GNU ld); ai_typ is now a plain
 # compare in love.h, so there is no data.ld / generated data.h on any platform.
 ifeq ($(shell uname -s),Darwin)
@@ -39,6 +39,19 @@ so_archive = -Wl,-force_load,$(ho)/liblove.a       # ld64's whole-archive
 so_undef = -Wl,-undefined,dynamic_lookup
 else
 so_archive = -Wl,--whole-archive $(ho)/liblove.a -Wl,--no-whole-archive
+endif
+# the boot image gets its OWN segment at the top of the address space, so `love --bake`
+# can GROW it: the blob is appended at the tail of the file and the one phdr + one shdr
+# naming it are rewritten, with nothing else moving (host/image.c's bake_tail). That is
+# what --section-start buys -- ld gives a section at a far address a PT_LOAD to itself,
+# above .bss and alone in it. 0x2000000 (32 MiB) clears .bss (~8 MiB) with room to grow
+# and is page-aligned, which the loader's offset/vaddr congruence needs; an overlap is a
+# LOUD ld error, never a silent one. mach-o has neither the flag nor --bake at all
+# (image_bake is /proc/self/exe + dl_iterate_phdr), so the mac lane keeps the reserve --
+# as does the mooncc/holo lane, until its own linker lays the same shape.
+ifneq ($(shell uname -s),Darwin)
+image_cflags = -DAI_IMAGE_TAIL
+image_ldflags = -Wl,--section-start=.image=0x2000000
 endif
 # STATIC=1 links a fully static `love` against musl (and skips liblove.so, which a
 # static build can't produce) -- the OPT-IN portable-binary lane (was briefly
@@ -74,7 +87,7 @@ endif
 force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
-	@printf '%s\n' '$(host_cc) $(host_ldflags)' > $@.tmp
+	@printf '%s\n' '$(host_cc) $(host_ldflags) $(image_cflags) $(image_ldflags)' > $@.tmp
 	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
 host: $(ho)/love $(ho)/ai $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
@@ -176,7 +189,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/quay.h
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags)
+	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags) $(image_ldflags)
 
 # compat: `ai` was the name from 2026-06-15 until the reversion to `love`. The old
 # name stays as a symlink so the doc/proto long tail -- and any external script that
