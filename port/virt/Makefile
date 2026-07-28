@@ -85,3 +85,12 @@ clean:
 FORCE:
 $(addprefix $(R)/,$(sort $(lib_h))): FORCE
 	@$(MAKE) -C $(R) $(patsubst $(R)/%,%,$@)
+# the binaries delegate the same way -- and the explicit rule also BLOCKS make's
+# builtin `%: %.o`: out/host/love.o (the root's liblove lane) sits beside the
+# binary, and a bare prerequisite let the builtin "relink" love from that lone
+# object -- undefined mains all the way down, and make DELETES the half-made
+# binary on the way out.
+$(lv): FORCE
+	@$(MAKE) -C $(R) out/host/love
+$(mc): FORCE
+	@$(MAKE) -C $(R) out/host/mooncc
