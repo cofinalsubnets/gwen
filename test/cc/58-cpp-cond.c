@@ -22,5 +22,17 @@ int main() {
 #elif 1
   r = r + 100;
 #endif
-  return r;           /* 3+20+5+1 = 29 */
+/* suffixed literals evaluate by VALUE: ll/LL once lexed as number + identifier,
+ * so 5ULL == 5 read false and love.c's own width probe (UINTPTR_MAX == UINT64_MAX,
+ * a UL against a ULL) took NO branch */
+#if 5ULL == 5 && 7ll == 7
+  r = r + 2;          /* 2 */
+#endif
+#if 18446744073709551615ULL > 0
+  r = r + 3;          /* 3 */
+#endif
+#if 18446744073709551615UL == 18446744073709551615ULL
+  r = r + 4;          /* 4 */
+#endif
+  return r;           /* 3+20+5+1+2+3+4 = 38 */
 }

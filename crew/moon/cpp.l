@@ -43,7 +43,7 @@
 
    ; -- the spelling of a token, for ## paste and # stringize --
    (spell t) (: k (kof t)
-                (? (member? k '(num unum ulnum)) (show (vof t))
+                (? (member? k '(num unum ulnum llnum ullnum)) (show (vof t))
                    (k = 'kw) (show (vof t))
                    (k = 'str) ("\"" + (vof t) + "\"")
                    (vof t)))                          ; id / p are their text
@@ -193,7 +193,7 @@
    (cprim ts)
     (? (! (two? ts)) `(0 ())
        (: t <ts
-          (? (member? (kof t) '(num unum ulnum)) `((vof t) >ts)
+          (? (member? (kof t) '(num unum ulnum llnum ullnum)) `((vof t) >ts)
              (pv? t "(") (: r (ccond >ts) (? (&& (two? <>r) (pv? (cap (caup r)) ")")) `(<r (cup (caup r))) r))
              (pv? t "!") (: r (cprim >ts) `((? (nil? <r) 1 0) <>r))
              (pv? t "~") (: r (cprim >ts) `(((0 - <r) - 1) <>r))
