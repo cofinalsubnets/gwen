@@ -29,3 +29,7 @@ doc/archive/
 __pycache__/
 *.pyc
 *.core
+
+# clangd's compilation database -- absolute paths, so it is per-machine. `make ccdb`.
+compile_commands.json
+.cache/clangd/

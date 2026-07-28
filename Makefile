@@ -27,7 +27,7 @@ export LOVE_NO_IMAGE := 1
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0 site site-serve
 .PHONY: test test_host test_all test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_encver test_lux test_extract test_big test_mx test_arm64 test_thumb1 test_thumb2 test_riscv test_virt test_wake
-.PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest lint fmt fmt-check
+.PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest lint fmt fmt-check ccdb
 
 # `make` with no target is `make test` -- pinned EXPLICITLY because the includes
 # below precede the test rule, so make's "first explicit target is the default"
@@ -70,6 +70,13 @@ all: host kernel wasm
 # don't fail. NOT in the test gate (it's an editing aid, not a semantic check).
 lint: $(ho)/love
 	@$(ho)/love $R/tools/ltidy.l $$(git ls-files '*.l') && echo "lint: .l balance clean"
+
+# ccdb: emit compile_commands.json so clangd sees the flags the build actually uses.
+# without it clangd guesses, misses love.h, and the fatal include error cascades into a
+# flood of undeclared-name noise that says nothing about the code. the generated headers
+# under out/ must exist, so build first. machine-specific (absolute paths), gitignored.
+ccdb:
+	@python3 $R/tools/ccdb.py
 
 # fmt: reformat the HOUSE-STYLE C in place with moonfmt (crew/moon/fmt.l) -- reindent
 # to 1-space, respace glued operators, normalize known-type pointer declarators. it is
