@@ -255,6 +255,11 @@
 ; --- complex --- a scalar at tier C; the `~` sigil: ~(re im) builds (twin re im), a bare ~x
 ; lifts a real or conjugates (an involution); i = ~(0 1). a rank-N complex array packs (re,im)
 ; into a `c`-typed array; the net is the complex SUM of the cells, $v = $(net v).
+; re/im/arg read ELEMENTWISE over a tray: a twin-tray answers the gem-tray of that component,
+; and a REAL tray lifts the scalar law -- re hands it back WHOLE (a real tray is its own real
+; part, tier and all), im answers its shape zeroed. an object tray reads the zero point, like
+; any non-number: the twin-tray must not fall through to re's identity face, which would answer
+; the COMPLEX tray as its own real part.
 (assert
  ((* i i) = -1) (~(2 0) = 2) (~(-5 10) = ~(1 2) * ~(3 4)) (twin? ~5) !(twin? 5)
  (~(0 0) = ~0) ((conj ~(2 3)) = ~~(2 3)) ((conj ~(2 3)) = ~(2 -3)) (~(2 3) = ~~~(2 3))
@@ -272,6 +277,15 @@
  ; measures 0 however large its magnitude (the truth gate is not the order)
  (0 = $(array 2 ~(3 4) ~(-3 4))) (0 = $`(~(3 4) ~(-3 4)))
  (5 = $(array 2 ~(3 4) ~(0 0))) (~(0.0 8.0) = (net (array 2 ~(3 4) ~(-3 4)))))
+(assert
+ (: m (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)))
+    (&& (aall ((re m) = (star-tray '(2 2) '(1 2 3 4)))) (aall ((im m) = (star-tray '(2 2) '(5 6 7 8))))
+        (aall (m = (twin (re m) (im m)))) ('(2 2) = (shape (re m)))       ; the parts rebuild the whole
+        (gem-tray = (tier (re m))) (gem-tray = (tier (im m)))))
+ (aall ((re @(1 2 3)) = @(1 2 3))) (star-tray = (tier (re @(1 2 3))))     ; a real tray IS its own re,
+ (aall ((im @(1 2 3)) = @(0 0 0))) (star-tray = (tier (im @(1.5 2.5))))   ; and its im is 0, shaped
+ ("@()" = (show (re (twin-tray '(0) 0)))) ("@()" = (show (im @())))       ; an empty tray stays a tray
+ !(re (top-tray '(2) 0)) !(im (top-tray '(2) 0)))                         ; an object tray is no number
 
 ; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o); (array shape elem..)
 ; infers; @(..) rank-1 literal; (iota n) the z-array 0..n-1. a ONE-CELL array DEMOTES to its lone

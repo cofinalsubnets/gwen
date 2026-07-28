@@ -8846,12 +8846,52 @@ lvm(lvm_cplx) {
 // (Cp x): is x a complex scalar?
 op11(lvm_Cp, Cp(Sp[0]) ? putcharm(1) : nil)
 
+// Fill r with component `off` (0 = re, 1 = im) of each element of the packed
+// ai_C array v, as f64. off < 0 is the (im realarr) lane: r is a ai_Z array and
+// every cell is 0, the array lift of (im real) = 0 (v goes unread). &-free but
+// ai_noinline, so lvm_re/lvm_im keep their tail call.
+static ai_noinline void cpart_fill(struct ai_vec *r, struct ai_vec *v, int off) {
+ uintptr_t n = vec_nelem(r);
+ if (off < 0) { intptr_t *zp = vec_data(r);
+  for (uintptr_t p = 0; p < n; p++) zp[p] = 0;
+  return; }
+ ai_flo_t *rf = vec_data(r), *fp = vec_data(v);
+ for (uintptr_t p = 0; p < n; p++) rf[p] = fp[2*p + off]; }
+
+// The array lane of re/im, reached by tail call once the wrapper has ruled out
+// the scalars and the ai_O tray. Result carries the operand's shape: f64 for a
+// component of a ai_C array, i64 zeros for off < 0.
+static lvm(lvm_cpart, int off) {
+ struct ai_vec *v = vec(Sp[0]);
+ enum ai_vec_type rt = off < 0 ? ai_Z : ai_R;
+ uintptr_t R = v->rank, n = vec_nelem(v);
+ uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[rt];
+ Have(b2w(bytes));
+ v = vec(Sp[0]);                                           // re-read post-Have
+ struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
+ ini_vec(r, rt, R);
+ for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
+ cpart_fill(r, v, off);
+ return Sp[0] = word(r), Ip++, Continue(); }
+
 // (re z) / (im z): real / imaginary part as a rank-0 float box. On a real
-// number, re is the number itself and im is 0; on a non-number, nil.
+// number, re is the number itself and im is 0. Over an ARRAY they go
+// elementwise like `arg`: a packed ai_C array answers an f64 array of that
+// component, and a real ai_Z/ai_R array lifts the scalar law -- re hands the
+// array straight back (a real array IS its own real part, tier and all), im
+// answers a fresh zero array of the same shape. An object array, and anything
+// that is not a number at all, -> nil. The nil is the point of the third
+// branch: without it a ai_C array would fall through to identity and re would
+// answer the COMPLEX array as its own real part -- a wrong answer inside the
+// numeric band, not an unhandled one.
 lvm(lvm_re) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t re = cplx_re(a); Have(box_req); emit_flo(re);
   return Sp[0] = _res, Ip++, Continue(); }
+ if (arrp(a)) { enum ai_vec_type t = vec(a)->type;
+  if (t == ai_O) return Sp[0] = ZeroPoint, Ip++, Continue();   // a tray is not a number
+  if (t != ai_C) return Ip++, Continue();          // a real array is its own real part
+  return Ap(lvm_cpart, g, 0); }
  if (isnum(a)) return Ip++, Continue();            // re of a real is itself
  return Sp[0] = ZeroPoint, Ip++, Continue(); }
 
@@ -8859,6 +8899,9 @@ lvm(lvm_im) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t im = cplx_im(a); Have(box_req); emit_flo(im);
   return Sp[0] = _res, Ip++, Continue(); }
+ if (arrp(a)) { enum ai_vec_type t = vec(a)->type;
+  if (t == ai_O) return Sp[0] = ZeroPoint, Ip++, Continue();
+  return Ap(lvm_cpart, g, t == ai_C ? 1 : -1); }   // real array -> zeros of its shape
  if (isnum(a)) return Sp[0] = putcharm(0), Ip++, Continue();   // im of a real is 0
  return Sp[0] = ZeroPoint, Ip++, Continue(); }
 
