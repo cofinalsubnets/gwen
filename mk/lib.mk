@@ -13,8 +13,8 @@ lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # backends are pure love (produce machine-code bytes as DATA, never execute them), so
 # every one is arch-neutral -- but the HOST bakes its NATIVE backend only (main.c
 # arch-gates the include; mooncc.image carries ALL backends via its cat, and a test
-# that wants a cross backend runtime-loads it: (enter ()) (use 'holo) <backend.l>
-# (leave ())). love0 keeps every backend so the corpus's cross-arch asserts run under
+# that wants a cross backend joins by (use 'holo) + the backend's text -- defbackend
+# mutates holo's own table). love0 keeps every backend so the corpus's cross-arch asserts run under
 # both its compilers. Both .h flavors are still GENERATED for both backends (love0
 # needs them; the host simply includes one). asm_h = lcat headers (host love);
 # asm0_h = sed-wrapped raw source (love0, the bootstrap -- can't lcat its own sources).
