@@ -182,8 +182,12 @@ void love_init(void) {
     pdg_log("love: woke -- workbench up");
     if (ai_ok(K.g)) pdg_set_update(k_update);
     return; }
-  K.g = ai_evals_(g, "("
-#include "egg.h"
+  static char const src_kanren[] =
+#include "kanren.h"
+  ;
+  g = ai_lib_(g, "kanren", src_kanren);                // kanren is a MODULE now: registered here, loaded
+  K.g = ai_evals_(g, "("                               //   by name below (rune's matcher reads it -- subst
+#include "egg.h"                                       //   through the registry, unify/ufail?/var down the splice)
     ai_egg_pre
 #include "prel.h"
     " "
@@ -191,7 +195,7 @@ void love_init(void) {
     ai_egg_post
 #include "q.h"                                         // the optional library layers rune stands on: q is its coefficient
     " "                                                //   field, kanren its matcher's unifier -- both out of prel now, so
-#include "kanren.h"                                    //   this frontend names what it needs
+    "(use 'kanren)"                                    //   this frontend names what it needs
     " "
 #include "rune.h"
     " "                                                //   (rune.l seals itself at its foot)

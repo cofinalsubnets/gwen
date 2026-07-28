@@ -265,6 +265,16 @@ int main(void) {
   struct ai *g = ai_ini();          // NO ai_defn: a port nif in the book would
                                     // ride into the image as a dead absolute
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
+#ifndef BAKER_RUNE
+  // bao is a MODULE now (no brackets of its own): registered here, loaded by
+  // name below, so the woken image serves ((from 'bao 'shell) 0) -- the teensy
+  // and nucleo launchers. the source string carries no absolutes, so the
+  // absguard stays satisfied.
+  static char const src_bao[] =
+#include "bao.h"
+  ;
+  g = ai_lib_(g, "bao", src_bao);
+#endif
   struct ai *r = ai_evals_(g, "("
 #include "egg.h"
     ai_egg_pre
@@ -281,7 +291,7 @@ int main(void) {
     " "                                                //   (rune.l seals itself at its foot)
 #include "cas.h"
 #else
-#include "bao.h"
+    "(use 'bao)"
 #endif
     "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {

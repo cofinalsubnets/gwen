@@ -48,11 +48,13 @@
 ; (opfix, feel, ana, cata): the full hull chars -> top in one call. nothing readable --
 ; empty input or an unfinished shape -- is nothing. (lit? is no use for the cell test:
 ; it names the top region -- map/fn/hot -- so a chain or string answers false anyway.)
-; the module span opens here: a REGISTERED MODULE (the kanren pattern). bao is ALL
-; surface -- the closure below already keeps the internals private -- so the foot
-; re-pins every member globally after sealing; the registry entry is the MANIFEST:
-; (from 'bao 'keys) lists the shell core's whole public face.
-(enter 'bao)
+; a REGISTERED MODULE with NO BRACKETS (the kanren pattern): the runtime
+; supplies the layer -- a frontend registers this source (ai_lib_) and its boot
+; says (use 'bao). bao is ALL surface -- the closure below already keeps the
+; internals private -- and the splice serves the user verbs (read reads welp
+; wrap) bare, while the frontend launchers reach the plumbing through the
+; registry ((from 'bao 'bao) / (from 'bao 'shell)); (from 'bao 'keys) lists
+; the shell core's whole public face.
 (: (read s)
    (: (char s)
       (? (two? s) (: t >s
@@ -602,18 +604,6 @@
  wrap  <>>>_
  bao   <>>>>_
  edln  <>>>>>_)
-
-; seal into the registry, then re-pin the USER VERBS globally -- read/reads (the io
-; surface, the corpus's load verb), welp (spec.l's condition-floor law), wrap (the
-; repl's pty wrapper, typed at the prompt). the PLUMBING stays sealed: shell/bao (the
-; frontend launchers -- main.c, kmain.c, teensy, bin/bao all eval (from 'bao ..) now)
-; and edraw/edln (editor primitives; only baoedit's battery reads them). the closure
-; above already hid the internals; (from 'bao 'keys) is the whole manifest.
-(leave ())
-(: read  (from 'bao 'read)
-   reads (from 'bao 'reads)
-   welp  (from 'bao 'welp)
-   wrap  (from 'bao 'wrap))
 
 ; bao.l is DEFINE-ONLY -- loading it (egg-bake or `-l love/bao.l`) installs the shell
 ; core but does NOT launch. The frontend launches: host/main.c evals `(bao 0)` on a

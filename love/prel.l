@@ -44,12 +44,15 @@
                       (: r (peep (mods ()) m ()) (? (nil? r) (scare (\ no-module) m) r)))
                  (setbooks (link (cap (books ())) (link b (cup (books ()))))))
    ; leave: unwind to the pre-enter chain, REGISTER the layer under its name, answer the book. a
-   ; BARE leave (top never entered, so no charm) truncates to the head -- the use-stack clears.
+   ; BARE leave (top never entered, so no charm) pops whatever sits just below the head -- the
+   ; exact inverse of `use`, so a use .. leave pair brackets cleanly (the glaze load rides this).
+   ; with nothing below, a no-op. UNPAIRED it pops your downstairs neighbor whatever that is, so
+   ; a bare leave belongs only where a use put something there first.
    (leave _)  (: F (cap (books ())) s (peep F 31337 ())
                  (? (two? s)
                     (: _ (pull F 31337 0) _ (setbooks (cap s))
                        _ (? (nil? (cup s)) 0 (pin (mods ()) (cup s) F)) F)
-                    (setbooks (link F ()))))
+                    (setbooks (link F (cup (cup (books ())))))))
    ; from: an OPAQUE accessor over the module -- currying reaches a member, 'keys introspects,
    ; (from ()) lists the registry, a missing module answers () (the presence guard). the raw
    ; tablet stays closure-private.

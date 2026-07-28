@@ -20,9 +20,16 @@ static const char boot_ai[] = "("
 #include "ev.h"
   ai_egg_post
 #include "uu.h"   // the uu kernel (love/uu.l, sweep at its tail): the corpus's uu files ride the `uu` book here too
-#include "coin.h"   // the optional library layers (love/coin.l, love/rng.l, love/q.l, love/kanren.l)
-#include "rng.h"    //   -- out of prel, so this frontend names them: the corpus asserts on all four
+#include "coin.h"   // the optional library layers (love/coin.l, love/q.l): out of prel, so this frontend names them
+  "(use 'rng)"      // rng and kanren are MODULES now -- registered in the source library (ai_lib_
 #include "q.h"
+  "(use 'kanren)"   //   in ai_init) and loaded by name; the corpus asserts on all four layers
+;
+// the module sources, name-keyed (see host/main.c): registered before boot_ai evals
+static const char src_rng[] =
+#include "rng.h"
+;
+static const char src_kanren[] =
 #include "kanren.h"
 ;
 
@@ -93,6 +100,8 @@ int ai_init(void) {
   struct ai_def d[] = {{"exit", (ai_word) nif_exit}};
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);
+  F = ai_lib_(F, "rng", src_rng);
+  F = ai_lib_(F, "kanren", src_kanren);
   F = ai_evals_(F, boot_ai);
   return ai_code_of(F); }
 

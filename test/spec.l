@@ -544,9 +544,13 @@
 ; nothing). (use 'name) splices a registered module just BELOW the top -- its names resolve on the
 ; walk but can never shadow the top's own, and it is cleared by LEAVING the layer it was spliced
 ; into -- so a `use` is scoped by its enclosing scope, the way a binding is. (a bare (leave ()) --
-; no matching enter -- used to be the way to clear it; it cannot be, now that a session always runs
-; inside a layer of its own: bare leave would unwind THAT, taking the session's whole namespace
-; with it.) (from 'name) is the OPAQUE accessor -- currying reaches a member, 'keys introspects, a
+; the head carrying no enter stash -- pops whatever sits just below the head: the exact inverse
+; of `use`, so a use .. leave pair brackets cleanly. the session layer IS entered, so a stray
+; bare leave in a session still unwinds it -- pair your leaves.) `use` also LOADS a module it
+; doesn't have -- the lib table or lib/<name>.l, one fresh layer per load, leave registering --
+; and a SLASHED name ('x/y) INCLUDES into the current head instead: test/host/loader.l is that
+; law in anger (fs fixtures, so it lives outside this corpus).
+; (from 'name) is the OPAQUE accessor -- currying reaches a member, 'keys introspects, a
 ; missing module answers () (the presence guard), (from ()) lists the registered names. binds
 ; here stay LOCAL (body-having :) so the egg's pass-2 mark stays clean.
 (: m1 (: _ (enter 'spec-mod) _ (: (spec-sib x) (+ x 1)) _ (: (spec-pub x) (spec-sib x)) (leave ()))

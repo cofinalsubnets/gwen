@@ -27,7 +27,15 @@
 ; state is a box, love's mutable cell, the same thing boxfix allocates for the
 ; compiler's own letrec cells. it must be BOUND, not inlined: four `#0`s would be
 ; four separate streams.
-(enter 'rng)
+;
+; NO BRACKETS HERE: the runtime supplies the layer. a frontend registers this
+; source (ai_lib_) and its boot says (use 'rng) -- the loader opens the layer,
+; leave registers it, the splice stays, and every bare consumer (the corpus,
+; test/fuzz.l's generators, lux's seeded fuzz, sat's restarts) resolves
+; random/rand/randf/rng-get/rng-set down the chain at its own compile. the box
+; rides the layer like everything else here -- what the module buys is not
+; secrecy (from reaches any member) but a QUIET BASE: the state key never
+; touches orth, in a session or a baked image.
 (: rng-box #0
    (random st n) (? (gem? n) (: r (turnf st) (link (* n (cap r)) (cup r)))
                     (< 0 n)  (: r (turn st)  (link (% (cap r) n) (cup r)))
@@ -44,13 +52,3 @@
                (? (&& (charm? n) (< 0 n)) (% (cap r) n) (cap r)))
    (randf n) (: r (turnf (rng-get 0)) _ (pin rng-box () (cup r))
                (? (&& (constellation? n) (< 0 n)) (* n (cap r)) (cap r))))
-(leave ())
-; the five PUBLIC names re-pin (kanren's emit-law shape): every consumer reads
-; them bare -- the corpus, test/fuzz.l's generators, lux's seeded fuzz, sat's
-; restarts -- and a sealed module cannot serve a bare name. rng-box is not among
-; them, which is the whole point: it stays inside the layer, unreachable.
-(: random (from 'rng 'random)
-   rng-get (from 'rng 'rng-get)
-   rng-set (from 'rng 'rng-set)
-   rand (from 'rng 'rand)
-   randf (from 'rng 'randf))
