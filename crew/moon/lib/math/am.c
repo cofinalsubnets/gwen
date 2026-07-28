@@ -453,9 +453,13 @@ double am_strtod(char const *s, char **end) {
  int sign = 1;
  if (*p == '-') sign = -1, p++;
  else if (*p == '+') p++;
- // significant digits: up to 19 kept exactly (din, LSB first), the rest fold
- // into a sticky bit and a scale count; fr counts digits after the point
- unsigned char din[20];
+ // significant digits: up to 780 kept exactly (din, MSB collected then
+ // reversed -- correct rounding can genuinely need ~768 digits; a mere sticky
+ // bit cannot carry a truncated tail's MAGNITUDE through a mid-comparison,
+ // only break an exact tie, and the 3.2M-parse differential found the 1-ulp
+ // misses that proves). beyond 780 the tail folds to sticky, which by the
+ // worst-case bound can then only break ties. fr counts post-point digits.
+ unsigned char din[790];
  int any = 0, pt = 0, fr = 0, nin = 0, extra = 0, sticky = 0;
  double v0 = 0;
  for (;; p++) {
@@ -464,12 +468,12 @@ double am_strtod(char const *s, char **end) {
   any = 1;
   if (pt) fr++;
   if (*p == '0' && !nin) continue;               // leading zeros: scale only (fr keeps them)
-  if (nin < 19) {
-   for (int i = nin; i > 0; i--) din[i] = din[i - 1];
-   din[0] = (unsigned char) (*p - '0');
-   nin++;
-   v0 = v0 * 10 + (*p - '0'); }
+  if (nin < 780) {
+   din[nin++] = (unsigned char) (*p - '0');      // MSB first while collecting
+   if (nin <= 19) v0 = v0 * 10 + (*p - '0'); }
   else extra++, sticky |= *p != '0'; }
+ for (int i = 0, j = nin - 1; i < j; i++, j--) {  // flip to LSB first for the compares
+  unsigned char t = din[i]; din[i] = din[j]; din[j] = t; }
  if (!any) { if (end) *end = (char*) s; return 0; }
  if (end) *end = (char*) p;
  int e10 = 0;
@@ -488,8 +492,9 @@ double am_strtod(char const *s, char **end) {
  int mag = nin + kk;                             // value in [10^(mag-1), 10^mag)
  if (mag > 310)  return sign * D_INF;
  if (mag < -342) return sign > 0 ? 0.0 : -0.0;
- // the seed: v0 x 10^kk in bounded chunks (gradual under/overflow lands close)
- { int e = kk;
+ // the seed: v0 holds only the TOP 19 kept digits, so its scale carries the
+ // rest of din's length; x 10 in bounded chunks (gradual under/overflow lands close)
+ { int e = kk + (nin > 19 ? nin - 19 : 0);
    while (e >= 300)  v0 *= 1e300, e -= 300;
    while (e <= -300) v0 /= 1e300, e += 300;
    double sc = 1;
