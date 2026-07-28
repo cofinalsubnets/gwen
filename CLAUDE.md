@@ -26,10 +26,11 @@
 ;   lane fell through to garbage and now loops (or reads OOB and segfaults), e.g. a baked lcat header
 ;   came up EMPTY (a failed love0 gen left a 0-byte .h that make thinks is fresh) so `assemble` is
 ;   unbound and the glaze's map lane emits nothing. one bug, two faces -- infinite loop or crash.
-; * the kernel has THREE boot doors, one ELF: PVH (port/inle/x86_64/boot.S -- `qemu -kernel`,
-;   what test_kernel rides, nothing downloaded), UEFI (port/inle/uefi/ -- our own BOOTX64.EFI,
-;   mooncc-built + holo-laid PE32+; `make uefi` for the ESP, test_uefi to gate it; doc/uefi.md)
-;   and limine (the iso/hdd + interactive run-* lanes, aarch64). out/dl (ovmf/limine, nuked by
+; * the kernel has THREE boot doors, one ELF per arch: -kernel (x86_64/boot.S's PVH stub and
+;   aarch64/boot.S's EL1 MMU stub -- what test_kernel + test_kernel_arm64 ride, nothing
+;   downloaded), UEFI (port/inle/uefi/ -- our own BOOTX64.EFI, mooncc-built + holo-laid PE32+;
+;   `make uefi` for the ESP, test_uefi to gate it; doc/uefi.md)
+;   and limine (the iso/hdd + interactive run-* lanes). out/dl (ovmf/limine, nuked by
 ;   `make clean`) feeds only limine + the uefi gate's firmware; stash it if you use those.
 ;   editing love.h needs no clean (every object deps on $(love_h), the lcat'd headers re-lay on love0).
 ; * CHECK A .l EDIT for balance before trusting it: `out/host/love tools/ltidy.l <file>` (or `make lint`
