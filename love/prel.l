@@ -299,7 +299,11 @@
    ; collection, which is what makes the fold read straight. lives down here, not
    ; up with the other predicates, so catmap/foldl are bound when it compiles: a
    ; forward reference would ride lvm_index and never fold.
-   (names _) (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ()))))
+   ; ..and NOMS only: a layer's keys are not all names. orth carries its macro
+   ; table under the nil key (love.c's book[nil]), and a scope layer stashes its
+   ; unwind chain under a charm -- both were reported as "names", the first since
+   ; forever. `names` answers what you could WRITE, so the bookkeeping stays out.
+   (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ())))))
    (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1 (iota its array twin); a section of tally, off the `*` glyph -- monadic `*` is prod now
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)

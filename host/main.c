@@ -544,6 +544,23 @@ extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
 // the post-warm dispatch (shared by boot() and the --wake path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
+  // THE SESSION LAYER. Boot is over; from here the base (orth -- prel/ev, the nifs,
+  // every module the frontend warmed) is READ-ONLY, and it is read-only for the
+  // plainest possible reason: it is never the HEAD again. lvm_defglob writes
+  // A(g->book) and nothing else, so a top-level definition -- a script's, a repl
+  // line's, the corpus's -- lands here instead of in the base. Reads still walk
+  // down (bookget, head-first), so prel resolves exactly as before.
+  //
+  // Pushed here because this is where boot() and the --wake path converge, so both
+  // get it; and it is never popped, because its lifetime IS the session. That is
+  // what keeps a CATTED app working: lux's eight files, the kore cat's fifteen and
+  // the whole test corpus each arrive as ONE stream, so they share this layer and
+  // the cross-file leaking they are built on (crew/lux/core.l's "every binding
+  // LEAKS ... so the other files see this vocabulary") still resolves.
+  //
+  // --bake exits before run_program, so the image carries the base with no session
+  // layer on top; each woken session pushes its own.
+  g = ai_evals_(g, "(enter ())");
 #ifdef AI_GLAZED
   // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
   // module book) and the natjit creation hook cleared. The forensics twin of LOVE_NO_IMAGE.
