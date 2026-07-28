@@ -431,6 +431,31 @@ static lvm(lvm_spawnmap) {
 // (getuid _) -> the real uid, a charm. the shell's # vs $ prompt; always succeeds.
 static lvm(lvm_getuid) { Sp[0] = putcharm((intptr_t) getuid()); return Ip++, Continue(); }
 
+// (fork _) -> child pid | 0 in the child | -errno. fork WITHOUT exec -- the
+// shell's subshell: the child EVALS a subtree and quits, and must NEVER return
+// to the reader loop (doc/posix.md's open question, answered conservatively:
+// the child owns a full copy-on-write address space, so the GC is fine; the
+// discipline is all in the caller -- flush out/err before, child = eval+quit).
+ai_noinline static ai_word host_fork(void) {
+ fflush(NULL);
+ pid_t pid = fork();
+ return putcharm(pid < 0 ? -errno : pid); }
+static lvm(lvm_fork) { Sp[0] = host_fork(); return Ip++, Continue(); }
+
+// (dup2 src dst) -> () | errno | EINVAL. the self-redirect (a forked subshell
+// laying its own fdmap, a compound's `done < file` swap).
+// (dup fd) -> a fresh fd duplicating fd (>= 3, clear of stdio) | -errno. the
+// save half of the swap.
+ai_noinline static ai_word host_dup2(ai_word sw, ai_word dw) {
+ if (!(sw & 1) || !(dw & 1)) return putcharm(EINVAL);
+ return dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_dup2) { Sp[1] = host_dup2(Sp[0], Sp[1]); Sp += 1; return Ip++, Continue(); }
+ai_noinline static ai_word host_dup(ai_word w) {
+ if (!(w & 1)) return putcharm(-EINVAL);
+ int fd = fcntl((int) getcharm(w), F_DUPFD, 3);
+ return putcharm(fd < 0 ? -errno : fd); }
+static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); return Ip++, Continue(); }
+
 // --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
 // (mkdir path mode) -> mkdir(2). () | -errno | -1 misuse. mode is octal (493 = 0755).
 // also makes cgroup dirs (cgroup-v2 placement is then `open` + `say` the control file).
@@ -599,6 +624,9 @@ static union u const
   nif_fdopen[]  = {{lvm_fdopen}, {lvm_ret0}},
   nif_spawnmap[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_spawnmap}, {lvm_ret0}},
   nif_getuid[]  = {{lvm_getuid}, {lvm_ret0}},
+  nif_fork[]    = {{lvm_fork}, {lvm_ret0}},
+  nif_dup2[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_dup2}, {lvm_ret0}},
+  nif_dup[]     = {{lvm_dup}, {lvm_ret0}},
   nif_mkdir[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mkdir}, {lvm_ret0}},
   nif_mount[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mount}, {lvm_ret0}},
   nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
@@ -624,6 +652,9 @@ AI_NIF("fdclose", nif_shutfd);
 AI_NIF("fdopen", nif_fdopen);
 AI_NIF("spawnmap", nif_spawnmap);
 AI_NIF("getuid", nif_getuid);
+AI_NIF("fork", nif_fork);
+AI_NIF("dup2", nif_dup2);
+AI_NIF("dup", nif_dup);
 AI_NIF("mkdir", nif_mkdir);
 AI_NIF("mount", nif_mount);
 AI_NIF("newns", nif_newns);

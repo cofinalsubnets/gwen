@@ -19,29 +19,24 @@
 ; the gate: test/host/sh.l reads the parts bare (cat order) and asserts on the
 ; sh-* names; the interactive loop is probed live under script(1).
 
-(: ; the script lane: gather lines through the 'more protocol, eval each
-   ; complete buffer; `exit` quits from inside, the tail quit carries $? out
-   (sh-lines port buf)
-     (: line (sh-getline port)
-        (? (id? line 'eof)
-           (? (tally buf)
-              (: _ (say err "lush: unexpected eof\n") (pin sh-status () 2))
-              0)
-           (: full (? (tally buf) (+ buf (+ "\n" line)) line)
-              r (sh-line full)
-              (? (two? r) (sh-lines port full) (sh-lines port "")))))
-   (sh-file path _args)
+(: ; the script lane rides eval.l's sh-lines ('more gathers continuations,
+   ; `exit` quits from inside); $0 and the positionals land before the run
+   (sh-file path args)
      (? (two? (stat path))
-        (: p (open path "r") _ (sh-lines p "") _ (close p) (quit (sh-status ())))
+        (: _ (pin sh-arg0 () path)
+           _ (pin sh-pos () args)
+           p (open path "r") _ (sh-lines p "") _ (close p) (quit (sh-status ())))
         (: _ (say err (+ (+ "lush: " path) ": not found\n")) (quit 127)))
-   (sh-c cmd)
-     (: r (sh-line cmd)
+   (sh-c cmd rest)                              ; -c CMD [name [args..]], POSIX
+     (: _ (pin sh-arg0 () (? (two? rest) (cap rest) "lush"))
+        _ (pin sh-pos () (? (two? rest) (cup rest) ()))
+        r (sh-line cmd)
         _ (? (two? r) (: _ (say err "lush: unexpected eof\n") (pin sh-status () 2)) 0)
         (quit (sh-status ())))
    (sh-main args)
      (? !args (sh 0)
         (: a (cap args)
-           (? (= a "-c") (? (cup args) (sh-c (caup args))
+           (? (= a "-c") (? (cup args) (sh-c (caup args) (cuup args))
                             (: _ (say err "lush: -c needs a command\n") (quit 2)))
               (sh-file a (cup args)))))
    ; the interactive entry: ignore the tty's job signals (children reset them),

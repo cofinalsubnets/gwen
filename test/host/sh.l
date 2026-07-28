@@ -52,7 +52,44 @@
 (: pr (sh-parse (cup (sh-lex "! false")))
    (assert (id? (cap (cup pr)) 'not)))
 (assert (id? (cap (sh-parse (cup (sh-lex "a &&")))) 'more)
-        (id? (cap (sh-parse (cup (sh-lex "( x )")))) 'err))
+        (id? (cap (sh-parse (cup (sh-lex "( x )")))) 'ok))
+
+; rung 3: compounds parse (and stay 'more while open), ${..} lexes as vop,
+; heredocs rewrite to <h with the body as the target word
+(: pr (sh-parse (cup (sh-lex "if a; then b; fi")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'if)))
+(: pr (sh-parse (cup (sh-lex "while a; do b; done < f")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'rdr)))
+(: pr (sh-parse (cup (sh-lex "case x in a|b) c;; esac")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'case)))
+(: pr (sh-parse (cup (sh-lex "f() { x; }")))
+   (assert (id? (cap pr) 'ok) (id? (cap (cup pr)) 'fun)))
+(assert (id? (cap (sh-parse (cup (sh-lex "if a; then b")))) 'more)
+        (id? (cap (sh-parse (cup (sh-lex "for f in")))) 'more)
+        (= '(1 (w (vop "x" ":-" "y"))) (: r (sh-lex "${x:-y}") r)))
+(: lx (sh-lex "cat <<EOF\nbody\nEOF")
+   t (cup lx)
+   (assert (= 1 (cap lx))
+           (id? (cap (caup t)) 'rd)                      ; (rd () . "<h")
+           (= "<h" (cup (cup (caup t))))))
+
+; rung 3, end to end through the BUILT shell: control flow, functions,
+; positionals, ${}, heredocs, subshells, set -u
+(: r (run (L "out/host/love" "out/host/lush" "-c" "for f in a b; do echo f=$f; done"))
+   (assert (= "f=a\nf=b\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "f() { echo n=$# one=$1; return 3; }; f x y; echo rc=$?"))
+   (assert (= "n=2 one=x\nrc=3\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "case q.l in *.c) echo c;; *.l) echo l;; esac"))
+   (assert (= "l\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "p=a/b.l; echo ${p%.l} ${p#a/} ${U:-dflt} ${#p}"))
+   (assert (= "a/b b.l dflt 5\n" (cup r))))
+(: _ (setenv "LUSH_HD" "quay")
+   r (run (L "out/host/love" "out/host/lush" "-c" "cat <<EOF | tr a-z A-Z\nhd $LUSH_HD\nEOF"))
+   (assert (= "HD QUAY\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "( exit 5 ); echo sub=$?"))
+   (assert (= "sub=5\n" (cup r))))
+(: r (run (L "out/host/love" "out/host/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"))
+   (assert (! (= 0 (cap r)))))
 
 ; expansion: POSIX order -- splitting only over expansion output, quotes
 ; shield, an unset var alone is NO field, a quoted empty IS one, glob last

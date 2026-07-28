@@ -29,6 +29,18 @@
    (sh-fgm _) (? (sh-tty ()) 1 0)
    sh-status #0                                ; $?: the last foreground status
    sh-curline #0                               ; the source line under eval (job display)
+   sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
+   sh-funcs (tablet 0)                         ; functions (name -> body ast)
+   sh-pos #0                                   ; the positionals, a list of strings
+   sh-arg0 #0                                  ; $0 (the script path, or the shell)
+   sh-eflag #0 sh-uflag #0 sh-xflag #0         ; set -e / -u / -x
+   sh-lastbg #0                                ; $!: the last background pid
+   sh-noe #0                                   ; errexit guard depth (conds, && || arms)
+
+   ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on
+   ; the shared floor: eval's `.`/read builtins and the loops all drink from it
+   (sh-getline port) (: c (see port) (? (< c 0) 'eof (= c 10) "" (+ (+ "" c) (sh-rest port))))
+   (sh-rest port)    (: c (see port) (? (< c 0) ""   (= c 10) "" (+ (+ "" c) (sh-rest port))))
 
    (sh-unwords ws) (foldl (\ a w (? (tally a) (+ (+ a " ") w) w)) "" ws)
    (sh-addjob pids state cmd)
@@ -55,12 +67,15 @@
                (? !j 0
                   (: ps (sh-unpid (sh-nth j 0) pid)
                      (? (= ps (sh-nth j 0)) 0
-                        !ps (: _ (puts (+ "[" (+ (show n) (+ "] done  " (+ (sh-nth j 2) "\n")))))
+                        !ps (: _ (? (sh-tty ())          ; notices are the tty's; scripts stay quiet
+                                    (puts (+ "[" (+ (show n) (+ "] done  " (+ (sh-nth j 2) "\n"))))) 0)
                                (pull sh-jobs n 0))
                         (pin sh-jobs n (L ps (sh-nth j 1) (sh-nth j 2)))))))))
    (sh-reapbg _)
      (: r (hear 0) (? (two? r) (: _ (sh-bgnote (cap r)) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
+   ; string membership: member? tests IDENTITY (uninterned strings never hit)
+   (sh-smem? x l) (? (! (two? l)) 0 (? (= x (cap l)) 1 (sh-smem? x (cup l))))
    (sh-int s) (sh-intl s 0 0)
    (sh-intl s i a) (? (= i (tally s)) a (sh-intl s (+ i 1) (+ (* a 10) (- (s i) 48))))
    (sh-lastjob _) (foldl (\ a k (? (< a k) k a)) 0 (keys sh-jobs))

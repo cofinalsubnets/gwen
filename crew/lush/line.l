@@ -14,11 +14,7 @@
 ; drops to cooked, prints ;; a b, welps to the zero point, and the loop
 ; re-prompts: a crash never eats the terminal (installed in (sh _), main.l).
 
-(: ; --- read one line (cooked tty): bytes until \n; 'eof at immediate EOF.
-   (sh-getline port) (: c (see port) (? (< c 0) 'eof (= c 10) "" (+ (+ "" c) (sh-rest port))))
-   (sh-rest port)    (: c (see port) (? (< c 0) ""   (= c 10) "" (+ (+ "" c) (sh-rest port))))
-
-   ; --- the floor: bao's shell-help shape, cooked first so the print lands clean
+(: ; --- the floor: bao's shell-help shape, cooked first so the print lands clean
    (lush-help s a b)
      (? (scare? s)
         (: _ (raw 0) _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10)
