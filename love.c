@@ -3913,7 +3913,12 @@ static void dg_expand(unsigned char *d, int *n, uintptr_t m, int e2) {
 
 static struct ai* ai_dtoa2(struct ai*g, ai_flo_t v) {
  if (v != v) return ioputs(g, "ieee-nan");
- if (v < 0) g = ioputc(g, '-'), v = -v;
+ // ⚠ the SIGN BIT, not v < 0 -- because -0.0 < 0 is FALSE, so a comparison
+ // drops the sign of a zero and this printed "0.0" for it. the reader then read
+ // that back as +0.0, so the roundtrip law failed on exactly one value: love
+ // has a negative zero ((1.0 / -0.0) is -ieee-inf), the printer just could not
+ // say it. -0.0 is a legitimate answer of the arithmetic, not a display quirk.
+ if (((ai_flo_pun){ .d = v }).u >> (8 * sizeof(ai_flo_t) - 1)) g = ioputc(g, '-'), v = -v;
  if (v > dtoa_inf) return ioputs(g, "ieee-inf");
  if (v == 0) return ioputs(g, "0.0");
  int const mbits = sizeof(ai_flo_t) == 4 ? 23 : 52;

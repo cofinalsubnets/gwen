@@ -23,6 +23,17 @@
  ; self-evaluating atoms
  (= 42 (rt 42))
  (= "hi\n" (rt "hi\n"))
+ (= 1.5 (rt 1.5))
+ ; ⚠ NEGATIVE ZERO, the one float whose round trip `=` CANNOT check: -0.0 = 0.0
+ ; is true by IEEE, so a printer that drops the sign passes an equality check
+ ; while losing the value -- and this one did, until it read the sign BIT rather
+ ; than testing (x < 0), which is false for -0.0. love has a negative zero; the
+ ; printer simply could not say it. compare through the RECIPROCAL, where the
+ ; sign is the whole answer.
+ ("-0.0" = (show -0.0)) ("0.0" = (show 0.0))
+ ("0.0" = (show (0 - 0.0)))                          ; +0.0 stays unsigned: 0 - 0 is +0
+ ("-ieee-inf" = (show (1.0 / (rd -0.0))))            ; the sign SURVIVED the loop
+ ("ieee-inf" = (show (1.0 / (rd 0.0))))
  ; ,-prefixed constructor forms reconstruct an equal value
  (aall (= (tuple 1 2 3) (rt (tuple 1 2 3))))
  (aall (= (star-tray '(2 2) '(1 2 3 4)) (rt (star-tray '(2 2) '(1 2 3 4)))))
