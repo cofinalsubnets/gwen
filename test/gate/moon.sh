@@ -63,6 +63,19 @@ moonrun "$ho/.cc-none.c" "$ho/.ccx" > /dev/null 2>&1; r=$?
 printf 'int main() { return 42 }\n' > "$ho/.cc3.c"
 moonrun "$ho/.cc3.c" "$ho/.ccx" > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc parse-error exit (rc $r)"
+# a refusal must NAME ITS CAUSE. an undeclared identifier in a static
+# initializer used to print the initializer's whole IR ("CGDATA-BAD .."), which
+# reads as a codegen gap rather than as a typo -- and was read as one.
+printf 'void *r[] = { (void *) nosuchthing, 0 };\nint main(void) { return 0; }\n' > "$ho/.cc4.c"
+moonrun "$ho/.cc4.c" "$ho/.ccx" > "$ho/.cc4.out" 2>&1; r=$?
+[ $r -eq 1 ] || fail "mooncc undeclared-in-initializer exit (rc $r)"
+grep -q "undeclared 'nosuchthing'" "$ho/.cc4.out" \
+  || fail "mooncc undeclared-in-initializer must name it: $(head -1 "$ho/.cc4.out")"
+# ..and the shape it must NOT refuse: a function's address IS a constant
+printf 'int puts(char const*);\nvoid *const r[] = { (void *) puts, 0 };\nint main(void) { return r[0] == 0; }\n' > "$ho/.cc5.c"
+moonrun "$ho/.cc5.c" "$ho/.cc5" > /dev/null 2>&1 || fail "mooncc fn address in a static initializer"
+"$ho/.cc5"; r=$?
+[ $r -eq 0 ] || fail "mooncc fn address in a static initializer ran wrong (rc $r)"
 
 # -------------------------------------------- -c objects, linked by the system ld
 printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > "$ho/.olib.c"

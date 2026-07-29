@@ -130,8 +130,17 @@ declaration.
   the lesson is the doc's, not the compiler's -- **`(show x)` is not a value
   test.** a printer that normalizes is exactly where a differential must not
   look.
-- ⚠ **mooncc refuses a function address in a static initializer** (`CGDATA-BAD`),
-  which is why phase 2 references at runtime. also open, also small.
+- **a refusal that did not name its cause.** phase 2's first draft died with
+  `CGDATA-BAD <the initializer's whole IR>`, which reads as a codegen gap, and I
+  recorded it as one -- "mooncc refuses a function address in a static
+  initializer". **it does not**; the generator was emitting undeclared
+  identifiers (a broken `sed`), and the compiler was right to refuse them. the
+  fault was the MESSAGE. `gen.l` already had an `'undecl` pin for function
+  bodies; the data path now sets it too, so it says
+  `cc: undeclared 'x' in the initializer of 'y'`. gated in `test/gate/moon.sh`
+  both ways -- the refusal must name it, and a function's address must still
+  image. ⚠ **a diagnostic that describes the compiler's internals instead of the
+  program's fault will be believed, and will send someone hunting.**
 
 ⚠ **this rung stands alone and is worth having even if the rest is never
 built** -- it is the thing that would have caught the original drift, and on its

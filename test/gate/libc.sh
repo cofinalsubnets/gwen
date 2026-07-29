@@ -107,12 +107,10 @@ names=$(grep -hE '^[a-z][a-zA-Z_0-9 ]*[ *][a-z_][a-z_0-9]*\(' \
   echo '#include <stdlib.h>'
   echo '#include <string.h>'
   echo '#include <ctype.h>'
-  # ⚠ referenced at RUNTIME, not in a static initializer: mooncc refuses a
-  # function address in one (CGDATA-BAD), which is its own small gap.
-  echo 'int main(void) {'
-  echo '  void *volatile sink = 0;'
-  for nm in $names; do echo "  sink = (void *) $nm;"; done
-  echo '  return sink == (void *) 1 ? 1 : 0; }'
+  echo 'void *const __refs[] = {'
+  for nm in $names; do echo "  (void *) $nm,"; done
+  echo '  0 };'
+  echo 'int main(void) { return __refs[0] == (void *) 1 ? 1 : 0; }'
 } > "$gen"
 
 nref=$(printf '%s\n' $names | grep -c .)

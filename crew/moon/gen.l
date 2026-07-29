@@ -3694,7 +3694,12 @@
        (<e = 'var)
         (? (peep (g 'fns) <>e ()) `((intern <>e) 0 `('ptr (fnty g <>e)))
            (: en (peep (g 'glob) <>e 0)
-              (? (! (two? en)) 'no
+              ; a name that is neither a function nor a global: NAME IT (the
+              ; same 'undecl pin cgfn uses). cgdata reads it on a refusal, so an
+              ; undeclared identifier in a static initializer reads as itself
+              ; instead of as an IR dump -- which is a codegen gap's face, and
+              ; sent one reader looking for one that was not there.
+              (? (! (two? en)) (: _ (pin g 'undecl <>e) 'no)
                  (: ty <>en (? (arr? ty) `(<en 0 `('ptr <>ty)) `(<en 0 `('ptr ty)))))))
        (<e = 'addr)
         (: lv (imlval g <>e) (? (id? lv 'no) 'no `(<lv <>lv `('ptr <>>lv))))
@@ -5158,12 +5163,17 @@
            (! (id? (strm <gs) want)) (globs >gs want acc)   ; another stream's
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
+              _ (pin g 'undecl ())                      ; fresh per global: the refusal below names THIS one's cause
               bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
               ; an aligned(N) global lands ON its boundary: the pad here places
               ; it within the stream, and the .o's .data header carries the max
               ; N so the linker grants the section the same grain (obj.l)
               an (? (id? want 'data) (peep (g 'aligns) <gs 0) 0)
-              (? (bad? bytes) (: _ (puts (+ ";; CGDATA-BAD " (<gs + ((" " + (show init)) + "\n")))) 'bad)
+              (? (bad? bytes)
+                 (: u (peep g 'undecl ())
+                    _ (puts (? u ("cc: undeclared '" + (u + ("' in the initializer of '" + (<gs + "'\n"))))
+                               (+ ";; CGDATA-BAD " (<gs + ((" " + (show init)) + "\n")))))
+                    'bad)
                  (: als (: (go l a2) (? (! (two? l)) a2
                                           (go >l (? ((peep (g 'alias) <l ()) = <gs)
                                                     (link `('label (intern <l)) a2) a2)))
