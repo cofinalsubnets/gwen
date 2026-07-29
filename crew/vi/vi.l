@@ -39,6 +39,19 @@
                              (vmsg s2 (+ "cannot write " nm)))))
                     (: _ (pin s2 'quit ())
                        (vmsg s2 "no file name"))))))
+       ; the ex read requests: (name) means put that file in the buffer. a name
+       ; that does not open is not an error -- it is a new file, the same welcome
+       ; the startup above gives one. ⚠ presence is uread's (1 text) WRAPPER, not
+       ; the text: an empty file is a real file with nothing in it.
+       (doe s2)
+        (: rq (s2 'doe)
+           (? (! (two? rq)) s2
+              (: _ (pin s2 'doe ())
+                 nm (cap rq)
+                 r (uread nm)
+                 _ (vload s2 (? (two? r) (lines (caup r)) ()) nm)
+                 (vmsg s2 (? (two? r) (nm + ": " + (show (tally (s2 'lines))) + " lines")
+                              (nm + ": new file"))))))
        ; one key, arrows decoded, with the one-byte pushback: (byte next-pend)
        (rd pend)
         (? (<= 0 pend) (L pend -1)
@@ -58,6 +71,7 @@
            (? (< c 0) (fin ())
               (: _ (vstep st c)
                  _ (dow st)
+                 _ (doe st)
                  (? (st 'quit) (fin ())
                     (go (caup kr))))))
        (go -1)))

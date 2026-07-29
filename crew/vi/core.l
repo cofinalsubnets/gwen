@@ -12,7 +12,8 @@
 ; f F t T r g Z), 'reg (the yank: ('lin lines) | ('chr text)), 'undo 'redo
 ; (snapshot stacks), 'file 'dirty 'msg 'cmd (the ex/search line), 'pat 'pattx
 ; 'dir (the search state), 'quit (() | 1), 'dow (a write request: (name) --
-; uread's shape, the face consumes it), 'w 'h (the view).
+; uread's shape, the face consumes it), 'doe (a READ request, same shape: :e/:o
+; leave it, the face reads and calls vload), 'w 'h (the view).
 ;
 ; the SYNTAX PAINT rides four more keys and crew/vi/hue.l: 'hl (paint? -- born
 ; on for a .l name, :hl flips it), 'pens (the class -> escape tablet; the FACE
@@ -26,7 +27,8 @@
 ; the dialect: motions h j k l 0 ^ $ w b e f F t T G gg, counts, operators
 ; d c y (doubled = linewise; with j/k/G/gg linewise, else within the line),
 ; x X D C s r J, i a I A o O, p P (lin + chr), u and ^R, / ? n N (BRE, over
-; re.l), : with w [NAME] q q! wq x hl and a line number, ZZ, ^F ^B ^D ^U paging.
+; re.l), : with w [NAME] e[!] [NAME] o [NAME] q q! wq x hl and a line number,
+; ZZ, ^F ^B ^D ^U paging.
 ; out of scope, documented: visual mode, named registers, ., macros, :s
 ; (sed exists), tabs render raw (the terminal's stops, not ours), no
 ; horizontal scroll (long lines clip at the view's edge).
@@ -62,6 +64,19 @@
                   (pin st 'redo ()))
    (vrest st fr) (: _ (pin st 'lines <fr) _ (pin st 'row <>fr)
                      _ (vgole st <>>fr) _ (pin st 'dirty 1) (vgen st))
+
+   ; the PURE half of :e -- the face reads the file and hands the lines over, this
+   ; starts the buffer over on them: cursor home, no history, not dirty. the paint
+   ; is re-decided from the NEW name, so :e-ing a .l from a .md lights up and the
+   ; other way round goes plain, and the generation bump drops the cached carry
+   ; along with the old buffer it described.
+   (vload st ls nm)
+    (: _ (pin st 'lines (? (two? ls) ls `("")))
+       _ (pin st 'file nm)
+       _ (pin st 'row 0) _ (pin st 'top 0) _ (vgole st 0)
+       _ (pin st 'undo ()) _ (pin st 'redo ())
+       _ (pin st 'dirty ()) _ (pin st 'hl (vdotl nm))
+       (vgen st))
 
    ; splice: replace rows r1..r2 (inclusive) with the list `ins`; r2 = r1 - 1
    ; is a pure insertion at r1 (the end of the buffer included)
@@ -273,6 +288,17 @@
           (vmsg st ("not found: " + (st 'pattx)))))
 
    ; -- the ex line --
+   ; :e / :o -- put another file in the buffer. this file touches no io, so the
+   ; ex line leaves a REQUEST ('doe, uread's shape) exactly the way :w leaves
+   ; 'dow, and the face performs it and calls vload. `!` forces over a dirty
+   ; buffer. (vim's real `:o` is open mode -- a line-editor face we do not have
+   ; and would not want; `:o NAME` reads as `:e NAME` here, which is what the
+   ; hand reaching for it means.)
+   (vedit st nm bang)
+    (? (&& (st 'dirty) (! bang))
+        (vmsg st "no write since last change (e! overrides)")
+       (0 = (tally nm)) (vmsg st "no file name")
+       (pin st 'doe `(nm)))
    (vex st)
     (: s (st 'cmd)
        n (tally s)
@@ -285,6 +311,12 @@
           (|| (s = "wq") (s = "x")) (: _ (pin st 'dow `((st 'file))) (pin st 'quit 1))
           (&& (2 < n) ((s 0) = 119) ((s 1) = 32))              ; w NAME
            (pin st 'dow `((snip s 2 n)))
+          (|| (s = "e") (s = "o")) (vedit st (st 'file) ())    ; reload this file
+          (s = "e!") (vedit st (st 'file) 1)
+          (&& (2 < n) (|| ((s 0) = 101) ((s 0) = 111)) ((s 1) = 32))          ; e NAME | o NAME
+           (vedit st (snip s 2 n) ())
+          (&& (3 < n) (|| ((s 0) = 101) ((s 0) = 111)) ((s 1) = 33) ((s 2) = 32))  ; e! NAME
+           (vedit st (snip s 3 n) 1)
           (s = "hl") (: _ (pin st 'hl (? (st 'hl) () 1))
                         (vmsg st (? (st 'hl) "syntax on" "syntax off")))
           (s = "$") (: _ (pin st 'row ((vnl st) - 1)) (vgole st 0))
@@ -488,7 +520,7 @@
       'reg () 'undo () 'redo ()
       'file file 'dirty () 'msg ""
       'cmd "" 'pat () 'pattx "" 'dir 1
-      'quit () 'dow ()
+      'quit () 'dow () 'doe ()
       'hl (vdotl file) 'pens () 'book () 'hlcar () 'hlgen 0
       'w 80 'h 24)
 
@@ -524,6 +556,11 @@
                  ((st 'mode) = 's) ((? (0 < (st 'dir)) "/" "?") + (st 'cmd))
                  (0 < (tally (st 'msg))) (st 'msg)
                  ((? (0 < (tally (st 'file))) (st 'file) "[no name]") + (? (st 'dirty) " [+]" "") + (? ((st 'mode) = 'i) " -- INSERT --" "") + "  " + (show ((st 'row) + 1)) + "," + (show ((st 'col) + 1))))
-       cr (((st 'row) - top) + 1)
-       cc (: k ((st 'col) + 1) (? (w < k) w k))
+       ; ⚠ in ex and search mode you are typing on the STATUS line, so that is
+       ; where the cursor goes -- one past what you have typed, prefix included.
+       ; it used to stay back in the text, which made `:` look like it had not
+       ; taken: the line grew with no cursor on it.
+       said? (|| ((st 'mode) = 'c) ((st 'mode) = 's))
+       cr (? said? h (((st 'row) - top) + 1))
+       cc (: k (? said? ((tally status) + 1) ((st 'col) + 1)) (? (w < k) w k))
        (e + "[H" + (rows top "") + (clip status) + e + "[K" + e + "[" + (show cr) + ";" + (show cc) + "H")))

@@ -167,6 +167,31 @@
          f (vframe st)
          (&& (= (st 'top) 2) (two? (L f)))))
 
+; --- :e and :o -- the request the face performs, and the buffer swap it calls -
+   _ (assert
+      (= (st? (vgob '("a") (cat (bytes ":e other") (L CR))) 'doe) '("other"))
+      (= (st? (vgob '("a") (cat (bytes ":o other") (L CR))) 'doe) '("other"))   ; the same door
+      (= (st? (vgob '("a") (cat (bytes ":e") (L CR))) 'doe) '("t"))             ; bare :e reloads
+      (! (st? (vgob '("a") (cat (bytes "x:e other") (L CR))) 'doe))             ; dirty refuses ...
+      (= (st? (vgob '("a") (cat (bytes "x:e! other") (L CR))) 'doe) '("other")) ; ... and ! overrides
+      (= (st? (vgob '("a") (cat (bytes "x:e!") (L CR))) 'doe) '("t"))
+      (! (st? (vgob '("a") (cat (bytes ":e ") (L CR))) 'doe)))                  ; no name, no request
+   _ (assert
+      ; the swap starts the file over -- and re-decides the paint from the NEW name
+      (: q (vgo '("a" "b") "jx") _ (vload q '("x" "y" "z") "n.l")
+         (&& (= (lns q) '("x" "y" "z"))
+             (&& (= (at q) '(0 0))
+                 (&& (! (q 'dirty)) (&& (! (q 'undo)) (q 'hl))))))
+      (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") (! (q 'hl)))
+      (: q (vgo '("a") "") _ (vload q () "e.l") (= (lns q) '(""))))             ; an empty read is one empty line
+
+; --- the cursor sits where you are TYPING: on the status line in ex and search -
+   _ (assert
+      (: f (mini '("ab") ":") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[4;2H")))
+      (: f (mini '("ab") ":wq") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[4;4H")))
+      (: f (mini '("ab") "/x") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[4;3H")))
+      (: f (mini '("ab") "") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[1;1H"))))
+
 ; --- the syntax paint (crew/vi/hue.l): classes, the carry, and the one law
 ; that keeps every exact-frame assertion above honest --------------------------
    hbk (hue-book ())
