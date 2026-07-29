@@ -1,12 +1,13 @@
-; --- test/host/lupa.l: lupa 🔍, the .l language server (crew/lupa/lupa.l) ---
+; --- test/host/libra.l: libra ⚖, the .l language server (crew/libra/libra.l) ---
 ; the ports are ARGUMENTS, so a whole lsp conversation runs in-process here: the
 ; client's messages go in on a (tap ..) and the server's come back out of a
 ; (jug 0). no subprocess, no pipes, no timing, and a failure points at a line
 ; rather than at a hung editor. run standalone from the repo root:
-;   cat test/00-init.l test/host/lupa.l | out/host/love
+;   cat test/00-init.l test/host/libra.l | out/host/love
 
 (use 'json)
-(use 'lupa)
+(use 'lint)          ; libra splices this BELOW itself, so the session must ask for it too
+(use 'libra)
 
 ; a string as an input PORT (prel's own trick: index it over its jot)
 (: (lt-port s) (tap (map s (jot (tally s)))))
@@ -17,7 +18,7 @@
 ; every frame the server wrote, parsed back into values
 (: (lt-said j)
    (: p (lt-port (slurp j))
-      (go acc) (: m (lupa-recv p)
+      (go acc) (: m (libra-recv p)
                   (? (! (two? m)) (rev acc)
                      (: r (json-read <>m)
                         (go (? (two? r) (link <>r acc) acc)))))
@@ -27,7 +28,7 @@
 (: (lt-talk vs)
    (: j (jug 0)
       txt (foldl (\ a v (a + (lt-wire v))) "" vs)
-      _ (lupa-serve (lt-port txt) j)
+      _ (libra-serve (lt-port txt) j)
       (lt-said j)))
 
 ; is ndl anywhere in hay? (for reading the raw wire, where key order is the
@@ -52,12 +53,12 @@
 ; a header block then exactly N bytes; the length is in BYTES, so utf-8 rides
 ; through without a character count anywhere
 (assert
- (: p (lt-port (lt-wire "hi")) r (lupa-recv p) (&& (two? r) ("\"hi\"" = <>r)))
- (: p (lt-port (lt-wire "é")) r (lupa-recv p) ("\"é\"" = <>r))
- !(lupa-recv (lt-port ""))                                  ; eof: nothing, out of band
- !(lupa-recv (lt-port "Content-Length: 5\r\n\r\nab"))        ; a short body is not a message
+ (: p (lt-port (lt-wire "hi")) r (libra-recv p) (&& (two? r) ("\"hi\"" = <>r)))
+ (: p (lt-port (lt-wire "é")) r (libra-recv p) ("\"é\"" = <>r))
+ !(libra-recv (lt-port ""))                                  ; eof: nothing, out of band
+ !(libra-recv (lt-port "Content-Length: 5\r\n\r\nab"))        ; a short body is not a message
  ; the header name is matched case-blind, and a stray header rides through ignored
- (: p (lt-port "content-length: 2\r\nX-Junk: 1\r\n\r\n42") r (lupa-recv p) ("42" = <>r)))
+ (: p (lt-port "content-length: 2\r\nX-Junk: 1\r\n\r\n42") r (libra-recv p) ("42" = <>r)))
 
 ; --- initialize -----------------------------------------------------------
 ; ⚠ id 0 is a REQUEST, not a notification: json-rpc numbers from 0, and a bare
@@ -67,20 +68,20 @@
     r  <rs
     (&& (1 = (tally rs)) (0 = (r "id")) ("2.0" = (r "jsonrpc"))
         (1 = (((r "result") "capabilities") "textDocumentSync"))
-        ("lupa" = (((r "result") "serverInfo") "name")))))
+        ("libra" = (((r "result") "serverInfo") "name")))))
 
 ; --- diagnostics ----------------------------------------------------------
 ; the positions are lint's, dropped by one: lint counts from 1, lsp from 0. an
 ; unclosed opener points at the OPENER (line 1 col 1 -> line 0 character 0).
 (assert
- (: ds (lupa-diags lt-bad)
+ (: ds (libra-diags lt-bad)
     d  <ds
     (&& (1 = (tally ds))
         (0 = (((d "range") "start") "line")) (0 = (((d "range") "start") "character"))
         (0 = (((d "range") "end") "line"))   (1 = (((d "range") "end") "character"))
-        (1 = (d "severity")) ("lupa" = (d "source")) ("unclosed (" = (d "message"))))
- !(lupa-diags lt-ok)                                        ; a clean document: no diagnostics
- !(lupa-diags ""))                                          ; ...and an empty one likewise
+        (1 = (d "severity")) ("libra" = (d "source")) ("unclosed (" = (d "message"))))
+ !(libra-diags lt-ok)                                        ; a clean document: no diagnostics
+ !(libra-diags ""))                                          ; ...and an empty one likewise
 
 ; didOpen publishes them; didChange with a repaired document publishes the EMPTY
 ; array, which is how lsp says "forget what i told you". `[]` and not `null` --
@@ -102,7 +103,7 @@
  ; and it goes out ON THE WIRE as [] -- never null, which an editor would ignore
  ; instead of clearing (the whole reason json names null and not the empty array)
  (: j (jug 0)
-    _ (lupa-serve (lt-port (lt-wire (lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-ok)))) j)
+    _ (libra-serve (lt-port (lt-wire (lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-ok)))) j)
     t (slurp j)
     (&& (lt-has? t "\"diagnostics\":[]") (! (lt-has? t "\"diagnostics\":null")))))
 
@@ -158,9 +159,31 @@
 (assert
  (: j (jug 0)
     txt ("Content-Length: 7\r\n\r\n{nope!!" + (lt-wire (lt-req 3 "initialize" (tablet 0))))
-    _ (lupa-serve (lt-port txt) j)
+    _ (libra-serve (lt-port txt) j)
     rs (lt-said j)
     (&& (1 = (tally rs)) (3 = (<rs "id")))))
 
-(puts "lupa: ok")
+; --- the other two verbs --------------------------------------------------
+; the FORMATTER is a reindenter: it replaces leading whitespace and touches
+; nothing else, so a line break, an inside-the-line alignment and a comment all
+; survive it. laying out an already-laid-out file is the identity, which is what
+; makes `fmt -n` a usable gate.
+(assert
+ ("(: a 1\n   b 2)\n" = (libra-fmt "(: a 1\n b 2)\n"))          ; a binding aligns under the first
+ ("(: a 1\n   b 2)\n" = (libra-fmt (libra-fmt "(: a 1\n b 2)\n")))   ; ...and again is the identity
+ ("(? 1 'a\n   2 'b)\n" = (libra-fmt "(? 1 'a\n      2 'b)\n"))      ; ? clauses align, tests flat
+ ; a line INSIDE a string keeps its own leading spaces -- they are the string
+ (: s "(: a \"one\n   two\")\n" (s = (libra-fmt s)))
+ ; trailing whitespace goes, and a whitespace-only line empties
+ ("(: a 1)\n" = (libra-fmt "(: a 1)   \n"))
+ ("\n(: a 1)\n" = (libra-fmt "   \n(: a 1)\n")))
+
+; the CHECK is the same scan the server publishes, so the two can never
+; disagree about a file: one warning here is one diagnostic there
+(assert
+ (1 = (tally (lint-scan "(: a 1\n")))
+ (1 = (tally (libra-diags "(: a 1\n")))
+ !(lint-scan "(: a 1)\n") !(libra-diags "(: a 1)\n"))
+
+(puts "libra: ok")
 (putc 10)
