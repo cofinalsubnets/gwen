@@ -324,6 +324,22 @@
                    (member? tb '(long ulong llong ullong))))
             (|| (u32? g ta) (u32? g tb))))
    (rbin g ta tb) (? (u32bin? g ta tb) 'uint (ubin ta tb))
+   ; ⚠ and ASK THE LITERAL what C would call it. a bare number's value tuple is
+   ; typed 'long on the 64-bit targets (the register is 64-bit and every other
+   ; consumer wants that), but C says an unsuffixed literal that fits is an `int`
+   ; -- and u32bin? above DISQUALIFIES on a long operand, so `(x * 0x076be629)`
+   ; on a uint x skipped its wrap entirely and the product carried bits past 31
+   ; that C had already thrown away.
+   ; x64 never saw it: its immediate lane catches a constant multiply first and
+   ; passes 'int by hand (immop). arm64 has NO mul-immediate form, so the same
+   ; expression fell through to the register lane, which read the literal off its
+   ; value tuple and got 'long. so the fault was in the shared model and only the
+   ; x64 path happened to route around it -- the classic shape of a bug that a
+   ; single-target differential cannot see. found by the arm64 battery
+   ; differential, in test/cc/104-u32wrap.c's own de Bruijn ctz.
+   ; a literal too WIDE for int really is long (C), and then the result is 64-bit
+   ; and must not wrap -- hence the range test rather than a blanket 'int. --
+   (numty n) (? (&& (-2147483648 <= n) (n <= 2147483647)) 'int 'long)
    (scc op unsg) (? (! unsg) op (op = 'lt) 'below (op = 'gt) 'above (op = 'le) 'be (op = 'ge) 'ae op)
    (rflip op) (? (op = 'lt) 'gt (op = 'gt) 'lt (op = 'le) 'ge (op = 'ge) 'le op)      ; MIRRORED (n < x reads x > n): constant-on-the-left
    (irop op) (? (op = '+) 'add (op = '-) 'sub (op = '*) 'imul                         ; C op -> IR mnemonic; not one of the six -> 'no
@@ -2179,6 +2195,8 @@
                    b (cgexpr g env rhs)
                    (? (bad? b) 'bad
                       (: tb (vty b)
+                         ta9 (? (<lhs = 'num) (numty <>lhs) ta)   ; C's type for a bare
+                         tb9 (? (<rhs = 'num) (numty <>rhs) tb)   ; literal -- see numty
                          av (? (id? ah 'sh) a ah)
                          ; the memory shuttle: left in r1, right in r0 (today's shape)
                          (shut z9)
@@ -2187,7 +2205,7 @@
                              pa (ptr? ta) pb (ptr? tb)
                              unsg (|| (usg? ta) (usg? tb))            ; either operand unsigned -> unsigned divide
                              cunsg (|| unsg (|| pa pb))               ; a POINTER relational compares UNSIGNED too (C: addresses are unsigned; matters where a pointer sets bit 63)
-                             u32 (u32bin? g ta tb)                    ; a 32-bit unsigned result wraps -- see u32bin?
+                             u32 (u32bin? g ta9 tb9)                  ; a 32-bit unsigned result wraps -- see u32bin?
                              nar (? u32 `(`('zx4 'r0)) ())            ; the shuttle always lands in r0 (back)
                              nty (? u32 'uint 'long)
                              (? (&& (t32? g) (&& (! (|| pa pb)) (|| (llt? ta) (llt? tb))))
@@ -2288,7 +2306,7 @@
                                            'bad)
                                    m32 (&& u32 (op = '*))              ; only the multiply here can carry
                                    (? (! (bad? tail))
-                                      (mkv (rbin g ta tb) 'r0
+                                      (mkv (rbin g ta9 tb9) 'r0
                                            (mid + tail + back + (? m32 nar ())))
                                       (member? op '(eq ne lt le gt ge))
                                        (mkv 'long 'r0 (mid + `(`('cmp 'r1 'r0) `('set (scc op cunsg) 'r0))))
@@ -2357,13 +2375,13 @@
                                         (member? op '(+ - * & | ^))
                                          (: iop2 (irop op)
                                             rd (? (&& wnt (! (id? wnt rB))) wnt (rdst g rA))
-                                            u32 (&& (member? op '(+ - *)) (u32bin? g ta tb))
+                                            u32 (&& (member? op '(+ - *)) (u32bin? g ta9 tb9))
                                             ; holo reorders a commutative rd==rb; sub CANNOT (alias-dst) --
                                             ; a borrowed left + dry pool can land rd on rB's r0
                                             (? (&& (op = '-) (id? rd rB)) (shut ())
                                                (: fs (pre + `(`(iop2 rd rA rB)) + (? u32 `(`('zx4 rd)) ()))
                                                   _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
-                                                  (mkv (rbin g ta tb) rd fs))))
+                                                  (mkv (rbin g ta9 tb9) rd fs))))
                                         (shut ())))))))))))))
 
    ; r3 (rbx) is CALLEE-SAVED under SysV and gen leans on it (callr park, the
