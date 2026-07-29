@@ -35,22 +35,45 @@ stay what they are. drafted 2026-07-28; trued up as rungs land.
 
 ## the rungs (each green and useful on its own)
 
-### 1. holo grows the SYSTEM vocabulary
+### 1. holo grows the SYSTEM vocabulary -- LANDED 2026-07-28
 
-the privileged instructions, as ordinary holo IR ops with laws:
+the privileged instructions are ordinary holo IR ops now, and the text
+front-end takes them with no grammar change (which is the seam mooncc's
+inline asm parses through -- `asm-text` is what rung 3's templates land in).
 
-* arm64.l: `mrs`/`msr` (sysreg by name -> its 16-bit encoding; the table is
-  the ~dozen the kernel touches, growable), msr-immediate (daifset/daifclr/
-  spsel), `dsb`/`isb` (+ domains), `tlbi`, `ic`/`dc`, `at`, `brk`, `hvc`,
-  `wfi`/`wfe`, `eret`.
-* x64.l: `cli`/`sti`/`hlt`, `in`/`out` (b/w/l forms), `int3`, `ud2`,
-  `iretq`, `lgdt`/`lidt`/`ltr`, mov to/from crN, `rdmsr`/`wrmsr`,
-  `invlpg`, `swapgs` if the vectors want it.
-* law files keep the encodings honest the way holotest already does:
-  byte-differential against clang's assembly of the same instruction.
+* arm64.l: `mrs`/`msr` over a ~score-row sysreg table, `msri` (the PSTATE
+  immediate: daifset/daifclr/spsel), `dsb`/`dmb` (+ domains) / `isb`, and
+  the SYS family `tlbi`/`ic`/`dc`/`at` -- an operation NAME then a register,
+  `zr` for the whole-system forms. exception generation `brk`/`hvc`/`smc`/
+  `udf` plus `dbrk`, and `wfi`/`wfe`/`eret`.
+* x64.l: `cli`/`sti`/`hlt`, `ud2`, `iretq`, `swapgs`, `rdmsr`/`wrmsr`,
+  `cpuid`/`rdtsc`, `int n`, `ltr`, `ldcr`/`stcr` (mov from/to crN),
+  `lgdt`/`lidt`/`invlpg`. `in`/`out` were already there.
+* MRS/MSR and the SYS family turned out to be ONE encoding wearing four
+  faces -- fixed head, an L bit, and a 16-bit selector op0:op1:CRn:CRm:op2
+  at [20:5] -- so a system register is its selector with op0 = 2 or 3 and a
+  SYS operation the same shape with op0 = 1. one `sreg` packer under all of
+  it, and every table row is one instruction.
+* the laws: goldens in holotest (542 now), plus `crew/holo/fuzz/sysdiff.py`
+  in test_holofuzz -- a byte-exact differential that ASSEMBLES the intended
+  text with llvm-mc and demands the same bytes. it reads the arm64 op tables
+  out of arm64.l itself, so a row added to holo is checked with no edit to
+  the harness. 910 encodings, zero discrepancies.
 
-this rung feeds BOTH consumers: the neutral inline-asm templates (rung 3)
-and the .S lays (rung 4). nothing downstream starts until its ops exist here.
+two findings worth carrying:
+
+* ⚠ **`mov` cannot say SP on arm64.** it is ORR against XZR, and encoding 31
+  in THAT form reads as the zero register -- so `(mov r9 sp)` would have
+  quietly answered zero. kernel code moves SP by name (`mov x9, sp` around
+  an `msr spsel, #1`), so this was a live hole: `mov` now SCARES on sp and
+  points at `(lea d s 0)`, add-#0, which is what the assembler writes.
+* `int 3` stays the two-byte `CD 03`. an assembler folds it to `CC`, which
+  is what `trap` already emits; keeping the long form means the instruction
+  you wrote is the one you get (they part company under vm86).
+
+not added, because nothing asks: `dc` maintenance-by-set/way, ASID-scoped
+tlbi variants, `sgdt`/`sidt`, the debug registers. one row is one
+instruction, so each is a two-line change when a caller appears.
 
 ### 2. the holo KERNEL LINK lane (vaddr =/= paddr) -- LANDED 2026-07-28
 
@@ -156,8 +179,9 @@ cannot say -- and they port to holo IR lays beside it:
 
 2 went first (it needed nothing from rung 1 and carried no compiler risk),
 and it landed the value early: our linker is under the shipping kernel on
-both arches and all three doors. what is left is 1 -> 3 -> 4 -> 5, with
-the probes before rung 1. rung 1 is holo work (~a few hundred lines +
-laws), 3 is a mechanical sweep with one new header per arch, 4 is two lay
-files (~mksys.l x 2-3 in size), 5 is makefile + gates. nothing before 5
-disturbs the clang COMPILER lanes, so the tree stays green the whole climb.
+both arches and all three doors. 1 followed, and it is pure ADDITION -- new
+ops, no caller yet, nothing in the tree lowered differently. what is left
+is 3 -> 4 -> 5. 3 is a mechanical sweep with one new header per arch, 4 is
+two lay files (~mksys.l x 2-3 in size), 5 is makefile + gates. the probes
+below belong before 5 (rungs 3 and 4 do not depend on them). nothing before
+5 disturbs the clang COMPILER lanes, so the tree stays green the whole climb.

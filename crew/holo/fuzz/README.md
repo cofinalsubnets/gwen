@@ -98,13 +98,47 @@ positions where the two backends would diverge — the fuzz analogue of respecti
   index slots (`irand`).
 - **arm64**: encoding `31` is SP only in load/store-base and add/sub-immediate contexts; as a
   general data-processing or value operand it is XZR (the zero register). holo maps `sp`→31 and
-  uses it *only* as SP (per `crew/holo/arm64.l`), so `(mov sp x)`, `(cmp x sp)`, `(jmpr sp)`, a
-  loaded/stored value register of `sp`, etc. silently encode the zero register — diverging from
-  x64 where `rsp` is a general operand. Generators use `nrand` (no-sp) for those positions and
-  keep `sp` only for load/store base and add/sub-immediate (the reachable stack cases, verified).
+  uses it *only* as SP (per `crew/holo/arm64.l`), so `(cmp x sp)`, `(jmpr sp)`, a loaded/stored
+  value register of `sp`, etc. silently encode the zero register — diverging from x64 where
+  `rsp` is a general operand. Generators use `nrand` (no-sp) for those positions and keep `sp`
+  only for load/store base and add/sub-immediate (the reachable stack cases, verified).
 
 Neither is reachable from real codegen. If holo ever grows a caller that could hit these, the
-backend should hard-reject rather than silently mis-encode.
+backend should hard-reject rather than silently mis-encode — which is what `mov` now does: a
+kernel moves SP by name (`mov x9, sp` around an `msr spsel`), and `mov` is ORR against XZR, so
+`(mov r9 sp)` would have answered zero. It **scares** instead and points at `(lea d s 0)`,
+add-#0, which is the instruction the assembler writes for that move.
+
+## The system lane — `sysdiff.py`
+
+`sysdiff.py` checks the privileged instructions with a different, sharper oracle. Each system op
+has exactly one encoding and a small enumerable operand space (a system register by name, a
+barrier domain, a cache operation), so instead of disassembling holo's bytes it **assembles the
+intended text with `llvm-mc` and demands the same bytes** — byte-exact, in both directions of
+the encode/decode pair.
+
+It reads the op tables straight out of `crew/holo/arm64.l` (`arm64-sysregs`, `arm64-pstate`,
+`arm64-barrier-opts`, and the four SYS tables), so **a row added to holo is checked on the next
+run with no edit here** — the uncovered row is the one that ships wrong. The x86 side has no
+name tables (its operand space *is* the register file), so it enumerates: cr0–cr8 × every GPR ×
+read/write, `lgdt`/`lidt`/`invlpg` over every base including the rsp-SIB and rbp-forced-disp
+quirks, `ltr`, all 256 `int` vectors, and the nullaries.
+
+```
+python3 crew/holo/fuzz/sysdiff.py             # both arches (in test_holofuzz)
+python3 crew/holo/fuzz/sysdiff.py --arch arm64 -v
+```
+
+Two rejections by `llvm-mc` are counted as skips, not failures, because holo is deliberately the
+more permissive of the two: writing a **read-only** system register (holo does not model
+read-only-ness — a kernel that writes one takes a fault, not wrong bytes), and the wrong-arity
+spelling of a SYS operation (`tlbi vae1` with no register — holo encodes Rt=31, XZR, which is a
+legal operand it simply does not police). Each SYS operation offers both spellings and the run
+fails if `llvm-mc` takes neither, so a table typo cannot hide behind a skip.
+
+Status as of 2026-07-28: **910 system encodings, zero discrepancies** (743 x64, 167 arm64). The
+one deliberate divergence is `int 3`: `llvm-mc` folds it to the one-byte `CC`, holo keeps `CD 03`
+(see `crew/holo/x64.l` — `trap` is the `CC` form).
 
 ## Extending
 

@@ -76,6 +76,28 @@
       `("io.out"      "ee66efef"              '((outb) (outw) (outl)))
       `("io.str"      "fcf36c66f36df36d"      '((cld) (insb) (insw) (insl)))
       `("io.strout"   "f36e66f36ff36f"        '((outsb) (outsw) (outsl)))
+      ;; the system lane -- the kernel's own vocabulary, every golden from llvm-mc
+      ;; --show-encoding. the flag/halt nullaries, the MSR pair, the interrupt return,
+      ;; and the vectored int (int3 is `trap`, CC, already above).
+      `("sys.flags"   "fafbf4"                '((cli) (sti) (hlt)))
+      `("sys.ud2"     "0f0b"                  '((ud2)))
+      `("sys.iretq"   "48cf"                  '((iretq)))
+      `("sys.swapgs"  "0f01f8"                '((swapgs)))
+      `("sys.msr"     "0f320f30"              '((rdmsr) (wrmsr)))
+      `("sys.cpuid"   "0fa20f31"              '((cpuid) (rdtsc)))
+      `("sys.int"     "cd00cd20"              '((int 0) (int 32)))
+      ;; the control registers: the CR number rides ModRM.reg, so REX.R is what reaches
+      ;; cr8 and REX.B what reaches r8 -- and neither carries REX.W (a CR move is 64-bit
+      ;; already). read then write, low pair and both extension bits.
+      `("sys.ldcr"    "0f20c00f20e3"          '((ldcr r0 0) (ldcr r3 4)))     ; mov rax,cr0 ; mov rbx,cr4
+      `("sys.ldcr.hi" "410f20d8440f20c0"      '((ldcr r7 3) (ldcr r0 8)))     ; mov r8,cr3 ; mov rax,cr8
+      `("sys.stcr"    "0f22c00f22db"          '((stcr 0 r0) (stcr 3 r3)))     ; mov cr0,rax ; mov cr3,rbx
+      `("sys.stcr.hi" "410f22e0440f22c0"      '((stcr 4 r7) (stcr 8 r0)))     ; mov cr4,r8 ; mov cr8,rax
+      ;; the descriptor tables and INVLPG: one opcode, 0F 01, told apart by the ModRM digit.
+      `("sys.lgdt"    "0f01170f015710"        '((lgdt r6 0) (lgdt r6 16)))    ; lgdt [rdi] ; lgdt [rdi+16]
+      `("sys.lidt"    "0f015e08"              '((lidt r5 8)))                 ; lidt [rsi+8]
+      `("sys.invlpg"  "0f013f410f017808"      '((invlpg r6 0) (invlpg r7 8))) ; invlpg [rdi] ; invlpg [r8+8]
+      `("sys.ltr"     "0f00d8410f00d8"        '((ltr r0) (ltr r7)))           ; ltr ax ; ltr r8w
       ;; tp: the thread pointer -- mov d, fs:[0]
       `("tp"          "64488b042500000000"    '((tp r0)))            ; mov rax, fs:[0]
       `("tp.hi"       "644c8b142500000000"    '((tp r9)))            ; mov r10, fs:[0]
@@ -219,6 +241,15 @@
    _ (chk-eq "text.full"
         (holo-hex 'x64 '((add r0 r0 r1) (label loop) (dec r0) (br ne loop) (ret)))
         (holo-hex 'x64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
+   ;; the SYSTEM lane rides the text front-end with no grammar change -- an operation name and a
+   ;; system register are ordinary symbols, underscores and all. this is the seam mooncc's inline
+   ;; asm parses through (asm-text is what crew/moon/gen.l calls), so the kernel's templates land
+   ;; here: `mrs r0, ttbr1_el1` in a header, these bytes out.
+   _ (chk-eq "text.sys.x64" (holo-hex 'x64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
+                            (holo-hex 'x64 (asm-text "cli\nldcr r0, 2\nlidt r6, 0\niretq")))
+   _ (chk-eq "text.sys.a64"
+        (holo-hex 'arm64 '((mrs r0 ttbr1_el1) (dsb ish) (tlbi vmalle1is zr) (isb) (eret)))
+        (holo-hex 'arm64 (asm-text "mrs r0, ttbr1_el1\ndsb ish\ntlbi vmalle1is, zr\nisb\neret")))
 
    ;; -- the ELF linker (crew/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))
@@ -363,7 +394,39 @@
       `("a64.cmn"      "1f1c00b1"          '((cmp r0 -7)))               ; cmn x0, #7 (negative imm flips)
       `("a64.set.np"   "e0679f9a"          '((set np r0)))               ; cset x0, vc (np aliases vc)
       `("a64.la"       "000000900040009107000090e740009141424300"
-                        '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0)))))  ; adrp+add pair: x at +16, page delta 0, lo12 16
+                        '((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))  ; adrp+add pair: x at +16, page delta 0, lo12 16
+      ;; the system lane -- the kernel's own vocabulary, every golden from llvm-mc
+      ;; --show-encoding. MRS/MSR and the SYS family share one encoding; these goldens
+      ;; walk both op0 banks (el1 at op1=0, el0 at op1=3) and both L directions.
+      `("a64.mrs"      "091038d5007438d523003bd5"
+                        '((mrs r9 sctlr_el1) (mrs r0 par_el1) (mrs r3 ctr_el0)))
+      `("a64.mrs.lr"   "be0038d5"          '((mrs lr mpidr_el1)))        ; mrs x30, mpidr_el1
+      `("a64.msr"      "031018d5222018d500c018d5"
+                        '((msr sctlr_el1 r3) (msr ttbr1_el1 r2) (msr vbar_el1 r0)))
+      `("a64.msr.el0"  "2ee21bd5"          '((msr cntp_ctl_el0 r14)))    ; msr cntp_ctl_el0, x14
+      ;; MSR (immediate): a PSTATE FIELD, the 4-bit immediate in CRm -- interrupts off, IRQ
+      ;; back on, and the stack-pointer select.
+      `("a64.msri"     "df4f03d5ff4203d5bf4100d5"
+                        '((msri daifset 15) (msri daifclr 2) (msri spsel 1)))
+      `("a64.barrier"  "9f3b03d59f3f03d5bf3b03d5df3f03d5"
+                        '((dsb ish) (dsb sy) (dmb ish) (isb)))
+      ;; the SYS operations. the whole-system forms take no register -- that operand is `zr`,
+      ;; which is Rt = 31 (XZR), exactly what the assembler puts there.
+      `("a64.tlbi"     "1f8308d51f8708d5208308d5"
+                        '((tlbi vmalle1is zr) (tlbi vmalle1 zr) (tlbi vae1is r0)))
+      `("a64.cache"    "1f7508d520750bd5217b0bd5227e0bd5237608d524740bd5"
+                        '((ic iallu zr) (ic ivau r0) (dc cvau r1) (dc civac r2) (dc ivac r3) (dc zva r4)))
+      `("a64.at"       "217808d5007808d5"  '((at s1e1w r1) (at s1e1r r0)))
+      ;; exception generation. `dbrk` is A64's HLT -- the DEBUGGER halt (hlt #0xf000 is the
+      ;; semihosting call), a different instruction from x86's `hlt`, which stops the core.
+      `("a64.exc"      "000020d4409a20d400005ed4020000d4030000d400000000"
+                        '((brk 0) (brk 1234) (dbrk 61440) (hvc 0) (smc 0) (udf 0)))
+      `("a64.wait"     "7f2003d55f2003d5e0039fd6"  '((wfi) (wfe) (eret)))
+      ;; the SP move, which kernel code makes by name (mov x9, sp ; msr spsel, #1 ; mov sp, x9).
+      ;; `mov` cannot say it -- ORR reads encoding 31 as XZR -- so it is `lea .. 0`, add #0, and
+      ;; `mov` SCARES on sp rather than quietly answer the zero register.
+      `("a64.sp.read"  "e9030091"          '((lea r9 sp 0)))             ; mov x9, sp
+      `("a64.sp.write" "3f010091"          '((lea sp r9 0))))            ; mov sp, x9
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
    ;; -- the thumb2 backend (crew/holo/thumb2.l): the SAME neutral IR, a THIRD target -- ARMv7E-M

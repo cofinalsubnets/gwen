@@ -24,6 +24,13 @@ slt/feq predicates). wide surface (25 x64 classes + 16 arm64 + 27 riscv), ~32.5k
 samples, zero discrepancies. the disassemblers are *trusted* -- this rung grounds holo's decode
 against the real ISA.
 
+the SYSTEM lane rides the same rung with the oracle turned around (`sysdiff.py`, same gate). a
+privileged instruction has exactly ONE encoding and a small enumerable operand space, so the
+sharp check is the assemble side: write the intended text, hand it to llvm-mc, demand the same
+bytes holo produced -- byte-exact, no non-uniqueness to tolerate. the arm64 op tables are read
+out of `crew/holo/arm64.l` itself, so a row added to holo is checked with no edit to the
+harness; x86 enumerates its register file instead. 910 encodings, zero discrepancies.
+
 **rung 2 -- prove** (proof/rocq/enc*.v, `make test_encver`). a machine-checked *reference encoder*
 in Rocq for a slice of the ISA, with `<slice>_roundtrip_ok` proving `decode (encode i) = Some i`
 over the slice's domain by `vm_compute` -- the domain is finite, so the exhaustive check IS the
@@ -122,6 +129,7 @@ first, smallest instance of that general move: prove the model, then bind the re
 make test_holofuzz     # rung 1: fuzz both backends (needs python3 + objdump / llvm-mc)
 make test_encver       # rung 2: the three prove slices (needs coqc + ocamlopt)
 python3 crew/holo/fuzz/fuzz.py --arch arm64 -n 500 --seed 7   # a bigger fuzz campaign by hand
+python3 crew/holo/fuzz/sysdiff.py -v                          # the system lane, row by row
 ```
 
 both gates skip gracefully when their toolchain is absent, and both live in `make test_all`.

@@ -719,6 +719,10 @@ endif
 # Needs python3; each arch runs only if its disassembler is present, no-op like
 # test_extract. Fixed seed, small n so it stays a few seconds in test_all; run
 # bigger campaigns by hand (see crew/holo/fuzz/README.md).
+# sysdiff.py rides the same lane for the SYSTEM instructions, where the operand
+# space is enumerable and the oracle sharper: ASSEMBLE the intended text with
+# llvm-mc and demand the same bytes. It reads holo's own op tables out of
+# crew/holo/arm64.l, so a row added there is checked with no edit here.
 PYTHON3 ?= $(shell command -v python3 2>/dev/null)
 ifeq ($(PYTHON3),)
 test_holofuzz:
@@ -738,6 +742,10 @@ test_holofuzz: host
 	   $(PYTHON3) crew/holo/fuzz/fuzz.py --arch riscv -n 8 --seed 20250717 \
 	     || { echo "FAIL holofuzz riscv -- a holo encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (riscv skipped: no llvm-mc)"; fi
+	@if command -v llvm-mc >/dev/null 2>&1; then \
+	   $(PYTHON3) crew/holo/fuzz/sysdiff.py \
+	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
+	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 endif
 # uu's NbE kernel lives at love/uu.l (mark + kernel + the sweep into the `uu`
 # book at its tail) and bakes post.l-style through the lib_h/%0.h pattern

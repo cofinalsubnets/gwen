@@ -297,6 +297,33 @@
    (emit-ldss d base disp)                                                               ; (ldss f base disp)  xmm(d) <- [base+disp] (low 32)
       (: dn (xrn d) (catall `(`(243) (xrex 0 dn (rn base)) `(15 16) (mem dn base disp))))
 
+   ;; -- the SYSTEM lane: what a kernel says and a userland never does. every encoding below was
+   ;; taken from `llvm-mc -triple=x86_64 --show-encoding`, and holotest keeps them there.
+   ;;
+   ;; the descriptor-table loads and INVLPG are one opcode, 0F 01, told apart by the ModRM DIGIT
+   ;; -- so they ride `mem` (which takes the digit where a register number would go) with a REX
+   ;; only when the base is a high register. no REX.W: these are 64-bit operations already.
+   (emit-m0f digit opc base off)
+      (: bn (rn base)
+         ((? ((hi bn) = 0) () `((rex 0 0 0 1))) + (opc + (mem digit base off))))
+   ;; the control registers. 0F 20 reads, 0F 22 writes; the CR NUMBER rides ModRM.reg (so REX.R
+   ;; is what reaches cr8) and the GPR rides ModRM.rm. again no REX.W -- a CR move is 64-bit
+   ;; whether or not anyone says so.
+   (emit-cr opc n g)
+      (: gn (rn g)
+         _ (? (&& (n >= 0) (n <= 15)) 0 (scare 'x64-crnum n))
+         ((? (&& ((hi n) = 0) ((hi gn) = 0)) () `((rex 0 (hi n) 0 (hi gn))))
+          + `(15 opc (modrm 3 n gn))))
+   (emit-ldcr d n) (emit-cr 32 n d)                                   ; (ldcr d n)  d <- CRn
+   (emit-stcr n s) (emit-cr 34 n s)                                   ; (stcr n s)  CRn <- s
+   (emit-ltr s) (: sn (rn s)                                          ; 0F 00 /3 -- the operand is r/m16
+      ((? ((hi sn) = 0) () `((rex 0 0 0 1))) + `(15 0 (modrm 3 3 sn))))
+   ;; INT n, CD ib -- the long form for EVERY vector, vector 3 included. an assembler usually
+   ;; folds `int 3` down to the one-byte CC, and CC is what `trap` already emits; keeping CD 03
+   ;; here means the form you WROTE is the form you get (they part company under vm86, where CD
+   ;; 03 faults at IOPL < 3 and CC does not). so: `trap` for a breakpoint, `int` for a vector.
+   (emit-int n) (: _ (? (&& (n >= 0) (n <= 255)) 0 (scare 'x64-int-vector n)) `(205 n))
+
    ;; the dispatch: an EMITTER TABLET, operand shapes in holo.l's ir-arity. a row is a
    ;; partial application where the form fixes early arguments ((emit-sx 1), (emit-div 0 1),
    ;; (emit-shift 'shl)); a nullary row is its bytes outright; `raw` splices its operand
@@ -340,7 +367,16 @@
            ('outb >< `(238)) ('outw >< `(102 239)) ('outl >< `(239))
            ('cld >< `(252))
            ('insb >< `(243 108)) ('insw >< `(102 243 109)) ('insl >< `(243 109))
-           ('outsb >< `(243 110)) ('outsw >< `(102 243 111)) ('outsl >< `(243 111))))
+           ('outsb >< `(243 110)) ('outsw >< `(102 243 111)) ('outsl >< `(243 111))
+           ; the system lane. `trap` is already int3 (CC), so `int` covers only the
+           ; vectored form; `iretq` is the 64-bit return (the REX.W is what widens it).
+           ('cli >< `(250)) ('sti >< `(251)) ('hlt >< `(244))
+           ('ud2 >< `(15 11)) ('iretq >< `(72 207)) ('swapgs >< `(15 1 248))
+           ('rdmsr >< `(15 50)) ('wrmsr >< `(15 48)) ('cpuid >< `(15 162)) ('rdtsc >< `(15 49))
+           ('int >< emit-int) ('ltr >< emit-ltr)
+           ('ldcr >< emit-ldcr) ('stcr >< emit-stcr)
+           ('lgdt >< (emit-m0f 2 `(15 1))) ('lidt >< (emit-m0f 3 `(15 1)))
+           ('invlpg >< (emit-m0f 7 `(15 1)))))
    _ (foldl (\ _ p (emrow x64-emitters <p (emit-alu <p))) 0 x64-alu-rows)
    _ (foldl (\ _ p (emrow x64-emitters <p (emit-sse <p))) 0 x64-sse-rows)
    (x64-lower ins) (: f lower-via (? (lit? f) (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))

@@ -116,6 +116,19 @@
            ('inb >< 0) ('inw >< 0) ('inl >< 0) ('outb >< 0) ('outw >< 0) ('outl >< 0)
            ('cld >< 0)
            ('insb >< 0) ('insw >< 0) ('insl >< 0) ('outsb >< 0) ('outsw >< 0) ('outsl >< 0)
+           ; the SYSTEM lane -- privileged instructions, arch-specific like the port i/o above.
+           ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control
+           ; registers. aarch64: the sysreg pair, the PSTATE-field immediate, barriers, the
+           ; SYS operations (an operation NAME then a register, `zr` for the whole-system
+           ; forms), the exception generators, and the two waits.
+           ('cli >< 0) ('sti >< 0) ('hlt >< 0) ('ud2 >< 0) ('iretq >< 0) ('swapgs >< 0)
+           ('rdmsr >< 0) ('wrmsr >< 0) ('cpuid >< 0) ('rdtsc >< 0)
+           ('isb >< 0) ('wfi >< 0) ('wfe >< 0) ('eret >< 0)
+           ('int >< 1) ('ltr >< 1) ('dsb >< 1) ('dmb >< 1)
+           ('brk >< 1) ('dbrk >< 1) ('hvc >< 1) ('smc >< 1) ('udf >< 1)
+           ('ldcr >< 2) ('stcr >< 2) ('lgdt >< 2) ('lidt >< 2) ('invlpg >< 2)
+           ('mrs >< 2) ('msr >< 2) ('msri >< 2)
+           ('tlbi >< 2) ('ic >< 2) ('dc >< 2) ('at >< 2)
            ('sx1 >< 1) ('sx2 >< 1) ('sx4 >< 1) ('zx1 >< 1) ('zx2 >< 1) ('zx4 >< 1)
            ('push >< 1) ('pop >< 1) ('neg >< 1) ('not >< 1) ('inc >< 1) ('dec >< 1) ('tp >< 1)
            ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)
