@@ -32,41 +32,180 @@
 (: (lclose c) (? (c = 40) 41 (c = 91) 93 125)          ; ( -> )   [ -> ]   { -> }
    (lopen c)  (? (c = 41) 40 (c = 93) 91 123)          ; ...and back, for the report
 
-   (lint-scan src)
-    (: n (tally src)
-       ; stk: `(closer line col) per open delimiter, a matched-pair stack, so ([)]
-       ; is caught and not just a net count. sl/sc hold a string's opening spot.
+   ; --- character classes ----------------------------------------------------
+   ; is the charm c anywhere in s? the three sets below are spelled as STRINGS
+   ; rather than as || chains, because a reader can check them against love.c at
+   ; a glance and a || chain of seventeen cannot be read at all.
+   (lin? s c) (: n (tally s) (go k) (? (n <= k) () ((s k) = c) 1 (go (k + 1))) (go 0))
+
+   ; the OPERATOR run characters (love.c's op_break, complemented) -- the chars
+   ; that fuse into one sigil when they touch.
+   (lopc? c) (lin? "!$%&*+-./:<=>?\\^|" c)
+   ; the CONSTRUCTOR sigils: a ( glued behind one of these is a DATUM, not a
+   ; form -- '(a) quote, `(a) list, #(a) map, @(a) tray, ~(a) twin (love.c's
+   ; ioparse). that is the exhaustive list.
+   (lctc? c) (lin? "'`#@~" c)
+   ; a token character: anything that is not whitespace, a delimiter, a quote
+   ; mark or a comment start.
+   (ltkc? c) (! (|| (c < 33) (|| (c = 34) (|| (c = 59) (|| (c = 40) (|| (c = 41)
+                   (|| (c = 91) (|| (c = 93) (|| (c = 123) (c = 125))))))))))
+
+   (lall? p s) (: n (tally s)
+                  (go k) (? (n <= k) (0 < n) (p (s k)) (go (k + 1)) ())
+                  (go 0))
+   ; the token starting at index i (empty if a delimiter sits there)
+   (ltok-at src n i) (: (go k) (? (&& (k < n) (ltkc? (src k))) (go (k + 1)) k)
+                        (snip src i (go i)))
+
+   ; --- the config the rules read --------------------------------------------
+   ; ⚠ lint.l takes a PLAIN TABLET and reads it with peep -- it does NOT depend on
+   ; lib/salt.l. vi cats this file directly (test/test.mk), and a module it had to
+   ; carry along would break that. salt fills the tablet; lint only reads it.
+   (lint-on? conf k) (: v (peep conf k ()) (&& (two? v) <v))
+   ; the name a token MENTIONS: a leading ' is quote, and 'foo names foo just as
+   ; much as bare foo does -- a rename wants both. (a TRAILING ' is the prime
+   ; idiom, part of the name, and stays.)
+   (lname t) (: n (tally t) (go k) (? (&& (k < n) ((t k) = 39)) (go (k + 1)) (snip t k n)) (go 0))
+   ; the roster entry for the token text t: a bare name, or `(name "hint").
+   (lint-dep roster t)
+    (? (! (two? roster)) ()
+       (: e <roster
+          nm (? (two? e) <e e)
+          (? ((string nm) = t) `(1 e) (lint-dep >roster t))))
+   (lint-depmsg e)
+    (: nm (? (two? e) <e e)
+       h  (? (&& (two? e) (two? >e)) <>e ())
+       ("deprecated " + (string nm) + (? (string? h) (" -- " + h) "")))
+
+   ; --- the frame ------------------------------------------------------------
+   ; `(closer line col nelem e1i plain quoted): the expected closer and where the
+   ; opener SAT (so an unclosed one reports its own position), how many elements
+   ; this form has taken, the index the FIRST one started at, and the two bits the
+   ; singleton rule turns on.
+   ;
+   ; ⚠ e1i is an INDEX, read back out of src on demand rather than accumulated as
+   ; text -- there is then no token-end bookkeeping to get wrong, and the scan
+   ; stays one pass with no per-character allocation.
+   (lelem stk i)
+    (? (! (two? stk)) stk
+       (: f <stk
+          ne (<>>>f + 1)
+          (link `(<f <>f <>>f ne (? (1 = ne) i <>>>>f) <>>>>>f <>>>>>>f) >stk)))
+
+   ; a new opener. `pre` is what it is GLUED to (empty when it stands free), and
+   ; that text decides everything:
+   ;   all constructor sigils -> a datum, and a ' among them makes the CONTENTS
+   ;                             data too (inherited by every frame inside)
+   ;   all operator chars     -> ⚠ THE PARENS MAY BE LOAD-BEARING, and we cannot
+   ;                             tell which. glued, two sigil runs LEX AS ONE:
+   ;                             <(<l) happens to survive it (<< composes to the
+   ;                             same caap), but (-(-5)) is 5 while --5 raises
+   ;                             `missing --5`. telling those apart needs the
+   ;                             operator table, which a balance scan has no
+   ;                             business knowing -- so every glued run is exempt.
+   ;   anything else          -> foo(x) is two datums to the reader, so the ( is a
+   ;                             plain form after all
+   (lpush stk c i line col src it ti)
+    (: pre (? it (snip src ti i) "")
+       pq  (? (two? stk) (: pf <stk <>>>>>>pf) 0)
+       ct  (lall? lctc? pre)
+       op  (lall? lopc? pre)
+       qd  (? (|| pq (&& ct (lin? pre 39))) 1 0)
+       pl  (? (|| pq (|| ct op)) 0 (? (c = 40) 1 0))
+       (link `((lclose c) line col 0 0 pl qd) stk))
+
+   ; the SINGLETON warning for a form about to close, or (). a form of one element
+   ; is that element -- (f) == f at zero operands -- so the parens do nothing and
+   ; a nullary call never fires. EXCEPT when the one element is ALL PUNCTUATION:
+   ; (+) is + as a value, the documented escape idiom, and (:) (?) (\) read their
+   ; own zero point. ⚠ that exemption is narrower than "starts with punctuation"
+   ; on purpose -- (<>b) IS droppable (probed: (<>l) and <>l are one value), and
+   ; flagging it is the point. only the GLUED case above is load-bearing.
+   (lsing src n f)
+    (? (&& <>>>>>f (1 = <>>>f))
+        (: t (ltok-at src n <>>>>f)
+           (? (lall? lopc? t) ()
+              `(<>f <>>f ("singleton " + (? (0 < (tally t)) ("(" + t + ") ") "")
+                          + "-- (x) == x") 'singleton)))
+       ())
+
+   ; --- the scan -------------------------------------------------------------
+   ; (lint-of src conf) is the whole weighing; (lint-scan src) is it with no
+   ; config, which runs BALANCE ALONE and is exactly what this file has always
+   ; answered. the extra rules cost nothing until a config turns them on.
+   ;
+   ; ⚠ the 4th field, the RULE, is APPENDED -- every consumer reads <w / <>w /
+   ; <>>w for line, column and text and none of them had to change.
+   (lint-scan src) (lint-of src ())
+
+   (lint-of src conf)
+    (: n  (tally src)
+       sg (lint-on? conf 'singleton)
+       dp (peep conf 'deprecated ())
+       ; a token just ENDED at index i, having started at ti/tc: the deprecated
+       ; roster is the only rule that reads whole tokens, so it is the only work
+       ; here, and an empty roster makes it a no-op.
+       (lend line tc ti i warns)
+        (? (! (two? dp)) warns
+           (: r (lint-dep dp (lname (snip src ti i)))
+              (? (two? r) (link `(line tc (lint-depmsg <>r) 'deprecated) warns) warns)))
+
+       ; stk: the frames above, a matched-pair stack, so ([)] is caught and not
+       ; just a net count. sl/sc hold a string's opening spot. it/ti/tc are the
+       ; token in hand -- ⚠ `it` must fire ONCE PER TOKEN, at its first character,
+       ; never once per character, or a three-letter name counts as three
+       ; elements and its second letter is mistaken for the form's first operand.
        ; states: code | cmt (; to EOL) | str (".." with \ escapes).
-       (w i st stk line col sl sc warns)
+       (w i st stk line col sl sc it ti tc warns)
         (? (n <= i)
-            (: w1 (? (id? st 'str) (link `(sl sc "unclosed string") warns) warns)
-               (rev (foldl (\ a o (link `(<>o <>>o ("unclosed " + string (lopen <o))) a)) w1 stk)))
+            (: w0 (? it (lend line tc ti i warns) warns)
+               w1 (? (id? st 'str) (link `(sl sc "unclosed string" 'balance) w0) w0)
+               (rev (foldl (\ a o (link `(<>o <>>o ("unclosed " + string (lopen <o)) 'balance) a)) w1 stk)))
            (: c (src i)
               (? (id? st 'str)                                    ; inside "..."
-                  (? (c = 92) (w (i + 2) 'str stk line (col + 2) sl sc warns)   ; \ escape: skip next
-                     (c = 34) (w (i + 1) 'code stk line (col + 1) sl sc warns)
-                     (c = 10) (w (i + 1) 'str stk (line + 1) 1 sl sc warns)
-                     (w (i + 1) 'str stk line (col + 1) sl sc warns))
+                  (? (c = 92) (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns)   ; \ escape: skip next
+                     (c = 34) (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
+                     (c = 10) (w (i + 1) 'str stk (line + 1) 1 sl sc 0 ti tc warns)
+                     (w (i + 1) 'str stk line (col + 1) sl sc 0 ti tc warns))
                  (id? st 'cmt)                                    ; ; comment to EOL
-                  (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc warns)
-                     (w (i + 1) 'cmt stk line (col + 1) sl sc warns))
-                 (c = 59) (w (i + 1) 'cmt stk line (col + 1) sl sc warns)       ; ; -- start comment
+                  (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc warns)
+                     (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
+                 (c = 59)                                                      ; ; -- start comment
+                  (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc
+                     (? it (lend line tc ti i warns) warns))
                  (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))          ; #! shebang, to EOL
-                  (w (i + 2) 'cmt stk line (col + 2) sl sc warns)
-                 (c = 34) (w (i + 1) 'str stk line (col + 1) line col warns)    ; " -- start string
-                 (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc warns)
+                  (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
+                     (? it (lend line tc ti i warns) warns))
+                 (c = 34)                                                      ; " -- start string
+                  (w (i + 1) 'str (? it stk (lelem stk i)) line (col + 1) line col 0 ti tc
+                     (? it (lend line tc ti i warns) warns))
+                 (c = 10)
+                  (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc
+                     (? it (lend line tc ti i warns) warns))
                  (|| (c = 40) (|| (c = 91) (c = 123)))                          ; ( [ {  -- push
-                  (w (i + 1) 'code (link `((lclose c) line col) stk) line (col + 1) sl sc warns)
+                  ; an opener is an element of its PARENT -- unless it is GLUED to
+                  ; the token before it, in which case the two are one datum.
+                  (w (i + 1) 'code (lpush (? it stk (lelem stk i)) c i line col src it ti)
+                     line (col + 1) sl sc 0 ti tc
+                     (? it (lend line tc ti i warns) warns))
                  (|| (c = 41) (|| (c = 93) (c = 125)))                          ; ) ] }  -- match
-                  (? (! (two? stk))
-                      (w (i + 1) 'code stk line (col + 1) sl sc
-                         (link `(line col ("stray " + string c)) warns))
-                     (! (<<stk = c))
-                      (w (i + 1) 'code >stk line (col + 1) sl sc
-                         (link `(line col ("mismatched " + string c)) warns))
-                     (w (i + 1) 'code >stk line (col + 1) sl sc warns))
-                 (w (i + 1) 'code stk line (col + 1) sl sc warns))))            ; ' ` \ and the rest
-       (w 0 'code () 1 1 1 1 ()))
+                  (: w0 (? it (lend line tc ti i warns) warns)
+                     (? (! (two? stk))
+                         (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
+                            (link `(line col ("stray " + string c) 'balance) w0))
+                        (! (<<stk = c))
+                         (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
+                            (link `(line col ("mismatched " + string c) 'balance) w0))
+                        (: sw (? sg (lsing src n <stk) ())
+                           (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
+                              (? (two? sw) (link sw w0) w0)))))
+                 (c < 33)                                                      ; space, tab, the rest
+                  (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
+                     (? it (lend line tc ti i warns) warns))
+                 ; an ordinary character: a token START only if we were not in one
+                 (w (i + 1) 'code (? it stk (lelem stk i)) line (col + 1) sl sc
+                    1 (? it ti i) (? it tc col) warns))))
+       (w 0 'code () 1 1 1 1 0 0 1 ()))
 
    ; --- the indent plan ------------------------------------------------------
    ; a frame is `(base openline ntok pair): where this form's continuation lines

@@ -46,6 +46,18 @@
 ;   trailing whitespace. NOT in the test gate. BALANCE IS THE DEFAULT VERB, so a bare file list is the
 ;   whole command; `libra fmt` reindents (by hand -- NOT adopted, nothing is gated on layout) and
 ;   `libra serve` speaks lsp. one scanner (lib/lint.l) under all three, so they cannot disagree.
+;   TWO MORE RULES ride a config and are OFF until it asks: `singleton` ((x) == x, so `(go)` never
+;   fires -- exempting constructors, all-punct escapes like (+), and a ( GLUED to an operator run,
+;   where (-(-5)) is 5 but --5 raises) and `deprecated`, a project's roster of finished-with names.
+;   they only SPEAK -- balance alone fails the gate, `(strict <rule>)` promotes one.
+; * CONFIG IS SALT (lib/salt.l): (salt 'app) answers a settings tablet from ~/.love/etc/<app>.l then
+;   ./.<app>.l over it -- any crew app, same door, and the project file speaks last (a deprecated
+;   roster is a fact about a TREE, not a person). a setting is one form, head names it, tail is the
+;   value. ⚠ read as DATA with `sound`, NEVER evaled -- a dotfile cannot run anything and nothing in
+;   it is quoted; ⚠ PRESENCE IS THE OPEN (an empty config means no overrides, so ask whether it
+;   OPENED, not whether it had bytes); ⚠ a form that is not a setting is skipped in SILENCE, and a
+;   dropped paren ends the read -- half a config beats none. HOME is the one env var here (the seat
+;   of /usr/bin/love is /usr, and nobody's settings live in /usr/etc). doc/libra.md.
 ; * C and docs EMBED love the .l sweeps miss -- grep on every rename: host/main.c (s2cl + runner),
 ;   port/inle/kmain.c (the K_TEST runner), port/rp2040/main.c (g_evals_ driver strings), port/playdate/ (main.c + cas.l -- the rune workbench),
 ;   wasm/; and index.html (the static page, style.css beside it) runs live demos as data-run chips --

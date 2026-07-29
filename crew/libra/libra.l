@@ -21,10 +21,16 @@
 ; `make lint` gates on. one scanner, three consumers: what the editor underlines
 ; is what the gate will refuse, always, with no second implementation to drift.
 ;
-; ⚠ THE PORTS ARE ARGUMENTS, never the ambient in/out: (libra-serve inp outp) is
-; the whole server, so test/host/libra.l drives entire conversations in-process
+; the SETTINGS come from lib/salt.l -- ~/.love/etc/libra.l for your taste, then
+; ./.libra.l over it for the tree's own. balance is unconditional; the rules that
+; are matters of OPINION (singleton, the deprecated roster) are off until a config
+; asks for them, and even then they only speak. see doc/libra.md.
+;
+; ⚠ THE PORTS ARE ARGUMENTS, never the ambient in/out: (libra-serve conf inp outp)
+; is the whole server, so test/host/libra.l drives entire conversations in-process
 ; over (tap ..) and (jug 0) -- no subprocess, no pipes, no timing. the seat hands
-; it the real in/out and nothing else changes.
+; it the real in/out and nothing else changes. the config rides the same way, so a
+; test states the settings it means instead of inheriting yours.
 ;
 ; ⚠ AN `id` IS PRESENCE, and it is the one field that must not be read with `!`:
 ; json-rpc numbers its requests FROM 0, so a bare truth test would mistake
@@ -46,6 +52,7 @@
 ; flag strips whitespace without touching indentation.
 (use 'json)
 (use 'lint)
+(use 'salt)
 
 (:
    ; --- the frame: a header block, then exactly N bytes -----------------------
@@ -131,21 +138,24 @@
    ; drops by one on the way out. the range covers the single character the
    ; warning points at -- for an unclosed opener that is the opener itself, which
    ; is where the eye needs to go.
+   ; an imbalance is an ERROR (1) -- the file does not read. every other rule is a
+   ; WARNING (2): the file reads fine and someone has an opinion about it.
+   (sev w) (? (id? <>>>w 'balance) 1 2)
    (diag w) (: l (<w - 1)
                c (<>w - 1)
                (otab `(`("range" (otab `(`("start" (pos l c)) `("end" (pos l (c + 1))))))
-                       `("severity" 1)                  ; an imbalance is an error, never a note
+                       `("severity" (sev w))
                        `("source" "libra")
                        `("message" <>>w))))
 
-   (libra-diags text) (map diag (lint-scan text))
+   (libra-diags conf text) (map diag (lint-of text conf))
 
    ; a clean document publishes an EMPTY array, which is how lsp says "forget what
    ; i told you" -- and since lint-scan answers () for clean and json writes () as
    ; [], clearing costs nothing and says itself.
-   (publish p uri text)
+   (publish conf p uri text)
     (note p "textDocument/publishDiagnostics"
-            (otab `(`("uri" uri) `("diagnostics" (libra-diags text)))))
+            (otab `(`("uri" uri) `("diagnostics" (libra-diags conf text)))))
 
    ; --- reading a document notification's params -----------------------------
    ; ⚠ EVERY SLOT IS CHECKED, because a missing one does not error here -- it
@@ -172,7 +182,7 @@
    ; answers 'stop when the client says exit, () otherwise. an unknown REQUEST is
    ; refused by number (a request must always be answered, or the editor waits
    ; forever); an unknown notification is simply dropped, which the spec allows.
-   (libra-handle p msg)
+   (libra-handle conf p msg)
     (: mth (msg "method")
        id  (msg "id")
        ps  (msg "params")
@@ -181,22 +191,22 @@
           (mth = "shutdown")    (: _ (reply p id json-null) ())
           (mth = "exit")        'stop
           (mth = "textDocument/didOpen")
-           (: r (docuri ps) _ (? (two? r) (publish p <>r (dopen ps)) 0) ())
+           (: r (docuri ps) _ (? (two? r) (publish conf p <>r (dopen ps)) 0) ())
           (mth = "textDocument/didChange")
-           (: r (docuri ps) _ (? (two? r) (publish p <>r (dchange ps)) 0) ())
+           (: r (docuri ps) _ (? (two? r) (publish conf p <>r (dchange ps)) 0) ())
           (mth = "textDocument/didClose")
-           (: r (docuri ps) _ (? (two? r) (publish p <>r "") 0) ())
+           (: r (docuri ps) _ (? (two? r) (publish conf p <>r "") 0) ())
           ask (: _ (fault p id -32601 ("no such method: " + show mth)) ())
           ()))
 
    ; the server: read, dispatch, repeat, until the client says exit or the pipe
    ; ends. a message that is not a json object is DROPPED rather than fatal --
    ; an editor that garbles one frame should not take the session down with it.
-   (libra-serve inp outp)
+   (libra-serve conf inp outp)
     (: (go u) (: m (libra-recv inp)
                  (? (! (two? m)) 0
                     (: r (json-read <>m)
-                       s (? (&& (two? r) (tablet? <>r)) (libra-handle outp <>r) ())
+                       s (? (&& (two? r) (tablet? <>r)) (libra-handle conf outp <>r) ())
                        (? (id? s 'stop) 0 (go ())))))
        (go ()))
 
@@ -242,31 +252,39 @@
                  (g 0))
    (tabwarns ls) (: (g l k acc) (? (! (two? l)) (rev acc)
                                    (: c (tabcol <l)
-                                      (g >l (k + 1) (? c (link `(k c "tab") acc) acc))))
+                                      (g >l (k + 1) (? c (link `(k c "tab" 'tab) acc) acc))))
                     (g ls 1 ()))
    (warnline path w) (path + ":" + show <w + ":" + show <>w + ": " + <>>w + "\n")
 
    ; --- the verbs ------------------------------------------------------------
    (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))
 
-   ; answers the count of FATAL warnings -- an imbalance fails, a tab does not.
+   ; ⚠ WHICH WARNINGS FAIL THE GATE, and which merely speak. an imbalance always
+   ; fails -- the file does not read, and that is not a matter of opinion. a tab
+   ; never has. the config rules sit with the tab by default: they print, the
+   ; editor underlines them, and `libra` still exits 0, so turning a rule on can
+   ; never redden a tree that was green. `(strict singleton)` promotes one when a
+   ; project has actually finished with it.
+   (fatal? conf w) (? (id? <>>>w 'balance) 1 (two? (salt-has? conf 'strict <>>>w)))
+   (tally-fatal conf ws) (foldl (\ a w (? (fatal? conf w) (a + 1) a)) 0 ws)
+
    ; `fix` is the janitor pass: strip trailing whitespace, WITHOUT reindenting.
    ; that separation is the point -- a tree can be kept tidy without anyone
    ; agreeing to a layout, which is why this lives on check and not on fmt.
-   (libra-check-files fs fix bad)
+   (libra-check-files conf fs fix bad)
     (? (! (two? fs)) bad
        (: r (rdf <fs)
           (? (! (two? r)) (: _ (say err ("libra: cannot open " + <fs + "\n"))
-                              (libra-check-files >fs fix (bad + 1)))
+                              (libra-check-files conf >fs fix (bad + 1)))
              (: src <>r
                 ls (linesof src)
-                bw (lint-scan src)
+                bw (lint-of src conf)
                 _ (foldl (\ _ w (: _ (say err (warnline <fs w)) 0)) 0
                          (bw + (tabwarns ls)))
                 _ (? fix (: q (open <fs "w") _ (say q (unlines (map rtrim ls))) (close q)) 0)
-                (libra-check-files >fs fix (bad + (tally bw)))))))
+                (libra-check-files conf >fs fix (bad + (tally-fatal conf bw)))))))
 
-   (libra-check fs fix) (: n (libra-check-files fs fix 0) (? (0 < n) (quit 1) 0))
+   (libra-check conf fs fix) (: n (libra-check-files conf fs fix 0) (? (0 < n) (quit 1) 0))
 
    (flag? x) (&& (0 < (tally x)) ((x 0) = 45))
    (files as) (filter (\ x (! (flag? x))) as)
@@ -295,21 +313,26 @@
    usage ("usage: libra [check] FILE ..   balance: path:line:col: on err, quiet when clean,\n"
           + "                               exit 1; -w also strips trailing whitespace. THE DEFAULT.\n"
           + "       libra fmt FILE ..      lay it out on stdout; -w rewrites, -n only checks (exit 1)\n"
-          + "       libra serve            speak lsp over stdio -- diagnostics as you type\n")
+          + "       libra serve            speak lsp over stdio -- diagnostics as you type\n"
+          + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 1),\n"
+          + "          (deprecated old (worse \"use better\")), (strict singleton). doc/libra.md\n")
 
+   ; ⚠ the config is read ONCE, here, and handed down -- never re-read per file.
+   ; `libra` over a whole tree opens two files at the top and no more.
    (libra-main as)
     (? (|| (member? "-h" as) (member? "--help" as))
         (: _ (say err "libra ⚖ -- the .l balance tool.\n") _ (say err usage) 0)
-       (: v (? (two? as) <as "")
+       (: conf (salt 'libra)
+          v (? (two? as) <as "")
           r >as
-          (? (v = "check") (libra-check (files r) (member? "-w" r))
+          (? (v = "check") (libra-check conf (files r) (member? "-w" r))
              (v = "fmt")   (: n (libra-fmt-files (files r)
                                                  (? (member? "-w" r) 'write
                                                     (member? "-n" r) 'check
                                                     'show)
                                                  0)
                               (? (&& (member? "-n" r) (0 < n)) (quit 1) 0))
-             (v = "serve") (libra-serve in out)
+             (v = "serve") (libra-serve conf in out)
              (v = "")      (: _ (say err usage) (quit 1))     ; nothing named, nothing to weigh
              ; NO VERB: the whole line is files, and CHECK is what happens to them.
              ; balance is the everyday errand -- `libra *.l` should simply answer
@@ -317,7 +340,7 @@
              ; exist. ⚠ so an unknown verb reads as a FILENAME now, and says
              ; "cannot open" rather than "no such verb". that is the right trade
              ; while the file list is the common case, but it is a trade.
-             (libra-check (files as) (member? "-w" as)))))
+             (libra-check conf (files as) (member? "-w" as)))))
 )
 
 ; the SEAT (kiosko's shape): fire libra-main iff this file -- or the installed

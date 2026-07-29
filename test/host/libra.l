@@ -7,10 +7,18 @@
 
 (use 'json)
 (use 'lint)          ; libra splices this BELOW itself, so the session must ask for it too
+(use 'salt)
 (use 'libra)
 
 ; a string as an input PORT (prel's own trick: index it over its jot)
 (: (lt-port s) (tap (map s (jot (tally s)))))
+
+; the settings a test means, stated rather than inherited: an empty tablet is
+; "no config anywhere", which is what every balance test wants. ⚠ never (salt
+; 'libra) in a test -- that would read the machine's own ~/.love/etc/libra.l and
+; make the gate depend on who is running it.
+(: lt-none (tablet 0)
+   (lt-conf prs) (foldl (\ t p (: _ (pin t <p >p) t)) (tablet 0) prs))
 
 ; one client message, framed the way an editor frames it
 (: (lt-wire v) (: t (json-show v) ("Content-Length: " + show (tally t) + "\r\n\r\n" + t)))
@@ -25,11 +33,12 @@
       (go ())))
 
 ; run a conversation: a list of message values in, the server's replies out
-(: (lt-talk vs)
+(: (lt-talkc conf vs)
    (: j (jug 0)
       txt (foldl (\ a v (a + (lt-wire v))) "" vs)
-      _ (libra-serve (lt-port txt) j)
+      _ (libra-serve conf (lt-port txt) j)
       (lt-said j)))
+(: (lt-talk vs) (lt-talkc lt-none vs))
 
 ; is ndl anywhere in hay? (for reading the raw wire, where key order is the
 ; tablet's business and only the spelling of a value is ours)
@@ -74,14 +83,14 @@
 ; the positions are lint's, dropped by one: lint counts from 1, lsp from 0. an
 ; unclosed opener points at the OPENER (line 1 col 1 -> line 0 character 0).
 (assert
- (: ds (libra-diags lt-bad)
+ (: ds (libra-diags lt-none lt-bad)
     d  <ds
     (&& (1 = (tally ds))
         (0 = (((d "range") "start") "line")) (0 = (((d "range") "start") "character"))
         (0 = (((d "range") "end") "line"))   (1 = (((d "range") "end") "character"))
         (1 = (d "severity")) ("libra" = (d "source")) ("unclosed (" = (d "message"))))
- !(libra-diags lt-ok)                                        ; a clean document: no diagnostics
- !(libra-diags ""))                                          ; ...and an empty one likewise
+ !(libra-diags lt-none lt-ok)                                        ; a clean document: no diagnostics
+ !(libra-diags lt-none ""))                                          ; ...and an empty one likewise
 
 ; didOpen publishes them; didChange with a repaired document publishes the EMPTY
 ; array, which is how lsp says "forget what i told you". `[]` and not `null` --
@@ -103,7 +112,7 @@
  ; and it goes out ON THE WIRE as [] -- never null, which an editor would ignore
  ; instead of clearing (the whole reason json names null and not the empty array)
  (: j (jug 0)
-    _ (libra-serve (lt-port (lt-wire (lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-ok)))) j)
+    _ (libra-serve lt-none (lt-port (lt-wire (lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-ok)))) j)
     t (slurp j)
     (&& (lt-has? t "\"diagnostics\":[]") (! (lt-has? t "\"diagnostics\":null")))))
 
@@ -159,7 +168,7 @@
 (assert
  (: j (jug 0)
     txt ("Content-Length: 7\r\n\r\n{nope!!" + (lt-wire (lt-req 3 "initialize" (tablet 0))))
-    _ (libra-serve (lt-port txt) j)
+    _ (libra-serve lt-none (lt-port txt) j)
     rs (lt-said j)
     (&& (1 = (tally rs)) (3 = (<rs "id")))))
 
@@ -182,8 +191,74 @@
 ; disagree about a file: one warning here is one diagnostic there
 (assert
  (1 = (tally (lint-scan "(: a 1\n")))
- (1 = (tally (libra-diags "(: a 1\n")))
- !(lint-scan "(: a 1)\n") !(libra-diags "(: a 1)\n"))
+ (1 = (tally (libra-diags lt-none "(: a 1\n")))
+ !(lint-scan "(: a 1)\n") !(libra-diags lt-none "(: a 1)\n"))
+
+; --- the config rules -----------------------------------------------------
+; ⚠ THE DEFAULT IS BALANCE ALONE. (lint-scan src) is (lint-of src ()), so a tool
+; that never heard of a config gets exactly what this file has always answered,
+; and turning a rule on can never redden a tree that was green.
+; ⚠ a setting's value is the form's TAIL, so (singleton 1) stores (1) and
+; (deprecated a b) stores (a b) -- one list, not a list holding one.
+(: lt-sing (lt-conf `(`('singleton 1)))
+   lt-dep  (lt-conf `(`('deprecated 'old-thing '(worse-thing "use better-thing"))))
+   ; the 4th field is the RULE, appended -- so <w / <>w / <>>w still read line,
+   ; column and text, which is why no consumer had to change
+   (lt-rule ws) (map (\ w <>>>w) ws)
+   (lt-msg ws)  (map (\ w <>>w) ws))
+
+(assert
+ !(lint-scan "(go)")                        ; off by default: the rule is an opinion
+ (1 = (tally (lint-of "(go)" lt-sing)))
+ ('(singleton) = (lt-rule (lint-of "(go)" lt-sing)))
+ ('(balance) = (lt-rule (lint-scan "(: a 1\n"))))
+
+; a form of one element IS that element, so the parens do nothing -- and a
+; nullary call never fires. the position points at the OPENER.
+(assert
+ (: w <(lint-of "(: a 1\n   (go))" lt-sing) (&& (2 = <w) (4 = <>w)))
+ (1 = (tally (lint-of "(0)" lt-sing)))         ; a number is no different
+ (1 = (tally (lint-of "((f x))" lt-sing)))     ; nor is an inner FORM
+ (1 = (tally (lint-of "foo(x)" lt-sing))))     ; foo(x) is two datums, so (x) is a form
+
+; ⚠ THE THREE EXEMPTIONS, each load-bearing.
+(assert
+ ; 1. a CONSTRUCTOR is a datum, not a form -- and a ' makes its contents data too
+ !(lint-of "'(x)" lt-sing) !(lint-of "`(x)" lt-sing) !(lint-of "#(x)" lt-sing)
+ !(lint-of "@(x)" lt-sing) !(lint-of "~(x)" lt-sing)
+ !(lint-of "'(a (b))" lt-sing)
+ ; ...but a BACKTICK list evaluates its elements, so a form inside one is a form
+ (1 = (tally (lint-of "`(a (b))" lt-sing)))
+ ; 2. GLUED to an operator run: (-(-5)) is 5, but --5 raises `missing --5`, so
+ ; those parens may be holding two sigil runs apart and are never flagged
+ !(lint-of "(-(-5))" lt-sing) !(lint-of "<(<l)" lt-sing) !(lint-of ">(<l)" lt-sing)
+ ; 3. an ALL-PUNCTUATION token is the escape idiom: (+) is + as a value, and
+ ; (:) (?) (\) read their own zero point
+ !(lint-of "(+)" lt-sing) !(lint-of "(*)" lt-sing) !(lint-of "(<=)" lt-sing)
+ !(lint-of "(:)" lt-sing) !(lint-of "(?)" lt-sing) !(lint-of "(\\)" lt-sing)
+ ; ⚠ and that is NARROWER than "starts with punctuation" on purpose -- (<>b) and
+ ; <>b are one value, so those parens really are droppable
+ (1 = (tally (lint-of "(<>b)" lt-sing))))
+
+; the DEPRECATED roster: a bare name, or `(name "hint"). comments and strings are
+; not code, and a quoted 'foo names foo just as much as bare foo does.
+(assert
+ !(lint-scan "(f old-thing)")                                  ; empty roster: silent
+ ("deprecated old-thing" = <(lt-msg (lint-of "(f old-thing)" lt-dep)))
+ ("deprecated worse-thing -- use better-thing"
+  = <(lt-msg (lint-of "(f worse-thing)" lt-dep)))
+ ('(deprecated) = (lt-rule (lint-of "(f old-thing)" lt-dep)))
+ (1 = (tally (lint-of "(f 'old-thing)" lt-dep)))                ; 'foo is a mention
+ !(lint-of "; old-thing" lt-dep)                                ; a comment is not code
+ !(lint-of "(f \"old-thing\")" lt-dep)                          ; nor is a string
+ !(lint-of "(f old-thing-x)" lt-dep)                            ; a longer name is another name
+ (2 = (tally (lint-of "(old-thing worse-thing)" lt-dep))))
+
+; the SEVERITY splits with the rule: an imbalance is an error (1) because the
+; file does not read; an opinion is a warning (2) because it does.
+(assert
+ (1 = ((<(libra-diags lt-none "(: a 1\n")) "severity"))
+ (2 = ((<(libra-diags lt-sing "(go)")) "severity")))
 
 (puts "libra: ok")
 (putc 10)

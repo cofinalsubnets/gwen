@@ -51,7 +51,7 @@ endif
 # this love resolves here. installed DEREFERENCED (install(1) follows the repo
 # lib/ symlinks), so the nest stands alone; lib/seed.l is the assembly and its
 # seed/ parts ride the slashed-include rung the same way.
-libmods = cook json lint lupa kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
+libmods = cook json lint salt libra kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 installs = \
   $d/bin/$(BIN) \
   $d/bin/ai \
@@ -62,7 +62,7 @@ installs = \
   $d/bin/cook \
   $d/bin/papel \
   $d/bin/kiosko \
-  $d/bin/lupa \
+  $d/bin/libra \
   $d/bin/ain \
   $d/bin/lux \
   $d/bin/bao \
@@ -116,7 +116,7 @@ $d/lib/love/moon/lib/%: crew/moon/lib/%
 # manpath. a real PREFIX (a distro) skips these.
 ifeq ($(PREFIX),.love/)
 compat = $(DESTDIR)/.local
-binnames = $(BIN) ai kore seed mooncc moonfmt cook papel kiosko lupa ain lux bao lush
+binnames = $(BIN) ai kore seed mooncc moonfmt cook papel kiosko libra ain lux bao lush
 installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
   $(compat)/share/man/man1/$(BIN).1 $(compat)/share/man/man1/cook.1 \
   $(compat)/share/man/man1/lush.1
@@ -211,11 +211,11 @@ $d/bin/kiosko: crew/kiosko/kiosko.l
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
 
-# lupa 🔍: the .l language server (crew/lupa/lupa.l), launched by an editor and
+# libra ⚖: the .l language server (crew/libra/libra.l), launched by an editor and
 # spoken to over stdio. Same shebang + SYMLINK mechanism as cook. It reads its
 # siblings by NAME -- (use 'json) and (use 'lint) -- so both ride libmods above:
 # the seat walk finds them at $d/lib/love/ wherever the editor's cwd happens to be.
-$d/bin/lupa: crew/lupa/lupa.l
+$d/bin/libra: crew/libra/libra.l
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
