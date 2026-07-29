@@ -5017,6 +5017,32 @@
         (homefold g ps gpi acc
          (\ a2 i9 p9 (? (&& (! (id? (nthr (argr g) i9) (homereg i9))) (rst-ok fs (nthr (argr g) i9)))
                         (link i9 a2) a2)))
+       ; ⚠ the ride verdict above is read off ir1, where every param still sits
+       ; in a FRAME SLOT -- and the regen it licenses rebuilds the body with the
+       ; riders in registers, so pass 2 reaches for different scratch than the
+       ; pass it was measured on. on x64 the only two rideable arrivals ARE the
+       ; shuttle pair (r2/r1 = rdx/rcx), so a store whose address shuttle moved
+       ; off a now-occupied r6 lands on the very register a param was told it
+       ; could ride: the param is gone, silently, and the next read of it answers
+       ; whatever the shuttle left. am_sin's mul64 lost its `lo` out-pointer
+       ; exactly so and segfaulted for every |x| >= 2^19 -- in the DEFAULT binary,
+       ; through a green test_all. so the ride is a PROPOSAL, not a verdict: it is
+       ; re-read against the code it actually produced, and a rider whose arrival
+       ; picked up a def deopts the whole fn to ir1 (the regen's own failure lane
+       ; -- the freed homes rejoined the operand pool under THIS ride set, so a
+       ; smaller one cannot simply be re-run over the same pool). --
+       (rideok2 fs A)                               ; no def of A survives in fs
+        (? (! (two? fs)) 1
+           (: f <fs
+              (? (! (two? f)) (rideok2 >fs A)
+                 (: rd (rdsp f)
+                    (? (id? rd 'bar)
+                        (? (member? <f '(label jmp br ret jmpr)) (rideok2 >fs A) ())
+                       (member? A <>rd) ()
+                       (rideok2 >fs A))))))
+       (ridesound? fs ks)                           ; every rider's arrival survived
+        (? (! (two? ks)) 1
+           (&& (rideok2 fs (nthr (argr g) <ks)) (ridesound? fs >ks)))
        ; -- the LOCALS picker: rank the homable locals ir1 recorded (cgdecl's
        ; hook) by residual frame touches, drop any whose slot is lea/lean'd
        ; (address taken), gate each on touches beating the per-call wrap, and
@@ -5128,7 +5154,9 @@
               (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
        irf (? (bad? ir1) 'bad
           (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
-           (regen `('ride ride))
+           (: i2 (regen `('ride ride))
+              (? (ridesound? i2 ride) i2
+                 (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)))
           ; calls remain: home + spill, where reads beat the wraps -- FN-WIDE,
           ; all homable params or none. per-param verdicts were built and
           ; measured BOTH ways 2026-07-16 and lost interleaved: pruning a
