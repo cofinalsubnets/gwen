@@ -69,9 +69,11 @@ typedef int64_t ai_sdlimb;
 // count by chunk+1 (a limb prints in < that many digits). 30103 = round(1e5 log10 2).
 #define limb_dec_chunk  (limb_bits * 30103 / 100000)
 #define limb_dec_digits (limb_dec_chunk + 1)
-// the hex twin, exact at 4 bits a digit -- but ONE SHORT of a full limb, because
-// the pass multiplies by radix^chunk and 16^(limb_bits/4) IS limb_base.
-#define limb_hex_chunk  (limb_bits / 4 - 1)
+// the binary-radix twins, exact at 4 and 3 bits a digit. a pass multiplies by
+// radix^chunk, so chunk is the most digits whose product still FITS a limb: one
+// bit shy of the full limb that 16^(limb_bits/4) would be, exactly.
+#define limb_hex_chunk  ((limb_bits - 1) / 4)
+#define limb_oct_chunk  ((limb_bits - 1) / 3)
 
 #define Bytes (Bits>>3)
 _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
@@ -380,6 +382,7 @@ struct ai *ai_big_quot_true(struct ai*);       // `/` bignum lane: exact quotien
 struct ai *ai_big_dec(struct ai*);             // sp[0] bignum -> decimal string
 struct ai *ai_big_read_dec(struct ai*);        // sp[0] [+-]?digits token -> canonical value
 struct ai *ai_big_read_hex(struct ai*);        // ..and its [+-]?0x<hexdigits> twin
+struct ai *ai_big_read_oct(struct ai*);        // ..and [+-]?0<octdigits>, the third
 
 // A boxed scalar float: its own data sentinel (lvm_flo) and a lean {ap, payload}
 // box (struct ai_flo, below) -- two words, vs the four a rank-0 ai_R vec spent.
@@ -552,7 +555,6 @@ void *malloc(size_t), free(void*),
  *memcpy(void*restrict, void const*restrict, size_t),
  *memmove(void*restrict, void const*restrict, size_t),
  *memset(void*, int, size_t);
-long strtol(char const*restrict, char**restrict, int);
 size_t strlen(char const*);
 
 // The lean scalar-float box: ap (lvm_flo) then one payload word holding the
@@ -4084,27 +4086,39 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
 static struct ai *grbufg(struct ai *g, uintptr_t len);
 
 // A token is a plain decimal integer iff it is [+-]?[0-9]+ with no leading-zero
-// prefix (so "0.." octal stays with strtol, and bare "0" parses as decimal).
+// prefix (a leading zero is octal's prefix; bare "0" parses as decimal).
 static ai_inline bool is_dec_int(char const *s, uintptr_t n) {
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
  if (i >= n) return false;                       // a lone sign is a symbol
- if (s[i] == '0' && n - i > 1) return false;     // leading zero -> let strtol decide
+ if (s[i] == '0' && n - i > 1) return false;     // leading zero -> octal's, below
  for (; i < n; i++) if (s[i] < '0' || s[i] > '9') return false;
  return true; }
 
-// ..and a hex integer iff it is [+-]?0[xX][0-9a-fA-F]+ -- at least one digit, so
-// a bare "0x" stays an honest symbol. BOTH read at full precision, through
-// ai_big_read_dec / _hex. Hex used to go by strtol, which is where the numeric
-// tower had its one hole: a literal at or above 2^63 came back as whatever that
-// build's strtol did with an overflow, so the SAME SOURCE read as three
-// different numbers (nolibc wrapped to the negative twin, glibc saturated, and
-// wasm's 32-bit long did neither). port/inle/klink.l spells kernel addresses
-// exactly this way, and it survived on the wrap alone.
+// ..a hex integer iff it is [+-]?0[xX][0-9a-fA-F]+ -- at least one digit, so a
+// bare "0x" stays an honest symbol..
 static ai_inline bool is_hex_int(char const *s, uintptr_t n) {
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
  if (n - i < 3 || s[i] != '0' || (s[i+1] | 32) != 'x') return false;
  for (i += 2; i < n; i++)
   if (!((s[i] >= '0' && s[i] <= '9') || ((s[i] | 32) >= 'a' && (s[i] | 32) <= 'f'))) return false;
+ return true; }
+
+// ..and an octal integer iff it is [+-]?0[0-7]+, the leading zero being the whole
+// prefix. "08" matches none of the three and keeps the strtod -> intern path it
+// has always had.
+//
+// ALL THREE READ AT FULL PRECISION, through ai_big_read_dec / _hex / _oct, and
+// that is the law: an integer literal is a fixnum / box / bignum by its VALUE.
+// hex and octal used to go by strtol, which is where the numeric tower had its
+// one hole -- a literal at or above 2^63 came back as whatever that build's
+// strtol did with an overflow, so the SAME SOURCE read as three different
+// numbers (nolibc wrapped to the negative twin, glibc saturated, and wasm's
+// 32-bit long did neither). port/inle/klink.l spells kernel addresses exactly
+// this way, and it survived on the wrap alone.
+static ai_inline bool is_oct_int(char const *s, uintptr_t n) {
+ uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
+ if (n - i < 2 || s[i] != '0') return false;
+ for (i += 1; i < n; i++) if (s[i] < '0' || s[i] > '7') return false;
  return true; }
 
 static struct ai *ioparse(struct ai *g, bool multi);
@@ -4130,8 +4144,8 @@ static ai_noinline double strtod_wrap(struct ai*g, word x) {
 
 // (flo s) — parse a l string as a decimal float. Returns a rank-0
 // f64 box if the entire string parses, else nil. Used by the l-side
-// reader in repl.l to match the C reader's strtol → strtod → intern
-// cascade on float-shaped tokens.
+// reader in repl.l to match the C reader's strtod → intern cascade on
+// float-shaped tokens.
 lvm(lvm_real) {
  word x = Sp[0];
  double d = strtod_wrap(g, x);
@@ -4505,18 +4519,17 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
      case '"': case '`': case ',': case 0 : case EOF:
       if (!ai_ok(g = zungetc(g, c))) return g;
       struct ai_str *s = str(g->sp[0]);
-      txt(s)[len(s) = n] = 0; // zero terminate for strtol ; n < lim so this is safe
-      // A plain integer, decimal or hex, reads at full precision (fixnum / box /
-      // bignum); octal/float/symbol tokens keep the strtol -> strtod -> intern path.
+      txt(s)[len(s) = n] = 0; // zero terminate for am_strtod ; n < lim so this is safe
+      // An integer in any of the three bases reads at full precision (fixnum /
+      // box / bignum); everything left is a float or a symbol. THE THREE
+      // PREDICATES ARE EXHAUSTIVE over what a base-0 strtol would have accepted
+      // whole, which is why the reader no longer calls it: a token that is not
+      // one of them (0x with no digits, 08, 1e5, abc) is one strtol would have
+      // left mid-way anyway. checked over the corpus and a 44-token sweep.
       if (is_dec_int(txt(s), n)) return ai_big_read_dec(g);
       if (is_hex_int(txt(s), n)) return ai_big_read_hex(g);
+      if (is_oct_int(txt(s), n)) return ai_big_read_oct(g);
       char *e;
-      long j = strtol(txt(s), &e, 0);
-      if (*e == 0) {
-       if (j >= fix_min && j <= fix_max) return g->sp[0] = putcharm(j), g;
-       if (ai_ok(g = ai_have(g, wide_req)))
-        g->sp[0] = mk_wide(&g->hp, j);
-       return g; }
       // the IEEE specials read by their own names; everything else strtod
       // would take by spelling (inf, infinity, nan) stays a symbol: a float
       // token leads with a digit (a sign or dot may front it).
@@ -7614,6 +7627,7 @@ static struct ai *big_read_radix(struct ai *g, ai_limb radix, int chunk, uintptr
  return g; }
 struct ai *ai_big_read_dec(struct ai *g) { return big_read_radix(g, 10, limb_dec_chunk, 0); }
 struct ai *ai_big_read_hex(struct ai *g) { return big_read_radix(g, 16, limb_hex_chunk, 2); }
+struct ai *ai_big_read_oct(struct ai *g) { return big_read_radix(g,  8, limb_oct_chunk, 1); }
 
 // g->sp[0] is a bignum; replace it with its base-10 string (with sign). Builds
 // the digits into a fresh ai_str by repeated divide-by-10 of a heap-local copy

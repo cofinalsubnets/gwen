@@ -18,10 +18,10 @@ mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
 lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 
 objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/ctype.o $(R)/$(o)/main.o $(R)/$(o)/start.o
+  $(R)/$(o)/main.o $(R)/$(o)/start.o
 
 baker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/ctype.o $(R)/$(o)/main-baker.o $(R)/$(o)/start.o
+  $(R)/$(o)/main-baker.o $(R)/$(o)/start.o
 
 .PHONY: mps2 img imgpd clean
 mps2: $(R)/$(o)/love.elf
@@ -43,7 +43,7 @@ $(R)/$(o)/baker.elf: $(baker_objs) mps2.lds
 	@$(LD) -T mps2.lds $(baker_objs) -o $@
 
 waker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/ctype.o $(R)/$(o)/main-waker.o $(R)/$(o)/start.o
+  $(R)/$(o)/main-waker.o $(R)/$(o)/start.o
 
 $(R)/$(o)/main-waker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@
@@ -109,7 +109,7 @@ mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Iout/lib
 t1_lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
 
 t1_objs = $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/mem-t1.o $(R)/$(o)/str-t1.o \
-  $(R)/$(o)/ctype-t1.o $(R)/$(o)/main-t1.o $(R)/$(o)/start.o
+  $(R)/$(o)/main-t1.o $(R)/$(o)/start.o
 
 .PHONY: mps2t1
 mps2t1: $(R)/$(o)/love-t1.elf
@@ -133,11 +133,6 @@ $(R)/$(o)/str-t1.o: $(R)/libc/str.c $(R)/love.h $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2t1_cc) -c libc/str.c $(o)/str-t1.o
-
-$(R)/$(o)/ctype-t1.o: $(R)/libc/ctype.c $(R)/love.h $(mc)
-	@echo MOON	$@
-	@mkdir -p $(R)/$(o)
-	@cd $(R) && $(mps2t1_cc) -c libc/ctype.c $(o)/ctype-t1.o
 
 $(R)/$(o)/main-t1.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@

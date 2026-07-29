@@ -27,7 +27,7 @@ virt_cc = $(MOONCC) -t riscv64 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
 lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 
 objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
-  $(R)/$(o)/str.o $(R)/$(o)/ctype.o $(R)/$(o)/main.o
+  $(R)/$(o)/str.o $(R)/$(o)/main.o
 
 .PHONY: virt clean
 virt: $(R)/$(o)/love.elf
@@ -60,11 +60,6 @@ $(R)/$(o)/str.o: $(R)/libc/str.c $(R)/love.h $(mc)
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(virt_cc) -c libc/str.c $(o)/str.o
 
-$(R)/$(o)/ctype.o: $(R)/libc/ctype.c $(R)/love.h $(mc)
-	@echo MOON	$@
-	@mkdir -p $(R)/$(o)
-	@cd $(R) && $(virt_cc) -c libc/ctype.c $(o)/ctype.o
-
 $(R)/$(o)/main.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
@@ -72,7 +67,7 @@ $(R)/$(o)/main.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 
 $(R)/$(o)/love.elf: $(objs)
 	@echo LINK	$@
-	@cd $(R) && $(MOONCC) -t riscv64 -Ttext 0x7FFFFF88 $(addprefix $(o)/,start.o love.o am.o mem.o str.o ctype.o main.o) -o $(o)/love.elf
+	@cd $(R) && $(MOONCC) -t riscv64 -Ttext 0x7FFFFF88 $(addprefix $(o)/,start.o love.o am.o mem.o str.o main.o) -o $(o)/love.elf
 
 clean:
 	rm -rf $(R)/$(o)

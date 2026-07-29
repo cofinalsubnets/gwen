@@ -21,9 +21,9 @@ rule and the `:`/`?` suppression; the constructor wraps `` ` `` `#` `@` `~` and
 their SPLICE rewrites (`splicesym` 4292, deliver loop 4412); the `~` twin-vs-conj
 peek (4307); the empty-collection direct-nif rewrite (4399); the comma datum
 (4318); the trailing-`-` shed (4278); `[`/`{` synonyms; the prime inside names;
-the number tower (decimal and hex at full precision via `ai_big_read_dec` /
-`ai_big_read_hex`, octal via strtol, floats via `am_strtod`); the `ieee-inf`
-named literals.
+the number tower (all three integer bases at full precision via
+`ai_big_read_dec`/`_hex`/`_oct`, floats via `am_strtod`); the `ieee-inf` named
+literals.
 
 **what it does NOT do, and this is the load-bearing surprise**: it does not
 resume. on an unfinished shape it *discards the partial parse* -- love.c:4148-4153
@@ -82,23 +82,33 @@ address split through an unsigned door under a five-line explanation, because
 nothing downstream would look wrong. port/inle/klink.l's addresses were correct on
 the default binary and **wrong on love0**, silently.
 
-one cut closes all three: **hex promotes like decimal.** `is_hex_int` →
-`ai_big_read_hex` (love.c), a radix parameter over the reader `ai_big_read_dec`
-already had, so a literal is a fixnum / box / bignum by its VALUE and never by
-what a libc did with an overflow. and beside it, **our two libcs saturate** like
-glibc/musl/newlib do -- crew/moon/lib/nolibc.c and libc/str.c, kept line for line
-alike -- so the one lane still on `strtol` (octal) cannot disagree either.
-gwen's call, and the right one: wrapping destroys the fact that it did not fit,
-saturating hands it back. all three workarounds are gone; the law is asserted in
-test/reader.l's numbers section.
+one cut closes all three: **every base gets the reader decimal already had.**
+`is_hex_int`/`is_oct_int` → `ai_big_read_hex`/`_oct` (love.c), a radix parameter
+over `ai_big_read_dec`, so a literal is a fixnum / box / bignum by its VALUE and
+never by what a libc did with an overflow. all three workarounds are gone; the
+law is asserted in test/reader.l's numbers section.
+
+**and the three predicates turned out to be EXHAUSTIVE** over what a base-0
+`strtol` accepted whole, so the reader stopped calling it: a token that is none of
+them (`0x` with no digits, `08`, `1e5`, `abc`) is one strtol would have abandoned
+mid-way anyway. checked, not argued -- the branch was instrumented and stayed
+silent through the corpus and a 44-token adversarial sweep. **that took the last
+caller of the freestanding `strtol` with it**, so `libc/ctype.c` is deleted and
+`libc/str.c` is down to `strlen`. see doc/libc.md.
+
+**beside it, both libcs we own SATURATE** like glibc/musl/newlib -- gwen's call,
+and the right one: wrapping destroys the fact that it did not fit, saturating
+hands it back. the reader no longer observes it, so it is gated where it belongs,
+by `test/cc/105-strtol.c` in the mooncc battery: gcc links glibc, mooncc links
+nolibc, the exit codes must agree.
 
 **still open, and independent:** `&` `|` `^` `<<` `>>` on non-negative bigs,
 limb-wise in `bit_slow` (love.c:6289 -- it widens to a *sun* and drops bigs to
 nil). bigs are sign-magnitude limb arrays (love.c:356-359), so non-negative is the
 easy half and covers every real use; negatives should keep refusing but **scare**
 rather than answering `()`, the plausible-lie pattern. nothing in the reader needs
-it now -- the big-hex literals in the link path already flow through `%` and `//`,
-not bit ops -- so this is a tower-completeness rung, not a blocker.
+it now -- the big literals in the link path already flow through `%` and `//`, not
+bit ops -- so this is a tower-completeness rung, not a blocker.
 
 ### 3. the reader differential
 

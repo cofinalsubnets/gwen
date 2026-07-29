@@ -62,39 +62,39 @@
  (: p (tap (map "\"oops" (jot 5))) (id? p (sound p rdr-eof))))
 
 ; --- numbers -------------------------------------------------------------------
-; signed decimal, floats, and 0x hex.
+; ⚠ AN INTEGER LITERAL READS ITS VALUE -- in all three bases, at full precision,
+; and the SAME in every build (host, love0, wasm, the kernel), whatever that
+; build's word width or libc. that is a law, not an accident, and it was won.
 ;
-; ⚠ AN INTEGER LITERAL READS AT FULL PRECISION IN EITHER BASE -- hex and decimal
-; agree everywhere, and the value is the same in EVERY build (host, love0, wasm,
-; the kernel), whatever that build's word width or libc. that is a law, not an
-; accident, and it was won: hex used to go through strtol, so a literal at or
-; above 2^63 came back as whatever THAT libc did with an overflow -- one source
-; text, three different numbers (nolibc wrapped to the negative twin, glibc
-; saturated to LONG_MAX, wasm's 32-bit `long` did neither). port/inle/klink.l
-; spells kernel addresses exactly this way and rode the wrap. both halves are
-; closed now: hex promotes to a big like decimal (love.c's is_hex_int ->
-; ai_big_read_hex), and our two libcs SATURATE like everyone else's
-; (crew/moon/lib/nolibc.c, libc/str.c) so the one lane still on strtol -- octal --
-; cannot disagree either.
+; hex and octal used to go through strtol, so a literal at or above 2^63 came
+; back as whatever THAT libc did with an overflow: one source text, three
+; different numbers (nolibc wrapped to the negative twin, glibc saturated to
+; LONG_MAX, wasm's 32-bit `long` did neither) -- while decimal, which had its own
+; reader, promoted to a big. port/inle/klink.l spells kernel addresses exactly
+; this way and rode the wrap. now all three bases share one reader
+; (is_dec_int/is_hex_int/is_oct_int -> ai_big_read_dec/_hex/_oct), and the
+; predicates are EXHAUSTIVE over what a base-0 strtol accepted whole, so the
+; reader does not call it at all. a float still goes by am_strtod, which is ours
+; and correctly rounded on every target.
 (assert
  (3 = (rdr "3")) (-3 = (rdr "-3")) (3 = (rdr "+3"))
- (16 = (rdr "0x10")) (255 = (rdr "0xff")) (255 = (rdr "0XFF"))  ; either case
+ (16 = (rdr "0x10")) (255 = (rdr "0xff")) (255 = (rdr "0XFF"))  ; hex, either case
  (-255 = (rdr "-0xff")) (255 = (rdr "+0xff"))
- (493 = (rdr "0755"))                                           ; octal, the strtol lane
- ; ⚠ octal is the LAST lane still on strtol, and this assert is what pins the two
- ; libcs we own: a WRAPPING accumulator answers -1 here, a saturating one answers
- ; its width's ceiling. asserted as a SIGN, so it holds at either width (wasm's
- ; `long` is 32 bits) -- the value would not.
- (0 < (rdr "01777777777777777777777"))                          ; octal 2^64-1: saturates, never wraps
+ (493 = (rdr "0755")) (7 = (rdr "007")) (0 = (rdr "00"))        ; octal, the leading zero its whole prefix
  ((0 - (1 / 2)) = (rdr "-.5")) ((1 / 2) = (rdr "+.5"))
- (18446744073709551615 = (rdr "18446744073709551615"))          ; decimal above the lane: a big
- ; ..and the same value written in hex, in every build
+ (18446744073709551615 = (rdr "18446744073709551615"))          ; decimal above the word: a big
+ ; ..and the same value in the other two bases, in every build
  (18446744073709551615 = (rdr "0xffffffffffffffff"))
+ (18446744073709551615 = (rdr "01777777777777777777777"))
  (18446744071564165120 = (rdr "0xffffffff80200000"))            ; klink.l's kernel vbase
  (9223372036854775807 = (rdr "0x7fffffffffffffff"))             ; the old strtol ceiling
  (340282366920938463463374607431768211455 = (rdr "0xffffffffffffffffffffffffffffffff"))
- ; a prefix with no digits is no number: an honest symbol, free for binding
- ('0x = (rdr "0x")) ('0xg = (rdr "0xg")))
+ (73786976294838206463 = (rdr "007777777777777777777777"))      ; 2^66-1, octal
+ ; a prefix with no digits is no number: an honest symbol, free for binding.
+ ; ⚠ and 08 is NEITHER octal (8 is not a digit there) nor decimal (the leading
+ ; zero is a prefix) -- it falls through to the float lane, as it always has.
+ ('0x = (rdr "0x")) ('0xg = (rdr "0xg")) ('0b101 = (rdr "0b101"))
+ (8.0 = (rdr "08")))
 
 ; --- quote and the constructor wraps -------------------------------------------
 ; a sigil GLUED to its datum builds it: ' quote, ` list, # hash, @ tuple, ~ twin.
