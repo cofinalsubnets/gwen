@@ -1,12 +1,12 @@
 ; crew/moon/moon.l -- the C compiler's driver:
 ;   mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
-; reads C, rides lex -> cpp -> parse -> gen -> the holo book. one .c WITHOUT -c
-; lays a runnable static ELF directly (chmod 755, _start + text + data one
-; segment); WITH -c it lays relocatable ELF objects (crew/holo/obj.l --
+; reads C, rides lex -> cpp -> parse -> gen -> the holo book. TWO outcomes, the
+; cc shape: WITH -c it lays relocatable ELF objects (crew/holo/obj.l --
 ; separate sections, a symbol table, and relocations), several .c inputs each
-; landing in the cwd as x.o (gcc-shaped); a .o input or SEVERAL inputs without
-; -c is a LINK -- our own static linker (crew/holo/link.l, rung 3) binds them
-; (compiling any .c on the way) into -o's exe, `a.out` bare. the old positional
+; landing in the cwd as x.o (gcc-shaped); WITHOUT it every input (a .c compiled
+; on the way, a .o read off disk) goes to our own static linker
+; (crew/holo/link.l, rung 3), which binds them with crt0 and the implicit
+; runtime into -o's exe, `a.out` bare. the old positional
 ; pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
 ; no .o). -I dirs search before the system pair on both include forms; a -D
 ; rides in as a synthesized #define line, so token bodies and function-like
@@ -136,14 +136,6 @@
        ps)
    ; the parser's static/section tablets, threaded to the gen as one list
    (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9))   ; sfns svars sects aliases ALIGNS
-   ; a standalone static executable (the default): _start + text + data, chmod +x
-   (cc-exe src dst is ds tgt)
-    (: ps (cc-parse src is ds tgt)
-       ir (cgen <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
-       _ (? (okv? ir) () (ccdie ir src ("cc: codegen error in " + src)))
-       res (elf64 tgt (\ _ <>ir) ())
-       _ (write-bytes dst (peep res 'bytes 0))
-       (chmod dst 493))
    ; a relocatable object: text/data/ai_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.
@@ -304,8 +296,6 @@
    (dirn d) (: n (tally d) (? (n = 0) d ((d (n - 1)) = 47) d (d + "/")))
    (dotc? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 99))))
    (doto? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 111))))
-   ; a LINK-shaped input list: any .o in it, or several inputs at once
-   (lnky? ins) (|| (two? >ins) (foldl (\ a x (|| a (doto? x))) () ins))
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r (n - 1)))
                 ((go 0 0) + "o"))
@@ -333,12 +323,16 @@
     (: ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
        f (flags as () () () () () ntv () () ())
        c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8)
-       lnk? (|| (lnky? ins) (|| pie (charm? org)))   ; -pie/-Ttext force the link path (crt0 + layout)
+       ; TWO outcomes now, the cc shape: -c lays objects, anything else LINKS.
+       ; one .c used to take a third path (cc-exe: elf64 straight off the IR,
+       ; no crt0 and no linker) which could not bind a libc -- so `mooncc
+       ; hello.c -o hello`, the most canonical cc line there is and what every
+       ; configure script writes, answered undef-label printf. rung 3 gave us a
+       ; linker; one exe path is the whole point of having it.
        (? (! (two? ins)) (udie 2 usage)
           o (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
                     (: _ (cc-obj <ins o is ds tgt) (quit 0)))
-               lnk? (: _ (cc-link ins o is ds tgt pie org nostd) (quit 0))
-               (: _ (cc-exe <ins o is ds tgt) (quit 0)))
+               (: _ (cc-link ins o is ds tgt pie org nostd) (quit 0)))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
           ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT)
           (&& (two? >ins)
@@ -346,14 +340,12 @@
                   (&& (! (dotc? <>ins))
                       (|| c (&& (! (doto? <ins)) (! (doto? <>ins)))))))
            (: _ (? c (cc-obj <ins <>ins is ds tgt)
-                     lnk? (cc-link `(<ins) <>ins is ds tgt pie org nostd)   ; -pie/-Ttext IN OUT: link the one input
-                     (cc-exe <ins <>ins is ds tgt)) (quit 0))
+                     (cc-link `(<ins) <>ins is ds tgt pie org nostd)) (quit 0))
           c (: (go l) (? (! (two? l)) (quit 0)
                          (! (dotc? <l)) (udie 2 ("cc: not a .c input: " + <l))
                          (: _ (cc-obj <l (obase <l) is ds tgt) (go >l)))
                (go ins))
-          lnk? (: _ (cc-link ins "a.out" is ds tgt pie org nostd) (quit 0))
-          (udie 2 usage))))
+          (: _ (cc-link ins "a.out" is ds tgt pie org nostd) (quit 0)))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the

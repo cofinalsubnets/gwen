@@ -47,9 +47,10 @@ relocations (R_64 = S+A; PC32/PLT32 both = S+A-P once the link is static,
 range-checked), and wraps elf.l's one-segment executable header. crt0 rides
 in as a synthetic FIRST object built by objelf itself (call main; exit), so
 `main` resolves through the same reloc path as everything else. the driver:
-a .o input or several inputs without -c is a LINK -- `mooncc a.o b.c -o prog`,
-`a.out` bare; one .c stays the direct cc-exe path, -c and the legacy pair
-unchanged. a foreign .o (gcc's .comment/.eh_frame zoo) scares off honestly
+anything without -c is a LINK -- `mooncc a.o b.c -o prog`, `a.out` bare,
+and (since 2026-07-28) the plain `mooncc hello.c -o hello` too, which used to
+take a third path straight from the IR with no crt0 and so could bind no libc
+at all; -c and the legacy pair unchanged. a foreign .o (gcc's .comment/.eh_frame zoo) scares off honestly
 ('link-section) -- our own objects only, by design: linking glibc's .a is the
 ifunc/TLS tarpit and stays OFF the ladder. the whole 84-program battery
 passes linked through it (compile -c, link, run, gcc differential), weak
