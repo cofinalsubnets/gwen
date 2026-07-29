@@ -468,6 +468,43 @@
                   (id? (vty r) 'ulong) ((tor0 g r) + ul2d)
                   ((tor0 g r) + `(`('cvtsi2sd 'f0 'r0))))
    (asint g r) (? (flo? (vty r)) ((vfs r) + `(`('cvttsd2si 'r0 'f0))) (tor0 g r))  ; result -> r0 as an int
+   ; ⚠ the MIRROR of ul2d, and it was the same hole: cvttsd2si is a SIGNED
+   ; truncation, so a double at or above 2^63 saturates to 0x8000000000000000 --
+   ; (unsigned long)1.0e19 answered 9223372036854775808 rather than
+   ; 10000000000000000000. the t32 cast lane rides its own cvttsd2ui and the pair
+   ; lane peels the bits by hand; the 64-bit targets have exactly ONE truncating
+   ; instruction and it only speaks signed. so BIAS around 2^63: under it convert
+   ; straight, at or above it subtract 2^63 first, convert the remainder (now
+   ; signed-representable), and put the bit back -- the remainder is under 2^63 so
+   ; bit 63 is clear and the xor IS the add.
+   ; the subtract being EXACT is the whole reason this works: a d >= 2^63 has an
+   ; ulp of at least 2^11, d - 2^63 is a multiple of that same ulp and lands under
+   ; 2^63, so it needs no more mantissa than d already had. no rounding enters,
+   ; hence no double-rounding to argue about.
+   ; a negative, an out-of-range and a NaN all fall to the plain lane and land on
+   ; the signed instruction's own indefinite -- C leaves every one of them
+   ; undefined, and that is what gcc hands back for them too. --
+   (dtoul g)
+    (: lb (nlab g ".du") ld (nlab g ".dv")
+       _ (vmflush g)
+       `(`('li 'r1 0x43e0000000000000) `('movqxr 'f1 'r1)      ; 2^63
+          `('ucomisd 'f0 'f1) `('br 'ae lb)
+          `('cvttsd2si 'r0 'f0) `('jmp ld)                     ; d < 2^63: straight
+          `('label lb)
+          `('subsd 'f0 'f1)                                    ; d - 2^63, exact
+          `('cvttsd2si 'r0 'f0)
+          `('li 'r1 0x8000000000000000) `('xor 'r0 'r0 'r1)     ; put 2^63 back
+          `('label ld)))
+   ; asint honouring an unsigned 64-bit DESTINATION. every caller that knows the
+   ; type it is converting INTO comes through here -- the cast, a store/init, a
+   ; register-homed assign, an outgoing arg, a return. the callers that know no
+   ; destination type (a shift count, an array index, the bit ops) are integer
+   ; contexts where the signed truncation is what C asks for anyway, and the
+   ; narrower unsigned types are right on the signed lane too: their values fit a
+   ; signed 64-bit word, and cvt's zx1/zx2/zx4 does the narrowing. --
+   (asintt g r ty)
+    (? (&& (! (t32? g)) (&& (flo? (vty r)) (id? ty 'ulong))) ((vfs r) + (dtoul g))
+       (asint g r))
    ; -- the environments: locals shadow globals --
    (vent g env name)                                ; -> ('regv rN ty) | ('loc off ty) | ('glo lbl ty) | 'bad
     (: e (assoc name env)
@@ -567,7 +604,7 @@
                        (: off (ntmp g 'long)
                           (cbind >ps >as
                                  (link `((cap (cap ps)) off (caup (cap ps))) benv)
-                                 (acc + (asint g r) + `(`('st 'r4 off 'r0))))))))
+                                 (acc + (asintt g r (caup (cap ps))) + `(`('st 'r4 off 'r0))))))))
              (dtmp ds benv9)                       ; the body's own decls: fresh temps over the params
               (? (! (two? ds)) benv9
                  (: d9 <ds (dtmp >ds (link `(<d9 (ntmp g <>d9) <>d9) benv9))))
@@ -1242,7 +1279,7 @@
                   (: _ (pin g 'want <>rv)         ; hint the rhs straight at the home
                      r (cgexpr g env <>>e)
                      (? (bad? r) 'bad
-                        (flo? (vty r)) (mkv <>>rv 'r0 ((asint g r) + `(`('mov <>rv 'r0))))
+                        (flo? (vty r)) (mkv <>>rv 'r0 ((asintt g r <>>rv) + `(`('mov <>rv 'r0))))
                         (id? (vreg r) <>rv) (mkv <>>rv <>rv (vfs r))   ; landed in the home already
                         (: fs ((vfs r) + `(`('mov <>rv (vreg r))))   ; straight from the value's register
                            _ (rfree g (vreg r))
@@ -1269,6 +1306,25 @@
                               ((asll g r)
                                + (? (<rv = 'loc) (pst 'r4 <>rv)
                                     (`(`('la 'r2 <>rv)) + (pst 'r2 0)))))
+                        ; ⚠ A DOUBLE SOURCE MUST TRUNCATE FIRST. this lane's guard
+                        ; (above) rules out a float TARGET and never looked at the
+                        ; float SOURCE, so `long v; v = d;` fell to the store-the-
+                        ; register lanes below -- and a double's value lives in f0
+                        ; with its reg field explicitly not consulted, so what
+                        ; reached the frame slot was the raw IEEE BIT PATTERN
+                        ; (v = 3.75 stored 4615626668101337088). the narrow lane
+                        ; was no safer: it rides tor0, which moves rather than
+                        ; converts, so `int v; v = d;` stored the low 32 bits of
+                        ; those same bits and answered 0.
+                        ; it is the ASSIGNMENT that was broken and not the
+                        ; initializer -- `long v = d;` goes through cgdecl's own
+                        ; store and was always right -- which is why this survived:
+                        ; the declaring form is the one everybody writes.
+                        (flo? (vty r))
+                         (mkv ty 'r0 ((asintt g r ty) + (cvt ty 'r0)
+                                      + (? (<rv = 'loc)
+                                           `(`((stop ty) 'r4 <>rv 'r0))
+                                           `(`('la 'r1 <>rv) `((stop ty) 'r1 0 'r0)))))
                         (two? (cvt ty 'r0))              ; a narrow target converts on the protocol
                          (mkv ty 'r0 (cat (tor0 g r)
                                       (cat (cvt ty 'r0)
@@ -1318,7 +1374,7 @@
                            sgn (! (usg? uty)) lo (64 - width)
                            (mkv 'long 'r0
                               ((vfs lv) + (spush 'r0)
-                               + (asint g r) + (spop 'r1)
+                               + (asintt g r uty) + (spop 'r1)
                                + `(`((uldop usz) 'r2 'r1 0)              ; r2 = the unit
                                    `('li 'r3 mask) `('and 'r0 'r0 'r3)   ; r0 = v & mask (the truncated value)
                                    `('li 'r3 cmask) `('and 'r2 'r2 'r3)  ; clear the field's bits
@@ -1342,14 +1398,14 @@
                           (? aR
                              (: fs (cat (vfs lv)
                                     (cat `(`('mov aR 'r0))
-                                     (cat (asint g r)
+                                     (cat (asintt g r ty)
                                       (cat (cvt ty 'r0)
                                            `(`((stop ty) aR 0 'r0))))))
                                 _ (rfree g aR)
                                 (mkv ty 'r0 fs))
                              (mkv ty 'r0 (cat (vfs lv)
                                     (cat (spush 'r0)
-                                     (cat (asint g r)
+                                     (cat (asintt g r ty)
                                       (cat (spop 'r1)
                                        (cat (cvt ty 'r0)
                                             `(`((stop ty) 'r1 0 'r0))))))))))))))))
@@ -1398,7 +1454,7 @@
                       (mkv tgt 'r0 ((vfs r) + (cvtdll g (usg? tgt))))
                      (&& (t32? g) (usg? tgt))                                    ; t32 unsigned: the U-converter
                       (mkv tgt 'r0 ((vfs r) + `(`('cvttsd2ui 'r0 'f0)) + (cvt tgt 'r0)))
-                     (mkv tgt 'r0 ((asint g r) + (cvt tgt 'r0))))
+                     (mkv tgt 'r0 ((asintt g r tgt) + (cvt tgt 'r0))))
                  (flo? tgt) (mkv 'double 'r0 (vfs r))                            ; double -> double
                  (&& (pair? g tgt) (! (llt? (vty r))))                           ; widen to the pair (source signedness)
                   (mkv tgt 'r0 (asll g r))
@@ -1786,7 +1842,7 @@
                           aval (? (&& (t32? g) (id? one 'sse)) ((tor0 g a) + (pld 'r0 0))   ; the t32 8B blob rides the r0:r1 pair
                                   one ((tor0 g a) + `(`('ld 'r0 'r0 0)))
                                   wd ((asflo g a) + `(`('movqrx 'r0 'f0)))
-                                  (asint g a))
+                                  (asintt g a aty))
                           ; a register arg rides a 16-byte cell: rsp stays 16-aligned
                           ; while the REMAINING args evaluate (a later arg may hold a
                           ; nested call, and the SysV ABI wants rsp%16==0 at it). an
@@ -3580,7 +3636,7 @@
        (? (bad? r) 'bad
           (flo? ty) ((asflo g r) + (fstf g ty 'r4 off 'f0))
           (pair? g ty) ((asll g r) + (pst 'r4 off))
-          ((asint g r) + (cvt ty 'r0) + `(`((stop ty) 'r4 off 'r0)))))
+          ((asintt g r ty) + (cvt ty 'r0) + `(`((stop ty) 'r4 off 'r0)))))
    (cgfill g env off ty ini0)                       ; fill an aggregate at frame offset off (no zero)
     (: ini (unelide g ty ini0)                        ; normalize elided braces (idempotent)
      (? (<ini = 'str) (? (arr? ty) (cgstr off <>ini) 'bad)
@@ -3914,13 +3970,13 @@
                        (flo? ty) (one >ps env3 (acc + (asflo g r) + (fstf g ty 'r4 off 'f0)))
                        (pair? g ty) (one >ps env3 (acc + (asll g r) + (pst 'r4 off)))
                        hreg (one >ps env3           ; a homed local's init is a register move
-                                 (acc + (asint g r) + `(`('mov hreg 'r0))))
+                                 (acc + (asintt g r ty) + `(`('mov hreg 'r0))))
                        (&& hint (&& (! (flo? (vty r)))
                            (member? (vreg r) (peep g 'pool0 ()))))   ; hint set = vmap on + universe local
                         (: _ (vmpin g <p (vreg r))       ; the init value stays resident
                            (one >ps env3 (acc + (vfs r) + `(`('st 'r4 off (vreg r))))))
                        (one >ps env3
-                            (cat acc (cat (asint g r)
+                            (cat acc (cat (asintt g r ty)
                                      (cat (cvt ty 'r0)
                                           `(`((stop ty) 'r4 off 'r0)))))))))))))
        _ (stq g)                                     ; one statement tick for the whole decl
@@ -4424,7 +4480,7 @@
                         + (bcopy g 0 (tsz g rt) ())
                         + `(`('mov 'r0 'r1)) + epj)
                       (|| (stru? rt) (stru? (vty r))) 'bad               ; a MIXED 16-byte pair: still refused
-                      (flo? (vty r)) ((asint g r) + (? il `(`('jmp il)) epj))   ; a double value, an int return -> truncate to r0
+                      (flo? (vty r)) ((asintt g r rt) + (? il `(`('jmp il)) epj))   ; a double value, an int return -> truncate to r0
                       (pair? g rt) ((asll g r) + (? il `(`('jmp il)) epj))      ; a pair return: r0:r1 (widen a word value)
                       ((tor0 g r) + (? il `(`('jmp il)) epj))))))    ; int -> int, as before (a pair value narrows to its lo)
           (k = 'expr)
@@ -4646,7 +4702,7 @@
                  (: off (ntmp g 'long)
                     (bind >ps >as
                           (link `((cap (cap ps)) off (caup (cap ps))) benv)
-                          (acc + (asint g r) + `(`('st 'r4 off 'r0))))))))
+                          (acc + (asintt g r (caup (cap ps))) + `(`('st 'r4 off 'r0))))))))
        br (bind <>>f args () ())
        _ (pin g 'inlret ilb9)
        _ (pin g 'inlrt rt)
