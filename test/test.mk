@@ -43,7 +43,7 @@ test_host: $m
 # haven.l is OUT of the gate: it can wedge on a wayland resource (a stray holding
 # the socket) and stall the whole run indefinitely. run it standalone when working
 # on the compositor: `cat test/00-init.l test/host/haven.l | out/host/love`.
-hostnif_tests = test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/lupa.l
+hostnif_tests = test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/libra.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
@@ -184,8 +184,8 @@ test_up: out/dist/love-$a
 # the baked kore.image (--wake, like test_kore), not the cold cat.
 .PHONY: test_vi
 test_vi: host out/host$(hsuf)/kore.image
-	@echo "VI crew/vi/{core,law}.l"; \
-	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/core.l crew/vi/law.l | $m > out/host/.test_vi.out 2>&1; r=$$?; \
+	@echo "VI crew/vi/{hue,core,law}.l"; \
+	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l | $m > out/host/.test_vi.out 2>&1; r=$$?; \
 	  cat out/host/.test_vi.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/vi/law:" out/host/.test_vi.out; } \
 	    || { echo "FAIL vi laws (exit $$r)"; exit 1; }

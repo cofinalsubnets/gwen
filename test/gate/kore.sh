@@ -35,7 +35,8 @@ pipe() { n=$1; i=$2; shift 2
 echo "UTILS crew/kore/{text,core,fs,re,sed,diff,law}.l"
 out=$ho/.test_kore.out
 cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
-    crew/kore/sed.l crew/kore/proc.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l \
+    crew/kore/sed.l crew/kore/proc.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l \
+    crew/vi/vi.l crew/kore/diff.l \
     crew/kore/law.l | "$m" > "$out" 2>&1
 r=$?
 cat "$out"

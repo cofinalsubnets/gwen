@@ -14,10 +14,19 @@
 ; 'dir (the search state), 'quit (() | 1), 'dow (a write request: (name) --
 ; uread's shape, the face consumes it), 'w 'h (the view).
 ;
+; the SYNTAX PAINT rides four more keys and crew/vi/hue.l: 'hl (paint? -- born
+; on for a .l name, :hl flips it), 'pens (the class -> escape tablet; the FACE
+; installs it, so this file still touches no getenv and no file), 'book (the
+; vocabulary, folded once at the first paint), 'hlcar (the cached per-line
+; "starts inside a string" carry, `(gen flags) -- ⚠ the wrapper is not
+; decoration, gen 0 over an empty buffer is a real cached value, so a bare one
+; could not say "no cache"), 'hlgen (bumped by the three line mutators -- vput,
+; vsplice, vrest -- and nothing else touches 'lines).
+;
 ; the dialect: motions h j k l 0 ^ $ w b e f F t T G gg, counts, operators
 ; d c y (doubled = linewise; with j/k/G/gg linewise, else within the line),
 ; x X D C s r J, i a I A o O, p P (lin + chr), u and ^R, / ? n N (BRE, over
-; re.l), : with w [NAME] q q! wq x and a line number, ZZ, ^F ^B ^D ^U paging.
+; re.l), : with w [NAME] q q! wq x hl and a line number, ZZ, ^F ^B ^D ^U paging.
 ; out of scope, documented: visual mode, named registers, ., macros, :s
 ; (sed exists), tabs render raw (the terminal's stops, not ours), no
 ; horizontal scroll (long lines clip at the view's edge).
@@ -32,9 +41,13 @@
    (vink ln) (: n (tally ln)                       ; first non-blank column
                  (go i) (? (&& (i < n) (|| ((ln i) = 32) ((ln i) = 9))) (go (i + 1)) i)
                  (: k (go 0) (? (k < n) k (? (0 < n) (n - 1) 0))))
-   (vput st r ln) (pin st 'lines (: (go l i) (? (! (two? l)) ()
-                                                (link (? (i = r) ln <l) (go >l (i + 1))))
-                                    (go (st 'lines) 0)))
+   ; every edit to 'lines bumps the generation, which is what lets the paint's
+   ; string carry be recomputed once per EDIT instead of once per keystroke
+   (vgen st) (: _ (pin st 'hlgen ((st 'hlgen) + 1)) st)
+   (vput st r ln) (: _ (pin st 'lines (: (go l i) (? (! (two? l)) ()
+                                                     (link (? (i = r) ln <l) (go >l (i + 1))))
+                                         (go (st 'lines) 0)))
+                     (vgen st))
    (vgole st c) (: _ (pin st 'col c) (pin st 'goal c))
    (vclampn st) (: n (vlen st)                     ; normal-mode col fence
                     (? ((st 'col) < n) st
@@ -48,7 +61,7 @@
    (vsnap st) (: _ (pin st 'undo (link `((st 'lines) (st 'row) (st 'col)) (st 'undo)))
                   (pin st 'redo ()))
    (vrest st fr) (: _ (pin st 'lines <fr) _ (pin st 'row <>fr)
-                     _ (vgole st <>>fr) (pin st 'dirty 1))
+                     _ (vgole st <>>fr) _ (pin st 'dirty 1) (vgen st))
 
    ; splice: replace rows r1..r2 (inclusive) with the list `ins`; r2 = r1 - 1
    ; is a pure insertion at r1 (the end of the buffer included)
@@ -57,7 +70,8 @@
        post (vtake st (r2 + 1) ((vnl st) - 1))
        nl2 (pre + ins + post)
        _ (pin st 'lines (? (two? nl2) nl2 `("")))
-       (pin st 'dirty 1))
+       _ (pin st 'dirty 1)
+       (vgen st))
    (vtake st r1 r2)                                ; rows r1..r2, a fresh list
     (: (go l i acc) (? (|| (! (two? l)) (r2 < i)) (rev acc)
                        (go >l (i + 1) (? (r1 <= i) (link <l acc) acc)))
@@ -271,6 +285,8 @@
           (|| (s = "wq") (s = "x")) (: _ (pin st 'dow `((st 'file))) (pin st 'quit 1))
           (&& (2 < n) ((s 0) = 119) ((s 1) = 32))              ; w NAME
            (pin st 'dow `((snip s 2 n)))
+          (s = "hl") (: _ (pin st 'hl (? (st 'hl) () 1))
+                        (vmsg st (? (st 'hl) "syntax on" "syntax off")))
           (s = "$") (: _ (pin st 'row ((vnl st) - 1)) (vgole st 0))
           dig? (: t ((uatoi s) - 1) nl (vnl st)
                        _ (pin st 'row (? (t < 0) 0 (? (t < nl) t (nl - 1))))
@@ -461,6 +477,10 @@
    (vfeed st bs) (? (! (two? bs)) st (vfeed (vstep st <bs) >bs))
 
    ; -- birth --
+   ; the paint is born on for a .l name and off for everything else, which is
+   ; also why every frame law below still reads the plain bytes it always did:
+   ; they open their buffers as "t".
+   (vdotl f) (: n (tally f) (&& (1 < n) (&& ((f (n - 2)) = 46) ((f (n - 1)) = 108))))
    (vnew ls file)
     #('lines (? (two? ls) ls `(""))
       'row 0 'col 0 'goal 0 'top 0
@@ -469,6 +489,7 @@
       'file file 'dirty () 'msg ""
       'cmd "" 'pat () 'pattx "" 'dir 1
       'quit () 'dow ()
+      'hl (vdotl file) 'pens () 'book () 'hlcar () 'hlgen 0
       'w 80 'h 24)
 
    ; -- the frame: one full redraw as a single text --
@@ -479,9 +500,26 @@
        _ (? (((st 'top) + (body - 1)) < (st 'row)) (pin st 'top ((st 'row) - (body - 1))) ())
        top (st 'top) ls (st 'lines) nl (tally ls)
        (clip ln) (? (w < (tally ln)) (snip ln 0 w) ln)
+       ; -- the paint. escapes are ZERO WIDTH, so CLIP first and paint the clip:
+       ; every column worked out below is the plain one, cursor included. off,
+       ; this whole lane vanishes and the frame is the byte-for-byte old one.
+       paint (&& (st 'hl) (tablet? (st 'pens)))
+       bk (? paint (: b (st 'book)
+                      (? (tablet? b) b (: n (hue-book ()) _ (pin st 'book n) n)))
+             ())
+       ; the carry says which lines START inside a string (papel.l's css is forty
+       ; lines of one literal); it is cached against the generation, so an edit
+       ; pays for it and a keystroke that only moves the cursor does not
+       car (? paint (: c (st 'hlcar)
+                      (? (&& (two? c) (<c = (st 'hlgen))) <>c
+                         (: k (hue-carry bk ls) _ (pin st 'hlcar `((st 'hlgen) k)) k)))
+              ())
+       (vcar l i) (? (! (two? l)) 0 (i < 1) <l (vcar >l (i - 1)))
+       (lay i) (: ln (clip (vnth ls i))
+                  (? paint (hue-line (st 'pens) bk ln (vcar car i)) ln))
        (rows i acc)
         (? ((top + body) <= i) acc
-           (rows (i + 1) (acc + (? (i < nl) (clip (vnth ls i)) "~") + e + "[K" + "\r\n")))
+           (rows (i + 1) (acc + (? (i < nl) (lay i) "~") + e + "[K" + "\r\n")))
        status (? ((st 'mode) = 'c) (":" + (st 'cmd))
                  ((st 'mode) = 's) ((? (0 < (st 'dir)) "/" "?") + (st 'cmd))
                  (0 < (tally (st 'msg))) (st 'msg)

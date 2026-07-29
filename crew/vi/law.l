@@ -2,7 +2,8 @@
 ; below drives the PURE engine (vstep, one byte at a time) and reads the
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
-;   cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/core.l crew/vi/law.l | out/host/love
+;   cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l \
+;       crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l | out/host/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.
@@ -166,4 +167,89 @@
          f (vframe st)
          (&& (= (st 'top) 2) (two? (L f)))))
 
-   _ (say err "crew/vi/law: motions + words + finds + insert + operators + registers + undo + search + ex + frames ok") _ (put err 10) 0)
+; --- the syntax paint (crew/vi/hue.l): classes, the carry, and the one law
+; that keeps every exact-frame assertion above honest --------------------------
+   hbk (hue-book ())
+   (klass s) (map (\ r <r) <(hue-lex hbk s 0 1))
+   (runs s in) <(hue-lex hbk s in 1)
+   ; strip SGR and ONLY SGR: \e[<digits;>m goes, \e[H and \e[K and \e[r;cH stay,
+   ; because those are the frame's own geometry and the whole point is that the
+   ; paint did not touch it
+   (bare s)
+    (: n (tally s)
+       (dig? c) (|| (&& (48 <= c) (c <= 57)) (c = 59))
+       (go i acc)
+        (? (n <= i) acc
+           (&& ((s i) = 27) (&& ((i + 1) < n) ((s (i + 1)) = 91)))
+            (: (sk j) (? (&& (j < n) (dig? (s j))) (sk (j + 1)) j)
+               k (sk (i + 2))
+               (? (&& (k < n) ((s k) = 109)) (go (k + 1) acc)
+                  (go (i + 1) (acc + (string (s i))))))
+           (go (i + 1) (acc + (string (s i)))))
+       (go 0 ""))
+   (hlon st) (: _ (pin st 'pens (hue-pens hue-theme ())) _ (pin st 'hl 1) st)
+
+; --- one class per token, table order: a word lane beats the punct lanes, the
+;     number lane beats a leading sigil, and punct INSIDE a name is the name ---
+   _ (assert
+      (= (klass "; hi") '(comment))
+      (= (klass "#!/x") '(comment))
+      (= (klass "\"a ; b\"") '(string))               ; a ; inside a string is no comment
+      (= (klass "'foo") '(atom))
+      (= (klass "`(1)") '(ctor paren number paren))
+      (= (klass "map") '(book))
+      (= (klass "zzznope") ())                        ; not in the book: plain, and that is the tell
+      (= (klass "zzz?") ())
+      (= (klass ":") '(form))
+      (= (klass "&&") '(macro))
+      (= (klass "tau") '(const))
+      (= (klass "$x") '(mono))                        ; the valence law, in colour
+      (= (klass "a $ b") '(dyad))
+      (= (klass "+") '(dyad))                         ; a bare operator is NOT a book name
+      (= (klass "-3") '(number))
+      (= (klass ".5") '(number))
+      (= (klass "1.5e-3") '(number))
+      (= (klass "1e10") '(number)))
+
+; --- the carry: a string spans lines (papel.l's css is forty of them), so a
+;     line's class depends on where the line BEFORE it ended -----------------
+   _ (assert
+      (= (hue-carry hbk '("(: css \"a" "b\" 1)" "x")) '(0 1 0))
+      (= (runs "a ; b\" c" 1) '((string 0 6)))        ; carried in: the ; is still string
+      (= (runs "a ; b" 1) '((string 0 5)))            ; and it stays open to the end
+      ; keep () is the SAME walk with its answers dropped -- one lexer, provably
+      (: a (hue-lex hbk "\"x" 0 1) b (hue-lex hbk "\"x" 0 ())
+         (&& (<>a = <>b) (! (two? <b)))))
+
+; --- the pens: molokayo, and every class has one -----------------------------
+   _ (assert
+      (= (hue-pen '(Comment 59 "#75715E" ()) ()) "\e[38;5;59m")
+      (= (hue-pen '(Statement 161 "#F92672" (bold)) ()) "\e[1;38;5;161m")
+      (= (hue-pen '(Statement 161 "#F92672" (bold)) 1) "\e[1;38;2;249;38;114m")
+      (: ps (hue-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hue-classes))
+      (all (\ r (any (\ c (id? (hue-grp c) <r)) hue-classes)) hue-theme))
+
+; --- PAINT INVARIANCE: colour adds colour and moves NOTHING. this is what keeps
+;     every byte-exact frame law above meaningful once the paint exists -------
+   (twin ls ks) (: a (vgo ls ks) b (vgo ls ks)
+                   _ (pin a 'w 30) _ (pin a 'h 5) _ (pin b 'w 30) _ (pin b 'h 5)
+                   _ (hlon b)
+                   ((bare (vframe b)) = (vframe a)))
+   _ (assert
+      (twin '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
+      (twin '("(: css \"a" "b\" 1)") "j")
+      (twin '("(a really quite long line that clips at the view edge)") "$")
+      (twin '("") ""))
+
+; --- born on for .l, off for everything else (which is why "t" above is plain),
+;     and :hl flips it ------------------------------------------------------
+   _ (assert
+      (! (st? (vnew '("a") "t") 'hl))
+      (! (st? (vnew '("a") "") 'hl))
+      (! (st? (vnew '("a") "l") 'hl))
+      (st? (vnew '("a") "x.l") 'hl)
+      (st? (vnew '("a") "crew/vi/hue.l") 'hl)
+      (st? (vgob '("a") (cat (bytes ":hl") (L CR))) 'hl)
+      (! (st? (vgob '("a") (cat (bytes ":hl") (cat (L CR) (cat (bytes ":hl") (L CR))))) 'hl)))
+
+   _ (say err "crew/vi/law: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)
