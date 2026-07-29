@@ -287,6 +287,61 @@
        (? (two? hit) (: _ (pin st 'row <hit) _ (vgole st <>hit) st)
           (vmsg st ("not found: " + (st 'pattx)))))
 
+   ; -- libra ⚖, on the BUFFER ------------------------------------------------
+   ; both of libra's weighings run in here, because both are PURE functions over
+   ; text (lib/lint.l rides ahead of this file in the cat). the point is the
+   ; BUFFER rather than the file on disk: it answers for what you are looking at,
+   ; not for what you last saved, which is exactly when you want to be told.
+   ; one scanner under libra's three faces and this one, so what pulchritude says
+   ; is what `make lint` will refuse -- there is no second implementation to
+   ; drift. ⚠ lint counts line and col from ONE and the buffer from ZERO.
+   (vlint st)
+    (: ws (lint-scan (unlines (st 'lines)))
+       (? (! (two? ws)) (vmsg st "balance clean")
+          (: w1 <ws
+             r (: k (<w1 - 1) nl (vnl st) (? (k < 0) 0 (? (k < nl) k (nl - 1))))
+             _ (pin st 'row r)
+             _ (vgole st (: c (<>w1 - 1) (? (c < 0) 0 c)))
+             _ (vclampn st)
+             (vmsg st ((show (tally ws)) + (? (1 = (tally ws)) " warning: " " warnings: ")
+                       + (show <w1) + "," + (show <>w1) + " " + <>>w1)))))
+
+   ; :fmt -- libra's REINDENTER, in place and undoable. it replaces leading
+   ; whitespace and nothing else: every break, every alignment inside a line,
+   ; every comment stays where its author put it. a () plan means "leave this
+   ; line exactly as it is" -- a line inside a string, whose leading spaces ARE
+   ; the string -- and a line with nothing on it stays empty rather than becoming
+   ; a row of spaces nobody asked for.
+   ; ⚠ PLAIN RECURSION, no inner accumulator scope. the accumulating twin --
+   ; `(: (go k acc) (? (k < 1) acc (go (k - 1) (acc + " "))) (go n ""))` -- is
+   ; MISCOMPILED by mooncc: it answers the charm 6 where love0 answers "   ".
+   ; the trigger is a `:` whose ONLY binding is a self-recursive helper called
+   ; from its body; a second binding, anywhere, makes it correct again. see the
+   ; note at tools/hue2vim.l's `pad`, the first place this bit.
+   (vsp n) (? (n < 1) "" (" " + (vsp (n - 1))))
+   (vtrimf ln) (: n (tally ln)
+                  (go i) (? (n <= i) n (|| ((ln i) = 32) ((ln i) = 9)) (go (i + 1)) i)
+                  (snip ln (go 0) n))
+   (vfmt st)
+    (: plan (lint-lay (unlines (st 'lines)))
+       (lay ls pl acc)
+        (? (! (two? ls)) (rev acc)
+           (: p (? (two? pl) <pl ())
+              body (vtrimf <ls)
+              (lay >ls (? (two? pl) >pl ())
+                   (link (? (! (two? p)) <ls
+                            (0 = (tally body)) ""
+                            ((vsp <>p) + body))
+                         acc))))
+       nl2 (lay (st 'lines) plan ())
+       (? (= nl2 (st 'lines)) (vmsg st "already laid out")
+          (: _ (vsnap st)
+             _ (pin st 'lines nl2)
+             _ (pin st 'dirty 1)
+             _ (vgen st)
+             _ (vclampn st)
+             (vmsg st "laid out"))))
+
    ; -- the ex line --
    ; :e / :o -- put another file in the buffer. this file touches no io, so the
    ; ex line leaves a REQUEST ('doe, uread's shape) exactly the way :w leaves
@@ -319,6 +374,8 @@
            (vedit st (snip s 3 n) 1)
           (s = "hl") (: _ (pin st 'hl (? (st 'hl) () 1))
                         (vmsg st (? (st 'hl) "syntax on" "syntax off")))
+          (s = "lint") (vlint st)                             ; libra's scan, on the buffer
+          (s = "fmt") (vfmt st)                               ; libra's reindenter, in place
           (s = "$") (: _ (pin st 'row ((vnl st) - 1)) (vgole st 0))
           dig? (: t ((uatoi s) - 1) nl (vnl st)
                        _ (pin st 'row (? (t < 0) 0 (? (t < nl) t (nl - 1))))
@@ -532,6 +589,13 @@
        _ (? (((st 'top) + (body - 1)) < (st 'row)) (pin st 'top ((st 'row) - (body - 1))) ())
        top (st 'top) ls (st 'lines) nl (tally ls)
        (clip ln) (? (w < (tally ln)) (snip ln 0 w) ln)
+       ; ⚠ the STATUS line clips from the LEFT. its TAIL is what carries the
+       ; news -- the row,col, the ": 12 lines", the end of the : you are typing --
+       ; and a deep path would otherwise push every word of it off the screen
+       ; (which it did: `:e some/long/path.l` confirmed into the void). `<` marks
+       ; the cut, the way vim marks a name it had to shorten. the TEXT lines
+       ; still clip RIGHT: that is the no-horizontal-scroll rule and it stays.
+       (clipl ln) (: k (tally ln) (? (w < k) ("<" + (snip ln ((k - w) + 1) k)) ln))
        ; -- the paint. escapes are ZERO WIDTH, so CLIP first and paint the clip:
        ; every column worked out below is the plain one, cursor included. off,
        ; this whole lane vanishes and the frame is the byte-for-byte old one.
@@ -563,4 +627,4 @@
        said? (|| ((st 'mode) = 'c) ((st 'mode) = 's))
        cr (? said? h (((st 'row) - top) + 1))
        cc (: k (? said? ((tally status) + 1) ((st 'col) + 1)) (? (w < k) w k))
-       (e + "[H" + (rows top "") + (clip status) + e + "[K" + e + "[" + (show cr) + ";" + (show cc) + "H")))
+       (e + "[H" + (rows top "") + (clipl status) + e + "[K" + e + "[" + (show cr) + ";" + (show cc) + "H")))

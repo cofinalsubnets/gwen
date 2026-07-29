@@ -185,6 +185,37 @@
       (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") (! (q 'hl)))
       (: q (vgo '("a") "") _ (vload q () "e.l") (= (lns q) '(""))))             ; an empty read is one empty line
 
+; --- libra ⚖ on the buffer: :lint weighs what you are LOOKING AT, :fmt lays it
+;     out. one scanner (lib/lint.l) under libra's three faces and these two -----
+   (ex ls s) (vgob ls (cat (bytes (":" + s)) (L CR)))
+   _ (assert
+      (= (st? (ex '("(: a 1)") "lint") 'msg) "balance clean")
+      (= (st? (ex '("(: a 1") "lint") 'msg) "1 warning: 1,1 unclosed (")
+      (= (at (ex '("(: a 1") "lint")) '(0 0))                  ; and it goes THERE
+      ; an unclosed opener reports where it OPENED, so the jump lands on the cause
+      (: q (ex '("(f x)" "(: a 1" "(g y)") "lint")
+         (&& (= (at q) '(1 0)) (= (q 'msg) "1 warning: 2,1 unclosed (")))
+      ; :fmt reindents and nothing else -- the break and the text are untouched
+      (= (lns (ex '("(: a 1" "     b 2)") "fmt")) '("(: a 1" "   b 2)"))
+      (= (st? (ex '("(: a 1" "   b 2)") "fmt") 'msg) "already laid out")
+      (st? (ex '("(: a 1" "     b 2)") "fmt") 'dirty)
+      (= (lns (vgob '("(: a 1" "     b 2)")                    ; and it is undoable
+                    (cat (cat (bytes ":fmt") (L CR)) (bytes "u"))))
+         '("(: a 1" "     b 2)"))
+      (= (lns (ex '("(: a 1" "" "   b 2)") "fmt")) '("(: a 1" "" "   b 2)")))  ; a blank line stays blank
+
+; --- the status line clips from the LEFT: its tail is the news ---------------
+   (miniw ls ks m) (: st (vgo ls ks) _ (vmsg st m) _ (pin st 'w 8) _ (pin st 'h 4)
+                      (vframe st))
+   (frame3 tail) (E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
+                     + tail + E$ + "[K" + E$ + "[1;1H")
+   _ (assert
+      ; 11 characters into a view 8 wide: the HEAD goes, `<` says so, and the
+      ; tail -- which is where the news lives -- is what you are left looking at
+      (= (miniw '("ab") "" "abcdefghijk") (frame3 "<efghijk"))
+      (= (miniw '("ab") "" "12345678") (frame3 "12345678"))    ; exactly w: untouched
+      (= (miniw '("ab") "" "short") (frame3 "short")))
+
 ; --- the cursor sits where you are TYPING: on the status line in ex and search -
    _ (assert
       (: f (mini '("ab") ":") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[4;2H")))

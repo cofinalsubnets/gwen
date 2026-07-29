@@ -185,7 +185,7 @@ test_up: out/dist/love-$a
 .PHONY: test_vi
 test_vi: host out/host$(hsuf)/kore.image
 	@echo "VI crew/vi/{hue,core,law}.l"; \
-	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l | $m > out/host/.test_vi.out 2>&1; r=$$?; \
+	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l | $m > out/host/.test_vi.out 2>&1; r=$$?; \
 	  cat out/host/.test_vi.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/vi/law:" out/host/.test_vi.out; } \
 	    || { echo "FAIL vi laws (exit $$r)"; exit 1; }
