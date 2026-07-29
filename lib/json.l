@@ -4,34 +4,30 @@
 ; `(use 'json)`, then json-read and json-show.
 ;
 ; the MAPPING, a BIJECTION in both directions:
-;   null    <-> ()
-;   true    <-> json-true       COINS, not 1 and 0 -- see the note below
+;   null    <-> json-null       a coin, like the booleans -- see the notes below
+;   true    <-> json-true
 ;   false   <-> json-false
 ;   number  <-> charm / sun / big / gem     (the celestial ladder; exact where json is)
 ;   string  <-> string
-;   array   <-> list, and json-empty for `[]`
+;   array   <-> list, and `[]` is plain ()
 ;   object  <-> tablet
 ;
-; ⚠ THE EMPTY ARRAY IS NAMED, because it cannot be (): `[]` and `null` would be the SAME
-; VALUE (every nothing here is nil, and an empty list IS the zero point), and the writer
-; would have to pick one -- so a document round-tripped through `[]` came back `null`.
-; json-empty is its own coin, so both directions are exact. it still behaves the way an
-; empty array should: it nets 0 (so `(? v ..)` and `!` read it as empty), tally is 0, and
-; map/each over it do nothing -- a consumer iterating an array never special-cases it.
-; ⚠ NOT @(). a tray cannot carry a json array at all: a one-cell array DEMOTES to its lone
-; scalar, so @(5) IS 5 -- `[5]`, the commonest shape in an lsp message, could not survive
-; the trip, and would silently write as a number. trays are out of the contract entirely
-; and the writer scares on one rather than pretending.
-;   (json-arr xs) turns a possibly-empty list into an array, which is what you want after
-; a map or a filter: a bare () there would write `null`, not `[]`.
+; ⚠ NULL IS NAMED, because it cannot be (): `[]` and `null` would be the SAME VALUE
+; (every nothing here is nil, and an empty list IS the zero point), and the writer would
+; have to pick one -- a document round-tripped through one would come back as the other.
+; the empty ARRAY is the common value: a mapped or filtered list should write `[]` with
+; no renaming step, so plain () is the empty array and null -- the weird one -- carries
+; the name. json-null still nets 0, so `(? v ..)` and `!` read null as false, while
+; json-null? keeps it exact for the writer.
 ;
-; ⚠ THE BOOLEANS ARE COINS. 1 and 0 cannot round-trip (the writer would emit numbers, and
-; lsp wants `true`). the symbol pair 'true/'false is WORSE than useless: 'false nets its
-; spelling, which is POSITIVE, so `(? v ..)` would take the true branch on false --
-; silent, plausible, and exactly the shape of bug this tree keeps paying for. a coin nets
-; its PAYLOAD, so json-false is blue and `(? v ..)` is simply right, while coin? keeps it
-; a boolean for the writer. that is what coins are for. json-empty rides its OWN die: two
-; coins with payload 0 on the SAME die would be `=`, and the empty array is not false.
+; ⚠ THE NAMED VALUES ARE COINS. 1 and 0 cannot round-trip (the writer would emit numbers,
+; and lsp wants `true`). the symbol pair 'true/'false is WORSE than useless: 'false nets
+; its spelling, which is POSITIVE, so `(? v ..)` would take the true branch on false --
+; silent, plausible, and exactly the shape of bug this tree keeps paying for; 'null would
+; be the same bug. a coin nets its PAYLOAD, so json-false and json-null are blue and
+; `(? v ..)` is simply right, while coin? keeps them exact for the writer. that is what
+; coins are for. json-null rides its OWN die: two coins with payload 0 on the SAME die
+; would be `=`, and null is not false.
 ;
 ; ⚠ READING CARRIES PRESENCE OUT OF BAND: json-read answers (1 value), or () when the
 ; text is not json. test with two?, take the value with <>. it CANNOT be otherwise --
@@ -51,12 +47,11 @@
    (json-bool? v) (&& (coin? v) (id? (die-of v) json-die))
    (json-bool v)  (? v json-true json-false)
 
-   ; the empty array, on its OWN die -- payload 0 so it nets blue like the empty list it
-   ; stands for, but never `=` json-false.
-   json-arr-die   #(0 'json-arr)
-   json-empty     (coin json-arr-die 0)
-   (json-empty? v) (&& (coin? v) (id? (die-of v) json-arr-die))
-   (json-arr xs)   (? (two? xs) xs json-empty)
+   ; null, on its OWN die -- payload 0 so it nets blue like the nothing it is, but
+   ; never `=` json-false.
+   json-null-die  #(0 'json-null)
+   json-null      (coin json-null-die 0)
+   (json-null? v) (&& (coin? v) (id? (die-of v) json-null-die))
 
    ; --- reading --------------------------------------------------------------------
    (jws s i n)  (? (&& (i < n) (member? (s i) '(32 9 10 13))) (jws s (i + 1) n) i)
@@ -165,11 +160,11 @@
 
    (jlit s i n) (? (jlit? s i n "true")  `(json-true (i + 4))
                    (jlit? s i n "false") `(json-false (i + 5))
-                   (jlit? s i n "null")  `(() (i + 4))
+                   (jlit? s i n "null")  `(json-null (i + 4))
                    (jnum s i n))
 
    (jarr s i n) (: a (jws s (i + 1) n)
-                   (? (&& (a < n) ((s a) = 93)) `(json-empty (a + 1))
+                   (? (&& (a < n) ((s a) = 93)) `(() (a + 1))
                       ((: (go k acc)
                           (: r (jval s k n)
                              (? (! (two? r)) ()
@@ -246,16 +241,19 @@
                    c (? (0 < (tally t)) (t 0) 0)
                    (? (|| (c = 45) (&& (48 <= c) (c <= 57))) t "null"))
 
+   ; the () = v test is EXACT -- true only for () itself, never 0 or "" (different bands)
+   ; -- so a bare () after a map or a filter writes `[]` with no renaming step. anything
+   ; json has no spelling for scares rather than riding out as a plausible null; trays
+   ; stay out of the contract (arrays are lists here).
    (json-show v)
       (? (string? v)    (jqt v)
          (json-bool? v) (? v "true" "false")
+         (json-null? v) "null"
+         (() = v)       ("" + 91 + 93)
          (tablet? v)    ((("" + 123)
                           + (jjoin (map (\ k ((jqt k) + 58 + (json-show (v k)))) (keys v))))
                          + ("" + 125))
-         (json-empty? v) ("" + 91 + 93)
-         ; a tray is NOT an array here -- @(5) is already the scalar 5, so a one-element
-         ; array could never survive as one. scare rather than write a plausible lie.
-         (tray? v)      (scare 'json "arrays are lists; json-empty is the empty one" v)
+         (tray? v)      (scare 'json "arrays are lists" v)
          (two? v)       ((("" + 91) + (jjoin (map json-show v))) + ("" + 93))
          (constellation? v) (jnumshow v)
-         "null"))
+         (scare 'json "no json spelling for this" v)))

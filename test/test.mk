@@ -43,7 +43,7 @@ test_host: $m
 # haven.l is OUT of the gate: it can wedge on a wayland resource (a stray holding
 # the socket) and stall the whole run indefinitely. run it standalone when working
 # on the compositor: `cat test/00-init.l test/host/haven.l | out/host/love`.
-hostnif_tests = test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l
+hostnif_tests = test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
@@ -250,6 +250,14 @@ test_selfhost: host out/host$(hsuf)/mooncc
 .PHONY: test_raw
 test_raw: host out/host$(hsuf)/mooncc
 	@sh test/gate/raw.sh x64 $(ho) $m $t
+# the cc-DRIVER conventions (the `CC=mooncc` door's floor): the REAL
+# $(ai_cflags) soup rides through -c and the link ignored, a link owing libc
+# symbols pulls the runtime by need (nolibc + the am math + the sys leaf,
+# compiled from the tree beside it), and the loud edges stay loud (-shared
+# usage-refuses, -nostdlib dies link-undef). Seconds, arch-native; in test_all.
+.PHONY: test_drv
+test_drv: host out/host$(hsuf)/mooncc
+	@sh test/gate/drv.sh $(ho) $(ai_cflags)
 # THE FIXPOINT (self-host rung 2): the default love IS mooncc-built now; this
 # gate has it rebuild ITSELF -- love1 (love0's lane, relinked) bakes its own
 # compiler image, recompiles every TU, links love2, and the two must be
