@@ -24,62 +24,61 @@ syn match LoveTodo /\<\(TODO\|FIXME\|NOTE\|XXX\|HACK\)\>/ contained
 " row wins, and reversing makes the two agree.
 syn match LoveDyad "[A-Za-z0-9_]\@<![@#$~.!?%\^*+/<>=|&\-]\+"
 syn match LoveMono "[A-Za-z0-9_]\@<![@#$~.!?%\^*+/<>=|&\-]\+\ze[^ \t),;@#$~.!?%\^*+/<>=|&\-]"
-syn keyword LoveBook BRIDGE C CMEM GLOB HELPC Q SRC aall
-syn keyword LoveBook abs accept all alt any ap apcap apof
-syn keyword LoveBook apover arg argv array assoc atom? await axm
-syn keyword LoveBook back? bake bao big? bit blit blitrow bound?
-syn keyword LoveBook bridge caaap caap caaup call-cc calloutdrive calloutresume cap
-syn keyword LoveBook capp cask cat catch catmap cauap caup cauup
-syn keyword LoveBook charm? chdir chk chmod chown clock close cmdline
-syn keyword LoveBook co coin coin? compose conj connect connectu const
-syn keyword LoveBook constellation? conv conv-args cosine cuaap cuap cuaup cuda-avail
-syn keyword LoveBook cuda-ew cuda-gemm cuda-reduce cuda-transp cue? cup cuuap cuup
-syn keyword LoveBook cuuup cwd defn defq dict_has dict_set die-of dig
-syn keyword LoveBook dobr docr doer dojr donr dop1 dop2 dot
-syn keyword LoveBook dour drop dup dup2 each edln edlnc edraw
-syn keyword LoveBook empty? empty_dict environ eof? eps err est ev
-syn keyword LoveBook exec ext_s fdclose fdopen filter fired? fires fixity
-syn keyword LoveBook flip flush foldl foldl1 foldr foldr1 font fork
-syn keyword LoveBook fraction freeze from g-die galaxy? gather gauge gaze
-syn keyword LoveBook gcd gem gem-tray gem? getc getenv getpid getuid
-syn keyword LoveBook glass glaze hardlink has-top-op? has_s hear hot? id
+syn keyword LoveBook :: BRIDGE CMEM GLOB HELPC SRC aall abs
+syn keyword LoveBook accept all alt any ap apcap apof apover
+syn keyword LoveBook arg array assoc atom? await back? bake bao
+syn keyword LoveBook big? bit blit blitrow bound? bridge caaap caap
+syn keyword LoveBook caaup call-cc calloutdrive calloutresume cap capp cask cat
+syn keyword LoveBook catch catmap cauap caup cauup charm? chdir chk
+syn keyword LoveBook chmod chown clock close co coin coin? compose
+syn keyword LoveBook conj connect connectu const constellation? conv conv-args cosine
+syn keyword LoveBook cuaap cuap cuaup cuda-avail cuda-ew cuda-gemm cuda-reduce cuda-transp
+syn keyword LoveBook cue? cup cuuap cuup cuuup cwd dict_has dict_set
+syn keyword LoveBook die-of dig dobr docr doer dojr donr dop1
+syn keyword LoveBook dop2 dot dour drop dup dup2 each edln
+syn keyword LoveBook edlnc edraw empty? environ eof? eps err est
+syn keyword LoveBook ev exec ext_s fdclose fdopen filter fired? fires
+syn keyword LoveBook fixity flip flush foldl foldl1 foldr foldr1 font
+syn keyword LoveBook fork fraction freeze from g-die galaxy? gather gauge
+syn keyword LoveBook gaze gcd gem gem-tray gem? getc getenv getpid
+syn keyword LoveBook getuid glass glaze hardlink has-top-op? has_s hear hot?
 syn keyword LoveBook id? im in inf inf-spine inf-sym init inner
 syn keyword LoveBook int intern ioctl iota jot jug kbrec kchain
 syn keyword LoveBook kconst kcrec keys ki1 ki2 knrec kp1 kp2
 syn keyword LoveBook krefl kseq ksucc last link listen lit lit?
-syn keyword LoveBook load lof log love-arch love-tco love-version lseek many
-syn keyword LoveBook map mapfd mapfdo mapin mapout max member? memfd
-syn keyword LoveBook merge min mind mint mintp missing mkdir modpow
-syn keyword LoveBook monofix monoid more? mount name? names natjit nclock
-syn keyword LoveBook negate net newns nil? nom nom? num-ap one
-syn keyword LoveBook one? op-span open openfd opfix opt out outer
-syn keyword LoveBook ov-both ov-check ov-eng ov-hook ov-slot overlay overlay-off overlay-set
-syn keyword LoveBook parse part peep peepw pin pinw pipe please
-syn keyword LoveBook pmap pour powover print prod ptyecho pull put
-syn keyword LoveBook putbn putc putn puts putx q qlit query
-syn keyword LoveBook quit rand randf random rank raw re read
-syn keyword LoveBook readdir readlink reads reciprocal rejects rel rename reply
-syn keyword LoveBook rest rev revcat rewrite ring rmdir rng-box rng-get
-syn keyword LoveBook rng-set run runp runt sX s_plus s_star sat
-syn keyword LoveBook saturate say scare scare? screen scribe seal see
-syn keyword LoveBook seq seqs setenv setwinsize sfold sha256 shape shell
-syn keyword LoveBook shore show sigfd signal sigtake sine sip skip
-syn keyword LoveBook slist slurp smap snip sno sort sortby sound
-syn keyword LoveBook span spawn spawnio spawnmap spread stack stake star-tray
-syn keyword LoveBook star? stat still string string? subst sun sun?
-syn keyword LoveBook swig symlink tablet tablet? take tally tangent tap
-syn keyword LoveBook tier top-tray tray? ttyfg turn turnf twin twin-tray
-syn keyword LoveBook twin? twirl two? u2 u2app udp-bind udp-recv udp-send
-syn keyword LoveBook ufail ufail? uglo umask unfold unify unlink unmap
-syn keyword LoveBook unsee use utime uu uu2l vapp var var?
-syn keyword LoveBook verbs vof vof-spine vof-sym vsucc wait walk welp
-syn keyword LoveBook wet wheel whole? winsize wl-recv wl-send wrap zero?
-syn keyword LoveBook zip
-syn keyword LoveConst true false e pi tau i born max-charm
-syn keyword LoveConst min-charm
-syn keyword LoveMacro :: L list do begin progn let if
-syn keyword LoveMacro cond quote tuple hash pins assert suite &&
-syn keyword LoveMacro \|\| :- ?- >>= <=< zz et vel
+syn keyword LoveBook load lof log lseek macro-names many map mapfd
+syn keyword LoveBook mapfdo mapin mapout max member? memfd merge min
+syn keyword LoveBook mind mint mintp missing mkdir modpow monofix monoid
+syn keyword LoveBook more? mount name? names natjit nclock negate net
+syn keyword LoveBook newns nil? nom nom? num-ap one one? op-span
+syn keyword LoveBook open openfd opfix opt out outer ov-check ov-eng
+syn keyword LoveBook ov-hook ov-slot overlay overlay-off overlay-set parse part peep
+syn keyword LoveBook peepw pin pinw pipe please pmap pour powover
+syn keyword LoveBook print prod ptyecho pull put putbn putc putn
+syn keyword LoveBook puts putx q qlit query quit rand randf
+syn keyword LoveBook random rank raw re read readdir readlink reads
+syn keyword LoveBook reciprocal rejects rel rename reply rest rev revcat
+syn keyword LoveBook rewrite ring rmdir rng-box rng-get rng-set run runp
+syn keyword LoveBook runt sX s_plus s_star sat saturate say scare
+syn keyword LoveBook scare? screen scribe seal see seq seqs setenv
+syn keyword LoveBook setwinsize sfold sha256 shape shell shore show sigfd
+syn keyword LoveBook signal sigtake sine sip skip slist slurp smap
+syn keyword LoveBook snip sno sort sortby sound span spawn spawnio
+syn keyword LoveBook spawnmap spread stack stake star-tray star? stat still
+syn keyword LoveBook string string? subst sun sun? swig symlink tablet
+syn keyword LoveBook tablet? take tally tangent tap tier top-tray tray?
+syn keyword LoveBook ttyfg turn turnf twin twin-tray twin? twirl two?
+syn keyword LoveBook u2 u2app udp-bind udp-recv udp-send ufail? uglo umask
+syn keyword LoveBook unfold unify unlink unmap unsee use utime uu
+syn keyword LoveBook uu2l vapp var var? vof vof-spine vof-sym vsucc
+syn keyword LoveBook wait walk welp wet wheel whole? winsize wl-recv
+syn keyword LoveBook wl-send wrap zero? zip
+syn keyword LoveConst C Q born e false i id love-arch
+syn keyword LoveConst love-tco love-version max-charm min-charm pi tau true ufail
+syn keyword LoveMacro && , :- <=< >>= ?- L \\\\
+syn keyword LoveMacro assert axm begin cond defn defq do et
+syn keyword LoveMacro hash if let list pins progn quote suite
+syn keyword LoveMacro tuple vel zz \|\|
 syn keyword LoveForm : ? \\
 syn match LoveNumber "\<-\?\d\+\>"
 syn match LoveNumber "\<-\?\d\+\.\d*\([eE][-+]\?\d\+\)\?\>"

@@ -226,6 +226,17 @@
    ; ⚠ lives down here so catmap/foldl are bound when it compiles; a forward reference would
    ; ride lvm_index and never fold.
    (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ())))))
+   ; the MACRO twin. each layer keeps its macro table at its nil key (love.h: "the
+   ; macro table is book[nil] -- no separate field"), so this walks the same chain
+   ; `macros` looks up through and answers what you could WRITE AS A HEAD. a layer
+   ; without a table is skipped, exactly as the lookup skips it. together with
+   ; `names` there is nothing left to keep a list of: the vocabulary answers for
+   ; itself. ⚠ same zone rules as `names` -- prefix only, and it folds its `books`
+   ; reference at compile time, which is what lets birth mop the nom out from under it.
+   (macro-names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0)
+                                             (catmap (\ b (: m (peep b 0 ())
+                                                             (? (tablet? m) (keys m) ())))
+                                                     (books ())))))
    (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1 (iota its array twin); a section of tally, off the `*` glyph -- monadic `*` is prod now
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)

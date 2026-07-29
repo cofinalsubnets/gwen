@@ -23,10 +23,11 @@
 ; run, and putting the word lanes first is exactly how vim reads the same rows
 ; (a syn keyword beats a syn match).
 ;
-; two lanes cannot be probed and so are written out: MACROS, because `macros` is
-; mopped at birth and the table lives inside the compiler's closures, and the
-; CONSTANTS, which are in the book but want their own colour. everything else in
-; the vocabulary is the `(word names)` row -- see hue-book.
+; NOTHING HERE IS A LIST OF WORDS. every word lane names a PROBE and the runtime
+; answers it: `names` the whole vocabulary, `macros` the macro table (prel's
+; macro-names, the twin of names), `values` the names bound to a value rather
+; than a nif. only the three special forms are written out, and they are the
+; grammar, not the book. a list would rot; a question cannot.
 (:
    hue-classes
     '((comment    Comment    (eol (";" "#!")))
@@ -36,11 +37,8 @@
       (paren      Delimiter  (delim "()[]{}"))
       (number     Number     (num))
       (form       Statement  (word (":" "?" "\\")))        ; letrec* / cond / lambda
-      (macro      Operator   (word ("::" "L" "list" "do" "begin" "progn" "let" "if" "cond"
-                                    "quote" "tuple" "hash" "pins" "assert" "suite" "&&" "||"
-                                    ":-" "?-" ">>=" "<=<" "zz" "et" "vel")))
-      (const      Constant   (word ("true" "false" "e" "pi" "tau" "i" "born"
-                                    "max-charm" "min-charm")))
+      (macro      Operator   (word macros))                ; prel's macro-names
+      (const      Constant   (word values))                ; bound to a value, not a nif
       (book       Function   (word names))
       (mono       Special    (punct glued))
       (dyad       Operator   (punct spaced)))
@@ -91,8 +89,48 @@
    ; prose ("the sigil matches below own every punct run"), which is precisely the
    ; kind of promise that goes stale when only prose keeps it.
    (hue-name? w) (: t (string w) (&& (0 < (tally t)) (! (hue-sig? (t 0)))))
-   (hue-book x) (foldl (\ b w (? (hue-name? w) (: _ (pin b (string w) 1) b) b))
-                       (tablet ()) (names ()))
+
+   ; the words a lane claims. a PROBE nom asks the runtime; anything else is the
+   ; literal list itself. SORTED, because the generator freezes this into a
+   ; diff-gated file and tablet-key order is nobody's promise.
+   ;
+   ; the two BOOK-derived probes drop sigil-leading names, for the reason above.
+   ; `macros` is NOT filtered: `&&` `||` `>>=` `:-` are genuinely macros and should
+   ; say so, and they come from the macro table rather than the book, so they were
+   ; never competing with the punct lanes in the first place.
+   ;
+   ; `values` is the CONSTANTS, asked rather than listed. `lit?` is true of a nif
+   ; or closure and false of a value, so its complement is the names that ARE
+   ; something instead of DOING something -- but that alone is too wide: it also
+   ; catches argv, cmdline and `parsed`, which are the RUN, not the language.
+   ; ⚠ and `parsed` is bound only when love was handed a file, so the wide test
+   ; made the answer depend on HOW THE TOOL WAS INVOKED -- a gate that flaps
+   ; between `love f.l` and `cat f.l | love`. so ask the sharper question: a
+   ; constant is a SCALAR OR A NAME, a number or a string or a nom. every
+   ; run-dependent binding is a list or a tablet, and none of those is any of the
+   ; three, so one positive test excludes the lot without naming a single one.
+   ; the two book lanes are BOTH positive tests, and that symmetry is what makes
+   ; the answer independent of how love was started: a name DOES something (lit?
+   ; -- a nif or a closure) or it IS something (a scalar or a name). anything
+   ; that is neither is SESSION DATA -- argv, cmdline, parsed, verbs -- and falls
+   ; out of both lanes rather than being named and excluded. that costs argv and
+   ; cmdline their colour, which is the price of a file that cannot flap.
+   (hue-verb? w) (lit? (ev w))
+   (hue-const? w) (: v (ev w)
+                     (&& (! (lit? v))
+                         (|| (constellation? v) (|| (string? v) (nom? v)))))
+   (hue-words a)
+    (? (id? a 'names)  (sort (map string (filter hue-name? (filter hue-verb? (names ())))))
+       (id? a 'macros) (sort (map string (macro-names ())))
+       (id? a 'values) (sort (map string (filter hue-name? (filter hue-const? (names ())))))
+       a)
+
+   ; ONE tablet, token -> class, filled in REVERSE table order so an earlier row
+   ; wins -- the same priority hue-lex reads top-down, paid once at birth instead
+   ; of walked per token.
+   (hue-book x)
+    (foldl (\ b r (foldl (\ b2 w (: _ (pin b2 w (hue-cls r)) b2)) b (hue-words (hue-arg r))))
+           (tablet ()) (rev (hue-tagged 'word)))
 
    ; --- is this token a number? -----------------------------------------------
    ; -3  .5  1.  1e10  1.5e-3 -- an optional sign, a mantissa with at least one
@@ -114,13 +152,9 @@
              b)
        (&& md (x = n)))
 
-   ; the word lanes in TABLE ORDER; () when no lane claims the token
-   (hue-word bk t)
-    (: (go l) (? (! (two? l)) ()
-                 (: r <l a (hue-arg r)
-                    (? (? (id? a 'names) (&& (tablet? bk) (bk t)) (member? t a))
-                        (hue-cls r) (go >l))))
-       (go (hue-tagged 'word)))
+   ; the word lanes, already folded into one tablet by hue-book; () when no lane
+   ; claims the token
+   (hue-word bk t) (? (tablet? bk) (bk t) ())
 
    ; --- the lexer -------------------------------------------------------------
    ; (hue-lex bk s in keep) answers `(runs out): the classified runs over the one

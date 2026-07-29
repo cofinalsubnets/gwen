@@ -48,10 +48,13 @@
    (grp r) ("Love" + (cap1 (string (hue-cls r))))
 
    ; --- the vocabulary ---------------------------------------------------------
-   ; every NAME the book knows, less the ones an explicit word lane already
-   ; claims (a keyword declared twice is vim's business, not ours) and less the
-   ; hue-* bindings, which are in the book only because this generator loads
-   ; crew/vi/hue.l to read its table. they are the tool, not the language.
+   ; every word lane asks crew/vi/hue.l's probes -- there is no list here either.
+   ; a lane CLAIMS its words and no later lane re-declares them: vim would accept
+   ; the duplicate, but the file would be lying about which lane owns the name,
+   ; and the painter (one tablet, earlier row wins) does not lie about it.
+   ;
+   ; the hue-* bindings are dropped: they are in the book only because this
+   ; generator loads hue.l to read its table. they are the tool, not the language.
    ; ⚠ THE BOOK IS ONLY THE LANGUAGE ONCE IT HAS BEEN MOPPED. under
    ; LOVE_NO_IMAGE the corpus is compiled at boot instead of woken from the
    ; baked image, so the egg's mop never runs and the compiler's own internals
@@ -65,10 +68,15 @@
             _ (put err 10)
             (quit 1))
         0)
-   taken (foldl (\ a r (a + (hue-arg r))) ()
-                (filter (\ r (! (id? (hue-arg r) 'names))) (hue-tagged 'word)))
-   vocab (sort (filter (\ t (&& (! (member? t taken)) (! (pre? t "hue-"))))
-                       (map string (filter hue-name? (names ())))))
+   wtab (: seen (tablet ())
+           (go l t)
+            (? (! (two? l)) t
+               (: r <l
+                  ws (filter (\ w (&& (! (seen w)) (! (pre? w "hue-")))) (hue-words (hue-arg r)))
+                  _ (each ws (\ w (pin seen w 1)))
+                  _ (pin t (hue-cls r) ws)
+                  (go >l t)))
+           (go (hue-tagged 'word) (tablet ())))
    (kwlines g ws) (? (! (two? ws)) ()
                      (: _ (line ("syn keyword " + g + " " + (join (map kwesc (take 8 ws)) " ")))
                         (kwlines g (drop 8 ws))))
@@ -96,7 +104,7 @@
               _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
               _ (line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
               (line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\"")))
-          (id? tag 'word) (kwlines g (? (id? a 'names) vocab a))
+          (id? tag 'word) (kwlines g (wtab (hue-cls r)))
           (id? tag 'punct)
            ; the valence law as vim reads it: a punct run LEADS a token (the
            ; lookbehind), and it is monadic when the full run touches a datum

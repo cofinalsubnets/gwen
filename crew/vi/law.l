@@ -221,6 +221,38 @@
       (: a (hue-lex hbk "\"x" 0 1) b (hue-lex hbk "\"x" 0 ())
          (&& (<>a = <>b) (! (two? <b)))))
 
+; --- the word lanes are ASKED, not listed. only the three special forms are
+;     written out, and they are the grammar rather than the book ---------------
+   _ (assert
+      (: ls (map hue-arg (hue-tagged 'word))
+         (&& (= (tally (filter nom? ls)) 3)                ; macros values names
+             (= (tally (filter two? ls)) 1)))              ; the forms, and nothing else
+      (0 < (tally (hue-words 'macros)))
+      (0 < (tally (hue-words 'values)))
+      (0 < (tally (hue-words 'names)))
+      ; the probes answer what they claim to: a known macro, a known constant, a
+      ; known verb -- each in ITS lane and no other
+      (member? "assert" (hue-words 'macros))
+      (member? "&&" (hue-words 'macros))                   ; NOT filtered: a sigil macro is a macro
+      (member? "tau" (hue-words 'values))
+      (member? "map" (hue-words 'names))
+      (! (member? "+" (hue-words 'names)))                 ; a bare operator belongs to the punct lanes
+      (! (member? "$" (hue-words 'values)))
+      ; sorted, because the generator freezes them into a diff-gated file
+      (: w (hue-words 'names) (= w (sort w)))
+      ; ⚠ THE STABILITY LAW. both book lanes are POSITIVE tests -- a name DOES
+      ; something or IS something -- so session data (argv, cmdline, `parsed`,
+      ; which is bound only when love was handed a file) falls out of BOTH, and
+      ; the generated syntax file cannot depend on how the generator was started.
+      (all (\ w (lit? (ev (intern w)))) (hue-words 'names))
+      (all (\ w (! (lit? (ev (intern w))))) (hue-words 'values))
+      (! (member? "argv" (hue-words 'names)))
+      (! (member? "argv" (hue-words 'values)))
+      (! (member? "cmdline" (hue-words 'names)))
+      ; earlier row wins in the one tablet, exactly as the table reads top-down
+      (: b (hue-book ()) (&& (id? (b "assert") 'macro) (&& (id? (b "tau") 'const)
+                                                           (id? (b "map") 'book)))))
+
 ; --- the pens: molokayo, and every class has one -----------------------------
    _ (assert
       (= (hue-pen '(Comment 59 "#75715E" ()) ()) "\e[38;5;59m")
