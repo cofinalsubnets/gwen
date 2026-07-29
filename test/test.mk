@@ -274,6 +274,18 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 .PHONY: test_libc
 test_libc: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/libc.sh $(ho) $m
+# test_ulp -- THE MATH FLOOR, built by both compilers and required to agree.
+# `make ulp` has always measured am.c's accuracy, but only ever the $(CC) build
+# of it, so it asked "is the algorithm right" and never "does OUR compiler build
+# it". am.c's header claimed the mooncc object measured identical; on 2026-07-29
+# it did not, and two mooncc bugs were living in the gap -- a lost 4th parameter
+# (am_sin SEGFAULTED for |x| >= 2^19, reachable as `(sine 1e20)`) and a signed
+# conversion of an unsigned 64-bit word (sin/cos to 1609 ulp past the
+# Payne-Hanek handoff). float BITS are where a codegen fault hides best, which
+# is the whole reason this rides beside test_libc rather than inside test_cc.
+.PHONY: test_ulp
+test_ulp: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/ulp.sh $(ho) $m
 # The rung-2 self-host gate ([[love-distro]]): compile love.c AND every host/*.c with
 # mooncc (gcc/clang only LINKS), then run the whole corpus through the all-mooncc
 # binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in

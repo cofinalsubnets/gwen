@@ -12,8 +12,14 @@
 // representable rim (~40 ulp at 1e+-300) -- the one documented stance -- with
 // the algebraic exponents (y in {2, 1, -1, 1/2}) EXACT: the spec's power-is-
 // application identities ride am_pow. measured against glibc by the differential
-// ulp harness (2M+ deterministic samples a function, tools/ulp.c); the
-// mooncc-compiled object measures IDENTICAL to gcc's.
+// ulp harness (2M+ deterministic samples a function, tools/ulp.c), and the
+// mooncc-compiled object is GATED to measure identical to the system cc's --
+// test_ulp, both sweep modes. that second half was a hand check and a header
+// claim until 2026-07-29, when it turned out to be false and two mooncc bugs
+// were living behind it (a lost 4th parameter segfaulting am_sin above 2^19,
+// and an unsigned 64-bit word converting to double SIGNED, which cost rbig
+// 1609 ulp). float bits are where a codegen fault hides best: the corpus, the
+// C battery and every other gate stayed green through both.
 #include <stdint.h>
 
 typedef union { double d; uint64_t u; } db;
