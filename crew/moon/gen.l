@@ -31,6 +31,29 @@
    ; is not textual -- anywhere later it scared `;; missing spush2` on every
    ; image bake. the t32 pair push; spop2 lives with the other pair helpers.
    spush2 '((sub sp sp 16) (st sp 0 r0) (st sp 4 r1))   ; a VALUE (nullary defines quote -- the (f) trap)
+   ; ⚠ an UNSIGNED 64-BIT source cannot ride cvtsi2sd -- the instruction is
+   ; SIGNED, so every value from 2^63 up converted NEGATIVE: (double)~0ull
+   ; answered -1. asflo's t32 lane dodges by widening a 32-bit unsigned into a
+   ; 64-bit signed, and its comment ("no 64-bit widen dodge on a 32-bit target")
+   ; reads as if the 64-bit targets were safe BECAUSE they can widen -- true of
+   ; uchar/ushort/uint, and there is nothing wider to widen `ulong` into. so
+   ; SPLIT the word: both halves are 32-bit, hence positive and exact as signed,
+   ; and hi*2^32 + lo rounds ONCE (hi*2^32 exact, lo exact, so the sum is the
+   ; correctly-rounded whole -- no double rounding to argue about). llong/ullong
+   ; fold to long/ulong off t32, so 'ulong IS the whole 64-bit unsigned case.
+   ; found by the am.c ulp differential and by nothing else: rbig's G1 word
+   ; crosses 2^63 on most inputs, so sin/cos drifted to 1609 ulp past the
+   ; Payne-Hanek handoff while every argument BELOW it stayed exact. a VALUE, so
+   ; it leads the book beside spush2 -- the eager fold order is not textual.
+   ; named ul2d, not u2d: cvtlld's t32 lane already binds a LOCAL u2d for the
+   ; 32-bit pair's half of the same hi*2^32 + lo trick. --
+   ul2d '((mov r1 r0) (shr r1 32)                     ; hi = x >> 32
+         (shl r0 32) (shr r0 32)                     ; lo = x & 0xffffffff
+         (cvtsi2sd f0 r1)
+         (li r1 0x41f0000000000000) (movqxr f1 r1)   ; 2^32
+         (mulsd f0 f1)                               ; hi * 2^32
+         (cvtsi2sd f1 r0)
+         (addsd f0 f1))
    cxdty '(struct "__cplx_double")                      ; the seeded complex-double tag (a VALUE: it must lead the book, like spush2 -- eager fold order is not textual)
    ; the gen state g (a tablet): 'n the label counter, 'off the frame's
    ; high-water offset, 'brk/'cnt the loop label stacks, 'glob the global
@@ -442,6 +465,7 @@
                                     '((ldsd f0 r0 0))))
                   (&& (t32? g) (llt? (vty r))) ((tor0 g r) + (cvtlld g (usg? (vty r))))
                   (&& (t32? g) (usg? (vty r))) ((tor0 g r) + `(`('cvtui2sd 'f0 'r0)))
+                  (id? (vty r) 'ulong) ((tor0 g r) + ul2d)
                   ((tor0 g r) + `(`('cvtsi2sd 'f0 'r0))))
    (asint g r) (? (flo? (vty r)) ((vfs r) + `(`('cvttsd2si 'r0 'f0))) (tor0 g r))  ; result -> r0 as an int
    ; -- the environments: locals shadow globals --
