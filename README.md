@@ -56,8 +56,9 @@ SPACED IS DYADIC -- and this holds everywhere, head position included, so
 head, so minified `(:(co ..)` still reads `(: (co ..))`.
 - `<x >x` cap and cup; `<>x ><x <<x >>x` the compounds, by factorization
 - `+l` the net -- the true sum -- and `*l` the product
-- `|x` abs, `-x` neg (`+` and `-` fuse only to `( ' " @ ~ #`, so `-3` stays a
-  number and `-x` a kebab name), `/x` reciprocal, `%x` frac, `?x` the iverson bracket
+- `|x` abs, `-x` neg (`+` and `-` are runs like every other punctuation; the one
+  exception is that a digit or `.` after them starts a NUMERAL, so `-3` stays a
+  number while `--5` is `-(-5)`), `/x` reciprocal, `%x` frac, `?x` the iverson bracket
 - `$x !x .x` as ever: sat, not, print
 - a glued sigil binds tightest: `$"ab" + 2` is `(+ ($ "ab") 2)`, i.e. 197
 the numerals still carry the power family (`-1 x = 1 / x`, `(1 / 2) x =

@@ -52,10 +52,11 @@ wanted one curry away. three things are exempt, and each for a reason:
   backtick list EVALUATES its elements, so a form inside one is a real form and
   is flagged.)
 - a `(` GLUED to an operator run, where the parens may be holding two sigil runs
-  apart: `(-(-5))` is `5`, but `--5` raises `missing --5`. some glued runs
-  survive being merged (`<(<l)` and `<<l` are both caap) and some do not, and
-  telling them apart needs the operator table -- which a balance scan has no
-  business knowing. so all of them are exempt.
+  apart. merged, two runs lex as ONE — and that is sometimes the same value and
+  sometimes a *different operator*: `<(<l)` survives (`<<` is the same caap), but
+  `<(= x)` is `(< (= x))` while `<=x` is the single operator `<=`. telling them
+  apart needs the operator table, which a balance scan has no business knowing,
+  so all of them are exempt.
 - an ALL-PUNCTUATION token, the escape idiom: `(+)` is `+` as a value, and
   `(:)` `(?)` `(\)` read their own zero point.
 

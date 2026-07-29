@@ -229,9 +229,12 @@
  !(lint-of "'(a (b))" lt-sing)
  ; ...but a BACKTICK list evaluates its elements, so a form inside one is a form
  (1 = (tally (lint-of "`(a (b))" lt-sing)))
- ; 2. GLUED to an operator run: (-(-5)) is 5, but --5 raises `missing --5`, so
- ; those parens may be holding two sigil runs apart and are never flagged
+ ; 2. GLUED to an operator run: merged, two runs lex as ONE, and that is sometimes
+ ; the same value and sometimes a DIFFERENT operator -- <(<l) survives (<< is the
+ ; same caap) but <(= x) is (< (= x)) while <=x is the single operator <=. the scan
+ ; cannot tell which without the operator table, so every glued run is exempt.
  !(lint-of "(-(-5))" lt-sing) !(lint-of "<(<l)" lt-sing) !(lint-of ">(<l)" lt-sing)
+ !(lint-of "<(= x)" lt-sing)
  ; 3. an ALL-PUNCTUATION token is the escape idiom: (+) is + as a value, and
  ; (:) (?) (\) read their own zero point
  !(lint-of "(+)" lt-sing) !(lint-of "(*)" lt-sing) !(lint-of "(<=)" lt-sing)

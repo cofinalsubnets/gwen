@@ -97,12 +97,13 @@
    ;   all constructor sigils -> a datum, and a ' among them makes the CONTENTS
    ;                             data too (inherited by every frame inside)
    ;   all operator chars     -> ⚠ THE PARENS MAY BE LOAD-BEARING, and we cannot
-   ;                             tell which. glued, two sigil runs LEX AS ONE:
-   ;                             <(<l) happens to survive it (<< composes to the
-   ;                             same caap), but (-(-5)) is 5 while --5 raises
-   ;                             `missing --5`. telling those apart needs the
-   ;                             operator table, which a balance scan has no
-   ;                             business knowing -- so every glued run is exempt.
+   ;                             tell which. glued, two sigil runs LEX AS ONE, and
+   ;                             sometimes that is the same value and sometimes a
+   ;                             DIFFERENT OPERATOR: <(<l) survives (<< composes to
+   ;                             the same caap), but <(= x) is (< (= x)) while <=x
+   ;                             is the single operator <=. telling those apart
+   ;                             needs the operator table, which a balance scan has
+   ;                             no business knowing -- so every glued run is exempt.
    ;   anything else          -> foo(x) is two datums to the reader, so the ( is a
    ;                             plain form after all
    (lpush stk c i line col src it ti)

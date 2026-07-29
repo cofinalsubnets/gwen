@@ -4336,13 +4336,20 @@ static struct ai *ioparse(struct ai *g, bool multi) {
     break;
    case '"': g = ioread1str(g); break;
    default: {                                          // operator run, else a symbol/number token
-    bool opp = c != '-' && c != '+' && !op_break(c);
-    if (!opp && (c == '-' || c == '+')) {              // +/- lead numbers and names (kebab), EXCEPT
-     if (!ai_ok(g = zgetc(g))) return g;                // glued to a constructor datum -- +'(..),
-     int cpm = g->b;                                   // -(f x), +@(..), +~(..), +"s", +#(..), +`(..) --
-     if (cpm != EOF && !ai_ok(g = zungetc(g, cpm))) return g;  // where they are monadic runs (net, neg)
-     opp = cpm == '(' || cpm == '\'' || cpm == '"' ||
-           cpm == '@' || cpm == '~' || cpm == '#' || cpm == '`'; }
+    bool opp = !op_break(c);
+    // + and - are operator runs like every other punctuation. the ONE exception
+    // is that a numeral has to start somewhere: a digit (or a '.', for -.5)
+    // right after them makes the token a NUMBER instead, read by ioread1sym.
+    // everything else -- another operator char (--5 is -(-5)), a name (-x is
+    // negate x, symmetric with !x), a constructor datum (-(f x), +@(..), +"s")
+    // -- is the run. `.` is held back outright rather than only before a digit
+    // because there is one char of pushback here, not two, and -.foo has never
+    // been anything but the unbound name it still is.
+    if (opp && (c == '-' || c == '+')) {
+     if (!ai_ok(g = zgetc(g))) return g;
+     int cpm = g->b;
+     if (cpm != EOF && !ai_ok(g = zungetc(g, cpm))) return g;
+     opp = !((cpm >= '0' && cpm <= '9') || cpm == '.'); }
     if (opp) {
      int lead = c;                                     // the run's first char: '\' never fuses (form space)
      g = ioread1op(g, c, &pending);                    // sigil: a plain symbol, factored by opfix later

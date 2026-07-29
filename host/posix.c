@@ -911,9 +911,8 @@ static lvm(lvm_reap) {
  Unpack(g);
  Ip += 1; return Continue(); }
 
-// (kill pid sig): POSIX kill(2). A negative pid (the caller writes (0 - pid),
-// never -pid -- that lexes as a kebab name) signals the process group. Returns
-// () on success, the errno fixnum on failure.
+// (kill pid sig): POSIX kill(2). A negative pid signals the process group.
+// Returns () on success, the errno fixnum on failure.
 static lvm(lvm_kill) {
  intptr_t pid = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
  intptr_t sig = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
