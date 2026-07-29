@@ -153,8 +153,7 @@ gate per stage. the pipeline, each its own file:
   unchanged): the advisory families (-W.. -O.. -g.. -std= -f.. -pipe
   -static) ride through ignored, and an exe link still owing strong symbols
   pulls the runtime BY NEED, archive-fashion -- nolibc + the am math + the
-  mksys sys leaf, compiled from the sources beside it (so it engages only
-  in-tree, exactly where the old answer was link-undef; a set carrying its
+  mksys sys leaf, compiled from the TOOLCHAIN ROOT (below; a set carrying its
   own am.o never meets a twin). -nostdlib/-ffreestanding turn the pull off;
   the SEMANTIC refusals stay loud (-shared, -Wl,'s payload, -m..) because an
   ignored one would be the silent-no-op trap in a cc suit. gate:
@@ -162,6 +161,35 @@ gate per stage. the pipeline, each its own file:
   program on the command line (the same trick as ain/cook), so mooncc stands
   alone as its own catted script -- it does NOT ride the kore multi-call
   dispatcher.
+
+### the toolchain root (2026-07-28)
+
+mooncc's own files -- our headers (crew/moon/include/, glibc-ABI-faithful but
+NOT glibc's) and the runtime sources the implicit link pulls (nolibc.c + the am
+math) -- are found through a two-rung walk, tried in order:
+
+1. **the dev tree**, `crew/moon/` off the cwd;
+2. **the installed nest**, `<seat>/../lib/love/moon/` -- the loader's own seat
+   walk (love/prel.l), readlink /proc/self/exe. so ~/.love/bin/love finds
+   ~/.love/lib/love/moon/, and a distro's /usr/bin/love finds
+   /usr/lib/love/moon/. mk/install.mk lays them there (~300K).
+
+before this every path in the driver was cwd-relative, so an installed mooncc
+outside a source tree could not compile hello-world at all: `<stdio.h>` fell
+through to /usr/include -- *glibc's*, whose stdio.h wants the compiler's own
+stddef.h -- and the link found no libc. a nest that ships no C sources made it
+structural. gate: test/gate/nest.sh compiles and links from a scratch cwd
+against the installed nest (`cd` matters: from the repo root rung 1 serves and
+rung 2 is never exercised).
+
+⚠ the root is READ AT EACH CALL, never bound. mooncc rides a BAKED image, and a
+captured seat folds the build tree's path into that image and rides it forever
+-- prel.l carries the same warning, having learned it the hard way.
+
+owing symbols with NO root in reach is its own diagnostic, naming the owed
+symbols and the roots searched -- not a bare link-undef on whichever symbol
+came first. an absent toolchain and an incomplete link are different
+conditions and must not wear the same face.
 
 ### the seams to grow (owned by their threads)
 

@@ -92,6 +92,25 @@ installs += \
   $d/include/love.h
 endif
 
+# THE TOOLCHAIN's own files: mooncc's headers (ours, glibc-ABI-faithful, NOT
+# glibc's) and the runtime sources its implicit-libc link pulls -- nolibc.c
+# plus the am math floor. they land under the SEAT, at the root moon.l walks
+# to (<seat>/../lib/love/moon/, /usr/lib/love/moon/ on the FHS rung), which is
+# what lets an installed mooncc work from ANY cwd: every path in the driver
+# was cwd-relative before, so outside a source tree `<stdio.h>` fell through
+# to /usr/include and the link found no libc at all. ~300K.
+# NOT read out of ~/.love/src instead: a package has no src tree, and `love
+# down` takes one away -- the copy is what makes the toolchain stand alone.
+moon_hdrs = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h)
+moon_srcs = crew/moon/lib/nolibc.c $(wildcard crew/moon/lib/math/*.c)
+installs += $(patsubst crew/moon/%,$d/lib/love/moon/%,$(moon_hdrs) $(moon_srcs))
+$d/lib/love/moon/include/%: crew/moon/include/%
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+$d/lib/love/moon/lib/%: crew/moon/lib/%
+	@echo CP	$(abspath $@)
+	@install -D -m 644 $< $@
+
 # the PATH door, nest-only: each bin (and man page) gets a ~/.local compat
 # symlink, since ~/.local/bin is already on PATH and ~/.local/share/man on
 # manpath. a real PREFIX (a distro) skips these.

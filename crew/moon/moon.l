@@ -24,14 +24,47 @@
                   (go i last) (? (n <= i) last ((path i) = 47) (go (i + 1) (i + 1)) (go (i + 1) last))
                   d (go 0 0)
                   (? (0 < d) (snip path 0 d) ""))
+   ; THE TOOLCHAIN ROOT -- where our own headers and the runtime sources live.
+   ; two rungs, tried in order: the dev tree off the cwd, then the INSTALLED
+   ; nest through the seat (love/prel.l's own walk -- readlink /proc/self/exe,
+   ; then <seat>/../lib/love/moon/, so ~/.love/bin/love finds ~/.love/lib/love/
+   ; moon/ and a distro's /usr/bin/love finds /usr/lib/love/moon/). without the
+   ; second rung mooncc only works with the repo root as the cwd: every path
+   ; here was cwd-relative, so an installed mooncc fell through to /usr/include
+   ; and could not even preprocess a hello-world (glibc's stdio.h wants the
+   ; compiler's own stddef.h).
+   ; ⚠ READ AT EACH CALL, never bound: mooncc rides a BAKED image, and a
+   ; captured seat would fold the BUILD tree's path into that image and ride it
+   ; forever -- prel.l carries the same warning because it learned this one the
+   ; hard way (the installed love walked out/lib instead of its own nest).
+   (mseat _) (: x (readlink "/proc/self/exe")
+                (? (string? x) ((cdir x) + "../lib/love/moon/") ()))
+   (mroots _) (: s (mseat ()) (? (string? s) `("crew/moon/" s) `("crew/moon/")))
+   ; the runtime home: the FIRST root that actually carries the sources. by
+   ; READ, not by a name test -- presence is the wrapper (uread answers
+   ; (1 text), an absent file the zero point), and an empty nolibc.c would be
+   ; no runtime either.
+   (mhome _) (: (go rs) (? (! (two? rs)) ()
+                           (two? (uread (<rs + "lib/nolibc.c"))) <rs
+                           (go >rs))
+                (go (mroots ())))
+   ; the first three of a name list, comma-joined, with a count of the rest --
+   ; a diagnostic wants a taste, not the whole bag
+   (mfew ns)
+    (: n (tally ns)
+       (go l k acc) (? (|| (! (two? l)) (3 <= k)) acc
+                       (go >l (k + 1) (? (0 < k) (acc + ", " + <l) <l)))
+       s (go ns 0 "")
+       (? (3 < n) (s + " (+" + (show (n - 3)) + " more)") s))
    ; #include resolver bound to a source dir + the -I list: "" searches relative
    ; first (the src dir, then cwd) then the -I dirs; <> the -I dirs straight off;
    ; both fall to the system pair, our own headers before /usr. answers
    ; (1 text child) -- the child hook resolves the hit file's OWN quote
    ; includes beside it (gcc's rule; cpp.l threads it). -> that | ().
    (incload is srcdir name sys?)
-    (: dirs (? sys? (is + `("crew/moon/include/" "/usr/include/"))   ; our headers (stdarg.h ..) win for <>
-                (`(srcdir "") + is + `("crew/moon/include/" "/usr/include/")))
+    (: ours ((map (\ r (r + "include/")) (mroots ())) + `("/usr/include/"))  ; our headers (stdarg.h ..) win for <>
+       dirs (? sys? (is + ours)
+                (`(srcdir "") + is + ours))
        (go ds) (? (! (two? ds)) ()
                   (: r (uread (<ds + name))
                      (? (two? r)
@@ -162,9 +195,11 @@
    ; the sources beside us and pulled MEMBER BY NEED, archive-fashion: a member
    ; whose every def the link already carries stays out, so a set bringing its
    ; own am.o (love0's does) never meets a twin. the lane engages exactly where
-   ; today's answer was link-undef -- sources out of sight (a mooncc far from
-   ; the tree) or the -nostdlib family leave it off whole, and a nom no member
-   ; defines still dies as link-undef downstream.
+   ; today's answer was link-undef; the -nostdlib family leaves it off whole,
+   ; and a nom no member defines still dies as link-undef downstream. the
+   ; sources come from the toolchain root (mhome above), so an INSTALLED mooncc
+   ; pulls from its nest -- and owing symbols with no root in reach is its own
+   ; diagnostic below, never a silent miss.
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us)
@@ -185,13 +220,22 @@
        owed (foldl (\ a du (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
                                   a <>du))
                    () duos)
-       nl (? (two? owed) (uread "crew/moon/lib/nolibc.c") ())
-       (? (! (two? nl)) ()
-          (: mdir "crew/moon/lib/math/"
+       home (? (two? owed) (mhome ()) ())
+       ; owed symbols and NO runtime in reach: name both halves. the old answer
+       ; was a bare link-undef on whichever symbol came first, which reports a
+       ; symptom -- an absent toolchain and an incomplete link are different
+       ; conditions and must not wear the same face.
+       _ (? (&& (two? owed) (! (string? home)))
+            (udie 1 ("cc: the link owes " + (mfew owed) + ", and no runtime was found (looked in "
+                     + (mfew (mroots ())) + ") -- run from a source tree, or install the nest"))
+            0)
+       (? (! (string? home)) ()
+          (: mdir (home + "lib/math/")
+             inc (home + "include/")
              mems (map (\ p (p + (dusyms <p <>p mach)))
-                       ((`("nolibc" (string (cc-objbytes "crew/moon/lib/nolibc.c" `("crew/moon/include/") () tgt)))
-                          >< (map (\ f `(f (string (cc-objbytes (mdir + f) `(mdir "crew/moon/include/") () tgt))))
-                                  (sort (filter dotc? (readdir "crew/moon/lib/math")))))
+                       ((`("nolibc" (string (cc-objbytes (home + "lib/nolibc.c") `(inc) () tgt)))
+                          >< (map (\ f `(f (string (cc-objbytes (mdir + f) `(mdir inc) () tgt))))
+                                  (sort (filter dotc? (readdir (home + "lib/math"))))))
                         + (? (member? tgt '(x64 arm64 riscv64))
                              `(`("sys" (string (mksys-bytes tgt)))) ())))
              (needs? m u) (foldl (\ a nm (|| a (member? nm u))) () (el m 2))

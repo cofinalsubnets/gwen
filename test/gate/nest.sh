@@ -79,5 +79,30 @@ cmp -s "$T/lb2" "$T/lc"                           || fail "B vs C: symlink targe
 shape "$T/C" > "$T/sc"
 cmp -s "$T/sb" "$T/sc"                            || fail "B vs C: entries/types/modes differ"
 
+# THE INSTALLED TOOLCHAIN, from a foreign cwd -- the whole point of shipping
+# lib/love/moon/. every path in the mooncc driver used to be cwd-relative, so
+# outside a source tree `<stdio.h>` fell through to /usr/include (glibc's, whose
+# stdio.h wants the compiler's own stddef.h -> "cannot resolve") and the link
+# found no libc at all. run it from a scratch directory: our headers must serve
+# the preprocessor and the implicit runtime must bind printf/strlen/sqrt.
+# `cd` matters more than it looks -- from the repo root the DEV rung would serve
+# and the seat rung would never be exercised.
+A=$(cd "$T/A" && pwd)
+mkdir -p "$T/away"
+cat > "$T/away/h.c" <<'EOF'
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+int main(void) { printf("%d\n", (int) sqrt(16.0) + (int) strlen("abc")); return 0; }
+EOF
+# two steps, because they test the two rungs separately: -c resolves the
+# HEADERS through the seat, the link pulls the RUNTIME through it.
+# (the one-file `mooncc h.c -o h` lane is the tiny standalone emit -- no
+# linker, so no libc, in a source tree just the same; see doc/moon.md.)
+( cd "$T/away" && "$A/.love/bin/mooncc" -c h.c -o h.o ) || fail "installed mooncc: -c from a foreign cwd (our headers)"
+( cd "$T/away" && "$A/.love/bin/mooncc" h.o -o h )      || fail "installed mooncc: link from a foreign cwd (the runtime pull)"
+out=$( cd "$T/away" && ./h )                       || fail "installed mooncc: the binary does not run"
+[ "$out" = 7 ]                                     || fail "installed mooncc: answered '$out', wanted 7"
+
 rm -rf "$T"
-echo "nest: make == cook, and the kore lane installs it (install/sed/ln/cat/chmod/mkdir/tr) ok"
+echo "nest: make == cook, the kore lane installs it (install/sed/ln/cat/chmod/mkdir/tr), and the installed mooncc compiles from any cwd ok"
