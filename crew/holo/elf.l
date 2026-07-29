@@ -18,24 +18,34 @@
            ('thumb1 >< 40) ('thumb2 >< 40) ('thumb2sp >< 40) ('cortex-m0 >< 40) ('cortex-m7 >< 40) ('arm >< 40)   ; EM_ARM
            ('riscv64 >< 243) ('rv64 >< 243)))                  ; EM_RISCV
 
-   ;; the 120-byte header for a single R+X load segment at `base` covering the whole file.
+   ;; one 56-byte program header. p_paddr is p_vaddr's twin on every hosted target -- the
+   ;; kernel lane is where they part (a high virtual address loaded at a low physical one).
+   (elf64-phdr ty fl off va pa fsz msz al)
+    (catall `((le32 ty) (le32 fl) (le64 off) (le64 va) (le64 pa)
+              (le64 fsz) (le64 msz) (le64 al)))
+
+   ;; the 64-byte ELF header + N program headers (each already 56 bytes of elf64-phdr).
    ;; etype = 2 (ET_EXEC, fixed base) or 3 (ET_DYN, a static-PIE the kernel loads at a random
    ;; base -- the mooncc `-pie` path, whose data pointers self-relocate at startup).
-   ;; memsz >= filesz: the excess is .bss, address space the kernel hands over already
-   ;; zeroed. an image with no .bss passes filesz for both, and the segment is exactly its file.
    ;; sh is () for a headerless image, or (shoff shnum shstrndx) to point at a section-header
    ;; table -- the symbol table rides there, past p_filesz, mapped by nothing and read by nm/gdb.
-   (elf64-hdr etype base entry filesz memsz machine sh)
+   (elf64-hdrn etype entry machine sh phs)
     (: shoff (? (two? sh) <sh 0) shnum (? (two? sh) <>sh 0) shstrx (? (two? sh) <>>sh 0)
       (catall `(
          `(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
          (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
          (le64 entry) (le64 64) (le64 shoff)                   ; e_entry, e_phoff=64, e_shoff
          (le32 0) (le16 64) (le16 56)                          ; e_flags, e_ehsize=64, e_phentsize=56
-         (le16 1) (le16 (? (two? sh) 64 0)) (le16 shnum) (le16 shstrx)   ; e_phnum=1, then the section-header trio
-         (le32 1) (le32 7) (le64 0)                            ; PT_LOAD, flags RWX -- globals ride the one segment as labeled raw data (cc stage 3); split segments arrive with the .o seam
-         (le64 base) (le64 base)                               ; p_vaddr, p_paddr
-         (le64 filesz) (le64 memsz) (le64 4096))))             ; p_filesz, p_memsz, p_align
+         (le16 (tally phs)) (le16 (? (two? sh) 64 0)) (le16 shnum) (le16 shstrx)
+         (catall phs))))
+
+   ;; the 120-byte header for a single R+X+W load segment at `base` covering the whole file.
+   ;; memsz >= filesz: the excess is .bss, address space the kernel hands over already
+   ;; zeroed. an image with no .bss passes filesz for both, and the segment is exactly its file.
+   (elf64-hdr etype base entry filesz memsz machine sh)
+    (elf64-hdrn etype entry machine sh
+                ; globals ride the one segment as labeled raw data (cc stage 3)
+                `((elf64-phdr 1 7 0 base base filesz memsz 4096)))
 
    ;; build a complete executable image for TARGET, loaded at `base`. `mkprog` is (\ dataddr -> IR);
    ;; `data` is the byte list appended after the code. returns a tablet { 'bytes 'entry 'dataddr }.

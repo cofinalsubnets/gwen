@@ -32,6 +32,10 @@
 ;   `make uefi` for the ESP, test_uefi to gate it; doc/uefi.md)
 ;   and limine (the iso/hdd + interactive run-* lanes). out/dl (ovmf/limine, nuked by
 ;   `make clean`) feeds only limine + the uefi gate's firmware; stash it if you use those.
+;   the LINK is OURS on every door: holo's kernel lane (ldkern -- the note, five page-aligned
+;   PT_LOADs, p_paddr = p_vaddr - bias, entry by symbol, kimage_end), driven by port/inle/klink.l
+;   where the four per-arch numbers live. `KLINK=lld` puts ld.lld + the .lds back, the comparison
+;   lane. the COMPILER is still clang there -- the last island; doc/moon-kernel.md is the ladder off it.
 ;   editing love.h needs no clean (every object deps on $(love_h), the lcat'd headers re-lay on love0).
 ; * CHECK A .l EDIT for balance before trusting it: `out/host/love crew/libra/libra.l <file>` (or
 ;   `make lint` over every tracked .l) -- LIBRA ⚖, the .l balance tool (crew/libra/, doc/libra.md),

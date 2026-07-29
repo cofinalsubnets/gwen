@@ -9,7 +9,7 @@ purely-source git-door bootstrap rim, and benchmarking / reverse-engineering
 comparison targets. qemu, OVMF and limine are firmware, not toolchain -- they
 stay what they are. drafted 2026-07-28; trued up as rungs land.
 
-## what clang/lld actually do today (the inventory)
+## what clang does today (the inventory, as drafted)
 
 * **C** (port/inle/kernel.mk:33-56): love.c + am.c, crew/quay/*.c, libc/*.c,
   kmain.c, port/inle/<a>/{arch,pvh,dtb,builtins}.c under
@@ -26,7 +26,8 @@ stay what they are. drafted 2026-07-28; trued up as rungs land.
 * **assembly files**, four: <a>/boot.S (the PVH stub -- ~50 lines of .code32
   before long mode -- and the EL1 MMU stub) and <a>/<a>.S (the exception/IRQ
   vector stubs, GAS .macro loops, iretq/eret, context plumbing).
-* **the link** (kernel.mk:56, <a>/<a>.lds): five named PT_LOADs (boot |
+* ~~**the link**~~ -- OURS since rung 2 below; ld.lld and <a>/<a>.lds are the
+  `KLINK=lld` comparison lane. what they said: five named PT_LOADs (boot |
   limine_requests | text | rodata | data), every section vaddr HIGH with an
   `AT()` LMA bias (vaddr - KVMA + phys base -- what lets `qemu -kernel` load
   low by p_paddr while limine maps high by p_vaddr), ENTRY by symbol,
@@ -51,25 +52,43 @@ the privileged instructions, as ordinary holo IR ops with laws:
 this rung feeds BOTH consumers: the neutral inline-asm templates (rung 3)
 and the .S lays (rung 4). nothing downstream starts until its ops exist here.
 
-### 2. the holo KERNEL LINK lane (vaddr =/= paddr)
+### 2. the holo KERNEL LINK lane (vaddr =/= paddr) -- LANDED 2026-07-28
 
-crew/holo/link.l grows a kernel layout -- the one real linker feature the
-.lds has that we don't: per-lane (vaddr, LMA) with multiple PT_LOADs.
+crew/holo/link.l grew a kernel layout -- the one real linker feature the
+.lds had that we didn't: per-lane (vaddr, LMA) with multiple PT_LOADs.
+`ldkern target entry vbase bias srcs` is the whole surface;
+port/inle/klink.l is the driver (it carries the four numbers per arch,
+which is all <a>.lds ever said that we could not); `KLINK=holo` is the
+default in port/inle/kernel.mk and `KLINK=lld` puts ld.lld and the .lds
+back as the comparison lane. all five doors boot the file it writes:
+`qemu -kernel` on both arches, our own BOOTX64.EFI, and the limine iso on
+both arches -- 3558 tests pass through each. the clang-built objects are
+laid unchanged, so this rung carries zero compiler risk, as planned.
 
-* lanes: `boot` FIRST in its own segment (the stub + tables; entry lives
-  here), `limine_requests` (obj.l maps the section name to a lane, the
-  ai_nifs precedent), then text/rodata/data+bss page-aligned, each phdr
-  carrying p_paddr = p_vaddr - KVMA + phys base.
-* entry by SYMBOL (a64boot/pvhboot), not first-object -- ld's `_start` rule
-  already exists (link.l's `ent`); this generalizes the name.
-* kimage_end synthesized (ldres's bracket-symbol lane is the model),
-  4K alignment, .note/.eh_frame dropped by name. --gc-sections is NOT
-  reproduced -- the image carries some dead code and that is fine (RAM).
-* **gate before any compiler moves**: lay the CLANG-BUILT objects with the
-  new lane and boot test_kernel + test_kernel_arm64, and the limine iso
-  still boots the same ELF (three doors, one file). ld-read ingests foreign
-  objects today (the thumb1 gate's arm-none-eabi-gcc struct is the
-  precedent), so the linker rung proves out with zero compiler risk.
+what the clang objects asked for that our own never had:
+
+* **local symbols as relocation targets.** clang names every constant pool
+  and jump table `.LCPI0_0` and relocates against THAT, where obj.l always
+  goes through the section symbol. a local defined symbol now resolves in
+  its own object (base + value) and never reaches the global book.
+* **modular field arithmetic.** boot.S's 32-bit stub says `.boot +
+  0x80003000`, and that sum WRAPS the high-half base off to the physical
+  address the pre-paging code jumps to. every S+A now goes through
+  `ld-u64` first; R_X86_64_32 reads it unsigned, _32S folds it signed
+  (the kernel's high addresses are 32S's negative half -- 2761 sites).
+* **the aarch64 ABS_LO12_NC family.** holo emits adrp+add, so ADD_ABS_LO12
+  was the only LO12 we had; clang folds the add into the load and emits
+  LDST{8,16,32,64,128}_ABS_LO12_NC, one field with a width-scaled imm12.
+* ⚠ **the reader folds a hex literal at or above 2^63 into its negative
+  twin** (`0xffffffff80200000` reads -2145386496). the same bits, and
+  every emit path takes it -- but a LAYOUT divides, and aligning a
+  negative overshoots by a page with nothing downstream looking wrong.
+  ldkern takes both halves of the address split through `ld-u64` first.
+
+not reproduced, deliberately: --gc-sections (the image carries some dead
+code -- .text 0x3b340 against lld's 0x37d80 -- and it is RAM), and
+.rodata string merging. the layout otherwise lands on lld's addresses
+exactly: same vaddrs, same paddrs, same entry.
 
 ### 3. the inline-asm seam: one header, two spellings
 
@@ -110,7 +129,7 @@ cannot say -- and they port to holo IR lays beside it:
 * kernel.mk: the moon lane becomes the default -- every TU
   `mooncc -t <arch>` with kernel flags (the -m* soup drops; mooncc's
   codegen is already red-zone-free and abs64+PC32-only, see the probes
-  below), objects + lays bound by rung 2's layout. `KCC=clang KLD=ld.lld`
+  below), objects + lays bound by rung 2's layout. `KCC=clang KLINK=lld`
   stays the opt-in comparison lane, exactly like CC on the host side.
 * gates: test_kernel, test_kernel_arm64, test_uefi, the limine iso boot,
   and the clang-vs-mooncc K_TEST differential from rung 3.
@@ -123,9 +142,9 @@ cannot say -- and they port to holo IR lays beside it:
   (the stack machine pre-decrements); pin it with a vmret-style scan or a
   law, then the -mno-red-zone flag is vacuously satisfied.
 * **mcmodel=kernel**: confirm mooncc emits ONLY abs64 + pc-relative
-  relocations (obj.l says 32/32S arrive "only from a foreign object") --
-  then top-2GiB linking is safe with no code-model knob at all. assert it
-  in the rung-2 gate (refuse 32/32S in kernel lays).
+  relocations -- then top-2GiB linking is safe with no code-model knob at
+  all. (rung 2 settled the linker's half either way: clang's kernel objects
+  carry 2761 32S sites and 12 wrapped _32 ones, and ldkern lays them.)
 * **attribute lists**: `__attribute__((used, section(".limine_requests")))`
   (kmain.c:83) -- confirm the parser takes the comma list; `used` is a
   no-op for us (no gc-sections).
@@ -135,9 +154,10 @@ cannot say -- and they port to holo IR lays beside it:
 
 ## order and size
 
-1 -> 2 -> 3 -> 4 -> 5, with the probes before rung 1. rungs 1+2 are holo
-work (~a few hundred lines + laws), 3 is a mechanical sweep with one new
-header per arch, 4 is two lay files (~mksys.l x 2-3 in size), 5 is
-makefile + gates. 2 lands value early (our linker under the shipping
-kernel) and de-risks everything after it; nothing before 5 disturbs the
-clang lanes, so the tree stays green the whole climb.
+2 went first (it needed nothing from rung 1 and carried no compiler risk),
+and it landed the value early: our linker is under the shipping kernel on
+both arches and all three doors. what is left is 1 -> 3 -> 4 -> 5, with
+the probes before rung 1. rung 1 is holo work (~a few hundred lines +
+laws), 3 is a mechanical sweep with one new header per arch, 4 is two lay
+files (~mksys.l x 2-3 in size), 5 is makefile + gates. nothing before 5
+disturbs the clang COMPILER lanes, so the tree stays green the whole climb.

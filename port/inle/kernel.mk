@@ -23,9 +23,11 @@ ifdef K_TEST
 ksuf := -test
 endif
 
-# Cross toolchain defaults to clang + lld (one multi-target pair covers every
-# arch). Override for a GCC cross toolchain, e.g.
-#   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLD=aarch64-linux-gnu-ld
+# The cross COMPILER defaults to clang (one multi-target binary covers every
+# arch) -- the last foreign compiler in the tree, and doc/moon-kernel.md is the
+# ladder off it. Override for a GCC cross toolchain, e.g.
+#   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLINK=lld KLD=aarch64-linux-gnu-ld
+# KLD serves the KLINK=lld lane only; the default link is ours (see below).
 KCC ?= clang
 KLD ?= ld.lld
 KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1)
@@ -86,10 +88,33 @@ k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword 
 
 kernel: $(ko)/love-$a$(ksuf).elf
 
+# The LINK is ours by default: holo's kernel lane (crew/holo/link.l's ldkern,
+# driven by port/inle/klink.l) lays the same shape <a>.lds asks for -- the
+# note, five page-aligned PT_LOADs, p_paddr = p_vaddr - bias, entry by symbol,
+# kimage_end -- and all three doors (`qemu -kernel`, our BOOTX64.EFI, limine)
+# boot the file it writes. KLINK=lld puts ld.lld and the .lds back, the
+# comparison lane; it stays exact, and the .lds files stay in the tree as its
+# statement of the layout. --gc-sections has no twin here (the image carries
+# some dead code; it is RAM, and the kernel has plenty).
+KLINK ?= holo
+klink_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
+  $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/port/inle/klink.l
+$(k_odir)/klink.l: $(klink_l)
+	@echo AI	$@
+	@mkdir -p "$(dir $@)"
+	@{ echo "(use 'holo)"; cat $(klink_l); } > $@
+
+ifeq ($(KLINK),holo)
+$(ko)/love-$a$(ksuf).elf: $(k_odir)/klink.l $(k_o) $m
+	@echo HOLO	$@
+	@mkdir -p "$(dir $@)"
+	@$m $(k_odir)/klink.l $@ $a $(k_o)
+else
 $(ko)/love-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
+endif
 
 # Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
