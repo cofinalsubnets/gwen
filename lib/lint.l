@@ -1,5 +1,5 @@
 ; lib/lint.l -- the .l balance scan, structured so its consumers can share one
-; scanner: `ltidy` (tools/ltidy.l) prints what it finds and gates `make lint`,
+; scanner: `libra check` prints what it finds and gates `make lint`,
 ; `libra` (crew/libra/libra.l) turns the same warnings into lsp diagnostics. it
 ; reads .l correctly -- `;` and `#!` start comments to end of line, `"..."` is
 ; the only string, and `'` / backtick are READER OPERATORS (quote, list-ctor),

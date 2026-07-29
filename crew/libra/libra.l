@@ -1,7 +1,7 @@
 #!/usr/bin/env -S love -l
 ; libra ⚖ -- the scales: the .l balance tool. it weighs a file three ways and they
 ; are all the same weighing -- `libra fmt` lays it out, `libra serve` says what is
-; wrong while you type, and tools/ltidy.l gates the tree on it. one scanner
+; wrong while you type, and `libra check` gates the tree. one scanner
 ; (lib/lint.l) under all three, so the editor, the formatter and the gate can
 ; never disagree about what balanced means.
 ;
@@ -17,7 +17,7 @@
 ; comes back empty, take the length, then read EXACTLY that many bytes. the rest
 ; of this file is the conversation.
 ;
-; the DIAGNOSTICS are lib/lint.l's, the same scan tools/ltidy.l prints and
+; the DIAGNOSTICS are lib/lint.l's, the same scan `libra check` prints and
 ; `make lint` gates on. one scanner, three consumers: what the editor underlines
 ; is what the gate will refuse, always, with no second implementation to drift.
 ;
@@ -32,8 +32,18 @@
 ; very first message. absence is tested EXACTLY, with (() = id) -- a stored 0 is
 ; not (), and `=` knows the difference.
 ;
-; usage:  libra            (an editor launches it; it serves stdio until eof)
-;     or: love -l crew/libra/libra.l
+; usage:  libra FILE ..      weigh them: balance is the DEFAULT verb, so a bare
+;                            file list is the whole command (`-w` also strips
+;                            trailing whitespace, WITHOUT reindenting)
+;         libra fmt FILE ..  lay it out (-w rewrites, -n only checks)
+;         libra serve        speak lsp over stdio
+;     or: love -l crew/libra/libra.l ..
+;
+; check is the default because it is the errand that actually recurs: `make lint`
+; runs it over every tracked .l, fmt is run BY HAND and nothing is gated on
+; layout, and serve waits for an editor that wants it. libra replaced tools/ltidy.l
+; outright (deleted 2026-07-28) -- including its janitor `-w`, which is why that
+; flag strips whitespace without touching indentation.
 (use 'json)
 (use 'lint)
 
@@ -239,17 +249,27 @@
    ; --- the verbs ------------------------------------------------------------
    (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))
 
-   ; answers the count of FATAL warnings -- an imbalance fails, a tab does not
-   (libra-check-files fs bad)
+   ; answers the count of FATAL warnings -- an imbalance fails, a tab does not.
+   ; `fix` is the janitor pass: strip trailing whitespace, WITHOUT reindenting.
+   ; that separation is the point -- a tree can be kept tidy without anyone
+   ; agreeing to a layout, which is why this lives on check and not on fmt.
+   (libra-check-files fs fix bad)
     (? (! (two? fs)) bad
        (: r (rdf <fs)
           (? (! (two? r)) (: _ (say err ("libra: cannot open " + <fs + "\n"))
-                              (libra-check-files >fs (bad + 1)))
+                              (libra-check-files >fs fix (bad + 1)))
              (: src <>r
+                ls (linesof src)
                 bw (lint-scan src)
                 _ (foldl (\ _ w (: _ (say err (warnline <fs w)) 0)) 0
-                         (bw + (tabwarns (linesof src))))
-                (libra-check-files >fs (bad + (tally bw)))))))
+                         (bw + (tabwarns ls)))
+                _ (? fix (: q (open <fs "w") _ (say q (unlines (map rtrim ls))) (close q)) 0)
+                (libra-check-files >fs fix (bad + (tally bw)))))))
+
+   (libra-check fs fix) (: n (libra-check-files fs fix 0) (? (0 < n) (quit 1) 0))
+
+   (flag? x) (&& (0 < (tally x)) ((x 0) = 45))
+   (files as) (filter (\ x (! (flag? x))) as)
 
    ; fmt: lay each file out on stdout; -w rewrites in place; -n (check) says
    ; nothing and answers the count that WOULD change, which is the gate's shape.
@@ -272,26 +292,32 @@
    ; read raises `missing usage` at LOAD.
    ; ⚠ an infix CHAIN, not (+ a b c) -- three operands is APPLICATION, ((+ a b) c),
    ; so the third line would be indexed into the first two rather than joined
-   usage ("usage: libra check FILE ..   balance: path:line:col: on err, quiet when clean, exit 1\n"
-          + "       libra fmt   FILE ..   lay it out on stdout; -w rewrites, -n only checks (exit 1)\n"
-          + "       libra serve           speak lsp over stdio -- diagnostics as you type (the default)\n")
+   usage ("usage: libra [check] FILE ..   balance: path:line:col: on err, quiet when clean,\n"
+          + "                               exit 1; -w also strips trailing whitespace. THE DEFAULT.\n"
+          + "       libra fmt FILE ..      lay it out on stdout; -w rewrites, -n only checks (exit 1)\n"
+          + "       libra serve            speak lsp over stdio -- diagnostics as you type\n")
 
    (libra-main as)
     (? (|| (member? "-h" as) (member? "--help" as))
         (: _ (say err "libra ⚖ -- the .l balance tool.\n") _ (say err usage) 0)
        (: v (? (two? as) <as "")
           r >as
-          fs (filter (\ x (! ((x 0) = 45))) r)               ; the files: everything not a flag
-          (? (v = "check") (: n (libra-check-files fs 0) (? (0 < n) (quit 1) 0))
-             (v = "fmt")   (: n (libra-fmt-files fs
+          (? (v = "check") (libra-check (files r) (member? "-w" r))
+             (v = "fmt")   (: n (libra-fmt-files (files r)
                                                  (? (member? "-w" r) 'write
                                                     (member? "-n" r) 'check
                                                     'show)
                                                  0)
                               (? (&& (member? "-n" r) (0 < n)) (quit 1) 0))
              (v = "serve") (libra-serve in out)
-             (v = "")      (libra-serve in out)              ; an editor launches it bare
-             (: _ (say err ("libra: no verb " + v + "\n")) _ (say err usage) (quit 1)))))
+             (v = "")      (: _ (say err usage) (quit 1))     ; nothing named, nothing to weigh
+             ; NO VERB: the whole line is files, and CHECK is what happens to them.
+             ; balance is the everyday errand -- `libra *.l` should simply answer
+             ; it -- while fmt is run by hand and serve waits for an editor to
+             ; exist. ⚠ so an unknown verb reads as a FILENAME now, and says
+             ; "cannot open" rather than "no such verb". that is the right trade
+             ; while the file list is the common case, but it is a trade.
+             (libra-check (files as) (member? "-w" as)))))
 )
 
 ; the SEAT (kiosko's shape): fire libra-main iff this file -- or the installed

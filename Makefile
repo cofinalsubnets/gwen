@@ -65,11 +65,13 @@ test_all: test_host test_love0 test_proof test_gen test_uugen test_uulean test_u
 all: host kernel wasm
 
 # lint: paren/bracket/brace balance + unclosed strings across every tracked .l
-# (tools/ltidy.l, a .l-aware scan -- ; and #! comments, ' and ` are reader ops).
-# QUIET when clean, line-pointed warnings + exit 1 on any imbalance; tabs warn but
-# don't fail. NOT in the test gate (it's an editing aid, not a semantic check).
+# (libra ⚖ -- crew/libra/libra.l over lib/lint.l, a .l-aware scan: ; and #!
+# comments, ' and ` are reader ops). Balance is libra's DEFAULT verb, so the bare
+# file list is the whole invocation. QUIET when clean, path:line:col: warnings +
+# exit 1 on any imbalance; tabs warn but don't fail. NOT in the test gate (it's an
+# editing aid, not a semantic check).
 lint: $(ho)/love
-	@$(ho)/love $R/tools/ltidy.l $$(git ls-files '*.l') && echo "lint: .l balance clean"
+	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l') && echo "lint: .l balance clean"
 
 # ccdb: emit compile_commands.json so clangd sees the flags the build actually uses.
 # without it clangd guesses, misses love.h, and the fatal include error cascades into a

@@ -33,11 +33,15 @@
 ;   and limine (the iso/hdd + interactive run-* lanes). out/dl (ovmf/limine, nuked by
 ;   `make clean`) feeds only limine + the uefi gate's firmware; stash it if you use those.
 ;   editing love.h needs no clean (every object deps on $(love_h), the lcat'd headers re-lay on love0).
-; * CHECK A .l EDIT for balance before trusting it: `out/host/love tools/ltidy.l <file>` (or `make lint`
-;   over every tracked .l) -- a .l-aware paren/bracket/brace + unclosed-string scan (`;`/`#!` comments,
-;   `'` and backtick are reader ops NOT delimiters, so it won't trip where a C lexer would). SILENT means
-;   clean; line-pointed warnings + exit 1 on imbalance (a dropped paren is the classic .l slip, and it
-;   catches it without a full rebuild). `-w` also strips trailing whitespace. NOT in the test gate.
+; * CHECK A .l EDIT for balance before trusting it: `out/host/love crew/libra/libra.l <file>` (or
+;   `make lint` over every tracked .l) -- LIBRA ⚖, the .l balance tool (crew/libra/, doc/libra.md),
+;   a .l-aware paren/bracket/brace + unclosed-string scan (`;`/`#!` comments, `'` and backtick are
+;   reader ops NOT delimiters, so it won't trip where a C lexer would). SILENT means clean;
+;   `path:line:col:` warnings + exit 1 on imbalance, pointing at the OPENER of an unclosed form (a
+;   dropped paren is the classic .l slip, and it catches it without a full rebuild). `-w` also strips
+;   trailing whitespace. NOT in the test gate. BALANCE IS THE DEFAULT VERB, so a bare file list is the
+;   whole command; `libra fmt` reindents (by hand -- NOT adopted, nothing is gated on layout) and
+;   `libra serve` speaks lsp. one scanner (lib/lint.l) under all three, so they cannot disagree.
 ; * C and docs EMBED love the .l sweeps miss -- grep on every rename: host/main.c (s2cl + runner),
 ;   port/inle/kmain.c (the K_TEST runner), port/rp2040/main.c (g_evals_ driver strings), port/playdate/ (main.c + cas.l -- the rune workbench),
 ;   wasm/; and index.html (the static page, style.css beside it) runs live demos as data-run chips --
