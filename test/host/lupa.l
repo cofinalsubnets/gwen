@@ -125,6 +125,34 @@
                   (lt-req 2 "initialize" (tablet 0))))
     (&& (1 = (tally rs)) (json-null? (<rs "result")))))
 
+; ⚠ a MALFORMED document notification is dropped, never answered with an invented
+; uri. unguarded this is not an error but a plausible lie: () applied to a string
+; is 1 (const-1) and 1 applied to it is the string back (the identity), so no
+; params at all reads its uri as "uri" and no textDocument reads it as 1 -- and
+; publishing an empty list at a bogus uri tells an editor to CLEAR warnings it is
+; rightly showing. nothing goes out, and the session stays up.
+(assert
+ !(lt-talk `((lt-not "textDocument/didOpen" (tablet 0))))                  ; no textDocument
+ !(lt-talk `((lt-not "textDocument/didOpen" (lt-obj `(`("textDocument" (tablet 0)))))))  ; no uri
+ !(lt-talk `((lt-not "textDocument/didChange" (tablet 0))))
+ !(lt-talk `((lt-not "textDocument/didClose" (tablet 0))))
+ ; a uri that is not a string is not a uri
+ !(lt-talk `((lt-not "textDocument/didOpen" (lt-obj `(`("textDocument" (lt-obj `(`("uri" 7)))))))))
+ ; ...and a malformed one does not stop the next message being served
+ (: rs (lt-talk `((lt-not "textDocument/didOpen" (tablet 0))
+                  (lt-req 5 "initialize" (tablet 0))))
+    (&& (1 = (tally rs)) (5 = (<rs "id"))))
+ ; a document with no text, but a real uri, is an EMPTY document -- clean, not junk
+ (: rs (lt-talk `((lt-not "textDocument/didOpen"
+                          (lt-obj `(`("textDocument" (lt-obj `(`("uri" "file:///e.l")))))))))
+    (&& (1 = (tally rs)) ("file:///e.l" = ((<rs "params") "uri"))
+        (() = ((<rs "params") "diagnostics"))))
+ ; an empty contentChanges list leaves the document empty rather than inventing text
+ (: rs (lt-talk `((lt-not "textDocument/didChange"
+                          (lt-obj `(`("textDocument" (lt-obj `(`("uri" "file:///x.l"))))
+                                    `("contentChanges" ()))))))
+    (() = ((<rs "params") "diagnostics"))))
+
 ; a garbled frame does not take the session down: the body is dropped and the
 ; next message is served as if nothing happened
 (assert

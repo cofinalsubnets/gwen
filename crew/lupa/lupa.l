@@ -129,8 +129,26 @@
     (note p "textDocument/publishDiagnostics"
             (otab `(`("uri" uri) `("diagnostics" (lupa-diags text)))))
 
-   ; full sync: the last change carries the whole document
-   (lastext cs) (? (two? cs) (: c (last cs) (c "text")) "")
+   ; --- reading a document notification's params -----------------------------
+   ; ⚠ EVERY SLOT IS CHECKED, because a missing one does not error here -- it
+   ; MANUFACTURES a plausible answer. () applied to a string is 1 (const-1) and 1
+   ; applied to a string is the string itself (the identity), so a message with no
+   ; params reads its uri as "uri" and one with no textDocument reads it as 1.
+   ; unguarded, lupa publishes diagnostics against a document the client never
+   ; named -- and publishing an empty list at a bogus uri is how you tell an editor
+   ; to CLEAR the warnings it is showing. the laws that make (f)==f lovely make
+   ; this lane a liar, so the shape is confirmed before it is believed.
+   (docuri ps) (? (tablet? ps)
+                   (: d (ps "textDocument")
+                      (? (tablet? d) (: u (d "uri") (? (string? u) `(1 u) ())) ()))
+                  ())
+
+   (stext v) (? (string? v) v "")                  ; absence and a non-string are both empty
+   (dopen ps) (: d (ps "textDocument") (? (tablet? d) (stext (d "text")) ""))
+
+   ; full sync: the LAST change carries the whole document
+   (dchange ps) (: cs (ps "contentChanges")
+                   (? (two? cs) (: c (last cs) (? (tablet? c) (stext (c "text")) "")) ""))
 
    ; --- the conversation -----------------------------------------------------
    ; answers 'stop when the client says exit, () otherwise. an unknown REQUEST is
@@ -145,11 +163,11 @@
           (mth = "shutdown")    (: _ (reply p id json-null) ())
           (mth = "exit")        'stop
           (mth = "textDocument/didOpen")
-           (: d (ps "textDocument") _ (publish p (d "uri") (d "text")) ())
+           (: r (docuri ps) _ (? (two? r) (publish p <>r (dopen ps)) 0) ())
           (mth = "textDocument/didChange")
-           (: d (ps "textDocument") _ (publish p (d "uri") (lastext (ps "contentChanges"))) ())
+           (: r (docuri ps) _ (? (two? r) (publish p <>r (dchange ps)) 0) ())
           (mth = "textDocument/didClose")
-           (: d (ps "textDocument") _ (publish p (d "uri") "") ())
+           (: r (docuri ps) _ (? (two? r) (publish p <>r "") 0) ())
           ask (: _ (fault p id -32601 ("no such method: " + show mth)) ())
           ()))
 
