@@ -1431,9 +1431,10 @@
                      ; +0, and elsewhere the subtract was already exact. so the
                      ; fix is the CONSTANT, not the instruction: same op count,
                      ; same registers, and it needs no xorpd (which is d==s only
-                     ; on riscv, see crew/holo/riscv.l). ⚠ INVISIBLE TO LOVE,
-                     ; which has no negative zero -- only C can see this, and
-                     ; test/libc/num.c (strtod "-0.0") is what found it.
+                     ; on riscv, see crew/holo/riscv.l). found by test/libc/num.c
+                     ; (strtod "-0.0"); love HAS a negative zero -- (1.0 / -0.0)
+                     ; is -ieee-inf -- its printer merely could not say so until
+                     ; the same day, so this read as C-only at first.
                      n0 (? (t32? g) `(`('li 'r0 0) `('li 'r1 0x80000000) `('movqxr 'f1 'r0))
                            `(`('li 'r0 0x8000000000000000) `('movqxr 'f1 'r0)))
                      (? (<>e = 'neg)                 ; -d = (-0.0) - d
