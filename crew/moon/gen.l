@@ -1387,14 +1387,33 @@
                   (: pa (cxpark g r)
                      (? (bad? pa) 'bad
                         (cxout g (? (id? (cxb (vty r)) 'float) (vty r) cxdty)
+                           ; each component subtracts from MINUS zero, for the
+                           ; reason the scalar lane below spells out: 0.0 - 0.0
+                           ; is +0.0, so a zero component could never come back
+                           ; negative. r0 is free here -- cxout writes it last.
                            (<>pa + `(`('ldsd 'f0 'r4 <pa) `('ldsd 'f1 'r4 (<pa + 8))
-                                     '(xorpd f4 f4) '(subsd f4 f0) '(movsd f0 f4)
-                                     '(xorpd f4 f4) '(subsd f4 f1) '(movsd f1 f4))))))
+                                     `('li 'r0 0x8000000000000000) '(movqxr f4 r0)
+                                     '(subsd f4 f0) '(movsd f0 f4)
+                                     `('li 'r0 0x8000000000000000) '(movqxr f4 r0)
+                                     '(subsd f4 f1) '(movsd f1 f4))))))
                  (flo? (vty r))                        ; unary on a double
                   (: z1 (? (t32? g) `(`('li 'r0 0) `('li 'r1 0) `('movqxr 'f1 'r0))   ; 0.0 (the t32 pair)
                            `(`('li 'r0 0) `('movqxr 'f1 'r0)))
-                     (? (<>e = 'neg)                 ; -d = 0.0 - d
-                         (mkv 'double 'r0 (cat (vfs r) (z1 + `(`('subsd 'f1 'f0) `('movsd 'f0 'f1)))))
+                     ; ⚠ NEGATION SUBTRACTS FROM MINUS ZERO, NOT FROM ZERO. this
+                     ; lane read `0.0 - d` for years and that is right for every
+                     ; input but one: 0.0 - 0.0 is +0.0, so -0.0 could not be
+                     ; produced at all. -0.0 - x IS -x everywhere -- for +0 it
+                     ; gives -0 (two negative zeros sum to one), for -0 it gives
+                     ; +0, and elsewhere the subtract was already exact. so the
+                     ; fix is the CONSTANT, not the instruction: same op count,
+                     ; same registers, and it needs no xorpd (which is d==s only
+                     ; on riscv, see crew/holo/riscv.l). ⚠ INVISIBLE TO LOVE,
+                     ; which has no negative zero -- only C can see this, and
+                     ; test/libc/num.c (strtod "-0.0") is what found it.
+                     n0 (? (t32? g) `(`('li 'r0 0) `('li 'r1 0x80000000) `('movqxr 'f1 'r0))
+                           `(`('li 'r0 0x8000000000000000) `('movqxr 'f1 'r0)))
+                     (? (<>e = 'neg)                 ; -d = (-0.0) - d
+                         (mkv 'double 'r0 (cat (vfs r) (n0 + `(`('subsd 'f1 'f0) `('movsd 'f0 'f1)))))
                         (<>e = 'not)                 ; !d = (d == 0.0), NaN-honest: !NaN is false -- fsete
                          (mkv 'long 'r0 (cat (vfs r) (z1 + (`(`('ucomisd 'f0 'f1)) + fsete))))
                         'bad))                           ; ~ on a double is invalid

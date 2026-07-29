@@ -112,12 +112,24 @@ declaration.
 - **`strtod` skipped no leading whitespace** -- `strtod("  42.5")` was `0`.
   `am_strtod` is love's float reader and the reader hands it a *token*, so the
   libc face wants a wrapper; that wrapper is now where the two part.
-- ⚠ **mooncc lowers unary minus on a double as `0.0 - d`** (crew/moon/gen.l:1396,
-  and the comment there says so), which does not flip the sign of a zero. so
-  `strtod("-0.0")` could not produce `-0.0` even once the wrapper wanted it to.
-  **invisible to love, which has no negative zero at all** -- only a C program
-  can see it, which is why it survived. worked around in the wrapper by setting
-  the sign bit by hand; **the codegen fix is open** and touches four backends.
+- ⚠ **mooncc lowered unary minus on a double as `0.0 - d`** (crew/moon/gen.l),
+  which cannot produce `-0.0`, because `0.0 - 0.0` is `+0.0` by IEEE 754.
+  **FIXED** -- the lane already materialized a zero to subtract from, so the fix
+  is that CONSTANT: subtract from **minus** zero and `-0.0 - x` is an exact
+  negation for every input, at the same op count and with no `xorpd` (which is
+  `d==s` only on riscv). same change in the complex lane. `test/cc/105-fneg.c`
+  pins it, freestanding, in the codegen battery where it belongs.
+
+  ⚠ **and it reached further than a C program.** `am_strtod` returns the
+  LITERAL `-0.0` (crew/moon/lib/math/am.c:40,44), so the miscompile hit a plain
+  constant in every mooncc-built binary -- **including `love` itself**. love does
+  have a negative zero (`(1.0 / -0.0)` is `-ieee-inf`); its PRINTER just drops a
+  zero's sign, which is what makes the fault look absent from the language. so
+  `love` (mooncc) and `love0` (gcc) disagreed on `1.0 / -0.0` until this fix: the
+  third build divergence found by this arc, from the same root as the first two.
+  the lesson is the doc's, not the compiler's -- **`(show x)` is not a value
+  test.** a printer that normalizes is exactly where a differential must not
+  look.
 - ⚠ **mooncc refuses a function address in a static initializer** (`CGDATA-BAD`),
   which is why phase 2 references at runtime. also open, also small.
 

@@ -1444,12 +1444,15 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
    that lived here parsed "0.3" one ulp off -- masked until love's printer
    went shortest-roundtrip, then loud in test_raw. */
 double am_strtod(char const *, char **);
-/* ⚠ THE LIBC FACE IS NOT am_strtod's FACE, and the wrapper is where they part.
- * am_strtod is love's float reader: the reader hands it a whole TOKEN, so it
- * skips no leading space, and love has no negative zero at all ((show -0.0) is
- * 0.0). C's strtod owes both. doing it here keeps am.c exactly what love's
- * reader wants -- correctly rounded and nothing else -- and still hands a C
- * program the function it asked for. found by test/libc/num.c against glibc. */
+/* ⚠ THE LIBC FACE IS NOT am_strtod's FACE, and the wrapper is where they part:
+ * am_strtod is love's float reader, and the reader hands it a whole TOKEN, so
+ * it skips no leading space. C's strtod owes that, and owes endptr = the
+ * ORIGINAL nptr when nothing converts. doing it here keeps am.c exactly what
+ * love wants -- correctly rounded and nothing else. found by test/libc/num.c.
+ * ⚠ the SIGN of a zero needs nothing: am_strtod gets -0.0 right on its own.
+ * it did not while mooncc lowered -d as 0.0 - d (crew/moon/gen.l), and a
+ * wrapper that "fixed" it here would now flip the sign BACK, since -0.0 == 0.0
+ * tests true. */
 double strtod(char const *s, char **end) {
   char const *p = s;
   while (*p == 32 || (*p >= 9 && *p <= 13)) p++;
@@ -1457,15 +1460,6 @@ double strtod(char const *s, char **end) {
   double v = am_strtod(p, &e);
   if (e == p) { if (end) *end = (char *) s; return 0.0; }   /* no conversion: the ORIGINAL s */
   if (end) *end = e;
-  if (v == 0.0 && *p == '-') {                              /* C keeps a zero's sign */
-    /* ⚠ the sign bit BY HAND, not -v. mooncc lowers unary minus on a double as
-     * `0.0 - d` (crew/moon/gen.l, and the comment there says so), and 0.0 - 0.0
-     * is +0.0 -- so -v would silently do nothing here. invisible to love, which
-     * has no negative zero at all, and therefore only reachable from C. */
-    union { double d; unsigned long u; } b;
-    b.d = v;
-    b.u |= 1UL << 63;
-    v = b.d; }
   return v; }
 /* the unsigned twin: strtol's digit walk, saturating at ULONG_MAX the same way,
  * with the ONE wrap the standard does ask for -- a leading minus negates the
