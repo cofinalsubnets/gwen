@@ -257,13 +257,29 @@ test_vi: host out/host$(hsuf)/kore.image
 # The C compiler (crew/moon/, rung 3 -- doc/moon.md): the pure pipeline's laws
 # (lexer/parser/gen goldens), then the stage-0 end to end through the real
 # `mooncc`: compile, run, exit 42 -- and the gcc -O0 differential is born
-# (same source, both compilers, same exit). x86-64 only until arm64 parity.
+# (same source, both compilers, same exit). x86-64 here; test_ccarm64 below runs
+# the SAME battery for aarch64 against a cross gcc under qemu, which is what
+# retired the "x86-64 only until arm64 parity" line this comment used to carry --
+# and it found a shared-model bug that x64 had been routing around.
 # the battery drives the WARM-baked image (what `make install` ships and users
 # run), not the cold source script -- ~0.68s -> ~0.02s per compile, 88 of them.
 moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m
+# test_ccarm64 -- the battery's AARCH64 twin, and the end of "x86-64 only until
+# arm64 parity" (the line above, which stood for four of the five backends). every
+# test/cc/*.c built by `mooncc -t arm64` AND an aarch64 cross-gcc, both run under
+# qemu-user, exit code AND stdout compared. it found a fault on its first run:
+# 104-u32wrap's de Bruijn ctz did not wrap to 32 bits, because the rule is shared
+# and only x64 routed around it (a mul-IMMEDIATE lane that passes 'int by hand;
+# arm64 has no such form and read the literal's 'long). ~20s. the three programs
+# the arm64 lane cannot build are asserted to REFUSE, not skipped -- a silent skip
+# would let a regression hide behind the list. skips whole without qemu-aarch64 or
+# a cross gcc (AARCH64_CC points at one).
+.PHONY: test_ccarm64
+test_ccarm64: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/ccarm64.sh $(ho) $m
 # test_libc -- OUR C LIBRARY against the system's, function by function
 # (doc/libc.md rung 0). test/libc/*.c is built by mooncc (which pulls
 # crew/moon/lib/nolibc.c by need) and by gcc (glibc), run, and the two OUTPUTS
