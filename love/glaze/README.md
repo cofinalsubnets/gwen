@@ -49,8 +49,18 @@ The **host** is the opposite: Linux maps the malloc heap no-execute, so raw heap
 can't be run. That is what the W^X arena (`code_maplen` + `nat_unmap` in `love.c`) is
 for, and `nif`/`nifx` route every hosted install through it. The corpus test
 (`test/glaze.l`) stays architecture-neutral — x86_64 opcodes would crash an aarch64 or
-wasm host — so it covers only the install guards (non-byte / empty code → nothing);
+wasm host — so it covers the install guards (non-byte / empty code → nothing) plus the
+*decline* laws, which read as plain arithmetic and answer the same everywhere by design;
 the executing tests are `test/glaze-x86.l`.
+
+Those decline laws are the ones worth understanding before touching a lane. A lane is a
+**recognizer + codegen pair**, and `cggir`'s dispatch ends in a silent `()`: an operand it
+cannot emit compiles to *no code at all* and leaves whatever the accumulator last held. So
+a recognizer that admits one shape too many does not crash — it answers a plausible number,
+forever. `make test_glazefuzz` (`love/glaze/fuzz.l`) is the standing guard: 3000 random
+closures, one shape per lane, run glazed and again under `LOVE_NO_GLAZE=1`, required to
+agree byte for byte. Its leaf pools carry what the integer lanes *cannot* hold — strings,
+noms, lists, gems — because the interesting behaviour is declining, not compiling.
 
 Bringing up a **new** freestanding target re-opens the same question. Emit the probe
 sequence for that target with holo rather than reaching for a hardcoded x86-64 buf.

@@ -119,6 +119,57 @@ else
 test_glaze:
 	@echo "test_glaze: skipped (host arch $a is not x86_64)"
 endif
+# test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (love/glaze/fuzz.l), in test_all beside
+# test_holofuzz (~4s: two 3000-case runs). The fuzzer builds 3000 closures at random in the
+# shapes the natjit creation hook recognizes -- one per lane, each applied fully -- and
+# this runs it TWICE against the SAME binary: once plain, once under LOVE_NO_GLAZE=1.
+# The two stdouts must match byte for byte. The glaze is only ever allowed to be FASTER.
+#
+# Why a fuzz and not more asserts: a lane is a recognizer + codegen PAIR, and when they
+# disagree the failure is not a crash, it is a plausible number -- cggir's `?` chain ends
+# in a silent (), so an operand it cannot emit compiles to NO CODE and leaves whatever the
+# accumulator last held. That is invisible to a corpus that only feeds the lanes what they
+# like, so the fuzzer's leaf pools carry what they CANNOT hold (strings, noms, lists, gems)
+# and the laws are about DECLINING. It found 215/3000 on the pre-fix binary (the group lane
+# gating on jgir-ok? with no grpfix); test/glaze.l carries the four shapes it reduced to.
+#
+# The `fires=` trailer is the PROOF OF WORK and is checked, not just printed: nonzero in the
+# glazed run, zero in the other. A green diff over a glaze that never fired is not evidence,
+# and that is exactly how this gate would rot. stderr is dropped on purpose -- a free-name
+# leaf is a helpless scare that answers the zero point, and the two runs fold different
+# branches so they scare a different number of times; stdout is what must agree.
+# x86-64 / aarch64: the arches the glaze emits for. Elsewhere nothing fires and the
+# fires check would read a skip as a failure.
+.PHONY: test_glazefuzz
+ifneq ($(filter $a,x86_64 aarch64),)
+test_glazefuzz: host
+	@echo TEST love/glaze/fuzz.l "(glaze differential fuzz: glazed vs interpreted)"
+	@on=out/host/.gfuzz_on.out; off=out/host/.gfuzz_off.out; \
+	  $m love/glaze/fuzz.l > $$on 2>/dev/null \
+	    || { echo "FAIL glazefuzz: the GLAZED run died"; exit 1; }; \
+	  LOVE_NO_GLAZE=1 $m love/glaze/fuzz.l > $$off 2>/dev/null \
+	    || { echo "FAIL glazefuzz: the INTERPRETED run died"; exit 1; }; \
+	  fon=`sed -n 's/^fires=//p' $$on`; foff=`sed -n 's/^fires=//p' $$off`; \
+	  [ -n "$$fon" ] && [ -n "$$foff" ] \
+	    || { echo "FAIL glazefuzz: no fires= trailer -- a run stopped early"; exit 1; }; \
+	  [ "$$fon" -gt 0 ] \
+	    || { echo "FAIL glazefuzz: the glazed run native-backed NOTHING (fires=0) -- the fuzz proved nothing"; exit 1; }; \
+	  [ "$$foff" -eq 0 ] \
+	    || { echo "FAIL glazefuzz: LOVE_NO_GLAZE=1 still fired (fires=$$foff)"; exit 1; }; \
+	  sed '$$d' $$on > $$on.body; sed '$$d' $$off > $$off.body; \
+	  cmp -s $$on.body $$off.body \
+	    || { echo "FAIL glazefuzz: the glaze DISAGREES with the interpreter"; \
+	         echo "  first differing case:"; \
+	         cmp $$on.body $$off.body 2>&1 | head -1; \
+	         n=`cmp $$on.body $$off.body 2>/dev/null | sed -n 's/.*line \([0-9]*\).*/\1/p'`; \
+	         [ -n "$$n" ] && { echo "  glazed: `sed -n $${n}p $$on.body`"; \
+	                           echo "  interp: `sed -n $${n}p $$off.body`"; }; \
+	         exit 1; }; \
+	  echo "  $$fon closures native-backed, `wc -l < $$on.body` cases, all agree"
+else
+test_glazefuzz:
+	@echo "test_glazefuzz: skipped (the glaze emits for x86_64 / aarch64; host arch is $a)"
+endif
 # crew/sat/ -- the CDCL SAT solver app. Portable love (no glaze), so it runs on every arch.
 # Gate = exit 0 AND the sentinel (a reader-stop or a strict-assert scare both miss it).
 .PHONY: test_sat
