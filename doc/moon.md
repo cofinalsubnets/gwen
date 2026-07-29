@@ -524,6 +524,25 @@ two ideas to keep warm as the stages climb, neither committed yet:
    system linker (-no-pie), runs, and matches an all-gcc build; probed live: cc<->
    gcc interop both directions, cc calling libc (abs/strlen), the love.c static
    (name, fn-ptr) table across an R_64 link.
+   7a' NAMED SECTIONS LANDED 2026-07-29 (moon-kernel rung 4): the writer's four
+   fixed sections became a LIST. `objsecs target secs funcs globs weaks locals`
+   takes `(name type flags align forms)` per section and `objelf` is a
+   four-element call to it -- .text/.data/ai_nifs/.image, unchanged and
+   byte-identical (test_fixpoint). the kernel's lays (port/inle/mk{boot,vec}.l)
+   are the other caller, and they want names a compiler never emits: .boot,
+   .boot.text, .note.pvh (SHT_NOTE, which the PVH loader READS), .rodata, .bss
+   (SHT_NOBITS -- it lays its forms for the labels and the size, then writes no
+   file bytes) and a 2 KiB-aligned .text.vectors. one section is one LAY, which
+   is exactly what a section boundary means: a branch inside it resolves in
+   place, a reference across it relocates. the two reloc emitters collapsed into
+   one dispatching on the fixup KIND rather than on the section -- the old split
+   was never the real line, since an executable section carries an abs64 too
+   (`lia`, the hop out of a low mapping), and the merge closed a hole where a
+   cross-section reference fell through to an UNDEF. ⚠ the backend must be
+   REGISTERED, not merely named: a frontend bakes holo with the NATIVE backend
+   only and a cross target joins the cat at runtime, and without it `lay`
+   lowered nothing and the object wrote out whole with a 0-byte .text. objsecs
+   scares (`obj-no-backend`) instead now.
    7b REAL SysV VARARGS LANDED 2026-07-07: cc's variadic ABI is now gcc-compatible,
    so ai_push (a variadic function DEFINED in love.c but CALLED from the gcc-built
    host objects -- love.h declares it) works across the toolchain seam. the va_list

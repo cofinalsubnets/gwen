@@ -25,9 +25,12 @@ stay what they are. drafted 2026-07-28; trued up as rungs land.
   inline-asm section) -- an AT&T/ARM front-end was deliberately deferred, and
   this plan keeps it deferred: the kernel is OURS, so the sites moved to the
   neutral surface instead.
-* **assembly files**, four: <a>/boot.S (the PVH stub -- ~50 lines of .code32
-  before long mode -- and the EL1 MMU stub) and <a>/<a>.S (the exception/IRQ
-  vector stubs, GAS .macro loops, iretq/eret, context plumbing).
+* ~~**assembly files**, four~~ -- GONE since rung 4 below: `port/inle/mkboot.l`
+  and `port/inle/mkvec.l` lay `boot.o` and `vec.o` as holo IR, and no assembler
+  runs in the kernel build at all. what they were: <a>/boot.S (the PVH stub --
+  ~50 lines of .code32 before long mode -- and the EL1 MMU stub) and
+  <a>/<a>.S (the exception/IRQ vector stubs, GAS .macro loops, iretq/eret,
+  context plumbing).
 * ~~**the link**~~ -- OURS since rung 2 below; ld.lld and <a>/<a>.lds are the
   `KLINK=lld` comparison lane. what they said: five named PT_LOADs (boot |
   limine_requests | text | rodata | data), every section vaddr HIGH with an
@@ -173,23 +176,83 @@ what the rung turned up:
   and ours with `divq`. every other op matches instruction for instruction on
   both arches.
 
-### 4. the .S files become LAYS (the mksys precedent)
+### 4. the .S files become LAYS (the mksys precedent) -- LANDED 2026-07-29
 
-the four .S files are exactly mksys.l's class -- register-exact leaves C
-cannot say -- and they port to holo IR lays beside it:
+the four .S files were exactly mksys.l's class -- register-exact leaves C
+cannot say -- and they are holo IR lays beside it now. `port/inle/mkvec.l`
+(the exception/IRQ tail) and `port/inle/mkboot.l` (the bring-up), one file per
+job rather than one per arch, since the scaffold is shared and only the payload
+is per-ISA. the GAS `.macro exc_noerr/exc_err` and `.rept` loops are love loops
+-- the 32 x86 stubs and the 16 aarch64 vector slots generate rather than
+repeat, which is what makes the error-code split and the table shape *stated*
+instead of transcribed. no assembler runs in the kernel build.
 
-* `mkvec.l`: the exception/vector stubs. the GAS `.macro exc_noerr/exc_err`
-  loops become love loops generating the 32 stubs -- strictly nicer than
-  assembler macros. iretq/eret/swapgs come from rung 1.
-* `mkboot.l`: aarch64's EL1 MMU stub is all A64 -- rung 1 ops + what the
-  backend has. x86_64's PVH stub opens with ~50 lines of .code32; holo lays
-  x64 only, so the 32-bit prologue takes a SMALL x86-32 helper table inside
-  the lay (~15 encodings: mov/or/and r32-imm/r32-r32, lgdt, mov-crN,
-  rdmsr/wrmsr, ljmp, the fill loop) -- prefer that over frozen raw bytes;
-  fall back to `('raw ..)` words WITH the source as comments only if the
-  table fights. the PVH protocol is frozen, so this code is write-once.
-* differential: K_TEST behavior on both doors; byte-compare stub-for-stub
-  against clang's .o where label layout allows.
+what the rung needed under it:
+
+* **holo's object writer grew NAMED SECTIONS.** `objelf` emitted exactly four
+  (.text/.data/ai_nifs/.image); the kernel needs .boot, .boot.text, .note.pvh,
+  .rodata, .bss and a 2 KiB-aligned .text.vectors. `objsecs` now takes a LIST of
+  `(name type flags align forms)` and `objelf` is a four-element call to it.
+  one section is one lay, which is what a section boundary means: a branch
+  inside it resolves in place, a reference across it relocates. test_fixpoint
+  says the refactor is byte-identical for hosted objects.
+* **the two relocation emitters became one**, dispatching on the fixup's KIND.
+  the old split (text vs data) was never the real line -- an executable section
+  carries an abs64 too, which is exactly what the hop out of the low mapping
+  is. it also closed a hole: a reference from one section to a label in another
+  used to fall through to an UNDEF.
+* **three ops and a reloc kind.** `lia` -- the label's ABSOLUTE (linked)
+  address, movabs on x86 and an inline literal on aarch64 -- because `la`
+  answers where a label IS RUNNING and the whole difficulty here is that the
+  image is linked high and runs low until the MMU comes on. `push` takes an
+  immediate (the stubs). `ldseg` reads a segment register, ldcr's twin (archinit
+  reads CS: the three doors leave three different selectors). `abs32` on x86,
+  for the note's `.long pvh32 - KVMA`.
+* **the x86-32 helper table lives in mkboot.l**, ~20 encodings, each
+  llvm-mc-checked and each carrying its AT&T source in the comment -- holo lays
+  x64, and teaching it a mode nothing else in the tree needs would be the wrong
+  shape. the PVH protocol is frozen, so it is write-once. it came out
+  instruction-for-instruction identical to GAS's.
+
+the differential, run on every piece while it was written: clang assembles the
+old .S, we lay ours, compare. `.rodata` (the ISR and gate-type tables) and
+`.boot` (the page tables and the GDT) came out BYTE-IDENTICAL, the 32-bit
+prologue instruction-for-instruction, and the relocations matched addend for
+addend including the KVMA fold. it caught a real bug -- a mistyped TCR_EL1
+constant -- which is the argument for doing it that way rather than reading
+twice.
+
+what the rung turned up:
+
+* **`lay` answered an empty stream for an unregistered backend.** a frontend
+  bakes holo with the NATIVE backend only and a cross target joins the cat at
+  runtime; without it the object still wrote out whole, with a 0-byte .text, and
+  the failure surfaced only as a boot that went nowhere. `objsecs` checks the
+  backend is registered now, not merely named.
+* **an immediate slot took a SYMBOL and assembled it.** every other operand
+  refuses a stranger through `rn` (badreg), but an immediate gets arithmetic
+  done to it, and a symbol survives arithmetic: `(li r6 a-tbl)` inside a QUOTED
+  IR block (where the name never evaluated) assembled quietly to the wrong
+  constant. both `li` emitters check now -- `badimm`.
+* ⚠ **aarch64's `lia` wants an `('align 8)` in front of it.** the literal sits
+  at the instruction's own address + 8, so it is 8-byte aligned only when the
+  site is, and an emitter cannot know its own address. a 4-mod-8 literal is an
+  unaligned 8-byte load: fine on Normal memory while SCTLR.A is clear, an
+  Alignment fault on Device memory whatever SCTLR says -- which is what the
+  world looks like before the MMU comes on, where a boot stub most wants this.
+
+the gate is `test_vec` (test/gate/vec.sh, in test_all). test_kernel already
+runs most of the lay by booting on it -- nothing boots without archinit's IDT,
+and the corpus is FED over the serial line and CLOCKED by the timer, so
+uart_isr and timer_isr run thousands of times per gate. what a green boot never
+touches is the part that runs when something goes wrong, so the gate makes
+something go wrong: `(fault n)` raises a real CPU exception and the report is
+read back. #PF is the load-bearing case -- an error-code vector that reports
+`err` AND `cr2`, so a stub on the wrong side of the split shifts the frame and
+misreports all three. the 27 stubs no boot reaches are checked against the
+architecture's own error-code list. negative-tested three ways (a vector moved
+across the split, the aarch64 IRQ slot moved, the table alignment dropped); the
+first prints `rip=2`, the shifted frame itself.
 
 ### 5. the flip
 
@@ -226,8 +289,13 @@ and it landed the value early: our linker is under the shipping kernel on
 both arches and all three doors. 1 followed, pure ADDITION -- new ops, no
 caller yet, nothing in the tree lowered differently. 3 then gave those ops
 their first callers and, with them, the differential the flip will lean on.
-what is left is 4 -> 5. 4 is two lay files (~mksys.l x 2-3 in size), 5 is
-makefile + gates. the probes above belong before 5 (rung 4 does not depend
-on them). nothing before 5 disturbs the clang COMPILER lanes, so the tree
-stays green the whole climb -- rung 3 changed 40 call sites and the kernel
-gates did not move (3562 tests, both arches, all three doors).
+4 retired the last assembler. what is left is 5 alone: makefile + gates. the
+probes above belong before it.
+
+nothing before 5 disturbs the clang COMPILER lanes, and the tree stayed green
+the whole climb -- rung 3 changed 40 call sites and rung 4 replaced every
+assembly file in the kernel, and the kernel gates have not moved once: 3562
+tests, both arches, both linkers, all three doors.
+
+so what clang still does, after four rungs, is COMPILE C. that is the whole
+remaining island, and rung 5 is the one line of kernel.mk that steps off it.

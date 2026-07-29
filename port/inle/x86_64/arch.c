@@ -1,5 +1,5 @@
 // x86_64 architecture-specific C: CPU-exception handling and the COM1
-// serial console. the stubs in x86_64.asm (exc_stub_0 .. exc_stub_31,
+// serial console. the stubs in mkvec.l (exc_stub_0 .. exc_stub_31,
 // funnelling through exc_common) build the frame below and call
 // k_exception; uart_isr funnels IRQ4 into k_uart (see the bottom).
 #include <stdint.h>
@@ -73,7 +73,7 @@ void k_exception(struct k_frame *fr) {
 // it touches nothing but I/O ports, so it still works when the heap,
 // console buffer, or framebuffer are unusable. input is interrupt-
 // driven: serial_init enables the UART receive interrupt (IRQ4),
-// uart_isr (x86_64.asm) funnels it here, and k_uart drains every ready
+// uart_isr (mkvec.l) funnels it here, and k_uart drains every ready
 // byte into the same input queue kb_int feeds. bytes pass through
 // verbatim -- a serial terminal already sends CR for Enter, DEL for
 // Backspace, and ESC-prefixed arrow sequences, all of which the l

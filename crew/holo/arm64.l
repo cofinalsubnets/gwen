@@ -18,14 +18,23 @@
    ;;    an UNNAMED scratch the indexed stores borrow. `lr` (x30) and `fp` (x29) are exposed by name so
    ;;    a callee that makes nested calls can spill its return address (BL clobbers x30) -- aarch64-only,
    ;;    no x86 analogue (CALL/RET there keep the return address on the stack implicitly). --
-   ;; abstract number = hardware x-number (identity), so x15..x18 are simply ABSENT: x16/x17 are the
-   ;; IP0/IP1 scratch (the indexed stores borrow x16) and x18 is platform-reserved. r19..r28 are the
-   ;; CALLEE-SAVED bank -- a glaze's args + OVF anchor live here so they survive nested `bl` (call) sites.
+   ;; abstract number = hardware x-number (identity). r19..r28 are the CALLEE-SAVED bank -- a glaze's
+   ;; args + OVF anchor live here so they survive nested `bl` (call) sites.
+   ;; ⚠ x16 (IP0) is BOTH nameable and BORROWED: the indexed stores and the far-memory lane
+   ;; materialize their address in it (arm64-far below), so it holds nothing across those. mooncc
+   ;; never asks for it, which is why the borrow is invisible there -- a hand-written lay that names
+   ;; r16 must keep its own value out of the way of an `stx`/`ldx` or a beyond-12-bit ld/st.
    arm64-regs (tabof
         `(('sp >< 31) ('fp >< 29) ('lr >< 30)
            ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
            ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
            ('r10 >< 10) ('r11 >< 11) ('r12 >< 12) ('r13 >< 13) ('r14 >< 14) ('r15 >< 15)
+           ; x16/x17 (the veneer scratch IP0/IP1) and x18 (the platform register)
+           ; are SAYABLE but never allocated -- mooncc names its own file (gen.l)
+           ; and asks for none of them. the kernel's IRQ path does: it saves
+           ; x0..x18 because the interrupted code is compiler output free to hold
+           ; a live value in any caller-saved register, this trio included.
+           ('r16 >< 16) ('r17 >< 17) ('r18 >< 18)
            ('r19 >< 19) ('r20 >< 20) ('r21 >< 21) ('r22 >< 22) ('r23 >< 23) ('r24 >< 24)
            ('r25 >< 25) ('r26 >< 26) ('r27 >< 27) ('r28 >< 28)))
 
@@ -53,8 +62,15 @@
    ;; lane extract is //% not &/>> -- a movz constant can be a full 64-bit word >= 2^63 (a BIGNUM in love,
    ;; e.g. the map hash mult), on which `&` drops the high limb (cf. le64). negatives normalize into [0,2^64).
    (arm64-lane u k) ((u // (k 65536)) % 65536)                                   ; the k-th 16-bit lane (65536^k via (k 65536))
+   ;; ⚠ the immediate must BE a number. every other operand slot is a register
+   ;; name and refuses a stranger through `rn` (badreg), but an immediate slot
+   ;; takes arithmetic on whatever arrives -- and a symbol survives that
+   ;; arithmetic, so `(li r6 a-tbl)` in a QUOTED IR block (where the name never
+   ;; evaluated) assembled quietly to the wrong constant. one lit-check turns
+   ;; the whole class into a scare at the instruction that has it.
    (arm64-li d imm)
-      (: dn (rn d) u (? (imm < 0) (imm + 18446744073709551616) imm)
+      (: _ (? (constellation? imm) 0 (scare 'badimm imm))
+         dn (rn d) u (? (imm < 0) (imm + 18446744073709551616) imm)
          l0 (arm64-lane u 0) l1 (arm64-lane u 1) l2 (arm64-lane u 2) l3 (arm64-lane u 3)
          (catall `(
             (le32 (0xD2800000 | ((l0 << 5) | dn)))                              ; movz d, l0
@@ -189,6 +205,28 @@
    ;; a code address inside a runtime-mmap'd W^X blob (the glaze's call-out resume point) -- a cask offset is
    ;; word- not page-aligned, so ADRP+ADD would compute the wrong page. x86's la (rip-rel lea) is already this.
    (arm64-lar d label)   (: dn (rn d) `((fix 4 'adr21 label (0x10000000 | dn))))
+   ;; lia: the label's ABSOLUTE (linked) address in d. la and lar both answer where
+   ;; the label IS RUNNING -- both are pc-relative, which is exactly right until the
+   ;; two disagree, and in the kernel's bring-up they do: the image is LINKED HIGH
+   ;; and RUNS LOW until the MMU comes on, so the hop into the high mapping needs
+   ;; the address the LINKER assigned, not the one the pc implies. that address is
+   ;; a full 64-bit word, so it rides an inline literal (what `ldr xd, =sym`
+   ;; assembles to) rather than an immediate:
+   ;;   ldr xd, .+8    ; imm19 = 2, the literal two words ahead
+   ;;   b   .+12       ; imm26 = 3, step over it
+   ;;   .quad label    ; an abs64 fixup -- never resolvable in a .o, always a reloc
+   ;; the two offsets are CONSTANTS of the shape, so this needs no labels of its
+   ;; own and no gensym. x86-64 says the same thing in one movabs.
+   ;; ⚠ PUT AN ('align 8) IN FRONT OF IT. the literal sits at site+8, so it is
+   ;; 8-byte aligned only when the SITE is, and an emitter cannot know its own
+   ;; address. a 4-mod-8 literal is an unaligned 8-byte load: permitted on Normal
+   ;; memory while SCTLR.A is clear, and an Alignment FAULT on Device memory
+   ;; whatever SCTLR says -- which is exactly what the world looks like before
+   ;; the MMU comes on, where a boot stub is most likely to want this.
+   (arm64-lia d label)   (: dn (rn d)
+                            ((le32 (0x58000040 | dn))       ; ldr xd, .+8
+                             + (le32 0x14000003)            ; b .+12
+                             + `((fix 8 'abs64 label 0))))
    (arm64-br cond label) (: cc (look arm64-cc cond 'badcc)
                             `((fix 4 'b19 label (0x54000000 | cc))))
    ;; jmpr: BR Xn -- branch to the address held in a register (the glaze's Continue / deopt tail).
@@ -377,7 +415,7 @@
            ('div >< arm64-div) ('rem >< arm64-rem) ('udiv >< arm64-udiv) ('urem >< arm64-urem)
            ('ldx >< arm64-ldx) ('stx >< arm64-stx) ('leax >< arm64-leax)
            ('ldxb >< arm64-ldxb) ('stxb >< arm64-stxb)
-           ('call >< arm64-call) ('la >< arm64-la) ('lar >< arm64-lar)
+           ('call >< arm64-call) ('la >< arm64-la) ('lar >< arm64-lar) ('lia >< arm64-lia)
            ('movsd >< arm64-fmov)                            ; -- scalar-double FP --
            ('addsd >< (arm64-fp3op 'addsd)) ('subsd >< (arm64-fp3op 'subsd))
            ('mulsd >< (arm64-fp3op 'mulsd)) ('divsd >< (arm64-fp3op 'divsd))

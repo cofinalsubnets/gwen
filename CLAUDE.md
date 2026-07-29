@@ -26,8 +26,8 @@
 ;   lane fell through to garbage and now loops (or reads OOB and segfaults), e.g. a baked lcat header
 ;   came up EMPTY (a failed love0 gen left a 0-byte .h that make thinks is fresh) so `assemble` is
 ;   unbound and the glaze's map lane emits nothing. one bug, two faces -- infinite loop or crash.
-; * the kernel has THREE boot doors, one ELF per arch: -kernel (x86_64/boot.S's PVH stub and
-;   aarch64/boot.S's EL1 MMU stub -- what test_kernel + test_kernel_arm64 ride, nothing
+; * the kernel has THREE boot doors, one ELF per arch: -kernel (x86_64's PVH stub and aarch64's
+;   EL1 MMU stub -- what test_kernel + test_kernel_arm64 ride, nothing
 ;   downloaded), UEFI (port/inle/uefi/ -- our own BOOTX64.EFI, mooncc-built + holo-laid PE32+;
 ;   `make uefi` for the ESP, test_uefi to gate it; doc/uefi.md)
 ;   and limine (the iso/hdd + interactive run-* lanes). out/dl (ovmf/limine, nuked by
@@ -35,7 +35,12 @@
 ;   the LINK is OURS on every door: holo's kernel lane (ldkern -- the note, five page-aligned
 ;   PT_LOADs, p_paddr = p_vaddr - bias, entry by symbol, kimage_end), driven by port/inle/klink.l
 ;   where the four per-arch numbers live. `KLINK=lld` puts ld.lld + the .lds back, the comparison
-;   lane. the COMPILER is still clang there -- the last island; doc/moon-kernel.md is the ladder off it.
+;   lane. the ASSEMBLY is ours too: no .S anywhere -- port/inle/mkboot.l lays the bring-up (both
+;   arches, the PVH stub's 32-bit prologue included) and port/inle/mkvec.l the interrupt tail
+;   (the 32 x86 stubs and the 16 aarch64 vector slots GENERATE, off a love loop, where GAS
+;   repeated a .macro), mksys.l's class and mksys.l's shape. `make test_vec` faults on purpose
+;   and reads the report -- the one way to reach a stub, since a green boot never faults.
+;   the COMPILER is still clang there -- the last island; doc/moon-kernel.md is the ladder off it.
 ;   editing love.h needs no clean (every object deps on $(love_h), the lcat'd headers re-lay on love0).
 ; * CHECK A .l EDIT for balance before trusting it: `out/host/love crew/libra/libra.l <file>` (or
 ;   `make lint` over every tracked .l) -- LIBRA ⚖, the .l balance tool (crew/libra/, doc/libra.md),

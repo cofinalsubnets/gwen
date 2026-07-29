@@ -356,6 +356,18 @@ test_drv: host out/host$(hsuf)/mooncc
 .PHONY: test_asmops
 test_asmops: host out/host$(hsuf)/mooncc
 	@sh test/gate/asmops.sh $(ho)
+# test_vec -- the INTERRUPT gate (moon-kernel rung 4). test_kernel already runs
+# most of port/inle/mkvec.l's lay by booting on it; this raises a real CPU
+# exception with (fault n) and reads the report, which is the only way to reach
+# the 32 stubs and the fault vector, then checks the stubs no boot can reach
+# against the architecture's own error-code list. ~12s x86_64, ~5s aarch64
+# (a boot each, stopped the moment its report lands). In test_all.
+.PHONY: test_vec
+test_vec: host
+	@$(MAKE) -s a=x86_64 kernel
+	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf out/free/x86_64/port/inle/x86_64/vec.o
+	@$(MAKE) -s a=aarch64 kernel
+	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/port/inle/aarch64/vec.o
 # THE FIXPOINT (self-host rung 2): the default love IS mooncc-built now; this
 # gate has it rebuild ITSELF -- love1 (love0's lane, relinked) bakes its own
 # compiler image, recompiles every TU, links love2, and the two must be

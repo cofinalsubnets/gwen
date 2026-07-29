@@ -133,7 +133,7 @@
            ('push >< 1) ('pop >< 1) ('neg >< 1) ('not >< 1) ('inc >< 1) ('dec >< 1) ('tp >< 1)
            ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)
            ('li >< 2) ('mov >< 2) ('cmp >< 2) ('test >< 2) ('set >< 2) ('br >< 2) ('br8 >< 2)
-           ('la >< 2) ('lar >< 2) ('clz >< 2)
+           ('la >< 2) ('lar >< 2) ('lia >< 2) ('ldseg >< 2) ('clz >< 2)
            ('shl >< 2) ('shr >< 2) ('sar >< 2) ('rol >< 2) ('ror >< 2)
            ('shlv >< 2) ('shrv >< 2) ('sarv >< 2)
            ('movupd >< 2) ('movsd >< 2) ('movhlps >< 2) ('unpcklpd >< 2)

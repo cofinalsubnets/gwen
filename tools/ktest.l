@@ -22,7 +22,7 @@
    ovmf (cap (cup a))
    arch (: x (cup (cup a)) (? (two? x) (cap x) "x86_64"))   ; optional 3rd arg; x86_64 by default
    ; a .elf boots direct: qemu's own loader reads the PVH note and enters our
-   ; boot.S stub -- nothing downloaded, nothing vendored.
+   ; bring-up stub (mkboot.l) -- nothing downloaded, nothing vendored.
    elf? (: n (tally iso) (&& (> n 4) (sub-at iso (- n 4) ".elf" 0)))
    ; a DIRECTORY is an ESP: qemu fakes a FAT volume over it and the firmware
    ; runs EFI/BOOT/BOOTX64.EFI -- ours, the uefi door. (stat's mode is at 2;

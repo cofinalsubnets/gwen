@@ -3,7 +3,7 @@ OUTPUT_FORMAT(elf64-x86-64)
 
 /* The ELF entry is the limine door (limine enters e_entry in long mode, high
    half mapped). The PVH door (qemu -kernel, no bootloader/firmware) enters
-   through the .note.pvh ELF note instead -- boot.S's 32-bit stub, which does
+   through the .note.pvh ELF note instead -- mkboot.l's 32-bit stub, which does
    the bring-up limine would have done and then calls kmain itself. */
 ENTRY(kmain)
 
@@ -25,7 +25,7 @@ SECTIONS
     /* We want to be placed in the topmost 2GiB of the address space, for optimisations */
     /* and because that is what the Limine spec mandates (every PT_LOAD vaddr high). */
     /* The PVH loader loads by PHYSICAL address instead, so every section carries an */
-    /* AT() LMA of vaddr - KVMA: the image lands at 2 MiB and boot.S's 32-bit code, */
+    /* AT() LMA of vaddr - KVMA: the image lands at 2 MiB and mkboot.l's 32-bit code, */
     /* executing at its physical address before paging, subtracts KVMA by hand. */
     . = 0xffffffff80000000 + 0x200000;
 
@@ -33,7 +33,7 @@ SECTIONS
         KEEP(*(.note.pvh))
     } :note
 
-    /* boot.S: page tables + GDT (.boot) and the 32/64-bit ladder (.boot.text). */
+    /* mkboot.l: page tables + GDT (.boot) and the 32/64-bit ladder (.boot.text). */
     . = ALIGN(CONSTANT(MAXPAGESIZE));
     .boot : AT(ADDR(.boot) - 0xffffffff80000000) {
         KEEP(*(.boot))

@@ -19,7 +19,7 @@ differs.
 
 | door | brought up by | what it needs | where it shines |
 | --- | --- | --- | --- |
-| PVH | `port/inle/x86_64/boot.S` | nothing (`qemu -kernel`) | the gate: no downloads, ~4.5s |
+| PVH | `port/inle/mkboot.l` | nothing (`qemu -kernel`) | the gate: no downloads, ~4.5s |
 | UEFI | this loader | the machine's own firmware | real hardware, framebuffer console |
 | limine | limine | a downloaded bootloader + firmware image | the historical lane, aarch64 |
 

@@ -1,7 +1,7 @@
 /* Tell the linker that we want an aarch64 ELF64 output file */
 OUTPUT_FORMAT(elf64-littleaarch64)
 
-/* The ELF entry is boot.S's stub, which serves BOTH doors: limine enters it
+/* The ELF entry is mkboot.l's stub, which serves BOTH doors: limine enters it
    with the MMU on and it branches straight to kmain; qemu -kernel enters it
    at its physical address with the MMU off (qemu translates a high e_entry
    through the load segments -- probed) and it does the bring-up limine would
@@ -30,7 +30,7 @@ SECTIONS
     /* writes there. */
     . = 0xffffffff80000000 + 0x200000;
 
-    /* boot.S: translation tables (.boot) and the EL1 MMU ladder (.boot.text). */
+    /* mkboot.l: translation tables (.boot) and the EL1 MMU ladder (.boot.text). */
     .boot : AT(ADDR(.boot) - 0xffffffff80000000 + 0x40000000) {
         KEEP(*(.boot))
         KEEP(*(.boot.text))

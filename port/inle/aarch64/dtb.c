@@ -1,4 +1,4 @@
-// dtb -> kboot: the C half of boot.S's hand-off (x86_64/pvh.c's twin). Runs
+// dtb -> kboot: the C half of mkboot.l's hand-off (x86_64/pvh.c's twin). Runs
 // high, MMU on, with the stub's hhdm window (0xffff8000_00000000 over
 // physical 0..4G) already mapped; reads the flat device tree qemu lays at
 // the RAM base and fills kboot the way limine_to_kboot fills it on the iso

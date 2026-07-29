@@ -98,6 +98,19 @@
       `("sys.lidt"    "0f015e08"              '((lidt r5 8)))                 ; lidt [rsi+8]
       `("sys.invlpg"  "0f013f410f017808"      '((invlpg r6 0) (invlpg r7 8))) ; invlpg [rdi] ; invlpg [r8+8]
       `("sys.ltr"     "0f00d8410f00d8"        '((ltr r0) (ltr r7)))           ; ltr ax ; ltr r8w
+      ;; the SEGMENT registers, ldcr's twin: 8C /r with the sreg number in ModRM.reg.
+      ;; REX.W widens the destination to the whole register, zero-extended -- no movzx.
+      `("sys.ldseg"   "488cc8498cc9"          '((ldseg r0 1) (ldseg r8 1)))   ; mov rax,cs ; mov r9,cs
+      ;; push takes an immediate as well as a register -- 6A ib / 68 id, both
+      ;; SIGN-extended into the 64-bit slot. the exception stubs are the caller.
+      `("push.imm"    "6a006a1f682c010000"    '((push 0) (push 31) (push 300)))
+      `("push.reg"    "504150"                '((push r0) (push r7)))
+      ;; lia: the label's ABSOLUTE (linked) address, movabs B8+rd io. never
+      ;; resolvable in a .o -- the eight zeros are the abs64 placeholder a
+      ;; relocation overwrites. `la` answers where the label RUNS; these part
+      ;; company exactly where the kernel is linked high and runs low.
+      `("lia"         "48b8000000000000000049b90000000000000000"
+                                              '((label k) (lia r0 k) (lia r8 k)))
       ;; tp: the thread pointer -- mov d, fs:[0]
       `("tp"          "64488b042500000000"    '((tp r0)))            ; mov rax, fs:[0]
       `("tp.hi"       "644c8b142500000000"    '((tp r9)))            ; mov r10, fs:[0]
@@ -426,7 +439,18 @@
       ;; `mov` cannot say it -- ORR reads encoding 31 as XZR -- so it is `lea .. 0`, add #0, and
       ;; `mov` SCARES on sp rather than quietly answer the zero register.
       `("a64.sp.read"  "e9030091"          '((lea r9 sp 0)))             ; mov x9, sp
-      `("a64.sp.write" "3f010091"          '((lea sp r9 0))))            ; mov sp, x9
+      `("a64.sp.write" "3f010091"          '((lea sp r9 0)))             ; mov sp, x9
+      ;; lia: the ABSOLUTE (linked) address, which no aarch64 immediate can hold --
+      ;; so an inline literal, exactly what `ldr xd, =sym` assembles to.
+      ;;   ldr xd, .+8 ; b .+12 ; .quad <the abs64 placeholder a reloc overwrites>
+      ;; the two offsets are constants of the shape, so it needs no label of its own.
+      `("a64.lia"      "4900005803000014000000000000000040000058030000140000000000000000"
+                                           '((label k) (lia r9 k) (lia r0 k)))
+      ;; x16/x17/x18 are sayable now -- the kernel's IRQ path saves x0..x18 because
+      ;; the interrupted code may hold a live value in any of them. ⚠ x16 stays the
+      ;; borrowed scratch of the indexed/far accesses; these plain stores are in range.
+      `("a64.ip.regs"  "f00300f9f10700f9f20b00f9"
+                                           '((st sp 0 r16) (st sp 8 r17) (st sp 16 r18))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
    ;; -- the thumb2 backend (crew/holo/thumb2.l): the SAME neutral IR, a THIRD target -- ARMv7E-M

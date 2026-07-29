@@ -1,6 +1,6 @@
 // aarch64 architecture-specific C: the PL011 serial console, the GICv2
 // interrupt controller, the ARM generic timer, and CPU-exception
-// reporting. the exception vector table itself lives in aarch64.S;
+// reporting. the exception vector table itself is laid by port/inle/mkvec.l;
 // archinit points VBAR_EL1 at it. this is the aarch64 counterpart of
 // x86_64/arch.c -- same contract (archinit, serial_init, serial_putc,
 // k_reset), different hardware.
@@ -22,7 +22,7 @@ extern void cb_putc(struct cb*, char);
 extern struct cb *kcb;
 extern void fbdraw(void);
 
-// the exception vector table (aarch64.S).
+// the exception vector table (mkvec.l).
 extern uint8_t vectors[];
 
 // --- QEMU 'virt' machine fixed MMIO layout ---------------------------
@@ -180,7 +180,7 @@ static void timer_init(void) {
   k_wr_cntp_ctl_el0(1); }               // enable
 
 // --- interrupt dispatch ----------------------------------------------
-// reached from the IRQ vector (aarch64.S). claim the interrupt, handle
+// reached from the IRQ vector (mkvec.l). claim the interrupt, handle
 // it, then signal completion. an INTID of 1020+ is the GIC's spurious
 // marker and must not be acknowledged.
 void k_irq(void) {

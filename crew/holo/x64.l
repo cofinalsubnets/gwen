@@ -75,8 +75,12 @@
    ;; high regs to 6); C7 /0 id sign-extends a negative signed-32 (7 bytes);
    ;; else the 10-byte movabs (B8+rd io). li density is high (every constant
    ;; and every call-staged argument), so the short form is a real text lever.
+   ;; ⚠ the immediate must BE a number -- see arm64-li's note. every other
+   ;; operand slot refuses a stranger through `rn`; this one does arithmetic,
+   ;; and a symbol survives arithmetic and assembles to a quiet wrong constant.
    (emit-li d imm)
-      (: dn (rn d)
+      (: _ (? (constellation? imm) 0 (scare 'badimm imm))
+         dn (rn d)
          (? (&& (0 <= imm) (imm <= 4294967295))
             ((? ((hi dn) = 0) () `((rex 0 0 0 1))) + ((184 | (lo dn)) >< (le32 imm)))
             (fits32 imm)
@@ -201,7 +205,15 @@
          (`((rex 1 0 0 (hi dn)) 211) + `((modrm 3 ext (lo dn)))))
 
    ;; push/pop: 0x50+rd / 0x58+rd, a bare REX.B (0x41) for the extended registers, no REX.W.
-   (emit-push s) (: sn (rn s) (? (sn >= 8) `(65 (80 | (lo sn))) `((80 | sn))))
+   ;; push takes a register OR an immediate -- 6A ib for a signed byte, 68 id for a
+   ;; signed dword, both SIGN-extended to the full 64-bit slot. the kernel's
+   ;; exception stubs are the caller: each pushes its vector number, and the
+   ;; twenty-two the CPU pushes NO error code for push a dummy 0 first, so every
+   ;; frame reaching the C handler has one shape.
+   (emit-push s) (? (reg? s) (: sn (rn s) (? (sn >= 8) `(65 (80 | (lo sn))) `((80 | sn))))
+                    (fits8 s) `(106 (byte s))
+                    (fits32 s) (104 >< (le32 s))
+                    (scare 'push-imm s))
    (emit-pop  d) (: dn (rn d) (? (dn >= 8) `(65 (88 | (lo dn))) `((88 | dn))))
 
    ;; in-place unary: F7 /3 neg, F7 /2 not, FF /0 inc, FF /1 dec.
@@ -216,6 +228,24 @@
    ;; (label)+(raw ..) is addressable with no new fixup kind.
    (emit-la d label)
       (: dn (rn d) `((rex 1 (hi dn) 0 0) 141 (modrm 0 (lo dn) 5) (fix 4 'rel32 label 0)))
+   ;; lia: the label's ABSOLUTE (linked) address -- movabs, B8+rd io under REX.W.
+   ;; `la` answers where the label IS RUNNING, which is the same thing until the
+   ;; two part company, and in the kernel's bring-up they do: the image is LINKED
+   ;; HIGH and RUNS LOW until paging comes on, so the hop into the high mapping
+   ;; needs the address the LINKER assigned. abs64 is never resolvable inside a
+   ;; .o, so this always leaves a relocation. aarch64 says it in three words.
+   (emit-lia d label)
+      (: dn (rn d) `((rex 1 0 0 (hi dn)) (184 | (lo dn)) (fix 8 'abs64 label 0)))
+   ;; ldseg: d <- the segment register n (ES CS SS DS FS GS = 0..5). 8C /r, the
+   ;; SREG number in ModRM.reg and the GPR in rm -- REX.W widens the destination
+   ;; to the full register, zero-extended, so no separate movzx. the twin of
+   ;; ldcr below; the kernel reads CS to learn which selector the bootloader left
+   ;; it running under, since the IDT entries must name a segment that is valid
+   ;; in the CURRENT GDT (limine leaves 0x28, OVMF 0x38).
+   (emit-ldseg d n)
+      (: dn (rn d)
+         _ (? (&& (n >= 0) (n <= 5)) 0 (scare 'x64-segnum n))
+         `((rex 1 0 0 (hi dn)) 140 (modrm 3 n dn)))
    (emit-jmp  label)     `(233 (fix 4 'rel32 label 0))
    (emit-br cond label)  `(15 (jcc-op cond) (fix 4 'rel32 label 0))
    ;; the 2-byte short forms the relaxer (holo.l relax) rewrites in-range branches to:
@@ -353,6 +383,7 @@
            ('urem >< (\ d a b t (emit-div 1 0 d a b)))
            ('call >< emit-call)
            ('la >< emit-la) ('lar >< emit-la)                ; lar == la on x86 (rip-rel lea, already translation-invariant); arm64 differs (ADR vs ADRP)
+           ('lia >< emit-lia) ('ldseg >< emit-ldseg)
            ('cmppd >< emit-cmppd) ('movmskpd >< emit-movmskpd)
            ('cvtsi2sd >< emit-cvtsi2sd) ('cvttsd2si >< emit-cvttsd2si)
            ('movqxr >< emit-movqxr) ('movqrx >< emit-movqrx)
@@ -390,6 +421,13 @@
                             _ (? (fits8 d) 0 (scare 'rel8-range d))   ; pessimistic layout; this scare
                             `((byte d)))                              ; is the loud net under that proof
          (kind = 'abs64) (le64 (target + aux))     ; aux = a byte ADDEND (&arr[i]/&s.field: label + constant offset)
+         ;; abs32: the same absolute address TRUNCATED to four bytes. only ever
+         ;; correct where the sum provably fits, and the kernel's boot stub is
+         ;; where it does -- `pvh32 - KVMA` is a high-half address minus the
+         ;; high-half base, which is the low physical address qemu's PVH loader
+         ;; jumps to. the linker range-checks its own half (link.l, kind 10).
+         (kind = 'abs32) (: v ((target + aux) % 4294967296)
+                            (le32 (? (v < 0) (v + 4294967296) v)))
          (scare 'badfix kind))
 
    ;; -- register the backend under its target names. --

@@ -8,8 +8,8 @@
 # kernel (freestanding) build -- outputs under out/free. Was free/Makefile.
 # The inle kernel lives in port/inle/: arch-independent glue is kmain.c + k.h
 # there, per-arch code in port/inle/<a>/ (arch.c, *.S, *.lds). Each arch
-# carries its own `qemu -kernel` bring-up (x86_64/boot.S's PVH stub, what
-# test_kernel rides; aarch64/boot.S's EL1 MMU stub, what test_kernel_arm64
+# carries its own `qemu -kernel` bring-up (x86_64's PVH stub (mkboot.l), what
+# test_kernel rides; aarch64's EL1 MMU stub (same file), what test_kernel_arm64
 # rides -- no bootloader/firmware on either), and the Limine iso/hdd lanes
 # below serve the interactive run-* targets (framebuffer console).
 # ====================================================================
@@ -33,10 +33,8 @@ KLD ?= ld.lld
 KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1)
 
 k_arch_c = $(wildcard $(R)/port/inle/$a/*.c)
-k_asm = $(wildcard $(R)/port/inle/$a/*.asm)
 k_free_c = $R/port/inle/kmain.c
 k_shared_c = $(love_c) $(f_c) $(c_c)
-k_S = $(wildcard $(R)/port/inle/$a/*.S)
 k_h = $(love_h) $(wildcard *.h $(R)/port/inle/*.h $(R)/port/inle/$a/*.h)
 
 k_odir = $(ko)/$a$(ksuf)
@@ -44,9 +42,11 @@ k_odir = $(ko)/$a$(ksuf)
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
 k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
 k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
-k_S_o = $(k_S:$(R)/%.S=$(k_odir)/%.o)
-k_asm_o = $(k_asm:$(R)/%.asm=$(k_odir)/%.o)
-k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_S_o) $(k_asm_o)
+# the two LAYS: what used to be four .S files (doc/moon-kernel.md rung 4).
+# boot.o is the bring-up, vec.o the interrupt tail; both are holo IR written in
+# love (port/inle/mk{boot,vec}.l), so no assembler runs in this build at all.
+k_lay_o = $(k_odir)/port/inle/$a/boot.o $(k_odir)/port/inle/$a/vec.o
+k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o)
 
 # The kernel runs the GENERATIONAL collector (the host default), BOUNDED by g->budget: kmain sums the
 # boot memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob). Without
@@ -85,7 +85,6 @@ kldflags_x86_64 = -m elf_x86_64
 kldflags_aarch64 = -m aarch64elf
 
 kcc = $(KCC) $(kcflags) $(kcflags_$a) $(kcppflags) $(kcc_if_clang)
-k_nasmflags := -f elf64 -g -F dwarf -Wall -w-reloc-abs-qword -w-reloc-abs-dword -w-reloc-rel-dword
 
 kernel: $(ko)/love-$a$(ksuf).elf
 
@@ -127,15 +126,38 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib
 # l.o carries the version string (love_version.h); recompile it when the id changes.
 $(k_odir)/love.o: out/lib/love_version.h
 
-$(k_odir)/%.o: $(R)/%.S $(k_h)
-	@echo AS	$@
+# The two LAYS. holo's object writer (crew/holo/obj.l's objsecs) takes a list of
+# NAMED sections, which is what the kernel needs and a compiler never emits --
+# .boot, .note.pvh, the 2 KiB-aligned vector table, .bss. The cat joins the
+# TARGET's backend text explicitly: a frontend bakes holo with the NATIVE one
+# only, and this build must not care which machine it is running on.
+k_be_x86_64 = x64
+k_be_aarch64 = arm64
+klay_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
+  $R/crew/holo/$(k_be_$a).l $R/crew/holo/elf.l $R/crew/holo/obj.l
+# klink.l's shape, twice: an explicit rule each rather than one pattern, so the
+# cats are ordinary targets. a pattern-made prerequisite is an INTERMEDIATE make
+# deletes after the link, which would re-cat them on every build.
+$(k_odir)/mkvec.l: $R/port/inle/mkvec.l $(klay_l)
+	@echo AI	$@
 	@mkdir -p "$(dir $@)"
-	@$(kcc) -c $< -o $@
+	@{ echo "(use 'holo)"; cat $(klay_l) $<; } > $@
+$(k_odir)/mkboot.l: $R/port/inle/mkboot.l $(klay_l)
+	@echo AI	$@
+	@mkdir -p "$(dir $@)"
+	@{ echo "(use 'holo)"; cat $(klay_l) $<; } > $@
 
-$(k_odir)/%.o: $(R)/%.asm $(k_h)
-	@echo AS	$@
+# `test -s`: an empty object is the failure this build cannot see -- it links,
+# and the kernel boots into nothing.
+$(k_odir)/port/inle/$a/vec.o: $(k_odir)/mkvec.l $m
+	@echo LAY	$@
 	@mkdir -p "$(dir $@)"
-	@nasm $< -o $@ $(k_nasmflags)
+	@$m -l $< -e '(lay-vec "$@" "$a")' && test -s $@
+
+$(k_odir)/port/inle/$a/boot.o: $(k_odir)/mkboot.l $m
+	@echo LAY	$@
+	@mkdir -p "$(dir $@)"
+	@$m -l $< -e '(lay-boot "$@" "$a")' && test -s $@
 
 # --- ISO / HDD image rules -------------------------------------------
 k_xorriso_x86_64 = \
@@ -253,7 +275,7 @@ test_arm64: host
 	@./tools/arm64check.sh
 
 # The x86_64 gate boots the ELF DIRECT: `qemu -kernel` reads the PVH ELF note
-# and enters boot.S's own bring-up (page tables, GDT, long mode, kboot) -- no
+# and enters our own bring-up (mkboot.l) (page tables, GDT, long mode, kboot) -- no
 # limine, no OVMF, no iso, NOTHING in out/dl. The limine/firmware machinery
 # above stays for the interactive run-* lanes (they want the framebuffer
 # console only a real bootloader hands over) and for test_kernel_arm64.

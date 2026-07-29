@@ -32,7 +32,7 @@
    (ld-align a v) (? (a < 2) v (: r (v % a) (? (r = 0) v (v + (a - r)))))
    (ld-fits32 v) (&& (-2147483648 <= v) (v <= 2147483647))
    ; every relocation's field arithmetic is a linker's: 64-bit MODULAR. hosted
-   ; addresses never reach the wrap, but the kernel LEANS on it -- boot.S's
+   ; addresses never reach the wrap, but the kernel LEANS on it -- mkboot.l's
    ; 32-bit stub says `.boot + 0x80003000`, and that sum wraps the high-half
    ; base off to the physical address the pre-paging code has to jump to.
    ; % is truncated here, so a negative sum comes back negative: fold it up.
@@ -310,7 +310,7 @@
                      ; sum its own way -- and a truncated address would point
                      ; somewhere real and wrong, so each checks its own range.
                      ; the kernel exercises both: its high-half addresses are
-                     ; 32S's negative half, and boot.S's wrapped `.boot + bias`
+                     ; 32S's negative half, and mkboot.l's wrapped `.boot + bias`
                      ; is a plain unsigned physical address.
                      (: v (? (kind = 10) sa (sg64 sa))
                         _ (? (? (kind = 10) (v <= 4294967295) (ld-fits32 v))
@@ -523,7 +523,7 @@
    ; a freestanding image is laid where it RUNS and loaded where it LANDS: every
    ; PT_LOAD carries p_paddr = p_vaddr - bias, which is what lets `qemu -kernel`
    ; copy by p_paddr with the MMU off while limine (and our own BOOTX64.EFI) maps
-   ; by p_vaddr with it on -- one file, and boot.S bridges the two. that split,
+   ; by p_vaddr with it on -- one file, and mkboot.l bridges the two. that split,
    ; and the several segments it needs, is the whole of what port/inle/<a>/<a>.lds
    ; says that ldlink's one-segment shape cannot.
    ;
