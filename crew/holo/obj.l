@@ -356,15 +356,26 @@
    ; these four sections are what a HOSTED object carries; objsecs below is the
    ; general door, and the kernel's lays go through it for names a compiler never
    ; emits (.boot, .note.pvh, the 2 KiB-aligned vector table).
+   ; the four DESCRIPTORS are their own binding because a compiler has a fifth
+   ; kind of stream to add to them: a global wearing __attribute__((section(..)))
+   ; with a name that is neither ai_nifs nor .image (the kernel's
+   ; .limine_requests, which a bootloader SCANS for). moon.l appends those and
+   ; calls objsecs itself; everything else takes the four and nothing more.
+   (objsecs4 textforms dataforms nifforms imgforms)
+    `(`(".text"   1 6 16 textforms)
+      `(".data"   1 3 (o-dalign dataforms) dataforms)
+      `("ai_nifs" 1 3 8 nifforms)
+      `(".image"  1 3 16 imgforms))
+   ; a named section a COMPILER emits: PROGBITS, allocated and writable, on the
+   ; widest grain its own globals ask for. the descriptor a hand-written lay
+   ; needs is its own business -- it says the flags outright.
+   (objsec-named nm forms) `(nm 1 3 (o-dalign forms) forms)
+
    (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms locnames)
     (? (arm32? target)
        (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)   ; no bake lane on arm32
           (objelf32 target textforms dataforms funcnames globnames wknames nifforms))   ; locnames unrepresented on arm32
-       (objsecs target
-                `(`(".text"   1 6 16 textforms)
-                  `(".data"   1 3 (o-dalign dataforms) dataforms)
-                  `("ai_nifs" 1 3 8 nifforms)
-                  `(".image"  1 3 16 imgforms))
+       (objsecs target (objsecs4 textforms dataforms nifforms imgforms)
                 funcnames globnames wknames locnames))
 
    ; -- the general object: a LIST of sections, each (name type flags align forms).

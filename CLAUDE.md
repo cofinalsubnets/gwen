@@ -40,7 +40,12 @@
 ;   (the 32 x86 stubs and the 16 aarch64 vector slots GENERATE, off a love loop, where GAS
 ;   repeated a .macro), mksys.l's class and mksys.l's shape. `make test_vec` faults on purpose
 ;   and reads the report -- the one way to reach a stub, since a green boot never faults.
-;   the COMPILER is still clang there -- the last island; doc/moon-kernel.md is the ladder off it.
+;   and the COMPILER is ours: `KCC ?= mooncc` (doc/moon-kernel.md, the ladder, CLIMBED) -- so
+;   NOTHING FOREIGN builds the kernel. `KCC=clang` is the comparison lane, `make test_kdiff`
+;   the differential that keeps it honest (opt-in, ~45s/arch). ⚠ each variant has its OWN odir
+;   and ELF (kccsuf/klsuf): they did not, so KCC=clang silently reused the mooncc objects and
+;   the twin re-ran the artifact it was meant to check. ⚠ mooncc REFUSES a -m flag rather than
+;   ignoring it, so the kernel's -m* soup had to be provably vacuous before the flip, and is.
 ;   editing love.h needs no clean (every object deps on $(love_h), the lcat'd headers re-lay on love0).
 ; * CHECK A .l EDIT for balance before trusting it: `out/host/love crew/libra/libra.l <file>` (or
 ;   `make lint` over every tracked .l) -- LIBRA ⚖, the .l balance tool (crew/libra/, doc/libra.md),

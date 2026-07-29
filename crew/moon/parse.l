@@ -1091,14 +1091,19 @@
                                (: v (? (c = 0) (cfold <>>>e) (cfold <>>e))
                                   (? (cint? v) v ()))))
        ())
-   ; _Static_assert ( const-expr , "message" ) ;  -> (('tdef) rest) | () -- an
+   ; _Static_assert ( const-expr [, "message"] ) ;  -> (('tdef) rest) | () -- an
    ; assertion that FOLDS to false fails the compile; a non-constant one is let by.
+   ; the MESSAGE is optional (C23 made it so, and the kernel writes it that way):
+   ; the assertion is the whole point, and the string was only ever the
+   ; diagnostic's wording. so the comma-and-string is one optional step, and a `)`
+   ; where the comma would be is the short form, not a refusal.
    (pstatic ps ts)
     (: r1 (want >ts "(")
        re (? (two? r1) (pcond ps r1) ())
        r2 (? (two? re) (want <>re ",") ())
        r3 (? (&& (two? r2) ((tkk <r2) = 'str)) >r2 ())
-       r4 (? (two? r3) (want r3 ")") ())
+       r4 (? (two? r3) (want r3 ")")                ; the long form: expr, "message"
+             (two? re) (want <>re ")") ())          ; ..and the short one: expr alone
        rest (? (two? r4) (want r4 ";") ())
        (? (! (two? rest)) ()
           (: v (cfold <re)
@@ -1572,7 +1577,18 @@
                                                         `(`(nm aty0 ()) rest0)))))))
                                       (peekp ts3 "=")
                                        (: r (pinit ps >ts3)
-                                          (? (two? r) `(`(nm t2 <r) <>r) ()))
+                                          (? (! (two? r)) ()
+                                             ; ⚠ a LATER declarator arrives here with its dims ALREADY
+                                             ; parsed (`more` below runs pdtor first, so t2 is the whole
+                                             ; array type and ts3 sits on the `=`), where the FIRST still
+                                             ; has its `[` ahead of it and takes the branch above. so a
+                                             ; lone [] bound has to be filled in HERE as well -- without
+                                             ; it `char a[]={1}, b[]={2,2};` left b INCOMPLETE, and every
+                                             ; later sizeof(b) answered 0 in silence (the bytes were laid
+                                             ; right; only the type was wrong, which is the worse half).
+                                             (: t3 (? (&& (arr? t2) (&& (<>>t2 = 0) (charm? (initcount <>t2 <r))))
+                                                      `('arr <>t2 (initcount <>t2 <r)) t2)
+                                                `(`(nm t3 <r) <>r))))
                                       `(`(nm t2 ()) ts3))
                                   first (one (patt ts2) name (? (two? fpty) fpty rty))
                                   (? (! (two? first)) ()

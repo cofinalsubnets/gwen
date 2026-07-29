@@ -5275,27 +5275,37 @@
        (? (bad? irf) irf (unhome g (jr0 (unframe g (deadlab irf))))))
 
    ; the data tail: globals in declaration order, then the string table
-   ; -> (dataforms nifforms imgforms) | 'bad. TWO named sections lay in a stream
-   ; of their own, because for both of them WHERE the bytes land is the point and
-   ; a symbol alone cannot say it: `ai_nifs` (AI_NIF's registry entries) needs the
-   ; linker's __start_/__stop_ bracket around a packed run for main()'s boot drain,
-   ; and `.image` needs to be LAST in the image so `love --bake` can grow it at the
-   ; tail (host/image.c). Any other named section stays in .data, reached by symbol.
+   ; -> (dataforms nifforms imgforms extras) | 'bad, where extras is
+   ; ((name forms) ..) -- one entry per OTHER named section, in the order the
+   ; file declares them.
+   ; a __attribute__((section(NAME))) global lays in a stream of its own,
+   ; because WHERE its bytes land is the point and a symbol alone cannot say it.
+   ; three of those streams have a meaning the writer knows: `ai_nifs` (AI_NIF's
+   ; registry entries) needs the linker's __start_/__stop_ bracket around a
+   ; packed run for main()'s boot drain, `.image` needs to be LAST in the image
+   ; so `love --bake` can grow it at the tail (host/image.c), and `.data` is
+   ; where an unattributed global goes. every OTHER name is carried through to
+   ; the .o as a real section now -- the kernel's .limine_requests is the caller
+   ; that made it matter: a bootloader SCANS for that section, and a request
+   ; block quietly sitting in .data is a kernel that boots with an empty memmap.
+   ; the three limine sections also bracket that scan, so DECLARATION ORDER is
+   ; the protocol's order, not ours -- xnames keeps it.
    (cgdata g)
     (: sects (peep g 'sects (tablet 0))
        (strm nm) (: s (peep sects nm ())                  ; which stream a global belongs to
-                    (? (s = "ai_nifs") 'nifs (s = ".image") 'image 'data))
+                    (? s s ".data"))                      ; the name IS the stream
        (globs gs want acc)
         (? (! (two? gs)) acc
-           (! (id? (strm <gs) want)) (globs >gs want acc)   ; another stream's
+           (! ((strm <gs) = want)) (globs >gs want acc)   ; another stream's
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
               _ (pin g 'undecl ())                      ; fresh per global: the refusal below names THIS one's cause
               bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
               ; an aligned(N) global lands ON its boundary: the pad here places
-              ; it within the stream, and the .o's .data header carries the max
-              ; N so the linker grants the section the same grain (obj.l)
-              an (? (id? want 'data) (peep (g 'aligns) <gs 0) 0)
+              ; it within the stream, and the .o's section header carries the max
+              ; N so the linker grants the section the same grain (obj.l). the two
+              ; SPECIAL streams are packed by construction and take no pad.
+              an (? (member? want '("ai_nifs" ".image")) 0 (peep (g 'aligns) <gs 0))
               (? (bad? bytes)
                  (: u (peep g 'undecl ())
                     _ (puts (? u ("cc: undeclared '" + (u + ("' in the initializer of '" + (<gs + "'\n"))))
@@ -5314,12 +5324,21 @@
               t <>p
               (strs >ss (cat acc `(`('label <p)
                                          `('raw ((bts t ((tally t) - 1) ()) + `(0))))))))
-       (: gb (globs (rev (g 'globs)) 'data ())        ; exported globals, then block-scope statics
-          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) 'data ()))   ; (local data labels), then strings
-          nb (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) 'nifs ()))
-          ib (? (|| (bad? gb) (|| (bad? sb) (bad? nb))) 'bad (globs (rev (g 'globs)) 'image ()))
-          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? nb) (bad? ib)))) 'bad
-             `((gb + sb + (strs (g 'strs) ())) nb ib))))
+       ; the OTHER section names, first-seen in declaration order
+       xnames (: (go gs acc) (? (! (two? gs)) (rev acc)
+                                (: s (strm <gs)
+                                   (go >gs (? (|| (member? s '(".data" "ai_nifs" ".image"))
+                                                  (member? s acc))
+                                              acc (link s acc)))))
+                 (go (rev (g 'globs)) ()))
+       (: gb (globs (rev (g 'globs)) ".data" ())        ; exported globals, then block-scope statics
+          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) ".data" ()))   ; (local data labels), then strings
+          nb (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) "ai_nifs" ()))
+          ib (? (|| (bad? gb) (|| (bad? sb) (bad? nb))) 'bad (globs (rev (g 'globs)) ".image" ()))
+          xb (? (|| (bad? gb) (|| (bad? sb) (|| (bad? nb) (bad? ib)))) 'bad
+                (map (\ nm `(nm (globs (rev (g 'globs)) nm ()))) xnames))
+          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? nb) (|| (bad? ib) (bad? xb))))) 'bad
+             `((gb + sb + (strs (g 'strs) ())) nb ib xb))))
 
    ; the shared core: build the gen state, then TEXT (the functions, no _start)
    ; and DATA (globals + strings) separately -> (g textforms dataforms) | ().
@@ -5430,7 +5449,7 @@
    ; cross-section refs) into a symbol table + relocations. the DEFINED static
    ; functions ride the tail as lnames: obj.l lays them as LOCAL FUNC symbols,
    ; so nm/gdb/vmret see real function boundaries in a holo-linked binary.
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           (! (two? r)) ()
@@ -5472,4 +5491,4 @@
                                                          (link <>f acc) acc))))
                        (go <>ast ()))
              dat <>>r
-             `(1 <>r <dat fnames gnames <>dat <>>dat lnames)))))
+             `(1 <>r <dat fnames gnames <>dat <>>dat lnames <>>>dat)))))

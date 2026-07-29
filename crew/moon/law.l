@@ -389,6 +389,27 @@
       (two? (cgn "_Static_assert(1 + 2 * 3 == 7, \"folds\"); int main() { return 0; }"))
       (! (cgn "int main() { _Static_assert(sizeof(int) == 5, \"bad\"); return 0; }"))
       (! (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))
+      ; ⚠ EVERY declarator in a declaration infers its own [] bound, not just the
+      ; first. a later one has its dims parsed before the initializer is seen, and
+      ; that path used to skip the inference -- so `char a[]={1}, b[]={2,2};` left
+      ; b INCOMPLETE and sizeof(b) answered 0 in SILENCE. the bytes were always
+      ; laid from the initializer; only the type was wrong, which is the worse
+      ; half: a countof() over b read zero and every loop over it did nothing.
+      (= (cast "char a[]={1}, b[]={2,2}, c[]={3,3,3};")
+         '(prog ((gdecl (("a" (arr char 1) (init ((num 1))))
+                         ("b" (arr char 2) (init ((num 2) (num 2))))
+                         ("c" (arr char 3) (init ((num 3) (num 3) (num 3)))))))))
+      (= (cast "char *p, q[]={1,2};")
+         '(prog ((gdecl (("p" (ptr char) ()) ("q" (arr char 2) (init ((num 1) (num 2)))))))))
+      (two? (cgn "static const char a[]={1,2,3}, b[]={4,5,6}; _Static_assert(sizeof(b) == 3, \"m\"); int main() { return a[0]; }"))
+      (! (cgn "static const char a[]={1,2,3}, b[]={4,5,6}; _Static_assert(sizeof(b) == 0, \"m\"); int main() { return a[0]; }"))
+      ; ..and the MESSAGE is optional (C23), which is how the kernel writes it.
+      ; the assertion was always the point; the string only ever worded the
+      ; diagnostic. a false one still refuses -- the short form is not a weaker one.
+      (two? (cgn "_Static_assert(sizeof(int) == 4); int main() { return 0; }"))
+      (two? (cgn "int main() { _Static_assert(1); return 0; }"))
+      (! (cgn "_Static_assert(sizeof(int) == 5); int main() { return 0; }"))
+      (! (cgn "int main() { _Static_assert(0); return 0; }"))
       ; cfold: ?: folds the SELECTED arm (both directions); &&/|| fold != 0 (a negative is true).
       (= (cast "int g = 1?2:3; int main() { return 0; }")
          '(prog ((gdecl (("g" int (num 2)))) (fn "main" () (blk ((ret (num 0))))))))
@@ -463,6 +484,38 @@
       (! (member? '(call main) (el ob 1)))                  ; NO _start/crt0 in an object (the linker's crt calls main)
       (two? (cob "int only(int x) { return x + 1; }"))      ; a LIBRARY TU (no main) still emits an object
       (gripe? (cob "int main() { return nope; }"))))        ; an undeclared name refuses, now naming it (rung 1)
+
+; --- __attribute__((section(NAME))): a named section is a STREAM of its own.
+; three names have a meaning the object writer knows -- ai_nifs (bracketed by
+; the linker for main()'s boot drain), .image (laid last, for the bake) and
+; .data (where an unattributed global goes). every OTHER name rides out as its
+; own section, because WHERE those bytes land is the point: the kernel's
+; .limine_requests is SCANNED for by a bootloader, and a request block quietly
+; sitting in .data is a kernel that boots with an empty memmap. cob passes no
+; xtra, so this needs the variant that carries the parser's section table. ---
+(: (cobx src)
+    (: r (cparse (caup (clex src)))
+       (? (okv? r) (cgen-obj (el r 1) (el r 2) (el r 3) (el r 4)
+                             `((el r 5) (el r 6) (el r 7) (el r 8) (el r 9)) 'x64) ()))
+   (el l i) (? (< i 1) (cap l) (el (cup l) (- i 1)))
+   ob (cobx "__attribute__((used, section(\".limine_requests\"))) static volatile long m = 7;
+             __attribute__((section(\".limine_requests_end\"))) static volatile long e = 1;
+             long plain = 3; int main() { return (int) (m + e + plain); }")
+   xs (el ob 8)
+   (assert
+      (= (tally xs) 2)                                   ; two extra sections, one per NAME
+      ; ..in DECLARATION order: the three limine sections bracket a scan, so the
+      ; order is the protocol's and not the compiler's to choose
+      (= (cap (cap xs)) ".limine_requests")
+      (= (cap (caup xs)) ".limine_requests_end")
+      (member? '(label m) (caup (cap xs)))                ; the global's bytes land THERE
+      (member? '(label e) (caup (caup xs)))
+      (! (member? '(label m) (el ob 2)))                  ; ..and NOT in .data
+      (! (member? '(label e) (el ob 2)))
+      (member? '(label plain) (el ob 2))                  ; an unattributed global still does
+      ; the two SPECIAL names keep their own streams and stay out of the extras
+      (= (el (cobx "__attribute__((section(\"ai_nifs\"))) static long n = 1; int main() { return 0; }") 8) ())
+      (= (el (cobx "__attribute__((section(\".image\"))) static long i = 1; int main() { return 0; }") 8) ())))
 
 ; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
 ; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.

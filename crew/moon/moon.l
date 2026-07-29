@@ -141,11 +141,23 @@
    ; a relocatable object: text/data/ai_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.
+   ; ..plus one section per OTHER __attribute__((section(NAME))) name the TU
+   ; used, appended in declaration order (cgen-obj's tail). the kernel's
+   ; .limine_requests is why: a bootloader SCANS for that section by name, and
+   ; three of them bracket the scan, so both their EXISTENCE and their order are
+   ; the protocol's. objsecs is the door that takes them.
    (cc-objbytes src is ds tgt nsi)
     (: ps (cc-parse src is ds tgt nsi)
        ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
        _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
-       (objelf tgt (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5) (el ob 6) (el ob 7)))
+       xs (map (\ x (objsec-named <x <>x) ) (el ob 8))
+       (? (arm32? tgt)
+          ; the 32-bit writer has no section list; a named section there would be
+          ; dropped in silence, so say so instead.
+          (: _ (? (two? xs) (scare 'obj-section-arm32 tgt) 0)
+             (objelf tgt (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5) (el ob 6) (el ob 7)))
+          (objsecs tgt ((objsecs4 (el ob 1) (el ob 2) (el ob 5) (el ob 6)) + xs)
+                   (el ob 3) (el ob 4) (el ps 4) (el ob 7))))
    (cc-obj src dst is ds tgt nsi) (write-bytes dst (cc-objbytes src is ds tgt nsi))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
@@ -323,6 +335,18 @@
              ; freestanding build quietly taking a hosted declaration is the wrong
              ; artifact wearing a green face. (x9 -- it reaches incload as nsi.)
              (a = "-nostdinc") (flags r c is ds o ins t9 p9 g9 n9 1)
+             ; -ffreestanding is the one member of the -nostd* family that says
+             ; something about the LANGUAGE and not just the link: it makes the
+             ; implementation freestanding, and __STDC_HOSTED__ is how the
+             ; standard lets a source ask. love.c asks exactly that, to choose
+             ; the W^X mmap arena over the freestanding heap copy -- so without
+             ; this a kernel build took the hosted lane and reached for sysconf.
+             ; it rides as a DEFINE (cpp applies -D after its predefines, so this
+             ; overrides), which keeps it out of the flag accumulators. ⚠ NOT the
+             ; rest of the family: -nostdlib alone is a hosted program that
+             ; simply supplies its own runtime, and test_raw is exactly that.
+             (a = "-ffreestanding")
+              (flags r c is (link "__STDC_HOSTED__=0" ds) o ins t9 p9 g9 1 x9)
              (nostd? a) (flags r c is ds o ins t9 p9 g9 1 x9)
              (tol? a) (flags r c is ds o ins t9 p9 g9 n9 x9)
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)

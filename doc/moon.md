@@ -155,8 +155,12 @@ gate per stage. the pipeline, each its own file:
   -static) ride through ignored, and an exe link still owing strong symbols
   pulls the runtime BY NEED, archive-fashion -- nolibc + the am math + the
   mksys sys leaf, compiled from the TOOLCHAIN ROOT (below; a set carrying its
-  own am.o never meets a twin). -nostdlib/-ffreestanding turn the pull off;
-  -nostdinc is the INCLUDE half of that word and drops /usr/include off the
+  own am.o never meets a twin). -nostdlib/-ffreestanding turn the pull off,
+  and -ffreestanding ALSO says the standard's own word: it makes
+  __STDC_HOSTED__ 0, which is how a source asks (love.c asks it to choose the
+  W^X mmap arena over the freestanding heap copy). ⚠ only that flag -- the
+  rest of the family is a hosted program supplying its own runtime, which is
+  what test_raw is. -nostdinc is the INCLUDE half of that word and drops /usr/include off the
   search tail, so only our own headers answer (loud, not advisory: with the
   tail on, a header we do not carry resolves to glibc's, and a freestanding
   build taking a hosted declaration is the wrong artifact wearing a green
@@ -524,6 +528,44 @@ two ideas to keep warm as the stages climb, neither committed yet:
    system linker (-no-pie), runs, and matches an all-gcc build; probed live: cc<->
    gcc interop both directions, cc calling libc (abs/strlen), the love.c static
    (name, fn-ptr) table across an R_64 link.
+   7c THE KERNEL'S OWN COMPILER LANDED 2026-07-29 (moon-kernel rung 5):
+   `KCC ?= mooncc` -- every inle TU is ours, so nothing foreign builds the
+   kernel. four language gaps had to close first, and each is worth its own
+   line because each was silent in a different way:
+   * `__STDC_HOSTED__` is 0 under `-ffreestanding` now. it was 1 always, so
+     love.c took its HOSTED lane in a kernel build and reached for sysconf.
+     it rides in as a `-D` (cpp applies those after its predefines), which
+     keeps it out of the flag accumulators. ⚠ NOT the rest of the -nostd*
+     family: `-nostdlib` alone is a hosted program supplying its own runtime,
+     which is exactly what test_raw is, and conflating them would have flipped
+     it too.
+   * `_Static_assert(expr)` -- the one-argument C23 form. the message was
+     only ever the diagnostic's wording; the assertion is the point, and a
+     false short form still refuses.
+   * ⚠ `sizeof` of a LATER declarator with an inferred `[]` bound. the
+     file-scope path parses a later declarator's dims BEFORE it sees the
+     initializer (the first still has its `[` ahead of it), so only the first
+     ran the inference: `char a[]={1}, b[]={2,2};` left b INCOMPLETE and
+     `sizeof(b)` answered 0 in SILENCE. the bytes were laid right from the
+     initializer -- only the type was wrong, which is the worse half, since a
+     countof() over b read zero and every loop over it did nothing.
+   * `__attribute__((section(NAME)))` for ANY name -- see 7a'' below.
+   the -m* soup drops from the kernel's flags, which mooncc could not have
+   taken anyway (it REFUSES a -m rather than ignoring it): both machine flags
+   were probed vacuous first -- our codegen never addresses below sp (1257
+   functions, zero) and emits no 32-bit absolute (where clang's kernel objects
+   carry 5792), so -mno-red-zone and -mcmodel=kernel have nothing to ask for.
+   7a'' NAMED SECTIONS, THE COMPILER HALF LANDED 2026-07-29: gen.l's cgdata
+   routed exactly two section names to a stream of their own (`ai_nifs`,
+   `.image`) and let every other one fall into .data, reached by symbol. that
+   is fine until a name means something to a READER: the kernel's
+   `.limine_requests` is SCANNED for by the bootloader, and three of them
+   bracket the scan, so both their existence and their order are the
+   protocol's. cgdata groups by section NAME now and hands moon.l one
+   `(name forms)` per other name, in declaration order; moon.l appends them to
+   objsecs4's four and calls objsecs. the three come out the sizes clang gives
+   them. a named section on the arm32 writer, which has no section list,
+   SCARES rather than being dropped.
    7a' NAMED SECTIONS LANDED 2026-07-29 (moon-kernel rung 4): the writer's four
    fixed sections became a LIST. `objsecs target secs funcs globs weaks locals`
    takes `(name type flags align forms)` per section and `objelf` is a

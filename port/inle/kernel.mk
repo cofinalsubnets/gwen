@@ -23,21 +23,46 @@ ifdef K_TEST
 ksuf := -test
 endif
 
-# The cross COMPILER defaults to clang (one multi-target binary covers every
-# arch) -- the last foreign compiler in the tree, and doc/moon-kernel.md is the
-# ladder off it. Override for a GCC cross toolchain, e.g.
+# The COMPILER is ours (doc/moon-kernel.md rung 5): mooncc compiles every TU,
+# holo lays the assembly and links, so nothing foreign is left in this build.
+# KCC=clang is the comparison lane -- exactly like CC on the host side, and the
+# differential the clang-shaped kernel exists to serve. A GCC cross toolchain
+# also works:
 #   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLINK=lld KLD=aarch64-linux-gnu-ld
 # KLD serves the KLINK=lld lane only; the default link is ours (see below).
-KCC ?= clang
+KCC ?= $(ho)/mooncc
 KLD ?= ld.lld
 KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1)
+# ours by NAME: mooncc is a wake shim over an image, so `--version` would have to
+# boot it just to answer a makefile question at parse time.
+KCC_IS_MOON := $(if $(findstring mooncc,$(KCC)),1,)
 
 k_arch_c = $(wildcard $(R)/port/inle/$a/*.c)
+# aarch64/builtins.c supplies __clear_cache and __udivti3 -- the two calls a
+# FOREIGN compiler's codegen emits and then has to be handed somewhere. ours
+# emits neither: it lowers __builtin___clear_cache to the dc/ic sequence inline
+# (gen.l) and never reaches for a 128-bit divide, so its objects reference no
+# such symbol. so the file belongs to the clang lane, and the moon lane drops
+# it -- which is just as well, since it is written in __int128, a type we do
+# not carry.
+ifeq ($(KCC_IS_MOON),1)
+k_arch_c := $(filter-out %/builtins.c,$(k_arch_c))
+endif
 k_free_c = $R/port/inle/kmain.c
 k_shared_c = $(love_c) $(f_c) $(c_c)
 k_h = $(love_h) $(wildcard *.h $(R)/port/inle/*.h $(R)/port/inle/$a/*.h)
 
-k_odir = $(ko)/$a$(ksuf)
+# the object tree and the ELF are per COMPILER as well as per K_TEST. ⚠ they
+# were not, and switching KCC therefore REUSED the other compiler's objects --
+# so the clang lane, whose whole job is to be the differential twin, silently
+# re-ran the mooncc artifact and reported it green. ours keeps the bare name
+# (it is the default and the shipped one); a foreign cc gets its own tree.
+KLINK ?= holo
+kccsuf = $(if $(KCC_IS_MOON),,-$(notdir $(KCC)))
+klsuf = $(if $(filter holo,$(KLINK)),,-$(KLINK))
+kvsuf = $(kccsuf)$(klsuf)
+k_odir = $(ko)/$a$(ksuf)$(kccsuf)
+k_elf = $(ko)/love-$a$(ksuf)$(kvsuf).elf
 
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
 k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
@@ -78,15 +103,29 @@ ifeq ($(KCC_IS_CLANG),1)
 kcc_if_clang = -target $a-unknown-none-elf
 endif
 
+# the machine flags a FOREIGN cc needs to be told. mooncc is told none of them:
+# `-t` names the backend, and the whole -m* soup is VACUOUS for our codegen --
+# probed before the flip (doc/moon-kernel.md). -mno-red-zone: gen.l allocates
+# its frame before addressing a slot and every scratch cell pre-decrements, so
+# nothing of ours ever lives below sp (1257 functions scanned, not one).
+# -mcmodel=kernel: we emit abs64 and pc-relative relocations and NOTHING else,
+# where clang's kernel objects carry 5792 32-bit absolutes -- so linking in the
+# top 2 GiB needs no code model at all. ⚠ and mooncc REFUSES a -m flag rather
+# than ignoring it (moon.l's tolerance list: dropping one silently would be the
+# no-op wearing a cc face), so these must not reach it.
 kcflags_x86_64 = -m64 -march=x86-64 -mabi=sysv -mno-red-zone -mcmodel=kernel
 kcflags_aarch64 = -mcpu=generic -march=armv8-a
+kcflags_mach = $(if $(KCC_IS_MOON),,$(kcflags_$a))
+kcc_tgt = $(if $(KCC_IS_MOON),-t $(k_be_$a),$(kcc_if_clang))
 
 kldflags_x86_64 = -m elf_x86_64
 kldflags_aarch64 = -m aarch64elf
 
-kcc = $(KCC) $(kcflags) $(kcflags_$a) $(kcppflags) $(kcc_if_clang)
+kcc = $(KCC) $(kcflags) $(kcflags_mach) $(kcppflags) $(kcc_tgt)
+# ours has to exist before it can compile anything.
+kcc_dep = $(if $(KCC_IS_MOON),$(ho)/mooncc,)
 
-kernel: $(ko)/love-$a$(ksuf).elf
+kernel: $(k_elf)
 
 # The LINK is ours by default: holo's kernel lane (crew/holo/link.l's ldkern,
 # driven by port/inle/klink.l) lays the same shape <a>.lds asks for -- the
@@ -95,8 +134,8 @@ kernel: $(ko)/love-$a$(ksuf).elf
 # boot the file it writes. KLINK=lld puts ld.lld and the .lds back, the
 # comparison lane; it stays exact, and the .lds files stay in the tree as its
 # statement of the layout. --gc-sections has no twin here (the image carries
-# some dead code; it is RAM, and the kernel has plenty).
-KLINK ?= holo
+# some dead code; it is RAM, and the kernel has plenty). (KLINK is set above --
+# the variant suffix needs it before the first rule names a target.)
 klink_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/port/inle/klink.l
 $(k_odir)/klink.l: $(klink_l)
@@ -105,12 +144,12 @@ $(k_odir)/klink.l: $(klink_l)
 	@{ echo "(use 'holo)"; cat $(klink_l); } > $@
 
 ifeq ($(KLINK),holo)
-$(ko)/love-$a$(ksuf).elf: $(k_odir)/klink.l $(k_o) $m
+$(k_elf): $(k_odir)/klink.l $(k_o) $m
 	@echo HOLO	$@
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/klink.l $@ $a $(k_o)
 else
-$(ko)/love-$a$(ksuf).elf: $(R)/port/inle/$a/$a.lds $(k_o)
+$(k_elf): $(R)/port/inle/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
@@ -118,7 +157,7 @@ endif
 
 # Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -175,7 +214,7 @@ $(ko)/limine.conf:
 	@mkdir -p $(dir $@)
 	@printf 'timeout: 1\n/gk\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
 
-$(ko)/love-$a$(ksuf).iso: $(ko)/love-$a$(ksuf).elf $(dl)/limine/limine $(ko)/limine.conf
+$(ko)/love-$a$(ksuf)$(kvsuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
 	@echo MK $@
 	@rm -rf $(ko)/iso_root
 	@mkdir -p $(ko)/iso_root/boot
@@ -282,9 +321,9 @@ test_arm64: host
 .PHONY: test_kernel
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
-	@echo TEST $(ko)/love-$a-test.elf "(serial, headless, -kernel)"
-	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.elf - $a
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test$(kvsuf).elf
+	@echo TEST $(ko)/love-$a-test$(kvsuf).elf "(serial, headless, -kernel)"
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test$(kvsuf).elf - $a
 else
 test_kernel:
 	@echo "test_kernel: skipped (host arch $a is not x86_64)"
@@ -314,7 +353,7 @@ $(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI: $(ko)/uefi$(ksuf)/BOOTX64.EFI
 	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
-$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf).elf
+$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf)$(kvsuf).elf
 	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
@@ -340,23 +379,44 @@ test_uefi: host $(R)/tools/ktest.l
 	@$m $(R)/tools/ktest.l $(ko)/esp-test $(OVMF_X64) x86_64
 endif
 
+# test_kdiff -- the clang-vs-mooncc K_TEST DIFFERENTIAL (moon-kernel rung 5).
+# The kernel is ours now, so clang's only remaining job in this tree is to be
+# the twin: a second compiler over the same sources, so that when the kernel
+# breaks you can ask whether it broke in the code or in our codegen. A twin
+# nothing runs is a twin that rots, so this boots it -- the same corpus through
+# the same three doors, out of its own object tree (kccsuf, without which the
+# two lanes silently shared objects and this compared nothing).
+# ~45s per arch on top of test_kernel, so it is OPT-IN, not in test_all --
+# test_kernel already gates the artifact we ship. Run it when the kernel moves.
+.PHONY: test_kdiff
+ifneq ($(shell command -v clang 2>/dev/null),)
+test_kdiff:
+	@$(MAKE) -s KCC=clang test_kernel
+	@$(MAKE) -s KCC=clang test_kernel_arm64
+	@echo "test_kdiff: the same corpus, both compilers, both arches"
+else
+test_kdiff:
+	@echo "test_kdiff: skipped (no clang)"
+endif
+
 # The aarch64 twin of test_kernel: cross-build the K_TEST kernel and run the same
 # corpus under full-TCG qemu-system-aarch64 (~45s). In test_all because the lane
 # needs a gate that RUNS it -- the aarch64 kernel silently stopped LINKING once,
 # and nothing caught it precisely because test_kernel is x86_64-gated.
-# Needs qemu-system-aarch64 and a CLANG $(KCC): the cross target comes from
-# -target $a-unknown-none-elf, which a native gcc cannot do. No-op without either
-# (so a plain `make test_all` stays green on a host lacking them), like test_wasm.
+# Needs qemu-system-aarch64 and a CROSS-CAPABLE $(KCC) -- ours (which names the
+# backend with -t, and is the default) or clang (-target $a-unknown-none-elf).
+# A native gcc cannot, so that lane still skips. No-op without either (so a
+# plain `make test_all` stays green on a host lacking them), like test_wasm.
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 .PHONY: test_kernel_arm64
-ifeq ($(and $(QEMU_A64),$(filter 1,$(KCC_IS_CLANG))),)
+ifeq ($(and $(QEMU_A64),$(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))),)
 test_kernel_arm64:
-	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64 + a clang KCC)"
+	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64 + a cross-capable KCC)"
 else
 test_kernel_arm64: host $(R)/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.elf
-	@echo TEST $(ko)/love-aarch64-test.elf "(serial, headless, TCG, -kernel)"
-	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
+	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test$(kvsuf).elf
+	@echo TEST $(ko)/love-aarch64-test$(kvsuf).elf "(serial, headless, TCG, -kernel)"
+	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test$(kvsuf).elf - aarch64
 endif
 
 # --- wasm headless test (wired into test_all; emcc + node) -----------------
