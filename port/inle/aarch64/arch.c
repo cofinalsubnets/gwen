@@ -5,6 +5,7 @@
 // x86_64/arch.c -- same contract (archinit, serial_init, serial_putc,
 // k_reset), different hardware.
 #include <stdint.h>
+#include "asmops.h"                    // the privileged instructions, both spellings
 
 // khhdm is the Limine higher-half direct map offset; kmain sets it
 // before archinit runs, so physical address P is reachable at khhdm+P.
@@ -58,17 +59,14 @@ static uint64_t l2_table[512] __attribute__((aligned(4096)));
 
 // translate a (mapped) virtual address to physical via the MMU.
 static uintptr_t va2pa(void *va) {
-  uint64_t par;
-  asm volatile ("at s1e1w, %1; isb; mrs %0, par_el1"
-                : "=r"(par) : "r"(va) : "memory");
+  uint64_t par = k_at_s1e1w_par(va);
   return (par & PA_MASK) | ((uintptr_t) va & 0xfff); }
 
 // the MAIR_EL1 slot to use for device memory: prefer a Device
 // attribute, then Normal non-cacheable, then Normal write-back (still
 // correct under QEMU). MAIR is configured by Limine and left as-is.
 static uint32_t mmio_attr_index(void) {
-  uint64_t mair;
-  asm volatile ("mrs %0, mair_el1" : "=r"(mair));
+  uint64_t mair = k_rd_mair_el1();
   static uint8_t const prefer[] = { 0x00, 0x04, 0x08, 0x0c, 0x44, 0xff };
   for (uint32_t p = 0; p < sizeof prefer; p++)
     for (uint32_t i = 0; i < 8; i++)
@@ -77,8 +75,7 @@ static uint32_t mmio_attr_index(void) {
 
 static void mmio_map(void) {
   uint32_t attr = mmio_attr_index();
-  uint64_t ttbr1;
-  asm volatile ("mrs %0, ttbr1_el1" : "=r"(ttbr1));
+  uint64_t ttbr1 = k_rd_ttbr1_el1();
   uint64_t *l0 = (uint64_t*) (khhdm + (ttbr1 & PA_MASK));
 
   // the GIC and UART share L0/L1 indices (both in the first 1GiB).
@@ -102,7 +99,7 @@ static void mmio_map(void) {
       | ((uint64_t) attr << 2)                 // MAIR attribute index
       | 1ULL;                                  // valid; bit 1 clear => block
 
-  asm volatile ("dsb ish; tlbi vmalle1is; dsb ish; isb" ::: "memory"); }
+  k_tlbi_all(); }
 
 // --- PL011 serial console --------------------------------------------
 // the aarch64 analogue of x86_64's COM1: a second console alongside the
@@ -175,15 +172,12 @@ static void gic_init(void) {
 // handler reloads the countdown, which also deasserts the interrupt.
 static uint64_t timer_interval;        // CNTFRQ_EL0 / 100
 
-static inline uint64_t rd_cntfrq(void) {
-  uint64_t v; asm volatile ("mrs %0, cntfrq_el0" : "=r"(v)); return v; }
-static inline void rearm_timer(void) {
-  asm volatile ("msr cntp_tval_el0, %0" :: "r"(timer_interval)); }
+static inline void rearm_timer(void) { k_wr_cntp_tval_el0(timer_interval); }
 
 static void timer_init(void) {
-  timer_interval = rd_cntfrq() / 100;
+  timer_interval = k_rd_cntfrq_el0() / 100;
   rearm_timer();
-  asm volatile ("msr cntp_ctl_el0, %0" :: "r"((uint64_t) 1)); }  // enable
+  k_wr_cntp_ctl_el0(1); }               // enable
 
 // --- interrupt dispatch ----------------------------------------------
 // reached from the IRQ vector (aarch64.S). claim the interrupt, handle
@@ -222,9 +216,9 @@ static void kputn(uintptr_t n, int base) {
 // are not resumed (returning would just re-fault). kput* reach the
 // serial console even when no framebuffer is up.
 void k_fault(uint64_t esr, uint64_t elr, uint64_t far) {
-  asm volatile ("msr daifset, #0xf");  // all interrupts off while reporting
+  k_daif_mask_all();                   // all interrupts off while reporting
   static int nested;
-  if (nested) for (;;) asm volatile ("wfi");
+  if (nested) for (;;) k_wait();
   nested = 1;
   kputs("\n*** CPU exception ("), kputs(fault_kind(esr));
   kputs(") esr="), kputn(esr, 16);
@@ -232,35 +226,26 @@ void k_fault(uint64_t esr, uint64_t elr, uint64_t far) {
   kputs(" far="),  kputn(far, 16);
   kputc('\n');
   fbdraw();
-  for (;;) asm volatile ("wfi"); }
+  for (;;) k_wait(); }
 
 // --- bring-up and reset ----------------------------------------------
 // Limine hands us a civilised environment -- EL1, MMU on, a stack and
 // the HHDM in place -- so archinit only has to install our own vector
 // table, interrupt controller and timer, then unmask IRQs.
 void archinit(void) {
-  // Limine enters the kernel at EL1t -- SP_EL0 selected, SP_EL1 unset.
-  // exception entry always switches to SP_EL1, so switch to EL1h with
-  // SP_EL1 pointing at the current stack before anything can fault.
-  // SP_EL1 cannot be written via `msr` at EL1 (that is EL2+), so the
-  // idiom is: capture SP, select SP_EL1, then write SP directly. one
-  // asm block so SP is never live-but-garbage across a memory access;
-  // the value is unchanged across the switch, so C carries on.
-  asm volatile ("mov x9, sp; msr spsel, #1; mov sp, x9"
-                ::: "x9", "memory");
-  // Enable FP/SIMD (CPACR_EL1.FPEN = 0b11) so g.c can use doubles.
-  // Limine leaves FPEN cleared on EL1, which would trap on the first
-  // FP register access.
-  asm volatile ("mrs x9, cpacr_el1; orr x9, x9, #(3 << 20); msr cpacr_el1, x9; isb"
-                ::: "x9", "memory");
-  asm volatile ("msr vbar_el1, %0; isb" :: "r"((uintptr_t) vectors));
+  // a bootloader may enter at EL1t (SP_EL0 selected, SP_EL1 unset) with
+  // FP/SIMD trapping -- both must be settled before anything can fault or
+  // touch a double. asmops.h carries why each one is written the way it is.
+  k_sp_to_el1h();
+  k_fpen_enable();
+  k_wr_vbar_el1((uintptr_t) vectors);
   // The HHDM covers RAM only, so mmio_map() walks TTBR1 to add 2 MiB
   // block descriptors at HHDM+phys for the GIC and UART pages (skipped
   // when the HHDM response is absent and khhdm == 0).
   if (khhdm) mmio_map();
   gic_init();
   timer_init();
-  asm volatile ("msr daifclr, #2");  // unmask IRQ (DAIF.I = 0)
+  k_daif_unmask_irq();                 // unmask IRQ (DAIF.I = 0)
 }
 
 // (fault n) backend: deliberately raise a CPU exception. n indexes the
@@ -270,13 +255,13 @@ void archinit(void) {
 void k_fault_trigger(intptr_t n) {
   switch (n) {
     case 3:            // breakpoint
-      asm volatile ("brk #0");
+      k_brk0();
       break;
     case 13: case 14:  // data abort: write to an unmapped address
       *(volatile int*) 0x600000000000ULL = 0;
       break;
     default:           // undefined instruction
-      asm volatile ("udf #0");
+      k_udf0();
       break; } }
 
 #ifdef K_TEST
@@ -289,14 +274,11 @@ void k_fault_trigger(intptr_t n) {
 // -semihosting on the qemu line (k_qemu_aarch64, kernel.mk).
 void k_qemu_exit(int code) {
   volatile uint64_t block[2] = { 0x20026, (uint64_t) (unsigned) code };  // ADP_Stopped_ApplicationExit
-  register uint64_t op asm("x0") = 0x18;                                 // SYS_EXIT
-  register uint64_t arg asm("x1") = (uint64_t) (uintptr_t) block;
-  asm volatile ("hlt #0xf000" :: "r"(op), "r"(arg) : "memory");
-  for (;;) asm volatile ("wfi"); }
+  k_semihost_exit(block);                                                // SYS_EXIT
+  for (;;) k_wait(); }
 #endif
 
 // PSCI SYSTEM_RESET. QEMU's 'virt' machine exposes PSCI over HVC.
 void k_reset(void) {
-  register uint64_t fn asm("x0") = 0x84000009;
-  asm volatile ("hvc #0" : "+r"(fn) :: "memory");
-  for (;;) asm volatile ("wfi"); }
+  k_psci_system_reset();
+  for (;;) k_wait(); }

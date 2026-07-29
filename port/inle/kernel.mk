@@ -59,6 +59,7 @@ kldflags := -static -nostdlib --gc-sections -T $(R)/port/inle/$a/$a.lds -z max-p
 kcppflags := \
   -I$(k_odir) \
   -I. -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/port/inle \
+  -I$(R)/port/inle/$a \
   -I$(R)/crew/moon/include \
   -Ilibc \
   $(kcppflags) \

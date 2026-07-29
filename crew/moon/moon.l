@@ -8,7 +8,8 @@
 ; (crew/holo/link.l, rung 3), which binds them with crt0 and the implicit
 ; runtime into -o's exe, `a.out` bare. the old positional
 ; pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
-; no .o). -I dirs search before the system pair on both include forms; a -D
+; no .o). -I dirs search before the system pair on both include forms
+; (-nostdinc drops /usr/include off the tail, so only our own headers answer); a -D
 ; rides in as a synthesized #define line, so token bodies and function-like
 ; -DF(x)=.. take the one macro path. the driver wears the cc conventions: the
 ; advisory flag families (-W.. -O.. -g.. -std= -f.. -pipe -static) ride through
@@ -61,15 +62,16 @@
    ; both fall to the system pair, our own headers before /usr. answers
    ; (1 text child) -- the child hook resolves the hit file's OWN quote
    ; includes beside it (gcc's rule; cpp.l threads it). -> that | ().
-   (incload is srcdir name sys?)
-    (: ours ((map (\ r (r + "include/")) (mroots ())) + `("/usr/include/"))  ; our headers (stdarg.h ..) win for <>
+   (incload nsi is srcdir name sys?)
+    (: ours ((map (\ r (r + "include/")) (mroots ()))                        ; our headers (stdarg.h ..) win for <>
+             + (? nsi () `("/usr/include/")))                                ; -nostdinc: no glibc tail at all
        dirs (? sys? (is + ours)
                 (`(srcdir "") + is + ours))
        (go ds) (? (! (two? ds)) ()
                   (: r (uread (<ds + name))
                      (? (two? r)
                         (: hd (cdir (<ds + name))
-                           `(1 <>r (\ n2 s2 (incload is hd n2 s2))))
+                           `(1 <>r (\ n2 s2 (incload nsi is hd n2 s2))))
                         (go >ds))))
        (go dirs))
    (el l i) (? (i < 1) <l (el >l (i - 1)))
@@ -123,13 +125,13 @@
    ; body runs to its line's end -- a separately-lexed stream would restart at 1
    ; and the last -D would swallow the file's first line); deskew pays the
    ; numbering back at the report.
-   (cc-parse src is ds tgt)
+   (cc-parse src is ds tgt nsi)
     (: ds9 (link (archdef tgt) ds)         ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clex ((deftext ds9) + <>r))
        _ (? (okv? lx) () (ccdie (deskew lx (tally ds9)) src ("cc: lex error in " + src)))
-       pp (cpp <>lx (\ name sys? (incload is (cdir src) name sys?)) src)
+       pp (cpp <>lx (\ name sys? (incload nsi is (cdir src) name sys?)) src)
        _ (? (okv? pp) () (ccdie (deskew pp (tally ds9)) src ("cc: preprocessor error in " + src)))
        ps (cparse-t <>pp tgt)                 ; thread the target so parse sizes pointers/longs at the ABI width
        _ (? (okv? ps) () (ccdie (deskew ps (tally ds9)) src ("cc: parse error in " + src)))
@@ -139,12 +141,12 @@
    ; a relocatable object: text/data/ai_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.
-   (cc-objbytes src is ds tgt)
-    (: ps (cc-parse src is ds tgt)
+   (cc-objbytes src is ds tgt nsi)
+    (: ps (cc-parse src is ds tgt nsi)
        ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
        _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
        (objelf tgt (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5) (el ob 6) (el ob 7)))
-   (cc-obj src dst is ds tgt) (write-bytes dst (cc-objbytes src is ds tgt))
+   (cc-obj src dst is ds tgt nsi) (write-bytes dst (cc-objbytes src is ds tgt nsi))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
    ; text is the entry), and ldlink binds the static exe -- no system linker.
@@ -224,9 +226,12 @@
        (? (! (string? home)) ()
           (: mdir (home + "lib/math/")
              inc (home + "include/")
+             ; the IMPLICIT runtime compiles with the system tail LEFT ON (the () below):
+             ; these are our own sources reaching only our own headers, and the user's
+             ; -nostdinc is about the user's translation units, not this one.
              mems (map (\ p (p + (dusyms <p <>p mach)))
-                       ((`("nolibc" (string (cc-objbytes (home + "lib/nolibc.c") `(inc) () tgt)))
-                          >< (map (\ f `(f (string (cc-objbytes (mdir + f) `(mdir inc) () tgt))))
+                       ((`("nolibc" (string (cc-objbytes (home + "lib/nolibc.c") `(inc) () tgt ())))
+                          >< (map (\ f `(f (string (cc-objbytes (mdir + f) `(mdir inc) () tgt ()))))
                                   (sort (filter dotc? (readdir (home + "lib/math"))))))
                         + (? (member? tgt '(x64 arm64 riscv64))
                              `(`("sys" (string (mksys-bytes tgt)))) ())))
@@ -241,8 +246,8 @@
                                  (filter (\ nm (! (peep dt nm ()))) u) hits)
                        (go rest u2 (picked + hits)))))
              (go mems owed ()))))
-   (cc-link ins dst is ds tgt pie org nostd)
-    (: srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt)))
+   (cc-link ins dst is ds tgt pie org nostd nsi)
+    (: srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt nsi)))
                          (doto? f) (: r (uread f)
                                       (? (two? r) `(f <>r)
                                          (udie 1 ("cc: cannot open " + f))))
@@ -253,7 +258,7 @@
        ps (ldlink tgt pie org (all + (? nostd () (rtpull all tgt))))
        _ (ld-write dst ps)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
+   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -299,30 +304,36 @@
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r (n - 1)))
                 ((go 0 0) + "o"))
-   (flags as c is ds o ins t9 p9 g9 n9)
-    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9)
+   (flags as c is ds o ins t9 p9 g9 n9 x9)
+    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9 x9)
        (: a <as r >as
-          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9)
-             (a = "-pie") (flags r c is ds o ins t9 1 g9 n9)
-             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9 g9 n9) (udie 2 usage))
-             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9 g9 n9) (udie 2 usage))
-             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9 n9) (udie 2 usage))
-             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9 n9) (udie 2 usage))
-             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r) n9) (udie 2 usage))
-             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9 g9 n9)
-             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9 g9 n9)
-             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9)
-             (nostd? a) (flags r c is ds o ins t9 p9 g9 1)
-             (tol? a) (flags r c is ds o ins t9 p9 g9 n9)
+          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9 x9)
+             (a = "-pie") (flags r c is ds o ins t9 1 g9 n9 x9)
+             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9 g9 n9 x9) (udie 2 usage))
+             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9 g9 n9 x9) (udie 2 usage))
+             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9 n9 x9) (udie 2 usage))
+             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9 n9 x9) (udie 2 usage))
+             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r) n9 x9) (udie 2 usage))
+             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9 g9 n9 x9)
+             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9 g9 n9 x9)
+             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9 x9)
+             ; -nostdinc is the INCLUDE half of -nostdlib's word, and it is LOUD
+             ; rather than advisory: with the /usr/include tail still on, a header
+             ; we simply do not carry resolves to GLIBC's instead, and a
+             ; freestanding build quietly taking a hosted declaration is the wrong
+             ; artifact wearing a green face. (x9 -- it reaches incload as nsi.)
+             (a = "-nostdinc") (flags r c is ds o ins t9 p9 g9 n9 1)
+             (nostd? a) (flags r c is ds o ins t9 p9 g9 1 x9)
+             (tol? a) (flags r c is ds o ins t9 p9 g9 n9 x9)
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)
-             (flags r c is ds o (link a ins) t9 p9 g9 n9))))
+             (flags r c is ds o (link a ins) t9 p9 g9 n9 x9))))
    (moon-main as)
     ; the default target is the ground we stand on: love-arch (the C boot's pin)
     ; names the running binary's arch, so a native mooncc emits native code and
     ; -t stays what it always was, the CROSS flag. unknown grounds keep x64.
     (: ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
-       f (flags as () () () () () ntv () () ())
-       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8)
+       f (flags as () () () () () ntv () () () ())
+       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8) nsi (el f 9)
        ; TWO outcomes now, the cc shape: -c lays objects, anything else LINKS.
        ; one .c used to take a third path (cc-exe: elf64 straight off the IR,
        ; no crt0 and no linker) which could not bind a libc -- so `mooncc
@@ -331,21 +342,21 @@
        ; linker; one exe path is the whole point of having it.
        (? (! (two? ins)) (udie 2 usage)
           o (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
-                    (: _ (cc-obj <ins o is ds tgt) (quit 0)))
-               (: _ (cc-link ins o is ds tgt pie org nostd) (quit 0)))
+                    (: _ (cc-obj <ins o is ds tgt nsi) (quit 0)))
+               (: _ (cc-link ins o is ds tgt pie org nostd nsi) (quit 0)))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
           ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT)
           (&& (two? >ins)
               (&& (! (two? >>ins))
                   (&& (! (dotc? <>ins))
                       (|| c (&& (! (doto? <ins)) (! (doto? <>ins)))))))
-           (: _ (? c (cc-obj <ins <>ins is ds tgt)
-                     (cc-link `(<ins) <>ins is ds tgt pie org nostd)) (quit 0))
+           (: _ (? c (cc-obj <ins <>ins is ds tgt nsi)
+                     (cc-link `(<ins) <>ins is ds tgt pie org nostd nsi)) (quit 0))
           c (: (go l) (? (! (two? l)) (quit 0)
                          (! (dotc? <l)) (udie 2 ("cc: not a .c input: " + <l))
-                         (: _ (cc-obj <l (obase <l) is ds tgt) (go >l)))
+                         (: _ (cc-obj <l (obase <l) is ds tgt nsi) (go >l)))
                (go ins))
-          (: _ (cc-link ins "a.out" is ds tgt pie org nostd) (quit 0)))))
+          (: _ (cc-link ins "a.out" is ds tgt pie org nostd nsi) (quit 0)))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the

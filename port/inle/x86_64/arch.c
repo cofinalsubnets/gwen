@@ -3,6 +3,7 @@
 // funnelling through exc_common) build the frame below and call
 // k_exception; uart_isr funnels IRQ4 into k_uart (see the bottom).
 #include <stdint.h>
+#include "asmops.h"                    // the privileged instructions, both spellings
 void k_halt(void);
 
 // the frame exc_common hands us, lowest address (rsp) first:
@@ -45,7 +46,7 @@ static char const *const exc_name[32] = {
 // whichever guard fired. faults are not resumed -- returning from
 // #UD/#GP/#PF would just re-execute the instruction and fault again.
 void k_exception(struct k_frame *fr) {
-  asm volatile ("cli");                // no interrupts while reporting
+  k_cli();                             // no interrupts while reporting
   static int nested;
   if (nested) k_halt();                // faulted while reporting -- stop
   nested = 1;
@@ -58,9 +59,7 @@ void k_exception(struct k_frame *fr) {
   kputs(" err=");
   kputn(fr->error, 16);
   if (fr->vector == 14) {              // #PF: also the faulting address
-    uint64_t cr2;
-    asm volatile ("mov %%cr2, %0" : "=r"(cr2));
-    kputs(" cr2="), kputn(cr2, 16); }
+    kputs(" cr2="), kputn(k_rd_cr2(), 16); }
   kputc('\n');
   fbdraw();
 
@@ -81,42 +80,37 @@ void k_exception(struct k_frame *fr) {
 // line editor decodes directly.
 #define COM1 0x3f8
 
-static inline void outb(uint16_t port, uint8_t v) {
-  asm volatile ("outb %0, %1" :: "a"(v), "Nd"(port)); }
-static inline uint8_t inb(uint16_t port) {
-  uint8_t v; asm volatile ("inb %1, %0" : "=a"(v) : "Nd"(port)); return v; }
-
 // called once from kmain, just after archinit (so the IDT is live).
 void serial_init(void) {
-  outb(COM1 + 1, 0x00);    // interrupts off while configuring
-  outb(COM1 + 3, 0x80);    // DLAB: address the divisor latch
-  outb(COM1 + 0, 0x01);    // divisor low  = 1  -> 115200 baud
-  outb(COM1 + 1, 0x00);    // divisor high = 0
-  outb(COM1 + 3, 0x03);    // 8 bits, no parity, 1 stop; DLAB off
-  outb(COM1 + 2, 0xc7);    // FIFO: enable, clear, 14-byte threshold
-  outb(COM1 + 4, 0x0b);    // DTR, RTS, OUT2 (OUT2 gates the IRQ line)
-  outb(COM1 + 1, 0x01); }  // IER: interrupt when receive data arrives
+  k_outb(COM1 + 1, 0x00);    // interrupts off while configuring
+  k_outb(COM1 + 3, 0x80);    // DLAB: address the divisor latch
+  k_outb(COM1 + 0, 0x01);    // divisor low  = 1  -> 115200 baud
+  k_outb(COM1 + 1, 0x00);    // divisor high = 0
+  k_outb(COM1 + 3, 0x03);    // 8 bits, no parity, 1 stop; DLAB off
+  k_outb(COM1 + 2, 0xc7);    // FIFO: enable, clear, 14-byte threshold
+  k_outb(COM1 + 4, 0x0b);    // DTR, RTS, OUT2 (OUT2 gates the IRQ line)
+  k_outb(COM1 + 1, 0x01); }  // IER: interrupt when receive data arrives
 
 #ifdef K_TEST
 // Test build (make test_kernel): the corpus is baked into the kernel and run at
 // boot; (exit code) calls this to quit qemu via the isa-debug-exit device.
-void k_qemu_exit(int code) { asm volatile ("outl %0, %w1" :: "a"((uint32_t) code), "Nd"((uint16_t) 0xf4)); }
+void k_qemu_exit(int code) { k_outl(0xf4, (uint32_t) code); }
 #endif
 
 void serial_putc(int c) {
   if (c == '\n') serial_putc('\r');
   // bounded spin on "transmit holding register empty" so an absent or
   // wedged port cannot hang output.
-  for (int i = 0; i < 100000 && !(inb(COM1 + 5) & 0x20); i++) {}
-  outb(COM1, (uint8_t) c); }
+  for (int i = 0; i < 100000 && !(k_inb(COM1 + 5) & 0x20); i++) {}
+  k_outb(COM1, (uint8_t) c); }
 
 // IRQ4 handler body, reached from uart_isr. one interrupt can cover
 // several received bytes, so drain the FIFO completely. kq lives in
 // k/main.c -- the same input queue the PS/2 keyboard path enqueues to.
 void kq(uint8_t);
 void k_uart(void) {
-  while (inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
-    kq(inb(COM1)); }
+  while (k_inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
+    kq(k_inb(COM1)); }
 
 // (fault n) backend: deliberately raise a CPU exception, indexed by
 // the x86 vector numbers that name it. does not return -- k_exception
@@ -124,11 +118,10 @@ void k_uart(void) {
 void k_fault_trigger(intptr_t n) {
   switch (n) {
     case 0:   // #DE: integer divide by zero
-      asm volatile ("xorl %%edx,%%edx; movl $1,%%eax; xorl %%ecx,%%ecx;"
-                    "divl %%ecx" ::: "eax","ecx","edx");
+      k_divzero();
       break;
     case 3:   // #BP: breakpoint
-      asm volatile ("int3");
+      k_int3();
       break;
     case 13:  // #GP: write through a non-canonical address
       *(volatile int*) 0xdeadbeefdeadbeefULL = 0;
@@ -137,5 +130,5 @@ void k_fault_trigger(intptr_t n) {
       *(volatile int*) 0x600000000000ULL = 0;
       break;
     default:  // #UD: invalid opcode
-      asm volatile ("ud2");
+      k_ud2();
       break; } }

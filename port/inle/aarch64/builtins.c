@@ -7,6 +7,7 @@
 // calls -- and the aarch64 kernel did not link until this file existed.
 #include <stdint.h>
 #include <stddef.h>
+#include "asmops.h"                    // the privileged instructions, both spellings
 
 // --- __clear_cache: make freshly written bytes safe to execute ---------------
 // the glaze JITs into the (RWX) heap on the freestanding path; on aarch64 the
@@ -21,19 +22,18 @@
 // real implementation and not an empty body.
 void __clear_cache(void *start, void *end);
 void __clear_cache(void *start, void *end) {
-  uint64_t ctr;
-  __asm__ volatile("mrs %0, ctr_el0" : "=r"(ctr));
+  uint64_t ctr = k_rd_ctr_el0();
   uintptr_t dline = (uintptr_t) 4 << ((ctr >> 16) & 0xf);
   uintptr_t iline = (uintptr_t) 4 << (ctr & 0xf);
   uintptr_t lo = (uintptr_t) start, hi = (uintptr_t) end, p;
 
   for (p = lo & ~(dline - 1); p < hi; p += dline)
-    __asm__ volatile("dc cvau, %0" :: "r"(p) : "memory");
-  __asm__ volatile("dsb ish" ::: "memory");     // the cleans must land before the invalidates
+    k_dc_cvau(p);
+  k_dsb_ish();                                  // the cleans must land before the invalidates
   for (p = lo & ~(iline - 1); p < hi; p += iline)
-    __asm__ volatile("ic ivau, %0" :: "r"(p) : "memory");
-  __asm__ volatile("dsb ish" ::: "memory");     // ...and those before the fetch
-  __asm__ volatile("isb" ::: "memory"); }
+    k_ic_ivau(p);
+  k_dsb_ish();                                  // ...and those before the fetch
+  k_isb(); }
 
 // --- __udivti3 / __umodti3: unsigned 128-bit division ------------------------
 // love.c's div2by1 (the 128/64 step inside Knuth-D long division and the decimal

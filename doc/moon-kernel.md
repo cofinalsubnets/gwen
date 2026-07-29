@@ -16,13 +16,15 @@ stay what they are. drafted 2026-07-28; trued up as rungs land.
   `$(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC
   -ffunction-sections -fdata-sections` + per-arch `-mno-red-zone
   -mcmodel=kernel` (x86) / `-mcpu -march` (arm).
-* **inline asm**, ~35 sites, GNU spelling: x86 cli/hlt/in/out/mov-cr/int3/
-  ud2 + a cpuid-ish sequence; arm64 mrs/msr over ~10 sysregs, msr-immediate
-  (daifset/daifclr/spsel), dsb/isb, tlbi, ic/dc, `at s1e1w`, brk/hvc/wfi,
-  and register-asm locals (`asm("x0")`). mooncc's inline asm is the NEUTRAL
-  template (doc/moon.md's inline-asm section) -- an AT&T/ARM front-end was
-  deliberately deferred, and this plan keeps it deferred: the kernel is OURS,
-  so the sites move to the neutral surface instead (rung 3).
+* ~~**inline asm**, ~35 sites, GNU spelling~~ -- BOTH spellings since rung 3
+  below, in `port/inle/<a>/asmops.h`, and no call site says either. what they
+  were: x86 cli/hlt/in/out/mov-cr/int3/ud2 + the CR0/CR4 SSE enable; arm64
+  mrs/msr over ~10 sysregs, msr-immediate (daifset/daifclr/spsel), dsb/isb,
+  tlbi, ic/dc, `at s1e1w`, brk/udf/hvc/wfi, and register-asm locals
+  (`asm("x0")`). mooncc's inline asm is the NEUTRAL template (doc/moon.md's
+  inline-asm section) -- an AT&T/ARM front-end was deliberately deferred, and
+  this plan keeps it deferred: the kernel is OURS, so the sites moved to the
+  neutral surface instead.
 * **assembly files**, four: <a>/boot.S (the PVH stub -- ~50 lines of .code32
   before long mode -- and the EL1 MMU stub) and <a>/<a>.S (the exception/IRQ
   vector stubs, GAS .macro loops, iretq/eret, context plumbing).
@@ -113,21 +115,63 @@ code -- .text 0x3b340 against lld's 0x37d80 -- and it is RAM), and
 .rodata string merging. the layout otherwise lands on lld's addresses
 exactly: same vaddrs, same paddrs, same entry.
 
-### 3. the inline-asm seam: one header, two spellings
+### 3. the inline-asm seam: one header, two spellings -- LANDED 2026-07-29
 
-* per-arch `port/inle/<a>/asmops.h`: every asm site becomes a static inline
-  (`mrs_ttbr1()`, `outb()`, ...) -- most already are. the HEADER carries
-  both spellings behind the mooncc predefine: neutral template for mooncc,
-  today's GNU string for clang. the ~35 call sites go spelling-free.
-* this is what makes gwen's carve-out STRUCTURAL: the clang kernel stays
-  buildable forever as the benchmark / differential twin -- `K_TEST` runs
-  on both builds and must agree (arm64check.sh's shape, compiler-vs-compiler
-  instead of arch-vs-arch).
-* register-asm locals (`asm("x0")` in the psci/semihost calls) become the
-  template's `"rN"` pin constraints (mooncc has them; GNU keeps the
-  register-asm spelling in the clang half of the header).
-* moon.l honors `-nostdinc` (incload drops the /usr/include fallback --
-  today a header missing from crew/moon/include would silently pull glibc's).
+`port/inle/<a>/asmops.h`, one per arch, is the only place in the kernel that
+spells an instruction now. every asm site is a static inline behind a NAME
+(`k_rd_ttbr1_el1()`, `k_outb()`, `k_sp_to_el1h()`, ...), and the header says
+each one twice -- holo's neutral template under `__mooncc__`, today's GNU
+string otherwise. all 40 sites across kmain.c, both arch.c's and aarch64's
+builtins.c are spelling-free; `grep asm` over the kernel's C finds the header
+and nothing else.
+
+this is what makes gwen's carve-out STRUCTURAL rather than incidental: the
+clang kernel stays buildable forever as the differential twin, and rung 5's
+compiler-vs-compiler `K_TEST` has something to compare.
+
+the moon-side halves of the rung, both small and both loud:
+
+* `__mooncc__`, a new cpp.l predefine -- who is compiling, where every other
+  predefine says something about the language or the machine.
+* `-nostdinc`, threaded through `incload` (which already refused it -- an
+  unknown dash arg -- so kcflags would have died at the flip). LOUD, never
+  advisory: with the /usr/include tail still on, a header we do not carry
+  resolves to glibc's, and a freestanding build quietly taking a hosted
+  declaration is the wrong artifact wearing a green face.
+
+the law is `test/gate/asmops.sh` (`make test_asmops`, in test_all): one probe
+TU calling every inline, compiled by BOTH compilers and compared op by op --
+same privileged mnemonics, same symbolic operands, same order, same function.
+the op list is read out of asmops.h itself, so adding an op and forgetting the
+probe fails the gate. rung 5's differential in miniature, and the only check
+that can catch one half of the header drifting from the other.
+
+what the rung turned up:
+
+* **the two dialects agree on more than they disagree.** a bare mnemonic
+  (`cli`, `wfi`, `isb`) and a `mnemonic op, op` line (`mrs %0, ctr_el0`,
+  `dc cvau, %0`, `at s1e1w, %1`) read the SAME in both once each compiler has
+  put its own register names into `%0` -- so those lines carry no `#ifdef` at
+  all. the divergences are exactly three, and enumerable: AT&T's operand order
+  and constraint letters (`"a"`/`"Nd"` where the neutral surface pins by
+  register name, `"r0"`/`"r2"`), the ops holo NAMES differently (`trap`,
+  `dbrk`, `msri`, `ldcr`/`stcr`, and `lea d,s,0` for the SP move), and the
+  `#`/`$` on an immediate.
+* ⚠ **a multi-instruction template separates on `\n`, NEVER `;`.** the neutral
+  reader takes `;` as a comment to end of line, so a `;`-joined template
+  assembles its first instruction and SILENTLY DROPS the rest -- no scare, a
+  short block, and a barrier or an isb quietly missing. GNU is happy with `\n`
+  either way, so `\n` is the form that serves both, and the three `;`-joined
+  blocks the kernel had were rewritten.
+* holo's arm64 bitmask-immediate encoder takes bottom-aligned runs only (a
+  documented choice with a documented escape hatch), so `orr x9, x9, #(3<<20)`
+  materializes through a register in the neutral half. the one op whose two
+  halves differ in instruction COUNT; growing the encoder to the full
+  replicated-rotated form is rung-1 work, and nothing asks for it yet.
+* one declared divergence in the gate: `k_divzero` only has to FAULT, and the
+  neutral surface has no 32-bit divide, so clang's half raises #DE with `divl`
+  and ours with `divq`. every other op matches instruction for instruction on
+  both arches.
 
 ### 4. the .S files become LAYS (the mksys precedent)
 
@@ -179,9 +223,11 @@ cannot say -- and they port to holo IR lays beside it:
 
 2 went first (it needed nothing from rung 1 and carried no compiler risk),
 and it landed the value early: our linker is under the shipping kernel on
-both arches and all three doors. 1 followed, and it is pure ADDITION -- new
-ops, no caller yet, nothing in the tree lowered differently. what is left
-is 3 -> 4 -> 5. 3 is a mechanical sweep with one new header per arch, 4 is
-two lay files (~mksys.l x 2-3 in size), 5 is makefile + gates. the probes
-below belong before 5 (rungs 3 and 4 do not depend on them). nothing before
-5 disturbs the clang COMPILER lanes, so the tree stays green the whole climb.
+both arches and all three doors. 1 followed, pure ADDITION -- new ops, no
+caller yet, nothing in the tree lowered differently. 3 then gave those ops
+their first callers and, with them, the differential the flip will lean on.
+what is left is 4 -> 5. 4 is two lay files (~mksys.l x 2-3 in size), 5 is
+makefile + gates. the probes above belong before 5 (rung 4 does not depend
+on them). nothing before 5 disturbs the clang COMPILER lanes, so the tree
+stays green the whole climb -- rung 3 changed 40 call sites and the kernel
+gates did not move (3562 tests, both arches, all three doors).

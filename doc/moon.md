@@ -156,6 +156,11 @@ gate per stage. the pipeline, each its own file:
   pulls the runtime BY NEED, archive-fashion -- nolibc + the am math + the
   mksys sys leaf, compiled from the TOOLCHAIN ROOT (below; a set carrying its
   own am.o never meets a twin). -nostdlib/-ffreestanding turn the pull off;
+  -nostdinc is the INCLUDE half of that word and drops /usr/include off the
+  search tail, so only our own headers answer (loud, not advisory: with the
+  tail on, a header we do not carry resolves to glibc's, and a freestanding
+  build taking a hosted declaration is the wrong artifact wearing a green
+  face -- the kernel is the consumer, doc/moon-kernel.md rung 3).
   the SEMANTIC refusals stay loud (-shared, -Wl,'s payload, -m..) because an
   ignored one would be the silent-no-op trap in a cc suit. gate:
   test/gate/drv.sh (test_drv, test_all). its tail SEAT fires moon-main when `mooncc` is the
@@ -813,6 +818,15 @@ sticks to the neutral surface, and no new assembler exists anywhere.
   prologue mov each, wraps say fp) KEEPS this gate --
   asm-as-precolor+clobber-node waits for a consumer that needs homes in
   an asm fn.
+* ⚠ a multi-instruction template separates on `\n`, NEVER `;` -- the neutral
+  reader takes `;` as a comment to end of line, so a `;`-joined template
+  assembles its first instruction and SILENTLY DROPS the rest. `\n` is also
+  what GNU wants, so it is the separator that serves a two-spelling header.
+* the first real consumer is the kernel's `port/inle/<a>/asmops.h`
+  (doc/moon-kernel.md rung 3), which carries both spellings behind the
+  `__mooncc__` predefine -- cpp's, and the reason it exists. worth reading
+  for how far the two dialects actually agree: a bare mnemonic and a
+  `mnemonic op, op` line are the SAME text in both.
 * deferred until a consumer demands them: an AT&T template front-end (the
   Linux floor), "f" float operands, asm goto (Linux x86 requires it),
   named [sym] operands, top-level asm.

@@ -2,6 +2,7 @@
 #include "k.h"
 #include "love.h"
 #include "quay.h"
+#include "asmops.h"                    // the privileged instructions, both spellings
 #include <stdarg.h>
 #include <limits.h>
 
@@ -69,14 +70,6 @@ void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc
 #ifdef K_TEST
 void k_qemu_exit(int);
 #endif
-
-static ai_inline void kwait(void) { asm volatile (
-#if defined (__x86_64__)
-  "hlt"
-#elif defined (__aarch64__)
-  "wfi"
-#endif
-  ); }
 
 #include "quay.h"
 #include <stdarg.h>
@@ -157,7 +150,7 @@ struct k_source {
 static int kb_getc(int fd) {
   (void) fd;
   int b;
-  while ((b = kqpop()) < 0) fbdraw(), kwait();
+  while ((b = kqpop()) < 0) fbdraw(), k_wait();
   return b; }
 static bool kb_ready(int fd) { (void) fd; return kkb.qh != kkb.qt; }
 
@@ -243,7 +236,7 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ticks) {
   for (;;) {
     if (ticks && kticks >= deadline) return;
     for (int i = 0; i < n; i++) if (ai_ready(fds[i])) return;
-    kwait(); } }
+    k_wait(); } }
 uintptr_t ai_clock(void) { return kticks; }
 
 // Pure time-wait. ticks=0 means infinite (caller is expected to chain with an
@@ -252,7 +245,7 @@ void ai_sleep(uintptr_t ticks) {
   uintptr_t deadline = kticks + ticks;
   for (;;) {
     if (ticks && kticks >= deadline) break;
-    kwait(); } }
+    k_wait(); } }
 
 static const uint8_t
   kb2ascii[] = {
@@ -398,7 +391,7 @@ void fbdraw(void) {
 
 static lvm(draw) {
   fbdraw();
-  kwait();
+  k_wait();
   Ip += 1;
   return Continue(); }
 
@@ -498,22 +491,11 @@ static char const ktests[] =
 
 void kmain(void) {
 #if defined(__x86_64__)
- // Enable x87/SSE before ANY other C runs. Limine doesn't guarantee SSE is
- // on, and clang auto-vectorizes freely on x86_64 -- even the struct copies
- // in limine_to_kboot below compile to movups, which #UDs (-> triple fault,
- // no output) if SSE is still masked. CR0: clear EM (no FPU emulation), set
- // MP; CR4: set OSFXSR | OSXMMEXCPT. The "memory" clobber keeps clang from
- // hoisting any vectorized access above this. This is the single SSE-enable
- // point -- archinit no longer repeats it.
- asm volatile(
-  "mov %%cr0, %%rax\n\t"
-  "and $~(1 << 2), %%rax\n\t"          // CR0.EM = 0
-  "or  $(1 << 1), %%rax\n\t"           // CR0.MP = 1
-  "mov %%rax, %%cr0\n\t"
-  "mov %%cr4, %%rax\n\t"
-  "or  $((1 << 9) | (1 << 10)), %%rax\n\t"  // CR4.OSFXSR | CR4.OSXMMEXCPT
-  "mov %%rax, %%cr4\n\t"
-  ::: "rax", "memory");
+ // Enable x87/SSE before ANY other C runs -- a compiler vectorizes freely on
+ // x86_64 (even the struct copies in limine_to_kboot below compile to movups),
+ // and that #UDs into a triple fault with no output while SSE is masked. This
+ // is the single SSE-enable point; archinit no longer repeats it.
+ k_sse_enable();
 #endif
  // Copy the requested Limine responses into kboot before anything else
  // reads it.

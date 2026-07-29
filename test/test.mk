@@ -309,6 +309,15 @@ test_raw: host out/host$(hsuf)/mooncc
 .PHONY: test_drv
 test_drv: host out/host$(hsuf)/mooncc
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
+# the kernel's inline-asm SEAM (doc/moon-kernel.md rung 3): port/inle/<a>/asmops.h
+# says every privileged instruction twice -- holo's neutral template for mooncc,
+# GNU's for clang -- and two spellings of one operation rot quietly. the gate
+# compiles one probe with BOTH compilers and compares them op by op, so a half
+# that drifts is caught here instead of at the rung-5 flip. seconds; in test_all.
+# skips its comparison (not its mooncc compile) without llvm-objdump or clang.
+.PHONY: test_asmops
+test_asmops: host out/host$(hsuf)/mooncc
+	@sh test/gate/asmops.sh $(ho)
 # THE FIXPOINT (self-host rung 2): the default love IS mooncc-built now; this
 # gate has it rebuild ITSELF -- love1 (love0's lane, relinked) bakes its own
 # compiler image, recompiles every TU, links love2, and the two must be

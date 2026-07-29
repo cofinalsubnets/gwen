@@ -380,6 +380,14 @@
    (cpp toks incf fname)                              ; -> (1 out) | ()
     (: macs (: t (tablet 0)
                _ (pin t "__STDC__" `('obj `((tok 'num 1 0))))
+               ; WHO IS COMPILING. every other predefine here says something about
+               ; the language or the machine; this one says the compiler, and it is
+               ; the seam a source uses to pick a spelling only we accept -- the
+               ; kernel's asmops.h reaches for it to write holo's NEUTRAL inline-asm
+               ; template for us and GNU's AT&T/ARM string for clang, one header,
+               ; both builds. cpp's, not the driver's: it is true of every mooncc
+               ; compile, target and flags alike.
+               _ (pin t "__mooncc__" `('obj `((tok 'num 1 0))))
                ; __FILE__ -> the TU path as a string literal. pinned as an object
                ; macro (not per-token) so it costs nothing until used; includes
                ; share this table, so it reads the top file's name throughout --
