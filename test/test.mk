@@ -264,6 +264,16 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m
+# test_libc -- OUR C LIBRARY against the system's, function by function
+# (doc/libc.md rung 0). test/libc/*.c is built by mooncc (which pulls
+# crew/moon/lib/nolibc.c by need) and by gcc (glibc), run, and the two OUTPUTS
+# compared -- output, not the exit code test_moon compares, so a drift names the
+# function and the case instead of just saying eight bits changed. it exists
+# because the two libcs DID drift (a wrapping strtol against a saturating one)
+# with nothing gating the pure floor at all.
+.PHONY: test_libc
+test_libc: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/libc.sh $(ho) $m
 # The rung-2 self-host gate ([[love-distro]]): compile love.c AND every host/*.c with
 # mooncc (gcc/clang only LINKS), then run the whole corpus through the all-mooncc
 # binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in

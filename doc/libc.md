@@ -67,20 +67,63 @@ byte loop.
 
 ## the rungs
 
-### 0. a differential gate for the shared floor -- SEEDED 2026-07-29
+### 0. a differential gate for the whole floor -- LANDED 2026-07-29
 
-`test/cc/105-strtol.c`. the mooncc battery (`test/gate/moon.sh`) compiles each
-`test/cc/*.c` with mooncc AND with gcc and demands the exit codes agree -- and
-because mooncc's implicit link pulls `nolibc.c`, a program that CALLS libc turns
-that harness into a differential over our libc against glibc. that is the shape
-to grow: one program per function family, gcc as the second opinion.
+**`make test_libc`** -- `test/gate/libc.sh` over `test/libc/*.c`, in `test_all`.
+six programs, one per family: `mem` `str` `ctype` `num` `fmt` `sort`, ~50
+functions. each is built twice -- by mooncc, whose implicit link pulls
+`nolibc.c`, and by gcc against glibc -- run, and the two **outputs** compared.
 
-⚠ it is deliberately the battery's only non-freestanding member; say so in any
-sibling, or a failure reads as a codegen bug. proved to bite: reverting nolibc's
-saturation drops the exit code 17 -> 10.
+⚠ **output, not the exit code the mooncc battery compares.** an exit code is
+eight bits and says only THAT something drifted; a diff names the function and
+the case. that is why this is its own gate rather than more programs in
+`test/cc`, which stays all-freestanding.
+
+three design points that make it work, all of them learned the hard way in the
+first hour:
+
+- **report what the standard FIXES, not what a library chose.** comparisons go
+  through `say_c` (the sign only -- glibc hands back the byte difference, ours
+  -1/0/1, both right); pointers through `say_p` (an offset, since addresses
+  differ between builds); a predicate's truth through `!!` (glibc's `isalnum`
+  returns the mask bit `8`, ours returns `1`). every one of these produced a
+  false failure before it was normalized.
+- **the reporting side must not use the library under test.** `test/libc/say.h`
+  turns its own digits by hand and prints through `putchar`, so a drifted `%d`
+  shows up as `fmt.c`'s payload instead of corrupting all six frames at once.
+- **no undefined behaviour in the cases.** an invalid `strtol` base leaves
+  `endptr` untouched in BOTH libraries, so a differential on it compares two
+  uninitialized pointers and fails at random. it did.
+
+**phase 2: the headers must not promise what the library cannot deliver.** every
+function declared in `stdio.h`/`stdlib.h`/`string.h`/`ctype.h` is referenced by a
+generated program; a name with no body fails the LINK. generated from the headers
+rather than listed, so it cannot rot. proved to bite by adding a bogus
+declaration.
+
+**what the first run found** -- all of it invisible until something compared:
+
+- **twelve declared-with-no-body names**: `putchar` `puts` `fgetc` `getchar`
+  `scanf` `isblank` `mempcpy` `rawmemchr` `reallocarray` `bsearch` `strtoll`
+  `getprogname`. a program calling any of them built under gcc and died at the
+  link under `CC=mooncc`. gnulib's progname module reaches `getprogname` exactly
+  that way. all twelve now have bodies; `gets` lost its declaration instead
+  (C11 removed it, and there is nothing safe to point it at).
+- **`strtod` skipped no leading whitespace** -- `strtod("  42.5")` was `0`.
+  `am_strtod` is love's float reader and the reader hands it a *token*, so the
+  libc face wants a wrapper; that wrapper is now where the two part.
+- ⚠ **mooncc lowers unary minus on a double as `0.0 - d`** (crew/moon/gen.l:1396,
+  and the comment there says so), which does not flip the sign of a zero. so
+  `strtod("-0.0")` could not produce `-0.0` even once the wrapper wanted it to.
+  **invisible to love, which has no negative zero at all** -- only a C program
+  can see it, which is why it survived. worked around in the wrapper by setting
+  the sign bit by hand; **the codegen fix is open** and touches four backends.
+- ⚠ **mooncc refuses a function address in a static initializer** (`CGDATA-BAD`),
+  which is why phase 2 references at runtime. also open, also small.
 
 ⚠ **this rung stands alone and is worth having even if the rest is never
-built** -- it is the thing that would have caught the original drift.
+built** -- it is the thing that would have caught the original drift, and on its
+first run it found four more.
 
 ### 1. the shared floor becomes one file
 
@@ -157,10 +200,17 @@ duplicate is deleted. what remains is five byte loops that cannot drift in any
 way a gate would miss -- change `memcpy` on either side and everything fails at
 once, loudly.
 
-so rung 0 is worth building on its own, and rungs 1-2 are worth doing when
-something else is already open in `moon.l`'s member list or in `kernel.mk`.
-**what would revive the case** is the freestanding side growing a function with
-a policy in it: a `snprintf` for kernel diagnostics, a real string surface, a
-`strtol` coming back for a command line. the rule that falls out of the original
-bug: **a duplicated function is fine while it is a loop, and a liability the
-moment it has a rule.**
+so rung 0 was worth building on its own -- and its first run found four more
+faults than the one it was written for, none of them about duplication at all.
+rungs 1-2 are worth doing when something else is already open in `moon.l`'s
+member list or in `kernel.mk`. **what would revive the merge case** is the
+freestanding side growing a function with a policy in it: a `snprintf` for kernel
+diagnostics, a real string surface, a `strtol` coming back for a command line.
+the rule that falls out of the original bug: **a duplicated function is fine
+while it is a loop, and a liability the moment it has a rule.**
+
+and the wider lesson rung 0 taught, which outlives this arc: **the tree had no
+differential against a second implementation of anything it wrote in C.** the
+mooncc battery compares CODEGEN against gcc; nothing compared the LIBRARY
+against a libc until now. every fault above had been sitting in the tree
+unnoticed, and none of them could have been found by reading.

@@ -285,6 +285,14 @@ int ispunct(int c) { return isprint(c) && c != 32 && !isalnum(c); }
 int tolower(int c) { return (c >= 65 && c <= 90) ? c + 32 : c; }
 int toupper(int c) { return (c >= 97 && c <= 122) ? c - 32 : c; }
 int isgraph(int c) { return c > 32 && c < 127; }
+int isblank(int c) { return c == 32 || c == 9; }
+/* the two GNU string extensions the headers name: memcpy answering its END, and
+ * memchr with no bound (the caller warrants the byte is there) */
+void *mempcpy(void *d, void const *s, size_t n) { return (char *) memcpy(d, s, n) + n; }
+void *rawmemchr(void const *p, int c) {
+  unsigned char const *q = p;
+  while (*q != (unsigned char) c) q++;
+  return (void *) q; }
 char *strchr(char const *s, int c) { for (;; s++) { if (*s == (char) c) return (char *) s; if (!*s) return 0; } }
 /* the classic table (errno 1..34), the range real packages print; past it the
  * number speaks for itself. the texts are the canonical POSIX ones -- m4's
@@ -696,6 +704,15 @@ long atol(char const *s) {
   return sign * v; }
 int abs(int v) { return v < 0 ? -v : v; }
 long labs(long v) { return v < 0 ? -v : v; }
+/* n*sz with the multiply CHECKED -- the whole reason the call exists, and a
+ * plain realloc(p, n*sz) would be the overflow it was invented to stop */
+void *reallocarray(void *p, size_t n, size_t sz) {
+  if (sz && n > (size_t) -1 / sz) { __errno_v = ENOMEM; return 0; }
+  return realloc(p, n * sz); }
+/* argv[0], stashed by __ai_start below -- gnulib's progname module reaches for
+ * this and would otherwise die at the link */
+char const *__ai_progname = "";
+const char *getprogname(void) { return __ai_progname; }
 
 /* ---- env ---- */
 char *getenv(char const *k) {
@@ -1427,7 +1444,29 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
    that lived here parsed "0.3" one ulp off -- masked until love's printer
    went shortest-roundtrip, then loud in test_raw. */
 double am_strtod(char const *, char **);
-double strtod(char const *s, char **end) { return am_strtod(s, end); }
+/* ⚠ THE LIBC FACE IS NOT am_strtod's FACE, and the wrapper is where they part.
+ * am_strtod is love's float reader: the reader hands it a whole TOKEN, so it
+ * skips no leading space, and love has no negative zero at all ((show -0.0) is
+ * 0.0). C's strtod owes both. doing it here keeps am.c exactly what love's
+ * reader wants -- correctly rounded and nothing else -- and still hands a C
+ * program the function it asked for. found by test/libc/num.c against glibc. */
+double strtod(char const *s, char **end) {
+  char const *p = s;
+  while (*p == 32 || (*p >= 9 && *p <= 13)) p++;
+  char *e = (char *) p;
+  double v = am_strtod(p, &e);
+  if (e == p) { if (end) *end = (char *) s; return 0.0; }   /* no conversion: the ORIGINAL s */
+  if (end) *end = e;
+  if (v == 0.0 && *p == '-') {                              /* C keeps a zero's sign */
+    /* ⚠ the sign bit BY HAND, not -v. mooncc lowers unary minus on a double as
+     * `0.0 - d` (crew/moon/gen.l, and the comment there says so), and 0.0 - 0.0
+     * is +0.0 -- so -v would silently do nothing here. invisible to love, which
+     * has no negative zero at all, and therefore only reachable from C. */
+    union { double d; unsigned long u; } b;
+    b.d = v;
+    b.u |= 1UL << 63;
+    v = b.d; }
+  return v; }
 /* the unsigned twin: strtol's digit walk, saturating at ULONG_MAX the same way,
  * with the ONE wrap the standard does ask for -- a leading minus negates the
  * magnitude modulo 2^64 rather than refusing. */
@@ -1453,6 +1492,7 @@ static unsigned long __strtoux(char const *s, char **endptr, int base) {
   if (!any) return 0;
   if (over) { __errno_v = ERANGE; return ULONG_MAX; }
   return neg ? 0UL - rc : rc; }
+long strtoll(char const *s, char **endptr, int base) { return strtol(s, endptr, base); }
 unsigned long strtoul(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
 unsigned long strtoull(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
 unsigned long strtoumax(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
@@ -1466,6 +1506,18 @@ void qsort(void *base, size_t n, size_t sz, int (*cmp)(void const *, void const 
       for (size_t j = i; j >= gap && cmp(a + (j - gap) * sz, a + j * sz) > 0; j -= gap) {
         char *x = a + (j - gap) * sz, *y = a + j * sz;
         for (size_t k = 0; k < sz; k++) { char t = x[k]; x[k] = y[k]; y[k] = t; } } }
+/* qsort's twin, and the headers already named it: a plain binary search over
+ * the half-open span, answering the ELEMENT or null. */
+void *bsearch(void const *key, void const *base, size_t n, size_t sz,
+              int (*cmp)(void const *, void const *)) {
+  char const *a = base;
+  size_t lo = 0, hi = n;
+  while (lo < hi) {
+    size_t mid = lo + (hi - lo) / 2;
+    int r = cmp(key, a + mid * sz);
+    if (r == 0) return (void *) (a + mid * sz);
+    if (r < 0) hi = mid; else lo = mid + 1; }
+  return 0; }
 
 /* exec's variadic pair: gather (arg0, .., NULL) off the stack, then execv[p]. */
 int execl(char const *p, char const *a0, ...) {
@@ -1580,6 +1632,17 @@ int ungetc(int c, FILE *f) {
   f->eof = 0;
   return c & 255; }
 int fputs(char const *s, FILE *f) { size_t n = strlen(s); return fwrite(s, 1, n, f) == n ? 0 : EOF; }
+/* ---- the stdout/stdin shorthands and the odds and ends the HEADERS already
+ * promised. every one of these was declared in crew/moon/include/ with no body
+ * anywhere, so a program calling it compiled and then died at the LINK under
+ * CC=mooncc while building fine against glibc -- gnulib's progname module
+ * reaches getprogname exactly that way. test/libc/'s header-completeness phase
+ * (test/gate/libc.sh) is what found them and is what keeps the promise honest
+ * from here: a name the headers declare must have a definition. ---- */
+int putchar(int c) { return fputc(c, stdout); }
+int puts(char const *s) { return fputs(s, stdout) == EOF || fputc('\n', stdout) == EOF ? EOF : 0; }
+int fgetc(FILE *f) { return getc(f); }
+int getchar(void) { return getc(stdin); }
 int ferror(FILE *f) { return f->err; }
 int feof(FILE *f) { return f->eof; }
 void clearerr(FILE *f) { f->err = 0; f->eof = 0; }
@@ -1598,8 +1661,7 @@ int sscanf(char const *s, char const *fmt, ...) {
     else { if (*s != *fmt) break; s++; } }
   va_end(ap);
   return got; }
-int fscanf(FILE *f, char const *fmt, ...) {
-  va_list ap; va_start(ap, fmt);
+static int __vfscanf(FILE *f, char const *fmt, va_list ap) {
   int got = 0, c;
   for (; *fmt; fmt++) {
     if (*fmt == '%') {
@@ -1621,8 +1683,18 @@ int fscanf(FILE *f, char const *fmt, ...) {
       else if (*fmt == 'c') { c = getc(f); if (c == EOF) break; *va_arg(ap, char *) = (char) c; got++; } }
     else if (*fmt == 32 || (*fmt >= 9 && *fmt <= 13)) ;   /* fmt whitespace: no peek, skip */
     else { c = getc(f); if (c != (unsigned char) *fmt) break; } }
-  va_end(ap);
   return got; }
+/* one body, three faces -- fscanf and scanf differ only in which stream */
+int fscanf(FILE *f, char const *fmt, ...) {
+  va_list ap; va_start(ap, fmt);
+  int r = __vfscanf(f, fmt, ap);
+  va_end(ap);
+  return r; }
+int scanf(char const *fmt, ...) {
+  va_list ap; va_start(ap, fmt);
+  int r = __vfscanf(stdin, fmt, ap);
+  va_end(ap);
+  return r; }
 
 /* no name database yet: every passwd/group lookup misses, so tar prints numeric
  * owner/group (its own fallback). a real /etc/passwd walk is a later rung. */
@@ -1685,6 +1757,7 @@ void __ai_start(long *sp) {
   long argc = sp[0];
   char **argv = (char **) (sp + 1);
   char **e = argv + argc + 1;
+  if (argc > 0 && argv[0]) __ai_progname = argv[0];   /* getprogname's answer */
   environ = e;
   while (*e) e++;
   __auxv = (long *) (e + 1);

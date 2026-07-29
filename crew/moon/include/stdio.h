@@ -35,7 +35,8 @@ int    ungetc(int, FILE*);
 int    getc(FILE*);
 int    getchar(void);
 char  *fgets(char*, int, FILE*);
-char  *gets(char*);
+/* no gets: C11 removed it, there is nothing safe to point it at, and a
+ * declaration with no definition is a link trap wearing a promise. */
 FILE  *fopen(char const*, char const*);
 FILE  *freopen(char const*, char const*, FILE*);
 int    fclose(FILE*);
