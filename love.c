@@ -69,6 +69,9 @@ typedef int64_t ai_sdlimb;
 // count by chunk+1 (a limb prints in < that many digits). 30103 = round(1e5 log10 2).
 #define limb_dec_chunk  (limb_bits * 30103 / 100000)
 #define limb_dec_digits (limb_dec_chunk + 1)
+// the hex twin, exact at 4 bits a digit -- but ONE SHORT of a full limb, because
+// the pass multiplies by radix^chunk and 16^(limb_bits/4) IS limb_base.
+#define limb_hex_chunk  (limb_bits / 4 - 1)
 
 #define Bytes (Bits>>3)
 _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
@@ -376,6 +379,7 @@ struct ai *ai_big_binop(struct ai*, int vop);  // vop_add..vop_rem, packed; pops
 struct ai *ai_big_quot_true(struct ai*);       // `/` bignum lane: exact quotient when b | a, else a float box
 struct ai *ai_big_dec(struct ai*);             // sp[0] bignum -> decimal string
 struct ai *ai_big_read_dec(struct ai*);        // sp[0] [+-]?digits token -> canonical value
+struct ai *ai_big_read_hex(struct ai*);        // ..and its [+-]?0x<hexdigits> twin
 
 // A boxed scalar float: its own data sentinel (lvm_flo) and a lean {ap, payload}
 // box (struct ai_flo, below) -- two words, vs the four a rank-0 ai_R vec spent.
@@ -4080,13 +4084,27 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
 static struct ai *grbufg(struct ai *g, uintptr_t len);
 
 // A token is a plain decimal integer iff it is [+-]?[0-9]+ with no leading-zero
-// prefix (so "0x.." hex and "0.." octal stay with strtol, and bare "0" parses
-// as decimal). These read at full precision through ai_big_read_dec.
+// prefix (so "0.." octal stays with strtol, and bare "0" parses as decimal).
 static ai_inline bool is_dec_int(char const *s, uintptr_t n) {
  uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
  if (i >= n) return false;                       // a lone sign is a symbol
  if (s[i] == '0' && n - i > 1) return false;     // leading zero -> let strtol decide
  for (; i < n; i++) if (s[i] < '0' || s[i] > '9') return false;
+ return true; }
+
+// ..and a hex integer iff it is [+-]?0[xX][0-9a-fA-F]+ -- at least one digit, so
+// a bare "0x" stays an honest symbol. BOTH read at full precision, through
+// ai_big_read_dec / _hex. Hex used to go by strtol, which is where the numeric
+// tower had its one hole: a literal at or above 2^63 came back as whatever that
+// build's strtol did with an overflow, so the SAME SOURCE read as three
+// different numbers (nolibc wrapped to the negative twin, glibc saturated, and
+// wasm's 32-bit long did neither). port/inle/klink.l spells kernel addresses
+// exactly this way, and it survived on the wrap alone.
+static ai_inline bool is_hex_int(char const *s, uintptr_t n) {
+ uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0;
+ if (n - i < 3 || s[i] != '0' || (s[i+1] | 32) != 'x') return false;
+ for (i += 2; i < n; i++)
+  if (!((s[i] >= '0' && s[i] <= '9') || ((s[i] | 32) >= 'a' && (s[i] | 32) <= 'f'))) return false;
  return true; }
 
 static struct ai *ioparse(struct ai *g, bool multi);
@@ -4488,9 +4506,10 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
       if (!ai_ok(g = zungetc(g, c))) return g;
       struct ai_str *s = str(g->sp[0]);
       txt(s)[len(s) = n] = 0; // zero terminate for strtol ; n < lim so this is safe
-      // A plain decimal integer reads at full precision (fixnum / box / bignum);
-      // hex/octal/float/symbol tokens keep the strtol -> strtod -> intern path.
+      // A plain integer, decimal or hex, reads at full precision (fixnum / box /
+      // bignum); octal/float/symbol tokens keep the strtol -> strtod -> intern path.
       if (is_dec_int(txt(s), n)) return ai_big_read_dec(g);
+      if (is_hex_int(txt(s), n)) return ai_big_read_hex(g);
       char *e;
       long j = strtol(txt(s), &e, 0);
       if (*e == 0) {
@@ -7566,26 +7585,35 @@ lvm(lvm_bdiv) {
 
 // --- reader / printer -------------------------------------------------------
 
-// g->sp[0] is a [+-]?[0-9]+ token string; replace it with the canonical value
-// (fixnum / box / bignum). Accumulates 9 decimal digits per mul-add pass.
-struct ai *ai_big_read_dec(struct ai *g) {
+// One digit, either radix -- decimal digits sort below 'a', so the same fold
+// reads both and hex takes either case.
+static ai_inline ai_limb rdigit(char c) {
+ return (ai_limb) (c <= '9' ? c - '0' : (c | 32) - 'a' + 10); }
+
+// g->sp[0] is a [+-]?<pfx><digits> token string in `radix`, `pfx` bytes of
+// prefix after the sign (2 for "0x", 0 for decimal); replace it with the
+// canonical value (fixnum / box / bignum). Accumulates `chunk` digits per
+// mul-add pass, chunk chosen so radix**chunk fits one limb.
+static struct ai *big_read_radix(struct ai *g, ai_limb radix, int chunk, uintptr_t pfx) {
  struct ai_str *tok = str(g->sp[0]);
  uintptr_t n = tok->len;
  char const *s = tok->bytes;
  bool neg = n && s[0] == '-';
- uintptr_t i = (n && (s[0] == '-' || s[0] == '+')) ? 1 : 0, ndig = n - i;
- int cap = (int) (ndig / limb_dec_chunk) + 3;    // upper-bound magnitude limbs (>= ndig/digits-per-limb)
+ uintptr_t i = ((n && (s[0] == '-' || s[0] == '+')) ? 1 : 0) + pfx, ndig = n - i;
+ int cap = (int) (ndig / (uintptr_t) chunk) + 3;  // upper-bound magnitude limbs (>= ndig/digits-per-limb)
  uintptr_t res_area = Width(struct ai_big) + b2w((size_t) cap * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, res_area + b2w((size_t) cap * sizeof(ai_limb))))) return g;
  tok = str(g->sp[0]), s = tok->bytes;            // re-fetch post-GC
  ai_limb *mag = (ai_limb*) (g->hp + res_area);
  int m = 0;
  while (i < n) {
-  ai_limb chunk = 0, pw = 1; int k = 0;          // limb_dec_chunk digits per pass (10^chunk fits a limb)
-  for (; i < n && k < limb_dec_chunk; i++, k++) chunk = chunk * 10 + (ai_limb) (s[i] - '0'), pw *= 10;
-  m = mag_mul_add_small(mag, m, pw, chunk); }
+  ai_limb acc = 0, pw = 1; int k = 0;
+  for (; i < n && k < chunk; i++, k++) acc = acc * radix + rdigit(s[i]), pw *= radix;
+  m = mag_mul_add_small(mag, m, pw, acc); }
  g->sp[0] = ai_big_canon(&g->hp, mag, m, neg);
  return g; }
+struct ai *ai_big_read_dec(struct ai *g) { return big_read_radix(g, 10, limb_dec_chunk, 0); }
+struct ai *ai_big_read_hex(struct ai *g) { return big_read_radix(g, 16, limb_hex_chunk, 2); }
 
 // g->sp[0] is a bignum; replace it with its base-10 string (with sign). Builds
 // the digits into a fresh ai_str by repeated divide-by-10 of a heap-local copy

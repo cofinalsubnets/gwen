@@ -1,6 +1,10 @@
 #include <stddef.h>
 #include "love.h"
 
+// -nostdinc, so no limits.h: the two bounds by construction.
+#define l_max ((long) (~0UL >> 1))
+#define l_min (-l_max - 1)
+
 size_t strlen(char const *c) {
   size_t len = 0;
   while (*c++) len++;
@@ -34,11 +38,20 @@ long int strtol(const char *s, char **endptr, int base) {
   else --p; }
  else if (!base) base = 10;
  if ( base < 2 || base > 36 ) return 0;
- int digit = -1;
- long rc = 0;
- for (const char *x; (x = memchr(digits, tolower(*p), base)); p++)
-  digit = x - digits,
-  rc = rc * base + digit;
- if (digit == -1) p = NULL, rc = 0;
+ // OVERFLOW SATURATES -- it does not wrap, which is what the standard says and
+ // what every strtol we sit beside does. crew/moon/lib/nolibc.c's twin saturates
+ // the same way, and it MUST: when the two disagreed, one source text read as two
+ // different numbers depending on which libc the binary carried. the accumulation
+ // runs UNSIGNED so the negative bound's magnitude is reachable without signed
+ // overflow on the way. (freestanding has no errno -- the limit IS the signal.)
+ unsigned long lim = sign < 0 ? (unsigned long) l_max + 1UL : (unsigned long) l_max,
+               cut = lim / (unsigned long) base, cutd = lim % (unsigned long) base, rc = 0;
+ int digit = -1, over = 0;
+ for (const char *x; (x = memchr(digits, tolower(*p), base)); p++) {
+  digit = (int) (x - digits);
+  if (over || rc > cut || (rc == cut && (unsigned long) digit > cutd)) over = 1;
+  else rc = rc * (unsigned long) base + (unsigned long) digit; }
+ if (digit == -1) p = NULL, rc = 0, over = 0;
  if (endptr) *endptr = (char*) (p ? p : s);
- return sign * rc; }
+ if (over) return sign < 0 ? l_min : l_max;
+ return (long) (sign < 0 ? 0UL - rc : rc); }

@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <limits.h>
 #include <signal.h>
 #include <setjmp.h>
 #include <poll.h>
@@ -1315,8 +1316,8 @@ int setsockopt(int fd, int lv, int op, void const *v, socklen_t n) {
   return (int) er(sc5(NR_setsockopt, fd, lv, op, (long) v, n)); }
 
 /* ---- strtol / strtod: the reader's number path. the bodies keep libc/str.c's
- * exact semantics (the kernel corpus runs them; the naive strtod measured
- * corpus-green against glibc's in the rung-4 differential). ---- */
+ * exact semantics, SATURATION INCLUDED (the kernel corpus runs them; the naive
+ * strtod measured corpus-green against glibc's in the rung-4 differential). ---- */
 static int __digval(int c) {
   if (c >= 48 && c <= 57) return c - 48;
   if (c >= 97 && c <= 122) return c - 87;
@@ -1338,11 +1339,24 @@ long strtol(char const *s, char **endptr, int base) {
     else --p; }
   else if (!base) base = 10;
   if (base < 2 || base > 36) return 0;
-  int any = 0;
-  long rc = 0;
-  for (int d; (d = __digval(*p)) < base; p++) { any = 1; rc = rc * base + d; }
+  /* OVERFLOW SATURATES -- it does not wrap. the standard says so, and every
+   * strtol we sit beside (glibc, musl, newlib) does it; the accumulator used to
+   * wrap, which is how ONE source text came to read as two different numbers
+   * depending on which libc the binary carried. saturating also leaves the
+   * caller a signal (the limit value, and ERANGE) where wrapping leaves a
+   * plausible lie. the accumulation runs UNSIGNED so LONG_MIN's magnitude is
+   * reachable without signed overflow on the way. */
+  unsigned long lim = sign < 0 ? (unsigned long) LONG_MAX + 1UL : (unsigned long) LONG_MAX,
+                cut = lim / (unsigned long) base, cutd = lim % (unsigned long) base, rc = 0;
+  int any = 0, over = 0;
+  for (int d; (d = __digval(*p)) < base; p++) {
+    any = 1;
+    if (over || rc > cut || (rc == cut && (unsigned long) d > cutd)) over = 1;
+    else rc = rc * (unsigned long) base + (unsigned long) d; }
   if (endptr) *endptr = (char *) (any ? p : s);
-  return any ? sign * rc : 0; }
+  if (!any) return 0;
+  if (over) { __errno_v = ERANGE; return sign < 0 ? LONG_MIN : LONG_MAX; }
+  return (long) (sign < 0 ? 0UL - rc : rc); }
 double atof(char const *s) { return strtod(s, 0); }
 /* the libc math faces over the am floor (am.c's seven transcendentals ride
  * m_am.o in every ladder link); the rest are exact derivations. tan and the
@@ -1414,7 +1428,9 @@ double ldexp(double x, int n) {                    /* x * 2^n, clamped through t
    went shortest-roundtrip, then loud in test_raw. */
 double am_strtod(char const *, char **);
 double strtod(char const *s, char **end) { return am_strtod(s, end); }
-/* the unsigned twin: strtol's digit walk, no sign, wrapping like glibc's. */
+/* the unsigned twin: strtol's digit walk, saturating at ULONG_MAX the same way,
+ * with the ONE wrap the standard does ask for -- a leading minus negates the
+ * magnitude modulo 2^64 rather than refusing. */
 static unsigned long __strtoux(char const *s, char **endptr, int base) {
   char const *p = s;
   int neg = 0;
@@ -1427,10 +1443,15 @@ static unsigned long __strtoux(char const *s, char **endptr, int base) {
     else --p; }
   else if (!base) base = 10;
   if (base < 2 || base > 36) return 0;
-  int any = 0;
-  unsigned long rc = 0;
-  for (int d; (d = __digval(*p)) < base; p++) { any = 1; rc = rc * (unsigned) base + (unsigned) d; }
+  unsigned long cut = ULONG_MAX / (unsigned long) base, cutd = ULONG_MAX % (unsigned long) base, rc = 0;
+  int any = 0, over = 0;
+  for (int d; (d = __digval(*p)) < base; p++) {
+    any = 1;
+    if (over || rc > cut || (rc == cut && (unsigned long) d > cutd)) over = 1;
+    else rc = rc * (unsigned long) base + (unsigned long) d; }
   if (endptr) *endptr = (char *) (any ? p : s);
+  if (!any) return 0;
+  if (over) { __errno_v = ERANGE; return ULONG_MAX; }
   return neg ? 0UL - rc : rc; }
 unsigned long strtoul(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }
 unsigned long strtoull(char const *s, char **endptr, int base) { return __strtoux(s, endptr, base); }

@@ -64,31 +64,37 @@
 ; --- numbers -------------------------------------------------------------------
 ; signed decimal, floats, and 0x hex.
 ;
-; ⚠ HEX AND DECIMAL DISAGREE ABOVE 2^63. decimal promotes to a big; hex goes
-; through strtol and does not. the bits are what every emit path wants, but
-; anything that DIVIDES overshoots -- crew/holo/link.l:542 routes an address
-; split through an unsigned door for exactly this reason.
-;
-; ⚠⚠ AND THE TWO BUILDS DISAGREE WITH EACH OTHER, which is worse and is why the
-; over-2^63 case is NOT asserted here. the same source text reads as two
-; different numbers depending on which binary reads it:
-;     out/host/love  (mooncc + nolibc)  0xffffffff80200000 -> -2145386496
-;     out/host/love0 (system cc + glibc) 0xffffffff80200000 -> 9223372036854775807
-; nolibc's strtol (crew/moon/lib/nolibc.c:1325) has no overflow handling at all
-; and wraps; glibc's saturates to LONG_MAX with ERANGE. port/inle/klink.l spells
-; kernel addresses exactly this way. rung 2 of doc/reader.md closes BOTH holes at
-; once -- bit ops on bignums, then hex promotes like decimal and the strtol
-; overflow path stops mattering. when it lands, assert the value here.
+; ⚠ AN INTEGER LITERAL READS AT FULL PRECISION IN EITHER BASE -- hex and decimal
+; agree everywhere, and the value is the same in EVERY build (host, love0, wasm,
+; the kernel), whatever that build's word width or libc. that is a law, not an
+; accident, and it was won: hex used to go through strtol, so a literal at or
+; above 2^63 came back as whatever THAT libc did with an overflow -- one source
+; text, three different numbers (nolibc wrapped to the negative twin, glibc
+; saturated to LONG_MAX, wasm's 32-bit `long` did neither). port/inle/klink.l
+; spells kernel addresses exactly this way and rode the wrap. both halves are
+; closed now: hex promotes to a big like decimal (love.c's is_hex_int ->
+; ai_big_read_hex), and our two libcs SATURATE like everyone else's
+; (crew/moon/lib/nolibc.c, libc/str.c) so the one lane still on strtol -- octal --
+; cannot disagree either.
 (assert
  (3 = (rdr "3")) (-3 = (rdr "-3")) (3 = (rdr "+3"))
- (16 = (rdr "0x10")) (255 = (rdr "0xff"))
+ (16 = (rdr "0x10")) (255 = (rdr "0xff")) (255 = (rdr "0XFF"))  ; either case
+ (-255 = (rdr "-0xff")) (255 = (rdr "+0xff"))
+ (493 = (rdr "0755"))                                           ; octal, the strtol lane
+ ; ⚠ octal is the LAST lane still on strtol, and this assert is what pins the two
+ ; libcs we own: a WRAPPING accumulator answers -1 here, a saturating one answers
+ ; its width's ceiling. asserted as a SIGN, so it holds at either width (wasm's
+ ; `long` is 32 bits) -- the value would not.
+ (0 < (rdr "01777777777777777777777"))                          ; octal 2^64-1: saturates, never wraps
  ((0 - (1 / 2)) = (rdr "-.5")) ((1 / 2) = (rdr "+.5"))
  (18446744073709551615 = (rdr "18446744073709551615"))          ; decimal above the lane: a big
- ; ⚠ and the hex lane is WIDTH-dependent on top of all that: strtol's `long` is
- ; 32 bits on the wasm shim, so a 64-bit hex literal is not even the same number
- ; there. a third disagreement, and the third reason rung 2 should retire this
- ; path rather than patch it.
- (? word (9223372036854775807 = (rdr "0x7fffffffffffffff")) 1))
+ ; ..and the same value written in hex, in every build
+ (18446744073709551615 = (rdr "0xffffffffffffffff"))
+ (18446744071564165120 = (rdr "0xffffffff80200000"))            ; klink.l's kernel vbase
+ (9223372036854775807 = (rdr "0x7fffffffffffffff"))             ; the old strtol ceiling
+ (340282366920938463463374607431768211455 = (rdr "0xffffffffffffffffffffffffffffffff"))
+ ; a prefix with no digits is no number: an honest symbol, free for binding
+ ('0x = (rdr "0x")) ('0xg = (rdr "0xg")))
 
 ; --- quote and the constructor wraps -------------------------------------------
 ; a sigil GLUED to its datum builds it: ' quote, ` list, # hash, @ tuple, ~ twin.

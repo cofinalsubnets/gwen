@@ -59,7 +59,7 @@
    (mapkind _) (apof (tablet 0))                                                    ; lvm_map_lookup's sentinel, for the map-param entry guard + the (mpeep ..) probe
    (nomkind _) (apof 'nomk)                                                         ; lvm_nom's sentinel, for the point-param entry guard
    (mintkind _) (apof (nom 0))                                                      ; lvm_sym's (a mint's) sentinel, ditto -- () is a mint too
-   mapmix 11400714819323198485                                                      ; the hash multiplier 0x9e3779b97f4a7c15 (= love.c's map hash mult), for the inline probe
+   mapmix 0x9e3779b97f4a7c15                                                        ; the hash multiplier (= love.c's map hash mult), for the inline probe
    ; -- the map probe, via the crew/holo/ assembler SERVICE (baked into the post-egg layer; the glaze is its
    ;    client). crew/holo/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
    ;    fragile bit. reg map: holo r0=rax, r7=x86-r8, r8=x86-r9, r9=x86-r10, r10=x86-r11. The probe wants

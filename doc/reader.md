@@ -21,8 +21,9 @@ rule and the `:`/`?` suppression; the constructor wraps `` ` `` `#` `@` `~` and
 their SPLICE rewrites (`splicesym` 4292, deliver loop 4412); the `~` twin-vs-conj
 peek (4307); the empty-collection direct-nif rewrite (4399); the comma datum
 (4318); the trailing-`-` shed (4278); `[`/`{` synonyms; the prime inside names;
-the number tower (hex via strtol, floats via `am_strtod`, bignums via
-`ai_big_read_dec`); the `ieee-inf` named literals.
+the number tower (decimal and hex at full precision via `ai_big_read_dec` /
+`ai_big_read_hex`, octal via strtol, floats via `am_strtod`); the `ieee-inf`
+named literals.
 
 **what it does NOT do, and this is the load-bearing surprise**: it does not
 resume. on an unfinished shape it *discards the partial parse* -- love.c:4148-4153
@@ -59,41 +60,45 @@ stripped, 64 distinct `+`/`-`-led code tokens, 61 of them numeric literals (940
 uses); the other three are `+@`, `->` and `-?>`, all standalone. bare `-foo`
 tokens: **zero**.
 
-### 2. close the numeric tower under bit ops
+### 2. an integer literal reads the same in every build ✅ LANDED
 
-`&` `|` `^` `<<` `>>` on non-negative bigs, limb-wise in `bit_slow`
-(love.c:6289 -- it widens to a *sun* today and drops bigs to nil). negatives keep
-refusing but **scare** rather than answering `()`, which is the plausible-lie
-pattern. bigs are sign-magnitude limb arrays (love.c:356-359), so non-negative is
-the easy half and covers every real use.
+writing test/reader.l turned up **three** disagreements out of one path, all of
+them the hex lane going through `strtol`: hex vs decimal, build vs build, and
+width vs width.
 
-then hex ≥ 2^63 can promote like decimal, and **two** holes close at once:
+```
+                                    0xffffffff80200000 read as
+out/host/love  (mooncc + nolibc)    -2145386496            (wrapped)
+out/host/love0 (system cc + glibc)  9223372036854775807    (saturated)
+wasm                                neither -- 32-bit `long`
+18446744071564165120 (decimal)      the value               (promoted to a big)
+```
 
-- hex and decimal disagree: `0xffffffff80200000` wraps, `18446744073709551615`
-  promotes. the bits are what every emit path wants, but anything that DIVIDES
-  overshoots. three workarounds already exist for this one wart --
-  love/glaze/emit.l:62 and test/holo.l:27 write the hash multiplier in decimal
-  with a comment naming the hex, and crew/holo/link.l:542-548 routes an address
-  split through an unsigned door with a five-line explanation.
-- ⚠⚠ **and the two builds disagree with each other**, found by test/reader.l on
-  the day it was written. the same source text reads as two different numbers:
+so the *same source text* was three numbers. and the tree had voted around it
+three times -- love/glaze/emit.l and test/holo.l wrote the hash multiplier in
+decimal with the hex named only in a comment, and crew/holo/link.l ran the kernel
+address split through an unsigned door under a five-line explanation, because
+`0xffffffff80200000` reaching a layout that DIVIDES would overshoot by a page and
+nothing downstream would look wrong. port/inle/klink.l's addresses were correct on
+the default binary and **wrong on love0**, silently.
 
-  ```
-  out/host/love  (mooncc + nolibc)   0xffffffff80200000 -> -2145386496
-  out/host/love0 (system cc + glibc) 0xffffffff80200000 -> 9223372036854775807
-  ```
+one cut closes all three: **hex promotes like decimal.** `is_hex_int` →
+`ai_big_read_hex` (love.c), a radix parameter over the reader `ai_big_read_dec`
+already had, so a literal is a fixnum / box / bignum by its VALUE and never by
+what a libc did with an overflow. and beside it, **our two libcs saturate** like
+glibc/musl/newlib do -- crew/moon/lib/nolibc.c and libc/str.c, kept line for line
+alike -- so the one lane still on `strtol` (octal) cannot disagree either.
+gwen's call, and the right one: wrapping destroys the fact that it did not fit,
+saturating hands it back. all three workarounds are gone; the law is asserted in
+test/reader.l's numbers section.
 
-  nolibc's `strtol` (crew/moon/lib/nolibc.c:1325) has no overflow handling at all
-  and wraps; glibc's saturates to LONG_MAX with ERANGE. port/inle/klink.l spells
-  kernel addresses exactly this way.
-- ⚠ **and it is width-dependent too**: strtol's `long` is 32 bits on the wasm
-  shim, so a 64-bit hex literal is not even the same number there (test/reader.l
-  gates that assert on `word`).
-
-  three disagreements out of one path -- hex vs decimal, build vs build, width vs
-  width. promoting to a big removes the strtol overflow path entirely and takes
-  all three with it, which is why rung 2 should retire this lane rather than
-  patch it.
+**still open, and independent:** `&` `|` `^` `<<` `>>` on non-negative bigs,
+limb-wise in `bit_slow` (love.c:6289 -- it widens to a *sun* and drops bigs to
+nil). bigs are sign-magnitude limb arrays (love.c:356-359), so non-negative is the
+easy half and covers every real use; negatives should keep refusing but **scare**
+rather than answering `()`, the plausible-lie pattern. nothing in the reader needs
+it now -- the big-hex literals in the link path already flow through `%` and `//`,
+not bit ops -- so this is a tower-completeness rung, not a blocker.
 
 ### 3. the reader differential
 

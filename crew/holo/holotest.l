@@ -322,8 +322,8 @@
       `("a64.stx"    "f00c008b080600f9"  '((stx r7 r0 8 8 r8)))        ; add x16,x7,x0,lsl#3 ; str x8,[x16,#8]
       `("a64.ldxb"   "6000008b00404039"  '((ldxb r0 r3 r0 1 16)))      ; add x0,x3,x0 ; ldrb w0,[x0,#16]   (string-lane peep read)
       `("a64.stxb"   "7000008b00420039"  '((stxb r3 r0 1 16 r0)))      ; add x16,x3,x0 ; strb w0,[x16,#16] (cask-lane pin store)
-      `("a64.li.big" "a0828fd240e9aff22037cff2e0c6f3f2"               ; movz+3 movk = 0x9e3779b97f4a7c15 (bignum-safe lane via //%)
-                      '((li r0 11400714819323198485)))
+      `("a64.li.big" "a0828fd240e9aff22037cff2e0c6f3f2"               ; movz + 3 movk (bignum-safe lane via //%)
+                      '((li r0 0x9e3779b97f4a7c15)))
       ;; the link register (x30) by name -- a callee spills it across nested calls (BL clobbers it).
       `("a64.push.lr" "fe0f1ff8"         '((push lr)))                ; str x30, [sp,#-16]!
       `("a64.pop.lr"  "fe0741f8"         '((pop lr)))                 ; ldr x30, [sp],#16

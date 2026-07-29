@@ -537,15 +537,9 @@
    ; aarch64) rather than taking the first object's text, and `kimage_end` is
    ; synthesized just past .bss -- pvh.c and dtb.c read it to hand the heap
    ; every byte of RAM the image does not occupy.
-   (ldkern target ent vb0 bi0 srcs)
+   (ldkern target ent vbase bias srcs)
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
-       ; the reader folds a hex literal at or above 2^63 into its NEGATIVE twin
-       ; (0xffffffff80200000 reads -2145386496 -- the same bits, and every emit
-       ; path takes it), but a layout DIVIDES: an alignment of a negative would
-       ; overshoot by a page and nothing downstream would look wrong. so both
-       ; halves of the address split come in through the unsigned door first.
-       vbase (ld-u64 vb0) bias (ld-u64 bi0)
        objs (map (\ p (ld-read <p <>p mach)) srcs)
        (lsz lane) (foldl (\ a ob (a + (ld-lanesz ob lane))) 0 objs)
        ne (ldlay1 'note vbase objs)                 ; the note first, at vbase
