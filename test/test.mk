@@ -642,6 +642,12 @@ endif
 # checked end to end. The hand-transcribed twin (test/oracle.l) stays in the
 # fast `make test`; this heavier, higher-assurance variant needs coqc + ocamlopt,
 # so it lives in test_all and no-ops when either tool is absent (like test_proof).
+# ⚠ RUN THE ORACLE ONCE, into a file: grep the file for the sentinel, then cat the
+# file to show it. The obvious spelling -- pipe one run to `grep -q`, then run it
+# AGAIN to display -- doubles the slowest half of the gate to print what the first
+# run already said. test_big and test_encver had it too (encver three oracles deep,
+# so six runs for three answers). Capture 2>&1 as well, so a scare rides into the
+# same file instead of the terminal and the failure branch shows the whole thing.
 OCAMLOPT ?= $(shell command -v ocamlopt 2>/dev/null)
 ifeq ($(and $(COQC),$(OCAMLOPT)),)
 test_extract:
@@ -652,13 +658,14 @@ test_extract: host
 	@cd proof/rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" extract.v >/dev/null \
 	  && rm -f normalizer.mli && $(OCAMLOPT) -w -a normalizer.ml oracle_drive.ml -o oracle_drive
 	@proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
-	@$m out/.extract_oracle.l | grep -q "2000 / 2000 PASS" \
-	  || { echo "EXTRACT ORACLE FAILED:"; $m out/.extract_oracle.l; exit 1; }
-	@$m out/.extract_oracle.l
+	@$m out/.extract_oracle.l > out/.extract_oracle.out 2>&1; \
+	  grep -q "2000 / 2000 PASS" out/.extract_oracle.out \
+	    || { echo "EXTRACT ORACLE FAILED:"; cat out/.extract_oracle.out; exit 1; }
+	@cat out/.extract_oracle.out
 	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux \
 	  proof/rocq/extract.vo proof/rocq/extract.vok proof/rocq/extract.vos proof/rocq/extract.glob proof/rocq/.extract.aux \
 	  proof/rocq/normalizer.ml proof/rocq/normalizer.mli proof/rocq/oracle_drive proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
-	  out/.extract_oracle.l
+	  out/.extract_oracle.l out/.extract_oracle.out
 endif
 # test_big: the BIGNUM lane vs a Rocq-extracted reference. coqc proves big.v's
 # decimal codec roundtrip (parse_print -- the process-boundary seam) plus the
@@ -679,12 +686,13 @@ test_big: host
 	@cd proof/rocq && $(COQC) -q big.v >/dev/null \
 	  && rm -f bigref.mli && $(OCAMLOPT) -w -a bigref.ml big_drive.ml -o big_drive
 	@proof/rocq/big_drive 2000 1 > out/.big_oracle.l
-	@$m out/.big_oracle.l | grep -q "2000 / 2000 PASS" \
-	  || { echo "BIG ORACLE FAILED:"; $m out/.big_oracle.l; exit 1; }
-	@$m out/.big_oracle.l
+	@$m out/.big_oracle.l > out/.big_oracle.out 2>&1; \
+	  grep -q "2000 / 2000 PASS" out/.big_oracle.out \
+	    || { echo "BIG ORACLE FAILED:"; cat out/.big_oracle.out; exit 1; }
+	@cat out/.big_oracle.out
 	@rm -f proof/rocq/big.vo proof/rocq/big.vok proof/rocq/big.vos proof/rocq/big.glob proof/rocq/.big.aux \
 	  proof/rocq/bigref.ml proof/rocq/bigref.mli proof/rocq/big_drive proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
-	  out/.big_oracle.l
+	  out/.big_oracle.l out/.big_oracle.out
 endif
 # test_mx: the +/* dispatch matrices as DATA, their shape machine-checked.
 # tools/mxdump.c (a TU including love.c whole -- the tables are static by
@@ -745,15 +753,16 @@ test_encver: host
 	@proof/rocq/enc_drive > out/.enc_oracle.l
 	@proof/rocq/encmem_drive > out/.encmem_oracle.l
 	@proof/rocq/encli_drive > out/.encli_oracle.l
-	@cat crew/holo/holo.l crew/holo/x64.l out/.enc_oracle.l | $m | grep -q "1792 / 1792 PASS" \
-	  || { echo "ENC (reg-direct) ORACLE FAILED:"; cat crew/holo/holo.l crew/holo/x64.l out/.enc_oracle.l | $m; exit 1; }
-	@cat crew/holo/holo.l crew/holo/x64.l out/.encmem_oracle.l | $m | grep -q "6144 / 6144 PASS" \
-	  || { echo "ENCMEM (memory) ORACLE FAILED:"; cat crew/holo/holo.l crew/holo/x64.l out/.encmem_oracle.l | $m; exit 1; }
-	@cat crew/holo/holo.l crew/holo/x64.l out/.encli_oracle.l | $m | grep -q "320 / 320 PASS" \
-	  || { echo "ENCLI (immediate) ORACLE FAILED:"; cat crew/holo/holo.l crew/holo/x64.l out/.encli_oracle.l | $m; exit 1; }
-	@cat crew/holo/holo.l crew/holo/x64.l out/.enc_oracle.l | $m
-	@cat crew/holo/holo.l crew/holo/x64.l out/.encmem_oracle.l | $m
-	@cat crew/holo/holo.l crew/holo/x64.l out/.encli_oracle.l | $m
+	@cat crew/holo/holo.l crew/holo/x64.l out/.enc_oracle.l | $m > out/.enc_oracle.out 2>&1; \
+	  grep -q "1792 / 1792 PASS" out/.enc_oracle.out \
+	    || { echo "ENC (reg-direct) ORACLE FAILED:"; cat out/.enc_oracle.out; exit 1; }
+	@cat crew/holo/holo.l crew/holo/x64.l out/.encmem_oracle.l | $m > out/.encmem_oracle.out 2>&1; \
+	  grep -q "6144 / 6144 PASS" out/.encmem_oracle.out \
+	    || { echo "ENCMEM (memory) ORACLE FAILED:"; cat out/.encmem_oracle.out; exit 1; }
+	@cat crew/holo/holo.l crew/holo/x64.l out/.encli_oracle.l | $m > out/.encli_oracle.out 2>&1; \
+	  grep -q "320 / 320 PASS" out/.encli_oracle.out \
+	    || { echo "ENCLI (immediate) ORACLE FAILED:"; cat out/.encli_oracle.out; exit 1; }
+	@cat out/.enc_oracle.out out/.encmem_oracle.out out/.encli_oracle.out
 	@rm -f proof/rocq/enc.vo proof/rocq/enc.vok proof/rocq/enc.vos proof/rocq/enc.glob proof/rocq/.enc.aux \
 	  proof/rocq/encmem.vo proof/rocq/encmem.vok proof/rocq/encmem.vos proof/rocq/encmem.glob proof/rocq/.encmem.aux \
 	  proof/rocq/encli.vo proof/rocq/encli.vok proof/rocq/encli.vos proof/rocq/encli.glob proof/rocq/.encli.aux \
@@ -761,7 +770,8 @@ test_encver: host
 	  proof/rocq/encmem_ref.ml proof/rocq/encmem_ref.mli proof/rocq/encmem_drive \
 	  proof/rocq/encli_ref.ml proof/rocq/encli_ref.mli proof/rocq/encli_drive \
 	  proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
-	  out/.enc_oracle.l out/.encmem_oracle.l out/.encli_oracle.l
+	  out/.enc_oracle.l out/.encmem_oracle.l out/.encli_oracle.l \
+	  out/.enc_oracle.out out/.encmem_oracle.out out/.encli_oracle.out
 endif
 # the fuzz-first rung of the holo encoder verification ladder (crew/holo/fuzz/):
 # generate random IR forms, encode via holo, disassemble the bytes, and check the
