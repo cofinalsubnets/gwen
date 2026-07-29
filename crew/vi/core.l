@@ -312,12 +312,6 @@
    ; line exactly as it is" -- a line inside a string, whose leading spaces ARE
    ; the string -- and a line with nothing on it stays empty rather than becoming
    ; a row of spaces nobody asked for.
-   ; ⚠ PLAIN RECURSION, no inner accumulator scope. the accumulating twin --
-   ; `(: (go k acc) (? (k < 1) acc (go (k - 1) (acc + " "))) (go n ""))` -- is
-   ; MISCOMPILED by mooncc: it answers the charm 6 where love0 answers "   ".
-   ; the trigger is a `:` whose ONLY binding is a self-recursive helper called
-   ; from its body; a second binding, anywhere, makes it correct again. see the
-   ; note at tools/hue2vim.l's `pad`, the first place this bit.
    (vsp n) (? (n < 1) "" (" " + (vsp (n - 1))))
    (vtrimf ln) (: n (tally ln)
                   (go i) (? (n <= i) n (|| ((ln i) = 32) ((ln i) = 9)) (go (i + 1)) i)

@@ -34,8 +34,22 @@
    calloutinfo-frame (glaze 'calloutinfo-frame)  njit-calloutframe (glaze 'njit-calloutframe)   ;   ... and its CAPTURED / multi-arg sibling (F read from the [imps args] frame)
    qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
    anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
+   grpfix (glaze 'grpfix)                                                    ;   ... and the recognizer that says WHETHER (below)
    njit-amble (glaze 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
-   ; lane: parse defs (anat-defs), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt).
+   ; lane: parse defs (anat-defs), recognize (grp-ok?), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt).
+   ; grp-ok? -- autogroup's OWN recognizer (auto.l grpfix: the descending int/value-typing fixpoint over
+   ; groupok?/vok?/cok?), run here over the SAME (nameform . body) defs jitgroupirx will compile. Every def
+   ; must survive, so the group is the closed glazeable subset and nothing else.
+   ; ⚠ THIS IS THE GATE, not jgir-ok?. jgir-ok? answers "does jitgroupir implement these OPS" and its own
+   ; header says it does NOT re-derive the grammar -- it was written as a backstop UNDER autogroup, which had
+   ; already run grpfix. This hook is the other caller and had no recognizer at all, so a body outside the
+   ; grammar reached cggir, whose `?` chain ends in a silent `()`: an operand it cannot emit -- a string, a
+   ; nom, a list, a gem -- emits NO CODE and leaves whatever the accumulator last held. `(+ acc " ")` then
+   ; compiled as `acc + k` and answered triangular numbers for three spaces. The two free-capture guards
+   ; below (opnd-ok?, gdefs-ok?) are earlier patches of this same class, one shape at a time; grpfix closes
+   ; it whole -- the recognizer and the codegen are one pair again, wherever the lane is entered from.
+   (grp-ok? gds) (: cands (map (\ gd `((cap (cap gd)) ((tally (cap gd)) - 1))) gds)   ; (name arity), autogroup's armap
+                    ((tally (grpfix gds cands)) = (tally gds)))
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e
                                (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps <>e) (exprn ps <>>e))
@@ -139,9 +153,9 @@
                          gnames (map (\ d <<d) gdefs)
                          flat? (&& okshape (member? <tail gnames) (>tail = ps))       ; tail IS (entry frame..)
                          osym '__outer  agdefs (? okshape (gdefs + `((link (link osym ps) tail))) ())   ; group + synthetic ((__outer . frame) . tail)
-                         (? (&& flat? (jgir-ok? gdefs) (gdefs-ok? gdefs))                         ; FLAT: entry direct, zero indirection
+                         (? (&& flat? (grp-ok? gdefs) (jgir-ok? gdefs) (gdefs-ok? gdefs))                         ; FLAT: entry direct, zero indirection
                             (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx gdefs <tail arch e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
-                            (&& okshape !(member? osym gnames) (opnd-ok? ps tail) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
+                            (&& okshape !(member? osym gnames) (opnd-ok? ps tail) (grp-ok? agdefs) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
                             ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.

@@ -22,13 +22,6 @@
    (bytes s) (: n (tally s) (go i acc) (? (i < 0) acc (go (i - 1) (link (s i) acc)))
                 (go (n - 1) ()))
    (join l sep) (foldl (\ a w (? (0 < (tally a)) (a + sep + w) w)) "" l)
-   ; ⚠ the width is bound BEFORE the call and not computed in the argument.
-   ; `(t + (sp (n - (tally t))))` -- a `:` whose ONLY binding is a self-recursive
-   ; helper, called with an argument that applies the enclosing parameter --
-   ; MISCOMPILES on the mooncc-built host: the helper reads as an unfilled
-   ; boxfix cell, the zero point answers 0, and `(0 x)` is 1. out/host/love0
-   ; (gcc, ai_tco=0) gets it right, so the two candidates are mooncc's codegen
-   ; and the tail-threaded path. minimal repro in the commit message.
    (pad t n) (: (sp j) (? (j < 1) "" (" " + (sp (j - 1))))
                 k (n - (tally t))
                 (t + (sp k)))
