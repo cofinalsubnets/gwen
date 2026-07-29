@@ -37,6 +37,14 @@
        r (seed-sync url)
        _ (? r 0 (oops "up: the sync did not land"))
        exe (readlink "/proc/self/exe")
+       ; the toolchain is US: unless the environment names a CC, the nest
+       ; builds under this very binary's mooncc verb -- love0 compiles there,
+       ; and love0 carries the graph on as always (mooncc0.image, the moon
+       ; lane) -- so the download door needs no ambient compiler at all. an
+       ; explicit CC (the git door's DDC leg) always wins. the embedding goods
+       ; (liblove, love.h) are the cc lane's own: up skips them (EMBED=0).
+       _ (? (getenv "CC") 0 (setenv "CC" (exe + " mooncc")))
+       _ (? (getenv "EMBED") 0 (setenv "EMBED" "0"))
        _ (puts "up: cooking the nest (cook install)\n")
        s (runt (list exe "cook" "install"))
        st (? (two? s) <s s)

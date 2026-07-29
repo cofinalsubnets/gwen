@@ -74,12 +74,22 @@ installs = \
   $d/lib/love/bao.l \
   $d/lib/love/mooncc.image \
   $(patsubst %,$d/lib/love/%.l,$(libmods)) \
-  $d/lib/liblove.a \
-  $d/lib/liblove.so \
-  $d/include/love.h \
   $v/ftdetect/love.vim \
   $v/syntax/love.vim \
   $v/ftplugin/love.vim
+
+# the embeddable goods -- liblove + love.h -- are the cc lane's (a shared
+# object wants PIC codegen + the dynamic section, which holo does not lay).
+# `love up` installs with EMBED=0 (its nest builds with no ambient cc
+# anywhere); `make install` keeps them by default.
+EMBED ?= 1
+override EMBED := $(filter-out 0,$(EMBED))
+ifneq ($(EMBED),)
+installs += \
+  $d/lib/liblove.a \
+  $d/lib/liblove.so \
+  $d/include/love.h
+endif
 
 # the PATH door, nest-only: each bin (and man page) gets a ~/.local compat
 # symlink, since ~/.local/bin is already on PATH and ~/.local/share/man on

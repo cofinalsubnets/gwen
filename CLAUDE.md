@@ -94,9 +94,12 @@
 ;   seed (the patch-set vcs, crew/seed/ + host/hash.c -- doc/seed.md, `make test_seed`; crew/seed/up.l
 ;   is the dist artifact's up/down verbs + verb table -- `make dist` bakes out/dist/love-x86_64, the
 ;   one-file download door, gated by test_dist (smoke, in test_all) + test_up (the whole door,
-;   opt-in)), moon (the C
+;   opt-in; `love up` defaults CC to the artifact's own mooncc verb, so the download door needs NO
+;   ambient toolchain -- an env CC, the git door's DDC leg, always wins)), moon (the C
 ;   compiler in love, crew/moon/ -- compiles love.c + all host/*.c and holo links them, no gcc/glibc/ld:
-;   `make test_raw`), rune (the symbolic algebra engine, crew/rune/ -- exact multivariate polys +
+;   `make test_raw`; the driver wears the cc CONVENTIONS -- advisory flags (-W/-O/-g/-std=/-f/..)
+;   ride through ignored and an exe link owing libc pulls nolibc/am/sys BY NEED from the tree, so
+;   `CC=mooncc` drives the gcc-shaped recipes unchanged, gated by test_drv), rune (the symbolic algebra engine, crew/rune/ -- exact multivariate polys +
 ;   Q[x]/(m) on the q coin; polys STRIKE AS COINS (die + - *, net-mode 1: !p is "zero poly");
 ;   a REGISTERED MODULE like holo, loaded by (use 'rune); its gate test/host/rune.l verifies the
 ;   2026 jacobian-conjecture disproof whole), lush (the command shell 🐚, crew/lush/ -- a cowrie on

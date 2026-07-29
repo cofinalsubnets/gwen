@@ -35,6 +35,13 @@ smoke)
 
   run "$dist" kore true                            || fail "kore true (the nested dispatch)"
   run "$dist" seed 2>&1 | grep -q "patch-set vcs"  || fail "seed usage"
+  run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
+  # the CC-under-make lane: the Makefile blanket-exports LOVE_NO_IMAGE=1, and
+  # the love0 recipes hand THIS command its image back with `LOVE_NO_IMAGE=`
+  # (empty = unset, main.c) -- pin that an empty value does not egg-boot the
+  # artifact (which would read "mooncc" as a filename).
+  LOVE_NO_IMAGE= "$dist" mooncc 2>&1 | grep -q "usage: mooncc" \
+                                                   || fail "empty LOVE_NO_IMAGE suppressed the image"
   run "$dist" up >/dev/null 2>&1
   [ $? -eq 2 ]                                     || fail "up without an origin should refuse (exit 2)"
   HOME=$dabs.nowhere run "$dist" down 2>&1 | grep -q "no nest" || fail "down without a nest"
@@ -63,9 +70,14 @@ up)
   ( cd "$s/origin" && run "$dabs" seed record "dist gate origin" ) || fail "seed record"
 
   oroot=$(CDPATH= cd -- "$s/origin" && pwd)/.seed
-  run "$dist" kiosko -p $port -q "$oroot" &
+  # the explicit `exec` is load-bearing: backgrounding the `run` FUNCTION left
+  # $! naming the subshell, not the server -- the kill hit the wrapper and the
+  # kiosko lived on reparented to init, holding the gate's stdout pipe open
+  # (make looked hung long after it passed) and the artifact ETXTBSY against
+  # the next rebake. -9 because the artifact rides a plain TERM out.
+  ( exec env -u LOVE_NO_IMAGE "$dist" kiosko -p $port -q "$oroot" ) &
   kpid=$!
-  trap 'kill $kpid 2>/dev/null' EXIT INT TERM
+  trap 'kill -9 $kpid 2>/dev/null' EXIT INT TERM
   sleep 1
 
   home=$(CDPATH= cd -- "$s/home" && pwd)

@@ -10,8 +10,12 @@
 ; pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
 ; no .o). -I dirs search before the system pair on both include forms; a -D
 ; rides in as a synthesized #define line, so token bodies and function-like
-; -DF(x)=.. take the one macro path. errors speak on err and exit 1; usage
-; exits 2. LAST in the mooncc cat (its own app, doc/moon.md), after
+; -DF(x)=.. take the one macro path. the driver wears the cc conventions: the
+; advisory flag families (-W.. -O.. -g.. -std= -f.. -pipe -static) ride through
+; ignored so `CC=mooncc` drives a gcc-shaped recipe unchanged, and a link owing
+; libc symbols pulls the runtime (nolibc + am math + sys) by need from the
+; sources beside it -- -nostdlib/-ffreestanding turn that off. errors speak on
+; err and exit 1; usage exits 2. LAST in the mooncc cat (its own app, doc/moon.md), after
 ; crew/holo/{elf,obj,link}.l and crew/moon/{lex,cpp,parse,gen}.l; rides the
 ; u-floor (uread udie). its tail SEAT fires moon-main when mooncc is the program.
 (:
@@ -152,7 +156,56 @@
               `('push 'lr)
               `('call 'main)
               `('li 'r7 94) `('sys))
-   (cc-link ins dst is ds tgt pie org)
+   ; the driver's LIBC (tolerance's other half): a link still owing strong
+   ; symbols after the given objects is the cue every cc answers by supplying
+   ; the runtime -- ours is nolibc + the am math + the sys leaf, compiled from
+   ; the sources beside us and pulled MEMBER BY NEED, archive-fashion: a member
+   ; whose every def the link already carries stays out, so a set bringing its
+   ; own am.o (love0's does) never meets a twin. the lane engages exactly where
+   ; today's answer was link-undef -- sources out of sight (a mooncc far from
+   ; the tree) or the -nostdlib family leave it off whole, and a nom no member
+   ; defines still dies as link-undef downstream.
+   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
+    (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
+       (go i ds us)
+        (? ((peep ob 'nsym 0) <= i) `(ds us)
+           (: sy (peep sy9 i ()) bind (el sy 1)
+              (? (! (member? bind '(1 2))) (go (i + 1) ds us)
+                 (0 < (el sy 3)) (go (i + 1) (link <sy ds) us)
+                 (bind = 1) (go (i + 1) ds (link <sy us))
+                 (go (i + 1) ds us))))    ; a weak undef resolves to 0 (ELF's law): no need
+       (go 1 () ()))
+   (rtpull srcs tgt)
+    (: mach (peep elf-machines tgt 0)
+       duos (map (\ p (dusyms <p <>p mach)) srcs)
+       dt (tablet 0)                      ; every nom the link defines (or ldres synthesizes)
+       _ (map (\ nm (pin dt nm 1))
+              '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"))
+       _ (map (\ du (map (\ nm (pin dt nm 1)) <du)) duos)
+       owed (foldl (\ a du (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
+                                  a <>du))
+                   () duos)
+       nl (? (two? owed) (uread "crew/moon/lib/nolibc.c") ())
+       (? (! (two? nl)) ()
+          (: mdir "crew/moon/lib/math/"
+             mems (map (\ p (p + (dusyms <p <>p mach)))
+                       ((`("nolibc" (string (cc-objbytes "crew/moon/lib/nolibc.c" `("crew/moon/include/") () tgt)))
+                          >< (map (\ f `(f (string (cc-objbytes (mdir + f) `(mdir "crew/moon/include/") () tgt))))
+                                  (sort (filter dotc? (readdir "crew/moon/lib/math")))))
+                        + (? (member? tgt '(x64 arm64 riscv64))
+                             `(`("sys" (string (mksys-bytes tgt)))) ())))
+             (needs? m u) (foldl (\ a nm (|| a (member? nm u))) () (el m 2))
+             (go ms u picked)
+              (: hits (filter (\ m (needs? m u)) ms)
+                 (? (! (two? hits)) (map (\ m `(<m <>m)) picked)
+                    (: rest (filter (\ m (! (needs? m u))) ms)
+                       _ (map (\ m (map (\ nm (pin dt nm 1)) (el m 2))) hits)
+                       u2 (foldl (\ a m (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
+                                               a (el m 3)))
+                                 (filter (\ nm (! (peep dt nm ()))) u) hits)
+                       (go rest u2 (picked + hits)))))
+             (go mems owed ()))))
+   (cc-link ins dst is ds tgt pie org nostd)
     (: srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt)))
                          (doto? f) (: r (uread f)
                                       (? (two? r) `(f <>r)
@@ -160,7 +213,8 @@
                          (udie 2 ("cc: not a .c/.o input: " + f))))
                  ins)
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
-       ps (ldlink tgt pie org (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () ()))) srcs))
+       all (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () ()))) srcs)
+       ps (ldlink tgt pie org (all + (? nostd () (rtpull all tgt))))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
@@ -178,12 +232,31 @@
                           (go (i + 1) ((acc * b) + d) b)))
        (? hex (go 2 0 16) (go 0 0 10)))
    ; the flag scan: -c, -pie, -t tgt / -ttgt, -Ttext addr, -I dir / -Idir,
-   ; -D def / -Ddef, -o out; every other bare arg is an input, any other dash
-   ; arg refuses. -pie links an ET_DYN static-PIE (the linker slides its abs64
-   ; pointers at startup); the default is the fixed-base ET_EXEC. -Ttext lays
-   ; the image at addr instead of the classic base (the bare-metal lane; it
-   ; forces the link path like -pie). -> (c idirs defs out ins tgt pie org).
+   ; -D def / -Ddef, -o out; every other bare arg is an input. -pie links an
+   ; ET_DYN static-PIE (the linker slides its abs64 pointers at startup); the
+   ; default is the fixed-base ET_EXEC. -Ttext lays the image at addr instead
+   ; of the classic base (the bare-metal lane; it forces the link path like
+   ; -pie). the ADVISORY cc families ride through ignored (tol? below), the
+   ; -nostdlib family turns the driver's libc off (n9 -- the runtime pull in
+   ; cc-link), and any other dash arg refuses. -> (c idirs defs out ins tgt
+   ; pie org nostd).
    (glu? a ch) (&& (2 < (tally a)) (&& ((a 0) = 45) ((a 1) = ch)))
+   ; the cc-driver tolerance: every cc accepts the advisory families -- warnings,
+   ; -O, -g, -pipe, -std= (we speak the one dialect we speak), -static (the
+   ; output already is), the -f codegen-hygiene family -- so `CC=mooncc` drives
+   ; a make recipe written for gcc/clang unchanged. what would CHANGE the
+   ; artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp, (their payload is
+   ; real arguments; dropping them is the silent no-op wearing a cc face).
+   (pfx? a p) (: n (tally p) (&& (n <= (tally a)) ((snip a 0 n) = p)))
+   (tol? a) (|| (a = "-pipe") (|| (a = "-static")
+             (|| (pfx? a "-g") (|| (pfx? a "-O") (|| (pfx? a "-std=")
+             (|| (pfx? a "-f")
+                 (&& (pfx? a "-W")
+                     (! (|| (pfx? a "-Wl,") (|| (pfx? a "-Wa,") (pfx? a "-Wp,")))))))))))
+   ; the -nostdlib family: freestanding on any cc's surface -- the driver
+   ; supplies no runtime, and an owed symbol dies as link-undef, as before.
+   (nostd? a) (|| (a = "-nostdlib") (|| (a = "-nostartfiles")
+               (|| (a = "-nodefaultlibs") (a = "-ffreestanding"))))
    (dirn d) (: n (tally d) (? (n = 0) d ((d (n - 1)) = 47) d (d + "/")))
    (dotc? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 99))))
    (doto? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 111))))
@@ -192,33 +265,35 @@
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r (n - 1)))
                 ((go 0 0) + "o"))
-   (flags as c is ds o ins t9 p9 g9)
-    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9)
+   (flags as c is ds o ins t9 p9 g9 n9)
+    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9)
        (: a <as r >as
-          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9)
-             (a = "-pie") (flags r c is ds o ins t9 1 g9)
-             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9 g9) (udie 2 usage))
-             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9 g9) (udie 2 usage))
-             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9) (udie 2 usage))
-             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9) (udie 2 usage))
-             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r)) (udie 2 usage))
-             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9 g9)
-             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9 g9)
-             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9)
+          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9)
+             (a = "-pie") (flags r c is ds o ins t9 1 g9 n9)
+             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9 g9 n9) (udie 2 usage))
+             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9 g9 n9) (udie 2 usage))
+             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9 n9) (udie 2 usage))
+             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9 n9) (udie 2 usage))
+             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r) n9) (udie 2 usage))
+             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9 g9 n9)
+             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9 g9 n9)
+             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9)
+             (nostd? a) (flags r c is ds o ins t9 p9 g9 1)
+             (tol? a) (flags r c is ds o ins t9 p9 g9 n9)
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)
-             (flags r c is ds o (link a ins) t9 p9 g9))))
+             (flags r c is ds o (link a ins) t9 p9 g9 n9))))
    (moon-main as)
     ; the default target is the ground we stand on: love-arch (the C boot's pin)
     ; names the running binary's arch, so a native mooncc emits native code and
     ; -t stays what it always was, the CROSS flag. unknown grounds keep x64.
     (: ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
-       f (flags as () () () () () ntv () ())
-       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7)
+       f (flags as () () () () () ntv () () ())
+       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8)
        lnk? (|| (lnky? ins) (|| pie (charm? org)))   ; -pie/-Ttext force the link path (crt0 + layout)
        (? (! (two? ins)) (udie 2 usage)
           o (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
                     (: _ (cc-obj <ins o is ds tgt) (quit 0)))
-               lnk? (: _ (cc-link ins o is ds tgt pie org) (quit 0))
+               lnk? (: _ (cc-link ins o is ds tgt pie org nostd) (quit 0))
                (: _ (cc-exe <ins o is ds tgt) (quit 0)))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
           ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT)
@@ -227,13 +302,13 @@
                   (&& (! (dotc? <>ins))
                       (|| c (&& (! (doto? <ins)) (! (doto? <>ins)))))))
            (: _ (? c (cc-obj <ins <>ins is ds tgt)
-                     lnk? (cc-link `(<ins) <>ins is ds tgt pie org)   ; -pie/-Ttext IN OUT: link the one input
+                     lnk? (cc-link `(<ins) <>ins is ds tgt pie org nostd)   ; -pie/-Ttext IN OUT: link the one input
                      (cc-exe <ins <>ins is ds tgt)) (quit 0))
           c (: (go l) (? (! (two? l)) (quit 0)
                          (! (dotc? <l)) (udie 2 ("cc: not a .c input: " + <l))
                          (: _ (cc-obj <l (obase <l) is ds tgt) (go >l)))
                (go ins))
-          lnk? (: _ (cc-link ins "a.out" is ds tgt pie org) (quit 0))
+          lnk? (: _ (cc-link ins "a.out" is ds tgt pie org nostd) (quit 0))
           (udie 2 usage))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line

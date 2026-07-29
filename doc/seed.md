@@ -145,7 +145,11 @@ exchange isn't.
 
 - **clone** = `sync` from empty
 - **install** and **upgrade** = `sync` + `cook install`, one composition for
-  both: `love up` (see the settlement note above). `love down` is its twin —
+  both: `love up` (see the settlement note above). the build's CC defaults to
+  the artifact's own `mooncc` verb — the download door carries its whole
+  toolchain, and an explicit env `CC` (the git door's DDC leg) always wins;
+  the embedding goods (liblove, love.h) are the cc lane's, so up installs
+  with `EMBED=0`. `love down` is its twin —
   the nest and its `~/.local` links removed, with seed refusing for unrecorded
   work in `~/.love/src`.
 

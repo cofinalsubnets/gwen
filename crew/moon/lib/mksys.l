@@ -21,7 +21,9 @@
 (: (mksys dst) (mksys-as 'x64 dst)
    (mksys-arm64 dst) (mksys-as 'arm64 dst)
    (mksys-riscv dst) (mksys-as 'riscv64 dst)
-   (mksys-as arch dst)
+   (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
+   ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
+   (mksys-bytes arch)
     (: ir (? (id? arch 'x64)
          '(
          ; -- __ai_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
@@ -283,4 +285,4 @@
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
-       (write-bytes dst (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () () ()))))
+       (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () () ())))

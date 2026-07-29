@@ -161,14 +161,23 @@ love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/host/main.o: $(gl0_h)
 out/host/0/host/cb.o: crew/quay/quay.c crew/quay/quay.h
+# the LOVE_NO_IMAGE= prefix (empty = unset, main.c's auto-load) hands the
+# compiler its baked image back under the blanket corpus export up top: when
+# CC is the dist artifact's own mooncc verb (`love up`'s default -- the
+# zero-ambient-toolchain door), the verb table lives in that image, and an
+# egg boot would read "mooncc" as a filename. a real cc ignores the noise.
 out/host/0/%.o: $(R)/%.c $(love_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(gl0_cc) -c $< -o $@
+	@LOVE_NO_IMAGE= $(gl0_cc) -c $< -o $@
+# -pie is LOAD-BEARING, not hygiene: love0 bakes mooncc0.image, and the image
+# codec refuses a binary whose text sits in its index range (love.c's
+# img_encode_ "binary ptr below TBOUND") -- a PIE loads high and clears it.
+# gcc/clang default to PIE anyway; mooncc (the download door's CC) does not.
 $(love0): $(love0_o)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(CC) $(ai_cflags) -o $@ $(love0_o)
+	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 
 # love.c -> out/host/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc

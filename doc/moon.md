@@ -148,7 +148,17 @@ gate per stage. the pipeline, each its own file:
   no .c); -I dirs search before the system pair on both include forms; a -D
   prepends a `#define` line to the source text before the one lex (so
   function-like -DF(x)=.. rides the normal macro path, and diagnostics under
-  -D skew by the define count). its tail SEAT fires moon-main when `mooncc` is the
+  -D skew by the define count). the driver wears the cc CONVENTIONS
+  (2026-07-28, gwen's call -- `CC=mooncc` drives a gcc-shaped recipe
+  unchanged): the advisory families (-W.. -O.. -g.. -std= -f.. -pipe
+  -static) ride through ignored, and an exe link still owing strong symbols
+  pulls the runtime BY NEED, archive-fashion -- nolibc + the am math + the
+  mksys sys leaf, compiled from the sources beside it (so it engages only
+  in-tree, exactly where the old answer was link-undef; a set carrying its
+  own am.o never meets a twin). -nostdlib/-ffreestanding turn the pull off;
+  the SEMANTIC refusals stay loud (-shared, -Wl,'s payload, -m..) because an
+  ignored one would be the silent-no-op trap in a cc suit. gate:
+  test/gate/drv.sh (test_drv, test_all). its tail SEAT fires moon-main when `mooncc` is the
   program on the command line (the same trick as ain/cook), so mooncc stands
   alone as its own catted script -- it does NOT ride the kore multi-call
   dispatcher.

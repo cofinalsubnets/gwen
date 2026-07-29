@@ -778,10 +778,15 @@ int main(int argc, char const **argv) {
   if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
   // AUTO-LOAD: with no image flag, wake the image baked into the binary's own .image section, so a
   // plain `love` is glazed-by-default at ~4 ms cold start instead of the ~230 ms egg eval. Opt out with
-  // LOVE_NO_IMAGE (the bench does, to control glazed-vs-interp itself). Any problem -- unbaked, stale,
-  // truncated -- makes the load return NULL, so we fall through to the normal egg boot. Never wrong.
+  // LOVE_NO_IMAGE (the bench does, to control glazed-vs-interp itself). An EMPTY value is nothing
+  // (unset) -- so a recipe under the Makefile's blanket `export LOVE_NO_IMAGE := 1` can hand ONE
+  // command its image back with the sh idiom `LOVE_NO_IMAGE= cmd` (the dist artifact running as
+  // $(CC): its mooncc verb lives in the baked image, and an egg boot would read "mooncc" as a
+  // filename). Any problem -- unbaked, stale, truncated -- makes the load return NULL, so we fall
+  // through to the normal egg boot. Never wrong.
   // (love0's reserve is 2 words and never baked, so its auto-load always falls through.)
-  if (!g && !bake && !getenv("LOVE_NO_IMAGE")) {
+  char const *noimg = getenv("LOVE_NO_IMAGE");
+  if (!g && !bake && !(noimg && *noimg)) {
    if (ai_baked_image_len && (g = ai_image_load(ai_baked_image, ai_baked_image_len)))
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
   if (!g) g = ai_ini();
