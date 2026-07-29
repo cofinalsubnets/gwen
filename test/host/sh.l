@@ -122,7 +122,7 @@
 (: r (sh-complete (sh-expl "cat crew/lus"))
    (assert (= "h/" (slurp (tap (cap r))))))              ; one DIR candidate: its /
 (: r (sh-complete (sh-expl "cat crew/lu"))
-   (assert (= '("crew/lush" "crew/lux") (cup r))))       ; two ways forward, listed
+   (assert (= '("crew/lupa" "crew/lush" "crew/lux") (cup r))))   ; ways forward, listed
 (assert (= "ab" (sh-common '("abc" "abd" "ab")))
         (= "~" (sh-homely (+ "" (getenv "HOME")))))
 

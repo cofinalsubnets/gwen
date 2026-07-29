@@ -1,0 +1,138 @@
+; --- test/host/lupa.l: lupa 🔍, the .l language server (crew/lupa/lupa.l) ---
+; the ports are ARGUMENTS, so a whole lsp conversation runs in-process here: the
+; client's messages go in on a (tap ..) and the server's come back out of a
+; (jug 0). no subprocess, no pipes, no timing, and a failure points at a line
+; rather than at a hung editor. run standalone from the repo root:
+;   cat test/00-init.l test/host/lupa.l | out/host/love
+
+(use 'json)
+(use 'lupa)
+
+; a string as an input PORT (prel's own trick: index it over its jot)
+(: (lt-port s) (tap (map s (jot (tally s)))))
+
+; one client message, framed the way an editor frames it
+(: (lt-wire v) (: t (json-show v) ("Content-Length: " + show (tally t) + "\r\n\r\n" + t)))
+
+; every frame the server wrote, parsed back into values
+(: (lt-said j)
+   (: p (lt-port (slurp j))
+      (go acc) (: m (lupa-recv p)
+                  (? (! (two? m)) (rev acc)
+                     (: r (json-read <>m)
+                        (go (? (two? r) (link <>r acc) acc)))))
+      (go ())))
+
+; run a conversation: a list of message values in, the server's replies out
+(: (lt-talk vs)
+   (: j (jug 0)
+      txt (foldl (\ a v (a + (lt-wire v))) "" vs)
+      _ (lupa-serve (lt-port txt) j)
+      (lt-said j)))
+
+; is ndl anywhere in hay? (for reading the raw wire, where key order is the
+; tablet's business and only the spelling of a value is ours)
+(: (lt-has? hay ndl)
+   (: n (tally hay)
+      m (tally ndl)
+      (go i) (? ((n - m) < i) ()
+                ((snip hay i (i + m)) = ndl) 1
+                (go (i + 1)))
+      (go 0)))
+
+(: (lt-obj prs) (foldl (\ t p (pin t <p <>p)) (tablet 0) prs))
+(: (lt-req id mth ps) (lt-obj `(`("jsonrpc" "2.0") `("id" id) `("method" mth) `("params" ps))))
+(: (lt-not mth ps)    (lt-obj `(`("jsonrpc" "2.0") `("method" mth) `("params" ps))))
+(: (lt-doc uri txt)   (lt-obj `(`("textDocument" (lt-obj `(`("uri" uri) `("text" txt)))))))
+
+(: lt-bad "(: a 1\n   (b 2)\n")     ; one dropped paren -- the classic .l slip
+(: lt-ok  "(: a 1 (a + 1))")
+
+; --- the frame ------------------------------------------------------------
+; a header block then exactly N bytes; the length is in BYTES, so utf-8 rides
+; through without a character count anywhere
+(assert
+ (: p (lt-port (lt-wire "hi")) r (lupa-recv p) (&& (two? r) ("\"hi\"" = <>r)))
+ (: p (lt-port (lt-wire "é")) r (lupa-recv p) ("\"é\"" = <>r))
+ !(lupa-recv (lt-port ""))                                  ; eof: nothing, out of band
+ !(lupa-recv (lt-port "Content-Length: 5\r\n\r\nab"))        ; a short body is not a message
+ ; the header name is matched case-blind, and a stray header rides through ignored
+ (: p (lt-port "content-length: 2\r\nX-Junk: 1\r\n\r\n42") r (lupa-recv p) ("42" = <>r)))
+
+; --- initialize -----------------------------------------------------------
+; ⚠ id 0 is a REQUEST, not a notification: json-rpc numbers from 0, and a bare
+; truth test on the id would answer nothing and hang the editor on message one
+(assert
+ (: rs (lt-talk `((lt-req 0 "initialize" (tablet 0))))
+    r  <rs
+    (&& (1 = (tally rs)) (0 = (r "id")) ("2.0" = (r "jsonrpc"))
+        (1 = (((r "result") "capabilities") "textDocumentSync"))
+        ("lupa" = (((r "result") "serverInfo") "name")))))
+
+; --- diagnostics ----------------------------------------------------------
+; the positions are lint's, dropped by one: lint counts from 1, lsp from 0. an
+; unclosed opener points at the OPENER (line 1 col 1 -> line 0 character 0).
+(assert
+ (: ds (lupa-diags lt-bad)
+    d  <ds
+    (&& (1 = (tally ds))
+        (0 = (((d "range") "start") "line")) (0 = (((d "range") "start") "character"))
+        (0 = (((d "range") "end") "line"))   (1 = (((d "range") "end") "character"))
+        (1 = (d "severity")) ("lupa" = (d "source")) ("unclosed (" = (d "message"))))
+ !(lupa-diags lt-ok)                                        ; a clean document: no diagnostics
+ !(lupa-diags ""))                                          ; ...and an empty one likewise
+
+; didOpen publishes them; didChange with a repaired document publishes the EMPTY
+; array, which is how lsp says "forget what i told you". `[]` and not `null` --
+; the whole reason json names null instead of the empty array.
+(assert
+ (: rs (lt-talk `((lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-bad))))
+    r  <rs
+    (&& (1 = (tally rs))
+        ("textDocument/publishDiagnostics" = (r "method"))
+        ("file:///x.l" = ((r "params") "uri"))
+        (1 = (tally ((r "params") "diagnostics")))))
+ (: rs (lt-talk `((lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-bad))
+                  (lt-not "textDocument/didChange"
+                          (lt-obj `(`("textDocument" (lt-obj `(`("uri" "file:///x.l"))))
+                                    `("contentChanges" `((lt-obj `(`("text" lt-ok)))))))) ))
+    (&& (2 = (tally rs))
+        (1 = (tally ((<rs "params") "diagnostics")))         ; broken: one
+        (() = ((<>rs "params") "diagnostics"))))             ; repaired: cleared, exactly ()
+ ; and it goes out ON THE WIRE as [] -- never null, which an editor would ignore
+ ; instead of clearing (the whole reason json names null and not the empty array)
+ (: j (jug 0)
+    _ (lupa-serve (lt-port (lt-wire (lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-ok)))) j)
+    t (slurp j)
+    (&& (lt-has? t "\"diagnostics\":[]") (! (lt-has? t "\"diagnostics\":null")))))
+
+; didClose clears them too
+(assert
+ (: rs (lt-talk `((lt-not "textDocument/didClose" (lt-doc "file:///x.l" lt-bad))))
+    (() = ((<rs "params") "diagnostics"))))
+
+; --- the edges ------------------------------------------------------------
+; an unknown REQUEST is refused by number (a request must always be answered, or
+; the editor waits forever); an unknown NOTIFICATION is dropped in silence
+(assert
+ (: rs (lt-talk `((lt-req 7 "textDocument/hover" (tablet 0))))
+    r  <rs
+    (&& (1 = (tally rs)) (7 = (r "id")) (-32601 = ((r "error") "code"))))
+ !(lt-talk `((lt-not "$/setTrace" (tablet 0))))
+ ; shutdown answers null, then exit ends the session -- what follows is never read
+ (: rs (lt-talk `((lt-req 1 "shutdown" (tablet 0))
+                  (lt-not "exit" (tablet 0))
+                  (lt-req 2 "initialize" (tablet 0))))
+    (&& (1 = (tally rs)) (json-null? (<rs "result")))))
+
+; a garbled frame does not take the session down: the body is dropped and the
+; next message is served as if nothing happened
+(assert
+ (: j (jug 0)
+    txt ("Content-Length: 7\r\n\r\n{nope!!" + (lt-wire (lt-req 3 "initialize" (tablet 0))))
+    _ (lupa-serve (lt-port txt) j)
+    rs (lt-said j)
+    (&& (1 = (tally rs)) (3 = (<rs "id")))))
+
+(puts "lupa: ok")
+(putc 10)
