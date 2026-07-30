@@ -376,15 +376,12 @@ uefi: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf
 # point is that `make test_slow` fetches nothing. Fetch it once by hand with
 # `make out/dl/edk2-ovmf/ovmf-code-x86_64.fd` and this lane starts running.
 #
-# OPT-IN, not in test_slow (2026-07-30) -- test_kdiff's bargain, for the same reason:
-# it boots the ELF test_kernel just booted (esp-test/love.elf is a COPY of it), so
-# everything past the hand-over is the artifact test_kernel already gates. What is ONLY
-# here is the DOOR -- the loader reading love.elf off the ESP, kboot filled from the UEFI
-# memmap + GOP, ExitBootServices, page tables, the jump. RUN IT WHEN THAT MOVES:
-# port/inle/uefi/, crew/holo/pe.l, mkefi.l, the kboot shape, or klink's numbers.
-# ⚠ the cost argument is GONE and only the duplication one is left: this lane read 184 s
-# against the -kernel door's 62 s until fbdraw learned to repaint one row (kmain.c) -- the
-# 122 s was the framebuffer console, which only this door hands over. It is ~64 s now.
+# In test_slow, at ~64 s -- the same as the -kernel door. What is only HERE is the
+# hand-over: the loader reading love.elf off the ESP, kboot filled from the UEFI memmap +
+# GOP, ExitBootServices, page tables, the jump. Everything past it is the artifact
+# test_kernel already gates. ⚠ this is also the ONLY gate that hands over a framebuffer,
+# so kmain.c's fbdraw runs nowhere else -- if this lane costs MINUTES while test_kernel
+# does not, the console is repainting more than it was asked to, not the door faulting.
 OVMF_X64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-x86_64.fd)
 .PHONY: test_uefi
 ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)

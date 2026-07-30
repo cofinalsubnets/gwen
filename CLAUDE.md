@@ -35,8 +35,7 @@
 ; * the kernel has THREE boot doors, one ELF per arch: -kernel (x86_64's PVH stub and aarch64's
 ;   EL1 MMU stub -- what test_kernel + test_kernel_arm64 ride, nothing
 ;   downloaded), UEFI (port/inle/uefi/ -- our own BOOTX64.EFI, mooncc-built + holo-laid PE32+;
-;   `make uefi` for the ESP, test_uefi to gate it -- OPT-IN, run it when the boot path moves;
-;   doc/uefi.md)
+;   `make uefi` for the ESP, test_uefi to gate it; doc/uefi.md)
 ;   and limine (the iso/hdd + interactive run-* lanes). out/dl (ovmf/limine, nuked by
 ;   `make clean`) feeds only limine + the uefi gate's firmware; stash it if you use those.
 ;   the LINK is OURS on every door: holo's kernel lane (ldkern -- the note, five page-aligned
