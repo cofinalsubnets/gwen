@@ -40,13 +40,13 @@
          (? (two? cs) (<cs >< (char->chars (<>cs ()))) ()))
       p (tap (char->chars s)) e (nom 0) r (sound p e)
       (? (id? r e) 0 (id? r p) 0 (ev r))))
-; reads: the stream shell -- a port is the LAZY charms, and reads drinks it:
-; read and eval every form until the stream ends (eof, or input ends inside
-; an unfinished shape); the value is the last form's. ev late-binds through
-; the book ((ev 'ev r)) so the one definition drives both of love0's passes.
+; reads: the stream shell -- a port is the LAZY charms, and reads drinks it: read and eval
+; every form, the value the last form's; ev late-binds ((ev 'ev r)) so one definition drives
+; both of love0's passes. ⚠ THE TWO ENDINGS DIFFER: the sentinel ends the stream BETWEEN
+; forms (done), the PORT ends it INSIDE one -- no more text coming, so that is a scare.
 (: (reads p)
    ((: (g e z) (: r (sound p e)
-       (? (id? r e) z (id? r p) z (g e (ev 'ev r)))))
+       (? (id? r e) z (id? r p) (scare 'unfinished-form p) (g e (ev 'ev r)))))
     (nom 0) 0))
 
 ; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
@@ -337,26 +337,25 @@
      (: zp (:)
         (\ s a b (? (eof? s) b (more? s) a zp)))
 
-   ; the shell's default help: a bare scare prints its condition -- ;; a b --
-   ; with an honest face, then welps to the point so the session survives
-   ; every raise (the answer must be a unit: a number would exponentiate under
-   ; a numeral). every other status -- the more bits -- welps straight through,
-   ; reproducing the read protocol exactly. (helpless, the C default is
-   ; terminal and wears the oom banner.)
-   shell-help
-     (\ s a b
-        (? (scare? s) (: _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10) (welp s a b))
-           (welp s a b)))
+   ; the face a raise wears -- ;; a b -- ⚠ ON ERR: a DIAGNOSTIC, and a script's stdout is the
+   ; script's (the C print this stands in for always went there). the two defaults share it and
+   ; differ only in WHAT SURVIVES: both welp to the point (a unit -- a number would exponentiate)
+   ; and pass the more bits through, but at the PROMPT every raise survives where in FILE MODE
+   ; only a missing does. a deliberate scare stays terminal there; 239 sites lean on it.
+   (hface a b) (: _ (say err ";; ") _ (print err a) _ (say err " ") _ (print err b) (put err 10))
+   shell-help (\ s a b (: _ (? (scare? s) (hface a b)) (welp s a b)))
+   file-help  (\ s a b (: _ (? (scare? s) (hface a b))
+                          (? (? (scare? s) (nil? (id? a 'missing)) ()) (quit 1) (welp s a b))))
 
-   ; the interactive entry: install shell-help IF no help is present. ⚠ the CHECK must
-   ; not be a bare (ev 'help): a live read of an ABSENT help trips the always-on
-   ; `;; missing help` warning, since the helpless missing-read path probes `help`
-   ; itself to decide terminal-vs-raise. the DEFINE still goes through ev -- a live
-   ; top-level pin, so a later (: help 0) uninstall is seen.
+   ; INSTALLED AT LOAD, not at the prompt: file mode is where nobody was listening. an unbound
+   ; global already surfaced from C, a `:` read before its pin did not, and both answer the zero
+   ; point -- a typo reads () and (() x) is 1, a fake result wearing a real one's face. ⚠ the
+   ; CHECK cannot be a bare (ev 'help): reading an ABSENT one trips the always-on warning.
+   _ (? !(member? 'help (names ())) (ev `(': 'help file-help)))
    ; ⚠ raw the tty BEFORE reading: the editor is the sole echo, so cooked-mode echo
    ; must be off or every line doubles.
    (shell _)
-     (: _ (? !(member? 'help (names ())) (ev `(': 'help shell-help)))
+     (: _ (ev `(': 'help shell-help))   ; the prompt survives every raise; a script must not
         _ (raw 1)
         _ (puts (";3 love " + love-version + "\n"))
         (repl 0 0))

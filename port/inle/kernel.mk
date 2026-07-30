@@ -195,12 +195,12 @@ $(k_odir)/mkboot.l: $R/port/inle/mkboot.l $(klay_l)
 $(k_odir)/port/inle/$a/vec.o: $(k_odir)/mkvec.l $m
 	@echo LAY	$@
 	@mkdir -p "$(dir $@)"
-	@$m -l $< -e '(lay-vec "$@" "$a")' && test -s $@
+	@$m -l $< -n -e '(lay-vec "$@" "$a")' && test -s $@
 
 $(k_odir)/port/inle/$a/boot.o: $(k_odir)/mkboot.l $m
 	@echo LAY	$@
 	@mkdir -p "$(dir $@)"
-	@$m -l $< -e '(lay-boot "$@" "$a")' && test -s $@
+	@$m -l $< -n -e '(lay-boot "$@" "$a")' && test -s $@
 
 # --- ISO / HDD image rules -------------------------------------------
 k_xorriso_x86_64 = \

@@ -186,7 +186,7 @@ $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@echo MOONX	$@
 	@mkdir -p $(dir $@)
-	@$(love0) -l $(ho)/.mksys-cat.l -e '($(xmksys) "$@")' && test -s $@
+	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(xmksys) "$@")' && test -s $@
 out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
 	@echo DIST	$(abspath $@)
 	@$(moonx) -pie $(xobjs) -o $@

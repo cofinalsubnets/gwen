@@ -261,7 +261,7 @@ $(ho)/.mksys-cat.l: $(mksys_l)
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(love0) -l $(ho)/.mksys-cat.l -e '($(mksys_e) "$@")' && test -s $@
+	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
 ifneq ($(STATIC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
