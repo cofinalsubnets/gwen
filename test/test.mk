@@ -267,19 +267,25 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m
-# test_ccarm64 -- the battery's AARCH64 twin, and the end of "x86-64 only until
-# arm64 parity" (the line above, which stood for four of the five backends). every
-# test/cc/*.c built by `mooncc -t arm64` AND an aarch64 cross-gcc, both run under
-# qemu-user, exit code AND stdout compared. it found a fault on its first run:
-# 104-u32wrap's de Bruijn ctz did not wrap to 32 bits, because the rule is shared
-# and only x64 routed around it (a mul-IMMEDIATE lane that passes 'int by hand;
-# arm64 has no such form and read the literal's 'long). ~20s. the three programs
-# the arm64 lane cannot build are asserted to REFUSE, not skipped -- a silent skip
-# would let a regression hide behind the list. skips whole without qemu-aarch64 or
-# a cross gcc (AARCH64_CC points at one).
-.PHONY: test_ccarm64
+# test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET, and the end of
+# "x86-64 only until arm64 parity" (the line above, which stood for four of the
+# five backends). TWO targets, ONE procedure (test/gate/ccarch.sh, raw.sh's shape).
+# every test/cc/*.c is built by `mooncc -t <arch>`, run under qemu-user, and
+# required to answer exactly what the same source answers on x86-64 -- which
+# test_moon pins against gcc, so the two gates compose: gcc pins x64, x64 pins
+# every other target. a cross gcc is used as an ADDITIONAL oracle wherever the box
+# has one (AARCH64_CC / RISCV64_CC, or the usual names), since agreeing with x64
+# cannot catch a fault the two SHARE.
+# it found one on its first arm64 run: 104-u32wrap's de Bruijn ctz did not wrap to
+# 32 bits, from a rule every target shares, and x64 was right only because it has
+# a mul-IMMEDIATE lane passing 'int by hand. ~25s arm64, ~15s riscv. the three
+# programs no cross lane can build are asserted to REFUSE, not skipped -- a silent
+# skip list is where a regression hides. each skips whole without its qemu.
+.PHONY: test_ccarm64 test_ccriscv
 test_ccarm64: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
-	@sh test/gate/ccarm64.sh $(ho) $m
+	@sh test/gate/ccarch.sh arm64 $(ho) $m
+test_ccriscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/ccarch.sh riscv64 $(ho) $m
 # test_libc -- OUR C LIBRARY against the system's, function by function
 # (doc/libc.md rung 0). test/libc/*.c is built by mooncc (which pulls
 # crew/moon/lib/nolibc.c by need) and by gcc (glibc), run, and the two OUTPUTS
