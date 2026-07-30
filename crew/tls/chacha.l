@@ -22,9 +22,11 @@
 ; scope, so a quarter-round written the obvious way --
 ;   (: a (& (a + b) m32) d (rotl (d ^ a) 16) ..)
 ; -- has `(a + b)` read the INNER `a`, before its pin: the missing condition, which
-; is the zero point, which is 0. every round then computes nothing, `block` hands
-; back its own input, and NOTHING SCARES. the first draft did exactly this and ran
-; 27x "faster". fresh names per step, always.
+; is the zero point, which is 0. every round then computes nothing and cc-block
+; hands back its own input. love SAYS SO now (";; missing a" -- ab0fd92e taught
+; file mode to surface a pre-pin read, the same hour-eating trap met from the
+; reader's side), but the value is still 0 and the cipher still RUNS: a scare
+; nobody reads is a cipher encrypting with nothing. fresh names per step, always.
 (:
    m32 4294967295
 
