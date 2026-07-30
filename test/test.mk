@@ -57,7 +57,7 @@ test_host: $m
 # on the compositor: `cat test/00-init.l test/host/haven.l | out/host/love`.
 # these run WARM ($(mw)) -- the nifs are the subject, not the egg, and 30 cold boots
 # cost 51 s of the 77 this gate used to take. hostnif_cold names the exceptions.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
@@ -287,6 +287,23 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m
+# test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for
+# every file in test/cc/, (cparse (clay-show ast)) == ast, compared STRUCTURALLY on
+# the tree and never as a string compare of the C text. that makes "clay can express
+# arbitrary C" empirical over 110 real programs instead of claimed.
+# it rides the woken mooncc image (the front end lives there) and takes clay by
+# (use 'clay), so the module's helper names never touch the compiler's book.
+# ⚠ the run PARTITIONS and prints both halves: the files it can say, and the files
+# whose declarations cparse did not keep (a typedef, a struct, a _Static_assert and
+# va_start's last parameter all land as markers carrying nothing). the second count
+# is a measured gap, not a red -- but it is printed by name every run, because a
+# silent skip would read as coverage. teach parse.l to FILL those markers and the
+# number falls; clay's grammar already has the faithful forms waiting.
+# stdin is /dev/null: -l with no -e drops into the shell otherwise.
+.PHONY: test_clay
+test_clay: host out/host$(hsuf)/mooncc.image
+	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
+	@$m --wake $(ho)/mooncc.image -l test/gate/clay.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET, and the end of
 # "x86-64 only until arm64 parity" (the line above, which stood for four of the
 # five backends). TWO targets, ONE procedure (test/gate/ccarch.sh, raw.sh's shape).

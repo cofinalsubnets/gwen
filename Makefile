@@ -26,7 +26,7 @@ export LOVE_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0 site site-serve
-.PHONY: test test_host test_slow test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_arm64 test_thumb1 test_thumb2 test_virt test_wake
+.PHONY: test test_host test_slow test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_clay test_arm64 test_thumb1 test_thumb2 test_virt test_wake
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest lint fmt fmt-check ccdb
 
 # `make` with no target is `make test` -- pinned EXPLICITLY because the includes
@@ -71,7 +71,7 @@ test:
 # test_kernel + test_wasm are in test_slow but NOT the fast `test`: each needs an
 # extra toolchain (qemu, x86_64-only; emcc + node) and no-ops when that is
 # absent. See their rules below.
-test_slow: test_host test_love0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_gcheck test_extract test_big test_mx test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi test_moon test_ccarm64 test_ccriscv test_libc test_ulp test_raw test_drv test_asmops test_fixpoint test_dist nettest test_arm64 test_thumb1 test_thumb2 test_thumb2sp test_virt test_mps2 test_mps2_t1 test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_kernel test_uefi test_kernel_arm64 test_vec test_wasm test_wake
+test_slow: test_host test_love0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_gcheck test_extract test_big test_mx test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi test_moon test_clay test_ccarm64 test_ccriscv test_libc test_ulp test_raw test_drv test_asmops test_fixpoint test_dist nettest test_arm64 test_thumb1 test_thumb2 test_thumb2sp test_virt test_mps2 test_mps2_t1 test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_kernel test_uefi test_kernel_arm64 test_vec test_wasm test_wake
 all: host kernel wasm
 
 # lint: paren/bracket/brace balance + unclosed strings across every tracked .l
