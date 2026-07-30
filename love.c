@@ -2438,8 +2438,7 @@ lvm(lvm_index) {
   // SURFACE it on err: ";; missing <nom>", then still answer the zero point. NON-terminal and
   // MISSING-SPECIFIC -- a deliberate (scare ..) keeps the terminal helpless law, so an assert
   // failure still stops the run. add_name + ioput* hold no heap operand -> no GC, so Sp/Ip
-  // survive; best-effort, a print error just stops. (The egg boot is clean; the remaining
-  // warnings are deliberate test fixtures -- helpless missing-read / mop tests over this very path.)
+  // survive; best-effort, a print error just stops.
   struct ai_str *nm = add_name(g, Ip[1].x);
   if (nm) { struct ai_io *sv = g->io; g->io = &ai_stderr;
             struct ai *w = ioputs(g, ";; missing ");
@@ -4449,10 +4448,7 @@ static struct ai *ioparse(struct ai *g, bool multi) {
                            : 0;
     if (empty_ctor) {
      g->sp[0] = putcharm(0);                            // the ignored arg (0; the pervasive convention)
-     g = gxr(ai_push(g, 1, ZeroPoint));                 // (0 . ()) -- ()-terminated like every other reader list,
-                                                        // NOT nil: `nil` is a live tail the printer hides (both show
-                                                        // "(0)") but `=` sees, so #()/@() was the one form in the
-                                                        // grammar that did not survive show -> read. test/host/rdiff.l
+     g = gxr(ai_push(g, 1, ZeroPoint));                 // (0 . ()) -- ()-terminated like every other reader list
      if (ai_ok(g)) g = intern(ai_strof(g, empty_ctor)); // push the ctor symbol
      g = gxl(g);                                        // (ctor . (0)) = (ctor 0)
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); }

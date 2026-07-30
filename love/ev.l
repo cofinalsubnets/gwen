@@ -470,11 +470,8 @@
         ; stack (they live on (d 'par)) -- the nom is THIS let's, so the walk
         ; must not escape to an enclosing binding of the same spelling. import
         ; it, as the book-miss would; the weave re-analysis resolves it through
-        ; 'lam. escaping here applied a same-named outer sibling's imports
-        ; MID-weave, past the fixcaps fixpoint, so every self-site of the
-        ; enclosing lambda under-applied -- the recursion answered a truthy
-        ; partial, silently. (!home keeps the 'far read off the hot local
-        ; path; a lambda scope carries no 'far anyway, so home never shadows.)
+        ; 'lam. (!home keeps the 'far read off the hot local path; a lambda
+        ; scope carries no 'far anyway, so home never shadows.)
         (!home && shadowed? c d x)
           (: _ (? (c 'par) (push c 'imp x)) (em2 lvm_index x))
         (: s (d 'stk)

@@ -36,6 +36,11 @@
 ; Reads test/spec.l, writes Coq to `out`.  Run: out/host/love tools/spec2coq.l > proof/rocq/gen.v
 
 (: (join l) (foldl (+) "" l)                           ; join a list of strings with + (was `cat`, which shadowed the global dyadic cat)
+   ; the four interning tables, HOISTED to the head of the chain: bound down beside their
+   ; readers, a capturing closure resolves them as a global import and the runtime says
+   ; ";; missing vtab" &c. bound first, they resolve lexically and it is quiet.
+   vtab (tablet 0) vc (tablet 0)      ; lambda params in flight: nom -> coq var; vc the freshness counter
+   ltab (tablet 0) lc (tablet 0)      ; free noms/operator heads -> LO index; lc the counter
 
    ; read a file's top-level forms as DATA (the reader strips ; comments)
    (forms path) (: q (open path "r") e (mint 0)
@@ -74,7 +79,6 @@
    (un2? x) (&& (two? (cup x)) (! (two? (cup (cup x))))) ; a 2-element (op arg) form
 
    ; -- lambdas as Coq funs (single param, exact body), sections, escaped operators --
-   vtab (tablet 0) vc (tablet 0)                        ; params in flight: nom -> coq var; vc the freshness counter
    (lamform? x) (&& (two? x) (id? (cap x) bs) (two? (cup x)) (two? (cup (cup x))))  ; (\ p .. b): 3+ elements (2 is quote)
    (lam1? x) (&& (lamform? x) (! (two? (cup (cup (cup x))))) (nom? (e2 x)))         ; exactly (\ p b), p a nom
    (inlam f k) (: v ("v" + (show (peep vc 0 0))) _ (pin vc 0 (+ 1 (peep vc 0 0)))
@@ -183,7 +187,6 @@
    ;    equality is lteqb, plain structural equality on the indices. a bound param is
    ;    its LV depth, a free nom or operator head interns to an LO index (ltab), a
    ;    literal is LN; quote data and special forms in a body stay out
-   ltab (tablet 0) lc (tablet 0)
    (lidx nm) (? (peep ltab nm 0) (peep ltab nm 0)
                 (: n (+ 1 (peep lc 0 0)) _ (pin lc 0 n) _ (pin ltab nm n) n))
    (idxof nm l k) (? (! (two? l)) -1 (id? (cap l) nm) k (idxof nm (cup l) (+ 1 k)))

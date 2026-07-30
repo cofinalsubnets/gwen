@@ -108,16 +108,12 @@
  ('(twin 0 1) = (rdr "~(0 1)"))
  ('(conj x) = (rdr "~x"))                             ; ~ NOT before ( is monadic
  ; the empty collections go DIRECT to a one-arg nif (a zero-arg macro is not
- ; expanded by the self-hosted feel on love0). this lane used to emit a NIL-tailed
- ; list where every other emission is ()-tailed; rung 1 pinned that here as an open
- ; choice -- reproduce it or normalize it -- rather than as a law. rung 3 settled
- ; it: a nil tail is invisible to the printer (both show "(0)") and to nilp, but
- ; `=` sees it, which made these the only two forms in the grammar that did not
- ; survive show -> read. normalized, love.c:4452, so they compare WHOLE now.
+ ; expanded by the self-hosted feel on love0). every reader emission is ()-tailed,
+ ; these two included, so they compare WHOLE against a source-quoted form.
  ('(tablet 0) = (rdr "#()"))
  ('(iota 0) = (rdr "@()"))
- (() = (cup (cup (rdr "#()"))))                       ; ()-tailed, like every reader list
- (() = (cup (cup (rdr "<x")))))                       ; ...including this one
+ (() = (cup (cup (rdr "#()"))))
+ (() = (cup (cup (rdr "<x")))))
 
 ; --- the valence law, reader half ----------------------------------------------
 ; GLUED is monadic, SPACED is dyadic -- everywhere, HEAD INCLUDED. a run glued to
