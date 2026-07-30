@@ -158,9 +158,18 @@
    (x-querytree s win)
     (: _ (x-w8 s 15) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s win) _ (x-flush s)
        hdr (x-reply s)
+       ; ⚠ PRESENCE RIDES OUT OF BAND: (1 windows) on success, () when the query
+       ; FAILED. a root with no children is a real answer and so is a garbled
+       ; reply, and the bare list cannot tell them apart -- which is how a
+       ; desynced connection read as "there are no windows", the startup sweep
+       ; adopted nothing, and lux ran on for good with an empty client list. the
+       ; house law (CLAUDE.md): carry presence in a wrapper tested with two?,
+       ; never in the value's own emptiness. QueryTree on the ROOT cannot fail
+       ; for any legitimate reason -- the root id is always valid -- so this ()
+       ; is precisely a garble detector, and it used to throw the detection away.
        (? (! (= (cap hdr) 1)) ()
           (: n (u16 hdr 16) bytes (x-rbytes s (* (u32 hdr 4) 4))
-             (take n (x-atoms-of bytes)))))
+             (L 1 (take n (x-atoms-of bytes))))))
    (x-attrs s win)                                                               ; -> (map-state override-redirect); map-state 2 = IsViewable
     (: _ (x-w8 s 3) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s win) _ (x-flush s)
        hdr (x-reply s)

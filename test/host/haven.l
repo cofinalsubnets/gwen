@@ -92,8 +92,9 @@
  sc (x-setup s ())
  _ (must 'x-eyes (&& (two? sc) (= 24 (scr-depth sc))))
  (waitwin t) (? (< t 1) ()
-                (: ws (x-querytree s (scr-root sc))
-                   (? (two? ws) (cap ws) (: _ (rest 100) (waitwin (- t 1))))))
+                (: ws (x-querytree s (scr-root sc))               ; (1 windows) | () -- a FAILED
+                   ws2 (? (two? ws) (caup ws) ())                 ; query keeps waiting, same as an
+                   (? (two? ws2) (cap ws2) (: _ (rest 100) (waitwin (- t 1))))))   ; empty root did
  win (waitwin 100)
  _ (must 'haven-window (charm? win))
  (waitmap t) (? (< t 1) 0

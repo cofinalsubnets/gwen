@@ -483,9 +483,36 @@
    (furniture? w) (|| (x-has-atom s w "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP")   ; desktops and docks are furniture, never clients
                       (x-has-atom s w "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK"))
    (ghostly? w) (two? (x-getprop-atoms s w (x-intern s "WM_STATE")))             ; the last generation's stamp: managed then, maybe hidden now
+   ; ⚠ THE RACE KNOB, test-only: milliseconds to wait before the sweep reads the
+   ; tree. this sweep is the ONLY adoption path for an ALREADY-MAPPED window --
+   ; no MapRequest ever comes for one -- and it is ONE-SHOT, so losing the race
+   ; loses the window for the life of the process. the window is narrower than a
+   ; single added comment line's worth of compile time on a cold boot, which is
+   ; why every in-process instrument hid it and no candidate fix could be tested.
+   ; LUX_SWEEP_DELAY opens it on demand, so a fix can be MEASURED instead of
+   ; guessed. unset in every normal run, where it costs one getenv.
+   sweep-wait (: v (getenv "LUX_SWEEP_DELAY") w (? (< 0 (tally v)) (gem v) 0)
+                  (? (&& w (< 0 w)) w 0))
+   _ (? (< 0 sweep-wait) (: _ (line (+ "lux: sweep delayed " (show sweep-wait)))
+                             (rest sweep-wait)) 0)
+   ; ONE query, and its PRESENCE checked: () is a failed round trip, not an empty
+   ; root (x-querytree's wrapper). the two reads below used to be two separate
+   ; QueryTrees, which could disagree; one answer serves both.
+   tree (x-querytree s root)
+   _ (? (two? tree) 0
+        (line "lux: QueryTree FAILED at startup -- the stream is garbled, adopting nothing"))
+   ; ⚠ AND THE FAULT INJECTOR, the knob that actually makes a fix testable.
+   ; LUX_SWEEP_MISS=1 forces the sweep to see an EMPTY tree -- exactly what a lost
+   ; race leaves behind. it is the deterministic form of the defect: the delay
+   ; knob above can only ever make the sweep LATER, and later always wins, so a
+   ; delay can prove the race's DIRECTION but can never reproduce it. this can.
+   ; any future fix for "a missed sweep is permanent" must make a MISS=1 run pass;
+   ; today one fails, because nothing ever looks at the tree a second time.
+   twins (? (= "1" (getenv "LUX_SWEEP_MISS")) (: _ (line "lux: sweep MISSED (forced)") ())
+            (two? tree) (caup tree) ())
    kids (filter (\ w (! (furniture? w)))
-                (filter (\ w (|| (x-manageable? s w) (ghostly? w))) (x-querytree s root)))
-   _ (map (\ w (ewmh-track s w)) (x-querytree s root))                           ; a pre-existing dock's strut still shrinks the rect
+                (filter (\ w (|| (x-manageable? s w) (ghostly? w))) twins))
+   _ (map (\ w (ewmh-track s w)) twins)                                          ; a pre-existing dock's strut still shrinks the rect
    (adopt-tag w) (: d (x-getprop-atoms s w (x-intern s "_NET_WM_DESKTOP"))       ; the last generation wrote each window's tag on the window
                     t (? (two? d) (+ 1 (cap d)) 1)                               ; (floats wear their HOME tag too, so they come back to it,
                     (? (&& (< 0 t) (! (< (tally lux-tags) t))) t 1))            ; tiled; out of range -> tag 1)

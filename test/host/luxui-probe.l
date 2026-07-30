@@ -126,7 +126,8 @@
       _ (cmsg w2 a-cl 0 0 0)
       s3 (connectu dpy)
       sc3 (x-setup s3 ())
-      _ (waitp "w2-felled" (\ u (! (any (\ k (= k w2)) (x-querytree s3 root)))) 100)
+      _ (waitp "w2-felled" (\ u (: t (x-querytree s3 root)                       ; a FAILED query is NOT
+                                    (&& (two? t) (! (any (\ k (= k w2)) (caup t)))))) 100)   ; "felled"
 
       ; --- 5b. the withdraw race (the telegram media-viewer zombie): a client
       ;     hides a fullscreen float Qt-style -- a REAL unmap, then the ICCCM
