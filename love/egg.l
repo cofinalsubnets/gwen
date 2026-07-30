@@ -11,6 +11,14 @@
    ; turn/turnf were mopped while prel owned the RNG wrapper. love/rng.l ships
    ; separately now and cannot capture what birth deletes, so the two pure steps stay -- `seed`
    ; was never mopped, and minting a state you could not step was the odd shape anyway.
+   ; ⚠ A VALUE-GLOBAL DOES NOT MOP LIKE A CLOSURE, and `make test` will not tell you. an
+   ; interned comma bound here and read by three opfix helpers came back as `;; missing
+   ; op-cma`, once per reader, with a zero point where the value was -- but ONLY on a boot
+   ; that compiles from source. `LOVE_NO_IMAGE=1 love -e ...` shows it; a woken image never
+   ; does, which is why the whole fast gate is silent and `--bake` (which boots off the egg
+   ; to bake) is where it surfaced. NOT the glaze: LOVE_NO_GLAZE=1 is identical. the tablets
+   ; above survive because opfix holds them by capture. so prove a new name with a quiet
+   ; `LOVE_NO_IMAGE=1` run, never with the gate alone.
    _ (each '(seal-hooks books setbooks mods lib enter leave gv trim peek poke seek spin yield macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics op-fr op-fold op-frg op-frgrip op-frw op-frd op-frn op-frc op-fro op-fin op-ent op-ar? op-gh op-del op-core op-steal op-drain op-w op-long op-puncp op-punc-byte op-colon op-lam op-mem? op-disjoint? op-params op-flat-ol op-cm? op-take op-drop op-split opfactor monofactor mono-long seqx sortsplit lidx ldel packp _)
       (\ k (pull book k 0)))
    (each (keys book)

@@ -4449,7 +4449,10 @@ static struct ai *ioparse(struct ai *g, bool multi) {
                            : 0;
     if (empty_ctor) {
      g->sp[0] = putcharm(0);                            // the ignored arg (0; the pervasive convention)
-     g = gxr(ai_push(g, 1, nil));                       // (0 . nil)
+     g = gxr(ai_push(g, 1, ZeroPoint));                 // (0 . ()) -- ()-terminated like every other reader list,
+                                                        // NOT nil: `nil` is a live tail the printer hides (both show
+                                                        // "(0)") but `=` sees, so #()/@() was the one form in the
+                                                        // grammar that did not survive show -> read. test/host/rdiff.l
      if (ai_ok(g)) g = intern(ai_strof(g, empty_ctor)); // push the ctor symbol
      g = gxl(g);                                        // (ctor . (0)) = (ctor 0)
      if (ai_ok(g)) g->sp[1] = B(g->sp[1]); }

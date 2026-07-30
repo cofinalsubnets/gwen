@@ -108,15 +108,16 @@
  ('(twin 0 1) = (rdr "~(0 1)"))
  ('(conj x) = (rdr "~x"))                             ; ~ NOT before ( is monadic
  ; the empty collections go DIRECT to a one-arg nif (a zero-arg macro is not
- ; expanded by the self-hosted feel on love0). ⚠ compared head and operand, NOT
- ; whole: this lane emits a 0-TAILED list where the mono lane emits an ()-tailed
- ; one, so `=` against a source-quoted form fails on the tail alone. that
- ; inconsistency is real and is a thing a reimplementation must reproduce or
- ; deliberately normalize -- it is asserted here so the choice cannot be silent.
- ('tablet = (cap (rdr "#()"))) (0 = (cap (cup (rdr "#()"))))
- ('iota = (cap (rdr "@()"))) (0 = (cap (cup (rdr "@()"))))
- !(() = (cup (cup (rdr "#()"))))                      ; 0-tailed, not ()-tailed
- (() = (cup (cup (rdr "<x")))))                       ; ...while this one is ()
+ ; expanded by the self-hosted feel on love0). this lane used to emit a NIL-tailed
+ ; list where every other emission is ()-tailed; rung 1 pinned that here as an open
+ ; choice -- reproduce it or normalize it -- rather than as a law. rung 3 settled
+ ; it: a nil tail is invisible to the printer (both show "(0)") and to nilp, but
+ ; `=` sees it, which made these the only two forms in the grammar that did not
+ ; survive show -> read. normalized, love.c:4452, so they compare WHOLE now.
+ ('(tablet 0) = (rdr "#()"))
+ ('(iota 0) = (rdr "@()"))
+ (() = (cup (cup (rdr "#()"))))                       ; ()-tailed, like every reader list
+ (() = (cup (cup (rdr "<x")))))                       ; ...including this one
 
 ; --- the valence law, reader half ----------------------------------------------
 ; GLUED is monadic, SPACED is dyadic -- everywhere, HEAD INCLUDED. a run glued to

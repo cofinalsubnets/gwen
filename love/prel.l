@@ -1,5 +1,9 @@
 ;;; book is present in prelude
 ;;; definitions in this file must not use infix notation
+;;; this file stays inside the PURE LISP subset -- delimiters, `;` comments, "…" with escapes,
+;;; atoms, integers, `'` quote, and four float literals. no `(, no ~(, no #(/@(, no glued
+;;; operator run, no bare `,`, no [/{, no prime inside a name: those are p1's half of the
+;;; grammar and p0 will not read them. doc/reader.md rung 4.
 ;;; FIXME move ev support functions to ev where possible
 ; prel.l -- love prel: data + function + macro definitions.
 ; ⚠ PRE-OPERATORS ZONE down to the `operators` table: c0 compiles this before opfix and
@@ -16,9 +20,9 @@
    tau (* 2 pi) ;; no infix here
    e 2.718281828459045                          ; Euler's number; exp is (\ x (x e))
    true 1 false 0
-   i ~(0 1) ;; FIXME up top
+   i (twin 0 1) ;; FIXME up top
    (tangent x) (/ (sine x) (cosine x))          ; derived: tan = sin/cos
-   star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray ~(0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
+   star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
    (tier v) (? (tray? v) (: c (atype v) (? (= c 0) star-tray (= c 1) gem-tray (= c 2) twin-tray top-tray)) ())  ; a tray's tier IS its ctor; nil off a tray
    zero? nil?                                  ; zero? aliases nil? (the net-to-zero test)
    (one? x) (= x (cap x))
@@ -353,12 +357,13 @@
 ; word and a run factors greedily, so <>x is (cap (cup x)) and !!x double-negates.
 (: monadics
    (foldl (\ t p (pin t (cap p) (caup p))) (tablet 0)
-   ; << and >> earn their rows by SPEED, not by reach: without them the greedy factor splits >>x
-   ; into > then >, which composes to the same cuup -- the entry makes it one call instead of two.
-      `('(< cap) '(> cup) '(<< caap) '(>> cuup) '(+ net) '(* prod)
-        '(| abs) '(- negate) '(/ reciprocal) '(% fraction) '(? bit)
-        '($ saturate)
-        '(! nil?) '(. dot))))
+   ; one row per RUN-PIECE, never per run: a multi-piece run is what the greedy factor is for,
+   ; and caap/cuup are prel closures the compiler inlines, so a `<<`/`>>` row bought nothing a
+   ; timing loop could see -- and left the tree's commonest run, `<>`, looking conspicuously absent.
+      (L '(< cap) '(> cup) '(+ net) '(* prod)
+         '(| abs) '(- negate) '(/ reciprocal) '(% fraction) '(? bit)
+         '($ saturate)
+         '(! nil?) '(. dot))))
 ; the FACTORIZATION LAW: greedy longest-prefix match, no backtracking; every factor but the
 ; last must be arity one, and the last takes the positional valence. a token that doesn't
 ; factor is a plain symbol -- so != factors to ! and =, while && >>= :- ?- stay atomic names.
@@ -576,9 +581,12 @@
    ; top-level commas and the whole becomes the `,` sequencing macro: (a, b c) -> (: _ a (b c)).
    ; empty clauses drop, so doubled/leading/trailing commas compose away. ⚠ the comma outranks
    ; even `:`, so a binder spine splits like any list -- parenthesize the form.
-   (op-cm? l)   (? (atom? l) 0 (id? (cap l) ',) 1 (op-cm? (cup l)))
-   (op-take l)  (? (atom? l) () (id? (cap l) ',) () (link (cap l) (op-take (cup l))))
-   (op-drop l)  (? (atom? l) () (id? (cap l) ',) (cup l) (op-drop (cup l)))
+   ; ⚠ the comma symbol is INTERNED, never written as a literal: prel stays inside the pure-lisp
+   ; subset p0 reads (doc/reader.md), and a source `,` is the reader datum these three describe.
+   ; `intern` is in ev.l's pureset, so cprop folds each call back to the constant it used to be.
+   (op-cm? l)   (? (atom? l) 0 (id? (cap l) (intern ",")) 1 (op-cm? (cup l)))
+   (op-take l)  (? (atom? l) () (id? (cap l) (intern ",")) () (link (cap l) (op-take (cup l))))
+   (op-drop l)  (? (atom? l) () (id? (cap l) (intern ",")) (cup l) (op-drop (cup l)))
    (op-split l) (: c (op-take l) r (? (op-cm? l) (op-split (op-drop l)) ())
                    (? (two? c) (link c r) r))
    ; op-core: the factor pass. quote interiors are DATA and stay verbatim (so a
@@ -597,7 +605,7 @@
               (: cs (op-split x)
                  (? (atom? cs) ()                            ; commas alone: nothing
                     (atom? (cup cs)) (op-core (cap cs))      ; one clause: the commas composed away
-                    (link ', (map op-core cs))))
+                    (link (intern ",") (map op-core cs))))
              (id? h '\) (link '\ (op-lam (op-flat-ol (cup x) ())))   ; (\ a.. body): flatten nested lambdas, then factor the body
              (id? h ':) (link ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run
@@ -628,16 +636,16 @@
 ; the table is read live, so a declaration governs every form compiled after it and none already
 ; folded. it is global, deliberately: an operator's grip is part of its meaning.
 (: (fixity nm v)
-   (? !(nom? nm) (scare 'bad-fixity nm)
+   (? (nil? (nom? nm)) (scare 'bad-fixity nm)
       (: old (operators -> nm ())
-         (? !v (: _ (pull operators nm 0) old)                       ; () clears the row
+         (? (nil? v) (: _ (pull operators nm 0) old)                 ; () clears the row
             (: _ (operators <- nm v)
                (? (two? (op-ent nm)) old                             ; op-ent itself is the acceptor
-                  (: _ (!old ? (pull operators nm 0) (operators <- nm old))
+                  (: _ ((nil? old) ? (pull operators nm 0) (operators <- nm old))
                      (scare 'bad-fixity nm))))))))
 ; lisp-compat aliases by head-symbol substitution
 (: seqx (\ l (link ': (foldr (\ l r (link '_ (link l r))) (list (last l)) (init l)))))
-(:: ', seqx) (:: 'do seqx) (:: 'begin seqx) (:: 'progn seqx)
+(:: (intern ",") seqx) (:: 'do seqx) (:: 'begin seqx) (:: 'progn seqx)
 (:: 'let (\ a (link ': a)))
 (:: 'if (\ a (link '? a)))
 (:: 'cond (\ a (link '? a)))
@@ -650,7 +658,7 @@
 ; ITSELF. not named `test`: that is a common local, and a macro ignores lexical scope.
 ; a purely-constant assertion is folded by cprop BEFORE this expands, so the message reads
 ; ";; assert 0" rather than the form. harmless -- a real assert tests a runtime value.
-(:: 'assert (\ l (link 'do (map (\ e `('? e 0 `('scare `('\ 'assert) `('\ e)))) l))))
+(:: 'assert (\ l (link 'do (map (\ e (L '? e 0 (L 'scare (L '\ 'assert) (L '\ e)))) l))))
 (:: 'suite (\ l (link 'do (link (link 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
 
 
@@ -662,12 +670,12 @@
 ; is rank-1 length 3 and (array ~(3 4) …) length 5.
 (: (a-rank x) (? (gem? x) 1 (| (charm? x) (sun? x)) 0 (twin? x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (< m k) k m))
-   (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) ~(0 0) ()))   ; a witness star of the tier
+   (a-type d) (: k (foldl a-emax 0 d) (? (= k 0) 0 (= k 1) 0.0 (= k 2) (twin 0 0) ()))   ; a witness star of the tier
    (a-dim d) (? (two? d) (tally d) (sat d))
-   (a-shape s) (? (two? s) (map a-dim s) `((a-dim s))))
+   (a-shape s) (? (two? s) (map a-dim s) (L (a-dim s))))
 
 ; tuple/hash value constructors -- also the read-back targets of the printed @(…) / #(…)
-(: (spread l) (tray (a-type l) `((foldl (\ n _ (+ 1 n)) 0 l)) l))
+(: (spread l) (tray (a-type l) (L (foldl (\ n _ (+ 1 n)) 0 l)) l))
 (:: 'tuple (\ a (list 'spread (link 'list a))))
 ; (hash x) boxes any non-list: a fresh tablet pinning x at 0, so #5 = #(0 5) and #() IS #0.
 ; an odd trailing operand lands in that 0 slot.

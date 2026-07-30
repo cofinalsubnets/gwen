@@ -110,23 +110,89 @@ rather than answering `()`, the plausible-lie pattern. nothing in the reader nee
 it now -- the big literals in the link path already flow through `%` and `//`, not
 bit ops -- so this is a tower-completeness rung, not a blocker.
 
-### 3. the reader differential
+### 3. the reader differential ✅ LANDED
 
-mostly assembly, not construction. `test_love0` (test/test.mk:23) already runs the
-whole corpus twice through one binary -- c0 vs the self-hosted `ev` -- and demands
-TWO `tests pass` summaries, so the two-implementation shape exists. test/roundtrip.l
-and test/fuzz.l:131 are already print→read differentials going through `sound`;
-point them at the second reader. copy test_glazefuzz's **checked proof-of-work
-counter**: a green diff over a reader that never ran proves nothing.
+**test/host/rdiff.l**, in `hostnif_tests` so it rides test_all. 1.8 s.
 
-### 4. hold prel.l to the p0 subset
+the SOCKET is one binding, `rd-test` in test/00-init.l, defaulting to `sound`.
+test/roundtrip.l and test/fuzz.l read through it now, so rung 6 points every
+print→read differential in the tree at p1 by rebinding that one name.
 
-measured, code only: `` `( `` ×7 (lines 358/653/667/670), `~(` ×3 (19/21/665),
-`',` ×5 (579-581/600/640), glued mono runs ×3 (631/633/636), and **zero** `#(` or
-`@(`. that is 18 sites on 15 lines -- `` `(a b) `` → `(list a b)`, `~(0 1)` →
-`(twin 0 1)`, `',` → `(intern ",")`. prel.l:2 already forbids infix in its own
-definitions, so the discipline exists; this completes it. pure refactor, gated by
-the existing corpus, useful alone as a statement of what prel may assume.
+the INPUT SET is the tree: every tracked `.l`, walked off `readdir`, read form by
+form -- 297 files, 1318 forms, carrying every construct the grammar has in anger.
+that beats a generator and it was already here. two laws ride it: **A/B** (the
+reader under test agrees with the C reader, form for form) and **print→read**
+(`(rd (show f))` is `(f)`).
+
+A/B is vacuous until p1 exists -- both legs are the same reader today -- so the
+rig is gated on a **fault injector** instead of on the diff being green: `rd-hurt`
+is the C reader with one form spoiled part-way through a file, and the sweep is
+REQUIRED to catch it. that plus checked floors on the file and form counts is the
+proof of work, and it is the honest version of it: green is also what a rig that
+never ran prints, and a comparison that *cannot* fail prints green forever.
+
+**its first run settled rung 1's one open question.** eighteen forms across seven
+files failed print→read, all the same divergence: `#()` and `@()` came off the
+reader as `(tablet . (0 . nil))` -- a `nil` tail where every other reader list
+uses `ZeroPoint`, love.c:4452 against 4462 and 4466 six lines below it. rung 1
+had already SEEN this and pinned it in test/reader.l as an explicit non-decision:
+"a thing a reimplementation must reproduce or deliberately normalize". what the
+differential added was the cost of reproducing it -- these were the only two
+forms in the whole grammar that did not survive show → read -- and that settles
+it toward normalizing. one word; the two asserts now compare WHOLE instead of
+head-and-operand.
+
+⚠ note how little was visible without the diff: the printer shows both tails as
+`(0)`, `nilp` is true for both, and either one ends the ap, so **only `=` on two
+trees could see it at all**. that is the shape of what rung 6 is up against --
+not a crash, a plausible tree nobody can print the difference of. it is also why
+`(show x)` is barred as a value test in this arc (rung 0's `-0.0`, doc/libc.md):
+twice now the printer has been the thing standing in front of the bug.
+
+### 4. hold prel.l to the p0 subset ✅ LANDED
+
+measured before, code only: `` `( `` ×7, `~(` ×3, `',` ×5, glued mono runs ×3, and
+**zero** `#(` or `@(` -- 18 sites on 15 lines. `` `(a b) `` → `(L a b)`, `~(0 1)` →
+`(twin 0 1)`, `!v` → `(nil? v)`, `',` → `(intern ",")`. the scan is clean on all of
+those now, and on brackets, bare commas, primes inside names and the trailing-`-`
+shed besides. so what p0 owes prel is exactly: delimiters, `;` comments, `"…"` with
+escapes, atoms, `'` quote, integers (negatives included -- rung 1 made a digit after
+`-` the thing that starts a numeral) and **four** float literals (`pi`, `e`, `0.0`
+×2). prel.l's header states the rule now, beside the no-infix one.
+
+**the comma cost a design decision.** the obvious shape -- bind `op-cma (intern ",")`
+once in the opfix binder chain and mop the nom at birth, exactly how `operators` and
+`monadics` live -- **does not survive the mop**: `;; missing op-cma`, three times,
+once each for `op-cm?`/`op-take`/`op-drop`, with a zero point where the comma should
+be. a mopped VALUE-global is not a mopped closure; opfix holds the tablets by
+capture and did not hold this.
+
+⚠ and it is invisible to the gate. it shows up **only on a boot that compiles from
+source** -- `LOVE_NO_IMAGE=1` reproduces it, a woken image never does -- so the whole
+of `make test` is silent and the place it surfaced was `--bake`, which boots off the
+egg in order to bake. (my first guess was the glaze re-analysing those closures
+post-birth. wrong: `LOVE_NO_GLAZE=1` is byte-identical. the note in egg.l records what
+was measured, not the story.)
+
+so the call is INLINE at all four sites and **`intern` joins ev.l's `pureset`** --
+cprop folds `(intern ",")` back to the constant symbol it used to be, measured
+identical to the old `',` literal over a 3M-iteration loop.
+
+**and `<<`/`>>` came out of `monadics` while we were in there.** their comment claimed
+the rows were earned by SPEED -- one `cuup` call instead of `>` then `>`. three things
+against it: the greedy factor gives the identical value either way, and `caap`/`cuup`
+are prel closures the compiler inlines, so the row saves no call a timing loop can
+see; they were the table's only COMPOSITE rows, every other being one run-PIECE → its
+monadic word; and the tree's commonest glued run by an order of magnitude is `<>`
+(1835 uses against 71 for `<<`), which never had a row and never wanted one.
+README.md already described all four compounds as arriving "by factorization" -- that
+is true now.
+
+it also **bought a theorem**, which was not the point but is the best argument for
+the change. `tools/spec2coq.l` models `cup` and does not model `cuup`, so spec.l's
+`('(3) = >>'(1 2 3))` had always been UNMODELED; factoring the run into primitives
+put it in reach, and proof/rocq/gen.v goes 312 translated → 313 (`gen_301`, proved
+under test_gen). a composite row was hiding a law from the prover.
 
 ### 5. `p0`
 
@@ -237,12 +303,18 @@ corpus, then delete the C reader.
 
 ## order and size
 
-1 went first because everything after it re-implements what it states, and it is
-useful alone -- the tree gained a conformance file and lost a special case. 2 is
-independent of the rest and can land any time; it is the one that deletes existing
-workarounds rather than adding machinery. 3 is assembly over gates that already
-exist. 4 is a 15-line refactor. 5 is a port of working code. only 6 is genuinely
-new, and most of its risk is in the boot stitch rather than in the parser.
+**1-4 are LANDED.** 1 went first because everything after it re-implements what
+it states, and it was useful alone -- the tree gained a conformance file and lost
+a special case. 2 deleted three existing workarounds rather than adding
+machinery, and took the freestanding `strtol` with it. 4 was the 15-line refactor
+it looked like, plus one design decision the mop forced. 3 turned out to be
+slightly more than assembly -- the input set is the whole tree rather than the
+fuzzers -- and it paid for itself immediately by finding the `#()` nil tail.
+
+**what is left: 5 and 6**, plus rung 2's bit ops. 5 is a port of working code
+(`3e8d8ebd^:g/g.c`, 66 lines). only 6 is genuinely new, and most of its risk is
+in the boot stitch rather than in the parser. rung 3 is the oracle both are
+measured against: rebind `rd-test` and the whole differential set goes live.
 
 **speed is bounded, not an open risk.** reading happens once per cold boot --
 `ai_evals_` reads the corpus and the double `sit` folds over already-read forms.
