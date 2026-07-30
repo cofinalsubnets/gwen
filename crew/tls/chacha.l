@@ -66,11 +66,8 @@
        (go 15 ()))
 
    ; --- getting bytes in and out ---------------------------------------------------
-   ; a little-endian 32-bit word off a string at byte offset i. absence reads 0, so a
-   ; short key is a quiet key -- callers check the length, not this.
-   ; ⚠ INFIX, not (+ a b c d): `+` is DYADIC, so a four-operand prefix `+` is
-   ; APPLICATION -- it church-exponentiates and answers a bignum the size of the sky.
-   (le32 s i) ((s i) + (<< (s (i + 1)) 8) + (<< (s (i + 2)) 16) + (<< (s (i + 3)) 24))
+   ; le32 / le32! are the shared byte floor (crew/tls/bytes.l), included into this
+   ; same head by lib/tls.l before this file.
 
    (ones n) (1 + (0 * (iota n)))            ; the n-cell galaxy of 1s -- the broadcaster
    (w32 v n) (v * (ones n))                 ; a scalar, spread down n cells
@@ -97,11 +94,7 @@
         (? (n <= i) b
            (: (gw j)                                 ; j counts words within block i
                (? (15 < j) 0
-                  (: v (wd j i) o ((i * 64) + (j * 4))
-                     _ (pin b o (& v 255))
-                     _ (pin b (o + 1) (& (>> v 8) 255))
-                     _ (pin b (o + 2) (& (>> v 16) 255))
-                     _ (pin b (o + 3) (& (>> v 24) 255))
+                  (: _ (le32! b ((i * 64) + (j * 4)) (wd j i))
                      (gw (j + 1))))
               _ (gw 0)
               (go (i + 1))))
@@ -114,7 +107,4 @@
     (: n (tally txt)
        nb (// (n + 63) 64)
        ks (cc-stream key nonce ctr nb)
-       b (cask n)
-       (go i) (? (n <= i) 0 (: _ (pin b i (^ (txt i) (ks i))) (go (i + 1))))
-       _ (go 0)
-       (string b)))
+       (bytes n (\ i (^ (txt i) (ks i))))))
