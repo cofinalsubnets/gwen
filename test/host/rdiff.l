@@ -130,6 +130,40 @@
             + " off-subset=" + (show (peep rd-p0x 'bad 0))
             + " deep=" + (show rd-deep) + "\n")))
 
+; --- p1, over the whole tree (doc/reader.md rung 6) ------------------------
+; the READER IN LOVE, love/p1.l. this is the A/B law as rung 3 meant it: a real
+; second reader, over the whole input set, form for form.
+;
+; p1 walks a CHARLIST and the socket is a (reader port sentinel) call, so the
+; shim slurps each port once and keeps the residue against the port's identity.
+; that is test scaffolding -- p1's own door is the charlist, and the boot hands
+; it whole text.
+(: _ (use "love/p1.l")
+   rd-p1res (tablet ())
+   (rd-p1 p e)
+     (: seen (peep rd-p1res p ())
+        cl (? (two? seen) (cup seen)
+              (: txt (slurp p) (map txt (jot (tally txt)))))
+        d (p1-read1 cl ())
+        (? (id? d p1-eof) (: _ (pin rd-p1res p (link 1 ())) e)
+           (id? d p1-more) p
+           (: _ (pin rd-p1res p (link 1 (cup d))) (cap d))))
+   ; and the same fault injector the sweep itself is gated on, pointed at THIS
+   ; leg: a green diff over a reader that never ran proves nothing, and neither
+   ; does one whose comparison cannot fail.
+   rd-p1hn (tablet 0)
+   (rd-p1hurt p e)
+     (: x (rd-p1 p e)
+        _ (pin rd-p1hn 0 (1 + (peep rd-p1hn 0 0)))
+        (? (= 3 (peep rd-p1hn 0 0)) 'rd-spoiled x)))
+
+(: rd-p1sweep (rd-run rd-p1 rd-files 1)
+   rd-p1hurtn (rd-run rd-p1hurt (L "test/spec.l") 0)
+   _ (puts ("rdiff: p1 files=" + (show (peep rd-p1sweep 'files 0))
+            + " forms=" + (show (peep rd-p1sweep 'forms 0))
+            + " bad=" + (show (peep rd-p1sweep 'bad 0))
+            + " injected=" + (show (peep rd-p1hurtn 'bad 0)) + "\n")))
+
 (assert
  ; the sweep reached the tree and read it -- the PROOF OF WORK, checked and not
  ; merely printed. floors, not exact counts: the tree grows.
@@ -145,7 +179,14 @@
  ; ... and parts from it off the subset, so the agreement above is a measurement
  (0 < (peep rd-p0x 'bad 0))
  ; ... and its C-stack nesting reaches far past anything the tree contains
- rd-deep)
+ rd-deep
+ ; rung 6: p1, the reader in love, over the WHOLE tree -- the A/B law with a
+ ; real second reader on one leg, which is what rung 3 built this rig for.
+ (250 < (peep rd-p1sweep 'files 0))
+ (1200 < (peep rd-p1sweep 'forms 0))
+ (0 = (peep rd-p1sweep 'bad 0))
+ ; and this leg can go red, so the zero above is a measurement
+ (0 < (peep rd-p1hurtn 'bad 0)))
 
 (puts "rdiff: ok")
 (putc 10)

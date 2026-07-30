@@ -280,33 +280,57 @@ fallback (prel has four: :15 π, :17 e, :21, :665 -- or move them past p1 and p0
 stays integer-only). `()` reads the ZeroPoint. call it **~80 lines**. pure
 addition: the existing reader stays, nothing calls p0.
 
-### 6. `p1`, the reader in love
+### 6. `p1`, the reader in love -- THE PARSER LANDED, the boot is next
 
-**p1 goes pre-prel** -- settled, and it is how it was written the first time. the
-working lisp-side reader is at `2efbaa51^:g/repl.g`, removed 2026-05-28 by a commit
-named "rm lisp-side reader". ~120 lines. it reads a CHARLIST, not a port, and
-answers `(value . rest)` with two sentinels (`e` no-datum, `m` incomplete) -- so no
-port protocol at all. every primitive it used is a core nif today: `link` `cap`
-`cup` `two?` `nil?` `intern` `nom` `mint` `string` `tally` `snip` `peep` `gem`
-plus arithmetic and comparison. the only prel-level things it touched come out
-trivially: `||`/`&&` are macros (→ nested `?`), `rev` is prel.l:222 (a three-line
-fold), and `foldl`/`flip` appear only in `revcat`, which the reader never calls.
+**love/p1.l**, ~150 code lines, and it reads the WHOLE TREE exactly as the C
+reader does: 298 files, 1322 forms, `bad=0`, plus print→read. that is the A/B law
+non-vacuous for the first time, which is what rung 3 built the rig for.
+
+it is gated in test/host/rdiff.l beside the p0 leg, with the same fault injector
+pointed at it -- and the zero was checked against three deliberate perturbations
+before being believed: flattening the mono wrap gives 473 bad, dropping the
+trailing-`-` shed gives 13, the injector gives 1.
+
+**p1.l is itself held to the p0 subset**, which the plan implies but never says
+outright: p0 is what reads p1. so no `` ` `` `#` `@` `~`, no comma, no brackets,
+and never a glued operator run. gated -- p0 reads p1.l form for form, same as it
+reads prel.l.
+
+**and it is pre-prel, mechanically checked**: every name it references is a nif
+or one of its own bindings. `||`/`&&` are open-coded to nested `?` (they are prel
+MACROS, and prel is not loaded when the boot calls this); `map`/`jot` have a
+local twin for the one place a text becomes a charlist.
+
+three bugs are worth carrying forward, because each is a law of this tree rather
+than a slip:
+
+* **`(: cl (p1-skip cl) …)` reads the NEW `cl`.** a body-having `:` is one scope,
+  so that is the missing condition and the value is the zero point -- silently.
+  the historical reader is full of that idiom and it does not survive the port.
+* **love has no `\f` escape** -- n t r e 0 x and nothing else -- so `"\f"` in a
+  char class is the LETTER f, which quietly made `f` whitespace and ate it out of
+  `ieee-inf` and `(f -1)`.
+* **`-5` and `0.0` net to nothing**, so `nil?` cannot ask whether a token parsed.
+  `p1-int` answers `(1 . n)` tested with `two?`; the float lane asks `gem?`, the
+  TYPE, because `gem` answers the charm 0 on failure and the float 0.0 on "0.0".
+
+**what is left is the BOOT STITCH**, which the plan already called the real work:
+
+### 6b. the boot
+
+p1's shape follows the historical lisp-side reader at `2efbaa51^:g/repl.g`
+(removed 2026-05-28, "rm lisp-side reader"): a charlist in, `(value . rest)` out,
+two sentinels, no port protocol. `flo`/`gem` (love.c:4116) survives as its
+purpose-built hook, cited to a `repl.l` that no longer exists, and it is still the
+float door.
 
 ⚠ **it was removed because it worked but did not pay** -- at that time the grammar
 was still pure lisp, which C handled fine and faster. that history is the argument
 for where this arc cuts: the removal reason applies exactly to the part p0 keeps
-and not at all to the part p1 takes. `flo`/`gem` (love.c:4116) survives as its
-purpose-built hook, cited to a `repl.l` that no longer exists.
+and not at all to the part p1 takes.
 
-**what p1 must ADD** over the historical one is exactly the surface that did not
-exist in May: operator runs, the `mono` wrap, the constructor wraps with their
-splice rewrites, the comma datum, the trailing-`-` shed, `[`/`{`, the prime,
-bignum literals. `'`, strings with escapes, hex and decimal integers, floats and
-symbols arrive free. lib/lint.l's char classes are already transcribed from
-love.c (`lopc?` :44 is the complement of `op_break`, `lctc?` :48 the constructor
-sigils) and are directly reusable.
-
-**⚠ the real structural work is the BOOT, not the parser.** `ai_evals_`
+**the boot is the part still to build, and it is the real structural work.**
+`ai_evals_`
 (love.c:2220-2231) does ONE `ai_reads` over the whole egg string --
 `"("` + egg.h + `" '("` + prel.h + ev.h + `"))"` -- so prel and ev are read
 *together, before anything is evaluated*. every frontend calls it.
@@ -371,16 +395,18 @@ it looked like, plus one design decision the mop forced. 3 turned out to be
 slightly more than assembly -- the input set is the whole tree rather than the
 fuzzers -- and it paid for itself immediately by finding the `#()` nil tail.
 
-**1-5 are LANDED.** 5 was a port of working code (`2efbaa51^:g/g.c:1286-1400`)
-and came in at 30 code lines against the estimated 80, by sharing the leaf lexers
-instead of copying them -- the same move rung 2 made for the number tower, for
-the same reason.
+**1-5 are LANDED, and so is 6's parser.** 5 was a port of working code
+(`2efbaa51^:g/g.c:1286-1400`) and came in at 30 code lines against the estimated
+80, by sharing the leaf lexers instead of copying them -- the same move rung 2
+made for the number tower, for the same reason. 6's parser then read the whole
+tree identically on the strength of that same oracle.
 
-**what is left: 6**, plus rung 2's bit ops. 6 is the genuinely new one, and most
-of its risk is in the boot stitch rather than in the parser: p0 exists and is
-measured now, so what remains is the reader in love and the egg's argument built
-by stitching. rung 3 is the oracle: rebind `rd-test` and the whole differential
-set goes live.
+**what is left: 6b, the boot stitch**, plus rung 2's bit ops. the plan's own
+estimate held exactly -- "most of its risk is in the boot rather than in the
+parser" -- and the parser is now the measured part. what remains is building the
+egg's argument by stitching, the mop question for p1's noms, and then the flip:
+rebind `rd-test` from `sound` to p1 so roundtrip.l and fuzz.l follow, and delete
+the C reader.
 
 **speed is bounded, not an open risk.** reading happens once per cold boot --
 `ai_evals_` reads the corpus and the double `sit` folds over already-read forms.
