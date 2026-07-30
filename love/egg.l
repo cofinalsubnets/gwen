@@ -19,7 +19,7 @@
    ; ⚠ a name mopped here must be one nothing reads after birth, and only a boot that
    ; COMPILES FROM SOURCE shows a violation -- a woken image never does, so the fast gate
    ; cannot see it. prove an addition with a quiet `LOVE_NO_IMAGE=1 love -e ..`.
-   _ (each '(seal-hooks books setbooks mods lib enter leave gv trim peek poke seek spin yield macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics seqx sortsplit lidx ldel packp _)
+   _ (each '(seal-hook books setbooks mods lib enter leave gv trim peek poke seek spin yield macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics seqx sortsplit lidx ldel packp _)
       (\ k (pull book k 0)))
    (each (keys book)
     (\ k (? (nom? k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))

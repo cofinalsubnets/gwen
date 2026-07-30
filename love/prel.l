@@ -155,12 +155,16 @@
                               (apover k) (scare 'apcap k)
                               (: c (cmp k) (? c (c x) (numfn k x))))))
         (pin book 'num-ap num-ap)))
-; the + and * combinators are `stack` and `compose`, immortal constant threads in C:
-;   (+ f g) = Church add   ((+ f g) a x) = (f a (g a x))  -- the extra a-slot threaded into
-;             both operands is what makes + agree with addition, not (f x (g x)).
-;   (* f g) = composition  ((* f g) x)   = (f (g x))
-; ⚠ seal-hooks caches num-ap into the VM, so it MUST follow num-ap's pin above.
-(seal-hooks ())
+; ⚠ seal-hook caches num-ap into the VM, so it MUST follow num-ap's pin above -- which
+; is now something you can SEE, the hook taking the function rather than fetching the nom.
+(seal-hook 1 num-ap)
+; the + and * of two FUNCTIONS, which is all Church arithmetic is: the extra a-slot
+; threaded into both of stack's operands is what makes + agree with addition, not the
+; S combinator's (f x (g x)). the C lanes (lvm_addh/lvm_mulh) read them by slot.
+(: (stack f g a x) (f a (g a x))                  ; (+ f g)
+   (compose f g x) (f (g x))                      ; (* f g)
+   _ (seal-hook 2 stack)
+   _ (seal-hook 3 compose))
 (: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
    (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z))
@@ -375,7 +379,7 @@
 ; the FACTORIZATION LAW: greedy longest-prefix match, no backtracking; every factor but the
 ; last must be arity one, and the last takes the positional valence. a token that doesn't
 ; factor is a plain symbol -- so != factors to ! and =, while && >>= :- ?- stay atomic names.
-; ⚠ everything from here to the SECOND (seal-hooks) is the opfix machinery itself and must
+; ⚠ everything from here to (seal-hook 4 opfix) is the opfix machinery itself and must
 ; stay PREFIX: the first bootstrap pass compiles prel with no opfix on the book, so an infix
 ; form in here reads as a raw application and love0's lcat dies.
 ; the four ranges are disjoint and run COMMONEST-FIRST -- op-puncp bails on a symbol's first
@@ -658,9 +662,9 @@
    ; by nom for that reason and one more -- C seals it into g->hot_* just below.
    _ (pin book 'fixity fixity)
    (pin book 'opfix opfix))
-; the SECOND seal: opfix joins num-ap/add/mul in the g->hot_* fields, so the C eval lane reads
+; the LAST seal: opfix joins the other four in the g->hot_* fields, so the C eval lane reads
 ; the field from here on and no later rebind of the nom can reach it.
-(seal-hooks ())
+(seal-hook 4 opfix)
 ; the two self-named apply operators: ** flips (a ** b = (b a), tightest grip), $ is the
 ; identity so a $ b = (a b), weak-binding application at the loosest grip. glued $x is saturate.
 (: (** a b) (b a))

@@ -220,16 +220,23 @@ struct ai {
    ai_word scare_a, scare_b; // the last bare scare's condition data, stashed at
                   // the raise so a terminal exit can speak (ai_scare_face_);
                   // nil nil = the bare oom, which has no data. GC-traced here.
-   ai_word hot_numap; // the church C->lisp num-ap hook, resolved ONCE by (seal-hooks)
-                  // after the prel pins it, then read directly on the hot apply paths
-                  // (lvm_numap/numtap, data_num_apply) -- no per-call sym_probe + book
-                  // lookup. GC-traced (v0..end). Unsealed = nil -> hot_hook traps, never
-                  // a wild read. (`+`/`*` of functions need no hook: their combinators are
-                  // the immortal constant threads stack_thread/compose_thread in love.c.)
-   ai_word hot_opfix; // the operator factor pass, sealed the same way (the prel's
-                  // SECOND (seal-hooks) call, after opfix exists) -- ai_eval reads
-                  // the field, so a book rebind can't reach the C compile lane;
-                  // pre-seal (mid-prel bootstrap) it falls back to the book probe.
+   // THE FIVE HOOKS: lisp the C lanes must reach, handed over by (seal-hook n f) and
+   // read by SLOT thereafter -- no per-call sym_probe + book lookup, and no later rebind
+   // of a nom can reach them. They are declared and numbered in SEAL ORDER, which is also
+   // boot order. All GC-traced (v0..end) and image-serialized, so a woken runtime comes up
+   // sealed; unsealed = nil -> hot_hook traps, never a wild read.
+   ai_word hot_read;  // 0: the CORPUS READER -- p1.l's whole-text door, sealed by p1's own
+                  // last act, which is why the reader needs no name in the book at all.
+                  // nil = p1 is not up yet, and readtext falls back to p0's lisp subset.
+   ai_word hot_numap; // 1: the church C->lisp num-ap hook, read on the hot apply paths
+                  // (lvm_numap/numtap, data_num_apply).
+   ai_word hot_stack, hot_compose; // 2, 3: `+` and `*` OF TWO FUNCTIONS -- church add
+                  // ((stack f g a x) = (f a (g a x))) and composition ((compose f g x) =
+                  // (f (g x))), two lines of prel. lvm_addh/lvm_mulh build the partial from
+                  // the slot.
+   ai_word hot_opfix; // 4: the operator factor pass, sealed last (it does not exist until
+                  // late in the prel) -- ai_eval reads the field, so a book rebind cannot
+                  // reach the C compile lane; pre-seal it falls back to the book probe.
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`
                   // on a named scope, read by `use`/`from` (love/prel.l). A lazy
                   // singleton (the `mods` nif creates it on first read, so both

@@ -267,12 +267,11 @@
    (p1-text s) (p1-reads (p1-chars s))
 
    ; --- and THIS `:` HAS A BODY, so the 33 above are LOCAL -----------------
-   ; the three below are the reader; the rest is its scaffolding. a body-less `:`
-   ; would leak all 33 into the book, and the egg cannot mop what it still reads.
+   ; `sound` and `torn` are the reader's vocabulary and go on the book. p1-text is
+   ; NOT vocabulary -- it is the boot's door, so it goes where C wants it and nowhere
+   ; else: hook 0, the FIRST thing sealed in a boot. that is why the whole-text reader
+   ; needs no name at all, and why nothing can rebind it out from under ai_evals_.
    ; `pin book` is the only publisher here -- prel is not loaded, so no `use` yet.
-   ; ⚠ `p1-text` is pinned under exactly that spelling: C resolves it BY NOM on
-   ; every ai_evals_ (readtext), and a miss there is silent -- the boot falls back
-   ; to p0 and reads the pure-lisp subset for the rest of the run.
    _ (pin book 'torn torn)
    _ (pin book 'sound sound)
-   (pin book 'p1-text p1-text))
+   (seal-hook 0 p1-text))
