@@ -2321,9 +2321,9 @@ lvm(lvm_calloutresume) { return Sp[0] = putcharm((intptr_t) callout_resume), Ip+
 // the lisp help calling convention
 // ============================================================================
 // With a global `help` function installed, a raise becomes the call
-// (help s a b): s = the status word (prel readers scare?/more?/eof?),
-// a/b = the condition data -- for the more bit the port and the read sentinel,
-// for a scare nil nil (oom is bare; future scares define their shapes). The
+// (help s a b): s = the status word (prel's `scare?` reads it -- one bit now,
+// the reader having stopped raising the other), a/b = the condition data, nil
+// nil for a scare (oom is bare; future scares define their shapes). The
 // frame runs through help_drive (numap_drive's 3-arg twin) into a per-class
 // epilogue: help_ret_more delivers the ap's result to the raise site's resume
 // text -- ⚠ despite the name that is the DELIBERATE-scare lane, what makes

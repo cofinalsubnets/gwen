@@ -255,11 +255,11 @@
  (slurp o) (? (= -2 (peek 1 o)) (snip (peek 4 o) 0 (peek 5 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 4 is a string too, so a string? probe would lie
               (: (rl i) (: c (see i) (? (= c -1) () (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
-; help status readers. the status word is two bits -- scare (1) and more (2, the reader
-; wants more input) -- so eof is more|scare: the end is the scary case of wanting more.
-(: (scare? s) (= s 1)
-   (more? s) (= s 2)
-   (eof? s) (= s 3))
+; the help status reader. ONE bit reaches a help now -- scare (1). the more bit
+; that named an unfinished read went out with ioparse: `sound` answers its own
+; nothings as values (doc/reader.md rung 6c), so nothing raises it and nothing
+; asks.
+(: (scare? s) (= s 1))
 ; here are some macro definitions
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
 ; the false answer is the UNIT, never a 0-fossil: (&& a ..) expands (? a .. ())
@@ -466,7 +466,7 @@
                        (: r (go (+ i (cap m))) (? (two? r) (link (caup m) r) 0)))
                     0))
               0))
-        0)))
+        0))
 ; the walk. a pending-operator frame is (orig chain name need grip . got):
 ;   orig  the source symbol, handed back verbatim when no operand ever arrives
 ;   chain the arity-one wrapper names, outermost first
@@ -476,7 +476,7 @@
 ;         `!=` carries the level neither of its symbols alone recovers
 ;   got   operands so far, reversed
 ; out/pend thread as one (out . pend) chain through the helpers.
-(: (op-fr o ch nm nd g gt) (link o (link ch (link nm (link nd (link g gt)))))
+   (op-fr o ch nm nd g gt) (link o (link ch (link nm (link nd (link g gt)))))
    (op-fro f) (cap f) (op-frc f) (caup f) (op-frn f) (cauup f)
    (op-frd f) (cap (cuuup f)) (op-frgrip f) (cap (cup (cuuup f))) (op-frg f) (cup (cup (cuuup f)))
    ; a frame is only ever rebuilt with a new need + got -- orig, chain, name and grip are fixed
@@ -624,8 +624,40 @@
                  fs (? (nom? r) (monofactor r) 0)
                  (? (two? fs) (op-fin fs d) (link r (link d ()))))
              (: res (op-w x 0 0)                        ; splice a lone FOLDED operand up (an infix/prefix-op form)
-                (? (&& (has-top-op? x) (two? res) (atom? (cup res)) (two? (cap res))) (cap res) res)))))) ; (a = b)->(= a b) not ((= a b)); ((mov r3 r12)) (list-of-one, no top-level op) is KEPT; (f)/(f x) untouched
-(: (opfix x) (op-core x))
+                (? (&& (has-top-op? x) (two? res) (atom? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b)->(= a b) not ((= a b)); ((mov r3 r12)) (list-of-one, no top-level op) is KEPT; (f)/(f x) untouched
+   (opfix x) (op-core x)
+
+   ; the FIXITY DOOR -- the one sanctioned write into the compile table, and the only reach to
+   ; `operators` at all once birth mops the nom (this closure captures it; nothing else can).
+   ; (fixity nm v) pins v as nm's row and answers the row it REPLACED in the same shape it takes,
+   ; so (fixity nm (fixity nm new)) restores exactly and a non-() answer says someone got there
+   ; first. () clears the row, which is also what an absent row answers. v is any shape op-ent
+   ; takes, so (fixity '<+> '(2 60 1)) is haskell's `infixl 7 <+>` and '(2 60) is `infixr 7`.
+   ; a refused shape is ROLLED BACK and scared: a bad row would otherwise silently demote its
+   ; operator to the fresh-punct default -- on a core operator, a poisoned compiler with no message.
+   ; the table is read live, so a declaration governs every form compiled after it and none already
+   ; folded. it is global, deliberately: an operator's grip is part of its meaning. it lives INSIDE
+   ; this form because op-ent is its acceptor and op-ent is local -- and so, like everything else
+   ; here, it is written PREFIX: opfix is not pinned until this form's own body, so `operators <- nm v`
+   ; would compile as a plain application and the pin would go nowhere, silently.
+   (fixity nm v)
+    (? (nil? (nom? nm)) (scare 'bad-fixity nm)
+       (: old (peep operators nm ())
+          (? (nil? v) (: _ (pull operators nm 0) old)                ; () clears the row
+             (: _ (pin operators nm v)
+                (? (two? (op-ent nm)) old                            ; op-ent itself is the acceptor
+                   (: _ (? (nil? old) (pull operators nm 0) (pin operators nm old))
+                      (scare 'bad-fixity nm)))))))
+
+   ; --- and THIS `:` HAS A BODY, so the 34 helpers above are LOCAL -----------
+   ; opfix and fixity are the door; the rest is the factor pass's scaffolding. the
+   ; frame walk and the factor helpers are ONE form for exactly that reason -- closing
+   ; them separately would wall them apart. nothing outside this file has ever named one.
+   ; ⚠ `operators`, `monadics` and `pureset` stay global-and-mopped instead: ev.l holds
+   ; them, and a cross-FILE capture has only the book to go through. `opfix` is pinned
+   ; by nom for that reason and one more -- C seals it into g->hot_* just below.
+   _ (pin book 'fixity fixity)
+   (pin book 'opfix opfix))
 ; the SECOND seal: opfix joins num-ap/add/mul in the g->hot_* fields, so the C eval lane reads
 ; the field from here on and no later rebind of the nom can reach it.
 (seal-hooks ())
@@ -633,24 +665,6 @@
 ; identity so a $ b = (a b), weak-binding application at the loosest grip. glued $x is saturate.
 (: (** a b) (b a))
 (: $ 1)
-; the FIXITY DOOR -- the one sanctioned write into the compile table, and the only reach to
-; `operators` at all once birth mops the nom (this closure captures it; nothing else can).
-; (fixity nm v) pins v as nm's row and answers the row it REPLACED in the same shape it takes,
-; so (fixity nm (fixity nm new)) restores exactly and a non-() answer says someone got there
-; first. () clears the row, which is also what an absent row answers. v is any shape op-ent
-; takes, so (fixity '<+> '(2 60 1)) is haskell's `infixl 7 <+>` and '(2 60) is `infixr 7`.
-; a refused shape is ROLLED BACK and scared: a bad row would otherwise silently demote its
-; operator to the fresh-punct default -- on a core operator, a poisoned compiler with no message.
-; the table is read live, so a declaration governs every form compiled after it and none already
-; folded. it is global, deliberately: an operator's grip is part of its meaning.
-(: (fixity nm v)
-   (? (nil? (nom? nm)) (scare 'bad-fixity nm)
-      (: old (operators -> nm ())
-         (? (nil? v) (: _ (pull operators nm 0) old)                 ; () clears the row
-            (: _ (operators <- nm v)
-               (? (two? (op-ent nm)) old                             ; op-ent itself is the acceptor
-                  (: _ ((nil? old) ? (pull operators nm 0) (operators <- nm old))
-                     (scare 'bad-fixity nm))))))))
 ; lisp-compat aliases by head-symbol substitution
 (: seqx (\ l (link ': (foldr (\ l r (link '_ (link l r))) (list (last l)) (init l)))))
 (:: (intern ",") seqx) (:: 'do seqx) (:: 'begin seqx) (:: 'progn seqx)

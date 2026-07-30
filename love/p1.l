@@ -264,4 +264,15 @@
         (go k acc) (? (< k 0) acc (go (- k 1) (link (s k) acc)))
         (go (- n 1) ()))
    ; the BOOT'S door, whole text -> every form: what ai_egg_ calls to read ev.l.
-   (p1-text s) (p1-reads (p1-chars s)))
+   (p1-text s) (p1-reads (p1-chars s))
+
+   ; --- and THIS `:` HAS A BODY, so the 33 above are LOCAL -----------------
+   ; the three below are the reader; the rest is its scaffolding. a body-less `:`
+   ; would leak all 33 into the book, and the egg cannot mop what it still reads.
+   ; `pin book` is the only publisher here -- prel is not loaded, so no `use` yet.
+   ; ⚠ `p1-text` is pinned under exactly that spelling: C resolves it BY NOM on
+   ; every ai_evals_ (readtext), and a miss there is silent -- the boot falls back
+   ; to p0 and reads the pure-lisp subset for the rest of the run.
+   _ (pin book 'torn torn)
+   _ (pin book 'sound sound)
+   (pin book 'p1-text p1-text))

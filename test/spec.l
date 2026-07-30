@@ -535,7 +535,7 @@
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
  !(rest 0) (4 = (tally (wheel 1))) ((rand 10) < 10) (gem? (randf 0))
- (scare? 1) !(scare? 3) (eof? 3) !(eof? 2) (more? 2) !(more? 3) (lit? scare)
+ (scare? 1) !(scare? 2) (lit? scare)
  (tablet? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
  (: st (wheel 7) ((cap (random st 0)) = (cap (random st 0)))))
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)

@@ -7,14 +7,12 @@
 ; reader raised an incomplete parse through help and the ap chose what the
 ; reader's caller saw -- but `sound` answers its own nothings as VALUES now
 ; (doc/reader.md rung 6c), so the scare bit is the only one a help ever sees.
-; the predicates and welp's arms are still exercised below, directly.
+; `scare?` is the whole status vocabulary now, exercised below directly.
 ; the ap is UNINSTALLED at the end of this file.
 (: help-log (tablet 0))
 
-; status readers
-(assert (scare? 1) !(scare? 3) !(scare? 2)
-        (more? 2) !(more? 3) !(more? 1)
-        (eof? 3) !(eof? 2) !(eof? 1))
+; the status reader
+(assert (scare? 1) !(scare? 3) !(scare? 2) !(scare? 0))
 
 ; a counting ap
 (: (help s p e) (: _ (pin help-log s (+ 1 (peep help-log s 0))) 0))
