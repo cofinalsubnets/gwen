@@ -10,7 +10,7 @@ the posture is a lattice of MODELS plus BRIDGES, not one end-to-end theorem: the
 laws are proven in Rocq (axiom-free, house rule -- the build log must say "closed
 under the global context"), and the implementation is held against them by three
 kinds of bridge. closer to seL4's spec-to-model shape than CakeML's compiler
-refinement -- and every rung below is wired into `make test_all`, regenerated on
+refinement -- and every rung below is wired into `make test_slow`, regenerated on
 every run, so none of it can drift quietly.
 
 ## the proofs

@@ -9,7 +9,7 @@
 # accurate" and never "does OUR COMPILER build it". am.c's own header claimed
 # "the mooncc-compiled object measures IDENTICAL to gcc's" -- true when a hand
 # check made it so, and quietly false afterwards. two mooncc bugs were living
-# in that gap on 2026-07-29, both invisible to a green test_all:
+# in that gap on 2026-07-29, both invisible to a green test_slow:
 #
 #   * the 4th integer parameter could be lost outright (its arrival register
 #     taken as scratch after the ride analysis licensed it). am.c's mul64 lost

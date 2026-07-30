@@ -56,7 +56,10 @@ if [ $# -gt 0 ]; then set -- "$@"; DEFAULT_CORPUS=; else DEFAULT_CORPUS=1
   set -- test/00-init.l test/spec.l test/uu.l $(ls test/*.l | LC_ALL=C sort | grep -vE '00-init|spec\.l|glaze-x86|uu\.l') test/arm64/callout.l
 fi
 echo "AARCH64 qemu run ($(echo "$@" | wc -w) files)"
-cat "$@" | LOVE_NO_IMAGE=1 "$QEMU" $O/love > $O/.out 2>&1; r=$?
+# under a CEILING: a wedged emulated corpus is indistinguishable from a slow one, and this
+# lane takes ~60 s, so a hang used to sit until someone noticed. 420 s is ktest.l's budget,
+# the same shape; exit 124 is the timeout's own and reads as the failure it is.
+cat "$@" | LOVE_NO_IMAGE=1 timeout 420 "$QEMU" $O/love > $O/.out 2>&1; r=$?
 tail -1 $O/.out
 # the default corpus must print "tests pass" AND each test/arm64/*.l sentinel (explicit-args runs skip the sentinel check)
 if [ -n "$DEFAULT_CORPUS" ]; then sent='test/arm64/callout:'; else sent=''; fi

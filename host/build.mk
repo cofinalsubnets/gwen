@@ -156,7 +156,13 @@ $(ho)/liblove.so: $(ho)/liblove.a
 # love0 links the WHOLE host/*.c glob now (main.c among it): the posix nifs and
 # host/image.c's bake/--wake are what let love0 bake and wake mooncc0.image and
 # drive the mooncc-built default `love` (the self-host rung) with CC only here.
-gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -I. -Iout/lib
+# -DAI_VERSION="bootstrap": love0 does NOT carry the version-control id, and that is
+# the point. It bakes the lcat headers every frontend shares ($(lib_h): $(love0)), so a
+# love0 that relinks re-lays all 22 of them and rebuilds every object behind them -- a
+# ~25 s full-tree cascade, fired by nothing but a new commit hash. The bootstrap is not
+# a release artifact and its `love-version` is read by nobody; the shipped `love` still
+# carries the real id (the love.o dep below).
+gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -DAI_VERSION='"bootstrap"' -I. -Iout/lib
 love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/host/main.o: $(gl0_h)
@@ -185,8 +191,9 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
-# l.o carries the version string (love_version.h); relink it when the id changes.
-$(ho)/love.o $(ho)/0/love.o: out/lib/love_version.h
+# l.o carries the version string (love_version.h); relink it when the id changes. love0's
+# twin is deliberately NOT here -- see the -DAI_VERSION note on gl0_cc.
+$(ho)/love.o: out/lib/love_version.h
 # host/main.o bakes the lcat lib headers inline (egg + prel/ev/cli/bao -- bao is the
 # baked shell core now, subsuming the old repl.h). Now that it rides the host/*.c
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
@@ -216,10 +223,12 @@ moon_d = $(ho)/moon
 moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
 moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_d)/nolibc.o $(moon_math_o) $(moon_d)/sys.o
-$(moon_d)/love.o: love.c $(love_h) out/host/mooncc0.image
+# -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
+# SHIPPED binary, and mooncc has no __has_include for love.c's fallback probe to use.
+$(moon_d)/love.o: love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)

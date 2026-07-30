@@ -132,4 +132,4 @@ python3 crew/holo/fuzz/fuzz.py --arch arm64 -n 500 --seed 7   # a bigger fuzz ca
 python3 crew/holo/fuzz/sysdiff.py -v                          # the system lane, row by row
 ```
 
-both gates skip gracefully when their toolchain is absent, and both live in `make test_all`.
+both gates skip gracefully when their toolchain is absent, and both live in `make test_slow`.

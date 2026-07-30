@@ -5125,7 +5125,7 @@
        ; could ride: the param is gone, silently, and the next read of it answers
        ; whatever the shuttle left. am_sin's mul64 lost its `lo` out-pointer
        ; exactly so and segfaulted for every |x| >= 2^19 -- in the DEFAULT binary,
-       ; through a green test_all. so the ride is a PROPOSAL, not a verdict: it is
+       ; through a green test_slow. so the ride is a PROPOSAL, not a verdict: it is
        ; re-read against the code it actually produced, and a rider whose arrival
        ; picked up a def deopts the whole fn to ir1 (the regen's own failure lane
        ; -- the freed homes rejoined the operand pool under THIS ride set, so a

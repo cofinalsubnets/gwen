@@ -6,7 +6,11 @@ compiles it, holo lays the PE32+ the firmware runs, and the whole thing is about
 250 lines of C plus three thunks of holo IR.
 
     make uefi          # -> out/free/esp/{EFI/BOOT/BOOTX64.EFI, love.elf}
-    make test_uefi     # the same door under qemu, corpus over serial
+    make test_uefi     # the same door under qemu, corpus over serial (opt-in)
+
+`test_uefi` is not in `make test_slow`: it boots the ELF `test_kernel` already
+booted, and the firmware makes the same corpus take 184s instead of 62s. Run it
+when the boot path moves -- this folder, `crew/holo/pe.l`, or `klink`'s numbers.
 
 Copy `out/free/esp/` onto a FAT32 EFI system partition and the machine boots
 love. `EFI/BOOT/BOOTX64.EFI` is the removable-media path every UEFI firmware

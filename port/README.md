@@ -2,7 +2,7 @@
 
 Every non-host target. Each device port is self-contained (own Makefile,
 `R := ../..` back to the repo root); the qemu boot gates live in
-test/test.mk and ride `make test_all`.
+test/test.mk and ride `make test_slow`.
 
 ## inle/
 

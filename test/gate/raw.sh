@@ -88,8 +88,10 @@ done
 
 moonc "$d"/*.o -o "$ho/$bin" || fail "our-linker bind $bin"
 
-# the binary carries no baked image, so LOVE_NO_IMAGE forces the fresh-egg boot
-cat "$@" | LOVE_NO_IMAGE=1 $run "$ho/$bin" > "$ho/$out" 2>&1
+# the binary carries no baked image, so LOVE_NO_IMAGE forces the fresh-egg boot -- under a
+# CEILING, like every other emulated corpus here (ktest.l's 420 s): the cross lanes run this
+# under qemu, where a wedge and a slow run look the same from outside. 124 is the timeout's.
+cat "$@" | LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" > "$ho/$out" 2>&1
 s=$?
 tail -1 "$ho/$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$ho/$out" || fail "corpus (exit $s)"

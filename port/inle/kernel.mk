@@ -162,8 +162,12 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/prel.h out/lib/e
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
-# l.o carries the version string (love_version.h); recompile it when the id changes.
+# l.o carries the version string (love_version.h); recompile it when the id changes. The
+# -D is what MAKES it carry one: $(KCC) defaults to mooncc, which has no __has_include for
+# love.c's fallback probe, so without this the dep tracked a header the object could not
+# read and the kernel answered "unknown".
 $(k_odir)/love.o: out/lib/love_version.h
+$(k_odir)/love.o: kcppflags += -DAI_HAVE_VERSION_H
 
 # The two LAYS. holo's object writer (crew/holo/obj.l's objsecs) takes a list of
 # NAMED sections, which is what the kernel needs and a compiler never emits --
@@ -275,7 +279,7 @@ init-container: host
 	@echo "-- love as PID 1 in a pid+user+mount namespace --"
 	unshare --pid --fork --mount-proc --user --map-root-user -- $m -l init/init.l -e "(pid1 0)"
 
-# --- headless serial test (wired into test_all; x86_64 + qemu only) ------------
+# --- headless serial test (wired into test_slow; x86_64 + qemu only) ------------
 # The K_TEST kernel boots, runs the baked corpus through the self-hosted ev, and
 # PASSES (1708/1708 in ~2.5s). Two bugs were behind the long-parked hang:
 #  (1) the cooperative scheduler deadlocked -- a task blocked in `(wait p)` was
@@ -300,7 +304,11 @@ init-container: host
 # for the emulated kernel. (math.l REJOINED when the math floor became am.c --
 # the same <= 2 ulp seven everywhere, so the glibc-precision bands hold.)
 kt = $(filter-out %/io.l %/run.l %/bell.l,$t)
-out/lib/ktests.l: $(kt) $(MAKEFILE_LIST) out/lib/corpus.list
+# out/lib/corpus.list carries the MEMBERSHIP (mk/lib.mk: regenerated every make, rewritten
+# only when the set changes), which is the whole job $(MAKEFILE_LIST) used to do here -- and
+# it did it by re-laying this header, and so rebuilding all eleven kernel objects, on any
+# edit to any makefile in the tree.
+out/lib/ktests.l: $(kt) out/lib/corpus.list
 	@mkdir -p out/lib
 	@cat $(kt) > $@
 out/lib/ktests.h: out/lib/ktests.l $(love0) tools/lcatv.l love/prel.l
@@ -322,7 +330,7 @@ test_arm64: host
 ifeq ($a,x86_64)
 test_kernel: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test$(kvsuf).elf
-	@echo TEST $(ko)/love-$a-test$(kvsuf).elf "(serial, headless, -kernel)"
+	@echo TEST $(ko)/love-$a-test$(kvsuf).elf "(serial, headless, -kernel; ~60s, ceiling 420s)"
 	@$m $(R)/tools/ktest.l $(ko)/love-$a-test$(kvsuf).elf - $a
 else
 test_kernel:
@@ -365,8 +373,17 @@ uefi: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf
 # test_uefi -- the whole laptop door under qemu: OUR BOOTX64.EFI loads the
 # K_TEST kernel, the corpus runs over serial. Needs firmware (any OVMF build);
 # gated on the file being PRESENT so the gate never downloads -- rung 4's whole
-# point is that `make test_all` fetches nothing. Fetch it once by hand with
+# point is that `make test_slow` fetches nothing. Fetch it once by hand with
 # `make out/dl/edk2-ovmf/ovmf-code-x86_64.fd` and this lane starts running.
+#
+# OPT-IN, not in test_slow (2026-07-30) -- test_kdiff's bargain, for the same reason.
+# 184 s warm with nothing to build, a fifth of the whole merge gate: it boots the ELF
+# test_kernel just booted (esp-test/love.elf is a COPY) and the same corpus that takes
+# 62 s through the -kernel door takes 184 s through the firmware. Everything past the
+# hand-over is the artifact test_kernel already gates; what is ONLY here is the door --
+# the loader reading love.elf off the ESP, kboot filled from the UEFI memmap + GOP,
+# ExitBootServices, page tables, the jump. RUN IT WHEN THE BOOT PATH MOVES:
+# port/inle/uefi/, crew/holo/pe.l, mkefi.l, the kboot shape, or klink's numbers.
 OVMF_X64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-x86_64.fd)
 .PHONY: test_uefi
 ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)
@@ -375,7 +392,7 @@ test_uefi:
 else
 test_uefi: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/esp-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-test/love.elf
-	@echo TEST $(ko)/esp-test "(serial, headless, our own BOOTX64.EFI)"
+	@echo TEST $(ko)/esp-test "(serial, headless, our own BOOTX64.EFI; ~184s, ceiling 420s)"
 	@$m $(R)/tools/ktest.l $(ko)/esp-test $(OVMF_X64) x86_64
 endif
 
@@ -386,7 +403,7 @@ endif
 # nothing runs is a twin that rots, so this boots it -- the same corpus through
 # the same three doors, out of its own object tree (kccsuf, without which the
 # two lanes silently shared objects and this compared nothing).
-# ~45s per arch on top of test_kernel, so it is OPT-IN, not in test_all --
+# ~45s per arch on top of test_kernel, so it is OPT-IN, not in test_slow --
 # test_kernel already gates the artifact we ship. Run it when the kernel moves.
 .PHONY: test_kdiff
 ifneq ($(shell command -v clang 2>/dev/null),)
@@ -400,13 +417,13 @@ test_kdiff:
 endif
 
 # The aarch64 twin of test_kernel: cross-build the K_TEST kernel and run the same
-# corpus under full-TCG qemu-system-aarch64 (~45s). In test_all because the lane
+# corpus under full-TCG qemu-system-aarch64 (~45s). In test_slow because the lane
 # needs a gate that RUNS it -- the aarch64 kernel silently stopped LINKING once,
 # and nothing caught it precisely because test_kernel is x86_64-gated.
 # Needs qemu-system-aarch64 and a CROSS-CAPABLE $(KCC) -- ours (which names the
 # backend with -t, and is the default) or clang (-target $a-unknown-none-elf).
 # A native gcc cannot, so that lane still skips. No-op without either (so a
-# plain `make test_all` stays green on a host lacking them), like test_wasm.
+# plain `make test_slow` stays green on a host lacking them), like test_wasm.
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 .PHONY: test_kernel_arm64
 ifeq ($(and $(QEMU_A64),$(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))),)
@@ -415,17 +432,17 @@ test_kernel_arm64:
 else
 test_kernel_arm64: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test$(kvsuf).elf
-	@echo TEST $(ko)/love-aarch64-test$(kvsuf).elf "(serial, headless, TCG, -kernel)"
+	@echo TEST $(ko)/love-aarch64-test$(kvsuf).elf "(serial, headless, TCG, -kernel; ~90s, ceiling 420s)"
 	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test$(kvsuf).elf - aarch64
 endif
 
-# --- wasm headless test (wired into test_all; emcc + node) -----------------
+# --- wasm headless test (wired into test_slow; emcc + node) -----------------
 # Build love.js and run the SAME $t corpus through it under node -- a third
 # runtime after the host and love0, exercising wasm's <data.h> override
 # (sentinel-ap data kinds, no flat code-address space). The harness evals the
 # whole corpus in one ai_eval and greps the drained output for the zz-fin
 # summary, exactly as test_host greps `cat $t | love`. No-op when emcc or node
-# is missing (so a plain `make test_all` stays green on a host without them).
+# is missing (so a plain `make test_slow` stays green on a host without them).
 NODE ?= $(shell command -v node 2>/dev/null)
 EMCC ?= $(or $(shell command -v emcc 2>/dev/null),/usr/lib/emscripten/emcc)
 .PHONY: test_wasm

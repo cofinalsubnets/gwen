@@ -4,6 +4,18 @@
 # which is invoked from the project root; paths resolve from there. Shared vars
 # live in common.mk. Every recipe here is unchanged from the single-file Makefile.
 
+# $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
+# from source. 12 ms against 1.05 s, measured. The root Makefile exports
+# LOVE_NO_IMAGE for every recipe so the EGG gates boot from source, which is right
+# for test_host / test_love0 / test_gcheck / the kernel+wasm+raw corpus runs -- the
+# egg IS their subject. A gate whose subject is an APP or a TOOL pays that second
+# for nothing, and test_slow pays it ~45 times over. The image cannot be stale:
+# $(ho)/love.baked is a make artifact of the freshly-linked binary (host/build.mk,
+# and `host` is these gates' prerequisite), so waking it runs THIS build's egg.
+# ⚠ the woken image is MOPPED (love/egg.l deletes the runtime-internal noms at
+# birth), so a gate that reads one -- `book` is the live case -- must stay cold.
+mw = env -u LOVE_NO_IMAGE $m
+
 # love0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
 # BOTH compilers in one run: eval prel (c0), run the corpus, bootstrap ev.l
 # through c0, run the corpus again via the self-hosted ev. Built with -Dai_tco=0,
@@ -43,6 +55,8 @@ test_host: $m
 # haven.l is OUT of the gate: it can wedge on a wayland resource (a stray holding
 # the socket) and stall the whole run indefinitely. run it standalone when working
 # on the compositor: `cat test/00-init.l test/host/haven.l | out/host/love`.
+# these run WARM ($(mw)) -- the nifs are the subject, not the egg, and 30 cold boots
+# cost 51 s of the 77 this gate used to take. hostnif_cold names the exceptions.
 hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
@@ -70,9 +84,12 @@ $(havenkm):
 	else echo "SKIP $@ (no xkbcli here)"; : > $@; fi
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end (via
 # out/host/love, never env's PATH love -- the tree's nifs, not the nest's)
+# bake.l pins into `book`, which the egg mops at birth -- it needs the cold boot.
+hostnif_cold = test/host/bake.l
 test_hostnif: host $(smoke) $(havenkm) out/host$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
-	  cat test/00-init.l $$s | $m > out/host/.test_hostnif.out 2>&1; r=$$?; \
+	  case " $(hostnif_cold) " in *" $$s "*) L="$m";; *) L="$(mw)";; esac; \
+	  cat test/00-init.l $$s | $$L > out/host/.test_hostnif.out 2>&1; r=$$?; \
 	  cat out/host/.test_hostnif.out; \
 	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_hostnif.out; } \
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
@@ -86,7 +103,7 @@ test_hostnif: host $(smoke) $(havenkm) out/host$(hsuf)/lush
 doc_tests = doc/stream.l
 test_doc: host
 	@for s in $(doc_tests); do echo "DOC $$s"; \
-	  cat test/00-init.l $$s | $m > out/host/.test_doc.out 2>&1; r=$$?; \
+	  cat test/00-init.l $$s | $(mw) > out/host/.test_doc.out 2>&1; r=$$?; \
 	  cat out/host/.test_doc.out; \
 	  { [ $$r -eq 0 ] && grep -q ': ok' out/host/.test_doc.out; } \
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
@@ -119,7 +136,7 @@ else
 test_glaze:
 	@echo "test_glaze: skipped (host arch $a is not x86_64)"
 endif
-# test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (love/glaze/fuzz.l), in test_all beside
+# test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (love/glaze/fuzz.l), in test_slow beside
 # test_holofuzz (~4s: two 3000-case runs). The fuzzer builds 3000 closures at random in the
 # shapes the natjit creation hook recognizes -- one per lane, each applied fully -- and
 # this runs it TWICE against the SAME binary: once plain, once under LOVE_NO_GLAZE=1.
@@ -172,6 +189,9 @@ test_glazefuzz:
 endif
 # crew/sat/ -- the CDCL SAT solver app. Portable love (no glaze), so it runs on every arch.
 # Gate = exit 0 AND the sentinel (a reader-stop or a strict-assert scare both miss it).
+# COLD ($m, not $(mw)) -- the one app gate that is. The solver answers in 3.6 s over
+# the fresh egg and 14.4 s over the woken image; neither LOVE_BUDGET_MB nor
+# LOVE_NO_GLAZE moves that, so the gap belongs to the image lane, not to sat.
 .PHONY: test_sat
 test_sat: host
 	@echo "SAT crew/sat/sat.l + crew/sat/dimacs.l + crew/sat/flat.l"; \
@@ -183,7 +203,7 @@ test_sat: host
 # drat-trim, the SAT competition's independent checker (fetched + built into out/drat
 # on first use; skips gracefully offline). The in-gate twin (fd-check, no external
 # dependency) runs inside test_sat; this aims the third-party eye at php5-8 + a
-# raw-RUP row. Not in test_all (network on first run); run after touching the emitter.
+# raw-RUP row. Not in test_slow (network on first run); run after touching the emitter.
 .PHONY: test_drat
 test_drat: host
 	@cd crew/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
@@ -195,7 +215,7 @@ test_drat: host
 .PHONY: test_lux
 test_lux: host
 	@echo "LUX crew/lux/core.l ... crew/lux/config.l + crew/lux/law.l (the whole app, host)"; \
-	  cat test/00-init.l crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l | $m > out/host/.test_lux.out 2>&1; r=$$?; \
+	  cat test/00-init.l crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l | $(mw) > out/host/.test_lux.out 2>&1; r=$$?; \
 	  cat out/host/.test_lux.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/lux/law: StackSet" out/host/.test_lux.out; } \
 	    || { echo "FAIL lux (exit $$r)"; exit 1; }
@@ -203,7 +223,7 @@ test_lux: host
 test_seed: host out/host$(hsuf)/seed
 	@echo "SEED crew/seed/{seed,seedtest}.l"; \
 	  rm -rf out/host/.seedtest; \
-	  cat test/00-init.l crew/seed/seedtest.l | $m > out/host/.test_seed.out 2>&1; r=$$?; \
+	  cat test/00-init.l crew/seed/seedtest.l | $(mw) > out/host/.test_seed.out 2>&1; r=$$?; \
 	  cat out/host/.test_seed.out; \
 	  { [ $$r -eq 0 ] && grep -q "seed: ok" out/host/.test_seed.out; } \
 	    || { echo "FAIL seed (exit $$r)"; exit 1; }
@@ -221,7 +241,7 @@ test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/
 test_nest: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc.image
 	@sh test/gate/nest.sh $(ho) $m
 # the dist artifact (self-host rung 3): test_dist smokes the verb rail on the
-# baked one-file binary (seconds; test_all); test_up runs the WHOLE download
+# baked one-file binary (seconds; test_slow); test_up runs the WHOLE download
 # door -- origin recorded, kiosko serving it, `love up` cooking a scratch nest
 # from source -- and is OPT-IN (minutes, the moon-userland shape).
 .PHONY: test_dist test_up
@@ -236,7 +256,7 @@ test_up: out/dist/love-$a
 .PHONY: test_vi
 test_vi: host out/host$(hsuf)/kore.image
 	@echo "VI crew/vi/{hue,core,law}.l"; \
-	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l | $m > out/host/.test_vi.out 2>&1; r=$$?; \
+	  cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l | $(mw) > out/host/.test_vi.out 2>&1; r=$$?; \
 	  cat out/host/.test_vi.out; \
 	  { [ $$r -eq 0 ] && grep -q "crew/vi/law:" out/host/.test_vi.out; } \
 	    || { echo "FAIL vi laws (exit $$r)"; exit 1; }
@@ -311,7 +331,7 @@ test_ulp: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # The rung-2 self-host gate ([[love-distro]]): compile love.c AND every host/*.c with
 # mooncc (gcc/clang only LINKS), then run the whole corpus through the all-mooncc
 # binary. Proves the compiler compiles the runtime it runs on. OPT-IN, not in
-# test_all -- it rebuilds ~14 objects + links + runs the corpus, and needs the
+# test_slow -- it rebuilds ~14 objects + links + runs the corpus, and needs the
 # system static linker. x86-64 only (mooncc emits x64). The binary carries
 # no baked image, so LOVE_NO_IMAGE forces the fresh-egg boot.
 .PHONY: test_selfhost
@@ -339,7 +359,7 @@ test_selfhost: host out/host$(hsuf)/mooncc
 # syscall trampoline + our sigsetjmp/longjmp, laid by crew/moon/lib/mksys.l) -- then
 # OUR OWN static linker (crew/holo/link.l via `mooncc a.o..`) binds them. No gcc, no
 # glibc, no ld anywhere: the whole chain is love. Corpus green over the fresh egg.
-# In test_all (the gcc-free fixpoint is a headline invariant); skips off x86-64.
+# In test_slow (the gcc-free fixpoint is a headline invariant); skips off x86-64.
 # mksys/nolibc/math are x64. Supersedes test_selfhost's coverage (which stays
 # opt-in as the lighter gcc-links-only check).
 .PHONY: test_raw
@@ -349,7 +369,7 @@ test_raw: host out/host$(hsuf)/mooncc
 # $(ai_cflags) soup rides through -c and the link ignored, a link owing libc
 # symbols pulls the runtime by need (nolibc + the am math + the sys leaf,
 # compiled from the tree beside it), and the loud edges stay loud (-shared
-# usage-refuses, -nostdlib dies link-undef). Seconds, arch-native; in test_all.
+# usage-refuses, -nostdlib dies link-undef). Seconds, arch-native; in test_slow.
 .PHONY: test_drv
 test_drv: host out/host$(hsuf)/mooncc
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
@@ -357,7 +377,7 @@ test_drv: host out/host$(hsuf)/mooncc
 # says every privileged instruction twice -- holo's neutral template for mooncc,
 # GNU's for clang -- and two spellings of one operation rot quietly. the gate
 # compiles one probe with BOTH compilers and compares them op by op, so a half
-# that drifts is caught here instead of at the rung-5 flip. seconds; in test_all.
+# that drifts is caught here instead of at the rung-5 flip. seconds; in test_slow.
 # skips its comparison (not its mooncc compile) without llvm-objdump or clang.
 .PHONY: test_asmops
 test_asmops: host out/host$(hsuf)/mooncc
@@ -367,7 +387,7 @@ test_asmops: host out/host$(hsuf)/mooncc
 # exception with (fault n) and reads the report, which is the only way to reach
 # the 32 stubs and the fault vector, then checks the stubs no boot can reach
 # against the architecture's own error-code list. ~12s x86_64, ~5s aarch64
-# (a boot each, stopped the moment its report lands). In test_all.
+# (a boot each, stopped the moment its report lands). In test_slow.
 .PHONY: test_vec
 test_vec: host
 	@$(MAKE) -s a=x86_64 kernel
@@ -377,24 +397,23 @@ test_vec: host
 # THE FIXPOINT (self-host rung 2): the default love IS mooncc-built now; this
 # gate has it rebuild ITSELF -- love1 (love0's lane, relinked) bakes its own
 # compiler image, recompiles every TU, links love2, and the two must be
-# byte-identical. In test_all: the self-regeneration is a headline invariant.
+# byte-identical. In test_slow: the self-regeneration is a headline invariant.
 .PHONY: test_fixpoint
 test_fixpoint: host $(love0) out/host/mooncc0.image
 	@sh test/gate/fixpoint.sh $(ho) $(love0)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The
 # procedure lives in test/gate/raw-bake.sh (and the why with it); make keeps the
 # dependency and the file list, whose $(filter-out) drops glaze.l.
-# Opt-in (not test_all): needs the -pie toolchain. x86-64 only.
+# Opt-in (not test_slow): needs the -pie toolchain. x86-64 only.
 .PHONY: test_raw_bake
 test_raw_bake: test_raw
 	@sh test/gate/raw-bake.sh $(ho) $(filter-out %/glaze.l,$t)
-# test_riscv -- the riscv64 codegen rung end to end: the whole test/cc battery
-# compiled `mooncc -t riscv64` (EM_RISCV static ELF, the holo riscv backend),
-# run under qemu-riscv64 (user mode), and DIFFERENTIAL against the native x64
-# mooncc build of the same file -- mooncc is its own reference (the frontend is
-# shared, so only codegen can diverge). the three x64-only features
-# (100-complex / 101-vla / 102-bigstruct) are excluded exactly as arm64
-# refuses them. skips clean without qemu-riscv64 or off x86_64.
+# test_riscv -- the test/cc battery `mooncc -t riscv64` under qemu-riscv64, exit code
+# against the native x64 build of the same file. OUT of test_slow (2026-07-30, 12.7 s):
+# test_ccriscv runs the same battery on the same qemu against the same x64 oracle and
+# compares STDOUT, not just the eight bits of an exit code, and asserts the three
+# unsupported programs REFUSE instead of skipping them -- so this is its strict subset.
+# Stays as the lighter opt-in lane, the way test_selfhost stands beside test_raw.
 .PHONY: test_riscv
 test_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/riscv.sh $(ho) $m
@@ -404,7 +423,7 @@ test_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # whole corpus over the fresh egg. The riscv backend loads into the sealed holo
 # module at runtime for the mksys step (the host bake carries only the native
 # backend); mooncc.image carries all backends already. Opt-in (not in
-# test_all): the qemu corpus costs a minute. Skips without qemu-riscv64.
+# test_slow): the qemu corpus costs a minute. Skips without qemu-riscv64.
 .PHONY: test_raw_riscv
 test_raw_riscv: host out/host$(hsuf)/mooncc out/lib/riscv.h
 	@sh test/gate/raw.sh riscv64 $(ho) $m $t
@@ -415,7 +434,7 @@ test_raw_riscv: host out/host$(hsuf)/mooncc out/lib/riscv.h
 # differential. ($t is C/byte order, so test/uu.l loads before test/uukindlaw.l,
 # which calls the kernel it defines; a locale `ls` sorts uukind* first and the
 # uk-jj assert runs before uu.l -- an ordering trap, never a GC/arm64 bug.)
-# Opt-in (not in test_all): the qemu corpus costs minutes. Skips without qemu.
+# Opt-in (not in test_slow): the qemu corpus costs minutes. Skips without qemu.
 .PHONY: test_raw_arm64
 test_raw_arm64: host out/host$(hsuf)/mooncc
 	@sh test/gate/raw.sh arm64 $(ho) $m $t
@@ -428,7 +447,7 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 # pointer-width regression (8 not 4) makes mooncc read offset 8 and the answer diverge.
 # arm-none-eabi-ld binds it all against a gas startup; qemu runs it on an emulated
 # Cortex-M0 (semihosting SYS_EXIT_EXTENDED carries the answer out). tiny (~1s), rides
-# test_all; skips clean without the arm toolchain or qemu-system-arm.
+# test_slow; skips clean without the arm toolchain or qemu-system-arm.
 # qemu reads </dev/null: -nographic muxes the guest serial+monitor onto stdio, so
 # without a definite-EOF stdin qemu BLOCKS on the host chardev when the recipe runs
 # without an interactive tty -- the guest exits via semihosting instantly (a bare run
@@ -541,7 +560,7 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 # party GNU package) with mooncc + nolibc + the holo linker, no gcc/glibc/ld, and
 # prove the binary RUNS -- cf/xf + czf/xzf roundtrips byte-identical + system-tar
 # interop. The third moon-userland rung (doc/moon-userland.md). Opt-in (not in
-# test_all): tar's source is imported -- point TARSRC at a ./configure'd tar-1.13
+# test_slow): tar's source is imported -- point TARSRC at a ./configure'd tar-1.13
 # tree; SKIPS cleanly without one, like test_raw_arm64 without qemu.
 .PHONY: moon-tar
 moon-tar: host out/host$(hsuf)/mooncc
@@ -570,7 +589,7 @@ moon-sqlite: host out/host$(hsuf)/mooncc
 .PHONY: test_holo
 test_holo: host
 	@echo "HOLO crew/holo/holotest.l"; \
-	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/holotest.l | $m > out/host/.test_holo.out 2>&1; r=$$?; \
+	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/holotest.l | $(mw) > out/host/.test_holo.out 2>&1; r=$$?; \
 	  cat out/host/.test_holo.out; \
 	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_holo.out; } \
 	    || { echo "FAIL holo (exit $$r)"; exit 1; }
@@ -579,13 +598,13 @@ test_holo: host
 .PHONY: test_as
 test_as: host
 	@echo "AS crew/holo/astest.l"; \
-	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l crew/holo/astest.l | $m > out/host/.test_as.out 2>&1; r=$$?; \
+	  cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l crew/holo/astest.l | $(mw) > out/host/.test_as.out 2>&1; r=$$?; \
 	  cat out/host/.test_as.out; \
 	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_as.out; } \
 	    || { echo "FAIL as (exit $$r)"; exit 1; }
 # ain's two-process loopback gate: a server and a client over real TCP on
 # 127.0.0.1, full-duplex, asserting each side received what the other sent (the
-# socket nifs in host/sock.c + the pump loops in tools/ain.l). In `test_all`
+# socket nifs in host/sock.c + the pump loops in tools/ain.l). In `test_slow`
 # (the thorough gate) but NOT the fast `test` -- it needs two live processes and
 # a free loopback port. It is the ONLY net gate that drives the real
 # `love tools/ain.l` cli path: the in-process `test/host/net.l` smoke (in
@@ -615,13 +634,21 @@ ifeq ($(COQC),)
 test_proof:
 	@echo "test_proof: skipped (needs rocq/coqc)"
 else
-test_proof:
-	@echo TEST proof/rocq/spec.v "(coqc)"
-	@$(COQC) -q proof/rocq/spec.v
-	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux
-	@echo TEST proof/rocq/patch.v "(coqc)"
-	@$(COQC) -q proof/rocq/patch.v
-	@rm -f proof/rocq/patch.vo proof/rocq/patch.vok proof/rocq/patch.vos proof/rocq/patch.glob proof/rocq/.patch.aux
+# spec.vo is a FILE target, compiled once and KEPT: test_gen and test_extract both
+# `Require Import spec`, and all three lanes used to coqc it and then delete the
+# artifact -- so one unchanged file was checked three times per test_slow, and the
+# second and third checks proved nothing the first had not. Every .vo is gitignored
+# and `make clean` sweeps proof/rocq, so keeping them costs a few hundred KB.
+# One spelling everywhere (`cd proof/rocq && -R . ""`), or the logical name recorded
+# in spec.vo would not be the one gen.v's Require asks for.
+# a STATIC pattern, scoped to these two: a bare proof/rocq/%.vo would offer itself for
+# big.vo / mx.vo / enc*.vo too, whose lanes coqc with their own flags.
+rocq_kept = proof/rocq/spec.vo proof/rocq/patch.vo
+$(rocq_kept): proof/rocq/%.vo: proof/rocq/%.v
+	@echo TEST proof/rocq/$*.v "(coqc)"
+	@cd proof/rocq && $(COQC) -q -R . "" $*.v
+test_proof: $(rocq_kept)
+	@echo "test_proof: spec.v + patch.v check (the .vo IS the evidence, so a re-run is quiet)"
 endif
 # Machine-check proof/rocq/gc.v -- the generational MINOR is SOUND: under a complete
 # write barrier (rem_complete) the nursery scan reaches every live young object,
@@ -654,13 +681,12 @@ ifeq ($(COQC),)
 test_gen:
 	@echo "test_gen: skipped (needs rocq/coqc)"
 else
-test_gen: host
+test_gen: host $(rocq_kept)
 	@echo AI	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
-	@$m tools/spec2coq.l > proof/rocq/gen.v
+	@$(mw) tools/spec2coq.l > proof/rocq/gen.v
 	@echo TEST proof/rocq/gen.v "(coqc, against spec.v's shared model)"
-	@cd proof/rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" gen.v
-	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux \
-	  proof/rocq/gen.vo proof/rocq/gen.vok proof/rocq/gen.vos proof/rocq/gen.glob proof/rocq/.gen.aux
+	@cd proof/rocq && $(COQC) -R . "" gen.v
+	@rm -f proof/rocq/gen.vo proof/rocq/gen.vok proof/rocq/gen.vos proof/rocq/gen.glob proof/rocq/.gen.aux
 endif
 # The PROOF half of the .l -> .v pipeline (cf. test_gen, which exports concrete
 # ASSERTS): tools/uu2coq.l loads uu's kernel (test/uu.l), has it TYPE-CHECK a proof
@@ -675,7 +701,7 @@ test_uugen:
 else
 test_uugen: host
 	@echo AI	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
-	@$m tools/uu2coq.l > proof/rocq/uugen.v
+	@$(mw) tools/uu2coq.l > proof/rocq/uugen.v
 	@echo TEST proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q proof/rocq/uugen.v
 	@rm -f proof/rocq/uugen.vo proof/rocq/uugen.vok proof/rocq/uugen.vos proof/rocq/uugen.glob proof/rocq/.uugen.aux
@@ -692,7 +718,7 @@ else
 test_uulean: host
 	@mkdir -p lean
 	@echo AI	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
-	@$m tools/uu2lean.l > proof/lean/uugen.lean
+	@$(mw) tools/uu2lean.l > proof/lean/uugen.lean
 	@echo TEST proof/lean/uugen.lean "(lean)"
 	@$(LEAN) proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
@@ -706,7 +732,7 @@ endif
 # IS the proven definitions (up to the standard nat->int mapping) -- machine-
 # checked end to end. The hand-transcribed twin (test/oracle.l) stays in the
 # fast `make test`; this heavier, higher-assurance variant needs coqc + ocamlopt,
-# so it lives in test_all and no-ops when either tool is absent (like test_proof).
+# so it lives in test_slow and no-ops when either tool is absent (like test_proof).
 # ⚠ RUN THE ORACLE ONCE, into a file: grep the file for the sentinel, then cat the
 # file to show it. The obvious spelling -- pipe one run to `grep -q`, then run it
 # AGAIN to display -- doubles the slowest half of the gate to print what the first
@@ -722,17 +748,16 @@ ifeq ($(and $(COQC),$(OCAMLOPT)),)
 test_extract:
 	@echo "test_extract: skipped (needs coqc + ocamlopt)"
 else
-test_extract: host
+test_extract: host $(rocq_kept)
 	@echo TEST proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
-	@cd proof/rocq && $(COQC) -R . "" spec.v >/dev/null && $(COQC) -R . "" extract.v >/dev/null \
+	@cd proof/rocq && $(COQC) -R . "" extract.v >/dev/null \
 	  && rm -f normalizer.mli && $(OCAMLOPT) -w -a normalizer.ml oracle_drive.ml -o oracle_drive
 	@proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
 	@$m out/.extract_oracle.l > out/.extract_oracle.out 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" out/.extract_oracle.out; } \
 	    || { echo "EXTRACT ORACLE FAILED (exit $$r):"; cat out/.extract_oracle.out; exit 1; }
 	@cat out/.extract_oracle.out
-	@rm -f proof/rocq/spec.vo proof/rocq/spec.vok proof/rocq/spec.vos proof/rocq/spec.glob proof/rocq/.spec.aux \
-	  proof/rocq/extract.vo proof/rocq/extract.vok proof/rocq/extract.vos proof/rocq/extract.glob proof/rocq/.extract.aux \
+	@rm -f proof/rocq/extract.vo proof/rocq/extract.vok proof/rocq/extract.vos proof/rocq/extract.glob proof/rocq/.extract.aux \
 	  proof/rocq/normalizer.ml proof/rocq/normalizer.mli proof/rocq/oracle_drive proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o \
 	  out/.extract_oracle.l out/.extract_oracle.out
 endif
@@ -793,7 +818,7 @@ test_mx: host
 	@echo TEST proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
 	@$(CC) $(ai_cflags) -o out/.mxdump tools/mxdump.c $R/crew/moon/lib/math/am.c
 	@out/.mxdump > out/.mx.l
-	@$m tools/mx2coq.l > proof/rocq/mx.v
+	@$(mw) tools/mx2coq.l > proof/rocq/mx.v
 	@cd proof/rocq && $(COQC) -q mx.v >/dev/null
 	@rm -f out/.mxdump out/.mx.l proof/rocq/mx.vo proof/rocq/mx.vok proof/rocq/mx.vos proof/rocq/mx.glob proof/rocq/.mx.aux
 endif
@@ -847,7 +872,7 @@ endif
 # decode matches intent -- the goldens' hand round-trip, automated over many forms.
 # x64 disassembles with objdump; arm64 with llvm-mc (host objdump lacks aarch64).
 # Needs python3; each arch runs only if its disassembler is present, no-op like
-# test_extract. Fixed seed, small n so it stays a few seconds in test_all; run
+# test_extract. Fixed seed, small n so it stays a few seconds in test_slow; run
 # bigger campaigns by hand (see crew/holo/fuzz/README.md).
 # sysdiff.py rides the same lane for the SYSTEM instructions, where the operand
 # space is enumerable and the oracle sharper: ASSEMBLE the intended text with
@@ -886,26 +911,26 @@ endif
 # from crew/lux/core.l into uu terms (tools/uuwmgen.l over tools/wm2uu.l, kind-
 # directed by crew/lux/sigs.l), so test/uuwmlaw.l proves its theorems OF THE
 # IMPLEMENTATION at corpus time. `make uuwm` refreshes it after a core.l edit;
-# test_uuwm (in test_all) regenerates and diffs, failing loudly on drift.
+# test_uuwm (in test_slow) regenerates and diffs, failing loudly on drift.
 uuwm: host
 	@echo AI	test/uuwm.l "(tools/uuwmgen.l on $m)"
-	@$m tools/uuwmgen.l > test/uuwm.l
+	@$(mw) tools/uuwmgen.l > test/uuwm.l
 test_uuwm: host
 	@echo TEST test/uuwm.l "(regenerate + diff)"
-	@$m tools/uuwmgen.l > out/host/.uuwm.l.tmp
+	@$(mw) tools/uuwmgen.l > out/host/.uuwm.l.tmp
 	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
 	  || { echo "FAIL: test/uuwm.l is stale (crew/lux/core.l moved?) -- run: make uuwm"; exit 1; }
 	@rm -f out/host/.uuwm.l.tmp
 # test/uukind.l is a COMMITTED GENERATED artifact: doc/proto/kinds.l's abstract
 # kinds-lattice JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l
 # proves the semilattice laws OF THE ANALYSIS at corpus time. `make uukind` refreshes
-# it after a kinds.l edit; test_uukind (in test_all) regenerates and diffs.
+# it after a kinds.l edit; test_uukind (in test_slow) regenerates and diffs.
 uukind: host
 	@echo AI	test/uukind.l "(tools/kinds2uu.l on $m)"
-	@$m tools/kinds2uu.l > test/uukind.l
+	@$(mw) tools/kinds2uu.l > test/uukind.l
 test_uukind: host
 	@echo TEST test/uukind.l "(regenerate + diff)"
-	@$m tools/kinds2uu.l > out/host/.uukind.l.tmp
+	@$(mw) tools/kinds2uu.l > out/host/.uukind.l.tmp
 	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
 	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
 	@rm -f out/host/.uukind.l.tmp
@@ -915,7 +940,7 @@ test_uukind: host
 # canonical binary untouched, ETXTBSY-proof) and runs test/uu.l through the woken
 # image under a budget the wake storm cannot meet (fresh lane ~1s, the storm was
 # >90s -- doc/wake-storm.md). GREEN since the dump's dead-native revert landed
-# (img_nif_interp: references re-aim at the bytecode twin); in test_all.
+# (img_nif_interp: references re-aim at the bytecode twin); in test_slow.
 test_wake: $(ho)/love
 	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
 	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake --bake

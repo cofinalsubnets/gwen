@@ -2,8 +2,16 @@
 // The build's version string (the version-control id), generated into out/lib/love_version.h by
 // the Makefile and surfaced in the runtime as the `love-version` global (ai_ini_0).
 // Optional include so a standalone/unwired compile still builds; falls back to "unknown".
-#if defined(__has_include) && __has_include("love_version.h")
-#include "love_version.h"
+// A lane that HAS the header says so with -DAI_HAVE_VERSION_H, and __has_include is only the
+// fallback probe: MOONCC DOES NOT IMPLEMENT IT, and mooncc builds the default host binary --
+// so on the shipped `love` the probe read false and `love --version` answered "unknown".
+// A -DAI_VERSION on the command line wins over both: love0 pins "bootstrap" that way
+// (host/build.mk's gl0_cc), which keeps a new commit's id from relinking the bootstrap --
+// and every lcat header, and every object, behind it.
+#ifndef AI_VERSION
+# if defined(AI_HAVE_VERSION_H) || (defined(__has_include) && __has_include("love_version.h"))
+#  include "love_version.h"
+# endif
 #endif
 #ifndef AI_VERSION
 #define AI_VERSION "unknown"

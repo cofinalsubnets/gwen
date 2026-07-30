@@ -26,7 +26,7 @@ export LOVE_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0 site site-serve
-.PHONY: test test_host test_all test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_arm64 test_thumb1 test_thumb2 test_riscv test_virt test_wake
+.PHONY: test test_host test_slow test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_arm64 test_thumb1 test_thumb2 test_virt test_wake
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest lint fmt fmt-check ccdb
 
 # `make` with no target is `make test` -- pinned EXPLICITLY because the includes
@@ -43,11 +43,19 @@ include port/inle/kernel.mk
 include test/test.mk
 include mk/install.mk
 
-# `make test` is the FAST gate: just the two egg self-tests (the host binary `love`
-# from-source under LOVE_NO_IMAGE, and love0 -- c0 + the self-hosted ev, twice). It does
-# NOT build the image (the --bake step), nor run coqc/lean/glaze/gc/tools, which
-# are slow and/or need extra toolchains -- those live in `make test_all` (and the
-# individual test_* targets). Serial by design: ~3s, no -j races, ctrl-C responsive.
+# `make test` is the DEV GATE -- what you run on every edit: the two egg self-tests (the
+# host binary `love` from-source under LOVE_NO_IMAGE, and love0 -- c0 + the self-hosted ev,
+# twice) plus vmret. It does NOT build the image (the --bake step), nor run
+# coqc/lean/glaze/gc/tools, which are slow and/or need extra toolchains. ~20 s settled on
+# this box, serial by design: no -j races, ctrl-C responsive.
+#
+# `make test_slow` is the MERGE GATE -- run it before publishing, not per edit. ~13 min
+# settled, and a fifth of that is two targets booting the corpus under emulation
+# (2026-07-30, warm, no builds: test_kernel 62s, test_kernel_arm64 88s) beside
+# test_arm64's 66s qemu-user corpus. It was `test_all` until the name stopped being
+# true: test_uefi and test_kdiff are opt-in, so this is the SLOW gate, not the whole
+# one. While DEVELOPING, run `make test` and the individual test_* targets that cover
+# what you touched -- most are now under a second ($(mw), test/test.mk).
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
 test_phases = test_host test_love0 vmret
@@ -57,11 +65,11 @@ test:
 # emit a `ret`) so a sibcall regression breaks the gate the moment it lands. It no-ops
 # with a message when no disassembler (objdump/llvm-objdump) is on PATH, like the
 # proof/kernel/wasm tests. The rest of test_tools (cook/tele/xor) + the crew apps stay
-# in test_all.
-# test_kernel + test_wasm are in test_all but NOT the fast `test`: each needs an
+# in test_slow.
+# test_kernel + test_wasm are in test_slow but NOT the fast `test`: each needs an
 # extra toolchain (qemu, x86_64-only; emcc + node) and no-ops when that is
 # absent. See their rules below.
-test_all: test_host test_love0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_gcheck test_extract test_big test_mx test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi test_moon test_ccarm64 test_ccriscv test_libc test_ulp test_raw test_drv test_asmops test_fixpoint test_dist nettest test_arm64 test_thumb1 test_thumb2 test_thumb2sp test_riscv test_virt test_mps2 test_mps2_t1 test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_kernel test_uefi test_kernel_arm64 test_vec test_wasm test_wake
+test_slow: test_host test_love0 test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_gcheck test_extract test_big test_mx test_tools test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi test_moon test_ccarm64 test_ccriscv test_libc test_ulp test_raw test_drv test_asmops test_fixpoint test_dist nettest test_arm64 test_thumb1 test_thumb2 test_thumb2sp test_virt test_mps2 test_mps2_t1 test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_kernel test_kernel_arm64 test_vec test_wasm test_wake
 all: host kernel wasm
 
 # lint: paren/bracket/brace balance + unclosed strings across every tracked .l
@@ -158,9 +166,9 @@ repl: host
 cloc:
 	cloc --by-file love love.c love.h main.c port tools test vim crew
 cat: clean all test
-cata: clean all test_all
+cata: clean all test_slow
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.
-catav: clean all test_all valg
+catav: clean all test_slow valg
 
 disasm: host
 	exec rizin -A $m

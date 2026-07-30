@@ -108,7 +108,7 @@ work here, the traps, the architecture -- is [CLAUDE.md](CLAUDE.md).
 ### build test run
 - `make` build + test
 - `make repl` interactive shell
-- `make test_all` adds the freestanding kernel (qemu) + tool diffs
+- `make test_slow` adds the freestanding kernel (qemu) + tool diffs
 - `make wasm` build the browser image (wasm/love.js, used by index.html) -- rebuild + stage by hand
 - `make dist` the one-file artifact: `out/dist/love-x86_64` is the default love
   re-baked with the crew warm -- `love up URL` clones + builds + installs the

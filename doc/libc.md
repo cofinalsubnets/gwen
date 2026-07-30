@@ -22,7 +22,7 @@ two of them through a `%.o: $(R)/libc/%.c` pattern rule that silently builds onl
 what is listed. so a grep for `c_c` finds a QUARTER of the truth -- grep for
 `libc/` across every Makefile, and for the basenames too. (deleting `ctype.c`
 looked clean under `make test` and broke `test_virt` three gates into
-`test_all`.) (`limine.h` sits in the same folder but is a vendored bootloader
+`test_slow`.) (`limine.h` sits in the same folder but is a vendored bootloader
 header, not ours.)
 
 **`crew/moon/lib/nolibc.c` -- a hosted Linux libc.** ~1700 lines, **224 raw
@@ -69,7 +69,7 @@ byte loop.
 
 ### 0. a differential gate for the whole floor -- LANDED 2026-07-29
 
-**`make test_libc`** -- `test/gate/libc.sh` over `test/libc/*.c`, in `test_all`.
+**`make test_libc`** -- `test/gate/libc.sh` over `test/libc/*.c`, in `test_slow`.
 six programs, one per family: `mem` `str` `ctype` `num` `fmt` `sort`, ~50
 functions. each is built twice -- by mooncc, whose implicit link pulls
 `nolibc.c`, and by gcc against glibc -- run, and the two **outputs** compared.

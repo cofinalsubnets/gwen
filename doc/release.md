@@ -83,7 +83,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
   same execvp pattern as kore-as-`cc`→mooncc (binary name a small open item, cf. mooncc).
 - [x] **`test_as` byte-diff gate LANDED 2026-07-14** — `crew/holo/astest.l` (33-instr straight-line battery)
       byte-identical to `/usr/bin/as`, frozen goldens (no shell-out at gate time), same `", 0 failed"` sentinel
-      as `test_holo`; wired into `.PHONY` + `test_all`. Mirrors `test/holo.l`'s `(= golden (as-hex src))` style.
+      as `test_holo`; wired into `.PHONY` + `test_slow`. Mirrors `test/holo.l`'s `(= golden (as-hex src))` style.
       Found + fixed an as.l bug along the way: `cdqe` emitted `99` (conflated with `cdq`) — it's REX.W+98 = `4898`.
       **KNOWN as.l gaps documented in astest.l's header (M2, correctly kept out of the byte-identical battery):**
       no AT&T size suffixes (base mnemonic + width-from-register only); branch relaxation (jmp/jcc-to-near-label);
@@ -105,7 +105,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 **precedence (grip)** — LANDED 2026-07-14
 - [x] implement grips in the reader-operators block of `love/prel.l` (op-ent normalizes to the triple `(name arity . grip)`, op-fr carries a grip slot + `op-frgrip`, op-steal gained the climb: fold when the frame grips tighter than the incomer, steal otherwise)
 - [x] assign the grip bands (multiplicative 60 / additive 50 / comparison 40 / logical 30 / house 27 / cons 25 / assignment 20 / cond 10)
-- [x] `make test` ×3 green (3416 → 3439, +23 from `test/precedence.l`) + `test_all` (glaze / holo / as / every crew app / wasm / x86 kernel / wake all green; the sole red is the pre-existing qemu-arm64 `uk-jj`, host-uukind passes, precedence.l passes on arm64)
+- [x] `make test` ×3 green (3416 → 3439, +23 from `test/precedence.l`) + `test_slow` (glaze / holo / as / every crew app / wasm / x86 kernel / wake all green; the sole red is the pre-existing qemu-arm64 `uk-jj`, host-uukind passes, precedence.l passes on arm64)
 - [x] the corpus audit: only THREE asserts shifted, all `|`/`&`-mixed-with-`=` (the doc's flagged risk the audit had cleared for `&&`/`||` but not single `|`/`&`) — `test/spec.l:88`,`:164` parenthesized (bitwise below `=`, grip 30 < 40, gwen blessed the C-style band), `test/infixop.l:27` updated to the C-ternary read (`1 < 2 ? 'big 'small` → `(? (< 1 2) 'big 'small)`)
 - [x] `test/precedence.l` — tree asserts (via the live `opfix`, op-core being book-private) + value asserts + short-circuit + idempotence; non-vacuous
 - [x] promote `doc/precedence.md` from design to shipped
@@ -168,7 +168,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 ### D. the gate
 
 - [ ] `make test` green ×3 (host + love0 ×2, + test_proof + test_gen)
-- [ ] `make test_all` (proofs, gc/glaze/sat/holo/phos, tool diffs, arm64 + qemu kernel + wasm)
+- [ ] `make test_slow` (proofs, gc/glaze/sat/holo/phos, tool diffs, arm64 + qemu kernel + wasm)
 - [ ] `make valg` clean, `make vmret` green
 - [ ] version stamp (`love_version.h` / `force_version`) — currently `9b45d8d2-dirty`
 
@@ -196,7 +196,7 @@ C nif is `connectu` (not `phos`), so C idents are untouched. The uu **model** na
 
 **2. swap `phos`→`lux` in content** (the noms phos-cell/st/!/sock/session/moor/display/auth/
 tags/keymap/startup/border/colors/dispnum, all in the same sweep so sibling cross-refs stay
-consistent): `crew/lux/*.l`, `Makefile` (target `test_phos`→`test_lux` in .PHONY + test_all +
+consistent): `crew/lux/*.l`, `Makefile` (target `test_phos`→`test_lux` in .PHONY + test_slow +
 the rule + its `crew/phos/law`→`crew/lux/law` grep string; `hostnif_tests` paths;
 `phosfiles`→`luxfiles`; `bin/phos`→`bin/lux` rule + install list; the uuwm-rule comment path),
 `host/lux.c` (2 comment lines only), `test/host/{lux,luxui,luxui-probe,haven,pier,drm,overlay}.l`,
@@ -209,7 +209,7 @@ input paths `crew/phos/{core,sigs}.l`→`crew/lux/` and the `phos-sigs` binding�
 goes red — drift gate). Confirm `tools/uu2coq.l`/`uu2lean.l` gather-lists don't name the path.
 
 **4. build + gate, in order:** `make out/host/love` (phos/lux is baked into no core, but `bin/lux`
-+ tests rebuild) → `make uuwm` → `make test_lux` → `make test` ×3 → `make test_all` (test_lux,
++ tests rebuild) → `make uuwm` → `make test_lux` → `make test` ×3 → `make test_slow` (test_lux,
 test_uuwm, test_uukind, wasm, kernel, arm64) → `make valg` + `make vmret`. The X UI layer
 (`luxui`) needs a display — run under Xephyr/Xvfb per [[x11-wm-spike]], not the portable gate.
 Live smoke: run `bin/lux` under Xephyr (gwen's daily WM). Land as ONE rename commit; `push tau`.

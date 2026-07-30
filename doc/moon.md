@@ -167,7 +167,7 @@ gate per stage. the pipeline, each its own file:
   face -- the kernel is the consumer, doc/moon-kernel.md rung 3).
   the SEMANTIC refusals stay loud (-shared, -Wl,'s payload, -m..) because an
   ignored one would be the silent-no-op trap in a cc suit. gate:
-  test/gate/drv.sh (test_drv, test_all). its tail SEAT fires moon-main when `mooncc` is the
+  test/gate/drv.sh (test_drv, test_slow). its tail SEAT fires moon-main when `mooncc` is the
   program on the command line (the same trick as ain/cook), so mooncc stands
   alone as its own catted script -- it does NOT ride the kore multi-call
   dispatcher.
@@ -904,7 +904,7 @@ sticks to the neutral surface, and no new assembler exists anywhere.
   random well-typed int expressions/statements, both compilers, compare.
   csmith-class whole-program fuzz is a stretch goal.
 * `make test_moon` gates laws + differential battery; stage 7 adds the
-  corpus-under-cc-love run to test_all.
+  corpus-under-cc-love run to test_slow.
 
 ## size and pacing
 

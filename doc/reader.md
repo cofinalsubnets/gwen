@@ -112,7 +112,7 @@ bit ops -- so this is a tower-completeness rung, not a blocker.
 
 ### 3. the reader differential ✅ LANDED
 
-**test/host/rdiff.l**, in `hostnif_tests` so it rides test_all. 1.8 s.
+**test/host/rdiff.l**, in `hostnif_tests` so it rides test_slow. 1.8 s.
 
 the SOCKET is one binding, `rd-test` in test/00-init.l, defaulting to `sound`.
 test/roundtrip.l and test/fuzz.l read through it now, so rung 6 points every

@@ -3,7 +3,7 @@
 #
 #   smoke  the artifact answers: verb dispatch (positional + argv[0]), the nested
 #          kore dispatch, up's no-origin refusal, down's no-nest answer, -e still
-#          evals, `--` still forces the file. seconds; rides test_all (test_dist).
+#          evals, `--` still forces the file. seconds; rides test_slow (test_dist).
 #
 #   up     the whole door in anger, test/host/seedhttp.l's shape writ large: the
 #          repo tree seed-recorded into a scratch origin, kiosko (the artifact's

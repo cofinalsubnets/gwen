@@ -13,7 +13,7 @@
  * aimed at the same valid address nothing faults, one variable just never gets
  * written. it reached the shipping binary through am.c's mul64, whose `lo`
  * out-pointer became a wild address -- am_sin then segfaulted for every
- * |x| >= 2^19, i.e. `(sine 1e20)` in out/host/love, under a green test_all.
+ * |x| >= 2^19, i.e. `(sine 1e20)` in out/host/love, under a green test_slow.
  *
  * found by the am.c ulp differential (test_ulp), which is the only thing in
  * the tree that had ever compared mooncc's float output against another

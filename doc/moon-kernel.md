@@ -143,7 +143,7 @@ the moon-side halves of the rung, both small and both loud:
   resolves to glibc's, and a freestanding build quietly taking a hosted
   declaration is the wrong artifact wearing a green face.
 
-the law is `test/gate/asmops.sh` (`make test_asmops`, in test_all): one probe
+the law is `test/gate/asmops.sh` (`make test_asmops`, in test_slow): one probe
 TU calling every inline, compiled by BOTH compilers and compared op by op --
 same privileged mnemonics, same symbolic operands, same order, same function.
 the op list is read out of asmops.h itself, so adding an op and forgetting the
@@ -242,7 +242,7 @@ what the rung turned up:
   Alignment fault on Device memory whatever SCTLR says -- which is what the
   world looks like before the MMU comes on, where a boot stub most wants this.
 
-the gate is `test_vec` (test/gate/vec.sh, in test_all). test_kernel already
+the gate is `test_vec` (test/gate/vec.sh, in test_slow). test_kernel already
 runs most of the lay by booting on it -- nothing boots without archinit's IDT,
 and the corpus is FED over the serial line and CLOCKED by the timer, so
 uart_isr and timer_isr run thousands of times per gate. what a green boot never

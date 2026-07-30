@@ -3,7 +3,7 @@
 Status: **SHIPPED 2026-07-14.** Grips live in [`love/prel.l`](../love/prel.l)'s
 reader-operators block (opfix); no C, both compilers inherit it.
 [`test/precedence.l`](../test/precedence.l) gates the tree + value + short-circuit
-+ idempotence; `make test` is green ×3 (3439) and `test_all` is green bar the
++ idempotence; `make test` is green ×3 (3439) and `test_slow` is green bar the
 pre-existing qemu-arm64 `uk-jj`. The corpus audit shifted exactly THREE asserts,
 all single `|`/`&` mixed with `=` (grip 30 below comparison 40): `test/spec.l:88`
 and `:164` parenthesized, `test/infixop.l:27` moved to the C-ternary read.
@@ -294,7 +294,7 @@ default.
 
 **4. glaze / native lanes.** opfix is a source→source pass upstream of analysis
 and codegen; a correct re-grouping is transparent to everything downstream. No
-glaze change expected — but `make test_all` (glaze-x86.l, arm64, kernel) is the
+glaze change expected — but `make test_slow` (glaze-x86.l, arm64, kernel) is the
 proof, not the assumption.
 
 ## Testing / gate
@@ -310,7 +310,7 @@ proof, not the assumption.
 - The hand: a same-grip arithmetic chain folds LEFT (`(opfix '(a + b + c))` =
   `'(+ (+ a b) c)`), a same-grip `><`/`$`/coined chain folds RIGHT.
 - `make test` (host + love0 bootstrap, both) with **zero edits to existing
-  asserts** is the acceptance bar. Then `make test_all`.
+  asserts** is the acceptance bar. Then `make test_slow`.
 - Idempotence assert: `(op-core (op-core form)) = (op-core form)` on the mixed
   cases.
 
