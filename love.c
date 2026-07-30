@@ -220,7 +220,7 @@ lvm_t lvm_kcall,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
- lvm_fputbn, lvm_sound, lvm_dot,
+ lvm_fputbn, lvm_sound, lvm_sound0, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_tray, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,
@@ -838,7 +838,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  _(nif_link, "link", s2(lvm_link)) _(nif_car, "cap", s1(lvm_cap)) _(nif_cdr, "cup", s1(lvm_cup))\
  _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
  _(nif_snip, "snip", s3(lvm_snip)) \
- _(nif_sound, "sound", s2(lvm_sound))\
+ _(nif_sound, "sound", s2(lvm_sound)) _(nif_sound0, "sound0", s2(lvm_sound0))\
  _(nif_string, "string", s1(lvm_string))\
  _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
@@ -4166,45 +4166,57 @@ lvm(lvm_real) {
  Sp[0] = mk_flo(&Hp, (ai_flo_t) d);
  return Ip++, Continue(); }
 
-lvm(lvm_sound) {
- if (!iop(Sp[0])) return Ip++, Sp++, Continue();
- struct ai_io *i = (struct ai_io*) Sp[0];
- // the reader's park law (lvm_fgetc's), kept by the parse nif too: a dry port
- // on a quiet fd parks the TASK, not the vm -- io_refill's dry loop is a
- // blocking poll deep inside the C parse, so a moored repl session waiting
- // between forms would hold every peer task hostage (haven's painter froze
- // mid-wipe on exactly this). the crossover first: our unsent reply sails
- // before we park on the answer. Ip is unadvanced on the park, so the task
- // re-enters sound when the fd fires; a torn mid-form refill still waits in
- // C (brief: the tail of one form).
- struct ai_bio *bb = bio_of(g, i);
- if (bio_wpending(bb)) {
-  g->io = i;
-  Pack(g);
-  if (!ai_ok(g = io_wdrain(g, i))) return ghelp(g);
-  Unpack(g);
-  i = (struct ai_io*) Sp[0]; }
- if (getcharm(i->ungetc_buf) == EOF && !bio_rpending(bio_of(g, i))
-     && !ai_ready(getcharm(i->fd))) {
-  g->next_wait_fd = getcharm(i->fd);
-  return Ap(lvm_yield_sw, g); }
- Ip++;
- uintptr_t depth = topof(g) - Sp;
- Pack(g);
- if (ai_ok(g = ai_read1(g, i))) g->sp[2] = g->sp[0], g->sp += 2;
- else {
-  struct ai *c = ai_core_of(g); // reset stack on parse fail
-  c->sp = (word*) c + c->len - depth;
-  switch (ai_code_of(g)) {
-   default: return ghelp(g);                          // scare: condition data per raise site
-   case ai_status_more: case ai_status_eof:
-    // The more bit routes control through the help continuation: push the read protocol's
-    // resume text under [port sentinel] and raise -- the help function (or
-    // raise_c's default) decides flow from the bits. Headroom for the push is
-    // the parse ctx frame, which exists wherever more/eof can arise.
-    *--c->sp = word(c->ip);
-    return ghelp2(c, ai_code_of(g)); } }
- return Unpack(g), Continue(); }
+// (sound port sentinel): read one datum. The parse nif is a TEMPLATE over which
+// parser runs -- `sound` takes the structural reader, `sound0` the bootstrap one
+// (p0, doc/reader.md rung 5) -- because the two differ in exactly one call and
+// share every rule around it: the park law, the transactional rollback, and the
+// read protocol's more/eof routing through help. A whole-body template is the
+// bit_slow / op11 shape this file already uses; the alternative was a second copy
+// of that rule, which is the thing the arc is trying to end.
+//
+// the reader's park law (lvm_fgetc's), kept by the parse nif too: a dry port
+// on a quiet fd parks the TASK, not the vm -- io_refill's dry loop is a
+// blocking poll deep inside the C parse, so a moored repl session waiting
+// between forms would hold every peer task hostage (haven's painter froze
+// mid-wipe on exactly this). the crossover first: our unsent reply sails
+// before we park on the answer. Ip is unadvanced on the park, so the task
+// re-enters sound when the fd fires; a torn mid-form refill still waits in
+// C (brief: the tail of one form).
+#define sound_op(name, read1)                                                  \
+ lvm(name) {                                                                   \
+  if (!iop(Sp[0])) return Ip++, Sp++, Continue();                              \
+  struct ai_io *i = (struct ai_io*) Sp[0];                                     \
+  struct ai_bio *bb = bio_of(g, i);                                            \
+  if (bio_wpending(bb)) {                     /* the crossover sails first */  \
+   g->io = i;                                                                  \
+   Pack(g);                                                                    \
+   if (!ai_ok(g = io_wdrain(g, i))) return ghelp(g);                           \
+   Unpack(g);                                                                  \
+   i = (struct ai_io*) Sp[0]; }                                                \
+  if (getcharm(i->ungetc_buf) == EOF && !bio_rpending(bio_of(g, i))            \
+      && !ai_ready(getcharm(i->fd))) {                                         \
+   g->next_wait_fd = getcharm(i->fd);                                          \
+   return Ap(lvm_yield_sw, g); }                                               \
+  Ip++;                                                                        \
+  uintptr_t depth = topof(g) - Sp;                                             \
+  Pack(g);                                                                     \
+  if (ai_ok(g = read1(g, i))) g->sp[2] = g->sp[0], g->sp += 2;                 \
+  else {                                                                       \
+   struct ai *c = ai_core_of(g);              /* reset stack on parse fail */  \
+   c->sp = (word*) c + c->len - depth;                                         \
+   switch (ai_code_of(g)) {                                                    \
+    default: return ghelp(g);         /* scare: condition data per raise site */\
+    case ai_status_more: case ai_status_eof:                                   \
+     /* The more bit routes control through the help continuation: push the */ \
+     /* read protocol's resume text under [port sentinel] and raise -- the   */ \
+     /* help function (or raise_c's default) decides flow from the bits.     */ \
+     /* Headroom for the push is the parse ctx frame, which exists wherever  */ \
+     /* more/eof can arise.                                                  */ \
+     *--c->sp = word(c->ip);                                                   \
+     return ghelp2(c, ai_code_of(g)); } }                                      \
+  return Unpack(g), Continue(); }
+
+sound_op(lvm_sound, ai_read1)
 
 // (string x): a charlist -> the string of those bytes; a named symbol -> its
 // name string; a fixnum -> the one-byte string of its low byte. Identity on any
@@ -4560,6 +4572,79 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
        g->sp[0] = mk_flo(&g->hp, d);
       return g; } }
  return g; }
+
+////
+/// " p0 -- the bootstrap reader "  (doc/reader.md rung 5)
+//
+// The PURE LISP SUBSET and nothing else: delimiters, `;` and `#!` comments,
+// `"…"` with escapes, atoms, `'` quote. None of the sigil surface -- no operator
+// run, no mono wrap, no ` # @ ~ constructor wraps, no comma, no [ ] { } synonyms.
+// Those are p1's, the reader written in love that will ride on top of this one.
+// prel.l is held to this subset (rung 4) so p0 can read it; ev.l is not.
+//
+// ported forward from 2efbaa51^:g/g.c:1286-1400, the last C reader before the
+// sigil surface arrived -- and it answers the GC question by DEMONSTRATION.
+// CONTROL FLOW ON THE C STACK, VALUES ON g->sp: p0reads lets datums pile up on
+// the l stack and folds them with gxr at the close, so no love value ever sits
+// in a C local across an allocation. That is the whole reason ioparse keeps its
+// frame stack on the heap, and the reason p0 does not have to.
+//
+// It SHARES the leaf lexers with the structural reader rather than forking them:
+// ai_z_getc (comments), ioread1str (escapes), ioread1sym (the atom lane -- three
+// integer bases at full precision, the float fallback, the ieee-inf literals).
+// rung 2 made that number tower the tree's one answer for what a literal means,
+// and a second copy in C is exactly the divergence it deleted.
+//
+// ⚠ p0 is a READER OF A SUBSET, not a validator. A char outside the subset
+// reaches the atom lane and comes back a plain symbol -- `#(a b)` reads as `#`
+// then `(a b)` where the structural reader gives `(hash a b)`. The enforcement
+// is the DIFFERENTIAL (test/host/rdiff.l), where that divergence is loud, not a
+// check here that would have to be kept in step with a grammar it does not own.
+
+// ⚠ NESTING RIDES THE C STACK, which is the trade that buys p0 its size -- so p0
+// is DEPTH-BOUNDED where the structural reader, stackless by construction, is
+// not. measured on the host: 100k deep reads, 200k faults. the deepest form in
+// the tree is 38 (test/uupatch.l) and p0's inputs are the bootstrap files the
+// tree owns, so the bound sits three orders of magnitude clear of its use;
+// test/host/rdiff.l pins it at 20000.
+static struct ai *p0read1(struct ai *g);
+
+// a list: read datums until `)`, then fold n of them off the stack. the tail is
+// ZeroPoint, NOT nil -- reader lists are ()-terminated (the nil-ontology), and
+// nil is the fixnum 0, which the printer shows the same way.
+static struct ai *p0reads(struct ai *g) {
+ uintptr_t n = 0;
+ for (int c; ai_ok(g = ai_z_getc(g)); n++) {
+  if ((c = g->b) == ')') break;
+  if (c == EOF) return encode(ai_core_of(g), ai_status_more);   // unclosed list
+  if (!ai_ok(g = zungetc(g, c))) return g;
+  g = p0read1(g); }
+ if (!ai_ok(g)) return g;
+ for (g = ai_push(g, 1, ZeroPoint); ai_ok(g) && n--; g = gxr(g));
+ return g; }                                            // () folds zero times -> ZeroPoint
+
+static struct ai *p0read1(struct ai *g) {
+ if (!ai_ok(g = ai_z_getc(g))) return g;
+ int c = g->b;
+ switch (c) {
+  case '(': return p0reads(g);
+  case ')': case EOF: return encode(ai_core_of(g), ai_status_eof);  // stray ) / no datum
+  case '"': return ioread1str(g);
+  case '\'':                                            // quote: 'x = (\ x)
+   g = p0read1(g);
+   if (ai_code_of(g) == ai_status_eof)                  // quote with no operand
+    g = encode(ai_core_of(g), ai_status_more);
+   if (!ai_ok(g)) return g;
+   g = gxr(ai_push(g, 1, ZeroPoint));                   // (d . ())
+   if (ai_ok(g)) g = intern(ai_strof(g, "\\"));
+   return gxl(g);                                       // (\ . (d))
+  default: return ioread1sym(g, c); } }                 // name / number
+
+struct ai *ai_p0read1(struct ai *g, struct ai_io *i) {
+ return ai_core_of(g)->io = i, p0read1(g); }
+
+// (sound0 port sentinel): sound's bootstrap twin, same protocol, p0's grammar.
+sound_op(lvm_sound0, ai_p0read1)
 
 // ============================================================================
 // sys

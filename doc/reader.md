@@ -194,19 +194,75 @@ the change. `tools/spec2coq.l` models `cup` and does not model `cuup`, so spec.l
 put it in reach, and proof/rocq/gen.v goes 312 translated → 313 (`gen_301`, proved
 under test_gen). a composite row was hiding a law from the prover.
 
-### 5. `p0`
+### 5. `p0` ✅ LANDED
+
+**`sound0`** in love.c, sound's bootstrap twin: the same protocol, the pure lisp
+subset, **30 code lines**. it reads all 53 forms of prel.l exactly as the C reader
+does, which is rung 5's whole claim and was true on the first run.
+
+it came out well under the estimate because it does not carry its own lexers. the leaf
+scanners are already the structural ones -- `ai_z_getc` (comments), `ioread1str`
+(escapes), `ioread1sym` (the atom lane) -- and p0 adds only the four structural
+cases over them: `(`, `)`, `'`, and a default that falls through to the atom
+lane. rung 2's number tower in particular is SHARED, not copied: it is the tree's
+one answer for what a literal means, and a second copy in C is the divergence
+rung 2 spent itself deleting.
+
+**the parse nif became a TEMPLATE** rather than a second copy. `sound` and
+`sound0` differ in exactly one call -- which parser runs -- and share the park
+law, the transactional rollback and the read protocol's more/eof routing through
+help; `sound_op(name, read1)` is that body once, the `bit_slow`/`op11` shape
+already in the file.
+
+⚠ **a reader list terminates in `ZeroPoint`, never `nil`** -- `nil` is the fixnum
+0, and the two are indistinguishable through the printer. that is the `#()`/`@()`
+divergence rung 3's first sweep found, and rung 6 faces the same choice the
+moment p1 folds a list.
+
+**p0 is a reader of a subset, not a validator.** a char outside the subset lands
+in the atom lane and comes back a plain symbol -- `#(a b)` reads as `#` then
+`(a b)` where the structural reader gives `(hash a b)`. adding a check would mean
+keeping a second copy of a grammar p0 does not own; the DIFFERENTIAL is the
+enforcement instead, and rung 4's "prel.l stays in the subset" rule and this gate
+are now the same fact.
+
+⚠ **the one property p0 gives up is DEPTH.** nesting rides the C stack -- the
+trade that buys the size -- where the structural reader is stackless and bounded
+only by the heap. measured: 100k deep reads, 200k faults; the deepest form in the
+tree is **38** (test/uupatch.l), so the bound is documented and pinned at 20000
+rather than capped. ⚠ revisit if p0 is ever pointed at text the tree does not
+own; it is a bootstrap reader and that is the contract.
+
+gated in test/host/rdiff.l, the rung 3 oracle, four ways: p0 vs the C reader over
+prel.l (0 bad of 53 forms), print→read through p0, the same rig pointed at
+**ev.l**, which is REQUIRED to go red (4 divergences), and the depth pin. the
+ev.l leg is the rd-hurt discipline applied to a real second reader instead of a
+spoiled one -- without it the agreement above is not a measurement. spec.l states
+the law beside `sound`'s; a GC stress pass (60 reads of prel.l with a forced
+major between each) covers the relocation p0's on-stack datums depend on.
+
+---
+
+what the rung was planned as, kept for the reasoning:
 
 **do not write this from scratch -- port it forward.** the whole sigil surface is
 recent: `3e8d8ebd` (2026-06-09, N-ary reader operators via `dict['operators]`),
 `fb4a7920` (06-10, reader infix), `6ce0be64` (06-11, "the reader is structural"),
-`3d8be764` (06-11, the valence law). before that, at `3e8d8ebd^` in `g/g.c` (the
-whole core was 1597 lines), the reader was **66 lines** of plain mutual recursion:
+`3d8be764` (06-11, the valence law). before all of that, at **`2efbaa51^:g/g.c`,
+lines 1286-1400** (2026-05-28, core 2618 lines), the reader was ~104 lines of
+plain mutual recursion:
 
 ```c
-g_r_getc   // whitespace + ; and # comments        ~10
-g_read1    // ( , ' , "…" with \ , atom            ~46
-g_reads    // the list loop                        ~10
+g_z_getc   // whitespace + ; and # comments        9
+gzread1    // ( , ' , "…" with \ , atom            71
+gzreads    // the list loop                        12
+           // + g_read1/g_reads/g_read wrappers    12   (g_read is the rollback)
 ```
+
+⚠ take it from `2efbaa51^`, the commit BEFORE "rm lisp-side reader" -- that is the
+minimal C reader, the one whose only job was to bootstrap `repl.g`. `2efbaa51`
+itself grew it by 85 lines taking back what the lisp reader had been covering, and
+those 85 lines are p1's half.
 
 it also answers the GC question by demonstration. the current reader keeps its
 frame stack on the l heap because it allocates on nearly every step and a copying
@@ -216,9 +272,13 @@ loops `f = g_read1(f, i)` letting datums pile on the l stack, then folds them wi
 `gxr`. no love value ever sits in a C local across an allocation. (love.c also has
 the `mm`/`um` shadow-stack roots -- 121-122, love.h:148 -- if one ever must.)
 
-p0 ≈ that + a `strtod` fallback (prel has four float literals: :15 π, :17 e, :21,
-:665 -- or move them past p1 and p0 stays integer-only) + `()` as the ZeroPoint.
-call it **~80 lines**. pure addition: the existing reader stays, nothing calls p0.
+p0 ≈ that, MINUS its number lane, PLUS today's. the historical atom lane ends in
+`strtol` then `g_strtod`; rung 2 deleted the reader's last `strtol` call, so p0
+takes the three radix predicates and `ai_big_read_*` instead -- fewer lines and the
+literal reads the same in every build by construction. floats stay a `strtod`
+fallback (prel has four: :15 π, :17 e, :21, :665 -- or move them past p1 and p0
+stays integer-only). `()` reads the ZeroPoint. call it **~80 lines**. pure
+addition: the existing reader stays, nothing calls p0.
 
 ### 6. `p1`, the reader in love
 
@@ -311,10 +371,16 @@ it looked like, plus one design decision the mop forced. 3 turned out to be
 slightly more than assembly -- the input set is the whole tree rather than the
 fuzzers -- and it paid for itself immediately by finding the `#()` nil tail.
 
-**what is left: 5 and 6**, plus rung 2's bit ops. 5 is a port of working code
-(`3e8d8ebd^:g/g.c`, 66 lines). only 6 is genuinely new, and most of its risk is
-in the boot stitch rather than in the parser. rung 3 is the oracle both are
-measured against: rebind `rd-test` and the whole differential set goes live.
+**1-5 are LANDED.** 5 was a port of working code (`2efbaa51^:g/g.c:1286-1400`)
+and came in at 30 code lines against the estimated 80, by sharing the leaf lexers
+instead of copying them -- the same move rung 2 made for the number tower, for
+the same reason.
+
+**what is left: 6**, plus rung 2's bit ops. 6 is the genuinely new one, and most
+of its risk is in the boot stitch rather than in the parser: p0 exists and is
+measured now, so what remains is the reader in love and the egg's argument built
+by stitching. rung 3 is the oracle: rebind `rd-test` and the whole differential
+set goes live.
 
 **speed is bounded, not an open risk.** reading happens once per cold boot --
 `ai_evals_` reads the corpus and the double `sit` folds over already-read forms.

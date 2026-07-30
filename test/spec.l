@@ -550,9 +550,15 @@
 ; is `sound`, and the whole read protocol IS its return value: the datum, the PORT back on an
 ; unfinished shape, or the eof sentinel -- no help needed. `read` rides it (ONE form, EVALED);
 ; `reads` drinks a port form by form; `dot` (the `.` operator, .x) prints x to out and returns it.
+; `sound0` is sound's BOOTSTRAP TWIN, same protocol over the PURE LISP SUBSET: parens, comments,
+; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is (hash a) to sound and the
+; plain symbol # to sound0. it is what reads prel.l before there is a language (doc/reader.md).
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
- (1 = (sound (tap '(49)) 99)) ('eof = (sound (tap 0) 'eof)) (: p (tap '(40)) (p = (sound p 99))))
+ (1 = (sound (tap '(49)) 99)) ('eof = (sound (tap 0) 'eof)) (: p (tap '(40)) (p = (sound p 99)))
+ ('(a) = (sound0 (tap '(40 97 41)) 99)) ('eof = (sound0 (tap 0) 'eof))
+ (: p (tap '(40 97)) (p = (sound0 p 99)))            ; the port back, unfinished shape
+ ('(hash a) = (sound (tap '(35 40 97 41)) 99)) ((intern "#") = (sound0 (tap '(35 40 97 41)) 99)))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;

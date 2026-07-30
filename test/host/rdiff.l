@@ -24,6 +24,7 @@
    (rd-port s) (tap (map s (jot (tally s))))
    (rd-slurp path) (: q (open path "r") (? q (: t (slurp q) _ (close q) t) ""))
    (rd-cut s n) (? ((tally s) <= n) s (snip s 0 n))
+   (rd-rep c n) (? (n <= 0) "" (c + (rd-rep c (n - 1))))
    ; every form a reader gets off a text. the read protocol IS sound's: the
    ; sentinel at eof, the PORT ITSELF where the shape did not finish -- p1 owes
    ; the same two answers, which is why the socket is a plain two-operand call.
@@ -104,6 +105,31 @@
             + " bad=" + (show (peep rd-clean 'bad 0))
             + " injected=" + (show (peep rd-hurtn 'bad 0)) + "\n")))
 
+; --- p0, over the subset it owns (doc/reader.md rung 5) ---------------------
+; `sound0` is the bootstrap reader in love.c: the pure lisp subset, no sigil
+; surface. this is the A/B law with a REAL second reader on one leg -- the first
+; non-vacuous run of it, and what rung 6 repeats with p1 on the whole tree.
+;
+; the input is prel.l ALONE, deliberately. p0 diverges on every sigil BY DESIGN
+; (#(a b) reads as # then (a b)), so a tree sweep would measure the divergence
+; instead of the agreement; prel.l is held to the subset by rung 4 and is the
+; whole of what p0 must read. the rung-4 rule and this gate are the same fact,
+; so a sigil creeping back into prel.l fails HERE.
+(: rd-p0 (rd-run sound0 (L "love/prel.l") 1)
+   ; and the same rig pointed at a file OUTSIDE the subset, which must go red:
+   ; the proof this leg can fail, the rd-hurt discipline applied to a real reader
+   ; rather than a spoiled one.
+   rd-p0x (rd-run sound0 (L "love/ev.l") 0)
+   ; p0 puts NESTING ON THE C STACK -- the trade that buys its size, and the one
+   ; thing the stackless reader has over it. so pin the depth it reaches, far
+   ; past the deepest form in the tree (38, test/uupatch.l).
+   rd-deep (: s ((rd-rep "(" 20000) + (rd-rep ")" 20000))
+              (= (sound0 (rd-port s) rd-eof) (sound (rd-port s) rd-eof)))
+   _ (puts ("rdiff: p0 forms=" + (show (peep rd-p0 'forms 0))
+            + " bad=" + (show (peep rd-p0 'bad 0))
+            + " off-subset=" + (show (peep rd-p0x 'bad 0))
+            + " deep=" + (show rd-deep) + "\n")))
+
 (assert
  ; the sweep reached the tree and read it -- the PROOF OF WORK, checked and not
  ; merely printed. floors, not exact counts: the tree grows.
@@ -112,7 +138,14 @@
  ; the two laws
  (0 = (peep rd-clean 'bad 0))
  ; and the rig can go RED: one spoiled form in one file is enough to see
- (0 < (peep rd-hurtn 'bad 0)))
+ (0 < (peep rd-hurtn 'bad 0))
+ ; rung 5: p0 agrees with the C reader on every form of prel.l ...
+ (50 <= (peep rd-p0 'forms 0))
+ (0 = (peep rd-p0 'bad 0))
+ ; ... and parts from it off the subset, so the agreement above is a measurement
+ (0 < (peep rd-p0x 'bad 0))
+ ; ... and its C-stack nesting reaches far past anything the tree contains
+ rd-deep)
 
 (puts "rdiff: ok")
 (putc 10)
