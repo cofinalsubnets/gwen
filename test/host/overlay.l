@@ -25,10 +25,8 @@
 (reads (open "crew/lux/sigs.l" "r"))
 (reads (open "crew/lux/core.l" "r"))
 
-(: (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
-   chk1 (overlay 'ov-check)
-   (sweep path) (foldl (\ a f (cat a (chk1 lux-dom lux-sigs f))) () (forms path))
+(:    chk1 (overlay 'ov-check)
+   (sweep path) (foldl (\ a f (cat a (chk1 lux-dom lux-sigs f))) () (forms (open path "r")))
 
  ; leg 1: the shipped sources check clean...
  _ (assert (! (sweep "crew/lux/core.l"))
@@ -53,8 +51,7 @@
 
 ; the kernel refuses through the help cell -- install the escape (test/uu.l's
 ; own tail move; the kernel span rightly bakes NO global help), probe, uninstall
-(: (help s p e) (? (more? s) p (eof? s) e
-                   (: h (peep (uu 'HELPC) () 0) (? h (h s p e) 0))))
+(: (help s p e) (: h (peep (uu 'HELPC) () 0) (? h (h s p e) 0)))
 (assert (id? 'rejected ((uu 'rejects) (\ z ((uu 'defn) 'boot-bad 'nat '(lam x x))))))
 (: help 0)
 
@@ -136,9 +133,7 @@
 ; does. the translated terms live in the model's vocabulary, so stage 4's
 ; idpath bridges can tie gen-* to the proved ops.
 (reads (open "tools/wm2uu.l" "r"))
-(: (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
-   cforms (forms "crew/lux/core.l")
+(:    cforms (forms (open "crew/lux/core.l" "r"))
    gens (wm2uu cforms lux-sigs)
  _ (assert (= 10 (tally gens)))
  _ (map (\ g (defn (cap g) (nthl g 1) (nthl g 2))) (rev gens))   ; the kernel certifies each

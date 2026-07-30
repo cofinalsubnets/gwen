@@ -14,8 +14,6 @@
 ;
 ; a body-LESS `:` -- the k2-* vocabulary leaks; none shadows a nif.
 (:
-   (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
    (k2-pairs bs) (? (! (two? bs)) () (! (two? (cup bs))) ()
                     (link (L (cap bs) (cap (cup bs))) (k2-pairs (cup (cup bs)))))
    (k2-find nm ps) (cap (filter (\ p (&& (two? (cap p)) (id? (cap (cap p)) nm))) ps))
@@ -67,7 +65,7 @@
    (k2-op km ps pr resty ty) (L (k2-pi ps resty) (k2-lams ps (k2-tx km (cap (cup pr)) ty)))
 
    ; --- drive: read kinds.l, lift num? and join ---
-   fs (forms "doc/proto/kinds.l")
+   fs (forms (open "doc/proto/kinds.l" "r"))
    big (cap (filter (\ f (&& (two? f) (id? (cap f) ':))) fs))
    ps (k2-pairs (cup big))
    km0 (k2-rankmap (cap (cup (k2-find 'rank ps))))

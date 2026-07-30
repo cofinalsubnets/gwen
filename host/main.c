@@ -525,9 +525,10 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_lib_(g, "holo", src0_holo);                   //   which the mooncc cat's cpp/gen read (the self-host build lane)
   if (argp) {                                          // a build tool (lcat etc.): bake prel + bao FIRST so the CLI's
     g = ai_evals_(g,                                   // own loader/printer (eval1/bye reach for map/jot/tap/puts/putc)
-#include "prel0.h"                                     // have the prel surface before they load the first file -- else
-    "(use 'bao)"                                       // loading prel.l ITSELF misses every prel fn its loader uses.
-    "(use 'kanren)"                                    // kanren before post, as the host boots: post's overlay half
+#include "p10.h"                                       // have the prel surface before they load the first file -- else
+#include "prel0.h"                                     // loading prel.l ITSELF misses every prel fn its loader uses.
+    "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
+    "(use 'kanren)"                                    // loader folds `sound` at its own compile. kanren before post,
     "(use 'post)"                                      //   reads unify/ufail bare; post serves revcat/parse/bake
     "(: verbs ())"                                     // the CLI's verb rail reads `verbs`: bound-empty = no verbs, quietly
     );
@@ -535,8 +536,10 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_strof(g, tests0);                            // the baked corpus, as a string
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
-  g = ai_evals_(g,                                    // prel, compiled by c0
-#include "prel0.h"
+  g = ai_evals_(g,                                    // p1 FIRST: prel's loader reads `sound`, and a
+#include "p10.h"                                      // global folds at its reader's compile, so the
+                                                      // reader in love has to exist before prel compiles
+#include "prel0.h"                                    // prel, compiled by c0
   );
   g = ai_evals_(g,
     "(use 'bao)"                                       // bao (the shell core): loaded, registered, spliced
@@ -551,12 +554,15 @@ static struct ai *boot(struct ai *g, bool argp) {
   );
   g = ai_evals_(g, "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))");   // string -> charlist, for the runner
   g = ai_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
-  g = ai_evals_(g, "("                                // bootstrap: install the self-hosted ev
+  g = ai_egg_(g,                                      // bootstrap: install the self-hosted ev
 #include "egg0.h"
-    "'("
+    ,
+#include "p10.h"
+    ,
 #include "prel0.h"
+    ,
 #include "ev0.h"
-    "))");
+    );
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
 
 #else
@@ -694,12 +700,16 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   g = ai_lib_(g, "uu", src_uu);
   g = ai_lib_(g, "bao", src_bao);
   g = ai_lib_(g, "holo", src_holo);
-  g = ai_evals_(g, "("
+  g = ai_egg_(g,
 #include "egg.h"
-    "'("
+    ,
+#include "p1.h"
+    ,
 #include "prel.h"
+    ,
 #include "ev.h"
-    "))"
+    );
+  g = ai_evals_(g,
     "(use 'coin)"                                        // the library layers, ALL modules now, in the old eval order: coin
     "(use 'rng)"                                         //   (ring/monoid over the C coin lane), rng (the random stream), q
     "(use 'q)"                                           //   (rationals), then kanren (unification) -- registered BEFORE post,

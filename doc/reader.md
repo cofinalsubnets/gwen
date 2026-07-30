@@ -208,11 +208,11 @@ lane. rung 2's number tower in particular is SHARED, not copied: it is the tree'
 one answer for what a literal means, and a second copy in C is the divergence
 rung 2 spent itself deleting.
 
-**the parse nif became a TEMPLATE** rather than a second copy. `sound` and
-`sound0` differ in exactly one call -- which parser runs -- and share the park
+**the parse nif became a TEMPLATE** rather than a second copy: `sound` and
+`sound0` differed in exactly one call -- which parser runs -- and shared the park
 law, the transactional rollback and the read protocol's more/eof routing through
-help; `sound_op(name, read1)` is that body once, the `bit_slow`/`op11` shape
-already in the file.
+help. (6c retired all of that with the C reader; the rollback is the one piece
+that had to be carried forward by hand, and forgetting it segfaulted the corpus.)
 
 ⚠ **a reader list terminates in `ZeroPoint`, never `nil`** -- `nil` is the fixnum
 0, and the two are indistinguishable through the printer. that is the `#()`/`@()`
@@ -280,7 +280,7 @@ fallback (prel has four: :15 π, :17 e, :21, :665 -- or move them past p1 and p0
 stays integer-only). `()` reads the ZeroPoint. call it **~80 lines**. pure
 addition: the existing reader stays, nothing calls p0.
 
-### 6. `p1`, the reader in love -- THE PARSER LANDED, the boot is next
+### 6. `p1`, the reader in love ✅ LANDED (parser + boot)
 
 **love/p1.l**, ~150 code lines, and it reads the WHOLE TREE exactly as the C
 reader does: 298 files, 1322 forms, `bad=0`, plus print→read. that is the A/B law
@@ -299,7 +299,8 @@ reads prel.l.
 **and it is pre-prel, mechanically checked**: every name it references is a nif
 or one of its own bindings. `||`/`&&` are open-coded to nested `?` (they are prel
 MACROS, and prel is not loaded when the boot calls this); `map`/`jot` have a
-local twin for the one place a text becomes a charlist.
+local twin for the one place a text becomes a charlist. it is **pre-opfix**
+besides -- see 6b, that one cost a rewrite.
 
 three bugs are worth carrying forward, because each is a law of this tree rather
 than a slip:
@@ -314,9 +315,66 @@ than a slip:
   `p1-int` answers `(1 . n)` tested with `two?`; the float lane asks `gem?`, the
   TYPE, because `gem` answers the charm 0 on failure and the float 0.0 on "0.0".
 
-**what is left is the BOOT STITCH**, which the plan already called the real work:
+### 6b. the boot ✅ LANDED
 
-### 6b. the boot
+**`ai_egg_(g, egg, p1, prel, ev)`** (love.c, 40 code lines) replaces the one
+juxtaposed string every frontend used to hand `ai_evals_`. The egg expression is
+unchanged -- `((\ egg …) '(<p1 forms> <prel forms> <ev forms>))`, the double
+`sit` still folding over the COMPLETE corpus -- but its ARGUMENT is now built by
+interleaved reads and `gxl`/`gxr` on the l stack, **p0 reading the three files
+held to the pure lisp subset and p1 reading ev.l**. So the C reader's sigil half
+is off the boot path on every target.
+
+the shape that made it small: **each half is read ONTO the list already on the
+stack**, so the corpus stitches right to left with no append and no copy -- ev's
+forms first, prel's onto those, p1's onto that. the same helper builds the
+applications: a one-form driver text read onto its own quoted operand IS
+`(driver '(list))`, which serves both the egg and the plain eval fold.
+
+p1.l is read **twice**. the first read is c0-evaluated on the spot, purely so p1
+is callable for ev.l; the second puts p1's forms in the corpus so the double sit
+recompiles them ev₁-compiled like everything else. reading a 258-line file twice
+costs ~2 ms and buys the whole circularity.
+
+two things the plan had not seen:
+
+* **p1.l has to be no-infix**, prel.l's rule and for prel.l's reason. "pre-prel
+  in its NAMES" is not the same as "pre-opfix in its SYNTAX", and the bootstrap
+  eval happens before prel defines `opfix` -- so `(n <= k)` would have compiled
+  as a plain application, church-exponentiating where a comparison was meant,
+  silently. ~60 prefix rewrites, LOC-neutral. it is self-gating, and that was
+  CHECKED rather than assumed: one comparison put back infix (`(48 <= c)` in
+  `p1-dig?`) makes p1 misread ev.l and the cold boot **dumps core**. loud, on
+  the first build, on every target -- but a segfault, not a diagnostic, so a
+  future session meeting one here should suspect this before anything else.
+* **p0 has to read what `lcat` PRINTS, not only what the tree types.** the boot
+  embeds the lcat'd headers -- canonical `show` output, minified against the
+  *structural* reader's grammar (tools/lcat.l drops a space wherever `sound`
+  parses the same either way). `show` spells a lambda `(\ egg …)`; lcat glues it
+  to `(\egg …)`; p0's atom lane took that as one name. the fix is the run
+  lexer's own rule, `\` never fuses, as one more case in `p0read1`. ⚠ the
+  general form of this: **p0's subset must be closed under show → read**, and
+  the boot itself is the gate that says so -- this failed on the first build,
+  not silently.
+
+**speed**, measured: reading ev.l is 62 ms through p1 against 4 ms through the C
+reader, so a cold boot pays ~+58 ms of its ~1 s. a woken image reads nothing and
+pays zero, which is what users run.
+
+**left open, deliberately, for the flip**: p1's 36 `p1-*` bindings are on the
+book now -- the whole of what this rung adds to `(names ())`, and exactly what
+vim/syntax.vim regenerated to. that is real vocabulary noise for something with
+no caller yet, and there are three ways out -- mop them by prefix the way
+`lvm_*` goes, seal the plumbing and re-pin only the doors (bao.l's shape), or
+make p1 a module now that the stitch, not `ai_evals_`, is what loads it. all
+three depend on **how `sound` reaches p1 after the flip**, which is 6c's first
+question, so the answer belongs there and not here. ⚠ what is NOT open: the
+plan's "p1 must survive the mop regardless" still holds, and mopping it before
+anything calls it would make the corpus copy dead and untestable.
+
+---
+
+what the rung was planned as, kept for the reasoning:
 
 p1's shape follows the historical lisp-side reader at `2efbaa51^:g/repl.g`
 (removed 2026-05-28, "rm lisp-side reader"): a charlist in, `(value . rest)` out,
@@ -374,16 +432,57 @@ gated by rung 3, with the C reader alive as the differential twin behind a switc
 (the `KLINK=lld` precedent). flip when the differential is silent over the whole
 corpus, then delete the C reader.
 
-## probes to run first
+the three probes this section opened with are all answered: p1 wants **nifs
+alone** (the sigil surface needed no prel helper), the egg-lane cost is **+58 ms
+cold and zero warm**, and doc/stream.md:118-135's lookahead-cons stream is still
+the standing proposal for the more-bit machinery -- which is 6c's problem now,
+not 6b's.
 
-* **read doc/stream.md:118-135.** it already proposes deleting the more-bit
-  machinery by making read a pure fold over a lookahead-cons stream. prior design
-  work on exactly this question.
-* **time p1 on the egg lane specifically**, not on a warm image. that is where the
-  cost lands and where nothing optimizes it.
-* **can p1 be written with nifs alone**, or does it want prel's helpers? the
-  historical one needed only `||`/`&&`/`rev`, all trivially inlined -- but the
-  sigil surface it must ADD is the part nobody has written in love yet.
+### 6c. the flip ✅ LANDED
+
+`sound` is `p1-read1`. it takes a charlist and answers three ways -- the datum
+CONSED ONTO WHAT IS LEFT, `()` at a clean end, or `torn` where the text ran out
+inside a shape. `sound0` moved with it, so the differential still compares like
+with like, and p0-vs-p1 is now the only reader pair left in the tree.
+
+deleted from love.c: `ioparse` (the 230-line structural parser), `ioread1op`,
+`op_break`, `symeq`/`hashsym`/`splicesym`, `ai_reads`/`ai_read1`, the `sound_op`
+template with its park law and transactional rollback, and the more-bit branches
+in `lvm_help` and `ghelp2`. **love.c is 112 lines shorter and the .l side is
+flat** -- the call sites shrank by about as much as p1 and `reads` grew.
+kept: `ioread1sym`, `ioread1str`, `ai_z_getc`, which p0 shares.
+
+**three things bit, all of them the tree's own documented traps:**
+
+- **a `(nom 0)` sits on the BLUE FLOOR.** `torn` started as an anonymous nom, so
+  `(nil? torn)` was TRUE and a torn answer read as a clean end. it is a NAMED
+  symbol now: nets its spelling, stays un-two, prints as itself. this is
+  "presence is the wrapper, never the net" wearing a fresh face.
+- **`p0reads` piles a list's datums on the l stack** and folds them only at the
+  close, so a TORN parse leaves the pile behind and the text slot is no longer
+  `sp[0]`. the old parse nif had a transactional rollback; dropping it segfaulted
+  the corpus. `p0text` records the depth and restores it.
+- **`ti_ungetc` parks the pushed-back byte in `ungetc_buf`, not on the
+  charlist**, so reading the port's `head` alone SWALLOWS the token terminator --
+  `#(a)` came back as `#` with the `(` gone.
+
+⚠ and the port must be ON THE HEAP: a `ci`'s head is a love value and `g->io`
+rides the core's `v0..end` span, so the collector forwards it. the boot stitch
+gets away with a C-stack `ti` only because ti's source is a plain C string.
+
+**`reads` is the one place a port becomes text**, and the only refill loop in the
+tree. it blocks for the first byte with `see`, then drains what `cue?` says is
+ready, and re-parses ONCE PER DRINK -- crew/moon/gen.l is a single 360KB form, so
+a byte-then-reparse loop is quadratic on it. `cue?` was generalized from
+stdin-only to any port for this (it also omitted `bio_rpending` and so disagreed
+with `see`'s own park guard). streaming is preserved: a form piped in evaluates
+before the pipe closes.
+
+lux, haven and port/inle/serve each hand-rolled the residue discipline to avoid
+sounding a live socket -- re-`tap`ping and re-parsing the whole accumulation
+every line. all three collapse into the returned residue, and each gained "every
+form on a line runs" for free, where only the first used to.
+
 
 ## order and size
 
@@ -395,24 +494,38 @@ it looked like, plus one design decision the mop forced. 3 turned out to be
 slightly more than assembly -- the input set is the whole tree rather than the
 fuzzers -- and it paid for itself immediately by finding the `#()` nil tail.
 
-**1-5 are LANDED, and so is 6's parser.** 5 was a port of working code
+**1-6 are LANDED, boot included.** 5 was a port of working code
 (`2efbaa51^:g/g.c:1286-1400`) and came in at 30 code lines against the estimated
 80, by sharing the leaf lexers instead of copying them -- the same move rung 2
 made for the number tower, for the same reason. 6's parser then read the whole
-tree identically on the strength of that same oracle.
+tree identically on the strength of that same oracle, and 6b put it on the boot
+path of every target for 40 more lines of C.
 
-**what is left: 6b, the boot stitch**, plus rung 2's bit ops. the plan's own
-estimate held exactly -- "most of its risk is in the boot rather than in the
-parser" -- and the parser is now the measured part. what remains is building the
-egg's argument by stitching, the mop question for p1's noms, and then the flip:
-rebind `rd-test` from `sound` to p1 so roundtrip.l and fuzz.l follow, and delete
-the C reader.
+the plan's own estimate held exactly -- "most of its risk is in the boot rather
+than in the parser". both of 6b's surprises were in the boot half and neither was
+about parsing: p1.l had to go **pre-opfix** as well as pre-prel, and p0 had to
+read **lcat's minified output** rather than the tree's source. both failed loudly
+on the first build.
 
-**speed is bounded, not an open risk.** reading happens once per cold boot --
-`ai_evals_` reads the corpus and the double `sit` folds over already-read forms.
-so p1 reads ev.l once, only cold: ~230 ms total today against ~1.2 ms of C
-parsing, and the baked image path (~4 ms wake) skips reading entirely, which is
-what users actually run. ⚠ the glaze will NOT help: its grammar is integer
+**6c LANDED, and the arc is closed** -- `sound` is p1, `ioparse` is gone, and the
+tree has ONE reader. what is left of the plan: rung 2's bit ops, still
+independent, and 6b's open vocabulary question (whether p1's names get mopped).
+
+the predicted hard half was the PORT PROTOCOL, and it was -- but not where the
+plan looked. no hot slot was needed and no lookahead-cons either: the answer was
+to stop bridging. `sound` takes TEXT and hands the RESIDUE back, so the caller
+owns what is left and the more-bit / port-back / help-continuation protocol has
+nothing to carry. `in`/`out`/`err` are static `struct ai_io` AND image immortals
+(love.c), never GC-traced, so a residue slot ON the port was never available --
+which is what forced the protocol change rather than a shim, and what makes this
+a strict prefix of doc/stream.md path B: when that charlist goes lazy, neither p1
+nor any caller changes again.
+
+**speed is bounded, and now measured.** reading happens once per cold boot --
+the stitch reads the corpus and the double `sit` folds over already-read forms.
+p1 reads ev.l in 62 ms against the C reader's 4 ms, so a cold boot pays ~+58 ms
+of its ~1 s, and the baked image path (~4 ms wake) skips reading entirely, which
+is what users actually run. ⚠ the glaze will NOT help: its grammar is integer
 arithmetic over frame params, and a reader is strings, noms and cons cells,
 exactly its declining set (test/test.mk:130-135). mooncc is the precedent that
 this is fine anyway -- 9200 lines of love, 20 ms per TU warm.

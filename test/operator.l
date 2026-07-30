@@ -13,7 +13,7 @@
 (: help 0)
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
-(assert ('^ = (sound (tap '(94)) 99)) ('+ = (sound (tap '(43)) 99)))
+(assert ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))
 
 ; ^^ has no entry and cannot factor as a run (^ is at two; a non-last factor must
 ; be arity one), so in head position it stays the plain symbol -- and ^ is the
@@ -49,6 +49,6 @@
 ; quote interiors are data: the comma stays a plain symbol, and reading is
 ; structural -- a lone comma off a port is just the datum
 (assert (3 = (tally '(1 , 2))) (', = (caup '(1 , 2)))
-        (nom? ',) ("," = (string ',)) (', = (sound (tap '(44)) 99)))
+        (nom? ',) ("," = (string ',)) (', = (cap (sound '(44)))))
 ; clauses nest per list, and chain with the infix aliases
 (assert (6 = (: t #(0 1) _ ((t <- 0 2), (t <- 1 3)) ((t 0) * (t 1)))))

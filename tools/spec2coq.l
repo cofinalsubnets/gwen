@@ -43,8 +43,6 @@
    ltab (tablet 0) lc (tablet 0)      ; free noms/operator heads -> LO index; lc the counter
 
    ; read a file's top-level forms as DATA (the reader strips ; comments)
-   (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
 
    (e2 l) (cap (cup l))  (e3 l) (cap (cup (cup l)))  (e4 l) (cap (cup (cup (cup l))))  ; 2nd 3rd 4th
    ; exactly three elements? (STRUCTURAL chainp, never `!`: '(0) nets zero)
@@ -589,7 +587,7 @@
      "Definition lamp  v := match v with Vmap => true | _ => false end." (string 10)   ; lit? = the top region (map + the unmodeled fns/hots); among modeled kinds only Vmap qualifies
      "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vunit|Vbot => 9 end." (string 10) (string 10))))
    _ (say err ("spec2coq: UNMODELED asserts (seen but never proved) --" + (string 10)))
-   _ (walk (forms "test/spec.l"))
+   _ (walk (forms (open "test/spec.l" "r")))
    _ (. ((string 10) + "(* " + (show (peep nt 0 0)) + " theorems generated from " + (show (peep ns 0 0)) + " asserts seen *)" + (string 10)))
    _ (say err ("spec2coq: " + (show (peep nt 0 0)) + " translated, " + (show (- (peep ns 0 0) (peep nt 0 0))) + " UNMODELED, of " + (show (peep ns 0 0)) + " asserts seen" + (string 10)))
    (quit 0))

@@ -7,10 +7,9 @@
 
 ; the READER UNDER TEST -- doc/reader.md rung 3's socket. every print->read
 ; differential in the tree reads through this ONE binding (test/roundtrip.l,
-; test/fuzz.l, test/host/rdiff.l), so rung 6 points the whole set at p1 by
-; rebinding it here and nowhere else. the protocol is `sound`'s, which is also
-; the whole contract p1 owes: (r port eofsym) answers the form, the sentinel at
-; eof, or the PORT ITSELF where the shape ran out of text.
+; test/fuzz.l, test/host/rdiff.l), so the whole set moves by rebinding it here
+; and nowhere else. the protocol is `sound`'s: (r text) answers the datum consed
+; onto the rest, () at a clean end, or `torn` where the shape ran out of text.
 (: rd-test sound)
 
 (: test_t0 (clock 0)

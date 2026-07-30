@@ -348,6 +348,7 @@ struct ai
  *ai_ini(void),
  *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
  *ai_evals_(struct ai*, const char*),
+ *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, prel, ev)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),
  *ai_lib_(struct ai*, char const*, char const*),   // register name -> source text in the
                                                    // source library (g->lib); `use` loads it
@@ -378,26 +379,28 @@ int ai_scare_face_(struct ai*);
 extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 
 // Bootstrap driver (was tools/mkboot.l, now a compile-time C constructor). The
-// lib/ headers are bare C string literals (lcat output), so a frontend builds
-// the egg + double-bake bootstrap by juxtaposing them between these macros:
+// lib/ headers are bare C string literals (lcat output), so a frontend hands the
+// four texts straight over -- one per argument, in the order the boot needs them:
 //
-//   ai_evals_(g, "("
-//   #include "egg.h"          // (\ egg (: ...)) -- the boot driver, lcat'd
-//     ai_egg_pre
+//   ai_egg_(g,
+//   #include "egg.h"           // (\ egg (: ...)) -- the boot driver, one form
+//     ,
+//   #include "p1.h"            // the reader in love (doc/reader.md rung 6)
+//     ,
 //   #include "prel.h"
-//     " "
+//     ,
 //   #include "ev.h"
-//     ai_egg_post
-//   #include "repl.h"          // optional: REPL, compiled by the installed ev
 //   );
 //
-// This applies the egg driver (l/egg.l) to the quoted corpus, i.e.
-// ((\ egg (: ...)) '(<prel forms> <ev forms>)): it compiles the l
+// This applies the egg driver (love/egg.l) to the quoted corpus, i.e.
+// ((\ egg (: ...)) '(<p1 forms> <prel forms> <ev forms>)): it compiles the love
 // compiler with c0, recompiles the whole corpus through itself (exercising
-// feel), and installs that as `ev`. Adjacent string-literal concatenation does
-// all the work at compile time -- no runtime allocation, freestanding-safe.
-#define ai_egg_pre " '("
-#define ai_egg_post ")) "
+// feel), and installs that as `ev`.
+//
+// The corpus list is STITCHED rather than read whole (love.c's ai_egg_): p0
+// reads p1.l / prel.l / egg.l, which the pure lisp subset covers, and p1 -- the
+// reader in love, evaluated a step earlier off p0 -- reads ev.l. So the C
+// reader's sigil half is no longer on the boot path.
 
 // === internal API shared with data.c / host / free (merged from former i.h) ===
 #define ai_wait_fds_max 8
@@ -479,8 +482,6 @@ struct ai
  *gxl(struct ai*),
  *gxr(struct ai*),
  *intern(struct ai*),
- *ai_reads(struct ai*, struct ai_io*),
- *ai_read1(struct ai*, struct ai_io*),
  *str0(struct ai*, uintptr_t);
 lvm(lvm_gc, uintptr_t);
 // ai_kind maps any value to its enum q: KCharm for a fixnum, KHot for a non-data heap

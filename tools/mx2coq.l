@@ -20,11 +20,9 @@
 (: (join l) (foldl (+) "" l)
    nl (string 10)
 
-   (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
    (at l i) (? (< 0 i) (at (cup l) (- i 1)) (cap l))
 
-   d (forms "out/.mx.l")
+   d (forms (open "out/.mx.l" "r"))
    kinds (cup (at d 0))                                 ; 16 kind noms, enum order
    addm  (cup (at d 1))                                 ; 16 rows of 16 lane noms
    mulm  (cup (at d 2))

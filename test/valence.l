@@ -35,7 +35,7 @@
  ; spaced heads stay prefix; the section and curry law are unchanged
  (3 = (+ 1 2)) (3 = ((1 +) 2)) (1 = ((< 5) 9)) (6 = (foldl (+) 0 '(1 2 3)))
  ; the data lane: a glued run READS as the mono node, and round-trips
- ('(f (mono (< x))) = (sound (tap '(40 102 32 60 120 41)) 99))
+ ('(f (mono (< x))) = (cap (sound '(40 102 32 60 120 41))))
  ; the words are real, the sigils their spellings
  (-7 = (negate 7)) (0.5 = (reciprocal 2)) (0.25 = (fraction 5.25)) (1 = (bit 9))
  (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))))

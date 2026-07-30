@@ -220,7 +220,7 @@ lvm_t lvm_kcall,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
- lvm_fputbn, lvm_sound, lvm_sound0, lvm_dot,
+ lvm_fputbn, lvm_sound0, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
  lvm_tray, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,
@@ -838,7 +838,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  _(nif_link, "link", s2(lvm_link)) _(nif_car, "cap", s1(lvm_cap)) _(nif_cdr, "cup", s1(lvm_cup))\
  _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
  _(nif_snip, "snip", s3(lvm_snip)) \
- _(nif_sound, "sound", s2(lvm_sound)) _(nif_sound0, "sound0", s2(lvm_sound0))\
+ _(nif_sound0, "sound0", s1(lvm_sound0))\
  _(nif_string, "string", s1(lvm_string))\
  _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
@@ -920,10 +920,9 @@ static union u const yield_c[] = { {_lvm_yield_c} };
 
 // lvm_help: the default help ap, a first-class vm ap (declared in love.h with
 // ret0/cur/port_io). A raise enters it with the raised status encoded into g
-// (see ghelp2 below). The MORE bit is read control flow, not a scare: the
-// raise site left [resume port sentinel] on the stack (the read protocol), so
-// deliver the port (more: incomplete) or the sentinel (eof) to the resume
-// text and keep running. A scare re-encodes and yields to C. Define a global
+// (see ghelp2 below). A scare re-encodes and yields to C. (The MORE bit used to
+// arrive here too, as read control flow; the reader answers its own nothings as
+// values now, so the scare lane is the whole of it.) Define a global
 // `help` function to land raises in l instead.
 // the scare exit door: re-encode and yield to C. Lives OUTSIDE the lvm_*
 // namespace (the underscore convention, like _lvm_yield_c above) because it
@@ -932,13 +931,7 @@ static union u const yield_c[] = { {_lvm_yield_c} };
 static lvm(_lvm_help_scare, enum ai_status s) { return Pack(g), encode(g, s); }
 lvm(lvm_help) {
  enum ai_status s = ai_code_of(g);
- g = ai_core_of(g);
- if (s & ai_status_more) {
-  Ip = cell(Sp[0]);                                   // [resume port sentinel]
-  Sp[2] = s == ai_status_more ? Sp[1] : Sp[2];         // more -> port, eof -> sentinel
-  Sp += 2;
-  return Continue(); }
- return Ap(_lvm_help_scare, g, s); }
+ return Ap(_lvm_help_scare, ai_core_of(g), s); }
 static union u const raise_c[] = { {lvm_help} };
 
 // ghelp2/ghelp are defined after numap_drive (the help call frame runs
@@ -1159,8 +1152,8 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
 // ===== generational write barrier (stage 2) =====================================
 // A MINOR collection scavenges only [minor, hp); it finds the young objects an OLD
 // object still points at through the REMEMBERED SET -- gen_wb records any old `src`
-// that takes a young `p`, so the minor rescans src. Every old->young edge EXECUTION
-// or the READER mints (a map pin, a reader set-tail) goes through gen_wb, so a minor
+// that takes a young `p`, so the minor rescans src. Every old->young edge an
+// EXECUTION mints -- a map pin, a store -- goes through gen_wb, so a minor
 // under a complete rem set is sound -- exactly the barrier proof/rocq/gc.v's `barrier_sound`
 // proves (rem_complete => the minor reaches every young object the mutator can). See
 // doc/gengc.md.
@@ -1200,7 +1193,13 @@ static ai_inline bool ai_major_cell(struct ai *g, word *c) {       // a tenured 
 //   gen_wb_cell -- the cell sits in a TAGGED span (a thread under construction, a
 //     struct env): gen_scan_inplace runs [cell, terminator), covering the store.
 //     Never a chain's field: data has no terminator, the scan would walk off the object.
-//   gen_wb_two -- a chain mutation: remember the CONS (the KChain lane rescans a+b).
+//   gen_wb_two -- a CONS mutation: remember the cons (the KChain lane rescans a+b).
+//     ⚠ THIS IS NOT A DOOR. patching a cons in place is OFF-ROAD here -- build the
+//     new structure and publish it, or mutate a TABLET, whose `pin` barriers
+//     itself. the five callers left all sit inside the letrec analyzer (ana_d,
+//     c1_recv) and each patches a list that function consed itself moments
+//     earlier and nobody else holds; that confinement is the whole reason they
+//     are survivable, and it is not a precedent.
 // Both mask g: a call site may hold a scared g mid-chain.
 static ai_inline void gen_wb_cell(struct ai *g, void *cl, word v) {
  g = ai_core_of(g);
@@ -2231,18 +2230,8 @@ lvm(lvm_defglob) {
 lvm(lvm_eval) { return Ip++, Pack(g),
  !ai_ok(g = c0(g, lvm_jump)) ? ghelp(g) : (Unpack(g), Continue()); }
 
-ai_noinline struct ai *ai_evals_(struct ai*g, char const*s) {
- static char const *t = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
- struct ti i = {{lvm_port_io, putcharm(-1), putcharm(EOF), putcharm(false)}, t, 0};
- ai_image_note(0x20);
- g = ai_reads(g, (void*) &i);
- ai_image_note(0x21);
- g = push0(pushq(push0(ai_eval(g))));
- ai_image_note(0x22);
- i.t = s, i.i = 0, i.io.ungetc_buf = putcharm(EOF), i.io.eof_seen = putcharm(false);
- g = ai_reads(g, (void*) &i);
- ai_image_note(0x23);
- return ai_pop(ai_eval(gxr(gxl(gxr(gxl(g))))), 1); }
+// ai_evals_ lives with the boot stitch it shares its machinery with, at the
+// foot of the reader section.
 
 // ============================================================================
 // vm
@@ -2336,9 +2325,10 @@ lvm(lvm_calloutresume) { return Sp[0] = putcharm((intptr_t) callout_resume), Ip+
 // a/b = the condition data -- for the more bit the port and the read sentinel,
 // for a scare nil nil (oom is bare; future scares define their shapes). The
 // frame runs through help_drive (numap_drive's 3-arg twin) into a per-class
-// epilogue: the more bit delivers the ap's result to the raise site's resume
-// text (the read protocol -- the ap chooses what the reader's caller
-// sees); a scare is observed, then takes the default escape to C.
+// epilogue: help_ret_more delivers the ap's result to the raise site's resume
+// text -- ⚠ despite the name that is the DELIBERATE-scare lane, what makes
+// (scare a b) and `missing` resumable; a bare scare is observed, then takes the
+// default escape to C.
 static lvm(help_ret_more) {   // [result resume port sentinel ..] -> resume sees result
  Ip = cell(Sp[1]);
  Sp[3] = Sp[0];
@@ -2384,11 +2374,11 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
 #endif
 }
 struct ai *ghelp2(struct ai *g, enum ai_status s) {
- struct ai *c = ai_core_of(g);
- int rd = s & ai_status_more;       // the more bit: a read-end condition --
- return ai_raise(c, s,              // [resume port sentinel] sits on the stack
-  rd ? c->sp[1] : nil, rd ? c->sp[2] : nil,
-  rd ? help_more_k : help_scare_k); }
+ // nothing raises the MORE bit through help any more -- the reader answers its
+ // own nothings as values (doc/reader.md rung 6c) -- so this is the scare lane
+ // alone. help_more_k lives on regardless: it is what makes a DELIBERATE scare
+ // resumable, and `scare`/`missing` reach for it directly below.
+ return ai_raise(ai_core_of(g), s, nil, nil, help_scare_k); }
 // Raise on an already-tagged g: re-raise its own status.
 struct ai *ghelp(struct ai *g) { return ghelp2(ai_core_of(g), ai_code_of(g)); }
 // (scare a b): the deliberate raise -- the user scares, the scare bit is set
@@ -4133,10 +4123,7 @@ static ai_inline bool is_oct_int(char const *s, uintptr_t n) {
  for (i += 1; i < n; i++) if (s[i] < '0' || s[i] > '7') return false;
  return true; }
 
-static struct ai *ioparse(struct ai *g, bool multi);
 static ai_inline struct ai *ioread1sym(struct ai*g, int c), *ioread1str(struct ai*g);
-struct ai *ai_reads(struct ai *g, struct ai_io* i) { return ai_core_of(g)->io = i, ioparse(g, true); }
-struct ai *ai_read1(struct ai*g, struct ai_io *i) { return ai_core_of(g)->io = i, ioparse(g, false); }
 
 static struct ai *grbufg(struct ai *g, uintptr_t len) {
  if (ai_ok(g = str0(g, 2 * len)))
@@ -4165,58 +4152,6 @@ lvm(lvm_real) {
  Have(flo_req);
  Sp[0] = mk_flo(&Hp, (ai_flo_t) d);
  return Ip++, Continue(); }
-
-// (sound port sentinel): read one datum. The parse nif is a TEMPLATE over which
-// parser runs -- `sound` takes the structural reader, `sound0` the bootstrap one
-// (p0, doc/reader.md rung 5) -- because the two differ in exactly one call and
-// share every rule around it: the park law, the transactional rollback, and the
-// read protocol's more/eof routing through help. A whole-body template is the
-// bit_slow / op11 shape this file already uses; the alternative was a second copy
-// of that rule, which is the thing the arc is trying to end.
-//
-// the reader's park law (lvm_fgetc's), kept by the parse nif too: a dry port
-// on a quiet fd parks the TASK, not the vm -- io_refill's dry loop is a
-// blocking poll deep inside the C parse, so a moored repl session waiting
-// between forms would hold every peer task hostage (haven's painter froze
-// mid-wipe on exactly this). the crossover first: our unsent reply sails
-// before we park on the answer. Ip is unadvanced on the park, so the task
-// re-enters sound when the fd fires; a torn mid-form refill still waits in
-// C (brief: the tail of one form).
-#define sound_op(name, read1)                                                  \
- lvm(name) {                                                                   \
-  if (!iop(Sp[0])) return Ip++, Sp++, Continue();                              \
-  struct ai_io *i = (struct ai_io*) Sp[0];                                     \
-  struct ai_bio *bb = bio_of(g, i);                                            \
-  if (bio_wpending(bb)) {                     /* the crossover sails first */  \
-   g->io = i;                                                                  \
-   Pack(g);                                                                    \
-   if (!ai_ok(g = io_wdrain(g, i))) return ghelp(g);                           \
-   Unpack(g);                                                                  \
-   i = (struct ai_io*) Sp[0]; }                                                \
-  if (getcharm(i->ungetc_buf) == EOF && !bio_rpending(bio_of(g, i))            \
-      && !ai_ready(getcharm(i->fd))) {                                         \
-   g->next_wait_fd = getcharm(i->fd);                                          \
-   return Ap(lvm_yield_sw, g); }                                               \
-  Ip++;                                                                        \
-  uintptr_t depth = topof(g) - Sp;                                             \
-  Pack(g);                                                                     \
-  if (ai_ok(g = read1(g, i))) g->sp[2] = g->sp[0], g->sp += 2;                 \
-  else {                                                                       \
-   struct ai *c = ai_core_of(g);              /* reset stack on parse fail */  \
-   c->sp = (word*) c + c->len - depth;                                         \
-   switch (ai_code_of(g)) {                                                    \
-    default: return ghelp(g);         /* scare: condition data per raise site */\
-    case ai_status_more: case ai_status_eof:                                   \
-     /* The more bit routes control through the help continuation: push the */ \
-     /* read protocol's resume text under [port sentinel] and raise -- the   */ \
-     /* help function (or raise_c's default) decides flow from the bits.     */ \
-     /* Headroom for the push is the parse ctx frame, which exists wherever  */ \
-     /* more/eof can arise.                                                  */ \
-     *--c->sp = word(c->ip);                                                   \
-     return ghelp2(c, ai_code_of(g)); } }                                      \
-  return Unpack(g), Continue(); }
-
-sound_op(lvm_sound, ai_read1)
 
 // (string x): a charlist -> the string of those bytes; a named symbol -> its
 // name string; a fixnum -> the one-byte string of its low byte. Identity on any
@@ -4281,219 +4216,6 @@ static struct ai* ai_z_getc(struct ai*g) {
    while (ai_ok(g = zeof(g)) && !g->b && ai_ok(g = zgetc(g)) && g->b != '\n' && g->b != '\r');
    continue; }
  return g; }
-
-// --- one non-recursive STRUCTURAL reader for ai_read1 (multi=0) and ai_reads
-// (multi=1) --- it knows tokens, parens, strings, and the value surface (the
-// printer's read-back contract: ' ` , @ # ~), and nothing else: operator
-// sigils read as plain symbols, factored at COMPILE time by the opfix pass
-// (prel.l) -- so reading is environment-free and the same machinery
-// serves data (read) and code (ev = opfix after read).
-// `ctx` (kept at sp[0]) is an explicit stack of frames, top = car, so the nesting
-// that used to recurse in C now lives on the l heap (and rides GC). A frame is
-// either a *list accumulator* — a chain (head . tail) holding the elements read so
-// far in source order, ((nil . nil) when empty), built in place by appending at
-// `tail` so no reverse pass is needed — or a *reader-macro* — the wrap symbol \ list
-// hash tuple twin conj, recognised by nomp. A finished datum is `delivered`
-// to the top frame: appended to a list, or wrapped/spliced and re-delivered; with
-// no frame left it is the result. Everything lives on the l stack so GC relocates
-// it across the allocs that reading does.
-
-static ai_inline struct ai *push_frame(struct ai *g) {     // push an empty (head . tail) accumulator
- return gxl(gxl(ai_push(g, 2, nil, nil))); }    // ctx' = ((nil . nil) . ctx)
-static ai_inline struct ai *push_wrap(struct ai *g, char const *nom) {
- return gxl(intern(ai_strof(g, nom))); }        // ctx' = (wrapsym . ctx)
-// the LEXER LAW, operator half. a token led by an operator (punctuation)
-// char is a maximal run of operator chars -- a SIGIL, read as one plain
-// symbol; the opfix compile pass (prel.l) factors it against
-// book['operators] later, so the reader is purely structural. a run stops
-// at name chars (alnum/_), whitespace, delimiters, and the value-surface
-// chars (' ` , # @ ~) -- those break runs, though a NAME-led token may
-// still contain @ ~ $ ! . and a trailing/internal ' (the prime: x', n'';
-// a LEADING ' is quote, dispatched before the name sounder -- see ioread1sym).
-static ai_inline bool op_break(int c) {
- return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-        c == '_' || c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' ||
-        c == ';' || c == '#' || c == '(' || c == ')' || c == '[' || c == ']' ||
-        c == '{' || c == '}' || c == '"' || c == '\'' || c == '`' || c == ',' ||
-        c == '@' || c == '~' || c == 0 || c == EOF || c >= 128; }
-// read a maximal operator run starting with c -> the interned symbol. a
-// trailing '-' immediately before a digit is the next number's sign, not
-// part of the run: the run is shortened by one and '-' re-dispatched via
-// *pending (the digit is ungot for ioread1sym), so `!-5` is ! then -5.
-static ai_inline struct ai *ioread1sym(struct ai*g, int c);
-static struct ai *ioread1op(struct ai *g, int c, int *pending) {
- uintptr_t n = 1, lim = sizeof(intptr_t);
- if (ai_ok(g = str0(g, sizeof(word))))
-  for (txt((struct ai_str*) g->sp[0])[0] = c; ai_ok(g); g = grbufg(g, lim), lim *= 2)
-   for (; n < lim; txt(g->sp[0])[n++] = c) {
-    if (!ai_ok(g = zgetc(g))) return g;
-    c = g->b;
-    if (!op_break(c)) continue;
-    if (!ai_ok(g = zungetc(g, c))) return g;
-    struct ai_str *s = str(g->sp[0]);
-    if (n > 1 && txt(s)[n - 1] == '-' && c >= '0' && c <= '9')
-     n -= 1, *pending = '-';
-    len(s) = n;
-    return intern(g); }
- return g; }
-// recognise the splicing reader-macro wraps -- `#` (interned `hash`) and `@`
-// (interned `tuple`) -- so a list operand splices into the constructor call
-// instead of being wrapped: see the deliver loop in ioparse.
-static ai_inline bool symeq(word x, char const *nm, uintptr_t n) {
- struct ai_str *s = namep(x) ? str(nom(x)->name) : 0;  // a named point -> its name; a bare mint is nameless
- if (!s || s->len != n) return false;
- for (uintptr_t i = 0; i < n; i++) if (s->bytes[i] != nm[i]) return false;
- return true; }
-static ai_inline bool hashsym(word x) { return symeq(x, "hash", 4); }
-static ai_inline bool splicesym(word x) { return hashsym(x) || symeq(x, "tuple", 5) || symeq(x, "twin", 4) || symeq(x, "list", 4); }
-
-static struct ai *ioparse(struct ai *g, bool multi) {
- // multi: ctx starts with one open accumulator (collects all top-level datums in
- // source order); read1: ctx starts empty (returns the first complete datum).
- g = multi ? gxl(gxl(ai_push(g, 3, nil, nil, nil))) : ai_push(g, 1, nil);
- int pending = 0;
- for (;;) {
-  int c, c2 = EOF;
-  if (pending) c = pending, pending = 0;               // a '-' shed from an operator run
-  else {
-   if (!ai_ok(g = ai_z_getc(g))) return g;
-   c = g->b; }
-  switch (c) {
-   case '(': case '[': case '{': g = push_frame(g); continue;   // [ ] { } are () synonyms
-   case '~':                                            // ~(re im)->(twin re im) [construct]; ~x->(conj x)
-    if (!ai_ok(g = zgetc(g))) return g;                 // peek the char after ~: `(` -> splice into twin (build
-    c2 = g->b;                                         // a complex / curry); anything else -> monadic lift/conj
-    if (c2 != EOF) g = zungetc(g, c2);                 // (conj: real r -> ~(r 0); complex z -> conj z)
-    g = push_wrap(g, c2 == '(' ? "twin" : "conj"); continue;
-   // the value surface -- the printer's read-back contract, environment-free,
-   // so it lives here in the structural reader (with ~ above), NOT in
-   // the operator table: ' ` # @ each wrap the next datum.
-   case '\'': g = push_wrap(g, "\\"); continue;        // quote: 'x = (\ x)
-   case '`': g = push_wrap(g, "list"); continue;            // `(a b c) -> (list a b c), each evaluated
-   case '#': g = push_wrap(g, "hash"); continue;       // (#! comments die in ai_z_getc)
-   case '@': g = push_wrap(g, "tuple"); continue;
-   case ',':                                           // the comma: a lone one-char datum, never
-    g = intern(ai_strof(g, ","));                      // fusing either side (a separator has one
-    break;                                             // valence) -- the clause layer, prel op-core
-   case ')': case ']': case '}':
-    if (nilp(g->sp[0])) return encode(ai_core_of(g), ai_status_eof);   // stray ) / read1
-    if (nomp(A(g->sp[0]))) return encode(ai_core_of(g), ai_status_more); // wrap wants its operand
-    g = ai_push(g, 1, AA(g->sp[0]));                    // d = head of the closed frame
-    if (ai_ok(g)) {
-     if (nilp(g->sp[0])) g->sp[0] = ZeroPoint;         // empty () IS the zero point (not the number 0)
-     g->sp[1] = B(g->sp[1]); }                          // pop the closed frame
-    break;                                             // -> deliver d
-   case EOF:
-    if (nilp(g->sp[0])) return encode(ai_core_of(g), ai_status_eof);
-    if (!(multi && nilp(B(g->sp[0])) && !nomp(A(g->sp[0]))))
-     return encode(ai_core_of(g), ai_status_more);       // unclosed list / pending wrap
-    g = ai_push(g, 1, AA(g->sp[0]));                    // close the top accumulator -> its head
-    if (ai_ok(g)) g->sp[1] = B(g->sp[1]);
-    break;
-   case '"': g = ioread1str(g); break;
-   default: {                                          // operator run, else a symbol/number token
-    bool opp = !op_break(c);
-    // + and - are operator runs like every other punctuation. the ONE exception
-    // is that a numeral has to start somewhere: a digit (or a '.', for -.5)
-    // right after them makes the token a NUMBER instead, read by ioread1sym.
-    // everything else -- another operator char (--5 is -(-5)), a name (-x is
-    // negate x, symmetric with !x), a constructor datum (-(f x), +@(..), +"s")
-    // -- is the run. `.` is held back outright rather than only before a digit
-    // because there is one char of pushback here, not two, and -.foo has never
-    // been anything but the unbound name it still is.
-    if (opp && (c == '-' || c == '+')) {
-     if (!ai_ok(g = zgetc(g))) return g;
-     int cpm = g->b;
-     if (cpm != EOF && !ai_ok(g = zungetc(g, cpm))) return g;
-     opp = !((cpm >= '0' && cpm <= '9') || cpm == '.'); }
-    if (opp) {
-     int lead = c;                                     // the run's first char: '\' never fuses (form space)
-     g = ioread1op(g, c, &pending);                    // sigil: a plain symbol, factored by opfix later
-     if (!ai_ok(g)) return g;
-     if (lead == '\\') break;
-     // the VALENCE LAW, reader half: a run GLUED to a following datum is
-     // monadic -- the run itself becomes a wrap under a `mono` wrap, so the
-     // next datum d delivers as (mono (run d)); opfix factors the run
-     // against book['monadics] (glued is monadic, spaced is dyadic). a shed
-     // '-' (pending) means a number follows: glued by definition. the
-     // emission is a plain list, so data round-trips through show.
-     int c3 = EOF;
-     if (!pending) {
-      if (!ai_ok(g = zgetc(g))) return g;
-      c3 = g->b;
-      if (c3 != EOF && !ai_ok(g = zungetc(g, c3))) return g; }
-     // HEAD FUSES TOO -- the valence law holds everywhere: a run GLUED to its
-     // datum is monadic even right after an open delimiter, so (<x = y) reads
-     // (= (cap x) y), not (< x (= y)). the ONE exception is the special forms
-     // : and ? at head: they consume the WHOLE list, but fusion swallows only
-     // the next datum -- so a glued (:(co ..) would strand its bindings. keep
-     // those two suppressed (\ already breaks above), which also preserves the
-     // minified (:(co ..) == (: (co ..)) shorthand. head = the top frame's head
-     // is still nil; a pending wrap (quote etc) is a symbol on the ctx, not a
-     // frame, and does not suppress fusion.
-     word rctx = g->sp[1];
-     bool headp = chainp(rctx) && chainp(A(rctx)) && nilp(A(A(rctx)));
-     bool form_head = headp && (lead == ':' || lead == '?');
-     if (!form_head &&
-         (pending || !(c3 == ' ' || c3 == '\n' || c3 == '\t' || c3 == '\r' ||
-                       c3 == '\f' || c3 == ';' || c3 == ')' || c3 == ']' ||
-                       c3 == '}' || c3 == 0 || c3 == EOF))) {
-      g = intern(ai_strof(g, "mono"));                  // [mono run ctx]
-      if (!ai_ok(g)) return g;
-      word w = g->sp[1]; g->sp[1] = g->sp[2], g->sp[2] = w;  // [mono ctx run]
-      g = gxl(g);                                      // [(mono . ctx) run]
-      if (!ai_ok(g)) return g;
-      w = g->sp[0], g->sp[0] = g->sp[1], g->sp[1] = w; // [run (mono . ctx)]
-      g = gxl(g);                                      // ctx' = (run mono . ctx)
-      if (!ai_ok(g)) return g;
-      continue; }                                      // the wraps take the next datum
-     break; }
-    g = ioread1sym(g, c);                              // name/number ('-'/'+' lead numbers, -> and \names etc.)
-    if (!ai_ok(g)) return g;
-    break; } }
-  if (!ai_ok(g)) return g;
-  // deliver the datum at sp[0] into the frame stack at sp[1]
-  for (bool done = false; ai_ok(g) && !done; ) {
-   if (nilp(g->sp[1])) {                               // no frame left: the result
-    g->sp[1] = g->sp[0], g->sp++;
-    return g; }
-   if (nomp(A(g->sp[1]))) {                            // reader-macro wrap, pop the wrap frame
-    bool emptyd = g->sp[0] == ZeroPoint;     // datum is the () zero-point (NOT the number 0)
-    // @()/#() -> the DIRECT one-arg empty-collection nif, (iota 0) / (tablet 0). A one-arg nif
-    // call is love0-safe; a ZERO-ARG macro (tuple)/(hash) is NOT expanded by the self-hosted feel,
-    // so @()->( tuple)->(spread (list)) would strand a macro value on love0. The nif sidesteps it.
-    char const *empty_ctor = !emptyd ? 0
-                           : hashsym(A(g->sp[1])) ? "tablet"          // #() -> empty map
-                           : symeq(A(g->sp[1]), "tuple", 5) ? "iota"  // @() -> empty z-array
-                           : 0;
-    if (empty_ctor) {
-     g->sp[0] = putcharm(0);                            // the ignored arg (0; the pervasive convention)
-     g = gxr(ai_push(g, 1, ZeroPoint));                 // (0 . ()) -- ()-terminated like every other reader list
-     if (ai_ok(g)) g = intern(ai_strof(g, empty_ctor)); // push the ctor symbol
-     g = gxl(g);                                        // (ctor . (0)) = (ctor 0)
-     if (ai_ok(g)) g->sp[1] = B(g->sp[1]); }
-    else if (splicesym(A(g->sp[1])) &&
-        (chainp(g->sp[0]) ||
-         (emptyd && !hashsym(A(g->sp[1]))))) {          // #(k v …)/@(e …); empty twin/list still splice
-     g = gxl(ai_push(g, 1, A(g->sp[1])));               // splice -> (sym . d)
-     if (ai_ok(g)) g->sp[1] = B(g->sp[1]); }
-    else {                                             // 'x `x ,x  #x %atom/@atom -> (wrapsym d)
-     g = gxr(ai_push(g, 1, ZeroPoint));                 // (d . ()) -- the wrapsym tail, ()-terminated (nil-ontology)
-     g = gxl(ai_push(g, 1, ai_ok(g) ? A(g->sp[1]) : nil)); // (wrapsym . (d))
-     if (ai_ok(g)) g->sp[1] = B(g->sp[1]); } }
-   else {                                              // list: append d at the frame's tail
-    g = gxr(ai_push(g, 1, ZeroPoint));                  // newcons = (d . ()) -- reader lists are ()-terminated (nil-ontology)
-    if (ai_ok(g)) {
-     word frame = A(g->sp[1]);                         // (head . tail)
-     if (nilp(A(frame))) { A(frame) = B(frame) = g->sp[0];  // first element: head = tail = newcons
-       gen_wb(g, frame, g->sp[0]);                        // reader set-tail: precise rem-set, an old frame takes the young newcons
-     } else { word tail = B(frame);                    // the current last cons
-       B(tail) = g->sp[0], B(frame) = g->sp[0];           // link onto tail, advance tail (B(B(frame)) == B(tail))
-       gen_wb(g, tail, g->sp[0]), gen_wb(g, frame, g->sp[0]);  // precise rem-set: old tail/frame take the young newcons
-     }
-     g->sp++; }                                        // pop newcons -> ctx
-    done = true; } }
-  if (!ai_ok(g)) return g; } }
 
 static ai_inline struct ai *ioread1str(struct ai*g) {
  int c;
@@ -4600,6 +4322,15 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
 // then `(a b)` where the structural reader gives `(hash a b)`. The enforcement
 // is the DIFFERENTIAL (test/host/rdiff.l), where that divergence is loud, not a
 // check here that would have to be kept in step with a grammar it does not own.
+//
+// ⚠ IT MUST READ WHAT lcat PRINTS, not only what the tree types. the boot
+// embeds the lcat'd headers -- canonical `show` output, MINIFIED against the
+// STRUCTURAL reader's grammar (tools/lcat.l drops a space wherever `sound`
+// parses the same with and without it). so p0's subset has to agree with
+// `sound` on every join lcat is willing to make, and the two lexers meeting
+// only in the leaves is what keeps that cheap. `\` is a case down in p0read1
+// for the grammar's own sake: it leads an operator run that never fuses, so
+// `(\x x)` is a lambda wherever it is typed, not a name.
 
 // ⚠ NESTING RIDES THE C STACK, which is the trade that buys p0 its size -- so p0
 // is DEPTH-BOUNDED where the structural reader, stackless by construction, is
@@ -4638,13 +4369,164 @@ static struct ai *p0read1(struct ai *g) {
    g = gxr(ai_push(g, 1, ZeroPoint));                   // (d . ())
    if (ai_ok(g)) g = intern(ai_strof(g, "\\"));
    return gxl(g);                                       // (\ . (d))
+  case '\\': return intern(ai_strof(g, "\\"));          // lambda/quote: NEVER fuses (form space)
   default: return ioread1sym(g, c); } }                 // name / number
 
 struct ai *ai_p0read1(struct ai *g, struct ai_io *i) {
  return ai_core_of(g)->io = i, p0read1(g); }
 
-// (sound0 port sentinel): sound's bootstrap twin, same protocol, p0's grammar.
-sound_op(lvm_sound0, ai_p0read1)
+// (sound0 text): sound's bootstrap twin -- the same protocol over p0's grammar,
+// so the differential (test/host/rdiff.l) compares the two readers like with
+// like. answers the datum consed onto what is left, () at a clean end, or the
+// symbol `torn` where the text ran out inside a shape.
+//
+// ⚠ THE PORT IS ON THE HEAP, not the C stack. p0 reads through the ordinary
+// port vt, and a `ci`'s head is a LOVE VALUE: g->io rides the core's v0..end
+// span, so the collector forwards it and the residue survives a mid-parse
+// collection. a C-stack ci would dangle the moment the parse allocated -- the
+// boot stitch gets away with a stack `ti` only because ti's source is a plain
+// C string. ⚠ and it lives in an ai_noinline helper for the OTHER reason: an
+// address-taken local in the lvm_ body would force the tail Continue() into a
+// ret and grow the stack every step (`make vmret`).
+ai_noinline static struct ai *p0text(struct ai *g) {
+ uintptr_t depth = topof(g) - g->sp;      // the rollback point (see the torn lane)
+ uintptr_t const n = Width(struct ci);
+ if (!ai_ok(g = ai_have(g, n + Width(struct ai_tag)))) return g;
+ union u *k = bump(g, n + Width(struct ai_tag));
+ struct ci *i = (struct ci*) k;
+ i->io.ap = lvm_port_io, i->io.fd = putcharm(-4);
+ i->io.ungetc_buf = putcharm(EOF), i->io.eof_seen = putcharm(false);
+ i->head = g->sp[0];                                  // the have above kept sp[0] live
+ tagthread(k, n);
+ g->io = (struct ai_io*) k;
+ g = p0read1(g);
+ if (!ai_ok(g)) {                                     // no datum: which nothing?
+  enum ai_status st = ai_code_of(g);
+  if (st != ai_status_eof && st != ai_status_more) return g;   // a real failure (oom) propagates
+  // ⚠ THE ROLLBACK IS NOT OPTIONAL. p0reads lets a list's datums pile up on the
+  // l stack and folds them only at the close, so a TORN parse leaves that pile
+  // behind -- and the text slot is no longer sp[0]. drop back to the depth we
+  // came in at, which is exactly what the old parse nif's transaction did.
+  struct ai *c = ai_core_of(g);
+  c->sp = (word*) c + c->len - depth;
+  g = c;
+  if (st == ai_status_eof) return g->sp[0] = ZeroPoint, g;     // a clean end, over the text slot
+  if (!ai_ok(g = intern(ai_strof(g, "torn")))) return g;
+  return g->sp[1] = g->sp[0], g->sp++, g; }
+ if (!ai_ok(g = ai_push(g, 1, nil))) return g;        // reserve, THEN read the residue
+ g->sp[0] = ((struct ci*) ai_core_of(g)->io)->head;   // forwarded if the gc moved the port
+ // ⚠ AND THE PUSHED-BACK BYTE. the token lexer ungets its terminator, and
+ // ti_ungetc parks that in ungetc_buf rather than back on the charlist -- so the
+ // head ALONE has already swallowed the delimiter: `#(a)` came back as `#` with
+ // the `(` gone, and every spaced token ate its space.
+ { int pb = getcharm(((struct ci*) ai_core_of(g)->io)->io.ungetc_buf);
+   if (pb != EOF) {
+    if (!ai_ok(g = gxl(ai_push(g, 1, putcharm(pb))))) return g; } }
+ g = gxr(g);                                          // (datum . residue)
+ return ai_ok(g) ? (g->sp[1] = g->sp[0], g->sp++, g) : g; }
+
+lvm(lvm_sound0) {
+ Pack(g);
+ if (!ai_ok(g = p0text(g))) return ghelp(g);
+ return Unpack(g), Ip++, Continue(); }
+
+////
+/// " the boot stitch "  (doc/reader.md rung 6b)
+//
+// The egg's argument used to be ONE READ over one juxtaposed string --
+// "(" egg.h " '(" prel.h ev.h "))" -- so every frontend needed the whole C
+// reader before any love existed. It is STITCHED now: p0 reads the halves it
+// owns (p1.l, prel.l, egg.l, each held to the pure lisp subset) and P1, THE
+// READER IN LOVE, reads ev.l. The egg expression is unchanged and its internals
+// never learn anything happened -- (sit (sit ev 0 egg) 0 egg) still folds over
+// the COMPLETE corpus as one unevaluated list, which is the thing that makes
+// prel ev1-compiled rather than left as c0 output.
+//
+// The circularity resolves by reading p1.l TWICE. The first read is evaluated
+// on the spot by c0, purely so p1 is callable for ev.l; the second puts p1's
+// forms in the corpus so the double sit recompiles them, ev1-compiled like
+// everything else. ⚠ AT THE HEAD, never the tail: `sit` answers the LAST form's
+// value and that value is what gets pinned as `ev`, so p1 at the tail would
+// install the reader as the evaluator.
+
+// read every top-level datum of a C string with p0 and CONS them, in source
+// order, onto the list already on top of the stack. reading the corpus RIGHT TO
+// LEFT then stitches its halves with no append and no copy.
+static struct ai *p0onto(struct ai *g, char const *s) {
+ struct ti i = {{lvm_port_io, putcharm(-1), putcharm(EOF), putcharm(false)}, s, 0};
+ ai_core_of(g)->io = (void*) &i;
+ uintptr_t n = 0;
+ for (;; n++) {
+  g = p0read1(g);
+  if (ai_ok(g)) continue;
+  if (ai_code_of(g) != ai_status_eof) return g;      // more: an unfinished shape
+  g = ai_core_of(g);
+  break; }
+ if (!ai_ok(g = ai_push(g, 1, nil))) return g;       // reserve first, THEN copy the
+ g->sp[0] = g->sp[n + 1];                            // tail up: a push can gc and move it
+ for (; ai_ok(g) && n--; g = gxr(g));
+ return ai_ok(g) ? (g->sp[1] = g->sp[0], g->sp++, g) : g; }
+
+// ev's half, read by the reader in love: an ordinary call, (p1-text "<ev.l>"),
+// answering the file's forms. p1.l's own door takes the WHOLE TEXT because the
+// boot has the whole text and there is nothing to resume.
+static struct ai *p1text(struct ai *g, char const *s) {
+ if (!ai_ok(g = ai_strof(g, s))) return g;
+ if (!ai_ok(g = gxr(push0(g)))) return g;            // ("<text>")
+ if (!ai_ok(g = intern(ai_strof(g, "p1-text")))) return g;
+ if (!ai_ok(g = ai_eval(gxl(g)))) return g;          // (p1-text "<text>")
+ // p1 answers `torn` -- a NAMED symbol -- for a shape that did not finish. the
+ // egg would fold over it as an EMPTY corpus and pin `ev` to 0, silently, so the
+ // one shape that is not a corpus is refused here. ⚠ the test is chainp AND NOT
+ // nomp, love's own `two?`: a named symbol is a (name . mint) chain, so a bare
+ // chainp calls `torn` a corpus.
+ word r = g->sp[0];
+ return (chainp(r) && !nomp(r)) || r == ZeroPoint ? g
+      : encode(ai_core_of(g), ai_status_more); }
+
+// a text -> the list of its forms, pushed. P1 READS IT once p1.l has been
+// evaluated, p0 until then -- the boot stitch below makes p1 live before it
+// reads anything else, and love0's build-tool lane evals p1.l up front for the
+// same reason, so the p0 lane serves only the forms that bring p1 into being.
+// the probe is by nom rather than a sealed slot: this runs a handful of times
+// per boot, never per datum.
+static struct ai *readtext(struct ai *g, char const *s) {
+ struct ai_mint *m = sym_probe(ai_core_of(g), "p1-text", 7);
+ if (m && lamp(bookget(ai_core_of(g), 0, word(m)))) return p1text(g, s);
+ return ai_ok(g = push0(g)) ? p0onto(g, s) : g; }
+
+// apply a ONE-FORM driver text to the list on top of the stack, quoted:
+// (<driver> '(list)). the driver reads ONTO its own quoted operand, so the
+// application is itself a stitch. the egg driver and the plain eval fold are
+// both pure lisp one-formers, so p0 reads them.
+static struct ai *applyq(struct ai *g, char const *driver) {
+ if (!ai_ok(g = gxr(push0(g)))) return g;            // (list)
+ if (!ai_ok(g = gxl(pushq(g)))) return g;            // '(list)
+ if (!ai_ok(g = gxr(push0(g)))) return g;            // ('(list))
+ if (!ai_ok(g = p0onto(g, driver))) return g;        // (driver '(list))
+ return ai_pop(ai_eval(g), 1); }
+
+// the plain eval fold: run a list of forms in order, answer the last one's
+// value. `ev` is read late so one text drives both of love0's passes.
+static char const evfold[] = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
+
+// every top-level form of a text, evaluated in order -- the frontends' door for
+// a boot tail, a CLI driver, a corpus runner.
+ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
+ ai_image_note(0x20);
+ if (!ai_ok(g = readtext(g, s))) return g;
+ ai_image_note(0x22);
+ return applyq(g, evfold); }
+
+ai_noinline struct ai *ai_egg_(struct ai *g, char const *egg, char const *p1,
+                               char const *prel, char const *ev) {
+ if (!ai_ok(g = ai_push(g, 1, ZeroPoint))) return g;
+ if (!ai_ok(g = p0onto(g, p1))) return g;            // p1's forms, by p0 ..
+ if (!ai_ok(g = applyq(g, evfold))) return g;        // .. and c0 evals them: p1 is live
+ if (!ai_ok(g = p1text(g, ev))) return g;            // ev's half, through the reader in love
+ if (!ai_ok(g = p0onto(g, prel))) return g;          // prel's half: rung 4 holds it to the subset
+ if (!ai_ok(g = p0onto(g, p1))) return g;            // and p1 at the HEAD of the corpus
+ return applyq(g, egg); }
 
 // ============================================================================
 // sys
@@ -4758,8 +4640,20 @@ __attribute__((weak)) void ai_fd_close(int fd) { (void) fd; }
 __attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {
   for (ticks += ai_clock(); ai_clock() < ticks;); }
 
+// (cue? p): would `see` answer WITHOUT PARKING? the exact dual of the park law,
+// so it tests the same three terms lvm_fgetc's guard does -- a pushed-back byte,
+// a pending buffered run, then the fd. asking any less than all three calls a
+// port with bytes already in hand "not ready", which is the one answer that
+// makes a drain loop stall on text it is holding.
+// ⚠ it asks WILL YOU ANSWER, not IS THERE DATA: a hung-up fd reads ready and the
+// see that follows answers -1. that is what a refill loop wants (drain, then let
+// the -1 end it) and it is why there is no separate eof question here.
+// a NON-PORT asks about stdin -- the bare `(cue? 0)` the repl poll, rove,
+// manifest and ink all write, from before the question could name a port.
 lvm(lvm_key) {
- Sp[0] = (getcharm(ai_stdin.ungetc_buf) != EOF || ai_ready(getcharm(ai_stdin.fd))) ? putcharm(1) : nil;
+ struct ai_io *i = iop(Sp[0]) ? (struct ai_io*) Sp[0] : &ai_stdin;
+ Sp[0] = (getcharm(i->ungetc_buf) != EOF || bio_rpending(bio_of(g, i))
+          || ai_ready(getcharm(i->fd))) ? putcharm(1) : nil;
  Ip += 1;
  return Continue(); }
 

@@ -124,32 +124,29 @@
          "  any global is a verb; (names ()) is the whole surface.\n")))))))))))))
 
    ; --- the session: read one LINE off the socket (see parks the TASK -- the
-   ; reader's park law), sound it off a tap, eval it in the book (so every
-   ; global is a verb), `show` the value back, flush. Loop to disconnect.
-   ; the tap matters: a memory port keeps the read protocol and cannot block,
-   ; where (sound c ..) on the socket itself stalls the WHOLE vm in the C
-   ; parse the moment the fd runs dry mid-skip -- one idle session would hold
-   ; every peer session hostage. an unfinished shape carries to the next
-   ; line. A scare during eval is caught by the installed dock-help (below):
-   ; the client sees the condition as a value and the session lives on --
-   ; the shell law, over TCP. --
+   ; reader's park law), sound the text, eval it in the book (so every global is
+   ; a verb), `show` the value back, flush. Loop to disconnect.
+   ; sounding TEXT matters: a charlist cannot block, where sounding the fd itself
+   ; stalled the WHOLE vm in the C parse the moment it ran dry mid-skip -- one
+   ; idle session would hold every peer hostage. a torn shape carries to the next
+   ; line as the RESIDUE the reader hands back. A scare during eval is caught by
+   ; the installed dock-help (below): the client sees the condition as a value
+   ; and the session lives on -- the shell law, over TCP. --
    (session c)
-     (: e (nom 0)
-        (rdline acc) (: ch (see c)
+     (: (rdline acc) (: ch (see c)
                         (? (= ch -1) ()                    ; EOF -- client disconnected
                            (= ch 10) (rev (link 10 acc))
                            (rdline (link ch acc))))
         (go pend) (: cl (rdline ())
                      (? (! (two? cl)) 0
-                        (: full (cat pend cl)
-                           p (tap full)
-                           r (sound p e)
-                           (? (id? r e) (go ())            ; a blank line
-                              (id? r p) (go full)          ; unfinished shape -- more lines
-                              (: v (ev 'ev r)              ; eval through the self-hosted ev
-                                 _ (say c (+ (show v) "\n"))
-                                 _ (flush c)
-                                 (go ()))))))
+                        ((: (h cl) (: r (sound cl)
+                                      (? (two? r) (: v (ev 'ev (cap r))   ; eval through the self-hosted ev
+                                                     _ (say c (+ (show v) "\n"))
+                                                     _ (flush c)
+                                                     (h (cup r)))
+                                         (id? r torn) (go cl)   ; unfinished -- more lines
+                                         (go ()))))             ; a blank line
+                         (cat pend cl))))
         (go ()))
 
    ; the accept loop: CONCURRENT. `await` parks the loop on the listener fd
@@ -169,14 +166,14 @@
         (accept-loop l))
 
    ; a welp-face help so a scare returns a visible value to the client instead
-   ; of dropping the dock. keeps the read protocol (more -> a, eof -> b); a bare
-   ; scare answers (scare a b) so the client sees WHAT went wrong. this is
+   ; of dropping the dock: it answers (scare a b) so the client sees WHAT went
+   ; wrong, and the scare bit is the only one a help sees. this is
    ; shell-help's shape, aimed at a socket peer rather than a local tty. it is a
    ; leaked top-level global (the web term installs help the same way) -- `book`
    ; is mopped off the globals post-egg, so a live `(pin book 'help ..)` can't
    ; reach it; a plain top-level binding is how help gets installed after birth.
    (help s a b)
-     (? (eof? s) b (more? s) a `('scare a b))
+     `('scare a b)
 
    ; the entry: stash the relaunch argv (so `adopt` can re-exec this exact
    ; dock), listen, run the accept loop. `port` is a fixnum. (help is installed

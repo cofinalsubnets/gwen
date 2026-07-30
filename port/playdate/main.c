@@ -194,13 +194,16 @@ void love_init(void) {
   g = ai_lib_(g, "q", src_q);                          // q, kanren and rune are MODULES: registered here, loaded
   g = ai_lib_(g, "kanren", src_kanren);                //   by name below -- q is rune's coefficient field, kanren
   g = ai_lib_(g, "rune", src_rune);                    //   its matcher's unifier (subst through the registry,
-  K.g = ai_evals_(g, "("                               //   unify/ufail?/var down the splice)
+  K.g = ai_egg_(g,                                     //   unify/ufail?/var down the splice)
 #include "egg.h"
-    ai_egg_pre
+    ,
+#include "p1.h"
+    ,
 #include "prel.h"
-    " "
+    ,
 #include "ev.h"
-    ai_egg_post
+    );
+  K.g = ai_evals_(K.g,
     "(use 'q)"
     " "
     "(use 'kanren)"

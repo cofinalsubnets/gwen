@@ -33,7 +33,10 @@
    (look p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))  ; (1 text) | ()
    (lay p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) 0))
    (form p) (: q (open p "r")                                 ; the file's one form | ()
-                  (? q (: r (sound q ()) _ (close q) (? (two? r) r ())) ()))
+                  (? q (: t (slurp q) _ (close q)
+                          r (sound (map t (jot (tally t))))
+                          d (? (two? r) (cap r) ())
+                          (? (two? d) d ())) ()))
 
    ; --- the store ---
    (mk _) (: _ (mkdir ".seed" 493) _ (mkdir ".seed/blob" 493) _ (mkdir ".seed/patch" 493) ())

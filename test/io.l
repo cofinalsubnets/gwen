@@ -58,69 +58,54 @@
   ; Each call allocates a fresh port object.
   (: p (tap 0) q (tap 0) !(= p q))
 
-  ; --- read: one datum per call from a port. ---
-  ; read returns datum on success, the caller-supplied sentinel `e` on
-  ; clean EOF, and the port itself on g_status_more (input ends inside an
-  ; unfinished form). The port and `e` are distinct, so the caller can
-  ; tell them apart by equality.
+  ; --- sound: one datum per call, off TEXT. ---
+  ; sound takes a CHARLIST and answers three ways: the datum CONSED ONTO WHAT IS
+  ; LEFT, () at a clean end, or `torn` where the text ran out inside a shape.
+  ; presence is the CONS -- ask two?, never the net -- and the residue is the
+  ; answer, so the caller owns what is left and nothing is stashed in a port.
   ;
-  ; Empty input: immediately hits EOF, returns the sentinel.
-  (= 99 (sound (tap 0) 99))
-  ; Caller chooses any sentinel value.
-  (= 'eof (sound (tap 0) 'eof))
+  ; Empty input: a clean end.
+  (nil? (sound ()))
 
   ; Single datum: number, symbol, list, quoted form, string literal.
-  (= 1 (sound (tap '(49)) 99))                          ; "1"
-  (= 'a (sound (tap '(97)) 99))                         ; "a"
-  (: r (sound (tap '(40 49 32 50 41)) 99)               ; "(1 2)"
-     (do (two? r) (= 1 (cap r)) (= 2 (caup r))))
-  (: r (sound (tap '(39 49)) 99)                        ; "'1" -> (` 1)
-     (do (two? r) (= 1 (caup r))))
-  ; "hi" -- string literal round-trip through the ci port.
-  (= (string (link 104 (link 105 0))) (sound (tap '(34 104 105 34)) 99))
+  (= 1 (cap (sound '(49))))                             ; "1"
+  (= 'a (cap (sound '(97))))                            ; "a"
+  (: d (cap (sound '(40 49 32 50 41)))                  ; "(1 2)"
+     (&& (two? d) (= 1 (cap d)) (= 2 (caup d))))
+  (: d (cap (sound '(39 49)))                           ; "'1" -> (` 1)
+     (&& (two? d) (= 1 (caup d))))
+  (= (string (link 104 (link 105 0))) (cap (sound '(34 104 105 34))))   ; "hi"
 
-  ; Sequential reads: pull each datum in source order; final read returns e.
-  (: p (tap '(49 32 50 32 51))                          ; "1 2 3"
-     (do (= 1 (sound p 99))
-        (= 2 (sound p 99))
-        (= 3 (sound p 99))
-        (= 99 (sound p 99))))
+  ; Sequential reads: THREAD THE RESIDUE. the last one is the clean end.
+  (: a (sound '(49 32 50 32 51))                        ; "1 2 3"
+     b (sound >a) c (sound >b)
+     (&& (= 1 <a) (= 2 <b) (= 3 <c) (nil? (sound >c))))
 
   ; Whitespace and ;-comments are skipped between datums.
-  (= 1 (sound (tap '(32 32 49 32 32)) 99))              ; "  1  "
-  (= 2 (sound (tap '(59 32 99 109 116 10 50)) 99))      ; "; cmt\n2"
+  (= 1 (cap (sound '(32 32 49 32 32))))                 ; "  1  "
+  (= 2 (cap (sound '(59 32 99 109 116 10 50))))         ; "; cmt\n2"
 
-  ; A bare close-paren at top level is treated as clean end-of-input.
-  (= 99 (sound (tap '(41)) 99))                          ; ")"
+  ; A bare close-paren at top level is a clean end.
+  (nil? (sound '(41)))                                  ; ")"
 
-  ; --- g_status_more cases: read returns the port itself, distinct from e ---
-  ; Unclosed list.
-  (: p (tap '(40)) r (sound p 99) (do (= r p) !(= r 99)))
-  ; Unterminated string.
-  (: p (tap '(34 97)) (= p (sound p 99)))                ; "\"a"
-  ; Dangling quote.
-  (: p (tap '(39)) (= p (sound p 99)))                   ; "'"
+  ; --- torn: the text ran out INSIDE a shape ---
+  (id? torn (sound '(40)))                              ; unclosed list
+  (id? torn (sound '(34 97)))                           ; unterminated string
+  (id? torn (sound '(39)))                              ; dangling quote
 
-  ; After a g_status_more, the port's source is exhausted; the next read
-  ; sees top-level EOF and returns the sentinel.
-  (: p (tap '(40)) _ (sound p 99) (= 99 (sound p 99)))
+  ; ⚠ torn and the clean end are DISTINCT, and NEITHER IS A DATUM: a datum comes
+  ; back as a cons whatever it holds, so reading "()" answers the datum () --
+  ; which is exactly the case a net test would call nothing.
+  (: r (sound '(40 41)) (&& (two? r) (nil? (cap r))))
+  !(id? torn (sound ()))
 
-  ; Caller may pass the port itself as the EOF sentinel to collapse
-  ; EOF and more into one "no datum" case.
-  (: p (tap 0)     (= p (sound p p)))                    ; clean EOF
-  (: p (tap '(40)) (= p (sound p p)))                    ; more
+  ; A torn read RESUMES: hand back the same text with the rest appended.
+  (: r (sound (cat '(40 49) '(32 50 41))) (&& (two? r) (= '(1 2) (cap r))))
 
-  ; The port stays usable across complete forms in mixed sequences.
-  (: p (tap '(40 41 32 49))                              ; "() 1"
-     (do (= 0 (sound p 99))                                 ; () -> nil
-        (= 1 (sound p 99))
-        (= 99 (sound p 99))))
+  ; Mixed sequence, residue threaded: "() 1"
+  (: a (sound '(40 41 32 49)) b (sound >a)
+     (&& (nil? <a) (= 1 <b) (nil? (sound >b))))
 
-  ; Misuse: non-port first argument leaves the sentinel in place.
-  (= 99 (sound 42 99))
-  (= 'x (sound 'notaport 'x))
-
-  ; `sound` reads one datum; `(sound in)` is a curried sound
-  ; bound to the stdin port. Verify the binding is a function (callable
-  ; closure), not the raw port or sentinel value.
-  !(= sound in))
+  ; Misuse: a non-charlist holds no datum, and reads as the clean end.
+  (nil? (sound 42))
+  (nil? (sound 'notaport)))

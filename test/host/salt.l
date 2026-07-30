@@ -69,8 +69,8 @@
         (1 = (tally (salt-all c 'deprecated))))))
 
 ; ...and a DROPPED PAREN ends the read rather than spinning on it: `sound`
-; answers the PORT ITSELF on an unfinished shape, which is a third thing to
-; catch, not a datum and not the eof sentinel.
+; answers `torn` on an unfinished shape, which is a third thing to catch --
+; not a datum and not the clean end.
 (: st-t (st-put "trunc.l" "(singleton 1)\n(deprecated foo\n"))
 (assert
  (: c (salt-file st-t (tablet 0))

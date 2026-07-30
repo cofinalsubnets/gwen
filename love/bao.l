@@ -4,10 +4,11 @@
 ; host (out/host/love), the freestanding kernel (kmain.c), and the love0 bootstrap
 ; self-test -- loaded after the prel.
 ;
-; parsing is delegated to the C reader: the editor's flattened charlist is
-; implicitly parenthesized and read as ONE expression via (tap ..) + read
-; -- a line `x y z` is the application (x y z), and infix works at the
-; prompt (factored at compile time by opfix; reading is structural).
+; parsing is `sound`, the reader in love (love/p1.l): the editor's flattened
+; charlist is implicitly parenthesized and read as ONE expression -- a line
+; `x y z` is the application (x y z), and infix works at the prompt (factored at
+; compile time by opfix; reading is structural). a line that ends mid-shape comes
+; back TORN and the editor keeps taking input.
 ;
 ; the editor buffer is a four-zipper threaded positionally through
 ; the editor functions: u (lines above the cursor, reversed), l (chars
@@ -38,16 +39,51 @@
       (char->chars s)
       (: cs (char s)
          (? (two? cs) (<cs >< (char->chars (<>cs ()))) ()))
-      p (tap (char->chars s)) e (nom 0) r (sound p e)
-      (? (id? r e) 0 (id? r p) 0 (ev r))))
-; reads: the stream shell -- a port is the LAZY charms, and reads drinks it: read and eval
-; every form, the value the last form's; ev late-binds ((ev 'ev r)) so one definition drives
-; both of love0's passes. ⚠ THE TWO ENDINGS DIFFER: the sentinel ends the stream BETWEEN
-; forms (done), the PORT ends it INSIDE one -- no more text coming, so that is a scare.
+      r (sound (char->chars s))
+      (? (two? r) (ev (cap r)) 0)))
+; reads: the stream shell -- reads and evals every form of a port, the value the last
+; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
+; ⚠ THE TWO ENDINGS DIFFER: a clean end comes BETWEEN forms (done), `torn` INSIDE one --
+; and once the port is spent there is no more text coming, so that is a scare.
+;
+; this is the tree's ONE refill loop: `sound` walks text, so somebody has to turn a port
+; into text, and drinking is the only place it happens. ⚠ IT MUST RE-PARSE ONCE PER
+; DRINK, NEVER ONCE PER BYTE -- crew/moon/gen.l is a single 360KB form, and a
+; byte-then-reparse loop is quadratic on it.
+;
+; drink: block for the first byte (see parks the TASK), then take everything already
+; waiting. `cue?` is the dual of that park -- true iff the next see will answer -- so the
+; loop stops at the fd's own edge and the caller gets a whole gulp per parse. () at eof.
+(: (drink p)
+   (: c (see p)
+      (? (c = -1) ()
+         (link c ((: (go acc) (? (cue? p)
+                                 (: b (see p) (? (b = -1) (rev acc) (go (link b acc))))
+                                 (rev acc))) ())))))
 (: (reads p)
-   ((: (g e z) (: r (sound p e)
-       (? (id? r e) z (id? r p) (scare 'unfinished-form p) (g e (ev 'ev r)))))
-    (nom 0) 0))
+   ((: (g cl z)
+       (: r (sound cl)
+          (? (two? r)      (g (cup r) (ev 'ev (cap r)))
+             (: more (drink p)
+                (? (two? more)     (g (cat cl more) z)
+                   (id? r torn)    (scare 'unfinished-form p)
+                   z)))))
+    () 0))
+; forms: every datum of a port, as DATA -- the data twin of `reads`, the same drink
+; loop underneath, and the shape half the tools had each copied out by hand. it takes
+; a PORT, like reads, so it needs neither open nor close (a fs-less frontend has
+; neither, and a bare mention would raise at the define). ⚠ a torn tail SCARES: the
+; other choice is handing back the forms that happened to land, which reads exactly
+; like a whole file and is the bug every one of those copies had.
+(: (forms p)
+   ((: (g cl acc)
+       (: r (sound cl)
+          (? (two? r)      (g (cup r) (<r >< acc))
+             (: more (drink p)
+                (? (two? more)     (g (cat cl more) acc)
+                   (id? r torn)    (scare 'unfinished-form p)
+                   (rev acc))))))
+    () ()))
 
 ; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
 ; the body of this (: ..) returns the public entry points as a list, defglob'd
@@ -72,12 +108,12 @@
    ; fuses -- the old `(+(-3))` -> `(+ -3)` bug); MULTIPLE datums become the
    ; application `(a b c)`, so `f x` applies and `1 = 1` factors infix. returns m if
    ; the line ends inside an unfinished shape, () for a blank line, else a one-form list.
-   (rdall p acc) (: r (sound p eofsym)
-                    (? (r = p)      m              ; unfinished shape -> more
-                       (r = eofsym) (rev acc)      ; eof -> the datums, in order
-                       (rdall p (r >< acc))))
+   (rdall cl acc) (: r (sound cl)
+                    (? (two? r)     (rdall (cup r) (<r >< acc))
+                       (id? r torn) m              ; unfinished shape -> more
+                       (rev acc)))                 ; a clean end -> the datums, in order
    (parseall cl)
-     (: ds (rdall (tap cl) ())
+     (: ds (rdall cl ())
         (? (id? ds m)        m                     ; unfinished shape
            !(two? ds)        ()                    ; blank line: no datums
            !(two? >ds)       `(<ds)                ; ONE datum: as-is (leading monadic preserved)
@@ -324,9 +360,9 @@
               _ (each vs (\ v (: _ (do_eval v) (putc 10))))
               (repl nhu nhd))))
 
-   ; welp -- the floor handler, help that has given up: keep the read protocol
-   ; (incomplete -> the port back, eof -> the sentinel) and answer the zero
-   ; point on a bare scare. this is the fromempty the introductions (scare,
+   ; welp -- the floor handler, help that has given up: answer the zero point,
+   ; whatever the condition. (it kept the read protocol too, until the reader
+   ; stopped raising one.) this is the fromempty the introductions (scare,
    ; missing) never named: from any condition, a value -- and the value of the
    ; absorbed condition is the point, the held inhabitant of nothing, so
    ; (i love you) stays 1. any policy that runs out of cases delegates here:
@@ -335,7 +371,7 @@
    ; head under an installed help would recurse.
    welp
      (: zp (:)
-        (\ s a b (? (eof? s) b (more? s) a zp)))
+        (\ s a b zp))
 
    ; the face a raise wears -- ;; a b -- ⚠ ON ERR: a DIAGNOSTIC, and a script's stdout is the
    ; script's (the C print this stands in for always went there). the two defaults share it and

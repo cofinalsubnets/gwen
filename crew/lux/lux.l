@@ -49,9 +49,9 @@
    (float! w r) (lux! (\ st (L (wsdofloat (cap st) w r) (caup st) (nthl st 2) w)))
    (row u) (wsrow (cap (lux-st ())))
 
-   ; the moor: shore the socket, twirl a session per client -- read one form
-   ; (sound keeps the read protocol), eval through the self-hosted ev, show
-   ; the value back. deliberate orphans, like the dock's: lux runs forever.
+   ; the moor: shore the socket, twirl a session per client -- read every form
+   ; a line completes, eval through the self-hosted ev, show the value back.
+   ; deliberate orphans, like the dock's: lux runs forever.
    (lux-rundir u) (: rd (getenv "XDG_RUNTIME_DIR")
                      (? (< 1 (tally rd)) rd "/tmp"))
    (lux-sock u) (+ (lux-rundir ()) (+ "/lux-" (+ (lux-dispnum ()) ".sock")))
@@ -88,29 +88,27 @@
                       _ (exec (L "/proc/self/exe" (lux-self ())))
                       'restart-failed)
    ; the session reads LINES (see parks the TASK -- the reader's park law) and
-   ; sounds them off a tap: a memory port keeps the read protocol and cannot
-   ; block, where (sound c ..) on the socket itself stalls the WHOLE vm in the
-   ; C parse the moment the fd runs dry mid-skip -- an idle attached client
-   ; would freeze the wm between asks (haven's painter starved on exactly
-   ; this). an unfinished shape carries to the next line; anything after the
-   ; first form on a line is let go.
+   ; sounds the TEXT: `sound` walks a charlist, so a socket running dry mid-skip
+   ; cannot strand the whole vm in a C parse the way sounding the fd once did (an
+   ; idle attached client froze the wm between asks; haven's painter starved on
+   ; exactly this). a torn shape carries to the next line as the RESIDUE the
+   ; reader hands back -- not the accumulation re-read from byte zero -- and
+   ; every form on a line runs, where only the first used to.
    (lux-session c)
-    (: e (nom 0)
-       (rdline acc) (: ch (see c)
+    (: (rdline acc) (: ch (see c)
                        (? (= ch -1) ()
                           (= ch 10) (rev (link 10 acc))
                           (rdline (link ch acc))))
        (go pend) (: cl (rdline ())
                     (? (! (two? cl)) 0
-                       (: full (cat pend cl)
-                          p (tap full)
-                          r (sound p e)
-                          (? (id? r e) (go ())
-                             (id? r p) (go full)
-                             (: v (ev 'ev r)
-                                _ (say c (+ (show v) "\n"))
-                                _ (flush c)
-                                (go ()))))))
+                       ((: (h cl) (: r (sound cl)
+                                     (? (two? r) (: v (ev 'ev (cap r))
+                                                    _ (say c (+ (show v) "\n"))
+                                                    _ (flush c)
+                                                    (h (cup r)))
+                                        (id? r torn) (go cl)
+                                        (go ()))))
+                        (cat pend cl))))
        (go ()))
    (lux-moor path)
     (: gone (lux-sweep path)
@@ -127,10 +125,10 @@
              (knock ())))))
 
 ; a welp-face help so a scare returns a visible value (to the repl client, or
-; at a driver raise site) instead of dropping the wm -- the dock's shape: keep
-; the read protocol, answer ('scare a b) on a bare scare. a leaked top-level
+; at a driver raise site) instead of dropping the wm -- the dock's shape:
+; answer ('scare a b), the only bit a help sees. a leaked top-level
 ; global, since the book is mopped post-egg.
-(: (help s a b) (? (eof? s) b (more? s) a `('scare a b)))
+(: (help s a b) `('scare a b))
 
 (: s (x-connect lux-display)
    _ (? s 0 (: _ (say err "lux: no display -- Xephyr up?\n") (quit 1)))

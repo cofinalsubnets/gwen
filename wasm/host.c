@@ -12,13 +12,21 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 
-static const char boot_ai[] = "("
+// the egg's four texts, one per ai_egg_ argument (love.h): the boot stitches the
+// corpus rather than reading it whole -- p0 takes egg/p1/prel, p1 takes ev.
+static const char src_egg[] =
 #include "egg.h"
-  ai_egg_pre
+;
+static const char src_p1[] =
+#include "p1.h"
+;
+static const char src_prel[] =
 #include "prel.h"
-  " "
+;
+static const char src_ev[] =
 #include "ev.h"
-  ai_egg_post
+;
+static const char boot_ai[] =
   "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered in ai_init, loaded by
   "(use 'coin)"                   //   name; the corpus asserts on each): the uu kernel keeps its
   "(use 'rng)"                    //   one-name surface, then coin, rng, q, kanren in the old eval order
@@ -114,6 +122,7 @@ int ai_init(void) {
   F = ai_lib_(F, "rng", src_rng);
   F = ai_lib_(F, "q", src_q);
   F = ai_lib_(F, "kanren", src_kanren);
+  F = ai_egg_(F, src_egg, src_p1, src_prel, src_ev);
   F = ai_evals_(F, boot_ai);
   // THE SESSION: a fresh writable layer, C-side -- everything the page ever
   // feeds through ai_eval defglobs here, never in the base.

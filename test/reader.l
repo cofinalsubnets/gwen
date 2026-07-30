@@ -17,21 +17,23 @@
 ; -- p0/p1). every law it states must survive that flip byte for byte; a case that
 ; is deliberately allowed to change is a case that must be edited HERE first,
 ; before the reimplementation, or the differential cannot tell the two apart.
-(: (rdr s) (: p (tap (map s (jot (tally s)))) e (nom 0) (sound p e))
-   rdr-eof (nom 0))
+(: (rdr-cl s) (map s (jot (tally s)))
+   (rdr s) (: r (sound (rdr-cl s)) (? (two? r) (cap r) r)))
 
 ; --- the read protocol ---------------------------------------------------------
-; `sound` answers THREE ways and the caller must tell them apart: the datum, the
-; SENTINEL at end of input, or THE PORT ITSELF on an unfinished shape. nothing is
-; stashed -- a torn read discards the partial parse and leaves the port exhausted,
-; so `more` means "you own the text, re-read the concatenation", which is exactly
-; what bao's editor and the socket repls do.
+; `sound` takes TEXT -- a charlist -- and answers THREE ways: the datum CONSED
+; ONTO WHAT IS LEFT, () at a clean end, or `torn` where the text ran out inside a
+; shape. the residue IS the answer, so the caller owns the rest and a torn read
+; RESUMES by handing back more text: no port to spend, nothing stashed anywhere.
+; presence is the cons -- `two?` asks "did I get one", never the net, because a
+; datum can perfectly well be a nothing (reading "()" answers (() . rest)).
 (assert
- (1 = (sound (tap '(49)) rdr-eof))                    ; a datum
- (id? rdr-eof (sound (tap 0) rdr-eof))                ; eof -> the sentinel
- (: p (tap '(40)) (id? p (sound p rdr-eof)))          ; unfinished -> the port back
- (: p (tap '(40)) _ (sound p rdr-eof)                 ; ...and the port is spent
-    (id? rdr-eof (sound p rdr-eof))))
+ (: r (sound '(49)) (&& (two? r) (1 = (cap r)) (nil? (cup r))))  ; a datum, nothing after
+ (nil? (sound ()))                                    ; a clean end -- the blue floor
+ (id? torn (sound '(40)))                             ; the text ran out inside a shape
+ (: r (sound '(49 32 50))                             ; ...and the residue reads the next
+    (&& (1 = (cap r)) (2 = (cap (sound (cup r))))))
+ (: r (sound '(40 41)) (&& (two? r) (nil? (cap r)))))  ; the datum () is still a datum
 
 ; --- the lexer law -------------------------------------------------------------
 ; the leading character splits the token. a name token (alnum/_) keeps - ? ! and
@@ -59,7 +61,7 @@
  ("hi" = (rdr "\"hi\""))
  ("a\"b" = (rdr "\"a\\\"b\""))
  ("" = (rdr "\"\""))
- (: p (tap (map "\"oops" (jot 5))) (id? p (sound p rdr-eof))))
+ (id? torn (sound (rdr-cl "\"oops"))))
 
 ; --- numbers -------------------------------------------------------------------
 ; ⚠ AN INTEGER LITERAL READS ITS VALUE -- in all three bases, at full precision,

@@ -37,18 +37,20 @@
    ; --- reading one file ------------------------------------------------------
    ; overlay path's settings onto the tablet c (mutated, and answered back). the
    ; open IS the presence test -- one syscall, no gap between asking and reading.
-   ; ⚠ `sound` answers THREE ways and all three must be caught: the datum, the
-   ; SENTINEL at eof, or THE PORT ITSELF on an unfinished shape. miss the port
-   ; lane and a config file with a dropped paren spins forever.
+   ; ⚠ `sound` answers THREE ways and all three must be caught: the datum CONSED
+   ; ONTO THE REST, () at a clean end, or `torn` on an unfinished shape. ask
+   ; `two?` for the datum -- a config file with a dropped paren must stop with
+   ; what landed, never spin.
    (salt-file path c)
     (: q (open path "r")
-       (? q (: e (mint 0)
-               (go u) (: d (sound q e)
-                          (? (id? d e) 0                       ; eof: done
-                             (id? d q) 0                       ; an unfinished shape: keep what landed
-                             (: _ (? (&& (two? d) (name? <d)) (pin c <d >d) 0)
-                                (go ()))))
-               _ (go ())
+       (? q (: t (slurp q)
+               (go cl) (: r (sound cl)
+                          (? (two? r)
+                             (: d (cap r)
+                                _ (? (&& (two? d) (name? <d)) (pin c <d >d) 0)
+                                (go (cup r)))
+                             0))                               ; a clean end, or torn: keep what landed
+               _ (go (map t (jot (tally t))))
                _ (close q)
                c)
           c))

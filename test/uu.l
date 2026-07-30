@@ -2474,9 +2474,8 @@
  (defn 'mstk 'UU '(coprod unit stk)))
 
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
-; --- (install per the help law -- more/eof keep the read protocol.)
-(: (help s p e) (? (more? s) p (eof? s) e
-                   (: h (peep HELPC () 0) (? h (h s p e) 0))))
+; --- (install per the help law; the scare bit is the only one a help sees.)
+(: (help s p e) (: h (peep HELPC () 0) (? h (h s p e) 0)))
 (assert
  (id? 'rejected (rejects (\ z (defn 'uu-bad1 '(paths nat 1 2) '(idpath 1)))))
  (id? 'rejected (rejects (\ z (defn 'uu-bad2 '(pi x nat nat) '(lam x (succ y))))))

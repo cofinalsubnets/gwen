@@ -18,10 +18,10 @@
    ; which read signals by returning the port itself) -- the full forms, compared
    ; STRUCTURALLY, not just counted: a re-tokenization can preserve the count yet
    ; change the parse (name'(a b) and name '(a b) both read two datums).
-   (datums s) ((: (g p e a) (: r (sound p e) (? (| (= e r) (= p r)) (rev a) (g p e (link r a)))))
-               (tap (s2cl s)) (nom 0) 0)
+   (datums s) ((: (g cl a) (: r (sound cl) (? (two? r) (g (cup r) (link (cap r) a)) (rev a))))
+               (s2cl s) 0)
    ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
-   (form1 cs) (: e (nom 0) p (tap cs) r (sound p e) (? (| (id? r e) (id? r p)) 0 (show r)))
+   (form1 cs) (: r (sound cs) (? (two? r) (show (cap r)) 0))
    ; a HARD token boundary: whitespace, delimiters, string quote, comment, and
    ; the value-surface chars. tokens never span these under any lexer law, so
    ; the redundancy probe's left context resets there.
@@ -30,12 +30,12 @@
                 (= c 34) 1 (= c 59) 1 (= c 39) 1 (= c 96) 1 (= c 44) 1
                 (= c 64) 1 (= c 126) 1 (= c 35) 1
                 0)
-   ; an operator-run byte: punct that is neither a hard boundary nor \ nor a
-   ; name char. under the VALENCE LAW a run glued to a datum is monadic, and
-   ; the probe below tests in isolation -- head position, where fusion is
-   ; suppressed -- so a space between a run's end and a datum start is kept
-   ; conservatively: it is semantic mid-list.
-   (opb? c) (? (hardb c) 0 (= c 92) 0
+   ; an operator-run byte: punct that is neither a hard boundary nor a name
+   ; char -- \ included, though it never fuses. under the VALENCE LAW a run
+   ; glued to a datum is monadic, and the probe below tests in isolation --
+   ; head position, where fusion is suppressed -- so a space between a run's
+   ; end and a datum start is kept conservatively: it is semantic mid-list.
+   (opb? c) (? (hardb c) 0
                (&& (<= 48 c) (<= c 57)) 0
                (&& (<= 65 c) (<= c 90)) 0
                (&& (<= 97 c) (<= c 122)) 0
@@ -61,12 +61,15 @@
 
 (: p (open (cap (cup argv)) "r")
    _ (? p 0 (: _ (say err "lcat: cannot open input") (quit 1)))
-   ; gather every canonical form into one space-joined string
-   acc ((: (g acc e p first)
-          (: r (sound p e)
-             (? (= e r) acc
-                (g (? first (show r) (+ (+ acc " ") (show r))) e p 0))))
-        "" (nom 0) p 1)
+   ; gather every canonical form into one space-joined string. ⚠ a TORN input dies
+   ; loudly: a header silently short of its last forms is the empty-lcat disaster
+   ; wearing a subtler face -- the build would take it as fresh and fail somewhere else.
+   acc ((: (g acc cl first)
+          (: r (sound cl)
+             (? (two? r) (g (? first (show (cap r)) (+ (+ acc " ") (show (cap r)))) (cup r) 0)
+                (id? r torn) (: _ (say err "lcat: unfinished form in input") (quit 1))
+                acc)))
+        "" (s2cl (slurp p)) 1)
    _ (put out 34)                                      ; opening "
    ; walk acc: drop redundant spaces (outside string literals), C-escape the rest.
    ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."

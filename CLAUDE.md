@@ -122,8 +122,8 @@
 ; * a corpus test that twirls a task must (catch p) it: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the interactive
 ;   shell installs a default help (love/bao.l shell-help): a scare prints `;; a b` and answers the zero
-;   point, so the session survives every raise and a missing nom or apcap is VISIBLE; the more bits
-;   keep the read protocol (port back when incomplete, sentinel at eof). file mode stays helpless.
+;   point, so the session survives every raise and a missing nom or apcap is VISIBLE. file mode
+;   stays helpless.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
 ;   parallel: lux (the X11 window manager, crew/lux/), inle (the freestanding kernel, port/inle/),
@@ -278,7 +278,8 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; reads the zero point), hashes (three absence lanes, one miss machinery), casks, reader
 ; operators (the sigil layer -- a terse, valence-sensitive operator surface, all factoring to lisp:
 ; the lexer / factorization / curry / valence laws and the comma layer), macros,
-; control (help/welp, missing, apcap), i/o & ports (sound's return value IS the read protocol),
+; control (help/welp, missing, apcap), i/o & ports (sound takes TEXT, and its return value IS
+; the read protocol: (datum . rest), () at a clean end, `torn` mid-shape),
 ; bootstrapping. each law lives in its section comment; the asserts below it keep it honest.
 ; the deep dives stay where they live: doc/measures.md (net & tally, the two measures),
 ; test/operator.l + test/infixop.l (sigils and the comma in anger), test/help.l test/missing.l
@@ -297,7 +298,7 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure globals,
 ;     mark apply strategy, flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins.
-; the *egg* (love/egg.l): WARM the egg (the quoted prel+ev corpus) and the evaluator SITS on it twice --
+; the *egg* (love/egg.l): WARM the egg (the quoted p1+prel+ev corpus) and the evaluator SITS on it twice --
 ; compile the compiler with the C bootstrap, recompile the whole corpus through itself -- then the
 ; hatchling installs as `ev` in the image at C compile time, no allocation; `born` records the hatch
 ; time (unbound pre-egg, an unbound nom reading the zero point). just before birth the egg MOPS UP
@@ -332,7 +333,11 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; with the sed-wrapped <name>0.h twins, which need a gl0_h entry), wasm/host.c, port/inle/kmain.c,
 ; port/playdate/main.c, port/mps2/main.c (the teensy/nucleo baker), port/teensy41/main.c (its
 ; on-device egg lane). Each wants a header dep too (host/build.mk, wasm/Makefile,
-; port/inle/kernel.mk, port/playdate/Makefile). coin/rng/q/kanren/uu ride the host, love0, wasm
+; port/inle/kernel.mk, port/playdate/Makefile). the EGG's own door is separate and takes FOUR
+; texts, not one juxtaposed string: `ai_egg_(g, egg, p1, prel, ev)` (love.h), NINE call sites
+; (the seven above + port/virt/main.c + mps2's second baker) each also naming p1.h. it STITCHES
+; the corpus (love.c, doc/reader.md rung 6b) -- p0 reads egg/p1/prel, p1 (the reader in love)
+; reads ev -- so the C reader's sigil half is off the boot path. coin/rng/q/kanren/uu ride the host, love0, wasm
 ; and the K_TEST kernel (the corpus asserts on each); the playdate workbench takes q + kanren +
 ; rune, what the cas stands on; a shipped kernel takes uu + bao. EVERY frontend opens its
 ; session with ai_layer_ after boot (bakers never push; wakers always do). ⚠ a layer may

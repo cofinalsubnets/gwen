@@ -281,13 +281,16 @@ int main(void) {
   ;
   g = ai_lib_(g, "bao", src_bao);
 #endif
-  struct ai *r = ai_evals_(g, "("
+  struct ai *r = ai_egg_(g,
 #include "egg.h"
-    ai_egg_pre
+    ,
+#include "p1.h"
+    ,
 #include "prel.h"
-    " "
+    ,
 #include "ev.h"
-    ai_egg_post
+    );
+  r = ai_evals_(r,
 #ifdef BAKER_RUNE
     // the PLAYDATE corpus: rune (registered module) + the cas workbench, no
     // bao -- the device has no shell, the crank is the interface. cas's
@@ -354,13 +357,16 @@ int main(void) {
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
-  struct ai *r = ai_evals_(g, "("
+  struct ai *r = ai_egg_(g,
 #include "egg.h"
-    ai_egg_pre
+    ,
+#include "p1.h"
+    ,
 #include "prel.h"
-    " "
+    ,
 #include "ev.h"
-    ai_egg_post
+    );
+  r = ai_evals_(r,
 #include "bao.h"
     // the driver tail: application-as-power, currying through map, the net
     // measure, and the hatched ev -- each a spec.l law, alive on the M7.

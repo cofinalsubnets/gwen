@@ -1,5 +1,5 @@
 ; --- test/host/rdiff.l: the READER DIFFERENTIAL (doc/reader.md rung 3) ---
-; two readers, one text, one comparison -- the oracle rungs 5-6 are built against.
+; two readers, one text, one comparison -- the oracle rungs 5-6 were built against.
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/host/rdiff.l | out/host/love
 ;
@@ -10,29 +10,30 @@
 ; integer bases, the comma -- which is a better corpus than any generator, and
 ; it is already here. two laws ride it:
 ;
-;   A/B          the reader under test agrees with the C reader, form for form
+;   A/B          two readers agree on one text, form for form
 ;   print->read  (rd (show f)) is (f) -- one form back, equal to the one that went in
 ;
-; ⚠ TODAY BOTH LEGS OF A/B ARE THE SAME READER, so that law is vacuous until p1
-; exists. rung 6 points `rd-test` (test/00-init.l) at p1 and it goes live; the
-; whole socket is that one binding. what keeps the rig honest MEANWHILE is
-; rd-hurt below -- a deliberately broken reader the sweep is REQUIRED to catch.
-; a green diff over a reader that never ran proves nothing, and neither does a
-; comparison that cannot fail; both are asserted at the foot.
+; ⚠ THE A/B LEG IS P0 AGAINST P1 NOW, and it is the only pair left: rung 6c
+; retired the C reader, so `sound` and `rd-test` are one reader and comparing
+; them proves nothing. p0 (love.c's sound0, the pure lisp subset) is the real
+; second implementation, and rd-p0 below is where the law does its work. the
+; tree-wide sweep keeps print->read, which one reader can still fail.
+; what keeps all of it honest is the INJECTORS -- rd-hurt and rd-p0hurt, readers
+; deliberately broken part-way -- because a green diff over a reader that never
+; ran proves nothing, and neither does a comparison that cannot fail. both are
+; asserted at the foot.
 
-(: rd-eof (nom 0)
-   (rd-port s) (tap (map s (jot (tally s))))
+(: (rd-cl s) (map s (jot (tally s)))
    (rd-slurp path) (: q (open path "r") (? q (: t (slurp q) _ (close q) t) ""))
    (rd-cut s n) (? ((tally s) <= n) s (snip s 0 n))
    (rd-rep c n) (? (n <= 0) "" (c + (rd-rep c (n - 1))))
-   ; every form a reader gets off a text. the read protocol IS sound's: the
-   ; sentinel at eof, the PORT ITSELF where the shape did not finish -- p1 owes
-   ; the same two answers, which is why the socket is a plain two-operand call.
+   ; every form a reader gets off a text. the read protocol IS sound's, and the
+   ; residue is the answer, so the walk threads it: a clean end and a torn shape
+   ; both stop, which is what makes the injected-fault runs below comparable.
    (rd-forms r txt)
-     (: p (rd-port txt)
-        (go acc) (: x (r p rd-eof)
-                    (? (id? x rd-eof) (rev acc) (id? x p) (rev acc) (go (x >< acc))))
-        (go ())))
+     (: (go cl acc) (: x (r cl)
+                       (? (two? x) (go (cup x) (<x >< acc)) (rev acc)))
+        (go (rd-cl txt) ())))
 
 ; the smallest subform where two trees part -- descend while the differing child
 ; is itself a pair, then report that pair. a leaf alone says "0 vs ()" and names
@@ -91,8 +92,8 @@
 ; plausible wrong tree) -- and the sweep must SEE it. gate the rig on this, never
 ; on the diff being green: green is what a rig that never ran also prints.
 (: rd-hurt-n (tablet 0)
-   (rd-hurt p e)
-     (: x (sound p e)
+   (rd-hurt cl)
+     (: x (sound cl)
         _ (pin rd-hurt-n 0 (1 + (peep rd-hurt-n 0 0)))
         (? (= 3 (peep rd-hurt-n 0 0)) 'rd-spoiled x)))
 
@@ -107,15 +108,15 @@
 
 ; --- p0, over the subset it owns (doc/reader.md rung 5) ---------------------
 ; `sound0` is the bootstrap reader in love.c: the pure lisp subset, no sigil
-; surface. this is the A/B law with a REAL second reader on one leg -- the first
-; non-vacuous run of it, and what rung 6 repeats with p1 on the whole tree.
+; surface. this is the A/B law with a REAL second reader on one leg -- and since
+; 6c retired the C reader it is the ONLY pair left in the tree.
 ;
 ; the input is prel.l ALONE, deliberately. p0 diverges on every sigil BY DESIGN
 ; (#(a b) reads as # then (a b)), so a tree sweep would measure the divergence
 ; instead of the agreement; prel.l is held to the subset by rung 4 and is the
 ; whole of what p0 must read. the rung-4 rule and this gate are the same fact,
 ; so a sigil creeping back into prel.l fails HERE.
-(: rd-p0 (rd-run sound0 (L "love/prel.l") 1)
+(: rd-p0 (rd-run sound0 (L "love/prel.l" "love/p1.l") 1)
    ; and the same rig pointed at a file OUTSIDE the subset, which must go red:
    ; the proof this leg can fail, the rd-hurt discipline applied to a real reader
    ; rather than a spoiled one.
@@ -124,45 +125,19 @@
    ; thing the stackless reader has over it. so pin the depth it reaches, far
    ; past the deepest form in the tree (38, test/uupatch.l).
    rd-deep (: s ((rd-rep "(" 20000) + (rd-rep ")" 20000))
-              (= (sound0 (rd-port s) rd-eof) (sound (rd-port s) rd-eof)))
+              (= (sound0 (rd-cl s)) (sound (rd-cl s))))
+   ; and p0's own injector: the A/B leg above is the load-bearing one now, so it
+   ; owes the same proof that its comparison CAN fail.
+   rd-p0hn (tablet 0)
+   (rd-p0hurt cl) (: x (sound0 cl)
+                     _ (pin rd-p0hn 0 (1 + (peep rd-p0hn 0 0)))
+                     (? (= 3 (peep rd-p0hn 0 0)) 'rd-spoiled x))
+   rd-p0hurtn (rd-run rd-p0hurt (L "love/prel.l") 0)
    _ (puts ("rdiff: p0 forms=" + (show (peep rd-p0 'forms 0))
             + " bad=" + (show (peep rd-p0 'bad 0))
             + " off-subset=" + (show (peep rd-p0x 'bad 0))
+            + " injected=" + (show (peep rd-p0hurtn 'bad 0))
             + " deep=" + (show rd-deep) + "\n")))
-
-; --- p1, over the whole tree (doc/reader.md rung 6) ------------------------
-; the READER IN LOVE, love/p1.l. this is the A/B law as rung 3 meant it: a real
-; second reader, over the whole input set, form for form.
-;
-; p1 walks a CHARLIST and the socket is a (reader port sentinel) call, so the
-; shim slurps each port once and keeps the residue against the port's identity.
-; that is test scaffolding -- p1's own door is the charlist, and the boot hands
-; it whole text.
-(: _ (use "love/p1.l")
-   rd-p1res (tablet ())
-   (rd-p1 p e)
-     (: seen (peep rd-p1res p ())
-        cl (? (two? seen) (cup seen)
-              (: txt (slurp p) (map txt (jot (tally txt)))))
-        d (p1-read1 cl ())
-        (? (id? d p1-eof) (: _ (pin rd-p1res p (link 1 ())) e)
-           (id? d p1-more) p
-           (: _ (pin rd-p1res p (link 1 (cup d))) (cap d))))
-   ; and the same fault injector the sweep itself is gated on, pointed at THIS
-   ; leg: a green diff over a reader that never ran proves nothing, and neither
-   ; does one whose comparison cannot fail.
-   rd-p1hn (tablet 0)
-   (rd-p1hurt p e)
-     (: x (rd-p1 p e)
-        _ (pin rd-p1hn 0 (1 + (peep rd-p1hn 0 0)))
-        (? (= 3 (peep rd-p1hn 0 0)) 'rd-spoiled x)))
-
-(: rd-p1sweep (rd-run rd-p1 rd-files 1)
-   rd-p1hurtn (rd-run rd-p1hurt (L "test/spec.l") 0)
-   _ (puts ("rdiff: p1 files=" + (show (peep rd-p1sweep 'files 0))
-            + " forms=" + (show (peep rd-p1sweep 'forms 0))
-            + " bad=" + (show (peep rd-p1sweep 'bad 0))
-            + " injected=" + (show (peep rd-p1hurtn 'bad 0)) + "\n")))
 
 (assert
  ; the sweep reached the tree and read it -- the PROOF OF WORK, checked and not
@@ -180,13 +155,8 @@
  (0 < (peep rd-p0x 'bad 0))
  ; ... and its C-stack nesting reaches far past anything the tree contains
  rd-deep
- ; rung 6: p1, the reader in love, over the WHOLE tree -- the A/B law with a
- ; real second reader on one leg, which is what rung 3 built this rig for.
- (250 < (peep rd-p1sweep 'files 0))
- (1200 < (peep rd-p1sweep 'forms 0))
- (0 = (peep rd-p1sweep 'bad 0))
- ; and this leg can go red, so the zero above is a measurement
- (0 < (peep rd-p1hurtn 'bad 0)))
+ ; ... and THAT leg can go red too, so its zero is a measurement as well
+ (0 < (peep rd-p0hurtn 'bad 0)))
 
 (puts "rdiff: ok")
 (putc 10)

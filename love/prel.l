@@ -282,7 +282,15 @@
 ; and the lanes just miss -- it degrades to the baked table instead of raising.
 (: use
    (: prior use
-      (rdev q) ((: (go e q) (: r (sound q e) (? (= e r) 0 (: _ (ev 'ev r) (go e q))))) (mint 0) q)
+      ; read-eval every form of a module source. the port is drained ONCE and
+      ; walked as text -- a module is a file or a baked string, never a live
+      ; wire, so there is nothing to stream. ⚠ a torn form used to fall through
+      ; and get EVALED as the port object; it scares now.
+      (rdev q) ((: (go cl) (: r (sound cl)
+                              (? (two? r) (: _ (ev 'ev (cap r)) (go (cup r)))
+                                 (id? r torn) (scare (\ unfinished-form) q)
+                                 0)))
+                (: s (slurp q) (map s (jot (tally s)))))
       (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
       (mname s) (: n (tally s)
                    b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)

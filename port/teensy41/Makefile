@@ -19,7 +19,7 @@ LD = arm-none-eabi-ld
 OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 
 te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
-lib_h = out/lib/egg.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
+lib_h = out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 
 objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \

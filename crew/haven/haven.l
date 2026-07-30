@@ -347,28 +347,26 @@
         _ (pin hb 1 (caup st))
         (hv-retile hb tl x fb))
    ; a session reads LINES (see parks the TASK -- the reader's park law) and
-   ; sounds them off a tap: a memory port keeps the read protocol and cannot
-   ; block, where (sound c ..) on the socket itself stalls the WHOLE vm in the
-   ; C parse the moment the fd runs dry mid-skip (the trailing newline lures it
-   ; in; the painter starves). an unfinished shape carries to the next line;
-   ; anything after the first form on a line is let go.
+   ; sounds the TEXT: `sound` walks a charlist, so a socket running dry mid-skip
+   ; cannot strand the whole vm in a C parse the way sounding the fd once did
+   ; (the trailing newline lured it in; the painter starved). a torn shape
+   ; carries to the next line as the RESIDUE the reader hands back, and every
+   ; form on a line runs, where only the first used to.
    (hv-session c)
-     (: e (nom 0)
-        (rdline acc) (: ch (see c)
+     (: (rdline acc) (: ch (see c)
                         (? (= ch -1) ()
                            (= ch 10) (rev (link 10 acc))
                            (rdline (link ch acc))))
         (go pend) (: cl (rdline ())
                      (? (! (two? cl)) 0
-                        (: full (cat pend cl)
-                           p (tap full)
-                           r (sound p e)
-                           (? (id? r e) (go ())
-                              (id? r p) (go full)
-                              (: v (ev 'ev r)
-                                 _ (say c (+ (show v) "\n"))
-                                 _ (flush c)
-                                 (go ()))))))
+                        ((: (h cl) (: r (sound cl)
+                                      (? (two? r) (: v (ev 'ev (cap r))
+                                                     _ (say c (+ (show v) "\n"))
+                                                     _ (flush c)
+                                                     (h (cup r)))
+                                         (id? r torn) (go cl)
+                                         (go ()))))
+                         (cat pend cl))))
         (go ()))
    (hv-moor path)
      (: lp (shore path)
@@ -723,5 +721,5 @@
 
 ; a welp-face help so a scare answers a visible value (to the moor client, or
 ; at a drain/serve raise site) instead of dropping the compositor -- the
-; dock's shape: keep the read protocol, answer ('scare a b) on a bare scare.
-(: (help s a b) (? (eof? s) b (more? s) a `('scare a b)))
+; dock's shape: answer ('scare a b), the only bit a help sees.
+(: (help s a b) `('scare a b))

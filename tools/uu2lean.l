@@ -35,8 +35,6 @@
    (e4 l) (cap (cup (cup (cup l))))  (e5 l) (cap (cup (cup (cup (cup l)))))
 
    ; read a file's top-level forms as DATA (the reader strips ; comments)
-   (forms path) (: q (open path "r") e (mint 0)
-                   ((: (g acc) (: r (sound q e) (? (= e r) (rev acc) (g (link r acc))))) ()))
 
    ; a uu name -> a Lean identifier: prefix uu_, kebab '-' -> '_'
    (sanit s) (: (g i acc) (? (< i (tally s)) (g (+ 1 i) (+ acc (: c (s i) (? (= c 45) 95 c)))) acc) (g 0 ""))
@@ -54,7 +52,7 @@
                            (| (deq? F) (axq? F)) (link (entry F) acc) acc)))
                       (rev acc))
    (app2 a b) (? (two? a) (link (cap a) (app2 (cup a) b)) b)   ; NOT `cat` -- the local cat is the STRING fold
-   ents (gather (app2 (forms "test/uu.l") (app2 (forms "test/uulay.l") (app2 (forms "test/uupatch.l") (app2 (forms "test/uuwm.l") (app2 (forms "test/uuwmlaw.l") (app2 (forms "test/uukind.l") (forms "test/uukindlaw.l"))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (forms (open "test/uukindlaw.l" "r")))))))) ())
 
    ; the SILENT-NO-OP gate (defense in depth behind uu.l's arity-door macros):
    ; a def gathered off the file must be WHOLE -- three operands; a paren slip

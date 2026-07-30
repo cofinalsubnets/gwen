@@ -272,14 +272,16 @@ int main(void) {
 #include "bao.h"
     ;
     g = ai_lib_(g, "bao", src_bao);
-    g = ai_evals_(g, "("
+    g = ai_egg_(g,
 #include "egg.h"
-    ai_egg_pre
+    ,
+#include "p1.h"
+    ,
 #include "prel.h"
-    " "
+    ,
 #include "ev.h"
-    ai_egg_post
-    "(use 'bao) 0)"); }
+    );
+    g = ai_evals_(g, "(use 'bao) 0"); }
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
   g = ai_layer_(g);

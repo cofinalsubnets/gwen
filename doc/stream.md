@@ -9,6 +9,20 @@ The user's standing direction: **fix this as the real io rework — the coinduct
 stream + `select`/`ready?` — not the half-duplex shortcut.** This doc is the design
 that session implements.
 
+> **§4 already landed, without the stream** (doc/reader.md rung 6c, 2026-07-30).
+> The reader is a pure fold now — `sound : text -> (datum . rest) | () | torn` —
+> and the whole more-bit / port-back / help-continuation protocol is deleted, as
+> §4 predicted. It took no new C: the residue moved to the CALLER rather than
+> into a lookahead cons. So what is left here is the part §4 was never really
+> about — laziness, memoization, `ready?`/`select`, and the scheduler/`wrap`
+> rework that is path B's actual motivation. When the charlist `sound` walks
+> becomes a lazy `source`, neither the reader nor any of its callers change
+> again; `reads` (love/bao.l) is the one place a port becomes text, and it is the
+> one place that would.
+>
+> One piece landed early too: **`cue?` is general now** — it answers "would `see`
+> park?" for any port, which is `ready?` for the fd case (§5).
+
 ## 0. The symptom
 
 `wrap` today is a *transparent* pty pump and works: `stdin -> master` in one task,

@@ -26,9 +26,8 @@
 (:
  ; --- reading a cell: repl-style, one form, unreadable text is a label ---
  (chars s i) (? (< i (tally s)) (link (s i) (chars s (+ i 1))) ())
- (glean s) (: e (mint 0)
-              d (sound (tap (chars (+ "(" (+ s ")")) 0)) e)
-              (? (id? d e) () (two? d) d ()))
+ (glean s) (: r (sound (chars (+ "(" (+ s ")")) 0))
+              (? (two? r) (: d (cap r) (? (two? d) d ())) ()))
 
  ; --- the cell-name shape: one letter, then digits (a1 .. z999) ---
  (cell? n) (? (name? n)
@@ -121,8 +120,9 @@
                        1)))
  (unstow sh path) (: p (open path "r")
                      (? (! (lit? p)) sh
-                      (: e (mint 0)
-                         d (sound p e)
+                      (: t (slurp p)
+                         r (sound (chars t 0))
+                         d (? (two? r) (cap r) ())
                          _ (close p)
                          _ (? (&& (two? d) (id? (cap d) (\ manifest)))
                               (map (\ pr (cell! sh (cap pr) (caup pr))) (cup d))

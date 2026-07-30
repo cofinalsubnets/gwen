@@ -46,11 +46,12 @@
  ; application -- for a special form like ? that is just the shorter form
  (3 = ((1 +) 2)) ('a = (1 ? 'a)))
 
-; structural incompleteness still pends: an unclosed list comes back as the port.
+; structural incompleteness still pends: an unclosed list comes back TORN.
 ; a trailing operator does NOT pend -- "1 +" is two complete datums whose factor
 ; folds to the partial (+ 1) at compile time, not a reader state.
-(: p (tap '(40 49 32 43)) (assert (p = (sound p 99))))   ; "(1 +" -> the port
-(: p (tap '(49 32 43)) (assert (1 = (sound p 99)) ('+ = (sound p 99))))  ; "1 +" -> 1, +
+(assert (id? torn (sound '(40 49 32 43))))               ; "(1 +" -> torn
+(: r (sound '(49 32 43))                                 ; "1 +"  -> 1, then +
+   (assert (1 = <r) ('+ = (cap (sound >r)))))
 
 ; a fresh dyadic operator needs no table at all -- define-then-use (the DEFAULT
 ; INFIX section below); ** here rides the default, right-associatively

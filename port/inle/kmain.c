@@ -584,13 +584,16 @@ void kmain(void) {
   // load the prel, then run the l read-eval-print loop. its line
   // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard
   // and serial input both arrive as ANSI escape sequences the l edev decodes.
-  struct ai *r = ai_evals_(g, "("
+  struct ai *r = ai_egg_(g,
 #include "egg.h"
- ai_egg_pre
+ ,
+#include "p1.h"
+ ,
 #include "prel.h"
- " "
+ ,
 #include "ev.h"
- ai_egg_post
+ );
+  r = ai_evals_(r,
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
  "(use 'bao)"                                          //   one-name `uu` surface on this target too
 #ifdef K_TEST

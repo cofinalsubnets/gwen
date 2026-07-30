@@ -87,4 +87,6 @@
     (: n (tally s)
        (chs i acc) (? (i < 0) acc (chs (i - 1) (link (s i) acc)))
        (? (! (0 < n)) ()
-          (: r (sound (tap (chs (n - 1) ())) ()) (? (two? r) r ())))))
+          (: r (sound (chs (n - 1) ()))
+             d (? (two? r) (cap r) ())
+             (? (two? d) d ())))))

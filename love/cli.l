@@ -36,13 +36,12 @@
 (: _
  (: (load1 p) (: q (open p "r")
        (? q (reads q) (: _ (say err (+ "love: cannot open " p)) (quit 1))))
-    (eval1 s) (: q (tap (map s (jot (tally s))))     ; a string is a fn over its bytes -> a charlist port
-       e (nom 0) m (nom 0)                           ; fresh noms: eof / unfinished-shape, id?-safe
-       (rdl _) (: r (sound q e)                      ; every top-level datum off the string, in order
-          (? (id? r q) m                             ; the port back: an unfinished shape
-             (id? r e) ()
-             (: t (rdl ()) (? (id? t m) m (link r t)))))
-       ds (rdl ())
+    (eval1 s) (: m (nom 0)                           ; a fresh nom: unfinished-shape, id?-safe
+       (rdl cl acc) (: r (sound cl)                  ; every top-level datum off the string, in order
+          (? (two? r)     (rdl (cup r) (link (cap r) acc))
+             (id? r torn) m                          ; an unfinished shape
+             (rev acc)))
+       ds (rdl (map s (jot (tally s))) ())           ; a string is a fn over its bytes -> its charlist
        (? (id? ds m)       (: _ (say err "love: -e: unfinished form") (quit 2))
           (two? ds)
           (? (two? (cup ds)) (ev 'ev ds)             ; MANY datums: the ONE application -- infix factors, like a repl line
