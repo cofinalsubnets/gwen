@@ -57,7 +57,7 @@ test_host: $m
 # on the compositor: `cat test/00-init.l test/host/haven.l | out/host/love`.
 # these run WARM ($(mw)) -- the nifs are the subject, not the egg, and 30 cold boots
 # cost 51 s of the 77 this gate used to take. hostnif_cold names the exceptions.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/tls.l
 # haven's real-client smoke binary: libwayland-client + the generated
 # xdg-shell glue -- deliberately NOT zero-dep, it exists to be the OTHER side
 # of haven's wire. built only where wayland-scanner + libwayland live;
