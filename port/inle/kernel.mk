@@ -376,14 +376,15 @@ uefi: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf
 # point is that `make test_slow` fetches nothing. Fetch it once by hand with
 # `make out/dl/edk2-ovmf/ovmf-code-x86_64.fd` and this lane starts running.
 #
-# OPT-IN, not in test_slow (2026-07-30) -- test_kdiff's bargain, for the same reason.
-# 184 s warm with nothing to build, a fifth of the whole merge gate: it boots the ELF
-# test_kernel just booted (esp-test/love.elf is a COPY) and the same corpus that takes
-# 62 s through the -kernel door takes 184 s through the firmware. Everything past the
-# hand-over is the artifact test_kernel already gates; what is ONLY here is the door --
-# the loader reading love.elf off the ESP, kboot filled from the UEFI memmap + GOP,
-# ExitBootServices, page tables, the jump. RUN IT WHEN THE BOOT PATH MOVES:
+# OPT-IN, not in test_slow (2026-07-30) -- test_kdiff's bargain, for the same reason:
+# it boots the ELF test_kernel just booted (esp-test/love.elf is a COPY of it), so
+# everything past the hand-over is the artifact test_kernel already gates. What is ONLY
+# here is the DOOR -- the loader reading love.elf off the ESP, kboot filled from the UEFI
+# memmap + GOP, ExitBootServices, page tables, the jump. RUN IT WHEN THAT MOVES:
 # port/inle/uefi/, crew/holo/pe.l, mkefi.l, the kboot shape, or klink's numbers.
+# ⚠ the cost argument is GONE and only the duplication one is left: this lane read 184 s
+# against the -kernel door's 62 s until fbdraw learned to repaint one row (kmain.c) -- the
+# 122 s was the framebuffer console, which only this door hands over. It is ~64 s now.
 OVMF_X64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-x86_64.fd)
 .PHONY: test_uefi
 ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)
@@ -392,7 +393,7 @@ test_uefi:
 else
 test_uefi: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/esp-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-test/love.elf
-	@echo TEST $(ko)/esp-test "(serial, headless, our own BOOTX64.EFI; ~184s, ceiling 420s)"
+	@echo TEST $(ko)/esp-test "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
 	@$m $(R)/tools/ktest.l $(ko)/esp-test $(OVMF_X64) x86_64
 endif
 

@@ -9,8 +9,12 @@ compiles it, holo lays the PE32+ the firmware runs, and the whole thing is about
     make test_uefi     # the same door under qemu, corpus over serial (opt-in)
 
 `test_uefi` is not in `make test_slow`: it boots the ELF `test_kernel` already
-booted, and the firmware makes the same corpus take 184s instead of 62s. Run it
-when the boot path moves -- this folder, `crew/holo/pe.l`, or `klink`'s numbers.
+booted, so only the door itself is untested elsewhere. Run it when the boot path
+moves -- this folder, `crew/holo/pe.l`, or `klink`'s numbers.
+
+It used to cost 184s against the `-kernel` door's 62s, and all of that gap was
+the framebuffer console: this is the only door that hands one over, and `fbdraw`
+repainted the whole screen per flush. It is ~64s now.
 
 Copy `out/free/esp/` onto a FAT32 EFI system partition and the machine boots
 love. `EFI/BOOT/BOOTX64.EFI` is the removable-media path every UEFI firmware

@@ -365,29 +365,58 @@ void free(void *x) { return kfree(x); }
 
 static lvm(ai_kreset) { return k_reset(), g; }
 
+// paint ONE console row. `cur` is the cursor's cell (~0u when it is hidden) and
+// `blink` its phase -- both passed IN, never read here: kticks is bumped by the timer
+// ISR, so re-reading it per row could paint one row lit and the next one dark.
+static void fbrow(uint16_t i, uint32_t cur, bool blink) {
+  for (uint16_t j = 0, cols = kcb->cols; j < cols; j++) {
+    uint32_t const
+     pos = (uint32_t) i * cols + j,
+     _g = kcb->cb[pos];
+    struct font *ff = fonts[cb_font(_g)];
+    uint8_t const
+     face = cb_face(_g),
+     g = _g,
+     *bmp = ff->glyphs + ff->h * (g == '\n' ? 0 : g);
+    bool invert = pos == cur && blink;
+    uint8_t fgx = cb_fg(_g);
+    if (face & cb_bold && fgx < 8) fgx += 8;      // bold as the bright half
+    uint32_t fg = palette[fgx], bg = palette[cb_bg(_g)];
+    if (face & cb_rev) fg ^= bg, bg ^= fg, fg ^= bg;
+    if (invert) fg ^= bg, bg ^= fg, fg ^= bg;
+    uintptr_t y = (uintptr_t) i * ff->h, x = (uintptr_t) j * ff->w;
+    for (uint8_t r = 0; r < ff->h; r++) {
+      bool ul = face & cb_under && r == ff->h - 1u;  // underline: the last scanline
+      for (uint8_t o = bmp[r], c = ff->w; c--; o >>= 1)
+        kfb._[(y + r) * kfb.pitch + x + c] = ul || o & 1 ? fg : bg; } } }
+
+// the cursor as last PAINTED. quay marks the row of every grid WRITE, and the cursor
+// is not one: cb_cur moves wpos in silence and the blink is a function of the clock.
+// So the renderer owns the cursor, or the block stays where it last was.
+static uint32_t fbcur = ~0u;
+static bool fbblink;
+
+// repaint what MOVED. quay marks each written row in cb->dmg and the contract is "a
+// renderer reads-and-clears" (quay.h) -- so read it. This is called from serial_flush,
+// and love flushes per WRITE, so painting the whole screen here cost a full-screen
+// blit per character printed: on the door that hands over a framebuffer the corpus
+// ran 3x slower than on the one that does not (measured 180s vs 61s under qemu, and
+// on metal every one of those cells is a write over the PCI bus).
 void fbdraw(void) {
   if (!kcb) return;                    // serial-only: no framebuffer console
-  for (uint16_t i = 0, rows = kcb->rows; i < rows; i++)
-    for (uint16_t j = 0, cols = kcb->cols; j < cols; j++) {
-      uint32_t const
-       pos = (uint32_t) i * cols + j,
-       _g = kcb->cb[pos];
-      struct font *ff = fonts[cb_font(_g)];
-      uint8_t const
-       face = cb_face(_g),
-       g = _g,
-       *bmp = ff->glyphs + ff->h * (g == '\n' ? 0 : g);
-      bool invert = kcb->flag & cb_show && kcb->wpos == pos && kticks & 64;
-      uint8_t fgx = cb_fg(_g);
-      if (face & cb_bold && fgx < 8) fgx += 8;      // bold as the bright half
-      uint32_t fg = palette[fgx], bg = palette[cb_bg(_g)];
-      if (face & cb_rev) fg ^= bg, bg ^= fg, fg ^= bg;
-      if (invert) fg ^= bg, bg ^= fg, fg ^= bg;
-      uintptr_t y = (uintptr_t) i * ff->h, x = (uintptr_t) j * ff->w;
-      for (uint8_t r = 0; r < ff->h; r++) {
-        bool ul = face & cb_under && r == ff->h - 1u;  // underline: the last scanline
-        for (uint8_t o = bmp[r], c = ff->w; c--; o >>= 1)
-          kfb._[(y + r) * kfb.pitch + x + c] = ul || o & 1 ? fg : bg; } } }
+  uint16_t const rows = kcb->rows, cols = kcb->cols;
+  bool const blink = (kticks & 64) != 0;
+  uint32_t const cur = kcb->flag & cb_show ? kcb->wpos : ~0u;
+  // a hidden cursor's row is ~0u, which no row index equals, so it matches nothing.
+  uint32_t const was = fbcur == ~0u ? ~0u : fbcur / cols,
+                 now = cur == ~0u ? ~0u : cur / cols;
+  bool const moved = cur != fbcur || blink != fbblink;
+  for (uint16_t i = 0; i < rows; i++) {
+    uint32_t const r = i > 255 ? 255 : i;   // quay's fold: bit 255 stands for 255-and-past
+    if (kcb->dmg[r >> 5] >> (r & 31) & 1 || (moved && (i == was || i == now)))
+      fbrow(i, cur, blink); }
+  for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
+  fbcur = cur, fbblink = blink; }
 
 static lvm(draw) {
   fbdraw();
