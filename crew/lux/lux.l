@@ -516,15 +516,47 @@
    (adopt-tag w) (: d (x-getprop-atoms s w (x-intern s "_NET_WM_DESKTOP"))       ; the last generation wrote each window's tag on the window
                     t (? (two? d) (+ 1 (cap d)) 1)                               ; (floats wear their HOME tag too, so they come back to it,
                     (? (&& (< 0 t) (! (< (tally lux-tags) t))) t 1))            ; tiled; out of range -> tag 1)
-   sh0 (foldl (\ ss w (wsview (admit (wsview ss (adopt-tag w)) w) (cap lux-tags))) (sheaf lux-tags) kids)
-   _ (map (\ w (x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))) kids)
-   _ (map (\ w (watch w)) kids)                                                 ; survivors get the mouse wires too
-   _ (map (\ w (? (x-manageable? s w) (pin mapd w 1) 0)) kids)                   ; seed the ledger: the viewable adoptees are mapped
-   _ (? (two? kids) (: _ (render sh0 lux-layout ())
-                       _ (map (\ w (? (any (\ x (= x w)) (wsrow sh0)) 0 (hide! w))) (wstiled sh0))   ; adopted onto a HIDDEN tag: hide it
-                       _ (x-flush s)                                             ; now, or it lingers painted over workspace 1 (the WM_STATE
-                       _ (refocus sh0) (line (+ "lux: adopted " (show kids)))) 0)   ; stamp keeps it adoptable through the NEXT restart)
+   ; admit a batch: tag it, stamp it ICCCM, wire its mouse, seed the map ledger.
+   ; spelled once because the SECOND LOOK below needs exactly the same thing.
+   (take-in sh ws)
+    (: sh2 (foldl (\ ss w (wsview (admit (wsview ss (adopt-tag w)) w) (cap lux-tags))) sh ws)
+       _ (map (\ w (x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") (L 1 0))) ws)
+       _ (map (\ w (watch w)) ws)                                               ; survivors get the mouse wires too
+       _ (map (\ w (? (x-manageable? s w) (pin mapd w 1) 0)) ws)                 ; the viewable adoptees are mapped
+       sh2)
+   (settle sh ws tag)                                                           ; paint a batch and say so
+    (: _ (render sh lux-layout ())
+       _ (map (\ w (? (any (\ x (= x w)) (wsrow sh)) 0 (hide! w))) (wstiled sh))   ; adopted onto a HIDDEN tag: hide it
+       _ (x-flush s)                                                            ; now, or it lingers painted over workspace 1 (the WM_STATE
+       _ (refocus sh) (line (+ tag (show ws))))                                 ; stamp keeps it adoptable through the NEXT restart)
+   sh0 (take-in (sheaf lux-tags) kids)
+   _ (? (two? kids) (settle sh0 kids "lux: adopted ") 0)
+   ; ⚠ THE SECOND LOOK, and the whole point of it: the sweep above is ONE SHOT and
+   ; it is the ONLY adoption path an already-mapped window has -- no MapRequest
+   ; ever comes for one -- so a sweep that read the tree before the server settled
+   ; lost those windows for the LIFE OF THE PROCESS. that is not a rare shape: it
+   ; is what a restart-in-place leaves behind, and it presented as a wm that came
+   ; back with an empty client list and no way to recover but another restart.
+   ; so look again, and keep looking while looking keeps paying -- CONVERGENT, not
+   ; a magic constant: the pass stops the moment it finds nothing new, so a healthy
+   ; start costs one beat and a QueryTree, while a slow server gets several. a
+   ; window that arrives after the last pass still has MapRequest; this is only for
+   ; the ones that were already mapped when we took over.
+   (adoptable sh ws) (filter (\ w (&& (! (wsknownw? sh w))
+                                      (&& (! (furniture? w))
+                                          (|| (x-manageable? s w) (ghostly? w))))) ws)
+   (resweep sh n)
+    (? (< n 1) sh
+       (: _ (rest 40)
+          t2 (x-querytree s root)
+          fresh (? (two? t2) (adoptable sh (caup t2)) ())                        ; a FAILED query adds nothing
+          (? (! (two? fresh)) sh
+             (: sh2 (take-in sh fresh)
+                _ (map (\ w (ewmh-track s w)) fresh)
+                _ (settle sh2 fresh "lux: adopted late ")
+                (resweep sh2 (- n 1))))))
+   sh1 (resweep sh0 4)
    _ (twirl (\ u (lux-moor (lux-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
-   _ (loop sh0 lux-layout () ())
+   _ (loop sh1 lux-layout () ())
    _ (close s)
    (line "lux: done"))
