@@ -181,7 +181,20 @@
    (x-keymap s mink maxk syms)                                                   ; syms = the keysyms we want located
     (: nkc (+ 1 (- maxk mink))
        _ (x-w8 s 101) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w8 s mink) _ (x-w8 s nkc) _ (x-w16 s 0) _ (x-flush s)
-       hdr (x-reply s) kpc (nthl hdr 1)                                          ; via the demux -- an event mid-wait must not desync us
+       hdr (x-reply s)                                                           ; via the demux -- an event mid-wait must not desync us
+       ; ⚠ ..and neither must an ERROR. x-reply answers the wait on an error
+       ; packet too (a blocking wait would hang the whole wm), and on one, byte 1
+       ; is the error CODE -- so reading nkc*kpc keysyms off the stream would eat
+       ; nkc*code words of the NEXT reply and desync the connection for good.
+       ; every other reply reader in this file guards on (= (cap hdr) 1); this was
+       ; the one that did not, and it is the only unguarded one that consumes
+       ; VARIABLE-LENGTH data off an unvalidated byte. a desync here is silent and
+       ; permanent: the next QueryTree reads as garbage, x-querytree answers the
+       ; empty list, and lux's startup sweep adopts nothing while printing X
+       ; errors whose codes (0, 159) are not even valid -- the tell that the bytes
+       ; are misaligned rather than the server complaining. 0 keysyms degrades to
+       ; "no chords", the inert value this file answers everywhere else. --
+       kpc (? (= (cap hdr) 1) (nthl hdr 1) 0)
        km (tablet 8)
        _ (: (go i) (? (< i (* nkc kpc))
                       (: sym (x-r32 s)
@@ -201,7 +214,7 @@
     (: n (tally nm)
        _ (x-w8 s 85) _ (x-w8 s 0) _ (x-w16 s (+ 3 (/ (+ n (x-pad4 n)) 4)))
        _ (x-w32 s cmap) _ (x-w16 s n) _ (x-w16 s 0) _ (x-wpad s nm) _ (x-flush s)
-       hdr (x-reply s) (u32 hdr 8))
+       hdr (x-reply s) (? (= (cap hdr) 1) (u32 hdr 8) 0))   ; an error answers the wait: pixel 0, not a garbage id
    (x-borderpix s win px)                                                        ; ChangeWindowAttributes CWBorderPixel
     (: _ (x-w8 s 2) _ (x-w8 s 0) _ (x-w16 s 4) _ (x-w32 s win) _ (x-w32 s 8) (x-w32 s px))
 
