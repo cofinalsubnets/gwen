@@ -8,7 +8,9 @@ a PURE LISP subset, and the real reader `p1` written in love on top of it --
 and every doubt settles by probing `sound`. drafted 2026-07-29.
 
 **rungs 1-7 are LANDED and the arc is closed** -- the tree has one reader, and it
-has one INPUT type, because a port IS a charlist with a promise for a tail.
+has one INPUT type, because a port IS a charlist with a promise for a tail. rung 8
+(below) is the last of it: p0's own lexers go charlist-native, and `g->io` stops
+being the thing a reader reads through. planned, not started.
 
 ## what the C reader does today (the inventory)
 
@@ -697,6 +699,91 @@ it stops at a tail that is not a cons, which is the one place a flow does not
 look like a list.
 
 
+### 8. charlist-native p0, and the port that nobody reads -- PLANNED, not started
+
+gwen's, and it is the arc's real tail: **`g->io` is a painful hack, and the
+polymorphism it was buying is exactly what a charlist-with-a-promise-tail already
+gives.** `cue?`, the more-bit, the pushback -- the awkward interface rung 6c spent
+so long sitting on -- existed to make one reader work over several kinds of input
+stream. that job has a better holder now.
+
+#### the evidence is already in the tree
+
+the buffered fd lane **is a colist, written by hand and then hidden.** `io_refill`
+(love.c:3156) drains the write side, dresses a backing string, does ONE `readn`
+into it, deep-waits if the gulp comes back dry -- then hands back byte 0 and
+stashes the rest in `rbuf`/`rpos`/`rlen`. that triple plus "refill when exhausted"
+is `(chunk . thunk)` spelled in C. and every one of `ungetc_buf`, `eof_seen`,
+`bio_rpending` and `cue?` exists to RE-SERIALIZE it back to one byte at a time.
+
+so this rung does not add a mechanism. it deletes the re-serialization and returns
+the chunk.
+
+#### ⚠ but `g->io` is not what it looks like, and this is the fact to keep
+
+it is **not a reader hack. it is a single-slot GC SHADOW ROOT.** the vt functions
+take `g` and re-read `g->io` because a C local pointing at a heap port dangles
+across any allocation -- love.c:3288 says so at the site: *"GC may have moved it;
+g->out is GC-traced"*. so "just pass the port as a parameter" was never available,
+and `g->io` survives as long as ANY C code touches a port across an allocation.
+**output does.** a colist cannot be a sink.
+
+which reframes the dream, correctly rather than smaller: not *delete the port* --
+**the READER never sees one, and the thunk does.** that is where `flow` already
+put it (rung 7), closure-private. the port object also cannot go for a socket,
+because the read path must drain the WRITE side before parking (`io_refill`'s
+*"the crossover: our unsent ask goes first"*) -- and the thunk closes over the
+port, so it can.
+
+#### two scopes, and only the first stands alone
+
+**A. p0 goes charlist-native.** the leaf lexers thread a cursor instead of pulling
+from `g->io`. self-contained, gated by rdiff, and it is the rung.
+
+| deleted | code lines |
+|---|---|
+| `p0text` | 23 |
+| `ai_z_getc` | 16 |
+| `struct ci` + `ci_getc` + prel's `tap` (a charlist IS the input, so the lift is the identity) | ~10 + the .l |
+| the port coupling inside `ioread1str` (29) / `ioread1sym` (31) -- they keep their logic and lose their getc | -- |
+
+what it costs: `p0read1`/`p0reads` (27) and both leaf lexers thread a cursor, and
+**the cursor is a LOVE VALUE that every leaf both reads and updates**, so it lives
+on `g->sp`. that is the discipline p0 already has -- *"control flow on the C stack,
+values on g->sp"* -- applied to one more value, and it is where the whole risk of
+this rung sits. `g->io` did that job today, GC-traced, for free.
+
+the ungetc dance disappears on its own: a pushback is **not advancing the cursor**.
+that takes p0text's residue recovery AND the trap it carries with it.
+
+**B. the input half of the port vt goes.** `ungetc_buf`, `eof_seen`,
+`zgetc`/`zeof`/`zungetc` (44), `bio_rpending`, `cue?` (6), `feof`/`fungetc`, and
+`io_refill`'s re-serialization -- all replaced by ONE nif: blocking-for-first,
+take-what-is-ready, answering a string. `sip`/`drink`/`slurp`/`end?` become list
+ops in love, and `await` stays as the park primitive (it was already pulled out of
+getc for exactly this -- *"the fds you CAN'T drain a byte at a time"*).
+
+⚠ **B is a migration, not a deletion: 124 live `(see ...)` call sites** (plus 11 in
+doc/proto). many are byte-protocol readers -- lux's X11 wire, kiosko, seed's http
+-- that want "exactly n bytes" rather than a text stream, and a colist serves them
+but only after a rewrite. so B is worth it only where the site genuinely wants a
+STREAM, and `see` may well deserve to survive as the port door for the rest. do
+not let A wait on that argument.
+
+#### ⚠ the question to settle before B: WHO OWNS THE BYTES
+
+today one port is one buffer, so the editor and a program that reads `in` share a
+position. with colists, **whoever holds the head owns whatever was gulped.** that
+is already half-true (`drink` gulped ahead, `flow` does), but B makes it total, and
+stdin is where it bites: the repl reads a line, evals it, and the evaled form reads
+`in`. that wants a deliberate answer -- a session colist head the repl rebinds is
+the obvious one -- and not an accident.
+
+fd lifetime is NOT a problem and was the first worry to check: `io_close`
+(love.c:4050) is a GC finalizer, so an abandoned colist's fd closes when its thunk
+is collected.
+
+
 ## order and size
 
 **1-4 are LANDED.** 1 went first because everything after it re-implements what
@@ -741,9 +828,13 @@ either" -- turned out to be no work at all. the estimate that missed was the oth
 direction: rung 7 was written expecting to take `p0text` and `struct ci` with it,
 and neither is p1's to take (the rung's own section says why).
 
-what is left of the plan: rung 2's bit ops, still independent, and a rung nobody
-has written -- making **p0's lexers charlist-native**, which is what would actually
-retire `p0text`/`ci`, and which has to answer for the boot stitch too.
+what is left of the plan: rung 2's bit ops, still independent, and **rung 8** --
+p0's lexers going charlist-native, which is what actually retires `p0text`/`ci`.
+7 earned it: it proved the colist carries a real input stream, and rung 8's whole
+case is that the tree ALREADY holds one in C (`io_refill`'s `rbuf`/`rpos`/`rlen`)
+and spends `cue?`, the pushback and the eof bit hiding it behind a byte at a time.
+8's scope A is the same size as 7 and self-contained; its scope B is a 124-site
+migration and a question about who owns the bytes, and A must not wait on it.
 
 the predicted hard half was the PORT PROTOCOL, and it was -- but not where the
 plan looked. no hot slot was needed and no lookahead-cons either: the answer was
