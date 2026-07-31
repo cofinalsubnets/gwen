@@ -735,7 +735,30 @@ because the read path must drain the WRITE side before parking (`io_refill`'s
 *"the crossover: our unsent ask goes first"*) -- and the thunk closes over the
 port, so it can.
 
-#### two scopes, and only the first stands alone
+#### the decision, TAKEN 2026-07-31: one input representation
+
+gwen's, and the alternatives are recorded because the middle one looks prudent and
+is not. what was on the table:
+
+| | **1. one input representation** | **2. readers only** | **3. stop at rung 7** |
+|---|---|---|---|
+| end state | nothing reads a port. ports are `readn` sources + sinks, `see` is gone, `g->io` is OUTPUT-ONLY | text readers walk charlists, devices keep `see`; `g->io` unchanged | today |
+| C deleted | ~130 | ~35 | 0 |
+| concepts deleted | the pushback, the eof bit, `cue?`, the readiness question, `tap` | `tap` | none |
+| spent | the cursor refactor + **124 `(see ..)` sites** + a stdin-ownership answer | the cursor refactor + ~30 sites | nothing |
+
+**1 is chosen.** 2 spends most of the refactor's risk and collects almost none of
+the prize -- `cue?`, `ungetc_buf` and `eof_seen` all survive it, because a device is
+still read a byte at a time, which is the thing this rung exists to stop.
+
+⚠ **A is not a scope you can judge on its own** -- it deletes ~20 lines and buys
+nothing. it is the first move of 1, and the only question was ever whether 1 is
+worth its migration. the 124 sites are milder than the number: 13 are in bao.l,
+11 are doc/proto (dead), and the byte-protocol clusters (lux's wire, kiosko,
+seed's http) are each ONE function wanting "exactly n bytes", which a colist
+gives with `take`. the real risk is stdin, and that is decision 3 below.
+
+#### the two lands, and only the first stands alone
 
 **A. p0 goes charlist-native.** the leaf lexers thread a cursor instead of pulling
 from `g->io`. self-contained, gated by rdiff, and it is the rung.
@@ -763,35 +786,45 @@ so it lives on `g->sp`. that is the discipline p0 already has -- *"control flow 
 the C stack, values on g->sp"* -- applied to one more value, and it is where the
 whole risk of this rung sits. `g->io` did that job today, GC-traced, for free.
 
-#### ⚠ the question to settle before A: WHAT THE BOOT READS
+#### WHAT THE BOOT READS -- asked as a choice, answered as a measurement
 
-p0 has two kinds of input and `g->io` is what lets one lexer take both. that is the
-hack -- and it is *buying* something:
+p0 has two kinds of input, and `g->io` is what lets one lexer take both:
 
 * the **boot** (`p0onto`) walks a C string through a stack `ti`, at **zero
   allocation**. it is called per text; the largest is prel.h at **17,646 bytes**.
 * **`sound0`** takes a love charlist, because the differential needs it to.
 
-a cons here is `struct ai_chain { lvm_t *ap; intptr_t a, b; }` -- **three words**.
-so consing prel.h costs ~424KB on 64-bit and **~212KB on 32-bit**, transient, peak
-(the `p0onto` calls are sequential, so it is the largest text and not the sum).
+so the cursor is ONE charlist and the boot conses its text first. a cons here is
+`struct ai_chain { lvm_t *ap; intptr_t a, b; }` -- **three words** -- so prel.h
+costs ~424KB on 64-bit and ~212KB on 32-bit, transient, and it is the PEAK rather
+than the sum because the `p0onto` calls are sequential.
 
-⚠ **that lands on teensy41, which hatches the egg ON DEVICE** (`ai_egg_`,
-port/teensy41/main.c:275) out of a **384KB pool** -- and its own comment records
-that a 384KB OCRAM2 pool *"starved the bake (the first-silicon blocker)"*. so this
-is not a theoretical budget, it is one the tree has already hit once at this size.
+⚠ **this was written up as a decision about the tiny targets, and that was wrong.**
+the reasoning was: teensy41 hatches the egg on device out of a 384KB pool, so
+212KB would not fit. every part of that is a misread of the comment above the pool
+(port/teensy41/main.c:194-201), which says the opposite:
 
-two ways, and they are the choice:
+* teensy41's arena of FIRST RESORT is the **16 MB external PSRAM** -- *"the same
+  arena size the qemu-M7 port bakes in"*, and port/mps2's baker is 16 MB too.
+* the 384KB OCRAM2 pool is the **no-PSRAM fallback, and it ALREADY cannot bake** --
+  *"the old 384 KB OCRAM2 pool starved the bake (the first-silicon blocker)"*. it is
+  a recorded failure, not a live budget.
+* and teensy41 is **WAKE-FIRST** anyway: it wakes a flash image baked by mps2, and
+  the on-device bake is the ~55s fallback path.
 
-1. **one cursor, a charlist.** the boot conses the text and drops it. simplest,
-   deletes the most, and keeps exactly zero polymorphism. **must be measured on the
-   teensy41 lane before it is committed to.**
-2. **two paths in the leaf lexers** -- a charlist cursor and a C-string cursor. the
-   boot stays allocation-free and every leaf keeps a two-way branch: a miniature of
-   the polymorphism this rung exists to remove, but a CLOSED one, not a vtable.
+so the real budget is 16 MB and the charlist is **1.3% of it**. no decision, no
+fork, and `test_mps2` -- which bakes from source on the emulated M7 at the same
+16 MB -- is a faithful gate for it.
 
-(a third, a `(text . index)` cursor, is worse: it makes `sound0` convert its
-charlist in and re-cons its residue out, per form, which is quadratic over rdiff.)
+⚠ the pattern in the mistake is the one to keep: **a comment's WARNING read as a
+CURRENT CONSTRAINT, without checking which branch is live.** that is now three
+times in this rung's planning (the `tap`/`ci` constructor, the A-scope ledger, and
+this), each one a claim about the tree made from a nearby sentence rather than from
+the code under it.
+
+(a `(text . index)` cursor is the option that stays rejected, on its own merits: it
+makes `sound0` convert its charlist in and re-cons its residue out, per form, which
+is quadratic over rdiff.)
 
 **B. the input half of the port vt goes.** `ungetc_buf`, `eof_seen`,
 `zgetc`/`zeof`/`zungetc` (44), `bio_rpending`, `cue?` (6), `feof`/`fungetc`, and
