@@ -263,5 +263,63 @@
  (1 = ((<(libra-diags lt-none "(: a 1\n")) "severity"))
  (2 = ((<(libra-diags lt-sing "(go)")) "severity")))
 
+; --- the paren minifier (fmt -p) ------------------------------------------
+; ⚠ THE SPAN HALF IS OPFIX'S OWN JUDGEMENT, not a copy of it: splice the child's
+; elements into the parent's operand run, fold both ways, and drop only when the
+; cores are IDENTICAL. so the precedence law lives in one place and libra cannot
+; drift from the compiler. the tree-wide check that gates this: apply every drop
+; to all 303 tracked .l files, re-read, and compare cores -- 303 clean, and a
+; rebuilt self-hosted tree gates green with the counts unmoved.
+(: lt-nos (lt-conf `(`('drop-singles 0)))          ; span drops alone
+   lt-nul (lt-conf `(`('drop-nullary 1)))          ; ...and the nullary trap too
+   (lt-drop src) (libra-drop src (tablet 0))
+   (lt-span src) (libra-drop src lt-nos))
+
+; the pattern this exists for: application binds tighter than every infix
+; operator, so a call alone in an operand span never needed its parens.
+(assert
+ ("(\"exit \" + show ec + \")\")" = (lt-drop "(\"exit \" + (show ec) + \")\")"))
+ ("(\"a\" + show x)"  = (lt-drop "(\"a\" + (show x))"))       ; trailing
+ ("(show x + \"a\")"  = (lt-drop "((show x) + \"a\")"))       ; and leading
+ ("(x + a * b)"       = (lt-drop "(x + (a * b))")))           ; grip, the plain case
+
+; ⚠ and the refusals, which are the whole safety of it
+(assert
+ (: s "(f (show x))"        (s = (lt-drop s)))    ; an application OPERAND: (f show x) is ((f show) x)
+ (: s "(\"a\" + f (show x))" (s = (lt-drop s)))   ; the group shares its span with f
+ (: s "(x * (a + b))"       (s = (lt-drop s)))    ; grip the other way
+ (: s "(x + (a + b))"       (s = (lt-drop s)))    ; arithmetic is LEFT-handed: + cannot yield to +
+ (: s "(f + `(a b))"        (s = (lt-drop s)))    ; reader sugar owns those parens
+ (: s "(f + @(1 2))"        (s = (lt-drop s)))
+ ; a PUNCT HEAD folds the same either way and reads far worse, so it is left alone
+ (: s "(? (! (two? l)) () 1)" (s = (lt-drop s))))
+
+; ⚠ THE LEXICAL GATE. the datum cannot see what a DELETION does to the text:
+; ((show x)+"a") folds equal, but dropping the bytes fuses x+ into ONE token. so a
+; pair drops only when it stands FREE -- a delimiter, comment or quote each side.
+(assert
+ (: s "((show x)+\"a\")" (s = (lt-drop s)))
+ (: s "(a + (mid r)., b)" (s = (lt-drop s))))     ; a ) followed by , would fuse too
+
+; the two halves rest on DIFFERENT laws and so have their own keys. a singleton is
+; (f) == f, which opfix declines to apply -- it keeps ((mov r3 r12)) whole, because
+; a list of one may be DATA -- so that half is lexical and separately refusable.
+(assert
+ ("(a = <b)"    = (lt-drop "(a = (<b))"))            ; a punct-bearing token: dropped
+ (: s "(a = (<b))" (s = (lt-span s)))                ; ...but not with (drop-singles 0)
+ (: s "((mat m n))" (s = (lt-drop s)))               ; a list of ONE FORM stays: it may be data
+ (: s "(f (go) x)"  (s = (lt-drop s)))               ; the nullary trap stays VISIBLE by default
+ ("(f go x)" = (libra-drop "(f (go) x)" lt-nul))     ; ...unless a config asks for it
+ (: s "(f (+) x)"   (s = (lt-drop s))))              ; (+) is + as a value, the escape idiom
+
+; fmt composes them in one pass, and MINIFIES BEFORE IT LAYS -- deleting two bytes
+; moves every column after them, so a lay computed on the old text would align to
+; parens that are gone.
+(assert
+ ("(: a (f x + 1)\n   b 2)\n"
+  = (libra-fmt (libra-drop "(: a ((f x) + 1)\n b 2)\n" (tablet 0))))
+ ; and with no drops in it, -p is the reindenter exactly
+ (: s "(: a 1\n   b 2)\n" (s = (libra-fmt (libra-drop s (tablet 0))))))
+
 (puts "libra: ok")
 (putc 10)

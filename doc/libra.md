@@ -16,6 +16,7 @@ libra check FILE ..     the same thing, spelled out
 libra -w FILE ..        ...and strip trailing whitespace while you are there
                         (WITHOUT reindenting)
 libra fmt FILE ..       lay it out on stdout; -w rewrites, -n only checks
+libra fmt -p FILE ..    ...and MINIFY THE PARENS while you are there
 libra serve             speak lsp over stdio
 libra -h                the usage
 ```
@@ -87,7 +88,14 @@ person, which is why the project file exists at all.
 (singleton 1)                                    ; turn the rule on
 (deprecated old-thing (worse-thing "use better-thing"))
 (strict singleton)                               ; ...and make it fail the gate
+(drop-parens 1)                                  ; fmt minifies parens without -p
+(drop-singles 0)                                 ; ...but leave (x) alone
+(drop-nullary 1)                                 ; ...and take (go) too
 ```
+
+⚠ `drop-parens` and `drop-singles` are read with `salt-one`, never by PRESENCE:
+the tail of `(drop-parens 0)` is `two?` just as much as `(drop-parens 1)`'s is, so
+asking whether the key is there would read an explicit OFF as an on.
 
 a setting is one form: the head names it, the tail is its value. an entry in the
 roster is a bare name or a `(name "hint")` pair, and the hint is printed after
@@ -164,6 +172,61 @@ is one sentence -- a continuation line aligns under its form's FIRST OPERAND, or
 one past the open delimiter when the head stands alone on its line -- plus the
 pairing rule, since `:` and `?` take their operands two at a time and the house
 sets the second of each pair one past the first.
+
+## the paren minifier
+
+`libra fmt -p` also drops the parens that do nothing. it is a format option rather
+than a verb of its own, because minifying and reindenting are one errand — make
+the file read the way the house writes it — and they compose in a single pass.
+
+the everyday case is the one that abounds: **application binds tighter than every
+infix operator**, so a call alone in an operand span never needed its parens.
+
+```love
+("cook: command failed (exit " + (show ec) + ")")   ; before
+("cook: command failed (exit " + show ec + ")")     ; after
+```
+
+⚠ **the decision is opfix's, not libra's.** splice the child's elements into its
+parent's operand run, fold both ways, and drop only when the cores come out
+IDENTICAL. `op-core` recurses structurally, so a form's fold reads only its own
+operand list — the test is local, the file is never read twice, and the precedence
+law is *borrowed* rather than copied, so libra cannot drift from the compiler. what
+it refuses matters as much as what it takes:
+
+```love
+(f (show x))        an application OPERAND -- (f show x) is ((f show) x)
+("a" + f (show x))  the group shares its span with f
+(x * (a + b))       grip
+(x + (a + b))       arithmetic is LEFT-handed, so + cannot yield to +
+(f + `(a b))        reader sugar owns those parens
+(? (! (two? l)) ..) a PUNCT HEAD folds the same and reads far worse
+```
+
+⚠ **and the answer is gated LEXICALLY**, because the datum cannot see what a
+deletion does to the text. `((show x)+"a")` reads fine and folds equal, but dropping
+the bytes leaves `x+` as one token — a different program. so a pair drops only when
+it stands FREE: a delimiter, a comment or a quote on both outer sides. that one rule
+also disposes of `foo(x)`, `'(x)` and every sigil-glued run, and it costs almost
+nothing — 17 of the tree's 193389 code parens are right-glued.
+
+**singletons ride the same flag** but rest on a different law: `(x)` is `x` by
+`(f) == f`, which opfix *declines* to apply — it keeps `((mov r3 r12))` whole,
+because a list of one may be data. so that half stays lexical, and it carries the
+risk the span half does not: `(f) == f` is false for a MACRO, which reads its
+operand's shape rather than its value, and libra cannot know which heads are macros.
+`(drop-singles 0)` turns it off. a list of one FORM is left alone either way.
+
+⚠ **the nullary trap stays visible.** `(go)` is `go` handed back unrun, and dropping
+those parens is semantics-preserving *and* deletes the only evidence of a bug this
+tree keeps hitting. fmt leaves them for `check`'s singleton rule to speak about;
+`(drop-nullary 1)` takes them anyway.
+
+**what it is checked against.** apply every drop to all 303 tracked `.l` files,
+re-read, and compare the compiled cores: 303 clean. then rebuild the self-hosting
+tree from the minified source and gate it — `make test` green, test counts unmoved.
+
+## the reindenter
 
 **it is BUILT BUT NOT ADOPTED.** nothing is gated on layout and nothing has been
 reformatted. tree-wide it would move about a fifth of all lines, because the

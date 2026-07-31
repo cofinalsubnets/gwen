@@ -5,10 +5,16 @@
 ; (lib/lint.l) under all three, so the editor, the formatter and the gate can
 ; never disagree about what balanced means.
 ;
-; the FORMATTER is a REINDENTER and nothing more: it replaces leading whitespace
-; and leaves every line break, every alignment inside a line, and every comment
-; exactly where its author put them (moonfmt's posture for C, and the reason a
-; reindent is safe to run over a whole tree). it cannot re-flow and will not try.
+; the FORMATTER is a REINDENTER: it replaces leading whitespace and leaves every
+; line break, every alignment inside a line, and every comment exactly where its
+; author put them (moonfmt's posture for C, and the reason a reindent is safe to
+; run over a whole tree). it cannot re-flow and will not try. under `-p` it also
+; MINIFIES PARENS -- deletes the pairs that do nothing and not one byte besides --
+; which is the one edit it makes inside a line, and it is a DELETION, so no comment
+; and no break can move. the decision is lint.l's (lint-drops) and it is opfix's
+; own: fold the form both ways and compare. ⚠ it is NOT a pretty-printer and must
+; not become one by accident -- printing from the datum would strip every comment
+; in the file, since `sound` does not keep them.
 ;
 ; the SERVER speaks LSP over stdin/stdout, a protocol in two layers and neither
 ; of them is lovely: a header block (`Content-Length: N`, CRLF-terminated) framing
@@ -235,6 +241,24 @@
     (? (! (two? pl)) ln
        (: b (ltrim ln) (? (! (0 < (tally b))) "" ((spaces <>pl) + (rtrim b)))))
 
+   ; `-p`, the paren minifier: delete the pairs lint-drops names, and NOTHING else.
+   ; lint says where, this applies it -- the same division libra-lay keeps with
+   ; lint-lay, and the reason there is no second opinion about what a paren does.
+   ;
+   ; ⚠ MINIFY FIRST, LAY SECOND, and the order is not a preference: deleting two
+   ; bytes moves every column on the line after them, and the reindenter aligns to
+   ; first-operand COLUMNS -- a lay computed on the old text would align to parens
+   ; that are no longer there. so this answers new SOURCE and libra-fmt runs on it.
+   (libra-drop src conf)
+    (: ds (lint-drops src conf)
+       (? (! (two? ds)) src
+          (: n (tally src)
+             (g k l acc)
+              (? (n <= k) (string (rev acc))
+                 (&& (two? l) (k = <l)) (g (k + 1) >l acc)
+                 (g (k + 1) l (link (src k) acc)))
+             (g 0 ds ()))))
+
    (libra-fmt src)
     (: ls (linesof src)
        pp (lint-lay src)
@@ -291,18 +315,18 @@
 
    ; fmt: lay each file out on stdout; -w rewrites in place; -n (check) says
    ; nothing and answers the count that WOULD change, which is the gate's shape.
-   (libra-fmt-files fs mode bad)
+   (libra-fmt-files conf fs mode drop bad)
     (? (! (two? fs)) bad
        (: r (rdf <fs)
           (? (! (two? r)) (: _ (say err ("libra: cannot open " + <fs + "\n"))
-                              (libra-fmt-files >fs mode (bad + 1)))
+                              (libra-fmt-files conf >fs mode drop (bad + 1)))
              (: src <>r
-                lay (libra-fmt src)
+                lay (libra-fmt (? drop (libra-drop src conf) src))
                 same (lay = src)
                 _ (? (id? mode 'write) (? same 0 (: q (open <fs "w") _ (say q lay) (close q)))
-                     (id? mode 'check) (? same 0 (say err (<fs + ": would reindent\n")))
+                     (id? mode 'check) (? same 0 (say err (<fs + ": would reformat\n")))
                      (say out lay))
-                (libra-fmt-files >fs mode (? same bad (bad + 1)))))))
+                (libra-fmt-files conf >fs mode drop (? same bad (bad + 1)))))))
 
    ; ⚠ ABOVE its reader, and not for tidiness: a lambda that closes over a LATER
    ; binding of the same `:` reads the cell before pin when the value is not
@@ -313,9 +337,12 @@
    usage ("usage: libra [check] FILE ..   balance: path:line:col: on err, quiet when clean,\n"
           + "                               exit 1; -w also strips trailing whitespace. THE DEFAULT.\n"
           + "       libra fmt FILE ..      lay it out on stdout; -w rewrites, -n only checks (exit 1)\n"
+          + "                              -p also MINIFIES PARENS: drops the pairs that do nothing\n"
           + "       libra serve            speak lsp over stdio -- diagnostics as you type\n"
           + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 1),\n"
-          + "          (deprecated old (worse \"use better\")), (strict singleton). doc/libra.md\n")
+          + "          (deprecated old (worse \"use better\")), (strict singleton),\n"
+          + "          (drop-parens 1) for -p by default, (drop-singles 0) / (drop-nullary 1)\n"
+          + "          to tune what it drops. doc/libra.md\n")
 
    ; ⚠ the config is read ONCE, here, and handed down -- never re-read per file.
    ; `libra` over a whole tree opens two files at the top and no more.
@@ -326,10 +353,21 @@
           v (? (two? as) <as "")
           r >as
           (? (v = "check") (libra-check conf (files r) (member? "-w" r))
-             (v = "fmt")   (: n (libra-fmt-files (files r)
+             ; ⚠ `-p` is a FORMAT option, not a verb of its own: minifying parens
+             ; and reindenting are one errand -- make the file read the way the
+             ; house writes it -- and they compose in one pass over one file.
+             ; the config can stand it up without the flag, for a tree that has
+             ; settled the question.
+             (v = "fmt")   (: n (libra-fmt-files conf (files r)
                                                  (? (member? "-w" r) 'write
                                                     (member? "-n" r) 'check
                                                     'show)
+                                                 ; ⚠ salt-one, never salt-all: the tail
+                                                 ; of (drop-parens 0) is two? just as
+                                                 ; much as (drop-parens 1)'s is, so
+                                                 ; presence would read an OFF as an on.
+                                                 (|| (member? "-p" r)
+                                                     (salt-one conf 'drop-parens 0))
                                                  0)
                               (? (&& (member? "-n" r) (0 < n)) (quit 1) 0))
              (v = "serve") (libra-serve conf in out)
