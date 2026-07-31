@@ -674,7 +674,11 @@ nettest: host
 	@sh $R/test/net/loopback.sh $m $(PORT)
 # Validate the l tool rewrites against their frozen Python references in
 # tools/py/ (gen_data / vmret). See tools/Makefile + tools/py/README.md.
-test_tools: host
+# ⚠ lush is a real prerequisite: cooktest's SHELL pair sets `SHELL := out/host/lush`
+# to prove cook honors it. It was undeclared and test_slow runs test_tools BEFORE
+# test_hostnif (which builds lush), so a fresh tree failed those two and a second
+# run passed -- a gate that reddens by build order teaches people to re-run it.
+test_tools: host out/host$(hsuf)/lush
 	@$(MAKE) -C tools
 # Machine-check proof/rocq/spec.v -- love's headline laws (the numeral / function /
 # absence core of test/spec.l) as Rocq theorems, axiom-free (every proof

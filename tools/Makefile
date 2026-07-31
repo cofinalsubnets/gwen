@@ -73,6 +73,10 @@ test_hue: | $(m)
 # the captured output (variable expansion, the make functions, conditionals,
 # include, pattern + static-pattern rules). It uses paths relative to the repo
 # root, so run it from there.
+# ⚠ the SHELL pair needs the BUILT lush -- the fixture sets `SHELL := out/host/lush`
+# to prove cook honors it, so an unbuilt shell is two red tests reading `cannot run
+# echo`. the rule that builds it lives in the ROOT makefile, so the prerequisite
+# sits on test_tools (test/test.mk) rather than here.
 test_cook: | $(m)
 	@echo TEST cook.l
 	@cd $(R) && $(mwr) crew/cook/cooktest.l
