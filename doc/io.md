@@ -1215,36 +1215,46 @@ distinct from EOF and from any byte), and `lvm_fgetc` parks the task on the fd w
 its own guard already did; the bulk lane had simply grown a second, worse answer to
 the same question.
 
-#### ⚠ AND THE BRANCH IS UNTESTED. knowingly, and this is the open debt
+#### the branch was untested -- ✅ GATED 2026-07-31 by a test-only frontend
 
-the fault hook was removed (2026-07-31, gwen's call) and is not coming back in that
-form. **love must not carry a feature whose only purpose is to let a test break
-it** -- neither an env var read by the shipped binary nor a nif on the public
-surface is acceptable language surface to buy a test.
+the debt this section recorded is paid, and by the remedy it named. the fault hook
+was removed (gwen's call) and is not coming back in that form: **love must not carry
+a feature whose only purpose is to let a test break it** -- neither an env var read
+by the shipped binary nor a nif on the public surface is acceptable language surface
+to buy a test.
 
-so `IO_WOULDBLOCK` is a live branch with no gate. what that costs: if the park were
-wrong -- `Ip` advanced so the op never re-runs, or the wrong fd recorded -- nothing
-would catch it, and the symptom would be a task that never resumes rather than the
-VM hang it replaced. partial cover: the pty two-task gate exercises real parking
-and resumption on real fds, but through `lvm_fgetc`'s own guard, never through the
-refill's new answer.
+**`test/front/` is the answer.** `liblove.a` is love.c ONLY (host/build.mk:140;
+`host/*.c` links direct, :23), so **the port vt has always been the frontend's
+responsibility, not the runtime's** -- and a frontend that lies to the runtime is
+test code. `out/host/front` links the archive, supplies the whole contract itself,
+and serves SYNTHETIC devices: a device is a byte queue fed from `.l`, so every
+schedule is deterministic. `(stall p k)` arms k would-block answers on `readn` while
+`ai_ready` keeps saying yes -- which IS the race, since the readiness check saying
+go and the read saying no is the whole condition. `test/front/io.l` carries six laws
+and `make test_front` gates them (in `test_slow`).
 
-**the way to regain it, when we come back:** a TEST-ONLY FRONTEND. `liblove.a`
-deliberately excludes `host/main.c` (host/build.mk:36), and `ai_fd_port_vt` --
-`readn` included -- lives in main.c, so **the port vt is already the frontend's
-responsibility, not the runtime's.** a small C frontend that links the archive and
-supplies its own vt, whose `readn` answers "would block" on cue, reproduces the
-condition with the fault in TEST code and nothing added to love. the cost is a new
-frontend plus a build target, which is why it is a revisit and not a patch.
-⚠ rejected alternative, recorded so it is not re-proposed: a genuine two-process
-race needs no surface but is non-deterministic, and a gate that usually reddens
-teaches people to ignore it.
+⚠ **it is a deadlock detector as well as a fault injector**, and that turned out to
+be most of its value: a synthetic device can only be fed by another task, so a wait
+with NO DEADLINE means every task is parked, and the frontend exits 97 with a named
+reason instead of hanging until the harness kills it.
 
-a cheaper partial, also not built: a structural check in `vmret`'s spirit --
-`ai_wait_fd` now has exactly two call sites, both in the scheduler (love.c:2696,
+**sabotage-proved, both halves** (2026-07-31, against patched copies of love.c built
+outside the tree):
+
+* restore `io_refill`'s blocking wait and the gate dies `exit 97 -- a sleep with no
+  deadline, every task is parked`. that is the whole-VM freeze, now loud.
+* delete `lvm_fgetc`'s `IO_WOULDBLOCK` park and law 1 reddens with its own source
+  form -- the sentinel leaks out as a byte and `"abc"` comes back wrong.
+
+⚠ rejected alternative, still recorded so it is not re-proposed: a genuine
+two-process race needs no surface but is non-deterministic, and a gate that usually
+reddens teaches people to ignore it.
+
+what is still NOT built, and is now cheap: the structural check in `vmret`'s spirit
+-- `ai_wait_fd` has exactly two call sites, both in the scheduler (love.c:2696,
 2698), so a build-time assertion that no io-path function calls it would pin that
-the blocking call cannot come back. ⚠ it does NOT cover what the deleted test
-covered: it gates the cause, never the effect.
+the blocking call cannot come back. ⚠ on its own it gates the CAUSE, never the
+effect; with `test_front` gating the effect, both halves are finally coverable.
 
 ### the boundary principle -- keep, it is still right
 

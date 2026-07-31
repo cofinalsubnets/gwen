@@ -51,6 +51,27 @@ test_host: $m
 	@{ $m out/host/.test_host.l </dev/null; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
 	  s=$$(cat out/host/.test_host.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
+# test_front -- the TEST-ONLY FRONTEND, and the instrument the io arc runs on.
+# out/host/front links liblove.a and supplies the frontend contract itself, so its
+# port vt can answer WOULD-BLOCK on cue. That branch (love.c's IO_WOULDBLOCK) is
+# otherwise unreachable in-process -- lvm_fgetc's readiness guard and its refill
+# are one op -- and the fault must not live in `love`, which is why the earlier
+# LOVE_FAULT_EAGAIN hook came out (doc/io.md). liblove.a is love.c ONLY
+# (host/build.mk), so nothing in test/front/ can reach the shipped binary.
+# ⚠ the frontend EXITS 97 on a wait with no deadline: its devices can only be fed
+# by another task, so "every task parked, no timer" is a deadlock by construction.
+# a loud exit beats a gate that hangs until the harness kills it.
+$(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc \
+    out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
+	@echo CC	$@
+	@mkdir -p $(dir $@)
+	@$(hcc) -o $@ test/front/main.c $(ho)/liblove.a
+test_front: $(ho)/front
+	@echo TEST $(ho)/front
+	@$(ho)/front test/front/io.l </dev/null > out/host/.test_front.out 2>&1; r=$$?; \
+	  cat out/host/.test_front.out; \
+	  { [ $$r -eq 0 ] && grep -q "front: ok" out/host/.test_front.out; } \
+	    || { echo "FAIL test_front (exit $$r)"; exit 1; }
 # Host-nif smoke tests: nifs defined in host/*.c link into `love` but NOT love0
 # (which bakes the test/*.l corpus), so they cannot sit DIRECTLY in test/ -- love0
 # would bake them, read the nif names as missing, and fail its self-test. They
