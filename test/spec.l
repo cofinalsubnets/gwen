@@ -27,8 +27,12 @@
 (assert
  (id? (:) (?)) (id? (?) (\)) !(:) !(nom? (:))     ; the empty form is the head read, both lanes: the zero point (absence, NOT a nom)
  (id? (:) (? 0 'a)) (id? (:) (map (+ 1) ()))     ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), NOT charm 0
- (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b))     ; one scope: forward read = the condition, the point helpless
- (2 = (: x 1 x (x + 1) x)))                      ; ... the sequence law is untouched
+ (2 = (: x 1 x (x + 1) x)))                      ; the sequence law: a rebind reads the previous value
+; one scope: a forward read raises missing, and welp answers it with the zero point -- the same
+; law the asserts above show, under a help that keeps it quiet (file mode's default wears a face)
+(: help welp)
+(assert (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b)))
+(: help 0)
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
 ; numbers their value, text its charm sum, lists the sum of element nets, SPINE only). `!` (nil?) reads
