@@ -15,16 +15,24 @@
 ; left of cursor on the current line, reversed), r (chars at/after
 ; cursor on the current line, in order), d (lines below).
 
-; drink: block for the first byte (see parks the TASK), then take everything already
-; waiting. `cue?` is the dual of that park -- true iff the next see will answer -- so the
-; loop stops at the fd's own edge. () at eof. one of the three vessel verbs: sip draws
-; ONE unit, drink what is READY, slurp ALL (test/spec.l's i/o section).
-(: (drink p)
+; gulp: block for the first byte (see parks the TASK), then take everything already
+; waiting, REVERSED. `cue?` is the dual of that park -- true iff the next see will
+; answer -- so the loop stops at the fd's own edge. () at eof.
+; ⚠ REVERSED IS THE POINT, and it is not tidiness: `flow` needs a gulp that ENDS IN A
+; PROMISE, and a forward-built list can only get one by being copied onto it. that
+; copy doubles the peak for the length of the gulp -- and the gulp is a whole file, so
+; on the freestanding targets it is the difference between fitting and not. built
+; backwards, one `foldl (flip link)` lays the cells straight onto the promise, and
+; `drink` pays the same single pass it always did.
+(: (gulp p)
    (: c (see p)
       (? (c = -1) ()
-         (link c ((: (go acc) (? (cue? p)
-                                 (: b (see p) (? (b = -1) (rev acc) (go (link b acc))))
-                                 (rev acc))) ())))))
+         ((: (go acc) (? (cue? p)
+                         (: b (see p) (? (b = -1) acc (go (b >< acc))))
+                         acc)) `(c)))))
+; drink: the gulp, in order. one of the three vessel verbs: sip draws ONE unit,
+; drink what is READY, slurp ALL (test/spec.l's i/o section).
+(: (drink p) (rev (gulp p)))
 ; once: THE PROMISE. a thunk that runs its f at most once and remembers the answer;
 ; every later firing reads the remembrance. it goes through a TABLET because that is
 ; the door this tree sanctions for mutation -- the classic promise mutates its own
@@ -56,8 +64,8 @@
 ; and against a bare (\ u (flow p)) each of those is another DRINK, which loses the bytes
 ; between. that fails as a MISREAD, never a crash.
 (: (flow p)
-   (: g (drink p)
-      (? (two? g) (cat g (once (\ u (flow p)))) ())))
+   (: g (gulp p)
+      (? (two? g) (foldl (flip link) (once (\ u (flow p))) g) ())))
 ; read: chars -> top, the reverse shell of the compiler -- the lane every shell
 ; ultimately feeds into. `s` is a charlist: a bare one (a charm is a sat, a non-negative
 ; fixnum), a flowing one, or a PORT, which is lifted to the flowing kind and is the only

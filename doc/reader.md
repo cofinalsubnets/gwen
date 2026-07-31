@@ -608,6 +608,17 @@ face of "presence is the wrapper, never the net", inside the fix for it.
   whole `drink` gulp inside the promise, so the amortization the refill loop had
   survives the move and the quadratic re-parse is not traded for a cons-and-a-call
   per character. the gulp is REALIZED; only the join is lazy.
+* ⚠ **the gulp must be built BACKWARDS**, and this is the one that actually bit. the
+  obvious `flow` is `(cat g (once ..))` -- and `cat` COPIES `g`, so a gulp holds two
+  cells per byte at its peak instead of one. on a host that is invisible; on the
+  freestanding targets it is the difference between fitting and not. it reddened
+  **`test_uefi` only** -- `test_kernel` on the same corpus and the same kmain.c
+  passed, because the UEFI lane hands over after the firmware has taken its share.
+  the failure wore exactly the face ktest.l already documents for a budget wall:
+  *"died SILENTLY mid-corpus at a deterministic dot, no fault text"*, no assert, no
+  scare. the fix is `gulp` (the drink, still reversed) plus one
+  `foldl (flip link) promise`, which lays the cells straight onto the tail; `drink`
+  is `(rev (gulp p))` and pays the same single pass it always did.
 * **`two?` is FALSE for a lambda**, so an unforced tail reads as a clean end to
   every test already written. a PARTIAL conversion fails by silently truncating
   input -- "presence is the wrapper, never the net" wearing its fifth face, and
@@ -618,8 +629,8 @@ face of "presence is the wrapper, never the net", inside the fix for it.
 
 #### how it went, and its gate
 
-1. `once`, the promise, and `flow`: a drunk gulp consed onto `(once (\ u (flow p)))`,
-   `()` at eof. both bao.l top-level, so they ride bao's splice like `drink`.
+1. `once`, the promise, and `flow`: a gulp laid onto `(once (\ u (flow p)))`, `()` at
+   eof. both bao.l top-level, so they ride bao's splice like `drink`.
 2. p1 reflects, through `p1-cup` -- `(? (lit? t) (t ()) t)`, one line. the rule is
    grep-able and TOTAL: after it, a bare `cup` on the INPUT cursor is a bug, and
    `grep '(cup ' love/p1.l` reads as an audit. six functions step the cursor
