@@ -4367,9 +4367,6 @@ static struct ai *p0read1(struct ai *g) {
   case '\\': return intern(ai_strof(g, "\\"));          // lambda/quote: NEVER fuses (form space)
   default: return ioread1sym(g, c); } }                 // name / number
 
-struct ai *ai_p0read1(struct ai *g, struct ai_io *i) {
- return ai_core_of(g)->io = i, p0read1(g); }
-
 // (sound0 text): sound's bootstrap twin -- the same protocol over p0's grammar,
 // so the differential (test/host/rdiff.l) compares the two readers like with
 // like. answers the datum consed onto what is left, () at a clean end, or the
@@ -4383,40 +4380,40 @@ struct ai *ai_p0read1(struct ai *g, struct ai_io *i) {
 // C string. ⚠ and it lives in an ai_noinline helper for the OTHER reason: an
 // address-taken local in the lvm_ body would force the tail Continue() into a
 // ret and grow the stack every step (`make vmret`).
+// It does FOUR things and none of them is reducible while p0 reads through a
+// port: wear the charlist as one, run the read, unwind on a partial input, and
+// hand back what is left. what would delete it is p0's LEXERS going
+// charlist-native -- then the residue IS the cursor -- and that is a rung of its
+// own, owing an answer for the boot stitch below, which reads a C string.
 ai_noinline static struct ai *p0text(struct ai *g) {
- uintptr_t depth = topof(g) - g->sp;      // the rollback point (see the torn lane)
- uintptr_t const n = Width(struct ci);
+ uintptr_t const depth = topof(g) - g->sp, n = Width(struct ci);   // the rollback point
  if (!ai_ok(g = ai_have(g, n + Width(struct ai_tag)))) return g;
  union u *k = bump(g, n + Width(struct ai_tag));
  struct ci *i = (struct ci*) k;
- i->io.ap = lvm_port_io, i->io.fd = putcharm(-4);
- i->io.ungetc_buf = putcharm(EOF), i->io.eof_seen = putcharm(false);
- i->head = g->sp[0];                                  // the have above kept sp[0] live
- tagthread(k, n);
- g->io = (struct ai_io*) k;
+ i->io.ap = lvm_port_io, i->io.fd = putcharm(-4), i->io.ungetc_buf = putcharm(EOF),
+ i->io.eof_seen = putcharm(false), i->head = g->sp[0];   // the have kept sp[0] live
+ g->io = (struct ai_io*) tagthread(k, n);
  g = p0read1(g);
  if (!ai_ok(g)) {                                     // no datum: which nothing?
-  enum ai_status st = ai_code_of(g);
+  enum ai_status const st = ai_code_of(g);
   if (st != ai_status_eof && st != ai_status_more) return g;   // a real failure (oom) propagates
   // ⚠ THE ROLLBACK IS NOT OPTIONAL. p0reads lets a list's datums pile up on the
   // l stack and folds them only at the close, so a TORN parse leaves that pile
   // behind -- and the text slot is no longer sp[0]. drop back to the depth we
   // came in at, which is exactly what the old parse nif's transaction did.
-  struct ai *c = ai_core_of(g);
-  c->sp = (word*) c + c->len - depth;
-  g = c;
+  g = ai_core_of(g), g->sp = topof(g) - depth;
   if (st == ai_status_eof) return g->sp[0] = ZeroPoint, g;     // a clean end, over the text slot
   if (!ai_ok(g = intern(ai_strof(g, "torn")))) return g;
   return g->sp[1] = g->sp[0], g->sp++, g; }
  if (!ai_ok(g = ai_push(g, 1, nil))) return g;        // reserve, THEN read the residue
- g->sp[0] = ((struct ci*) ai_core_of(g)->io)->head;   // forwarded if the gc moved the port
- // ⚠ AND THE PUSHED-BACK BYTE. the token lexer ungets its terminator, and
- // ti_ungetc parks that in ungetc_buf rather than back on the charlist -- so the
- // head ALONE has already swallowed the delimiter: `#(a)` came back as `#` with
- // the `(` gone, and every spaced token ate its space.
- { int pb = getcharm(((struct ci*) ai_core_of(g)->io)->io.ungetc_buf);
-   if (pb != EOF) {
-    if (!ai_ok(g = gxl(ai_push(g, 1, putcharm(pb))))) return g; } }
+ i = (struct ci*) ai_core_of(g)->io;                  // forwarded if the gc moved the port
+ // ⚠ THE RESIDUE IS THE HEAD PLUS THE PUSHED-BACK BYTE. the token lexer ungets its
+ // terminator, and ti_ungetc parks that in ungetc_buf rather than back on the
+ // charlist -- so the head ALONE has already swallowed the delimiter: `#(a)` came
+ // back as `#` with the `(` gone, and every spaced token ate its space.
+ int const pb = getcharm(i->io.ungetc_buf);
+ g->sp[0] = i->head;
+ if (pb != EOF && !ai_ok(g = gxl(ai_push(g, 1, putcharm(pb))))) return g;
  g = gxr(g);                                          // (datum . residue)
  return ai_ok(g) ? (g->sp[1] = g->sp[0], g->sp++, g) : g; }
 

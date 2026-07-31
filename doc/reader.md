@@ -567,6 +567,36 @@ what remains true: p0 is the SOLE consumer of the leaf lexers (`ai_z_getc`,
 `ioread1str`, `ioread1sym` have no caller outside `p0read1`/`p0reads`; 6c's
 `ioparse` deletion took the other), so converting its input later strands nobody.
 
+**so how small can `p0text` go?** measured, not estimated: **28 code lines to 23**,
+and that is the floor while p0 reads through a port. it does four things and each
+one is answering a real question:
+
+| job | lines | why it cannot go |
+|---|---|---|
+| wear the charlist as a port | 5 | ⚠ ON THE HEAP -- a `ci`'s head is a love value and `g->io` rides the core's `v0..end` span, so the collector forwards it. a C-stack `ci` dangles the moment the parse allocates. |
+| run `p0read1` | 1 | |
+| unwind on partial input | 5 | `p0reads` piles a list's datums on the l stack and folds at the close, so a torn parse leaves the pile and the text slot is no longer `sp[0]`. |
+| hand back what is left | 6 | the residue is `head` PLUS the byte `ti_ungetc` parked off-list. |
+
+the 5 that left were the four separate field assignments (now one comma run, the
+shape `p0onto` already uses for its `ti`), the three-step rollback, and a `{}` block
+around the pushback. `ai_p0read1` went with them -- 2 lines, non-static, no
+declaration in love.h and no caller in the tree; 6c's `ioparse` deletion took its
+last one. love.c 9047 -> 9044.
+
+two ways past the floor, neither of them this rung's:
+
+* **charlist-native p0** -- the leaf lexers thread a cursor instead of pulling from
+  `g->io`. `p0text` collapses to about 6 lines and the ungetc dance disappears
+  entirely (a pushback is just not advancing). but the cursor is a LOVE VALUE that
+  every leaf both reads and updates, so it has to live on `g->sp` -- and `g->io` does
+  that job today, GC-traced, for free. the three lexers would each grow what
+  `p0text` sheds. net could easily be zero.
+* **give `struct ci` a `prev` word**, so a ci-specific ungetc rewinds onto the list
+  instead of parking off it. that retires the residue's second half AND the trap
+  above -- but the fd = -4 layout is built from LOVE (prel's `tap` pokes a 5-word
+  spin), so it is a change to a shape two languages agree on, for ~3 lines.
+
 #### ⚠ the thunk must MEMOIZE, and the sanctioned way is a tablet -- taken
 
 p1 forces the same tail more than once. `p1.l:66-67`, the shebang lookahead:
