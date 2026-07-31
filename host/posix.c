@@ -167,7 +167,7 @@ static lvm(lvm_reapany) {
 //                  not a death. () on failure. SIGINT is left unblocked so ^C bails.
 // (sigtake port) -> (signo . pid) of ONE pending signal, or () if none ready.
 // The supervisor PARKS with the core `(await sig)` (cooperative -- the scheduler
-// merges the sigfd with a heartbeat task's timer in one ai_wait_fds, the {nic, clock}
+// merges the sigfd with a heartbeat task's timer in one wait, the {nic, clock}
 // story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
 // 'chld wake still loops `hear` to harvest every zombie.
 #if defined(__linux__)

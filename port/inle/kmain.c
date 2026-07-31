@@ -215,13 +215,12 @@ bool ai_ready(int fd) {
 
 // Multi-source wait. ticks=0 means infinite. Future: program a one-shot
 // timer at the deadline instead of waking every tick.
-void ai_wait_fds(int const *fds, int n, uintptr_t ticks) {
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
   if (n <= 0) { ai_sleep(ticks); return; }
-  if (n > ai_wait_fds_max) __builtin_trap();
   uintptr_t deadline = kticks + ticks;
   for (;;) {
     if (ticks && kticks >= deadline) return;
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i])) return;
+    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd)) return;
     k_wait(); } }
 uintptr_t ai_clock(void) { return kticks; }
 

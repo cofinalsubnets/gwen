@@ -2682,9 +2682,10 @@ lvm(lvm_callk) {
  Sp[1] = f_val;
  return Ap(lvm_ap, g); }
 
-// lvm_yield_sw_mono can't call ai_wait_fds directly with a stack pointer
-static ai_noinline void ai_wait_fd(int const fd, int n, uintptr_t ms) {
-  ai_wait_fds(&fd, n, ms); }
+// lvm_yield_sw_mono can't call ai_wait_fds directly with a stack record
+static ai_noinline void wait_one(int fd, int n, uintptr_t ms) {
+  struct ai_wait_fd w = { .fd = fd };
+  ai_wait_fds(&w, n, ms); }
 
 // monotask fast path
 static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
@@ -2693,9 +2694,9 @@ static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
  g->next_wait_fd = -1;
  g->yield_ctr = 0;
  if (my_wake) for (uintptr_t now; my_wake > (now = ai_clock());)
-  my_wait_fd >= 0 ? ai_wait_fd(my_wait_fd, 1, my_wake - now) : ai_sleep(my_wake - now);
+  my_wait_fd >= 0 ? wait_one(my_wait_fd, 1, my_wake - now) : ai_sleep(my_wake - now);
  else if (my_wait_fd >= 0)
-  while (!ai_ready(my_wait_fd)) ai_wait_fd(my_wait_fd, 1, 0);
+  while (!ai_ready(my_wait_fd)) wait_one(my_wait_fd, 1, 0);
  return Continue(); }
 
 // First non-dormant peer in the ring whose wake_at <= now and whose
@@ -2709,21 +2710,40 @@ static ai_inline union u *find_runnable(union u *head, uintptr_t now) {
    if (wf < 0 || ai_ready(wf)) return n; }
  return NULL; }
 
+// ⚠ THE FD SET IS SIZED BY THE COUNT, NEVER BY A CONSTANT. this was an
+// `int fds[ai_wait_fds_max]` on this frame with `nfds < ai_wait_fds_max` guarding
+// the fill, which SILENTLY DROPPED every fd past the eighth -- so a ninth parked
+// task with no timer pending could not wake the wait at all, and kiosko twirls a
+// task per client. the block rides the uncommitted heap gap instead (host_run's
+// door: invisible to gc, holds no love pointers, Hp never moves, consumed before
+// anything allocates again), so counting the ring first and sizing the block
+// second retires the cap by construction. ⚠ CALLED WITH g PACKED -- the gap is
+// [hp, sp) and both are stale otherwise.
 static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd) {
  uintptr_t min_wake = my_wake;
- int fds[ai_wait_fds_max], nfds = 0;
- if (my_wait_fd >= 0) fds[nfds++] = my_wait_fd;
+ int nfds = my_wait_fd >= 0;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
   if (n[1].m->ap != lvm_task_exit) {
    uintptr_t wa = (uintptr_t) getcharm(n[3].x);
    if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
-   int wf = (int) getcharm(n[4].x);
-   if (wf >= 0 && nfds < ai_wait_fds_max) fds[nfds++] = wf; }
+   if (getcharm(n[4].x) >= 0) nfds++; }
  if (!min_wake && !nfds) return NULL;
- uintptr_t now = ai_clock();
- if (!min_wake) ai_wait_fds(fds, nfds, 0);
- else if (min_wake > now) ai_wait_fds(fds, nfds, min_wake - now);
- now = ai_clock();
+ uintptr_t now = ai_clock(), ticks = min_wake ? min_wake - now : 0;
+ if (!min_wake || min_wake > now) {
+  struct ai_wait_fd *fds = (struct ai_wait_fd*) g->hp;
+  // no gap to lay them in (the heap at its fullest, a collection pending): wait
+  // on the CLOCK alone and come straight back, rather than on a set we already
+  // know is short -- the one thing this rung exists to stop.
+  if (avail(g) < b2w((uintptr_t) nfds * sizeof *fds)) ai_wait_fds(NULL, 0, ticks ? ticks : 1);
+  else {
+   int k = 0;
+   if (my_wait_fd >= 0) fds[k++].fd = my_wait_fd;
+   for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
+    if (n[1].m->ap != lvm_task_exit) {
+     int wf = (int) getcharm(n[4].x);
+     if (wf >= 0) fds[k++].fd = wf; }
+   ai_wait_fds(fds, k, ticks); }
+  now = ai_clock(); }
  if (my_wait_fd >= 0 && ai_ready(my_wait_fd)) return NULL;
  return find_runnable(g->tasks, now); }
 
@@ -2741,7 +2761,9 @@ lvm(lvm_yield_sw) {
   // (my_wake set, or my_wait_fd >= 0) still waits properly below; sleeping peers
   // are picked up by a later YieldCheck once their wake_at passes.
   if (!my_wake && my_wait_fd < 0) { g->yield_ctr = 0; return Continue(); }
+  Pack(g);                     // the wait lays its fd block in the [hp, sp) gap
   next = yield_sw_wait(g, my_wake, my_wait_fd);
+  Unpack(g);                   // nothing allocated, so these come back unchanged
   if (!next) {
    g->next_wake_at = 0;
    g->next_wait_fd = -1;
@@ -4672,7 +4694,7 @@ lvm(lvm_apof) {
 // (all fds always-ready; multi-source wait collapses to plain sleep) so
 // frontends that don't multitask (lcat, pd) link without providing impls.
 __attribute__((weak)) bool ai_ready(int fd) { (void) fd; return true; }
-__attribute__((weak)) void ai_wait_fds(int const *fds, int n, uintptr_t ticks) {
+__attribute__((weak)) void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
   (void) fds; (void) n; ai_sleep(ticks); }
 
 // Default fd close is a no-op. The host overrides with close(2); kernel

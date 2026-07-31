@@ -35,12 +35,11 @@ void ai_sleep(uintptr_t ms) {
 // first-silicon interactive). fd 0 is the honest poll; other fds are nominal.
 bool ai_ready(int fd) { return fd ? 1 : serial_rx_ready(); }
 
-void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
-  if (n > ai_wait_fds_max) __builtin_trap();
   uintptr_t start = ai_clock();
   for (;;) {
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i])) return;
+    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd)) return;
     if (ms && ai_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------

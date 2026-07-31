@@ -79,3 +79,13 @@
       (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits NO ignore at all
 
 (puts "run sigpipe: ok\n")
+
+; --- rung 6: seventeen parked tasks, and the wake reaches the last of them ------
+; the law and the shape live in test/host/parked.l -- driven from HERE, under a
+; timeout, because its regression is a HANG (the scheduler sleeping on a fd set
+; the ninth parked task never got into) and a wedged gate is worse than a red one.
+; ⚠ it must be a subprocess for that reason alone; nothing about it needs one.
+(: rc (cap (run `("sh" "-c" "timeout 20 out/host/love test/host/parked.l")))
+   _ (assert (rc = 0)))                    ; 124 is the timeout: the old cap's hang
+
+(puts "run parked: ok\n")

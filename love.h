@@ -452,7 +452,6 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 // reader's sigil half is no longer on the boot path.
 
 // === internal API shared with data.c / host / free (merged from former i.h) ===
-#define ai_wait_fds_max 8
 #define A(o) two(o)->a
 #define B(o) two(o)->b
 #define len(_) (((struct ai_str*)(_))->len)
@@ -522,7 +521,21 @@ extern const struct ai_str ai_str_empty;
 // const-1-apply/()-print for free.
 extern const struct ai_mint ai_mint_zero;
 #define ZeroPoint ((word) &ai_mint_zero)
-void ai_wait_fds(int const *fds, int n, uintptr_t ticks);
+// One parked fd, as the scheduler hands it over. ⚠ THE LAYOUT IS POSIX poll(2)'s
+// struct pollfd, on purpose: the host fills in the event mask and polls the block
+// DIRECTLY, so it needs no vector of its own -- host/main.c static-asserts the
+// match rather than trusting it. A frontend that does not poll reads .fd and
+// ignores the rest.
+struct ai_wait_fd { int fd; short events, revents; };
+
+// Wait until one of `n` parked fds is readable or `ticks` elapse (0 = no
+// deadline). ⚠ n IS THE NUMBER OF PARKED TASKS AND HAS NO CEILING. The block
+// rides the runtime's own uncommitted heap gap, sized to the count -- the door
+// host_run marshals argv through, and the reason neither the scheduler nor a
+// frontend needs a fixed array, an allocator or a global. There used to be an
+// `ai_wait_fds_max` of 8 and every fd past the eighth was dropped in silence,
+// which is a hang the moment a ninth task parks with no timer pending.
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks);
 bool ai_ready(int fd), ai_strp(ai_word);
 struct ai
  *ai_please(struct ai*, uintptr_t),

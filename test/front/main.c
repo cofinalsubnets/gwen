@@ -109,7 +109,7 @@ bool ai_ready(int fd) {
   struct dev *d = dev_of_fd(fd);
   return d ? (d->qpos < d->qlen || d->ended) : true; }
 
-void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   (void) fds, (void) n;
   ai_sleep(ms); }                    // ms == 0 dies loudly; see the header note
 

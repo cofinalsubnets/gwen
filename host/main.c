@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <math.h>
+#include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -51,12 +52,22 @@ static ai_noinline int poll_wrap(int fd) {
 
 bool ai_ready(int fd) { return fd < 0 || poll_wrap(fd) > 0; }
 
-void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
+// love.h lays the block out as poll(2)'s own struct, so there is nothing to copy
+// and no vector of ours to size -- which is the whole reason the cap could go.
+// There used to be a `struct pollfd p[ai_wait_fds_max]` here with a
+// `__builtin_trap()` above it, one of three in the tree standing guard over an
+// array the scheduler had already truncated in silence -- so the trap could never
+// fire, and the drop it was watching for WAS the bug.
+_Static_assert(sizeof(struct ai_wait_fd) == sizeof(struct pollfd)
+            && offsetof(struct ai_wait_fd, fd) == offsetof(struct pollfd, fd)
+            && offsetof(struct ai_wait_fd, events) == offsetof(struct pollfd, events),
+               "struct ai_wait_fd must be this platform's struct pollfd");
+
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
-  if (n > ai_wait_fds_max) __builtin_trap();
-  struct pollfd p[ai_wait_fds_max];
-  for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
-  poll_wait(p, n, ms); }
+  struct pollfd *p = (struct pollfd*) fds;
+  for (int i = 0; i < n; i++) p[i].events = POLLIN;
+  poll_wait(p, (nfds_t) n, ms); }
 
 // ⚠ SIGPIPE IS IGNORED (main), AND THE CONSOLE RE-RAISES IT BY HAND. a runtime
 // that ANSWERS "the device is gone" cannot be killed before it reads the answer
