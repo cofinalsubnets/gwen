@@ -29,7 +29,9 @@ a PURE LISP subset, and the real reader `p1` written in love on top of it --
 **rungs 1-7 are LANDED and that arc is closed** -- the tree has one reader, and it
 has one INPUT type, because a port IS a charlist with a promise for a tail. rung
 8A landed 2026-07-31 (p0's lexers went charlist-native). **8B is NOT started, and
-part III is why.**
+part III is why.** the reader was then MEASURED for the first time (2026-07-31)
+and went 4x on a class table -- the speed paragraph at the foot of part I carries
+the numbers, the trap and what is still on the floor.
 
 ## what the C reader does today (the inventory)
 
@@ -383,7 +385,8 @@ two things the plan had not seen:
 
 **speed**, measured: reading ev.l is 62 ms through p1 against 4 ms through the C
 reader, so a cold boot pays ~+58 ms of its ~1 s. a woken image reads nothing and
-pays zero, which is what users run.
+pays zero, which is what users run. (⚠ that 62 ms was the SCAN-based reader; the
+class table took it to ~8 ms -- the speed paragraph at the foot of part I.)
 
 **left open, deliberately, for the flip**: p1's 36 `p1-*` bindings are on the
 book now -- the whole of what this rung adds to `(names ())`, and exactly what
@@ -1022,7 +1025,10 @@ what is left of the plan: rung 2's bit ops, still independent, and **rung 8's
 scope B** -- the input half of the port vt, a 124-site migration and a question
 about who owns stdin's bytes. 7 earned 8 and A cleared its way: the tree ALREADY
 holds a colist in C (`io_refill`'s `rbuf`/`rpos`/`rlen`) and spends `cue?`, the
-pushback and the eof bit hiding it behind a byte at a time.
+pushback and the eof bit hiding it behind a byte at a time. and one the plan
+never had, because nobody had measured the reader until 2026-07-31: a **`chars`
+nif**, text → charlist, the inverse `string` has never had -- see the speed
+paragraph below, where it is now the largest single cost in reading anything.
 
 the predicted hard half was the PORT PROTOCOL, and it was -- but not where the
 plan looked. no hot slot was needed and no lookahead-cons either: the answer was
@@ -1035,14 +1041,60 @@ a strict prefix of part II's path B: when that charlist goes lazy, no CALLER
 of p1 changes again. ⚠ p1 itself does -- it has to reflect on the tail, and the
 sentence above was written a shade too strong. rung 7 prices that honestly.
 
-**speed is bounded, and now measured.** reading happens once per cold boot --
-the stitch reads the corpus and the double `sit` folds over already-read forms.
-p1 reads ev.l in 62 ms against the C reader's 4 ms, so a cold boot pays ~+58 ms
-of its ~1 s, and the baked image path (~4 ms wake) skips reading entirely, which
-is what users actually run. ⚠ the glaze will NOT help: its grammar is integer
-arithmetic over frame params, and a reader is strings, noms and cons cells,
-exactly its declining set (test/test.mk:130-135). mooncc is the precedent that
-this is fine anyway -- 9200 lines of love, 20 ms per TU warm.
+**speed is bounded, and now measured -- twice.** reading happens once per cold
+boot: the stitch reads the corpus and the double `sit` folds over already-read
+forms, and the baked image path (~4 ms wake) reads nothing at all, which is what
+users run. at the flip p1 read ev.l in 62 ms against the C reader's 4 ms, so the
+cold boot paid ~+58 ms of its ~1 s -- and the arc was willing to leave it there.
+
+**the second measurement took most of it back** (2026-07-31, `4b5f71bf`). the
+cost was not parsing, it was DECIDING WHAT KIND OF CHARACTER the reader was
+holding: `p1-in?` walked a class string per test and minted a fresh `go` closure
+and a `tally` before it looked at anything, so `p1-tend?` cost fifteen string
+indexes for every character of every token. one 256-byte string, a bitmask per
+char, and a membership test is an index and an `&`:
+
+```
+              ev.l   prel.l   gen.l   spec.l          (ns/char)
+  before      716      810      849     1143
+  after       178      207      222      540
+```
+
+ev.l reads in ~8 ms now and the cold boot pays ~+4 ms. the same table went into
+crew/moon/lex.l (2.7x, where the bigger half is bucketing the multi-char
+punctuators BY FIRST CHAR -- `firstat` walked all 21 on every punctuator token).
+⚠ **bit 0 is left unused in both tables**: a string indexed past its end answers
+the charm 1, so a char outside 0..255 would match whichever class held bit 0 --
+silently. empty, `(& 1 m)` is 0 for every mask used and an out-of-range charm
+matches NOTHING, which is what the scan it replaced answered. free, where a
+bounds guard measured 15%. spec.l gains half what the others do, and that NAMES
+THE NEXT SEAM rather than disappointing: its time is in the operator-run lane.
+
+⚠ **the biggest item left is not in the parser at all.** text → charlist costs
+63 ns/char against 178 to PARSE the same text, so a third of the reader's cost
+is spent before it sees a byte. there is no `chars` nif -- `string` goes
+charlist → text and its inverse does not exist -- so every caller of `sound`
+pays `map s (jot n)` in love. one nif closes it.
+
+**and rung 8A already paid for the next one.** p0's leaf lexers thread a
+charlist cursor now, which is exactly the shape p1's token lane wants: over a
+cursor, `ioread1sym` IS `(atom cl) → (value . rest)` and `ai_z_getc` IS
+`(skip cl)`. what was a rung is a door. ⚠ price it honestly before building it,
+though -- `string` + `intern` costs ~107 ns/token whoever does the scanning, so
+the token lane has ~2x in it, not 10x.
+
+⚠ **and "the glaze will NOT help" needs its caveat.** that was said of the
+SCAN-based reader -- its grammar is integer arithmetic over frame params, and a
+reader is strings, noms and cons cells, exactly its declining set
+(test/test.mk). the class table is what changes it: the inner loops are now
+`int | (OP E E) | (? E E E)` plus one byte load. what blocks the glaze is two
+missing pieces rather than the shape of a reader -- a **string-index leaf op**
+(a bounds-checked byte load) and a **scan-loop recognizer** (a tail-recursive
+while answering an index; the existing LOOP recognizer takes counted SUMS only).
+clex is already index-based over a string and would take both today; p1 cannot
+while it walks conses, which is one more argument for a chunked cursor. mooncc
+stays the precedent that this is fine either way -- 9200 lines of love, 20 ms
+per TU warm.
 
 
 ---
