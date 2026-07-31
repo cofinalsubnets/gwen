@@ -1459,7 +1459,7 @@ is already in the write run, so a park there re-emits the whole string on the
 re-run. at its top a park is safe but proved UNOBSERVABLE -- with or without it
 the same bytes arrive in the same order; it only bounds `wbuf` growth, which no
 law can see. it was written, measured, and deleted. backpressure on `say` is a
-real question and it belongs to rung 6, with a law that measures growth.
+real question and it is still open -- rung 6 did not take it (see there).
 
 **a bug found in the rung while gating it: `writen` needed readn's third
 answer.** `close` and `seal` wait for an empty run, so a residue on a DEAD fd --
@@ -1498,6 +1498,83 @@ buys nothing the 40 ms law does not already prove.
 ⚠ two pre-existing hazards were found on the way, and both are **fixed in the
 epilogue below**. one of them was first written down here WRONG -- as "`slurp` on
 a socket port segfaults" -- and the correction is the interesting part.
+
+### the cap goes, and the devices stop losing bytes in silence -- ✅ rung 6, 2026-07-31
+
+**6a. `ai_wait_fds_max` was a hang, not a limit.** `yield_sw_wait` folded every
+parked task's fd into an `int fds[8]` on its own C frame and guarded the fill
+with `nfds < ai_wait_fds_max`, so every fd past the eighth was dropped in
+silence. with no timer pending that is not a delay -- the poll never watches the
+fd that will become ready, and nothing ever wakes. kiosko twirls a task per
+client, so nine clients was the shipped shape that reaches it.
+
+the cap goes **by construction**: count the ring first, then lay the block down
+sized to the count, in the runtime's own uncommitted heap gap -- the door
+`host_run` marshals argv through (invisible to gc, holds no love pointers, `Hp`
+never moves, consumed before anything allocates again). the three
+`__builtin_trap()` guards go with it: they stood over an array the scheduler had
+*already* truncated, so they could never fire, and the drop they watched for was
+the bug.
+
+⚠ **three doors were tried and shut, and each shutting is worth keeping:**
+
+- **the frontend cannot own the storage.** the plan had the host grow a `pollfd`
+  vector of its own; a mutable global and the malloc family are both out in this
+  tree. the heap gap is the answer to exactly this question and it is documented
+  one screen from where it was needed.
+- **a VLA is out, and OUR OWN COMPILER is what says so.** `int fds[n]` compiles
+  and runs under mooncc's x64 backend; its arm64 backend answers `;; cgfn refuses
+  yield_sw_wait`. `test_kernel_arm64` caught it. **x64 taking a C feature is not
+  evidence that the tree does** -- the two backends are not the same compiler.
+- **epoll needs no vector at all, and is Linux-only.** `host/build.mk` and
+  `host/posix.c` both carry Darwin branches.
+
+what made it fit: **`struct ai_wait_fd` IS `poll(2)`'s `struct pollfd`**,
+static-asserted field by field in host/main.c. the host fills in the event mask
+and polls the scheduler's block directly, so there is nothing to copy and no
+second array to size.
+
+the law is test/host/parked.l, driven from test/host/run.l **under a timeout,
+because its regression is a HANG** and a wedged gate is worse than a red one.
+what it took to reach the wait at all is the interesting part: seventeen tasks
+parked on seventeen pipes with **no timer anywhere** (a timer bounds the wait,
+which would turn the dropped fd from a hang into a latency and the law would pass
+over the bug), and the byte that starts the chain comes **from another process**
+-- a task that wakes a peer is itself runnable, so `find_runnable` answers before
+the wait is ever entered. control-verified twice, before and after the redesign.
+
+**6b. three device buffers lost bytes in silence.** a hardware ring must be
+bounded -- an interrupt cannot wait -- so the fix is never a bigger number. it is
+that the loss becomes visible, because input that simply is not there is the one
+failure a user cannot diagnose:
+
+| device | was | now |
+|---|---|---|
+| inle `kkb.q[16]` | dropped the byte, said nothing | counts; `serial_flush` prints it before the frame goes up |
+| teensy41 `rx_ring[1024]` | **overwrote unread bytes** -- scrambled in the middle, not short at the end | drops the newest (what survives is a coherent prefix) and counts |
+| wasm `out_buf[1<<18]` | discarded past the cap by its own comment | holds `out_tail` back and ends the eval saying it truncated |
+
+⚠ **and the notice says only what is true, which is not always a byte count.**
+the wasm edge counted bytes first and was wrong by 25x: `lvm_fputs` answers a
+refusal by re-offering the whole remainder, then the byte alone through `zputc`,
+twice -- so a WRITE device sees each lost byte many times over and cannot tell
+attempts from bytes. it says THAT it ran out, which is what it knows. the two
+READ devices count at ingress, one call per byte received, so their counts are
+bytes and are exact.
+
+probed by hand, because none of the three has an automated gate (`kq` is
+reachable only from an ISR, wasm's is a browser-buffer overflow, and
+`test_teensy41` is a **build** gate -- it links and verifies the boot image, it
+never runs): 200 bytes pasted into qemu's serial answers `; input lost: 185
+bytes` and shows the 15 that fit; 368 K of `puts` through node truncates and says
+so, while 460 bytes is untouched.
+
+**⚠ what rung 6 did NOT take: backpressure on `say`.** rung 5 handed it here, and
+it does not belong with either half of what landed. the two halves above are both
+about a bound that is too small; `say`'s is the opposite -- `wbuf` grows without
+one, so a task writing faster than its device drains has no ceiling on the write
+run at all. it wants a law that measures growth, which neither the cap's law nor
+the device notices resemble. it stays open, unclaimed by a rung.
 
 ### the epilogue: two hazards the arc uncovered -- ✅ 2026-07-31
 
