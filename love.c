@@ -8555,7 +8555,7 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
  // pops one, and advances ip -- so save/restore ip and pop the net result.
  if (!ai_ok(g = ai_push(g, 2, a, b))) return *fp = g, nil;
  union u *ip0 = g->ip;
- g = ai_big_binop(g, op);
+ avec(g, ip0, g = ai_big_binop(g, op));
  if (!ai_ok(g)) return *fp = g, nil;
  g->ip = ip0;
  word r = g->sp[0]; g->sp++;
