@@ -77,7 +77,7 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
 
 // --- port vtable ----------------------------------------------------------
 // Console bytes in and out through the ns16550 (pollable, never EOF -- a live
-// wire). The eof_seen machinery stays for the vt's shape but nothing latches it.
+// wire).
 static struct ai *fd_getc(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
@@ -88,18 +88,6 @@ static struct ai *fd_getc(struct ai *g) {
   fc->b = uart_getc();
   return g; }
 
-static struct ai *fd_ungetc(struct ai *g, int c) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  i->ungetc_buf = putcharm(c);
-  i->eof_seen = putcharm(false);
-  return fc->b = c, g; }
-
-static struct ai *fd_eof(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
-
 static struct ai *fd_putc(struct ai *g, int c) {
   v_putc(c);
   return g; }
@@ -109,7 +97,7 @@ static struct ai *fd_flush(struct ai *g) { return g; }
 struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, NULL, NULL };
+struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_putc, fd_flush, NULL, NULL };
 
 // --- the exit builtin -----------------------------------------------------
 // (vexit code) -- leave the machine through the test finisher with `code` as

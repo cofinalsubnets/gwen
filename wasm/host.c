@@ -77,14 +77,6 @@ static struct ai *_getc(struct ai *g) {
     return ai_core_of(g)->b = c, g; }
   i->eof_seen = putcharm(true);
   return ai_core_of(g)->b = EOF, g; }
-static struct ai *_ungetc(struct ai *g, int c) {
-  struct ai_io *i = ai_core_of(g)->io;
-  i->ungetc_buf = putcharm(c);
-  i->eof_seen = putcharm(false);
-  return ai_core_of(g)->b = c, g; }
-static struct ai *_eof(struct ai *g) {
-  struct ai_io *i = ai_core_of(g)->io;
-  return ai_core_of(g)->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 
 // fd values are nominal: all I/O routes through the vtable regardless. We
 // just need fd >= 0 so the dispatcher picks ai_fd_port_vt over a synth slot.
@@ -95,7 +87,7 @@ struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1),
 // No separate error stream in the browser host; route err to out's fd.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1),
                          .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush, NULL, NULL };  // no bulk lanes: per-byte fallback
+struct ai_port_vt const ai_fd_port_vt = { _getc, _putc, _flush, NULL, NULL };  // no bulk lanes: per-byte fallback
 
 // (exit n) -- a frontend nif, like main.c's and kmain.c's. The wasm host needs
 // it for the same reason they do: the test harness aborts a failed assert with

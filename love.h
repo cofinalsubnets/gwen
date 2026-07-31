@@ -254,6 +254,15 @@ struct ai {
      lvm_t *ap;
      ai_word fd;
      ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
+     // ⚠ eof_seen HAS NO READER LEFT. Every one of them was an `eof` vt method,
+     // and the whole lane went with `empty?` (zero call sites in the tree). It is
+     // written by the getc lanes and by io_refill, and read by nobody -- but it is
+     // not free to delete, because this struct's LAYOUT is a shape two languages
+     // agree on: prel's `tap` and `jug` build ports word by word with `poke`
+     // (love/prel.l), and dropping a word renumbers every one of those pokes and
+     // every `peek` that follows them. It also changes the width of a baked port,
+     // so it wants an encver bump. Delete it with a rung that already owns the
+     // layout -- not on its own.
      ai_word eof_seen;
     } *io; }; }; };
  intptr_t end[]; };
@@ -279,20 +288,23 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
     _ainif_##fn = { (nm), (intptr_t) (fn) }
 #endif
 
-// Port vtable. One shape covers both directions; unused slots in a given
-// port get noop_* stubs (defined in g.c) so dispatch needs no NULL guards.
-// The BULK lanes may be NULL: dispatch falls back to per-byte putc/getc loops,
-// so a frontend adopts them at its own pace. Neither may allocate or block the
-// scheduler, and neither touches ungetc_buf (the generic layer above owns it).
+// Port vtable -- what a DEVICE owes, and nothing else. One shape covers both
+// directions. The BULK lanes may be NULL: dispatch falls back to per-byte
+// putc/getc loops, so a frontend adopts them at its own pace. None may allocate
+// or block the scheduler, and none touches ungetc_buf (the generic layer above
+// owns it).
 //   writen: land up to n bytes from src in one motion; returns how many landed
 //     (0 = no room without an alloc -- the caller makes one byte of progress
 //     through putc, which may grow/GC, then retries the bulk lane).
 //   readn: drink up to n waiting bytes into dst WITHOUT blocking;
 //     >0 = bytes, 0 = nothing waiting right now, -1 = end of stream.
+// ⚠ THE PUSHBACK IS NOT A DEVICE QUESTION and never was. `ungetc` used to be a
+// slot, and all nine implementations were the same three lines against the port's
+// own head words -- while the synthetic rows answered a no-op, so a pushback onto
+// a jug was DISCARDED although zgetc reads ungetc_buf before it dispatches. One
+// generic zungetc (love.c) replaced the lot and closed that asymmetry.
 struct ai_port_vt {
  struct ai*(*getc)(struct ai*),
-         *(*ungetc)(struct ai*, int),
-         *(*eof)(struct ai*),
          *(*putc)(struct ai*, int),
          *(*flush)(struct ai*);
  intptr_t (*writen)(struct ai*, unsigned char const*, uintptr_t),

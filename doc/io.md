@@ -1292,7 +1292,7 @@ stream.md's stage 4 said to remove `see`/`unsee`/`end?`/`key?`/`ungetc_buf`/
 | `see` | `lvm_fgetc` | ~82 across 29 files | the sole input lane on SIX of seven frontends -- every freestanding target passes `readn = NULL` and falls through to `vt->getc` |
 | `readn` | `fd_readn` | -- | **hot**: one `read(fd,…,4096)` where the byte lane does three, proved under strace. host only |
 | `unsee` | `lvm_fungetc` | **3**, all `test/io.l` | load-bearing: `:100` is the ONLY witness in the corpus that `flow` memoizes |
-| `empty?` | `lvm_feof` | **0** | genuinely unused -- and still not free: a bound global with nine `*_eof` bodies across seven frontends |
+| `empty?` | `lvm_feof` | **0** | genuinely unused -- and not free at the time: a bound global with nine `*_eof` bodies across seven frontends. ✅ **GONE 2026-07-31**, with the whole `eof` lane, once the device-floor arc moved all seven frontends anyway |
 | `cue?` | `lvm_key` | 6 | `gulp`'s stop condition, `rove.l:178`'s ESC-vs-CSI discriminator, and what makes the tty case free |
 
 what was removable on 2026-07-31 with zero behaviour change: a dead `lvm_getc`
@@ -1496,5 +1496,11 @@ choosing park-or-block. so:
 5. **defect 4** (writes never yield) and **`select`**: when something asks. after
    1, nothing does.
 
-`empty?` is unused but not free; leave it until something else in this list moves
-the frontends anyway.
+~~`empty?` is unused but not free; leave it until something else in this list moves
+the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all
+seven frontends, so `empty?`, `lvm_feof`, `zeof` and nine `*_eof` bodies went with the
+`eof` vt slot. ⚠ what it left behind is worth knowing before someone rediscovers it:
+**`eof_seen` now has no reader anywhere in the tree.** every one of them was an `eof`
+method. it is not free to delete either, because `struct ai_io`'s layout is a shape two
+languages agree on -- prel's `tap` and `jug` poke it word by word -- so it wants a rung
+that already owns the layout, and an encver bump. love.h says so at the field.

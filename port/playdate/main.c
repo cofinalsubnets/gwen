@@ -57,16 +57,6 @@ static struct ai *_getc(struct ai *g) {
   int c = cb_getc(kcb);
   if (c == EOF) i->eof_seen = putcharm(true);
   return fc->b = c, g; }
-static struct ai *_ungetc(struct ai *g, int c) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  i->ungetc_buf = putcharm(c);
-  i->eof_seen = putcharm(false);
-  return fc->b = c, g; }
-static struct ai *_eof(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 static struct ai *_putc(struct ai *g, int c) { return cb_putc(kcb, c), g; }
 static struct ai *_flush(struct ai *g) { return g; }
 
@@ -74,7 +64,7 @@ struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = p
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 // No separate error stream on the device; the scare face lands on the LCD too.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { _getc, _ungetc, _eof, _putc, _flush, NULL, NULL };
+struct ai_port_vt const ai_fd_port_vt = { _getc, _putc, _flush, NULL, NULL };
 
 // --- the playdate nifs ------------------------------------------------------
 // (crank ())     -- the crank angle 0..359, or () docked

@@ -219,7 +219,7 @@ lvm_t lvm_kcall,
  lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_hush, lvm_key,
  lvm_await,
- lvm_fgetc, lvm_fungetc, lvm_feof, lvm_fputc, lvm_fputs, lvm_fflush,
+ lvm_fgetc, lvm_fungetc, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0, lvm_dot,
  // Step 5a -- typed multi-rank arrays (kernel/arr.c). lvm_vbin is the shared
  // elementwise/broadcast engine the arith/compare slow lanes divert into.
@@ -872,7 +872,7 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_fputbn, "putbn", s3(lvm_fputbn))\
  _(nif_fputx, "print", s2(lvm_fputx))\
  _(nif_await, "await", s1(lvm_await))\
- _(nif_fgetc, "see", s1(lvm_fgetc)) _(nif_fungetc, "unsee", s2(lvm_fungetc)) _(nif_feof, "empty?", s1(lvm_feof))\
+ _(nif_fgetc, "see", s1(lvm_fgetc)) _(nif_fungetc, "unsee", s2(lvm_fungetc))\
  _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
  _(nif_wheel, "wheel", s1(lvm_wheel))\
@@ -3199,7 +3199,17 @@ static ai_inline struct ai *zgetc(struct ai*g) {
   b->rpos = putcharm(p + 1);
   return g; }
  return io_refill(g); }
-static ai_inline struct ai *zungetc(struct ai*g, int c) { return ai_ok(g) ? port_vt(g->io->fd)->ungetc(g, c) : g; }
+// the pushback is the PORT's, not the device's: one head word, set here for every
+// kind of port there is. it was a vt slot with nine identical implementations, and
+// the synthetic rows answered a no-op -- so `unsee` on a jug threw the byte away
+// while zgetc above would happily have served it back.
+static ai_inline struct ai *zungetc(struct ai*g, int c) {
+ if (!ai_ok(g)) return g;
+ struct ai *fc = ai_core_of(g);
+ struct ai_io *i = fc->io;
+ i->ungetc_buf = putcharm(c);
+ i->eof_seen = putcharm(false);
+ return fc->b = c, g; }
 static struct ai *zputc(struct ai*g, int c) {
  if (!ai_ok(g)) return g;
  struct ai *fc = ai_core_of(g);
@@ -3221,11 +3231,6 @@ static struct ai *zflush(struct ai*g) {
  if (!ai_ok(g)) return g;
  g = io_wdrain(g, ai_core_of(g)->io);
  return ai_ok(g) ? port_vt(ai_core_of(g)->io->fd)->flush(g) : g; }
-static ai_inline struct ai *zeof(struct ai*g) {
- if (!ai_ok(g)) return g;
- struct ai *fc = ai_core_of(g);
- if (bio_rpending(bio_of(g, fc->io))) return fc->b = false, g;
- return port_vt(fc->io->fd)->eof(g); }
 // the exported faces (love.h): a host nif consults/drains the read run without
 // knowing the bio shape -- swig's first course rides these.
 uintptr_t ai_io_pending(struct ai *g, struct ai_io *i) {
@@ -3250,20 +3255,8 @@ static struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x);
 static struct ai *noop_getc(struct ai *g) {
  ai_core_of(g)->io->eof_seen = putcharm(true);
  return g->b = EOF, g; }
-static struct ai *noop_ungetc(struct ai *g, int c) { (void) c; return g; }
-static struct ai *noop_eof(struct ai *g) { return g->b = true, g; }
 static struct ai *noop_putc(struct ai *g, int c) { (void) c; return g; }
 static struct ai *noop_flush(struct ai *g) { return g; }
-
-static struct ai *ci_eof(struct ai*g) {
- struct ci *i = (struct ci*) g->io;
- return g->b = (getcharm(i->io.ungetc_buf) == EOF) && getcharm(i->io.eof_seen), g; }
-
-static struct ai *ci_ungetc(struct ai*g, int c) {
- struct ci *i = (struct ci*) g->io;
- i->io.ungetc_buf = putcharm(c);
- i->io.eof_seen = putcharm(false);
- return g->b = c, g; }
 
 static struct ai *ci_getc(struct ai *g) {
  struct ci *i = (struct ci*) g->io;
@@ -3311,13 +3304,13 @@ struct ai_port_vt const synth[] = {
     was its only maker and the boot cursor is a charlist now (rung 8) -- but the
     fd is a PROTOCOL number that prel pokes by hand, so the row stays a hole
     rather than renumbering its neighbours. */
- { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush, NULL,      NULL     },
+ { noop_getc, noop_putc, noop_flush, NULL,      NULL },
  /* fd = -2, to: write-only vec sink   */
- { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush,   to_writen, NULL     },
+ { noop_getc, to_putc,   to_flush,   to_writen, NULL },
  /* fd = -3, closed port (post-close)  */
- { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush, NULL,      NULL     },
+ { noop_getc, noop_putc, noop_flush, NULL,      NULL },
  /* fd = -4, ci: read-only charlist source -- prel's `tap` builds one by poke. */
- { ci_getc,   ci_ungetc,   ci_eof,   noop_putc, noop_flush, NULL,      NULL     }, };
+ { ci_getc,   noop_putc, noop_flush, NULL,      NULL }, };
 
 // (fputc port byte) — write byte to port; return byte.
 lvm(lvm_fputc) {
@@ -3974,16 +3967,6 @@ chosen:;
   for (int i = 0; i < sig; i++) ob[on++] = '0' + dc[nc - 1 - i]; }
  for (int i = 0; i < on; i++) g = ioputc(g, ob[i]);
  return g; }
-
-// (feof port) — -1 if at end of stream, nil otherwise.
-lvm(lvm_feof) {
- if (iop(Sp[0])) {
-  g->io = (struct ai_io*) Sp[0];
-  Pack(g);
-  if (!ai_ok(g = zeof(g))) return ghelp(g);
-  Unpack(g);
-  Sp[0] = g->b ? putcharm(1) : nil; }
- return Ip++, Continue(); }
 
 // (fgetc port) — like (getc _) but on an explicit port. Cooperative wait
 // uses the port's own fd. A non-port reads as an already-empty stream: EOF

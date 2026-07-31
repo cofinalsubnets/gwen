@@ -167,10 +167,9 @@ static struct k_source k_sources[k_sources_max] = {
   [1] = { .putc = serial_putc1, .flush = serial_flush },
 };
 
-// Generic kernel dispatchers. ungetc/eof touch only header fields so
-// they're identical across sources; getc/putc/flush route through
-// k_sources[fd]. Bounds-checks and NULL-guards keep misuse from
-// crashing (read-from-output-fd returns EOF; write-to-input-fd discards).
+// Generic kernel dispatchers: getc/putc/flush route through k_sources[fd].
+// Bounds-checks and NULL-guards keep misuse from crashing (read-from-output-fd
+// returns EOF; write-to-input-fd discards).
 static struct ai *fd_getc(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = g->io;
@@ -185,16 +184,6 @@ static struct ai *fd_getc(struct ai *g) {
   if (c < 0) { i->eof_seen = putcharm(true); fc->b = EOF; }
   else fc->b = c;
   return g; }
-static struct ai *fd_ungetc(struct ai *g, int c) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  i->ungetc_buf = putcharm(c);
-  i->eof_seen = putcharm(false);
-  return fc->b = c, g; }
-static struct ai *fd_eof(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 static struct ai *fd_putc(struct ai *g, int c) {
   int fd = getcharm(g->io->fd);
   if (fd >= 0 && fd < k_sources_max && k_sources[fd].putc)
@@ -214,7 +203,7 @@ struct ai_io ai_stdout = { .ap = lvm_port_io,
 struct ai_io ai_stderr = { .ap = lvm_port_io,
                          .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, NULL, NULL };  // bulk lanes: the promised P3b, when ramfs/files need them
+struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_putc, fd_flush, NULL, NULL };  // bulk lanes: the promised P3b, when ramfs/files need them
 
 // Override the weak g.c default; route close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.

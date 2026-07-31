@@ -45,8 +45,7 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
 
 // --- port vtable ----------------------------------------------------------
 // Both ports ride LPUART6; the fd is nominal (>= 0 so the dispatcher routes
-// here). Serial never reaches EOF, so the dispatcher's eof_seen latch never
-// trips.
+// here). Serial never reaches EOF.
 static struct ai *fd_getc(struct ai *g) {
   struct ai *fc = ai_core_of(g);
   struct ai_io *i = fc->io;
@@ -56,18 +55,6 @@ static struct ai *fd_getc(struct ai *g) {
     return g; }
   fc->b = serial_getc();
   return g; }
-
-static struct ai *fd_ungetc(struct ai *g, int c) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  i->ungetc_buf = putcharm(c);
-  i->eof_seen = putcharm(false);
-  return fc->b = c, g; }
-
-static struct ai *fd_eof(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
 
 static struct ai *fd_putc(struct ai *g, int c) {
   if (c == '\n') serial_putc('\r');     // cook LF -> CRLF for terminals
@@ -80,7 +67,7 @@ struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = p
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 // No separate error stream; route err to the console too.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, NULL, NULL };  // no bulk lanes: per-byte fallback
+struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_putc, fd_flush, NULL, NULL };  // no bulk lanes: per-byte fallback
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.

@@ -70,18 +70,6 @@ static struct ai *fd_getc(struct ai *g) {
   else fc->b = b;
   return g; }
 
-static struct ai *fd_ungetc(struct ai *g, int c) {
- struct ai *fc = ai_core_of(g);
- struct ai_io *i = fc->io;
- i->ungetc_buf = putcharm(c);
- i->eof_seen = putcharm(false);
- return fc->b = c, g; }
-
-static struct ai *fd_eof(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
-
 static struct ai *fd_putc(struct ai *g, int c) {
  uint8_t b = c;
  if (g->io->fd == putcharm(STDOUT_FILENO)) fputc(b, stdout);
@@ -117,7 +105,7 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
 
 struct ai_port_vt const ai_fd_port_vt =
- { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush, fd_writen, fd_readn };
+ { fd_getc, fd_putc, fd_flush, fd_writen, fd_readn };
 
 struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF), putcharm(false) };
 struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF), putcharm(false) };
