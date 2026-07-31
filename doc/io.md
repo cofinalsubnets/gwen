@@ -1233,17 +1233,46 @@ head DETACHED from the port. two positions where there was one.
 
 two things are still SEMANTICS, and the guile model does not settle either:
 
-**1. persistence versus position.** a charlist is a persistent value; a port
-position is ephemeral. guile has only the position -- its buffer is not a value.
-love has handed the value out, and that is what made p1 clean (`once` exists
-precisely so forcing twice is safe). if the port owns a head, two readers holding
-DIFFERENT heads do not share a position: the list keeps the old bytes alive. the
-resolvable form is **the port is a mutable cell holding a persistent list** --
-one CURRENT head, with old heads still readable. that is a capability guile
-cannot express, and we have to decide whether a stale head is a feature
-(re-readable input, a backtracking parser) or a hazard (two readers silently
-diverging). probed: after a gulp, `(see in)` answers `-1` while the bytes sit in
-the colist.
+**1. persistence versus position. -- DECIDED 2026-07-31 (gwen): persistence is a
+BENEFIT.** a charlist is a persistent value; a port position is ephemeral. guile
+has only the position -- its buffer is not a value. love has handed the value
+out, and that is what made p1 clean (`once` exists precisely so forcing twice is
+safe). so **the port is a mutable cell holding a persistent list**: one CURRENT
+head, with old heads still readable. two readers holding DIFFERENT heads do not
+share a position, and that is allowed.
+
+what made it an easy call is the SHAPE OF THE FAILURE. with a persistent list
+nothing is ever LOST from any holder's view -- a stale holder sees what was
+consumed PLUS what came after, so divergence shows up as duplication (a form run
+twice, a line processed again), which is loud. contrast today, where the failure
+IS disappearance: after a gulp, `(see in)` answers `-1` while the bytes sit in
+the colist, unreachable from there. duplication is a better failure than silent
+loss, and silent loss is the bug this tree has hit four times.
+
+⚠ **the real cost is SPACE, and it is accepted knowingly.** a retained head pins
+every byte gulped since -- haskell's classic space leak, and a copying collector
+cannot help, because reachable is reachable. the program that runs afoul is not a
+script but something long-lived that stashes a head and forgets: a repl keeping
+input history, a server retaining a request stream, an editor snapshotting for
+undo. **the rule is: do not retain a stream head.** one localized rule about one
+kind of value, checkable by looking at what a closure captures -- which is why
+this beat the write-back protocol, where 33 sites each owed a duty.
+
+the canonical instance is `reads` (love/bao.l:84-90), which holds `cl` across
+`(ev 'ev <r)`. under the mutable cell it must RE-READ the cell each iteration
+instead of threading its own head -- otherwise a form that consumes stdin is
+invisible to it and the rest of the script re-runs. one line, and the example to
+teach the rule from.
+
+FUTURE RESEARCH, not needed yet (gwen): if the chains get too long to bear, roll
+them into ROPES -- a compact backing the runtime unspools transparently, possibly
+compacted AT GC TIME, since the copying collector already walks and rebuilds
+every live object. ⚠ it would soften the space cost by a constant factor and does
+NOT make a retained head collectable, and it does not bear on persistence versus
+position at all: a rope is still a persistent value. pleasingly, a rope is a
+shared compact backing with per-holder offsets -- which is exactly `io_refill`'s
+`rbuf`/`rpos`/`rlen`, the port buffer rediscovered as a value. the two ends of
+this arc converge on one structure from opposite directions.
 
 **2. what a waiting reader does.** guile has real threads; love has cooperative
 tasks, and the guile model is silent on what happens to a task that needs bytes
@@ -1270,16 +1299,23 @@ such a design would then silently depend on.
 another road, and its stage 4 is mostly not removable. what is actually next,
 cheapest first:
 
+**nothing is left to settle in the abstract.** question 1 is DECIDED above.
+question 2 (what a waiting reader does) does not want a decision meeting -- it
+gets answered BY step 2, since the blocking refill cannot be fixed without
+choosing park-or-block. so:
+
 1. **re-test the bao deadlock.** defect 1 is fixed and the reverted `feedlines`
    has never been run against the fixed guard. it may simply work now. one
-   experiment, and it decides how much of part II is still a project.
+   experiment, and it decides how much of part II is still a project. ⚠ NO COMMIT
+   CARRIES `feedlines` -- the five-line snippet in part II is the only copy left,
+   which is reason enough that it lives in this file. the scriptable rig is
+   test/host/pty.l.
 2. **fix defect 5.** the blocking refill is a live hazard with a named failure
-   mode, not a design preference. it also forces the answer to open question 2 --
-   what a waiting reader does -- which 8B needs anyway. do this before 8B.
-3. **decide open question 1** (persistence versus position). this is the gate on
-   8B, and it is a semantics call, not a measurement.
-4. **then 8B**, whose shape follows from 3.
-5. **`select`** when `wrap` actually needs it -- i.e. after 1 says whether it does.
+   mode, not a design preference. it also answers question 2, which 8B needs
+   anyway. do this before 8B.
+3. **then 8B**, whose shape follows from the decision above: one cell, one
+   current head, `reads` re-reading the cell each iteration.
+4. **`select`** when `wrap` actually needs it -- i.e. after 1 says whether it does.
 
 `empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.
