@@ -742,7 +742,6 @@ static ai_inline uintptr_t rot(uintptr_t x) {
 
 extern struct ai_port_vt const synth[];
 
-struct ti { struct ai_io io; char const *t; word i; } ; // C string input
 static ai_inline void *off_pool(struct ai *g) {
  return g == g->pool ? (word*) g->pool + g->len : (word*) g->pool; }
 static ai_inline struct ai *pushq(struct ai*g) { return intern(ai_strof(g, "\\")); }
@@ -3248,21 +3247,12 @@ static struct ai *noop_eof(struct ai *g) { return g->b = true, g; }
 static struct ai *noop_putc(struct ai *g, int c) { (void) c; return g; }
 static struct ai *noop_flush(struct ai *g) { return g; }
 
-static struct ai *ti_eof(struct ai*g) {
- struct ti *i = (struct ti*) g->io;
+static struct ai *ci_eof(struct ai*g) {
+ struct ci *i = (struct ci*) g->io;
  return g->b = (getcharm(i->io.ungetc_buf) == EOF) && getcharm(i->io.eof_seen), g; }
 
-static struct ai *ti_getc(struct ai*g) {
- struct ti *i = (struct ti*) g->io;
- if (getcharm(i->io.ungetc_buf) != EOF) {
-  int c = getcharm(i->io.ungetc_buf);
-  i->io.ungetc_buf = putcharm(EOF);
-  return g->b = c, g; }
- if (!i->t[i->i]) { i->io.eof_seen = putcharm(true); return g->b = EOF, g; }
- return g->b = i->t[i->i++], g; }
-
-static struct ai *ti_ungetc(struct ai*g, int c) {
- struct ti *i = (struct ti*) g->io;
+static struct ai *ci_ungetc(struct ai*g, int c) {
+ struct ci *i = (struct ci*) g->io;
  i->io.ungetc_buf = putcharm(c);
  i->io.eof_seen = putcharm(false);
  return g->b = c, g; }
@@ -3308,23 +3298,18 @@ static intptr_t to_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
  memcpy(txt(o->buf) + i, src, k);
  o->i = putcharm(i + k);
  return (intptr_t) k; }
-static intptr_t ti_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
- struct ti *i = (struct ti*) g->io;
- uintptr_t k = 0;
- while (k < n && i->t[i->i]) dst[k++] = (unsigned char) i->t[i->i], i->i += 1;
- if (!i->t[i->i] && !k) return -1;
- return (intptr_t) k; }
-
 struct ai_port_vt const synth[] = {
- /* fd = -1, ti: read-only string source */
- { ti_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush, NULL,      ti_readn },
+ /* fd = -1, ti: a read-only C-string source. NOTHING CONSTRUCTS ONE -- p0onto
+    was its only maker and the boot cursor is a charlist now (rung 8) -- but the
+    fd is a PROTOCOL number that prel pokes by hand, so the row stays a hole
+    rather than renumbering its neighbours. */
+ { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush, NULL,      NULL     },
  /* fd = -2, to: write-only vec sink   */
  { noop_getc, noop_ungetc, noop_eof, to_putc,   to_flush,   to_writen, NULL     },
  /* fd = -3, closed port (post-close)  */
  { noop_getc, noop_ungetc, noop_eof, noop_putc, noop_flush, NULL,      NULL     },
- /* fd = -4, ci: read-only charlist source -- ungetc/eof read only the ai_io
-    fields, so ti_ungetc/ti_eof work unchanged here. */
- { ci_getc,   ti_ungetc,   ti_eof,   noop_putc, noop_flush, NULL,      NULL     }, };
+ /* fd = -4, ci: read-only charlist source -- prel's `tap` builds one by poke. */
+ { ci_getc,   ci_ungetc,   ci_eof,   noop_putc, noop_flush, NULL,      NULL     }, };
 
 // (fputc port byte) — write byte to port; return byte.
 lvm(lvm_fputc) {
@@ -4118,7 +4103,7 @@ static ai_inline bool is_oct_int(char const *s, uintptr_t n) {
  for (i += 1; i < n; i++) if (s[i] < '0' || s[i] > '7') return false;
  return true; }
 
-static ai_inline struct ai *ioread1sym(struct ai*g, int c), *ioread1str(struct ai*g);
+static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c), *ioread1str(struct ai*g, uintptr_t d);
 
 static struct ai *grbufg(struct ai *g, uintptr_t len) {
  if (ai_ok(g = str0(g, 2 * len)))
@@ -4188,55 +4173,59 @@ lvm(lvm_string) {
 ////
 /// " the parser "
 //
+// p0's input is a CHARLIST and its position IS the list, so the cursor is ONE
+// love value on the l stack -- named by its DEPTH, never by an address: a
+// collection moves the stack, but nothing moves a value's depth in it. Every
+// leaf both reads and updates it, and p0reads piles datums ABOVE it, which is
+// why the depth and not sp[0] is the name.
 //
-// get the next significant character from the stream. mm-protect the C
-// `i` parameter across the multiple port_* calls — each push triggers a
-// have() check that may GC and move heap ports.
+// ⚠ A LOOKAHEAD NEEDS NO PUSHBACK when the input is a list -- `unget` is simply
+// NOT ADVANCING, and the char after the next is one more B away. That is what
+// took the ungetc buffer out of every reader here but the port's own.
+static ai_inline word *p0cur(struct ai *g, uintptr_t d) { return topof(ai_core_of(g)) - d; }
+static ai_inline int p0peek(struct ai *g, uintptr_t d) {
+ word h = *p0cur(g, d);
+ return chainp(h) ? (int) getcharm(A(h)) : EOF; }
+static ai_inline int p0peek2(struct ai *g, uintptr_t d) {
+ word h = *p0cur(g, d);
+ return chainp(h) && chainp(B(h)) ? (int) getcharm(A(B(h))) : EOF; }
+static ai_inline void p0pop(struct ai *g, uintptr_t d) {
+ word *c = p0cur(g, d);
+ if (chainp(*c)) *c = B(*c); }
+static ai_inline int p0getc(struct ai *g, uintptr_t d) {
+ int c = p0peek(g, d);
+ return p0pop(g, d), c; }
 
-// Comments: `;` runs to end of line; `#!` (shebang) runs to end of line; a bare
-// `#` is significant (the len reader macro), as is any other non-whitespace char.
-static struct ai* ai_z_getc(struct ai*g) {
- while (ai_ok(g = zgetc(g))) switch (g->b) {
-  default: return g;
-  case '\n': case '\r': continue;
-  case 0: case ' ': case '\t': case '\f': continue;
-  case '#':                                          // #! is a line comment; bare # is significant (the hash macro)
-   if (!ai_ok(g = zgetc(g))) return g;
-   if (g->b != '!') {                                // not a shebang: push back, return #
-    if ((int) g->b != EOF && !ai_ok(g = zungetc(g, g->b))) return g;
-    return g->b = '#', g; }
-   while (ai_ok(g = zeof(g)) && !g->b && ai_ok(g = zgetc(g)) && g->b != '\n' && g->b != '\r');
-   continue;
-  case ';':                                          // line comment: run to end of line
-   while (ai_ok(g = zeof(g)) && !g->b && ai_ok(g = zgetc(g)) && g->b != '\n' && g->b != '\r');
-   continue; }
- return g; }
+// the next SIGNIFICANT char, the cursor left AT it: whitespace stepped over,
+// `;` and `#!` (shebang) running to end of line. a bare `#` is significant (the
+// len reader macro), as is any other non-whitespace char.
+static int p0skip(struct ai *g, uintptr_t d) {
+ for (int c; (c = p0peek(g, d)) != EOF;) {
+  if (c == ';' || (c == '#' && p0peek2(g, d) == '!'))
+   while ((c = p0getc(g, d)) != EOF && c != '\n' && c != '\r');
+  else if (c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' || !c) p0pop(g, d);
+  else return c; }
+ return EOF; }
 
-static ai_inline struct ai *ioread1str(struct ai*g) {
+static ai_inline struct ai *ioread1str(struct ai*g, uintptr_t d) {
  int c;
  size_t n = 0, lim = sizeof(word);
  for (g = str0(g, lim); ai_ok(g); g = grbufg(g, lim), lim *= 2)
   for (; n < lim; txt(g->sp[0])[n++] = c) {
-   if (!ai_ok(g = zgetc(g))) return g;     // threaded; char in g->b
-   else if ((c = g->b) == '"')                  // close quote; "" -> the empty
-    return n ? (len(g->sp[0]) = n, g)            // (truthy) singleton, never allocated
+   if ((c = p0getc(g, d)) == '"')                    // close quote; "" -> the empty
+    return n ? (len(g->sp[0]) = n, g)                // (truthy) singleton, never allocated
              : (g->sp[0] = EmptyString, g);
    else if (c == EOF) return encode(g, ai_status_more);
-   else if (c == '\\') {                               // escape: take next char
-    if (!ai_ok(g = zgetc(g))) return g;
-    else if ((c = g->b) == EOF) return encode(g, ai_status_more);
+   else if (c == '\\') {                             // escape: take next char
+    if ((c = p0getc(g, d)) == EOF) return encode(g, ai_status_more);
     else if (c == 'n') c = '\n';
     else if (c == 't') c = '\t';
     else if (c == 'r') c = '\r';
     else if (c == 'e') c = 27;                    // \e: ESC, the terminal's own letter
     else if (c == '0') c = '\0';
     else if (c == 'x') {                          // \xHH: two hex digits
-     if (!ai_ok(g = zgetc(g))) return g;
-     int h1 = g->b;
-     if (h1 == EOF) return encode(g, ai_status_more);
-     if (!ai_ok(g = zgetc(g))) return g;
-     int h2 = g->b;
-     if (h2 == EOF) return encode(g, ai_status_more);
+     int h1 = p0getc(g, d), h2 = p0getc(g, d);
+     if (h1 == EOF || h2 == EOF) return encode(g, ai_status_more);
      int v1 = h1 <= '9' ? h1 - '0' : (h1 | 0x20) - 'a' + 10;
      int v2 = h2 <= '9' ? h2 - '0' : (h2 | 0x20) - 'a' + 10;
      c = ((v1 & 0xf) << 4) | (v2 & 0xf); } } }
@@ -4244,21 +4233,19 @@ static ai_inline struct ai *ioread1str(struct ai*g) {
 
 
 
-static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
+static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
  uintptr_t n = 1, lim = sizeof(intptr_t);
  if (ai_ok(g = str0(g, sizeof(word))))
   for (txt((struct ai_str*) g->sp[0])[0] = c; ai_ok(g); g = grbufg(g, lim), lim *= 2)
    for (; n < lim; txt(g->sp[0])[n++] = c) {
-    if (!ai_ok(g = zgetc(g))) return g;
-    switch (c = g->b) {
-     default: continue;
+    switch (c = p0peek(g, d)) {
+     default: p0pop(g, d); continue;
      case ' ': case '\n': case '\t': case '\r': case '\f': case ';': case '#':
      case '(': case ')': case '[': case ']': case '{': case '}':
      // note: '\'' is NOT here -- a name keeps a trailing/internal prime (x', n'',
-     // the prover idiom). A LEADING ' is still quote: ioparse dispatches it as a
+     // the prover idiom). A LEADING ' is still quote: p0read1 dispatches it as a
      // wrap before this sounder ever runs, so only a continuation ' reaches here.
-     case '"': case '`': case ',': case 0 : case EOF:
-      if (!ai_ok(g = zungetc(g, c))) return g;
+     case '"': case '`': case ',': case 0 : case EOF: {   // the cursor stays ON the terminator
       struct ai_str *s = str(g->sp[0]);
       txt(s)[len(s) = n] = 0; // zero terminate for am_strtod ; n < lim so this is safe
       // An integer in any of the three bases reads at full precision (fixnum /
@@ -4275,19 +4262,19 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
       // would take by spelling (inf, infinity, nan) stays a symbol: a float
       // token leads with a digit (a sign or dot may front it).
       char *tx = txt(s);
-      double d;
-      if (n == 8 && !memcmp(tx, "ieee-inf", 8)) d = __builtin_inf();
-      else if (n == 9 && !memcmp(tx, "-ieee-inf", 9)) d = -__builtin_inf();
+      double dv;
+      if (n == 8 && !memcmp(tx, "ieee-inf", 8)) dv = __builtin_inf();
+      else if (n == 9 && !memcmp(tx, "-ieee-inf", 9)) dv = -__builtin_inf();
       // no ieee-nan literal: NaN collapses to 0 (flo_put), so there is no NaN
       // value to name -- "ieee-nan" reads as an honest symbol, free for binding.
       else {
        char c0 = *tx == '+' || *tx == '-' ? tx[1] : *tx;
        if (!(c0 >= '0' && c0 <= '9') && c0 != '.') return intern(g);
-       d = am_strtod(tx, &e);
+       dv = am_strtod(tx, &e);
        if (e == tx || *e != 0) return intern(g); }
       if (ai_ok(g = ai_have(g, flo_req)))
-       g->sp[0] = mk_flo(&g->hp, d);
-      return g; } }
+       g->sp[0] = mk_flo(&g->hp, dv);
+      return g; } } }
  return g; }
 
 ////
@@ -4302,15 +4289,15 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
 // ported forward from 2efbaa51^:g/g.c:1286-1400, the last C reader before the
 // sigil surface arrived -- and it answers the GC question by DEMONSTRATION.
 // CONTROL FLOW ON THE C STACK, VALUES ON g->sp: p0reads lets datums pile up on
-// the l stack and folds them with gxr at the close, so no love value ever sits
-// in a C local across an allocation. That is the whole reason ioparse keeps its
-// frame stack on the heap, and the reason p0 does not have to.
+// the l stack and folds them with gxr at the close, and the input cursor is one
+// more slot down there, so no love value ever sits in a C local across an
+// allocation and p0 needs no heap frame stack of its own.
 //
-// It SHARES the leaf lexers with the structural reader rather than forking them:
-// ai_z_getc (comments), ioread1str (escapes), ioread1sym (the atom lane -- three
-// integer bases at full precision, the float fallback, the ieee-inf literals).
-// rung 2 made that number tower the tree's one answer for what a literal means,
-// and a second copy in C is exactly the divergence it deleted.
+// Its leaf lexers are p0skip (comments), ioread1str (escapes) and ioread1sym
+// (the atom lane -- three integer bases at full precision, the float fallback,
+// the ieee-inf literals). rung 2 made that number tower the tree's one answer
+// for what a literal means, and a second copy in C is exactly the divergence it
+// deleted -- p1 reaches this one through sound0's differential, not by forking.
 //
 // ⚠ p0 is a READER OF A SUBSET, not a validator. A char outside the subset
 // reaches the atom lane and comes back a plain symbol -- `#(a b)` reads as `#`
@@ -4333,31 +4320,30 @@ static ai_inline struct ai *ioread1sym(struct ai*g, int c) {
 // the tree is 38 (test/uupatch.l) and p0's inputs are the bootstrap files the
 // tree owns, so the bound sits three orders of magnitude clear of its use;
 // test/host/rdiff.l pins it at 20000.
-static struct ai *p0read1(struct ai *g);
+static struct ai *p0read1(struct ai *g, uintptr_t d);
 
 // a list: read datums until `)`, then fold n of them off the stack. the tail is
 // ZeroPoint, NOT nil -- reader lists are ()-terminated (the nil-ontology), and
 // nil is the fixnum 0, which the printer shows the same way.
-static struct ai *p0reads(struct ai *g) {
+static struct ai *p0reads(struct ai *g, uintptr_t d) {
  uintptr_t n = 0;
- for (int c; ai_ok(g = ai_z_getc(g)); n++) {
-  if ((c = g->b) == ')') break;
+ for (int c; ai_ok(g); n++) {
+  if ((c = p0skip(g, d)) == ')') { p0pop(g, d); break; }
   if (c == EOF) return encode(ai_core_of(g), ai_status_more);   // unclosed list
-  if (!ai_ok(g = zungetc(g, c))) return g;
-  g = p0read1(g); }
+  g = p0read1(g, d); }
  if (!ai_ok(g)) return g;
  for (g = ai_push(g, 1, ZeroPoint); ai_ok(g) && n--; g = gxr(g));
  return g; }                                            // () folds zero times -> ZeroPoint
 
-static struct ai *p0read1(struct ai *g) {
- if (!ai_ok(g = ai_z_getc(g))) return g;
- int c = g->b;
+static struct ai *p0read1(struct ai *g, uintptr_t d) {
+ int c = p0skip(g, d);
+ p0pop(g, d);
  switch (c) {
-  case '(': return p0reads(g);
+  case '(': return p0reads(g, d);
   case ')': case EOF: return encode(ai_core_of(g), ai_status_eof);  // stray ) / no datum
-  case '"': return ioread1str(g);
+  case '"': return ioread1str(g, d);
   case '\'':                                            // quote: 'x = (\ x)
-   g = p0read1(g);
+   g = p0read1(g, d);
    if (ai_code_of(g) == ai_status_eof)                  // quote with no operand
     g = encode(ai_core_of(g), ai_status_more);
    if (!ai_ok(g)) return g;
@@ -4365,57 +4351,33 @@ static struct ai *p0read1(struct ai *g) {
    if (ai_ok(g)) g = intern(ai_strof(g, "\\"));
    return gxl(g);                                       // (\ . (d))
   case '\\': return intern(ai_strof(g, "\\"));          // lambda/quote: NEVER fuses (form space)
-  default: return ioread1sym(g, c); } }                 // name / number
+  default: return ioread1sym(g, d, c); } }              // name / number
 
 // (sound0 text): sound's bootstrap twin -- the same protocol over p0's grammar,
 // so the differential (test/host/rdiff.l) compares the two readers like with
 // like. answers the datum consed onto what is left, () at a clean end, or the
 // symbol `torn` where the text ran out inside a shape.
 //
-// ⚠ THE PORT IS ON THE HEAP, not the C stack. p0 reads through the ordinary
-// port vt, and a `ci`'s head is a LOVE VALUE: g->io rides the core's v0..end
-// span, so the collector forwards it and the residue survives a mid-parse
-// collection. a C-stack ci would dangle the moment the parse allocated -- the
-// boot stitch gets away with a stack `ti` only because ti's source is a plain
-// C string. ⚠ and it lives in an ai_noinline helper for the OTHER reason: an
-// address-taken local in the lvm_ body would force the tail Continue() into a
-// ret and grow the stack every step (`make vmret`).
-// It does FOUR things and none of them is reducible while p0 reads through a
-// port: wear the charlist as one, run the read, unwind on a partial input, and
-// hand back what is left. what would delete it is p0's LEXERS going
-// charlist-native -- then the residue IS the cursor -- and that is a rung of its
-// own, owing an answer for the boot stitch below, which reads a C string.
+// THE TEXT SLOT IS THE CURSOR: sp[0] comes in as the charlist to read and goes
+// out as the answer, and what is left of it in between IS the residue -- so
+// there is no port to dress, nothing to recover, and the reader's whole state is
+// one traced stack slot. ⚠ it stays in an ai_noinline helper for the OTHER
+// reason: a frame in the lvm_ body would force the tail Continue() into a ret
+// and grow the stack every step (`make vmret`).
 ai_noinline static struct ai *p0text(struct ai *g) {
- uintptr_t const depth = topof(g) - g->sp, n = Width(struct ci);   // the rollback point
- if (!ai_ok(g = ai_have(g, n + Width(struct ai_tag)))) return g;
- union u *k = bump(g, n + Width(struct ai_tag));
- struct ci *i = (struct ci*) k;
- i->io.ap = lvm_port_io, i->io.fd = putcharm(-4), i->io.ungetc_buf = putcharm(EOF),
- i->io.eof_seen = putcharm(false), i->head = g->sp[0];   // the have kept sp[0] live
- g->io = (struct ai_io*) tagthread(k, n);
- g = p0read1(g);
- if (!ai_ok(g)) {                                     // no datum: which nothing?
-  enum ai_status const st = ai_code_of(g);
-  if (st != ai_status_eof && st != ai_status_more) return g;   // a real failure (oom) propagates
-  // ⚠ THE ROLLBACK IS NOT OPTIONAL. p0reads lets a list's datums pile up on the
-  // l stack and folds them only at the close, so a TORN parse leaves that pile
-  // behind -- and the text slot is no longer sp[0]. drop back to the depth we
-  // came in at, which is exactly what the old parse nif's transaction did.
-  g = ai_core_of(g), g->sp = topof(g) - depth;
-  if (st == ai_status_eof) return g->sp[0] = ZeroPoint, g;     // a clean end, over the text slot
-  if (!ai_ok(g = intern(ai_strof(g, "torn")))) return g;
-  return g->sp[1] = g->sp[0], g->sp++, g; }
- if (!ai_ok(g = ai_push(g, 1, nil))) return g;        // reserve, THEN read the residue
- i = (struct ci*) ai_core_of(g)->io;                  // forwarded if the gc moved the port
- // ⚠ THE RESIDUE IS THE HEAD PLUS THE PUSHED-BACK BYTE. the token lexer ungets its
- // terminator, and ti_ungetc parks that in ungetc_buf rather than back on the
- // charlist -- so the head ALONE has already swallowed the delimiter: `#(a)` came
- // back as `#` with the `(` gone, and every spaced token ate its space.
- int const pb = getcharm(i->io.ungetc_buf);
- g->sp[0] = i->head;
- if (pb != EOF && !ai_ok(g = gxl(ai_push(g, 1, putcharm(pb))))) return g;
- g = gxr(g);                                          // (datum . residue)
- return ai_ok(g) ? (g->sp[1] = g->sp[0], g->sp++, g) : g; }
+ uintptr_t const d = topof(g) - g->sp;                // the cursor's depth, and the rollback point
+ g = p0read1(g, d);
+ if (ai_ok(g)) return gxl(g);                         // (datum . residue), over the text slot
+ enum ai_status const st = ai_code_of(g);             // no datum: which nothing?
+ if (st != ai_status_eof && st != ai_status_more) return g;   // a real failure (oom) propagates
+ // ⚠ THE ROLLBACK IS NOT OPTIONAL. p0reads lets a list's datums pile up on the
+ // l stack and folds them only at the close, so a TORN parse leaves that pile
+ // behind -- and the text slot is no longer sp[0]. drop back to the depth we
+ // came in at, which is exactly what the old parse nif's transaction did.
+ g = ai_core_of(g), g->sp = topof(g) - d;
+ if (st == ai_status_eof) return g->sp[0] = ZeroPoint, g;     // a clean end, over the text slot
+ if (!ai_ok(g = intern(ai_strof(g, "torn")))) return g;
+ return g->sp[1] = g->sp[0], g->sp++, g; }
 
 lvm(lvm_sound0) {
  Pack(g);
@@ -4441,23 +4403,40 @@ lvm(lvm_sound0) {
 // value and that value is what gets pinned as `ev`, so p1 at the tail would
 // install the reader as the evaluator.
 
+// p0's cursor is a charlist and the boot's text is a C string, so the boot
+// CONSES it: one Have for the whole run, then a backward walk that needs no root
+// (nothing allocates once the space is reserved). the peak is one text at a time
+// -- the p0onto calls are sequential -- and the largest is prel.h, ~18KB, so
+// ~424KB of transient cells on 64-bit against the 8MB the smallest baker has.
+static struct ai *p0chars(struct ai *g, char const *s) {
+ uintptr_t n = 0;
+ while (s[n]) n++;
+ if (!ai_ok(g = ai_push(g, 1, ZeroPoint))) return g;               // the cursor's slot first,
+ if (!ai_ok(g = ai_have(g, n * Width(struct ai_chain)))) return g; // then the whole run at once
+ word l = ZeroPoint;
+ for (uintptr_t i = n; i--;) {
+  struct ai_chain *p = bump(g, Width(struct ai_chain));
+  ini_chain(p, putcharm((unsigned char) s[i]), l);
+  l = (word) p; }
+ return g->sp[0] = l, g; }
+
 // read every top-level datum of a C string with p0 and CONS them, in source
 // order, onto the list already on top of the stack. reading the corpus RIGHT TO
 // LEFT then stitches its halves with no append and no copy.
 static struct ai *p0onto(struct ai *g, char const *s) {
- struct ti i = {{lvm_port_io, putcharm(-1), putcharm(EOF), putcharm(false)}, s, 0};
- ai_core_of(g)->io = (void*) &i;
+ if (!ai_ok(g = p0chars(g, s))) return g;
+ uintptr_t const d = topof(g) - g->sp;               // the cursor, pushed under the datums
  uintptr_t n = 0;
  for (;; n++) {
-  g = p0read1(g);
+  g = p0read1(g, d);
   if (ai_ok(g)) continue;
   if (ai_code_of(g) != ai_status_eof) return g;      // more: an unfinished shape
   g = ai_core_of(g);
   break; }
  if (!ai_ok(g = ai_push(g, 1, nil))) return g;       // reserve first, THEN copy the
- g->sp[0] = g->sp[n + 1];                            // tail up: a push can gc and move it
- for (; ai_ok(g) && n--; g = gxr(g));
- return ai_ok(g) ? (g->sp[1] = g->sp[0], g->sp++, g) : g; }
+ g->sp[0] = g->sp[n + 2];                            // tail up: a push can gc and move it
+ for (; ai_ok(g) && n--; g = gxr(g));                //   (+2: the datums sit over the cursor)
+ return ai_ok(g) ? (g->sp[2] = g->sp[0], g->sp += 2, g) : g; }
 
 // ev's half, read by the reader in love: an ordinary call of hook 0 on the text,
 // answering the file's forms. p1's own door takes the WHOLE TEXT because the boot
