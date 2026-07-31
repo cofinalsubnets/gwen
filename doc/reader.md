@@ -740,21 +740,58 @@ port, so it can.
 **A. p0 goes charlist-native.** the leaf lexers thread a cursor instead of pulling
 from `g->io`. self-contained, gated by rdiff, and it is the rung.
 
-| deleted | code lines |
+⚠ **A DOES NOT PAY FOR ITSELF IN LINES, and the honest ledger matters here** --
+it is about **20 lines** of net deletion:
+
+| | code lines |
 |---|---|
-| `p0text` | 23 |
-| `ai_z_getc` | 16 |
-| `struct ci` + `ci_getc` + prel's `tap` (a charlist IS the input, so the lift is the identity) | ~10 + the .l |
-| the port coupling inside `ioread1str` (29) / `ioread1sym` (31) -- they keep their logic and lose their getc | -- |
+| `p0text` 23 -> ~8: no `ci` to build, no residue to recover -- the cursor IS the residue | -15 |
+| `ai_z_getc` 16 -> ~13: the `#!` pushback becomes NOT ADVANCING | -3 |
+| `ioread1str` (29) / `ioread1sym` (31) / `p0read1`+`p0reads` (27): convert, roughly flat, each shedding a `zungetc` | ~-5 |
 
-what it costs: `p0read1`/`p0reads` (27) and both leaf lexers thread a cursor, and
-**the cursor is a LOVE VALUE that every leaf both reads and updates**, so it lives
-on `g->sp`. that is the discipline p0 already has -- *"control flow on the C stack,
-values on g->sp"* -- applied to one more value, and it is where the whole risk of
-this rung sits. `g->io` did that job today, GC-traced, for free.
+⚠ and **`struct ci` / `ci_getc` / prel's `tap` are B's, not A's** -- `tap` has 32
+call sites making a port out of a charlist for `reads`, `slurp`, `edraw`, and they
+only dissolve when the READERS take charlists. an earlier draft of this section put
+them under A; that was the same mistake rung 7's plan made about `p0text`, made
+again one level down.
 
-the ungetc dance disappears on its own: a pushback is **not advancing the cursor**.
-that takes p0text's residue recovery AND the trap it carries with it.
+**so A's case is not its own size -- it is that A GATES B.** while p0 reads through
+the vt, the vt cannot go. ~20 lines to unlock ~150.
+
+what it costs: **the cursor is a LOVE VALUE that every leaf both reads and updates**,
+so it lives on `g->sp`. that is the discipline p0 already has -- *"control flow on
+the C stack, values on g->sp"* -- applied to one more value, and it is where the
+whole risk of this rung sits. `g->io` did that job today, GC-traced, for free.
+
+#### ⚠ the question to settle before A: WHAT THE BOOT READS
+
+p0 has two kinds of input and `g->io` is what lets one lexer take both. that is the
+hack -- and it is *buying* something:
+
+* the **boot** (`p0onto`) walks a C string through a stack `ti`, at **zero
+  allocation**. it is called per text; the largest is prel.h at **17,646 bytes**.
+* **`sound0`** takes a love charlist, because the differential needs it to.
+
+a cons here is `struct ai_chain { lvm_t *ap; intptr_t a, b; }` -- **three words**.
+so consing prel.h costs ~424KB on 64-bit and **~212KB on 32-bit**, transient, peak
+(the `p0onto` calls are sequential, so it is the largest text and not the sum).
+
+⚠ **that lands on teensy41, which hatches the egg ON DEVICE** (`ai_egg_`,
+port/teensy41/main.c:275) out of a **384KB pool** -- and its own comment records
+that a 384KB OCRAM2 pool *"starved the bake (the first-silicon blocker)"*. so this
+is not a theoretical budget, it is one the tree has already hit once at this size.
+
+two ways, and they are the choice:
+
+1. **one cursor, a charlist.** the boot conses the text and drops it. simplest,
+   deletes the most, and keeps exactly zero polymorphism. **must be measured on the
+   teensy41 lane before it is committed to.**
+2. **two paths in the leaf lexers** -- a charlist cursor and a C-string cursor. the
+   boot stays allocation-free and every leaf keeps a two-way branch: a miniature of
+   the polymorphism this rung exists to remove, but a CLOSED one, not a vtable.
+
+(a third, a `(text . index)` cursor, is worse: it makes `sound0` convert its
+charlist in and re-cons its residue out, per form, which is quadratic over rdiff.)
 
 **B. the input half of the port vt goes.** `ungetc_buf`, `eof_seen`,
 `zgetc`/`zeof`/`zungetc` (44), `bio_rpending`, `cue?` (6), `feof`/`fungetc`, and
@@ -770,7 +807,7 @@ but only after a rewrite. so B is worth it only where the site genuinely wants a
 STREAM, and `see` may well deserve to survive as the port door for the rest. do
 not let A wait on that argument.
 
-#### ⚠ the question to settle before B: WHO OWNS THE BYTES
+#### ⚠ and the question to settle before B: WHO OWNS THE BYTES
 
 today one port is one buffer, so the editor and a program that reads `in` share a
 position. with colists, **whoever holds the head owns whatever was gulped.** that
