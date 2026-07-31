@@ -155,10 +155,25 @@ static lvm(lvm_accept) {
 // fixnum: 0 = read, 1 = write, 2 = both. The load-bearing case is (shutdown s 1)
 // after a stdin-EOF, so the peer sees EOF on its read instead of a hung
 // half-open socket. Returns the port (chainable); a no-op on misuse.
+// ⚠ SHUTTING THE WRITE HALF MUST LAND THE WRITE RUN FIRST. love.h always said
+// "close/seal call it first" and seal never did -- harmless while a write
+// delivered by blocking, a truncated response the moment the door could answer
+// short (rung 4). kiosko's own shape is `(say c body) (seal c 1) (close c)`.
 static lvm(lvm_shutdown) {
  int fd = (int) port_fd(Sp[0]);
  if (fd >= 0 && oddp(Sp[1])) {
   intptr_t how = getcharm(Sp[1]);
+  if (how >= 1 && how <= 2) {                 // fd >= 0 already proved it a port
+   struct ai_io *io = (struct ai_io*) Sp[0];
+   g->io = io;
+   Pack(g);
+   g = ai_io_wflush(g, io);
+   if (!ai_ok(g)) return ghelp(g);
+   if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {   // park; nothing shut yet
+    Unpack(g);
+    g->next_wake_at = ai_clock() + 1;
+    return Ap(lvm_yield_sw, g); }
+   Unpack(g); }
   if (how >= 0 && how <= 2) shutdown(fd, (int) how); }
  // stack: [s, how, ...] -> [s, ...]
  Sp[1] = Sp[0];

@@ -3172,8 +3172,15 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
   if (!n) return g;
   intptr_t k;
   avec(g, i, k = vt->writen(&g, (unsigned char*) txt((struct ai_str*) b->wbuf), n));
-  if (!ai_ok(g) || k <= 0) return g;
+  if (!ai_ok(g)) return g;
   b = (struct ai_bio*) i;                       // writen may allocate: re-derive
+  // ⚠ THE DEVICE IS GONE: DROP THE RUN. keeping it would be a task parked
+  // forever on a stream that will never move again (close and seal wait for an
+  // empty run). the bytes are lost because there is nowhere left to put them --
+  // which is NOT rung 3's bug, where a device that WOULD have taken them was
+  // told they had landed.
+  if (k < 0) return b->wlen = putcharm(0), g;
+  if (!k) return g;
   char *w = txt((struct ai_str*) b->wbuf);
   if ((uintptr_t) k < n) memmove(w, w + k, n - (uintptr_t) k);
   b->wlen = putcharm(n - (uintptr_t) k); } }
@@ -3296,18 +3303,10 @@ uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, ui
  memcpy(dst, txt((struct ai_str*) b->rbuf) + p, k);
  b->rpos = putcharm(p + k);
  return k; }
-// close and seal's door, and the one flush that must LAND. io_wdrain is a TRY
-// now -- a heap fd door answers short rather than waiting -- so taking its
-// answer here would shut the fd on top of a residue. What the try leaves goes
-// out through ai_fd_drain, the same blocking backstop the finalizer uses, on
-// the same bargain: a port being closed has no later op to retry in.
-struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) {
- avec(g, i, g = io_wdrain(g, i));
+struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) { return io_wdrain(g, i); }
+uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {
  struct ai_bio *b = bio_of(g, i);
- if (ai_ok(g) && bio_wpending(b))
-  ai_fd_drain((int) getcharm(i->fd), txt((struct ai_str*) b->wbuf), getcharm(b->wlen)),
-  b->wlen = putcharm(0);
- return g; }
+ return bio_wpending(b) ? (uintptr_t) getcharm(b->wlen) : 0; }
 // GC-context finalizer hook: weak no-op; the host overrides with write(2).
 __attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
  (void) fd; (void) p; (void) n; }
@@ -3386,12 +3385,19 @@ lvm(lvm_fputc) {
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 
-// (fflush port) — flush; return the port.
+// (fflush port) — flush; return the port. FLUSH MEANS DELIVER: if the device
+// would not take the whole run, the TASK parks and the op re-runs -- rung 4 made
+// the door answer short, and this is what finishes what it left. re-running is
+// safe because a flush consumes nothing.
 lvm(lvm_fflush) {
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
   if (!ai_ok(g = zflush(g))) return ghelp(g);
+  if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
+   Unpack(g);
+   g->next_wake_at = ai_clock() + 1;      // the write residue's poll -- see io_wdrain
+   return Ap(lvm_yield_sw, g); }
   Unpack(g); }
  return Ip++, Continue(); }
 

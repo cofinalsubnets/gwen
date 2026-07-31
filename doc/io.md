@@ -1421,23 +1421,10 @@ not op boundaries -- so a refusal there is a byte on the floor. their door lands
 what it takes, and that is the one wait host/main.c is still allowed. bounded: a
 console drains.
 
-**what rung 4 traded, stated plainly.** `flush` used to DELIVER, by blocking. it
-means TRY now. delivery finishes at the next write op on that port, at `close`
-(`ai_io_wflush`, which hands what the try leaves to the blocking `ai_fd_drain`
--- a port being closed has no later op to retry in), or through the finalizer.
-rung 5 is what makes an unwritten residue finish on its own.
-
-⚠ **the remaining unbounded wait, named: the finalizer's drain.** a port that
-becomes unreachable with a residue the device will not take blocks inside GC,
-where nothing can park. this is not new code -- `io_close` -> `ai_fd_drain` has
-been there all along -- but rung 4 is what makes a residue REACHABLE, so it is
-newly reachable too. probed: a 4 MB `say` to a loopback socket nobody reads
-returns in 19 ms and then the program hangs at teardown, where before rung 4 it
-hung inside the `say` instead. **the hang moved; it did not go.** a bound would
-be exactly the arbitrary constant this arc exists to delete, and dropping the
-bytes would be the silent loss rung 3 exists to stop, so it waits for rung 5 --
-after which a reachable port drains as the scheduler runs and the finalizer sees
-a residue only when the peer truly never reads.
+**what rung 4 traded, and rung 5 took back.** for one rung `flush` meant TRY --
+it used to DELIVER, by blocking. it delivers again, by PARKING: `lvm_fflush`
+re-runs its own ap until the run is empty, so the task waits and the vm does
+not. see below.
 
 the gate is in test/host/run.l: `sh -c "sleep 1; cat"` reads nothing for a
 second, a 200 K `say` into a 64 K pipe cannot land its tail, and the law is that
@@ -1448,6 +1435,77 @@ the control DEADLOCKS instead of reddening, and a gate that hangs is worse than
 one that fails. (the pty was the first instrument tried and is the wrong one: a
 tty in canonical mode DISCARDS input past its queue rather than blocking, so
 200 K through a pty master "succeeds" in 3 ms on either door.)
+
+### the residue finishes on its own -- ✅ rung 5, 2026-07-31
+
+**how a task parks, in three lines**: set `g->next_wake_at = ai_clock() + 1`,
+leave `Ip` unadvanced, `return Ap(lvm_yield_sw, g)`. the op re-runs on
+reschedule. it is a POLL -- one `write(2)` per millisecond per stalled port --
+and it is labelled one; there is nothing readable to wait on, because
+write-direction readiness is rung 7 and nothing has asked for it yet.
+
+three ops park, and the rule that picks them is **the op must be re-runnable at
+the point it parks**:
+
+- `lvm_fflush` -- a flush consumes nothing, so re-running is free. FLUSH MEANS
+  DELIVER again.
+- `lvm_close` and `lvm_shutdown` (`seal`) -- neither has mutated anything yet:
+  the fd is open, the half-close has not happened. this **deletes rung 4's
+  blocking backstop in `ai_io_wflush`**, which is back to one line; `lvm_yield_sw`
+  and `ai_io_wpending` join love.h so a frontend nif can park at all.
+
+⚠ **`lvm_fputs` does NOT park, and that is deliberate.** at its tail every byte
+is already in the write run, so a park there re-emits the whole string on the
+re-run. at its top a park is safe but proved UNOBSERVABLE -- with or without it
+the same bytes arrive in the same order; it only bounds `wbuf` growth, which no
+law can see. it was written, measured, and deleted. backpressure on `say` is a
+real question and it belongs to rung 6, with a law that measures growth.
+
+**a bug found in the rung while gating it: `writen` needed readn's third
+answer.** `close` and `seal` wait for an empty run, so a residue on a DEAD fd --
+EPIPE, EBADF -- parked the task forever. the door now answers `-1` for "the
+device is gone" beside `0` for "no room right now", and `io_wdrain` drops the run
+on it. that is not rung 3's bug wearing a new coat: rung 3's drop told the caller
+bytes had landed that a WILLING device never took, and this one lets go of bytes
+that have nowhere left to go. it also makes writen's three answers readn's three,
+which is one asymmetry less.
+
+**and the other thing gating it found: `seal` never flushed.** love.h has said
+"close/seal call it first" since the buffer landed, and only `close` did.
+harmless while a write delivered by blocking -- the run was always empty by then
+-- and a **silently truncated stream** the moment the door could answer short.
+kiosko's own shape is `(say c body) (seal c 1) (close c)`. the law is in
+test/host/net.l and costs 40 ms: `put` parks two bytes in the write run without
+a drain, `seal` must land them before the half-close, and the FIN it sends is the
+server's EOF. no need to out-run a socket buffer the kernel auto-tunes into the
+megabytes.
+
+⚠ **the finalizer's drain is still the one unbounded wait**, and it cannot park:
+`io_close` runs inside GC. rung 5 makes it rare rather than routine -- a
+reachable port now finishes at its next flush, seal or close -- but a program
+that drops a port on the floor holding a residue no device will take still blocks
+at teardown. that is the shape of the problem, not a bug in the rung: there is no
+task to park.
+
+**measured, in anger.** a 3 MB `say` between two tasks in ONE process -- a
+client task and a server task on a loopback socket, so every byte that moves,
+moves because a parked writer gave the reader its turn -- delivers all 3,000,000
+bytes in 5.4 s (the cost is the per-byte read loop, not the scheduler). before
+this arc the same program DEADLOCKS: the client's `write(2)` blocks and the only
+reader is a task that needs the client to yield. it is not in a gate because 5.4 s
+buys nothing the 40 ms law does not already prove.
+
+⚠ **two pre-existing hazards found on the way, neither fixed, both reproduced on
+`dbc93b9f` (before this arc):**
+
+- **`slurp` on a socket port segfaults** at a few hundred KB. this is the parked
+  `slurp` defect wearing its other face; it is why the law above counts bytes by
+  hand instead.
+- **love never ignores SIGPIPE**, so a write to a hung-up peer kills the process
+  before the new `-1` answer can be read. kiosko dies when a client hangs up
+  mid-response. the fix is one line and the reason it is not here is that it
+  changes shell-pipeline semantics (`love ... | head` would stop dying), which is
+  gwen's call, not a side effect of an io rung.
 
 ### the boundary principle -- keep, it is still right
 

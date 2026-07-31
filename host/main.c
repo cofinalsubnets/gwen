@@ -110,7 +110,8 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  ssize_t k;
  do k = write((int) fd, src, n); while (k < 0 && errno == EINTR);
  if (off) fcntl((int) fd, F_SETFL, fl);
- return k > 0 ? (intptr_t) k : 0; }   // a refusal and a dead fd both keep the residue
+ return k > 0 ? (intptr_t) k
+      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }   // busy vs gone
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  intptr_t fd = getcharm(g->io->fd);
  int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
@@ -193,6 +194,15 @@ static lvm(lvm_close) {
       g->io = io;
       Pack(g);
       g = ai_io_wflush(g, io);   // buffered bytes land before the fd dies
+      if (!ai_ok(g)) return ghelp(g);
+      // the device would not take the whole run: PARK and come back. nothing has
+      // been mutated yet -- the fd is open and Ip unadvanced -- so the re-run is
+      // this same close from the top. it used to deliver by blocking, which stops
+      // every other task for a peer that is only slow.
+      if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
+        Unpack(g);
+        g->next_wake_at = ai_clock() + 1;
+        return Ap(lvm_yield_sw, g); }
       Unpack(g);
       close(fd);
       ((struct ai_io*) Sp[0])->fd = putcharm(-3); } }   // ⚠ re-read: wflush may collect

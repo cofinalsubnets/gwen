@@ -286,8 +286,11 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 // no readn reads END, no writen discards. Neither blocks the scheduler, and
 // neither touches ungetc_buf (the generic layer above owns it).
 //   writen: land up to n bytes from src in one motion WITHOUT waiting for the
-//     device; answers how many landed (0 = no room right now -- the caller KEEPS
-//     THE RESIDUE and comes back). ⚠ A DOOR MAY ONLY REFUSE A PORT THAT KEEPS A
+//     device. >0 = bytes landed, 0 = no room right now (the caller KEEPS THE
+//     RESIDUE and comes back), -1 = the device is GONE. the three answers are
+//     readn's three, and the last one earns its place: a run held for a stream
+//     that will never move again is a task parked forever, since close and seal
+//     wait for an empty run. io_wdrain drops it. ⚠ A DOOR MAY ONLY REFUSE A PORT THAT KEEPS A
 //     WRITE RUN. A heap port does (io_wdrain re-offers what was refused); the
 //     static ports do NOT -- nothing traces a static, and their per-byte lane
 //     prints from inside a structural printer with nowhere to park mid-shape --
@@ -335,7 +338,12 @@ static ai_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(ai_word), r = b % sizeof(ai_word);
  return q + (r ? 1 : 0); }
 
-lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_buf;
+lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_buf,
+// how a frontend nif PARKS: set g->next_wake_at (or g->next_wait_fd), leave Ip
+// unadvanced, and `return Ap(lvm_yield_sw, g)` -- the task gives up its turn and
+// the op re-runs on reschedule, so the op must be re-runnable at that point.
+// close/seal use it to finish a write run without stopping the vm.
+      lvm_yield_sw;
 
 // Frontend-provided vtable for ports backed by real OS file descriptors.
 // Used whenever fd >= 0. Synthetic ports (fd <= -1) route through the
@@ -362,7 +370,11 @@ struct ai_bio { struct ai_io io; ai_word rbuf, rpos, rlen, wbuf, wlen; };
 // dst (swig's first course -- a buffered see may have gulped ahead of the fd).
 uintptr_t ai_io_pending(struct ai*, struct ai_io*);
 uintptr_t ai_io_read_drain(struct ai*, struct ai_io*, unsigned char*, uintptr_t);
-struct ai *ai_io_wflush(struct ai*, struct ai_io*);   // push the write run out (close/seal call it first)
+struct ai *ai_io_wflush(struct ai*, struct ai_io*);   // TRY to push the write run out
+uintptr_t ai_io_wpending(struct ai*, struct ai_io*);  // ... and what the device would not take.
+// close and seal call the pair: wflush, then park on a nonzero wpending (see
+// lvm_yield_sw) and come back. ⚠ NEITHER MAY SHUT THE FD ON A RESIDUE -- that is
+// a truncated stream, and it is what a blocking write used to hide.
 // frontend hook: raw bytes at an fd with NO g machinery -- the GC-context
 // finalizer drains a dying port's write buffer through it. Weak no-op default;
 // the host overrides with write(2).

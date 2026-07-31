@@ -136,4 +136,33 @@
    _ (flush p)
    _ (assert ((sent p) = "onetwosix")))
 
+; --- law 9: flush DELIVERS -- the residue finishes on its own -----------------
+; rung 4 made the write door answer short, so a flush that took its answer left
+; bytes behind and "flush" quietly meant "try". it means DELIVER again: the run
+; that will not go parks the TASK and the op re-runs until the port is empty.
+; five refusals stand between these bytes and the device; every one must be
+; outlived, and none of them may stop the vm.
+(: p (dev ())
+   _ (wstall p 5)
+   _ (say p "hello")
+   _ (flush p)
+   _ (assert ((sent p) = "hello")))
+
+; --- law 10: the writer parks, it does not stop the vm -----------------------
+; law 2's shape on the write side, and the whole point of the rung: the task
+; that cannot deliver gives up its turn, so a peer runs while it waits. under a
+; blocking write door the ticker below never moved at all.
+(: p (dev ())
+   _ (wstall p 30)
+   n (tablet 0)
+   t (twirl (\ _ ((: (go u) (: _ (pin n 0 (1 + (peep n 0 0)))
+                                _ (rest 0)
+                                (go ())))
+                  ())) ())
+   _ (say p "xyz")
+   _ (flush p)
+   _ (freeze t)
+   _ (assert ((sent p) = "xyz")
+             (0 < (peep n 0 0))))       ; the peer ran while the writer waited
+
 (: _ (say out "front: ok") (putc 10))
