@@ -58,6 +58,52 @@
   ; Each call allocates a fresh port object.
   (: p (tap 0) q (tap 0) !(= p q))
 
+  ; --- once: the promise ---
+  ; a thunk that runs at most once and remembers. fired with the UNIT, per the
+  ; zero-operand law -- (th) alone is th unrun.
+  ; ⚠ THE LAW IS THE COUNT, not just the agreement: two firings that agree prove
+  ; nothing on their own (a pure f agrees anyway), so the witness is a tablet the
+  ; body bumps.
+  (: c (tablet 0)
+     th (once (\ u (: k (peep c 0 0) _ (pin c 0 (k + 1)) k)))
+     a (th ()) b (th ()) d (th ())
+     (&& (= a b) (= b d) (= 1 (peep c 0 0))))
+  ; ⚠ AND A PROMISE OF NOTHING STILL FORCES ONCE. this is the case that matters --
+  ; a flow's last promise answers () at eof -- and it is where presence-as-the-net
+  ; fails: a bare pin of () leaves the slot reading exactly like an unforced one,
+  ; so f re-runs forever, silently.
+  (: c (tablet 0)
+     th (once (\ u (: _ (pin c 0 ((peep c 0 0) + 1)) ())))
+     _ (th ()) _ (th ())
+     (&& (nil? (th ())) (= 1 (peep c 0 0))))
+
+  ; --- flow: a PORT IS A CHARLIST ---
+  ; one whose tail is a promise that drinks the next gulp, so `sound` reads a port
+  ; with no one turning it into text first.
+  (: p (tap '(40 49 32 50 41))                          ; "(1 2)"
+     r (sound (flow p))
+     (&& (two? r) (= '(1 2) <r)))
+  ; the gulp is REALIZED and only the join is lazy: the cells up to the tail are
+  ; ordinary conses, and a flowing charlist ends in a promise or in ().
+  (: f (flow (tap '(97 98)))
+     (&& (= 97 <f) (= 98 <>f) (|| (lit? >>f) (nil? >>f))))
+  ; an empty port is the empty charlist, not a promise of one.
+  (nil? (flow (tap ())))
+  ; ⚠ THE MEMOIZATION LAW: a position forced twice answers THE SAME THING, so the
+  ; flow's tail is a `once` and not a bare (\ u (flow p)). p1 re-forces on purpose
+  ; (the `#!` lookahead reads the tail three times in one expression, the \xNN lane
+  ; twice), and a re-drinking tail loses the bytes between -- a MISREAD, never a
+  ; crash. ⚠ the witness has to be a port that still has something to give: the
+  ; unget puts a byte back AFTER the first gulp, so a second drink would swallow it
+  ; and answer the clean end. two forces that both say () prove nothing.
+  (: p (tap '(97)) f (flow p) t >f
+     _ (unsee p 98)
+     x (t ()) y (t ())
+     ; ⚠ and x is compared by IDENTITY, not by `=`: its own tail is the next promise,
+     ; so (= '(98) x) is FALSE -- the printer shows it as (98) because it stops at a
+     ; tail that is not a cons, which is the one place a flow does not look like a list.
+     (&& (lit? t) (&& (= 98 <x) (id? x y))))
+
   ; --- sound: one datum per call, off TEXT. ---
   ; sound takes a CHARLIST and answers three ways: the datum CONSED ONTO WHAT IS
   ; LEFT, () at a clean end, or `torn` where the text ran out inside a shape.

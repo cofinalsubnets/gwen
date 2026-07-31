@@ -15,75 +15,83 @@
 ; left of cursor on the current line, reversed), r (chars at/after
 ; cursor on the current line, in order), d (lines below).
 
-; read: chars -> top, the reverse shell of the compiler -- the lane every shell
-; ultimately feeds into. its `char` lift + `char->chars` realizer are CLOSURE-PRIVATE
-; here (off the book). a charm is a sat (a non-negative fixnum); a CHARS is a bare
-; charlist (eager, ends at 0); the `char` colist is the LAZY form: (cap cs) is a charm,
-; (cup cs) a top, the tail forced with the empty -- ((cup cs) ()) -- typing as colist + 0
-; (the coproduct, 0 the end). consumers dispatch on KIND: two? is a cell, anything else
-; the end. `char` is the canonical lift -- chars cell by cell, a port (the HOT lane)
-; one byte per force (-1 ends it), a colist passing through, the end lifting to itself --
-; and `char->chars` realizes a finite colist. read takes any of these as `s`, reads ONE
-; form (structurally -- the reader knows no operators) and sends it through ev's core
-; (opfix, feel, ana, cata): the full hull chars -> top in one call. nothing readable --
-; empty input or an unfinished shape -- is nothing.
-(: (read s)
-   (: (char s)
-      (? (two? s) (: t >s
-                     (? (two? t) (<s >< (\ u (char t)))          ; chars: lift, lazy tail
-                        !t (<s >< (\ u ()))                      ; the last chars cell
-                        s))                                      ; a top tail: char already
-         (hot? s) (: c (see s)                                   ; a port is the hot char
-                        (? (c = -1) () (c >< (\ u (char s)))))
-         ())
-      (char->chars s)
-      (: cs (char s)
-         (? (two? cs) (<cs >< (char->chars (<>cs ()))) ()))
-      r (sound (char->chars s))
-      (? (two? r) (ev (cap r)) 0)))
-; reads: the stream shell -- reads and evals every form of a port, the value the last
-; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
-; ⚠ THE TWO ENDINGS DIFFER: a clean end comes BETWEEN forms (done), `torn` INSIDE one --
-; and once the port is spent there is no more text coming, so that is a scare.
-;
-; this is the tree's ONE refill loop: `sound` walks text, so somebody has to turn a port
-; into text, and drinking is the only place it happens. ⚠ IT MUST RE-PARSE ONCE PER
-; DRINK, NEVER ONCE PER BYTE -- crew/moon/gen.l is a single 360KB form, and a
-; byte-then-reparse loop is quadratic on it.
-;
 ; drink: block for the first byte (see parks the TASK), then take everything already
 ; waiting. `cue?` is the dual of that park -- true iff the next see will answer -- so the
-; loop stops at the fd's own edge and the caller gets a whole gulp per parse. () at eof.
+; loop stops at the fd's own edge. () at eof. one of the three vessel verbs: sip draws
+; ONE unit, drink what is READY, slurp ALL (test/spec.l's i/o section).
 (: (drink p)
    (: c (see p)
       (? (c = -1) ()
          (link c ((: (go acc) (? (cue? p)
                                  (: b (see p) (? (b = -1) (rev acc) (go (link b acc))))
                                  (rev acc))) ())))))
+; once: THE PROMISE. a thunk that runs its f at most once and remembers the answer;
+; every later firing reads the remembrance. it goes through a TABLET because that is
+; the door this tree sanctions for mutation -- the classic promise mutates its own
+; cons tail in place, which is off-road here.
+; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the
+; ordinary case (eof answers ()), and a bare pin would leave the slot reading exactly
+; like an unforced one -- so it would re-run f forever, silently, on the one input that
+; matters. presence is the wrapper, never the net.
+(: (once f)
+   (: t (tablet 0)
+      (\ u (: v (peep t 0 ())
+              (? (two? v) >v
+                 (: w (f ()) _ (pin t 0 (1 >< w)) w))))))
+; flow: A PORT IS A CHARLIST -- one whose tail is a thunk that drinks the next gulp.
+; that is the whole of it: "charlist" and "port" stop being two ideas, so the reader
+; (love/p1.l) asks for more itself and nobody has to turn a port into text first.
+;
+; the reader REFLECTS on the tail rather than forcing implicitly -- a cons is more text,
+; () the end, anything else a thunk fired with the unit -- so `cup` stays the op it was
+; and the hot path never learns this happened. p1-cup is the one advance.
+;
+; the gulp is REALIZED and only the join is lazy: a byte-per-force charlist would cons
+; and call per character, and crew/moon/gen.l is a single 360KB form. (that form is also
+; why `reads` used to re-parse once per drink rather than once per byte -- a hazard that
+; existed only because the reader could not ask.)
+;
+; ⚠ THE TAIL IS A `once`, AND IT MUST BE: p1 forces the same position more than once --
+; the `#!` lookahead reads the tail three times in one expression, the \xNN lane twice --
+; and against a bare (\ u (flow p)) each of those is another DRINK, which loses the bytes
+; between. that fails as a MISREAD, never a crash.
+(: (flow p)
+   (: g (drink p)
+      (? (two? g) (cat g (once (\ u (flow p)))) ())))
+; read: chars -> top, the reverse shell of the compiler -- the lane every shell
+; ultimately feeds into. `s` is a charlist: a bare one (a charm is a sat, a non-negative
+; fixnum), a flowing one, or a PORT, which is lifted to the flowing kind and is the only
+; case that needs saying. read takes any of them, reads ONE form (structurally -- the
+; reader knows no operators) and sends it through ev's core (opfix, feel, ana, cata): the
+; full hull chars -> top in one call. nothing readable -- empty input or an unfinished
+; shape -- is nothing.
+(: (read s)
+   (: r (sound (? (hot? s) (flow s) s))
+      (? (two? r) (ev <r) 0)))
+; reads: the stream shell -- reads and evals every form of a port, the value the last
+; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
+; ⚠ THE TWO ENDINGS DIFFER: a clean end comes BETWEEN forms (done), `torn` INSIDE one.
+; and `torn` is no longer a maybe: the reader drank for itself and found the end, so
+; there is nothing left to try and it is a scare.
 (: (reads p)
    ((: (g cl z)
        (: r (sound cl)
-          (? (two? r)      (g (cup r) (ev 'ev (cap r)))
-             (: more (drink p)
-                (? (two? more)     (g (cat cl more) z)
-                   (id? r torn)    (scare 'unfinished-form p)
-                   z)))))
-    () 0))
-; forms: every datum of a port, as DATA -- the data twin of `reads`, the same drink
-; loop underneath, and the shape half the tools had each copied out by hand. it takes
-; a PORT, like reads, so it needs neither open nor close (a fs-less frontend has
-; neither, and a bare mention would raise at the define). ⚠ a torn tail SCARES: the
-; other choice is handing back the forms that happened to land, which reads exactly
-; like a whole file and is the bug every one of those copies had.
+          (? (two? r)       (g >r (ev 'ev <r))
+             (id? r torn)   (scare 'unfinished-form p)
+             z)))
+    (flow p) 0))
+; forms: every datum of a port, as DATA -- the data twin of `reads`, and the shape half
+; the tools had each copied out by hand. it takes a PORT, like reads, so it needs neither
+; open nor close (a fs-less frontend has neither, and a bare mention would raise at the
+; define). ⚠ a torn tail SCARES: the other choice is handing back the forms that happened
+; to land, which reads exactly like a whole file and is the bug every one of those had.
 (: (forms p)
    ((: (g cl acc)
        (: r (sound cl)
-          (? (two? r)      (g (cup r) (<r >< acc))
-             (: more (drink p)
-                (? (two? more)     (g (cat cl more) acc)
-                   (id? r torn)    (scare 'unfinished-form p)
-                   (rev acc))))))
-    () ()))
+          (? (two? r)       (g >r (<r >< acc))
+             (id? r torn)   (scare 'unfinished-form p)
+             (rev acc))))
+    (flow p) ()))
 
 ; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
 ; the body of this (: ..) returns the public entry points as a list, defglob'd

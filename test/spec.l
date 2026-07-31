@@ -547,14 +547,19 @@
 ; see/put/... , open/close/pad. the vessels: (tap cl) an input SOURCE over a colist, (jug 0) an
 ; output PORT with a growable buffer that pours both ways (a PORT, not a cask -- a cask is the
 ; mutable byte ARRAY); (sip o) draws ONE unit, (drink o) takes all that is READY, (slurp o) drains
-; ALL to a value. the datum reader is `sound` and it takes TEXT -- a charlist, not a port -- so the
-; whole read protocol IS its return value, three ways: the datum CONSED ONTO WHAT IS LEFT, () at a
+; ALL to a value. the datum reader is `sound` and it takes TEXT -- a charlist -- so the whole read
+; protocol IS its return value, three ways: the datum CONSED ONTO WHAT IS LEFT, () at a
 ; clean end, or `torn` where the text ran out inside a shape. ⚠ ask `two?` for the datum, never the
 ; net: the answer is a cons and a datum may perfectly well be a nothing (reading "()" answers
 ; (() . rest)). the RESIDUE IS THE ANSWER, so a torn read resumes by handing back more text and
 ; nothing is stashed in a port -- which is why the old more-bit/port-back protocol is gone.
-; `read` rides it (ONE form, EVALED); `reads` drinks a port form by form, and is the one place a
-; port becomes text; `dot` (the `.` operator, .x) prints x to out and returns it.
+; and A PORT IS A CHARLIST: (flow p) is one whose tail is a promise that drinks the next gulp,
+; so the reader asks for more itself and there is nothing to bridge. a consumer REFLECTS on the
+; tail -- a cons is more, () the end, anything else a thunk fired with the unit -- and nothing
+; forces implicitly. (once f) is that promise on its own: it runs f at most once and remembers,
+; through a tablet, wrapping the answer because a promise of NOTHING is the ordinary case.
+; `read` rides sound (ONE form, EVALED); `reads` and `forms` walk a flowing port, evaling and
+; collecting; `dot` (the `.` operator, .x) prints x to out and returns it.
 ; `sound0` is sound's BOOTSTRAP TWIN, same protocol over the PURE LISP SUBSET: parens, comments,
 ; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is (hash a) to sound and the
 ; plain symbol # to sound0. it is what reads prel.l before there is a language (doc/reader.md).
@@ -563,6 +568,9 @@
  (1 = (cap (sound '(49)))) (nil? (sound ())) (id? torn (sound '(40)))
  (: r (sound '(49 32 50)) (2 = (cap (sound >r))))    ; the residue reads the next datum
  (: r (sound '(40 41)) (&& (two? r) (nil? <r)))      ; ...and the datum () is still a datum
+ (: r (sound (flow (tap '(40 49 32 50 41)))) ('(1 2) = <r))   ; a PORT reads as the charlist it is
+ (: c (tablet 0) th (once (\ u (: k (peep c 0 0) _ (pin c 0 (k + 1)) k)))
+    (&& ((th ()) = (th ())) (1 = (peep c 0 0))))     ; a promise forces ONCE and remembers
  ('(a) = (cap (sound0 '(40 97 41)))) (nil? (sound0 ()))
  (id? torn (sound0 '(40 97)))                        ; torn, unfinished shape
  ('(hash a) = (cap (sound '(35 40 97 41)))) ((intern "#") = (cap (sound0 '(35 40 97 41)))))

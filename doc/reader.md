@@ -7,9 +7,8 @@ a PURE LISP subset, and the real reader `p1` written in love on top of it --
 `c0`/`ev` again, one layer down. this ORIENTS; the laws live in test/reader.l,
 and every doubt settles by probing `sound`. drafted 2026-07-29.
 
-**rungs 1-6c are LANDED and the arc is closed** -- the tree has one reader. rung 7
-(below) is its tail: the reader has one INPUT type too, because a port IS a
-charlist with a thunk tail. planned, not started.
+**rungs 1-7 are LANDED and the arc is closed** -- the tree has one reader, and it
+has one INPUT type, because a port IS a charlist with a promise for a tail.
 
 ## what the C reader does today (the inventory)
 
@@ -488,7 +487,7 @@ every line. all three collapse into the returned residue, and each gained "every
 form on a line runs" for free, where only the first used to.
 
 
-### 7. one input: the charlist IS the port -- PLANNED, not started
+### 7. one input: the charlist IS the port ✅ LANDED
 
 gwen's, and the framing is the whole rung: **do not make laziness transparent.**
 the caller REFLECTS on the tail -- a cons is more input, `()` is the end, anything
@@ -510,50 +509,65 @@ untouched, and the only new C is whatever mints a thunk over a port.
 **the point is not speed.** it is that "charlist" and "port" stop being two ideas.
 a port, viewed as input, IS a charlist whose tail is a thunk that reads more.
 
-#### the design already exists, and is thrown away at p1's door
+#### the design already existed, and was thrown away at p1's door
 
-`love/bao.l:20-27` states it exactly, as the `char` colist -- "(cap cs) is a charm,
-(cup cs) a top, the tail forced with the empty -- `((cup cs) ())` … consumers
-dispatch on KIND: two? is a cell, anything else the end", and `char` is "the
-canonical lift -- chars cell by cell, a port (the HOT lane) one byte per force
-(-1 ends it), a colist passing through". the vocabulary is already ordinary: `><`
-is `link` as the loosest infix builder (prel.l:363), and the force is unit-fired,
-`(t ())`, per the zero-operand law.
+bao.l stated it exactly, as the `char` colist -- "(cap cs) is a charm, (cup cs) a
+top, the tail forced with the empty -- `((cup cs) ())` … consumers dispatch on
+KIND: two? is a cell, anything else the end", and `char` was "the canonical lift
+-- chars cell by cell, a port (the HOT lane) one byte per force (-1 ends it), a
+colist passing through". the vocabulary was already ordinary: the force is
+unit-fired, `(t ())`, per the zero-operand law.
 
-then `bao.l:39-42` undoes it: `char->chars` REALIZES the colist into a strict list
-before handing it to `sound`, because p1 only eats strict lists. the tree builds
-the thing and discards it at the one door that wanted it.
+then `char->chars` undid it, REALIZING the colist into a strict list before handing
+it to `sound`, because p1 only ate strict lists. the tree built the thing and
+discarded it at the one door that wanted it. so the rung was mostly a matter of
+not throwing it away -- with two corrections. the force moved OUT of the lift and
+into the reader (`char` forced for the caller; `p1-cup` lets the caller decide),
+and the unit of laziness moved from the BYTE to the GULP.
 
-#### what it deletes
+#### what it deleted
 
-four sites, and they are one seam:
+two sites, and they are one seam:
 
-| site | the workaround it is |
+| site | the workaround it was |
 |---|---|
-| `bao.l:39-42` `char->chars` | realize the colist before parsing |
-| `bao.l:57-71` `drink` + `(cat cl more)` in `reads`, and its twin in `forms` | refill OUTSIDE the reader, re-parse per gulp |
-| `love.c:4386` `p0text` | build a heap `ci`, then recover the residue from `head` PLUS the byte `ti_ungetc` parked off-list |
-| `love.c:3238`/`:3270` `struct ci` / `ci_getc` | exist for nothing else -- 4388/4391 are the only constructors |
+| `bao.l` `char->chars` | realize the colist before parsing |
+| `bao.l` `(cat cl more)` in `reads`, and its twin in `forms` | refill OUTSIDE the reader, re-parse per gulp |
 
-feed p1 a colist and `reads`/`forms` collapse from a refill loop to a walk, and the
-6c warning goes with them: *"IT MUST RE-PARSE ONCE PER DRINK, NEVER ONCE PER BYTE
--- crew/moon/gen.l is a single 360KB form"*. that hazard exists ONLY because the
-reader cannot ask for more itself.
+`reads` and `forms` collapsed from a refill loop to a walk -- each is now four
+lines around `sound` -- and the 6c warning went with them: *"IT MUST RE-PARSE ONCE
+PER DRINK, NEVER ONCE PER BYTE -- crew/moon/gen.l is a single 360KB form"*. that
+hazard existed ONLY because the reader could not ask for more itself. `read` went
+from a nested lift-and-realize to one line: `(sound (? (hot? s) (flow s) s))`.
+`drink` STAYS -- it is a vessel verb in its own right (sip/drink/slurp, spec.l's
+i/o section), and `flow` is the caller that turns it into a charlist.
 
-and the deep one: **`torn` stops being a maybe.** today `reads` gets `torn` and
-cannot tell "unfinished shape" from "unfinished shape, more is coming", so it
-drinks again, re-parses, and scares only when the drink comes back empty. with a
-colist the reader forces and finds out; `torn` means a genuine `()` tail. that is
-the unification paying, not merely glue leaving.
+and the deep one: **`torn` stopped being a maybe.** `reads` used to get `torn` and
+be unable to tell "unfinished shape" from "unfinished shape, more is coming", so it
+drank again, re-parsed, and scared only when the drink came back empty. now the
+reader forces and finds out; `torn` means a genuine `()` tail, and the scare is one
+line at the same level as the datum case. that is the unification paying, not
+merely glue leaving.
 
-**p0 does not change.** its only inputs are complete texts -- the boot corpus and
-rdiff's strings -- so it stays the nil-tails-only reader and simply refuses a
-thunk. that is what keeps it at 30 lines. and it is now the SOLE consumer of the
-leaf lexers (`ai_z_getc`, `ioread1str`, `ioread1sym` have no caller outside
-`p0read1`/`p0reads`; 6c's `ioparse` deletion took the other), so converting p0's
-own input later strands nobody.
+**p0 does not change**, and it turned out that **the C does not either.** the plan
+said `p0text` and `struct ci`/`ci_getc` would collapse with the rest. that was
+wrong twice over, and worth writing down:
 
-#### ⚠ THE DECISION: the thunk must MEMOIZE, and the sanctioned way is a tablet
+- `ci` is not p1's adapter, it is **p0's own**. `p0read1` reads through the port
+  vt (`ai_z_getc` and the leaf lexers), and `sound0`'s protocol is charlist-in /
+  residue-out, so something has to wear a charlist as a port. laziness never
+  touched that mismatch. removing it means making p0's lexers charlist-native --
+  a rung of its own, and one that also has to answer for the boot stitch, which
+  reads a C string through `ti`.
+- `4388/4391 are the only constructors` was simply false: **prel's `tap` builds a
+  `ci`** (`(poke -1 -4 ..)`, fd = -4, the in-memory port every test and `flow`'s
+  own witness leans on). the C stays because the facility does.
+
+what remains true: p0 is the SOLE consumer of the leaf lexers (`ai_z_getc`,
+`ioread1str`, `ioread1sym` have no caller outside `p0read1`/`p0reads`; 6c's
+`ioparse` deletion took the other), so converting its input later strands nobody.
+
+#### ⚠ the thunk must MEMOIZE, and the sanctioned way is a tablet -- taken
 
 p1 forces the same tail more than once. `p1.l:66-67`, the shebang lookahead:
 
@@ -574,40 +588,72 @@ a one-shot thunk therefore cannot be the tail. the two ways to memoize:
   more than once, and mutation goes through TABLETS here.
 * **a tablet-backed promise** -- the thunk closes over a tablet, the first force
   pins the result, later forces read the pin. pure from the caller's side, one
-  tablet per chunk, and it uses the door the tree already sanctions. **this is
-  the recommendation.**
+  tablet per gulp, and it uses the door the tree already sanctions. **taken**, as
+  `once` in bao.l, six lines and a name of its own because it is worth stating
+  alone.
 
 the third option, proving p1 never re-forces a position, is not worth attempting:
 the run/backtrack logic re-examines positions by construction, and a failure is
 silent (two reads look like ordinary input).
 
+⚠ and `once` has the presence trap in it, sharply: **the answer is wrapped `(1 v)`
+and read back with `two?`**, because a promise of NOTHING is the ordinary case --
+the last gulp's promise answers `()` at eof. a bare pin of `()` leaves the slot
+reading exactly like an unforced one, so `f` re-runs forever. that is the fifth
+face of "presence is the wrapper, never the net", inside the fix for it.
+
 #### ⚠ two smaller traps
 
-* **chunk size.** `char`'s hot lane forces ONE BYTE per force. move `drink`'s gulp
-  INSIDE the thunk, or the quadratic re-parse is traded for a cons-and-a-call per
-  character. the amortization has to survive the move.
+* **chunk size.** `char`'s hot lane forced ONE BYTE per force; `flow` puts the
+  whole `drink` gulp inside the promise, so the amortization the refill loop had
+  survives the move and the quadratic re-parse is not traded for a cons-and-a-call
+  per character. the gulp is REALIZED; only the join is lazy.
 * **`two?` is FALSE for a lambda**, so an unforced tail reads as a clean end to
   every test already written. a PARTIAL conversion fails by silently truncating
   input -- "presence is the wrapper, never the net" wearing its fifth face, and
-  the one to fear here.
+  the one that was feared here. it did not bite, because p1's conversion went in
+  FIRST and whole, one commit ahead of anything lazy existing to feed it: on
+  strict input `p1-cup` is `cup`, so the gate that proved it green proved nothing
+  had been missed either.
 
-#### the shape of the work, and its gate
+#### how it went, and its gate
 
-1. the tablet promise, and one nif (or prel helper) that mints a colist over a
-   port: a realized gulp consed onto a memoizing thunk, `()` at eof.
-2. p1 reflects. the rule is grep-able and must be TOTAL: never bare `cup` on the
-   INPUT cursor, always the forcing advance. the token lists p1 builds itself stay
-   strict, so `p1-int` and friends are untouched -- only the raw cursor changes.
-3. `sound` takes either; a strict charlist is the nil-tailed case and nothing that
-   passes one today notices.
-4. `reads`/`forms`/`read` drop `drink` and `char->chars`.
-5. `sound0` takes the charlist directly; the residue IS the cursor, so `p0text`
-   collapses and `struct ci`/`ci_getc` go.
+1. `once`, the promise, and `flow`: a drunk gulp consed onto `(once (\ u (flow p)))`,
+   `()` at eof. both bao.l top-level, so they ride bao's splice like `drink`.
+2. p1 reflects, through `p1-cup` -- `(? (lit? t) (t ()) t)`, one line. the rule is
+   grep-able and TOTAL: after it, a bare `cup` on the INPUT cursor is a bug, and
+   `grep '(cup ' love/p1.l` reads as an audit. six functions step the cursor
+   (`p1-eol`, `p1-skip`, `p1-tok`, `p1-run`, `p1-str`, `p1-read1`) plus `p1-list`'s
+   close, which is the one that hid: it walks its own `cl` but advances past the
+   `)` in the RETURN. the token lists p1 builds itself stay strict, so `p1-int`
+   and friends were untouched.
+3. `sound` takes either, for free -- a strict charlist is the nil-tailed case, and
+   nothing that passes one noticed. this step was empty, which is the sign the
+   reflecting design was the right one.
+4. `reads`/`forms`/`read` dropped the refill loop and `char->chars`.
+5. the C: NOT DONE, and not to be done here -- see above. `p0text`/`ci` are p0's,
+   not p1's.
 
-the acceptance test already exists: **test/host/rdiff.l**, one rebindable name over
-297 files / 1318 forms, plus `test/io.l` for the live-port lane and `test_kore`'s
-piped stdin for streaming. a memoization bug shows up as a MISREAD, not a crash,
-so add one law that forces a position twice ON PURPOSE and requires the same byte.
+net: **.l code down 6 lines, C unchanged, one new ambient name pair (`once`,
+`flow`)** -- but the count is not the point and never was. what left is a whole
+mode of failure: there is no longer a place where text is realized ahead of the
+reader, so there is no longer a gulp size to get wrong.
+
+the acceptance test already existed: **test/host/rdiff.l**, one rebindable name
+over 297 files / 1318 forms, plus `test/io.l` for the live-port lane and
+`test_kore`'s piped stdin. a memoization bug shows up as a MISREAD, not a crash,
+so test/io.l gained a law that forces a position twice ON PURPOSE.
+
+⚠ **that law needs a port with something still to give.** the obvious witness --
+force a flow's last tail twice, get `()` both times -- passes with a bare thunk
+too, because a second drink on a spent port answers `()` as well. the working one
+`unsee`s a byte back AFTER the first gulp: memoized, both forces answer it;
+re-drinking, the second swallows it and answers the clean end. sabotage-proved --
+with `once` removed from `flow`, that assert is the ONLY one in the corpus that
+reddens. ⚠ and it compares by `id?`, not `=`: a flowing cell's own tail is the
+next promise, so `(= '(98) x)` is FALSE even though the printer shows `(98)` --
+it stops at a tail that is not a cons, which is the one place a flow does not
+look like a list.
 
 
 ## order and size
@@ -637,15 +683,26 @@ on the first build.
 tree has ONE reader. 6b's vocabulary question closed after it (2026-07-30): p1 and
 the opfix factor pass CLOSE their scopes rather than leaking and being mopped, so
 the book carries `sound`/`torn` and nothing else of p1's -- a name that never
-reaches the book cannot be forgotten from a list. what is left of the plan: rung
-2's bit ops, still independent, and **rung 7**, which is the arc's tail rather
-than its body -- one reader was the goal, one INPUT is the tidy-up.
+reaches the book cannot be forgotten from a list.
 
-rung 7 is the same insight run once more. 6c stopped bridging the reader to the
-port by making `sound` take TEXT; rung 7 stops bridging the PORT to the reader by
-making a port BE text -- a charlist with a thunk tail. the leftover glue named in
-6c's paragraph below (`reads` as "the one place a port becomes text", the refill
-loop, the re-parse-per-drink hazard) is exactly what that retires.
+**7 LANDED** (2026-07-30), the same insight run once more. 6c stopped bridging the
+reader to the port by making `sound` take TEXT; 7 stops bridging the PORT to the
+reader by making a port BE text -- a charlist with a promise for a tail. the
+leftover glue named in 6c's paragraph below (`reads` as "the one place a port
+becomes text", the refill loop, the re-parse-per-drink hazard) is exactly what it
+retired. bao.l and p1.l came to **6 code lines fewer** between them (bao -7, p1 +1)
+and 21 total lines more, all of it the ⚠ comments this rung's traps earned.
+
+it was cheap for the reason the framing predicted: **reflecting rather than forcing
+implicitly** kept the whole change on the .l side of the line. `cup` was never
+touched, so neither was the hot path, and step 3 of the plan -- "`sound` takes
+either" -- turned out to be no work at all. the estimate that missed was the other
+direction: rung 7 was written expecting to take `p0text` and `struct ci` with it,
+and neither is p1's to take (the rung's own section says why).
+
+what is left of the plan: rung 2's bit ops, still independent, and a rung nobody
+has written -- making **p0's lexers charlist-native**, which is what would actually
+retire `p0text`/`ci`, and which has to answer for the boot stitch too.
 
 the predicted hard half was the PORT PROTOCOL, and it was -- but not where the
 plan looked. no hot slot was needed and no lookahead-cons either: the answer was
