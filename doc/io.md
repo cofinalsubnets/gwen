@@ -1125,7 +1125,7 @@ true; it defaults there for a non-port.
 bare `while (i<n) write(...)` with no poll and no park. a blocking write to a
 flow-controlled fd stalls the whole VM.
 
-### ⚠ 5. the new one: the buffered read lane BLOCKS where the byte lane PARKS
+### 5. the buffered read lane BLOCKED where the byte lane PARKS -- ✅ FIXED 2026-07-31
 
 `io_refill`'s loop (love.c:3170-3177):
 
@@ -1141,12 +1141,29 @@ to -1 -- so `k == 0` means "would block". and `ai_wait_fd(fd, 1, 0)` reaches
 `poll_wait` with `ms == 0`, which is spelled `t = -1`: **poll blocks
 indefinitely** (host/main.c:34-43).
 
-so one port has two doors with opposite scheduling behaviour. the per-byte lane
-parks the task and lets the scheduler run someone else; the bulk lane blocks the
-whole VM on one fd. it is reachable exactly where it hurts -- a heap port on the
-host that can EAGAIN, i.e. sockets, pipes and ptys, which is kiosko's
-task-per-client, lush's pty pump, haven. **this is by inspection; no stall has
-been demonstrated.** it is defect 3's family and it postdates the diagnosis.
+so one port had two doors with opposite scheduling behaviour. the per-byte lane
+parks the task and lets the scheduler run someone else; the bulk lane blocked the
+whole VM on one fd.
+
+**REACHABILITY, settled by probe rather than by argument.** no in-process schedule
+can reach it: `lvm_fgetc`'s readiness guard and its refill are ONE op, and the vm
+yields only at an `Ap`, so nothing can run between "poll said ready" and "read said
+no". what CAN reach it is a second process sharing the open file description and
+winning the race. host/main.c's `fd_readn` now injects exactly that under
+`LOVE_FAULT_EAGAIN` -- on a TTY, and it must be a tty, because on a regular file
+poll always says readable so the retry succeeds and nothing is proved.
+
+armed against the pty master, with a ticker task alongside: **the whole process
+hung.** ticker, main task, everything -- not just the reader. that is the failure,
+demonstrated, where before it was inspection.
+
+**the fix is the answer to open question 2: a waiting reader PARKS.** `io_refill`
+no longer waits at all -- on a would-block it answers `IO_WOULDBLOCK` (a sentinel
+distinct from EOF and from any byte), and `lvm_fgetc` parks the task on the fd with
+`Ip` unadvanced, so the op re-runs and re-checks readiness. that is precisely what
+its own guard already did; the bulk lane had simply grown a second, worse answer to
+the same question. gated in test/host/pty.l, and **the gate was checked to fail**
+against the unfixed core.
 
 ### the boundary principle -- keep, it is still right
 
@@ -1300,11 +1317,12 @@ shared compact backing with per-holder offsets -- which is exactly `io_refill`'s
 `rbuf`/`rpos`/`rlen`, the port buffer rediscovered as a value. the two ends of
 this arc converge on one structure from opposite directions.
 
-**2. what a waiting reader does.** guile has real threads; love has cooperative
-tasks, and the guile model is silent on what happens to a task that needs bytes
-that have not arrived. love currently answers this TWICE AND DIFFERENTLY --
-`lvm_fgetc` parks, `io_refill` blocks (defect 5). picking one is a decision the
-ownership model does not make for us.
+**2. what a waiting reader does. -- ANSWERED 2026-07-31: IT PARKS.** guile has real
+threads; love has cooperative tasks, and the guile model is silent on what happens
+to a task that needs bytes that have not arrived. love used to answer this TWICE
+AND DIFFERENTLY -- `lvm_fgetc` parked, `io_refill` blocked. defect 5's fix settles
+it on parking, everywhere: **a reader that cannot proceed yields to the scheduler,
+and the VM never waits on one fd.** 8B inherits this rather than re-deciding it.
 
 everything else -- where the buffer lives, C or love, which vt slots survive --
 is implementation.
@@ -1335,9 +1353,9 @@ choosing park-or-block. so:
    path B's entire motivation, `select` loses its justification with it, and what
    remains of part II is defects 2, 4 and 5 on their own merits rather than as
    one project.
-2. **fix defect 5.** the blocking refill is a live hazard with a named failure
-   mode, not a design preference -- and it is now the ONLY thing in part II with
-   a real failure story. it also answers question 2, which 8B needs anyway.
+2. ~~fix defect 5~~ ✅ **DONE 2026-07-31** -- reproduced under fault injection (it
+   hung the whole vm), fixed by parking instead of waiting, gated both ways. it
+   answered question 2 by doing, as predicted.
 3. **then 8B**, whose shape follows from the decision above: one cell, one
    current head, `reads` re-reading the cell each iteration.
 4. **defect 2** (the `-1` sentinel) rides along with 8B where it touches, and is

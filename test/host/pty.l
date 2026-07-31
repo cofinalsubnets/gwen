@@ -128,3 +128,36 @@
    _ (assert
       (string? got)                    ; ⚠ slurp of a jug is TEXT -- two? is FALSE for a string
       (= got "AXB\r\n")))              ; the whole chain: LEFT decoded, X inserted BEFORE b, tr answered
+
+; --- defect 5: a competing reader must park the TASK, never block the VM ---
+; io_refill used to answer a "would block" readn with ai_wait_fd(fd,1,0), which is
+; poll with an INFINITE timeout -- inside lvm_fgetc, which is one op, so the whole
+; vm stopped on one quiet fd while every other task starved. it is reachable only
+; when a second process shares the open file description and wins the race: no
+; in-process schedule can get between the readiness guard and the refill, because
+; the vm yields only at an Ap. host/main.c's fd_readn injects exactly that race
+; under LOVE_FAULT_EAGAIN, on a TTY (on a regular file poll always says readable,
+; so the retry succeeds and nothing is proved).
+; ⚠ THIS GATE WAS CHECKED TO FAIL. against love.c before the fix the child hangs,
+; gets killed at the deadline below, and the run reddens on `(two? st)` -- it is the
+; deadline kill that shows, not the exit code. a fault gate that cannot redden is
+; furniture, so if this is ever edited, re-check it BOTH ways.
+; the child ticks one task while another reads the raced pty; reaching (quit 7)
+; means the vm kept scheduling.
+(: kid "(: r (mind `(\"cat\")) m (cup r)
+          b (twirl (\\ _ ((: (tick n) (? (n <= 0) 0 (: _ (rest 20) (tick (n - 1))))) 8)) 0)
+          a (twirl (\\ _ (see m)) 0)
+          _ (rest 60) _ (put m 120) _ (flush m) _ (rest 300)
+          _ (still (cap r) 9) (quit 7))"
+   ; ⚠ our OWN injector is already latched off: fd_readn reads the env once, at the
+   ; first readn, which happened when this file was read -- long before this setenv.
+   _ (setenv "LOVE_FAULT_EAGAIN" "1")
+   p (spawn (L "out/host/love" "-n" "-e" kid))
+   _ (assert (< 0 p))
+   st ((: (poll n) (: s (gather p)
+                      (? (two? s) s
+                         (n <= 0) (: _ (still p 9) _ (rest 20) (gather p))   ; deadline: kill and reap
+                         (: _ (rest 50) (poll (n - 1)))))) 60)               ; ~3s of grace
+   _ (assert
+      (two? st)                    ; reaped at all
+      (= 7 (cap st))))             ; ... by its own (quit 7): the vm never stalled

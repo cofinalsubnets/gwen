@@ -3150,6 +3150,9 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
  else for (uintptr_t k = 0; ai_ok(g) && k < n; k++)   // a frontend with no bulk lane: fd putc, no alloc
   g = vt->putc(g, (unsigned char) txt(w)[k]);
  return g; }
+// io_refill's third answer, beside a byte and EOF: the fd said "would block" after
+// the readiness check said otherwise. distinct from EOF (-1) and from any byte.
+#define IO_WOULDBLOCK ((uintptr_t) -2)
 static struct ai *io_refill(struct ai *g) {
  struct ai *fc = ai_core_of(g);
  struct ai_bio *b = bio_of(g, fc->io);
@@ -3165,15 +3168,20 @@ static struct ai *io_refill(struct ai *g) {
   b->rpos = b->rlen = putcharm(0);
   gen_wb(fc, (word) b, b->rbuf);                 // a tenured port takes a young backing
   fc->sp += 1; }
- for (;;) {
-  struct ai_str *r = (struct ai_str*) b->rbuf;
-  intptr_t k = vt->readn(g, (unsigned char*) txt(r), r->len);
-  if (k > 0) {
-   b->rlen = putcharm(k), b->rpos = putcharm(1);
-   fc->b = (unsigned char) txt(r)[0];
-   return g; }
-  if (k < 0) { b->io.eof_seen = putcharm(true); fc->b = EOF; return g; }
-  ai_wait_fd((int) getcharm(b->io.fd), 1, 0); } }
+ struct ai_str *r = (struct ai_str*) b->rbuf;
+ intptr_t k = vt->readn(g, (unsigned char*) txt(r), r->len);
+ if (k > 0) {
+  b->rlen = putcharm(k), b->rpos = putcharm(1);
+  fc->b = (unsigned char) txt(r)[0];
+  return g; }
+ if (k < 0) { b->io.eof_seen = putcharm(true); fc->b = EOF; return g; }
+ // k == 0 is "would block": the readiness check said yes and the read said no.
+ // ⚠ NEVER WAIT HERE. this runs under lvm_fgetc, which is ONE op -- a blocking
+ // poll stops the whole VM, not the reading task, so every other task starves on
+ // one quiet fd. reachable when a second process shares the description and wins
+ // the race (test/host/pty.l injects exactly that). hand it back and let the
+ // caller park, which is what its own readiness guard already does.
+ return fc->b = IO_WOULDBLOCK, g; }
 static ai_inline struct ai *zgetc(struct ai*g) {
  if (!ai_ok(g)) return g;
  struct ai *fc = ai_core_of(g);
@@ -4000,6 +4008,9 @@ lvm(lvm_fgetc) {
   g->io = i;
   if (!ai_ok(g = zgetc(g))) return ghelp(g);
   Unpack(g);
+  if (g->b == IO_WOULDBLOCK) {          // the refill raced and lost -- park, don't spin
+   g->next_wait_fd = getcharm(((struct ai_io*) Sp[0])->fd);   // re-read: the gc may have moved it
+   return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
  else Sp[0] = putcharm(EOF);
  return Ip++, Continue(); }
