@@ -304,6 +304,15 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 test_clay: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
 	@$m --wake $(ho)/mooncc.image -l test/gate/clay.l < /dev/null
+# ...and the first CONSUMER: love.c's +/* dispatch matrices are generated from
+# tools/mx.l (doc/clay.md rung 2), so mx.h has to be exactly what the table lays.
+# Regenerate and diff -- a hand edit to mx.h, or a table edit with no regen, is a
+# red here rather than a surprise at the next person's build. `cmp` and not
+# `rtk diff` on purpose (the release notes: rtk diff can lie).
+	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
+	@cmp -s out/.mx.h mx.h || { echo "FAIL mx.h is not what tools/mx.l lays -- regenerate it"; diff -u mx.h out/.mx.h | head -20; exit 1; }
+	@echo "clay-mx: mx.h regenerates identically"
+	@rm -f out/.mx.h
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET, and the end of
 # "x86-64 only until arm64 parity" (the line above, which stood for four of the
 # five backends). TWO targets, ONE procedure (test/gate/ccarch.sh, raw.sh's shape).
@@ -806,15 +815,18 @@ test_big: host
 	  out/.big_oracle.l out/.big_oracle.out
 endif
 # test_mx: the +/* dispatch matrices as DATA, their shape machine-checked.
-# tools/mxdump.c (a TU including love.c whole -- the tables are static by
-# design, so the dump reads them out of the same compilation) prints kind and
-# lane names; tools/mx2coq.l DERIVES the band partition from row+column
-# equality and generates proof/rocq/mx.v: the 256-cell tables factor through
-# the band quotient with nothing left over, dispatch commutes over the WHOLE
-# square (KMint is its own band, the unit lane -- the dispatchers' mint
-# early-out is the fast path, never load-bearing), and the diagonal reads
-# the lattice. Regenerated every run, so the tables cannot drift from the
-# theorems. Needs coqc (the dump itself needs only $(CC)); no-ops without.
+# tools/mx.l IS the tables (love data); love.c's mx.h is laid from it through clay
+# and tools/mx2coq.l models it in Rocq, so the theorem and the code are two
+# derivations of ONE datum and cannot drift -- doc/verify.md's bridge 1. That
+# replaced a bridge 3: tools/mxdump.c, a TU that #include'd love.c whole to read
+# its own statics back, naming each lane by comparing function pointers and
+# printing UNKNOWN when it could not. Deleted, along with its $(CC) step.
+# mx2coq DERIVES the band partition from row+column equality and generates
+# proof/rocq/mx.v: the 256-cell tables factor through the band quotient with
+# nothing left over, dispatch commutes over the WHOLE square (KMint is its own
+# band, the unit lane -- the dispatchers' mint early-out is the fast path, never
+# load-bearing), and the diagonal reads the lattice. Needs coqc; no-ops without.
+# The C side of the same datum is gated by test_clay, which needs nothing.
 # test_gcheck: the copy loop's FIXPOINT instance check. AI_GC_CHECK makes
 # gen_minor re-drive its WHOLE scan after the drain -- roots, rem set, the
 # promoted window -- and trap if the second pass copies a single word: gc.v's
@@ -833,11 +845,9 @@ test_mx:
 else
 test_mx: host
 	@echo TEST proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@$(CC) $(ai_cflags) -o out/.mxdump tools/mxdump.c $R/crew/moon/lib/math/am.c
-	@out/.mxdump > out/.mx.l
-	@$(mw) tools/mx2coq.l > proof/rocq/mx.v
+	@cat tools/mx.l tools/mx2coq.l | $(mw) > proof/rocq/mx.v
 	@cd proof/rocq && $(COQC) -q mx.v >/dev/null
-	@rm -f out/.mxdump out/.mx.l proof/rocq/mx.vo proof/rocq/mx.vok proof/rocq/mx.vos proof/rocq/mx.glob proof/rocq/.mx.aux
+	@rm -f proof/rocq/mx.vo proof/rocq/mx.vok proof/rocq/mx.vos proof/rocq/mx.glob proof/rocq/.mx.aux
 endif
 # the PROVE rung of the holo encoder ladder: machine-checked reference x86-64
 # encoders, each proving decode inverts encode (axiom-free, vm_compute over the

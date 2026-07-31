@@ -103,11 +103,14 @@
               (? (! (two? r)) (bad ("unknown tag " + (string h)))
                  (n < <r) (bad ((string h) + " wants at least " + (show <r) + " operands"))
                  (&& (-1 < <>r) (<>r < n)) (bad ((string h) + " takes at most " + (show <>r) + " operands"))
+                 ; ⚠ a gdecl/xdecl's STORAGE slot is a list of bare keywords, not
+                 ; nodes -- `(static)` walked as a form would read `static` as a tag.
+                 ; so the walk takes the declarators and stops.
                  (: (kids l) (? (! (two? l)) ()
                                 (: e <l
                                    (? (two? e) (: v (? (name? <e) (go e) (kids e)) (? v v (kids >l)))
                                       (kids >l))))
-                    (kids >x)))))
+                    (kids (? (member? h '(gdecl xdecl)) `(<>x) >x))))))
        v (go c)
        (? v v 1))
 
@@ -245,7 +248,7 @@
              (id? h 'dot) (: t a
                               (? (&& (two? t) (id? <t 'deref)) ((ce <>t 100) + "->" + (el e 2))
                                  ((ce t 100) + "." + (el e 2))))
-             (id? h 'init) ("{ " + (sepby ", " (map cinit a)) + " }")
+             (id? h 'init) (cinit e 0)
              (id? h 'clit) ("(" + (cty a "") + ") " + (craw (el e 2)))
              (id? h 'vastart) ("__builtin_va_start(" + (ce a 21) + ", " + (ce (el e 2) 21) + ")")   ; clay's 2-slot form; the 1-slot one never reaches here (clay-unsaid)
              (id? h 'vaarg) ("__builtin_va_arg(" + (ce a 21) + ", " + (cty (el e 2) "") + ")")
@@ -254,10 +257,22 @@
    ; a type shows up in operand position for sizeof; tell the two apart by the head
    (ctype? t) (? (name? t) (member? t '(char short int long uint void double float))
                  (&& (two? t) (member? <t '(ptr arr struct named const fn))))
-   (cinit x)
+   ; a brace initializer, and the ONE layout rule the shower has: a NESTED initializer
+   ; breaks the line, a flat one does not. so a 16x16 dispatch matrix comes out one
+   ; ROW per line -- which is the unit you read a matrix in -- while the row itself
+   ; stays whole. no threshold to tune, and it falls out of the data's own shape.
+   (cinitv x) (? (&& (two? x) (member? <x '(dfield didx))) (el x 2) x)
+   (cnested? l) (any (\ x (: v (cinitv x) (&& (two? v) (id? <v 'init)))) l)
+   (cinit x ind)
     (? (! (two? x)) (ce x 21)
-       (id? <x 'dfield) ("." + (el x 1) + " = " + (cinit (el x 2)))
-       (id? <x 'didx) ("[" + (? (charm? (el x 1)) (show (el x 1)) (ce (el x 1) 0)) + "] = " + (cinit (el x 2)))
+       (id? <x 'dfield) ("." + (el x 1) + " = " + (cinit (el x 2) ind))
+       (id? <x 'didx) ("[" + (? (charm? (el x 1)) (show (el x 1)) (ce (el x 1) 0)) + "] = " + (cinit (el x 2) ind))
+       (id? <x 'init)
+        (: l (el x 1)
+           (? (cnested? l)
+              ("{" + nl + (join (map (\ i ((pad (ind + 1)) + (cinit i (ind + 1)) + "," + nl)) l))
+               + (pad ind) + "}")
+              ("{ " + (sepby ", " (map (\ i (cinit i ind)) l)) + " }")))
        (ce x 21))
 
    ; --- declarations -------------------------------------------------------------
@@ -266,7 +281,7 @@
    ; statements would come back as two nodes.
    (cstor st) (? (! (two? st)) "" ((sepby " " (map string st)) + " "))
    (cdtor1 d) (: nm <d t (el d 1) v (el d 2)
-                 ((cty-dtor t nm 0) + (? (! (two? v)) "" (" = " + (cinit v)))))
+                 ((cty-dtor t nm 0) + (? (! (two? v)) "" (" = " + (cinit v 0)))))
    (cdecls ds) (: b (cty-base (el <ds 1))
                   (b + " " + (sepby ", " (map cdtor1 ds))))
 
@@ -277,9 +292,10 @@
    ; a `note` is the only node that prints as prose. multi-line text becomes one
    ; `//` per line, so an authored paragraph keeps its shape.
    (cnote n txt)
-    (: (go acc cur l)
-        (? (! (two? l)) (acc + (line n ("// " + cur)))
-           (: c <l (? (c = 10) (go (acc + (line n ("// " + cur))) "" >l)
+    (: (one1 s) (? (tally s) ("// " + s) "//")     ; no trailing space on a blank line
+       (go acc cur l)
+        (? (! (two? l)) (acc + (line n (one1 cur)))
+           (: c <l (? (c = 10) (go (acc + (line n (one1 cur))) "" >l)
                       (go acc (cur + (string c)) >l))))
        (go "" "" (map txt (jot (tally txt)))))
    ; --- braces, K&R, the way love.c writes them ----------------------------------

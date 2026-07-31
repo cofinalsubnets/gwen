@@ -6195,66 +6195,14 @@ static lvm(data_pair_apply) {
 //   lvm_0 = undefined (-> nil): sequence*sequence
 // Precedence (high->low): lambda > map > chain > text > number(incl array).
 
-// `+`: numbers add, lists/text concat, lambdas/maps Church-add. KMap/KHot rows+cols all addl.
-// Named-index rows (NOT positional): one column value per OTHER-operand kind, so
-// inserting a kind can't silently shift a column. NUMK fills the whole arithmetic
-// lane -- every numeric kind (the scalar gems KCharm/KWide/KFlo/KCplx/KBig, the KVec
-// sentinel, and the arrays KArrZ..KArrO) with one value v; the five non-numeric
-// columns (mint/string/chain/map/top) are named explicitly -- KMint is the bare point
-// (the blue floor, ordinal 0, OUTSIDE the NUMK lane), so it too is named per row; named
-// syms are chains, riding the KChain column/row. Unnamed entries would be
-// NULL (a crash), so every row names all 15 columns via NUMK + the five.
-#define NUMK(v) [KCharm]=v,[KWide]=v,[KFlo]=v,[KCplx]=v,[KBig]=v,[KVec]=v,\
-                [KArrZ]=v,[KArrR]=v,[KArrC]=v,[KArrO]=v
-// KNom (a named point) carries NO +/* algebra of its own -- it rides the KChain column/row
-// exactly as it did when it WAS a (name . mint) chain (the lane fns test formp/strp on the
-// value, and a nom answers neither), so every [KNom] entry mirrors that macro's [KChain].
-// a NAMED symbol now inherits the string lane under + (lvm_add_string): nom+nom cats
-// spellings and re-INTERNS (stringrank 2), nom+str DEMOTES to a string (the min pulls
-// rank to 0), nom+num rides the byte law. nom+chain stays lvm_add_seq -- a symbol ADJOINS
-// to a list (foo stays foo). coins are the per-kind override. so [KNom] no longer mirrors
-// [KChain]: the row is ADD_NOM, and the [KNom] COLUMN routes to lvm_add_string off the
-// number/string rows (the chain row keeps add_seq so list+sym adjoins).
-#define ADD_NUM { NUMK(lvm_addn),     [KMint]=lvm_bin_unit, [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_STR { NUMK(lvm_add_string),[KMint]=lvm_bin_unit, [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_NOM { NUMK(lvm_add_string),[KMint]=lvm_bin_unit, [KString]=lvm_add_string, [KChain]=lvm_add_seq, [KNom]=lvm_add_string, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_MINT { NUMK(lvm_bin_unit), [KMint]=lvm_bin_unit, [KString]=lvm_bin_unit,  [KChain]=lvm_bin_unit, [KNom]=lvm_bin_unit, [KMap]=lvm_bin_unit, [KHot]=lvm_bin_unit }
-#define ADD_TWO { NUMK(lvm_add_seq),  [KMint]=lvm_bin_unit, [KString]=lvm_add_seq,    [KChain]=lvm_add_seq, [KNom]=lvm_add_seq, [KMap]=lvm_addh, [KHot]=lvm_addh }
-#define ADD_H   { NUMK(lvm_addh),     [KMint]=lvm_bin_unit, [KString]=lvm_addh,       [KChain]=lvm_addh,    [KNom]=lvm_addh,    [KMap]=lvm_addh, [KHot]=lvm_addh }
-static lvm_t *const ai_add_mx[KN][KN] = {
- [KMint]=ADD_MINT, [KNom]=ADD_NOM,
- [KCharm]=ADD_NUM, [KWide]=ADD_NUM, [KFlo]=ADD_NUM, [KCplx]=ADD_NUM, [KBig]=ADD_NUM, [KVec]=ADD_NUM,
- [KArrZ]=ADD_NUM, [KArrR]=ADD_NUM, [KArrC]=ADD_NUM, [KArrO]=ADD_NUM,
- [KString]=ADD_STR, [KChain]=ADD_TWO, [KMap]=ADD_H, [KHot]=ADD_H,
-};
-#undef ADD_NUM
-#undef ADD_STR
-#undef ADD_NOM
-#undef ADD_MINT
-#undef ADD_TWO
-#undef ADD_H
-// `*`: the semiring product whose `+` is the lane above. numbers multiply, sequence
-// * count repeats, lambdas/maps compose (Church mul). chain*chain is the CARTESIAN
-// product (lvm_mul_cart -- the KChain row); string*string / sym*sym stay nil.
-#define MUL_NUM { NUMK(lvm_muln),    [KMint]=lvm_bin_unit, [KString]=lvm_mul_rep, [KChain]=lvm_mul_rep, [KNom]=lvm_mul_rep, [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_REP { NUMK(lvm_mul_rep), [KMint]=lvm_bin_unit, [KString]=lvm_0,       [KChain]=lvm_0,        [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-// the KChain row: like MUL_REP (a number repeats the list), but chain*chain is the
-// CARTESIAN product (the semiring lane). string*chain / nom*chain stay nil.
-#define MUL_CHAIN { NUMK(lvm_mul_rep), [KMint]=lvm_bin_unit, [KString]=lvm_0,     [KChain]=lvm_mul_cart, [KNom]=lvm_0,       [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-#define MUL_MINT { NUMK(lvm_bin_unit), [KMint]=lvm_bin_unit, [KString]=lvm_bin_unit, [KChain]=lvm_bin_unit, [KNom]=lvm_bin_unit, [KMap]=lvm_bin_unit, [KHot]=lvm_bin_unit }
-#define MUL_H   { NUMK(lvm_mulh),    [KMint]=lvm_bin_unit, [KString]=lvm_mulh, [KChain]=lvm_mulh,     [KNom]=lvm_mulh,    [KMap]=lvm_mulh, [KHot]=lvm_mulh }
-static lvm_t *const ai_mul_mx[KN][KN] = {
- [KMint]=MUL_MINT, [KNom]=MUL_REP,
- [KCharm]=MUL_NUM, [KWide]=MUL_NUM, [KFlo]=MUL_NUM, [KCplx]=MUL_NUM, [KBig]=MUL_NUM, [KVec]=MUL_NUM,
- [KArrZ]=MUL_NUM, [KArrR]=MUL_NUM, [KArrC]=MUL_NUM, [KArrO]=MUL_NUM,
- [KString]=MUL_REP, [KChain]=MUL_CHAIN, [KMap]=MUL_H, [KHot]=MUL_H,
-};
-#undef MUL_NUM
-#undef MUL_REP
-#undef MUL_CHAIN
-#undef MUL_MINT
-#undef MUL_H
-#undef NUMK
+// The two tables themselves are GENERATED, and love.c's only generated region:
+// tools/mx.l holds them as love data and lays this header through clay (the C-as-
+// love-data layer, doc/clay.md). ONE datum feeds both the C below and the Rocq
+// model proof/rocq/mx.v, so the theorem and the code cannot drift -- where mx.v
+// used to reach these statics through tools/mxdump.c, a translation unit that
+// #include'd this file WHOLE and named each lane by comparing function pointers.
+// EDIT tools/mx.l, NOT mx.h; `make test_clay` regenerates and fails on drift.
+#include "mx.h"
 // (apply is no longer a matrix: each data sentinel tail-jumps straight to its
 // handler -- see the apply lane above. The apply was uniform in the argument kind,
 // so the 2-D table was pure indirection; a handler that cares about the arg kind

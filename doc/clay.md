@@ -3,11 +3,23 @@
 the plan for owning C the way holo owns assembly: a C AST written as love data, a shower
 that renders it to C text, and one datum feeding both the generated C and its Rocq model.
 the payoff sought is VERIFICATION -- doc/verify.md says love.c is "near its floor" for
-shrinking and the remaining lever is verifying pieces against references, and the one rung
-that reaches love.c's own data today does it through a C hack.
+shrinking and the remaining lever is verifying pieces against references. its LINE count is
+near its floor; its TRUSTED surface is not, and that is where clay pays.
 
-the map, the ranked slate, and the honest costs. rungs 0 and 1 are landing now; the rest
-is unbuilt.
+the map, the ranked slate, and the honest costs. **rungs 0, 1 and 2 have landed**
+(`crew/moon/clay.l`, `make test_clay`, `tools/mx.l` + `mx.h`); the rest is unbuilt.
+
+what rungs 0-1 actually found, and it is the single most useful fact in this file:
+**cparse's AST is not a complete C representation.** a top-level DECLARATION mostly
+does not survive it -- a typedef, a struct definition and a `_Static_assert` all land
+as the empty marker `(tdef)`, a prototype keeps only its name, a function definition
+has no RETURN TYPE, and `static`/`const` are gone. that information is real; it lives
+in the side tables (`stag`, `sigs`) and the parse state, which `gen.l` is HANDED and a
+shower is not. so clay is a SUPERSET of cparse's output, with the missing slots
+APPENDED, and G1 partitions test/cc into what it can say (62) and what it cannot
+(48) and prints both. the second number is the live measure of the gap, and teaching
+parse.l to FILL those markers is what shrinks it -- clay's grammar already carries
+the faithful forms.
 
 ## what already exists
 
@@ -41,10 +53,16 @@ this costs nothing for most of the slate and reshapes section B; see there.
 | the lower seam | `crew/moon/lib/mksys.l` -- holo IR as literal love data | exists, in production |
 | the architectural shape | `crew/holo/` -- assembly as love data | exists; clay is this one level up |
 
-what is missing: a NAME, a SHOWER (AST -> C text; `crew/moon/fmt.l` is text->text and shares
-nothing with the parser), and one derivation. `gen.l` TRUSTS the parser for `stag` (tag ->
-`(fields size align)`, offsets already laid) and `sigs` (name -> `(rettype (paramty..)
-variadic?)`); neither is derivable from the AST. that is the one real gap.
+what was missing: a NAME, a SHOWER (AST -> C text; `crew/moon/fmt.l` is text->text and
+shares nothing with the parser), and one derivation. the first two landed in rungs 0-1
+(`crew/moon/clay.l`). the derivation is `clay-tables`: `gen.l` TRUSTS the parser for `stag`
+(tag -> `(fields size align)`, offsets already laid) and `sigs` (name -> `(rettype
+(paramty..) variadic?)`), and neither is derivable from the AST. it moved to rung 6, where
+`cc-clay` gives it a consumer.
+
+and the writing above understates the same gap in the OTHER direction, which is what the
+shower ran into: the tables are not merely underivable from the AST, they hold information
+the AST never had. see the header.
 
 the name `clay` is free in the tree. `cast` is doubly taken -- as the test helper `(cast
 "int main…")` in law.l and as the AST tag for a C cast.
@@ -335,9 +353,14 @@ why it stays optional here rather than blocking.
 1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `test/cc/`. smoke it
    on `ai_T[]` (`love.c:6422`, a five-line designated-initializer table) first. new
    `test_clay` in `test/test.mk`, added to `test_slow`.
-2. **the dispatch matrices; delete `tools/mxdump.c`.** `test_mx` (`test/test.mk:746`) stays
-   green with the dumper and its `$(CC) -o out/.mxdump` step gone, and mx.v's bridge moves
-   from a dump to a shared source.
+2. **the dispatch matrices; delete `tools/mxdump.c`.** LANDED. `tools/mx.l` is the
+   table; `mx.h` is laid from it through clay and `#include`d by love.c (its first
+   generated region); `tools/mx2coq.l` reads the same table instead of a dump, so
+   mx.v's bridge moved from shape 3 to shape 1. the dumper, its `$(CC)` step, the
+   function-pointer comparison and the UNKNOWN case are all gone. net C **-54**
+   lines. the migration was checked the G2 way before love.c was touched -- the love
+   table reproduced all 512 cells the C had compiled -- and the drift check lives in
+   `test_clay` (regenerate, `cmp`), sabotage-proven.
 3. **the bignum magnitude helpers, and `clay2coq.l`.** asm-free at `7164-7213` first, then
    `6946-7090`. meet `big.v` at the seam. remember both legs run different limb widths.
 4. **dtoa** -- once the `show0` float question is answered. `3889-3910` first, then
