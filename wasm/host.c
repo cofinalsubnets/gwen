@@ -54,10 +54,27 @@ static const char src_kanren[] =
 // 256K: a single ai_eval can emit a lot before the page drains it -- the
 // whole test corpus (test_wasm) runs in one eval and prints ~25K of dots +
 // the summary. _writen lands what fits and answers the count, so an overflowing
-// eval truncates rather than overrunning -- rung 6 of the device floor owes this
-// a LOUD edge (doc/io.md), which is a dropped-count, not a bigger number.
+// eval truncates rather than overruns.
+//
+// ⚠ AND A FULL BUFFER SAYS SO. ai_stdout is a STATIC port: it carries no write
+// run (rung 4), and zputc offers a refused byte twice before giving up, so what
+// does not fit here really is on the floor. A bigger number would only move the
+// cliff; the honest edge is to SAY the answer is short. out_tail is held back
+// from the buffer for that one line, so a truncated eval reads as truncated
+// instead of stopping mid-word.
+//
+// ⚠ AND IT SAYS ONLY WHAT IS TRUE -- WHICH IS NOT A BYTE COUNT. lvm_fputs answers
+// a refusal by re-offering the whole remainder, and then the byte alone through
+// zputc, twice: a device sees each lost byte many times over and cannot tell
+// attempts from bytes. What it can tell is THAT it ran out, so that is all it says.
+#define out_tail 64
 static char     out_buf[1 << 18];
 static uint32_t out_len;
+static int      out_full;
+
+static void out_note(void) {
+  for (char const *s = "\n; output truncated -- the page's buffer is full\n"; *s; s++)
+    out_buf[out_len++] = *s; }
 
 uintptr_t ai_clock(void) {
   struct timespec ts;
@@ -68,9 +85,12 @@ uintptr_t ai_clock(void) {
 // Output goes to out_buf; the page reads it back through the exports below.
 static intptr_t _writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
   (void) fp;
-  uintptr_t room = sizeof out_buf - out_len, k = room < n ? room : n;
+  uintptr_t cap = sizeof out_buf - out_tail,
+            room = out_len < cap ? cap - out_len : 0,
+            k = room < n ? room : n;
   memcpy(out_buf + out_len, src, k);
   out_len += (uint32_t) k;
+  out_full |= k < n;
   return (intptr_t) k; }
 static struct ai *_flush(struct ai *g) { return g; }
 
@@ -124,8 +144,9 @@ int ai_init(void) {
 
 EMSCRIPTEN_KEEPALIVE
 int ai_eval(const char *src) {
-  out_len = 0;
+  out_len = 0, out_full = 0;
   F = ai_evals_(F, src);
+  if (out_full) out_note();
   return ai_code_of(F); }
 
 EMSCRIPTEN_KEEPALIVE char*    ai_out_ptr(void) { return out_buf; }

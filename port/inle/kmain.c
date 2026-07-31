@@ -32,12 +32,18 @@ static struct {
 // enqueues input bytes -- arrow/Delete keys as the ANSI escape sequences
 // the line editor decodes; kb_readn and the (key) builtin drain the queue.
 // g holds the live modifier flags.
-static struct { uint8_t g, q[16], qh, qt; } kkb;
-// enqueue one input byte (drop if full). non-static: the COM1 serial
-// RX ap (k_uart, in x86_64/arch.c) feeds this same queue.
+static struct { uint8_t g, q[16], qh, qt; uint16_t lost; } kkb;
+// enqueue one input byte. non-static: the COM1 serial RX ap (k_uart, in
+// x86_64/arch.c) feeds this same queue.
+// ⚠ A DROPPED KEYSTROKE SAYS SO. an interrupt cannot wait, so the ring must be
+// bounded and a fast paste can outrun it -- but a byte vanishing in SILENCE is
+// the one input failure a user cannot diagnose, and no size makes it diagnosable.
+// so the drop is counted and serial_flush says how many fell (below). the count
+// SATURATES rather than wrapping: "65535" understates, 0 would lie.
 void kq(uint8_t b) {
   uint8_t n = (kkb.qt + 1) & 15;
-  if (n != kkb.qh) kkb.q[kkb.qt] = b, kkb.qt = n; }
+  if (n != kkb.qh) kkb.q[kkb.qt] = b, kkb.qt = n;
+  else if (kkb.lost != (uint16_t) -1) kkb.lost++; }
 static int kqpop(void) {                   // dequeue one byte, -1 if empty
   if (kkb.qh == kkb.qt) return -1;
   int b = kkb.q[kkb.qh];
@@ -167,7 +173,20 @@ static void serial_putc1(int fd, int c) {
   (void) fd;
   if (kcb) cb_putc(kcb, c);
   serial_putc(c); }
-static void serial_flush(int fd) { (void) fd; fbdraw(); }
+// the loud edge for kq's drops: the console is about to be shown, so say what
+// the keyboard ring could not hold before the frame goes up.
+static void serial_flush(int fd) {
+  (void) fd;
+  if (kkb.lost) {
+    char d[6];
+    int i = 0;
+    unsigned v = kkb.lost;
+    kkb.lost = 0;
+    for (char const *s = "\n; input lost: "; *s; s++) serial_putc1(1, *s);
+    do d[i++] = (char) ('0' + v % 10); while ((v /= 10));
+    while (i) serial_putc1(1, d[--i]);
+    for (char const *s = " bytes\n"; *s; s++) serial_putc1(1, *s); }
+  fbdraw(); }
 
 static struct k_source k_sources[k_sources_max] = {
   [0] = { .readn = kb_readn,    .ready = kb_ready    },

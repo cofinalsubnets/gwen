@@ -194,17 +194,37 @@ void serial_init(void) {
 // halts reception AND desyncs the FIFO pointers (Kinetis-lineage block), so
 // the recovery is save-what's-readable, RXFLUSH, clear every error flag.
 static uint8_t  rx_ring[1024];
-static uint32_t rx_w, rx_r;
+static uint32_t rx_w, rx_r, rx_lost;
+
+// ⚠ A FULL RING DROPS THE NEWEST BYTE AND COUNTS IT. it used to write straight
+// through -- `rx_ring[rx_w++ & 1023u] = ..` with no room check -- so a paste
+// longer than the ring OVERWROTE bytes the reader had not taken yet: the stream
+// came out scrambled in the middle rather than short at the end, and nothing
+// anywhere said a byte had been lost. The hardware overrun a few lines up is
+// handled with care; this is the same event one layer in, and it deserves the
+// same. Dropping the newest keeps what survives a coherent PREFIX, and
+// serial_rx_lost (main.c's flush) is where the count reaches the user.
+static void rx_put(uint8_t b) {
+  if (rx_w - rx_r < sizeof rx_ring) rx_ring[rx_w++ & 1023u] = b;
+  else if (rx_lost != (uint32_t) -1) rx_lost++; }
+
 static void rx_pump(void) {
   for (;;) {
     if (REG(LPUART_STAT) & LPUART_STAT_OR) {
       while (REG(LPUART_STAT) & LPUART_STAT_RDRF)
-        rx_ring[rx_w++ & 1023u] = REG(LPUART_DATA) & 0xff;
+        rx_put(REG(LPUART_DATA) & 0xff);
       REG(LPUART_FIFO) |= LPUART_FIFO_RXFLUSH;
       REG(LPUART_STAT) = LPUART_STAT_ERR;
       continue; }
     if (!(REG(LPUART_STAT) & LPUART_STAT_RDRF)) return;
-    rx_ring[rx_w++ & 1023u] = REG(LPUART_DATA) & 0xff; } }
+    rx_put(REG(LPUART_DATA) & 0xff); } }
+
+// how many inbound bytes the ring could not hold since the last ask, and clears.
+// ⚠ NOT reported from rx_pump: the console is this same UART, so a notice
+// written there would re-enter through serial_putc's own pump.
+uint32_t serial_rx_lost(void) {
+  uint32_t n = rx_lost;
+  return rx_lost = 0, n; }
 
 void serial_putc(int c) {
   while (!(REG(LPUART_STAT) & LPUART_STAT_TDRE)) rx_pump();

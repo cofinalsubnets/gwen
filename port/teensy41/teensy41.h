@@ -150,6 +150,7 @@ void serial_init(void);
 void serial_putc(int c);
 int  serial_getc(void);
 int  serial_rx_ready(void);
+uint32_t serial_rx_lost(void);   // inbound bytes the soft ring could not hold, and clears
 void gpio_init(unsigned pin);
 void gpio_set_dir(unsigned pin, int out);
 void gpio_put(unsigned pin, int hi);

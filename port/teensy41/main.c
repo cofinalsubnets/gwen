@@ -61,7 +61,19 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
     serial_putc(src[k]); }
   return (intptr_t) n; }
 
-static struct ai *fd_flush(struct ai *g) { return g; }   // LPUART has no buffer here
+// LPUART has no output buffer here, so a flush has nothing of its own to push --
+// it is simply the moment before the user is shown something, which makes it the
+// place to say what the INBOUND ring could not hold (teensy41.c's rx_put).
+static struct ai *fd_flush(struct ai *g) {
+  uint32_t lost = serial_rx_lost();
+  if (lost) {
+    char d[10];
+    int i = 0;
+    for (char const *s = "\r\n; input lost: "; *s; s++) serial_putc(*s);
+    do d[i++] = (char) ('0' + lost % 10); while ((lost /= 10));
+    while (i) serial_putc(d[--i]);
+    for (char const *s = " bytes\r\n"; *s; s++) serial_putc(*s); }
+  return g; }
 
 struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF) };
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
