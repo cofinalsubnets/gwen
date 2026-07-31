@@ -261,8 +261,14 @@
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 "  " (poke 4 0 (spin 5))))))
  (sip o) (see o)                                  ; draw ONE unit (pairs with slurp = all)
  ; slurp drains a vessel to a value: a jug reads its backing buffer, a tap drains via see.
+ ; ⚠ THE DRAIN IS AN ACCUMULATOR, NOT A RECURSION. it used to build the charlist on
+ ; the way DOWN -- (link c (rl i)) -- so the stack depth WAS the byte count, and on a
+ ; port that PARKS (a socket, a pipe) every task switch copies that stack: slurp went
+ ; quadratic in the stream and fell over somewhere past 200K. an accumulator in tail
+ ; position keeps the stack flat, so a park costs the same at byte 400000 as at byte 1.
  (slurp o) (? (= -2 (peek 1 o)) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 3 is a string too, so a string? probe would lie
-              (: (rl i) (: c (see i) (? (= c -1) () (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
+              (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))   ; (pre-opfix: no ! here)
+                 (string (rev (rl o ())))))
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; the help status reader. ONE bit reaches a help now -- scare (1). the more bit
 ; that named an unfinished read went out with ioparse: `sound` answers its own

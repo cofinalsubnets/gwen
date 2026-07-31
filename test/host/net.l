@@ -78,4 +78,44 @@
  _ (close c)
  _ (close l))
 
+; --- slurp over a port that PARKS is LINEAR ------------------------------------
+; prel's slurp used to build the charlist on the way DOWN -- (link c (rl i)) -- so
+; the stack depth WAS the byte count. on a file that is merely deep; on a socket
+; every would-block PARKS, and a park copies the task's stack, so the cost went
+; quadratic in the stream and fell over somewhere past 200K. measured on the
+; recursive form: 40K 1.75s, 80K 7.1s, 120K 15.0s, 160K 25.6s -- textbook n².
+; with the accumulator it is 17/34/58/53 ms, and 4 MB lands in 1.9s.
+(: port 7394
+ l (listen port)
+ got (tablet 0)
+ srv (twirl (\ _ (: c (accept l) s (slurp c) _ (pin got 0 (tally s)) _ (close c) 1)) 0)
+ c (connect "127.0.0.1" port)
+ _ (say c (* "x" 160000))
+ _ (close c)
+ t0 (clock 0)
+ _ (catch srv)
+ ms (clock t0)
+ _ (close l)
+ _ (assert
+    ((peep got 0 0) = 160000)             ; every byte
+    (ms < 3000)))                         ; the recursive form sat here for 25 SECONDS
+
+; --- a peer that hangs up mid-response does not kill the runtime ---------------
+; the ordinary thing a browser does to kiosko. love ignores SIGPIPE now, so the
+; write ANSWERS "the device is gone" (writen -1) and io_wdrain lets the run go;
+; before, the process died on the first byte after the hangup and took every other
+; task with it. ⚠ the console keeps the old behaviour -- see test/host/run.l.
+(: port 7395
+ l (listen port)
+ srv (twirl (\ _ (: c (accept l)
+                    _ ((: (go k) (? (k = 0) 0
+                                    (: _ (say c (* "x" 200000)) _ (rest 5) (go (k - 1))))) 30)
+                    _ (close c) 1)) 0)
+ c (connect "127.0.0.1" port)
+ _ (rest 30)
+ _ (close c)                              ; hang up mid-response
+ _ (rest 400)
+ _ (catch srv)
+ _ (close l))                             ; reaching here at all IS the law
+
 (puts "net: ok") (putc 10)

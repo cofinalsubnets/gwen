@@ -55,3 +55,27 @@
    _ (wait pid))
 
 (puts "run rung4: ok\n")
+
+; --- the SIGPIPE pair: the console still dies, a child never inherits the ignore -
+; love ignores SIGPIPE so a write to a hung-up peer ANSWERS instead of killing the
+; runtime (test/host/net.l has that half). two things must survive that:
+; ⚠ 1. A SHELL TOOL MUST STILL DIE ON A CLOSED PIPE, or `love ... | head` runs to
+;   completion writing into nothing. the console re-raises by hand, so the wait
+;   status stays a signal death and every downstream $? is unchanged. the spewer
+;   below is BOUNDED (300000 lines) on purpose: under a regression it finishes
+;   rather than hanging, so this reddens as a slow run, not a wedged gate.
+; ⚠ 2. AN IGNORED DISPOSITION SURVIVES exec, so a child that inherited it is a
+;   `yes | head` that never stops. every fork site resets it: main.c's two exec
+;   sites by hand, and host/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/mind.
+;   the law below reaches `run`'s door only -- the posix.c half is lush's, and
+;   shares the one line.
+; ⚠ the status has to come out of the PIPELINE, and $? there is head's, so love's
+; own goes to a file from inside the subshell -- POSIX, no PIPESTATUS.
+(: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/host/love; echo $? > out/host/.sigst ) | head -1 > /dev/null; cat out/host/.sigst; rm -f out/host/.sigst"
+   st (cup (run `("sh" "-c" spew)))
+   sig (cup (run `("sh" "-c" "grep SigIgn /proc/self/status")))
+   _ (assert
+      (st = "141\n")                       ; 128 + SIGPIPE: the death the shell has always seen
+      (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits NO ignore at all
+
+(puts "run sigpipe: ok\n")

@@ -102,8 +102,13 @@ static struct ai *argv_marshal(struct ai *g, char ***cavp) {
 // the child side of the ignore dance: a disposition set to SIG_IGN SURVIVES exec,
 // so a shell that ignores the job-control signals must undo that in every child
 // between fork and exec -- or ^C could never kill anything it launches.
+// ⚠ SIGPIPE RIDES THIS TOO, and it is the one that bites hardest: love ignores it
+// so a write to a hung-up peer answers "the device is gone" instead of killing the
+// runtime -- but a child that inherited the ignore is a `yes | head` that never
+// stops. every fork/exec in the tree resets it (here, and by hand at main.c's two
+// exec sites, which are outside this file).
 static void sig_dfl_job(void) {
- signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL);
+ signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL); signal(SIGPIPE, SIG_DFL);
  signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL); }
 
 // (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
@@ -838,6 +843,7 @@ ai_noinline static struct ai *host_ptyrun(struct ai *g) {
  if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, putcharm(e)); }
  if (!pid) {                                       // child
   close(mfd); close(ep[0]);
+  sig_dfl_job();                                  // the ignores must not ride the exec
   int e;
   if (setsid() < 0) { e = errno; goto childfail; }
   int sfd = open(sname, O_RDWR);                  // opening a tty in a fresh session claims it as ctty

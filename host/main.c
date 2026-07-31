@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stdnoreturn.h>
+#include <signal.h>
 #include <sys/wait.h>
 
 ai_noinline uintptr_t ai_clock(void) {
@@ -57,8 +58,22 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
   for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
   poll_wait(p, n, ms); }
 
+// ⚠ SIGPIPE IS IGNORED (main), AND THE CONSOLE RE-RAISES IT BY HAND. a runtime
+// that ANSWERS "the device is gone" cannot be killed before it reads the answer
+// -- kiosko died whenever a client hung up mid-response, which is the ordinary
+// thing a browser does. but a SHELL TOOL must still die on a closed pipe, or
+// `love ... | head` runs to completion writing into nothing. the line between the
+// two is the one rung 4 already drew: a HEAP port reports (writen answers -1 and
+// io_wdrain drops the run), a STATIC re-raises. re-raising rather than exiting
+// keeps the wait status a signal death, so the shell's own reporting and every
+// `$?` downstream are byte-for-byte what they always were.
+static noreturn void console_hangup(void) {
+ signal(SIGPIPE, SIG_DFL);
+ raise(SIGPIPE);
+ _exit(128 + SIGPIPE); }               // unreached unless someone caught it
+
 static struct ai *fd_flush(struct ai *g) {
- if (g->io->fd == putcharm(STDOUT_FILENO)) fflush(stdout);
+ if (g->io == &ai_stdout && fflush(stdout) && errno == EPIPE) console_hangup();
  return g; }
 
 // land every byte, waiting on the device as long as it takes. Answers how many
@@ -102,9 +117,11 @@ static uintptr_t fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
  struct ai_io *io = (*fp)->io;
  intptr_t fd = getcharm(io->fd);
- if (io == &ai_stdout) return (intptr_t) fwrite(src, 1, n, stdout);
- if (io == &ai_stdin || io == &ai_stderr)
-  return (intptr_t) fd_write_all((int) fd, src, n);
+ if (io == &ai_stdout || io == &ai_stdin || io == &ai_stderr) {
+  uintptr_t k = io == &ai_stdout ? fwrite(src, 1, n, stdout)
+                                 : fd_write_all((int) fd, src, n);
+  if (k < n && errno == EPIPE) console_hangup();
+  return (intptr_t) k; }
  int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
  if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
  ssize_t k;
@@ -288,6 +305,7 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv, int tee) {
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
   return ai_push(g, 1, putcharm(e)); }
  if (!pid) {                                              // child
+  signal(SIGPIPE, SIG_DFL);                               // the ignore must not ride the exec
   dup2(op[1], STDOUT_FILENO);
   // DETACH stdin from the controlling terminal: this is a CAPTURE spawn (we want the child's
   // output, never interactive input), so give it /dev/null. Otherwise a child that touches the
@@ -383,6 +401,7 @@ ai_noinline static struct ai *host_exec(struct ai *g, ai_word argv) {
     off += len(s) + 1; }
    cav[argc] = NULL; }
  fflush(stdout); fflush(stderr);
+ signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
  execvp(cav[0], cav);
  return ai_push(g, 1, putcharm(errno)); }                  // exec failed -> errno
 
@@ -779,6 +798,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #endif
 
 int main(int argc, char const **argv) {
+  signal(SIGPIPE, SIG_IGN);        // a hung-up peer is an ANSWER, not a death (fd_writen)
   struct ai *g = NULL;
   // --bake [PATH] / --wake PATH must lead the args; strip them (keep argv[0]).
   // Both lanes now: love0 links host/image.c too, so it wakes an image FILE

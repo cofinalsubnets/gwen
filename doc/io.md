@@ -1495,17 +1495,54 @@ this arc the same program DEADLOCKS: the client's `write(2)` blocks and the only
 reader is a task that needs the client to yield. it is not in a gate because 5.4 s
 buys nothing the 40 ms law does not already prove.
 
-⚠ **two pre-existing hazards found on the way, neither fixed, both reproduced on
-`dbc93b9f` (before this arc):**
+⚠ two pre-existing hazards were found on the way, and both are **fixed in the
+epilogue below**. one of them was first written down here WRONG -- as "`slurp` on
+a socket port segfaults" -- and the correction is the interesting part.
 
-- **`slurp` on a socket port segfaults** at a few hundred KB. this is the parked
-  `slurp` defect wearing its other face; it is why the law above counts bytes by
-  hand instead.
-- **love never ignores SIGPIPE**, so a write to a hung-up peer kills the process
-  before the new `-1` answer can be read. kiosko dies when a client hangs up
-  mid-response. the fix is one line and the reason it is not here is that it
-  changes shell-pipeline semantics (`love ... | head` would stop dying), which is
-  gwen's call, not a side effect of an io rung.
+### the epilogue: two hazards the arc uncovered -- ✅ 2026-07-31
+
+**1. `slurp` over a port that parks was QUADRATIC.** prel built the charlist on
+the way DOWN -- `(link c (rl i))` -- so the stack depth WAS the byte count. on a
+file that is merely deep. on a socket every would-block PARKS, and a park copies
+the task's stack, so the cost is `sum of depth over refills` ~ n²/2·4096:
+
+| bytes | recursive | accumulator |
+|---|---|---|
+| 40 K | 1754 ms | 17 ms |
+| 80 K | 7085 ms | 34 ms |
+| 120 K | 15042 ms | 58 ms |
+| 160 K | 25607 ms | 53 ms |
+| 4 M | fell over | 1915 ms |
+
+⚠ **and this is why "it segfaults" was the wrong diagnosis.** two runs at 400 K
+died with SIGSEGV and that went into this file as a fact. it was the TAIL of the
+quadratic -- deep enough to run out of room -- and at 160 K the same code merely
+took 25 seconds. the tell was there and unread: a crash whose threshold moves
+with load is not a crash, it is a curve. **measure the curve before naming the
+bug.** an accumulator in tail position keeps the stack flat, so a park costs the
+same at byte 4,000,000 as at byte 1.
+
+**2. love never ignored SIGPIPE**, so a write to a hung-up peer killed the
+process before the new `-1` answer could be read -- kiosko died whenever a
+browser hung up mid-response. it is ignored now, and the reason this took more
+than one line is the reason it was worth pausing over:
+
+- **a shell tool must still die on a closed pipe**, or `love … | head` runs to
+  completion writing into nothing. so the CONSOLE re-raises by hand
+  (`console_hangup`: `SIG_DFL`, `raise`, then `_exit(128+SIGPIPE)` for a catcher).
+  re-raising rather than exiting keeps the wait status a signal death, so the
+  shell's reporting and every downstream `$?` are byte-for-byte unchanged --
+  measured: still 141.
+- the line between "die" and "answer" is **the one rung 4 already drew**: a heap
+  port reports, a static re-raises.
+- ⚠ **an ignored disposition SURVIVES exec**, so a child that inherited it is a
+  `yes | head` that never stops. every fork site resets it: `sig_dfl_job`
+  (spawn/spawnio/spawnmap, and `mind`, which was not calling it at all) and
+  main.c's two exec sites by hand.
+
+laws: test/host/net.l (slurp is linear; a hangup does not kill the runtime) and
+test/host/run.l (the console still exits 141; a child inherits no ignore), all
+four control-verified.
 
 ### the boundary principle -- keep, it is still right
 
