@@ -2367,7 +2367,7 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
 }
 struct ai *ghelp2(struct ai *g, enum ai_status s) {
  // nothing raises the MORE bit through help any more -- the reader answers its
- // own nothings as values (doc/reader.md rung 6c) -- so this is the scare lane
+ // own nothings as values (doc/io.md rung 6c) -- so this is the scare lane
  // alone. help_more_k lives on regardless: it is what makes a DELIBERATE scare
  // resumable, and `scare`/`missing` reach for it directly below.
  return ai_raise(ai_core_of(g), s, nil, nil, help_scare_k); }
@@ -4276,7 +4276,7 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
  return g; }
 
 ////
-/// " p0 -- the bootstrap reader "  (doc/reader.md rung 5)
+/// " p0 -- the bootstrap reader "  (doc/io.md rung 5)
 //
 // The PURE LISP SUBSET and nothing else: delimiters, `;` and `#!` comments,
 // `"…"` with escapes, atoms, `'` quote. None of the sigil surface -- no operator
@@ -4383,7 +4383,7 @@ lvm(lvm_sound0) {
  return Unpack(g), Ip++, Continue(); }
 
 ////
-/// " the boot stitch "  (doc/reader.md rung 6b)
+/// " the boot stitch "  (doc/io.md rung 6b)
 //
 // The egg's argument used to be ONE READ over one juxtaposed string --
 // "(" egg.h " '(" prel.h ev.h "))" -- so every frontend needed the whole C

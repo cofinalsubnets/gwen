@@ -1,6 +1,6 @@
 ; --- doc/stream.l: path B's coinductive byte-stream, the PURE HALF, in love ---
 ; a runnable design companion -- the real `source` is a C hot.
-; doc/stream.md is the full design; this models the algebra over an in-memory
+; doc/io.md part II is the full design; this models the algebra over an in-memory
 ; charlist producer, so it runs ANYWHERE (no fds, no pty) and pins the shape the
 ; core session builds against. Run (assert comes from test/00-init.l):
 ;
@@ -8,7 +8,7 @@
 ;
 ; green dots = pass, then `stream: ok`. What it demonstrates:
 ;   * a stream forces its head ONCE and MEMOIZES it -- the memo IS the lookahead,
-;     so `ungetc` deletes (defect 1 in doc/stream.md);
+;     so `ungetc` deletes (defect 1 in doc/io.md part II);
 ;   * EOF is the empty stream `()`, never a -1 byte -- a 0/NUL byte is a real
 ;     value, told from end-of-stream by `seof?`, never by its magnitude (defect 2);
 ;   * `read : stream -> () | (datum . stream')` as a PURE fold: EOF folds to (),
@@ -17,7 +17,7 @@
 ;   * `select`/`ready?` -- the one genuinely-new multiplex primitive, here trivial
 ;     because a memory stream is always ready (over fds it projects onto poll).
 ;
-; surface map to the C design (doc/stream.md §3): shd ~ cap, stl ~ cup,
+; surface map to the C design (doc/io.md part II): shd ~ cap, stl ~ cup,
 ; seof? ~ ! (the stream tests empty), and (twop s) ~ !(seof? s).
 
 (: forces (tablet 0)                       ; a global counter: how many times ANY
@@ -76,7 +76,7 @@
            (: r (read1 t)                    ; r = (datum . stream'')
               (read-lst (cup r) (link (cap r) acc)))))
 
-   ; --- the one genuinely-new primitive (doc/stream.md §5) ---
+   ; --- the one genuinely-new primitive (doc/io.md part II, `select`) ---
    ; a memory stream is ALWAYS ready (nothing to block on); over an fd, ready?
    ; projects onto ai_ready and select onto ai_wait_fds. select returns the first
    ; ready (here: non-empty) stream, or () if every stream is at EOF.

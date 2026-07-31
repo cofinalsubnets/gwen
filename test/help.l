@@ -6,7 +6,7 @@
 ; ⚠ THE MORE BIT NO LONGER REACHES HERE. it used to be read control flow -- the
 ; reader raised an incomplete parse through help and the ap chose what the
 ; reader's caller saw -- but `sound` answers its own nothings as VALUES now
-; (doc/reader.md rung 6c), so the scare bit is the only one a help ever sees.
+; (doc/io.md rung 6c), so the scare bit is the only one a help ever sees.
 ; `scare?` is the whole status vocabulary now, exercised below directly.
 ; the ap is UNINSTALLED at the end of this file.
 (: help-log (tablet 0))

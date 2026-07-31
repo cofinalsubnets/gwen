@@ -1,4 +1,4 @@
-; --- test/host/rdiff.l: the READER DIFFERENTIAL (doc/reader.md rung 3) ---
+; --- test/host/rdiff.l: the READER DIFFERENTIAL (doc/io.md rung 3) ---
 ; two readers, one text, one comparison -- the oracle rungs 5-6 were built against.
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/host/rdiff.l | out/host/love
@@ -106,7 +106,7 @@
             + " bad=" + (show (peep rd-clean 'bad 0))
             + " injected=" + (show (peep rd-hurtn 'bad 0)) + "\n")))
 
-; --- p0, over the subset it owns (doc/reader.md rung 5) ---------------------
+; --- p0, over the subset it owns (doc/io.md rung 5) ---------------------
 ; `sound0` is the bootstrap reader in love.c: the pure lisp subset, no sigil
 ; surface. this is the A/B law with a REAL second reader on one leg -- and since
 ; 6c retired the C reader it is the ONLY pair left in the tree.

@@ -3,7 +3,7 @@
 ;;; this file stays inside the PURE LISP subset -- delimiters, `;` comments, "…" with escapes,
 ;;; atoms, integers, `'` quote, and four float literals. no `(, no ~(, no #(/@(, no glued
 ;;; operator run, no bare `,`, no [/{, no prime inside a name: those are p1's half of the
-;;; grammar and p0 will not read them. doc/reader.md rung 4.
+;;; grammar and p0 will not read them. doc/io.md rung 4.
 ;;; FIXME move ev support functions to ev where possible
 ; prel.l -- love prel: data + function + macro definitions.
 ; ⚠ PRE-OPERATORS ZONE down to the `operators` table: c0 compiles this before opfix and
@@ -261,7 +261,7 @@
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; the help status reader. ONE bit reaches a help now -- scare (1). the more bit
 ; that named an unfinished read went out with ioparse: `sound` answers its own
-; nothings as values (doc/reader.md rung 6c), so nothing raises it and nothing
+; nothings as values (doc/io.md rung 6c), so nothing raises it and nothing
 ; asks.
 (: (scare? s) (= s 1))
 ; here are some macro definitions
@@ -594,7 +594,7 @@
    ; empty clauses drop, so doubled/leading/trailing commas compose away. ⚠ the comma outranks
    ; even `:`, so a binder spine splits like any list -- parenthesize the form.
    ; ⚠ the comma symbol is INTERNED, never written as a literal: prel stays inside the pure-lisp
-   ; subset p0 reads (doc/reader.md), and a source `,` is the reader datum these three describe.
+   ; subset p0 reads (doc/io.md), and a source `,` is the reader datum these three describe.
    ; `intern` is in ev.l's pureset, so cprop folds each call back to the constant it used to be.
    (op-cm? l)   (? (atom? l) 0 (id? (cap l) (intern ",")) 1 (op-cm? (cup l)))
    (op-take l)  (? (atom? l) () (id? (cap l) (intern ",")) () (link (cap l) (op-take (cup l))))

@@ -1,16 +1,35 @@
-# the reader off C -- THE PLAN
+# the io substrate -- THE PLAN
 
-the reader is the last big island of C that is not the runtime: 470 raw / 351
+**this is `doc/reader.md` and `doc/stream.md` merged (2026-07-31), because the two
+arcs converged.** they were written apart -- one to get the reader off C, one to
+fix a scheduler deadlock in the port surface -- and they turned out to be the same
+work approached from opposite ends. stream.md's §4 (`read` as a pure fold, the
+more-bit protocol collapsing) landed as rung 6c. its §3 (`source`: a lazy,
+memoizing byte-chain over an fd) landed as rung 7 and is called `flow`. its §5
+(`ready?` generalized off stdin) landed as `cue?`. its defect 1 was fixed
+outright. **nobody noticed at the time, because the docs did not talk.** that is
+the whole reason they are one file now.
+
+part I is the reader ladder, LANDED, kept as the record. part II is the port
+surface: what stream.md diagnosed, re-scored against the tree as it actually is.
+part III is the question neither document asked, which is the live one. this
+ORIENTS; the laws live in test/reader.l and test/io.l, and every doubt settles by
+probing `sound`.
+
+---
+
+## part I -- the reader off C
+
+the reader was the last big island of C that is not the runtime: 470 raw / 351
 code lines of `love.c` (5.7% by code line), a hand-stacklessed parser carrying a
-grammar that has outgrown it. the arc: a tiny bootstrap C parser `p0` that reads
+grammar that had outgrown it. the arc: a tiny bootstrap C parser `p0` that reads
 a PURE LISP subset, and the real reader `p1` written in love on top of it --
-`c0`/`ev` again, one layer down. this ORIENTS; the laws live in test/reader.l,
-and every doubt settles by probing `sound`. drafted 2026-07-29.
+`c0`/`ev` again, one layer down. drafted 2026-07-29.
 
-**rungs 1-7 are LANDED and the arc is closed** -- the tree has one reader, and it
-has one INPUT type, because a port IS a charlist with a promise for a tail. rung 8
-(below) is the last of it: p0's own lexers go charlist-native, and `g->io` stops
-being the thing a reader reads through. planned, not started.
+**rungs 1-7 are LANDED and that arc is closed** -- the tree has one reader, and it
+has one INPUT type, because a port IS a charlist with a promise for a tail. rung
+8A landed 2026-07-31 (p0's lexers went charlist-native). **8B is NOT started, and
+part III is why.**
 
 ## what the C reader does today (the inventory)
 
@@ -439,7 +458,7 @@ corpus, then delete the C reader.
 
 the three probes this section opened with are all answered: p1 wants **nifs
 alone** (the sigil surface needed no prel helper), the egg-lane cost is **+58 ms
-cold and zero warm**, and doc/stream.md:118-135's lookahead-cons stream is still
+cold and zero warm**, and doc/io.md part II's lookahead-cons stream is still
 the standing proposal for the more-bit machinery -- which is 6c's problem now,
 not 6b's.
 
@@ -892,12 +911,59 @@ today one port is one buffer, so the editor and a program that reads `in` share 
 position. with colists, **whoever holds the head owns whatever was gulped.** that
 is already half-true (`drink` gulped ahead, `flow` does), but B makes it total, and
 stdin is where it bites: the repl reads a line, evals it, and the evaled form reads
-`in`. that wants a deliberate answer -- a session colist head the repl rebinds is
-the obvious one -- and not an accident.
+`in`.
 
 fd lifetime is NOT a problem and was the first worry to check: `io_close`
 (love.c:4050) is a GC finalizer, so an abandoned colist's fd closes when its thunk
 is collected.
+
+#### what the probes said (2026-07-31), and the hole they left
+
+five probes, all in scratchpad -- nothing in the tree moved.
+
+**the over-read is real and it is ONE call site.** `printf '(say out (slurp in))\n(say
+out "second")\n' | love` answers empty and then runs the second form; bash on the
+same shape hands the rest of the script to the reader and does not run it. but the
+33 tracked stdin sites are two families and one exception: 18 `(slurp in)` in kore,
+every one the `(? (f = "-") (slurp in) (uread f))` idiom, which takes ALL of it and
+leaves no residue; 12 `(see in)` interactive key decoders, one byte used
+immediately. **`love/cli.l:81` is the whole problem.** a session-wide ownership
+protocol to fix one line is the wrong size of answer, and that retired the "slot"
+shape before it was written down.
+
+**bash's answer, measured:** an `lseek` probe at startup, then block reads plus
+`lseek(0, -23, SEEK_CUR)` before a child on a seekable fd, and `read(0, …, 1)` per
+byte forever on a pipe. `kore sh` on a piped script is 44 single-byte reads and is
+correct -- including for a genuine spawned `/usr/bin/cat` that inherits fd 0.
+
+**the seek handback works here too:** gulp the whole file, read one form, seek back
+by the residue, spawn `cat` -- fd goes 50 -> 15 and the child reads exactly the
+residue. the arithmetic is sound because the colist is byte-granular (42 cells for a
+42-byte UTF-8 file), which the design would then silently depend on.
+
+**vi.l's decoder over a colist agrees byte for byte**, and what it retires is not
+lines: `(rd pend)` answers `(byte next-pend)` where `-1` means "nothing pending",
+while `go` tests `(< c 0)` for end-of-input -- **the same sentinel meaning two
+things in one function**, presence encoded in the net. over a colist neither is
+expressible: the byte you did not want is still in the stream you did not walk past,
+and the end is `()`. and `unsee` -- the C ungetc nif, plus the `ungetc` slot in the
+vt (4 of its 7 slots are input) -- has NO users in the tree outside `test/io.l`,
+which tests it.
+
+**⚠ THE HOLE, and it is the reason B is still not started.** `in` as a colist bound
+at boot does not answer ownership -- it MOVES it into "how much does one force
+take". `flow` gulps, and after a gulp `(see in)` answers `-1` while the bytes sit in
+the colist (probed). bao's editor reads through `getc` -> `(see in)`, one byte, which
+is *why* lush on a pipe keeps fd 0 positioned for its children -- that correctness is
+incidental, inherited from an editor written for a tty. make `in` a gulping colist
+and lush's child inheritance breaks. a byte-per-force colist would be correct and is
+exactly what rung 7 rejected on cost (bao.l:57: `crew/moon/gen.l` is a single 360KB
+form).
+
+so **gulp granularity IS the ownership question wearing a second face**, alongside
+readiness -- `cue?` is gulp's stop condition, rove.l:178's ESC-vs-CSI discriminator,
+and the thing that makes the tty case free. one input representation was the right
+call and it retires real machinery; it is not by itself an answer here.
 
 
 ## order and size
@@ -965,7 +1031,7 @@ owns what is left and the more-bit / port-back / help-continuation protocol has
 nothing to carry. `in`/`out`/`err` are static `struct ai_io` AND image immortals
 (love.c), never GC-traced, so a residue slot ON the port was never available --
 which is what forced the protocol change rather than a shim, and what makes this
-a strict prefix of doc/stream.md path B: when that charlist goes lazy, no CALLER
+a strict prefix of part II's path B: when that charlist goes lazy, no CALLER
 of p1 changes again. ⚠ p1 itself does -- it has to reflect on the tail, and the
 sentence above was written a shade too strong. rung 7 prices that honestly.
 
@@ -977,3 +1043,243 @@ is what users actually run. ⚠ the glaze will NOT help: its grammar is integer
 arithmetic over frame params, and a reader is strings, noms and cons cells,
 exactly its declining set (test/test.mk:130-135). mooncc is the precedent that
 this is fine anyway -- 9200 lines of love, 20 ms per TU warm.
+
+
+---
+
+## part II -- the port surface, re-scored
+
+stream.md was written to explain a deadlock and proposed replacing the port
+surface wholesale ("path B"). three of its pieces have since landed by another
+road. what follows is its diagnosis checked against the tree as it is on
+2026-07-31, line by line, by an audit that probed rather than inferred.
+
+### the symptom it was written for
+
+`wrap` is a transparent pty pump and works: `stdin -> master` in one task,
+`master -> stdout` in another, the two park on different fds and interleave. the
+rlwrap upgrade swaps the input side for a line editor -- `feedlines` reads keys
+via `edraw`, renders to `out`, and sends to the child only on Enter -- and it
+**hangs after one keystroke**. single-task `edraw` on `in` works; a lone `see` in
+a spawned task works; the concurrent two-task park is what breaks. built,
+reverted, still reverted.
+
+### the four defects, scored
+
+**1. `ungetc_buf` invisible to the readiness check. -- FIXED.** this was the
+diagnosis's centrepiece: `lvm_fgetc` parked whenever `!ai_ready(fd)` without
+consulting the pushback, so a task could park holding the very byte it needed.
+the guard now reads (love.c:3997-4000):
+
+```c
+if (getcharm(i->ungetc_buf) == EOF && !bio_rpending(bb)
+    && !ai_ready(getcharm(i->fd))) { g->next_wait_fd = ...; return Ap(lvm_yield_sw, g); }
+```
+
+pushback first, then the buffered run, then the fd. `cue?` tests the identical
+three terms (love.c:4625). the asymmetry stream.md called "the bug" is gone --
+its own §12 fallback #1, landed and then strengthened with a third term. **the
+deadlock has never been re-tested against this.** that is the cheapest
+outstanding experiment in this document.
+
+**2. the `-1` EOF sentinel. -- STANDS, but confined.** `love.c:4005-4006` still
+answers `putcharm(EOF)`, and byte loops still compare `(= c -1)` / `(< c 0)`
+(`love/bao.l:29,31,425`, `crew/kiosko/kiosko.l:73`, `crew/lush/job.l:44`). what
+changed is that the READER no longer sees it: `flow`/`sound` present input as a
+charlist ending in `()` (test/io.l:91,114). the sentinel now lives only at the
+`see` primitive and its direct callers. rung 8's probe found the sharpest example
+in `crew/vi/vi.l:56-65`, where `-1` means BOTH "no pushback pending" and
+"end of input" inside one function.
+
+**3. fd/poll knowledge smeared across the VM. -- STANDS, and there is one MORE
+site than when this was written.** today: `lvm_fgetc` (love.c:3998), `lvm_await`
+(4020), `cue?` (4626), the scheduler (2690-2728), and **`io_refill`
+(love.c:3178), which is new with the buffered-port arc and is the bad one** --
+see below. the doc's claim that `cue?` hardcodes `ai_stdin` is now only half
+true; it defaults there for a non-port.
+
+**4. the write side never yields. -- STANDS, unchanged.** `zputc`
+(love.c:3195-3211) -> `io_wdrain` (3144) -> `fd_writen` (host/main.c:100-108), a
+bare `while (i<n) write(...)` with no poll and no park. a blocking write to a
+flow-controlled fd stalls the whole VM.
+
+### ⚠ 5. the new one: the buffered read lane BLOCKS where the byte lane PARKS
+
+`io_refill`'s loop (love.c:3170-3177):
+
+```c
+intptr_t k = vt->readn(g, (unsigned char*) txt(r), r->len);
+if (k > 0) { ... return g; }
+if (k < 0) { b->io.eof_seen = putcharm(true); fc->b = EOF; return g; }
+ai_wait_fd((int) getcharm(b->io.fd), 1, 0); } }
+```
+
+`fd_readn` (host/main.c:109-117) answers 0 **only** on EAGAIN -- a real EOF maps
+to -1 -- so `k == 0` means "would block". and `ai_wait_fd(fd, 1, 0)` reaches
+`poll_wait` with `ms == 0`, which is spelled `t = -1`: **poll blocks
+indefinitely** (host/main.c:34-43).
+
+so one port has two doors with opposite scheduling behaviour. the per-byte lane
+parks the task and lets the scheduler run someone else; the bulk lane blocks the
+whole VM on one fd. it is reachable exactly where it hurts -- a heap port on the
+host that can EAGAIN, i.e. sockets, pipes and ptys, which is kiosko's
+task-per-client, lush's pty pump, haven. **this is by inspection; no stall has
+been demonstrated.** it is defect 3's family and it postdates the diagnosis.
+
+### the boundary principle -- keep, it is still right
+
+> the core knows **generic-apply + scheduler-yield**. "bytes out of an fd" is a
+> HOST concern, presented as a value of an existing kind -- the chain (a lazy
+> one). fd-awareness meets the scheduler at EXACTLY ONE site: the thunk that
+> forces a stream's tail.
+
+### what of path B is left
+
+`source` is `flow` (love/bao.l:66-68) and needs no C. `read`-as-a-fold is
+`sound`. `ready?` is `cue?`. what has NOT landed:
+
+- **`(select ss)`** -- block until one of several streams is ready. the one
+  genuinely-new primitive, and the honest reason it is needed: you cannot wait on
+  two streams with `cap`/`cup` alone, because forcing one commits you to it. this
+  is what `wrap` wants for the kbd/master pair.
+- **`sink`** -- the write dual, so a pump reads symmetric. low value; `dot`
+  already works.
+- **the write-side park** (defect 4).
+- **the blocking refill** (defect 5), which did not exist when the list was made.
+
+### the delete ledger, corrected by measurement
+
+stream.md's stage 4 said to remove `see`/`unsee`/`end?`/`key?`/`ungetc_buf`/
+`eof_seen`. an audit on 2026-07-31 counted the actual users (tracked files only
+-- a plain recursive grep hits `.claude/worktrees/` and inflates every number):
+
+| name | real name | tracked `.l` sites | verdict |
+|---|---|---|---|
+| `see` | `lvm_fgetc` | ~82 across 29 files | the sole input lane on SIX of seven frontends -- every freestanding target passes `readn = NULL` and falls through to `vt->getc` |
+| `readn` | `fd_readn` | -- | **hot**: one `read(fd,…,4096)` where the byte lane does three, proved under strace. host only |
+| `unsee` | `lvm_fungetc` | **3**, all `test/io.l` | load-bearing: `:100` is the ONLY witness in the corpus that `flow` memoizes |
+| `empty?` | `lvm_feof` | **0** | genuinely unused -- and still not free: a bound global with nine `*_eof` bodies across seven frontends |
+| `cue?` | `lvm_key` | 6 | `gulp`'s stop condition, `rove.l:178`'s ESC-vs-CSI discriminator, and what makes the tty case free |
+
+what was removable on 2026-07-31 with zero behaviour change: a dead `lvm_getc`
+extern declaration and a comment naming two deleted functions. **that is the
+entire list** (commit `457f19d4`). `end?` and `key?` do not exist under those
+names.
+
+---
+
+## part III -- who owns the bytes, and the way out
+
+neither document asked this, and it is now the live question. stream.md's
+`source` has it too: a lazy memoized chain over an fd is a COPY with its own
+position, and the doc never considered two readers of one stdin.
+
+### the problem, stated
+
+`(reads in)` flows stdin, so a form inside the script that reads `in` finds
+nothing -- and the next form still runs, because the colist held it:
+
+```
+$ printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "second form ran")\n' | love
+rest: []second form ran
+```
+
+**it is ONE call site.** `love/cli.l:81`. the 33 tracked stdin readers look like
+a migration and are not: 18 are kore's `(? (f = "-") (slurp in) (uread f))` idiom,
+which takes ALL of it and leaves no residue; 12 are interactive key decoders that
+use one byte immediately. a session-wide ownership protocol to fix one line is
+the wrong size of answer, and that killed the "slot" shape before it was written
+down.
+
+### what our peers do, measured
+
+three camps, all probed rather than remembered:
+
+| camp | who | behaviour | cost |
+|---|---|---|---|
+| **read the whole program first** | python, node, perl, ruby | script consumed entirely; `stdin` reads empty; every later line still runs | no ownership question, because there is no interleaving |
+| **interleave, keep the FD exact** | bash, zsh, tclsh | a command that reads stdin gets the remainder and the shell stops | an `lseek` probe at startup, then seek-back on files and **one `read()` per byte** on pipes, forever |
+| **interleave at DATUM granularity, one port** | guile | `(read)` takes exactly the next datum and execution carries on | none |
+
+guile, verbatim:
+
+```
+$ printf '(display (list (quote got) (read)))(newline)\n(display "SECOND-RAN")(newline)\n' | guile
+(got (newline))SECOND-RAN
+```
+
+form 1's `(read)` took `(newline)` -- the next datum, no more -- and `SECOND-RAN`
+still ran. no seeking, no per-byte reads, no protocol. it works because the
+REPL's reader and the user's `(read)` are THE SAME PORT WITH ONE POSITION.
+nothing is copied, so nothing can disagree.
+
+bash's two branches, under strace, for contrast: `lseek(0,0,SEEK_CUR)` then
+`read(0,…,71)` then `lseek(0,-23,SEEK_CUR)` on a file; `read(0,"e",1)`,
+`read(0,"c",1)`, `read(0,"h",1)` … on a pipe. `kore sh` on a piped script is 44
+single-byte reads and is correct for a genuine spawned `/usr/bin/cat` -- **but
+that correctness is an ACCIDENT.** lush does not read stdin at all; it goes
+through bao's editor, which reads one byte at a time because it was written for a
+TTY. nobody chose the discipline that keeps fd 0 positioned for a child.
+
+### the semantics we want: camp 3
+
+one port, one buffer, one position. a reader takes exactly what it needs;
+in-process readers share coherently. **love had this before `flow`.** the culprit
+is not the colist and not the reader arc -- it is THE GULP, which predates both
+(`drink` gulped ahead, `flow` does): it takes everything ready and hands back a
+head DETACHED from the port. two positions where there was one.
+
+### ⚠ but it is not only an implementation question
+
+two things are still SEMANTICS, and the guile model does not settle either:
+
+**1. persistence versus position.** a charlist is a persistent value; a port
+position is ephemeral. guile has only the position -- its buffer is not a value.
+love has handed the value out, and that is what made p1 clean (`once` exists
+precisely so forcing twice is safe). if the port owns a head, two readers holding
+DIFFERENT heads do not share a position: the list keeps the old bytes alive. the
+resolvable form is **the port is a mutable cell holding a persistent list** --
+one CURRENT head, with old heads still readable. that is a capability guile
+cannot express, and we have to decide whether a stale head is a feature
+(re-readable input, a backtracking parser) or a hazard (two readers silently
+diverging). probed: after a gulp, `(see in)` answers `-1` while the bytes sit in
+the colist.
+
+**2. what a waiting reader does.** guile has real threads; love has cooperative
+tasks, and the guile model is silent on what happens to a task that needs bytes
+that have not arrived. love currently answers this TWICE AND DIFFERENTLY --
+`lvm_fgetc` parks, `io_refill` blocks (defect 5). picking one is a decision the
+ownership model does not make for us.
+
+everything else -- where the buffer lives, C or love, which vt slots survive --
+is implementation.
+
+### the one thing the value cannot reach
+
+a child that inherits fd 0 sees the FD, not our buffer. no representation choice
+helps. bash pays per byte for it; **lush should DECLARE it** rather than inherit
+it from a tty editor by accident. proved workable on a seekable fd: gulp the
+whole file, read one form, seek back by the residue, spawn `/usr/bin/cat` -- fd
+goes 50 -> 15 and the child reads exactly the residue. the arithmetic is sound
+because the colist is byte-granular (42 cells for a 42-byte UTF-8 file), which
+such a design would then silently depend on.
+
+### the way out, in order
+
+**not** stream.md's stage ladder -- three of its five stages already landed by
+another road, and its stage 4 is mostly not removable. what is actually next,
+cheapest first:
+
+1. **re-test the bao deadlock.** defect 1 is fixed and the reverted `feedlines`
+   has never been run against the fixed guard. it may simply work now. one
+   experiment, and it decides how much of part II is still a project.
+2. **fix defect 5.** the blocking refill is a live hazard with a named failure
+   mode, not a design preference. it also forces the answer to open question 2 --
+   what a waiting reader does -- which 8B needs anyway. do this before 8B.
+3. **decide open question 1** (persistence versus position). this is the gate on
+   8B, and it is a semantics call, not a measurement.
+4. **then 8B**, whose shape follows from 3.
+5. **`select`** when `wrap` actually needs it -- i.e. after 1 says whether it does.
+
+`empty?` is unused but not free; leave it until something else in this list moves
+the frontends anyway.

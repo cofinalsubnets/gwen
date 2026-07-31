@@ -1,4 +1,4 @@
-; --- love/p1.l: THE READER IN LOVE (doc/reader.md rung 6) -------------------
+; --- love/p1.l: THE READER IN LOVE (doc/io.md rung 6) -------------------
 ;
 ; the grammar p0 does not take: the operator run and its valence law, the
 ; constructor wraps with their splice rewrites, the comma datum, the bracket

@@ -562,7 +562,7 @@
 ; collecting; `dot` (the `.` operator, .x) prints x to out and returns it.
 ; `sound0` is sound's BOOTSTRAP TWIN, same protocol over the PURE LISP SUBSET: parens, comments,
 ; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is (hash a) to sound and the
-; plain symbol # to sound0. it is what reads prel.l before there is a language (doc/reader.md).
+; plain symbol # to sound0. it is what reads prel.l before there is a language (doc/io.md).
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
  (1 = (cap (sound '(49)))) (nil? (sound ())) (id? torn (sound '(40)))

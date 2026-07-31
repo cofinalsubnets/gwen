@@ -95,7 +95,7 @@ test_hostnif: host $(smoke) $(havenkm) out/host$(hsuf)/lush
 	    || { echo "FAIL $$s (exit $$r)"; exit 1; }; \
 	done
 # Runnable design companions in doc/ -- pure-love models that pin the shape a C
-# design takes (doc/stream.l ~ doc/stream.md). Zero-dep (no host nifs), so unlike
+# design takes (doc/stream.l ~ doc/io.md part II). Zero-dep (no host nifs), so unlike
 # hostnif_tests they COULD ride the corpus -- but they leak generic helper names
 # into the one global scope, so they run standalone instead. Gated only to keep
 # them from rotting (this file's drain-floor bug slipped in while ungated). Same

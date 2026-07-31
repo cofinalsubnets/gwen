@@ -4,7 +4,7 @@ the tree carries two C libraries of its own, `libc/` and
 `crew/moon/lib/nolibc.c`, and they overlapped enough to DRIFT: a wrapping
 `strtol` on one side against a saturating one on the other made a single
 source text read as two different numbers, silently, in the one function the
-reader leaned on (see doc/reader.md rung 2). this is the plan for collapsing
+reader leaned on (see doc/io.md rung 2). this is the plan for collapsing
 the overlap. drafted 2026-07-29.
 
 ⚠ **read the verdict at the bottom before starting.** the reader change that

@@ -392,7 +392,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 //   ai_egg_(g,
 //   #include "egg.h"           // (\ egg (: ...)) -- the boot driver, one form
 //     ,
-//   #include "p1.h"            // the reader in love (doc/reader.md rung 6)
+//   #include "p1.h"            // the reader in love (doc/io.md rung 6)
 //     ,
 //   #include "prel.h"
 //     ,

@@ -100,10 +100,10 @@ file -- but it is seven alternating sub-blocks and only ~230 lines are pure; the
 VM-macro uses, 177 `Sp[]/Ip/Hp` refs, 31 `lvm()` definitions. take the pure part, not the
 section.
 
-p0 is not a target at all: doc/reader.md:510 says that arc is CLOSED, and it closed by moving
+p0 is not a target at all: doc/io.md says that arc is CLOSED, and it closed by moving
 code OUT of C. what is left is 28 lines at `love.c:4346-4373` that are almost purely
 GC-threading (`gxl`, `gxr`, manual stack rollback), delegating all real lexing to
-`ioread1str`/`ioread1sym`, which doc/reader.md:453 says are deliberately KEPT. no pure
+`ioread1str`/`ioread1sym`, which doc/io.md says are deliberately KEPT. no pure
 computation, no repetition, no payoff.
 
 four candidates survive, and they prove different things.
@@ -274,7 +274,7 @@ doc/verify.md already tells about moon. state it this way or not at all.
 ## the gates
 
 * **G1 faithfulness** -- `(cparse (clay-show c)) == c`, compared STRUCTURALLY on the parsed
-  AST, never as a string compare of the C text (doc/reader.md:149 -- twice now the printer
+  AST, never as a string compare of the C text (doc/io.md -- twice now the printer
   has been the thing standing in front of the bug). run over all 110 files of `test/cc/`,
   already in the tree: that makes "expresses arbitrary C" empirical rather than claimed.
 * **G2 conversion equivalence** -- for the section being replaced, `(cparse
@@ -374,7 +374,7 @@ why it stays optional here rather than blocking.
 
 open, not committed: the rest of the `_fill` family (`vmap1_fill` 7997, `vmap2_fill` 8546,
 `cplx_fill` 8751, `cbin_fill` 8784, `cplx_pow_fill` 8843, `cplx_build_fill` 8902, `cpart_fill`
-8952, `carg_fill` 9077), then `bit_slow`'s limb-wise bit ops (`love.c:6289` -- doc/reader.md:511
+8952, `carg_fill` 9077), then `bit_slow`'s limb-wise bit ops (`love.c:6289` -- doc/io.md
 lists these as unfinished tower work, where negatives should SCARE rather than answer `()`, so
 clay would land the fix and the generation together). "love.c as a generated artifact" stays a
 conversation; comment capture is what would have to be paid for first.

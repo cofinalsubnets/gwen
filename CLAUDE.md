@@ -336,7 +336,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; port/inle/kernel.mk, port/playdate/Makefile). the EGG's own door is separate and takes FOUR
 ; texts, not one juxtaposed string: `ai_egg_(g, egg, p1, prel, ev)` (love.h), NINE call sites
 ; (the seven above + port/virt/main.c + mps2's second baker) each also naming p1.h. it STITCHES
-; the corpus (love.c, doc/reader.md rung 6b) -- p0 reads egg/p1/prel, p1 (the reader in love)
+; the corpus (love.c, doc/io.md rung 6b) -- p0 reads egg/p1/prel, p1 (the reader in love)
 ; reads ev -- so the C reader's sigil half is off the boot path. coin/rng/q/kanren/uu ride the host, love0, wasm
 ; and the K_TEST kernel (the corpus asserts on each); the playdate workbench takes q + kanren +
 ; rune, what the cas stands on; a shipped kernel takes uu + bao. EVERY frontend opens its
