@@ -61,12 +61,32 @@ static struct ai *fd_flush(struct ai *g) {
  if (g->io->fd == putcharm(STDOUT_FILENO)) fflush(stdout);
  return g; }
 
+// land every byte, waiting on the device as long as it takes. Answers how many
+// got there, so a caller can tell a full write from a dead fd.
+static uintptr_t fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
+ uintptr_t i = 0;
+ while (i < n) {
+  ssize_t k = write(fd, src + i, n - i);
+  if (k < 0) { if (errno == EINTR) continue; break; }
+  i += (uintptr_t) k; }
+ return i; }
+
 // the bulk lanes (contract in love.h). stdout rides stdio -- the static port has
 // no buffer of love's own (nothing traces a static), so without fwrite every
-// byte of every print would be its own write(2). Every OTHER fd goes straight
-// out. ⚠ there used to be an `fflush(stdout)` here and a per-byte `fputc` in a
-// `putc` slot beside it, because two paths wrote one stream and the direct one
-// had to land after the buffered one. One door, no ordering to keep.
+// byte of every print would be its own write(2). ⚠ there used to be an
+// `fflush(stdout)` here and a per-byte `fputc` in a `putc` slot beside it,
+// because two paths wrote one stream and the direct one had to land after the
+// buffered one. One door, no ordering to keep.
+//
+// ⚠ NONBLOCKING WHERE A RESIDUE CAN BE KEPT, AND ONLY THERE. A heap port carries
+// love's write run behind it, and io_wdrain re-offers whatever this call
+// refuses -- so the door answers what one stroke took and the writing task goes
+// on. That is the rung: a peer that never reads used to stop the whole vm, not
+// the one task writing to it. The three STATICS have no such run (nothing
+// traces a static) and their per-byte lane prints from inside a structural
+// printer, with nowhere to park mid-shape, so a refusal there would be a byte
+// on the floor. Their door lands what it takes and is the one place in this
+// frontend still allowed to wait -- bounded, because a console drains.
 //
 // ⚠ THE O_NONBLOCK TOGGLE IS PER-CALL AND MUST STAY THAT WAY. The flags ride the
 // OPEN FILE DESCRIPTION, which a pty child and the shell that launched us both
@@ -80,14 +100,17 @@ static struct ai *fd_flush(struct ai *g) {
 // through stdin still lands in 0.05s -- the reader is orders of magnitude the
 // bottleneck, and every OTHER fd is a heap port that gulps 4096 at a time.
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
- intptr_t fd = getcharm((*fp)->io->fd);
- if (fd == STDOUT_FILENO) return (intptr_t) fwrite(src, 1, n, stdout);
- uintptr_t i = 0;
- while (i < n) {
-  ssize_t k = write((int) fd, src + i, n - i);
-  if (k < 0) { if (errno == EINTR) continue; break; }
-  i += (uintptr_t) k; }
- return (intptr_t) i; }
+ struct ai_io *io = (*fp)->io;
+ intptr_t fd = getcharm(io->fd);
+ if (io == &ai_stdout) return (intptr_t) fwrite(src, 1, n, stdout);
+ if (io == &ai_stdin || io == &ai_stderr)
+  return (intptr_t) fd_write_all((int) fd, src, n);
+ int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
+ if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
+ ssize_t k;
+ do k = write((int) fd, src, n); while (k < 0 && errno == EINTR);
+ if (off) fcntl((int) fd, F_SETFL, fl);
+ return k > 0 ? (intptr_t) k : 0; }   // a refusal and a dead fd both keep the residue
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  intptr_t fd = getcharm(g->io->fd);
  int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
@@ -111,13 +134,7 @@ struct ai_io ai_stderr = { lvm_port_io, putcharm(STDERR_FILENO), putcharm(EOF) }
 void ai_fd_close(int fd) { close(fd); }
 // the GC-context drain (a collected port's unflushed write run): raw write(2),
 // no g machinery -- safe inside run_finalizers.
-void ai_fd_drain(int fd, void const *p, uintptr_t n) {
- unsigned char const *src = p;
- uintptr_t i = 0;
- while (i < n) {
-  ssize_t k = write(fd, src + i, n - i);
-  if (k < 0) { if (errno == EINTR) continue; break; }
-  i += (uintptr_t) k; } }
+void ai_fd_drain(int fd, void const *p, uintptr_t n) { fd_write_all(fd, p, n); }
 
 // (open path mode) — open a file with mode "r"/"w"/"a"; returns a heap port
 // (closed on GC) or nil on error or misuse. mode is a l string; only the
@@ -178,7 +195,7 @@ static lvm(lvm_close) {
       g = ai_io_wflush(g, io);   // buffered bytes land before the fd dies
       Unpack(g);
       close(fd);
-      io->fd = putcharm(-3); } }
+      ((struct ai_io*) Sp[0])->fd = putcharm(-3); } }   // ⚠ re-read: wflush may collect
   Sp[0] = ZeroPoint;
   Ip += 1;
   return Continue(); }

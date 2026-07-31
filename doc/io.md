@@ -1175,13 +1175,14 @@ helpers, and by the two nifs that park without a read to answer them. the read
 path no longer asks it at all. the doc's claim that `cue?` hardcodes `ai_stdin`
 is only half true; it defaults there for a non-port.
 
-**4. the write side never yields. -- HALF FIXED, rung 3, 2026-07-31.** `fd_writen`
-is still a bare `while (i<n) write(...)` with no poll and no park, so a blocking
-write to a flow-controlled fd still stalls the whole VM -- that half is rung 4's.
-what rung 3 took is the half NOBODY had named: the path above it threw the count
-away, so the bytes a stalled or dying fd refused were silently dropped instead of
-kept. a residue survives now, which is the thing rung 4 needs to exist before
-yielding is even meaningful.
+**4. the write side never yields. -- ✅ FIXED, rungs 3 + 4, 2026-07-31.** rung 3
+took the half NOBODY had named: the path above `fd_writen` threw the count away,
+so the bytes a stalled or dying fd refused were silently dropped instead of kept.
+rung 4 took the named half: a heap port's door is one nonblocking `write(2)` now
+and answers what it took, so a peer that will not read stops the one task writing
+to it instead of the whole VM. see "the write door, and where waiting still
+lives" below -- the fix is not symmetric with the read side, and the reason is
+worth reading before touching it.
 
 ### 5. the buffered read lane BLOCKED where the byte lane PARKS -- ✅ FIXED 2026-07-31
 
@@ -1393,6 +1394,60 @@ GROW the surviving one, and when the residue needs `bio_wgrow` and a real loop
 where a discard needed neither. judge the rung on the two bugs and the slot, which
 is what the plan said to do -- the line count was the part of the plan that was
 wrong.
+
+### the write door, and where waiting still lives -- ✅ rung 4, 2026-07-31
+
+a heap fd port's door is **one nonblocking `write(2)`** now: a per-call
+`O_NONBLOCK` toggle (the same one `fd_readn` has carried since rung 2, for the
+same reason -- the flags ride the open file description a pty child shares) and
+an answer of what that stroke took. `io_wdrain` re-offers the rest at the next
+write op. a peer that will not read now stalls the one task writing to it.
+
+**the fix is NOT symmetric with the read side, and the asymmetry is the design.**
+a read that finds nothing can always park: the byte is still on the device and
+`lvm_fgetc` re-runs. a write that lands nothing has bytes IN HAND and must put
+them somewhere -- so a door may only refuse a port that keeps a **write run**:
+
+| port | keeps a run? | its door |
+|---|---|---|
+| heap fd port (`open`, `pipe`+`fdopen`, socket, pty master) | yes -- `bio` `wbuf` | nonblocking, may answer short |
+| the three statics (in/out/err) | no -- nothing traces a static | lands what it takes |
+| the `to` string sink (fd -2) | it IS the run | grows, never refuses twice |
+| freestanding frontends (kernel, virt, mps2, teensy41, playdate, wasm) | no heap ports at all | per-byte over a UART, bounded by a device that drains |
+
+the statics are the sharp one. `zputc` on a bufferless port has **nowhere to
+park mid-shape** -- it is called from inside `ioput_map`/`ioput_chain`, which are
+not op boundaries -- so a refusal there is a byte on the floor. their door lands
+what it takes, and that is the one wait host/main.c is still allowed. bounded: a
+console drains.
+
+**what rung 4 traded, stated plainly.** `flush` used to DELIVER, by blocking. it
+means TRY now. delivery finishes at the next write op on that port, at `close`
+(`ai_io_wflush`, which hands what the try leaves to the blocking `ai_fd_drain`
+-- a port being closed has no later op to retry in), or through the finalizer.
+rung 5 is what makes an unwritten residue finish on its own.
+
+⚠ **the remaining unbounded wait, named: the finalizer's drain.** a port that
+becomes unreachable with a residue the device will not take blocks inside GC,
+where nothing can park. this is not new code -- `io_close` -> `ai_fd_drain` has
+been there all along -- but rung 4 is what makes a residue REACHABLE, so it is
+newly reachable too. probed: a 4 MB `say` to a loopback socket nobody reads
+returns in 19 ms and then the program hangs at teardown, where before rung 4 it
+hung inside the `say` instead. **the hang moved; it did not go.** a bound would
+be exactly the arbitrary constant this arc exists to delete, and dropping the
+bytes would be the silent loss rung 3 exists to stop, so it waits for rung 5 --
+after which a reachable port drains as the scheduler runs and the finalizer sees
+a residue only when the peer truly never reads.
+
+the gate is in test/host/run.l: `sh -c "sleep 1; cat"` reads nothing for a
+second, a 200 K `say` into a 64 K pipe cannot land its tail, and the law is that
+the op comes back in under 500 ms. ⚠ **the peer must be another PROCESS.** an
+in-process reader task cannot drain the pipe while the writer sits inside a
+blocking `write(2)` -- the scheduler is cooperative and never gets the turn -- so
+the control DEADLOCKS instead of reddening, and a gate that hangs is worse than
+one that fails. (the pty was the first instrument tried and is the wrong one: a
+tty in canonical mode DISCARDS input past its queue rather than blocking, so
+200 K through a pty master "succeeds" in 3 ms on either door.)
 
 ### the boundary principle -- keep, it is still right
 

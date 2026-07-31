@@ -3276,6 +3276,10 @@ static struct ai *zputc(struct ai*g, int c) {
  txt(w)[n] = (char) c;
  b->wlen = putcharm(n + 1);
  return n + 1 >= w->len ? io_wdrain(g, fc->io) : g; }
+// ⚠ FLUSH MEANS TRY, NEVER WAIT. it used to deliver by blocking; a heap fd door
+// answers short now, so what the device would not take stays in the write run
+// and lands at the next write op, at close (ai_io_wflush), or through the
+// finalizer's drain. that is the guarantee this arc trades for the invariant.
 static struct ai *zflush(struct ai*g) {
  if (!ai_ok(g)) return g;
  g = io_wdrain(g, ai_core_of(g)->io);
@@ -3292,7 +3296,18 @@ uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, ui
  memcpy(dst, txt((struct ai_str*) b->rbuf) + p, k);
  b->rpos = putcharm(p + k);
  return k; }
-struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) { return io_wdrain(g, i); }
+// close and seal's door, and the one flush that must LAND. io_wdrain is a TRY
+// now -- a heap fd door answers short rather than waiting -- so taking its
+// answer here would shut the fd on top of a residue. What the try leaves goes
+// out through ai_fd_drain, the same blocking backstop the finalizer uses, on
+// the same bargain: a port being closed has no later op to retry in.
+struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) {
+ avec(g, i, g = io_wdrain(g, i));
+ struct ai_bio *b = bio_of(g, i);
+ if (ai_ok(g) && bio_wpending(b))
+  ai_fd_drain((int) getcharm(i->fd), txt((struct ai_str*) b->wbuf), getcharm(b->wlen)),
+  b->wlen = putcharm(0);
+ return g; }
 // GC-context finalizer hook: weak no-op; the host overrides with write(2).
 __attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
  (void) fd; (void) p; (void) n; }

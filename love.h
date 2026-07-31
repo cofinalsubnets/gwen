@@ -285,8 +285,15 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 // directions. A NULL slot means NO METHOD, and the dispatcher answers for it:
 // no readn reads END, no writen discards. Neither blocks the scheduler, and
 // neither touches ungetc_buf (the generic layer above owns it).
-//   writen: land up to n bytes from src in one motion; answers how many landed
-//     (0 = no room right now -- the caller KEEPS THE RESIDUE and comes back).
+//   writen: land up to n bytes from src in one motion WITHOUT waiting for the
+//     device; answers how many landed (0 = no room right now -- the caller KEEPS
+//     THE RESIDUE and comes back). ⚠ A DOOR MAY ONLY REFUSE A PORT THAT KEEPS A
+//     WRITE RUN. A heap port does (io_wdrain re-offers what was refused); the
+//     static ports do NOT -- nothing traces a static, and their per-byte lane
+//     prints from inside a structural printer with nowhere to park mid-shape --
+//     so a refusal there is a byte on the floor and their door must land what it
+//     takes. That is the only wait a frontend is still allowed, and it is
+//     bounded by a console that drains.
 //     ⚠ IT MAY ALLOCATE, which is why it takes the frame BY ADDRESS: a string
 //     sink grows its backing, so a scare has to ride out and src may MOVE. Land
 //     nothing after an allocating step -- grow, answer 0, and let the caller
