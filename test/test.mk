@@ -37,9 +37,18 @@ test_love0: $(love0)
 	@{ $(love0) </dev/null; echo $$? > out/host/.test_love0.rc; } | tee out/host/.test_love0.out; \
 	  s=$$(cat out/host/.test_love0.rc); \
 	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_love0.out` -eq 2 ]
+# ⚠ test_host takes the corpus as a FILE, not on stdin, for the same reason love0
+# stopped: the corpus TESTS stdin (test/io.l's see/unsee roundtrip pokes `in`), and
+# a stream you are being read from is not one you can also poke. that used to be
+# harmless only because `reads` gulped stdin whole before the first form ran, which
+# left `in` drained and the asserts vacuous. `reads` no longer runs ahead of stdin
+# (doc/io.md part III), so the two uses collide honestly -- a discarded byte and a
+# pushed-back 99 land in the middle of the script and the reader desyncs on the next
+# comment. concatenating keeps the one-global-scope property the corpus relies on.
 test_host: $m
 	@echo TEST $m
-	@{ cat $t | $m; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
+	@cat $t > out/host/.test_host.l
+	@{ $m out/host/.test_host.l </dev/null; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
 	  s=$$(cat out/host/.test_host.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
 # Host-nif smoke tests: nifs defined in host/*.c link into `love` but NOT love0

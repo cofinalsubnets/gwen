@@ -1327,6 +1327,48 @@ and the VM never waits on one fd.** 8B inherits this rather than re-deciding it.
 everything else -- where the buffer lives, C or love, which vt slots survive --
 is implementation.
 
+### 8B, as it actually landed -- ✅ 2026-07-31
+
+the cell was never built, because a measurement removed the need for it. **stdin
+ALREADY reads one byte per syscall**: `ai_stdin` is a static struct outside the
+live pool, so `bio_of` answers NULL and `io_refill` falls through to the per-byte
+`fd_getc`. strace on `love < script`: 26 `read(0,…,1)` for 26 bytes. so `flow`'s
+gulp on stdin was buying NO syscalls -- it called `see` in a loop, one syscall per
+byte, and then handed back a head detached from the port. it manufactured the
+second position and saved nothing.
+
+so 8B is `trickle` (love/bao.l), flow's careful twin: ONE byte per force, tail
+memoized by `once` for exactly flow's reason. it cannot run ahead, so the port and
+the list share a position BY CONSTRUCTION. `reads` picks by ownership:
+
+```
+(? (id? p in) (trickle p) (flow p))
+```
+
+⚠ **GULP ONLY WHAT YOU OWN.** a file (cli.l's `load1`) and a tap (the baked corpus,
+host/main.c's runner) are ours alone, so running ahead is free and worth keeping --
+measured 15 ms vs 28 ms over 60 KB of file. `in` is the one shared stream.
+
+the probe that opened all this now answers like bash and guile: the first form's
+`(slurp in)` gets the rest of the script, and the second form does not run.
+
+#### ⚠ what it broke, and why that was the point
+
+`test_host` was `cat $t | $m` -- **the corpus was fed on stdin, and the corpus
+TESTS stdin** (test/io.l's see/unsee roundtrip, whose own comment says "otherwise
+the REPL parser would consume the pushed-back byte itself"). under the gulp those
+asserts were VACUOUS: stdin was drained whole before the first form ran, so
+`(see in)` answered EOF and the pushback went nowhere. with the trickle they became
+real again -- a discarded byte and a pushed-back `99` land mid-script and the reader
+desyncs on the next comment.
+
+that test was written for the shared-position world and rung 7 had quietly made it
+inert. the fix follows a precedent already in test/test.mk: `test_love0` stopped
+piping its corpus for the same class of reason. `test_host` now concatenates to a
+file and runs it as a program with `</dev/null`, which keeps the one-global-scope
+property and frees `in`. ⚠ love0's baked image and kore's image both carry bao, so
+both need rebuilding when `trickle` changes.
+
 ### the one thing the value cannot reach
 
 a child that inherits fd 0 sees the FD, not our buffer. no representation choice
@@ -1356,8 +1398,7 @@ choosing park-or-block. so:
 2. ~~fix defect 5~~ ✅ **DONE 2026-07-31** -- reproduced under fault injection (it
    hung the whole vm), fixed by parking instead of waiting, gated both ways. it
    answered question 2 by doing, as predicted.
-3. **then 8B**, whose shape follows from the decision above: one cell, one
-   current head, `reads` re-reading the cell each iteration.
+3. ~~then 8B~~ ✅ **DONE 2026-07-31, and it needed NO CELL.** see below.
 4. **defect 2** (the `-1` sentinel) rides along with 8B where it touches, and is
    not worth a pass of its own.
 5. **defect 4** (writes never yield) and **`select`**: when something asks. after

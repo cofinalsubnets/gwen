@@ -66,6 +66,20 @@
 (: (flow p)
    (: g (gulp p)
       (? (two? g) (foldl (flip link) (once (\ u (flow p))) g) ())))
+; trickle: flow's careful twin -- ONE byte per force, so the list NEVER RUNS AHEAD
+; of the port. that is the whole difference and it is the whole point: `flow` gulps
+; everything ready and hands back a head DETACHED from the port, which is two
+; positions where there was one, which is why a form inside a piped script reads
+; `in` and finds nothing (doc/io.md part III). a trickle cannot run ahead, so the
+; port and the list share a position BY CONSTRUCTION -- guile's model, and the
+; reason `(read)` there takes exactly the next datum and execution carries on.
+; ⚠ the tail is a `once` for exactly flow's reason: p1 forces a position more than
+; once, and a re-reading tail loses the bytes between.
+; the cost is one cons + one promise per byte, ~2x flow over 60KB of FILE -- and on
+; stdin it is not even that: `in` is a static port outside the live pool, so bio_of
+; answers NULL and every `see` is already its own read(2). the gulp bought no
+; syscalls there at all; it only manufactured the second position.
+(: (trickle p) (: c (see p) (? (c = -1) () (link c (once (\ u (trickle p)))))))
 ; read: chars -> top, the reverse shell of the compiler -- the lane every shell
 ; ultimately feeds into. `s` is a charlist: a bare one (a charm is a sat, a non-negative
 ; fixnum), a flowing one, or a PORT, which is lifted to the flowing kind and is the only
@@ -87,7 +101,11 @@
           (? (two? r)       (g >r (ev 'ev <r))
              (id? r torn)   (scare 'unfinished-form p)
              z)))
-    (flow p) 0))
+    ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) and a tap (the baked corpus,
+    ; host/main.c's runner) are ours alone -- nobody else reads them, so running
+    ; ahead is free and worth it. `in` is SHARED: the forms we eval can read it,
+    ; and a child can inherit its fd. so stdin trickles.
+    (? (id? p in) (trickle p) (flow p)) 0))
 ; forms: every datum of a port, as DATA -- the data twin of `reads`, and the shape half
 ; the tools had each copied out by hand. it takes a PORT, like reads, so it needs neither
 ; open nor close (a fs-less frontend has neither, and a bare mention would raise at the
