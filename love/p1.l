@@ -35,6 +35,19 @@
 
 (: torn 'torn
 
+   ; --- the cursor advance --------------------------------------------------
+   ; ⚠ THE INPUT IS A COLIST, and this is the ONE place p1 steps it: a tail is a
+   ; cons (more text), () (the end), or a THUNK -- a port with more to drink,
+   ; fired with the unit per the zero-operand law. a bare `cup` on the cursor
+   ; would read an unforced tail as a clean end, because `two?` is FALSE for a
+   ; lambda -- the input truncates SILENTLY and looks exactly like a short file.
+   ; so `cup` on the CURSOR is a bug wherever it appears below; the token lists
+   ; p1 builds itself are strict, and p1-rev / p1-all? / p1-digits keep it.
+   ; the thunk MEMOIZES (bao.l's `once`), so forcing a position twice -- which
+   ; the `#!` lookahead and the \xNN lane both do -- reads the same byte twice
+   ; rather than drinking twice.
+   (p1-cup cl) (: t (cup cl) (? (lit? t) (t ()) t))
+
    ; --- char classes (love.c's op_break / ioread1sym terminators) -----------
    (p1-in? s c) (: n (tally s)
                    (go k) (? (<= n k) () (= (s k) c) 1 (go (+ k 1)))
@@ -56,15 +69,15 @@
    ; --- whitespace and comments --------------------------------------------
    ; `;` runs to end of line; `#!` does too; a bare `#` is the hash wrap.
    (p1-eol cl) (? (nil? (two? cl)) cl
-                  (p1-in? "\n\r" (cap cl)) (cup cl)
-                  (p1-eol (cup cl)))
+                  (p1-in? "\n\r" (cap cl)) (p1-cup cl)
+                  (p1-eol (p1-cup cl)))
    (p1-skip cl)
      (? (nil? (two? cl)) cl
         (: c (cap cl)
-           (? (p1-ws? c) (p1-skip (cup cl))
-              (= c 59) (p1-skip (p1-eol (cup cl)))
-              (? (= c 35) (? (two? (cup cl)) (= (cap (cup cl)) 33) ()) ())
-                (p1-skip (p1-eol (cup (cup cl))))
+           (? (p1-ws? c) (p1-skip (p1-cup cl))
+              (= c 59) (p1-skip (p1-eol (p1-cup cl)))
+              (? (= c 35) (? (two? (p1-cup cl)) (= (cap (p1-cup cl)) 33) ()) ())
+                (p1-skip (p1-eol (p1-cup (p1-cup cl))))
               cl)))
 
    ; --- integers, at full precision ----------------------------------------
@@ -116,7 +129,7 @@
    (p1-tok cl acc)                                   ; a name-led token
      (? (nil? (two? cl)) (link (p1-rev acc ()) cl)
         (p1-tend? (cap cl)) (link (p1-rev acc ()) cl)
-        (p1-tok (cup cl) (link (cap cl) acc)))
+        (p1-tok (p1-cup cl) (link (cap cl) acc)))
    (p1-rev l acc) (? (two? l) (p1-rev (cup l) (link (cap l) acc)) acc)
    ; an OPERATOR RUN: a maximal run of operator chars, read as one plain symbol
    ; and factored later by opfix. ⚠ a trailing '-' right before a digit is the
@@ -124,7 +137,7 @@
    ; put back, so `!-5` is ! then -5.
    (p1-run cl acc)
      (? (? (two? cl) (p1-opc? (cap cl)) ())
-        (p1-run (cup cl) (link (cap cl) acc))
+        (p1-run (p1-cup cl) (link (cap cl) acc))
         ; the run ended: shed a trailing '-' if a digit follows and the run has
         ; more than that '-' to it, and hand the '-' back for the number lane.
         (: shed (? (nil? (two? acc)) ()
@@ -156,7 +169,7 @@
    (p1-esc c) (? (= c 110) 10 (= c 116) 9 (= c 114) 13 (= c 101) 27 (= c 48) 0 c)
    (p1-str cl acc)
      (? (nil? (two? cl)) torn
-        (: c (cap cl) r (cup cl)
+        (: c (cap cl) r (p1-cup cl)
            ; ⚠ "" is the EMPTY STRING, and (string ()) is not it -- string is
            ; identity on the zero point, so an empty accumulator has to name the
            ; literal to get the object the C reader hands back.
@@ -164,11 +177,11 @@
               (nil? (= c 92)) (p1-str r (link c acc))
               (nil? (two? r)) torn
               (= (cap r) 120)                              ; \xHH
-                (? (nil? (? (two? (cup r)) (two? (cup (cup r))) ())) torn
-                   (p1-str (cup (cup (cup r)))
-                           (link (+ (* (p1-dval (cap (cup r))) 16)
-                                    (p1-dval (cap (cup (cup r))))) acc)))
-              (p1-str (cup r) (link (p1-esc (cap r)) acc)))))
+                (? (nil? (? (two? (p1-cup r)) (two? (p1-cup (p1-cup r))) ())) torn
+                   (p1-str (p1-cup (p1-cup (p1-cup r)))
+                           (link (+ (* (p1-dval (cap (p1-cup r))) 16)
+                                    (p1-dval (cap (p1-cup (p1-cup r))))) acc)))
+              (p1-str (p1-cup r) (link (p1-esc (cap r)) acc)))))
 
    ; --- the wraps -----------------------------------------------------------
    ; the value surface, the printer's read-back contract: ' ` # @ ~ each wrap
@@ -188,7 +201,7 @@
    (p1-read1 cl0 head)
      (: cl (p1-skip cl0)
         (? (nil? (two? cl)) ()
-           (: c (cap cl) r (cup cl)
+           (: c (cap cl) r (p1-cup cl)
               ; a numeral has to start somewhere (rung 1): + and - are operator
               ; runs like every other punctuation, EXCEPT that a digit -- or a
               ; `.`, for -.5 -- right after them makes the token a NUMBER.
@@ -239,7 +252,7 @@
    (p1-list cl0 head acc)
      (: cl (p1-skip cl0)
         (? (nil? (two? cl)) torn
-           (p1-in? ")]}" (cap cl)) (link (p1-rev acc ()) (cup cl))
+           (p1-in? ")]}" (cap cl)) (link (p1-rev acc ()) (p1-cup cl))
            (: d (p1-read1 cl head)
               (? (nil? (two? d)) torn
                  (p1-list (cup d) () (link (cap d) acc))))))
