@@ -91,3 +91,40 @@
 (: _ (assert (charm? (ptyecho 5 0))))               ; non-port -> errno (EBADF)
 
 (puts "pty: ok") (putc 10)
+
+; --- the two-task editor + pump topology (doc/io.md part II, "the symptom") ---
+; bao's rlwrap upgrade was BUILT AND REVERTED because this hung after one
+; keystroke: `feedlines` (edraw on one port, rendering to out) in one task while
+; `pump` reads a different port in a second. the diagnosis was defect 1 -- a task
+; parked with the byte it needed already sitting in ungetc_buf. that is fixed
+; (love.c:3997 consults the pushback AND the buffered run before the fd), and
+; today's `besc` does not push back at all, it discards. re-tested green
+; 2026-07-31; this pins it. ⚠ no commit ever carried `feedlines` -- it is
+; reconstructed from the snippet in doc/io.md, which is its only other copy.
+; scriptable with two ptys: one plays the keyboard (echo OFF so escape bytes
+; arrive raw -- with echo on, the line discipline renders ESC as `^[` and the
+; arrow never decodes), one is the child.
+(: edraw (from 'bao 'edraw)
+   (pump src dst) (: ch (see src)
+                     (? (ch = -1) 0 (: _ (put dst ch) _ (flush dst) (pump src dst))))
+   (feedlines ip m)
+    (: line (edraw ip "")
+       (? !(two? line) (put m 4)
+          (: _ (each line (\ c (put m c))) _ (put m 10) _ (flush m)
+             (feedlines ip m))))
+   rk (mind `("cat")) mk (cup rk)                  ; the keyboard: what we write comes back
+   rc (mind `("tr" "a-z" "A-Z")) mc (cup rc)       ; the child: output differs from input
+   _ (ptyecho mk 0) _ (ptyecho mc 0)
+   sink (jug 0)
+   a (twirl (\ _ (feedlines mk mc)) 0)             ; task A: reads mk, RENDERS TO OUT
+   b (twirl (\ _ (pump mc sink)) 0)                ; task B: parks on its own fd
+   _ (each `(97 98 27 91 68 88 10) (\ c (put mk c)))   ; "ab", LEFT, "X", Enter -> "aXb"
+   _ (flush mk)
+   _ (rest 300)
+   got (slurp sink)
+   _ (still (cap rk) 9) _ (still (cap rc) 9)
+   _ (? (back? a) (catch a) (freeze a))
+   _ (? (back? b) (catch b) (freeze b))
+   _ (assert
+      (string? got)                    ; ⚠ slurp of a jug is TEXT -- two? is FALSE for a string
+      (= got "AXB\r\n")))              ; the whole chain: LEFT decoded, X inserted BEFORE b, tr answered

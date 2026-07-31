@@ -1056,13 +1056,35 @@ road. what follows is its diagnosis checked against the tree as it is on
 
 ### the symptom it was written for
 
+### the symptom it was written for -- ✅ GONE, re-tested 2026-07-31
+
 `wrap` is a transparent pty pump and works: `stdin -> master` in one task,
 `master -> stdout` in another, the two park on different fds and interleave. the
 rlwrap upgrade swaps the input side for a line editor -- `feedlines` reads keys
 via `edraw`, renders to `out`, and sends to the child only on Enter -- and it
-**hangs after one keystroke**. single-task `edraw` on `in` works; a lone `see` in
-a spawned task works; the concurrent two-task park is what breaks. built,
-reverted, still reverted.
+**hung after one keystroke**. single-task `edraw` on `in` worked; a lone `see` in
+a spawned task worked; the concurrent two-task park was what broke. built,
+reverted.
+
+**it does not hang any more.** the topology now runs green as a gate --
+test/host/pty.l, in `test_hostnif`: two ptys (one plays the keyboard with echo
+OFF so escape bytes arrive raw), `feedlines` rendering to `out` in one task,
+`pump` parked on the other fd in a second, fed `"ab"` LEFT `"X"` Enter. the
+arrow DECODES, the `X` lands before the `b`, and the child answers `"AXB\r\n"`.
+clean teardown, both tasks joined.
+
+TWO independent things had fixed it, neither of them noticed:
+
+1. the C guard (defect 1 below) now consults the pushback and the buffered run
+   before the fd.
+2. **`besc` does not push back at all any more** -- it reads and DISCARDS
+   (`love/bao.l:465`, `(? !(91 = see ip) 0 …)`). the editor was reworked at some
+   point after the diagnosis was written, which is why its cited line numbers
+   (`bao.l:69-86`) no longer point at it. so the mechanism the diagnosis named
+   could not fire even if the guard were still wrong.
+
+⚠ **no commit ever carried `feedlines`** -- `git log -S` finds nothing. the
+snippet above and the gate are the only copies.
 
 ### the four defects, scored
 
@@ -1138,10 +1160,14 @@ been demonstrated.** it is defect 3's family and it postdates the diagnosis.
 `source` is `flow` (love/bao.l:66-68) and needs no C. `read`-as-a-fold is
 `sound`. `ready?` is `cue?`. what has NOT landed:
 
-- **`(select ss)`** -- block until one of several streams is ready. the one
-  genuinely-new primitive, and the honest reason it is needed: you cannot wait on
-  two streams with `cap`/`cup` alone, because forcing one commits you to it. this
-  is what `wrap` wants for the kbd/master pair.
+- **`(select ss)`** -- block until one of several streams is ready. stream.md
+  called it "the one genuinely-new primitive", and the reason stands on its own
+  terms: you cannot wait on two streams with `cap`/`cup` alone, because forcing
+  one commits you to it. ⚠ **but its MOTIVATION is gone.** it was justified by
+  `wrap` needing to wait on the kbd/master pair, and `wrap` now runs that
+  topology green without it -- two tasks parked on their own fds is what the
+  scheduler already does correctly. build it when something actually asks;
+  nothing does today.
 - **`sink`** -- the write dual, so a pump reads symmetric. low value; `dot`
   already works.
 - **the write-side park** (defect 4).
@@ -1304,18 +1330,20 @@ question 2 (what a waiting reader does) does not want a decision meeting -- it
 gets answered BY step 2, since the blocking refill cannot be fixed without
 choosing park-or-block. so:
 
-1. **re-test the bao deadlock.** defect 1 is fixed and the reverted `feedlines`
-   has never been run against the fixed guard. it may simply work now. one
-   experiment, and it decides how much of part II is still a project. ⚠ NO COMMIT
-   CARRIES `feedlines` -- the five-line snippet in part II is the only copy left,
-   which is reason enough that it lives in this file. the scriptable rig is
-   test/host/pty.l.
+1. ~~re-test the bao deadlock~~ ✅ **DONE 2026-07-31, and it is gone** -- gated in
+   test/host/pty.l. this deleted more of the plan than it kept: the deadlock was
+   path B's entire motivation, `select` loses its justification with it, and what
+   remains of part II is defects 2, 4 and 5 on their own merits rather than as
+   one project.
 2. **fix defect 5.** the blocking refill is a live hazard with a named failure
-   mode, not a design preference. it also answers question 2, which 8B needs
-   anyway. do this before 8B.
+   mode, not a design preference -- and it is now the ONLY thing in part II with
+   a real failure story. it also answers question 2, which 8B needs anyway.
 3. **then 8B**, whose shape follows from the decision above: one cell, one
    current head, `reads` re-reading the cell each iteration.
-4. **`select`** when `wrap` actually needs it -- i.e. after 1 says whether it does.
+4. **defect 2** (the `-1` sentinel) rides along with 8B where it touches, and is
+   not worth a pass of its own.
+5. **defect 4** (writes never yield) and **`select`**: when something asks. after
+   1, nothing does.
 
 `empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.
