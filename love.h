@@ -291,23 +291,28 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 #endif
 
 // Port vtable -- what a DEVICE owes, and nothing else. One shape covers both
-// directions. The BULK lanes may be NULL: dispatch falls back to per-byte
-// putc/getc loops, so a frontend adopts them at its own pace. None may allocate
-// or block the scheduler, and none touches ungetc_buf (the generic layer above
-// owns it).
+// directions. A NULL slot means NO METHOD, and the dispatcher answers for it:
+// no readn reads END, no writen discards. None may allocate or block the
+// scheduler, and none touches ungetc_buf (the generic layer above owns it).
 //   writen: land up to n bytes from src in one motion; returns how many landed
 //     (0 = no room without an alloc -- the caller makes one byte of progress
 //     through putc, which may grow/GC, then retries the bulk lane).
 //   readn: drink up to n waiting bytes into dst WITHOUT blocking;
 //     >0 = bytes, 0 = nothing waiting right now, -1 = end of stream.
+// ⚠ READN IS THE WHOLE READ DOOR. There was a per-byte `getc` beside it and its
+// nine implementations were nine spellings of one fact -- five of them SPINNING
+// on a probe they already had, which is how a quiet fd stopped the entire vm
+// instead of the one task reading it. A device now ANSWERS "nothing yet" (0) and
+// the scheduler owns the wait; io_refill turns that into IO_WOULDBLOCK and
+// lvm_fgetc parks. There is no fourth answer to widen, and no second place to
+// state it.
 // ⚠ THE PUSHBACK IS NOT A DEVICE QUESTION and never was. `ungetc` used to be a
 // slot, and all nine implementations were the same three lines against the port's
 // own head words -- while the synthetic rows answered a no-op, so a pushback onto
 // a jug was DISCARDED although zgetc reads ungetc_buf before it dispatches. One
 // generic zungetc (love.c) replaced the lot and closed that asymmetry.
 struct ai_port_vt {
- struct ai*(*getc)(struct ai*),
-         *(*putc)(struct ai*, int),
+ struct ai*(*putc)(struct ai*, int),
          *(*flush)(struct ai*);
  intptr_t (*writen)(struct ai*, unsigned char const*, uintptr_t),
           (*readn)(struct ai*, unsigned char*, uintptr_t); };

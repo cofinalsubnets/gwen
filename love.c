@@ -3125,13 +3125,12 @@ static ai_inline struct ai_port_vt const *port_vt(word fd_tagged) {
 // guard -- heap (traced, so a backing survives GC) AND fd >= 0 (synth ports
 // overlay their own fields past the head; statics are untraced) -- nothing
 // reads past the head without it. zgetc serves ungetc -> the pending run ->
-// one readn gulp (a dry gulp deep-waits the fd: the blocking semantics
-// fd_getc's read(2) had, so cooperative parking stays the caller's job, and
-// lvm_fgetc's park test consults the buffers FIRST). zputc lands bytes in
+// one readn gulp, and THAT ORDER IS THE PARK LAW: a port holding bytes is
+// readable however quiet its fd is, so nothing above needs to ask twice. a dry
+// gulp hands back IO_WOULDBLOCK and the caller parks. zputc lands bytes in
 // wbuf and drains by whole writen strokes; a read on the same port drains
 // writes first (the request/response crossover), as do flush and say's bulk
-// lane; the finalizer drains a dying port through ai_fd_drain. eof answers
-// false over a pending run.
+// lane; the finalizer drains a dying port through ai_fd_drain.
 static ai_inline struct ai_bio *bio_of(struct ai *g, struct ai_io *i) {
  return getcharm(i->fd) >= 0 && in_live_pool(ai_core_of(g), (word const*) i)
       ? (struct ai_bio*) i : NULL; }
@@ -3150,14 +3149,33 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
  else for (uintptr_t k = 0; ai_ok(g) && k < n; k++)   // a frontend with no bulk lane: fd putc, no alloc
   g = vt->putc(g, (unsigned char) txt(w)[k]);
  return g; }
-// io_refill's third answer, beside a byte and EOF: the fd said "would block" after
-// the readiness check said otherwise. distinct from EOF (-1) and from any byte.
+// io_refill's third answer, beside a byte and EOF: the device has nothing right
+// now. distinct from EOF (-1) and from any byte -- the one sentinel/two meanings
+// bug this arc kept finding, spelled apart on purpose. it never escapes lvm_fgetc.
 #define IO_WOULDBLOCK ((uintptr_t) -2)
+// the three answers, in one place for every port there is. a port with no read
+// method is at END (that is what a NULL slot means); a port with no BUFFER asks
+// for exactly one byte and is otherwise identical.
+// ⚠ THE UNBUFFERED LANE STAYS UNBUFFERED. bio_of refuses the statics (they sit
+// outside the live pool), so `in` reads one byte per readn -- and it must, because
+// `trickle` and every interactive reader stand on stdin not gulping past what was
+// asked for. a buffer here would make the repl swallow the line after the one it
+// is reading, and re-open the ownership question doc/io.md part III closed.
+static ai_inline void io_end(struct ai *fc) {
+ fc->io->eof_seen = putcharm(true);
+ fc->b = EOF; }
 static struct ai *io_refill(struct ai *g) {
  struct ai *fc = ai_core_of(g);
  struct ai_bio *b = bio_of(g, fc->io);
  struct ai_port_vt const *vt = port_vt(fc->io->fd);
- if (!b || !vt->readn) return vt->getc(g);       // no buffers / no bulk lane: per-byte
+ if (!vt->readn) return io_end(fc), g;
+ if (!b) {                                       // no buffer: the same lane at n = 1
+  unsigned char c;
+  intptr_t k = vt->readn(g, &c, 1);
+  if (k > 0) fc->b = c;
+  else if (k < 0) io_end(fc);
+  else fc->b = IO_WOULDBLOCK;
+  return g; }
  if (bio_wpending(b)) {                          // the crossover: our unsent ask goes first
   if (!ai_ok(g = io_wdrain(g, fc->io))) return g;
   fc = ai_core_of(g), b = (struct ai_bio*) fc->io; }
@@ -3174,15 +3192,13 @@ static struct ai *io_refill(struct ai *g) {
   b->rlen = putcharm(k), b->rpos = putcharm(1);
   fc->b = (unsigned char) txt(r)[0];
   return g; }
- if (k < 0) { b->io.eof_seen = putcharm(true); fc->b = EOF; return g; }
- // k == 0 is "would block": the readiness check said yes and the read said no.
- // ⚠ NEVER WAIT HERE. this runs under lvm_fgetc, which is ONE op -- a blocking
- // poll stops the whole VM, not the reading task, so every other task starves on
- // one quiet fd. reachable when a second process shares the description and wins
- // the race. ⚠ THIS BRANCH IS UNTESTED, knowingly (doc/io.md): no in-process
- // schedule can reach it, and gating it wanted either a fault hook in the shipped
- // binary or a test-only frontend with its own vt. hand it back and let the
- // caller park, which is what its own readiness guard already does.
+ if (k < 0) return io_end(fc), g;
+ // k == 0 is "would block", and it is the ORDINARY answer now: every quiet device
+ // on every frontend comes through here, so every test that reads anything walks
+ // it (test/front/io.l gates the sharp case, where the fd said ready and then said
+ // no). ⚠ NEVER WAIT HERE. this runs under lvm_fgetc, which is ONE op -- a
+ // blocking poll stops the whole VM, not the reading task, so every other task
+ // starves on one quiet fd. hand it back and let the caller park.
  return fc->b = IO_WOULDBLOCK, g; }
 static ai_inline struct ai *zgetc(struct ai*g) {
  if (!ai_ok(g)) return g;
@@ -3252,22 +3268,27 @@ struct to { struct ai_io io; struct ai_str *buf; ai_word i; }; // lisp string ou
 static struct ai *ai_dtoa2(struct ai*, ai_flo_t);
 static struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x);
 
-static struct ai *noop_getc(struct ai *g) {
- ai_core_of(g)->io->eof_seen = putcharm(true);
- return g->b = EOF, g; }
 static struct ai *noop_putc(struct ai *g, int c) { (void) c; return g; }
 static struct ai *noop_flush(struct ai *g) { return g; }
 
-static struct ai *ci_getc(struct ai *g) {
+// the charlist source's read door. it walks the spine and never blocks, so a
+// spent list is the END -- there is no "quiet" answer a colist could give.
+// ⚠ it is asked for ONE byte at a time and always will be: fd -4 fails bio_of,
+// so there is no backing to gulp into. written as the bulk lane anyway, because
+// the contract is the contract and the loop costs nothing.
+// ⚠ a charm outside 0..255 lands as its LOW BYTE, which ci_getc did not do -- it
+// handed the raw charm straight to g->b, so a -1 in the list FORGED the end of
+// the stream. probed against both binaries: `(flow (tap '(-1 65)))` came back
+// EMPTY before and is 2 long now, so it was sound/reads/slurp that lost the whole
+// list to one element, not `see` (which answered -1 and carried on -- worse, since
+// nothing looked wrong). a port is a byte stream on every other row; this was the
+// exception. the law is in test/io.l's tap section.
+static intptr_t ci_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  struct ci *i = (struct ci*) g->io;
- if (getcharm(i->io.ungetc_buf) != EOF) {
-  int c = getcharm(i->io.ungetc_buf);
-  i->io.ungetc_buf = putcharm(EOF);
-  return g->b = c, g; }
- if (!chainp(i->head)) { i->io.eof_seen = putcharm(true); return g->b = EOF, g; }
- int c = getcharm(A(i->head));
- i->head = B(i->head);
- return g->b = c, g; }
+ uintptr_t k = 0;
+ while (k < n && chainp(i->head))
+  dst[k++] = (unsigned char) getcharm(A(i->head)), i->head = B(i->head);
+ return k ? (intptr_t) k : -1; }
 
 static struct ai *to_putc(struct ai *g, int c) {
  struct to *o = (struct to*) g->io;
@@ -3304,13 +3325,13 @@ struct ai_port_vt const synth[] = {
     was its only maker and the boot cursor is a charlist now (rung 8) -- but the
     fd is a PROTOCOL number that prel pokes by hand, so the row stays a hole
     rather than renumbering its neighbours. */
- { noop_getc, noop_putc, noop_flush, NULL,      NULL },
+ { noop_putc, noop_flush, NULL,      NULL },
  /* fd = -2, to: write-only vec sink   */
- { noop_getc, to_putc,   to_flush,   to_writen, NULL },
+ { to_putc,   to_flush,   to_writen, NULL },
  /* fd = -3, closed port (post-close)  */
- { noop_getc, noop_putc, noop_flush, NULL,      NULL },
+ { noop_putc, noop_flush, NULL,      NULL },
  /* fd = -4, ci: read-only charlist source -- prel's `tap` builds one by poke. */
- { ci_getc,   noop_putc, noop_flush, NULL,      NULL }, };
+ { noop_putc, noop_flush, NULL,      ci_readn }, };
 
 // (fputc port byte) — write byte to port; return byte.
 lvm(lvm_fputc) {
@@ -3982,13 +4003,13 @@ lvm(lvm_fgetc) {
    Pack(g);
    if (!ai_ok(g = io_wdrain(g, i))) return ghelp(g);
    Unpack(g); }
-  // the park law: consult the port's OWN bytes first -- a pushed-back byte or
-  // a pending rbuf run makes the port readable however quiet the fd is; a
-  // task parked on the bare fd over a full buffer would sleep forever.
-  if (getcharm(i->ungetc_buf) == EOF && !bio_rpending(bb)
-      && !ai_ready(getcharm(i->fd))) {
-   g->next_wait_fd = getcharm(i->fd);
-   return Ap(lvm_yield_sw, g); }
+  // ⚠ NO READINESS PRE-GUARD. There was one -- pushback, then buffered run, then
+  // ai_ready -- and it was the third copy of a test zgetc already makes by reading
+  // those same three things in that same order. The device ANSWERS now: a byte, an
+  // end, or IO_WOULDBLOCK. Asking first was also a lie on the kernel, where
+  // k_sources[1].ready is NULL: reading an output fd parked forever on a wait
+  // nothing could satisfy, where it now reads the END the dispatcher promises.
+  // (cue? and await still ask -- they have no read to answer them.)
   Pack(g);
   g->io = i;
   if (!ai_ok(g = zgetc(g))) return ghelp(g);

@@ -1140,21 +1140,20 @@ snippet above and the gate are the only copies.
 
 ### the four defects, scored
 
-**1. `ungetc_buf` invisible to the readiness check. -- FIXED.** this was the
-diagnosis's centrepiece: `lvm_fgetc` parked whenever `!ai_ready(fd)` without
-consulting the pushback, so a task could park holding the very byte it needed.
-the guard now reads (love.c:3997-4000):
+**1. `ungetc_buf` invisible to the readiness check. -- FIXED, then the check
+itself went.** this was the diagnosis's centrepiece: `lvm_fgetc` parked whenever
+`!ai_ready(fd)` without consulting the pushback, so a task could park holding the
+very byte it needed. the first fix made the guard read three terms in order --
+pushback, then the buffered run, then the fd. **rung 2 deleted the guard
+outright**, because that is the same three things `zgetc` reads, in the same
+order, one call further down: pushback, pending run, `io_refill`. asking first was
+a third copy of a test the read already makes, and on the kernel it was also a
+LIE -- `k_sources[1].ready` is NULL, so reading an output fd parked forever on a
+wait nothing could satisfy, where it now reads the end the dispatcher promises.
 
-```c
-if (getcharm(i->ungetc_buf) == EOF && !bio_rpending(bb)
-    && !ai_ready(getcharm(i->fd))) { g->next_wait_fd = ...; return Ap(lvm_yield_sw, g); }
-```
-
-pushback first, then the buffered run, then the fd. `cue?` tests the identical
-three terms (love.c:4625). the asymmetry stream.md called "the bug" is gone --
-its own §12 fallback #1, landed and then strengthened with a third term. **the
-deadlock has never been re-tested against this.** that is the cheapest
-outstanding experiment in this document.
+`cue?` and `await` still ask `ai_ready`, and must: neither has a read to answer
+them. the asymmetry stream.md called "the bug" is gone by having one door, not by
+keeping two in agreement.
 
 **2. the `-1` EOF sentinel. -- STANDS, but confined.** `love.c:4005-4006` still
 answers `putcharm(EOF)`, and byte loops still compare `(= c -1)` / `(< c 0)`
@@ -1165,12 +1164,15 @@ charlist ending in `()` (test/io.l:91,114). the sentinel now lives only at the
 in `crew/vi/vi.l:56-65`, where `-1` means BOTH "no pushback pending" and
 "end of input" inside one function.
 
-**3. fd/poll knowledge smeared across the VM. -- STANDS, and there is one MORE
-site than when this was written.** today: `lvm_fgetc` (love.c:3998), `lvm_await`
-(4020), `cue?` (4626), the scheduler (2690-2728), and **`io_refill`
-(love.c:3178), which is new with the buffered-port arc and is the bad one** --
-see below. the doc's claim that `cue?` hardcodes `ai_stdin` is now only half
-true; it defaults there for a non-port.
+**3. fd/poll knowledge smeared across the VM. -- NARROWED to the scheduler and
+its two questioners.** it was five sites and two of them have gone: `io_refill`'s
+own blocking wait (defect 5) and `lvm_fgetc`'s readiness pre-guard (rung 2). what
+is left is `lvm_await`, `cue?`, and the scheduler itself -- and that is not a
+smear, it is the shape: **`ai_ready` is the SCHEDULER's question**, "would this
+task make progress if I ran it?", asked by `find_runnable`, by the two wait
+helpers, and by the two nifs that park without a read to answer them. the read
+path no longer asks it at all. the doc's claim that `cue?` hardcodes `ai_stdin`
+is only half true; it defaults there for a non-port.
 
 **4. the write side never yields. -- STANDS, unchanged.** `zputc`
 (love.c:3195-3211) -> `io_wdrain` (3144) -> `fd_writen` (host/main.c:100-108), a
@@ -1256,6 +1258,59 @@ what is still NOT built, and is now cheap: the structural check in `vmret`'s spi
 the blocking call cannot come back. ⚠ on its own it gates the CAUSE, never the
 effect; with `test_front` gating the effect, both halves are finally coverable.
 
+### the read side, closed -- ✅ rung 2, 2026-07-31
+
+**`readn` is the whole read door, on all seven frontends.** `getc` did not become
+nonblocking; it was DELETED. `readn`'s contract was already the answer -- *">0 =
+bytes, 0 = nothing waiting right now, -1 = end"* -- and widening `getc` to a fourth
+answer would have meant two spellings of one fact in nine places.
+
+what that bought, which is more than the line count says:
+
+* **five frontends stopped spinning.** `kb_getc`'s `while ((b = kqpop()) < 0)
+  fbdraw(), k_wait();` is the clean example: it COMPUTED the answer and threw it
+  away, then waited inside a VM op. virt, mps2 and teensy did the same against
+  their UART's own RX-ready flag. all four now read the flag and answer 0. (⚠ the
+  kernel's spin was in fact unreachable, because the pre-guard parked first --
+  which is the point: it was one edit away from being reachable, and nothing said
+  so.)
+* **the untested branch became the only branch.** `IO_WOULDBLOCK` used to need a
+  fault injector to reach. now every quiet device on every frontend comes through
+  it, so the whole corpus walks it and `test_front` gates the sharp case (ready
+  said go, the device said no).
+* **`struct k_source`'s "-1 = EOF / no data"** -- one sentinel, two meanings, in a
+  document that records three such bugs -- is spelled apart.
+* `ci_getc` -> `ci_readn`, dropping its private copy of the pushback dance (`zgetc`
+  reads `ungetc_buf` before it dispatches, so the copy could never fire) -- **and
+  fixing a forged end of stream in passing.** `readn` fills an `unsigned char*`, so
+  a charlist element now lands as its low byte; `ci_getc` handed the raw charm to
+  `g->b`, so a `-1` in the list read as EOF. probed against both binaries:
+  `(flow (tap '(-1 65)))` came back EMPTY before and is 2 long now. the damage was
+  never at `see` -- which answered -1 and carried on, so nothing looked wrong --
+  but at `flow`/`sound`/`reads`/`slurp`, every reader that stops there. a port is
+  a byte stream on every other row; this was the exception. law in test/io.l.
+* `noop_getc` and the "unused slots get noop stubs so dispatch needs no NULL
+  guards" rule go together. **the kernel's rule wins tree-wide**: a NULL slot means
+  NO METHOD and the dispatcher answers for it (no `readn` reads the end).
+
+vt: 5 slots -> 4. shipped C: **-54 code lines** (115 deleted, 61 written), which
+is where the plan's -48 estimate landed.
+
+⚠ **the price, measured and accepted.** the unbuffered statics now pay host's
+per-call `O_NONBLOCK` toggle on every byte: 3 `fcntl` + 1 `read`, where the old
+pre-guard cost 1 `poll` + 1 `read`. 26 reads for 26 bytes either way -- the
+syscall COUNT per byte went 2 -> 4, the read count did not move. 53 KB of source
+through stdin still lands in 0.05s, and every other fd is a heap port gulping
+4096 at a time. we skip the `fcntl` pair when the fd already says nonblocking; we
+do **not** cache flags for an inherited fd, and the statics do **not** get a
+buffer -- that would make the repl swallow the line after the one it is reading
+and re-open part III's ownership question.
+
+⚠ **what is still ungated, unchanged by this rung**: no gate feeds a keystroke to
+inle, virt, mps2 or teensy -- `boot.sh` runs qemu `</dev/null` on purpose (a
+non-definite stdin hangs the harness). their `readn` is exercised by dispatch and
+by review, not by a byte arriving. that was equally true of the `getc` it replaced.
+
 ### the boundary principle -- keep, it is still right
 
 > the core knows **generic-apply + scheduler-yield**. "bytes out of an fd" is a
@@ -1289,8 +1344,8 @@ stream.md's stage 4 said to remove `see`/`unsee`/`end?`/`key?`/`ungetc_buf`/
 
 | name | real name | tracked `.l` sites | verdict |
 |---|---|---|---|
-| `see` | `lvm_fgetc` | ~82 across 29 files | the sole input lane on SIX of seven frontends -- every freestanding target passes `readn = NULL` and falls through to `vt->getc` |
-| `readn` | `fd_readn` | -- | **hot**: one `read(fd,…,4096)` where the byte lane does three, proved under strace. host only |
+| `see` | `lvm_fgetc` | ~82 across 29 files | the sole input lane, everywhere |
+| `readn` | `fd_readn` | -- | **the sole read DOOR** since the device floor's rung 2 -- all seven frontends, buffered or not. it was host-only, and the other six fell through to a per-byte `vt->getc` that SPUN |
 | `unsee` | `lvm_fungetc` | **3**, all `test/io.l` | load-bearing: `:100` is the ONLY witness in the corpus that `flow` memoizes |
 | `empty?` | `lvm_feof` | **0** | genuinely unused -- and not free at the time: a bound global with nine `*_eof` bodies across seven frontends. ✅ **GONE 2026-07-31**, with the whole `eof` lane, once the device-floor arc moved all seven frontends anyway |
 | `cue?` | `lvm_key` | 6 | `gulp`'s stop condition, `rove.l:178`'s ESC-vs-CSI discriminator, and what makes the tty case free |
@@ -1422,8 +1477,10 @@ is implementation.
 
 the cell was never built, because a measurement removed the need for it. **stdin
 ALREADY reads one byte per syscall**: `ai_stdin` is a static struct outside the
-live pool, so `bio_of` answers NULL and `io_refill` falls through to the per-byte
-`fd_getc`. strace on `love < script`: 26 `read(0,…,1)` for 26 bytes. so `flow`'s
+live pool, so `bio_of` answers NULL and `io_refill` asks the device for exactly
+one byte (it fell through to a per-byte `fd_getc` when this was measured; rung 2
+made it `readn(g, &c, 1)`, same syscall count). strace on `love < script`: 26
+`read(0,…,1)` for 26 bytes, before and after. so `flow`'s
 gulp on stdin was buying NO syscalls -- it called `see` in a loop, one syscall per
 byte, and then handed back a head detached from the port. it manufactured the
 second position and saved nothing.

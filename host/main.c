@@ -57,19 +57,6 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
   for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
   poll_wait(p, n, ms); }
 
-static struct ai *fd_getc(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = g->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    fc->b = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return g; }
-  uint8_t b;
-  ssize_t n = read(getcharm(i->fd), &b, 1);
-  if (n <= 0) { i->eof_seen = putcharm(true); fc->b = EOF; }
-  else fc->b = b;
-  return g; }
-
 static struct ai *fd_putc(struct ai *g, int c) {
  uint8_t b = c;
  if (g->io->fd == putcharm(STDOUT_FILENO)) fputc(b, stdout);
@@ -82,9 +69,19 @@ static struct ai *fd_flush(struct ai *g) {
 
 // the bulk lanes (contract in love.h). writen drains stdio first when the fd is
 // stdout -- per-byte puts ride stdio there, and the direct write(2) must land
-// AFTER them or the stream interleaves. readn is one nonblocking gulp: the
-// O_NONBLOCK toggle is per-call because fd flags ride the open file description,
-// which a pty child shares.
+// AFTER them or the stream interleaves. readn is one nonblocking gulp.
+//
+// ⚠ THE O_NONBLOCK TOGGLE IS PER-CALL AND MUST STAY THAT WAY. The flags ride the
+// OPEN FILE DESCRIPTION, which a pty child and the shell that launched us both
+// share -- leaving stdin nonblocking at exit is the classic way to hand the
+// user's terminal back broken ("resource temporarily unavailable" in their
+// shell). We skip the pair when the fd already says nonblocking, which is free
+// and covers the fds love opens itself; we do NOT cache the flags for an fd we
+// inherited. The measured price, now that readn is the sole read door: the
+// unbuffered statics pay 3 fcntls + 1 read per byte where they used to pay 1
+// poll + 1 read (love's readiness pre-guard, deleted with getc). 53K of source
+// through stdin still lands in 0.05s -- the reader is orders of magnitude the
+// bottleneck, and every OTHER fd is a heap port that gulps 4096 at a time.
 static intptr_t fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
  intptr_t fd = getcharm(g->io->fd);
  if (fd == STDOUT_FILENO) fflush(stdout);
@@ -96,16 +93,16 @@ static intptr_t fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
  return (intptr_t) i; }
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  intptr_t fd = getcharm(g->io->fd);
- int fl = fcntl((int) fd, F_GETFL);
- fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
+ int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
+ if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
  ssize_t k = read((int) fd, dst, n);
- fcntl((int) fd, F_SETFL, fl);
+ if (off) fcntl((int) fd, F_SETFL, fl);
  return k > 0 ? (intptr_t) k
       : k == 0 ? -1
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
 
 struct ai_port_vt const ai_fd_port_vt =
- { fd_getc, fd_putc, fd_flush, fd_writen, fd_readn };
+ { fd_putc, fd_flush, fd_writen, fd_readn };
 
 struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF), putcharm(false) };
 struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF), putcharm(false) };

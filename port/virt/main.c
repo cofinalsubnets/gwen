@@ -23,9 +23,6 @@ static void v_putc(char c) {
   while (!(UART[5] & 0x20)) ;
   UART[0] = (uint8_t) c; }
 static int uart_rx_ready(void) { return UART[5] & 1; }
-static int uart_getc(void) {
-  while (!uart_rx_ready()) ;
-  return UART[0]; }
 
 // the CLINT's mtime, a free-running 10 MHz counter -> ms.
 #define MTIME (*(volatile uint64_t *) 0x0200BFF8u)
@@ -77,16 +74,13 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
 
 // --- port vtable ----------------------------------------------------------
 // Console bytes in and out through the ns16550 (pollable, never EOF -- a live
-// wire).
-static struct ai *fd_getc(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    fc->b = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return g; }
-  fc->b = uart_getc();
-  return g; }
+// wire, so a dry read is 0 and never -1). This used to spin in uart_getc until
+// a byte arrived, which stopped the vm rather than the reading task.
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  (void) g;
+  uintptr_t k = 0;
+  while (k < n && uart_rx_ready()) dst[k++] = UART[0];
+  return (intptr_t) k; }
 
 static struct ai *fd_putc(struct ai *g, int c) {
   v_putc(c);
@@ -97,7 +91,7 @@ static struct ai *fd_flush(struct ai *g) { return g; }
 struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_putc, fd_flush, NULL, NULL };
+struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };
 
 // --- the exit builtin -----------------------------------------------------
 // (vexit code) -- leave the machine through the test finisher with `code` as

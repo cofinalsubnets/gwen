@@ -56,9 +56,6 @@ void fault_report(uintptr_t *frame) {    // frame: r0 r1 r2 r3 r12 lr pc xPSR
 #define UREG(o) (*(volatile uint32_t *)(UART0_BASE + (o)))
 static void uart_init(void) { UREG(0x10) = 16; UREG(0x08) = 3; }   // min bauddiv; TX+RX enable
 static int uart_rx_ready(void) { return !!(UREG(0x04) & 2); }      // STATE bit1 = RX full
-static int uart_getc(void) {
-  while (!uart_rx_ready()) ;
-  return (int) (UREG(0x00) & 0xff); }
 
 // --- cooperative waits ----------------------------------------------------
 // The teensy shapes: no IRQs, so spin against an ai_clock deadline (ms;
@@ -83,17 +80,14 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
     if (ms && ai_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------
-// Console bytes in from UART0 (pollable, never EOF -- a live wire), out
-// through semihosting.
-static struct ai *fd_getc(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    fc->b = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return g; }
-  fc->b = uart_getc();
-  return g; }
+// Console bytes in from UART0 (pollable, never EOF -- a live wire, so a dry
+// read is 0 and never -1), out through semihosting. This used to spin in
+// uart_getc until a byte arrived, which stopped the vm rather than the task.
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  (void) g;
+  uintptr_t k = 0;
+  while (k < n && uart_rx_ready()) dst[k++] = (unsigned char) (UREG(0x00) & 0xff);
+  return (intptr_t) k; }
 
 static struct ai *fd_putc(struct ai *g, int c) {
   sh_putc(c);
@@ -104,7 +98,7 @@ static struct ai *fd_flush(struct ai *g) { return g; }
 struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_putc, fd_flush, NULL, NULL };
+struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };
 
 // --- the exit builtin -----------------------------------------------------
 // (m7exit code) -- leave the machine through semihosting with `code` as the

@@ -138,22 +138,7 @@ static intptr_t fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
   memcpy(d->o + d->olen, src, k);
   return d->olen += k, (intptr_t) k; }
 
-// the per-byte lanes, for the ports with no buffer (the statics). Each is the
-// bulk lane at n = 1 -- one shape, so the two cannot drift.
-static struct ai *fd_getc(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    fc->b = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return g; }
-  unsigned char b;
-  intptr_t k = fd_readn(g, &b, 1);
-  if (k > 0) fc->b = b;
-  else if (k < 0) i->eof_seen = putcharm(true), fc->b = EOF;
-  else fc->b = (int) (uintptr_t) -2;                 // IO_WOULDBLOCK (love.c)
-  return g; }
-
+// the per-byte write lane: the bulk one at n = 1, so the two cannot drift.
 static struct ai *fd_putc(struct ai *g, int c) {
   unsigned char b = (unsigned char) c;
   return fd_writen(g, &b, 1), g; }
@@ -165,7 +150,7 @@ static struct ai *fd_flush(struct ai *g) {
   return g; }
 
 struct ai_port_vt const ai_fd_port_vt =
- { fd_getc, fd_putc, fd_flush, fd_writen, fd_readn };
+ { fd_putc, fd_flush, fd_writen, fd_readn };
 
 struct ai_io ai_stdin  = { lvm_port_io, putcharm(0), putcharm(EOF), putcharm(false) };
 struct ai_io ai_stdout = { lvm_port_io, putcharm(1), putcharm(EOF), putcharm(false) };

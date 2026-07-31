@@ -1,11 +1,12 @@
 ; test/front/io.l -- the laws of the WOULD-BLOCK park, gated at last.
 ;
-; these run under test/front/main.c, the test-only frontend, because the branch
-; they cover cannot be reached from inside a normal love: `lvm_fgetc`'s readiness
-; guard and its refill are ONE op and the vm yields only at an `Ap`, so nothing can
-; run between "poll said ready" and "read said no". only a second process sharing
-; the open file description can lose that race -- or a frontend that lies, which is
-; what this one is for.
+; these run under test/front/main.c, the test-only frontend. the PARK itself is
+; ordinary now -- every quiet device on every frontend comes through it, so the
+; whole corpus walks it -- but the SHARP case still cannot be reached from inside
+; a normal love: `ai_ready` says go and the device then says no. the scheduler's
+; readiness question and the device's answer are separated by no yield point, so
+; only a second process sharing the open file description can lose that race --
+; or a frontend that lies, which is what this one is for.
 ;
 ; the fault lives in TEST code. love carries no switch, no env var and no nif for
 ; it, which is the standing rule (doc/io.md).

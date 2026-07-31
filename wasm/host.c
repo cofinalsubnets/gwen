@@ -68,15 +68,10 @@ static struct ai *_putc(struct ai *g, int c) {
   return g; }
 static struct ai *_flush(struct ai *g) { return g; }
 
-// No real stdin: getc reports EOF (honouring any pushed-back byte first).
-static struct ai *_getc(struct ai *g) {
-  struct ai_io *i = ai_core_of(g)->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    int c = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return ai_core_of(g)->b = c, g; }
-  i->eof_seen = putcharm(true);
-  return ai_core_of(g)->b = EOF, g; }
+// No real stdin: every read is at the end (-1), never merely quiet -- the page
+// feeds source through ai_eval, not the stdin port, so nothing is coming.
+static intptr_t _readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  return (void) g, (void) dst, (void) n, -1; }
 
 // fd values are nominal: all I/O routes through the vtable regardless. We
 // just need fd >= 0 so the dispatcher picks ai_fd_port_vt over a synth slot.
@@ -87,7 +82,7 @@ struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1),
 // No separate error stream in the browser host; route err to out's fd.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1),
                          .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { _getc, _putc, _flush, NULL, NULL };  // no bulk lanes: per-byte fallback
+struct ai_port_vt const ai_fd_port_vt = { _putc, _flush, NULL, _readn };  // no writen: per-byte out
 
 // (exit n) -- a frontend nif, like main.c's and kmain.c's. The wasm host needs
 // it for the same reason they do: the test harness aborts a failed assert with

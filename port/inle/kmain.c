@@ -30,7 +30,7 @@ static struct {
 
 // keyboard input. kb_int (interrupt context) decodes scancodes and
 // enqueues input bytes -- arrow/Delete keys as the ANSI escape sequences
-// the line editor decodes; k_getc and the (key) builtin drain the queue.
+// the line editor decodes; kb_readn and the (key) builtin drain the queue.
 // g holds the live modifier flags.
 static struct { uint8_t g, q[16], qh, qt; } kkb;
 // enqueue one input byte (drop if full). non-static: the COM1 serial
@@ -128,14 +128,18 @@ static void limine_to_kboot(void) {
 // k_sources[] holds per-fd vtables. The kernel's ai_fd_port_vt is a thin
 // shim that routes each call through k_sources[fd]. NULL slots mean
 // "no method"; the dispatcher skips them (writes discard, reads return
-// EOF, ready returns false). Per-byte methods today -- P3b/later will
-// add bulk read/write when ramfs/files start needing them. `state` is
+// the end, ready returns false). The read side is bulk; the write side is
+// still per-byte and gains a writen when ramfs/files need one. `state` is
 // per-instance scratch (ramfs uses it for the buffer pointer; statics
 // like keyboard/serial leave it null).
 #define k_sources_max 32
 
 struct k_source {
-  int  (*getc)(int fd);                 // returns 0..255, -1 = EOF / no data
+  // the read door (love.h's readn contract, one fd deeper): >0 = bytes,
+  // 0 = nothing waiting, -1 = end. it USED to be a per-byte getc answering
+  // "-1 = EOF / no data" -- one sentinel, two meanings -- and the keyboard paid
+  // for it by spinning the whole vm on an empty queue.
+  intptr_t (*readn)(int fd, unsigned char *dst, uintptr_t n);
   void (*putc)(int fd, int c);
   void (*flush)(int fd);
   bool (*ready)(int fd);                // non-blocking probe
@@ -143,15 +147,16 @@ struct k_source {
   void *state;
 };
 
-// Slot 0: PS/2 keyboard. Blocks until a byte is queued, pumping the
-// framebuffer in between so the cursor keeps blinking. No EOF on bare
-// metal -- the kb queue is endless -- so the dispatcher's eof_seen
-// latch never trips for slot 0.
-static int kb_getc(int fd) {
+// Slot 0: PS/2 keyboard. Drains what the interrupt queued and answers 0 when
+// there is nothing -- never the end, because the kb queue is endless on bare
+// metal, so eof_seen never latches for slot 0. It used to SPIN here (`while
+// ((b = kqpop()) < 0) fbdraw(), k_wait();`), computing this same answer and
+// throwing it away; the scheduler owns that wait now.
+static intptr_t kb_readn(int fd, unsigned char *dst, uintptr_t n) {
   (void) fd;
-  int b;
-  while ((b = kqpop()) < 0) fbdraw(), k_wait();
-  return b; }
+  uintptr_t k = 0;
+  for (int b; k < n && (b = kqpop()) >= 0; ) dst[k++] = (unsigned char) b;
+  return (intptr_t) k; }
 static bool kb_ready(int fd) { (void) fd; return kkb.qh != kkb.qt; }
 
 // Slot 1: serial console. Output goes to the framebuffer when one is
@@ -163,27 +168,17 @@ static void serial_putc1(int fd, int c) {
 static void serial_flush(int fd) { (void) fd; fbdraw(); }
 
 static struct k_source k_sources[k_sources_max] = {
-  [0] = { .getc = kb_getc,      .ready = kb_ready    },
+  [0] = { .readn = kb_readn,    .ready = kb_ready    },
   [1] = { .putc = serial_putc1, .flush = serial_flush },
 };
 
-// Generic kernel dispatchers: getc/putc/flush route through k_sources[fd].
+// Generic kernel dispatchers: readn/putc/flush route through k_sources[fd].
 // Bounds-checks and NULL-guards keep misuse from crashing (read-from-output-fd
-// returns EOF; write-to-input-fd discards).
-static struct ai *fd_getc(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = g->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    fc->b = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return g; }
-  int fd = getcharm(i->fd);
-  int c = -1;
-  if (fd >= 0 && fd < k_sources_max && k_sources[fd].getc)
-    c = k_sources[fd].getc(fd);
-  if (c < 0) { i->eof_seen = putcharm(true); fc->b = EOF; }
-  else fc->b = c;
-  return g; }
+// reads the end; write-to-input-fd discards).
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  int fd = getcharm(g->io->fd);
+  if (fd < 0 || fd >= k_sources_max || !k_sources[fd].readn) return -1;
+  return k_sources[fd].readn(fd, dst, n); }
 static struct ai *fd_putc(struct ai *g, int c) {
   int fd = getcharm(g->io->fd);
   if (fd >= 0 && fd < k_sources_max && k_sources[fd].putc)
@@ -203,7 +198,7 @@ struct ai_io ai_stdout = { .ap = lvm_port_io,
 struct ai_io ai_stderr = { .ap = lvm_port_io,
                          .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
 
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_putc, fd_flush, NULL, NULL };  // bulk lanes: the promised P3b, when ramfs/files need them
+struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };  // writen: the promised P3b, when ramfs/files need it
 
 // Override the weak g.c default; route close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.

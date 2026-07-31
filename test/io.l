@@ -57,6 +57,15 @@
   (< 0 (sat (show (tap 0))))
   ; Each call allocates a fresh port object.
   (: p (tap 0) q (tap 0) !(= p q))
+  ; ⚠ A TAP IS A BYTE STREAM like every other port, so a charm outside 0..255
+  ; lands as its LOW BYTE. that is not a rounding convenience -- it is what stops
+  ; a -1 in the list from FORGING the end of the stream. ci_getc used to hand the
+  ; raw charm over, and the measured cost was not at `see` (which answered -1 and
+  ; carried on) but at every reader that STOPS there: `(flow (tap '(-1 65)))`
+  ; came back EMPTY, so sound/reads/slurp lost the whole list to one element.
+  (: p (tap '(300 -1 65))
+     (&& (= 44 (see p)) (= 255 (see p)) (= 65 (see p)) (= -1 (see p))))
+  (= 2 (tally (flow (tap '(-1 65)))))
 
   ; --- once: the promise ---
   ; a thunk that runs at most once and remembers. fired with the UNIT, per the

@@ -45,16 +45,15 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
 
 // --- port vtable ----------------------------------------------------------
 // Both ports ride LPUART6; the fd is nominal (>= 0 so the dispatcher routes
-// here). Serial never reaches EOF.
-static struct ai *fd_getc(struct ai *g) {
-  struct ai *fc = ai_core_of(g);
-  struct ai_io *i = fc->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    fc->b = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return g; }
-  fc->b = serial_getc();
-  return g; }
+// here). Serial never reaches EOF, so a dry read is 0 and never -1. It used to
+// call serial_getc, which spins the whole vm on an empty ring; serial_rx_ready
+// pumps the ring and answers the same question without waiting. (serial_getc
+// stays in the driver -- psram-test.c is a standalone image with no scheduler.)
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  (void) g;
+  uintptr_t k = 0;
+  while (k < n && serial_rx_ready()) dst[k++] = (unsigned char) serial_getc();
+  return (intptr_t) k; }
 
 static struct ai *fd_putc(struct ai *g, int c) {
   if (c == '\n') serial_putc('\r');     // cook LF -> CRLF for terminals
@@ -67,7 +66,7 @@ struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = p
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
 // No separate error stream; route err to the console too.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_port_vt const ai_fd_port_vt = { fd_getc, fd_putc, fd_flush, NULL, NULL };  // no bulk lanes: per-byte fallback
+struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };  // no writen: per-byte out
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.
