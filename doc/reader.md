@@ -467,9 +467,10 @@ kept: `ioread1sym`, `ioread1str`, `ai_z_getc`, which p0 shares.
   close, so a TORN parse leaves the pile behind and the text slot is no longer
   `sp[0]`. the old parse nif had a transactional rollback; dropping it segfaulted
   the corpus. `p0text` records the depth and restores it.
-- **`ti_ungetc` parks the pushed-back byte in `ungetc_buf`, not on the
+- **`ci_ungetc` parks the pushed-back byte in `ungetc_buf`, not on the
   charlist**, so reading the port's `head` alone SWALLOWS the token terminator --
-  `#(a)` came back as `#` with the `(` gone.
+  `#(a)` came back as `#` with the `(` gone. (rung 8A retired that pushback for
+  p0: the cursor just stays ON the terminator. the port's own remains.)
 
 ⚠ and the port must be ON THE HEAP: a `ci`'s head is a love value and `g->io`
 rides the core's `v0..end` span, so the collector forwards it. the boot stitch
@@ -578,7 +579,7 @@ one is answering a real question:
 | wear the charlist as a port | 5 | ⚠ ON THE HEAP -- a `ci`'s head is a love value and `g->io` rides the core's `v0..end` span, so the collector forwards it. a C-stack `ci` dangles the moment the parse allocates. |
 | run `p0read1` | 1 | |
 | unwind on partial input | 5 | `p0reads` piles a list's datums on the l stack and folds at the close, so a torn parse leaves the pile and the text slot is no longer `sp[0]`. |
-| hand back what is left | 6 | the residue is `head` PLUS the byte `ti_ungetc` parked off-list. |
+| hand back what is left | 6 | the residue is `head` PLUS the byte `ci_ungetc` parked off-list. |
 
 the 5 that left were the four separate field assignments (now one comma run, the
 shape `p0onto` already uses for its `ti`), the three-step rollback, and a `{}` block
@@ -594,6 +595,10 @@ two ways past the floor, neither of them this rung's:
   every leaf both reads and updates, so it has to live on `g->sp` -- and `g->io` does
   that job today, GC-traced, for free. the three lexers would each grow what
   `p0text` sheds. net could easily be zero.
+  **this is rung 8A, LANDED**: `p0text` 22 -> 10, and the worry was the wrong
+  way round -- the lexers SHED (`ioread1str` -29 -> 23, the other two flat), and
+  what grew was the cursor's own five helpers. the depth, not `g->sp[0]`, is what
+  makes it GC-safe.
 * **give `struct ci` a `prev` word**, so a ci-specific ungetc rewinds onto the list
   instead of parking off it. that retires the residue's second half AND the trap
   above -- but the fd = -4 layout is built from LOVE (prel's `tap` pokes a 5-word
@@ -699,7 +704,7 @@ it stops at a tail that is not a cons, which is the one place a flow does not
 look like a list.
 
 
-### 8. charlist-native p0, and the port that nobody reads -- PLANNED, not started
+### 8. charlist-native p0, and the port that nobody reads -- A LANDED, B planned
 
 gwen's, and it is the arc's real tail: **`g->io` is a painful hack, and the
 polymorphism it was buying is exactly what a charlist-with-a-promise-tail already
@@ -735,10 +740,74 @@ because the read path must drain the WRITE side before parking (`io_refill`'s
 *"the crossover: our unsent ask goes first"*) -- and the thunk closes over the
 port, so it can.
 
-#### two scopes, and only the first stands alone
+#### the decision, TAKEN 2026-07-31: one input representation
 
-**A. p0 goes charlist-native.** the leaf lexers thread a cursor instead of pulling
-from `g->io`. self-contained, gated by rdiff, and it is the rung.
+gwen's, and the alternatives are recorded because the middle one looks prudent and
+is not. what was on the table:
+
+| | **1. one input representation** | **2. readers only** | **3. stop at rung 7** |
+|---|---|---|---|
+| end state | nothing reads a port. ports are `readn` sources + sinks, `see` is gone, `g->io` is OUTPUT-ONLY | text readers walk charlists, devices keep `see`; `g->io` unchanged | today |
+| C deleted | ~130 | ~35 | 0 |
+| concepts deleted | the pushback, the eof bit, `cue?`, the readiness question, `tap` | `tap` | none |
+| spent | the cursor refactor + **124 `(see ..)` sites** + a stdin-ownership answer | the cursor refactor + ~30 sites | nothing |
+
+**1 is chosen.** 2 spends most of the refactor's risk and collects almost none of
+the prize -- `cue?`, `ungetc_buf` and `eof_seen` all survive it, because a device is
+still read a byte at a time, which is the thing this rung exists to stop.
+
+⚠ **A is not a scope you can judge on its own** -- it deletes ~20 lines and buys
+nothing. it is the first move of 1, and the only question was ever whether 1 is
+worth its migration. the 124 sites are milder than the number: 13 are in bao.l,
+11 are doc/proto (dead), and the byte-protocol clusters (lux's wire, kiosko,
+seed's http) are each ONE function wanting "exactly n bytes", which a colist
+gives with `take`. the real risk is stdin, and that is decision 3 below.
+
+#### the two lands, and only the first stands alone
+
+**A. p0 goes charlist-native.** ✅ **LANDED 2026-07-31.** the leaf lexers thread a
+cursor instead of pulling from `g->io`. self-contained, gated by rdiff, and it is
+the rung.
+
+#### what A actually cost, against the ledger below
+
+**the estimate held: exactly 20 code lines net** (love.c 5996 -> 5976, comments
+and blanks excluded), and the shape of it was not quite the shape predicted.
+
+| | code lines |
+|---|---|
+| `p0text` 22 -> **10**: the text slot IS the cursor, so the whole answer is `gxl` | -12 |
+| `ai_z_getc` (16) -> `p0skip` (7) + five cursor helpers (13) | +4 |
+| `ioread1str` 29 -> 23; `ioread1sym` and `p0read1`/`p0reads` flat, each shedding its `zungetc` | -8 |
+| `p0onto` 14 -> `p0chars` + `p0onto` 25: the boot conses its C string | +11 |
+| **`struct ti` and its lane, unplanned** -- `p0onto` was its ONLY constructor | -13 |
+| net | **-20** |
+
+* **the cursor is named by its DEPTH, never by an address.** a collection moves
+  the stack (`p0text`'s own rollback recomputes `topof(g) - depth` and always
+  did), so a `word*` into it dangles exactly like the C local `g->io` existed to
+  avoid. one `uintptr_t d` parameter threads every p0 function; `p0cur` resolves
+  it per access. that is the whole GC discipline of the rung, and it is three
+  lines.
+* **`p0peek2` is why the skipper more than halved.** `#!` was the only two-char
+  decision in the grammar and it owned the pushback; with a list, the second char
+  is one more `B` away and `unget` is simply not advancing. the token lexer's
+  `zungetc` went the same way -- it now just LEAVES the cursor on the terminator,
+  which is also what deleted `p0text`'s residue recovery.
+* **`struct ti` fell out for free**, and that was not in the plan: p0onto's stack
+  `ti` was the only thing that ever made one, so the C-string port is gone.
+  ⚠ the fd = -1 ROW stays, as a hole -- the synth fd is a PROTOCOL number prel
+  pokes by hand (`tap` writes -4, `jug` -2), so deleting the row would renumber
+  its neighbours. `ti_ungetc`/`ti_eof` were the charlist lane's too and are
+  renamed `ci_ungetc`/`ci_eof`.
+* **the boot's cons is invisible in practice.** `p0chars` takes one `Have` for
+  the whole run and then walks backwards, so nothing allocates mid-list and the
+  cells need no root. the predicted ~424KB peak for prel.h on 64-bit is real and
+  nothing noticed: `test_mps2` (32-bit, bakes the egg from source on the emulated
+  M7) and `test_uefi` (the tight lane, and the one that caught rung 7's doubled
+  gulp) are both green, as are test_kernel and the qemu doors.
+* what did NOT move, exactly as the plan said: `struct ci`, `ci_getc`, prel's
+  `tap`, `see`/`cue?`/`ungetc_buf`/`eof_seen`. those are B's.
 
 ⚠ **A DOES NOT PAY FOR ITSELF IN LINES, and the honest ledger matters here** --
 it is about **20 lines** of net deletion:
@@ -763,35 +832,45 @@ so it lives on `g->sp`. that is the discipline p0 already has -- *"control flow 
 the C stack, values on g->sp"* -- applied to one more value, and it is where the
 whole risk of this rung sits. `g->io` did that job today, GC-traced, for free.
 
-#### ⚠ the question to settle before A: WHAT THE BOOT READS
+#### WHAT THE BOOT READS -- asked as a choice, answered as a measurement
 
-p0 has two kinds of input and `g->io` is what lets one lexer take both. that is the
-hack -- and it is *buying* something:
+p0 has two kinds of input, and `g->io` is what lets one lexer take both:
 
 * the **boot** (`p0onto`) walks a C string through a stack `ti`, at **zero
   allocation**. it is called per text; the largest is prel.h at **17,646 bytes**.
 * **`sound0`** takes a love charlist, because the differential needs it to.
 
-a cons here is `struct ai_chain { lvm_t *ap; intptr_t a, b; }` -- **three words**.
-so consing prel.h costs ~424KB on 64-bit and **~212KB on 32-bit**, transient, peak
-(the `p0onto` calls are sequential, so it is the largest text and not the sum).
+so the cursor is ONE charlist and the boot conses its text first. a cons here is
+`struct ai_chain { lvm_t *ap; intptr_t a, b; }` -- **three words** -- so prel.h
+costs ~424KB on 64-bit and ~212KB on 32-bit, transient, and it is the PEAK rather
+than the sum because the `p0onto` calls are sequential.
 
-⚠ **that lands on teensy41, which hatches the egg ON DEVICE** (`ai_egg_`,
-port/teensy41/main.c:275) out of a **384KB pool** -- and its own comment records
-that a 384KB OCRAM2 pool *"starved the bake (the first-silicon blocker)"*. so this
-is not a theoretical budget, it is one the tree has already hit once at this size.
+⚠ **this was written up as a decision about the tiny targets, and that was wrong.**
+the reasoning was: teensy41 hatches the egg on device out of a 384KB pool, so
+212KB would not fit. every part of that is a misread of the comment above the pool
+(port/teensy41/main.c:194-201), which says the opposite:
 
-two ways, and they are the choice:
+* teensy41's arena of FIRST RESORT is the **16 MB external PSRAM** -- *"the same
+  arena size the qemu-M7 port bakes in"*, and port/mps2's baker is 16 MB too.
+* the 384KB OCRAM2 pool is the **no-PSRAM fallback, and it ALREADY cannot bake** --
+  *"the old 384 KB OCRAM2 pool starved the bake (the first-silicon blocker)"*. it is
+  a recorded failure, not a live budget.
+* and teensy41 is **WAKE-FIRST** anyway: it wakes a flash image baked by mps2, and
+  the on-device bake is the ~55s fallback path.
 
-1. **one cursor, a charlist.** the boot conses the text and drops it. simplest,
-   deletes the most, and keeps exactly zero polymorphism. **must be measured on the
-   teensy41 lane before it is committed to.**
-2. **two paths in the leaf lexers** -- a charlist cursor and a C-string cursor. the
-   boot stays allocation-free and every leaf keeps a two-way branch: a miniature of
-   the polymorphism this rung exists to remove, but a CLOSED one, not a vtable.
+so the real budget is 16 MB and the charlist is **1.3% of it**. no decision, no
+fork, and `test_mps2` -- which bakes from source on the emulated M7 at the same
+16 MB -- is a faithful gate for it.
 
-(a third, a `(text . index)` cursor, is worse: it makes `sound0` convert its
-charlist in and re-cons its residue out, per form, which is quadratic over rdiff.)
+⚠ the pattern in the mistake is the one to keep: **a comment's WARNING read as a
+CURRENT CONSTRAINT, without checking which branch is live.** that is now three
+times in this rung's planning (the `tap`/`ci` constructor, the A-scope ledger, and
+this), each one a claim about the tree made from a nearby sentence rather than from
+the code under it.
+
+(a `(text . index)` cursor is the option that stays rejected, on its own merits: it
+makes `sound0` convert its charlist in and re-cons its residue out, per form, which
+is quadratic over rdiff.)
 
 **B. the input half of the port vt goes.** `ungetc_buf`, `eof_seen`,
 `zgetc`/`zeof`/`zungetc` (44), `bio_rpending`, `cue?` (6), `feof`/`fungetc`, and
@@ -865,13 +944,19 @@ either" -- turned out to be no work at all. the estimate that missed was the oth
 direction: rung 7 was written expecting to take `p0text` and `struct ci` with it,
 and neither is p1's to take (the rung's own section says why).
 
-what is left of the plan: rung 2's bit ops, still independent, and **rung 8** --
-p0's lexers going charlist-native, which is what actually retires `p0text`/`ci`.
-7 earned it: it proved the colist carries a real input stream, and rung 8's whole
-case is that the tree ALREADY holds one in C (`io_refill`'s `rbuf`/`rpos`/`rlen`)
-and spends `cue?`, the pushback and the eof bit hiding it behind a byte at a time.
-8's scope A is the same size as 7 and self-contained; its scope B is a 124-site
-migration and a question about who owns the bytes, and A must not wait on it.
+**8A LANDED** (2026-07-31) at exactly its estimated 20 lines, and the ledger's
+honesty was the point -- A was never worth its own size, it was worth GATING B,
+and it does: p0 no longer reads through the port vt, so the vt's input half is
+now free to go. the two things it taught are in 8's section: the cursor is named
+by DEPTH because the collector moves the stack, and a LIST needs no pushback,
+which is what halved the skipper and deleted the residue recovery. `struct ti`
+came out with it, unplanned -- p0onto was its only constructor.
+
+what is left of the plan: rung 2's bit ops, still independent, and **rung 8's
+scope B** -- the input half of the port vt, a 124-site migration and a question
+about who owns stdin's bytes. 7 earned 8 and A cleared its way: the tree ALREADY
+holds a colist in C (`io_refill`'s `rbuf`/`rpos`/`rlen`) and spends `cue?`, the
+pushback and the eof bit hiding it behind a byte at a time.
 
 the predicted hard half was the PORT PROTOCOL, and it was -- but not where the
 plan looked. no hot slot was needed and no lookahead-cons either: the answer was
