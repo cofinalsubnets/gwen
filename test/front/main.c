@@ -152,9 +152,9 @@ static struct ai *fd_flush(struct ai *g) {
 struct ai_port_vt const ai_fd_port_vt =
  { fd_putc, fd_flush, fd_writen, fd_readn };
 
-struct ai_io ai_stdin  = { lvm_port_io, putcharm(0), putcharm(EOF), putcharm(false) };
-struct ai_io ai_stdout = { lvm_port_io, putcharm(1), putcharm(EOF), putcharm(false) };
-struct ai_io ai_stderr = { lvm_port_io, putcharm(2), putcharm(EOF), putcharm(false) };
+struct ai_io ai_stdin  = { lvm_port_io, putcharm(0), putcharm(EOF) };
+struct ai_io ai_stdout = { lvm_port_io, putcharm(1), putcharm(EOF) };
+struct ai_io ai_stderr = { lvm_port_io, putcharm(2), putcharm(EOF) };
 
 // --- the nifs --------------------------------------------------------------
 // ⚠ no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies

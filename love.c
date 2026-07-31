@@ -3161,19 +3161,16 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
 // `trickle` and every interactive reader stand on stdin not gulping past what was
 // asked for. a buffer here would make the repl swallow the line after the one it
 // is reading, and re-open the ownership question doc/io.md part III closed.
-static ai_inline void io_end(struct ai *fc) {
- fc->io->eof_seen = putcharm(true);
- fc->b = EOF; }
 static struct ai *io_refill(struct ai *g) {
  struct ai *fc = ai_core_of(g);
  struct ai_bio *b = bio_of(g, fc->io);
  struct ai_port_vt const *vt = port_vt(fc->io->fd);
- if (!vt->readn) return io_end(fc), g;
+ if (!vt->readn) return fc->b = EOF, g;
  if (!b) {                                       // no buffer: the same lane at n = 1
   unsigned char c;
   intptr_t k = vt->readn(g, &c, 1);
   if (k > 0) fc->b = c;
-  else if (k < 0) io_end(fc);
+  else if (k < 0) fc->b = EOF;
   else fc->b = IO_WOULDBLOCK;
   return g; }
  if (bio_wpending(b)) {                          // the crossover: our unsent ask goes first
@@ -3192,7 +3189,7 @@ static struct ai *io_refill(struct ai *g) {
   b->rlen = putcharm(k), b->rpos = putcharm(1);
   fc->b = (unsigned char) txt(r)[0];
   return g; }
- if (k < 0) return io_end(fc), g;
+ if (k < 0) return fc->b = EOF, g;
  // k == 0 is "would block", and it is the ORDINARY answer now: every quiet device
  // on every frontend comes through here, so every test that reads anything walks
  // it (test/front/io.l gates the sharp case, where the fd said ready and then said
@@ -3224,7 +3221,6 @@ static ai_inline struct ai *zungetc(struct ai*g, int c) {
  struct ai *fc = ai_core_of(g);
  struct ai_io *i = fc->io;
  i->ungetc_buf = putcharm(c);
- i->eof_seen = putcharm(false);
  return fc->b = c, g; }
 static struct ai *zputc(struct ai*g, int c) {
  if (!ai_ok(g)) return g;
@@ -4072,7 +4068,6 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
   io->io.ap = lvm_port_io;
   io->io.fd = putcharm(fd);
   io->io.ungetc_buf = putcharm(EOF);
-  io->io.eof_seen = putcharm(false);
   io->rbuf = io->wbuf = 0;                     // never dressed (io_refill/zputc dress lazily)
   io->rpos = io->rlen = io->wlen = putcharm(0);
   *--g->sp = (word) tagthread(k, n);            // stack slot reserved by the +1 in have()

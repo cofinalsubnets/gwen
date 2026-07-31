@@ -894,8 +894,9 @@ the code under it.
 makes `sound0` convert its charlist in and re-cons its residue out, per form, which
 is quadratic over rdiff.)
 
-**B. the input half of the port vt goes.** `ungetc_buf`, `eof_seen`,
-`zgetc`/`zeof`/`zungetc` (44), `bio_rpending`, `cue?` (6), `feof`/`fungetc`, and
+**B. the input half of the port vt goes.** `ungetc_buf`, ~~`eof_seen`~~ (gone in
+the device floor's rung 2b), `zgetc`/`zeof`/`zungetc` (44), `bio_rpending`,
+`cue?` (6), `feof`/`fungetc`, and
 `io_refill`'s re-serialization -- all replaced by ONE nif: blocking-for-first,
 take-what-is-ready, answering a string. `sip`/`drink`/`slurp`/`end?` become list
 ops in love, and `await` stays as the park primitive (it was already pulled out of
@@ -1311,6 +1312,41 @@ inle, virt, mps2 or teensy -- `boot.sh` runs qemu `</dev/null` on purpose (a
 non-definite stdin hangs the harness). their `readn` is exercised by dispatch and
 by review, not by a byte arriving. that was equally true of the `getc` it replaced.
 
+### the port head, three words -- ✅ rung 2b, 2026-07-31
+
+`eof_seen` is gone, and with it the idea that **the end is a state a port
+remembers**. it never had to be: a spent device answers `-1` to every ask, and
+every device in the tree does, so the latch only ever agreed with the thing that
+set it. that promise moved to where it can be enforced -- love.h's `readn`
+contract now states it as an obligation on the DEVICE, and test/front/io.l's law 3
+is the witness that reddens if a frontend ever answers the end once and then goes
+quiet.
+
+what it cost is the layout, exactly as scheduled: `struct ai_io` 4 words -> **3**
+(so `struct ai_bio` 9 -> 8, `struct ci` 5 -> 4, `struct to` 6 -> 5), and prel's
+`tap`/`jug`/`slurp` renumbered to match (prel.l:253-259). ⚠ **the image did not
+care**, as the rung-1 note predicted: it is binary-specific (love.c's anchor +
+refsym check), so an image laid by any other binary is refused and falls back to a
+normal boot. `test_wake`, `test_mps2_wake` and `test_dist` all green with no bump.
+
+shipped delta: **-9 lines** against an estimate of -25, and the estimate was the
+honest one to miss -- nine of the sites are a single-line static-port initializer
+that stays a single line. the ledger this rung actually moves is a word off every
+port and a state off the model, not a line count. ⚠ `port/rp2040/main.c` still
+names `eof_seen`; it is dead (pre-rename `struct g` API, no in-tree build) and
+stayed untouched here for the same reason rung 2 left it alone.
+
+⚠ **and it turned up a GC bug that was never this arc's.** losing 24 bytes moved
+allocation enough that the aarch64 K_TEST kernel jumped into the heap, at `-m 512M`
+and nowhere else. `obin_elem` held `g->ip` in an unrooted C local across
+`ai_big_binop`, which allocates: the collection promotes the running thread and
+updates `g->ip`, then the restore writes the from-space address back, so the next
+dispatch calls the forwarding pointer sitting there. one `avec` fixed it. it is
+generic C on every target and had survived every gate -- `AI_GC_CHECK` verifies the
+COLLECTOR and this is the MUTATOR breaking the rooting contract, so nothing looks
+for it. the gate that would find its siblings (a GC-stress build in the
+`AI_GC_CHECK` mould) is proposed and unbuilt.
+
 ### the boundary principle -- keep, it is still right
 
 > the core knows **generic-apply + scheduler-yield**. "bytes out of an fd" is a
@@ -1556,14 +1592,6 @@ choosing park-or-block. so:
 ~~`empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all
 seven frontends, so `empty?`, `lvm_feof`, `zeof` and nine `*_eof` bodies went with the
-`eof` vt slot. ⚠ what it left behind is worth knowing before someone rediscovers it:
-**`eof_seen` now has no reader anywhere in the tree.** every one of them was an `eof`
-method. the cost of deleting it is ONE thing and not the obvious one: `struct ai_io`'s
-layout is a shape two languages agree on -- prel's `tap` and `jug` build ports word by
-word with `poke` (prel.l:254,256) and `slurp` peeks a jug's backing by index (:259) --
-so dropping a word renumbers all of it. ⚠ **the image does NOT care**, which an earlier
-draft of this line got wrong: it is binary-specific (love.c:5314-5320, the anchor +
-refsym check), so an image laid by any other binary is already refused and falls back to
-a normal boot. no format bump, and `test_encver` is about x86 instruction encoding, not
-this. scheduled as **rung 2b**, after `readn` becomes the sole read door and the only
-writers left are `io_refill` and `ci_readn`.
+`eof` vt slot. ⚠ what it left behind was worth knowing: **`eof_seen` had no reader
+anywhere in the tree** -- every one of them was an `eof` method -- and it went in rung
+2b (below).

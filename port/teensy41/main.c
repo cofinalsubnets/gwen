@@ -62,10 +62,10 @@ static struct ai *fd_putc(struct ai *g, int c) {
 
 static struct ai *fd_flush(struct ai *g) { return g; }   // LPUART has no buffer here
 
-struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF) };
+struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 // No separate error stream; route err to the console too.
-struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };  // no writen: per-byte out
 
 // --- GPIO builtins --------------------------------------------------------

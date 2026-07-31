@@ -57,10 +57,10 @@ static intptr_t _readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 static struct ai *_putc(struct ai *g, int c) { return cb_putc(kcb, c), g; }
 static struct ai *_flush(struct ai *g) { return g; }
 
-struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
-struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF) };
+struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 // No separate error stream on the device; the scare face lands on the LCD too.
-struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 struct ai_port_vt const ai_fd_port_vt = { _putc, _flush, NULL, _readn };
 
 // --- the playdate nifs ------------------------------------------------------

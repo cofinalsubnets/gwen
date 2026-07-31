@@ -60,7 +60,9 @@
    _ (shut p)
    _ (assert ((see p) = -1)))
 
-; and the end survives a re-read: eof_seen latches, so the second ask agrees.
+; and the end survives a re-read -- ⚠ a DEVICE law, not a port one: nothing above
+; readn remembers the end, so a shut device owes -1 to every ask (love.h's readn
+; contract). this reddens if a device ever answers the end once and then goes quiet.
 (: p (dev ())
    _ (shut p)
    _ (assert ((see p) = -1) ((see p) = -1)))

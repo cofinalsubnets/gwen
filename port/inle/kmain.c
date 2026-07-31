@@ -149,9 +149,9 @@ struct k_source {
 
 // Slot 0: PS/2 keyboard. Drains what the interrupt queued and answers 0 when
 // there is nothing -- never the end, because the kb queue is endless on bare
-// metal, so eof_seen never latches for slot 0. It used to SPIN here (`while
-// ((b = kqpop()) < 0) fbdraw(), k_wait();`), computing this same answer and
-// throwing it away; the scheduler owns that wait now.
+// metal. It used to SPIN here (`while ((b = kqpop()) < 0) fbdraw(), k_wait();`),
+// computing this same answer and throwing it away; the scheduler owns that wait
+// now.
 static intptr_t kb_readn(int fd, unsigned char *dst, uintptr_t n) {
   (void) fd;
   uintptr_t k = 0;
@@ -191,12 +191,12 @@ static struct ai *fd_flush(struct ai *g) {
   return g; }
 
 struct ai_io ai_stdin = { .ap = lvm_port_io,
-                        .fd = putcharm(0), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
+                        .fd = putcharm(0), .ungetc_buf = putcharm(EOF), };
 struct ai_io ai_stdout = { .ap = lvm_port_io,
-                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
+                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), };
 // No separate error stream; route err to the same fd as out (the console).
 struct ai_io ai_stderr = { .ap = lvm_port_io,
-                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false), };
+                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), };
 
 struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };  // writen: the promised P3b, when ramfs/files need it
 

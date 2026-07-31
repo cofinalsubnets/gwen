@@ -254,18 +254,9 @@ struct ai {
      lvm_t *ap;
      ai_word fd;
      ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
-     // ⚠ eof_seen HAS NO READER LEFT. Every one of them was an `eof` vt method,
-     // and the whole lane went with `empty?` (zero call sites in the tree). It is
-     // written by the getc lanes and by io_refill, and read by nobody. What it
-     // costs to delete is ONE thing and it is not the obvious one: this struct's
-     // LAYOUT is a shape two languages agree on -- prel's `tap` and `jug` build
-     // ports word by word with `poke` (love/prel.l), and `slurp` peeks a jug's
-     // backing by index -- so dropping a word renumbers all of that. The IMAGE
-     // does NOT care: it is binary-specific (the anchor + refsym check below), so
-     // an image laid by any other binary is refused and falls back to a normal
-     // boot. Scheduled as its own rung after `readn` becomes the sole read door,
-     // when the only writers left are io_refill and ci_readn.
-     ai_word eof_seen;
+     // ⚠ three words, and prel's tap/jug poke this layout word by word while
+     // slurp peeks a jug's backing by index (love/prel.l) -- a word added here is
+     // a renumbering there.
     } *io; }; }; };
  intptr_t end[]; };
 
@@ -298,7 +289,9 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 //     (0 = no room without an alloc -- the caller makes one byte of progress
 //     through putc, which may grow/GC, then retries the bulk lane).
 //   readn: drink up to n waiting bytes into dst WITHOUT blocking;
-//     >0 = bytes, 0 = nothing waiting right now, -1 = end of stream.
+//     >0 = bytes, 0 = nothing waiting right now, -1 = end of stream. ⚠ THE END IS
+//     STABLE: nothing above the device remembers it, so a spent device owes -1 to
+//     every ask, not just the first (test/front/io.l's law 3 is the witness).
 // ⚠ READN IS THE WHOLE READ DOOR. There was a per-byte `getc` beside it and its
 // nine implementations were nine spellings of one fact -- five of them SPINNING
 // on a probe they already had, which is how a quiet fd stopped the entire vm

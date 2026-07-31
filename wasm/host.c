@@ -76,12 +76,12 @@ static intptr_t _readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 // fd values are nominal: all I/O routes through the vtable regardless. We
 // just need fd >= 0 so the dispatcher picks ai_fd_port_vt over a synth slot.
 struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0),
-                         .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+                         .ungetc_buf = putcharm(EOF) };
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1),
-                         .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+                         .ungetc_buf = putcharm(EOF) };
 // No separate error stream in the browser host; route err to out's fd.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1),
-                         .ungetc_buf = putcharm(EOF), .eof_seen = putcharm(false) };
+                         .ungetc_buf = putcharm(EOF) };
 struct ai_port_vt const ai_fd_port_vt = { _putc, _flush, NULL, _readn };  // no writen: per-byte out
 
 // (exit n) -- a frontend nif, like main.c's and kmain.c's. The wasm host needs

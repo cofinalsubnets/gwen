@@ -104,9 +104,9 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 struct ai_port_vt const ai_fd_port_vt =
  { fd_putc, fd_flush, fd_writen, fd_readn };
 
-struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF), putcharm(false) };
-struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF), putcharm(false) };
-struct ai_io ai_stderr = { lvm_port_io, putcharm(STDERR_FILENO), putcharm(EOF), putcharm(false) };
+struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF) };
+struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF) };
+struct ai_io ai_stderr = { lvm_port_io, putcharm(STDERR_FILENO), putcharm(EOF) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that ai_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live

@@ -250,13 +250,18 @@
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(())))
+; ⚠ THE PORT HEAD IS THREE WORDS -- ap, fd, ungetc -- and both languages know it:
+; these build one word by word, C declares it (love.h's struct ai_io). each poke
+; ANSWERS THE CELL it wrote, so a `poke -1` walks backwards from the last word to
+; the first, and the count of pokes is the count of words: a tap spins 4 (the head
+; plus its charlist), a jug 5 (the head plus a backing and a fill).
 (: (tap cl)
- (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke -1 0 (poke 4 cl (spin 5))))))
+ (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke 3 cl (spin 4)))))
  (jug _)                                          ; the output dual of `tap`: say INTO it, slurp it back OUT
-  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 0 (poke -1 "  " (poke 5 0 (spin 6)))))))
+  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 "  " (poke 4 0 (spin 5))))))
  (sip o) (see o)                                  ; draw ONE unit (pairs with slurp = all)
  ; slurp drains a vessel to a value: a jug reads its backing buffer, a tap drains via see.
- (slurp o) (? (= -2 (peek 1 o)) (snip (peek 4 o) 0 (peek 5 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 4 is a string too, so a string? probe would lie
+ (slurp o) (? (= -2 (peek 1 o)) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 3 is a string too, so a string? probe would lie
               (: (rl i) (: c (see i) (? (= c -1) () (link c (rl i)))) (string (rl o))))  ; (pre-opfix: no ! here)
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; the help status reader. ONE bit reaches a help now -- scare (1). the more bit
