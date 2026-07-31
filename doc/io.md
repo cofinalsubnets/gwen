@@ -1501,6 +1501,12 @@ the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung mov
 seven frontends, so `empty?`, `lvm_feof`, `zeof` and nine `*_eof` bodies went with the
 `eof` vt slot. ⚠ what it left behind is worth knowing before someone rediscovers it:
 **`eof_seen` now has no reader anywhere in the tree.** every one of them was an `eof`
-method. it is not free to delete either, because `struct ai_io`'s layout is a shape two
-languages agree on -- prel's `tap` and `jug` poke it word by word -- so it wants a rung
-that already owns the layout, and an encver bump. love.h says so at the field.
+method. the cost of deleting it is ONE thing and not the obvious one: `struct ai_io`'s
+layout is a shape two languages agree on -- prel's `tap` and `jug` build ports word by
+word with `poke` (prel.l:254,256) and `slurp` peeks a jug's backing by index (:259) --
+so dropping a word renumbers all of it. ⚠ **the image does NOT care**, which an earlier
+draft of this line got wrong: it is binary-specific (love.c:5314-5320, the anchor +
+refsym check), so an image laid by any other binary is already refused and falls back to
+a normal boot. no format bump, and `test_encver` is about x86 instruction encoding, not
+this. scheduled as **rung 2b**, after `readn` becomes the sole read door and the only
+writers left are `io_refill` and `ci_readn`.
