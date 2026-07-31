@@ -202,7 +202,7 @@ lvm_t lvm_kcall,
  lvm_cplx, lvm_Cp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,
  lvm_bxor,  lvm_bsr,    lvm_bsl,    lvm_snip,
  lvm_link,   lvm_cap,  lvm_cup,    lvm_puts,
- lvm_getc,  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
+ lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
  lvm_sort,  lvm_tally,
  lvm_put, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
  lvm_unc, lvm_poke, lvm_peek,
@@ -3111,8 +3111,6 @@ lvm(lvm_pin) { Sp[0] = putcharm(ai_pin(g, Sp[0])); Ip += 1; return Continue(); }
 //     ioprintf (integer + char formats only -- no %s).
 //   * lvm edges Pack/Unpack and re-read bytes each step (lvm_dot/_fputs/_fputc),
 //     zflush at the close; a scare mid-print stops cleanly (ai_ok gates).
-//   * the reader half is symmetric: ioread1op/ioparse keep the partial parse in
-//     parked sp slots and re-read the growing buffer (grbufg/str0) after each GC.
 // The lam_* lambda-canonicalization helpers are PURE (no io, no buffer): they
 // cannot open an edge, and lam_canon reserves its cells up front (alloc-free
 // rebuild), so even ioput_fn_body -> lam_canon keeps the surrounding op atomic.
