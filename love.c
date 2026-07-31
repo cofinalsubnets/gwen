@@ -3179,7 +3179,9 @@ static struct ai *io_refill(struct ai *g) {
  // ⚠ NEVER WAIT HERE. this runs under lvm_fgetc, which is ONE op -- a blocking
  // poll stops the whole VM, not the reading task, so every other task starves on
  // one quiet fd. reachable when a second process shares the description and wins
- // the race (test/host/pty.l injects exactly that). hand it back and let the
+ // the race. ⚠ THIS BRANCH IS UNTESTED, knowingly (doc/io.md): no in-process
+ // schedule can reach it, and gating it wanted either a fault hook in the shipped
+ // binary or a test-only frontend with its own vt. hand it back and let the
  // caller park, which is what its own readiness guard already does.
  return fc->b = IO_WOULDBLOCK, g; }
 static ai_inline struct ai *zgetc(struct ai*g) {

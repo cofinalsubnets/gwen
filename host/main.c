@@ -108,25 +108,6 @@ static intptr_t fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
  return (intptr_t) i; }
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  intptr_t fd = getcharm(g->io->fd);
- // FAULT INJECTOR for doc/io.md defect 5 -- LOVE_FAULT_EAGAIN=<n> makes the nth
- // readn ON A TTY model a COMPETING READER on a shared fd: swallow whatever is waiting and
- // answer "would block". that is the poll-said-ready-then-read-said-no race, which
- // NO in-process schedule can reach (lvm_fgetc's guard and its refill are one op,
- // and the vm yields only at an Ap) but a second process sharing the open file
- // description can. before the fix this hung the whole VM; test/host/pty.l gates it.
- // ⚠ it fires only on a TTY, and must: on a regular file poll always says
- // readable, so the retry succeeds and nothing is proved. targeting the tty
- // rather than an nth-call count keeps the gate independent of how many times
- // the script itself was read.
- static int fault = -2;
- if (fault == -2) { char const *s = getenv("LOVE_FAULT_EAGAIN"); fault = s ? atoi(s) : 0; }
- if (fault > 0 && isatty((int) fd) && --fault == 0) {
-  int fl0 = fcntl((int) fd, F_GETFL);
-  fcntl((int) fd, F_SETFL, fl0 | O_NONBLOCK);
-  unsigned char sink[256];
-  while (read((int) fd, sink, sizeof sink) > 0);   // the other reader takes it all
-  fcntl((int) fd, F_SETFL, fl0);
-  return 0; }
  int fl = fcntl((int) fd, F_GETFL);
  fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
  ssize_t k = read((int) fd, dst, n);

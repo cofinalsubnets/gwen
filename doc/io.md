@@ -1149,21 +1149,50 @@ whole VM on one fd.
 can reach it: `lvm_fgetc`'s readiness guard and its refill are ONE op, and the vm
 yields only at an `Ap`, so nothing can run between "poll said ready" and "read said
 no". what CAN reach it is a second process sharing the open file description and
-winning the race. host/main.c's `fd_readn` now injects exactly that under
-`LOVE_FAULT_EAGAIN` -- on a TTY, and it must be a tty, because on a regular file
-poll always says readable so the retry succeeds and nothing is proved.
+winning the race.
 
-armed against the pty master, with a ticker task alongside: **the whole process
-hung.** ticker, main task, everything -- not just the reader. that is the failure,
-demonstrated, where before it was inspection.
+that was demonstrated once, under a temporary fault hook in `fd_readn`: armed
+against a pty master with a ticker task alongside, **the whole process hung** --
+ticker, main task, everything, not just the reader. so the failure was real, not
+inferred.
 
 **the fix is the answer to open question 2: a waiting reader PARKS.** `io_refill`
 no longer waits at all -- on a would-block it answers `IO_WOULDBLOCK` (a sentinel
 distinct from EOF and from any byte), and `lvm_fgetc` parks the task on the fd with
 `Ip` unadvanced, so the op re-runs and re-checks readiness. that is precisely what
 its own guard already did; the bulk lane had simply grown a second, worse answer to
-the same question. gated in test/host/pty.l, and **the gate was checked to fail**
-against the unfixed core.
+the same question.
+
+#### ⚠ AND THE BRANCH IS UNTESTED. knowingly, and this is the open debt
+
+the fault hook was removed (2026-07-31, gwen's call) and is not coming back in that
+form. **love must not carry a feature whose only purpose is to let a test break
+it** -- neither an env var read by the shipped binary nor a nif on the public
+surface is acceptable language surface to buy a test.
+
+so `IO_WOULDBLOCK` is a live branch with no gate. what that costs: if the park were
+wrong -- `Ip` advanced so the op never re-runs, or the wrong fd recorded -- nothing
+would catch it, and the symptom would be a task that never resumes rather than the
+VM hang it replaced. partial cover: the pty two-task gate exercises real parking
+and resumption on real fds, but through `lvm_fgetc`'s own guard, never through the
+refill's new answer.
+
+**the way to regain it, when we come back:** a TEST-ONLY FRONTEND. `liblove.a`
+deliberately excludes `host/main.c` (host/build.mk:36), and `ai_fd_port_vt` --
+`readn` included -- lives in main.c, so **the port vt is already the frontend's
+responsibility, not the runtime's.** a small C frontend that links the archive and
+supplies its own vt, whose `readn` answers "would block" on cue, reproduces the
+condition with the fault in TEST code and nothing added to love. the cost is a new
+frontend plus a build target, which is why it is a revisit and not a patch.
+⚠ rejected alternative, recorded so it is not re-proposed: a genuine two-process
+race needs no surface but is non-deterministic, and a gate that usually reddens
+teaches people to ignore it.
+
+a cheaper partial, also not built: a structural check in `vmret`'s spirit --
+`ai_wait_fd` now has exactly two call sites, both in the scheduler (love.c:2696,
+2698), so a build-time assertion that no io-path function calls it would pin that
+the blocking call cannot come back. ⚠ it does NOT cover what the deleted test
+covered: it gates the cause, never the effect.
 
 ### the boundary principle -- keep, it is still right
 
@@ -1395,9 +1424,10 @@ choosing park-or-block. so:
    path B's entire motivation, `select` loses its justification with it, and what
    remains of part II is defects 2, 4 and 5 on their own merits rather than as
    one project.
-2. ~~fix defect 5~~ ✅ **DONE 2026-07-31** -- reproduced under fault injection (it
-   hung the whole vm), fixed by parking instead of waiting, gated both ways. it
-   answered question 2 by doing, as predicted.
+2. ~~fix defect 5~~ ✅ **DONE 2026-07-31** -- reproduced under a temporary fault
+   hook (it hung the whole vm), fixed by parking instead of waiting. it answered
+   question 2 by doing, as predicted. ⚠ the hook is GONE and the branch is
+   UNTESTED -- the open debt, above.
 3. ~~then 8B~~ ✅ **DONE 2026-07-31, and it needed NO CELL.** see below.
 4. **defect 2** (the `-1` sentinel) rides along with 8B where it touches, and is
    not worth a pass of its own.
