@@ -10,6 +10,7 @@
 #include <emscripten.h>
 #include <time.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdnoreturn.h>
 
 // the egg's four texts, one per ai_egg_ argument (love.h): the boot stitches the
@@ -52,7 +53,9 @@ static const char src_kanren[] =
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the
 // whole test corpus (test_wasm) runs in one eval and prints ~25K of dots +
-// the summary. Output past the cap is dropped (never overruns, see _putc).
+// the summary. _writen lands what fits and answers the count, so an overflowing
+// eval truncates rather than overrunning -- rung 6 of the device floor owes this
+// a LOUD edge (doc/io.md), which is a dropped-count, not a bigger number.
 static char     out_buf[1 << 18];
 static uint32_t out_len;
 
@@ -63,9 +66,12 @@ uintptr_t ai_clock(void) {
 
 // --- ports ----------------------------------------------------------------
 // Output goes to out_buf; the page reads it back through the exports below.
-static struct ai *_putc(struct ai *g, int c) {
-  if (out_len < sizeof out_buf) out_buf[out_len++] = (char) c;
-  return g; }
+static intptr_t _writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+  (void) fp;
+  uintptr_t room = sizeof out_buf - out_len, k = room < n ? room : n;
+  memcpy(out_buf + out_len, src, k);
+  out_len += (uint32_t) k;
+  return (intptr_t) k; }
 static struct ai *_flush(struct ai *g) { return g; }
 
 // No real stdin: every read is at the end (-1), never merely quiet -- the page
@@ -82,7 +88,7 @@ struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1),
 // No separate error stream in the browser host; route err to out's fd.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1),
                          .ungetc_buf = putcharm(EOF) };
-struct ai_port_vt const ai_fd_port_vt = { _putc, _flush, NULL, _readn };  // no writen: per-byte out
+struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn };
 
 // (exit n) -- a frontend nif, like main.c's and kmain.c's. The wasm host needs
 // it for the same reason they do: the test harness aborts a failed assert with

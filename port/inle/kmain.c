@@ -129,7 +129,9 @@ static void limine_to_kboot(void) {
 // shim that routes each call through k_sources[fd]. NULL slots mean
 // "no method"; the dispatcher skips them (writes discard, reads return
 // the end, ready returns false). The read side is bulk; the write side is
-// still per-byte and gains a writen when ramfs/files need one. `state` is
+// still per-byte HERE, one fd deeper than the vt's writen -- a console takes
+// bytes one at a time either way, and ramfs/files can grow a bulk slot beside
+// it when the copy is worth saving. `state` is
 // per-instance scratch (ramfs uses it for the buffer pointer; statics
 // like keyboard/serial leave it null).
 #define k_sources_max 32
@@ -179,11 +181,11 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   int fd = getcharm(g->io->fd);
   if (fd < 0 || fd >= k_sources_max || !k_sources[fd].readn) return -1;
   return k_sources[fd].readn(fd, dst, n); }
-static struct ai *fd_putc(struct ai *g, int c) {
-  int fd = getcharm(g->io->fd);
-  if (fd >= 0 && fd < k_sources_max && k_sources[fd].putc)
-    k_sources[fd].putc(fd, c);
-  return g; }
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+  int fd = getcharm((*fp)->io->fd);
+  if (fd < 0 || fd >= k_sources_max || !k_sources[fd].putc) return (intptr_t) n;
+  for (uintptr_t k = 0; k < n; k++) k_sources[fd].putc(fd, src[k]);
+  return (intptr_t) n; }
 static struct ai *fd_flush(struct ai *g) {
   int fd = getcharm(g->io->fd);
   if (fd >= 0 && fd < k_sources_max && k_sources[fd].flush)
@@ -198,7 +200,7 @@ struct ai_io ai_stdout = { .ap = lvm_port_io,
 struct ai_io ai_stderr = { .ap = lvm_port_io,
                          .fd = putcharm(1), .ungetc_buf = putcharm(EOF), };
 
-struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };  // writen: the promised P3b, when ramfs/files need it
+struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn };
 
 // Override the weak g.c default; route close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.

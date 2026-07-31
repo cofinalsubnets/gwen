@@ -950,9 +950,9 @@ lines: `(rd pend)` answers `(byte next-pend)` where `-1` means "nothing pending"
 while `go` tests `(< c 0)` for end-of-input -- **the same sentinel meaning two
 things in one function**, presence encoded in the net. over a colist neither is
 expressible: the byte you did not want is still in the stream you did not walk past,
-and the end is `()`. and `unsee` -- the C ungetc nif, plus the `ungetc` slot in the
-vt (4 of its 7 slots are input) -- has NO users in the tree outside `test/io.l`,
-which tests it.
+and the end is `()`. and `unsee` -- the C ungetc nif; the vt slot behind it went in
+the device floor's rung 1 -- has NO users in the tree outside `test/io.l`, which
+tests it.
 
 **⚠ THE HOLE, and it is the reason B is still not started.** `in` as a colist bound
 at boot does not answer ownership -- it MOVES it into "how much does one force
@@ -1175,10 +1175,13 @@ helpers, and by the two nifs that park without a read to answer them. the read
 path no longer asks it at all. the doc's claim that `cue?` hardcodes `ai_stdin`
 is only half true; it defaults there for a non-port.
 
-**4. the write side never yields. -- STANDS, unchanged.** `zputc`
-(love.c:3195-3211) -> `io_wdrain` (3144) -> `fd_writen` (host/main.c:100-108), a
-bare `while (i<n) write(...)` with no poll and no park. a blocking write to a
-flow-controlled fd stalls the whole VM.
+**4. the write side never yields. -- HALF FIXED, rung 3, 2026-07-31.** `fd_writen`
+is still a bare `while (i<n) write(...)` with no poll and no park, so a blocking
+write to a flow-controlled fd still stalls the whole VM -- that half is rung 4's.
+what rung 3 took is the half NOBODY had named: the path above it threw the count
+away, so the bytes a stalled or dying fd refused were silently dropped instead of
+kept. a residue survives now, which is the thing rung 4 needs to exist before
+yielding is even meaningful.
 
 ### 5. the buffered read lane BLOCKED where the byte lane PARKS -- ✅ FIXED 2026-07-31
 
@@ -1346,6 +1349,50 @@ generic C on every target and had survived every gate -- `AI_GC_CHECK` verifies 
 COLLECTOR and this is the MUTATOR breaking the rooting contract, so nothing looks
 for it. the gate that would find its siblings (a GC-stress build in the
 `AI_GC_CHECK` mould) is proposed and unbuilt.
+
+### writen is the whole write door -- ✅ rung 3, 2026-07-31
+
+the `putc` slot is gone and the vt is **three slots** -- `flush`, `writen`,
+`readn` -- which is the shape this whole arc was aimed at. every implementation
+of `putc` was its own `writen` at n = 1, and the six freestanding frontends had
+no `writen` at all, so each traded a per-byte body for a bulk one.
+
+the slot's REAL job turned out to be elsewhere, and naming it is what let it go:
+`putc` was **the only write path allowed to allocate**. that is why the bulk lane
+answered "0 = no room without an alloc" and bounced back through it. `writen`
+allocates now -- it takes the frame BY ADDRESS (`struct ai **`, the shape
+`obin_elem` already uses) so a scare rides out -- and there is nothing left to
+bounce to. ⚠ the grow and the copy still cannot share a call: `str0` collects and
+`src` may be the very heap string being printed, so `to_writen` grows, answers 0,
+and lands nothing; the caller re-derives and comes back. zputc's one-byte lane
+holds src in a C local, which the GC never moves, so its second ask always lands.
+
+**two silent bugs closed, and each has a law that reddens on exactly its own fix**
+(test/front/io.l laws 7 and 8, verified by putting each bug back):
+
+- **truncation.** `io_wdrain` zeroed the pending length BEFORE the stroke and
+  threw `writen`'s count away, so a device that took part of a run reported a
+  clean write of bytes it never got. the ordinary EPIPE/ENOSPC path, on every
+  port. the residue slides to the front of the buffer now and the next drain
+  carries it; `zputc` grows the backing when a drain leaves it full, so nothing
+  overruns and nothing is dropped.
+- **shuffling.** `lvm_fputs` had two lanes -- a direct `writen` stroke and a
+  buffering `zputc` fallback -- and took the direct one even with bytes already
+  parked in the port. a refusal mid-string put byte 0 in the buffer and sent
+  bytes 1.. straight past it. unreachable on a blocking host fd (once `write(2)`
+  fails it keeps failing, so everything buffers), and routine the moment rung 4
+  makes a refusal ordinary. the direct stroke is now only for an empty buffer.
+
+also gone: host's stdout `fflush` dance (one door, no ordering to keep -- stdout
+routes through `fwrite` for the buffering the static port cannot have), `noop_putc`,
+`to_putc`, and `io_wdrain`'s per-byte fallback loop.
+
+shipped delta: **+26 lines**, against an estimate of -12. the estimate assumed
+deleting a slot subtracts; it doesn't when six of the eight frontends have to
+GROW the surviving one, and when the residue needs `bio_wgrow` and a real loop
+where a discard needed neither. judge the rung on the two bugs and the slot, which
+is what the plan said to do -- the line count was the part of the plan that was
+wrong.
 
 ### the boundary principle -- keep, it is still right
 

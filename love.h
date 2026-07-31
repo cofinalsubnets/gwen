@@ -283,12 +283,17 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 
 // Port vtable -- what a DEVICE owes, and nothing else. One shape covers both
 // directions. A NULL slot means NO METHOD, and the dispatcher answers for it:
-// no readn reads END, no writen discards. None may allocate or block the
-// scheduler, and none touches ungetc_buf (the generic layer above owns it).
-//   writen: land up to n bytes from src in one motion; returns how many landed
-//     (0 = no room without an alloc -- the caller makes one byte of progress
-//     through putc, which may grow/GC, then retries the bulk lane).
-//   readn: drink up to n waiting bytes into dst WITHOUT blocking;
+// no readn reads END, no writen discards. Neither blocks the scheduler, and
+// neither touches ungetc_buf (the generic layer above owns it).
+//   writen: land up to n bytes from src in one motion; answers how many landed
+//     (0 = no room right now -- the caller KEEPS THE RESIDUE and comes back).
+//     ⚠ IT MAY ALLOCATE, which is why it takes the frame BY ADDRESS: a string
+//     sink grows its backing, so a scare has to ride out and src may MOVE. Land
+//     nothing after an allocating step -- grow, answer 0, and let the caller
+//     re-derive its source; the one-byte lane's src is a C local, so it lands.
+//   readn: drink up to n waiting bytes into dst WITHOUT blocking; it fills a
+//     caller's buffer and so can never allocate, which is why it takes the frame
+//     by value.
 //     >0 = bytes, 0 = nothing waiting right now, -1 = end of stream. ⚠ THE END IS
 //     STABLE: nothing above the device remembers it, so a spent device owes -1 to
 //     every ask, not just the first (test/front/io.l's law 3 is the witness).
@@ -304,10 +309,16 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 // own head words -- while the synthetic rows answered a no-op, so a pushback onto
 // a jug was DISCARDED although zgetc reads ungetc_buf before it dispatches. One
 // generic zungetc (love.c) replaced the lot and closed that asymmetry.
+// ⚠ WRITEN IS THE WHOLE WRITE DOOR, for the reason readn is the whole read one.
+// A per-byte `putc` sat beside it and every implementation was its writen at
+// n = 1 -- while the slot's real job was elsewhere: it was the ONLY write path
+// allowed to allocate, so the bulk lane answered "no room without an alloc" and
+// bounced back through it. That cost a slot, a retry protocol, and a discarded
+// return value in io_wdrain that dropped the tail of a buffer on a mid-stroke
+// write error. writen allocates now, so there is nothing left to bounce to.
 struct ai_port_vt {
- struct ai*(*putc)(struct ai*, int),
-         *(*flush)(struct ai*);
- intptr_t (*writen)(struct ai*, unsigned char const*, uintptr_t),
+ struct ai*(*flush)(struct ai*);
+ intptr_t (*writen)(struct ai**, unsigned char const*, uintptr_t),
           (*readn)(struct ai*, unsigned char*, uintptr_t); };
 
 // only 2 tag bits on 32 bit so we can only have four of these

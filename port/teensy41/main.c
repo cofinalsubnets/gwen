@@ -55,10 +55,12 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   while (k < n && serial_rx_ready()) dst[k++] = (unsigned char) serial_getc();
   return (intptr_t) k; }
 
-static struct ai *fd_putc(struct ai *g, int c) {
-  if (c == '\n') serial_putc('\r');     // cook LF -> CRLF for terminals
-  serial_putc(c);
-  return g; }
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+  (void) fp;
+  for (uintptr_t k = 0; k < n; k++) {
+    if (src[k] == '\n') serial_putc('\r');   // cook LF -> CRLF for terminals
+    serial_putc(src[k]); }
+  return (intptr_t) n; }
 
 static struct ai *fd_flush(struct ai *g) { return g; }   // LPUART has no buffer here
 
@@ -66,7 +68,7 @@ struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = p
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 // No separate error stream; route err to the console too.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
-struct ai_port_vt const ai_fd_port_vt = { fd_putc, fd_flush, NULL, fd_readn };  // no writen: per-byte out
+struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn };
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.

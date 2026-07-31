@@ -100,4 +100,40 @@
    _ (assert (string cl = "one")
              (string cl = "one")))      ; forced twice, same answer: `once` holds
 
+; --- law 7: a short write loses nothing ---------------------------------------
+; ⚠ THE ONE THIS FRONTEND WAS BUILT FOR that no gate could reach before. io_wdrain
+; used to zero the pending length BEFORE the stroke and throw writen's count away,
+; so a device that took part of a run reported a clean write of bytes it never got
+; -- silent truncation, on every port, on the ordinary EPIPE/ENOSPC path. `wcap`
+; makes the device take one byte per ask; every byte must still arrive, in order.
+; ⚠ the bytes go in through `put`, which PARKS them in the port's write run --
+; that run is what io_wdrain strokes and what used to be zeroed before the stroke.
+; `say` would take the direct lane and never touch it.
+(: p (dev ())
+   _ (wcap p 1)
+   _ (each '(97 98 99 100 101 102 103 104) (\ c (put p c)))
+   _ (flush p)
+   _ (assert ((sent p) = "abcdefgh")))
+
+; --- law 8: a stalled write keeps its residue and its ORDER --------------------
+; a device that lands nothing for a while must not lose the run, and the bytes that
+; wait must not be overtaken by the bytes behind them. that second half is the trap:
+; a refusal parks the byte in the PORT's buffer while the next stroke would go
+; straight to the device, so a two-lane writer shuffles its own stream.
+; two refusals: one to the bulk stroke, one to the flush that follows it. the run
+; waits in the port and the third ask -- this flush -- carries the whole of it.
+(: p (dev ())
+   _ (wstall p 2)
+   _ (say p "hello world")
+   _ (flush p)
+   _ (assert ((sent p) = "hello world")))
+
+; and the same over many small writes, where the residue has to survive the gaps
+(: p (dev ())
+   _ (wcap p 2)
+   _ (wstall p 1)
+   _ (each '("one" "two" "six") (\ s (say p s)))
+   _ (flush p)
+   _ (assert ((sent p) = "onetwosix")))
+
 (: _ (say out "front: ok") (putc 10))

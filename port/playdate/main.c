@@ -54,14 +54,17 @@ static intptr_t _readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = 0;
   for (int c; k < n && (c = cb_getc(kcb)) != EOF; ) dst[k++] = (unsigned char) c;
   return k ? (intptr_t) k : -1; }
-static struct ai *_putc(struct ai *g, int c) { return cb_putc(kcb, c), g; }
+static intptr_t _writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+  (void) fp;
+  for (uintptr_t k = 0; k < n; k++) cb_putc(kcb, src[k]);
+  return (intptr_t) n; }
 static struct ai *_flush(struct ai *g) { return g; }
 
 struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF) };
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 // No separate error stream on the device; the scare face lands on the LCD too.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
-struct ai_port_vt const ai_fd_port_vt = { _putc, _flush, NULL, _readn };
+struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn };
 
 // --- the playdate nifs ------------------------------------------------------
 // (crank ())     -- the crank angle 0..359, or () docked

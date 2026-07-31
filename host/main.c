@@ -57,19 +57,16 @@ void ai_wait_fds(int const *fds, int n, uintptr_t ms) {
   for (int i = 0; i < n; i++) p[i].fd = fds[i], p[i].events = POLLIN;
   poll_wait(p, n, ms); }
 
-static struct ai *fd_putc(struct ai *g, int c) {
- uint8_t b = c;
- if (g->io->fd == putcharm(STDOUT_FILENO)) fputc(b, stdout);
- else write(getcharm(g->io->fd), &b, 1);
- return g; }
-
 static struct ai *fd_flush(struct ai *g) {
  if (g->io->fd == putcharm(STDOUT_FILENO)) fflush(stdout);
  return g; }
 
-// the bulk lanes (contract in love.h). writen drains stdio first when the fd is
-// stdout -- per-byte puts ride stdio there, and the direct write(2) must land
-// AFTER them or the stream interleaves. readn is one nonblocking gulp.
+// the bulk lanes (contract in love.h). stdout rides stdio -- the static port has
+// no buffer of love's own (nothing traces a static), so without fwrite every
+// byte of every print would be its own write(2). Every OTHER fd goes straight
+// out. ⚠ there used to be an `fflush(stdout)` here and a per-byte `fputc` in a
+// `putc` slot beside it, because two paths wrote one stream and the direct one
+// had to land after the buffered one. One door, no ordering to keep.
 //
 // ⚠ THE O_NONBLOCK TOGGLE IS PER-CALL AND MUST STAY THAT WAY. The flags ride the
 // OPEN FILE DESCRIPTION, which a pty child and the shell that launched us both
@@ -82,9 +79,9 @@ static struct ai *fd_flush(struct ai *g) {
 // poll + 1 read (love's readiness pre-guard, deleted with getc). 53K of source
 // through stdin still lands in 0.05s -- the reader is orders of magnitude the
 // bottleneck, and every OTHER fd is a heap port that gulps 4096 at a time.
-static intptr_t fd_writen(struct ai *g, unsigned char const *src, uintptr_t n) {
- intptr_t fd = getcharm(g->io->fd);
- if (fd == STDOUT_FILENO) fflush(stdout);
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+ intptr_t fd = getcharm((*fp)->io->fd);
+ if (fd == STDOUT_FILENO) return (intptr_t) fwrite(src, 1, n, stdout);
  uintptr_t i = 0;
  while (i < n) {
   ssize_t k = write((int) fd, src + i, n - i);
@@ -102,7 +99,7 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
 
 struct ai_port_vt const ai_fd_port_vt =
- { fd_putc, fd_flush, fd_writen, fd_readn };
+ { fd_flush, fd_writen, fd_readn };
 
 struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF) };
 struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF) };
