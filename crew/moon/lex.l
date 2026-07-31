@@ -25,14 +25,40 @@
        p3 '("<<=" ">>=" "...")
        p2 '("==" "!=" "<=" ">=" "&&" "||" "<<" ">>" "+=" "-=" "*=" "/=" "%="
             "&=" "|=" "^=" "->" "++" "--" "##")
-       p32 (p3 + p2)                              ; joined ONCE (this sat in the per-token path)
+       ; the multi-char punctuators BUCKETED BY FIRST CHAR. firstat walked all
+       ; 21 of them on every punctuator token, each `at?` minting a closure and a
+       ; tally; a `(` now looks at none of them and a `<` at three.
+       pmap (: t (tablet 0)
+               (add l) (? (! (two? l)) t
+                          (: pat <l  h (pat 0)
+                             _ (pin t h ((peep t h ()) + (L pat)))
+                             (add >l)))
+               (add (p3 + p2)))
        kwt (: t (tablet 0) (go l) (? (! (two? l)) t (: _ (pin t <l 1) (go >l))) (go kws))
        p1 "()[]{};,.:?~!+-*/%<>=&|^#"
-       (ws? c) (|| (c = 32) (|| (c = 9) (|| (c = 13) (|| (c = 12) (c = 11)))))   ; space tab CR, + form-feed \f (GNU page breaks) + vertical-tab \v
-       (dig? c) (&& (48 <= c) (c <= 57))
-       (hexd? c) (|| (dig? c) (|| (&& (97 <= c) (c <= 102)) (&& (65 <= c) (c <= 70))))   ; 0-9 a-f A-F
+       ; --- THE CLASS TABLE: one 256-byte string, a bitmask per char ------
+       ; a membership test becomes an index and an `&` where it was a scan
+       ; (in1? walked 25 chars, idc? called two predicates -- both per char).
+       ; ⚠ BIT 0 IS LEFT UNUSED: a string indexed past its end answers the charm
+       ; 1, so a char outside 0..255 would match whichever class held bit 0;
+       ; with it empty, (& 1 m) is 0 for every mask here. `oct?` rides dig?
+       ; rather than taking the eighth bit.
+       ;   2 ws  4 dig  8 idh  16 idc  32 hexd  64 suf  128 punct1
+       (cbit c) (+ (? (|| (c = 32) (|| (c = 9) (|| (c = 13) (|| (c = 12) (c = 11))))) 2 0)
+                 (+ (? (&& (48 <= c) (c <= 57)) 4 0)
+                 (+ (? (|| (&& (97 <= c) (c <= 122)) (|| (&& (65 <= c) (c <= 90)) (c = 95))) 8 0)
+                 (+ (? (|| (&& (48 <= c) (c <= 57))
+                           (|| (&& (97 <= c) (c <= 122)) (|| (&& (65 <= c) (c <= 90)) (c = 95)))) 16 0)
+                 (+ (? (|| (&& (48 <= c) (c <= 57))
+                           (|| (&& (97 <= c) (c <= 102)) (&& (65 <= c) (c <= 70)))) 32 0)
+                 (+ (? (|| (c = 117) (|| (c = 85) (|| (c = 108) (c = 76)))) 64 0)
+                    (? (member? c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35)) 128 0)))))))
+       ctbl (: (go k acc) (? (k < 0) (string acc) (go (k - 1) (link (cbit k) acc))) (go 255 ()))
+       (ws? c) (& (ctbl c) 2)
+       (dig? c) (& (ctbl c) 4)
+       (hexd? c) (& (ctbl c) 32)
        (hexv c) (? (dig? c) (c - 48) (&& (97 <= c) (c <= 102)) (c - 87) (c - 55))         ; a=10 A=10
-       (suf? c) (|| (c = 117) (|| (c = 85) (|| (c = 108) (c = 76))))                      ; u U l L
+       (suf? c) (& (ctbl c) 64)
        (skipsuf j) (? (&& (j < n) (suf? (src j))) (skipsuf (j + 1)) j)                    ; eat an int-literal suffix run
        ; a WIDE/prefixed literal marker before ' or " : L (C89 wchar_t), u/U (C11 char16/32),
        ; u8 (C11 UTF-8 string). we carry no distinct wide type, so the prefix just DROPS -- a
@@ -61,7 +87,7 @@
        (escv d) (? (d = 110) 10 (d = 116) 9 (d = 114) 13 (d = 97) 7 (d = 98) 8            ; \n \t \r \a \b
                    (d = 102) 12 (d = 118) 11 (d = 48) 0 (d = 92) 92                       ; \f \v \0 backslash
                    (d = 34) 34 (d = 39) 39 (d = 63) 63 (d = 101) 27 ())                   ; \" \' \? \e
-       (oct? c) (&& (48 <= c) (c <= 55))                                                 ; an octal digit 0-7
+       (oct? c) (&& (& (ctbl c) 4) (c <= 55))                                            ; an octal digit 0-7
        (escseq k) (: d (src k)                     ; k = index of the char AFTER the backslash -> (value nextpos) or ()
                      (? (oct? d)                                                          ; \ooo -- 1..3 octal digits
                          (: (oc m v cnt) (? (&& (cnt < 3) (&& (m < n) (oct? (src m))))
@@ -76,8 +102,8 @@
                                (hx (k + 1) 0))
                             ())
                         (: v (escv d) (? (charm? v) `(v (k + 1)) ()))))
-       (idh? c) (|| (&& (97 <= c) (c <= 122)) (|| (&& (65 <= c) (c <= 90)) (c = 95)))
-       (idc? c) (|| (idh? c) (dig? c))
+       (idh? c) (& (ctbl c) 8)
+       (idc? c) (& (ctbl c) 16)
        (at? i pat) (: m (tally pat)                 ; does pat sit at i?
                       (go k) (? (m <= k) 1
                                 (n <= (i + k)) ()
@@ -87,9 +113,7 @@
        (firstat i ps) (? (! (two? ps)) ()
                          (at? i <ps) <ps
                          (firstat i >ps))
-       (in1? c) (: m (tally p1)
-                   (go k) (? (m <= k) () ((p1 k) = c) 1 (go (k + 1)))
-                   (go 0))
+       (in1? c) (& (ctbl c) 128)
        ; -- float literals: a run with a '.' or an exponent (12.5, .5, 2., 1e9,
        ; 3.14e-2, a trailing f/F/l/L consumed). digrun scans a decimal run ->
        ; (endj value ndigits); flolit -> (endj isflo? gem-or-int). --
@@ -128,7 +152,7 @@
        (hxrun j v nd) (? (&& (j < n) (hexd? (src j))) (hxrun (j + 1) ((* 16 v) + (hexv (src j))) (nd + 1)) `(j v nd))
        ; -- octal literal: a leading 0 then octal digits (0777, 0644). i points at the 0
        ; (it folds to 0). -> (endj value); a plain `0`, `0.5`, `08`, `0x..` never reach here. --
-       (octd? c) (&& (48 <= c) (c <= 55))
+       (octd? c) (&& (& (ctbl c) 4) (c <= 55))
        (octlit i) (: (go k v) (? (&& (k < n) (octd? (src k))) (go (k + 1) ((* 8 v) + ((src k) - 48))) `(k v)) (go i 0))
        (hexlit i)
         (: ir (hxrun (i + 2) 0 0) j0 <ir im <>ir
@@ -217,7 +241,7 @@
                              t (snip src i j)
                              s (intern t)
                              (go j line (link (? (peep kwt s ()) `('kw s line) `('id t line)) acc)))
-                 (: hit (firstat i p32)
+                 (: hit (firstat i (peep pmap c ()))
                     (? hit (go (i + (tally hit)) line (link `('p hit line) acc))
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren
                         (: gl (&& (c = 40) (&& (0 < i) (idc? (src (i - 1)))))

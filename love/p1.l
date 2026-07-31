@@ -49,27 +49,46 @@
    (p1-cup cl) (: t (cup cl) (? (lit? t) (t ()) t))
 
    ; --- char classes (love.c's op_break / ioread1sym terminators) -----------
-   (p1-in? s c) (: n (tally s)
-                   (go k) (? (<= n k) () (= (s k) c) 1 (go (+ k 1)))
-                   (go 0))
+   ; --- THE CLASS TABLE ------------------------------------------------------
+   ; ONE 256-byte string, a bitmask per char, so a membership test is an index
+   ; and an `&` where it used to be a scan over a class string -- with a fresh
+   ; closure and a `tally` minted per call, which is what made it the reader's
+   ; whole cost (`p1-tend?` walked 15 chars for every character of every token).
+   ; ⚠ BIT 0 IS LEFT UNUSED ON PURPOSE: a string indexed PAST ITS END answers the
+   ; charm 1, so a char outside 0..255 would match whichever class held bit 0.
+   ; with bit 0 empty, (& 1 m) is 0 for every mask below and an out-of-range
+   ; charm matches NOTHING -- which is exactly what the scan it replaces said.
+   ;   2 ws   4 opc   8 tend   16 open   32 close   64 sign   128 gstop
+   (p1-cin? s c) (: n (tally s)
+                    (go k) (? (<= n k) () (= (s k) c) 1 (go (+ k 1)))
+                    (go 0))
+   (p1-bits c) (+ (? (? (= c 12) 1 (p1-cin? " \t\n\r" c)) 2 0)
+                (+ (? (p1-cin? "!$%&*+-./:<=>?\\^|" c) 4 0)
+                (+ (? (? (= c 12) 1 (p1-cin? " \t\n\r;#()[]{}\"`," c)) 8 0)
+                (+ (? (p1-cin? "([{" c) 16 0)
+                (+ (? (p1-cin? ")]}" c) 32 0)
+                (+ (? (p1-cin? "+-" c) 64 0)
+                   (? (? (= c 12) 1 (p1-cin? " \t\n\r;)]}" c)) 128 0)))))))
+   p1-cls (: (go k acc) (? (< k 0) (string acc) (go (- k 1) (link (p1-bits k) acc)))
+             (go 255 ()))
    ; ⚠ 12 IS SPELLED OUT, here and in every class below: love's escapes are
    ; n t r e 0 x and NOTHING ELSE, so "\f" in a love string is the LETTER f --
    ; which would quietly make f whitespace and eat it out of `ieee-inf`.
-   (p1-ws? c)   (? (= c 12) 1 (p1-in? " \t\n\r" c))
+   (p1-ws? c)   (& (p1-cls c) 2)
    (p1-dig? c)  (? (<= 48 c) (<= c 57) ())
    (p1-hex? c)  (? (p1-dig? c) 1 (? (<= 97 (p1-low c)) (<= (p1-low c) 102) ()))
    (p1-low c)   (? (? (<= 65 c) (<= c 90) ()) (+ c 32) c)
    ; op_break complemented: the chars that FUSE into one operator run.
-   (p1-opc? c)  (p1-in? "!$%&*+-./:<=>?\\^|" c)
+   (p1-opc? c)  (& (p1-cls c) 4)
    ; a name-led token ends here (love.c's ioread1sym switch). ⚠ ' is absent --
    ; a name keeps a trailing/internal prime (x', n''); a LEADING ' is quote and
    ; never reaches the token lane.
-   (p1-tend? c) (? (= c 12) 1 (p1-in? " \t\n\r;#()[]{}\"`," c))
+   (p1-tend? c) (& (p1-cls c) 8)
 
    ; --- whitespace and comments --------------------------------------------
    ; `;` runs to end of line; `#!` does too; a bare `#` is the hash wrap.
    (p1-eol cl) (? (nil? (two? cl)) cl
-                  (p1-in? "\n\r" (cap cl)) (p1-cup cl)
+                  (? (= (cap cl) 10) 1 (= (cap cl) 13)) (p1-cup cl)
                   (p1-eol (p1-cup cl)))
    (p1-skip cl)
      (? (nil? (two? cl)) cl
@@ -159,7 +178,7 @@
            (= s "ieee-inf") (/ 1.0 0.0)
            (= s "-ieee-inf") (/ -1.0 0.0)
            (: lead (? (nil? (two? tok)) 0
-                      (p1-in? "+-" (cap tok)) (? (two? (cup tok)) (cap (cup tok)) 0)
+                      (& (p1-cls (cap tok)) 64) (? (two? (cup tok)) (cap (cup tok)) 0)
                       (cap tok))
               (? (? (p1-dig? lead) 1 (= lead 46))
                  (: f (gem s) (? (gem? f) f (intern s)))
@@ -205,9 +224,9 @@
               ; a numeral has to start somewhere (rung 1): + and - are operator
               ; runs like every other punctuation, EXCEPT that a digit -- or a
               ; `.`, for -.5 -- right after them makes the token a NUMBER.
-              numlead (? (p1-in? "+-" c) (? (two? r) (? (p1-dig? (cap r)) 1 (= (cap r) 46)) ()) ())
-              (? (p1-in? "([{" c) (p1-list r 1 ())
-                 (p1-in? ")]}" c) ()
+              numlead (? (& (p1-cls c) 64) (? (two? r) (? (p1-dig? (cap r)) 1 (= (cap r) 46)) ()) ())
+              (? (& (p1-cls c) 16) (p1-list r 1 ())
+                 (& (p1-cls c) 32) ()
                  (= c 34) (p1-str r ())
                  (= c 39) (p1-lift (intern "\\") r head)
                  (= c 96) (p1-lift 'list r head)
@@ -246,13 +265,13 @@
                  (link (link 'mono (link (link sym (link (cap d) ())) ())) (cup d))))))
    ; glued = the next char starts a datum rather than ending the form.
    (p1-glued? cl)
-     (? (two? cl) (: c (cap cl) (nil? (? (= c 12) 1 (p1-in? " \t\n\r;)]}" c)))) ())
+     (? (two? cl) (: c (cap cl) (nil? (& (p1-cls c) 128))) ())
 
    ; a list: datums until the close. an empty one IS the zero point.
    (p1-list cl0 head acc)
      (: cl (p1-skip cl0)
         (? (nil? (two? cl)) torn
-           (p1-in? ")]}" (cap cl)) (link (p1-rev acc ()) (p1-cup cl))
+           (& (p1-cls (cap cl)) 32) (link (p1-rev acc ()) (p1-cup cl))
            (: d (p1-read1 cl head)
               (? (nil? (two? d)) torn
                  (p1-list (cup d) () (link (cap d) acc))))))
