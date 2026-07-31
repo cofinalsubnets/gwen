@@ -91,7 +91,11 @@ moonc "$d"/*.o -o "$ho/$bin" || fail "our-linker bind $bin"
 # the binary carries no baked image, so LOVE_NO_IMAGE forces the fresh-egg boot -- under a
 # CEILING, like every other emulated corpus here (ktest.l's 420 s): the cross lanes run this
 # under qemu, where a wedge and a slow run look the same from outside. 124 is the timeout's.
-cat "$@" | LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" > "$ho/$out" 2>&1
+# the corpus goes in as a FILE with stdin closed, not on a pipe, for test_host's reason
+# (test/test.mk): the corpus TESTS stdin, and `reads` no longer drains stdin ahead of the
+# first form, so a piped corpus has test/io.l's see/unsee poking the script it is riding on.
+cat "$@" > "$ho/.corpus.l"
+LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" "$ho/.corpus.l" </dev/null > "$ho/$out" 2>&1
 s=$?
 tail -1 "$ho/$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$ho/$out" || fail "corpus (exit $s)"

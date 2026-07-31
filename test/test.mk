@@ -383,7 +383,8 @@ test_selfhost: host out/host$(hsuf)/mooncc
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
 	  $(host_cc) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
-	  cat $t | LOVE_NO_IMAGE=1 $(ho)/love-selfhost > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
+	  cat $t > $(ho)/.selfhost-corpus.l; \
+	  LOVE_NO_IMAGE=1 $(ho)/love-selfhost $(ho)/.selfhost-corpus.l </dev/null > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
 	  tail -1 $(ho)/.test_selfhost.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \

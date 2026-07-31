@@ -44,7 +44,10 @@ cp "$ho/love-raw-pie" "$ho/love-raw-baked"
 
 # the corpus runs CONCATENATED in one global scope
 out=$ho/.test_raw_bake.out
-cat "$@" | "$ho/love-raw-baked" > "$out" 2>&1
+# corpus as a FILE, stdin closed -- test_host's reason (test/test.mk): the corpus
+# TESTS stdin, and `reads` no longer drains it ahead of the first form.
+cat "$@" > "$ho/.corpus-baked.l"
+"$ho/love-raw-baked" "$ho/.corpus-baked.l" </dev/null > "$out" 2>&1
 s=$?
 tail -1 "$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$out" \

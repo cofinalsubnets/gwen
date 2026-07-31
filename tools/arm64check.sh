@@ -59,7 +59,12 @@ echo "AARCH64 qemu run ($(echo "$@" | wc -w) files)"
 # under a CEILING: a wedged emulated corpus is indistinguishable from a slow one, and this
 # lane takes ~60 s, so a hang used to sit until someone noticed. 420 s is ktest.l's budget,
 # the same shape; exit 124 is the timeout's own and reads as the failure it is.
-cat "$@" | LOVE_NO_IMAGE=1 timeout 420 "$QEMU" $O/love > $O/.out 2>&1; r=$?
+# the corpus goes in as a FILE with stdin closed, not on a pipe -- test_host's reason
+# (test/test.mk): the corpus TESTS stdin (test/io.l's see/unsee roundtrip), and `reads`
+# no longer drains stdin ahead of the first form, so a piped corpus has those asserts
+# poking the very script they are riding on.
+cat "$@" > $O/.corpus.l
+LOVE_NO_IMAGE=1 timeout 420 "$QEMU" $O/love $O/.corpus.l </dev/null > $O/.out 2>&1; r=$?
 tail -1 $O/.out
 # the default corpus must print "tests pass" AND each test/arm64/*.l sentinel (explicit-args runs skip the sentinel check)
 if [ -n "$DEFAULT_CORPUS" ]; then sent='test/arm64/callout:'; else sent=''; fi
