@@ -140,7 +140,15 @@ static void limine_to_kboot(void) {
 // it when the copy is worth saving. `state` is
 // per-instance scratch (ramfs uses it for the buffer pointer; statics
 // like keyboard/serial leave it null).
-#define k_sources_max 32
+//
+// ⚠ THE TABLE GROWS; IT DOES NOT CAP. it was a `k_source[32]` with five `fd <
+// k_sources_max` bounds checks around it -- unreachable while nothing wrote it,
+// and the rung-6 sweep left it as a rule in prose (doc/io.md) rather than a fix.
+// this is the fix: k_source_open is the ONE door in, and it grows the table on
+// the KERNEL'S OWN HEAP, which we own -- the one place in this tree where the
+// malloc family is not somebody else's. the bug a ceiling would have shipped is
+// worse than the host's was: not a hang but a silent refusal to open the 33rd
+// thing.
 
 struct k_source {
   // the read door (love.h's readn contract, one fd deeper): >0 = bytes,
@@ -188,27 +196,62 @@ static void serial_flush(int fd) {
     for (char const *s = " bytes\n"; *s; s++) serial_putc1(1, *s); }
   fbdraw(); }
 
-static struct k_source k_sources[k_sources_max] = {
+// ⚠ THE BOOT ROWS ARE STATIC ON PURPOSE, and must stay that way: the console is
+// how the kernel says anything at all -- including that an allocation failed --
+// so it cannot itself be the first thing that needs one. everything past them is
+// heap.
+static struct k_source k_boot[] = {
   [0] = { .readn = kb_readn,    .ready = kb_ready    },
   [1] = { .putc = serial_putc1, .flush = serial_flush },
 };
+static struct k_source *k_sources = k_boot;
+static int k_sources_n = (int) countof(k_boot);
+
+// the row for fd, or NULL -- the ONE bounds check in the file, so no dispatcher
+// carries a limit of its own.
+static ai_inline struct k_source *k_source(int fd) {
+  return fd >= 0 && fd < k_sources_n ? &k_sources[fd] : NULL; }
+
+// THE DOOR IN: answer fd's row, making room for it first. Doubling from the boot
+// rows, copying, and freeing the old table unless it is the static one -- there
+// is no realloc down here. -> NULL when there is no memory, which is a REFUSAL
+// the caller must read; nothing is ever silently dropped, which is the whole
+// difference between this and the ceiling it replaces.
+// ⚠ NO CALLER YET. inle owns no files and no sockets, so slots 0 and 1 are still
+// the whole table -- this is the rule doc/io.md left for whoever adds the third,
+// built as a door instead of a sentence so it cannot be got wrong. the grow
+// branch is therefore UNEXERCISED; the first file or socket is its gate.
+struct k_source *k_source_open(int fd) {
+  if (fd < 0) return NULL;
+  if (fd >= k_sources_n) {
+    int m = k_sources_n;
+    while (m <= fd) m *= 2;
+    struct k_source *t = malloc((size_t) m * sizeof *t);
+    if (!t) return NULL;
+    for (int i = 0; i < m; i++)
+      t[i] = i < k_sources_n ? k_sources[i] : (struct k_source) {0};
+    if (k_sources != k_boot) free(k_sources);
+    k_sources = t, k_sources_n = m; }
+  return &k_sources[fd]; }
 
 // Generic kernel dispatchers: readn/putc/flush route through k_sources[fd].
-// Bounds-checks and NULL-guards keep misuse from crashing (read-from-output-fd
-// reads the end; write-to-input-fd discards).
+// The NULL-guards keep misuse from crashing (read-from-output-fd reads the end;
+// write-to-input-fd discards).
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   int fd = getcharm(g->io->fd);
-  if (fd < 0 || fd >= k_sources_max || !k_sources[fd].readn) return -1;
-  return k_sources[fd].readn(fd, dst, n); }
+  struct k_source *s = k_source(fd);
+  if (!s || !s->readn) return -1;
+  return s->readn(fd, dst, n); }
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
   int fd = getcharm((*fp)->io->fd);
-  if (fd < 0 || fd >= k_sources_max || !k_sources[fd].putc) return (intptr_t) n;
-  for (uintptr_t k = 0; k < n; k++) k_sources[fd].putc(fd, src[k]);
+  struct k_source *s = k_source(fd);
+  if (!s || !s->putc) return (intptr_t) n;
+  for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
   return (intptr_t) n; }
 static struct ai *fd_flush(struct ai *g) {
   int fd = getcharm(g->io->fd);
-  if (fd >= 0 && fd < k_sources_max && k_sources[fd].flush)
-    k_sources[fd].flush(fd);
+  struct k_source *s = k_source(fd);
+  if (s && s->flush) s->flush(fd);
   return g; }
 
 struct ai_io ai_stdin = { .ap = lvm_port_io,
@@ -224,13 +267,13 @@ struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn };
 // Override the weak g.c default; route close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.
 void ai_fd_close(int fd) {
-  if (fd >= 0 && fd < k_sources_max && k_sources[fd].close)
-    k_sources[fd].close(fd); }
+  struct k_source *s = k_source(fd);
+  if (s && s->close) s->close(fd); }
 
 bool ai_ready(int fd) {
   if (fd < 0) return true;
-  if (fd >= k_sources_max || !k_sources[fd].ready) return false;
-  return k_sources[fd].ready(fd); }
+  struct k_source *s = k_source(fd);
+  return s && s->ready && s->ready(fd); }
 
 // Multi-source wait. ticks=0 means infinite. Future: program a one-shot
 // timer at the deadline instead of waking every tick.

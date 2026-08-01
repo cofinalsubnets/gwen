@@ -1915,18 +1915,35 @@ writes everything at once and exits lets a blocking drain finish in a single rea
 the law would pass straight over the bug. Control-verified by taking the read end's
 `O_NONBLOCK` back off and watching law 4's own assert redden.
 
-### `k_sources_max` -- the rule, since the fix is not owed yet
+### `k_sources_max` -- the rule became a door -- ✅ 2026-08-01
 
-port/inle/kmain.c:143 caps the kernel's fd table at 32. the rung-6 sweep left it,
-and correctly: nothing writes the table today and 30 of the slots are dead, so it
-is not reachable. this is the rule it left behind, for whoever gives inle files
-and sockets -- **the table GROWS, it does not cap.**
+the kernel's fd table was a `struct k_source[32]` with five `fd < k_sources_max`
+bounds checks around it. the rung-6 sweep left it and recorded a rule instead --
+*the table GROWS, it does not cap* -- because nothing wrote the table and 30 of
+the slots were dead, so the ceiling was not reachable. **gwen's call to build it
+now, and the reason is the one thing that made it easy: down here the malloc
+family is OURS.** the host could not have this (a mutable global and malloc are
+both out, which is what sent rung 6 to the uncommitted heap gap); `kmallocw` is
+seventy lines further down this same file.
 
-the two patterns to copy are both in the tree already: rung 6's `yield_sw_wait`
-(count first, size second, no constant anywhere) and the test frontend's device
-table (test/front/main.c:66-73), which `realloc`s and says so in its comment. a
-ceiling here would be rung 6's bug one layer down, and it would arrive WORSE --
-as a silent refusal to open the 33rd thing, rather than as a hang.
+so `k_source_open(fd)` is the one door in -- double from the boot rows, copy,
+free the old table unless it is the static one (there is no `realloc` down here)
+-- and `k_source(fd)` is the one bounds check left, which no dispatcher now
+carries a limit of its own to make. a failed allocation answers **NULL, a refusal
+the caller must read**; nothing is silently dropped, which was the whole worry: a
+ceiling here would have been rung 6's bug one layer down and arrived WORSE, as a
+silent refusal to open the 33rd thing rather than as a hang.
+
+⚠ **the boot rows stay STATIC and must**: the console is how the kernel says
+anything at all, including that an allocation failed, so it cannot itself be the
+first thing that needs one.
+
+⚠ **the grow branch has no caller and is therefore unexercised.** inle owns no
+files and no sockets, so slots 0 and 1 are still the whole table -- what changed
+is that the rule is now a function rather than a sentence, so the third source
+cannot get it wrong. the first file or socket is its gate. both kernel arches
+boot and run the corpus over the rewrite (`test_kernel`, `test_kernel_arm64`,
+`test_vec`).
 
 ### defect 6 -- a task could sleep on a quiet fd over a full buffer -- ✅ FIXED 2026-08-01
 
