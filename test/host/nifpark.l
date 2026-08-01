@@ -96,9 +96,18 @@
 ;
 ; ⚠ THE INSTRUMENT IS A FULL ACCEPT QUEUE, and nothing else offline works: an
 ; unroutable address is no good, because a machine with no route to it fails
-; INSTANTLY with ENETUNREACH and the law would pass straight over the bug. love's
-; `listen` asks for a backlog of 1, so the kernel queues two and drops the third
-; SYN -- and a dropped SYN is retried for about two minutes, which is a hang.
+; INSTANTLY with ENETUNREACH and the law would pass straight over the bug. a SYN
+; the kernel drops is retried for about two minutes, which is the stall this needs.
+;
+; ⚠ SO THIS LAW KNOWS host/sock.c's `ai_listen_backlog` BY VALUE, and has to: it
+; fills the queue that constant sizes. linux queues one MORE than asked (the test
+; is `> max`), so backlog+1 arrivals fill it and the next is dropped. if the
+; constant moves and this does not, the fill stops one short, the stalled connect
+; lands instead, and `(nil? r)` reddens -- noisily, which is the point.
+;
+; ⚠ AND THE FILL CLOSES AS IT GOES, which costs one fd instead of 513: a client
+; hangup does NOT free the slot. An unaccepted connection holds its place in the
+; queue until something accepts it, and nothing here ever does.
 ;
 ; closing the LISTENER is what ends it: the queued connections reset, the stalled
 ; client's handshake fails, and `catch` reaps a plain nil. no freeze, so no socket
@@ -106,17 +115,17 @@
 (: port 7397
    l (listen port)
    n (tablet 0)
-   a (connect "127.0.0.1" port)         ; these two fill the accept queue
-   b (connect "127.0.0.1" port)
+   a (connect "127.0.0.1" port)         ; the witness: one that lands, kept open
+   (fillq k) (? (k = 0) 0 (: c (connect "127.0.0.1" port) _ (close c) (fillq (k - 1))))
+   _ (fillq 512)                        ; a + 512 = 513 = backlog + 1: the queue is full
    t (ticker n)
-   s (twirl (\ _ (connect "127.0.0.1" port)) ())   ; the third: SYN dropped, stalls
+   s (twirl (\ _ (connect "127.0.0.1" port)) ())   ; the next: SYN dropped, stalls
    _ (rest 50)
    k (peep n 0 0)
    _ (close l)                          ; ... which resets it, so the task ends
    r (catch s)
    _ (freeze t)
    _ (close a)
-   _ (close b)
    _ (assert (0 < k)                    ; 0 with a blocking connect back in
              (nil? r)                   ; the reset handshake is a plain nil
              (lit? a)))                 ; ... and a connect that DID land is a port

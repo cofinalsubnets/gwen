@@ -24,9 +24,6 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define MSG_NOSIGNAL 16384
 #define MSG_DONTWAIT 64
 #define MSG_CMSG_CLOEXEC 1073741824
-// listen's largest honored backlog. Linux clamps to net.core.somaxconn anyway
-// (4096 since 5.4), so this is a "give me all of it" and not a promise.
-#define SOMAXCONN 4096
 int socket(int, int, int);
 int bind(int, struct sockaddr const*, socklen_t);
 int listen(int, int);

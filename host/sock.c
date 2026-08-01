@@ -147,6 +147,7 @@ static lvm(lvm_connectw) {
 // (listen port) -- TCP server socket: socket()+SO_REUSEADDR+bind(INADDR_ANY,
 // port)+listen(). Returns the listening port object, or () on any failure.
 // IPv4 only (enough for a loopback demo); `accept` gives the connection.
+#define ai_listen_backlog 512
 ai_noinline static int call_listen(int port) {
  if (port < 0 || port > 65535) return -1;
  int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -157,13 +158,22 @@ ai_noinline static int call_listen(int port) {
  a.sin_family = AF_INET;
  a.sin_addr.s_addr = htonl(INADDR_ANY);
  a.sin_port = htons((uint16_t) port);
- // ⚠ SOMAXCONN, not 1. The backlog is the ACCEPT QUEUE -- connections the kernel
- // has already shaken hands on and is holding for us -- and a server that twirls a
- // task per client is off serving them, not sitting in accept. At 1 the queue
- // overflows on the second simultaneous arrival, the kernel drops the SYN, and the
- // client waits out an exponential retry (measured: 1s at 25 arrivals, 30s at 100),
+ // The backlog is the ACCEPT QUEUE -- connections the kernel has already shaken
+ // hands on and is holding for us -- and a server that twirls a task per client is
+ // off serving them, not sitting in accept. At 1 the queue overflows on the second
+ // simultaneous arrival, the kernel drops the SYN, and the client waits out an
+ // exponential retry (measured against kiosko: 1s at 25 arrivals, 30s at 100),
  // which reads as our latency and is not ours.
- if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, SOMAXCONN)) {
+ // ⚠ IT IS A CONSTANT AND NOT AN OPERAND, deliberately: `listen` is 1-ary across
+ // the tree and out of it, and a second operand would turn every `(listen port)`
+ // into a closure -- truthy, so every "did it listen?" test would read the failure
+ // as a success.
+ // ⚠ AND test/host/nifpark.l KNOWS THIS NUMBER: its law 5 fills the queue to make a
+ // connect stall, which is the only way to reach the write-direction park offline.
+ // Moving this without moving that leaves the fill one arrival short and reddens
+ // there. 512 is the measured floor for a flat arrival curve at 400 simultaneous
+ // clients, and small enough that filling it costs the law about 20ms.
+ if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, ai_listen_backlog)) {
   close(fd);
   return -1; }
  cloexec(fd);
