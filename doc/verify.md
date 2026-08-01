@@ -85,6 +85,58 @@ glibc's strtod left the trusted base), spec.l pins the classic faces. the
 next such rung is the round-trip on the rest of the data grammar (big.v
 covers the decimal integers; strings/symbols/lists remain).
 
+## the mutator's side of the collector -- GCDBG, and the lane that is half built
+
+`test_gcheck` checks the COLLECTOR. The sibling question is the MUTATOR's: a raw C
+pointer held across a call that may collect. It is the costliest recurring bug shape
+in the C core (`obin_elem` held `g->ip` across `ai_big_binop` for years and surfaced
+only when an unrelated 24-byte struct shrink moved allocation), and nothing in the
+tree looked for it. `AI_GC_STRESS` is the instrument: `ai_have` -- the tree's own
+phrase for *"this call may collect"* -- stops being a maybe and always collects, the
+vacated nursery is poisoned so a stale read faults instead of reading plausible data,
+and every 32nd collection is a MAJOR so tenured objects move too.
+
+**⚠ the flag knob is `GCDBG`, not `EXTRA_CFLAGS`, and that distinction is a bug fix.**
+`EXTRA_CFLAGS` rides `$(ai_cflags)`, which the mooncc recipes do not use -- and the
+default `love` has been mooncc-built since self-host rung 2. So
+`EXTRA_CFLAGS=-DAI_GC_CHECK` compiled love.c **clean** and ran the corpus on a binary
+that had never had the check in it: **`test_gcheck` was answering green on a question
+it was not asking, and had been since the mooncc flip.** `GCDBG` reaches both
+compilers and, deliberately, NOT `love0` -- love0 is shared and unsuffixed
+(`out/host/0`), so a flag that reaches it leaks out of the debug lane's own tree, and
+a stress-built love0 segfaults baking `mooncc0.image`.
+
+**What is verified.** The lane detects. The control is `ai_big_binop`'s own re-fetch
+(`a = g->sp[0], b = g->sp[1]; // re-fetch (ai_have may have GC'd)`): delete that one
+line and the normal build answers a 163-digit bignum sum correctly and passes the
+whole corpus -- **latent, exactly as obin_elem was** -- while the stress build
+segfaults on the first big + big. Restore it and the stress build is clean again.
+It also found a real bug on its first boot: `intern` evaluated `intern_reserve(g)` as
+an ARGUMENT to `ai_have`, so a scare arriving from the caller was dereferenced rather
+than propagated -- an OOM at startup segfaulted instead of scaring. Fixed.
+
+**⚠ what is NOT verified, and why there is no `test_gcstress` target.** The lane runs
+a targeted program; it does not yet run the corpus. A stress build boots (16.9 s) and
+then **exits 0 having evaluated nothing at all** -- `-e '(quit 7)'` exits 0. Silent,
+green, and wrong, which is the one gate result worth less than none. The suspicion is
+the uncommitted heap gap (the argv marshalling lays bytes in it and the gap's contract
+is "consumed before anything allocates again", which forcing a collection at every
+`ai_have` breaks by construction) -- suspicion, not a finding: it has not been traced.
+Until it is, this is an instrument you point at a program by hand, not a gate.
+
+Three measurements worth not re-deriving:
+
+* **a minor is not enough.** Collecting at every `ai_have` tenures everything almost
+  at once, so a minor -- which only moves the young -- moves nothing by the time the
+  stale local's collection lands. The detector answered green on its own control
+  until the periodic major went in.
+* **every collection being a major is not shippable**: a bare boot took 458 s (and
+  crashed). Every 32nd is 17-24 s. Coverage is the trade and it is stated in the code.
+* **poisoning the old major half costs more than ten minutes on that same boot**, and
+  is the half least needed: a Cheney copy already overwrites word0 -- the ap -- of
+  every source object with the forwarding pointer, which is precisely how obin_elem
+  announced itself. Only the vacated young is poisoned.
+
 ## the open seams, ranked
 
 one already closed sets the pattern: test/host/gcpause.l MEASURES the minor flat
@@ -113,3 +165,6 @@ repeat: a gate that measures a shape earns a theorem that OWNS the shape.
    sized loads, arm64.
 4. **uu whole-corpus integration** -- every corpus file into both export lists;
    mechanical, unfinished.
+5. **the mutator's side of the collector** -- `AI_GC_STRESS` detects the class and
+   has caught one real bug, but cannot run the corpus yet (above). Finishing it is
+   the cheapest remaining rung here: one silent stop to trace, and it becomes a gate.

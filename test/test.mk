@@ -869,11 +869,15 @@ endif
 # A trap means the first pass LOST an object the mutator can still reach (a
 # scan-window or walker bug), caught at the collection that lost it instead of
 # corrupting silently. The check build lives in its own tree (out/host/gck),
-# so the fast binary rides clean; needs only $(CC), never skips. The `host`
-# prerequisite keeps the SHARED lanes (love0, the lcat headers) canonical --
-# fresh before the sub-make, so the flag never leaks into them.
+# so the fast binary rides clean; never skips. The `host` prerequisite keeps the
+# SHARED lanes (love0, the lcat headers) canonical -- fresh before the sub-make.
+# ⚠ the knob is GCDBG, not EXTRA_CFLAGS, and the swap is a FIX rather than a
+# tidy: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use, and
+# the default love has been MOONCC-BUILT since self-host rung 2. So this lane
+# compiled love.c clean and ran the corpus on a binary that had never had the
+# check in it -- green on a question it was not asking. doc/verify.md.
 test_gcheck: host
-	@$(MAKE) --no-print-directory hsuf=/gck EXTRA_CFLAGS=-DAI_GC_CHECK test_host
+	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAI_GC_CHECK test_host
 ifeq ($(COQC),)
 test_mx:
 	@echo "test_mx: skipped (needs coqc)"

@@ -27,7 +27,16 @@ host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
 # host_cc: STATIC picks musl-clang unless CC was set explicitly (the musl-gcc
 # fallback below); love0 and the lib tools stay on plain $(CC) either way.
 host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
-hcc = $(host_cc) $(ai_cflags) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
+# ⚠ GCDBG: the GC DEBUG LANES' knob, and it is NOT $(EXTRA_CFLAGS) on purpose.
+# It reaches the SHIPPED love only -- both compilers, since the default binary is
+# mooncc-built -- and never love0. Two reasons, both learned the hard way:
+#  * EXTRA_CFLAGS does not reach $(moon0) at all, so test_gcheck compiled love.c
+#    CLEAN and ran the corpus on a binary that had never had the check in it. A
+#    gate answering a question it was not asking is worse than no gate.
+#  * love0 IS shared and unsuffixed (out/host/0), so a flag that reaches it leaks
+#    out of the debug lane's own tree -- and a stress-built love0 segfaults baking
+#    mooncc0.image, taking the whole tree down with it.
+hcc = $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # whole-archive flag differs by linker (ld64 vs GNU ld); ai_typ is now a plain
 # compare in love.h, so there is no data.ld / generated data.h on any platform.
 ifeq ($(shell uname -s),Darwin)
@@ -218,7 +227,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/quay.h
 # and the liblove.a/.so lane (a shared object wants PIC codegen + the dynamic
 # section, which holo does not lay). STATIC=1 keeps the musl-cc link below --
 # the raw default is already fully static, so the flavor is legacy/opt-in.
-moon0 = $(love0) --wake out/host/mooncc0.image -e '(moon-main (cuup (cup cmdline)))'
+moon0 = $(love0) --wake out/host/mooncc0.image -e '(moon-main (cuup (cup cmdline)))' $(GCDBG)
 moon_d = $(ho)/moon
 moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
 moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))

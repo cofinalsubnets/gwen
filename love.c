@@ -1269,6 +1269,15 @@ static void major_run_finalizers(struct ai *g) {
   } else fz->fn(fz->p); }
  g->fz = new_fz; }
 
+// The two numbers AI_GC_STRESS runs on (love.h's ai_have is the lane's door; what
+// it has caught, and what it cannot run yet, is in doc/verify.md).
+// The poison is an EVEN word, so a stale read is taken for a pointer and
+// dereferencing it faults at an address a backtrace can name. The other is how often
+// a forced collection is a MAJOR rather than a minor -- see gen_please for why it is
+// neither 1 nor never.
+#define ai_gc_poison ((word) 0xd0d0d0d0d0d0d0d0ULL)
+#define ai_gc_stress_major 32
+
 // gen_minor: the MINOR. Evacuate the minor [end, hp) into the major ACTIVE half (append at
 // major_hp), then reset hp = end. The cheney scan starts at the append point (major_hp), so it walks
 // only the freshly-promoted survivors -- never the existing major -- and relies on the rem set
@@ -1324,6 +1333,15 @@ static void gen_minor(struct ai *g) {
 #endif
  if (g->fz) gen_fz_relocate(g);
  g->hp = g->end;                                              // minor emptied
+#ifdef AI_GC_STRESS
+ // ⚠ POISON THE VACATED NURSERY, or the stress build is half a detector. A copying
+ // collector leaves a FORWARDING POINTER in every from-space cell, so a stale local
+ // read after a collection hands back something that still looks like a live object:
+ // the bug survives as a wrong answer, or as a jump to whatever the forwarding
+ // pointer names. Filling the span makes the same read a fault at a legible address.
+ // Last thing in the minor -- gen_fz_relocate is the from-space's last reader.
+ for (word *p = (word*) p0; p < (word*) t0; p++) *p = ai_gc_poison;
+#endif
  g->gc_gen = 0; }
 
 // gen_major: a full collection, by REACHABILITY (never a linear sweep, so dead objects and their
@@ -1383,6 +1401,16 @@ static struct ai *gen_major(struct ai *g) {
  if (resized) g->alloc(g, g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
+#ifdef AI_GC_STRESS
+ // The promoted young goes, same as the minor's. ⚠ THE OLD MAJOR HALF DOES NOT, and
+ // that is a measurement, not an oversight: poisoning it costs more than ten minutes
+ // on a bare boot where the rest of this lane costs 24 seconds. It is also the half
+ // least needed -- a Cheney copy overwrites word0 of every source object with the
+ // FORWARDING POINTER, and word0 is the ap. A stale pointer into it is a jump into
+ // the heap on the next dispatch, which is exactly how the bug this lane exists for
+ // announced itself.
+ for (word *p = (word*) g->end; p < (word*) g->end + young; p++) *p = ai_gc_poison;
+#endif
  return g->gc_gen = 0, g; }
 
 // gen_grow: resize the MINOR pool (the main pool) to len1 -- its own copy/growth, decoupled from the
@@ -1432,6 +1460,21 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  bool major = g->rem_miss
    || major_free < (uintptr_t) g->len + req0 + 16
    || g->since_major > g->major_live0 + 4 * (uintptr_t) g->len;
+#ifdef AI_GC_STRESS
+ // ⚠ A MINOR IS NOT ENOUGH, which is most of what this lane cost to learn. A minor
+ // moves only the YOUNG -- and collecting at every ai_have tenures everything almost
+ // at once, so by the time a stale local's collection lands, the object it names was
+ // promoted long ago and sits still. The detector answered green on its own control.
+ // A major relocates every reachable object, young or old, so every heap address in
+ // a C local is wrong after one.
+ // ⚠ but EVERY collection being a major is not affordable and not shippable: a bare
+ // boot took 458 s. So a major rides every ai_gc_stress_major'th collection instead
+ // -- deterministic (a count, never a clock), and off g->n_gc so the lane needs no
+ // state of its own. Coverage is the trade, stated plainly: a stale pointer to a
+ // TENURED object is caught with probability 1/N per allocation site it survives,
+ // which over a corpus run is many chances at each site, not one.
+ major = major || g->n_gc % ai_gc_stress_major == 0;
+#endif
  word *before = g->major_hp;
  if (major) {
   if (!ai_ok(g = gen_major(g))) return g;     // a true OOM mid-major (compacting would overflow the spare): propagate the scare
@@ -1452,6 +1495,17 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  // multiple would chase. ai_budget (0 = unbounded) caps the whole footprint -- Appel's rule: the nursery
  // gets the free budget after the major pool. One knob bounds a small device.
  enum { ratio = ai_gc_ratio };                  // target band: grow above 1/ratio overhead, shrink below 1/(4*ratio)
+#ifdef AI_GC_STRESS
+ // ⚠ THE BAND IS MEANINGLESS ON A FORCED SCHEDULE, and left in it is fatal. It
+ // tracks copied/allocated, and collecting at every ai_have makes `allocated` ~0
+ // while `copied` is the whole live set -- so the overhead reads as infinite, the
+ // nursery doubles at every collection, and the boot dies at a 256 MB `oom`.
+ // ⚠ but the HARD FLOOR is not part of the heuristic and must stay: it is what
+ // guarantees the pending allocation fits, and skipping it trades the oom for a
+ // `bump` trap three frames away, which reads exactly like a runtime bug.
+ { uintptr_t used0 = g->len - avail(g), req = req0 + used0 + (used0 >> 2);
+   return req <= (uintptr_t) g->len ? g : gen_grow(g, req); }
+#endif
  g->win_alloc += seen_young, g->win_copied += copied;
  uintptr_t used = g->len - avail(g), req = req0 + used + (used >> 2), len1 = g->len, arena = len1;
  // resize STICKINESS: one out-of-band window is a hint, not a verdict -- act only when TWO
@@ -5805,6 +5859,11 @@ lvm(lvm_nomctor) {
  return Sp[0] = word(y), Ip += 1, Continue(); }
 
 struct ai *intern(struct ai*g) {
+ if (!ai_ok(g)) return g;                        // ⚠ intern_reserve READS g, and ai_have's own
+                                                 // guard is too late: it is an ARGUMENT here, so a
+                                                 // scare arriving from the caller was dereferenced
+                                                 // rather than propagated (ai_defn's loop is the
+                                                 // reachable one -- an OOM at startup segfaulted).
  if (ai_ok(g = ai_have(g, intern_reserve(g))))   // atom + (at the load factor) the doubled backing
   g->sp[0] = intern_checked(g, (struct ai_str*) g->sp[0]);
  return g; }
