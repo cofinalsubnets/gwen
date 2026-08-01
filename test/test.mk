@@ -334,15 +334,18 @@ test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 test_clay: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
 	@$m --wake $(ho)/mooncc.image -l test/gate/clay.l < /dev/null
-# ...and the first CONSUMER: love.c's +/* dispatch matrices are generated from
-# tools/mx.l (doc/clay.md rung 2), so mx.h has to be exactly what the table lays.
-# Regenerate and diff -- a hand edit to mx.h, or a table edit with no regen, is a
-# red here rather than a surprise at the next person's build. `cmp` and not
-# `rtk diff` on purpose (the release notes: rtk diff can lie).
+# ...and the CONSUMERS: love.c's +/* dispatch matrices (mx.h, doc/clay.md rung 2)
+# and the kind lattice they are indexed by (kinds.h, rung 2b) are both generated
+# from tools/mx.l, so each has to be exactly what the table lays. Regenerate and
+# diff -- a hand edit to either, or a table edit with no regen, is a red here
+# rather than a surprise at the next person's build. `cmp` and not `rtk diff` on
+# purpose (the release notes: rtk diff can lie).
 	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
 	@cmp -s out/.mx.h mx.h || { echo "FAIL mx.h is not what tools/mx.l lays -- regenerate it"; diff -u mx.h out/.mx.h | head -20; exit 1; }
-	@echo "clay-mx: mx.h regenerates identically"
-	@rm -f out/.mx.h
+	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
+	@cmp -s out/.kinds.h kinds.h || { echo "FAIL kinds.h is not what tools/mx.l lays -- regenerate it"; diff -u kinds.h out/.kinds.h | head -20; exit 1; }
+	@echo "clay-mx: mx.h and kinds.h regenerate identically"
+	@rm -f out/.mx.h out/.kinds.h
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET, and the end of
 # "x86-64 only until arm64 parity" (the line above, which stood for four of the
 # five backends). TWO targets, ONE procedure (test/gate/ccarch.sh, raw.sh's shape).

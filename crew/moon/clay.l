@@ -75,7 +75,13 @@
     ; definition and (fn ret) is the function TYPE under a pointer, so the range has
     ; to admit both and cannot catch a truncated definition. the only alternative is
     ; renaming one of them in parse.l, which is not clay's edit to make.
+    ; ⚠ `edef` is EMIT-ONLY, and cannot be otherwise: cparse reduces a top-level
+    ; `enum q { .. };` to the bare `(tdef)` marker (parse.l:1509), folding the
+    ; constants into its `enums` tablet and keeping neither the tag nor the names.
+    ; so an edef only ever comes from a generator, never back from a parse -- the
+    ; same standing `note` has, and for the same reason.
     '((prog 1 1) (fn 1 4) (proto 1 1) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
+      (edef 2 2)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 1) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 4)
@@ -105,12 +111,14 @@
                  (&& (-1 < <>r) (<>r < n)) (bad ((string h) + " takes at most " + (show <>r) + " operands"))
                  ; ⚠ a gdecl/xdecl's STORAGE slot is a list of bare keywords, not
                  ; nodes -- `(static)` walked as a form would read `static` as a tag.
-                 ; so the walk takes the declarators and stops.
+                 ; so the walk takes the declarators and stops. an edef is the same
+                 ; hazard whole: BOTH its slots are names, and its constant list
+                 ; would read `KMint` as a tag, so it has no kids at all.
                  (: (kids l) (? (! (two? l)) ()
                                 (: e <l
                                    (? (two? e) (: v (? (name? <e) (go e) (kids e)) (? v v (kids >l)))
                                       (kids >l))))
-                    (kids (? (member? h '(gdecl xdecl)) `(<>x) >x))))))
+                    (kids (? (member? h '(gdecl xdecl)) `(<>x) (id? h 'edef) () >x))))))
        v (go c)
        (? v v 1))
 
@@ -374,6 +382,11 @@
              (id? h 'proto) (line 0 ("int " + a + "();"))
              (id? h 'tdef) (? (two? >t) (line 0 ("typedef " + (cty (el t 2) a) + ";"))
                               (gripe "(tdef) carries nothing -- a typedef cparse could not keep"))
+             ; an enum definition, one line. there is no `= n` slot and there should
+             ; not be: a generator's constants take the positions C already gives
+             ; them, and a table that had to say its own indices would not be one.
+             (id? h 'edef) (line 0 ("enum " + (string a) + " { "
+                                    + (sepby ", " (map (\ k (string k)) (el t 2))) + " };"))
              (gripe ("cannot show top-level " + (string h))))))
 
    ; --- what cannot be said ------------------------------------------------------
@@ -402,6 +415,10 @@
             (gripe ("(struct " + (show <>x) + ") names a shape the tree does not carry"))
            (&& (id? <x 'flo) (! (cfinite? <>x)))
             (gripe ("(flo " + (show <>x) + ") -- C has no literal for an infinity or a nan"))
+           ; C has no empty enum, so `enum q { };` is not a thin way to say a lattice
+           ; with no kinds -- it is a syntax error.
+           (&& (id? <x 'edef) (! (two? (el x 2))))
+            (gripe ("(edef " + (show <>x) + " ()) has no constants -- C has no empty enum"))
            (: (kids l) (? (! (two? l)) ()
                           (: e <l v (? (two? e) (? (name? <e) (go e) (kids e)) ())
                              (? v v (kids >l))))

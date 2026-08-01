@@ -525,8 +525,11 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // cmp_rank in love.c -- which reseats string just below the number band and the KArrO tray
 // just BELOW chain (point < string < number < tray < chain < map < hot). The two coincide
 // only on the chain < map < hot tail; do NOT read this enum as the compare order.
-// KN is the matrix dimension.
-enum q { KMint, KNom, KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KChain, KMap, KHot, KN };
+// KN is the matrix dimension -- the roster's own length, not a kind.
+// The ROSTER itself is tools/mx.l's, the same list the +/* dispatch matrices are
+// indexed by, so this enum and mx.h's [KN][KN] grid are one datum and cannot drift.
+// EDIT tools/mx.l, NOT kinds.h; `make test_clay` regenerates and fails on drift.
+#include "kinds.h"
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
 // out-of-pool short-circuit). Strings are immutable, so one empty string
