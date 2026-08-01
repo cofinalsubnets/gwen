@@ -21,7 +21,7 @@
    look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty) refof (SD 'refof)
    urlsplit (SD 'url-split) urlp (SD 'url?) digits (SD 'digits) readform (SD 'readform)
    root "out/host/.seedhttp"
-   _ (run (list "rm" "-rf" root))
+   _ (hark (list "rm" "-rf" root))
    _ (mkdir "out" 493) _ (mkdir "out/host" 493) _ (mkdir root 493)
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
    home (cwd 0)

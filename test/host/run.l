@@ -1,32 +1,32 @@
-; --- test/host/run.l: smoke test for the run / runt nifs (host/main.c host_run) ---
-; (run argv) forks, captures the child's stdout into a string, and answers
-; (status . output). (runt argv) is the SAME answer, but relays each chunk to our
+; --- test/host/run.l: smoke test for the hark / herald nifs (host/main.c) ---
+; (hark argv) forks, captures the child's stdout into a string, and answers
+; (status . output). (herald argv) is the SAME answer, but relays each chunk to our
 ; stdout as it is read instead of holding it to the exit -- what make does, and
 ; what lets a long cook step show progress. The tee must not disturb the capture.
 ; host-only (the nifs are host/*.c), so it runs standalone against the built
 ; binary like test/host/bake.l:
 ;   cat test/00-init.l test/host/run.l | out/host/love
 ;
-; The payloads are deliberately TINY: runt echoes what it captures, so anything
+; The payloads are deliberately TINY: herald echoes what it captures, so anything
 ; big would flood the gate log. The >64KB lane -- where the capture string
 ; outgrows its buffer and MOVES mid-drain -- is checked by hand instead:
 ;   (: c `("sh" "-c" "i=0; while [ $i -lt 20000 ]; do echo abcdefgh; i=$((i+1)); done")
-;      (assert ((>(run c)) = (>(runt c)))))
+;      (assert ((>(hark c)) = (>(herald c)))))
 (: cmd `("sh" "-c" "printf 'tee-me\n'")
 
    ; the two agree on BOTH halves of the answer: teeing changes when the bytes
    ; reach stdout, never what the caller is handed.
-   a (run cmd) b (runt cmd)
+   a (hark cmd) b (herald cmd)
    _ (assert (two? a) (two? b))
    _ (assert ((<a) = (<b)) ((<a) = 0))
    _ (assert ((>a) = (>b)) ((>a) = "tee-me\n"))
 
    ; a nonzero exit still rides back through the tee path
-   bad (runt `("sh" "-c" "printf 'nope\n'; exit 3"))
+   bad (herald `("sh" "-c" "printf 'nope\n'; exit 3"))
    _ (assert (two? bad) ((<bad) = 3) ((>bad) = "nope\n"))
 
    ; no output -> the EmptyString singleton, tee or not
-   quiet (runt `("sh" "-c" "exit 0"))
+   quiet (herald `("sh" "-c" "exit 0"))
    _ (assert (two? quiet) ((<quiet) = 0) (! (>quiet)))
 
    (puts "run: ok\n"))
@@ -66,14 +66,14 @@
 ;   rather than hanging, so this reddens as a slow run, not a wedged gate.
 ; ⚠ 2. AN IGNORED DISPOSITION SURVIVES exec, so a child that inherited it is a
 ;   `yes | head` that never stops. every fork site resets it: main.c's two exec
-;   sites by hand, and host/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/mind.
-;   the law below reaches `run`'s door only -- the posix.c half is lush's, and
+;   sites by hand, and host/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
+;   the law below reaches `hark`'s door only -- the posix.c half is lush's, and
 ;   shares the one line.
 ; ⚠ the status has to come out of the PIPELINE, and $? there is head's, so love's
 ; own goes to a file from inside the subshell -- POSIX, no PIPESTATUS.
 (: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/host/love; echo $? > out/host/.sigst ) | head -1 > /dev/null; cat out/host/.sigst; rm -f out/host/.sigst"
-   st (cup (run `("sh" "-c" spew)))
-   sig (cup (run `("sh" "-c" "grep SigIgn /proc/self/status")))
+   st (cup (hark `("sh" "-c" spew)))
+   sig (cup (hark `("sh" "-c" "grep SigIgn /proc/self/status")))
    _ (assert
       (st = "141\n")                       ; 128 + SIGPIPE: the death the shell has always seen
       (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits NO ignore at all
@@ -85,7 +85,7 @@
 ; timeout, because its regression is a HANG (the scheduler sleeping on a fd set
 ; the ninth parked task never got into) and a wedged gate is worse than a red one.
 ; ⚠ it must be a subprocess for that reason alone; nothing about it needs one.
-(: rc (cap (run `("sh" "-c" "timeout 20 out/host/love test/host/parked.l")))
+(: rc (cap (hark `("sh" "-c" "timeout 20 out/host/love test/host/parked.l")))
    _ (assert (rc = 0)))                    ; 124 is the timeout: the old cap's hang
 
 (puts "run parked: ok\n")
@@ -96,7 +96,7 @@
 ; waits for a connection only the wedged vm could still make), and a wedged gate is
 ; worse than a red one. 124 IS the control's answer, and each law was verified by
 ; putting its own blocking call back.
-(: rc (cap (run `("sh" "-c" "timeout 20 out/host/love test/host/nifpark.l")))
+(: rc (cap (hark `("sh" "-c" "timeout 20 out/host/love test/host/nifpark.l")))
    _ (assert (rc = 0)))
 
 (puts "run nifpark: ok\n")

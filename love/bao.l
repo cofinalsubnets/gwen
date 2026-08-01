@@ -126,13 +126,13 @@
 (: _                                ; the export-list holder: `_` never leaks to the book
  (: m (nom 0) eofsym (nom 0)
 
-   ; the host nifs the shell wants -- raw (termios), the pty pair (mind gather),
+   ; the host nifs the shell wants -- raw (termios), the pty pair (tether gather),
    ; close -- are not on every frontend: the kernel pins none of them, love0
    ; lacks the ptys. bind the global when it exists, else a no-op stub; the
    ; mentions below read these locals, so bao compiles quiet everywhere and a
    ; call answers a clean () where the facility is not.
    (want n) (? (member? n (names ())) (ev n) (\ _ ()))
-   raw (want 'raw) mind (want 'mind) gather (want 'gather) close (want 'close)
+   raw (want 'raw) tether (want 'tether) gather (want 'gather) close (want 'close)
 
    (revcat a b) (foldl (flip link) b a)
 
@@ -433,7 +433,7 @@
    ; --- the host-only pty wrapper (wrap) ---
    ; reachable from the bao prompt to pty-wrap a host program -- (wrap (L
    ; "python3")). it uses the pty nifs (ptyrun, gather) which live in host/posix.c
-   ; and are NOT present in love0 or the kernel -- there mind/gather are the
+   ; and are NOT present in love0 or the kernel -- there tether/gather are the
    ; want-stubs, so (wrap ..) answers a clean (). it drives the real in/out tty
    ; fds, so it is exercised manually.
 
@@ -458,7 +458,7 @@
    ; dead, so dropping pending input is right). returns the exited status pair, or
    ; the errno fixnum on hatch failure.
    (wrap argv)
-     (: r (mind argv)
+     (: r (tether argv)
         (? (two? r)
            (: pid <r m >r
               up (twirl (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF

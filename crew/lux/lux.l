@@ -330,7 +330,7 @@
                               _ (render sh2 lay2 flf)
                               _ (? flf (: _ (x-focus s flf) (x-flush s)) (refocus sh2))
                               (loop sh2 lay2 hist f2))
-       _ (hear 0)                                                                ; hear one spawned zombie home, if any
+       _ (glean 0)                                                                ; glean one spawned zombie home, if any
        _ (ewmh-sync s sh)                                                        ; publish the sheaf to pagers (change-guarded)
        e (x-next s)
        (? (! e) (line "lux: display gone")

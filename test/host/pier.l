@@ -1,5 +1,5 @@
 ; --- test/host/pier.l: the X window frontend, end to end against a headless server ---
-; NOT in the test/*.l corpus (connectu/mind/screen/blit are host/*.c). spawns its
+; NOT in the test/*.l corpus (connectu/tether/screen/blit are host/*.c). spawns its
 ; own Xvfb, sails a pier with a real child, finds the window with QueryTree, and
 ; reads the PAINTED PIXELS back through the server with GetImage -- the whole loop:
 ; pty -> parser -> grid -> blit -> PutImage -> X -> GetImage.
@@ -17,7 +17,7 @@
 ; story): a fresh display every run so no stray server can become the test
 ; target, the number-on-its-own-line read, and every child struck on any
 ; failed claim so a failure leaves no debris to poison the next run.
-(: xv (mind `("Xvfb" "-displayfd" "1" "-screen" "0" "2560x1200x24" "-nolisten" "tcp"))
+(: xv (tether `("Xvfb" "-displayfd" "1" "-screen" "0" "2560x1200x24" "-nolisten" "tcp"))
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    camp #()
    (enlist k pid) (pin camp k pid)
@@ -54,7 +54,7 @@
 
  ; the pier under test, on its own pty with a real child
  ; the child prints steadily, so a resize's FRESH grid refills on its own
- md (mind `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l" "-l" "crew/quay/berth.l"
+ md (tether `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l" "-l" "crew/quay/berth.l"
             "-l" "crew/quay/pier.l"
             "-e" (+ "(pier (L \"sh\" \"-c\" \"while true; do printf H; sleep 0.3; done\") \"" (+ dpy "\" () ())"))))
  _ (must 'pier-up (two? md))

@@ -1507,7 +1507,7 @@ client, so nine clients was the shipped shape that reaches it.
 
 the cap goes **by construction**: count the ring first, then lay the block down
 sized to the count, in the runtime's own uncommitted heap gap -- the door
-`host_run` marshals argv through (invisible to gc, holds no love pointers, `Hp`
+`hark` marshals argv through (invisible to gc, holds no love pointers, `Hp`
 never moves, consumed before anything allocates again). the three
 `__builtin_trap()` guards go with it: they stood over an array the scheduler had
 *already* truncated, so they could never fire, and the drop they watched for was
@@ -1721,7 +1721,7 @@ than one line is the reason it was worth pausing over:
   port reports, a static re-raises.
 - ⚠ **an ignored disposition SURVIVES exec**, so a child that inherited it is a
   `yes | head` that never stops. every fork site resets it: `sig_dfl_job`
-  (spawn/spawnio/spawnmap, and `mind`, which was not calling it at all) and
+  (spawn/spawnio/spawnmap, and `tether`, which was not calling it at all) and
   main.c's two exec sites by hand.
 
 laws: test/host/net.l (slurp is linear; a hangup does not kill the runtime) and
@@ -1812,7 +1812,7 @@ a genuine catch CYCLE (a catches b, b catches a) still spins rather than being
 diagnosed. it spun before too, so nothing regressed -- but it is a real deadlock and
 a `;; two tasks caught on each other` would beat burning a core. not built.
 
-### the floor below this floor -- THE NIF FLOOR, three of four taken
+### the floor below this floor -- THE NIF FLOOR, taken but for one project
 
 the device floor made every DEVICE entry point nonblocking. what still blocks is
 a different layer with a different fix shape: a device answers would-block and the
@@ -1826,8 +1826,8 @@ purpose, and this is the roster, read off the source rather than off memory:
 | `udp-recv` | host/sock.c | ✅ **parks** on the socket's fd -- 2026-08-01 |
 | `wait` | host/posix.c | ✅ **parks** -- 2026-08-01, and it is a 1 ms POLL (below) |
 | `catch` | love.c, `lvm_wait` | ✅ **taken** -- it never blocked; it never idled |
-| `mind` | host/posix.c | ⚠ **was never on this floor.** It hands back `(pid . master-port)` and does not wait for the child at all; its two `waitpid(pid, &st, 0)` calls are teardown reaps of a child that has already `_exit`ed or been SIGKILLed. Read off the source this time. |
-| `run` / `runt` | host/main.c, `host_run` | **the one left.** Not the reap -- the DRAIN: a blocking `read(2)` loop over the child's stdout pipe, which holds the vm for the child's whole life. ⚠ `make waits` cannot see it (a raw read, not one of the four hooks it names). |
+| `tether` | host/posix.c | ⚠ **was never on this floor.** It hands back `(pid . master-port)` and does not wait for the child at all; its two `waitpid(pid, &st, 0)` calls are teardown reaps of a child that has already `_exit`ed or been SIGKILLed. Read off the source this time. |
+| `hark` / `herald` (was `run`/`runt`) | host/main.c | ✅ **parks** on the child's stdout pipe -- 2026-08-01, and it took a TWO-AP nif body to do it (below). The reap behind it is a 1 ms poll, like `wait`'s. ⚠ `make waits` never could see either the old block or the new park (a raw read, not one of the four hooks it names). |
 | `connect` | host/sock.c | a PROJECT, not a rung -- `getaddrinfo` below |
 
 ⚠ **`catch` was a different bug from the other six and was not lumped in.** it
@@ -1844,7 +1844,7 @@ async door. so `connect` cannot be fixed the way the others can: it wants a
 thread, a subprocess, or a resolver of our own. **that one is a project, not a
 rung**, and it is the reason this list is a sibling arc rather than a seventh rung.
 
-### what the three parks cost, and what `run` still needs
+### what the four parks cost
 
 **`accept` and `udp-recv` are true fd parks.** `next_wait_fd` is the listener (or the
 bound socket) and the scheduler folds it into the same `poll` as every other quiet fd
@@ -1867,22 +1867,53 @@ scheduler's wait set and a pid is not an fd. Rung 5's shape for the write residu
 the same trade. The unit carries the fourth term ("still running"): every real answer
 is a charm, so nothing is overloaded.
 
-**`run` is the one left, and it is not the reap.** `host_run` forks, then sits in a
-blocking `read(2)` loop draining the child's stdout pipe into a growing string; the
-`waitpid` after it is instant, because the pipe already hit EOF. The obstacle is that
-the op is NOT re-runnable at the point where it would park -- it has already forked a
-child and drained N bytes, and a re-entry from the top would fork again. The shape that
-fits is a **two-ap nif body**: `{{lvm_run_start}, {lvm_run_drain}, {lvm_ret0}}` -- the
-first forks and leaves (string, n, fd, pid) on the stack, the second parks on the pipe
-fd and re-runs until EOF, then reaps. The park state is four stack slots, which the
-yield snapshots and the GC traces for free. Not built here: it is a rung's work inside
-the nif the whole build system shells out through, and nothing concurrent pays for the
-block today (`run` is the CAPTURE spawn -- lush and kiosko use `spawn`+`wait` and
-`mind`, which park).
+**`hark` needed a TWO-AP NIF BODY, and that is the whole of what was hard.** The block
+was never the reap -- it was the DRAIN: a blocking `read(2)` loop over the child's
+stdout pipe, held for as long as the child had anything left to say. But the op is not
+re-runnable where it would park. It has already forked a child and taken N bytes, and
+love.h's nif park re-runs the op from the top, which would fork a SECOND child. So the
+fork and the capture are two ops -- `{{lvm_hark}, {lvm_harkdrain}, {lvm_ret0}}` -- and
+the park lives in the second, which re-runs as often as the child is slow. Arbitrary
+`Ip` motion inside a nif body was already precedented (`lvm_cur` hands `Ip + 2` on).
+
+the whole park state is **five stack slots**, which the yield snapshots and the GC
+traces for free -- no C local survives a turn, and the capture string is free to move
+between them: `out`, `n`, `fd`, `pid`, and `tee` in argv's own slot, which argv is done
+with by then. `fd` doubles as the state: `>= 0` draining, `-2` drained-and-reaping,
+`-1` done, at which point `out` IS the answer. That last term is what makes the spawn
+failures (a misuse, a failed pipe, a failed fork, a failed exec) need no second shape
+-- they land the errno charm in `out` with `fd = -1`, and the drain's first line
+answers.
+
+three things the design note above did not predict:
+
+* **the reap poll is not free, and the cost is real but tiny.** `WNOHANG` misses **58%
+  of the time** on a `/bin/true` -- the parent wakes on the pipe's `POLLHUP`, which the
+  kernel raises in the child's `exit_files`, one step before the `exit_notify` that
+  makes it reapable. (⚠ a plain C harness blocked in `read(2)` misses only 1.6%, so
+  measuring the race outside the runtime measures the wrong thing.) That is 0.7 ms on
+  a tight `hark` loop -- 1.17 ms/call to 1.85 ms/call -- and **nothing measurable on
+  the gate that actually uses it**: test/host/run.l is 2.51 s before and 2.53 s after.
+  The poll stays, because a blocking reap is a hole (a child that closes stdout and
+  keeps computing would hold the vm) and 1% of a spawn is not worth a hole.
+* **`sched_yield` would have shaved it and cannot be had.** One yield before the park
+  clears two thirds of the misses. `<sched.h>` is not in nolibc, so mooncc -- which
+  builds the default `out/host/love` -- refuses the file. The same door shuts on
+  `pidfd_open`, which would have made the reap a true fd park and needs `syscall(2)`.
+  ⚠ **a header the host toolchain has is not a header this tree has.**
+* **the ERROR-PIPE HANDSHAKE still blocks, and it is the one wait left in the nif.**
+  It is bounded by the child's `exec(2)`, not by the child's life -- which is the whole
+  difference this rung is about -- so it is named rather than fixed.
 
 the machinery for the process half was already there: host/posix.c reaps with
 `waitpid(-1, WNOHANG)` for the init lane, and `reap` has been WNOHANG since it
 landed.
+
+the law is test/host/nifpark.l 4, driven from run.l under a timeout with the other
+three. ⚠ **the child has to be slow in the MIDDLE**, not just at the end: one that
+writes everything at once and exits lets a blocking drain finish in a single read, and
+the law would pass straight over the bug. Control-verified by taking the read end's
+`O_NONBLOCK` back off and watching law 4's own assert redden.
 
 ### `k_sources_max` -- the rule, since the fix is not owed yet
 
@@ -2134,9 +2165,9 @@ choosing park-or-block. so:
 5. ~~**defect 4** (writes never yield)~~ ✅ the device-floor arc took it whole
    (rungs 3-5, then backpressure). **`select`**: still when something asks, and
    after 1 nothing does. what IS next is the nif floor -- its own section in
-   part II. ✅ its first item, `catch`, is taken; the process half (`wait`,
-   `run`, `runt`, `mind`) is the next cheapest, and `connect` is last because
-   `getaddrinfo` makes it a project.
+   part II. ✅ **the whole floor is taken** -- `catch`, then `accept`/`udp-recv`,
+   then the process half (`wait`, `hark`, `herald`; `tether` never blocked) --
+   and only `connect` is left, because `getaddrinfo` makes it a project.
 
 ~~`empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all

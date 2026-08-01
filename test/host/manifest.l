@@ -1,6 +1,6 @@
 ; --- test/host/manifest.l: the spreadsheet, engine and tui, end to end ---
 ; NOT in the test/*.l corpus (the tui rides raw/winsize; the pty harness
-; rides mind -- all host/*.c). the engine itself is pure core, probed here
+; rides tether -- all host/*.c). the engine itself is pure core, probed here
 ; against the loaded app; the tui is driven over a REAL pty and its painted
 ; screen read back through the cb glass -- the emulator built for berth is
 ; the spreadsheet's witness:
@@ -87,7 +87,7 @@
    (rowtx s r) (: c (gaze s 2)
                 (foldl (\ a i (+ a (: ch (& 255 (glass s (+ (* r c) i))) (? (= 0 ch) 32 ch))))
                        "" (jot c)))
- md (mind `("out/host/love" "-l" "crew/manifest/manifest.l" "-e" "(manifest ())"))
+ md (tether `("out/host/love" "-l" "crew/manifest/manifest.l" "-e" "(manifest ())"))
  m (cup md)
  ; a reader task gathers every painted byte into a box, so the test can
  ; HANDSHAKE: keys sent before the child's raw-mode first frame would land

@@ -25,18 +25,18 @@
    (console _) (L "/bin/love" "-l" "/lib/sh.l" "-e" "(sh 0)")
 
    ; a boot self-check: run a real userland command (kore, forked + captured) so the
-   ; console SHOWS the base system works end to end before we hand off the tty. `run`
+   ; console SHOWS the base system works end to end before we hand off the tty. `hark`
    ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
    (selfcheck _)
-     (: r (run (L "/bin/kore" "ls" "/proc"))
+     (: r (hark (L "/bin/kore" "ls" "/proc"))
         (say1 (+ "-- self-check: kore ls /proc -> exit " (+ (show (cap r))
                  (+ ", " (+ (show (tally (cup r))) " bytes --"))))))
 
-   ; pid 1's forever loop: harvest every child (waitpid(-1) via `hear`). the console dying
+   ; pid 1's forever loop: harvest every child (waitpid(-1) via `glean`). the console dying
    ; RESPAWNS it (a getty); any other pid is a reparented orphan we just harvest. a
-   ; non-pair hear (nothing pending / -ECHILD) paces the loop so we never busy-spin.
+   ; non-pair glean (nothing pending / -ECHILD) paces the loop so we never busy-spin.
    (harvest shpid)
-     (: ev (hear 0)
+     (: ev (glean 0)
         (? (two? ev)
              (? (id? (cap ev) shpid)
                   (: _ (say1 "  [init] console exited -> respawn")

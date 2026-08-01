@@ -728,7 +728,7 @@ static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
 // the `+` string lane all hand back ai_str_empty). Predicates read `ap`, so it
 // behaves as a normal string value; the FAM `bytes[]` is simply absent (len 0).
 // External linkage (declared in love.h with the EmptyString macro) so the
-// frontends can return it too (e.g. host_run's empty-output capture). (the
+// frontends can return it too (e.g. hark's empty-output capture). (the
 // empty SYMBOL died in the one-nothing round: () reads as 0.)
 const struct ai_str ai_str_empty = { .ap = lvm_str, .len = 0 };
 // () -- the one serial-0 mint, shared by every core (serial 0 is never drawn, so
@@ -2806,7 +2806,7 @@ static ai_inline union u *find_runnable(union u *head, uintptr_t now, int me_liv
 // `int fds[ai_wait_fds_max]` on this frame with `nfds < ai_wait_fds_max` guarding
 // the fill, which SILENTLY DROPPED every fd past the eighth -- so a ninth parked
 // task with no timer pending could not wake the wait at all, and kiosko twirls a
-// task per client. the block rides the uncommitted heap gap instead (host_run's
+// task per client. the block rides the uncommitted heap gap instead (hark's
 // door: invisible to gc, holds no love pointers, Hp never moves, consumed before
 // anything allocates again), so counting the ring first and sizing the block
 // second retires the cap by construction. ⚠ CALLED WITH g PACKED -- the gap is
@@ -8739,7 +8739,7 @@ lvm(lvm_vmap2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
 // bignum and boxes floats -- so a ai_O array adds/multiplies *exactly*. Cost: the
 // inner loop allocates, so it runs Pack'd (lvm_obin -> obin_run) and re-fetches
 // every live pointer (result, operands) after each element, exactly like the
-// other allocate-in-a-loop paths (cf. host_run, ai_big_binop).
+// other allocate-in-a-loop paths (cf. hark, ai_big_binop).
 
 // One element op: a (op) b for two scalar values, allocating via *fp (may GC --
 // a/b are passed by value and rooted before the first allocation here). Returns

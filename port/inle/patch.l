@@ -64,7 +64,7 @@
         (? m (m sys-code q)                                  ; a mock model is installed
            (: k (getenv "ANTHROPIC_API_KEY")
               (? (! k) ""
-                 (: r (run (L "curl" "-s" "https://api.anthropic.com/v1/messages"
+                 (: r (hark (L "curl" "-s" "https://api.anthropic.com/v1/messages"
                               "-H" (+ "x-api-key: " k)
                               "-H" "anthropic-version: 2023-06-01"
                               "-H" "content-type: application/json"

@@ -1,5 +1,5 @@
 ; --- test/host/pty.l: a runnable smoke test for bao's pty nifs (host/posix.c) ---
-; NOT in the test/*.l corpus on purpose: the pty nifs (mind/gather/still/winsize)
+; NOT in the test/*.l corpus on purpose: the pty nifs (tether/gather/still/winsize)
 ; live in host/posix.c, which the final `love` links but love0 does NOT -- and love0
 ; bakes the whole corpus, so a corpus test would read these names as missing and
 ; fail love0's self-test. So this is verified the host-nif way: standalone, against
@@ -18,8 +18,8 @@
 (: (waitfor pid)
  (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s)))
 
-; --- (mind argv): spawn `echo hello` on a pty, read its output off the master ---
-(: r (mind `("echo" "hello"))
+; --- (tether argv): spawn `echo hello` on a pty, read its output off the master ---
+(: r (tether `("echo" "hello"))
  _ (assert
     (two? r)            ; (pid . master-port)
     (charm? (cap r))        ; pid is a fixnum
@@ -35,7 +35,7 @@
     (= st (L 0))))      ; ... a REAL ()-tailed list (not the charm-0 dotted fossil)
 
 ; --- (still pid sig) + signal-death gather: cat waits forever; SIGKILL it ---
-(: r (mind `("cat"))
+(: r (tether `("cat"))
  _ (assert (two? r))
  _ (still (cap r) 9)       ; SIGKILL -- a positive pid, the process (not the group)
  _ (slurp (cup r))        ; drain to EOF (the killed cat's slave closes)
@@ -45,7 +45,7 @@
     (= 137 (cap st))))    ; 128 + 9: the signal-death encoding
 
 ; --- (setwinsize port r c): ok on a live master, errno on a non-port ---
-(: r (mind `("cat"))
+(: r (tether `("cat"))
  _ (assert
     (nil? (setwinsize (cup r) 24 80))   ; () = ok
     (charm? (setwinsize 5 24 80)))       ; a bare fixnum (not a port) -> EBADF
@@ -54,7 +54,7 @@
  _ (waitfor (cap r)))
 
 ; --- (still pid sig) on a dead pid -> an errno fixnum (ESRCH), never () ---
-(: dead (cap (mind `("true")))      ; exits immediately
+(: dead (cap (tether `("true")))      ; exits immediately
  _ (waitfor dead)                      ; gather it so the pid is truly gone (not a zombie)
  _ (assert (charm? (still dead 0))))     ; sig 0 probes existence -> ESRCH
 
@@ -65,7 +65,7 @@
 ; bounded read, NOT slurp -- cat never EOFs). proves the write AND read lanes of
 ; the master port in one round trip; the full stdin<->stdout pump (bao's `wrap`)
 ; rides real tty fds, so it is verified manually, like ain's `make nettest`.
-(: r (mind `("cat"))
+(: r (tether `("cat"))
  m (cup r)
  _ (put m 110) _ (put m 101) _ (put m 107) _ (put m 111) _ (put m 10)  ; "neko\n"
  _ (flush m)
@@ -79,7 +79,7 @@
 ; `tr a-z A-Z` turns "hi" into "HI", so the lowercase line-discipline echo is gone.
 ; (this is what stops wrap doubling each edited line.) tr's stdout is the slave tty,
 ; so it line-buffers and flushes "HI\n" on the newline.
-(: r (mind `("tr" "a-z" "A-Z"))
+(: r (tether `("tr" "a-z" "A-Z"))
  m (cup r)
  _ (assert (nil? (ptyecho m 0)))                  ; echo OFF -> () ok
  _ (put m 104) _ (put m 105) _ (put m 10)  ; "hi\n"
@@ -112,8 +112,8 @@
        (? !(two? line) (put m 4)
           (: _ (each line (\ c (put m c))) _ (put m 10) _ (flush m)
              (feedlines ip m))))
-   rk (mind `("cat")) mk (cup rk)                  ; the keyboard: what we write comes back
-   rc (mind `("tr" "a-z" "A-Z")) mc (cup rc)       ; the child: output differs from input
+   rk (tether `("cat")) mk (cup rk)                  ; the keyboard: what we write comes back
+   rc (tether `("tr" "a-z" "A-Z")) mc (cup rc)       ; the child: output differs from input
    _ (ptyecho mk 0) _ (ptyecho mc 0)
    sink (jug 0)
    a (twirl (\ _ (feedlines mk mc)) 0)             ; task A: reads mk, RENDERS TO OUT

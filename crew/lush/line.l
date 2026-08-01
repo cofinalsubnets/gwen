@@ -36,7 +36,7 @@
            (? (< k 1) 0 (sh-gitup (snip d 0 k)))))
    (sh-gitbr _)
      (? (sh-gitup (+ "" (cwd 0)))
-        (: r (run (L "git" "symbolic-ref" "--short" "-q" "HEAD"))
+        (: r (hark (L "git" "symbolic-ref" "--short" "-q" "HEAD"))
            (? (= 0 (cap r)) (sh-chomp (cup r)) ""))
         "")
    (sh-prompt _)

@@ -534,7 +534,7 @@ struct ai_wait_fd { int fd; short events, revents; };
 // Wait until one of `n` parked fds is readable or `ticks` elapse (0 = no
 // deadline). ⚠ n IS THE NUMBER OF PARKED TASKS AND HAS NO CEILING. The block
 // rides the runtime's own uncommitted heap gap, sized to the count -- the door
-// host_run marshals argv through, and the reason neither the scheduler nor a
+// hark marshals argv through, and the reason neither the scheduler nor a
 // frontend needs a fixed array, an allocator or a global. There used to be an
 // `ai_wait_fds_max` of 8 and every fd past the eighth was dropped in silence,
 // which is a hang the moment a ninth task parks with no timer pending.
