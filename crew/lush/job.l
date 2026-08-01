@@ -60,7 +60,7 @@
            (: n (sh-addjob pids 'stopped cmd)
               _ (puts (sh-jobline n (sh-jobs n))) 0)
            0))
-   ; background bookkeeping: drain hear at each prompt; a reaped pid leaves its job,
+   ; background bookkeeping: drain glean at each prompt; a reaped pid leaves its job,
    ; an emptied job prints done and goes
    (sh-unpid l p) (? !l () (? (= (cap l) p) (cup l) (link (cap l) (sh-unpid (cup l) p))))
    (sh-bgnote pid)
@@ -74,7 +74,7 @@
                                (pull sh-jobs n 0))
                         (pin sh-jobs n (L ps (sh-nth j 1) (sh-nth j 2)))))))))
    (sh-reapbg _)
-     (: r (hear 0) (? (two? r) (: _ (sh-bgnote (cap r)) (sh-reapbg 0)) 0))
+     (: r (glean 0) (? (two? r) (: _ (sh-bgnote (cap r)) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
    ; string membership: member? tests IDENTITY (uninterned strings never hit)
    (sh-smem? x l) (? (! (two? l)) 0 (? (= x (cap l)) 1 (sh-smem? x (cup l))))

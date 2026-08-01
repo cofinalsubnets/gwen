@@ -11,7 +11,7 @@
 // argv marshaling mirrors host_exec (main.c): a chain of strings -> a NUL-
 // terminated char** in the uncommitted heap gap at Hp (GC-invisible, holds no l
 // pointers, consumed before any further alloc), valid across the fork -- ONE
-// copy here (argv_marshal) shared by spawn, spawnio and mind; main.c keeps its
+// copy here (argv_marshal) shared by spawn, spawnio and tether; main.c keeps its
 // own (main.c is CORE, an app file can't reach in).
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
@@ -91,12 +91,12 @@ static struct ai *argv_marshal(struct ai *g, char ***cavp) {
 
 // --- the supervisor pair: spawn without waiting, reap any dead child ------------
 // (spawn argv)  -> child pid (a fixnum) | a NEGATIVE fixnum (-errno / -1 misuse)
-// (hear _)      -> (pid . status) of one reaped child
+// (glean _)     -> (pid . status) of one reaped child
 //                | ()                 none pending
 //                | a NEGATIVE fixnum  (-errno, e.g. -ECHILD: no children left)
 // init/init.l drives REAL processes with these plus the generic `still` (kill):
-// spawn returns a pid to track, hear is the SIGCHLD core (poll it, map the pid
-// back to a unit, restart per policy). On a real pid1 hear also collects
+// spawn returns a pid to track, glean is the SIGCHLD core (poll it, map the pid
+// back to a unit, restart per policy). On a real pid1 glean also collects
 // reparented orphans (waitpid(-1)).
 
 // the child side of the ignore dance: a disposition set to SIG_IGN SURVIVES exec,
@@ -115,7 +115,7 @@ static void sig_dfl_job(void) {
 // a pid (positive) from a failure (negative) without a second value). fork +
 // execvp; the parent returns immediately -- NON-BLOCKING, unlike run (waits +
 // captures) and exec (replaces in place). The child inherits init's stdio (a real
-// pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next hear.
+// pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next glean.
 ai_noinline static struct ai *host_spawn(struct ai *g) {
  char **cav;
  g = argv_marshal(g, &cav);
@@ -135,11 +135,11 @@ static lvm(lvm_spawn) {
  Sp += 1; Ip += 1;
  return Continue(); }
 
-// (hear _) -> (pid . status) of one reaped child, () if none are pending, or a
+// (glean _) -> (pid . status) of one reaped child, () if none are pending, or a
 // negated errno (e.g. -ECHILD when no children remain). The pid is the CAR so the
 // supervisor maps it back to a unit; status is proc_status (exit code / 128+sig).
 // waitpid(-1, WNOHANG) reaps ANY child -- incl. reparented orphans on a real pid1.
-// The arg is a dummy (ignored), so a bare (hear) curries; call it (hear 0).
+// The arg is a dummy (ignored), so a bare (glean) curries; call it (glean 0).
 ai_noinline static struct ai *host_reapany(struct ai *g) {
  int st;
  pid_t r = waitpid(-1, &st, WNOHANG);
@@ -169,7 +169,7 @@ static lvm(lvm_reapany) {
 // The supervisor PARKS with the core `(await sig)` (cooperative -- the scheduler
 // merges the sigfd with a heartbeat task's timer in one wait, the {nic, clock}
 // story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
-// 'chld wake still loops `hear` to harvest every zombie.
+// 'chld wake still loops `glean` to harvest every zombie.
 #if defined(__linux__)
 // the arg may be a LIST of signal numbers to watch; anything else (the dummy-0
 // convention) keeps the supervisor's classic pair, SIGCHLD + SIGTERM.
@@ -664,7 +664,7 @@ static union u const
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
 AI_NIF("spawn", nif_spawn);
-AI_NIF("hear",  nif_reapany);
+AI_NIF("glean",  nif_reapany);
 AI_NIF("sigfd", nif_sigfd);
 AI_NIF("sigtake", nif_sigtake);
 AI_NIF("wait",  nif_waitpid);
@@ -808,13 +808,13 @@ AI_NIF("rmdir",    nif_posix_rmdir);
 AI_NIF("hardlink", nif_posix_hardlink);
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
-// it, and read/write its window size. The keystone, (mind argv), is host_run
+// it, and read/write its window size. The keystone, (tether argv), is host_run
 // (main.c) with the stdout PIPE swapped for a pty pair: the same argv marshal +
 // close-on-exec errno-pipe handshake, but the child's 0/1/2 become the pty SLAVE
 // and the parent keeps the MASTER as a heap port (ai_io_alloc). So bao's editor
 // talks to any program over the master the way a terminal would.
 //
-//   (mind argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
+//   (tether argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
 //   (reap pid)         -> (status)   exited (a PAIR, truthy even at status 0)
 //                       | ()         still running
 //                       | errno      waitpid error (e.g. ECHILD)
@@ -825,7 +825,7 @@ AI_NIF("hardlink", nif_posix_hardlink);
 // (winsize) takes a dummy arg (ignored, like getpid): a bare (winsize) is the
 // function itself -- (f) == f at zero operands -- so the call is (winsize 0).
 
-// Workhorse for (mind argv), called with g Packed; argv is the single arg and
+// Workhorse for (tether argv), called with g Packed; argv is the single arg and
 // the sole GC root at g->sp[0]. Leaves EXACTLY ONE net value above argv on every
 // non-OOM path (so lvm_ptyrun collapses uniformly, cf. host_run): the
 // (pid . master-port) chain on success, an errno/-1 fixnum otherwise. Returns a
@@ -1039,7 +1039,7 @@ static union u const
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AI_NIF("mind", nif_ptyrun);
+AI_NIF("tether", nif_ptyrun);
 AI_NIF("gather", nif_reap);
 AI_NIF("still", nif_kill);
 AI_NIF("winsize", nif_winsize);

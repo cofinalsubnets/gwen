@@ -12,7 +12,7 @@
 ;   (: ft (psf-gz "/usr/share/kbd/consolefonts/ter-132n.psf.gz")
 ;      (pier (L "sh") "/tmp/.X11-unix/X0" (xauth-cookie ...) ft))
 ;
-; host-only (pour/unfold/mind ride host/*.c); gated by boot/font.l.
+; host-only (pour/unfold/tether ride host/*.c); gated by boot/font.l.
 
 (:
  (psf-u32 f i) (| (f i) (| (<< (f (+ i 1)) 8) (| (<< (f (+ i 2)) 16) (<< (f (+ i 3)) 24))))
@@ -94,13 +94,13 @@
  ; a .gz font: zcat into a temp file (a pty would mangle the bytes), then
  ; read it back. the temp wears the clock so parallel piers don't collide.
  (psf-gz p) (: tmp (+ "/tmp/quay-font-" (+ (show (clock 0)) ".psf"))
-               md (mind (L "sh" "-c" (+ "zcat '" (+ p (+ "' > " tmp)))))
+               md (tether (L "sh" "-c" (+ "zcat '" (+ p (+ "' > " tmp)))))
                (? (! (two? md)) ()
                 (: (wf q) (: g2 (gather q) (? (two? g2) g2 (: _ (rest 2) (wf q))))
                    _ (slurp (cup md))
                    _ (wf (cap md))
                    _ (close (cup md))
                    at (psf tmp)
-                   md2 (mind (L "rm" "-f" tmp))
+                   md2 (tether (L "rm" "-f" tmp))
                    _ (? (two? md2) (: _ (slurp (cup md2)) _ (wf (cap md2)) (close (cup md2))) 0)
                    at))))

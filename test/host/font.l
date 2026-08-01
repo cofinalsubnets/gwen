@@ -55,7 +55,7 @@
  _ (blitrow fb 32 s 0 () at)
  lit (foldl (\ a i (+ a (? (= 192 (peep fb i 0)) 1 0))) 0 (jot 2048))
  _ (assert (= (* 64 3) lit))                     ; a solid 8x8: every channel lit
- md (mind `("rm" "-f" "/tmp/quay-font-boot.psf"))
+ md (tether `("rm" "-f" "/tmp/quay-font-boot.psf"))
  _ (? (two? md) (: _ (slurp (cup md))
                    _ (: (wf q) (: g2 (gather q) (? (two? g2) g2 (: _ (rest 2) (wf q)))) (wf (cap md)))
                    (close (cup md)))

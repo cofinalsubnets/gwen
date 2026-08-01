@@ -1,5 +1,5 @@
 ; --- test/host/berth.l: the berth emulator's moor, end to end over a real pty ---
-; NOT in the test/*.l corpus (screen/scribe/mind live in host/*.c; love0 links
+; NOT in the test/*.l corpus (screen/scribe/tether live in host/*.c; love0 links
 ; none of them). loads the berth library off disk with reads, berths real
 ; children, and reads the grid back through the glass:
 ;
@@ -17,7 +17,7 @@
                        "" (jot c))))
 
 ; --- a child's plain output lands on the grid, colours and all ---
-(: md (mind `("sh" "-c" "printf 'hi\\033[31mred'; exit 3"))
+(: md (tether `("sh" "-c" "printf 'hi\\033[31mred'; exit 3"))
  _ (assert (two? md))
  s (mkscr 5 20)
  bx #s
@@ -31,7 +31,7 @@
  (close (cup md)))
 
 ; --- the pty's ONLCR: a child's bare \n arrives as \r\n, so columns behave ---
-(: md (mind `("sh" "-c" "printf 'a\\nb'"))
+(: md (tether `("sh" "-c" "printf 'a\\nb'"))
  s (mkscr 5 20)
  bx #s
  _ (moor bx (cup md) ())
@@ -47,7 +47,7 @@
 ; stty raw -echo, as any real full-screen guest would: a COOKED slave holds
 ; input until a newline (the answer has none) and would echo it back onto
 ; the grid besides.
-(: md (mind `("sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 >/dev/null; printf OK"))
+(: md (tether `("sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 >/dev/null; printf OK"))
  s (mkscr 5 20)
  bx #s
  _ (moor bx (cup md) ())
@@ -56,7 +56,7 @@
  (close (cup md)))
 
 ; --- a full-screen guest: clear, address, paint, leave ---
-(: md (mind `("sh" "-c" "printf '\\033[2J\\033[3;5Hdeep\\033[7msea'"))
+(: md (tether `("sh" "-c" "printf '\\033[2J\\033[3;5Hdeep\\033[7msea'"))
  s (mkscr 6 20)
  bx #s
  _ (moor bx (cup md) ())
@@ -73,7 +73,7 @@
                   (? (= n (snip h i (+ i (tally n)))) 1 (find h n (+ i 1)))
                   0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
- md (mind `("out/host/love" "-l" "crew/quay/berth.l"
+ md (tether `("out/host/love" "-l" "crew/quay/berth.l"
             "-e" "(berth (L \"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"))"))
  outb (slurp (cup md))
  st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))

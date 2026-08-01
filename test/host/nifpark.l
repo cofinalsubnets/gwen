@@ -63,7 +63,7 @@
 ; how often the waiter wakes to ask is the poll's business, not the law's.
 (: n (tablet 0)
    t (ticker n)
-   r (mind '("sleep" "0.3"))
+   r (tether '("sleep" "0.3"))
    st (wait (cap r))
    _ (freeze t)
    _ (close (cup r))

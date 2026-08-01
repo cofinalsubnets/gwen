@@ -309,7 +309,7 @@
    ;     AND the moor -- a chord's action IS one of these closures, so every
    ;     key is rebindable live over the socket ((bind! ..), the stumpwm
    ;     move). the pure ones queue through the guard; part!/spawn are one
-   ;     atomic effect each (a single wl-ship / a mind), safe from any task ---
+   ;     atomic effect each (a single wl-ship / a tether), safe from any task ---
    (up! u)     (haven! (\ z lay (L (zfocup z) lay)))
    (dn! u)     (haven! (\ z lay (L (zfocdn z) lay)))
    (swapup! u) (haven! (\ z lay (L (zswapup z) lay)))
@@ -322,7 +322,7 @@
                      (: hb (cap st) tl (nthl st 1)       ; normal farewell/retile path follows
                         fk (peep hb 8 ()) e (? fk (peep tl fk ()) ())
                         (? (two? e) (wl-ship (cap e) (nthl e 1) 1 () ()) 0))))
-   (spawn cmd) (mind (L "sh" "-c" (+ "WAYLAND_DISPLAY=" (+ (peep haven-cell 'path "") (+ " exec " cmd)))))
+   (spawn cmd) (tether (L "sh" "-c" (+ "WAYLAND_DISPLAY=" (+ (peep haven-cell 'path "") (+ " exec " cmd)))))
    (bind! mods sym f)                                    ; sym an X keysym; keycode off the boot map
      (: st (haven-st ())
         (? (! (two? st)) 'no-harbor

@@ -1,5 +1,5 @@
 ; --- test/host/haven.l: haven + two skiffs, end to end under a headless X ---
-; NOT in the test/*.l corpus (shore/wl-send/memfd/connectu/mind are host/*.c).
+; NOT in the test/*.l corpus (shore/wl-send/memfd/connectu/tether are host/*.c).
 ; spawns an Xvfb, sails haven (the wayland compositor) as one child and two
 ; skiffs (red, then blue) as two more, then reads haven's X WINDOW back with
 ; GetImage: red fills the glass alone; when blue arrives the LAYOUT retiles
@@ -25,7 +25,7 @@
 ; and a failed claim STRIKES the camp before exiting -- an assert naps straight
 ; out of file mode, so cleanup must ride in front of it (Xvfb catches SIGHUP,
 ; it survives our death; the love children die with their pty).
-(: xv (mind `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
+(: xv (tether `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    camp #()
    (enlist k pid) (pin camp k pid)
@@ -79,7 +79,7 @@
                       (go px 0))
 
  ; haven on its own X window + shore
- hv (mind `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l"
+ hv (tether `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/wire.l"
             "-l" "crew/lux/layout.l" "-l" "crew/quay/pier.l"
             "-l" "crew/haven/wire.l" "-l" "crew/haven/haven.l"
             "-e" (+ "(haven \"" (+ sock (+ "\" \"" (+ dpy "\" () 320 240)"))))))
@@ -108,7 +108,7 @@
                              (? (< 30 n) n (: _ (rest 100) (waithue x y b g r (- t 1))))))
 
  ; the red skiff, alone: one toplevel takes the whole 320x240 glass
- skr (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+ skr (tether `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
              "-e" (+ "(skiff \"" (+ sock "\" 320 240 12582912)"))))
  _ (must 'red-up (two? skr))
  _ (enlist 'skr (cap skr))
@@ -116,7 +116,7 @@
 
  ; the blue skiff arrives: the layout retiles -- blue masters the left
  ; column, red hears its new size and re-dresses into the right
- skb (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+ skb (tether `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
              "-e" (+ "(skiff \"" (+ sock "\" 320 240 192)"))))
  _ (must 'blue-up (two? skb))
  _ (enlist 'skb (cap skb))
@@ -184,7 +184,7 @@
  smokep (open smokebin "r")
  _ (? (lit? smokep)
       (: _ (close smokep)
-         smk (mind (L smokebin sock "00c000" "1500" "30"))      ; expect evdev 30 (X keycode 38); frames cover the seat+chord+squeeze acts with slack
+         smk (tether (L smokebin sock "00c000" "1500" "30"))      ; expect evdev 30 (X keycode 38); frames cover the seat+chord+squeeze acts with slack
          _ (must 'smoke-up (two? smk))
          _ (enlist 'smk (cap smk))
          _ (must 'smoke-masters (waithue 76 120 0 192 0 100))   ; green in the master column
@@ -218,7 +218,7 @@
          ; size and does the honest resize: buffers struck (delete_id), a
          ; fresh pool dressed, the retired ids REUSED by libwayland. a
          ; bookkeeping slip is a protocol error and a nonzero exit below.
-         sky (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+         sky (tether `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
                      "-e" (+ "(skiff \"" (+ sock "\" 320 240 12632064)"))))
          _ (must 'yellow-up (two? sky))
          _ (enlist 'sky (cap sky))
@@ -239,7 +239,7 @@
  ; enables on enter); the GATE ITSELF moors as the input method over the raw
  ; wire. the im's committed text must pour through haven into the skiff's
  ; mouth, and a grabbed keyboard steals the glass's keys from the clients
- skt (mind `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
+ skt (tether `("out/host/love" "-l" "crew/haven/wire.l" "-l" "crew/haven/skiff.l"
              "-e" (+ "(skiff \"" (+ sock "\" 320 240 8421504)"))))
  _ (must 'ti-up (two? skt))
  _ (enlist 'skt (cap skt))

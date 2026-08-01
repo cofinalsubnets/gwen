@@ -1,5 +1,5 @@
 ; --- test/host/luxui.l: lux end to end under a headless X ---
-; NOT in the test/*.l corpus (connectu/mind are host/*.c). Spawns an Xvfb,
+; NOT in the test/*.l corpus (connectu/tether are host/*.c). Spawns an Xvfb,
 ; sails the REAL lux driver (the same seven modules `make install` cats into
 ; bin/lux) as one child, then a PROBE (test/host/luxui-probe.l) as another: the
 ; probe drives synthetic input -- XTEST FakeInput for the super+drags, SendEvent
@@ -15,7 +15,7 @@
 
 ; the display number off Xvfb's -displayfd stdout: take the first line that is
 ; ENTIRELY digits (server chatter shares the pty -- test/host/haven.l's lesson).
-(: xv (mind `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
+(: xv (tether `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    camp #()
    (enlist k pid) (pin camp k pid)
@@ -50,7 +50,7 @@
  _ (must 'stale-planted (any (\ n (= n stale)) (readdir rdir)))
 
  ; the real driver, the same module set bin/lux ships (DISPLAY rides env)
- ph (mind `("env" (+ "DISPLAY=:" (show dn))
+ ph (tether `("env" (+ "DISPLAY=:" (show dn))
             "out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
             "-l" "crew/lux/wire.l" "-l" "crew/lux/ewmh.l"
             "-l" "crew/lux/manage.l" "-l" "crew/lux/keys.l"
@@ -61,7 +61,7 @@
  ; the probe: its own process, its own streams; it waits for lux itself
  ; (_NET_SUPPORTED on the root), drives, asserts, and exits 0 or names its
  ; failure. Its pty is echoed either way -- a red run tells its story here.
- pr (mind `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
+ pr (tether `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
             "-l" "crew/lux/wire.l" "-l" "test/host/luxui-probe.l"
             "-e" (+ "(probe \"" (+ dpy "\")"))))
  _ (must 'probe-up (two? pr))

@@ -1721,7 +1721,7 @@ than one line is the reason it was worth pausing over:
   port reports, a static re-raises.
 - ⚠ **an ignored disposition SURVIVES exec**, so a child that inherited it is a
   `yes | head` that never stops. every fork site resets it: `sig_dfl_job`
-  (spawn/spawnio/spawnmap, and `mind`, which was not calling it at all) and
+  (spawn/spawnio/spawnmap, and `tether`, which was not calling it at all) and
   main.c's two exec sites by hand.
 
 laws: test/host/net.l (slurp is linear; a hangup does not kill the runtime) and
@@ -1826,7 +1826,7 @@ purpose, and this is the roster, read off the source rather than off memory:
 | `udp-recv` | host/sock.c | ✅ **parks** on the socket's fd -- 2026-08-01 |
 | `wait` | host/posix.c | ✅ **parks** -- 2026-08-01, and it is a 1 ms POLL (below) |
 | `catch` | love.c, `lvm_wait` | ✅ **taken** -- it never blocked; it never idled |
-| `mind` | host/posix.c | ⚠ **was never on this floor.** It hands back `(pid . master-port)` and does not wait for the child at all; its two `waitpid(pid, &st, 0)` calls are teardown reaps of a child that has already `_exit`ed or been SIGKILLed. Read off the source this time. |
+| `tether` | host/posix.c | ⚠ **was never on this floor.** It hands back `(pid . master-port)` and does not wait for the child at all; its two `waitpid(pid, &st, 0)` calls are teardown reaps of a child that has already `_exit`ed or been SIGKILLed. Read off the source this time. |
 | `run` / `runt` | host/main.c, `host_run` | **the one left.** Not the reap -- the DRAIN: a blocking `read(2)` loop over the child's stdout pipe, which holds the vm for the child's whole life. ⚠ `make waits` cannot see it (a raw read, not one of the four hooks it names). |
 | `connect` | host/sock.c | a PROJECT, not a rung -- `getaddrinfo` below |
 
@@ -1878,7 +1878,7 @@ fd and re-runs until EOF, then reaps. The park state is four stack slots, which 
 yield snapshots and the GC traces for free. Not built here: it is a rung's work inside
 the nif the whole build system shells out through, and nothing concurrent pays for the
 block today (`run` is the CAPTURE spawn -- lush and kiosko use `spawn`+`wait` and
-`mind`, which park).
+`tether`, which park).
 
 the machinery for the process half was already there: host/posix.c reaps with
 `waitpid(-1, WNOHANG)` for the init lane, and `reap` has been WNOHANG since it
@@ -2135,7 +2135,7 @@ choosing park-or-block. so:
    (rungs 3-5, then backpressure). **`select`**: still when something asks, and
    after 1 nothing does. what IS next is the nif floor -- its own section in
    part II. ✅ its first item, `catch`, is taken; the process half (`wait`,
-   `run`, `runt`, `mind`) is the next cheapest, and `connect` is last because
+   `run`, `runt`, `tether`) is the next cheapest, and `connect` is last because
    `getaddrinfo` makes it a project.
 
 ~~`empty?` is unused but not free; leave it until something else in this list moves

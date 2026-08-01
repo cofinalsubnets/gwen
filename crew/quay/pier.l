@@ -222,7 +222,7 @@
              _ (x-flush s)
              km (px-keysyms s (scr-mink sc) (scr-maxk sc))
              _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
-             md (mind argv)
+             md (tether argv)
              (? (! (two? md)) (: _ (close s) md)
               (: pid (cap md) m (cup md)
                  s0 (screen (cask (screen () r c)) r c)

@@ -1,29 +1,29 @@
 ; --- test/host/init.l: smoke test for the init (pid1 supervisor) nifs (host/posix.c) ---
-; spawn/hear/wait/still link into `love` but NOT love0 (which bakes the corpus), so this
+; spawn/glean/wait/still link into `love` but NOT love0 (which bakes the corpus), so this
 ; runs standalone against the built binary, like test/host/pty.l -- not in test/*.l. Run
 ; (assert comes from test/00-init.l):
 ;   cat test/00-init.l test/host/init.l | out/host/love
 ; the FULL pid-1 story -- mounting proc, reaping a REPARENTED orphan -- needs love to
 ; actually BE pid 1: `make init-container` (a pid+user+mount namespace). Here we
-; cover the hear nif's three distinct returns and the spawn/wait pair.
+; cover the glean nif's three distinct returns and the spawn/wait pair.
 
-; hear is waitpid(-1, WNOHANG), with THREE returns the supervisor tells apart:
+; glean is waitpid(-1, WNOHANG), with THREE returns the supervisor tells apart:
 ;   (pid . status)  a child was reaped
 ;   ()              none pending (children alive) -- the REAL zero point, not charm 0
 ;   -ECHILD         no children remain -- a negative charm (nil?-true), distinct from ()
-(: (hear-until n)                                   ; hear, paced, to a (pid . status) pair (or steps out)
-     (: ev (hear 0) (? (two? ev) ev (< n 1) () (: _ (rest 2) (hear-until (- n 1)))))
+(: (glean-until n)                                   ; glean, paced, to a (pid . status) pair (or steps out)
+     (: ev (glean 0) (? (two? ev) ev (< n 1) () (: _ (rest 2) (glean-until (- n 1)))))
    _ (assert
        ; spawn is NON-BLOCKING: a real live pid, the child runs on
        (: p (spawn (L "sleep" "5"))
           (&& (charm? p) (< 0 p)
-              ; a child ALIVE, none exited -> hear is the REAL () (not charm 0), nil?-true
-              (id? (hear 0) ()) (nil? (hear 0)) !(charm? (hear 0))
-              ; kill it (bao's `still`), then hear the zombie -> (pid . 128+sig)
-              (: _ (still p 9) r (hear-until 200)
+              ; a child ALIVE, none exited -> glean is the REAL () (not charm 0), nil?-true
+              (id? (glean 0) ()) (nil? (glean 0)) !(charm? (glean 0))
+              ; kill it (bao's `still`), then glean the zombie -> (pid . 128+sig)
+              (: _ (still p 9) r (glean-until 200)
                  (&& (two? r) (= (cap r) p) (= (cup r) 137)))))
        ; no children left -> -ECHILD: a NEGATIVE charm, nil?-true, but NOT the () above
-       (charm? (hear 0)) (< (hear 0) 0) (nil? (hear 0)) !(id? (hear 0) ())
+       (charm? (glean 0)) (< (glean 0) 0) (nil? (glean 0)) !(id? (glean 0) ())
        ; the blocking foreground wait: spawn then wait -> the child's exit status
        (= 0 (wait (spawn (L "true"))))
        (= 3 (wait (spawn (L "sh" "-c" "exit 3"))))

@@ -1,6 +1,6 @@
 ; berth -- quay's terminal emulator: where a program ties up.
 ;
-; a child rides a pty (mind); its bytes pour through quay's cb screen -- the
+; a child rides a pty (tether); its bytes pour through quay's cb screen -- the
 ; same VT parser the kernel console runs, hosted in a cask by host/cb.c --
 ; and the grid repaints the OUTER terminal as painted cells: tmux for one.
 ; keys pour down the other way; DSR/DA answers ride home off the screen's
@@ -12,7 +12,7 @@
 ; run: out/host/love -l crew/quay/berth.l -e '(berth (L "sh"))'
 ;      out/host/love -l crew/quay/berth.l -e '(berth (L "vim" "README.md"))'
 ;
-; host-only (screen/scribe + mind/gather + raw/winsize ride host/*.c), so
+; host-only (screen/scribe + tether/gather + raw/winsize ride host/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-
 ; tested end to end over a real pty by boot/berth.l.
 
@@ -113,12 +113,12 @@
 
  (waitfor pid) (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
 
- ; --- berth: tie argv up. returns the child's status pair, or mind's errno ---
+ ; --- berth: tie argv up. returns the child's status pair, or tether's errno ---
  (berth argv) (: ws (winsize 0)                  ; a fresh pty says 0x0: fall back
                  r (? (&& (two? ws) (< 5 (cap ws))) (cap ws) 24)
                  c (? (&& (two? ws) (< 19 (cup ws))) (cup ws) 80)
                  _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
-                 md (mind argv)
+                 md (tether argv)
                  (? (! (two? md)) md
                   (: pid (cap md) m (cup md)
                      s0 (screen (cask (screen () r c)) r c)

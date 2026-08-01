@@ -66,7 +66,7 @@
 ;   rather than hanging, so this reddens as a slow run, not a wedged gate.
 ; ⚠ 2. AN IGNORED DISPOSITION SURVIVES exec, so a child that inherited it is a
 ;   `yes | head` that never stops. every fork site resets it: main.c's two exec
-;   sites by hand, and host/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/mind.
+;   sites by hand, and host/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
 ;   the law below reaches `run`'s door only -- the posix.c half is lush's, and
 ;   shares the one line.
 ; ⚠ the status has to come out of the PIPELINE, and $? there is head's, so love's
