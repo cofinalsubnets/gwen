@@ -627,6 +627,12 @@ moon-tar: host out/host$(hsuf)/mooncc
 .PHONY: moon-tar-arm64
 moon-tar-arm64: host out/host$(hsuf)/mooncc
 	@TARSRC="$(TARSRC)" ./tools/moon-tar.sh arm64
+# moon-tar-riscv -- the roundtrips again. This is the lane that caught the
+# O_DIRECTORY arch gate: opendir answered EINVAL and tar could not read a
+# directory, where arm64 had been right and masked it.
+.PHONY: moon-tar-riscv
+moon-tar-riscv: host out/host$(hsuf)/mooncc
+	@TARSRC="$(TARSRC)" ./tools/moon-tar.sh riscv64
 # moon-m4 -- the fourth moon-userland rung: GNU m4 1.4 (macro processor, so it
 # exercises tmpfile/rewind diversions, popen'd esyscmd, float format), built by
 # mooncc + nolibc + holo and gated on m4's OWN 57-check suite. Opt-in like
@@ -640,6 +646,10 @@ moon-m4: host out/host$(hsuf)/mooncc
 .PHONY: moon-m4-arm64
 moon-m4-arm64: host out/host$(hsuf)/mooncc
 	@M4SRC="$(M4SRC)" ./tools/moon-m4.sh arm64
+# moon-m4-riscv -- the check suite again, under qemu-riscv64.
+.PHONY: moon-m4-riscv
+moon-m4-riscv: host out/host$(hsuf)/mooncc
+	@M4SRC="$(M4SRC)" ./tools/moon-m4.sh riscv64
 # moon-lua: point LUASRC at an extracted lua-5.4.x tree (no configure needed);
 # SKIPS cleanly without. Builds + runs the interpreter battery.
 .PHONY: moon-lua
@@ -653,6 +663,11 @@ moon-lua: host out/host$(hsuf)/mooncc
 .PHONY: moon-lua-arm64
 moon-lua-arm64: host out/host$(hsuf)/mooncc
 	@LUASRC="$(LUASRC)" ./tools/moon-lua.sh arm64
+# moon-lua-riscv -- the third target. riscv routes around faults the other
+# two share (nhome = 0, so nothing rides), which is why it is not redundant.
+.PHONY: moon-lua-riscv
+moon-lua-riscv: host out/host$(hsuf)/mooncc
+	@LUASRC="$(LUASRC)" ./tools/moon-lua.sh riscv64
 # moon-sqlite: point SQLSRC at an extracted sqlite-amalgamation dir; SKIPS
 # cleanly without. Compiles the whole amalgamation + runs the VFS battery, and
 # the battery is a DIFFERENTIAL payload -- forty lines of computed answers, so
@@ -668,6 +683,13 @@ moon-sqlite: host out/host$(hsuf)/mooncc
 .PHONY: moon-sqlite-arm64
 moon-sqlite-arm64: moon-sqlite
 	@SQLSRC="$(SQLSRC)" ./tools/moon-sqlite.sh arm64
+# moon-sqlite-riscv -- the same, on the third target. This is the lane that
+# caught the riscv tail-call reach: a tail call is the one jmp that leaves its
+# function, riscv's jal spans +-1MB, and 1.6MB of sqlite is what it takes to
+# notice. Ordered after moon-sqlite for the same oracle reason.
+.PHONY: moon-sqlite-riscv
+moon-sqlite-riscv: moon-sqlite
+	@SQLSRC="$(SQLSRC)" ./tools/moon-sqlite.sh riscv64
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into love0. The gate greps

@@ -2791,7 +2791,17 @@
                        (? ((tally (keys t2)) = n) t2 (elabsx fs t2 ej)))
    (butret es) (? (! (two? >es)) () (link <es (butret >es)))   ; the epilogue's restore forms (the ret drops)
    (sibjmp g f)
-    (? (<f = 'call) ((butret (peep g 'epi epi)) + `(`('jmp <>f)))
+    ; ⚠ riscv takes the DIRECT tail call through the park too, where the other
+    ; targets ride `jmp`. a tail call is the one jmp that leaves its function,
+    ; and riscv's jal reaches only +-1MB: in sqlite's 1.6MB object a tail call
+    ; to a distant function overflowed it and the backend refused
+    ; (rv-jal-range). `call` never had the problem -- it is already the auipc
+    ; pair -- so this borrows that reach via `la` (+-2GB) and the same t4 park
+    ; the INDIRECT lane below already uses, loaded AFTER the restores so
+    ; nothing has to survive them.
+    (? (&& (rv? g) (<f = 'call))
+       ((butret (peep g 'epi epi-a64)) + `(`('la (pkr g) <>f) `('jmpr (pkr g))))
+       (<f = 'call) ((butret (peep g 'epi epi)) + `(`('jmp <>f)))
        (a64? g) ((butret epi-a64) + `(`('jmpr 'r15)))          ; the arm64 epilogue never touches the x15 park
        (rv? g) ((butret (peep g 'epi epi-a64)) + `(`('jmpr (pkr g))))   ; riscv: the park (t4) survives the epilogue
        (t32? g) ((butret epi-a64) + `(`('jmpr (pkr g))))       ; thumb2: the callr target parks in r12 (pkr), untouched by the epilogue

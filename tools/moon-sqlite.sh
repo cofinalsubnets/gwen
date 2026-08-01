@@ -43,7 +43,9 @@ case $target in
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
   arm64) name=moon-sqlite-arm64 ; tflag="-t arm64" ; sub=moonsqlite-a64
          mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  *) echo "moon-sqlite.sh: unknown target $target" >&2; exit 1 ;;
+  riscv64) name=moon-sqlite-riscv ; tflag="-t riscv64" ; sub=moonsqlite-rv
+         mksys=mksys-riscv ; backend=crew/holo/riscv.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-sqlite.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local out/dl,
@@ -258,4 +260,4 @@ if [ "$target" != x64 ]; then
     exit 1
   fi
 fi
-echo "$name: a runnable SQLite $(echo "$out" | sed -n 's/^battery ok //p'), mooncc-compiled$([ -n "$run" ] && echo " for aarch64"), no gcc/glibc/ld"
+echo "$name: a runnable SQLite $(echo "$out" | sed -n 's/^battery ok //p'), mooncc-compiled$([ -n "$run" ] && echo " for $target"), no gcc/glibc/ld"

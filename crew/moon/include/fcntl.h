@@ -10,12 +10,20 @@
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
-#if defined(__aarch64__) || defined(__riscv)
-#define O_DIRECTORY  16384   /* asm-generic 040000 */
-#define O_NOFOLLOW   32768   /* asm-generic 0100000 */
+/* ⚠ THE ARM FAMILY IS THE EXCEPTION HERE, and riscv64 is NOT in it. arm64 kept
+ * 32-bit ARM's values for these two; riscv64 takes the genuine asm-generic
+ * ones, which are x86-64's. the first cut of this gated on
+ * `__aarch64__ || __riscv` and called 040000 "asm-generic" -- it is arm's. on
+ * riscv64 that made O_DIRECTORY mean O_DIRECT and O_NOFOLLOW mean O_LARGEFILE:
+ * opendir answered EINVAL (direct I/O on a directory), and the symlink guard
+ * was silently absent, which is the quieter half. arm64 masked it by being
+ * right, so it took a riscv64 package build to surface. */
+#if defined(__aarch64__) || defined(__arm__)
+#define O_DIRECTORY  16384   /* arm/arm64 040000 */
+#define O_NOFOLLOW   32768   /* arm/arm64 0100000 */
 #else
-#define O_DIRECTORY  65536   /* x86 0200000 */
-#define O_NOFOLLOW  131072   /* x86 0400000 */
+#define O_DIRECTORY  65536   /* x86-64, riscv64, asm-generic 0200000 */
+#define O_NOFOLLOW  131072   /* x86-64, riscv64, asm-generic 0400000 */
 #endif
 #define O_CLOEXEC   524288
 #define O_SEARCH   O_RDONLY   /* Linux has no O_SEARCH; gnulib's own fallback (fcntl.in.h) */

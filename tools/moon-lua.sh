@@ -45,7 +45,9 @@ case $target in
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
   arm64) name=moon-lua-arm64 ; tflag="-t arm64" ; sub=moonlua-a64
          mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  *) echo "moon-lua.sh: unknown target $target" >&2; exit 1 ;;
+  riscv64) name=moon-lua-riscv ; tflag="-t riscv64" ; sub=moonlua-rv
+         mksys=mksys-riscv ; backend=crew/holo/riscv.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-lua.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local out/dl,
@@ -152,4 +154,4 @@ EOF
 out=$(cd "$d" && $run "$luabin" battery.lua)
 [ "$out" = "battery ok" ] || { echo "FAIL lua battery: '$out'"; exit 1; }
 echo "  OK closures + strings + patterns + tables + math + pcall/coroutines (setjmp) + metatables + os date/time + io + load"
-echo "$name: a runnable Lua $($run "$luabin" -v 2>&1 | cut -d' ' -f2), mooncc-compiled$([ -n "$run" ] && echo " for aarch64"), no gcc/glibc/ld"
+echo "$name: a runnable Lua $($run "$luabin" -v 2>&1 | cut -d' ' -f2), mooncc-compiled$([ -n "$run" ] && echo " for $target"), no gcc/glibc/ld"

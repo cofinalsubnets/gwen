@@ -545,6 +545,50 @@ m4 prints its own `argv[0]` in every error message and two of the checks compare
 against a text that names it. Without that the suite fails for a reason that has nothing
 to do with the compiler, which is exactly the kind of false red a cross lane invites.
 
+## riscv64 — the third target, and it paid immediately
+
+`make moon-lua-riscv`, `moon-m4-riscv`, `moon-tar-riscv`, `moon-sqlite-riscv`. All four
+packages build and run under `qemu-riscv64`, and SQLite's forty answers are byte-identical
+to the x86-64 build.
+
+**Adding it was worth it on the first run, and this is the argument for a third target
+rather than a second.** riscv is the more distant of the two: `nhome = 0`, so nothing rides
+the arrival registers at all and the entire analysis that produced the arm64 param5 bug is
+bypassed. It found two faults that arm64 had been silent about:
+
+**1. `O_DIRECTORY` and `O_NOFOLLOW` were wrong on riscv64** (`crew/moon/include/fcntl.h`).
+The gate read `#if defined(__aarch64__) || defined(__riscv)` and its comment called 040000
+"asm-generic" — it is **arm's**. arm64 kept 32-bit ARM's values for these two; riscv64 takes
+the genuine asm-generic ones, which are x86-64's:
+
+| | O_DIRECTORY | O_NOFOLLOW |
+|---|---|---|
+| arm, arm64 | 040000 | 0100000 |
+| x86-64, riscv64, asm-generic | 0200000 | 0400000 |
+
+So on riscv64 `O_DIRECTORY` actually meant **`O_DIRECT`** and `O_NOFOLLOW` meant
+**`O_LARGEFILE`**. `opendir` answered EINVAL (direct I/O on a directory) and tar could not
+read a directory at all; the missing symlink guard was the quieter half. arm64 masked it by
+being right. The gate is on the **ARM family** now (`__aarch64__ || __arm__`), which is what
+the difference actually is.
+
+**2. A direct tail call could not reach past ±1MB on riscv64** (`sibjmp`, `crew/moon/gen.l`).
+A tail call is the one `jmp` that leaves its function — `sibjmp` emits the epilogue's restores
+and then jumps to the target function — and riscv's `jal` spans only ±1MB. `call` never had
+the problem, being already an auipc pair (±2GB). It took 1.6MB of SQLite in one object to
+reach the limit, and the backend refused loudly (`;; rv-jal-range 1627800`) rather than
+emitting a wrong branch, which is the behaviour you want from a range check.
+
+The fix borrows from the lane directly below it: the *indirect* tail call on riscv already
+parks its target in t4 and uses `jmpr`, which has no range at all. The direct one now loads
+the address with `la` (the auipc pair) into that same park **after** the restores, so nothing
+has to survive them. One branch, no new neutral-IR op, no other backend touched.
+
+⚠ **Neither bug is reachable from x86-64, and neither was reachable from arm64.** The
+measured precedent was already on record — with the u32-literal bug present, arm64 caught it
+while x64 *and* riscv64 both missed it. Targets route around faults differently; a third one
+is coverage, not a second opinion.
+
 ## the source cache — why `make moon-lua` needs no variable
 
 Every package rung is opt-in on an imported source tree, and for a long time each one meant
@@ -570,7 +614,7 @@ amalgamation want only an extracted one.
 
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.
 (Six are runnable now: bzip2, gzip, tar, m4, Lua and SQLite. **Four of them cross-build and run
-for aarch64** — lua, sqlite, m4 and tar — each `tools/moon-*.sh <target>` in raw.sh's shape with
+for BOTH aarch64 and riscv64** — lua, sqlite, m4 and tar — each `tools/moon-*.sh <target>` in raw.sh's shape with
 a `make moon-<pkg>-arm64` target, each skipping cleanly without qemu. gzip and bzip2 are the two
 left, and both are plain C89 with no configure, so they should be short.)
 

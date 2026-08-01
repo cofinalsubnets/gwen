@@ -48,7 +48,9 @@ case $target in
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
   arm64) name=moon-m4-arm64 ; tflag="-t arm64" ; sub=moonm4-a64
          mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  *) echo "moon-m4.sh: unknown target $target" >&2; exit 1 ;;
+  riscv64) name=moon-m4-riscv ; tflag="-t riscv64" ; sub=moonm4-rv
+         mksys=mksys-riscv ; backend=crew/holo/riscv.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-m4.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local out/dl,
@@ -155,4 +157,4 @@ echo "  OK define/eval + divert + esyscmd + format"
   || { echo "FAIL m4's own check suite"; exit 1; }
 echo "  OK m4's own check suite (57 checks from the manual)"
 
-echo "$name: GNU m4 1.4 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for aarch64"), runs + full check suite -- ok"
+echo "$name: GNU m4 1.4 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for $target"), runs + full check suite -- ok"

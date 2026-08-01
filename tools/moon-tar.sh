@@ -42,7 +42,9 @@ case $target in
          mksys=mksys       ; backend=""              ; run=""            ; need="" ;;
   arm64) name=moon-tar-arm64 ; tflag="-t arm64" ; sub=moontar-a64
          mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
-  *) echo "moon-tar.sh: unknown target $target" >&2; exit 1 ;;
+  riscv64) name=moon-tar-riscv ; tflag="-t riscv64" ; sub=moontar-rv
+         mksys=mksys-riscv ; backend=crew/holo/riscv.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+  *) echo "moon-tar.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
 esac
 
 # where a package's sources may live, first hit wins: the tree-local out/dl,
@@ -144,4 +146,4 @@ if command -v gzip >/dev/null 2>&1; then
   echo "  OK czf/xzf roundtrip (forked gzip through a pipe)"
 fi
 
-echo "$name: GNU tar 1.13 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for aarch64"), runs + roundtrips -- ok"
+echo "$name: GNU tar 1.13 built by mooncc + nolibc + holo$([ -n "$run" ] && echo " for $target"), runs + roundtrips -- ok"
