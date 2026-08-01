@@ -634,6 +634,14 @@ moon-m4: host out/host$(hsuf)/mooncc
 .PHONY: moon-lua
 moon-lua: host out/host$(hsuf)/mooncc
 	@LUASRC="$(LUASRC)" ./tools/moon-lua.sh
+# moon-lua-arm64 -- the same package cross-built with `mooncc -t arm64` and run
+# under qemu-aarch64: the first moon-userland rung to leave x86-64, and the one
+# that caught test/cc/110-param5.c (a 5th pointer parameter collided with the
+# frame-base spelling, and Lua's pattern matcher was the shape that reached it).
+# Skips without qemu-aarch64, like test_raw_arm64.
+.PHONY: moon-lua-arm64
+moon-lua-arm64: host out/host$(hsuf)/mooncc
+	@LUASRC="$(LUASRC)" ./tools/moon-lua.sh arm64
 # moon-sqlite: point SQLSRC at an extracted sqlite-amalgamation dir; SKIPS
 # cleanly without. Compiles the whole amalgamation + runs the VFS battery.
 .PHONY: moon-sqlite

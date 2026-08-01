@@ -5147,10 +5147,23 @@
                         (rst-defok >fs A boff)
                        ())))))
        (rst-ok fs A) (: bo (rst-stoff fs A) (? (id? bo 'no) () (rst-defok fs A bo)))
+       ; ⚠ an arrival register that COLLIDES with the build-time frame-base
+       ; spelling can never be ridden. gen speaks r4 for the frame base on every
+       ; target and a4ize retargets it to fp at the end of build BY POSITION --
+       ; so an r4 left in a memory op's BASE slot becomes fp. that reads a
+       ; rider's arrival exactly wrong: gp 4 arrives in x4 on arm64, and a
+       ; pointer param's natural use IS a base slot, so *p, p[i] and p + i all
+       ; silently addressed the FRAME instead of p. the ride is the only lane
+       ; that puts a value in r4 there (opool and hregs-a64 both exclude it, and
+       ; a staged call arg is written and consumed with no base-slot read
+       ; between), so barring it here closes the collision; the 5th param pays
+       ; one prologue mov. --
+       (a4rider? A) (&& (! (id? (fbase g) 'r4)) (id? A 'r4))
        (rideset fs ps gpi acc)                      ; the rideable gp indices
         (homefold g ps gpi acc
-         (\ a2 i9 p9 (? (&& (! (id? (nthr (argr g) i9) (homereg i9))) (rst-ok fs (nthr (argr g) i9)))
-                        (link i9 a2) a2)))
+         (\ a2 i9 p9 (: A (nthr (argr g) i9)
+                        (? (&& (! (a4rider? A)) (&& (! (id? A (homereg i9))) (rst-ok fs A)))
+                           (link i9 a2) a2))))
        ; ⚠ the ride verdict above is read off ir1, where every param still sits
        ; in a FRAME SLOT -- and the regen it licenses rebuilds the body with the
        ; riders in registers, so pass 2 reaches for different scratch than the

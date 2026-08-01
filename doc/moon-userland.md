@@ -456,6 +456,48 @@ in seconds — but it CANNOT be left in: recoverable bads are a normal lane (cgi
 decline falls back to a real call), so the probe spams clean compiles. Re-add for a session,
 revert before committing.
 
+## Lua 5.4.7 — the fifth rung, and the first to leave x86-64
+
+Lua builds with mooncc + nolibc + holo into a 513 KB static ELF and runs a battery over
+closures, strings, patterns, tables, math, pcall/coroutines (setjmp/longjmp through sys.o's
+leaves), metatables, gc, os date/time, io and `load`. `make moon-lua LUASRC=<an extracted
+lua-5.4.x tree>` is the repeatable target (tools/moon-lua.sh). Lua needs **no configure**, and
+it is the first package where every source file compiles unpatched — 33/33, first try.
+
+**`make moon-lua-arm64` cross-builds the same sources with `mooncc -t arm64` and runs the
+battery under qemu-aarch64** (642 KB; skips cleanly without qemu, like test_raw_arm64). Every
+package rung before this one was x64-only, so for four of the five backends no package-scale
+differential existed at all — the same gap ccarch.sh was written to close for test/cc.
+
+It paid immediately. The first arm64 build produced an interpreter that ran its whole battery,
+printed floats correctly and drove coroutines through setjmp — and in which `string.match`,
+`string.gsub` and `string.find`-with-a-pattern **all silently answered nil**. Plain `find` was
+fine, because a pattern with no specials shortcuts to `lmemfind` and never enters the matcher.
+
+The cause is a codegen collision, now pinned by test/cc/110-param5.c:
+
+- gen speaks `r4` for the frame base on every target, and `a4ize` retargets it to `fp` at the
+  end of build **by position** — an `r4` in a memory op's BASE slot becomes `fp`, an `r4`
+  anywhere else is left alone (it is the 5th argument).
+- On AArch64 gp 4 arrives in x4. The moment the ride analysis let the 5th parameter stay in its
+  arrival register, and the body used it the way a pointer is used, its base slot read as the
+  frame pointer. `*p`, `p[i]` and `p + i` all addressed the FRAME.
+- lstrlib's `prepstate` takes six parameters; the 6th spilled and the 5th rode x4, so
+  `ms->p_end` came out as `sp + lp` and every `do_match` ran against a garbage pattern end.
+
+The fix bars a rider whose arrival register collides with the build-time frame-base spelling
+(`rideset`, crew/moon/gen.l). It costs nothing measurable: with the ride barred the param homes
+to r14, `a4ize` renames the frame base, and `unhome` — which runs *after* `a4ize` — renames r14
+back to r4 safely, so the param still rides its arrival register end to end.
+
+x64 cannot reach this (r4 is rbp, never an argument register), thumb has only four argument
+registers, and riscv has `nhome = 0` so nothing rides. That is why 110 single-file programs and
+the whole love corpus under mooncc/arm64 stayed green over it. **The lesson is the one
+ccarch.sh's header already states, one level up: a shared model's fault hides behind whichever
+lane the other target lacks, and a 30k-line package is a much wider net than a test suite
+someone wrote on purpose.** The shape that reaches this bug — a six-parameter function whose
+5th is a pointer — is not one anybody writes into a compiler test deliberately.
+
 ## suggested order (LFS-shaped, easiest real C first)
 
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.
