@@ -234,15 +234,29 @@ static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
 // (cwd _)      -> the current directory as a string, or () on failure. for the prompt.
 // The syscall body lives in an ai_noinline helper so the lvm_ wrapper stays a pure tail-jump (no ret):
 // the syscall + any stack buffer would otherwise block the sibcall to Continue() and trip `make vmret`.
+// ⚠ WNOHANG, and the unit means "still running". Every real answer is a charm (a
+// status, 256+sig for a stop, -errno for a failure), so the zero point is free to
+// carry the fourth term -- no sentinel is overloaded.
 ai_noinline static ai_word host_waitpid(ai_word arg) {
  intptr_t pid = (arg & 1) ? getcharm(arg) : 0;
  int st;
  pid_t r;
- do r = waitpid((pid_t) pid, &st, WUNTRACED); while (r < 0 && errno == EINTR);
+ do r = waitpid((pid_t) pid, &st, WUNTRACED | WNOHANG); while (r < 0 && errno == EINTR);
+ if (!r) return ZeroPoint;                                   // alive, neither exited nor stopped
  if (r < 0) return putcharm(-errno);
  if (WIFSTOPPED(st)) return putcharm(256 + WSTOPSIG(st));
  return putcharm(proc_status(st)); }
-static lvm(lvm_waitpid) { Sp[0] = host_waitpid(Sp[0]); return Ip++, Continue(); }
+// (wait pid) waits by PARKING, not by blocking: a live child re-arms the task for the
+// next tick and yields, so a peer task runs while a foreground job is up. ⚠ IT IS A
+// POLL AND SHOULD BE READ AS ONE -- one waitpid per millisecond per waiting task,
+// because SIGCHLD is not in the scheduler's wait set and a pid is not an fd. That is
+// rung 5's shape for the write residue, and the same trade: honest and small, and
+// correct until something measures it hurting. Nothing is consumed before the park
+// (WNOHANG left the child exactly as it found it), so the op re-runs whole.
+static lvm(lvm_waitpid) {
+ ai_word r = host_waitpid(Sp[0]);
+ if (r == ZeroPoint) { g->next_wake_at = ai_clock() + 1; return Ap(lvm_yield_sw, g); }
+ Sp[0] = r; return Ip++, Continue(); }
 
 ai_noinline static ai_word host_posix_signal(ai_word sigw, ai_word dw) {
  if (!(sigw & 1) || !(dw & 1)) return putcharm(EINVAL);

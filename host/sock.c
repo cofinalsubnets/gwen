@@ -8,9 +8,12 @@
 // existing fgetc/fputc machinery (the fgetc read path even yields
 // cooperatively on a not-ready fd), so a socket nif only has to make the fd.
 //
-// Blocking is intentional in the TCP setup calls: ain is one-shot, so a
-// blocking getaddrinfo / connect / accept is acceptable (the doc's Stage 1).
-// The fgetc/fputc traffic that follows is what interleaves cooperatively.
+// accept and udp-recv PARK on their fd instead of blocking (love.h's nif park:
+// leave Ip unadvanced and yield, so the op re-runs on reschedule). connect does
+// NOT, and cannot be made to the same way: getaddrinfo has no nonblocking form --
+// not a syscall with an O_NONBLOCK to set, but a config read that may speak DNS --
+// so it wants a thread, a subprocess or a resolver of our own. That is a project,
+// and it is the one blocking call left in this file. doc/io.md, the nif floor.
 #define _GNU_SOURCE     // SOCK_CLOEXEC, the SCM_RIGHTS glue
 #include "love.h"
 #include <unistd.h>
@@ -128,14 +131,31 @@ static lvm(lvm_listen) {
  Sp[0] = ai_nil; Ip += 1;
  return Continue(); }
 
-// (accept l) -- block until a client connects to listener port `l`, wrap the
-// connection fd as a port. Blocking is fine for one-shot ain: there is
-// nothing else to do until the first client arrives, and the pump tasks are
-// only spawned afterwards. nil on misuse / accept() failure.
+// accept(2) without waiting, in readn's three terms: >=0 the fd, -2 nobody is there
+// yet, -1 gone. The O_NONBLOCK toggle is per call for main.c's reason -- the flags
+// ride the OPEN FILE DESCRIPTION, which a forked child shares, and a listener left
+// nonblocking is a surprise for whoever inherits it. errno is read before the
+// restore, which is an fcntl and may set its own.
+ai_noinline static int call_accept(int lfd) {
+ int fl = fcntl(lfd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
+ if (off) fcntl(lfd, F_SETFL, fl | O_NONBLOCK);
+ int fd;
+ do fd = accept(lfd, NULL, NULL); while (fd < 0 && errno == EINTR);
+ int busy = fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
+ if (off) fcntl(lfd, F_SETFL, fl);
+ return fd >= 0 ? fd : busy ? -2 : -1; }
+
+// (accept l) -- take the next client on listener port `l` and wrap its fd as a port.
+// An empty backlog PARKS the task on the listener's fd (love.h's nif park: leave Ip
+// unadvanced and yield), so the scheduler folds this listener into the same wait as
+// every other quiet fd and one core is not burnt waiting for a first connection.
+// Re-running the op is exact: nothing is consumed before the park. nil on misuse or
+// a real accept() failure.
 static lvm(lvm_accept) {
  int lfd = (int) port_fd(Sp[0]);
  if (lfd < 0) goto fail;
- int fd = accept(lfd, NULL, NULL);
+ int fd = call_accept(lfd);
+ if (fd == -2) { g->next_wait_fd = lfd; return Ap(lvm_yield_sw, g); }
  if (fd < 0) goto fail;
  cloexec(fd);
  Pack(g);
@@ -187,10 +207,11 @@ static lvm(lvm_shutdown) {
 // that recvfrom/sendto directly off a bound port's fd and marshal the peer as a
 // fixnum -- (host-order ipv4 << 16) | port, 48 bits, comfortably inside a fixnum:
 //   (udp-bind port)            -> a port on a bound UDP socket | nil
-//   (udp-recv p)               -> (peerfix . datagram-bytes) | nil  [BLOCKS]
+//   (udp-recv p)               -> (peerfix . datagram-bytes) | nil  [PARKS]
 //   (udp-send p peerfix bytes) -> p (chainable) | nil
-// Blocking recv is intentional, like accept above: the oracle is one-at-a-time,
-// so there is nothing else to do until the next datagram arrives.
+// A quiet socket PARKS the task on its fd, like accept above -- the oracle is
+// one-at-a-time, but "nothing else to do" is the SCHEDULER's judgement to make,
+// not this nif's, and while it blocked no peer task could run at all.
 
 ai_noinline static int call_udpbind(int port) {
  if (port < 0 || port > 65535) return -1;
@@ -225,13 +246,19 @@ static lvm(lvm_udpbind) {
 
 // recvfrom + peer marshaling; the &-taken sockaddr lives here so the lvm
 // wrapper stays TCO-clean. Returns by value (16 bytes -> registers).
+// ⚠ THE STRUCT MUST STAY TWO WORDS. At 24 bytes the ABI returns it through memory,
+// which puts an address-taken slot in the CALLER's frame -- and the caller is an
+// lvm_, where a frame turns the tail Continue() into a ret (make vmret). So the
+// would-block answer rides `n` as a third term rather than a third field: >=0 bytes,
+// -2 nothing waiting, -1 gone. MSG_DONTWAIT asks for it without touching the flags.
 struct dgram { ssize_t n; uintptr_t peerfix; };
 ai_noinline static struct dgram call_udprecv(int fd, char *buf, size_t cap) {
  struct sockaddr_in peer; memset(&peer, 0, sizeof peer);
  socklen_t plen = sizeof peer;
  ssize_t n;
- do n = recvfrom(fd, buf, cap, 0, (struct sockaddr*) &peer, &plen);
+ do n = recvfrom(fd, buf, cap, MSG_DONTWAIT, (struct sockaddr*) &peer, &plen);
  while (n < 0 && errno == EINTR);
+ if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) n = -2;
  return (struct dgram) { n, ((uintptr_t) ntohl(peer.sin_addr.s_addr) << 16)
                           | (uintptr_t) ntohs(peer.sin_port) }; }
 
@@ -240,6 +267,11 @@ static lvm(lvm_udprecv) {
  if (fd < 0) goto fail;
  static char buf[DG_MAX];
  struct dgram d = call_udprecv(fd, buf, sizeof buf);
+ // no datagram yet -> PARK on the socket, exactly as accept does. Nothing has been
+ // taken off the wire, so the op re-runs whole. ⚠ the fd is RE-READ off Sp[0] rather
+ // than carried in `fd`: a local live across call_udprecv is scratch in an lvm_
+ // frame, and make vmret catches it as a ret (it did, on the first build of this).
+ if (d.n == -2) { g->next_wait_fd = port_fd(Sp[0]); return Ap(lvm_yield_sw, g); }
  ssize_t n = d.n;
  if (n < 0) goto fail;
  uintptr_t peerfix = d.peerfix;
