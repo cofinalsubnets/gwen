@@ -263,7 +263,7 @@ static void host_teeout(char const *p, size_t n) {
 
 // (hark argv) / (herald argv) are a TWO-AP NIF BODY -- {{start}, {drain}, {ret0}} --
 // because the op is not re-runnable where it has to park. love.h's nif park says
-// "leave Ip unadvanced and yield, the op re-runs", and a run that re-ran from the
+// "leave Ip unadvanced and yield, the op re-runs", and a hark that re-ran from the
 // top would fork a SECOND child. So the fork and the capture are two ops, and the
 // park lives in the second one, which re-runs as often as the child is slow.
 //
@@ -338,7 +338,10 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  // difference this rung is about. (Every push below happens after the fork, so
  // growing the stack over the cav/blob gap is the parent's business alone.)
  int op[2], ep[2];
- if (pipe(op)) return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(errno));
+ // ⚠ errno into a local BEFORE the state push, on every one of these: the push
+ // may collect, and a collection that grows the pool makes syscalls of its own.
+ if (pipe(op)) { int e = errno;
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
  if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]);
   return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
