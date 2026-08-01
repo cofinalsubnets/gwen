@@ -43,6 +43,10 @@ export LOVE_NO_IMAGE := 1
 # source, and every gate goes green over both. one line, whole tree, every fragment
 # below. it does NOT cover a recipe that exits 0 having written garbage -- that wants
 # a `test -s $@` at the recipe (mk/lib.mk's lcat_h, host/build.mk's sys.o).
+# ⚠ NOR DOES IT COVER A KILLED MAKE. make deletes a half-written target on a recipe
+# failure and on a signal it can CATCH; SIGKILL it cannot, so a `kill -9` mid-build can
+# still leave one truncated -- `make test_slow` killed mid-run left proof/lean/uugen.lean
+# at 0 bytes. after killing a build, `git status` before anything else.
 .DELETE_ON_ERROR:
 
 # --- build fragments, pushed down into the folders they build (see each file) ---
