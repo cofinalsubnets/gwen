@@ -85,7 +85,7 @@ glibc's strtod left the trusted base), spec.l pins the classic faces. the
 next such rung is the round-trip on the rest of the data grammar (big.v
 covers the decimal integers; strings/symbols/lists remain).
 
-## the mutator's side of the collector -- GCDBG, and the lane that is half built
+## the mutator's side of the collector -- GCDBG, and the gate it became
 
 `test_gcheck` checks the COLLECTOR. The sibling question is the MUTATOR's: a raw C
 pointer held across a call that may collect. It is the costliest recurring bug shape
@@ -106,7 +106,46 @@ compilers and, deliberately, NOT `love0` -- love0 is shared and unsuffixed
 (`out/host/0`), so a flag that reaches it leaks out of the debug lane's own tree, and
 a stress-built love0 segfaults baking `mooncc0.image`.
 
-**What is verified.** The lane detects. The control is `ai_big_binop`'s own re-fetch
+**It is `test_gcstress`, and it rides `test_slow`.** The whole corpus walks the stress
+build: 3726 asserts green in **258 s** wall (239 s of corpus behind a 17 s cold egg
+boot). Sabotage-proven -- delete the `gen_wb` in `obin_run` and the gate reddens on
+exactly the array-of-bignums assert that found it.
+
+**What it found on its first full pass.** Three real bugs, all latent in a plain build,
+none of them reachable by any other gate in the tree:
+
+* **`argv` and `cmdline` were bound to a forwarded chain.** `main()` popped the argv
+  list off the stack and then called `ai_defn` for the ~100 static nifs, which interns
+  a hundred names -- so the value was unrooted across a hundred allocations. And
+  `ai_defn` itself read `defs[n].x` one entry at a time, so even a two-entry call went
+  stale between its own definitions. The visible face was a **silent stop**: a stress
+  build booted in 17 s and exited 0 having evaluated nothing, because the CLI read an
+  argv that was no longer there. ⚠ **the first fix for this was wrong and gwen caught
+  it**: rooting the values up front only MOVES the hazard into the pushes, because
+  `ai_push` collects when the stack is short and leaves every entry it has not reached
+  yet exactly as stale -- rarely, and only under memory pressure, which is worse than
+  the bug it replaced, and which `AI_GC_STRESS` cannot see at all (`ai_push` does not
+  route through `ai_have`). Reserving the room up front is no better: it collects
+  before the first `.x` is even read. **There is no ordering that fixes it**, because
+  C cannot re-root what it holds in an array. So `ai_defn` keeps its real contract --
+  immortal values only, which is what every other caller passes -- and a live value
+  arrives on the STACK instead, through the new `ai_defv`, where the collector finds
+  and updates it. Two more callers were quietly in the same position (`love-version`
+  and `love-arch`, each popping a fresh string into a one-entry array) and use the new
+  door too.
+* **the `obin` element loop stored into a promoted array with no write barrier.** The
+  ai_O elementwise lane allocates per element, so a minor mid-loop tenures the result
+  array while the elements it is being filled with stay young -- an old->young edge
+  nothing remembered, so the next minor freed an element the array still pointed at.
+  Re-fetching `vec(g->sp[0])` (which the loop already did, and commented) keeps the
+  STORE landing in the right place; it does not make the stored edge visible. ⚠ this
+  one is reachable with no flag at all: 6000 bignums at `LOVE_BUDGET_MB=16` answers
+  `(- (+ o ones) ones) /= o`, on the shipped binary.
+* **`ioput_coin` printed through a bare C word.** Every other `ioput_*` parks its value
+  on the stack because emitting a byte grows the port and may collect; the coin lane
+  read `coin_die`/`coin_load` off a raw `x` across the emission of `(` and the name.
+
+**What is verified about the instrument itself.** The control is `ai_big_binop`'s own re-fetch
 (`a = g->sp[0], b = g->sp[1]; // re-fetch (ai_have may have GC'd)`): delete that one
 line and the normal build answers a 163-digit bignum sum correctly and passes the
 whole corpus -- **latent, exactly as obin_elem was** -- while the stress build
@@ -115,14 +154,19 @@ It also found a real bug on its first boot: `intern` evaluated `intern_reserve(g
 an ARGUMENT to `ai_have`, so a scare arriving from the caller was dereferenced rather
 than propagated -- an OOM at startup segfaulted instead of scaring. Fixed.
 
-**⚠ what is NOT verified, and why there is no `test_gcstress` target.** The lane runs
-a targeted program; it does not yet run the corpus. A stress build boots (16.9 s) and
-then **exits 0 having evaluated nothing at all** -- `-e '(quit 7)'` exits 0. Silent,
-green, and wrong, which is the one gate result worth less than none. The suspicion is
-the uncommitted heap gap (the argv marshalling lays bytes in it and the gap's contract
-is "consumed before anything allocates again", which forcing a collection at every
-`ai_have` breaks by construction) -- suspicion, not a finding: it has not been traced.
-Until it is, this is an instrument you point at a program by hand, not a gate.
+**⚠ what it still does NOT reach.** `ai_have` is the whole door. `Have(n)` -- the
+op-boundary macro inside an `lvm_` frame -- does not route through it, and does not need
+to: the op re-runs, so that lane is safe by construction. But it means the stress lane
+says nothing about a raw pointer held across a `Have`, and nothing at all about the
+frontends' own allocation.
+
+⚠ **the silent stop this lane opened with was the FIRST bug, not an artifact.** A stress
+build booted in 17 s and exited 0 having evaluated anything you handed it -- `-e '(quit
+7)'` exited 0. I wrote down the uncommitted heap gap as the suspicion. It was not: it
+was the argv staleness above, and the way to it was to notice that the STDIN lane worked
+while every lane that reads `argv` did nothing. A suspicion recorded as a suspicion cost
+nothing; had it been recorded as a finding it would have sent the next reader to the
+wrong file.
 
 Three measurements worth not re-deriving:
 
@@ -165,6 +209,7 @@ repeat: a gate that measures a shape earns a theorem that OWNS the shape.
    sized loads, arm64.
 4. **uu whole-corpus integration** -- every corpus file into both export lists;
    mechanical, unfinished.
-5. **the mutator's side of the collector** -- `AI_GC_STRESS` detects the class and
-   has caught one real bug, but cannot run the corpus yet (above). Finishing it is
-   the cheapest remaining rung here: one silent stop to trace, and it becomes a gate.
+5. **the mutator's side of the collector** -- CLOSED as of 2026-08-01: `test_gcstress`
+   runs the whole corpus and rides `test_slow` (above). What is left is the class it
+   cannot see -- a pointer held across a `Have(n)`, and the frontends' own allocation
+   (host/*.c is compiled into the stress build, but nothing drives its rarer lanes).

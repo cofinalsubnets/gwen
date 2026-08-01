@@ -907,6 +907,19 @@ endif
 # check in it -- green on a question it was not asking. doc/verify.md.
 test_gcheck: host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAI_GC_CHECK test_host
+# test_gcstress: the MUTATOR's side of the same question, and the sibling gate.
+# test_gcheck asks whether the collector loses anything; this asks whether the C
+# around it holds a raw pointer across a call that collects. AI_GC_STRESS makes
+# ai_have -- the tree's own phrase for "this call may collect" -- ALWAYS collect,
+# poisons the vacated nursery so a stale read faults at an address a backtrace can
+# name instead of reading plausible data, and makes every 32nd collection a MAJOR so
+# tenured objects move too. Then the whole corpus walks it. ~4 min, its own tree
+# (out/host/gcs), GCDBG not EXTRA_CFLAGS -- same reasons as test_gcheck above.
+# It found three on its first full pass: argv/cmdline bound to a forwarded chain
+# (ai_defn), the obin element loop storing into a promoted array with no write
+# barrier, and ioput_coin printing through a bare C word. doc/verify.md.
+test_gcstress: host
+	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAI_GC_STRESS test_host
 ifeq ($(COQC),)
 test_mx:
 	@echo "test_mx: skipped (needs coqc)"

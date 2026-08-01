@@ -899,10 +899,31 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g->pool, 0); }
  return s; }
 
+// ⚠ EVERY .x HERE MUST BE IMMORTAL -- a nif address, a fixnum, an out-of-pool constant.
+// C cannot re-root what it holds in an ARRAY, so a def whose value is a live heap word
+// goes stale the moment anything below collects, and NO ORDERING FIXES IT: rooting the
+// values up front only moves the hazard into the pushes (ai_push collects when the
+// stack is short, leaving every entry it has not reached yet exactly as stale, rarely
+// and only under memory pressure), and reserving the room up front collects BEFORE the
+// first .x is even read. A value that MOVES arrives on the stack instead -- ai_defv.
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
  for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
   g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
  ai_core_of(g)->sp++;
+ return g; }
+
+// The twin of ai_defn for a value that MOVES: it rides g->sp[0], where the collector
+// finds and updates it, and it is LEFT there -- so a second name binds the same one
+// (main()'s argv and cmdline are one chain, and every caller of this pops when done).
+// The re-read of sp[1] is the whole of it: it happens AFTER the book push, so a
+// collection inside that push is already accounted for, and ai_push roots its own
+// operand (ai_pushr's mm) so the second one cannot go stale either.
+struct ai *ai_defv(struct ai *g, char const *nm) {
+ if (!ai_ok(g)) return g;
+ g = ai_push(g, 1, A(ai_core_of(g)->book));           // [book, value, ..]
+ if (!ai_ok(g)) return g;
+ g = ai_mapput(intern(ai_strof(ai_push(g, 1, ai_core_of(g)->sp[1]), nm)));
+ if (ai_ok(g)) ai_core_of(g)->sp++;                   // [value, ..]
  return g; }
 
 nifs(native_implemented_function);
@@ -999,9 +1020,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = ai_defn(g, def1, countof(def1));
   // `love-version`: the build's version-control id (love_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
-  if (ai_ok(g = ai_strof(g, AI_VERSION))) {
-   struct ai_def vd[] = {{"love-version", ai_pop1(g)}};
-   g = ai_defn(g, vd, countof(vd)); }
+  if (ai_ok(g = ai_strof(g, AI_VERSION)))            // a live string: off the STACK, never an ai_def
+   g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for. auto-ev interns it as the assembler
   // target ('x64 / 'arm64) and gates the still-x86-only lanes (float / loops).
 #if defined(__x86_64__)
@@ -1013,9 +1033,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
 #else
   #define AI_ARCH "other"
 #endif
-  if (ai_ok(g = ai_strof(g, AI_ARCH))) {
-   struct ai_def ad[] = {{"love-arch", ai_pop1(g)}};
-   g = ai_defn(g, ad, countof(ad)); }
+  if (ai_ok(g = ai_strof(g, AI_ARCH)))
+   g = ai_pop(ai_defv(g, "love-arch"), 1);
   // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
   // name, so installing that nif interns it and the book roots it; the raise
   // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).
@@ -4030,13 +4049,18 @@ static struct ai *ioput_fn_body(struct ai *g, word x, uintptr_t off) {
 
 // a coin shows as `(name payload)` -- reparsable when the die's NAME is the symbol
 // of a bound constructor (the common case: `(z5 3)`). Nameless -> `(coin payload)`.
+// ⚠ THE COIN IS PARKED, like every other ioput_* value. Printing a byte grows the port,
+// which allocates, so a raw `x` -- and the die and payload read out of it -- is stale
+// after the first one. This lane was the last one reading through a bare C word.
 static struct ai *ioput_coin(struct ai *g, word x, uintptr_t off) {
- word nm = die_get(g, coin_die(x), DIE_NAME);
+ if (!ai_ok(g = ai_push(g, 1, x))) return g;
  g = ioputc(g, '(');
- g = ai_nilp(g, nm) ? ioputcs(g, "coin") : ioputx(g, nm, off);
+ if (ai_ok(g)) {
+  word nm = die_get(g, coin_die(g->sp[0]), DIE_NAME);
+  g = ai_nilp(g, nm) ? ioputcs(g, "coin") : ioputx(g, nm, off); }
  g = ioputc(g, ' ');
- g = ioputx(g, coin_load(x), off);
- return ioputc(g, ')'); }
+ if (ai_ok(g)) g = ioputx(g, coin_load(g->sp[0]), off);
+ return ai_pop(ioputc(g, ')'), 1); }
 static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
  if (charmp(x)) return ioprintf(g, "%d", getcharm(x));
  if (coinp(x)) return ioput_coin(g, x, off);
@@ -8730,9 +8754,10 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
  if (!isnum(a) || !isnum(b)) return nil;
  struct ai *g = *fp;
  if (flop(a) || flop(b)) {                      // float domain -> float box
-  if (!ai_ok(g = ai_have(g, flo_req))) return *fp = g, nil;
-  *fp = g;
-  return mk_flo(&g->hp, vop_flo(op, toflo(a), toflo(b))); }
+  ai_flo_t r = vop_flo(op, toflo(a), toflo(b));  // ⚠ BOTH OPERANDS READ FIRST: a/b are raw words
+  if (!ai_ok(g = ai_have(g, flo_req))) return *fp = g, nil;   // and a float box is a heap object, so
+  *fp = g;                                                    // toflo after the have reads a moved one
+  return mk_flo(&g->hp, r); }
  if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
   intptr_t av = toint(a), bv = toint(b), t; bool of;
   switch (op) {
@@ -8787,7 +8812,8 @@ static struct ai *arr_to_obj(struct ai *g, int slot) {
    if (e >= fix_min && e <= fix_max) v = putcharm(e);
    else { if (!ai_ok(g = ai_have(g, wide_req))) return g;
     v = mk_wide(&g->hp, e); } }
-  vec_put_obj(vec(g->sp[0]), i, v); }                          // re-fetch dst post-box
+  vec_put_obj(vec(g->sp[0]), i, v);                            // re-fetch dst post-box
+  gen_wb(g, g->sp[0], v); }                                    // ... and BARRIER it: see obin_run
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
  return g; }
 
@@ -8821,6 +8847,13 @@ static struct ai *obin_run(struct ai *g, int op) {
   word res = obin_elem(&g, op, ae, be);
   if (!ai_ok(g)) return g;
   vec_put_obj(vec(g->sp[0]), p, res);                          // re-fetch result post-alloc
+  // ⚠ AND BARRIER IT. Re-fetching keeps the STORE landing in the right place; it does not
+  // make the stored edge visible. This loop allocates, so a minor mid-loop promotes the
+  // result array while the elements it is being filled with stay young -- an old->young
+  // edge the rem set has to carry or the next minor frees an element still in the array
+  // (which then reads as whatever is allocated over it). gen_scan_inplace's KVec lane is
+  // what rescans it. Reachable in a plain build: 6000 bignums at LOVE_BUDGET_MB=16.
+  gen_wb(g, g->sp[0], res);
   odo_step(idx, R, shp); }
  word result = g->sp[0];                                       // collapse [r,a,b] -> r, advance ip
  g->sp += 2, g->sp[0] = result, g->ip = (union u*) g->ip + 1;

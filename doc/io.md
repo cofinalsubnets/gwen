@@ -1812,7 +1812,7 @@ a genuine catch CYCLE (a catches b, b catches a) still spins rather than being
 diagnosed. it spun before too, so nothing regressed -- but it is a real deadlock and
 a `;; two tasks caught on each other` would beat burning a core. not built.
 
-### the floor below this floor -- THE NIF FLOOR, named and not built
+### the floor below this floor -- THE NIF FLOOR, three of four taken
 
 the device floor made every DEVICE entry point nonblocking. what still blocks is
 a different layer with a different fix shape: a device answers would-block and the
@@ -1820,15 +1820,15 @@ caller parks, but a **nif** parks itself -- leave `Ip` unadvanced, return
 `Ap(lvm_yield_sw, g)`, and the op re-runs. these were scoped OUT of this arc on
 purpose, and this is the roster, read off the source rather than off memory:
 
-| nif | where | what it does today |
+| nif | where | state |
 |---|---|---|
-| `accept` | host/sock.c:138 | `accept(lfd, NULL, NULL)` -- blocking |
-| `udp-recv` | host/sock.c:190 | blocking `recvfrom`; its own comment says `[BLOCKS]`, *"intentional, like accept"* |
-| `connect` | host/sock.c:56-79 | `getaddrinfo`, then a blocking `connect(2)` |
-| `wait` | host/posix.c:241 | `waitpid(pid, &st, WUNTRACED)` in an EINTR loop |
-| `run` / `runt` | host/posix.c:866, 873 | `waitpid(pid, &st, 0)` in an EINTR loop |
-| `mind` | host/posix.c:1028 | the pty runner, same shape |
-| `catch` | love.c, `lvm_wait` | ✅ **taken, above** -- it never blocked; it never idled |
+| `accept` | host/sock.c | ✅ **parks** on the listener's fd -- 2026-08-01 |
+| `udp-recv` | host/sock.c | ✅ **parks** on the socket's fd -- 2026-08-01 |
+| `wait` | host/posix.c | ✅ **parks** -- 2026-08-01, and it is a 1 ms POLL (below) |
+| `catch` | love.c, `lvm_wait` | ✅ **taken** -- it never blocked; it never idled |
+| `mind` | host/posix.c | ⚠ **was never on this floor.** It hands back `(pid . master-port)` and does not wait for the child at all; its two `waitpid(pid, &st, 0)` calls are teardown reaps of a child that has already `_exit`ed or been SIGKILLed. Read off the source this time. |
+| `run` / `runt` | host/main.c, `host_run` | **the one left.** Not the reap -- the DRAIN: a blocking `read(2)` loop over the child's stdout pipe, which holds the vm for the child's whole life. ⚠ `make waits` cannot see it (a raw read, not one of the four hooks it names). |
+| `connect` | host/sock.c | a PROJECT, not a rung -- `getaddrinfo` below |
 
 ⚠ **`catch` was a different bug from the other six and was not lumped in.** it
 already yielded; what it did was clear `next_wake_at` and `next_wait_fd` first, so
@@ -1844,10 +1844,45 @@ async door. so `connect` cannot be fixed the way the others can: it wants a
 thread, a subprocess, or a resolver of our own. **that one is a project, not a
 rung**, and it is the reason this list is a sibling arc rather than a seventh rung.
 
-the process half is the cheap half, and the machinery is already there:
-host/posix.c:145 reaps with `waitpid(-1, WNOHANG)` for the init lane. a parking
-`wait` is that call plus the scheduler's retry -- exactly the shape rung 5 used
-for the write residue.
+### what the three parks cost, and what `run` still needs
+
+**`accept` and `udp-recv` are true fd parks.** `next_wait_fd` is the listener (or the
+bound socket) and the scheduler folds it into the same `poll` as every other quiet fd
+-- no timer, no retry, no poll. `accept` toggles `O_NONBLOCK` per call for main.c's
+reason (the flags ride the open file description, which a forked child shares);
+`udp-recv` asks with `MSG_DONTWAIT` and touches no flags at all. Both answer in
+`readn`'s three terms, which is what the read side settled on: a value, -2 for
+nothing-yet, -1 for gone.
+
+⚠ **`udp-recv`'s park had to ride the EXISTING two words, not a third field.**
+`call_udprecv` returns `struct dgram` by value; at 24 bytes the ABI returns it through
+memory, which puts an address-taken slot in the CALLER's frame -- and the caller is an
+`lvm_`, where a frame turns the tail `Continue()` into a `ret`. `make vmret` caught the
+first build of this, on a DIFFERENT line: a local `fd` kept live across the call for
+the park. The fd is re-read off `Sp[0]` instead.
+
+**`wait` is a POLL and should be read as one.** `WNOHANG` plus `next_wake_at = now + 1`
+-- one `waitpid` per millisecond per waiting task -- because SIGCHLD is not in the
+scheduler's wait set and a pid is not an fd. Rung 5's shape for the write residue, and
+the same trade. The unit carries the fourth term ("still running"): every real answer
+is a charm, so nothing is overloaded.
+
+**`run` is the one left, and it is not the reap.** `host_run` forks, then sits in a
+blocking `read(2)` loop draining the child's stdout pipe into a growing string; the
+`waitpid` after it is instant, because the pipe already hit EOF. The obstacle is that
+the op is NOT re-runnable at the point where it would park -- it has already forked a
+child and drained N bytes, and a re-entry from the top would fork again. The shape that
+fits is a **two-ap nif body**: `{{lvm_run_start}, {lvm_run_drain}, {lvm_ret0}}` -- the
+first forks and leaves (string, n, fd, pid) on the stack, the second parks on the pipe
+fd and re-runs until EOF, then reaps. The park state is four stack slots, which the
+yield snapshots and the GC traces for free. Not built here: it is a rung's work inside
+the nif the whole build system shells out through, and nothing concurrent pays for the
+block today (`run` is the CAPTURE spawn -- lush and kiosko use `spawn`+`wait` and
+`mind`, which park).
+
+the machinery for the process half was already there: host/posix.c reaps with
+`waitpid(-1, WNOHANG)` for the init lane, and `reap` has been WNOHANG since it
+landed.
 
 ### `k_sources_max` -- the rule, since the fix is not owed yet
 

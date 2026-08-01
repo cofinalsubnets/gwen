@@ -89,3 +89,14 @@
    _ (assert (rc = 0)))                    ; 124 is the timeout: the old cap's hang
 
 (puts "run parked: ok\n")
+
+; --- the nif floor: accept / udp-recv / wait all PARK --------------------------
+; the laws and the shapes live in test/host/nifpark.l -- driven from HERE for the
+; same reason parked.l is: two of its three regressions are HANGS (a blocking accept
+; waits for a connection only the wedged vm could still make), and a wedged gate is
+; worse than a red one. 124 IS the control's answer, and each law was verified by
+; putting its own blocking call back.
+(: rc (cap (run `("sh" "-c" "timeout 20 out/host/love test/host/nifpark.l")))
+   _ (assert (rc = 0)))
+
+(puts "run nifpark: ok\n")
