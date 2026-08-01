@@ -83,10 +83,10 @@ struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn };
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin.
-// (gpio_dir pin out) -- direction: out non-nil => output; returns out.
-// (gpio_put pin val) -- drive an output: val non-nil => high; returns val.
+// (gpio_dir pin out) -- direction: out non-zero => output; returns out.
+// (gpio_put pin val) -- drive an output: val non-zero => high; returns val.
 // (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
-// nil is putcharm(0), so getcharm(arg) != 0 reads a number or nil correctly.
+// zero is putcharm(0), so getcharm(arg) != 0 reads a number or zero correctly.
 static lvm(ai_gpio_init) {
   gpio_init(getcharm(Sp[0]));           // leaves Sp[0] (the pin) as the result
   Ip += 1;

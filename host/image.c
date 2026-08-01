@@ -234,21 +234,21 @@ int image_bake(struct ai *g) {
 // tail-jump (make vmret). the helper runs after Pack(g), on g->sp; the wrapper
 // stays a thin sibcall. answers the result word (1 | ()).
 static ai_noinline ai_word image_bake_do(struct ai *g) {
- if (!ai_strp(g->sp[0])) return ai_nil;
+ if (!ai_strp(g->sp[0])) return ai_zero;
  struct ai_str *s = (struct ai_str*) g->sp[0];
  char path[4096];
- if (s->len >= sizeof path) return ai_nil;
+ if (s->len >= sizeof path) return ai_zero;
  memcpy(path, s->bytes, s->len);                 // copy OUT first: the dump's gen_major moves the string
  path[s->len] = 0;
  image_guard_arm();
  uintptr_t len = 0;
  void *buf = ai_image_save_(g, &len);
- if (!buf) { image_guard_report(); return ai_nil; }
+ if (!buf) { image_guard_report(); return ai_zero; }
  FILE *f = fopen(path, "wb");
  int rc = !f ? -1 : (fwrite(buf, 1, len, f) == len) ? 0 : -1;
  if (f) fclose(f);
  g->alloc(g, buf, 0);                            // a session lives on after a bake: no leak
- return rc ? ai_nil : putcharm(1); }
+ return rc ? ai_zero : putcharm(1); }
 static lvm(lvm_bake) {
  Pack(g);
  ai_word r = image_bake_do(g);

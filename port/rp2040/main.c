@@ -77,10 +77,10 @@ struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_
 
 // --- GPIO builtins --------------------------------------------------------
 // (gpio_init pin)    -- claim a pin for SIO; returns the pin.
-// (gpio_dir pin out) -- direction: out non-nil => output; returns out.
-// (gpio_put pin val) -- drive an output: val non-nil => high; returns val.
+// (gpio_dir pin out) -- direction: out non-zero => output; returns out.
+// (gpio_put pin val) -- drive an output: val non-zero => high; returns val.
 // (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
-// nil is putcharm(0), so getcharm(arg) != 0 reads a number or nil correctly.
+// zero is putcharm(0), so getcharm(arg) != 0 reads a number or zero correctly.
 static g_vm(g_gpio_init) {
   gpio_init(getcharm(Sp[0]));           // leaves Sp[0] (the pin) as the result
   Ip += 1;

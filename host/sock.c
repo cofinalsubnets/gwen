@@ -85,7 +85,7 @@ static int quad(struct ai_str *hv, uint32_t *out) {
 // already made a socket and sent a SYN. So the first ap makes the socket and
 // starts the handshake, the second waits for it, and the fd rides the stack
 // between them (a charm -- the GC walks that slot as an ordinary word).
-// Any failure -- bad args, not a quad, refused, unreachable -> nil, unchanged.
+// Any failure -- bad args, not a quad, refused, unreachable -> zero, unchanged.
 ai_noinline static int call_connect(struct ai_str *hv, int port) {
  uint32_t a;
  if (port < 0 || port > 65535 || quad(hv, &a) < 0) return -1;
@@ -139,13 +139,13 @@ static lvm(lvm_connectw) {
  Sp[2] = Sp[0];
  Sp += 2; Ip += 1;
  return Continue();
- fail:                                    // [fd, port#, ret] -> [nil, ret]
- Sp[1] = ai_nil;
+ fail:                                    // [fd, port#, ret] -> [zero, ret]
+ Sp[1] = ai_zero;
  Sp += 1; Ip += 1;
  return Continue(); }
 
 // (listen port) -- TCP server socket: socket()+SO_REUSEADDR+bind(INADDR_ANY,
-// port)+listen(). Returns the listening port object, or nil on any failure.
+// port)+listen(). Returns the listening port object, or zero on any failure.
 // IPv4 only (enough for a loopback demo); `accept` gives the connection.
 ai_noinline static int call_listen(int port) {
  if (port < 0 || port > 65535) return -1;
@@ -177,7 +177,7 @@ static lvm(lvm_listen) {
  Sp += 1; Ip += 1;
  return Continue();
  fail:
- Sp[0] = ai_nil; Ip += 1;
+ Sp[0] = ai_zero; Ip += 1;
  return Continue(); }
 
 // accept(2) without waiting, in readn's three terms: >=0 the fd, -2 nobody is there
@@ -198,7 +198,7 @@ ai_noinline static int call_accept(int lfd) {
 // An empty backlog PARKS the task on the listener's fd (love.h's nif park: leave Ip
 // unadvanced and yield), so the scheduler folds this listener into the same wait as
 // every other quiet fd and one core is not burnt waiting for a first connection.
-// Re-running the op is exact: nothing is consumed before the park. nil on misuse or
+// Re-running the op is exact: nothing is consumed before the park. zero on misuse or
 // a real accept() failure.
 static lvm(lvm_accept) {
  int lfd = (int) port_fd(Sp[0]);
@@ -217,7 +217,7 @@ static lvm(lvm_accept) {
  Sp += 1; Ip += 1;
  return Continue();
  fail:
- Sp[0] = ai_nil; Ip += 1;
+ Sp[0] = ai_zero; Ip += 1;
  return Continue(); }
 
 // (shutdown s how) -- half-close a socket port. `how` is the POSIX SHUT_*
@@ -255,9 +255,9 @@ static lvm(lvm_shutdown) {
 // (the fgetc/fputc free-read path) can't express that. So UDP gets three nifs
 // that recvfrom/sendto directly off a bound port's fd and marshal the peer as a
 // fixnum -- (host-order ipv4 << 16) | port, 48 bits, comfortably inside a fixnum:
-//   (udp-bind port)            -> a port on a bound UDP socket | nil
-//   (udp-recv p)               -> (peerfix . datagram-bytes) | nil  [PARKS]
-//   (udp-send p peerfix bytes) -> p (chainable) | nil
+//   (udp-bind port)            -> a port on a bound UDP socket | zero
+//   (udp-recv p)               -> (peerfix . datagram-bytes) | zero  [PARKS]
+//   (udp-send p peerfix bytes) -> p (chainable) | zero
 // A quiet socket PARKS the task on its fd, like accept above -- the oracle is
 // one-at-a-time, but "nothing else to do" is the SCHEDULER's judgement to make,
 // not this nif's, and while it blocked no peer task could run at all.
@@ -290,7 +290,7 @@ static lvm(lvm_udpbind) {
  Sp += 1; Ip += 1;
  return Continue();
  fail:
- Sp[0] = ai_nil; Ip += 1;
+ Sp[0] = ai_zero; Ip += 1;
  return Continue(); }
 
 // recvfrom + peer marshaling; the &-taken sockaddr lives here so the lvm
@@ -344,7 +344,7 @@ static lvm(lvm_udprecv) {
  Sp += 1; Ip += 1;
  return Continue();
  fail:
- Sp[0] = ai_nil; Ip += 1;
+ Sp[0] = ai_zero; Ip += 1;
  return Continue(); }
 
 // sendto with the peer unmarshaled from its fixnum; the &-taken sockaddr
@@ -371,7 +371,7 @@ static lvm(lvm_udpsend) {
  Sp += 2; Ip += 1;
  return Continue();
  fail:
- Sp[2] = ai_nil;
+ Sp[2] = ai_zero;
  Sp += 2; Ip += 1;
  return Continue(); }
 
@@ -392,7 +392,7 @@ AI_NIF("udp-recv", nif_udprecv);
 AI_NIF("udp-send", nif_udpsend);
 // --- unix-domain connect: lux's X display door ----------------------------------
 // (connectu path) -- connect to a unix-domain stream socket and wrap the fd as a
-// port | nil. The load-bearing case is an X display socket (/tmp/.X11-unix/X<n>):
+// port | zero. The load-bearing case is an X display socket (/tmp/.X11-unix/X<n>):
 // real X servers listen only there, so lux's wire codec (doc/proto/x11.l lineage)
 // needs this one door the TCP nifs can't open.
 ai_noinline static int call_connectu(struct ai_str *pv) {
@@ -421,7 +421,7 @@ static lvm(lvm_connectu) {
  Sp += 1; Ip += 1;
  return Continue();
  fail:
- Sp[0] = ai_nil; Ip += 1;
+ Sp[0] = ai_zero; Ip += 1;
  return Continue(); }
 
 static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};

@@ -185,11 +185,11 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
  int fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
  if (fd < 0) return g->sp[0] = ZeroPoint, g;
  struct ai *r = ai_io_alloc(g, fd);
- if (!ai_ok(r)) return close(fd), g->sp[0] = ZeroPoint, g;    // OOM -> nil (cf. net.c lvm_listen)
+ if (!ai_ok(r)) return close(fd), g->sp[0] = ZeroPoint, g;    // OOM -> zero (cf. net.c lvm_listen)
  g = r;
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the dummy arg
 static lvm(lvm_sigfd) {
- Pack(g); g = host_sigfd(g); Unpack(g);     // host_sigfd folds every failure to nil, so no ghelp
+ Pack(g); g = host_sigfd(g); Unpack(g);     // host_sigfd folds every failure to (), so no ghelp
  return Ip++, Continue(); }
 
 // read one signalfd_siginfo (non-blocking) into (signo . pid). signo is the raw
@@ -392,11 +392,11 @@ ai_noinline static struct ai *host_fdopen(struct ai *g) {
  intptr_t fd = (a & 1) ? getcharm(a) : -1;
  if (fd < 0) return g->sp[0] = ZeroPoint, g;
  struct ai *r = ai_io_alloc(g, (int) fd);
- if (!ai_ok(r)) return g->sp[0] = ZeroPoint, g;               // OOM -> nil (cf. sigfd)
+ if (!ai_ok(r)) return g->sp[0] = ZeroPoint, g;               // OOM -> zero (cf. sigfd)
  g = r;
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the fd arg
 static lvm(lvm_fdopen) {
- Pack(g); g = host_fdopen(g); Unpack(g);     // every failure folds to nil, so no ghelp
+ Pack(g); g = host_fdopen(g); Unpack(g);     // every failure folds to (), so no ghelp
  return Ip++, Continue(); }
 
 // (spawnmap argv fdmap closes pg fg) -> pid | -errno. spawnio generalized: instead
@@ -912,7 +912,7 @@ ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
  intptr_t pid = (pidw & 1) ? getcharm(pidw) : 0;
  int st;
  pid_t r = waitpid((pid_t) pid, &st, WNOHANG);
- if (r == 0) { g->sp[0] = ai_nil; return g; }            // still running
+ if (r == 0) { g->sp[0] = ai_zero; return g; }            // still running
  if (r < 0)  { g->sp[0] = putcharm(errno); return g; }   // waitpid error
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
@@ -936,7 +936,7 @@ static lvm(lvm_reap) {
 static lvm(lvm_kill) {
  intptr_t pid = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
  intptr_t sig = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
- Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(errno) : ai_nil;
+ Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(errno) : ai_zero;
  Sp += 1; Ip += 1; return Continue(); }
 
 // Workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
@@ -945,7 +945,7 @@ static lvm(lvm_kill) {
 // tty. Returns a not-ok g only on OOM (lvm_winsize routes that to ghelp).
 ai_noinline static struct ai *host_winsize(struct ai *g) {
  struct winsize ws;
- if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = ai_nil; return g; }
+ if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = ai_zero; return g; }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                  putcharm(ws.ws_row), putcharm(ws.ws_col));
@@ -977,7 +977,7 @@ static lvm(lvm_setwinsize) {
  intptr_t row = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
  intptr_t col = (Sp[2] & 1) ? getcharm(Sp[2]) : 0;
  int rc = host_setwinsize(fd, row, col);
- Sp[2] = rc ? putcharm(rc) : ai_nil;
+ Sp[2] = rc ? putcharm(rc) : ai_zero;
  Sp += 2; Ip += 1; return Continue(); }
 
 // (ptyecho port on): toggle the pty's input ECHO. on = 0 / () clears it so a
@@ -998,7 +998,7 @@ static lvm(lvm_ptyecho) {
  intptr_t fd = port_fd(Sp[0]);
  intptr_t on = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
  int rc = host_ptyecho(fd, on);
- Sp[1] = rc ? putcharm(rc) : ai_nil;
+ Sp[1] = rc ? putcharm(rc) : ai_zero;
  Sp += 1; Ip += 1; return Continue(); }
 
 // (raw on): own the interactive terminal discipline on stdin (fd 0). A truthy
@@ -1028,7 +1028,7 @@ ai_noinline static int host_raw(intptr_t on) {
 static lvm(lvm_raw) {
  intptr_t on = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
  int rc = host_raw(on);
- Sp[0] = rc ? putcharm(rc) : ai_nil;
+ Sp[0] = rc ? putcharm(rc) : ai_zero;
  Ip += 1; return Continue(); }
 
 static union u const

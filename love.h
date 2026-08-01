@@ -21,7 +21,7 @@
 #define NAN (__builtin_nanf(""))
 #endif
 
-#define ai_nil putcharm(0)
+#define ai_zero putcharm(0)
 #define ai_inline inline __attribute__((always_inline))
 #define ai_noinline __attribute__((noinline))
 // Keep a function from being identical-code-folded with another. The data
@@ -219,21 +219,21 @@ struct ai {
   intptr_t v0;
   struct {
    ai_word book;   // global env map (lookup-lambda); GC-forwarded in v0..end. The
-                  // macro table is book[nil] -- no separate field. The 'missing
+                  // macro table is book[zero] -- no separate field. The 'missing
                   // condition tag needs no slot: it is the `missing` nif's name,
                   // so the book roots it, and the raise path reads it back with
                   // sym_probe (alloc-free, already on that path for `help`).
    ai_word scare_a, scare_b; // the last bare scare's condition data, stashed at
                   // the raise so a terminal exit can speak (ai_scare_face_);
-                  // nil nil = the bare oom, which has no data. GC-traced here.
+                  // zero zero = the bare oom, which has no data. GC-traced here.
    // THE FIVE HOOKS: lisp the C lanes must reach, handed over by (seal-hook n f) and
    // read by SLOT thereafter -- no per-call sym_probe + book lookup, and no later rebind
    // of a nom can reach them. They are declared and numbered in SEAL ORDER, which is also
    // boot order. All GC-traced (v0..end) and image-serialized, so a woken runtime comes up
-   // sealed; unsealed = nil -> hot_hook traps, never a wild read.
+   // sealed; unsealed = zero -> hot_hook traps, never a wild read.
    ai_word hot_read;  // 0: the CORPUS READER -- p1.l's whole-text door, sealed by p1's own
                   // last act, which is why the reader needs no name in the book at all.
-                  // nil = p1 is not up yet, and readtext falls back to p0's lisp subset.
+                  // zero = p1 is not up yet, and readtext falls back to p0's lisp subset.
    ai_word hot_numap; // 1: the church C->lisp num-ap hook, read on the hot apply paths
                   // (lvm_numap/numtap, data_num_apply).
    ai_word hot_stack, hot_compose; // 2, 3: `+` and `*` OF TWO FUNCTIONS -- church add
@@ -430,7 +430,7 @@ struct ai *ai_image_load(void const *buf, uintptr_t len);
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
 // the terminal scare face: print ";; a b\n" (show forms) to the err port from
-// the stashed condition data and answer 1; the bare scare (nil nil -- oom,
+// the stashed condition data and answer 1; the bare scare (zero zero -- oom,
 // which has no data) answers 0 so the frontend can report it raw.
 int ai_scare_face_(struct ai*);
 
@@ -489,7 +489,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 #define Have1() Have(1)
 #define ai_pop1(g) (*(g)->sp++)
 #define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
-#define nil ai_nil
+#define zero ai_zero
 struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // The fundamental value kind for generic-op dispatch (enum q). KMint is the bare point
 // (the blue floor: () and the nameless mints; named syms are (name . mint) CHAINS now);

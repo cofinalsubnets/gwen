@@ -72,7 +72,7 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn };
 //                   down 8 B 16 A 32)
 // (cur_set r c)  -- seat the console's write cursor
 static lvm(ai_crank) {
-  Sp[0] = pdg_crank_docked() ? ai_nil : putcharm(pdg_crank_deg());
+  Sp[0] = pdg_crank_docked() ? ai_zero : putcharm(pdg_crank_deg());
   Ip += 1;
   return Continue(); }
 static lvm(ai_pushed) {

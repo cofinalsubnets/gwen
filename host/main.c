@@ -170,12 +170,12 @@ void ai_fd_close(int fd) { close(fd); }
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { fd_write_all(fd, p, n); }
 
 // (open path mode) — open a file with mode "r"/"w"/"a"; returns a heap port
-// (closed on GC) or nil on error or misuse. mode is a l string; only the
+// (closed on GC) or zero on error or misuse. mode is a l string; only the
 // first byte is consulted.
 //   r = read-only
 //   w = write-only, truncate-or-create
 //   a = write-only, append-or-create
-// Errors (path too long, unknown mode, open(2) failure) all return nil.
+// Errors (path too long, unknown mode, open(2) failure) all return zero.
 
 static ai_noinline int call_open(struct ai_str *pv, struct ai_str *mv) {
   uintptr_t plen = pv->len;
@@ -516,7 +516,7 @@ ai_noinline static char const *host_getenv(struct ai_str *nv) {
  name[nv->len] = 0;
  return getenv(name); }
 
-// (getenv name) -> string, or nil if unset / misused. nil = absent, not an
+// (getenv name) -> string, or zero if unset / misused. zero = absent, not an
 // error; the run fixnum-error convention does not apply here.
 static lvm(lvm_getenv) {
  char const *v = ai_strp(Sp[0]) ? host_getenv((struct ai_str*) Sp[0]) : NULL;
@@ -929,7 +929,7 @@ int main(int argc, char const **argv) {
   char const **av = argv;
   int ac = argc;
   for (; *av; g = ai_strof(g, *av++));
-  for (g = ai_push(g, 1, ai_nil); ac--; g = gxr(g));
+  for (g = ai_push(g, 1, ai_zero); ac--; g = gxr(g));
   if (ai_ok(g)) {
     // the static nifs (exit/open/close/run/getenv + any host/*.c app nifs) come
     // from the ai_nifs section -- immortal addresses, so the array door serves.
