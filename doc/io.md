@@ -1928,25 +1928,47 @@ table (test/front/main.c:66-73), which `realloc`s and says so in its comment. a
 ceiling here would be rung 6's bug one layer down, and it would arrive WORSE --
 as a silent refusal to open the 33rd thing, rather than as a hang.
 
-### defect 6 -- a task can sleep on a quiet fd over a full buffer
+### defect 6 -- a task could sleep on a quiet fd over a full buffer -- ✅ FIXED 2026-08-01
 
 the scheduler's readiness is per-FD, but bytes live in the PORT. so a task parked
-on fd X while ANOTHER task's bulk gulp fills the shared port's `rbuf` sleeps: its
-fd is quiet, and the buffer it could read from is not the thing being asked about.
-`ai_ready` answers the honest truth about the wrong object.
+on fd X while ANOTHER task's bulk gulp fills the shared port's `rbuf` slept: its
+fd was quiet, and the buffer it could read from was not the thing being asked
+about. `ai_ready` answered the honest truth about the wrong object.
 
-⚠ **not reachable today**, which is why it is written down rather than fixed: not
-through `in` (`trickle` never runs ahead, by construction -- part III), and not
-through `wrap` (two tasks, two fds). it needs two tasks on one heap port where one
-uses the bulk lane.
+**⚠ THE PRICE QUOTED HERE WAS WRONG, AND THE CORRECTION IS THE KEEPER.** this
+section said the fix meant parking on the PORT, which meant moving
+`g->next_wait_fd` inside the traced `v0..end` span -- an image-format change, an
+encver bump, a rebake of every baked image. **the port never had to be stored at
+all.** a reader parks with `Ip` unadvanced, so its port is the top of its saved
+stack, at exactly the `n[5].x` the catch clause one line above already reads for a
+catcher's pid. six lines of C, no field, no bump. ⚠ the rung that closed `catch`
+had already written the lesson down -- *the third parked state needed NO new
+state* -- and this section did not apply it. **when a fix is priced at an image
+format, check whether the value is already on the stack.**
 
-the fix is to park on the PORT rather than the fd, which means `g->next_wait_fd`
-(love.h:141) has to move inside the traced `v0..end` span -- an image-format
-change: an encver bump and a rebake of every baked image. real cost, and nothing
-is paying for it. ⚠ and the reason first given for this being hard was WRONG and
-is corrected here: it was not that a task node cannot hold a port. task nodes are
-GC-traced word by word including word0 (love.c:1221-1222), so a port would ride
-free. the obstacle is one level up, in the field that is outside the span.
+so `find_runnable`'s wait_fd clause gains one term: `wf < 0 || wait_buffered(..)
+|| ai_ready(wf)`. the AP GUARD inside `wait_buffered` is what makes reading `n[5]`
+legal rather than decoration -- `lvm_fgetc` and `lvm_await` are the only two ops
+that park with a port at `Sp[0]`, so every other fd parker (hark's drain holds its
+capture string there) answers false before dereferencing anything and falls
+through to the fd, and a task with an empty saved stack cannot be read at all.
+
+**⚠ and `await` had the same defect independently, at the ENTRY rather than at the
+wake** -- `if (fd >= 0 && !ai_ready(fd))` parked on a port already holding bytes,
+against the park law `bio_of`'s own comment states three screens down: *a port
+holding bytes is readable however quiet its fd is*. that half is the more
+reachable one, and it is one line.
+
+**reaching it took building the state on purpose**, since neither `in` (`trickle`
+never runs ahead, by construction -- part III) nor `wrap` (two tasks, two fds) can:
+two tasks on ONE heap port off `(pipe 0)` + `fdopen`, the bytes written from
+outside so nothing in the process is runnable when they land. ⚠ **who wins the
+wake is not a race, and the law leans on that**: `yield_sw_wait` asks about the
+RUNNING task's own fd before it re-scans the ring, so main always comes back first
+and its `see` gulps both bytes, leaving the peer parked over the buffer. the
+`await` half needs only one task -- the monotask wait is the hang. test/host/
+parked.l, both control-verified by taking each term back out and watching the
+whole file wedge at `timeout 20`.
 
 ### the delete ledger, corrected by measurement
 

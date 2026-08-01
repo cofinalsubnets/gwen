@@ -38,4 +38,40 @@
    b (see qr)                      ; parks; only the woken peer's byte releases it
    _ (wait pid)
    _ (assert (b = 120)))
+
+; --- defect 6: readiness is asked of an FD, but the bytes live in the PORT -----
+; a task parked on a quiet fd over a buffer ANOTHER task's gulp filled used to
+; sleep on top of exactly what it was waiting for. reaching it takes two tasks on
+; ONE heap port where one uses the bulk lane, which is why it sat written down and
+; unfixed: `in` cannot reach it (trickle never runs ahead) and `wrap` cannot (two
+; tasks, two fds).
+;
+; ⚠ WHO WINS THE WAKE IS NOT A RACE, and the law depends on that. both tasks park
+; on the same fd; when the byte lands, yield_sw_wait asks about the RUNNING task's
+; own fd before it re-scans the ring, so main always comes back first and its `see`
+; gulps BOTH bytes into the port. the peer is then parked on a fd with nothing left
+; to say, over a buffer holding its byte -- and `catch` hangs instead of reaping.
+(: p (pipe 0)
+   r (fdopen (cap p))               ; ONE heap port; the write end stays a bare fd
+   t (twirl (\ _ (see r)) ())
+   _ (rest 20)                      ; t reaches its park BEFORE anything is written
+   pid (spawnio `("sh" "-c" "sleep 0.3; printf AB") 0 (cup p) 2 `() -1 0)
+   a (see r)
+   b (catch t)                      ; hangs with the port half of the test taken out
+   _ (wait pid)
+   _ (assert (a = 65) (b = 66)))    ; one byte each, in order
+
+; --- the same defect at the ENTRY: await asked the fd alone --------------------
+; a port holding bytes is readable however quiet its fd is (love.c, bio_of's park
+; law), so awaiting one whose buffer is already full parked on a device that has
+; nothing left to say. one task is enough here, and the hang is the monotask wait.
+(: p2 (pipe 0)
+   r2 (fdopen (cap p2))
+   pid2 (spawnio `("sh" "-c" "printf AB") 0 (cup p2) 2 `() -1 0)
+   _ (wait pid2)
+   a2 (see r2)                      ; gulps both; the second is in the buffer now
+   _ (await r2)                     ; hangs with the buffer term taken out
+   b2 (see r2)
+   _ (assert (a2 = 65) (b2 = 66)))
+
 (puts "parked: ok\n")

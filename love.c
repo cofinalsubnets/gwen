@@ -2782,6 +2782,18 @@ static ai_inline int task_live(union u *head, intptr_t pid, int me_live) {
   if (getcharm(n[2].x) == pid) return n[1].m->ap != lvm_task_exit;
  return 0; }
 
+// Is this parked task sitting on a port that is already holding bytes? Readiness
+// is asked of an FD, but bytes live in the PORT -- so a task parked on a quiet fd
+// over a buffer ANOTHER task's bulk gulp filled would sleep on top of exactly what
+// it is waiting for. The port is not stored anywhere and does not need to be: a
+// reader parks with Ip unadvanced, so its port is the top of its saved stack,
+// exactly as a catcher's pid is one line below.
+// ⚠ THE AP GUARD IS WHAT MAKES READING n[5] LEGAL, not decoration. These are the
+// only two ops that park with a port at Sp[0]; every other fd parker holds
+// something else there (hark's drain holds its capture string), and answers false
+// before dereferencing anything, falling through to the fd as before.
+static ai_inline bool wait_buffered(struct ai*, lvm_t*, word, int);
+
 // First non-dormant peer in the ring whose wake_at <= now, whose wait_fd is either
 // unset or actually ready, and which is not parked in `catch` on a live peer.
 // Without the wait_fd check a task parked on stdin would be scheduled immediately,
@@ -2794,12 +2806,12 @@ static ai_inline int task_live(union u *head, intptr_t pid, int me_live) {
 // catching task is always runnable, so find_runnable always answers it and the
 // scheduler NEVER REACHES ITS WAIT: one core burnt, and every peer parked on a quiet
 // fd polled at full speed instead of slept on.
-static ai_inline union u *find_runnable(union u *head, uintptr_t now, int me_live) {
+static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live) {
  for (union u *n = head->m; n != head; n = n->m)
   if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
    if (n[1].m->ap == lvm_wait && task_live(head, getcharm(n[5].x), me_live)) continue;
    int wf = (int) getcharm(n[4].x);
-   if (wf < 0 || ai_ready(wf)) return n; }
+   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[5].x, wf) || ai_ready(wf)) return n; }
  return NULL; }
 
 // ⚠ THE FD SET IS SIZED BY THE COUNT, NEVER BY A CONSTANT. this was an
@@ -2837,14 +2849,14 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
    ai_wait_fds(fds, k, ticks); }
   now = ai_clock(); }
  if (my_wait_fd >= 0 && ai_ready(my_wait_fd)) return NULL;
- return find_runnable(g->tasks, now, me_live); }
+ return find_runnable(g, g->tasks, now, me_live); }
 
 lvm(lvm_yield_sw) {
  if (g->tasks->m == g->tasks) return Ap(lvm_yield_sw_mono, g);
  // a task on its way out is not live, and its own node cannot say so yet -- the
  // snapshot that records the exit is written at the foot of this op.
  int me_live = Ip->ap != lvm_task_exit;
- union u *next = find_runnable(g->tasks, ai_clock(), me_live);
+ union u *next = find_runnable(g, g->tasks, ai_clock(), me_live);
  uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd;
  if (!next) {
@@ -3267,6 +3279,11 @@ static ai_inline bool bio_rpending(struct ai_bio *b) {
  return b && b->rbuf && !(b->rbuf & 1) && getcharm(b->rpos) < getcharm(b->rlen); }
 static ai_inline bool bio_wpending(struct ai_bio *b) {
  return b && b->wbuf && !(b->wbuf & 1) && getcharm(b->wlen) > 0; }
+// the scheduler's half of the park law above, declared up by find_runnable.
+static ai_inline bool wait_buffered(struct ai *g, lvm_t *ap, word x, int fd) {
+ return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
+     && getcharm(((struct ai_io*) x)->fd) == fd
+     && bio_rpending(bio_of(g, (struct ai_io*) x)); }
 // the write run outgrew its backing: double it, pending bytes and all. only
 // reachable when a device took LESS than the whole run -- a port that drains to
 // empty never sees it -- so the growth is the residue's, not the buffer size's.
@@ -4250,7 +4267,11 @@ lvm(lvm_fgetc) {
 lvm(lvm_await) {
  if (iop(Sp[0])) {
   intptr_t fd = getcharm(((struct ai_io*) Sp[0])->fd);
-  if (fd >= 0 && !ai_ready(fd)) {
+  // ⚠ THE BUFFER COUNTS, and asking the fd alone was defect 6 at the entry rather
+  // than at the wake: a port holding bytes is readable however quiet its fd is
+  // (bio_of's park law), so awaiting one that another task's gulp already filled
+  // parked on a device that has nothing left to say.
+  if (fd >= 0 && !bio_rpending(bio_of(g, (struct ai_io*) Sp[0])) && !ai_ready(fd)) {
    g->next_wait_fd = fd;
    return Ap(lvm_yield_sw, g); } }
  return Ip++, Continue(); }
