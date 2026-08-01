@@ -53,11 +53,8 @@ static ai_noinline int poll_wrap(int fd, int events) {
 bool ai_ready(int fd, int events) { return fd < 0 || poll_wrap(fd, events) > 0; }
 
 // love.h lays the block out as poll(2)'s own struct, so there is nothing to copy
-// and no vector of ours to size -- which is the whole reason the cap could go.
-// There used to be a `struct pollfd p[ai_wait_fds_max]` here with a
-// `__builtin_trap()` above it, one of three in the tree standing guard over an
-// array the scheduler had already truncated in silence -- so the trap could never
-// fire, and the drop it was watching for WAS the bug.
+// and no vector of ours to size -- which is the whole reason the count needs no
+// ceiling, and why `revents` comes back to the scheduler for free.
 _Static_assert(sizeof(struct ai_wait_fd) == sizeof(struct pollfd)
             && offsetof(struct ai_wait_fd, fd) == offsetof(struct pollfd, fd)
             && offsetof(struct ai_wait_fd, events) == offsetof(struct pollfd, events),
@@ -66,9 +63,9 @@ _Static_assert(sizeof(struct ai_wait_fd) == sizeof(struct pollfd)
 _Static_assert(ai_wait_in == POLLIN && ai_wait_out == POLLOUT,
                "ai_wait_in/out must be this platform's POLLIN/POLLOUT");
 
-// ⚠ THE EVENTS COME IN FILLED. This used to blanket-set POLLIN over the block,
-// which was true of every park there was until connect learned to wait on its
-// handshake; the scheduler knows each task's direction and sets it per fd now.
+// ⚠ THE EVENTS COME IN FILLED, per fd -- the scheduler knows each task's park
+// direction and a blanket mask would wake readers on writable. poll(2) fills
+// `revents` on the way back out and the scheduler reads it (love.h).
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
   poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }

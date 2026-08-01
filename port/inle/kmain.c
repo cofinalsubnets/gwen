@@ -280,12 +280,20 @@ bool ai_ready(int fd, int events) {
 
 // Multi-source wait. ticks=0 means infinite. Future: program a one-shot
 // timer at the deadline instead of waking every tick.
+// ⚠ RECORD WHICH SOURCE ANSWERED, don't just return on the first: the scheduler
+// reads `revents` back and skips re-asking about every fd it names (love.h). A
+// sweep of the whole block costs one flag read per source and saves the scheduler
+// a walk of the ring per parked task.
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
   if (n <= 0) { ai_sleep(ticks); return; }
   uintptr_t deadline = kticks + ticks;
   for (;;) {
-    if (ticks && kticks >= deadline) return;
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd, fds[i].events)) return;
+    int any = 0;
+    for (int i = 0; i < n; i++) {
+      int r = ai_ready(fds[i].fd, fds[i].events);
+      fds[i].revents = r ? fds[i].events : 0;
+      any |= r; }
+    if (any || (ticks && kticks >= deadline)) return;
     k_wait(); } }
 uintptr_t ai_clock(void) { return kticks; }
 

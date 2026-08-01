@@ -2810,24 +2810,48 @@ static ai_inline bool wait_buffered(struct ai*, lvm_t*, word, int);
 // catching task is always runnable, so find_runnable always answers it and the
 // scheduler NEVER REACHES ITS WAIT: one core burnt, and every peer parked on a quiet
 // fd polled at full speed instead of slept on.
-static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live) {
+// Readiness the wait we just did has already answered. poll(2) reports EVERY ready
+// fd in the set it was handed, so for an fd that was IN that set `revents` is the
+// same answer ai_ready would go and ask the kernel for, one syscall per parked task.
+// -> 1 ready, 0 not ready, -1 don't know (no block, or this fd is not in it).
+// ⚠ MATCH ON THE PAIR, never on the fd alone: two tasks can park on one fd in
+// opposite directions, and each entry carries only what its own task asked for.
+// ⚠ ANY nonzero revents is ready. Only one direction was asked, so the kernel can
+// add nothing but POLLERR/POLLHUP/POLLNVAL -- and a task parked on a hung-up fd
+// wants waking to read the end, not sleeping through it.
+// The cursor is SPEED, NOT CORRECTNESS: the fill walks the ring in the order the
+// scan does, so a match is nearly always at or just past the previous one, but a
+// full wrap answers the same either way.
+static ai_inline int polled_ready(struct ai_wait_fd const *fds, int nfds, int *cur, int fd, int ev) {
+ for (int i = 0; i < nfds; i++) {
+  int j = *cur + i < nfds ? *cur + i : *cur + i - nfds;
+  if (fds[j].fd == fd && fds[j].events == (short) ev)
+   return *cur = j + 1 < nfds ? j + 1 : 0, fds[j].revents != 0; }
+ return -1; }
+
+// `fds`/`nfds` is the block a just-finished wait filled, or NULL/0 for a scan with
+// no wait behind it (the pre-wait scan, and any frontend whose ai_wait_fds left
+// every revents zero -- see yield_sw_wait). An absent answer falls back to asking.
+static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live,
+                                        struct ai_wait_fd const *fds, int nfds) {
+ int cur = 0;
  for (union u *n = head->m; n != head; n = n->m)
   if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
    if (n[1].m->ap == lvm_wait && task_live(head, getcharm(n[6].x), me_live)) continue;
-   int wf = (int) getcharm(n[4].x);
-   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)
-              || ai_ready(wf, (int) getcharm(n[5].x))) return n; }
+   int wf = (int) getcharm(n[4].x), ev = (int) getcharm(n[5].x);
+   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)) return n;
+   int pr = polled_ready(fds, nfds, &cur, wf, ev);
+   if (pr < 0 ? ai_ready(wf, ev) : pr) return n; }
  return NULL; }
 
-// ⚠ THE FD SET IS SIZED BY THE COUNT, NEVER BY A CONSTANT. this was an
-// `int fds[ai_wait_fds_max]` on this frame with `nfds < ai_wait_fds_max` guarding
-// the fill, which SILENTLY DROPPED every fd past the eighth -- so a ninth parked
-// task with no timer pending could not wake the wait at all, and kiosko twirls a
-// task per client. the block rides the uncommitted heap gap instead (hark's
-// door: invisible to gc, holds no love pointers, Hp never moves, consumed before
-// anything allocates again), so counting the ring first and sizing the block
-// second retires the cap by construction. ⚠ CALLED WITH g PACKED -- the gap is
-// [hp, sp) and both are stale otherwise.
+// ⚠ THE FD SET IS SIZED BY THE COUNT, NEVER BY A CONSTANT: a set sized by a
+// constant drops every fd past it in silence, and a parked task with no timer
+// pending can then never wake the wait at all -- kiosko twirls a task per client,
+// so the count is the client count. the block rides the uncommitted heap gap
+// (hark's door: invisible to gc, holds no love pointers, Hp never moves, consumed
+// before anything allocates again), so counting the ring first and sizing the
+// block second retires the cap by construction. ⚠ CALLED WITH g PACKED -- the gap
+// is [hp, sp) and both are stale otherwise.
 static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live) {
  uintptr_t min_wake = my_wake;
  int nfds = my_wait_fd >= 0;
@@ -2838,6 +2862,13 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
    if (getcharm(n[4].x) >= 0) nfds++; }
  if (!min_wake && !nfds) return NULL;
  uintptr_t now = ai_clock(), ticks = min_wake ? min_wake - now : 0;
+ // the block, once the wait has filled it in -- the readiness of every parked fd,
+ // already paid for. Stays NULL unless some entry actually came back nonzero, which
+ // is what lets a frontend that fills nothing (playdate sleeps; the mps2/teensy/virt
+ // boards answer off a device flag and never write the block back) keep working
+ // unchanged: it reads as "nothing to say", and every fd is asked the old way.
+ struct ai_wait_fd const *pol = NULL;
+ int npol = 0;
  if (!min_wake || min_wake > now) {
   struct ai_wait_fd *fds = (struct ai_wait_fd*) g->hp;
   // no gap to lay them in (the heap at its fullest, a collection pending): wait
@@ -2846,22 +2877,30 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
   if (avail(g) < b2w((uintptr_t) nfds * sizeof *fds)) ai_wait_fds(NULL, 0, ticks ? ticks : 1);
   else {
    int k = 0;
-   if (my_wait_fd >= 0) fds[k].fd = my_wait_fd, fds[k++].events = (short) my_events;
+   // ⚠ revents is ZEROED here and nowhere else. The block is raw heap gap, so an
+   // unwritten slot would otherwise read as whatever the last allocation left, and
+   // "ready" is exactly the wrong way to guess.
+   if (my_wait_fd >= 0)
+    fds[k].fd = my_wait_fd, fds[k].revents = 0, fds[k++].events = (short) my_events;
    for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
     if (n[1].m->ap != lvm_task_exit) {
      int wf = (int) getcharm(n[4].x);
-     if (wf >= 0) fds[k].fd = wf, fds[k++].events = (short) getcharm(n[5].x); }
-   ai_wait_fds(fds, k, ticks); }
+     if (wf >= 0)
+      fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(n[5].x); }
+   ai_wait_fds(fds, k, ticks);
+   for (int i = 0; i < k; i++) if (fds[i].revents) { pol = fds, npol = k; break; } }
   now = ai_clock(); }
- if (my_wait_fd >= 0 && ai_ready(my_wait_fd, my_events)) return NULL;
- return find_runnable(g, g->tasks, now, me_live); }
+ if (my_wait_fd >= 0) {
+  int cur = 0, pr = polled_ready(pol, npol, &cur, my_wait_fd, my_events);
+  if (pr < 0 ? ai_ready(my_wait_fd, my_events) : pr) return NULL; }
+ return find_runnable(g, g->tasks, now, me_live, pol, npol); }
 
 lvm(lvm_yield_sw) {
  if (g->tasks->m == g->tasks) return Ap(lvm_yield_sw_mono, g);
  // a task on its way out is not live, and its own node cannot say so yet -- the
  // snapshot that records the exit is written at the foot of this op.
  int me_live = Ip->ap != lvm_task_exit;
- union u *next = find_runnable(g, g->tasks, ai_clock(), me_live);
+ union u *next = find_runnable(g, g->tasks, ai_clock(), me_live, NULL, 0);
  uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd, my_events = g->next_wait_events;
  if (!next) {

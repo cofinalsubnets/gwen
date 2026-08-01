@@ -531,10 +531,17 @@ extern const struct ai_str ai_str_empty;
 extern const struct ai_mint ai_mint_zero;
 #define ZeroPoint ((word) &ai_mint_zero)
 // One parked fd, as the scheduler hands it over. ⚠ THE LAYOUT IS POSIX poll(2)'s
-// struct pollfd, on purpose: the host fills in the event mask and polls the block
-// DIRECTLY, so it needs no vector of its own -- host/main.c static-asserts the
-// match rather than trusting it. A frontend that does not poll reads .fd and
-// ignores the rest.
+// struct pollfd, on purpose: the host polls the block DIRECTLY, so it needs no
+// vector of its own -- host/main.c static-asserts the match rather than trusting
+// it. The scheduler fills .fd and .events and zeroes .revents.
+// ⚠ .revents IS READ BACK, and is the whole reason a wait is cheap: for an fd the
+// wait reported on, the scheduler takes that answer instead of asking the kernel
+// again one fd at a time. Filling it is OPTIONAL -- a frontend that answers off a
+// device flag can leave the block alone, and every entry then reads as "nothing to
+// say" and is asked the old way -- but a frontend that CAN fill it should, because
+// the alternative costs one syscall per parked task per scheduling decision.
+// Nonzero means ready: only one direction is ever asked for, so nothing but poll's
+// own error/hangup bits can appear on top of it, and those want waking too.
 struct ai_wait_fd { int fd; short events, revents; };
 
 // THE TWO DIRECTIONS A PARK CAN WANT, in poll(2)'s own bit values -- host/main.c
@@ -550,11 +557,9 @@ struct ai_wait_fd { int fd; short events, revents; };
 // `ticks` elapse (0 = no deadline). ⚠ n IS THE NUMBER OF PARKED TASKS AND HAS NO
 // CEILING. The block rides the runtime's own uncommitted heap gap, sized to the
 // count -- the door hark marshals argv through, and the reason neither the
-// scheduler nor a frontend needs a fixed array, an allocator or a global. There
-// used to be an `ai_wait_fds_max` of 8 and every fd past the eighth was dropped in
-// silence, which is a hang the moment a ninth task parks with no timer pending.
-// ⚠ THE SCHEDULER FILLS `events`, not the frontend: it used to blanket-set POLLIN
-// over the block, which was true of every park there was and is not now.
+// scheduler nor a frontend needs a fixed array, an allocator or a global.
+// ⚠ THE SCHEDULER FILLS `events`, not the frontend: each parked task asks for its
+// own direction, and a blanket mask over the block would wake readers on writable.
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks);
 bool ai_ready(int fd, int events), ai_strp(ai_word);
 struct ai
