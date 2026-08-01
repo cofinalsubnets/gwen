@@ -545,6 +545,27 @@ m4 prints its own `argv[0]` in every error message and two of the checks compare
 against a text that names it. Without that the suite fails for a reason that has nothing
 to do with the compiler, which is exactly the kind of false red a cross lane invites.
 
+## the source cache — why `make moon-lua` needs no variable
+
+Every package rung is opt-in on an imported source tree, and for a long time each one meant
+naming a path on the make line. They are cached now, and all four harnesses look in the same
+two places before giving up:
+
+```
+$LUASRC / $SQLSRC / $M4SRC / $TARSRC   (explicit, always wins)
+out/dl/<glob>                          (tree-local; `make clean` takes it)
+$MOONSRC/<glob>                        (the cache — ~/src when MOONSRC is unset)
+```
+
+So `make moon-sqlite-arm64` works bare. The globs are versioned (`lua-5.4.*`,
+`sqlite-amalgamation-*`, `m4-1.4*`, `tar-1.13*`), so a version bump does not break the search,
+and **a missing tree is still a clean SKIP, never a failure** — these stay opt-in, and a green
+`make test_slow` still says nothing about them. The exact `curl` line for each lives in the
+header of its `tools/moon-*.sh`.
+
+⚠ m4 and tar want a `./configure`'d tree (they read `config.h`); Lua and the SQLite
+amalgamation want only an extracted one.
+
 ## suggested order (LFS-shaped, easiest real C first)
 
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.

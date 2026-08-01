@@ -15,6 +15,12 @@
 #   make moon-tar       TARSRC=$PWD/tar-1.13
 #   make moon-tar-arm64 TARSRC=$PWD/tar-1.13
 #
+# THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
+# `tar-1.13*` under out/dl/ and then under $MOONSRC -- ~/src when that is unset --
+# so a bare `make moon-tar` finds a cached tree with no variable at all. An
+# explicit TARSRC= still outranks both, and a missing tree is a clean SKIP
+# rather than a failure, so this gate stays opt-in either way.
+#
 # (Those two lines are about CONFIGURE, not about us: tar 1.13 predates x86-64,
 # and modern gcc makes the implicit-int `main(){return(0);}` of its probes a
 # hard error. mooncc compiles every actual source either way.)
@@ -39,17 +45,29 @@ case $target in
   *) echo "moon-tar.sh: unknown target $target" >&2; exit 1 ;;
 esac
 
+# where a package's sources may live, first hit wins: the tree-local out/dl,
+# then the cache -- $MOONSRC, or ~/src when that is unset. An explicit *SRC=
+# on the make line still outranks both. Answers EMPTY when nothing matches,
+# which is what the skip branch below reads, so a missing tree is never an
+# error and never a `set -e` abort.
+pkgfind() {                        # pkgfind <dir-glob> <witness-file>
+  for c in out/dl/$1 "${MOONSRC:-$HOME/src}"/$1; do
+    [ -f "$c/$2" ] && { printf '%s\n' "$c"; return 0; }
+  done
+  return 0
+}
+
 ho=out/host
 mc=$ho/mooncc
 love=$ho/love
-TARSRC=${TARSRC:-out/dl/tar-1.13}
+TARSRC=${TARSRC:-$(pkgfind 'tar-1.13*' config.h)}
 
 if [ -n "$need" ] && ! command -v "$need" > /dev/null 2>&1; then
   echo "$name: no $need, skipped"
   exit 0
 fi
 if [ ! -f "$TARSRC/config.h" ]; then
-  echo "$name: no configured tar-1.13 at '$TARSRC' -- skipped."
+  echo "$name: no configured tar-1.13 found (looked in out/dl and ${MOONSRC:-$HOME/src}) -- skipped."
   echo "          set TARSRC=<a ./configure'd tar-1.13 tree> to run (see tools/moon-tar.sh)."
   exit 0
 fi

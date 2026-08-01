@@ -27,6 +27,12 @@
 #   make moon-sqlite       SQLSRC=$PWD/sqlite-amalgamation-3450300
 #   make moon-sqlite-arm64 SQLSRC=$PWD/sqlite-amalgamation-3450300
 #
+# THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
+# `sqlite-amalgamation-*` under out/dl/ and then under $MOONSRC -- ~/src when that is unset --
+# so a bare `make moon-sqlite` finds a cached tree with no variable at all. An
+# explicit SQLSRC= still outranks both, and a missing tree is a clean SKIP
+# rather than a failure, so this gate stays opt-in either way.
+#
 # The config: THREADSAFE=0 (nolibc carries no pthreads) and no load-extension
 # (no dlopen) -- both first-class sqlite configurations, not patches.
 set -e
@@ -40,6 +46,18 @@ case $target in
   *) echo "moon-sqlite.sh: unknown target $target" >&2; exit 1 ;;
 esac
 
+# where a package's sources may live, first hit wins: the tree-local out/dl,
+# then the cache -- $MOONSRC, or ~/src when that is unset. An explicit *SRC=
+# on the make line still outranks both. Answers EMPTY when nothing matches,
+# which is what the skip branch below reads, so a missing tree is never an
+# error and never a `set -e` abort.
+pkgfind() {                        # pkgfind <dir-glob> <witness-file>
+  for c in out/dl/$1 "${MOONSRC:-$HOME/src}"/$1; do
+    [ -f "$c/$2" ] && { printf '%s\n' "$c"; return 0; }
+  done
+  return 0
+}
+
 ho=out/host
 mc=$ho/mooncc
 love=$ho/love
@@ -48,8 +66,9 @@ if [ -n "$need" ] && ! command -v "$need" > /dev/null 2>&1; then
   echo "$name: no $need, skipped"
   exit 0
 fi
+SQLSRC=${SQLSRC:-$(pkgfind 'sqlite-amalgamation-*' sqlite3.c)}
 if [ -z "$SQLSRC" ] || [ ! -f "$SQLSRC/sqlite3.c" ]; then
-  echo "$name: no amalgamation at '$SQLSRC' -- skipped."
+  echo "$name: no amalgamation found (looked in out/dl and ${MOONSRC:-$HOME/src}) -- skipped."
   echo "             set SQLSRC=<an extracted sqlite-amalgamation dir> to run (see tools/moon-sqlite.sh)."
   exit 0
 fi
