@@ -3403,6 +3403,16 @@ lvm(lvm_fputc) {
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
+  // backpressure, as in lvm_fputs -- but the drain is BEHIND the test here, not
+  // in front of it. zputc strokes only when the buffer fills, so draining on
+  // every put would turn a put loop into one write(2) per byte.
+  if (ai_io_wpending(g, (struct ai_io*) g->sp[0]) >= ai_iobuf) {
+   g = io_wdrain(g, (struct ai_io*) g->sp[0]);
+   if (!ai_ok(g)) return ghelp(g);
+   if (ai_io_wpending(g, (struct ai_io*) g->sp[0]) >= ai_iobuf) {
+    Unpack(g);
+    g->next_wake_at = ai_clock() + 1;
+    return Ap(lvm_yield_sw, g); } }
   if (!ai_ok(g = zputc(g, getcharm(g->sp[1])))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
@@ -3444,6 +3454,17 @@ lvm(lvm_fputs) {
   intptr_t (*wn)(struct ai**, unsigned char const*, uintptr_t) = port_vt(g->io->fd)->writen;
   Pack(g);
   g = io_wdrain(g, (struct ai_io*) g->sp[0]);   // buffered puts land before the bulk stroke
+  // ⚠ BACKPRESSURE: THE WRITE RUN IS A BUFFER, NOT A QUEUE. rung 4's short-answering
+  // door hands the remainder to `wbuf`, so `say` never refuses and a peer that stops
+  // reading grows the run by a whole string per call, forever. an op that would push
+  // it past its own size waits for the device instead; nothing is consumed here, so
+  // the re-run is free. a single say longer than the buffer still leaves its own
+  // tail -- a park mid-string would re-emit it -- so the bound is one buffer plus
+  // one say, never an accumulation across ops.
+  if (ai_ok(g) && ai_io_wpending(g, (struct ai_io*) g->sp[0]) >= ai_iobuf) {
+   Unpack(g);
+   g->next_wake_at = ai_clock() + 1;            // the write residue's poll -- see io_wdrain
+   return Ap(lvm_yield_sw, g); }
   while (ai_ok(g) && i < l) {
    struct ai *w = g;       // the frame BY ADDRESS, off the restrict-qualified param
    intptr_t k = wn && !bio_wpending(bio_of(g, (struct ai_io*) g->sp[0]))
@@ -3458,7 +3479,14 @@ lvm(lvm_fputs) {
 lvm(lvm_fputx) {
  if (iop(Sp[0])) {
   Pack(g);
-  if (!ai_ok(g = gfputx(g, (struct ai_io*) Sp[0], Sp[1]))) return ghelp(g);
+  if (ai_io_wpending(g, (struct ai_io*) g->sp[0]) >= ai_iobuf) {   // backpressure, as in lvm_fputs
+   g = io_wdrain(g, (struct ai_io*) g->sp[0]);
+   if (!ai_ok(g)) return ghelp(g);
+   if (ai_io_wpending(g, (struct ai_io*) g->sp[0]) >= ai_iobuf) {
+    Unpack(g);
+    g->next_wake_at = ai_clock() + 1;
+    return Ap(lvm_yield_sw, g); } }
+  if (!ai_ok(g = gfputx(g, (struct ai_io*) g->sp[0], g->sp[1]))) return ghelp(g);
   Unpack(g); }
  return Sp++, Ip++, Continue(); }
 

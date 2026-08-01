@@ -165,4 +165,34 @@
    _ (assert ((sent p) = "xyz")
              (0 < (peep n 0 0))))       ; the peer ran while the writer waited
 
+; --- law 11: the write run is a BUFFER, not a queue --------------------------
+; rung 4 made the door answer short and hand the remainder to the port, which is
+; what stopped bytes being lost -- and it also meant `say` NEVER REFUSES. a peer
+; that stops reading used to hold the writer at its own rate through a blocking
+; write(2); nothing replaced that, so the run grew by a whole string per say and
+; kept growing. now a say that would push the run past its own size waits for the
+; device instead. the device below refuses long enough that four says would pile
+; up all four; the run must never hold more than one buffer's worth.
+(: p (dev ())
+   s (: (dup t n) (? (n = 0) t (dup (t + t) (n - 1))) (dup "0123456789abcdef" 8))
+   _ (wstall p 40)
+   hi (foldl (\ m _ (: _ (say p s) k (wpending p) (? (m < k) k m))) 0 '(1 2 3 4))
+   _ (flush p)
+   _ (assert ((tally s) = 4096)
+             (hi <= 4096)                  ; 16384 with the park taken back out
+             ((tally (sent p)) = 16384)))  ; and not one byte lost to the waiting
+
+; and the same rule on the byte lane. `put` fills the run one byte at a time,
+; and one byte at a time is still without a bound -- the run just doubled its
+; backing instead of waiting. (`putx` carries the identical guard; it is the same
+; six lines and reaching it wants a value big enough to be its own story.)
+(: p (dev ())
+   _ (wstall p 40)
+   hi (: (go k m) (? (k = 0) m
+                     (: _ (put p 120) j (wpending p) (go (k - 1) (? (m < j) j m))))
+         (go 9000 0))
+   _ (flush p)
+   _ (assert (hi <= 4096)                 ; 8192 with the park taken back out
+             ((tally (sent p)) = 9000)))
+
 (: _ (say out "front: ok") (putc 10))

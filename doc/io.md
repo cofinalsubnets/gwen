@@ -1571,7 +1571,65 @@ it does not belong with either half of what landed. the two halves above are bot
 about a bound that is too small; `say`'s is the opposite -- `wbuf` grows without
 one, so a task writing faster than its device drains has no ceiling on the write
 run at all. it wants a law that measures growth, which neither the cap's law nor
-the device notices resemble. it stays open, unclaimed by a rung.
+the device notices resemble. it stays open, unclaimed by a rung. *(taken since --
+the next section.)*
+
+### the write run stops being a queue -- ✅ backpressure, 2026-07-31
+
+**backpressure** is a slow consumer's ability to push back on a fast producer.
+rung 4 deleted ours without replacing it: the blocking door held a writer at the
+device's own rate because `write(2)` sat there until the kernel had room, and the
+nonblocking door hands the remainder to `wbuf` instead. that is what stopped bytes
+being lost -- and it also means **`say` never refuses**. write to a socket whose
+peer has stopped reading and every call succeeds instantly while the run grows by
+the whole string, forever.
+
+the rule that replaces it, in one sentence: **the write run is a buffer, not a
+queue.** a write op that would push it past its own size (`ai_iobuf`) drains
+first, and parks if the run is still that big. three ops carry the guard -- `say`,
+`put`, `putx` -- and re-running is free, because the park sits where nothing has
+been consumed yet (rung 5's re-runnability rule, again).
+
+what it does NOT bound, said plainly: a single `say` longer than the buffer still
+leaves its own tail in the run, because a park mid-string is not re-runnable --
+those bytes are already in the run and the op would re-emit them. so the run holds
+at most **one buffer plus the tail of one say**, never an accumulation across ops.
+that is the whole claim.
+
+⚠ **the bound is the buffer's own size and not a new number**, which is the only
+reason a constant is admissible here at all. `ai_iobuf` is already the tree's
+chunk size (the rung-6 sweep kept it for exactly that reason: a chunk size, not a
+cap). a bound on a BUFFER is not a cap on how many things love can be doing --
+nothing is lost at the edge, the writer waits.
+
+⚠ **and "zero pending" was the wrong rule, by measurement.** parking whenever the
+run is non-empty needs a drain before every write, and `zputc` strokes only when
+the buffer fills -- so a `put` loop would have become one `write(2)` per byte. the
+threshold is what keeps the byte lane's batching, and it is why the drain sits
+BEHIND the test on `put` and `putx` and in front of it on `say` (where the
+ordering already required it: buffered puts land before the bulk stroke).
+
+measured, at a device that refuses (test/front/io.l laws 11 and 12), each half
+control-verified by taking its own park back out:
+
+| | before | after | delivered |
+|---|---|---|---|
+| four 4 K says | run peaks at **16384** | **4096** | 16384 both ways |
+| 9000 `put`s | run peaks at **8192** | **4096** | 9000 both ways |
+
+⚠ **one shape does change, and it is a deadlock coming back into view**: a single
+task writing more than a pipe holds to a pipe only it will read used to be
+absorbed by the growth and now waits. that is the OS-level deadlock the blocking
+door had all along -- rung 4's unbounded buffering was the anomaly that hid it,
+not a feature. nothing in the tree does it (`make test_slow` green, run/pty/net/
+kiosko/seed included), and a peer TASK still drains fine, because this parks
+rather than blocking.
+
+not one byte differs -- only the memory. which is the note worth keeping from
+**rung 5, where this park was already written and then deleted**: it was measured
+"unobservable", and that was true of the bytes and false of the run. the
+measurement was of the wrong thing, and `wpending` (love.h's own accessor, exposed
+as a nif by the test frontend only) is the instrument that was missing.
 
 ### the invariant is a roster now, and the roster is six lines -- ✅ rung 8, 2026-07-31
 

@@ -24,6 +24,8 @@
 //   (wstall p k)  the next k writen calls land nothing
 //   (wcap p k)    each writen lands at most k bytes (0 = no cap)
 //   (sent p)      what has been written to p, as text
+//   (wpending p)  how many bytes of p's write run the device has not taken --
+//                 the number backpressure exists to bound
 //
 // ⚠ A WAIT WITH NO DEADLINE EXITS 97 rather than sleeping. A synthetic device
 // can only be fed by another task, so "every task is parked with no timer" is a
@@ -238,8 +240,21 @@ static lvm(lvm_sent) {
   Sp[1] = Sp[0];
   Sp += 1; Ip += 1; return Continue(); }
 
+// (wpending p) -- the size of p's unsent write run, straight off love.h's own
+// accessor. no device state of its own: this is the runtime's number, not ours.
+static lvm(lvm_wpending) {
+  ai_word x = Sp[0];
+  uintptr_t n = 0;
+  if (!(x & 1) && ((union u*) x)->ap == lvm_port_io) {
+    Pack(g);
+    n = ai_io_wpending(g, (struct ai_io*) x);
+    Unpack(g); }
+  Sp[0] = putcharm((intptr_t) n);
+  Ip += 1; return Continue(); }
+
 static union u const
   nif_quit[]   = {{lvm_quit},  {lvm_ret0}},
+  nif_wpend[]  = {{lvm_wpending}, {lvm_ret0}},
   nif_dev[]    = {{lvm_dev},   {lvm_ret0}},
   nif_shut[]   = {{lvm_shut},  {lvm_ret0}},
   nif_sent[]   = {{lvm_sent},  {lvm_ret0}},
@@ -256,7 +271,8 @@ static struct ai_def const defs[] = {
   {"stall",  (intptr_t) nif_stall},
   {"wstall", (intptr_t) nif_wstall},
   {"wcap",   (intptr_t) nif_wcap},
-  {"sent",   (intptr_t) nif_sent} };
+  {"sent",   (intptr_t) nif_sent},
+  {"wpending", (intptr_t) nif_wpend} };
 
 // --- the boot --------------------------------------------------------------
 // The corpus texts are the ones every frontend shares (out/lib, laid by lcat off
