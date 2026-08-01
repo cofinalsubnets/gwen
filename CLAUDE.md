@@ -17,7 +17,10 @@
 ; --- how to work here (read this first) ---
 ; * `make test` is the DEV GATE -- every edit, ~20s: host + self-hosted bootstrap love0, BOTH
 ;   required to print the zz-fin "tests pass" summary (love0 EXACTLY twice -- a silent reader stop
-;   exits 0 without reaching zz-fin, so the exit code alone proves nothing), plus vmret.
+;   exits 0 without reaching zz-fin, so the exit code alone proves nothing), plus vmret and
+;   waits (tools/waits.l -- the device floor's rule that the only code in the tree that BLOCKS
+;   is the scheduler, as a roster of every wait and the sentence that earns it; a new one
+;   reddens the gate, and its only other failure mode is a hang. doc/io.md rung 8).
 ;   `make test_slow` is the MERGE GATE -- before publishing, NOT per edit: the rocq/lean proofs,
 ;   gc/glaze/sat/holo/lux, tool diffs, arm64 + the qemu kernel + wasm. BETWEEN THE TWO, run the
 ;   individual test_* targets covering what you touched -- nearly all are under a second now,

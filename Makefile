@@ -27,7 +27,7 @@ export LOVE_NO_IMAGE := 1
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0 site site-serve
 .PHONY: test test_host test_slow test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_hostnif test_doc test_glaze test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_clay test_arm64 test_thumb1 test_thumb2 test_virt test_wake
-.PHONY: valg disasm flame cat cata catav perf repl gdb vmret bench nettest lint fmt fmt-check ccdb
+.PHONY: valg disasm flame cat cata catav perf repl gdb vmret waits bench nettest lint fmt fmt-check ccdb
 
 # `make` with no target is `make test` -- pinned EXPLICITLY because the includes
 # below precede the test rule, so make's "first explicit target is the default"
@@ -45,7 +45,7 @@ include mk/install.mk
 
 # `make test` is the DEV GATE -- what you run on every edit: the two egg self-tests (the
 # host binary `love` from-source under LOVE_NO_IMAGE, and love0 -- c0 + the self-hosted ev,
-# twice) plus vmret. It does NOT build the image (the --bake step), nor run
+# twice) plus vmret and waits. It does NOT build the image (the --bake step), nor run
 # coqc/lean/glaze/gc/tools, which are slow and/or need extra toolchains. ~20 s settled on
 # this box, serial by design: no -j races, ctrl-C responsive.
 #
@@ -60,7 +60,7 @@ include mk/install.mk
 # ($(mw), test/test.mk).
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_love0 vmret
+test_phases = test_host test_love0 vmret waits
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 # vmret rides the fast `test`: the TCO gate (every lvm_* VM ap must tail-jump, never
@@ -186,6 +186,23 @@ vmret: host
 else
 vmret: host
 	@$m tools/vmret.l $m
+endif
+
+# waits rides the fast `test` beside vmret, for the same reason: it pins an
+# invariant whose only failure mode is a HANG, which no assert can catch after
+# the fact. the device floor's rule is that the only code in the tree that blocks
+# is the scheduler, and tools/waits.l carries the roster of every wait plus the
+# sentence that earns it -- a new one reddens here instead of arriving as a wedged
+# gate. it needs no toolchain (it reads the C, never the ELF; see the file for why
+# a disassembly could only answer green), but it does need the tracked file list,
+# so it no-ops outside a git checkout the way vmret does without objdump.
+WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
+ifeq ($(WAITS_C),)
+waits: host
+	@echo "waits: skipped (needs a git checkout to enumerate the .c files)"
+else
+waits: host
+	@$m tools/waits.l $(WAITS_C)
 endif
 
 bench: host

@@ -1257,11 +1257,8 @@ outside the tree):
 two-process race needs no surface but is non-deterministic, and a gate that usually
 reddens teaches people to ignore it.
 
-what is still NOT built, and is now cheap: the structural check in `vmret`'s spirit
--- `ai_wait_fd` has exactly two call sites, both in the scheduler (love.c:2696,
-2698), so a build-time assertion that no io-path function calls it would pin that
-the blocking call cannot come back. ⚠ on its own it gates the CAUSE, never the
-effect; with `test_front` gating the effect, both halves are finally coverable.
+the other half -- the structural check in `vmret`'s spirit, gating the CAUSE where
+`test_front` gates the effect -- is `make waits`, and it landed as rung 8 below.
 
 ### the read side, closed -- ✅ rung 2, 2026-07-31
 
@@ -1575,6 +1572,55 @@ about a bound that is too small; `say`'s is the opposite -- `wbuf` grows without
 one, so a task writing faster than its device drains has no ceiling on the write
 run at all. it wants a law that measures growth, which neither the cap's law nor
 the device notices resemble. it stays open, unclaimed by a rung.
+
+### the invariant is a roster now, and the roster is six lines -- ✅ rung 8, 2026-07-31
+
+`make waits` (tools/waits.l, riding the fast gate beside `vmret`) reads every
+tracked `.c` file and answers **who waits**: every call to `ai_sleep`,
+`ai_wait_fds`, `ai_fd_drain` or love.c's `wait_one` must name a function on a
+roster carried in the tool, each with the sentence that earns it. six entries, and
+reading them IS the invariant:
+
+| | |
+|---|---|
+| `wait_one -> ai_wait_fds` | the scheduler's one-fd shim; an `lvm_` frame may hold no scratch |
+| `lvm_yield_sw_mono -> wait_one` / `-> ai_sleep` | the monotask scheduler, with a parked fd and without |
+| `yield_sw_wait -> ai_wait_fds` | THE wait: every parked task and the nearest timer, one call |
+| `io_close -> ai_fd_drain` | ⚠ the finalizer, the write side's one remaining unbounded wait |
+| teensy41 `main -> ai_sleep` | the panic blink after a fatal shell exit |
+
+so the arc's two documented exceptions stop being prose. they are gate data, and a
+seventh wait cannot arrive quietly.
+
+**⚠ it reads the C as WRITTEN, never the binary, and that is the whole design.**
+the check this document proposed was a disassembly in `vmret`'s literal shape --
+and it would have answered GREEN forever. every `io_*` and `z*` function in love.c
+is `static`, so the compiler inlines them and their names are gone from the ELF; a
+call graph read off the image cannot find the caller it is looking for. `vmret` can
+disassemble only because `lvm_*` aps are addressed and survive. **a gate that
+cannot see its subject reports success**, which is the worst answer a gate gives.
+
+reading the source instead makes one edge free that the binary would have made
+hard: `Ap(lvm_yield_sw, g)` names `Ap`, never `lvm_yield_sw`. a tail-jump is not a
+call -- the op returns to the trampoline and the scheduler then waits in *its own*
+frame -- so the shape the arc exists to permit is exactly the shape the rule
+already ignores.
+
+it also came out **wider than proposed and smaller to write**. the plan was "no
+`io_*`/`z*` function reaches a wait", which needs a list of what counts as the io
+family and grows every time that family does. asking *every* caller to be on a
+roster needs no such list, and the roster turned out shorter than the exclusion
+would have been.
+
+**sabotage-proved, both halves** (against the real tree, reverted after): a
+restored `ai_sleep(1)` at the head of `io_refill` reddens with
+`love.c:3222: io_refill -> ai_sleep`, and a roster line with no call site reddens
+as stale, so a wait that goes away cannot leave its excuse behind.
+
+⚠ **what it does not see**, so nobody reads it as more than it is: the four hooks
+by NAME, never blocking in general. a raw `read(2)` in love.c, a fresh primitive,
+or a hook reached through a function pointer all walk past it. it says *the named
+waits are where we put them*, which is the thing that regresses.
 
 ### the epilogue: two hazards the arc uncovered -- ✅ 2026-07-31
 
