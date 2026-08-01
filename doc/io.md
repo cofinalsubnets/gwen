@@ -1750,8 +1750,84 @@ four control-verified.
   nothing does today.
 - **`sink`** -- the write dual, so a pump reads symmetric. low value; `dot`
   already works.
-- **the write-side park** (defect 4).
-- **the blocking refill** (defect 5), which did not exist when the list was made.
+
+~~the write-side park (defect 4)~~ ✅ rungs 3-5. ~~the blocking refill (defect
+5)~~ ✅ its own section above. so `select` and `sink` are the whole of what is
+left here, and neither has a caller.
+
+### the floor below this floor -- THE NIF FLOOR, named and not built
+
+the device floor made every DEVICE entry point nonblocking. what still blocks is
+a different layer with a different fix shape: a device answers would-block and the
+caller parks, but a **nif** parks itself -- leave `Ip` unadvanced, return
+`Ap(lvm_yield_sw, g)`, and the op re-runs. these were scoped OUT of this arc on
+purpose, and this is the roster, read off the source rather than off memory:
+
+| nif | where | what it does today |
+|---|---|---|
+| `accept` | host/sock.c:138 | `accept(lfd, NULL, NULL)` -- blocking |
+| `udp-recv` | host/sock.c:190 | blocking `recvfrom`; its own comment says `[BLOCKS]`, *"intentional, like accept"* |
+| `connect` | host/sock.c:56-79 | `getaddrinfo`, then a blocking `connect(2)` |
+| `wait` | host/posix.c:241 | `waitpid(pid, &st, WUNTRACED)` in an EINTR loop |
+| `run` / `runt` | host/posix.c:866, 873 | `waitpid(pid, &st, 0)` in an EINTR loop |
+| `mind` | host/posix.c:1028 | the pty runner, same shape |
+| `catch` | love.c:2843-2850 | ⚠ does not block -- **never idles**, below |
+
+⚠ **`catch` is a different bug from the other six and must not be lumped in.** it
+already yields; what it does is clear `next_wake_at` and `next_wait_fd` first, so
+the waiting task is IMMEDIATELY RUNNABLE again. `find_runnable` therefore always
+answers it, the scheduler never reaches `yield_sw_wait`'s sleep, and a program
+whose only remaining work is a `catch` on a slow peer burns a core. worse, it
+defeats the wait for EVERYONE: other tasks parked on quiet fds get polled at full
+speed instead of slept on. and the clearing is CORRECT as far as it goes -- the
+comment there is right that a stale `next_wait_fd` would park this task on an fd
+nothing will ready and `find_runnable` would never reschedule it. what is missing
+is a third parked state, *runnable when a named peer exits*, which is neither a
+timer nor an fd.
+
+⚠ **`getaddrinfo` has no nonblocking form at all** -- it is not a syscall with an
+`O_NONBLOCK` to set; it reads config, may speak DNS, and there is no portable
+async door. so `connect` cannot be fixed the way the others can: it wants a
+thread, a subprocess, or a resolver of our own. **that one is a project, not a
+rung**, and it is the reason this list is a sibling arc rather than a seventh rung.
+
+the process half is the cheap half, and the machinery is already there:
+host/posix.c:145 reaps with `waitpid(-1, WNOHANG)` for the init lane. a parking
+`wait` is that call plus the scheduler's retry -- exactly the shape rung 5 used
+for the write residue.
+
+### `k_sources_max` -- the rule, since the fix is not owed yet
+
+port/inle/kmain.c:143 caps the kernel's fd table at 32. the rung-6 sweep left it,
+and correctly: nothing writes the table today and 30 of the slots are dead, so it
+is not reachable. this is the rule it left behind, for whoever gives inle files
+and sockets -- **the table GROWS, it does not cap.**
+
+the two patterns to copy are both in the tree already: rung 6's `yield_sw_wait`
+(count first, size second, no constant anywhere) and the test frontend's device
+table (test/front/main.c:66-73), which `realloc`s and says so in its comment. a
+ceiling here would be rung 6's bug one layer down, and it would arrive WORSE --
+as a silent refusal to open the 33rd thing, rather than as a hang.
+
+### defect 6 -- a task can sleep on a quiet fd over a full buffer
+
+the scheduler's readiness is per-FD, but bytes live in the PORT. so a task parked
+on fd X while ANOTHER task's bulk gulp fills the shared port's `rbuf` sleeps: its
+fd is quiet, and the buffer it could read from is not the thing being asked about.
+`ai_ready` answers the honest truth about the wrong object.
+
+⚠ **not reachable today**, which is why it is written down rather than fixed: not
+through `in` (`trickle` never runs ahead, by construction -- part III), and not
+through `wrap` (two tasks, two fds). it needs two tasks on one heap port where one
+uses the bulk lane.
+
+the fix is to park on the PORT rather than the fd, which means `g->next_wait_fd`
+(love.h:141) has to move inside the traced `v0..end` span -- an image-format
+change: an encver bump and a rebake of every baked image. real cost, and nothing
+is paying for it. ⚠ and the reason first given for this being hard was WRONG and
+is corrected here: it was not that a task node cannot hold a port. task nodes are
+GC-traced word by word including word0 (love.c:1221-1222), so a port would ride
+free. the obstacle is one level up, in the field that is outside the span.
 
 ### the delete ledger, corrected by measurement
 
@@ -1967,8 +2043,10 @@ choosing park-or-block. so:
 3. ~~then 8B~~ ✅ **DONE 2026-07-31, and it needed NO CELL.** see below.
 4. **defect 2** (the `-1` sentinel) rides along with 8B where it touches, and is
    not worth a pass of its own.
-5. **defect 4** (writes never yield) and **`select`**: when something asks. after
-   1, nothing does.
+5. ~~**defect 4** (writes never yield)~~ ✅ the device-floor arc took it whole
+   (rungs 3-5, then backpressure). **`select`**: still when something asks, and
+   after 1 nothing does. what IS next is the nif floor -- its own section in
+   part II.
 
 ~~`empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all
