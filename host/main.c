@@ -238,7 +238,7 @@ static lvm(lvm_close) {
   Ip += 1;
   return Continue(); }
 
-// --- subprocess (run) + environment (getenv) ---------------------------
+// --- subprocess (hark) + environment (getenv) ---------------------------
 // Both are host-only nifs (POSIX fork/exec/wait, getenv), like open/close.
 // No malloc: argv is marshalled into the uncommitted l heap gap and the
 // child's stdout is captured into a growing l string (the reader's
@@ -261,7 +261,7 @@ static void host_teeout(char const *p, size_t n) {
   if (w < 0) { if (errno == EINTR) continue; return; }
   p += w, n -= (size_t) w; } }
 
-// (run argv) / (runt argv) are a TWO-AP NIF BODY -- {{start}, {drain}, {ret0}} --
+// (hark argv) / (herald argv) are a TWO-AP NIF BODY -- {{start}, {drain}, {ret0}} --
 // because the op is not re-runnable where it has to park. love.h's nif park says
 // "leave Ip unadvanced and yield, the op re-runs", and a run that re-ran from the
 // top would fork a SECOND child. So the fork and the capture are two ops, and the
@@ -279,8 +279,8 @@ static void host_teeout(char const *p, size_t n) {
 //    sp[5]        the return ip lvm_ret0 wants
 //
 // `tee` picks WHEN the captured output reaches stdout, not whether it is
-// captured: 0 (run) holds it until the child exits and hands the whole string
-// back for the caller to do as it likes; 1 (runt) ALSO write(2)s each chunk
+// captured: 0 (hark) holds it until the child exits and hands the whole string
+// back for the caller to do as it likes; 1 (herald) ALSO write(2)s each chunk
 // through as it is read, so a long-running child STREAMS -- which is what make
 // does (it pipes the child too, then relays each chunk rather than hoarding it).
 // A capture-and-reprint caller passes 1 and skips its own reprint; a caller that
@@ -294,24 +294,24 @@ static void host_teeout(char const *p, size_t n) {
 // Lay the four state slots over argv, so every exit from the spawn -- a misuse,
 // a failed pipe, a failed fork, a failed exec, a live child -- hands the drain
 // ONE shape to read. The capture string (or the errno answer) goes on top after.
-static struct ai *host_runst(struct ai *g, intptr_t fd, intptr_t pid, int tee) {
+static struct ai *host_harkst(struct ai *g, intptr_t fd, intptr_t pid, int tee) {
  g = ai_push(g, 3, putcharm(0), putcharm(fd), putcharm(pid));
  if (ai_ok(g)) g->sp[3] = putcharm(tee);
  return g; }
 
 // The first ap: marshal argv, fork, and confirm the exec. Called with g Packed;
 // argv is at sp[0]. Returns a not-ok g only on OOM.
-ai_noinline static struct ai *host_runstart(struct ai *g, int tee) {
+ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
  // pass 1: validate every element is a string; size the arg-byte blob.
  ai_word argv = g->sp[0];
  intptr_t argc = 0;
  uintptr_t total = 0;
  for (ai_word p = argv; chainp(p); p = B(p)) {
   if (!ai_strp(A(p)))                                     // misuse
-   return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(-1));
+   return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-1));
   argc++, total += len(A(p)) + 1; }                       // +1 for the NUL
  if (!argc)                                               // empty argv
-  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(-1));
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-1));
 
  // Reserve gap for cav (argc+1 pointers, word-aligned) + the byte blob.
  // Written into the uncommitted region at Hp -- invisible to GC, holds no
@@ -338,15 +338,15 @@ ai_noinline static struct ai *host_runstart(struct ai *g, int tee) {
  // difference this rung is about. (Every push below happens after the fork, so
  // growing the stack over the cav/blob gap is the parent's business alone.)
  int op[2], ep[2];
- if (pipe(op)) return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(errno));
+ if (pipe(op)) return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(errno));
  if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]);
-  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(e)); }
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  pid_t pid = fork();
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
-  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(e)); }
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
  if (!pid) {                                              // child
   signal(SIGPIPE, SIG_DFL);                               // the ignore must not ride the exec
   dup2(op[1], STDOUT_FILENO);
@@ -368,19 +368,19 @@ ai_noinline static struct ai *host_runstart(struct ai *g, int tee) {
  if (childerr) {                                          // exec failed
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(childerr)); }
+  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(childerr)); }
 
  // The read end never blocks. It is a fresh fd the child does not share, so the
  // flag just STAYS on -- none of fd_readn's per-call toggle dance, which exists
  // for fds whose open file description a forked child holds too.
  { int fl = fcntl(op[0], F_GETFL); if (fl >= 0) fcntl(op[0], F_SETFL, fl | O_NONBLOCK); }
- return str0(host_runst(g, op[0], pid, tee), 1u << 16); }  // capture -> sp[0]
+ return str0(host_harkst(g, op[0], pid, tee), 1u << 16); }  // capture -> sp[0]
 
 // The second ap, once per scheduled turn: take what the pipe has (growing the
 // string when it fills), tee it through if asked, then leave the state where the
 // next turn finds it. Nothing here holds a pointer across an allocation -- the
 // capture string is re-read off sp[0] every time, because a park may have moved it.
-ai_noinline static struct ai *host_rundrain(struct ai *g) {
+ai_noinline static struct ai *host_harkdrain(struct ai *g) {
  intptr_t fd = getcharm(g->sp[2]);
  if (fd == -1) return g;                        // nothing was spawned: sp[0] IS the answer
  pid_t pid = (pid_t) getcharm(g->sp[3]);
@@ -430,28 +430,28 @@ ai_noinline static struct ai *host_rundrain(struct ai *g) {
    g->sp[2] = putcharm(-1); }                             // done
  return g; }
 
-static lvm(lvm_run) {
+static lvm(lvm_hark) {
  Pack(g);
- g = host_runstart(g, 0);
+ g = host_harkstart(g, 0);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  return Ip += 1, Continue(); }
 
-// (runt argv) -- run, TEEING: identical to (run argv), same (status . output)
+// (herald argv) -- hark, TEEING: identical to (hark argv), same (status . output)
 // answer, but the child's stdout is relayed as it arrives instead of only at
 // exit. For a caller that just reprints what it captured; see the `tee` note above.
-static lvm(lvm_runt) {
+static lvm(lvm_herald) {
  Pack(g);
- g = host_runstart(g, 1);
+ g = host_harkstart(g, 1);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  return Ip += 1, Continue(); }
 
 // The shared second ap. It PARKS -- Ip unadvanced, so the whole op re-runs on
 // reschedule and reads its state back off the stack.
-static lvm(lvm_rundrain) {
+static lvm(lvm_harkdrain) {
  Pack(g);
- g = host_rundrain(g);
+ g = host_harkdrain(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  if (Sp[2] != putcharm(-1)) return Ap(lvm_yield_sw, g);
@@ -460,12 +460,12 @@ static lvm(lvm_rundrain) {
  return Continue(); }
 
 // (exec argv) -> REPLACE this process with argv[0], inheriting stdio (the real
-// terminal). Unlike (run argv) -- which forks, pipes the child's stdout into a
+// terminal). Unlike (hark argv) -- which forks, pipes the child's stdout into a
 // captured string, and waits -- exec hands the tty straight to the child, so an
 // INTERACTIVE program drives the terminal. On success it never returns; on a bad
-// argv or a failed exec it returns an errno (or -1) fixnum, exactly like run's
+// argv or a failed exec it returns an errno (or -1) fixnum, exactly like hark's
 // spawn-failure path. cook execs its terminal recipe steps this way (the repl,
-// gdb, the qemu run targets). Marshals argv into cav like host_run, then execvp
+// gdb, the qemu run targets). Marshals argv into cav like hark, then execvp
 // in place -- no allocation between the build and the exec, so cav stays valid.
 ai_noinline static struct ai *host_exec(struct ai *g, ai_word argv) {
  intptr_t argc = 0;
@@ -529,8 +529,8 @@ static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
  nif_close[] = {{lvm_close}, {lvm_ret0}},
- nif_run[] = {{lvm_run}, {lvm_rundrain}, {lvm_ret0}},
- nif_runt[] = {{lvm_runt}, {lvm_rundrain}, {lvm_ret0}},
+ nif_hark[] = {{lvm_hark}, {lvm_harkdrain}, {lvm_ret0}},
+ nif_herald[] = {{lvm_herald}, {lvm_harkdrain}, {lvm_ret0}},
  nif_exec[] = {{lvm_exec}, {lvm_ret0}},
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
@@ -544,8 +544,8 @@ static union u const
 AI_NIF("quit", nif_exit);
 AI_NIF("open", nif_open);
 AI_NIF("close", nif_close);
-AI_NIF("run", nif_run);
-AI_NIF("runt", nif_runt);
+AI_NIF("hark", nif_hark);
+AI_NIF("herald", nif_herald);
 AI_NIF("exec", nif_exec);
 AI_NIF("getenv", nif_getenv);
 AI_NIF("getpid", nif_getpid);

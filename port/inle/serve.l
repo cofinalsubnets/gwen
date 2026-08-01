@@ -32,10 +32,10 @@
 ; CONCURRENT: the accept loop `await`s the listener fd (cooperative park) and
 ; spins each client's session as its own task, so many agents moor at once.
 ; Sessions interleave through the scheduler -- parked in `sound`/`see` on their
-; own fds, and a long pure-love computation yields periodically too. The ONE thing
-; that freezes the dock is a blocking C nif: `run` (fork/wait), so the heavy
-; verbs `probe`/`gate`/`build`/`adopt` hold the whole dock while they run. That
-; is acceptable -- they are deliberate, occasional, and want the machine anyway.
+; own fds, and a long pure-love computation yields periodically too. `hark`
+; (fork/capture) used to freeze the dock for a whole child's life; it parks on the
+; child's pipe now, so the heavy verbs `probe`/`gate`/`build`/`adopt` interleave
+; with everyone else's session (doc/io.md, the nif floor).
 
 (: (note s) (: _ (puts s) _ (puts "\n") ())
 
@@ -43,11 +43,11 @@
    (look path)      (: q (open path "r") (? q (: s (slurp q) _ (close q) s) ()))
    (lay path body)  (: q (open path "w") (? q (: _ (say q body) _ (close q) 1) 0))
 
-   ; run an argv, returning a PROPER 2-list (status output) -- not run's raw
+   ; run an argv, returning a PROPER 2-list (status output) -- not hark's raw
    ; (status . output) dotted pair, whose string tail `show` drops (an improper
    ; list is ill-formed under the ()-terminated ontology). status: 0 clean, 124
    ; a timeout kill, >=128 a signal kill. destructure: (cap r) status, (caup r) output.
-   (runl argv) (: r (run argv) `((cap r) (cup r)))
+   (runl argv) (: r (hark argv) `((cap r) (cup r)))
 
    ; --- the world: shell out (git, ls, grep, ...) -> (status output) ---
    (sh argv) (runl argv)

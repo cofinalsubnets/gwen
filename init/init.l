@@ -9,7 +9,7 @@
 ;   (demos 0) -- the MODELED supervisor: a deterministic tour where a "service" is a
 ;     green task and a crash is a `scare` the watchdog `help` welps to () (the SAME
 ;     shape recovery inle uses), so the dep graph / restart policy / checkpoint run
-;     with no OS processes. (the oneshot lane here is already real via the `run` nif.)
+;     with no OS processes. (the oneshot lane here is already real via the `hark` nif.)
 ;   (real 0) -- the REAL supervisor: services are OS processes. host/posix.c adds the
 ;     two missing primitives -- (spawn argv) forks+execs and returns a pid to track,
 ;     (glean _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
@@ -30,7 +30,7 @@
 
    ; --- a unit is an IMMUTABLE list (name kind cmd restart deps) --- show/read
    ; checkpoints it for free (the inle.md rule: state is a love value, persistence is
-   ; show/read). `kind` is 'oneshot (a real argv for `run`) or 'service (a thunk modeling
+   ; show/read). `kind` is 'oneshot (a real argv for `hark`) or 'service (a thunk modeling
    ; the long-running process). `restart` is 'no | 'on-fail | 'always (systemd's Restart=).
    ; `deps` is the After= list -- names that must be up before this one starts.
    (nth l i) (? (= i 0) (cap l) (nth (cup l) (- i 1)))
@@ -65,13 +65,13 @@
                  (: _ (note (+ "    " (+ (show name) " gave up"))) ())))))
 
    ; --- act: bring ONE unit up --- a oneshot really forks/execs/waits a child (the wire
-   ; out to a real process: `run` returns (exit-code . captured-stdout), so the REAL exit
+   ; out to a real process: `hark` returns (exit-code . captured-stdout), so the REAL exit
    ; status drives done/failed). a service is supervised. returns the registry with this
    ; unit's status pinned.
    (start1 reg cnt u)
      (: name (u-name u)
         (? (id? (u-kind u) 'oneshot)
-             (: res  (run (u-cmd u))                  ; REAL child (host/main.c fork+exec+wait)
+             (: res  (hark (u-cmd u))                  ; REAL child (host/main.c fork+exec+wait)
                 code (cap res)  text (cup res)         ; (exit . stdout)
                 _    (note (+ "  [oneshot] " (+ (show name) (+ " -> \"" (+ text (+ "\" (exit " (+ (show code) ")")))))))
                 (pin reg name (? (= code 0) 'done 'failed)))
@@ -112,7 +112,7 @@
 ; poll `glean` -- the SIGCHLD core -- mapping each dead pid back to its unit and
 ; restarting on a NONZERO exit per policy. on metal this poll is driven by signalfd
 ; through ai_wait_fds (perceive), exactly as {nic, clock} is in inle; here a rest-paced
-; loop stands in. a real service's `cmd` is its argv (run by spawn); `pids` maps
+; loop stands in. a real service's `cmd` is its argv (hark by spawn); `pids` maps
 ; pid->name, `tries` counts restarts. the dep graph / checkpoint above carry over
 ; unchanged -- only start1's "modeled thunk" becomes "a real fork+exec".
 (: (rstart pids u)                                    ; spawn one unit, record pid->name

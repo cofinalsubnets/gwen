@@ -1,7 +1,7 @@
 ; Driver for `make test_kernel`: boot the headless serial test kernel under qemu,
 ; capture its serial console (the baked corpus runs at boot and prints the usual
 ; "N tests pass" summary, then (exit) quits qemu via isa-debug-exit), and report.
-; Run on the host love, which has the `run` subprocess nif.
+; Run on the host love, which has the `hark` subprocess nif.
 ; argv = (this file firmware arch), and the FILE picks the door: a .elf boots
 ; DIRECT (`qemu -kernel`, the PVH door -- no bootloader, no firmware image at
 ; all, so pass "-" for the firmware); a DIRECTORY is an ESP served as a FAT
@@ -45,7 +45,7 @@
    media (? elf? `("-kernel" iso)
             dir? (fw + `("-drive" (+ "format=raw,file=fat:rw:" iso)))
             (fw + `("-cdrom" iso)))
-   r    (run (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
+   r    (hark (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
              (cat mach
              (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media))))
    out  (cup r)

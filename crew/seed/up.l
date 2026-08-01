@@ -46,7 +46,7 @@
        _ (? (getenv "CC") 0 (setenv "CC" (exe + " mooncc")))
        _ (? (getenv "EMBED") 0 (setenv "EMBED" "0"))
        _ (puts "up: cooking the nest (cook install)\n")
-       s (runt (list exe "cook" "install"))
+       s (herald (list exe "cook" "install"))
        st (? (two? s) <s s)
        _ (? (0 = st) 0 (oops ("up: cook install failed (exit " + (show st) + ")")))
        _ (puts ("up: the nest is " + nest + " -- love (and seed, cook, kore ..) on ~/.local/bin\n"))

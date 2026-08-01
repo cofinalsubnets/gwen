@@ -25,10 +25,10 @@
    (console _) (L "/bin/love" "-l" "/lib/sh.l" "-e" "(sh 0)")
 
    ; a boot self-check: run a real userland command (kore, forked + captured) so the
-   ; console SHOWS the base system works end to end before we hand off the tty. `run`
+   ; console SHOWS the base system works end to end before we hand off the tty. `hark`
    ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
    (selfcheck _)
-     (: r (run (L "/bin/kore" "ls" "/proc"))
+     (: r (hark (L "/bin/kore" "ls" "/proc"))
         (say1 (+ "-- self-check: kore ls /proc -> exit " (+ (show (cap r))
                  (+ ", " (+ (show (tally (cup r))) " bytes --"))))))
 

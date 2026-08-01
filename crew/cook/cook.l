@@ -23,10 +23,10 @@
 ;             always runs, cascading a rebuild to everything that needs it.
 ;   ingredients -- a list of prerequisite items (strings and/or symbols).
 ;   steps  -- a list of STEPS. each step is either an argv list of strings, run as
-;             a subprocess via the host `run` nif, or a THUNK (any lit?), called as
+;             a subprocess via the host `hark` nif, or a THUNK (any lit?), called as
 ;             (step 0) for its effect. an empty step list is legal (a pure aggregate).
 ;
-; file ages come from stat(1) -- love has no stat nif, but it has `run`, and that
+; file ages come from stat(1) -- love has no stat nif, but it has `hark`, and that
 ; is enough. a missing file and a phony item both read as the ZERO POINT (nil):
 ; ageless, hence ancient, hence always rebuilt. the FIRST recipe declared is the
 ; default ticket, exactly as in make. drive it with (cook item) -- to cook an item
@@ -176,14 +176,14 @@
        _ (exec argv)
        _ (say err ("cook: cannot exec " + (join " " argv))) _ (put err 10) (quit 1))
 
-   ; run one argv: echo it, run it STREAMING its output (runt relays each chunk as
+   ; run one argv: echo it, run it STREAMING its output (herald relays each chunk as
    ; it arrives, so a long step is not silent until it exits), abort on failure.
-   ; The flush is load-bearing: runt writes the child's bytes past the `out`
+   ; The flush is load-bearing: herald writes the child's bytes past the `out`
    ; buffer, so an unflushed echo would land after them.
    (shell step)
    (: _ (puts ("  " + (join " " step))) _ (putc 10)
        _ (flush out)
-       r (runt step)
+       r (herald step)
        (? (two? r)
           (? (0 = <r) 0
              (: _ (say err ("cook: command failed (exit " + (show <r) + ")"))
@@ -199,7 +199,7 @@
    (sh-line silent ignore sh flags cmd)
    (: _ (? silent 0 (: _ (puts cmd) (putc 10)))
        _ (flush out)
-       r (runt ((`(sh) + flags) + `(cmd)))
+       r (herald ((`(sh) + flags) + `(cmd)))
        ec (? (two? r) <r -1)
        (? (0 = ec) 0
           (! (two? r)) (: _ (say err ("cook: cannot run " + cmd)) _ (put err 10) (quit 1))
@@ -459,7 +459,7 @@
    ; -- function helpers --
    (chomp s) ((: (g i) (? (&& (0 < i) ((s (i - 1)) = 10)) (g (i - 1)) (snip s 0 i))) (tally s))
    (nl->sp s) ((: (g i acc) (? (i >= (tally s)) acc (g (1 + i) (acc + (? ((s i) = 10) 32 (s i)))))) 0 "")
-   (fn-shell sh cmd) (: r (run `(sh "-c" cmd)) (? (two? r) (nl->sp (chomp >r)) ""))
+   (fn-shell sh cmd) (: r (hark `(sh "-c" cmd)) (? (two? r) (nl->sp (chomp >r)) ""))
    ; $(wildcard), native both ways: lush's glob (cook-glob -- classes, multi-
    ; segment patterns, the mask law) when it is aboard; else glob1 below -- a
    ; word with no * or ? is an existence test; otherwise the
@@ -596,7 +596,7 @@
    ; a recipe LINE that begins with the shell `exec` builtin is an INTERACTIVE
    ; line: `exec <cmd>` replaces the shell, so make already runs it on the real
    ; tty -- and cook honours the same convention, running it through the exec nif
-   ; (the `(exec ..)` step) rather than capturing it via `run`. So one notation --
+   ; (the `(exec ..)` step) rather than capturing it via `hark`. So one notation --
    ; `exec` -- marks the repl / gdb / qemu targets interactive in BOTH builders.
    (starts? s pre) (&& ((tally pre) <= (tally s)) (pre = (snip s 0 (tally pre))))
    (execp cmd) (: t (ltrim cmd)

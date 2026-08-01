@@ -4,7 +4,7 @@
 ; Port of tools/vmret.py (see it for the full rationale). The l VM is
 ; threaded: every lvm_* opcode ap should tail-jump to the next, never
 ; emit an ordinary `ret`. This tool disassembles an ELF (shelling out to
-; objdump / llvm-objdump via the `run` nif) and reports every lvm_* function
+; objdump / llvm-objdump via the `hark` nif) and reports every lvm_* function
 ; whose body still contains a `ret` -- a first-pass heuristic, expect false
 ; positives. It is cross-arch: it reads e_machine and picks a per-arch return
 ; mnemonic, preferring multi-target llvm-objdump for non-x86 images.
@@ -12,7 +12,7 @@
 ; Usage: l vmret.l ELF [--prefix PREFIX] [--objdump PATH]
 ; Exit:  0 = all clean, 1 = suspects found, 2 = usage/tool error.
 ;
-; This needs the host-only `run`/`getenv` nifs (subprocess + environment).
+; This needs the host-only `hark`/`getenv` nifs (subprocess + environment).
 
 (: (die m)   (: _ (say err "vmret: ") _ (say err m) _ (say err "\n") (quit 2))
    (usage 0) (: _ (say out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n") (quit 0)))
@@ -197,11 +197,11 @@
       `(path prefix od)))
 
 ; --- try candidate disassemblers in order ----------------------------
-; (run ...) returns (status . output) when the tool ran, else a fixnum errno
+; (hark ...) returns (status . output) when the tool ran, else a fixnum errno
 ; (spawn failed -> try the next). -> (cand status . output) or 0 if exhausted.
 (: (try-cands cs elf)
    (? (two? cs)
-      (: r (run `((cap cs) "-d" "--no-show-raw-insn" elf))
+      (: r (hark `((cap cs) "-d" "--no-show-raw-insn" elf))
          (? (two? r) (link (cap cs) r) (try-cands (cup cs) elf)))
       0))
 

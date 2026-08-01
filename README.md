@@ -145,7 +145,7 @@ love and bootstrapped through normal `make`. `cook` accepts either the tradition
 each card is `(recipe item ingredients steps)`: an item is a filename or a
 phony symbol, ingredients are the items it needs first, steps are argv lists
 (run as subprocesses) or thunks. item ages come from `stat` through the host
-`run` nif, so a phony symbol is ageless and always cooks. the whole kitchen:
+`hark` nif, so a phony symbol is ageless and always cooks. the whole kitchen:
 cook an item -- check its date, prep its ingredients, follow the recipe's
 steps, record what shipped, from the cards; the ticket names what to make
 (default: the first card, the standing check).

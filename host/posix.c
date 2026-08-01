@@ -35,7 +35,7 @@
 
 // A wait(2) status word -> the value a reaper hands back: the exit code, or
 // 128+signal for a signalled death (the shell convention), or -1 for the
-// (shouldn't-happen) neither case. The way host_run (main.c) decodes it -- the
+// (shouldn't-happen) neither case. The way hark (main.c) decodes it -- the
 // one copy every reaper here shares, so they agree on what an exit code MEANS.
 static inline int proc_status(int st) {
  return WIFEXITED(st) ? WEXITSTATUS(st)
@@ -808,7 +808,7 @@ AI_NIF("rmdir",    nif_posix_rmdir);
 AI_NIF("hardlink", nif_posix_hardlink);
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
-// it, and read/write its window size. The keystone, (tether argv), is host_run
+// it, and read/write its window size. The keystone, (tether argv), is hark
 // (main.c) with the stdout PIPE swapped for a pty pair: the same argv marshal +
 // close-on-exec errno-pipe handshake, but the child's 0/1/2 become the pty SLAVE
 // and the parent keeps the MASTER as a heap port (ai_io_alloc). So bao's editor
@@ -827,10 +827,10 @@ AI_NIF("hardlink", nif_posix_hardlink);
 
 // Workhorse for (tether argv), called with g Packed; argv is the single arg and
 // the sole GC root at g->sp[0]. Leaves EXACTLY ONE net value above argv on every
-// non-OOM path (so lvm_ptyrun collapses uniformly, cf. host_run): the
+// non-OOM path (so lvm_tether collapses uniformly, cf. hark): the
 // (pid . master-port) chain on success, an errno/-1 fixnum otherwise. Returns a
-// not-ok g only on OOM (lvm_ptyrun routes that to ghelp).
-ai_noinline static struct ai *host_ptyrun(struct ai *g) {
+// not-ok g only on OOM (lvm_tether routes that to ghelp).
+ai_noinline static struct ai *host_tether(struct ai *g) {
   // NO l allocation between the marshal and the fork: openpt/grantpt/unlockpt/
   // ptsname/pipe don't touch the heap, so the uncommitted gap holds.
  char **cav;
@@ -894,9 +894,9 @@ ai_noinline static struct ai *host_ptyrun(struct ai *g) {
  g->sp[0] = word(w);                               // [(pid . port), argv]
  return g; }
 
-static lvm(lvm_ptyrun) {
+static lvm(lvm_tether) {
  Pack(g);
- g = host_ptyrun(g);
+ g = host_tether(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];                                    // result over argv
@@ -905,7 +905,7 @@ static lvm(lvm_ptyrun) {
 
 // Workhorse for (reap pid), called with g Packed and pid at g->sp[0]. The &st
 // waitpid + the chain alloc live here (off the wrapper's frame so lvm_reap's
-// Continue() tail-jumps, cf. host_ptyrun). Leaves exactly one net value at sp[0]:
+// Continue() tail-jumps, cf. host_tether). Leaves exactly one net value at sp[0]:
 // the (status) one-element list, () still-running, or an errno fixnum. Returns a
 // not-ok g only on OOM (lvm_reap routes that to ghelp).
 ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
@@ -941,7 +941,7 @@ static lvm(lvm_kill) {
 
 // Workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
 // The &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
-// (cf. host_ptyrun). Overwrites sp[0] with (rows . cols), or () if stdout isn't a
+// (cf. host_tether). Overwrites sp[0] with (rows . cols), or () if stdout isn't a
 // tty. Returns a not-ok g only on OOM (lvm_winsize routes that to ghelp).
 ai_noinline static struct ai *host_winsize(struct ai *g) {
  struct winsize ws;
@@ -1033,13 +1033,13 @@ static lvm(lvm_raw) {
 
 static union u const
   nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
-  nif_ptyrun[]     = {{lvm_ptyrun}, {lvm_ret0}},
+  nif_tether[]     = {{lvm_tether}, {lvm_ret0}},
   nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
   nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AI_NIF("tether", nif_ptyrun);
+AI_NIF("tether", nif_tether);
 AI_NIF("gather", nif_reap);
 AI_NIF("still", nif_kill);
 AI_NIF("winsize", nif_winsize);

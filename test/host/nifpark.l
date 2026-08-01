@@ -70,9 +70,9 @@
    _ (assert (0 < (peep n 0 0))         ; 0 with the blocking waitpid back in
              (st = 0)))                 ; ... and the child's status is still exact
 
-; --- law 4: run PARKS for the child's whole life ------------------------------
+; --- law 4: hark PARKS for the child's whole life ------------------------------
 ; not the reap -- the DRAIN. A blocking read(2) over the child's stdout held the
-; vm for as long as the child had anything left to say. `run` is a TWO-AP nif
+; vm for as long as the child had anything left to say. `hark` is a TWO-AP nif
 ; body ({start},{drain},{ret0}) because the op is not re-runnable where it parks:
 ; a re-entry from the top would fork a SECOND child. So the fork is one op, the
 ; capture is the other, and the five stack slots between them are the park state.
@@ -81,7 +81,7 @@
 ; read and the law would pass over the bug.
 (: n (tablet 0)
    t (ticker n)
-   r (run '("sh" "-c" "echo one; sleep 0.2; echo two"))
+   r (hark '("sh" "-c" "echo one; sleep 0.2; echo two"))
    _ (freeze t)
    _ (assert (0 < (peep n 0 0))         ; 0 with the blocking drain back in
              ((cap r) = 0)

@@ -36,7 +36,7 @@ A **Cookfile** is ordinary love source that registers recipes and then calls **c
 > (cook-all 0)
 > ```
 
-A card is (*recipe* *item ingredients steps**):* an *item* is a filename string or a phony symbol, ingredients are the items it needs first, and steps are argv lists (run as subprocesses) or thunks. Item ages come from the **stat** nif at nanosecond resolution; a phony symbol owns no file, so it is ageless and always cooks.
+A card is (*recipe* *item ingredients steps**):* an *item* is a filename string or a phony symbol, ingredients are the items it needs first, and steps are argv lists (**hark**ed as subprocesses) or thunks. Item ages come from the **stat** nif at nanosecond resolution; a phony symbol owns no file, so it is ageless and always cooks.
 
 A Cookfile drives itself: **(cook-all****0)** builds every *recipe* named on the command line (or the default when none), while **(cook****(ticket****0))** builds just the first. **--emit** generates a Cookfile ending in **(cook-all 0)**.
 

@@ -18,7 +18,7 @@
 ; (kernel-tco1-gc, glaze-intparam-guard were both target divergences).
 ;
 ; NB: relative binary paths -> run from the repo root. one `-e` form per candidate
-; (a `:` block counts as one). pure love + the `run`/`timeout` shell-out inle already
+; (a `:` block counts as one). pure love + the `hark`/`timeout` shell-out inle already
 ; uses for curl -- no new nif.
 
 (: (bytes-of s) (map (\ i (s i)) (jot (tally s)))         ; a string's byte colist (for `tap`)
@@ -39,7 +39,7 @@
    ;; missing-nom / a silent reader stop both exit 0 (soft) -- parse is caught at
    ;; rung 1 in-process; a missing-nom's `;; missing` face rides stderr, uncaught
    ;; here (a temp-file + `2>&1` variant can add it -- deferred, it's soft). --
-   (judge-run bin prog secs) (run (L "timeout" (show secs) bin "-e" prog))   ; (show 5)="5"; (string 5) is the BYTE 5
+   (judge-run bin prog secs) (hark (L "timeout" (show secs) bin "-e" prog))   ; (show 5)="5"; (string 5) is the BYTE 5
 
    ;; -- the judge: parse in-process, run host + love0 isolated, classify by status,
    ;; diff, tally. --

@@ -6,7 +6,7 @@
 ; cook reads a real Makefile -- variable expansion, the make functions,
 ; conditionals, include, pattern + static-pattern rules -- so these tests build
 ; fixture Makefiles (a flat list of lines, joined by newlines), run cook on them
-; as a SUBPROCESS (the host `run` nif), and assert over its captured stdout. The
+; as a SUBPROCESS (the host `hark` nif), and assert over its captured stdout. The
 ; recipes mostly `echo` a computed value, so the assertion is a substring check;
 ; the pattern-rule tests build real files and check they appear.
 
@@ -27,16 +27,16 @@
                             (? (= sub (snip s i (+ i (tally sub)))) 1 (g (+ 1 i))))) 0)
 
    (write-file path content) (: q (open path "w") _ (say q content) (close q))
-   (sh cmd) (run `("sh" "-c" cmd))
+   (sh cmd) (hark `("sh" "-c" cmd))
    ; run cook on a fixture Makefile, return its captured stdout.
    (run-cook src tgt)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (run `(love "-l" "crew/cook/cook.l" (+ dir "/Makefile") tgt))
+       r (hark `(love "-l" "crew/cook/cook.l" (+ dir "/Makefile") tgt))
        (? (two? r) (cup r) ""))
    ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
    (run-emit src)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (run `(love "-l" "crew/cook/cook.l" "--emit" (+ dir "/Makefile")))
+       r (hark `(love "-l" "crew/cook/cook.l" "--emit" (+ dir "/Makefile")))
        (? (two? r) (cup r) ""))
 
    _ (sh (+ "rm -rf " (+ dir "; mkdir -p " dir)))
@@ -144,7 +144,7 @@
    (D2 f) (+ dir f)
    (run-cookv src args)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (run (`(love "-l" "crew/cook/cook.l" (+ dir "/Makefile")) + args))
+       r (hark (`(love "-l" "crew/cook/cook.l" (+ dir "/Makefile")) + args))
        (? (two? r) (cup r) ""))
    _ (setenv "COOKT_ENV" "from-env")
    env (run-cookv (mk `("COOKT_ENV ?= nope"
@@ -214,7 +214,7 @@
                         (+ dir "/e/out.txt:") "\techo HI > $@")))
    _ (write-file (+ dir "/e/Cookfile") emc)
    _ (sh (+ "rm -f " (+ dir "/e/out.txt")))
-   _ (run `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile") "all"))
+   _ (hark `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile") "all"))
    _ (ok "emit: round-trip cooks the emitted Cookfile" (= 0 (cap (sh (+ "test -f " (+ dir "/e/out.txt"))))))
 
    ; .DEFAULT_GOAL overrides "the first rule declared" as the default ticket --
@@ -225,10 +225,10 @@
                "first:"  "\techo FIRST"
                "second:" "\techo SECOND"))
    _ (write-file (+ dir "/Makefile") dgsrc)
-   dgr (: r (run `(love "-l" "crew/cook/cook.l" (+ dir "/Makefile"))) (? (two? r) (cup r) ""))
+   dgr (: r (hark `(love "-l" "crew/cook/cook.l" (+ dir "/Makefile"))) (? (two? r) (cup r) ""))
    _ (ok ".DEFAULT_GOAL is the default ticket" (has dgr "SECOND"))
    _ (write-file (+ dir "/e/Cookfile") (run-emit dgsrc))
-   dgc (: r (run `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile"))) (? (two? r) (cup r) ""))
+   dgc (: r (hark `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile"))) (? (two? r) (cup r) ""))
    _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
 
    ; ------------------------------------------------- side-effect writes are seen
@@ -247,7 +247,7 @@
                  (+ (D "/second: ") (D "/shared.txt"))
                  (+ "\tcp " (+ (D "/shared.txt") (+ " " (D "/second"))))))
    _ (write-file (D "/Makefile") sidesrc)
-   _ (: r (run `(love "-l" "crew/cook/cook.l" (D "/Makefile") "all")) 0)
+   _ (: r (hark `(love "-l" "crew/cook/cook.l" (D "/Makefile") "all")) 0)
    side (: r (sh (+ "cat " (D "/second"))) (? (two? r) (cup r) ""))
    _ (ok "a recipe's side-effect write invalidates the date cache" (has side "NEW"))
 

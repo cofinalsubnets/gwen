@@ -54,7 +54,7 @@
 
    ; from a CLEAN slate: the freshness clauses below count files written, so a left-over
    ; site from a previous run would make the first build a no-op and every count wrong.
-   _ (run `("rm" "-rf" dir))
+   _ (hark `("rm" "-rf" dir))
    _ (mkdir dir 493)
    _ (mkdir (dir + "/src") 493)
 

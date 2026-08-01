@@ -1507,7 +1507,7 @@ client, so nine clients was the shipped shape that reaches it.
 
 the cap goes **by construction**: count the ring first, then lay the block down
 sized to the count, in the runtime's own uncommitted heap gap -- the door
-`host_run` marshals argv through (invisible to gc, holds no love pointers, `Hp`
+`hark` marshals argv through (invisible to gc, holds no love pointers, `Hp`
 never moves, consumed before anything allocates again). the three
 `__builtin_trap()` guards go with it: they stood over an array the scheduler had
 *already* truncated, so they could never fire, and the drop they watched for was
@@ -1827,7 +1827,7 @@ purpose, and this is the roster, read off the source rather than off memory:
 | `wait` | host/posix.c | ✅ **parks** -- 2026-08-01, and it is a 1 ms POLL (below) |
 | `catch` | love.c, `lvm_wait` | ✅ **taken** -- it never blocked; it never idled |
 | `tether` | host/posix.c | ⚠ **was never on this floor.** It hands back `(pid . master-port)` and does not wait for the child at all; its two `waitpid(pid, &st, 0)` calls are teardown reaps of a child that has already `_exit`ed or been SIGKILLed. Read off the source this time. |
-| `run` / `runt` | host/main.c | ✅ **parks** on the child's stdout pipe -- 2026-08-01, and it took a TWO-AP nif body to do it (below). The reap behind it is a 1 ms poll, like `wait`'s. ⚠ `make waits` never could see either the old block or the new park (a raw read, not one of the four hooks it names). |
+| `hark` / `herald` (was `run`/`runt`) | host/main.c | ✅ **parks** on the child's stdout pipe -- 2026-08-01, and it took a TWO-AP nif body to do it (below). The reap behind it is a 1 ms poll, like `wait`'s. ⚠ `make waits` never could see either the old block or the new park (a raw read, not one of the four hooks it names). |
 | `connect` | host/sock.c | a PROJECT, not a rung -- `getaddrinfo` below |
 
 ⚠ **`catch` was a different bug from the other six and was not lumped in.** it
@@ -1867,12 +1867,12 @@ scheduler's wait set and a pid is not an fd. Rung 5's shape for the write residu
 the same trade. The unit carries the fourth term ("still running"): every real answer
 is a charm, so nothing is overloaded.
 
-**`run` needed a TWO-AP NIF BODY, and that is the whole of what was hard.** The block
+**`hark` needed a TWO-AP NIF BODY, and that is the whole of what was hard.** The block
 was never the reap -- it was the DRAIN: a blocking `read(2)` loop over the child's
 stdout pipe, held for as long as the child had anything left to say. But the op is not
 re-runnable where it would park. It has already forked a child and taken N bytes, and
 love.h's nif park re-runs the op from the top, which would fork a SECOND child. So the
-fork and the capture are two ops -- `{{lvm_run}, {lvm_rundrain}, {lvm_ret0}}` -- and
+fork and the capture are two ops -- `{{lvm_hark}, {lvm_harkdrain}, {lvm_ret0}}` -- and
 the park lives in the second, which re-runs as often as the child is slow. Arbitrary
 `Ip` motion inside a nif body was already precedented (`lvm_cur` hands `Ip + 2` on).
 
@@ -1892,8 +1892,8 @@ three things the design note above did not predict:
   kernel raises in the child's `exit_files`, one step before the `exit_notify` that
   makes it reapable. (⚠ a plain C harness blocked in `read(2)` misses only 1.6%, so
   measuring the race outside the runtime measures the wrong thing.) That is 0.7 ms on
-  a tight `run` loop -- 1.17 ms/run to 1.85 ms/run -- and **nothing measurable on the
-  gate that actually uses `run`**: test/host/run.l is 2.51 s before and 2.53 s after.
+  a tight `hark` loop -- 1.17 ms/call to 1.85 ms/call -- and **nothing measurable on
+  the gate that actually uses it**: test/host/run.l is 2.51 s before and 2.53 s after.
   The poll stays, because a blocking reap is a hole (a child that closes stdout and
   keeps computing would hold the vm) and 1% of a spawn is not worth a hole.
 * **`sched_yield` would have shaved it and cannot be had.** One yield before the park
@@ -2165,9 +2165,9 @@ choosing park-or-block. so:
 5. ~~**defect 4** (writes never yield)~~ ✅ the device-floor arc took it whole
    (rungs 3-5, then backpressure). **`select`**: still when something asks, and
    after 1 nothing does. what IS next is the nif floor -- its own section in
-   part II. ✅ its first item, `catch`, is taken; the process half (`wait`,
-   `run`, `runt`, `tether`) is the next cheapest, and `connect` is last because
-   `getaddrinfo` makes it a project.
+   part II. ✅ **the whole floor is taken** -- `catch`, then `accept`/`udp-recv`,
+   then the process half (`wait`, `hark`, `herald`; `tether` never blocked) --
+   and only `connect` is left, because `getaddrinfo` makes it a project.
 
 ~~`empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all
