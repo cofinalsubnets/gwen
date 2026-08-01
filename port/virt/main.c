@@ -69,7 +69,7 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
   uintptr_t start = ai_clock();
   for (;;) {
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd)) return;
+    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd, fds[i].events)) return;
     if (ms && ai_clock() - start >= ms) return; } }
 
 // --- port vtable ----------------------------------------------------------

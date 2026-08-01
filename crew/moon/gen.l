@@ -1705,9 +1705,24 @@
                     ptys (? (two? sig) <>sig ())
                     rt (? (two? sig) <sig 'long)
                     variadic (? (two? sig) (nthr sig 2) ())
+                    ; the ARITY CHECK: a sig'd direct call hands its callee the
+                    ; arguments the prototype asked for, the named ones a FLOOR when
+                    ; variadic. a short call otherwise reads whatever the argument
+                    ; register happened to hold.
+                    ; ⚠ AN EMPTY PARAMETER LIST IS EXEMPT AND MUST STAY SO: `int f()`
+                    ; (unspecified, the old style) and `int f(void)` (none) both park
+                    ; an empty ptys here, and the sigs row cannot tell them apart --
+                    ; so refusing the first would refuse musl's headers.
+                    nps (tally ptys) nas (tally args)
+                    off (&& (0 < nps) (? variadic (nas < nps) (! (nas = nps))))
+                    _ (? off (pin g 'arity
+                                  ("call to '" + <>head + "' wants "
+                                   + (show nps) + (? variadic " or more" "")
+                                   + (? (nps = 1) " argument" " arguments")
+                                   + ", given " + (show nas))) 0)
                     ; every call rides the SysV registers (call-fixed); a variadic one
                     ; additionally sets al = #xmm args for its callee's register save area.
-                    cr (call-fixed g env head args direct ptys rt variadic)
+                    cr (? off 'bad (call-fixed g env head args direct ptys rt variadic))
                     (? (bad? cr) 'bad
                        (! (stru? (vty cr))) cr
                        (sretm? g (vty cr)) cr   ; a MEMORY return: the sret temp's address in r0 IS the struct value
@@ -5489,7 +5504,7 @@
                     (gripe () () () (? c c "cannot lay the static data (cause unnamed -- see doc/moon-diag.md)")))))
            (: f <fs
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
-                 (: _ (pin g 'undecl ()) _ (pin g 'nolane ())   ; fresh per fn: the pins the refusal reads name THIS fn's cause
+                 (: _ (pin g 'undecl ()) _ (pin g 'nolane ()) _ (pin g 'arity ())   ; fresh per fn: the pins the refusal reads name THIS fn's cause
                     r (cgfn g f)
                     ; a refusal answers ONE gripe, and the driver puts it on
                     ; stderr. it used to answer two half-messages on two
@@ -5499,7 +5514,9 @@
                     (? (bad? r)
                        (: u (peep g 'undecl ())         ; rung 1: an undeclared id was named -> a gripe carrying it + the enclosing fn
                           nl (peep g 'nolane ())        ; rung 4: a deliberate refusal named the feature it has no lane for
+                          ar (peep g 'arity ())         ; a direct call disagreeing with its own prototype
                           (? u (gripe () () () ("undeclared '" + u + "' (in " + <>f + ")"))
+                             ar (gripe () () () (ar + (" (in " + <>f + ")")))
                              nl (gripe () () () (nl + (" (in " + <>f + ")")))
                              (gripe () () () ("cannot compile '" + <>f + "' (cause unnamed -- see doc/moon-diag.md)"))))
                        ; fn-start alignment to EVEN (2): a function's address can

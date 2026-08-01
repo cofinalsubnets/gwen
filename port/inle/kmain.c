@@ -285,7 +285,7 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
   uintptr_t deadline = kticks + ticks;
   for (;;) {
     if (ticks && kticks >= deadline) return;
-    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd)) return;
+    for (int i = 0; i < n; i++) if (ai_ready(fds[i].fd, fds[i].events)) return;
     k_wait(); } }
 uintptr_t ai_clock(void) { return kticks; }
 

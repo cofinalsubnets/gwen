@@ -178,6 +178,19 @@
       (two? (cgn "int f(int a) { return a; } int main() { return f(1); }"))
       (gripe? (cgn "int main() { return f(1,2,3,4,5,6,7); }"))     ; an unknown callee still refuses, now naming it (f undeclared) ...
       (two? (cgn "int f(int a,int b,int c,int d,int e,int x,int y) { return y; } int main() { return f(1,2,3,4,5,6,7); }"))   ; ... but args 7+ ride the caller stack now, both sides
+      ; a direct call must AGREE WITH ITS OWN PROTOTYPE -- a short one otherwise
+      ; reads whatever the argument register held, in silence.
+      (gripe? (cgn "int f(int a, int b); int f(int a,int b){return a+b;} int main() { return f(1); }"))
+      (gripe? (cgn "int f(int a); int f(int a){return a;} int main() { return f(1,2); }"))
+      (two? (cgn "int f(int a, int b); int f(int a,int b){return a+b;} int main() { return f(1,2); }"))
+      ; the named parameters are a FLOOR when the callee is variadic, not a count
+      (two? (cgn "int f(int a, ...); int f(int a,...){return a;} int main() { return f(1,2,3); }"))
+      (gripe? (cgn "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"))
+      ; ⚠ an EMPTY parameter list is exempt, and has to be: `int f()` (unspecified,
+      ; the old style) and `int f(void)` (none) park the same empty row in `sigs`,
+      ; so refusing the first would refuse musl's headers.
+      (two? (cgn "int f(); int main() { return f(1,2,3); }"))
+      (two? (cgn "int f(void); int f(void){return 1;} int main() { return f(); }"))
       (two? (cgn "int g; int main() { int *p = &g; *p = 3; return g; }"))
       (refused? (cgn "int main() { int *p; int *q; return (long)(p+q); }"))   ; ptr+ptr refused
       (refused? (cgn "int main() { int x; return *x; }"))                     ; deref wants a pointer
