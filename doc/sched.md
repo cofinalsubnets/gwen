@@ -1,5 +1,11 @@
 # the scheduler -- THE PLAN
 
+> **status, 2026-08-01.** rungs 0 and 1 are BUILT. the measurements taken while building
+> them moved the diagnosis: the cost is not on the wait path, it is on the **pre-wait
+> scan**, so **rung 2 is the rung** and rung 1 turned out to be its groundwork rather than
+> a win of its own. the "what the measurements actually said" section below is the part to
+> read first; the rung texts under it have been corrected to match.
+
 love's tasks are cooperative: an op tail-jumps to `lvm_yield_sw` (love.c:~2854), which
 snapshots the running task into a fresh heap node and picks the next one off a single
 circular ring. that design is right and this plan does not replace it. what it does is
@@ -29,10 +35,53 @@ nothing breaks along the way -- at 50, 100 and 200 held-then-released every requ
 back `200`, none empty, none stalled. it is a rate collapse, not a failure, and the shape
 is the giveaway: a tenfold client count costs tenfold per request.
 
-⚠ **the measured wall is not the scheduler yet.** `listen(fd, 1)` (host/sock.c:111) gives
+⚠ **the measured wall is not the scheduler yet.** `listen(fd, 1)` (host/sock.c) gave
 the listener an accept queue of one, so *connecting* 100 clients took 29.7s -- 1-second
 TCP SYN retries, with `TcpExtListenOverflows` climbing on every run and `ss -ltn` showing
 Send-Q 1. rung 0 exists because until that is gone, none of the rest is visible end to end.
+
+## what the measurements actually said
+
+rung 0 landed and the connect storm went away entirely (0.01s to connect 400 clients,
+where it had timed out at four minutes). the service curve barely moved, which confirmed
+the two ceilings were independent -- and left the scheduler's own cost showing clean, and
+superlinear: 200 parked costs 2.70 ms/req, 400 costs 16.78.
+
+then two probes changed the plan.
+
+**one: `yield_interval` is worth more than rung 1, and it has never been tuned.** it has
+been 64 since multitasking landed. holding everything else fixed and rebuilding per value:
+
+| `yield_interval` | 0 parked | 100 parked | 200 parked |
+|---|---|---|---|
+| **64** (today) | 5886 req/s | 854 | 305 |
+| 256 | 5795 | 2164 | 1058 |
+| 1024 | 5137 | 3489 | 1622 |
+| 4096 | 5009 | 3563 | 1680 |
+
+**two: the wait path is cold.** counting from inside `ai_wait_fds`, 600 requests against
+100 parked clients enter the multi-fd wait **fewer than 25 times**. nearly every
+scheduling decision is settled by the PRE-wait `find_runnable`, which has no poll behind
+it and pays one `poll(2)` per parked task.
+
+those two say the same thing from opposite directions: **the cost is the O(n) syscall scan
+on the fairness-yield path.** a bigger `yield_interval` helps only because it runs that
+scan less often, and it charges latency for it -- note the 0-parked column falling as the
+slice grows, which is the accept loop waiting longer for its turn. that is a trade, not a
+fix. rung 2 removes the scan instead, and should get the throughput without the latency.
+
+⚠ **the yield_interval numbers are NOT a recommendation to change it.** 64 -> 256 looks
+nearly free (2% at 0 parked, 2.5-3.5x under load) and may well be worth taking, but the
+fairness cost was measured only against a SEQUENTIAL client, which is the friendliest case
+there is. re-measure it after rung 2, when the scan it is compensating for is gone.
+
+⚠ **a stale object cost three measurements before this was caught.** `make host` relinks
+but does not re-archive `out/host/liblove.a`, and `make out/host/love` leaves the pre-BAKE
+binary -- twice a run, `out/host/love` did not contain the constant the source said it did
+(`ss -ltn` showed Send-Q 64 against a source reading 512; `objdump --disassemble=call_listen`
+showed the immediate). when a measurement here disagrees with the source, VERIFY THE BINARY
+before believing either: `rm -f out/host/moon/love.o out/host/liblove.a out/host/love` then
+`make host`, and read the constant back out of the ELF.
 
 ## the anatomy of one switch
 
@@ -54,60 +103,74 @@ on top of that, two ops that look constant are not: `lvm_donep` (`back?`) walks 
 per call, and `task_live` walks it once **per catch-parked task** inside `find_runnable`
 -- O(n·k) in catchers.
 
-⚠ **line numbers here are `~` anchors and the function names are the real reference.** the
-scheduler is being actively edited (see the in-flight note under rung 1) and this whole
-region moves; `git grep -n` the name, never trust the number.
+⚠ **line numbers here are `~` anchors and the function names are the real reference.** this
+whole region moves; `git grep -n` the name, never trust the number.
 
-⚠ the syscall counts above are read off the source, not traced; ptrace was unavailable in
-the sandbox this was written in. the rate table is measured.
+⚠ the syscall counts above are read off the source, not traced; ptrace is unavailable in
+this sandbox (`PTRACE_SEIZE: Operation not permitted`, on attach and on launch alike). the
+rate tables are measured, and the wait-entry count was got by counting inside
+`ai_wait_fds` on a throwaway build.
 
 ## the rungs (each green and useful on its own)
 
-### 0. make the improvement visible -- planned
+### 0. make the improvement visible -- BUILT
 
-`listen(fd, 1)` -> `SOMAXCONN` (host/sock.c:111). one word, and until it lands every
-end-to-end number below is measuring TCP retry backoff instead of the scheduler.
+the listener's accept queue was ONE, so a second simultaneous arrival overflowed it, the
+kernel dropped the SYN, and the client waited out an exponential retry that reads as our
+latency. `ai_listen_backlog` (host/sock.c) is **512**. connect phase, before -> after:
+1.06s -> 0.00s at 25 clients, 29.7s -> 0.00s at 50, four-minute timeout -> 0.01s at 400.
 
-record the baseline curve above in the rung's commit. ⚠ the harness stays OUT of the
-gate: it takes minutes, and a test that crawls is a bug announcing itself, never a bench
-to wait out.
+⚠ **512 and not SOMAXCONN, and the reason is a law.** test/host/nifpark.l law 5 uses a FULL
+ACCEPT QUEUE as its instrument -- it is the only way to stall a connect offline, and so the
+only way to reach the write-direction park at all. it filled that queue with two arrivals
+back when the backlog was 1. SOMAXCONN put it out of reach and the law reddened; 512 is the
+measured floor for a flat arrival curve at 400 clients and is fillable in about 20ms. the
+number lives in two places on purpose and both say so.
 
-### 1. use the `revents` already collected -- planned
+⚠ **the backlog is a constant, not an operand.** `listen` is 1-ary across the tree and out
+of it, and a second operand would turn every `(listen port)` into a closure -- truthy, so
+every "did it listen?" test would read the failure as a success.
+
+⚠ the harness stays OUT of the gate: it takes minutes, and a test that crawls is a bug
+announcing itself, never a bench to wait out.
+
+### 1. use the `revents` already collected -- BUILT, and it is groundwork
+
+**it does not move the end-to-end number, and the measurement above says why**: the
+multi-fd wait is entered fewer than 25 times per 600 requests. this rung makes the WAIT
+path cheap, and the wait path is cold until rung 2 moves the parked tasks onto it. it is
+committed as what it is -- a syscall reduction on a cold path that regresses nothing and
+pays once rung 2 lands. the original text follows, corrected where it was wrong.
 
 `ai_wait_fds` fills `revents` (`struct ai_wait_fd` in love.h; the host's block IS a
-`struct pollfd`, static-asserted in host/main.c) and the scheduler then throws it away and
-re-asks the kernel one fd at a time. hand the block and its count to the post-wait
-`find_runnable` and match by fd: **2n+1 syscalls per wait become 1.**
+`struct pollfd`, static-asserted in host/main.c) and the scheduler threw it away and
+re-asked the kernel one fd at a time -- **2n+1 syscalls where the wait had already answered
+all n.** `find_runnable` takes the block now; the post-wait scan and the my-fd check are
+both served from it.
 
 no new state, no image change -- the block is still live in the heap gap at that point
 and `find_runnable` allocates nothing.
 
-⚠ **IN FLIGHT, and this rung lands ON TOP of it, not beside it.** as of 2026-08-01 another
-session is teaching `connect` to park on its handshake, which is the last open item in the
-io arc. it reaches all of this: `ai_ready` grows an `events` operand (a love.h contract
-change, so every frontend moves), the task node grows a slot for the park's direction (the
-saved stack shifts from `n[5]` to `n[6]`), and **the scheduler now fills `events` per fd
-instead of the frontend blanket-setting POLLIN**. that last one is this rung's own premise
-arriving early -- the block becomes fully scheduler-owned, and reading `revents` back is
-the natural completion of the same change. rebase on it; do not start before it settles.
+⚠ **match on the (fd, events) PAIR, never on the fd alone.** two tasks can park on one fd
+in opposite directions and each entry carries only its own task's question. a socket is
+almost always writable, so a reader that accepted a `POLLOUT` wake would spin every pass.
 
-⚠ and it adds a correctness term to the match: **`revents` must be compared by DIRECTION,
-not just by fd.** their own note earns it -- a socket is almost always writable, so the two
-directions cannot be OR'd and asked as one, and a reader that accepts a `POLLOUT` wake
-would spin on every pass.
+⚠ **any nonzero `revents` is ready.** only one direction is ever asked for, so poll can add
+nothing but its error/hangup/invalid bits on top -- and a task parked on a hung-up fd wants
+waking to read the end, not sleeping through it.
 
-⚠ **inle does not fill `revents`, and love.h:~530 currently blesses that** ("a frontend
-that does not poll reads `.fd` and ignores the rest"): port/inle/kmain.c:~280-286 returns
-on the first ready source without recording which. two ways, and the choice is the rung:
+⚠ **the block is trusted only when SOME entry fired**, and that is what settled the
+advisory-vs-contract question the plan left open. **neither was chosen: the answer is
+"authoritative when it has anything to say".** a frontend that fills nothing (playdate
+sleeps; the mps2/teensy41/virt boards answer off a device flag and never write the block
+back) leaves every `revents` at the zero the scheduler wrote, reads as "nothing to say",
+and every fd is asked exactly as before -- correct everywhere, no frontend forced to move,
+no hang available as a failure mode. inle learned to fill it anyway, being the other
+frontend where the parked count grows.
 
-- **advisory** -- `revents` is a positive hint only (nonzero means ready and skips the
-  syscall; zero still asks). correct on every frontend unchanged; inle gains nothing.
-- **contract** -- `ai_wait_fds` MUST fill `revents`, and inle learns to (~5 lines: record
-  which sources answered instead of returning on the first).
-
-**the contract is chosen (revisable), with the advisory read kept as the fallback path**
--- so a frontend that forgets degrades to today's cost rather than to a hang. inle is the
-only other polling frontend, so the blast radius is two files.
+⚠ **the scheduler zeroes `revents` itself, in the fill loop.** the block is raw heap gap;
+an unwritten slot would otherwise read as whatever the last allocation left there, and
+"ready" is exactly the wrong way to guess.
 
 ⚠ `find_runnable` is `ai_inline` and lands on `lvm_yield_sw`'s frame: pointer parameter,
 never array scratch. `make vmret` is what catches the slip.
@@ -115,11 +178,22 @@ never array scratch. `make vmret` is what catches the slip.
 *gates:* `make test` (waits + vmret), `test_hostnif` (test/host/parked.l carries the law),
 `test_kernel`, `test_kernel_arm64`.
 
-### 2. two rings: runnable and parked -- planned
+### 2. two rings: runnable and parked -- planned, and THIS IS THE RUNG
 
 `g->parked` beside `g->tasks` (love.h:~133). a task parking on an fd leaves the run ring;
 the wake pass moves ready ones back. a switch becomes O(runnable), and the O(parked) scan
 runs only when nothing is runnable.
+
+**this is where the measured cost is.** the fairness yield fires every `yield_interval`
+aps and runs `find_runnable` over the whole ring, one `poll(2)` per parked task -- and the
+two probes above agree that this, not the wait, is what collapses the rate. moving parked
+tasks off the run ring deletes that scan rather than running it less often, which is what
+the `yield_interval` lever does at the price of latency.
+
+**the number to beat:** at 200 parked, 305 req/s today. a `yield_interval` of 4096 buys
+1680 req/s while costing 15% at 0 parked. rung 2 should reach the first without paying the
+second -- and if it does, re-measure `yield_interval` afterwards on top of it, because the
+value that is right for a scan-free scheduler is not the one that was right for this one.
 
 what rides along, because the split is the moment each becomes cheap:
 
@@ -219,10 +293,14 @@ task with no yield of its own still loses the cpu.
 
 ## order, and what to do first
 
-**0 and 1 together.** a one-word fix plus a contained change to two functions, gated by
-tests that already exist, and between them they should move the curve more than anything
-else here. then re-measure before committing to 2 -- the split is where the write-barrier
-risk lives, and it should be bought by a number rather than by a prediction.
+**0 and 1 are built.** the prediction that "between them they should move the curve more
+than anything else here" was WRONG, and the re-measure is what caught it: 0 removed a TCP
+artifact that was masking the scheduler, and 1 optimized a path this workload does not
+take. the plan called for buying rung 2 with a number rather than a prediction, and the
+number arrived pointing at rung 2 harder than before.
+
+**2 next, and it is the whole arc.** everything measured says the fairness-yield scan is
+the cost.
 
 **2 before 4, always.** preemption raises the switch rate, which multiplies whatever
 per-switch linear cost is left; landing it first would make the split look like it did
@@ -239,5 +317,12 @@ not help.
   has measured it as the cost.
 - fairness policy. round-robin is what the ring gives and no workload here has asked for
   priorities.
-- `yield_interval` (64 aps, love.c:~780). an adaptive interval is available if rung 3's
-  measurement wants it; it is noise beside the linear costs.
+and one thing it very much DOES touch, having been listed here as noise and measured as a
+5x lever:
+
+- `yield_interval` (64 aps, love.c:~774) is a real knob and has never been tuned -- 64 has
+  been the value since multitasking landed. the sweep is in the measurement section. it is
+  deliberately NOT changed here: it buys throughput with latency, and the thing it is
+  compensating for is what rung 2 deletes. retune it on top of rung 2, against a
+  CONCURRENT client rather than the sequential one used above, which is the friendliest
+  case the fairness cost has.
