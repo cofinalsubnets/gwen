@@ -1519,10 +1519,13 @@ the bug.
   vector of its own; a mutable global and the malloc family are both out in this
   tree. the heap gap is the answer to exactly this question and it is documented
   one screen from where it was needed.
-- **a VLA is out, and OUR OWN COMPILER is what says so.** `int fds[n]` compiles
-  and runs under mooncc's x64 backend; its arm64 backend answers `;; cgfn refuses
+- **a VLA was out, and OUR OWN COMPILER is what said so.** `int fds[n]` compiled
+  and ran under mooncc's x64 backend; its arm64 backend answered `;; cgfn refuses
   yield_sw_wait`. `test_kernel_arm64` caught it. **x64 taking a C feature is not
   evidence that the tree does** -- the two backends are not the same compiler.
+  (the refusal has since been lifted: the VLA lane's IR was x86-shaped, and
+  spelling its three sp moves neutrally let arm64 ride it. the door stays shut
+  anyway -- the pollfd shape below needs no vector at all.)
 - **epoll needs no vector at all, and is Linux-only.** `host/build.mk` and
   `host/posix.c` both carry Darwin branches.
 

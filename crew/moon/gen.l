@@ -3911,12 +3911,22 @@
    ; deterministic across pass 1 and the regen (same walk; splices don't
    ; tick, and a mis-target only ever deopts through &-local's 'bad). --
    (cgdecl g env pairs)
-    (: ; -- the C99 VLA local (x64): free any prior instance from this SITE
-       ; first (a loop re-runs the decl; rsp = ptr + rounded size also frees
-       ; everything younger), evaluate the dim, stash the EXACT byte size
-       ; (the szof lane reads it back), then sub sp and stash the block
-       ; pointer. the fn stays out of sibcalls and homing (fesc + hasasm,
-       ; the 'sys precedent) -- nine musl files, perf is not the point. --
+    (: ; -- the C99 VLA local: free any prior instance from this SITE first (a
+       ; loop re-runs the decl; sp = ptr + rounded size also frees everything
+       ; younger), evaluate the dim, stash the EXACT byte size (the szof lane
+       ; reads it back), then sub sp and stash the block pointer. the fn stays
+       ; out of sibcalls and homing (fesc + hasasm, the 'sys precedent) --
+       ; nine musl files, perf is not the point.
+       ; the IR is TARGET-NEUTRAL, which is what lets arm64 ride it. aarch64
+       ; spells register 31 as XZR in both the mov (ORR) and the shifted-ALU
+       ; forms, so `(mov sp r1)` refuses and `(sub sp sp r0)` would assemble to
+       ; `neg xzr, x0` -- sp untouched, silently. every sp move here is a `lea`
+       ; (ADD-immediate, the one form where 31 IS sp; mksys and the glaze's
+       ; anchor stage the same way) and the 16-round is a shr/shl pair, since
+       ; ~15 is a ROTATED bitmask immediate and holo's encoder takes only the
+       ; bottom-aligned runs. x64 lays the same forms, two bytes wider. --
+       v16 '((add r0 r0 15) (shr r0 4) (shl r0 4))   ; r0 = r0 rounded UP to 16
+       vsub '((lea r1 sp 0) (sub r1 r1 r0) (lea sp r1 0))   ; sp -= r0, through a plain register
        (vone ps env2 acc p ty)
         (: sl (peep (g 'vslots) (varix ty) ())
            (? (! (two? sl)) 'bad
@@ -3927,16 +3937,16 @@
                  dr (cgexpr g env2 (varn ty))
                  (? (bad? dr) 'bad
                     (: lf (nlab g ".vla")
-                       code (`(`('ld 'r0 'r4 so) `('cmp 'r0 0) `('br 'eq lf)
-                               '(add r0 r0 15) '(and r0 r0 -16)
-                               `('ld 'r1 'r4 po) '(add r1 r1 r0) '(mov sp r1)
-                               `('label lf))
+                       code (`(`('ld 'r0 'r4 so) `('cmp 'r0 0) `('br 'eq lf))
+                             + v16
+                             + `(`('ld 'r1 'r4 po) '(add r1 r1 r0) '(lea sp r1 0)
+                                 `('label lf))
                              + ((asint g dr)
                                 + ((? (1 < es) (imby g 'r0 es) ())
-                                   + `(`('st 'r4 so 'r0)
-                                       '(add r0 r0 15) '(and r0 r0 -16)
-                                       '(sub sp sp r0)
-                                       '(mov r0 sp) `('st 'r4 po 'r0)))))
+                                   + `(`('st 'r4 so 'r0))
+                                   + v16
+                                   + vsub
+                                   + `('(lea r0 sp 0) `('st 'r4 po 'r0)))))
                        (one >ps (link `(<p po ty) env2) (acc + code)))))))
        (one ps env2 acc)
         (? (! (two? ps)) `(acc env2)
@@ -3945,7 +3955,7 @@
               ty <>p
               init <>>p
               (? (gvarr? ty)
-                  (? (|| (two? init) (! (id? (peep g 'tgt 'x64) 'x64))) 'bad
+                  (? (|| (two? init) (! (member? (peep g 'tgt 'x64) '(x64 arm64)))) 'bad
                      (vone ps env2 acc p ty))
                  (: span (& ((tsz g ty) + 7) -8)
               off (nslot g span)
@@ -4754,7 +4764,7 @@
        _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
        _ (rgreset g)                                 ; fresh regen channels
        _ (pin g 'fn <>f)
-       ; -- C99 VLA prep (x64): scan the body for runtime-dim locals; each
+       ; -- C99 VLA prep: scan the body for runtime-dim locals; each
        ; site takes a POINTER slot + a SIZE slot in the static frame, the size
        ; slots ZEROED after the param spill (the decl lane's re-execution
        ; guard reads 0 = never allocated -- a loop re-running the decl frees

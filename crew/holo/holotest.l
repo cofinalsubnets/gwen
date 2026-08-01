@@ -248,6 +248,15 @@
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
+   ;; -- the same principle one target over: aarch64's register-form ALU is the SHIFTED-register
+   ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
+   ;; (`neg xzr, x0`) that leave sp alone. it raises rather than emit them; moving sp is `lea`'s
+   ;; job (a64.anchor / a64.abandon below), and the arithmetic goes through a plain register. --
+   spcaught (tablet 0) _ (pin spcaught 0 0)
+   _ (: help (\ s a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp s a b))))
+   _ (holo-bytes 'arm64 '((sub sp sp r0)))
+   _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
+
    ;; -- the text front-end (crew/holo/text.l) parses to the same IR, so it assembles byte-identically. --
    _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
                           (holo-hex 'x64 (asm-text "li r0, 60\nret")))

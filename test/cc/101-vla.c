@@ -1,4 +1,4 @@
-/* C99 variable-length arrays (x64), the musl shapes: a plain runtime-dim
+/* C99 variable-length arrays (x64 + arm64), the musl shapes: a plain runtime-dim
  * local (execl's char *argv[argc+1]), sizeof over one (getcwd's `size =
  * sizeof tmp`), a decl RE-EXECUTED in a loop (execvp's char b[l+k+1] --
  * each pass must free the prior block or the stack walks away), a runtime
