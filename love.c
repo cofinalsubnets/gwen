@@ -3158,6 +3158,9 @@ static ai_inline struct ai_port_vt const *port_vt(word fd_tagged) {
 // wbuf and drains by whole writen strokes; a read on the same port drains
 // writes first (the request/response crossover), as do flush and say's bulk
 // lane; the finalizer drains a dying port through ai_fd_drain.
+// ⚠ THE FD IS THE TYPE TAG, not a formality. a `ci`'s word 3 is its charlist head
+// where a bio's is `rbuf`, so a row that answered a bio on a negative fd would
+// read a chain pointer as a string -- a wild dereference, not a wrong answer.
 static ai_inline struct ai_bio *bio_of(struct ai *g, struct ai_io *i) {
  return getcharm(i->fd) >= 0 && in_live_pool(ai_core_of(g), (word const*) i)
       ? (struct ai_bio*) i : NULL; }
@@ -3341,9 +3344,12 @@ static struct ai *noop_flush(struct ai *g) { return g; }
 
 // the charlist source's read door. it walks the spine and never blocks, so a
 // spent list is the END -- there is no "quiet" answer a colist could give.
-// ⚠ it is asked for ONE byte at a time and always will be: fd -4 fails bio_of,
-// so there is no backing to gulp into. written as the bulk lane anyway, because
-// the contract is the contract and the loop costs nothing.
+// ⚠ IT IS ASKED FOR ONE BYTE AT A TIME, AND A BUFFER IS NOT THE ANSWER. fd -4
+// fails bio_of, so io_refill takes its no-backing lane and asks for 1 -- but a
+// backing here would walk the same cell per byte, memcpy it into a string, and
+// read the copy back: strictly more work, because there is no SYSCALL on this row
+// to amortize. what is per-byte is the CALLER. this door hands over as much as it
+// is asked for, already.
 // ⚠ a charm outside 0..255 lands as its LOW BYTE, which ci_getc did not do -- it
 // handed the raw charm straight to g->b, so a -1 in the list FORGED the end of
 // the stream. probed against both binaries: `(flow (tap '(-1 65)))` came back
