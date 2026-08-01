@@ -213,6 +213,65 @@ Distinguishing "mooncc can't compile this" from "config.h says this platform lac
 function" is the difference between a compiler bug and a config edit, and right now the
 message doesn't let you tell them apart.
 
+### rung 4 — a DELIBERATE refusal names the feature — LANDED
+
+Rung 1 named undeclared *identifiers*. It did not touch the other half of the codegen
+refusals: a feature mooncc simply has no lane for on this target. Those said
+
+```
+;; cgfn refuses sum                      (stdout)
+cc: codegen error in vla.c               (stderr)
+```
+
+and cost a source dive every time. The case that forced this: "why don't VLAs work on
+arm64?" was a one-line answer sitting in `cgdecl`'s target gate, and reading it took
+grepping `gen.l`. Now:
+
+```
+cc: vla.c: no lane for a variable-length array on riscv64 (in sum)
+cc: b1.c: no lane for passing this 40-byte struct by value on arm64 (in take)
+cc: b2.c: no lane for returning this 40-byte struct by value on arm64 (in give)
+cc: c2.c: no lane for C99 complex arithmetic on arm64 (in fmul)
+```
+
+**The rung is a DISTINCTION, not a message.** `'bad` in `gen.l` is two different answers
+wearing one face — "I decline, take another lane" (`cginl`'s fesc decline, a policy deopt:
+an ordinary recoverable step) and "there is no lane for this, anywhere" (a target gate, an
+ABI class never built). Only the second is a diagnosis. That is exactly why the `cgexpr`
+debug probe in [[moon-userland]] could never be left in: it printed both, so it spammed
+every clean compile. Converting the second kind is what makes the message free.
+
+`nolane` pins its phrase and answers the same bare bad as before; `gfns` and `cgdata`
+read the pin ONLY where the function refuses outright, so a recoverable bad that pinned
+on its way past costs nothing. Last pin wins — the deepest site reached before the unwind
+is the one that knows. Four sites converted, chosen because they are the ones that fire:
+the VLA target gate, the complex-arithmetic gate, and the composite-by-value param and
+return catch-alls. The `refuse LOUD` sites on the thumb lanes are the same class and take
+one `nolane` each; nobody has needed them yet.
+
+**And the message is now ONE message on ONE channel.** It used to be two halves on two
+streams — the enclosing function to stdout, `codegen error in <file>` to stderr — so a
+build log capturing either one kept half the sentence, and neither half was sufficient.
+Every codegen refusal now mints a gripe, including the ones with no cause to name
+(`cannot compile 'f' (cause unnamed — see doc/moon-diag.md)`), and the driver puts it on
+stderr. The static-data lane joined the same door: its cause rides a pin (`globs` sets it)
+and `gfns`'s tail mints the gripe, because `cgdata`'s callers thread a bare `'bad` through
+a dozen `(bad? x)` joins and a gripe is not one.
+
+⚠ **every codegen refusal is now a gripe, so `(! (cgn …))` is no longer how a law says
+"refused".** `law.l` grows `refused?` (`(|| (! x) (gripe? x))`) and 27 laws moved onto it;
+the laws that mean "refused, and here is exactly what it said" pin `gripe?` and the message
+string. A message golden earns its churn here — the string IS the deliverable.
+
+⚠ **the laws found a real bug the driver never could.** `gen.l`'s `varix` read the 4th
+element with `at` — which is *holo's* (`holo.l`), not the language's. `gen.l` is cat'd
+without holo for the laws, and an unbound name there is not an error but a SILENT no-op:
+`(at ty 3)` reads `((0 ty) 3)` = `(1 3)` = `3`, so every VLA site in a TU shared one slot
+index and the whole lane refused. It only ever worked because the real driver splices holo
+for the linker. Now spelled `<>>>ty`. **A law harness that runs a stage in isolation is
+worth having for exactly this** — the ambient dependency is invisible where the ambient is
+always there.
+
 ## the declaration gaps (separate, mundane) — LANDED
 
 Independent of diagnostics; the actual gnulib content work. Added to `crew/moon/include/`:
@@ -272,6 +331,12 @@ before-picture — and note the census keys are themselves the indictment:
 
 The deliverable is those parentheticals disappearing — the failure list becoming
 *self-explanatory* — more than the compile count going up. Rung 1 retired the first line;
-rung 2 the second. ⚠ the four parse failures have NOT been re-run against a real tree —
-there was no configured gzip source here, so rung 2 was verified on synthetic cases and
-against gcc's own file:line. Re-running the sweep is the first thing to do with one.
+rung 2 the second; rung 4 the fourth, and with it the census key itself (`cc: codegen
+error` no longer exists as a message — a refusal names its cause or names the function it
+gave up in, and either way says so once, on stderr). Only `#error` (rung 3) still throws
+its text away.
+
+⚠ the four parse failures have NOT been re-run against a real tree — there was no
+configured gzip source here, so rung 2 was verified on synthetic cases and against gcc's
+own file:line, and rung 4 on the shapes `test/cc/` already pins. Re-running the sweep is
+the first thing to do with one.

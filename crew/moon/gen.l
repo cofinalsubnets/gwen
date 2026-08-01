@@ -201,6 +201,18 @@
    (hregs g) (? (a64? g) hregs-a64 (t32? g) hregs-t32 opool)   ; the home pool (x64 rides opool, positionally arg-aligned)
    (nhome g) (? (a64? g) 5 (|| (t32? g) (rv? g)) 0 6)   ; how many gp positions can home (thumb2 + riscv: none yet -- spill all params)
    (fbase g) (? (arm? g) 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize); arm64+thumb2 fp, x64 r4
+   ; -- rung 4 (doc/moon-diag.md): a DELIBERATE refusal names itself. `'bad` in
+   ; this file is TWO answers wearing one face -- "I decline, take another lane"
+   ; (cginl's fesc decline, a policy deopt: an ordinary recoverable step, and the
+   ; reason the old cgexpr debug probe had to be reverted before every commit)
+   ; and "there is no lane for this, anywhere" (a target gate, an ABI class never
+   ; built). only the second is a DIAGNOSIS, so only the second speaks. `nolane`
+   ; pins the phrase and answers the same bare bad it always did; gfns and cgdata
+   ; read the pin ONLY where the function refuses outright, so a recoverable bad
+   ; that pinned on its way past costs nothing but the pin. LAST pin wins -- the
+   ; deepest site reached before the unwind is the one that knows. --
+   (nolane g txt) (: _ (pin g 'nolane txt) 'bad)
+   (ontgt g) (" on " + (show (peep g 'tgt 'x64)))    ; " on arm64" -- for a phrase whose answer turns on the target
    ; the immediate gate: x64 ALU/cmp immediates ride le32; arm64 add/sub/cmp
    ; take imm12 (a negative flips, a 24-bit value splits in the backend), the
    ; logicals only a bottom-aligned bitmask (2^n - 1), multiply none at all.
@@ -2075,7 +2087,12 @@
    (gvarr? ty) (&& (two? ty) (<ty = 'varr))
    (varel ty) (caup ty)                             ; the element type (const-sized)
    (varn ty) (cauup ty)                             ; the dim EXPRESSION (an AST)
-   (varix ty) (at ty 3)                             ; a decl's slot index (4-long only)
+   ; ⚠ the 4th element by READER OPS, not by `at` -- `at` is holo's (holo.l), and
+   ; gen.l is cat'd WITHOUT holo for the laws, where an unbound `at` is not an
+   ; error but a silent no-op: (at ty 3) reads ((0 ty) 3) = (1 3) = 3, so every
+   ; VLA site in the tree shared one slot index and the whole lane refused. it
+   ; only ever worked because the real driver splices holo for the linker.
+   (varix ty) <>>>ty                                ; a decl's slot index (4-long only)
    ; park a VALUE REC as a double-pair temp -> (off forms srcty) | 'bad
    (cxpark g rv)
     (: off (ntmp g cxdty)
@@ -2125,7 +2142,8 @@
              `(`('stsd 'r4 ro 'f0) `('stsd 'r4 (ro + 8) 'f1)))
        (mkv rt 'r0 (fs + (st + `(`('lea 'r0 'r4 ro))))))
    (cgcx g env op a rhs)                            ; the LEFT already evaluated (a value rec)
-    (? (! (id? (peep g 'tgt 'x64) 'x64)) 'bad
+    (? (! (id? (peep g 'tgt 'x64) 'x64))
+        (nolane g ("no lane for C99 complex arithmetic" + (ontgt g)))
        (: arith (cxarith op)
           (? (! (two? arith)) 'bad
              (: pa (cxpark g a)
@@ -3955,7 +3973,10 @@
               ty <>p
               init <>>p
               (? (gvarr? ty)
-                  (? (|| (two? init) (! (member? (peep g 'tgt 'x64) '(x64 arm64)))) 'bad
+                  (? (two? init)
+                      (nolane g "a variable-length array cannot take an initializer")
+                     (! (member? (peep g 'tgt 'x64) '(x64 arm64)))
+                      (nolane g ("no lane for a variable-length array" + (ontgt g)))
                      (vone ps env2 acc p ty))
                  (: span (& ((tsz g ty) + 7) -8)
               off (nslot g span)
@@ -4507,7 +4528,9 @@
                         + `(`('ld 'r1 'r4 (peep g 'sret 0)))
                         + (bcopy g 0 (tsz g rt) ())
                         + `(`('mov 'r0 'r1)) + epj)
-                      (|| (stru? rt) (stru? (vty r))) 'bad               ; a MIXED 16-byte pair: still refused
+                      (|| (stru? rt) (stru? (vty r)))                    ; a MIXED 16-byte pair, and every composite class
+                       (nolane g ("no lane for returning this " + (show (tsz g (? (stru? rt) rt (vty r))))   ; arm64 has no MEMORY return yet
+                                  + "-byte struct by value" + (ontgt g)))
                       (flo? (vty r)) ((asintt g r rt) + (? il `(`('jmp il)) epj))   ; a double value, an int return -> truncate to r0
                       (pair? g rt) ((asll g r) + (? il `(`('jmp il)) epj))      ; a pair return: r0:r1 (widen a word value)
                       ((tor0 g r) + (? il `(`('jmp il)) epj))))))    ; int -> int, as before (a pair value narrows to its lo)
@@ -4867,7 +4890,9 @@
                   (? (|| (pol? hp) (< 8 (asalign g pty))) 'bad   ; under a policy, or over-aligned: deopt/refuse
                      (spill hp >ps gpi xmmi (ovi + (aslots g pty))
                             (link `(<p ((ovb g) + (* 8 ovi)) pty) env) acc))
-                 (&& (stru? pty) (! (id? (aone g pty) 'int))) 'bad   ; MIXED pair stays ahead; a small INT one rides the gp lane
+                 (&& (stru? pty) (! (id? (aone g pty) 'int)))   ; MIXED pair stays ahead; a small INT one rides the gp lane
+                  (nolane g ("no lane for passing this " + (show (tsz g pty))
+                             + "-byte struct by value" + (ontgt g)))
                  (&& (v6m? g) (id? pty 'float))         ; v6-M base ABI: a bare float param is ONE WORD
                   (? (gpi < (ngp g))                    ;  (binary32 bits in a gp reg / a 4-byte caller slot);
                      (: off (nslot g 8) ;  clval's fldf 'float widens it on read
@@ -5309,17 +5334,22 @@
            (! ((strm <gs) = want)) (globs >gs want acc)   ; another stream's
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
-              _ (pin g 'undecl ())                      ; fresh per global: the refusal below names THIS one's cause
+              _ (pin g 'undecl ()) _ (pin g 'datacause ())   ; fresh per global: the refusal below names THIS one's cause
               bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
               ; an aligned(N) global lands ON its boundary: the pad here places
               ; it within the stream, and the .o's section header carries the max
               ; N so the linker grants the section the same grain (obj.l). the two
               ; SPECIAL streams are packed by construction and take no pad.
               an (? (member? want '("ai_nifs" ".image")) 0 (peep (g 'aligns) <gs 0))
+              ; the cause rides a PIN, not a puts: cgdata's callers thread a bare
+              ; 'bad through a dozen (bad? x) joins and a gripe is not one, so
+              ; gfns's tail mints the gripe from the pin instead (same one
+              ; message, same one channel as a function's refusal).
               (? (bad? bytes)
                  (: u (peep g 'undecl ())
-                    _ (puts (? u ("cc: undeclared '" + (u + ("' in the initializer of '" + (<gs + "'\n"))))
-                               (+ ";; CGDATA-BAD " (<gs + ((" " + (show init)) + "\n")))))
+                    _ (pin g 'datacause
+                           (? u ("undeclared '" + u + "' in the initializer of '" + <gs + "'")
+                              ("cannot lay the initializer of '" + <gs + "' (" + (show init) + ")")))
                     'bad)
                  (: als (: (go l a2) (? (! (two? l)) a2
                                           (go >l (? ((peep (g 'alias) <l ()) = <gs)
@@ -5409,15 +5439,25 @@
        ; quadratic over love.c's 611 fns); the tail restores emission order.
        (gfns fs acc saw)
         (? (! (two? fs))
-           (: dat (cgdata g) (? (bad? dat) () `(g (rev acc) dat saw)))
+           (: dat (cgdata g)
+              (? (! (bad? dat)) `(g (rev acc) dat saw)
+                 (: c (peep g 'datacause ())            ; the static-data refusal, minted here (globs pinned it)
+                    (gripe () () () (? c c "cannot lay the static data (cause unnamed -- see doc/moon-diag.md)")))))
            (: f <fs
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
-                 (: _ (pin g 'undecl ())               ; fresh per fn: the pin the refusal reads names THIS fn's cause
+                 (: _ (pin g 'undecl ()) _ (pin g 'nolane ())   ; fresh per fn: the pins the refusal reads name THIS fn's cause
                     r (cgfn g f)
+                    ; a refusal answers ONE gripe, and the driver puts it on
+                    ; stderr. it used to answer two half-messages on two
+                    ; channels -- the enclosing fn to stdout, "codegen error in
+                    ; <file>" to stderr -- so a build log capturing either one
+                    ; kept half the sentence and neither half was sufficient.
                     (? (bad? r)
                        (: u (peep g 'undecl ())         ; rung 1: an undeclared id was named -> a gripe carrying it + the enclosing fn
+                          nl (peep g 'nolane ())        ; rung 4: a deliberate refusal named the feature it has no lane for
                           (? u (gripe () () () ("undeclared '" + u + "' (in " + <>f + ")"))
-                             (: _ (puts (+ ";; cgfn refuses " (<>f + "\n"))) ())))   ; cause unknown: today's note + a bare bad
+                             nl (gripe () () () (nl + (" (in " + <>f + ")")))
+                             (gripe () () () ("cannot compile '" + <>f + "' (cause unnamed -- see doc/moon-diag.md)"))))
                        ; fn-start alignment to EVEN (2): a function's address can
                        ; ride into the heap as an object's ap (the lvm_* dispatch
                        ; kind), and the love image codec's pointer/fixnum discriminator

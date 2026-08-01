@@ -8,6 +8,14 @@
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
 
+; A REFUSAL, however it says so. A stage answers a bare () when it refused
+; without a cause it could name, and a gripe when it could -- and since rung 4
+; (doc/moon-diag.md) every codegen refusal names SOMETHING, if only the function
+; it gave up in. So a law that means "this source is refused" says `refused?`;
+; the laws that mean "refused, and here is exactly what it said" pin `gripe?`
+; and the message, in the diagnostics sections below.
+(: (refused? x) (|| (! x) (gripe? x)))
+
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
 (: (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))   ; lists don't index by application
    r (clex "int main() { return 42; }")
@@ -162,22 +170,22 @@
       (! (member? '(call rec) (caup (cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))))
       ; a frame-escaping fn keeps the plain call (the address outlives the frame)
       (member? '(call g) (caup (cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }")))
-      (! (cgn "int f() { return 1; }"))                      ; no main, no program
+      (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a NAMED refusal now (rung 1, doc/moon-diag.md)
-      (! (cgn "int main() { return 5=3; }"))                 ; not an lvalue
-      (! (cgn "int main() { break; }"))                      ; no loop to leave
+      (refused? (cgn "int main() { return 5=3; }"))                 ; not an lvalue
+      (refused? (cgn "int main() { break; }"))                      ; no loop to leave
       (two? (cgn "int main() { int a=1; int b=2; return a<<b; }"))  ; variable shifts ride shlv now
       (two? (cgn "int f(int a) { return a; } int main() { return f(1); }"))
       (gripe? (cgn "int main() { return f(1,2,3,4,5,6,7); }"))     ; an unknown callee still refuses, now naming it (f undeclared) ...
       (two? (cgn "int f(int a,int b,int c,int d,int e,int x,int y) { return y; } int main() { return f(1,2,3,4,5,6,7); }"))   ; ... but args 7+ ride the caller stack now, both sides
       (two? (cgn "int g; int main() { int *p = &g; *p = 3; return g; }"))
-      (! (cgn "int main() { int *p; int *q; return (long)(p+q); }"))   ; ptr+ptr refused
-      (! (cgn "int main() { int x; return *x; }"))                     ; deref wants a pointer
-      (! (cgn "int main() { int a[3]; int b[3]; a = b; return 0; }"))  ; arrays are not assignable
+      (refused? (cgn "int main() { int *p; int *q; return (long)(p+q); }"))   ; ptr+ptr refused
+      (refused? (cgn "int main() { int x; return *x; }"))                     ; deref wants a pointer
+      (refused? (cgn "int main() { int a[3]; int b[3]; a = b; return 0; }"))  ; arrays are not assignable
       (two? (cgn "int g = 1+2; int main() { return g; }"))             ; a global init FOLDS to its constant
-      (! (cgn "int x; int g = x; int main() { return g; }"))           ; ... but stays refused when genuinely non-constant
+      (refused? (cgn "int x; int g = x; int main() { return g; }"))           ; ... but stays refused when genuinely non-constant
       (two? (cgn "char *s = \"hi\"; int main() { return 0; }"))       ; a label-valued global: abs64 (4d)
-      (! (cgn "int main() { int a[2] = 5; return 0; }"))))          ; a scalar cannot initialize an array
+      (refused? (cgn "int main() { int a[2] = 5; return 0; }"))))          ; a scalar cannot initialize an array
 
 ; --- stage 4a: aggregates -- layout to the C rules, members, the new statements ---
 (: (cast src) (caup (cparse (caup (clex src))))
@@ -215,8 +223,8 @@
       (two? (cgn "int main() { int x = 2; switch (x) { case 1: return 9; default: return 7; } }"))
       (two? (cgn "int main() { int i = 0; do i++; while (i < 3); return i; }"))
       (two? (cgn "int main() { int i = 0; top: i++; if (i < 3) goto top; return i; }"))
-      (! (cgn "struct S { int x; }; int main() { struct S s; return s; }"))                       ; no struct VALUES
-      (! (cgn "struct S { int x; }; int main() { struct S s; return s.y; }"))                      ; no such member
+      (refused? (cgn "struct S { int x; }; int main() { struct S s; return s; }"))                       ; no struct VALUES
+      (refused? (cgn "struct S { int x; }; int main() { struct S s; return s.y; }"))                      ; no such member
       ; --- bitfields: LSB-first packing into a declared-type unit (SysV/gcc x86);
       ; the member's stored (unit-offset bitoff width) drives a 2-shift load and a
       ; read-modify-write store. layout folds at parse; &bitfield is illegal. ---
@@ -225,7 +233,7 @@
       (= (cexpp "struct U { unsigned a:4; unsigned b:4; };" "sizeof(struct U)") '(num 4))            ; one byte of bits, int-aligned
       (= (cexpp "struct Z { int a; int :0; int b; };" "sizeof(struct Z)") '(num 8))                 ; `:0` forces the next unit to align
       (two? (cgn "struct b { unsigned a:1; unsigned n:5; int s:4; }; int main() { struct b x; x.a=1; x.n=21; x.s=-3; return x.a + x.n + (x.s < 0); }"))  ; read/write, signed sign-extends
-      (! (cgn "struct b { unsigned a:1; }; int main() { struct b x; unsigned *p = &x.a; return *p; }"))   ; &bitfield is illegal -- refuse
+      (refused? (cgn "struct b { unsigned a:1; }; int main() { struct b x; unsigned *p = &x.a; return *p; }"))   ; &bitfield is illegal -- refuse
       ; --- stage 4b: whole-struct assignment (a block copy) and function pointers ---
       (two? (cgn "struct S { int x; int y; }; int main() { struct S a; struct S b; a.x = 3; a.y = 4; b = a; return b.x + b.y; }"))
       (two? (cgn "struct S { long a; long b; }; int f(struct S *p, struct S *q) { *p = *q; return p->a; } int main() { return 0; }"))
@@ -280,7 +288,7 @@
       (two? (cgn "struct P{int x,y,z;}; struct P a[3]; int *p = &a[1].z; int main() { return 0; }")) ; &arr[i].member
       (two? (cgn "char *p = \"ok\" + 1; int main() { return 0; }"))                     ; a string label + offset
       ; a NON-constant address still refuses (gcc: initializer not constant)
-      (! (cgn "int a[4]; int i; int *p = &a[i]; int main() { return 0; }"))
+      (refused? (cgn "int a[4]; int i; int *p = &a[i]; int main() { return 0; }"))
       ; the TOP-LEVEL fn-pointer fence FELL (rung D): ptop's first declarator
       ; routes through pdtor now -- `T (*name)(args)` (love.c's ai_image_absguard)
       ; AND the array form both parse, and gen's &f-in-images lane lays them
@@ -332,7 +340,7 @@
       (two? (cgn "int main() { int i = 3.5; return i; }"))                             ; a double literal into an int local
       (two? (cgn "int main() { double d = 3.0; int n = 0; while (d) { d = d - 1.0; n++; } return n; }"))  ; a bare double condition (d != 0.0)
       (two? (cgn "int main() { double d = 2.5; return d ? 9 : 4; }"))                  ; a double ternary condition
-      (! (cgn "int main() { double a = 1.0; return ~a; }"))))                          ; ~ on a double is still invalid
+      (refused? (cgn "int main() { double a = 1.0; return ~a; }"))))                          ; ~ on a double is still invalid
 
 ; --- variadic functions + _Static_assert (stage 6c). the `...` is recorded as
 ; the signature's variadic flag (cc's simplified all-stack call ABI -- doc/moon.md);
@@ -387,8 +395,8 @@
       ; a true _Static_assert compiles; a false one refuses the whole program
       (two? (cgn "int main() { _Static_assert(sizeof(int) == 4, \"w\"); return 0; }"))
       (two? (cgn "_Static_assert(1 + 2 * 3 == 7, \"folds\"); int main() { return 0; }"))
-      (! (cgn "int main() { _Static_assert(sizeof(int) == 5, \"bad\"); return 0; }"))
-      (! (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))
+      (refused? (cgn "int main() { _Static_assert(sizeof(int) == 5, \"bad\"); return 0; }"))
+      (refused? (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))
       ; ⚠ EVERY declarator in a declaration infers its own [] bound, not just the
       ; first. a later one has its dims parsed before the initializer is seen, and
       ; that path used to skip the inference -- so `char a[]={1}, b[]={2,2};` left
@@ -402,14 +410,14 @@
       (= (cast "char *p, q[]={1,2};")
          '(prog ((gdecl (("p" (ptr char) ()) ("q" (arr char 2) (init ((num 1) (num 2)))))))))
       (two? (cgn "static const char a[]={1,2,3}, b[]={4,5,6}; _Static_assert(sizeof(b) == 3, \"m\"); int main() { return a[0]; }"))
-      (! (cgn "static const char a[]={1,2,3}, b[]={4,5,6}; _Static_assert(sizeof(b) == 0, \"m\"); int main() { return a[0]; }"))
+      (refused? (cgn "static const char a[]={1,2,3}, b[]={4,5,6}; _Static_assert(sizeof(b) == 0, \"m\"); int main() { return a[0]; }"))
       ; ..and the MESSAGE is optional (C23), which is how the kernel writes it.
       ; the assertion was always the point; the string only ever worded the
       ; diagnostic. a false one still refuses -- the short form is not a weaker one.
       (two? (cgn "_Static_assert(sizeof(int) == 4); int main() { return 0; }"))
       (two? (cgn "int main() { _Static_assert(1); return 0; }"))
-      (! (cgn "_Static_assert(sizeof(int) == 5); int main() { return 0; }"))
-      (! (cgn "int main() { _Static_assert(0); return 0; }"))
+      (refused? (cgn "_Static_assert(sizeof(int) == 5); int main() { return 0; }"))
+      (refused? (cgn "int main() { _Static_assert(0); return 0; }"))
       ; cfold: ?: folds the SELECTED arm (both directions); &&/|| fold != 0 (a negative is true).
       (= (cast "int g = 1?2:3; int main() { return 0; }")
          '(prog ((gdecl (("g" int (num 2)))) (fn "main" () (blk ((ret (num 0))))))))
@@ -424,9 +432,9 @@
       ; the dead ternary arm need not be constant (or defined): 1 ? 1 : 1/0 is a valid const expr
       (two? (cgn "_Static_assert(1 ? 1 : 1/0, \"dead div0 unevaluated\"); int main() { return 0; }"))
       ; false-folding asserts now FIRE (were silently let by -- the whole point of the fix)
-      (! (cgn "_Static_assert(1 ? 0 : 0, \"fires\"); int main() { return 0; }"))
-      (! (cgn "_Static_assert(1 && 0, \"fires\"); int main() { return 0; }"))
-      (! (cgn "_Static_assert(0 || 0, \"fires\"); int main() { return 0; }"))
+      (refused? (cgn "_Static_assert(1 ? 0 : 0, \"fires\"); int main() { return 0; }"))
+      (refused? (cgn "_Static_assert(1 && 0, \"fires\"); int main() { return 0; }"))
+      (refused? (cgn "_Static_assert(0 || 0, \"fires\"); int main() { return 0; }"))
       ; a negative && is TRUE (would fire under the old (0 < a) truthiness) -- must NOT fire
       (two? (cgn "_Static_assert(-1 && 1, \"negative true\"); int main() { return 0; }"))
       ; a GENUINELY non-constant assert is still let by (cfold partial by design, policy unchanged)
@@ -460,7 +468,7 @@
       (two? (cgn "int main() { float a[2] = {1.5, 2.5}; return (int)(a[0] + a[1]); }"))
       (two? (cgn "struct V { float x; int n; }; int main() { struct V v; v.x = 4.5; v.n = 2; return (int)v.x + v.n; }"))
       (two? (cgn "float g = 6.25; int main() { return (int)g; }"))                 ; a float global -> a 4-byte single image
-      (! (cgn "int main() { float a = 1.0; return ~a; }"))                          ; ~ on a float is still invalid
+      (refused? (cgn "int main() { float a = 1.0; return ~a; }"))                          ; ~ on a float is still invalid
       ; the compound literal: a struct one address-taken and read, a scalar one
       (two? (cgn "struct P { int a; int b; }; int f(struct P *p) { return p->a + p->b; } int main() { return f(&(struct P){10, 32}); }"))
       (two? (cgn "int main() { int *p = &(int){42}; return *p; }"))
@@ -586,6 +594,51 @@
          '(prog ((gdecl (("s" (ptr char) (str "abc")))))))
       ; a clean parse is still a plain result, never mistaken for a gripe
       (okv? (pgi "int main(void) { return 0; }\n" hdr))))
+
+; --- diagnostics: a DELIBERATE refusal names the feature it has no lane for
+; (doc/moon-diag.md rung 4). the whole point is the DISTINCTION: a `'bad` meaning
+; "I decline, take another lane" (an inline decline, a policy deopt) must stay
+; SILENT, and only "there is no lane for this, anywhere" speaks. so every law
+; below pins BOTH directions -- the refusal names itself, AND the same source on
+; a target that HAS the lane compiles clean. a message golden is worth its churn
+; here: the string IS the deliverable.
+; cgen-obj, not cgen: the OBJECT view compiles a TU as it stands, where cgen
+; also insists on a `main` to start -- and a lane's refusal has nothing to do
+; with whether the file happens to be a program.
+(: (cgt src tgt)
+    (: r (cparse-t (caup (clex src)) tgt)
+       (? (okv? r) (cgen-obj (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () tgt) ()))
+   (el l i) (? (i < 1) <l (el >l (i - 1)))
+   (gmsg g) (el g 4)
+   vla "int s(int n){ int a[n]; a[0]=1; return a[0]; }"
+   big "struct b { long a,b,c,d,e; };\n"
+   (assert
+      ; the C99 VLA: x64 and arm64 carry the lane, riscv64 does not -- and says which
+      (okv? (cgt vla 'x64))
+      (okv? (cgt vla 'arm64))
+      (: g (cgt vla 'riscv64)
+         (&& (gripe? g) ((gmsg g) = "no lane for a variable-length array on riscv64 (in s)")))
+      ; a >16-byte struct by value. the two halves refuse SEPARATELY and each
+      ; names which half it is -- passing and returning are different lanes, and
+      ; "codegen error" could never tell you which one you had
+      (: g (cgt (big + "int t(struct b f){ return (int)f.a; }") 'arm64)
+         (&& (gripe? g) ((gmsg g) = "no lane for passing this 40-byte struct by value on arm64 (in t)")))
+      (: g (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'arm64)
+         (&& (gripe? g) ((gmsg g) = "no lane for returning this 40-byte struct by value on arm64 (in m)")))
+      (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'x64))
+      ; C99 complex arithmetic is an x64 lane only
+      (: g (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'arm64)
+         (&& (gripe? g) ((gmsg g) = "no lane for C99 complex arithmetic on arm64 (in f)")))
+      ; a refusal with NO named cause is still ONE gripe, never a note on one
+      ; channel and an error on another -- the whole message reaches whichever
+      ; stream a build log kept
+      (: g (cgt "int f(void){ return nope; }" 'x64)
+         (&& (gripe? g) ((gmsg g) = "undeclared 'nope' (in f)")))
+      ; the static-data lane refuses through the same door: a cause pinned by
+      ; globs, a gripe minted at gfns's tail (cgdata's callers thread a bare
+      ; 'bad through a dozen joins, and a gripe is not one)
+      (: g (cgt "int g = nope;\n" 'x64)
+         (&& (gripe? g) ((gmsg g) = "cannot lay the initializer of 'g' ((var \"nope\"))")))))
 
 ; -- 7c-i: freestanding-header surface. cc keeps no linkage/qualifier state, so
 ; storage/qualifier keywords (static const volatile restrict register inline) and
@@ -752,7 +805,7 @@
       (two? (cgn "int one(int), two(int); int one(int x){return x+1;} int main(){ int (*p)(int) = two; return p != 0; }"))
       (two? (cgn "int f(int x){return x;} int main(){ int (*p)(int) = &f; return p(1); }"))
       (two? (cgn "int f(int x){return x;} typedef int (*fp)(int); fp t[1] = { &f }; int main(){ return t[0](1); }"))
-      (! (cgn "int main(){ return (long)&nope; }"))))
+      (refused? (cgn "int main(){ return (long)&nope; }"))))
 
 ; -- inline asm (the statement): the template is holo neutral TEXT, %N the
 ; operands (outputs first), adjacent template strings concatenate, and the
@@ -788,10 +841,10 @@
       ; like `sys`, so the template is bare and the operands only pin -- the
       ; assembled body is exactly the opcode bytes
       (two? g2) (hasraw2 (caup g2))
-      (! (cgn "int main() { long v; asm(\"li %0, 1\" : \"=q\"(v)); return 0; }"))
-      (! (cgn "int main() { asm(\"sys\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
-      (! (cgn "int main() { asm(\"sys\" : : \"r4\"(1)); return 0; }"))
-      (! (cgn "int main() { double d; asm(\"sys\" : : \"r\"(d)); return 0; }"))))
+      (refused? (cgn "int main() { long v; asm(\"li %0, 1\" : \"=q\"(v)); return 0; }"))
+      (refused? (cgn "int main() { asm(\"sys\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
+      (refused? (cgn "int main() { asm(\"sys\" : : \"r4\"(1)); return 0; }"))
+      (refused? (cgn "int main() { double d; asm(\"sys\" : : \"r\"(d)); return 0; }"))))
 
 ; -- the alive pass (per-call wrap filtering): a non-leaf fn's homed params
 ; spill/reload ONLY around calls they are live across. `wraps` counts stores
