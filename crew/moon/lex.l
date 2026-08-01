@@ -118,6 +118,17 @@
        ; 3.14e-2, a trailing f/F/l/L consumed). digrun scans a decimal run ->
        ; (endj value ndigits); flolit -> (endj isflo? gem-or-int). --
        (ipow b p) (: (go k a) (? (k < 1) a (go (k - 1) (* a b))) (go p 1))
+       ; -- the digits -> a double. ⚠ NEVER (/ mant (ipow 10 k)) in FLOATS: that
+       ; rounds twice, and 10^310 is an infinity before the divide ever runs --
+       ; 1e-310 folded to 0, 1e-308 to -inf (the 10^308 coerce landing on -0.0,
+       ; and 1/-0.0), 1e-307 came out a ulp light. every one of them SILENT, in
+       ; a compiler that was otherwise green. hand the exact digits to the
+       ; READER instead: am_strtod under `sound` is the tree's one
+       ; correctly-rounded decimal->binary, the same one love's own literals
+       ; ride, and it carries the whole range including the subnormals. the
+       ; `e` keeps the answer a gem however integral the digits look. --
+       (chars t) (: k9 (tally t) (: (go k) (? (k < k9) (link (t k) (go (k + 1))) ()) (go 0)))
+       (dec2flo mant dxp) (cap (sound (chars ((show mant) + "e" + (show dxp)))))
        (digrun j) (: (go k v nd) (? (&& (k < n) (dig? (src k)))
                                     (go (k + 1) ((* 10 v) + ((src k) - 48)) (nd + 1)) `(k v nd))
                      (go j 0 0))
@@ -144,8 +155,7 @@
                  (: k (j3 + 1)
                     (? (&& (k < n) (member? (src k) '(102 70 108 76))) (k + 1) k)))
            dxp (exp - fd)
-           val (? isflo (? (dxp < 0) (0.0 + (/ mant (ipow 10 (0 - dxp))))
-                           (0.0 + (* mant (ipow 10 dxp)))) iv)
+           val (? isflo (dec2flo mant dxp) iv)
            `(j4 (? im 'imag isflo) val))
        ; -- hex literals: 0x integer (0xff), OR a hex FLOAT 0x H.H p [+-] D (a binary
        ; exponent, base 2): 0x1.0p-53, 0x1p4, 0x.8p1. i points at the '0'. -> (endj isflo? value). --
@@ -169,7 +179,12 @@
                             `(j1 0))
                  j2 <ee exp <>ee
                  bexp (exp - (* 4 fd))                        ; each fractional hex digit is 2^-4
-                 val (? (bexp < 0) (0.0 + (/ mant (ipow 2 (0 - bexp)))) (0.0 + (* mant (ipow 2 bexp))))
+                 ; mant * 2^bexp is EXACT in decimal either way -- a negative
+                 ; binary exponent is mant * 5^k over 10^k -- so the same
+                 ; correctly-rounded reader takes this lane too, and 0x1p-1074
+                 ; stops needing a 2^1074 that no double can hold.
+                 val (? (bexp < 0) (dec2flo (* mant (ipow 5 (0 - bexp))) bexp)
+                        (dec2flo (* mant (ipow 2 bexp)) 0))
                  j3 (? (&& (j2 < n) (member? (src j2) '(102 70 108 76))) (j2 + 1) j2)
                  `(j3 1 val))))
        (go i line acc)

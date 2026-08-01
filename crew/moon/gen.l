@@ -455,22 +455,43 @@
    ; a load widens (ldss + cvtss2sd) and a store narrows (cvtsd2ss + stss). fldf/
    ; fstf pick the lane by the DECLARED type; every loaded float types 'double.
    (flo? ty) (|| (ty = 'double) (ty = 'float))
-   (fenc ax bias mant)                              ; positive finite -> biased-exponent * mant + mantissa fraction
-    (: eu ((: (go e) (? (((e + 1) 2.0) <= ax) (go (e + 1)) e)) (int (/ (log ax) (log 2.0))))
-       e  ((: (go e) (? (ax < (e 2.0)) (go (e - 1)) e)) eu)
-       (+ (* (e + bias) mant) (int (* ((/ ax (e 2.0)) - 1.0) (0.0 + mant)))))
+   ; ⚠ TWO THINGS THE FIRST CUT OF THIS GOT WRONG, both silent, both in every
+   ; program mooncc built. a SUBNORMAL carries no implicit leading 1 and sits at
+   ; one fixed exponent, so the normal lane's (e + bias) runs NEGATIVE for it and
+   ; the pattern lands on nonsense -- 5e-324 encoded as -inf. and a `float`
+   ; constant must ROUND to its 24 bits: truncating left 0.1f a ulp light, and
+   ; the double lane hid it, being exact there (its fraction IS an integer).
+   (mul2 x k) (? (k <= 1000) (* x (k 2.0)) (mul2 (* x (1000 2.0)) (k - 1000)))   ; x * 2^k, split so 2^1074 never needs a double
+   (fnear y)                                        ; y >= 0 -> the nearest integer, ties to EVEN
+    (: f (int y) r (y - (0.0 + f))
+       (? (r > 0.5) (f + 1) (r < 0.5) f (& f 1) (f + 1) f))
+   (fenc ax bias p)                                 ; positive finite -> biased-exponent * 2^p + mantissa fraction
+    (: mant (p 2)
+       emin (1 - bias)                              ; the smallest normal's exponent
+       (? (ax < (emin 2.0)) (fnear (mul2 ax (p - emin)))       ; subnormal: the biased exponent is 0
+          (: eu ((: (go e) (? (((e + 1) 2.0) <= ax) (go (e + 1)) e)) (int (/ (log ax) (log 2.0))))
+             e  ((: (go e) (? (ax < (e 2.0)) (go (e - 1)) e)) eu)
+             m  (fnear (* ((/ ax (e 2.0)) - 1.0) (0.0 + mant)))
+             ; a fraction that rounds up out of its binade carries into the
+             ; exponent (0x1.ff..f -> 0x2.0), and at the top that IS the
+             ; infinity pattern, which is the answer C wants there.
+             (? (m < mant) (+ (* (e + bias) mant) m) (* ((e + 1) + bias) mant)))))
    (fbits x)                                        ; double -> its IEEE-754 bits as the SIGNED i64 pattern
     (? (x = 0.0) 0                                  ; (the sign bit would make a BIG, and les/imnum walk i64 patterns)
        (! (x = x)) 9221120237041090560              ; nan (the quiet pattern) -- fenc's climb never ends on a non-finite
        ((x + x) = x) (? (x < 0.0) -4503599627370496 9218868437227405312)   ; +-inf (1e999 reads as one)
-       (: m (fenc (? (x < 0.0) (0.0 - x) x) 1023 4503599627370496)
+       (: m (fenc (? (x < 0.0) (0.0 - x) x) 1023 52)
           (? (x < 0.0) (m - 9223372036854775808) m)))
    (fbits32 x)                                      ; double -> its IEEE-754 SINGLE (u32) bits (a `float` image)
     (? (x = 0.0) 0
        (! (x = x)) 2143289344
        ((x + x) = x) (? (x < 0.0) 4286578688 2139095040)
-       (+ (* (? (x < 0.0) 1 0) 2147483648)
-          (fenc (? (x < 0.0) (0.0 - x) x) 127 8388608)))
+       (: ax (? (x < 0.0) (0.0 - x) x)
+          ; under 2^128 fenc's own carry covers the top edge (a fraction that
+          ; rounds out of the last binade IS the infinity pattern); at or above
+          ; it the exponent would wrap, so name the infinity here.
+          m (? (ax < (128 2.0)) (fenc ax 127 23) 2139095040)
+          (+ (* (? (x < 0.0) 1 0) 2147483648) m)))
    (fldf ty freg base off)                          ; load a float/double from [base+off] into freg (widen if float)
     (? (ty = 'float) `(`('ldss freg base off) `('cvtss2sd freg freg))
        `(`('ldsd freg base off)))
