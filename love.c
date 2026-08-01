@@ -899,19 +899,31 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g->pool, 0); }
  return s; }
 
-// FIXME i think this fix is wrong
-// ⚠ EVERY VALUE IS ROOTED BEFORE THE FIRST NAME IS INTERNED. ai_strof/intern/ai_mapput
-// all allocate, so a def whose .x is a live heap value goes stale in the CALLER's array
-// the moment one of them collects -- and C cannot re-root what it holds. main()'s
-// argv/cmdline are exactly that: two entries sharing one chain, and the second
-// definition bound a pointer the first definition's intern had already forwarded.
+// ⚠ EVERY .x HERE MUST BE IMMORTAL -- a nif address, a fixnum, an out-of-pool constant.
+// C cannot re-root what it holds in an ARRAY, so a def whose value is a live heap word
+// goes stale the moment anything below collects, and NO ORDERING FIXES IT: rooting the
+// values up front only moves the hazard into the pushes (ai_push collects when the
+// stack is short, leaving every entry it has not reached yet exactly as stale, rarely
+// and only under memory pressure), and reserving the room up front collects BEFORE the
+// first .x is even read. A value that MOVES arrives on the stack instead -- ai_defv.
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- uintptr_t m = n;
- // FIXME what if ai_push triggers GC before the loop is finished? 
- for (uintptr_t i = 0; i < n; i++) g = ai_push(g, 1, defs[i].x);
- for (g = ai_push(g, 1, A(ai_core_of(g)->book)); ai_ok(g) && n--; )
-  g = ai_mapput(intern(ai_strof(ai_push(g, 1, ai_core_of(g)->sp[m - n]), defs[n].n)));
- if (ai_ok(g)) ai_core_of(g)->sp += m + 1;
+ for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
+  g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
+ ai_core_of(g)->sp++;
+ return g; }
+
+// The twin of ai_defn for a value that MOVES: it rides g->sp[0], where the collector
+// finds and updates it, and it is LEFT there -- so a second name binds the same one
+// (main()'s argv and cmdline are one chain, and every caller of this pops when done).
+// The re-read of sp[1] is the whole of it: it happens AFTER the book push, so a
+// collection inside that push is already accounted for, and ai_push roots its own
+// operand (ai_pushr's mm) so the second one cannot go stale either.
+struct ai *ai_defv(struct ai *g, char const *nm) {
+ if (!ai_ok(g)) return g;
+ g = ai_push(g, 1, A(ai_core_of(g)->book));           // [book, value, ..]
+ if (!ai_ok(g)) return g;
+ g = ai_mapput(intern(ai_strof(ai_push(g, 1, ai_core_of(g)->sp[1]), nm)));
+ if (ai_ok(g)) ai_core_of(g)->sp++;                   // [value, ..]
  return g; }
 
 nifs(native_implemented_function);
@@ -1008,9 +1020,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = ai_defn(g, def1, countof(def1));
   // `love-version`: the build's version-control id (love_version.h), surfaced on init so the user
   // can read the running version. A non-fixnum global, harmlessly skipped by ev.l's pureset.
-  if (ai_ok(g = ai_strof(g, AI_VERSION))) {
-   struct ai_def vd[] = {{"love-version", ai_pop1(g)}};
-   g = ai_defn(g, vd, countof(vd)); }
+  if (ai_ok(g = ai_strof(g, AI_VERSION)))            // a live string: off the STACK, never an ai_def
+   g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for. auto-ev interns it as the assembler
   // target ('x64 / 'arm64) and gates the still-x86-only lanes (float / loops).
 #if defined(__x86_64__)
@@ -1022,9 +1033,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
 #else
   #define AI_ARCH "other"
 #endif
-  if (ai_ok(g = ai_strof(g, AI_ARCH))) {
-   struct ai_def ad[] = {{"love-arch", ai_pop1(g)}};
-   g = ai_defn(g, ad, countof(ad)); }
+  if (ai_ok(g = ai_strof(g, AI_ARCH)))
+   g = ai_pop(ai_defv(g, "love-arch"), 1);
   // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
   // name, so installing that nif interns it and the book roots it; the raise
   // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).

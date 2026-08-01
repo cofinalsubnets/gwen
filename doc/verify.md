@@ -120,8 +120,19 @@ none of them reachable by any other gate in the tree:
   `ai_defn` itself read `defs[n].x` one entry at a time, so even a two-entry call went
   stale between its own definitions. The visible face was a **silent stop**: a stress
   build booted in 17 s and exited 0 having evaluated nothing, because the CLI read an
-  argv that was no longer there. The fix roots every value before the first intern, so
-  the door is safe for its next caller rather than for its current one.
+  argv that was no longer there. ⚠ **the first fix for this was wrong and gwen caught
+  it**: rooting the values up front only MOVES the hazard into the pushes, because
+  `ai_push` collects when the stack is short and leaves every entry it has not reached
+  yet exactly as stale -- rarely, and only under memory pressure, which is worse than
+  the bug it replaced, and which `AI_GC_STRESS` cannot see at all (`ai_push` does not
+  route through `ai_have`). Reserving the room up front is no better: it collects
+  before the first `.x` is even read. **There is no ordering that fixes it**, because
+  C cannot re-root what it holds in an array. So `ai_defn` keeps its real contract --
+  immortal values only, which is what every other caller passes -- and a live value
+  arrives on the STACK instead, through the new `ai_defv`, where the collector finds
+  and updates it. Two more callers were quietly in the same position (`love-version`
+  and `love-arch`, each popping a fresh string into a one-entry array) and use the new
+  door too.
 * **the `obin` element loop stored into a promoted array with no write barrier.** The
   ai_O elementwise lane allocates per element, so a minor mid-loop tenures the result
   array while the elements it is being filled with stay young -- an old->young edge

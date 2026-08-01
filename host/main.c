@@ -850,13 +850,16 @@ int main(int argc, char const **argv) {
   for (g = ai_push(g, 1, ai_nil); ac--; g = gxr(g));
   if (ai_ok(g)) {
     // the static nifs (exit/open/close/run/getenv + any host/*.c app nifs) come
-    // from the ai_nifs section; argv/cmdline are runtime values, defined here.
+    // from the ai_nifs section -- immortal addresses, so the array door serves.
+    // (This also re-pins them into a loaded image's book.)
     g = ai_defn(g, __start_ai_nifs, __stop_ai_nifs - __start_ai_nifs);
-    ai_word full_argv = ai_pop1(ai_core_of(g));     // shared by `argv` and `cmdline`; popped
-                                                    // AFTER the defn above, which interns a
-                                                    // hundred names and collects while it does
-    struct ai_def d[] = {{"argv", full_argv}, {"cmdline", full_argv}};
-    g = ai_defn(g, d, countof(d));      // re-pins the host nifs (live addresses) into the loaded book too
+    // ⚠ THE ARGV CHAIN NEVER LEAVES THE STACK. It is a live heap value, so it cannot
+    // ride a struct ai_def: C cannot re-root what it holds in an array, and the defn
+    // above interns a hundred names -- a hundred chances to move it. ai_defv reads it
+    // off sp[0] and leaves it there, so both names bind the one chain.
+    g = ai_defv(g, "argv");
+    g = ai_defv(g, "cmdline");
+    if (ai_ok(g)) ai_core_of(g)->sp++;              // the book holds it now
 #ifdef GL_BOOTSTRAP
     if (!image_load_path) g = boot(g, argp);
     else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
