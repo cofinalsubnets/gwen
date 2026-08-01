@@ -23,6 +23,11 @@
 ; The whole tool is ONE define: a body-less top-level `:` leaks `ain-main` (args ->
 ; conversation) and nothing else; the SEAT form at the bottom fires it only when the
 ; file itself was invoked (positional or -l), so a multi-call cat stays quiet.
+; dns is a MODULE in the tree and a CATTED SIBLING in the dist artifact, so ask
+; for it only when `dial` is not already here -- the artifact has no lib/ to load
+; from, and a `use` that misses scares rather than shrugging.
+(: _ (? (member? 'dial (names ())) 0 (use 'dns)))
+
 (: (ain-main as)
  (:
     ; parse a decimal port string -> a fixnum (a string indexes its bytes; '0' = 48).
@@ -64,14 +69,14 @@
                                (: _ (close l) (die "accept failed"))))
                        (die (+ "cannot listen on port " (string port)))))
 
-    ; client: connect, then talk.
-    (dial host port) (: s (connect host port)
-                       (? s (talk s) (die (+ "cannot connect to " (+ host (+ ":" (string port)))))))
+    ; client: resolve, connect, then talk.
+    (client host port) (: s (dial host port)
+                          (? s (talk s) (die (+ "cannot connect to " (+ host (+ ":" (string port)))))))
 
     ; dispatch on the args: -l PORT = server, HOST PORT = client, else usage.
     (? (= (cap as) "-l") (? (two? (cup as)) (serve (atoi (caup as)))
                             (die "usage: ain -l PORT"))
-       (two? (cup as)) (dial (cap as) (atoi (caup as)))
+       (two? (cup as)) (client (cap as) (atoi (caup as)))
        (die "usage: ain HOST PORT  |  ain -l PORT"))))
 
 ; the SEAT: fire ain-main iff this very file sits in the program seat of the real

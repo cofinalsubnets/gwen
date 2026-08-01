@@ -54,7 +54,7 @@
    ; response; a 404 is a perfectly good answer and comes back as (404 ..), so
    ; the caller can tell "no such object" from "no such host".
    (http-get host port path)
-    (: s (connect host port)
+    (: s (dial host port)
        (? (! s) ()
           (: _ (say s ("GET " + path + " HTTP/1.1\r\nHost: " + host
                        + "\r\nConnection: close\r\nUser-Agent: seed\r\n\r\n"))

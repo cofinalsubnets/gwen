@@ -51,7 +51,7 @@ endif
 # this love resolves here. installed DEREFERENCED (install(1) follows the repo
 # lib/ symlinks), so the nest stands alone; lib/seed.l is the assembly and its
 # seed/ parts ride the slashed-include rung the same way.
-libmods = cook json lint salt libra kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
+libmods = cook dns json lint salt libra kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 installs = \
   $d/bin/$(BIN) \
   $d/bin/ai \

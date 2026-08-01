@@ -1916,6 +1916,69 @@ first `connect` on a fresh socket, so "a previous one is still going" cannot be
 the answer. mooncc named the undeclared identifier and the function, which is
 exactly what that diagnostic was rebuilt for.)
 
+### the resolver moves into love -- ✅ 2026-08-01
+
+`lib/dns.l`, a registered module: `(resolve h)` -> a list of ipv4 charms,
+`(dial h port)` -> a port. `/etc/hosts` first (no packet at all, which is what
+makes localhost and every LAN name free), then `/etc/resolv.conf`'s nameservers
+in order, then the search domains appended on a miss. A records over UDP; **not**
+AAAA and **not** the TCP fallback -- a truncated answer is a SCARE, so the gap
+says so when something reaches it rather than handing back a partial.
+
+**⚠ IT IS A PORT, NOT A DESIGN.** crew/moon/lib/nolibc.c has carried a complete
+small resolver since the seam was written -- its own comment says why: *"the
+smallest resolver that keeps `connect host port` (ain) and seed's http pull real
+on the raw default binary"*. Every fiddly part had a working reference to read
+(the wire format, the compression pointer, the two config parsers, the retry
+policy). It **stays where it is**: nolibc is a libc and a C program mooncc builds
+is entitled to `getaddrinfo`. ⚠ but it now has no consumer in the tree, and that
+is said at the site rather than left for a reader to assume.
+
+**⚠ NOTHING IN IT POLLS, and the shape is the thing to keep.** A lookup wants "an
+answer, or a deadline", and the scheduler has no OR of the two -- a task parked on
+both a timer and an fd wakes when BOTH are ready. So it is **three tasks**: the
+receiver parks on the socket, a watchdog parks on the clock, and the caller parks
+in `catch`. Whichever finishes first wins, because a **freeze out from under a
+catcher wakes it with the zero point** -- the edge the catch rung's law 15 pins,
+used here as a mechanism rather than an edge case. No `cue?` loop, no 1 ms tick.
+
+Three things the tree taught while this was written, all of them mine to have
+known:
+
+* **`(string 0)` is the ZERO POINT, not a NUL byte** -- the 0 -> () flip, and a
+  DNS header is mostly zero bytes, so every length and flag word would have
+  silently lost half of itself. `("" + 0)` is the byte. spec.l says it plainly
+  (*"a NUL nets nothing"*) and it still had to be measured to be believed.
+* **`:` and `?` bind their forms in PAIRS**, so a bare infix expression at a tail
+  -- `(: (o k) .. (o 1) + (o 2))` -- is not one expression, it is a binding of
+  `(o 1)` to `+`. The compiler caught it as `imports-grew`, which is a REFUSAL
+  and not a miscompile, and I read it as a compiler bug for two rounds before
+  narrowing it. The scare was right and I was wrong.
+* **the ` list ctor EVALUATES every element** (CLAUDE.md says so), so
+  ``(scare 'torn `(dns h))`` folded `dns` at compile time and scared four times
+  before the module would load. Quote the literal positions.
+
+**the law is test/host/dns.l, hermetic and offline**, which was the whole
+difficulty: a resolver's subject is a nameserver, and a gate that asks the real
+one fails on a train. So **the nameserver is a love task** -- it binds a UDP port,
+waits for a query, and answers a canned response built with the module's own byte
+helpers, name compression pointer and all. Five laws: the round trip, the deadline
+(both that it wakes and that it waited), the TC bit, `/etc/hosts` off a fixture,
+and the empty-resolv.conf fallback to 127.0.0.1. Control-verified by breaking the
+compression pointer (law 1 reddens), the TC test (law 3 reddens) and the watchdog
+(the file hangs).
+
+⚠ **the server is named by ADDRESS AND PORT**, not address alone. resolv.conf has
+no port syntax and every line it yields means 53 -- but a stub on another port is
+a real thing to want, and it is what lets the gate stand up its own nameserver
+without asking for port 53.
+
+`crew/seed/http.l` and `tools/ain.l` are the two callers in the tree that ever
+resolved a name; both now `dial`. ⚠ **ain is BOTH a module consumer and a catted
+sibling** (it rides `distfiles`), so its `use` is guarded on whether `dial` is
+already bound: the dist artifact has no `lib/` to load from, and a `use` that
+misses SCARES rather than shrugging.
+
 ### what the four parks cost
 
 **`accept` and `udp-recv` are true fd parks.** `next_wait_fd` is the listener (or the
@@ -2279,8 +2342,9 @@ choosing park-or-block. so:
    part II. ✅ **the whole floor is taken** -- `catch`, then `accept`/`udp-recv`,
    then the process half (`wait`, `hark`, `herald`; `tether` never blocked), and
    ✅ **`connect` last, 2026-08-01** -- split into a numeric door that parks on its
-   handshake (rung 7, which it is what asked for) and a name half that leaves C
-   for love. **NOTHING IN THE TREE BLOCKS BUT THE SCHEDULER AND THE FINALIZER.**
+   handshake (rung 7, which it is what asked for) and a name half that left C for
+   love entirely (`lib/dns.l`). **NOTHING IN THE TREE BLOCKS BUT THE SCHEDULER AND
+   THE FINALIZER.**
 
 ~~`empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all

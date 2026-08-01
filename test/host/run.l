@@ -100,3 +100,13 @@
    _ (assert (rc = 0)))
 
 (puts "run nifpark: ok\n")
+
+; --- the resolver: a lookup parks, and a deadline is a park too -----------------
+; test/host/dns.l stands up a fake nameserver as a love task, so nothing leaves
+; the loopback. driven from HERE for the usual reason: a resolver whose deadline
+; stops working does not redden, it HANGS -- there is no answer coming and nothing
+; to wake the caller.
+(: rc (cap (hark `("sh" "-c" "timeout 20 out/host/love test/host/dns.l")))
+   _ (assert (rc = 0)))
+
+(puts "run dns: ok\n")

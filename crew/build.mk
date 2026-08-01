@@ -66,7 +66,7 @@ out/host$(hsuf)/mooncc: out/host$(hsuf)/mooncc.image
 	@chmod 755 $@
 # seed: the patch-set vcs (crew/seed/seed.l over the kore text+diff floor;
 # doc/seed.md). its own catted shebang script, the mooncc precedent.
-seedfiles = crew/kore/text.l crew/kore/diff.l crew/seed/merge.l crew/seed/http.l crew/seed/seed.l
+seedfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/seed/merge.l crew/seed/http.l crew/seed/seed.l
 out/host$(hsuf)/seed: $(seedfiles)
 	@echo AI	$(abspath $@)
 	@mkdir -p $(dir $@)
@@ -120,7 +120,7 @@ $(ho)/kore.image: $(ho)/.kore-cat.l $m
 distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
             crew/vi/core.l crew/vi/vi.l \
-            crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
+            crew/kore/diff.l lib/dns.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
