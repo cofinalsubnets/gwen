@@ -139,6 +139,12 @@ struct ai {
                         // GC-stable (code rides the copy), closing trichotomy.
            next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
  intptr_t next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
+ int next_wait_events;  // WHAT it suspended for: ai_wait_in (the default, restored on
+                        // every consumption) or ai_wait_out, which only connect's
+                        // handshake park sets. Rides beside the fd into the same
+                        // snapshot slot. ⚠ it is a FIELD and not read off the parked
+                        // op the way the port is, because the op that wants OUT lives
+                        // in a frontend and love.c may not name it.
  ai_word symbols;        // the WEAK intern map (string -> the canonical atom; see struct ai_mint
                         // above): value-keyed by string content; a collection clones it untraced and
                         // sweeps it after the cheney fixpoint, so a dead atom's entry drops --
@@ -531,15 +537,26 @@ extern const struct ai_mint ai_mint_zero;
 // ignores the rest.
 struct ai_wait_fd { int fd; short events, revents; };
 
-// Wait until one of `n` parked fds is readable or `ticks` elapse (0 = no
-// deadline). ⚠ n IS THE NUMBER OF PARKED TASKS AND HAS NO CEILING. The block
-// rides the runtime's own uncommitted heap gap, sized to the count -- the door
-// hark marshals argv through, and the reason neither the scheduler nor a
-// frontend needs a fixed array, an allocator or a global. There used to be an
-// `ai_wait_fds_max` of 8 and every fd past the eighth was dropped in silence,
-// which is a hang the moment a ninth task parks with no timer pending.
+// THE TWO DIRECTIONS A PARK CAN WANT, in poll(2)'s own bit values -- host/main.c
+// static-asserts them against POLLIN/POLLOUT the way it does the struct above. A
+// read park is every one there was until `connect` learned to park on its
+// handshake; a write park is that one. ⚠ THEY CANNOT BE OR'd TOGETHER AND ASKED
+// AS ONE: a socket is almost always writable, so a reader polled for both would
+// wake on every pass and spin.
+#define ai_wait_in  1
+#define ai_wait_out 4
+
+// Wait until one of `n` parked fds is ready for what its `events` asks, or
+// `ticks` elapse (0 = no deadline). ⚠ n IS THE NUMBER OF PARKED TASKS AND HAS NO
+// CEILING. The block rides the runtime's own uncommitted heap gap, sized to the
+// count -- the door hark marshals argv through, and the reason neither the
+// scheduler nor a frontend needs a fixed array, an allocator or a global. There
+// used to be an `ai_wait_fds_max` of 8 and every fd past the eighth was dropped in
+// silence, which is a hang the moment a ninth task parks with no timer pending.
+// ⚠ THE SCHEDULER FILLS `events`, not the frontend: it used to blanket-set POLLIN
+// over the block, which was true of every park there was and is not now.
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks);
-bool ai_ready(int fd), ai_strp(ai_word);
+bool ai_ready(int fd, int events), ai_strp(ai_word);
 struct ai
  *ai_please(struct ai*, uintptr_t),
  *ai_push(struct ai*, uintptr_t, ...),

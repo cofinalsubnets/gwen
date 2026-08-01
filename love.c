@@ -975,15 +975,17 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->major_pool = g->rem ? g->alloc(g, NULL, 2 * g->major_len * sizeof(word)) : NULL;
  if (!g->major_pool) { if (g->rem) g->alloc(g, g->rem, 0); return encode(g, ai_status_scare); }
  g->major_base = g->major_hp = g->major_pool, g->rem_cap = AI_REM_CAP, g->budget = ai_budget;
+ g->next_wait_events = ai_wait_in;
  // book + macro maps (lookup-lambdas) then the main task thread.
- if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 6))) {
-  union u *M = bump(g, 6);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
+ if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 7))) {
+  union u *M = bump(g, 7);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
   M[0].m = M;
   M[1].x = nil;   // sentinel; replaced on first yield
   M[2].x = nil;   // main pid
   M[3].x = nil;   // wake_at: nil means "always runnable"
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
-  g->tasks = tagthread(M, 5);
+  M[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
+  g->tasks = tagthread(M, 6);
   // book[nil] = macro (the macro table -- no separate field). Both are on the
   // stack; push the nil key so (sp2,sp1,sp0)=(book,macro,nil) for ai_mapput.
   g = ai_push(g, 1, nil);
@@ -2756,20 +2758,21 @@ lvm(lvm_callk) {
  return Ap(lvm_ap, g); }
 
 // lvm_yield_sw_mono can't call ai_wait_fds directly with a stack record
-static ai_noinline void wait_one(int fd, int n, uintptr_t ms) {
-  struct ai_wait_fd w = { .fd = fd };
-  ai_wait_fds(&w, n, ms); }
+static ai_noinline void wait_one(int fd, int events, uintptr_t ms) {
+  struct ai_wait_fd w = { .fd = fd, .events = (short) events };
+  ai_wait_fds(&w, 1, ms); }
 
 // monotask fast path
 static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
- int my_wait_fd = g->next_wait_fd;
+ int my_wait_fd = g->next_wait_fd, my_events = g->next_wait_events;
  g->next_wake_at = 0;
  g->next_wait_fd = -1;
+ g->next_wait_events = ai_wait_in;
  g->yield_ctr = 0;
  if (my_wake) for (uintptr_t now; my_wake > (now = ai_clock());)
-  my_wait_fd >= 0 ? wait_one(my_wait_fd, 1, my_wake - now) : ai_sleep(my_wake - now);
+  my_wait_fd >= 0 ? wait_one(my_wait_fd, my_events, my_wake - now) : ai_sleep(my_wake - now);
  else if (my_wait_fd >= 0)
-  while (!ai_ready(my_wait_fd)) wait_one(my_wait_fd, 1, 0);
+  while (!ai_ready(my_wait_fd, my_events)) wait_one(my_wait_fd, my_events, 0);
  return Continue(); }
 
 // Is the task named by `pid` still live? ⚠ THE RING HEAD IS THE RUNNING TASK and
@@ -2788,7 +2791,7 @@ static ai_inline int task_live(union u *head, intptr_t pid, int me_live) {
 // it is waiting for. The port is not stored anywhere and does not need to be: a
 // reader parks with Ip unadvanced, so its port is the top of its saved stack,
 // exactly as a catcher's pid is one line below.
-// ⚠ THE AP GUARD IS WHAT MAKES READING n[5] LEGAL, not decoration. These are the
+// ⚠ THE AP GUARD IS WHAT MAKES READING n[6] LEGAL, not decoration. These are the
 // only two ops that park with a port at Sp[0]; every other fd parker holds
 // something else there (hark's drain holds its capture string), and answers false
 // before dereferencing anything, falling through to the fd as before.
@@ -2809,9 +2812,10 @@ static ai_inline bool wait_buffered(struct ai*, lvm_t*, word, int);
 static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live) {
  for (union u *n = head->m; n != head; n = n->m)
   if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
-   if (n[1].m->ap == lvm_wait && task_live(head, getcharm(n[5].x), me_live)) continue;
+   if (n[1].m->ap == lvm_wait && task_live(head, getcharm(n[6].x), me_live)) continue;
    int wf = (int) getcharm(n[4].x);
-   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[5].x, wf) || ai_ready(wf)) return n; }
+   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)
+              || ai_ready(wf, (int) getcharm(n[5].x))) return n; }
  return NULL; }
 
 // ⚠ THE FD SET IS SIZED BY THE COUNT, NEVER BY A CONSTANT. this was an
@@ -2823,7 +2827,7 @@ static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t n
 // anything allocates again), so counting the ring first and sizing the block
 // second retires the cap by construction. ⚠ CALLED WITH g PACKED -- the gap is
 // [hp, sp) and both are stale otherwise.
-static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int me_live) {
+static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live) {
  uintptr_t min_wake = my_wake;
  int nfds = my_wait_fd >= 0;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
@@ -2841,14 +2845,14 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
   if (avail(g) < b2w((uintptr_t) nfds * sizeof *fds)) ai_wait_fds(NULL, 0, ticks ? ticks : 1);
   else {
    int k = 0;
-   if (my_wait_fd >= 0) fds[k++].fd = my_wait_fd;
+   if (my_wait_fd >= 0) fds[k].fd = my_wait_fd, fds[k++].events = (short) my_events;
    for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
     if (n[1].m->ap != lvm_task_exit) {
      int wf = (int) getcharm(n[4].x);
-     if (wf >= 0) fds[k++].fd = wf; }
+     if (wf >= 0) fds[k].fd = wf, fds[k++].events = (short) getcharm(n[5].x); }
    ai_wait_fds(fds, k, ticks); }
   now = ai_clock(); }
- if (my_wait_fd >= 0 && ai_ready(my_wait_fd)) return NULL;
+ if (my_wait_fd >= 0 && ai_ready(my_wait_fd, my_events)) return NULL;
  return find_runnable(g, g->tasks, now, me_live); }
 
 lvm(lvm_yield_sw) {
@@ -2858,7 +2862,7 @@ lvm(lvm_yield_sw) {
  int me_live = Ip->ap != lvm_task_exit;
  union u *next = find_runnable(g, g->tasks, ai_clock(), me_live);
  uintptr_t my_wake = g->next_wake_at;
- int my_wait_fd = g->next_wait_fd;
+ int my_wait_fd = g->next_wait_fd, my_events = g->next_wait_events;
  if (!next) {
   // A *fairness* yield (this task is still runnable: no wake deadline, no I/O
   // wait) with no runnable peer -- just keep running this task. Crucially do NOT
@@ -2871,26 +2875,28 @@ lvm(lvm_yield_sw) {
   // at the catch, so "keep running it" means run the catch again, and again.
   if (!my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait) { g->yield_ctr = 0; return Continue(); }
   Pack(g);                     // the wait lays its fd block in the [hp, sp) gap
-  next = yield_sw_wait(g, my_wake, my_wait_fd, me_live);
+  next = yield_sw_wait(g, my_wake, my_wait_fd, my_events, me_live);
   Unpack(g);                   // nothing allocated, so these come back unchanged
   if (!next) {
    g->next_wake_at = 0;
    g->next_wait_fd = -1;
+   g->next_wait_events = ai_wait_in;
    if (g->yield_ctr >= yield_interval) g->yield_ctr = 0;
    return Continue(); } }
  word my_height = topof(g) - Sp;
- union u *next_stack = next + 5,
+ union u *next_stack = next + 6,
        *end = (union u*) ttag(g, next_stack);
  uintptr_t restore_h = end - next_stack,
-           need = my_height + restore_h + 6;
+           need = my_height + restore_h + 7;
  if (Sp < Hp + need) {
   Pack(g);
   if (!ai_ok(g = ai_please(ai_push(g, 1, next), need))) return ghelp(g);
   next = cell(pop1(g));
   Unpack(g);
-  next_stack = next + 5; }   // recompute: next was forwarded by gc
+  next_stack = next + 6; }   // recompute: next was forwarded by gc
  g->next_wake_at = 0;
  g->next_wait_fd = -1;
+ g->next_wait_events = ai_wait_in;
  union u *prev = next;
  while (prev->m != g->tasks) prev = prev->m;
  union u *N = (union u*) Hp;
@@ -2900,8 +2906,9 @@ lvm(lvm_yield_sw) {
  N[2].x = g->tasks[2].x;
  N[3].x = putcharm((intptr_t) my_wake);
  N[4].x = putcharm(my_wait_fd);
- memcpy(N + 5, Sp, my_height * sizeof(word));
- prev->m = tagthread(N, 5 + my_height);
+ N[5].x = putcharm(my_events);
+ memcpy(N + 6, Sp, my_height * sizeof(word));
+ prev->m = tagthread(N, 6 + my_height);
  // Pack FIRST: ai_young reads g->hp, and the live Hp runs ahead of the last Pack --
  // against a stale g->hp the fresh node reads as OLD, the barrier drops the edge, and
  // the next minor eats the ring (berth+ink froze in seconds on exactly this).
@@ -2917,10 +2924,10 @@ lvm(lvm_yield_nif) { return Ip++, Ap(lvm_yield_sw, g); }
 lvm(lvm_task_exit) { return Ap(lvm_yield_sw, g); }
 static union u const spawn_body[] = { {lvm_ap}, {.ap = lvm_task_exit} };
 lvm(lvm_spawn) {
- Have(8);
- // New task node N: [next, saved_ip=spawn_body, pid, wake_at=0, wait_io=0, stack[0..1]=x,fn, tag]
+ Have(9);
+ // New task node N: [next, saved_ip=spawn_body, pid, wake_at, wait_fd, wait_events, stack[0..1]=x,fn, tag]
  union u *N = (union u*) Hp;
- Hp += 8;
+ Hp += 9;
  word fn = Sp[0], x = Sp[1];
  uintptr_t pid = ++g->next_serial;   // a pid is a fresh identity: drawn from the mint stream
  N[0].m = g->tasks->m;
@@ -2928,9 +2935,10 @@ lvm(lvm_spawn) {
  N[2].x = Sp[1] = putcharm(pid);
  N[3].x = nil;         // wake_at: sentinel for "always runnable"
  N[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O
- N[5].x = x;
- N[6].x = fn;
- g->tasks->m = tagthread(N, 7);
+ N[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
+ N[6].x = x;
+ N[7].x = fn;
+ g->tasks->m = tagthread(N, 8);
  Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
  gen_wb(g, (word) g->tasks, (word) g->tasks->m);   // task ring: an old node now links to the fresh (young) spawned task
  return Sp++, Ip++, Continue(); }
@@ -2941,8 +2949,8 @@ lvm(lvm_wait) {
  for (union u *node = g->tasks->m; node != g->tasks; node = node->m) {
   if (getcharm(node[2].x) != target) continue;
   if (node[1].m->ap == lvm_task_exit) {
-   // dormant: dormant task's stack is just [retval] at node[5]
-   ret = node[5].x;
+   // dormant: dormant task's stack is just [retval] at node[6]
+   ret = node[6].x;
    union u *prev = node;
    while (prev->m != node) prev = prev->m;
    prev->m = node->m;
@@ -4271,7 +4279,7 @@ lvm(lvm_await) {
   // than at the wake: a port holding bytes is readable however quiet its fd is
   // (bio_of's park law), so awaiting one that another task's gulp already filled
   // parked on a device that has nothing left to say.
-  if (fd >= 0 && !bio_rpending(bio_of(g, (struct ai_io*) Sp[0])) && !ai_ready(fd)) {
+  if (fd >= 0 && !bio_rpending(bio_of(g, (struct ai_io*) Sp[0])) && !ai_ready(fd, ai_wait_in)) {
    g->next_wait_fd = fd;
    return Ap(lvm_yield_sw, g); } }
  return Ip++, Continue(); }
@@ -4852,7 +4860,7 @@ lvm(lvm_apof) {
 // Default fd-keyed waits. Frontends override; defaults are conservative
 // (all fds always-ready; multi-source wait collapses to plain sleep) so
 // frontends that don't multitask (lcat, pd) link without providing impls.
-__attribute__((weak)) bool ai_ready(int fd) { (void) fd; return true; }
+__attribute__((weak)) bool ai_ready(int fd, int events) { (void) fd, (void) events; return true; }
 __attribute__((weak)) void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
   (void) fds; (void) n; ai_sleep(ticks); }
 
@@ -4876,7 +4884,7 @@ __attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {
 lvm(lvm_key) {
  struct ai_io *i = iop(Sp[0]) ? (struct ai_io*) Sp[0] : &ai_stdin;
  Sp[0] = (getcharm(i->ungetc_buf) != EOF || bio_rpending(bio_of(g, i))
-          || ai_ready(getcharm(i->fd))) ? putcharm(1) : nil;
+          || ai_ready(getcharm(i->fd), ai_wait_in)) ? putcharm(1) : nil;
  Ip += 1;
  return Continue(); }
 

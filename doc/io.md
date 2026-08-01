@@ -1438,8 +1438,10 @@ tty in canonical mode DISCARDS input past its queue rather than blocking, so
 **how a task parks, in three lines**: set `g->next_wake_at = ai_clock() + 1`,
 leave `Ip` unadvanced, `return Ap(lvm_yield_sw, g)`. the op re-runs on
 reschedule. it is a POLL -- one `write(2)` per millisecond per stalled port --
-and it is labelled one; there is nothing readable to wait on, because
-write-direction readiness is rung 7 and nothing has asked for it yet.
+and it is labelled one; there is nothing readable to wait on. (write-direction
+readiness -- rung 7 -- exists now, but a stalled WRITE RUN is not a thing poll can
+answer for: the device took less than we offered, and POLLOUT would say "go" again
+at once. `connect` is what asked for rung 7, and it is a different question.)
 
 three ops park, and the rule that picks them is **the op must be re-runnable at
 the point it parks**:
@@ -1533,6 +1535,13 @@ what made it fit: **`struct ai_wait_fd` IS `poll(2)`'s `struct pollfd`**,
 static-asserted field by field in host/main.c. the host fills in the event mask
 and polls the scheduler's block directly, so there is nothing to copy and no
 second array to size.
+
+⚠ **the `revents` half of that block is filled and then discarded**, and
+`find_runnable` re-asks the kernel one fd at a time instead -- one `poll(2)` per
+parked task, twice per wait. retiring that is doc/sched.md rung 1, and it decides
+whether filling `revents` stays optional (love.h:530 permits a frontend to ignore
+it; port/inle/kmain.c does) or becomes the contract. that is the one place the io
+arc and the scheduler arc touch.
 
 the law is test/host/parked.l, driven from test/host/run.l **under a timeout,
 because its regression is a HANG** and a wedged gate is worse than a red one.
@@ -1828,7 +1837,7 @@ purpose, and this is the roster, read off the source rather than off memory:
 | `catch` | love.c, `lvm_wait` | ✅ **taken** -- it never blocked; it never idled |
 | `tether` | host/posix.c | ⚠ **was never on this floor.** It hands back `(pid . master-port)` and does not wait for the child at all; its two `waitpid(pid, &st, 0)` calls are teardown reaps of a child that has already `_exit`ed or been SIGKILLed. Read off the source this time. |
 | `hark` / `herald` (was `run`/`runt`) | host/main.c | ✅ **parks** on the child's stdout pipe -- 2026-08-01, and it took a TWO-AP nif body to do it (below). The reap behind it is a 1 ms poll, like `wait`'s. ⚠ `make waits` never could see either the old block or the new park (a raw read, not one of the four hooks it names). |
-| `connect` | host/sock.c | a PROJECT, not a rung -- `getaddrinfo` below |
+| `connect` | host/sock.c | ✅ **parks** on its handshake -- 2026-08-01. `getaddrinfo` left the file entirely; the name half moved into love (below) |
 
 ⚠ **`catch` was a different bug from the other six and was not lumped in.** it
 already yielded; what it did was clear `next_wake_at` and `next_wait_fd` first, so
@@ -1840,9 +1849,72 @@ node rather than stored. the section above has it.
 
 ⚠ **`getaddrinfo` has no nonblocking form at all** -- it is not a syscall with an
 `O_NONBLOCK` to set; it reads config, may speak DNS, and there is no portable
-async door. so `connect` cannot be fixed the way the others can: it wants a
-thread, a subprocess, or a resolver of our own. **that one is a project, not a
-rung**, and it is the reason this list is a sibling arc rather than a seventh rung.
+async door. it wanted a thread, a subprocess, or a resolver of our own, and gwen
+chose the third. **the answer was to SPLIT `connect` rather than fix it**: the
+handshake is an ordinary write-direction park (rung 7, below), and the name half
+left C for love, where a lookup can park like anything else.
+
+### `connect` splits, and rung 7 arrives -- ✅ 2026-08-01
+
+**`connect` takes a dotted quad and nothing else.** `getaddrinfo` is gone from
+host/sock.c, so nothing in that file waits any more. ⚠ **and the block it removed
+was bigger than the host's**: `out/host/love` is mooncc-built, so love resolved
+through **nolibc's own resolver** (crew/moon/lib/nolibc.c) -- /etc/hosts, then a
+UDP A query, 2 tries x 2.5 s per nameserver across up to 3 of them. Fifteen
+seconds of dead vm, on the default build, and no one had noticed because a
+resolver is not one of the four hooks `make waits` names.
+
+**the handshake is a TWO-AP nif body, for hark's reason**: `O_NONBLOCK`, expect
+`EINPROGRESS`, and the op is not re-runnable at the park because it has already
+made a socket and sent a SYN. So `{{lvm_connect}, {lvm_connectw}, {lvm_ret0}}`,
+with the fd riding the stack between them as a charm.
+
+⚠ **readiness is the question here, not the pre-guard rung 2 deleted.** The read
+path lost its `ai_ready` ask because the device ANSWERS -- a byte, an end, or
+would-block. A connecting socket answers nothing: `SO_ERROR` reads 0 on one that
+is merely still trying, so POLLOUT first and the error second is the one order
+that tells connected from refused.
+
+**rung 7, and the correction that shaped it.** The plan said the direction would
+be free, because `find_runnable` already holds each parked task's saved ap and
+could read the direction off it the way `wait_buffered` reads the port. **It
+cannot: `lvm_connectw` lives in host/sock.c and love.c may not name a frontend
+nif's ap.** `wait_buffered` got away with it only because `lvm_fgetc` and
+`lvm_await` are love.c's own. So the direction is carried, exactly as rung 7
+first said: `g->next_wait_events` beside `g->next_wait_fd`, and the task node's
+header grows from five words to six. Neither is image-serialized (`g->tasks` and
+both staging fields sit outside `v0..end`), so there is no encver bump. ⚠ the
+node growth moves every saved-stack read from `n[5]` to `n[6]` -- the catch
+clause's pid, `wait_buffered`'s port, and `lvm_wait`'s dormant return value,
+which is the one that reddened the corpus when it was missed.
+
+`ai_ready` grows an `events` argument across all seven frontends plus love.c's
+weak default; the six freestanding ones answer *true* for the write direction,
+because a device that can take a byte can always take one. love.h names
+`ai_wait_in`/`ai_wait_out` in poll(2)'s own bit values, static-asserted on the
+host beside the `struct pollfd` assert that was already there. ⚠ and the
+scheduler fills `events` per fd now: `ai_wait_fds` used to blanket-set `POLLIN`
+over the block, which was true of every park there was and is not now. **they
+cannot be OR'd and asked as one** -- a socket is almost always writable, so a
+reader polled for both would wake on every pass and spin.
+
+**the law is test/host/nifpark.l 5, and the instrument took the most thought.**
+It needs a connect that does not complete at once, offline. ⚠ **an unroutable
+address is no good**: a machine with no route to it fails INSTANTLY with
+`ENETUNREACH` and the law passes straight over the bug. What works is a FULL
+ACCEPT QUEUE -- love's `listen` asks for a backlog of 1, so the kernel queues two
+and drops the third SYN, and a dropped SYN is retried for about two minutes.
+Closing the listener resets the queue, so the stalled handshake fails and `catch`
+reaps a plain nil: no `freeze`, so no socket is left behind by a task unspliced
+mid-park. Control-verified by taking the `O_NONBLOCK` back off and watching the
+file wedge.
+
+**one libc gap, filled**: nolibc had `setsockopt` and not `getsockopt`, though
+sys/socket.h had always declared it. Two syscall numbers and a wrapper. (It also
+has no `EALREADY`, which the first draft used and does not need -- this is the
+first `connect` on a fresh socket, so "a previous one is still going" cannot be
+the answer. mooncc named the undeclared identifier and the function, which is
+exactly what that diagnostic was rebuilt for.)
 
 ### what the four parks cost
 
@@ -2205,8 +2277,10 @@ choosing park-or-block. so:
    (rungs 3-5, then backpressure). **`select`**: still when something asks, and
    after 1 nothing does. what IS next is the nif floor -- its own section in
    part II. ✅ **the whole floor is taken** -- `catch`, then `accept`/`udp-recv`,
-   then the process half (`wait`, `hark`, `herald`; `tether` never blocked) --
-   and only `connect` is left, because `getaddrinfo` makes it a project.
+   then the process half (`wait`, `hark`, `herald`; `tether` never blocked), and
+   ✅ **`connect` last, 2026-08-01** -- split into a numeric door that parks on its
+   handshake (rung 7, which it is what asked for) and a name half that leaves C
+   for love. **NOTHING IN THE TREE BLOCKS BUT THE SCHEDULER AND THE FINALIZER.**
 
 ~~`empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all

@@ -46,11 +46,11 @@ static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
 
 void ai_sleep(uintptr_t ms) { poll_wait(NULL, 0, ms); }
 
-static ai_noinline int poll_wrap(int fd) {
-  struct pollfd p = { .fd = fd, .events = POLLIN };
+static ai_noinline int poll_wrap(int fd, int events) {
+  struct pollfd p = { .fd = fd, .events = (short) events };
   return poll(&p, 1, 0); }
 
-bool ai_ready(int fd) { return fd < 0 || poll_wrap(fd) > 0; }
+bool ai_ready(int fd, int events) { return fd < 0 || poll_wrap(fd, events) > 0; }
 
 // love.h lays the block out as poll(2)'s own struct, so there is nothing to copy
 // and no vector of ours to size -- which is the whole reason the cap could go.
@@ -62,12 +62,16 @@ _Static_assert(sizeof(struct ai_wait_fd) == sizeof(struct pollfd)
             && offsetof(struct ai_wait_fd, fd) == offsetof(struct pollfd, fd)
             && offsetof(struct ai_wait_fd, events) == offsetof(struct pollfd, events),
                "struct ai_wait_fd must be this platform's struct pollfd");
+// ... and the two directions must be poll's own bits, for the same reason.
+_Static_assert(ai_wait_in == POLLIN && ai_wait_out == POLLOUT,
+               "ai_wait_in/out must be this platform's POLLIN/POLLOUT");
 
+// ⚠ THE EVENTS COME IN FILLED. This used to blanket-set POLLIN over the block,
+// which was true of every park there was until connect learned to wait on its
+// handshake; the scheduler knows each task's direction and sets it per fd now.
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
-  struct pollfd *p = (struct pollfd*) fds;
-  for (int i = 0; i < n; i++) p[i].events = POLLIN;
-  poll_wait(p, (nfds_t) n, ms); }
+  poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
 
 // ⚠ SIGPIPE IS IGNORED (main), AND THE CONSOLE RE-RAISES IT BY HAND. a runtime
 // that ANSWERS "the device is gone" cannot be killed before it reads the answer

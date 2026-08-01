@@ -270,8 +270,11 @@ void ai_fd_close(int fd) {
   struct k_source *s = k_source(fd);
   if (s && s->close) s->close(fd); }
 
-bool ai_ready(int fd) {
+// the kernel has no write-direction probe: a k_source that can take a byte can
+// always take one, so an OUT park is ready by definition.
+bool ai_ready(int fd, int events) {
   if (fd < 0) return true;
+  if (events != ai_wait_in) return true;
   struct k_source *s = k_source(fd);
   return s && s->ready && s->ready(fd); }
 

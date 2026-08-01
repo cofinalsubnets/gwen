@@ -113,6 +113,7 @@ extern int main(int, char**);
 #define NR_connect        203
 #define NR_sendto         206
 #define NR_recvfrom       207
+#define NR_getsockopt     209
 #define NR_setsockopt     208
 #define NR_shutdown       210
 #define NR_sendmsg        211
@@ -153,6 +154,7 @@ extern int main(int, char**);
 #define NR_shutdown        48
 #define NR_bind            49
 #define NR_listen          50
+#define NR_getsockopt      55
 #define NR_setsockopt      54
 #define NR_clone           56
 #define NR_execve          59
@@ -1508,6 +1510,11 @@ int bind(int fd, struct sockaddr const *a, socklen_t n) { return (int) er(sc3(NR
 int listen(int fd, int bl) { return (int) er(sc2(NR_listen, fd, bl)); }
 int setsockopt(int fd, int lv, int op, void const *v, socklen_t n) {
   return (int) er(sc5(NR_setsockopt, fd, lv, op, (long) v, n)); }
+/* its sibling, added for connect's handshake park: SO_ERROR after POLLOUT is the
+   one way to tell a completed connect from a refused one, and love has no other
+   door to it. sys/socket.h has always declared it. */
+int getsockopt(int fd, int lv, int op, void *v, socklen_t *n) {
+  return (int) er(sc5(NR_getsockopt, fd, lv, op, (long) v, (long) n)); }
 
 /* ---- strtol / strtod: the reader's number path. the bodies keep libc/str.c's
  * exact semantics, SATURATION INCLUDED (the kernel corpus runs them; the naive

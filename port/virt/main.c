@@ -63,7 +63,7 @@ void ai_sleep(uintptr_t ms) {
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy. fd 0 is the honest poll;
 // others nominal.
-bool ai_ready(int fd) { return fd ? 1 : uart_rx_ready(); }
+bool ai_ready(int fd, int events) { return fd || events != ai_wait_in ? 1 : uart_rx_ready(); }
 
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }

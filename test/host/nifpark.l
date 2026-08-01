@@ -5,12 +5,13 @@
 ;
 ;   out/host/love test/host/nifpark.l      ; green dots = pass, exits 1 on fail
 ;
-; ⚠ DRIVEN FROM test/host/run.l UNDER A TIMEOUT, because two of the three
-; regressions are HANGS rather than red asserts: a blocking `accept` with an empty
-; backlog waits for a connection that only the wedged vm could still make. A wedged
-; gate is worse than a red one, so the timeout is the instrument. (Law 3 does redden
-; on its own -- a blocking `wait` merely finishes late. It rides here anyway, because
-; the three laws are one invariant.)
+; ⚠ DRIVEN FROM test/host/run.l UNDER A TIMEOUT, because most of these regressions
+; are HANGS rather than red asserts: a blocking `accept` with an empty backlog waits
+; for a connection that only the wedged vm could still make, and a blocking
+; `connect` on a dropped SYN waits about two minutes. A wedged gate is worse than a
+; red one, so the timeout is the instrument. (Law 3 does redden on its own -- a
+; blocking `wait` merely finishes late. It rides here anyway, because the laws are
+; one invariant.)
 ;
 ; the shape of every law: a ticker task that ONLY advances if the task under test
 ; gave up its turn. Its count is the gauge, exactly as (naps ()) is in test/front.
@@ -86,5 +87,38 @@
    _ (assert (0 < (peep n 0 0))         ; 0 with the blocking drain back in
              ((cap r) = 0)
              ((cup r) = "one\ntwo\n")))  ; ... and the capture is still whole
+
+; --- law 5: connect PARKS on the handshake ------------------------------------
+; the WRITE-direction park, and the only one there is -- doc/io.md held it back as
+; rung 7 "until something asks", and connect is what asked. a socket that has sent
+; its SYN is not readable and will not be; POLLOUT is the question, which is why
+; the scheduler carries a direction per parked task at all.
+;
+; ⚠ THE INSTRUMENT IS A FULL ACCEPT QUEUE, and nothing else offline works: an
+; unroutable address is no good, because a machine with no route to it fails
+; INSTANTLY with ENETUNREACH and the law would pass straight over the bug. love's
+; `listen` asks for a backlog of 1, so the kernel queues two and drops the third
+; SYN -- and a dropped SYN is retried for about two minutes, which is a hang.
+;
+; closing the LISTENER is what ends it: the queued connections reset, the stalled
+; client's handshake fails, and `catch` reaps a plain nil. no freeze, so no socket
+; is left behind by a task unspliced mid-park.
+(: port 7397
+   l (listen port)
+   n (tablet 0)
+   a (connect "127.0.0.1" port)         ; these two fill the accept queue
+   b (connect "127.0.0.1" port)
+   t (ticker n)
+   s (twirl (\ _ (connect "127.0.0.1" port)) ())   ; the third: SYN dropped, stalls
+   _ (rest 50)
+   k (peep n 0 0)
+   _ (close l)                          ; ... which resets it, so the task ends
+   r (catch s)
+   _ (freeze t)
+   _ (close a)
+   _ (close b)
+   _ (assert (0 < k)                    ; 0 with a blocking connect back in
+             (nil? r)                   ; the reset handshake is a plain nil
+             (lit? a)))                 ; ... and a connect that DID land is a port
 
 (: _ (say out "nifpark: ok") (putc 10))

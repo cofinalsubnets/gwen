@@ -70,7 +70,7 @@ void ai_sleep(uintptr_t ms) {
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze, walled here
 // and on teensy silicon alike). fd 0 is the honest poll; others nominal.
-bool ai_ready(int fd) { return fd ? 1 : uart_rx_ready(); }
+bool ai_ready(int fd, int events) { return fd || events != ai_wait_in ? 1 : uart_rx_ready(); }
 
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }

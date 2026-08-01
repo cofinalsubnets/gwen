@@ -8,12 +8,13 @@
 // existing fgetc/fputc machinery (the fgetc read path even yields
 // cooperatively on a not-ready fd), so a socket nif only has to make the fd.
 //
-// accept and udp-recv PARK on their fd instead of blocking (love.h's nif park:
-// leave Ip unadvanced and yield, so the op re-runs on reschedule). connect does
-// NOT, and cannot be made to the same way: getaddrinfo has no nonblocking form --
-// not a syscall with an O_NONBLOCK to set, but a config read that may speak DNS --
-// so it wants a thread, a subprocess or a resolver of our own. That is a project,
-// and it is the one blocking call left in this file. doc/io.md, the nif floor.
+// EVERY nif here PARKS rather than blocking (love.h's nif park: leave Ip
+// unadvanced and yield, so the op re-runs on reschedule) -- accept and udp-recv
+// on their fd, and connect on its HANDSHAKE, which is the write-direction wait
+// doc/io.md held back as rung 7 "until something asks". NOTHING IN THIS FILE
+// WAITS. getaddrinfo is what used to make connect the exception, and it is gone:
+// `connect` takes a dotted quad, and a NAME resolves one layer up in love, where
+// the lookup itself can park. doc/io.md, the nif floor.
 #define _GNU_SOURCE     // SOCK_CLOEXEC, the SCM_RIGHTS glue
 #include "love.h"
 #include <unistd.h>
@@ -52,45 +53,93 @@ static struct ai_str *cask_bytes(ai_word x) {
  if (((union u*) x)->ap == lvm_buf) return ((struct ai_buf*) x)->str;
  return ai_strp(x) ? (struct ai_str*) x : 0; }
 
-// (connect host port) -- TCP client. Resolve `host` (a string: name or dotted
-// quad) through getaddrinfo against the decimal `port` (a fixnum 0..65535),
-// socket()+connect() the first address that takes, and wrap the fd as a port.
-// Any failure (bad args, DNS miss, refused, all addresses tried) -> nil.
+// A DOTTED QUAD and nothing else -> the address in host order, or -1. This is
+// the whole of what `connect` accepts now: getaddrinfo left this file with the
+// nif floor's last rung, because it is not a syscall with an O_NONBLOCK to set
+// but a config read that may speak DNS, and there is no nonblocking form of it.
+// Names resolve one layer UP, in love, where a lookup can park -- lib/dns.l's
+// `dial`. (nolibc's own resolver, crew/moon/lib/nolibc.c, is what this used to
+// reach on a mooncc-built binary: /etc/hosts then a UDP A query, up to 2 tries x
+// 2.5 s per nameserver across 3 of them. Fifteen seconds of dead vm, on the
+// default build.)
+static int quad(struct ai_str *hv, uint32_t *out) {
+ if (hv->len < 7 || hv->len > 15) return -1;      // "0.0.0.0" .. "255.255.255.255"
+ char s[16];
+ memcpy(s, hv->bytes, hv->len);
+ s[hv->len] = 0;
+ uint32_t a = 0;
+ char const *p = s;
+ for (int i = 0; i < 4; i++) {
+  uint32_t b = 0, any = 0;
+  while (*p >= '0' && *p <= '9') {
+   b = b * 10 + (uint32_t) (*p++ - '0'), any = 1;
+   if (b > 255) return -1; }
+  if (!any) return -1;
+  a = (a << 8) | b;
+  if (i < 3 && *p++ != '.') return -1; }
+ if (*p) return -1;
+ return *out = a, 0; }
+
+// (connect quad port) -- TCP client, as a TWO-AP NIF BODY for hark's reason: the
+// handshake has to park, and the op is not re-runnable at the park because it has
+// already made a socket and sent a SYN. So the first ap makes the socket and
+// starts the handshake, the second waits for it, and the fd rides the stack
+// between them (a charm -- the GC walks that slot as an ordinary word).
+// Any failure -- bad args, not a quad, refused, unreachable -> nil, unchanged.
 ai_noinline static int call_connect(struct ai_str *hv, int port) {
- if (hv->len >= 256 || port < 0 || port > 65535) return -1;
- char host[256], serv[8];
- memcpy(host, hv->bytes, hv->len);
- host[hv->len] = 0;
- snprintf(serv, sizeof serv, "%d", port);
- struct addrinfo hints = {0}, *res, *rp;
- hints.ai_family = AF_UNSPEC;
- hints.ai_socktype = SOCK_STREAM;
- if (getaddrinfo(host, serv, &hints, &res)) return -1;
- int fd = -1;
- for (rp = res; rp; rp = rp->ai_next) {
-  fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-  if (fd < 0) continue;
-  if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
-  close(fd);
-  fd = -1; }
- freeaddrinfo(res);
+ uint32_t a;
+ if (port < 0 || port > 65535 || quad(hv, &a) < 0) return -1;
+ int fd = socket(AF_INET, SOCK_STREAM, 0);
+ if (fd < 0) return -1;
  cloexec(fd);
- return fd; }
+ // ⚠ AND IT STAYS NONBLOCKING. The handshake needs it, and afterwards love wraps
+ // the fd as a heap port whose reads and writes toggle the flag per call anyway.
+ int fl = fcntl(fd, F_GETFL);
+ if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+ struct sockaddr_in sa = {0};
+ sa.sin_family = AF_INET;
+ sa.sin_addr.s_addr = htonl(a);
+ sa.sin_port = htons((uint16_t) port);
+ int r;
+ do r = connect(fd, (struct sockaddr*) &sa, sizeof sa); while (r < 0 && errno == EINTR);
+ // ⚠ EINPROGRESS and no EALREADY: this is the FIRST connect on a fresh socket, so
+ // "a previous one is still going" cannot be the answer. (nolibc has no EALREADY
+ // either, and mooncc said so by name -- the undeclared-identifier diagnostic.)
+ if (r == 0 || errno == EINPROGRESS) return fd;   // in hand, or in flight
+ close(fd);
+ return -1; }
 
 static lvm(lvm_connect) {
- if (!ai_strp(Sp[0]) || !oddp(Sp[1])) goto fail;
- int fd = call_connect((struct ai_str*) Sp[0], (int) getcharm(Sp[1]));
+ int fd = ai_strp(Sp[0]) && oddp(Sp[1])
+        ? call_connect((struct ai_str*) Sp[0], (int) getcharm(Sp[1])) : -1;
+ Sp[0] = putcharm(fd);                    // over `host`; -1 rides through to the waiter
+ return Ip += 1, Continue(); }
+
+// The second ap: the handshake, waited on by the SCHEDULER. ⚠ readiness is the
+// question here, not a leftover pre-guard of the kind rung 2 deleted from the read
+// path -- there is no read to answer it, and SO_ERROR reads 0 on a socket that is
+// merely still trying. POLLOUT first, then the error, is the one order that tells
+// "connected" from "refused".
+static lvm(lvm_connectw) {
+ int fd = (int) getcharm(Sp[0]);
  if (fd < 0) goto fail;
+ if (!ai_ready(fd, ai_wait_out)) {
+  g->next_wait_fd = fd;
+  g->next_wait_events = ai_wait_out;
+  return Ap(lvm_yield_sw, g); }
+ int err = 0;
+ socklen_t el = sizeof err;
+ if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) || err) { close(fd); goto fail; }
  Pack(g);
  struct ai *r = ai_io_alloc(g, fd);
  if (!ai_ok(r)) { close(fd); goto fail; }
  g = r;
  Unpack(g);
- // stack: [port, host, port#, ...] -> [port, ...]
+ // stack: [port, fd, port#, ...] -> [port, ...]
  Sp[2] = Sp[0];
  Sp += 2; Ip += 1;
  return Continue();
- fail:
+ fail:                                    // [fd, port#, ret] -> [nil, ret]
  Sp[1] = ai_nil;
  Sp += 1; Ip += 1;
  return Continue(); }
@@ -327,7 +376,7 @@ static lvm(lvm_udpsend) {
  return Continue(); }
 
 static union u const
- nif_connect[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_connect},  {lvm_ret0}},
+ nif_connect[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_connect}, {lvm_connectw}, {lvm_ret0}},
  nif_listen[]   = {{lvm_listen}, {lvm_ret0}},
  nif_accept[]   = {{lvm_accept}, {lvm_ret0}},
  nif_shutdown[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_shutdown}, {lvm_ret0}},

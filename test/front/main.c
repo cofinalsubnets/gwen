@@ -114,8 +114,12 @@ void ai_sleep(uintptr_t ms) {
 // ⚠ rstall is NOT consulted here, and that is the whole point: `ai_ready` says
 // go and the read says no, which is the one schedule no in-process test could
 // otherwise reach.
-bool ai_ready(int fd) {
+// ⚠ an OUT park is ready by definition here: this frontend's devices take
+// writes through `wstall`, which is a REFUSAL from the write door, not a
+// readiness the scheduler can poll for. Only the read direction is a question.
+bool ai_ready(int fd, int events) {
   struct dev *d = dev_of_fd(fd);
+  if (events != ai_wait_in) return true;
   return d ? (d->qpos < d->qlen || d->ended) : true; }
 
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {

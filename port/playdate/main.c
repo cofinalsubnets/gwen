@@ -43,7 +43,7 @@ void ai_sleep(uintptr_t ms) {
 // NEGATIVE fd is ALWAYS ready -- a string port waits on nothing external.
 // fd 0 (the console buffer) answers instantly too (data or EOF), so every
 // fd is honestly ready here.
-bool ai_ready(int fd) { (void) fd; return 1; }
+bool ai_ready(int fd, int events) { (void) fd, (void) events; return 1; }
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) { ai_sleep(ms); }
 
 // --- port vtable: both ports ride the console buffer -----------------------
