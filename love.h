@@ -596,7 +596,20 @@ static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
 // Raise: to the global `help` function when installed, else raise_c (love.c).
 // ghelp re-raises an already-tagged g's own status.
 struct ai *ghelp2(struct ai*, enum ai_status), *ghelp(struct ai*);
+// ⚠ ai_have IS THE PHRASE "this call may collect", and under AI_GC_STRESS it stops
+// being a maybe: every one of them collects, so a raw local held across an
+// allocating call is stale on the FIRST run instead of on the day an unrelated
+// struct changes size. That is the whole bug class -- love.c's own obin_elem held
+// g->ip across ai_big_binop for years and surfaced only when a 24-byte shrink moved
+// allocation. Debug builds only, off the GCDBG knob -- doc/verify.md carries what
+// it has caught and what it cannot run yet. AI_GC_CHECK is the other half: it checks
+// the COLLECTOR where this checks the MUTATOR.
 static ai_inline struct ai *ai_have(struct ai *g, uintptr_t n) {
- return !ai_ok(g) || avail(g) >= n ? g : ai_please(g, n); }
+#ifdef AI_GC_STRESS
+ return !ai_ok(g) ? g : ai_please(g, n);
+#else
+ return !ai_ok(g) || avail(g) >= n ? g : ai_please(g, n);
+#endif
+}
 
 #endif

@@ -26,6 +26,8 @@
 //   (sent p)      what has been written to p, as text
 //   (wpending p)  how many bytes of p's write run the device has not taken --
 //                 the number backpressure exists to bound
+//   (naps ())     how many times the scheduler has reached its wait -- the gauge
+//                 that tells a park from a spin
 //
 // ⚠ A WAIT WITH NO DEADLINE EXITS 97 rather than sleeping. A synthetic device
 // can only be fed by another task, so "every task is parked with no timer" is a
@@ -96,8 +98,13 @@ uintptr_t ai_clock(void) {
   return clock_gettime(CLOCK_MONOTONIC, &ts) ? 0
        : (uintptr_t) (ts.tv_sec * 1000u + (uintptr_t) ts.tv_nsec / 1000000u); }
 
+// every wait the scheduler reaches lands here, so counting them here counts them
+// all -- see the (naps ()) nif, and the law it is the gauge for.
+static uintptr_t naps;
+
 void ai_sleep(uintptr_t ms) {
   if (!ms) die("a sleep with no deadline -- every task is parked");
+  naps += 1;
   struct timespec t = { (time_t) (ms / 1000), (long) (ms % 1000) * 1000000L };
   nanosleep(&t, NULL); }
 
@@ -252,7 +259,15 @@ static lvm(lvm_wpending) {
   Sp[0] = putcharm((intptr_t) n);
   Ip += 1; return Continue(); }
 
+// (naps ()) -- how many times the scheduler has reached its wait. The one number
+// that tells a park from a spin: a task that POLLS a peer stays runnable, so
+// find_runnable answers it on every pass and this never moves at all.
+static lvm(lvm_naps) {
+  Sp[0] = putcharm((intptr_t) naps);
+  Ip += 1; return Continue(); }
+
 static union u const
+  nif_naps[]   = {{lvm_naps},  {lvm_ret0}},
   nif_quit[]   = {{lvm_quit},  {lvm_ret0}},
   nif_wpend[]  = {{lvm_wpending}, {lvm_ret0}},
   nif_dev[]    = {{lvm_dev},   {lvm_ret0}},
@@ -272,7 +287,8 @@ static struct ai_def const defs[] = {
   {"wstall", (intptr_t) nif_wstall},
   {"wcap",   (intptr_t) nif_wcap},
   {"sent",   (intptr_t) nif_sent},
-  {"wpending", (intptr_t) nif_wpend} };
+  {"wpending", (intptr_t) nif_wpend},
+  {"naps",   (intptr_t) nif_naps} };
 
 // --- the boot --------------------------------------------------------------
 // The corpus texts are the ones every frontend shares (out/lib, laid by lcat off
