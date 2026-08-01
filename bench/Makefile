@@ -107,6 +107,11 @@ SHOW    := $(filter $(PRESENT),$(DEFAULT_LANGS))
 
 txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 
+# a failed recipe takes its half-written target with it -- else a 0-byte artifact
+# carries a fresh mtime and the next make calls it up to date. this makefile stands
+# alone (the root does not include it), so it says so itself. see ../Makefile.
+.DELETE_ON_ERROR:
+
 .PHONY: all bench run raw html clean satrace setup ccbench $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 

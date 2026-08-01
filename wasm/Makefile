@@ -31,6 +31,11 @@ EMFLAGS = \
   -sEXPORTED_FUNCTIONS=_ai_init,_ai_eval,_ai_out_ptr,_ai_out_len,_ai_out_reset,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAPU32
 
+# a failed recipe takes its half-written target with it -- else a 0-byte artifact
+# carries a fresh mtime and the next make calls it up to date. this makefile stands
+# alone (the root does not include it), so it says so itself. see ../Makefile.
+.DELETE_ON_ERROR:
+
 all: love.js
 
 # prel.h/ev.h are serialized from lib/*.g by the top-level lcat rule;

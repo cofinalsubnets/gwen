@@ -25,6 +25,11 @@ objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
   $(R)/$(o)/love-img.o
 
+# a failed recipe takes its half-written target with it -- else a 0-byte artifact
+# carries a fresh mtime and the next make calls it up to date. this makefile stands
+# alone (the root does not include it), so it says so itself. see ../../Makefile.
+.DELETE_ON_ERROR:
+
 .PHONY: teensy41 flash clean
 teensy41: $(R)/$(o)/love.hex
 default: teensy41

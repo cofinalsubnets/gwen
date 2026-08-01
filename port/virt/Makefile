@@ -29,6 +29,11 @@ lib_h = out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out
 objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
   $(R)/$(o)/str.o $(R)/$(o)/main.o
 
+# a failed recipe takes its half-written target with it -- else a 0-byte artifact
+# carries a fresh mtime and the next make calls it up to date. this makefile stands
+# alone (the root does not include it), so it says so itself. see ../../Makefile.
+.DELETE_ON_ERROR:
+
 .PHONY: virt clean
 virt: $(R)/$(o)/love.elf
 default: virt

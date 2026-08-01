@@ -56,6 +56,11 @@ pd_src = $(pd_local_c) $(pd_shared_c) $(pd_sdk_c)
 mc_shared_o = $(pd_shared_c:$(R)/%.c=$(o)/%.o)
 pd_o = $(o)/main.o $(mc_shared_o) $(o)/pdglue.o $(o)/setup.o
 
+# a failed recipe takes its half-written target with it -- else a 0-byte artifact
+# carries a fresh mtime and the next make calls it up to date. this makefile stands
+# alone (the root does not include it), so it says so itself. see ../../Makefile.
+.DELETE_ON_ERROR:
+
 .PHONY: default sim clean
 default: $(o)/$n.pdx
 

@@ -34,6 +34,17 @@ export LOVE_NO_IMAGE := 1
 # would otherwise pick a fragment's first rule (mk/lib.mk's `lib`).
 .DEFAULT_GOAL := test
 
+# a FAILED recipe takes its half-written target WITH IT. make's own default is to
+# LEAVE it, and `cmd > $@` truncates $@ before cmd ever runs -- so a failure lands a
+# 0-byte artifact carrying a FRESH mtime, and the next make calls it up to date and
+# exits 0. the failure is loud once and silent forever after: an empty out/lib/holo.h
+# leaves `assemble` unbound (the glaze's map lane emits nothing -- a hang or a crash
+# in some unrelated test), an empty .o relinks the previous build's code under new
+# source, and every gate goes green over both. one line, whole tree, every fragment
+# below. it does NOT cover a recipe that exits 0 having written garbage -- that wants
+# a `test -s $@` at the recipe (mk/lib.mk's lcat_h, host/build.mk's sys.o).
+.DELETE_ON_ERROR:
+
 # --- build fragments, pushed down into the folders they build (see each file) ---
 include mk/lib.mk
 include host/build.mk

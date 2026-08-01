@@ -23,6 +23,11 @@ objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
 baker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
   $(R)/$(o)/main-baker.o $(R)/$(o)/start.o
 
+# a failed recipe takes its half-written target with it -- else a 0-byte artifact
+# carries a fresh mtime and the next make calls it up to date. this makefile stands
+# alone (the root does not include it), so it says so itself. see ../../Makefile.
+.DELETE_ON_ERROR:
+
 .PHONY: mps2 img imgpd clean
 mps2: $(R)/$(o)/love.elf
 default: mps2
