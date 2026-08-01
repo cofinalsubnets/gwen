@@ -2699,13 +2699,32 @@ static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
   while (!ai_ready(my_wait_fd)) wait_one(my_wait_fd, 1, 0);
  return Continue(); }
 
-// First non-dormant peer in the ring whose wake_at <= now and whose
-// wait_fd is either unset or actually ready. Without the wait_fd check
-// a task parked on stdin would be scheduled immediately, busy-looping
-// through yield_sw and filling the heap with stale task nodes.
-static ai_inline union u *find_runnable(union u *head, uintptr_t now) {
+// Is the task named by `pid` still live? ⚠ THE RING HEAD IS THE RUNNING TASK and
+// its saved ip is a stale snapshot, so it cannot answer for itself -- only its own
+// yield knows whether it is exiting, which is what `me_live` carries in. A pid with
+// no node is GONE, not live: freeze unsplices, and a catcher must not wait on a ghost.
+static ai_inline int task_live(union u *head, intptr_t pid, int me_live) {
+ if (getcharm(head[2].x) == pid) return me_live;
+ for (union u *n = head->m; n != head; n = n->m)
+  if (getcharm(n[2].x) == pid) return n[1].m->ap != lvm_task_exit;
+ return 0; }
+
+// First non-dormant peer in the ring whose wake_at <= now, whose wait_fd is either
+// unset or actually ready, and which is not parked in `catch` on a live peer.
+// Without the wait_fd check a task parked on stdin would be scheduled immediately,
+// busy-looping through yield_sw and filling the heap with stale task nodes.
+//
+// ⚠ THE CATCH PARK CARRIES NO STATE OF ITS OWN, and needs none. A task parked in
+// `catch` left Ip unadvanced, so its saved ip IS the catch and the pid it was handed
+// is the top of its saved stack (yield_sw memcpys Sp to n+5) -- the same read of a
+// saved ip the dormancy test one line up already makes. Without this clause a
+// catching task is always runnable, so find_runnable always answers it and the
+// scheduler NEVER REACHES ITS WAIT: one core burnt, and every peer parked on a quiet
+// fd polled at full speed instead of slept on.
+static ai_inline union u *find_runnable(union u *head, uintptr_t now, int me_live) {
  for (union u *n = head->m; n != head; n = n->m)
   if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
+   if (n[1].m->ap == lvm_wait && task_live(head, getcharm(n[5].x), me_live)) continue;
    int wf = (int) getcharm(n[4].x);
    if (wf < 0 || ai_ready(wf)) return n; }
  return NULL; }
@@ -2719,7 +2738,7 @@ static ai_inline union u *find_runnable(union u *head, uintptr_t now) {
 // anything allocates again), so counting the ring first and sizing the block
 // second retires the cap by construction. ⚠ CALLED WITH g PACKED -- the gap is
 // [hp, sp) and both are stale otherwise.
-static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd) {
+static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int me_live) {
  uintptr_t min_wake = my_wake;
  int nfds = my_wait_fd >= 0;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
@@ -2745,11 +2764,14 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
    ai_wait_fds(fds, k, ticks); }
   now = ai_clock(); }
  if (my_wait_fd >= 0 && ai_ready(my_wait_fd)) return NULL;
- return find_runnable(g->tasks, now); }
+ return find_runnable(g->tasks, now, me_live); }
 
 lvm(lvm_yield_sw) {
  if (g->tasks->m == g->tasks) return Ap(lvm_yield_sw_mono, g);
- union u *next = find_runnable(g->tasks, ai_clock());
+ // a task on its way out is not live, and its own node cannot say so yet -- the
+ // snapshot that records the exit is written at the foot of this op.
+ int me_live = Ip->ap != lvm_task_exit;
+ union u *next = find_runnable(g->tasks, ai_clock(), me_live);
  uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd;
  if (!next) {
@@ -2758,11 +2780,13 @@ lvm(lvm_yield_sw) {
   // fall into yield_sw_wait, which sleeps until the nearest peer's wake_at: that
   // would throttle a compute-heavy task to the slowest sleeping peer's period
   // (a 3 s heartbeat would crawl an `ev` to 64 ap-cycles per 3 s). A blocked task
-  // (my_wake set, or my_wait_fd >= 0) still waits properly below; sleeping peers
-  // are picked up by a later YieldCheck once their wake_at passes.
-  if (!my_wake && my_wait_fd < 0) { g->yield_ctr = 0; return Continue(); }
+  // (my_wake set, my_wait_fd >= 0, or parked in `catch`) still waits properly
+  // below; sleeping peers are picked up by a later YieldCheck once their wake_at
+  // passes. ⚠ a catcher takes this arm only over its own dead body: Ip still points
+  // at the catch, so "keep running it" means run the catch again, and again.
+  if (!my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait) { g->yield_ctr = 0; return Continue(); }
   Pack(g);                     // the wait lays its fd block in the [hp, sp) gap
-  next = yield_sw_wait(g, my_wake, my_wait_fd);
+  next = yield_sw_wait(g, my_wake, my_wait_fd, me_live);
   Unpack(g);                   // nothing allocated, so these come back unchanged
   if (!next) {
    g->next_wake_at = 0;
@@ -2840,11 +2864,13 @@ lvm(lvm_wait) {
    Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
    gen_wb(g, (word) prev, (word) prev->m);   // task ring: unsplicing relinks an old node to a (maybe young) successor
    break; }
-   // still running: yield without advancing Ip (re-enter wait on resume).
-   // A task blocked in `wait` is polling a peer, NOT blocked on I/O or a timer,
-   // so clear any stale next_wait_fd/next_wake_at (e.g. a serial-read fd left set
-   // by the kernel's cooperative input) -- otherwise yield_sw saves this task as
-   // parked on an unready fd and find_runnable never reschedules it (deadlock).
+   // still running: yield without advancing Ip, which is BOTH halves of the park --
+   // the re-entry on resume, and the record of what is being waited for. Ip pointing
+   // here says "parked in catch" and Sp[0] names the peer, so find_runnable can read
+   // the condition off the saved node and nothing has to be stored twice.
+   // Neither a timer nor an fd is what this task waits on, so clear both -- a stale
+   // next_wait_fd (a serial-read fd left set by the kernel's cooperative input) would
+   // otherwise park it on an fd that need never fire.
    g->next_wake_at = 0;
    g->next_wait_fd = -1;
   return Ap(lvm_yield_sw, g); }

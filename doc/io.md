@@ -1755,6 +1755,63 @@ four control-verified.
 5)~~ ✅ its own section above. so `select` and `sink` are the whole of what is
 left here, and neither has a caller.
 
+### the catcher parks -- ✅ 2026-07-31, the first item off the nif floor
+
+`catch` was the only outstanding item that cost something on every run rather than
+hypothetically, and it cost the arc's own invariant: not something else waiting, but
+**the scheduler prevented from waiting**. a task catching a peer cleared its park and
+came back immediately runnable, so `find_runnable` answered it on every pass, the
+sleep in `yield_sw_wait` was never reached, and every OTHER task's park -- a quiet
+fd, a write residue, a timer -- got polled at full speed instead of slept on. one
+core burnt, and the whole rest of the arc's waiting undone from one line.
+
+**the third parked state needed no new state.** the plan said this wanted a word on
+the task node -- *runnable when a named peer exits*, neither a timer nor an fd. it
+does not: a task parked in `catch` left `Ip` unadvanced, so its saved ip **is** the
+catch and the pid it was handed is the top of its saved stack (`lvm_yield_sw`
+memcpys `Sp` to `n+5`). reading the node is the same idiom the dormancy test one line
+above it already makes (`n[1].m->ap != lvm_task_exit`). the whole fix is a clause in
+`find_runnable` and a `task_live` helper.
+
+⚠ **the one-line fix is the wrong one, by measurement.** setting
+`next_wake_at = now + 1` instead of clearing it -- rung 5's write-residue shape, one
+line, established precedent -- kills the burn immediately and puts up to a
+millisecond on every catch. a tight twirl/catch loop measures **1000 pairs in 1 ms**
+today, so that poll would have made it ~1 s: a thousandfold regression on a pattern
+the tree uses. a poll is right where nothing is waiting on the latency and wrong
+here. deriving the wake condition costs nothing, because `find_runnable` can answer
+the catcher the instant its target goes dormant.
+
+**two halves, and one shape cannot reach both** -- which is the part that took the
+work. the catcher's own yield must not take `lvm_yield_sw`'s *"still runnable, keep
+going"* arm (Ip points at the catch, so keeping going means running it again), AND
+`find_runnable` must not answer a catcher on some other task's yield. the obvious
+two-task law proves only the first: with the peer freshly twirled it is runnable, so
+the catcher's yield never reaches that arm at all. the laws that reach each half:
+
+| law | shape | what it pins |
+|---|---|---|
+| 13 | catch a peer that has ALREADY parked on its timer (`rest 0` first) | the yield arm |
+| 14 | a CHAIN -- main catches a, a catches b, b sleeps | the `find_runnable` clause |
+
+the gauge is `(naps ())` on the test frontend only: how many times the scheduler
+reached its wait. love gains nothing -- every wait already funnels through that
+frontend's own `ai_sleep`, so counting them there counts them all, and a spin leaves
+the number at zero. each law was control-verified by taking its own half back out
+and watching exactly that law redden.
+
+⚠ **two edges worth stating.** a pid with no node is GONE, not live -- `freeze`
+unsplices, so a catcher whose target is frozen out from under it must wake and
+answer the zero point, and law 15 pins it. and the RING HEAD is the running task
+whose saved ip is a stale snapshot: it cannot answer for itself, so `lvm_yield_sw`
+passes in whether it is on its way out (`Ip->ap != lvm_task_exit`). without that, a
+task exiting while its catcher waits would find the catcher still blocked on a node
+that says "live", nothing runnable, and spin on `lvm_task_exit` forever.
+
+a genuine catch CYCLE (a catches b, b catches a) still spins rather than being
+diagnosed. it spun before too, so nothing regressed -- but it is a real deadlock and
+a `;; two tasks caught on each other` would beat burning a core. not built.
+
 ### the floor below this floor -- THE NIF FLOOR, named and not built
 
 the device floor made every DEVICE entry point nonblocking. what still blocks is
@@ -1771,19 +1828,15 @@ purpose, and this is the roster, read off the source rather than off memory:
 | `wait` | host/posix.c:241 | `waitpid(pid, &st, WUNTRACED)` in an EINTR loop |
 | `run` / `runt` | host/posix.c:866, 873 | `waitpid(pid, &st, 0)` in an EINTR loop |
 | `mind` | host/posix.c:1028 | the pty runner, same shape |
-| `catch` | love.c:2843-2850 | ⚠ does not block -- **never idles**, below |
+| `catch` | love.c, `lvm_wait` | ✅ **taken, above** -- it never blocked; it never idled |
 
-⚠ **`catch` is a different bug from the other six and must not be lumped in.** it
-already yields; what it does is clear `next_wake_at` and `next_wait_fd` first, so
-the waiting task is IMMEDIATELY RUNNABLE again. `find_runnable` therefore always
-answers it, the scheduler never reaches `yield_sw_wait`'s sleep, and a program
-whose only remaining work is a `catch` on a slow peer burns a core. worse, it
-defeats the wait for EVERYONE: other tasks parked on quiet fds get polled at full
-speed instead of slept on. and the clearing is CORRECT as far as it goes -- the
-comment there is right that a stale `next_wait_fd` would park this task on an fd
-nothing will ready and `find_runnable` would never reschedule it. what is missing
-is a third parked state, *runnable when a named peer exits*, which is neither a
-timer nor an fd.
+⚠ **`catch` was a different bug from the other six and was not lumped in.** it
+already yielded; what it did was clear `next_wake_at` and `next_wait_fd` first, so
+the waiting task came back IMMEDIATELY RUNNABLE and the scheduler never reached its
+sleep. the clearing was CORRECT as far as it went -- a stale `next_wait_fd` would
+park the task on an fd nothing will ready. what was missing was the third parked
+state, and it is built: *runnable when a named peer exits*, read off the parked
+node rather than stored. the section above has it.
 
 ⚠ **`getaddrinfo` has no nonblocking form at all** -- it is not a syscall with an
 `O_NONBLOCK` to set; it reads config, may speak DNS, and there is no portable
@@ -2046,7 +2099,9 @@ choosing park-or-block. so:
 5. ~~**defect 4** (writes never yield)~~ ✅ the device-floor arc took it whole
    (rungs 3-5, then backpressure). **`select`**: still when something asks, and
    after 1 nothing does. what IS next is the nif floor -- its own section in
-   part II.
+   part II. ✅ its first item, `catch`, is taken; the process half (`wait`,
+   `run`, `runt`, `mind`) is the next cheapest, and `connect` is last because
+   `getaddrinfo` makes it a project.
 
 ~~`empty?` is unused but not free; leave it until something else in this list moves
 the frontends anyway.~~ ✅ that came due: the device-floor arc's first rung moved all

@@ -195,4 +195,49 @@
    _ (assert (hi <= 4096)                 ; 8192 with the park taken back out
              ((tally (sent p)) = 9000)))
 
+; --- law 13: a catcher PARKS, so the scheduler gets to sleep -----------------
+; ⚠ NOT A DEVICE LAW, and it is here because this is the only frontend that can
+; ask the question. `catch` used to clear its own park and come back always
+; runnable, so find_runnable answered it on every pass and the scheduler NEVER
+; REACHED ITS WAIT -- one core burnt, and every peer parked on a quiet fd polled
+; at full speed instead of slept on. That is the arc's invariant inverted: not
+; something else waiting, but the scheduler prevented from waiting.
+; ⚠ THE PARK HAS TWO HALVES AND ONE SHAPE CANNOT REACH BOTH, which is why 13 and
+; 14 look alike and are not. This one is the catcher's OWN yield: it must not take
+; yield_sw's "still runnable, keep going" arm, because Ip is still pointing at the
+; catch and keeping going means running the catch again, and again.
+; ⚠ the `rest 0` is load-bearing -- it lets the peer reach its own park first, so
+; that when the catcher yields there is nothing runnable left in the tree. Drop it
+; and the peer is fresh and runnable, the catcher's yield never reaches the arm at
+; all, and the law proves nothing.
+(: n0 (naps ())
+   b (twirl (\ _ (rest 60)) ())
+   _ (rest 0)
+   _ (catch b)
+   _ (assert (0 < ((naps ()) - n0))))    ; 0 with that arm's guard taken back out
+
+; --- law 14: and find_runnable must not answer a catcher either ---------------
+; the other half, on some OTHER task's yield. A CHAIN is what reaches it: the
+; sleeper is the last to yield here and it yields with a deadline, so law 13's arm
+; is never even offered and only the find_runnable clause can keep this green.
+(: n0 (naps ())
+   b (twirl (\ _ (rest 60)) ())
+   a (twirl (\ _ (catch b)) ())
+   _ (catch a)
+   _ (assert (0 < ((naps ()) - n0))))    ; 0 with the find_runnable clause out
+
+; --- law 15: the park still ANSWERS, on an exit and on a freeze ---------------
+; a catcher wakes on its peer's exit and reaps the value, which is the whole of
+; what catch promised before it went and did it by spinning.
+(: t (twirl (\ _ (: _ (rest 20) 41)) ())
+   _ (assert ((catch t) = 41)))
+
+; and a caught peer FROZEN OUT FROM UNDER the catcher must wake it too. freeze
+; unsplices the node, so the pid goes GONE rather than dormant -- a park that
+; waited for dormancy alone would wait out the 5 s that never comes, and this
+; frontend would exit 97 on the deadlock rather than hang.
+(: t (twirl (\ _ (rest 5000)) ())
+   _ (twirl (\ _ (freeze t)) ())
+   _ (assert (! (catch t))))
+
 (: _ (say out "front: ok") (putc 10))
