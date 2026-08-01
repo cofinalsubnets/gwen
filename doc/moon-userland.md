@@ -548,9 +548,15 @@ to do with the compiler, which is exactly the kind of false red a cross lane inv
 ## suggested order (LFS-shaped, easiest real C first)
 
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.
-(Six are runnable now: bzip2, gzip, tar, m4, Lua and SQLite — and three of those cross-build
-and run for aarch64. `tar` is the obvious next cross lane, and the only one of the six whose
-harness has not been given a target argument.)
+(Six are runnable now: bzip2, gzip, tar, m4, Lua and SQLite. **Four of them cross-build and run
+for aarch64** — lua, sqlite, m4 and tar — each `tools/moon-*.sh <target>` in raw.sh's shape with
+a `make moon-<pkg>-arm64` target, each skipping cleanly without qemu. gzip and bzip2 are the two
+left, and both are plain C89 with no configure, so they should be short.)
+
+⚠ **tar 1.13 needs two things of `./configure` that are about 1999, not about us**: its
+`config.guess`/`config.sub` predate x86-64 (copy the system automake's over), and modern gcc
+makes the implicit-int `main(){return(0);}` of its probes a hard error (`CC="gcc -std=gnu89"`).
+mooncc compiles every actual source either way.
 Skip the two-pass cross-toolchain ritual entirely — mooncc/holo/nolibc already ARE the
 self-hosting toolchain ([[love-distro]]). Link initially with a foreign `ld` + the host libc
 (the "gcc appears once as ld" precedent), then move packages onto nolibc/holo as their

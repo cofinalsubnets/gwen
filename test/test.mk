@@ -622,6 +622,11 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 .PHONY: moon-tar
 moon-tar: host out/host$(hsuf)/mooncc
 	@TARSRC="$(TARSRC)" ./tools/moon-tar.sh
+# moon-tar-arm64 -- the same package cross-built and roundtripped under qemu,
+# forked gzip and all; the system tar still reads what the aarch64 one wrote.
+.PHONY: moon-tar-arm64
+moon-tar-arm64: host out/host$(hsuf)/mooncc
+	@TARSRC="$(TARSRC)" ./tools/moon-tar.sh arm64
 # moon-m4 -- the fourth moon-userland rung: GNU m4 1.4 (macro processor, so it
 # exercises tmpfile/rewind diversions, popen'd esyscmd, float format), built by
 # mooncc + nolibc + holo and gated on m4's OWN 57-check suite. Opt-in like
