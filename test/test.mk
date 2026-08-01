@@ -629,6 +629,12 @@ moon-tar: host out/host$(hsuf)/mooncc
 .PHONY: moon-m4
 moon-m4: host out/host$(hsuf)/mooncc
 	@M4SRC="$(M4SRC)" ./tools/moon-m4.sh
+# moon-m4-arm64 -- the same package cross-built and run under qemu, check suite
+# and all: the suite is a shell script that execs `m4` off PATH, so the cross
+# lane puts a qemu wrapper there and the 57 checks run entirely unmodified.
+.PHONY: moon-m4-arm64
+moon-m4-arm64: host out/host$(hsuf)/mooncc
+	@M4SRC="$(M4SRC)" ./tools/moon-m4.sh arm64
 # moon-lua: point LUASRC at an extracted lua-5.4.x tree (no configure needed);
 # SKIPS cleanly without. Builds + runs the interpreter battery.
 .PHONY: moon-lua
@@ -643,10 +649,20 @@ moon-lua: host out/host$(hsuf)/mooncc
 moon-lua-arm64: host out/host$(hsuf)/mooncc
 	@LUASRC="$(LUASRC)" ./tools/moon-lua.sh arm64
 # moon-sqlite: point SQLSRC at an extracted sqlite-amalgamation dir; SKIPS
-# cleanly without. Compiles the whole amalgamation + runs the VFS battery.
+# cleanly without. Compiles the whole amalgamation + runs the VFS battery, and
+# the battery is a DIFFERENTIAL payload -- forty lines of computed answers, so
+# the same source built by the system cc is a second opinion on every one.
 .PHONY: moon-sqlite
 moon-sqlite: host out/host$(hsuf)/mooncc
 	@SQLSRC="$(SQLSRC)" ./tools/moon-sqlite.sh
+# moon-sqlite-arm64 -- the same 256k lines cross-built and run under qemu, then
+# compared to the x86-64 answers byte for byte. That completes the ladder the
+# cross gates stand on: gcc pins x64 (above), x64 pins the cross target. Ordered
+# AFTER moon-sqlite because it reads that run's output as its oracle; on its own
+# it still builds and runs, and says it had nothing to compare against.
+.PHONY: moon-sqlite-arm64
+moon-sqlite-arm64: moon-sqlite
+	@SQLSRC="$(SQLSRC)" ./tools/moon-sqlite.sh arm64
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (crew/holo/holotest.l). A host-only app (like sat) -- it rides the
 # core's lists/tablets, adds no nif, and is NOT baked into love0. The gate greps

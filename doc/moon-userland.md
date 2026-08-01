@@ -498,9 +498,59 @@ lane the other target lacks, and a 30k-line package is a much wider net than a t
 someone wrote on purpose.** The shape that reaches this bug — a six-parameter function whose
 5th is a pointer — is not one anybody writes into a compiler test deliberately.
 
+## SQLite 3.45.3 — the sixth rung, and the widest net the tree has
+
+`make moon-sqlite SQLSRC=<an extracted sqlite-amalgamation dir>`, and
+`make moon-sqlite-arm64` for the cross lane. 256k lines from ONE file, no configure —
+the amalgamation is machine-built from many sources, so it reaches C shapes nobody writes
+by hand: deep switch ladders, computed unions, 64-bit mixing, and a whole float formatter
+of its own. Config is `THREADSAFE=0` + no load-extension, both first-class sqlite
+configurations rather than patches (nolibc carries no pthreads and no dlopen).
+
+Both targets built and ran **first try, no compiler bug found** — which is itself the
+result worth recording, because the two rungs before it each found one.
+
+**The battery is a differential payload, not a smoke test.** Forty lines of computed
+answers — 64-bit integer edges, REAL formatting through sqlite's own printf, string and
+GLOB/LIKE operators, aggregates, `GROUP BY … HAVING`, a join, a correlated subquery, a
+window function, a recursive CTE, `json_extract`, then the file-backed lane: journaled
+transaction, index, close/reopen, a rollback that must actually roll back, and
+`PRAGMA integrity_check`. Every line is compared, not just checked for "ok", because an
+exit code is eight bits and cannot name the query that broke.
+
+**That gives a complete oracle ladder**, and it is the same one `test/gate/ccarch.sh`
+stands on one level down:
+
+```
+gcc + glibc  ──pins──▶  mooncc x86-64  ──pins──▶  mooncc aarch64
+```
+
+The x64 lane builds the SAME driver and the SAME amalgamation with the system cc and
+compares byte for byte; the arm64 lane compares against the x64 answers. Two mooncc
+builds agreeing proves less than it looks — they can share a fault in the shared model —
+so the gcc leg is what makes the cross comparison mean something.
+
+## m4 1.4 on aarch64 — the check suite, unmodified
+
+`make moon-m4-arm64 M4SRC=<a ./configure'd m4-1.4 tree>`. The interesting part is that
+m4's OWN 57-check suite runs on the cross target, not a reduced version of it. `config.h`
+is reused as configure wrote it for the host, which is sound here and worth saying why:
+both targets are little-endian LP64, and the two answers that actually differ
+(`HAVE_EFGCVT`, `USE_STACKOVF`) are the ones the harness already corrects by hand.
+
+⚠ **`check-them` is a shell script that execs `m4` off PATH**, and an aarch64 binary is
+not executable on an x86-64 box without a binfmt_misc registration for qemu. So the cross
+lane writes a one-line `m4` wrapper onto PATH — and it must pass **`qemu -0 m4`**, because
+m4 prints its own `argv[0]` in every error message and two of the checks compare stderr
+against a text that names it. Without that the suite fails for a reason that has nothing
+to do with the compiler, which is exactly the kind of false red a cross lane invites.
+
 ## suggested order (LFS-shaped, easiest real C first)
 
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.
+(Six are runnable now: bzip2, gzip, tar, m4, Lua and SQLite — and three of those cross-build
+and run for aarch64. `tar` is the obvious next cross lane, and the only one of the six whose
+harness has not been given a target argument.)
 Skip the two-pass cross-toolchain ritual entirely — mooncc/holo/nolibc already ARE the
 self-hosting toolchain ([[love-distro]]). Link initially with a foreign `ld` + the host libc
 (the "gcc appears once as ld" precedent), then move packages onto nolibc/holo as their
