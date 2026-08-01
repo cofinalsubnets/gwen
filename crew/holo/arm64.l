@@ -87,7 +87,16 @@
       (le32 (0xAA0003E0 | ((sn << 16) | dn))))                                       ; orr d, xzr, s
 
    ;; ALU. register form is the native three-address; immediate is add/sub only.
-   (alu-rrr base d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (base | ((bn << 16) | ((an << 5) | dn)))))
+   ;; ⚠ the register form is the SHIFTED-register one, where encoding 31 is XZR in
+   ;; every slot -- so `(sub sp sp r0)` assembles as `neg xzr, x0`: the stack pointer
+   ;; untouched, the answer discarded, in SILENCE. (the form that means SP is
+   ;; add/sub EXTENDED-register, which no IR op spells.) the mov guard's sibling, and
+   ;; louder for it -- mov at least had nowhere else to go, this one lies. move sp
+   ;; with `lea` (add #0) and do the arithmetic in a plain register: mksys's
+   ;; __sigsetjmp and moon's VLA lane both stage that way.
+   (alu-rrr base d a b) (: dn (rn d) an (rn a) bn (rn b)
+      _ (? (|| (dn = 31) (|| (an = 31) (bn = 31))) (scare 'arm64-alu-sp `(d a b)) 0)
+      (le32 (base | ((bn << 16) | ((an << 5) | dn)))))
    (alu-rri base d a imm) (: dn (rn d) an (rn a) (le32 (base | ((imm << 10) | ((an << 5) | dn)))))
    ;; a 12-bit immediate rides one instruction; up to 24 bits splits into the
    ;; shifted-by-12 form plus the low half (add/sub only -- a C-sized frame).

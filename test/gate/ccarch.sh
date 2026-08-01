@@ -29,11 +29,13 @@
 # ⚠ stdout is compared, not just the exit code. These programs return a COUNT of
 # passing checks; eight bits can say THAT something moved and never which one.
 #
-# THE EXCLUSIONS ARE ASSERTED, NOT SKIPPED. 100-complex, 101-vla and 102-bigstruct
-# use features no cross lane implements yet, and mooncc must REFUSE them: nonzero
-# exit, no signal, a diagnostic naming the file. A silent skip list is where a
-# regression hides; and the day a target grows one of these its build starts
-# succeeding, this check fails, and the name comes off the list.
+# THE EXCLUSIONS ARE ASSERTED, NOT SKIPPED, and the list is PER TARGET. A program
+# using a feature this target has no lane for must be REFUSED: nonzero exit, no
+# signal, a diagnostic naming the file. A silent skip list is where a regression
+# hides; and the day a target grows one of these its build starts succeeding, this
+# check fails, and the name comes off that target's list -- which is exactly how
+# 101-vla left arm64's (the lane was one `and` mask and three sp moves away from
+# neutral, and the C99 VLA has ridden both backends since).
 #
 # Skips whole (exit 0, a note) without the target's qemu -- like test_arm64 /
 # test_kernel. make owns the dependency graph; this owns the procedure.
@@ -51,12 +53,14 @@ case $arch in
            ccenv=${AARCH64_CC:-}
            ccnames="aarch64-linux-gnu-gcc aarch64-nerves-linux-gnu-gcc"
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_aarch64*/bin/aarch64-nerves-linux-gnu-gcc"
-           ccvar=AARCH64_CC ;;
+           ccvar=AARCH64_CC
+           unsupported="100-complex 102-bigstruct" ;;
   riscv64) name=test_ccriscv ; qemu=qemu-riscv64 ; pretty=riscv64
            ccenv=${RISCV64_CC:-}
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"
            ccglob=""
-           ccvar=RISCV64_CC ;;
+           ccvar=RISCV64_CC
+           unsupported="100-complex 101-vla 102-bigstruct" ;;
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
@@ -66,8 +70,8 @@ mkdir -p "$d"
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
 
-# the features no cross lane implements yet -- refusal is the asserted behaviour
-unsupported="100-complex 101-vla 102-bigstruct"
+# $unsupported comes from the case above: the features THIS target has no lane
+# for yet -- refusal is the asserted behaviour, per target, not per gate.
 
 QEMU=$(command -v "$qemu" 2>/dev/null || true)
 if [ -z "$QEMU" ]; then
