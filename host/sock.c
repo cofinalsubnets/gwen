@@ -157,7 +157,13 @@ ai_noinline static int call_listen(int port) {
  a.sin_family = AF_INET;
  a.sin_addr.s_addr = htonl(INADDR_ANY);
  a.sin_port = htons((uint16_t) port);
- if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, 1)) {
+ // ⚠ SOMAXCONN, not 1. The backlog is the ACCEPT QUEUE -- connections the kernel
+ // has already shaken hands on and is holding for us -- and a server that twirls a
+ // task per client is off serving them, not sitting in accept. At 1 the queue
+ // overflows on the second simultaneous arrival, the kernel drops the SYN, and the
+ // client waits out an exponential retry (measured: 1s at 25 arrivals, 30s at 100),
+ // which reads as our latency and is not ours.
+ if (bind(fd, (struct sockaddr*) &a, sizeof a) || listen(fd, SOMAXCONN)) {
   close(fd);
   return -1; }
  cloexec(fd);
