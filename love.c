@@ -4399,7 +4399,6 @@ lvm(lvm_real) {
 // other type (strings, anonymous syms, nil, ...).
 lvm(lvm_string) {
  word x = Sp[0];
- if (x == nil) return Ip++, Continue();             // nil is the empty string (0)
  if (charmp(x)) {                                     // fixnum -> one-byte string
   uintptr_t req = str_type_width + b2w(1);
   Have(req);

@@ -2,7 +2,7 @@
 ; HERMETIC AND OFFLINE, which is the whole difficulty: a resolver's subject is a
 ; nameserver, and a gate that asks the real one is a gate that fails on a train.
 ; So the nameserver is a love TASK -- it binds a UDP port, waits for a query, and
-; answers a canned response built with the module's own byte helpers. Nothing
+; answers a canned response built with the module's own be16 helper. Nothing
 ; leaves the loopback and nothing here reads the machine's own /etc.
 ;
 ;   out/host/love test/host/dns.l      ; green dots = pass, exits 1 on fail
@@ -23,12 +23,12 @@
      + (dns-be16 1) + (dns-be16 (? tc 0 1)) + (dns-be16 0) + (dns-be16 0)
      + (snip q 12 (tally q))                          ; the question, verbatim
      + (? tc ""
-          ((dns-byte 192) + (dns-byte 12)             ; name: a pointer to offset 12
+          ((string 192) + (string 12)             ; name: a pointer to offset 12
            + (dns-be16 1) + (dns-be16 1)              ; type A, class IN
            + (dns-be16 0) + (dns-be16 60)             ; ttl
            + (dns-be16 4)
-           + (dns-byte ((addr >> 24) & 255)) + (dns-byte ((addr >> 16) & 255))
-           + (dns-byte ((addr >> 8) & 255)) + (dns-byte (addr & 255)))))
+           + (string ((addr >> 24) & 255)) + (string ((addr >> 16) & 255))
+           + (string ((addr >> 8) & 255)) + (string (addr & 255)))))
 
    ; serve exactly one query on `port`, then exit. the recv PARKS -- this task is
    ; the peer whose running proves the resolver gave up its turn.

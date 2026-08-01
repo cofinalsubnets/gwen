@@ -1945,10 +1945,6 @@ used here as a mechanism rather than an edge case. No `cue?` loop, no 1 ms tick.
 Three things the tree taught while this was written, all of them mine to have
 known:
 
-* **`(string 0)` is the ZERO POINT, not a NUL byte** -- the 0 -> () flip, and a
-  DNS header is mostly zero bytes, so every length and flag word would have
-  silently lost half of itself. `("" + 0)` is the byte. spec.l says it plainly
-  (*"a NUL nets nothing"*) and it still had to be measured to be believed.
 * **`:` and `?` bind their forms in PAIRS**, so a bare infix expression at a tail
   -- `(: (o k) .. (o 1) + (o 2))` -- is not one expression, it is a binding of
   `(o 1)` to `+`. The compiler caught it as `imports-grew`, which is a REFUSAL

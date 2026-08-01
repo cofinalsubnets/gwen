@@ -75,11 +75,7 @@
        (oct 0 0 4))
 
    ; --- the wire ---------------------------------------------------------------
-   ; ⚠ ONE BYTE IS `"" + b`, NEVER `(string b)`. (string 0) is the ZERO POINT, not
-   ; a NUL -- the 0 -> () flip -- and a DNS header is mostly zero bytes, so every
-   ; length and every flag word would have silently lost half of itself.
-   (dns-byte b) ("" + b)
-   (dns-be16 v) ((dns-byte ((v >> 8) & 255)) + (dns-byte (v & 255)))
+   (dns-be16 v) ((string ((v >> 8) & 255)) + (string (v & 255)))
    (dns-hi r p)  (((r p) * 256) + (r (p + 1)))
 
    ; a name as length-prefixed labels, NUL-terminated. () if any label is empty
@@ -87,11 +83,11 @@
    (dns-labels h)
     (: n (tally h)
        (dot i) (? (|| (n <= i) ((h i) = 46)) i (dot (i + 1)))
-       (go i) (? (n <= i) (dns-byte 0)
+       (go i) (? (n <= i) (string 0)
                  (: j (dot i)  l (j - i)
                     (? (|| (l = 0) (63 < l)) ()
                        (: r (go (j + 1))
-                          (? (string? r) (((dns-byte l) + (snip h i j)) + r) ())))))
+                          (? (string? r) (((string l) + (snip h i j)) + r) ())))))
        (? (0 < n) (go 0) ()))
 
    ; the query packet: header (RD set, one question), the name, QTYPE A QCLASS IN.
