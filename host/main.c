@@ -849,10 +849,12 @@ int main(int argc, char const **argv) {
   for (; *av; g = ai_strof(g, *av++));
   for (g = ai_push(g, 1, ai_nil); ac--; g = gxr(g));
   if (ai_ok(g)) {
-    ai_word full_argv = ai_pop1(g);                // shared by `argv` and `cmdline`
     // the static nifs (exit/open/close/run/getenv + any host/*.c app nifs) come
     // from the ai_nifs section; argv/cmdline are runtime values, defined here.
     g = ai_defn(g, __start_ai_nifs, __stop_ai_nifs - __start_ai_nifs);
+    ai_word full_argv = ai_pop1(ai_core_of(g));     // shared by `argv` and `cmdline`; popped
+                                                    // AFTER the defn above, which interns a
+                                                    // hundred names and collects while it does
     struct ai_def d[] = {{"argv", full_argv}, {"cmdline", full_argv}};
     g = ai_defn(g, d, countof(d));      // re-pins the host nifs (live addresses) into the loaded book too
 #ifdef GL_BOOTSTRAP

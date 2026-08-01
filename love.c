@@ -899,10 +899,19 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g->pool, 0); }
  return s; }
 
+// FIXME i think this fix is wrong
+// ⚠ EVERY VALUE IS ROOTED BEFORE THE FIRST NAME IS INTERNED. ai_strof/intern/ai_mapput
+// all allocate, so a def whose .x is a live heap value goes stale in the CALLER's array
+// the moment one of them collects -- and C cannot re-root what it holds. main()'s
+// argv/cmdline are exactly that: two entries sharing one chain, and the second
+// definition bound a pointer the first definition's intern had already forwarded.
 struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
-  g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
- ai_core_of(g)->sp++;
+ uintptr_t m = n;
+ // FIXME what if ai_push triggers GC before the loop is finished? 
+ for (uintptr_t i = 0; i < n; i++) g = ai_push(g, 1, defs[i].x);
+ for (g = ai_push(g, 1, A(ai_core_of(g)->book)); ai_ok(g) && n--; )
+  g = ai_mapput(intern(ai_strof(ai_push(g, 1, ai_core_of(g)->sp[m - n]), defs[n].n)));
+ if (ai_ok(g)) ai_core_of(g)->sp += m + 1;
  return g; }
 
 nifs(native_implemented_function);
@@ -4030,13 +4039,18 @@ static struct ai *ioput_fn_body(struct ai *g, word x, uintptr_t off) {
 
 // a coin shows as `(name payload)` -- reparsable when the die's NAME is the symbol
 // of a bound constructor (the common case: `(z5 3)`). Nameless -> `(coin payload)`.
+// ⚠ THE COIN IS PARKED, like every other ioput_* value. Printing a byte grows the port,
+// which allocates, so a raw `x` -- and the die and payload read out of it -- is stale
+// after the first one. This lane was the last one reading through a bare C word.
 static struct ai *ioput_coin(struct ai *g, word x, uintptr_t off) {
- word nm = die_get(g, coin_die(x), DIE_NAME);
+ if (!ai_ok(g = ai_push(g, 1, x))) return g;
  g = ioputc(g, '(');
- g = ai_nilp(g, nm) ? ioputcs(g, "coin") : ioputx(g, nm, off);
+ if (ai_ok(g)) {
+  word nm = die_get(g, coin_die(g->sp[0]), DIE_NAME);
+  g = ai_nilp(g, nm) ? ioputcs(g, "coin") : ioputx(g, nm, off); }
  g = ioputc(g, ' ');
- g = ioputx(g, coin_load(x), off);
- return ioputc(g, ')'); }
+ if (ai_ok(g)) g = ioputx(g, coin_load(g->sp[0]), off);
+ return ai_pop(ioputc(g, ')'), 1); }
 static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
  if (charmp(x)) return ioprintf(g, "%d", getcharm(x));
  if (coinp(x)) return ioput_coin(g, x, off);
@@ -8730,9 +8744,10 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
  if (!isnum(a) || !isnum(b)) return nil;
  struct ai *g = *fp;
  if (flop(a) || flop(b)) {                      // float domain -> float box
-  if (!ai_ok(g = ai_have(g, flo_req))) return *fp = g, nil;
-  *fp = g;
-  return mk_flo(&g->hp, vop_flo(op, toflo(a), toflo(b))); }
+  ai_flo_t r = vop_flo(op, toflo(a), toflo(b));  // ⚠ BOTH OPERANDS READ FIRST: a/b are raw words
+  if (!ai_ok(g = ai_have(g, flo_req))) return *fp = g, nil;   // and a float box is a heap object, so
+  *fp = g;                                                    // toflo after the have reads a moved one
+  return mk_flo(&g->hp, r); }
  if (!bigp(a) && !bigp(b)) {                    // machine-int fast path, overflow-checked
   intptr_t av = toint(a), bv = toint(b), t; bool of;
   switch (op) {
@@ -8787,7 +8802,8 @@ static struct ai *arr_to_obj(struct ai *g, int slot) {
    if (e >= fix_min && e <= fix_max) v = putcharm(e);
    else { if (!ai_ok(g = ai_have(g, wide_req))) return g;
     v = mk_wide(&g->hp, e); } }
-  vec_put_obj(vec(g->sp[0]), i, v); }                          // re-fetch dst post-box
+  vec_put_obj(vec(g->sp[0]), i, v);                            // re-fetch dst post-box
+  gen_wb(g, g->sp[0], v); }                                    // ... and BARRIER it: see obin_run
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
  return g; }
 
@@ -8821,6 +8837,13 @@ static struct ai *obin_run(struct ai *g, int op) {
   word res = obin_elem(&g, op, ae, be);
   if (!ai_ok(g)) return g;
   vec_put_obj(vec(g->sp[0]), p, res);                          // re-fetch result post-alloc
+  // ⚠ AND BARRIER IT. Re-fetching keeps the STORE landing in the right place; it does not
+  // make the stored edge visible. This loop allocates, so a minor mid-loop promotes the
+  // result array while the elements it is being filled with stay young -- an old->young
+  // edge the rem set has to carry or the next minor frees an element still in the array
+  // (which then reads as whatever is allocated over it). gen_scan_inplace's KVec lane is
+  // what rescans it. Reachable in a plain build: 6000 bignums at LOVE_BUDGET_MB=16.
+  gen_wb(g, g->sp[0], res);
   odo_step(idx, R, shp); }
  word result = g->sp[0];                                       // collapse [r,a,b] -> r, advance ip
  g->sp += 2, g->sp[0] = result, g->ip = (union u*) g->ip + 1;
