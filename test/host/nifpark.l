@@ -70,4 +70,21 @@
    _ (assert (0 < (peep n 0 0))         ; 0 with the blocking waitpid back in
              (st = 0)))                 ; ... and the child's status is still exact
 
+; --- law 4: run PARKS for the child's whole life ------------------------------
+; not the reap -- the DRAIN. A blocking read(2) over the child's stdout held the
+; vm for as long as the child had anything left to say. `run` is a TWO-AP nif
+; body ({start},{drain},{ret0}) because the op is not re-runnable where it parks:
+; a re-entry from the top would fork a SECOND child. So the fork is one op, the
+; capture is the other, and the five stack slots between them are the park state.
+; ⚠ the child must be slow in the MIDDLE, not just at the end -- a child that
+; writes everything at once and exits would let a blocking drain finish in one
+; read and the law would pass over the bug.
+(: n (tablet 0)
+   t (ticker n)
+   r (run '("sh" "-c" "echo one; sleep 0.2; echo two"))
+   _ (freeze t)
+   _ (assert (0 < (peep n 0 0))         ; 0 with the blocking drain back in
+             ((cap r) = 0)
+             ((cup r) = "one\ntwo\n")))  ; ... and the capture is still whole
+
 (: _ (say out "nifpark: ok") (putc 10))

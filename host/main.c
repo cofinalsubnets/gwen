@@ -261,12 +261,22 @@ static void host_teeout(char const *p, size_t n) {
   if (w < 0) { if (errno == EINTR) continue; return; }
   p += w, n -= (size_t) w; } }
 
-// Workhorse for (run argv) / (runt argv). Called with g Packed; argv is the
-// single arg. Pushes EXACTLY ONE net value above argv on every path so the
-// lvm_run shell collapses uniformly: success -> [(status . output), argv],
-// failure -> [errno-or-(-1) fixnum, argv]. Returns a not-ok g only on OOM.
-// &locals (pipes/pid/status) are fine here: this returns normally, it is
-// not a VM-dispatch tail-call site (cf. call_open vs lvm_open).
+// (run argv) / (runt argv) are a TWO-AP NIF BODY -- {{start}, {drain}, {ret0}} --
+// because the op is not re-runnable where it has to park. love.h's nif park says
+// "leave Ip unadvanced and yield, the op re-runs", and a run that re-ran from the
+// top would fork a SECOND child. So the fork and the capture are two ops, and the
+// park lives in the second one, which re-runs as often as the child is slow.
+//
+// The whole park state is FIVE STACK SLOTS, which the yield snapshots and the GC
+// traces for free -- no C local survives a turn, and the capture string is free
+// to move between them:
+//
+//    sp[0] out    the growing capture string -- or, when fd is -1, the whole answer
+//    sp[1] n      bytes filled so far (a charm)
+//    sp[2] fd     >= 0 draining | -2 drained, reaping | -1 done, out IS the answer
+//    sp[3] pid    the child (a charm)
+//    sp[4] tee    0/1 -- argv's own slot, which argv is done with by then
+//    sp[5]        the return ip lvm_ret0 wants
 //
 // `tee` picks WHEN the captured output reaches stdout, not whether it is
 // captured: 0 (run) holds it until the child exits and hands the whole string
@@ -277,14 +287,31 @@ static void host_teeout(char const *p, size_t n) {
 // consumes the text -- $(shell ..), a glob, an mtime probe -- passes 0. Because
 // the tee bypasses the l-level `out` buffer, a teeing caller must (flush out)
 // first or its own echoed lines land after the child's bytes.
-ai_noinline static struct ai *host_run(struct ai *g, ai_word argv, int tee) {
+//
+// &locals (pipes/pid/status) are fine in both helpers: they return normally,
+// they are not VM-dispatch tail-call sites (cf. call_open vs lvm_open).
+
+// Lay the four state slots over argv, so every exit from the spawn -- a misuse,
+// a failed pipe, a failed fork, a failed exec, a live child -- hands the drain
+// ONE shape to read. The capture string (or the errno answer) goes on top after.
+static struct ai *host_runst(struct ai *g, intptr_t fd, intptr_t pid, int tee) {
+ g = ai_push(g, 3, putcharm(0), putcharm(fd), putcharm(pid));
+ if (ai_ok(g)) g->sp[3] = putcharm(tee);
+ return g; }
+
+// The first ap: marshal argv, fork, and confirm the exec. Called with g Packed;
+// argv is at sp[0]. Returns a not-ok g only on OOM.
+ai_noinline static struct ai *host_runstart(struct ai *g, int tee) {
  // pass 1: validate every element is a string; size the arg-byte blob.
+ ai_word argv = g->sp[0];
  intptr_t argc = 0;
  uintptr_t total = 0;
  for (ai_word p = argv; chainp(p); p = B(p)) {
-  if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));   // misuse
+  if (!ai_strp(A(p)))                                     // misuse
+   return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(-1));
   argc++, total += len(A(p)) + 1; }                       // +1 for the NUL
- if (!argc) return ai_push(g, 1, putcharm(-1));            // empty argv
+ if (!argc)                                               // empty argv
+  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(-1));
 
  // Reserve gap for cav (argc+1 pointers, word-aligned) + the byte blob.
  // Written into the uncommitted region at Hp -- invisible to GC, holds no
@@ -306,15 +333,20 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv, int tee) {
  // spawn: stdout pipe + a close-on-exec error pipe. On a successful exec the
  // kernel closes ep[1] -> parent reads EOF; on failure the child writes errno
  // -> parent distinguishes "couldn't spawn" from "ran and exited 127".
+ // ⚠ THAT HANDSHAKE STILL BLOCKS, and it is the one wait left here: it is
+ // bounded by the child's exec(2), not by the child's life, which is the whole
+ // difference this rung is about. (Every push below happens after the fork, so
+ // growing the stack over the cav/blob gap is the parent's business alone.)
  int op[2], ep[2];
- if (pipe(op)) return ai_push(g, 1, putcharm(errno));
- if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]); return ai_push(g, 1, putcharm(e)); }
+ if (pipe(op)) return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(errno));
+ if (pipe(ep)) { int e = errno; close(op[0]); close(op[1]);
+  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
  pid_t pid = fork();
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
-  return ai_push(g, 1, putcharm(e)); }
+  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(e)); }
  if (!pid) {                                              // child
   signal(SIGPIPE, SIG_DFL);                               // the ignore must not ride the exec
   dup2(op[1], STDOUT_FILENO);
@@ -336,52 +368,95 @@ ai_noinline static struct ai *host_run(struct ai *g, ai_word argv, int tee) {
  if (childerr) {                                          // exec failed
   close(op[0]);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
-  return ai_push(g, 1, putcharm(childerr)); }
+  return ai_push(host_runst(g, -1, 0, tee), 1, putcharm(childerr)); }
 
- // drain stdout into a growing l string (bulk reads; stderr inherited). Under
- // tee, each chunk is ALSO written straight through as it arrives -- the read
- // loop is already incremental, so streaming costs one write per chunk.
- uintptr_t n = 0, lim = 1u << 16;
- g = str0(g, lim);                                        // capture -> sp[0]
- while (ai_ok(g)) {
-  if (n == lim) { g = host_grbufg(g, lim); lim *= 2; continue; }
-  r = read(op[0], txt(g->sp[0]) + n, lim - n);
-  if (r < 0) { if (errno == EINTR) continue; break; }
-  if (!r) break;                                          // EOF
-  if (tee) host_teeout(txt(g->sp[0]) + n, (size_t) r);    // ..before the buffer can move
-  n += (uintptr_t) r; }
- close(op[0]);
- { int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}          // reap
-   if (!ai_ok(g)) return g;                                // OOM mid-drain
+ // The read end never blocks. It is a fresh fd the child does not share, so the
+ // flag just STAYS on -- none of fd_readn's per-call toggle dance, which exists
+ // for fds whose open file description a forked child holds too.
+ { int fl = fcntl(op[0], F_GETFL); if (fl >= 0) fcntl(op[0], F_SETFL, fl | O_NONBLOCK); }
+ return str0(host_runst(g, op[0], pid, tee), 1u << 16); }  // capture -> sp[0]
+
+// The second ap, once per scheduled turn: take what the pipe has (growing the
+// string when it fills), tee it through if asked, then leave the state where the
+// next turn finds it. Nothing here holds a pointer across an allocation -- the
+// capture string is re-read off sp[0] every time, because a park may have moved it.
+ai_noinline static struct ai *host_rundrain(struct ai *g) {
+ intptr_t fd = getcharm(g->sp[2]);
+ if (fd == -1) return g;                        // nothing was spawned: sp[0] IS the answer
+ pid_t pid = (pid_t) getcharm(g->sp[3]);
+ if (fd >= 0) {
+  int tee = getcharm(g->sp[4]) != 0;
+  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
+  for (;;) {
+   uintptr_t lim = len(g->sp[0]);
+   if (n == lim) {                                        // full -> double it and retry
+    if (ai_ok(g = host_grbufg(g, lim))) continue;
+    // ⚠ OOM mid-capture: close the pipe and KILL the child rather than wait on
+    // it. A bounded reap of a killed child is not the wait this rung deletes.
+    close((int) fd);
+    kill(pid, SIGKILL);
+    { int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {} }
+    return g; }
+   ssize_t r = read((int) fd, txt(g->sp[0]) + n, lim - n);
+   if (r > 0) {
+    if (tee) host_teeout(txt(g->sp[0]) + n, (size_t) r);  // ..before the buffer can move
+    n += (uintptr_t) r;
+    continue; }
+   if (r < 0 && errno == EINTR) continue;
+   g->sp[1] = putcharm((intptr_t) n);
+   if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    g->next_wait_fd = (int) fd;                           // the scheduler owns the wait
+    return g; }
+   break; }                                               // EOF, or a read error we cannot use
+  close((int) fd);
+  g->sp[2] = putcharm(-2); }                              // drained; now reap
+ // ⚠ THE REAP IS A POLL, for the reason the `wait` nif is one: SIGCHLD is not in
+ // the scheduler's wait set and a pid is not an fd. It almost always answers on
+ // the first ask -- the child closed its stdout on the way out -- so the tick is
+ // what a child that closes stdout early and keeps computing costs, nothing more.
+ { int st; pid_t w;
+   do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
+   if (!w) { g->next_wake_at = ai_clock() + 1; return g; }
+   uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
    if (n) len(g->sp[0]) = n;                              // fix logical length
-   else g->sp[0] = EmptyString;                             // empty output -> the singleton
-   int status = WIFEXITED(st) ? WEXITSTATUS(st)
+   else g->sp[0] = EmptyString;                           // empty output -> the singleton
+   int status = w < 0 ? -1
+              : WIFEXITED(st) ? WEXITSTATUS(st)
               : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1;
    if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
-   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                              putcharm(status), g->sp[0]);
-   g->sp[0] = word(w); }                                  // [(status.output), argv]
+   struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                  putcharm(status), g->sp[0]);
+   g->sp[0] = word(c);
+   g->sp[2] = putcharm(-1); }                             // done
  return g; }
 
 static lvm(lvm_run) {
  Pack(g);
- g = host_run(g, Sp[0], 0);
+ g = host_runstart(g, 0);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- Sp[1] = Sp[0];                                           // result over argv
- Sp += 1; Ip += 1;
- return Continue(); }
+ return Ip += 1, Continue(); }
 
 // (runt argv) -- run, TEEING: identical to (run argv), same (status . output)
 // answer, but the child's stdout is relayed as it arrives instead of only at
-// exit. For a caller that just reprints what it captured; see host_run's `tee`.
+// exit. For a caller that just reprints what it captured; see the `tee` note above.
 static lvm(lvm_runt) {
  Pack(g);
- g = host_run(g, Sp[0], 1);
+ g = host_runstart(g, 1);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- Sp[1] = Sp[0];                                           // result over argv
- Sp += 1; Ip += 1;
+ return Ip += 1, Continue(); }
+
+// The shared second ap. It PARKS -- Ip unadvanced, so the whole op re-runs on
+// reschedule and reads its state back off the stack.
+static lvm(lvm_rundrain) {
+ Pack(g);
+ g = host_rundrain(g);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ if (Sp[2] != putcharm(-1)) return Ap(lvm_yield_sw, g);
+ Sp[4] = Sp[0];                                           // the answer over the state
+ Sp += 4; Ip += 1;
  return Continue(); }
 
 // (exec argv) -> REPLACE this process with argv[0], inheriting stdio (the real
@@ -454,8 +529,8 @@ static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
  nif_close[] = {{lvm_close}, {lvm_ret0}},
- nif_run[] = {{lvm_run}, {lvm_ret0}},
- nif_runt[] = {{lvm_runt}, {lvm_ret0}},
+ nif_run[] = {{lvm_run}, {lvm_rundrain}, {lvm_ret0}},
+ nif_runt[] = {{lvm_runt}, {lvm_rundrain}, {lvm_ret0}},
  nif_exec[] = {{lvm_exec}, {lvm_ret0}},
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
