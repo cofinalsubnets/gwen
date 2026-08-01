@@ -70,6 +70,17 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { ai_sleep(ms); return; }
   poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
 
+// The same block, asked and not waited on -- ONE poll(2) for the whole parked ring,
+// where the weak default would spend one per fd. That is what lets the scheduler sweep
+// the parked tasks on a fairness yield at all (love.c, over sweep_interval).
+// ⚠ NO EINTR RETRY: a zero timeout means poll returns at once, and a signal that beats
+// it is answered by leaving every revents zero -- "none ready", asked again next sweep.
+// Retrying would be the one thing this call must never do, which is block.
+void ai_ready_fds(struct ai_wait_fd *fds, int n) {
+  if (n <= 0) return;
+  if (poll((struct pollfd*) fds, (nfds_t) n, 0) >= 0) return;
+  for (int i = 0; i < n; i++) fds[i].revents = 0; }
+
 // ⚠ SIGPIPE IS IGNORED (main), AND THE CONSOLE RE-RAISES IT BY HAND. a runtime
 // that ANSWERS "the device is gone" cannot be killed before it reads the answer
 // -- kiosko died whenever a client hung up mid-response, which is the ordinary

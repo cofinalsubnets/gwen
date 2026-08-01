@@ -772,6 +772,17 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define limb_base ((ai_dlimb) 1 << limb_bits)
 
 #define yield_interval 64
+// How many FAIRNESS YIELDS between two sweeps of the parked ring. The two are
+// separate counters because they buy separate things: a fairness yield hands the cpu
+// to a RUNNABLE peer and costs a walk of the run ring, which is short by construction;
+// a sweep asks the kernel whether a PARKED peer became runnable, and costs a syscall
+// over the whole parked ring. yield_interval alone had to price both, and every value
+// that made the sweep affordable also starved the run ring -- measured, at 200 parked:
+// 64 -> 305 req/s, 4096 -> 1680, but 4096 cost 15% at zero parked.
+// ⚠ WHAT THIS BOUNDS is how long a ready parked task waits behind a peer that NEVER
+// BLOCKS. any task that does i/o at all sweeps on its own blocking path long before
+// this counter comes round, so it is the compute-bound case alone that reads it.
+#define sweep_interval 16
 // A *fairness* yield (deep in compute, not an explicit I/O/timer wait): clear any
 // stale next_wait_fd/next_wake_at first. Those are one-shot intentions set right
 // before an explicit yield (lvm_fgetc/lvm_sleep), and lvm_fgetc never clears the fd
@@ -779,8 +790,11 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 // periodic yield then inherits it, yield_sw saves this task as parked on that fd and
 // find_runnable never reschedules it until the fd happens to fire again (deadlock).
 // Same hazard the lvm_wait path already guards against.
+// ⚠ g->parked JOINS THE GUARD: with the parked tasks off the run ring, a server whose
+// every client is blocked leaves a SELF-RING behind, and the old guard would stop firing
+// -- the parked peers would then wake only when this task blocked of its own accord.
 #define YieldCheck() \
-  if (g->tasks->m != g->tasks && ++g->yield_ctr >= yield_interval) \
+  if ((g->tasks->m != g->tasks || g->parked) && ++g->yield_ctr >= yield_interval) \
     { g->next_wait_fd = -1; g->next_wake_at = 0; return Ap(lvm_yield_sw, g); }
 #define argn(nom, i) lvm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
 #define quon(nom, v) lvm(nom) { Have1(); Sp -= 1; Sp[0] = putcharm(v); Ip += 1; return Continue(); }
@@ -987,6 +1001,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   M[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
   g->tasks = tagthread(M, 6);
+  g->parked = NULL;   // nothing is fd-parked before the first task ever parks
   // book[zero] = macro (the macro table -- no separate field). Both are on the
   // stack; push the zero key so (sp2,sp1,sp0)=(book,macro,zero) for ai_mapput.
   g = ai_push(g, 1, zero);
@@ -1316,6 +1331,7 @@ static void gen_minor(struct ai *g) {
  g->cp = g->major_hp;
  g->ip = cell(gcp(g, word(g->ip), p0, t0));
  g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
+ if (g->parked) g->parked = cell(gcp(g, word(g->parked), p0, t0));   // the parked ring is its own root
  for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);   // core vars
  for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, *s, p0, t0);                       // stack
  for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, *r->x, p0, t0);              // C roots
@@ -1341,6 +1357,7 @@ static void gen_minor(struct ai *g) {
   g->cp = (word*) g->gc_fwd;
   g->ip = cell(gcp(g, word(g->ip), p0, t0));
   g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
+  if (g->parked) g->parked = cell(gcp(g, word(g->parked), p0, t0));
   for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);
   for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, *s, p0, t0);
   for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, *r->x, p0, t0);
@@ -1412,6 +1429,7 @@ static struct ai *gen_major(struct ai *g) {
  g->gc_f2lo = (word*) g->end, g->gc_f2hi = g->hp;            // from-range 2: the minor (promote young in the same pass)
  g->ip = cell(gcp(g, word(g->ip), p0, t0));
  g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
+ if (g->parked) g->parked = cell(gcp(g, word(g->parked), p0, t0));   // the parked ring is its own root
  for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);
  for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, *s, p0, t0);
  for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, *r->x, p0, t0);
@@ -1453,6 +1471,7 @@ static struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  h->gc_gen = 0, h->gc_to_lo = ptr(h), h->gc_to_hi = ptr(h) + len1, h->gc_fwd = ptr(h), h->gc_f2lo = 0;
  h->ip = cell(gcp(h, word(h->ip), p0, t0));
  h->tasks = cell(gcp(h, word(h->tasks), p0, t0));
+ if (h->parked) h->parked = cell(gcp(h, word(h->parked), p0, t0));
  // h->symbols + the major were memcpy'd and live outside [p0,t0): untouched, NOT rebuilt
  for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);   // core vars
  for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                        // stack
@@ -2776,15 +2795,54 @@ static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
   while (!ai_ready(my_wait_fd, my_events)) wait_one(my_wait_fd, my_events, 0);
  return Continue(); }
 
+// The PARKED ring by pid. No node here is the running task, so unlike the run ring
+// every one is searchable -- and the predecessor comes back too, because the ring is
+// singly linked and an unsplice cannot go looking for it twice.
+static ai_inline union u *parked_find(struct ai *g, intptr_t pid, union u **prevp) {
+ union u *head = g->parked;
+ if (!head) return NULL;
+ union u *prev = head;
+ do { union u *n = prev->m;
+      if (getcharm(n[2].x) == pid) return *prevp = prev, n;
+      prev = n; } while (prev != head);
+ return NULL; }
+
+// Take `n` off the parked ring. ⚠ CALLED WITH g PACKED: gen_wb reads g->hp to tell
+// young from old, and the live Hp runs ahead of the last Pack.
+static ai_inline void parked_drop(struct ai *g, union u *prev, union u *n) {
+ if (prev == n) return (void) (g->parked = NULL);   // it was the whole ring
+ prev->m = n->m;
+ gen_wb(g, (word) prev, (word) prev->m);            // an old node now links to a (maybe young) successor
+ if (g->parked == n) g->parked = prev; }
+
+// ... and onto the run ring behind `tail` (the node whose link closes the ring), so a
+// task that parks and wakes constantly takes its turn after the peers already queued
+// rather than ahead of them every cycle.
+// ⚠ ANSWERS THE NEW TAIL, which is the node just spliced -- a wake pass that moves many
+// tasks at once therefore walks the run ring ONCE, not once per task. (Finding the tail
+// inside made a 200-client wake quadratic.)
+// ⚠ THE WAIT_FD IS CLEARED ON THE WAY IN, and that is the run ring's whole invariant:
+// nothing there is fd-parked, so find_runnable asks the kernel nothing. (An immediate,
+// so no barrier -- a charm cannot be an old->young edge.)
+static ai_inline union u *run_splice_at(struct ai *g, union u *tail, union u *n) {
+ n[0].m = g->tasks;
+ n[4].x = putcharm(-1);
+ gen_wb(g, (word) n, (word) n[0].m);
+ tail->m = n;
+ gen_wb(g, (word) tail, (word) tail->m);
+ return n; }
+
 // Is the task named by `pid` still live? ⚠ THE RING HEAD IS THE RUNNING TASK and
 // its saved ip is a stale snapshot, so it cannot answer for itself -- only its own
 // yield knows whether it is exiting, which is what `me_live` carries in. A pid with
 // no node is GONE, not live: freeze unsplices, and a catcher must not wait on a ghost.
-static ai_inline int task_live(union u *head, intptr_t pid, int me_live) {
+static ai_inline int task_live(struct ai *g, union u *head, intptr_t pid, int me_live) {
  if (getcharm(head[2].x) == pid) return me_live;
  for (union u *n = head->m; n != head; n = n->m)
   if (getcharm(n[2].x) == pid) return n[1].m->ap != lvm_task_exit;
- return 0; }
+ union u *prev;   // ⚠ AND THE PARKED RING: a caught task blocked on an fd is LIVE, and
+ union u *p = parked_find(g, pid, &prev);   // a catcher told otherwise stops waiting.
+ return p ? p[1].m->ap != lvm_task_exit : 0; }
 
 // Is this parked task sitting on a port that is already holding bytes? Readiness
 // is asked of an FD, but bytes live in the PORT -- so a task parked on a quiet fd
@@ -2829,20 +2887,76 @@ static ai_inline int polled_ready(struct ai_wait_fd const *fds, int nfds, int *c
    return *cur = j + 1 < nfds ? j + 1 : 0, fds[j].revents != 0; }
  return -1; }
 
-// `fds`/`nfds` is the block a just-finished wait filled, or NULL/0 for a scan with
-// no wait behind it (the pre-wait scan, and any frontend whose ai_wait_fds left
-// every revents zero -- see yield_sw_wait). An absent answer falls back to asking.
-static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live,
-                                        struct ai_wait_fd const *fds, int nfds) {
- int cur = 0;
+// The RUN ring only. Nothing here is fd-parked, so this walk ISSUES NO SYSCALL -- that
+// is the whole of rung 2, and it is why a task deep in compute can yield for fairness
+// every yield_interval aps without the blocked peers costing it anything.
+// ⚠ THE WAIT_FD ARM IS A FLOOR, NOT A PATH. It should never fire; it is here so that a
+// slipped invariant costs a re-park rather than a task run on an fd nobody asked about.
+static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live) {
  for (union u *n = head->m; n != head; n = n->m)
   if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
-   if (n[1].m->ap == lvm_wait && task_live(head, getcharm(n[6].x), me_live)) continue;
-   int wf = (int) getcharm(n[4].x), ev = (int) getcharm(n[5].x);
-   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)) return n;
-   int pr = polled_ready(fds, nfds, &cur, wf, ev);
-   if (pr < 0 ? ai_ready(wf, ev) : pr) return n; }
+   if (n[1].m->ap == lvm_wait && task_live(g, head, getcharm(n[6].x), me_live)) continue;
+   int wf = (int) getcharm(n[4].x);
+   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)
+       || ai_ready(wf, (int) getcharm(n[5].x))) return n; }
  return NULL; }
+
+// Can this parked task run again? Same three terms find_runnable used to ask of it,
+// read off the saved node: its deadline has come, its port already holds bytes, or its
+// fd says yes. `fds`/`nfds` is a readiness block already filled -- by the wait, or by
+// the fairness path's single ai_ready_fds -- and -1 from polled_ready falls back to
+// asking that one fd.
+// ⚠ `ask` IS WHETHER THE KERNEL MAY BE ASKED. With it clear only the syscall-free terms
+// count -- the deadline that has come, the port that already holds bytes -- and an fd
+// nobody has an answer for reads as not ready. That is the pass yield_sw_wait must make
+// BEFORE it builds a wait (see there).
+static ai_inline int parked_ready(struct ai *g, union u *n, uintptr_t now,
+                                  struct ai_wait_fd const *fds, int nfds, int *cur, int ask) {
+ if (n[1].m->ap == lvm_task_exit || (uintptr_t) getcharm(n[3].x) > now) return 0;
+ int wf = (int) getcharm(n[4].x), ev = (int) getcharm(n[5].x);
+ if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)) return 1;
+ int pr = polled_ready(fds, nfds, cur, wf, ev);
+ return pr < 0 ? (ask && ai_ready(wf, ev)) : pr; }
+
+// THE WAKE PASS: every parked task that can run again moves to the run ring. Answers
+// how many moved, so a caller can tell whether a second look is worth taking.
+// ⚠ WALKED BY COUNT, not by "back at the head": a task that wakes is unspliced under
+// the cursor, and the head is as free to leave as anyone.
+// ⚠ CALLED WITH g PACKED -- every relink here is a barrier, and both rings are old.
+static ai_noinline int wake_parked(struct ai *g, uintptr_t now,
+                                   struct ai_wait_fd const *fds, int nfds, int ask) {
+ if (!g->parked) return 0;
+ int n = 1, cur = 0, woke = 0;
+ for (union u *q = g->parked->m; q != g->parked; q = q->m) n++;
+ union u *prev = g->parked, *tail = NULL;
+ for (int i = 0; i < n && g->parked; i++) {
+  union u *t = prev->m;
+  if (!parked_ready(g, t, now, fds, nfds, &cur, ask)) { prev = t; continue; }
+  if (!tail) for (tail = g->tasks; tail->m != g->tasks; tail = tail->m);   // once, on the first wake
+  parked_drop(g, prev, t);
+  tail = run_splice_at(g, tail, t);
+  woke++; }
+ return woke; }
+
+// The fairness path's ask: ONE sweep of every parked fd, then the wake. The block rides
+// the [hp, sp) gap exactly as the wait's does -- no allocation, nothing gc can see.
+// ⚠ CALLED WITH g PACKED (the gap is [hp, sp), and both are stale otherwise).
+// ⚠ THE BLOCK IS AUTHORITATIVE HERE, unlike the wait's: ai_ready_fds fills every slot
+// even on the weak default, so all-zero means "none ready" rather than "nobody said".
+static ai_noinline int poll_parked(struct ai *g, uintptr_t now) {
+ int n = 1;
+ for (union u *q = g->parked->m; q != g->parked; q = q->m) n++;
+ struct ai_wait_fd *fds = (struct ai_wait_fd*) g->hp;
+ // no gap to lay them in (the heap at its fullest, a collection pending): ask the old
+ // way rather than skip the sweep, which would leave a ready peer parked.
+ if (avail(g) < b2w((uintptr_t) n * sizeof *fds)) return wake_parked(g, now, NULL, 0, 1);
+ int k = 0;
+ union u *q = g->parked;
+ do { int wf = (int) getcharm(q[4].x);
+      if (wf >= 0) fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(q[5].x);
+      q = q->m; } while (q != g->parked);
+ ai_ready_fds(fds, k);
+ return wake_parked(g, now, fds, k, 0); }
 
 // ⚠ THE FD SET IS SIZED BY THE COUNT, NEVER BY A CONSTANT: a set sized by a
 // constant drops every fd past it in silence, and a parked task with no timer
@@ -2852,14 +2966,31 @@ static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t n
 // before anything allocates again), so counting the ring first and sizing the
 // block second retires the cap by construction. ⚠ CALLED WITH g PACKED -- the gap
 // is [hp, sp) and both are stale otherwise.
+// ⚠ BOTH RINGS ARE WALKED HERE, and each answers a different half: the run ring holds
+// the sleepers (a deadline, never an fd) and the parked ring holds the fds. Waiting on
+// one ring's terms alone oversleeps the other's.
 static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live) {
+ // ⚠ THE SYSCALL-FREE WAKES FIRST, AND THIS IS LOAD-BEARING. A parked task whose PORT
+ // already holds bytes (another task's bulk gulp put them there) is runnable over an fd
+ // that has nothing left to say -- so a wait built while it is still parked never
+ // returns, and `catch` hangs on a task that finished. That is defect 6 wearing the two
+ // rings' clothes; test/host/parked.l's second law is the one that catches it.
+ // No syscall here: `ask` is clear, so only the deadline and the buffer terms count.
+ if (wake_parked(g, ai_clock(), NULL, 0, 0)) {
+  union u *n = find_runnable(g, g->tasks, ai_clock(), me_live);
+  if (n) return n; }
  uintptr_t min_wake = my_wake;
  int nfds = my_wait_fd >= 0;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
   if (n[1].m->ap != lvm_task_exit) {
    uintptr_t wa = (uintptr_t) getcharm(n[3].x);
-   if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
-   if (getcharm(n[4].x) >= 0) nfds++; }
+   if (wa && (!min_wake || wa < min_wake)) min_wake = wa; }
+ if (g->parked) {
+  union u *q = g->parked;
+  do { uintptr_t wa = (uintptr_t) getcharm(q[3].x);
+       if (wa && (!min_wake || wa < min_wake)) min_wake = wa;
+       if (getcharm(q[4].x) >= 0) nfds++;
+       q = q->m; } while (q != g->parked); }
  if (!min_wake && !nfds) return NULL;
  uintptr_t now = ai_clock(), ticks = min_wake ? min_wake - now : 0;
  // the block, once the wait has filled it in -- the readiness of every parked fd,
@@ -2882,27 +3013,46 @@ static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int m
    // "ready" is exactly the wrong way to guess.
    if (my_wait_fd >= 0)
     fds[k].fd = my_wait_fd, fds[k].revents = 0, fds[k++].events = (short) my_events;
-   for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
-    if (n[1].m->ap != lvm_task_exit) {
-     int wf = (int) getcharm(n[4].x);
-     if (wf >= 0)
-      fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(n[5].x); }
+   if (g->parked) {
+    union u *q = g->parked;
+    do { int wf = (int) getcharm(q[4].x);
+         if (wf >= 0)
+          fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(q[5].x);
+         q = q->m; } while (q != g->parked); }
    ai_wait_fds(fds, k, ticks);
    for (int i = 0; i < k; i++) if (fds[i].revents) { pol = fds, npol = k; break; } }
   now = ai_clock(); }
  if (my_wait_fd >= 0) {
   int cur = 0, pr = polled_ready(pol, npol, &cur, my_wait_fd, my_events);
   if (pr < 0 ? ai_ready(my_wait_fd, my_events) : pr) return NULL; }
- return find_runnable(g, g->tasks, now, me_live, pol, npol); }
+ wake_parked(g, now, pol, npol, 1);   // the wait answered the whole parked ring: collect it
+ return find_runnable(g, g->tasks, now, me_live); }
 
 lvm(lvm_yield_sw) {
- if (g->tasks->m == g->tasks) return Ap(lvm_yield_sw_mono, g);
+ // ⚠ THE MONOTASK DOOR NEEDS BOTH RINGS EMPTY. A lone runnable task with parked peers
+ // reads as a self-ring now, and the mono path waits on ITS OWN fd only -- the peers
+ // would sleep through every wake they were owed.
+ if (g->tasks->m == g->tasks && !g->parked) return Ap(lvm_yield_sw_mono, g);
  // a task on its way out is not live, and its own node cannot say so yet -- the
  // snapshot that records the exit is written at the foot of this op.
  int me_live = Ip->ap != lvm_task_exit;
- union u *next = find_runnable(g, g->tasks, ai_clock(), me_live, NULL, 0);
+ uintptr_t now = ai_clock();
  uintptr_t my_wake = g->next_wake_at;
  int my_wait_fd = g->next_wait_fd, my_events = g->next_wait_events;
+ // a FAIRNESS yield: still runnable, waiting on nothing. such a task never reaches
+ // yield_sw_wait, so this counter is the ONLY thing that ever asks, on its behalf,
+ // whether a parked peer became runnable. Sweeping is a syscall, so it rides
+ // sweep_interval rather than every yield.
+ // ⚠ IT MUST FIRE EVEN WHEN THE RUN RING HAS SOMEONE TO HAND THE CPU TO. two compute
+ // tasks trading turns are each perfectly fair to the other and would starve every
+ // parked peer for good, neither of them ever reaching a wait.
+ int fair = !my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait;
+ if (fair && g->parked && ++g->sweep_ctr >= sweep_interval) {
+  g->sweep_ctr = 0;
+  Pack(g);                     // the sweep lays its fd block in the [hp, sp) gap
+  poll_parked(g, now);
+  Unpack(g); }                 // nothing allocated, so these come back unchanged
+ union u *next = find_runnable(g, g->tasks, now, me_live);
  if (!next) {
   // A *fairness* yield (this task is still runnable: no wake deadline, no I/O
   // wait) with no runnable peer -- just keep running this task. Crucially do NOT
@@ -2913,7 +3063,7 @@ lvm(lvm_yield_sw) {
   // below; sleeping peers are picked up by a later YieldCheck once their wake_at
   // passes. ⚠ a catcher takes this arm only over its own dead body: Ip still points
   // at the catch, so "keep running it" means run the catch again, and again.
-  if (!my_wake && my_wait_fd < 0 && Ip->ap != lvm_wait) { g->yield_ctr = 0; return Continue(); }
+  if (fair) { g->yield_ctr = 0; return Continue(); }
   Pack(g);                     // the wait lays its fd block in the [hp, sp) gap
   next = yield_sw_wait(g, my_wake, my_wait_fd, my_events, me_live);
   Unpack(g);                   // nothing allocated, so these come back unchanged
@@ -2941,19 +3091,31 @@ lvm(lvm_yield_sw) {
  while (prev->m != g->tasks) prev = prev->m;
  union u *N = (union u*) Hp;
  Hp += need - restore_h;
- N[0].m = g->tasks->m;
+ // THE SNAPSHOT'S RING IS DECIDED BY ITS WAIT_FD. A task giving up its turn for an fd
+ // is not runnable and must not be walked as though it were -- it leaves the run ring
+ // here, which is the whole rung, and comes back through wake_parked.
+ int parking = my_wait_fd >= 0;
+ N[0].m = parking ? (g->parked ? g->parked->m : N) : g->tasks->m;
  N[1].m = Ip;
  N[2].x = g->tasks[2].x;
  N[3].x = putcharm((intptr_t) my_wake);
  N[4].x = putcharm(my_wait_fd);
  N[5].x = putcharm(my_events);
  memcpy(N + 6, Sp, my_height * sizeof(word));
- prev->m = tagthread(N, 6 + my_height);
+ tagthread(N, 6 + my_height);
+ // the run ring closes over the departing head either way: onto the snapshot when it
+ // stays, or over it entirely when it parks.
+ prev->m = parking ? g->tasks->m : N;
  // Pack FIRST: ai_young reads g->hp, and the live Hp runs ahead of the last Pack --
  // against a stale g->hp the fresh node reads as OLD, the barrier drops the edge, and
  // the next minor eats the ring (berth+ink froze in seconds on exactly this).
  Pack(g);
  gen_wb(g, (word) prev, (word) prev->m);   // task ring: an old node now links to the fresh (young) yield snapshot
+ if (parking) {
+  // ⚠ N ALREADY POINTS INTO THE PARKED RING (or at itself): only the ring's own link
+  // in is left, and only that one is an old->young edge worth a barrier.
+  if (g->parked) { g->parked->m = N; gen_wb(g, (word) g->parked, (word) g->parked->m); }
+  else g->parked = N; }
  g->yield_ctr = 0;
  g->tasks = next;
  Sp = memmove(topof(g) - restore_h, next_stack, restore_h * sizeof(word));
@@ -3007,6 +3169,12 @@ lvm(lvm_wait) {
    g->next_wake_at = 0;
    g->next_wait_fd = -1;
   return Ap(lvm_yield_sw, g); }
+ // ⚠ AND THE PARKED RING, or catching a task that is merely blocked on an fd answers
+ // the zero point AT ONCE, as though it had already finished. It is live, so this parks
+ // exactly as the run-ring arm above does; a dormant task is never parked (it exits with
+ // no fd), so there is no retval to collect here.
+ { union u *prev, *p = parked_find(g, target, &prev);
+   if (p) { g->next_wake_at = 0; g->next_wait_fd = -1; return Ap(lvm_yield_sw, g); } }
  return *Sp = ret, Ip++, Continue(); }
 
 lvm(lvm_donep) {
@@ -3015,7 +3183,12 @@ lvm(lvm_donep) {
  for (union u *node = g->tasks->m; node != g->tasks; node = node->m)
   if (getcharm(node[2].x) == target) {
    if (node[1].m->ap != lvm_task_exit) result = zero;
-   break; }
+   Sp[0] = result, Ip += 1;
+   return Continue(); }
+ // an unfound pid reads DONE, so a task merely parked on an fd would report finished --
+ // `reap` would drop a live session's handle mid-request.
+ { union u *prev;
+   if (parked_find(g, target, &prev)) result = zero; }
  Sp[0] = result;
  Ip += 1;
  return Continue(); }
@@ -3029,8 +3202,12 @@ lvm(lvm_hush) {
    prev->m = node->m;
    Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
    gen_wb(g, (word) prev, (word) prev->m);   // unsplice relinks an old node to a (maybe young) successor
-   result = putcharm(1);
-   break; }
+   Sp[0] = putcharm(1), Ip += 1;
+   return Continue(); }
+ // freeze reaches the parked ring too -- a task blocked on a quiet fd is exactly the one
+ // a caller most wants to be able to stop.
+ { union u *pp, *p = parked_find(g, target, &pp);
+   if (p) { Pack(g); parked_drop(g, pp, p); result = putcharm(1); } }
  Sp[0] = result;
  Ip += 1;
  return Continue(); }
@@ -4902,6 +5079,13 @@ lvm(lvm_apof) {
 __attribute__((weak)) bool ai_ready(int fd, int events) { (void) fd, (void) events; return true; }
 __attribute__((weak)) void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
   (void) fds; (void) n; ai_sleep(ticks); }
+// The default AUTHORITATIVE readiness sweep: ask one at a time, but fill every slot, so
+// the caller never has to tell "none ready" from "nobody answered". A frontend with a
+// real multiplexer replaces the whole loop with one call and that is where the fairness
+// path's cost goes; a frontend without one is exactly as fast as it was before.
+__attribute__((weak)) void ai_ready_fds(struct ai_wait_fd *fds, int n) {
+  for (int i = 0; i < n; i++)
+    fds[i].revents = ai_ready(fds[i].fd, fds[i].events) ? fds[i].events : 0; }
 
 // Default fd close is a no-op. The host overrides with close(2); kernel
 // and pd don't have real OS fds to release, so the no-op is correct.
@@ -5897,6 +6081,11 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  if (H.nroot != 2 + nv) return NULL;                                     // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
  g->tasks   = (union u*) image_root_dec(H.root_tag[1], H.root_val[1], base);
+ // ⚠ THE PARKED RING IS NOT IN THE IMAGE, and needs no slot: an fd number means
+ // nothing in a new process, and a baker is single-tasked, so there was never a
+ // parked task to carry. An empty ring at wake -- no root_tag entry, so nroot and
+ // the encver are exactly what they were.
+ g->parked  = NULL;
  for (uintptr_t i = 0; i < nv; i++) ((word*) &g->v0)[i] = image_root_dec(H.root_tag[2 + i], H.root_val[2 + i], base);
  g->next_serial = H.next_serial;
  ai_image_note(6);
