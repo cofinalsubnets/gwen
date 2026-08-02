@@ -582,8 +582,8 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define YieldCheck() \
   if ((g->tasks->m != g->tasks || g->parked) && ++g->yield_ctr >= yield_interval) \
     { g->next_wait_fd = -1; g->next_wake_at = 0; return Ap(lvm_yield_sw, g); }
-#define argn(nom, i) lvm(nom) { Prof(); Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
-#define quon(nom, v) lvm(nom) { Prof(); Have1(); Sp -= 1; Sp[0] = putcharm(v); Ip += 1; return Continue(); }
+#define argn(nom, i) lvm(nom) { Have1(); Sp[-1] = Sp[i]; Sp -= 1; Ip += 1; return Continue(); }
+#define quon(nom, v) lvm(nom) { Have1(); Sp -= 1; Sp[0] = putcharm(v); Ip += 1; return Continue(); }
 
 #define Ana(n, ...) struct ai *n(struct ai *g, struct env **c, intptr_t x, ##__VA_ARGS__)
 #define Cata(n, ...) struct ai *n(struct ai *g, struct env **c, ##__VA_ARGS__)
@@ -693,14 +693,8 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
 // ============================================================================
 // g
 // ============================================================================
-#ifdef AI_VMPROF
-static void prof_dump(void);   // defined below def1, which it reads to name ops
-#endif
 enum ai_status ai_fin(struct ai *g) {
  enum ai_status s = ai_code_of(g);
-#ifdef AI_VMPROF
- prof_dump();
-#endif
  if ((g = ai_core_of(g))) {
    for (struct ai_fz *fz = g->fz; fz; fz->fn(fz->p), fz = fz->next); // run finalizers
    g->alloc(g, g->pool, 0); }
@@ -740,99 +734,6 @@ lvm(lvm_help) {
  return Ap(_lvm_help_scare, ai_core_of(g), s); }
 
 static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
-
-// AI_VMPROF -- TEMPORARY load-run profiler (delete before merge).
-// Counts the DYNAMIC frequency of each maximal run of load instructions:
-// a/q = arg/quote (plain or operand-specialized), A/Q/T = argap/quoteap/argtap
-// (terminal -- control leaves the run there). One note per run EXECUTION, not
-// per instruction: prof_end remembers where the last run ended, so a mid-run
-// entry is skipped. Dumps to /tmp/vmprof.out at ai_fin -- and ONLY if that file
-// already exists (open without O_CREAT), so love0 and the build's own runs stay
-// silent unless the file is deliberately touched.
-#ifdef AI_VMPROF
-#include <unistd.h>
-#include <fcntl.h>
-#define PROF_N 16384
-static struct { char s[24]; unsigned long n; } prof_tab[PROF_N];
-static union u *prof_end;
-static unsigned long prof_runs, prof_ops;
-static int prof_kind(lvm_t *ap, int *w, int *term) {
- *term = 0;
- if (ap == lvm_arg)   return *w = 2, 'a';
- if (ap == lvm_quote) return *w = 2, 'q';
- // s/c: the OPERAND-VALUE-specialized loads, kept distinct from plain a/q so the
- // profile can say whether run fusion is cannibalising them.
- if (ap == lvm_arg0 || ap == lvm_arg1 || ap == lvm_arg2 || ap == lvm_arg3) return *w = 1, 's';
- if (ap == lvm_quo0 || ap == lvm_quo1 || ap == lvm_quo2 || ap == lvm_quo3
-  || ap == lvm_quom1 || ap == lvm_quom2) return *w = 1, 'c';
- if (ap == lvm_argap)   return *w = 2, *term = 1, 'A';
- if (ap == lvm_quoteap) return *w = 2, *term = 1, 'Q';
- if (ap == lvm_argtap)  return *w = 3, *term = 1, 'T';
- if (ap == lvm_aa || ap == lvm_aq || ap == lvm_qa || ap == lvm_qq) return *w = 3, '2';
- if (ap == lvm_aap || ap == lvm_aqp || ap == lvm_qap || ap == lvm_qqp) return *w = 3, *term = 1, 'P';
- // F: a load already fused with its consumer (still pushes, so a run can continue);
- // G: arg+cond, which branches, so the run ends there.
- if (ap == lvm_argcap) return *w = 2, 'H';
- if (ap == lvm_argcup) return *w = 2, 'U';
- if (ap == lvm_argtwo) return *w = 2, 'W';
- if (ap == lvm_argcond) return *w = 3, *term = 1, 'G';
- if (ap == lvm_argtwocond) return *w = 3, *term = 1, 'X';
- return 0; }
-// what the run runs INTO -- the op that CONSUMES the loads. A load+operator fusion has
-// to be picked out of the JOINT (shape, consumer) distribution, so the shape string
-// carries the consumer's source name after a ':'. def1 holds each nif's BODY array and
-// its code slot (cell[0], or cell[2] under a lvm_cur curry header) is the lvm_ function,
-// so a bare op pointer resolves to its name -- the lane image_fn_index rides. A fixed
-// guessed char set left 12% of all load dispatches in an "other" bucket, which is not
-// a finding; this names every one of them.
-static char const *prof_opname(lvm_t *ap) {
- for (uintptr_t j = 0; j < countof(def1); j++) {
-  word const *c = (word const*) def1[j].x;
-  if ((intptr_t)(c[0] == (word) lvm_cur ? c[2] : c[0]) == (intptr_t) ap) return def1[j].n; }
- return "?"; }
-static ai_noinline void prof_note(union u *p) {
- char b[24];
- int n = 0, w, t = 0;
- for (; n < 8;) { int k = prof_kind(p->ap, &w, &t); if (!k) break; b[n++] = (char) k, p += w; if (t) break; }
- prof_end = t ? 0 : p;
- if (!n) return;
- prof_runs++, prof_ops += (unsigned) n;
- if (!t) {                                  // a terminal run has no consumer: control left
-  char const *nm = prof_opname(p->ap);
-  b[n++] = ':';
-  for (int q = 0; nm[q] && n < 20; q++) b[n++] = nm[q]; }
- b[n] = 0;
- unsigned h = 5381;
- for (int i = 0; i < n; i++) h = h * 33u + (unsigned) b[i];
- for (unsigned i = 0; i < PROF_N; i++) {
-  unsigned j = (h + i) & (PROF_N - 1);
-  if (!prof_tab[j].s[0]) { for (int q = 0; q <= n; q++) prof_tab[j].s[q] = b[q]; prof_tab[j].n = 1; return; }
-  int e = 1;
-  for (int q = 0; q <= n; q++) if (prof_tab[j].s[q] != b[q]) { e = 0; break; }
-  if (e) { prof_tab[j].n++; return; } } }
-#define Prof() do { if (Ip != prof_end) prof_note(Ip); } while (0)
-static char *prof_num(char *p, unsigned long v) {
- char t[24]; int n = 0;
- do t[n++] = (char)('0' + v % 10), v /= 10; while (v);
- while (n--) *p++ = t[n];
- return p; }
-static void prof_dump(void) {
- int fd = open("/tmp/vmprof.out", O_WRONLY | O_APPEND);
- if (fd < 0) return;
- char buf[64], *p;
- for (unsigned i = 0; i < PROF_N; i++) if (prof_tab[i].s[0]) {
-  p = prof_num(buf, prof_tab[i].n), *p++ = ' ';
-  for (int q = 0; prof_tab[i].s[q] && q < 22; q++) *p++ = prof_tab[i].s[q];
-  *p++ = '\n', write(fd, buf, p - buf); }
- // ⚠ the summary markers must not collide with the SHAPE alphabet (a q s c A Q T
- // 2 3 P R): a bare "R" line read as "runs" is also a legal shape -- one lone
- // 4-word ap-terminal 3-run -- and that ambiguity has already been misread twice.
- p = prof_num(buf, prof_runs), *p++ = ' ', *p++ = '#', *p++ = 'r', *p++ = '\n';
- p = prof_num(p, prof_ops), *p++ = ' ', *p++ = '#', *p++ = 'o', *p++ = '\n';
- write(fd, buf, p - buf), close(fd); }
-#else
-#define Prof() ((void) 0)
-#endif
 
 // reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
 char const *ai_nif_name(intptr_t x) {
@@ -2802,7 +2703,6 @@ lvm(lvm_cur) {
 // load instructions
 //
 lvm(lvm_quote) {
- Prof();
  Have1();
  Sp -= 1;
  Sp[0] = Ip[1].x;
@@ -2818,7 +2718,6 @@ lvm(lvm_port_io) {
 
 // push a value from the stack
 lvm(lvm_arg) {
- Prof();
  Have1();
  Sp[-1] = Sp[getcharm(Ip[1].x)];
  Sp -= 1;
@@ -2828,7 +2727,6 @@ lvm(lvm_arg) {
 // fused (arg <idx> ; ap): the dominant "call a function on a local" shape, one
 // dispatch saved; resume is Ip+2 (2-word op)
 lvm(lvm_argap) {
- Prof();
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, resume at Ip+2
   Have1();
   Sp[-1] = Sp[getcharm(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; resume now Ip+2
@@ -2842,7 +2740,6 @@ lvm(lvm_argap) {
 
 // fused (quote <v> ; ap): a call with a constant arg; resume Ip+2
 lvm(lvm_quoteap) {
- Prof();
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, resume at Ip+2
   Have1();
   Sp[-1] = Ip[1].x, Sp -= 1, Ip += 1;               // push const under operator; resume now Ip+2
@@ -2856,7 +2753,6 @@ lvm(lvm_quoteap) {
 
 // fused (arg <idx> ; tap <fs>): the single-arg tail-call shape, e.g. a tail (loop x)
 lvm(lvm_argtap) {
- Prof();
  if (oddp(Sp[0])) {                                  // fixnum operator -> num-ap, deliver to caller
   Have1();
   Sp[-1] = Sp[getcharm(Ip[1].x)], Sp -= 1, Ip += 1;   // push local under operator; fs operand now Ip[1]
@@ -2890,13 +2786,13 @@ quon(lvm_quom1, -1) quon(lvm_quom2, -2)
 #define PushA(k) (Sp[-1] = Sp[getcharm(Ip[k].x)], Sp -= 1)
 #define PushQ(k) (Sp[-1] = Ip[k].x, Sp -= 1)
 // pure run, 2 loads: op + 2 operands = 3 words.
-#define frun2(nom, p1, p2) lvm(nom) { Prof(); Have(2); p1(1); p2(2); Ip += 3; return Continue(); }
+#define frun2(nom, p1, p2) lvm(nom) { Have(2); p1(1); p2(2); Ip += 3; return Continue(); }
 // ... with the apply on the second load. The operator is what the FIRST load
 // pushed (cf. lvm_argap, which reads it at Sp[0] before its own push), so the
 // fixnum test sits between the two. The numap lane bumps Ip to leave numap's
 // `ret = Ip+1` landing past the whole op.
 #define frun2p(nom, p1, p2) lvm(nom) { \
- Prof(); Have(2); p1(1); \
+ Have(2); p1(1); \
  if (oddp(Sp[0])) { p2(2); Ip += 2; return Ap(lvm_numap, g); } \
  p2(2); \
  union u *k = cell(Sp[1]); Sp[1] = word(Ip + 3), Ip = k; \
@@ -2916,21 +2812,21 @@ frun2p(lvm_qap, PushQ, PushA) frun2p(lvm_qqp, PushQ, PushQ)
 // for lvm_cond); this is the compile-time twin, and it reaches ops with no such peek.
 // ⚠ the parameter is NOT named `x`: the body says Ip[1].x, and a macro parameter of
 // that name substitutes into the MEMBER access.
-#define fld(nom, val) lvm(nom) { Prof(); Have1(); word v = Sp[getcharm(Ip[1].x)]; Sp[-1] = (val); Sp -= 1; Ip += 2; return Continue(); }
+#define fld(nom, val) lvm(nom) { Have1(); word v = Sp[getcharm(Ip[1].x)]; Sp[-1] = (val); Sp -= 1; Ip += 2; return Continue(); }
 fld(lvm_argcap, chainp(v) ? A(v) : v)
 fld(lvm_argcup, chainp(v) ? B(v) : ZeroPoint)
 fld(lvm_argtwo, (chainp(v) && !nomp(v)) ? putcharm(1) : zero)
 // arg + cond: the test never reaches the stack at all -- no push, no pop, one op.
 // Layout [Ip]=argcond [Ip+1]=idx [Ip+2]=else-addr [Ip+3]=then, matching lvm_cond's
 // own targets shifted by our operand (cf. the cmp_lt note).
-lvm(lvm_argcond) { Prof(); return Ip = ai_nilp(g, Sp[getcharm(Ip[1].x)]) ? Ip[2].m : Ip + 3, Continue(); }
+lvm(lvm_argcond) { return Ip = ai_nilp(g, Sp[getcharm(Ip[1].x)]) ? Ip[2].m : Ip + 3, Continue(); }
 // ... and the RUNG ABOVE: load + predicate + cond, all three in one op. Measured, this
 // is where `?` actually lives: only 7.1M conds test a bare local, while 86.1M test the
 // result of a fused load+accessor -- `(? (two? b) ..)` is the shape, 64.4M of it. The
 // whole test then costs one dispatch and NO stack traffic at all: nothing is pushed to
 // be immediately popped by the branch. Layout [Ip]=op [Ip+1]=idx [Ip+2]=else, so the
 // emit consumes the predicate's op cell AND the cond's, spending no new word.
-#define fldc(nom, test) lvm(nom) { Prof(); word v = Sp[getcharm(Ip[1].x)]; \
+#define fldc(nom, test) lvm(nom) { word v = Sp[getcharm(Ip[1].x)]; \
  return Ip = (test) ? Ip + 3 : Ip[2].m, Continue(); }
 fldc(lvm_argtwocond, chainp(v) && !nomp(v))            // two? answers a charm: no ai_nilp needed
 

@@ -258,6 +258,11 @@ fine: lengths 4+ are 1.0% of runs, and length 3 is 4.5%.
 corpus, four binaries with byte-identical machine code. THIRTEEN new opcodes total:
 8 run pairs, 4 load+consumer, 1 load+predicate+cond.
 
+⚠ all four carry the AI_VMPROF block, which tilts the comparison toward the fused end --
+see the post-base section below for why, and for the profiler-free numbers that supersede
+the wall-clock column here. The insn/cycle/branch columns are relative between builds that
+share the bias, so the SHAPE of the ladder stands; the magnitudes are optimistic.
+
                        insn     cycles  branches  bmiss  corpus self-time   binary
     R0 nothing       86.961G   25.238G   8.606G  90.93M      6.766s        6,344,640
     R1 pairs (8)     85.571G   24.321G   8.370G  80.19M      6.574s        6,317,224
@@ -320,19 +325,26 @@ B is the thing that had never been measured. Every earlier table compared fused 
 to each OTHER, so the question they answered was "is this arm worth its opcodes", never
 "is any of it worth shipping". Against B, on three budgets where maxRSS agrees:
 
-    budget   RSS spread    S vs B    M vs B   pairs (S vs M)
-      512         2.4%    -12.96%   -9.95%       -3.34%
-     1536        0.24%    -12.42%  -10.97%       -1.63%
-     3072        0.07%    -10.94%   -9.52%       -1.57%
+    workload  budget   RSS spread    S vs B    M vs B   pairs (S vs M)
+    corpus      3072         1.4%     -9.35%   -7.31%       -2.19%
+    eggboot   unpinned       2.4%     -7.46%        --           --
+    bintrees closure fib tak primes    within +-1.6%, no consistent sign
 
-    eggboot (RSS 152276/155348/151764)   -9.07%   -9.55%    ~0
-    bintrees closure fib tak primes           within +-1.6%, no sign
+So: **~9% on the corpus, ~7.5% at egg boot, nothing on the numeric benches.** Consumer
+fusion carries ~7 of the corpus points, the pairs ~2.2. That revises the older reading of
+"slightly negative on compile-only work" -- that was P-vs-M, the memo's cost, not the
+feature's. The feature is clearly positive at boot. S's image is also 47KB smaller than
+B's, fused threads costing fewer cells.
 
-So: **~11-13% on the corpus, ~9% at egg boot, nothing on the numeric benches.** Consumer
-fusion carries ~10 of the corpus points; the pairs add 1.5-3.3 there and nothing anywhere
-else. That revises the older reading of "slightly negative on compile-only work" -- that
-was P-vs-M, the memo's cost, not the feature's. The feature is strongly positive at boot.
-S's image is also 47KB smaller than B's, fused threads costing fewer cells.
+⚠ **the profiler was biasing this in the feature's favour.** Measured with the AI_VMPROF
+block compiled in (but never defined, so `Prof()` expanded to `((void) 0)`), the same
+comparison read -12.4%/-10.9%. Removing it sped BOTH sides up and the baseline more --
+B 7284->6639, S 6379->6038 at budget 1536. The dead statements sat in `argn`, `quon`,
+`lvm_arg`, `lvm_quote`, `lvm_argap`: exactly the hot dispatch ops the baseline executes
+MORE of, and an empty statement is still an AST node that moves mooncc's allocator (its
+removal alone changed .text by 15 instructions, in `lvm_hush`, which has no Prof site).
+An instrument in the hot path is not free even when it expands to nothing. Every number
+above is measured on the shipped, profiler-free source.
 
 ⚠ **the corpus file goes stale silently.** These runs began against a snapshot taken one
 day earlier -- 937501 bytes against the tree's 938329, 828 bytes apart -- and on the new
@@ -347,16 +359,21 @@ this investigation. Quote no timing whose RSS column is not matched.
 
 ## status
 
-`make test` green (host + love0 twice, vmret, waits). `make test_slow` hit two
-failures, **both pre-existing on unmodified HEAD** and neither this branch's:
+On the post base both gates are green. `make test` (host + love0 twice, vmret, waits)
+and `make test_slow` end to end, `test_fixpoint` included -- the gate that matters here,
+since this changes what the compiler emits and it still rebuilds itself to the byte.
+`wasm/love.js` regenerates with the emitter and is committed alongside it.
 
-* `test_front` — `;; missing sent`. Reproduced by stashing the branch and rebuilding.
-* `test_hue` — `vim/syntax.vim is stale`. The no-fusion baseline binary regenerates a
-  syntax.vim byte-identical to the fused one, and both differ from the committed file:
-  a book name moved and the generated file was not refreshed.
+The three failures recorded here earlier -- `test_front` (`;; missing sent`), `test_hue`
+(stale `vim/syntax.vim`) and `gen.v` at 713 asserts against a committed 715 -- were
+pre-existing on the old HEAD and are all resolved by post. None were this branch's.
 
-The generated `proof/rocq/gen.v` also comes out at 713 asserts against a committed 715 —
-again identical from all three binaries, so `test/spec.l` moved without a regenerate.
+⚠ `test_hostnif` asserts the process starts with NO signal ignored (`SigIgn: 0...0`), so
+it fails under `nohup` (SIGHUP) and under a shell that ignores SIGPIPE. Reset every
+signal to `SIG_DFL` before `exec` if you drive test_slow from a harness -- resetting the
+obvious few is not enough, python leaves SIGXFSZ ignored.
 
-The `AI_VMPROF` block in love.c is the instrument, not the product: `#ifdef`-guarded,
-off in every build, and it should come out before any merge.
+The `AI_VMPROF` load-run profiler that produced the dynamic distributions above was the
+instrument, not the product, and is **gone** -- the block, the `ai_fin` dump hook and all
+twelve `Prof()` call sites. The tables it produced stand; git history has it if it is
+ever wanted again.
