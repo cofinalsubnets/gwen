@@ -122,17 +122,104 @@
   (spa i) (? (i = 0) lvm_arg0 (i = 1) lvm_arg1 (i = 2) lvm_arg2 (i = 3) lvm_arg3 0)
   (spq v) (? (charm? v) (? (v = 0) lvm_quo0 (v = 1) lvm_quo1 (v = 2) lvm_quo2
                            (v = 3) lvm_quo3 (v = -1) lvm_quom1 (v = -2) lvm_quom2 0) 0)
-  (fuse a o t sp x k n)                          ; a=ap-op o=tap-op(0=none) t=plain-op sp=specializer
+  ; --- run fusion: the peephole's SECOND axis --------------------------------------
+  ; spa/spq specialize on an operand's VALUE; these specialize on the SHAPE of a RUN --
+  ; one op for two consecutive loads (lvm_aa/aq/qa/qq, and aap/aqp/qap/qqp when the
+  ; second load carries the apply). Measured on the corpus + the benches: half of all
+  ; runs are a lone load, but the pairs behind them are worth ~25% of every load
+  ; dispatch -- (- n 1) and friends emit `quote;arg`, an l2r call emits `quote;argap`.
+  ; NO LOOKAHEAD IS NEEDED: code builds backward, so a load's successor is already in
+  ; place at `tail` when it emits. GROWING is the same move the ap-fusion above makes --
+  ; overwrite the successor's OP cell with our operand and prepend the fused op, which
+  ; leaves the successor's own operands exactly where they sat, backpatch sites (qsite)
+  ; included. a successor that was operand-SPECIALIZED carries no operand cell, so its
+  ; implicit value is written out first; that is the only case spending the second
+  ; reserved word.
+  ;
+  ; how to grow the op at the head is READ OFF THE OP WORD, which `h` already holds.
+  ; nothing is remembered between emits: the shape of an instruction is a function of
+  ; its op word alone, so the three questions -- what letter is it, does it carry an
+  ; explicit operand cell, and what value does a specialized one imply -- are each a
+  ; plain lookup on `h`. an op that is not a growable load answers 0 from `rsh`, which
+  ; is every ap-fused, run-fused and consumer-fused op: a pair never grows into a
+  ; triple and nothing grows onto a tap, with no bookkeeping to say so.
+  (rsh h) (? (id? h lvm_arg) 1 (id? h lvm_arg0) 1 (id? h lvm_arg1) 1
+              (id? h lvm_arg2) 1 (id? h lvm_arg3) 1
+              (id? h lvm_quote) 2 (id? h lvm_quo0) 2 (id? h lvm_quo1) 2
+              (id? h lvm_quo2) 2 (id? h lvm_quo3) 2 (id? h lvm_quom1) 2 (id? h lvm_quom2) 2
+              (id? h lvm_argap) 3 (id? h lvm_quoteap) 4 0)
+  (rwide h) (? (id? h lvm_arg0) 0 (id? h lvm_arg1) 0 (id? h lvm_arg2) 0 (id? h lvm_arg3) 0
+                (id? h lvm_quo0) 0 (id? h lvm_quo1) 0 (id? h lvm_quo2) 0 (id? h lvm_quo3) 0
+                (id? h lvm_quom1) 0 (id? h lvm_quom2) 0 1)
+  (rimm h) (? (id? h lvm_arg1) 1 (id? h lvm_arg2) 2 (id? h lvm_arg3) 3
+               (id? h lvm_quo1) 1 (id? h lvm_quo2) 2 (id? h lvm_quo3) 3
+               (id? h lvm_quom1) -1 (id? h lvm_quom2) -2 0)
+  ; the SHAPE CODE names a 1-load run: 1 a, 2 q, 3 A(argap), 4 Q(quoteap). gop grows one
+  ; by a leading load (gs: 1 arg, 2 quote), and a PAIR is where it stops -- length 3 was
+  ; built, measured and removed. Sixteen more opcodes bought 0.71% of corpus cycles where
+  ; one predicate/cond op bought 4.3%; a longer run just chunks into pairs.
+  (gop c gs) (? (gs = 1)
+   (? (c = 1) lvm_aa (c = 2) lvm_aq (c = 3) lvm_aap lvm_aqp)
+   (? (c = 1) lvm_qa (c = 2) lvm_qq (c = 3) lvm_qap lvm_qqp))
+  ;                                       a=ap-op o=tap-op(0=none) t=plain-op sp=specializer
+  ; pc/tc are the shape codes to memoize for the ap-fused and the plain op;
+  ; gs is OUR letter (1=arg, 2=quote), read against a memoized head.
+  ; --- the OTHER axis: fuse a load with the op that CONSUMES it -----------------
+  ; the runs above are only half the picture -- something eats them, and on the corpus
+  ; that consumer is an accessor, a predicate or a branch, not arithmetic: cup 133.7M,
+  ; `?` 128.8M, cap 80.7M, two? 77.5M, against `+` at 5.5M. 64% of every load dispatch
+  ; goes into the first four. `cfuse` answers the fused op for a consumer we know, 0
+  ; otherwise; the emit is the SAME move as everywhere else here (overwrite the
+  ; consumer's op cell with our index, prepend the fused op), because all four consumers
+  ; keep whatever followed them exactly where it was -- `?`'s else-address included.
+  ; arg only: a quote consumed by one of these folds at compile time anyway.
+  ; the consumer ops are NIF bodies, not `insts` entries, so they are not names in the
+  ; book -- read them off the nif VALUE the way opof/feels does ((peek 0 f) is a 1-arg
+  ; nif's code slot). lvm_cond is an inst and resolves by name.
+  lvm_cup_ (peek 0 cup) lvm_cap_ (peek 0 cap) lvm_two_ (peek 0 two?)
+  (cfuse h) (? (id? h lvm_cup_) lvm_argcup (id? h lvm_cap_) lvm_argcap
+               (id? h lvm_two_) lvm_argtwo (id? h lvm_cond) lvm_argcond 0)
+  ; the rung above: load + PREDICATE + cond in one op. Only 7.1M conds test a bare local;
+  ; 86.1M test a fused load+accessor, and `(? (two? b) ..)` alone is 64.4M. h2 is the cell
+  ; AFTER the predicate's op -- always readable, since a thread always has its terminator
+  ; past the last instruction. The triple consumes the predicate's op cell AND the cond's,
+  ; so it costs NO new word: op at tail, index over the cond, else-address left where it
+  ; already sat at tail+2. Overwriting the cond cell is the same move the argcond arm
+  ; makes and is safe for the same reason -- nothing JUMPS to a cond, only falls into it
+  ; (aco's targets are the alt = rest's head, and the join).
+  ; ONLY two?. cap/cup were built and measured too and are NOT here: at RUNTIME an
+  ; argcap/argcup is followed by a cond 21.7M times, but at EMIT time cap/cup sit before
+  ; a cond in 8 sites out of 2497 -- those runtime adjacencies come from branch joins and
+  ; let bodies, where the cell after the accessor was not yet the cond. Two opcodes that
+  ; fire ~never are worse than none.
+  (cfuse2 h h2) (? !(id? h2 lvm_cond) 0 (id? h lvm_two_) lvm_argtwocond 0)
+  (fuse a o t sp pc tc gs x k n)
    (: tail (k (+ 2 n)) h (peek 0 tail)
-    (? (id? h lvm_ap)         (p2 a x (seek 1 tail))
+      cf (? (gs = 1) (cfuse h) 0)          ; arg only; 0 when the head is not a known consumer
+      c2 (? (gs = 1) (cfuse2 h (peek 1 tail)) 0)   ; ... and the load+predicate+cond triple
+    ; ⚠ the guard is `!(id? cf 0)`, NOT a bare `cf`. cf is a raw op ADDRESS, and asking
+    ; a raw address for its TRUTH sends `net` into it as if it were a heap object -- so
+    ; the answer depends on the machine code at that address, not on whether we found a
+    ; consumer. lvm_argcup/cap/two read true there and lvm_argcond read FALSE, which is
+    ; the whole reason cond fusion silently never fired. `id?` is plain identity and
+    ; dereferences nothing. (the `(? s ..)` spa/spq test below has the same latent shape
+    ; and happens to work on today's addresses -- left alone, but it is the same trap.)
+    (? (id? h lvm_ap)       (p2 a x (seek 1 tail))
        (o && id? h lvm_tap) (p2 o x (seek 1 tail))
-       (: s (sp x) (? s (poke -1 s tail) (p2 t x tail)))))
+       !(id? c2 0)          (: _ (poke 1 x tail) (poke 0 c2 tail))
+       !(id? cf 0)          (p2 cf x (seek 1 tail))
+       (: c (rsh h)
+        (? c (p2 (gop c gs) x (? (rwide h) (seek 1 tail)
+                                  (poke -1 (rimm h) (seek 1 tail))))
+           (: s (sp x) (? s (poke -1 s tail)
+                            (p2 t x tail)))))))
   ; arg fuses both ap and tap; quote only ap. quote;tap (a constant arg to a tail
   ; call, e.g. (loop 0)) is left unfused: overwriting the shared tap cell in some
   ; emit contexts corrupts a branch's jump target -- safe for arg (a fixnum index)
-  ; but not for quote. The rarest of the four cases; deferred.
-  (karg x k n) (fuse lvm_argap   lvm_argtap lvm_arg   spa x k n)
-  (kim  x k n) (fuse lvm_quoteap 0           lvm_quote spq x k n)
+  ; but not for quote. The rarest of the four cases; deferred -- and a fused run is
+  ; likewise never grown ONTO a tap, so lvm_argtap memoizes as ungrowable.
+  (karg x k n) (fuse lvm_argap   lvm_argtap lvm_arg   spa 3 1 1 x k n)
+  (kim  x k n) (fuse lvm_quoteap 0           lvm_quote spq 4 2 2 x k n)
   (k0 c n) (poke -1 lvm_ret (poke (+ 1 n) (ary c) (spin (+ 2 n))))
   ; k0s: like k0 but reserves one extra LEADING cell (so the text is shifted up
   ; by one) for ala to stash the lambda's source \-expr at value[-1], where the
