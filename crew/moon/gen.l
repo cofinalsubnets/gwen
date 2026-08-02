@@ -2417,7 +2417,10 @@
    epi-t16va `(`('lea 'sp 'fp 0) `('pop 'r4) `('pop 'fp) `('pop 'r3) `('add 'sp 'sp 16) `('jmpr 'r3))
    ; --- the ISA families: the one place an op's membership is stated. every IR pass reads these
    ; -- the derived base/disp tablets, rdsp (the dataflow view), the member? sites in the sweeps.
-   ; a new op joins its family HERE; an op off every list stays opaque (the safe default). ---
+   ; a new op joins its family HERE; an op off every list stays opaque (the safe default).
+   ; ⚠ an op that can BASE on r4 must also join a4base + uoff (unframe proves frame-cleanliness
+   ; there; a missed op re-frames the fn, and a framed fn that calls the VM faults -- glaze rides
+   ; Ip in rbp) and, if it touches a frame slot, deadst's scans. ---
    ldops9 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)          ; the gp loads (full + narrow)
    gstops '(st st1 st2 st4)                         ; the gp stores
    fldops '(ldsd ldss) fstops '(stsd stss)          ; the f-memory pair
@@ -2426,6 +2429,7 @@
    xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
    stxops '(stx stxb)                               ; the indexed stores
    siops '(si si1 si2 si4)                          ; the store-immediates (made only by the addressing fold)
+   cmpmops '(cmpm cmprm)                            ; the memory cmps (made only by cmpfuse)
    aluops '(add sub and or xor imul)
    divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
    vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
@@ -2449,6 +2453,8 @@
           (member? op gstops) `(`(<>f <>>>f) () ())
           (member? op stxops) `(`(<>f <>>f (nthr f 5)) () ())
           (member? op siops) `(`(<>f) () ())
+          (op = 'cmpm) `((`(<>f) + (rg1 <>>>f)) () ())
+          (op = 'cmprm) `(`(<>f <>>f) () ())
           (member? op leaops) `(`(<>>f) `(<>f) 1)
           (member? op xops) `(`(<>>f <>>>f) `(<>f) 1)
           (op = 'la) `(() `(<>f) 1)
@@ -2470,8 +2476,8 @@
    ; argument register -- so the rename is by POSITION, not by symbol: only the operand slot where
    ; r4 means "the frame base" becomes fp. an r4 anywhere else IS the 5th argument and stays.
    a4base (: t (tablet 0)
-             _ (foldl (\ _ o (pin t o 2)) 0 (ldops9 + fldops + xops + leaops))
-             _ (foldl (\ _ o (pin t o 1)) 0 ((stops9 + stxops) + siops))
+             _ (foldl (\ _ o (pin t o 2)) 0 ((ldops9 + fldops) + (xops + (leaops + '(cmprm)))))
+             _ (foldl (\ _ o (pin t o 1)) 0 ((stops9 + stxops) + (siops + '(cmpm))))
              t)
    (a4ize fs)
     (: (swap f i bp)
@@ -2625,9 +2631,9 @@
    ; frame base anywhere OUTSIDE a base slot. ⚠ rbp is retired everywhere it can be: the glaze ABI
    ; rides Ip in rbp, so a framed fn that calls into the VM faults on its own slots on return. --
    uoff (: t (tablet 0)
-           _ (foldl (\ _ o (pin t o 3)) 0 (ldops9 + fldops + leaops))
+           _ (foldl (\ _ o (pin t o 3)) 0 ((ldops9 + fldops) + (leaops + '(cmprm))))
            _ (foldl (\ _ o (pin t o 5)) 0 xops)
-           _ (foldl (\ _ o (pin t o 2)) 0 (stops9 + siops))
+           _ (foldl (\ _ o (pin t o 2)) 0 ((stops9 + siops) + '(cmpm)))
            _ (foldl (\ _ o (pin t o 4)) 0 stxops)
            t)
    (unframe g fs)
@@ -3230,6 +3236,10 @@
                             (? (<>>f = 'r4) (pin used <>>>f 1) ())
                            (member? <f fldops)
                             (? (<>>f = 'r4) (pin used <>>>f 1) ())
+                           (<f = 'cmpm)
+                            (? (<>f = 'r4) (pin used <>>f 1) ())
+                           (<f = 'cmprm)
+                            (? (<>>f = 'r4) (pin used <>>>f 1) ())
                            (member? <f '(lea lean))
                             (? (<>>f = 'r4) (pin esc 'y 1) ())
                            ())
@@ -3395,6 +3405,58 @@
              (f >< addrf1 r))))
    (addrfold fs) (: r (addrf1 (addrf1 fs))
                     (? ((tally r) = (tally fs)) r (addrfold r)))
+
+   ; the BRANCHING death proof (cmpfuse's license): X is dead at a point when NO reachable path
+   ; reads it before a def. segments explore once (a label memo), a br queues its target and
+   ; falls through, a jmp ends its segment into the target, ret frees every register but r0;
+   ; a read, an unknown op, or a call answers live (the args are unseen). linear per query.
+   (dieb? rd all fs0)
+    (: seen (tablet 0)
+       (lab l w) (? !(two? l) ()
+                    (: f <l (? (two? f && <f = 'label && id? <>f w) >l (lab >l w))))
+       (go l wl)
+        (? !(two? l) (next wl)
+           (: f <l
+              (? !(two? f) (go >l wl)
+                 (<f = 'label)
+                  (? (peep seen <>f ()) (next wl)
+                     (: _ (pin seen <>f 1) (go >l wl)))
+                 (member? <f '(jmp jmp8)) (next (link <>f wl))
+                 (member? <f '(br br8)) (go >l (link <>>f wl))
+                 (<f = 'ret) (? (id? rd 'r0) () (next wl))
+                 (: rs (rdsp f)
+                    (? (id? rs 'bar) ()
+                       (member? rd <rs) ()
+                       (member? rd <>rs) (next wl)
+                       (go >l wl))))))
+       (next wl) (? !(two? wl) 1
+                    (: w <wl
+                       (? (peep seen w ()) (next >wl)
+                          (: _ (pin seen w 1) (go (lab all w) >wl)))))
+       (go fs0 ()))
+
+   ; cmp LOAD-OP FUSION: a full-word load whose dest is consumed by the VERY NEXT cmp and dead
+   ; beyond it fuses into the cmp's memory operand -- (ld X b o)(cmp X y) is (cmpm b o y),
+   ; (cmp r X) is (cmprm r b o). runs after addrfold (the base already folded), the death proof
+   ; follows branches. x64 only; full-word only (a narrow cmp's flags shift with the extension).
+   (cmpfuse fs)
+    (: (go l)
+        (? !(two? l) ()
+           (: f <l r >l
+              nx (? (two? r) <r ())
+              X (? (two? f && <f = 'ld && two? nx && <nx = 'cmp) <>f ())
+              m (? !(nom? X) ()
+                   (id? <>nx X)
+                    (? (id? <>>nx X) ()             ; X both sides never fuses
+                       (charm? <>>nx && !(fits32? <>>nx)) ()
+                       `('cmpm <>>f <>>>f <>>nx))
+                   (id? <>>nx X)
+                    (? (charm? <>nx) () `('cmprm <>nx <>>f <>>>f))
+                   ())
+              (? (two? m && dieb? X fs >r)
+                 (m >< go >r)
+                 (f >< go r))))
+       (go fs))
 
    ; store-forward: a full-word frame store followed by ITS OWN reload reads the register instead
    ; -- (st r4 o rX) (ld rY r4 o) keeps the store and turns the reload into a mov. ⚠ the narrow
@@ -4832,6 +4894,7 @@
                             (body + `(`('li 'r0 0)) + (peep g 'epi epi-a64))))))))
                        (deadst
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
+                        (cmpfuse
                         (addrfold
                         (stld
                         (spmerge
@@ -4843,7 +4906,7 @@
                                   `('push 'r4) `('mov 'r4 'sp) `('sub 'sp 'sp frame)
                                   `('st 'r4 -8 'r3))
                            (cat <sp0
-                            (body + `(`('li 'r0 0)) + epi)))))))))))))))))
+                            (body + `(`('li 'r0 0)) + epi))))))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
        (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (link (homereg i9) a2)))

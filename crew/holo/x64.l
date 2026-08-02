@@ -171,6 +171,16 @@
    (emit-st1 base off s)  (x64-mem () 0 `(136) s base off)      ; 88     mov BYTE, s8 (REX present: spl/sil, never ah/ch)
    (emit-st2 base off s)  (x64-mem `(102) 0 `(137) s base off)  ; 66 89  mov WORD, s16
    (emit-st4 base off s)  (x64-mem () 0 `(137) s base off)      ; 89     mov DWORD, s32
+   ;; cmp against memory (the load-op fusion): (cmpm base off y) is the flags of [base+off] - y,
+   ;; y a register or an immediate (83 /7 ib under a signed byte, else 81 /7 id -- regf r6
+   ;; spells the 7 field, rn r6 = rdi = 7); (cmprm s base off) the flags of s - [base+off].
+   (emit-cmpm base off y)
+      (? (reg? y) (x64-mem () 1 `(57) y base off)                              ; 39 /r  cmp QWORD, r64
+         (&& (-128 <= y) (y <= 127))
+          ((x64-mem () 1 `(131) 'r6 base off) + `((byte y)))                   ; 83 /7 ib
+         ((x64-mem () 1 `(129) 'r6 base off) + (le32 y)))                      ; 81 /7 id
+   (emit-cmprm s base off) (x64-mem () 1 `(59) s base off)                     ; 3B /r  cmp r64, QWORD
+
    ;; the store-immediate family (si : li :: st : ld): mov r/m, imm through /0 (regf r0 spells
    ;; the 0 field). the 64-bit face sign-extends its imm32; the narrow faces truncate like their
    ;; register twins.
@@ -374,6 +384,7 @@
            ('ld1 >< emit-ld1) ('ld2 >< emit-ld2) ('ld4 >< emit-ld4)
            ('st1 >< emit-st1) ('st2 >< emit-st2) ('st4 >< emit-st4)
            ('si >< emit-si) ('si1 >< emit-si1) ('si2 >< emit-si2) ('si4 >< emit-si4)
+           ('cmpm >< emit-cmpm) ('cmprm >< emit-cmprm)
            ('ldu1 >< emit-ldu1) ('ldu2 >< emit-ldu2) ('ldu4 >< emit-ldu4)
            ('cas >< (emit-cas 1)) ('cas4 >< (emit-cas 0)) ('tp >< emit-tp)
            ('sx1 >< (emit-sx 1)) ('sx2 >< (emit-sx 2)) ('sx4 >< (emit-sx 4))
