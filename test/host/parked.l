@@ -74,4 +74,27 @@
    b2 (see r2)
    _ (assert (a2 = 65) (b2 = 66)))
 
+; --- rung 2: a parked peer is not starved by tasks that never block ------------
+; the two rings put the fd-parked tasks off the run ring, so the ONLY thing that
+; asks after them on behalf of a task deep in compute is the sweep counter
+; (love.c, sweep_interval). gate that counter on "nothing else is runnable" and
+; TWO compute tasks are enough to close the door forever: each is a runnable peer
+; for the other, so the fairness yield always has someone to hand the cpu to, the
+; sweep never fires, and the parked task waits for a wake that is never asked for.
+; ⚠ ONE compute task does NOT reach it -- it is the second that keeps the run ring
+; from running dry, which is exactly why the bug survived the first reading.
+; verified by fault injection: gating the sweep hangs this law and nothing else.
+(: p3 (pipe 0)
+   r3 (fdopen (cap p3))
+   (spin n) (? (n < 1) 0 (spin (n - 1)))
+   t3 (twirl (\ _ (see r3)) ())
+   _ (rest 30)                      ; t3 reaches its park before the compute starts
+   c1 (twirl (\ _ (spin 4000000)) ())
+   c2 (twirl (\ _ (spin 4000000)) ())
+   pid3 (spawnio `("sh" "-c" "sleep 0.2; printf Z") 0 (cup p3) 2 `() -1 0)
+   got (catch t3)                   ; never returns if the parked peer starves
+   _ (wait pid3)
+   _ (freeze c1) _ (freeze c2)
+   _ (assert (got = 90)))
+
 (puts "parked: ok\n")

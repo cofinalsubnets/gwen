@@ -6,8 +6,9 @@ the payoff sought is VERIFICATION -- doc/verify.md says love.c is "near its floo
 shrinking and the remaining lever is verifying pieces against references. its LINE count is
 near its floor; its TRUSTED surface is not, and that is where clay pays.
 
-the map, the ranked slate, and the honest costs. **rungs 0, 1 and 2 have landed**
-(`crew/moon/clay.l`, `make test_clay`, `tools/mx.l` + `mx.h`); the rest is unbuilt.
+the map, the ranked slate, and the honest costs. **rungs 0, 1, 2 and 2b have landed**
+(`crew/moon/clay.l`, `make test_clay`, `tools/mx.l` + `mx.h` + `kinds.h`); the rest is
+unbuilt.
 
 what rungs 0-1 actually found, and it is the single most useful fact in this file:
 **cparse's AST is not a complete C representation.** a top-level DECLARATION mostly
@@ -17,7 +18,7 @@ has no RETURN TYPE, and `static`/`const` are gone. that information is real; it 
 in the side tables (`stag`, `sigs`) and the parse state, which `gen.l` is HANDED and a
 shower is not. so clay is a SUPERSET of cparse's output, with the missing slots
 APPENDED, and G1 partitions test/cc into what it can say (62) and what it cannot
-(48) and prints both. the second number is the live measure of the gap, and teaching
+(49) and prints both. the second number is the live measure of the gap, and teaching
 parse.l to FILL those markers is what shrinks it -- clay's grammar already carries
 the faithful forms.
 
@@ -205,6 +206,23 @@ two checkers, doc/verify.md's strongest form and the discipline `gen.v` already 
 that is a change in the KIND of assurance, not the amount, and it is the cheapest one
 available.
 
+### E. the kind lattice -- the candidate this slate MISSED. `love.h:517`, one line
+
+LANDED as rung 2b; recorded here because the way it was missed is the useful part. the
+slate ranked by SECTION SIZE and purity meters, and every meter it used is blind to a
+one-line declaration. but the criterion the order was later rewritten around -- "where does
+the trusted surface shrink" -- catches it immediately: `enum q` was one datum kept in two
+places by hand, and rung 2 had just made one of those places a love table without noticing
+it now owned the list.
+
+the tell is textual, not structural: `tools/mx.l:21` said the order "is not free to change
+here alone." **a comment asserting a cross-file invariant is a bridge-3 confession** --
+shared source would need no such sentence. that reads as a better cheap-candidate detector
+than line count, and it costs a grep: an unchecked coupling announces itself in prose.
+
+what it does NOT prove is anything about the emitter. one `edef` node is not a workout, and
+the byte-identical output means the C never moved. A-D keep their order.
+
 ### the order
 
 **the matrices, then bignum, then dtoa, then `vbin_fill`.**
@@ -361,6 +379,19 @@ why it stays optional here rather than blocking.
    lines. the migration was checked the G2 way before love.c was touched -- the love
    table reproduced all 512 cells the C had compiled -- and the drift check lives in
    `test_clay` (regenerate, `cmp`), sabotage-proven.
+2b. **the kind lattice the matrices are INDEXED by.** LANDED. rung 2 moved the grid and
+   left its index behind: `enum q` was still hand-written at `love.h:517` and `mx-kinds`
+   was a transcription of it, coupled by a comment ("not free to change here alone") and
+   checked by nothing. now `kinds.h` is laid from the same roster the grid is and love.h
+   `#include`s it, so a kind cannot enter the lattice without entering both, and `KN` is
+   the roster's own length rather than a number someone counted -- which is what makes
+   `[KN][KN]` in mx.h mean the grid actually laid. the generated line came out
+   BYTE-IDENTICAL to the hand-written one, so this changed no C and no behaviour; it
+   changed who owns the list. cost: one new clay form, `(edef NAME (CONSTS…))`, emit-only
+   because cparse reduces a top-level enum to the bare `(tdef)` marker (`36-enum.c` is in
+   G1's inexpressible partition, which is how we know). ⚠ the embedding surface is TWO
+   files now -- `mk/install.mk` ships `kinds.h` beside `love.h`, and an install missing it
+   does not compile.
 3. **the bignum magnitude helpers, and `clay2coq.l`.** asm-free at `7164-7213` first, then
    `6946-7090`. meet `big.v` at the seam. remember both legs run different limb widths.
 4. **dtoa** -- once the `show0` float question is answered. `3889-3910` first, then

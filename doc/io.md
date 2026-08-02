@@ -1537,7 +1537,7 @@ and polls the scheduler's block directly, so there is nothing to copy and no
 second array to size.
 
 ⚠ **the `revents` half of that block is read back by the scheduler** (doc/sched.md
-rung 1) -- for an fd the wait reported on, `find_runnable` takes that answer instead
+rung 1) -- for an fd the wait reported on, the wake pass takes that answer instead
 of asking the kernel again one fd at a time. this is the one place the io arc and the
 scheduler arc touch, and filling `revents` stayed **optional**: a frontend that
 answers off a device flag leaves the block alone, every entry reads as "nothing to
@@ -1546,6 +1546,15 @@ zeroes `revents` on the way in and only trusts the block when some entry actuall
 fired -- so a frontend that never fills it degrades to the old cost, never to a hang.
 inle fills it (port/inle/kmain.c), being the other frontend where the parked count
 grows.
+
+⚠ **`ai_ready_fds` is the same block asked WITHOUT the wait** (doc/sched.md rung 2) --
+the scheduler needs the readiness of every parked fd on a path where it must not
+block, and one ask has to cover the ring. the host answers it in a single `poll(2)`.
+**its contract is the opposite of the wait's on exactly one point: the block comes
+back AUTHORITATIVE.** the weak default in love.c fills every slot by asking `ai_ready`
+one at a time, so all-zero means "none ready" and never "nobody answered" -- which is
+what lets a caller trust it without a second, per-fd pass. a frontend that provides
+nothing gets the default and is exactly as fast as it was.
 
 the law is test/host/parked.l, driven from test/host/run.l **under a timeout,
 because its regression is a HANG** and a wedged gate is worse than a red one.

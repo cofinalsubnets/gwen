@@ -235,7 +235,7 @@
                  pnt (twirl (\ _ (px-paintloop s win gc depth bx fx rig dirty -1)) 0)
                  _ (px-watch s m km del bx fx rig dirty)
                  _ (freeze pnt)
-                 _ (? (back? up) (catch up) (: _ (still pid 15) (freeze up)))
+                 _ (? (landed? up) (catch up) (: _ (still pid 15) (freeze up)))
                  _ (close s)
                  _ (close m)
                  (waitfor pid)))))))))

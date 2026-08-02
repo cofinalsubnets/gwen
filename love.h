@@ -130,8 +130,20 @@ struct ai {
   ai_word x;
   union u *m; } *ip;
  ai_word *hp, *sp;
- union u *tasks;       // task ring head (running task's node); always non-NULL after ai_ini
+ union u *tasks;       // RUN ring head (running task's node); always non-NULL after ai_ini.
+                       // ⚠ NO NODE HERE IS FD-PARKED -- a task that parks on an fd leaves for
+                       // `parked` below, which is what makes a switch cost no syscall at all.
+ union u *parked;      // the PARKED ring: tasks waiting on an fd, or NULL when none are. Its own
+                       // ring, not a segment of the run ring, so the fairness yield never walks
+                       // it -- only a task that BLOCKS pays for the tasks that are blocked, and
+                       // the readiness of the whole ring comes back from one ai_wait_fds/
+                       // ai_ready_fds. Never image-serialized: an fd means nothing across a
+                       // bake, and a baker is single-tasked, so a woken runtime starts empty.
  uintptr_t yield_ctr,  // ap-cycles since last cooperative yield; counts up to yield_interval (level-triggered)
+           sweep_ctr,  // fairness yields since the last PARKED sweep; counts to sweep_interval.
+                       // a second, slower counter on purpose -- handing the cpu to a runnable
+                       // peer is a ring walk, asking the kernel about a parked one is a syscall,
+                       // and one knob cannot price both (love.c, over sweep_interval).
            next_serial, // THE MINT STREAM: one monotonic counter every fresh identity draws
                         // from -- task pids and nom serials alike (pre-incremented).
                         // a nom's serial lands in its `code` slot: its
@@ -513,8 +525,11 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // cmp_rank in love.c -- which reseats string just below the number band and the KArrO tray
 // just BELOW chain (point < string < number < tray < chain < map < hot). The two coincide
 // only on the chain < map < hot tail; do NOT read this enum as the compare order.
-// KN is the matrix dimension.
-enum q { KMint, KNom, KCharm, KWide, KFlo, KCplx, KBig, KVec, KArrZ, KArrR, KArrC, KArrO, KString, KChain, KMap, KHot, KN };
+// KN is the matrix dimension -- the roster's own length, not a kind.
+// The ROSTER itself is tools/mx.l's, the same list the +/* dispatch matrices are
+// indexed by, so this enum and mx.h's [KN][KN] grid are one datum and cannot drift.
+// EDIT tools/mx.l, NOT kinds.h; `make test_clay` regenerates and fails on drift.
+#include "kinds.h"
 typedef ai_word num, word;
 // The unique empty string -- a data-segment global the GC never moves (gcp's
 // out-of-pool short-circuit). Strings are immutable, so one empty string
@@ -561,6 +576,15 @@ struct ai_wait_fd { int fd; short events, revents; };
 // ⚠ THE SCHEDULER FILLS `events`, not the frontend: each parked task asks for its
 // own direction, and a blanket mask over the block would wake readers on writable.
 void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks);
+// The same question WITHOUT THE WAIT: fill `revents` for all `n` fds as they stand
+// right now. The scheduler asks it on the fairness path, where the running task still
+// has work and only wants to know whether a parked peer has become runnable -- so it
+// must not block, and one ask must cover the whole ring.
+// ⚠ UNLIKE ai_wait_fds's block, THIS ONE IS AUTHORITATIVE: the weak default fills every
+// slot by asking ai_ready one at a time, so an all-zero answer means "none ready", never
+// "nobody told me". The host replaces the whole loop with a single poll(2), which is the
+// only reason the fairness path can afford to ask at all.
+void ai_ready_fds(struct ai_wait_fd *fds, int n);
 bool ai_ready(int fd, int events), ai_strp(ai_word);
 struct ai
  *ai_please(struct ai*, uintptr_t),

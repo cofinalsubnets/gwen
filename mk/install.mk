@@ -89,7 +89,8 @@ ifneq ($(EMBED),)
 installs += \
   $d/lib/liblove.a \
   $d/lib/liblove.so \
-  $d/include/love.h
+  $d/include/love.h \
+  $d/include/kinds.h
 endif
 
 # THE TOOLCHAIN's own files: mooncc's headers (ours, glibc-ABI-faithful, NOT
@@ -135,7 +136,9 @@ uninstall:
 	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
-$d/include/love.h: love.h
+# the embedding surface is TWO files: love.h includes kinds.h (the kind lattice,
+# laid by tools/mx.l), so an installed love.h without it does not compile.
+$d/include/%.h: %.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@
 
