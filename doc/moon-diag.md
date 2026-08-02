@@ -213,6 +213,12 @@ Distinguishing "mooncc can't compile this" from "config.h says this platform lac
 function" is the difference between a compiler bug and a config edit, and right now the
 message doesn't let you tell them apart.
 
+⚠ and the shape is the one rung 4 retired for codegen: `cpp.l`'s two self-naming messages
+(`#error directive`, `cannot resolve #include`) both `say err` and *then* return a bare
+`'cppbad`, so the driver appends its own `cc: preprocessor error in <file>`. **Two half-
+messages, neither sufficient** — the same indictment, one stage over. Converting them is
+what makes the census below fall.
+
 ### rung 4 — a DELIBERATE refusal names the feature — LANDED
 
 Rung 1 named undeclared *identifiers*. It did not touch the other half of the codegen
@@ -313,11 +319,142 @@ before `__typeof__` and statement expressions exist would push code *off* the fa
 and into holes, making failures worse. Revisit once the dialect surface is there;
 `__MOONCC__` alongside it, so packages can special-case us the way they do clang.
 
+## the refusal probe (2026-08-01)
+
+The rungs above were each measured against the gnulib sweep — real C that mooncc *failed*
+to compile. This is the other direction: C that mooncc **should** fail to compile, fed in
+deliberately. Two instruments, and they found different things.
+
+### the fuzz — `make test_moonfuzz`
+
+`test/gate/moonfuzz.l`, wired into `test_slow`. It takes each of the 111 `test/cc/`
+programs and breaks it eight ways from a fixed seed — truncate, delete a byte, delete a
+run, flip a byte, insert punctuation, swap two, drop a line, double a line — 888 mutants
+in 3.6s. Mutation and not generation on purpose: every mutant is C that was *nearly*
+valid, which is the shape a real mistake has, and a generator would have to be taught the
+grammar first.
+
+Three properties, and only two of them are red:
+
+- **the front end survives.** No scares (an internal raise reaching the installed `help`),
+  no hangs. **888/888.** This is the load-bearing result — a compiler that falls over on
+  bad input has no diagnostics to discuss — and it is not the result the probe expected.
+- **clay agrees with the parser, on trees the corpus never had.** Every mutant that still
+  parses gets `test_clay`'s G1 law: `(cparse (clay-show ast)) == ast`. **192 round-trips,
+  0 diffs.** This is the answer to "can the fuzzer reach clay": yes, and the shower held.
+  340 of 888 mutants still parsed, 192 of those expressible — the same 56% G1 rate the
+  hand-written corpus gets, over shapes nobody wrote.
+- **a refusal names its cause** — the CENSUS, not a red:
+
+```
+  lex   refused  52 --   0 named,  52 bare
+  cpp   refused   4 --   0 named,   4 bare
+  parse refused 420 -- 420 named,   0 bare
+  gen   refused  72 --  72 named,   0 bare
+```
+
+Rungs 1/2/4 are **complete** where they landed: every parse and codegen refusal in 888
+tries carried a gripe. Rungs 3-and-lex are **untouched**: every lex and cpp refusal
+arrived bare, 56 of 548. That is the whole remaining diagnostics debt, counted. The gate
+prints it every run so landing rung 3 shows up as a number falling rather than as a claim.
+
+⚠ the fuzz hands cpp the driver's real include hook rooted at `test/cc/`. The first cut
+passed `(\ n s ())` and counted the corpus's own `#include <stdarg.h>` as a cpp refusal in
+every mutant of every file that had one — 78 instead of 4. **The census was measuring the
+harness.** A fuzz whose baseline is broken reports its own scaffolding as a finding.
+
+### the battery — programs gcc rejects and mooncc does not
+
+**`tools/moon-reject.sh`** — 35 invalid programs across lex/cpp/parse/semantic/link, each
+put to `gcc -c -std=c99` as the oracle and to mooncc, verdicts side by side. Skips cleanly
+without a gcc, like `moon-sweep.sh` without a package tree; gcc is the oracle and nothing
+it produces is used. **24 refused by both, 0 refused by mooncc alone** (it rejects no valid
+C here), 11 accepted that gcc refuses. The refusals were good — `cc: f.c:5: parse error near ;`,
+`undeclared 'nope' (in main)`, `call to 'f' wants 2 arguments, given 1 (in main)`. What
+the battery is for is the other column. **mooncc exits 0 and lays an object for all of
+these**, where gcc errors:
+
+| source | gcc | mooncc lays |
+|---|---|---|
+| `goto nowhere;`, no such label | label used but not defined | an object with an **undefined GLOBAL `main.nowhere`** |
+| duplicate `case 1:` | duplicate case value | an object with a **dangling `.k1` relocation** |
+| `int x=3; x(1);` | called object is not a function | `mov $3,%eax` … `jmp *%rax` |
+| two definitions of `f` | redefinition of 'f' | **both bodies**, the symbol on the second |
+| `int x=1; int x=2;` | redefinition of 'x' | accepted |
+| `struct s; struct s v;` | storage size isn't known | accepted |
+| `int x = v;` (v a struct) | incompatible types | accepted |
+| `(struct s)1` | conversion to non-scalar type | accepted |
+| `void f(void){ return 1; }` | return with a value | accepted |
+| `return 0x;` | invalid suffix on integer constant | accepted |
+| `#frobnicate 3` | invalid preprocessing directive | ignored in silence |
+
+Most of these are ordinary missing semantic checks — mooncc does no full C type analysis
+and never claimed to, and the C it is *for* (this tree, the LFS ladder) does not contain
+them. Two are a different kind, and they share one root:
+
+**an unresolved local label leaves the object as an undefined external symbol.** `goto` to
+a label that does not exist and a duplicate `case` value both reach the symbol table as
+`main.nowhere` / `.k1`, GLOBAL and UND. Nothing in `-c` notices. What surfaces is a link
+failure — and the link's message was the worst diagnostic the probe found. It said:
+
+```
+;; link-undef "main.nowhere"                        (from a source tree)
+cc: the link owes main.nowhere, and no runtime was found (looked in crew/moon/, ..)
+  -- run from a source tree, or install the nest    (from anywhere else)
+```
+
+The first is a `;;` love-side debug note, not a `cc:` diagnostic, and it leaks a compiler-
+internal label spelling to the user. The second **reports a bug in the program as a bug in
+the toolchain installation** — it sends you to check your `~/.love` nest when your source
+has a typo'd label. `l_undef.c` (a plain `extern int nowhere(void);` never defined) got
+the same treatment, where gcc's `undefined reference to 'nowhere'` is the whole message
+anyone needs.
+
+### the link names its undefined references — LANDED
+
+The analysis was already there and the answer was being thrown away. `moon.l`'s `rtpull`
+pulls runtime members by need in a worklist; when no remaining member satisfies anything,
+`u` — the still-unsatisfied set — is *exactly* the noms nothing anywhere defines. It fell
+off the end of the loop unread, and three lines later holo's `ldres` scared about whichever
+one the patcher reached first. Now the loop reads it:
+
+```
+cc: undefined reference to 'main.nowhere'
+cc: undefined reference to 'a', 'b', 'c' (+1 more)
+```
+
+Every owed nom at once, not whichever came first — the worklist knows the whole set, and a
+link that owes four names should say four. Three lanes, one sentence:
+
+- **the runtime resolved everything but these** — the worklist tail above.
+- **`-nostdlib` and friends** — no runtime *by request*, so an owed nom is undefined
+  outright. `rtpull` now takes the flag instead of the caller skipping the call, because
+  the analysis is wanted there and only the pull is not. This is the lane where a bad name
+  is most likely: freestanding code has no libc it could have meant.
+- **no runtime in reach at all** — states both facts in the order they can be acted on:
+  `cc: undefined reference to 'main.nowhere'; no runtime in reach to supply it either
+  (looked in crew/moon/, ..) -- check the spelling, then the nest`. The undefined reference
+  is the half that is certainly true. The old message led with the absent toolchain and
+  prescribed installing the nest, which is the wrong repair for a misspelled label, and
+  from inside the driver the two conditions are indistinguishable.
+
+⚠ **`test_drv` pinned the exit code, not the sentence** — which is how `;; link-undef`
+stood as long as it did. It now pins the message, so the next person to touch this path
+finds out from a gate rather than from a user.
+
+**Ranked, what is left.** (1) Rung 3 + the lex position, which the census counts — 56 bare
+refusals, and `cpp.l`'s two `say err`-then-bare-bad sites are half-converted already.
+(2) A local label that never resolves should refuse in `gen` and name the label, not escape
+into the symbol table to be reported at link under its internal spelling; that is a real
+check, not a message, and it is what gcc's `label 'nowhere' used but not defined` is. The
+rest of the table is semantic analysis mooncc has never had, and wanting it is a separate
+decision from wanting diagnostics.
+
 ## gates
 
-`make test_moon` + `make test_raw` (the standing pair). The diagnostics pass touches
-message construction, not codegen, so `test_raw`'s byte-identical expectations are the
-guard that it stayed that way.
+`make test_moon` + `make test_raw` (the standing pair), and `make test_moonfuzz` for the
+refusal surface. The diagnostics pass touches message construction, not codegen, so
+`test_raw`'s byte-identical expectations are the guard that it stayed that way.
 
 Re-run `tools/moon-sweep.sh` after each rung. The bucket table at the top is the
 before-picture — and note the census keys are themselves the indictment:

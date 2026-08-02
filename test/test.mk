@@ -343,6 +343,28 @@ test_clay: host out/host$(hsuf)/mooncc.image
 	@cmp -s out/.mx.h mx.h || { echo "FAIL mx.h is not what tools/mx.l lays -- regenerate it"; diff -u mx.h out/.mx.h | head -20; exit 1; }
 	@echo "clay-mx: mx.h regenerates identically"
 	@rm -f out/.mx.h
+# test_moonfuzz -- moon's REFUSAL surface (test/gate/moonfuzz.l, doc/moon-diag.md).
+# test_moon and test_clay both feed the compiler C that WORKS; this feeds it C that
+# nearly does -- each test/cc file broken eight ways from a fixed seed (truncate,
+# delete, flip, insert, swap, drop a line, double a line), ~900 mutants in 3.6s.
+# Three properties, and only two of them are red: the front end must not SCARE and
+# must not hang (a compiler that falls over has no diagnostics to speak of), and
+# every mutant that still parses must satisfy test_clay's G1 law -- which is the
+# point of taking clay here, since a mutant reaches tree shapes 111 hand-written
+# files cannot. The third is a CENSUS, printed by stage every run: how many refusals
+# named their cause (a gripe) and how many arrived bare. That number is not a
+# failure, it is doc/moon-diag.md's remaining rungs counted -- lex and cpp are still
+# 100% bare, parse and gen 100% named, and the gate exists partly so landing rung 3
+# shows up as a number falling rather than as a claim.
+# stderr is KEPT: cpp's two self-naming messages (#error, cannot resolve) are said
+# there and are themselves under test -- a new stray print must be visible, not eaten.
+# ⚠ the reds were verified by FAULT INJECTION, not by hoping: a temporary
+# (scare 'INJECT 1) every 200th mutant made the run print 14 named cases and exit 1.
+# A gate whose failure path has never run is a gate that passes for the wrong reason.
+.PHONY: test_moonfuzz
+test_moonfuzz: host out/host$(hsuf)/mooncc.image
+	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
+	@$m --wake $(ho)/mooncc.image -l test/gate/moonfuzz.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET, and the end of
 # "x86-64 only until arm64 parity" (the line above, which stood for four of the
 # five backends). TWO targets, ONE procedure (test/gate/ccarch.sh, raw.sh's shape).
@@ -426,7 +448,7 @@ test_raw: host out/host$(hsuf)/mooncc
 # $(ai_cflags) soup rides through -c and the link ignored, a link owing libc
 # symbols pulls the runtime by need (nolibc + the am math + the sys leaf,
 # compiled from the tree beside it), and the loud edges stay loud (-shared
-# usage-refuses, -nostdlib dies link-undef). Seconds, arch-native; in test_slow.
+# usage-refuses, -nostdlib names its undefined references). Seconds, arch-native; in test_slow.
 .PHONY: test_drv
 test_drv: host out/host$(hsuf)/mooncc
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)

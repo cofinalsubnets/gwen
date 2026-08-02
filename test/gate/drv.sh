@@ -7,9 +7,12 @@
 #      math + the sys leaf, compiled from the sources beside us -- and the
 #      binary RUNS;
 #   3. the loud edges stay loud: -shared refuses (usage, exit 2) and -nostdlib
-#      leaves the libc out (link-undef, exit 1) -- an ignored SEMANTIC flag
-#      would be the silent-no-op trap wearing a cc face, and this gate keeps
-#      that door shut.
+#      leaves the libc out (exit 1) -- an ignored SEMANTIC flag would be the
+#      silent-no-op trap wearing a cc face, and this gate keeps that door shut.
+#      And -nostdlib's refusal is pinned by its SENTENCE, not just its exit
+#      code: it used to arrive as `;; link-undef "printf"`, a love debug note
+#      escaping from inside holo, and an exit-code-only check is exactly what
+#      let that stand for as long as it did (doc/moon-diag.md, the refusal probe).
 #
 # usage: drv.sh OUTDIR CFLAGS..
 set -u
@@ -41,7 +44,13 @@ out=$("$d/drv") || fail "the pulled binary did not run"
 "$ho/mooncc" -shared "$d/b.o" -o "$d/x.so" 2>/dev/null && fail "-shared did not refuse"
 [ $? -eq 2 ] || fail "-shared refused with the wrong exit"
 
-# 3b: -nostdlib turns the driver's libc off -- the owed symbols stay link-undef
-"$ho/mooncc" -nostdlib "$d/a.o" "$d/b.o" -o "$d/no" 2>/dev/null && fail "-nostdlib still linked"
+# 3b: -nostdlib turns the driver's libc off, and the owed symbols are an
+# UNDEFINED REFERENCE -- named, on stderr, with a cc: prefix like every other
+# diagnostic. printf is owed by a.c and nothing supplies it under -nostdlib.
+msg=$("$ho/mooncc" -nostdlib "$d/a.o" "$d/b.o" -o "$d/no" 2>&1) && fail "-nostdlib still linked"
+case $msg in
+  "cc: undefined reference to "*"'printf'"*) : ;;
+  *) fail "-nostdlib refused, but said: $msg" ;;
+esac
 
 echo "test_drv: CC=mooncc -- the cc flag soup rides through, the runtime pulls by need, -shared/-nostdlib stay loud"

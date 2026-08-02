@@ -200,12 +200,28 @@
    ; the runtime -- ours is nolibc + the am math + the sys leaf, compiled from
    ; the sources beside us and pulled MEMBER BY NEED, archive-fashion: a member
    ; whose every def the link already carries stays out, so a set bringing its
-   ; own am.o (love0's does) never meets a twin. the lane engages exactly where
-   ; today's answer was link-undef; the -nostdlib family leaves it off whole,
-   ; and a nom no member defines still dies as link-undef downstream. the
+   ; own am.o (love0's does) never meets a twin. the lane engages exactly where a
+   ; nom is owed; the -nostdlib family leaves it off whole. the
    ; sources come from the toolchain root (mhome above), so an INSTALLED mooncc
    ; pulls from its nest -- and owing symbols with no root in reach is its own
    ; diagnostic below, never a silent miss.
+   ; the noms the LINKER synthesizes rather than any object defining them (holo's
+   ; ldres). they are not owed by anybody, and counting them would report the nif
+   ; bracket as a missing symbol.
+   ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela")
+   ; THE LINK CAME UP SHORT. noms that no input object defines and that no runtime
+   ; member could add: a misspelled name, a function declared and never defined, or
+   ; a `goto` to a label that is not there (gen spells the label main.<lbl> and it
+   ; reaches the symbol table as an undefined GLOBAL, so an unresolvable label
+   ; arrives here rather than at the refusal it should be -- doc/moon-diag.md).
+   ; ⚠ this used to be holo's `(scare 'link-undef nm)` arriving raw: `;; link-undef
+   ; "main.nowhere"`, which is a love DEBUG NOTE and not a diagnostic -- no cc:
+   ; prefix, no sentence, and the reader is left to guess that a compiler-internal
+   ; label spelling is their typo. every cc says this sentence; now so does ours,
+   ; and it says it about ALL the owed noms at once rather than whichever the
+   ; patcher happened to reach first.
+   (qfew ns) (mfew (map (\ n ("'" + n + "'")) ns))     ; a taste of the bag, each nom quoted
+   (undie us) (udie 1 ("cc: undefined reference to " + (qfew us)))
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us)
@@ -216,26 +232,32 @@
                  (bind = 1) (go (i + 1) ds (link <sy us))
                  (go (i + 1) ds us))))    ; a weak undef resolves to 0 (ELF's law): no need
        (go 1 () ()))
-   (rtpull srcs tgt)
+   (rtpull srcs tgt nostd)
     (: mach (peep elf-machines tgt 0)
        duos (map (\ p (dusyms <p <>p mach)) srcs)
        dt (tablet 0)                      ; every nom the link defines (or ldres synthesizes)
-       _ (map (\ nm (pin dt nm 1))
-              '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"))
+       _ (map (\ nm (pin dt nm 1)) ldsynth)
        _ (map (\ du (map (\ nm (pin dt nm 1)) <du)) duos)
        owed (foldl (\ a du (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
                                   a <>du))
                    () duos)
-       home (? (two? owed) (mhome ()) ())
-       ; owed symbols and NO runtime in reach: name both halves. the old answer
-       ; was a bare link-undef on whichever symbol came first, which reports a
-       ; symptom -- an absent toolchain and an incomplete link are different
-       ; conditions and must not wear the same face.
+       ; -nostdlib and friends: no runtime BY REQUEST, so there is nothing left to
+       ; consult and an owed nom is undefined, full stop. this lane used to fall
+       ; through to holo's raw scare, and it is the lane where a bad name is most
+       ; likely -- freestanding code has no libc to have meant.
+       _ (? (&& nostd (two? owed)) (undie owed) 0)
+       home (? (&& (two? owed) (! nostd)) (mhome ()) ())
+       ; owed symbols and NO runtime in reach: BOTH facts, in the order they can
+       ; be acted on. the undefined reference is the one that is certainly true --
+       ; the old message led with the absent toolchain and prescribed "install the
+       ; nest", which is the wrong repair for a program whose label is misspelled,
+       ; and the two conditions read identically from here.
        _ (? (&& (two? owed) (! (string? home)))
-            (udie 1 ("cc: the link owes " + (mfew owed) + ", and no runtime was found (looked in "
-                     + (mfew (mroots ())) + ") -- run from a source tree, or install the nest"))
+            (udie 1 ("cc: undefined reference to " + (qfew owed)
+                     + "; no runtime in reach to supply it either (looked in "
+                     + (mfew (mroots ())) + ") -- check the spelling, then the nest"))
             0)
-       (? (! (string? home)) ()
+       (? (|| nostd (! (string? home))) ()
           (: mdir (home + "lib/math/")
              inc (home + "include/")
              ; the IMPLICIT runtime compiles with the system tail LEFT ON (the () below):
@@ -248,9 +270,16 @@
                         + (? (member? tgt '(x64 arm64 riscv64))
                              `(`("sys" (string (mksys-bytes tgt)))) ())))
              (needs? m u) (foldl (\ a nm (|| a (member? nm u))) () (el m 2))
+             ; ⚠ `u` AT TERMINATION IS THE ANSWER, and it used to be thrown away.
+             ; no member satisfies anything left in u, so u is exactly the set
+             ; nothing anywhere defines -- computed here, three lines before holo
+             ; would have scared about one of them by surprise. it is already
+             ; filtered against dt each round, so a nom that a pulled member
+             ; defined is gone from it.
              (go ms u picked)
               (: hits (filter (\ m (needs? m u)) ms)
-                 (? (! (two? hits)) (map (\ m `(<m <>m)) picked)
+                 (? (! (two? hits))
+                    (: _ (? (two? u) (undie u) 0) (map (\ m `(<m <>m)) picked))
                     (: rest (filter (\ m (! (needs? m u))) ms)
                        _ (map (\ m (map (\ nm (pin dt nm 1)) (el m 2))) hits)
                        u2 (foldl (\ a m (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
@@ -267,7 +296,7 @@
                  ins)
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
        all (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () ()))) srcs)
-       ps (ldlink tgt pie org (all + (? nostd () (rtpull all tgt))))
+       ps (ldlink tgt pie org (all + (rtpull all tgt nostd)))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
@@ -307,7 +336,8 @@
                  (&& (pfx? a "-W")
                      (! (|| (pfx? a "-Wl,") (|| (pfx? a "-Wa,") (pfx? a "-Wp,")))))))))))
    ; the -nostdlib family: freestanding on any cc's surface -- the driver
-   ; supplies no runtime, and an owed symbol dies as link-undef, as before.
+   ; supplies no runtime, and an owed symbol is an undefined reference outright
+   ; -- there is nothing left to consult, so rtpull says so rather than pulling.
    (nostd? a) (|| (a = "-nostdlib") (|| (a = "-nostartfiles")
                (|| (a = "-nodefaultlibs") (a = "-ffreestanding"))))
    (dirn d) (: n (tally d) (? (n = 0) d ((d (n - 1)) = 47) d (d + "/")))
