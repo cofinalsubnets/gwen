@@ -308,6 +308,43 @@ Two smaller leaks, both worth a look and neither chased here:
 * `ava`'s closure references go out through `em2 lvm_quote` rather than `kim`, so they
   never reach the peephole at all (`qA` is still 9.9M on the image lane).
 
+## re-measured on the post base, against a REAL baseline
+
+Merged `post` (the mooncc quintet, the enum split, `every raise is a scare`) and rebuilt
+the ladder as three binaries with byte-identical `.text`, differing only in the baked
+image: **B** no fusion at all, **M** consumer fusion only, **S** consumer fusion + the
+8 pairs. Every helper binding is present in all three, so the image-size delta is only
+what the emitter actually emits.
+
+B is the thing that had never been measured. Every earlier table compared fused variants
+to each OTHER, so the question they answered was "is this arm worth its opcodes", never
+"is any of it worth shipping". Against B, on three budgets where maxRSS agrees:
+
+    budget   RSS spread    S vs B    M vs B   pairs (S vs M)
+      512         2.4%    -12.96%   -9.95%       -3.34%
+     1536        0.24%    -12.42%  -10.97%       -1.63%
+     3072        0.07%    -10.94%   -9.52%       -1.57%
+
+    eggboot (RSS 152276/155348/151764)   -9.07%   -9.55%    ~0
+    bintrees closure fib tak primes           within +-1.6%, no sign
+
+So: **~11-13% on the corpus, ~9% at egg boot, nothing on the numeric benches.** Consumer
+fusion carries ~10 of the corpus points; the pairs add 1.5-3.3 there and nothing anywhere
+else. That revises the older reading of "slightly negative on compile-only work" -- that
+was P-vs-M, the memo's cost, not the feature's. The feature is strongly positive at boot.
+S's image is also 47KB smaller than B's, fused threads costing fewer cells.
+
+⚠ **the corpus file goes stale silently.** These runs began against a snapshot taken one
+day earlier -- 937501 bytes against the tree's 938329, 828 bytes apart -- and on the new
+base it stopped at 1050 of 3744 dots, raising `missing poke`/`spin`/`boxfix`/`operators`
+and still exiting plausibly. It read as a 3x speedup from post. Regenerate the list from
+`$t` (test.mk's wildcard) per base, and check the tail says `NNNN tests pass`; a dot count
+alone will not catch it. Redirect stdin too -- the corpus TESTS stdin and hangs on a tty.
+
+⚠ **budget 1024 and 2048 do NOT equalize the full corpus** (43% and 23% RSS spreads);
+512/1536/3072 do. The pool-cliff class has now contaminated four separate comparisons in
+this investigation. Quote no timing whose RSS column is not matched.
+
 ## status
 
 `make test` green (host + love0 twice, vmret, waits). `make test_slow` hit two
