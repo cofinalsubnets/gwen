@@ -95,7 +95,7 @@ _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size"
 #endif
 _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // structural test for the charm ZERO -- an identity, not a measure. ⚠ distinct
-// from ai_nilp, the language's falsy predicate (all-zero vec, unit, red net).
+// from ai_nilp, the language's falsy predicate (all-zero tray, unit, red net).
 #define zerop(_) (word(_)==zero)
 #define AB(o) A(B(o))
 #define AA(o) A(A(o))
@@ -128,13 +128,13 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define pop1 ai_pop1
 
 // one word per element: ints fold to Z, floats to R; C is the rank-0 complex pair
-// (arr rejects it at rank>=1). ordered Z < R < C, so `>= ai_R` is the float test.
-// O slots hold live l words -- the one vec type the GC traces per element
-// (evac_vec); O elements route through the promoting scalar dispatch (lvm_obin),
+// (a tray rejects it at rank>=1). ordered Z < R < C, so `>= ai_R` is the float test.
+// O slots hold live l words -- the one tray type the GC traces per element
+// (evac_tray); O elements route through the promoting scalar dispatch (lvm_obin),
 // which is what makes a bignum array add exactly instead of wrapping.
-enum ai_vec_type { ai_Z, ai_R, ai_C, ai_O, };
+enum ai_tray_type { ai_Z, ai_R, ai_C, ai_O, };
 // elementwise dyadic opcodes for lvm_vbin. codes >= vop_lt produce a 0/1 mask
-// (vop_eq is table-shared machinery only -- arr_eq answers `=` as a boolean).
+// (vop_eq is table-shared machinery only -- tray_eq answers `=` as a boolean).
 // vop_quot is `/` (true division), vop_fquot `//` (truncating); both in the arith group.
 enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
            vop_band, vop_bor, vop_bxor, vop_bsl, vop_bsr,
@@ -149,7 +149,7 @@ uintptr_t intern_reserve(struct ai*);
 uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
- lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); each tail-jumps to its apply handler
+ lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // the data sentinels; each tail-jumps to its apply handler
  lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
@@ -178,7 +178,7 @@ lvm_t lvm_kcall,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0, lvm_dot,
- lvm_tray, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
+ lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
  lvm_packp, lvm_bigp, lvm_widep, lvm_setp, lvm_intf, lvm_litp, lvm_hotp,
  lvm_nif,         // CODEGEN BACKEND: emitted bytes -> applicable native value (1-arg / multi-arg)
@@ -188,17 +188,18 @@ lvm_t lvm_kcall,
 // these carry extra operands, so they are declared apart from the plain lvm_t list
 lvm(lvm_vbin, int);   // the elementwise/broadcast dyadic engine (vop selects the op)
 lvm(lvm_bdiv_start, int);   // resumable long-division entry; the int is vop (vop_fquot / vop_rem)
-lvm(lvm_vmap1, ai_flo_t (*)(ai_flo_t));            // monadic math fn elementwise, e.g. (sin arr)
-lvm(lvm_vmap2, ai_flo_t (*)(ai_flo_t, ai_flo_t));  // ..dyadic with broadcast, e.g. (pow arr arr)
+lvm(lvm_vmap1, ai_flo_t (*)(ai_flo_t));            // monadic math fn elementwise, e.g. (sin a-tray)
+lvm(lvm_vmap2, ai_flo_t (*)(ai_flo_t, ai_flo_t));  // ..dyadic with broadcast, e.g. (pow a-tray a-tray)
 lvm(lvm_cplx_bin, int);   // complex scalar lane; vop selects add/sub/mul/quot (rem -> zero)
 lvm(lvm_cbin, int);   // complex-array lane: vbin's broadcast in the complex domain; `=` -> mask, ordering/% -> zero
 lvm(lvm_obin, int);   // object-array lane: each element op runs the promoting scalar dispatch
-// the data-kind sentinels: each is the first word (ap) of its kind's heap objects
-// and tail-jumps straight to its apply handler -- the sentinel IS the kind. bodies
-// are byte-identical, kept distinct by address (ai_noicf) for ai_typ's compare.
+// the data sentinels: each is the first word (ap) of its rep's heap objects and
+// tail-jumps straight to its apply handler -- the sentinel IS the rep (enum d).
+// bodies are byte-identical, kept distinct by address (ai_noicf) for ai_typ's
+// compare.
 static lvm(data_num_apply); static lvm(data_string_apply);
 static lvm(data_sym_apply); static lvm(data_pair_apply);
-lvm(lvm_vec)   { return Ap(data_num_apply, g); }
+lvm(lvm_tray)   { return Ap(data_num_apply, g); }
 lvm(lvm_big)   { return Ap(data_num_apply, g); }
 lvm(lvm_str)   { return Ap(data_string_apply, g); }
 lvm(lvm_sym)   { return Ap(data_sym_apply, g); }
@@ -208,7 +209,7 @@ lvm(lvm_flo)   { return Ap(data_num_apply, g); }
 lvm(lvm_wide)  { return Ap(data_num_apply, g); }
 lvm(lvm_cbox)  { return Ap(data_num_apply, g); }
 char const *ai_nif_name(intptr_t);
-#define vec(_) ((struct ai_vec*)(_))
+#define tray(_) ((struct ai_tray*)(_))
 #define charmp oddp
 #define sym(_) ((struct ai_mint*)(_))
 #define nom(_) ((struct ai_nom*)(_))
@@ -216,7 +217,7 @@ char const *ai_nif_name(intptr_t);
 // either. neither is a chain, so a chain is ALWAYS a real compound (formp == chainp).
 static ai_inline bool mintp(word _) { return lamp(_) && cell(_)->ap == lvm_sym; }
 static ai_inline bool namep(word _) { return lamp(_) && cell(_)->ap == lvm_nom; }
-static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_vec; }
+static ai_inline bool packp(word _) { return lamp(_) && cell(_)->ap == lvm_tray; }
 static ai_inline bool strp(word _) { return lamp(_) && cell(_)->ap == lvm_str; }
 static ai_inline bool nomp(word _) { return mintp(_) || namep(_); }
 static ai_inline bool formp(word _) { return chainp(_); }
@@ -300,46 +301,46 @@ static ai_inline bool widep(word _) {
 // misread the two-word payload, so arith/eq handle Cp branches before the real lanes.
 static ai_inline bool Cp(word _) {
   return lamp(_) && cell(_)->ap == lvm_cbox; }
-// a typed array: a vec exists at rank>=1 and ANY tally; only a rank-0 point
+// a typed array: a tray exists at rank>=1 and ANY tally; only a rank-0 point
 // demotes at the build seam, so this guard is load-bearing
-static ai_inline bool arrp(word _) { return packp(_) && vec(_)->rank >= 1; }
+static ai_inline bool trayp(word _) { return packp(_) && tray(_)->rank >= 1; }
 // a GALAXY: a numeric array; bands into the number band by its net (a tray stays below chain)
-static ai_inline bool galaxyp(word _) { return arrp(_) && vec(_)->type != ai_O; }
+static ai_inline bool galaxyp(word _) { return trayp(_) && tray(_)->type != ai_O; }
 
 #define maxrank 8   // bounds the stack index/stride arrays in the broadcast loop
-extern size_t const ai_vt_[];                 // element byte size by ai_vec_type
-extern size_t const ai_T[];                   // element byte size by ai_vec_type (used pre-definition by lvm_gauge)
+extern size_t const ai_vt_[];                 // element byte size by ai_tray_type
+extern size_t const ai_T[];                   // element byte size by ai_tray_type (used pre-definition by lvm_gauge)
 // Element payload: laid out row-major just past the shape words.
-static ai_inline void *vec_data(struct ai_vec *v) { return (void*) (v->shape + v->rank); }
+static ai_inline void *tray_data(struct ai_tray *v) { return (void*) (v->shape + v->rank); }
 // Total element count = product of the dimensions (1 for a rank-0 scalar box).
-static ai_inline uintptr_t vec_nelem(struct ai_vec *v) {
+static ai_inline uintptr_t tray_nelem(struct ai_tray *v) {
  uintptr_t n = 1;
  for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  return n; }
-static ai_inline struct ai_vec *ini_vec(struct ai_vec *v, enum ai_vec_type t, uintptr_t rank) {
- return v->ap = lvm_vec, v->type = t, v->rank = rank, v; }
+static ai_inline struct ai_tray *ini_tray(struct ai_tray *v, enum ai_tray_type t, uintptr_t rank) {
+ return v->ap = lvm_tray, v->type = t, v->rank = rank, v; }
 // Read element i of v as a double / as an integer (sign-extending the narrow
 // integer types; truncating a float toward zero for the int reader). The int
 // reader is only used on integer-typed arrays in practice.
-static ai_inline ai_flo_t vec_get_flo(struct ai_vec *v, uintptr_t i) {
- void *p = vec_data(v);
+static ai_inline ai_flo_t tray_get_flo(struct ai_tray *v, uintptr_t i) {
+ void *p = tray_data(v);
  return v->type == ai_R ? ((ai_flo_t*) p)[i] : (ai_flo_t) ((intptr_t*) p)[i]; }
-static ai_inline intptr_t vec_get_int(struct ai_vec *v, uintptr_t i) {
- void *p = vec_data(v);
+static ai_inline intptr_t tray_get_int(struct ai_tray *v, uintptr_t i) {
+ void *p = tray_data(v);
  return v->type == ai_R ? (intptr_t) ((ai_flo_t*) p)[i] : ((intptr_t*) p)[i]; }
 // Write element i of v, converting to v's element kind.
-static ai_inline void vec_put_int(struct ai_vec *v, uintptr_t i, intptr_t x) {
- void *p = vec_data(v);
+static ai_inline void tray_put_int(struct ai_tray *v, uintptr_t i, intptr_t x) {
+ void *p = tray_data(v);
  if (v->type == ai_R) ((ai_flo_t*) p)[i] = (ai_flo_t) x; else ((intptr_t*) p)[i] = x; }
-static ai_inline void vec_put_flo(struct ai_vec *v, uintptr_t i, ai_flo_t x) {
- void *p = vec_data(v);
+static ai_inline void tray_put_flo(struct ai_tray *v, uintptr_t i, ai_flo_t x) {
+ void *p = tray_data(v);
  if (v->type == ai_R) ((ai_flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = (intptr_t) x; }
 // Read/write element i of a ai_O array as a raw tagged l word (the GC traces
-// these; see evac_vec). No conversion -- the slot IS a value.
-static ai_inline word vec_get_obj(struct ai_vec *v, uintptr_t i) {
- return ((word*) vec_data(v))[i]; }
-static ai_inline void vec_put_obj(struct ai_vec *v, uintptr_t i, word x) {
- ((word*) vec_data(v))[i] = x; }
+// these; see evac_tray). No conversion -- the slot IS a value.
+static ai_inline word tray_get_obj(struct ai_tray *v, uintptr_t i) {
+ return ((word*) tray_data(v))[i]; }
+static ai_inline void tray_put_obj(struct ai_tray *v, uintptr_t i, word x) {
+ ((word*) tray_data(v))[i] = x; }
 
 // truth: x is false iff (= 0 ($ x)). the net's codomain is COMPLEX (ai_net): a
 // complex scalar nets itself, every other scalar nets real, aggregates SUM -- so
@@ -393,16 +394,16 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
  else _res = mk_wide(&Hp, _r); } while (0)
 #define emit_flo(R) do { _res = mk_flo(&Hp, (R)); } while (0)
 
-// RNG: state is a rank-1 i64 vec of length 4 (xoshiro256++), its payload raw
-// bytes moved by memcpy -- vec_get/put_int would truncate the limbs on 32-bit
+// RNG: state is a rank-1 i64 tray of length 4 (xoshiro256++), its payload raw
+// bytes moved by memcpy -- tray_get/put_int would truncate the limbs on 32-bit
 // ports. fixed 8-byte limbs make a seed reproduce on every target.
 #define rng_state_len 4
 #define rng_payload_bytes (rng_state_len * 8)
-#define rng_vec_bytes (sizeof(struct ai_vec) + sizeof(uintptr_t) + rng_payload_bytes)
-#define rng_vec_req (b2w(rng_vec_bytes))
-// whichever element kind is 8 bytes wide, so ai_vec_bytes sees the full payload
+#define rng_tray_bytes (sizeof(struct ai_tray) + sizeof(uintptr_t) + rng_payload_bytes)
+#define rng_tray_req (b2w(rng_tray_bytes))
+// whichever element kind is 8 bytes wide, so ai_tray_bytes sees the full payload
 #define rng_vt (Bytes == 4 ? ai_C : ai_Z)
-void ai_rng_seed(struct ai_vec*, uint64_t);   // shape an i64 state vec + seed it (SplitMix64)
+void ai_rng_seed(struct ai_tray*, uint64_t);   // shape an i64 state tray + seed it (SplitMix64)
 lvm_t lvm_wheel, lvm_turn, lvm_turnf;
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
@@ -636,7 +637,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  _(nif_cplx, "twin", s2(lvm_cplx)) _(nif_Cp, "twin?", s1(lvm_Cp))\
  _(nif_re, "re", s1(lvm_re)) _(nif_im, "im", s1(lvm_im)) _(nif_conj, "conj", s1(lvm_conj))\
  _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
- _(nif_tray, "tray", s3(lvm_tray))\
+ _(nif_tray, "tray", s3(lvm_trayctor))\
  _(nif_iota, "iota", s1(lvm_iota))\
  _(nif_nif, "nif", s4(lvm_nif))\
 _(nif_nifx, "nifx", s5(lvm_nifx))\
@@ -867,12 +868,12 @@ static ai_inline void evac_chain(struct ai*g, word const*const p0, word const*co
  w->a = gcp(g, w->a, p0, t0);
  w->b = gcp(g, w->b, p0, t0); }
 
-static ai_inline void evac_vec(struct ai*g, word const*const p0, word const*const t0) {
- struct ai_vec *v = vec(g->cp);
- g->cp += b2w(ai_vec_bytes(v));
- if (v->type != ai_O) return;                 // numeric vecs are GC leaves (flat payload)
- word *e = (word*) vec_data(v);              // object vec: forward each live element word
- uintptr_t n = vec_nelem(v);
+static ai_inline void evac_tray(struct ai*g, word const*const p0, word const*const t0) {
+ struct ai_tray *v = tray(g->cp);
+ g->cp += b2w(ai_tray_bytes(v));
+ if (v->type != ai_O) return;                 // numeric trays are GC leaves (flat payload)
+ word *e = (word*) tray_data(v);              // object tray: forward each live element word
+ uintptr_t n = tray_nelem(v);
  while (n--) e[n] = gcp(g, e[n], p0, t0); }
 
 static ai_inline void evac_str(struct ai*g, word const*const p0, word const*const t0) {
@@ -905,16 +906,16 @@ static ai_inline void evac_thread(struct ai *g, word const *const p0, word const
 
 static ai_inline void evac_data(struct ai *g, word const *const p0, word const*const t0) {
   switch (typ(g->cp)) {
-   default: __builtin_trap();
-   case KVec: return evac_vec(g, p0, t0);
-   case KMint: return evac_sym(g, p0, t0);
-   case KNom: return evac_nom(g, p0, t0);
-   case KChain: return evac_chain(g, p0, t0);
-   case KString: return evac_str(g, p0, t0);
-   case KBig: return evac_big(g, p0, t0);
-   case KFlo: return evac_flo(g, p0, t0);
-   case KWide: return evac_wide(g, p0, t0);
-   case KCplx: return evac_cplx(g, p0, t0); } }
+   case DTray: return evac_tray(g, p0, t0);
+   case DMint: return evac_sym(g, p0, t0);
+   case DNom: return evac_nom(g, p0, t0);
+   case DChain: return evac_chain(g, p0, t0);
+   case DString: return evac_str(g, p0, t0);
+   case DBig: return evac_big(g, p0, t0);
+   case DGem: return evac_flo(g, p0, t0);
+   case DSun: return evac_wide(g, p0, t0);
+   case DTwin: return evac_cplx(g, p0, t0); }
+  __builtin_trap(); }                            // a hot outside enum d: the object is not what its ap says
 
 // ===== generational write barrier =====
 // a minor scavenges only [minor, hp) and finds old->young edges through the REM
@@ -957,12 +958,12 @@ static ai_inline void gen_wb_two(struct ai *g, word two, word v) {
 static void gen_scan_inplace(struct ai *g, word obj, word const *p0, word const *t0) {
  union u *p = cell(obj);
  if (datp(obj)) switch (typ(obj)) {
-  case KChain: { struct ai_chain *w = two(obj);
+  case DChain: { struct ai_chain *w = two(obj);
                  w->a = gcp(g, w->a, p0, t0), w->b = gcp(g, w->b, p0, t0); break; }
-  case KVec:   { struct ai_vec *v = vec(p); if (v->type == ai_O) { word *e = (word*) vec_data(v);
-                 for (uintptr_t i = 0, ne = vec_nelem(v); i < ne; i++) e[i] = gcp(g, e[i], p0, t0); } break; }
-  case KNom:   { nom(p)->name = gcp(g, nom(p)->name, p0, t0); break; }
-  default: break;                                  // KMint/KString/KBig/KFlo/KWide/KCplx: pointer-free leaves
+  case DTray:   { struct ai_tray *v = tray(p); if (v->type == ai_O) { word *e = (word*) tray_data(v);
+                 for (uintptr_t i = 0, ne = tray_nelem(v); i < ne; i++) e[i] = gcp(g, e[i], p0, t0); } break; }
+  case DNom:   { nom(p)->name = gcp(g, nom(p)->name, p0, t0); break; }
+  default: break;                                  // DMint/DString/DBig/DGem/DSun/DTwin: pointer-free leaves
  } else { for (union u *q = p; !tagl(g, q->x); q++) q->x = gcp(g, q->x, p0, t0); } }   // a thread: every word to the tag terminator (tagl: head in any live pool)
           // INCLUDING word0 -- a normal thread's ap is out-of-pool (gcp no-op) but a task-ring node's
           // word0 is its `next` pointer, the very old->young edge the rem set exists to chase.
@@ -1235,9 +1236,9 @@ static ai_inline word copy_chain(struct ai*g, struct ai_chain *src, word const *
  src->ap = (lvm_t*) dst;
  return word(dst); }
 
-static ai_inline word copy_vec(struct ai*g, struct ai_vec *src, word const *const p0, word const*const t0) {
- uintptr_t bytes = ai_vec_bytes(src);
- struct ai_vec *dst = bump(g, b2w(bytes));
+static ai_inline word copy_tray(struct ai*g, struct ai_tray *src, word const *const p0, word const*const t0) {
+ uintptr_t bytes = ai_tray_bytes(src);
+ struct ai_tray *dst = bump(g, b2w(bytes));
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
@@ -1284,16 +1285,16 @@ static ai_inline word copy_nom(struct ai*g, struct ai_nom *src, word const *cons
 
 static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0, word const *const t0) {
  switch (typ(src)) {
-  default: __builtin_trap();
-  case KChain: return copy_chain(g, two(src), p0, t0);
-  case KVec: return copy_vec(g, vec(src), p0, t0);
-  case KMint: return copy_sym(g, sym(src), p0, t0);
-  case KNom: return copy_nom(g, nom(src), p0, t0);
-  case KString: return copy_str(g, str(src), p0, t0);
-  case KBig: return copy_big(g, (struct ai_big*) src, p0, t0);
-  case KFlo: return copy_flo(g, (struct ai_flo*) src, p0, t0);
-  case KWide: return copy_wide(g, (struct ai_wide*) src, p0, t0);
-  case KCplx: return copy_cplx(g, (struct ai_cplx*) src, p0, t0); } }
+  case DChain: return copy_chain(g, two(src), p0, t0);
+  case DTray: return copy_tray(g, tray(src), p0, t0);
+  case DMint: return copy_sym(g, sym(src), p0, t0);
+  case DNom: return copy_nom(g, nom(src), p0, t0);
+  case DString: return copy_str(g, str(src), p0, t0);
+  case DBig: return copy_big(g, (struct ai_big*) src, p0, t0);
+  case DGem: return copy_flo(g, (struct ai_flo*) src, p0, t0);
+  case DSun: return copy_wide(g, (struct ai_wide*) src, p0, t0);
+  case DTwin: return copy_cplx(g, (struct ai_cplx*) src, p0, t0); }
+ __builtin_trap(); }
 
 static ai_inline struct ai_tag *ttag2(struct ai *g, union u *k) {
  while (!tagl(g, k->x)) k++;                                 // tagl: terminator head in any live pool
@@ -2660,7 +2661,7 @@ lvm(lvm_sleep) {
 
 lvm(lvm_jump) { return Ip = Ip[1].m, Continue(); }
 // The only compiled truthiness branch (`?`, and the `&&`/`||` macros). Uses the
-// language falsy predicate so an all-zero vec (boxed 0.0, zero int box,
+// language falsy predicate so an all-zero tray (boxed 0.0, zero int box,
 // all-zero array) takes the false arm, lifting "0 is the only false scalar".
 lvm(lvm_cond) { return Ip = ai_nilp(g, *Sp++) ? Ip[1].m : Ip + 2, Continue(); }
 lvm(lvm_unc) {
@@ -2821,34 +2822,34 @@ static struct ai_zn ai_net(struct ai *g, word x) {
     return ai_net(g, coin_load(x)); }
   if (!datp(x)) return zn(1, 0);                                // opaque but present (fn / port): truthy
   switch (typ(x)) {
-    default: return zn(1, 0);                                   // unknown present data kind -> truthy
-    case KString: { ai_flo_t t = 0;                                 // a string is PACKED CHARS: Σ charms
+    case DString: { ai_flo_t t = 0;                                 // a string is PACKED CHARS: Σ charms
       for (uintptr_t i = 0; i < len(x); i++) t += (uint8_t) txt(x)[i];
       return zn(t, 0); }                                           // (the count moved to tally)
-    case KChain: { struct ai_zn s = zn(0, 0); word p = x;           // chain: sum the SPINE's nets --
+    case DChain: { struct ai_zn s = zn(0, 0); word p = x;           // chain: sum the SPINE's nets --
       do { struct ai_zn e = ai_net(g, A(p));                       // complex sums, so negatives cancel,
            s.re += e.re, s.im += e.im;                           // phases cancel, and a chain of
            p = B(p); } while (chainp(p));                          // nothings nets to nothing
       return s; }
-    case KBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
-    case KFlo: return zn(flo_get(x), 0);                         // a boxed float nets its value
-    case KWide: return zn((ai_flo_t) box_get(x), 0);             // a boxed wide int nets its value
-    case KCplx: return zn(cplx_re(x), cplx_im(x));               // a complex nets ITSELF (phase intact)
-    case KMint: return zn(0, 0);                                 // a bare point nets nothing (the distinct nothing)
-    case KNom: { ai_flo_t t = 0; struct ai_str *s = str(nom(x)->name);  // a named point nets its SPELLING's charms
+    case DBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
+    case DGem: return zn(flo_get(x), 0);                         // a boxed float nets its value
+    case DSun: return zn((ai_flo_t) box_get(x), 0);             // a boxed wide int nets its value
+    case DTwin: return zn(cplx_re(x), cplx_im(x));               // a complex nets ITSELF (phase intact)
+    case DMint: return zn(0, 0);                                 // a bare point nets nothing (the distinct nothing)
+    case DNom: { ai_flo_t t = 0; struct ai_str *s = str(nom(x)->name);  // a named point nets its SPELLING's charms
       for (uintptr_t i = 0; i < s->len; i++) t += (uint8_t) txt(s)[i];
       return zn(t, 0); }
-    case KVec: { struct ai_vec *v = vec(x);                 // a rank>=1 array (scalar gems: KFlo/KWide/KCplx)
-      uintptr_t i, n = vec_nelem(v);
+    case DTray: { struct ai_tray *v = tray(x);                 // a rank>=1 tray (the scalar stars are DGem/DSun/DTwin)
+      uintptr_t i, n = tray_nelem(v);
       struct ai_zn s = zn(0, 0);                                  // rank>=1 array -> Σ elem
-      if (v->type == ai_C) { ai_flo_t *d = vec_data(v);
+      if (v->type == ai_C) { ai_flo_t *d = tray_data(v);
         for (i = 0; i < n; i++) s.re += d[2*i], s.im += d[2*i+1];
         return s; }
       if (v->type == ai_O)
-        for (i = 0; i < n; i++) { struct ai_zn e = ai_net(g, vec_get_obj(v, i));
+        for (i = 0; i < n; i++) { struct ai_zn e = ai_net(g, tray_get_obj(v, i));
           s.re += e.re, s.im += e.im; }
-      else for (i = 0; i < n; i++) s.re += vec_get_flo(v, i);
-      return s; } } }
+      else for (i = 0; i < n; i++) s.re += tray_get_flo(v, i);
+      return s; } }
+  return zn(1, 0); }
 // $: the net observed once -- max(0, ceil) of its order-signed magnitude (a
 // phaseful net takes |z|, gated by zn_false). lockstep with ai_nilp.
 static intptr_t ai_pin(struct ai *g, word x) {
@@ -3083,7 +3084,7 @@ struct ai_port_vt const synth[] = {
  /* fd = -1, ti: retired C-string source; the fd is a protocol number prel pokes,
     so the row stays a hole rather than renumbering its neighbours */
  { noop_flush, NULL,      NULL },
- /* fd = -2, to: write-only vec sink   */
+ /* fd = -2, to: write-only string sink   */
  { to_flush,   to_writen, NULL },
  /* fd = -3, closed port (post-close)  */
  { noop_flush, NULL,      NULL },
@@ -3300,15 +3301,15 @@ static ai_inline struct ai*ioput_chain(struct ai*g, word _, uintptr_t off) {
 
 
 // element i of the array parked at g->sp[0], read before any ioputc (printing may GC)
-static struct ai *ioput_vec_elem(struct ai *g, uintptr_t i) {
- struct ai_vec *v = vec(g->sp[0]);
+static struct ai *ioput_tray_num(struct ai *g, uintptr_t i) {
+ struct ai_tray *v = tray(g->sp[0]);
  if (v->type >= ai_R)
-  return ai_dtoa2(g, vec_get_flo(v, i));
- return ioputn(g, vec_get_int(v, i), 10); }
+  return ai_dtoa2(g, tray_get_flo(v, i));
+ return ioputn(g, tray_get_int(v, i), 10); }
 
 // packed ai_C element as ~(re im); re/im to C locals before any ioputc
-static struct ai *ioput_carr_elem(struct ai *g, uintptr_t i) {
- ai_flo_t *fp = vec_data(vec(g->sp[0]));
+static struct ai *ioput_tray_cplx(struct ai *g, uintptr_t i) {
+ ai_flo_t *fp = tray_data(tray(g->sp[0]));
  ai_flo_t re = fp[2*i], im = fp[2*i+1];
  g = ioprintf(g, "~("); g = ai_dtoa2(g, re); g = ioputc(g, ' ');
  g = ai_dtoa2(g, im); return ioputc(g, ')'); }
@@ -3318,35 +3319,35 @@ static struct ai *ioput_carr_elem(struct ai *g, uintptr_t i) {
 // printed elements, symbol/chain elements quoted. re-fetched from g->sp[0] each step.
 static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off);
 
-static struct ai *ioput_arr_elem(struct ai *g, uintptr_t i, uintptr_t type, uintptr_t off) {
- if (type == ai_C) return ioput_carr_elem(g, i);
- if (type != ai_O) return ioput_vec_elem(g, i);
- word e = vec_get_obj(vec(g->sp[0]), i);           // kind test only; re-fetched below
+static struct ai *ioput_tray_elem(struct ai *g, uintptr_t i, uintptr_t type, uintptr_t off) {
+ if (type == ai_C) return ioput_tray_cplx(g, i);
+ if (type != ai_O) return ioput_tray_num(g, i);
+ word e = tray_get_obj(tray(g->sp[0]), i);           // kind test only; re-fetched below
  if (nomp(e) || chainp(e)) g = ioputc(g, '\'');          // quote, so eval rebuilds the element
- return ioputx(g, vec_get_obj(vec(g->sp[0]), i), off); }
+ return ioputx(g, tray_get_obj(tray(g->sp[0]), i), off); }
 
-static struct ai *ioput_arr(struct ai *g, uintptr_t off) {
- struct ai_vec *v = vec(g->sp[0]);
- uintptr_t rank = v->rank, type = v->type, nelem = vec_nelem(v);
+static struct ai *ioput_tray_els(struct ai *g, uintptr_t off) {
+ struct ai_tray *v = tray(g->sp[0]);
+ uintptr_t rank = v->rank, type = v->type, nelem = tray_nelem(v);
  if (rank == 1) {                                      // terse rank-1: @(…), empty -> @()
   g = ioputc(g, '@'); g = ioputc(g, '(');
   for (uintptr_t i = 0; ai_ok(g) && i < nelem; i++) {
    if (i) g = ioputc(g, ' ');
-   g = ioput_arr_elem(g, i, type, off); }
+   g = ioput_tray_elem(g, i, type, off); }
   return ai_ok(g) ? ioputc(g, ')') : g; }
  // rank>=2: (array '(shape) elem …) -- @ has no shape spelling yet (a-type of the
  // printed elements re-infers the element type, the loss every surface form accepts).
  g = ioprintf(g, "(array '(");                         // (array '(shape) elem …)
  for (uintptr_t i = 0; ai_ok(g) && i < rank; i++) {
   if (i) g = ioputc(g, ' ');
-  g = ioputn(g, vec(g->sp[0])->shape[i], 10); }
+  g = ioputn(g, tray(g->sp[0])->shape[i], 10); }
  g = ioputc(g, ')');
  for (uintptr_t i = 0; ai_ok(g) && i < nelem; i++) {
-  g = ioputc(g, ' '); g = ioput_arr_elem(g, i, type, off); }
+  g = ioputc(g, ' '); g = ioput_tray_elem(g, i, type, off); }
  return ai_ok(g) ? ioputc(g, ')') : g; }
 
 // complex -> ~(re im); re/im read up front so a GC in ai_dtoa2 can't strand them
-static ai_inline struct ai*ioput_vec_scalar_complex(struct ai*g) {
+static ai_inline struct ai*ioput_tray_scalar_complex(struct ai*g) {
  ai_flo_t re = cplx_re(g->sp[0]), im = cplx_im(g->sp[0]);
  g = ioprintf(g, "~(");
  g = ai_dtoa2(g, re);
@@ -3354,9 +3355,9 @@ static ai_inline struct ai*ioput_vec_scalar_complex(struct ai*g) {
  g = ai_dtoa2(g, im);
  return ioputc(g, ')'); }
 
-static ai_inline struct ai*ioput_vec(struct ai*g, word _, uintptr_t off) {
+static ai_inline struct ai*ioput_tray(struct ai*g, word _, uintptr_t off) {
  if (!ai_ok(g = ai_push(g, 1, _))) return g;
- return ai_pop(ioput_arr(g, off), 1); }
+ return ai_pop(ioput_tray_els(g, off), 1); }
 
 static ai_inline struct ai*ioput_str(struct ai*g, word _) {
  uintptr_t slen = len(_);
@@ -3576,17 +3577,17 @@ static ai_noinline struct ai *ioputx(struct ai *g, intptr_t x, uintptr_t off) {
  if (coinp(x)) return ioput_coin(g, x, off);
  if (!datp(x)) return tabp(x) ? ioput_map(g, x, off) : ioput_fn(g, x, off);
  switch (typ(x)) {   // the data kinds are acyclic; only maps need the cycle guard
-   default: __builtin_trap();
-   case KChain:  return ioput_chain(g, x, off);
-   case KVec:  return ioput_vec(g, x, off);
-   case KFlo:  return ai_dtoa2(g, flo_get(x));
-   case KWide: return ioputn(g, box_get(x), 10);
-   case KCplx: if (!ai_ok(g = ai_push(g, 1, x))) return g;  // ~(re im); the helper reads sp[0]
-               return ai_pop(ioput_vec_scalar_complex(g), 1);
-   case KMint:  return ioput_sym(g, x);
-   case KNom:   return ioput_nom(g, x);
-   case KString: return ioput_str(g, x);
-   case KBig:  return ioput_big(g, x); } }
+   case DChain:  return ioput_chain(g, x, off);
+   case DTray:  return ioput_tray(g, x, off);
+   case DGem:  return ai_dtoa2(g, flo_get(x));
+   case DSun: return ioputn(g, box_get(x), 10);
+   case DTwin: if (!ai_ok(g = ai_push(g, 1, x))) return g;  // ~(re im); the helper reads sp[0]
+               return ai_pop(ioput_tray_scalar_complex(g), 1);
+   case DMint:  return ioput_sym(g, x);
+   case DNom:   return ioput_nom(g, x);
+   case DString: return ioput_str(g, x);
+   case DBig:  return ioput_big(g, x); }
+ __builtin_trap(); }
 
 // Establish a fresh seen-list slot at the bottom of the print region, print, then
 // restore the original stack height (discarding the slot and the whole list).
@@ -4178,28 +4179,28 @@ lvm(lvm_please) {
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap
 lvm(lvm_gauge) {
  enum { N = 16 };
- uintptr_t const bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + N * ai_T[ai_Z];
+ uintptr_t const bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + N * ai_T[ai_Z];
  Have(b2w(bytes));
- struct ai_vec *v = (struct ai_vec*) Hp;
+ struct ai_tray *v = (struct ai_tray*) Hp;
  Hp += b2w(bytes);
- ini_vec(v, ai_Z, 1);
+ ini_tray(v, ai_Z, 1);
  v->shape[0] = N;
- vec_put_int(v, 0, (intptr_t) g->len);
- vec_put_int(v, 1, (intptr_t) (Hp - ptr(g)));
- vec_put_int(v, 2, (intptr_t) (ptr(g) + g->len - Sp));
- vec_put_int(v, 3, (intptr_t) g->n_gc);
- vec_put_int(v, 4, (intptr_t) g->max_len);
- vec_put_int(v, 5, (intptr_t) g->max_heap);
- vec_put_int(v, 6, (intptr_t) g->n_seen);
- vec_put_int(v, 7, (intptr_t) g->n_evac);
- vec_put_int(v, 9, (intptr_t) g->rem_miss);
- vec_put_int(v, 10, (intptr_t) g->rem_hi);
- vec_put_int(v, 11, (intptr_t) g->n_minor);
- vec_put_int(v, 8, (intptr_t) (g->major_pool ? g->major_hp - g->major_base : g->minor - (word*) g->end));  // major live (gen), else [end,minor)
- vec_put_int(v, 12, (intptr_t) (g->major_pool ? 2 * g->major_len : 0));  // major pool capacity (both halves), words
- vec_put_int(v, 13, (intptr_t) g->n_resize);
- vec_put_int(v, 14, (intptr_t) g->minor_hi);
- vec_put_int(v, 15, (intptr_t) g->major_hi);
+ tray_put_int(v, 0, (intptr_t) g->len);
+ tray_put_int(v, 1, (intptr_t) (Hp - ptr(g)));
+ tray_put_int(v, 2, (intptr_t) (ptr(g) + g->len - Sp));
+ tray_put_int(v, 3, (intptr_t) g->n_gc);
+ tray_put_int(v, 4, (intptr_t) g->max_len);
+ tray_put_int(v, 5, (intptr_t) g->max_heap);
+ tray_put_int(v, 6, (intptr_t) g->n_seen);
+ tray_put_int(v, 7, (intptr_t) g->n_evac);
+ tray_put_int(v, 9, (intptr_t) g->rem_miss);
+ tray_put_int(v, 10, (intptr_t) g->rem_hi);
+ tray_put_int(v, 11, (intptr_t) g->n_minor);
+ tray_put_int(v, 8, (intptr_t) (g->major_pool ? g->major_hp - g->major_base : g->minor - (word*) g->end));  // major live (gen), else [end,minor)
+ tray_put_int(v, 12, (intptr_t) (g->major_pool ? 2 * g->major_len : 0));  // major pool capacity (both halves), words
+ tray_put_int(v, 13, (intptr_t) g->n_resize);
+ tray_put_int(v, 14, (intptr_t) g->minor_hi);
+ tray_put_int(v, 15, (intptr_t) g->major_hi);
  return Sp[0] = word(v), Ip++, Continue(); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. The string-lane glaze
@@ -4375,13 +4376,13 @@ static lvm(lvm_map_lookup) {
  return Ip = cell(*++Sp), *Sp = v, Continue(); }
 
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : zero)
-// (lit? x): the upper segment of the lattice, ai_kind >= KMap -- maps and the
+// (lit? x): the upper segment of the lattice, ai_kind >= KTablet -- tablets and the
 // tops above (closures, nifs, cask/port), never the fresh value-data below. a
 // COIN's die decides (DIE_HOT truthy = lit): lit? is the lattice cut, not storage.
 lvm(lvm_litp) {
  word x = Sp[0];
  bool lit = coinp(x) ? !ai_nilp(g, die_get(g, coin_die(x), DIE_HOT))   // a coin: its die decides
-                     : ai_kind(x) >= KMap;                             // else the lattice cut
+                     : ai_kind(x) >= KTablet;                             // else the lattice cut
  Sp[0] = lit ? putcharm(1) : zero;
  return Ip++, Continue(); }
 // (hot? x): an opaque hot handle -- a buf or a port (a task is a fixnum id, not a handle)
@@ -4398,16 +4399,16 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
    z = putcharm((unsigned char) txt(s)[n]); }
  else if (tabp(x)) z = ai_mapget(g, z, k, x);     // map lookup (not a data sentinel)
  else if (lamp(x) && datp(x)) switch (typ(x)) {
-  default: break;                               // a bare mint (KMint) is not indexable
-  case KFlo:                                    // a rank-0 scalar float: a zero key derefs to itself
-  case KWide:                                   // ... same for a wide-int scalar
-  case KCplx:                                   // ... and a complex scalar
+  default: break;                               // a bare mint (DMint) is not indexable
+  case DGem:                                    // a rank-0 scalar float: a zero key derefs to itself
+  case DSun:                                   // ... same for a wide-int scalar
+  case DTwin:                                   // ... and a complex scalar
    if (zerop(k)) z = x;
    break;
-  case KVec: {
+  case DTray: {
    // array index: a fixnum (rank-1) or a row-major shape-list (rank-N);
    // out-of-bounds or wrong rank falls through to the default
-   struct ai_vec *v = vec(x);
+   struct ai_tray *v = tray(x);
    uintptr_t R = v->rank, off = 0; bool ok = false;
    if (R == 1 && charmp(k)) {
     intptr_t ix = getcharm(k);
@@ -4421,22 +4422,22 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
      intptr_t ix = getcharm(ki);
      if (ix < 0 || ix >= (intptr_t) v->shape[a]) { ok = false; break; }
      off = off * v->shape[a] + ix, a++; } }
-   if (ok && v->type == ai_O) z = vec_get_obj(v, off);   // object: the slot IS the value
+   if (ok && v->type == ai_O) z = tray_get_obj(v, off);   // object: the slot IS the value
    else if (ok && v->type == ai_C) {                       // packed complex -> a (re,im) box
-    Have(cplx_req); v = vec(Sp[0]);                      // re-read coll (Sp[0]) post-Have
-    ai_flo_t *fp = vec_data(v);
+    Have(cplx_req); v = tray(Sp[0]);                      // re-read coll (Sp[0]) post-Have
+    ai_flo_t *fp = tray_data(v);
     z = mk_cplx(&Hp, fp[2*off], fp[2*off+1]); }
-   else if (ok) { word _res; Have(box_req); v = vec(Sp[0]);
-    if (v->type >= ai_R) emit_flo(vec_get_flo(v, off));
-    else emit_int(vec_get_int(v, off));
+   else if (ok) { word _res; Have(box_req); v = tray(Sp[0]);
+    if (v->type >= ai_R) emit_flo(tray_get_flo(v, off));
+    else emit_int(tray_get_int(v, off));
     z = _res; }
    break; }
-  case KString:
+  case DString:
    // byte as its unsigned value 0..255 (txt is signed char[]: cast, or a high byte sign-extends)
    if (charmp(k) && (n = getcharm(k)) >= 0 && n < (word) len(x))
     z = putcharm((unsigned char) txt(x)[n]);
    break;
-  case KChain:
+  case DChain:
    if (charmp(k) && (n = getcharm(k)) >= 0) {
     while (n-- && chainp(x = B(x)));
     if (chainp(x)) z = A(x); } }
@@ -4511,37 +4512,37 @@ uintptr_t hash(struct ai *g, intptr_t x) {
    for (union u *y = k; y < (union u*) tg; y++) r ^= r * mix;
    return r; }
  switch (typ(x)) {
-   default: __builtin_trap();
-   case KChain: return hash_two(g, x);
-   case KMint: return sym(x)->code;
-   case KNom: return nom(x)->dig;                  // the cached SPELLING hash -- a serial would key
+   case DChain: return hash_two(g, x);
+   case DMint: return sym(x)->code;
+   case DNom: return nom(x)->dig;                  // the cached SPELLING hash -- a serial would key
                                                    // bucket order to intern history (a reproducible-
                                                    // build leak); same-spelled noms collide, `=` separates
-   case KVec: {
-    uintptr_t len = ai_vec_bytes(vec(x)), h = mix;
+   case DTray: {
+    uintptr_t len = ai_tray_bytes(tray(x)), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case KBig: {
+   case DBig: {
     uintptr_t len = ai_big_bytes((struct ai_big*) x), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case KFlo: {                                 // hash the lean box (ap is GC-stable, payload is the value)
+   case DGem: {                                 // hash the lean box (ap is GC-stable, payload is the value)
     uintptr_t len = flo_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case KWide: {                                // same: hash the lean box bytes
+   case DSun: {                                // same: hash the lean box bytes
     uintptr_t len = wide_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case KCplx: {                                // same: hash the lean (ap, re, im) box bytes
+   case DTwin: {                                // same: hash the lean (ap, re, im) box bytes
     uintptr_t len = cplx_req * sizeof(word), h = mix;
     for (uint8_t const *bs = (void*) x; len--; h ^= *bs++, h *= mix);
     return h; }
-   case KString: {
+   case DString: {
     uintptr_t n = len(x), h = mix;
     char const *bs = txt(x);
     while (n--) h ^= (uint8_t) *bs++, h *= mix;
-    return h; } } }
+    return h; } }
+ __builtin_trap(); }
 
 // ============================================================================
 // str
@@ -4780,7 +4781,7 @@ bool ai_strp(ai_word x) { return strp(x); }
 // ============================================================================
 // lvm_* that appear as an object's ap but are NOT in def1[]
 static lvm_t *const image_extra_aps[] = {
- lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox,  // data sentinels
+ lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox,  // data sentinels
  lvm_map_lookup, lvm_map_data, lvm_buf, lvm_coin, lvm_port_io,                        // thread aps
  lvm_cur, lvm_help, lvm_ret0, lvm_ap, lvm_ret,                                         // dispatchers
  // instruction fns a compiled thread embeds directly (no def1 cell); odd on
@@ -4791,15 +4792,15 @@ static lvm_t *const image_extra_aps[] = {
 // ttag (the hand-rolled [lo,hi) scan drifted)
 static uintptr_t image_objsize(struct ai *g, union u *p) {
  if (in_data(p->ap)) switch (ai_typ(p)) {
-  case KChain: return Width(struct ai_chain);
-  case KMint:  return Width(struct ai_mint);
-  case KNom:   return Width(struct ai_nom);
-  case KFlo:   return Width(struct ai_flo);
-  case KWide:  return Width(struct ai_wide);
-  case KCplx:  return Width(struct ai_cplx);
-  case KString:return b2w(sizeof(struct ai_str) + str(p)->len);
-  case KBig:   return b2w(ai_big_bytes((struct ai_big*) p));
-  default:     return b2w(ai_vec_bytes((struct ai_vec*) p)); }   // KVec
+  case DChain: return Width(struct ai_chain);
+  case DMint:  return Width(struct ai_mint);
+  case DNom:   return Width(struct ai_nom);
+  case DGem:   return Width(struct ai_flo);
+  case DSun:  return Width(struct ai_wide);
+  case DTwin:  return Width(struct ai_cplx);
+  case DString:return b2w(sizeof(struct ai_str) + str(p)->len);
+  case DBig:   return b2w(ai_big_bytes((struct ai_big*) p));
+  case DTray:  return b2w(ai_tray_bytes((struct ai_tray*) p)); }
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
  return (uintptr_t)(term - (word*) p) + 1; }
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, then def1 E..
@@ -5003,14 +5004,14 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen) {
         || (((word*) p)[2] == (word) lvm_cur && (word*) p + 8 <= hp && ((word*) p)[6] == (word) lvm_ret));
   blob[off] = img_encode(((word*) p)[0], base, hp, hb, &fail);                                    // word0: the ap
   if (in_data(p->ap)) switch (ai_typ(p)) {
-   case KChain: blob[off + 1] = img_encode(((struct ai_chain*) p)->a, base, hp, hb, &fail);
+   case DChain: blob[off + 1] = img_encode(((struct ai_chain*) p)->a, base, hp, hb, &fail);
                 blob[off + 2] = img_encode(((struct ai_chain*) p)->b, base, hp, hb, &fail); break;
-   case KNom:   blob[off + 1] = img_encode((intptr_t) nom(p)->name, base, hp, hb, &fail); break;
-   case KVec:   if (vec(p)->type == ai_O) {
-                 word *e = (word*) vec_data(vec(p)); uintptr_t ne = vec_nelem(vec(p)), eo = (uintptr_t)(e - (word*) p);
+   case DNom:   blob[off + 1] = img_encode((intptr_t) nom(p)->name, base, hp, hb, &fail); break;
+   case DTray:   if (tray(p)->type == ai_O) {
+                 word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - (word*) p);
                  for (uintptr_t i = 0; i < ne; i++) blob[off + eo + i] = img_encode(e[i], base, hp, hb, &fail); }
                 break;
-   default: break; }                                     // KMint/KStr/KBig/KFlo/KWide/KCplx: flat leaves
+   default: break; }                                     // DMint/DString/DBig/DGem/DSun/DTwin: flat leaves
   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(((word*) p)[i], base, hp, hb, &fail);   // thread interior + terminator
   img_suppress = 0;
   p = (union u*) ((word*) p + sz); }
@@ -5068,10 +5069,10 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
   ((word*) p)[0] = img_decode(((word*) p)[0], base, hb, delta);                   // word0 first: the ap (sizing needs it real)
   if (in_data(p->ap)) { sz = image_objsize(g, p);                                 // data kinds: size by ai_typ + raw length words
    switch (ai_typ(p)) {
-    case KChain: ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta);
+    case DChain: ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta);
                  ((word*) p)[2] = img_decode(((word*) p)[2], base, hb, delta); break;
-    case KNom:   ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta); break;
-    case KVec:   if (vec(p)->type == ai_O) { word *e = (word*) vec_data(vec(p)); uintptr_t ne = vec_nelem(vec(p));
+    case DNom:   ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta); break;
+    case DTray:   if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
                   for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], base, hb, delta); }
                  break;
     default: break; }
@@ -5187,7 +5188,7 @@ op11(lvm_namep, namep(Sp[0]) ? putcharm(1) : zero)
 op11(lvm_packp, (packp(Sp[0]) || flop(Sp[0]) || widep(Sp[0]) || Cp(Sp[0])) ? putcharm(1) : zero)  // the pack family: arrays + the lean float/wide/complex scalar boxes
 op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : zero)
 op11(lvm_widep, widep(Sp[0]) ? putcharm(1) : zero)
-op11(lvm_setp, arrp(Sp[0]) ? putcharm(1) : zero)
+op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. Used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
 op11(lvm_intf, flop(Sp[0]) ? putcharm((intptr_t) flo_get(Sp[0])) : Sp[0])
@@ -5263,7 +5264,7 @@ lvm(lvm_link) {
 
 #define avm_slow(op, vop, ovf, fexpr) static lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop); \
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop); \
  if (Cp(a) || Cp(b)) return Ap(lvm_cplx_bin, g, vop); \
  if (!isnum(a) || !isnum(b)) return *++Sp = ZeroPoint, Ip++, Continue(); \
  if (flop(a) || flop(b)) { word _res; Have(box_req); \
@@ -5279,7 +5280,7 @@ lvm(lvm_link) {
  return Unpack(g), Continue(); }
 #define avm_slowdiv(op, vop, c_op, fexpr) static lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop); \
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop); \
  if (Cp(a) || Cp(b)) return Ap(lvm_cplx_bin, g, vop); \
  if (!isnum(a) || !isnum(b)) return *++Sp = ZeroPoint, Ip++, Continue(); \
  if (flop(a) || flop(b) || b == zero) { word _res; Have(box_req); \
@@ -5330,7 +5331,7 @@ avm_slowdiv(rem, vop_rem, %, ai_fmod(ad, bd))    // NaN on bd == 0
 // (the truncating quotient is `//`)
 static lvm(lvm_quotn) {
  word a = Sp[0], b = Sp[1];
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_quot);
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_quot);
  if (Cp(a) || Cp(b)) return Ap(lvm_cplx_bin, g, vop_quot);
  if (!isnum(a) || !isnum(b)) return *++Sp = ZeroPoint, Ip++, Continue();
  if (flop(a) || flop(b) || b == zero) { word _res; Have(box_req);   // ±inf/NaN on ÷0
@@ -5428,7 +5429,7 @@ static ai_inline char *add_emit(struct ai *g, char *w, word x) {  // append x's 
  return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (gated >= 0 by the byte law)
 static lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
- if (arrp(a) || arrp(b)) return *++Sp = ZeroPoint, Ip++, Continue(); // array <-> string: undefined
+ if (trayp(a) || trayp(b)) return *++Sp = ZeroPoint, Ip++, Continue(); // array <-> string: undefined
  if (!strp(a) && !nomp(a) && seq_byte(a) < 0) return *++Sp = ZeroPoint, Ip++, Continue();  // the byte law
  if (!strp(b) && !nomp(b) && seq_byte(b) < 0) return *++Sp = ZeroPoint, Ip++, Continue();
  int rank = min(stringrank(g, a), stringrank(g, b));
@@ -5451,16 +5452,6 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
 static lvm(lvm_bin_unit) {
  word a = Sp[0], b = Sp[1];
  return *++Sp = mintp(a) ? b : a, Ip++, Continue(); }
-
-// the value kind for generic dispatch (enum q, love.h): fixnum -> KCharm,
-// non-data heap pointer -> KMap/KHot, else ai_typ's data kind, a vec refined by
-// element tier to KArrZ..KArrO. exported so the apply sentinels share it.
-enum q ai_kind(word x) {
- if (charmp(x)) return KCharm;
- if (!datp(x)) return tabp(x) ? KMap : KHot;
- enum q k = typ(x);
- if (k != KVec) return k;
- return (enum q) (KArrZ + vec(x)->type); }
 
 // ============================================================================
 // generic-op lane aps, the dispatch matrices, then the `+`/`*` dispatchers
@@ -5564,14 +5555,25 @@ static lvm(data_pair_apply) {
  return Ip = (union u*) pair_drive, Continue(); }
 
 // === the two generic-op dispatch matrices (+ and *), indexed by ai_kind =====
-// lanes: *n numeric/broadcast (every gem/array kind routes identically), add_seq
+// lanes: *n numeric/broadcast (every star and tray kind routes identically), add_seq
 // a list anywhere, add_string strings (+ a number as one byte -- the byte law),
 // mul_rep sequence * count, *l a lambda-or-map operand (church add / compose),
-// lvm_0 undefined -> zero. precedence: lambda > map > chain > text > number.
+// lvm_0 undefined -> zero. precedence: lambda > tablet > chain > text > number.
 // the tables are GENERATED: one datum (tools/mx.l) feeds this header AND the rocq
 // model mx.v, so theorem and code cannot drift. EDIT tools/mx.l, not mx.h;
 // `make test_clay` regenerates and fails on drift.
 #include "mx.h"
+
+// any value -> the kind it dispatches as (enum q, love.h): fixnum -> KCharm,
+// non-data heap pointer -> KTablet/KHot, else the rep's kind. a TRAY is the one rep
+// that dispatches four ways, by element tier. exported so the apply sentinels share
+// it; it sits under mx.h for ai_kind_of_d, the rep -> kind crossing.
+enum q ai_kind(word x) {
+ if (charmp(x)) return KCharm;
+ if (!datp(x)) return tabp(x) ? KTablet : KHot;
+ enum d r = typ(x);
+ if (r == DTray) return (enum q) (KTrayZ + tray(x)->type);
+ return ai_kind_of_d[r]; }
 
 // === the `+`/`*` dispatchers (fixnum fast path, then the matrix) ============
 lvm(lvm_add) {
@@ -5620,17 +5622,17 @@ bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a & b) | 1, Ip++, Continue();
  avm_unit(a, b);
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_band);
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_band);
  return Ap(lvm_band_slow, g); }
 lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a | b) | 1, Ip++, Continue();
  avm_unit(a, b);
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bor);
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bor);
  return Ap(lvm_bor_slow, g); }
 lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) return *++Sp = (a ^ b) | 1, Ip++, Continue();
  avm_unit(a, b);
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bxor);
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bxor);
  return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `zerop`.)
 
@@ -5644,14 +5646,14 @@ lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b))
   return *++Sp = putcharm(getcharm(a) >> shmask(getcharm(b))), Ip++, Continue();
  avm_unit(a, b);
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bsr);
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bsr);
  return Ap(lvm_bsr_slow, g); }
 
 // << : can overflow the tag, so it always runs the box/demote path; the shift is
 // done in uintptr_t for well-defined overflow
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  avm_unit(a, b);
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, vop_bsl);
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bsl);
  if (!(charmp(a) || widep(a)) || !charmp(b)) return *++Sp = ZeroPoint, Ip++, Continue();
  Have(box_req);
  emit_int((intptr_t)((uintptr_t) toint(a) << shmask(getcharm(b))));
@@ -5667,8 +5669,8 @@ op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : zero)
 // Non-numeric arg → zero. TCO-clean (no & escapes).
 static lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t)) {
  word a = Sp[0];
- if (arrp(a)) {                               // (sin arr) etc. -> float array; complex array undefined
-  if (vec(a)->type == ai_C) return Sp[0] = ZeroPoint, Ip++, Continue();
+ if (trayp(a)) {                               // (sin a-tray) etc. -> gem tray; a twin tray is undefined
+  if (tray(a)->type == ai_C) return Sp[0] = ZeroPoint, Ip++, Continue();
   return Ap(lvm_vmap1, g, fn); }
  if (!isnum(a)) return Sp[0] = ZeroPoint, Ip++, Continue();
  ai_flo_t ad = toflo(a), rd = fn(ad);
@@ -5677,8 +5679,8 @@ static lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t)) {
 
 static lvm(lvm_math2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  word a = Sp[0], b = Sp[1];
- if (arrp(a) || arrp(b)) {                               // (pow arr ..) etc. -> float array
-  if ((arrp(a) && vec(a)->type == ai_C) || (arrp(b) && vec(b)->type == ai_C))
+ if (trayp(a) || trayp(b)) {                               // (pow arr ..) etc. -> float array
+  if ((trayp(a) && tray(a)->type == ai_C) || (trayp(b) && tray(b)->type == ai_C))
    return *++Sp = ZeroPoint, Ip++, Continue();                 // complex array undefined here
   return Ap(lvm_vmap2, g, fn); }
  if (!isnum(a) || !isnum(b)) return
@@ -5706,7 +5708,7 @@ lvm(lvm_log) {
 op11(lvm_flop, flop(Sp[0]) ? putcharm(1) : zero)
 
 // ============================================================================
-// vec
+// tray
 // ============================================================================
 size_t const ai_T[] = {
  [ai_Z] = Bytes,
@@ -5714,8 +5716,8 @@ size_t const ai_T[] = {
  [ai_C] = 2 * Bytes,      // complex scalar: (re, im)
  [ai_O] = Bytes, };       // object: one tagged l word per element
 
-uintptr_t ai_vec_bytes(struct ai_vec *v) {
- return sizeof(struct ai_vec) + v->rank * sizeof(word) + ai_T[v->type] * vec_nelem(v); }
+uintptr_t ai_tray_bytes(struct ai_tray *v) {
+ return sizeof(struct ai_tray) + v->rank * sizeof(word) + ai_T[v->type] * tray_nelem(v); }
 
 // ============================================================================
 // rng
@@ -5763,24 +5765,24 @@ static ai_inline ai_flo_t u64_to_unit(uint64_t u) {
 #endif
 }
 
-// shape v as a state vec and seed it; no &local, so an inlining caller keeps its tail call
-void ai_rng_seed(struct ai_vec *v, uint64_t seed) {
- ini_vec(v, rng_vt, 1);
+// shape v as a state tray and seed it; no &local, so an inlining caller keeps its tail call
+void ai_rng_seed(struct ai_tray *v, uint64_t seed) {
+ ini_tray(v, rng_vt, 1);
  v->shape[0] = rng_state_len;
- rng_seed_into(vec_data(v), seed); }
+ rng_seed_into(tray_data(v), seed); }
 
-// Is x a well-formed state vec (rank-1 i64, length 4)?
+// Is x a well-formed state tray (rank-1 i64, length 4)?
 static ai_inline bool rng_state_p(word x) {
- return packp(x) && vec(x)->rank == 1 && vec(x)->type == rng_vt
-        && vec(x)->shape[0] == rng_state_len; }
+ return packp(x) && tray(x)->rank == 1 && tray(x)->type == rng_vt
+        && tray(x)->shape[0] == rng_state_len; }
 
-// a fresh state vec at Hp copying src's limbs; caller holds Have(rng_vec_req)
-static ai_inline struct ai_vec *rng_copy(ai_word **hp, struct ai_vec *src) {
- struct ai_vec *v = (struct ai_vec*) *hp;
- *hp += rng_vec_req;
- ini_vec(v, rng_vt, 1);
+// a fresh state tray at Hp copying src's limbs; caller holds Have(rng_tray_req)
+static ai_inline struct ai_tray *rng_copy(ai_word **hp, struct ai_tray *src) {
+ struct ai_tray *v = (struct ai_tray*) *hp;
+ *hp += rng_tray_req;
+ ini_tray(v, rng_vt, 1);
  v->shape[0] = rng_state_len;
- memcpy(vec_data(v), vec_data(src), rng_payload_bytes);
+ memcpy(tray_data(v), tray_data(src), rng_payload_bytes);
  return v; }
 
 // canonicalize a 62-bit draw to the smallest integer tier. out-of-line so the
@@ -5790,13 +5792,13 @@ static ai_noinline word rng_canon(struct ai *g, uint64_t r) {
  for (int i = 0; (size_t) i * limb_bits < 64; i++) limb[i] = (ai_limb) (r >> (i * limb_bits)), nl = i + 1;
  return ai_big_canon(&g->hp, limb, nl, false); }
 
-// (wheel n): a fresh state vec deterministically seeded from fixnum n. A
+// (wheel n): a fresh state tray deterministically seeded from fixnum n. A
 // non-fixnum seeds from 0.
 lvm(lvm_wheel) {
  word n = Sp[0];
  uint64_t seed = charmp(n) ? (uint64_t) (intptr_t) getcharm(n) : 0;
- Have(rng_vec_req);
- struct ai_vec *v = (struct ai_vec*) Hp; Hp += rng_vec_req;
+ Have(rng_tray_req);
+ struct ai_tray *v = (struct ai_tray*) Hp; Hp += rng_tray_req;
  ai_rng_seed(v, seed);
  return Sp[0] = word(v), Ip++, Continue(); }
 
@@ -5807,10 +5809,10 @@ lvm(lvm_wheel) {
 lvm(lvm_turn) {
  word st = Sp[0];
  if (!rng_state_p(st)) return Sp[0] = ZeroPoint, Ip++, Continue();
- Have(rng_vec_req + rng_draw_req + Width(struct ai_chain));
+ Have(rng_tray_req + rng_draw_req + Width(struct ai_chain));
  st = Sp[0];                                 // re-read post-Have
- struct ai_vec *v = rng_copy(&Hp, vec(st));
- uint64_t r = rng_step(vec_data(v)) & rng_draw_mask;
+ struct ai_tray *v = rng_copy(&Hp, tray(st));
+ uint64_t r = rng_step(tray_data(v)) & rng_draw_mask;
  Pack(g);
  word val = rng_canon(g, r);
  Unpack(g);
@@ -5822,10 +5824,10 @@ lvm(lvm_turn) {
 lvm(lvm_turnf) {
  word st = Sp[0], _res;
  if (!rng_state_p(st)) return Sp[0] = ZeroPoint, Ip++, Continue();
- Have(rng_vec_req + box_req + Width(struct ai_chain));
+ Have(rng_tray_req + box_req + Width(struct ai_chain));
  st = Sp[0];                                 // re-read post-Have
- struct ai_vec *v = rng_copy(&Hp, vec(st));
- uint64_t r = rng_step(vec_data(v));
+ struct ai_tray *v = rng_copy(&Hp, tray(st));
+ uint64_t r = rng_step(tray_data(v));
  ai_flo_t u = u64_to_unit(r);
  emit_flo(u);                                // box at Hp, into _res
  struct ai_chain *p = (struct ai_chain*) Hp; Hp += Width(struct ai_chain);
@@ -6030,30 +6032,30 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
    if (((a | b) & 1) || !datp(a) || !datp(b) || typ(a) != typ(b)) return false;
    switch (typ(a)) {
     default: return false;
-    case KChain:
+    case DChain:
      if (top - w < 2) __builtin_trap();     // worklist overflow: a cycle
      *w++ = B(a), *w++ = B(b), a = A(a), b = A(b);
      continue;
-    case KVec: {
-     size_t la = ai_vec_bytes(vec(a)), lb = ai_vec_bytes(vec(b));
-     if (la != lb || memcmp(vec(a), vec(b), la)) return false;
+    case DTray: {
+     size_t la = ai_tray_bytes(tray(a)), lb = ai_tray_bytes(tray(b));
+     if (la != lb || memcmp(tray(a), tray(b), la)) return false;
      break; }
-    case KFlo:
+    case DGem:
      if (flo_get(a) != flo_get(b)) return false;       // two float boxes: compare the payload (parallels = / cmp)
      break;
-    case KWide:
+    case DSun:
      if (box_get(a) != box_get(b)) return false;       // two wide boxes: compare the payload
      break;
-    case KCplx:
+    case DTwin:
      if (cplx_re(a) != cplx_re(b) || cplx_im(a) != cplx_im(b)) return false;  // re AND im
      break;
-    case KBig: {
+    case DBig: {
      struct ai_big *x = (struct ai_big*) a, *y = (struct ai_big*) b;
      if (x->slen != y->slen) return false;
      size_t nb = (size_t) (x->slen < 0 ? -x->slen : x->slen) * sizeof(ai_limb);
      if (memcmp(x->limb, y->limb, nb)) return false;
      break; }
-    case KString:
+    case DString:
      if (len(a) != len(b) || memcmp(txt(a), txt(b), len(a))) return false;
      break; } }
   if (w == base) return true;              // worklist drained: all equal
@@ -6064,34 +6066,34 @@ ai_noinline bool eqv(struct ai *g, word a, word b) { return eqv_at(g, a, b, off_
 // equal), NOT the elementwise mask -- `<` and `>` are the mask makers. cells
 // compare ACROSS TIERS (a z-tray equals a gem-tray of the same values); object
 // cells go through eqv; an object tray never equals a numeric one.
-static ai_noinline bool arr_eq(struct ai *g, word a, word b) {
- if (!arrp(a) || !arrp(b)) return false;            // an array is never a scalar
- struct ai_vec *va = vec(a), *vb = vec(b);
+static ai_noinline bool tray_eq(struct ai *g, word a, word b) {
+ if (!trayp(a) || !trayp(b)) return false;            // an array is never a scalar
+ struct ai_tray *va = tray(a), *vb = tray(b);
  if (va->rank != vb->rank) return false;
  for (uintptr_t k = 0; k < va->rank; k++)
   if (va->shape[k] != vb->shape[k]) return false;   // same shape, not merely conformant
- uintptr_t n = vec_nelem(va);
+ uintptr_t n = tray_nelem(va);
  bool oa = va->type == ai_O, ob = vb->type == ai_O;
  if (oa || ob) {
   if (oa != ob) return false;
   for (uintptr_t i = 0; i < n; i++)
-   if (!eqv(g, vec_get_obj(va, i), vec_get_obj(vb, i))) return false;
+   if (!eqv(g, tray_get_obj(va, i), tray_get_obj(vb, i))) return false;
   return true; }
  if (va->type == ai_C || vb->type == ai_C) {        // (re,im) per cell; a real reads as (r,0)
-  ai_flo_t const *pa = vec_data(va), *pb = vec_data(vb);
+  ai_flo_t const *pa = tray_data(va), *pb = tray_data(vb);
   for (uintptr_t i = 0; i < n; i++) {
-   ai_flo_t are = va->type == ai_C ? pa[2*i] : vec_get_flo(va, i);
+   ai_flo_t are = va->type == ai_C ? pa[2*i] : tray_get_flo(va, i);
    ai_flo_t aim = va->type == ai_C ? pa[2*i+1] : 0;
-   ai_flo_t bre = vb->type == ai_C ? pb[2*i] : vec_get_flo(vb, i);
+   ai_flo_t bre = vb->type == ai_C ? pb[2*i] : tray_get_flo(vb, i);
    ai_flo_t bim = vb->type == ai_C ? pb[2*i+1] : 0;
    if (are != bre || aim != bim) return false; }
   return true; }
  if (va->type == ai_Z && vb->type == ai_Z) {        // exact: no double round-trip
   for (uintptr_t i = 0; i < n; i++)
-   if (vec_get_int(va, i) != vec_get_int(vb, i)) return false;
+   if (tray_get_int(va, i) != tray_get_int(vb, i)) return false;
   return true; }
  for (uintptr_t i = 0; i < n; i++)                  // a float on either side: as doubles
-  if (vec_get_flo(va, i) != vec_get_flo(vb, i)) return false;
+  if (tray_get_flo(va, i) != tray_get_flo(vb, i)) return false;
  return true; }
 
 // (= a b): value-equality with numeric promotion across the tower; falls through
@@ -6106,8 +6108,8 @@ lvm(lvm_eq) {
   bool r = a == b;
   if (Ip[1].ap == lvm_cond) return Sp += 2, Ip = r ? Ip + 3 : Ip[2].m, Continue();
   return Sp[1] = r ? putcharm(1) : zero, Sp++, Ip++, Continue(); }
- if (arrp(a) || arrp(b)) {   // whole-array equality -> a boolean; the mask lives on < and >
-  bool r = arr_eq(g, a, b);
+ if (trayp(a) || trayp(b)) {   // whole-array equality -> a boolean; the mask lives on < and >
+  bool r = tray_eq(g, a, b);
   Sp[1] = r ? putcharm(1) : zero;
   return Sp++, Ip++, Continue(); }
  // complex: equal iff re AND im match, a real reading as (r, 0); before the
@@ -6797,7 +6799,7 @@ struct ai *ai_big_dec(struct ai *g) {
 // prel's *-tray wrap it). the witness names its tier by example (0/0.0/~(0 0)/()
 // -> z/r/c/o); vals fills row-major (missing stays 0, extras ignored). bad
 // witness / negative dim / over-rank -> zero.
-lvm(lvm_tray) {
+lvm(lvm_trayctor) {
  word t = Sp[0], shp = Sp[1];                  // t = a WITNESS GEM (names its tier), vals = Sp[2]
  // the type is read off the witness's KIND -- a value inhabiting the tier: 0 -> Z,
  // 0.0 -> R, ~(0 0) -> C, and anything else (canonically (), the O floor) -> O.
@@ -6809,38 +6811,38 @@ lvm(lvm_tray) {
   if (!charmp(d) || getcharm(d) < 0) return Sp[2] = zero, Sp += 2, Ip++, Continue();
   rank++, nelem *= (uintptr_t) getcharm(d); }
  if (rank > maxrank) return Sp[2] = zero, Sp += 2, Ip++, Continue();
- uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + nelem * ai_T[ty];
+ uintptr_t bytes = sizeof(struct ai_tray) + rank * sizeof(word) + nelem * ai_T[ty];
  Have(b2w(bytes));
- struct ai_vec *v = (struct ai_vec*) Hp;
+ struct ai_tray *v = (struct ai_tray*) Hp;
  Hp += b2w(bytes);
- ini_vec(v, ty, rank);
+ ini_tray(v, ty, rank);
  uintptr_t i = 0;                              // re-walk the (possibly moved) lists
  for (word l = Sp[1]; chainp(l); l = B(l)) v->shape[i++] = (uintptr_t) getcharm(A(l));
- if (ty == ai_O) for (i = 0; i < nelem; i++) vec_put_obj(v, i, ZeroPoint);  // O floor is () not 0
- else memset(vec_data(v), 0, nelem * ai_T[ty]);
+ if (ty == ai_O) for (i = 0; i < nelem; i++) tray_put_obj(v, i, ZeroPoint);  // O floor is () not 0
+ else memset(tray_data(v), 0, nelem * ai_T[ty]);
  i = 0;                                        // no alloc below, so v/Sp[2] stay put
  for (word l = Sp[2]; chainp(l) && i < nelem; l = B(l), i++) {
   word e = A(l);
-  if (ty == ai_O) { vec_put_obj(v, i, e); continue; }   // store any value verbatim
+  if (ty == ai_O) { tray_put_obj(v, i, e); continue; }   // store any value verbatim
   if (ty == ai_C) {                                        // pack (re,im): a real -> (r,0)
-   ai_flo_t *fp = vec_data(v);
+   ai_flo_t *fp = tray_data(v);
    if (Cp(e)) fp[2*i] = cplx_re(e), fp[2*i+1] = cplx_im(e);
    else if (isnum(e)) fp[2*i] = toflo(e), fp[2*i+1] = 0;
    continue; }
   if (!isnum(e)) continue;
-  if (ty >= ai_R) vec_put_flo(v, i, toflo(e));
-  else vec_put_int(v, i, charmp(e) ? (intptr_t) getcharm(e)
+  if (ty >= ai_R) tray_put_flo(v, i, toflo(e));
+  else tray_put_int(v, i, charmp(e) ? (intptr_t) getcharm(e)
                        : flop(e) ? (intptr_t) flo_get(e) : box_get(e)); }
  // only a RANK-0 point (empty shape) demotes to its lone scalar gem; a
  // rank-1-len-1 STAYS an array (@(5) is a one-cell array, not 5 -- collapsing it
- // left the surface discontinuous). root the built vec: the box alloc can GC.
+ // left the surface discontinuous). root the built tray: the box alloc can GC.
  Sp[2] = word(v);
  if (rank == 0) {
-  if (ty == ai_O) return Sp[2] = vec_get_obj(v, 0), Sp += 2, Ip++, Continue();
-  if (ty == ai_C) { Have(cplx_req); v = vec(Sp[2]); ai_flo_t *fp = vec_data(v);
+  if (ty == ai_O) return Sp[2] = tray_get_obj(v, 0), Sp += 2, Ip++, Continue();
+  if (ty == ai_C) { Have(cplx_req); v = tray(Sp[2]); ai_flo_t *fp = tray_data(v);
    return Sp[2] = mk_cplx(&Hp, fp[0], fp[1]), Sp += 2, Ip++, Continue(); }
-  word _res; Have(box_req); v = vec(Sp[2]);
-  if (ty >= ai_R) emit_flo(vec_get_flo(v, 0)); else emit_int(vec_get_int(v, 0));
+  word _res; Have(box_req); v = tray(Sp[2]);
+  if (ty >= ai_R) emit_flo(tray_get_flo(v, 0)); else emit_int(tray_get_int(v, 0));
   return Sp[2] = _res, Sp += 2, Ip++, Continue(); }
  return Sp[2] = word(v), Sp += 2, Ip++, Continue(); }
 
@@ -6849,33 +6851,33 @@ lvm(lvm_iota) {
  word nx = Sp[0];
  if (!charmp(nx) || getcharm(nx) < 0) return Sp[0] = ZeroPoint, Ip++, Continue();
  uintptr_t n = (uintptr_t) getcharm(nx);
- uintptr_t bytes = sizeof(struct ai_vec) + 1 * sizeof(word) + n * ai_T[ai_Z];
+ uintptr_t bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + n * ai_T[ai_Z];
  Have(b2w(bytes));
- struct ai_vec *v = (struct ai_vec*) Hp;
+ struct ai_tray *v = (struct ai_tray*) Hp;
  Hp += b2w(bytes);
- ini_vec(v, ai_Z, 1);
+ ini_tray(v, ai_Z, 1);
  v->shape[0] = n;
- for (uintptr_t i = 0; i < n; i++) vec_put_int(v, i, (intptr_t) i);
+ for (uintptr_t i = 0; i < n; i++) tray_put_int(v, i, (intptr_t) i);
  return Sp[0] = word(v), Ip++, Continue(); }
 
 // --- accessors -------------------------------------------------------------
-// rank / element-type code as fixnums; zero for a non-vec. Both 0 for a scalar box.
-op11(lvm_rank, packp(Sp[0]) ? putcharm(vec(Sp[0])->rank) : ZeroPoint)
-op11(lvm_atype, packp(Sp[0]) ? putcharm(vec(Sp[0])->type) : ZeroPoint)
+// rank / element-type code as fixnums; zero for a non-tray. Both 0 for a scalar box.
+op11(lvm_rank, packp(Sp[0]) ? putcharm(tray(Sp[0])->rank) : ZeroPoint)
+op11(lvm_atype, packp(Sp[0]) ? putcharm(tray(Sp[0])->type) : ZeroPoint)
 
-// total element count (1 for a scalar box), zero for a non-vec.
+// total element count (1 for a scalar box), zero for a non-tray.
 lvm(lvm_alen) {
  word x = Sp[0];
  if (!packp(x)) return Sp[0] = ZeroPoint, Ip++, Continue();
- return Sp[0] = putcharm(vec_nelem(vec(x))), Ip++, Continue(); }
+ return Sp[0] = putcharm(tray_nelem(tray(x))), Ip++, Continue(); }
 
-// dimensions as a list (allocates rank link cells), zero for a non-vec.
+// dimensions as a list (allocates rank link cells), zero for a non-tray.
 lvm(lvm_shape) {
  word x = Sp[0];
  if (!packp(x)) return Sp[0] = ZeroPoint, Ip++, Continue();
- uintptr_t r = vec(x)->rank;
+ uintptr_t r = tray(x)->rank;
  Have(r * Width(struct ai_chain));
- struct ai_vec *v = vec(Sp[0]);                 // re-read post-Have
+ struct ai_tray *v = tray(Sp[0]);                 // re-read post-Have
  struct ai_chain *p = (struct ai_chain*) Hp;
  Hp += r * Width(struct ai_chain);
  word list = ZeroPoint;                             // () terminator (zero-ontology)
@@ -6894,13 +6896,13 @@ static struct ai *ored(struct ai *g, int kind);   // kind: 0 sum, 1 prod, 2 max,
 lvm(lvm_asum) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();        // scalar: (asum 5) = 5
- if (vec(x)->type == ai_O) {
+ if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, 0);
   if (!ai_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
- if (vec(x)->type == ai_C) {                   // complex sum -> a complex box
-  struct ai_vec *v = vec(x); uintptr_t n = vec_nelem(v);  // K=4 accumulators (see aprod)
-  ai_flo_t *fp = vec_data(v);                   // read all parts before Have (no alloc here)
+ if (tray(x)->type == ai_C) {                   // complex sum -> a complex box
+  struct ai_tray *v = tray(x); uintptr_t n = tray_nelem(v);  // K=4 accumulators (see aprod)
+  ai_flo_t *fp = tray_data(v);                   // read all parts before Have (no alloc here)
   ai_flo_t a0=0,b0=0, a1=0,b1=0, a2=0,b2=0, a3=0,b3=0; uintptr_t j = 0;
   for (; j + 4 <= n; j += 4) {
    a0 += fp[2*j];   b0 += fp[2*j+1]; a1 += fp[2*j+2]; b1 += fp[2*j+3];
@@ -6909,35 +6911,35 @@ lvm(lvm_asum) {
   ai_flo_t sr = (a0+a1)+(a2+a3), si = (b0+b1)+(b2+b3);
   Have(cplx_req);
   return Sp[0] = mk_cplx(&Hp, sr, si), Ip++, Continue(); }
- struct ai_vec *v = vec(x);
- uintptr_t n = vec_nelem(v);
+ struct ai_tray *v = tray(x);
+ uintptr_t n = tray_nelem(v);
  bool fdom = v->type >= ai_R; word _res;
  Have(box_req);
- v = vec(Sp[0]);
+ v = tray(Sp[0]);
  if (fdom) {                                    // K=4 accumulators (see aprod complex)
   ai_flo_t a0=0,a1=0,a2=0,a3=0; uintptr_t i = 0;
-  for (; i + 4 <= n; i += 4) a0+=vec_get_flo(v,i), a1+=vec_get_flo(v,i+1), a2+=vec_get_flo(v,i+2), a3+=vec_get_flo(v,i+3);
-  for (; i < n; i++) a0 += vec_get_flo(v, i);
+  for (; i + 4 <= n; i += 4) a0+=tray_get_flo(v,i), a1+=tray_get_flo(v,i+1), a2+=tray_get_flo(v,i+2), a3+=tray_get_flo(v,i+3);
+  for (; i < n; i++) a0 += tray_get_flo(v, i);
   emit_flo((a0+a1)+(a2+a3)); }
  else {                                         // K=4 (modular, Z/2^64 is a commutative ring -> assoc+exact)
   uintptr_t a0=0,a1=0,a2=0,a3=0, i = 0;
-  for (; i + 4 <= n; i += 4) a0+=(uintptr_t)vec_get_int(v,i), a1+=(uintptr_t)vec_get_int(v,i+1), a2+=(uintptr_t)vec_get_int(v,i+2), a3+=(uintptr_t)vec_get_int(v,i+3);
-  for (; i < n; i++) a0 += (uintptr_t) vec_get_int(v, i);
+  for (; i + 4 <= n; i += 4) a0+=(uintptr_t)tray_get_int(v,i), a1+=(uintptr_t)tray_get_int(v,i+1), a2+=(uintptr_t)tray_get_int(v,i+2), a3+=(uintptr_t)tray_get_int(v,i+3);
+  for (; i < n; i++) a0 += (uintptr_t) tray_get_int(v, i);
   emit_int((intptr_t) ((a0+a1)+(a2+a3))); }
  return Sp[0] = _res, Ip++, Continue(); }
 
 lvm(lvm_aprod) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- if (vec(x)->type == ai_O) {
+ if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, 1);
   if (!ai_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
- if (vec(x)->type == ai_C) {                   // complex product -> a complex box
+ if (tray(x)->type == ai_C) {                   // complex product -> a complex box
   // K=4 independent accumulators break the multiply latency chain (~3x);
   // reassociation is sound -- fp differs only in last-bit rounding per grouping
-  struct ai_vec *v = vec(x); uintptr_t n = vec_nelem(v);
-  ai_flo_t *fp = vec_data(v);
+  struct ai_tray *v = tray(x); uintptr_t n = tray_nelem(v);
+  ai_flo_t *fp = tray_data(v);
   ai_flo_t r0=1,i0=0, r1=1,i1=0, r2=1,i2=0, r3=1,i3=0, t; uintptr_t j = 0;
   for (; j + 4 <= n; j += 4) {
    t = r0*fp[2*j]  -i0*fp[2*j+1]; i0 = r0*fp[2*j+1]+i0*fp[2*j];   r0 = t;
@@ -6949,19 +6951,19 @@ lvm(lvm_aprod) {
   ai_flo_t pr = ra*rb-ia*ib, pi = ra*ib+ia*rb;
   Have(cplx_req);
   return Sp[0] = mk_cplx(&Hp, pr, pi), Ip++, Continue(); }
- struct ai_vec *v = vec(x);
- uintptr_t n = vec_nelem(v);
+ struct ai_tray *v = tray(x);
+ uintptr_t n = tray_nelem(v);
  bool fdom = v->type >= ai_R; word _res;
- Have(box_req); v = vec(Sp[0]);
+ Have(box_req); v = tray(Sp[0]);
  if (fdom) {                                    // K=4 accumulators (see complex above)
   ai_flo_t a0=1,a1=1,a2=1,a3=1; uintptr_t i = 0;
-  for (; i + 4 <= n; i += 4) a0*=vec_get_flo(v,i), a1*=vec_get_flo(v,i+1), a2*=vec_get_flo(v,i+2), a3*=vec_get_flo(v,i+3);
-  for (; i < n; i++) a0 *= vec_get_flo(v, i);
+  for (; i + 4 <= n; i += 4) a0*=tray_get_flo(v,i), a1*=tray_get_flo(v,i+1), a2*=tray_get_flo(v,i+2), a3*=tray_get_flo(v,i+3);
+  for (; i < n; i++) a0 *= tray_get_flo(v, i);
   emit_flo((a0*a1)*(a2*a3)); }
  else {                                         // K=4 (modular product; imul is latency-bound, ~3x)
   uintptr_t a0=1,a1=1,a2=1,a3=1, i = 0;
-  for (; i + 4 <= n; i += 4) a0*=(uintptr_t)vec_get_int(v,i), a1*=(uintptr_t)vec_get_int(v,i+1), a2*=(uintptr_t)vec_get_int(v,i+2), a3*=(uintptr_t)vec_get_int(v,i+3);
-  for (; i < n; i++) a0 *= (uintptr_t) vec_get_int(v, i);
+  for (; i + 4 <= n; i += 4) a0*=(uintptr_t)tray_get_int(v,i), a1*=(uintptr_t)tray_get_int(v,i+1), a2*=(uintptr_t)tray_get_int(v,i+2), a3*=(uintptr_t)tray_get_int(v,i+3);
+  for (; i < n; i++) a0 *= (uintptr_t) tray_get_int(v, i);
   emit_int((intptr_t) ((a0*a1)*(a2*a3))); }
  return Sp[0] = _res, Ip++, Continue(); }
 
@@ -6970,35 +6972,35 @@ lvm(lvm_aprod) {
 static lvm(lvm_aextreme, int kind) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- if (vec(x)->type == ai_O) {
+ if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, kind);
   if (!ai_ok(g)) return ghelp(g);
   return Unpack(g), Continue(); }
- if (vec(x)->type == ai_C) return Sp[0] = ZeroPoint, Ip++, Continue();   // complex: unordered
- struct ai_vec *v = vec(x);
- uintptr_t n = vec_nelem(v);
+ if (tray(x)->type == ai_C) return Sp[0] = ZeroPoint, Ip++, Continue();   // complex: unordered
+ struct ai_tray *v = tray(x);
+ uintptr_t n = tray_nelem(v);
  if (!n) return Sp[0] = ZeroPoint, Ip++, Continue();
  bool fdom = v->type >= ai_R, ismax = kind == 2; word _res;
- Have(box_req); v = vec(Sp[0]);
+ Have(box_req); v = tray(Sp[0]);
  // K=4 running extremes break the latency chain; EXACT (selects an existing element)
- if (fdom) { ai_flo_t m0 = vec_get_flo(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
+ if (fdom) { ai_flo_t m0 = tray_get_flo(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
   for (; i + 4 <= n; i += 4) {
-   e = vec_get_flo(v,i);   if (ismax?e>m0:e<m0) m0=e;
-   e = vec_get_flo(v,i+1); if (ismax?e>m1:e<m1) m1=e;
-   e = vec_get_flo(v,i+2); if (ismax?e>m2:e<m2) m2=e;
-   e = vec_get_flo(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
-  for (; i < n; i++) { e = vec_get_flo(v,i); if (ismax?e>m0:e<m0) m0=e; }
+   e = tray_get_flo(v,i);   if (ismax?e>m0:e<m0) m0=e;
+   e = tray_get_flo(v,i+1); if (ismax?e>m1:e<m1) m1=e;
+   e = tray_get_flo(v,i+2); if (ismax?e>m2:e<m2) m2=e;
+   e = tray_get_flo(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
+  for (; i < n; i++) { e = tray_get_flo(v,i); if (ismax?e>m0:e<m0) m0=e; }
   if (ismax?m1>m0:m1<m0) m0=m1;
   if (ismax?m2>m0:m2<m0) m0=m2;
   if (ismax?m3>m0:m3<m0) m0=m3;
   emit_flo(m0); }
- else { intptr_t m0 = vec_get_int(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
+ else { intptr_t m0 = tray_get_int(v, 0), m1=m0, m2=m0, m3=m0, e; uintptr_t i = 1;
   for (; i + 4 <= n; i += 4) {
-   e = vec_get_int(v,i);   if (ismax?e>m0:e<m0) m0=e;
-   e = vec_get_int(v,i+1); if (ismax?e>m1:e<m1) m1=e;
-   e = vec_get_int(v,i+2); if (ismax?e>m2:e<m2) m2=e;
-   e = vec_get_int(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
-  for (; i < n; i++) { e = vec_get_int(v,i); if (ismax?e>m0:e<m0) m0=e; }
+   e = tray_get_int(v,i);   if (ismax?e>m0:e<m0) m0=e;
+   e = tray_get_int(v,i+1); if (ismax?e>m1:e<m1) m1=e;
+   e = tray_get_int(v,i+2); if (ismax?e>m2:e<m2) m2=e;
+   e = tray_get_int(v,i+3); if (ismax?e>m3:e<m3) m3=e; }
+  for (; i < n; i++) { e = tray_get_int(v,i); if (ismax?e>m0:e<m0) m0=e; }
   if (ismax?m1>m0:m1<m0) m0=m1;
   if (ismax?m2>m0:m2<m0) m0=m2;
   if (ismax?m3>m0:m3<m0) m0=m3;
@@ -7012,14 +7014,14 @@ lvm(lvm_min) { return Ap(lvm_aextreme, g, 3); }
 lvm(lvm_aall) {
  word x = Sp[0];
  if (!packp(x)) return Ip++, Continue();
- struct ai_vec *v = vec(x);
- uintptr_t n = vec_nelem(v);
+ struct ai_tray *v = tray(x);
+ uintptr_t n = tray_nelem(v);
  if (v->type == ai_O) {                         // object: a falsy element fails the conjunction
   for (uintptr_t i = 0; i < n; i++)
-   if (ai_nilp(g, vec_get_obj(v, i))) return Sp[0] = zero, Ip++, Continue();
+   if (ai_nilp(g, tray_get_obj(v, i))) return Sp[0] = zero, Ip++, Continue();
   return Sp[0] = putcharm(1), Ip++, Continue(); }
  if (v->type == ai_C) {                         // complex: a 0+0i element fails the conjunction
-  ai_flo_t *fp = vec_data(v);
+  ai_flo_t *fp = tray_data(v);
   for (uintptr_t i = 0; i < n; i++)
    if (fp[2*i] == 0 && fp[2*i+1] == 0) return Sp[0] = zero, Ip++, Continue();
   return Sp[0] = putcharm(1), Ip++, Continue(); }
@@ -7027,7 +7029,7 @@ lvm(lvm_aall) {
  // compiler vectorizes it), so multi-accumulating buys nothing; left as is.
  bool fdom = v->type >= ai_R;
  for (uintptr_t i = 0; i < n; i++)
-  if (fdom ? vec_get_flo(v, i) == 0 : vec_get_int(v, i) == 0)
+  if (fdom ? tray_get_flo(v, i) == 0 : tray_get_int(v, i) == 0)
    return Sp[0] = zero, Ip++, Continue();
  return Sp[0] = putcharm(1), Ip++, Continue(); }
 
@@ -7035,26 +7037,26 @@ lvm(lvm_aall) {
 // object or over-rank -> zero
 lvm(lvm_outer) {
  word a = Sp[0], b = Sp[1];
- if (!(arrp(a) && arrp(b))) return *++Sp = ZeroPoint, Ip++, Continue();
- struct ai_vec *va = vec(a), *vb = vec(b);
+ if (!(trayp(a) && trayp(b))) return *++Sp = ZeroPoint, Ip++, Continue();
+ struct ai_tray *va = tray(a), *vb = tray(b);
  if (va->type > ai_R || vb->type > ai_R) return *++Sp = ZeroPoint, Ip++, Continue();
- uintptr_t M = vec_nelem(va), N = vec_nelem(vb), n = M * N, rank = va->rank + vb->rank;
+ uintptr_t M = tray_nelem(va), N = tray_nelem(vb), n = M * N, rank = va->rank + vb->rank;
  if (rank > maxrank) return *++Sp = ZeroPoint, Ip++, Continue();
  bool fdom = va->type == ai_R || vb->type == ai_R;
- enum ai_vec_type rt = fdom ? ai_R : ai_Z;
- uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + ai_T[rt] * n;
+ enum ai_tray_type rt = fdom ? ai_R : ai_Z;
+ uintptr_t bytes = sizeof(struct ai_tray) + rank * sizeof(word) + ai_T[rt] * n;
  Have(b2w(bytes));
- va = vec(Sp[0]), vb = vec(Sp[1]);          // re-read post-Have
- struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, rt, rank);
+ va = tray(Sp[0]), vb = tray(Sp[1]);          // re-read post-Have
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+ ini_tray(r, rt, rank);
  for (uintptr_t i = 0; i < va->rank; i++) r->shape[i] = va->shape[i];
  for (uintptr_t i = 0; i < vb->rank; i++) r->shape[va->rank + i] = vb->shape[i];
- if (fdom) { ai_flo_t *rp = vec_data(r);
-  for (uintptr_t i = 0; i < M; i++) { ai_flo_t av = vec_get_flo(va, i);
-   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = av * vec_get_flo(vb, j); } }
- else { intptr_t *rp = vec_data(r);
-  for (uintptr_t i = 0; i < M; i++) { intptr_t av = vec_get_int(va, i);
-   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = (intptr_t)((uintptr_t)av * (uintptr_t)vec_get_int(vb, j)); } }
+ if (fdom) { ai_flo_t *rp = tray_data(r);
+  for (uintptr_t i = 0; i < M; i++) { ai_flo_t av = tray_get_flo(va, i);
+   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = av * tray_get_flo(vb, j); } }
+ else { intptr_t *rp = tray_data(r);
+  for (uintptr_t i = 0; i < M; i++) { intptr_t av = tray_get_int(va, i);
+   for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = (intptr_t)((uintptr_t)av * (uintptr_t)tray_get_int(vb, j)); } }
  return *++Sp = word(r), Ip++, Continue(); }   // arity 2
 
 // (inner a b): +.× -- contract a's LAST axis with b's FIRST (1D·1D = dot, 2D·2D =
@@ -7062,8 +7064,8 @@ lvm(lvm_outer) {
 // loop vectorizes.
 lvm(lvm_inner) {
  word a = Sp[0], b = Sp[1];
- if (!(arrp(a) && arrp(b))) return *++Sp = ZeroPoint, Ip++, Continue();
- struct ai_vec *va = vec(a), *vb = vec(b);
+ if (!(trayp(a) && trayp(b))) return *++Sp = ZeroPoint, Ip++, Continue();
+ struct ai_tray *va = tray(a), *vb = tray(b);
  if (va->type > ai_R || vb->type > ai_R || va->rank < 1 || vb->rank < 1)
   return *++Sp = ZeroPoint, Ip++, Continue();
  uintptr_t K = va->shape[va->rank - 1];
@@ -7076,31 +7078,31 @@ lvm(lvm_inner) {
  bool fdom = va->type == ai_R || vb->type == ai_R, ar = va->type == ai_R, br = vb->type == ai_R;
  if (n == 1) {                                  // 1D·1D dot, or any 1-cell contraction -> scalar (invariant)
   word _res;
-  if (fdom) { ai_flo_t *Ad = vec_data(va), *Bd = vec_data(vb);
-   intptr_t *Ai = vec_data(va), *Bi = vec_data(vb); ai_flo_t acc = 0;
+  if (fdom) { ai_flo_t *Ad = tray_data(va), *Bd = tray_data(vb);
+   intptr_t *Ai = tray_data(va), *Bi = tray_data(vb); ai_flo_t acc = 0;
    for (uintptr_t l = 0; l < K; l++) acc += (ar ? Ad[l] : (ai_flo_t) Ai[l]) * (br ? Bd[l] : (ai_flo_t) Bi[l]);
    Have(box_req); emit_flo(acc); }
-  else { intptr_t *A = vec_data(va), *B = vec_data(vb); uintptr_t acc = 0;
+  else { intptr_t *A = tray_data(va), *B = tray_data(vb); uintptr_t acc = 0;
    for (uintptr_t l = 0; l < K; l++) acc += (uintptr_t) A[l] * (uintptr_t) B[l];
    Have(box_req); emit_int((intptr_t) acc); }
   return *++Sp = _res, Ip++, Continue(); }
- enum ai_vec_type rt = fdom ? ai_R : ai_Z;
- uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + ai_T[rt] * n;
+ enum ai_tray_type rt = fdom ? ai_R : ai_Z;
+ uintptr_t bytes = sizeof(struct ai_tray) + rank * sizeof(word) + ai_T[rt] * n;
  Have(b2w(bytes));
- va = vec(Sp[0]), vb = vec(Sp[1]);
- struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, rt, rank);
+ va = tray(Sp[0]), vb = tray(Sp[1]);
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+ ini_tray(r, rt, rank);
  { uintptr_t s = 0;
    for (uintptr_t i = 0; i + 1 < va->rank; i++) r->shape[s++] = va->shape[i];
    for (uintptr_t i = 1; i < vb->rank; i++) r->shape[s++] = vb->shape[i]; }
- if (fdom) { ai_flo_t *C = vec_data(r);
-  ai_flo_t *Ad = vec_data(va), *Bd = vec_data(vb);
-  intptr_t *Ai = vec_data(va), *Bi = vec_data(vb);
+ if (fdom) { ai_flo_t *C = tray_data(r);
+  ai_flo_t *Ad = tray_data(va), *Bd = tray_data(vb);
+  intptr_t *Ai = tray_data(va), *Bi = tray_data(vb);
   for (uintptr_t p = 0; p < n; p++) C[p] = 0;
   for (uintptr_t i = 0; i < M; i++)
    for (uintptr_t l = 0; l < K; l++) { ai_flo_t av = ar ? Ad[i*K+l] : (ai_flo_t) Ai[i*K+l];
     for (uintptr_t j = 0; j < N; j++) C[i*N+j] += av * (br ? Bd[l*N+j] : (ai_flo_t) Bi[l*N+j]); } }
- else { intptr_t *C = vec_data(r), *A = vec_data(va), *B = vec_data(vb);
+ else { intptr_t *C = tray_data(r), *A = tray_data(va), *B = tray_data(vb);
   for (uintptr_t p = 0; p < n; p++) C[p] = 0;
   for (uintptr_t i = 0; i < M; i++)
    for (uintptr_t l = 0; l < K; l++) { intptr_t av = A[i*K+l];
@@ -7109,19 +7111,19 @@ lvm(lvm_inner) {
 
 // --- elementwise monadic math over an array -> a float array of the same shape;
 // the fill loop takes no &local, so the lvm wrapper keeps its tail call
-static ai_noinline void vmap1_fill(struct ai_vec *r, struct ai_vec *a, ai_flo_t (*fn)(ai_flo_t)) {
- uintptr_t n = vec_nelem(r);
- for (uintptr_t i = 0; i < n; i++) vec_put_flo(r, i, fn(vec_get_flo(a, i))); }
+static ai_noinline void vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t)) {
+ uintptr_t n = tray_nelem(r);
+ for (uintptr_t i = 0; i < n; i++) tray_put_flo(r, i, fn(tray_get_flo(a, i))); }
 
 lvm(lvm_vmap1, ai_flo_t (*fn)(ai_flo_t)) {
- struct ai_vec *a = vec(Sp[0]);
- uintptr_t rank = a->rank, n = vec_nelem(a);
- uintptr_t bytes = sizeof(struct ai_vec) + rank * sizeof(word) + n * ai_T[ai_R];
+ struct ai_tray *a = tray(Sp[0]);
+ uintptr_t rank = a->rank, n = tray_nelem(a);
+ uintptr_t bytes = sizeof(struct ai_tray) + rank * sizeof(word) + n * ai_T[ai_R];
  Have(b2w(bytes));
- a = vec(Sp[0]);                               // re-read post-Have
- struct ai_vec *r = (struct ai_vec*) Hp;
+ a = tray(Sp[0]);                               // re-read post-Have
+ struct ai_tray *r = (struct ai_tray*) Hp;
  Hp += b2w(bytes);
- ini_vec(r, ai_R, rank);
+ ini_tray(r, ai_R, rank);
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = a->shape[i];
  vmap1_fill(r, a, fn);
  return Sp[0] = word(r), Ip++, Continue(); }
@@ -7171,10 +7173,10 @@ static ai_inline int cmp_rank(struct ai *g, word x) {
  enum q k = ai_kind(x);
  if (k == KString) return 1;                       // string: above mint, below number
  if (isnum(x) || Cp(x)) return 2;                  // the number band, by value (charm bridges up from string)
- if (k == KArrZ || k == KArrR || k == KArrC) return 2;  // a GALAXY folds into the number band, ordered by its net
- if (k == KArrO) return 3;                         // object tray: above the numbers, BELOW chain
+ if (k == KTrayZ || k == KTrayR || k == KTrayC) return 2;  // a GALAXY folds into the number band, ordered by its net
+ if (k == KTrayO) return 3;                         // object tray: above the numbers, BELOW chain
  if (k == KChain) return 4;                        // chain: the grammar substrate -- HIGH, just under book (only book's mutability seats it above)
- if (k == KMap) return 5;                          // map: above chain
+ if (k == KTablet) return 5;                          // tablet: above chain
  if (coinp(x) && die_get(g, coin_die(x), DIE_NET) == putcharm(2))
   return 2;                                        // a RATIO coin seats IN the number band, by its value
  return 6; }                                       // KHot -- thread/function, the ceiling (the only kind left)
@@ -7205,16 +7207,16 @@ static ai_inline intptr_t mint_cmp(struct ai *g, word a, word b) {
 // Two galaxies of EQUAL net: a strict tiebreak so cmp3 stays antisymmetric --
 // shape lexicographically (rank, then dims), then cell content (re, then im),
 // row-major. Reached only from the number band below, both operands galaxies.
-static ai_inline struct ai_zn vec_cell_zn(struct ai_vec *v, uintptr_t i) {
- if (v->type == ai_C) { ai_flo_t *d = vec_data(v); return zn(d[2*i], d[2*i+1]); }
- return zn(vec_get_flo(v, i), 0); }
-static intptr_t galaxy_tie(struct ai_vec *va, struct ai_vec *vb) {
+static ai_inline struct ai_zn tray_cell_zn(struct ai_tray *v, uintptr_t i) {
+ if (v->type == ai_C) { ai_flo_t *d = tray_data(v); return zn(d[2*i], d[2*i+1]); }
+ return zn(tray_get_flo(v, i), 0); }
+static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb) {
  if (va->rank != vb->rank) return va->rank < vb->rank ? -1 : 1;
  for (uintptr_t i = 0; i < va->rank; i++)
   if (va->shape[i] != vb->shape[i]) return va->shape[i] < vb->shape[i] ? -1 : 1;
- uintptr_t n = vec_nelem(va);                             // same shape -> same nelem
+ uintptr_t n = tray_nelem(va);                             // same shape -> same nelem
  for (uintptr_t i = 0; i < n; i++) {
-  struct ai_zn ea = vec_cell_zn(va, i), eb = vec_cell_zn(vb, i);
+  struct ai_zn ea = tray_cell_zn(va, i), eb = tray_cell_zn(vb, i);
   if (ea.re != eb.re) return ea.re < eb.re ? -1 : 1;
   if (ea.im != eb.im) return ea.im < eb.im ? -1 : 1; }
  return 0; }
@@ -7298,7 +7300,7 @@ static intptr_t cmp3(struct ai *g, word a, word b) {
    if (na.re != nb.re) return na.re < nb.re ? -1 : 1;
    if (na.im != nb.im) return na.im < nb.im ? -1 : 1;
    if (ga != gb) return ga ? 1 : -1;                       // net tie: a star seats below a galaxy
-   return galaxy_tie(vec(a), vec(b)); }                    // both galaxies, equal net: shape then content
+   return galaxy_tie(tray(a), tray(b)); }                    // both galaxies, equal net: shape then content
   if (Cp(a) || Cp(b)) {                                    // both scalars -- complex: (re, im) lexicographic
    ai_flo_t ar = Cp(a) ? cplx_re(a) : toflo(a), br = Cp(b) ? cplx_re(b) : toflo(b);
    if (ar != br) return ar < br ? -1 : 1;
@@ -7323,7 +7325,7 @@ static intptr_t ai_count(struct ai *g, word l) {
  if (strp(l)) return (intptr_t) len(l);
  if (bufp(l)) return (intptr_t) len(buf_str(l));
  if (tabp(l)) return (intptr_t) map_len(l);
- if (arrp(l)) return (intptr_t) vec_nelem(vec(l));
+ if (trayp(l)) return (intptr_t) tray_nelem(tray(l));
  if (nomp(l)) { struct ai_str *nm = add_name(g, l); return nm ? (intptr_t) len(nm) : 0; }  // a sym counts its spelling; a bare mint / the core: 0
  intptr_t n = 0;
  while (chainp(l)) n++, l = B(l);
@@ -7364,7 +7366,7 @@ lvm(lvm_sort) {
 // unordered -> false), so e.g. (<= nan nan) is zero.
 static lvm(lvm_cmp_ord, int op) {
  word a = Sp[0], b = Sp[1]; intptr_t r;
- if (arrp(a) || arrp(b)) return Ap(lvm_vbin, g, op);      // array -> elementwise
+ if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, op);      // array -> elementwise
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
  else if (!(isnum(a) || Cp(a)) || coinp(b)) r = vcmp_int(op, cmp3(g, a, b), 0);  // same non-number band, or a ratio coin either side (a coin as `a` fails isnum; as `b` this catches it): via cmp3
@@ -7410,12 +7412,12 @@ static ai_inline uintptr_t bdim(uintptr_t da, uintptr_t db) {
 // twice (gate before Have, fill after), re-deriving each time (operands move).
 // bshape_n: the broadcast element count, or (uintptr_t) -1 on non-conformance.
 static uintptr_t bshape_n(word a, word b) {
- bool aarr = arrp(a), barr = arrp(b);
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ bool atray = trayp(a), btray = trayp(b);
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = 1;
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (atray && k < ra) ? tray(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return (uintptr_t) -1;
   n *= bdim(da, db); }
  return n; }
@@ -7423,17 +7425,17 @@ static uintptr_t bshape_n(word a, word b) {
 // Fill shape[0..R) with the broadcast shape of a and b (conformance already
 // gated by bshape_n).
 static void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b) {
- bool aarr = arrp(a), barr = arrp(b);
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ bool atray = trayp(a), btray = trayp(b);
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (aarr && k < ra) ? vec(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (barr && k < rb) ? vec(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (atray && k < ra) ? tray(a)->shape[ra - 1 - k] : 1;
+  uintptr_t db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
   shape[R - 1 - k] = bdim(da, db); } }
 
 // c[j]: the operand's flat-offset contribution of result axis j (0 when that
 // axis is absent in the operand or is a size-1 broadcast axis); v == 0 reads
 // a scalar operand (all zeros).
-static void bstride(struct ai_vec *v, uintptr_t R, intptr_t *c) {
+static void bstride(struct ai_tray *v, uintptr_t R, intptr_t *c) {
  for (uintptr_t j = 0; j < R; j++) c[j] = 0;
  if (!v) return;
  intptr_t s = 1;
@@ -7450,44 +7452,44 @@ static ai_inline void odo_step(intptr_t *idx, uintptr_t R, uintptr_t const *shap
 // Fill the (already-shaped) result r with a `op` b, broadcasting. All the
 // &-taking stack arrays (strides, odometer) live here so the lvm wrapper stays
 // TCO-clean. No allocation inside, so operand pointers can't move under us.
-static ai_noinline void vbin_fill(struct ai_vec *r, word a, word b, int op, bool fdom) {
- uintptr_t R = r->rank, n = vec_nelem(r);
- bool aarr = arrp(a), barr = arrp(b);
- struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
+static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, bool fdom) {
+ uintptr_t R = r->rank, n = tray_nelem(r);
+ bool atray = trayp(a), btray = trayp(b);
+ struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
  // CONTIGUOUS MONOTYPE FAST PATH: no broadcasting, so the odometer and dispatch
  // vanish -- raw pointers, the op hoisted once, a body the compiler vectorizes.
  // mixed/bignum/broadcast falls through to the general loop; results bit-identical.
  { bool cmpf = op >= vop_lt;
-   bool aok = !aarr || vec_nelem(va) == n, bok = !barr || vec_nelem(vb) == n;
-   bool nobig = !((!aarr && bigp(a)) || (!barr && bigp(b)));
+   bool aok = !atray || tray_nelem(va) == n, bok = !btray || tray_nelem(vb) == n;
+   bool nobig = !((!atray && bigp(a)) || (!btray && bigp(b)));
    if (aok && bok && nobig) {
-    if (fdom && (!aarr || va->type == ai_R) && (!barr || vb->type == ai_R)) {
-     ai_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
-     ai_flo_t *ap = aarr ? (ai_flo_t*) vec_data(va) : 0, *bp = barr ? (ai_flo_t*) vec_data(vb) : 0;
-     if (cmpf) { intptr_t *rp = (intptr_t*) vec_data(r);
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = aarr?ap[p]:sa, bv = barr?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
+    if (fdom && (!atray || va->type == ai_R) && (!btray || vb->type == ai_R)) {
+     ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
+     ai_flo_t *ap = atray ? (ai_flo_t*) tray_data(va) : 0, *bp = btray ? (ai_flo_t*) tray_data(vb) : 0;
+     if (cmpf) { intptr_t *rp = (intptr_t*) tray_data(r);
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
       switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
         case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
       #undef VBF
-     } else { ai_flo_t *rp = (ai_flo_t*) vec_data(r);
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = aarr?ap[p]:sa, bv = barr?bp[p]:sb; rp[p] = (E); } } while (0)
+     } else { ai_flo_t *rp = (ai_flo_t*) tray_data(r);
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E); } } while (0)
       switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
         case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
         case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(ai_fmod(av,bv)); return; }
       #undef VBF
      }
-    } else if (!fdom && (!aarr || va->type == ai_Z) && (!barr || vb->type == ai_Z)) {
-     intptr_t sia = aarr ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : box_get(a));
-     intptr_t sib = barr ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : box_get(b));
-     intptr_t *ap = aarr ? (intptr_t*) vec_data(va) : 0, *bp = barr ? (intptr_t*) vec_data(vb) : 0;
-     intptr_t *rp = (intptr_t*) vec_data(r);   // r is ai_Z for both int-arith and the mask
+    } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
+     intptr_t sia = atray ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : box_get(a));
+     intptr_t sib = btray ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : box_get(b));
+     intptr_t *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0;
+     intptr_t *rp = (intptr_t*) tray_data(r);   // r is ai_Z for both int-arith and the mask
      if (cmpf) {
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = aarr?ap[p]:sia, bv = barr?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
       switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
         case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
       #undef VBF
      } else {
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = aarr?ap[p]:sia, bv = barr?bp[p]:sib; rp[p] = (E); } } while (0)
+      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E); } } while (0)
       switch (op) {
         case vop_add: VBF((intptr_t)((uintptr_t)av+(uintptr_t)bv)); return;
         case vop_sub: VBF((intptr_t)((uintptr_t)av-(uintptr_t)bv)); return;
@@ -7502,71 +7504,71 @@ static ai_noinline void vbin_fill(struct ai_vec *r, word a, word b, int op, bool
  bool cmp = op >= vop_lt;
  // the int domain demotes a bignum scalar by low bits for arithmetic, but a
  // COMPARISON against one is decided exactly by its sign below
- ai_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
- intptr_t ia = aarr ? 0 : charmp(a) ? getcharm(a) : bigp(a) ? ai_big_low(a) : box_get(a),
-          ib = barr ? 0 : charmp(b) ? getcharm(b) : bigp(b) ? ai_big_low(b) : box_get(b);
- bool abig = !aarr && bigp(a), bbig = !barr && bigp(b);   // at most one (the other is an array)
+ ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
+ intptr_t ia = atray ? 0 : charmp(a) ? getcharm(a) : bigp(a) ? ai_big_low(a) : box_get(a),
+          ib = btray ? 0 : charmp(b) ? getcharm(b) : bigp(b) ? ai_big_low(b) : box_get(b);
+ bool abig = !atray && bigp(a), bbig = !btray && bigp(b);   // at most one (the other is an array)
  int asign = abig ? (((struct ai_big*) a)->slen < 0 ? -1 : 1) : 0;
  int bsign = bbig ? (((struct ai_big*) b)->slen < 0 ? -1 : 1) : 0;
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
   if (fdom) {
-   ai_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
-   if (cmp) vec_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
-   else vec_put_flo(r, p, vop_flo(op, av, bv)); }
+   ai_flo_t av = atray ? tray_get_flo(va, oa) : sa, bv = btray ? tray_get_flo(vb, ob) : sb;
+   if (cmp) tray_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
+   else tray_put_flo(r, p, vop_flo(op, av, bv)); }
   else {
-   intptr_t av = aarr ? vec_get_int(va, oa) : ia, bv = barr ? vec_get_int(vb, ob) : ib;
+   intptr_t av = atray ? tray_get_int(va, oa) : ia, bv = btray ? tray_get_int(vb, ob) : ib;
    if (cmp) {                                    // bignum side (if any) sorts by sign: a-b ~ asign, or -bsign
     intptr_t t = (abig || bbig) ? vcmp_sign(op, abig ? asign : -bsign) : vcmp_int(op, av, bv);
-    vec_put_int(r, p, t ? 1 : 0); }
-   else vec_put_int(r, p, vop_int(op, av, bv)); }
+    tray_put_int(r, p, t ? 1 : 0); }
+   else tray_put_int(r, p, vop_int(op, av, bv)); }
   odo_step(idx, R, r->shape); } }
 
 // `/` over the integer domain: true if some element divides inexactly, so the
 // whole result promotes to f64 (a bignum scalar forces the float lane). called
 // only after conformance is checked.
 static ai_noinline bool vquot_needs_float(word a, word b) {
- bool aarr = arrp(a), barr = arrp(b);
- if ((!aarr && bigp(a)) || (!barr && bigp(b))) return true;
- struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
- uintptr_t ra = aarr ? va->rank : 0, rb = barr ? vb->rank : 0, R = ra > rb ? ra : rb;
+ bool atray = trayp(a), btray = trayp(b);
+ if ((!atray && bigp(a)) || (!btray && bigp(b))) return true;
+ struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
+ uintptr_t ra = atray ? va->rank : 0, rb = btray ? vb->rank : 0, R = ra > rb ? ra : rb;
  uintptr_t n = bshape_n(a, b), shp[maxrank];
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  bshape_put(shp, R, a, b);
  for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
  bstride(va, R, ca), bstride(vb, R, cb);
- intptr_t ia = aarr ? 0 : toint(a), ib = barr ? 0 : toint(b);
+ intptr_t ia = atray ? 0 : toint(a), ib = btray ? 0 : toint(b);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  intptr_t av = aarr ? vec_get_int(va, oa) : ia, bv = barr ? vec_get_int(vb, ob) : ib;
+  intptr_t av = atray ? tray_get_int(va, oa) : ia, bv = btray ? tray_get_int(vb, ob) : ib;
   if (bv == 0 || av % bv != 0) return true;
   odo_step(idx, R, shp); }
  return false; }
 
 lvm(lvm_vbin, int op) {
  word a = Sp[0], b = Sp[1];
- bool aarr = arrp(a), barr = arrp(b);
+ bool atray = trayp(a), btray = trayp(b);
  // complex lane first (a complex scalar isn't isnum, so it must divert before
  // the gate below); mixing ai_C with ai_O is unsupported -- the ai_O lane wins
- if (((aarr && vec(a)->type == ai_C) || (barr && vec(b)->type == ai_C) || Cp(a) || Cp(b))
-     && !(aarr && vec(a)->type == ai_O) && !(barr && vec(b)->type == ai_O)) {
+ if (((atray && tray(a)->type == ai_C) || (btray && tray(b)->type == ai_C) || Cp(a) || Cp(b))
+     && !(atray && tray(a)->type == ai_O) && !(btray && tray(b)->type == ai_O)) {
   if (vop_bitp(op)) return *++Sp = ZeroPoint, Ip++, Continue();   // no bits on a complex
   return Ap(lvm_cbin, g, op); }
- if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
+ if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
   return *++Sp = op == vop_eq ? zero : ZeroPoint, Ip++, Continue();   // `=` is boolean: undefined face -> 0, not ()
- if ((aarr && vec(a)->type == ai_O) || (barr && vec(b)->type == ai_O)) {
+ if ((atray && tray(a)->type == ai_O) || (btray && tray(b)->type == ai_O)) {
   // boxed cells are NOT the word lane: a big refuses the bits on a star, so the
   // object tray refuses them whole rather than answering per-element zero.
   if (vop_bitp(op)) return *++Sp = ZeroPoint, Ip++, Continue();
   return Ap(lvm_obin, g, op); }                   // object array -> promoting lane
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type
  // (i8) so it never widens an int array, a scalar float forces the float lane.
- int ta = aarr ? (int) vec(a)->type : flop(a) ? (int) ai_R : (int) ai_Z;
- int tb = barr ? (int) vec(b)->type : flop(b) ? (int) ai_R : (int) ai_Z;
+ int ta = atray ? (int) tray(a)->type : flop(a) ? (int) ai_R : (int) ai_Z;
+ int tb = btray ? (int) tray(b)->type : flop(b) ? (int) ai_R : (int) ai_Z;
  int ct = ta > tb ? ta : tb;
  bool fdom = ct >= ai_R, cmp = op >= vop_lt;
  if (vop_bitp(op) && fdom) return *++Sp = ZeroPoint, Ip++, Continue();   // no bits on a gem
@@ -7576,46 +7578,46 @@ lvm(lvm_vbin, int op) {
  // any element divides inexactly (matching the scalar `/`); `//` (vop_fquot) stays
  // integer. Sound only after conformance is known good (offsets are then in range).
  if (op == vop_quot && !fdom && !cmp && vquot_needs_float(a, b)) fdom = true, ct = ai_R;
- enum ai_vec_type rt = cmp ? ai_Z : (enum ai_vec_type) ct;   // compare -> 0/1 Z mask
- uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[rt];
+ enum ai_tray_type rt = cmp ? ai_Z : (enum ai_tray_type) ct;   // compare -> 0/1 Z mask
+ uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1];                                       // re-read post-Have
- struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, rt, R);
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+ ini_tray(r, rt, R);
  bshape_put(r->shape, R, a, b);
  vbin_fill(r, a, b, op, fdom);
  return *++Sp = word(r), Ip++, Continue(); }
 
 // --- dyadic math map with broadcasting (pow / atan2 over arrays): lvm_vbin's
 // float-domain twin -- the result is always a float array, each element fn(av, bv)
-static ai_noinline void vmap2_fill(struct ai_vec *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
- uintptr_t R = r->rank, n = vec_nelem(r);
- bool aarr = arrp(a), barr = arrp(b);
- struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
+static ai_noinline void vmap2_fill(struct ai_tray *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
+ uintptr_t R = r->rank, n = tray_nelem(r);
+ bool atray = trayp(a), btray = trayp(b);
+ struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
  bstride(va, R, ca), bstride(vb, R, cb);
- ai_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
+ ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  ai_flo_t av = aarr ? vec_get_flo(va, oa) : sa, bv = barr ? vec_get_flo(vb, ob) : sb;
-  vec_put_flo(r, p, fn(av, bv));
+  ai_flo_t av = atray ? tray_get_flo(va, oa) : sa, bv = btray ? tray_get_flo(vb, ob) : sb;
+  tray_put_flo(r, p, fn(av, bv));
   odo_step(idx, R, r->shape); } }
 
 lvm(lvm_vmap2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  word a = Sp[0], b = Sp[1];
- bool aarr = arrp(a), barr = arrp(b);
- if (!(aarr || isnum(a)) || !(barr || isnum(b)))   // each operand: array or scalar
+ bool atray = trayp(a), btray = trayp(b);
+ if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
   return *++Sp = ZeroPoint, Ip++, Continue();
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b);
  if (n == (uintptr_t) -1) return *++Sp = ZeroPoint, Ip++, Continue();
- uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_R];
+ uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_R];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1];                                       // re-read post-Have
- struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, ai_R, R);
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+ ini_tray(r, ai_R, R);
  bshape_put(r->shape, R, a, b);
  vmap2_fill(r, a, b, fn);
  return *++Sp = word(r), Ip++, Continue(); }
@@ -7670,31 +7672,31 @@ static word obin_elem(struct ai **fp, int op, word a, word b) {
 
 // widen the numeric array at g->sp[slot] to a ai_O copy (box each element);
 // allocates per element, everything re-fetched after every box
-static struct ai *arr_to_obj(struct ai *g, int slot) {
- struct ai_vec *src = vec(g->sp[slot]);
+static struct ai *tray_to_obj(struct ai *g, int slot) {
+ struct ai_tray *src = tray(g->sp[slot]);
  uintptr_t R = src->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= src->shape[i];
- uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_O];
+ uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_O];
  if (!ai_ok(g = ai_have(g, b2w(bytes)))) return g;
- src = vec(g->sp[slot]);
- struct ai_vec *dst = (struct ai_vec*) g->hp; g->hp += b2w(bytes);
- ini_vec(dst, ai_O, R);
+ src = tray(g->sp[slot]);
+ struct ai_tray *dst = (struct ai_tray*) g->hp; g->hp += b2w(bytes);
+ ini_tray(dst, ai_O, R);
  for (uintptr_t i = 0; i < R; i++) dst->shape[i] = src->shape[i];
- for (uintptr_t i = 0; i < n; i++) vec_put_obj(dst, i, zero);   // safe pre-fill (GC may see it)
+ for (uintptr_t i = 0; i < n; i++) tray_put_obj(dst, i, zero);   // safe pre-fill (GC may see it)
  if (!ai_ok(g = ai_push(g, 1, word(dst)))) return g;             // sp[0]=dst, src now at slot+1
  for (uintptr_t i = 0; i < n; i++) {
-  struct ai_vec *s = vec(g->sp[slot + 1]);
+  struct ai_tray *s = tray(g->sp[slot + 1]);
   word v;
   if (s->type >= ai_R) {                                        // float -> float box
-   ai_flo_t e = vec_get_flo(s, i);
+   ai_flo_t e = tray_get_flo(s, i);
    if (!ai_ok(g = ai_have(g, flo_req))) return g;
    v = mk_flo(&g->hp, e); }
   else {                                                       // int -> fixnum or wide box
-   intptr_t e = vec_get_int(s, i);
+   intptr_t e = tray_get_int(s, i);
    if (e >= fix_min && e <= fix_max) v = putcharm(e);
    else { if (!ai_ok(g = ai_have(g, wide_req))) return g;
     v = mk_wide(&g->hp, e); } }
-  vec_put_obj(vec(g->sp[0]), i, v);                            // re-fetch dst post-box
+  tray_put_obj(tray(g->sp[0]), i, v);                            // re-fetch dst post-box
   gen_wb(g, g->sp[0], v); }                                    // ... and BARRIER it: see obin_run
  word d = g->sp[0]; g->sp++; g->sp[slot] = d;                  // install copy, drop the parked root
  return g; }
@@ -7702,33 +7704,33 @@ static struct ai *arr_to_obj(struct ai *g, int slot) {
 // Pack'd body of lvm_obin (operands at g->sp[0..1], >=1 is a ai_O array).
 static struct ai *obin_run(struct ai *g, int op) {
  word a = g->sp[0], b = g->sp[1];
- bool aarr = arrp(a), barr = arrp(b);
- if (aarr && vec(a)->type != ai_O) { if (!ai_ok(g = arr_to_obj(g, 0))) return g; }
- if (barr && vec(b)->type != ai_O) { if (!ai_ok(g = arr_to_obj(g, 1))) return g; }
- a = g->sp[0], b = g->sp[1], aarr = arrp(a), barr = arrp(b);
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ bool atray = trayp(a), btray = trayp(b);
+ if (atray && tray(a)->type != ai_O) { if (!ai_ok(g = tray_to_obj(g, 0))) return g; }
+ if (btray && tray(b)->type != ai_O) { if (!ai_ok(g = tray_to_obj(g, 1))) return g; }
+ a = g->sp[0], b = g->sp[1], atray = trayp(a), btray = trayp(b);
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b), shp[maxrank];
  if (n == (uintptr_t) -1) {                                    // non-conforming -> zero
   g->sp[1] = zero, g->sp++, g->ip = (union u*) g->ip + 1; return g; }
  bshape_put(shp, R, a, b);
- uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_O];
+ uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_O];
  if (!ai_ok(g = ai_have(g, b2w(bytes)))) return g;
- struct ai_vec *r = (struct ai_vec*) g->hp; g->hp += b2w(bytes);
- ini_vec(r, ai_O, R);
+ struct ai_tray *r = (struct ai_tray*) g->hp; g->hp += b2w(bytes);
+ ini_tray(r, ai_O, R);
  for (uintptr_t k = 0; k < R; k++) r->shape[k] = shp[k];
- for (uintptr_t p = 0; p < n; p++) vec_put_obj(r, p, zero);     // zero-fill before any GC
+ for (uintptr_t p = 0; p < n; p++) tray_put_obj(r, p, zero);     // zero-fill before any GC
  if (!ai_ok(g = ai_push(g, 1, word(r)))) return g;               // sp: [0]=r [1]=a [2]=b
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
- bstride(aarr ? vec(g->sp[1]) : 0, R, ca), bstride(barr ? vec(g->sp[2]) : 0, R, cb);
+ bstride(atray ? tray(g->sp[1]) : 0, R, ca), bstride(btray ? tray(g->sp[2]) : 0, R, cb);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  word ae = aarr ? vec_get_obj(vec(g->sp[1]), oa) : g->sp[1];  // scalar operand re-read each step
-  word be = barr ? vec_get_obj(vec(g->sp[2]), ob) : g->sp[2];
+  word ae = atray ? tray_get_obj(tray(g->sp[1]), oa) : g->sp[1];  // scalar operand re-read each step
+  word be = btray ? tray_get_obj(tray(g->sp[2]), ob) : g->sp[2];
   word res = obin_elem(&g, op, ae, be);
   if (!ai_ok(g)) return g;
-  vec_put_obj(vec(g->sp[0]), p, res);                          // re-fetch result post-alloc
+  tray_put_obj(tray(g->sp[0]), p, res);                          // re-fetch result post-alloc
   // ⚠ and BARRIER it: a minor mid-loop promotes the result array while its
   // elements stay young -- an edge the rem set must carry, or the next minor
   // frees an element still in the array
@@ -7746,21 +7748,21 @@ lvm(lvm_obin, int op) {
 
 // ai_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
 static struct ai *ored(struct ai *g, int kind) {
- struct ai_vec *v = vec(g->sp[0]);
+ struct ai_tray *v = tray(g->sp[0]);
  uintptr_t n = 1; for (uintptr_t i = 0; i < v->rank; i++) n *= v->shape[i];
  if (kind >= 2) {                                              // max/min: pick an element, no alloc
   if (!n) { g->sp[0] = zero, g->ip = (union u*) g->ip + 1; return g; }
-  word acc = vec_get_obj(vec(g->sp[0]), 0);
+  word acc = tray_get_obj(tray(g->sp[0]), 0);
   int cop = kind == 2 ? vop_gt : vop_lt;
   for (uintptr_t i = 1; i < n; i++) {
-   word e = vec_get_obj(vec(g->sp[0]), i);
+   word e = tray_get_obj(tray(g->sp[0]), i);
    if (obin_elem(&g, cop, e, acc) == putcharm(1)) acc = e; }
   g->sp[0] = acc, g->ip = (union u*) g->ip + 1; return g; }
  word init = kind == 0 ? putcharm(0) : putcharm(1);               // sum/prod: fold with allocation
  int aop = kind == 0 ? vop_add : vop_mul;
  if (!ai_ok(g = ai_push(g, 1, init))) return g;                 // sp[0]=acc, sp[1]=array
  for (uintptr_t i = 0; i < n; i++) {
-  word e = vec_get_obj(vec(g->sp[1]), i);
+  word e = tray_get_obj(tray(g->sp[1]), i);
   word acc = obin_elem(&g, aop, g->sp[0], e);
   if (!ai_ok(g)) return g;
   g->sp[0] = acc; }
@@ -7806,29 +7808,29 @@ lvm(lvm_cplx_bin, int vop) {
 
 // --- complex-array elementwise lane (ai_C): lvm_vbin's complex twin -- packed
 // (re,im) broadcast, a real element promoting to (v, 0)
-static ai_inline void cbin_part(bool isarr, struct ai_vec *v, ai_flo_t sre, ai_flo_t sim,
+static ai_inline void cbin_part(bool istray, struct ai_tray *v, ai_flo_t sre, ai_flo_t sim,
                                uintptr_t o, ai_flo_t *re, ai_flo_t *im) {
- if (!isarr) { *re = sre; *im = sim; return; }
- if (v->type == ai_C) { ai_flo_t *fp = vec_data(v); *re = fp[2*o]; *im = fp[2*o+1]; }
- else { *re = vec_get_flo(v, o); *im = 0; } }
+ if (!istray) { *re = sre; *im = sim; return; }
+ if (v->type == ai_C) { ai_flo_t *fp = tray_data(v); *re = fp[2*o]; *im = fp[2*o+1]; }
+ else { *re = tray_get_flo(v, o); *im = 0; } }
 
-static ai_noinline void cbin_fill(struct ai_vec *r, word a, word b, int op, bool cmp) {
- uintptr_t R = r->rank, n = vec_nelem(r);
- bool aarr = arrp(a), barr = arrp(b);
- struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
+static ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, bool cmp) {
+ uintptr_t R = r->rank, n = tray_nelem(r);
+ bool atray = trayp(a), btray = trayp(b);
+ struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
  bstride(va, R, ca), bstride(vb, R, cb);
  ai_flo_t sar = 0, sai = 0, sbr = 0, sbi = 0;
- if (!aarr) { if (Cp(a)) sar = cplx_re(a), sai = cplx_im(a); else sar = toflo(a); }
- if (!barr) { if (Cp(b)) sbr = cplx_re(b), sbi = cplx_im(b); else sbr = toflo(b); }
- ai_flo_t *rf = cmp ? 0 : vec_data(r);
+ if (!atray) { if (Cp(a)) sar = cplx_re(a), sai = cplx_im(a); else sar = toflo(a); }
+ if (!btray) { if (Cp(b)) sbr = cplx_re(b), sbi = cplx_im(b); else sbr = toflo(b); }
+ ai_flo_t *rf = cmp ? 0 : tray_data(r);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
   ai_flo_t ar, love, br, bi, re, im;
-  cbin_part(aarr, va, sar, sai, oa, &ar, &love);
-  cbin_part(barr, vb, sbr, sbi, ob, &br, &bi);
+  cbin_part(atray, va, sar, sai, oa, &ar, &love);
+  cbin_part(btray, vb, sbr, sbi, ob, &br, &bi);
   if (cmp) {                                   // (re,im) LEXICOGRAPHIC -- the same order
    int t;                                      // cmp3's complex arm gives a scalar pair
    if (op == vop_eq) t = ar == br && love == bi;   // kept exact (a NaN is equal to nothing)
@@ -7836,7 +7838,7 @@ static ai_noinline void cbin_fill(struct ai_vec *r, word a, word b, int op, bool
     int c = ar < br ? -1 : ar > br ? 1 : love < bi ? -1 : love > bi ? 1 : 0;
     t = op == vop_lt ? c < 0 : op == vop_le ? c <= 0
       : op == vop_gt ? c > 0 : c >= 0; }        // vop_ge
-   vec_put_int(r, p, t ? 1 : 0); }
+   tray_put_int(r, p, t ? 1 : 0); }
   else {
    cplx_op(op, ar, love, br, bi, &re, &im);
    rf[2*p] = re; rf[2*p+1] = im; }
@@ -7844,22 +7846,22 @@ static ai_noinline void cbin_fill(struct ai_vec *r, word a, word b, int op, bool
 
 lvm(lvm_cbin, int op) {
  word a = Sp[0], b = Sp[1];
- bool aarr = arrp(a), barr = arrp(b);
+ bool atray = trayp(a), btray = trayp(b);
  // % and // stay undefined on complex, but the ORDERINGS hold ((re,im)
  // lexicographic): a tray follows its scalar
- if (!(aarr || Cp(a) || isnum(a)) || !(barr || Cp(b) || isnum(b))
+ if (!(atray || Cp(a) || isnum(a)) || !(btray || Cp(b) || isnum(b))
      || op == vop_rem || op == vop_fquot)
   return *++Sp = op == vop_eq ? zero : ZeroPoint, Ip++, Continue();   // `=` is boolean: undefined face -> 0, not ()
  bool cmp = op >= vop_lt;
- uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
  uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b);
  if (n == (uintptr_t) -1) return *++Sp = op == vop_eq ? zero : ZeroPoint, Ip++, Continue();   // non-conformant `=` -> 0
- enum ai_vec_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
- uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[rt];
+ enum ai_tray_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
+ uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));
  a = Sp[0], b = Sp[1];                                 // re-read post-Have
- struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, rt, R);
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+ ini_tray(r, rt, R);
  bshape_put(r->shape, R, a, b);
  cbin_fill(r, a, b, op, cmp);
  return *++Sp = word(r), Ip++, Continue(); }
@@ -7916,39 +7918,39 @@ lvm(lvm_pow) {
  return Ap(lvm_math2, g, ai_pow); }
 
 // fill a packed ai_C array with (re = a-element, im = b-element) under broadcast
-static ai_noinline void cplx_build_fill(struct ai_vec *r, word a, word b) {
- uintptr_t R = r->rank, n = vec_nelem(r);
- bool aarr = arrp(a), barr = arrp(b);
- struct ai_vec *va = aarr ? vec(a) : 0, *vb = barr ? vec(b) : 0;
+static ai_noinline void cplx_build_fill(struct ai_tray *r, word a, word b) {
+ uintptr_t R = r->rank, n = tray_nelem(r);
+ bool atray = trayp(a), btray = trayp(b);
+ struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
  bstride(va, R, ca), bstride(vb, R, cb);
- ai_flo_t sa = aarr ? 0 : toflo(a), sb = barr ? 0 : toflo(b);
- ai_flo_t *rf = vec_data(r);
+ ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
+ ai_flo_t *rf = tray_data(r);
  for (uintptr_t p = 0; p < n; p++) {
   intptr_t oa = 0, ob = 0;
   for (uintptr_t j = 0; j < R; j++) oa += idx[j] * ca[j], ob += idx[j] * cb[j];
-  rf[2*p]   = aarr ? vec_get_flo(va, oa) : sa;
-  rf[2*p+1] = barr ? vec_get_flo(vb, ob) : sb;
+  rf[2*p]   = atray ? tray_get_flo(va, oa) : sa;
+  rf[2*p+1] = btray ? tray_get_flo(vb, ob) : sb;
   odo_step(idx, R, r->shape); } }
 
 // (twin re im): scalars -> a complex box; a real array operand -> a packed ai_C
 // array (so arg stays elementwise); complex/object array or non-numeric -> zero
 lvm(lvm_cplx) {
  word a = Sp[0], b = Sp[1];
- bool aarr = arrp(a), barr = arrp(b);
- if (aarr || barr) {
-  if ((aarr && vec(a)->type >= ai_C) || (barr && vec(b)->type >= ai_C)
-      || (!aarr && !isnum(a)) || (!barr && !isnum(b)))
+ bool atray = trayp(a), btray = trayp(b);
+ if (atray || btray) {
+  if ((atray && tray(a)->type >= ai_C) || (btray && tray(b)->type >= ai_C)
+      || (!atray && !isnum(a)) || (!btray && !isnum(b)))
    return *++Sp = ZeroPoint, Ip++, Continue();
-  uintptr_t ra = aarr ? vec(a)->rank : 0, rb = barr ? vec(b)->rank : 0;
+  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
   uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b);
   if (n == (uintptr_t) -1) return *++Sp = ZeroPoint, Ip++, Continue();
-  uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_C];
+  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_C];
   Have(b2w(bytes));
   a = Sp[0], b = Sp[1];                                     // re-read post-Have
-  struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
-  ini_vec(r, ai_C, R);
+  struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+  ini_tray(r, ai_C, R);
   bshape_put(r->shape, R, a, b);
   cplx_build_fill(r, a, b);
   return *++Sp = word(r), Ip++, Continue(); }
@@ -7962,24 +7964,24 @@ op11(lvm_Cp, Cp(Sp[0]) ? putcharm(1) : zero)
 
 // fill r with component `off` (0 = re, 1 = im) of each element; off < 0 is the
 // (im realarr) lane -- all zeros
-static ai_noinline void cpart_fill(struct ai_vec *r, struct ai_vec *v, int off) {
- uintptr_t n = vec_nelem(r);
- if (off < 0) { intptr_t *zp = vec_data(r);
+static ai_noinline void cpart_fill(struct ai_tray *r, struct ai_tray *v, int off) {
+ uintptr_t n = tray_nelem(r);
+ if (off < 0) { intptr_t *zp = tray_data(r);
   for (uintptr_t p = 0; p < n; p++) zp[p] = 0;
   return; }
- ai_flo_t *rf = vec_data(r), *fp = vec_data(v);
+ ai_flo_t *rf = tray_data(r), *fp = tray_data(v);
  for (uintptr_t p = 0; p < n; p++) rf[p] = fp[2*p + off]; }
 
 // the array lane of re/im: result carries the operand's shape
 static lvm(lvm_cpart, int off) {
- struct ai_vec *v = vec(Sp[0]);
- enum ai_vec_type rt = off < 0 ? ai_Z : ai_R;
- uintptr_t R = v->rank, n = vec_nelem(v);
- uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[rt];
+ struct ai_tray *v = tray(Sp[0]);
+ enum ai_tray_type rt = off < 0 ? ai_Z : ai_R;
+ uintptr_t R = v->rank, n = tray_nelem(v);
+ uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));
- v = vec(Sp[0]);                                           // re-read post-Have
- struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
- ini_vec(r, rt, R);
+ v = tray(Sp[0]);                                           // re-read post-Have
+ struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+ ini_tray(r, rt, R);
  for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
  cpart_fill(r, v, off);
  return Sp[0] = word(r), Ip++, Continue(); }
@@ -7990,7 +7992,7 @@ lvm(lvm_re) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t re = cplx_re(a); Have(box_req); emit_flo(re);
   return Sp[0] = _res, Ip++, Continue(); }
- if (arrp(a)) { enum ai_vec_type t = vec(a)->type;
+ if (trayp(a)) { enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) return Sp[0] = ZeroPoint, Ip++, Continue();   // a tray is not a number
   if (t != ai_C) return Ip++, Continue();          // a real array is its own real part
   return Ap(lvm_cpart, g, 0); }
@@ -8001,7 +8003,7 @@ lvm(lvm_im) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t im = cplx_im(a); Have(box_req); emit_flo(im);
   return Sp[0] = _res, Ip++, Continue(); }
- if (arrp(a)) { enum ai_vec_type t = vec(a)->type;
+ if (trayp(a)) { enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) return Sp[0] = ZeroPoint, Ip++, Continue();
   return Ap(lvm_cpart, g, t == ai_C ? 1 : -1); }   // real array -> zeros of its shape
  if (isnum(a)) return Sp[0] = putcharm(0), Ip++, Continue();   // im of a real is 0
@@ -8049,38 +8051,38 @@ lvm(lvm_abs) {
   struct ai_big *y = (struct ai_big*) Hp; Hp += b2w(bytes);
   memcpy(y, x, bytes); y->slen = -x->slen;           // flip the sign
   return Sp[0] = word(y), Ip++, Continue(); }
- if (arrp(a)) {                                       // vector -> scalar: the Euclidean (L2) norm
-  struct ai_vec *v = vec(a); uintptr_t i, n = vec_nelem(v);   // sqrt(sum of squares); abs of a
+ if (trayp(a)) {                                       // vector -> scalar: the Euclidean (L2) norm
+  struct ai_tray *v = tray(a); uintptr_t i, n = tray_nelem(v);   // sqrt(sum of squares); abs of a
   ai_flo_t s = 0;                                      // complex elem is its 2-vector modulus; ai_C sums 2n floats
-  if (v->type == ai_C) { ai_flo_t *fp = vec_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
-  else for (i = 0; i < n; i++) { ai_flo_t e = vec_get_flo(v, i); s += e * e; }
+  if (v->type == ai_C) { ai_flo_t *fp = tray_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
+  else for (i = 0; i < n; i++) { ai_flo_t e = tray_get_flo(v, i); s += e * e; }
   Have(box_req); emit_flo(ai_sqrt(s)); return Sp[0] = _res, Ip++, Continue(); }
  if (tabp(a)) {                                       // table: its key count (so (int (abs t)) == (len t))
   Have(box_req); emit_int((intptr_t) map_len(a)); return Sp[0] = _res, Ip++, Continue(); }
  return Sp[0] = ZeroPoint, Ip++, Continue(); }
 
 // fill f64 array r with arg of each element of v
-static ai_noinline void carg_fill(struct ai_vec *r, struct ai_vec *v) {
- uintptr_t n = vec_nelem(v);
- ai_flo_t *rf = vec_data(r);
- if (v->type == ai_C) { ai_flo_t *fp = vec_data(v);
+static ai_noinline void carg_fill(struct ai_tray *r, struct ai_tray *v) {
+ uintptr_t n = tray_nelem(v);
+ ai_flo_t *rf = tray_data(r);
+ if (v->type == ai_C) { ai_flo_t *fp = tray_data(v);
   for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(fp[2*p+1], fp[2*p]); }
- else for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(0, vec_get_flo(v, p)); }
+ else for (uintptr_t p = 0; p < n; p++) rf[p] = ai_atan2(0, tray_get_flo(v, p)); }
 
 // (arg z): phase angle atan2(im, re); elementwise over an array, zero on a non-number
 lvm(lvm_carg) {
  word a = Sp[0], _res;
  if (Cp(a)) { ai_flo_t r = ai_atan2(cplx_im(a), cplx_re(a));
   Have(box_req); emit_flo(r); return Sp[0] = _res, Ip++, Continue(); }
- if (arrp(a)) {
-  struct ai_vec *v = vec(a);
+ if (trayp(a)) {
+  struct ai_tray *v = tray(a);
   if (v->type == ai_O) return Sp[0] = ZeroPoint, Ip++, Continue();   // object array -> zero
   uintptr_t R = v->rank, n = 1; for (uintptr_t i = 0; i < R; i++) n *= v->shape[i];
-  uintptr_t bytes = sizeof(struct ai_vec) + R * sizeof(word) + n * ai_T[ai_R];
+  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_R];
   Have(b2w(bytes));
-  v = vec(Sp[0]);                                           // re-read post-Have
-  struct ai_vec *r = (struct ai_vec*) Hp; Hp += b2w(bytes);
-  ini_vec(r, ai_R, R);
+  v = tray(Sp[0]);                                           // re-read post-Have
+  struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
+  ini_tray(r, ai_R, R);
   for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
   carg_fill(r, v);
   return Sp[0] = word(r), Ip++, Continue(); }

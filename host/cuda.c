@@ -10,8 +10,8 @@
 //    the CPU, exactly like tl-cpu). Nothing here needs a GPU to compile or link.
 //  * -DAI_CUDA against a real device: the kernels dispatch to cuBLAS / hand
 //    kernels. Those bodies are sketched below and gated on ONE core change that is
-//    a core-thread task, NOT smuggled in here: the vec cell accessors
-//    (vec_data / ini_vec / vec_nelem) are static in love.c today, so a nif cannot yet
+//    a core-thread task, NOT smuggled in here: the tray cell accessors
+//    (tray_data / ini_tray / tray_nelem) are static in love.c today, so a nif cannot yet
 //    read/write a galaxy's float buffer. Until that's exported, the AI_CUDA bodies
 //    stay as the marshaling sketch -- the interface is frozen, only the kernel
 //    innards wait on the GPU (and that one export).
@@ -39,16 +39,16 @@ static lvm(lvm_cuda_reduce) { Sp[0] = ai_zero;      return Ip++, Continue(); }  
 static lvm(lvm_cuda_transp) { Sp[0] = ai_zero;      return Ip++, Continue(); }   // (m)      -> 1
 #else
 // The real kernels. Each reads its galaxy operands' f64 buffers, runs on the
-// device, and builds the result galaxy. The cuBLAS structure, ready for the vec
+// device, and builds the result galaxy. The cuBLAS structure, ready for the tray
 // accessor export (see the header note); until then these keep the stub return so
 // an AI_CUDA build still links while the bodies are filled in incrementally.
 static lvm(lvm_cuda_gemm) {                                  // C(m,n) = A(m,k) . B(k,n)
-  // struct ai_vec *A = vec(Sp[0]), *B = vec(Sp[1]);
+  // struct ai_tray *A = tray(Sp[0]), *B = tray(Sp[1]);
   // uintptr_t m = A->shape[0], k = A->shape[1], n = B->shape[1];
-  // double *dA,*dB,*dC; cudaMalloc &c; cudaMemcpy H2D vec_data(A),vec_data(B);
+  // double *dA,*dB,*dC; cudaMalloc &c; cudaMemcpy H2D tray_data(A),tray_data(B);
   // double one=1, zero=0;                                   // column-major: compute B^T A^T = (A B)^T
   // cublasDgemm(h, CUBLAS_OP_N,CUBLAS_OP_N, n,m,k, &one, dB,n, dA,k, &zero, dC,n);
-  // struct ai_vec *C = new gem-tray (m,n); cudaMemcpy D2H vec_data(C),dC; *(Sp += 1) = word(C);
+  // struct ai_tray *C = new gem-tray (m,n); cudaMemcpy D2H tray_data(C),dC; *(Sp += 1) = word(C);
  *(Sp += 1) = ai_zero; return Ip++, Continue();
 }
 static lvm(lvm_cuda_ew) {                                    // elementwise op over a,b (op = a tag, marshaled love-side)
@@ -56,7 +56,7 @@ static lvm(lvm_cuda_ew) {                                    // elementwise op o
  *(Sp += 2) = ai_zero; return Ip++, Continue();
 }
 static lvm(lvm_cuda_reduce) {                                // sum-all -> a scalar
-  // cublasDasum / a segmented reduce over vec_data(Sp[0]); emit a boxed f64.
+  // cublasDasum / a segmented reduce over tray_data(Sp[0]); emit a boxed f64.
  Sp[0] = ai_zero; return Ip++, Continue();
 }
 static lvm(lvm_cuda_transp) {                               // 2D transpose

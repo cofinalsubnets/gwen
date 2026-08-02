@@ -68,7 +68,7 @@ union u;
 typedef _lvm(lvm_t);
 
 // typed n-dim array; rank 0 = scalar (no shape words); payload at shape+rank; immutable
-struct ai_vec {
+struct ai_tray {
  lvm_t *ap;
  uintptr_t type, rank, shape[]; };
 
@@ -337,12 +337,18 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 #define zero ai_zero
 struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // enum q, the value-kind lattice for generic dispatch: KMint the blue floor, then
-// KNom, the arithmetic lane [KCharm..KArrO] (scalars then their array mirrors),
-// the sequence lane [KString..KChain], map, thread last -- each dyadic lane one
+// KNom, the arithmetic lane [KCharm..KTrayO] (scalars then their tray mirrors),
+// the sequence lane [KString..KChain], tablet, thread last -- each dyadic lane one
 // contiguous range, `max` the within-lane promotion join. ⚠ DISPATCH order only:
 // the total compare order is cmp_rank's separate remap (love.c). KN is the matrix
-// dimension. the roster is tools/mx.l's -- edit THAT, not kinds.h; `make
-// test_clay` regenerates and fails on drift.
+// dimension.
+// enum d is the other question: what a heap object's hot SAYS it is. ai_typ can
+// answer these nine and nothing else, so a switch over them is exhaustive and
+// carries no default -- add a data sentinel and -Wswitch names every site. the two
+// do NOT share values; mx.h's ai_kind_of_d is the one crossing, and a tray is the
+// one rep that dispatches four ways.
+// both rosters are tools/mx.l's -- edit THAT, not kinds.h; `make test_clay`
+// regenerates and fails on drift.
 #include "kinds.h"
 typedef ai_word num, word;
 // the unique empty string: data-segment, never moved (gcp's out-of-pool
@@ -389,29 +395,29 @@ struct ai
  *str0(struct ai*, uintptr_t);
 lvm(lvm_gc, uintptr_t);
 // any value -> its enum q: KCharm for a fixnum, KHot for a non-data heap pointer,
-// else ai_typ's data kind, refined for a rank>=1 vec by element tier (KArrZ..KArrO).
+// else ai_typ's rep, a tray refined by element tier (KTrayZ..KTrayO).
 // both the +/* matrices and the apply sentinels dispatch on this.
 enum q ai_kind(word);
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-lvm_t lvm_ap, lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
-// recover a data value's kind by comparing its ap against the sentinel addresses
+lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
+// recover a data value's rep by comparing its ap against the sentinel addresses
 // (a tiny compare on the cold apply path)
 static ai_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
- return p == lvm_vec || p == lvm_big || p == lvm_str || p == lvm_sym || p == lvm_nom
+ return p == lvm_tray || p == lvm_big || p == lvm_str || p == lvm_sym || p == lvm_nom
      || p == lvm_chain || p == lvm_flo || p == lvm_wide || p == lvm_cbox; }
-static ai_inline enum q ai_typ(union u *o) {
+static ai_inline enum d ai_typ(union u *o) {
  lvm_t *p = o->ap;
- return p == lvm_vec   ? KVec
-      : p == lvm_big    ? KBig
-      : p == lvm_str    ? KString
-      : p == lvm_sym    ? KMint
-      : p == lvm_nom    ? KNom
-      : p == lvm_chain  ? KChain
-      : p == lvm_flo    ? KFlo
-      : p == lvm_wide   ? KWide
-      :                   KCplx; }   // the 8th and last: lvm_cbox
-uintptr_t hash(struct ai*, word), ai_vec_bytes(struct ai_vec*);
+ return p == lvm_tray   ? DTray
+      : p == lvm_big    ? DBig
+      : p == lvm_str    ? DString
+      : p == lvm_sym    ? DMint
+      : p == lvm_nom    ? DNom
+      : p == lvm_chain  ? DChain
+      : p == lvm_flo    ? DGem
+      : p == lvm_wide   ? DSun
+      :                   DTwin; }   // the 8th and last: lvm_cbox
+uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp
 #define two(_) ((struct ai_chain*)(_))
