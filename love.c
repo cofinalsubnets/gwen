@@ -218,7 +218,7 @@ lvm_t lvm_kcall,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
  lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
  lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
- lvm_sleep, lvm_donep, lvm_hush, lvm_key,
+ lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_key,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0, lvm_dot,
@@ -881,7 +881,8 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
  _(nif_missing, "missing", s2(lvm_missing)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
  _(nif_spawn, "twirl", s2(lvm_spawn)) _(nif_wait, "catch", s1(lvm_wait)) \
- _(nif_sleep, "rest", s1(lvm_sleep)) _(nif_donep, "back?", s1(lvm_donep)) \
+ _(nif_sleep, "rest", s1(lvm_sleep)) _(nif_donep, "landed?", s1(lvm_donep)) \
+ _(nif_scoop, "scoop", s1(lvm_scoop)) \
  _(nif_hush, "freeze", s1(lvm_hush)) \
  _(nif_key, "cue?", s1(lvm_key)) \
  _(nif_fputbn, "putbn", s3(lvm_fputbn))\
@@ -3185,12 +3186,43 @@ lvm(lvm_donep) {
    if (node[1].m->ap != lvm_task_exit) result = zero;
    Sp[0] = result, Ip += 1;
    return Continue(); }
- // an unfound pid reads DONE, so a task merely parked on an fd would report finished --
- // `reap` would drop a live session's handle mid-request.
+ // an unfound pid reads LANDED, so a task merely parked on an fd would report finished --
+ // a collector would drop a live session's handle mid-request.
  { union u *prev;
    if (parked_find(g, target, &prev)) result = zero; }
  Sp[0] = result;
  Ip += 1;
+ return Continue(); }
+
+// (scoop _) -> (pid . retval) of ONE task that has finished, or () when none have.
+// The task-side twin of `glean` (host/posix.c), which harvests one finished CHILD:
+// the runtime knows a task is done however it ended, so nobody needs a roster of
+// pids to ask about one at a time. The unsplice is `catch`'s (lvm_wait above) with
+// the pid discovered rather than given.
+//
+// ⚠ PRESENCE RIDES THE PAIR, NEVER THE NET. A task's return value is legitimately ()
+// -- a session task run for its effect returns one every time -- so the retval ALONE
+// cannot say whether anything was harvested. `two?` is the test and ZeroPoint (the
+// real ()) is the empty answer; a drain loop that read the net instead would stop on
+// the first such task with the ring still full, and look like it had finished.
+//
+// only the RUN ring is walked: a task on the parked ring is blocked on an fd, which
+// is what unfinished MEANS. the arg is a dummy (ignored), so a bare (scoop) curries --
+// call it (scoop 0). g->tasks is the running task and is skipped by construction.
+lvm(lvm_scoop) {
+ Have(Width(struct ai_chain));
+ for (union u *prev = g->tasks, *node = prev->m; node != g->tasks; prev = node, node = node->m) {
+  if (node[1].m->ap != lvm_task_exit) continue;
+  word pid = node[2].x, ret = node[6].x;   // dormant: the stack is just [retval] at node[6]
+  struct ai_chain *p = (struct ai_chain*) Hp;
+  Hp += Width(struct ai_chain);
+  ini_chain(p, pid, ret);
+  prev->m = node->m;
+  Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
+  gen_wb(g, (word) prev, (word) prev->m);   // task ring: unsplicing relinks an old node to a (maybe young) successor
+  Sp[0] = (word) p, Ip += 1;
+  return Continue(); }
+ Sp[0] = ZeroPoint, Ip += 1;
  return Continue(); }
 
 lvm(lvm_hush) {

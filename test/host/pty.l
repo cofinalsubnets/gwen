@@ -123,8 +123,8 @@
    _ (rest 300)
    got (slurp sink)
    _ (still (cap rk) 9) _ (still (cap rc) 9)
-   _ (? (back? a) (catch a) (freeze a))
-   _ (? (back? b) (catch b) (freeze b))
+   _ (? (landed? a) (catch a) (freeze a))
+   _ (? (landed? b) (catch b) (freeze b))
    _ (assert
       (string? got)                    ; ⚠ slurp of a jug is TEXT -- two? is FALSE for a string
       (= got "AXB\r\n")))              ; the whole chain: LEFT decoded, X inserted BEFORE b, tr answered

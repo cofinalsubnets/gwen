@@ -9,8 +9,11 @@
 ;                  if the task is still running, yield until it becomes dormant.
 ; (rest n)     -> nil; blocks the current task for at least n g_clock ticks.
 ;                  n <= 0 returns immediately. Other tasks run during the wait.
-; (back? pid)   -> 1 if (catch pid) would not yield (pid unknown, self, dormant),
+; (landed? pid) -> 1 if (catch pid) would not yield (pid unknown, self, dormant),
 ;                  nil if pid refers to a runnable task.
+; (scoop _)    -> (pid . retval) of one task that has finished, or () when none
+;                  have. no pid needed and it never yields; the PAIR carries the
+;                  presence, since a retval of () is a perfectly ordinary answer.
 
 (assert
  ; hatch-wait round trip: fn is applied to x; the result flows back through wait.
@@ -74,23 +77,81 @@
     r (catch p)
     (&& (= 'done r) (= 3 (peep t 'n 0))))
 
- ; --- done? predicate ---
+ ; --- landed? predicate ---
 
- ; done? on an unknown pid is true (catch would return 0 immediately).
- (= 1 (back? 99999))
- ; done? on a non-numeric pid is true.
- (= 1 (back? ()))
- ; done? on the caller's own pid (main = 0) is true — wait skips self.
- (= 1 (back? 0))
+ ; landed? on an unknown pid is true (catch would return 0 immediately).
+ (= 1 (landed? 99999))
+ ; landed? on a non-numeric pid is true.
+ (= 1 (landed? ()))
+ ; landed? on the caller's own pid (main = 0) is true — wait skips self.
+ (= 1 (landed? 0))
 
- ; done? on a freshly spawned task is false: the task hasn't completed.
- (: p (twirl (\ _ 42) 0) r (back? p) _ (catch p) (nil? r))
+ ; landed? on a freshly spawned task is false: the task hasn't completed.
+ (: p (twirl (\ _ 42) 0) r (landed? p) _ (catch p) (nil? r))
 
- ; after yielding, the worker completes and done? becomes true.
- (: p (twirl (\ _ 42) 0) _ (rest 0) r (back? p) _ (catch p) (= 1 r))
+ ; after yielding, the worker completes and landed? becomes true.
+ (: p (twirl (\ _ 42) 0) _ (rest 0) r (landed? p) _ (catch p) (= 1 r))
 
- ; after wait collects the task, done? is again true (pid is gone).
- (: p (twirl (\ _ 42) 0) _ (catch p) (= 1 (back? p)))
+ ; after wait collects the task, landed? is again true (pid is gone).
+ (: p (twirl (\ _ 42) 0) _ (catch p) (= 1 (landed? p)))
+
+ ; --- scoop: harvest one finished task, whichever it turns out to be ---
+ ; `catch` names a pid and BLOCKS until that one is done; `scoop` names none and
+ ; never waits. it answers (pid . retval) for ONE task that has finished, or ()
+ ; when none have -- the task-side twin of `glean`, which does this for a finished
+ ; child process. a server twirling a task per client wants exactly this: without
+ ; it, the only way to collect is to keep a roster of live pids and ask about each
+ ; one, and since every ask is itself a ring search the two costs multiply.
+ ; ⚠ every law here drains FIRST: the corpus runs concatenated in one scope, so a
+ ; task some earlier section left dormant is a task scoop would rightly hand back.
+
+ ; an empty ring answers the zero point.
+ (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+    _ (drain ())
+    (nil? (scoop 0)))
+
+ ; a finished task comes back whole: the pid in the car, its value in the cdr.
+ (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+    _ (drain ())
+    p (twirl (\ x (x + 1)) 41)
+    _ (rest 0)
+    s (scoop 0)
+    (&& (= p (cap s)) (= 42 (cup s))))
+
+ ; ⚠ PRESENCE RIDES THE PAIR, NEVER THE NET. a task run for its EFFECT answers ()
+ ; -- most of them do -- and it is still handed back as a pair. a drain that tested
+ ; the value rather than the shape would stop dead on the first such task and leave
+ ; the ring full while reporting it empty.
+ (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+    _ (drain ())
+    p (twirl (\ _ ()) ())
+    _ (rest 0)
+    s (scoop 0)
+    (&& (two? s) (&& (= p (cap s)) (nil? (cup s)))))
+
+ ; scooping COLLECTS, exactly as catching does: the pid is gone afterwards.
+ (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+    _ (drain ())
+    p (twirl (\ _ 42) ())
+    _ (rest 0)
+    _ (scoop 0)
+    (= 0 (catch p)))
+
+ ; a task still running is not harvested -- unfinished is the whole condition.
+ (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+    _ (drain ())
+    p (twirl (\ _ (: _ (rest 0) 42)) ())
+    s (scoop 0)
+    _ (catch p)
+    (nil? s))
+
+ ; three finished tasks drain in three scoops, and the fourth answers nothing.
+ (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
+    (count k) (? (two? (scoop 0)) (count (k + 1)) k)
+    _ (drain ())
+    _ (twirl (\ _ 1) ()) _ (twirl (\ _ 2) ()) _ (twirl (\ _ 3) ())
+    _ (rest 0)
+    (= 3 (count 0)))
 
  ; --- sleep ---
 
@@ -154,7 +215,7 @@
  ; chill a dormant task (already finished): also returns 1, then wait sees 0.
  (: p (twirl (\ _ 42) 0)
     _ (rest 0)
-    ; p is dormant now (back? would be 1).
+    ; p is dormant now (landed? would be 1).
     (&& (= 1 (freeze p)) (= 0 (catch p))))
 
  ; double-chill: second chill is a no-op since the pid is gone from the ring.
@@ -182,7 +243,7 @@
  (: big (200000 2)
     ticks (cask 1)
     w (twirl (\ _ (* big big)) 0)
-    t (twirl (\ _ (: (go _) (? (back? w) 0
+    t (twirl (\ _ (: (go _) (? (landed? w) 0
                                (: c (peep ticks 0 0)
                                   _ (? (< c 250) (pin ticks 0 (+ c 1)) 0)
                                   _ (rest 0) (go 0)))
@@ -211,7 +272,7 @@
  (: a (twirl (\ _ (do (rest 10) 1)) 0)
     b (twirl (\ _ (do (rest 80) 2)) 0)
     ra (catch a)               ; ~10ms; b still sleeping
-    db (back? b)              ; b should still be running
+    db (landed? b)              ; b should still be running
     rb (catch b)               ; ~70ms more
     (&& (= 1 ra) (nil? db) (= 2 rb)))
 

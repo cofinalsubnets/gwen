@@ -132,7 +132,7 @@
                      sw (twirl (\ _ (swim bx m dirty 1)) 0)
                      _ (moor bx m dirty)            ; ... until the child hangs up
                      _ (freeze sw)
-                     _ (? (back? up) (catch up) (freeze up))
+                     _ (? (landed? up) (catch up) (freeze up))
                      _ (say out "\e[0m\e[?25h\e[?1049l")
                      _ (flush out)
                      _ (raw 0)

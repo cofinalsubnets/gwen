@@ -1,11 +1,13 @@
 # the scheduler -- THE PLAN
 
-> **status, 2026-08-01.** rungs 0, 1 and 2 are BUILT. the measurements taken while
-> building 0 and 1 moved the diagnosis -- the cost was not on the wait path but on the
-> **pre-wait scan** -- and rung 2 removed it: **at 200 parked clients, 305 -> 3837 req/s,
-> and the zero-parked column did not move.** the target had been 1680, which is what a
-> `yield_interval` of 4096 bought while costing 15% at zero parked; rung 2 beat it 2.3x
-> and cost nothing. **rung 3 is now a question, not a plan** -- see its section.
+> **status, 2026-08-01.** rungs 0, 1, 2 and 2a are BUILT, and **the curve is flat**: 400
+> held clients cost 0.16 ms/req against 0.14 at zero, where the arc opened at 16.78. rung
+> 2 (two rings) took it from 305 to 3837 req/s at 200 parked, past its 1680 target and
+> free at zero parked. rung 2a then caught this document blaming the wrong thing for what
+> was left: not the parked sweep but kiosko asking `landed?` once per live session per
+> accept -- `scoop` retires the roster and the last of the slope with it, 3.6x at 400.
+> **rung 3 is now answered NO** -- there is nothing left for an epoll lane to buy on the
+> measurement that motivated it. rung 4 (preemption) is the next real build.
 
 love's tasks are cooperative: an op tail-jumps to `lvm_yield_sw` (love.c:~2854), which
 snapshots the running task into a fresh heap node and picks the next one off a single
@@ -105,7 +107,7 @@ up to **2n+1 `poll(2)` calls**:
 - and the switch itself allocates a node and memcpys the outgoing task's stack in, then
   memmoves the incoming one's back out.
 
-on top of that, two ops that look constant are not: `lvm_donep` (`back?`) walks the ring
+on top of that, two ops that look constant are not: `lvm_donep` (`landed?`) walks the ring
 per call, and `task_live` walks it once **per catch-parked task** inside `find_runnable`
 -- O(n·k) in catchers.
 
@@ -234,14 +236,12 @@ exactly the job it was written for.
 the peers already queued rather than ahead of them, so a park/wake-heavy task cannot jump
 a compute-bound one every cycle.
 
+**collecting finished tasks -- TAKEN, as `scoop`, and it was worth more than the split.**
+this was written down here as "dormant tasks go on the parked ring", and the measurement
+sent it somewhere better. see rung 2a below.
+
 what did NOT ride along, and is still worth taking:
 
-- **dormant tasks go on the parked ring.** an exited-but-uncaught task is still scanned on
-  every pass, and kiosko's `reap` (crew/kiosko/kiosko.l:275) maps `back?` over every
-  live session while `lvm_donep` walks the whole ring per call -- so one accept costs
-  |sessions| x |ring|. that product is the decay the comment above `reap` describes
-  (4581 -> 3652 req/s over 2400 requests). ⚠ `lvm_donep` searches BOTH rings now, so the
-  product did not shrink, it only moved.
 - **wake catchers at exit.** an exiting task knows its own pid and can hand a waiting
   catcher straight back to the run ring, which retires `task_live` and the `lvm_wait`
   clause in `find_runnable` together. ⚠ `task_live` got MORE expensive here, not less: it
@@ -275,20 +275,83 @@ serializes it. a root that DOES need the image appends at `[2 + nv]` so nothing 
 *gates:* `make test`, `test_gc`, `test_gcstress`, `test_gcheck`, `test_hostnif`,
 `test_kernel`, `test_kernel_arm64`, `test_encver`, `vmret`.
 
-### 3. re-measure, then decide -- MEASURED, and the answer is "not yet"
+### 2a. collect finished tasks without a roster -- BUILT, as `scoop`
 
-the curve was re-run and it is in rung 2's table. **it is not flat** -- 8600 at zero
-parked against 1782 at 400 -- so the arc does not stop here on its own terms. but the
-knee moved so far out that the case for rung 3 is now weaker, not stronger: what used to
-collapse at 100 clients holds 5939 req/s there, and 400 parked costs 0.56 ms/req where it
-cost 16.78.
+after rung 2 the curve still was not flat, and this document blamed the parked sweep's
+`poll(n)`. **that was wrong, and an ablation said so:** replace kiosko's collector with
+`ps` -- collect nothing at all -- and 400 held clients go from 0.61 ms/req to 0.20. the
+residual slope was never the scheduler. it was the app asking the scheduler a question
+`|sessions|` times per accept.
 
-**what is left to pay for, and it is one thing:** the parked sweep still rebuilds an
-n-entry block and asks about every parked fd, on `sweep_interval` and on every block. it
-is one syscall instead of n, which is why it stopped mattering -- but it is still O(n)
-walk plus O(n) kernel-side scan, and that is what the residual slope is.
+the shape of the cost, isolated (N tasks parked on their own pipes, the exact filter
+timed, three ways so the shares separate):
 
-**two knobs to try FIRST, both free, before writing an epoll lane:**
+| N | the list walk alone | + `landed?` | `landed?`'s share |
+|---|---|---|---|
+| 25 | 5.9 µs | 6.1 | 4% |
+| 100 | 25.5 | 30.8 | 17% |
+| 400 | 132.2 | 249.6 | **47%** |
+
+**two multipliers, and they are roughly equal at the sizes that hurt.** the list walk is
+linear -- ~330 ns of interpreted `filter` per live session, paid whether or not anything
+finished -- and `landed?` is quadratic on top, because `lvm_donep` searches a ring per
+call. so *making the ask cheap fixes only half*: the fix has to stop asking per session.
+
+⚠ **and a bounded or rotating collector is a TRAP.** inspect k pids per accept and the
+un-reaped dormant tasks linger on the RUN ring, which `find_runnable` walks on every
+switch -- it trades a linear cost on the accept path for a linear cost on a hotter one.
+the ablation shows this directly: collecting nothing reaches 0.20 ms/req, and `scoop`
+beats it at 0.16, because the tasks it collects stop being scanned.
+
+so: **`scoop`** (love.c, next to `lvm_donep`) -- one walk of the run ring, unsplice the
+first task whose `Ip` is `lvm_task_exit`, answer `(pid . retval)`, or `()` when none have
+finished. it is the task-side twin of `glean` (host/posix.c), which harvests one finished
+CHILD, and the asymmetry that it was missing is the whole defect: love could collect the
+OS's children without naming them and not its own. kiosko drops its session roster
+entirely and drains what ended.
+
+| held clients | reap (rung 2) | `scoop` | |
+|---|---|---|---|
+| 0 | 7016 req/s (0.14 ms) | 7016 (0.14) | flat, as it must be |
+| 100 | 5023 (0.20) | 6556 (0.15) | 1.3x |
+| 200 | 4110 (0.24) | 6457 (0.15) | 1.6x |
+| 400 | 1766 (0.57) | 6298 (0.16) | **3.6x** |
+
+the curve is now flat to within its own noise across 400 held clients, and a 3000-request
+soak holds 8134 req/s with no decay -- the symptom that started this whole file (a server
+that gets slower at the one thing it does) is gone rather than moved.
+
+⚠ **the trap this primitive is built around: PRESENCE RIDES THE PAIR, NEVER THE NET.** a
+session task returns `()` every time -- it is run for its effect -- so the retval alone
+cannot say whether anything was collected. `two?` is the test. a drain that read the net
+would stop on the first such task with the ring still full and look like it had finished.
+that is the tree's costliest recurring bug and this is a textbook site for it, so it is a
+law in both test/task.l and spec.l rather than a comment.
+
+**no third ring was needed.** a dormant task already sits on the run ring with its retval
+at `node[6]`, and `lvm_wait` already does find-then-unsplice -- `scoop` is that with the
+pid discovered instead of given. with a drain per accept the run ring stays ~2 in steady
+state, so `find_runnable` stops walking dormant nodes for free. no new GC root, no bake
+question, no change to `catch`/`freeze`.
+
+`back?` was renamed **`landed?`** in the same pass (twirl it up, has it landed?) -- 12
+files, mechanical. its contract is unchanged and still folds three cases into one bit
+(dormant, self, unknown pid), which is what made the old name read as opaque.
+
+*gates:* `make test`, `test_hostnif` (test/host/parked.l rides it), `test_tools` (the
+generated vim/syntax.vim), `test_doc`, `test_gc`, `test_encver`, `vmret`.
+
+### 3. re-measure, then decide -- MEASURED, and the answer is "no"
+
+the curve after rung 2a is **flat**: 0.14 ms/req at zero parked against 0.16 at 400.
+rung 3 was gated on the residual slope being the parked sweep's `poll(n)`, and rung 2a
+showed it was not -- the sweep never was the visible cost at these sizes. **there is
+nothing left for an epoll lane to buy on the measurement that motivated it.**
+
+that is a success condition, not a gap. the two knobs below are still free and still
+unswept, and would be the way to look again if a workload ever does bend the curve:
+
+**two knobs to try FIRST, if it ever comes back:**
 - **re-measure `yield_interval` and `sweep_interval` on top of rung 2.** neither has been
   swept since the split, and the old sweep conflated them. ⚠ use a CONCURRENT client this
   time -- every number in this document came from a sequential one, which is the
@@ -364,12 +427,18 @@ SPLIT alone bought none of it -- the counter that stopped the sweep firing on ev
 fairness yield, and the one ask that replaced n, are what the number came from. a plan
 that says "move them to another ring" and stops there describes a refactor.
 
+**2a is where the arc actually finished, and it was not in the plan.** the residual slope
+after rung 2 was blamed here on the parked sweep and it was the APP -- a roster of live
+pids asked about one at a time. an ablation found that in one run where three paragraphs
+of reasoning had not. ⚠ the lesson is the same one rung 2 taught in the other direction:
+**measure which term dominates before building for either.** rung 2 was bought by a
+number and paid; rung 3 was nearly built on a guess.
+
 **2 before 4, always.** preemption raises the switch rate, which multiplies whatever
 per-switch linear cost is left; landing it first would make the split look like it did
 not help.
 
-**3 is now a measurement, not a plan** -- two knobs to sweep before anyone writes an epoll
-lane, and the case for building it got weaker rather than stronger. see its section.
+**3 is answered NO** -- the curve it was meant to flatten is flat. see its section.
 
 **4 is the next real rung** if the arc continues, and it is the one the tree is most ready
 for.

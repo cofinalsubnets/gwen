@@ -372,11 +372,11 @@
    ; the worker is killed; any other byte is silently dropped (matches most
    ; shells). prints the result (or ^C) before returning -1; caller adds
    ; the trailing newline. a worker that scares is terminated by the default
-   ; help and back? flips, so the repl survives evaluation errors by construction.
+   ; help and landed? flips, so the repl survives evaluation errors by construction.
    (do_eval v)
      (: pid (twirl ev v)
         (poll _)
-          (? (back? pid) (: r (catch pid) _ (putx r) -1)   ; the answer
+          (? (landed? pid) (: r (catch pid) _ (putx r) -1)   ; the answer
              (cue? 0)    (: c (getc 0)
                             (? (c = 3) (do (puts "^C") (freeze pid) -1)
                                (poll ())))
@@ -463,7 +463,7 @@
            (: pid <r m >r
               up (twirl (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF
               _ (pump m out)                                      ; child -> stdout; ends when the child dies
-              _ (? (back? up) (catch up) (freeze up))                ; join the input pump through the one death
+              _ (? (landed? up) (catch up) (freeze up))                ; join the input pump through the one death
               _ (flush out)
               _ (close m)
               (waitfor pid))                                      ; gather the child

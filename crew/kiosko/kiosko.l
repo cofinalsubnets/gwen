@@ -265,27 +265,30 @@
    ; `await` parks THIS task on the listener until a client is pending; `accept` then
    ; returns at once, the session is spun as its own task, and we re-park.
    ;
-   ; and the finished sessions are REAPED. a session task that nobody catches is not free:
-   ; it stays on the scheduler's list, which the scheduler then walks on every switch, so a
-   ; server that never reaps gets steadily slower at the one thing it does -- measured, 4581
-   ; req/s falling to 3652 over 2400 requests, and still falling. `catch` alone cannot be the
-   ; answer (it BLOCKS, and blocking the accept loop on one client would serialise the
-   ; server); `back?` asks whether a task has finished without waiting, so each pass through
-   ; the loop collects the ones that are done and keeps the ones that are not.
-   (reap ps)  (filter (\ p (? (back? p) (: _ (catch p) 0) 1)) ps)
+   ; and the finished sessions are COLLECTED. a session task that nobody catches is not
+   ; free: it stays on the scheduler's run ring, which the scheduler walks on every switch,
+   ; so a server that never collects gets steadily slower at the one thing it does.
+   ; `catch` alone cannot be the answer -- it BLOCKS, and blocking the accept loop on one
+   ; client would serialise the server. `scoop` hands back ONE finished task, (pid . retval),
+   ; or () when none have finished, so the drain costs what actually ended and kiosko keeps
+   ; no roster of live sessions at all. that matters at scale: a roster has to be asked
+   ; about one pid at a time, and each ask is itself a ring search, so the two multiply --
+   ; 400 idle clients held open cost 0.61 ms/req that way against 0.20 this way.
+   ; ⚠ `two?` IS THE TEST, never the answer's value: a session task returns () every time,
+   ; so a drain that read the net would stop on the first one with the ring still full.
+   (drain _)  (? (two? (scoop 0)) (drain ()) 0)
    ; `before` is a thunk run once per accepted client, before the request is served, or ()
    ; for none. it is how a generator turns this into a DEV SERVER without kiosko learning
    ; anything: the hook regenerates, kiosko still only knows a directory. it runs in the
    ; accept task, not the session task, so two clients cannot regenerate at once.
-   (accept-loop root l quiet before live)
+   (accept-loop root l quiet before)
    (: _ (await l)
       c (accept l)
-      ps (reap live)
-      ps (? c (: _ (? before (before ()) 0)
-                 (link (twirl (\ _ (: r (serve1 root c) _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ())
-                       ps))
-            ps)
-      (accept-loop root l quiet before ps))
+      _ (drain ())
+      _ (? c (: _ (? before (before ()) 0)
+                (twirl (\ _ (: r (serve1 root c) _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ()))
+           0)
+      (accept-loop root l quiet before))
    ; the entry. `root` is a directory (no trailing slash), `port` a fixnum, `before` a thunk
    ; or (). answers () when the port cannot be taken, so a caller can say something better
    ; than we can. ⚠ all four operands, always -- three would hand back a CLOSURE, which is
@@ -295,7 +298,7 @@
       l (listen port)
       (? l (: _ (? quiet 0 (: _ (say err ("kiosko: serving " + r + " on http://127.0.0.1:" + show port + "/"))
                               (put err 10)))
-              _ (accept-loop r l quiet before ())
+              _ (accept-loop r l quiet before)
               _ (close l) 1)
          ())))
 

@@ -522,8 +522,12 @@
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4)))
 
 ; --- control --- ev compiles+runs; call-cc a one-shot escape; tasks twirl/catch/rest/freeze/
-; back?/cue? ((twirl f x) forks to an id, (catch p) blocks for the result, (rest 0) yields --
-; always catch an orphan). the RNG is xoshiro256++, two layers: FUNCTIONAL seed/random
+; landed?/scoop/cue? ((twirl f x) forks to an id, (catch p) blocks for the result, (rest 0) yields --
+; always catch an orphan). `scoop` collects an orphan WITHOUT naming it: (pid . retval) for one
+; task that has finished, () when none have, so a server that twirls a task per client drains
+; what ended instead of polling a roster of what might have -- ⚠ and the PAIR carries the
+; presence, since a task run for its effect answers () and is handed back all the same.
+; the RNG is xoshiro256++, two layers: FUNCTIONAL seed/random
 ; (explicit-state, reproducible) and GLOBAL rand/randf (a hidden clock-seeded stream; (rng-set
 ; (wheel n)) pins it). a global `help` takes every raise as (help s a b) -- s the status word,
 ; scare (1) and more (2) bits; `welp` is the FLOOR HANDLER: keeps the read protocol, answers the
@@ -537,7 +541,10 @@
 ; test/missing.l, test/apcap.l.
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
- (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (back? 99999)
+ (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (landed? 99999)
+ (: (drain _) (? (two? (scoop 0)) (drain ()) 0)                  ; the ring is shared: drain first
+    _ (drain ()) p (twirl (\ _ ()) ()) _ (rest 0) s (scoop 0)
+    (&& (two? s) (&& (p = (cap s)) (nil? (cup s)))))             ; a () retval is STILL a pair
  !(rest 0) (4 = (tally (wheel 1))) ((rand 10) < 10) (gem? (randf 0))
  (scare? 1) !(scare? 2) (lit? scare)
  (tablet? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
