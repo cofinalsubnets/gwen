@@ -775,21 +775,23 @@
    ; instead of raising -- a raise nobody is listening for would stop the run, and a
    ; cell miss must stay survivable. that ask is the (names ()) scan, and it is only on
    ; the MISS lane: a filled cell never reaches it.
-   ; `sent` is minted ONCE: a fresh mint is unique, so nothing a cell can hold poses as
-   ; absence, which is what lets a cell hold () or 0 and still read as FILLED.
    ; `help` is ALWAYS BOUND, () by default. ai_raise reads () as "nobody is listening"
    ; exactly as it read an absent name, so nothing downstream changes -- but a reader
    ; never has to ask whether help EXISTS, only what it IS, and (ev 'help) is then
    ; always safe (reading an ABSENT name is what trips the always-on warning).
    help ()
-   sent (mint 0)
    ; ⚠ (ev 'help) and NOT a bare `help`: a closure captures its free globals at
    ; CREATION, so a bare read here would freeze the () above and never see the help a
    ; program installs later. ev re-reads the book at the moment of the miss.
-   (cellread c nm) (: v (peep c nm sent)
-                      (? (nil? (id? v sent)) v
-                         (nil? (ev 'help)) ()
-                         (scare 'missing nm))))
+   ; `sent` is minted ONCE and CLOSURE-PRIVATE: a fresh mint is unique, so nothing a
+   ; cell can hold poses as absence (a cell holding () or 0 still reads as FILLED) --
+   ; and it never reaches the book, so it needs no mop entry and cannot shadow a
+   ; frontend's own `sent` (test/front binds one as a nif, pre-egg).
+   cellread (: sent (mint 0)
+               (\ c nm (: v (peep c nm sent)
+                          (? (nil? (id? v sent)) v
+                             (nil? (ev 'help)) ()
+                             (scare 'missing nm))))))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nil? (member? (cap p) ns))) cs)
