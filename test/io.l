@@ -33,6 +33,27 @@
   (= -1 (see 42))
   (= -1 (see "notaport"))
 
+  ; The port question itself: `port?` answers by the head's ap word, so every
+  ; port shape passes -- the static pair, a tap, a jug -- and every non-port
+  ; is (), the closure and the buf included (hot? and lit? alone cannot tell
+  ; a port from its neighbours in the zoo).
+  (port? in)
+  (port? out)
+  (port? (tap "x"))
+  (port? (jug 0))
+  (! (port? 42))
+  (! (port? "notaport"))
+  (! (port? ()))
+  (! (port? (\ x x)))
+  (! (port? (cask 4)))
+  ; and slurp is bounded like see: a non-port drains as the already-empty
+  ; stream, so the zero point -- a missing or misused name -- slurps to the
+  ; unit, the same value an exhausted tap drains to, instead of reading the
+  ; raw words of whatever it was handed.
+  (id? () (slurp 42))
+  (id? () (slurp ()))
+  (id? (slurp (tap "")) (slurp 42))
+
   ; File-I/O roundtrip: write a string to /tmp via say, read it back
   ; byte-by-byte via get, rebuild as a string with str, and compare.
   ; The payload is (show (clock 0)) so the bytes vary every run --
