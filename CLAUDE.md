@@ -125,8 +125,10 @@
 ; * a corpus test that twirls a task must (catch p) it: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the interactive
 ;   shell installs a default help (love/bao.l shell-help): a scare prints `;; a b` and answers the zero
-;   point, so the session survives every raise and a missing nom or apcap is VISIBLE. file mode
-;   stays helpless.
+;   point, so the session survives every raise and a missing nom or apcap is VISIBLE. FILE MODE HAS
+;   ONE TOO (file-help, at bao's load): same face, but a scare that is not `missing` quits 1, so an
+;   assert failure still stops the run. `help` is always BOUND (prel binds it ()); ⚠ read it with
+;   (ev 'help), since a bare read captures at CREATION and never sees a later install.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
 ;   parallel: lux (the X11 window manager, crew/lux/), inle (the freestanding kernel, port/inle/),
@@ -239,7 +241,7 @@
 ; `:` doubles as sequencing (bind `_` for effect); `(f x)` on the left is define-sugar; a body-less
 ; top-level `:` leaks its bindings to the global scope (how tests share helpers). a body-having `:`
 ; is ONE SCOPE: every name binds over the whole form, so a read before the pin is the MISSING
-; CONDITION (spec.l's control section) carrying the binding site's nom -- the zero point helpless;
+; CONDITION (spec.l's control section) carrying the binding site's nom -- the zero point with no help;
 ; no read escapes to an outer binding of the same name. rebinding a name still reads the previous
 ; value (the sequence law); recursion among lambda bindings resolves lazily. an EMPTY form is its
 ; head's value -- (f) == f at zero operands -- so (:) (?) (\) all read (), and a nullary HELPER call
@@ -278,7 +280,8 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; functions (sine/cosine/log the only transcendental nifs -- power IS application), a few
 ; identities (euler in the exact direction), complex, arrays (a one-cell array demotes to its
 ; scalar; empty reductions answer their monoid units), chains & lists, strings & mints (absence
-; reads the zero point), hashes (three absence lanes, one miss machinery), casks, reader
+; reads the zero point), hashes (two absence lanes, one miss machinery; peep is also the TOTAL
+; presence test, against a fresh (mint 0) no stored value can pose as), casks, reader
 ; operators (the sigil layer -- a terse, valence-sensitive operator surface, all factoring to lisp:
 ; the lexer / factorization / curry / valence laws and the comma layer), macros,
 ; control (help/welp, missing, apcap), i/o & ports (sound takes TEXT, and its return value IS
@@ -296,8 +299,10 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ;     shared with the C bootstrap compiler.
 ;   boxfix -- the letrec* "capture by location" rewrite (one scope): a forward-referenced binding
 ;     indirects through a CELL, a fresh tablet keyed by the binding site's nom -- pin fills it,
-;     (missing cell 'nom) reads it, so a pre-fill read IS the missing condition. emits nif VALUES
-;     (pin/missing/tablet), immune to shadowing.
+;     (cellread cell 'nom) reads it, so a pre-fill read IS the missing condition. cellread is LOVE
+;     (prel, mopped at birth): peep against a unique mint, then scare -- or the zero point when no
+;     help is installed, since a raise nobody hears would stop the run. it emits the VALUES
+;     (pin/tablet nifs, cellread the closure), immune to shadowing.
 ;   wev -- the source->source pre-pass before analysis: expand macros, apply boxfix, fold pure globals,
 ;     mark apply strategy, flip (? !e a b) to (? e b a).
 ;   maps -- #(..)/map expand to nested pins.
