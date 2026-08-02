@@ -9,7 +9,7 @@
 ; CLAUDE.md carries as prose:
 ;   * the BAND partition is DERIVED, not assumed: kinds are grouped by
 ;     row+column equality across BOTH matrices at once, and the factorization
-;     theorems check in Coq that the 256-cell tables carry no information
+;     theorems check in Coq that the tables carry no information
 ;     beyond that quotient: a band matrix plus the band assignment ("every
 ;     gem/array kind routes identically"). KMint is its own band, the unit
 ;     lane whole (the dispatchers early-out a mint first -- the fast path;
@@ -34,8 +34,8 @@
    ; could not name one -- a case this file had to refuse on. all of that is gone:
    ; here the lane's SYMBOL is the datum, so there is nothing to recover and nothing
    ; to fail to name.
-   kinds mx-kinds                                       ; 16 kind noms, enum order
-   addm  mx-add                                         ; 16 rows of 16 lane noms
+   kinds mx-kinds                                       ; the kind noms, enum order
+   addm  mx-add                                         ; one row of lane noms per kind
    mulm  mx-mul
    nk (tally kinds)
 
@@ -67,7 +67,7 @@
    (commas f l) (join (map (\ x (? (id? x (cap l)) (f x) ("; " + (f x)))) l))
    (bars f l)   (join (map (\ x (? (id? x (cap l)) (f x) (" | " + (f x)))) l))
 
-   ; one dispatch table as nested matches: 16 rows, each an inner match on b
+   ; one dispatch table as nested matches: one row per kind, each an inner match on b
    (mxdef nm m)
      ("Definition " + nm + " (a b : kind) : lane :=" + nl + " match a with" + nl
       + (join (map (\ i (" | " + (kn i) + " => match b with "
@@ -92,7 +92,9 @@
 "" nl
 "   The +/* dispatch matrices, their SHAPE machine-checked -- what the narrative" nl
 "   states as prose: every kind collapses to a BAND (the partition is derived" nl
-"   from the table by row+column equality, both ops at once), the 256-" nl
+; the count is READ off the roster, so the sentence cannot outlive it
+("   from the table by row+column equality, both ops at once), the "
+ + (show ((tally kinds) * (tally kinds))) + "-") nl
 "   cell tables factor through the band quotient with nothing left over, the" nl
 "   dispatch COMMUTES (orientation lives in the lane fn, never the table), and" nl
 "   the diagonal reads the lattice: one lane per band, the algebra ladder." nl

@@ -1,9 +1,9 @@
-; holotest -- the gate for the neutral assembler + its x86-64 backend. each golden below is the exact
-; hex the assembler emits, and EVERY one was checked against the real toolchain: emit the bytes,
-; `objdump -d -M intel`, confirm the mnemonic. so this file is the frozen record of that round-trip
-; -- if a golden drifts, either the encoder broke or the disassembler disagrees, and either is a bug.
+; holotest -- the gate for the neutral assembler and every backend, the text front-end, and the ELF
+; linker. each golden is the exact hex the assembler emits, and EVERY one was checked against the
+; real toolchain (objdump / llvm-mc, the mnemonic in the trailing comment): this file is the frozen
+; record of that round-trip, so a drifted golden is a broken encoder or a disagreeing disassembler.
 ; run: cat crew/holo/{holo,x64,arm64,thumb2,riscv,thumb1,text,elf,holotest}.l | out/host/love
-; (exits nonzero on any miss). it gates every backend, the text front-end, and the ELF linker.
+; (nonzero exit on any miss).
 
 (: pass (tablet 0) _ (pin pass 0 0)
    fail (tablet 0) _ (pin fail 0 0)
@@ -53,9 +53,7 @@
       `("ld.disp8"    "488b4708"              '((ld r0 r6 8)))
       `("ld.rbp0"     "488b4500"              '((ld r0 r4 0)))     ; rbp base forces a 0 disp byte
       `("ld.rbp.d8"   "488b4564"              '((ld r0 r4 100)))
-      ;; the sized family (movsx/movsxd loads, truncating stores, in-register
-      ;; extends, CL shifts) -- each checked vs objdump -M intel (mnemonics in
-      ;; the trailing comments)
+      ;; the sized family: movsx/movsxd loads, truncating stores, in-register extends, CL shifts
       `("ld1.rbp"     "480fbe45f8"            '((ld1 r0 r4 -8)))     ; movsx  rax, BYTE [rbp-8]
       `("ld2.sp"      "480fbf5c2410"          '((ld2 r3 sp 16)))     ; movsx  rbx, WORD [rsp+16]
       `("ld4.rbp"     "4c63459c"              '((ld4 r7 r4 -100)))   ; movsxd r8, DWORD [rbp-100]
@@ -76,9 +74,8 @@
       `("io.out"      "ee66efef"              '((outb) (outw) (outl)))
       `("io.str"      "fcf36c66f36df36d"      '((cld) (insb) (insw) (insl)))
       `("io.strout"   "f36e66f36ff36f"        '((outsb) (outsw) (outsl)))
-      ;; the system lane -- the kernel's own vocabulary, every golden from llvm-mc
-      ;; --show-encoding. the flag/halt nullaries, the MSR pair, the interrupt return,
-      ;; and the vectored int (int3 is `trap`, CC, already above).
+      ;; the system lane -- the kernel's own vocabulary: the flag/halt nullaries, the MSR pair,
+      ;; the interrupt return, the vectored int (int3 is `trap`, CC, already above)
       `("sys.flags"   "fafbf4"                '((cli) (sti) (hlt)))
       `("sys.ud2"     "0f0b"                  '((ud2)))
       `("sys.iretq"   "48cf"                  '((iretq)))
@@ -86,9 +83,8 @@
       `("sys.msr"     "0f320f30"              '((rdmsr) (wrmsr)))
       `("sys.cpuid"   "0fa20f31"              '((cpuid) (rdtsc)))
       `("sys.int"     "cd00cd20"              '((int 0) (int 32)))
-      ;; the control registers: the CR number rides ModRM.reg, so REX.R is what reaches
-      ;; cr8 and REX.B what reaches r8 -- and neither carries REX.W (a CR move is 64-bit
-      ;; already). read then write, low pair and both extension bits.
+      ;; the control registers: the CR number rides ModRM.reg, so REX.R reaches cr8 and REX.B
+      ;; reaches r8 -- and neither carries REX.W, a CR move being 64-bit already
       `("sys.ldcr"    "0f20c00f20e3"          '((ldcr r0 0) (ldcr r3 4)))     ; mov rax,cr0 ; mov rbx,cr4
       `("sys.ldcr.hi" "410f20d8440f20c0"      '((ldcr r7 3) (ldcr r0 8)))     ; mov r8,cr3 ; mov rax,cr8
       `("sys.stcr"    "0f22c00f22db"          '((stcr 0 r0) (stcr 3 r3)))     ; mov cr0,rax ; mov cr3,rbx
@@ -105,10 +101,9 @@
       ;; SIGN-extended into the 64-bit slot. the exception stubs are the caller.
       `("push.imm"    "6a006a1f682c010000"    '((push 0) (push 31) (push 300)))
       `("push.reg"    "504150"                '((push r0) (push r7)))
-      ;; lia: the label's ABSOLUTE (linked) address, movabs B8+rd io. never
-      ;; resolvable in a .o -- the eight zeros are the abs64 placeholder a
-      ;; relocation overwrites. `la` answers where the label RUNS; these part
-      ;; company exactly where the kernel is linked high and runs low.
+      ;; lia: the label's ABSOLUTE (linked) address, movabs B8+rd io -- never resolvable in a .o,
+      ;; the eight zeros being the abs64 placeholder a relocation overwrites. `la` answers where
+      ;; the label RUNS; the two part company exactly where a kernel is linked high and runs low.
       `("lia"         "48b8000000000000000049b90000000000000000"
                                               '((label k) (lia r0 k) (lia r8 k)))
       ;; tp: the thread pointer -- mov d, fs:[0]
@@ -241,19 +236,18 @@
            (peep >p 'done ())))
 
    ;; -- the encoder REFUSES a three-way alias it cannot honestly encode (d <- a OP d, d != a,
-   ;; non-commutative): it raises 'alias-dst rather than emit subtly wrong bytes. we trap the scare
-   ;; with a help that delegates everything else (incl the reader's own eof/more) back to welp. --
+   ;; non-commutative), raising 'alias-dst rather than emitting subtly wrong bytes. the help traps
+   ;; that scare and delegates everything else back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
-   _ (: help (\ s a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp s a b))))
+   _ (hear (\ s a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp s a b))))
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
    ;; -- the same principle one target over: aarch64's register-form ALU is the SHIFTED-register
    ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
-   ;; (`neg xzr, x0`) that leave sp alone. it raises rather than emit them; moving sp is `lea`'s
-   ;; job (a64.anchor / a64.abandon below), and the arithmetic goes through a plain register. --
+   ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
    spcaught (tablet 0) _ (pin spcaught 0 0)
-   _ (: help (\ s a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp s a b))))
+   _ (hear (\ s a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp s a b))))
    _ (holo-bytes 'arm64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
@@ -265,8 +259,7 @@
         (holo-hex 'x64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
    ;; the SYSTEM lane rides the text front-end with no grammar change -- an operation name and a
    ;; system register are ordinary symbols, underscores and all. this is the seam mooncc's inline
-   ;; asm parses through (asm-text is what crew/moon/gen.l calls), so the kernel's templates land
-   ;; here: `mrs r0, ttbr1_el1` in a header, these bytes out.
+   ;; asm parses through, so the kernel's templates land here.
    _ (chk-eq "text.sys.x64" (holo-hex 'x64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
                             (holo-hex 'x64 (asm-text "cli\nldcr r0, 2\nlidt r6, 0\niretq")))
    _ (chk-eq "text.sys.a64"
@@ -444,15 +437,14 @@
       `("a64.exc"      "000020d4409a20d400005ed4020000d4030000d400000000"
                         '((brk 0) (brk 1234) (dbrk 61440) (hvc 0) (smc 0) (udf 0)))
       `("a64.wait"     "7f2003d55f2003d5e0039fd6"  '((wfi) (wfe) (eret)))
-      ;; the SP move, which kernel code makes by name (mov x9, sp ; msr spsel, #1 ; mov sp, x9).
-      ;; `mov` cannot say it -- ORR reads encoding 31 as XZR -- so it is `lea .. 0`, add #0, and
-      ;; `mov` SCARES on sp rather than quietly answer the zero register.
+      ;; the SP move, which kernel code makes by name. `mov` cannot say it -- ORR reads encoding
+      ;; 31 as XZR -- so it is `lea .. 0`, add #0, and `mov` SCARES on sp rather than answer XZR.
       `("a64.sp.read"  "e9030091"          '((lea r9 sp 0)))             ; mov x9, sp
       `("a64.sp.write" "3f010091"          '((lea sp r9 0)))             ; mov sp, x9
-      ;; lia: the ABSOLUTE (linked) address, which no aarch64 immediate can hold --
-      ;; so an inline literal, exactly what `ldr xd, =sym` assembles to.
+      ;; lia: the ABSOLUTE (linked) address, which no aarch64 immediate can hold -- so an inline
+      ;; literal, exactly what `ldr xd, =sym` assembles to:
       ;;   ldr xd, .+8 ; b .+12 ; .quad <the abs64 placeholder a reloc overwrites>
-      ;; the two offsets are constants of the shape, so it needs no label of its own.
+      ;; both offsets are constants of the shape, so it needs no label of its own.
       `("a64.lia"      "4900005803000014000000000000000040000058030000140000000000000000"
                                            '((label k) (lia r9 k) (lia r0 k)))
       ;; x16/x17/x18 are sayable now -- the kernel's IRQ path saves x0..x18 because
@@ -462,12 +454,10 @@
                                            '((st sp 0 r16) (st sp 8 r17) (st sp 16 r18))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
-   ;; -- the thumb2 backend (crew/holo/thumb2.l): the SAME neutral IR, a THIRD target -- ARMv7E-M
-   ;; (Cortex-M7, the Teensy 4.1 / Playdate device CPU). MIXED 16/32-bit little-endian; a 32-bit
-   ;; word lays hi-halfword-first (le16(hw1)++le16(hw2)). every golden was disassembled by
-   ;; `llvm-mc --disassemble --triple=thumbv7em-none-eabi` (mnemonics in the trailing comment); the
-   ;; branch-offset scrambling (S/J1/J2/I1/I2) was cross-checked over forward/backward spans across
-   ;; the imm11 boundary. --
+   ;; -- the thumb2 backend: the SAME neutral IR, a THIRD target -- ARMv7E-M (Cortex-M7, the Teensy
+   ;; 4.1 / Playdate device CPU). MIXED 16/32-bit little-endian, a 32-bit word laid hi-halfword
+   ;; first. goldens from `llvm-mc --disassemble --triple=thumbv7em-none-eabi`; the branch-offset
+   ;; scrambling (S/J1/J2/I1/I2) was cross-checked over spans across the imm11 boundary. --
    t2tests `(
       `("t2.li"      "40f20500"          '((li r0 5)))                 ; movw r0, #5
       `("t2.movt"    "45f27861c1f23421"  '((li r1 305419896)))         ; 0x12345678: movw + movt
@@ -581,12 +571,11 @@
                       '((uremll))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb2 (at t 2))) 0 t2tests)
 
-   ;; -- the thumb1 backend (crew/holo/thumb1.l): the SAME neutral IR, a FOURTH target -- ARMv6-M
-   ;; (Cortex-M0/M0+, the RP2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT
-   ;; (so `li` byte-builds the constant), no wide ALU, no IT (so `set` branches over), no hardware
-   ;; divide. every golden disassembled/encoded by `llvm-mc --triple=thumbv6m-none-eabi` (mnemonics
-   ;; in the trailing comment). branches: B T2 (jmp, +-2KB), Bcc T1 (br, +-256B), BL T1 (call, wide);
-   ;; the pc-relative offset (halfword-scaled) was cross-checked forward AND backward. --
+   ;; -- the thumb1 backend: the SAME neutral IR, a FOURTH target -- ARMv6-M (Cortex-M0/M0+, the
+   ;; RP2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT (so `li` byte-builds
+   ;; the constant), no wide ALU, no IT (so `set` branches over), no hardware divide. goldens from
+   ;; `llvm-mc --triple=thumbv6m-none-eabi`; the halfword-scaled pc-relative offset was
+   ;; cross-checked forward AND backward. --
    t1tests `(
       `("t1.li"      "0520"              '((li r0 5)))                 ; movs r0, #5
       `("t1.li.neg1" "0020c043"          '((li r0 -1)))                ; movs r0,#0 ; mvns r0,r0
@@ -684,14 +673,12 @@
                   '((rem r1 r1 r0 r3))))                               ; |a|,|b| ; core ; sign=sa ; refix
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb1 (at t 2))) 0 t1tests)
 
-   ;; -- the riscv backend (crew/holo/riscv.l): the SAME neutral IR, a FIFTH target -- RV64IMFD
-   ;; (the pine64 ox64's C906, qemu -M virt). fixed 32-bit little-endian, three-address, and NO
-   ;; FLAGS REGISTER: cmp/test/ucomisd emit nothing (or an immediate materialization into x30)
-   ;; and REMEMBER their operands; br/set fuse them into beq/blt/slt/feq forms -- so the flag
-   ;; goldens pair the compare with its consumer. label branches are WIDE (thumb1's shape: the
-   ;; inverted fused branch hops a jal); call/la are the auipc pair. every golden was
-   ;; disassembled by `llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d` (mnemonics in
-   ;; the trailing comment). --
+   ;; -- the riscv backend: the SAME neutral IR, a FIFTH target -- RV64IMFD (the pine64 ox64's
+   ;; C906, qemu -M virt). fixed 32-bit little-endian, three-address, and ⚠ NO FLAGS REGISTER:
+   ;; cmp/test/ucomisd emit nothing (or materialize an immediate into x30) and REMEMBER their
+   ;; operands, which br/set fuse into beq/blt/slt/feq -- so the flag goldens pair the compare with
+   ;; its consumer. label branches are WIDE (thumb1's shape); call/la are the auipc pair.
+   ;; goldens from `llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d`. --
    rvtests `(
       ;; immediates: addi / lui+addiw (the 32-bit wraparound pair) / the shift-add chunk chain
       `("rv.li"       "1305c003"          '((li r0 60)))                ; li a0, 60

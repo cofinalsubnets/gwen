@@ -30,9 +30,9 @@
  (2 = (: x 1 x (x + 1) x)))                      ; the sequence law: a rebind reads the previous value
 ; one scope: a forward read raises missing, and welp answers it with the zero point -- the same
 ; law the asserts above show, under a help that keeps it quiet (file mode's default wears a face)
-(: help welp)
+(hear welp)
 (assert (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b)))
-(: help 0)
+(hear 0)
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
 ; numbers their value, text its charm sum, lists the sum of element nets, SPINE only). `!` (nil?) reads
@@ -80,7 +80,7 @@
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
 ; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? two? tablet?;
-; derived constellation? whole? atom?; lit? = a top-region reference (map/fn/hot, ai_kind>=KMap); hot? the opaque cask/port subset.
+; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, ai_kind>=KTablet); hot? the opaque cask/port subset.
 (assert
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? #(1 2))
  (big? (100 2)) ((? word sun? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
@@ -151,18 +151,18 @@
 ; closure -- numerals ACT as their lambdas under apply ((1 x) = x), `=` doesn't say so.
 ; (\ y z) below holds a FREE var z; welp answers its read with the zero point so the closure
 ; builds with no warning surfaced -- it stays distinct from (\ x x) (free body /= bound body).
-(: help welp)
+(hear welp)
 (assert
  ((\ x x) = (\ y y)) ((\ a b (+ a b)) = (\ x y (+ x y)))           ; alpha: bound vars by position
  ((\ x (+ x 1)) = (\ x (+ x 1))) !(id? (\ x (+ x 1)) (\ x (+ x 1)))  ; equal, yet distinct objects
  !((\ x x) = (\ y z)) !((\ x (+ x 1)) = (\ x (+ x 2)))             ; free /= bound; different body
  (: g (\ a (\ b (+ a b))) (&& ((g 1) = (g 1)) !((g 1) = (g 2))))   ; closures: equal iff captures match
  ((+ 1) = (+ 1)) !((\ x x) < (\ y y)) !((\ x (cap x)) = cap)           ; partial apps too; eta not bridged
- ((+ 1.5) = (+ 1.5)) !((+ 1.5) = (+ 2.5)) ('(1.5) = '(1.5)) !('(1.5) = '(2.5))  ; nested float boxes compare by value (eqv KFlo)
+ ((+ 1.5) = (+ 1.5)) !((+ 1.5) = (+ 2.5)) ('(1.5) = '(1.5)) !('(1.5) = '(2.5))  ; nested float boxes compare by value (eqv DGem)
  !(1 = (\ x x)) !((\ y y) = 1) !(id? 1 (\ x x))                    ; NO numeral bridge: a number never equals a closure
  !(0 = (\ _ 1)) !((\ q 1) = 0) (42 = ((\ x x) 42)) (1 = ((\ _ 1) 9)) ; ... they ACT alike under apply; = stays representation-strict
  !!(\ _ 1) (1 = $(\ _ 1)))     ; a top is present and nets 1
-(: help 0)
+(hear 0)
 
 ; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it REDUCES. these are the
 ; binary twins of proof/rocq/spec.v's reduction layer (step/subst): the proof says "valid by the
@@ -376,9 +376,9 @@
 ; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
 ; a missing read answers the zero point under the floor handler welp (no warning surfaced)
-(: help welp)
+(hear welp)
 (assert (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z)))))   ; absence: the zero point, wearing ()
-(: help 0)
+(hear 0)
 (assert
  (() = (:)) !(nom? ()) !(name? ()) !(0 = ()) !(id? 0 '()) (() = (intern "")) (0 = $()) !() !!$'x
  ("()" = (show ()))
@@ -531,7 +531,7 @@
 ; presence, since a task run for its effect answers () and is handed back all the same.
 ; the RNG is xoshiro256++, two layers: FUNCTIONAL seed/random
 ; (explicit-state, reproducible) and GLOBAL rand/randf (a hidden clock-seeded stream; (rng-set
-; (wheel n)) pins it). a global `help` takes every raise as (help s a b) -- s the status word,
+; (wheel n)) pins it). the heard help ((hear f) installs it) takes every raise as (help s a b) -- s the status word,
 ; scare (1) and more (2) bits; `welp` is the FLOOR HANDLER: keeps the read protocol, answers the
 ; zero point on a bare scare (the shell's default help is welp with a face). a missing name
 ; raises (scare 'missing nom) -- ONE LAW AT EVERY DEPTH: a `:` binding read before its pin,
@@ -552,9 +552,9 @@
  (tablet? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
  (: st (wheel 7) ((cap (random st 0)) = (cap (random st 0)))))
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
-(: help welp)
+(hear welp)
 (assert (id? (:) not-in-the-book) !not-in-the-book)   ; a nom not in the book
-(: help 0)
+(hear 0)
 
 ; --- i/o & ports --- in/out/err are the default ports; getc + putc/puts/putn/putx, per-port
 ; see/put/... , open/close/pad. the vessels: (tap cl) an input SOURCE over a colist, (jug 0) an
@@ -592,14 +592,14 @@
 ; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;
 ; `born` records the hatch (unbound pre-egg); just before birth the egg mops up runtime names.
 ; the mopped names are GONE post-birth; the floor handler welp answers the miss with the zero point (no warning)
-(: help welp)
+(hear welp)
 (assert (lit? ev) (? born (charm? born) 1)
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !spin 1)                        ;  hence the born guards)
         (? born !operators 1) (? born !monadics 1) (? born !pureset 1)  ; the compile tables too (2026-07-07)
         (? born !enter 1) (? born !leave 1) (? born !lib 1))  ; the layer door + the source library: the runtime's, off the surface
-(: help 0)
+(hear 0)
 
 ; --- modules --- one layer per load, the registry, and `use` the loader -- all the runtime's.
 ; there is NO enter/leave on the surface: the runtime opens a fresh layer around every module

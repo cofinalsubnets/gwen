@@ -8,9 +8,9 @@
 ; test/infixop.l, the <- -> aliases in test/infixop.l, greedy longest-prefix
 ; factorization below and in the valence laws, and a FRESH punct operator needs
 ; no entry at all (default dyadic; test/infixop.l's DEFAULT INFIX section).
-(: help welp)                                    ; welp answers the misses quietly
+(hear welp)                                    ; welp answers the misses quietly
 (assert (? born !operators 1) (? born !monadics 1) (? born !pureset 1))
-(: help 0)
+(hear 0)
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
 (assert ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))

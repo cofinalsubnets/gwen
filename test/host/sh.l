@@ -150,9 +150,9 @@
 
 ; ... and a taken signal re-raised through the condition system IS the doc's
 ; "signals arrive as conditions": scare routes it to the installed help policy
-(: help (\ s a b (L 'gotsig a b)))
+(hear (\ s a b (L 'gotsig a b)))
 (assert (= (L 'gotsig 'sigusr1 (getpid 0)) (scare 'sigusr1 (getpid 0))))
-(: help 0)
+(hear 0)
 
 ; env nifs: set, read back through environ's raw K=V, absence unsets
 (assert (id? (setenv "LOVE_SH_T5" "quay") ())

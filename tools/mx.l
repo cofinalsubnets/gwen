@@ -24,17 +24,33 @@
    ; contiguous block because the roster puts it in one. why THIS order, band by
    ; band, is love.h's narrative over the include; changing it is that comment's
    ; business and this list's together, which is the point of there being one list.
-   mx-kinds '(KMint KNom KCharm KWide KFlo KCplx KBig KVec KArrZ KArrR KArrC KArrO
-              KString KChain KMap KHot)
+   ; ⚠ DISPATCH only: every entry is a kind `ai_kind` can actually ANSWER, so a tray
+   ; enters as its four TIERS and never as the bare rep -- that one lives in the
+   ; roster below.
+   mx-kinds '(KMint KNom KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO
+              KString KChain KTablet KHot)
    ; the arithmetic lane: every numeric kind routes identically -- the scalar gem
-   ; tower, the vec sentinel, and the parallel array tower. this is the group the C
-   ; needed a macro (NUMK) to say.
-   mx-numk '(KCharm KWide KFlo KCplx KBig KVec KArrZ KArrR KArrC KArrO)
+   ; tower and the parallel tray tower. this is the group the C needed a macro
+   ; (NUMK) to say.
+   mx-numk '(KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
 
-   ; --- the rows. one row per (name numk KMint KNom KString KChain KMap KHot): the
-   ; numeric lane, then the six kinds that are named one at a time. ten plus six is
-   ; sixteen, so every row is total and no cell can come up NULL.
-   ; precedence, high to low: lambda > map > chain > text > number (incl. array).
+   ; --- the REPS: what a heap object's hot says it is, which is a different question
+   ; from which lane it dispatches down. `ai_typ` compares the ap against the data
+   ; sentinels and can answer these NINE and nothing else, so a switch over them is
+   ; exhaustive and -Wswitch says so -- that is the whole reason the two rosters are
+   ; two. the tray is the one that differs: ONE rep, refined by element tier into
+   ; four dispatch kinds. reps carry no order and no lanes; only the map below reads
+   ; this list's shape.
+   mx-reps '(DMint DNom DSun DGem DTwin DBig DTray DString DChain)
+   ; each rep's dispatch kind. DTray's entry is the FLOOR of the tier ladder and is
+   ; never read -- ai_kind branches on the tray first and adds the tier itself.
+   mx-repq '((DMint KMint) (DNom KNom) (DSun KSun) (DGem KGem) (DTwin KTwin)
+             (DBig KBig) (DTray KTrayZ) (DString KString) (DChain KChain))
+
+   ; --- the rows. one row per (name numk KMint KNom KString KChain KTablet KHot): the
+   ; numeric lane, then the six kinds that are named one at a time. nine plus six is
+   ; fifteen, so every row is total and no cell can come up NULL.
+   ; precedence, high to low: lambda > tablet > chain > text > number (incl. tray).
    mx-rows
     '(; `+`: numbers add, lists and text concatenate, lambdas and maps Church-add.
       ;      () -- and every bare mint -- is the IDENTITY in every lane: it nets 0,
@@ -62,15 +78,15 @@
       (MUL_CHAIN lvm_mul_rep    lvm_bin_unit lvm_0          lvm_0          lvm_mul_cart lvm_mulh     lvm_mulh)
       (MUL_H     lvm_mulh       lvm_bin_unit lvm_mulh       lvm_mulh       lvm_mulh     lvm_mulh     lvm_mulh))
 
-   ; --- which row each kind takes. a KMap or KHot operand wins over everything, which
-   ; is why their rows AND columns are the Church lanes: a map IS a lookup lambda for
-   ; +/*, kept deliberately so its rung shares the lanes.
+   ; --- which row each kind takes. a KTablet or KHot operand wins over everything,
+   ; which is why their rows AND columns are the Church lanes: a tablet IS a lookup
+   ; lambda for +/*, kept deliberately so its rung shares the lanes.
    mx-add-of '((ADD_MINT KMint) (ADD_NOM KNom)
-               (ADD_NUM KCharm KWide KFlo KCplx KBig KVec KArrZ KArrR KArrC KArrO)
-               (ADD_STR KString) (ADD_TWO KChain) (ADD_H KMap KHot))
+               (ADD_NUM KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
+               (ADD_STR KString) (ADD_TWO KChain) (ADD_H KTablet KHot))
    mx-mul-of '((MUL_MINT KMint) (MUL_REP KNom KString)
-               (MUL_NUM KCharm KWide KFlo KCplx KBig KVec KArrZ KArrR KArrC KArrO)
-               (MUL_CHAIN KChain) (MUL_H KMap KHot))
+               (MUL_NUM KCharm KSun KGem KTwin KBig KTrayZ KTrayR KTrayC KTrayO)
+               (MUL_CHAIN KChain) (MUL_H KTablet KHot))
 
    ; --- expanding the table ------------------------------------------------------
    (mx-el l i) (? (i < 1) <l (mx-el >l (i - 1)))
@@ -83,7 +99,7 @@
        v (r mx-rows)
        (? (member? c mx-numk) (mx-el v 0)
           (id? c 'KMint) (mx-el v 1) (id? c 'KNom) (mx-el v 2) (id? c 'KString) (mx-el v 3)
-          (id? c 'KChain) (mx-el v 4) (id? c 'KMap) (mx-el v 5) (mx-el v 6)))
+          (id? c 'KChain) (mx-el v 4) (id? c 'KTablet) (mx-el v 5) (mx-el v 6)))
    ; the whole square, 16 rows of 16 lane noms in enum order -- the shape mx2coq.l
    ; derives the band partition from, and the shape the C lays out.
    (mx-grid asg) (map (\ k (map (\ c (mx-lane (mx-rowof asg k) c)) mx-kinds)) mx-kinds)
@@ -103,6 +119,33 @@
                  (zip mx-kinds g))
        `('gdecl `(`((string nm) mx-ty `('init rows))) '(static)))
    (zip a b) (? (! (two? a)) () (link `(<a <b) (zip >a >b)))
+
+   ; --- the same table's OTHER consumer: the enums the matrices are indexed BY ------
+   ; love.h spelled this roster out by hand and mx-kinds was a transcription of it,
+   ; kept honest by a comment saying the order "is not free to change here alone" --
+   ; which is a promise, not a check. now the transcription is the SOURCE: `enum q`
+   ; is laid from the same list the grid is, so a kind cannot enter the lattice
+   ; without entering both, and the ⚠ that comment carried simply stops existing.
+   ; KN rides at the end and is not a kind: it is the roster's own LENGTH, which is
+   ; what lets mx-ty say [KN][KN] and mean the grid it actually laid. ⚠ enum d gets
+   ; NO such tail: it is the one enum the C SWITCHES over, and a count riding in it
+   ; is a case -Wswitch would demand for a value ai_typ can never answer. the table
+   ; below wants no bound anyway.
+   kinds-clay `('edef "q" (mx-kinds + '(KN)))
+   reps-clay `('edef "d" mx-reps)
+   ; the one bridge between the two rosters: rep -> the kind it dispatches as. it is
+   ; LAID, not written, because a hand-written map is exactly the drift the split was
+   ; meant to end -- a rep can no more miss its kind than a kind can miss its column.
+   ; ⚠ clay's edef has no `= n` slot on purpose, so the two enums do NOT share values
+   ; and this table is the only crossing. it rides mx.h, not kinds.h: kinds.h is
+   ; love.h's and reaches every frontend, where a static table would sit unread under
+   ; -Werror -- the tables are love.c's alone. UNSIZED on purpose: C reads the bound
+   ; off the designators, so it cannot disagree with the roster that laid them.
+   repq-clay
+    `('gdecl `(`("ai_kind_of_d" '(arr (const (named "enum q")) 0)
+                 `('init (map (\ p `('didx <p `('var (string <>p)))) mx-repq))))
+      '(static))
+
    ; the whole header. the banner is not decoration: a hand edit here is lost the next
    ; time the gate runs, so the file has to say where its source is.
    ; ⚠ a plain BINDING, not a nullary helper: `(mx-h)` is `mx-h` unrun (CLAUDE.md's
@@ -122,29 +165,31 @@
           (mx-clay1 "ai_add_mx" mx-add)
           '(note "")
           '(note "`*`: the semiring product whose `+` is the lane above.")
-          (mx-clay1 "ai_mul_mx" mx-mul)))))
-   ; --- the same table's OTHER consumer: the enum the matrices are indexed BY ------
-   ; love.h spelled this roster out by hand and mx-kinds was a transcription of it,
-   ; kept honest by a comment saying the order "is not free to change here alone" --
-   ; which is a promise, not a check. now the transcription is the SOURCE: `enum q`
-   ; is laid from the same list the grid is, so a kind cannot enter the lattice
-   ; without entering both, and the ⚠ that comment carried simply stops existing.
-   ; KN rides at the end and is not a kind: it is the roster's own LENGTH, which is
-   ; what lets mx-ty say [KN][KN] and mean the grid it actually laid.
-   kinds-clay `('edef "q" (mx-kinds + '(KN)))
+          (mx-clay1 "ai_mul_mx" mx-mul)
+          '(note "")
+          '(note "rep -> dispatch kind, the one crossing between the two rosters. DTray's entry")
+          '(note "is the FLOOR of the tier ladder and is never read: ai_kind branches on the")
+          '(note "tray and adds the element tier itself.")
+          repq-clay))))
    kinds-h
     (: nl2 (string 10)
        (join (map mx-show
         `(`('note ("kinds.h -- GENERATED by tools/mx.l. do not edit; edit the table there." + nl2
-                   + "the kind lattice: the dispatch order love.h's narrative reads, and the row" + nl2
-                   + "and column index of the +/* matrices in mx.h -- ONE roster, so the enum and" + nl2
-                   + "the grid it dimensions cannot drift apart. KN is the count, not a kind." + nl2
+                   + "the TWO rosters. `enum q` is the dispatch lattice: the order love.h's" + nl2
+                   + "narrative reads, and the row and column index of the +/* matrices in mx.h." + nl2
+                   + "`enum d` is what a heap object's hot SAYS it is -- the nine ai_typ can" + nl2
+                   + "answer, so a switch over it is exhaustive and needs no default -- and so it" + nl2
+                   + "carries no count, which would be a case with no value. KN is enum q's own" + nl2
+                   + "length; mx.h's ai_kind_of_d is the crossing between the two." + nl2
                    + "doc/clay.md rung 2b; the drift check is `make test_clay`."))
-          kinds-clay))))
+          kinds-clay
+          reps-clay))))
    ; a shape check before anything is written: gen.l and the C compiler both trust
    ; this, and a malformed tree would arrive as a codegen error naming nothing.
    mx-ok
     (: a (mx-ok? (mx-clay1 "ai_add_mx" mx-add))
        b (mx-ok? (mx-clay1 "ai_mul_mx" mx-mul))
        c (mx-ok? kinds-clay)
-       (&& (id? a 1) (&& (id? b 1) (id? c 1)))))
+       d (mx-ok? reps-clay)
+       e (mx-ok? repq-clay)
+       (&& (id? a 1) (&& (id? b 1) (&& (id? c 1) (&& (id? d 1) (id? e 1)))))))

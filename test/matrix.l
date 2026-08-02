@@ -1,8 +1,8 @@
 ; === the generic-op DISPATCH MATRICES, walked cell by cell ====================
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
-; (l.h enum q): KCharm | KWide KFlo KCplx (the lean scalar-star boxes) | KBig |
-; KVec (the coarse array sentinel; ai_kind refines it away) | KArrZ KArrR KArrC
-; KArrO (the array tower) | KString KSym | KChain(chain) | KHot.
+; (l.h enum q): KCharm | KSun KGem KTwin (the lean scalar-star boxes) | KBig |
+; KTrayZ KTrayR KTrayC KTrayO (the tray tower -- ONE rep, DTray, refined by element
+; tier) | KString KMint | KChain(chain) | KTablet KHot.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
 ; < <= = >= >) are lane aps that refine the same lattice internally. This
@@ -14,21 +14,21 @@
 ; the four array tiers) and the apply matrix, which had no systematic test.
 
 ; one representative value per kind. The three scalar-star boxes are now distinct
-; kinds (KFlo/KCplx/KWide) but still share one apply matrix cell (data_num_apply).
+; kinds (KGem/KTwin/KSun) but still share one apply matrix cell (data_num_apply).
 (: mx-fix 5                              ; KCharm
-   mx-real 2.5                            ; KFlo, float box (gem?)
-   mx-cpx ~(2 3)                        ; KCplx, complex scalar (Cp)
-   mx-box (<< 1 62)                      ; KWide, wide int (sun?)
+   mx-real 2.5                            ; KGem, the gem (float box)
+   mx-cpx ~(2 3)                        ; KTwin, complex scalar (Cp)
+   mx-box (<< 1 62)                      ; KSun, the sun (wide int)
    mx-big (100 2)                     ; KBig
-   mx-az  @(10 20)                       ; KArrZ (int array)
-   mx-ar  @(1.5 2.5)                     ; KArrR (float array)
-   mx-ac  (array 2 ~(1 2) ~(3 4))      ; KArrC (packed complex array)
-   mx-ao  (array 2 (100 2) 5)         ; KArrO (object array)
+   mx-az  @(10 20)                       ; KTrayZ (int tray)
+   mx-ar  @(1.5 2.5)                     ; KTrayR (float tray)
+   mx-ac  (array 2 ~(1 2) ~(3 4))      ; KTrayC (packed complex tray)
+   mx-ao  (array 2 (100 2) 5)         ; KTrayO (object tray)
    mx-str "ab"                           ; KString
-   mx-sym 'ef                            ; KSym (interned)
+   mx-sym 'ef                            ; KMint (interned)
    mx-lst '(1 2)                         ; KChain (chain / list)
    mx-fn  (+ 1)                          ; KHot (nif partial application)
-   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KHot (a map is a lookup-lambda)
+   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KTablet (a tablet is a lookup-lambda)
 
 ; ============================================================================
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
@@ -54,15 +54,15 @@
  (= 255 ((string 255) 0))                     ; byte is unsigned 0..255
  (= 1 ("" 5))                                 ; the empty string indexes to 1
 
- ; --- row KSym: the name index left with the string algebra (the mint round);
+ ; --- row KMint: the name index left with the string algebra (the mint round);
  ;     a symbol is a point with a spelling attribute and applies as every unit
  ;     does -- const-1, like 0, (), and the hots ---
  (= 1 ('abc 0))   (= 1 ('abc 2))
  (= 1 ('abc 9))   (= 1 ('abc 'x))
  (= 1 ((mint 0) 5))
 
- ; --- the scalar-star + array rows (KFlo/KCplx/KWide/KArr*, all -> data_num_apply):
- ;     a star or array is a Church numeral (operand ** operator, or operator-fold
+ ; --- the scalar-star + array rows (KGem/KTwin/KSun/KTray*, all -> data_num_apply):
+ ;     a star or tray is a Church numeral (operand ** operator, or operator-fold
  ;     over a function). Full tower coverage in functions.l. ---
  (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 = 9
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8
@@ -72,13 +72,13 @@
 
  ; --- row KBig: a bignum is also a Church numeral, but its magnitude is always
  ;     astronomical (>= 2^62), so (bignum x) cannot terminate in a finite test.
- ;     The row exists (-> data_num_apply, same as KVec) but is not exercised. ---
+ ;     The row exists (-> data_num_apply, same as the tray tiers) but is not exercised. ---
 
  ; --- non-matrix apply paths --------------------------------------------------
  (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KCharm numeral (odd-tag path)
  (= 36 ((\ x (* x x)) 6))                     ; KHot: a lambda applies directly
  (= 7 (((+) 3) 4))                            ; KHot: a nif / partial application
- (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KHot: a map looks its key up
+ (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KTablet: a tablet looks its key up
  (nil? (mx-map 9))                            ; ...missing key -> nil
  (= 1 ((cask 4) 'x)))                       ; opaque handle (cask) behaves as 0
 
@@ -125,7 +125,7 @@
  ('efef = (+ 'ef 'ef))                         ; sym + sym cats spellings and RE-INTERNS -> a symbol
  ("efab" = (+ 'ef "ab"))                       ; ... demote again (the rank min pulls to string)
 
- ; --- the arith<->seq SEAM (KArrO|KString) is ARRAY x text only -> nil. A SCALAR
+ ; --- the arith<->seq SEAM (KTrayO|KString) is ARRAY x text only -> nil. A SCALAR
  ;     number joins text as one byte ONLY under the byte law (exact 0..255), so a
  ;     bignum -- never in range -- is nil too. ---
  (nil? (+ @(1 2) "ab"))   (nil? (+ "ab" @(1 2)))   (nil? (+ @(1 2) 'ef))

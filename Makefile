@@ -161,8 +161,14 @@ clean:
 	@$(MAKE) -C wasm clean
 distclean: clean
 
+# the memory lane. ⚠ THE CORPUS IS A FILE ARGUMENT, NEVER STDIN -- the corpus TESTS
+# stdin (test/io.l's see/unsee roundtrip), so piping it in has those asserts eating the
+# script they ride on, and the run dies reading its own comments as code. e77e0e8c moved
+# four other lanes off the same pattern and missed this one; `</dev/null` is what the
+# asserts should find.
 valg: host
-	cat $t | valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m
+	@cat $t > $(ho)/.valg-corpus.l
+	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the math floor's differential: am.c vs the host libm, max-ulp per fn, and the
 # REPORT -- `./out/host/ulp reduce` adds the reduction scan. this lane is the
 # eyeball one (opt-in like valg: needs a hosted oracle); test_ulp is the GATE,

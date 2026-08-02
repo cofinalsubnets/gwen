@@ -961,10 +961,5 @@ int main(int argc, char const **argv) {
       g = run_program(g, argp, replp); }
 #endif
   }
-  switch (ai_code_of(g)) {
-   default: break;
-   case ai_status_scare:               // the honest face: ";; a b" when the scare
-    if (!ai_scare_face_(g))            // said something; bare (no data) = oom
-     fprintf(stderr, ";; oom@len=%ld\n", (long) ai_core_of(g)->len);
-    break; }
+  if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);   // the honest face: ";; a b", or ";; oom@len=N" bare
   return ai_fin(g); }

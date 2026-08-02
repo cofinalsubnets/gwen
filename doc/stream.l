@@ -126,9 +126,9 @@
 ; mid-datum EOF is a REAL scare (the () floor is for a CLEAN end only). install a
 ; help that hands back the condition tag, so an unterminated list surfaces 'eofmid
 ; instead of terminating; a well-formed read never trips it.
-(: help (\ s a b a))
+(hear (\ s a b a))
 (: _ (assert (id? 'eofmid (read1 (strm-str "(1 2")))   ; "(1 2" with no ')' -> scare
              (= `(1 2) (cap (read1 (strm-str "(1 2)")))))) ; closed -> clean datum
-(: help 0)                               ; uninstall (hygiene; back to the floor handler)
+(hear 0)                               ; uninstall (hygiene; back to the floor handler)
 
 (puts "stream: ok") (putc 10)

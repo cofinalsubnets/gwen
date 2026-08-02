@@ -335,7 +335,6 @@ int main(int argc, char const **argv) {
   g = ai_evals_(g, "(use 'bao)");
   g = ai_layer_(g);                  // the session layer: one load, one layer
   for (int i = 1; i < argc && ai_ok(g); i++) g = ai_evals_(g, slurp(argv[i]));
-  if (ai_code_of(g) == ai_status_scare && !ai_scare_face_(g))
-    fprintf(stderr, ";; oom@len=%ld\n", (long) ai_core_of(g)->len);
+  if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);   // the honest face: ";; a b", or ";; oom@len=N" bare
   fflush(stdout);
   return ai_fin(g); }

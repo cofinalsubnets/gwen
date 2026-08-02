@@ -41,7 +41,7 @@
    ; stage that then loops is P1's other face, a hang, which the recipe's timeout
    ; owns because nothing inside the process can.
    scared (tablet 0)
-   _ (: help (\ s a b (: _ (pin scared 0 1) 0)))
+   _ (hear (\ s a b (: _ (pin scared 0 1) 0)))
    (unscared _) (pin scared 0 0)
    (scared? _) (peep scared 0 0)
 

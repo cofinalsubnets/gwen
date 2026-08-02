@@ -8,8 +8,8 @@
 
 ; install a help that answers 'apcap scares with (capped k); anything else
 ; falls through to whatever was installed before (nil pre-help.l: const-1).
-(: apcap-t0 help)
-(: help (\ s a b (? (&& (scare? s) (= a 'apcap)) `('capped b) (apcap-t0 s a b))))
+(: apcap-t0 (heard ()))
+(hear (\ s a b (? (&& (scare? s) (= a 'apcap)) `('capped b) (apcap-t0 s a b))))
 (assert
  ; a bignum compose count saturates to fix_max, far above the cap -> scares
  (: r ((100 2) (+ 1)) (&& (= 'capped (cap r)) (< 1048576 (caup r))))
@@ -38,5 +38,5 @@
 (pin apcap 0 1048576)
 ; restore: a missing prior help reads 0 -- exactly the uninstall. (one nothing
 ; closed the old hole where a ()-saved help reinstalled as the unit.)
-(: help apcap-t0)
+(hear apcap-t0)
 (assert (= 1048576 (apcap 0)) (= 64 (6 2)) (= 12 ((2 (+ 1)) 10)))

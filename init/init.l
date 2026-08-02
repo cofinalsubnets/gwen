@@ -105,7 +105,7 @@
 ; into () so the supervisor sees a falsey `catch`) --- read control keeps the protocol;
 ; a real scare just welps (the supervisor narrates restarts itself; a true init would
 ; log the fault to the journal here). mirrors repl.l's shell-help, quieter.
-(: help welp)
+(hear welp)
 
 ; --- the REAL supervisor (needs host/posix.c: spawn + glean; kill via bao's `still`) ---
 ; the same supervisor, now over OS PROCESSES. spawn each unit (a pid to track), then

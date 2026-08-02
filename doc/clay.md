@@ -392,6 +392,19 @@ why it stays optional here rather than blocking.
    G1's inexpressible partition, which is how we know). ⚠ the embedding surface is TWO
    files now -- `mk/install.mk` ships `kinds.h` beside `love.h`, and an install missing it
    does not compile.
+2c. **the rep roster, split off the dispatch one.** LANDED. `enum q` was answering two
+   questions: which lane a value dispatches down, and what a heap object's hot SAYS it
+   is. only nine of its members were ever `ai_typ` answers, so the eleven `switch
+   (typ(x))` sites all carried a `default:` that `ai_typ`'s own fall-through had already
+   made unreachable -- and `-Wswitch` could say nothing. now `enum d` is laid from its
+   own roster: nine reps, no count riding along (a count is a case with no value), so
+   the exhaustive switches drop their defaults and a tenth data sentinel is a COMPILE
+   error at every site rather than a runtime trap. `KVec` left `enum q` with it -- a
+   tray dispatches by element tier or not at all -- taking 31 unreachable cells out of
+   each grid and 62 out of `mx.v`'s square. the two enums do NOT share values (clay's
+   `edef` has no `= n` slot, deliberately); `mx.h`'s `ai_kind_of_d` is the one crossing,
+   laid from the same table, so a rep can no more miss its kind than a kind can miss its
+   column.
 3. **the bignum magnitude helpers, and `clay2coq.l`.** asm-free at `7164-7213` first, then
    `6946-7090`. meet `big.v` at the seam. remember both legs run different limb widths.
 4. **dtoa** -- once the `show0` float question is answered. `3889-3910` first, then

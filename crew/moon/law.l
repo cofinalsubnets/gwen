@@ -882,6 +882,15 @@
                                               (member? <>>>f2 '(r5 r6)))))
                                           (n + 1) n))))
                  (go fs 0))
+   ; the fn's OWN forms, label to the next align seam: the inliner copies the body into main,
+   ; where a folded store may read a home register legitimately -- main's copy is not a wrap
+   (fnf nm fs) (: (seek l) (? (! (two? l)) ()
+                              (= <l `('label nm)) >l
+                              (seek >l))
+                  (take l) (? (! (two? l)) ()
+                              (= <l '(align 2)) ()
+                              (link <l (take >l)))
+                  (take (seek fs)))
    pre9 "long g(long x); "
    irD (cgn (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
    irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
@@ -889,11 +898,11 @@
    irG (cgn (pre9 + "long w(long a, long b) { long s = a+b+a*b+a-b; g(1); if (s > 9) goto out; s = s+1; out: return s+1; } int main() { return w(20, 22); }"))
    (assert
       (two? irD) (two? irL) (two? irS) (two? irG)
-      (= 0 (wraps (caup irD)))                       ; dead across the call: no spills at all
-      (= 2 (wraps (caup irL)))                       ; live across: both homes keep their wrap
-      (= 1 (wraps (caup irS)))                       ; the shadowed a's blanket; b's own still drops
-      (member? '(st sp 32 r6) (caup irS))            ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
-      (= 2 (wraps (caup irG)))))                     ; a goto fn wraps everything
+      (= 0 (wraps (fnf 'f (caup irD))))              ; dead across the call: no spills at all
+      (= 2 (wraps (fnf 'h (caup irL))))              ; live across: both homes keep their wrap
+      (= 1 (wraps (fnf 'q (caup irS))))              ; the shadowed a's blanket; b's own still drops
+      (member? '(st sp 32 r6) (fnf 'q (caup irS)))   ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
+      (= 2 (wraps (fnf 'w (caup irG))))))            ; a goto fn wraps everything
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
@@ -962,7 +971,7 @@
       (= 0 (hmovs (caup irKa)))                      ; born-at-a-call locals keep their slots
       (member? '(mov r6 r0) (caup irBa))             ; the free local s homes...
       (member? '(add r6 r6 r9) (caup irBa))          ; ...and accumulates 3-address (i*i in r9)
-      (member? '(add r5 r0 1) (caup irBa))           ; the loop counter i ALSO homes (r5): its
+      (member? '(add r5 r5 1) (caup irBa))           ; the loop counter i ALSO homes (r5): its
       (= 0 (wrapsa (caup irBa)))))                   ; ++ no longer leans its own slot. zero wraps
 
 (say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) ok")

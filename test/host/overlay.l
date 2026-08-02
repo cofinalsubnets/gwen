@@ -51,9 +51,9 @@
 
 ; the kernel refuses through the help cell -- install the escape (test/uu.l's
 ; own tail move; the kernel span rightly bakes NO global help), probe, uninstall
-(: (help s p e) (: h (peep (uu 'HELPC) () 0) (? h (h s p e) 0)))
+(hear (\ s p e (: h (peep (uu 'HELPC) () 0) (? h (h s p e) 0))))
 (assert (id? 'rejected ((uu 'rejects) (\ z ((uu 'defn) 'boot-bad 'nat '(lam x x))))))
-(: help 0)
+(hear 0)
 
 ; leg 4: load the whole uu corpus (kernel + the StackSet model + its theorems,
 ; every defn re-certified right here), then run the MODEL against core.l's
