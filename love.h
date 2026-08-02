@@ -642,7 +642,8 @@ static ai_inline struct ai_chain *ini_chain(struct ai_chain *w, intptr_t a, intp
  return w->ap = lvm_chain, w->a = a, w->b = b, w; }
 static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
   (struct ai*) ((uintptr_t) g | s); }
-// Raise: to the global `help` function when installed, else raise_c (love.c).
+// Raise: to the global `help` function when installed, else the status-encoded
+// core straight back to C (love.c).
 // ghelp re-raises an already-tagged g's own status.
 struct ai *ghelp2(struct ai*, enum ai_status), *ghelp(struct ai*);
 // ⚠ ai_have IS THE PHRASE "this call may collect", and under AI_GC_STRESS it stops

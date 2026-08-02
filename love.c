@@ -961,7 +961,6 @@ static lvm(_lvm_help_scare, enum ai_status s) { return Pack(g), encode(g, s); }
 lvm(lvm_help) {
  enum ai_status s = ai_code_of(g);
  return Ap(_lvm_help_scare, ai_core_of(g), s); }
-static union u const raise_c[] = { {lvm_help} };
 
 // ghelp2/ghelp are defined after numap_drive (the help call frame runs
 // through its 3-arg twin); declared in love.h.
@@ -2432,9 +2431,13 @@ static union u const help_drive[] =
 // Raise status s with condition data a/b to the help continuation. With a
 // global `help` function -- present the way everything is present: by its
 // net -- and 5 words of stack headroom (the raise path never
-// allocates), build the (help s a b) frame and run it; else the C default
-// raise_c, which resumes the eof protocol raw. Pre-book raises (ai_ini_0)
-// always take the default.
+// allocates), build the (help s a b) frame and run it; else hand the
+// status-encoded core straight back to C, which is what every other scare
+// site does (the OOM lanes above). Pre-book raises (ai_ini_0) always take
+// the default.
+// `ip` IS LEFT WHERE THE RAISE HAPPENED: the callers Pack before entering here,
+// so the core still points at the raise site for anything that wants to say
+// WHERE, and the exit face is the one reader that could.
 static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
                          union u const *K) {
  if (s == ai_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
@@ -2453,13 +2456,7 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
    return c;                       // ok-g: the trampoline dispatches help_drive
 #endif
   } }
- union u *t = (union u*) raise_c;
- c->ip = t;
-#if ai_tco
- return t->ap(encode(c, s), t, c->hp, c->sp);
-#else
- return t->ap(encode(c, s));
-#endif
+ return encode(c, s);
 }
 struct ai *ghelp2(struct ai *g, enum ai_status s) {
  // nothing raises the MORE bit through help any more -- the reader answers its
