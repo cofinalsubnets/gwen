@@ -4823,8 +4823,8 @@
        ; rideable arrivals ARE the shuttle pair, so a store whose address shuttle moved off a
        ; now-occupied register can land on the very register a param was told it could ride.
        ; so the ride is a PROPOSAL: it is re-read against the code it actually produced, and a
-       ; rider whose arrival picked up a def deopts the whole fn to ir1 -- the freed homes
-       ; rejoined the pool under THIS ride set, so a smaller one cannot re-run over it. --
+       ; rider whose arrival picked up a def is DROPPED and the regen re-runs without it (the
+       ; leaf loop below recomputes the pool per attempt) -- the fn keeps its register homes. --
        (rideok2 fs A)                               ; no def of A survives in fs
         (? (! (two? fs)) 1
            (: f <fs
@@ -4861,7 +4861,7 @@
                       (go2 l2 k) (? (k < 1) l2 (go2 >l2 (k - 1)))
                       (? (d < 1) l (go2 l d)))
        (dropn l n) (? (|| (n < 1) (! (two? l))) l (dropn >l (n - 1)))
-       (lpick ir1x crs uv)
+       (lpick ir1x crs uv hp9)
         (: nc (ncalls ir1x 0)
            ; a call-free fn homes by touches alone (post-sibcall: tail calls cost nothing). with
            ; calls REMAINING, only a ZERO-CROSSING local may home -- alive's cross says it is
@@ -4870,7 +4870,7 @@
            ; rounds SLOWER (~2%): static counts don't predict the dynamic spill/reload balance.
            (free? nm) (&& (member? nm uv) ((peep crs nm 0) = 0))
            lt (leaoffs ir1x (tablet 0))
-           navl ((tally hpool) - 2)
+           navl ((tally hp9) - 2)
            (walk rs acc)
             (? (! (two? rs)) acc
                (: e2 <rs sq <e2 off <>e2
@@ -4883,7 +4883,7 @@
            (mk l hp t) (? (|| (! (two? l)) (! (two? hp))) t
                           (: _ (pin t (caup (cap l)) <hp)
                              (mk >l >hp t)))
-           (? (two? cs) `((mk cs hpool (tablet 0)) (dropn hpool (tally cs))) ()))
+           (? (two? cs) `((mk cs hp9 (tablet 0)) (dropn hp9 (tally cs))) ()))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
        ; ⚠ the operand pool is EMPTY on t32: AAPCS32 keeps r4-r11 callee-saved and the thumb2
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
@@ -4909,26 +4909,27 @@
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
        ride (? (|| sr6f (|| vararg (|| (peep g 'fesc ()) (hascall? ir1)))) () (rideset ir1 params 0 ()))
-       hpool (: rh (map (\ k (homereg k)) ride)      ; the freed homes rejoin the pool for locals
-                uh (filter (\ q (! (member? q rh))) (uhomes params 0 ()))
-                (filter (\ q (! (member? q uh))) tpool))
+       (pools rd) (: rh (map (\ k (homereg k)) rd)   ; the freed homes rejoin the pool for locals
+                     uh (filter (\ q (! (member? q rh))) (uhomes params 0 ()))
+                     (filter (\ q (! (member? q uh))) tpool))
+       hpool (pools ride)
        hm (&& (! vararg) (&& (! sr6f) (&& (! (peep g 'hasasm ()))   ; sr6f: the hidden sret arg shifts every
                 (&& (! (anyop? ir1 'sys)) (homes? params 0)))))            ; param register -- the pickers don't model it
        ; the alive pass runs once per homing-eligible fn: lpick reads cross/
        ; univ (a zero-crossing local homes through calls), the regens pin its
        ; livtab so call-fixed wraps only what a call actually needs
        av (? (|| sr6f (|| vararg (|| (bad? ir1) (|| (peep g 'hasasm ()) (anyop? ir1 'sys))))) () (alive g f))
-       lr (? av (lpick ir1 (caup av) (cauup av)) ())
+       lr (? av (lpick ir1 (caup av) (cauup av) hpool) ())
        lh (? (two? lr) <lr ())
        lp0 (? (two? lr) <>lr hpool)
-       ; the REGEN dance, once: reset the accumulators and the frame to the ir1 snapshot, pin the
-       ; analyses' channels (the vmap universe, the locals homes, the livtab), rebuild under the
-       ; spill policy hp, then clear every channel. a 'bad ir2 deopts: ir1 stands, accumulators
-       ; restored.
-       (regen hp)
+       ; the REGEN dance: reset the accumulators and the frame to the ir1 snapshot, pin the
+       ; analyses' channels (the vmap universe, the locals homes lh9, the livtab), rebuild under
+       ; the spill policy hp with the operand pool lp9, then clear every channel. a 'bad ir2
+       ; deopts: ir1 stands, accumulators restored.
+       (regen hp lh9 lp9)
         (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
-           _ (pin g 'pool0 lp0) _ (pin g 'pool lp0)
-           _ (rgset g lh av)
+           _ (pin g 'pool0 lp9) _ (pin g 'pool lp9)
+           _ (rgset g lh9 av)
            ir2 (build (spill hp params 0 0 0 () ()))
            _ (rgreset g)
            ; the numbering guard: the build's forward ticks must land exactly
@@ -4936,11 +4937,22 @@
            ; landed on the wrong statements -- deopt to ir1, whole
            (? (|| (bad? ir2) (&& (two? av) (! ((peep g 'lsq 0) = (nthr av 3)))))
               (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
+       ; the leaf lane's ride loop: a rider whose arrival picked up a def in the code it licensed
+       ; DROPS, and the regen re-runs -- pool, locals picks and homes all recomputed for the
+       ; smaller set, so the survivors keep their arrivals and the dropped param homes like any
+       ; other. strictly shrinking (a failed check names a rider), so at most (tally ride)
+       ; re-runs; the no-shrink arm is regen's own deopt wearing through -- take ir1 and stop.
+       (leaf rd)
+        (: hp9 (pools rd)
+           lr9 (? av (lpick ir1 (caup av) (cauup av) hp9) ())
+           i2 (regen `('ride rd) (? (two? lr9) <lr9 ()) (? (two? lr9) <>lr9 hp9))
+           (? (ridesound? i2 rd) i2
+              (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
+                 (? ((tally rs) < (tally rd)) (leaf rs)
+                    (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)))))
        irf (? (bad? ir1) 'bad
           (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
-           (: i2 (regen `('ride ride))
-              (? (ridesound? i2 ride) i2
-                 (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)))
+           (leaf ride)
           ; calls remain: home + spill where reads beat the wraps -- FN-WIDE, all homable params
           ; or none. ⚠ per-param verdicts were measured BOTH ways and lost: pruning a "losing"
           ; home inside a gated fn is 7/8 slower (its wraps hide behind a call that is already
@@ -4948,7 +4960,7 @@
           ; pool registers for homes, and returning unhomed ones collides with the ride policy).
           (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)
                           ((* 2 (* nc nh)) < (nreads ir1 (pslots <>sp1 ()) 0))))
-             (? (|| pp lh) (regen (? pp 'shadow ())) ir1)))
+             (? (|| pp lh) (regen (? pp 'shadow ()) lh lp0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
        ; it early lets a pass-2 ride clobber a live arrival.
