@@ -882,6 +882,15 @@
                                               (member? <>>>f2 '(r5 r6)))))
                                           (n + 1) n))))
                  (go fs 0))
+   ; the fn's OWN forms, label to the next align seam: the inliner copies the body into main,
+   ; where a folded store may read a home register legitimately -- main's copy is not a wrap
+   (fnf nm fs) (: (seek l) (? (! (two? l)) ()
+                              (= <l `('label nm)) >l
+                              (seek >l))
+                  (take l) (? (! (two? l)) ()
+                              (= <l '(align 2)) ()
+                              (link <l (take >l)))
+                  (take (seek fs)))
    pre9 "long g(long x); "
    irD (cgn (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
    irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
@@ -889,11 +898,11 @@
    irG (cgn (pre9 + "long w(long a, long b) { long s = a+b+a*b+a-b; g(1); if (s > 9) goto out; s = s+1; out: return s+1; } int main() { return w(20, 22); }"))
    (assert
       (two? irD) (two? irL) (two? irS) (two? irG)
-      (= 0 (wraps (caup irD)))                       ; dead across the call: no spills at all
-      (= 2 (wraps (caup irL)))                       ; live across: both homes keep their wrap
-      (= 1 (wraps (caup irS)))                       ; the shadowed a's blanket; b's own still drops
-      (member? '(st sp 32 r6) (caup irS))            ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
-      (= 2 (wraps (caup irG)))))                     ; a goto fn wraps everything
+      (= 0 (wraps (fnf 'f (caup irD))))              ; dead across the call: no spills at all
+      (= 2 (wraps (fnf 'h (caup irL))))              ; live across: both homes keep their wrap
+      (= 1 (wraps (fnf 'q (caup irS))))              ; the shadowed a's blanket; b's own still drops
+      (member? '(st sp 32 r6) (fnf 'q (caup irS)))   ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
+      (= 2 (wraps (fnf 'w (caup irG))))))            ; a goto fn wraps everything
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs

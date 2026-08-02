@@ -171,6 +171,13 @@
    (emit-st1 base off s)  (x64-mem () 0 `(136) s base off)      ; 88     mov BYTE, s8 (REX present: spl/sil, never ah/ch)
    (emit-st2 base off s)  (x64-mem `(102) 0 `(137) s base off)  ; 66 89  mov WORD, s16
    (emit-st4 base off s)  (x64-mem () 0 `(137) s base off)      ; 89     mov DWORD, s32
+   ;; the store-immediate family (si : li :: st : ld): mov r/m, imm through /0 (regf r0 spells
+   ;; the 0 field). the 64-bit face sign-extends its imm32; the narrow faces truncate like their
+   ;; register twins.
+   (emit-si base off n)   ((x64-mem () 1 `(199) 'r0 base off) + (le32 n))      ; C7 /0 id  QWORD (sx)
+   (emit-si1 base off n)  ((x64-mem () 0 `(198) 'r0 base off) + `((byte n)))   ; C6 /0 ib  BYTE
+   (emit-si2 base off n)  ((x64-mem `(102) 0 `(199) 'r0 base off) + (le16 n))  ; 66 C7 /0 iw WORD
+   (emit-si4 base off n)  ((x64-mem () 0 `(199) 'r0 base off) + (le32 n))      ; C7 /0 id  DWORD
    ;; the THREAD POINTER (the TLS base): x86_64 keeps it in fs, and the ABI lays
    ;; the pointer itself as the first word of its own block, so (tp d) is one
    ;; segment-prefixed load -- mov d, fs:[0]. (arm64's face would be mrs tpidr_el0.)
@@ -366,6 +373,7 @@
            ('ldxb >< emit-ldxb) ('stxb >< emit-stxb)
            ('ld1 >< emit-ld1) ('ld2 >< emit-ld2) ('ld4 >< emit-ld4)
            ('st1 >< emit-st1) ('st2 >< emit-st2) ('st4 >< emit-st4)
+           ('si >< emit-si) ('si1 >< emit-si1) ('si2 >< emit-si2) ('si4 >< emit-si4)
            ('ldu1 >< emit-ldu1) ('ldu2 >< emit-ldu2) ('ldu4 >< emit-ldu4)
            ('cas >< (emit-cas 1)) ('cas4 >< (emit-cas 0)) ('tp >< emit-tp)
            ('sx1 >< (emit-sx 1)) ('sx2 >< (emit-sx 2)) ('sx4 >< (emit-sx 4))

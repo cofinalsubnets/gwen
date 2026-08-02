@@ -2425,6 +2425,7 @@
    leaops '(lea lean)                               ; the address makes (lean: consumed by its own use)
    xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
    stxops '(stx stxb)                               ; the indexed stores
+   siops '(si si1 si2 si4)                          ; the store-immediates (made only by the addressing fold)
    aluops '(add sub and or xor imul)
    divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
    vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
@@ -2446,6 +2447,8 @@
           (member? op '(shl shr sar rol ror)) `(`(<>f) `(<>f) 1)
           (member? op ldops9) `(`(<>>f) `(<>f) 1)
           (member? op gstops) `(`(<>f <>>>f) () ())
+          (member? op stxops) `(`(<>f <>>f (nthr f 5)) () ())
+          (member? op siops) `(`(<>f) () ())
           (member? op leaops) `(`(<>>f) `(<>f) 1)
           (member? op xops) `(`(<>>f <>>>f) `(<>f) 1)
           (op = 'la) `(() `(<>f) 1)
@@ -2468,7 +2471,7 @@
    ; r4 means "the frame base" becomes fp. an r4 anywhere else IS the 5th argument and stays.
    a4base (: t (tablet 0)
              _ (foldl (\ _ o (pin t o 2)) 0 (ldops9 + fldops + xops + leaops))
-             _ (foldl (\ _ o (pin t o 1)) 0 (stops9 + stxops))
+             _ (foldl (\ _ o (pin t o 1)) 0 ((stops9 + stxops) + siops))
              t)
    (a4ize fs)
     (: (swap f i bp)
@@ -2624,7 +2627,7 @@
    uoff (: t (tablet 0)
            _ (foldl (\ _ o (pin t o 3)) 0 (ldops9 + fldops + leaops))
            _ (foldl (\ _ o (pin t o 5)) 0 xops)
-           _ (foldl (\ _ o (pin t o 2)) 0 stops9)
+           _ (foldl (\ _ o (pin t o 2)) 0 (stops9 + siops))
            _ (foldl (\ _ o (pin t o 4)) 0 stxops)
            t)
    (unframe g fs)
@@ -3234,7 +3237,7 @@
        _ (scan fs)
        (drop l) (? (! (two? l)) ()
                    (: f <l
-                      (? (&& (two? f) (&& (member? <f stops9)
+                      (? (&& (two? f) (&& (member? <f stops9 || member? <f siops)
                              (&& (<>f = 'r4) (! (peep used <>>f ())))))
                          (drop >l)
                          (link f (drop >l)))))
@@ -3279,18 +3282,22 @@
 
    ; the addressing fold: an add/lea/mov whose result is consumed as the VERY NEXT load's base
    ; folds into the load's displacement, so the member-access triple (mov base; add off; ld) lands
-   ; as one insn. sound by adjacency: a dest the load overwrites (or one that dies on the straight
-   ; line) folds outright; a LIVE dest keeps the addr insn beside the re-based load -- whichever
-   ; order leaves every read pre-clobber -- for the deaddef rerun to harvest. two passes chain the
-   ; mov through a folded add. x64 only (the a64 lane rides raw forms).
+   ; as one insn. STORES fold the same three shapes on their base (operand 1), a leax becomes the
+   ; indexed ldx/stx, and a mov feeding only a store's VALUE operand renames it -- so the parked
+   ; member store (addr; park; value; st) cascades to one insn, each pass peeling a link (addrfold
+   ; runs to a fixpoint on length). sound by adjacency: a dest the consumer overwrites (or one
+   ; that dies on the straight line) folds outright; a LIVE dest keeps the addr insn beside the
+   ; re-based form -- whichever order leaves every read pre-clobber -- for the deaddef rerun to
+   ; harvest. x64 only (the a64 lane rides raw forms).
    ; a register DIES on the straight-line suffix when an insn overwrites it before any read; a
-   ; label/branch/call/unknown op ends the certainty
+   ; label/branch/call/unknown op ends the certainty -- except a ret, which rides only r0 out
    (dies? rd l)
     (? !(two? l) ()
        (: f <l
           (? !(two? f) ()
              (: rs (rdsp f)
-                (? (id? rs 'bar) ()
+                (? (id? rs 'bar)
+                    (&& (id? <f 'ret) !(id? rd 'r0))
                    (member? rd <rs) ()
                    (member? rd <>rs) 1
                    (dies? rd >l))))))
@@ -3305,7 +3312,15 @@
                 !(&& (charm? <>>>nx) (charm? (nthr f 5))) ()
                 `((? (<nx = 'ld) 'ldx 'ldxb) <>nx <>>f <>>>f (nthr f 4)
                   ((nthr f 5) + <>>>nx)))
-          hit (? (two? lx) ()
+          ; leax feeding a store's BASE is the indexed store (the value must not be the leax's dest)
+          sx (? (two? lx) ()
+                !(two? f && <f = 'leax && two? nx && member? <nx '(st st1)) ()
+                !(id? <>nx <>f) ()
+                !(&& (charm? <>>nx) (charm? (nthr f 5))) ()
+                (id? <>>>nx <>f) ()
+                `((? (<nx = 'st) 'stx 'stxb) <>>f <>>>f (nthr f 4)
+                  ((nthr f 5) + <>>nx) <>>>nx))
+          hit (? (two? lx || two? sx) ()
                  !(two? f && two? nx  && member? <nx ldops9) ()
                  !(id? <>>nx <>f) ()               ; the load's base is f's dest
                  !(charm? <>>>nx) ()
@@ -3316,6 +3331,39 @@
                      `(<>>f (<>>>f + <>>>nx)) ())
                  (<f = 'mov) `(<>>f <>>>nx)
                  ())
+          ; the store twin: f's dest as the store's base (operand 1; the value must not be f's dest)
+          sh (? (two? lx || two? sx || two? hit) ()
+                !(two? f && two? nx && (member? <nx stops9 || member? <nx siops)) ()
+                !(id? <>nx <>f) ()
+                !(charm? <>>nx) ()
+                (id? <>>>nx <>f) ()
+                (member? <f '(lea lean))
+                 (? (charm? <>>>f) `(<>>f (<>>>f + <>>nx)) ())
+                (<f = 'add)
+                 (? (charm? <>>>f && !(id? <>>f 'sp) && fits32? (<>>>f + <>>nx))
+                    `(<>>f (<>>>f + <>>nx)) ())
+                (<f = 'mov) `(<>>f <>>nx)
+                ())
+          ; the value twin: a mov whose dest rides only the store's value operand renames it
+          vh (? (two? lx || two? sx || two? hit || two? sh) ()
+                !(two? f && <f = 'mov && !(charm? <>>f) && two? nx && member? <nx gstops) ()
+                !(id? <>>>nx <>f) ()
+                (id? <>nx <>f) ()
+                `(<nx <>nx <>>nx <>>f))
+          ; ... and a li riding only the value operand is the store-immediate, each width
+          ; truncating like its register twin
+          vi (? (two? lx || two? sx || two? hit || two? sh || two? vh) ()
+                !(two? f && <f = 'li && charm? <>>f && two? nx && member? <nx gstops) ()
+                !(id? <>>>nx <>f) ()
+                (id? <>nx <>f) ()
+                (: k <>>f
+                   ok (? (<nx = 'st) (fits32? k)
+                         (<nx = 'st4) (&& (-2147483648 <= k) (k <= 4294967295))
+                         (<nx = 'st2) (&& (-32768 <= k) (k <= 65535))
+                         (&& (-128 <= k) (k <= 255)))
+                   (? ok `((? (<nx = 'st) 'si (<nx = 'st1) 'si1 (<nx = 'st2) 'si2 'si4)
+                           <>nx <>>nx k)
+                      ())))
           (? (two? lx)
               (? (id? <>nx <>f || dies? <>f >r) (lx >< addrf1 >r)
                  !(id? <>f <>>f || id? <>f <>>>f)
@@ -3323,13 +3371,30 @@
                  !(id? <>nx <>>f || id? <>nx <>>>f)
                   (lx >< f >< addrf1 >r)
                  (f >< addrf1 r))
+             (two? sx)
+              (? (dies? <>f >r) (sx >< addrf1 >r)
+                 !(id? <>f <>>f || id? <>f <>>>f)
+                  (f >< sx >< addrf1 >r)
+                 (sx >< f >< addrf1 >r))
              (two? hit)
               (: nl `(<nx <>nx <hit <>hit)
                  (? (id? <>nx <>f || dies? <>f >r) (nl >< addrf1 >r)
                     !(id? <>f <hit) (f ><  nl >< addrf1 >r)
                     (nl >< f >< addrf1 >r)))
+             (two? sh)
+              (: nl `(<nx <sh <>sh <>>>nx)
+                 (? (dies? <>f >r) (nl >< addrf1 >r)
+                    !(id? <>f <sh) (f >< nl >< addrf1 >r)
+                    (nl >< f >< addrf1 >r)))
+             (two? vh)
+              (? (dies? <>f >r) (vh >< addrf1 >r)
+                 (f >< vh >< addrf1 >r))
+             (two? vi)
+              (? (dies? <>f >r) (vi >< addrf1 >r)
+                 (f >< vi >< addrf1 >r))
              (f >< addrf1 r))))
-   (addrfold fs) (addrf1 (addrf1 fs))
+   (addrfold fs) (: r (addrf1 (addrf1 fs))
+                    (? ((tally r) = (tally fs)) r (addrfold r)))
 
    ; store-forward: a full-word frame store followed by ITS OWN reload reads the register instead
    ; -- (st r4 o rX) (ld rY r4 o) keeps the store and turns the reload into a mov. ⚠ the narrow
