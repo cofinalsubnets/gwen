@@ -420,14 +420,14 @@
    ; INSTALLED AT LOAD, not at the prompt: file mode is where nobody was listening. an unbound
    ; global already surfaced from C, a `:` read before its pin did not, and both answer the zero
    ; point -- a typo reads () and (() x) is 1, a fake result wearing a real one's face.
-   ; `help` is always BOUND now (prel binds it ()), so the question is what it IS, not
-   ; whether it is there -- and (ev 'help) is the live read, since a bare one would
-   ; capture at creation. that also retires the (names ()) scan this used to pay.
-   _ (? (nil? (ev 'help)) (ev `(': 'help file-help)))
+   ; (heard ()) is the live read of the installed help (the hot_help slot), so the
+   ; question is what it IS, not whether it is there -- and an already-heard help
+   ; (a frontend's own) is respected, never clobbered.
+   _ (? (nil? (heard ())) (hear file-help))
    ; ⚠ raw the tty BEFORE reading: the editor is the sole echo, so cooked-mode echo
    ; must be off or every line doubles.
    (shell _)
-     (: _ (ev `(': 'help shell-help))   ; the prompt survives every raise; a script must not
+     (: _ (hear shell-help)             ; the prompt survives every raise; a script must not
         _ (raw 1)
         _ (puts (";3 love " + love-version + "\n"))
         (repl 0 0))

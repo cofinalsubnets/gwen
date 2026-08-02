@@ -192,7 +192,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_vec, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, // data sentinels (enum q order); each tail-jumps to its apply handler
- lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
+ lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_pin, lvm_peep, lvm_fputx, lvm_buf, lvm_bufnew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -834,7 +834,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define nifs(_) \
  _(nif_clock, "clock", s1(lvm_clock)) _(nif_nclock, "nclock", s1(lvm_nclock)) _(nif_please, "please", s1(lvm_please))\
  _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
- _(nif_seal, "seal-hook", s2(lvm_seal)) _(nif_books, "books", s1(lvm_books)) _(nif_setbooks, "setbooks", s1(lvm_setbooks)) _(nif_mods, "mods", s1(lvm_mods)) _(nif_lib, "lib", s1(lvm_lib))\
+ _(nif_seal, "seal-hook", s2(lvm_seal)) _(nif_heard, "heard", s1(lvm_heard)) _(nif_books, "books", s1(lvm_books)) _(nif_setbooks, "setbooks", s1(lvm_setbooks)) _(nif_mods, "mods", s1(lvm_mods)) _(nif_lib, "lib", s1(lvm_lib))\
  _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
  _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
  _(nif_lt, "<", s2(lvm_lt))  _(nif_le, "<=", s2(lvm_le)) _(nif_eq, "=", s2(lvm_eq))\
@@ -951,8 +951,8 @@ static union u const yield_c[] = { {_lvm_yield_c} };
 // ret0/cur/port_io). A raise enters it with the raised status encoded into g
 // (see ghelp2 below). A scare re-encodes and yields to C. (The MORE bit used to
 // arrive here too, as read control flow; the reader answers its own nothings as
-// values now, so the scare lane is the whole of it.) Define a global
-// `help` function to land raises in l instead.
+// values now, so the scare lane is the whole of it.) Install a help --
+// prel's (hear f), the hot_help slot -- to land raises in l instead.
 // the scare exit door: re-encode and yield to C. Lives OUTSIDE the lvm_*
 // namespace (the underscore convention, like _lvm_yield_c above) because it
 // is the one designed return -- the vmret gate's no-ret invariant sounds
@@ -977,7 +977,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
  g->len = len0, g->pool = (void*) g, g->alloc = al;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
+ g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_help = zero;   // unsealed: hot_hook traps until (seal-hook) fills them; help zero = nobody listening
  g->mods = zero;                       // the module registry: lazily created by the first (mods _) read
  g->lib = zero;                        // the source library: same lazy shape ((lib _) / ai_lib_)
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
@@ -1695,7 +1695,6 @@ static ai_noinline intptr_t gcp(struct ai *g, word x, word const *p0, word const
 static ai_inline struct ai *pushl(struct ai*g) { return intern(ai_strof(g, "\\")); }
 static struct ai *c0(struct ai *g, lvm_t *y);
 static struct ai *ai_eval(struct ai *g);
-static struct ai_mint *sym_probe(struct ai *g, char const *nm, uintptr_t n);
 
 // function state using this type
 struct env {
@@ -1771,11 +1770,9 @@ static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  // skipped, which also terminates the recursion through ai_eval.
  { word x0 = g->sp[0];
    if (chainp(x0) && (!lamp(A(x0)) || datp(A(x0)))) {
-    word of = ai_core_of(g)->hot_opfix;          // sealed: a book rebind can't reach this lane
-    if (!lamp(of)) {                             // pre-seal (mid-prel bootstrap): probe by nom
-     struct ai_mint *os = sym_probe(ai_core_of(g), "opfix", 5);
-     of = os ? bookget(ai_core_of(g), 0, word(os)) : 0; }
-    if (of && lamp(of)) {
+    word of = ai_core_of(g)->hot_opfix;          // sealed: a book rebind can't reach this lane;
+    if (lamp(of)) {                              // pre-seal (mid-prel bootstrap) it is zero and
+                                                 // the pass skips -- everything there is prefix
      g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, zero, zero, of)))))));
      if (!ai_ok(g)) return g;
      g->sp[1] = g->sp[0], g->sp += 1; } } }
@@ -2323,26 +2320,9 @@ lvm(lvm_eval) { return Ip++, Pack(g),
 // ============================================================================
 // vm
 // ============================================================================
-// Probe the symbol map for a C-string name, materializing the lookup with a
-// phantom ai_str on the C stack -- same content hash, same walk as
-// intern_checked, but never interning or allocating. A miss means the name was
-// never read, so no global by that name was ever defined.
-uintptr_t hash(struct ai*, intptr_t);
-static struct ai_mint *sym_probe(struct ai *g, char const *nm, uintptr_t n) {
- word m = g->symbols;
- if (!m) return 0;
- uintptr_t h = mix;                            // the KString content hash, over the C bytes
- for (uintptr_t j = 0; j < n; j++) h ^= (uint8_t) nm[j], h *= mix;
- uintptr_t mask = map_cap(m) - 1, i = h & mask;
- word *s = map_slots(m);
- for (;; i = (i + 1) & mask) {
-  word k = s[2 * i];
-  if (k == map_gap) return 0;
-  if (len(k) == n && !memcmp(txt(k), nm, n)) return sym(s[2 * i + 1]); } }
-
-// The five hooks (love.h) are lisp the C apply/compile lanes must reach. (seal-hook n f)
+// The hooks (love.h) are lisp the C apply/compile lanes must reach. (seal-hook n f)
 // hands each one over as it comes into being; the lanes then read the slot directly -- no
-// per-call sym_probe + book lookup, and no later rebind of the nom can reach them.
+// per-call name lookup, and no later rebind of the nom can reach them.
 // hot_hook traps if a slot is unsealed (zero) or somehow not a lambda: a clean failure, never
 // a wild read. g->hot_* is GC-traced (v0..end) and rides the egg image, so a loaded image
 // is sealed.
@@ -2367,10 +2347,13 @@ static ai_inline ai_word hot_hook(ai_word h) { if (!lamp(h)) __builtin_trap(); r
 // in the popped region, deliver to the caller's ret at Sp[fs+2]). The fused arg/quote
 // variants first push their argument under the operator and bump Ip by one word so
 // the canonical [.. x n] layout and resume/frame-size operand line up, then divert.
-static lvm(numap_swap) {
+// apply the partial to the next argument: the result of the last application
+// sits over the next operand, so swap to put it in operator position, then ap.
+// one ap_next cell in a drive = one more curried argument.
+static lvm(ap_next) {
  word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
  return Ap(lvm_ap, g); }
-union u const numap_drive[] = { {lvm_ap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
+union u const numap_drive[] = { {lvm_ap}, {.ap = ap_next}, {.ap = lvm_ret0} };
 
 // --- callout_drive: the STACKLESS call-out bridge (the glaze call-out arc) -------------------------
 // A native glaze blob calls a closure the way the VM itself does -- NOT by re-entering C, but by
@@ -2426,36 +2409,46 @@ static lvm(help_ret_scare) {  // result ignored: scares are not (yet) resumable
 static union u const help_more_k[] = { {help_ret_more} };
 static union u const help_scare_k[] = { {help_ret_scare} };
 static union u const help_drive[] =
- { {lvm_ap}, {.ap = numap_swap}, {.ap = numap_swap}, {.ap = lvm_ret0} };
+ { {lvm_ap}, {.ap = ap_next}, {.ap = ap_next}, {.ap = lvm_ret0} };
 
 // Raise status s with condition data a/b to the help continuation. With a
-// global `help` function -- present the way everything is present: by its
-// net -- and 5 words of stack headroom (the raise path never
-// allocates), build the (help s a b) frame and run it; else hand the
-// status-encoded core straight back to C, which is what every other scare
-// site does (the OOM lanes above). Pre-book raises (ai_ini_0) always take
-// the default.
+// help installed (the hot_help slot, prel's `hear` -- present the way
+// everything is present: by its net) build the (help s a b) frame and run it;
+// else hand the status-encoded core straight back to C, which is what every
+// other scare site does (the OOM lanes above). Pre-hear raises always take
+// the default: the slot is zero until somebody listens.
+// THE RAISE MAKES ITS OWN ROOM: the frame is 5 words, and short of them one
+// collection buys them -- sound because the callers Pack before entering, the
+// scare data rides the GC-walked scare_a/b stash, and K is static text, so
+// every heap pointer re-derives after the move. the raise still never
+// ALLOCATES. a please that comes up short keeps the default escape (on the
+// OOM lane that is one redundant sweep on the death path; each nested raise
+// pins 5 more words, so a help that re-scares cannot spiral forever).
 // `ip` IS LEFT WHERE THE RAISE HAPPENED: the callers Pack before entering here,
 // so the core still points at the raise site for anything that wants to say
 // WHERE, and the exit face is the one reader that could.
 static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
                          union u const *K) {
  if (s == ai_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
- if (c->book) {
-  struct ai_mint *ts = sym_probe(c, "help", 4);
-  word h = ts ? bookget(c, zero, word(ts)) : zero;
-  if (!ai_nilp(c, h) && avail(c) >= 5) {
-   word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
-   sp[0] = putcharm(s), sp[1] = h;
-   sp[2] = a, sp[3] = b;
-   sp[4] = word(K);
-   c->ip = (union u*) help_drive;
+ word h = c->hot_help;
+ if (!ai_nilp(c, h) && avail(c) < 5) {
+  struct ai *p = ai_please(c, 5);
+  if (!ai_ok(p)) return encode(ai_core_of(p), s);
+  c = ai_core_of(p);                            // moved: re-derive every pointer
+  if (s == ai_status_scare) a = c->scare_a, b = c->scare_b;
+  h = c->hot_help; }                            // the slot is walked: re-read for the move
+ if (!ai_nilp(c, h) && avail(c) >= 5) {
+  word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
+  sp[0] = putcharm(s), sp[1] = h;
+  sp[2] = a, sp[3] = b;
+  sp[4] = word(K);
+  c->ip = (union u*) help_drive;
 #if ai_tco
-   return c->ip->ap(c, c->ip, c->hp, c->sp);
+  return c->ip->ap(c, c->ip, c->hp, c->sp);
 #else
-   return c;                       // ok-g: the trampoline dispatches help_drive
+  return c;                       // ok-g: the trampoline dispatches help_drive
 #endif
-  } }
+ }
  return encode(c, s);
 }
 struct ai *ghelp2(struct ai *g, enum ai_status s) {
@@ -2473,13 +2466,7 @@ struct ai *ghelp(struct ai *g) { return ghelp2(ai_core_of(g), ai_code_of(g)); }
 // resume is this nif's own ret. With no help installed the C default
 // applies and the scare is terminal.
 lvm(lvm_scare) {
- Have(6);                          // [resume] + ai_raise's 5 words (a, b are the
-                                   // two args, already on the stack). Under-
-                                   // provisioning here lets ai_raise's avail>=5
-                                   // guard fail and SILENTLY drop the help call,
-                                   // so a deliberate scare can miss its handler
-                                   // on a tight heap (cf. lvm_index,
-                                   // which Have(8) for the same reason).
+ Have1();                          // the resume push only: ai_raise buys its own frame
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
@@ -2525,9 +2512,7 @@ lvm(lvm_index) {
   *--Sp = v,                       // present: push the live value, no quote patch
   Ip += 2,
   Continue();
- Have(8);                          // [resume a b] + ai_raise's 5 words
- struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? bookget(g, zero, word(ts)) : zero;
+ word h = g->hot_help;
  if (ai_nilp(g, h)) {
 #if __STDC_HOSTED__
   // helpless (file mode): the zero point is otherwise SILENT, so an unbound name reads
@@ -2549,9 +2534,9 @@ lvm(lvm_index) {
  word a = missing_tag(g);          // may collect
  if (!a) return ghelp2(g, ai_status_scare);   // no tag to be had: the bare scare, still packed
  Unpack(g);
- Have(8);                          // re-reserve AFTER the intern: [resume a b] + ai_raise's 5.
-                                   // A collect here RE-DISPATCHES the whole op, so `a` is
-                                   // either untouched or never read.
+ Have(3);                          // reserve AFTER the intern: [resume a b] (ai_raise buys
+                                   // its own frame). A collect here RE-DISPATCHES the whole
+                                   // op, so `a` is either untouched or never read.
  word b = Ip[1].x;
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
@@ -2579,7 +2564,9 @@ static lvm(lvm_numtap) {
  return Sp = dst, Ip = (union u*) numap_drive, Continue(); }
 
 // (seal-hook n f): install f as core hook n -- 0 read, 1 num-ap, 2 stack, 3 compose,
-// 4 opfix -- numbered in the order the boot seals them (p1, then the prel twice over).
+// 4 opfix -- numbered in the order the boot seals them (p1, then the prel twice over),
+// plus 5, the help, the one DYNAMIC slot (prel's `hear` is its friendly face; any
+// value goes, nil meaning nobody listening, so it alone skips the lambda gate).
 // The CALLER hands the function over rather than the nif reading it back off the book,
 // which is what lets p1 seal the reader with no name anywhere and makes every ordering
 // contract LEXICAL: a seal written above its subject reads a missing name, where the old
@@ -2589,16 +2576,20 @@ static lvm(lvm_numtap) {
 // A switch, not a table: an lvm_ body must stay frame-free (the sibcall law; see the lvm_
 // scratch rule), and a slot[] would be an address-taken local.
 lvm(lvm_seal) {
- if (!lamp(Sp[1])) __builtin_trap();
+ if (getcharm(Sp[0]) != 5 && !lamp(Sp[1])) __builtin_trap();
  switch (getcharm(Sp[0])) {
   case 0: g->hot_read = Sp[1]; break;
   case 1: g->hot_numap = Sp[1]; break;
   case 2: g->hot_stack = Sp[1]; break;
   case 3: g->hot_compose = Sp[1]; break;
   case 4: g->hot_opfix = Sp[1]; break;
+  case 5: g->hot_help = Sp[1]; break;
   default: __builtin_trap(); }
  Sp += 1, Sp[0] = zero, Ip += 1;
  return Continue(); }
+// (heard x) -> the installed help (x ignored): the live read of hook 5, what
+// prel's cellread and bao's launcher ask before choosing to raise or install.
+op11(lvm_heard, (intptr_t) g->hot_help)
 
 // `+`/`*` over a lambda operand: build the combinator partial (stack/compose g g)
 // and leave it as the result. Mirrors lvm_numap's frame -- [g, comb, g, ret=Ip+1]
@@ -3893,22 +3884,6 @@ static struct ai*ioputs(struct ai*g, char const *s) {
  while (*s) g = ioputc(g, *s++);
  return g; }
 
-// the terminal scare face (declared in love.h): an helpless scare's stashed
-// condition data prints as ";; a b" -- the shell help's face -- to the err
-// port; the bare scare (zero zero) is oom, which has no data: answer 0 and let
-// the frontend report it raw. best-effort: a failure mid-print just stops.
-int ai_scare_face_(struct ai *g) {
- struct ai *c = ai_core_of(g);
- if (!c || (zerop(c->scare_a) && zerop(c->scare_b))) return 0;
- c->io = &ai_stderr;
- struct ai *h = ioputs(c, ";; ");  // gfputx may GC and MOVE the core: re-derive
- if (ai_ok(h)) h = gfputx(h, &ai_stderr, ai_core_of(h)->scare_a);
- if (ai_ok(h)) h = ioputc(h, ' ');
- if (ai_ok(h)) h = gfputx(h, &ai_stderr, ai_core_of(h)->scare_b);
- if (ai_ok(h)) h = ioputc(h, '\n');
- if (ai_ok(h)) zflush(h);
- return 1; }
-
 static struct ai*ioputn(struct ai *g, intptr_t n, uint8_t b) {
  uintptr_t
   m = n >= 0 || b != 10 ? (uintptr_t) n : (g = ioputc(g, '-'), -(uintptr_t) n),
@@ -3916,6 +3891,27 @@ static struct ai*ioputn(struct ai *g, intptr_t n, uint8_t b) {
   r = m % b;
  if (q) g = ioputn(g, q, b);
  return ioputc(g, ai_digits[r]); }
+
+// the terminal scare face (declared in love.h): the one reporter every frontend
+// calls on a terminal scare. stashed condition data prints as ";; a b" -- the
+// shell help's face -- on err; the bare scare (zero zero) is oom, which has no
+// data: ";; oom@len=N" instead, ioputs/ioputn only, safe on an exhausted heap
+// (err is a bare static port, so zputc's no-buffer lane touches no heap).
+// best-effort: a failure mid-print just stops. gfputx may GC and MOVE the
+// core, so it is re-derived at every read after a print.
+void ai_scare_face_(struct ai *g) {
+ if (!(g = ai_core_of(g))) return;
+ g->io = &ai_stderr;
+ if (zerop(g->scare_a) && zerop(g->scare_b)) {
+  g = ioputs(g, ";; oom@len=");
+  if (ai_ok(g)) g = ioputn(g, (intptr_t) ai_core_of(g)->len, 10); }
+ else {
+  g = ioputs(g, ";; ");
+  if (ai_ok(g)) g = gfputx(g, &ai_stderr, ai_core_of(g)->scare_a);
+  if (ai_ok(g)) g = ioputc(g, ' ');
+  if (ai_ok(g)) g = gfputx(g, &ai_stderr, ai_core_of(g)->scare_b); }
+ if (ai_ok(g)) g = ioputc(g, '\n');
+ if (ai_ok(g)) zflush(g); }
 
 static ai_inline struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o) {
  return g->io = o, ioputn(g, n, b); }

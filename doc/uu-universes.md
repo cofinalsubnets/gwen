@@ -130,7 +130,7 @@ ignores it).
 
 Gotchas hit:
 - `assert` (prel.l:517) scares on a false claim, but uu.l installs a scare-SWALLOWING help for its
-  negative-test window (uu.l:~2335 → `(: help 0)`). A predicative `(assert …)` placed inside that
+  negative-test window (uu.l:~2335 → `(hear 0)`). A predicative `(assert …)` placed inside that
   window passes VACUOUSLY. Fix: place it before the window; express the rejection as a pure boolean
   `cleq` (not `rejects`, which needs that window's HELPC-delegating help).
 - A silent reader-stop also exits 0 — confirm a section ran by probing a binding it defines AND by

@@ -235,11 +235,12 @@ struct ai {
    ai_word scare_a, scare_b; // the last bare scare's condition data, stashed at
                   // the raise so a terminal exit can speak (ai_scare_face_);
                   // zero zero = the bare oom, which has no data. GC-traced here.
-   // THE FIVE HOOKS: lisp the C lanes must reach, handed over by (seal-hook n f) and
-   // read by SLOT thereafter -- no per-call sym_probe + book lookup, and no later rebind
+   // THE HOOKS: lisp the C lanes must reach, handed over by (seal-hook n f) and
+   // read by SLOT thereafter -- no per-call name lookup, and no later rebind
    // of a nom can reach them. They are declared and numbered in SEAL ORDER, which is also
    // boot order. All GC-traced (v0..end) and image-serialized, so a woken runtime comes up
-   // sealed; unsealed = zero -> hot_hook traps, never a wild read.
+   // sealed; unsealed = zero -> hot_hook traps, never a wild read (slot 5, the help,
+   // is the exception: zero is its steady state and the raise lanes read it nil-tested).
    ai_word hot_read;  // 0: the CORPUS READER -- p1.l's whole-text door, sealed by p1's own
                   // last act, which is why the reader needs no name in the book at all.
                   // zero = p1 is not up yet, and readtext falls back to p0's lisp subset.
@@ -251,7 +252,12 @@ struct ai {
                   // the slot.
    ai_word hot_opfix; // 4: the operator factor pass, sealed last (it does not exist until
                   // late in the prel) -- ai_eval reads the field, so a book rebind cannot
-                  // reach the C compile lane; pre-seal it falls back to the book probe.
+                  // reach the C compile lane; pre-seal the factor pass simply skips
+                  // (everything up to the seal is written prefix).
+   ai_word hot_help;  // 5: the INSTALLED HELP -- unlike 0-4 it is DYNAMIC: (hear f)
+                  // installs, (hear ()) uninstalls, (heard ()) answers it, and zero is
+                  // the helpless steady state (raises take the default escape). the
+                  // raise lanes (ai_raise, lvm_index) read the slot, never the book.
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`
                   // on a named scope, read by `use`/`from` (love/prel.l). A lazy
                   // singleton (the `mods` nif creates it on first read, so both
@@ -438,10 +444,10 @@ void *ai_image_save_(struct ai*, uintptr_t *outlen);   // the unguarded worker: 
 struct ai *ai_image_load(void const *buf, uintptr_t len);
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
-// the terminal scare face: print ";; a b\n" (show forms) to the err port from
-// the stashed condition data and answer 1; the bare scare (zero zero -- oom,
-// which has no data) answers 0 so the frontend can report it raw.
-int ai_scare_face_(struct ai*);
+// the terminal scare face: the one reporter for a terminal scare. prints
+// ";; a b\n" (show forms) to the err port from the stashed condition data;
+// the bare scare (zero zero -- oom, which has no data) prints ";; oom@len=N\n".
+void ai_scare_face_(struct ai*);
 
 extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 

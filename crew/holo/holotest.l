@@ -244,7 +244,7 @@
    ;; non-commutative): it raises 'alias-dst rather than emit subtly wrong bytes. we trap the scare
    ;; with a help that delegates everything else (incl the reader's own eof/more) back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
-   _ (: help (\ s a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp s a b))))
+   _ (hear (\ s a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp s a b))))
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
@@ -253,7 +253,7 @@
    ;; (`neg xzr, x0`) that leave sp alone. it raises rather than emit them; moving sp is `lea`'s
    ;; job (a64.anchor / a64.abandon below), and the arithmetic goes through a plain register. --
    spcaught (tablet 0) _ (pin spcaught 0 0)
-   _ (: help (\ s a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp s a b))))
+   _ (hear (\ s a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp s a b))))
    _ (holo-bytes 'arm64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 

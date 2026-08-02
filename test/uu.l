@@ -2475,7 +2475,7 @@
 
 ; --- the kernel refuses: ill-typed terms scare; the help cell catches them.
 ; --- (install per the help law; the scare bit is the only one a help sees.)
-(: (help s p e) (: h (peep HELPC () 0) (? h (h s p e) 0)))
+(hear (\ s p e (: h (peep HELPC () 0) (? h (h s p e) 0))))
 (assert
  (id? 'rejected (rejects (\ z (defn 'uu-bad1 '(paths nat 1 2) '(idpath 1)))))
  (id? 'rejected (rejects (\ z (defn 'uu-bad2 '(pi x nat nat) '(lam x (succ y))))))
@@ -2484,4 +2484,4 @@
  (id? 'rejected (rejects (\ z (defn 'uu-bad5 'nat '(let x (lam y y) x)))))
  (id? 'rejected (rejects (\ z (defn 'uu-bad6 '(pi x nat 5) '(lam x x)))))  ; a non-type in the codomain
  (id? 'accepted (rejects (\ z (defn 'uu-good '(paths nat 2 2) '(idpath 2))))))
-(: help 0)
+(hear 0)

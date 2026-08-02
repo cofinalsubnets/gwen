@@ -127,8 +127,9 @@
 ;   shell installs a default help (love/bao.l shell-help): a scare prints `;; a b` and answers the zero
 ;   point, so the session survives every raise and a missing nom or apcap is VISIBLE. FILE MODE HAS
 ;   ONE TOO (file-help, at bao's load): same face, but a scare that is not `missing` quits 1, so an
-;   assert failure still stops the run. `help` is always BOUND (prel binds it ()); ⚠ read it with
-;   (ev 'help), since a bare read captures at CREATION and never sees a later install.
+;   assert failure still stops the run. a help is INSTALLED, not bound: (hear f) writes the hot_help
+;   core slot (the one the C raise lanes read), (hear ()) uninstalls, (heard ()) is the live read --
+;   `help` is not a book name at all.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session can take one in
 ;   parallel: lux (the X11 window manager, crew/lux/), inle (the freestanding kernel, port/inle/),
@@ -315,7 +316,7 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; array-ctor helpers, the macro expanders -- the macro TABLE lives on inside the compiler's closures),
 ; every hot lvm_* pointer, and finally the `book` itself. compiled references were folded, so only the
 ; noms die; noms the printer/reader/expanders EMIT (spread link pin tablet mono list ..) stay, as do
-; the C-resolved hooks (num-ap add mul help). the shell core (love/bao.l) needs no mopping: its internals
+; the C-resolved hooks (num-ap add mul). the shell core (love/bao.l) needs no mopping: its internals
 ; are closure-private, and it is a REGISTERED MODULE -- the USER VERBS (read reads welp wrap) re-pin
 ; globally at its foot, the PLUMBING (shell bao edraw edln) stays sealed: every frontend launcher
 ; evals ((from 'bao 'bao) 0) / ((from 'bao 'shell) 0), and (from 'bao 'keys) is the manifest.

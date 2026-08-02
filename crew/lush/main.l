@@ -57,9 +57,8 @@
               (sh-file a (cup args)))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty
-   ; (the cooked fallback). interactively: install lush-help as the floor IF no
-   ; help is present (the bao door -- peek the book, define through ev so a
-   ; later (: help 0) uninstall is seen), source the profiles (login only) then
+   ; (the cooked fallback). interactively: hear lush-help as the floor IF no
+   ; help is heard yet (the bao door), source the profiles (login only) then
    ; $ENV else ~/.lushrc cooked -- AFTER the floor lands, so a broken rc scares
    ; back to the prompt instead of killing the shell -- and seed the recall from
    ; ~/.lush_history. ^D / `exit` ends the shell.
@@ -67,7 +66,7 @@
              _ (signal sig-ttou 1) _ (signal sig-ttin 1)
              ok (raw 1)
              (? (nil? ok)
-                (: _ (? !(member? 'help (names ())) (ev `(': 'help lush-help)))
+                (: _ (? (nil? (heard ())) (hear lush-help))
                    _ (pin sh-tty () 1)
                    erc (+ "" (getenv "ENV"))
                    rc (? (tally erc) erc (+ (+ "" (getenv "HOME")) "/.lushrc"))
