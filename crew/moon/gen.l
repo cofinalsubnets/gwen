@@ -1324,7 +1324,7 @@
               (? (&& (two? rv) (<rv = 'regv))   ; p++ on a register-homed scalar: old in r0, home += step
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
                      (mkv ty 'r0 `(`('mov 'r0 <>rv)
-                                    `('add <>rv 'r0 (* stp <>>e)))))
+                                    `('add <>rv <>rv (* stp <>>e)))))
                  ; STORE-DIRECT (the asn twin): a frame scalar's slot is a STATIC offset --
                  ; read/step/write with a direct frame ld+st. leaves no lean, so a loop
                  ; counter's slot never reads as address-taken and the local can home
@@ -4823,16 +4823,20 @@
        ; rideable arrivals ARE the shuttle pair, so a store whose address shuttle moved off a
        ; now-occupied register can land on the very register a param was told it could ride.
        ; so the ride is a PROPOSAL: it is re-read against the code it actually produced, and a
-       ; rider whose arrival picked up a def is DROPPED and the regen re-runs without it (the
-       ; leaf loop below recomputes the pool per attempt) -- the fn keeps its register homes. --
-       (rideok2 fs A)                               ; no def of A survives in fs
+       ; rider whose arrival picked up a FOREIGN def is DROPPED and the regen re-runs without it
+       ; (the leaf loop below recomputes the pool per attempt) -- the fn keeps its register homes.
+       ; a def that READS its own dest is the param's own update (Sp += n riding A: the register
+       ; is the param either side of it) and passes; a foreign value must FIRST land through a
+       ; def that reads nothing of A (rdst never answers an arrival, the shuttle/protocol
+       ; placements are all plain movs/pops), so that def is the one that drops the rider. --
+       (rideok2 fs A)                               ; no FOREIGN def of A survives in fs
         (? (! (two? fs)) 1
            (: f <fs
               (? (! (two? f)) (rideok2 >fs A)
                  (: rd (rdsp f)
                     (? (id? rd 'bar)
                         (? (member? <f '(label jmp br ret jmpr)) (rideok2 >fs A) ())
-                       (member? A <>rd) ()
+                       (member? A <>rd) (? (member? A <rd) (rideok2 >fs A) ())
                        (rideok2 >fs A))))))
        (ridesound? fs ks)                           ; every rider's arrival survived
         (? (! (two? ks)) 1
@@ -4908,6 +4912,7 @@
        sp1 (? (two? vzf) `((<sp1 + vzf) (caup sp1)) sp1)   ; the VLA size-slot zeroes ride after the spills
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
+       lrec1 (peep g 'lrec ())                      ; ir1's locals record: a leaf RETRY ranks on it (a regen leaves pass-2 offsets)
        ride (? (|| sr6f (|| vararg (|| (peep g 'fesc ()) (hascall? ir1)))) () (rideset ir1 params 0 ()))
        (pools rd) (: rh (map (\ k (homereg k)) rd)   ; the freed homes rejoin the pool for locals
                      uh (filter (\ q (! (member? q rh))) (uhomes params 0 ()))
@@ -4943,7 +4948,8 @@
        ; other. strictly shrinking (a failed check names a rider), so at most (tally ride)
        ; re-runs; the no-shrink arm is regen's own deopt wearing through -- take ir1 and stop.
        (leaf rd)
-        (: hp9 (pools rd)
+        (: _ (pin g 'lrec lrec1)                    ; the retry's lpick ranks ir1's layout, never the failed regen's
+           hp9 (pools rd)
            lr9 (? av (lpick ir1 (caup av) (cauup av) hp9) ())
            i2 (regen `('ride rd) (? (two? lr9) <lr9 ()) (? (two? lr9) <>lr9 hp9))
            (? (ridesound? i2 rd) i2
