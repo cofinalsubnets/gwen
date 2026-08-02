@@ -1053,9 +1053,9 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
 #endif
   if (ai_ok(g = ai_strof(g, AI_ARCH)))
    g = ai_pop(ai_defv(g, "love-arch"), 1);
-  // the 'missing condition tag needs no pre-intern: it is the `missing` nif's
-  // name, so installing that nif interns it and the book roots it; the raise
-  // path reads it back alloc-free via sym_probe (lvm_index/lvm_missing).
+  // the 'missing condition tag needs nothing here: the two raise sites mint it
+  // where they use it (missing_tag), so it owes the book no binding and the core
+  // no slot.
   // the reader owns no operator tables: book['operators] (the ONE table,
   // symbol -> arity | (name . arity)) is seeded by the prel, and the
   // opfix source pass (prel.l, hooked by both compilers at c0 and feel)
@@ -2497,6 +2497,20 @@ static ai_inline struct ai *zflush(struct ai*);
 // 0**i is honest nan), a unit absorbs -- which is what keeps (i love you) = 1. It prints
 // () -- the face of absence.
 // No named constant; the nothing is ZeroPoint (ai_mint_zero). DISTINCT from 0 (fixnum) and "" (string).
+// The 'missing condition TAG, minted WHERE IT IS USED by the two ops below.
+// `symbols` is a weak map, so being interned roots nothing -- and nothing needs it
+// to: the intern answers the canonical atom and it is a live value from that moment,
+// held by the frame about to carry it. Both callers are as cold as this runtime
+// gets (a name that is not there), so a short-lived string is cheaper than a core
+// slot or a book binding, and it is why `missing` needs neither.
+// ⚠ MAY COLLECT: Pack first, Unpack after, hold no heap local across it. Affordable
+// HERE and nowhere near ai_raise's no-alloc law -- the OOM lane raises a BARE scare
+// (zero zero, no tag) and never comes through this.
+// Answers the tag, or 0 if the intern could not be made.
+static ai_noinline word missing_tag(struct ai *g) {
+ struct ai *h = intern(ai_strof(g, "missing"));
+ return ai_ok(h) ? ai_pop1(h) : 0; }
+
 // A read of the LIVE book (the outermost cell) by name -- the missing-name law
 // at the global scope, the twin of boxfix's local (missing cell 'nom). A hit
 // pushes the current value; a miss is a MISSING name -- a nom not in the book,
@@ -2531,7 +2545,14 @@ lvm(lvm_index) {
             g->io = sv; }
 #endif
   return *--Sp = ZeroPoint, Ip += 2, Continue(); }
- word a = word(sym_probe(g, "missing", 7)), b = Ip[1].x;   // 'missing: the nif's name, rooted by the book
+ Pack(g);                          // the tag is minted only on the lane that carries it
+ word a = missing_tag(g);          // may collect
+ if (!a) return ghelp2(g, ai_status_scare);   // no tag to be had: the bare scare, still packed
+ Unpack(g);
+ Have(8);                          // re-reserve AFTER the intern: [resume a b] + ai_raise's 5.
+                                   // A collect here RE-DISPATCHES the whole op, so `a` is
+                                   // either untouched or never read.
+ word b = Ip[1].x;
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
@@ -2540,8 +2561,11 @@ lvm(lvm_index) {
 // k present in map t answers the value; a miss is the MISSING CONDITION: with a
 // global help installed the read raises (help 1 'missing k) and the help's result
 // is the value, helpless it reads the zero point. boxfix's letrec cells read this way --
-// pre-fill is a miss, the binding-site nom the payload. distinct from peep,
-// whose caller names what absence means.
+// pre-fill is a miss, the binding-site nom the payload, and that is the WHOLE
+// customer: the nom is mopped at birth (love/egg.l) and boxfix emits the VALUE.
+// distinct from peep, whose caller names what absence means -- and peep is what
+// a presence question wants, since (peep t k (mint 0)) tells absence from every
+// stored value, this one only routes the miss into the condition system.
 lvm(lvm_missing) {
  word v = tabp(Sp[0]) ? ai_mapget(g, word(no_entry), Sp[1], Sp[0]) : word(no_entry);
  if (v != word(no_entry)) return
@@ -2557,7 +2581,11 @@ lvm(lvm_missing) {
   Sp++,
   Ip++,
   Continue();
- word a = word(sym_probe(g, "missing", 7));   // 'missing: the nif's name, rooted by the book
+ Pack(g);
+ word a = missing_tag(g);          // may collect; see missing_tag
+ if (!a) return ghelp2(g, ai_status_scare);   // no tag to be had: the bare scare, still packed
+ Unpack(g);
+ Have(8);                          // re-reserve after the intern; a collect re-dispatches
  Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
  Sp[0] = word(Ip + 1), Sp[1] = a;
  return Pack(g), ai_raise(g, ai_status_scare, a, Sp[2], help_more_k); }

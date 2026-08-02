@@ -401,14 +401,16 @@
 ; --- hashes --- #(k v ..)/(hash ..) build, (tablet 0) the empty hash; #() = the EMPTY
 ; MAP (the reader emits (tablet 0); () is the zero-point, distinct from 0); #x boxes a datum;
 ; accessors collection-first peep/pin/pull (peep and pull share the default-if-absent; only pull
-; mutates the key away). THREE ABSENCE LANES, one miss machinery: peep (the caller names absence),
-; apply ((t k) == (peep t k ()) -- a map is a lookup function, absence the zero point), and
-; (missing t k) -- a present k answers, a miss is the missing condition (k the payload).
+; mutates the key away). TWO ABSENCE LANES, one miss machinery: peep (the caller names absence)
+; and apply ((t k) == (peep t k ()) -- a map is a lookup function, absence the zero point).
+; peep is also the PRESENCE test, and a total one: a fresh (mint 0) is unique, so no stored
+; value can pose as it -- (id? s (peep t k s)) tells absence from every value INCLUDING the
+; empty ones, which is the out-of-band presence the ⚠ wrapper law asks for.
 (assert
  (: b #0 (&& (tablet? b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
  (tablet? #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
- (10 = (missing #(1 10) 1)) (id? (:) (missing (tablet 0) 'k)) (0 = (missing #(1 0) 1))   ; missing: the conditioned read; presence beats value
+ (: t #(1 0) s (mint 0) (&& !(id? s (peep t 1 s)) (id? s (peep t 9 s))))   ; peep as the total presence test: a pinned 0 is PRESENT, an absent key is not
  (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
  (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
  ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (tablet? (tablet 0)) !(tablet? 5)

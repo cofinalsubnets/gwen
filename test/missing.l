@@ -62,11 +62,11 @@
 (assert (id? (:) ()) (id? (?) ()) (id? (\) ()))
 (: help 0)
 
-; (missing t k) -- the book read as a value: k present in tablet t answers the
-; value, a miss is the missing condition with k as payload. a tablet is a little
-; book; `the` book is just the outermost one.
-(assert (10 = (missing #(1 10) 1)) (id? (:) (missing (tablet 0) 'k)) (id? (:) (missing 5 'k))
-        (0 = (missing #(1 0) 1)))                   ; presence beats value: a pinned 0 answers 0
-(: help (\ s a b (? (&& (scare? s) (id? a 'missing) (id? b 'an-missing)) 'heard 0)))
-(assert (id? 'heard (missing (tablet 0) 'an-missing)))
-(: help 0)
+; the conditioned read itself is the COMPILER's (boxfix's letrec cells) and its nom
+; is mopped at birth, so there is no user-facing call to assert here. what a reader
+; wants from a tablet is presence, and peep answers that totally: a fresh (mint 0)
+; is unique, so no stored value can pose as it.
+(assert (: t #(1 0) s (mint 0)
+           (&& !(id? s (peep t 1 s))               ; a pinned 0 is PRESENT, not absent
+               (id? s (peep t 9 s))                ; an absent key is absent
+               (id? (:) (peep t 9 ())))))          ; ... and the caller may still name absence ()
