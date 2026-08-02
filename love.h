@@ -648,7 +648,7 @@ static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
 // Raise: to the global `help` function when installed, else the status-encoded
 // core straight back to C (love.c).
 // ghelp re-raises an already-tagged g's own status.
-struct ai *ghelp2(struct ai*, enum ai_status), *ghelp(struct ai*);
+struct ai *ghelp(struct ai*);
 // ⚠ ai_have IS THE PHRASE "this call may collect", and under AI_GC_STRESS it stops
 // being a maybe: every one of them collects, so a raw local held across an
 // allocating call is stale on the FIRST run instead of on the day an unrelated

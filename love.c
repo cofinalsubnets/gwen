@@ -947,23 +947,13 @@ nifs(native_implemented_function);
 static lvm(_lvm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_lvm_yield_c} };
 
-// lvm_help: the default help ap, a first-class vm ap (declared in love.h with
-// ret0/cur/port_io). A raise enters it with the raised status encoded into g
-// (see ghelp2 below). A scare re-encodes and yields to C. (The MORE bit used to
-// arrive here too, as read control flow; the reader answers its own nothings as
-// values now, so the scare lane is the whole of it.) Install a help --
-// prel's (hear f), the hot_help slot -- to land raises in l instead.
-// the scare exit door: re-encode and yield to C. Lives OUTSIDE the lvm_*
-// namespace (the underscore convention, like _lvm_yield_c above) because it
-// is the one designed return -- the vmret gate's no-ret invariant sounds
-// lvm_*, and lvm_help reaches here by tail call (a jmp under ai_tco).
+// lvm_help: the default help ap -- re-encode the raised status, yield to C.
+// _lvm_help_scare sits outside lvm_* on purpose: the one designed `ret`
+// (vmret sounds lvm_* only), reached by tail call.
 static lvm(_lvm_help_scare, enum ai_status s) { return Pack(g), encode(g, s); }
 lvm(lvm_help) {
  enum ai_status s = ai_code_of(g);
  return Ap(_lvm_help_scare, ai_core_of(g), s); }
-
-// ghelp2/ghelp are defined after numap_drive (the help call frame runs
-// through its 3-arg twin); declared in love.h.
 
 static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
 
@@ -2411,35 +2401,22 @@ static union u const help_scare_k[] = { {help_ret_scare} };
 static union u const help_drive[] =
  { {lvm_ap}, {.ap = ap_next}, {.ap = ap_next}, {.ap = lvm_ret0} };
 
-// Raise status s with condition data a/b to the help continuation. With a
-// help installed (the hot_help slot, prel's `hear` -- present the way
-// everything is present: by its net) build the (help s a b) frame and run it;
-// else hand the status-encoded core straight back to C, which is what every
-// other scare site does (the OOM lanes above). Pre-hear raises always take
-// the default: the slot is zero until somebody listens.
-// THE RAISE MAKES ITS OWN ROOM: the frame is 5 words, and short of them one
-// collection buys them -- sound because the callers Pack before entering, the
-// scare data rides the GC-walked scare_a/b stash, and K is static text, so
-// every heap pointer re-derives after the move. the raise still never
-// ALLOCATES. a please that comes up short keeps the default escape (on the
-// OOM lane that is one redundant sweep on the death path; each nested raise
-// pins 5 more words, so a help that re-scares cannot spiral forever).
-// `ip` IS LEFT WHERE THE RAISE HAPPENED: the callers Pack before entering here,
-// so the core still points at the raise site for anything that wants to say
-// WHERE, and the exit face is the one reader that could.
-static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
-                         union u const *K) {
- if (s == ai_status_scare) c->scare_a = a, c->scare_b = b; // for the exit face
+// raise a scare with data a/b at the heard help as (help 1 a b); helpless (or
+// still too tight after a collect) hand the scare-encoded core back to C.
+// callers Pack first (ip stays at the raise site); a/b survive the collect in
+// the scare_a/b stash, so the raise buys its own frame and never allocates.
+static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
+ c->scare_a = a, c->scare_b = b;  // for the exit face
  word h = c->hot_help;
  if (!ai_nilp(c, h) && avail(c) < 5) {
   struct ai *p = ai_please(c, 5);
-  if (!ai_ok(p)) return encode(ai_core_of(p), s);
+  if (!ai_ok(p)) return encode(ai_core_of(p), ai_status_scare);
   c = ai_core_of(p);                            // moved: re-derive every pointer
-  if (s == ai_status_scare) a = c->scare_a, b = c->scare_b;
-  h = c->hot_help; }                            // the slot is walked: re-read for the move
+  a = c->scare_a, b = c->scare_b;
+  h = c->hot_help; }
  if (!ai_nilp(c, h) && avail(c) >= 5) {
   word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
-  sp[0] = putcharm(s), sp[1] = h;
+  sp[0] = putcharm(ai_status_scare), sp[1] = h;
   sp[2] = a, sp[3] = b;
   sp[4] = word(K);
   c->ip = (union u*) help_drive;
@@ -2449,16 +2426,11 @@ static struct ai *ai_raise(struct ai *c, enum ai_status s, word a, word b,
   return c;                       // ok-g: the trampoline dispatches help_drive
 #endif
  }
- return encode(c, s);
+ return encode(c, ai_status_scare);
 }
-struct ai *ghelp2(struct ai *g, enum ai_status s) {
- // nothing raises the MORE bit through help any more -- the reader answers its
- // own nothings as values (doc/io.md rung 6c) -- so this is the scare lane
- // alone. help_more_k lives on regardless: it is what makes a DELIBERATE scare
- // resumable, and `scare`/`missing` reach for it directly below.
- return ai_raise(ai_core_of(g), s, zero, zero, help_scare_k); }
-// Raise on an already-tagged g: re-raise its own status.
-struct ai *ghelp(struct ai *g) { return ghelp2(ai_core_of(g), ai_code_of(g)); }
+// re-raise a failed op's scare: bare data, observe-then-terminal. (the one
+// status that ever reaches here is scare -- more/eof die in the reader.)
+struct ai *ghelp(struct ai *g) { return ai_raise(ai_core_of(g), zero, zero, help_scare_k); }
 // (scare a b): the deliberate raise -- the user scares, the scare bit is set
 // unconditionally and the global help hears (help 1 a b). Unlike a C scare
 // (oom), the raise point here is a clean boundary, so the help's result is
@@ -2469,7 +2441,7 @@ lvm(lvm_scare) {
  Have1();                          // the resume push only: ai_raise buys its own frame
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
- return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
+ return Pack(g), ai_raise(g, a, b, help_more_k); }
 // the missing miss sentinel: a private static address no book value can equal,
 // so a name bound to zero stays distinct from no entry at all.
 static union u const no_entry[1];
@@ -2532,7 +2504,7 @@ lvm(lvm_index) {
   return *--Sp = ZeroPoint, Ip += 2, Continue(); }
  Pack(g);                          // the tag is minted only on the lane that carries it
  word a = missing_tag(g);          // may collect
- if (!a) return ghelp2(g, ai_status_scare);   // no tag to be had: the bare scare, still packed
+ if (!a) return ghelp(g);   // no tag to be had: the bare scare, still packed
  Unpack(g);
  Have(3);                          // reserve AFTER the intern: [resume a b] (ai_raise buys
                                    // its own frame). A collect here RE-DISPATCHES the whole
@@ -2540,7 +2512,7 @@ lvm(lvm_index) {
  word b = Ip[1].x;
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
- return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
+ return Pack(g), ai_raise(g, a, b, help_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: lvm_gc
