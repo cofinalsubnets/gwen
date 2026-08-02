@@ -764,14 +764,35 @@
      (filter (\ v (any (\ p (w v (cup p) 0 0 (lambp (cup (assoc v prs)))))
                        (take (+ 1 (lidx v nm)) prs))) nm))
    (mkcs bx) (map (\ v (link v (link (nom 0) (nom v)))) bx)
-   (cellbinds cs) (map (\ c (link (caup c) (list tablet 0))) cs))
+   (cellbinds cs) (map (\ c (link (caup c) (list tablet 0))) cs)
+   ; THE CELL READ boxfix emits. a filled cell answers its value; a pre-fill read is
+   ; a map miss -> the missing condition carrying the binding-site nom, and the help's
+   ; result is the value at the site. with NO help installed it answers the zero point
+   ; instead of raising -- a raise nobody is listening for would stop the run, and a
+   ; cell miss must stay survivable. that ask is the (names ()) scan, and it is only on
+   ; the MISS lane: a filled cell never reaches it.
+   ; `sent` is minted ONCE: a fresh mint is unique, so nothing a cell can hold poses as
+   ; absence, which is what lets a cell hold () or 0 and still read as FILLED.
+   ; `help` is ALWAYS BOUND, () by default. ai_raise reads () as "nobody is listening"
+   ; exactly as it read an absent name, so nothing downstream changes -- but a reader
+   ; never has to ask whether help EXISTS, only what it IS, and (ev 'help) is then
+   ; always safe (reading an ABSENT name is what trips the always-on warning).
+   help ()
+   sent (mint 0)
+   ; ⚠ (ev 'help) and NOT a bare `help`: a closure captures its free globals at
+   ; CREATION, so a bare read here would freeze the () above and never see the help a
+   ; program installs later. ev re-reads the book at the moment of the miss.
+   (cellread c nm) (: v (peep c nm sent)
+                      (? (nil? (id? v sent)) v
+                         (nil? (ev 'help)) ()
+                         (scare 'missing nm))))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p (nil? (member? (cap p) ns))) cs)
    ; bnd: the lexical binder set, seeded with the scope's own names -- the SHADOW LAW, so a
    ; locally-bound name is an ordinary variable and never a macro head.
    (sub cs x bnd) (?
-    (nom? x) (: p (assoc x cs) (? (two? p) (list missing (caup p) (list '\ (cuup p))) x))
+    (nom? x) (: p (assoc x cs) (? (two? p) (list cellread (caup p) (list '\ (cuup p))) x))
     (atom? x) x
     (: h (cap x) (?
       (id? h '\) (? (atom? (cuup x)) x (: r (lp x) (link '\ (cat (cap r) (list (sub (rmc cs (cap r)) (cup r) (cat (cap r) bnd)))))))

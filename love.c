@@ -217,7 +217,7 @@ lvm_t lvm_kcall,
  lvm_argap, lvm_quoteap, lvm_argtap,
  lvm_arg0, lvm_arg1, lvm_arg2, lvm_arg3,
  lvm_quo0, lvm_quo1, lvm_quo2, lvm_quo3, lvm_quom1, lvm_quom2,
- lvm_callk, lvm_scare, lvm_missing, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
+ lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_key,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_fputc, lvm_fputs, lvm_fflush,
@@ -879,7 +879,7 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_litp, "lit?", s1(lvm_litp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
  _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
- _(nif_missing, "missing", s2(lvm_missing)) _(nif_yield, "yield", s1(lvm_yield_nif)) \
+ _(nif_yield, "yield", s1(lvm_yield_nif)) \
  _(nif_spawn, "twirl", s2(lvm_spawn)) _(nif_wait, "catch", s1(lvm_wait)) \
  _(nif_sleep, "rest", s1(lvm_sleep)) _(nif_donep, "landed?", s1(lvm_donep)) \
  _(nif_scoop, "scoop", s1(lvm_scoop)) \
@@ -2478,7 +2478,7 @@ lvm(lvm_scare) {
                                    // provisioning here lets ai_raise's avail>=5
                                    // guard fail and SILENTLY drop the help call,
                                    // so a deliberate scare can miss its handler
-                                   // on a tight heap (cf. lvm_index/lvm_missing,
+                                   // on a tight heap (cf. lvm_index,
                                    // which Have(8) for the same reason).
  word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
@@ -2556,39 +2556,6 @@ lvm(lvm_index) {
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
  return Pack(g), ai_raise(g, ai_status_scare, a, b, help_more_k); }
-// (missing t k): the book read as a value -- lvm_index's law with the book as an
-// argument (a tablet is a little book; the book is just the outermost one).
-// k present in map t answers the value; a miss is the MISSING CONDITION: with a
-// global help installed the read raises (help 1 'missing k) and the help's result
-// is the value, helpless it reads the zero point. boxfix's letrec cells read this way --
-// pre-fill is a miss, the binding-site nom the payload, and that is the WHOLE
-// customer: the nom is mopped at birth (love/egg.l) and boxfix emits the VALUE.
-// distinct from peep, whose caller names what absence means -- and peep is what
-// a presence question wants, since (peep t k (mint 0)) tells absence from every
-// stored value, this one only routes the miss into the condition system.
-lvm(lvm_missing) {
- word v = tabp(Sp[0]) ? ai_mapget(g, word(no_entry), Sp[1], Sp[0]) : word(no_entry);
- if (v != word(no_entry)) return
-  Sp[1] = v,
-  Sp++,
-  Ip++,
-  Continue();
- Have(8);                          // [resume a b] + ai_raise's 5 words
- struct ai_mint *ts = sym_probe(g, "help", 4);
- word h = ts ? bookget(g, zero, word(ts)) : zero;
- if (ai_nilp(g, h)) return
-  Sp[1] = ZeroPoint,
-  Sp++,
-  Ip++,
-  Continue();
- Pack(g);
- word a = missing_tag(g);          // may collect; see missing_tag
- if (!a) return ghelp2(g, ai_status_scare);   // no tag to be had: the bare scare, still packed
- Unpack(g);
- Have(8);                          // re-reserve after the intern; a collect re-dispatches
- Sp -= 1;                          // [resume a b]: b = the key, already in place at Sp[2]
- Sp[0] = word(Ip + 1), Sp[1] = a;
- return Pack(g), ai_raise(g, ai_status_scare, a, Sp[2], help_more_k); }
 // numap/numtap are tail-called (Ap) from the fused arg/quote aps, which bump
 // Ip by one word so its `ret = Ip+1` math lines up -- leaving Ip pointing at an
 // operand, NOT a re-runnable instruction. So a plain Have() here is unsafe: lvm_gc
@@ -5789,7 +5756,7 @@ static lvm_t *const image_extra_aps[] = {
  // instruction fns a compiled thread embeds directly (no def1 cell to reach
  // them through). On thumb these are ODD and would otherwise escape as
  // "fixnums" -- raw baker addresses, the cross-binary poison.
- lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_missing, lvm_unc, lvm_dot,
+ lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc, lvm_dot,
  lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit };
 // size (words) of the object at p, using the SAME per-kind logic as the GC:
 // data kinds by their copy_* sizes; threads via the production terminator scan
