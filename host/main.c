@@ -214,12 +214,12 @@ static lvm(lvm_open) {
   Sp[2] = Sp[0];
   Sp += 2;
   Ip += 1;
-  return Continue();
+  ai_musttail return Continue();
  fail:
   Sp[1] = ZeroPoint;
   Sp += 1;
   Ip += 1;
-  return Continue(); }
+  ai_musttail return Continue(); }
 
 // (close p) — close a port, mark its fd as the closed-sentinel (-3) so
 // subsequent reads/writes/flush go to the noop slot, and the finalizer
@@ -242,13 +242,13 @@ static lvm(lvm_close) {
       if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
         Unpack(g);
         g->next_wake_at = ai_clock() + 1;
-        return Ap(lvm_yield_sw, g); }
+        ai_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
       close(fd);
       ((struct ai_io*) Sp[0])->fd = putcharm(-3); } }   // ⚠ re-read: wflush may collect
   Sp[0] = ZeroPoint;
   Ip += 1;
-  return Continue(); }
+  ai_musttail return Continue(); }
 
 // --- subprocess (hark) + environment (getenv) ---------------------------
 // Both are host-only nifs (POSIX fork/exec/wait, getenv), like open/close.
@@ -450,7 +450,7 @@ static lvm(lvm_hark) {
  g = host_harkstart(g, 0);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip += 1, Continue(); }
+ ai_musttail return Next(1); }
 
 // (herald argv) -- hark, TEEING: identical to (hark argv), same (status . output)
 // answer, but the child's stdout is relayed as it arrives instead of only at
@@ -460,7 +460,7 @@ static lvm(lvm_herald) {
  g = host_harkstart(g, 1);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip += 1, Continue(); }
+ ai_musttail return Next(1); }
 
 // The shared second ap. It PARKS -- Ip unadvanced, so the whole op re-runs on
 // reschedule and reads its state back off the stack.
@@ -469,10 +469,10 @@ static lvm(lvm_harkdrain) {
  g = host_harkdrain(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- if (Sp[2] != putcharm(-1)) return Ap(lvm_yield_sw, g);
+ if (Sp[2] != putcharm(-1)) ai_musttail return Ap(lvm_yield_sw, g);
  Sp[4] = Sp[0];                                           // the answer over the state
  Sp += 4; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // (exec argv) -> REPLACE this process with argv[0], inheriting stdio (the real
 // terminal). Unlike (hark argv) -- which forks, pipes the child's stdout into a
@@ -513,7 +513,7 @@ static lvm(lvm_exec) {
  Unpack(g);
  Sp[1] = Sp[0];                                            // errno fixnum over argv
  Sp += 1; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // Copy the name to a C string and look it up. Factored out (ai_noinline) so the
 // memcpy(&name,...) escape can't defeat lvm_getenv's tail call (cf. call_open).
@@ -528,17 +528,17 @@ ai_noinline static char const *host_getenv(struct ai_str *nv) {
 // error; the run fixnum-error convention does not apply here.
 static lvm(lvm_getenv) {
  char const *v = ai_strp(Sp[0]) ? host_getenv((struct ai_str*) Sp[0]) : NULL;
- if (!v) { Sp[0] = ZeroPoint; Ip += 1; return Continue(); }
+ if (!v) { Sp[0] = ZeroPoint; Ip += 1; ai_musttail return Continue(); }
  Pack(g);
  if (!ai_ok(g = ai_strof(g, v))) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // (getpid x) -> the running process id (x ignored). main.c is linked into love0
 // too, so unlike the host/*.c glob nifs this one exists in the bootstrap as well.
-static lvm(lvm_getpid) { return Sp[0] = putcharm(getpid()), Ip++, Continue(); }
+static lvm(lvm_getpid) { ai_musttail return Answer(putcharm(getpid())); }
 
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
@@ -553,7 +553,7 @@ static union u const
 // own nifs the same way in its OWN host/<app>.c -- auto-globbed, AI_NIF-registered,
 // NO edit here or to love.c/love.h:
 //   #include "love.h"                                       // the nif-writing surface
-//   static lvm(lvm_foo) { ... return Sp[0] = <v>, Ip++, Continue(); }
+//   static lvm(lvm_foo) { ... ai_musttail return Answer(<v>); }
 //   static union u const nif_foo[] = {{lvm_foo}, {lvm_ret0}};  // 1-arg; curry for more
 //   AI_NIF("foo", nif_foo);
 AI_NIF("quit", nif_exit);

@@ -81,7 +81,7 @@ static lvm(lvm_sha256) {
  Pack(g); g = host_sha256(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}};
 AI_NIF("sha256", nif_sha256);

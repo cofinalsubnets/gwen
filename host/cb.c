@@ -69,7 +69,7 @@ static lvm(lvm_screen) {
     cb_open((struct cb*) s->bytes, (uint16_t) r, (uint16_t) k);
     out = b; } } }
  Sp[2] = out;
- Sp += 2; Ip += 1; return Continue(); }
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
 // (scribe scr x): the feed. A charm is one byte; a string or cask pours every
 // byte through cb_putc (the hot path: one nif call per pty read). Returns the
@@ -88,7 +88,7 @@ static lvm(lvm_scribe) {
    for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
   else out = ZeroPoint; }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (glass scr i): look through to one packed cell.
 static lvm(lvm_glass) {
@@ -98,7 +98,7 @@ static lvm(lvm_glass) {
   uintptr_t i = (uintptr_t) getcharm(Sp[1]);
   if (i < (uintptr_t) c->rows * c->cols) out = putcharm(c->cb[i]); }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (gaze scr k): one header field by key -- no allocation, so a render loop
 // polls the cursor for free. 0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot.
@@ -114,7 +114,7 @@ static lvm(lvm_gaze) {
   case 5: out = putcharm(c->bot);  break;
   default: break; }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // the xterm-256 palette, laid once: 16 classics + the 6x6x6 cube + greys.
 // same recipe as the kernel's fbdraw palette -- a cell means the same
@@ -203,7 +203,7 @@ static lvm(lvm_font) {
     for (uintptr_t i = 0; i < need; i++) s->bytes[i] = (char) src[i];
     out = b; } } }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (blit fb wpx cell x y): one cell, bounds-checked; misuse is nothing.
 static lvm(lvm_blit) {
@@ -222,7 +222,7 @@ static lvm(lvm_blit) {
    cb_px1((uint8_t*) s->bytes, w, (uint32_t) cl, x, y, &a);
    out = fb; } }
  Sp[4] = out;
- Sp += 4; Ip += 1; return Continue(); }
+ Sp += 4; Ip += 1; ai_musttail return Continue(); }
 
 // (blitrow fb wpx scr row curpos): a whole grid row in one call -- the
 // painter's hot lane (a keystroke repaints one row, a scroll a bandful,
@@ -250,7 +250,7 @@ static lvm(lvm_blitrow) {
     cb_px1((uint8_t*) s->bytes, w, cell, q * a.w, row * a.h, &a); }
    out = fb; } }
  Sp[5] = out;
- Sp += 5; Ip += 1; return Continue(); }
+ Sp += 5; Ip += 1; ai_musttail return Continue(); }
 
 // (wet scr k): dirty-row bits for rows 32k..32k+31, read-and-cleared --
 // the renderer's shopping list. bit 255 stands for row 255 and past.
@@ -263,7 +263,7 @@ static lvm(lvm_damage) {
    out = putcharm(c->dmg[k]);
    c->dmg[k] = 0; } }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // gush is GONE: say rides the port vt's writen lane now (love.c lvm_fputs), one
 // write(2) stroke for any string/cask at any port -- the fallback dance died
@@ -286,7 +286,7 @@ static lvm(lvm_swig) {
   if (s->len && ai_io_pending(g, io)) {
    uintptr_t k = ai_io_read_drain(g, io, (unsigned char*) s->bytes, s->len);
    Sp[1] = putcharm((intptr_t) k);
-   Sp += 1; Ip += 1; return Continue(); }
+   Sp += 1; Ip += 1; ai_musttail return Continue(); }
   if (fd >= 0 && s->len) {
    int fl = fcntl((int) fd, F_GETFL);
    fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
@@ -297,7 +297,7 @@ static lvm(lvm_swig) {
           : (errno == EAGAIN || errno == EWOULDBLOCK) ? putcharm(0)
           : putcharm(-errno); } }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (unfold g): a cp437 glyph byte's unicode codepoint, 0 when it has none --
 // the outward half of the utf-8 fold, for a painter re-emitting the grid
@@ -305,7 +305,7 @@ static lvm(lvm_swig) {
 static lvm(lvm_unfold) {
  intptr_t g_ = (Sp[0] & 1) ? getcharm(Sp[0]) : -1;
  Sp[0] = (g_ >= 0 && g_ < 256) ? putcharm(cb_unfold((uint8_t) g_)) : ZeroPoint;
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 
 // Workhorse for (reply scr), called with g Packed and the screen at sp[0].
 // Drains the queue into a stack buffer FIRST (ai_have may move the cask),
@@ -331,7 +331,7 @@ static lvm(lvm_reply) {
  g = host_reply(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 
 static union u const
   nif_screen[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_screen}, {lvm_ret0}},

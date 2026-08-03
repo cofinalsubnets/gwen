@@ -133,7 +133,7 @@ static lvm(lvm_spawn) {
  Unpack(g);
  Sp[1] = Sp[0];                                              // pid over argv
  Sp += 1; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // (glean _) -> (pid . status) of one reaped child, () if none are pending, or a
 // negated errno (e.g. -ECHILD when no children remain). The pid is the CAR so the
@@ -156,7 +156,7 @@ static lvm(lvm_reapany) {
  g = host_reapany(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 
 // --- the signal perceive source (Linux signalfd) --------------------------------
 // (sigfd sigs)  -> a PORT over a signalfd watching `sigs` (a list of signal numbers;
@@ -190,7 +190,7 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the dummy arg
 static lvm(lvm_sigfd) {
  Pack(g); g = host_sigfd(g); Unpack(g);     // host_sigfd folds every failure to (), so no ghelp
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 // read one signalfd_siginfo (non-blocking) into (signo . pid). signo is the raw
 // number (Linux: SIGCHLD 17, SIGTERM 15); pid is ssi_pid (the dead child on SIGCHLD).
@@ -207,16 +207,16 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
 
 static lvm(lvm_sigtake) {
  int fd = (int) port_fd(Sp[0]);
- if (fd < 0) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
+ if (fd < 0) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
  Pack(g);
  g = host_sigtake(g, fd);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 #else
 // signalfd is Linux-only; keep the names present (so init.l loads) but inert.
-static lvm(lvm_sigfd)   { Sp[0] = ZeroPoint; return Ip++, Continue(); }
-static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; return Ip++, Continue(); }
+static lvm(lvm_sigfd)   { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
+static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 #endif
 
 // --- foreground job control + cwd (the muscle a real shell needs) ---------------
@@ -255,8 +255,8 @@ ai_noinline static ai_word host_waitpid(ai_word arg) {
 // (WNOHANG left the child exactly as it found it), so the op re-runs whole.
 static lvm(lvm_waitpid) {
  ai_word r = host_waitpid(Sp[0]);
- if (r == ZeroPoint) { g->next_wake_at = ai_clock() + 1; return Ap(lvm_yield_sw, g); }
- Sp[0] = r; return Ip++, Continue(); }
+ if (r == ZeroPoint) { g->next_wake_at = ai_clock() + 1; ai_musttail return Ap(lvm_yield_sw, g); }
+ Sp[0] = r; ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_signal(ai_word sigw, ai_word dw) {
  if (!(sigw & 1) || !(dw & 1)) return putcharm(EINVAL);
@@ -267,14 +267,14 @@ ai_noinline static ai_word host_posix_signal(ai_word sigw, ai_word dw) {
  return sigaction((int) getcharm(sigw), &sa, NULL) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_signal) {
  Sp[1] = host_posix_signal(Sp[0], Sp[1]);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 
 ai_noinline static ai_word host_chdir(ai_word arg) {
  char buf[4096];
  if (!str_cbuf(arg, buf, sizeof buf)) return putcharm(-1);
  return chdir(buf) ? putcharm(-errno) : ZeroPoint; }
-static lvm(lvm_chdir) { Sp[0] = host_chdir(Sp[0]); return Ip++, Continue(); }
+static lvm(lvm_chdir) { Sp[0] = host_chdir(Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline static struct ai *host_cwd(struct ai *g) {
  char buf[4096];
@@ -285,7 +285,7 @@ static lvm(lvm_cwd) {
  Pack(g); g = host_cwd(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 // --- pipes + redirects (the fd plumbing a shell pipeline needs) ------------------
 // (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or -errno.
@@ -320,18 +320,18 @@ static lvm(lvm_pipe) {
  Pack(g); g = host_pipe(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 static lvm(lvm_openfd) {
  char buf[4096];
- if (!str_cbuf(Sp[0], buf, sizeof buf)) { Sp[1] = putcharm(-1); Sp += 1; return Ip++, Continue(); }
+ if (!str_cbuf(Sp[0], buf, sizeof buf)) { Sp[1] = putcharm(-1); Sp += 1; ai_musttail return Next(1); }
  intptr_t m = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : O_RDONLY;
  int fd = open(buf, flags, 0644);
  Sp[1] = (fd < 0) ? putcharm(-errno) : putcharm(fd);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int err,
                                             intptr_t pg, intptr_t fg) {
@@ -371,17 +371,17 @@ static lvm(lvm_spawnio) {
  Unpack(g);
  Sp[7] = Sp[0];                              // pid over the 7 args
  Sp += 7; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 ai_noinline static ai_word host_posix_ttyfg(ai_word pgw) {
  pid_t pg = ((pgw & 1) && getcharm(pgw) > 0) ? (pid_t) getcharm(pgw) : getpgrp();
  return tcsetpgrp(0, pg) ? putcharm(errno) : ZeroPoint; }
-static lvm(lvm_posix_ttyfg) { Sp[0] = host_posix_ttyfg(Sp[0]); return Ip++, Continue(); }
+static lvm(lvm_posix_ttyfg) { Sp[0] = host_posix_ttyfg(Sp[0]); ai_musttail return Next(1); }
 
 static lvm(lvm_shutfd) {
  intptr_t fd = (Sp[0] & 1) ? getcharm(Sp[0]) : -1;
  Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 // (fdopen fd) -> a PORT over a raw fd -- pipe/openfd's other half, so love reads
 // and writes its own plumbing (a command substitution drains a pipe with slurp, a
@@ -397,7 +397,7 @@ ai_noinline static struct ai *host_fdopen(struct ai *g) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the fd arg
 static lvm(lvm_fdopen) {
  Pack(g); g = host_fdopen(g); Unpack(g);     // every failure folds to (), so no ghelp
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 // (spawnmap argv fdmap closes pg fg) -> pid | -errno. spawnio generalized: instead
 // of the hardwired in/out/err triple, `fdmap` is a list of (childfd . srcfd) pairs
@@ -445,10 +445,10 @@ static lvm(lvm_spawnmap) {
  Unpack(g);
  Sp[5] = Sp[0];                              // pid over the 5 args
  Sp += 5; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // (getuid _) -> the real uid, a charm. the shell's # vs $ prompt; always succeeds.
-static lvm(lvm_getuid) { Sp[0] = putcharm((intptr_t) getuid()); return Ip++, Continue(); }
+static lvm(lvm_getuid) { Sp[0] = putcharm((intptr_t) getuid()); ai_musttail return Next(1); }
 
 // (fork _) -> child pid | 0 in the child | -errno. fork WITHOUT exec -- the
 // shell's subshell: the child EVALS a subtree and quits, and must NEVER return
@@ -459,7 +459,7 @@ ai_noinline static ai_word host_fork(void) {
  fflush(NULL);
  pid_t pid = fork();
  return putcharm(pid < 0 ? -errno : pid); }
-static lvm(lvm_fork) { Sp[0] = host_fork(); return Ip++, Continue(); }
+static lvm(lvm_fork) { Sp[0] = host_fork(); ai_musttail return Next(1); }
 
 // (dup2 src dst) -> () | errno | EINVAL. the self-redirect (a forked subshell
 // laying its own fdmap, a compound's `done < file` swap).
@@ -468,12 +468,12 @@ static lvm(lvm_fork) { Sp[0] = host_fork(); return Ip++, Continue(); }
 ai_noinline static ai_word host_dup2(ai_word sw, ai_word dw) {
  if (!(sw & 1) || !(dw & 1)) return putcharm(EINVAL);
  return dup2((int) getcharm(sw), (int) getcharm(dw)) < 0 ? putcharm(errno) : ZeroPoint; }
-static lvm(lvm_dup2) { Sp[1] = host_dup2(Sp[0], Sp[1]); Sp += 1; return Ip++, Continue(); }
+static lvm(lvm_dup2) { Sp[1] = host_dup2(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
 ai_noinline static ai_word host_dup(ai_word w) {
  if (!(w & 1)) return putcharm(-EINVAL);
  int fd = fcntl((int) getcharm(w), F_DUPFD, 3);
  return putcharm(fd < 0 ? -errno : fd); }
-static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); return Ip++, Continue(); }
+static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); ai_musttail return Next(1); }
 
 // --- pid1 bringup: mount the early filesystems + cgroup dirs ----------------------
 // (mkdir path mode) -> mkdir(2). () | -errno | -1 misuse. mode is octal (493 = 0755).
@@ -487,10 +487,10 @@ static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); return Ip++, Continue(); }
 // the pty/net convention; -errno would net falsey like the () success).
 static lvm(lvm_mkdir) {
  char p[4096];
- if (!str_cbuf(Sp[0], p, sizeof p)) { Sp[1] = putcharm(EINVAL); Sp += 1; return Ip++, Continue(); }
+ if (!str_cbuf(Sp[0], p, sizeof p)) { Sp[1] = putcharm(EINVAL); Sp += 1; ai_musttail return Next(1); }
  intptr_t mode = (Sp[1] & 1) ? getcharm(Sp[1]) : 0755;
  Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(errno) : ZeroPoint;
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 #if defined(__linux__)
 ai_noinline static ai_word host_mount(ai_word a, ai_word b, ai_word c) {
@@ -498,7 +498,7 @@ ai_noinline static ai_word host_mount(ai_word a, ai_word b, ai_word c) {
  if (!str_cbuf(a, src, sizeof src) || !str_cbuf(b, tgt, sizeof tgt) || !str_cbuf(c, typ, sizeof typ))
   return putcharm(EINVAL);
  return mount(src, tgt, typ, 0, NULL) ? putcharm(errno) : ZeroPoint; }
-static lvm(lvm_mount) { Sp[2] = host_mount(Sp[0], Sp[1], Sp[2]); Sp += 2; return Ip++, Continue(); }
+static lvm(lvm_mount) { Sp[2] = host_mount(Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
 
 static int ns_write(char const *path, char const *s) {
  int fd = open(path, O_WRONLY);
@@ -507,15 +507,15 @@ static int ns_write(char const *path, char const *s) {
  return close(fd), (n < 0 ? -1 : 0); }
 static lvm(lvm_newns) {
  long uid = (long) getuid(), gid = (long) getgid();
- if (unshare(CLONE_NEWUSER | CLONE_NEWNS)) { Sp[0] = putcharm(errno); return Ip++, Continue(); }
+ if (unshare(CLONE_NEWUSER | CLONE_NEWNS)) { Sp[0] = putcharm(errno); ai_musttail return Next(1); }
  char b[64];
  ns_write("/proc/self/setgroups", "deny");                       // required before gid_map
  snprintf(b, sizeof b, "0 %ld 1\n", uid); ns_write("/proc/self/uid_map", b);
  snprintf(b, sizeof b, "0 %ld 1\n", gid); ns_write("/proc/self/gid_map", b);
- Sp[0] = ZeroPoint; return Ip++, Continue(); }
+ Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 #else
-static lvm(lvm_mount) { Sp[2] = putcharm(ENOSYS); Sp += 2; return Ip++, Continue(); }   // Linux-only
-static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); return Ip++, Continue(); }
+static lvm(lvm_mount) { Sp[2] = putcharm(ENOSYS); Sp += 2; ai_musttail return Next(1); }   // Linux-only
+static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 #endif
 
 // --- the general POSIX fs surface (the posix_ symbol namespace; doc/posix.md L0,
@@ -562,7 +562,7 @@ static lvm(lvm_posix_stat) {
  Pack(g); g = host_posix_stat(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 ai_noinline static struct ai *host_posix_readdir(struct ai *g) {
  char p[4096];
@@ -585,13 +585,13 @@ static lvm(lvm_posix_readdir) {
  Pack(g); g = host_posix_readdir(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_unlink(ai_word arg) {
  char p[4096];
  if (!str_cbuf(arg, p, sizeof p)) return putcharm(EINVAL);
  return unlink(p) ? putcharm(errno) : ZeroPoint; }
-static lvm(lvm_posix_unlink) { Sp[0] = host_posix_unlink(Sp[0]); return Ip++, Continue(); }
+static lvm(lvm_posix_unlink) { Sp[0] = host_posix_unlink(Sp[0]); ai_musttail return Next(1); }
 
 // (setenv name val) -> () | positive errno | EINVAL misuse; a NON-STRING val UNSETS
 // (the absence lane: (setenv n ()) clears n from the environment).
@@ -605,7 +605,7 @@ ai_noinline static ai_word host_posix_setenv(ai_word nw, ai_word vw) {
  return setenv(n, v, 1) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_setenv) {
  Sp[1] = host_posix_setenv(Sp[0], Sp[1]);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 extern char **environ;
 ai_noinline static struct ai *host_posix_environ(struct ai *g) {
@@ -622,7 +622,7 @@ static lvm(lvm_posix_environ) {
  Pack(g); g = host_posix_environ(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_lseek(ai_word fdw, ai_word offw, ai_word whw) {
  if (!(fdw & 1) || !(offw & 1)) return putcharm(-1);
@@ -632,7 +632,7 @@ ai_noinline static ai_word host_posix_lseek(ai_word fdw, ai_word offw, ai_word w
  return r < 0 ? putcharm(-errno) : putcharm((intptr_t) r); }
 static lvm(lvm_posix_lseek) {
  Sp[2] = host_posix_lseek(Sp[0], Sp[1], Sp[2]);
- Sp += 2; return Ip++, Continue(); }
+ Sp += 2; ai_musttail return Next(1); }
 
 static union u const
   nif_spawn[]   = {{lvm_spawn}, {lvm_ret0}},
@@ -711,7 +711,7 @@ ai_noinline static ai_word host_posix_rename(ai_word ow, ai_word nw) {
  return rename(o, n) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_rename) {
  Sp[1] = host_posix_rename(Sp[0], Sp[1]);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_symlink(ai_word tw, ai_word pw) {
  char t[4096], p[4096];
@@ -719,7 +719,7 @@ ai_noinline static ai_word host_posix_symlink(ai_word tw, ai_word pw) {
  return symlink(t, p) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_symlink) {
  Sp[1] = host_posix_symlink(Sp[0], Sp[1]);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
  char p[4096], b[4096];
@@ -735,7 +735,7 @@ static lvm(lvm_posix_readlink) {
  Pack(g); g = host_posix_readlink(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_chmod(ai_word pw, ai_word mw) {
  char p[4096];
@@ -743,7 +743,7 @@ ai_noinline static ai_word host_posix_chmod(ai_word pw, ai_word mw) {
  return chmod(p, (mode_t) getcharm(mw)) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_chmod) {
  Sp[1] = host_posix_chmod(Sp[0], Sp[1]);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_chown(ai_word pw, ai_word uw, ai_word gw) {
  char p[4096];
@@ -751,7 +751,7 @@ ai_noinline static ai_word host_posix_chown(ai_word pw, ai_word uw, ai_word gw) 
  return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_chown) {
  Sp[2] = host_posix_chown(Sp[0], Sp[1], Sp[2]);
- Sp += 2; return Ip++, Continue(); }
+ Sp += 2; ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
  char p[4096];
@@ -766,13 +766,13 @@ ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
  return utimensat(AT_FDCWD, p, ts, 0) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_utime) {
  Sp[1] = host_posix_utime(Sp[0], Sp[1]);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_rmdir(ai_word pw) {
  char p[4096];
  if (!str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
  return rmdir(p) ? putcharm(errno) : ZeroPoint; }
-static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); return Ip++, Continue(); }
+static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
  char o[4096], n[4096];
@@ -780,12 +780,12 @@ ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
  return link(o, n) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_hardlink) {
  Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
- Sp += 1; return Ip++, Continue(); }
+ Sp += 1; ai_musttail return Next(1); }
 
 static lvm(lvm_posix_umask) {
  Sp[0] = (Sp[0] & 1) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
                      : putcharm(-1);
- return Ip++, Continue(); }
+ ai_musttail return Next(1); }
 
 static union u const
   nif_posix_rename[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_rename}, {lvm_ret0}},
@@ -901,7 +901,7 @@ static lvm(lvm_tether) {
  Unpack(g);
  Sp[1] = Sp[0];                                    // result over argv
  Sp += 1; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // Workhorse for (reap pid), called with g Packed and pid at g->sp[0]. The &st
 // waitpid + the chain alloc live here (off the wrapper's frame so lvm_reap's
@@ -929,7 +929,7 @@ static lvm(lvm_reap) {
  g = host_reap(g, Sp[0]);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 
 // (kill pid sig): POSIX kill(2). A negative pid signals the process group.
 // Returns () on success, the errno fixnum on failure.
@@ -937,7 +937,7 @@ static lvm(lvm_kill) {
  intptr_t pid = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
  intptr_t sig = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
  Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(errno) : ai_zero;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // Workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
 // The &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
@@ -959,7 +959,7 @@ static lvm(lvm_winsize) {
  g = host_winsize(g);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 
 // (setwinsize port rows cols): push a window size onto a master port; the kernel
 // raises SIGWINCH on the slave's foreground group. () on success, errno on
@@ -978,7 +978,7 @@ static lvm(lvm_setwinsize) {
  intptr_t col = (Sp[2] & 1) ? getcharm(Sp[2]) : 0;
  int rc = host_setwinsize(fd, row, col);
  Sp[2] = rc ? putcharm(rc) : ai_zero;
- Sp += 2; Ip += 1; return Continue(); }
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
 // (ptyecho port on): toggle the pty's input ECHO. on = 0 / () clears it so a
 // line-editing wrapper (bao's edraw) owns the echo and the child's cooked-mode
@@ -999,7 +999,7 @@ static lvm(lvm_ptyecho) {
  intptr_t on = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
  int rc = host_ptyecho(fd, on);
  Sp[1] = rc ? putcharm(rc) : ai_zero;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (raw on): own the interactive terminal discipline on stdin (fd 0). A truthy
 // `on` puts the tty in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is
@@ -1029,7 +1029,7 @@ static lvm(lvm_raw) {
  intptr_t on = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
  int rc = host_raw(on);
  Sp[0] = rc ? putcharm(rc) : ai_zero;
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 
 static union u const
   nif_raw[]        = {{lvm_raw}, {lvm_ret0}},

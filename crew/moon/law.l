@@ -7,6 +7,11 @@
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
+;
+; ⚠ a MID-LETREC assert must bind to `_` -- a bare one sits in binding position,
+; becomes define-sugar, and NEVER RUNS (it shadows a name, the pairing shifts, and
+; the missing scares it sheds don't stop file mode -- the gate stays green). when
+; in doubt, falsify one assert and watch the gate red.
 
 ; A REFUSAL, however it says so. A stage answers a bare () when it refused
 ; without a cause it could name, and a gripe when it could -- and since rung 4
@@ -170,6 +175,10 @@
       (! (member? '(call rec) (caup (cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))))
       ; a frame-escaping fn keeps the plain call (the address outlives the frame)
       (member? '(call g) (caup (cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }")))
+      ; a STATEMENT-position attribute run SKIPS -- love.h's `ai_musttail return` and a bare
+      ; fallthrough both parse, and the annotated tail still jmps (sibcall owes it anyway)
+      (member? '(jmp rec) (caup (cgn "int rec(int n){ if(n==0) return 5; __attribute__((musttail)) return rec(n-1); } int main(){ return rec(3); }")))
+      (two? (cgn "int main(int c, char **v) { switch (c) { case 1: c++; __attribute__((fallthrough)); default: c++; } return c; }"))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a NAMED refusal now (rung 1, doc/moon-diag.md)
       (refused? (cgn "int main() { return 5=3; }"))                 ; not an lvalue
@@ -896,13 +905,109 @@
    irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
    irS (cgn (pre9 + "long q(long a, long b) { long s = a+b+a*b+a-b; g(1); { long a = s; s = a+1; } return s+2; } int main() { return q(20, 22); }"))
    irG (cgn (pre9 + "long w(long a, long b) { long s = a+b+a*b+a-b; g(1); if (s > 9) goto out; s = s+1; out: return s+1; } int main() { return w(20, 22); }"))
-   (assert
+   _ (assert
       (two? irD) (two? irL) (two? irS) (two? irG)
       (= 0 (wraps (fnf 'f (caup irD))))              ; dead across the call: no spills at all
       (= 2 (wraps (fnf 'h (caup irL))))              ; live across: both homes keep their wrap
       (= 1 (wraps (fnf 'q (caup irS))))              ; the shadowed a's blanket; b's own still drops
       (member? '(st sp 32 r6) (fnf 'q (caup irS)))   ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
-      (= 2 (wraps (fnf 'w (caup irG))))))            ; a goto fn wraps everything
+      (= 2 (wraps (fnf 'w (caup irG)))))             ; a goto fn wraps everything
+   ; -- callee-saved locals (the cs lane): a local touched under NESTED loops (depth >= 2)
+   ; homes on r11..r14 (machine r12-r15) even while it CROSSES calls -- the callee preserves
+   ; the register, so the home takes no wrap; the price is one save/restore pair in the
+   ; owner's frame, and only compounding iteration counts repay it. here s and the inner j
+   ; ride r11/r12 through g(j) unwrapped; the depth-1 i (and irS's loop-free s above) stay
+   ; slotted -- their touches never earn the pair.
+   irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
+   qf (fnf 'ql (caup irQ))
+   (occ f2) (: (go l n) (? (! (two? l)) n (go >l (? (= <l f2) (n + 1) n))) (go qf 0))
+   _ (assert
+      (two? irQ)
+      (= 1 (occ '(st sp 56 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
+      (= 1 (occ '(ld r11 sp 56)))                    ; s's restore, ONCE (epilogue)
+      (= 1 (occ '(st sp 64 r12)))                    ; j's pair likewise
+      (= 1 (occ '(ld r12 sp 64)))
+      (member? '(add r12 r12 1) qf)                  ; the inner step is register-only
+      (member? '(st sp 24 r9) qf))
+   ; -- slot-load elision: loadval honors the want hint (a decl/asn init from a member/deref
+   ; lands straight in the hinted register, so the vmap pin fires and re-reads are zero forms),
+   ; and stld rides a whole straight-line run (a bound slot's reload forwards from the register
+   ; until a redef, an overlapping store, a label, or a bar).
+   irE (cgn (pre9 + "long f2(long *p) { long a = p[0]; if (a & 1) return a; return g(a); } int main() { return f2((long*)0); }"))
+   irF (cgn (pre9 + "long q2(long *p) { long a = p[0]; g(a); return a + (a >> 3); } int main() { return q2((long*)0); }"))
+   (splds fs) (: (go l n) (? (! (two? l)) n
+                            (go >l (? (&& (two? <l) (&& (id? (cap <l) 'ld) (id? (cauup <l) 'sp))) (n + 1) n)))
+                 (go fs 0))
+   _ (assert
+      (two? irE) (two? irF)
+      ; the pinned deref: a lands in r5 and rides it end to end -- slot-free, frameless
+      (member? '(ld r5 r6 0) (fnf 'f2 (caup irE)))
+      (member? '(test r5 1) (fnf 'f2 (caup irE)))
+      (= 0 (splds (fnf 'f2 (caup irE))))
+      ; a crosses the call (one wrap reload), then the second read FORWARDS: one sp load total
+      (= 1 (splds (fnf 'q2 (caup irF)))))
+   ; -- the wide pair park: a d128 binop's LEFT rides two pool registers and the combine
+   ; reads the r-twins (a128r/mw128r/..) -- the machine-stack cell never opens. a callish
+   ; right keeps the cell: it must hold the pair THROUGH the call.
+   irW (cgn (pre9 + "unsigned long w(unsigned long a, unsigned long b, unsigned long c) { unsigned __int128 s = (unsigned __int128) a * b + c; return (unsigned long)(s >> 64) ^ (unsigned long) s; } int main() { return (int) w(3,4,5); }"))
+   irX (cgn (pre9 + "unsigned long v(unsigned long a) { unsigned __int128 s = (unsigned __int128) a * a + (unsigned __int128) g(1); return (unsigned long) s; } int main() { return (int) v(3); }"))
+   (occh l h9) (: (go l2 n) (? (! (two? l2)) n (go >l2 (? (&& (two? <l2) (id? (cap <l2) h9)) (n + 1) n))) (go l 0))
+   _ (assert
+      (two? irW) (two? irX)
+      (= 1 (occh (fnf 'w (caup irW)) 'mw128r))       ; the widening mul reads its parked register
+      (= 1 (occh (fnf 'w (caup irW)) 'a128r))        ; the add combines through the pair
+      (= 0 (occh (fnf 'w (caup irW)) 'mw128))        ; the cell forms are gone from this shape
+      (= 0 (occh (fnf 'w (caup irW)) 'a128))
+      (= 1 (occh (fnf 'v (caup irX)) 'mw128r))       ; the mul's right is callish-free: parked
+      (= 1 (occh (fnf 'v (caup irX)) 'a128)))        ; the add's right CALLS: the cell holds through it
+   ; -- the leaf cs overflow: a call-free fn whose param homes drank the operand pool
+   ; (five homable params here) overflows its depth>=2 locals onto the cs pool -- the
+   ; save/restore pair rides the leaf lane's regen too (the ride regen passes the cs regs
+   ; through), and the loop nest runs register-only.
+   irY (cgn "long lf(long *r, long *a, long na, long *b, long nb) { long s = 0; for (long i = 0; i < na; i++) { for (long j = 0; j < nb; j++) { s = s + a[i] * b[j] + r[i+j]; } } return s; } int main() { return 0; }")
+   yf (fnf 'lf (caup irY))
+   _ (assert
+      (two? irY)
+      (member? '(st sp 32 r11) yf)                   ; s saves (prologue), homes r11
+      (member? '(ld r11 sp 32) yf)                   ; ...and restores (epilogue)
+      (member? '(add r12 r12 1) yf)                  ; i steps on its home, register-only
+      (member? '(add r13 r13 1) yf)                  ; j likewise
+      (= 3 (splds yf)))                              ; the ONLY sp loads are the three restores
+   ; -- canonical int homing: an int/uint LOCAL homes (lhomable?), and the home always holds
+   ; the EXTENDED value -- every def re-narrows (sx4/zx4), so reads are zero forms and 32-bit
+   ; wrap holds. an int PARAM homes only by RIDING its arrival (one entry cvt, no pool
+   ; register): here na rides r2; nb's ride is dropped by the soundness re-read (r7 turns
+   ; scratch) and it keeps its SLOT -- never a pool home.
+   irZ (cgn "long g2(long *r, long *a, int na, long *b, int nb) { long s = 0; for (int i = 0; i < na; i++) { for (int j = 0; j < nb; j++) { s = s + a[i] * b[j]; } } return s; } int main() { return 0; }")
+   zf (fnf 'g2 (caup irZ))
+   _ (assert
+      (two? irZ)
+      (member? '(sx4 r2) zf)                         ; na rides its arrival, canonicalized once
+      (member? '(cmp r11 r2) zf)                     ; ...and the bound compare reads it register-register
+      (member? '(st sp 32 r7) zf)                    ; nb's dropped ride lands in its slot
+      (member? '(sx4 r11) zf)                        ; i's defs re-narrow: the home stays canonical
+      (member? '(add r11 r11 1) zf)                  ; i on its cs home
+      (= 2 (splds zf)))                              ; full-word sp loads: only the two cs restores
+   ; the guard law: with a call remaining there is no ride, so an int param KEEPS ITS SLOT
+   ; (a pool home would starve the locals and pay wraps -- the measured anti-lever)
+   irZp (cgn "long ext(long); long h3(int n, long *a) { long s = 0; for (int i = 0; i < n; i++) { s = s + ext(a[i]) + n; } return s; } int main() { return 0; }")
+   zpf (fnf 'h3 (caup irZp))
+   _ (assert
+      (two? irZp)
+      (member? '(st sp 48 r6) zpf)                   ; n spills at entry...
+      (member? '(ld4 r0 sp 48) zpf))                 ; ...and every read re-extends from the slot
+   ; -- d128 LOCALS home as CS PAIRS: a loop-carried __int128 local takes (lo hi) off the
+   ; cs pool (callee-saved: call-safe, no wraps, and no operand-pool pressure -- the wpk
+   ; park's registers stay free). reads/writes are mov pairs on the r0:r2 protocol; the
+   ; slot never opens. &-taken and ++ shapes deopt through clval.
+   irV (cgn "long w2(long *a, int n) { unsigned __int128 c = 0; for (int i = 0; i < n; i++) { for (int k = 0; k < 2; k++) { c = c + (unsigned __int128) a[i] * 3; a[i] = (long) c; } } return (long)(c >> 64); } int main() { return 0; }")
+   vf (fnf 'w2 (caup irV))
+   (assert
+      (two? irV)
+      (member? '(mov r11 r0) vf)                     ; c's write lands its lo home...
+      (member? '(mov r12 r2) vf)                     ; ...and its hi
+      (member? '(a128r r10 r7) vf)                   ; the combine reads the parked twins
+      (= 2 (splds vf))))                             ; full-word sp loads: only the two cs restores
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
@@ -974,5 +1079,45 @@
       (member? '(add r5 r5 1) (caup irBa))           ; the loop counter i ALSO homes (r5): its
       (= 0 (wrapsa (caup irBa)))))                   ; ++ no longer leans its own slot. zero wraps
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) ok")
+; -- register-bound branch splices: a call-free cbinl predicate reads its args from
+; REGISTERS. a var arg over a pinned/homed local ALIASES that register (zero forms);
+; an expression arg PARKS in a pool reg -- only while the pool stays deep (the shallow
+; park is the measured displacement anti-lever). the loop body runs slot-free.
+(: (cgn src) (: r (cparse (caup (clex src)))
+               (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? (! (two? l)) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? (! (two? l)) ()
+                              (= <l '(align 2)) ()
+                              (link <l (take >l)))
+                  (take (seek fs)))
+   (splds fs) (: (go l n) (? (! (two? l)) n
+                            (go >l (? (&& (two? <l) (&& (id? (cap <l) 'ld) (id? (cauup <l) 'sp))) (n + 1) n)))
+                 (go fs 0))
+   pre9 "static long inr(long x, long n) { return x >= 2 && x <= n; }\n"
+   irU (cgn (pre9 + "long wq(long a, long n) { long s = 0; long i = 0; while (i < n) { if (inr(a, n)) s = s + a; if (inr(s, a)) s = s + 1; i = i + 1; } return s; } int main() { return wq(3, 5); }"))
+   uf (fnf 'wq (caup irU))
+   _ (assert
+      (two? irU)
+      (member? '(cmp r6 2) uf)                       ; x aliases a's ride: the compare reads r6
+      (member? '(cmp r6 r5) uf)                      ; ...and n's ride r5 -- no temp anywhere
+      (member? '(cmp r10 2) uf)                      ; the second splice aliases s's home
+      (member? '(cmp r10 r6) uf)
+      (= 0 (splds uf)))                              ; the whole fn runs slot-free
+   irP (cgn (pre9 + "long pk(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { if (inr(a + i, n)) s += i; } return s; } int main() { return pk(1, 6); }"))
+   pf (fnf 'pk (caup irP))
+   _ (assert
+      (two? irP)
+      (member? '(add r7 r6 r10) pf)                  ; the expression arg lands its park r7...
+      (member? '(cmp r7 r5) pf)                      ; ...and the body compares park vs alias
+      (= 0 (splds pf)))
+   ; the VALUE splice aliases too (its multi-return body reads lo straight from n's ride);
+   ; its expression arg stays a slot -- a cginl park would span the whole body (the anti-lever)
+   irQ2 (cgn "static long clamp9(long x, long lo) { if (x < lo) return lo; if (x > 99) return 99; return x; }\nlong vq(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + clamp9(a + i, n); } return s; } int main() { return vq(1, 5); }")
+   q2f (fnf 'vq (caup irQ2))
+   (assert
+      (two? irQ2)
+      (member? '(cmp r7 r5) q2f)                     ; x < lo compares against the ALIAS, no stage
+      (= 0 (splds q2f))))
+
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool) ok")
 (put err 10)

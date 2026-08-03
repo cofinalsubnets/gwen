@@ -58,7 +58,7 @@ static lvm(lvm_ioctl) {
   int r = ioctl((int) fd, (unsigned long) req, arg);
   out = putcharm(r < 0 ? -errno : r); }
  Sp[2] = out;
- Sp += 2; Ip += 1; return Continue(); }
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
 static lvm(lvm_mapfdo) {
  intptr_t fd  = any_fd(Sp[0]),
@@ -70,7 +70,7 @@ static lvm(lvm_mapfdo) {
                    (int) fd, (off_t) off);
   out = p == MAP_FAILED ? putcharm(-errno) : putcharm((intptr_t) p); }
  Sp[2] = out;
- Sp += 2; Ip += 1; return Continue(); }
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
 // (memfd n): anonymous shared memory of n bytes, by fd -- what a client
 // builds its pool from.
@@ -83,7 +83,7 @@ static lvm(lvm_memfd) {
   else if (ftruncate(fd, n)) { out = putcharm(-errno); close(fd); }
   else out = putcharm(fd); }
  Sp[0] = out;
- Ip += 1; return Continue(); }
+ Ip += 1; ai_musttail return Continue(); }
 
 // (mapfd fd n): the fd's memory, mapped shared read/write.
 static lvm(lvm_mapfd) {
@@ -94,14 +94,14 @@ static lvm(lvm_mapfd) {
   void *p = mmap(0, (size_t) n, PROT_READ | PROT_WRITE, MAP_SHARED, (int) fd, 0);
   out = p == MAP_FAILED ? putcharm(-errno) : putcharm((intptr_t) p); }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 static lvm(lvm_unmap) {
  intptr_t p = (Sp[0] & 1) ? getcharm(Sp[0]) : 0,
            n = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
  if (p && n > 0) munmap((void*) p, (size_t) n);
  Sp[1] = ZeroPoint;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (mapin dst doff ptr soff n): mapping -> cask, the compositing read.
 static lvm(lvm_mapin) {
@@ -115,7 +115,7 @@ static lvm(lvm_mapin) {
       && (uintptr_t) (doff + n) <= d->len)
     memcpy(d->bytes + doff, (char const*) p + soff, (size_t) n);
  Sp[4] = Sp[0];
- Sp += 4; Ip += 1; return Continue(); }
+ Sp += 4; Ip += 1; ai_musttail return Continue(); }
 
 // (mapout ptr doff src soff n): cask/string -> mapping, the client's brush.
 static lvm(lvm_mapout) {
@@ -128,7 +128,7 @@ static lvm(lvm_mapout) {
       && (uintptr_t) (soff + n) <= s->len)
     memcpy((char*) p + doff, s->bytes + soff, (size_t) n);
  Sp[4] = ZeroPoint;
- Sp += 4; Ip += 1; return Continue(); }
+ Sp += 4; Ip += 1; ai_musttail return Continue(); }
 
 // --- 8-byte word slots on a cask, low 4 bytes live (the flat solver's state:
 // the byte-at-a-time accessors were 4 dispatches per read) ----------------------
@@ -142,7 +142,7 @@ static lvm(lvm_peepw) {
    memcpy(&w, s->bytes + 8 * i, 8);
    out = putcharm((intptr_t) (w & 0xffffffffu)); } }
  Sp[1] = out;
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 static lvm(lvm_pinw) {
  ai_word c = Sp[0], out = ZeroPoint;
@@ -154,7 +154,7 @@ static lvm(lvm_pinw) {
    memcpy(s->bytes + 8 * i, &v, 8);
    out = c; } }
  Sp[2] = out;
- Sp += 2; Ip += 1; return Continue(); }
+ Sp += 2; Ip += 1; ai_musttail return Continue(); }
 
 static union u const
   nif_ioctl[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_ioctl}, {lvm_ret0}},

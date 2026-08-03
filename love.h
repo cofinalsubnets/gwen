@@ -47,12 +47,45 @@
 #define _lvm(n, ...) struct ai *n(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp, ##__VA_ARGS__)
 #define Ap(fn, g, ...) fn(g, Ip, Hp, Sp, ##__VA_ARGS__)
 #define Continue() Ap(Ip->ap, g)
+// the stepped/answering tails as BARE CALLS (ai_musttail's operand may not be a comma):
+// Next steps n cells, Nextp also pops k, Answer stores v at the top, Answerp under a pop
+// of k, Push opens a fresh slot, Resume re-reads the packed g. the store rides INSIDE the
+// Sp argument, sequenced by its own comma. ⚠ v must not touch Hp or Ip -- they are
+// SIBLING arguments, the mutation would be unsequenced: such a site stores first, then
+// `ai_musttail return Next(1);`. n and k evaluate twice: literals only.
+#define Next(n) Ip[n].ap(g, Ip + (n), Hp, Sp)
+#define Nextp(n, k) Ip[n].ap(g, Ip + (n), Hp, Sp + (k))
+#define Answer(v) Ip[1].ap(g, Ip + 1, Hp, (Sp[0] = (v), Sp))
+#define Answerp(k, v) Ip[1].ap(g, Ip + 1, Hp, (Sp[k] = (v), Sp + (k)))
+#define Push(v) Ip[1].ap(g, Ip + 1, Hp, (*++Sp = (v), Sp))
+#define Resume() g->ip->ap(g, g->ip, g->hp, g->sp)
 #define Pack(g) (g->ip = Ip, g->hp = Hp, g->sp = Sp)
 #define Unpack(g) (Ip = g->ip, Hp = g->hp, Sp = g->sp)
+// every VM tail spells `ai_musttail return ..`: mooncc guarantees the jump structurally
+// (sibcall + make vmret), clang/gcc 15+ are HELD to it here -- an opportunistic miss is
+// one frame per dispatch and a stack overflow down some long read. ⚠ the extra-arg lvms
+// (vbin, gc, vmap*..) keep PLAIN returns: musttail wants matching prototypes.
+#if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 15)
+#define ai_musttail __attribute__((musttail))
+#if !defined(__clang__)
+// gcc's "maybe" escape lint: an address-taken local handed to an EARLIER helper trips it,
+// but the ⚠ no-scratch-in-lvm_ discipline already forbids a frame address outliving its call
+#pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"
+#endif
+#else
+#define ai_musttail
+#endif
 #else
 #define _lvm(n, ...) struct ai *n(struct ai *restrict g, ##__VA_ARGS__)
 #define Ap(fn, g, ...) fn(g, ##__VA_ARGS__)
 #define Continue() g
+#define Next(n) (Ip += (n), g)
+#define Nextp(n, k) (Sp += (k), Ip += (n), g)
+#define Answer(v) (Sp[0] = (v), Ip += 1, g)
+#define Answerp(k, v) (Sp[k] = (v), Sp += (k), Ip += 1, g)
+#define Push(v) (*++Sp = (v), Ip += 1, g)
+#define Resume() g
+#define ai_musttail
 #define Hp g->hp
 #define Sp g->sp
 #define Ip g->ip
@@ -339,7 +372,7 @@ extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 #define Have(n) if (Sp < Hp + (n) + ai_avail_floor) return Ap(lvm_gc, g, (n) + ai_avail_floor)
 #define Have1() Have(1)
 #define ai_pop1(g) (*(g)->sp++)
-#define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; return Continue(); }
+#define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; ai_musttail return Continue(); }
 #define zero ai_zero
 struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // enum q, the value-kind lattice for generic dispatch: KMint the blue floor, then

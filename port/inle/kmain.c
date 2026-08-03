@@ -148,7 +148,9 @@ static void limine_to_kboot(void) {
 // the KERNEL'S OWN HEAP, which we own -- the one place in this tree where the
 // malloc family is not somebody else's. the bug a ceiling would have shipped is
 // worse than the host's was: not a hang but a silent refusal to open the 33rd
-// thing.
+// thing. (that family is OURS, defined below the allocator -- declare it here)
+void *malloc(size_t n);
+void free(void *x);
 
 struct k_source {
   // the read door (love.h's readn contract, one fd deeper): >0 = bytes,
@@ -480,14 +482,14 @@ static lvm(draw) {
   fbdraw();
   k_wait();
   Ip += 1;
-  return Continue(); }
+  ai_musttail return Continue(); }
 
 
 static lvm(key) {
  int b = kqpop();
  Sp[0] = putcharm(b < 0 ? 0 : b);
  Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 static lvm(color) {
  uint8_t fg = getcharm(*Sp++), bg = getcharm(*Sp++);
@@ -495,7 +497,7 @@ static lvm(color) {
   cb_attr(kcb, fg, bg, 0);
   for (uint32_t i = 0, j = kcb->rows * kcb->cols; i < j; i++)
    kcb->cb[i] = cb_cell(cb_ch(kcb->cb[i]), fg, bg, 0); }
- return Ip += 1, Continue(); }
+ ai_musttail return Next(1); }
 
 // (fault n) -- deliberately raise a CPU exception to exercise the
 // ap in arch.c. k_fault_trigger (in each arch's arch.c) maps n
@@ -506,11 +508,11 @@ static lvm(color) {
 static lvm(lvm_fault) {
   k_fault_trigger(getcharm(Sp[0]));
   Ip += 1;
-  return Continue(); }
+  ai_musttail return Continue(); }
 
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
-static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; return Continue(); }
+static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; ai_musttail return Continue(); }
 #endif
 
 

@@ -1212,9 +1212,17 @@
                                rest (? (two? r9) (want r9 ";") ())
                                (? (two? rest) `(`('asm <tr <s1 <s2 <s3) rest) ()))))))))))
 
-   (pstmt ps ts)
+   ; a STATEMENT-position __attribute__((..)) run skips (musttail, fallthrough..): the one
+   ; whose semantic we owe -- musttail -- the sibcall pass already delivers on every
+   ; ret-position call, and `make vmret` holds the lvm_ fleet to it
+   (pstmt ps ts0)
+    (? (! (two? ts0)) ()
+       (: ts (patt ts0)
+          (? (! (two? ts)) ()
+             (static? ts) (pstatic ps ts)
+             (pstmt2 ps ts))))
+   (pstmt2 ps ts)
     (? (! (two? ts)) ()
-       (static? ts) (pstatic ps ts)
        (: t <ts
           (? (tkw? t 'return)
               (? (peekp >ts ";") `(`('ret ()) >>ts)    ; bare `return;` -- a void return
