@@ -1079,5 +1079,37 @@
       (member? '(add r5 r5 1) (caup irBa))           ; the loop counter i ALSO homes (r5): its
       (= 0 (wrapsa (caup irBa)))))                   ; ++ no longer leans its own slot. zero wraps
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) ok")
+; -- register-bound branch splices: a call-free cbinl predicate reads its args from
+; REGISTERS. a var arg over a pinned/homed local ALIASES that register (zero forms);
+; an expression arg PARKS in a pool reg -- only while the pool stays deep (the shallow
+; park is the measured displacement anti-lever). the loop body runs slot-free.
+(: (cgn src) (: r (cparse (caup (clex src)))
+               (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? (! (two? l)) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? (! (two? l)) ()
+                              (= <l '(align 2)) ()
+                              (link <l (take >l)))
+                  (take (seek fs)))
+   (splds fs) (: (go l n) (? (! (two? l)) n
+                            (go >l (? (&& (two? <l) (&& (id? (cap <l) 'ld) (id? (cauup <l) 'sp))) (n + 1) n)))
+                 (go fs 0))
+   pre9 "static long inr(long x, long n) { return x >= 2 && x <= n; }\n"
+   irU (cgn (pre9 + "long wq(long a, long n) { long s = 0; long i = 0; while (i < n) { if (inr(a, n)) s = s + a; if (inr(s, a)) s = s + 1; i = i + 1; } return s; } int main() { return wq(3, 5); }"))
+   uf (fnf 'wq (caup irU))
+   _ (assert
+      (two? irU)
+      (member? '(cmp r6 2) uf)                       ; x aliases a's ride: the compare reads r6
+      (member? '(cmp r6 r5) uf)                      ; ...and n's ride r5 -- no temp anywhere
+      (member? '(cmp r10 2) uf)                      ; the second splice aliases s's home
+      (member? '(cmp r10 r6) uf)
+      (= 0 (splds uf)))                              ; the whole fn runs slot-free
+   irP (cgn (pre9 + "long pk(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { if (inr(a + i, n)) s += i; } return s; } int main() { return pk(1, 6); }"))
+   pf (fnf 'pk (caup irP))
+   (assert
+      (two? irP)
+      (member? '(add r7 r6 r10) pf)                  ; the expression arg lands its park r7...
+      (member? '(cmp r7 r5) pf)                      ; ...and the body compares park vs alias
+      (= 0 (splds pf))))
+
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool) ok")
 (put err 10)

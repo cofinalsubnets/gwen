@@ -63,11 +63,13 @@
                  (? (two? fr) (: _ (pin g 'pool >fr) <fr) ()))
    (rfree g r) (? (&& (member? r (peep g 'pool0 ()))
                       (&& (! (member? r (peep g 'pool ())))
-                          (! (member? r (peep g 'vpin ())))))   ; a vmap pin is not ours to free
+                          (&& (! (member? r (peep g 'vpin ())))     ; a vmap pin is not ours to free
+                              (! (member? r (peep g 'rpin ()))))))  ; nor a splice's register bind
                   (pin g 'pool (link r (peep g 'pool ()))) ())
    (wr? g r) (|| (id? r 'r0)
                  (&& (member? r (peep g 'pool0 ()))
-                     (! (member? r (peep g 'vpin ())))))   ; writable: protocol r0 or an OWNED pool reg (a borrowed home or a vmap pin is read-only)
+                     (&& (! (member? r (peep g 'vpin ())))   ; writable: protocol r0 or an OWNED pool reg
+                         (! (member? r (peep g 'rpin ()))))))   ; (a borrowed home, a vmap pin or a bind reg is read-only)
    (callish? x) (? (! (two? x)) ()                             ; does the AST reach a call? (an inline splice still may)
                    (<x = 'call) 1
                    (|| (callish? <x) (callish? >x)))
@@ -96,20 +98,23 @@
    ; point, and g 'vuniv already excludes address-taken and multiply-declared names. off while
    ; inlining (an inlinee's names would conflate with the caller's). --
    (vmon? g) (&& (two? (peep g 'vuniv ())) (! (peep g 'inlining ())))
+   ; the READ side stays live through a splice's ARG binds (caller scope, caller names) --
+   ; only the inlinee BODY blinds it ('inlbody depth: its names would conflate with the
+   ; caller's). births stay gated on vmon? (no pin is born anywhere inside a splice).
    (vmget g nm)
-    (? (! (vmon? g)) ()
+    (? (|| (! (two? (peep g 'vuniv ()))) (0 < (peep g 'inlbody 0))) ()
        (: e9 (assoc nm (peep g 'vmap ()))
           (? (two? e9) <>e9 ())))
+   ; ⚠ NOT `pins`: that is a prel MACRO (chained tablet pins), and a macro expands at head
+   ; position over any local binding -- the collision answers the map itself, silently
+   (vmregs l acc) (? (! (two? l)) acc
+                     (: r9 (caup <l)
+                        (? (member? r9 acc) (vmregs >l acc)
+                           (vmregs >l (link r9 acc)))))
    (vmdrop g nm)
     (: m2 (filter (\ e9 (! (id? <e9 nm))) (peep g 'vmap ()))
-       ; ⚠ NOT `pins`: that is a prel MACRO (chained tablet pins), and a macro expands at head
-       ; position over any local binding -- the collision answers the map itself, silently
-       (vregs9 l acc) (? (! (two? l)) acc
-                         (: r9 (caup <l)
-                            (? (member? r9 acc) (vregs9 >l acc)
-                               (vregs9 >l (link r9 acc)))))
        _ (pin g 'vmap m2)
-       (pin g 'vpin (vregs9 m2 ())))
+       (pin g 'vpin (vmregs m2 ())))
    ; ⚠ no pin is BORN while a call's arguments stage (the argseal depth, set by call-fixed): the
    ; staging splices args right-to-left while generation runs left-to-right, so a pin born inside
    ; one arg would read STALE from a later-generated, earlier-spliced sibling. pins from BEFORE
@@ -124,9 +129,25 @@
           (? (member? r (peep g 'vpin ())) ()
              (pin g 'vpin (link r (peep g 'vpin ()))))) ())
    (vmflush g) (: _ (pin g 'vmap ()) (pin g 'vpin ()))
+   ; -- the forward joins: at a label whose arriving edges are all KNOWN (an if/?: join -- never
+   ; a loop head, a user label, or a case), the map need not die. an entry (nm r) survives iff
+   ; EVERY arriving edge carries the same pair -- on each edge r held nm's slot value when the
+   ; edge left, and nothing runs ON an edge, so the intersection holds at the join. an arm whose
+   ; forms end in ret/jmp/jmpr never arrives and stays out of the meet. a pinned reg is never on
+   ; the free list (ralloc took it, rfree refuses vpin, a dropped pin waits for psreset), so a
+   ; restored branch-point map cannot be clobbered by the other arm's scratch. --
+   (vmsnap g) (peep g 'vmap ())
+   (vmset g m) (: _ (pin g 'vmap m) (pin g 'vpin (vmregs m ())))
+   (vmeet a b) (filter (\ e9 (: o (assoc <e9 b)
+                                 (? (two? o) (id? <>o <>e9) ()))) a)
+   (vmout? fs)                                      ; does control fall out the bottom of the forms?
+    (? (! (two? fs)) 1
+       (: (go l) (? (two? >l) (go >l) <l)
+          lf (go fs)
+          (! (member? <lf '(ret jmp jmpr)))))
    ; the per-statement pool reset: pool0 minus the vmap pins
    (psreset g)
-    (: vp (peep g 'vpin ())
+    (: vp (cat (peep g 'vpin ()) (peep g 'rpin ()))
        (? (! (two? vp)) (pin g 'pool (peep g 'pool0 ()))
           (pin g 'pool (filter (\ r9 (! (member? r9 vp))) (peep g 'pool0 ())))))
    ; -- the TARGET seam: g 'tgt ('x64 | 'arm64 | 'thumb2) picks the ABI shapes; the IR stays
@@ -562,26 +583,69 @@
        (? (! (abit? e9)) 'no
           (: fe0 (peep g 'fesc ())
              strs0 (g 'strs)
+             rp0 (peep g 'rpin ())
+             ; the register-bind license: a call-free splice (body and args) reads its scalar
+             ; args from REGISTERS. an arg that is a word-typed pinned local ALIASES its pin
+             ; (call-by-value holds: retex bodies never assign a param, and a later drop leaves
+             ; the alias holding the passed value); anything else parks canonically in a fresh
+             ; pool reg. rpin holds every bind reg against wr?/rfree/psreset for the splice's
+             ; span (a body label's flush forgets vpin, never rpin). the slot bind stands when
+             ; the type narrows to the alias, a call rides anywhere, or the pool is SHALLOW --
+             ; a park may only take a register when two stay free: parks that drained the pool
+             ; starved the hints and pins around them and the shuttle spushed (measured: corpus
+             ; L1 loads +0.4% -- the displacement is unpriced by any other gate).
+             (anyc l) (? (! (two? l)) () (? (callish? <l) 1 (anyc >l)))
+             nocall (&& (! (callish? e9)) (! (anyc args)))
              _ (pin g 'inlining (d0 + 1))
-             (cbind ps as benv acc)                ; cginl's bind, the same slots
-              (? (! (two? ps)) `(benv acc)
-                 (: r (cgexpr g env <as)
-                    (? (bad? r) 'bad
-                       (pair? g (caup (cap ps)))   ; a pair param: an 8-byte slot, both words
-                        (: off (ntmp g 'llong)
-                           (cbind >ps >as
-                                  (link `((cap (cap ps)) off (caup (cap ps))) benv)
-                                  (acc + (asll g r) + (pst 'r4 off))))
-                       (: off (ntmp g 'long)
-                          (cbind >ps >as
-                                 (link `((cap (cap ps)) off (caup (cap ps))) benv)
-                                 (acc + (asintt g r (caup (cap ps))) + `(`('st 'r4 off 'r0))))))))
+             (cbind ps as benv acc rbs)            ; cginl's bind, the same slots
+              (? (! (two? ps)) `(benv acc rbs)
+                 (: pty (caup (cap ps))
+                    al (? (&& nocall (&& (! (flo? pty)) (&& (8 = (tsz g pty))
+                             (&& (two? <as) ((cap <as) = 'var)))))
+                          (: nm9 (caup <as)
+                             pM (vmget g nm9)               ; a pinned local -- or a homed/riding
+                             (? pM pM                       ; one (regv): both are read-only regs
+                                (: v9 (vent g env nm9)      ; holding the canonical current value
+                                   (? (&& (two? v9) (&& (<v9 = 'regv) (! (flo? <>>v9))))
+                                      <>v9 ()))))
+                          ())
+                    (? al                          ; the alias bind: zero forms
+                        (: _ (pin g 'rpin (link al (peep g 'rpin ())))
+                           (cbind >ps >as (link `((cap (cap ps)) `('reg al) pty) benv) acc rbs))
+                       (: r (cgexpr g env <as)
+                          (? (bad? r) 'bad
+                             (pair? g pty)         ; a pair param: an 8-byte slot, both words
+                              (: off (ntmp g 'llong)
+                                 (cbind >ps >as
+                                        (link `((cap (cap ps)) off pty) benv)
+                                        (acc + (asll g r) + (pst 'r4 off)) rbs))
+                             (: rb (? (&& nocall (&& (! (flo? pty))
+                                          (two? (cuup (peep g 'pool ())))))   ; park only into a DEEP pool
+                                       (ralloc g) ())
+                                (? rb              ; the park bind: the value rides a pool reg
+                                    (: _ (pin g 'rpin (link rb (peep g 'rpin ())))
+                                       (cbind >ps >as (link `((cap (cap ps)) `('reg rb) pty) benv)
+                                              (acc + (asintt g r pty)
+                                                   + (`(`('mov rb 'r0)) + (cvt pty rb)))
+                                              (link rb rbs)))
+                                   (: off (ntmp g 'long)
+                                      (cbind >ps >as
+                                             (link `((cap (cap ps)) off pty) benv)
+                                             (acc + (asintt g r pty) + `(`('st 'r4 off 'r0)))
+                                             rbs)))))))))
              (dtmp ds benv9)                       ; the body's own decls: fresh temps over the params
               (? (! (two? ds)) benv9
                  (: d9 <ds (dtmp >ds (link `(<d9 (ntmp g <>d9) <>d9) benv9))))
-             br (cbind <>>inlf args () ())
+             br (cbind <>>inlf args () () ())
+             ib0 (peep g 'inlbody 0)
+             _ (pin g 'inlbody (ib0 + 1))          ; the body blinds vmget (name conflation)
              bf (? (bad? br) 'bad (cbranch g (dtmp <rx <br) e9 cc lbl))
+             _ (pin g 'inlbody ib0)
              _ (pin g 'inlining il0)
+             _ (pin g 'rpin rp0)                   ; the bind pins die with the splice
+             (unrb l) (? (! (two? l)) ()
+                         (: _ (rfree g <l) (unrb >l)))
+             _ (? (two? br) (unrb (nthr br 2)) ())
              (? (bad? bf)
                  (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
                 (&& (! fe0) (peep g 'fesc ()))     ; the body took a frame address: keep the caller lean
@@ -1562,10 +1626,12 @@
           (k = 'cond)
            (: le (nlab g ".e") ld (nlab g ".d")
               c (cbranch g env <>e 'eq le)
+              m0 (vmsnap g)                          ; the branch edge into le
               t (cgexpr g env <>>e)
-              _ (vmflush g)                          ; label le joins
+              mt (vmsnap g)                          ; an expression arm always falls out
+              _ (vmset g m0)                         ; the else arm enters off the branch edge
               el (cgexpr g env <>>>e)
-              _ (vmflush g)                          ; label ld joins
+              _ (vmset g (vmeet mt (vmsnap g)))      ; label ld joins the two edges
               (? (|| (bad? c) (|| (bad? t) (bad? el))) 'bad
                  ; ⚠ C's conditional CONVERTS its arms: one flo arm makes the whole result flo,
                  ; so the INTEGER arm rides asflo at its edge -- typing by the then-arm alone
@@ -4679,14 +4745,19 @@
           (k = 'if)
            (: le (nlab g ".e")
               c (cbranch g env <>s 'eq le)
+              m0 (vmsnap g)                            ; the map on le's arriving branch edge
               t (cgstmt g env <>>s)
-              _ (vmflush g)                            ; label le joins
               (? (|| (bad? c) (bad? t)) 'bad
                  (! (two? <>>>s))
-                  (c + t + `(`('label le)))
-                 (: el (cgstmt g env <>>>s)
+                  (: _ (vmset g (? (vmout? t) (vmeet m0 (vmsnap g)) m0))   ; label le joins
+                     (c + t + `(`('label le))))
+                 (: mt (? (vmout? t) `((vmsnap g)) ()) ; the then edge into ld, when it arrives
+                    _ (vmset g m0)                     ; the else arm enters off the branch edge
+                    el (cgstmt g env <>>>s)
                     ld (nlab g ".d")
-                    _ (vmflush g)                      ; label ld joins
+                    me (? (vmout? el) `((vmsnap g)) ())
+                    _ (vmset g (? (two? mt) (? (two? me) (vmeet <mt <me) <mt)
+                                  (two? me) <me ()))   ; label ld joins the arriving edges
                     (? (bad? el) 'bad
                        (cat c
                         (cat t (cat `(`('jmp ld) `('label le))
@@ -4887,7 +4958,10 @@
        ; cgexpr->cginl->cgitems->cgstmt->cgexpr cycle, and the loader's analysis then re-weaves
        ; the scope so several `epi` reads compile as book reads before the pin. the indirection
        ; stays until the core analysis owns cycles in big body-less letrecs.
+       ib0 (peep g 'inlbody 0)
+       _ (pin g 'inlbody (ib0 + 1))                ; the body blinds vmget (name conflation)
        ibd (? (bad? br) 'bad ((g 'cgitems) g <br (caup (caup (cuup f))) ()))
+       _ (pin g 'inlbody ib0)
        _ (pin g 'inlret ir0)
        _ (pin g 'inlrt irt0)
        _ (pin g 'inlining il0)
@@ -5445,6 +5519,8 @@
        _ (pin g 'hasasm ())                         ; fresh per fn: an asm statement pins it (homing off)
        _ (pin g 'cssv ())                           ; fresh per fn: the callee-saved save forms (a cs regen pins)
        _ (pin g 'argseal 0)                         ; fresh per fn: the vmap's staging seal depth
+       _ (pin g 'inlbody 0)                         ; ...and the splice-body depth (vmget's blind)
+       _ (pin g 'rpin ())                           ; ...and the splice bind pins
        ; v6-M MEMORY return: this fn's >4B composite result fills the address the caller
        ; passed as the implicit first arg (r0) -- save it in its own slot, params start at
        ; gp 1. the ret lane reads g 'sret back; reset per fn (stale pins would misroute).
