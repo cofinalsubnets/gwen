@@ -113,7 +113,7 @@ static lvm(lvm_connect) {
  int fd = ai_strp(Sp[0]) && oddp(Sp[1])
         ? call_connect((struct ai_str*) Sp[0], (int) getcharm(Sp[1])) : -1;
  Sp[0] = putcharm(fd);                    // over `host`; -1 rides through to the waiter
- return Ip += 1, Continue(); }
+ ai_musttail return Next(1); }
 
 // The second ap: the handshake, waited on by the SCHEDULER. ⚠ readiness is the
 // question here, not a leftover pre-guard of the kind rung 2 deleted from the read
@@ -126,7 +126,7 @@ static lvm(lvm_connectw) {
  if (!ai_ready(fd, ai_wait_out)) {
   g->next_wait_fd = fd;
   g->next_wait_events = ai_wait_out;
-  return Ap(lvm_yield_sw, g); }
+  ai_musttail return Ap(lvm_yield_sw, g); }
  int err = 0;
  socklen_t el = sizeof err;
  if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) || err) { close(fd); goto fail; }
@@ -138,11 +138,11 @@ static lvm(lvm_connectw) {
  // stack: [port, fd, port#, ...] -> [port, ...]
  Sp[2] = Sp[0];
  Sp += 2; Ip += 1;
- return Continue();
+ ai_musttail return Continue();
  fail:                                    // [fd, port#, ret] -> [(), ret]
  Sp[1] = ZeroPoint;
  Sp += 1; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // (listen port) -- TCP server socket: socket()+SO_REUSEADDR+bind(INADDR_ANY,
 // port)+listen(). Returns the listening port object, or () on any failure.
@@ -191,10 +191,10 @@ static lvm(lvm_listen) {
  // stack: [port, port#, ...] -> [port, ...]
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
- return Continue();
+ ai_musttail return Continue();
  fail:
  Sp[0] = ZeroPoint; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // accept(2) without waiting, in readn's three terms: >=0 the fd, -2 nobody is there
 // yet, -1 gone. The O_NONBLOCK toggle is per call for main.c's reason -- the flags
@@ -220,7 +220,7 @@ static lvm(lvm_accept) {
  int lfd = (int) port_fd(Sp[0]);
  if (lfd < 0) goto fail;
  int fd = call_accept(lfd);
- if (fd == -2) { g->next_wait_fd = lfd; return Ap(lvm_yield_sw, g); }
+ if (fd == -2) { g->next_wait_fd = lfd; ai_musttail return Ap(lvm_yield_sw, g); }
  if (fd < 0) goto fail;
  cloexec(fd);
  Pack(g);
@@ -231,10 +231,10 @@ static lvm(lvm_accept) {
  // stack: [conn, l, ...] -> [conn, ...]
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
- return Continue();
+ ai_musttail return Continue();
  fail:
  Sp[0] = ZeroPoint; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // (shutdown s how) -- half-close a socket port. `how` is the POSIX SHUT_*
 // fixnum: 0 = read, 1 = write, 2 = both. The load-bearing case is (shutdown s 1)
@@ -257,13 +257,13 @@ static lvm(lvm_shutdown) {
    if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {   // park; nothing shut yet
     Unpack(g);
     g->next_wake_at = ai_clock() + 1;
-    return Ap(lvm_yield_sw, g); }
+    ai_musttail return Ap(lvm_yield_sw, g); }
    Unpack(g); }
   if (how >= 0 && how <= 2) shutdown(fd, (int) how); }
  // stack: [s, how, ...] -> [s, ...]
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // --- UDP (inle's milestone-5 oracle wire) ---------------------------------
 // The TCP nifs above can't talk to inle: inle speaks UDP DATAGRAMS, each
@@ -304,10 +304,10 @@ static lvm(lvm_udpbind) {
  // stack: [port#, ...] -> [port, ...]
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
- return Continue();
+ ai_musttail return Continue();
  fail:
  Sp[0] = ZeroPoint; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // recvfrom + peer marshaling; the &-taken sockaddr lives here so the lvm
 // wrapper stays TCO-clean. Returns by value (16 bytes -> registers).
@@ -336,7 +336,7 @@ static lvm(lvm_udprecv) {
  // taken off the wire, so the op re-runs whole. ⚠ the fd is RE-READ off Sp[0] rather
  // than carried in `fd`: a local live across call_udprecv is scratch in an lvm_
  // frame, and make vmret catches it as a ret (it did, on the first build of this).
- if (d.n == -2) { g->next_wait_fd = port_fd(Sp[0]); return Ap(lvm_yield_sw, g); }
+ if (d.n == -2) { g->next_wait_fd = port_fd(Sp[0]); ai_musttail return Ap(lvm_yield_sw, g); }
  ssize_t n = d.n;
  if (n < 0) goto fail;
  uintptr_t peerfix = d.peerfix;
@@ -358,10 +358,10 @@ static lvm(lvm_udprecv) {
  // stack: [port, ...] -> [(peerfix . bytes), ...]
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
- return Continue();
+ ai_musttail return Continue();
  fail:
  Sp[0] = ZeroPoint; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 // sendto with the peer unmarshaled from its fixnum; the &-taken sockaddr
 // lives here so the lvm wrapper stays TCO-clean.
@@ -385,11 +385,11 @@ static lvm(lvm_udpsend) {
  // stack: [p, peerfix, bytes, ...] -> [p, ...]
  Sp[2] = Sp[0];
  Sp += 2; Ip += 1;
- return Continue();
+ ai_musttail return Continue();
  fail:
  Sp[2] = ZeroPoint;
  Sp += 2; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 static union u const
  nif_connect[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_connect}, {lvm_connectw}, {lvm_ret0}},
@@ -435,10 +435,10 @@ static lvm(lvm_connectu) {
  // stack: [port, path, ...] -> [port, ...]
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;
- return Continue();
+ ai_musttail return Continue();
  fail:
  Sp[0] = ZeroPoint; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 
 static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
 AI_NIF("connectu", nif_connectu);
@@ -479,7 +479,7 @@ static lvm(lvm_shore) {
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (wl-recv port b): one nonblocking recvmsg; the byte count then the fds,
 // as a list. () = EAGAIN or misuse; (0) = the peer hung up.
@@ -522,7 +522,7 @@ static lvm(lvm_wlrecv) {
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  Sp[1] = Sp[0];
- Sp += 1; Ip += 1; return Continue(); }
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 // (wl-send port b n fds): sendmsg of the cask's first n bytes, the fd
 // charms riding as SCM_RIGHTS. Retries partial writes without the fds
@@ -563,7 +563,7 @@ static ai_noinline ai_word hv_wlsend_do(ai_word *sp) {
  return out; }
 static lvm(lvm_wlsend) {
  Sp[3] = hv_wlsend_do(Sp);
- Sp += 3; Ip += 1; return Continue(); }
+ Sp += 3; Ip += 1; ai_musttail return Continue(); }
 
 static union u const
   nif_shore[]   = {{lvm_shore}, {lvm_ret0}},

@@ -27,16 +27,16 @@ static int cuda_present(void) { return 0; }
 
 // (cuda-avail _) -> 1 if a device is usable, else 0. Arity 1: it ignores its arg,
 // so call (cuda-avail ()) -- a nullary (cuda-avail) hands back the closure unrun.
-static lvm(lvm_cuda_avail) { Sp[0] = putcharm(cuda_present()); return Ip++, Continue(); }
+static lvm(lvm_cuda_avail) { Sp[0] = putcharm(cuda_present()); ai_musttail return Next(1); }
 
 #ifndef AI_CUDA
 // Inert stubs. Never reached in the default build -- cuda-dev routes to native when
 // the probe is 0 -- but present so crew/tele/cuda.l's references resolve with no warning.
 // Stack effect mirrors the real ops: gemm/ew fold their operands to one result slot.
-static lvm(lvm_cuda_gemm)   { *(Sp += 1) = ai_zero; return Ip++, Continue(); }   // (a b)    -> 1
-static lvm(lvm_cuda_ew)     { *(Sp += 2) = ai_zero; return Ip++, Continue(); }   // (op a b) -> 1
-static lvm(lvm_cuda_reduce) { Sp[0] = ai_zero;      return Ip++, Continue(); }   // (a)      -> 1
-static lvm(lvm_cuda_transp) { Sp[0] = ai_zero;      return Ip++, Continue(); }   // (m)      -> 1
+static lvm(lvm_cuda_gemm)   { *(Sp += 1) = ai_zero; ai_musttail return Next(1); }   // (a b)    -> 1
+static lvm(lvm_cuda_ew)     { *(Sp += 2) = ai_zero; ai_musttail return Next(1); }   // (op a b) -> 1
+static lvm(lvm_cuda_reduce) { Sp[0] = ai_zero;      ai_musttail return Next(1); }   // (a)      -> 1
+static lvm(lvm_cuda_transp) { Sp[0] = ai_zero;      ai_musttail return Next(1); }   // (m)      -> 1
 #else
 // The real kernels. Each reads its galaxy operands' f64 buffers, runs on the
 // device, and builds the result galaxy. The cuBLAS structure, ready for the tray
@@ -49,19 +49,19 @@ static lvm(lvm_cuda_gemm) {                                  // C(m,n) = A(m,k) 
   // double one=1, zero=0;                                   // column-major: compute B^T A^T = (A B)^T
   // cublasDgemm(h, CUBLAS_OP_N,CUBLAS_OP_N, n,m,k, &one, dB,n, dA,k, &zero, dC,n);
   // struct ai_tray *C = new gem-tray (m,n); cudaMemcpy D2H tray_data(C),dC; *(Sp += 1) = word(C);
- *(Sp += 1) = ai_zero; return Ip++, Continue();
+ *(Sp += 1) = ai_zero; ai_musttail return Next(1);
 }
 static lvm(lvm_cuda_ew) {                                    // elementwise op over a,b (op = a tag, marshaled love-side)
   // dispatch a fused +/-/* kernel by the op tag in Sp[0]; broadcast a(Sp[1]), b(Sp[2]).
- *(Sp += 2) = ai_zero; return Ip++, Continue();
+ *(Sp += 2) = ai_zero; ai_musttail return Next(1);
 }
 static lvm(lvm_cuda_reduce) {                                // sum-all -> a scalar
   // cublasDasum / a segmented reduce over tray_data(Sp[0]); emit a boxed f64.
- Sp[0] = ai_zero; return Ip++, Continue();
+ Sp[0] = ai_zero; ai_musttail return Next(1);
 }
 static lvm(lvm_cuda_transp) {                               // 2D transpose
   // cublasDgeam(h, CUBLAS_OP_T,CUBLAS_OP_N, ...) into a fresh (c,r) gem-tray.
- Sp[0] = ai_zero; return Ip++, Continue();
+ Sp[0] = ai_zero; ai_musttail return Next(1);
 }
 #endif
 

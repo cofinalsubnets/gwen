@@ -254,7 +254,7 @@ static lvm(lvm_bake) {
  ai_word r = image_bake_do(g);
  Unpack(g);
  Sp[0] = r; Ip += 1;
- return Continue(); }
+ ai_musttail return Continue(); }
 static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
 AI_NIF("bake", nif_bake);
 
