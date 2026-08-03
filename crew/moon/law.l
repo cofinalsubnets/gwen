@@ -954,7 +954,20 @@
       (= 0 (occh (fnf 'w (caup irW)) 'mw128))        ; the cell forms are gone from this shape
       (= 0 (occh (fnf 'w (caup irW)) 'a128))
       (= 1 (occh (fnf 'v (caup irX)) 'mw128r))       ; the mul's right is callish-free: parked
-      (= 1 (occh (fnf 'v (caup irX)) 'a128))))       ; the add's right CALLS: the cell holds through it
+      (= 1 (occh (fnf 'v (caup irX)) 'a128)))        ; the add's right CALLS: the cell holds through it
+   ; -- the leaf cs overflow: a call-free fn whose param homes drank the operand pool
+   ; (five homable params here) overflows its depth>=2 locals onto the cs pool -- the
+   ; save/restore pair rides the leaf lane's regen too (the ride regen passes the cs regs
+   ; through), and the loop nest runs register-only.
+   irY (cgn "long lf(long *r, long *a, long na, long *b, long nb) { long s = 0; for (long i = 0; i < na; i++) { for (long j = 0; j < nb; j++) { s = s + a[i] * b[j] + r[i+j]; } } return s; } int main() { return 0; }")
+   yf (fnf 'lf (caup irY))
+   (assert
+      (two? irY)
+      (member? '(st sp 32 r11) yf)                   ; s saves (prologue), homes r11
+      (member? '(ld r11 sp 32) yf)                   ; ...and restores (epilogue)
+      (member? '(add r12 r12 1) yf)                  ; i steps on its home, register-only
+      (member? '(add r13 r13 1) yf)                  ; j likewise
+      (= 3 (splds yf))))                             ; the ONLY sp loads are the three restores
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs

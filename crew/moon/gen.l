@@ -5325,14 +5325,16 @@
                         (? (tc <= 1) (walk >rs acc)
                            (walk >rs (link `(tc sq) acc)))))))
            cs (? (navl < 1) () (lastn (imsort (walk (peep g 'lrec ()) ())) navl))
-           ; the CALLEE-SAVED overflow (under calls only): a home there needs no wrap -- the
-           ; callee preserves it -- so a CROSSING local qualifies too. the price is the
+           ; the CALLEE-SAVED overflow: a home there needs no wrap -- the callee preserves
+           ; it -- so a CROSSING local qualifies too, and a call-free fn whose param homes
+           ; drank the operand pool overflows here the same way (its cs registers otherwise
+           ; sit idle while the loop locals reload per iteration). the price is the
            ; save/restore pair on EVERY invocation, and static touch counts keep lying about
            ; the payback (the pmax lesson wearing its locals face: a tc-only gate measured
            ; insns +0.2%; adding any-loop touches turned loads +0.2% -- short list/scheduler
            ; loops don't amortize the pair). only a touch under NESTED loops (depth >= 2)
            ; licenses a home: those iteration counts compound, and the pair drowns
-           kp (? (0 < nc) (cspool g) ())
+           kp (cspool g)
            taken (: t (tablet 0)
                     _ (foldl (\ _ e9 (pin t (caup e9) 1)) 0 cs)
                     t)
@@ -5466,7 +5468,8 @@
         (: _ (pin g 'lrec lrec1)                    ; the retry's lpick ranks ir1's layout, never the failed regen's
            hp9 (pools rd)
            lr9 (? av (lpick ir1 (caup av) (cauup av) hp9) ())
-           i2 (regen `('ride rd) (? (two? lr9) <lr9 ()) (? (two? lr9) <>lr9 hp9) ())
+           i2 (regen `('ride rd) (? (two? lr9) <lr9 ()) (? (two? lr9) <>lr9 hp9)
+                     (? (two? lr9) (nthr lr9 2) ()))   ; the cs regs ride too -- their pair pins in regen
            (? (ridesound? i2 rd) i2
               (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
                  (? ((tally rs) < (tally rd)) (leaf rs)
