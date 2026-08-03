@@ -6,8 +6,8 @@
 ;
 ; NOT in the arch-neutral corpus (common.mk's $t filters it out, beside glaze-x86.l): it
 ; EXECUTES native machine code. `make test_hook` runs it on the arches the hook emits for
-; (x86-64 + aarch64) and TWICE -- once over the binary's BAKED hook, which is what ships,
-; and once over a fresh standalone re-cat of hook.l, which is the re-install path.
+; (x86-64 + aarch64), against the WOKEN IMAGE's hook and the EGG BOOT's -- two different
+; closures, the first what ships and the second what an edit to hook.l moves.
 ;
 ; the three names it drives are the ones hook.l leaks on purpose: `natjit` (the hook),
 ; `fires` (the probe counter it bumps) and `fired?`. every law is the same shape -- take a

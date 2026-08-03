@@ -164,24 +164,28 @@ endif
 # test_hook -- the natjit CREATION-HOOK laws (test/glaze-hook.l): a qualifying closure is
 # native-backed by love/glaze/hook.l at every `ala`, and every law claims BOTH the answer and
 # that the hook owned it (`fired?`) -- the answer alone is no evidence, bytecode computes it too.
-# TWICE, because the hook has two lives: over the binary's BAKED hook, which is what ships and
-# what every other gate here runs on top of; and over a fresh standalone re-cat of hook.l, the
-# re-install path (a second natjit, built post-boot through (from 'glaze) rather than folded).
+# TWICE, over the hook's two lives, which are genuinely different closures: the IMAGE's, carried
+# through the bake and woken -- what a plain `love` runs, so $(mw), since this Makefile exports
+# LOVE_NO_IMAGE for every recipe -- and the EGG BOOT's, built by hook.h during boot() out of the
+# source in the tree. An edit here moves the second; the first is what ships.
+# ⚠ NOT by cat'ing hook.l into a session: a baked image has `nif` pulled off the book (main.c
+# hides the machine-code seam from users), so a second load builds a hook whose leaf lane cannot
+# emit. That passes under an egg boot and nowhere else, which is to say only in here.
 # x86-64 + aarch64, the arches the hook emits for -- the same gate test_glazefuzz uses, and NOT
 # test_glaze's x86-only one: this is the only automated coverage an arm64 host has of the hook.
 .PHONY: test_hook
 ifneq ($(filter $a,x86_64 aarch64),)
 test_hook: host
-	@echo "HOOK test/glaze-hook.l (baked)"; \
+	@echo "HOOK test/glaze-hook.l (the baked image)"; \
+	  $(mw) test/glaze-hook.l > out/host/.test_hook.out 2>&1; r=$$?; \
+	  cat out/host/.test_hook.out; \
+	  { [ $$r -eq 0 ] && grep -q "glaze-hook: ok" out/host/.test_hook.out; } \
+	    || { echo "FAIL glaze-hook, baked image (exit $$r)"; exit 1; }; \
+	  echo "HOOK test/glaze-hook.l (egg boot, hook.l out of the tree)"; \
 	  $m test/glaze-hook.l > out/host/.test_hook.out 2>&1; r=$$?; \
 	  cat out/host/.test_hook.out; \
 	  { [ $$r -eq 0 ] && grep -q "glaze-hook: ok" out/host/.test_hook.out; } \
-	    || { echo "FAIL glaze-hook, baked (exit $$r)"; exit 1; }; \
-	  echo "HOOK test/glaze-hook.l (love/glaze/hook.l re-cat)"; \
-	  { echo "(use 'holo)"; cat love/glaze/hook.l test/glaze-hook.l; } | $m > out/host/.test_hook.out 2>&1; r=$$?; \
-	  cat out/host/.test_hook.out; \
-	  { [ $$r -eq 0 ] && grep -q "glaze-hook: ok" out/host/.test_hook.out; } \
-	    || { echo "FAIL glaze-hook, re-cat (exit $$r)"; exit 1; }
+	    || { echo "FAIL glaze-hook, egg boot (exit $$r)"; exit 1; }
 else
 test_hook:
 	@echo "test_hook: skipped (the hook emits for x86_64 / aarch64; host arch is $a)"
