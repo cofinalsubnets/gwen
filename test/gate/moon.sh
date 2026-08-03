@@ -8,15 +8,18 @@
 # make owns the dependency graph; this owns the procedure.
 # NOT set -e: nearly every check captures $? to report it in its own message.
 #
-# usage: moon.sh OUTDIR LOVE
+# usage: moon.sh OUTDIR LOVE LOVE0
 set -u
 
 ho=$1
 m=$2
+love0=$3
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: the baked mooncc image, woken per invocation
 moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+# ..and the BOOTSTRAP one, the lane that compiles love.c: love0 waking mooncc0.image
+moon0() { "$love0" --wake out/host/mooncc0.image -e '(moon-main (cuup (cup cmdline)))' "$@"; }
 
 # ---------------------------------------------------------------- the laws
 echo "CC crew/moon/{lex,cpp,parse,gen,law}.l"
@@ -28,6 +31,16 @@ out=$ho/.test_moon.out
 r=$?
 cat "$out"
 [ $r -eq 0 ] && grep -q "crew/moon/law:" "$out" || fail "cc laws (exit $r)"
+
+# ----------------------------------------------- the template parser, under love0
+# ⚠ holo/text.l reaches the combinators through the BARE name `parse`, which each
+# frontend's boot binds to the post ACCESSOR. a lane that leaves the splice's own
+# parse FN there instead curries every combinator into a silent partial: no scare,
+# no wrong answer, just every template failing to parse. love0's build-tool lane is
+# the one that compiles love.c, and it is the only lane the laws above never walk.
+echo "CC crew/holo/text.l (love0 lane)"
+"$love0" -l crew/holo/text.l -e '(? (two? (asm-text "li r0, 60")) (quit 0) (quit 1))' </dev/null \
+  || fail "asm-text under love0 -- is bare \`parse\` the post accessor there?"
 
 arch=$(uname -m)
 if [ "$arch" != x86_64 ]; then
@@ -115,6 +128,14 @@ moonrun "$ho/.casm3.c" "$ho/.casm3" > /dev/null 2>&1 || fail "mooncc asm in-out 
 [ $a -eq 42 ] || fail "mooncc asm in-out (got $a want 42)"
 
 moonrun -t arm64 -o "$ho/.casm1a" "$ho/.casm1.c" > /dev/null 2>&1 || fail "mooncc asm arm64 compile"
+
+# the same template through the BOOTSTRAP compiler. every check above rides the
+# default love, and inline asm is the one feature whose front end (the combinators
+# text.l parses templates with) is reached by a bare name each lane binds itself --
+# so mooncc0 losing it while mooncc keeps it is a live shape, not a hypothetical.
+moon0 -o "$ho/.casm0" "$ho/.casm1.c" > /dev/null 2>&1 || fail "mooncc0 asm compile"
+"$ho/.casm0"; a=$?
+[ $a -eq 42 ] || fail "mooncc0 inline asm (got $a want 42)"
 
 # ------------------------------------------------------------- multi-input -c
 printf 'int f();\nint main() { return f() + 2; }\n' > "$ho/.mi1.c"
@@ -216,4 +237,4 @@ for s in "T main" "T fill" "B bigbuf" "B zed" "R tbl"; do
     || fail "symtab missing '$s' (nm must classify by the section the symbol lives in)"
 done
 
-echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"
+echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"

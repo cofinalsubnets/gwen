@@ -659,6 +659,9 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile. kanren before post,
     "(use 'post)"                                      //   reads unify/ufail bare; post serves revcat/parse/bake
+    "(: parse (from 'post))"                           // ⚠ `parse` is the ACCESSOR here as on the host: the splice alone
+                                                       //   answers post's own parse FN, and holo/text.l's (P 'eps) would
+                                                       //   curry it into silent garbage -- every asm-text line then scares
     "(: verbs ())"                                     // the CLI's verb rail reads `verbs`: bound-empty = no verbs, quietly
     );
     return ai_evals_(g, cli); }

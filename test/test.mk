@@ -314,9 +314,13 @@ test_vi: host out/host$(hsuf)/kore.image
 # the battery drives the WARM-baked image (what `make install` ships and users
 # run), not the cold source script -- ~0.68s -> ~0.02s per compile, 88 of them.
 moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
+# love0 rides along for the inline-asm checks: templates parse through holo/text.l,
+# whose combinators come off a bare name each frontend's boot binds ITSELF, so the
+# bootstrap lane can lose the feature while this one keeps it. mooncc0.image is
+# `host`'s own prerequisite on x86-64, where the e2e half of that lives.
 .PHONY: test_moon
-test_moon: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
-	@sh test/gate/moon.sh $(ho) $m
+test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/moon.sh $(ho) $m $(love0)
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for
 # every file in test/cc/, (cparse (clay-show ast)) == ast, compared STRUCTURALLY on
 # the tree and never as a string compare of the C text. that makes "clay can express
