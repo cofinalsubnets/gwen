@@ -195,6 +195,14 @@
       `("s128"        "482904244819542408488b0424488b542408" '((s128 sp)))  ; sub/sbb into the cell, reload
       `("mw128"       "48f72424"               '((mw128 sp)))          ; mul QWORD [rsp]
       `("m128"        "480faf1424488b4c2408480fafc84801d148f724244801ca" '((m128 sp)))
+      ;; the register twins: LEFT rides two registers (lo hi), RIGHT keeps rdx:rax
+      `("a128r"       "4c01c04c11ca"           '((a128r r7 r8)))        ; add rax,r8; adc rdx,r9
+      `("s128r"       "4929c04919d14c89c04c89ca" '((s128r r7 r8)))      ; sub r8,rax; sbb r9,rdx; pair back
+      `("mw128r"      "49f7e0"                 '((mw128r r7)))          ; mul r8
+      `("m128r"       "490fafd04c89c9480fafc84801d149f7e04801ca" '((m128r r7 r8)))
+      `("c128r.eq"    "4c31c04c31ca4809d00f94c0480fb6c0" '((c128r eq r7 r8)))
+      `("c128r.lt"    "4c89c14829c14c89c94819d10f9cc0480fb6c0" '((c128r lt r7 r8)))
+      `("c128r.gt"    "4c29c04c19ca0f9cc0480fb6c0" '((c128r gt r7 r8)))
       `("sx128"       "4899"                   '((sx128)))             ; cqo
       `("n128"        "48f7d248f7d84883daff"   '((n128)))              ; not;neg;sbb -1
       `("shl128.5"    "480fa4c20548c1e005"     '((shl128 5)))          ; shld 5; shl 5

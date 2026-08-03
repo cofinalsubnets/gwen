@@ -2179,6 +2179,18 @@
                             (member? op '(+ * & | ^ eq ne lt le gt ge))))
                    ah (? (|| iml? (|| (flo? ta) (|| (callish? rhs) (|| (llt? ta) (d128? ta))))) 'sh
                          (vpark g env lhs a))       ; a pair lhs keeps the shuttle (no pool park)
+                   ; the wide pair park: a d128 LEFT steps off the protocol into two pool
+                   ; registers, ALLOCATED BEFORE the right evaluates so its scratch dodges
+                   ; them; the combine reads the r-twins and the cell never opens. a callish
+                   ; right keeps the cell (a call clobbers every pool register), / % too
+                   ; (the divide dance owns the cell).
+                   wpk (? (&& (x64t? g) (&& (d128? ta) (&& (! (callish? rhs))
+                             (member? op '(+ - * & | ^ eq ne lt le gt ge)))))
+                          (: rl (ralloc g)
+                             (? (! rl) ()
+                                (: rh (ralloc g)
+                                   (? rh `(rl rh) (: _ (rfree g rl) ())))))
+                          ())
                    b (cgexpr g env rhs)
                    (? (bad? b) 'bad
                       (: tb (vty b)
@@ -2204,20 +2216,25 @@
                                  (? (! (x64t? g)) 'bad
                                     (|| pa pb) 'bad
                                     (: rt (wbin ta tb)
-                                       midw ((as128 g av) + (wpush + (as128 g b)))
-                                       (? (op = '+) (mkv rt 'r0 (midw + ('((a128 sp)) + wdrop)))
-                                          (op = '-) (mkv rt 'r0 (midw + ('((s128 sp)) + wdrop)))
+                                       w? (two? wpk)
+                                       midw (? w? ((as128 g av) + (`(`('mov <wpk 'r0) `('mov <>wpk 'r2)) + (as128 g b)))
+                                               ((as128 g av) + (wpush + (as128 g b))))
+                                       res (? (op = '+) (mkv rt 'r0 (midw + (? w? `(`('a128r <wpk <>wpk)) ('((a128 sp)) + wdrop))))
+                                          (op = '-) (mkv rt 'r0 (midw + (? w? `(`('s128r <wpk <>wpk)) ('((s128 sp)) + wdrop))))
                                           (op = '*)
                                            (: zl (? (d128? ta) (zext128? (vfs av)) (|| (usg? ta9) (ptr? ta9)))
                                               zr (? (d128? tb) (zext128? (vfs b)) (|| (usg? tb9) (ptr? tb9)))
-                                              (? (&& zl zr)
-                                                 (mkv rt 'r0 ((as128 g av) + (wpush + ((tor0 g b) + ('((mw128 sp)) + wdrop)))))
-                                                 (mkv rt 'r0 (midw + ('((m128 sp)) + wdrop)))))
+                                              (? (&& zl zr)                 ; hi halves zero: ONE mulq, the park needs only lo
+                                                 (mkv rt 'r0 (? w? ((as128 g av) + (`(`('mov <wpk 'r0)) + ((tor0 g b) + `(`('mw128r <wpk)))))
+                                                               ((as128 g av) + (wpush + ((tor0 g b) + ('((mw128 sp)) + wdrop))))))
+                                                 (mkv rt 'r0 (midw + (? w? `(`('m128r <wpk <>wpk)) ('((m128 sp)) + wdrop))))))
                                           (member? op '(& | ^))
                                            (: w9 (irop op)
-                                              (mkv rt 'r0 (midw + (`(`('ld 'r1 'sp 0) `(w9 'r0 'r0 'r1) `('ld 'r1 'sp 8) `(w9 'r2 'r2 'r1)) + wdrop))))
+                                              (mkv rt 'r0 (midw + (? w? `(`(w9 'r0 'r0 <wpk) `(w9 'r2 'r2 <>wpk))
+                                                             (`(`('ld 'r1 'sp 0) `(w9 'r0 'r0 'r1) `('ld 'r1 'sp 8) `(w9 'r2 'r2 'r1)) + wdrop)))))
                                           (member? op '(eq ne lt le gt ge))
-                                           (mkv 'long 'r0 (midw + (`(`('c128 (scc op (id? rt 'u128)) 'sp)) + wdrop)))
+                                           (mkv 'long 'r0 (midw + (? w? `(`('c128r (scc op (id? rt 'u128)) <wpk <>wpk))
+                                                             (`(`('c128 (scc op (id? rt 'u128)) 'sp)) + wdrop))))
                                           (member? op '(/ %))
                                            ; u128 by a divisor with a provably-zero high half only
                                            ; (dv128's two-step divq is unsigned): a widened unsigned
@@ -2227,7 +2244,9 @@
                                                     (|| (usg? tb9) (ptr? tb9)))
                                               (? (|| (! zr) (! (id? rt 'u128))) 'bad
                                                  (mkv rt 'r0 (midw + (`(`((? (op = '/) 'dv128 'rm128) 'sp)) + wdrop)))))
-                                          'bad)))
+                                          'bad)
+                                       _ (? w? (: _ (rfree g <wpk) (rfree g <>wpk)) ())
+                                       res))
                                 (&& (t32? g) (&& (! (|| pa pb)) (|| (llt? ta) (llt? tb))))
                                  ; the PAIR shuttle: both sides widen to r0:r1, left pops to
                                  ; r2:r3; +,-,* and the logicals combine through the carry family,

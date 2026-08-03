@@ -202,6 +202,32 @@
                      72 1 209                                     ; add rcx,rdx     (the cross terms)
                      72 247 36 36                                 ; mul QWORD [rsp]      rdx:rax = Llo*Rlo
                      72 1 202)                                    ; add rdx,rcx
+   ;; the register twins: the LEFT pair rides two registers (rl lo : rh hi) instead of the cell,
+   ;; the RIGHT keeps the rdx:rax protocol -- one form each, so the carry pair still can't part.
+   ;; s128r answers through the park (rl/rh clobbered: they die with the op).
+   (emit-a128r rl rh) ((alu-rr 1 'r0 rl) + (alu-rr 17 'r2 rh))    ; add rax,rl; adc rdx,rh
+   (emit-s128r rl rh) ((alu-rr 41 rl 'r0) + ((alu-rr 25 rh 'r2)   ; sub rl,rax; sbb rh,rdx
+                     + ((emit-mov 'r0 rl) + (emit-mov 'r2 rh))))  ; the pair back on the protocol
+   (emit-mw128r rl) (: n (rn rl) `((rex 1 0 0 (hi n)) 247 (modrm 3 4 n)))   ; mul rl -> rdx:rax
+   (emit-m128r rl rh)
+      ((emit-imul 'r2 'r2 rl)                                     ; rdx = Rhi*Llo
+       + ((emit-mov 'r1 rh) + ((emit-imul 'r1 'r1 'r0)            ; rcx = Lhi*Rlo
+       + ((alu-rr 1 'r1 'r2)                                      ; add rcx,rdx  (the cross terms)
+       + ((emit-mw128r rl)                                        ; rdx:rax = Llo*Rlo
+       + (alu-rr 1 'r2 'r1))))))                                  ; add rdx,rcx
+   (emit-c128r cond rl rh)
+      (: chain ((emit-mov 'r1 rl) + ((alu-rr 41 'r1 'r0)          ; rcx=rl; sub rcx,rax
+                + ((emit-mov 'r1 rh) + (alu-rr 25 'r1 'r2))))     ; rcx=rh; sbb rcx,rdx
+         rsub ((alu-rr 41 'r0 rl) + (alu-rr 25 'r2 rh))           ; sub rax,rl; sbb rdx,rh
+         (? (|| (cond = 'eq) (cond = 'ne))
+             ((alu-rr 49 'r0 rl) + ((alu-rr 49 'r2 rh)            ; xor both words, or them
+              + ((alu-rr 9 'r0 'r2) + (emit-set cond 'r0))))
+            (member? cond '(lt below ge ae)) (chain + (emit-set cond 'r0))
+            (cond = 'gt)    (rsub + (emit-set 'lt 'r0))
+            (cond = 'above) (rsub + (emit-set 'below 'r0))
+            (cond = 'le)    (rsub + (emit-set 'ge 'r0))
+            (cond = 'be)    (rsub + (emit-set 'ae 'r0))
+            (scare 'badcc128 cond)))
    (emit-shl128 c)
       (? (c < 64) `(72 15 164 194 (byte c)  72 193 224 (byte c))  ; shld rdx,rax,c; shl rax,c
          (: s9 (? (c = 64) () `(72 193 226 (byte (c - 64))))      ; shl rdx,c-64
@@ -442,6 +468,8 @@
            ('si >< emit-si) ('si1 >< emit-si1) ('si2 >< emit-si2) ('si4 >< emit-si4)
            ('cmpm >< emit-cmpm) ('cmprm >< emit-cmprm)
            ('a128 >< emit-a128) ('s128 >< emit-s128) ('m128 >< emit-m128) ('mw128 >< emit-mw128)
+           ('a128r >< emit-a128r) ('s128r >< emit-s128r) ('m128r >< emit-m128r)
+           ('mw128r >< emit-mw128r) ('c128r >< emit-c128r)
            ('shl128 >< emit-shl128) ('shr128 >< emit-shr128) ('sar128 >< emit-sar128)
            ('c128 >< emit-c128)
            ('divq >< emit-divq) ('dv128 >< emit-dv128) ('rm128 >< emit-rm128)

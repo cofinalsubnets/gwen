@@ -940,7 +940,21 @@
       (member? '(test r5 1) (fnf 'f2 (caup irE)))
       (= 0 (splds (fnf 'f2 (caup irE))))
       ; a crosses the call (one wrap reload), then the second read FORWARDS: one sp load total
-      (= 1 (splds (fnf 'q2 (caup irF))))))
+      (= 1 (splds (fnf 'q2 (caup irF)))))
+   ; -- the wide pair park: a d128 binop's LEFT rides two pool registers and the combine
+   ; reads the r-twins (a128r/mw128r/..) -- the machine-stack cell never opens. a callish
+   ; right keeps the cell: it must hold the pair THROUGH the call.
+   irW (cgn (pre9 + "unsigned long w(unsigned long a, unsigned long b, unsigned long c) { unsigned __int128 s = (unsigned __int128) a * b + c; return (unsigned long)(s >> 64) ^ (unsigned long) s; } int main() { return (int) w(3,4,5); }"))
+   irX (cgn (pre9 + "unsigned long v(unsigned long a) { unsigned __int128 s = (unsigned __int128) a * a + (unsigned __int128) g(1); return (unsigned long) s; } int main() { return (int) v(3); }"))
+   (occh l h9) (: (go l2 n) (? (! (two? l2)) n (go >l2 (? (&& (two? <l2) (id? (cap <l2) h9)) (n + 1) n))) (go l 0))
+   (assert
+      (two? irW) (two? irX)
+      (= 1 (occh (fnf 'w (caup irW)) 'mw128r))       ; the widening mul reads its parked register
+      (= 1 (occh (fnf 'w (caup irW)) 'a128r))        ; the add combines through the pair
+      (= 0 (occh (fnf 'w (caup irW)) 'mw128))        ; the cell forms are gone from this shape
+      (= 0 (occh (fnf 'w (caup irW)) 'a128))
+      (= 1 (occh (fnf 'v (caup irX)) 'mw128r))       ; the mul's right is callish-free: parked
+      (= 1 (occh (fnf 'v (caup irX)) 'a128))))       ; the add's right CALLS: the cell holds through it
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
