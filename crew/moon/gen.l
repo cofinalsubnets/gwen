@@ -322,6 +322,10 @@
    ; the size rides r3 first (free mid-expression: the shuttle holds r0/r1, args load at the pops)
    (imby g rX sz) (? (arm? g) `(`('li 'r3 sz) `('imul rX rX 'r3)) `(`('imul rX rX sz)))   ; arm mul (a64/t32/v6-M) has no imm form
    (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))   ; an 8-byte gp scalar: what a register home can carry
+   ; a LOCAL home carries int/uint too, CANONICALLY: the register always holds the extended
+   ; value (every def re-narrows through cvt), so reads are zero forms and 32-bit wrap holds.
+   ; params stay homable? -- a foreign caller passes a word whose high half is undefined
+   (lhomable? ty) (|| (homable? ty) (member? ty '(int uint)))
    ; the homable-param fold, spelled once for its five readers (pgo/homes?/nhomable/uhomes/
    ; rideset): a float/sse param rides its own lane and spends no gp seat, the walk stops folding
    ; at the home limit, and hx folds each homable seat -- (hx acc gpi param) -> acc
@@ -1273,9 +1277,9 @@
                   (: _ (pin g 'want <>rv)         ; hint the rhs straight at the home
                      r (cgexpr g env <>>e)
                      (? (bad? r) 'bad
-                        (flo? (vty r)) (mkv <>>rv 'r0 ((asintt g r <>>rv) + `(`('mov <>rv 'r0))))
-                        (id? (vreg r) <>rv) (mkv <>>rv <>rv (vfs r))   ; landed in the home already
-                        (: fs ((vfs r) + `(`('mov <>rv (vreg r))))   ; straight from the value's register
+                        (flo? (vty r)) (mkv <>>rv 'r0 ((asintt g r <>>rv) + (`(`('mov <>rv 'r0)) + (cvt <>>rv <>rv))))
+                        (id? (vreg r) <>rv) (mkv <>>rv <>rv ((vfs r) + (cvt <>>rv <>rv)))   ; landed in the home already (re-narrowed)
+                        (: fs ((vfs r) + (`(`('mov <>rv (vreg r))) + (cvt <>>rv <>rv)))   ; straight from the value's register
                            _ (rfree g (vreg r))
                            (mkv <>>rv <>rv fs))))
                  ; STORE-DIRECT: a plain variable target's address is STATIC (a frame offset or
@@ -1409,8 +1413,8 @@
               _ (? ((cap (caup e)) = 'var) (vmdrop g (caup (caup e))) ())   ; the RMW retires any mapping
               (? (&& (two? rv) (<rv = 'regv))   ; p++ on a register-homed scalar: old in r0, home += step
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
-                     (mkv ty 'r0 `(`('mov 'r0 <>rv)
-                                    `('add <>rv <>rv (* stp <>>e)))))
+                     (mkv ty 'r0 (`(`('mov 'r0 <>rv)
+                                    `('add <>rv <>rv (* stp <>>e))) + (cvt ty <>rv))))
                  ; STORE-DIRECT (the asn twin): a frame scalar's slot is a STATIC offset --
                  ; read/step/write with a direct frame ld+st. leaves no lean, so a loop
                  ; counter's slot never reads as address-taken and the local can home
@@ -4100,7 +4104,7 @@
                      (vone ps env2 acc p ty))
                  (: span (& ((tsz g ty) + 7) -8)
               off (nslot g span)
-              hreg (? (|| (peep g 'inlining ()) (! (homable? ty))) ()
+              hreg (? (|| (peep g 'inlining ()) (! (lhomable? ty))) ()
                       (: sq (1 + (peep g 'dseq 0))
                          _ (pin g 'dseq sq)
                          _ (pin g 'lrec (link `(sq off ty <p) (peep g 'lrec ())))
@@ -4144,8 +4148,8 @@
                        (d128? ty)
                         (? (! (x64t? g)) 'bad
                            (one >ps env3 (acc + (as128 g r) + `(`('st 'r4 off 'r0) `('st 'r4 (off + 8) 'r2)))))
-                       hreg (one >ps env3           ; a homed local's init is a register move
-                                 (acc + (asintt g r ty) + `(`('mov hreg 'r0))))
+                       hreg (one >ps env3           ; a homed local's init is a register move (a narrow home lands canonical)
+                                 (acc + (asintt g r ty) + (`(`('mov hreg 'r0)) + (cvt ty hreg))))
                        (&& hint (&& (! (flo? (vty r)))
                            (member? (vreg r) (peep g 'pool0 ()))))   ; hint set = vmap on + universe local
                         (: _ (vmpin g <p (vreg r))       ; the init value stays resident
@@ -4650,7 +4654,7 @@
                     (vent g env (caup (caup pe))) 'bad)
               (? (&& (two? rv) (<rv = 'regv))   ; a statement-position x++ on a home: the old value is dead
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
-                     `(`('add <>rv <>rv (* stp <>>pe))))
+                     (`(`('add <>rv <>rv (* stp <>>pe))) + (cvt ty <>rv)))
                  (: r (cgexpr g env pe)
                     (? (bad? r) 'bad (vdrop g r)))))
           (k = 'nop) ()

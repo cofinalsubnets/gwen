@@ -967,7 +967,20 @@
       (member? '(ld r11 sp 32) yf)                   ; ...and restores (epilogue)
       (member? '(add r12 r12 1) yf)                  ; i steps on its home, register-only
       (member? '(add r13 r13 1) yf)                  ; j likewise
-      (= 3 (splds yf))))                             ; the ONLY sp loads are the three restores
+      (= 3 (splds yf)))                              ; the ONLY sp loads are the three restores
+   ; -- canonical int homing: an int/uint LOCAL homes too (lhomable?), and the home always
+   ; holds the EXTENDED value -- every def re-narrows (sx4/zx4), so reads are zero forms and
+   ; 32-bit wrap holds. the mag_mul shape: int indices ride cs + operand homes, the loop nest
+   ; register-only; int PARAMS stay slotted (a foreign caller's high half is undefined).
+   irZ (cgn "long g2(long *r, long *a, int na, long *b, int nb) { long s = 0; for (int i = 0; i < na; i++) { for (int j = 0; j < nb; j++) { s = s + a[i] * b[j]; } } return s; } int main() { return 0; }")
+   zf (fnf 'g2 (caup irZ))
+   (assert
+      (two? irZ)
+      (member? '(sx4 r11) zf)                        ; i's defs re-narrow: the home stays canonical
+      (member? '(add r9 r9 1) zf)                    ; j steps on its operand home
+      (member? '(add r11 r11 1) zf)                  ; i on its cs home
+      (member? '(ld4 r0 sp 32) zf)                   ; the int PARAM na stays a slot (re-extending read)
+      (= 2 (splds zf))))                             ; full-word sp loads: only the two cs restores
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
