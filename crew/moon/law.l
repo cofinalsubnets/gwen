@@ -170,6 +170,10 @@
       (! (member? '(call rec) (caup (cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))))
       ; a frame-escaping fn keeps the plain call (the address outlives the frame)
       (member? '(call g) (caup (cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }")))
+      ; a STATEMENT-position attribute run SKIPS -- love.h's `ai_musttail return` and a bare
+      ; fallthrough both parse, and the annotated tail still jmps (sibcall owes it anyway)
+      (member? '(jmp rec) (caup (cgn "int rec(int n){ if(n==0) return 5; __attribute__((musttail)) return rec(n-1); } int main(){ return rec(3); }")))
+      (two? (cgn "int main(int c, char **v) { switch (c) { case 1: c++; __attribute__((fallthrough)); default: c++; } return c; }"))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a NAMED refusal now (rung 1, doc/moon-diag.md)
       (refused? (cgn "int main() { return 5=3; }"))                 ; not an lvalue
