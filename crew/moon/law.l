@@ -896,13 +896,30 @@
    irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
    irS (cgn (pre9 + "long q(long a, long b) { long s = a+b+a*b+a-b; g(1); { long a = s; s = a+1; } return s+2; } int main() { return q(20, 22); }"))
    irG (cgn (pre9 + "long w(long a, long b) { long s = a+b+a*b+a-b; g(1); if (s > 9) goto out; s = s+1; out: return s+1; } int main() { return w(20, 22); }"))
-   (assert
+   _ (assert
       (two? irD) (two? irL) (two? irS) (two? irG)
       (= 0 (wraps (fnf 'f (caup irD))))              ; dead across the call: no spills at all
       (= 2 (wraps (fnf 'h (caup irL))))              ; live across: both homes keep their wrap
       (= 1 (wraps (fnf 'q (caup irS))))              ; the shadowed a's blanket; b's own still drops
       (member? '(st sp 32 r6) (fnf 'q (caup irS)))   ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
-      (= 2 (wraps (fnf 'w (caup irG))))))            ; a goto fn wraps everything
+      (= 2 (wraps (fnf 'w (caup irG)))))             ; a goto fn wraps everything
+   ; -- callee-saved locals (the cs lane): a local touched under NESTED loops (depth >= 2)
+   ; homes on r11..r14 (machine r12-r15) even while it CROSSES calls -- the callee preserves
+   ; the register, so the home takes no wrap; the price is one save/restore pair in the
+   ; owner's frame, and only compounding iteration counts repay it. here s and the inner j
+   ; ride r11/r12 through g(j) unwrapped; the depth-1 i (and irS's loop-free s above) stay
+   ; slotted -- their touches never earn the pair.
+   irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
+   qf (fnf 'ql (caup irQ))
+   (occ f2) (: (go l n) (? (! (two? l)) n (go >l (? (= <l f2) (n + 1) n))) (go qf 0))
+   (assert
+      (two? irQ)
+      (= 1 (occ '(st sp 56 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
+      (= 1 (occ '(ld r11 sp 56)))                    ; s's restore, ONCE (epilogue)
+      (= 1 (occ '(st sp 64 r12)))                    ; j's pair likewise
+      (= 1 (occ '(ld r12 sp 64)))
+      (member? '(add r12 r12 1) qf)                  ; the inner step is register-only
+      (member? '(st sp 24 r9) qf)))                  ; i (depth 1) stays a slot: no pair to earn
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs

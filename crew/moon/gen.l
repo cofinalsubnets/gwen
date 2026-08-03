@@ -161,6 +161,10 @@
    hregs-t32 '(r5 r6 r7 r8)                          ; thumb2 callee-saved home pool (inert while nhome=0)
    (hregs g) (? (a64? g) hregs-a64 (t32? g) hregs-t32 opool)   ; the home pool (x64 rides opool, positionally arg-aligned)
    (nhome g) (? (a64? g) 5 (|| (t32? g) (rv? g)) 0 6)   ; how many gp positions can home (thumb2 + riscv: none yet -- spill all params)
+   ; the x64 CALLEE-SAVED pool (r11..r14 -> machine r12..r15): overflow homes for locals in
+   ; non-leaf fns. a home here rides THROUGH calls unwrapped -- the callee preserves it -- at
+   ; the price of one save/restore pair in the owner's frame (arm64's x19+ rungs: unclimbed)
+   (cspool g) (? (arm? g) () '(r11 r12 r13 r14))
    (fbase g) (? (arm? g) 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize); arm64+thumb2 fp, x64 r4
    ; -- a DELIBERATE refusal names itself (doc/moon-diag.md). `'bad` here is TWO answers wearing
    ; one face: "I decline, take another lane" (a policy deopt, ordinary and recoverable) and
@@ -2741,7 +2745,7 @@
        (a64? g) ((butret epi-a64) + `(`('jmpr 'r15)))          ; the arm64 epilogue never touches the x15 park
        (rv? g) ((butret (peep g 'epi epi-a64)) + `(`('jmpr (pkr g))))   ; riscv: the park (t4) survives the epilogue
        (t32? g) ((butret epi-a64) + `(`('jmpr (pkr g))))       ; thumb2: the callr target parks in r12 (pkr), untouched by the epilogue
-       (`(`('mov 'r10 'r3)) + (butret epi) + `(`('jmpr 'r10))))   ; park first: the x64 epilogue reloads r3
+       (`(`('mov 'r10 'r3)) + (butret (peep g 'epi epi)) + `(`('jmpr 'r10))))   ; park first: the x64 epilogue reloads r3
    ; a home reload run ((ld rH r4 slot)..) after a ret-position call is DEAD --
    ; the tail-jump hands the frame back first. skiprel peels exactly those.
    (skiprel fs hs)
@@ -4043,7 +4047,10 @@
                          lht (peep g 'lhome ())
                          (? lht (peep lht sq ()) ())))
               env3 (link `(<p (? hreg `('reg hreg) off) ty) env2)
-              _ (? hreg (pin g 'homes (link `(hreg off <p) (peep g 'homes ()))) ())
+              ; a callee-saved home stays OFF g 'homes: no call wrap (the callee preserves it),
+              ; no sib peel, and ezarg must never read its never-written shadow slot
+              _ (? (&& hreg (! (member? hreg (cspool g))))
+                   (pin g 'homes (link `(hreg off <p) (peep g 'homes ()))) ())
               (? (! (two? init)) (one >ps env3 acc)
                  (|| (<init = 'init) (&& (<init = 'str) (arr? ty)))
                   (? (&& (<init = 'init) (! (aggish? ty))) 'bad   ; a brace for a scalar
@@ -5147,8 +5154,9 @@
                           (cat `(`('label (intern <>f))
                                   `('push 'r4) `('mov 'r4 'sp) `('sub 'sp 'sp frame)
                                   `('st 'r4 -8 'r3))
-                           (cat <sp0
-                            (body + `(`('li 'r0 0)) + epi))))))))))))))))))
+                           (cat (peep g 'cssv ())
+                            (cat <sp0
+                             (body + `(`('li 'r0 0)) + (peep g 'epi epi))))))))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
        (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (link (homereg i9) a2)))
@@ -5257,10 +5265,72 @@
                         (? (tc <= 1) (walk >rs acc)
                            (walk >rs (link `(tc sq) acc)))))))
            cs (? (navl < 1) () (lastn (imsort (walk (peep g 'lrec ()) ())) navl))
+           ; the CALLEE-SAVED overflow (under calls only): a home there needs no wrap -- the
+           ; callee preserves it -- so a CROSSING local qualifies too. the price is the
+           ; save/restore pair on EVERY invocation, and static touch counts keep lying about
+           ; the payback (the pmax lesson wearing its locals face: a tc-only gate measured
+           ; insns +0.2%; adding any-loop touches turned loads +0.2% -- short list/scheduler
+           ; loops don't amortize the pair). only a touch under NESTED loops (depth >= 2)
+           ; licenses a home: those iteration counts compound, and the pair drowns
+           kp (? (0 < nc) (cspool g) ())
+           taken (: t (tablet 0)
+                    _ (foldl (\ _ e9 (pin t (caup e9) 1)) 0 cs)
+                    t)
+           ; loop spans over ir1x, ONE per header label (the longest backward reach -- a
+           ; continue's second branch must not fake depth); a touch's depth = covering spans
+           spans (: labi (tablet 0)
+                    (gi l i) (? (! (two? l)) ()
+                                (: f <l
+                                   _ (? (&& (two? f) (id? <f 'label)) (pin labi <>f i) ())
+                                   (gi >l (i + 1))))
+                    _ (gi ir1x 0)
+                    reach (tablet 0)
+                    (go l i)
+                     (? (! (two? l)) ()
+                        (: f <l
+                           tgt (? (! (two? f)) ()
+                                  (id? <f 'jmp) <>f
+                                  (id? <f 'br) <>>f
+                                  ())
+                           ti (? tgt (peep labi tgt -1) -1)
+                           _ (? (&& (0 <= ti) (ti < i))
+                                (: b (peep reach ti -1) (? (b < i) (pin reach ti i) ())) ())
+                           (go >l (i + 1))))
+                    _ (go ir1x 0)
+                    (mks ts acc) (? (! (two? ts)) acc
+                                    (mks >ts (link `(<ts (peep reach <ts 0)) acc)))
+                    (mks (keys reach) ()))
+           (nspan i) (: (go2 ss n) (? (! (two? ss)) n
+                                      (: s2 <ss
+                                         (go2 >ss (? (&& (<s2 <= i) (i <= <>s2)) (n + 1) n))))
+                        (go2 spans 0))
+           (lntouch fs off i n)
+            (? (! (two? fs)) n
+               (: f2 <fs
+                  hit (? (! (two? f2)) ()
+                         (member? <f2 ldops9) (&& (<>>f2 = fb9) (<>>>f2 = off))
+                         (member? <f2 gstops) (&& (<>f2 = fb9) (<>>f2 = off))
+                         ())
+                  (lntouch >fs off (i + 1) (? (&& hit (1 < (nspan i))) (n + 1) n))))
+           (walk2 rs acc)
+            (? (! (two? rs)) acc
+               (: e2 <rs sq <e2 off <>e2
+                  (? (|| (peep lt off ()) (peep taken sq ())) (walk2 >rs acc)
+                     (: tc (ntouch ir1x off 0)
+                        (? (tc <= 2) (walk2 >rs acc)
+                           (: ln (lntouch ir1x off 0 0)
+                              (? (ln < 1) (walk2 >rs acc)
+                                 (walk2 >rs (link `(ln sq) acc)))))))))
+           ks (? (! (two? kp)) () (lastn (imsort (walk2 (peep g 'lrec ()) ())) (tally kp)))
            (mk l hp t) (? (|| (! (two? l)) (! (two? hp))) t
                           (: _ (pin t (caup (cap l)) <hp)
                              (mk >l >hp t)))
-           (? (two? cs) `((mk cs hp9 (tablet 0)) (dropn hp9 (tally cs))) ()))
+           (firstn l n acc) (? (|| (n < 1) (! (two? l))) (rev acc) (firstn >l (n - 1) (link <l acc)))
+           (? (|| (two? cs) (two? ks))
+              `((mk ks kp (mk cs hp9 (tablet 0)))
+                (dropn hp9 (tally cs))
+                (firstn kp (tally ks) ()))
+              ()))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
        ; ⚠ the operand pool is EMPTY on t32: AAPCS32 keeps r4-r11 callee-saved and the thumb2
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
@@ -5269,6 +5339,7 @@
        tpool (? (t32? g) () (rv? g) '(r8 r9 r10 r11) opool)
        _ (pin g 'pool0 tpool) _ (pin g 'pool tpool)
        _ (pin g 'hasasm ())                         ; fresh per fn: an asm statement pins it (homing off)
+       _ (pin g 'cssv ())                           ; fresh per fn: the callee-saved save forms (a cs regen pins)
        _ (pin g 'argseal 0)                         ; fresh per fn: the vmap's staging seal depth
        ; v6-M MEMORY return: this fn's >4B composite result fills the address the caller
        ; passed as the implicit first arg (r0) -- save it in its own slot, params start at
@@ -5300,15 +5371,26 @@
        lr (? av (lpick ir1 (caup av) (cauup av) hpool) ())
        lh (? (two? lr) <lr ())
        lp0 (? (two? lr) <>lr hpool)
+       cu0 (? (two? lr) <>>lr ())                   ; the callee-saved homes lpick took (the regen saves/restores them)
        ; the REGEN dance: reset the accumulators and the frame to the ir1 snapshot, pin the
        ; analyses' channels (the vmap universe, the locals homes lh9, the livtab), rebuild under
        ; the spill policy hp with the operand pool lp9, then clear every channel. a 'bad ir2
        ; deopts: ir1 stands, accumulators restored.
-       (regen hp lh9 lp9)
+       (regen hp lh9 lp9 cs9)
         (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
            _ (pin g 'pool0 lp9) _ (pin g 'pool lp9)
            _ (rgset g lh9 av)
+           ; the callee-saved homes: one slot each past the r3 cell, stored by the prologue
+           ; (g 'cssv) and reloaded on every exit -- the epilogue PIN carries the loads through
+           ; each ret and sib splice, and unframe re-addresses them like any slot op
+           e0 (peep g 'epi epi)
+           _ (? (two? cs9)
+                (: sv (map (\ r9 `('st 'r4 (nslot g 8) r9)) cs9)
+                   _ (pin g 'cssv sv)
+                   (pin g 'epi ((map (\ f9 `('ld (nthr f9 3) 'r4 (nthr f9 2))) sv) + e0)))
+                ())
            ir2 (build (spill hp params 0 0 0 () ()))
+           _ (pin g 'cssv ()) _ (pin g 'epi e0)
            _ (rgreset g)
            ; the numbering guard: the build's forward ticks must land exactly
            ; on alive's total, or the wrap sets keyed by statement number
@@ -5324,7 +5406,7 @@
         (: _ (pin g 'lrec lrec1)                    ; the retry's lpick ranks ir1's layout, never the failed regen's
            hp9 (pools rd)
            lr9 (? av (lpick ir1 (caup av) (cauup av) hp9) ())
-           i2 (regen `('ride rd) (? (two? lr9) <lr9 ()) (? (two? lr9) <>lr9 hp9))
+           i2 (regen `('ride rd) (? (two? lr9) <lr9 ()) (? (two? lr9) <>lr9 hp9) ())
            (? (ridesound? i2 rd) i2
               (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
                  (? ((tally rs) < (tally rd)) (leaf rs)
@@ -5347,7 +5429,7 @@
                  (\ n2 i9 p9 (? (id? (nthr (argr g) i9) (homereg i9)) n2 (n2 + 1))))
              pp (&& hm (|| ((* 2 (* nc nh)) < nr)
                            (&& (two? av) (((* 2 (* nh ((pmax ir1) + (nthr av 4)))) + em) < nr))))
-             (? (|| pp lh) (regen (? pp 'shadow ()) lh lp0) ir1)))
+             (? (|| pp lh) (regen (? pp 'shadow ()) lh lp0 cu0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
        ; it early lets a pass-2 ride clobber a live arrival.
