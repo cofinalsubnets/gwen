@@ -187,6 +187,28 @@
                        '((div r0 r0 r7)))
       `("rem"         "524150489948f73c244889d04883c4085a"             ; ... mov rax,rdx (remainder) ...
                        '((rem r0 r0 r7 r4)))
+      `("divq"        "48f7f6"                 '((divq r5)))          ; div rsi (rn r5 = rsi): F7 /6
+      `("dv128"       "4889c1488b0424488b54240848890c244889c14889d031d248f73424489148f734244889ca" '((dv128 sp)))
+      `("rm128"       "4889c1488b0424488b54240848890c244889c14889d031d248f73424489148f734244889d031d2" '((rm128 sp)))
+      ;; the 128-bit pair kit (hi rdx : lo rax, left operand at [rsp] lo / [rsp+8] hi)
+      `("a128"        "480304244813542408"     '((a128 sp)))           ; add rax,[rsp]; adc rdx,[rsp+8]
+      `("s128"        "482904244819542408488b0424488b542408" '((s128 sp)))  ; sub/sbb into the cell, reload
+      `("mw128"       "48f72424"               '((mw128 sp)))          ; mul QWORD [rsp]
+      `("m128"        "480faf1424488b4c2408480fafc84801d148f724244801ca" '((m128 sp)))
+      `("sx128"       "4899"                   '((sx128)))             ; cqo
+      `("n128"        "48f7d248f7d84883daff"   '((n128)))              ; not;neg;sbb -1
+      `("shl128.5"    "480fa4c20548c1e005"     '((shl128 5)))          ; shld 5; shl 5
+      `("shl128.64"   "4889c231c0"             '((shl128 64)))         ; mov rdx,rax; xor eax
+      `("shl128.100"  "4889c248c1e22431c0"     '((shl128 100)))
+      `("shr128.5"    "480facd00548c1ea05"     '((shr128 5)))          ; shrd 5; shr 5
+      `("shr128.64"   "4889d031d2"             '((shr128 64)))
+      `("sar128.100"  "4889d048c1f82448c1fa3f" '((sar128 100)))        ; lo=hi>>36; hi floods
+      `("shl128v"     "80f940720a4889c248d3e231c0eb07480fa5c248d3e0" '((shl128v)))
+      `("shr128v"     "80f940720a4889d048d3e831d2eb07480fadd048d3ea" '((shr128v)))
+      `("sar128v"     "80f940720c4889d048d3f848c1fa3feb07480fadd048d3fa" '((sar128v)))
+      `("c128.eq"     "4833042448335424084809d00f94c0480fb6c0" '((c128 eq sp)))
+      `("c128.below"  "488b0c244829c1488b4c24084819d10f92c0480fb6c0" '((c128 below sp)))
+      `("c128.gt"     "482b0424481b5424080f9cc0480fb6c0" '((c128 gt sp)))
       ;; a whole program: write(1, buf, 13); exit(0)  -- r0=rax carries the syscall number
       `("syscall.prog"
          "b801000000bf01000000be00100000ba0d0000000f05b83c000000bf000000000f05"

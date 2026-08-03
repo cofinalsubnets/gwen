@@ -407,9 +407,10 @@
                ; cc.l prepends it as a -D-style define by target (love.c's AI_ARCH/
                ; IMAGE_ARCH read it -- a build without one believed its arch was
                ; "other" and the glaze handed holo an unknown target).
-               ; __SIZEOF_INT128__ stays UNDEFINED on both, so the bignum limbs
-               ; stay the portable 32-bit branch and the lone `divq` __asm__
-               ; (guarded && limb_bits == 64) stays out of reach.
+               ; __SIZEOF_INT128__ rides the DRIVER's -D channel too, x64 only
+               ; (gen's d128 lane): love.c takes 64-bit limbs there, and the
+               ; `divq` __asm__ lane with them; every other target keeps the
+               ; portable 32-bit branch.
                ; and Linux is the OS under every cc-built object (raw syscalls,
                ; ELF, the host seam) -- without it host/posix.c's signalfd source
                ; silently compiled OUT of the selfhost binary (a rung-2 wart)

@@ -83,13 +83,14 @@
    ; them zero-extend loads + unsigned >> / compare / divide). `long long` folds
    ; to 'long on the 64-bit targets (same width); on the 32-bit thumb ABI it is
    ; its own 8-byte type, 'llong/'ullong -- the register pair.
-   tyspec '(char short int long void double float signed unsigned _Complex)
+   tyspec '(char short int long void double float signed unsigned _Complex __int128)
    (canon ps specs)
     (? (member? '_Complex specs)                   ; C99 complex: a SEEDED two-member struct
         (? (member? 'float specs) '(struct "__cplx_float") '(struct "__cplx_double"))
        (member? 'void specs) 'void
        (member? 'double specs) 'double
        (member? 'float specs) 'float
+       (member? '__int128 specs) (? (member? 'unsigned specs) 'u128 'i128)
        (: uns (member? 'unsigned specs)
           ll (&& (pst32? ps) (: (n2 l k) (? (! (two? l)) k (n2 >l (? (id? <l 'long) (k + 1) k)))
                                 (1 < (n2 specs 0))))                        ; TWO longs on t32
@@ -276,7 +277,7 @@
    ; does a type begin here?
    (tkbty? ps t)
     (? (! (two? t)) ()
-       ((tkk t) = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned _Complex struct union enum))
+       ((tkk t) = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned _Complex __int128 struct union enum))
        ((tkk t) = 'id) (? (member? (tkv t) `("__typeof" "__typeof__")) 1
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
@@ -300,6 +301,7 @@
                   (|| (ty = 'char) (ty = 'uchar)) 1 (|| (ty = 'short) (ty = 'ushort)) 2
                   (|| (ty = 'int) (|| (ty = 'uint) (ty = 'float))) 4
                   (|| (ty = 'llong) (|| (ty = 'ullong) (ty = 'double))) 8   ; 8-byte on EVERY target
+                  (|| (ty = 'i128) (ty = 'u128)) 16
                   (psword ps))
    (talign ps ty) (? (ptr? ty) (psword ps)
                      (arr? ty) (talign ps <>ty)
@@ -1060,7 +1062,10 @@
               (op = 'lt) (? (a < b) 1 0) (op = 'le) (? (a <= b) 1 0)
               (op = 'gt) (? (b < a) 1 0) (op = 'ge) (? (b <= a) 1 0)
               (op = '&) (& a b) (op = '|) (| a b) (op = '^) (^ a b)
-              (op = 'shl) (u32w e (<< a b))
+              ; shl multiplies by 2^b (the church exponent): love's << wraps at the word, and a
+              ; u128 constant (limb_base) must fold EXACT -- a bignum result rides, its guarded
+              ; consumers (charm?/cint?) decide; an unfoldable count answers no-fold
+              (op = 'shl) (? (&& (0 <= b) (b <= 256)) (u32w e (* a (b 2))) ())
               (op = 'shr) (? (uext? <>>e) (& (>> a b) ((<< 1 (64 - b)) - 1)) (>> a b))
               ()))
        (<e = 'un)

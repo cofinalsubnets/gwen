@@ -6283,10 +6283,11 @@ static ai_noinline int mag_mul_add_small(ai_limb *a, int n, ai_limb mul, ai_limb
 // 128/64 -> quotient + remainder, caller guarantees the quotient fits a limb
 // (hi < d): the hardware divq on x86-64, never __udivti3
 static ai_inline ai_limb div2by1(ai_limb hi, ai_limb lo, ai_limb d, ai_limb *rem) {
-#if defined(__x86_64__) && limb_bits == 64
- ai_limb q;
- __asm__("divq %[d]" : "=a"(q), "=d"(*rem) : [d] "rm"(d), "a"(lo), "d"(hi));
- return q;
+#if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__)
+ // gcc/clang take the one-divq asm; mooncc compiles the C face below natively
+ // (its u128/u64 divide IS the same two-step divq dance, emitted whole)
+ __asm__("divq %2" : "+a"(lo), "+d"(hi) : "r"(d));
+ return *rem = hi, lo;
 #else
  ai_dlimb num = ((ai_dlimb) hi << limb_bits) | lo;
  return *rem = (ai_limb) (num % d), (ai_limb) (num / d);

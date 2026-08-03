@@ -126,7 +126,8 @@
    ; and the last -D would swallow the file's first line); deskew pays the
    ; numbering back at the report.
    (cc-parse src is ds tgt nsi)
-    (: ds9 (link (archdef tgt) ds)         ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+    (: ds9 (link (archdef tgt)             ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+                 (? (id? tgt 'x64) (link "__SIZEOF_INT128__=16" ds) ds))   ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clex ((deftext ds9) + <>r))

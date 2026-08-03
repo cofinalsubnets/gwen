@@ -188,6 +188,62 @@
    (emit-si1 base off n)  ((x64-mem () 0 `(198) 'r0 base off) + `((byte n)))   ; C6 /0 ib  BYTE
    (emit-si2 base off n)  ((x64-mem `(102) 0 `(199) 'r0 base off) + (le16 n))  ; 66 C7 /0 iw WORD
    (emit-si4 base off n)  ((x64-mem () 0 `(199) 'r0 base off) + (le32 n))      ; C7 /0 id  DWORD
+   ;; the 128-bit pair kit (moon's i128/u128): a wide value rides hi rdx : lo rax, the LEFT
+   ;; operand of a binop staged at [rsp] lo / [rsp+8] hi. each op is ONE IR form so no pass can
+   ;; part a carry pair (adc/sbb read the flag the insn before them set); the sp operand is
+   ;; deadcell's dirty signal, the encoding fixes rsp. shifts are in-place on the pair; counts
+   ;; past 63 take the one-word lane (the v-forms branch on cl at run time, 0..127 exact).
+   (emit-a128 sp9) '(72 3 4 36  72 19 84 36 8)                    ; add rax,[rsp]; adc rdx,[rsp+8]
+   (emit-s128 sp9) '(72 41 4 36  72 25 84 36 8                    ; sub [rsp],rax; sbb [rsp+8],rdx
+                     72 139 4 36  72 139 84 36 8)                 ; mov rax,[rsp]; mov rdx,[rsp+8]
+   (emit-mw128 sp9) '(72 247 36 36)                               ; mul QWORD [rsp] -> rdx:rax
+   (emit-m128 sp9) '(72 15 175 20 36                              ; imul rdx,[rsp]       rdx = Rhi*Llo
+                     72 139 76 36 8  72 15 175 200                ; mov rcx,[rsp+8]; imul rcx,rax
+                     72 1 209                                     ; add rcx,rdx     (the cross terms)
+                     72 247 36 36                                 ; mul QWORD [rsp]      rdx:rax = Llo*Rlo
+                     72 1 202)                                    ; add rdx,rcx
+   (emit-shl128 c)
+      (? (c < 64) `(72 15 164 194 (byte c)  72 193 224 (byte c))  ; shld rdx,rax,c; shl rax,c
+         (: s9 (? (c = 64) () `(72 193 226 (byte (c - 64))))      ; shl rdx,c-64
+            ('(72 137 194) + (s9 + '(49 192)))))                  ; mov rdx,rax; ..; xor eax,eax
+   (emit-shr128 c)
+      (? (c < 64) `(72 15 172 208 (byte c)  72 193 234 (byte c))  ; shrd rax,rdx,c; shr rdx,c
+         (: s9 (? (c = 64) () `(72 193 232 (byte (c - 64))))      ; shr rax,c-64
+            ('(72 137 208) + (s9 + '(49 210)))))                  ; mov rax,rdx; ..; xor edx,edx
+   (emit-sar128 c)
+      (? (c < 64) `(72 15 172 208 (byte c)  72 193 250 (byte c))  ; shrd rax,rdx,c; sar rdx,c
+         (: s9 (? (c = 64) () `(72 193 248 (byte (c - 64))))      ; sar rax,c-64
+            ('(72 137 208) + (s9 + '(72 193 250 63)))))           ; mov rax,rdx; ..; sar rdx,63
+   ;; the 128/64 divide pair (u128 num in the cell, u64 divisor on the protocol lo): the two-step
+   ;; Knuth-safe dance -- qhi = hi/d leaves its remainder in rdx for the low divq, so neither
+   ;; divide can fault (rdx < d both times). dv128 answers the full quotient pair, rm128 the
+   ;; remainder (hi 0: rem < d). d = 0 faults like the hardware -- C's own undefined.
+   (d128-div-pre z9) '(72 137 193                                 ; mov rcx,rax        (d aside)
+                  72 139 4 36  72 139 84 36 8                     ; num: rax=[rsp] lo, rdx=[rsp+8] hi
+                  72 137 12 36                                    ; mov [rsp],rcx      (d -> the cell)
+                  72 137 193  72 137 208  49 210                  ; rcx=lo; rax=hi; xor edx,edx
+                  72 247 52 36                                    ; div QWORD [rsp]    (rax=qhi, rdx=r1)
+                  72 145                                          ; xchg rax,rcx       (rax=lo, rcx=qhi)
+                  72 247 52 36)                                   ; div QWORD [rsp]    (rax=qlo, rdx=rem)
+   (emit-dv128 sp9) ((d128-div-pre 0) + '(72 137 202))            ; mov rdx,rcx: quotient qhi:qlo
+   (emit-rm128 sp9) ((d128-div-pre 0) + '(72 137 208  49 210))    ; rax=rem; xor edx,edx
+   ;; (c128 cond sp): 0/1 <- (LEFT cond RIGHT). eq/ne xor both words; lt/ge run the borrow chain
+   ;; L-R through rcx; gt/le/above/be compute R-L in place and read the flipped relation.
+   (emit-c128 cond sp9)
+      (: chain '(72 139 12 36  72 41 193  72 139 76 36 8  72 25 209)  ; mov rcx,[rsp]; sub rcx,rax; mov rcx,[rsp+8]; sbb rcx,rdx
+         rsub  '(72 43 4 36  72 27 84 36 8)                       ; sub rax,[rsp]; sbb rdx,[rsp+8]
+         (? (|| (cond = 'eq) (cond = 'ne))
+             ('(72 51 4 36  72 51 84 36 8  72 9 208)              ; xor rax,[rsp]; xor rdx,[rsp+8]; or rax,rdx
+              + (emit-set cond 'r0))
+            (member? cond '(lt below ge ae)) (chain + (emit-set cond 'r0))
+            (cond = 'gt)    (rsub + (emit-set 'lt 'r0))
+            (cond = 'above) (rsub + (emit-set 'below 'r0))
+            (cond = 'le)    (rsub + (emit-set 'ge 'r0))
+            (cond = 'be)    (rsub + (emit-set 'ae 'r0))
+            (scare 'badcc128 cond)))
+   ;; the one-operand unsigned divide (the divq the bignum kernel's inline asm speaks):
+   ;; rdx:rax / r -> rax quotient, rdx remainder. F7 /6. caller stages rdx:rax itself.
+   (emit-divq s) (: sn (rn s) `((rex 1 0 0 (hi sn)) 247 (modrm 3 6 sn)))
    ;; the THREAD POINTER (the TLS base): x86_64 keeps it in fs, and the ABI lays
    ;; the pointer itself as the first word of its own block, so (tp d) is one
    ;; segment-prefixed load -- mov d, fs:[0]. (arm64's face would be mrs tpidr_el0.)
@@ -385,6 +441,23 @@
            ('st1 >< emit-st1) ('st2 >< emit-st2) ('st4 >< emit-st4)
            ('si >< emit-si) ('si1 >< emit-si1) ('si2 >< emit-si2) ('si4 >< emit-si4)
            ('cmpm >< emit-cmpm) ('cmprm >< emit-cmprm)
+           ('a128 >< emit-a128) ('s128 >< emit-s128) ('m128 >< emit-m128) ('mw128 >< emit-mw128)
+           ('shl128 >< emit-shl128) ('shr128 >< emit-shr128) ('sar128 >< emit-sar128)
+           ('c128 >< emit-c128)
+           ('divq >< emit-divq) ('dv128 >< emit-dv128) ('rm128 >< emit-rm128)
+           ('inc128 >< '(72 131 192 1  72 131 210 0))            ; add rax,1; adc rdx,0
+           ('dec128 >< '(72 131 232 1  72 131 218 0))            ; sub rax,1; sbb rdx,0
+           ('sx128 >< '(72 153))                                 ; cqo: rdx:rax <- sign rax
+           ('n128 >< '(72 247 210  72 247 216  72 131 218 255))  ; not rdx; neg rax; sbb rdx,-1
+           ('shl128v >< '(128 249 64 114 10                      ; cmp cl,64; jb small
+                          72 137 194  72 211 226  49 192  235 7  ; mov rdx,rax; shl rdx,cl; xor eax,eax; jmp done
+                          72 15 165 194  72 211 224))            ; small: shld rdx,rax,cl; shl rax,cl
+           ('shr128v >< '(128 249 64 114 10
+                          72 137 208  72 211 232  49 210  235 7  ; mov rax,rdx; shr rax,cl; xor edx,edx
+                          72 15 173 208  72 211 234))            ; small: shrd rax,rdx,cl; shr rdx,cl
+           ('sar128v >< '(128 249 64 114 12
+                          72 137 208  72 211 248  72 193 250 63  235 7   ; mov rax,rdx; sar rax,cl; sar rdx,63
+                          72 15 173 208  72 211 250))            ; small: shrd rax,rdx,cl; sar rdx,cl
            ('ldu1 >< emit-ldu1) ('ldu2 >< emit-ldu2) ('ldu4 >< emit-ldu4)
            ('cas >< (emit-cas 1)) ('cas4 >< (emit-cas 0)) ('tp >< emit-tp)
            ('sx1 >< (emit-sx 1)) ('sx2 >< (emit-sx 2)) ('sx4 >< (emit-sx 4))
