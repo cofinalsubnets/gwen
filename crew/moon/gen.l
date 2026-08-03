@@ -140,6 +140,15 @@
    (vmset g m) (: _ (pin g 'vmap m) (pin g 'vpin (vmregs m ())))
    (vmeet a b) (filter (\ e9 (: o (assoc <e9 b)
                                  (? (two? o) (id? <>o <>e9) ()))) a)
+   ; ⚠ may an ALIAS live across a splice body? only in a register the body's STAGING can
+   ; never write. x64 staging owns exactly the protocol quad r0-r3 (r3 the callr park), so
+   ; every pool/home/cs register aliases -- but a seat-2/3 ride (r2/r1) must not. elsewhere
+   ; the arrivals r0-r7 are staging-adjacent (a64's shuttle rides r0-r3, spush2 r2/r3), so
+   ; only the pool/cs families are safe -- an arrival alias there MISCOMPILES (getenv's
+   ; PATH walk was the catch: a ride aliased across a body that staged through it).
+   (alsafe? g r)
+    (? (x64t? g) (! (member? r '(r0 r1 r2 r3)))
+       (|| (member? r (peep g 'pool0 ())) (member? r (cspool g))))
    (vmout? fs)                                      ; does control fall out the bottom of the forms?
     (? (! (two? fs)) 1
        (: (go l) (? (two? >l) (go >l) <l)
@@ -609,6 +618,7 @@
                                    (? (&& (two? v9) (&& (<v9 = 'regv) (! (flo? <>>v9))))
                                       <>v9 ()))))
                           ())
+                    al (? al (? (alsafe? g al) al ()) ())   ; staging must never write it
                     (? al                          ; the alias bind: zero forms
                         (: _ (pin g 'rpin (link al (peep g 'rpin ())))
                            (cbind >ps >as (link `((cap (cap ps)) `('reg al) pty) benv) acc rbs))
@@ -4938,19 +4948,50 @@
        _ (pin g 'inlining ((? (! il0) 0 il0) + 1))
        rt (cap (peep (g 'sigs) <>f `('long ())))
        ilb9 (nlab g ".il")
-       (bind ps as benv acc)                         ; arg values -> fresh full-word slots, left to right
+       rp0 (peep g 'rpin ())
+       ; the ALIAS bind, cbinl's extended to a VALUE splice: a word-typed var arg over a
+       ; pinned/homed local reads straight from that register -- licensed only when the whole
+       ; splice is call-free AND the body never ASSIGNS that param (statements can); &param
+       ; self-declines through clval (regv answers 'bad, the real call stands). rpin holds the
+       ; alias against wr?/rfree/psreset across the body's own statement resets. NO PARK LANE
+       ; here: a cginl park spans the whole body, starves its statements, and the shuttle
+       ; spushes (measured: corpus L1 loads +0.36% -- cbinl's short-span parks stay).
+       (anyc l) (? (! (two? l)) () (? (callish? <l) 1 (anyc >l)))
+       nocall (&& (! (callish? (caup (caup (cuup f))))) (! (anyc args)))
+       (wrs? nm e)                                   ; does the body WRITE nm? (asn/pre/post on its var)
+        (? (! (two? e)) ()
+           (&& (member? <e '(asn pre post))
+               (&& (two? <>e) (&& ((cap <>e) = 'var) (id? (caup <>e) nm)))) 1
+           (: (go l) (? (! (two? l)) () (? (wrs? nm <l) 1 (go >l)))
+              (go e)))
+       (bind ps as benv acc)                         ; arg values -> the alias register, else slots
         (? (! (two? ps)) `(benv acc)
-           (: r (cgexpr g env <as)
-              (? (bad? r) 'bad
-                 (pair? g (caup (cap ps)))           ; a pair param: an 8-byte slot, both words land
-                  (: off (ntmp g 'llong)
-                     (bind >ps >as
-                           (link `((cap (cap ps)) off (caup (cap ps))) benv)
-                           (acc + (asll g r) + (pst 'r4 off))))
-                 (: off (ntmp g 'long)
-                    (bind >ps >as
-                          (link `((cap (cap ps)) off (caup (cap ps))) benv)
-                          (acc + (asintt g r (caup (cap ps))) + `(`('st 'r4 off 'r0))))))))
+           (: pty (caup (cap ps))
+              al (? (&& nocall (&& (! (flo? pty)) (&& (8 = (tsz g pty))
+                       (&& (two? <as) (&& ((cap <as) = 'var)
+                           (! (wrs? (cap (cap ps)) (caup (caup (cuup f))))))))))
+                    (: nm9 (caup <as)
+                       pM (vmget g nm9)
+                       (? pM pM
+                          (: v9 (vent g env nm9)
+                             (? (&& (two? v9) (&& (<v9 = 'regv) (! (flo? <>>v9))))
+                                <>v9 ()))))
+                    ())
+              al (? al (? (alsafe? g al) al ()) ())  ; staging must never write it
+              (? al                                  ; the alias bind: zero forms
+                  (: _ (pin g 'rpin (link al (peep g 'rpin ())))
+                     (bind >ps >as (link `((cap (cap ps)) `('reg al) pty) benv) acc))
+                 (: r (cgexpr g env <as)
+                    (? (bad? r) 'bad
+                       (pair? g pty)                 ; a pair param: an 8-byte slot, both words land
+                        (: off (ntmp g 'llong)
+                           (bind >ps >as
+                                 (link `((cap (cap ps)) off pty) benv)
+                                 (acc + (asll g r) + (pst 'r4 off))))
+                       (: off (ntmp g 'long)
+                          (bind >ps >as
+                                (link `((cap (cap ps)) off pty) benv)
+                                (acc + (asintt g r pty) + `(`('st 'r4 off 'r0))))))))))
        br (bind <>>f args () ())
        _ (pin g 'inlret ilb9)
        _ (pin g 'inlrt rt)
@@ -4965,6 +5006,7 @@
        _ (pin g 'inlret ir0)
        _ (pin g 'inlrt irt0)
        _ (pin g 'inlining il0)
+       _ (pin g 'rpin rp0)                            ; the alias pins die with the splice
        _ (vmflush g)                                  ; the splice's end label joins
        (? (|| (bad? br) (bad? ibd))                   ; a shape the splice can't take: the real call still can
            (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
