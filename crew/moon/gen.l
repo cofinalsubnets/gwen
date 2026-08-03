@@ -4263,9 +4263,11 @@
    ; numbers; a livtab miss reads 'all, and a drifted walk is caught LOUD.
    ; loops seed with everything the loop reads (the back edge, no fixpoint -- a post-back-edge
    ; read is textually in the loop; a goto ESCAPES, so as a loop use it reads the whole universe);
-   ; a label is a backward no-op. answers (livtab cross univ total): livtab sq -> wrapset, cross
-   ; name -> static call crossings, univ the analyzed names -- ⚠ a gate must never trust cross for
-   ; an outsider -- total the statement count (the regen's numbering guard).
+   ; a label is a backward no-op. answers (livtab cross univ total ncw): livtab sq -> wrapset,
+   ; cross name -> static call crossings, univ the analyzed names -- ⚠ a gate must never trust
+   ; cross for an outsider -- total the statement count (the regen's numbering guard), ncw the
+   ; fn's loop-weighted IN-LOOP call count (the payoff gate's per-iteration price; a depth-0
+   ; call sits in the path maximum instead -- it runs at most once per invocation).
    (alive g f)
     (: params <>>f
        items (caup (caup (cuup f)))
@@ -4314,9 +4316,12 @@
                        (<s2 = nm) >s2
                        (link <s2 (sdel >s2 nm)))
        (tick u) (: q (peep n9 'q 0) _ (pin n9 'q (q - 1)) q)
-       (rec sq w ncl)                               ; a call-bearing statement's record
+       ; nclw = the statement's IN-LOOP share of ncl (0 at depth 0): the fn total n9 'ncw feeds
+       ; the payoff gate -- a depth-0 call runs at most once per invocation
+       (rec sq w ncl nclw)                          ; a call-bearing statement's record
         (? (ncl < 1) ()
            (: _ (pin liv sq (sun w pales))          ; the outside-universe homes ride every wrap
+              _ (pin n9 'ncw (nclw + (peep n9 'ncw 0)))
               (bump l) (? (! (two? l)) ()
                           (: _ (pin crs <l (ncl + (peep crs <l 0))) (bump >l)))
               (bump w)))
@@ -4400,11 +4405,12 @@
                      ; ⚠ the KILL rides the record too: a name born in a call-bearing statement is
                      ; invisible to in/out yet lives across the statement's OWN calls, and
                      ; statement-grain cannot order intra-statement events
-                     sq (tick ()) _ (rec sq (sun (sun in out) (? kv `(kv) ())) (* <>r w9))
+                     sq (tick ()) _ (rec sq (sun (sun in out) (? kv `(kv) ())) (* <>r w9)
+                                         (? (1 < w9) (* <>r w9) 0))
                      in)
                  (k = 'ret)
                   (: r (? (two? <>s) (erd <>s () 0) '(() 0))
-                     sq (tick ()) _ (rec sq <r (* <>r w9))
+                     sq (tick ()) _ (rec sq <r (* <>r w9) (? (1 < w9) (* <>r w9) 0))
                      <r)
                  (k = 'decl)
                   (: pr (dpairs (rev <>s) out 0)
@@ -4412,7 +4418,8 @@
                                       (: nm (cap (cap ps))
                                          (? (member? nm univ) (link nm (go >ps)) (go >ps))))
                            (go <>s))
-                     sq (tick ()) _ (rec sq (sun (sun <pr out) ks) (* <>pr w9))
+                     sq (tick ()) _ (rec sq (sun (sun <pr out) ks) (* <>pr w9)
+                                         (? (1 < w9) (* <>pr w9) 0))
                      <pr)
                  (k = 'sdecl) (: _ (tick ()) out)   ; statics: no runtime init, no kill
                  (k = 'if)
@@ -4420,21 +4427,21 @@
                      inT (lst <>>s out brk cnt w9)
                      r (erd <>s () 0)
                      in (sun (sun inT inE) <r)
-                     sq (tick ()) _ (rec sq (sun in out) (* <>r w9))
+                     sq (tick ()) _ (rec sq (sun in out) (* <>r w9) (? (1 < w9) (* <>r w9) 0))
                      in)
                  (k = 'while)
                   (: w8 (* 8 w9)
                      seed (sun out (ust <>>s (cap (erd <>s () 0))))
                      _ (lst <>>s seed out seed w8)
                      r (erd <>s () 0)
-                     sq (tick ()) _ (rec sq seed (* <>r w8))
+                     sq (tick ()) _ (rec sq seed (* <>r w8) (* <>r w8))
                      seed)
                  (k = 'do)
                   (: w8 (* 8 w9)
                      seed (sun out (ust <>s (cap (erd <>>s () 0))))
                      r (erd <>>s () 0)
                      _ (lst <>s seed out seed w8)
-                     sq (tick ()) _ (rec sq seed (* <>r w8))
+                     sq (tick ()) _ (rec sq seed (* <>r w8) (* <>r w8))
                      seed)
                  (k = 'for)
                   (: w8 (* 8 w9)
@@ -4459,7 +4466,8 @@
                            (member? <ini '(decl sdecl)) (lst ini seed () () w9)   ; ticks (cgdecl does); kill applies; runs ONCE
                            (sun (? kv8 (sdel seed kv8) seed) <ri))
                      ; kv8 joins the record: the init's kill (see the expr lane)
-                     sq (tick ()) _ (rec sq (sun (sun seed <ri) (? kv8 `(kv8) ())) (+ (* nc9 w8) (* <>ri w9)))
+                     sq (tick ()) _ (rec sq (sun (sun seed <ri) (? kv8 `(kv8) ())) (+ (* nc9 w8) (* <>ri w9))
+                                         (+ (* nc9 w8) (? (1 < w9) (* <>ri w9) 0)))
                      in)
                  (k = 'switch)
                   (: r (erd <>s () 0)
@@ -4468,7 +4476,7 @@
                      macc (cap (peep n9 'sw ()))
                      _ (pin n9 'sw (cup (peep n9 'sw ())))       ; pop
                      in (sun (sun <r macc) out)
-                     sq (tick ()) _ (rec sq in (* <>r w9))
+                     sq (tick ()) _ (rec sq in (* <>r w9) (? (1 < w9) (* <>r w9) 0))
                      in)
                  (member? k '(case dflt))
                   (: sw (peep n9 'sw ())
@@ -4478,14 +4486,14 @@
                  (k = 'cont) (: _ (tick ()) cnt)
                  (k = 'goto) (: _ (tick ()) univ)   ; any target: everything
                  (k = 'lbl) (: _ (tick ()) out)
-                 (k = 'asm) (: sq (tick ()) _ (rec sq univ w9) univ)   ; homing is off anyway (hasasm)
+                 (k = 'asm) (: sq (tick ()) _ (rec sq univ w9 (? (1 < w9) w9 0)) univ)   ; homing is off anyway (hasasm)
                  (: _ (tick ()) out))))             ; nop tdef
        ; -- run: liveout at the fn end is empty; the counter descends from the prepass total so
        ; lst's numbers land forward pre-order. ⚠ pre and lst disagreeing on the statement set is a
        ; compiler bug, so the counter must land exactly on zero or alive answers () --
        _ (pin n9 'q (peep n9 'n 0))
        _ (litems items () () () 1)
-       (? (0 = (peep n9 'q 0)) `(liv crs univ (peep n9 'n 0)) ()))
+       (? (0 = (peep n9 'q 0)) `(liv crs univ (peep n9 'n 0) (peep n9 'ncw 0)) ()))
    ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this counter and pin the
    ; statement's wrapset (g 'stwrap) off g 'livtab -- a miss pins 'all, the blanket wrap. an
    ; inline splice neither ticks nor re-pins: it compiles under its statement's set.
@@ -5054,6 +5062,29 @@
        (ncalls fs n) (? (! (two? fs)) n
                         (: f <fs
                            (ncalls >fs (? (&& (two? f) (member? <f '(call callr))) (n + 1) n))))
+       ; the forward-path call maximum over post-sibcall ir1: labels merge by max, a jmp/ret/jmpr
+       ; ends its path, a BACKWARD branch is ignored (an in-loop call is ncw's charge). this is
+       ; the price a single invocation can actually pay -- the dispatch fleet's calls sit in
+       ; exclusive arms, so their total says nothing about any one path.
+       (pmax fs)
+        (: best (tablet 0)
+           (mxu m c) (? (id? c 'dead) m (? (m < c) c m))
+           (bpin lab c) (? (id? c 'dead) ()
+                           (: b (peep best lab 0) (? (b < c) (pin best lab c) ())))
+           (go l cur mx)
+            (? (! (two? l)) (mxu mx cur)
+               (: f <l
+                  (? (! (two? f)) (go >l cur mx)
+                     (: k <f
+                        (? (k = 'label)
+                            (go >l (: b (peep best <>f 0)
+                                      (? (id? cur 'dead) b (? (b < cur) cur b))) mx)
+                           (member? k '(call callr)) (go >l (? (id? cur 'dead) 'dead (cur + 1)) mx)
+                           (k = 'br) (: _ (bpin <>>f cur) (go >l cur mx))
+                           (k = 'jmp) (: _ (bpin <>f cur) (go >l 'dead (mxu mx cur)))
+                           (member? k '(ret jmpr)) (go >l 'dead (mxu mx cur))
+                           (go >l cur mx))))))
+           (go fs 0 0))
        (pslots env acc)                             ; the homable params' PASS-1 frame slots
         (? (! (two? env)) acc
            (: e2 <env
@@ -5211,6 +5242,9 @@
            ; never live across any call, so it takes no wraps and free reads are pure win.
            ; ⚠ WRAP-PAYING locals (home iff touches beat 2x loop-weighted crossings) measured 8/8
            ; rounds SLOWER (~2%): static counts don't predict the dynamic spill/reload balance.
+           ; ⚠ nor may a local whose crossings are merely all OUTSIDE loops: a kill-born local's
+           ; wraps land beside ALWAYS-executed calls (the irKa shape) -- per-local path
+           ; sensitivity would be needed, and the measured extra win was ~0.3% loads.
            (free? nm) (&& (member? nm uv) ((peep crs nm 0) = 0))
            lt (leaoffs ir1x (tablet 0))
            navl ((tally hp9) - 2)
@@ -5303,8 +5337,16 @@
           ; home inside a gated fn is 7/8 slower (its wraps hide behind a call that is already
           ; there), and adding zero-cross homes outside the gate is 8/8 slower (the regen trades
           ; pool registers for homes, and returning unhomed ones collides with the ride policy).
-          (: pp (&& hm (: nc (ncalls ir1 0) nh (nhomable params 0 0)
-                          ((* 2 (* nc nh)) < (nreads ir1 (pslots <>sp1 ()) 0))))
+          ; TWO pricings, either licenses: the flat count (call-light overall), or the PATH price
+          ; pmax + ncw -- an invocation pays wraps only at the calls its one path passes (the hot
+          ; dispatch fleet: many calls, all in exclusive cold arms), plus in-loop calls at
+          ; alive's per-iteration weight, plus one mov per home that differs from its arrival.
+          (: nc (ncalls ir1 0) nh (nhomable params 0 0)
+             nr (nreads ir1 (pslots <>sp1 ()) 0)
+             em (homefold g params 0 0
+                 (\ n2 i9 p9 (? (id? (nthr (argr g) i9) (homereg i9)) n2 (n2 + 1))))
+             pp (&& hm (|| ((* 2 (* nc nh)) < nr)
+                           (&& (two? av) (((* 2 (* nh ((pmax ir1) + (nthr av 4)))) + em) < nr))))
              (? (|| pp lh) (regen (? pp 'shadow ()) lh lp0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
