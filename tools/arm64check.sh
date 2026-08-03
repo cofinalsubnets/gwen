@@ -63,8 +63,12 @@ echo "AARCH64 qemu run ($(echo "$@" | wc -w) files)"
 # (test/test.mk): the corpus TESTS stdin (test/io.l's see/unsee roundtrip), and `reads`
 # no longer drains stdin ahead of the first form, so a piped corpus has those asserts
 # poking the very script they are riding on.
+# ⚠ THE RUN GOES IN AN `if`, not `cmd; r=$?`: under `set -e` a failing corpus kills the
+# script right here, so the FAIL branch below never speaks and the gate reports Error 1
+# with nothing to read. A condition context is the one place a non-zero exit is allowed.
 cat "$@" > $O/.corpus.l
-LOVE_NO_IMAGE=1 timeout 420 "$QEMU" $O/love $O/.corpus.l </dev/null > $O/.out 2>&1; r=$?
+if LOVE_NO_IMAGE=1 timeout 420 "$QEMU" $O/love $O/.corpus.l </dev/null > $O/.out 2>&1
+  then r=0; else r=$?; fi
 tail -1 $O/.out
 # the default corpus must print "tests pass" AND each test/arm64/*.l sentinel (explicit-args runs skip the sentinel check)
 if [ -n "$DEFAULT_CORPUS" ]; then sent='test/arm64/callout:'; else sent=''; fi

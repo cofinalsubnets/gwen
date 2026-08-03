@@ -11,7 +11,7 @@
 ; past 2^63, and the float (gate 1) deopt -- both the DIRECT emit and the AUTO-glaze (natjit hook), + and *.
 
 ; --- direct emit: build the aarch64 nif by hand and run it ---
-(: G glaze  jitcalloutx (G 'jitcalloutx)
+(: G (from 'glaze)  jitcalloutx (G 'jitcalloutx)
    (ca-sq i)   (* i i)
    (ca-half i) (* i 0.5)
    (ca-inc i)  (+ i 1)
