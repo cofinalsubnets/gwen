@@ -480,11 +480,12 @@
     (? (&& (! (t32? g)) (&& (flo? (vty r)) (id? ty 'ulong))) ((vfs r) + (dtoul g))
        (asint g r))
    ; -- the environments: locals shadow globals --
-   (vent g env name)                                ; -> ('regv rN ty) | ('loc off ty) | ('glo lbl ty) | 'bad
+   (vent g env name)                                ; -> ('regv rN ty) | ('regw (lo hi) ty) | ('loc off ty) | ('glo lbl ty) | 'bad
     (: e (assoc name env)
        (? (two? e)
            (: h <>e                             ; a homed param's "off" slot is a (reg rN) list;
               (? (&& (two? h) (<h = 'reg)) `('regv <>h <>>e)   ; a block-scope static's is (glob lbl)
+                 (&& (two? h) (<h = 'regw)) `('regw <>h <>>e)  ; a d128 pair home: (lo hi)
                  (&& (two? h) (<h = 'glob)) `('glo <>h <>>e)
                  `('loc h <>>e)))
           (: ge (peep (g 'glob) name 0)
@@ -979,7 +980,7 @@
        (? (k = 'var)
            (: en (vent g env <>e)
               (? (bad? en) 'bad
-                 (<en = 'regv) 'bad             ; a register home has no address (& is gated out per-fn)
+                 (member? <en '(regv regw)) 'bad   ; a register home has no address (& is gated out per-fn)
                  ; lean, not lea: an lvalue's address is CONSUMED by its own load/store, so the
                  ; sibcall escape gate must not see it (the & lane flips it back -- it escapes there)
                  (<en = 'loc) (mkv <>>en 'r0 `(`('lean 'r0 'r4 <>en)))
@@ -1223,6 +1224,8 @@
                      (mkv `('ptr (fnty g <>e)) 'r0 `(`('la 'r0 (intern <>e))))
                      (: _ (pin g 'undecl <>e) 'bad))   ; undeclared: name it for the gripe (rung 1); an undeclared CALL funnels here too (call-fixed evaluates its head)
                  (<en = 'regv) (mkv <>>en <>en ())   ; a homed param IS its register: zero forms, borrowed (read-only)
+                 (<en = 'regw)                       ; a pair-homed d128 materializes onto the protocol (hi first)
+                  (mkv <>>en 'r0 `(`('mov 'r2 (caup <>en)) `('mov 'r0 (cap <>en))))
                  (: ty <>>en
                     ap? (peep g 'argpos ())
                     _ (? (|| (stru? ty) (arr? ty)) (pin g 'argpos ()) ())
@@ -1286,6 +1289,11 @@
                         (: fs ((vfs r) + (`(`('mov <>rv (vreg r))) + (cvt <>>rv <>rv)))   ; straight from the value's register
                            _ (rfree g (vreg r))
                            (mkv <>>rv <>rv fs))))
+                 (&& (two? rv) (<rv = 'regw))     ; store into a pair-homed d128: land on the protocol, mov both halves
+                  (: r (cgexpr g env <>>e)
+                     (? (bad? r) 'bad
+                        (mkv <>>rv 'r0 ((as128 g r)
+                                        + `(`('mov (cap <>rv) 'r0) `('mov (caup <>rv) 'r2))))))
                  ; STORE-DIRECT: a plain variable target's address is STATIC (a frame offset or
                  ; a label) -- the value stores from wherever it sits, no shuttle around it
                  (&& (two? rv) (&& (member? <rv '(loc glo))
@@ -4108,16 +4116,18 @@
                      (vone ps env2 acc p ty))
                  (: span (& ((tsz g ty) + 7) -8)
               off (nslot g span)
-              hreg (? (|| (peep g 'inlining ()) (! (lhomable? ty))) ()
+              hreg (? (|| (peep g 'inlining ())
+                          (! (|| (lhomable? ty) (&& (d128? ty) (x64t? g))))) ()
                       (: sq (1 + (peep g 'dseq 0))
                          _ (pin g 'dseq sq)
                          _ (pin g 'lrec (link `(sq off ty <p) (peep g 'lrec ())))
                          lht (peep g 'lhome ())
                          (? lht (peep lht sq ()) ())))
-              env3 (link `(<p (? hreg `('reg hreg) off) ty) env2)
+              ; a d128's home is a PAIR (lo hi) off the cs pool -- lpick packs two seats
+              env3 (link `(<p (? (two? hreg) `('regw hreg) hreg `('reg hreg) off) ty) env2)
               ; a callee-saved home stays OFF g 'homes: no call wrap (the callee preserves it),
               ; no sib peel, and ezarg must never read its never-written shadow slot
-              _ (? (&& hreg (! (member? hreg (cspool g))))
+              _ (? (&& hreg (&& (! (two? hreg)) (! (member? hreg (cspool g)))))
                    (pin g 'homes (link `(hreg off <p) (peep g 'homes ()))) ())
               (? (! (two? init)) (one >ps env3 acc)
                  (|| (<init = 'init) (&& (<init = 'str) (arr? ty)))
@@ -4151,6 +4161,8 @@
                        (pair? g ty) (one >ps env3 (acc + (asll g r) + (pst 'r4 off)))
                        (d128? ty)
                         (? (! (x64t? g)) 'bad
+                           (two? hreg)              ; a pair home's init is two register moves
+                            (one >ps env3 (acc + (as128 g r) + `(`('mov (cap hreg) 'r0) `('mov (caup hreg) 'r2))))
                            (one >ps env3 (acc + (as128 g r) + `(`('st 'r4 off 'r0) `('st 'r4 (off + 8) 'r2)))))
                        hreg (one >ps env3           ; a homed local's init is a register move (a narrow home lands canonical)
                                  (acc + (asintt g r ty) + (`(`('mov hreg 'r0)) + (cvt ty hreg))))
@@ -5329,6 +5341,7 @@
             (? (! (two? rs)) acc
                (: e2 <rs sq <e2 off <>e2
                   (? (peep lt off ()) (walk >rs acc)
+                     (d128? <>>e2) (walk >rs acc)     ; a pair homes off the CS pool only (never the operand pool)
                      (&& (0 < nc) (! (free? <>>>e2))) (walk >rs acc)
                      (: tc (ntouch ir1x off 0)
                         (? (tc <= 1) (walk >rs acc)
@@ -5383,7 +5396,7 @@
                          (member? <f2 gstops) (&& (<>f2 = fb9) (<>>f2 = off))
                          ())
                   (lntouch >fs off (i + 1) (? (&& hit (1 < (nspan i))) (n + 1) n))))
-           (walk2 rs acc)
+           (walk2 rs acc)                             ; cs candidates carry a WIDTH: a d128 pair takes two seats
             (? (! (two? rs)) acc
                (: e2 <rs sq <e2 off <>e2
                   (? (|| (peep lt off ()) (peep taken sq ())) (walk2 >rs acc)
@@ -5391,16 +5404,36 @@
                         (? (tc <= 2) (walk2 >rs acc)
                            (: ln (lntouch ir1x off 0 0)
                               (? (ln < 1) (walk2 >rs acc)
-                                 (walk2 >rs (link `(ln sq) acc)))))))))
-           ks (? (! (two? kp)) () (lastn (imsort (walk2 (peep g 'lrec ()) ())) (tally kp)))
+                                 (walk2 >rs (link `(ln sq (? (d128? <>>e2) 2 1)) acc)))))))))
+           ; choose HOTTEST-first while seats remain (a pair spends two; one that can't fit
+           ; skips so a scalar may still take the last seat) -- the choose-order link restores
+           ; ascending heat, so seat ASSIGNMENT stays the old positional walk (register
+           ; spellings unchanged for scalar-only fns)
+           (pick l seats acc)
+            (? (|| (! (two? l)) (seats < 1)) acc
+               (: e3 <l w (nthr e3 2)
+                  (? (seats < w) (pick >l seats acc)
+                     (pick >l (seats - w) (link e3 acc)))))
+           (mkk l regs t acc9)
+            (? (|| (! (two? l)) (! (two? regs))) `(t acc9)
+               (: e3 <l w (nthr e3 2)
+                  (? (&& (w = 2) (two? >regs))
+                      (: _ (pin t (caup e3) `(<regs (caup regs)))
+                         (mkk >l (cup (cup regs)) t (link (caup regs) (link <regs acc9))))
+                     (w = 2) `(t acc9)
+                     (: _ (pin t (caup e3) <regs)
+                        (mkk >l >regs t (link <regs acc9))))))
+           kpk (? (! (two? kp)) `((tablet 0) ())
+                  (: k9 (mkk (pick (rev (imsort (walk2 (peep g 'lrec ()) ()))) (tally kp) ())
+                             kp (tablet 0) ())
+                     `((cap k9) (rev (caup k9)))))    ; cu0 in assignment order (the save offsets ride it)
            (mk l hp t) (? (|| (! (two? l)) (! (two? hp))) t
                           (: _ (pin t (caup (cap l)) <hp)
                              (mk >l >hp t)))
-           (firstn l n acc) (? (|| (n < 1) (! (two? l))) (rev acc) (firstn >l (n - 1) (link <l acc)))
-           (? (|| (two? cs) (two? ks))
-              `((mk ks kp (mk cs hp9 (tablet 0)))
+           (? (|| (two? cs) (two? (caup kpk)))
+              `((mk cs hp9 (cap kpk))
                 (dropn hp9 (tally cs))
-                (firstn kp (tally ks) ()))
+                (caup kpk))
               ()))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
        ; ⚠ the operand pool is EMPTY on t32: AAPCS32 keeps r4-r11 callee-saved and the thumb2

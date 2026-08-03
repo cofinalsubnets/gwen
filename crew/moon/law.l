@@ -992,10 +992,22 @@
    ; (a pool home would starve the locals and pay wraps -- the measured anti-lever)
    irZp (cgn "long ext(long); long h3(int n, long *a) { long s = 0; for (int i = 0; i < n; i++) { s = s + ext(a[i]) + n; } return s; } int main() { return 0; }")
    zpf (fnf 'h3 (caup irZp))
-   (assert
+   _ (assert
       (two? irZp)
       (member? '(st sp 48 r6) zpf)                   ; n spills at entry...
-      (member? '(ld4 r0 sp 48) zpf)))                ; ...and every read re-extends from the slot
+      (member? '(ld4 r0 sp 48) zpf))                 ; ...and every read re-extends from the slot
+   ; -- d128 LOCALS home as CS PAIRS: a loop-carried __int128 local takes (lo hi) off the
+   ; cs pool (callee-saved: call-safe, no wraps, and no operand-pool pressure -- the wpk
+   ; park's registers stay free). reads/writes are mov pairs on the r0:r2 protocol; the
+   ; slot never opens. &-taken and ++ shapes deopt through clval.
+   irV (cgn "long w2(long *a, int n) { unsigned __int128 c = 0; for (int i = 0; i < n; i++) { for (int k = 0; k < 2; k++) { c = c + (unsigned __int128) a[i] * 3; a[i] = (long) c; } } return (long)(c >> 64); } int main() { return 0; }")
+   vf (fnf 'w2 (caup irV))
+   (assert
+      (two? irV)
+      (member? '(mov r11 r0) vf)                     ; c's write lands its lo home...
+      (member? '(mov r12 r2) vf)                     ; ...and its hi
+      (member? '(a128r r10 r7) vf)                   ; the combine reads the parked twins
+      (= 2 (splds vf))))                             ; full-word sp loads: only the two cs restores
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
