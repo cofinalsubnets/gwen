@@ -1,6 +1,6 @@
 ; ============================================================================
 ; overlay-macros -- the ergonomic rung-1/2 surface: `domain` + `deft` macros.
-; Run: out/host/love doc/proto/overlay-macros.l   (the overlay lives in post.l, baked in.)
+; Run: out/host/love doc/proto/overlay-macros.l   (the overlay lives in love/overlay.l, baked in.)
 ;
 ; The overlay (memory pluggable-types) checks a user-defined type domain against ai
 ; code, observe-only + erasable. Raw, that means a hand-built domain map and a
@@ -14,7 +14,7 @@
 ; the boundary sig + CHECKS the body at compile time (a clash reports as you compile,
 ; before it runs), and EXPANDS to a plain `:` def -- so the types are erasable and
 ; deft/plain code interoperate (gradual). All user-level: it rides `ov-slot`/`ov-eng`,
-; the globals post.l's overlay already leaks -- no core change.
+; the globals love/overlay.l already leaks -- no core change.
 ;
 ; NOTE (single-pass): the macros must be installed in an EARLIER top-level form than
 ; their uses, and `overlay-set` must run before the deft's compile (deft checks at

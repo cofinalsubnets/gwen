@@ -22,7 +22,7 @@
 ;  * SHAPES THE RECOGNIZERS ACTUALLY MATCH. the call-out and counted-loop lanes want the
 ;    APPLIED named-let `((: (go i a) ..) 0 a0)`; the un-applied `(: (go i a) .. (go 0 0))`
 ;    drops past them to the group lane and those recognizers never see it. probe with
-;    (glaze 'calloutinfo) &c before believing a shape covers a lane.
+;    ((from 'glaze) 'calloutinfo) &c before believing a shape covers a lane.
 ;  * A HOISTED HARNESS. `upto` below is deliberately NOT a nested single-binding `:` --
 ;    that is the very shape the 2026-07-29 group-lane miscompile ate, so a harness written
 ;    the natural way miscompiles ITSELF on the binary it is meant to indict and the fuzz
@@ -64,7 +64,7 @@
                           (r = 2) `('? `('< (xpr (d - 1) lf op) 3) (xpr (d - 1) lf op) (xpr (d - 1) lf op))
                           `('+ (xpr (d - 1) lf op) (lf 0)))))
    ; thirteen shapes, one per lane the hook offers. the lane each one lands in was PROBED
-   ; ((glaze 'loopinfo) &c), not assumed -- 9 reaches calloutinfo with every earlier lane
+   ; (((from 'glaze) 'loopinfo) &c), not assumed -- 9 reaches calloutinfo with every earlier lane
    ; declining, 10 reaches calloutinfo-frame, 11 reaches loopinfo.
    (shape i)
     (: r (% i 13)

@@ -14,7 +14,7 @@
 ; WHAT LIVES WHERE: the fn defs + the domain are ordinary globals (the book); the sigs live
 ; in the overlay's slot (overlay-off clears the checking, not the code). `deft` checks at
 ; COMPILE time, so a clash prints the instant you enter the def. The overlay engine itself
-; is in post.l (baked in); this lib is pure user-level, riding the ov-slot/ov-eng globals it
+; is in love/overlay.l (baked in); this lib is pure user-level, riding the ov-slot/ov-eng globals it
 ; leaks. Nominal units domain: +/- must match units (else clash); * gives `top` (untracked).
 ; See doc/proto/overlay-macros.l (worked demo) and memory pluggable-types.
 ; ============================================================================

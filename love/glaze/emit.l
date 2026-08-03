@@ -19,16 +19,12 @@
 ; apply of interp to the original arg (still in Sp[0]). putfix is add rax,rax (its OF
 ; flag is exactly the 62-bit fixnum boundary); jno; or rax,1.
 
-; the module span opens here: love/glaze/export.l diffs (names ()) against this mark and
-; sweeps every name emit.l + auto.l leak into the ONE `glaze` book -- measured, never
-; listed. (in a dev cat-load of these sources, where export.l never loads, it is inert.)
-(: glaze-mark (names ()))
-
 (: ; the glaze consumes the crew/holo/ assembler by BARE NAME -- host/main.c brackets this whole
    ; load with (use 'holo) .. ai_unsplice_, so assemble/assemble-at resolve through the spliced
    ; module at compile and FOLD (the capture law): every glaze closure is self-contained after
    ; the unsplice. (the byte-piece concat helper is `bcat` -- it must NEVER be named `holo`: this :
-   ; is body-less, its bindings leak to orth, and a `holo` binding once clobbered the module.)
+   ; is body-less, so its bindings leak to the `glaze` module's own book, and a `holo` binding
+   ; there once clobbered the assembler.)
    (le8 n) (: u (? (n < 0) (n + 18446744073709551616) n)                            ; two's-complement; & is broken on
               ((: (go i) (? (i < 8) (link ((u // (i 256)) % 256) (go (i + 1))) ())) 0))   ; a bignum >= 2^63, so use //% (n -> 8 LE bytes)
    (le4 n) ((: (go i) (? (i < 4) (link ((n >> (8 * i)) & 255) (go (i + 1))) ())) 0)  ; n -> 4 LE bytes (offsets < 2^31, & ok)

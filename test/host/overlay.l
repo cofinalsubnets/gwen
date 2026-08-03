@@ -1,6 +1,6 @@
 ; --- test/host/overlay.l: the lux type overlay + the baked uu book, end to end ---
 ; NOT in the test/*.l corpus (the overlay + uu ride the HOST binary's post-egg
-; layer; love0/kernel/wasm have no post.l). Three legs:
+; layers; love0/kernel/wasm never load them). Three legs:
 ;   1. crew/lux/sigs.l checks CLEAN over the real core.l + layout.l sources
 ;      (read as DATA, checked pure with (overlay 'ov-check1) -- no install,
 ;      no eval, observe-only squared), and a deliberately wounded def is

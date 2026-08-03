@@ -159,7 +159,7 @@ dumping honest where the boot bake could assume purity:
 - **NULL is an immortal.** A live bio port carries undressed `rbuf`/`wbuf` zero words; a raw
   zero is even and below the index bound, so it needed its own slot in `image_immortals`.
 
-The `bake` global is a post.l wrapper over the host nif (host/image.c, the AI_NIF glob): it
+The `bake` global is a glaze wrapper (love/glaze/hook.l) over the host nif (host/image.c, the AI_NIF glob): it
 empties the glaze compile cache first (a native closure cannot serialize; entries re-JIT lazily
 in the woken session). Any OTHER live native at bake time is on the caller — same contract as
 the boot bake. Smoke: boot/bake.l (test_hostnif) round-trips a pinned marker through bake +

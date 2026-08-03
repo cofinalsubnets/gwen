@@ -25,7 +25,7 @@ asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h
 # in main.c), so a normal boot never pays the ~810 ms; the baked snapshot then carries
 # an always-on JIT at zero startup (Phase 4, doc/snapshot.md). Their self-test asserts
 # native-compile transient closures -- the bake's gen_major drops them before serializing.
-glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h out/lib/hook.h
+glaze_h = out/lib/emit.h out/lib/auto.h out/lib/hook.h
 # love0's bootstrap headers: sed-wrapped raw source (a text->C-literal needing no
 # interpreter -- the l reader strips the ; comments at read time), since love0
 # can't lcat the very sources it is assembled from (chicken/egg). cli.l doubles as
@@ -33,7 +33,7 @@ glaze_h = out/lib/emit.h out/lib/auto.h out/lib/gexport.h out/lib/hook.h
 # are baked in so love0 self-tests both compilers in one run (see main.c). The final
 # l uses the canonicalized lcat headers from the rule below instead.
 sed_lit = sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/post0.h out/lib/overlay0.h out/lib/peg0.h out/lib/tests0.h $(asm0_h)
+gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/tests0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 # lcat a .l source into its C-string header, ATOMICALLY: generate to a temp, require it
@@ -88,10 +88,6 @@ out/lib/emit.h: love/glaze/emit.l
 	@echo AI	$@
 	@$(sed_lit) $< > $@
 out/lib/auto.h: love/glaze/auto.l
-	@mkdir -p out/lib
-	@echo AI	$@
-	@$(sed_lit) $< > $@
-out/lib/gexport.h: love/glaze/export.l
 	@mkdir -p out/lib
 	@echo AI	$@
 	@$(sed_lit) $< > $@

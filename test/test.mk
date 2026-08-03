@@ -1062,7 +1062,7 @@ test_holofuzz: host
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 endif
 # uu's NbE kernel lives at love/uu.l (mark + kernel + the sweep into the `uu`
-# book at its tail) and bakes post.l-style through the lib_h/%0.h pattern
+# book at its tail) and bakes module-style through the lib_h/%0.h pattern
 # rules -- into the host, love0, the inle kernel and wasm, so the corpus's uu
 # files (test/uu*.l, binding the book surface at test/uu.l's head) run on
 # every target, and an overlay can reach (uu 'vof) in a bare binary.

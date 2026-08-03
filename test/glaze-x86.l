@@ -16,12 +16,12 @@
 ; skips every block, yet the final top-level "ok" still prints (a false pass -- the const-1 trap). assert
 ; the harness names are bound so a wrong invocation SCARES `;; assert (lit? base-ev)` instead.
 ; the assembler and the glaze live in MODULES now (the registry via holo's (leave ());
-; the glaze book via love/glaze/export.l): this stream cat-loads post-boot, so nothing
+; the glaze is one too, emit.l + auto.l): this stream cat-loads post-boot, so nothing
 ; folded for it -- bind every internal it drives through the accessors, bare-global
 ; reads both (bcat stands in for the glaze's private byte-concat helper).
 (: assemble (from 'holo 'assemble)
    bcat (\ ps (foldl (\ a b (+ a b)) () ps))
-   G glaze
+   G (from 'glaze)
    anat-defs (G 'anat-defs)  autogroup (G 'autogroup)  autonat (G 'autonat)  autospec (G 'autospec)
    base-ev (G 'base-ev)  castbuild (G 'castbuild)  cggir (G 'cggir)  cggvir (G 'cggvir)
    consir (G 'consir)  coreir (G 'coreir)  delet (G 'delet)  deoptir (G 'deoptir)
@@ -32,6 +32,12 @@
    loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow))
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
+; ..and the boundary those accessors stand for: the glaze is a REGISTERED module and NOT ONE
+; of its ~415 names is in the book. this is the assert that catches a leak coming back --
+; a name on the book resolves bare, so nothing else here would ever notice.
+(assert (member? 'glaze (from ()))
+        (400 < (tally (from 'glaze 'keys)))
+        (: nm (names ()) (! (member? 'autogroup nm)) (! (member? 'jitir nm)) (! (member? 'glaze nm))))
 
 (base-ev '(: ev base-ev
 (: (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
@@ -844,7 +850,7 @@
    ; declined form keeps the quoted body LIST in the binding slot; an admitted one splices
    ; the native closure (not two?). If this fires, the point-= grammar regressed and the
    ; baked member? silently fell back to interp.
-   adm ((glaze 'autogroup) '(: (pm1 x l) (? (two? l) (? (= x (cap l)) 1 (pm1 x (cup l))) 0) (pm1 'b '(a b))))
+   adm ((G 'autogroup) '(: (pm1 x l) (? (two? l) (? (= x (cap l)) 1 (pm1 x (cup l))) 0) (pm1 'b '(a b))))
    _ (assert
       (! (two? (caup (cup adm)))) (1 = (ev adm))                                  ; admitted: native spliced, and it answers
       (1 = (member? 'b '(a b c))) (0 = (member? 'z '(a b c)))                     ; nom key, native walk

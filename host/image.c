@@ -226,7 +226,7 @@ int image_bake(struct ai *g) {
 // stack's objects ride into the blob as wake-unreachable ballast and the load side
 // resets sp/ip, so `love --wake path prog.l ..` boots a session carrying every global
 // this one had pinned (an app baked warm: the mooncc image erases its per-run load).
-// natives cannot serialize -- the post.l wrapper empties the glaze compile cache
+// natives cannot serialize -- the glaze's own bake wrapper (love/glaze/hook.l) empties its cache
 // first (they re-JIT lazily in the woken session); any OTHER live native closure at
 // bake time is on the caller. answers 1 | ().
 // the frame-heavy body lives in a plain helper: path[4096] + &len escape (to

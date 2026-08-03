@@ -628,9 +628,6 @@ static char const src0_coin[] =
 static char const src0_q[] =
 #include "q0.h"
  ;
-static char const src0_post[] =
-#include "post0.h"
- ;
 static char const src0_peg[] =
 #include "peg0.h"
  ;
@@ -656,7 +653,6 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_lib_(g, "uu", src0_uu);                       //   self-test's; an unused entry costs a registration, nothing more
   g = ai_lib_(g, "coin", src0_coin);
   g = ai_lib_(g, "q", src0_q);
-  g = ai_lib_(g, "post", src0_post);                   //   post rides love0 now: its splice serves revcat/bake bare,
   g = ai_lib_(g, "overlay", src0_overlay);             //   overlay and peg are REGISTERED, never used here: each
   g = ai_lib_(g, "peg", src0_peg);                     //   consumer opens with its own (use ..), the boot owes nothing
   g = ai_lib_(g, "holo", src0_holo);                   //   which the mooncc cat's cpp/gen read (the self-host build lane)
@@ -665,9 +661,8 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "p10.h"                                       // have the prel surface before they load the first file -- else
 #include "prel0.h"                                     // loading prel.l ITSELF misses every prel fn its loader uses.
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
-    "(use 'kanren)"                                    // loader folds `sound` at its own compile. kanren before post,
-    "(use 'post)"                                      //   reads unify/ufail bare. post is down to the `bake` redef,
-                                                       //   ambient because that wrapper only works pre-seal (post.l)
+    "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
+                                                       //   because the corpus reads unify/ufail bare
     "(: verbs ())"                                     // the CLI's verb rail reads `verbs`: bound-empty = no verbs, quietly
     );
     return ai_evals_(g, cli); }
@@ -763,7 +758,7 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // Checked here, the convergence of the egg-boot and image-wake paths: a body-less
   // top-level : pins even where the book nom is sealed away (an image). --bake never
   // sees it -- the knob governs a session, not the baked artifact.
-  if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, "(: ev (glaze 'base-ev) natjit ())");
+  if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, "(: ev (from 'glaze 'base-ev) natjit ())");
 #endif
   // the ARGV[0] DOOR of the verb rail (love/cli.l has the positional door): when the
   // binary was invoked under a verb's name -- a `seed` symlink onto the dist artifact
@@ -802,9 +797,6 @@ static char const src_q[] =
 static char const src_kanren[] =
 #include "kanren.h"
  ;
-static char const src_post[] =
-#include "post.h"
- ;
 static char const src_peg[] =
 #include "peg.h"
  ;
@@ -832,6 +824,16 @@ static char const src_holo[] =
 #endif
  ;
 
+#ifdef AI_GLAZED
+// the glaze, ONE module in two files: emit.l (the SSE/native emitter) then auto.l (ev's
+// source recognizer), which reads emit's names bare -- so the order here is the module.
+// hook.l is deliberately not in it; see the (use 'glaze) block in boot().
+static char const src_glaze[] =
+#include "emit.h"
+#include "auto.h"
+ ;
+#endif
+
 // bake: NULL = no snapshot; "" = --bake (patch the binary's own .image); else --bake PATH (write an image file).
 static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   bool replp = !argp && isatty(STDIN_FILENO);
@@ -840,12 +842,14 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   g = ai_lib_(g, "rng", src_rng);
   g = ai_lib_(g, "q", src_q);
   g = ai_lib_(g, "kanren", src_kanren);
-  g = ai_lib_(g, "post", src_post);
   g = ai_lib_(g, "overlay", src_overlay);
   g = ai_lib_(g, "peg", src_peg);
   g = ai_lib_(g, "uu", src_uu);
   g = ai_lib_(g, "bao", src_bao);
   g = ai_lib_(g, "holo", src_holo);
+#ifdef AI_GLAZED
+  g = ai_lib_(g, "glaze", src_glaze);
+#endif
   g = ai_egg_(g,
 #include "egg.h"
     ,
@@ -858,12 +862,11 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   g = ai_evals_(g,
     "(use 'coin)"                                        // the library layers, ALL modules now, in the old eval order: coin
     "(use 'rng)"                                         //   (ring/monoid over the C coin lane), rng (the random stream), q
-    "(use 'q)"                                           //   (rationals), then kanren (unification) -- registered BEFORE post,
-    "(use 'kanren)"                                      //   whose overlay half reads subst through the registry
-    "(use 'post)"                                        // post is down to the `bake` redef (its wrapper reads `book`, so it
-    "(use 'overlay)"                                     //   must load before the --bake seal); overlay for the ev seam, whose
-    "(: overlay (from 'overlay)"                         //   HOOK lands in ORTH -- a module layer cannot write it, the boot can.
-    "   ev ((from 'overlay 'ov-hook) ev))"               //   peg is registered above and used by its consumers, not here.
+    "(use 'q)"                                           //   (rationals), then kanren (unification) -- registered BEFORE
+    "(use 'kanren)"                                      //   overlay, whose engine reads subst through the registry
+    "(use 'overlay)"                                     // overlay for the ev seam, whose HOOK lands in ORTH -- a module
+    "(: overlay (from 'overlay)"                         //   layer cannot write it, the boot can. peg is registered above
+    "   ev ((from 'overlay 'ov-hook) ev))"               //   and used by its consumers, not here.
     "(use 'uu)"                                          // uu's NbE kernel: (: uu (from 'uu)) keeps the one-name surface --
     "(: uu (from 'uu))"                                  //   the corpus + an overlay reach (uu 'vof) through it
     "(use 'holo)"                                        // the crew/holo/ assembler, a post-egg language SERVICE: load + register,
@@ -876,14 +879,20 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     "(: verbs ())"                                       // the CLI's verb rail reads `verbs`: bound-EMPTY here, so a plain binary
   );                                                     //   answers no verbs quietly; a dist bake's cat rebinds it with the table
 #ifdef AI_GLAZED
+  // the glaze, in three moves. (use 'glaze) loads emit.l + auto.l into their own layer and
+  // registers it -- ~415 codegen names the book never sees. holo is spliced UNDER that layer
+  // so `assemble` folds at the glaze's compile, and both come off after.
+  g = ai_evals_(g, "(use 'holo)" "(use 'glaze)");
+  g = ai_unsplice_(g);                                   // the glaze layer: registered, non-ambient
+  // then ORTH's two names, which a module layer cannot write and the boot can: `ev` becomes
+  // auto-native, `member?` its glazed self. Both carry their own re-load/trampoline gates.
+  // Last the ala creation hook (love/glaze/hook.l), which is NOT in the module -- it leaks
+  // natjit/fires/fired?/bake onto the book on purpose, and test_glaze re-cats it standalone.
   g = ai_evals_(g,
-      "(use 'holo)"
-#include "emit.h"
-#include "auto.h"
-#include "gexport.h"
+      "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))"
 #include "hook.h"
       );
-  g = ai_unsplice_(g);
+  g = ai_unsplice_(g);                                   // holo back to non-ambient
 #endif
 
   if (bake) {                                            // --bake: snapshot the post-warm heap, then exit
@@ -904,7 +913,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
     // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
     // with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
-    g = ai_evals_(g, "(: c ((peep book 'glaze 0) 'cache) (map (\\ k (pull c k 0)) (keys c)))");
+    g = ai_evals_(g, "(: c (from 'glaze 'cache) (map (\\ k (pull c k 0)) (keys c)))");
 #endif
     // HIDE the raw machine-code-execution seam from USERS (who boot this image): the glaze folded
     // `nif` into its closures, so pulling it off the book is safe. nif/nifx off, then seal `book`.

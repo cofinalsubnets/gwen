@@ -15,27 +15,31 @@
 ;  * no double-compile -- the deopt target is `e` itself (the bytecode closure ala built),
 ;    passed as nat/natn's `interp`; no separate (ev lam) pass.
 ; Loops are NOT caught here (their body isn't leaf-grammar) -- they stay bytecode, or use
-; love/glaze/auto.l's counted-loop path. Rides the BAKED glaze through the module books
-; (the binds just below). x86-64 only.
-; natjit is the ONLY glaze name ala needs global (it reads the hook via (gv 'natjit), ev.l) -- plus its
-; probe counter `fires` and `fired?`, all hook-owned. A post-egg stream installs a global ONLY by leaking
-; a body-less `:` (book is mopped -> no (pin book ..)). So keep the ~20 glaze aliases (loopinfo/emit/
-; calloutinfo/coreir/..) PRIVATE in an inner body-having `:` (one scope, returns natjit); the outer
-; body-less `:` leaks just fires/natjit/fired?. fires/natjit/fired? are all bound before the `_ (assert)`
-; self-test, so natjit is installed (global, via the leak) by the time the assert exercises the hook.
+; love/glaze/auto.l's counted-loop path. Rides the BAKED glaze through (from 'glaze). x86-64 only.
+;
+; THIS FILE IS THE GLAZE'S GLOBALS, and it is deliberately OUTSIDE the `glaze` module
+; (emit.l + auto.l): a module member is reached by key, and these four names have to be
+; on the book -- natjit because ala reads the hook via (gv 'natjit) (ev.l), `fires`/`fired?`
+; because they are its probe, and `bake` because it wraps ORTH's own nif. A post-egg stream
+; installs a global ONLY by leaking a body-less `:` (book is mopped -> no (pin book ..)). So
+; keep the ~20 glaze aliases (loopinfo/emit/calloutinfo/coreir/..) PRIVATE in an inner
+; body-having `:` (one scope, returns natjit); the outer body-less `:` leaks just those four.
+; fires/natjit/fired? are all bound before the `_ (assert)` self-test, so natjit is installed
+; (global, via the leak) by the time the assert exercises the hook.
 (: fires #0                                                                  ; probe counter: how many closures the hook native-backed (natjit writes, fired? reads)
    natjit
     (: arch (intern love-arch)                                                ; the runtime CPU target ('x64 / 'arm64), evaluated at boot on the actual binary -- so the SAME baked hook.h emits x64 on the x86 host and aarch64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
                                                                             ; `assemble` below reads BARE: main.c brackets this load with (use 'holo) .. ai_unsplice_, so it folds at compile (the capture law)
-   emit (glaze 'emit)  coreir (glaze 'coreir)  deoptir (glaze 'deoptir)     ;   the glaze names through its book (love/glaze/export.l) -- this stream cat-loads
-   loopinfo (glaze 'loopinfo)  njit-loop (glaze 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
-   loopinfo-n (glaze 'loopinfo-n)  njit-loop-n (glaze 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges
-   calloutinfo (glaze 'calloutinfo)  jitcalloutx (glaze 'jitcalloutx)       ;   + the CALL-OUT loop: a counted sum whose body calls a global closure (the stackless bridge)
-   calloutinfo-frame (glaze 'calloutinfo-frame)  njit-calloutframe (glaze 'njit-calloutframe)   ;   ... and its CAPTURED / multi-arg sibling (F read from the [imps args] frame)
-   qualfr (glaze 'qualfr)  jitfrx (glaze 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
-   anat-defs (glaze 'anat-defs)  jgir-ok? (glaze 'jgir-ok?)  jitgroupirx (glaze 'jitgroupirx)  ; creation. + the (always-on) GROUP
-   grpfix (glaze 'grpfix)                                                    ;   ... and the recognizer that says WHETHER (below)
-   njit-amble (glaze 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
+   G (from 'glaze)                                                          ; the glaze MODULE -- this file is NOT in it (test_glaze re-cats this alone
+   emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)     ;   over a baked binary), so every name arrives by key. cat-loads post-boot, nothing folded
+   loopinfo (G 'loopinfo)  njit-loop (G 'njit-loop)                 ;   post-boot, so nothing folded for it. loop lane
+   loopinfo-n (G 'loopinfo-n)  njit-loop-n (G 'njit-loop-n)         ;   (unify with auto-ev): the counted + N-VAR back-edges
+   calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)       ;   + the CALL-OUT loop: a counted sum whose body calls a global closure (the stackless bridge)
+   calloutinfo-frame (G 'calloutinfo-frame)  njit-calloutframe (G 'njit-calloutframe)   ;   ... and its CAPTURED / multi-arg sibling (F read from the [imps args] frame)
+   qualfr (G 'qualfr)  jitfrx (G 'jitfrx)                           ;   plus the float-RESULT leaf, all owned natively at
+   anat-defs (G 'anat-defs)  jgir-ok? (G 'jgir-ok?)  jitgroupirx (G 'jitgroupirx)  ; creation. + the (always-on) GROUP
+   grpfix (G 'grpfix)                                                    ;   ... and the recognizer that says WHETHER (below)
+   njit-amble (G 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
    ; lane: parse defs (anat-defs), recognize (grp-ok?), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt).
    ; grp-ok? -- autogroup's OWN recognizer (auto.l grpfix: the descending int/value-typing fixpoint over
    ; groupok?/vok?/cok?), run here over the SAME (nameform . body) defs jitgroupirx will compile. Every def
@@ -190,3 +194,14 @@
     (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner CAPTURES z -> a fresh native cell per call
        (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)) !(id? f g))) ; computes right, = the interp instance, yet distinct
    ))  ; NOTE: baked as a boot module now -> SILENT on load (no puts banner; it polluted tool stdout, e.g. spec2coq -> gen.v). asserts stay (silent unless they fail).
+
+; `bake` is a NIF (host/image.c). Wrap it so the glaze's memo cache -- native closures whose ap
+; is a W^X mmap address, which cannot serialize -- empties before the snapshot. The cache is the
+; glaze's, so the wrapper is the glaze's: it closes over the tablet DIRECTLY and reads no `book`,
+; which is what lets it ride into a baked image (where `book` is sealed) and still flush. The
+; --bake FLAG has its own flush in host/main.c on the way past; this is the door for love code
+; calling (bake p) -- the image recipes in crew/build.mk, test/gate/fixpoint.sh, test/host/bake.l.
+; ⚠ its own top-level form, so the sequence law gives `b0` the NIF: inside the leaking `:` above,
+; `bake` would be the enclosing letrec's own unfilled binding.
+(: bake (: c ((from 'glaze) 'cache) b0 bake
+            (\ p (: _ (map (\ k (pull c k 0)) (keys c)) (b0 p)))))

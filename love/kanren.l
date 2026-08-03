@@ -1,7 +1,7 @@
 ; kanren -- first-order unification + a church-stream search monad.
 ; a POST-EGG LAYER like love/q.l (see its head for why): prel stays the language, a library
-; rides its own out/lib/kanren.h. Needs love/prel.l only. love/post.l's overlay half reads
-; `unify`/`ufail?`/`var` from here, so this layer must be evaled BEFORE post.
+; rides its own out/lib/kanren.h. Needs love/prel.l only. love/overlay.l's engine reads
+; `unify`/`ufail?`/`var` from here, so this layer must be evaled BEFORE overlay.
 ; the UNIFIER is the compiler-grade core (a future relational rewrite layer sits
 ; on `unify`/`walk`); the SEARCH half (streams, `query`, `===`) is its userland
 ; face. `unify s u v` is PURE -- a substitution or `ufail` -- with NO occurs
@@ -15,8 +15,8 @@
 ; which loads, registers and splices in one motion. the splice serves every
 ; bare consumer (unify/ufail?/var/s_plus/s_star/===, and the goal macros'
 ; expansions); internals answer to (from 'kanren ..) -- subst, walk, query,
-; the dict kit; (from 'kanren 'keys) introspects. love/post.l's overlay half
-; reads subst through the registry, so kanren must be REGISTERED before post
+; the dict kit; (from 'kanren 'keys) introspects. love/overlay.l's engine
+; reads subst through the registry, so kanren must be REGISTERED before overlay
 ; evals (boot order, not just splice order).
 (: (dict_has d k) (: (loop k ks vs) (? ks (? (= k <ks) vs (loop k >ks >vs))) (loop k <d >d))
    (dict_set d k v) ((k >< <d) >< v >< >d)
