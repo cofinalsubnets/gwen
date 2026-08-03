@@ -576,6 +576,38 @@ static char const ktests[] =
 ;
 #endif
 
+// the module sources, name-keyed (see host/main.c): the source library `use` reads
+// in the boot text below -- one layer per load, leave registers, the splice serves
+// the bare names (the console editor reads bao's). .rodata: a source the kernel
+// never loads costs a row and not one word of its bounded heap.
+static char const src_uu[] =
+#include "uu.h"
+;
+static char const src_bao[] =
+#include "bao.h"
+;
+#ifdef K_TEST
+static char const src_coin[] =
+#include "coin.h"
+;
+static char const src_rng[] =
+#include "rng.h"
+;
+static char const src_q[] =
+#include "q.h"
+;
+static char const src_kanren[] =
+#include "kanren.h"
+;
+#endif
+static struct ai_lib const libs[] = {
+  {"uu", src_uu}, {"bao", src_bao},
+#ifdef K_TEST
+  {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
+#endif
+  {NULL, NULL} };
+struct ai_lib const *ai_libs(void) { return libs; }
+
 void kmain(void) {
 #if defined(__x86_64__)
  // Enable x87/SSE before ANY other C runs -- a compiler vectorizes freely on
@@ -609,35 +641,6 @@ void kmain(void) {
   g = ai_strof(g, ktests);
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td));
-#endif
-  // the module sources, name-keyed (see host/main.c): registered in the source
-  // library, loaded by `use` in the boot text below -- one layer per load, leave
-  // registers, the splice serves the bare names (the console editor reads bao's).
-  static char const src_uu[] =
-#include "uu.h"
-  ;
-  static char const src_bao[] =
-#include "bao.h"
-  ;
-  g = ai_lib_(g, "uu", src_uu);
-  g = ai_lib_(g, "bao", src_bao);
-#ifdef K_TEST
-  static char const src_coin[] =
-#include "coin.h"
-  ;
-  static char const src_rng[] =
-#include "rng.h"
-  ;
-  static char const src_q[] =
-#include "q.h"
-  ;
-  static char const src_kanren[] =
-#include "kanren.h"
-  ;
-  g = ai_lib_(g, "coin", src_coin);
-  g = ai_lib_(g, "rng", src_rng);
-  g = ai_lib_(g, "q", src_q);
-  g = ai_lib_(g, "kanren", src_kanren);
 #endif
   // load the prel, then run the l read-eval-print loop. its line
   // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard

@@ -29,7 +29,7 @@
 ; four separate streams.
 ;
 ; NO BRACKETS HERE: the runtime supplies the layer. a frontend registers this
-; source (ai_lib_) and its boot says (use 'rng) -- the loader opens the layer,
+; source (a row in its ai_libs table) and its boot says (use 'rng) -- the loader opens the layer,
 ; leave registers it, the splice stays, and every bare consumer (the corpus,
 ; test/fuzz.l's generators, lux's seeded fuzz, sat's restarts) resolves
 ; random/rand/randf/rng-get/rng-set down the chain at its own compile. the box

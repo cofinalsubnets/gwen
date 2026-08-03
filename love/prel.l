@@ -284,11 +284,15 @@
    (: prior use
       ; read-eval every form of a module source. the port is drained ONCE and walked as text -- a
       ; module is a file or a baked string, never a live wire. ⚠ a torn form scares.
+      ; ⚠ STRAIGHT TO THE CHARLIST, never through `slurp`: its drain conses the bytes, reverses
+      ; them and re-strings them, and the string would then be consed a second time -- so a 245 KB
+      ; module would cost four copies of itself. and the walk is an ACCUMULATOR: `jot` would put a
+      ; frame on the l-stack per byte, which the stress sizer reads as heap and chases.
       (rdev q) ((: (go cl) (: r (sound cl)
                               (? (two? r) (: _ (ev 'ev (cap r)) (go (cup r)))
                                  (id? r torn) (scare (\ unfinished-form) q)
                                  0)))
-                (: s (slurp q) (map s (jot (tally s)))))
+                (rev ((: (rl acc) (: c (see q) (? (= c -1) acc (rl (link c acc))))) ())))
       (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
       (mname s) (: n (tally s)
                    b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)
@@ -308,8 +312,8 @@
                         ()))
       ; the walk: the baked table, then lib/ off the cwd (the dev tree), then the seat root's lib/,
       ; then its love/ subfolder
-      (libsrc nm) (: s (peep (lib ()) nm ())
-                     (? (string? s) (tap (map s (jot (tally s))))
+      (libsrc nm) (: s (lib nm)                                ; the baked table: a read port over the C text
+                     (? (port? s) s
                         (nil? fsopen) ()
                         (: f (+ (string nm) ".l")
                            q (fsopen (+ "lib/" f) "r")
@@ -327,7 +331,7 @@
                           (: _ (enter nm) _ (rdev q) _ (leave ()) (prior nm))))))
               (tablet? (peep (mods ()) m ())) (prior m)
               (: q (libsrc m)
-                 (? (nil? q) (prior m)
+                 (? (nil? (port? q)) (prior m)                ; every source is a port now, baked or on disk
                     (slashy? (string m)) (: _ (rdev q) ())
                     (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
 

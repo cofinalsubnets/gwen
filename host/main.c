@@ -607,7 +607,7 @@ static char const tests0[] =
 #include "tests0.h"
  ;
 static char const runner[] = "(reads (tap (s2cl tests)))";   // the stream shell (love/bao.l) drinks the baked corpus
-// the MODULE sources, name-keyed: registered in the source library (ai_lib_, love.h)
+// the MODULE sources, name-keyed: the source library's rows (struct ai_lib, love.h)
 // and loaded by `use` -- the loader wraps each in its own layer, leave registers it,
 // the splice serves the bare names. bao/rng/kanren carry no brackets of their own now.
 static char const src0_bao[] =
@@ -646,17 +646,19 @@ static char const src0_holo[] =
 // With no args, self-test: eval prel, load bao (the shell core) as a module, and run
 // the baked corpus via c0, then bootstrap the self-hosted ev (egg) and run the corpus
 // again through it.
+// the source library: both lanes load bao by name, and BOTH get the whole table -- a
+// build tool's (use 'x) (the mooncc cat's (use 'holo)) resolves the same as the
+// self-test's. overlay and peg are listed, never used here: each consumer opens with
+// its own (use ..), the boot owes nothing. an unlisted-for entry costs a row, nothing more.
+static struct ai_lib const libs0[] = {
+  {"bao", src0_bao}, {"rng", src0_rng}, {"kanren", src0_kanren}, {"uu", src0_uu},
+  {"coin", src0_coin}, {"q", src0_q}, {"overlay", src0_overlay}, {"peg", src0_peg},
+  {"holo", src0_holo},                                 // which the mooncc cat's cpp/gen read (the self-host build lane)
+  {NULL, NULL} };
+struct ai_lib const *ai_libs(void) { return libs0; }
+
 static struct ai *boot(struct ai *g, bool argp) {
-  g = ai_lib_(g, "bao", src0_bao);                     // the source library: both lanes load bao by name;
-  g = ai_lib_(g, "rng", src0_rng);                     //   BOTH lanes get the whole registry -- a build tool's (use 'x)
-  g = ai_lib_(g, "kanren", src0_kanren);               //   (the mooncc cat's (use 'holo)) resolves the same as the
-  g = ai_lib_(g, "uu", src0_uu);                       //   self-test's; an unused entry costs a registration, nothing more
-  g = ai_lib_(g, "coin", src0_coin);
-  g = ai_lib_(g, "q", src0_q);
-  g = ai_lib_(g, "overlay", src0_overlay);             //   overlay and peg are REGISTERED, never used here: each
-  g = ai_lib_(g, "peg", src0_peg);                     //   consumer opens with its own (use ..), the boot owes nothing
-  g = ai_lib_(g, "holo", src0_holo);                   //   which the mooncc cat's cpp/gen read (the self-host build lane)
-  if (argp) {                                          // a build tool (lcat etc.): bake prel + bao FIRST so the CLI's
+  if (argp) {                                        // a build tool (lcat etc.): bake prel + bao FIRST so the CLI's
     g = ai_evals_(g,                                   // own loader/printer (eval1/bye reach for map/jot/tap/puts/putc)
 #include "p10.h"                                       // have the prel surface before they load the first file -- else
 #include "prel0.h"                                     // loading prel.l ITSELF misses every prel fn its loader uses.
@@ -834,22 +836,22 @@ static char const src_glaze[] =
  ;
 #endif
 
+// the source library (love.h): .rodata, so an entry nothing loads costs a row and no
+// heap at all -- overlay and peg are here for consumers that open with their own (use ..).
+static struct ai_lib const libs[] = {
+  {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
+  {"overlay", src_overlay}, {"peg", src_peg}, {"uu", src_uu}, {"bao", src_bao},
+  {"holo", src_holo},
+#ifdef AI_GLAZED
+  {"glaze", src_glaze},
+#endif
+  {NULL, NULL} };
+struct ai_lib const *ai_libs(void) { return libs; }
+
 // bake: NULL = no snapshot; "" = --bake (patch the binary's own .image); else --bake PATH (write an image file).
 static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
-  g = ai_lib_(g, "coin", src_coin);
-  g = ai_lib_(g, "rng", src_rng);
-  g = ai_lib_(g, "q", src_q);
-  g = ai_lib_(g, "kanren", src_kanren);
-  g = ai_lib_(g, "overlay", src_overlay);
-  g = ai_lib_(g, "peg", src_peg);
-  g = ai_lib_(g, "uu", src_uu);
-  g = ai_lib_(g, "bao", src_bao);
-  g = ai_lib_(g, "holo", src_holo);
-#ifdef AI_GLAZED
-  g = ai_lib_(g, "glaze", src_glaze);
-#endif
   g = ai_egg_(g,
 #include "egg.h"
     ,

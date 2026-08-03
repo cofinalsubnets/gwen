@@ -200,6 +200,14 @@ void free(void *p) {
 // OCRAM pool stays as the no-PSRAM fallback.
 static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed: naturally aligned (mooncc parses no post-declarator attribute)
 
+// bao's text, and the source library over it (love.h): .rodata on the flash, so the
+// bounded arena never holds a byte of it.
+static char const src_bao[] =
+#include "bao.h"
+;
+static struct ai_lib const libs[] = {{"bao", src_bao}, {NULL, NULL}};
+struct ai_lib const *ai_libs(void) { return libs; }
+
 int main(void) {
   // first light: the LED comes on before any love runs, so a board with no
   // serial adapter still shows the boot image + crt0 + clocks worked. The
@@ -264,13 +272,9 @@ int main(void) {
     "(: _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
     "    _ (putc 10) _ (puts \"" banner "\") _ (putc 10) ((from 'bao 'shell) 0))"
   if (!woke) {
-    // the on-device egg bake: bao is a MODULE (no brackets of its own) --
-    // register the source, load it by name inside the boot form. a woken
-    // image (the mps2 baker's) carries the registration already.
-    static char const src_bao[] =
-#include "bao.h"
-    ;
-    g = ai_lib_(g, "bao", src_bao);
+    // the on-device egg bake: bao is a MODULE (no brackets of its own), loaded
+    // by name inside the boot form out of the source library above. a woken
+    // image (the mps2 baker's) carries the load already.
     g = ai_egg_(g,
 #include "egg.h"
     ,

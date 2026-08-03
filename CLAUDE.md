@@ -103,7 +103,7 @@
 ;   use-stack, orth last and read-only; run_program pushes the SESSION layer, one load = one
 ;   layer. `use` IS the loader: (use 'x) splices a registered module just below the top (bare
 ;   names resolve on the walk, never shadow yours), and on a MISS loads x from the SOURCE LIBRARY
-;   (g->lib, entries baked with ai_lib_) or the filesystem WALK: lib/<x>.l off the cwd, then
+;   (the frontend's static ai_libs table, .rodata) or the filesystem WALK: lib/<x>.l off the cwd, then
 ;   <seat>/../lib/<x>.l (the seat = the binary's home via readlink /proc/self/exe), then its
 ;   love/ subfolder. PATH picks the love, the love carries its library -- no env vars anywhere.
 ;   a STRING is an explicit path; a SLASHED name ('holo/x64, one symbol) INCLUDES lib/x/y.l into
@@ -234,7 +234,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; (x86_64/aarch64), wasm. PREL IS THE LANGUAGE AND STAYS MINIMAL -- a library is its OWN love/*.l;
 ; mk/lib.mk lcats it to out/lib/<name>.h automatically, and EVERY post-egg layer is a MODULE
 ; (coin, rng, q, kanren, overlay, uu, bao, holo, glaze, rune ..): the frontend registers the lcat'd
-; constant (ai_lib_) and its boot text says (use 'x); the boot rebinds the one-name surfaces there
+; constant (a row in the frontend's ai_libs table) and its boot text says (use 'x); the boot rebinds the one-name surfaces there
 ; too, ⚠ ALWAYS UNDER THE MODULE'S OWN NAME ((: uu (from 'uu)), (: overlay (from 'overlay))) -- an
 ; accessor bound under some other name means one word for both a book and whatever else wears it,
 ; and the lane that skips the rebind then hands out the other thing in SILENCE (`parse` did exactly

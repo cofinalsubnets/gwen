@@ -607,7 +607,7 @@
 ; the layer verbs live on only inside the loader's closures, mopped at birth like books/setbooks.
 ; a module arrives by NAME: (use 'x) splices a registered module just below the top -- its names
 ; resolve on the walk but can never shadow the top's own -- and LOADS it on a miss: the baked
-; source library (ai_lib_), or the filesystem walk -- lib/<x>.l off the cwd, then the SEAT
+; source library (the frontend's static ai_libs table), or the filesystem walk -- lib/<x>.l off the cwd, then the SEAT
 ; rungs, <seat>/../lib/ and its love/ subfolder, the seat being the running binary's own home
 ; (readlink /proc/self/exe): PATH picks the love, the love carries its library. a STRING is an
 ; explicit path

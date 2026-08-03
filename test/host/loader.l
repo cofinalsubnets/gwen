@@ -4,7 +4,7 @@
 ; ('x/y, one symbol) is an INCLUDE into the current head layer, no registration.
 ; the lib/ lane resolves against the cwd, so run from the repo root:
 ;   cat test/00-init.l test/host/loader.l | out/host/love
-; the baked-table lane (ai_lib_) is every frontend's boot; this script smokes
+; the baked-table lane (the frontend's ai_libs) is every frontend's boot; this script smokes
 ; the filesystem lane and the registry behavior around it. fixtures are written
 ; here and removed at the foot -- zz- names, so a crashed run's leftovers are
 ; recognizable.

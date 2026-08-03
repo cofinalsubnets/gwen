@@ -239,6 +239,27 @@ extern uintptr_t (*ai_image_absguard)(uintptr_t);
 extern uintptr_t ai_image_bad[8], ai_image_nbad;
 static uintptr_t img_reject_all(uintptr_t v) { (void) v; return 0; }
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
+// rune / bao are MODULES (no brackets of their own): the source library (love.h) holds
+// the text and the boot loads it by name, so the woken image serves ((from 'bao 'shell) 0)
+// -- the teensy and nucleo launchers. the source strings carry no absolutes, so the
+// absguard stays satisfied.
+#ifdef BAKER_RUNE
+static char const src_rune[] =
+#include "rune.h"
+;
+#else
+static char const src_bao[] =
+#include "bao.h"
+;
+#endif
+static struct ai_lib const libs[] = {
+#ifdef BAKER_RUNE
+  {"rune", src_rune},
+#else
+  {"bao", src_bao},
+#endif
+  {NULL, NULL} };
+struct ai_lib const *ai_libs(void) { return libs; }
 int main(void) {
   sh_puts("\n; love/mps2 baker -- baking the corpus\n");
   freelist = (struct mem*) POOL;
@@ -247,22 +268,6 @@ int main(void) {
   struct ai *g = ai_ini();          // NO ai_defn: a port nif in the book would
                                     // ride into the image as a dead absolute
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
-#ifdef BAKER_RUNE
-  // rune is a MODULE (no brackets of its own): registered here, loaded by name
-  // below. the source strings carry no absolutes, so the absguard stays satisfied.
-  static char const src_rune[] =
-#include "rune.h"
-  ;
-  g = ai_lib_(g, "rune", src_rune);
-#else
-  // bao is a MODULE (no brackets of its own): registered here, loaded by name
-  // below, so the woken image serves ((from 'bao 'shell) 0) -- the teensy and
-  // nucleo launchers.
-  static char const src_bao[] =
-#include "bao.h"
-  ;
-  g = ai_lib_(g, "bao", src_bao);
-#endif
   struct ai *r = ai_egg_(g,
 #include "egg.h"
     ,

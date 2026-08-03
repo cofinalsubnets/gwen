@@ -15,7 +15,7 @@
 ; and any other list is an application spine. (f) == f here too.
 ;
 ; a MODULE on every corpus target (host + love0 + the inle kernel + wasm): the
-; frontend registers this source (ai_lib_) and its boot says (use 'uu), then
+; frontend lists this source in its ai_libs table and its boot says (use 'uu), then
 ; rebinds `uu` to the accessor -- (: uu (from 'uu)) -- so the surface stays
 ; (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every internal a probe away.
 ; the layer IS the module boundary now: the old uu-mark/sweep trailer retired

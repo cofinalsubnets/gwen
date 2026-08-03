@@ -11,7 +11,7 @@
 ; is (\ s stream); est/=== unify, + interleaves (disjunction), * binds
 ; (conjunction) -- so a relation is a polynomial in unifications (see the ring).
 ; a REGISTERED MODULE with NO BRACKETS: the runtime supplies the layer -- a
-; frontend registers this source (ai_lib_) and its boot says (use 'kanren),
+; frontend lists this source in its ai_libs table and its boot says (use 'kanren),
 ; which loads, registers and splices in one motion. the splice serves every
 ; bare consumer (unify/ufail?/var/s_plus/s_star/===, and the goal macros'
 ; expansions); internals answer to (from 'kanren ..) -- subst, walk, query,

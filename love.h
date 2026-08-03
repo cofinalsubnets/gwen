@@ -184,8 +184,6 @@ struct ai {
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
                   // read by use/from. a lazy singleton, so both bootstrap prel runs
                   // capture the SAME tablet. in v0..end: traced + serialized.
-   ai_word lib;   // the SOURCE LIBRARY book: name -> source text, read by `use`'s miss
-                  // lane; frontends fill it with ai_lib_. a lazy singleton like mods.
    union {
     ai_word x;
     struct ai_io {
@@ -198,6 +196,15 @@ struct ai {
  intptr_t end[]; };
 
 struct ai_def { char const *n; intptr_t x; };
+
+// THE SOURCE LIBRARY: the .l texts lcat'd into this binary, name -> source, the rung
+// `use` tries before the filesystem walk. A frontend defines ai_libs over its own
+// table; the weak default answers none, so one that bakes nothing links unchanged.
+// ⚠ IMMORTAL C STRINGS, and the whole point: `use` copies ONE of these for the length
+// of ONE load. Nothing here is on the heap, traced by a collection, or in an image.
+// ⚠ TERMINATED BY A {NULL, NULL} ROW -- there is no count to pass and none to keep.
+struct ai_lib { char const *nom, *src; };
+struct ai_lib const *ai_libs(void);
 
 // host nif auto-registration: AI_NIF("name", fn) lands the entry in the ai_nifs
 // section; boot drains [__start_ai_nifs, __stop_ai_nifs) via ai_defn, so an app
@@ -285,7 +292,6 @@ struct ai
  *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, prel, ev)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),   // ⚠ IMMORTAL values only
  *ai_defv(struct ai*, char const*),                // its twin for a LIVE heap value (rides sp[0], stays there)
- *ai_lib_(struct ai*, char const*, char const*),   // register name -> source text in g->lib; `use` loads it on a miss
  *ai_layer_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
  *ai_unsplice_(struct ai*);   // drop the link below the head (the runtime's bare leave)
 

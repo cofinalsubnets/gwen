@@ -298,9 +298,11 @@ static struct ai_def const defs[] = {
 // The corpus texts are the ones every frontend shares (out/lib, laid by lcat off
 // love0). bao rides along so a law can reach `reads`/`flow`/`trickle` -- the
 // colist lane is what sits on top of the would-block park.
-static char const *src_bao =
+static char const src_bao[] =
 #include "bao.h"
  ;
+static struct ai_lib const libs[] = {{"bao", src_bao}, {NULL, NULL}};
+struct ai_lib const *ai_libs(void) { return libs; }
 
 static ai_noinline char *slurp(char const *path) {
   FILE *f = fopen(path, "rb");
@@ -322,7 +324,6 @@ int main(int argc, char const **argv) {
     fprintf(stderr, "usage: %s <file.l>...\n", argv[0]);
     return 2; }
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
-  g = ai_lib_(g, "bao", src_bao);
   g = ai_egg_(g,
 #include "egg.h"
     ,

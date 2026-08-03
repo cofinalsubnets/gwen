@@ -748,7 +748,6 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
  g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_help = zero;   // unsealed: hot_hook traps until (seal-hook) fills them; help zero = nobody listening
  g->mods = zero;                       // the module registry: lazily created by the first (mods _) read
- g->lib = zero;                        // the source library: same lazy shape ((lib _) / ai_lib_)
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
  g->minor = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
  // the rem set + major pool ride g->alloc: a frontend that cannot supply them cannot run
@@ -3113,6 +3112,11 @@ uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {
 __attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
  (void) fd; (void) p; (void) n; }
 struct ci { struct ai_io io; ai_word head; }; // charlist input
+// ⚠ `t` IS A C POINTER RIDING A THREAD WORD, and that is sound for one reason: gcp
+// forwards only what lies inside a from-space, so a .rodata address passes through
+// every collection untouched. It also means the text must OUTLIVE the port -- only
+// immortal strings here (the baked library, love.h's struct ai_lib).
+struct ti { struct ai_io io; ai_word t; ai_word i; }; // C string input
 struct to { struct ai_io io; struct ai_str *buf; ai_word i; }; // lisp string output
 static struct ai *ai_dtoa2(struct ai*, ai_flo_t);
 static struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x);
@@ -3128,6 +3132,17 @@ static intptr_t ci_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  uintptr_t k = 0;
  while (k < n && chainp(i->head))
   dst[k++] = (unsigned char) getcharm(A(i->head)), i->head = B(i->head);
+ return k ? (intptr_t) k : -1; }
+
+// the C string source's read door: NUL ends it, so the text needs no length beside
+// it. Unbuffered like every synth row (bio_of refuses a negative fd), which costs a
+// call per byte and saves the source ever being a love value.
+static intptr_t ti_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+ struct ti *i = (struct ti*) g->io;
+ char const *t = (char const*) i->t;
+ uintptr_t p = (uintptr_t) getcharm(i->i), k = 0;
+ while (k < n && t[p]) dst[k++] = (unsigned char) t[p++];
+ i->i = putcharm((intptr_t) p);
  return k ? (intptr_t) k : -1; }
 
 static struct ai *to_flush(struct ai *g) { return g; }
@@ -3153,9 +3168,8 @@ static intptr_t to_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  g->sp++;
  return 0; }
 struct ai_port_vt const synth[] = {
- /* fd = -1, ti: retired C-string source; the fd is a protocol number prel pokes,
-    so the row stays a hole rather than renumbering its neighbours */
- { noop_flush, NULL,      NULL },
+ /* fd = -1, ti: read-only C-string source -- the baked library's door (lvm_lib) */
+ { noop_flush, NULL,      ti_readn },
  /* fd = -2, to: write-only string sink   */
  { to_flush,   to_writen, NULL },
  /* fd = -3, closed port (post-close)  */
@@ -5283,28 +5297,27 @@ lvm(lvm_mods) {
   Hp += nb + 3;
   g->mods = (word) h; }
  return Sp[0] = g->mods, Ip++, Continue(); }
-// (lib _): the SOURCE LIBRARY book (g->lib) -- name -> source text, use's miss
-// lane; filled from C by ai_lib_. the same lazy-singleton shape as mods.
+// a frontend bakes no sources unless it says so (love.h)
+__attribute__((weak)) struct ai_lib const *ai_libs(void) { return NULL; }
+// (lib nm): the SOURCE LIBRARY -- the frontend's static table (love.h), answering nm's
+// baked .l text as a READ PORT over the C string itself, or nothing on a miss. The text
+// is never copied: no source is a love value, none is traced by a collection, and none
+// reaches an image. A miss falls through to `use`'s filesystem walk (love/prel.l).
 lvm(lvm_lib) {
- if (g->lib == zero) {
-  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
-  Have(nb + 3);
-  union u *b = map_fill_back((union u*) Hp, cap), *h = (union u*) (Hp + nb);
-  h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
-  Hp += nb + 3;
-  g->lib = (word) h; }
- return Sp[0] = g->lib, Ip++, Continue(); }
-// register name -> source text in the library, from a frontend's boot
-struct ai *ai_lib_(struct ai *g, char const *nm, char const *src) {
- if (!ai_ok(g)) return g;
- if (ai_core_of(g)->lib == zero) {
-  if (!ai_ok(g = map_new(g))) return g;                // pushes the fresh map
-  ai_core_of(g)->lib = *ai_core_of(g)->sp;
-  ai_core_of(g)->sp++; }
- g = ai_push(g, 1, ai_core_of(g)->lib);
- g = ai_mapput(intern(ai_strof(ai_strof(g, src), nm)));
- if (ai_ok(g)) ai_core_of(g)->sp++;
- return g; }
+ struct ai_lib const *t = ai_libs();
+ struct ai_str *nm = nomp(Sp[0]) ? add_name(g, Sp[0]) : NULL;
+ if (t && nm) for (; t->nom; t++) {
+  if (strlen(t->nom) != len(nm) || memcmp(t->nom, txt(nm), len(nm))) continue;
+  Have(Width(struct ti) + Width(struct ai_tag));   // ⚠ nm dies here; the re-run re-finds the row
+  struct ti *p = (struct ti*) Hp;
+  Hp += Width(struct ti) + Width(struct ai_tag);
+  p->io.ap = lvm_port_io;
+  p->io.fd = putcharm(-1);                      // the synth fd: the ti row
+  p->io.ungetc_buf = putcharm(EOF);
+  p->t = (ai_word) t->src, p->i = putcharm(0);
+  tagthread((union u*) p, Width(struct ti));
+  return Sp[0] = word(p), Ip++, Continue(); }
+ return Sp[0] = zero, Ip++, Continue(); }
 // push a fresh writable LAYER at the head of the book chain -- the runtime's
 // enter: the session's scope, every defglob's target
 struct ai *ai_layer_(struct ai *g) {

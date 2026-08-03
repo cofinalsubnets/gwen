@@ -120,6 +120,12 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn };
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 
+// the source library (love.h): .rodata, name -> baked .l text, read by `use`.
+static struct ai_lib const libs[] = {
+  {"uu", src_uu}, {"coin", src_coin}, {"rng", src_rng}, {"q", src_q},
+  {"kanren", src_kanren}, {NULL, NULL} };
+struct ai_lib const *ai_libs(void) { return libs; }
+
 // --- exported entry points ------------------------------------------------
 static struct ai *F;
 
@@ -130,11 +136,6 @@ int ai_init(void) {
   struct ai_def d[] = {{"exit", (ai_word) nif_exit}};
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);
-  F = ai_lib_(F, "uu", src_uu);
-  F = ai_lib_(F, "coin", src_coin);
-  F = ai_lib_(F, "rng", src_rng);
-  F = ai_lib_(F, "q", src_q);
-  F = ai_lib_(F, "kanren", src_kanren);
   F = ai_egg_(F, src_egg, src_p1, src_prel, src_ev);
   F = ai_evals_(F, boot_ai);
   // THE SESSION: a fresh writable layer, C-side -- everything the page ever

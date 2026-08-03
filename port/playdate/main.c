@@ -139,6 +139,22 @@ void *_sbrk(intptr_t n) { return (void *) -1; }
 static void *pd_alloc(struct ai *g, void *p, size_t n) {
   return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
 
+// q, kanren and rune are MODULES: the source library (love.h) holds their text, the
+// boot below loads them by name -- q is rune's coefficient field, kanren its matcher's
+// unifier (subst through the registry, unify/ufail?/var down the splice).
+static char const src_q[] =
+#include "q.h"
+;
+static char const src_kanren[] =
+#include "kanren.h"
+;
+static char const src_rune[] =
+#include "rune.h"
+;
+static struct ai_lib const libs[] = {
+  {"q", src_q}, {"kanren", src_kanren}, {"rune", src_rune}, {NULL, NULL} };
+struct ai_lib const *ai_libs(void) { return libs; }
+
 void love_init(void) {
   pdg_log("love: init");
   cb_open(kcb, NROWS, NCOLS);
@@ -172,19 +188,7 @@ void love_init(void) {
     pdg_log("love: woke -- workbench up");
     if (ai_ok(K.g)) pdg_set_update(k_update);
     return; }
-  static char const src_q[] =
-#include "q.h"
-  ;
-  static char const src_kanren[] =
-#include "kanren.h"
-  ;
-  static char const src_rune[] =
-#include "rune.h"
-  ;
-  g = ai_lib_(g, "q", src_q);                          // q, kanren and rune are MODULES: registered here, loaded
-  g = ai_lib_(g, "kanren", src_kanren);                //   by name below -- q is rune's coefficient field, kanren
-  g = ai_lib_(g, "rune", src_rune);                    //   its matcher's unifier (subst through the registry,
-  K.g = ai_egg_(g,                                     //   unify/ufail?/var down the splice)
+  K.g = ai_egg_(g,
 #include "egg.h"
     ,
 #include "p1.h"
