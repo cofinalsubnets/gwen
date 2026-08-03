@@ -916,14 +916,31 @@
    irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
    qf (fnf 'ql (caup irQ))
    (occ f2) (: (go l n) (? (! (two? l)) n (go >l (? (= <l f2) (n + 1) n))) (go qf 0))
-   (assert
+   _ (assert
       (two? irQ)
       (= 1 (occ '(st sp 56 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
       (= 1 (occ '(ld r11 sp 56)))                    ; s's restore, ONCE (epilogue)
       (= 1 (occ '(st sp 64 r12)))                    ; j's pair likewise
       (= 1 (occ '(ld r12 sp 64)))
       (member? '(add r12 r12 1) qf)                  ; the inner step is register-only
-      (member? '(st sp 24 r9) qf)))                  ; i (depth 1) stays a slot: no pair to earn
+      (member? '(st sp 24 r9) qf))
+   ; -- slot-load elision: loadval honors the want hint (a decl/asn init from a member/deref
+   ; lands straight in the hinted register, so the vmap pin fires and re-reads are zero forms),
+   ; and stld rides a whole straight-line run (a bound slot's reload forwards from the register
+   ; until a redef, an overlapping store, a label, or a bar).
+   irE (cgn (pre9 + "long f2(long *p) { long a = p[0]; if (a & 1) return a; return g(a); } int main() { return f2((long*)0); }"))
+   irF (cgn (pre9 + "long q2(long *p) { long a = p[0]; g(a); return a + (a >> 3); } int main() { return q2((long*)0); }"))
+   (splds fs) (: (go l n) (? (! (two? l)) n
+                            (go >l (? (&& (two? <l) (&& (id? (cap <l) 'ld) (id? (cauup <l) 'sp))) (n + 1) n)))
+                 (go fs 0))
+   _ (assert
+      (two? irE) (two? irF)
+      ; the pinned deref: a lands in r5 and rides it end to end -- slot-free, frameless
+      (member? '(ld r5 r6 0) (fnf 'f2 (caup irE)))
+      (member? '(test r5 1) (fnf 'f2 (caup irE)))
+      (= 0 (splds (fnf 'f2 (caup irE))))
+      ; a crosses the call (one wrap reload), then the second read FORWARDS: one sp load total
+      (= 1 (splds (fnf 'q2 (caup irF))))))
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs

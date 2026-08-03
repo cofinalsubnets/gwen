@@ -942,8 +942,10 @@
                   off)
    (ntmp g ty) (nslot g (& ((tsz g ty) + 7) -8))
    ; load a value from the address in r0, by type -- the dot/deref/clit value tail
-   ; (arrays and functions decay to the address; a struct has no register value)
-   (loadval g ty addrf)
+   ; (arrays and functions decay to the address; a struct has no register value). the scalar
+   ; tail honors the want hint: the load lands straight in the hinted register, so a decl/asn
+   ; hint holds and the vmap pin fires (the wide/float/aggregate lanes keep their protocols)
+   (loadval g ty addrf W9)
     (? (arr? ty) (mkv `('ptr <>ty) 'r0 addrf)
        (gvarr? ty) (mkv `('ptr (varel ty)) 'r0 addrf)   ; a VLA row decays to its address (p[i] a char*)
        (fn? ty) (mkv `('ptr ty) 'r0 addrf)
@@ -951,7 +953,8 @@
        (flo? ty) (mkv 'double 'r0 (addrf + (fldf ty 'f0 'r0 0)))
        (pair? g ty) (mkv ty 'r0 (addrf + (pld 'r0 0)))
        (d128? ty) (mkv ty 'r0 (addrf + '((ld r2 r0 8) (ld r0 r0 0))))   ; hi first: the low load overwrites the base
-       (mkv ty 'r0 (addrf + `(`((ldop ty) 'r0 'r0 0)))))
+       (: W (? W9 W9 'r0)
+          (mkv ty W (addrf + `(`((ldop ty) W 'r0 0))))))
    ; the fill code for a compound literal at frame offset off: an aggregate zeroes
    ; then fills (cgfill), a scalar unwraps its single-element brace and stores.
    (clitcode g env off ty ini)
@@ -1204,7 +1207,7 @@
                                  + `(`((uldop usz) 'r0 'r0 0))
                                  + (? (hi > 0) `(`('shl 'r0 hi)) ())
                                  + (? (lo > 0) `(`((? sgn 'sar 'shr) 'r0 lo)) ()))))
-                       (loadval g ty (vfs r))))))
+                       (loadval g ty (vfs r) wnt)))))
           (k = 'var)
            (: en (vent g env <>e)
               (? (bad? en)
@@ -1263,7 +1266,7 @@
                  'bad))
           (k = 'deref)
            (: r (clval g env e)                     ; clval already walked the pointer
-              (? (bad? r) 'bad (loadval g (vty r) (vfs r))))
+              (? (bad? r) 'bad (loadval g (vty r) (vfs r) wnt)))
           (k = 'asn)
            (: rv (? ((cap (caup e)) = 'var) (vent g env (caup (caup e))) 'bad)
               (? (&& (two? rv) (<rv = 'regv))   ; store into a register-homed scalar (param or local)
@@ -1697,7 +1700,7 @@
                        'bad))))))
           (k = 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
-              (? (bad? lv) 'bad (loadval g (vty lv) (vfs lv))))
+              (? (bad? lv) 'bad (loadval g (vty lv) (vfs lv) wnt)))
           (k = 'bin) (cgbin g env e wnt)
           'bad))
    ; a TARGETABLE gp register argument: pure and single-emission, reading only an immediate, the
@@ -3658,21 +3661,59 @@
                  (f >< go r))))
        (go fs))
 
-   ; store-forward: a full-word frame store followed by ITS OWN reload reads the register instead
-   ; -- (st r4 o rX) (ld rY r4 o) keeps the store and turns the reload into a mov. ⚠ the narrow
-   ; loads keep their memory round-trip: they re-extend, a different value.
+   ; store-forward: within one straight-line run a full-word frame slot RIDES the register that
+   ; last touched it -- a store binds slot -> reg, a bound slot's reload answers the register (a
+   ; mov, or nothing when it lands home), a first load binds too. a binding dies with a redef of
+   ; its register, a store over its slot (byte overlap: the narrow stores too), a label (paths
+   ; join), and every bar/r4 def (a call clobbers, pop r4 tears down); a branch OUT keeps the
+   ; fall-through. ⚠ the narrow loads keep their round-trip (they re-extend, a different value).
+   ; ⚠ dst r3/cs reloads stay -- epim?/sibjmp/unframe anchor on the epilogue's exact shapes.
+   ; ⚠ an lea/lean off r4 hands out a RANGE (deadst's law): that fn keeps the adjacent pair only.
+   stldkeep '(r3 r11 r12 r13 r14)
+   (bdropr bs r9) (filter (\ e9 !(<>e9 = r9)) bs)
+   (bdropo bs o9) (filter (\ e9 (: d (<e9 - o9) (|| (7 < d) (d < -7)))) bs)
    (stld fs)
+    (: (esc? l) (? !(two? l) ()
+                   (: f <l
+                      (? (two? f && member? <f '(lea lean) && <>>f = 'r4) 1 (esc? >l))))
+       (? (esc? fs) (stlda fs) (stldw fs ())))
+   (stlda fs)                                        ; the escape lane: only the pair with nothing between is aliasing-proof
     (? !(two? fs) ()
        (: f <fs r >fs
           (? !(two? r && two? f && <f = 'st && <>f = 'r4)
-             (f >< stld r)
+             (f >< stlda r)
              (: nx <r
                 rX <>>>f
                 (? !(two? nx && <nx = 'ld && <>>nx = 'r4 && <>>>nx = <>>f)
-                   (f >< stld r)
+                   (f >< stlda r)
                    (: rY <>nx
-                      (? (rY = rX) (f >< stld >r)
-                         (f >< `('mov rY rX) >< stld >r))))))))
+                      (? (rY = rX) (f >< stlda >r)
+                         (f >< `('mov rY rX) >< stlda >r))))))))
+   (stldw fs bs)
+    (? !(two? fs) ()
+       (: f <fs r >fs
+          (? !(two? f) (f >< stldw r bs)
+             (: op <f
+                (? (op = 'label) (f >< stldw r ())
+                   (member? op '(br jmp jmpr ret)) (f >< stldw r bs)
+                   (op = 'ld && <>>f = 'r4)
+                    (: rY <>f o <>>>f
+                       b9 (assoc o bs)
+                       (? (member? rY stldkeep)
+                          (f >< stldw r ((`(o rY)) >< (bdropo (bdropr bs rY) o)))
+                          (two? b9 && <>b9 = rY) (stldw r bs)
+                          (two? b9) (`('mov rY <>b9) >< stldw r (bdropr bs rY))
+                          (f >< stldw r ((`(o rY)) >< (bdropr bs rY)))))
+                   (member? op stops9 && <>f = 'r4)
+                    (: o <>>f
+                       b2 (bdropo bs o)
+                       (? (op = 'st && nom? <>>>f)
+                          (f >< stldw r ((`(o <>>>f)) >< b2))
+                          (f >< stldw r b2)))
+                   (: rd (rdsp f)
+                      (? (id? rd 'bar) (f >< stldw r ())
+                         (member? 'r4 <>rd) (f >< stldw r ())
+                         (f >< stldw r (filter (\ e9 !(member? <>e9 <>rd)) bs)))))))))
 
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
