@@ -360,7 +360,9 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
 // nothing unless its REAL part is positive, so a pure phase is BLUE (truth cannot
 // depend on which root of x^2+1 we named `i`). the lexicographic order stays as
 // it was -- sorting needs totality. doc/measures.md.
-static ai_inline bool zn_false(struct ai_zn z) { return z.re <= 0; }
+// a macro, not a fn: a by-value ai_zn argument stages through push/pop, which
+// bars unframe in every fn ai_nilp splices into (the hot truth-test fleet)
+#define zn_false(z) ((z).re <= 0)
 static struct ai_zn ai_net(struct ai *, word);         // fwd: aggregates sum their elements
 static intptr_t ai_count(struct ai *, word);           // fwd: tally's C body (net-mode 1 reads it)
 static ai_inline bool ai_nilp(struct ai *g, word x) {

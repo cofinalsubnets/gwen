@@ -1002,7 +1002,7 @@
    ; result stored through arg3, the flag the value.
    (cgbuiltin g env bi args)                       ; a builtin call -> its value | 'bad; not one -> 'no
     (? (bi = "__builtin_trap") (? (arm? g) (mkv 'long 'r0 `(`('trap)))
-                                  (mkv 'long 'r0 `(`('raw `(15 11)))))
+                                  (mkv 'long 'r0 `(`('ud2))))   ; the named op, not raw bytes: a raw bars unframe in every splice site
        (bi = "__builtin_inf")
         (? (t32? g) (mkv 'double 'r0 `(`('li 'r0 0) `('li 'r1 2146435072) `('movqxr 'f0 'r0)))
            (mkv 'double 'r0 `(`('li 'r0 9218868437227405312) `('movqxr 'f0 'r0))))
@@ -1634,7 +1634,7 @@
               bi (? (<head = 'var) <>head ())
               bv (cgbuiltin g env bi args)
               (? (! (id? bv 'no)) bv
-                 (: inlf (? (peep g 'inlining ()) ()
+                 (: inlf (? (2 < (|| (peep g 'inlining ()) 0)) ()   ; splices NEST to depth 3, cbinl's cap
                             (! (<head = 'var)) ()
                             (! (bad? (vent g env <>head))) ()   ; a local/global shadows the name
                             (peep (g 'inl) <>head ()))
@@ -1672,7 +1672,7 @@
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         (cat (fstf g 'double 'r4 toff (xmmreg 0))
                                          (cat (fstf g 'double 'r4 (toff + 8) (xmmreg 1))
-                                              `(`('lea 'r0 'r4 toff)))))))
+                                              `(`('lean 'r0 'r4 toff)))))))
                        (&& (t32? g)                    ; t32: past the d-pair, only the 8B sse blob (d0) and the <=4B int one (r0) return
                            (! (|| (&& (id? (aone g (vty cr)) 'sse) ((tsz g (vty cr)) = 8))
                                   (&& (id? (aone g (vty cr)) 'int) ((tsz g (vty cr)) <= 4))))) 'bad
@@ -1680,16 +1680,16 @@
                         (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         `(`('st 'r4 toff 'r0) `('st 'r4 (toff + 8) (ip2 g))
-                                           `('lea 'r0 'r4 toff)))))
+                                           `('lean 'r0 'r4 toff)))))
                        (id? (aone g (vty cr)) 'sse)    ; a small SSE aggregate result: park xmm0
                         (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
                                         (cat (fstf g 'double 'r4 toff (xmmreg 0))
-                                             `(`('lea 'r0 'r4 toff))))))
+                                             `(`('lean 'r0 'r4 toff))))))
                        (id? (aone g (vty cr)) 'int)    ; a small INT aggregate result: park rax
                         (: toff (nslot g 16)
                            (mkv (vty cr) 'r0 (cat (vfs cr)
-                                        `(`('st 'r4 toff 'r0) `('lea 'r0 'r4 toff)))))
+                                        `(`('st 'r4 toff 'r0) `('lean 'r0 'r4 toff)))))
                        'bad))))))
           (k = 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
@@ -2089,7 +2089,7 @@
        st (? (id? (cxb rt) 'float)
              ((fstf g 'float 'r4 ro 'f0) + (fstf g 'float 'r4 (ro + 4) 'f1))
              `(`('stsd 'r4 ro 'f0) `('stsd 'r4 (ro + 8) 'f1)))
-       (mkv rt 'r0 (fs + (st + `(`('lea 'r0 'r4 ro))))))
+       (mkv rt 'r0 (fs + (st + `(`('lean 'r0 'r4 ro))))))
    (cgcx g env op a rhs)                            ; the LEFT already evaluated (a value rec)
     (? (! (id? (peep g 'tgt 'x64) 'x64))
         (nolane g ("no lane for C99 complex arithmetic" + (ontgt g)))
@@ -4730,28 +4730,30 @@
              (scasel-l g (stkids it) tab acc))))
    (scasel-l g l tab acc) (? (! (two? l)) acc (scasel-l g >l tab (scasel g <l tab acc)))
 
-   ; -- the inline lane: a SMALL function splices its whole body at the call site -- each arg
-   ; value lands in a fresh 8-byte frame temp (exactly a callee frame's param slot, so the
-   ; semantics are the out-of-line call's), the body's statements compile in place, and every
-   ; `return` computes into r0 then JUMPS to the splice's end label (cgstmt's inlret door, so an
-   ; if-chain inlines too). no call is emitted, so a hot caller can turn LEAF and home its params.
-   ; depth 1: a body being inlined compiles its own calls out-of-line (g 'inlining).
+   ; -- the inline lane: a SMALL function (or an always_inline one at any size) splices its whole
+   ; body at the call site -- each arg value lands in a fresh 8-byte frame temp (exactly a callee
+   ; frame's param slot, so the semantics are the out-of-line call's), the body's statements
+   ; compile in place, and every `return` computes into r0 then JUMPS to the splice's end label
+   ; (cgstmt's inlret door, so an if-chain inlines too). no call is emitted, so a hot caller can
+   ; turn LEAF and home its params. splices NEST to depth 3 (cbinl's cap -- labels are nlab-fresh
+   ; per splice, so only recursion needs one); inlret/inlrt restore to the OUTER splice's.
    ; gated out: goto/labels (two splices in one caller would collide), block statics (each splice
    ; would mint a SEPARATE instance where C owes one), va_start. --
-   (noinl? x) (? (member? x '(sdecl goto lbl vastart)) 1
+   (noinl? x) (? (member? x '(sdecl goto lbl vastart varr)) 1   ; varr: a VLA's slots ride cgfn's per-FN prescan
                  (! (two? x)) ()
+                 (&& (id? <x 'call) (6 < (tally <>>x))) 1       ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
                  (|| (noinl? <x) (noinl? >x)))
    (oneret? items)                                  ; decls* + one trailing `return expr` (the b2w shape)
     (? (! (two? items)) ()
        (: it <items
           (? (<it = 'decl) (oneret? >items)
              (&& (<it = 'ret) (&& (two? <>it) (! (two? >items)))))))
-   (inlok? f sig)
+   (inlok? f sig aln)                               ; aln: __attribute__((always_inline)) -- the author's word waives the size gate
     (: rt (? (two? sig) <sig 'long)
        items (caup (caup (cuup f)))
        (pok ps n) (? (! (two? ps)) (n <= 6)
-                     (: pty (caup (cap ps))
-                        (? (|| (flo? pty) (|| (stru? pty) (arr? pty))) ()
+                     (: pty (caup (cap ps))                     ; a d128 param would bind only its lo word -- a real call takes it
+                        (? (|| (flo? pty) (|| (stru? pty) (|| (arr? pty) (d128? pty)))) ()
                            (pok >ps (n + 1)))))
        (? (! (two? sig)) ()
           (|| (flo? rt) (stru? rt)) ()
@@ -4759,12 +4761,15 @@
           (! (pok <>>f 0)) ()
           ; a straight-line single-return body pays broadly (600); a branchy one
           ; only while TINY (250, the guard shape) -- big if-chains bloat icache
-          ((? (oneret? items) 600 250) < (tally (show <>>>f))) ()
+          (&& (! aln) ((? (oneret? items) 600 250) < (tally (show <>>>f)))) ()
           (! (noinl? <>>>f))))
    (cginl g env f args)                              ; splice f's body at the site -> (ty forms) | 'no (declined)
     (: fe0 (peep g 'fesc ())                          ; a splice that pins a CLEAR fesc would cost the CALLER
        strs0 (g 'strs)                                ; every sibcall (the lvm_peep stack blowup) -- decline it
-       _ (pin g 'inlining 1)
+       il0 (peep g 'inlining ())
+       ir0 (peep g 'inlret ())
+       irt0 (peep g 'inlrt ())
+       _ (pin g 'inlining ((? (! il0) 0 il0) + 1))
        rt (cap (peep (g 'sigs) <>f `('long ())))
        ilb9 (nlab g ".il")
        (bind ps as benv acc)                         ; arg values -> fresh full-word slots, left to right
@@ -4788,13 +4793,14 @@
        ; the scope so several `epi` reads compile as book reads before the pin. the indirection
        ; stays until the core analysis owns cycles in big body-less letrecs.
        ibd (? (bad? br) 'bad ((g 'cgitems) g <br (caup (caup (cuup f))) ()))
-       _ (pin g 'inlret ())
-       _ (pin g 'inlining ())
+       _ (pin g 'inlret ir0)
+       _ (pin g 'inlrt irt0)
+       _ (pin g 'inlining il0)
        _ (vmflush g)                                  ; the splice's end label joins
        (? (|| (bad? br) (bad? ibd))                   ; a shape the splice can't take: the real call still can
            (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
-          (&& (! fe0) (peep g 'fesc ()))              ; the body took a frame address: keep the caller lean
-           (: _ (pin g 'fesc ()) _ (pin g 'strs strs0) 'no)
+          (&& (! fe0) (peep g 'fesc ()))              ; the splice took a frame address (an & arg too -- the
+           (: _ (pin g 'fesc ()) _ (pin g 'strs strs0) 'no)   ; real call's arg lane wraps it, bind cannot): keep the caller lean
           (mkv rt 'r0 (<>br + ibd + `(`('label ilb9))))))
 
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
@@ -5383,13 +5389,18 @@
             _ (pin t 'aligns (? (&& (two? xtra) (4 < (tally xtra))) (nthr xtra 4) (tablet 0))) t)
        ; pass 0: every function name -- so a bare use of one is its address (la). the sig table
        ; too: an mproto sibling (`double sin(..), cos(..);`) has a sig but no proto form of its
-       ; own. a small single-return definition also lands in the INLINE table, before any body.
+       ; own. a small single-return definition also lands in the INLINE table, before any body --
+       ; an always_inline one (ainls, the parser's roster) at any size; a noinline one NEVER
+       ; (the lvm fleet and the designed-ret seams stay out-of-line by the C's own word).
+       ainls (? (&& (two? xtra) (5 < (tally xtra))) (nthr xtra 5) ())
+       noinls (? (&& (two? xtra) (6 < (tally xtra))) (nthr xtra 6) ())
        (recfns fs) (? (! (two? fs)) 1
                       (: f <fs
                          _ (? (member? <f '(fn proto)) (pin (g 'fns) <>f 1) ())
                          _ (? (&& (<f = 'fn)
                                   (&& (! (member? <>f weaks))
-                                      (inlok? f (peep sigs <>f ()))))
+                                      (&& (! (member? <>f noinls))
+                                          (inlok? f (peep sigs <>f ()) (member? <>f ainls)))))
                               (pin (g 'inl) <>f f) ())
                          (recfns >fs)))
        _ (recfns <>ast)

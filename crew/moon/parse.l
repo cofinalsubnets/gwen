@@ -189,6 +189,21 @@
                              (|| ((tkv t) = "weak") ((tkv t) = "__weak__"))) 1
                          (go >s d))))
        (go ts 0))
+   ; an `always_inline` attribute anywhere in the declaration (love.h's
+   ; ai_inline) -- the gen admits the name to its inline table size-unbounded.
+   ; its mirror `noinline` (love.h's ai_noinline, every lvm_) BARS the table:
+   ; the designed rets and the no-scratch helpers stay out-of-line by name.
+   (attrany? ts a b)
+    (: (go s d) (? (! (two? s)) ()
+                   (: t <s
+                      (? (&& (d < 1) (|| (tp? t ";") (tp? t "{"))) ()
+                         (tp? t "(") (go >s (d + 1))
+                         (tp? t ")") (go >s (d - 1))
+                         (&& ((tkk t) = 'id) (|| ((tkv t) = a) ((tkv t) = b))) 1
+                         (go >s d))))
+       (go ts 0))
+   (inlany? ts) (attrany? ts "always_inline" "__always_inline__")
+   (noinlany? ts) (attrany? ts "noinline" "__noinline__")
    ; the declaration's section attribute, if any: scan this form's tokens (to
    ; the first depth-0 `;` or `{`) for `section ( "NAME" )` -- inside a
    ; declaration that shape only occurs in an __attribute__. -> NAME | ()
@@ -244,6 +259,8 @@
                 _ (pin t 'tgt tgt)                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
                 _ (pin t 'types (tablet 0))         ; typedef name -> ty
                 _ (pin t 'weaks ())                 ; __attribute__((weak)) function names
+                _ (pin t 'ainl ())                  ; always_inline function names (love.h's ai_inline)
+                _ (pin t 'noinl ())                 ; noinline function names (love.h's ai_noinline)
                 _ (pin t 'enums (tablet 0))         ; enum constant -> value
                 _ (pin t 'stag (tablet 0))          ; tag -> (fields size align)
                 _ (pin t 'sigs (tablet 0))          ; fn/proto name -> (rettype (paramty..)) for the call ABI
@@ -1479,6 +1496,8 @@
        _ (? (peep ps 'cursect ()) () (: sc (secat? ts) (? sc (pin ps 'cursect sc) ())))
        _ (? (peep ps 'curalias ()) () (: al (aliasat? ts) (? al (pin ps 'curalias al) ())))
        _ (? (peep ps 'curweak ()) () (? (wkany? ts) (pin ps 'curweak 1) ()))
+       _ (? (peep ps 'curinl ()) () (? (inlany? ts) (pin ps 'curinl 1) ()))
+       _ (? (peep ps 'curnoinl ()) () (? (noinlany? ts) (pin ps 'curnoinl 1) ()))
        _ (? (peep ps 'curalign ()) () (: an (alignat? ts) (? an (pin ps 'curalign an) ())))
        (ptop9 ps ts))
    (ptop9 ps ts)
@@ -1700,14 +1719,20 @@
                       (go4 l) (? (! (two? l)) 1
                                  (: _ (pin ps 'weaks (link <l (ps 'weaks))) (go4 >l)))
                       (go4 nms))))
+           _ (? (&& (peep ps 'curinl ()) (member? <f '(proto fn)))
+                (pin ps 'ainl (link <>f (ps 'ainl))) ())
+           _ (? (&& (peep ps 'curnoinl ()) (member? <f '(proto fn)))
+                (pin ps 'noinl (link <>f (ps 'noinl))) ())
            _ (pin ps 'curstat ())
            _ (pin ps 'curalias ())
            _ (pin ps 'curweak ())
+           _ (pin ps 'curinl ())
+           _ (pin ps 'curnoinl ())
            _ (pin ps 'curalign ())
            (pin ps 'cursect ()))
        (tops ts2 acc)
         (? (! (two? ts2)) `(1 `('prog (rev acc)) (ps 'stag) (ps 'sigs) (ps 'weaks)   ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
-                              (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns))
+                              (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl))
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (link <r acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
