@@ -7,6 +7,11 @@
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
+;
+; ⚠ a MID-LETREC assert must bind to `_` -- a bare one sits in binding position,
+; becomes define-sugar, and NEVER RUNS (it shadows a name, the pairing shifts, and
+; the missing scares it sheds don't stop file mode -- the gate stays green). when
+; in doubt, falsify one assert and watch the gate red.
 
 ; A REFUSAL, however it says so. A stage answers a bare () when it refused
 ; without a cause it could name, and a gripe when it could -- and since rung 4
@@ -947,7 +952,7 @@
    irW (cgn (pre9 + "unsigned long w(unsigned long a, unsigned long b, unsigned long c) { unsigned __int128 s = (unsigned __int128) a * b + c; return (unsigned long)(s >> 64) ^ (unsigned long) s; } int main() { return (int) w(3,4,5); }"))
    irX (cgn (pre9 + "unsigned long v(unsigned long a) { unsigned __int128 s = (unsigned __int128) a * a + (unsigned __int128) g(1); return (unsigned long) s; } int main() { return (int) v(3); }"))
    (occh l h9) (: (go l2 n) (? (! (two? l2)) n (go >l2 (? (&& (two? <l2) (id? (cap <l2) h9)) (n + 1) n))) (go l 0))
-   (assert
+   _ (assert
       (two? irW) (two? irX)
       (= 1 (occh (fnf 'w (caup irW)) 'mw128r))       ; the widening mul reads its parked register
       (= 1 (occh (fnf 'w (caup irW)) 'a128r))        ; the add combines through the pair
@@ -961,26 +966,36 @@
    ; through), and the loop nest runs register-only.
    irY (cgn "long lf(long *r, long *a, long na, long *b, long nb) { long s = 0; for (long i = 0; i < na; i++) { for (long j = 0; j < nb; j++) { s = s + a[i] * b[j] + r[i+j]; } } return s; } int main() { return 0; }")
    yf (fnf 'lf (caup irY))
-   (assert
+   _ (assert
       (two? irY)
       (member? '(st sp 32 r11) yf)                   ; s saves (prologue), homes r11
       (member? '(ld r11 sp 32) yf)                   ; ...and restores (epilogue)
       (member? '(add r12 r12 1) yf)                  ; i steps on its home, register-only
       (member? '(add r13 r13 1) yf)                  ; j likewise
       (= 3 (splds yf)))                              ; the ONLY sp loads are the three restores
-   ; -- canonical int homing: an int/uint LOCAL homes too (lhomable?), and the home always
-   ; holds the EXTENDED value -- every def re-narrows (sx4/zx4), so reads are zero forms and
-   ; 32-bit wrap holds. the mag_mul shape: int indices ride cs + operand homes, the loop nest
-   ; register-only; int PARAMS stay slotted (a foreign caller's high half is undefined).
+   ; -- canonical int homing: an int/uint LOCAL homes (lhomable?), and the home always holds
+   ; the EXTENDED value -- every def re-narrows (sx4/zx4), so reads are zero forms and 32-bit
+   ; wrap holds. an int PARAM homes only by RIDING its arrival (one entry cvt, no pool
+   ; register): here na rides r2; nb's ride is dropped by the soundness re-read (r7 turns
+   ; scratch) and it keeps its SLOT -- never a pool home.
    irZ (cgn "long g2(long *r, long *a, int na, long *b, int nb) { long s = 0; for (int i = 0; i < na; i++) { for (int j = 0; j < nb; j++) { s = s + a[i] * b[j]; } } return s; } int main() { return 0; }")
    zf (fnf 'g2 (caup irZ))
-   (assert
+   _ (assert
       (two? irZ)
+      (member? '(sx4 r2) zf)                         ; na rides its arrival, canonicalized once
+      (member? '(cmp r11 r2) zf)                     ; ...and the bound compare reads it register-register
+      (member? '(st sp 32 r7) zf)                    ; nb's dropped ride lands in its slot
       (member? '(sx4 r11) zf)                        ; i's defs re-narrow: the home stays canonical
-      (member? '(add r9 r9 1) zf)                    ; j steps on its operand home
       (member? '(add r11 r11 1) zf)                  ; i on its cs home
-      (member? '(ld4 r0 sp 32) zf)                   ; the int PARAM na stays a slot (re-extending read)
-      (= 2 (splds zf))))                             ; full-word sp loads: only the two cs restores
+      (= 2 (splds zf)))                              ; full-word sp loads: only the two cs restores
+   ; the guard law: with a call remaining there is no ride, so an int param KEEPS ITS SLOT
+   ; (a pool home would starve the locals and pay wraps -- the measured anti-lever)
+   irZp (cgn "long ext(long); long h3(int n, long *a) { long s = 0; for (int i = 0; i < n; i++) { s = s + ext(a[i]) + n; } return s; } int main() { return 0; }")
+   zpf (fnf 'h3 (caup irZp))
+   (assert
+      (two? irZp)
+      (member? '(st sp 48 r6) zpf)                   ; n spills at entry...
+      (member? '(ld4 r0 sp 48) zpf)))                ; ...and every read re-extends from the slot
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs

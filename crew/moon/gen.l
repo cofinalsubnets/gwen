@@ -322,19 +322,23 @@
    ; the size rides r3 first (free mid-expression: the shuttle holds r0/r1, args load at the pops)
    (imby g rX sz) (? (arm? g) `(`('li 'r3 sz) `('imul rX rX 'r3)) `(`('imul rX rX sz)))   ; arm mul (a64/t32/v6-M) has no imm form
    (homable? pty) (|| (ptr? pty) (member? pty '(long ulong)))   ; an 8-byte gp scalar: what a register home can carry
-   ; a LOCAL home carries int/uint too, CANONICALLY: the register always holds the extended
-   ; value (every def re-narrows through cvt), so reads are zero forms and 32-bit wrap holds.
-   ; params stay homable? -- a foreign caller passes a word whose high half is undefined
+   ; a home carries int/uint too, CANONICALLY: the register always holds the extended value
+   ; (every def re-narrows through cvt; a param's entry cvt canonicalizes the arrival -- a
+   ; foreign caller's high half is undefined), so reads are zero forms and 32-bit wrap holds.
+   ; ⚠ an int PARAM homes only by RIDING its arrival (no pool register, no wrap -- one entry
+   ; cvt): a pool home for a cold int param starves the d128 pair park and the hot locals
+   ; (mag_mul measured +3% corpus cycles), so a non-rideable int param keeps its slot.
    (lhomable? ty) (|| (homable? ty) (member? ty '(int uint)))
    ; the homable-param fold, spelled once for its five readers (pgo/homes?/nhomable/uhomes/
    ; rideset): a float/sse param rides its own lane and spends no gp seat, the walk stops folding
-   ; at the home limit, and hx folds each homable seat -- (hx acc gpi param) -> acc
+   ; at the home limit, and hx folds each homable seat -- (hx acc gpi param) -> acc.
+   ; the gate admits int/uint for RIDESET's sake; every other reader filters back to homable?
    (homefold g ps gpi acc hx)
     (? (! (two? ps)) acc
        (: pty (caup (cap ps))
           (? (|| (flo? pty) (|| (sse2? g pty) (id? (aone g pty) 'sse))) (homefold g >ps gpi acc hx)
              ((nhome g) <= gpi) acc
-             (homable? pty) (homefold g >ps (gpi + 1) (hx acc gpi (cap ps)) hx)
+             (lhomable? pty) (homefold g >ps (gpi + 1) (hx acc gpi (cap ps)) hx)
              (homefold g >ps (gpi + 1) acc hx))))
    ; -- the immediate lane: the left value already in r0, a compile-time constant on the right ->
    ; ONE imm-form op (holo's add/sub/imul/and/or/xor/cmp take a signed-32 immediate), no
@@ -4371,7 +4375,7 @@
                     (: _ (pin dcl (cap (cap ps)) (1 + (peep dcl (cap (cap ps)) 0)))
                        (pdcl >ps)))
        ; -- the universe: the homable gp walk for the param NAMES, plus the locals --
-       (pgo ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (link (cap p9) a2)))
+       (pgo ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (? (homable? (caup p9)) (link (cap p9) a2) a2)))
        _ (pdcl params)
        _ (prel items)
        _ (pexl items)
@@ -5025,20 +5029,21 @@
                  (&& (t32? g) (flo? pty)) 'bad          ; a t32 double param past d7: the 4-byte slot can't carry it -- refuse LOUD
                  (d128? pty) 'bad                       ; a wide param: not carried (mirror of the arg refusal)
                  (&& (! (flo? pty)) (gpi < (ngp g)))
-                  (? (&& (pol? hp) (&& (homable? pty) (gpi < (nhome g))))
+                  (? (&& (pol? hp) (&& (gpi < (nhome g))
+                         (|| (homable? pty) (&& (two? hp) (member? gpi <>hp)))))
                       (? (two? hp)                      ; the leaf lane: home in a register, moving from the
                          (: inc (nthr (argr g) gpi)     ; incoming arg reg if it differs -- but a rideable param
                             ; rides its ARRIVAL register: no home reserved, no entry
                             ; mov, its home register freed to the pool
                             home (? (member? gpi <>hp) inc (homereg gpi))
-                            mv (? (home = inc) () `(`('mov home inc)))
+                            mv ((? (home = inc) () `(`('mov home inc))) + (cvt pty home))
                             (spill hp >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
                                    (acc + mv)))
                          (: home (homereg gpi)          ; the non-leaf lane: home + the spill shadow
                             inc (nthr (argr g) gpi)
                             off (nslot g 8)
                             _ (pin g 'homes (link `(home off <p) (peep g 'homes ())))
-                            mv (? (home = inc) () `(`('mov home inc)))
+                            mv ((? (home = inc) () `(`('mov home inc))) + (cvt pty home))
                             (spill hp >ps (gpi + 1) xmmi ovi (link `(<p `('reg home) pty) env)
                                    (acc + mv))))
                      (: off (nslot g 8)
@@ -5129,7 +5134,7 @@
        ; the non-leaf PAYOFF gate: homing saves one frame load per param READ but costs a
        ; spill+reload PER HOME around every remaining call -- worth it only where reads dominate.
        ; counted on the post-sibcall ir1: tail calls already cost nothing.
-       (nhomable ps gpi n) (homefold g ps gpi n (\ n2 i9 p9 (n2 + 1)))
+       (nhomable ps gpi n) (homefold g ps gpi n (\ n2 i9 p9 (? (homable? (caup p9)) (n2 + 1) n2)))
        (ncalls fs n) (? (! (two? fs)) n
                         (: f <fs
                            (ncalls >fs (? (&& (two? f) (member? <f '(call callr))) (n + 1) n))))
@@ -5223,7 +5228,7 @@
                              (body + `(`('li 'r0 0)) + (peep g 'epi epi))))))))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
-       (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (link (homereg i9) a2)))
+       (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (? (homable? (caup p9)) (link (homereg i9) a2) a2)))
        ; -- the RIDE analysis (freeing a pass-through param's home): a param whose home register
        ; differs from its arrival register, and whose ARRIVAL the body never uses as scratch, can
        ; ride the arrival end to end -- the unhome outcome, but decided UP FRONT so its home
@@ -5479,7 +5484,7 @@
                  (? ((tally rs) < (tally rd)) (leaf rs)
                     (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)))))
        irf (? (bad? ir1) 'bad
-          (&& (|| hm lh) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
+          (&& (|| hm (|| lh (two? ride))) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
            (leaf ride)
           ; calls remain: home + spill where reads beat the wraps -- FN-WIDE, all homable params
           ; or none. ⚠ per-param verdicts were measured BOTH ways and lost: pruning a "losing"
@@ -5493,7 +5498,8 @@
           (: nc (ncalls ir1 0) nh (nhomable params 0 0)
              nr (nreads ir1 (pslots <>sp1 ()) 0)
              em (homefold g params 0 0
-                 (\ n2 i9 p9 (? (id? (nthr (argr g) i9) (homereg i9)) n2 (n2 + 1))))
+                 (\ n2 i9 p9 (? (&& (homable? (caup p9))
+                                (! (id? (nthr (argr g) i9) (homereg i9)))) (n2 + 1) n2)))
              pp (&& hm (|| ((* 2 (* nc nh)) < nr)
                            (&& (two? av) (((* 2 (* nh ((pmax ir1) + (nthr av 4)))) + em) < nr))))
              (? (|| pp lh) (regen (? pp 'shadow ()) lh lp0 cu0) ir1)))
