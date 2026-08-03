@@ -24,8 +24,7 @@
 ; installs a global ONLY by leaking a body-less `:` (book is mopped -> no (pin book ..)). So
 ; keep the ~20 glaze aliases (loopinfo/emit/calloutinfo/coreir/..) PRIVATE in an inner
 ; body-having `:` (one scope, returns natjit); the outer body-less `:` leaks just those four.
-; fires/natjit/fired? are all bound before the `_ (assert)` self-test, so natjit is installed
-; (global, via the leak) by the time the assert exercises the hook.
+; The LAWS are test/glaze-hook.l, under `make test_hook`, which drives those four names.
 (: fires #0                                                                  ; probe counter: how many closures the hook native-backed (natjit writes, fired? reads)
    natjit
     (: arch (intern love-arch)                                                ; the runtime CPU target ('x64 / 'arm64), evaluated at boot on the actual binary -- so the SAME baked hook.h emits x64 on the x86 host and aarch64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
@@ -167,33 +166,7 @@
                                (? aj (: _ (pin fires () (1 + (peep fires () 0))) aj)
                                   (: _ (? (getenv "LOVE_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
-   (fired? n) (n < (peep fires () 0))                 ; did the hook fire since count n? (outer, leaked with natjit/fires)
- _ (assert
-    ; --- embedded leaves get native-backed at creation, and compute correctly ---
-    (: n (peep fires () 0)
-       (&& (31 = (ev '(: f (\ x (+ (* x 3) 1)) (f 10))))            ; leaf in a let body
-           (fired? n)))                                             ; ... the hook fired on it
-    (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum
-    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the AMBLE lane owns it now, still right
-    ; --- an embedded FLOAT-RESULT leaf: native gem box at creation, == interp, deopts on a non-float arg ---
-    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))   ; f built by ala -> the float lane fires
-       (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (fr 4) ((\ x (+ (* x 1.5) 2.0)) 4))   ; boxes a gem, == the interpreter
-           (fired? n) (= (fr 'nope) ((\ x (+ (* x 1.5) 2.0)) 'nope))))   ; ... the hook fired, and a non-float arg deopts == interp
-    ; --- an embedded N-VAR loop (iterative fib i,a,b): native back-edge at creation, == interp ---
-    (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
-       (&& (55 = (fib 10)) (fired? n)                                       ; the hook owned the loop; fib(10)=55
-           (= (fib 20) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 20))   ; == the interpreter
-           (= (fib 100) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 100))))  ; ... and past fixnum: cf-deopt's bignum matrix path == interp
-    ; --- an embedded CAPTURING closure: native captured closure, transparent ---
-    (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)                      ; inner (\ x (+ x y)) is the embedded one
-       (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3)))            ; native captured closure, composes
-           (= a5 ((\ y (\ x (+ x y))) 5))))                         ; ... and = the interpreter's instance
-    ; --- id? + transparency on an embedded CAPTURING leaf pulled out as a value ---
-    ; (the leaf must CAPTURE (z) -- a closed leaf like (\ x (+ x 0)) hoists to a shared
-    ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
-    (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner CAPTURES z -> a fresh native cell per call
-       (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)) !(id? f g))) ; computes right, = the interp instance, yet distinct
-   ))  ; NOTE: baked as a boot module now -> SILENT on load (no puts banner; it polluted tool stdout, e.g. spec2coq -> gen.v). asserts stay (silent unless they fail).
+   (fired? n) (n < (peep fires () 0)))                ; did the hook fire since count n? (outer, leaked with natjit/fires)
 
 ; `bake` is a NIF (host/image.c). Wrap it so the glaze's memo cache -- native closures whose ap
 ; is a W^X mmap address, which cannot serialize -- empties before the snapshot. The cache is the

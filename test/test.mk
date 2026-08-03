@@ -141,10 +141,10 @@ test_doc: host
 # Native-codegen self-tests (the love/glaze/ x86-64 jit): emit (the SSE emitter) +
 # auto (ev's source-recognizer: counted loops, float grids, recursive arith
 # groups) are exercised by test/glaze-x86.l (the asserts moved out of emit.l/
-# auto.l so they no longer run at every glaze load/bake); it cats emit.l + auto.l
+# auto.l so they no longer run at every glaze load/bake -- and hook.l's went the
+# same way, to test/glaze-hook.l under test_hook); it cats the holo backends
 # ahead of itself, then runs each block through base-ev (the loader's global ev is
-# now auto-ev, which mis-opfixes some pathological self-test forms). hook (ev.l's
-# ala creation-hook) keeps its inline self-test, run with emit.l prepended. Each
+# now auto-ev, which mis-opfixes some pathological self-test forms). It
 # needs the built binary (the `nat` host nif) and prel's strict `assert` (SCARES
 # on a false claim, terminal exit 1). x86-64 ONLY (real machine code); skipped
 # elsewhere. Gate = exit 0 AND the sentinel (a reader-stop exits 0 without it).
@@ -156,15 +156,35 @@ test_glaze: host
 	    cat test/glaze-x86.l; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
 	  cat out/host/.test_glaze.out; \
 	  { [ $$r -eq 0 ] && grep -q "test/glaze-x86:" out/host/.test_glaze.out; } \
-	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }; \
-	  echo "GLAZE love/glaze/hook.l"; \
-	  { echo "(use 'holo)"; cat love/glaze/hook.l; printf '\n(puts "glaze-hook-ran")(putc 10)'; } | $m > out/host/.test_glaze.out 2>&1; r=$$?; \
-	  cat out/host/.test_glaze.out; \
-	  { [ $$r -eq 0 ] && grep -q "glaze-hook-ran" out/host/.test_glaze.out; } \
-	    || { echo "FAIL glaze/hook (exit $$r)"; exit 1; }
+	    || { echo "FAIL glaze x86 (exit $$r)"; exit 1; }
 else
 test_glaze:
 	@echo "test_glaze: skipped (host arch $a is not x86_64)"
+endif
+# test_hook -- the natjit CREATION-HOOK laws (test/glaze-hook.l): a qualifying closure is
+# native-backed by love/glaze/hook.l at every `ala`, and every law claims BOTH the answer and
+# that the hook owned it (`fired?`) -- the answer alone is no evidence, bytecode computes it too.
+# TWICE, because the hook has two lives: over the binary's BAKED hook, which is what ships and
+# what every other gate here runs on top of; and over a fresh standalone re-cat of hook.l, the
+# re-install path (a second natjit, built post-boot through (from 'glaze) rather than folded).
+# x86-64 + aarch64, the arches the hook emits for -- the same gate test_glazefuzz uses, and NOT
+# test_glaze's x86-only one: this is the only automated coverage an arm64 host has of the hook.
+.PHONY: test_hook
+ifneq ($(filter $a,x86_64 aarch64),)
+test_hook: host
+	@echo "HOOK test/glaze-hook.l (baked)"; \
+	  $m test/glaze-hook.l > out/host/.test_hook.out 2>&1; r=$$?; \
+	  cat out/host/.test_hook.out; \
+	  { [ $$r -eq 0 ] && grep -q "glaze-hook: ok" out/host/.test_hook.out; } \
+	    || { echo "FAIL glaze-hook, baked (exit $$r)"; exit 1; }; \
+	  echo "HOOK test/glaze-hook.l (love/glaze/hook.l re-cat)"; \
+	  { echo "(use 'holo)"; cat love/glaze/hook.l test/glaze-hook.l; } | $m > out/host/.test_hook.out 2>&1; r=$$?; \
+	  cat out/host/.test_hook.out; \
+	  { [ $$r -eq 0 ] && grep -q "glaze-hook: ok" out/host/.test_hook.out; } \
+	    || { echo "FAIL glaze-hook, re-cat (exit $$r)"; exit 1; }
+else
+test_hook:
+	@echo "test_hook: skipped (the hook emits for x86_64 / aarch64; host arch is $a)"
 endif
 # test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (love/glaze/fuzz.l), in test_slow beside
 # test_holofuzz (~4s: two 3000-case runs). The fuzzer builds 3000 closures at random in the

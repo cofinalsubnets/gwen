@@ -45,9 +45,9 @@ tco ?= 1
 # always see it, whatever the sort collation -- a locale `ls` orders uukind* before uu.l and the
 # laws would run against an unloaded kernel (the byte-sort here happens to put uu.l first, but that
 # is implicit and a rename could flip it; test/uukindlaw.l also guards with an explicit assert).
-# glaze-x86 is EXCLUDED: it needs emit.l/auto.l cat'd ahead of it and EXECUTES x86-64 native code, so
-# it runs only under the x86-guarded `test_glaze`, never the arch-neutral corpus (crash on non-x86).
-t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
+# glaze-x86 and glaze-hook are EXCLUDED: both EXECUTE native machine code, so they run only under
+# their own arch-guarded targets (`test_glaze`, `test_hook`), never the arch-neutral corpus.
+t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
 love_h = $(wildcard $R/*.h)
 # the core rides with its math floor (crew/moon/lib/math/am.c -- our own

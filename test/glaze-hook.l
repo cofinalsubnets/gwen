@@ -1,0 +1,45 @@
+; --- test/glaze-hook.l: the natjit CREATION-HOOK laws ---------------------------
+; the hook is love/glaze/hook.l -- ev.l's `ala` reads it via (gv 'natjit) on EVERY closure
+; built, top-level and embedded, and a qualifying leaf is native-backed AT CREATION. these
+; laws lived inside that source as an `_ (assert)` pair, so they ran at every egg boot and
+; every --bake; they are a test, and this is where a test goes.
+;
+; NOT in the arch-neutral corpus (common.mk's $t filters it out, beside glaze-x86.l): it
+; EXECUTES native machine code. `make test_hook` runs it on the arches the hook emits for
+; (x86-64 + aarch64) and TWICE -- once over the binary's BAKED hook, which is what ships,
+; and once over a fresh standalone re-cat of hook.l, which is the re-install path.
+;
+; the three names it drives are the ones hook.l leaks on purpose: `natjit` (the hook),
+; `fires` (the probe counter it bumps) and `fired?`. every law is the same shape -- take a
+; count, build a closure through the LIVE ev, and claim both the ANSWER and that the hook
+; owned it. the answer alone is no evidence: bytecode computes it too.
+(assert (lit? natjit) (lit? fires) (lit? fired?))            ; the const-1 trap: unbound -> ()=zero point -> every claim below reads 1
+
+(assert
+    ; --- embedded leaves get native-backed at creation, and compute correctly ---
+    (: n (peep fires () 0)
+       (&& (31 = (ev '(: f (\ x (+ (* x 3) 1)) (f 10))))            ; leaf in a let body
+           (fired? n)))                                             ; ... the hook fired on it
+    (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; embedded leaf, applied inline -> deopt -> bignum
+    (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; chain body -> the AMBLE lane owns it now, still right
+    ; --- an embedded FLOAT-RESULT leaf: native gem box at creation, == interp, deopts on a non-float arg ---
+    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))   ; f built by ala -> the float lane fires
+       (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (fr 4) ((\ x (+ (* x 1.5) 2.0)) 4))   ; boxes a gem, == the interpreter
+           (fired? n) (= (fr 'nope) ((\ x (+ (* x 1.5) 2.0)) 'nope))))   ; ... the hook fired, and a non-float arg deopts == interp
+    ; --- an embedded N-VAR loop (iterative fib i,a,b): native back-edge at creation, == interp ---
+    (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
+       (&& (55 = (fib 10)) (fired? n)                                       ; the hook owned the loop; fib(10)=55
+           (= (fib 20) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 20))   ; == the interpreter
+           (= (fib 100) ((\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) 100))))  ; ... and past fixnum: cf-deopt's bignum matrix path == interp
+    ; --- an embedded CAPTURING closure: native captured closure, transparent ---
+    (: mk (ev '(\ y (\ x (+ x y))))  a5 (mk 5)                      ; inner (\ x (+ x y)) is the embedded one
+       (&& (15 = (a5 10)) ('(6 7 8) = (map a5 '(1 2 3)))            ; native captured closure, composes
+           (= a5 ((\ y (\ x (+ x y))) 5))))                         ; ... and = the interpreter's instance
+    ; --- id? + transparency on an embedded CAPTURING leaf pulled out as a value ---
+    ; (the leaf must CAPTURE (z) -- a closed leaf like (\ x (+ x 0)) hoists to a shared
+    ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
+    (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner CAPTURES z -> a fresh native cell per call
+       (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)) !(id? f g))) ; computes right, = the interp instance, yet distinct
+   )
+(: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, transparency)
+") 0)
