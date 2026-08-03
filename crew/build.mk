@@ -27,8 +27,8 @@ korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew
 # crew/moon/{lex,cpp,parse,gen}.l, lib/mksys.l (the sys leaf the driver's
 # runtime pull lays in-memory), and moon.l whose tail SEAT fires.
 # (crew/holo/text.l = the neutral-text assembler front end gen.l's inline asm
-# parses templates with; it leaks stream globals incl. a `parse` rebind -- fine
-# here, no later cat member reads them bare.)
+# parses templates with; it leaks its stream globals -- fine here, no later cat
+# member reads them bare.)
 moonfiles = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
 # (`ho` is defined further down, after this rule is READ -- target/prereq names
 # expand at parse time, so these lines spell out/host$(hsuf) themselves.)
@@ -173,7 +173,7 @@ $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@echo MOONX	$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
-$(xd)/host_main.o: out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/uu.h $(holo_h) $(glaze_h)
+$(xd)/host_main.o: out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/post.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h $(holo_h) $(glaze_h)
 $(xd)/host_cb.o: crew/quay/quay.c crew/quay/quay.h
 $(xd)/nolibc.o: crew/moon/lib/nolibc.c out/host/mooncc0.image
 	@echo MOONX	$@

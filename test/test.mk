@@ -315,7 +315,7 @@ test_vi: host out/host$(hsuf)/kore.image
 # run), not the cold source script -- ~0.68s -> ~0.02s per compile, 88 of them.
 moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 # love0 rides along for the inline-asm checks: templates parse through holo/text.l,
-# whose combinators come off a bare name each frontend's boot binds ITSELF, so the
+# whose combinators come off the bare `post` each frontend's boot binds ITSELF, so the
 # bootstrap lane can lose the feature while this one keeps it. mooncc0.image is
 # `host`'s own prerequisite on x86-64, where the e2e half of that lives.
 .PHONY: test_moon

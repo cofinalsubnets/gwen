@@ -33,14 +33,14 @@ cat "$out"
 [ $r -eq 0 ] && grep -q "crew/moon/law:" "$out" || fail "cc laws (exit $r)"
 
 # ----------------------------------------------- the template parser, under love0
-# ⚠ holo/text.l reaches the combinators through the BARE name `parse`, which each
-# frontend's boot binds to the post ACCESSOR. a lane that leaves the splice's own
-# parse FN there instead curries every combinator into a silent partial: no scare,
-# no wrong answer, just every template failing to parse. love0's build-tool lane is
-# the one that compiles love.c, and it is the only lane the laws above never walk.
+# ⚠ holo/text.l reaches the combinators through the bare name `post`, which each
+# frontend's boot binds to that module's accessor. a lane that leaves something else
+# there curries every combinator into a silent partial: no scare, no wrong answer,
+# just every template failing to parse. love0's build-tool lane is the one that
+# compiles love.c, and it is the only lane the laws above never walk.
 echo "CC crew/holo/text.l (love0 lane)"
 "$love0" -l crew/holo/text.l -e '(? (two? (asm-text "li r0, 60")) (quit 0) (quit 1))' </dev/null \
-  || fail "asm-text under love0 -- is bare \`parse\` the post accessor there?"
+  || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
 arch=$(uname -m)
 if [ "$arch" != x86_64 ]; then

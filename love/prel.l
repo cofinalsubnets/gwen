@@ -158,7 +158,11 @@
    _ (seal-hook 3 compose))
 (: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
-   (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z))
+   (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
+   ; (rev l) glued onto acc in one pass -- the flush of the reversed-accumulator
+   ; pattern (a cat per step re-copies the whole accumulation; link + one revcat
+   ; keeps it linear). moon's cpp/gen and lapiz ride it.
+   (revcat l acc) (? (two? l) (revcat (cup l) (link (cap l) acc)) acc))   ; ⚠ no `!` here: it is not bound yet at this line
 ; the monadic words behind the glued sigils. net is the content measure -- `+` turned inward --
 ; and a coin's lane is by DECLARATION: die slot 7 nets itself (so additivity lands in the die's
 ; own ring), else its tally under net-mode 1, else its payload signed.

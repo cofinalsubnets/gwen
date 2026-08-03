@@ -32,9 +32,11 @@
  (member? 'build (from 'papel 'keys))
  (lit? (from 'papel 'papel-main))
  (! (from 'papyrus))                          ; a missing module answers ()
- ; cook stopped clobbering the book's `parse` when it became a module: the name is
- ; the post.l BOOK again, so `(parse 'seq)` reaches a combinator rather than running one.
- (lit? (parse 'seq)))
+ ; the combinators are a MODULE nobody splices at boot: lapiz and cook each said (use 'peg),
+ ; so peg is loaded and reachable BY KEY -- and `parse` is not a name in the book at all.
+ (member? 'peg (from ()))
+ (lit? (from 'peg 'seq))
+ (! (member? 'parse (names ()))))
 
 (: dir "/tmp/papeltest"
    (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))

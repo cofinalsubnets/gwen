@@ -1,5 +1,5 @@
-; text -- a human-writable TEXT front-end for the neutral assembler, parsed with the post-egg PARSER
-; COMBINATORS (love/post.l, the same set cook and sat use). it turns lines like
+; text -- a human-writable TEXT front-end for the neutral assembler, parsed with the PARSER
+; COMBINATORS (love/peg.l, the same set cook and sat use). it turns lines like
 ;     li   r0, 60        ; a comment
 ;     add  r0, r0, r1
 ;     label loop
@@ -11,16 +11,13 @@
 ; arch here at all -- it lowers to whatever backend `holo` is handed. mooncc's inline asm
 ; (crew/moon/gen.l) parses its templates with asm-text; its cats carry this file.
 ;
-; needs only the baked post layer (the `parse` combinator book) -- no assembler names, so it
-; loads in the raw holo.l stream (test_holo) and on the baked host (book-only) alike:
+; needs only (use 'peg) -- no assembler names, so it loads in the raw holo.l stream (test_holo)
+; and on the baked host alike:
 ;   out/host/love -l crew/holo/text.l ...
 
-; the combinators live in the `parse` MODULE book (love/post.l): bind the set this
-; front-end drives -- `parse` itself rebound LAST (the sequence law).
-(: P parse
-   eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
-   seq (P 'seq)  seqs (P 'seqs)  opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
-   many (P 'many)  runp (P 'runp)  parse (P 'parse))
+; the combinators (love/peg.l). the use is its OWN top-level form -- a `:` body compiles
+; as one unit, so a use inside the form below would run too late to serve it.
+(use 'peg)
 
 (: ;; -- byte-class predicates (the combinator leaves feed a parser one byte at a time). --
    (txws?  c) (|| (c = 32) (c = 9))                             ; space / tab

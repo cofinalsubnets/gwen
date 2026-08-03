@@ -631,6 +631,12 @@ static char const src0_q[] =
 static char const src0_post[] =
 #include "post0.h"
  ;
+static char const src0_peg[] =
+#include "peg0.h"
+ ;
+static char const src0_overlay[] =
+#include "overlay0.h"
+ ;
 // holo with BOTH cross backends (x64 + arm64), one entry -- the corpus's cross-arch
 // asserts run under both of love0's compilers.
 static char const src0_holo[] =
@@ -650,7 +656,9 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_lib_(g, "uu", src0_uu);                       //   self-test's; an unused entry costs a registration, nothing more
   g = ai_lib_(g, "coin", src0_coin);
   g = ai_lib_(g, "q", src0_q);
-  g = ai_lib_(g, "post", src0_post);                   //   post rides love0 now: its splice serves revcat/parse/bake bare,
+  g = ai_lib_(g, "post", src0_post);                   //   post rides love0 now: its splice serves revcat/bake bare,
+  g = ai_lib_(g, "overlay", src0_overlay);             //   overlay and peg are REGISTERED, never used here: each
+  g = ai_lib_(g, "peg", src0_peg);                     //   consumer opens with its own (use ..), the boot owes nothing
   g = ai_lib_(g, "holo", src0_holo);                   //   which the mooncc cat's cpp/gen read (the self-host build lane)
   if (argp) {                                          // a build tool (lcat etc.): bake prel + bao FIRST so the CLI's
     g = ai_evals_(g,                                   // own loader/printer (eval1/bye reach for map/jot/tap/puts/putc)
@@ -658,10 +666,8 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "prel0.h"                                     // loading prel.l ITSELF misses every prel fn its loader uses.
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile. kanren before post,
-    "(use 'post)"                                      //   reads unify/ufail bare; post serves revcat/parse/bake
-    "(: parse (from 'post))"                           // ⚠ `parse` is the ACCESSOR here as on the host: the splice alone
-                                                       //   answers post's own parse FN, and holo/text.l's (P 'eps) would
-                                                       //   curry it into silent garbage -- every asm-text line then scares
+    "(use 'post)"                                      //   reads unify/ufail bare. post is down to the `bake` redef,
+                                                       //   ambient because that wrapper only works pre-seal (post.l)
     "(: verbs ())"                                     // the CLI's verb rail reads `verbs`: bound-empty = no verbs, quietly
     );
     return ai_evals_(g, cli); }
@@ -799,6 +805,12 @@ static char const src_kanren[] =
 static char const src_post[] =
 #include "post.h"
  ;
+static char const src_peg[] =
+#include "peg.h"
+ ;
+static char const src_overlay[] =
+#include "overlay.h"
+ ;
 static char const src_uu[] =
 #include "uu.h"
  ;
@@ -829,6 +841,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   g = ai_lib_(g, "q", src_q);
   g = ai_lib_(g, "kanren", src_kanren);
   g = ai_lib_(g, "post", src_post);
+  g = ai_lib_(g, "overlay", src_overlay);
+  g = ai_lib_(g, "peg", src_peg);
   g = ai_lib_(g, "uu", src_uu);
   g = ai_lib_(g, "bao", src_bao);
   g = ai_lib_(g, "holo", src_holo);
@@ -846,9 +860,10 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     "(use 'rng)"                                         //   (ring/monoid over the C coin lane), rng (the random stream), q
     "(use 'q)"                                           //   (rationals), then kanren (unification) -- registered BEFORE post,
     "(use 'kanren)"                                      //   whose overlay half reads subst through the registry
-    "(use 'post)"                                        // the parser combinators + the ev-seam overlay: the accessors rebind
-    "(: parse (from 'post) overlay (from 'post)"         //   to the union (every reach is by key), and the ev HOOK lands in
-    "   ev ((from 'post 'ov-hook) ev))"                  //   ORTH here -- a module layer cannot write it, the boot can
+    "(use 'post)"                                        // post is down to the `bake` redef (its wrapper reads `book`, so it
+    "(use 'overlay)"                                     //   must load before the --bake seal); overlay for the ev seam, whose
+    "(: overlay (from 'overlay)"                         //   HOOK lands in ORTH -- a module layer cannot write it, the boot can.
+    "   ev ((from 'overlay 'ov-hook) ev))"               //   peg is registered above and used by its consumers, not here.
     "(use 'uu)"                                          // uu's NbE kernel: (: uu (from 'uu)) keeps the one-name surface --
     "(: uu (from 'uu))"                                  //   the corpus + an overlay reach (uu 'vof) through it
     "(use 'holo)"                                        // the crew/holo/ assembler, a post-egg language SERVICE: load + register,

@@ -15,7 +15,7 @@
 ; missing (meta, deflist), which then made markdown and html richer too. that is the trade a
 ; surface is allowed to ask for; anything else it must do alone.
 ;
-; both readers are built from the PARSER COMBINATORS in the post-egg layer love/post.l (a parser
+; both readers are built from the PARSER COMBINATORS in love/peg.l (a parser
 ; is (\ s y n): a string s, a success continuation y = (rest payload), a failure continuation
 ; n = rest; payloads are lists that `seq` concatenates -- love has no regex, so the leaves are
 ; `lit`, `one` and `span`). cook and sat/dimacs share that same set; lapiz adds the handful it
@@ -66,14 +66,8 @@
 ; mdread/mdshow/htread/htshow/md->ht/ht->md; everything else is machinery,
 ; reachable for a probe ((from 'lapiz 'keys)) but not meant for the eye.
 
-; the combinators come from the `parse` MODULE book (love/post.l) -- bind the shared set. lapiz
-; does NOT rebind the global `parse` the way cook and sat/dimacs do (they take the STRICT runner
-; under that name; lapiz only ever wants the lenient `runp`), so the book stays whole. ⚠ it does
-; READ that book, so a cat putting cook or dimacs FIRST hands lapiz the strict runner instead.
-(: P parse
-   eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
-   seq (P 'seq)  seqs (P 'seqs) opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
-   many (P 'many) runp (P 'runp))
+; the combinators (love/peg.l) -- its own top-level form; lapiz wants only the lenient `runp`.
+(use 'peg)
 
 ; --- little utils ---
 (: (nthl l k)   (? (k = 0) <l (nthl >l (k - 1)))
@@ -87,7 +81,7 @@
                  0 0 ())
    (endnl s)    (? (&& (0 < tally s) ((s (tally s - 1)) = 10)) s (s + "\n")))   ; one trailing newline, always
 
-; --- the combinators post.l's set lacked ---
+; --- the combinators peg's set lacked ---
 (: nope       (\ s y n (n s))                                  ; the always-failing parser: alts' unit
    (notp a)   (\ s y n (a s (\ _ _ (n s)) (\ _ (y s ()))))     ; NEGATIVE LOOKAHEAD -- consumes nothing either way
    (many1 a)  (seq a (many a))

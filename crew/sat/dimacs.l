@@ -1,21 +1,17 @@
-; dimacs -- a DIMACS CNF reader for the sat solver, built from the PARSER COMBINATORS in the post-egg
-; layer love/post.l (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a
-; failure continuation n = rest; payloads are lists that `seq` concatenates). post.l shares that set
+; dimacs -- a DIMACS CNF reader for the sat solver, built from the PARSER COMBINATORS in love/peg.l
+; (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a failure
+; continuation n = rest; payloads are lists that `seq` concatenates). peg shares that set
 ; (eps/lit/span/alt/seq/seqs/skip/many/runp) with cook; here we add only a signed-int LEAF `pint` (love
 ; has no regex) and the grammar. `dimacs text` -> (formula . nvars): skip `c` comment lines, read the
 ; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
 ; Standalone (parse self-tests below); when loaded AFTER crew/sat/sat.l it also self-tests parse->solve via
 ; `cdcl`. Run: out/host/love crew/sat/dimacs.l   (or: cat crew/sat/sat.l crew/sat/dimacs.l | out/host/love).
-; the combinators live in the `parse` MODULE book (love/post.l): bind the shared set --
-; `parse` itself rebound LAST, so the earlier reads get the book (the sequence law).
-(: P parse
-   eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
-   seq (P 'seq)  seqs (P 'seqs)  opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
-   many (P 'many)  runp (P 'runp)  parse (P 'parse))
+; the combinators (love/peg.l) -- its own top-level form; this reader is all lenient `runp`.
+(use 'peg)
 
 (:
    ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
-   ;    the POST-EGG layer love/post.l, baked once after the egg -- shared with cook, not re-derived here.
+   ;    love/peg.l via the (use 'peg) above -- shared with cook, not re-derived here.
    ; -- character classes + the signed-integer leaf --
    (ws? c)   (|| (= c 32) (|| (= c 9) (|| (= c 13) (= c 10))))      ; space/tab/CR/LF
    (dig? c)  (&& (< 47 c) (< c 58))                                 ; '0'..'9'

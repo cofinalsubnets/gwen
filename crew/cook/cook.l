@@ -46,16 +46,11 @@
 ; (use 'cook) (lib/cook.l) or probes (from 'cook 'recipe); riding a cat (kore's),
 ; everything binds in the cat's session layer instead -- never orth. before cook
 ; was a module it leaked 32 globals into the base, `join` `date` `check` `one`
-; `span` `pick` among them -- and CLOBBERED `parse`, so a cat that put cook ahead
-; of another post.l consumer handed it cook's strict runner instead of the book.
+; `span` `pick` among them.
 
-; the combinators live in the `parse` MODULE book (love/post.l): bind the shared set.
-; `pstrict` is post.l's `parse` (the strict runner that must consume the whole input);
-; it is NOT named `parse` -- that name stays the book, for us and for everyone after.
-(: P parse
-   eps (P 'eps)  lit (P 'lit)  one (P 'one)  span (P 'span)  alt (P 'alt)
-   seq (P 'seq)  seqs (P 'seqs)  opt (P 'opt)  skip (P 'skip)  pmap (P 'pmap)
-   many (P 'many)  runp (P 'runp)  pstrict (P 'parse))
+; the combinators (love/peg.l) -- its own top-level form, so the names are spliced
+; before anything below compiles against them.
+(use 'peg)
 
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
@@ -243,7 +238,7 @@
 ; cook reads a Cookfile (ordinary love source) -- but it can also read a real
 ; Makefile directly, the same dependency idea wearing make's notation. The reader
 ; is built on the PARSER COMBINATORS (after the gw.js style) now shared from the
-; post-egg layer love/post.l: a parser is (\ s y n) over a string s, with a success
+; love/peg.l: a parser is (\ s y n) over a string s, with a success
 ; continuation y = rest parsed and a failure continuation n = rest; the parsed
 ; payload is a list that `seq` concatenates. love has no regex, so the leaves are
 ; `lit` (a literal prefix), `one` (one char by predicate) and `span` (a maximal
@@ -277,7 +272,7 @@
                 ()))
 
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
-; names leak to the global scope. The form reads outer globals (the post.l
+; names leak to the global scope. The form reads outer globals (the peg
 ; combinators, recipe, cook, ticket, the prel) freely; its body ANSWERS cook-main
 ; (args -> the whole job, exiting via quit). The outer `_`-holder form (cli.l's own
 ; trick) leaks cook-main as the ONE public -- the multi-call `kore` (crew/kore/kore.l)
@@ -289,8 +284,8 @@
    ; resolved cards can be SHOWN back as a Cookfile (see emit-cookfile below).
    emitp (tablet 0)
 
-   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/pstrict) live in the POST-EGG
-   ;    layer love/post.l, baked once after the egg; this body-having `:` reads them off the cook layer.
+   ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) come from love/peg.l,
+   ;    spliced by the (use 'peg) above; this body-having `:` reads them bare down the walk.
 
    ; -- character classes and string utilities --
    (chws c)     (|| (c = 32) (c = 9))
@@ -396,8 +391,8 @@
                   ; `override NAME op VAL` assigns past a command-line VAR=VAL;
                   ; `export NAME [op VAL]` assigns (when an op is there) and hands the
                   ; final value to the process environment, so recipes inherit it.
-                  (w = "override") (: a (pstrict assignP rest) (? (two? a) (link 'oassign a) `('skip)))
-                  (w = "export") (: a (pstrict assignP rest)
+                  (w = "override") (: a (parse assignP rest) (? (two? a) (link 'oassign a) `('skip)))
+                  (w = "export") (: a (parse assignP rest)
                                     (? (two? a) (link 'xassign a) `('xname (trim rest))))
                   (w = "ifeq") `('ifeq rest)
                   (w = "ifneq") `('ifneq rest)
@@ -405,8 +400,8 @@
                   (w = "ifndef") `('ifndef rest)
                   (w = "else") `('else rest)
                   (w = "endif") `('endif)
-                  (: a (pstrict assignP t) (? (two? a) (link 'assign a)
-                     (: r (pstrict ruleP t) (? (two? r) (link 'rule r) `('skip))))))))))
+                  (: a (parse assignP t) (? (two? a) (link 'assign a)
+                     (: r (parse ruleP t) (? (two? r) (link 'rule r) `('skip))))))))))
 
    ; -- nested-paren-aware variable expansion + make functions --
    ; the index of the ) that matches the ( just opened, counting nested $(..).
