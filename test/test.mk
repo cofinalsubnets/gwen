@@ -12,8 +12,8 @@
 # for nothing, and test_slow pays it ~45 times over. The image cannot be stale:
 # $(ho)/love.baked is a make artifact of the freshly-linked binary (host/build.mk,
 # and `host` is these gates' prerequisite), so waking it runs THIS build's egg.
-# ⚠ the woken image is MOPPED (love/egg.l deletes the runtime-internal noms at
-# birth), so a gate that reads one -- `book` is the live case -- must stay cold.
+# Both lanes carry the SAME vocabulary -- host/main.c seals book/nif/nifx on every
+# boot, not just the bake -- so warm-vs-cold is a speed choice and never a semantic one.
 mw = env -u LOVE_NO_IMAGE $m
 
 # love0 bakes prel+ev+repl + the whole test corpus (sed headers) and self-tests
@@ -115,7 +115,7 @@ $(havenkm):
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end (via
 # out/host/love, never env's PATH love -- the tree's nifs, not the nest's)
 # bake.l pins into `book`, which the egg mops at birth -- it needs the cold boot.
-hostnif_cold = test/host/bake.l
+hostnif_cold =                                   # empty: `book` is off the book on EVERY boot now, so no gate needs the cold lane
 test_hostnif: host $(smoke) $(havenkm) out/host$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  case " $(hostnif_cold) " in *" $$s "*) L="$m";; *) L="$(mw)";; esac; \
@@ -513,11 +513,12 @@ test_fixpoint: host $(love0) out/host/mooncc0.image
 	@sh test/gate/fixpoint.sh $(ho) $(love0)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The
 # procedure lives in test/gate/raw-bake.sh (and the why with it); make keeps the
-# dependency and the file list, whose $(filter-out) drops glaze.l.
+# dependency and the file list -- the WHOLE corpus now: glaze.l used to be dropped here
+# because a woken heap had no `nif` on the book, and it takes the seam by key instead.
 # Opt-in (not test_slow): needs the -pie toolchain. x86-64 only.
 .PHONY: test_raw_bake
 test_raw_bake: test_raw
-	@sh test/gate/raw-bake.sh $(ho) $(filter-out %/glaze.l,$t)
+	@sh test/gate/raw-bake.sh $(ho) $t
 # test_riscv -- the test/cc battery `mooncc -t riscv64` under qemu-riscv64, exit code
 # against the native x64 build of the same file. OUT of test_slow (2026-07-30, 12.7 s):
 # test_ccriscv runs the same battery on the same qemu against the same x64 oracle and
@@ -1117,9 +1118,10 @@ test_uukind: host
 	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
 	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
 	@rm -f out/host/.uukind.l.tmp
-# test_wake: the WOKEN-IMAGE lane -- the one lane no other gate runs (LOVE_NO_IMAGE
-# is exported for every recipe above, so every gate exercises the fresh egg; only
-# a user's direct run wakes the image). Bakes a CANDIDATE COPY (love.wake -- the
+# test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs. Plenty of gates
+# wake an image -- every $(mw) one does, and the mooncc/kore lanes wake their app
+# images -- but they all wake an image some earlier recipe baked. This bakes and wakes
+# in the one run, so the snapshot and the load are both under test. Bakes a CANDIDATE COPY (love.wake -- the
 # canonical binary untouched, ETXTBSY-proof) and runs test/uu.l through the woken
 # image under a budget the wake storm cannot meet (fresh lane ~1s, the storm was
 # >90s -- doc/wake-storm.md). GREEN since the dump's dead-native revert landed

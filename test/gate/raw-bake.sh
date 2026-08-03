@@ -7,10 +7,8 @@
 # the ONLY gate that exercises ai_image_load on a mooncc binary -- the seam where an
 # odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot gate.
 #
-# The SPLIT: make owns the dependency graph and the file lists -- its $(filter-out)
-# drops glaze.l, because the bake pulls the nif/nifx seam off the book, so (lit? nif)
-# cannot hold on a woken heap; the gcc build fails it identically, so it is not a
-# mooncc regression. This file owns the PROCEDURE, which is why it is a file: a make
+# The SPLIT: make owns the dependency graph and the file lists; this file owns the
+# PROCEDURE, which is why it is a file: a make
 # recipe would carry the same steps \-joined into one line with $$ throughout.
 #
 # NOT set -e: the corpus run captures $? to report the exit code in its own failure

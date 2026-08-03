@@ -6,10 +6,14 @@
 ; host-only (the nif + hark + --wake), so it runs standalone against the built
 ; binary like test/host/fs.l:
 ;   cat test/00-init.l test/host/bake.l | out/host/love
+; the marker the woken child reads back. its own TOP-LEVEL body-less `:`, so it leaks to the
+; session scope and the snapshot carries it -- `book` is off the book on every boot now, and
+; a binding inside the body-having `:` below would be local to that form.
+(: bake-smoke-marker 4242)
+
 (: img "out/.bake-nif-smoke.image"
    drv "out/.bake-nif-drive.l"
    _ (unlink img) _ (unlink drv)                    ; a clean slate, tolerated if absent
-   _ (pin book 'bake-smoke-marker 4242)
 
    ; the bake answers 1 and the session RIDES ON (this very assert runs post-dump);
    ; note the file port feeding THIS script is live at the dump -- the fz leg.

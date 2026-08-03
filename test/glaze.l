@@ -2,13 +2,20 @@
 ; is machine-specific) -- plus the DECLINE laws below, which run everywhere and answer the same on
 ; every target by construction: that is the whole point of a lane that knows when to stand down.
 ; The executing tests are test/glaze-x86.l; the mechanism, love/glaze/README.md.
-(assert
- ; `nif` -- the codegen-backend install seam (love.c): (nif code interp src ..) wraps
- ; emitted bytes in a TRANSPARENT applicable native closure. NEUTRAL here (no
- ; install/run -- the bytes are x86-64; the real round-trip lives in love/glaze/emit.l):
- ; non-byte / empty code installs nothing.
- (lit? nif)
- !(nif 5 0 0 1) !(nif 'x 0 0 1) !(nif () 0 0 1) !(nif "" 0 0 1))
+; `nif` -- the codegen-backend install seam (love.c): (nif code interp src ..) wraps
+; emitted bytes in a TRANSPARENT applicable native closure. NEUTRAL here (no
+; install/run -- the bytes are x86-64; the real round-trip lives in love/glaze/emit.l):
+; non-byte / empty code installs nothing.
+; ⚠ BY KEY, never bare: every boot pulls nif/nifx off the book (host/main.c), so raw byte
+; installation is reachable only through the glaze, which is the only thing that does it.
+; a bare `nif` here would read the zero point and every claim below would answer 1.
+; ⚠ AND UNDER THE PRESENCE GUARD: love0 and the kernel/wasm frontends carry no glaze, so
+; there is no seam there to hold to its word -- (from 'glaze) answers () and this stands down.
+(: G (from 'glaze)
+   (? G (: N (G 'nif)
+           (assert (lit? N)
+                   !(N 5 0 0 1) !(N 'x 0 0 1) !(N () 0 0 1) !(N "" 0 0 1)))
+      0))
 
 ; --- the natjit GROUP lane declines what it cannot emit -------------------------------
 ; jitgroupir's codegen (emit.l cggir/cggvir) compiles a leaf that is a frame PARAM or a

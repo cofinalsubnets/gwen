@@ -895,6 +895,14 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   g = ai_unsplice_(g);                                   // holo back to non-ambient
 #endif
 
+  // THE SEAL, and it runs on EVERY boot -- an egg boot and a woken image must differ in
+  // startup time and NOTHING else. `book` goes so a program cannot reassign the globals
+  // under everyone (the same reason a module book hands out a lookup closure, not its
+  // tablet), and nif/nifx go because they install raw bytes as executable code: the glaze
+  // folded them into its closures at the load above, and keeps them as module members
+  // (love/glaze/emit.l), so (from 'glaze 'nif) is the one door left onto that.
+  g = ai_evals_(g, "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
+
   if (bake) {                                            // --bake: snapshot the post-warm heap, then exit
     // LOVE_BAKE_LOAD: read-eval one more .l file before the snapshot -- the dist
     // artifact's door (crew/build.mk): the crew cats + the verb table go in WARM,
@@ -915,10 +923,6 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     // with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
     g = ai_evals_(g, "(: c (from 'glaze 'cache) (map (\\ k (pull c k 0)) (keys c)))");
 #endif
-    // HIDE the raw machine-code-execution seam from USERS (who boot this image): the glaze folded
-    // `nif` into its closures, so pulling it off the book is safe. nif/nifx off, then seal `book`.
-    // The no-image dev/test binary keeps them (egg.l defers book-removal) as the test knob.
-    g = ai_evals_(g, "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
     int rc = *bake ? image_dump(g, bake) : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }

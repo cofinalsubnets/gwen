@@ -48,16 +48,15 @@
    ;
    ; the hue-* bindings are dropped: they are in the book only because this
    ; generator loads hue.l to read its table. they are the tool, not the language.
-   ; ⚠ THE BOOK IS ONLY THE LANGUAGE ONCE IT HAS BEEN MOPPED. under
-   ; LOVE_NO_IMAGE the corpus is compiled at boot instead of woken from the
-   ; baked image, so the egg's mop never runs and the compiler's own internals
-   ; are still pinned -- `book` itself the plainest of them. writing those into
-   ; the syntax file would be freezing BUILD STATE and calling it the language.
-   ; `book` is therefore the tell, and this dies loudly rather than emit a file
-   ; that looks fine and is wrong. (the root Makefile exports LOVE_NO_IMAGE := 1,
-   ; so the gate below clears it -- this guard is the belt to that braces.)
+   ; ⚠ THE BOOK IS ONLY THE LANGUAGE ONCE IT HAS BEEN SEALED, and `book` is the
+   ; tell: host/main.c pulls it -- with nif/nifx -- at the end of EVERY boot, so a
+   ; run that can still see it is one where the seal did not happen. writing the
+   ; compiler's own internals into the syntax file would be freezing BUILD STATE
+   ; and calling it the language, so this dies loudly rather than emit a file that
+   ; looks fine and is wrong. unreachable while the seal holds, which is the point:
+   ; it is what notices if the seal ever goes lane-dependent again.
    _ (? (member? 'book (names ()))
-         (: _ (say err "hue2vim: the book is unmopped (LOVE_NO_IMAGE?) -- that is build state, not the language")
+         (: _ (say err "hue2vim: `book` is still on the book -- the seal did not run, and that is build state, not the language")
             _ (put err 10)
             (quit 1))
         0)

@@ -30,7 +30,8 @@
    jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
    jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  jitcalloutx (G 'jitcalloutx)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)  loopinfo (G 'loopinfo)
    loopinfo-n (G 'loopinfo-n)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)  nthl (G 'nthl)
-   occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow))
+   occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)
+   nif (G 'nif))                                 ; the C install seam, a glaze member: every boot pulls it off the book
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
 ; ..and the boundary those accessors stand for: the glaze is a REGISTERED module and NOT ONE
 ; of its ~415 names is in the book. this is the assert that catches a leak coming back --
