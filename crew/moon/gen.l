@@ -216,6 +216,7 @@
    ; non-leaf fns. a home here rides THROUGH calls unwrapped -- the callee preserves it -- at
    ; the price of one save/restore pair in the owner's frame (arm64's x19+ rungs: unclimbed)
    (cspool g) (? (arm? g) () '(r11 r12 r13 r14))
+   (deep? pl) (two? (cuup pl))                      ; a pool affords a PRICED seat: two remain after the take
    (fbase g) (? (arm? g) 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize); arm64+thumb2 fp, x64 r4
    ; -- a DELIBERATE refusal names itself (doc/moon-diag.md). `'bad` here is TWO answers wearing
    ; one face: "I decline, take another lane" (a policy deopt, ordinary and recoverable) and
@@ -4422,7 +4423,7 @@
                       (? (&& (peep g 'rgon ())
                             (&& (lhomable? ty)
                             (&& (member? <p (peep g 'inlrb ()))
-                                (two? (cuup (peep g 'pool ()))))))
+                                (deep? (peep g 'pool ())))))
                           (: rb (ralloc g)
                              (? (! rb) ()
                                 (: _ (pin g 'rpin (link rb (peep g 'rpin ())))
@@ -5196,13 +5197,15 @@
        ; loads +0.36%), so it must EARN the seat: weighted body reads >= 8 -- a read inside a
        ; loop, where the slot bind reloads every iteration -- and cbinl's deep-pool gate.
        (anyc l) (? (! (two? l)) () (? (callish? <l) 1 (anyc >l)))
-       nocall (&& (! (callish? (caup (caup (cuup f))))) (! (anyc args)))
+       body9 (caup (caup (cuup f)))
+       (paid? nm) (7 < (rdw nm body9 1))            ; the seat pricing: weighted body reads earn a register
+       nocall (&& (! (callish? body9)) (! (anyc args)))
        (bind ps as benv acc rbs)                     ; arg values -> the alias register, a priced park, else slots
         (? (! (two? ps)) `(benv acc rbs)
            (: pty (caup (cap ps))
               al (? (&& nocall (&& (! (flo? pty)) (&& (8 = (tsz g pty))
                        (&& (two? <as) (&& ((cap <as) = 'var)
-                           (! (wrs? (cap (cap ps)) (caup (caup (cuup f))))))))))
+                           (! (wrs? (cap (cap ps)) body9)))))))
                     (: nm9 (caup <as)
                        pM (vmget g nm9)
                        (? pM pM
@@ -5222,8 +5225,8 @@
                                  (link `((cap (cap ps)) off pty) benv)
                                  (acc + (asll g r) + (pst 'r4 off)) rbs))
                        (: rb (? (&& nocall (&& (! (flo? pty))
-                                    (&& (7 < (rdw (cap (cap ps)) (caup (caup (cuup f))) 1))
-                                        (two? (cuup (peep g 'pool ()))))))   ; park only into a DEEP pool
+                                    (&& (paid? (cap (cap ps)))
+                                        (deep? (peep g 'pool ())))))   ; a seat is EARNED: paid reads into a deep pool
                                  (ralloc g) ())
                           (? rb                      ; the park bind: the value rides a pool reg
                               (: _ (pin g 'rpin (link rb (peep g 'rpin ())))
@@ -5247,8 +5250,7 @@
             (: (dn ps a) (? (! (two? ps)) a (dn >ps (link (cap <ps) a)))
                (dn <>x a9))
            (dnames <x (dnames >x a9)))
-       body9 (caup (caup (cuup f)))
-       _ (pin g 'inlrb (? nocall (filter (\ nm (7 < (rdw nm body9 1))) (dnames body9 ())) ()))
+       _ (pin g 'inlrb (? nocall (filter paid? (dnames body9 ())) ()))
        _ (pin g 'inlrbs ())
        _ (pin g 'inlret ilb9)
        _ (pin g 'inlrt rt)
@@ -5258,7 +5260,7 @@
        ; stays until the core analysis owns cycles in big body-less letrecs.
        ib0 (peep g 'inlbody 0)
        _ (pin g 'inlbody (ib0 + 1))                ; the body blinds vmget (name conflation)
-       ibd (? (bad? br) 'bad ((g 'cgitems) g <br (caup (caup (cuup f))) ()))
+       ibd (? (bad? br) 'bad ((g 'cgitems) g <br body9 ()))
        _ (pin g 'inlbody ib0)
        _ (pin g 'inlret ir0)
        _ (pin g 'inlrt irt0)
@@ -5857,11 +5859,8 @@
        ; the alive pass runs once per homing-eligible fn: lpick reads cross/
        ; univ (a zero-crossing local homes through calls), the regens pin its
        ; livtab so call-fixed wraps only what a call actually needs
-       av (? (|| sr6f (|| vararg (|| (bad? ir1) (|| (peep g 'hasasm ()) (anyop? ir1 'sys))))) () (alive g f))
-       lr (? av (lpick ir1 (caup av) (cauup av) hpool) ())
-       lh (? (two? lr) <lr ())
-       lp0 (? (two? lr) <>lr hpool)
-       cu0 (? (two? lr) <>>lr ())                   ; the callee-saved homes lpick took (the regen saves/restores them)
+       ng (|| sr6f (|| vararg (|| (bad? ir1) (|| (peep g 'hasasm ()) (anyop? ir1 'sys)))))
+       av (? ng () (alive g f))
        ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
        ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
        ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
@@ -5880,18 +5879,27 @@
                   (&& (! (two? off))
                   (&& (! (id? off ()))
                   (&& (1 < (ntouch ir1 off 0))
-                      (? pooled (&& (member? hr pl) (two? (cuup pl))) 1))))))
+                      (? pooled (&& (member? hr pl) (deep? pl)) 1))))))
                    `((link i9 <a2) (? pooled (filter (\ q (! (id? q hr))) pl) pl))
                   a2))))
-       ih0 (? (|| sr6f (|| vararg (|| (peep g 'fesc ()) (|| (bad? ir1)
-              (|| (peep g 'hasasm ()) (|| (anyop? ir1 'sys) (hascall? ir1))))))) ()
-              (cap (ihset ride lp0)))
+       ; -- the SEAT TABLE (lh ih lp cs): every priced register grant in one answer -- locals
+       ; homes (lpick), int-param homes (ihset), the pool left after both, the cs homes
+       ; taken. both lanes mint it here; regen consumes it whole. --
+       (seats rd hp9 wi)
+        (: lr (? av (lpick ir1 (caup av) (cauup av) hp9) ())
+           lp (? (two? lr) <>lr hp9)
+           ih (? wi (ihset rd lp) `(() lp))
+           `((? (two? lr) <lr ()) (cap ih) (caup ih) (? (two? lr) (nthr lr 2) ())))
+       st0 (seats ride hpool (! (|| ng (|| (peep g 'fesc ()) (hascall? ir1)))))
+       lh <st0 ih0 <>st0                            ; the choice below reads these two; regen takes the table whole
+       (deopt u) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)   ; ir1 stands, accumulators restored
        ; the REGEN dance: reset the accumulators and the frame to the ir1 snapshot, pin the
-       ; analyses' channels (the vmap universe, the locals homes lh9, the livtab), rebuild under
-       ; the spill policy hp with the operand pool lp9, then clear every channel. a 'bad ir2
-       ; deopts: ir1 stands, accumulators restored.
-       (regen hp lh9 lp9 cs9)
-        (: _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
+       ; analyses' channels (the vmap universe, the locals homes, the livtab), rebuild under
+       ; the spill policy hp with the seat table's pool, then clear every channel. a 'bad ir2
+       ; deopts: ir1 stands.
+       (regen hp st)
+        (: lh9 <st lp9 <>>st cs9 (nthr st 3)
+           _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
            _ (pin g 'pool0 lp9) _ (pin g 'pool lp9)
            _ (rgset g lh9 av)
            ; the callee-saved homes: one slot each past the r3 cell, stored by the prologue
@@ -5910,7 +5918,7 @@
            ; on alive's total, or the wrap sets keyed by statement number
            ; landed on the wrong statements -- deopt to ir1, whole
            (? (|| (bad? ir2) (&& (two? av) (! ((peep g 'lsq 0) = (nthr av 3)))))
-              (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1) ir2))
+              (deopt ()) ir2))
        ; the leaf lane's ride loop: a rider whose arrival picked up a def in the code it licensed
        ; DROPS, and the regen re-runs -- pool, locals picks and homes all recomputed for the
        ; smaller set, so the survivors keep their arrivals and the dropped param homes like any
@@ -5918,15 +5926,11 @@
        ; re-runs; the no-shrink arm is regen's own deopt wearing through -- take ir1 and stop.
        (leaf rd)
         (: _ (pin g 'lrec lrec1)                    ; the retry's lpick ranks ir1's layout, never the failed regen's
-           hp9 (pools rd)
-           lr9 (? av (lpick ir1 (caup av) (cauup av) hp9) ())
-           ih9 (ihset rd (? (two? lr9) <>lr9 hp9))
-           i2 (regen `('ride rd <ih9) (? (two? lr9) <lr9 ()) (caup ih9)
-                     (? (two? lr9) (nthr lr9 2) ()))   ; the cs regs ride too -- their pair pins in regen
+           st (seats rd (pools rd) 1)               ; the cs regs ride too -- their pair pins in regen
+           i2 (regen `('ride rd <>st) st)
            (? (ridesound? i2 rd) i2
               (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
-                 (? ((tally rs) < (tally rd)) (leaf rs)
-                    (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)))))
+                 (? ((tally rs) < (tally rd)) (leaf rs) (deopt ())))))
        irf (? (bad? ir1) 'bad
           (&& (|| hm (|| lh (|| (two? ride) (two? ih0)))) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
            (leaf ride)
@@ -5946,7 +5950,7 @@
                                 (! (id? (nthr (argr g) i9) (homereg i9)))) (n2 + 1) n2)))
              pp (&& hm (|| ((* 2 (* nc nh)) < nr)
                            (&& (two? av) (((* 2 (* nh ((pmax ir1) + (nthr av 4)))) + em) < nr))))
-             (? (|| pp lh) (regen (? pp 'shadow ()) lh lp0 cu0) ir1)))
+             (? (|| pp lh) (regen (? pp 'shadow ()) st0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
        ; it early lets a pass-2 ride clobber a live arrival. this chain's order is TYPED
