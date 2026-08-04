@@ -1139,23 +1139,36 @@
    ; a value-splice park that EARNS the seat: a read inside the body's loop weighs x8 (the
    ; slot bind would reload it every iteration), so the expression arg rides a pool reg
    ; for the splice's whole span and the loop runs off the register
+   ; ...and the body's own DECLS earn seats the same way (regen attempts only): s binds a
+   ; pool reg, so the loop's accumulate is register-register and only i still slots
    irG (cgn "static long sum9(long p, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + p; } return s; }\nlong gq(long a, long n) { return sum9(a + 1, n); }\nint main() { return gq(3, 5); }")
    gf (fnf 'gq (caup irG))
    _ (assert
       (two? irG)
       (member? '(mov r10 r9) gf)                     ; a + 1 lands its park r10...
-      (member? '(add r9 r9 r10) gf))                 ; ...and the loop reads it, no reload
+      (member? '(add r9 r9 r10) gf)                  ; ...and the loop reads it, no reload
+      (member? '(mov r9 r0) gf)                      ; s's decl bind: init lands the register
+      (= 1 (splds gf)))                              ; the one surviving slot read is i's
    ; ⚠ a park under the CALLER's loop resets from its source every iteration -- that mov
    ; wears the entry-home shape (mov H A), and unhome renaming it away erases the reset
    ; (strpbrk walked its set forward and never rewound; test_libc was the only catch).
    ; pears stops at the first body label, so the reset stands and the walk stays on the park.
    irH (cgn "static char *sch9(char const *s, int c) { for (;; s++) { if (*s == (char) c) return (char *) s; if (!*s) return 0; } }\nchar *pb9(char const *s, char const *set) {\n  for (; *s; s++) if (sch9(set, *s)) return (char *) s;\n  return 0; }\nint main() { char const *s = \"hello, world\"; return pb9(s, \"xyzw\") ? 7 : 255; }")
    hf (fnf 'pb9 (caup irH))
-   (assert
+   _ (assert
       (two? irH)
       (member? '(mov r9 r5) hf)                      ; the reset copies set anew each iteration...
       (member? '(add r9 r9 1) hf)                    ; ...the walk rides the park
-      (! (member? '(add r5 r5 1) hf))))              ; ...and the arrival never walks
+      (! (member? '(add r5 r5 1) hf)))               ; ...and the arrival never walks
+   ; a splice whose one decl earns a seat runs REGISTER-ONLY: the caller goes slot-free
+   ; and frameless -- the body-decl bind's end-to-end shape
+   irJ (cgn "static long cnt9(long n) { long i = 0; while (i < n) { i++; } return i; }\nlong gq2(long a, long n) { return cnt9(n) + a; }\nint main() { return gq2(3, 5); }")
+   jf (fnf 'gq2 (caup irJ))
+   (assert
+      (two? irJ)
+      (member? '(cmp r9 r5) jf)                      ; i rides its seat against n's ride...
+      (member? '(add r9 r9 1) jf)                    ; ...and steps in place
+      (= 0 (splds jf))))                             ; the whole fn runs slot-free
 
 ; -- the shuttle skip + slot residency: a right side whose forms never write r1 (no call, no
 ; label, no control) runs with the left PARKED IN r1 -- one mov, no push/pop memory round-trip

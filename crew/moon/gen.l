@@ -167,6 +167,9 @@
        (: w9 (? (member? <e '(while do for)) (w * 8) w)
           (go l a) (? (! (two? l)) a (go >l (a + (rdw nm <l w9))))
           ((? (two? <e) (rdw nm <e w9) 0) + (go >e 0))))
+   ; ⚠ a C name is a STRING: member? is id?-based and inert on fresh strings -- this is the
+   ; explicit `=` walk (wrs?'s law)
+   (nmem? nm l) (? (! (two? l)) () (? (<l = nm) 1 (nmem? nm >l)))
    (vmout? fs)                                      ; does control fall out the bottom of the forms?
     (? (! (two? fs)) 1
        (: (go l) (? (two? >l) (go >l) <l)
@@ -4325,8 +4328,24 @@
                      (vone ps env2 acc p ty))
                  (: span (& ((tsz g ty) + 7) -8)
               off (nslot g span)
-              hreg (? (|| (peep g 'inlining ())
-                          (! (|| (lhomable? ty) (&& (d128? ty) (x64t? g))))) ()
+              hreg (? (peep g 'inlining ())
+                      ; a call-free splice's body decl takes a pool seat when cginl's read
+                      ; pricing licensed the name (inlrb); rpin holds it across the body's
+                      ; statements, the splice frees it (inlrbs). ⚠ REGEN attempts only
+                      ; (rgon): an ir1 bind changes the slot-touch counts lpick and the
+                      ; homing payoff gate rank on, and the attempt flip is unpriced --
+                      ; ioputx LOST ITS SIBCALL to one (a stack-growing call in the printer)
+                      (? (&& (peep g 'rgon ())
+                            (&& (lhomable? ty)
+                            (&& (nmem? <p (peep g 'inlrb ()))
+                                (two? (cuup (peep g 'pool ()))))))
+                          (: rb (ralloc g)
+                             (? (! rb) ()
+                                (: _ (pin g 'rpin (link rb (peep g 'rpin ())))
+                                   _ (pin g 'inlrbs (link rb (peep g 'inlrbs ())))
+                                   rb)))
+                         ())
+                      (! (|| (lhomable? ty) (&& (d128? ty) (x64t? g)))) ()
                       (: sq (1 + (peep g 'dseq 0))
                          _ (pin g 'dseq sq)
                          _ (pin g 'lrec (link `(sq off ty <p) (peep g 'lrec ())))
@@ -4807,12 +4826,14 @@
     (: _ (pin g 'livtab ())                          ; liveness (set only for a wrap-bearing regen)
        _ (pin g 'vuniv ()) _ (vmflush g)             ; vmap off (no universe)
        _ (pin g 'lhome ())                           ; locals-homing map (cgdecl's hook reads it)
+       _ (pin g 'rgon ())                            ; ...and its regen flag (the splice decl gate)
        (pin g 'homes ()))                            ; non-leaf home set (call-fixed + sibs read it)
    ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
    ; and wraps per-call off the liveness (av9, alive's answer)
    (rgset g lh9 av9)
     (: _ (pin g 'vuniv (cauup av9)) _ (vmflush g)    ; the vmap rides the regen (univ known)
        _ (pin g 'homes ()) _ (pin g 'lhome lh9)
+       _ (pin g 'rgon 1)
        (pin g 'livtab (cap av9)))
    ; the per-BUILD counters, spelled once: build arms them fresh on each of
    ; its (up to two) runs per fn
@@ -5132,6 +5153,19 @@
                                       (acc + (asintt g r pty) + `(`('st 'r4 off 'r0)))
                                       rbs)))))))))
        br (bind <>>f args () () ())
+       ; the body-decl license: a decl name whose weighted reads price a pool seat (the
+       ; park's discipline) register-binds in cgdecl's splice lane; nesting saves/restores
+       rb0 (peep g 'inlrb ())
+       rbs0 (peep g 'inlrbs ())
+       (dnames x a9)
+        (? (! (two? x)) a9
+           (&& (id? <x 'decl) (two? >x))
+            (: (dn ps a) (? (! (two? ps)) a (dn >ps (link (cap <ps) a)))
+               (dn <>x a9))
+           (dnames <x (dnames >x a9)))
+       body9 (caup (caup (cuup f)))
+       _ (pin g 'inlrb (? nocall (filter (\ nm (7 < (rdw nm body9 1))) (dnames body9 ())) ()))
+       _ (pin g 'inlrbs ())
        _ (pin g 'inlret ilb9)
        _ (pin g 'inlrt rt)
        ; ⚠ cgitems rides the g tablet, not a direct call: the direct edge closes the
@@ -5146,9 +5180,13 @@
        _ (pin g 'inlrt irt0)
        _ (pin g 'inlining il0)
        _ (pin g 'rpin rp0)                            ; the bind pins die with the splice
+       drbs (peep g 'inlrbs ())
+       _ (pin g 'inlrb rb0)
+       _ (pin g 'inlrbs rbs0)
        (unrb l) (? (! (two? l)) ()
                    (: _ (rfree g <l) (unrb >l)))
-       _ (? (two? br) (unrb (nthr br 2)) ())          ; ...and the park regs return to the pool
+       _ (? (two? br) (unrb (nthr br 2)) ())          ; the park regs return to the pool...
+       _ (unrb drbs)                                  ; ...and the body-decl binds with them
        _ (vmflush g)                                  ; the splice's end label joins
        (? (|| (bad? br) (bad? ibd))                   ; a shape the splice can't take: the real call still can
            (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
@@ -5166,6 +5204,8 @@
        _ (pin g 'fesc ())                            ; fresh escape flag (the sibcall gate reads it)
        _ (pin g 'inlining ())                        ; fresh inline-depth flag
        _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
+       _ (pin g 'inlrb ())                           ; fresh splice decl-license (+ its reg roster)
+       _ (pin g 'inlrbs ())
        _ (rgreset g)                                 ; fresh regen channels
        _ (pin g 'fn <>f)
        ; -- C99 VLA prep: scan the body for runtime-dim locals; each site takes a POINTER slot +
