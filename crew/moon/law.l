@@ -1209,9 +1209,35 @@
       (= (dehusk '((mov r9 r5) (add r5 r5 r9) (mov r9 r0))) '((mov r9 r5) (add r5 r5 r9) (mov r9 r0)))
       (= (dehusk '((mov r0 r5) (div r1 r1 r0) (mov r0 r9))) '((mov r0 r5) (div r1 r1 r0) (mov r0 r9))))
    ; cfoldir's root-restore drop rides past reads; the epilogue sp restore stands
-   (assert
+   _ (assert
       (= (cfoldir '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
-      (member? '(mov sp r4) (cfoldir '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret))))))
+      (member? '(mov sp r4) (cfoldir '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret)))))
+   ; the rename sandwich: (mov X Y) M.. (mov Y X) with X dead after and Y untouched between
+   ; runs as well in Y alone -- X renames away, both movs drop. declines: X live after,
+   ; a middle touching Y, a 'la symbol spelled like X
+   _ (assert
+      (= (dehusk '((mov r1 r0) (add r1 r1 65536) (mov r0 r1) (sub r0 r0 1) (ret)))
+         '((add r0 r0 65536) (sub r0 r0 1) (ret)))
+      (= (dehusk '((mov r1 r0) (ld r5 r1 8) (add r1 r1 24) (mov r0 r1) (ret)))
+         '((ld r5 r0 8) (add r0 r0 24) (ret)))
+      (= (dehusk '((mov r1 r0) (mov r0 r1) (ret))) '((ret)))
+      (= (dehusk '((mov r1 r0) (add r1 r1 8) (mov r0 r1) (mov r5 r1) (ret)))
+         '((mov r1 r0) (add r1 r1 8) (mov r0 r1) (mov r5 r1) (ret)))
+      (= (dehusk '((mov r1 r0) (add r1 r1 r0) (mov r0 r1) (ret)))
+         '((mov r1 r0) (add r1 r1 r0) (mov r0 r1) (ret)))
+      (= (dehusk '((mov r1 r0) (li r0 5) (mov r0 r1) (ret)))
+         '((mov r1 r0) (li r0 5) (mov r0 r1) (ret)))
+      (= (dehusk '((mov r1 r0) (la r5 r1) (mov r0 r1) (ret)))
+         '((mov r1 r0) (la r5 r1) (mov r0 r1) (ret))))
+   ; the quiet-window back-copy: the restore drops across defs-free forms and conditional
+   ; brs (the drop lives only on the fall-through); a label or a call still bars
+   (assert
+      (= (dehusk '((mov r1 r0) (test r1 1) (br ne .x9) (mov r0 r1) (ret)))
+         '((mov r1 r0) (test r1 1) (br ne .x9) (ret)))
+      (= (dehusk '((mov r1 r0) (label .x9) (mov r0 r1) (ret)))
+         '((mov r1 r0) (label .x9) (mov r0 r1) (ret)))
+      (= (dehusk '((mov r1 r0) (call foo) (mov r0 r1) (ret)))
+         '((mov r1 r0) (call foo) (mov r0 r1) (ret)))))
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) + the shuttle skip (a leaf right parks the left in r1; stld slot residency through movs) + the mov-husk fold (dehusk's adjacent squeeze, the ALU read-through where the mov strands; cfoldir's root-restore drop) ok")
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) + the shuttle skip (a leaf right parks the left in r1; stld slot residency through movs) + the mov-husk fold (dehusk's adjacent squeeze, the ALU read-through where the mov strands; cfoldir's root-restore drop; the rename sandwich and the quiet-window back-copy) ok")
 (put err 10)

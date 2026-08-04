@@ -3876,6 +3876,36 @@
    ; symbol, so a generic substitution has no license.
    (hmov? f) (two? f && <f = 'mov && nom? <>f && nom? <>>f
                && !(member? <>f '(sp fp r4 r3)) && !(member? <>>f '(sp fp r4 r3)))
+   ; the RENAME SANDWICH: (mov X Y) M.. (mov Y X) with X dead past the back-copy and every
+   ; M a straight-line form that never touches Y -- the region runs as well in Y alone, so
+   ; X renames away and BOTH movs drop. implicit protocol regs ride rdsp's defs, so the Y
+   ; guard covers div and the variable shifts; ⚠ a 'la symbol spelled like X would rename
+   ; as if it were the register -- that collision declines.
+   (swin x y q n acc)
+    (? (n > 8) ()
+       !(two? q) ()
+       (: g <q
+          (? (two? g && <g = 'mov && id? <>g y && id? <>>g x) `(acc q)
+             (two? g && <g = 'la && id? <>>g x) ()
+             (: rd (rdsp g)
+                (? (id? rd 'bar) ()
+                   (|| (member? y <rd) (member? y <>rd)) ()
+                   (swin x y >q (n + 1) (g >< acc)))))))
+   (hren f x y) (? !(two? f) f ((? (id? <f x) y <f) >< hren >f x y))
+   ; a back-copy across a QUIET window (defs-free forms, conditional brs) is still a husk:
+   ; nothing between rewrites either register, and the drop lives only on the fall-through.
+   ; answers the rest with the copy gone, 'no when the window closes.
+   (qdrop a b q n)
+    (? (n > 6) 'no
+       !(two? q) 'no
+       (: g <q
+          (? (two? g && <g = 'mov && id? <>g b && id? <>>g a) >q
+             (: ok (? (two? g && <g = 'br) 1
+                      (: rd (rdsp g)
+                         (? (id? rd 'bar) 0 !(two? <>rd))))
+                (? !ok 'no
+                   (: t (qdrop a b >q (n + 1))
+                      (? (id? t 'no) 'no (g >< t))))))))
    ; no memory ops here: addrfold CONSUMES a feeding mov into a load's base and deletes
    ; it under its own license -- a read-through would steal the pattern and strand a mov
    ; deaddef can't always prove dead
@@ -3890,23 +3920,33 @@
           nx (? (two? r) <r ())
           (? !(hmov? f) (f >< dehusk r)
              (id? <>f <>>f) (dehusk r)
-             !(hmov? nx)
-              (: a <>f b <>>f
-                 e9 (? (two? nx) (assoc <nx huskrd) ())
-                 rd9 (? (two? e9) (rdsp nx) 'bar)
-                 ; b must stay clear of the consumer's defs: the alu dance writes its
-                 ; dest before reading the source, so (sub rd ra rd) reads its own wreck.
-                 ; and the rewrite pays only when it STRANDS the mov (a dies past the
-                 ; consumer) -- a live park's read is renamer-free, not worth the churn
-                 (? (|| (id? rd9 'bar) (|| (member? a <>rd9) (member? b <>rd9))) (f >< dehusk r)
-                    (: nx2 (hsub nx a b >e9 0)
-                       (? (|| (= nx2 nx) !(dies? a >r)) (f >< dehusk r)
-                          (f >< dehusk (nx2 >< >r))))))
-             (: a <>f b <>>f d <>nx s <>>nx
-                (? (&& (id? s a) (id? d b)) (dehusk (f >< >r))   ; back-copy: b holds b already
-                   (&& (id? s b) (id? d a)) (dehusk (f >< >r))   ; a duplicate copy
-                   (id? s a) (f >< dehusk (`('mov d b) >< >r))   ; the feed reads through
-                   (f >< dehusk r))))))
+             (: a <>f b <>>f
+                sw (swin a b r 0 ())
+                ; the (1 x) wrapper: an empty rewritten tail is a legitimate result
+                sk (? !(two? sw) ()
+                      (: ms <sw bq <>sw
+                         (? (dies? a >bq)
+                            (1 >< ((map (\ g (hren g a b)) (rev ms)) + >bq))
+                            ())))
+                qt (? (two? sk) 'no (qdrop a b r 0))
+                (? (two? sk) (dehusk >sk)
+                   !(id? qt 'no) (f >< dehusk qt)
+                   !(hmov? nx)
+                    (: e9 (? (two? nx) (assoc <nx huskrd) ())
+                       rd9 (? (two? e9) (rdsp nx) 'bar)
+                       ; b must stay clear of the consumer's defs: the alu dance writes its
+                       ; dest before reading the source, so (sub rd ra rd) reads its own wreck.
+                       ; and the rewrite pays only when it STRANDS the mov (a dies past the
+                       ; consumer) -- a live park's read is renamer-free, not worth the churn
+                       (? (|| (id? rd9 'bar) (|| (member? a <>rd9) (member? b <>rd9))) (f >< dehusk r)
+                          (: nx2 (hsub nx a b >e9 0)
+                             (? (|| (= nx2 nx) !(dies? a >r)) (f >< dehusk r)
+                                (f >< dehusk (nx2 >< >r))))))
+                   (: d <>nx s <>>nx
+                      (? (&& (id? s a) (id? d b)) (dehusk (f >< >r))   ; back-copy: b holds b already
+                         (&& (id? s b) (id? d a)) (dehusk (f >< >r))   ; a duplicate copy
+                         (id? s a) (f >< dehusk (`('mov d b) >< >r))   ; the feed reads through
+                         (f >< dehusk r))))))))
 
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
