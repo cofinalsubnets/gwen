@@ -1030,6 +1030,46 @@
       (member? '(a128r r10 r7) vf)                   ; the combine reads the parked twins
       (= 2 (splds vf))))                             ; full-word sp loads: only the two cs restores
 
+; -- the callee-saved contract (cskeep): every cgn above already compiles under it --
+; a breach REFUSES at emission -- so these laws probe the checker itself. the dirty
+; walk is path-aware: a written reg is dirty until its restore, labels join by union,
+; and every exit must leave the set empty -- so an early exit whose path never wrote
+; (the stld-folded restore) passes, and the cs9 shape (written bare) scares. the
+; breach probes ride a counting help; the checker RESUMES through it, so one run
+; logs every scare it meets.
+(: ck9 (tablet 0) _ (pin ck9 'tgt 'x64)
+   kf1 '((label f9) (push r4) (mov r4 sp) (sub sp sp 32) (st r4 -8 r3) (st r4 -16 r11)
+         (mov r11 r6) (mov r3 r11) (ld r3 r4 -8) (ld r11 r4 -16) (mov sp r4) (pop r4) (ret))
+   kf2 '((label f9) (sub sp sp 16) (st sp 8 r12)                ; the early exit's path never
+         (cmp r6 r5) (br lt .k9) (add sp sp 16) (ret)           ; writes r12: its folded-away
+         (label .k9) (mov r12 r6) (mov r0 r12) (ld r12 sp 8) (add sp sp 16) (ret))   ; restore is ADMITTED
+   kf3 '((label f9) (sub sp sp 16) (st sp 8 r13) (li r13 0)     ; the back edge keeps r13 dirty
+         (label .c9) (add r13 r13 1) (cmp r13 r5) (br lt .c9)   ; around the loop; the restore
+         (mov r0 r13) (ld r13 sp 8) (add sp sp 16) (ret))       ; cleanses before the one exit
+   _ (assert
+      (= kf1 (cskeep ck9 kf1)) (= kf2 (cskeep ck9 kf2)) (= kf3 (cskeep ck9 kf3))
+      (= '(r12) (csdefs '(mov r12 r0)))
+      (= '(r11) (csdefs '(ld r11 sp 80)))
+      (= '(r12) (csdefs '(div r12 r0 r5)))           ; idiv writes r0 + its dst, never r3 (self-saved r2)
+      (! (two? (csdefs '(a128r r11 r12))))           ; the d128 family only speaks r0:r2
+      (! (two? (csdefs '(st sp 80 r11))))            ; a save writes memory, not the register
+      (id? 'dark (csdefs '(frob r0))))               ; an op on neither roster is dark -> refuses
+   klog (tablet 0)
+   _ (hear (\ s p e (: _ (pin klog p (+ 1 (peep klog p 0))) 0)))
+   _ (cskeep ck9 '((label f9) (mov r12 r6) (ret)))                 ; written bare: the cs9 shape
+   _ (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6)
+                   (cmp r6 r5) (br lt .k9) (ret)                   ; one path exits dirty
+                   (label .k9) (ld r11 sp 8) (ret)))
+   _ (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6) (jmp helper9)))   ; a sibcall is an exit too
+   _ (cskeep ck9 '((label f9) (frob r0) (ret)))
+   _ (cskeep ck9 '((label f9) (sub sp sp 16) (mov r11 r6) (st sp 8 r11) (ld r11 sp 8) (ret)))
+   _ (hear ())
+   (assert
+      (= 1 (peep klog 'cs-unsaved 0))
+      (= 3 (peep klog 'cs-unrestored 0))             ; the bare write's exit + the dirty branch + the sibcall
+      (= 1 (peep klog 'cs-dark-op 0))
+      (= 1 (peep klog 'cs-save-late 0))))            ; a save AFTER the write stores the clobber
+
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
 ; its loop body all-register. s rides r5 (hpool front past the reserve) and
@@ -1294,5 +1334,5 @@
       (= (dehusk '((mov r1 r0) (call foo) (mov r0 r1) (ret)))
          '((mov r1 r0) (call foo) (mov r0 r1) (ret)))))
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) + the shuttle skip (a leaf right parks the left in r1; stld slot residency through movs) + the mov-husk fold (dehusk's adjacent squeeze, the ALU read-through where the mov strands; cfoldir's root-restore drop; the rename sandwich and the quiet-window back-copy) ok")
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) + the shuttle skip (a leaf right parks the left in r1; stld slot residency through movs) + the mov-husk fold (dehusk's adjacent squeeze, the ALU read-through where the mov strands; cfoldir's root-restore drop; the rename sandwich and the quiet-window back-copy) + the callee-saved contract (cskeep's dirty walk holds every emitted fn; path-aware restores admitted, the cs9 shape refused) ok")
 (put err 10)

@@ -3609,6 +3609,90 @@
                  (link f (sweep >l (? (&& (two? f) (member? <f '(jmp jmpr ret))) 1 0))))))
        (sweep fs 0))
 
+   ; -- the callee-saved contract, held at emission (x64): a borrowed register -- r3 r4
+   ; r11-r14, machine rbx rbp r12-r15 -- written anywhere in a fn must be SAVED before its
+   ; first write and RESTORED by every exit: ret, jmpr, and a sibcall jmp alike. defs read
+   ; off rdsp (divops override: idiv self-saves r2 and writes r0 + its dst); the ops rdsp
+   ; bars are rostered quiet here (control, calls, the d128 r0:r2 family) -- an op on
+   ; neither roster REFUSES, so a new op must name its cs effect to land. a fn carrying
+   ; inline asm owns its own clobbers: skipped whole. --
+   csregs '(r3 r4 r11 r12 r13 r14)
+   csquiet '(label align ud2 br jmp jmpr ret call callr sys mulo
+             sx128 n128 a128 a128r s128 s128r m128 m128r mw128 mw128r c128 c128r
+             dv128 rm128 inc128 dec128 shl128 shr128 sar128 shl128v shr128v sar128v)
+   (csdefs f)                                       ; the cs regs one form writes | 'dark
+    (? (member? <f csquiet) ()
+       (member? <f divops) (filter (\ r (member? r csregs)) `(<>f))
+       (: rd (rdsp f)
+          (? (id? rd 'bar) 'dark
+             (filter (\ r (member? r csregs)) <>rd))))
+   (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
+    (: (rawy? l) (? (! (two? l)) ()
+                    (: f <l (? (&& (two? f) (id? <f 'raw)) 1 (rawy? >l))))
+       (? (|| (arm? g) (|| (! (two? fs)) (|| (peep g 'hasasm ()) (rawy? fs)))) fs
+          (: fn (nthr <fs 1)
+             labs (tablet 0) saves (tablet 0) defs (tablet 0)
+             (note l i)
+              (? (! (two? l)) 0
+                 (: f <l
+                    _ (? (! (two? f)) 0
+                         (id? <f 'label) (pin labs <>f 1)
+                         (: _ (? (&& (id? <f 'push) (member? <>f csregs))
+                                 (? (peep saves <>f ()) 0 (pin saves <>f `('push i))) 0)
+                            _ (? (&& (id? <f 'st)
+                                 (&& (|| (id? <>f 'sp) (id? <>f 'r4)) (member? <>>>f csregs)))
+                                 (? (peep saves <>>>f ()) 0 (pin saves <>>>f `('slot <>f <>>f i))) 0)
+                            ds (csdefs f)
+                            (? (id? ds 'dark) (scare 'cs-dark-op <f)
+                               (foldl (\ _ r (? (peep defs r ()) 0 (pin defs r i))) 0 ds))))
+                    (note >l (i + 1))))
+             _ (note fs 1)
+             dr (filter (\ r (peep defs r ())) csregs)
+             (? (! (two? dr)) fs                    ; no cs writes: most fns leave here
+                (: _ (foldl                         ; every written reg saved, before its first write
+                      (\ _ r (: sv (peep saves r ())
+                                (? (! (two? sv)) (scare 'cs-unsaved `(fn r))
+                                   (: sp9 (nthr sv (? (id? <sv 'push) 1 3))
+                                      (? (sp9 < (peep defs r 0)) 0 (scare 'cs-save-late `(fn r)))))))
+                      0 dr)
+                   (rest r) (: sv (peep saves r ())  ; the restore shape a save earns
+                               (? (! (two? sv)) ()
+                                  (id? <sv 'push) `('pop r) `('ld r <>sv <>>sv)))
+                   ; the DIRTY walk: a written reg is dirty until its restore reloads it; a label
+                   ; joins every path in (union -- monotone, so the pass iterates to a fixpoint);
+                   ; every exit must leave with the set EMPTY. stld folding a restore away where
+                   ; the path never wrote is exactly what this admits and a window scan would not.
+                   lst (tablet 0)                   ; label -> the join of its incoming dirty sets
+                   (uni a b) (foldl (\ s r (? (member? r s) s (link r s))) b a)
+                   (sub? a b) (? (! (two? a)) 1 (&& (member? <a b) (sub? >a b)))
+                   (bmark L S) (: old (peep lst L ())
+                                  new (uni S old)
+                                  (? (sub? new old) 0 (: _ (pin lst L new) 1)))
+                   (move f S)                       ; one form's transfer on the dirty set
+                    (: ds (csdefs f)
+                       S2 (uni (? (id? ds 'dark) dr (filter (\ r (member? r dr)) ds)) S)
+                       (filter (\ r (! (f = (rest r)))) S2))
+                   (step l S chg fin)
+                    (? (! (two? l)) chg
+                       (: f <l
+                          (? (! (two? f)) (step >l S chg fin)
+                             (: k <f
+                                dead (id? S 'dead)
+                                (? (id? k 'label)
+                                    (step >l (uni (? dead () S) (peep lst <>f ())) chg fin)
+                                   dead (step >l S chg fin)
+                                   (id? k 'br) (step >l S (chg + (bmark <>>f S)) fin)
+                                   (&& (id? k 'jmp) (peep labs <>f ()))
+                                    (step >l 'dead (chg + (bmark <>f S)) fin)
+                                   (member? k '(ret jmpr jmp))
+                                    (: _ (? fin (foldl (\ _ r (scare 'cs-unrestored `(fn r))) 0 S) 0)
+                                       (step >l 'dead chg fin))
+                                   (step >l (move f S) chg fin))))))
+                   (fix n) (? (step fs () 0 ()) (? (n < 24) (fix (n + 1)) (scare 'cs-fix fn)) 0)
+                   _ (fix 0)
+                   _ (step fs () 0 1)
+                   fs)))))
+
    ; the addressing fold: an add/lea/mov whose result is consumed as the VERY NEXT load's base
    ; folds into the load's displacement, so the member-access triple (mov base; add off; ld) lands
    ; as one insn. STORES fold the same three shapes on their base (operand 1), a leax becomes the
@@ -5863,7 +5947,7 @@
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
        ; it early lets a pass-2 ride clobber a live arrival.
-       (? (bad? irf) irf (unhome g (jr0 (unframe g (deadlab irf))))))
+       (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (deadlab irf)))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms
    ; imgforms extras) | 'bad, extras being ((name forms) ..), one per OTHER named section.
