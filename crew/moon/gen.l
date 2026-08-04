@@ -159,6 +159,14 @@
            (&& (two? <>e) (&& ((cap <>e) = 'var) ((caup <>e) = nm)))) 1
        (: (go l) (? (! (two? l)) () (? (wrs? nm <l) 1 (go >l)))
           (go e)))
+   ; how hard does the body lean on this param? reads weighted x8 per loop level (the alive
+   ; pass's convention) -- the price of a whole-body park is paid in reloads saved.
+   (rdw nm e w)
+    (? (! (two? e)) 0
+       (&& (<e = 'var) (&& (two? >e) ((caup e) = nm))) w
+       (: w9 (? (member? <e '(while do for)) (w * 8) w)
+          (go l a) (? (! (two? l)) a (go >l (a + (rdw nm <l w9))))
+          ((? (two? <e) (rdw nm <e w9) 0) + (go >e 0))))
    (vmout? fs)                                      ; does control fall out the bottom of the forms?
     (? (! (two? fs)) 1
        (: (go l) (? (two? >l) (go >l) <l)
@@ -3478,7 +3486,10 @@
        (pears l n acc)                                ; the leading (mov H A) movs -> ((H A)..)
         (? (|| (! (two? l)) (8 < n)) acc
            (: f <l
-              (? (&& (two? f) (&& (<f = 'mov)
+              ; ⚠ a body label ends the entry: a (mov H A) past it is loop-reachable (a splice
+              ; park's per-iteration RESET wears this exact shape) and renaming erases the reset
+              (? (&& (two? f) (&& (<f = 'label) (0 < n))) acc
+                 (&& (two? f) (&& (<f = 'mov)
                     (&& (member? <>f hr) (member? <>>f ar))))
                  (pears >l (n + 1) (link `(<>f <>>f) acc))
                  (pears >l (n + 1) acc))))
@@ -5075,13 +5086,14 @@
        ; pinned/homed local reads straight from that register -- licensed only when the whole
        ; splice is call-free AND the body never ASSIGNS that param (statements can); &param
        ; self-declines through clval (regv answers 'bad, the real call stands). rpin holds the
-       ; alias against wr?/rfree/psreset across the body's own statement resets. NO PARK LANE
-       ; here: a cginl park spans the whole body, starves its statements, and the shuttle
-       ; spushes (measured: corpus L1 loads +0.36% -- cbinl's short-span parks stay).
+       ; alias against wr?/rfree/psreset across the body's own statement resets. a PARK here
+       ; spans the whole body and starves its statements (an ungated one measured corpus L1
+       ; loads +0.36%), so it must EARN the seat: weighted body reads >= 8 -- a read inside a
+       ; loop, where the slot bind reloads every iteration -- and cbinl's deep-pool gate.
        (anyc l) (? (! (two? l)) () (? (callish? <l) 1 (anyc >l)))
        nocall (&& (! (callish? (caup (caup (cuup f))))) (! (anyc args)))
-       (bind ps as benv acc)                         ; arg values -> the alias register, else slots
-        (? (! (two? ps)) `(benv acc)
+       (bind ps as benv acc rbs)                     ; arg values -> the alias register, a priced park, else slots
+        (? (! (two? ps)) `(benv acc rbs)
            (: pty (caup (cap ps))
               al (? (&& nocall (&& (! (flo? pty)) (&& (8 = (tsz g pty))
                        (&& (two? <as) (&& ((cap <as) = 'var)
@@ -5096,19 +5108,30 @@
               al (? al (? (alsafe? g al) al ()) ())  ; staging must never write it
               (? al                                  ; the alias bind: zero forms
                   (: _ (pin g 'rpin (link al (peep g 'rpin ())))
-                     (bind >ps >as (link `((cap (cap ps)) `('reg al) pty) benv) acc))
+                     (bind >ps >as (link `((cap (cap ps)) `('reg al) pty) benv) acc rbs))
                  (: r (cgexpr g env <as)
                     (? (bad? r) 'bad
                        (pair? g pty)                 ; a pair param: an 8-byte slot, both words land
                         (: off (ntmp g 'llong)
                            (bind >ps >as
                                  (link `((cap (cap ps)) off pty) benv)
-                                 (acc + (asll g r) + (pst 'r4 off))))
-                       (: off (ntmp g 'long)
-                          (bind >ps >as
-                                (link `((cap (cap ps)) off pty) benv)
-                                (acc + (asintt g r pty) + `(`('st 'r4 off 'r0))))))))))
-       br (bind <>>f args () ())
+                                 (acc + (asll g r) + (pst 'r4 off)) rbs))
+                       (: rb (? (&& nocall (&& (! (flo? pty))
+                                    (&& (7 < (rdw (cap (cap ps)) (caup (caup (cuup f))) 1))
+                                        (two? (cuup (peep g 'pool ()))))))   ; park only into a DEEP pool
+                                 (ralloc g) ())
+                          (? rb                      ; the park bind: the value rides a pool reg
+                              (: _ (pin g 'rpin (link rb (peep g 'rpin ())))
+                                 (bind >ps >as (link `((cap (cap ps)) `('reg rb) pty) benv)
+                                       (acc + (asintt g r pty)
+                                            + (`(`('mov rb 'r0)) + (cvt pty rb)))
+                                       (link rb rbs)))
+                             (: off (ntmp g 'long)
+                                (bind >ps >as
+                                      (link `((cap (cap ps)) off pty) benv)
+                                      (acc + (asintt g r pty) + `(`('st 'r4 off 'r0)))
+                                      rbs)))))))))
+       br (bind <>>f args () () ())
        _ (pin g 'inlret ilb9)
        _ (pin g 'inlrt rt)
        ; ⚠ cgitems rides the g tablet, not a direct call: the direct edge closes the
@@ -5122,7 +5145,10 @@
        _ (pin g 'inlret ir0)
        _ (pin g 'inlrt irt0)
        _ (pin g 'inlining il0)
-       _ (pin g 'rpin rp0)                            ; the alias pins die with the splice
+       _ (pin g 'rpin rp0)                            ; the bind pins die with the splice
+       (unrb l) (? (! (two? l)) ()
+                   (: _ (rfree g <l) (unrb >l)))
+       _ (? (two? br) (unrb (nthr br 2)) ())          ; ...and the park regs return to the pool
        _ (vmflush g)                                  ; the splice's end label joins
        (? (|| (bad? br) (bad? ibd))                   ; a shape the splice can't take: the real call still can
            (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)

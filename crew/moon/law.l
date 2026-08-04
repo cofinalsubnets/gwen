@@ -1111,7 +1111,8 @@
       (member? '(cmp r7 r5) pf)                      ; ...and the body compares park vs alias
       (= 0 (splds pf)))
    ; the VALUE splice aliases too (its multi-return body reads lo straight from n's ride);
-   ; its expression arg stays a slot -- a cginl park would span the whole body (the anti-lever)
+   ; its low-read expression arg stays a slot -- a value-splice park spans the whole body
+   ; (the measured anti-lever), so it must EARN the seat: weighted body reads >= 8
    irQ2 (cgn "static long clamp9(long x, long lo) { if (x < lo) return lo; if (x > 99) return 99; return x; }\nlong vq(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + clamp9(a + i, n); } return s; } int main() { return vq(1, 5); }")
    q2f (fnf 'vq (caup irQ2))
    _ (assert
@@ -1130,11 +1131,31 @@
       (member? '(cmp r7 r5) wf))                     ; lim, never written, still aliases n's ride
    irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
    xf (fnf 'run (caup irX))
-   (assert
+   _ (assert
       (two? irX)
       (member? '(mov r7 r6) xf)                      ; a += b parks off x's ride...
       (! (member? '(add r6 r6 r5) xf))               ; ...and x's ride never takes the add
-      (member? '(add r7 r7 r5) xf)))                 ; b, never written, still aliases y's ride
+      (member? '(add r7 r7 r5) xf))                  ; b, never written, still aliases y's ride
+   ; a value-splice park that EARNS the seat: a read inside the body's loop weighs x8 (the
+   ; slot bind would reload it every iteration), so the expression arg rides a pool reg
+   ; for the splice's whole span and the loop runs off the register
+   irG (cgn "static long sum9(long p, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + p; } return s; }\nlong gq(long a, long n) { return sum9(a + 1, n); }\nint main() { return gq(3, 5); }")
+   gf (fnf 'gq (caup irG))
+   _ (assert
+      (two? irG)
+      (member? '(mov r10 r9) gf)                     ; a + 1 lands its park r10...
+      (member? '(add r9 r9 r10) gf))                 ; ...and the loop reads it, no reload
+   ; ⚠ a park under the CALLER's loop resets from its source every iteration -- that mov
+   ; wears the entry-home shape (mov H A), and unhome renaming it away erases the reset
+   ; (strpbrk walked its set forward and never rewound; test_libc was the only catch).
+   ; pears stops at the first body label, so the reset stands and the walk stays on the park.
+   irH (cgn "static char *sch9(char const *s, int c) { for (;; s++) { if (*s == (char) c) return (char *) s; if (!*s) return 0; } }\nchar *pb9(char const *s, char const *set) {\n  for (; *s; s++) if (sch9(set, *s)) return (char *) s;\n  return 0; }\nint main() { char const *s = \"hello, world\"; return pb9(s, \"xyzw\") ? 7 : 255; }")
+   hf (fnf 'pb9 (caup irH))
+   (assert
+      (two? irH)
+      (member? '(mov r9 r5) hf)                      ; the reset copies set anew each iteration...
+      (member? '(add r9 r9 1) hf)                    ; ...the walk rides the park
+      (! (member? '(add r5 r5 1) hf))))              ; ...and the arrival never walks
 
 ; -- the shuttle skip + slot residency: a right side whose forms never write r1 (no call, no
 ; label, no control) runs with the left PARKED IN r1 -- one mov, no push/pop memory round-trip
