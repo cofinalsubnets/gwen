@@ -1160,12 +1160,14 @@
       (! (r1safe? '((call f9))))
       (! (r1safe? '((ld r1 r4 8))))
       (! (r1safe? '((label .x)))))
-   ; the divide always shuttles: a leaf right turns the push/pop pair into one mov
+   ; the divide always shuttles: a leaf right turns the push/pop pair into one mov -- and
+   ; dehusk reads the park straight through the staging (no r0 round-trip at all)
    irD (cgn "long dv(long a, long b) { return a / b; } int main() { return (int)dv(10, 2); }")
    df (fnf 'dv (caup irD))
    _ (assert
       (two? irD)
-      (member? '(mov r1 r0) df)
+      (member? '(mov r1 r6) df)
+      (! (member? '(mov r1 r0) df))
       (= 0 (splds df))
       (= 0 (spsts df)))
    ; stld: a slot binding rides a mov and survives its source's death (the reload elides);
@@ -1184,5 +1186,22 @@
       (= 0 (splds pbf))
       (= 0 (spsts pbf))))
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) + the shuttle skip (a leaf right parks the left in r1; stld slot residency through movs) ok")
+; -- the mov-husk fold: adjacent reg-reg movs squeeze (dehusk -- a back-copy or duplicate
+; drops, a feed reads through and strands its middle def for deaddef), and cfoldir drops a
+; mov whose source chases to the dest's own value at any straight-line distance. the sp
+; family never folds: sp moves through the cell cursor, so its copy records outlive it.
+(: _ (assert
+      ; dehusk units: feed read-through, back-copy, duplicate, self-mov; r3 and a label bar
+      (= (dehusk '((mov r0 r6) (mov r1 r0) (mov r0 r5) (div r1 r1 r0)))
+         '((mov r0 r6) (mov r1 r6) (mov r0 r5) (div r1 r1 r0)))
+      (= (dehusk '((mov r0 r9) (mov r9 r0) (cmp r9 r0))) '((mov r0 r9) (cmp r9 r0)))
+      (= (dehusk '((mov r0 r9) (mov r0 r9) (ret))) '((mov r0 r9) (ret)))
+      (= (dehusk '((mov r0 r0) (mov r3 r0) (mov sp r4))) '((mov r3 r0) (mov sp r4)))
+      (= (dehusk '((mov r0 r6) (label .x9) (mov r1 r0))) '((mov r0 r6) (label .x9) (mov r1 r0))))
+   ; cfoldir's root-restore drop rides past reads; the epilogue sp restore stands
+   (assert
+      (= (cfoldir '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
+      (member? '(mov sp r4) (cfoldir '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret))))))
+
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) + the shuttle skip (a leaf right parks the left in r1; stld slot residency through movs) + the mov-husk fold (dehusk's adjacent squeeze; cfoldir's root-restore drop) ok")
 (put err 10)

@@ -3191,8 +3191,13 @@
                   (? (id? <>f <>>f) (go r 1 cur rg sl ce ci acc)   ; a self-mov says nothing
                      (: v (rsv rg <>>f)
                         old (rv rg <>f)
-                        (? (&& (two? old) (&& (two? v)
-                              (&& (<old = <v) (<>old = <>v))))
+                        ; a source whose copy chases to the DEST restores the dest's own value.
+                        ; ⚠ never on sp/fp/r4: sp moves through the cell cursor, not defr, so a
+                        ; copy-of-sp record outlives the motion
+                        (? (|| (&& (two? old) (&& (two? v)
+                                  (&& (<old = <v) (<>old = <>v))))
+                               (two? v && <v = 2 && id? <>v <>f
+                                  && !(member? <>f '(sp fp r4 r3))))
                            (go r 1 cur rg sl ce ci acc)     ; the dest already holds this value
                            (: _ (defr ci rg sl ce <>f)
                               _ (rset rg <>f v)
@@ -3862,6 +3867,24 @@
                       (? (id? rd 'bar) (f >< stldw r ())
                          (member? 'r4 <>rd) (f >< stldw r ())
                          (f >< stldw r (filter (\ e9 !(member? <>e9 <>rd)) bs)))))))))
+
+   ; adjacent reg-reg movs FOLD: after (mov a b), a back-copy or a duplicate is a husk and
+   ; drops; a feed (mov d a) reads through to b, stranding the middle def for deaddef's
+   ; rerun. frame anchors and r3 stay out (epim?/sibjmp/unframe anchor on their shapes).
+   (hmov? f) (two? f && <f = 'mov && nom? <>f && nom? <>>f
+               && !(member? <>f '(sp fp r4 r3)) && !(member? <>>f '(sp fp r4 r3)))
+   (dehusk fs)
+    (? !(two? fs) ()
+       (: f <fs r >fs
+          nx (? (two? r) <r ())
+          (? !(hmov? f) (f >< dehusk r)
+             (id? <>f <>>f) (dehusk r)
+             !(hmov? nx) (f >< dehusk r)
+             (: a <>f b <>>f d <>nx s <>>nx
+                (? (&& (id? s a) (id? d b)) (dehusk (f >< >r))   ; back-copy: b holds b already
+                   (&& (id? s b) (id? d a)) (dehusk (f >< >r))   ; a duplicate copy
+                   (id? s a) (f >< dehusk (`('mov d b) >< >r))   ; the feed reads through
+                   (f >< dehusk r))))))
 
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
@@ -5373,6 +5396,7 @@
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse
                         (addrfold
+                        (dehusk
                         (stld
                         (spmerge
                         (deaddef
@@ -5384,7 +5408,7 @@
                                   `('st 'r4 -8 'r3))
                            (cat (peep g 'cssv ())
                             (cat <sp0
-                             (body + `(`('li 'r0 0)) + (peep g 'epi epi))))))))))))))))))))
+                             (body + `(`('li 'r0 0)) + (peep g 'epi epi)))))))))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
        (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (? (homable? (caup p9)) (link (homereg i9) a2) a2)))
