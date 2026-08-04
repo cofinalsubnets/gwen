@@ -82,9 +82,36 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     ; parameter and for a struct shape the tree does not carry.
     (gripe? (one '(tdef)))
     (gripe? (one cl-vas))
-    (gripe? (one '(gdecl (("v" (struct "S") ())))))
     ; C has no literal for an infinity, so it is not sayable
     (gripe? (one cl-inf))))
+
+; --- a struct or union DEFINITION, the other form cparse cannot emit ------------
+; a FIELD is parse's own member pair ((name ty)..), so a member type is a clay node
+; and brackets its own name exactly as a global does. the 3rd slot is 'union, which
+; changes the DEFINING keyword only -- moon's tag namespace holds both, so a union
+; is still REFERRED to as ('struct tag).
+(: cl-sd '(sdef "P" (("x" int) ("next" (ptr (struct "P"))) ("row" (arr (named "lvm_t") KN))))
+   cl-un '(sdef "pun" (("d" double) ("u" ullong)) union)
+   (assert
+    ((one cl-sd) = ("struct P {" + nl + " int x;" + nl + " struct P *next;" + nl
+                    + " lvm_t row[KN];" + nl + "};" + nl))
+    ((one cl-un) = ("union pun {" + nl + " double d;" + nl + " unsigned long long u;" + nl + "};" + nl))))
+
+; --- and the composition that was unreachable before it: define the shape, name
+; it, then USE it. a named tag is sayable on its own, because a reference standing
+; without a definition is either incomplete BY DESIGN (`struct S *p`) or resolved by
+; the header the generated region sits inside -- which is how mx.h rides love.c.
+(: cl-tds '(prog ((sdef "P" (("x" int))) (tdef "P" (struct "P")) (gdecl (("v" (struct "P") ())))))
+   (assert
+    ((one cl-tds) = ("struct P {" + nl + " int x;" + nl + "};" + nl
+                     + "typedef struct P P;" + nl + "struct P v;" + nl))
+    ((one '(gdecl (("p" (ptr (struct "S")) ())))) = ("struct S *p;" + nl))
+    ; the ANONYMOUS tag is the one that stays unsayable, and it is not a judgement
+    ; call: parse mints it as ".anon0", which no C compiler will read back.
+    (gripe? (one '(sdef ".anon0" (("x" int)))))
+    (gripe? (one '(gdecl (("v" (ptr (struct ".anon0")) ())))))
+    ; C has no empty struct, the same way it has no empty enum
+    (gripe? (one '(sdef "E" ())))))
 
 ; --- clay-ok? is a SHAPE check, because gen.l trusts its input ------------------
 (assert

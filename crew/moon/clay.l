@@ -29,6 +29,7 @@
 ;   (fn name params body RET)          the return type, absent = int
 ;   (gdecl decls STOR)                 (static) / (extern) / (), absent = ()
 ;   (tdef NAME TY)                     a real typedef, which cparse can never emit
+;   (sdef TAG FIELDS)                  a struct/union DEFINITION, which it can never emit
 ;   (named "lvm_t")   (const t)        type forms with no cparse counterpart
 ;   (arr t EXPR)                       a symbolic bound -- cparse folds these to numbers,
 ;   (didx EXPR val)                    a GENERATOR wants to say [KCharm], not [2]
@@ -80,8 +81,13 @@
     ; constants into its `enums` tablet and keeping neither the tag nor the names.
     ; so an edef only ever comes from a generator, never back from a parse -- the
     ; same standing `note` has, and for the same reason.
+    ; ⚠ `sdef` is emit-only for the same reason, and its FIELDS take the shape
+    ; parse's own pmembers answers -- ((name ty)..) -- so the day parse.l fills
+    ; (tdef) the member list is already the one it hands back. the 3rd slot is
+    ; 'union: a union DEFINES with its own keyword but REFERS as ('struct tag),
+    ; since moon's tag namespace holds both (parse.l:10) -- not clay's choice.
     '((prog 1 1) (fn 1 4) (proto 1 1) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
-      (edef 2 2)
+      (edef 2 2) (sdef 2 3)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 1) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 4)
@@ -135,6 +141,12 @@
    spelling '((uchar "unsigned char") (ushort "unsigned short") (uint "unsigned int")
               (ulong "unsigned long") (ullong "unsigned long long") (llong "long long"))
    (cptr? t) (&& (two? t) (id? <t 'ptr))
+   ; a tag spells as itself, string or symbol. cident? is a FIRST-character check and
+   ; wants to be no more: a tag reaches here from a C lexer or from a generator, and
+   ; the one non-identifier in that set is parse's anonymous `.anon0` (parse.l:614).
+   (ctag a) (? (string? a) a (string a))
+   (cident? a) (: s (ctag a) c (? (tally s) (s 0) 0)
+                  (|| (&& (96 < c) (c < 123)) (|| (&& (64 < c) (c < 91)) (c = 95))))
    (cty-base t)
     (? (name? t) (look spelling t (string t))
        (! (two? t)) "int"
@@ -143,7 +155,7 @@
              (id? h 'arr) (cty-base a)
              (id? h 'fn) (cty-base a)
              (id? h 'named) a
-             (id? h 'struct) ("struct " + (? (string? a) a (string a)))
+             (id? h 'struct) ("struct " + (ctag a))
              ; const binds to the DECLARATOR when the thing under it is a pointer
              ; (`lvm_t *const`), to the base otherwise (`size_t const`).
              (id? h 'const) (? (cptr? a) (cty-base a) ((cty-base a) + " const"))
@@ -387,23 +399,36 @@
              ; them, and a table that had to say its own indices would not be one.
              (id? h 'edef) (line 0 ("enum " + (string a) + " { "
                                     + (sepby ", " (map (\ k (string k)) (el t 2))) + " };"))
+             ; a struct or union definition, one member per line. a FIELD is parse's
+             ; member pair, so its type is a clay node and brackets its own name the
+             ; way every other declaration here does -- `lvm_t *m[KN]` as a member is
+             ; the same cty call it is as a global.
+             (id? h 'sdef)
+              (: kw (? (id? (el t 3) 'union) "union" "struct")
+                 ((line 0 (kw + " " + (ctag a) + " {"))
+                  + (join (map (\ f (line 1 ((cty (el f 1) <f) + ";"))) (el t 2)))
+                  + (line 0 "};")))
              (gripe ("cannot show top-level " + (string h))))))
 
    ; --- what cannot be said ------------------------------------------------------
-   ; the two forms that carry strictly less than C needs, found in ONE pass up front
-   ; so that every renderer below can just return text. both are cparse's degenerate
-   ; shapes, and both have a faithful clay counterpart waiting for the day parse.l
-   ; fills them:
-   ;   (tdef)        a typedef / struct definition / _Static_assert, name and shape gone
-   ;   (vastart ap)  va_start's last named parameter, dropped at parse (:733)
-   ;   (struct tag)  a REFERENCE to a shape the tree does not carry. the layout lives
-   ;                 in the stag table, and clay has no node for a struct DEFINITION,
-   ;                 so `struct S v;` would name a tag nothing defines -- and an
-   ;                 anonymous one is worse, since parse mints it as `.anon0`, which
-   ;                 is not even a C identifier. an `sdef` node retires this.
+   ; the forms that carry strictly less than C needs, found in ONE pass up front so
+   ; that every renderer below can just return text. the first two are cparse's
+   ; degenerate shapes, and both have a faithful clay counterpart waiting for the day
+   ; parse.l fills them:
+   ;   (tdef)          a typedef / struct definition / _Static_assert, name and shape gone
+   ;   (vastart ap)    va_start's last named parameter, dropped at parse (:733)
+   ;   (struct .anon0) an ANONYMOUS tag, which is not a C identifier and so cannot be
+   ;                   written down at all. a NAMED tag is sayable: `sdef` defines the
+   ;                   shape, and a reference standing without one is either
+   ;                   incomplete BY DESIGN (`struct S *p` needs no definition) or
+   ;                   resolved by the header the generated region sits inside, which
+   ;                   is how mx.h rides love.c.
    ; the alternative -- printing `;` for the first and a made-up second argument for
    ; the second -- would round-trip green and emit C that does not mean the program.
    ; a gate that can be passed by pretending is worth nothing.
+   ; ⚠ and that is exactly why the named tag can be let through without weakening G1:
+   ; a file that DEFINES the struct it names still carries the (tdef) that refuses, so
+   ; a tag clay prints and does not define is one the source never defined either.
    (clay-unsaid c)
     (: (go x)
         (? (! (two? x)) ()
@@ -411,14 +436,20 @@
             (gripe "(tdef) carries nothing -- a typedef, struct or _Static_assert cparse could not keep")
            (&& (id? <x 'vastart) (! (two? >>x)))
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
-           (id? <x 'struct)
-            (gripe ("(struct " + (show <>x) + ") names a shape the tree does not carry"))
+           (&& (id? <x 'struct) (! (cident? <>x)))
+            (gripe ("(struct " + (show <>x) + ") -- an anonymous tag is not a C identifier"))
            (&& (id? <x 'flo) (! (cfinite? <>x)))
             (gripe ("(flo " + (show <>x) + ") -- C has no literal for an infinity or a nan"))
            ; C has no empty enum, so `enum q { };` is not a thin way to say a lattice
            ; with no kinds -- it is a syntax error.
            (&& (id? <x 'edef) (! (two? (el x 2))))
             (gripe ("(edef " + (show <>x) + " ()) has no constants -- C has no empty enum"))
+           ; ...and no empty struct either, for the same reason: a shape with no
+           ; members is a syntax error, not a thin way to say an empty one.
+           (&& (id? <x 'sdef) (! (two? (el x 2))))
+            (gripe ("(sdef " + (show <>x) + " ()) has no members -- C has no empty struct"))
+           (&& (id? <x 'sdef) (! (cident? <>x)))
+            (gripe ("(sdef " + (show <>x) + ") -- an anonymous tag is not a C identifier"))
            (: (kids l) (? (! (two? l)) ()
                           (: e <l v (? (two? e) (? (name? <e) (go e) (kids e)) ())
                              (? v v (kids >l))))

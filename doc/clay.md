@@ -6,7 +6,7 @@ the payoff sought is VERIFICATION -- doc/verify.md says love.c is "near its floo
 shrinking and the remaining lever is verifying pieces against references. its LINE count is
 near its floor; its TRUSTED surface is not, and that is where clay pays.
 
-the map, the ranked slate, and the honest costs. **rungs 0, 1, 2 and 2b have landed**
+the map, the ranked slate, and the honest costs. **rungs 0 through 2d have landed**
 (`crew/moon/clay.l`, `make test_clay`, `tools/mx.l` + `mx.h` + `kinds.h`); the rest is
 unbuilt.
 
@@ -18,7 +18,7 @@ has no RETURN TYPE, and `static`/`const` are gone. that information is real; it 
 in the side tables (`stag`, `sigs`) and the parse state, which `gen.l` is HANDED and a
 shower is not. so clay is a SUPERSET of cparse's output, with the missing slots
 APPENDED, and G1 partitions test/cc into what it can say (62) and what it cannot
-(49) and prints both. the second number is the live measure of the gap, and teaching
+(51) and prints both. the second number is the live measure of the gap, and teaching
 parse.l to FILL those markers is what shrinks it -- clay's grammar already carries
 the faithful forms.
 
@@ -405,6 +405,32 @@ why it stays optional here rather than blocking.
    `edef` has no `= n` slot, deliberately); `mx.h`'s `ai_kind_of_d` is the one crossing,
    laid from the same table, so a rep can no more miss its kind than a kind can miss its
    column.
+2d. **the aggregate, and the struct REFERENCE rule beside it.** LANDED. rungs 2/2b wanted
+   enums and fn-ptr arrays and got them, so clay could lay a typedef, an enum, a global
+   array and a table of function pointers -- and could not name a struct at all:
+   `clay-unsaid` refused every `(struct tag)`, since clay had no node for a DEFINITION and
+   a bare tag would name a shape nothing defines. now `(sdef TAG FIELDS ['union])` defines
+   it, and the refusal is narrowed to the tag that genuinely cannot be written down --
+   parse's anonymous `.anon0` (`parse.l:614`), which is not a C identifier. FIELDS take the
+   shape `pmembers` already answers (`((name ty)..)`), so a member type is a clay node and
+   brackets its own name the way a global does, and the day parse.l fills `(tdef)` the
+   member list is the one it hands back. ⚠ letting a NAMED tag through does not weaken G1,
+   and the reason is worth keeping: a file that DEFINES the struct it names still carries
+   the `(tdef)` that refuses, so a tag clay prints without defining is one the source never
+   defined either -- G1 held at 62/51 across the change, and `test_moonfuzz` round-tripped
+   184 of 904 mutants unmoved. a reference standing alone is either incomplete BY DESIGN
+   (`struct S *p`) or resolved by the header the generated region sits inside, which is how
+   `mx.h` rides love.c. emit-only, like `note` and `edef`; laws in `test/host/clay.l`.
+
+## running the gates
+
+`make test` is the DEV gate (~20s, every edit) -- host + love0 must BOTH print the zz-fin
+summary, love0 exactly twice. `make test_slow` is the MERGE gate, before publishing only
+(`make test_all` is gone as of `c376bfa5`). between them, the individual `test_*` covering
+what you touched. `out/host/love crew/libra/libra.l <file>` on every .l -- silence is clean.
+`make test_selfhost` and `make test_raw` (opt-in) still compile love.c from scratch, so
+generated C must survive that path. never assert on `(show x)` as a value test. and watch the
+clock: a generator that crawls is a bug announcing itself.
 3. **the bignum magnitude helpers, and `clay2coq.l`.** asm-free at `7164-7213` first, then
    `6946-7090`. meet `big.v` at the seam. remember both legs run different limb widths.
 4. **dtoa** -- once the `show0` float question is answered. `3889-3910` first, then
@@ -422,13 +448,3 @@ open, not committed: the rest of the `_fill` family (`vmap1_fill` 7997, `vmap2_f
 lists these as unfinished tower work, where negatives should SCARE rather than answer `()`, so
 clay would land the fix and the generation together). "love.c as a generated artifact" stays a
 conversation; comment capture is what would have to be paid for first.
-
-## running the gates
-
-`make test` is the DEV gate (~20s, every edit) -- host + love0 must BOTH print the zz-fin
-summary, love0 exactly twice. `make test_slow` is the MERGE gate, before publishing only
-(`make test_all` is gone as of `c376bfa5`). between them, the individual `test_*` covering
-what you touched. `out/host/love crew/libra/libra.l <file>` on every .l -- silence is clean.
-`make test_selfhost` and `make test_raw` (opt-in) still compile love.c from scratch, so
-generated C must survive that path. never assert on `(show x)` as a value test. and watch the
-clock: a generator that crawls is a bug announcing itself.
