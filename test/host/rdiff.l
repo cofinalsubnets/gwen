@@ -111,12 +111,12 @@
 ; surface. this is the A/B law with a REAL second reader on one leg -- and since
 ; 6c retired the C reader it is the ONLY pair left in the tree.
 ;
-; the input is prel.l ALONE, deliberately. p0 diverges on every sigil BY DESIGN
-; (#(a b) reads as # then (a b)), so a tree sweep would measure the divergence
-; instead of the agreement; prel.l is held to the subset by rung 4 and is the
-; whole of what p0 must read. the rung-4 rule and this gate are the same fact,
-; so a sigil creeping back into prel.l fails HERE.
-(: rd-p0 (rd-run sound0 (L "love/prel.l" "love/p1.l") 1)
+; the input is the SUBSET'S OWN files, deliberately. p0 diverges on every sigil BY
+; DESIGN (#(a b) reads as # then (a b)), so a tree sweep would measure the
+; divergence instead of the agreement. p1.l and egg.l are what p0 reads at boot;
+; p0fix.l spans the grammar they are too thin to cover. a sigil creeping into any
+; of the three fails HERE -- and prel.l is NOT among them: it rides p1 now.
+(: rd-p0 (rd-run sound0 (L "test/host/p0fix.l" "love/p1.l" "love/egg.l") 1)
    ; and the same rig pointed at a file OUTSIDE the subset, which must go red:
    ; the proof this leg can fail, the rd-hurt discipline applied to a real reader
    ; rather than a spoiled one.
@@ -132,7 +132,7 @@
    (rd-p0hurt cl) (: x (sound0 cl)
                      _ (pin rd-p0hn 0 (1 + (peep rd-p0hn 0 0)))
                      (? (= 3 (peep rd-p0hn 0 0)) 'rd-spoiled x))
-   rd-p0hurtn (rd-run rd-p0hurt (L "love/prel.l") 0)
+   rd-p0hurtn (rd-run rd-p0hurt (L "test/host/p0fix.l") 0)
    _ (puts ("rdiff: p0 forms=" + (show (peep rd-p0 'forms 0))
             + " bad=" + (show (peep rd-p0 'bad 0))
             + " off-subset=" + (show (peep rd-p0x 'bad 0))
@@ -148,7 +148,7 @@
  (0 = (peep rd-clean 'bad 0))
  ; and the rig can go RED: one spoiled form in one file is enough to see
  (0 < (peep rd-hurtn 'bad 0))
- ; rung 5: p0 agrees with the C reader on every form of prel.l ...
+ ; rung 5: p0 agrees with p1 on every form of the subset it owns ...
  (50 <= (peep rd-p0 'forms 0))
  (0 = (peep rd-p0 'bad 0))
  ; ... and parts from it off the subset, so the agreement above is a measurement
