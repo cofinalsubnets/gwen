@@ -5337,7 +5337,8 @@
                  (d128? pty) 'bad                       ; a wide param: not carried (mirror of the arg refusal)
                  (&& (! (flo? pty)) (gpi < (ngp g)))
                   (? (&& (pol? hp) (&& (gpi < (nhome g))
-                         (|| (homable? pty) (&& (two? hp) (member? gpi <>hp)))))
+                         (|| (homable? pty)
+                             (&& (two? hp) (|| (member? gpi <>hp) (member? gpi (nthr hp 2)))))))
                       (? (two? hp)                      ; the leaf lane: home in a register, moving from the
                          (: inc (nthr (argr g) gpi)     ; incoming arg reg if it differs -- but a rideable param
                             ; rides its ARRIVAL register: no home reserved, no entry
@@ -5774,6 +5775,30 @@
        lh (? (two? lr) <lr ())
        lp0 (? (two? lr) <>lr hpool)
        cu0 (? (two? lr) <>>lr ())                   ; the callee-saved homes lpick took (the regen saves/restores them)
+       ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
+       ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
+       ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
+       ; (>= 2 free after the take). ⚠ the unpriced version was the measured anti-lever
+       ; (+3.4% cycles): cold params drank the pool and reopened mag_mul's d128 stack cell.
+       ; a64 homes past r10 sit outside the operand pool -- always free at their own seat. --
+       (poff9 nm env) (? (! (two? env)) ()
+                         (: e2 <env (? (id? <e2 nm) <>e2 (poff9 nm >env))))
+       (ihset rd lp9)
+        (homefold g params 0 `(() lp9)
+         (\ a2 i9 p9
+            (: pl <>a2 hr (homereg i9) off (poff9 (cap p9) <>sp1)
+               pooled (member? hr tpool)
+               (? (&& (! (homable? (caup p9)))
+                  (&& (! (member? i9 rd))
+                  (&& (! (two? off))
+                  (&& (! (id? off ()))
+                  (&& (1 < (ntouch ir1 off 0))
+                      (? pooled (&& (member? hr pl) (two? (cuup pl))) 1))))))
+                   `((link i9 <a2) (? pooled (filter (\ q (! (id? q hr))) pl) pl))
+                  a2))))
+       ih0 (? (|| sr6f (|| vararg (|| (peep g 'fesc ()) (|| (bad? ir1)
+              (|| (peep g 'hasasm ()) (|| (anyop? ir1 'sys) (hascall? ir1))))))) ()
+              (cap (ihset ride lp0)))
        ; the REGEN dance: reset the accumulators and the frame to the ir1 snapshot, pin the
        ; analyses' channels (the vmap universe, the locals homes lh9, the livtab), rebuild under
        ; the spill policy hp with the operand pool lp9, then clear every channel. a 'bad ir2
@@ -5808,14 +5833,15 @@
         (: _ (pin g 'lrec lrec1)                    ; the retry's lpick ranks ir1's layout, never the failed regen's
            hp9 (pools rd)
            lr9 (? av (lpick ir1 (caup av) (cauup av) hp9) ())
-           i2 (regen `('ride rd) (? (two? lr9) <lr9 ()) (? (two? lr9) <>lr9 hp9)
+           ih9 (ihset rd (? (two? lr9) <>lr9 hp9))
+           i2 (regen `('ride rd <ih9) (? (two? lr9) <lr9 ()) (caup ih9)
                      (? (two? lr9) (nthr lr9 2) ()))   ; the cs regs ride too -- their pair pins in regen
            (? (ridesound? i2 rd) i2
               (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
                  (? ((tally rs) < (tally rd)) (leaf rs)
                     (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)))))
        irf (? (bad? ir1) 'bad
-          (&& (|| hm (|| lh (two? ride))) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
+          (&& (|| hm (|| lh (|| (two? ride) (two? ih0)))) (&& (! (peep g 'fesc ())) (! (hascall? ir1))))
            (leaf ride)
           ; calls remain: home + spill where reads beat the wraps -- FN-WIDE, all homable params
           ; or none. ⚠ per-param verdicts were measured BOTH ways and lost: pruning a "losing"

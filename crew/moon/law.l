@@ -996,6 +996,27 @@
       (two? irZp)
       (member? '(st sp 48 r6) zpf)                   ; n spills at entry...
       (member? '(ld4 r0 sp 48) zpf))                 ; ...and every read re-extends from the slot
+   ; -- priced int-param homes (the leaf lane): an int param whose slot touches pay the
+   ; entry cvt takes its POSITIONAL pool seat -- after the locals pick, and only while the
+   ; pool stays deep (>= 2 free after the take). f4: n homes its own arrival seat (one sx4,
+   ; no mov, the slot never opens -- the fn runs bare); f5: four pointer homes + the picked
+   ; locals leave the pool at two, so the hot n keeps its slot (the mag_mul discipline:
+   ; the unpriced version drank the pool and reopened the d128 stack cell); f6: a read-free
+   ; param earns nothing.
+   irIH (cgn "long f4(long *a, int n) { return a[n] + a[0]; } int main() { return 0; }")
+   ihf (fnf 'f4 (caup irIH))
+   irIP (cgn "long f5(long *a, long *b, long *c, long *d, int n) { long s = 0; for (int i = 0; i < n; i++) { s = s + a[i] + b[i] + c[i] + d[i]; } return s; } int main() { return 0; }")
+   ipf (fnf 'f5 (caup irIP))
+   irID (cgn "long f6(long *a, int n) { return a[0]; } int main() { return 0; }")
+   idf (fnf 'f6 (caup irID))
+   _ (assert
+      (two? irIH) (two? irIP) (two? irID)
+      (member? '(sx4 r5) ihf)                        ; n canonicalizes ON its seat (home = arrival)...
+      (member? '(ldx r0 r6 r5 8 0) ihf)              ; ...and indexes register-resident
+      (= 0 (splds ihf))                              ; no slot traffic at all: f4 runs bare
+      (member? '(st sp 16 r7) ipf)                   ; f5: n spills -- the pool ends at two...
+      (member? '(ld4 r0 sp 16) ipf)                  ; ...and the loop re-reads the slot
+      (! (member? '(sx4 r5) idf)))                   ; a read-free param earns nothing
    ; -- d128 LOCALS home as CS PAIRS: a loop-carried __int128 local takes (lo hi) off the
    ; cs pool (callee-saved: call-safe, no wraps, and no operand-pool pressure -- the wpk
    ; park's registers stay free). reads/writes are mov pairs on the r0:r2 protocol; the
