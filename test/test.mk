@@ -37,6 +37,20 @@ test_love0: $(love0)
 	@{ $(love0) </dev/null; echo $$? > out/host/.test_love0.rc; } | tee out/host/.test_love0.out; \
 	  s=$$(cat out/host/.test_love0.rc); \
 	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/host/.test_love0.out` -eq 2 ]
+# test_filemode -- FILE MODE IS TERMINAL, and nothing inside the corpus can gate that:
+# a test that proves the run dies cannot also report. so a shell runs one two-line file
+# and asks both halves of the law -- the face on err AND exit 1 -- for the scare nobody
+# used to stop on, a missing name. the zero point it would otherwise answer is a fake
+# result wearing a real one's face ((() x) is 1), which is the whole reason it stops now.
+.PHONY: test_filemode
+test_filemode: $m
+	@echo TEST file mode is terminal
+	@printf '(: _ (puts "reached\\n") _ (an-name-the-book-lacks 1) (puts "past\\n"))\n' > out/host/.test_filemode.l
+	@$m out/host/.test_filemode.l > out/host/.test_filemode.out 2>&1; r=$$?; \
+	  { [ $$r -eq 1 ] && grep -q "^reached$$" out/host/.test_filemode.out \
+	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
+	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
+	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
 # ⚠ test_host takes the corpus as a FILE, not on stdin, for the same reason love0
 # stopped: the corpus TESTS stdin (test/io.l's see/unsee roundtrip pokes `in`), and
 # a stream you are being read from is not one you can also poke. that used to be

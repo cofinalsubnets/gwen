@@ -75,7 +75,7 @@ include mk/install.mk
 # ($(mw), test/test.mk).
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_love0 vmret waits
+test_phases = test_host test_love0 test_filemode vmret waits
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 # vmret rides the fast `test`: the TCO gate (every lvm_* VM ap must tail-jump, never

@@ -34,6 +34,13 @@
 ;
 ; validated against the pre-fix binary (the natjit group lane gating on jgir-ok? alone,
 ; with no grpfix): 215 of 3000 cases differed, in exactly the five group shapes.
+
+; ⚠ THE FREE NAME IS THE INSTRUMENT here (bleaf below), and file mode's help quits on every
+; scare -- so this file installs its own: a missing read answers the zero point and the case
+; runs on, everything else still delegates to the default and stops the file.
+(: fzhelp (heard ())
+   _ (hear (\ s a b (? (&& (scare? s) (id? a 'missing)) () (fzhelp s a b)))))
+
 (: ; globals the call-out lane can resolve -- two arithmetic, two that hand back a value
    ; the integer lane cannot hold, so the lane must decline rather than emit nothing
    (gfz0 i) (i + 1)

@@ -77,9 +77,15 @@ test_hue: | $(m)
 # to prove cook honors it, so an unbuilt shell is two red tests reading `cannot run
 # echo`. the rule that builds it lives in the ROOT makefile, so the prerequisite
 # sits on test_tools (test/test.mk) rather than here.
+# ⚠ and the built love goes on PATH FIRST, because that lush is a catted script under
+# `#!/usr/bin/env -S love`: PATH picks the love (the design), so without this the gate
+# runs whatever love is INSTALLED -- a stale one scares its way through a green run.
+# a one-entry .bin/ dir, NOT out/host itself: that holds `sh -> kore`, and shadowing
+# /bin/sh costs the two .SHELLFLAGS tests (kore's lush takes no bundled -ec).
 test_cook: | $(m)
 	@echo TEST cook.l
-	@cd $(R) && $(mwr) crew/cook/cooktest.l
+	@mkdir -p $(R)/out/host$(hsuf)/.bin && ln -sf ../love $(R)/out/host$(hsuf)/.bin/love
+	@cd $(R) && PATH="$(abspath $(R)/out/host$(hsuf)/.bin):$$PATH" $(mwr) crew/cook/cooktest.l
 
 # crew/tele/tele.l: the PyTorch-style autograd library (pure love over the constellation
 # algebra). teletest.l grad-checks every op -- the analytic gradient (from `back`)

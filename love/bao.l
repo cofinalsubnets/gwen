@@ -335,22 +335,23 @@
    ; missing) never named: from any condition, a value -- and the value of the
    ; absorbed condition is the point, the held inhabitant of nothing, so
    ; (i love you) stays 1. any policy that runs out of cases delegates here:
-   ; (\ s a b (? (mine? a) .. (welp s a b))). the point is captured HERE,
-   ; helpless at load -- the body cannot say (:), since reading the missing
-   ; head under an installed help would recurse.
-   welp
-     (: zp (:)
-        (\ s a b zp))
+   ; (\ s a b (? (mine? a) .. (welp s a b))).
+   welp (\ s a b ())
 
    ; the face a raise wears -- ;; a b -- ⚠ ON ERR: a DIAGNOSTIC, and a script's stdout is the
    ; script's (the C print this stands in for always went there). the two defaults share it and
-   ; differ only in WHAT SURVIVES: both welp to the point (a unit -- a number would exponentiate)
-   ; and pass the more bits through, but at the PROMPT every raise survives where in FILE MODE
-   ; only a missing does. a deliberate scare stays terminal there; 239 sites lean on it.
+   ; differ only in WHAT SURVIVES: at the PROMPT every raise welps to the point (a unit -- a
+   ; number would exponentiate) and the session reads on, where in FILE MODE nobody is listening
+   ; and every scare is TERMINAL -- a deliberate one (239 sites lean on that) and a missing name
+   ; alike, since the point a missing answers is a fake result wearing a real one's face.
+   ; ⚠ file-help welps AFTER the quit, and that line is not dead: a frontend with no `quit`
+   ; nif (wasm) folds the name to the point at this define, so (quit 1) is a no-op there and
+   ; the floor is what answers. never let the quit be the answer -- it would be 1.
    (hface a b) (: _ (say err ";; ") _ (print err a) _ (say err " ") _ (print err b) (put err 10))
    shell-help (\ s a b (: _ (? (scare? s) (hface a b)) (welp s a b)))
    file-help  (\ s a b (: _ (? (scare? s) (hface a b))
-                          (? (? (scare? s) (nil? (id? a 'missing)) ()) (quit 1) (welp s a b))))
+                          _ (? (scare? s) (quit 1))
+                          (welp s a b)))
 
    ; INSTALLED AT LOAD, not at the prompt: file mode is where nobody was listening. an unbound
    ; global already surfaced from C, a `:` read before its pin did not, and both answer the zero

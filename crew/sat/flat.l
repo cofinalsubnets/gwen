@@ -13,10 +13,10 @@
 ;                          arena family; the layout comment sits above fbvag3)
 ;                                                              -> best key | count = M_cls
 ; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) over the SAME memory are the deopt
-; fallbacks, the arm64/no-`nif` engine (the glazed image mops nif; make exports
-; LOVE_NO_IMAGE=1 so every gate run has it), and the differential oracle: the `fknob`
-; box forces the twins and `fboth` gates verdict equality. lisp keeps only the cold
-; path: restarts, learnt-DB reduction, activity decay/rescale.
+; fallbacks, the arm64/no-`nif` engine (the seam rides `(from 'glaze 'nif)` -- main.c's
+; seal pulls nif off the book, and the glaze module is the door it keeps), and the
+; differential oracle: the `fknob` box forces the twins and `fboth` gates verdict
+; equality. lisp keeps only the cold path: restarts, learnt-DB reduction, decay/rescale.
 ; Run AFTER sat.l (it reuses the leaked oracle + instances):
 ;   cat crew/sat/sat.l crew/sat/flat.l | love
 ; the story, the kernel contract, and the measured results: doc/sat-kernels.md.
@@ -38,12 +38,16 @@
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
 (:
+   ; ⚠ PRESENCE OUT OF BAND: `(lit? peepw)` READS peepw, and reading a name the book lacks
+   ; IS the missing condition -- so every "have I got one?" here asks (names ()), never the
+   ; name. the answer is the same on a host; off one it is an answer instead of a raise.
+   (there? n) (member? n (names ()))
    ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (host/mem.c) when
    ; they are in the book, the byte path as the portable twin (freestanding targets
    ; have no host glob) -- picked once at bind time ---------------------------------
-   getw (? (lit? peepw) peepw
+   getw (? (there? 'peepw) peepw
            (\ c i (: b (8 * i) ((peep c b 0) | (((peep c (b + 1) 0) << 8) | (((peep c (b + 2) 0) << 16) | ((peep c (b + 3) 0) << 24)))))))
-   putw (? (lit? pinw) pinw
+   putw (? (there? 'pinw) pinw
            (\ c i v (: b (8 * i)
                        _ (pin c b (v & 255)) _ (pin c (b + 1) ((v >> 8) & 255))
                        _ (pin c (b + 2) ((v >> 16) & 255)) (pin c (b + 3) ((v >> 24) & 255)))))
@@ -679,12 +683,17 @@
     (: _ (say j pre)
        _ (foldl (\ _ l (: _ (say j (show l)) (say j " "))) 0 c)
        (say j "0\n"))
+   ; the seam itself, bound ONCE, through the MODULE: main.c's seal pulls `nif` off the book on
+   ; every boot -- the glaze folded it into its closures and keeps it as a member, so this is the
+   ; one door left. no glaze answers () and (() 'nif) is 1, which `lit?` below declines: the guard
+   ; is the presence test. a local, so those guards read a binding and never a name.
+   nifseam (from 'glaze 'nif)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep ((from 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
        c (cask bs)                                           ; the charlist lane fills in C
-       (nif c fb '(\ q (q)) ar))
+       (nifseam c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? !(&& (lit? nif) (id? (intern love-arch) 'x64)) ()
+    (? !(&& (lit? nifseam) (id? (intern love-arch) 'x64)) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
              (: ks `((fnif (fbcp-ir nv) fbcp3 3)
@@ -693,7 +702,7 @@
                 _ (pin fkers nv ks) ks))))
    bvkers (tablet 0)                                        ; NB -> (fbvag), the grow-step kernel, one assemble per bucket
    (fbvagk NB2)
-    (? !(&& (lit? nif) (id? (intern love-arch) 'x64)) ()
+    (? !(&& (lit? nifseam) (id? (intern love-arch) 'x64)) ()
        (: hit (peep bvkers NB2 ())
           (? (two? hit) hit
              (: ks (link (fnif (fbvag-ir NB2) fbvag3 4) ())

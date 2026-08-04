@@ -29,7 +29,7 @@
  (id? (:) (? 0 'a)) (id? (:) (map (+ 1) ()))     ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), NOT charm 0
  (2 = (: x 1 x (x + 1) x)))                      ; the sequence law: a rebind reads the previous value
 ; one scope: a forward read raises missing, and welp answers it with the zero point -- the same
-; law the asserts above show, under a help that keeps it quiet (file mode's default wears a face)
+; law the asserts above show, under a help that keeps it quiet (file mode's default quits on it)
 (hear welp)
 (assert (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b)))
 (hear 0)

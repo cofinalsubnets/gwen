@@ -81,8 +81,10 @@
 ; * a corpus test that twirls a task must (catch p) it: an orphan stalls the kernel runner.
 ; * the repl reads each LINE as one expression (1 = 1 answers 1); files read forms. the shell
 ;   installs a default help (bao's shell-help): a scare prints `;; a b` and answers the zero
-;   point, so the session survives every raise. FILE MODE's file-help quits 1 on any non-`missing`
-;   scare, so an assert failure still stops the run. a help is INSTALLED, not bound: (hear f)
+;   point, so the session survives every raise. FILE MODE's file-help prints the same face and
+;   quits 1 on EVERY scare -- a missing name included, since the point it would answer is a fake
+;   result wearing a real one's face. so ask presence OUT OF BAND ((member? 'x (names ())), never
+;   `(lit? x)`, which reads x). a help is INSTALLED, not bound: (hear f)
 ;   writes the hot_help slot, (hear ()) uninstalls, (heard ()) reads -- `help` is not a book name.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the CREW (crew/, the apps) rides over the core, each owning NON-OVERLAPPING files so a session

@@ -37,6 +37,30 @@
          (cvtsi2sd f1 r0)
          (addsd f0 f1))
    cxdty '(struct "__cplx_double")                      ; the seeded complex-double tag (a VALUE: it leads the book, like spush2)
+   ; --- the ISA families: the one place an op's membership is stated. every IR pass reads these
+   ; -- the derived base/disp tablets, rdsp (the dataflow view), the member? sites in the sweeps.
+   ; a new op joins its family HERE; an op off every list stays opaque (the safe default).
+   ; ⚠ an op that can BASE on r4 must also join a4base + uoff (unframe proves frame-cleanliness
+   ; there; a missed op re-frames the fn, and a framed fn that calls the VM faults -- glaze rides
+   ; Ip in rbp) and, if it touches a frame slot, deadst's scans.
+   ; ⚠ VALUES, so they lead the book beside spush2: rdsp reads them and rdsp's readers fold
+   ; FIRST, so a family pinned BELOW them is read empty at that fold -- one missing scare per
+   ; family per reader, and file mode stops on the first. ---
+   ldops9 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)          ; the gp loads (full + narrow)
+   gstops '(st st1 st2 st4)                         ; the gp stores
+   fldops '(ldsd ldss) fstops '(stsd stss)          ; the f-memory pair
+   stops9 (gstops + fstops)                         ; every plain store (gp head first)
+   leaops '(lea lean)                               ; the address makes (lean: consumed by its own use)
+   xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
+   stxops '(stx stxb)                               ; the indexed stores
+   siops '(si si1 si2 si4)                          ; the store-immediates (made only by the addressing fold)
+   cmpmops '(cmpm cmprm)                            ; the memory cmps (made only by cmpfuse)
+   aluops '(add sub and or xor imul)
+   divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
+   vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
+   unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
+   xmmops '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)   ; xmm-only: no gp effect
+   barops '(call callr raw sys)                     ; the opaque barriers
    ; the gen state g (a tablet): 'n the label counter, 'off the frame's
    ; high-water offset, 'brk/'cnt the loop label stacks, 'glob the global
    ; table (name -> (label ty init)), 'globs the emission order, 'strs the
@@ -2728,27 +2752,6 @@
    ; after it -- so the return address pops into r3 (caller-saved, never a return value) and BX r3
    ; returns once the 16-byte block drops. bit0 of the pushed lr is set, so the BX stays Thumb.
    epi-t16va `(`('lea 'sp 'fp 0) `('pop 'r4) `('pop 'fp) `('pop 'r3) `('add 'sp 'sp 16) `('jmpr 'r3))
-   ; --- the ISA families: the one place an op's membership is stated. every IR pass reads these
-   ; -- the derived base/disp tablets, rdsp (the dataflow view), the member? sites in the sweeps.
-   ; a new op joins its family HERE; an op off every list stays opaque (the safe default).
-   ; ⚠ an op that can BASE on r4 must also join a4base + uoff (unframe proves frame-cleanliness
-   ; there; a missed op re-frames the fn, and a framed fn that calls the VM faults -- glaze rides
-   ; Ip in rbp) and, if it touches a frame slot, deadst's scans. ---
-   ldops9 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)          ; the gp loads (full + narrow)
-   gstops '(st st1 st2 st4)                         ; the gp stores
-   fldops '(ldsd ldss) fstops '(stsd stss)          ; the f-memory pair
-   stops9 (gstops + fstops)                         ; every plain store (gp head first)
-   leaops '(lea lean)                               ; the address makes (lean: consumed by its own use)
-   xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
-   stxops '(stx stxb)                               ; the indexed stores
-   siops '(si si1 si2 si4)                          ; the store-immediates (made only by the addressing fold)
-   cmpmops '(cmpm cmprm)                            ; the memory cmps (made only by cmpfuse)
-   aluops '(add sub and or xor imul)
-   divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
-   vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
-   unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
-   xmmops '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)   ; xmm-only: no gp effect
-   barops '(call callr raw sys)                     ; the opaque barriers
    ; rdsp: the table's dataflow view of one form -- what it reads, what it defines, whether it's
    ; droppable when its defs die. an op off the table answers 'bar (assume everything).
    (rdsp f)                                         ; -> (L reads defs pure?) | 'bar

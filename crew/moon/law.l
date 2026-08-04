@@ -9,9 +9,8 @@
 ; smoke through the real `mooncc`.
 ;
 ; ⚠ a MID-LETREC assert must bind to `_` -- a bare one sits in binding position,
-; becomes define-sugar, and NEVER RUNS (it shadows a name, the pairing shifts, and
-; the missing scares it sheds don't stop file mode -- the gate stays green). when
-; in doubt, falsify one assert and watch the gate red.
+; becomes define-sugar, and NEVER RUNS (it shadows a name and the pairing shifts).
+; when in doubt, falsify one assert and watch the gate red.
 
 ; A REFUSAL, however it says so. A stage answers a bare () when it refused
 ; without a cause it could name, and a gripe when it could -- and since rung 4
