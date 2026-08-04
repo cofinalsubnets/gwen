@@ -3871,15 +3871,37 @@
    ; adjacent reg-reg movs FOLD: after (mov a b), a back-copy or a duplicate is a husk and
    ; drops; a feed (mov d a) reads through to b, stranding the middle def for deaddef's
    ; rerun. frame anchors and r3 stay out (epim?/sibjmp/unframe anchor on their shapes).
+   ; an ALU/compare/memory consumer reads through the same way, at the WHITELISTED read
+   ; positions only -- div and the shifts ride protocol registers, and la's operand is a
+   ; symbol, so a generic substitution has no license.
    (hmov? f) (two? f && <f = 'mov && nom? <>f && nom? <>>f
                && !(member? <>f '(sp fp r4 r3)) && !(member? <>>f '(sp fp r4 r3)))
+   ; no memory ops here: addrfold CONSUMES a feeding mov into a load's base and deletes
+   ; it under its own license -- a read-through would steal the pattern and strand a mov
+   ; deaddef can't always prove dead
+   huskrd '((add 2 3) (sub 2 3) (and 2 3) (or 2 3) (xor 2 3) (imul 2 3)
+            (cmp 1 2) (test 1 2))
+   (hsub f a b ps i)
+    (? !(two? f) ()
+       ((? (member? i ps && id? <f a) b <f) >< hsub >f a b ps (i + 1)))
    (dehusk fs)
     (? !(two? fs) ()
        (: f <fs r >fs
           nx (? (two? r) <r ())
           (? !(hmov? f) (f >< dehusk r)
              (id? <>f <>>f) (dehusk r)
-             !(hmov? nx) (f >< dehusk r)
+             !(hmov? nx)
+              (: a <>f b <>>f
+                 e9 (? (two? nx) (assoc <nx huskrd) ())
+                 rd9 (? (two? e9) (rdsp nx) 'bar)
+                 ; b must stay clear of the consumer's defs: the alu dance writes its
+                 ; dest before reading the source, so (sub rd ra rd) reads its own wreck.
+                 ; and the rewrite pays only when it STRANDS the mov (a dies past the
+                 ; consumer) -- a live park's read is renamer-free, not worth the churn
+                 (? (|| (id? rd9 'bar) (|| (member? a <>rd9) (member? b <>rd9))) (f >< dehusk r)
+                    (: nx2 (hsub nx a b >e9 0)
+                       (? (|| (= nx2 nx) !(dies? a >r)) (f >< dehusk r)
+                          (f >< dehusk (nx2 >< >r))))))
              (: a <>f b <>>f d <>nx s <>>nx
                 (? (&& (id? s a) (id? d b)) (dehusk (f >< >r))   ; back-copy: b holds b already
                    (&& (id? s b) (id? d a)) (dehusk (f >< >r))   ; a duplicate copy
