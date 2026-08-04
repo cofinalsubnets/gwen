@@ -4927,6 +4927,22 @@
        _ (pin g 'lrec ())
        _ (pin g 'lsq 0)                              ; the alive statement counter
        (pin g 'stwrap 'all))
+   ; the g-pin RECORD: every per-fn pin and its neutral value, one roster -- cgfn's entry
+   ; and each regen attempt wipe the lot, so an attempt always starts from the clean
+   ; record. a NEW per-fn pin registers here; the computed ones (fn, epi, pool0/pool,
+   ; vslots, the fc cells, sret's slot) re-pin over their neutrals at their owner.
+   (fnreset g)
+    (: _ (pin g 'off 8)                              ; the frame cursor: slot -8 = saved r3 (see epi)
+       _ (pin g 'fesc ())                            ; escape flag (the sibcall gate reads it)
+       _ (pin g 'inlining ()) _ (pin g 'inlbody 0)   ; splice depth + body depth (vmget's blind)
+       _ (pin g 'inlret ()) _ (pin g 'inlrt ())      ; splice return label + type (cgstmt's ret door)
+       _ (pin g 'inlrb ()) _ (pin g 'inlrbs ())      ; splice decl-license + its reg roster
+       _ (pin g 'rpin ())                            ; splice bind pins
+       _ (pin g 'argseal 0)                          ; the vmap's staging seal depth
+       _ (pin g 'hasasm ())                          ; an asm statement pins it (homing off)
+       _ (pin g 'cssv ())                            ; the callee-saved save forms (a cs regen pins)
+       _ (pin g 'sret ())                            ; the memory-return slot (the driver re-pins under sr6f)
+       (rgreset g))                                  ; + the regen channels' neutral state
 
    (cgstmt g env s)
     (: _ (psreset g)                                 ; a statement never carries a live operand in (vmap pins do)
@@ -5282,17 +5298,11 @@
 
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     (: params <>>f
-       _ (pin g 'off 8)                              ; slot -8 = saved r3 (see epi)
+       _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        ; v6-M has no FPU registers at all: the f0/f1/f15 fiction lives in three 8-byte frame CELLS
        ; allocated up front, and soften rewrites every f-op onto them
        _ (? (v6m? g) (: _ (pin g 'fc0 (ntmp g 'double)) _ (pin g 'fc1 (ntmp g 'double))
                         _ (pin g 'fc15 (ntmp g 'double)) 0) 0)
-       _ (pin g 'fesc ())                            ; fresh escape flag (the sibcall gate reads it)
-       _ (pin g 'inlining ())                        ; fresh inline-depth flag
-       _ (pin g 'inlret ())                          ; fresh inline-return label (cgstmt's ret door)
-       _ (pin g 'inlrb ())                           ; fresh splice decl-license (+ its reg roster)
-       _ (pin g 'inlrbs ())
-       _ (rgreset g)                                 ; fresh regen channels
        _ (pin g 'fn <>f)
        ; -- C99 VLA prep: scan the body for runtime-dim locals; each site takes a POINTER slot +
        ; a SIZE slot in the static frame, the size slots ZEROED after the param spill (the decl
@@ -5828,17 +5838,12 @@
        ; never args; opool's names land on riscv arg registers, so it can't ride there.
        tpool (? (t32? g) () (rv? g) '(r8 r9 r10 r11) opool)
        _ (pin g 'pool0 tpool) _ (pin g 'pool tpool)
-       _ (pin g 'hasasm ())                         ; fresh per fn: an asm statement pins it (homing off)
-       _ (pin g 'cssv ())                           ; fresh per fn: the callee-saved save forms (a cs regen pins)
-       _ (pin g 'argseal 0)                         ; fresh per fn: the vmap's staging seal depth
-       _ (pin g 'inlbody 0)                         ; ...and the splice-body depth (vmget's blind)
-       _ (pin g 'rpin ())                           ; ...and the splice bind pins
        ; v6-M MEMORY return: this fn's >4B composite result fills the address the caller
        ; passed as the implicit first arg (r0) -- save it in its own slot, params start at
-       ; gp 1. the ret lane reads g 'sret back; reset per fn (stale pins would misroute).
+       ; gp 1. the ret lane reads g 'sret back; fnreset holds the neutral.
        srt (? (two? sig) <sig 'long)
        sr6f (sretm? g srt)
-       _ (? sr6f (pin g 'sret (ntmp g 'long)) (pin g 'sret ()))
+       _ (? sr6f (pin g 'sret (ntmp g 'long)) ())
        sp1 (? (&& vararg (a64? g)) (vaspill-a64 params)
               (&& vararg (t32? g)) (vaspill-t32 params)
               (&& vararg (rv? g)) (vaspill-rv params)
@@ -5899,7 +5904,8 @@
        ; deopts: ir1 stands.
        (regen hp st)
         (: lh9 <st lp9 <>>st cs9 (nthr st 3)
-           _ (pin g 'n n0) _ (pin g 'strs strs0) _ (pin g 'off 8) _ (pin g 'fesc ())
+           _ (fnreset g)                             ; the attempt starts from the clean record...
+           _ (pin g 'n n0) _ (pin g 'strs strs0)     ; ...at ir1's accumulator snapshot
            _ (pin g 'pool0 lp9) _ (pin g 'pool lp9)
            _ (rgset g lh9 av)
            ; the callee-saved homes: one slot each past the r3 cell, stored by the prologue
