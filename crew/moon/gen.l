@@ -13,6 +13,9 @@
 ; compound literal ('clit ty init) fills a frame temp whose ADDRESS is the lvalue.
 ; refused, not fudged: ptr+ptr, deref of a non-pointer, assigning to an array, struct params
 ; or returns by value.
+; the PIPELINE'S STAGES are typed: crew/moon/stage.l holds each pass's sig (input stage ->
+; output stage), and the moon gate checks this file as data against it -- a new pass declares
+; its sig there, and a recomposition of the strict chains is a clash naming its seam.
 (:
    ; ⚠ FIRST binding on purpose: a plain VALUE folds EAGERLY when the baking compiler reaches
    ; a reader (a lambda resolves lazily), and the fold order is NOT textual. the t32 pair push;
@@ -5946,7 +5949,8 @@
              (? (|| pp lh) (regen (? pp 'shadow ()) lh lp0 cu0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
-       ; it early lets a pass-2 ride clobber a live arrival.
+       ; it early lets a pass-2 ride clobber a live arrival. this chain's order is TYPED
+       ; (stage.l): each pass advances a stage die, so only this composition checks.
        (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (deadlab irf)))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms

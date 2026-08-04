@@ -42,6 +42,12 @@ echo "CC crew/holo/text.l (love0 lane)"
 "$love0" -l crew/holo/text.l -e '(? (two? (asm-text "li r0, 60")) (quit 0) (quit 1))' </dev/null \
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
+# ---------------------------------------------- the pipeline's stage types
+# gen.l read as DATA and typed against crew/moon/stage.l's sig table (the
+# overlay leg): the post-choice chain composes in exactly one order, and a
+# clash names its innermost seam. nothing from stage.l rides any image.
+"$m" crew/moon/stage.l || fail "moon-stage (the ;; moon-stage line names the seam)"
+
 arch=$(uname -m)
 if [ "$arch" != x86_64 ]; then
   echo "mooncc: cc (laws only -- x86_64 e2e skipped on $arch) ok"
