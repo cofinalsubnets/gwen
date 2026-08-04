@@ -256,6 +256,32 @@
  (slurp o) (? (? (port? o) (= -2 (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 3 is a string too, so a string? probe would lie
               (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))
                  (string (rev (rl o ())))))
+ ; gulp: block for the first byte (see parks the TASK), then all that is ready, REVERSED --
+ ; `flow` needs a gulp ENDING IN A PROMISE, and a forward-built list only gets one by being
+ ; copied onto it. `cue?` is the dual of the park, so the loop stops at the fd's own edge.
+ (gulp p) (: c (see p)
+             (? (= c -1) ()
+                ((: (go acc) (? (cue? p) (: b (see p) (? (= b -1) acc (go (link b acc)))) acc))
+                 (link c ()))))
+ (drink p) (rev (gulp p))                         ; the gulp in order: sip draws ONE, drink what is READY, slurp ALL
+ ; once: THE PROMISE, through a tablet -- the door this tree sanctions for mutation.
+ ; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the ordinary
+ ; case (eof answers ()), and a bare pin leaves the slot reading exactly like an unforced one --
+ ; so it would re-run f forever, silently, on the one input that matters.
+ (once f) (: t (tablet 0)
+             (\ u (: v (peep t 0 ())
+                     (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
+ ; flow: A PORT IS A CHARLIST -- one whose tail is a promise that drinks the next gulp, so the
+ ; reader (love/p1.l) asks for more itself and nobody turns a port into text first. the gulp is
+ ; REALIZED and only the join is lazy. ⚠ THE TAIL IS A `once` AND MUST BE: p1 forces one position
+ ; more than once (the `#!` lookahead, the \xNN lane), and a re-reading tail DRINKS again, losing
+ ; the bytes between -- which fails as a misread, never a crash.
+ (flow p) (: g (gulp p) (? (two? g) (foldl (flip link) (once (\ u (flow p))) g) ()))
+ ; trickle: flow's careful twin, ONE byte per force, so the list never runs ahead of the port and
+ ; the two share a position BY CONSTRUCTION. `flow` hands back a head DETACHED from the port --
+ ; two positions where there was one -- which is why a form inside a piped script reads `in` and
+ ; finds nothing (doc/io.md part III). `in` trickles for exactly that reason.
+ (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p))))))
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; the help status reader. ONE bit reaches a help -- scare (1); `sound` answers its own nothings as
 ; values (doc/io.md rung 6c), so nothing raises the more bit and nothing asks.
@@ -279,17 +305,14 @@
 ; read, so a fs-less frontend holds () there and degrades to the baked table instead of raising.
 (: use
    (: prior use
-      ; read-eval every form of a module source. the port is drained ONCE and walked as text -- a
-      ; module is a file or a baked string, never a live wire. ⚠ a torn form scares.
-      ; ⚠ STRAIGHT TO THE CHARLIST, never through `slurp`: its drain conses the bytes, reverses
-      ; them and re-strings them, and the string would then be consed a second time -- so a 245 KB
-      ; module would cost four copies of itself. and the walk is an ACCUMULATOR: `jot` would put a
-      ; frame on the l-stack per byte, which the stress sizer reads as heap and chases.
+      ; read-eval every form of a module source. ⚠ a torn form scares.
+      ; ⚠ `flow`, never `slurp`: slurp's drain conses the bytes, reverses them and re-strings
+      ; them, and the string would then be consed a second time -- four copies of a 245 KB module.
       (rdev q) ((: (go cl) (: r (sound cl)
                               (? (two? r) (: _ (ev 'ev (cap r)) (go (cup r)))
                                  (id? r torn) (scare (\ unfinished-form) q)
                                  0)))
-                (rev ((: (rl acc) (: c (see q) (? (= c -1) acc (rl (link c acc))))) ())))
+                (flow q))
       (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
       (mname s) (: n (tally s)
                    b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)
