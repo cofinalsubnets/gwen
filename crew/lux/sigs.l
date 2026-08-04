@@ -13,10 +13,10 @@
 ;
 ; a body-LESS `:` -- lux-dom/lux-sigs leak; neither shadows a nif.
 (:
-   (lux-join a b) (? (= a b) a 'top)
+   (lux-join a b) (? (a = b) a 'top)
    (lux-tr op a b) 'top
    (lux-lit e) 'top
-   (lux-okr bd decl) (? (member? bd '(top bot)) 1 (= bd decl))
+   (lux-okr bd decl) (? (member? bd '(top bot)) 1 (bd = decl))
    lux-dom (hash 'dice '(window tag rect zipper sheaf wrow trow fmap lay)
                 'ctors ()
                 'join lux-join 'tr lux-tr 'litdie lux-lit 'okr lux-okr)

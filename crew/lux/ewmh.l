@@ -13,12 +13,12 @@
 (:
    ; --- pure: strut arithmetic. A strut is (left right top bottom), root-
    ;     relative reserved widths; shrinking clamps the rect off each edge. ---
-   (strut-parse vals) (? (< (tally vals) 4) () (take 4 vals))                    ; _PARTIAL's 12 values: the first 4 are the strut
+   (strut-parse vals) (? ((tally vals) < 4) () (take 4 vals))                    ; _PARTIAL's 12 values: the first 4 are the strut
    (strut-shrink r st swp shp)
     (: x1 (mx2 (rx r) (nthl st 0)) y1 (mx2 (ry r) (nthl st 2))
-       x2 (mn2 (+ (rx r) (rw r)) (- swp (nthl st 1)))
-       y2 (mn2 (+ (ry r) (rh r)) (- shp (nthl st 3)))
-       (rct x1 y1 (mx2 0 (- x2 x1)) (mx2 0 (- y2 y1))))
+       x2 (mn2 ((rx r) + (rw r)) (swp - (nthl st 1)))
+       y2 (mn2 ((ry r) + (rh r)) (shp - (nthl st 3)))
+       (rct x1 y1 (mx2 0 (x2 - x1)) (mx2 0 (y2 - y1))))
 
    ; --- the EWMH state: one tablet (the evq pattern) ---
    ewst (tablet 4)
@@ -32,8 +32,8 @@
     (: vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT_PARTIAL"))
        vals (? (two? vals) vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
        st (strut-parse vals)
-       (? st (: _ (pin ewst 'struts (link (L win st) (filter (\ p (! (= (cap p) win))) (peep ewst 'struts ())))) st) ()))
-   (ewmh-untrack win) (pin ewst 'struts (filter (\ p (! (= (cap p) win))) (peep ewst 'struts ())))
+       (? st (: _ (pin ewst 'struts (link `(win st) (filter (\ p (! ((cap p) = win))) (peep ewst 'struts ())))) st) ()))
+   (ewmh-untrack win) (pin ewst 'struts (filter (\ p (! ((cap p) = win))) (peep ewst 'struts ())))
 
    ; --- CreateWindow (opcode 1): the 1x1 InputOnly support window at (-1,-1) ---
    (x-mkwin s wid parent)
@@ -44,18 +44,18 @@
    ; --- ChangeProperty (opcode 18, mode Replace), format 32 and 8 ---
    (x-chprop32 s win prop type vals)
     (: n (tally vals)
-       _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s (+ 6 n)) _ (x-w32 s win) _ (x-w32 s prop)
+       _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s (6 + n)) _ (x-w32 s win) _ (x-w32 s prop)
        _ (x-w32 s type) _ (x-w8 s 32) _ (x-w8 s 0) _ (x-w16 s 0) _ (x-w32 s n)
        (: (go m) (? (two? m) (: _ (x-w32 s (cap m)) (go (cup m))) 0) (go vals))) ; an ORDERED loop: map's effects run tail-first
    (x-chprop8 s win prop type txt)
     (: n (tally txt)
-       _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s (+ 6 (/ (+ n (x-pad4 n)) 4))) _ (x-w32 s win) _ (x-w32 s prop)
+       _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s (6 + ((n + (x-pad4 n)) / 4))) _ (x-w32 s win) _ (x-w32 s prop)
        _ (x-w32 s type) _ (x-w8 s 8) _ (x-w8 s 0) _ (x-w16 s 0) _ (x-w32 s n)
        _ (x-wname s txt)
-       (: (go i) (? (< i (x-pad4 n)) (: _ (put s 0) (go (+ i 1))) 0) (go 0)))
+       (: (go i) (? (i < (x-pad4 n)) (: _ (put s 0) (go (i + 1))) 0) (go 0)))
 
    ; --- init: intern the vocabulary, hoist the support window, write the root ---
-   ewmh-atoms (L "_NET_SUPPORTED" "_NET_SUPPORTING_WM_CHECK" "_NET_WM_NAME" "_NET_CLIENT_LIST"
+   ewmh-atoms `("_NET_SUPPORTED" "_NET_SUPPORTING_WM_CHECK" "_NET_WM_NAME" "_NET_CLIENT_LIST"
                  "_NET_CLIENT_LIST_STACKING" "_NET_ACTIVE_WINDOW" "_NET_CURRENT_DESKTOP" "_NET_NUMBER_OF_DESKTOPS" "_NET_WM_DESKTOP"
                  "_NET_WM_STATE" "_NET_WM_STATE_FULLSCREEN" "_NET_WM_STATE_MODAL"
                  "_NET_WM_STATE_MAXIMIZED_VERT" "_NET_WM_STATE_MAXIMIZED_HORZ" "_NET_CLOSE_WINDOW"
@@ -70,27 +70,27 @@
        (a nm) (peep at nm 0)
        _ (x-mkwin s idbase root)
        _ (x-chprop32 s root (a "_NET_SUPPORTED") 4                                           ; type ATOM(4); only the _NET_ vocabulary
-                     (map (\ nm (peep at nm 0)) (filter (\ nm (= (snip nm 0 5) "_NET_")) ewmh-atoms)))
-       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 (L idbase))                    ; type WINDOW(33)
-       _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 (L idbase))
+                     (map (\ nm (peep at nm 0)) (filter (\ nm ((snip nm 0 5) = "_NET_")) ewmh-atoms)))
+       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 `(idbase))                     ; type WINDOW(33)
+       _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 `(idbase))
        _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setWMName: the Java hack
-       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 (L ndesk))                       ; type CARDINAL(6)
+       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 `(ndesk))                        ; type CARDINAL(6)
        (x-flush s))
 
    ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
    (ewmh-sync s sh)
-    (: wins (wswins sh) cur (- (wscur sh) 1) foc (? (wsfoc sh) (wsfoc sh) 0)
-       key (L cur foc wins)
-       (? (= key (peep ewst 'last ())) 0
+    (: wins (wswins sh) cur ((wscur sh) - 1) foc (? (wsfoc sh) (wsfoc sh) 0)
+       key `(cur foc wins)
+       (? (key = (peep ewst 'last ())) 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins)   ; libwnck CREATES its windows off THIS list (no stacking =
                                                                                      ; an empty taskbar); wswins is tiles-then-floats = bottom to top
-             _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 (L cur))
-             _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 (L foc))
-             _ (map (\ p (: t (- (cap p) 1)                                      ; tiled windows wear their workspace...
-                            (map (\ w (x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 (L t))) (zrow (caup p))))) (wsboard sh))
-             _ (map (\ p (x-chprop32 s (cap p) (ewmh-atom "_NET_WM_DESKTOP") 6 (L (- (nthl p 2) 1)))) (wsfloat sh))   ; ...floats wear their HOME tag (per-workspace now)
+             _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 `(cur))
+             _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 `(foc))
+             _ (map (\ p (: t ((cap p) - 1)                                      ; tiled windows wear their workspace...
+                            (map (\ w (x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 `(t))) (zrow (caup p))))) (wsboard sh))
+             _ (map (\ p (x-chprop32 s (cap p) (ewmh-atom "_NET_WM_DESKTOP") 6 `(((nthl p 2) - 1)))) (wsfloat sh))    ; ...floats wear their HOME tag (per-workspace now)
              (x-flush s))))
 
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---

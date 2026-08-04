@@ -295,7 +295,8 @@ $d/lib/love/mooncc.image: $(ho)/mooncc.image
 	@install -D -m 644 $< $@
 
 # lux: the window manager (crew/lux/*.l), the seven modules catted into one shebang
-# script. DISPLAY picks the socket, ~/.Xauthority the cookie (crew/lux/config.l);
+# script. Settings ride salt -- ~/.love/etc/lux.l, then ./.lux.l (crew/lux/config.l),
+# which also names the display and the cookie when DISPLAY/~/.Xauthority won't do;
 # mod+q restarts in place by exec'ing this same script.
 luxfiles = crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/lux.l
 $d/bin/lux: $(luxfiles)

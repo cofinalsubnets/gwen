@@ -201,7 +201,8 @@ on the front page):
 - 🦨 **kore** -- the coreutils: one multi-call binary, busybox's trick -- diff, grep,
   sed, the fs/line/process tools, nc, make, as, ar, ld, vi. [crew/kore/](crew/kore/)
 - 🦇 **thom** -- the SAT bat: a CDCL solver. [crew/sat/](crew/sat/)
-- 🦐 **lux** -- the window manager: an xmonad clone. [crew/lux/](crew/lux/)
+- 🦐 **lux** -- the window manager: an xmonad clone, configured by salt
+  (`~/.love/etc/lux.l`). [crew/lux/](crew/lux/) + [crew/lux/config.l](crew/lux/config.l)
 - 🦑 **quay** -- the terminal emulator: a cuttlefish with 256-color skin that likes
   writing screensavers -- and roguelikes: rove plays live on the front page.
   [crew/quay/](crew/quay/)

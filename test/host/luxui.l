@@ -49,8 +49,13 @@
  _ (: p (shore (+ rdir (+ "/" stale))) (? p (close p) 0))
  _ (must 'stale-planted (any (\ n (= n stale)) (readdir rdir)))
 
- ; the real driver, the same module set bin/lux ships (DISPLAY rides env)
- ph (tether `("env" (+ "DISPLAY=:" (show dn))
+ ; the real driver, the same module set bin/lux ships (DISPLAY rides env).
+ ; ⚠ HOME rides too, at a scratch seat: crew/lux/config.l reads ~/.love/etc/lux.l
+ ; through salt, and the probe below drives NAMED chords (super+space) against the
+ ; stock layout -- so the box's own lux config must not reach this gate.
+ luxhome "out/host/.luxui-home"
+ _ (mkdir luxhome 493)                                                          ; already there -> -EEXIST, which is the same good news
+ ph (tether `("env" (+ "DISPLAY=:" (show dn)) (+ "HOME=" luxhome)
             "out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
             "-l" "crew/lux/wire.l" "-l" "crew/lux/ewmh.l"
             "-l" "crew/lux/manage.l" "-l" "crew/lux/keys.l"

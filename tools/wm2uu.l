@@ -20,6 +20,12 @@
                          (id? nm (cap (cap sigs))) (cap sigs)
                          (w2-sigof (cup sigs) nm))
    (w2-zip ps ks) (? (two? ps) (link (L (cap ps) (cap ks)) (w2-zip (cup ps) (cup ks))) ())
+   ; ⚠ the list ctor wears TWO noms for one closure: `L` written out, `list` from
+   ; the ` sigil the reader emits. core.l's zmk is spelled either way.
+   (w2-list? h) (|| (id? h 'L) (id? h 'list))
+   ; ⚠ and so does negation: `!` is the SIGIL, `nil?` what opfix factors it to.
+   ; the forms arrive factored, so match the core word and the surface one both.
+   (w2-not? h) (|| (id? h '!) (id? h 'nil?))
 
    ; --- kinds -> the model's types; zdel is the one Maybe op ---
    (w2-ty k) (? (id? k 'window) 'nat (id? k 'zipper) 'stk (id? k 'wrow) 'nlist 'nat)
@@ -58,7 +64,7 @@
              (id? h 'caup) 'wrow
              (id? h 'cup)  'wrow
              (id? h 'rev) 'wrow (id? h 'cat) 'wrow (id? h 'link) 'wrow
-             (id? h 'filter) 'wrow (id? h 'L) 'zipper
+             (id? h 'filter) 'wrow (w2-list? h) 'zipper
              (: sg (w2-sigof sigs h) (? (two? sg) (w2-nthl sg 2) 'top)))))
 
    ; --- the translation. rk = the RESULT kind at this position ---
@@ -86,7 +92,7 @@
           (id? h 'cat) (L 'lapp (w2-tx (w2-nthl e 1) env sigs 'wrow)
                                 (w2-tx (w2-nthl e 2) env sigs 'wrow))
           (id? h 'rev) (L 'lrev (w2-tx (w2-nthl e 1) env sigs 'wrow))
-          (id? h 'L) (L 'zmk (w2-tx (w2-nthl e 1) env sigs 'window)
+          (w2-list? h) (L 'zmk (w2-tx (w2-nthl e 1) env sigs 'window)
                              (w2-tx (w2-nthl e 2) env sigs 'wrow)
                              (w2-tx (w2-nthl e 3) env sigs 'wrow))
           (id? h 'filter)                              ; (filter (\ x (! (= x w))) l) -> nfilt
@@ -104,7 +110,7 @@
           els (? (two? (cup rest)) (link '? rest) (cap rest))
           (w2-if t r els env sigs rk)))
    (w2-if t then-x else-x env sigs rk)
-    (? (&& (two? t) (id? (cap t) '!)) (w2-if (w2-nthl t 1) else-x then-x env sigs rk)
+    (? (&& (two? t) (w2-not? (cap t))) (w2-if (w2-nthl t 1) else-x then-x env sigs rk)
        (&& (two? t) (id? (cap t) 'two?))
          (: x (w2-nthl t 1)
             (? (id? (w2-kof x env sigs) 'zipper)

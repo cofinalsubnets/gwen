@@ -26,7 +26,9 @@
 (reads (open "crew/lux/core.l" "r"))
 
 (:    chk1 (overlay 'ov-check)
-   (sweep path) (foldl (\ a f (cat a (chk1 lux-dom lux-sigs f))) () (forms (open path "r")))
+   ; ⚠ OPFIX FIRST: `forms` reads the SURFACE, the domain checker reads the core
+   ; shapes. the factor pass is the one door between them (tools/uuwmgen.l too).
+   (sweep path) (foldl (\ a f (cat a (chk1 lux-dom lux-sigs (opfix f)))) () (forms (open path "r")))
 
  ; leg 1: the shipped sources check clean...
  _ (assert (! (sweep "crew/lux/core.l"))
@@ -133,7 +135,7 @@
 ; does. the translated terms live in the model's vocabulary, so stage 4's
 ; idpath bridges can tie gen-* to the proved ops.
 (reads (open "tools/wm2uu.l" "r"))
-(:    cforms (forms (open "crew/lux/core.l" "r"))
+(:    cforms (map opfix (forms (open "crew/lux/core.l" "r")))                    ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (assert (= 10 (tally gens)))
  _ (map (\ g (defn (cap g) (nthl g 1) (nthl g 2))) (rev gens))   ; the kernel certifies each

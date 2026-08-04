@@ -136,7 +136,12 @@ app can call `(salt 'its-own-name)` and get the same two-file overlay. see
 ```
 
 ⚠ `salt-all` cannot tell an ABSENT key from one written with no operand -- both
-are `()`. so a switch is `(singleton 1)`, never a bare `(singleton)`.
+are `()`. so a switch is `(singleton 1)`, never a bare `(singleton)`, and an
+app that wants "the EMPTY roster" spells it with an explicit `()` operand --
+`(startup ())` in `crew/lux/config.l`, the other salt consumer.
+
+⚠ a repeated key REPLACES rather than appends, so a roster takes all its entries
+in ONE form. lux's `(bind (spec action) (spec action) ..)` is the shape.
 
 ⚠ `salt` reads `HOME`. the seat of `/usr/bin/love` is `/usr`, and nobody's
 settings live in `/usr/etc`, so config is the one thing a love program finds by
