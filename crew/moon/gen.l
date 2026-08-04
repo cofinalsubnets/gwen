@@ -167,9 +167,6 @@
        (: w9 (? (member? <e '(while do for)) (w * 8) w)
           (go l a) (? (! (two? l)) a (go >l (a + (rdw nm <l w9))))
           ((? (two? <e) (rdw nm <e w9) 0) + (go >e 0))))
-   ; ⚠ a C name is a STRING: member? is id?-based and inert on fresh strings -- this is the
-   ; explicit `=` walk (wrs?'s law)
-   (nmem? nm l) (? (! (two? l)) () (? (<l = nm) 1 (nmem? nm >l)))
    (vmout? fs)                                      ; does control fall out the bottom of the forms?
     (? (! (two? fs)) 1
        (: (go l) (? (two? >l) (go >l) <l)
@@ -4337,7 +4334,7 @@
                       ; ioputx LOST ITS SIBCALL to one (a stack-growing call in the printer)
                       (? (&& (peep g 'rgon ())
                             (&& (lhomable? ty)
-                            (&& (nmem? <p (peep g 'inlrb ()))
+                            (&& (member? <p (peep g 'inlrb ()))
                                 (two? (cuup (peep g 'pool ()))))))
                           (: rb (ralloc g)
                              (? (! rb) ()
