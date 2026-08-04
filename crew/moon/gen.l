@@ -149,6 +149,16 @@
    (alsafe? g r)
     (? (x64t? g) (! (member? r '(r0 r1 r2 r3)))
        (|| (member? r (peep g 'pool0 ())) (member? r (cspool g))))
+   ; and may THIS param alias? only if the body never WRITES it (asn/post on its var): the
+   ; register holds the CALLER's live value, so the splice's own p++ would walk it.
+   ; ⚠ a C name is a STRING here, so the compare is `=` -- `id?` answers false for every
+   ; distinct one, and a scan that never matches is a gate that isn't there.
+   (wrs? nm e)
+    (? (! (two? e)) ()
+       (&& (member? <e '(asn post))
+           (&& (two? <>e) (&& ((cap <>e) = 'var) ((caup <>e) = nm)))) 1
+       (: (go l) (? (! (two? l)) () (? (wrs? nm <l) 1 (go >l)))
+          (go e)))
    (vmout? fs)                                      ; does control fall out the bottom of the forms?
     (? (! (two? fs)) 1
        (: (go l) (? (two? >l) (go >l) <l)
@@ -595,9 +605,9 @@
              rp0 (peep g 'rpin ())
              ; the register-bind license: a call-free splice (body and args) reads its scalar
              ; args from REGISTERS. an arg that is a word-typed pinned local ALIASES its pin
-             ; (call-by-value holds: retex bodies never assign a param, and a later drop leaves
-             ; the alias holding the passed value); anything else parks canonically in a fresh
-             ; pool reg. rpin holds every bind reg against wr?/rfree/psreset for the splice's
+             ; (call-by-value holds: wrs? bars a body that assigns the param, and a later drop
+             ; leaves the alias holding the passed value); anything else parks canonically in a
+             ; fresh pool reg. rpin holds every bind reg against wr?/rfree/psreset for the splice's
              ; span (a body label's flush forgets vpin, never rpin). the slot bind stands when
              ; the type narrows to the alias, a call rides anywhere, or the pool is SHALLOW --
              ; a park may only take a register when two stay free: parks that drained the pool
@@ -610,7 +620,8 @@
               (? (! (two? ps)) `(benv acc rbs)
                  (: pty (caup (cap ps))
                     al (? (&& nocall (&& (! (flo? pty)) (&& (8 = (tsz g pty))
-                             (&& (two? <as) ((cap <as) = 'var)))))
+                             (&& (two? <as) (&& ((cap <as) = 'var)
+                                 (! (wrs? (cap (cap ps)) (caup (caup (cuup inlf))))))))))
                           (: nm9 (caup <as)
                              pM (vmget g nm9)               ; a pinned local -- or a homed/riding
                              (? pM pM                       ; one (regv): both are read-only regs
@@ -4958,12 +4969,6 @@
        ; spushes (measured: corpus L1 loads +0.36% -- cbinl's short-span parks stay).
        (anyc l) (? (! (two? l)) () (? (callish? <l) 1 (anyc >l)))
        nocall (&& (! (callish? (caup (caup (cuup f))))) (! (anyc args)))
-       (wrs? nm e)                                   ; does the body WRITE nm? (asn/pre/post on its var)
-        (? (! (two? e)) ()
-           (&& (member? <e '(asn pre post))
-               (&& (two? <>e) (&& ((cap <>e) = 'var) (id? (caup <>e) nm)))) 1
-           (: (go l) (? (! (two? l)) () (? (wrs? nm <l) 1 (go >l)))
-              (go e)))
        (bind ps as benv acc)                         ; arg values -> the alias register, else slots
         (? (! (two? ps)) `(benv acc)
            (: pty (caup (cap ps))

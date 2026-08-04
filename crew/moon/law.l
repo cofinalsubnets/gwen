@@ -1114,10 +1114,27 @@
    ; its expression arg stays a slot -- a cginl park would span the whole body (the anti-lever)
    irQ2 (cgn "static long clamp9(long x, long lo) { if (x < lo) return lo; if (x > 99) return 99; return x; }\nlong vq(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + clamp9(a + i, n); } return s; } int main() { return vq(1, 5); }")
    q2f (fnf 'vq (caup irQ2))
-   (assert
+   _ (assert
       (two? irQ2)
       (member? '(cmp r7 r5) q2f)                     ; x < lo compares against the ALIAS, no stage
-      (= 0 (splds q2f))))
+      (= 0 (splds q2f)))
+   ; ⚠ a body that ASSIGNS its param cannot alias: the register holds the CALLER's live
+   ; value and the splice's own p++ would walk it. that param takes a slot (value splice) or
+   ; a park (branch splice); a read-only sibling in the same splice still aliases.
+   irW (cgn "static long walk9(long p, long lim) { for (;; p++) { if (p >= lim) return p; } }\nlong wv(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + walk9(a, n); } return s; } int main() { return wv(1, 5); }")
+   wf (fnf 'wv (caup irW))
+   _ (assert
+      (two? irW)
+      (member? '(st sp 16 r6) wf)                    ; the written param p spills off a's ride...
+      (! (member? '(add r6 r6 1) wf))                ; ...and a's ride is never walked
+      (member? '(cmp r7 r5) wf))                     ; lim, never written, still aliases n's ride
+   irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
+   xf (fnf 'run (caup irX))
+   (assert
+      (two? irX)
+      (member? '(mov r7 r6) xf)                      ; a += b parks off x's ride...
+      (! (member? '(add r6 r6 r5) xf))               ; ...and x's ride never takes the add
+      (member? '(add r7 r7 r5) xf)))                 ; b, never written, still aliases y's ride
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool) ok")
+(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) ok")
 (put err 10)
