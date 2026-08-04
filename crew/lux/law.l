@@ -333,25 +333,31 @@
 
 ; --- key SPECS (crew/lux/keys.l): the surface a config writes chords in ---
 (: c2 (foldl (\ t p (pin t (cap p) (cup p))) (tablet 0)
-             '((bind (sup+Return (spawn "alacritty" "-e" "tmux"))
-                     (sup+shift+F1 (view 1))
-                     (mod+XF86AudioMute (spawn "amixer" "set" "Master" "toggle"))
-                     (nonsense+q (kill)))
-               (unbind sup+p sup+z sup+bogus)))
+             '((bind ((sup Return) (spawn "alacritty" "-e" "tmux"))
+                     ((sup shift F1) (view 1))
+                     ((mod XF86AudioMute) (spawn "amixer" "set" "Master" "toggle"))
+                     ((sup 65027) (kill))
+                     ((nonsense q) (kill)))
+               (unbind (sup p) (sup z) (sup bogus))))
    km (keys-build supm 20 9 (conf-roster c2 'bind ()) (conf-roster c2 'unbind ()))
    (assert
-      ((kspec supm 'sup+e) = '(64 101))                                          ; a one-char key IS its ascii keysym
-      ((kspec supm 'sup+shift+Return) = '(65 65293))                             ; masks OR together, names come off the table
-      ((kspec altm 'mod+Tab) = '(8 65289))                                       ; `mod` follows the configured modifier
-      ((kspec supm 'F7) = '(0 65476))                                            ; ⚠ no modifier is a mask of 0, not a failure
-      ((kspec supm 'comma) = '(0 44))                                            ; punctuation goes by its keysym NAME
-      (! (kspec supm 'sup+nosuchkey)) (! (kspec supm 'bogus+e))                  ; an unknown field kills the whole spec
+      ((kspec supm '(sup e)) = '(64 101))                                        ; a one-char key IS its ascii keysym
+      ((kspec supm '(sup shift Return)) = '(65 65293))                           ; masks OR together, names come off the table
+      ((kspec altm '(mod Tab)) = '(8 65289))                                     ; `mod` follows the configured modifier
+      ((kspec supm '(F7)) = '(0 65476))                                          ; ⚠ no modifier is a mask of 0, not a failure
+      ((kspec supm '(sup ",")) = '(64 44))                                       ; a one-char STRING is that character, punctuation and all
+      ((kspec supm '(sup "1")) = '(64 49))                                       ; ... digits the same way
+      ((kspec supm '(sup 65027)) = '(64 65027))                                  ; a bare charm IS the keysym: the table is no ceiling
+      (! (kspec supm '(sup 1))) (! (kspec supm '(sup 0)))                        ; ⚠ but not below 32 -- `1` is the digit's trap, not its keysym
+      (! (kspec supm '(sup nosuchkey))) (! (kspec supm '(bogus e)))              ; an unknown field kills the whole spec
+      (! (kspec supm 'sup+e)) (! (kspec supm ()))                                ; a spec is a LIST; a bare name is not one
       ((keys-find km supm xk-ret) = '(spawn ("alacritty" "-e" "tmux")))          ; a config's argv rides in FLAT and lands nested
       ((keys-find km (supm | shiftm) 65470) = '(view 1))
       ((keys-find km supm 269025042) = '(spawn ("amixer" "set" "Master" "toggle")))
+      ((keys-find km supm 65027) = '(kill))                                      ; the raw-keysym chord grabs like any other
       (! (keys-find km supm 112)) (! (keys-find km supm 122))                    ; unbind cuts, and cuts LAST
       ((keys-find km supm 120) = '(kill))                                        ; ... only what it names
-      ((tally km) = 70)))                                                        ; 70 stock, +2 new rows, -2 unbound (1 bind + 1 unbind unreadable)
+      ((tally km) = 71)))                                                        ; 70 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
 ; --- ~/.Xauthority parsing (crew/lux/wire.l rung 8), on mock bytes ---
 (: (be16 n) (("" + (>> n 8)) + (255 & n))                                        ; big-endian u16 as two appended bytes

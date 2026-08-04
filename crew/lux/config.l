@@ -20,9 +20,15 @@
 ;   (layout (rtall 1 0.02 0.5) (dwindle phi))
 ;   (layout-wrap minimize smart toggle-full mirror)
 ;   (center-class Xmessage feh vlc)  (float-class steam Gimp krita)  (ignore-class conky)
-;   (bind (sup+Return (spawn "alacritty")) (sup+F1 (view 1)))
-;   (unbind sup+p sup+z)
+;   (bind ((sup Return) (spawn "alacritty")) ((sup shift F1) (view 1))
+;         ((sup ",") (msg shrink))           ((sup 65027) (spawn "xdotool" "key" "x")))
+;   (unbind (sup p) (sup z))
 ;   (display ":7")  (xauthority "/home/me/.Xauthority")
+;
+; a CHORD is a list, the last element the key and the rest modifiers: a symbol
+; names it (`e`, `Return`), a one-char string IS that character (`","`, `"1"`),
+; and a bare number is the keysym itself -- so the name table is a convenience,
+; never a ceiling.
 ;
 ; the conf-* readers take the tablet, so crew/lux/law.l proves the defaults against
 ; an EMPTY one -- the gate must not change meaning the day you write a config file.
@@ -32,7 +38,7 @@
    ;     `()` that spells "empty") drops out, and an ABSENT roster takes d. ---
    (conf-live? e) ((two? e) || (name? e) || (string? e))
    (conf-roster c k d) (: r (salt-all c k) (? (two? r) (filter conf-live? r) d))
-   (conf-mod c) (: m (kmod-of (string (salt-one c 'mod 'sup)) supm) (? m m supm))
+   (conf-mod c) (: m (kmod-of (salt-one c 'mod 'sup) supm) (? m m supm))
    (conf-tags c) (: n (salt-one c 'tags 9) (? ((charm? n) && (0 < n)) n 9))
 
    lux-conf (salt 'lux)

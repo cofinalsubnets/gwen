@@ -34,11 +34,15 @@
    (keys-union custom def) (cat custom (filter (\ r (! (keys-has custom (kb-mods r) (kb-sym r)))) def))
    (keys-syms t) (foldl (\ a r (? (any (\ x (x = (kb-sym r))) a) a (link (kb-sym r) a))) () t)
 
-   ; --- KEY SPECS: one symbol, `sup+shift+e` -- mods, then the key. a config
-   ;     writes these (crew/lux/config.l reads them out of salt as plain data), so
-   ;     the whole surface is a name table and a split on `+`. ⚠ a key spelled with
-   ;     punctuation names its X keysym (`comma`, `grave`), never the glyph:
-   ;     `sup+,` would end the symbol. ---
+   ; --- KEY SPECS: a LIST, `(sup shift e)` -- the LAST element is the key, every
+   ;     one before it a modifier. a config writes these (crew/lux/config.l reads
+   ;     them out of salt as plain data), so the reader hands over the structure
+   ;     and nothing here parses a spelling.
+   ;     the key field, four ways, each unambiguous:
+   ;       e / Return    a symbol -- one char is its ascii keysym, longer names one below
+   ;       "," / "1"     a one-char STRING is that character, punctuation and digits included
+   ;       65027         a bare charm IS the keysym, so the table is a convenience,
+   ;                     never a ceiling (⚠ 32 and up: a digit key is "1" or 49, not 1) ---
    xk-fkeys (map (\ i `(("F" + (show (i + 1))) (65470 + i))) (jot 12))           ; F1..F12
    xk-names (cat xk-fkeys `(
      `("Return" xk-ret)   `("Tab" xk-tab)     `("space" 32)       `("Escape" 65307)
@@ -54,32 +58,28 @@
      `("XF86AudioStop" 269025045)        `("XF86AudioPrev" 269025046)
      `("XF86AudioNext" 269025047)
      `("XF86MonBrightnessUp" 269025026)  `("XF86MonBrightnessDown" 269025027)))
-   (xk-of nm) (? ((tally nm) = 1) (nm 0)                                         ; a one-char key IS its ascii keysym
-                 (: hit (afind (\ r ((cap r) = nm)) xk-names)
-                    (? (two? hit) (caup hit) ())))                               ; unknown name -> () (no keysym is 0, so nothing is lost)
-   (kmod-of nm modm) (? ((nm = "sup") || (nm = "super") || (nm = "mod4")) supm
-                        ((nm = "alt") || (nm = "mod1")) altm
-                        ((nm = "ctrl") || (nm = "control")) ctrlm
-                        (nm = "shift") shiftm
-                        (nm = "mod") modm                                        ; `mod` follows whatever the config chose
-                        ())
-   (ksplit t) (: n (tally t)                                                     ; text -> the `+`-separated fields
-                 (go i st acc) (? (i = n) (rev (link (snip t st i) acc))
-                                  ((t i) = 43) (go (i + 1) (i + 1) (link (snip t st i) acc))
-                                  (go (i + 1) st acc))
-                 (go 0 0 ()))
+   (xk-of k) (? (charm? k) (? (31 < k) k ())                                     ; a keysym, verbatim -- the escape hatch past the table
+                (: nm (? (name? k) (string k) k)
+                   (? (! (string? nm)) ()
+                      ((tally nm) = 1) (nm 0)                                    ; one char IS its ascii keysym
+                      (: hit (afind (\ r ((cap r) = nm)) xk-names)
+                         (? (two? hit) (caup hit) ())))))                        ; unknown name -> () (no keysym is 0, so nothing is lost)
+   (kmod-of m modm) (? ((id? m 'sup) || (id? m 'super) || (id? m 'mod4)) supm
+                       ((id? m 'alt) || (id? m 'mod1)) altm
+                       ((id? m 'ctrl) || (id? m 'control)) ctrlm
+                       (id? m 'shift) shiftm
+                       (id? m 'mod) modm                                         ; `mod` follows whatever the config chose
+                       ())
    ; a spec -> (mods keysym), or () if any field is unknown. ⚠ the mask ACCUMULATES
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
    ; answer and would read as failure on its own.
    (kspec modm spec)
-    (: t (? (name? spec) (string spec) spec)
-       (? (! (string? t)) ()
-          (: ps (ksplit t) n (tally ps)
-             (? (n < 1) ()
-                (: ks (xk-of (nthl ps (n - 1)))
-                   ms (foldl (\ a p (: m (kmod-of p modm) (? ((two? a) && m) `(((cap a) | m)) ())))
-                             `(0) (take (n - 1) ps))
-                   (? (ks && (two? ms)) `((cap ms) ks) ()))))))
+    (? (! (two? spec)) ()
+       (: n (tally spec)
+          ks (xk-of (nthl spec (n - 1)))
+          ms (foldl (\ a m (: b (kmod-of m modm) (? ((two? a) && b) `(((cap a) | b)) ())))
+                    `(0) (take (n - 1) spec))
+          (? (ks && (two? ms)) `((cap ms) ks) ())))
 
    ; --- a config's own rows. `spawn`/`exec` carry their argv FLAT in a config
    ;     ((spawn "rofi" "-show" "drun")) and nested in a binding row, so they are
