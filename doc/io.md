@@ -175,7 +175,7 @@ not a crash, a plausible tree nobody can print the difference of. it is also why
 `(show x)` is barred as a value test in this arc (rung 0's `-0.0`, doc/libc.md):
 twice now the printer has been the thing standing in front of the bug.
 
-### 4. hold prel.l to the p0 subset ✅ LANDED
+### 4. hold prel.l to the p0 subset ✅ LANDED (⚠ RETIRED by 6d -- prel rides p1 now)
 
 measured before, code only: `` `( `` ×7, `~(` ×3, `',` ×5, glued mono runs ×3, and
 **zero** `#(` or `@(` -- 18 sites on 15 lines. `` `(a b) `` → `(L a b)`, `~(0 1)` →
@@ -319,8 +319,8 @@ trailing-`-` shed gives 13, the injector gives 1.
 
 **p1.l is itself held to the p0 subset**, which the plan implies but never says
 outright: p0 is what reads p1. so no `` ` `` `#` `@` `~`, no comma, no brackets,
-and never a glued operator run. gated -- p0 reads p1.l form for form, same as it
-reads prel.l.
+and never a glued operator run. gated -- p0 reads p1.l form for form. (it read
+prel.l the same way until 6d; p1.l is the only .l left under the rule.)
 
 **and it is pre-prel, mechanically checked**: every name it references is a nif
 or one of its own bindings. `||`/`&&` are open-coded to nested `?` (they are prel
@@ -510,6 +510,42 @@ lux, haven and port/inle/serve each hand-rolled the residue discipline to avoid
 sounding a live socket -- re-`tap`ping and re-parsing the whole accumulation
 every line. all three collapse into the returned residue, and each gained "every
 form on a line runs" for free, where only the first used to.
+
+
+### 6d. prel comes off the subset ✅ LANDED 2026-08-04
+
+rung 4 held prel.l to the pure lisp subset because **p0 was the only reader there
+was**. 6b built p1 and evaluated it a step before prel is read, and 6c flipped
+everything else -- but prel stayed behind, and the rule outlived its reason. the
+design was always "p1.l is the one file p0 reads"; this closes the gap.
+
+two things held it, and neither was the rule itself:
+
+* **`ai_evals_` picks its reader ONCE per call** (`readtext`, on `lamp(hot_read)`),
+  and host/main.c handed it p1's text and prel's *juxtaposed in one call* -- so
+  hook 0 was still unsealed when the pair was read. two calls, and prel rides p1.
+* **`ai_egg_`'s stitch** reads each half ONTO the list already on the stack
+  (`p0onto`, no append and no copy), while `p1text` mints a fresh one. so only the
+  innermost read can be p1's. the fix is not a new reader door: **prel and ev are
+  juxtaposed into one C string at the call site** and read by a single `p1text`.
+  the corpus list is identical, and it is one read fewer -- `ai_egg_` takes three
+  texts now, not four.
+
+what the rule was quietly also doing: **carrying p0's differential**. `rd-p0` read
+prel.l for its 53 forms, and p1.l alone is a single top-level form -- so dropping
+prel would have left the A/B leg reading one datum. `test/host/p0fix.l` is p0's
+specimen now: never evaluated, 67 forms, spanning the subset on purpose (three
+integer bases, every escape, the float lane, quote, nesting) rather than
+inheriting whatever prel happened to contain. off-subset and injector legs unchanged.
+
+**what it buys**: prel is the language floor written in the language. the vessel
+floor moved down with it -- `gulp`/`drink`/`once`/`flow`/`trickle` were in bao.l
+only because they were born beside `reads`, which left `sip`/`slurp` in prel and
+`drink` two layers up, one trio in two files. and prel's own module loader stops
+hand-rolling a strict port drain: `rdev` is `(flow q)` now, the four-copies
+warning deleted with the code that earned it.
+
+**price**: prel (52 KB) joins ev on the p1 read, ~+9 ms on a cold boot, zero warm.
 
 
 ### 7. one input: the charlist IS the port ✅ LANDED

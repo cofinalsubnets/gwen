@@ -1530,6 +1530,7 @@ static lvm(_lvm_yieldk) { return
 // means an invariant is already broken, and the immediate core dump names the site.
 // (a barrier here once turned that class into a silent per-call siglongjmp storm.)
 static struct ai *ai_eval(struct ai *g) {
+ if (!ai_ok(g)) return g;                        // ⚠ c0 reads g->sp[0] before any guard of its own
  g = c0(g, _lvm_yieldk);
 #if ai_tco
  if (ai_ok(g)) g = g->ip->ap(g, g->ip, g->hp, g->sp);
@@ -4060,8 +4061,8 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
 /// " p0 -- the bootstrap reader "  (doc/io.md rung 5)
 //
 // the PURE LISP SUBSET and nothing else: delimiters, comments, strings, atoms,
-// ' quote -- the sigil surface is p1's, and prel.l is held to this subset so p0
-// can read it. control flow on the C stack, VALUES on g->sp: datums pile on the
+// ' quote -- the sigil surface is p1's, and p1.l + egg.l are held to this subset
+// so p0 can read them. control flow on the C stack, VALUES on g->sp: datums pile on the
 // l stack and fold at the close, so no love value sits in a C local across an
 // allocation. ⚠ a reader of a SUBSET, not a validator -- enforcement is the
 // differential (test/host/rdiff.l). ⚠ it must read what lcat PRINTS (minified
@@ -4138,7 +4139,7 @@ lvm(lvm_sound0) {
 static struct ai *p0chars(struct ai *g, char const *s) {
  uintptr_t n = 0;
  while (s[n]) n++;
- if (!ai_ok(g = ai_push(g, 1, ZeroPoint))) return g;               // the cursor's slot first,
+ g = ai_push(g, 1, ZeroPoint);                                     // the cursor's slot first,
  if (!ai_ok(g = ai_have(g, n * Width(struct ai_chain)))) return g; // then the whole run at once
  word l = ZeroPoint;
  for (uintptr_t i = n; i--;) {
@@ -4165,10 +4166,10 @@ static struct ai *p0onto(struct ai *g, char const *s) {
  for (; ai_ok(g) && n--; g = gxr(g));                //   (+2: the datums sit over the cursor)
  return ai_ok(g) ? (g->sp[2] = g->sp[0], g->sp += 2, g) : g; }
 
-// ev's half, read by the reader in love: an ordinary call of hook 0 on the whole text
+// the corpus, read by the reader in love: an ordinary call of hook 0 on the whole text
 static struct ai *p1text(struct ai *g, char const *s) {
- if (!ai_ok(g = ai_strof(g, s))) return g;
- if (!ai_ok(g = gxr(push0(g)))) return g;            // ("<text>")
+ g = ai_strof(g, s);
+ g = gxr(push0(g));                                  // ("<text>")
  if (!ai_ok(g = ai_push(g, 1, zero))) return g;       // reserve FIRST, then read the slot:
  g->sp[0] = ai_core_of(g)->hot_read;                 //   a push can gc, and the gc is what
  if (!ai_ok(g = ai_eval(gxl(g)))) return g;          //   moves hot_read. (<reader> "<text>")
@@ -4182,15 +4183,16 @@ static struct ai *p1text(struct ai *g, char const *s) {
 // (the sealed slot IS the test)
 static struct ai *readtext(struct ai *g, char const *s) {
  if (lamp(ai_core_of(g)->hot_read)) return p1text(g, s);
- return ai_ok(g = push0(g)) ? p0onto(g, s) : g; }
+ return p0onto(push0(g), s); }
 
 // apply a ONE-FORM driver text (pure lisp, p0-read) to the quoted list on top of
 // the stack: (<driver> '(list))
 static struct ai *applyq(struct ai *g, char const *driver) {
- if (!ai_ok(g = gxr(push0(g)))) return g;            // (list)
- if (!ai_ok(g = gxl(pushq(g)))) return g;            // '(list)
- if (!ai_ok(g = gxr(push0(g)))) return g;            // ('(list))
- if (!ai_ok(g = p0onto(g, driver))) return g;        // (driver '(list))
+ if (!ai_ok(g)) return g;                            // ⚠ ai_pop bumps sp unguarded
+ g = gxr(push0(g));                                  // (list)
+ g = gxl(pushq(g));                                  // '(list)
+ g = gxr(push0(g));                                  // ('(list))
+ g = p0onto(g, driver);                              // (driver '(list))
  return ai_pop(ai_eval(g), 1); }
 
 // the plain eval fold: run a list of forms in order, answer the last one's
@@ -4201,18 +4203,16 @@ static char const evfold[] = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
 // a boot tail, a CLI driver, a corpus runner.
 ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
  ai_image_note(0x20);
- if (!ai_ok(g = readtext(g, s))) return g;
+ g = readtext(g, s);
  ai_image_note(0x22);
  return applyq(g, evfold); }
 
 ai_noinline struct ai *ai_egg_(struct ai *g, char const *egg, char const *p1,
-                               char const *prel, char const *ev) {
- if (!ai_ok(g = ai_push(g, 1, ZeroPoint))) return g;
- if (!ai_ok(g = p0onto(g, p1))) return g;            // p1's forms, by p0 ..
- if (!ai_ok(g = applyq(g, evfold))) return g;        // .. and c0 evals them: p1 is live
- if (!ai_ok(g = p1text(g, ev))) return g;            // ev's half, through the reader in love
- if (!ai_ok(g = p0onto(g, prel))) return g;          // prel's half: rung 4 holds it to the subset
- if (!ai_ok(g = p0onto(g, p1))) return g;            // and p1 at the HEAD of the corpus
+                               char const *corpus) {
+ g = p0onto(ai_push(g, 1, ZeroPoint), p1);           // p1's forms, by p0 ..
+ g = applyq(g, evfold);                              // .. and c0 evals them: p1 is live
+ g = p1text(g, corpus);                              // prel + ev, through the reader in love
+ g = p0onto(g, p1);                                  // and p1 at the HEAD of the corpus
  return applyq(g, egg); }
 
 // ============================================================================

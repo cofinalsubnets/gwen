@@ -1,7 +1,4 @@
 ; prel.l -- love prel: data + function + macro definitions.
-; ⚠ stays inside the PURE LISP subset p0 reads -- delimiters, `;` comments, "…" with escapes,
-; atoms, integers, `'` quote, four float literals; no `(, ~(, #(/@(, glued operator run, bare
-; `,`, [/{, or prime inside a name: those are p1's half of the grammar. doc/io.md rung 4.
 ; ⚠ PRE-OPERATORS ZONE down to the `operators` table: c0 compiles this before opfix and before
 ; the church add/mul hooks exist, so it stays OPERATOR-FREE -- prefix nifs only. using `*` for
 ; caap..cuuup here cores the egg.

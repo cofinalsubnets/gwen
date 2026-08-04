@@ -661,7 +661,9 @@ static struct ai *boot(struct ai *g, bool argp) {
   if (argp) {                                        // a build tool (lcat etc.): bake prel + bao FIRST so the CLI's
     g = ai_evals_(g,                                   // own loader/printer (eval1/bye reach for map/jot/tap/puts/putc)
 #include "p10.h"                                       // have the prel surface before they load the first file -- else
-#include "prel0.h"                                     // loading prel.l ITSELF misses every prel fn its loader uses.
+    );                                                 // loading prel.l ITSELF misses every prel fn its loader uses.
+    g = ai_evals_(g,                                   // ⚠ ITS OWN CALL: readtext picks its reader ONCE per text, and
+#include "prel0.h"                                     // p1 seals hook 0 only when the call above EVALUATES
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
                                                        //   because the corpus reads unify/ufail bare
@@ -673,8 +675,9 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_defn(g, td, countof(td));
   g = ai_evals_(g,                                    // p1 FIRST: prel's loader reads `sound`, and a
 #include "p10.h"                                      // global folds at its reader's compile, so the
-                                                      // reader in love has to exist before prel compiles
-#include "prel0.h"                                    // prel, compiled by c0
+  );                                                  // reader in love has to exist before prel compiles
+  g = ai_evals_(g,
+#include "prel0.h"                                    // prel, read by p1 now that hook 0 is sealed
   );
   g = ai_evals_(g,
     "(use 'bao)"                                       // bao (the shell core): loaded, registered, spliced
@@ -695,7 +698,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "p10.h"
     ,
 #include "prel0.h"
-    ,
+    " "
 #include "ev0.h"
     );
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
@@ -858,7 +861,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "p1.h"
     ,
 #include "prel.h"
-    ,
+    " "
 #include "ev.h"
     );
   g = ai_evals_(g,

@@ -3,21 +3,20 @@
 ; the grammar p0 does not take: the operator run and its valence law, the
 ; constructor wraps with their splice rewrites, the comma datum, the bracket
 ; synonyms, the number tower. p0 (love.c's sound0) reads the pure lisp subset
-; and reads THIS FILE; p1 reads ev.l, and after the flip it reads everything.
+; and reads THIS FILE; p1 reads the corpus -- prel and ev both.
 ;
-; ⚠ P1.L IS HELD TO THE P0 SUBSET, exactly as prel.l is (rung 4) and for the
-; same reason -- p0 is what reads it. so: no ` # @ ~ wraps, no comma, no
-; brackets, and NEVER A GLUED OPERATOR RUN. `!x` and `<c` are one symbol to p0
-; and (mono ! x) / (mono < c) to the reader this file is replacing, and the
-; PRINTER SHOWS BOTH THE SAME -- only `=` on two trees can see it. space every
-; operator; say (nil? x) and (cap x) for the words.
+; ⚠ P1.L IS THE ONLY .l HELD TO THE P0 SUBSET, and it is the whole of why the
+; subset exists -- p0 is what reads it, and love/egg.l (applyq's driver text).
+; so: no ` # @ ~ wraps, no comma, no brackets, and NEVER A GLUED OPERATOR RUN.
+; `!x` and `<c` are one symbol to p0 and (mono ! x) / (mono < c) to the reader
+; this file is replacing, and the PRINTER SHOWS BOTH THE SAME -- only `=` on two
+; trees can see it. space every operator; say (nil? x) and (cap x) for the words.
 ;
-; ⚠ AND IT IS PRE-OPFIX, so NO INFIX either -- prel.l's rule, and the same one:
-; the boot stitch (rung 6b) evals this file to make it callable BEFORE prel
-; runs, so `opfix` does not exist yet and an infix form would compile as a plain
-; application -- silently, church-exponentiating where a comparison was meant.
-; prefix nifs only. it is also PRE-PREL: nifs and its own bindings, nothing
-; else, no prel helpers and no macros.
+; ⚠ AND IT IS PRE-OPFIX, so NO INFIX either: the boot stitch (rung 6b) evals this
+; file to make it callable BEFORE prel runs, so `opfix` does not exist yet and an
+; infix form would compile as a plain application -- silently, church-
+; exponentiating where a comparison was meant. prefix nifs only. it is also
+; PRE-PREL: nifs and its own bindings, nothing else, no prel helpers, no macros.
 ;
 ; the protocol is the historical one (2efbaa51^:g/repl.g) and NOT a port: read1
 ; walks a charlist and answers the value CONSED ONTO WHAT IS LEFT, () for no

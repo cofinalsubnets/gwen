@@ -322,7 +322,7 @@ struct ai
  *ai_ini(void),
  *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
  *ai_evals_(struct ai*, const char*),
- *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, prel, ev)
+ *ai_egg_(struct ai*, char const*, char const*, char const*),  // (egg, p1, corpus)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),   // ⚠ IMMORTAL values only
  *ai_defv(struct ai*, char const*),                // its twin for a LIVE heap value (rides sp[0], stays there)
  *ai_layer_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
@@ -343,10 +343,12 @@ void ai_scare_face_(struct ai*);
 
 extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
 
-// the boot driver: ai_egg_(g, egg, p1, prel, ev) applies love/egg.l to the quoted
+// the boot driver: ai_egg_(g, egg, p1, corpus) applies love/egg.l to the quoted
 // corpus -- compile the compiler with c0, recompile the corpus through itself,
-// install as `ev`. the list is STITCHED (p0 reads egg/p1/prel; p1, evaluated a
-// step earlier, reads ev), so the C reader's sigil half is off the boot path.
+// install as `ev`. the list is STITCHED (p0 reads egg + p1; p1, evaluated a step
+// earlier, reads the corpus), so p1.l is the ONLY .l held to the pure lisp subset.
+// ⚠ `corpus` is prel ++ ev juxtaposed at the call site -- one p1 read, because
+// p1text mints a fresh list where p0onto extends the one on the stack.
 
 // === internal API shared with host / free ===
 #define A(o) two(o)->a

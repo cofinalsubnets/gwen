@@ -242,10 +242,13 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; which only the boot can write.
 ; the embed sites, SEVEN: host/main.c (twice -- love0's sed-wrapped <name>0.h twins need a gl0_h
 ; entry), wasm/host.c, port/inle/kmain.c, port/playdate/main.c, port/mps2/main.c,
-; port/teensy41/main.c; each wants a header dep in its build file. the EGG's own door takes FOUR
-; texts -- `ai_egg_(g, egg, p1, prel, ev)`, NINE call sites each also naming p1.h -- and STITCHES
-; the corpus (p0 reads egg/p1/prel, p1 reads ev), so the C reader's sigil half is off the boot
-; path. coin/rng/q/kanren/uu ride host, love0, wasm and the K_TEST kernel; the playdate workbench
+; port/teensy41/main.c; each wants a header dep in its build file. the EGG's own door takes THREE
+; texts -- `ai_egg_(g, egg, p1, corpus)`, TEN call sites, `corpus` being prel.h and ev.h JUXTAPOSED
+; (p1text mints a fresh list where p0onto extends the one on the stack, so the corpus is ONE p1
+; read) -- and STITCHES the corpus (p0 reads egg + p1, p1 reads the rest), so the C reader's sigil
+; half is off the boot path and P1.L IS THE ONLY .l HELD TO THE PURE LISP SUBSET (egg.l too, via
+; applyq's driver door). ⚠ prel rides p1: an `ai_evals_` bundling p1's text WITH a later one puts
+; both on p0, because readtext picks its reader once per call. coin/rng/q/kanren/uu ride host, love0, wasm and the K_TEST kernel; the playdate workbench
 ; takes q + kanren + rune; a shipped kernel takes uu + bao. EVERY frontend opens its session with
 ; ai_layer_ after boot (bakers never push; wakers always do). ⚠ a layer leans only on what
 ; SURVIVES BIRTH -- wrapping a mopped nif means taking it off egg.l's mop list. ⚠ a post-egg
