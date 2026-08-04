@@ -788,9 +788,10 @@
                        (? (id? ah 'sh)
                            (: pA (pair? g (vty a))
                               wA (d128? (vty a))
+                              af0 (? (|| wA pA) () (tor0 g a))
                               af (? wA ((as128 g a) + wpush)
                                     pA ((asll g a) + spush2)
-                                    ((tor0 g a) + (spush 'r0)))
+                                    (af0 + (spush 'r0)))
                               b (cgexpr g env rhs)
                               (? (bad? b) 'bad
                                  (flo? (vty b)) (? wA 'bad (: _ (rfree g (vreg b)) (fcb ())))
@@ -811,8 +812,10 @@
                                          ((spop 'r2)
                                           + (? (usg? (vty a)) `(`('li 'r3 0)) `(`('mov 'r3 'r2) `('sar 'r3 31)))
                                           + (pbrf g op u2 'r2 'r3 'r0 'r1 cc lbl))))))
-                                 (cat af (cat (tor0 g b)
-                                  ((spop 'r1) + `(`('cmp 'r1 'r0) `('br (bcc op (cu2 (vty a) (vty b))) lbl)))))))
+                                 (: bf (tor0 g b)
+                                    brf `(`('cmp 'r1 'r0) `('br (bcc op (cu2 (vty a) (vty b))) lbl))
+                                    (? (r1safe? bf) (cat af0 (cat `(`('mov 'r1 'r0)) (cat bf brf)))
+                                       (cat af (cat bf ((spop 'r1) + brf)))))))
                           (: b (cgexpr g env rhs)
                              (? (bad? b) 'bad
                                 (flo? (vty b)) (: _ (rfree g (vreg ah)) _ (rfree g (vreg b)) (fcb ()))
@@ -883,6 +886,18 @@
    ; SysV violation glibc turns into a #GP -- so reserve a whole 16-byte cell.
    (spush r) `(`('sub 'sp 'sp 16) `('st 'sp 0 r))
    (spop r)  `(`('ld r 'sp 0) `('add 'sp 'sp 16))
+   ; the SHUTTLE SKIP: a right side whose forms never write r1 or touch sp (no call, no label,
+   ; no control -- rdsp's 'bar) may run with the LEFT PARKED IN r1: one mov replaces the
+   ; push/pop memory round-trip. the left protocol stays r1, the right r0 -- callers unchanged.
+   (r1safe? fs)
+    (? !(two? fs) 1
+       (: f <fs
+          (? !(two? f) ()
+             (: rd (rdsp f)
+                (? (id? rd 'bar) ()
+                   (member? 'r1 <>rd) ()
+                   (member? 'sp <>rd) ()
+                   (r1safe? >fs))))))
 
    ; -- the PAIR kit (t32 llong/ullong, moon rung 3): a 64-bit value rides r0 (lo) : r1 (hi),
    ; the AAPCS32 return pair. pairs NEVER enter the operand pool or the immediate lanes --
@@ -2302,7 +2317,10 @@
                          av (? (id? ah 'sh) a ah)
                          ; the memory shuttle: left in r1, right in r0 (today's shape)
                          (shut z9)
-                          (: mid ((tor0 g av) + (spush 'r0) + (tor0 g b) + (spop 'r1))
+                          (: mid (: af9 (tor0 g av)
+                                    bf (tor0 g b)
+                                    (? (r1safe? bf) (af9 + `(`('mov 'r1 'r0)) + bf)
+                                       (af9 + (spush 'r0) + bf + (spop 'r1))))
                              back `(`('mov 'r0 'r1))
                              pa (ptr? ta) pb (ptr? tb)
                              unsg (|| (usg? ta) (usg? tb))            ; either operand unsigned -> unsigned divide
@@ -3824,7 +3842,7 @@
                        (? (member? rY stldkeep)
                           (f >< stldw r ((`(o rY)) >< (bdropo (bdropr bs rY) o)))
                           (two? b9 && <>b9 = rY) (stldw r bs)
-                          (two? b9) (`('mov rY <>b9) >< stldw r (bdropr bs rY))
+                          (two? b9) (`('mov rY <>b9) >< stldw r ((`(o rY)) >< (bdropr bs rY)))
                           (f >< stldw r ((`(o rY)) >< (bdropr bs rY)))))
                    (member? op stops9 && <>f = 'r4)
                     (: o <>>f
@@ -3832,6 +3850,14 @@
                        (? (op = 'st && nom? <>>>f)
                           (f >< stldw r ((`(o <>>>f)) >< b2))
                           (f >< stldw r b2)))
+                   ; a reg-reg mov CARRIES its src's bindings: the slot now rides both registers,
+                   ; and when one dies the other still answers. sp/fp/r4 stay out (sp moves in
+                   ; silence -- its defs are empty by design)
+                   (op = 'mov && nom? <>f && nom? <>>f
+                       && !(member? <>f '(sp fp r4)) && !(member? <>>f '(sp fp r4)))
+                    (: rY <>f rB <>>f
+                       news (map (\ e9 `(<e9 rY)) (filter (\ e9 (<>e9 = rB)) bs))
+                       (f >< stldw r (news + (bdropr bs rY))))
                    (: rd (rdsp f)
                       (? (id? rd 'bar) (f >< stldw r ())
                          (member? 'r4 <>rd) (f >< stldw r ())
