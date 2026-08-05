@@ -86,24 +86,27 @@ test:
 # test_kernel + test_wasm are in test_slow but NOT the fast `test`: each needs an
 # extra toolchain (qemu, x86_64-only; emcc + node) and no-ops when that is
 # absent. See their rules below.
-# THE MERGE GATE keeps ONE of each kind of proof, and test_extra holds the second
-# copies. what stays: the host-arch kernel (test_kernel + test_vec's fault stubs +
-# test_uefi's framebuffer door), love on a third runtime (test_wasm) and a third ISA
-# (test_virt), mooncc's codegen differentials (thumb1/2/2sp, ccarm64, ccriscv), the
-# one aarch64 EXECUTION proof (test_arm64 -- holotest proves the encodings, this
-# proves they run), and test_front, whose synthetic devices reach a schedule no other
-# gate can. what moves: a SECOND boot of an ISA already covered, and the real-metal
-# LINK gates, which prove a memory map and nothing about the language.
-test_slow: test_host test_love0 test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi test_moon test_clay test_moonfuzz test_ccarm64 test_ccriscv test_libc test_ulp test_raw test_drv test_asmops test_fixpoint test_dist nettest test_arm64 test_thumb1 test_thumb2 test_thumb2sp test_virt test_kernel test_uefi test_vec test_wasm test_wake
+# THE MERGE GATE IS THE HOST ARCH. what stays: the x86_64 kernel running the corpus
+# (test_kernel, + test_uefi's framebuffer door), love on a third runtime (test_wasm)
+# and a third ISA (test_virt), mooncc's codegen differentials -- thumb1/2/2sp and the
+# two CROSS batteries, which do run their output under qemu-user -- and test_front,
+# whose synthetic devices reach a schedule no other gate can.
+# ⚠ AARCH64 IS NOT GATED HERE. love never executes on it in test_slow: test_ccarm64
+# runs MOONCC's aarch64 output, holotest checks the glaze's encodings, and neither
+# runs love. a glaze arm64 fault that encodes correctly and computes wrong reaches
+# main. run test_extra after touching arm64.l, the glaze, or port/inle/aarch64/.
+test_slow: test_host test_love0 test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi test_moon test_clay test_moonfuzz test_ccarm64 test_ccriscv test_libc test_ulp test_raw test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp test_virt test_kernel test_uefi test_wasm test_wake
 
-# test_extra -- the SECOND COPIES, run before a release rather than before a merge:
-# aarch64's kernel (test_kernel already boots the host arch; test_arm64 already runs
-# love on aarch64), two more boots of qemu's M7, and the four real-metal ports, whose
-# gates only LINK -- no board here runs them. `make test_slow test_extra` is the full
-# sweep. ⚠ these are the gates a CROSS-TARGET break hides behind, so run them after
-# touching mooncc's backends, holo's linker, or anything a port's memory map sees.
+# test_extra -- EVERYTHING THAT IS NOT THE HOST ARCH, run before a release rather than
+# before a merge: the whole aarch64 side (its kernel, love's own execution under
+# qemu-aarch64, and test_vec's fault stubs -- which cross-built a SECOND kernel just to
+# raise five exceptions), two more boots of qemu's M7, and the four real-metal ports,
+# whose gates only LINK, no board here running them. `make test_slow test_extra` is the
+# full sweep. ⚠ these are the gates a CROSS-TARGET break hides behind: run them after
+# touching mooncc's backends, holo's linker or arm64 lane, the glaze's second target,
+# or anything a port's memory map sees.
 .PHONY: test_extra
-test_extra: test_kernel_arm64 test_mps2 test_mps2_t1 test_mps2_wake test_teensy41 test_nucleo446 test_playdate
+test_extra: test_kernel_arm64 test_mps2 test_mps2_t1 test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_arm64 test_vec
 all: host kernel wasm
 
 # lint: paren/bracket/brace balance + unclosed strings across every tracked .l
