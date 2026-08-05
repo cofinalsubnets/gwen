@@ -3108,23 +3108,29 @@ uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, ui
  b->rpos = putcharm(p + k);
  return k; }
 // (chug port): everything ALREADY readable, as ONE exact-length text -- the
-// pushback byte if there is one, then the buffer's pending run. it never touches
-// the device and never parks, so the gulp is: draw the first byte with `see`
-// (which refills, and parks if it must), unsee it, then chug the run whole.
-// ⚠ "" IS THE ORDINARY ANSWER, not a failure: an unbuffered port always answers
-// it (bio_of refuses the statics), so a caller must draw with `see` rather than
-// spin here. the length is known BEFORE the string is minted (ai_io_pending
-// already counts it), which is the whole point -- no over-allocate, no trim.
+// pushback byte if there is one, then the run. it never touches the device and
+// never parks, so the gulp is: draw the first byte with `see` (which refills, and
+// parks if it must), unsee it, then chug the run whole.
+// ⚠ "" IS THE ORDINARY ANSWER, not a failure: a port with no run answers it (the
+// statics, which bio_of refuses and whose text is not in memory), so a caller must
+// draw with `see` rather than spin here. the length is known BEFORE the string is
+// minted, which is the whole point -- no over-allocate, no trim.
 ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
  uintptr_t u = getcharm(i->ungetc_buf) != EOF ? 1 : 0;
- uintptr_t n = u + ai_io_pending(g, i);
- g->io = i;
+ struct ai_port_vt const *vt = port_vt(i->fd);
+ g->io = i;                                   // athand reads it, as readn does
+ uintptr_t n = u + (bio_of(g, i) ? ai_io_pending(g, i)
+                    : vt->athand ? vt->athand(g, ai_iobuf) : 0);
  if (!ai_ok(g = str0(g, n))) return g;
  i = ai_core_of(g)->io;                       // str0 collects: the port may have moved
  if (n) {
   char *d = txt(g->sp[0]);
   if (u) *d = (char) getcharm(i->ungetc_buf), i->ungetc_buf = putcharm(EOF);
-  ai_io_read_drain(g, i, (unsigned char*) d + u, n - u); }
+  // the fill splits where the count did: a bio drains its buffer, an at-hand source
+  // reads its own text. never a device -- for one, athand answered 0.
+  if (n - u) {
+   if (bio_of(g, i)) ai_io_read_drain(g, i, (unsigned char*) d + u, n - u);
+   else vt->readn(g, (unsigned char*) d + u, n - u); } }
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 lvm(lvm_chug) {
  if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
@@ -3152,9 +3158,15 @@ static struct ai *gfputx(struct ai *g, struct ai_io *o, intptr_t x);
 static struct ai *noop_flush(struct ai *g) { return g; }
 
 // the charlist source's read door: walks the spine, never blocks, so a spent list
-// is the END. asked one byte at a time, and a buffer is NOT the answer -- no
-// syscall on this row to amortize. ⚠ a charm outside 0..255 lands as its LOW BYTE:
-// the raw charm once forged the end of the stream (test/io.l's tap section).
+// is the END. a buffer is NOT the answer here -- no syscall on this row to
+// amortize, and the spine IS the run, which is what athand counts.
+// ⚠ a charm outside 0..255 lands as its LOW BYTE: the raw charm once forged the
+// end of the stream (test/io.l's tap section).
+static uintptr_t ci_athand(struct ai *g, uintptr_t n) {
+ word h = ((struct ci*) g->io)->head;
+ uintptr_t k = 0;
+ while (k < n && chainp(h)) k++, h = B(h);
+ return k; }
 static intptr_t ci_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  struct ci *i = (struct ci*) g->io;
  uintptr_t k = 0;
@@ -3163,8 +3175,14 @@ static intptr_t ci_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  return k ? (intptr_t) k : -1; }
 
 // the C string source's read door: NUL ends it, so the text needs no length beside
-// it. Unbuffered like every synth row (bio_of refuses a negative fd), which costs a
-// call per byte and saves the source ever being a love value.
+// it. no buffer, and none wanted: the text is already in memory, so athand scans
+// ahead for the run and the source never becomes a love value.
+static uintptr_t ti_athand(struct ai *g, uintptr_t n) {
+ struct ti *i = (struct ti*) g->io;
+ char const *t = (char const*) i->t + (uintptr_t) getcharm(i->i);
+ uintptr_t k = 0;
+ while (k < n && t[k]) k++;
+ return k; }
 static intptr_t ti_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  struct ti *i = (struct ti*) g->io;
  char const *t = (char const*) i->t;
@@ -3197,13 +3215,13 @@ static intptr_t to_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  return 0; }
 struct ai_port_vt const synth[] = {
  /* fd = -1, ti: read-only C-string source -- the baked library's door (lvm_lib) */
- { noop_flush, NULL,      ti_readn },
+ { noop_flush, NULL,      ti_readn, ti_athand },
  /* fd = -2, to: write-only string sink   */
- { to_flush,   to_writen, NULL },
+ { to_flush,   to_writen, NULL,     NULL },
  /* fd = -3, closed port (post-close)  */
- { noop_flush, NULL,      NULL },
+ { noop_flush, NULL,      NULL,     NULL },
  /* fd = -4, ci: read-only charlist source -- prel's `tap` builds one by poke. */
- { noop_flush, NULL,      ci_readn }, };
+ { noop_flush, NULL,      ci_readn, ci_athand }, };
 
 // (fputc port byte) — write byte to port; return byte.
 lvm(lvm_fputc) {

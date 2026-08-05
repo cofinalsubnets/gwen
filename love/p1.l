@@ -282,38 +282,26 @@
                  (p1-list (cup d) () (link (cap d) acc))))))
 
    ; --- a port is a charlist ------------------------------------------------
-   ; the gulp is REALIZED and only the join is lazy: p1-flow lays a port's
-   ; readable run down as ordinary conses and closes it on a thunk that drinks
-   ; the next, which p1-cup fires like any other tail. ⚠ THE THUNK MEMOIZES AND
-   ; MUST: p1 forces one position more than once on purpose (the `#!` lookahead,
-   ; the \xNN lane), and a re-drinking tail takes the NEXT gulp instead -- the
-   ; bytes between are simply gone, which fails as a misread, never a crash.
-   ; ⚠ and the answer is WRAPPED (1 v), read back with two?: a promise of NOTHING
-   ; is the ordinary case (eof answers ()), and a bare pin leaves the slot reading
-   ; exactly like an unforced one -- so it would drink forever on the one input
-   ; that matters. prel's flow/gulp/once are these, and stay for their own
-   ; callers; the reader cannot reach them (prel is not loaded when p1 runs).
+   ; p1-flow lays a port's readable run down as ordinary conses and closes it on a
+   ; thunk for the next, which p1-cup fires like any other tail. the thunk must
+   ; memoize: p1 forces a position more than once on purpose (the `#!` lookahead,
+   ; the \xNN lane), and a re-drinking tail would take the next gulp instead, losing
+   ; the bytes between. it wraps its answer (1 v) and reads it back with two?, since
+   ; a promise of nothing is the ordinary case at eof. these are prel's flow/once
+   ; written again -- prel is not loaded when p1 runs.
    (p1-port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
    (p1-once f) (: t (tablet 0)
                   (\ u (: v (peep t 0 ())
                           (? (two? v) (cup v)
                              (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
-   ; the gulp: `see` blocks for the first byte -- it parks the TASK and refills the
-   ; port -- `unsee` hands it back, and `chug` takes that byte plus the buffered run
-   ; as ONE text. ⚠ THE `see` IS THE PARK AND CANNOT GO: chug never touches the
-   ; device, so a bare chug on a quiet port answers "" forever. ⚠ and the steps are
-   ; PINNED IN ORDER, never nested as arguments: an n-ary call evals right to left,
-   ; so a nested (go .. (chug p)) would draw the byte before it chugged. `go` lays
-   ; the text down backwards onto the tail handed in, so the thunk is what the list
-   ; closes on and there is no second pass.
-   ; ⚠ ONE CHUG PER GULP, AND THAT BOUND IS THE STREAMING: drinking on while `cue?`
-   ; says ready realizes a whole regular FILE as conses in one call (a file is always
-   ; ready), which leaves the thunk at eof and nowhere else. bounded, the PORT'S OWN
-   ; BUFFERING sets the gulp: a heap fd port hands over its 4096-byte run, and an
-   ; UNBUFFERED port (`in`, a tap, a jug) has no run to hand over, so chug answers
-   ; the pushback alone and the list trickles a byte per force -- which is why `in`
-   ; needs no separate lane here. it cannot run ahead of a port that never buffered.
-   ; prel's `gulp` carries the same bound for the same reason.
+   ; the gulp: `see` draws the first byte and is the only step that touches the
+   ; device -- it parks the task and refills -- `unsee` hands it back, and `chug`
+   ; takes it plus the run the port has in hand. one chug per gulp: the run is the
+   ; port's own, so a file arrives 4096 at a time and never all at once.
+   ; ⚠ the steps are PINNED IN ORDER, never nested as arguments: an n-ary call evals
+   ; right to left, so a nested (go .. (chug p)) would draw the byte before it
+   ; chugged. `go` lays the text down backwards onto the tail handed in, so the
+   ; thunk is what the list closes on and there is no second pass.
    (p1-gulp p tl)
      (: c (see p)
         (? (= c -1) tl

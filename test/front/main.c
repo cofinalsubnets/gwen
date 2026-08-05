@@ -158,7 +158,7 @@ static struct ai *fd_flush(struct ai *g) {
   return g; }
 
 struct ai_port_vt const ai_fd_port_vt =
- { fd_flush, fd_writen, fd_readn };
+ { fd_flush, fd_writen, fd_readn, NULL };
 
 struct ai_io ai_stdin  = { lvm_port_io, putcharm(0), putcharm(EOF) };
 struct ai_io ai_stdout = { lvm_port_io, putcharm(1), putcharm(EOF) };

@@ -64,7 +64,7 @@ struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = p
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 // No separate error stream on the device; the scare face lands on the LCD too.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
-struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn };
+struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn, NULL };
 
 // --- the playdate nifs ------------------------------------------------------
 // (crank ())     -- the crank angle 0..359, or () docked

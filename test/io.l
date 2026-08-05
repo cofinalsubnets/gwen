@@ -118,12 +118,11 @@
      (&& (two? r) (= '(1 2) <r)))
   ; the gulp is REALIZED and only the join is lazy: the cells of one run are ordinary
   ; conses, and a flowing charlist ends in a promise or in ().
-  ; ⚠ AND THE RUN IS THE PORT'S, NOT THE READER'S: a tap has no backing buffer, so its
-  ; run is ONE byte and the second cell is still behind the promise. that is the whole
-  ; of what bounds the reader on a file -- a buffered port hands over 4096 here, and
-  ; the frontend gate (test/front/io.l) is where a real run is walked as plain conses.
+  ; the run is the PORT's, and it is what the port has in hand: a tap's charlist is
+  ; already in memory, so both bytes come at once and the promise sits after them. a
+  ; buffered fd port hands over its 4096 the same way (test/front/io.l walks a real one).
   (: f (flow (tap '(97 98)))
-     (&& (= 97 <f) (lit? >f) (= 98 <(>f ())) (|| (lit? >(>f ())) (nil? >(>f ())))))
+     (&& (= 97 <f) (= 98 <>f) (|| (lit? >>f) (nil? >>f))))
   ; an empty port is the empty charlist, not a promise of one.
   (nil? (flow (tap ())))
   ; ⚠ THE MEMOIZATION LAW: a position forced twice answers THE SAME THING, so the

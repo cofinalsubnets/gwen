@@ -269,10 +269,15 @@ extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 //     owns the wait), -1 end of stream. never allocates, hence frame by value.
 //     ⚠ THE END IS STABLE: a spent device owes -1 to every ask, not just the
 //     first (test/front/io.l law 3).
+//   athand: of the next n bytes, how many are here already -- a source whose text
+//     is in memory (a C string, a charlist) counts them without a device. NULL is
+//     "ask the device", so a run must come out of a buffer instead. `chug` is the
+//     one caller, and this is the whole of what it means to be readable now.
 struct ai_port_vt {
  struct ai*(*flush)(struct ai*);
  intptr_t (*writen)(struct ai**, unsigned char const*, uintptr_t),
-          (*readn)(struct ai*, unsigned char*, uintptr_t); };
+          (*readn)(struct ai*, unsigned char*, uintptr_t);
+ uintptr_t (*athand)(struct ai*, uintptr_t); };
 
 // only 2 tag bits on 32 bit so we can only have four of these
 enum ai_status ai_fin(struct ai*);

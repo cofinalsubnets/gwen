@@ -163,7 +163,7 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
 
 struct ai_port_vt const ai_fd_port_vt =
- { fd_flush, fd_writen, fd_readn };
+ { fd_flush, fd_writen, fd_readn, NULL };
 
 struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF) };
 struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF) };

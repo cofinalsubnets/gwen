@@ -248,8 +248,8 @@
                      (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
  ; a port is a charlist: the run just gulped is realized, the tail a promise for the next.
  ; the tail must be a `once` -- p1 forces a position twice, and a re-drinking tail would lose the
- ; bytes between. one chug per gulp, so the port's own buffering bounds the run; the `see` is what
- ; refills, since chug never touches the device.
+ ; bytes between. one chug per gulp, and the run is whatever the port has in hand; the `see` is
+ ; what refills, since chug never touches the device.
  (flow p) (: (gulp tl) (: c (see p)
                           (? (= c -1) tl
                              (: _ (unsee p c)
@@ -258,8 +258,8 @@
                                 (go (tally t) tl))))
              c (see p)
              (? (= c -1) () (: _ (unsee p c) (gulp (once (\ u (flow p)))))))
- ; flow at one byte per force. an unbuffered port already flows that way, so this is for taking a
- ; buffered port slowly, where a whole run would read too far ahead.
+ ; flow at one byte per force, for taking a port slowly where a whole run would read too far
+ ; ahead. `in` already flows that way: it holds nothing in hand.
  (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p))))))
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; the help status reader. one bit reaches a help: scare (1). `sound` answers its own nothings as

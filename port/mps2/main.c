@@ -99,7 +99,7 @@ static struct ai *fd_flush(struct ai *g) { return g; }
 struct ai_io ai_stdin  = { .ap = lvm_port_io, .fd = putcharm(0), .ungetc_buf = putcharm(EOF) };
 struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1), .ungetc_buf = putcharm(EOF) };
-struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn };
+struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
 // --- the exit builtin -----------------------------------------------------
 // (m7exit code) -- leave the machine through semihosting with `code` as the

@@ -107,7 +107,7 @@ struct ai_io ai_stdout = { .ap = lvm_port_io, .fd = putcharm(1),
 // No separate error stream in the browser host; route err to out's fd.
 struct ai_io ai_stderr = { .ap = lvm_port_io, .fd = putcharm(1),
                          .ungetc_buf = putcharm(EOF) };
-struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn };
+struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn, NULL };
 
 // (exit n) -- a frontend nif, like main.c's and kmain.c's. The wasm host needs
 // it for the same reason they do: the test harness aborts a failed assert with
