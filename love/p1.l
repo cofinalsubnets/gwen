@@ -18,16 +18,17 @@
 ; exponentiating where a comparison was meant. prefix nifs only. it is also
 ; PRE-PREL: nifs and its own bindings, nothing else, no prel helpers, no macros.
 ;
-; the protocol is the historical one (2efbaa51^:g/repl.g) and NOT a port: read1
-; walks a charlist and answers the value CONSED ONTO WHAT IS LEFT, () for no
+; the protocol is the historical one (2efbaa51^:g/repl.g) and it is NOT A PORT'S:
+; read1 walks a charlist and answers the value CONSED ONTO WHAT IS LEFT, () for no
 ; datum (end of text, or a stray close), or `torn` for a shape that did not
 ; finish. the residue IS the answer, which is what lets a caller resume a torn
-; read by handing back more text -- there is no port to stash it in.
+; read by handing back more text -- nothing is stashed anywhere on its behalf.
 ;
-; ⚠ SO THE RESIDUE IS ALWAYS A CHARLIST, whatever went in. `sound` spreads a
-; STRING at the door (below) because every caller was writing that spread by
-; hand, but the answer's tail is what the walk holds, and a caller resumes by
-; handing it straight back -- one spread per text, not one per datum.
+; ⚠ SO THE RESIDUE IS ALWAYS A CHARLIST, whichever of the three doors went in.
+; `sound` spreads a STRING and lifts a PORT at the door (below) because every
+; caller was writing that by hand, but the answer's tail is what the WALK holds,
+; and a caller resumes by handing it straight back -- one lift per text, not one
+; per datum, and a port is never handed in twice.
 ;
 ; ⚠ ASK `two?` FIRST, never the net: a cons is the one structural answer, and
 ; testing (nil? d) first would call a perfectly good (datum . rest) a clean end
@@ -47,7 +48,7 @@
    ; lambda -- the input truncates SILENTLY and looks exactly like a short file.
    ; so `cup` on the CURSOR is a bug wherever it appears below; the token lists
    ; p1 builds itself are strict, and p1-rev / p1-all? / p1-digits keep it.
-   ; the thunk MEMOIZES (bao.l's `once`), so forcing a position twice -- which
+   ; the thunk MEMOIZES (p1-once, below), so forcing a position twice -- which
    ; the `#!` lookahead and the \xNN lane both do -- reads the same byte twice
    ; rather than drinking twice.
    (p1-cup cl) (: t (cup cl) (? (lit? t) (t ()) t))
@@ -280,12 +281,60 @@
               (? (nil? (two? d)) 'torn
                  (p1-list (cup d) () (link (cap d) acc))))))
 
+   ; --- a port is a charlist ------------------------------------------------
+   ; the gulp is REALIZED and only the join is lazy: p1-flow lays a port's
+   ; readable run down as ordinary conses and closes it on a thunk that drinks
+   ; the next, which p1-cup fires like any other tail. ⚠ THE THUNK MEMOIZES AND
+   ; MUST: p1 forces one position more than once on purpose (the `#!` lookahead,
+   ; the \xNN lane), and a re-drinking tail takes the NEXT gulp instead -- the
+   ; bytes between are simply gone, which fails as a misread, never a crash.
+   ; ⚠ and the answer is WRAPPED (1 v), read back with two?: a promise of NOTHING
+   ; is the ordinary case (eof answers ()), and a bare pin leaves the slot reading
+   ; exactly like an unforced one -- so it would drink forever on the one input
+   ; that matters. prel's flow/gulp/once are these, and stay for their own
+   ; callers; the reader cannot reach them (prel is not loaded when p1 runs).
+   (p1-port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
+   (p1-once f) (: t (tablet 0)
+                  (\ u (: v (peep t 0 ())
+                          (? (two? v) (cup v)
+                             (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
+   ; the gulp: `see` blocks for the first byte -- it parks the TASK and refills the
+   ; port -- `unsee` hands it back, and `chug` takes that byte plus the buffered run
+   ; as ONE text. ⚠ THE `see` IS THE PARK AND CANNOT GO: chug never touches the
+   ; device, so a bare chug on a quiet port answers "" forever. ⚠ and the steps are
+   ; PINNED IN ORDER, never nested as arguments: an n-ary call evals right to left,
+   ; so a nested (go .. (chug p)) would draw the byte before it chugged. `go` lays
+   ; the text down backwards onto the tail handed in, so the thunk is what the list
+   ; closes on and there is no second pass.
+   ; ⚠ ONE CHUG PER GULP, AND THAT BOUND IS THE STREAMING: drinking on while `cue?`
+   ; says ready realizes a whole regular FILE as conses in one call (a file is always
+   ; ready), which leaves the thunk at eof and nowhere else. bounded, the PORT'S OWN
+   ; BUFFERING sets the gulp: a heap fd port hands over its 4096-byte run, and an
+   ; UNBUFFERED port (`in`, a tap, a jug) has no run to hand over, so chug answers
+   ; the pushback alone and the list trickles a byte per force -- which is why `in`
+   ; needs no separate lane here. it cannot run ahead of a port that never buffered.
+   ; prel's `gulp` carries the same bound for the same reason.
+   (p1-gulp p tl)
+     (: c (see p)
+        (? (= c -1) tl
+           (: _ (unsee p c)
+              t (chug p)
+              (go k l) (? (nil? (< 0 k)) l (: j (- k 1) (go j (link (t j) l))))
+              (go (tally t) tl))))
+   (p1-flow p)
+     (: c (see p)
+        (? (= c -1) ()
+           (: _ (unsee p c) (p1-gulp p (p1-once (\ u (p1-flow p)))))))
+
    ; --- the doors -----------------------------------------------------------
-   ; SOUND: one datum off TEXT, and the tree's whole reader. answers
-   ; (datum . rest), () at a clean end, or `torn` mid-shape. text is a STRING or
-   ; the charlist a previous read left (or a flowing one, off a port); anything
-   ; else has no datum in it and reads as a clean end.
-   (sound x) (p1-read1 (? (string? x) (p1-chars x) x) ())
+   ; sound: one datum off text, and the tree's whole reader. answers
+   ; (datum . rest), () at a clean end, or `torn` mid-shape. four doors: a port, a
+   ; string, an unforced tail, or the charlist a previous read left. the residue is
+   ; always a charlist, so a caller threads it and never hands a port back twice.
+   (sound x) (p1-read1 (? (string? x)  (p1-chars x)
+                          (p1-port? x) (p1-flow x)
+                          (lit? x)     (x ())    ; an unforced tail -- so a closure is fired
+                          x) ())
    ; every datum in a text, in source order -- what the boot stitch wants.
    ; answers `torn` if any shape did not finish.
    (p1-reads cl)

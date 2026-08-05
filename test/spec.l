@@ -565,14 +565,19 @@
 ; see/put/... , open/close/pad. the vessels: (tap cl) an input SOURCE over a colist, (jug 0) an
 ; output PORT with a growable buffer that pours both ways (a PORT, not a cask -- a cask is the
 ; mutable byte ARRAY); (see o) draws ONE unit, (flow o) reads as a lazy charlist, (slurp o) drains
-; ALL to a value. the datum reader is `sound` and it takes TEXT -- a STRING, or a charlist -- so
-; the whole read protocol IS its return value, three ways: the datum CONSED ONTO WHAT IS LEFT, () at a
+; ALL to a value. the datum reader is `sound` and it takes TEXT -- a PORT, a STRING, or a charlist
+; -- so the whole read protocol IS its return value, three ways: the datum CONSED ONTO WHAT IS LEFT, () at a
 ; clean end, or `torn` where the text ran out inside a shape. ⚠ ask `two?` for the datum, never the
 ; net: the answer is a cons and a datum may perfectly well be a nothing (reading "()" answers
 ; (() . rest)). the RESIDUE IS THE ANSWER, so a torn read resumes by handing back more text and
 ; nothing is stashed in a port -- which is why the old more-bit/port-back protocol is gone.
-; ⚠ AND THE RESIDUE IS A CHARLIST WHICHEVER DOOR WENT IN: a string is spread ONCE, at the door, so
-; the two doors meet after the first datum and a resuming caller has one shape to know.
+; ⚠ AND THE RESIDUE IS A CHARLIST WHICHEVER DOOR WENT IN: a string is spread ONCE and a port lifted
+; ONCE, at the door, so the three doors meet after the first datum and a resuming caller has one
+; shape to know -- and a port, having become its own tail, is never handed in twice.
+; ⚠ THE PORT DOOR STREAMS, one buffered run per gulp: the reader takes a heap fd port's 4096-byte
+; run and stops, so reading one form off a file leaves the rest ON THE PORT. an UNBUFFERED port
+; (`in`, a tap, a jug) has no run to hand over, so it trickles a byte per force and CANNOT run
+; ahead of a position something else shares.
 ; and A PORT IS A CHARLIST: (flow p) is one whose tail is a promise that drinks the next gulp,
 ; so the reader asks for more itself and there is nothing to bridge. a consumer REFLECTS on the
 ; tail -- a cons is more, () the end, anything else a thunk fired with the unit -- and nothing
@@ -589,6 +594,8 @@
  (: r (sound '(49 32 50)) (2 = (cap (sound >r))))    ; the residue reads the next datum
  (: r (sound '(40 41)) (&& (two? r) (nil? <r)))      ; ...and the datum () is still a datum
  (: r (sound (flow (tap '(40 49 32 50 41)))) ('(1 2) = <r))   ; a PORT reads as the charlist it is
+ (: r (sound (tap '(40 49 32 50 41))) ('(1 2) = <r))          ; ...and sound lifts one itself
+ (: p (tap '(49 32 50)) r (sound p) (2 = (cap (sound >r))))   ; the residue carries the rest of the port
  (: r (sound "(1 2) 3") (&& ('(1 2) = <r) (3 = (cap (sound >r)))))   ; a STRING is spread at the door
  (nil? (sound "")) (id? 'torn (sound "(1")) (nil? (sound 42))        ; ...and reads the same three ways
  (: c (tablet 0) th (once (\ u (: k (peep c 0 0) _ (pin c 0 (k + 1)) k)))

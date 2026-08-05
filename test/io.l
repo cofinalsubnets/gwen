@@ -182,6 +182,12 @@
   (: a (sound '(40 41 32 49)) b (sound >a)
      (&& (nil? <a) (= 1 <b) (nil? (sound >b))))
 
+  ; an unforced tail is a charlist that has not been drunk yet, so sound fires it and reads
+  ; on. without this arm a residue arriving unforced would read as a clean end -- a short
+  ; read, silently. the cost is that a closure handed to sound is CALLED, not refused.
+  (: r (sound (once (\ u (map "(1 2)" (jot 5)))))
+     (&& (two? r) (= '(1 2) <r)))
+
   ; Misuse: a non-charlist holds no datum, and reads as the clean end.
   (nil? (sound 42))
   (nil? (sound 'notaport)))

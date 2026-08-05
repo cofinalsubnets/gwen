@@ -50,6 +50,40 @@
  (nil? (sound 42)) (nil? (sound 'notaport))           ; nothing to read is a clean end
  ((sound "(1 2) 3") = (sound (map "(1 2) 3" (jot 7)))))  ; the two doors agree, datum and rest
 
+; --- the port door ---------------------------------------------------------------
+; a PORT is the third door: sound lifts it to the flowing charlist it already is,
+; so nobody slurps a file to a string to read one form out of it. the DATUMS are
+; the law -- the residue cannot be, because a port's rest ends in the thunk that
+; drinks the next gulp where a string's ends in (), which is exactly the point.
+; ⚠ AND A TAP IS THE STRONGEST WITNESS THERE IS: the charlist row is unbuffered, so
+; every single byte arrives as its own gulp behind its own thunk. the `#!` lookahead
+; forces one position three times and the \xNN lane twice, so a tail that DRANK
+; instead of remembering would take the next byte and lose the one between -- and
+; the failure is a misread, never a crash. the sweep below runs every reader lane
+; through that sieve and demands the string's answer back.
+(: (rdr-all x)                                      ; every datum of a text, in order
+   (: (go cl acc) (: r (sound cl)
+                     (? (two? r)      (go (cup r) (link (cap r) acc))
+                        (id? r 'torn) 'torn
+                        (rev acc)))
+      (go x ()))
+   (rdr-doors s) (: cl (map s (jot (tally s)))      ; string, charlist and port agree
+                    d (rdr-all s)
+                    (&& (d = (rdr-all cl)) (d = (rdr-all (tap cl))))))
+(assert
+ (: p (tap (map "(1 2) 3" (jot 7))) r (sound p)
+    (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))   ; a port, and its residue resumes
+ (nil? (sound (tap ())))                            ; a spent port is a clean end
+ (nil? (sound (jug 0)))                             ; ...and so is one with no read door
+ (id? 'torn (sound (tap (map "(1" (jot 2)))))       ; torn reads torn off a port too
+ ; the sieve: one byte per gulp, so every lane crosses a thunk at every position.
+ (rdr-doors "(1 2) 3 \"hi\" 'q")
+ (rdr-doors "#!/usr/bin/env love\n(a b)")           ; the lookahead: one position, 3 forces
+ (rdr-doors "\"\\x41\\x42\" 7")                     ; the \xNN lane: 2 forces
+ (rdr-doors "; comment\n(a . b) #(1 2) @(3) ~(0 1)")
+ (rdr-doors "map (+ 1) '(1 2 3)")                   ; an operator run, glued and spaced
+ (rdr-doors "1.5e3 -2 #xff 1/2 [a b] {c d}"))
+
 ; --- the lexer law -------------------------------------------------------------
 ; the leading character splits the token. a name token (alnum/_) keeps - ? ! and
 ; the prime INSIDE it (the kebab law); a punctuation-led token is a SIGIL -- a
