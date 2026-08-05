@@ -182,7 +182,7 @@ lvm_t lvm_kcall,
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_key,
  lvm_await,
- lvm_fgetc, lvm_fungetc, lvm_fputc, lvm_fputs, lvm_fflush,
+ lvm_fgetc, lvm_fungetc, lvm_chug, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0, lvm_dot,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
@@ -671,6 +671,7 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_fputx, "print", s2(lvm_fputx))\
  _(nif_await, "await", s1(lvm_await))\
  _(nif_fgetc, "see", s1(lvm_fgetc)) _(nif_fungetc, "unsee", s2(lvm_fungetc))\
+ _(nif_chug, "chug", s1(lvm_chug))\
  _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
  _(nif_dot, "dot", s1(lvm_dot))\
  _(nif_wheel, "wheel", s1(lvm_wheel))\
@@ -3106,6 +3107,31 @@ uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, ui
  memcpy(dst, txt((struct ai_str*) b->rbuf) + p, k);
  b->rpos = putcharm(p + k);
  return k; }
+// (chug port): everything ALREADY readable, as ONE exact-length text -- the
+// pushback byte if there is one, then the buffer's pending run. it never touches
+// the device and never parks, so the gulp is: draw the first byte with `see`
+// (which refills, and parks if it must), unsee it, then chug the run whole.
+// ⚠ "" IS THE ORDINARY ANSWER, not a failure: an unbuffered port always answers
+// it (bio_of refuses the statics), so a caller must draw with `see` rather than
+// spin here. the length is known BEFORE the string is minted (ai_io_pending
+// already counts it), which is the whole point -- no over-allocate, no trim.
+ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
+ uintptr_t u = getcharm(i->ungetc_buf) != EOF ? 1 : 0;
+ uintptr_t n = u + ai_io_pending(g, i);
+ g->io = i;
+ if (!ai_ok(g = str0(g, n))) return g;
+ i = ai_core_of(g)->io;                       // str0 collects: the port may have moved
+ if (n) {
+  char *d = txt(g->sp[0]);
+  if (u) *d = (char) getcharm(i->ungetc_buf), i->ungetc_buf = putcharm(EOF);
+  ai_io_read_drain(g, i, (unsigned char*) d + u, n - u); }
+ return g->sp[1] = g->sp[0], g->sp += 1, g; }
+lvm(lvm_chug) {
+ if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
+ Pack(g); g = chug_str(g, (struct ai_io*) Sp[0]);
+ if (!ai_ok(g)) return ghelp(g);
+ Unpack(g);
+ ai_musttail return Next(1); }
 struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) { return io_wdrain(g, i); }
 uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {
  struct ai_bio *b = bio_of(g, i);

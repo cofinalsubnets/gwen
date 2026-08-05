@@ -256,14 +256,33 @@
  (slurp o) (? (? (port? o) (= -2 (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 3 is a string too, so a string? probe would lie
               (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))
                  (string (rev (rl o ())))))
- ; gulp: block for the first byte (see parks the TASK), then all that is ready, REVERSED --
- ; `flow` needs a gulp ENDING IN A PROMISE, and a forward-built list only gets one by being
- ; copied onto it. `cue?` is the dual of the park, so the loop stops at the fd's own edge.
- (gulp p) (: c (see p)
-             (? (= c -1) ()
-                ((: (go acc) (? (cue? p) (: b (see p) (? (= b -1) acc (go (link b acc)))) acc))
-                 (link c ()))))
- (drink p) (rev (gulp p))                         ; the gulp in order: sip draws ONE, drink what is READY, slurp ALL
+ ; once: THE PROMISE, through a tablet -- the door this tree sanctions for mutation.
+ ; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the ordinary
+ ; case (eof answers ()), and a bare pin leaves the slot reading exactly like an unforced one --
+ ; so it would re-run f forever, silently, on the one input that matters.
+ (once f) (: t (tablet 0)
+             (\ u (: v (peep t 0 ())
+                     (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
+ ; the gulp: `see` blocks for the first byte -- it parks the TASK and refills the port --
+ ; `unsee` hands it back, and `chug` takes that byte plus the whole buffered run as ONE text of
+ ; exactly the right length (ai_io_pending counts it before the string is minted, so there is no
+ ; over-allocate and no trim). ⚠ THE `see` IS THE PARK AND CANNOT GO: chug never touches the
+ ; device, so a bare chug on a quiet port answers "" forever.
+ ; ⚠ CHUG SERVES THE BUFFERED FD LANE ONLY: a tap, a jug or `in` has no backing buffer and
+ ; answers just the pushback, so the `cue?` round is the GENERAL lane and the two agree on
+ ; content -- chug only lets the fd case take it 4096 at a time instead of one `see` per byte.
+ ; ⚠ AND THE STEPS ARE PINNED IN ORDER, never nested as arguments: an n-ary call evals RIGHT TO
+ ; LEFT, so a nested (go .. (chugged p tl)) would drain the port before it chugged. `go` lays the
+ ; text down backwards onto the tail the caller hands in, so the promise is what the list closes
+ ; on and there is no second pass.
+ (chugged p tl) (: c (see p)
+                   (? (= c -1) tl
+                      (: _ (unsee p c)
+                         t (chug p)
+                         r (? (cue? p) (chugged p tl) tl)
+                         (go k l) (? (nil? (< 0 k)) l (: j (- k 1) (go j (link (t j) l))))
+                         (go (tally t) r))))
+ (drink p) (chugged p ())                         ; sip draws ONE, drink what is READY, slurp ALL
  ; once: THE PROMISE, through a tablet -- the door this tree sanctions for mutation.
  ; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the ordinary
  ; case (eof answers ()), and a bare pin leaves the slot reading exactly like an unforced one --
@@ -276,7 +295,7 @@
  ; REALIZED and only the join is lazy. ⚠ THE TAIL IS A `once` AND MUST BE: p1 forces one position
  ; more than once (the `#!` lookahead, the \xNN lane), and a re-reading tail DRINKS again, losing
  ; the bytes between -- which fails as a misread, never a crash.
- (flow p) (: g (gulp p) (? (two? g) (foldl (flip link) (once (\ u (flow p))) g) ()))
+ (flow p) (: c (see p) (? (= c -1) () (: _ (unsee p c) (chugged p (once (\ u (flow p)))))))
  ; trickle: flow's careful twin, ONE byte per force, so the list never runs ahead of the port and
  ; the two share a position BY CONSTRUCTION. `flow` hands back a head DETACHED from the port --
  ; two positions where there was one -- which is why a form inside a piped script reads `in` and
