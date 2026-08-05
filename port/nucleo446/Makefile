@@ -7,9 +7,10 @@
 #
 # Faces: `make` builds firm.bin/.hex (the device firmware; flash with `make
 # flash` -- st-flash -- or copy firm.bin to the NODE_F446RE mass-storage
-# drive). `make smoke` builds the -D QSMOKE twin that leaves through qemu
-# semihosting with the self-check tally; `make test_nucleo446` at the root
-# boots it on qemu's STM32F405 (netduinoplus2) and expects 28.
+# drive), and that is what `make test_nucleo446` gates: mooncc compiled every
+# C file and the boot image is valid. `make smoke` builds the -D QSMOKE twin
+# that leaves through qemu semihosting with the self-check tally -- boot it by
+# hand on netduinoplus2 and expect 28.
 R := ../..
 o = out/nucleo446
 MOONCC = out/host/mooncc

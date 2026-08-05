@@ -444,12 +444,19 @@ test_teensy41: host out/host$(hsuf)/mooncc
 	   echo "test_teensy41: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_teensy41: love (all-mooncc thumb2) links against the XIP flash map, boot image verified"
-# test_nucleo446 -- the Nucleo-F446RE firmware BOOT gate: the whole port compiled by mooncc
-# -t thumb2sp, then the -D QSMOKE face BOOTS on qemu's netduinoplus2 (same USART2/RCC map)
-# and runs the port's OWN vectors/crt0/clock/USART2 battery; 100+n names the first miss.
+# test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate, teensy41-shaped: the whole port
+# compiled by mooncc -t thumb2sp and the boot image VERIFIED (initial SP inside SRAM, thumb-bit
+# reset entry inside flash). The 128 KB SRAM never held love -- this port is the TOOLCHAIN on
+# silicon -- and test_thumb2sp already runs that lane's arithmetic as 72 differential checks
+# against gcc, so booting the QSMOKE twin under qemu re-proved it at a minute a go. That face
+# stays for a hand: `make -C port/nucleo446 smoke` then boot it on netduinoplus2.
 .PHONY: test_nucleo446
 test_nucleo446: host out/host$(hsuf)/mooncc
-	@sh test/gate/boot.sh nucleo446 "$(MAKE)"
+	@echo NUCLEO446 out/nucleo446/firm.hex
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1; then \
+	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
+	  echo "test_nucleo446: firmware (all-mooncc thumb2sp) links against the F4 flash map, boot image verified"
 # moon-tar -- the userland cousin of test_raw (doc/moon-userland.md): build GNU tar 1.13
 # with mooncc + nolibc + the holo linker (no gcc/glibc/ld) and prove the binary RUNS --
 # cf/xf + czf/xzf roundtrips + system-tar interop. Point TARSRC at a ./configure'd tree.

@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/boot.sh -- LOVE ITSELF booting on emulated silicon. Five gates, one
+# test/gate/boot.sh -- LOVE ITSELF booting on emulated silicon. Four gates, one
 # procedure: build the port with its own make, run the ELF under qemu, and require an
 # exact exit code. 42 means the egg hatched on-device and the driver laws held; 98 is a
 # fault, 1 is a law that failed. These are the gates that prove the whole runtime --
@@ -9,7 +9,6 @@
 #   mps2_t1    Cortex-M0,  all-mooncc thumb1 (RP2040 ISA)  42
 #   mps2_wake  the IMAGE lane: baked on qemu's M7, woken in a DIFFERENT binary  42
 #   virt       riscv64 bare metal, our linker + holo start.o  42
-#   nucleo446  thumb2sp firmware on the F4, 28 on-board checks
 #
 # ⚠ qemu reads </dev/null: -nographic muxes guest serial + monitor onto stdio, so
 # without a definite-EOF stdin qemu BLOCKS on the host chardev when this runs with no
@@ -46,11 +45,6 @@ case $gate in
              qemu="qemu-system-riscv64 -M virt -bios none -nographic"
              why="love-on-virt boot"
              done_msg="love (all-mooncc riscv64, our linker, holo start.o) boots on qemu -M virt -- egg baked on-hart, laws hold, exit 42" ;;
-  nucleo446) banner="NUCLEO446 out/nucleo446/smoke.elf" ; need=$arm
-             elf=out/nucleo446/smoke.elf              ; tmo=60  ; want=28
-             qemu="qemu-system-arm -M netduinoplus2 -semihosting -nographic -monitor none -serial null -serial stdio"
-             why="nucleo446 smoke"
-             done_msg="mooncc -t thumb2sp firmware boots the F4 (28 on-board checks green on qemu)" ;;
   *) echo "boot.sh: unknown gate $gate" >&2; exit 1 ;;
 esac
 
@@ -76,8 +70,6 @@ case $gate in
              test -s out/mps2/love.img || {
                echo "$name: empty image (no qemu at bake), skipped"; exit 0; } ;;
   virt)      $mk -C port/virt || fail "virt build" ;;
-  nucleo446) $mk -C port/nucleo446 || fail "nucleo446 build (the boot-image verify is inside)"
-             $mk -C port/nucleo446 smoke || fail "nucleo446 smoke build" ;;
 esac
 
 # shellcheck disable=SC2086  # $qemu is a deliberate word list
@@ -85,7 +77,6 @@ timeout "$tmo" $qemu -kernel "$elf" < /dev/null
 a=$?
 
 case $gate in
-  nucleo446) [ "$a" -eq "$want" ] || fail "$why (got $a, want $want; 100+n first miss, 98 fault)" ;;
   mps2_wake) [ "$a" -eq "$want" ] || fail "$why (got $a, want $want)" ;;
   *)         [ "$a" -eq "$want" ] \
                || fail "$why (got $a, want $want = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)" ;;

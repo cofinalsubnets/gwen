@@ -10,8 +10,10 @@
 // test_thumb2sp pins against gcc on qemu-M4), composites and varargs. Every
 // check prints; the tally is the story. A -D QSMOKE build leaves through
 // qemu semihosting with the tally as the exit code (100+n names the first
-// miss, 98 a fault) -- `make test_nucleo446` boots it on qemu's STM32F405
-// cousin. The device build blinks instead: slow = all green, fast = a miss.
+// miss, 98 a fault) -- booted BY HAND (`make -C port/nucleo446 smoke`, then
+// qemu's STM32F405 cousin), since test_thumb2sp gates this lane's arithmetic
+// against gcc and `make test_nucleo446` only builds and verifies the image.
+// The device build blinks instead: slow = all green, fast = a miss.
 #include <stdint.h>
 #include "nucleo446.h"
 #include <stdarg.h>
