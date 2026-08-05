@@ -347,27 +347,30 @@
         _ (pin hb 1 (caup st))
         (hv-retile hb tl x fb))
    ; a session reads LINES (see parks the TASK -- the reader's park law) and
-   ; sounds the TEXT: `sound` walks a charlist, so a socket running dry mid-skip
-   ; cannot strand the whole vm in a C parse the way sounding the fd once did
-   ; (the trailing newline lured it in; the painter starved). a torn shape
-   ; carries to the next line as the RESIDUE the reader hands back, and every
-   ; form on a line runs, where only the first used to.
+   ; sounds the TEXT: the reader walks a string already in hand, so a socket
+   ; running dry mid-skip cannot strand the whole vm in a C parse the way
+   ; sounding the fd once did (the trailing newline lured it in; the painter
+   ; starved). a torn shape carries to the next line as the RESIDUE the reader
+   ; hands back, and every form on a line runs, where only the first used to.
    (hv-session c)
      (: (rdline acc) (: ch (see c)
                         (? (= ch -1) ()
-                           (= ch 10) (rev (link 10 acc))
+                           (= ch 10) (string (rev (link 10 acc)))
                            (rdline (link ch acc))))
-        (go pend) (: cl (rdline ())
-                     (? (! (two? cl)) 0
-                        ((: (h cl) (: r (sound cl)
-                                      (? (two? r) (: v (ev 'ev (cap r))
-                                                     _ (say c (+ (show v) "\n"))
-                                                     _ (flush c)
-                                                     (h (cup r)))
-                                         (id? r torn) (go cl)
-                                         (go ()))))
-                         (cat pend cl))))
-        (go ()))
+        ; ⚠ the line's PRESENCE is that it is a STRING, never its length: `two?` is
+        ; false for every string, and a bare newline is an honest line.
+        (go pend) (: ln (rdline ())
+                     (? (! (string? ln)) 0
+                        (: txt (+ pend ln)
+                           ((: (h x) (: r (sound x)
+                                         (? (two? r) (: v (ev 'ev (cap r))
+                                                        _ (say c (+ (show v) "\n"))
+                                                        _ (flush c)
+                                                        (h (cup r)))
+                                            (id? r torn) (go txt)
+                                            (go ""))))
+                            txt))))
+        (go ""))
    (hv-moor path)
      (: lp (shore path)
         (? (! (lit? lp)) (: _ (say out (+ "haven: no moor at " (+ path "\n"))) (flush out))

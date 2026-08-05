@@ -256,13 +256,6 @@
  (slurp o) (? (? (port? o) (= -2 (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 3 is a string too, so a string? probe would lie
               (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))
                  (string (rev (rl o ())))))
- ; once: THE PROMISE, through a tablet -- the door this tree sanctions for mutation.
- ; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the ordinary
- ; case (eof answers ()), and a bare pin leaves the slot reading exactly like an unforced one --
- ; so it would re-run f forever, silently, on the one input that matters.
- (once f) (: t (tablet 0)
-             (\ u (: v (peep t 0 ())
-                     (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
  ; the gulp: `see` blocks for the first byte -- it parks the TASK and refills the port --
  ; `unsee` hands it back, and `chug` takes that byte plus the whole buffered run as ONE text of
  ; exactly the right length (ai_io_pending counts it before the string is minted, so there is no
@@ -271,10 +264,10 @@
  ; ⚠ CHUG SERVES THE BUFFERED FD LANE ONLY: a tap, a jug or `in` has no backing buffer and
  ; answers just the pushback, so the `cue?` round is the GENERAL lane and the two agree on
  ; content -- chug only lets the fd case take it 4096 at a time instead of one `see` per byte.
- ; ⚠ AND THE STEPS ARE PINNED IN ORDER, never nested as arguments: an n-ary call evals RIGHT TO
- ; LEFT, so a nested (go .. (chugged p tl)) would drain the port before it chugged. `go` lays the
- ; text down backwards onto the tail the caller hands in, so the promise is what the list closes
- ; on and there is no second pass.
+ ; ⚠ AND THE STEPS ARE PINNED IN ORDER, never nested as arguments: ARGUMENT EVALUATION ORDER IS
+ ; UNSPECIFIED, so two effects on one port share a sequence only when `:` gives them one. `go`
+ ; lays the text down backwards onto the tail the caller hands in, so the promise is what the
+ ; list closes on and there is no second pass.
  (chugged p tl) (: c (see p)
                    (? (= c -1) tl
                       (: _ (unsee p c)
@@ -290,17 +283,22 @@
  (once f) (: t (tablet 0)
              (\ u (: v (peep t 0 ())
                      (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
- ; flow: A PORT IS A CHARLIST -- one whose tail is a promise that drinks the next gulp, so the
- ; reader (love/p1.l) asks for more itself and nobody turns a port into text first. the gulp is
- ; REALIZED and only the join is lazy. ⚠ THE TAIL IS A `once` AND MUST BE: p1 forces one position
- ; more than once (the `#!` lookahead, the \xNN lane), and a re-reading tail DRINKS again, losing
- ; the bytes between -- which fails as a misread, never a crash.
- (flow p) (: c (see p) (? (= c -1) () (: _ (unsee p c) (chugged p (once (\ u (flow p)))))))
- ; trickle: flow's careful twin, ONE byte per force, so the list never runs ahead of the port and
- ; the two share a position BY CONSTRUCTION. `flow` hands back a head DETACHED from the port --
+ ; spout: A PORT IS A CHUNK SOURCE -- a promise of (text . next), () at eof, so the reader
+ ; (love/p1.l) asks for more itself and nobody turns a port into text first. the gulp is REALIZED
+ ; and only the join is lazy; p1 walks an INDEX into the text `chug` hands over whole, so no cell
+ ; is stepped and no byte is copied twice.
+ ; ⚠ THE TAIL IS A `once` AND MUST BE: p1 re-forces one position on purpose (the `#!` lookahead,
+ ; the \xNN lane), and a re-reading source DRINKS AGAIN, losing the bytes between -- which fails
+ ; as a misread, never a crash.
+ ; ⚠ AND A CHUNK IS NEVER EMPTY -- the reader would pull on it forever. the `see`/`unsee` pair is
+ ; what guarantees it: chug counts the pushback byte, so a port with no buffer at all still
+ ; answers that one char rather than "".
+ (spout p) (once (\ u (: c (see p) (? (= c -1) () (: _ (unsee p c) (link (chug p) (spout p)))))))
+ ; drip: spout's careful twin, ONE byte per force, so the source never runs ahead of the port and
+ ; the two share a position BY CONSTRUCTION. `spout` hands back a chunk DETACHED from the port --
  ; two positions where there was one -- which is why a form inside a piped script reads `in` and
- ; finds nothing (doc/io.md part III). `in` trickles for exactly that reason.
- (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p))))))
+ ; finds nothing (doc/io.md part III). `in` drips for exactly that reason.
+ (drip p) (once (\ u (: c (see p) (? (= c -1) () (link (string (link c ())) (drip p))))))
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
 ; the help status reader. ONE bit reaches a help -- scare (1); `sound` answers its own nothings as
 ; values (doc/io.md rung 6c), so nothing raises the more bit and nothing asks.
@@ -330,13 +328,14 @@
 (: use
    (: prior use
       ; read-eval every form of a module source. ⚠ a torn form scares.
-      ; ⚠ `flow`, never `slurp`: slurp's drain conses the bytes, reverses them and re-strings
-      ; them, and the string would then be consed a second time -- four copies of a 245 KB module.
-      (rdev q) ((: (go cl) (: r (sound cl)
+      ; ⚠ `spout`, never `slurp`: slurp's drain conses the bytes, reverses them and re-strings
+      ; them, and it holds the whole module at once; spout hands the reader one gulp at a time as
+      ; the text chug already made, and the reader indexes it without consing at all.
+      (rdev q) ((: (go x) (: r (sound x)
                               (? (two? r) (: _ (ev 'ev (cap r)) (go (cup r)))
                                  (id? r torn) (scare 'unfinished-form q)
                                  0)))
-                (flow q))
+                (spout q))
       (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
       (mname s) (: n (tally s)
                    b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)

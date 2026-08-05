@@ -82,11 +82,11 @@
   ; lands as its LOW BYTE. that is not a rounding convenience -- it is what stops
   ; a -1 in the list from FORGING the end of the stream. ci_getc used to hand the
   ; raw charm over, and the measured cost was not at `see` (which answered -1 and
-  ; carried on) but at every reader that STOPS there: `(flow (tap '(-1 65)))`
-  ; came back EMPTY, so sound/reads/slurp lost the whole list to one element.
+  ; carried on) but at every reader that STOPS there: a drain of (-1 65) came back
+  ; EMPTY, so sound/reads/slurp lost the whole list to one element.
   (: p (tap '(300 -1 65))
      (&& (= 44 (see p)) (= 255 (see p)) (= 65 (see p)) (= -1 (see p))))
-  (= 2 (tally (flow (tap '(-1 65)))))
+  (= 2 (tally (drink (tap '(-1 65)))))
 
   ; --- once: the promise ---
   ; a thunk that runs at most once and remembers. fired with the UNIT, per the
@@ -107,81 +107,95 @@
      _ (th ()) _ (th ())
      (&& (nil? (th ())) (= 1 (peep c 0 0))))
 
-  ; --- flow: a PORT IS A CHARLIST ---
-  ; one whose tail is a promise that drinks the next gulp, so `sound` reads a port
-  ; with no one turning it into text first.
+  ; --- spout: a PORT IS A CHUNK SOURCE ---
+  ; a promise of (text . next), () at eof, so `sound` reads a port with no one
+  ; turning it into text first and no cell stepped per byte.
   (: p (tap '(40 49 32 50 41))                          ; "(1 2)"
-     r (sound (flow p))
+     r (sound (spout p))
      (&& (two? r) (= '(1 2) <r)))
-  ; the gulp is REALIZED and only the join is lazy: the cells up to the tail are
-  ; ordinary conses, and a flowing charlist ends in a promise or in ().
-  (: f (flow (tap '(97 98)))
-     (&& (= 97 <f) (= 98 <>f) (|| (lit? >>f) (nil? >>f))))
-  ; an empty port is the empty charlist, not a promise of one.
-  (nil? (flow (tap ())))
-  ; ⚠ THE MEMOIZATION LAW: a position forced twice answers THE SAME THING, so the
-  ; flow's tail is a `once` and not a bare (\ u (flow p)). p1 re-forces on purpose
-  ; (the `#!` lookahead reads the tail three times in one expression, the \xNN lane
-  ; twice), and a re-drinking tail loses the bytes between -- a MISREAD, never a
+  ; the chunk is REALIZED text and only the join is lazy. ⚠ ITS SIZE IS THE PORT'S,
+  ; not a promise the source makes: `chug` answers what is already readable, so a
+  ; buffered fd gives its whole pending run and a tap -- which has no buffer at all
+  ; -- gives the one pushback byte. both are correct; only the granularity differs.
+  (: s (spout (tap '(97 98)))
+     g (s ())
+     (&& (two? g) (&& (= "a" <g) (lit? >g))))
+  ; an empty port's source answers () on its first force -- no chunk, and never an
+  ; EMPTY one (a reader would pull on that forever).
+  (nil? ((spout (tap ())) ()))
+  ; ⚠ THE MEMOIZATION LAW: a source forced twice answers THE SAME THING, so spout's
+  ; next is a `once` and not a bare (\ u (spout p)). p1 re-forces on purpose (the
+  ; `#!` lookahead reads the tail three times in one expression, the \xNN lane
+  ; twice), and a re-drinking source loses the bytes between -- a MISREAD, never a
   ; crash. ⚠ the witness has to be a port that still has something to give: the
-  ; unget puts a byte back AFTER the first gulp, so a second drink would swallow it
+  ; unget puts a byte back AFTER the first chunk, so a second drink would swallow it
   ; and answer the clean end. two forces that both say () prove nothing.
-  (: p (tap '(97)) f (flow p) t >f
+  (: p (tap '(97)) s (spout p) g (s ()) t >g
      _ (unsee p 98)
      x (t ()) y (t ())
-     ; ⚠ and x is compared by IDENTITY, not by `=`: its own tail is the next promise,
-     ; so (= '(98) x) is FALSE -- the printer shows it as (98) because it stops at a
-     ; tail that is not a cons, which is the one place a flow does not look like a list.
-     (&& (lit? t) (&& (= 98 <x) (id? x y))))
+     (&& (lit? t) (&& (= "b" <x) (id? x y))))
+  ; drip: spout's careful twin, one byte per force, so the source never runs ahead
+  ; of the port -- what `in` takes, and why a form inside a piped script can read it.
+  (: s (drip (tap '(97 98)))
+     g (s ())
+     (&& (= "a" <g) (= "b" (cap ((>g) ())))))
 
   ; --- sound: one datum per call, off TEXT. ---
-  ; sound takes a CHARLIST and answers three ways: the datum CONSED ONTO WHAT IS
-  ; LEFT, () at a clean end, or `torn` where the text ran out inside a shape.
-  ; presence is the CONS -- ask two?, never the net -- and the residue is the
-  ; answer, so the caller owns what is left and nothing is stashed in a port.
+  ; sound takes TEXT and answers three ways: the datum CONSED ONTO WHAT IS LEFT,
+  ; () at a clean end, or `torn` where the text ran out inside a shape. presence is
+  ; the CONS -- ask two?, never the net -- and the residue is the answer, so the
+  ; caller owns what is left and nothing is stashed in a port.
+  ; ⚠ THE RESIDUE IS A CURSOR, not text: it names a place in the text it came off,
+  ; so threading it copies nothing. `spot` builds one, and past the end it is the
+  ; zero point -- which reads as the clean end.
   ;
   ; Empty input: a clean end.
+  (nil? (sound ""))
   (nil? (sound ()))
 
   ; Single datum: number, symbol, list, quoted form, string literal.
-  (= 1 (cap (sound '(49))))                             ; "1"
-  (= 'a (cap (sound '(97))))                            ; "a"
-  (: d (cap (sound '(40 49 32 50 41)))                  ; "(1 2)"
+  (= 1 (cap (sound "1")))
+  (= 'a (cap (sound "a")))
+  (: d (cap (sound "(1 2)"))
      (&& (two? d) (= 1 (cap d)) (= 2 (caup d))))
-  (: d (cap (sound '(39 49)))                           ; "'1" -> (` 1)
+  (: d (cap (sound "'1"))                               ; -> (` 1)
      (&& (two? d) (= 1 (caup d))))
-  (= (string (link 104 (link 105 0))) (cap (sound '(34 104 105 34))))   ; "hi"
+  (= "hi" (cap (sound "\"hi\"")))
 
   ; Sequential reads: THREAD THE RESIDUE. the last one is the clean end.
-  (: a (sound '(49 32 50 32 51))                        ; "1 2 3"
+  (: a (sound "1 2 3")
      b (sound >a) c (sound >b)
      (&& (= 1 <a) (= 2 <b) (= 3 <c) (nil? (sound >c))))
 
+  ; ... and a `spot` starts one mid-text, which is the residue's own shape.
+  (= 2 (cap (sound (spot "1 2 3" 2))))
+  (nil? (sound (spot "1" 9)))                           ; past the end: the clean end
+
   ; Whitespace and ;-comments are skipped between datums.
-  (= 1 (cap (sound '(32 32 49 32 32))))                 ; "  1  "
-  (= 2 (cap (sound '(59 32 99 109 116 10 50))))         ; "; cmt\n2"
+  (= 1 (cap (sound "  1  ")))
+  (= 2 (cap (sound "; cmt\n2")))
 
   ; A bare close-paren at top level is a clean end.
-  (nil? (sound '(41)))                                  ; ")"
+  (nil? (sound ")"))
 
   ; --- torn: the text ran out INSIDE a shape ---
-  (id? torn (sound '(40)))                              ; unclosed list
-  (id? torn (sound '(34 97)))                           ; unterminated string
-  (id? torn (sound '(39)))                              ; dangling quote
+  (id? torn (sound "("))                                ; unclosed list
+  (id? torn (sound "\"a"))                               ; unterminated string
+  (id? torn (sound "'"))                                ; dangling quote
 
   ; ⚠ torn and the clean end are DISTINCT, and NEITHER IS A DATUM: a datum comes
   ; back as a cons whatever it holds, so reading "()" answers the datum () --
   ; which is exactly the case a net test would call nothing.
-  (: r (sound '(40 41)) (&& (two? r) (nil? (cap r))))
-  !(id? torn (sound ()))
+  (: r (sound "()") (&& (two? r) (nil? (cap r))))
+  !(id? torn (sound ""))
 
   ; A torn read RESUMES: hand back the same text with the rest appended.
-  (: r (sound (cat '(40 49) '(32 50 41))) (&& (two? r) (= '(1 2) (cap r))))
+  (: r (sound ("(1" + " 2)")) (&& (two? r) (= '(1 2) (cap r))))
 
   ; Mixed sequence, residue threaded: "() 1"
-  (: a (sound '(40 41 32 49)) b (sound >a)
+  (: a (sound "() 1") b (sound >a)
      (&& (nil? <a) (= 1 <b) (nil? (sound >b))))
 
-  ; Misuse: a non-charlist holds no datum, and reads as the clean end.
+  ; Misuse: a non-text holds no datum, and reads as the clean end.
   (nil? (sound 42))
   (nil? (sound 'notaport)))

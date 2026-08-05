@@ -37,11 +37,11 @@
  (: (load1 p) (: q (open p "r")
        (? q (reads q) (: _ (say err (+ "love: cannot open " p)) (quit 1))))
     (eval1 s) (: m (nom 0)                           ; a fresh nom: unfinished-shape, id?-safe
-       (rdl cl acc) (: r (sound cl)                  ; every top-level datum off the string, in order
+       (rdl x acc) (: r (sound x)                  ; every top-level datum off the string, in order
           (? (two? r)     (rdl (cup r) (link (cap r) acc))
              (id? r torn) m                          ; an unfinished shape
              (rev acc)))
-       ds (rdl (map s (jot (tally s))) ())           ; a string is a fn over its bytes -> its charlist
+       ds (rdl s ())                                 ; `sound` takes text, so the argument goes straight in
        (? (id? ds m)       (: _ (say err "love: -e: unfinished form") (quit 2))
           (two? ds)
           (? (two? (cup ds)) (ev 'ev ds)             ; MANY datums: the ONE application -- infix factors, like a repl line

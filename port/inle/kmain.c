@@ -670,11 +670,12 @@ void kmain(void) {
   // the shell's defglobs (and the corpus stream's) land here, never in the base.
   r = ai_layer_(r);
 #ifdef K_TEST
-  // test build: drink the baked `tests` string (string -> charlist -> tap port)
-  // through reads (love/bao.l) -- the same stream shell as the host's stdin runner.
-  // zz-fin.l prints the summary and (exit 1)s on failure. (`tap` builds the port;
-  // `sip` is the verb that draws ONE unit -- see the vessel frame in love/prel.l.)
-  r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally tests)) (link (peep tests i 0) (g (+ 1 i))))) 0)))");
+  // test build: read the baked `tests` string through reads (love/bao.l) -- the
+  // same stream shell as the host's stdin runner. zz-fin.l prints the summary
+  // and (exit 1)s on failure. ⚠ THE TEXT GOES STRAIGHT IN: exploding it to a
+  // charlist under a `tap` costs a cons per byte, and on a budgeted heap that is the
+  // difference between running the corpus and ";; oom@len=".
+  r = ai_evals_(r, "(reads tests)");
 #else
   r = ai_evals_(r, "((from 'bao 'shell) 0)");
 #endif

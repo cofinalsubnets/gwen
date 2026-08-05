@@ -506,7 +506,7 @@
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
  (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; spaced head = prefix call; the section
  (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(+ 1 2)))   ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : still whole-list
- ('(mono (< x)) = (caup (cap (sound '(40 102 32 60 120 41)))))  ; the emission, data-lane
+ ('(mono (< x)) = (caup (cap (sound "(f <x)"))))  ; the emission, data-lane
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
  (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5))))
@@ -565,33 +565,36 @@
 ; see/put/... , open/close/pad. the vessels: (tap cl) an input SOURCE over a colist, (jug 0) an
 ; output PORT with a growable buffer that pours both ways (a PORT, not a cask -- a cask is the
 ; mutable byte ARRAY); (sip o) draws ONE unit, (drink o) takes all that is READY, (slurp o) drains
-; ALL to a value. the datum reader is `sound` and it takes TEXT -- a charlist -- so the whole read
+; ALL to a value. the datum reader is `sound` and it takes TEXT, so the whole read
 ; protocol IS its return value, three ways: the datum CONSED ONTO WHAT IS LEFT, () at a
 ; clean end, or `torn` where the text ran out inside a shape. ⚠ ask `two?` for the datum, never the
 ; net: the answer is a cons and a datum may perfectly well be a nothing (reading "()" answers
-; (() . rest)). the RESIDUE IS THE ANSWER, so a torn read resumes by handing back more text and
-; nothing is stashed in a port -- which is why the old more-bit/port-back protocol is gone.
-; and A PORT IS A CHARLIST: (flow p) is one whose tail is a promise that drinks the next gulp,
-; so the reader asks for more itself and there is nothing to bridge. a consumer REFLECTS on the
-; tail -- a cons is more, () the end, anything else a thunk fired with the unit -- and nothing
-; forces implicitly. (once f) is that promise on its own: it runs f at most once and remembers,
-; through a tablet, wrapping the answer because a promise of NOTHING is the ordinary case.
-; `read` rides sound (ONE form, EVALED); `reads` and `forms` walk a flowing port, evaling and
+; (() . rest)). the RESIDUE IS THE ANSWER -- a CURSOR, a place in the text it came off, which
+; `spot` also builds -- so a torn read resumes by handing back more text, threading costs no copy
+; and nothing is stashed in a port (which is why the old more-bit/port-back protocol is gone).
+; and A PORT IS A CHUNK SOURCE: (spout p) is a promise of (text . next), () at eof, so the reader
+; asks for more itself and there is nothing to bridge; the chunk's SIZE is the port's own (a
+; buffered fd gives its whole pending run, a tap the one pushback byte). (drip p) is the careful
+; twin, one byte per force, so the source never runs ahead -- what `in` takes. (once f) is that
+; promise on its own: it runs f at most once and remembers, through a tablet, wrapping the answer
+; because a promise of NOTHING is the ordinary case.
+; `read` rides sound (ONE form, EVALED); `reads` and `forms` walk a port or a text, evaling and
 ; collecting; `dot` (the `.` operator, .x) prints x to out and returns it.
 ; `sound0` is sound's BOOTSTRAP TWIN, same protocol over the PURE LISP SUBSET: parens, comments,
 ; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is (hash a) to sound and the
 ; plain symbol # to sound0. it is what reads prel.l before there is a language (doc/io.md).
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
- (1 = (cap (sound '(49)))) (nil? (sound ())) (id? torn (sound '(40)))
- (: r (sound '(49 32 50)) (2 = (cap (sound >r))))    ; the residue reads the next datum
- (: r (sound '(40 41)) (&& (two? r) (nil? <r)))      ; ...and the datum () is still a datum
- (: r (sound (flow (tap '(40 49 32 50 41)))) ('(1 2) = <r))   ; a PORT reads as the charlist it is
+ (1 = (cap (sound "1"))) (nil? (sound "")) (id? torn (sound "("))
+ (: r (sound "1 2") (2 = (cap (sound >r))))          ; the residue reads the next datum
+ (2 = (cap (sound (spot "1 2" 2))))                  ; ...and `spot` names one mid-text
+ (: r (sound "()") (&& (two? r) (nil? <r)))          ; ...and the datum () is still a datum
+ (: r (sound (spout (tap '(40 49 32 50 41)))) ('(1 2) = <r))  ; a PORT reads as the source it is
  (: c (tablet 0) th (once (\ u (: k (peep c 0 0) _ (pin c 0 (k + 1)) k)))
     (&& ((th ()) = (th ())) (1 = (peep c 0 0))))     ; a promise forces ONCE and remembers
  ('(a) = (cap (sound0 '(40 97 41)))) (nil? (sound0 ()))
  (id? torn (sound0 '(40 97)))                        ; torn, unfinished shape
- ('(hash a) = (cap (sound '(35 40 97 41)))) ((intern "#") = (cap (sound0 '(35 40 97 41)))))
+ ('(hash a) = (cap (sound "#(a)"))) ((intern "#") = (cap (sound0 '(35 40 97 41)))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;

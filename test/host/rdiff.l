@@ -30,10 +30,14 @@
    ; every form a reader gets off a text. the read protocol IS sound's, and the
    ; residue is the answer, so the walk threads it: a clean end and a torn shape
    ; both stop, which is what makes the injected-fault runs below comparable.
-   (rd-forms r txt)
+   ; ⚠ `prep` IS THE INPUT SHAPE, and the two readers differ: p1's `sound` takes
+   ; TEXT (prep = 1, the identity), p0's `sound0` a CHARLIST (prep = rd-cl), its
+   ; cursor being the list cell itself. after the first call each threads its own
+   ; residue, so this is the only place the shapes are named.
+   (rd-forms prep r txt)
      (: (go cl acc) (: x (r cl)
                        (? (two? x) (go (cup x) (<x >< acc)) (rev acc)))
-        (go (rd-cl txt) ())))
+        (go (prep txt) ())))
 
 ; the smallest subform where two trees part -- descend while the differing child
 ; is itself a pair, then report that pair. a leaf alone says "0 vs ()" and names
@@ -62,7 +66,7 @@
 ; answers a tally tablet: files, forms, bad. `loud` prints the first few
 ; divergences with the subform that parted -- off for the injected run, which is
 ; SUPPOSED to diverge.
-(: (rd-run r paths loud)
+(: (rd-run prep r paths loud)
    (: n (tablet 0)
       (bump k v) (pin n k (v + (peep n k 0)))
       (say leg path a b)
@@ -74,14 +78,14 @@
               0))
       (one path)
         (: txt (rd-slurp path)
-           fa (rd-forms sound txt)
-           fb (rd-forms r txt)
+           fa (rd-forms 1 sound txt)
+           fb (rd-forms prep r txt)
            _ (bump 'files 1)
            _ (bump 'forms (tally fa))
            _ (? (= fa fb) 0 (say "A/B" path fa fb))
            ; print->read rides reader A's forms so it still measures something
            ; when A and B are the same reader
-           (each fa (\ f (: g (rd-forms r (show f))
+           (each fa (\ f (: g (rd-forms prep r (show f))
                             (? (= (L f) g) 0 (say "print->read" path (L f) g))))))
       _ (each paths one)
       n))
@@ -92,15 +96,15 @@
 ; plausible wrong tree) -- and the sweep must SEE it. gate the rig on this, never
 ; on the diff being green: green is what a rig that never ran also prints.
 (: rd-hurt-n (tablet 0)
-   (rd-hurt cl)
-     (: x (sound cl)
+   (rd-hurt t)
+     (: x (sound t)
         _ (pin rd-hurt-n 0 (1 + (peep rd-hurt-n 0 0)))
         (? (= 3 (peep rd-hurt-n 0 0)) 'rd-spoiled x)))
 
 (: rd-files (rd-walk "." ())
    _ (puts ("rdiff: " + (show (tally rd-files)) + " .l files\n"))
-   rd-clean (rd-run rd-test rd-files 1)
-   rd-hurtn (rd-run rd-hurt (L "test/spec.l") 0)
+   rd-clean (rd-run 1 rd-test rd-files 1)
+   rd-hurtn (rd-run 1 rd-hurt (L "test/spec.l") 0)
    _ (puts ("rdiff: files=" + (show (peep rd-clean 'files 0))
             + " forms=" + (show (peep rd-clean 'forms 0))
             + " bad=" + (show (peep rd-clean 'bad 0))
@@ -116,23 +120,26 @@
 ; divergence instead of the agreement. p1.l and egg.l are what p0 reads at boot;
 ; p0fix.l spans the grammar they are too thin to cover. a sigil creeping into any
 ; of the three fails HERE -- and prel.l is NOT among them: it rides p1 now.
-(: rd-p0 (rd-run sound0 (L "test/host/p0fix.l" "love/p1.l" "love/egg.l") 1)
+(: rd-p0 (rd-run rd-cl sound0 (L "test/host/p0fix.l" "love/p1.l" "love/egg.l") 1)
    ; and the same rig pointed at a file OUTSIDE the subset, which must go red:
    ; the proof this leg can fail, the rd-hurt discipline applied to a real reader
    ; rather than a spoiled one.
-   rd-p0x (rd-run sound0 (L "love/ev.l") 0)
+   rd-p0x (rd-run rd-cl sound0 (L "love/ev.l") 0)
    ; p0 puts NESTING ON THE C STACK -- the trade that buys its size, and the one
    ; thing the stackless reader has over it. so pin the depth it reaches, far
    ; past the deepest form in the tree (38, test/uupatch.l).
+   ; ⚠ THE DATUMS, not the pairs: p0's residue is a charlist and p1's is a cursor
+   ; (rung 9), so the two agree on what they READ and differ on how they say what
+   ; is left. rd-forms above compares (cap ..) for the same reason.
    rd-deep (: s ((rd-rep "(" 20000) + (rd-rep ")" 20000))
-              (= (sound0 (rd-cl s)) (sound (rd-cl s))))
+              (= (cap (sound0 (rd-cl s))) (cap (sound s))))
    ; and p0's own injector: the A/B leg above is the load-bearing one now, so it
    ; owes the same proof that its comparison CAN fail.
    rd-p0hn (tablet 0)
    (rd-p0hurt cl) (: x (sound0 cl)
                      _ (pin rd-p0hn 0 (1 + (peep rd-p0hn 0 0)))
                      (? (= 3 (peep rd-p0hn 0 0)) 'rd-spoiled x))
-   rd-p0hurtn (rd-run rd-p0hurt (L "test/host/p0fix.l") 0)
+   rd-p0hurtn (rd-run rd-cl rd-p0hurt (L "test/host/p0fix.l") 0)
    _ (puts ("rdiff: p0 forms=" + (show (peep rd-p0 'forms 0))
             + " bad=" + (show (peep rd-p0 'bad 0))
             + " off-subset=" + (show (peep rd-p0x 'bad 0))

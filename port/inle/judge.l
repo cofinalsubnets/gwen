@@ -21,16 +21,14 @@
 ; (a `:` block counts as one). pure love + the `hark`/`timeout` shell-out inle already
 ; uses for curl -- no new nif.
 
-(: (bytes-of s) (map (\ i (s i)) (jot (tally s)))         ; a string's byte colist (for `tap`)
-
-   ;; -- rung 1: parse, in-process. reads every form with `sound`; `ok` is 0 the
+(: ;; -- rung 1: parse, in-process. reads every form with `sound`; `ok` is 0 the
    ;; moment the reader hits an unfinished shape (a returned port), else 1 at eof. --
    (judge-parse s)
-      (: (go cl n) (: r (sound cl)
+      (: (go x n) (: r (sound x)
                     (? (two? r)      (go (cup r) (+ n 1))
                        (id? r torn)  (link n 0)           ; incomplete -> (count . 0)
                        (link n 1)))                       ; clean end   -> (count . 1)
-         (go (bytes-of s) 0))
+         (go s 0))
 
    ;; -- rungs 2-4: run one target under a wall-clock cap -> (status . stdout).
    ;; host_run captures STDOUT only (stderr is inherited), but the exit STATUS is

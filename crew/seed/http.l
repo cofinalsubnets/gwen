@@ -81,12 +81,9 @@
           (: r (http-get <u (<>u) (<>>u))
              (? (&& (two? r) (200 = <r)) `(1 (<>r)) ()))))
 
-   ; a form off a STRING: explode to charms, tap that as a port, sound one datum
-   ; (index.html's webln idiom -- `tap` of a string is not a char port)
+   ; a form off a STRING -- `sound` takes text, so the string goes straight in
    (readform s)
-    (: n (tally s)
-       (chs i acc) (? (i < 0) acc (chs (i - 1) (link (s i) acc)))
-       (? (! (0 < n)) ()
-          (: r (sound (chs (n - 1) ()))
-             d (? (two? r) (cap r) ())
-             (? (two? d) d ())))))
+    (? (! (0 < (tally s))) ()
+       (: r (sound s)
+          d (? (two? r) (cap r) ())
+          (? (two? d) d ()))))

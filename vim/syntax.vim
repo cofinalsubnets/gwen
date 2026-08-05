@@ -35,10 +35,10 @@ syn keyword LoveBook conj connect connectu const constellation? conv conv-args c
 syn keyword LoveBook cuaap cuap cuaup cuda-avail cuda-ew cuda-gemm cuda-reduce cuda-transp
 syn keyword LoveBook cue? cup cuuap cuup cuuup cwd dict_has dict_set
 syn keyword LoveBook die-of dig dobr docr doer dojr donr dop1
-syn keyword LoveBook dop2 dot dour drink drop dup dup2 each
-syn keyword LoveBook edln edlnc edraw environ err est ev exec
-syn keyword LoveBook ext_s fdclose fdopen filter fired? fires fixity flip
-syn keyword LoveBook flow flush foldl foldl1 foldr foldr1 font fork
+syn keyword LoveBook dop2 dot dour drink drip drop dup dup2
+syn keyword LoveBook each edln edlnc edraw environ err est ev
+syn keyword LoveBook exec ext_s fdclose fdopen filter fired? fires fixity
+syn keyword LoveBook flip flush foldl foldl1 foldr foldr1 font fork
 syn keyword LoveBook forms fraction freeze from g-die galaxy? gather gauge
 syn keyword LoveBook gaze gcd gem gem-tray gem? getc getenv getpid
 syn keyword LoveBook getuid glass glean hardlink hark has_s hear heard
@@ -62,16 +62,16 @@ syn keyword LoveBook rng-set sX s_plus s_star sat saturate say scare
 syn keyword LoveBook scare? scoop screen scribe seal see setenv setwinsize
 syn keyword LoveBook sfold sha256 shape shell shore show sigfd signal
 syn keyword LoveBook sigtake sine sip slist slurp smap snip sno
-syn keyword LoveBook sort sortby sound sound0 spawn spawnio spawnmap spread
-syn keyword LoveBook stack stake star-tray star? stat still string string?
-syn keyword LoveBook subst sun sun? swig symlink tablet tablet? take
-syn keyword LoveBook tally tangent tap tether tier top-tray tray? trickle
-syn keyword LoveBook ttyfg turn turnf twin twin-tray twin? twirl two?
-syn keyword LoveBook u2 u2app udp-bind udp-recv udp-send ufail? uglo umask
-syn keyword LoveBook unfold unify unlink unmap unsee use utime uu
-syn keyword LoveBook uu2l vapp var var? vof vof-spine vof-sym vsucc
-syn keyword LoveBook wait walk welp wet wheel whole? winsize wl-recv
-syn keyword LoveBook wl-send wrap zero? zip
+syn keyword LoveBook sort sortby sound sound0 spawn spawnio spawnmap spot
+syn keyword LoveBook spout spread stack stake star-tray star? stat still
+syn keyword LoveBook string string? subst sun sun? swig symlink tablet
+syn keyword LoveBook tablet? take tally tangent tap tether tier top-tray
+syn keyword LoveBook tray? ttyfg turn turnf twin twin-tray twin? twirl
+syn keyword LoveBook two? u2 u2app udp-bind udp-recv udp-send ufail? uglo
+syn keyword LoveBook umask unfold unify unlink unmap unsee use utime
+syn keyword LoveBook uu uu2l vapp var var? vof vof-spine vof-sym
+syn keyword LoveBook vsucc wait walk welp wet wheel whole? winsize
+syn keyword LoveBook wl-recv wl-send wrap zero? zip
 syn keyword LoveConst C Q born e false i id love-arch
 syn keyword LoveConst love-tco love-version max-charm min-charm pi tau torn true
 syn keyword LoveConst ufail

@@ -129,7 +129,7 @@
 ; serialize via show, re-read the bytes, expect equality -- through rd-test, the
 ; reader-under-test socket (doc/io.md rung 3).
 (: (fz-s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
-   (fz-rd x) (: r (rd-test (fz-s2cl (show x))) (? (two? r) <r r))   ; the reader-under-test socket (test/00-init.l)
+   (fz-rd x) (: r (rd-test (show x)) (? (two? r) <r r))   ; the reader-under-test socket (test/00-init.l)
    fz-syms '(a b c d foo bar baz qux)
    fz-leaf (fz-oneof `((fz-elt fz-syms) (fz-int -500 500)))
    (fz-sexp d) (? (< d 1) fz-leaf

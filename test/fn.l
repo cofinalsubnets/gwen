@@ -9,8 +9,7 @@
 ; the no-capture lambda with its captured args substituted -- a held redex equal to its reduct --
 ; so a closure is also asserted INTENSIONALLY below ((adder 5) = (\ x (+ x 5))). General beta/eta
 ; stay unbridged (the line: `=` surfaces the beta ev ALREADY ran, it does not reduce on its own).
-(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
-   (rt x) (ev (cap (sound (s2cl (show x)))))
+(: (rt x) (ev (cap (sound (show x))))
  (assert
   (= "\+" (show (+)))
   (= "link" (show link))

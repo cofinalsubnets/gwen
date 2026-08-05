@@ -46,7 +46,7 @@
    _ (? src 0 (: _ (puts ";; moon-stage: cannot open crew/moon/gen.l") (quit 1)))
    text (slurp src)
    reps (catmap (\ f (? (&& (two? f) (id? <f ':)) (ovck stage-dom stage-sigs f) ()))
-                (forms (map text (jot (tally text))) ()))   ; sound reads a CHARLIST; a string indexes itself over jot
+                (forms text ()))
    _ (? (two? reps)
         (: _ (map (\ r (: _ (puts ";; moon-stage: ") _ (putx r) (putc 10))) reps)
            (quit 1))

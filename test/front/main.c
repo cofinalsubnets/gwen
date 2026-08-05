@@ -296,8 +296,8 @@ static struct ai_def const defs[] = {
 
 // --- the boot --------------------------------------------------------------
 // The corpus texts are the ones every frontend shares (out/lib, laid by lcat off
-// love0). bao rides along so a law can reach `reads` -- the colist lane under it
-// (flow/trickle) is prel's now, and sits on top of the would-block park.
+// love0). bao rides along so a law can reach `reads` -- the chunk-source lane
+// under it (spout/drip) is prel's now, and sits on top of the would-block park.
 static char const src_bao[] =
 #include "bao.h"
  ;

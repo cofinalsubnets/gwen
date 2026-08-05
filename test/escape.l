@@ -26,11 +26,11 @@
   (= 3 (tally "a\0b"))         (= "a\0b" (string (link 97 (link 0  (link 98 0)))))
   (= 3 (tally "a\x42b"))       (= "a\x42b" (string (link 97 (link 66 (link 98 0))))))
 
-; --- charlist port path: feed the C reader a charlist of `"..."` source
-; through the ci synth port (the editor's submit path).
+; --- the reader's own path: feed it `"..."` SOURCE and read the datum back.
+; the cases are written as byte codes so the escapes under test are not themselves
+; escaped in this file; `string` makes the text the reader takes.
 (:
- ; chars-of-source-with-quotes -> the parsed datum.
- (parse cl) (cap (sound cl))
+ (parse cl) (cap (sound (string cl)))
  (assert
    (= (string (link 10 0))                   (parse '(34 92 110 34)))   ; "\n"
    (= (string (link 9 0))                    (parse '(34 92 116 34)))   ; "\t"
