@@ -225,67 +225,49 @@
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(())))
-; ⚠ THE PORT HEAD IS THREE WORDS -- ap, fd, ungetc -- and both languages know it: these build one
-; word by word, C declares it (love.h's struct ai_io). each poke ANSWERS THE CELL it wrote, so a
-; `poke -1` walks backwards and the count of pokes is the count of words: a tap spins 4 (the head
-; plus its charlist), a jug 5 (the head plus a backing and a fill).
+; the port head is three words -- ap, fd, ungetc -- and both languages know it: love.h declares
+; it, these build it. each poke answers the cell it wrote, so `poke -1` walks backwards.
 (: (tap cl)
  (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke 3 cl (spin 4)))))
  (jug _)                                          ; the output dual of `tap`: say INTO it, slurp it back OUT
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 "  " (poke 4 0 (spin 5))))))
- ; the port question: hot? names the zoo (a buf or a port), the head's ap word names the species --
- ; the same recognition C's iop does, and hot? first keeps the peek to a heap cell.
+ ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
+ ; does. hot? goes first so the peek only ever lands on a heap cell.
  (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
- ; slurp drains a vessel to a value: a jug reads its backing buffer, a tap drains via see.
- ; ⚠ THE DRAIN IS AN ACCUMULATOR, NOT A RECURSION: built on the way down, the stack depth IS the
- ; byte count, and on a port that PARKS every task switch copies that stack -- quadratic in the stream.
- (slurp o) (? (? (port? o) (= -2 (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 3 is a string too, so a string? probe would lie
+ ; drain a vessel to a value: a jug reads its backing buffer, a tap drains via see.
+ ; the drain accumulates, it does not recurse -- a recursion's stack depth is the byte count, and
+ ; on a parking port every task switch copies that stack.
+ (slurp o) (? (? (port? o) (= -2 (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug by its fd (-2): a buffered fd port's word 3 is a string too
               (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))
                  (string (rev (rl o ())))))
- ; the gulp: `see` blocks for the first byte -- it parks the TASK and refills the port --
- ; `unsee` hands it back, and `chug` takes that byte plus the whole buffered run as ONE text of
- ; exactly the right length (ai_io_pending counts it before the string is minted, so there is no
- ; over-allocate and no trim). ⚠ THE `see` IS THE PARK AND CANNOT GO: chug never touches the
- ; device, so a bare chug on a quiet port answers "" forever.
- ; ⚠ CHUG SERVES THE BUFFERED FD LANE ONLY: a tap, a jug or `in` has no backing buffer and
- ; answers just the pushback, so the `cue?` round is the GENERAL lane and the two agree on
- ; content -- chug only lets the fd case take it 4096 at a time instead of one `see` per byte.
- ; ⚠ AND THE STEPS ARE PINNED IN ORDER, never nested as arguments: an n-ary call evals RIGHT TO
- ; LEFT, so a nested (go .. (chugged p tl)) would drain the port before it chugged. `go` lays the
- ; text down backwards onto the tail the caller hands in, so the promise is what the list closes
- ; on and there is no second pass.
- (chugged p tl) (: c (see p)
-                   (? (= c -1) tl
-                      (: _ (unsee p c)
-                         t (chug p)
-                         r (? (cue? p) (chugged p tl) tl)
-                         (go k l) (? (nil? (< 0 k)) l (: j (- k 1) (go j (link (t j) l))))
-                         (go (tally t) r))))
- ; once: THE PROMISE, through a tablet -- the door this tree sanctions for mutation.
- ; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the ordinary
- ; case (eof answers ()), and a bare pin leaves the slot reading exactly like an unforced one --
- ; so it would re-run f forever, silently, on the one input that matters.
+ ; the promise, through a tablet -- the mutation door this tree sanctions. the answer is wrapped
+ ; (1 v) and read with two?: a promise of nothing is ordinary (eof gives ()), and a bare pin would
+ ; leave the slot reading like an unforced one, so f would re-run forever.
  (once f) (: t (tablet 0)
              (\ u (: v (peep t 0 ())
                      (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
- ; flow: A PORT IS A CHARLIST -- one whose tail is a promise that drinks the next gulp, so the
- ; reader (love/p1.l) asks for more itself and nobody turns a port into text first. the gulp is
- ; REALIZED and only the join is lazy. ⚠ THE TAIL IS A `once` AND MUST BE: p1 forces one position
- ; more than once (the `#!` lookahead, the \xNN lane), and a re-reading tail DRINKS again, losing
- ; the bytes between -- which fails as a misread, never a crash.
- (flow p) (: c (see p) (? (= c -1) () (: _ (unsee p c) (chugged p (once (\ u (flow p)))))))
- ; trickle: flow's careful twin, ONE byte per force, so the list never runs ahead of the port and
- ; the two share a position BY CONSTRUCTION. `flow` hands back a head DETACHED from the port --
- ; two positions where there was one -- which is why a form inside a piped script reads `in` and
- ; finds nothing (doc/io.md part III). `in` trickles for exactly that reason.
+ ; a port is a charlist: the run just gulped is realized, the tail a promise for the next.
+ ; the tail must be a `once` -- p1 forces a position twice, and a re-drinking tail would lose the
+ ; bytes between. one chug per gulp, so the port's own buffering bounds the run; the `see` is what
+ ; refills, since chug never touches the device.
+ (flow p) (: (gulp tl) (: c (see p)
+                          (? (= c -1) tl
+                             (: _ (unsee p c)
+                                t (chug p)
+                                (go k l) (? (nil? (< 0 k)) l (: j (- k 1) (go j (link (t j) l))))
+                                (go (tally t) tl))))
+             c (see p)
+             (? (= c -1) () (: _ (unsee p c) (gulp (once (\ u (flow p)))))))
+ ; flow at one byte per force. an unbuffered port already flows that way, so this is for taking a
+ ; buffered port slowly, where a whole run would read too far ahead.
  (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p))))))
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
-; the help status reader. ONE bit reaches a help -- scare (1); `sound` answers its own nothings as
-; values (doc/io.md rung 6c), so nothing raises the more bit and nothing asks.
+; the help status reader. one bit reaches a help: scare (1). `sound` answers its own nothings as
+; values, so nothing raises the more bit.
 (: (scare? s) (= s 1))
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
-; the false answer is the UNIT, never a 0-fossil: (&& a ..) expands (? a .. ()) and ||'s exhausted
-; tail reads () -- both blue, but a && result must ride ? and id? against (), not arithmetic.
+; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
+; reads (). test a result with ? or id?, not arithmetic.
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) ()) (cap l)) (? (two? l) (and l) 1))))
 (:: '|| (\ l (: (or l) (? (two? l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) ()) (or l))))
 (:: ':- (\ a (link ': (cat (cup a) (link (cap a) ())))))

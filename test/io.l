@@ -86,7 +86,10 @@
   ; came back EMPTY, so sound/reads/slurp lost the whole list to one element.
   (: p (tap '(300 -1 65))
      (&& (= 44 (see p)) (= 255 (see p)) (= 65 (see p)) (= -1 (see p))))
-  (= 2 (tally (flow (tap '(-1 65)))))
+  ; ⚠ COUNTED BY FORCING, never by `tally`: a flow is lazy past the first run and a tap has no
+  ; buffered run at all, so tally sees ONE cell and a promise. the law is that both bytes ARRIVE.
+  (: (fw cl n) (? (two? cl) (fw (: t (cup cl) (? (lit? t) (t ()) t)) (n + 1)) n)
+     (2 = (fw (flow (tap '(-1 65))) 0)))
 
   ; --- once: the promise ---
   ; a thunk that runs at most once and remembers. fired with the UNIT, per the
@@ -113,10 +116,14 @@
   (: p (tap '(40 49 32 50 41))                          ; "(1 2)"
      r (sound (flow p))
      (&& (two? r) (= '(1 2) <r)))
-  ; the gulp is REALIZED and only the join is lazy: the cells up to the tail are
-  ; ordinary conses, and a flowing charlist ends in a promise or in ().
+  ; the gulp is REALIZED and only the join is lazy: the cells of one run are ordinary
+  ; conses, and a flowing charlist ends in a promise or in ().
+  ; ⚠ AND THE RUN IS THE PORT'S, NOT THE READER'S: a tap has no backing buffer, so its
+  ; run is ONE byte and the second cell is still behind the promise. that is the whole
+  ; of what bounds the reader on a file -- a buffered port hands over 4096 here, and
+  ; the frontend gate (test/front/io.l) is where a real run is walked as plain conses.
   (: f (flow (tap '(97 98)))
-     (&& (= 97 <f) (= 98 <>f) (|| (lit? >>f) (nil? >>f))))
+     (&& (= 97 <f) (lit? >f) (= 98 <(>f ())) (|| (lit? >(>f ())) (nil? >(>f ())))))
   ; an empty port is the empty charlist, not a promise of one.
   (nil? (flow (tap ())))
   ; ⚠ THE MEMOIZATION LAW: a position forced twice answers THE SAME THING, so the
