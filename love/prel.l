@@ -1,7 +1,6 @@
 ; prel.l -- love prel: data + function + macro definitions.
-; ⚠ PRE-OPERATORS ZONE down to the `operators` table: c0 compiles this before opfix and before
-; the church add/mul hooks exist, so it stays OPERATOR-FREE -- prefix nifs only. using `*` for
-; caap..cuuup here cores the egg.
+; prefix only down to the `operators` table: c0 compiles this before opfix and before the church
+; add/mul hooks exist. an operator up here cores the egg.
 ; FIXME move ev support functions to ev where possible
 (: id 1
    (const x _) x
@@ -21,9 +20,8 @@
    zero? nil?
    (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
-   ; the scope-layer door: a fresh layer with its OWN macro table (key 0, love.c's book[nil]),
-   ; the pre-enter chain + name under the reserved charm key 31337 -- a charm can never collide
-   ; with a name. (enter ()) is anonymous.
+   ; a fresh layer: its own macro table at key 0, the pre-enter chain and name at charm key 31337.
+   ; a charm key cannot collide with a name. (enter ()) is anonymous.
    (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (books ()) nm))
                  _ (setbooks (link F (books ()))) ())
    ; use: splice a registered module just BELOW the head, so its names resolve on the walk but
@@ -31,9 +29,8 @@
    (use m)    (: b (? (tablet? m) m
                       (: r (peep (mods ()) m ()) (? (nil? r) (scare (\ no-module) m) r)))
                  (setbooks (link (cap (books ())) (link b (cup (books ()))))))
-   ; leave: unwind to the pre-enter chain, register the layer under its name, answer the book.
-   ; ⚠ a BARE leave (no charm, so never entered) pops whatever sits just below the head -- the
-   ; inverse of `use`, so unpaired it pops your downstairs neighbor whatever that is.
+   ; unwind to the pre-enter chain, register the layer under its name, answer the book.
+   ; a bare leave -- never entered, so no charm -- pops whatever sits below the head instead.
    (leave _)  (: F (cap (books ())) s (peep F 31337 ())
                  (? (two? s)
                     (: _ (pull F 31337 0) _ (setbooks (cap s))
@@ -57,12 +54,10 @@
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
 (:
    )
-; `::` defines a macro in THE HEAD LAYER's table -- the same book a plain `:` defglobs to, so
+; `::` defines a macro in the head layer's table -- the same book a plain `:` defglobs to, so
 ; prel's macros land in orth during boot, a script's in the session layer, a module's in the module.
-(: ; macros: look a macro up across the LAYER CHAIN -- the love twin of love.c's macroget, and it
-   ; has to stay in step with it. each book carries its table at the nil key; a layer without one
-   ; is skipped; 0 is the no-macro answer. the (tablet 0) fallback below is for a layer built
-   ; without one.
+(: ; look a macro up across the layer chain -- the twin of love.c's macroget, kept in step with
+   ; it. each book holds its table at the nil key; a layer without one is skipped. 0 = no macro.
    (macros k) (: (go c) (? (nil? (two? c)) 0
                            (: m (peep (cap c) 0 ())
                               (? (tablet? m) (: v (peep m k 0) (? v v (go (cup c))))
@@ -75,9 +70,9 @@
    (putn n) (putbn out n 10)
    putx (print out)
    (getc _) (see in))
-; numfn assembles the n-fold text directly via spin/poke, so applying a fixnum never re-enters
-; the compiler: n quote-f's then n ap's, cell 0 the source \-expr for the printer, entry at cell 1.
-; ⚠ the helpers pass th/f/n explicitly -- a closure over the forward-bound th miscompiles under c0.
+; numfn lays the n-fold thread with spin/poke, so applying a fixnum never re-enters the compiler:
+; n quote-f's then n ap's, cell 0 the printer's source, entry at cell 1.
+; the helpers pass th/f/n explicitly: a closure over the forward-bound th miscompiles under c0.
 (: (nfnest f i acc) (? (< i 1) acc (nfnest f (+ -1 i) (link f (link acc ()))))
    (nfq th f i n) (? (< i n) (: _ (poke (+ 1 (* 2 i)) lvm_quote th) _ (poke (+ 2 (* 2 i)) f th) (nfq th f (+ 1 i) n)) th)
    (nfa th i n) (? (< i n) (: _ (poke (+ (+ 3 (* 2 n)) i) lvm_ap th) (nfa th (+ 1 i) n)) th)
@@ -115,11 +110,10 @@
                              (? (powover x m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                  (power x n))
-   ; church-numeral application across the tower: numeric operand -> x ** n, a function ->
-   ; compose ($ n) times, where saturation reduces ANY numeral to a fixnum nat. cmp2..cmp8 are
-   ; cached compose-combinators, so a numeral over a runtime function is a closure capture rather
-   ; than per-call thread assembly; past the cache numfn takes it. ⚠ a counting iterative applier
-   ; measured 45% slower across k=2..8 -- don't "simplify" the straight-line bodies back.
+   ; church application across the tower: a numeric operand gives x ** n, a function composes
+   ; ($ n) times, saturation reducing any numeral to a fixnum nat. cmp2..cmp8 are cached
+   ; combinators; past them numfn assembles the thread. keep the straight-line bodies -- a
+   ; counting applier measures ~45% slower at k=2..8.
    _ (: cmp2 (\ f (\ x (f (f x))))
         cmp3 (\ f (\ x (f (f (f x)))))
         cmp4 (\ f (\ x (f (f (f (f x))))))
@@ -127,11 +121,11 @@
         cmp6 (\ f (\ x (f (f (f (f (f (f x))))))))
         cmp7 (\ f (\ x (f (f (f (f (f (f (f x)))))))))
         cmp8 (\ f (\ x (f (f (f (f (f (f (f (f x))))))))))
-        ; FREQUENCY-ORDERED, and that is why it stays a chain: k=2/3 answers in one or two ~9ns
-        ; compares where a tablet peep is ~47ns flat in size -- a table pays past k=6.
+        ; frequency-ordered, so it stays a chain: k=2/3 costs one or two compares. a table would
+        ; only pay past k=6.
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
-        ; an OPEN star: a coin whose die pins slot 7 is numeric by declaration, so a numeral powers
-        ; it through its own * (ipow is generic). no size to read, so this lane keeps the COUNT cap.
+        ; an open star: a coin whose die pins slot 7 is numeric by declaration, so a numeral powers
+        ; it through its own * (ipow is generic). no size to read, so this lane keeps the count cap.
         (starred? x) (? (coin? x) (= 1 (-> (die-of x) 7 0)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
                         (starred? x)
@@ -144,7 +138,7 @@
                               (apover k) (scare 'apcap k)
                               (: c (cmp k) (? c (c x) (numfn k x))))))
         (pin book 'num-ap num-ap)))
-; ⚠ seal-hook caches num-ap into the VM, so it MUST follow num-ap's pin above.
+; seal-hook caches num-ap into the VM, so it must follow the pin above.
 (seal-hook 1 num-ap)
 ; the + and * of two FUNCTIONS, which is all church arithmetic is: the extra a-slot threaded into
 ; both of stack's operands is what makes + agree with addition, not the S combinator's (f x (g x)).
@@ -156,10 +150,9 @@
 (: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
    (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
-   ; (rev l) glued onto acc in one pass -- the flush of the reversed-accumulator
-   ; pattern (a cat per step re-copies the whole accumulation; link + one revcat
-   ; keeps it linear). moon's cpp/gen and lapiz ride it.
-   (revcat l acc) (? (two? l) (revcat (cup l) (link (cap l) acc)) acc))   ; ⚠ no `!` here: it is not bound yet at this line
+   ; (rev l) glued onto acc in one pass. a cat per step re-copies the whole accumulation;
+   ; link plus one revcat keeps it linear.
+   (revcat l acc) (? (two? l) (revcat (cup l) (link (cap l) acc)) acc))   ; no `!` here: not bound yet
 ; the monadic words behind the glued sigils. net is the content measure -- `+` turned inward --
 ; and a coin's lane is by DECLARATION: die slot 7 nets itself (so additivity lands in the die's
 ; own ring), else its tally under net-mode 1, else its payload signed.
@@ -177,8 +170,8 @@
    reciprocal (/ 1)
    (fraction x) (% x 1)
    (bit x) (nil? (nil? x))
-   ; a star is the fixpoint of net. id?, not `=`: net hands a number operand back unchanged where
-   ; a tray's net is a fresh sum, so star? and galaxy? stay DISJOINT.
+   ; a star is the fixpoint of net. id?, not `=`: a number comes back unchanged where a tray's
+   ; net is a fresh sum, so star? and galaxy? stay disjoint.
    (star? x) (id? x (net x))
    ; galaxy? keys on the CELLS, not the tier code, so an object tray of bignums still counts
    (galaxy? x) (? (tray? x) (? (nil? (= top-tray (tier x))) 1 (star? (peep x 0 0))) 0))
@@ -192,14 +185,12 @@
    (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (link (cap l) (ldel x (cup l)))))
    (all f l) (? (two? l) (? (f (cap l)) (all f (cup l)) 0) 1)   ; truth BITS (0/1, like =/</!), not ()
    (any f l) (? (two? l) (? (f (cap l)) 1 (any f (cup l))) 0)   ; -- a predicate's false is 0, the green floor
-   ; the shared monotone-fixpoint driver: iterate `step` until `size` stops changing. size must be
-   ; strictly monotone under step until the fixpoint, and is snapshot BEFORE the step, so a step
-   ; that mutates in place is still detected.
+   ; iterate `step` until `size` stops changing. size must be strictly monotone under step until
+   ; the fixpoint, and is read before the step, so a step that mutates in place is still seen.
    (monofix st step size) (: b (size st) nx (step st) (? (= (size nx) b) nx (monofix nx step size)))
 
-   ; the one constant-form recognizer. the answer is PRESENCE-WRAPPED -- (1 . value) or () --
-   ; because a constant's value can itself be nothing. (no `&&`: it is a macro defined later in
-   ; prel, and a single-pass bootstrap can't expand a forward macro.)
+   ; the one constant-form recognizer. the answer is wrapped -- (1 . value) or () -- because a
+   ; constant's value can itself be nothing. no `&&`: c0 is single-pass and it is defined later.
    (kconst e) (? (nom? e) ()                                                    ; a variable -> no fact
                  (atom? e) (link 1 e)                                           ; a literal -> (1 . itself)
                  (id? (cap e) '\) (? (atom? (cuup e)) (link 1 (caup e)) ())     ; (\ v) quote of an atom -> (1 . v); a real lambda -> no fact
@@ -220,15 +211,11 @@
    (member? x l) (? (two? l) (? (= x (cap l)) 1 (member? x (cup l))) 0)   ; any of (= x); first-order, so the glaze's point-= grammar closes it (auto.l re-declares this body)
    (zip a b) (? (two? a) (? (two? b) (link (link (cap a) (cap b)) (zip (cup a) (cup b)))))
    rev (foldl (flip link) ())
-   ; every nom visible from here -- the WHOLE layer chain, deduped through a tablet since a nom in
-   ; two layers is one name. NOMS only: a layer's keys also carry the macro table and the unwind
-   ; chain, and `names` answers what you could WRITE. ⚠ lives down here so catmap/foldl are bound
-   ; when it compiles; a forward reference would ride lvm_index and never fold.
+   ; every nom on the layer chain, deduped through a tablet. noms only -- a layer's keys also hold
+   ; the macro table and the unwind chain. it sits down here so catmap/foldl are already bound.
    (names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0) (catmap keys (books ())))))
-   ; the MACRO twin: each layer keeps its macro table at its nil key, so this walks the same chain
-   ; `macros` looks up through and answers what you could WRITE AS A HEAD. ⚠ same zone rules as
-   ; `names`, and it folds its `books` reference at compile time -- which is what lets birth mop
-   ; the nom out from under it.
+   ; the macro twin: each layer keeps its table at its nil key, so this walks the chain `macros`
+   ; looks up through. same placement rule as `names`, and its `books` folds at compile time.
    (macro-names _) (filter nom? (keys (foldl (\ t k (pin t k 1)) (tablet 0)
                                              (catmap (\ b (: m (peep b 0 ())
                                                              (? (tablet? m) (keys m) ())))
@@ -312,17 +299,15 @@
 
 
 ; --- the loader: use-on-miss ------------------------------------------------
-; the `use` up top splices a REGISTERED module; down here -- where tap/map/jot are bound -- it
-; learns to LOAD one it doesn't have, from the baked lib book or the filesystem walk. a load is ONE
-; FRESH LAYER: enter, read-eval every form, leave registers, the prior use splices it. a SLASHED
-; name is an INCLUDE (evals into the current head, no layer, no registration); a STRING is an
-; explicit path, the module named by its basename. the open nif is captured by PEEP, not a nom
-; read, so a fs-less frontend holds () there and degrades to the baked table instead of raising.
+; the `use` up top splices a registered module; here it also loads one it lacks, from the baked
+; lib book or the filesystem walk. a load is one fresh layer: enter, read-eval, leave registers.
+; a slashed name includes into the current head instead; a string is an explicit path.
+; `open` is captured by peep, so a fs-less frontend holds () there and falls back to the table.
 (: use
    (: prior use
-      ; read-eval every form of a module source. ⚠ a torn form scares.
-      ; ⚠ `flow`, never `slurp`: slurp's drain conses the bytes, reverses them and re-strings
-      ; them, and the string would then be consed a second time -- four copies of a 245 KB module.
+      ; read-eval every form of a module source; a torn form scares.
+      ; `flow`, never `slurp`: slurp conses the bytes, reverses, re-strings, and sound would cons
+      ; them again -- four copies of the module.
       (rdev q) ((: (go cl) (: r (sound cl)
                               (? (two? r) (: _ (ev 'ev (cap r)) (go (cup r)))
                                  (id? r 'torn) (scare 'unfinished-form q)
@@ -334,10 +319,9 @@
                    e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
                    (intern (snip s b e)))
       fsopen (peep book 'open ())      ; the host's open nif, by peep -- see above
-      ; the SEAT ROOT: where the running binary lives. <seat>/../lib/ is the nest shape
-      ; (~/.love/bin/love finds ~/.love/lib), its love/ subfolder the FHS one. absent readlink, ()
-      ; and the rungs miss. ⚠ READ AT EACH MISS, never captured: a binding would fold the BUILD
-      ; tree's seat into the loader closure and ride the baked image forever.
+      ; the seat root: where the running binary lives. <seat>/../lib/ is the nest shape, its
+      ; love/ subfolder the FHS one. no readlink gives (), and the rungs miss.
+      ; read at each miss, never captured -- a binding folds the build tree's seat into the image.
       rlink (peep book 'readlink ())
       (seatlib _) (: x (? (nil? rlink) () (rlink "/proc/self/exe"))
                      (? (string? x)
@@ -371,16 +355,11 @@
                     (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
 
 ; --- reader operators: the table + the opfix factor pass --------------------
-; the reader leaves a sigil (a maximal all-punct token) a plain symbol; opfix factors it against
-; THIS table at compile time. arity ONE applies to the next datum and never captures a left
-; operand; two..seven are infix, and the DEFAULT is infix at two AT THE HOUSE GRIP 95, above every
-; band here (haskell's undeclared-is-`infixl 9`), so an undeclared operator groups before any row
-; can steal from it -- the table is the INFIX grammar and holds only the exceptions. a row carries
-; arity, a GRIP (precedence, higher binds tighter) and a HAND (0 right, 1 left: which way a
-; same-grip run folds); op-ent below normalizes all five written shapes to the quad
-; (name arity grip . hand). an incoming operator STEALS a pending filled operand when its grip
-; beats the frame's; at EQUAL grip its hand decides, which is why arithmetic is left-handed.
-; ⚠ END PRE-OPERATORS ZONE: infix is live from this table on.
+; the reader leaves a sigil a plain symbol; opfix factors it against this table at compile time.
+; a row is arity, a grip (higher binds tighter) and a hand (0 right, 1 left -- how a same-grip run
+; folds); op-ent normalizes all five written shapes to (name arity grip . hand). arity one takes
+; the next datum, never a left operand. undeclared is infix at two, grip 95 -- above every row
+; here, so the table holds only exceptions. infix is live from this table on.
 (: operators (pins (tablet 0)
  '** (>< 2 70)
  '* (>< 2 (>< 60 1)) '/ (>< 2 (>< 60 1)) '% (>< 2 (>< 60 1))  ; multiplicative, LEFT
@@ -391,27 +370,23 @@
  '<- (>< 'pin (>< 3 20)) '-> (>< 'peep (>< 3 20))   ; assignment aliases
  '? (>< 3 10)                                                    ; cond
  '$ (>< 2 5)))                                                  ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
-; the VALENCE LAW's table: a GLUED operator run is monadic (the reader emits (mono (run datum))),
-; where spaced it keeps its infix life. each entry maps a run-piece to its monadic word and a run
-; factors greedily, so <>x is (cap (cup x)) and !!x double-negates. GLUED RUNS ONLY -- a sigil that
-; is monadic and nothing else lives here and is a plain function by name, with no row up above.
+; the valence law's table: a glued operator run is monadic, spaced it stays infix. each entry maps
+; a run-piece to its monadic word and a run factors greedily, so <>x is (cap (cup x)).
+; glued runs only -- a monadic-only sigil lives here and has no row above.
 (: monadics (pins (tablet 0)
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
  '% fraction '? bit '$ saturate '! nil? '. dot))
-; the FACTORIZATION LAW: greedy longest-prefix match, no backtracking; every factor but the last
-; must be arity one, and the last takes the positional valence. a token that doesn't factor is a
-; plain symbol, which the stock table makes the ordinary case -- it declares no arity-one row, so
-; != && >>= :- ?- are each one name. a `fixity`-declared prefix operator is what composes.
-; ⚠ everything from here to (seal-hook 4 opfix) is the opfix machinery itself and must stay
-; PREFIX: the first bootstrap pass compiles prel with no opfix on the book.
-; ⚠ the four ranges are disjoint and run COMMONEST-FIRST -- op-puncp bails on a symbol's first
-; byte, and that byte is usually a lowercase letter. don't reorder them.
+; the factorization law: greedy longest-prefix, no backtracking. every factor but the last is
+; arity one; the last takes the positional valence. the stock table declares no arity-one row, so
+; != && >>= :- ?- are each one name; a `fixity`-declared prefix operator is what composes.
+; everything to (seal-hook 4 opfix) stays prefix -- the first pass compiles prel with no opfix.
 (: (op-punc-byte c) (? (&& (<= 97 c) (<= c 122)) 0
                        (&& (<= 48 c) (<= c 57)) 0
                        (&& (<= 65 c) (<= c 90)) 0
                        (= c 95) 0
                        1)
-   ; cheap prefilter: only an all-punct symbol can factor
+   ; cheap prefilter: only an all-punct symbol can factor. the four ranges above are disjoint and
+   ; run commonest-first, so don't reorder them.
    (op-puncp x)
     (? (nom? x)
        (: s (string x)
@@ -422,9 +397,8 @@
                    0))
              0))
        0)
-   ; normalize a table entry for key k -> the quad (name arity grip . hand), or 0. both head and
-   ; tail fork BY KIND, so all five written shapes land here and nothing downstream sees the
-   ; difference; a bad arity or tail answers 0 -- not a table operator.
+   ; normalize a table entry for key k -> the quad (name arity grip . hand), or 0. head and tail
+   ; fork by kind, so all five written shapes land here. a bad arity or tail answers 0.
    (op-ar? n) (&& (charm? n) (< 0 n) (< n 8))
    ; the grip/hand tail, dotted OR as a plain list -- the table writes (2 60 . 1) but `fixity`'s
    ; caller writes '(2 60 1), and the door should not make anyone count dots.
@@ -452,9 +426,8 @@
                   (: e (op-ent (intern (snip nm i (+ i k))))
                      (? (two? e) (>< k e) (go (- k 1))))))
      (- n i))
-   ; factor symbol s -> a list of (name . arity) entries, else nothing. every no-match falls off
-   ; the end of its `?` to the UNIT: op-w reads the answer with two?, so an omitted else says
-   ; "does not factor" without leaving a 0-fossil in a do-nothing slot.
+   ; factor symbol s -> a list of (name . arity) entries, else nothing. a no-match falls off the
+   ; end of its `?` to the unit, and op-w reads the answer with two?.
    (opfactor s)
     (: nm (string s) n (tally nm)
        ((: (go i)
@@ -465,10 +438,9 @@
                             (= (caup e) 1) (: r (go (+ i k)) ; non-last factors must be arity one
                                              (? (two? r) (>< e r)))))))))
         0))
-   ; longest prefix of nm[i..n) that has a monadic meaning -> (len . word), or 0. monadics first,
-   ; then an operators entry at arity ONE -- the lane a `fixity`-declared prefix operator rides.
-   ; ⚠ the table holds WORD VALUES, so a hit is asked OUT OF BAND against the miss answer -- a
-   ; truth test would drop any word that nets nothing.
+   ; longest prefix of nm[i..n) with a monadic meaning -> (len . word), or 0. monadics first, then
+   ; an operators row at arity one. the table holds word values, so a hit is asked out of band
+   ; against the miss answer -- a truth test would drop any word that nets nothing.
    (mono-long nm i n)
     ((: (go k) (? (< k 1) 0
                   (: s (intern (snip nm i (+ i k)))
@@ -489,15 +461,10 @@
                     (? (= (+ i (cap m)) n) (>< (caup m) ())
                        (: r (go (+ i (cap m))) (? (two? r) (>< (caup m) r))))))))
         0))
-; the walk. a pending-operator frame is (orig chain name need grip . got):
-;   orig  the source symbol, handed back verbatim when no operand ever arrives
-;   chain the arity-one wrapper names, outermost first
-;   need  operands still wanted; 0 = FILLED, the fold deferred so a following operator can steal
-;         the last operand -- that deferral IS right-associativity
-;   grip  the precedence, captured from the factor entry, so an alias `<-` carries the level its
-;         own spelling never recovers
-;   got   operands so far, reversed
-; out/pend thread as one (out . pend) chain through the helpers.
+; the walk. a pending-operator frame is (orig chain name need grip . got): the source symbol, the
+; arity-one wrapper names outermost first, the operands still wanted, the captured grip, and the
+; operands so far, reversed. need 0 means filled with the fold deferred, so a later operator can
+; steal the last operand -- that deferral is right-associativity. out/pend thread as (out . pend).
    (op-fr o ch nm nd g gt) (>< o (>< ch (>< nm (>< nd (>< g gt)))))
    (op-fro f) (cap f) (op-frc f) (caup f) (op-frn f) (cauup f)
    (op-frd f) (cap (cuuup f)) (op-frgrip f) (cap (cup (cuuup f))) (op-frg f) (cup (cup (cuuup f)))
@@ -509,17 +476,15 @@
    ; fold a collected span (out, reversed) into ONE operand: a lone datum stays itself, two-or-more
    ; become the application (juxtaposition binds tighter than any infix operator).
    (op-span out) (? (two? (cup out)) (rev out) (cap out))
-   ; fold a frame with whatever it has: nothing collected -> the plain symbol, a shortfall -> the
-   ; partial application (the curry law), arity one -> wrap its lone operand.
-   ; ⚠ KIND tests throughout the walk, never truth: a collected operand list like (0) or ("") NETS
-   ; zero, so nil? would read it as empty and silently drop the operand.
+   ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
+   ; partial application, arity one wraps its lone operand.
+   ; kind tests throughout the walk, never truth -- an operand list like (0) or ("") nets zero.
    (op-fold f) (? (atom? (op-frg f)) (op-fro f)
                   (nom? (op-frn f)) (op-fin (op-frc f) (>< (op-frn f) (rev (op-frg f))))
                   (op-fin (op-frc f) (cap (op-frg f))))
-   ; deliver datum d -> (out' . pend'). a collecting frame takes it; a FILLED infix frame EXTENDS
-   ; its right operand into an application span, since juxtaposition binds tighter than any infix
-   ; operator: (a = b c) is (= a (b c)). the span state rides `need`: 0 = still a lone datum (the
-   ; first extra wraps it), -1 = a growing span (append). a frame at arity one folds AT ONCE.
+   ; deliver datum d -> (out' . pend'). a collecting frame takes it; a filled infix frame extends
+   ; its right operand into a span, since juxtaposition binds tighter: (a = b c) is (= a (b c)).
+   ; the span state rides `need`: 0 = a lone datum, -1 = growing. arity one folds at once.
    (op-del d out pend)
     (? (atom? pend) (>< (>< d out) pend)
        (: f (cap pend)
@@ -534,10 +499,9 @@
                 f2 (op-frw f -1 (>< nx (cup (op-frg f))))
                 (>< out (>< f2 (cup pend)))))))
    ; take a left operand for an incoming operator of grip g and hand h -> (. (out' . pend')), or 0.
-   ; against a FILLED top frame the incomer either STEALS its last operand or FOLDS it and retries
-   ; beneath (the precedence climb). the whole associativity question is which way EQUAL grip goes,
-   ; and that is the incomer's HAND -- right-handed steals, left-handed yields.
-   ; at top level the WHOLE leading span is taken: (a b = c) captures (a b), not just b.
+   ; against a filled top frame the incomer either steals its last operand or folds it and retries
+   ; beneath. at equal grip the incomer's hand decides: right-handed steals, left-handed yields.
+   ; at top level the whole leading span is taken: (a b = c) captures (a b), not just b.
    (op-steal g h out pend)
     (? (two? pend)
        (: f (cap pend)
@@ -576,9 +540,8 @@
                             (op-w (cup l) (cap r) (cup r)))))))
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
-   ; a `:` is a BINDING form, not an application -- opfix must not rearrange it. binder positions
-   ; stay verbatim and only each pair's VALUE and the trailing body factor; the pairing matches
-   ; eval's exactly, so a punct binder like (: >< (\ ..) ..) keeps its name.
+   ; a `:` binds, it does not apply, so opfix must not rearrange it. binders stay verbatim and only
+   ; each pair's value and the trailing body factor. the pairing matches eval's exactly.
    (op-colon fs)
     (? (atom? fs) fs
        (atom? (cup fs)) (>< (op-core (cap fs)) ())        ; a lone form is the body
@@ -590,9 +553,8 @@
    (op-lam fs)
     (? (atom? (cup fs)) (>< (op-core (cap fs)) ())        ; the last operand is the body
        (>< (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
-   ; flatten a directly-nested lambda body at the SOURCE level -- (\ a (\ b B)) -> (\ a b B) -- so
-   ; neither compiler builds the extra inner closure a curried HOF would. ⚠ SHADOWING stays nested:
-   ; (\ x (\ x x)) must NOT become (\ x x x), whose body binds two same-named params.
+   ; flatten a directly-nested lambda body -- (\ a (\ b B)) -> (\ a b B) -- so neither compiler
+   ; builds the extra closure. shadowing stays nested: (\ x (\ x x)) must not merge.
    (op-mem? y l)      (? (atom? l) 0 (id? y (cap l)) 1 (op-mem? y (cup l)))
    (op-disjoint? a b) (? (atom? b) 1 (op-mem? (cap b) a) 0 (op-disjoint? a (cup b)))
    (op-params ol)     (? (atom? (cup ol)) () (>< (cap ol) (op-params (cup ol))))
@@ -603,21 +565,18 @@
              (op-flat-ol (cup b) seen)                       ; disjoint inner lambda -> merge its operands up
              ol))                                             ; else the body stays raw
        (>< (cap ol) (op-flat-ol (cup ol) (>< (cap ol) seen))))   ; a param: keep + accumulate for the shadow check
-   ; the comma layer -- the loosest grouping, ABOVE infix. datums split into clauses at top-level
-   ; commas and the whole becomes the `,` sequencing macro: (a, b c) -> (: _ a (b c)); empty clauses
-   ; drop. ⚠ the comma outranks even `:`, so a binder spine splits like any list -- parenthesize
-   ; the form. ⚠ the comma symbol is INTERNED, never written as a literal (the pure-lisp subset);
-   ; `intern` is in ev.l's pureset, so cprop folds each call back to the constant it used to be.
+   ; the comma layer, the loosest grouping, above infix. datums split at top-level commas and the
+   ; whole becomes the `,` macro: (a, b c) -> (: _ a (b c)); empty clauses drop. the comma outranks
+   ; `:`, so a binder spine splits like any list. the symbol is interned, never written literally.
    (op-cm? l)   (? (atom? l) 0 (id? (cap l) ',) 1 (op-cm? (cup l)))
    (op-take l)  (? (atom? l) () (id? (cap l) ',) () (>< (cap l) (op-take (cup l))))
    (op-drop l)  (? (atom? l) () (id? (cap l) ',) (cup l) (op-drop (cup l)))
    (op-split l) (: c (op-take l) r (? (op-cm? l) (op-split (op-drop l)) ())
                    (? (two? c) (>< c r) r))
-   ; op-core: the factor pass. quote interiors are DATA and stay verbatim; the binding forms keep
-   ; their binders (op-colon/op-lam); everything else walks. idempotent: factored output carries
-   ; operators only in head position, where they read plain.
-   ; has-top-op?: did the ORIGINAL form carry a TOP-LEVEL operator? only then may a lone folded
-   ; operand splice up -- a bare list-of-one like ((mov r3 r12)) is data, and STAYS wrapped.
+   ; op-core: the factor pass. quote interiors stay verbatim, binding forms keep their binders,
+   ; everything else walks. idempotent. has-top-op? asks whether the original form carried a
+   ; top-level operator -- only then may a lone folded operand splice up, since a bare
+   ; list-of-one like ((mov r3 r12)) is data and stays wrapped.
    (has-top-op? x) (? (atom? x) 0 (op-puncp (cap x)) 1 (has-top-op? (cup x)))
    (op-core x)
     (? (atom? x) x
@@ -640,15 +599,10 @@
                 (? (&& (has-top-op? x) (two? res) (atom? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b) -> (= a b), not ((= a b))
    (opfix x) (op-core x)
 
-   ; the FIXITY DOOR -- the one sanctioned write into the compile table, and the only reach to
-   ; `operators` at all once birth mops the nom (this closure captures it). (fixity nm v) pins v as
-   ; nm's row and answers the row it REPLACED in the same shape it takes, so (fixity nm (fixity nm
-   ; new)) restores exactly and a non-() answer says someone got there first. () clears the row.
-   ; v is any shape op-ent takes: (fixity '<+> '(2 60 1)) is haskell's `infixl 7 <+>`.
-   ; a refused shape is ROLLED BACK and scared -- a bad row would silently demote its operator to
-   ; the fresh-punct default, which on a core operator is a poisoned compiler with no message.
-   ; the table is read live, so a declaration governs every form compiled after it. it lives INSIDE
-   ; this form because op-ent is its acceptor and op-ent is local -- and so is written PREFIX.
+   ; the fixity door: the one sanctioned write into the compile table, and the only reach to
+   ; `operators` once birth mops the nom. it answers the row it replaced in the shape it takes, so
+   ; (fixity nm (fixity nm new)) restores exactly; () clears a row. v is any shape op-ent takes,
+   ; a refused one rolls back and scares. the table is read live.
    (fixity nm v)
     (? (nil? (nom? nm)) (scare 'bad-fixity nm)
        (: old (peep operators nm ())
@@ -658,11 +612,10 @@
                    (: _ (? (nil? old) (pull operators nm 0) (pin operators nm old))
                       (scare 'bad-fixity nm)))))))
 
-   ; --- and THIS `:` HAS A BODY, so the 34 helpers above are LOCAL -----------
-   ; opfix and fixity are the door; the rest is the factor pass's scaffolding, one form so nothing
-   ; walls the frame walk apart from the factor helpers. ⚠ `operators`, `monadics` and `pureset`
-   ; stay global-and-mopped instead: ev.l holds them, and a cross-FILE capture has only the book to
-   ; go through. `opfix` is pinned by nom for that reason and one more -- C seals it just below.
+   ; --- this `:` has a body, so the helpers above are local ------------------
+   ; opfix and fixity are the door; the rest is the factor pass's scaffolding.
+   ; `operators`, `monadics` and `pureset` stay global-and-mopped instead: ev.l holds them, and a
+   ; cross-file capture has only the book to go through.
    _ (pin book 'fixity fixity)
    (pin book 'opfix opfix))
 ; the LAST seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
@@ -671,9 +624,9 @@
 ; so a $ b = (a b), weak-binding application at the loosest grip. glued $x is saturate.
 (: (** a b) (b a))
 (: $ 1)
-; ! . != are ORDINARY FUNCTIONS under their punct names -- ! and . are monadic and nothing else, so
-; the walk has no row to fold and hands the plain symbol through to these. != carries the comparison
-; row, the one thing a binding cannot say. escape mid-list as (!) (.), like any bare operator.
+; ! . != are ordinary functions under their punct names. ! and . are monadic and nothing else, so
+; the walk has no row to fold and hands the plain symbol through. != carries the comparison row,
+; the one thing a binding cannot say. escape mid-list as (!) (.), like any bare operator.
 (: ! nil?)
 (: . dot)
 (: (!= a b) !(a = b))
@@ -685,20 +638,19 @@
 (:: 'cond (\ a (>< '? a)))
 (:: 'quote (\ a (>< '\ a)))
 
-; --- assert / suite: the strict checkers, baked so they work with NO harness ---
-; each form must net true or assert SCARES with the SOURCE form, terminal without a help -- no
-; `quit`, which is host-only, so a false claim stops the run loud on the kernel too. `suite` wraps
-; the recurring shape: a battery then a "<name>: ok" sentinel, so a file gates ITSELF. not named
-; `test`: that is a common local, and a macro ignores lexical scope.
+; --- assert / suite: the strict checkers, baked so they work with no harness ---
+; each form must net true or assert scares with the source form, terminal without a help -- no
+; `quit`, which is host-only, so a false claim stops the kernel run too. `suite` adds a
+; "<name>: ok" sentinel, so a file gates itself. not `test`: that is a common local, and a macro
+; ignores lexical scope.
 (:: 'assert (\ l (>< 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))
 (:: 'suite (\ l (>< 'do (>< (>< 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
 
 
 ; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
-; a-type answers a WITNESS star of the highest tier present -- an inhabitant, not a code, since the
-; generic `tray` ctor reads the tier off a witness; anything past the real numeric tower lifts the
-; whole array to an object array. a shape dimension may be ANY numeric and coerces to a nat by
-; saturation, so (array 2.5 …) is rank-1 length 3 and (array ~(3 4) …) length 5.
+; a-type answers a witness star of the highest tier present -- an inhabitant, not a code, since
+; the generic `tray` ctor reads the tier off a witness. past the numeric tower the whole array
+; lifts to an object array. a shape dimension may be any numeric and saturates to a nat.
 (: (a-rank x) (? (gem? x) 1 (| (charm? x) (sun? x)) 0 (twin? x) 2 3)
    (a-emax m x) (: k (a-rank x) (m < k ? k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (k = 0) 0 (k = 1) 0.0 (k = 2) (twin 0 0) ()))   ; a witness star of the tier
@@ -715,21 +667,17 @@
                  (list 'pin (hashtx >>a) <a <>a)))
 (:: 'hash (\ a (hashtx a)))
 
-; (array shape elem…): the N-D constructor. shape is a dimension list or a lone number (a rank-1
-; length); the element type is inferred, so exactness is never silently lost. the elements are
-; ordinary trailing args -- the shape fixes the count, so `array` curries them one at a time.
+; (array shape elem…): the N-D constructor. shape is a dimension list or a lone number; the
+; element type is inferred, so exactness is never silently lost. the shape fixes the count, so
+; the elements are ordinary trailing args and `array` curries them one at a time.
 (: (a-coll sh n acc) (? (< n 1) (: d (rev acc) (tray (a-type d) sh d))
                         (\ x (a-coll sh (n - 1) (x >< acc))))
    (array s) (: sh (a-shape s) (a-coll sh (foldl (*) 1 sh) 0)))
 
-; recursive-value boxing for `:` -- the letrec* "capture by location" fix. ONE SCOPE: every name
-; bound in a `:` resolves locally over the whole form. a reference at-or-before its own binding is
-; FORWARD, and the name indirects through a CELL keyed by the binding site's nom: store via pin,
-; read via (missing cell 'nom), so a pre-fill read is a map miss = the MISSING condition at every
-; depth. a value binding boxes on ANY forward reference, a lambda binding only on a DIRECT one, so
-; ordinary recursion keeps the lazy lane. answers 0 when nothing needs boxing, else (prs' . body').
-; ⚠ it emits the nif VALUES, not their names, so the rewrite survives the egg pulling names and
-; user bindings shadowing them.
+; recursive-value boxing for `:` -- the letrec* "capture by location" fix. a reference at-or-before
+; its own binding is forward, and indirects through a cell keyed by the binding site's nom, so a
+; pre-fill read is a map miss = the missing condition. it emits nif values, not names, so the
+; egg's mop cannot break it. 0 when nothing needs boxing, else (prs' . body').
 (: (lambp x) (? (two? x) (&& (id? '\ (cap x)) (two? (cuup x)))) ; \ with >=1 param (one-operand \ is quote)
    (dsug n d) (? (atom? n) (link n d) (dsug (cap n) (link '\ (cup n + list d))))
    (lp x) (: a (cup x) (? (atom? (cup a)) (0 >< cap a) (init a >< last a)))
@@ -752,12 +700,10 @@
                        (take (1 + lidx v nm) prs))) nm))
    (mkcs bx) (map (\ v (link v (link (nom 0) (nom v)))) bx)
    (cellbinds cs) (map (\ c (caup c >< list tablet 0)) cs)
-   ; THE CELL READ boxfix emits. a filled cell answers its value; a pre-fill read is a map miss ->
-   ; the missing condition carrying the binding-site nom, and the help's result is the value at the
-   ; site. with NO help heard ((heard ()) is the live ask, the same hot_help slot ai_raise reads) it
-   ; answers the zero point instead of raising -- a cell miss must stay survivable.
-   ; ⚠ `sent` is minted ONCE and CLOSURE-PRIVATE: a fresh mint is unique, so nothing a cell can hold
-   ; poses as absence (a cell holding () or 0 still reads as FILLED), and it never reaches the book.
+   ; the cell read boxfix emits. a filled cell answers its value; a pre-fill read is a map miss, so
+   ; the missing condition carries the binding-site nom and the help's result is the value there.
+   ; with no help heard it answers the zero point instead of raising -- a cell miss stays
+   ; survivable. `sent` is minted once and closure-private, so nothing a cell holds poses as absence.
    cellread (: sent (mint 0)
                (\ c nm (: v (peep c nm sent)
                           (? !(id? v sent) v
@@ -770,8 +716,8 @@
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p !(member? <p ns)) cs)
-   ; bnd: the lexical binder set, seeded with the scope's own names -- the SHADOW LAW, so a
-   ; locally-bound name is an ordinary variable and never a macro head.
+   ; bnd: the lexical binder set, seeded with the scope's own names, so a locally-bound name is
+   ; an ordinary variable and never a macro head.
    (sub cs x bnd) (?
     (nom? x) (: p (assoc x cs) (? (two? p) (list cellread <>p (list '\ >>p)) x))
     (atom? x) x
@@ -792,8 +738,8 @@
                         (link (cap p) d)))
           (cellbinds cs + map one prs >< sub cs body ns0))))))
 ; the flat-list adapter: a `:` binding list -> the rewritten list, or the input unchanged.
-; ⚠ love.c interns "boxfix" and calls it off the book, so c0 compiles prel itself through this --
-; it must exist before ev.l does, and both compilers share this one pass.
+; love.c interns "boxfix" and calls it off the book, so c0 compiles prel through this. it must
+; exist before ev.l does, and both compilers share the one pass.
 (: (boxfix fs) (:
    (ev l) (? (atom? l) 1 (atom? >l) 0 (ev >>l))
    (bpr fs) (? (atom? >fs) (0 >< <fs)
