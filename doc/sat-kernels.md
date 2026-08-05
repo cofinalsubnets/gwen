@@ -142,18 +142,6 @@ the classic ratio — fine as a differential-fuzz driver (DPLL referees), useles
 difficulty calibration. The bench generator draws each (var, sign) independently from
 xoshiro.
 
-## the watcher-vector experiment (built, measured, kept out)
-
-The full minisat watcher architecture — per-literal contiguous vector segments, blocking
-literals, an in-watcher binary-clause lane, swap-remove slides, newest-first backward walk,
-grow-by-clean-abort — was built, gated green, and measured against the intrusive-node
-design, warm, both ways: nodes win everywhere here (PHP 4/42/980 vs 6/57/981; random 3-SAT
-n=1000: 12–13ms vs 22ms). CDCL slide churn is constant and an O(1) node relink beats
-vector growth machinery; a blocking literal only pays when a touched clause is *already*
-satisfied, which conflict-storm propagation rarely grants. The spike survives with its
-verdict in `doc/proto/sat-watcher-vectors.l` — a sound base if a blocker-friendly workload
-(high satisfied-visit rates, e.g. large industrial SAT instances) ever shows up.
-
 ## fbva — the factoring pass, and how it was found
 
 Ablating cadical itself (probe the binary, never trust a prior) located the pigeonhole
