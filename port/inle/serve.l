@@ -144,7 +144,7 @@
                                                      _ (say c (+ (show v) "\n"))
                                                      _ (flush c)
                                                      (h (cup r)))
-                                         (id? r torn) (go cl)   ; unfinished -- more lines
+                                         (id? r 'torn) (go cl)   ; unfinished -- more lines
                                          (go ()))))             ; a blank line
                          (cat pend cl))))
         (go ()))

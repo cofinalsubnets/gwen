@@ -24,17 +24,22 @@
 ; finish. the residue IS the answer, which is what lets a caller resume a torn
 ; read by handing back more text -- there is no port to stash it in.
 ;
+; ⚠ SO THE RESIDUE IS ALWAYS A CHARLIST, whatever went in. `sound` spreads a
+; STRING at the door (below) because every caller was writing that spread by
+; hand, but the answer's tail is what the walk holds, and a caller resumes by
+; handing it straight back -- one spread per text, not one per datum.
+;
 ; ⚠ ASK `two?` FIRST, never the net: a cons is the one structural answer, and
 ; testing (nil? d) first would call a perfectly good (datum . rest) a clean end
 ; whenever the pair happens to net 0.
-; ⚠ AND `torn` IS A NAMED SYMBOL, not a (nom 0). a nameless mint sits on the BLUE
-; FLOOR -- it nets nothing, so (nil? torn) is TRUE and the torn answer reads as a
-; clean end, silently, on exactly the inputs that matter. named, it nets its
-; spelling, stays un-two, prints as itself in a scare, and `id?` is exact.
+; ⚠ AND `torn` IS THE QUOTED SYMBOL 'torn, written out at every site -- not a
+; (nom 0), and not a name on the book either. a nameless mint sits on the BLUE
+; FLOOR -- it nets nothing, so (nil? it) is TRUE and the torn answer reads as a
+; clean end, silently, on exactly the inputs that matter. spelled, it nets its
+; spelling, stays un-two, prints as itself in a scare, and `id?` is exact -- and
+; symbols intern, so 'torn HERE and 'torn in a caller are the one value.
 
-(: torn 'torn
-
-   ; --- the cursor advance --------------------------------------------------
+(: ; --- the cursor advance --------------------------------------------------
    ; ⚠ THE INPUT IS A COLIST, and this is the ONE place p1 steps it: a tail is a
    ; cons (more text), () (the end), or a THUNK -- a port with more to drink,
    ; fired with the unit per the zero-operand law. a bare `cup` on the cursor
@@ -186,16 +191,16 @@
    ; --- strings -------------------------------------------------------------
    (p1-esc c) (? (= c 110) 10 (= c 116) 9 (= c 114) 13 (= c 101) 27 (= c 48) 0 c)
    (p1-str cl acc)
-     (? (nil? (two? cl)) torn
+     (? (nil? (two? cl)) 'torn
         (: c (cap cl) r (p1-cup cl)
            ; ⚠ "" is the EMPTY STRING, and (string ()) is not it -- string is
            ; identity on the zero point, so an empty accumulator has to name the
            ; literal to get the object the C reader hands back.
            (? (= c 34) (link (? (two? acc) (string (p1-rev acc ())) "") r)
               (nil? (= c 92)) (p1-str r (link c acc))
-              (nil? (two? r)) torn
+              (nil? (two? r)) 'torn
               (= (cap r) 120)                              ; \xHH
-                (? (nil? (? (two? (p1-cup r)) (two? (p1-cup (p1-cup r))) ())) torn
+                (? (nil? (? (two? (p1-cup r)) (two? (p1-cup (p1-cup r))) ())) 'torn
                    (p1-str (p1-cup (p1-cup (p1-cup r)))
                            (link (+ (* (p1-dval (cap (p1-cup r))) 16)
                                     (p1-dval (cap (p1-cup (p1-cup r))))) acc)))
@@ -240,7 +245,7 @@
    ; a wrap takes the next datum; an unfinished one is MORE, never EOF.
    (p1-lift w cl head)
      (: d (p1-read1 cl head)
-        (? (nil? (two? d)) torn
+        (? (nil? (two? d)) 'torn
            (link (p1-wrap w (cap d)) (cup d))))
 
    ; THE VALENCE LAW, reader half: a run GLUED to the datum after it is MONADIC
@@ -260,7 +265,7 @@
            (? head (? (= run ":") 1 (= run "?")) ()) (link sym rest)
            (nil? (? shed 1 (p1-glued? rest))) (link sym rest)
            (: d (p1-read1 rest ())
-              (? (nil? (two? d)) torn
+              (? (nil? (two? d)) 'torn
                  (link (link 'mono (link (link sym (link (cap d) ())) ())) (cup d))))))
    ; glued = the next char starts a datum rather than ending the form.
    (p1-glued? cl)
@@ -269,23 +274,25 @@
    ; a list: datums until the close. an empty one IS the zero point.
    (p1-list cl0 head acc)
      (: cl (p1-skip cl0)
-        (? (nil? (two? cl)) torn
+        (? (nil? (two? cl)) 'torn
            (& (p1-cls (cap cl)) 32) (link (p1-rev acc ()) (p1-cup cl))
            (: d (p1-read1 cl head)
-              (? (nil? (two? d)) torn
+              (? (nil? (two? d)) 'torn
                  (p1-list (cup d) () (link (cap d) acc))))))
 
    ; --- the doors -----------------------------------------------------------
-   ; SOUND: one datum off a charlist, and the tree's whole reader. answers
-   ; (datum . rest), () at a clean end, or `torn` mid-shape.
-   (sound cl) (p1-read1 cl ())
+   ; SOUND: one datum off TEXT, and the tree's whole reader. answers
+   ; (datum . rest), () at a clean end, or `torn` mid-shape. text is a STRING or
+   ; the charlist a previous read left (or a flowing one, off a port); anything
+   ; else has no datum in it and reads as a clean end.
+   (sound x) (p1-read1 (? (string? x) (p1-chars x) x) ())
    ; every datum in a text, in source order -- what the boot stitch wants.
    ; answers `torn` if any shape did not finish.
    (p1-reads cl)
      (: (go cl acc)
           (: d (p1-read1 cl ())
              (? (two? d) (go (cup d) (link (cap d) acc))
-                (id? d torn) torn
+                (id? d 'torn) 'torn
                 (p1-rev acc ())))
         (go cl ()))
    ; a text -> its charlist. built by index rather than by map/jot: those are
@@ -297,12 +304,13 @@
    ; the BOOT'S door, whole text -> every form: what ai_egg_ calls to read ev.l.
    (p1-text s) (p1-reads (p1-chars s))
 
-   ; --- and THIS `:` HAS A BODY, so the 33 above are LOCAL -----------------
-   ; `sound` and `torn` are the reader's vocabulary and go on the book. p1-text is
-   ; NOT vocabulary -- it is the boot's door, so it goes where C wants it and nowhere
-   ; else: hook 0, the FIRST thing sealed in a boot. that is why the whole-text reader
-   ; needs no name at all, and why nothing can rebind it out from under ai_evals_.
+   ; --- and THIS `:` HAS A BODY, so the 32 above are LOCAL -----------------
+   ; `sound` is the reader's whole vocabulary and the only name that goes on the
+   ; book: the torn answer is the SYMBOL 'torn, which every site spells for itself.
+   ; p1-text is NOT vocabulary either -- it is the boot's door, so it goes where C
+   ; wants it and nowhere else: hook 0, the FIRST thing sealed in a boot. that is why
+   ; the whole-text reader needs no name at all, and why nothing can rebind it out
+   ; from under ai_evals_.
    ; `pin book` is the only publisher here -- prel is not loaded, so no `use` yet.
-   _ (pin book 'torn torn)
    _ (pin book 'sound sound)
    (seal-hook 0 p1-text))

@@ -17,23 +17,38 @@
 ; -- p0/p1). every law it states must survive that flip byte for byte; a case that
 ; is deliberately allowed to change is a case that must be edited HERE first,
 ; before the reimplementation, or the differential cannot tell the two apart.
-(: (rdr-cl s) (map s (jot (tally s)))
-   (rdr s) (: r (sound (rdr-cl s)) (? (two? r) (cap r) r)))
+(: (rdr s) (: r (sound s) (? (two? r) (cap r) r)))
 
 ; --- the read protocol ---------------------------------------------------------
-; `sound` takes TEXT -- a charlist -- and answers THREE ways: the datum CONSED
-; ONTO WHAT IS LEFT, () at a clean end, or `torn` where the text ran out inside a
-; shape. the residue IS the answer, so the caller owns the rest and a torn read
-; RESUMES by handing back more text: no port to spend, nothing stashed anywhere.
+; `sound` takes TEXT -- a STRING, or the charlist a previous read left -- and
+; answers THREE ways: the datum CONSED ONTO WHAT IS LEFT, () at a clean end, or
+; `torn` where the text ran out inside a shape. the residue IS the answer, so the
+; caller owns the rest and a torn read RESUMES by handing back more text: no port
+; to spend, nothing stashed anywhere.
 ; presence is the cons -- `two?` asks "did I get one", never the net, because a
 ; datum can perfectly well be a nothing (reading "()" answers (() . rest)).
+; ⚠ AND THE RESIDUE IS A CHARLIST WHICHEVER WENT IN: the string is spread once at
+; the door, so the two doors meet after the first datum and never diverge.
 (assert
  (: r (sound '(49)) (&& (two? r) (1 = (cap r)) (nil? (cup r))))  ; a datum, nothing after
  (nil? (sound ()))                                    ; a clean end -- the blue floor
- (id? torn (sound '(40)))                             ; the text ran out inside a shape
+ (id? 'torn (sound '(40)))                            ; the text ran out inside a shape
  (: r (sound '(49 32 50))                             ; ...and the residue reads the next
     (&& (1 = (cap r)) (2 = (cap (sound (cup r))))))
  (: r (sound '(40 41)) (&& (two? r) (nil? (cap r)))))  ; the datum () is still a datum
+
+; --- the string door -----------------------------------------------------------
+; text is a string OR a charlist and the reader spreads the first itself -- every
+; caller had been writing that spread by hand. an empty string is a clean end, and
+; a value with no text in it (a number, a name) has no datum in it either.
+(assert
+ (: r (sound "(1 2) 3")
+    (&& ('(1 2) = (cap r)) (3 = (cap (sound (cup r))))))  ; ...and the residue resumes
+ (: r (sound "1") (&& (two? r) (1 = (cap r))))
+ (nil? (sound ""))                                    ; empty text: a clean end, not torn
+ (id? 'torn (sound "(1"))
+ (nil? (sound 42)) (nil? (sound 'notaport))           ; nothing to read is a clean end
+ ((sound "(1 2) 3") = (sound (map "(1 2) 3" (jot 7)))))  ; the two doors agree, datum and rest
 
 ; --- the lexer law -------------------------------------------------------------
 ; the leading character splits the token. a name token (alnum/_) keeps - ? ! and
@@ -61,7 +76,7 @@
  ("hi" = (rdr "\"hi\""))
  ("a\"b" = (rdr "\"a\\\"b\""))
  ("" = (rdr "\"\""))
- (id? torn (sound (rdr-cl "\"oops"))))
+ (id? 'torn (sound "\"oops")))
 
 ; --- numbers -------------------------------------------------------------------
 ; ⚠ AN INTEGER LITERAL READS ITS VALUE -- in all three bases, at full precision,

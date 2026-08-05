@@ -201,8 +201,10 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; equality, comparing functions, + and * generic, numeric functions (sine/cosine/log the only
 ; transcendental nifs -- power IS application), identities, complex, arrays, chains & lists,
 ; strings & mints, hashes (peep the TOTAL presence test), casks, reader operators, macros,
-; control (help/welp, missing, apcap), i/o & ports (sound takes TEXT; its return IS the read
-; protocol: (datum . rest), () at a clean end, `torn` mid-shape), bootstrapping. each law lives in
+; control (help/welp, missing, apcap), i/o & ports (sound takes TEXT -- a string or a charlist --
+; and its return IS the read protocol: (datum . rest) with the rest ALWAYS a charlist, () at a
+; clean end, the SYMBOL 'torn mid-shape -- spelled at each site, not a book name), bootstrapping.
+; each law lives in
 ; its section comment; the asserts below keep it honest. deep dives: doc/measures.md,
 ; test/operator.l + test/infixop.l, test/help.l test/missing.l test/apcap.l, proof/rocq/spec.v.
 

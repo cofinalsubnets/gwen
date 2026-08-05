@@ -364,7 +364,7 @@
                                                      _ (say c (+ (show v) "\n"))
                                                      _ (flush c)
                                                      (h (cup r)))
-                                         (id? r torn) (go cl)
+                                         (id? r 'torn) (go cl)
                                          (go ()))))
                          (cat pend cl))))
         (go ()))

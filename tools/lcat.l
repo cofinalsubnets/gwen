@@ -18,8 +18,8 @@
    ; which read signals by returning the port itself) -- the full forms, compared
    ; STRUCTURALLY, not just counted: a re-tokenization can preserve the count yet
    ; change the parse (name'(a b) and name '(a b) both read two datums).
-   (datums s) ((: (g cl a) (: r (sound cl) (? (two? r) (g (cup r) (link (cap r) a)) (rev a))))
-               (s2cl s) 0)
+   (datums s) ((: (g x a) (: r (sound x) (? (two? r) (g (cup r) (link (cap r) a)) (rev a))))
+               s 0)
    ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
    (form1 cs) (: r (sound cs) (? (two? r) (show (cap r)) 0))
    ; a HARD token boundary: whitespace, delimiters, string quote, comment, and
@@ -67,9 +67,9 @@
    acc ((: (g acc cl first)
           (: r (sound cl)
              (? (two? r) (g (? first (show (cap r)) (+ (+ acc " ") (show (cap r)))) (cup r) 0)
-                (id? r torn) (: _ (say err "lcat: unfinished form in input") (quit 1))
+                (id? r 'torn) (: _ (say err "lcat: unfinished form in input") (quit 1))
                 acc)))
-        "" (s2cl (slurp p)) 1)
+        "" (slurp p) 1)
    _ (put out 34)                                      ; opening "
    ; walk acc: drop redundant spaces (outside string literals), C-escape the rest.
    ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."

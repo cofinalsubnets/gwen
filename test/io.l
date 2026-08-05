@@ -61,7 +61,7 @@
   ; the wasm shim has no filesystem (fd ports are stubbed to EOF/out-buffer), so
   ; real-file I/O can't round-trip there; gated to the hosted builds. The read
   ; loop is bounded everywhere now (get on a non-port is EOF), so the stubbed
-  ; path no longer OOMs. In-memory ports (sip, below) still run on wasm.
+  ; path no longer OOMs. In-memory ports (tap, below) still run on wasm.
   (? word (: txt (show (clock 0))
      wp (open "/tmp/l-io-test" "w")
      _ (say wp txt)
@@ -72,8 +72,8 @@
      _ (close rp)
      (= txt rd)) 1)
 
-  ; --- sip: charlist-backed read-only synth port (fd=-4, ci) ---
-  ; sip returns a port whose show rendering is a non-empty string.
+  ; --- tap: charlist-backed read-only synth port (fd=-4, ci) ---
+  ; tap returns a port whose show rendering is a non-empty string.
   (string? (show (tap 0)))
   (< 0 (sat (show (tap 0))))
   ; Each call allocates a fresh port object.
@@ -165,15 +165,15 @@
   (nil? (sound '(41)))                                  ; ")"
 
   ; --- torn: the text ran out INSIDE a shape ---
-  (id? torn (sound '(40)))                              ; unclosed list
-  (id? torn (sound '(34 97)))                           ; unterminated string
-  (id? torn (sound '(39)))                              ; dangling quote
+  (id? 'torn (sound '(40)))                             ; unclosed list
+  (id? 'torn (sound '(34 97)))                          ; unterminated string
+  (id? 'torn (sound '(39)))                             ; dangling quote
 
   ; ⚠ torn and the clean end are DISTINCT, and NEITHER IS A DATUM: a datum comes
   ; back as a cons whatever it holds, so reading "()" answers the datum () --
   ; which is exactly the case a net test would call nothing.
   (: r (sound '(40 41)) (&& (two? r) (nil? (cap r))))
-  !(id? torn (sound ()))
+  !(id? 'torn (sound ()))
 
   ; A torn read RESUMES: hand back the same text with the rest appended.
   (: r (sound (cat '(40 49) '(32 50 41))) (&& (two? r) (= '(1 2) (cap r))))

@@ -34,7 +34,7 @@
    ((: (g cl z)
        (: r (sound cl)
           (? (two? r)       (g >r (ev 'ev <r))
-             (id? r torn)   (scare 'unfinished-form p)
+             (id? r 'torn)  (scare 'unfinished-form p)
              z)))
     ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) and a tap (the baked corpus,
     ; host/main.c's runner) are ours alone -- nobody else reads them, so running
@@ -50,7 +50,7 @@
    ((: (g cl acc)
        (: r (sound cl)
           (? (two? r)       (g >r (<r >< acc))
-             (id? r torn)   (scare 'unfinished-form p)
+             (id? r 'torn)  (scare 'unfinished-form p)
              (rev acc))))
     (flow p) ()))
 
@@ -79,7 +79,7 @@
    ; the line ends inside an unfinished shape, () for a blank line, else a one-form list.
    (rdall cl acc) (: r (sound cl)
                     (? (two? r)     (rdall (cup r) (<r >< acc))
-                       (id? r torn) m              ; unfinished shape -> more
+                       (id? r 'torn) m             ; unfinished shape -> more
                        (rev acc)))                 ; a clean end -> the datums, in order
    (parseall cl)
      (: ds (rdall cl ())

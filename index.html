@@ -66,7 +66,7 @@
   // webln: bao's line protocol (parseall's law) for a STRING -- read every
   // top-level datum; ONE datum evaluates as-is, MANY become the application
   // (a b c).
-  ev("(: webln (\\ s (: e (nom 0) (chs i acc) (? (< i 0) acc (chs (- i 1) (link (s i) acc))) (go p acc) (: r (sound p e) (? (= r p) () (= r e) (rev acc) (go p (link r acc)))) ds (go (tap (chs (- (tally s) 1) ())) ()) (? !(two? ds) () !(two? (cup ds)) (ev (cap ds)) (ev ds)))))");
+  ev("(: webln (\\ s (: (go x acc) (: r (sound x) (? (two? r) (go (cup r) (link (cap r) acc)) (id? r 'torn) () (rev acc))) ds (go s ()) (? !(two? ds) () !(two? (cup ds)) (ev (cap ds)) (ev ds)))))");
   ev("(. love-version)");
   const ver = drain();
   status.style.display = 'none';

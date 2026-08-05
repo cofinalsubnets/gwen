@@ -62,9 +62,6 @@
                            ; rule that a file assignment never beats a command-line one)
    clivars (tablet 0)      ; a 1-cell box: the command line's VAR=VAL words, ((name . val) ..)
 
-   ; string -> charlist, so a captured string can be read as a port ($(word)'s index).
-   (s2cl s) ((: (g i) (? (i < (tally s)) (link (peep s i 0) (g (1 + i))))) 0)
-
    ; "a b c" from ("a" "b" "c"); "" from the empty list.
    (join sep l) (? (two? l) (foldl (\ a x (a + sep + x)) <l >l) "")
 
@@ -550,7 +547,7 @@
          (nm = "addsuffix") (: a (argl 0) (join " " (map (\ w (w + (nth a 0 ""))) (split-ws (nth a 1 "")))))
          (nm = "firstword") (: ws (split-ws (ex1 at)) (? (two? ws) <ws ""))
          (nm = "lastword")  (: ws (split-ws (ex1 at)) (? (two? ws) (lastl ws) ""))
-         (nm = "word")      (: a (argl 0) ws (split-ws (nth a 1 "")) n (: r (sound (s2cl (trim (nth a 0 "")))) (? (two? r) <r 0)) (nth ws (n - 1) ""))
+         (nm = "word")      (: a (argl 0) ws (split-ws (nth a 1 "")) n (: r (sound (trim (nth a 0 ""))) (? (two? r) <r 0)) (nth ws (n - 1) ""))
          (nm = "words")     (show (tally (split-ws (ex1 at))))
          (nm = "if")        (: a (rawl 0) c (trim (ex1 (nth a 0 ""))) (? (0 < (tally c)) (ex1 (nth a 1 "")) (ex1 (nth a 2 ""))))
          (nm = "or")        (fn-or (rawl 0) as d)
@@ -962,13 +959,13 @@
          (: q (open file "r")
             _ (? (makefilep file)
                  (: _ (register-makefile (slurp q)) (cook-all 0))
-                 ((: (g cl) (: r (sound cl)
+                 ((: (g x) (: r (sound x)
                                   (? (two? r) (: _ (ev 'ev <r) (g >r))
-                                     (id? r torn)
+                                     (id? r 'torn)
                                        (: _ (say err ("cook: unfinished form in " + file))
                                           _ (put err 10) (quit 1))
                                      0)))
-                   (s2cl (slurp q))))
+                   (slurp q)))
             (quit 0))
          (two? pos)
          (: _ (say err "cook: no Cards.l, Cookfile or Makefile found") _ (put err 10) (quit 1))

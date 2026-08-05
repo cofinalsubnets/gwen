@@ -441,10 +441,6 @@
                   (0 = (tally t)) ()
                   (|| nu (lany? lopc? t)))))))    ; (<>b) yes; (go) only if asked
 
-   ; ⚠ ITERATIVE, walking DOWN: a top-level form runs to tens of kilobytes here and
-   ; a cons-on-the-way-up would recurse once per byte of it.
-   (ldcl src a b) (: (go k acc) (? (k < a) acc (go (k - 1) (link (src k) acc)))
-                     (go (b - 1) ()))
    ; the i'th element of l replaced by its OWN elements
    (ldsplice l i) (? (! (two? l)) l
                      (0 < i) (link <l (ldsplice >l (i - 1)))
@@ -453,7 +449,7 @@
    ; which only exists now that its closer is known. one read and one base fold per
    ; FORM, then one fold per kid.
    (ldspans src n f j ks acc)
-    (: r (sound (ldcl src (ldf-oi f) (j + 1)))
+    (: r (sound (snip src (ldf-oi f) (j + 1)))
        (? (! (two? r)) acc
           (! (two? <r)) acc
           (: x <r

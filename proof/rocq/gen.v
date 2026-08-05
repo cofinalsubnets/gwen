@@ -463,4 +463,4 @@ Theorem gen_199 : true = true.  Proof. vm_compute. reflexivity. Qed.
 (* (id? (|| () 0) ()) *)
 Theorem gen_200 : true = true.  Proof. vm_compute. reflexivity. Qed.
 
-(* 200 theorems generated from 722 asserts seen *)
+(* 200 theorems generated from 726 asserts seen *)

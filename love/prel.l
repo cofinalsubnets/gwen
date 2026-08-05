@@ -246,7 +246,6 @@
  (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke 3 cl (spin 4)))))
  (jug _)                                          ; the output dual of `tap`: say INTO it, slurp it back OUT
   (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 "  " (poke 4 0 (spin 5))))))
- (sip o) (see o)                                  ; draw ONE unit (pairs with slurp = all)
  ; the port question: hot? names the zoo (a buf or a port), the head's ap word names the species --
  ; the same recognition C's iop does, and hot? first keeps the peek to a heap cell.
  (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
@@ -256,13 +255,6 @@
  (slurp o) (? (? (port? o) (= -2 (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS FD (-2): a buffered fd port's word 3 is a string too, so a string? probe would lie
               (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))
                  (string (rev (rl o ())))))
- ; once: THE PROMISE, through a tablet -- the door this tree sanctions for mutation.
- ; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the ordinary
- ; case (eof answers ()), and a bare pin leaves the slot reading exactly like an unforced one --
- ; so it would re-run f forever, silently, on the one input that matters.
- (once f) (: t (tablet 0)
-             (\ u (: v (peep t 0 ())
-                     (? (two? v) (cup v) (: w (f ()) _ (pin t 0 (link 1 w)) w)))))
  ; the gulp: `see` blocks for the first byte -- it parks the TASK and refills the port --
  ; `unsee` hands it back, and `chug` takes that byte plus the whole buffered run as ONE text of
  ; exactly the right length (ai_io_pending counts it before the string is minted, so there is no
@@ -282,7 +274,6 @@
                          r (? (cue? p) (chugged p tl) tl)
                          (go k l) (? (nil? (< 0 k)) l (: j (- k 1) (go j (link (t j) l))))
                          (go (tally t) r))))
- (drink p) (chugged p ())                         ; sip draws ONE, drink what is READY, slurp ALL
  ; once: THE PROMISE, through a tablet -- the door this tree sanctions for mutation.
  ; ⚠ THE ANSWER IS WRAPPED (1 v) AND READ BACK WITH two?. a promise of NOTHING is the ordinary
  ; case (eof answers ()), and a bare pin leaves the slot reading exactly like an unforced one --
@@ -334,7 +325,7 @@
       ; them, and the string would then be consed a second time -- four copies of a 245 KB module.
       (rdev q) ((: (go cl) (: r (sound cl)
                               (? (two? r) (: _ (ev 'ev (cap r)) (go (cup r)))
-                                 (id? r torn) (scare 'unfinished-form q)
+                                 (id? r 'torn) (scare 'unfinished-form q)
                                  0)))
                 (flow q))
       (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)

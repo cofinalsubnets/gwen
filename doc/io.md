@@ -2397,3 +2397,40 @@ seven frontends, so `empty?`, `lvm_feof`, `zeof` and nine `*_eof` bodies went wi
 `eof` vt slot. ⚠ what it left behind was worth knowing: **`eof_seen` had no reader
 anywhere in the tree** -- every one of them was an `eof` method -- and it went in rung
 2b (below).
+
+### `sound` takes a string -- ✅ 2026-08-05
+
+the reader's door was charlist-only, so every caller spread the text by hand and
+sixteen of them had written the same `(map t (jot (tally t)))` (or an index loop
+under a local name: `chars`, `s2cl`, `chs`, `bytes-of`, `ldcl`, `rdr-cl`). now
+`sound` spreads a STRING itself and the sixteen spreads are gone.
+
+⚠ **the RESIDUE is a charlist whichever door went in.** the protocol hands back
+what is LEFT, and a caller resumes by passing that straight back -- so the spread
+happens once per text, not once per datum, and the two doors meet after the first
+read. that is the whole reason this is a door and not a rewrite: the reverted rung
+9 tried to make the WALK take a string, which is a different and much larger claim.
+
+two things fell out of the sweep. `index.html`'s `webln` was still on the C
+reader's protocol -- `(sound p e)` with a port and an eof sentinel -- which on p1
+reads `()` , applies it to `e`, gets 1, and loops forever on an unmoved cursor: the
+browser repl hung on the first line typed into it. and `once` was defined twice in
+`prel.l`, byte-identical, in the same body-less `:`.
+
+**`sip` and `drink` went with it.** `sip` was `(see o)` -- the definition was that
+expression and nothing else, a rename with no caller in the tree. `drink` was
+`(chugged p ())`, the strict prefix of `flow`: everything ready right now, no
+promise tail. it reads like a vessel verb (the sip/drink/slurp triple this doc
+argued for at 6a, above) but nothing ever wanted that shape -- a consumer takes the
+lazy list (`flow`, the reader's door) or the whole thing (`slurp`). `chugged` stays;
+it is the shared engine under `flow` and `trickle`. `test/io.l`'s synth-port section
+had also been calling `tap` "sip" in its comments since some earlier rename.
+
+**and `torn` came off the book, same day.** it was pinned there (6c, above) as the
+second half of the reader's vocabulary, but it is a plain interned symbol: `'torn`
+at a call site and `'torn` inside p1 are the one value, so the binding bought
+nothing and cost a name on the surface. every site spells it now, p1's own local
+binding is gone with the pin, and `sound` is the whole of what p1 publishes. a bare
+`torn` is an honest `missing` again -- and it is a QUOTE at each site rather than a
+book walk, which is the cheaper of the two anyway. ⚠ `vim/syntax.vim` is generated
+from `(names ())` and went stale on the drop; `make test_tools` is what says so.
