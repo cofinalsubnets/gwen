@@ -126,7 +126,7 @@
    ; --- the session: read one LINE off the socket (see parks the TASK -- the
    ; reader's park law), sound the text, eval it in the book (so every global is
    ; a verb), `show` the value back, flush. Loop to disconnect.
-   ; sounding TEXT matters: a string in hand cannot block, where sounding the fd itself
+   ; sounding TEXT matters: a charlist cannot block, where sounding the fd itself
    ; stalled the WHOLE vm in the C parse the moment it ran dry mid-skip -- one
    ; idle session would hold every peer hostage. a torn shape carries to the next
    ; line as the RESIDUE the reader hands back. A scare during eval is caught by
@@ -135,22 +135,19 @@
    (session c)
      (: (rdline acc) (: ch (see c)
                         (? (= ch -1) ()                    ; EOF -- client disconnected
-                           (= ch 10) (string (rev (link 10 acc)))
+                           (= ch 10) (rev (link 10 acc))
                            (rdline (link ch acc))))
-        ; ⚠ the line's PRESENCE is that it is a STRING, never its length: a bare
-        ; newline is an honest line, and `two?` is false for every string.
-        (go pend) (: ln (rdline ())
-                     (? (! (string? ln)) 0
-                        (: txt (pend + ln)
-                           ((: (h x) (: r (sound x)
-                                         (? (two? r) (: v (ev 'ev (cap r))   ; eval through the self-hosted ev
-                                                        _ (say c (+ (show v) "\n"))
-                                                        _ (flush c)
-                                                        (h (cup r)))
-                                            (id? r torn) (go txt)   ; unfinished -- more lines
-                                            (go ""))))              ; a blank line
-                            txt))))
-        (go ""))
+        (go pend) (: cl (rdline ())
+                     (? (! (two? cl)) 0
+                        ((: (h cl) (: r (sound cl)
+                                      (? (two? r) (: v (ev 'ev (cap r))   ; eval through the self-hosted ev
+                                                     _ (say c (+ (show v) "\n"))
+                                                     _ (flush c)
+                                                     (h (cup r)))
+                                         (id? r torn) (go cl)   ; unfinished -- more lines
+                                         (go ()))))             ; a blank line
+                         (cat pend cl))))
+        (go ()))
 
    ; the accept loop: CONCURRENT. `await` parks the loop on the listener fd
    ; (yielding to running sessions) until a client is pending, so the following

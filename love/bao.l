@@ -15,44 +15,44 @@
 ; left of cursor on the current line, reversed), r (chars at/after
 ; cursor on the current line, in order), d (lines below).
 
-; read: text -> top, the reverse shell of the compiler -- the lane every shell ultimately
-; feeds into. `s` is TEXT, or a PORT, which is SPOUTED into a chunk source and is the only
-; case that needs saying. read takes either, reads ONE form (structurally -- the reader
-; knows no operators) and sends it through ev's core (opfix, feel, ana, cata): the full
-; hull text -> top in one call. nothing readable -- empty input or an unfinished shape --
-; is nothing.
+; read: chars -> top, the reverse shell of the compiler -- the lane every shell
+; ultimately feeds into. `s` is a charlist: a bare one (a charm is a sat, a non-negative
+; fixnum), a flowing one, or a PORT, which is lifted to the flowing kind and is the only
+; case that needs saying. read takes any of them, reads ONE form (structurally -- the
+; reader knows no operators) and sends it through ev's core (opfix, feel, ana, cata): the
+; full hull chars -> top in one call. nothing readable -- empty input or an unfinished
+; shape -- is nothing.
 (: (read s)
-   (: r (sound (? (hot? s) (spout s) s))
+   (: r (sound (? (hot? s) (flow s) s))
       (? (two? r) (ev <r) 0)))
-; reads: the stream shell -- reads and evals every form of a port OR a text, the value the
-; last form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
+; reads: the stream shell -- reads and evals every form of a port, the value the last
+; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
 ; ⚠ THE TWO ENDINGS DIFFER: a clean end comes BETWEEN forms (done), `torn` INSIDE one.
 ; and `torn` is no longer a maybe: the reader drank for itself and found the end, so
 ; there is nothing left to try and it is a scare.
 (: (reads p)
-   ((: (g x z)
-       (: r (sound x)
+   ((: (g cl z)
+       (: r (sound cl)
           (? (two? r)       (g >r (ev 'ev <r))
              (id? r torn)   (scare 'unfinished-form p)
              z)))
-    ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) is ours alone -- nobody else
-    ; reads it, so running ahead is free and worth it. `in` is SHARED: the forms we
-    ; eval can read it, and a child can inherit its fd. so stdin drips. a TEXT (the
-    ; baked corpus, host/main.c's runner) is already whole and goes straight in.
-    (? (string? p) p (id? p in) (drip p) (spout p)) 0))
-; forms: every datum of a port or a text, as DATA -- the data twin of `reads`, and the
-; shape half the tools had each copied out by hand. it takes a PORT, like reads, so it
-; needs neither open nor close (a fs-less frontend has neither, and a bare mention would
-; raise at the define). ⚠ a torn tail SCARES: the other choice is handing back the forms
-; that happened to land, which reads exactly like a whole file and is the bug every one
-; of those had.
+    ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) and a tap (the baked corpus,
+    ; host/main.c's runner) are ours alone -- nobody else reads them, so running
+    ; ahead is free and worth it. `in` is SHARED: the forms we eval can read it,
+    ; and a child can inherit its fd. so stdin trickles.
+    (? (id? p in) (trickle p) (flow p)) 0))
+; forms: every datum of a port, as DATA -- the data twin of `reads`, and the shape half
+; the tools had each copied out by hand. it takes a PORT, like reads, so it needs neither
+; open nor close (a fs-less frontend has neither, and a bare mention would raise at the
+; define). ⚠ a torn tail SCARES: the other choice is handing back the forms that happened
+; to land, which reads exactly like a whole file and is the bug every one of those had.
 (: (forms p)
-   ((: (g x acc)
-       (: r (sound x)
+   ((: (g cl acc)
+       (: r (sound cl)
           (? (two? r)       (g >r (<r >< acc))
              (id? r torn)   (scare 'unfinished-form p)
              (rev acc))))
-    (? (string? p) p (spout p)) ()))
+    (flow p) ()))
 
 ; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
 ; the body of this (: ..) returns the public entry points as a list, defglob'd
@@ -77,15 +77,12 @@
    ; fuses -- the old `(+(-3))` -> `(+ -3)` bug); MULTIPLE datums become the
    ; application `(a b c)`, so `f x` applies and `1 = 1` factors infix. returns m if
    ; the line ends inside an unfinished shape, () for a blank line, else a one-form list.
-   (rdall x acc) (: r (sound x)
-                   (? (two? r)     (rdall (cup r) (<r >< acc))
+   (rdall cl acc) (: r (sound cl)
+                    (? (two? r)     (rdall (cup r) (<r >< acc))
                        (id? r torn) m              ; unfinished shape -> more
                        (rev acc)))                 ; a clean end -> the datums, in order
-   ; ⚠ THE EDITOR HOLDS CHARS AND THE READER TAKES TEXT, so the line is strung ONCE
-   ; here -- the whole zipper's reason for being is char-at-a-time editing, and the
-   ; reader's is indexing, so this is where the two meet.
    (parseall cl)
-     (: ds (rdall (string cl) ())
+     (: ds (rdall cl ())
         (? (id? ds m)        m                     ; unfinished shape
            !(two? ds)        ()                    ; blank line: no datums
            !(two? >ds)       `(<ds)                ; ONE datum: as-is (leading monadic preserved)

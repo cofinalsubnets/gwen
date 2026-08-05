@@ -6,9 +6,11 @@
 ; equal but would re-EVAL as code -- those use rd. Self-evaluating atoms and the
 ; value forms (tuple/tray/hash/functions, and the complex form ~(re im))
 ; reconstruct the value under eval -- those use rt.
-(:    ; through rd-test (test/00-init.l), the reader-under-test socket -- doc/io.md
+; s2cl turns a string into a charlist of byte codes (get is generic over strings).
+(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
+   ; through rd-test (test/00-init.l), the reader-under-test socket -- doc/io.md
    ; rung 3, so rung 6 points this loop at p1 without touching this file
-   (rdr s) (: r (rd-test s) (? (two? r) <r r))
+   (rdr s) (: r (rd-test (s2cl s)) (? (two? r) <r r))
    (rd x) (rdr (show x))
    (rt x) (ev (rdr (show x))))
 (assert

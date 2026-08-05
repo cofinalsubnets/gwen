@@ -13,16 +13,15 @@
 ; yet change the parse). Spaces inside a string literal are data and never touched.
 ; Surviving bytes are C-escaped.
 
-(: ; the datums readable from s (stop on the eof sentinel or an incomplete form,
+(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)  ; string -> charlist
+   ; the datums readable from s (stop on the eof sentinel or an incomplete form,
    ; which read signals by returning the port itself) -- the full forms, compared
    ; STRUCTURALLY, not just counted: a re-tokenization can preserve the count yet
    ; change the parse (name'(a b) and name '(a b) both read two datums).
-   (datums s) ((: (g x a) (: r (sound x) (? (two? r) (g (cup r) (link (cap r) a)) (rev a))))
-               s 0)
-   ; the next complete form of t AT k, re-shown; 0 if none reads cleanly. reading
-   ; at a `spot` is what keeps the walk below linear: snipping the tail per probe
-   ; would copy the whole remainder at every space.
-   (form1 t k) (: r (sound (spot t k)) (? (two? r) (show (cap r)) 0))
+   (datums s) ((: (g cl a) (: r (sound cl) (? (two? r) (g (cup r) (link (cap r) a)) (rev a))))
+               (s2cl s) 0)
+   ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
+   (form1 cs) (: r (sound cs) (? (two? r) (show (cap r)) 0))
    ; a HARD token boundary: whitespace, delimiters, string quote, comment, and
    ; the value-surface chars. tokens never span these under any lexer law, so
    ; the redundancy probe's left context resets there.
@@ -52,9 +51,9 @@
    ; just today's. the opb? clause still keeps an operator-then-datum space:
    ; the probe reads in isolation (head position, fusion off) but the run is
    ; monadic mid-list.
-   (redundant? t ctx k) (? (&& (two? ctx) (opb? (cap ctx)) (dstart? (peep t k 0))) 0
-                           (: lt (string (rev ctx)) rt (form1 t k)
-                              (? rt (= (datums (+ lt rt)) (datums (+ (+ lt " ") rt))) 0)))
+   (redundant? ctx cs) (? (&& (two? ctx) (opb? (cap ctx)) (dstart? (cap cs))) 0
+                          (: lt (string (rev ctx)) rt (form1 cs)
+                             (? rt (= (datums (+ lt rt)) (datums (+ (+ lt " ") rt))) 0)))
    ; emit one byte to out, C-escaped for the string literal.
    (eb c) (? (= c 10) (say out "\\n")
               (| (= c 92) (= c 34)) (: _ (put out 92) (put out c))
@@ -65,29 +64,28 @@
    ; gather every canonical form into one space-joined string. ⚠ a TORN input dies
    ; loudly: a header silently short of its last forms is the empty-lcat disaster
    ; wearing a subtler face -- the build would take it as fresh and fail somewhere else.
-   acc ((: (g acc x first)
-          (: r (sound x)
+   acc ((: (g acc cl first)
+          (: r (sound cl)
              (? (two? r) (g (? first (show (cap r)) (+ (+ acc " ") (show (cap r)))) (cup r) 0)
                 (id? r torn) (: _ (say err "lcat: unfinished form in input") (quit 1))
                 acc)))
-        "" (slurp p) 1)
+        "" (s2cl (slurp p)) 1)
    _ (put out 34)                                      ; opening "
    ; walk acc: drop redundant spaces (outside string literals), C-escape the rest.
    ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."
    ; literal (where \ escapes).
-   n (tally acc)
-   _ ((: (g k ctx instr)
-        (? (< k n)
-           (: c (peep acc k 0)
+   _ ((: (g cs ctx instr)
+        (? (two? cs)
+           (: c (cap cs)
               (? instr
-                 (? (= c 92) (: _ (eb c) _ (eb (peep acc (k + 1) 0)) (g (k + 2) 0 1))
-                    (: _ (eb c) (g (k + 1) 0 (? (= c 34) 0 1))))
+                 (? (= c 92) (: _ (eb c) _ (eb (cap (cup cs))) (g (cup (cup cs)) 0 1))
+                    (: _ (eb c) (g (cup cs) 0 (? (= c 34) 0 1))))
                  (? (= c 32)
-                    (? (redundant? acc ctx (k + 1))
-                       (g (k + 1) ctx 0)                  ; drop the space; ctx keeps accruing
-                       (: _ (eb c) (g (k + 1) 0 0)))      ; keep it: a real boundary
+                    (? (redundant? ctx (cup cs))
+                       (g (cup cs) ctx 0)                 ; drop the space; ctx keeps accruing
+                       (: _ (eb c) (g (cup cs) 0 0)))     ; keep it: a real boundary
                     (: _ (eb c)
-                       (g (k + 1) (? (hardb c) 0 (link c ctx)) (= c 34))))))))
-        0 0 0)
+                       (g (cup cs) (? (hardb c) 0 (link c ctx)) (= c 34))))))))
+        (s2cl acc) 0 0)
    _ (put out 34)                                      ; closing "
    (put out 10))

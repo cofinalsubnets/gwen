@@ -127,7 +127,8 @@
        ; correctly-rounded decimal->binary, the same one love's own literals
        ; ride, and it carries the whole range including the subnormals. the
        ; `e` keeps the answer a gem however integral the digits look. --
-       (dec2flo mant dxp) (cap (sound ((show mant) + "e" + (show dxp))))
+       (chars t) (: k9 (tally t) (: (go k) (? (k < k9) (link (t k) (go (k + 1))) ()) (go 0)))
+       (dec2flo mant dxp) (cap (sound (chars ((show mant) + "e" + (show dxp)))))
        (digrun j) (: (go k v nd) (? (&& (k < n) (dig? (src k)))
                                     (go (k + 1) ((* 10 v) + ((src k) - 48)) (nd + 1)) `(k v nd))
                      (go j 0 0))

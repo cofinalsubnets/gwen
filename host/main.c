@@ -595,17 +595,18 @@ extern uintptr_t ai_baked_image_len;
 // ap). Self-test: the whole test corpus, baked in (sed-wrapped), run
 // twice -- once compiled by the C bootstrap compiler (c0), once by the
 // self-hosted ev installed from ev.l -- so one love0 invocation exercises both
-// compilers (and -Dai_tco=0 makes it the trampoline path). runner drinks the baked
-// corpus (the global `tests`) through reads (the shell core, love/bao.l), whose
-// `(ev 'ev r)` indirection late-binds to whatever `ev` is now, so the same shell
-// drives the c0 pass and (after the egg) the self-hosted pass.
+// compilers (and -Dai_tco=0 makes it the trampoline path). s2cldef installs
+// s2cl (string -> charlist); runner drinks the baked corpus (the global
+// `tests`) through reads (the shell core, love/bao.l), whose `(ev 'ev r)` indirection
+// late-binds to whatever `ev` is now, so the same shell drives the c0 pass and
+// (after the egg) the self-hosted pass.
 static char const cli[] =
 #include "cli0.h"
  ;
 static char const tests0[] =
 #include "tests0.h"
  ;
-static char const runner[] = "(reads tests)";        // the stream shell (love/bao.l) reads the baked corpus, as the text it already is
+static char const runner[] = "(reads (tap (s2cl tests)))";   // the stream shell (love/bao.l) drinks the baked corpus
 // the MODULE sources, name-keyed: the source library's rows (struct ai_lib, love.h)
 // and loaded by `use` -- the loader wraps each in its own layer, leave registers it,
 // the splice serves the bare names. bao/rng/kanren carry no brackets of their own now.
@@ -689,6 +690,7 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'q)"                                         //   load serves both corpus passes
     "(use 'kanren)"
   );
+  g = ai_evals_(g, "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))");   // string -> charlist, for the runner
   g = ai_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
   g = ai_egg_(g,                                      // bootstrap: install the self-hosted ev
 #include "egg0.h"

@@ -118,8 +118,9 @@
 
 ; --- minify (identical to lcat): drop a space only where the two flanking bytes
 ; re-parse to the same datum count without it; then C-escape the survivors. ---
-(: (nforms s) ((: (g x n) (: r (sound x) (? (two? r) (g (cup r) (+ 1 n)) n)))
-                  s 0)
+(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
+   (nforms s) ((: (g cl n) (: r (sound cl) (? (two? r) (g (cup r) (+ 1 n)) n)))
+               (s2cl s) 0)
    ; the valence-law guard (cf. lcat.l): a space between an operator byte and
    ; a datum start is semantic mid-list (glued = monadic); the probe below
    ; tests at head position where fusion is suppressed, so keep it.
@@ -141,7 +142,7 @@
               (| (= c 92) (= c 34)) (: _ (put out 92) (put out c))
               (put out c)))
 
-(: (readforms x) (: r (sound x) (? (two? r) (link (cap r) (readforms (cup r))) 0))
+(: (readforms cl) (: r (sound cl) (? (two? r) (link (cap r) (readforms (cup r))) 0))
    (joinforms fs) (? (atom? fs) "" (atom? (cup fs)) (show (rn (cap fs) 0 0 1 rn))
        (+ (+ (show (rn (cap fs) 0 0 1 rn)) " ") (joinforms (cup fs))))
    (emit acc) (: _ (put out 34)
@@ -156,7 +157,7 @@
        (put out 34))
    p (open (cap (cup argv)) "r")
    _ (? p 0 (: _ (say err "lcat2: cannot open input") (quit 1)))
-   forms (readforms (slurp p))
+   forms (readforms (s2cl (slurp p)))
    _ (map (\ m (pin cnt m (+ 1 (peep cnt m 0)))) (keys (peep book 0 0)))  ; macro heads bypass scoping
    _ (map collect forms)                                        ; count symbols
    acc (joinforms forms)

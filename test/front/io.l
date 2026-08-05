@@ -89,16 +89,16 @@
    _ (stall p 1)
    _ (assert (cue? p)))
 
-; --- law 6: the chunk source rides the park -----------------------------------
-; `spout` gulps through `see`, so a stall lands inside the promise's own force. the
-; lazy source must survive it -- and memoize, so a re-force does not re-drink.
+; --- law 6: the colist rides the park -----------------------------------------
+; `flow` gulps through `see`, so a stall lands inside the promise's own force. the
+; lazy tail must survive it -- and memoize, so a re-force does not re-drink.
 (: p (dev ())
    _ (feed p "one")
    _ (shut p)
    _ (stall p 2)
-   sp (spout p)
-   _ (assert ("one" = (cap (sp ())))
-             ("one" = (cap (sp ())))))  ; forced twice, same answer: `once` holds
+   cl (flow p)
+   _ (assert (string cl = "one")
+             (string cl = "one")))      ; forced twice, same answer: `once` holds
 
 ; --- law 7: a short write loses nothing ---------------------------------------
 ; ⚠ THE ONE THIS FRONTEND WAS BUILT FOR that no gate could reach before. io_wdrain

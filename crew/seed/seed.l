@@ -34,7 +34,7 @@
    (lay p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) 0))
    (form p) (: q (open p "r")                                 ; the file's one form | ()
                   (? q (: t (slurp q) _ (close q)
-                          r (sound t)
+                          r (sound (map t (jot (tally t))))
                           d (? (two? r) (cap r) ())
                           (? (two? d) d ())) ()))
 

@@ -1006,43 +1006,6 @@ and the thing that makes the tty case free. one input representation was the rig
 call and it retires real machinery; it is not by itself an answer here.
 
 
-## rung 9 -- the position is three arguments, and the colist door is gone
-
-**the reader's input is TEXT now, and a position is `(t k th)`** -- chunk text,
-index into it, source of the next chunk -- threaded as three separate arguments
-through every scan loop, so a step is `(+ k 1)` and allocates nothing. a cons
-cursor (`p1-cur`) is minted only where a position ESCAPES: the residue a caller
-gets back, and the one-char lookahead. saturation is load-bearing -- partially
-applying a scan fn puts `apxh` on the l2r chain -- so the arity is not free
-decoration.
-
-`spot` is the new public verb: `(sound (spot t k))` reads the datum starting at
-`k` without snipping the tail out first, which is what keeps a byte-walking
-caller (tools/lcat.l probes at every space, lib/lint.l at every form) LINEAR.
-⚠ past the end is the zero point, which reads as a clean end -- the same answer
-the text's own end gives, so a walk needs no bounds test of its own.
-
-**the charlist door is DROPPED, not deprecated.** `sound` takes text, a chunk
-source, a cursor, or `()`; a caller holding chars `string`s them ONCE and hands
-that over. the adapter that survived the first cut cost +23.5% on the charlist
-door and +40.7% on the tap path, which is the whole argument for closing it.
-`flow`/`trickle` are `spout`/`drip`: a port is a CHUNK SOURCE now -- a promise of
-`(text . next)`, `()` at eof -- not a byte colist, so `chug`'s gulp is handed
-over whole and the reader indexes it.
-
-**⚠ THE MIGRATION'S REAL COST WAS THE CONSUMERS, AND ONE OF THEM WAS THE C
-COMPILER.** `crew/moon/lex.l`'s `dec2flo` hands a C source file's decimal digits
-to `sound` -- deliberately, so mooncc gets the tree's one correctly-rounded
-decimal->binary instead of growing its own (the three float bugs of 2026-08-01
-are why). left on the old door it answered `()`, so every float constant mooncc
-emitted was garbage, so the `am_strtod` in the runtime it built read `0.0` as
--inf, so the egg's `(? b ..)` over the corpus measured a red net and the fold ran
-ZERO forms -- a boot that trapped with `hot_read` unsealed, four layers from the
-edit. **a door that silently answers nothing is the expensive kind.** the rest of
-the roster: bao's `read`/`reads`/`forms`, cli's `-e`, prel's `rdev`, tools/lcat,
-tools/lcat2, crew/{cook,kore,seed,vi/hue,lux,haven}, lib/{salt,lint},
-port/inle/{serve,judge}, index.html's `webln`.
-
 ## order and size
 
 **1-4 are LANDED.** 1 went first because everything after it re-implements what
