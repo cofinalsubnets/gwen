@@ -17,7 +17,7 @@
  (6 = +'(1 2 3)) (294 = +"abc") (0 = +"") (7 = +@(3 4))
  (-1 = +'(-2 1))                                ; the net, UNCLAMPED: $ would read 0
  (~(0 8) = +`(~(3 4) ~(-3 4)))                 ; phases sum as vectors: + glued to `` ` `` -> net over the evaluated list
- (3 = +`(1 2)) ("(negate (list 1 2))" = (show (opfix '-`(1 2))))   ; + and - fuse to `` ` `` too (a datum-opener like ' # @): monadic net / negate over the evaluated list
+ (3 = +`(1 2)) ("(saturate (list 1 2))" = (show (opfix '$`(1 2))))   ; + and - fuse to `` ` `` too (a datum-opener like ' # @): monadic net / negate over the evaluated list
  (24 = *'(1 2 3 4)) (7 = *7) (6 = *@(1 2 3))   ; * is prod inward: a star vacuously itself (like +5), a list/array its product
  ; the dyadics turned inward
  (5 = |-5) (5.0 = |~(3 4)) (-3 = -(1 + 2)) (0.25 = /4) (0.5 = %2.5)

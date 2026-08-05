@@ -483,7 +483,9 @@
  ('(1 (\ x) 3) = `(1 ''x 3)) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
- ("(dot x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; opfix factors -- a lone folded clause splices up (cmp via show: internal forms stay 0-tailed); quotes stay data
+ ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
+ (: was (fixity '<-> '(1 60)) t (opfix '(<-> a b)) _ (fixity '<-> was)   ; an arity-ONE row is still
+    (&& (was = ()) (t = '((<-> a) b))))                                  ;   the prefix lane: folds on fill
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a NUMERAL (the whole exception)
@@ -493,7 +495,10 @@
     (&& (was = ()) (t = '(<+> (<+> a b) c))))     ;   restored inside the form: the next one reparses
  ('(1 2 3) = 1 >< 2 >< '(3))                     ; ... while a right-handed band still folds right
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
- (1 = (3 != 4)) (0 = (3 != 3))                   ; the factorization law: != = ! of =
+ (1 = (3 != 4)) (0 = (3 != 3)) (: t (opfix '(a != b && c)) (t = '(&& (!= a b) c)))  ; != is a plain
+ (: was (fixity '! ()) _ (fixity '! was) (was = ()))   ;   dyad at the comparison grip, and ! -- monadic
+ ("(! x)" = (show (opfix '(! x)))) (id? (!) nil?) (id? (.) dot)   ; and nothing else -- carries NO row:
+ (1 = (! 0)) (0 = (! 5)) (1 = (! ""))            ;   the walk hands the symbol to an ordinary function
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
  (3 = ((1 +) 2))                                 ; the curry law: (1 +) folds to (+ 1)
  (1 = <'(1 2 3)) (2 = <>'(1 2 3)) ('(3) = >>'(1 2 3))   ; glued runs are MONADIC

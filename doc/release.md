@@ -109,7 +109,7 @@ tablet, so a stray `(pin holo …)` can no longer poison a baked service. See [[
 - [x] the corpus audit: only THREE asserts shifted, all `|`/`&`-mixed-with-`=` (the doc's flagged risk the audit had cleared for `&&`/`||` but not single `|`/`&`) — `test/spec.l:88`,`:164` parenthesized (bitwise below `=`, grip 30 < 40, gwen blessed the C-style band), `test/infixop.l:27` updated to the C-ternary read (`1 < 2 ? 'big 'small` → `(? (< 1 2) 'big 'small)`)
 - [x] `test/precedence.l` — tree asserts (via the live `opfix`, op-core being book-private) + value asserts + short-circuit + idempotence; non-vacuous
 - [x] promote `doc/precedence.md` from design to shipped
-- ( ) `grip` the name and house = 27 shipped as working defaults (internal, not in `(names ())`, mechanically swappable) — still gwen's to bless/rename per precedence.md §Naming ([[decisions-never-locked]])
+- ( ) `grip` the name shipped as a working default (internal, not in `(names ())`, mechanically swappable) — still gwen's to bless/rename per precedence.md §Naming ([[decisions-never-locked]]). House settled at 95 on 2026-08-04, above every band, per haskell's undeclared-is-`infixl 9`
 
 **namespaces** — close the phase-3 tail (phases 1 + 3 landed: `(names ())` 820 → 327; see [[namespace-modules]])
 - **NO "sealed tablet" language feature** (decided 2026-07-14). The same way users can't reassign the

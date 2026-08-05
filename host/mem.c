@@ -37,7 +37,7 @@
 // a cask's (or string's) backing bytes, or 0.
 static struct ai_str *cask_bytes(ai_word x) {
  if (x & 1) return 0;
- if (((union u*) x)->ap == lvm_buf) return ((struct ai_buf*) x)->str;
+ if (((union u*) x)->ap == lvm_cask) return ((struct ai_cask*) x)->str;
  return ai_strp(x) ? (struct ai_str*) x : 0; }
 
 // an fd charm, or an open port's fd -- the device rides either way
@@ -110,7 +110,7 @@ static lvm(lvm_mapin) {
            p = (Sp[2] & 1) ? getcharm(Sp[2]) : 0,
            soff = (Sp[3] & 1) ? getcharm(Sp[3]) : -1,
            n = (Sp[4] & 1) ? getcharm(Sp[4]) : -1;
- if (d && !(Sp[0] & 1) && ((union u*) Sp[0])->ap == lvm_buf
+ if (d && !(Sp[0] & 1) && ((union u*) Sp[0])->ap == lvm_cask
       && p && doff >= 0 && soff >= 0 && n > 0
       && (uintptr_t) (doff + n) <= d->len)
     memcpy(d->bytes + doff, (char const*) p + soff, (size_t) n);
@@ -134,9 +134,9 @@ static lvm(lvm_mapout) {
 // the byte-at-a-time accessors were 4 dispatches per read) ----------------------
 static lvm(lvm_peepw) {
  ai_word c = Sp[0], out = ZeroPoint;
- if (!(c & 1) && ((union u*) c)->ap == lvm_buf && (Sp[1] & 1)) {
+ if (!(c & 1) && ((union u*) c)->ap == lvm_cask && (Sp[1] & 1)) {
   intptr_t i = getcharm(Sp[1]);
-  struct ai_str *s = ((struct ai_buf*) c)->str;
+  struct ai_str *s = ((struct ai_cask*) c)->str;
   if (i >= 0 && (uintptr_t) (i + 1) * 8 <= s->len) {
    uint64_t w;
    memcpy(&w, s->bytes + 8 * i, 8);
@@ -146,10 +146,10 @@ static lvm(lvm_peepw) {
 
 static lvm(lvm_pinw) {
  ai_word c = Sp[0], out = ZeroPoint;
- if (!(c & 1) && ((union u*) c)->ap == lvm_buf && (Sp[1] & 1) && (Sp[2] & 1)) {
+ if (!(c & 1) && ((union u*) c)->ap == lvm_cask && (Sp[1] & 1) && (Sp[2] & 1)) {
   intptr_t i = getcharm(Sp[1]);
   uint64_t v = (uint64_t) getcharm(Sp[2]) & 0xffffffffu;
-  struct ai_str *s = ((struct ai_buf*) c)->str;
+  struct ai_str *s = ((struct ai_cask*) c)->str;
   if (i >= 0 && (uintptr_t) (i + 1) * 8 <= s->len) {
    memcpy(s->bytes + 8 * i, &v, 8);
    out = c; } }

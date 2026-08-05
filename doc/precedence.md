@@ -7,8 +7,8 @@ reader-operators block (opfix); no C, both compilers inherit it.
 pre-existing qemu-arm64 `uk-jj`. The corpus audit shifted exactly THREE asserts,
 all single `|`/`&` mixed with `=` (grip 30 below comparison 40): `test/spec.l:88`
 and `:164` parenthesized, `test/infixop.l:27` moved to the C-ternary read.
-Two calls remain gwen's (§Open): the `grip` **name** and house = 27 — both shipped
-as working defaults (internal, absent from `(names ())`, mechanically swappable).
+One call remains gwen's (§Open): the `grip` **name**, shipped as a working default
+(internal, absent from `(names ())`, mechanically swappable). House is 95.
 The design below is the as-built record.
 
 ## the ask
@@ -94,12 +94,12 @@ bands, coarse and few:
 
 ```
 ; higher grip binds tighter. leave gaps so a level can slot between later.
-;   **             grip 70   (apply — flip-apply (a ** b = (b a)), tightest infix)
+;   (house)        grip 95   (coined operators — the default, fresh punct, no row)
+;   **             grip 70   (apply — flip-apply (a ** b = (b a)), tightest DECLARED infix)
 ;   * / %          grip 60   (multiplicative)
 ;   + -            grip 50   (additive)
 ;   < <= > >= =    grip 40   (comparison)   <- the assert-relation band
 ;   | &  && ||     grip 30   (logical)
-;   (house)        grip 27   (coined operators — the default, fresh punct, no row)
 ;   ><             grip 25   (cons — the loosest builder)
 ;   <- ->          grip 20   (assignment aliases)
 ;   ?              grip 10   (cond)
@@ -143,9 +143,9 @@ The op-fr frame is `(orig chain name need . got)`
 ([`prel.l:386`](../love/prel.l)). **Store grip on the frame — do not re-probe the
 table.** The frame keeps two symbols, and neither alone recovers grip:
 
-- `op-fro` = the *source* symbol. A composite like `!=` factors to `(! =)`; its
-  source `!=` has no table row, so `op-ent` gives the house grip, but the
-  operative grip is `=`'s (comparison). The source side can't see it.
+- `op-fro` = the *source* symbol. A composite run — one whose leading factors are
+  arity-one rows — has no row of its own, so `op-ent` gives the house grip while
+  the operative grip is the last factor's. The source side can't see it.
 - `op-frn` = the *resolved* name. An alias like `<-` resolves to `pin`; the table
   is keyed by source `<-`, so `op-ent 'pin` misses → house grip, but the
   operative grip is `<-`'s row. The resolved side can't see it.
@@ -342,20 +342,22 @@ proof, not the assumption.
 
 - **grip of `?` and `<- ->`.** `?` = 10, `<- ->` = 20. See §Risks 3.
 - **grip on the frame vs. re-probe.** On the frame — re-probe is a *correctness*
-  bug (composite `!=` and alias `<-` each defeat one of the two symbols op-ent
+  bug (a composite run and alias `<-` each defeat one of the two symbols op-ent
   would probe). Capture from `en`. See §what-changes 2.
 - **`|`/`&` band, plus `&&`/`||`.** All four at grip 30, below comparison — so
   `a < b & c < d` and `a < b && c < d` group with the logical op loosest.
-- **how many bands.** Six coarse levels (60/50/40/30/20/10) plus the two coined
-  slots (27 house, 25 cons). No C-style 15-level ladder; gaps left to slot more.
+- **how many bands.** Six coarse levels (60/50/40/30/20/10) plus the cons slot
+  (25) and house above them all (95). No C-style 15-level ladder; gaps left to
+  slot more.
+- **where house sits.** Above every band, as Haskell's undeclared-is-`infixl 9`.
+  It was 27 (between logical and cons) until 2026-08-04. Measured before the
+  move: opfixing every top-level form of all 313 `.l` files at 27, 35 and 95
+  differs only in prel.l's own literals — no source in the tree rides house.
+  lux is the one production `fixity` user and pins both its grips by number.
 
 ## Open questions (genuine, for gwen)
 
 - **`grip` the name** (see §Naming) — coins a new word under the rename freeze.
-- **house = 27 vs. a distinct isolated slot.** 27 lets coined operators interact
-  predictably (they yield to every band, tie none). The alternative — a level
-  shared by nothing so coined ops never interact with anything — is arguably
-  worse; 27 is the recommendation, revisit at the scope-layer door.
 
 ## Naming
 

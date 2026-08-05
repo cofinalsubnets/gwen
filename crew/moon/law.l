@@ -137,6 +137,18 @@
          '(prog ((fn "main" () (blk ((decl (("x" int (num 1))))
                                      (if (var "x") (ret (num 2)) ())
                                      (ret (num 3))))))))
+      ; a label is a flat MARKER in a statement list, but a labeled statement is ONE statement:
+      ; as an unbraced ARM it takes what it labels WITH it, into a block. left flat, the arm
+      ; would be the marker alone and the statement would land past the arm's join -- the then
+      ; arm falling into the else (`else pass: switch` in love.c's gvzprintf printed "\%z").
+      (= (cast "int main() { lab: return 2; }")
+         '(prog ((fn "main" () (blk ((lbl "lab") (ret (num 2))))))))
+      (= (cast "int main() { if (1) return 1; else e0: return 2; }")
+         '(prog ((fn "main" () (blk ((if (num 1) (ret (num 1))
+                                         (blk ((lbl "e0") (ret (num 2)))))))))))
+      (= (cast "int main() { if (0) x0: return 1; return 3; }")
+         '(prog ((fn "main" () (blk ((if (num 0) (blk ((lbl "x0") (ret (num 1)))) ())
+                                     (ret (num 3))))))))
       (= (cast "int main() { char c; long a=1, b; return 0; }")
          '(prog ((fn "main" () (blk ((decl (("c" char ())))
                                      (decl (("a" long (num 1)) ("b" long ())))

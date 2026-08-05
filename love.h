@@ -113,9 +113,9 @@ struct ai_str {
  lvm_t *ap;
  uintptr_t len;        // byte count
  char bytes[]; };
-// a buf (the surface's cask): mutable bytes behind a 2-word wrapper, recognized by
+// a cask: mutable bytes behind a 2-word wrapper, recognized by
 // ap like ports. public so a host nif can wrap a C struct's bytes (host/cb.c).
-struct ai_buf { lvm_t *ap; struct ai_str *str; };
+struct ai_cask { lvm_t *ap; struct ai_str *str; };
 // a mint: a bare nameless point -- just the hot and its serial
 struct ai_mint {
  lvm_t *ap;
@@ -281,7 +281,7 @@ static ai_inline size_t b2w(size_t b) {
  size_t q = b / sizeof(ai_word), r = b % sizeof(ai_word);
  return q + (r ? 1 : 0); }
 
-lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_buf,
+lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_cask,
 // how a frontend nif PARKS: set g->next_wake_at (or next_wait_fd), leave Ip
 // unadvanced, `return Ap(lvm_yield_sw, g)` -- the op re-runs on reschedule.
       lvm_yield_sw;
@@ -440,13 +440,13 @@ lvm(lvm_gc, uintptr_t);
 // both the +/* matrices and the apply sentinels dispatch on this.
 enum q ai_kind(word);
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
-lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_flo, lvm_wide, lvm_cbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
+lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_sunbox, lvm_twinbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
 // recover a data value's rep by comparing its ap against the sentinel addresses
 // (a tiny compare on the cold apply path)
 static ai_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
  return p == lvm_tray || p == lvm_big || p == lvm_str || p == lvm_sym || p == lvm_nom
-     || p == lvm_chain || p == lvm_flo || p == lvm_wide || p == lvm_cbox; }
+     || p == lvm_chain || p == lvm_gembox || p == lvm_sunbox || p == lvm_twinbox; }
 static ai_inline enum d ai_typ(union u *o) {
  lvm_t *p = o->ap;
  return p == lvm_tray   ? DTray
@@ -455,9 +455,9 @@ static ai_inline enum d ai_typ(union u *o) {
       : p == lvm_sym    ? DMint
       : p == lvm_nom    ? DNom
       : p == lvm_chain  ? DChain
-      : p == lvm_flo    ? DGem
-      : p == lvm_wide   ? DSun
-      :                   DTwin; }   // the 8th and last: lvm_cbox
+      : p == lvm_gembox    ? DGem
+      : p == lvm_sunbox   ? DSun
+      :                   DTwin; }   // the 8th and last: lvm_twinbox
 uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp

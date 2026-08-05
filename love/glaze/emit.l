@@ -705,7 +705,7 @@
    ; the float lane carries NO overflow guard (doubles saturate to inf, never promote
    ; to bignum); only the INTEGER lane keeps the jno->deopt that preserves bignum
    ; promotion. this first cut: a float PREDICATE leaf (\ x (cmp <fexpr> <fexpr>)) over
-   ; a FIXNUM arg -> 0/1 -- no gem args (deferred: needs the lvm_flo type guard); a
+   ; a FIXNUM arg -> 0/1 -- no gem args (deferred: needs the lvm_gembox type guard); a
    ; float RESULT is now `jitfr` below (the Have-checked box). a non-fixnum arg DEOPTS (fxv).
    (fbits x)                                                          ; finite double -> its IEEE-754 u64 bits
     (? (x = 0.0) 0
@@ -740,13 +740,13 @@
    (jitf lam) (: v <>lam (nif (emit (asmx ((cgfp 'x64 v <>>lam 0) + (loopepi 'x64)))) (ev lam) lam 1))
    ; --- HEAP RESULT (the deferred "Have-checked box"): (jitfr '(\ x <fexpr>)) returns a GEM, not 0/1.
    ; the lane never allocates because it can't GC (its raw regs aren't roots) -- so it does the alloc
-   ; twin of the overflow guard: a ROOM GUARD (Sp - Hp >= flo_req+floor words) DEOPTS to interp when
+   ; twin of the overflow guard: a ROOM GUARD (Sp - Hp >= gem_req+floor words) DEOPTS to interp when
    ; the heap is too full to fit the box, exactly as `jo` deopts when a fixnum result leaves range.
-   ; fast path (room proven): write [Hp]=lvm_flo (apof's kind const, ASLR-captured at emit like the
-   ; string guard), the double at [Hp+8] with NaN->0 (flo_put's law), return Hp UNTAGGED (an even heap
-   ; ptr IS the gem), bump Hp by flo_req. the epilogue stores the POINTER (NO putfix) and threads the
+   ; fast path (room proven): write [Hp]=lvm_gembox (apof's kind const, ASLR-captured at emit like the
+   ; string guard), the double at [Hp+8] with NaN->0 (gem_put's law), return Hp UNTAGGED (an even heap
+   ; ptr IS the gem), bump Hp by gem_req. the epilogue stores the POINTER (NO putfix) and threads the
    ; advanced Hp on through Continue, so the box is live to the next op and the GC at the next safepoint.
-   ; nanc: NaN -> 0.0 in f0 (flo_put's law). x86: ucomisd xmm0,xmm0 ; jnp +4 ; xorpd (the parity cc +
+   ; nanc: NaN -> 0.0 in f0 (gem_put's law). x86: ucomisd xmm0,xmm0 ; jnp +4 ; xorpd (the parity cc +
    ; self-jump as a raw blob). arm64: fcmp d0,d0 ; b.vc ok ; (d0 <- 0) ; ok -- unordered sets V, so vc
    ; skips when not-NaN; zero via a gpr-0 moved into d0.
    (nanc tgt) (? (id? tgt 'x64) `(`('raw '(102 15 46 192  123 4  102 15 87 192)))
@@ -757,14 +757,14 @@
    ; creation hook (love/glaze/hook.l) calls it DIRECTLY with `e`, the bytecode twin ala already built --
    ; re-interpreting lam there would re-enter ala -> natjit -> ... (the leaf lane's `e`-deopt law).
    (jitfrx lam tgt interp)
-    (: v <>lam  kind (apof 1.5)                                 ; lvm_flo's address, captured now (code never moves)
+    (: v <>lam  kind (apof 1.5)                                 ; lvm_gembox's address, captured now (code never moves)
        A (greg tgt 'acc) S (greg tgt 'sp) HP (greg tgt 'hp) IP (greg tgt 'ip) T (greg tgt 'tmp) ok (mint 0)
        ; neutral crew/holo/ IR (both targets): the room-guard skips the deopt by LABEL; the box store is `stsd`;
        ; the deopt is deoptbody (no pending spills here -- cgf balances its own); nanc is arch-aware.
        (nif (emit (asmt tgt ((cgf tgt v <>>lam 0)
           + `(`('lea A HP 80) `('cmp S A) `('br 'ae ok))                  ; cmp Sp,Hp+10w ; room? skip deopt
           + (deoptbody tgt 0) + `(`('label ok)) + (nanc tgt)             ; heap-full -> deopt ; NaN -> 0.0
-          + `(`('li T kind) `('st HP 0 T)                                 ; [Hp] = lvm_flo (box header)
+          + `(`('li T kind) `('st HP 0 T)                                 ; [Hp] = lvm_gembox (box header)
               `('stsd HP 8 'f0)                                           ; [Hp+8] = the double
               `('mov A HP) `('add HP HP 16)                               ; acc = Hp (the gem ptr) ; Hp += 16
               `('st S 0 A) `('add IP IP 16) `('ld T IP 0) `('jmpr T)))))   ; [Sp] = gem ; Continue (NO putfix: acc IS the gem)

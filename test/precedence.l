@@ -4,7 +4,8 @@
 ; and EQUAL grip goes to the incomer's hand: RIGHT-handed steals (its band folds right), LEFT-handed
 ; yields (its band folds left). ARITHMETIC IS LEFT-HANDED -- (1 - 2 - 3) is -4, as everywhere else --
 ; and everything else stays right, which is the flat fold the surface started with. bands:
-; multiplicative 60, additive 50, comparison 40, logical 30, house 27 (coined ops), cons 25,
+; house 95 (coined ops -- TIGHTEST, haskell's undeclared-is-infixl-9), apply 70, multiplicative 60,
+; additive 50, comparison 40, logical 30, cons 25,
 ; assignment 20, cond 10. we assert BOTH the factored TREE (via the live `opfix`, the source pass both
 ; compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping is
 ; observable in the result.
@@ -25,8 +26,11 @@
  ((opfix '(a < b & c < d)) = '(& (< a b) (< c d)))   ; bitwise & (30) likewise
  ((opfix '(1 < 2 ? x y)) = '(? (< 1 2) x y))        ; ? (10) loosest -> the C-ternary read
  ((opfix '(a + b >< c)) = '(>< (+ a b) c))          ; >< (25) the loosest builder, below arithmetic
- ((opfix '(a :+ b >< c)) = '(>< (:+ a b) c))        ; a coined op (house 27) beats >< (25)
- ((opfix '(a :+ b + c)) = '(:+ a (+ b c)))          ; arithmetic (50) beats a coined op (27)
+ ((opfix '(a :+ b >< c)) = '(>< (:+ a b) c))        ; a coined op (house 95) beats >< (25)
+ ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic (50), and every other band:
+ ((opfix '(a :+ b ** c)) = '(** (:+ a b) c))        ;   house is the TIGHTEST, so an undeclared
+ ((opfix '(a :+ b && c)) = '(&& (:+ a b) c))        ;   operator groups before anything can steal
+ ((opfix '(a + b :+ c)) = '(+ a (:+ b c)))          ;   from it, on either side
 
  ; --- the two apply operators: ** flip-applies (a ** b = (b a)) at the TIGHTEST grip (70), $ weak-
  ; applies (a $ b = (a b), the haskell $) at the LOOSEST (5). glued $x is saturate, a separate valence. ---
@@ -69,7 +73,7 @@
     (tree = '(<+> a (<+> b c))))
  (: _ (fixity '<+> '(2 60 1))
     prev (fixity '<+> ())                             ; () CLEARS, and answers what it cleared
-    (&& (prev = '(2 60 1)) ((opfix '(a <+> b * c)) = '(<+> a (* b c)))))   ; back to house grip
+    (&& (prev = '(2 60 1)) ((opfix '(a <+> b * c)) = '(* (<+> a b) c))))   ; back to house grip -- above *
  ((fixity '<+> ()) = ())                              ; clearing an absent row is a no-op answering ()
  (: _ (fixity '=: '(pin 3 20 0))                      ; the nom-led ALIAS form, like <- itself
     tree (opfix '(t =: k v))

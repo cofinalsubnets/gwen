@@ -50,7 +50,7 @@ static intptr_t port_fd(ai_word x) {
 // a cask's (or string's) backing bytes, or 0 -- the wl lanes take either.
 static struct ai_str *cask_bytes(ai_word x) {
  if (x & 1) return 0;
- if (((union u*) x)->ap == lvm_buf) return ((struct ai_buf*) x)->str;
+ if (((union u*) x)->ap == lvm_cask) return ((struct ai_cask*) x)->str;
  return ai_strp(x) ? (struct ai_str*) x : 0; }
 
 // A DOTTED QUAD and nothing else -> the address in host order, or -1. This is

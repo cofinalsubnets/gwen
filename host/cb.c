@@ -33,8 +33,8 @@
 // of it -- so every entry clamps the header fields the C loops trust: a
 // scribbled screen may paint garbage, never read or write out of bounds.
 static struct cb *scr_ok(ai_word x) {
- if (x & 1 || ((union u*) x)->ap != lvm_buf) return 0;
- struct ai_str *s = ((struct ai_buf*) x)->str;
+ if (x & 1 || ((union u*) x)->ap != lvm_cask) return 0;
+ struct ai_str *s = ((struct ai_cask*) x)->str;
  if (s->len < sizeof(struct cb)) return 0;
  struct cb *c = (struct cb*) s->bytes;
  uintptr_t n = (uintptr_t) c->rows * c->cols;
@@ -62,9 +62,9 @@ static lvm(lvm_screen) {
  if (r >= 1 && k >= 1 && r <= 65535 && k <= 65535
       && (uintptr_t) r * (uintptr_t) k <= (uintptr_t) 1 << 22) {
   uintptr_t need = sizeof(struct cb) + (uintptr_t) r * (uintptr_t) k * 4;
-  if ((b & 1) || ((union u*) b)->ap != lvm_buf) out = putcharm(need);
+  if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
-   struct ai_str *s = ((struct ai_buf*) b)->str;
+   struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
     cb_open((struct cb*) s->bytes, (uint16_t) r, (uint16_t) k);
     out = b; } } }
@@ -83,8 +83,8 @@ static lvm(lvm_scribe) {
   else if (ai_strp(x)) {
    struct ai_str *s = (struct ai_str*) x;
    for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
-  else if (((union u*) x)->ap == lvm_buf) {
-   struct ai_str *s = ((struct ai_buf*) x)->str;
+  else if (((union u*) x)->ap == lvm_cask) {
+   struct ai_str *s = ((struct ai_cask*) x)->str;
    for (uintptr_t i = 0; i < s->len; i++) cb_putc(c, s->bytes[i]); }
   else out = ZeroPoint; }
  Sp[1] = out;
@@ -141,8 +141,8 @@ static void xpal_ini(void) {
 // the same shape via (font b k). glyphs up to 16x32.
 struct cb_atlas { uint8_t const *g; intptr_t w, h, bpr; };
 static int atlas_ok(ai_word x, struct cb_atlas *a) {
- if (x & 1 || ((union u*) x)->ap != lvm_buf) return 0;
- struct ai_str *s = ((struct ai_buf*) x)->str;
+ if (x & 1 || ((union u*) x)->ap != lvm_cask) return 0;
+ struct ai_str *s = ((struct ai_cask*) x)->str;
  if (s->len < 4) return 0;
  intptr_t w = (uint8_t) s->bytes[0], h = (uint8_t) s->bytes[1];
  intptr_t bpr = (w + 7) / 8;
@@ -194,9 +194,9 @@ static lvm(lvm_font) {
  intptr_t k = (Sp[1] & 1) ? getcharm(Sp[1]) : -1;
  if (k == 0 || k == 1) {
   uintptr_t need = k == 0 ? sizeof cb_bi0 : sizeof cb_bi1;
-  if ((b & 1) || ((union u*) b)->ap != lvm_buf) out = putcharm(need);
+  if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
-   struct ai_str *s = ((struct ai_buf*) b)->str;
+   struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
     cb_bi_ini();
     uint8_t const *src = k == 0 ? cb_bi0 : cb_bi1;
@@ -212,9 +212,9 @@ static lvm(lvm_blit) {
            cl = (Sp[2] & 1) ? getcharm(Sp[2]) : -1,
            x = (Sp[3] & 1) ? getcharm(Sp[3]) : -1,
            y = (Sp[4] & 1) ? getcharm(Sp[4]) : -1;
- if (!(fb & 1) && ((union u*) fb)->ap == lvm_buf
+ if (!(fb & 1) && ((union u*) fb)->ap == lvm_cask
       && w > 0 && cl >= 0 && x >= 0 && y >= 0 && x + 8 <= w) {
-  struct ai_str *s = ((struct ai_buf*) fb)->str;
+  struct ai_str *s = ((struct ai_cask*) fb)->str;
   if ((uintptr_t) (y + 16) * (uintptr_t) w * 4 <= s->len) {
    if (!xpal[255]) xpal_ini();
    struct cb_atlas a;
@@ -236,9 +236,9 @@ static lvm(lvm_blitrow) {
  struct cb *c = scr_ok(Sp[2]);
  struct cb_atlas a;
  atlas_of(Sp[5], &a);
- if (c && !(fb & 1) && ((union u*) fb)->ap == lvm_buf
+ if (c && !(fb & 1) && ((union u*) fb)->ap == lvm_cask
       && w > 0 && row >= 0 && row < (intptr_t) c->rows) {
-  struct ai_str *s = ((struct ai_buf*) fb)->str;
+  struct ai_str *s = ((struct ai_cask*) fb)->str;
   intptr_t cols = c->cols;
   if (cols * a.w > w) cols = w / a.w;
   if ((uintptr_t) ((row + 1) * a.h) * (uintptr_t) w * 4 <= s->len) {
@@ -277,10 +277,10 @@ static lvm(lvm_swig) {
  ai_word p = Sp[0], x = Sp[1];
  ai_word out = putcharm(-1);
  if (!(p & 1) && ((union u*) p)->ap == lvm_port_io
-      && !(x & 1) && ((union u*) x)->ap == lvm_buf) {
+      && !(x & 1) && ((union u*) x)->ap == lvm_cask) {
   struct ai_io *io = (struct ai_io*) p;
   intptr_t fd = getcharm(io->fd);
-  struct ai_str *s = ((struct ai_buf*) x)->str;
+  struct ai_str *s = ((struct ai_cask*) x)->str;
     // the port's OWN pending run comes first: a buffered see may have gulped
     // ahead of us, and reading the fd past it would scramble the byte order
   if (s->len && ai_io_pending(g, io)) {

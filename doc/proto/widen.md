@@ -30,7 +30,7 @@ TEXT is `lvm_string` `lvm_snip` `lvm_peep` `lvm_index` `data_string_apply`
 `lvm_add_string` `lvm_add_seq` `add_emit` `lvm_mul_rep` `ai_net` `ai_count`
 `stringlen` `mint_cmp` `cmp3` `eqv_at` `ini_str` `str0` `copy_str` `evac_str`
 `image_objsize`. BYTES is the whole `io*` family plus the cask backing
-(`lvm_bufnew` `lvm_bcopy` `buf_str` `bytes_of` `grbufg`). `host/*.c` is nifs over
+(`lvm_casknew` `lvm_bcopy` `cask_str` `bytes_of` `grbufg`). `host/*.c` is nifs over
 syscalls -- near-100% BYTES (`main.c` 26, `init.c` 17, `cb.c` 10, `net.c` 9,
 `haven.c` 7, `pty.c` 6).
 
@@ -39,7 +39,7 @@ syscalls -- near-100% BYTES (`main.c` 26, `init.c` 17, `cb.c` 10, `net.c` 9,
 `struct ai_str { lvm_t *ap; uintptr_t len; char bytes[]; }` is the text type AND
 the byte container, in three load-bearing places that fail SILENTLY:
 
-1. `struct ai_buf` wraps an `ai_str` -- a cask's backing. `host/cb.c` rides that to
+1. `struct ai_cask` wraps an `ai_str` -- a cask's backing. `host/cb.c` rides that to
    hand a C struct's bytes to love. a cask is bytes by definition.
 2. every port read/write is an `ai_str`. `slurp` of a binary file answers one.
 3. `crew/holo/elf.l` -- `(write-bytes path bs)` was `(say q (string bs))`, so every
@@ -78,7 +78,7 @@ half. the enabling hole was that the only BULK byte path in the system ran throu
 a string: `(string <charlist>)` had a C lane, `(cask ...)` took a count only, and
 filling a cask by `pin` per byte measured 20x slower (20 ms per 200 KB -- ~200 ms
 on a real link). so `cask` grew the charlist lane its sibling already had
-(`lvm_bufnew`), and the two whole-binary writers say a cask:
+(`lvm_casknew`), and the two whole-binary writers say a cask:
 `crew/holo/elf.l`'s `write-bytes` and `crew/holo/link.l`'s `ld-write` -- the second
 one carries the linker's output and does NOT go through `write-bytes`, so a grep
 for that name alone misses it. the new lane also retired two hand-rolled pin-fill

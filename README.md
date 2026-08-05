@@ -46,8 +46,9 @@ compiles with it):
 - at two: `+ - * / % = < <= > >= | &`
 - at three: `?` (the cond form infix: `(t ? a b)`)
 - aliases: `<-` pin, `->` peep (the collection accessors: `(t <- k v)`, `(t -> k d)`)
-- factorization is greedy, longest prefix first: `!=` is `!` of `=`, `!!`
-  double-negates, and a token that doesn't factor stays one symbol (`&&`, `>>=`)
+- a glued run factors greedily, longest prefix first: `!!` double-negates, `<>`
+  is `cap` of `cup`; spaced, a token that doesn't factor stays one symbol
+  (`!=`, `&&`, `>>=`)
 
 and the valence law: every operator is two operators -- GLUED IS MONADIC,
 SPACED IS DYADIC -- and this holds everywhere, head position included, so

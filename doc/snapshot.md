@@ -28,7 +28,7 @@ rewritten so it can be re-based and re-linked in a fresh process:
 
 - **Internal heap pointers** → stored as OFFSETS into the blob (re-based to `image_base+offset` on
   load). ASLR-safe: nothing absolute is stored.
-- **C `lvm_*` pointers** (the aps/hots/nifs — `lvm_chain`, `lvm_flo`, every nif entry, the C-resolved
+- **C `lvm_*` pointers** (the aps/hots/nifs — `lvm_chain`, `lvm_gembox`, every nif entry, the C-resolved
   hooks num-ap/add/mul/help) → stored as a SYMBOLIC INDEX into a fixed table, re-resolved to the
   current `.text` address on load. The enumeration already exists: the egg `mop` (love/egg.l) walks and
   deletes every `lvm_*` nom — reuse that set as the relocation table.

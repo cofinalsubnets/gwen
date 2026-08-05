@@ -1,5 +1,6 @@
 vgcore.*
 .gdb_history
+.claude/
 /out/
 # proof/rocq/coqc build artifacts (proof/rocq/spec.v is checked by `make test_proof`).
 # proof/rocq/gen.v, proof/rocq/uugen.v, proof/lean/uugen.lean are GENERATED proof artifacts but are now

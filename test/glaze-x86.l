@@ -19,6 +19,14 @@
 ; the glaze is one too, emit.l + auto.l): this stream cat-loads post-boot, so nothing
 ; folded for it -- bind every internal it drives through the accessors, bare-global
 ; reads both (bcat stands in for the glaze's private byte-concat helper).
+; ..and the boundary those accessors stand for: the glaze is a REGISTERED module and NOT ONE
+; of its ~415 names is in the book. this is the assert that catches a leak coming back --
+; a name on the book resolves bare, so nothing else here would ever notice. ⚠ it must run
+; BEFORE the binds below: that form is a body-less top-level `:`, so ITS names land on the
+; book, and half the roster here would answer its own copies.
+(assert (member? 'glaze (from ()))
+        (400 < (tally (from 'glaze 'keys)))
+        (: nm (names ()) (&& (! (member? 'autogroup nm)) (! (member? 'jitir nm)) (! (member? 'glaze nm)))))
 (: assemble (from 'holo 'assemble)
    bcat (\ ps (foldl (\ a b (+ a b)) () ps))
    G (from 'glaze)
@@ -33,12 +41,6 @@
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)
    nif (G 'nif))                                 ; the C install seam, a glaze member: every boot pulls it off the book
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
-; ..and the boundary those accessors stand for: the glaze is a REGISTERED module and NOT ONE
-; of its ~415 names is in the book. this is the assert that catches a leak coming back --
-; a name on the book resolves bare, so nothing else here would ever notice.
-(assert (member? 'glaze (from ()))
-        (400 < (tally (from 'glaze 'keys)))
-        (: nm (names ()) (! (member? 'autogroup nm)) (! (member? 'jitir nm)) (! (member? 'glaze nm))))
 
 (base-ev '(: ev base-ev
 (: (isum n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (* i 7))) a)) 0 0)
@@ -135,8 +137,8 @@
          (lit? fr) ((\ x (+ (* x 1.5) 2.0)) = fr)                         ; applicable + =-IDENTICAL to source
          (= (map ifr '(1 2 3)) (map fr '(1 2 3)))                         ; composes with map, == interp
          (= (ifr (:)) (fr (:)))))                                         ; non-fixnum arg -> fxv deopt -> interp
-  (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'x64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (flo_put's law)
-  ; GC-SAFETY: a native-written box is a normal ai_flo (kind=lvm_flo, 2 words) -> the cheney copier
+  (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'x64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (gem_put's law)
+  ; GC-SAFETY: a native-written box is a normal ai_gem (kind=lvm_gembox, 2 words) -> the cheney copier
   ; traces/moves it like any gem. hold one across a big alloc (forces GC), and box thousands under
   ; pressure -- if the box were malformed or the bump corrupted Sp's region, these would diverge/crash.
   (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
