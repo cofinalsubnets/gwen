@@ -90,7 +90,7 @@ static struct dev *dev_of_fd(intptr_t fd) {
 
 static struct dev *dev_of_port(ai_word x) {
   if ((x & 1) || ((union u*) x)->ap != lvm_port_io) return NULL;
-  return dev_of_fd(getcharm(((struct ai_io*) x)->fd)); }
+  return dev_of_fd(ai_io_fd((struct ai_io*) x)); }
 
 // --- the clock and the waits -----------------------------------------------
 uintptr_t ai_clock(void) {
@@ -108,8 +108,9 @@ void ai_sleep(uintptr_t ms) {
   struct timespec t = { (time_t) (ms / 1000), (long) (ms % 1000) * 1000000L };
   nanosleep(&t, NULL); }
 
-// the readiness law: a NEGATIVE fd is always ready (a synth port waits on
-// nothing external), the console is always ready (end-of-stream IS an answer),
+// the readiness law: a NEGATIVE fd is always ready (ai_io_fd answers -1 for
+// every port with no device behind it, and those wait on nothing external),
+// the console is always ready (end-of-stream IS an answer),
 // and a device is ready when it has bytes or has ended.
 // ⚠ rstall is NOT consulted here, and that is the whole point: `ai_ready` says
 // go and the read says no, which is the one schedule no in-process test could
@@ -128,7 +129,7 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 
 // --- the port vtable -------------------------------------------------------
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  struct dev *d = dev_of_fd(getcharm(g->io->fd));
+  struct dev *d = dev_of_fd(ai_io_fd(g->io));
   if (!d) return -1;                                 // the console never reads
   if (d->rstall) return d->rstall -= 1, 0;           // armed: would-block
   uintptr_t have = d->qlen - d->qpos;
@@ -138,7 +139,7 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   return d->qpos += k, (intptr_t) k; }
 
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  intptr_t fd = getcharm((*fp)->io->fd);
+  intptr_t fd = ai_io_fd((*fp)->io);
   struct dev *d = dev_of_fd(fd);
   if (!d) {
     if (fd == 1 || fd == 2) {
@@ -152,7 +153,7 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
   return d->olen += k, (intptr_t) k; }
 
 static struct ai *fd_flush(struct ai *g) {
-  intptr_t fd = getcharm(g->io->fd);
+  intptr_t fd = ai_io_fd(g->io);
   if (fd == 1) fflush(stdout);
   else if (fd == 2) fflush(stderr);
   return g; }
@@ -160,9 +161,9 @@ static struct ai *fd_flush(struct ai *g) {
 struct ai_port_vt const ai_fd_port_vt =
  { fd_flush, fd_writen, fd_readn, NULL };
 
-struct ai_io ai_stdin  = { lvm_port_io, putcharm(0), putcharm(EOF) };
-struct ai_io ai_stdout = { lvm_port_io, putcharm(1), putcharm(EOF) };
-struct ai_io ai_stderr = { lvm_port_io, putcharm(2), putcharm(EOF) };
+struct ai_fio ai_stdin  = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(0) };
+struct ai_fio ai_stdout = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(1) };
+struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(2) };
 
 // --- the nifs --------------------------------------------------------------
 // ⚠ no scratch on an lvm_ frame (CLAUDE.md, the tail-threaded VM): the bodies

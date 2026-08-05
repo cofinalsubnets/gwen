@@ -225,19 +225,21 @@
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
                                         (link (cap m) (link a (cup m))))) '(())))
-; the port head is three words -- ap, fd, ungetc -- and both languages know it: love.h declares
-; it, these build it. each poke answers the cell it wrote, so `poke -1` walks backwards.
+; the port head is three words -- ap, vt, ungetc -- and both languages know it: love.h declares
+; it, these build it. each poke answers the cell it wrote, so `poke -1` walks backwards. the vt
+; is the port's whole kind, so these stamp the one they mean; C hands the address over as ci-vt
+; and to-vt, the way it hands over lvm_quote, and the egg mops both noms.
 (: (tap cl)
- (poke -1 (peek 0 in) (poke -1 -4 (poke -1 -1 (poke 3 cl (spin 4)))))
+ (poke -1 (peek 0 in) (poke -1 ci-vt (poke -1 -1 (poke 3 cl (spin 4)))))
  (jug _)                                          ; the output dual of `tap`: say INTO it, slurp it back OUT
-  (poke -1 (peek 0 in) (poke -1 -2 (poke -1 -1 (poke -1 "  " (poke 4 0 (spin 5))))))
+  (poke -1 (peek 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "  " (poke 4 0 (spin 5))))))
  ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
  ; does. hot? goes first so the peek only ever lands on a heap cell.
  (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
  ; drain a vessel to a value: a jug reads its backing buffer, a tap drains via see.
  ; the drain accumulates, it does not recurse -- a recursion's stack depth is the byte count, and
  ; on a parking port every task switch copies that stack.
- (slurp o) (? (? (port? o) (= -2 (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug by its fd (-2): a buffered fd port's word 3 is a string too
+ (slurp o) (? (? (port? o) (id? to-vt (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS VT: a buffered fd port's word 3 is a string too
               (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))
                  (string (rev (rl o ())))))
  ; the promise, through a tablet -- the mutation door this tree sanctions. the answer is wrapped

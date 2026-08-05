@@ -47,7 +47,7 @@ static inline int proc_status(int st) {
 // to the syscall, which fails with EBADF -- the honest answer.
 static intptr_t port_fd(ai_word x) {
  if ((x & 1) == 0 && ((union u*) x)->ap == lvm_port_io)
-    return getcharm(((struct ai_io*) x)->fd);
+    return ai_io_fd((struct ai_io*) x);
  return -1; }
 
 // copy a love string into a NUL-terminated C buffer; false on non-string / too long.

@@ -541,7 +541,8 @@ static ai_inline uintptr_t rot(uintptr_t x) {
   int const s = sizeof(uintptr_t) * 4; // shift bits = word bits / 2 = sizeof(word) * 4
   return (x << s) | (x >> s); }
 
-extern struct ai_port_vt const synth[];
+// the four doors that are not a device; spelled out beside their readn/writen
+extern struct ai_port_vt const ai_ti_vt, ai_to_vt, ai_closed_vt, ai_ci_vt;
 
 static ai_inline void *off_pool(struct ai *g) {
  return g == g->pool ? (word*) g->pool + g->len : (word*) g->pool; }
@@ -792,6 +793,10 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"in", (word) &ai_stdin},
    {"out", (word) &ai_stdout},
    {"err", (word) &ai_stderr},
+   // the two doors prel BUILDS (tap and jug), so it can stamp the kind it means;
+   // mopped at birth like every other raw pointer the compiler folds (love/egg.l)
+   {"ci-vt", (word) &ai_ci_vt},
+   {"to-vt", (word) &ai_to_vt},
    // max-charm/min-charm: this build's fixnum bounds, exposed so width-specific
    // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
    {"max-charm", putcharm((ai_word)((uintptr_t)-1 >> 2))},
@@ -2059,7 +2064,7 @@ lvm(lvm_index) {
   // on err and still answer it. missing-specific -- a deliberate scare stays
   // terminal. add_name + ioput* hold no heap operand -> no GC, so Sp/Ip survive.
   struct ai_str *nm = add_name(g, Ip[1].x);
-  if (nm) { struct ai_io *sv = g->io; g->io = &ai_stderr;
+  if (nm) { struct ai_io *sv = g->io; g->io = &ai_stderr.io;
             struct ai *w = ioputs(g, ";; missing ");
             for (uintptr_t i = 0; ai_ok(w) && i < nm->len; i++) w = ioputc(w, nm->bytes[i]);
             if (ai_ok(w)) w = ioputc(w, '\n');
@@ -2942,20 +2947,20 @@ lvm(lvm_saturate) { Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttai
 // io_* family holds it without exception; the lam_* helpers are pure (no io, no
 // alloc) and cannot open an edge.
 static ai_inline bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io; }
-static ai_inline struct ai_port_vt const *port_vt(word fd_tagged) {
- intptr_t fd = getcharm(fd_tagged);
- return fd >= 0 ? &ai_fd_port_vt : &synth[-(fd + 1)]; }
+// THE DESCRIPTOR, and the only way to it: the vt says whether there is one, so a
+// port whose door is not a device answers -1 and no cast is ever taken on faith.
+intptr_t ai_io_fd(struct ai_io const *i) {
+ return i->vt == &ai_fd_port_vt ? getcharm(((struct ai_fio const*) i)->fd) : -1; }
 
 // --- the buffered lanes (generic, above the vt) ---
 // a HEAP fd port is an ai_bio (love.h), dressed lazily; bio_of is the ONE guard
-// (heap AND fd >= 0), and nothing reads past the head without it. zgetc serves
+// (heap AND fd-backed), and nothing reads past the head without it. zgetc serves
 // ungetc -> the pending run -> one readn gulp, and THAT ORDER IS THE PARK LAW: a
 // port holding bytes is readable however quiet its fd is; a dry gulp answers
 // IO_WOULDBLOCK and the caller parks. a read drains pending writes first (the
-// request/response crossover). ⚠ the fd is the TYPE TAG: a synth row answered as
-// a bio would read a chain pointer as a string -- a wild dereference.
+// request/response crossover).
 static ai_inline struct ai_bio *bio_of(struct ai *g, struct ai_io *i) {
- return getcharm(i->fd) >= 0 && in_live_pool(ai_core_of(g), (word const*) i)
+ return i->vt == &ai_fd_port_vt && in_live_pool(ai_core_of(g), (word const*) i)
       ? (struct ai_bio*) i : NULL; }
 static ai_inline bool bio_rpending(struct ai_bio *b) {
  return b && b->rbuf && !(b->rbuf & 1) && getcharm(b->rpos) < getcharm(b->rlen); }
@@ -2964,7 +2969,7 @@ static ai_inline bool bio_wpending(struct ai_bio *b) {
 // the scheduler's half of the park law above, declared up by find_runnable.
 static ai_inline bool wait_buffered(struct ai *g, lvm_t *ap, word x, int fd) {
  return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
-     && getcharm(((struct ai_io*) x)->fd) == fd
+     && ai_io_fd((struct ai_io*) x) == fd
      && bio_rpending(bio_of(g, (struct ai_io*) x)); }
 // the write run outgrew its backing: double it, pending bytes and all (only
 // reachable when a device took less than the whole run)
@@ -2984,7 +2989,7 @@ static struct ai *bio_wgrow(struct ai *g) {
 // drain carries it (zeroing wlen up front once dropped the tail on a mid-buffer EPIPE)
 static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
  if (!ai_ok(g) || !bio_wpending(bio_of(g, i))) return g;
- struct ai_port_vt const *vt = port_vt(i->fd);
+ struct ai_port_vt const *vt = i->vt;
  if (!vt->writen) return g;                     // no write door: the run waits for one
  for (;;) {
   struct ai_bio *b = (struct ai_bio*) i;
@@ -3011,7 +3016,7 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
 static struct ai *io_refill(struct ai *g) {
  struct ai *fc = ai_core_of(g);
  struct ai_bio *b = bio_of(g, fc->io);
- struct ai_port_vt const *vt = port_vt(fc->io->fd);
+ struct ai_port_vt const *vt = fc->io->vt;
  if (!vt->readn) return fc->b = EOF, g;
  if (!b) {                                       // no buffer: the same lane at n = 1
   unsigned char c;
@@ -3067,7 +3072,7 @@ static struct ai *zputc(struct ai*g, int c) {
  if (!ai_ok(g)) return g;
  struct ai *fc = ai_core_of(g);
  struct ai_bio *b = bio_of(g, fc->io);
- struct ai_port_vt const *vt = port_vt(fc->io->fd);
+ struct ai_port_vt const *vt = fc->io->vt;
  if (!vt->writen) return g;                      // no write door: the byte goes nowhere
  if (!b) {                                       // no buffer: the same lane at n = 1.
   unsigned char x = (unsigned char) c;           // ⚠ src is a C LOCAL, so a sink that
@@ -3094,7 +3099,7 @@ static struct ai *zputc(struct ai*g, int c) {
 static struct ai *zflush(struct ai*g) {
  if (!ai_ok(g)) return g;
  g = io_wdrain(g, ai_core_of(g)->io);
- return ai_ok(g) ? port_vt(ai_core_of(g)->io->fd)->flush(g) : g; }
+ return ai_ok(g) ? ai_core_of(g)->io->vt->flush(g) : g; }
 // the exported faces (love.h): a host nif consults/drains the read run without
 // knowing the bio shape -- swig's first course rides these.
 uintptr_t ai_io_pending(struct ai *g, struct ai_io *i) {
@@ -3117,7 +3122,7 @@ uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, ui
 // minted, which is the whole point -- no over-allocate, no trim.
 ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
  uintptr_t u = getcharm(i->ungetc_buf) != EOF ? 1 : 0;
- struct ai_port_vt const *vt = port_vt(i->fd);
+ struct ai_port_vt const *vt = i->vt;
  g->io = i;                                   // athand reads it, as readn does
  uintptr_t n = u + (bio_of(g, i) ? ai_io_pending(g, i)
                     : vt->athand ? vt->athand(g, ai_iobuf) : 0);
@@ -3213,15 +3218,11 @@ static intptr_t to_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  gen_wb(g, (word) o, (word) nb);   // a tenured string-sink takes a fresh young backing -> remember it
  g->sp++;
  return 0; }
-struct ai_port_vt const synth[] = {
- /* fd = -1, ti: read-only C-string source -- the baked library's door (lvm_lib) */
- { noop_flush, NULL,      ti_readn, ti_athand },
- /* fd = -2, to: write-only string sink   */
- { to_flush,   to_writen, NULL,     NULL },
- /* fd = -3, closed port (post-close)  */
- { noop_flush, NULL,      NULL,     NULL },
- /* fd = -4, ci: read-only charlist source -- prel's `tap` builds one by poke. */
- { noop_flush, NULL,      ci_readn, ci_athand }, };
+struct ai_port_vt const
+ ai_ti_vt     = { noop_flush, NULL,      ti_readn, ti_athand },  // a C string: the baked library's door (lvm_lib)
+ ai_to_vt     = { to_flush,   to_writen, NULL,     NULL },       // a string sink: prel's `jug`
+ ai_closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
+ ai_ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand };  // a charlist: prel's `tap`
 
 // (fputc port byte) — write byte to port; return byte.
 lvm(lvm_fputc) {
@@ -3265,7 +3266,7 @@ lvm(lvm_fputs) {
   // zputc (its C-local src is the one shape that can grow and land in one breath).
   // ⚠ the direct stroke is only for an EMPTY buffer: going direct past a pending
   // run would overtake it and the stream comes out shuffled.
-  intptr_t (*wn)(struct ai**, unsigned char const*, uintptr_t) = port_vt(g->io->fd)->writen;
+  intptr_t (*wn)(struct ai**, unsigned char const*, uintptr_t) = g->io->vt->writen;
   Pack(g);
   g = io_wdrain(g, (struct ai_io*) g->sp[0]);   // buffered puts land before the bulk stroke
   // ⚠ backpressure: the write run is a buffer, not a queue -- an op that would push
@@ -3304,13 +3305,13 @@ lvm(lvm_fputx) {
 // external form. the `.` reader sigil expands to (dot x).
 lvm(lvm_dot) {
  word x = Sp[0];
- g->io = &ai_stdout;
+ g->io = &ai_stdout.io;
  Pack(g);
  if (strp(x) || caskp(x)) {
   uintptr_t i = 0, l = len(bytes_of(x));
   while (ai_ok(g) && i < l) g = zputc(g, txt(bytes_of(g->sp[0]))[i++]);
   if (ai_ok(g)) g = zflush(g); }
- else g = gfputx(g, &ai_stdout, x);
+ else g = gfputx(g, &ai_stdout.io, x);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  ai_musttail return Next(1); }
@@ -3342,15 +3343,15 @@ static struct ai*ioputn(struct ai *g, intptr_t n, uint8_t b) {
 // exhausted heap. best-effort; gfputx may GC, so the core is re-derived per read.
 void ai_scare_face_(struct ai *g) {
  if (!(g = ai_core_of(g))) return;
- g->io = &ai_stderr;
+ g->io = &ai_stderr.io;
  if (zerop(g->scare_a) && zerop(g->scare_b)) {
   g = ioputs(g, ";; oom@len=");
   if (ai_ok(g)) g = ioputn(g, (intptr_t) ai_core_of(g)->len, 10); }
  else {
   g = ioputs(g, ";; ");
-  if (ai_ok(g)) g = gfputx(g, &ai_stderr, ai_core_of(g)->scare_a);
+  if (ai_ok(g)) g = gfputx(g, &ai_stderr.io, ai_core_of(g)->scare_a);
   if (ai_ok(g)) g = ioputc(g, ' ');
-  if (ai_ok(g)) g = gfputx(g, &ai_stderr, ai_core_of(g)->scare_b); }
+  if (ai_ok(g)) g = gfputx(g, &ai_stderr.io, ai_core_of(g)->scare_b); }
  if (ai_ok(g)) g = ioputc(g, '\n');
  if (ai_ok(g)) zflush(g); }
 
@@ -3855,7 +3856,7 @@ lvm(lvm_fgetc) {
   if (!ai_ok(g = zgetc(g))) return ghelp(g);
   Unpack(g);
   if (g->b == IO_WOULDBLOCK) {          // the refill raced and lost -- park, don't spin
-   g->next_wait_fd = getcharm(((struct ai_io*) Sp[0])->fd);   // re-read: the gc may have moved it
+   g->next_wait_fd = ai_io_fd((struct ai_io*) Sp[0]);   // re-read: the gc may have moved it
    ai_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
  else Sp[0] = putcharm(EOF);
@@ -3866,7 +3867,7 @@ lvm(lvm_fgetc) {
 // (signalfd, timerfd). Ip is unadvanced, so the task re-checks on reschedule.
 lvm(lvm_await) {
  if (iop(Sp[0])) {
-  intptr_t fd = getcharm(((struct ai_io*) Sp[0])->fd);
+  intptr_t fd = ai_io_fd((struct ai_io*) Sp[0]);
   // ⚠ the buffer counts: a port holding bytes is readable however quiet its fd is
   if (fd >= 0 && !bio_rpending(bio_of(g, (struct ai_io*) Sp[0])) && !ai_ready(fd, ai_wait_in)) {
    g->next_wait_fd = fd;
@@ -3887,7 +3888,7 @@ lvm(lvm_fungetc) {
 // already closed or a non-OS fd
 static void io_close(void *p) {
  struct ai_bio *b = p;                         // every finalized port is a bio (ai_io_alloc made it)
- intptr_t fd = getcharm(b->io.fd);
+ intptr_t fd = ai_io_fd(&b->f.io);
  if (fd < 0) return;
  if (b->wbuf && !(b->wbuf & 1) && getcharm(b->wlen) > 0)   // unflushed bytes ride out raw --
   ai_fd_drain((int) fd, txt((struct ai_str*) b->wbuf), (uintptr_t) getcharm(b->wlen));   // from-space is readable here
@@ -3899,9 +3900,10 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
  if (ai_ok(g = ai_have(g, n + Width(struct ai_tag) + Width(struct ai_fz) + 1))) {
   union u *k = bump(g, n + Width(struct ai_tag));
   struct ai_bio *io = (struct ai_bio*) k;
-  io->io.ap = lvm_port_io;
-  io->io.fd = putcharm(fd);
-  io->io.ungetc_buf = putcharm(EOF);
+  io->f.io.ap = lvm_port_io;
+  io->f.io.vt = &ai_fd_port_vt;
+  io->f.io.ungetc_buf = putcharm(EOF);
+  io->f.fd = putcharm(fd);
   io->rbuf = io->wbuf = 0;                     // never dressed (io_refill/zputc dress lazily)
   io->rpos = io->rlen = io->wlen = putcharm(0);
   *--g->sp = (word) tagthread(k, n);            // stack slot reserved by the +1 in have()
@@ -4364,9 +4366,9 @@ __attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {
 // "not ready". ⚠ it asks WILL YOU ANSWER, not IS THERE DATA: a hung-up fd reads
 // ready and the see answers -1. a non-port asks about stdin (the bare (cue? 0)).
 lvm(lvm_key) {
- struct ai_io *i = iop(Sp[0]) ? (struct ai_io*) Sp[0] : &ai_stdin;
+ struct ai_io *i = iop(Sp[0]) ? (struct ai_io*) Sp[0] : &ai_stdin.io;
  Sp[0] = (getcharm(i->ungetc_buf) != EOF || bio_rpending(bio_of(g, i))
-          || ai_ready(getcharm(i->fd), ai_wait_in)) ? putcharm(1) : zero;
+          || ai_ready((int) ai_io_fd(i), ai_wait_in)) ? putcharm(1) : zero;
  Ip += 1;
  ai_musttail return Continue(); }
 
@@ -4958,7 +4960,10 @@ static intptr_t image_fn_resolve(intptr_t j) {
  return image_fn_slot((word const*) def1[j].x); }
 // the out-of-pool IMMORTALS: (), "", the std ports, NULL (a mid-eval dump meets it
 // in an undressed rbuf/wbuf), map_gap appended LAST so existing indices stay stable
-static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap };
+// ⚠ EVERY PORT VTABLE BELONGS HERE: a port's head carries its vt, so an imaged
+// port holds a binary address that only an index survives the trip.
+static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap,
+ (word) &ai_fd_port_vt, (word) &ai_ti_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt };
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
  return -1; }
@@ -5357,7 +5362,7 @@ lvm(lvm_lib) {
   struct ti *p = (struct ti*) Hp;
   Hp += Width(struct ti) + Width(struct ai_tag);
   p->io.ap = lvm_port_io;
-  p->io.fd = putcharm(-1);                      // the synth fd: the ti row
+  p->io.vt = &ai_ti_vt;
   p->io.ungetc_buf = putcharm(EOF);
   p->t = (ai_word) t->src, p->i = putcharm(0);
   tagthread((union u*) p, Width(struct ti));

@@ -240,29 +240,29 @@ struct k_source *k_source_open(int fd) {
 // The NULL-guards keep misuse from crashing (read-from-output-fd reads the end;
 // write-to-input-fd discards).
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  int fd = getcharm(g->io->fd);
+  int fd = (int) ai_io_fd(g->io);
   struct k_source *s = k_source(fd);
   if (!s || !s->readn) return -1;
   return s->readn(fd, dst, n); }
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  int fd = getcharm((*fp)->io->fd);
+  int fd = (int) ai_io_fd((*fp)->io);
   struct k_source *s = k_source(fd);
   if (!s || !s->putc) return (intptr_t) n;
   for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
   return (intptr_t) n; }
 static struct ai *fd_flush(struct ai *g) {
-  int fd = getcharm(g->io->fd);
+  int fd = (int) ai_io_fd(g->io);
   struct k_source *s = k_source(fd);
   if (s && s->flush) s->flush(fd);
   return g; }
 
-struct ai_io ai_stdin = { .ap = lvm_port_io,
-                        .fd = putcharm(0), .ungetc_buf = putcharm(EOF), };
-struct ai_io ai_stdout = { .ap = lvm_port_io,
-                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), };
+struct ai_fio ai_stdin = { { .ap = lvm_port_io,
+                        .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
+struct ai_fio ai_stdout = { { .ap = lvm_port_io,
+                         .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 // No separate error stream; route err to the same fd as out (the console).
-struct ai_io ai_stderr = { .ap = lvm_port_io,
-                         .fd = putcharm(1), .ungetc_buf = putcharm(EOF), };
+struct ai_fio ai_stderr = { { .ap = lvm_port_io,
+                         .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
 
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 

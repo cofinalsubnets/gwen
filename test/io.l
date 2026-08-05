@@ -72,7 +72,7 @@
      _ (close rp)
      (= txt rd)) 1)
 
-  ; --- tap: charlist-backed read-only synth port (fd=-4, ci) ---
+  ; --- tap: charlist-backed read-only port (the ci vt) ---
   ; tap returns a port whose show rendering is a non-empty string.
   (string? (show (tap 0)))
   (< 0 (sat (show (tap 0))))

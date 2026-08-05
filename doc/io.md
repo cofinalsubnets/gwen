@@ -856,8 +856,9 @@ and blanks excluded), and the shape of it was not quite the shape predicted.
   `ti` was the only thing that ever made one, so the C-string port is gone.
   ⚠ the fd = -1 ROW stays, as a hole -- the synth fd is a PROTOCOL number prel
   pokes by hand (`tap` writes -4, `jug` -2), so deleting the row would renumber
-  its neighbours. `ti_ungetc`/`ti_eof` were the charlist lane's too and are
-  renamed `ci_ungetc`/`ci_eof`.
+  its neighbours. (the numbering itself went away on 2026-08-05, below.)
+  `ti_ungetc`/`ti_eof` were the charlist lane's too and are renamed
+  `ci_ungetc`/`ci_eof`.
 * **the boot's cons is invisible in practice.** `p0chars` takes one `Have` for
   the whole run and then walks backwards, so nothing allocates mid-list and the
   cells need no root. the predicted ~424KB peak for prel.h on 64-bit is real and
@@ -1445,7 +1446,7 @@ them somewhere -- so a door may only refuse a port that keeps a **write run**:
 |---|---|---|
 | heap fd port (`open`, `pipe`+`fdopen`, socket, pty master) | yes -- `bio` `wbuf` | nonblocking, may answer short |
 | the three statics (in/out/err) | no -- nothing traces a static | lands what it takes |
-| the `to` string sink (fd -2) | it IS the run | grows, never refuses twice |
+| the `to` string sink (the jug) | it IS the run | grows, never refuses twice |
 | freestanding frontends (kernel, virt, mps2, teensy41, playdate, wasm) | no heap ports at all | per-byte over a UART, bounded by a device that drains |
 
 the statics are the sharp one. `zputc` on a bufferless port has **nowhere to
@@ -2434,3 +2435,38 @@ binding is gone with the pin, and `sound` is the whole of what p1 publishes. a b
 `torn` is an honest `missing` again -- and it is a QUOTE at each site rather than a
 book walk, which is the cheaper of the two anyway. ⚠ `vim/syntax.vim` is generated
 from `(names ())` and went stale on the drop; `make test_tools` is what says so.
+
+### the fd stops being the type -- ✅ 2026-08-05
+
+a port's word 1 held its file descriptor, and that one word did three jobs: the OS
+handle, the type tag, and the index into `synth[]` (`fd >= 0 ? &ai_fd_port_vt :
+&synth[-(fd + 1)]`). it now holds the VTABLE, and nothing else answers what a port
+is. `port_vt` and the `synth` array are gone; the four doors that are not a device
+are named statics beside their own `readn`/`writen`, and the descriptor moved into
+`struct ai_fio`, reachable only through `ai_io_fd` -- which asks the vt first and
+answers -1 for every port with no device behind it.
+
+three things fall out. `bio_of`'s ⚠ retires: it tested `fd >= 0`, so any port whose
+word 1 happened to be non-negative would be read as a buffered one and its word 3 --
+a charlist head -- dereferenced as a string; the test is now `vt == &ai_fd_port_vt`,
+which only love.c ever writes. `close` stops poking a -3 sentinel and hands the port
+`ai_closed_vt`, so the swap IS the close and the finalizer's "is there an fd" is the
+same question everyone else asks. and the frontends stop knowing the layout: eight of
+them reached `->fd` through a cast, and all of them now call `ai_io_fd`.
+
+⚠ **the vtable addresses had to join `image_immortals`.** a port's head now carries a
+binary pointer, and only an index survives a bake; without the five entries an imaged
+port would ride absolute on the base-delta path. the witness is a live `tap` and `jug`
+baked and woken in a fresh process -- the tap still reads its datum, and `slurp` still
+tells the jug apart, which it does by comparing `to-vt` with `id?`.
+
+**prel keeps building `tap` and `jug`.** the poke door survives because C hands the
+two addresses over as book globals (`ci-vt`, `to-vt`) exactly the way it hands over
+`lvm_quote`, and `love/egg.l` mops both noms at birth. that was the whole question
+the rung turned on: the first read said a vtable pointer is not a love value, so
+`tap`/`jug` would have to move into C -- +15 lines of love.c against -5 of prel, and
+language moving the wrong way. the `lvm_*` precedent is what made it free.
+
+net **+17 lines** across 18 code files -- +4 of code and +13 of comment, the
+comments being the two contracts the shape now rests on (the vt is the license to
+read an fd; every vtable belongs in `image_immortals`).

@@ -129,6 +129,8 @@ struct ai_nom {
  uintptr_t code;
  uintptr_t dig; };
 
+struct ai_port_vt;   // the port's kind, in its head; spelled out below
+
 struct ai {
  union u {
   lvm_t *ap;
@@ -221,7 +223,7 @@ struct ai {
     ai_word x;
     struct ai_io {
      lvm_t *ap;
-     ai_word fd;
+     struct ai_port_vt const *vt;   // WHAT KIND OF PORT THIS IS -- the only answer there is
      ai_word ungetc_buf;            // pushed-back byte; putcharm(EOF) = empty
      // ⚠ three words: prel's tap/jug poke this layout by index (love/prel.l) --
      // a word added here is a renumbering there
@@ -291,20 +293,28 @@ lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_cask,
 // unadvanced, `return Ap(lvm_yield_sw, g)` -- the op re-runs on reschedule.
       lvm_yield_sw;
 
-// vtable for ports backed by real OS fds (fd >= 0); synthetic ports (fd <= -1)
-// route through the shared synth table in love.c
+// the vtable every port backed by a real OS fd wears; the frontend defines it,
+// and its ADDRESS is what says "there is an fd behind this one" (ai_io_fd).
 extern struct ai_port_vt const ai_fd_port_vt;
+// what a closed port wears: every door a no-op, and no fd behind it. a frontend
+// owning `close` swaps this in -- that swap IS the close, there is no other mark.
+extern struct ai_port_vt const ai_closed_vt;
 
 // close an OS fd backing a heap port; weak no-op default, the host overrides
 // with close(2). called by ai_io_alloc's finalizer.
 void ai_fd_close(int fd);
 
-// THE BUFFERED PORT: the plain ai_io head plus both buffer lanes, PRIVATE to the
-// generic dispatch (prel's tap/jug poke the bare shape; static ports stay bare --
-// nothing traces a static). rbuf/wbuf hold an ai_str backing or 0; [rpos,rlen)
-// bounds the pending read run, wlen the filled write prefix. GC walks the
-// extension words as ordinary thread words.
-struct ai_bio { struct ai_io io; ai_word rbuf, rpos, rlen, wbuf, wlen; };
+// THE FD PORT: the head plus the descriptor. ⚠ the vt IS THE LICENSE to read it --
+// nothing casts here without ai_io_fd, which answers -1 for every port whose door
+// is not a device (a tap, a jug, a closed port: all real ports, none with an fd).
+struct ai_fio { struct ai_io io; ai_word fd; };
+intptr_t ai_io_fd(struct ai_io const*);
+// THE BUFFERED PORT: the fd port plus both buffer lanes, PRIVATE to the generic
+// dispatch (prel's tap/jug poke the bare shape; static ports stay bare -- nothing
+// traces a static). rbuf/wbuf hold an ai_str backing or 0; [rpos,rlen) bounds the
+// pending read run, wlen the filled write prefix. GC walks the extension words as
+// ordinary thread words.
+struct ai_bio { struct ai_fio f; ai_word rbuf, rpos, rlen, wbuf, wlen; };
 // the two faces host nifs need (guards inside; both 0/no-op on a bare port):
 // pending = bytes waiting in the read buffer; drain pops up to n of them into dst
 uintptr_t ai_io_pending(struct ai*, struct ai_io*);
@@ -346,7 +356,7 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*,
 // the stashed condition data; the bare oom prints ";; oom@len=N\n".
 void ai_scare_face_(struct ai*);
 
-extern struct ai_io ai_stdin, ai_stdout, ai_stderr;
+extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 
 // the boot driver: ai_egg_(g, egg, p1, corpus) applies love/egg.l to the quoted
 // corpus -- compile the compiler with c0, recompile the corpus through itself,

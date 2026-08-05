@@ -279,7 +279,7 @@ static lvm(lvm_swig) {
  if (!(p & 1) && ((union u*) p)->ap == lvm_port_io
       && !(x & 1) && ((union u*) x)->ap == lvm_cask) {
   struct ai_io *io = (struct ai_io*) p;
-  intptr_t fd = getcharm(io->fd);
+  intptr_t fd = ai_io_fd(io);
   struct ai_str *s = ((struct ai_cask*) x)->str;
     // the port's OWN pending run comes first: a buffered see may have gulped
     // ahead of us, and reading the fd past it would scramble the byte order

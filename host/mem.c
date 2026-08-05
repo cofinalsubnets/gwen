@@ -43,7 +43,7 @@ static struct ai_str *cask_bytes(ai_word x) {
 // an fd charm, or an open port's fd -- the device rides either way
 static intptr_t any_fd(ai_word x) {
  if (x & 1) return getcharm(x);
- if (((union u*) x)->ap == lvm_port_io) return getcharm(((struct ai_io*) x)->fd);
+ if (((union u*) x)->ap == lvm_port_io) return ai_io_fd((struct ai_io*) x);
  return -1; }
 
 static lvm(lvm_ioctl) {

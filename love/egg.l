@@ -23,7 +23,7 @@
    ; closure-private there, off the book from birth on every lane.
    ; boxfix emits the VALUE, so the nom dying here costs it nothing -- and a user
    ; asking "is k here?" has peep, which answers it totally against a fresh (mint 0).
-   _ (each '(cellread seal-hook books setbooks mods lib enter leave gv trim peek poke seek spin yield macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics seqx sortsplit lidx ldel packp _)
+   _ (each '(cellread seal-hook books setbooks mods lib enter leave gv trim peek poke seek spin yield ci-vt to-vt macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics seqx sortsplit lidx ldel packp _)
       (\ k (pull book k 0)))
    (each (keys book)
     (\ k (? (nom? k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))

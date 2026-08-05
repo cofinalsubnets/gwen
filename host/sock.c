@@ -44,7 +44,7 @@
 // -3 sentinel; we hand that straight back and the syscall answers EBADF.
 static intptr_t port_fd(ai_word x) {
  if ((x & 1) == 0 && ((union u*) x)->ap == lvm_port_io)
-    return getcharm(((struct ai_io*) x)->fd);
+    return ai_io_fd((struct ai_io*) x);
  return -1; }
 
 // a cask's (or string's) backing bytes, or 0 -- the wl lanes take either.

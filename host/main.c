@@ -96,7 +96,7 @@ static noreturn void console_hangup(void) {
  _exit(128 + SIGPIPE); }               // unreached unless someone caught it
 
 static struct ai *fd_flush(struct ai *g) {
- if (g->io == &ai_stdout && fflush(stdout) && errno == EPIPE) console_hangup();
+ if (g->io == &ai_stdout.io && fflush(stdout) && errno == EPIPE) console_hangup();
  return g; }
 
 // land every byte, waiting on the device as long as it takes. Answers how many
@@ -139,9 +139,9 @@ static uintptr_t fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
 // bottleneck, and every OTHER fd is a heap port that gulps 4096 at a time.
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
  struct ai_io *io = (*fp)->io;
- intptr_t fd = getcharm(io->fd);
- if (io == &ai_stdout || io == &ai_stdin || io == &ai_stderr) {
-  uintptr_t k = io == &ai_stdout ? fwrite(src, 1, n, stdout)
+ intptr_t fd = ai_io_fd(io);
+ if (io == &ai_stdout.io || io == &ai_stdin.io || io == &ai_stderr.io) {
+  uintptr_t k = io == &ai_stdout.io ? fwrite(src, 1, n, stdout)
                                  : fd_write_all((int) fd, src, n);
   if (k < n && errno == EPIPE) console_hangup();
   return (intptr_t) k; }
@@ -153,7 +153,7 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  return k > 0 ? (intptr_t) k
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }   // busy vs gone
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
- intptr_t fd = getcharm(g->io->fd);
+ intptr_t fd = ai_io_fd(g->io);
  int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
  if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
  ssize_t k = read((int) fd, dst, n);
@@ -165,9 +165,9 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 struct ai_port_vt const ai_fd_port_vt =
  { fd_flush, fd_writen, fd_readn, NULL };
 
-struct ai_io ai_stdin = { lvm_port_io, putcharm(STDIN_FILENO), putcharm(EOF) };
-struct ai_io ai_stdout = { lvm_port_io, putcharm(STDOUT_FILENO), putcharm(EOF) };
-struct ai_io ai_stderr = { lvm_port_io, putcharm(STDERR_FILENO), putcharm(EOF) };
+struct ai_fio ai_stdin = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDIN_FILENO) };
+struct ai_fio ai_stdout = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDOUT_FILENO) };
+struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDERR_FILENO) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that ai_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live
@@ -221,15 +221,15 @@ static lvm(lvm_open) {
   Ip += 1;
   ai_musttail return Continue(); }
 
-// (close p) — close a port, mark its fd as the closed-sentinel (-3) so
-// subsequent reads/writes/flush go to the noop slot, and the finalizer
-// (which checks fd >= 0) skips. Returns (). No-op on misuse, matching
-// the existing fputc/etc. convention.
+// (close p) — close a port and HAND IT THE CLOSED VT, so every later read,
+// write and flush finds the door that does nothing and the finalizer, which
+// asks the vt for an fd, skips. Returns (). No-op on misuse, matching the
+// existing fputc/etc. convention.
 static lvm(lvm_close) {
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
   if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == lvm_port_io) {
     struct ai_io *io = (struct ai_io*) Sp[0];
-    intptr_t fd = getcharm(io->fd);
+    intptr_t fd = ai_io_fd(io);
     if (fd >= 0) {
       g->io = io;
       Pack(g);
@@ -245,7 +245,7 @@ static lvm(lvm_close) {
         ai_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
       close(fd);
-      ((struct ai_io*) Sp[0])->fd = putcharm(-3); } }   // ⚠ re-read: wflush may collect
+      ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // ⚠ re-read: wflush may collect
   Sp[0] = ZeroPoint;
   Ip += 1;
   ai_musttail return Continue(); }
