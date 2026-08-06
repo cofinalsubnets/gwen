@@ -9,10 +9,10 @@
 ; entry is the FIRST object's text (the mkefi.l thunk -- ms_abi in, sysv out),
 ; x64 only: UEFI on this machine speaks ms_abi x86-64.
 ;
-; the one address subtlety: ldlay lays text at base+120 (ELF's header rides
-; inside the load image); PE headers live BELOW the first section, so pelink
-; hands ldlay (base - 120) and the first text byte lands exactly at base =
-; ImageBase + 0x1000.
+; the one address subtlety: ldlay reserves a header inside the load image (an
+; ELF's own header rides there); PE headers live BELOW the first section, so
+; pelink asks for a reserve of ZERO and the first text byte lands exactly at
+; base = ImageBase + 0x1000.
 
 (: pe-ibase 65536                        ; the preferred base; .reloc frees the loader from it
    pe-hraw 512                           ; file bytes reserved for every header
@@ -48,7 +48,7 @@
    (pelink srcs out)
     (: objs (map (\ p (ld-read <p <>p 62)) srcs)
        base (+ pe-ibase 4096)
-       lay (ldlay objs (- base 120))
+       lay (ldlay objs base 0)
        end <lay n0 <>lay
        bend (ldlay1 'bss end objs)
        relbox (: t (tablet 0) _ (pin t 0 ()) t)
