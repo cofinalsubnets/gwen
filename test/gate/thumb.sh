@@ -181,10 +181,9 @@ thumb1)
   lane z  test/thumb1/libzn.c test/thumb1/harnesszn.c "" 9  30 "thumb1 composites" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnesszn.c; the MEMORY-return (sret) lane and the position-0 16B r0-r3 quad are the featured shapes"
   # the other direction: read one of the objects just written back through the front
-  # half of OUR linker (link.l's ld-read). every 64-bit link the tree does proves that
-  # reader's ELF64/RELA rows; this is the only thing that proves its ELF32/REL ones.
-  # am.lib.o because it carries no compiler-NAMED section -- ld-lane has no lane for
-  # one until the 32-bit link itself lands, and refuses rather than guessing.
+  # half of OUR linker (link.l's ld-read) and check the symbol and relocation shapes
+  # a whole link would only report in aggregate. test_mps2_t1 binds a v6-M image end
+  # to end; this names what a miss actually is.
   { echo "(use 'holo)"
     cat crew/holo/thumb1.l crew/kore/text.l crew/kore/core.l crew/kore/asbook.l \
         crew/holo/elf.l crew/holo/obj.l crew/holo/link.l test/gate/ld32.l

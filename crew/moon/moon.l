@@ -210,7 +210,10 @@
    ; the noms the LINKER synthesizes rather than any object defining them (holo's
    ; ldres). they are not owed by anybody, and counting them would report the nif
    ; bracket as a missing symbol.
-   ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela")
+   ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"
+             ; ..and the copied region's brackets, which only ldbare32's map knows
+             "__data_start__" "__data_end__" "__data_load__"
+             "__bss_start__" "__bss_end__")
    ; THE LINK CAME UP SHORT. noms that no input object defines and that no runtime
    ; member could add: a misspelled name, a function declared and never defined, or
    ; a `goto` to a label that is not there (gen spells the label main.<lbl> and it
@@ -333,7 +336,7 @@
                                  (filter (\ nm (! (peep dt nm ()))) u) hits)
                        (go rest u2 (picked + hits)))))
              (go mems owed ()))))
-   (cc-link ins dst is ds tgt pie org nostd nsi)
+   (cc-link ins dst is ds tgt pie org dorg nostd nsi)
     (: ars (filter dota? ins)
        srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt nsi)))
                          (doto? f) (: r (uread f)
@@ -348,6 +351,17 @@
        arm? (arm32? tgt)
        _ (? (&& arm? pie) (udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal") 0)
        _ (? (&& arm? (! (charm? org))) (udie 2 "cc: an arm32 link needs -Ttext <addr>") 0)
+       ; the MAP the board's image lays under. -Ttext alone is the ONE-region
+       ; part (mps2's SSRAM, where code and data share a memory): everything at
+       ; org, and the file is the image. -Tdata splits it the way every XIP MCU
+       ; wants -- code and literals run from flash where they are stored, .data
+       ; runs from SRAM but is STORED after them, and the port's startup copies
+       ; it across at boot off __data_load__. a board with a real map (a ROM
+       ; header at a fixed offset, a lane order of its own) writes its own link
+       ; driver over ldbare32 instead, the way port/inle/klink.l does over ldkern.
+       runs (? (charm? dorg) `(`('at org 'text 'rodata 'nifs)
+                               `('copy dorg 'data 'bss))
+              `(`('at org 'text 'rodata 'data 'nifs 'bss)))
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
        all (? arm? srcs
               (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () () () ()))) srcs))
@@ -355,10 +369,10 @@
        ; line NAMED is what the link meant, and the implicit one is the fallback.
        lib (all + (arload all ars tgt))
        set (lib + (rtpull lib tgt nostd))
-       ps (? arm? (ldbare32 tgt org set) (ldlink tgt pie org set))
+       ps (? arm? (ldbare32 tgt runs set) (ldlink tgt pie org set))
        _ (ld-write dst ps)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a .."
+   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -406,25 +420,28 @@
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r (n - 1)))
                 ((go 0 0) + "o"))
-   (flags as c is ds o ins t9 p9 g9 n9 x9)
-    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9 x9)
+   (flags as c is ds o ins t9 p9 g9 n9 x9 d9)
+    (? (! (two? as)) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9 x9 d9)
        (: a <as r >as
-          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9 x9)
-             (a = "-pie") (flags r c is ds o ins t9 1 g9 n9 x9)
-             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9 g9 n9 x9) (udie 2 usage))
-             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9 g9 n9 x9) (udie 2 usage))
-             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9 n9 x9) (udie 2 usage))
-             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9 n9 x9) (udie 2 usage))
-             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r) n9 x9) (udie 2 usage))
-             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9 g9 n9 x9)
-             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9 g9 n9 x9)
-             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9 x9)
+          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9 x9 d9)
+             (a = "-pie") (flags r c is ds o ins t9 1 g9 n9 x9 d9)
+             (a = "-I") (? (two? r) (flags >r c (link <r is) ds o ins t9 p9 g9 n9 x9 d9) (udie 2 usage))
+             (a = "-D") (? (two? r) (flags >r c is (link <r ds) o ins t9 p9 g9 n9 x9 d9) (udie 2 usage))
+             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9 n9 x9 d9) (udie 2 usage))
+             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9 n9 x9 d9) (udie 2 usage))
+             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r) n9 x9 d9) (udie 2 usage))
+             ; -Tdata is the SPLIT: .data runs there and is stored after the code,
+             ; which is what every XIP part needs and what -Ttext alone cannot say.
+             (a = "-Tdata") (? (two? r) (flags >r c is ds o ins t9 p9 g9 n9 x9 (tonum <r)) (udie 2 usage))
+             (glu? a 73) (flags r c (link (snip a 2 (tally a)) is) ds o ins t9 p9 g9 n9 x9 d9)
+             (glu? a 68) (flags r c is (link (snip a 2 (tally a)) ds) o ins t9 p9 g9 n9 x9 d9)
+             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9 x9 d9)
              ; -nostdinc is the INCLUDE half of -nostdlib's word, and it is LOUD
              ; rather than advisory: with the /usr/include tail still on, a header
              ; we simply do not carry resolves to GLIBC's instead, and a
              ; freestanding build quietly taking a hosted declaration is the wrong
              ; artifact wearing a green face. (x9 -- it reaches incload as nsi.)
-             (a = "-nostdinc") (flags r c is ds o ins t9 p9 g9 n9 1)
+             (a = "-nostdinc") (flags r c is ds o ins t9 p9 g9 n9 1 d9)
              ; -ffreestanding is the one member of the -nostd* family that says
              ; something about the LANGUAGE and not just the link: it makes the
              ; implementation freestanding, and __STDC_HOSTED__ is how the
@@ -436,18 +453,18 @@
              ; rest of the family: -nostdlib alone is a hosted program that
              ; simply supplies its own runtime, and test_raw is exactly that.
              (a = "-ffreestanding")
-              (flags r c is (link "__STDC_HOSTED__=0" ds) o ins t9 p9 g9 1 x9)
-             (nostd? a) (flags r c is ds o ins t9 p9 g9 1 x9)
-             (tol? a) (flags r c is ds o ins t9 p9 g9 n9 x9)
+              (flags r c is (link "__STDC_HOSTED__=0" ds) o ins t9 p9 g9 1 x9 d9)
+             (nostd? a) (flags r c is ds o ins t9 p9 g9 1 x9 d9)
+             (tol? a) (flags r c is ds o ins t9 p9 g9 n9 x9 d9)
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)
-             (flags r c is ds o (link a ins) t9 p9 g9 n9 x9))))
+             (flags r c is ds o (link a ins) t9 p9 g9 n9 x9 d9))))
    (moon-main as)
     ; the default target is the ground we stand on: love-arch (the C boot's pin)
     ; names the running binary's arch, so a native mooncc emits native code and
     ; -t stays what it always was, the CROSS flag. unknown grounds keep x64.
     (: ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
-       f (flags as () () () () () ntv () () () ())
-       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8) nsi (el f 9)
+       f (flags as () () () () () ntv () () () () ())
+       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8) nsi (el f 9) dorg (el f 10)
        ; TWO outcomes now, the cc shape: -c lays objects, anything else LINKS.
        ; one .c used to take a third path (cc-exe: elf64 straight off the IR,
        ; no crt0 and no linker) which could not bind a libc -- so `mooncc
@@ -457,7 +474,7 @@
        (? (! (two? ins)) (udie 2 usage)
           o (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
                     (: _ (cc-obj <ins o is ds tgt nsi) (quit 0)))
-               (: _ (cc-link ins o is ds tgt pie org nostd nsi) (quit 0)))
+               (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi) (quit 0)))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
           ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). ⚠ and a
           ; .a is never an OUT: `mooncc a.o libgcc.a` reading as a pair would
@@ -468,12 +485,12 @@
                       (&& (! (dota? <ins)) (&& (! (dota? <>ins))
                            (|| c (&& (! (doto? <ins)) (! (doto? <>ins)))))))))
            (: _ (? c (cc-obj <ins <>ins is ds tgt nsi)
-                     (cc-link `(<ins) <>ins is ds tgt pie org nostd nsi)) (quit 0))
+                     (cc-link `(<ins) <>ins is ds tgt pie org dorg nostd nsi)) (quit 0))
           c (: (go l) (? (! (two? l)) (quit 0)
                          (! (dotc? <l)) (udie 2 ("cc: not a .c input: " + <l))
                          (: _ (cc-obj <l (obase <l) is ds tgt nsi) (go >l)))
                (go ins))
-          (: _ (cc-link ins "a.out" is ds tgt pie org nostd nsi) (quit 0)))))
+          (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi) (quit 0)))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the

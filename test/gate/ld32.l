@@ -2,8 +2,8 @@
 ; holo's linker (ld-read) and check what it found. every link the tree does proves
 ; the 64-bit rows of link.l's field table; this is the only thing that exercises
 ; the 32-bit ones, and unexercised rows rot in silence.
-; ⚠ the object must carry no compiler-NAMED section: ld-lane has no lane for one
-; yet -- that lands with the 32-bit link itself -- and it refuses rather than guess.
+; test_mps2_t1 binds a whole v6-M image through the back half; this names what a
+; miss IS -- the thumb bit on a FUNC symbol, the two kinds, the empty addend slot.
 ; run: cat crew/holo/{thumb1,elf,obj,link}.l + the kore lay, then (ld32-check "<o>").
 (: (ld32-check p)
    (: r (uread p)

@@ -178,7 +178,10 @@
    ;; field and the aux the encoding hides (a movw/movt's Rd) there too, so this takes the
    ;; field's BYTES back and answers the re-encode -- the bit scatter stays in the backend
    ;; that owns it, in one copy, and link.l never learns an instruction format.
-   (refix-with be k bs t s w)  ((peep be 'refix 0) k bs t s w)
+   ;; ⚠ answered by PRESENCE, never by a zero: an unbound slot would be `(0 k ..)`,
+   ;; which is const-1 applied and comes back a plausible number.
+   (refix-with be k bs t s w)
+    (: f (peep be 'refix ()) (? (lit? f) (f k bs t s w) (scare 'holo-no-refix k)))
 
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels -> (items .
    ;; labels), the flat byte/fixup stream and a name->address tablet. ⚠ items accumulate REVERSED

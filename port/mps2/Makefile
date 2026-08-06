@@ -24,7 +24,7 @@ baker_objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
 
 # our own link: -Ttext 0 is the board's origin, -nostdlib says an owed nom is a
 # diagnostic rather than a hunt for a runtime this board would not want.
-mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -nostdlib
+mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact
 # carries a fresh mtime and the next make calls it up to date. this makefile stands
@@ -152,7 +152,7 @@ $(R)/$(o)/main-t1.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 # members are the only foreign objects in the tree's boot images.
 $(R)/$(o)/love-t1.elf: $(t1_objs)
 	@echo LINK	$@
-	@cd $(R) && $(MOONCC) -t thumb1 -Ttext 0 -nostdlib $(t1_objs:$(R)/%=%) $(t1_lg) -o $(o)/love-t1.elf
+	@cd $(R) && $(MOONCC) -t thumb1 -Ttext 0 -Tdata 0x20000000 -nostdlib $(t1_objs:$(R)/%=%) $(t1_lg) -o $(o)/love-t1.elf
 
 clean:
 	rm -rf $(R)/$(o)
