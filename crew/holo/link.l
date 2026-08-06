@@ -81,8 +81,25 @@
    ; the whole thing, so .rodata and .data.rel.ro are data that nothing writes.
    ; ai_nifs is ours and exact -- it is a packed array with a bracket, not a lane.
    (ld-pre nm p) (: n (tally p) (&& ((tally nm) >= n) ((snip nm 0 n) = p)))
-   (ld-lane nm ty)
-    (? (ty = 8) (? (|| (nm = ".bss") (ld-pre nm ".bss.")) 'bss ())
+   ; the lanes the linker knows by name; anything else allocated is a named lane
+   ld-lanes '(text rodata data nifs bss image note boot limreq)
+   ; a COMPILER-NAMED section -- one the list below has no word for -- becomes its
+   ; OWN lane, keyed by the name. keeping a section apart from .text and .data is
+   ; the only reason to name one, so the linker keeps it apart and keeps it whole:
+   ; a lane lays as one contiguous run, which is what a program that brackets or
+   ; scans its own table is counting on.
+   ; ⚠ PROGBITS and NOBITS only. .note.gnu.property is ALLOC and advisory, and the
+   ; one note this image places is named below.
+   (ld-any nm ty fl) (? (&& (member? ty '(1 8)) (0 < (fl & 2))) (intern nm) ())
+   ; and it travels with the known lane its FLAGS name -- executable with text,
+   ; writable with data, neither with rodata, NOBITS with bss. flags, because they
+   ; are what the object actually says; a table a port wants at a FIXED address is
+   ; the link driver's word to say, and nothing readable here can stand in for it.
+   (ld-home lane fl ty)
+    (? (member? lane ld-lanes) lane
+       (ty = 8) 'bss (0 < (fl & 4)) 'text (0 < (fl & 1)) 'data 'rodata)
+   (ld-lane nm ty fl)
+    (? (ty = 8) (? (|| (nm = ".bss") (ld-pre nm ".bss.")) 'bss (ld-any nm ty fl))
        (|| (nm = ".text") (ld-pre nm ".text.")) 'text
        (|| (nm = ".rodata") (ld-pre nm ".rodata.")) 'rodata
        (|| (nm = ".data") (ld-pre nm ".data.")) 'data
@@ -95,7 +112,8 @@
        ; find the 32-bit entry. a hosted object carries none of them.
        (|| (nm = ".boot") (nm = ".boot.text")) 'boot
        (ld-pre nm ".limine_requests") 'limreq
-       (nm = ".note.pvh") 'note ())
+       (nm = ".note.pvh") 'note
+       (ld-any nm ty fl))
 
    ; parse one relocatable object (id names it in scares) -> a tablet
    ;   'id 'src            the name and the raw bytes
@@ -151,14 +169,15 @@
               ; a NOTE the LOADER reads is placed like progbits -- .note.pvh is
               ; how `qemu -kernel` finds the 32-bit entry, so dropping it as
               ; advisory (which every other note is) would strand the kernel.
-              (? (|| (member? ty '(1 8)) (&& (ty = 7) (? (ld-lane nm ty) 1 ())))
+              (? (|| (member? ty '(1 8)) (&& (ty = 7) (? (ld-lane nm ty fl) 1 ())))
                   ; SHT_NOBITS (8) is the bss lane: it OWNS NO FILE BYTES -- its
                   ; sh_offset is a placeholder -- so it carries only size and
                   ; alignment, and the image gives it address space PAST the last
                   ; byte written (p_memsz over p_filesz, the kernel zeroing the
                   ; difference). that is the whole meaning of .bss.
-                  (: lane (ld-lane nm ty)
-                     (? lane (: _ (pin secs i `(lane (? (ty = 8) 0 off) sz (ld-f fs s h 'sh-align)))
+                  (: lane (ld-lane nm ty fl)
+                     (? lane (: _ (pin secs i `(lane (? (ty = 8) 0 off) sz
+                                                (ld-f fs s h 'sh-align) (ld-home lane fl ty)))
                                 _ (pin lanes lane (i >< (peep lanes lane ())))
                                 (class (i + 1) symt rls))
                         (drop? i ty fl nm sz) (class (i + 1) symt rls)
@@ -172,10 +191,20 @@
                  (drop? i ty fl nm sz) (class (i + 1) symt rls)
                  (scare 'link-section nm))))
        cl (class 1 () ())
+       ; the NAMED lanes this object carries, first-seen in HEADER order -- which
+       ; is the order they lay in, and the order the C file wrote them
+       nmd (: (go i acc)
+               (? (shnum <= i) (rev acc)
+                  (: se (peep secs i ())
+                     (go (i + 1) (? !(two? se) acc
+                                    (member? (at se 0) ld-lanes) acc
+                                    (member? (at se 0) acc) acc
+                                    ((at se 0) >< acc)))))
+              (go 1 ()))
+       _ (pin ob 'named nmd)
        ; the lane lists came out reversed (the walk conses); put each back in
        ; header order, so a lane's pieces lay in the order the object wrote them
-       _ (foldl (\ _ l (pin lanes l (rev (peep lanes l ()))))
-                0 '(text rodata data nifs bss image note boot limreq))
+       _ (foldl (\ _ l (pin lanes l (rev (peep lanes l ())))) 0 (ld-lanes + nmd))
        symt <cl
        _ (? (two? symt) 0 (scare 'link-no-symtab id))
        stro (ld-f fs s (sh (at symt 2)) 'sh-off)    ; .strtab offset, via symtab's link
@@ -227,6 +256,26 @@
                           (go (a + (at se 2)) >is)))
           (ldlay1 lane (go cur (peep (peep ob 'lanes 0) lane ())) >os)))
 
+   ; the NAMED lanes of a SET that travel with `home`, deduped, first-seen order
+   ; (object order, then header order) -- the one order layout and emit both walk.
+   (ld-nlanes objs home)
+    (: seen (tablet 0)
+       (nhome ob l) (at (peep (peep ob 'secs 0) <(peep (peep ob 'lanes 0) l ()) ()) 4)
+       (go os acc)
+        (? !(two? os) (rev acc)
+           (: ob <os
+              (go >os (foldl (\ a l (? (0 < (peep seen l 0)) a
+                                       !((nhome ob l) = home) a
+                                       (: _ (pin seen l 1) (l >< a))))
+                             acc (peep ob 'named ())))))
+       (go objs ()))
+   ; lay them, each whole, after the known lane they travel with -> the next address
+   (ldlayn home cur objs)
+    (foldl (\ c l (ldlay1 l c objs)) cur (ld-nlanes objs home))
+   ; and emit them in that SAME order: the bytes and the addresses are one walk
+   (ldemitn cx home objs r)
+    (foldl (\ a l (ldemit cx l <a objs >a)) r (ld-nlanes objs home))
+
    ; how many bytes a lane holds in one object. a lane with a NAME is recorded even
    ; when it is empty (every object carries a zero-size .image), so "does this set
    ; use the lane at all?" has to weigh the bytes, not count the sections.
@@ -241,9 +290,9 @@
    ; so it is laid LAST, past everything written (ldlink, once the -pie table's
    ; size is known). pins the bases; -> (end nifstart).
    (ldlay objs base)
-    (: t1 (ldlay1 'text (base + 120) objs)
-       o1 (ldlay1 'rodata t1 objs)
-       d1 (ldlay1 'data o1 objs)
+    (: t1 (ldlayn 'text (ldlay1 'text (base + 120) objs) objs)
+       o1 (ldlayn 'rodata (ldlay1 'rodata t1 objs) objs)
+       d1 (ldlayn 'data (ldlay1 'data o1 objs) objs)
        n0 (ld-align 16 d1)
        `((ldlay1 'nifs n0 objs) n0))
 
@@ -438,7 +487,9 @@
    ; be a lie. st_size rides through from the object: ours say 0 (holo lays labels,
    ; not extents), and a size-0 symbol is bounded by the next one, which is what
    ; every reader already does for a stripped-but-symboled binary.
-   ; lanesx maps a lane to its section index in the image. -> (bytes strs nlocal)
+   ; lanesx maps a lane to its section index in the image -- by the section's HOME,
+   ; so a symbol in a compiler-named lane is classified as what it travels with
+   ; rather than landing in UNDEF. -> (bytes strs nlocal)
    (ldstab objs glo lanesx)
     (: (one ob acc)
         (: bs (peep ob 'base 0) secs (peep ob 'secs 0) syms (peep ob 'syms 0)
@@ -458,8 +509,8 @@
                          ; own address (glo holds the winner; a global twin would be a lie,
                          ; but an unnamed span makes nm/vmret charge the bytes to whatever
                          ; symbol precedes them)
-                         (&& (0 < bind) !won) (`(nm 0 typ (peep lanesx <se 0) ad (at sy 5)) >< a)
-                         (`(nm bind typ (peep lanesx <se 0) ad (at sy 5)) >< a)))))
+                         (&& (0 < bind) !won) (`(nm 0 typ (peep lanesx (at se 4) 0) ad (at sy 5)) >< a)
+                         (`(nm bind typ (peep lanesx (at se 4) 0) ad (at sy 5)) >< a)))))
            (go 1 acc))
        all (foldl (\ a ob (one ob a)) () objs)
        locs (filter (\ e ((at e 1) = 0)) all)
@@ -503,7 +554,7 @@
        ; .bss last, past every byte the file carries: the segment's p_memsz runs
        ; out to `bend` where its p_filesz stops at r1, and the kernel hands over
        ; the difference already zeroed -- which is the whole meaning of .bss.
-       bend (ldlay1 'bss r1 objs)
+       bend (ldlayn 'bss (ldlay1 'bss r1 objs) objs)
        ; .image last of all -- past .bss, on a page, so `love --bake` can GROW it at
        ; the tail of the file (host/image.c: the section that ENDS the segment is the
        ; one that can grow without moving anything). It owns file bytes where .bss does
@@ -527,9 +578,9 @@
               (? (two? e) <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
        cx `(glo n0 end r0 r1 relbox rv)
-       et (ldemit cx 'text (base + 120) objs ())
-       eo (ldemit cx 'rodata <et objs >et)
-       ed (ldemit cx 'data <eo objs >eo)
+       et (ldemitn cx 'text objs (ldemit cx 'text (base + 120) objs ()))
+       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata <et objs >et))
+       ed (ldemitn cx 'data objs (ldemit cx 'data <eo objs >eo))
        en (ldemit cx 'nifs <ed objs >ed)
        tail (? (<en < r0) `((ld-zeros (r0 - <en))) ())      ; nif tail + table alignment in one pad
        rtab (? pie (catall (map (\ o (le64 o)) (rev (peep relbox 0 ())))) ())
@@ -595,12 +646,12 @@
        ne (ldlay1 'note vbase objs)                 ; the note first, at vbase
        b0 (ld-align 4096 ne)  b1 (ldlay1 'boot b0 objs)
        q0 (ld-align 4096 b1)  q1 (ldlay1 'limreq q0 objs)
-       t0 (ld-align 4096 q1)  t1 (ldlay1 'text t0 objs)
-       o0 (ld-align 4096 t1)  o1 (ldlay1 'rodata o0 objs)
-       d0 (ld-align 4096 o1)  d1 (ldlay1 'data d0 objs)
+       t0 (ld-align 4096 q1)  t1 (ldlayn 'text (ldlay1 'text t0 objs) objs)
+       o0 (ld-align 4096 t1)  o1 (ldlayn 'rodata (ldlay1 'rodata o0 objs) objs)
+       d0 (ld-align 4096 o1)  d1 (ldlayn 'data (ldlay1 'data d0 objs) objs)
        n0 (ld-align 16 d1)    n1 (ldlay1 'nifs n0 objs)
        i1 (ldlay1 'image n1 objs)
-       kend (ldlay1 'bss i1 objs)                   ; .bss owns address space, no file bytes
+       kend (ldlayn 'bss (ldlay1 'bss i1 objs) objs)  ; .bss owns address space, no file bytes
        ; p_offset mirrors the address space ONE PAGE IN -- the first page holds
        ; the ELF header, the program headers and the note -- so every p_offset
        ; stays congruent to its p_vaddr modulo the page size, which is what a
@@ -625,9 +676,9 @@
        en (ldemit cx 'note vbase objs ())
        eb (ldemit cx 'boot b0 objs (gap vbase b0))  ; the file resumes at vbase (offset 4096)
        eq (ldemit cx 'limreq q0 objs (>eb + (gap <eb q0)))
-       et (ldemit cx 'text t0 objs (>eq + (gap <eq t0)))
-       eo (ldemit cx 'rodata o0 objs (>et + (gap <et o0)))
-       ed (ldemit cx 'data d0 objs (>eo + (gap <eo d0)))
+       et (ldemitn cx 'text objs (ldemit cx 'text t0 objs (>eq + (gap <eq t0))))
+       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + (gap <et o0))))
+       ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs (>eo + (gap <eo d0))))
        ef (ldemit cx 'nifs n0 objs (>ed + (gap <ed n0)))
        eg (ldemit cx 'image n1 objs (>ef + (gap <ef n1)))
        fsz (fo i1)                                  ; the loaded bytes end here

@@ -63,7 +63,11 @@ moonrun "$ho/.cc1.c" "$ho/.cc1" > /dev/null 2>&1 || fail "mooncc compile"
 $cc_g -O0 -o "$ho/.cc1g" "$ho/.cc1.c" && "$ho/.cc1g"; b=$?
 [ $a -eq 42 ] && [ $a -eq $b ] || fail "mooncc vs gcc (ours $a gcc $b)"
 
-printf '// c\nint f() { return 1; }\nint main() { return 7; }\n' > "$ho/.cc2.c"
+cat > "$ho/.cc2.c" <<'EOF'
+// c
+int f() { return 1; }
+int main() { return 7; }
+EOF
 moonrun "$ho/.cc2.c" "$ho/.cc2" > /dev/null 2>&1 && "$ho/.cc2"; a=$?
 $cc_g -O0 -o "$ho/.cc2g" "$ho/.cc2.c" && "$ho/.cc2g"; b=$?
 [ $a -eq $b ] || fail "mooncc two-fn vs gcc (ours $a gcc $b)"
@@ -85,20 +89,36 @@ moonrun "$ho/.cc3.c" "$ho/.ccx" > /dev/null 2>&1; r=$?
 # a refusal must NAME ITS CAUSE. an undeclared identifier in a static
 # initializer used to print the initializer's whole IR ("CGDATA-BAD .."), which
 # reads as a codegen gap rather than as a typo -- and was read as one.
-printf 'void *r[] = { (void *) nosuchthing, 0 };\nint main(void) { return 0; }\n' > "$ho/.cc4.c"
+cat > "$ho/.cc4.c" <<'EOF'
+void *r[] = { (void *) nosuchthing, 0 };
+int main(void) { return 0; }
+EOF
 moonrun "$ho/.cc4.c" "$ho/.ccx" > "$ho/.cc4.out" 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc undeclared-in-initializer exit (rc $r)"
 grep -q "undeclared 'nosuchthing'" "$ho/.cc4.out" \
   || fail "mooncc undeclared-in-initializer must name it: $(head -1 "$ho/.cc4.out")"
 # ..and the shape it must NOT refuse: a function's address IS a constant
-printf 'int puts(char const*);\nvoid *const r[] = { (void *) puts, 0 };\nint main(void) { return r[0] == 0; }\n' > "$ho/.cc5.c"
+cat > "$ho/.cc5.c" <<'EOF'
+int puts(char const*);
+void *const r[] = { (void *) puts, 0 };
+int main(void) { return r[0] == 0; }
+EOF
 moonrun "$ho/.cc5.c" "$ho/.cc5" > /dev/null 2>&1 || fail "mooncc fn address in a static initializer"
 "$ho/.cc5"; r=$?
 [ $r -eq 0 ] || fail "mooncc fn address in a static initializer ran wrong (rc $r)"
 
 # -------------------------------------------- -c objects, linked by the system ld
-printf 'int vals[3] = {10,20,12};\nchar *tag = "x";\nint pick(int i){return vals[i];}\n' > "$ho/.olib.c"
-printf 'extern int vals[];\nint pick(int i);\nint ext_add(int a,int b);\nint main(){return pick(0)+vals[2]+ext_add(15,5);}\n' > "$ho/.omain.c"
+cat > "$ho/.olib.c" <<'EOF'
+int vals[3] = {10,20,12};
+char *tag = "x";
+int pick(int i){return vals[i];}
+EOF
+cat > "$ho/.omain.c" <<'EOF'
+extern int vals[];
+int pick(int i);
+int ext_add(int a,int b);
+int main(){return pick(0)+vals[2]+ext_add(15,5);}
+EOF
 printf 'int ext_add(int a,int b){return a+b;}\n' > "$ho/.oext.c"
 moonrun -c "$ho/.olib.c"  "$ho/.olib.o"  > /dev/null 2>&1 || fail "mooncc -c lib"
 moonrun -c "$ho/.omain.c" "$ho/.omain.o" > /dev/null 2>&1 || fail "mooncc -c main"
@@ -110,7 +130,10 @@ $cc_g -O0 -o "$ho/.oexeg" "$ho/.omain.c" "$ho/.olib.c" "$ho/.oext.c" && "$ho/.oe
 [ $a -eq 42 ] && [ $a -eq $b ] || fail "mooncc -c link+run (ours $a gcc $b)"
 
 # --------------------------------------------------------------- -I / -D / -o
-printf '#include <ans.h>\nint main() { return ANS + BONUS; }\n' > "$ho/.flg.c"
+cat > "$ho/.flg.c" <<'EOF'
+#include <ans.h>
+int main() { return ANS + BONUS; }
+EOF
 mkdir -p "$ho/.flginc" && printf '#define ANS 30\n' > "$ho/.flginc/ans.h"
 moonrun -I "$ho/.flginc" -D BONUS=12 -o "$ho/.flg" "$ho/.flg.c" > /dev/null 2>&1 \
   || fail "mooncc -I/-D/-o"
@@ -144,7 +167,10 @@ moon0 -o "$ho/.casm0" "$ho/.casm1.c" > /dev/null 2>&1 || fail "mooncc0 asm compi
 [ $a -eq 42 ] || fail "mooncc0 inline asm (got $a want 42)"
 
 # ------------------------------------------------------------- multi-input -c
-printf 'int f();\nint main() { return f() + 2; }\n' > "$ho/.mi1.c"
+cat > "$ho/.mi1.c" <<'EOF'
+int f();
+int main() { return f() + 2; }
+EOF
 printf 'int f() { return 40; }\n' > "$ho/.mi2.c"
 # -c with several inputs writes each .o beside its source, so it runs IN $ho
 mabs="$PWD/$ho"
@@ -157,8 +183,14 @@ $cc_g -no-pie -o "$ho/.mi" "$ho/.mi1.o" "$ho/.mi2.o" > /dev/null 2>&1 \
 [ $a -eq 42 ] || fail "mooncc multi-input run (got $a want 42)"
 
 # ------------------------------------- SysV varargs, called ACROSS toolchains
-printf '#include <stdarg.h>\nint isum(int n,...){va_list ap;va_start(ap,n);long s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}\n' > "$ho/.valib.c"
-printf 'int isum(int n,...);\nint main(){return isum(4,10,11,12,9);}\n' > "$ho/.vamain.c"
+cat > "$ho/.valib.c" <<'EOF'
+#include <stdarg.h>
+int isum(int n,...){va_list ap;va_start(ap,n);long s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}
+EOF
+cat > "$ho/.vamain.c" <<'EOF'
+int isum(int n,...);
+int main(){return isum(4,10,11,12,9);}
+EOF
 moonrun -c "$ho/.valib.c" "$ho/.valib.o" > /dev/null 2>&1 || fail "mooncc -c variadic"
 $cc_g -O0 -c -o "$ho/.vamain.o" "$ho/.vamain.c"
 $cc_g -no-pie -o "$ho/.vaexe" "$ho/.vamain.o" "$ho/.valib.o" > /dev/null 2>&1 \
@@ -167,7 +199,10 @@ $cc_g -no-pie -o "$ho/.vaexe" "$ho/.vamain.o" "$ho/.valib.o" > /dev/null 2>&1 \
 [ $a -eq 42 ] || fail "cc-variadic <- gcc-caller (SysV va ABI, got $a want 42)"
 
 # ------------------------------------------------------------- weak overriding
-printf '__attribute__((weak)) int wpick(void){return 7;}\nint main(){return wpick() + 30;}\n' > "$ho/.wklib.c"
+cat > "$ho/.wklib.c" <<'EOF'
+__attribute__((weak)) int wpick(void){return 7;}
+int main(){return wpick() + 30;}
+EOF
 printf 'int wpick(void){return 12;}\n' > "$ho/.wkstr.c"
 moonrun -c "$ho/.wklib.c" "$ho/.wklib.o" > /dev/null 2>&1 || fail "mooncc -c weak"
 $cc_g -no-pie -o "$ho/.wkdef" "$ho/.wklib.o" > /dev/null 2>&1 && "$ho/.wkdef"; a=$?
@@ -178,7 +213,10 @@ $cc_g -no-pie -o "$ho/.wkovr" "$ho/.wklib.o" "$ho/.wkstr.o" > /dev/null 2>&1 && 
 
 # ------------------------------------------- callee-saved rbx across a cc call
 printf 'long bump(long x){long r;__builtin_add_overflow(x,1,&r);return r;}\n' > "$ho/.rblib.c"
-printf 'long bump(long);\nint main(void){volatile long a=0;long s=a;for(int i=42;i--;)s=bump(s);return (int)s;}\n' > "$ho/.rbmain.c"
+cat > "$ho/.rbmain.c" <<'EOF'
+long bump(long);
+int main(void){volatile long a=0;long s=a;for(int i=42;i--;)s=bump(s);return (int)s;}
+EOF
 moonrun -c "$ho/.rblib.c" "$ho/.rblib.o" > /dev/null 2>&1 || fail "mooncc -c rbx-callee"
 $cc_g -O2 -c -o "$ho/.rbmain.o" "$ho/.rbmain.c"
 $cc_g -no-pie -o "$ho/.rbexe" "$ho/.rbmain.o" "$ho/.rblib.o" > /dev/null 2>&1 || fail "ld rbx interop"
@@ -186,7 +224,14 @@ $cc_g -no-pie -o "$ho/.rbexe" "$ho/.rbmain.o" "$ho/.rblib.o" > /dev/null 2>&1 ||
 [ $a -eq 42 ] || fail "callee-saved rbx across cc call (-O2 caller loop bound, got $a want 42)"
 
 # ------------------------------------------------------- guaranteed sibcalls
-printf 'static long cd(long n,long a){if(n==0)return a;return cd(n-1,a+1);}\nstatic long tb(long n);\nstatic long ta(long n){if(n==0)return 21;return tb(n-1);}\nstatic long tb(long n){if(n==0)return 22;return ta(n-1);}\nstatic long dp(long(*f)(long,long),long n){return f(n,0);}\nint main(void){long a=cd(50000000,0)/2500000;long b=ta(30000000);long c=dp(cd,1000000)/1000000;return (int)(a+b+c);}\n' > "$ho/.sib.c"
+cat > "$ho/.sib.c" <<'EOF'
+static long cd(long n,long a){if(n==0)return a;return cd(n-1,a+1);}
+static long tb(long n);
+static long ta(long n){if(n==0)return 21;return tb(n-1);}
+static long tb(long n){if(n==0)return 22;return ta(n-1);}
+static long dp(long(*f)(long,long),long n){return f(n,0);}
+int main(void){long a=cd(50000000,0)/2500000;long b=ta(30000000);long c=dp(cd,1000000)/1000000;return (int)(a+b+c);}
+EOF
 moonrun "$ho/.sib.c" "$ho/.sibx" > /dev/null 2>&1 || fail "mooncc sibcall"
 "$ho/.sibx"; a=$?
 [ $a -eq 42 ] \
@@ -218,15 +263,70 @@ moonrun "$ho/.wklib.o" "$ho/.wkstr2.o" -o "$ho/.lnk4" > /dev/null 2>&1 && "$ho/.
 [ $a -eq 42 ] || fail "mooncc-link weak override (got $a want 42)"
 
 # the ai_nifs bracket: two TUs packed into one section, __start_/__stop_ synthesized
-printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e1 = { "a", 30 };\n' > "$ho/.nf1.c"
-printf 'typedef struct { char *n; long v; } ent;\n__attribute__((section("ai_nifs"))) ent e2 = { "b", 12 };\nextern ent __start_ai_nifs[];\nextern ent __stop_ai_nifs[];\nint main(){ long s=0; for (ent *p=__start_ai_nifs; p<__stop_ai_nifs; p++) s+=p->v; return (int)s; }\n' > "$ho/.nf2.c"
+cat > "$ho/.nf1.c" <<'EOF'
+typedef struct { char *n; long v; } ent;
+__attribute__((section("ai_nifs"))) ent e1 = { "a", 30 };
+EOF
+cat > "$ho/.nf2.c" <<'EOF'
+typedef struct { char *n; long v; } ent;
+__attribute__((section("ai_nifs"))) ent e2 = { "b", 12 };
+extern ent __start_ai_nifs[];
+extern ent __stop_ai_nifs[];
+int main(){ long s=0; for (ent *p=__start_ai_nifs; p<__stop_ai_nifs; p++) s+=p->v; return (int)s; }
+EOF
 moonrun "$ho/.nf2.c" "$ho/.nf1.c" -o "$ho/.lnk5" > /dev/null 2>&1 || fail "mooncc link ai_nifs"
 "$ho/.lnk5"; a=$?
 [ $a -eq 42 ] || fail "ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $a want 42)"
 
+# a COMPILER-NAMED section -- one the linker has no word for. it becomes its own
+# lane and stays WHOLE: the two TUs' entries land adjacent, in the order given.
+cat > "$ho/.mt1.c" <<'EOF'
+typedef struct { char *n; long v; } ent;
+__attribute__((section("mytab"))) ent e1 = { "a", 30 };
+EOF
+cat > "$ho/.mt2.c" <<'EOF'
+typedef struct { char *n; long v; } ent;
+__attribute__((section("mytab"))) ent e2 = { "b", 12 };
+extern ent e1;
+int main(){ long d=(char*)&e2-(char*)&e1; if (d!=(long)sizeof(ent) && d!=-(long)sizeof(ent)) return 1; return (int)(e1.v+e2.v); }
+EOF
+moonrun "$ho/.mt2.c" "$ho/.mt1.c" -o "$ho/.lnk6" > /dev/null 2>&1 || fail "mooncc link a named section"
+"$ho/.lnk6"; a=$?
+[ $a -eq 42 ] || fail "named-section lane (two TUs, contiguous, got $a want 42; 1 = the entries were not adjacent)"
+
+# ..and which known lane it travels with is its FLAGS, so all three homes need a
+# gcc TU to say them: mooncc marks every named section writable (it cannot know a
+# table is const), which only ever exercises the data home.
+cat > "$ho/.hm1.c" <<'EOF'
+const long __attribute__((section("rotab"))) c1 = 30;
+__attribute__((section("mycode"),noinline)) int f12(int x){ return x + 10; }
+EOF
+cat > "$ho/.hm2.c" <<'EOF'
+extern const long c1;
+int f12(int);
+__attribute__((section("mytab"))) long w1 = 12;
+int main(){ if ((unsigned long)&c1 >= (unsigned long)&w1) return 1; return (int)(c1 + f12(2)); }
+EOF
+$cc_g -O2 -c -o "$ho/.hm1.o" "$ho/.hm1.c" || fail "gcc -c named sections"
+moonrun "$ho/.hm2.c" "$ho/.hm1.o" -o "$ho/.lnk7" > /dev/null 2>&1 || fail "mooncc link named-section homes"
+"$ho/.lnk7"; a=$?
+[ $a -eq 42 ] || fail "named-section homes (AX->text, A->rodata below data, WA->data; got $a want 42; 1 = rodata did not land below data)"
+
 # ------------------------------------------------- a FOREIGN gcc .o, linked whole
-printf 'long bigbuf[4096];\nint zed;\nstatic const char *const nms[]={"zero","one","two"};\nconst long tbl[4]={3,5,7,9};\nlong fill(long n){long i;for(i=0;i<n;i++)bigbuf[i]=i+1;zed=(int)bigbuf[n-1];return bigbuf[0]+bigbuf[n-1];}\nconst char *nm(int i){return nms[i];}\nlong tb(int i){return tbl[i];}\n' > "$ho/.fgn.c"
-printf 'extern long bigbuf[];extern int zed;long fill(long);const char*nm(int);long tb(int);\nstatic int eq(const char*a,const char*b){while(*a&&*a==*b){a++;b++;}return *a==*b;}\nint main(void){if(zed||bigbuf[5]||bigbuf[4095])return 1;if(!eq(nm(1),"one"))return 2;if(tb(3)!=9)return 3;long s=fill(9);return (int)(s+zed+23);}\n' > "$ho/.fgnm.c"
+cat > "$ho/.fgn.c" <<'EOF'
+long bigbuf[4096];
+int zed;
+static const char *const nms[]={"zero","one","two"};
+const long tbl[4]={3,5,7,9};
+long fill(long n){long i;for(i=0;i<n;i++)bigbuf[i]=i+1;zed=(int)bigbuf[n-1];return bigbuf[0]+bigbuf[n-1];}
+const char *nm(int i){return nms[i];}
+long tb(int i){return tbl[i];}
+EOF
+cat > "$ho/.fgnm.c" <<'EOF'
+extern long bigbuf[];extern int zed;long fill(long);const char*nm(int);long tb(int);
+static int eq(const char*a,const char*b){while(*a&&*a==*b){a++;b++;}return *a==*b;}
+int main(void){if(zed||bigbuf[5]||bigbuf[4095])return 1;if(!eq(nm(1),"one"))return 2;if(tb(3)!=9)return 3;long s=fill(9);return (int)(s+zed+23);}
+EOF
 for mode in -fno-pie -fPIE; do
   $cc_g -O0 $mode -c -o "$ho/.fgn.o" "$ho/.fgn.c"
   moonrun "$ho/.fgnm.c" "$ho/.fgn.o" -o "$ho/.fgnx" > /dev/null 2>&1 \
@@ -243,4 +343,4 @@ for s in "T main" "T fill" "B bigbuf" "B zed" "R tbl"; do
     || fail "symtab missing '$s' (nm must classify by the section the symbol lives in)"
 done
 
-echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"
+echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their flag homes, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"
