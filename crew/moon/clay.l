@@ -38,6 +38,8 @@
 ;   (arr t EXPR)                       a symbolic bound -- cparse folds these to numbers,
 ;   (didx EXPR val)                    a GENERATOR wants to say [KCharm], not [2]
 ;   (note "text")                      a comment, authored, never captured
+;   (cpp-def NAME [BODY])              the preprocessor, likewise never captured
+;   (cpp-undef NAME)   (cpp-if ARMS [ELSE])
 ;
 ; a clay term that came out of cparse is therefore a SUBSET term, and the lossy
 ; forms show as the best C the tree can justify: an absent return type prints
@@ -51,6 +53,24 @@
 ; and cpp.l runs first), so notes are AUTHORED in the generator, exactly as
 ; port/inle/mkvec.l carries its narrative in the love that lays the assembly.
 ; doc/clay.md's "comments, in two halves" prices the capture side; it is not built.
+;
+; --- the preprocessor -------------------------------------------------------------
+; emit-only by construction, and more firmly than `note` is: cpp runs BEFORE the lexer,
+; so a directive is gone by the time cparse could see one. love.c is ONE TEXT compiled
+; for many targets and test_fixpoint wants the mooncc rebuild byte-identical, so the
+; architecture conditionals cannot be folded away by generating per seat -- a generator
+; has to emit the `#if` itself. doc/clay.md's rung 2.
+;   (cpp-def NAME [BODY])  NAME a SPELLING, carrying its own parameter list where it has
+;                          one ("countof(_)"), which is what cpp reads. BODY absent is a
+;                          bare `#define` -- presence is the arity, never the value.
+;   (cpp-if ARMS [ELSE])   ARMS is ((cond items)..): the first arm `#if`, the rest
+;                          `#elif`, ELSE the `#else` items. items are TOP-LEVEL forms at
+;                          column 0, so a cpp-if nests inside one as love.h's do.
+; ⚠ a #define's body is TOKENS, not an expression. a spelling rides through verbatim; a
+; clay expression renders at the TIGHTEST context, so anything composite parenthesizes
+; itself -- a macro body cannot see where it is substituted.
+; ⚠ `#ifdef X` is `#if defined(X)`: (call (var "defined") ((var "X"))), no node owed --
+; `defined` wears call syntax in C's own grammar.
 (:
    ; --- the small vocabulary this file stands on ---------------------------------
    ; el/join/sepby/gripe are two lines each, and defining them here is what lets
@@ -92,8 +112,10 @@
     ; since moon's tag namespace holds both (parse.l:10) -- not clay's choice.
     ; ⚠ `sassert` is emit-only like edef/sdef: parse reduces a _Static_assert to the
     ; bare (tdef) marker, so one only ever comes from a generator.
+    ; ⚠ the cpp trio is emit-only more firmly than any of those: cpp runs before the
+    ; lexer, so a directive never reaches a parse at all. see the header.
     '((prog 1 1) (fn 1 5) (proto 1 1) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
-      (edef 2 2) (sdef 2 3) (sassert 2 2)
+      (edef 2 2) (sdef 2 3) (sassert 2 2) (cpp-def 1 2) (cpp-undef 1 1) (cpp-if 1 2)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 4)
@@ -426,7 +448,31 @@
                   + (line 0 "};")))
              (id? h 'sassert)
               (line 0 ("_Static_assert(" + (ce a 21) + ", " + (cstrlit (ctag (el t 2))) + ");"))
+             ; the preprocessor. a directive owns its line and starts at column 0,
+             ; nested or not -- love.h's own style, and the one cpp reads fastest.
+             (id? h 'cpp-def)
+              (line 0 ("#define " + (ctag a)
+                       + (? (1 < (tally >t)) (" " + (ce (el t 2) 100)) "")))
+             (id? h 'cpp-undef) (line 0 ("#undef " + (ctag a)))
+             (id? h 'cpp-if) (ccpp a (? (1 < (tally >t)) (el t 2) ()) (1 < (tally >t)))
              (gripe ("cannot show top-level " + (string h))))))
+   ; #if / #elif / #else / #endif over top-level items. the arms carry their own
+   ; conditions and the else is a SLOT, so an else out of place has no spelling.
+   (ccpp arms els has)
+    (: (go l first)
+        (? (! (two? l)) (? has (cseq (line 0 "#else") (citems els)) "")
+           (: r <l
+              (cseq (cseq (line 0 ((? first "#if " "#elif ") + (ce <r 0))) (citems (el r 1)))
+                    (go >l 0))))
+       (cseq (go arms 1) (line 0 "#endif")))
+   ; ⚠ a gripe from a nested item has to come OUT rather than be concatenated into
+   ; the text, which is what `+` on a form and a string would quietly do.
+   (cseq a b) (? (gripe? a) a (? (gripe? b) b (a + b)))
+   (citems l) (: (go m) (? (! (two? m)) "" (cseq (ctop1 <m) (go >m)))
+                 (go l))
+   ; the top-level dispatch, shared by clay-show and by a cpp arm's body: a `fn` with
+   ; a body goes to cfn, everything else to ctop.
+   (ctop1 x) (? (&& (two? x) (&& (id? <x 'fn) (2 < (tally >x)))) (cfn x) (ctop x))
 
    ; --- what cannot be said ------------------------------------------------------
    ; the forms that carry strictly less than C needs, found in ONE pass up front so
@@ -468,6 +514,12 @@
             (gripe ("(sdef " + (show <>x) + " ()) has no members -- C has no empty struct"))
            (&& (id? <x 'sdef) (! (cident? <>x)))
             (gripe ("(sdef " + (show <>x) + ") -- an anonymous tag is not a C identifier"))
+           ; a macro is NAMED by an identifier, and `#if` with no arm is not a thin
+           ; way to say a group that is always off -- both are syntax errors.
+           (&& (member? <x '(cpp-def cpp-undef)) (! (cident? <>x)))
+            (gripe ("(" + (string <x) + " " + (show <>x) + ") -- a macro name is an identifier"))
+           (&& (id? <x 'cpp-if) (! (two? <>x)))
+            (gripe "(cpp-if ()) has no arms -- C has no #if without a condition")
            ; restrict qualifies a pointer or nothing; anywhere else the shower would
            ; have to drop it in silence, which is pretending.
            (&& (id? <x 'restrict) (! (cptr? <>x)))
@@ -483,14 +535,11 @@
    ; anything else shows on its own, which is what a generator laying one table
    ; wants.
    (clay-show c)
-    (: (top1 x) (? (&& (two? x) (&& (id? <x 'fn) (2 < (tally >x)))) (cfn x) (ctop x))
-       (go l) (? (! (two? l)) ""
-                 (: v (top1 <l) (? (gripe? v) v (: r (go >l) (? (gripe? r) r (v + r))))))
-       u (clay-unsaid c)
+    (: u (clay-unsaid c)
        (? u u
           (! (two? c)) (gripe "clay-show wants a form")
-          (id? <c 'prog) (go (el c 1))
-          (top1 c)))
+          (id? <c 'prog) (citems (el c 1))
+          (ctop1 c)))
    ; a function definition: signature line, then the body block at column 0. the
    ; RETURN TYPE is clay's 4th slot; absent -- which is every fn cparse ever built --
    ; `int` is the best the tree can justify. the 5th is attribute SPELLINGS laid

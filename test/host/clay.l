@@ -152,6 +152,57 @@ here")) = ("// two lines" + nl + "// here" + nl)))
      = ("ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp) {"
         + nl + " ai_musttail return Continue();" + nl + "}" + nl))))
 
+; --- the preprocessor, doc/clay.md's rung 2 ------------------------------------
+; emit-only more firmly than a note is: cpp runs before the lexer, so no directive
+; survives to be parsed back. a BODY that is a clay expression renders at the
+; tightest context, which is macro hygiene falling out of the precedence table --
+; the body cannot see where it is substituted, so it parenthesizes itself.
+(assert
+ ((one '(cpp-def "ai_data_n" 9)) = ("#define ai_data_n 9" + nl))
+ ((one '(cpp-def "countof(_)" (bin / (szof (var "_")) (szof (deref (var "_"))))))
+  = ("#define countof(_) (sizeof(_) / sizeof(*_))" + nl))
+ ; ...and a body that is TOKENS rather than an expression rides through as a
+ ; spelling, the standing that `fn`'s attributes and `ret`'s prefix already have
+ ((one '(cpp-def "ai_noicf" "__attribute__((noipa))")) = ("#define ai_noicf __attribute__((noipa))" + nl))
+ ; presence is the ARITY: no body slot is a bare #define, the feature-test flag
+ ((one '(cpp-def "AI_FLAG")) = ("#define AI_FLAG" + nl))
+ ((one '(cpp-undef "AI_FLAG")) = ("#undef AI_FLAG" + nl))
+ ; a macro is NAMED by an identifier -- a spelling that is not one would emit C
+ ; that no compiler reads
+ (gripe? (one '(cpp-def "9bad" 1)))
+ (gripe? (one '(cpp-undef "(x)"))))
+
+; --- #if / #elif / #else, over TOP-LEVEL items ----------------------------------
+; the arms are ((cond items)..) and the else is its own slot, so an else out of
+; place has no spelling at all. `#ifdef X` needs no node: `defined` wears call
+; syntax in C's own grammar, so it is a plain (call (var "defined") ..).
+(: cl-def (\ n `('call `('var "defined") `(`('var n))))
+   cl-if `('cpp-if `(`(`('lor (cl-def "__wasm__") (cl-def "__APPLE__"))
+                        `(`('cpp-def "ai_data_section" 0))))
+                   `(`('cpp-def "ai_data_section" 1)))
+   ; the shape love.h actually wants: a guard with a conditional nested inside it,
+   ; every directive at column 0 whatever the depth -- love.h's own style
+   cl-nest `('cpp-if `(`(`('un 'not (cl-def "ai_data_stride"))
+                          `(cl-if))))
+   (assert
+    ((one cl-if) = ("#if defined(__wasm__) || defined(__APPLE__)" + nl
+                    + "#define ai_data_section 0" + nl + "#else" + nl
+                    + "#define ai_data_section 1" + nl + "#endif" + nl))
+    ((one cl-nest) = ("#if !defined(ai_data_stride)" + nl
+                      + "#if defined(__wasm__) || defined(__APPLE__)" + nl
+                      + "#define ai_data_section 0" + nl + "#else" + nl
+                      + "#define ai_data_section 1" + nl + "#endif" + nl + "#endif" + nl))
+    ; an #elif arm, and an arm's body carrying more than a directive
+    ((one '(cpp-if (((var "A") ((note "a"))) ((var "B") ((note "b")))) ((note "c"))))
+     = ("#if A" + nl + "// a" + nl + "#elif B" + nl + "// b" + nl
+        + "#else" + nl + "// c" + nl + "#endif" + nl))
+    ; no arms is a syntax error, not a thin way to say a group that is always off
+    (gripe? (one '(cpp-if ())))
+    ; ⚠ a refusal from INSIDE an arm has to come out as a gripe, never be
+    ; concatenated into the text -- which is what `+` on a form would quietly do
+    (gripe? (one '(cpp-if ((1 ((tdef)))))))
+    (gripe? (one '(cpp-if ((1 ((blk ())))))))))
+
 ; --- clay-ok? is a SHAPE check, because gen.l trusts its input ------------------
 (assert
  (1 = (cok '(bin + (num 1) (num 2))))
@@ -164,7 +215,11 @@ here")) = ("// two lines" + nl + "// here" + nl)))
  ; the ATTRS slot holds spellings, not nodes, so the walk must not read them as tags
  (1 = (cok '(fn "f" () (blk ((ret (num 1) ai_musttail))) void (ai_noinline ai_noicf))))
  (1 = (cok '(sassert (bin eq (num 1) (num 1)) "m")))
- (gripe? (cok '(sassert (num 1)))))                ; wants the message
+ (gripe? (cok '(sassert (num 1))))                 ; wants the message
+ ; a cpp arm's CONDITION and its body are both walked, three list levels down
+ (1 = (cok '(cpp-if (((var "A") ((cpp-def "X" 1)))))))
+ (gripe? (cok '(cpp-if (((var "A") ((bin + (num 1))))))))
+ (gripe? (cok '(cpp-def))))                        ; wants a name
 
 ; --- precedence: the shower is not fully parenthesized, so the table has to be
 ; right. these are the pairs that go wrong when it is not.
