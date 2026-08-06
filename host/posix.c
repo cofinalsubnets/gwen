@@ -1005,18 +1005,20 @@ static lvm(lvm_ptyecho) {
 // `on` puts the tty in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is
 // the SOLE echo; on = 0 / () restores the cooked termios captured at the first
 // raw-on. bao's (shell _) calls (raw 1) because the bin/bao launch
-// (love -l bao.l -e "(bao 0)") passes argv, so main.c's argp path skips raw_mode --
-// without this the kernel tty echo doubles every line the editor draws. The cooked
-// baseline is captured ONCE (a re-raw, e.g. main.c's no-arg path already raw'd,
-// never re-saves a raw state) and restored on exit via atexit. () on success,
-// errno on failure (stdin not a tty).
+// (love -l bao.l -e "(bao 0)") passes argv, so main.c's argp path never raws --
+// without this the kernel tty echo doubles every line the editor draws. () on
+// success, errno on failure (stdin not a tty).
+// ⚠ ONE terminal, so one saved baseline and one atexit: main.c's repl calls this
+// too (ai_raw_mode). Two owners each capturing their own cooked state and each
+// registering their own handler was only ever correct by atexit's LIFO -- the
+// first to register held the true baseline and so ran last.
 static struct termios raw_cooked;
 static int raw_have_cooked = 0;
 static void raw_restore(void) {
  if (raw_have_cooked) tcsetattr(STDIN_FILENO, TCSANOW, &raw_cooked); }
 // All the &t termios work + the capture-once/atexit state for (raw on), off
 // lvm_raw's frame so its Continue() tail-jumps. Returns 0 or the errno.
-ai_noinline static int host_raw(intptr_t on) {
+ai_noinline int ai_raw_mode(intptr_t on) {
  struct termios t;
  if (tcgetattr(STDIN_FILENO, &t)) return errno;
  if (!on) { raw_restore(); return 0; }
@@ -1027,7 +1029,7 @@ ai_noinline static int host_raw(intptr_t on) {
  return tcsetattr(STDIN_FILENO, TCSANOW, &t) ? errno : 0; }
 static lvm(lvm_raw) {
  intptr_t on = (Sp[0] & 1) ? getcharm(Sp[0]) : 0;
- int rc = host_raw(on);
+ int rc = ai_raw_mode(on);
  Sp[0] = rc ? putcharm(rc) : ai_zero;
  Ip += 1; ai_musttail return Continue(); }
 

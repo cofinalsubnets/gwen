@@ -687,20 +687,12 @@ static struct ai *boot(struct ai *g, bool argp) {
 #if defined(__x86_64__) || defined(__aarch64__)
 #define AI_GLAZED 1                                      // the native JIT exists on this arch
 #endif
-static struct termios saved_termios;
-static void restore_termios(void) {
-  tcsetattr(STDIN_FILENO, TCSANOW, &saved_termios); }
-
-static void raw_mode(void) {
-  tcgetattr(STDIN_FILENO, &saved_termios);
-  atexit(restore_termios);                 // restore on normal exit
-  struct termios raw = saved_termios;
-  raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);  // no line buffering/echo
-  raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-  raw.c_cc[VMIN] = 1;                      // block for one byte
-  raw.c_cc[VTIME] = 0;
-  tcsetattr(STDIN_FILENO, TCSANOW, &raw); }
-  // c_oflag is left alone, so '\n' on output still becomes CR-LF.
+// the tty is ONE terminal, so its cooked baseline and its atexit live in one
+// place -- posix.c's, which the (raw on) nif already drives. this is the same
+// call, and the capture-once latch there is what makes a repl that raws after
+// bao already did restore the true baseline rather than a raw one.
+extern int ai_raw_mode(intptr_t on);
+#define raw_mode() ((void) ai_raw_mode(1))
 
 static char const cli[] =
 #include "cli.h"
