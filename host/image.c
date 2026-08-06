@@ -16,51 +16,45 @@
 #include <sys/mman.h>
 #include <link.h>
 
-// the wake-safety guard: a kept-absolute pointer only survives a
-// wake if it aims inside the MAIN PROGRAM's load segments (one ASLR base delta shifts
-// them all). Anything else -- a JIT W^X page, an mmap, a shared library -- dies with
-// the bake process, and every post-wake use is a hardware fault the barrier eats per
-// call: the storm. Collect the segments once, install the predicate before any dump,
-// and on a refused bake print the offenders so the survivor names itself.
-extern uintptr_t (*ai_image_absguard)(uintptr_t);
-extern uintptr_t ai_image_bad[8];
-extern uintptr_t ai_image_nbad;
-static struct { uintptr_t lo, hi; } image_segs[16];
-static int image_nsegs = 0;
+// the wake-safety guard: a kept-absolute pointer only survives a wake if it aims inside
+// the MAIN PROGRAM's load segments (one ASLR base delta shifts them all). Anything else --
+// a JIT W^X page, an mmap, a shared library -- dies with the bake process, so the dump
+// refuses it. the bounds ride the CALLER's frame and reach the codec by parameter: one
+// phdr walk per bake, and the audit keeps no state between them.
+struct image_segs { struct { uintptr_t lo, hi; } s[16]; int n; };
 static int image_seg_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
-  for (int i = 0; i < in->dlpi_phnum && image_nsegs < 16; i++) {
+  struct image_segs *q = d;
+  (void) sz;
+  for (int i = 0; i < in->dlpi_phnum && q->n < 16; i++) {
     const ElfW(Phdr) *p = &in->dlpi_phdr[i];
     if (p->p_type == PT_LOAD) {
-      image_segs[image_nsegs].lo = in->dlpi_addr + p->p_vaddr;
-      image_segs[image_nsegs].hi = in->dlpi_addr + p->p_vaddr + p->p_memsz;
-      image_nsegs++; } }
+      q->s[q->n].lo = in->dlpi_addr + p->p_vaddr;
+      q->s[q->n].hi = in->dlpi_addr + p->p_vaddr + p->p_memsz;
+      q->n++; } }
   return 1;                                       // first object only: the main program
 }
-static uintptr_t image_abs_ok(uintptr_t v) {
-  for (int i = 0; i < image_nsegs; i++)
-    if (v >= image_segs[i].lo && v < image_segs[i].hi) return 1;
+static uintptr_t image_abs_ok(void *ctx, uintptr_t v, uintptr_t off, uintptr_t ap) {
+  struct image_segs *q = ctx;
+  (void) off, (void) ap;
+  for (int i = 0; i < q->n; i++)
+    if (v >= q->s[i].lo && v < q->s[i].hi) return 1;
   return 0;
 }
-static void image_guard_arm(void) {
-  if (!image_nsegs) dl_iterate_phdr(image_seg_phdr, NULL);
-  ai_image_nbad = 0;
-  ai_image_absguard = image_abs_ok;
-}
-static void image_guard_report(void) {
-  if (!ai_image_nbad) return;
-  fprintf(stderr, "love: bake refused -- %lu un-wakeable absolute pointer(s) in the live heap\n",
-          (unsigned long) ai_image_nbad);
-  for (uintptr_t i = 0; i < ai_image_nbad && i < 2; i++)
-    fprintf(stderr, "love:   offender %lu: value %p in object at heap word %lu (object hot %p) -- JIT/W^X/mmap; see doc/wake-storm.md\n",
-            (unsigned long) i, (void*) ai_image_bad[4 * i + 1],
-            (unsigned long) ai_image_bad[4 * i], (void*) ai_image_bad[4 * i + 2]);
+// ⚠ segs must outlive the dump: it is what the guard reads. keep it in the frame that
+// makes the ai_image_save call, never a temporary.
+static struct ai_image_guard image_guard(struct image_segs *segs) {
+  segs->n = 0;
+  dl_iterate_phdr(image_seg_phdr, segs);
+  struct ai_image_guard gd = { image_abs_ok, segs };
+  return gd;
 }
 
 int image_dump(struct ai *g, char const *path) {
-  image_guard_arm();
+  struct image_segs segs;
+  struct ai_image_guard gd = image_guard(&segs);
   uintptr_t len = 0;
-  void *buf = ai_image_save(g, &len);             // g->alloc'd; --bake exits right after, so we don't free it
-  if (!buf) { image_guard_report(); return -2; }
+  void *buf = ai_image_save(g, &len, &gd);        // g->alloc'd; --bake exits right after, so we don't free it
+  if (!buf) return -2;
   FILE *f = fopen(path, "wb");
   int rc = !f ? -4 : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
   if (f) fclose(f);
@@ -105,23 +99,23 @@ static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
       b->off = p->p_offset + (b->addr - lo), b->found = 1; }
   return 1;                                       // stop after the first object: the main program
 }
-static char bake_buf[1 << 20];                    // the copy/pad scratch, shared by both lanes
-// move n bytes src@soff -> dst@doff. the two lanes only ever shuttle bytes.
-static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n) {
+#define BAKE_SCRATCH (64u << 10)                  // the copy/pad window: a bake runs once, so iterations are free
+// move n bytes src@soff -> dst@doff through the caller's window. the two lanes only shuttle bytes.
+static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win) {
   for (uint64_t z = 0; z < n; ) {
-    size_t w = n - z < sizeof bake_buf ? (size_t)(n - z) : sizeof bake_buf;
-    if (pread(src, bake_buf, w, (off_t)(soff + z)) != (ssize_t) w) return -6;
-    if (pwrite(dst, bake_buf, w, (off_t)(doff + z)) != (ssize_t) w) return -6;
+    size_t w = n - z < BAKE_SCRATCH ? (size_t)(n - z) : BAKE_SCRATCH;
+    if (pread(src, win, w, (off_t)(soff + z)) != (ssize_t) w) return -6;
+    if (pwrite(dst, win, w, (off_t)(doff + z)) != (ssize_t) w) return -6;
     z += w; }
   return 0;
 }
 // lay the image. 0 done, >0 "this binary is not laid for growth", <0 a real failure.
-static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
+static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, uintptr_t len,
                      uint64_t lenoff, mode_t mode) {
   Elf64_Ehdr eh;
   Elf64_Shdr *sh = NULL;
   Elf64_Phdr *ph = NULL;
-  char *str = NULL;
+  char *str = NULL, *win = NULL;
   size_t nsh, nph, si = 0, pi;
   uint64_t head, off, cur, al;
   int dst = -1, rc = 1;
@@ -130,12 +124,13 @@ static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
       || eh.e_shentsize != sizeof(Elf64_Shdr) || eh.e_phentsize != sizeof(Elf64_Phdr)
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
   nsh = eh.e_shnum, nph = eh.e_phnum;
-  sh = malloc(nsh * sizeof *sh), ph = malloc(nph * sizeof *ph);
-  if (!sh || !ph) { rc = -6; goto out; }
+  sh = g->alloc(g, NULL, nsh * sizeof *sh), ph = g->alloc(g, NULL, nph * sizeof *ph);
+  win = g->alloc(g, NULL, BAKE_SCRATCH);
+  if (!sh || !ph || !win) { rc = -6; goto out; }
   if (pread(src, sh, nsh * sizeof *sh, (off_t) eh.e_shoff) != (ssize_t)(nsh * sizeof *sh)
       || pread(src, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph))
     { rc = -6; goto out; }
-  if (!(str = malloc(sh[eh.e_shstrndx].sh_size + 1))) { rc = -6; goto out; }
+  if (!(str = g->alloc(g, NULL, sh[eh.e_shstrndx].sh_size + 1))) { rc = -6; goto out; }
   if (pread(src, str, sh[eh.e_shstrndx].sh_size, (off_t) sh[eh.e_shstrndx].sh_offset)
       != (ssize_t) sh[eh.e_shstrndx].sh_size) { rc = -6; goto out; }
   str[sh[eh.e_shstrndx].sh_size] = 0;
@@ -162,7 +157,7 @@ static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
   head = off;                                     // everything below the blob stays put, byte for byte
   al = sh[si].sh_addr - ph[pi].p_vaddr;           // the image's own start within its segment
   if ((dst = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0700)) < 0) { rc = -6; goto out; }
-  if ((rc = bake_move(src, dst, 0, 0, head))) goto out;
+  if ((rc = bake_move(src, dst, 0, 0, head, win))) goto out;
   if (pwrite(dst, buf, len, (off_t) off) != (ssize_t) len) { rc = -6; goto out; }
   cur = off + len;
   for (size_t i = 1; i < nsh; i++) {              // the non-allocated tail, relaid past the blob
@@ -171,7 +166,7 @@ static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
     if (sh[i].sh_offset < head) continue;         // it rode along inside the head
     a = sh[i].sh_addralign ? sh[i].sh_addralign : 1;
     cur = (cur + a - 1) / a * a;
-    if ((rc = bake_move(src, dst, sh[i].sh_offset, cur, sh[i].sh_size))) goto out;
+    if ((rc = bake_move(src, dst, sh[i].sh_offset, cur, sh[i].sh_size, win))) goto out;
     sh[i].sh_offset = cur;
     cur += sh[i].sh_size; }
   sh[si].sh_size = len;                           // the two records that now describe the image
@@ -186,18 +181,19 @@ static int bake_tail(int src, char const *tmp, void const *buf, uintptr_t len,
   if (dst >= 0) {
     if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
     if (close(dst)) rc = -6; }
-  free(sh), free(ph), free(str);
+  g->alloc(g, sh, 0), g->alloc(g, ph, 0), g->alloc(g, str, 0), g->alloc(g, win, 0);
   return rc;
 }
 
 int image_bake(struct ai *g) {
-  image_guard_arm();
+  struct image_segs segs;
+  struct ai_image_guard gd = image_guard(&segs);
   uintptr_t len = 0;
-  void *buf = ai_image_save(g, &len);
+  void *buf = ai_image_save(g, &len, &gd);
   // the codec silently reverts any would-be-dead native reference to the bytecode
   // twin the cell carries (ai_image_redir); the bake stays correct, so there is
   // nothing to announce. only a REFUSED bake (below) is worth a word.
-  if (!buf) { image_guard_report(); return -2; }
+  if (!buf) return -2;
   // ai_baked_image_len is patched by FILE OFFSET, and the offset comes from the running
   // program's own phdrs (dl_iterate_phdr, first object) -- the one place a live address
   // and a file position are known to name the same byte.
@@ -212,7 +208,7 @@ int image_bake(struct ai *g) {
   struct stat st;
   int src = open(exe, O_RDONLY);
   if (src < 0 || fstat(src, &st)) { if (src >= 0) close(src); return -6; }
-  int rc = bake_tail(src, tmp, buf, len, bl.off, st.st_mode & 07777);
+  int rc = bake_tail(g, src, tmp, buf, len, bl.off, st.st_mode & 07777);
   if (rc > 0) {
     fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n");
     rc = -3; }
@@ -240,10 +236,11 @@ static ai_noinline ai_word image_bake_do(struct ai *g) {
  if (s->len >= sizeof path) return ai_zero;
  memcpy(path, s->bytes, s->len);                 // copy OUT first: the dump's gen_major moves the string
  path[s->len] = 0;
- image_guard_arm();
+ struct image_segs segs;
+ struct ai_image_guard gd = image_guard(&segs);
  uintptr_t len = 0;
- void *buf = ai_image_save_(g, &len);
- if (!buf) { image_guard_report(); return ai_zero; }
+ void *buf = ai_image_save_(g, &len, &gd);
+ if (!buf) return ai_zero;
  FILE *f = fopen(path, "wb");
  int rc = !f ? -1 : (fwrite(buf, 1, len, f) == len) ? 0 : -1;
  if (f) fclose(f);

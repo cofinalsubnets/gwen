@@ -235,9 +235,13 @@ int main(void) {
 #define SH_OPEN  0x01
 #define SH_WRITE 0x05
 #define SH_CLOSE 0x02
-extern uintptr_t (*ai_image_absguard)(uintptr_t);
-extern uintptr_t ai_image_bad[8], ai_image_nbad;
-static uintptr_t img_reject_all(uintptr_t v) { (void) v; return 0; }
+// the offender log rides the BAKER'S OWN frame -- the guard is told which object carries
+// each absolute, so naming them needs nothing of the core's. quads: obj-off, val, obj-hot.
+struct img_bad { uintptr_t q[3 * 2]; uintptr_t n; };
+static uintptr_t img_reject_all(void *ctx, uintptr_t v, uintptr_t off, uintptr_t ap) {
+  struct img_bad *b = ctx;
+  if (b->n < 2) b->q[3 * b->n] = off, b->q[3 * b->n + 1] = v, b->q[3 * b->n + 2] = ap, b->n++;
+  return 0; }
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
 // rune / bao are MODULES (no brackets of their own): the source library (love.h) holds
 // the text and the boot loads it by name, so the woken image serves ((from 'bao 'shell) 0)
@@ -293,15 +297,16 @@ int main(void) {
   if (!ai_ok(r)) {
     if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
     m7_exit(3); }
-  ai_image_absguard = img_reject_all;   // ANY kept absolute refuses the dump
+  struct img_bad bad = { {0}, 0 };
+  struct ai_image_guard gd = { img_reject_all, &bad };   // ANY kept absolute refuses the dump
   uintptr_t len = 0;
-  void *img = ai_image_save(r, &len);
+  void *img = ai_image_save(r, &len, &gd);
   if (!img) {
     sh_puts("; dump REFUSED -- absolutes in the heap (off, val, ap):\n");
-    for (uintptr_t i = 0; i < ai_image_nbad; i++) {
-      sh_hex(ai_image_bad[4 * i]); sh_putc(' ');
-      sh_hex(ai_image_bad[4 * i + 1]); sh_putc(' ');
-      sh_hex(ai_image_bad[4 * i + 2]); sh_putc('\n'); }
+    for (uintptr_t i = 0; i < bad.n; i++) {
+      sh_hex(bad.q[3 * i]); sh_putc(' ');
+      sh_hex(bad.q[3 * i + 1]); sh_putc(' ');
+      sh_hex(bad.q[3 * i + 2]); sh_putc('\n'); }
     m7_exit(4); }
   // round-trip PROOF before the file exists: wake the buffer we just dumped
   // and run a law through the woken heap. (same-binary wake -- the cross-

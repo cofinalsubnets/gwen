@@ -350,8 +350,17 @@ struct ai
 // g->alloc'd buffer; load reconstructs a fresh g, or NULL on any mismatch (the
 // caller boots normally). buffer-based so a freestanding frontend needs no filesystem.
 void ai_image_note(uintptr_t stage);   // wake-progress hook, weak no-op; a port bringing the wake up on new metal overrides it
-void *ai_image_save(struct ai*, uintptr_t *outlen);
-void *ai_image_save_(struct ai*, uintptr_t *outlen);   // the unguarded worker: a MID-EVAL dump (the bake nif)
+// a kept ABSOLUTE only survives a wake if it aims inside the binary's own load segments
+// (one ASLR delta shifts them all); anything else -- a JIT W^X page, an mmap, a shared
+// library -- dies with the bake process, so the dump refuses it. only the host can answer
+// that (love.c is freestanding), and it answers by PARAMETER, like ai_image_load_m's
+// allocator -- the audit owns no state here. a NULL guard is audit off.
+// asked of every candidate absolute, and told which object carries it (heap word offset
+// + that object's hot) -- enough for a seat to name an offender in its OWN frame, which
+// is where a report belongs. answer 0 and the dump refuses.
+struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, uintptr_t ap); void *ctx; };
+void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
+void *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
