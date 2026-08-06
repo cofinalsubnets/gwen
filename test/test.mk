@@ -59,15 +59,16 @@ test_front: $(ho)/front
 # ⚠ each frontend is asked for ITS OWN object and ITS OWN ELF through ITS OWN makefile.
 # Re-spelling the flags here would drift from the build this claims to gate, and a green
 # would mean nothing. That is also why the link phase skips rather than improvises.
-# ⚠ rp2040 compiles and does not link -- the head of port/rp2040/Makefile names the three
-# reasons, all of them holo's. ⚠ wasm compiles and does not link HERE: love.js is a tracked
+# ⚠ rp2040 links here now (it did not: its C vector table wanted a named section the
+# 32-bit object writer could not spell). What it still borrows is arm-none-eabi-ld --
+# see the head of port/rp2040/Makefile. ⚠ wasm compiles and does not link HERE: love.js is a tracked
 # committed artifact, and a gate must not rewrite the working tree. test_wasm owns that link.
 embed_ports = mps2 teensy41 nucleo446 playdate virt rp2040
 # what each linkable port calls its ELF. ⚠ teensy41 is NOT here: its ELF embeds the baked
 # heap image, whose rule delegates to port/mps2's `img` -- a BAKE UNDER QEMU, on a FORCE rule
 # with no opt-out. Linking it here would cost 80 s and quietly boot a machine, which is the
 # one thing this gate promises not to do. test_teensy41 (test_extra) owns that link.
-embed_elfs = mps2/love.elf nucleo446/firm.elf
+embed_elfs = mps2/love.elf nucleo446/firm.elf rp2040/love.elf
 # the aarch64 kernel face needs a CROSS-CAPABLE KCC -- ours or clang, never a native gcc
 embed_a64 = $(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))
 embed_arm := $(and $(shell command -v arm-none-eabi-gcc 2>/dev/null),\
@@ -516,6 +517,22 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp) links against the F4 flash map, boot image verified"
+# test_rp2040 -- the Raspberry Pi Pico firmware BUILD gate, nucleo446-shaped, and the one
+# port in the tree with NO .S: the vector table and crt0 are C, and boot2 -- the 256-byte
+# stage the mask ROM checksums before it runs anything -- is laid straight into a named
+# section by mkboot2.l. So the boot image verify here has THREE words to check, not two:
+# boot2's CRC-32/MPEG-2 must be 0x7a4eb274, the SP inside the 264 KB SRAM, the reset entry
+# thumb-bit and inside flash. v6-M is the leanest target mooncc has (no FPU, no divide);
+# test_thumb1 runs that lane's arithmetic against gcc as ~120 differential checks under
+# qemu's M0, and qemu has no RP2040 machine, so this gate builds and never boots.
+# ⚠ the LINK is still arm-none-eabi-ld: thumb relocations are not in crew/holo/link.l.
+.PHONY: test_rp2040
+test_rp2040: host out/host$(hsuf)/mooncc
+	@echo RP2040 out/rp2040/love.bin
+	@if ! command -v arm-none-eabi-ld >/dev/null 2>&1; then \
+	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
+	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
+	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S) verified"
 # moon-tar -- the userland cousin of test_raw (doc/moon-userland.md): build GNU tar 1.13
 # with mooncc + nolibc + the holo linker (no gcc/glibc/ld) and prove the binary RUNS --
 # cf/xf + czf/xzf roundtrips + system-tar interop. Point TARSRC at a ./configure'd tree.

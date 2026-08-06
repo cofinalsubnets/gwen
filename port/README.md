@@ -38,11 +38,19 @@ See playdate/README.md.
 
 ## rp2040/
 
-PARKED. The ISA half landed -- love boots ARMv6-M via `mooncc -t thumb1`
-(test_mps2_t1) -- but the part's 264 KB SRAM can't hold the baked image
-(~544 KB), so the device port stopped. Sources are stale pre-rename code;
-boot2.bin, the lds, and tools/ (elf2uf2, pad_checksum) are the reusable
-bits if a love-lite ever revives it.
+Raspberry Pi Pico (RP2040, Cortex-M0+ @ 125 MHz, 264 KB SRAM -- firmware
+only, no love: the baked image is ~544 KB, so this is the toolchain on
+silicon, like nucleo446). ARMv6-M is the leanest target mooncc has -- no FPU
+and no divide instruction, so every `/`, `%`, float and double is a libcall --
+and main.c is a 32-check battery over exactly those. The one port with **no
+`.S` anywhere**: the vector table and crt0 are C (rp2040.c), and boot2 -- the
+256-byte stage the mask ROM CRC-checks before running -- is laid by mkboot2.l
+into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
+thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
+this ISA actually runs. ⚠ arm-none-eabi-ld still binds it (thumb relocations
+are not in crew/holo/link.l), and tools/ (elf2uf2, pad_checksum) is stale
+pre-rename code -- pad_checksum's job now belongs to mkboot2.l, so only the
+.uf2 packer is still wanted.
 
 ## teensy41/
 
