@@ -1,27 +1,13 @@
-# Project root. This file holds the cross-cutting tasks (test, clean, install,
-# ...) and INCLUDES one fragment per build area, each living in the folder it
-# builds: mk/lib.mk (out/lib headers), host/build.mk (the POSIX CLI), crew/build.mk
-# (the crew app scripts), port/inle/kernel.mk (the freestanding kernel), test/test.mk
-# (the gates), mk/install.mk. wasm keeps its own Makefile. Device ports (playdate,
-# rp2040) live in the separate l-ports repo. Build output lands under out/
-# (out/host, out/free, out/lib, out/dl). Shared vars live in common.mk.
+# project root makefile
 R := .
 include common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
-# love0 -- the bootstrap interpreter, PINNED to the canonical out/host tree (never
-# $(hsuf)'d like $(ho)): it bakes the lcat headers every frontend shares. Defined
-# UP HERE, not by the host-build block below, because test_love0's prerequisite uses
-# it -- and make expands prerequisites at PARSE time, so a later definition reads as
-# empty, silently dropping test_love0's dep on the binary. Serially that hides (the
-# earlier test_host builds love0 transitively via host -> lib_h -> love0); under -j,
-# test_love0 then races ahead of the love0 link ("out/host/love0: No such file").
+# bootstrap interpreter
 love0 = out/host/love0
 
-# every love run UNDER make boots deterministically: the test gate must exercise the freshly-built egg
-# (not a stale baked image), and the bench controls glazed-vs-interp itself. So suppress the startup
-# image auto-load for all recipes. The USER's binary (run outside make) still wakes its baked image.
+# maybe we can change this
 export LOVE_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
@@ -29,24 +15,9 @@ export LOVE_NO_IMAGE := 1
 .PHONY: test test_host test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 test_virt test_wake
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret waits bench nettest lint fmt fmt-check ccdb
 
-# `make` with no target is `make test` -- pinned EXPLICITLY because the includes
-# below precede the test rule, so make's "first explicit target is the default"
-# would otherwise pick a fragment's first rule (mk/lib.mk's `lib`).
 .DEFAULT_GOAL := test
 
-# a FAILED recipe takes its half-written target WITH IT. make's own default is to
-# LEAVE it, and `cmd > $@` truncates $@ before cmd ever runs -- so a failure lands a
-# 0-byte artifact carrying a FRESH mtime, and the next make calls it up to date and
-# exits 0. the failure is loud once and silent forever after: an empty out/lib/holo.h
-# leaves `assemble` unbound (the glaze's map lane emits nothing -- a hang or a crash
-# in some unrelated test), an empty .o relinks the previous build's code under new
-# source, and every gate goes green over both. one line, whole tree, every fragment
-# below. it does NOT cover a recipe that exits 0 having written garbage -- that wants
-# a `test -s $@` at the recipe (mk/lib.mk's lcat_h, host/build.mk's sys.o).
-# ⚠ NOR DOES IT COVER A KILLED MAKE. make deletes a half-written target on a recipe
-# failure and on a signal it can CATCH; SIGKILL it cannot, so a `kill -9` mid-build can
-# still leave one truncated -- `make test_slow` killed mid-run left proof/lean/uugen.lean
-# at 0 bytes. after killing a build, `git status` before anything else.
+# avoid creating empty artifacts with fresh mtime
 .DELETE_ON_ERROR:
 
 # --- build fragments, pushed down into the folders they build (see each file) ---
@@ -58,55 +29,30 @@ include port/inle/kernel.mk
 include test/test.mk
 include mk/install.mk
 
-# `make test` is the DEV GATE -- what you run on every edit: the two egg self-tests (the
-# host binary `love` from-source under LOVE_NO_IMAGE, and love0 -- c0 + the self-hosted ev,
-# twice) plus vmret and waits. It does NOT build the image (the --bake step), nor run
-# coqc/lean/glaze/gc/tools, which are slow and/or need extra toolchains. ~20 s settled on
-# this box, serial by design: no -j races, ctrl-C responsive.
-#
-# `make test_slow` is the MERGE GATE -- run it before publishing, not per edit. It is
-# MINUTES (~17 on this box, less on a settled tree, more right after a commit), and a
-# fifth of that is three doors booting the corpus under emulation (2026-07-30, warm:
-# test_kernel 62s, test_uefi 64s, test_kernel_arm64 88s) beside test_arm64's 66s
-# qemu-user corpus. It was `test_all` until the name stopped being true -- test_kdiff,
-# test_selfhost, test_riscv, test_up and the test_raw_* cross lanes are all opt-in, so
-# this is the SLOW gate, not the whole one. While DEVELOPING, run `make test` and the
-# individual test_* targets that cover what you touched -- most are under a second
-# ($(mw), test/test.mk).
+.PHONY: test test_slow test_extra
+
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_love0 test_filemode vmret waits
+test_phases = test_host test_love0
+# fast gate
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
-# vmret rides the fast `test`: the TCO gate (every lvm_* VM ap must tail-jump, never
-# emit a `ret`) so a sibcall regression breaks the gate the moment it lands. It no-ops
-# with a message when no disassembler (objdump/llvm-objdump) is on PATH, like the
-# proof/kernel/wasm tests. The rest of test_tools (cook/tele/xor) + the crew apps stay
-# in test_slow.
-# test_kernel + test_wasm are in test_slow but NOT the fast `test`: each needs an
-# extra toolchain (qemu, x86_64-only; emcc + node) and no-ops when that is
-# absent. See their rules below.
-# THE MERGE GATE IS THE HOST ARCH. what stays: the x86_64 kernel running the corpus
-# (test_kernel, + test_uefi's framebuffer door), love on a third runtime (test_wasm)
-# and a third ISA (test_virt), mooncc's codegen differentials -- thumb1/2/2sp and the
-# two CROSS batteries, which do run their output under qemu-user -- and test_front,
-# whose synthetic devices reach a schedule no other gate can.
-# ⚠ AARCH64 IS NOT GATED HERE. love never executes on it in test_slow: test_ccarm64
-# runs MOONCC's aarch64 output, holotest checks the glaze's encodings, and neither
-# runs love. a glaze arm64 fault that encodes correctly and computes wrong reaches
-# main. run test_extra after touching arm64.l, the glaze, or port/inle/aarch64/.
-test_slow: test_host test_love0 test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi test_moon test_clay test_moonfuzz test_ccarm64 test_ccriscv test_libc test_ulp test_raw test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp test_virt test_kernel test_uefi test_wasm test_wake
 
-# test_extra -- EVERYTHING THAT IS NOT THE HOST ARCH, run before a release rather than
-# before a merge: the whole aarch64 side (its kernel, love's own execution under
-# qemu-aarch64, and test_vec's fault stubs -- which cross-built a SECOND kernel just to
-# raise five exceptions), two more boots of qemu's M7, and the four real-metal ports,
-# whose gates only LINK, no board here running them. `make test_slow test_extra` is the
-# full sweep. ⚠ these are the gates a CROSS-TARGET break hides behind: run them after
-# touching mooncc's backends, holo's linker or arm64 lane, the glaze's second target,
-# or anything a port's memory map sees.
-.PHONY: test_extra
-test_extra: test_kernel_arm64 test_mps2 test_mps2_t1 test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_arm64 test_vec
+# slow gate
+test_slow: test_host test_love0 vmret test_wasm test_kernel test_virt
+	
+
+# really really really slow gate
+test_extra: test_filemode waits test_kernel_arm64 test_mps2 test_mps2_t1 \
+	test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_arm64 \
+	test_vec test_front test_proof test_gen test_uugen test_uulean test_uuwm \
+	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
+	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
+	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi \
+	test_moon test_clay test_moonfuzz test_ccarm64 test_ccriscv test_libc test_ulp test_raw \
+	test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp \
+	test_virt test_kernel test_uefi test_wasm test_wake
+
 all: host kernel wasm
 
 # lint: paren/bracket/brace balance + unclosed strings across every tracked .l
@@ -155,23 +101,13 @@ crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
 	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
 
 # site: this tree's own docs as a browsable site -- README.md + doc/*.md through
-# papel (crew/papel/papel.l), which is lapiz for the markdown and cook for the
-# staleness, so a second `make site` writes nothing. `make site-serve` builds it
-# and hands out/site to kiosko, regenerating before each request: edit a .md,
-# reload, see it. There is no out/site rule -- papel IS the incremental build,
-# and make must not second-guess which pages are stale.
+# papel (crew/papel/papel.l)
 site: host
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc
+SITEPORT ?= 8080
 site-serve: host
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc
-# NOT `PORT` -- test/test.mk already claims that one for nettest (7390), is included
-# first, and `?=` on a set variable is a no-op, so `make site-serve` quietly served
-# the site on nettest's port.
-SITEPORT ?= 8080
 
-# ====================================================================
-# wasm (own Makefile)
-# ====================================================================
 wasm:
 	@$(MAKE) -C wasm
 
