@@ -49,26 +49,15 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
   int b = kkb.q[kkb.qh];
   return kkb.qh = (kkb.qh + 1) & 15, b; }
 
-static uint32_t palette[256];
+// the xterm-256 palette rides .rodata, laid by quay.l through clay -- the SAME table
+// host/cb.c reads, so a cell means the same pixels in a window and on the framebuffer
+// by construction rather than by two copies of the recipe agreeing.
+#include "xterm256.h"
+#define palette xterm256
 static struct font
  kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 16, },
  *fonts[16] = { &kfont };
 
-static void palette_init(void) {
-  static const uint32_t base[16] = {              // 0..15: the standard 16
-    0x000000, 0x800000, 0x008000, 0x808000,
-    0x000080, 0x800080, 0x008080, 0xc0c0c0,
-    0x808080, 0xff0000, 0x00ff00, 0xffff00,
-    0x0000ff, 0xff00ff, 0x00ffff, 0xffffff };
-  static const uint8_t cube[6] = { 0, 95, 135, 175, 215, 255 };  // xterm levels
-
-  for (int i = 0; i < 16; i++) palette[i] = base[i];
-  for (int i = 0; i < 216; i++) {                  // 16..231: 6x6x6 cube
-    int r = i / 36, g = i / 6 % 6, b = i % 6;
-    palette[16 + i] = cube[r] << 16 | cube[g] << 8 | cube[b]; }
-  for (int i = 0; i < 24; i++) {                   // 232..255: grey ramp
-    uint32_t v = 8 + 10 * i;
-    palette[232 + i] = v << 16 | v << 8 | v; } }
 
 
 void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int),
@@ -629,7 +618,7 @@ void kmain(void) {
  // framebuffer, or the console buffer won't allocate -- kcb stays null
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {
-  if (fbinit() && cbinit()) palette_init();
+  if (fbinit()) cbinit();        // the framebuffer console; the palette is a table now
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks

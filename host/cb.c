@@ -116,24 +116,11 @@ static lvm(lvm_gaze) {
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
-// the xterm-256 palette, laid once: 16 classics + the 6x6x6 cube + greys.
-// same recipe as the kernel's fbdraw palette -- a cell means the same
-// pixels on the framebuffer and in a window.
-static uint32_t xpal[256];
-static void xpal_ini(void) {
- static const uint32_t base[16] = {
-  0x000000, 0x800000, 0x008000, 0x808000,
-    0x000080, 0x800080, 0x008080, 0xc0c0c0,
-    0x808080, 0xff0000, 0x00ff00, 0xffff00,
-    0x0000ff, 0xff00ff, 0x00ffff, 0xffffff };
- static const uint8_t cube[6] = { 0, 95, 135, 175, 215, 255 };
- for (int i = 0; i < 16; i++) xpal[i] = base[i];
- for (int i = 0; i < 216; i++) {
-  int r = i / 36, g_ = i / 6 % 6, b_ = i % 6;
-  xpal[16 + i] = (uint32_t) cube[r] << 16 | (uint32_t) cube[g_] << 8 | cube[b_]; }
- for (int i = 0; i < 24; i++) {
-  uint32_t v = 8 + 10u * i;
-  xpal[232 + i] = v << 16 | v << 8 | v; } }
+// the xterm-256 palette rides .rodata, laid by quay.l through clay -- the SAME table
+// the kernel's fbdraw reads, so a cell means the same pixels on a framebuffer and in
+// a window by construction. #define xpal to keep the reading sites short.
+#include "../crew/quay/xterm256.h"
+#define xpal xterm256
 
 // a FONT ATLAS: a cask of [w u8][h u8][0 u16] then 256 glyphs, h scanlines
 // each, ceil(w/8) bytes per scanline, MSB the leftmost pixel -- the PSF
@@ -214,7 +201,6 @@ static lvm(lvm_blit) {
       && w > 0 && cl >= 0 && x >= 0 && y >= 0 && x + 8 <= w) {
   struct ai_str *s = ((struct ai_cask*) fb)->str;
   if ((uintptr_t) (y + 16) * (uintptr_t) w * 4 <= s->len) {
-   if (!xpal[255]) xpal_ini();
    struct cb_atlas a;
    atlas_of(0, &a);
    cb_px1((uint8_t*) s->bytes, w, (uint32_t) cl, x, y, &a);
@@ -240,7 +226,6 @@ static lvm(lvm_blitrow) {
   intptr_t cols = c->cols;
   if (cols * a.w > w) cols = w / a.w;
   if ((uintptr_t) ((row + 1) * a.h) * (uintptr_t) w * 4 <= s->len) {
-   if (!xpal[255]) xpal_ini();
    for (intptr_t q = 0; q < cols; q++) {
     uint32_t cell = c->cb[(uintptr_t) row * c->cols + (uintptr_t) q];
     if ((intptr_t) ((uintptr_t) row * c->cols + (uintptr_t) q) == cur)

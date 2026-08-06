@@ -302,20 +302,23 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m $(love0)
-# mx.h, kinds.h and nifs.h are COMMITTED GENERATED artifacts: love.c's +/* dispatch matrices
-# and the kind lattice they are indexed by (mx.l), and its nif + instruction registry
-# (nifs.l), all laid through clay. `make mx` refreshes all three; test_clay's second half
-# regenerates and diffs. ⚠ they are CORE headers -- a refresh rebuilds the tree, so the gate to
-# run after is `make test` and not test_clay alone. Each is written aside and moved, so a shape
-# check that quits (mx-ok / nifs-ok) leaves the committed file untouched.
+# mx.h, kinds.h, nifs.h and crew/quay/xterm256.h are COMMITTED GENERATED artifacts: love.c's
+# +/* dispatch matrices and the kind lattice they are indexed by (mx.l), its nif + instruction
+# registry (nifs.l), and the xterm-256 palette both the host and the kernel read (quay.l), all
+# laid through clay. `make mx` refreshes all four; test_clay's second half regenerates and diffs.
+# ⚠ the first three are CORE headers -- a refresh rebuilds the tree, so the gate to run after is
+# `make test` and not test_clay alone. Each is written aside and moved, so a shape check that
+# quits (mx-ok / nifs-ok / q-ok) leaves the committed file untouched.
 mx: host
-	@echo AI	mx.h kinds.h nifs.h "(mx.l + nifs.l on $m)"
+	@echo AI	mx.h kinds.h nifs.h xterm256.h "(mx.l + nifs.l + quay.l on $m)"
 	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
 	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
 	@$(mw) -l nifs.l -e '(: _ (? nifs-ok 0 (quit 1)) _ (puts nifs-h) (quit 0))' > out/.nifs.h
+	@$(mw) -l quay.l -e '(: _ (? q-ok 0 (quit 1)) _ (puts q-c) (quit 0))' > out/.xterm256.h
 	@mv out/.mx.h mx.h
 	@mv out/.kinds.h kinds.h
 	@mv out/.nifs.h nifs.h
+	@mv out/.xterm256.h crew/quay/xterm256.h
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
@@ -333,8 +336,10 @@ test_clay: host out/host$(hsuf)/mooncc.image
 	@cmp -s out/.kinds.h kinds.h || { echo "FAIL kinds.h is not what mx.l lays -- run: make mx"; diff -u kinds.h out/.kinds.h | head -20; exit 1; }
 	@$(mw) -l nifs.l -e '(: _ (? nifs-ok 0 (quit 1)) _ (puts nifs-h) (quit 0))' > out/.nifs.h
 	@cmp -s out/.nifs.h nifs.h || { echo "FAIL nifs.h is not what nifs.l lays -- run: make mx"; diff -u nifs.h out/.nifs.h | head -20; exit 1; }
-	@echo "clay-mx: mx.h, kinds.h and nifs.h regenerate identically"
-	@rm -f out/.mx.h out/.kinds.h out/.nifs.h
+	@$(mw) -l quay.l -e '(: _ (? q-ok 0 (quit 1)) _ (puts q-c) (quit 0))' > out/.xterm256.h
+	@cmp -s out/.xterm256.h crew/quay/xterm256.h || { echo "FAIL crew/quay/xterm256.h is not what quay.l lays -- run: make mx"; diff -u crew/quay/xterm256.h out/.xterm256.h | head -20; exit 1; }
+	@echo "clay-mx: mx.h, kinds.h, nifs.h and xterm256.h regenerate identically"
+	@rm -f out/.mx.h out/.kinds.h out/.nifs.h out/.xterm256.h
 # test_moonfuzz -- moon's REFUSAL surface (doc/moon-diag.md): each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
