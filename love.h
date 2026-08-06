@@ -406,7 +406,7 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 // carries no default -- add a data sentinel and -Wswitch names every site. the two
 // do NOT share values; mx.h's ai_kind_of_d is the one crossing, and a tray is the
 // one rep that dispatches four ways.
-// both rosters are tools/mx.l's -- edit THAT, not kinds.h; `make test_clay`
+// both rosters are mx.l's -- edit THAT, not kinds.h; `make test_clay`
 // regenerates and fails on drift.
 #include "kinds.h"
 typedef ai_word num, word;

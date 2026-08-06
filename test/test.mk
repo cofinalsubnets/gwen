@@ -302,17 +302,20 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m $(love0)
-# mx.h and kinds.h are COMMITTED GENERATED artifacts: love.c's +/* dispatch matrices and the
-# kind lattice they are indexed by, laid from tools/mx.l through clay. `make mx` refreshes both;
-# test_clay's second half regenerates and diffs. ⚠ they are CORE headers -- a refresh rebuilds
-# the tree, so the gate to run after is `make test` and not test_clay alone. Each half is written
-# aside and moved, so a shape check that quits (mx-ok) leaves the committed file untouched.
+# mx.h, kinds.h and nifs.h are COMMITTED GENERATED artifacts: love.c's +/* dispatch matrices
+# and the kind lattice they are indexed by (mx.l), and its nif + instruction registry
+# (nifs.l), all laid through clay. `make mx` refreshes all three; test_clay's second half
+# regenerates and diffs. ⚠ they are CORE headers -- a refresh rebuilds the tree, so the gate to
+# run after is `make test` and not test_clay alone. Each is written aside and moved, so a shape
+# check that quits (mx-ok / nifs-ok) leaves the committed file untouched.
 mx: host
-	@echo AI	mx.h kinds.h "(tools/mx.l on $m)"
-	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
-	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
+	@echo AI	mx.h kinds.h nifs.h "(mx.l + nifs.l on $m)"
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
+	@$(mw) -l nifs.l -e '(: _ (? nifs-ok 0 (quit 1)) _ (puts nifs-h) (quit 0))' > out/.nifs.h
 	@mv out/.mx.h mx.h
 	@mv out/.kinds.h kinds.h
+	@mv out/.nifs.h nifs.h
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
@@ -320,15 +323,18 @@ mx: host
 test_clay: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
 	@$m --wake $(ho)/mooncc.image -l test/gate/clay.l < /dev/null
-# ...and the CONSUMERS: love.c's +/* dispatch matrices (mx.h) and the kind lattice they
-# are indexed by (kinds.h) are both generated from tools/mx.l, so regenerate and diff --
-# a hand edit to either, or a table edit with no regen, is a red here. `cmp`, not rtk diff.
-	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
-	@cmp -s out/.mx.h mx.h || { echo "FAIL mx.h is not what tools/mx.l lays -- run: make mx"; diff -u mx.h out/.mx.h | head -20; exit 1; }
-	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
-	@cmp -s out/.kinds.h kinds.h || { echo "FAIL kinds.h is not what tools/mx.l lays -- run: make mx"; diff -u kinds.h out/.kinds.h | head -20; exit 1; }
-	@echo "clay-mx: mx.h and kinds.h regenerate identically"
-	@rm -f out/.mx.h out/.kinds.h
+# ...and the CONSUMERS: love.c's +/* dispatch matrices (mx.h), the kind lattice they are
+# indexed by (kinds.h) and its nif + instruction registry (nifs.h) are all generated, so
+# regenerate and diff -- a hand edit to any, or a table edit with no regen, is a red here.
+# `cmp`, not rtk diff.
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
+	@cmp -s out/.mx.h mx.h || { echo "FAIL mx.h is not what mx.l lays -- run: make mx"; diff -u mx.h out/.mx.h | head -20; exit 1; }
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
+	@cmp -s out/.kinds.h kinds.h || { echo "FAIL kinds.h is not what mx.l lays -- run: make mx"; diff -u kinds.h out/.kinds.h | head -20; exit 1; }
+	@$(mw) -l nifs.l -e '(: _ (? nifs-ok 0 (quit 1)) _ (puts nifs-h) (quit 0))' > out/.nifs.h
+	@cmp -s out/.nifs.h nifs.h || { echo "FAIL nifs.h is not what nifs.l lays -- run: make mx"; diff -u nifs.h out/.nifs.h | head -20; exit 1; }
+	@echo "clay-mx: mx.h, kinds.h and nifs.h regenerate identically"
+	@rm -f out/.mx.h out/.kinds.h out/.nifs.h
 # test_moonfuzz -- moon's REFUSAL surface (doc/moon-diag.md): each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
@@ -763,7 +769,7 @@ test_gcheck: host
 # ALWAYS collect, poisons the vacated nursery, and majors every 32nd. ~4 min, own tree.
 test_gcstress: host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAI_GC_STRESS test_host
-# test_mx: the +/* dispatch matrices as DATA (doc/verify.md's bridge 1). tools/mx.l IS the
+# test_mx: the +/* dispatch matrices as DATA (doc/verify.md's bridge 1). mx.l IS the
 # tables; mx.h is laid from it through clay and tools/mx2coq.l models it in Rocq -- two
 # derivations of ONE datum: bands factor, dispatch commutes, the diagonal reads the lattice.
 ifeq ($(COQC),)
@@ -772,7 +778,7 @@ test_mx:
 else
 test_mx: host
 	@echo TEST proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat tools/mx.l tools/mx2coq.l | $(mw) > proof/rocq/mx.v
+	@cat mx.l tools/mx2coq.l | $(mw) > proof/rocq/mx.v
 	@cd proof/rocq && $(COQC) -q mx.v >/dev/null
 	@rm -f proof/rocq/mx.vo proof/rocq/mx.vok proof/rocq/mx.vos proof/rocq/mx.glob proof/rocq/.mx.aux
 endif

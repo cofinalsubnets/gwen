@@ -24,7 +24,7 @@ spec-to-model shape than CakeML's compiler refinement — and every rung below i
 | proof/lean/uugen.lean | the SAME uu corpus through Lean 4 — a second, unrelated kernel | test_uulean |
 | proof/rocq/extract.v | the differential oracle's normalizer BUILT ON spec.v's proven subst/shift, extracted to OCaml | test_extract |
 | proof/rocq/big.v | the bignum lane's reference: stdlib binary Z + a PROVEN decimal codec (parse_print), extracted; big_drive fuzzes love's reader/limbs/printer against it | test_big |
-| proof/rocq/mx.v | GENERATED from THE TABLE (tools/mx.l), the same love datum love.c's mx.h is laid from: the 256-cell tables factor through the derived band quotient, dispatch commutes, the diagonal reads the lattice | test_mx |
+| proof/rocq/mx.v | GENERATED from THE TABLE (mx.l), the same love datum love.c's mx.h is laid from: the 256-cell tables factor through the derived band quotient, dispatch commutes, the diagonal reads the lattice | test_mx |
 | proof/rocq/enc.v encmem.v encli.v | reference x86-64 encoders, decode inverts encode, byte-identical against holo | test_encver |
 
 Every `.v` holds the axiom audit: no `Axiom`, no `Admitted`, no classical/funext escape hatch.
@@ -71,7 +71,7 @@ gcc/glibc/ld out. So the work is VERIFYING pieces against references, the encode
 - the bignum lane is bridged (big.v);
 - the `+`/`*` dispatch matrices are owned as data (mx.v — band factorization, dispatch
   commutativity, the diagonal-is-the-lattice reading) and owned in the OTHER direction too:
-  `tools/mx.l` is the table, the C (mx.h) and the model are both generated from it, so love.c
+  `mx.l` is the table, the C (mx.h) and the model are both generated from it, so love.c
   has a generated region;
 - the GC copy loop has its theorems (gc.v's `drain_*`), with test_gcheck re-driving the whole
   minor scan on a debug build and trapping if a second pass copies a word — a guard that is

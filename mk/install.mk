@@ -137,7 +137,7 @@ uninstall:
 	@rm -f $(installs)
 
 # the embedding surface is TWO files: love.h includes kinds.h (the kind lattice,
-# laid by tools/mx.l), so an installed love.h without it does not compile.
+# laid by mx.l), so an installed love.h without it does not compile.
 $d/include/%.h: %.h
 	@echo CP	$(abspath $@)
 	@install -D -m 644 $< $@

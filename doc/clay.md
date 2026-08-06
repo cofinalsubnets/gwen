@@ -23,13 +23,13 @@ count is near its floor; its TRUSTED surface is not, and that is where clay pays
 -> JS backend is a second consumer of the same datum rather than a second implementation,
 and `cc-clay` gives a native leg with no C text at all.
 
-**rungs 0 through 3 have landed** (`crew/moon/clay.l`, `make test_clay`, `tools/mx.l` +
-`mx.h` + `kinds.h`, and the order of work's rung 1 -- the five node shapes); the rest is
-unbuilt.
+**rungs 0 through 4 have landed** (`crew/moon/clay.l`, `make test_clay`, `mx.l` +
+`mx.h` + `kinds.h`, the order of work's rung 1 -- the five node shapes -- and its rung 3,
+the nif registry); the rest is unbuilt.
 
 ## the state, measured
 
-on the current tree -- `love.c` 8232 lines, `love.h` 505, `crew/moon/clay.l` 505.
+on the current tree -- `love.c` 8148 lines, `love.h` 508, `crew/moon/clay.l` 505.
 
 `make test_clay` reads **63 round-trip, 51 inexpressible, 0 unparsed, 114 files**.
 
@@ -82,10 +82,10 @@ so the move is not "remove macros" but **move each abstraction up one level**, c
 per macro between three routes:
 
 * **(a) leave it call-shaped.** free, and covers the table above.
-* **(b) generate it away.** the X-macros `nifs(_)` / `insts(_)` (`love.c:617-692`, 5
-  expansion sites) expand differently at each site because C cannot abstract "the same
-  list with a different consumer". the love loop replaces them and the macro is DELETED.
-  this is the criterion's exact shape and the one place a macro genuinely goes.
+* **(b) generate it away.** the X-macros `nifs(_)` / `insts(_)` expanded differently at
+  each site because C cannot abstract "the same list with a different consumer". the love
+  loop replaces them and the macros are DELETED. this is the criterion's exact shape and
+  the one place a macro genuinely goes -- **landed**, rung 4 in §what has landed.
 * **(c) add an emit-only clay node.** the rung 2b-2d precedent, for the shapes that are
   not call-shaped.
 
@@ -150,8 +150,9 @@ incremental, each rung shippable, `love.c` staying hand-written until its region
    flexible array members. lawed in `test/host/clay.l`. no `love.c` change; G1 must hold at
    63/51. **landed** -- rung 3 in §what has landed.
 2. **add preprocessor nodes** -- `cpp-if` / `cpp-def`.
-3. **the X-macro registry** -- `nifs` / `insts` (`love.c:617-692`), route (b): the first
-   region where a macro is deleted and the love loop is the better abstraction.
+3. **the X-macro registry** -- `nifs` / `insts`, route (b): the first region where a macro
+   is deleted and the love loop is the better abstraction. **landed** -- rung 4 in §what
+   has landed.
 4. **the alpha-equivalence cluster** -- `3574-3609` (partial-application introspection:
    `fn_partialp`/`fn_base`/`fn_arg`/`fn_src`), `3609-3737` (de Bruijn canonical lambda
    printing), `5979-6032` (`salpha` + `shash`), `6038-6136` (the beta bridge:
@@ -310,7 +311,7 @@ tells about moon. state it this way or not at all.
    const`. `clay-ok?`, a validator, because `gen.l` currently TRUSTS its input. honors the
    `gripe` protocol (`doc/moon-diag.md`).
 1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `test/cc/`.
-2. **the dispatch matrices; deleted `tools/mxdump.c`.** `tools/mx.l` is the table; `mx.h` is
+2. **the dispatch matrices; deleted `tools/mxdump.c`.** `mx.l` is the table; `mx.h` is
    laid from it through clay and `#include`d by love.c (its first generated region);
    `tools/mx2coq.l` reads the same table instead of a dump, so mx.v's bridge moved from
    shape 3 to shape 1. the dumper, its `$(CC)` step, the function-pointer comparison and the
@@ -347,6 +348,33 @@ tells about moon. state it this way or not at all.
    except the `ret` prefix, which parses now: a statement-position `musttail` lands in the
    PRE slot (spelled `"__attribute__((musttail))"`), gen marks the call, and sibcall spells
    the jump or refuses. G1 held at 63/51/0 for the rest.
+4. **the nif + instruction registry, and the first DELETED macros.** `nifs.l` is the
+   roster -- 126 nif rows `(ARRAY name arity IMPL)` and 38 instruction names -- and `nifs.h`
+   is laid from it: ONE `union u` table, a nif's little stream being a RUN inside it, then
+   `def1`, the name -> value table `ai_defn` reads into the book, carrying each run's
+   address. nine macros stop existing (`s1`..`s5`, `nifs`, `insts`, `niff`, `i_entry`);
+   love.c takes an `#include` at the one site the two expansions stood. route (b) exactly:
+   the five `sN` were arity wearing a macro, and the X-macro pair existed only because C
+   cannot hand one list to two readers.
+   the one table is what a generator buys that a macro could not: the run OFFSETS are a
+   running sum over the roster, so 126 separate array symbols collapse into one object and
+   no hand has to keep the offsets straight.
+   **it cost no new clay node.** `gdecl` + `(static)`, nested `init`, `dfield` for the `.x`
+   designator and `cast` for `(intptr_t)` were all already there, which is the useful
+   measurement: a whole region of love.c converted on the grammar rung 3 left behind, and
+   G1 held at 63/51/0 untouched.
+   G2 came in two pieces, both exact. the flat table: rebuild the 336-cell sequence from
+   the roster and compare it to the emitted cells -- identical, with every `def1` offset
+   matching the roster's running sum and no slack at the end. and, against the macro it
+   replaced: preprocess the old and new `love.c` with the same cc, tokenize, compare
+   top-level declarations as multisets -- **equal** at the point the per-nif arrays were
+   still named, which is what pins the cell contents to what the macros expanded to.
+   net C **-84** lines.
+   ⚠ 506 generated lines stand where 85 dense macro lines did, and that is the criterion
+   working, not failing -- the `.l` roster is 126 rows and the repetition went where
+   repetition belongs. a braced union cell is an aggregate, so `cinit`'s one layout rule
+   gives it its own line; that rule is not a knob, and a compaction wanting a new clay node
+   is not worth a new clay node.
 
 ## open
 

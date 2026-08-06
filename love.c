@@ -607,91 +607,6 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
 #define dtoa_sci_lo 1e-4f
 #endif
 
-#define s1(i) {{i}, {lvm_ret0}}
-#define s2(i) {{lvm_cur},{.x=putcharm(2)},{i}, {lvm_ret0}}
-#define s3(i) {{lvm_cur},{.x=putcharm(3)},{i}, {lvm_ret0}}
-#define s4(i) {{lvm_cur},{.x=putcharm(4)},{i}, {lvm_ret0}}
-#define s5(i) {{lvm_cur},{.x=putcharm(5)},{i}, {lvm_ret0}}
-// `+` and `*` of two functions are prel's stack/compose, reached from
-// lvm_addh/lvm_mulh through g->hot_stack / g->hot_compose
-#define nifs(_) \
- _(nif_clock, "clock", s1(lvm_clock)) _(nif_nclock, "nclock", s1(lvm_nclock)) _(nif_please, "please", s1(lvm_please))\
- _(nif_gauge, "gauge", s1(lvm_gauge)) _(nif_apof, "apof", s1(lvm_apof))\
- _(nif_seal, "seal-hook", s2(lvm_seal)) _(nif_heard, "heard", s1(lvm_heard)) _(nif_books, "books", s1(lvm_books)) _(nif_setbooks, "setbooks", s1(lvm_setbooks)) _(nif_mods, "mods", s1(lvm_mods)) _(nif_lib, "lib", s1(lvm_lib))\
- _(nif_add, "+", s2(lvm_add)) _(nif_sub, "-", s2(lvm_sub)) _(nif_mul, "*", s2(lvm_mul))\
- _(nif_quot, "/", s2(lvm_quot)) _(nif_fquot, "//", s2(lvm_fquot)) _(nif_rem, "%", s2(lvm_rem)) \
- _(nif_lt, "<", s2(lvm_lt))  _(nif_le, "<=", s2(lvm_le)) _(nif_eq, "=", s2(lvm_eq))\
- _(nif_ge, ">=", s2(lvm_ge))  _(nif_gt, ">", s2(lvm_gt)) \
- _(nif_same, "id?", s2(lvm_same)) \
- _(nif_bsl, "<<", s2(lvm_bsl)) _(nif_bsr, ">>", s2(lvm_bsr))\
- _(nif_band, "&", s2(lvm_band)) _(nif_bor, "|", s2(lvm_bor)) _(nif_bxor, "^", s2(lvm_bxor))\
- _(nif_link, "link", s2(lvm_link)) _(nif_car, "cap", s1(lvm_cap)) _(nif_cdr, "cup", s1(lvm_cup))\
- _(nif_sort, "sort", s1(lvm_sort)) _(nif_tally, "tally", s1(lvm_tally)) \
- _(nif_snip, "snip", s3(lvm_snip)) \
- _(nif_sound0, "sound0", s1(lvm_sound0))\
- _(nif_string, "string", s1(lvm_string))\
- _(nif_intern, "name", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
- _(nif_nomctor, "nom", s1(lvm_nomctor))\
- _(nif_spin, "spin", s1(lvm_spin))\
- _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
- _(nif_seek, "seek", s2(lvm_seek)) _(nif_saturate, "saturate", s1(lvm_saturate)) _(nif_peep, "peep", s3(lvm_peep))\
- _(nif_pin, "pin", s3(lvm_pin)) _(nif_pull, "pull", s3(lvm_pull))\
- _(nif_table, "tablet", s1(lvm_tablet)) _(nif_keys, "keys", s1(lvm_keys))\
- _(nif_dig, "dig", s1(lvm_dig))\
- _(nif_casknew, "cask", s1(lvm_casknew)) _(nif_bcopy, "pour", s5(lvm_bcopy))\
- _(nif_chainp, "link?", s1(lvm_chainp)) _(nif_strp, "string?", s1(lvm_strp))\
- _(nif_gem, "gem", s1(lvm_gem)) _(nif_gemp, "gem?", s1(lvm_gemp))\
- _(nif_sin, "sine", s1(lvm_sin)) _(nif_cos, "cosine", s1(lvm_cos))\
- _(nif_log, "log", s1(lvm_log)) _(nif_pow, "power", s2(lvm_pow))\
- _(nif_twin, "twin", s2(lvm_twin)) _(nif_twinp, "twin?", s1(lvm_twinp))\
- _(nif_re, "re", s1(lvm_re)) _(nif_im, "im", s1(lvm_im)) _(nif_conj, "conj", s1(lvm_conj))\
- _(nif_abs, "abs", s1(lvm_abs)) _(nif_arg, "arg", s1(lvm_carg))\
- _(nif_tray, "tray", s3(lvm_trayctor))\
- _(nif_iota, "iota", s1(lvm_iota))\
- _(nif_nif, "nif", s4(lvm_nif))\
-_(nif_nifx, "nifx", s5(lvm_nifx))\
- _(nif_rank, "rank", s1(lvm_rank))\
- _(nif_alen, "alen", s1(lvm_alen)) _(nif_shape, "shape", s1(lvm_shape))\
- _(nif_atype, "atype", s1(lvm_atype))\
- _(nif_asum, "asum", s1(lvm_asum)) _(nif_aprod, "aprod", s1(lvm_aprod))\
- _(nif_max, "max", s1(lvm_max)) _(nif_min, "min", s1(lvm_min))\
- _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
- _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "big?", s1(lvm_bigp)) _(nif_sunp, "sun?", s1(lvm_sunp))\
- _(nif_setp, "tray?", s1(lvm_setp)) _(nif_intf, "int", s1(lvm_intf))\
- _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_namep, "name?", s1(lvm_namep)) _(nif_mintp, "mint?", s1(lvm_mintp)) _(nif_tabp, "tablet?", s1(lvm_tabp)) _(nif_charmp, "charm?", s1(lvm_charmp))\
- _(nif_litp, "lit?", s1(lvm_litp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
- _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
- _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
- _(nif_yield, "yield", s1(lvm_yield_nif)) \
- _(nif_spawn, "twirl", s2(lvm_spawn)) _(nif_wait, "catch", s1(lvm_wait)) \
- _(nif_sleep, "rest", s1(lvm_sleep)) _(nif_donep, "landed?", s1(lvm_donep)) \
- _(nif_scoop, "scoop", s1(lvm_scoop)) \
- _(nif_hush, "freeze", s1(lvm_hush)) \
- _(nif_key, "cue?", s1(lvm_key)) \
- _(nif_fputbn, "putbn", s3(lvm_fputbn))\
- _(nif_fputx, "print", s2(lvm_fputx))\
- _(nif_await, "await", s1(lvm_await))\
- _(nif_fgetc, "see", s1(lvm_fgetc)) _(nif_fungetc, "unsee", s2(lvm_fungetc))\
- _(nif_chug, "chug", s1(lvm_chug))\
- _(nif_fputc, "put", s2(lvm_fputc)) _(nif_fputs, "say", s2(lvm_fputs))  _(nif_fflush, "flush", s1(lvm_fflush))\
- _(nif_dot, "dot", s1(lvm_dot))\
- _(nif_wheel, "wheel", s1(lvm_wheel))\
- _(nif_turn, "turn", s1(lvm_turn)) _(nif_turnf, "turnf", s1(lvm_turnf))\
- _(nif_coinmk, "coin", s2(lvm_coinmk)) _(nif_load, "load", s1(lvm_load))\
- _(nif_dieof, "die-of", s1(lvm_dieof)) _(nif_coinp, "coin?", s1(lvm_coinp))\
- _(nif_calloutdrive, "calloutdrive", s1(lvm_calloutdrive)) _(nif_calloutresume, "calloutresume", s1(lvm_calloutresume))
-#define native_implemented_function(n, _, d) static union u const n[] = d;
-#define insts(_) _(lvm_unc) _(lvm_index) _(lvm_ret) _(lvm_ap) _(lvm_tap) _(lvm_apn) _(lvm_tapn)\
-  _(lvm_jump) _(lvm_cond) _(lvm_arg) _(lvm_quote) _(lvm_defglob)\
-  _(lvm_argap) _(lvm_quoteap) _(lvm_argtap)\
-  _(lvm_arg0) _(lvm_arg1) _(lvm_arg2) _(lvm_arg3)\
-  _(lvm_quo0) _(lvm_quo1) _(lvm_quo2) _(lvm_quo3) _(lvm_quom1) _(lvm_quom2)\
-  _(lvm_aa) _(lvm_aq) _(lvm_qa) _(lvm_qq)\
-  _(lvm_aap) _(lvm_aqp) _(lvm_qap) _(lvm_qqp)\
-  _(lvm_argcap) _(lvm_argcup) _(lvm_argtwo) _(lvm_argcond)\
-  _(lvm_argtwocond)
-#define niff(b, n, _) {n, (intptr_t) b},
-#define i_entry(i) {#i, (intptr_t) i},
 
 
 // ============================================================================
@@ -724,7 +639,11 @@ struct ai *ai_defv(struct ai *g, char const *nm) {
  if (ai_ok(g)) ai_core_of(g)->sp++;                   // [value, ..]
  return g; }
 
-nifs(native_implemented_function);
+// the nif + instruction registry: one `union u` table, a nif's little stream being a
+// RUN inside it, then def1 -- the name -> value table ai_defn reads into the book,
+// carrying each run's address. both are laid from the one roster in nifs.l -- EDIT
+// THAT, not nifs.h; `make test_clay` fails on drift.
+#include "nifs.h"
 
 static lvm(_lvm_yield_c) { return Pack(g), g; }
 static union u const yield_c[] = { {_lvm_yield_c} };
@@ -736,8 +655,6 @@ static lvm(_lvm_help_scare, enum ai_status s) { return Pack(g), encode(g, s); }
 lvm(lvm_help) {
  enum ai_status s = ai_code_of(g);
  return Ap(_lvm_help_scare, ai_core_of(g), s); }
-
-static struct ai_def const def1[] = { nifs(niff) insts(i_entry)};
 
 // reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
 char const *ai_nif_name(intptr_t x) {
@@ -5700,8 +5617,8 @@ static lvm(data_pair_apply) {
 // a list anywhere, add_string strings (+ a number as one byte -- the byte law),
 // mul_rep sequence * count, *l a lambda-or-map operand (church add / compose),
 // lvm_0 undefined -> zero. precedence: lambda > tablet > chain > text > number.
-// the tables are GENERATED: one datum (tools/mx.l) feeds this header AND the rocq
-// model mx.v, so theorem and code cannot drift. EDIT tools/mx.l, not mx.h;
+// the tables are GENERATED: one datum (mx.l) feeds this header AND the rocq
+// model mx.v, so theorem and code cannot drift. EDIT mx.l, not mx.h;
 // `make test_clay` regenerates and fails on drift.
 #include "mx.h"
 
