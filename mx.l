@@ -183,12 +183,12 @@
                  (tiled  1 ()))
    ; the scripts, keyed to a class. the third column is the script's indent, so the
    ; block keeps its neighbours' shape. a seat leaves this roster when its LINK
-   ; becomes ours: holo packs each love_data.N whole and in order, which is this
-   ; tiling already, so a holo-linked board owes no script at all (nucleo446).
+   ; becomes ours: holo lays each love_data.N whole and in order, on the grain the
+   ; object declares, which IS this tiling -- so a holo-linked board owes no script
+   ; at all. the three thumb seats left that way; the two kernel ones stay while
+   ; KLINK=lld remains the comparison lane and ld.lld still needs telling.
    mx-seats '(("port/inle/x86_64/x86_64.lds"    lean 8)
-              ("port/inle/aarch64/aarch64.lds"  lean 8)
-              ("port/rp2040/rp2040.lds"         fat  4)
-              ("port/teensy41/teensy41.lds"     fat  4))
+              ("port/inle/aarch64/aarch64.lds"  lean 8))
    (mx-stride cls) (: (go l) (? (! (two? l)) (scare 'mx-stride cls)
                                  (: r <l (? (id? <r cls) <>r (go >l))))
                       (go mx-strides))

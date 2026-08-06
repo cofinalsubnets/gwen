@@ -3,10 +3,12 @@
 # built by the root Makefile). Every C file -- love.c, the am math floor,
 # libc, teensy41.c, main.c -- goes through `mooncc -t thumb2`, and boot.o (the
 # ROM-facing FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from
-# holo IR by mkboot.l -- no gas anywhere. arm-none-eabi-ld still links against
-# teensy41.lds. No libgcc: mooncc's thumb2 lanes are self-contained (zero
-# __aeabi_*). mooncc's system include dir is CWD-relative, so every compile
-# runs from $(R). Output lands in $(R)/out/teensy41/.
+# holo IR by mkboot.l, the baked heap image by mkimg.l, and tlink.l does the
+# LINK over holo's ldbare32 -- so the port owes no gas, no ld and no linker
+# script; objcopy for the .hex is the last foreign tool here. No libgcc:
+# mooncc's thumb2 lanes are self-contained (zero __aeabi_*). mooncc's system
+# include dir is CWD-relative, so every compile runs from $(R). Output lands
+# in $(R)/out/teensy41/.
 #
 # The default target also VERIFIES the boot image: FCFB tag at flash offset
 # 0, IVT header at 0x1000, and a thumb-bit entry pointing into .startup --
@@ -14,7 +16,6 @@
 R := ../..
 o = out/teensy41
 MOONCC = out/host/mooncc
-LD = arm-none-eabi-ld
 OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 
 te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
@@ -90,15 +91,27 @@ $(R)/out/mps2/love.img: FORCE
 	@$(MAKE) --no-print-directory -C $(R)/port/mps2 img
 FORCE:
 
-$(R)/$(o)/love-img.o: $(R)/out/mps2/love.img
+# the baked heap image as an object: mkimg.l lays it, in place of `ld -r -b binary`.
+$(R)/$(o)/love-img.o: $(R)/out/mps2/love.img mkimg.l $(R)/crew/holo/thumb2.l $(lay_l) $(R)/out/host/love
 	@echo IMG	$@
 	@mkdir -p $(R)/$(o)
-	@cp $< $(R)/$(o)/love.img
-	@cd $(R)/$(o) && $(LD) -r -b binary love.img -o love-img.o
+	@cd $(R) && { echo "(use 'holo)"; cat crew/holo/thumb2.l $(subst $(R)/,,$(lay_l)) \
+	  port/teensy41/mkimg.l; \
+	  echo '(mkimg "out/mps2/love.img" "$(o)/love-img.o")'; } | out/host/love
 
-$(R)/$(o)/love.elf: $(objs) teensy41.lds
-	@echo LD	$@
-	@$(LD) -T teensy41.lds $(objs) -o $@
+# the link is ours: tlink.l drives holo's ldbare32 with the XIP flash map, in place
+# of arm-none-eabi-ld + teensy41.lds.
+link_l = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+  $(R)/crew/holo/thumb2.l $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l $(R)/crew/holo/link.l
+
+$(R)/$(o)/tlink.l: tlink.l $(link_l)
+	@echo AI	$@
+	@mkdir -p $(R)/$(o)
+	@{ echo "(use 'holo)"; cat $(link_l) $<; } > $@
+
+$(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(R)/out/host/love
+	@echo LINK	$@
+	@cd $(R) && out/host/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
 
 # .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash.
 # The .bin is the verification surface: byte offsets ARE flash offsets.
@@ -129,9 +142,9 @@ $(R)/$(o)/psram-test.o: psram-test.c psram.h teensy41.h
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(te_cc) -c port/teensy41/psram-test.c $(o)/psram-test.o
-$(R)/$(o)/psram-test.elf: $(pt_objs) teensy41.lds
-	@echo LD	$@
-	@$(LD) -T teensy41.lds $(pt_objs) -o $@
+$(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(R)/out/host/love
+	@echo LINK	$@
+	@cd $(R) && out/host/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
 $(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf
 	@echo HEX	$@
 	@$(OBJCOPY) -O ihex $< $@

@@ -328,7 +328,7 @@
    ; door here answers for these, so a ledger must not go looking for them in a .a.
    ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"
              "__data_start__" "__data_end__" "__data_load__"
-             "__bss_start__" "__bss_end__")
+             "__bss_start__" "__bss_end__" "__load_size__")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us)
@@ -1080,6 +1080,12 @@
                _ (pin glo "__bss_end__"    `((dv + dm) 0))
                0)
             0)
+       ; -- how many bytes the file LAYS from org. a boot ROM handed a header with a
+       ; length field (the i.MX IVT's boot data) is asking this and nothing else, and
+       ; only the layout can answer. the last run's file end, since runs lay in map
+       ; order; .bss is not in it, which is right -- a ROM copies what exists.
+       _ (: pN (at plan ((tally plan) - 1))
+            (pin glo "__load_size__" `((((at pN 2) + (at pN 3)) - foff) 0)))
        ; the entry symbol is a COURTESY -- for objdump, gdb and a reader asking what
        ; runs first. the core never consults e_entry; it takes the vector table.
        ent (: e (peep glo "_start" ()) (? (two? e) <e org))

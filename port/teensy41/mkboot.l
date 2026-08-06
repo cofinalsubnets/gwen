@@ -4,8 +4,9 @@
 ;
 ; the ROM reads three structures at FIXED flash offsets before any of our code runs --
 ; the FlexSPI config block at 0x000, the image vector table at 0x1000, the boot data
-; right after it -- so their addresses are the contract and teensy41.lds pins them by
-; section name. every word below is byte-for-byte what first silicon booted with
+; right after it -- so their addresses are the contract, and port/teensy41/tlink.l's map
+; names each of these lanes at its own. every word below is byte-for-byte what first
+; silicon booted with
 ; (2026-07; the README carries the wrong-offset lore).
 ;
 ; ⚠ a vector is an ADDRESS CARRYING THE THUMB BIT, and obj.l sets bit 0 on every FUNC
@@ -44,14 +45,14 @@
 
       ;; -- 2. the image vector table at flash 0x1000, and the boot data after it ------
       ;; the ROM validates the header and jumps to entry. boot_data.length is how much
-      ;; of flash the ROM treats as the image -- teensy41.lds sums the sections into
-      ;; __image_size__, the one number here that only the link can know.
+      ;; of flash the ROM treats as the image -- __load_size__, which crew/holo/link.l
+      ;; pins from the layout, being the one number here that only the link can know.
       ivt ((le32 0x432000D1)                   ; tag 0xD1, len 0x0020, ver 0x43
             + (wsym 'cstartup)                 ; entry
             + (le32 0) + (le32 0)              ; rsv1, dcd
             + (wsym 'boot_data) + (wsym 'image_vector_table)
             + (le32 0) + (le32 0))             ; csf, rsv2
-      bdata ((le32 0x60000000) + (wsym '__image_size__) + (le32 0))
+      bdata ((le32 0x60000000) + (wsym '__load_size__) + (le32 0))
 
       ;; -- 3. the ARM vector table (VTOR points here once we run; the ROM boots via
       ;; the IVT, so word 0's SP is advisory). every fault lands somewhere that speaks.

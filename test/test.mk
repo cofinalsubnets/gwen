@@ -313,8 +313,7 @@ test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # quits (mx-ok / nifs-ok / q-ok) leaves the committed file untouched.
 # love_data.ld is laid WHOLE; a board's own script is a board's own memory map, so mx.l takes
 # its text and answers it with the marked block relaid -- the recipe's IO is a pipe.
-mx_lds = port/inle/x86_64/x86_64.lds port/inle/aarch64/aarch64.lds \
-         port/rp2040/rp2040.lds port/teensy41/teensy41.lds
+mx_lds = port/inle/x86_64/x86_64.lds port/inle/aarch64/aarch64.lds
 mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0))
 mx: host
 	@echo AI	mx.h kinds.h nifs.h xterm256.h love_data.ld "+5 .lds (mx.l + nifs.l + quay.l on $m)"
@@ -532,15 +531,18 @@ test_playdate: host out/host$(hsuf)/mooncc
 	  [ "$$m" -eq 0 ] || { echo "FAIL $$m movw/movt relocs (the loader can't relocate them)"; exit 1; }; \
 	  echo "test_playdate: love.pdx (device half all-mooncc -t thumb2sp, soft f64) -- resolved, word-relocs only"
 # test_teensy41 -- the REAL-METAL cousin's build gate: the whole port compiled by mooncc -t
-# thumb2, linked against the XIP flash map, and the ROM-facing boot image VERIFIED (FCFB tag
-# at flash 0, IVT at 0x1000, thumb-bit entry). No RT1062 emulation: test_mps2 is the runtime.
+# thumb2, LINKED BY US (tlink.l over holo's ldbare32 -- no ld and no linker script, the XIP
+# flash map being the map in that file), the baked heap image wrapped by mkimg.l rather than
+# `ld -r -b binary`, and the ROM-facing boot image VERIFIED (FCFB tag at flash 0, IVT at
+# 0x1000, thumb-bit entry). objcopy for the .hex is the one foreign tool left, so that is
+# what the skip asks after. No RT1062 emulation: test_mps2 is the runtime.
 .PHONY: test_teensy41
 test_teensy41: host out/host$(hsuf)/mooncc
 	@echo TEENSY41 out/teensy41/love.hex
-	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1; then \
-	   echo "test_teensy41: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
+	@if ! command -v llvm-objcopy >/dev/null 2>&1 && ! command -v arm-none-eabi-objcopy >/dev/null 2>&1; then \
+	   echo "test_teensy41: no objcopy, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_teensy41: love (all-mooncc thumb2) links against the XIP flash map, boot image verified"
+	  echo "test_teensy41: love (all-mooncc thumb2), OUR linker and no linker script, boot image verified"
 # test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate: the whole port compiled by
 # mooncc -t thumb2sp, LINKED BY US (nlink.l over holo's ldbare32, no ld and no linker
 # script -- the F4's memory map is the map in that file), and the boot image VERIFIED
@@ -580,10 +582,10 @@ test_nucleo446_smoke: host out/host$(hsuf)/mooncc
 .PHONY: test_rp2040
 test_rp2040: host out/host$(hsuf)/mooncc
 	@echo RP2040 out/rp2040/love.bin
-	@if ! command -v arm-none-eabi-ld >/dev/null 2>&1; then \
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S) verified"
+	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and no linker script, verified"
 # moon-tar -- the userland cousin of test_raw (doc/moon-userland.md): build GNU tar 1.13
 # with mooncc + nolibc + the holo linker (no gcc/glibc/ld) and prove the binary RUNS --
 # cf/xf + czf/xzf roundtrips + system-tar interop. Point TARSRC at a ./configure'd tree.
