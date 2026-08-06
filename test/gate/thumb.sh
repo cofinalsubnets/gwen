@@ -180,7 +180,16 @@ thumb1)
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessf.c; a bare float is ONE WORD on v6-M (ai_flo_t IS float on a 32-bit love -- the widened-pair mismatch here kept the egg from hatching)"
   lane z  test/thumb1/libzn.c test/thumb1/harnesszn.c "" 9  30 "thumb1 composites" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnesszn.c; the MEMORY-return (sret) lane and the position-0 16B r0-r3 quad are the featured shapes"
-  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + composites vs gcc), ld binds, runs on qemu Cortex-M0" ;;
+  # the other direction: read one of the objects just written back through the front
+  # half of OUR linker (link.l's ld-read). every 64-bit link the tree does proves that
+  # reader's ELF64/RELA rows; this is the only thing that proves its ELF32/REL ones.
+  # am.lib.o because it carries no compiler-NAMED section -- ld-lane has no lane for
+  # one until the 32-bit link itself lands, and refuses rather than guessing.
+  { echo "(use 'holo)"
+    cat crew/holo/thumb1.l crew/kore/text.l crew/kore/core.l crew/kore/asbook.l \
+        crew/holo/elf.l crew/holo/obj.l crew/holo/link.l test/gate/ld32.l
+    echo "(ld32-check \"$d/am.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/am.lib.o"
+  echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
 thumb2)
   lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 45 30 "thumb2 64-bit pairs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c"

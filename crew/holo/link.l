@@ -1,6 +1,7 @@
 ; crew/holo/link.l -- a static ELF LINKER over obj.l's relocatable objects (the
-; toolchain ladder, rung 3): read each .o (the section shape obj.l lays --
-; .text / .data / ai_nifs + symtab + RELA), resolve every symbol across the set
+; toolchain ladder, rung 3): read each .o (the section shape obj.l lays -- .text /
+; .data / ai_nifs + symtab + RELA, or REL at 32 bits -- ld-read takes either ELF
+; class off the field table below), resolve every symbol across the set
 ; (strong over weak; __start_/__stop_ai_nifs synthesized over the packed nif
 ; region), lay the sections at the classic ET_EXEC base, apply the relocations
 ; (R_64 an absolute S+A; PC32/PLT32 both the pc-relative S+A-P once the link is
@@ -27,6 +28,42 @@
    (rle32 s i) ((rle16 s i) + (65536 * (rle16 s (i + 2))))
    (rle64 s i) ((rle32 s i) + (4294967296 * (rle32 s (i + 4))))
    (sg64 v) (? (v < 9223372036854775808) v (v - 18446744073709551616))
+   ; a field of any width, little-endian -- the table below asks for 1, 2, 3, 4 and 8
+   (rlew s i n) (? (n < 1) 0 ((s i) + (256 * (rlew s (i + 1) (n - 1)))))
+
+   ; --- the FIELD TABLE: where each class keeps what ld-read reads. ---
+   ; ⚠ the two classes are not one shape at two widths. Elf32_Sym REORDERS (st_info
+   ; 4 -> 12, st_shndx 6 -> 14, st_value 8 -> 4), a REL's r_info splits at a BYTE
+   ; (type low, sym the top three) where a RELA's splits at a word, and a REL has no
+   ; addend column at all -- its addend rides IN the field, so `rl-add` is simply
+   ; absent at 32 bits and the patcher pulls it per kind. every one of those but the
+   ; last is a row here, which is why there is one reader below and not two.
+   ; a row is (offset width); a lone scalar rides as a one-element row so presence
+   ; is always the `two?`, never a zero.
+   (ld-cls c) (: t (tablet 0) _ (foldl (\ _ r (pin t <r >r)) 0 c) t)
+   (ld-row fs nm) (peep fs nm ())
+   (ld-n fs nm) (: r (ld-row fs nm) (? (two? r) <r (scare 'link-field nm)))
+   (ld-f fs s b nm)
+    (: r (ld-row fs nm) (? (two? r) (rlew s (b + <r) <>r) (scare 'link-field nm)))
+   ; ⚠ a table stride is the ONE row a wrong value does not announce: read a
+   ; 16-byte symbol at 24 and the walk quietly takes every other one, each of
+   ; them well-formed. so ask the section its OWN sh_entsize and hold the table
+   ; to it -- the file is the oracle, and it is the only one there is.
+   (ld-esz fs s h want sec)
+    (? ((ld-f fs s h 'sh-esz) = (ld-n fs want)) 0 (scare 'link-entsize sec))
+   ;                     ELF64 / RELA                        ELF32 / REL
+   elf64f (ld-cls '((sh-ent 64) (sy-ent 24) (rl-ent 24) (rl-ty 4)
+                    (e-shent 58 2) (e-shoff 40 8) (e-shnum 60 2) (e-shstrx 62 2)
+                    (sh-name 0 4) (sh-type 4 4) (sh-flags 8 8) (sh-off 24 8)
+                    (sh-size 32 8) (sh-link 40 4) (sh-info 44 4) (sh-align 48 8) (sh-esz 56 8)
+                    (sy-name 0 4) (sy-info 4 1) (sy-shndx 6 2) (sy-val 8 8) (sy-size 16 8)
+                    (rl-off 0 8) (rl-kind 8 4) (rl-sym 12 4) (rl-add 16 8)))
+   elf32f (ld-cls '((sh-ent 40) (sy-ent 16) (rl-ent 8) (rl-ty 9)
+                    (e-shent 46 2) (e-shoff 32 4) (e-shnum 48 2) (e-shstrx 50 2)
+                    (sh-name 0 4) (sh-type 4 4) (sh-flags 8 4) (sh-off 16 4)
+                    (sh-size 20 4) (sh-link 24 4) (sh-info 28 4) (sh-align 32 4) (sh-esz 36 4)
+                    (sy-name 0 4) (sy-info 12 1) (sy-shndx 14 2) (sy-val 4 4) (sy-size 8 4)
+                    (rl-off 0 4) (rl-kind 4 1) (rl-sym 5 3)))
    (ld-cstr s i) (: (go j) (? ((s j) = 0) (snip s i j) (go (j + 1))) (go i))
    (ld-zeros n) (? (n < 1) () (0 >< (ld-zeros (n - 1))))
    (ld-align a v) (? (a < 2) v (: r (v % a) (? (r = 0) v (v + (a - r)))))
@@ -66,19 +103,23 @@
    ;   'lanes              lane -> its section indices, ASCENDING (header order)
    ;   'drops              section index -> 1, the ones ruled out (see `class`)
    ;   'syms / 'nsym       symbol index -> (name bind typ shndx value size)
-   ;   'relas              ((secidx (off kind symidx addend)..) ..)
+   ;   'relas              ((secidx (off kind symidx addend)..) ..), the addend ()
+   ;                       on a REL, where it rides in the field instead
    ; layout pins 'base -- section index -> load address -- on it later. keying
    ; the bases by INDEX, not by lane, is what lets a lane hold more than one
    ; section: a symbol reads its own section's base straight off its shndx.
    (ld-read id s mach)
     (: _ (? (&& ((s 0) = 127) (&& ((s 1) = 69) (&& ((s 2) = 76) ((s 3) = 70)))) 0
             (scare 'link-not-elf id))
+       ; EI_CLASS picks the wire shape; e_type and e_machine sit at 16 and 18 in both
+       fs (? ((s 4) = 2) elf64f ((s 4) = 1) elf32f (scare 'link-elf-class id))
        _ (? (&& ((rle16 s 16) = 1) ((rle16 s 18) = mach)) 0 (scare 'link-machine id))
-       _ (? ((rle16 s 58) = 64) 0 (scare 'link-shentsize id))
-       shoff (rle64 s 40) shnum (rle16 s 60) shstrx (rle16 s 62)
-       (sh i) (shoff + (i * 64))                       ; the i-th section header
-       shstro (rle64 s ((sh shstrx) + 24))
-       (sname i) (ld-cstr s (shstro + (rle32 s (sh i))))
+       _ (? ((ld-f fs s 0 'e-shent) = (ld-n fs 'sh-ent)) 0 (scare 'link-shentsize id))
+       shoff (ld-f fs s 0 'e-shoff)
+       shnum (ld-f fs s 0 'e-shnum) shstrx (ld-f fs s 0 'e-shstrx)
+       (sh i) (shoff + (i * (ld-n fs 'sh-ent)))        ; the i-th section header
+       shstro (ld-f fs s (sh shstrx) 'sh-off)
+       (sname i) (ld-cstr s (shstro + (ld-f fs s (sh i) 'sh-name)))
        ob (tablet 0) _ (pin ob 'id id) _ (pin ob 'src s)
        secs (tablet 0) _ (pin ob 'secs secs)
        lanes (tablet 0) _ (pin ob 'lanes lanes)
@@ -104,8 +145,8 @@
        ; give every thread the SAME variable -- a wrong answer, quietly.
        (class i symt rls)
         (? (shnum <= i) (symt >< rls)
-           (: h (sh i) ty (rle32 s (h + 4)) fl (rle64 s (h + 8))
-              off (rle64 s (h + 24)) sz (rle64 s (h + 32)) nm (sname i)
+           (: h (sh i) ty (ld-f fs s h 'sh-type) fl (ld-f fs s h 'sh-flags)
+              off (ld-f fs s h 'sh-off) sz (ld-f fs s h 'sh-size) nm (sname i)
               _ (? (&& (0 < (fl & 1024)) (0 < sz)) (scare 'link-tls nm) 0)
               ; a NOTE the LOADER reads is placed like progbits -- .note.pvh is
               ; how `qemu -kernel` finds the 32-bit entry, so dropping it as
@@ -117,13 +158,16 @@
                   ; byte written (p_memsz over p_filesz, the kernel zeroing the
                   ; difference). that is the whole meaning of .bss.
                   (: lane (ld-lane nm ty)
-                     (? lane (: _ (pin secs i `(lane (? (ty = 8) 0 off) sz (rle64 s (h + 48))))
+                     (? lane (: _ (pin secs i `(lane (? (ty = 8) 0 off) sz (ld-f fs s h 'sh-align)))
                                 _ (pin lanes lane (i >< (peep lanes lane ())))
                                 (class (i + 1) symt rls))
                         (drop? i ty fl nm sz) (class (i + 1) symt rls)
                         (scare 'link-section nm)))
-                 (ty = 2) (class (i + 1) `(off sz (rle32 s (h + 40))) rls)
-                 (ty = 4) (class (i + 1) symt (`((rle32 s (h + 44)) off sz) >< rls))
+                 (ty = 2) (: _ (ld-esz fs s h 'sy-ent nm)
+                             (class (i + 1) `(off sz (ld-f fs s h 'sh-link)) rls))
+                 (ty = (ld-n fs 'rl-ty))
+                  (: _ (ld-esz fs s h 'rl-ent nm)
+                     (class (i + 1) symt (`((ld-f fs s h 'sh-info) off sz) >< rls)))
                  (member? ty '(0 3)) (class (i + 1) symt rls)
                  (drop? i ty fl nm sz) (class (i + 1) symt rls)
                  (scare 'link-section nm))))
@@ -134,28 +178,34 @@
                 0 '(text rodata data nifs bss image note boot limreq))
        symt <cl
        _ (? (two? symt) 0 (scare 'link-no-symtab id))
-       stro (rle64 s ((sh (at symt 2)) + 24))       ; .strtab offset, via symtab's link
+       stro (ld-f fs s (sh (at symt 2)) 'sh-off)    ; .strtab offset, via symtab's link
        syms (tablet 0) _ (pin ob 'syms syms)
-       nsym ((at symt 1) // 24)
+       nsym ((at symt 1) // (ld-n fs 'sy-ent))
        _ (pin ob 'nsym nsym)
        _ (: (go i) (? (nsym <= i) 0
-                      (: e ((at symt 0) + (i * 24))
-                         info (s (e + 4))
-                         _ (pin syms i `((ld-cstr s (stro + (rle32 s e)))
+                      (: e ((at symt 0) + (i * (ld-n fs 'sy-ent)))
+                         info (ld-f fs s e 'sy-info)
+                         _ (pin syms i `((ld-cstr s (stro + (ld-f fs s e 'sy-name)))
                                           (info >> 4) (info & 15)
-                                          (rle16 s (e + 6)) (rle64 s (e + 8))
-                                          (rle64 s (e + 16))))
+                                          (ld-f fs s e 'sy-shndx) (ld-f fs s e 'sy-val)
+                                          (ld-f fs s e 'sy-size)))
                          (go (i + 1))))
             (go 0))
        ; a .rela whose TARGET was dropped is dropped with it (gcc's
        ; .rela.eh_frame is the whole of this case) -- but a target that is
        ; neither placed nor dropped is a section we never saw, and scares.
-       relas (map (\ r (: n ((at r 2) // 24)
+       ; ⚠ the ONE place the absent row shows: a REL has no addend column, so the
+       ; slot arrives EMPTY and the patch stage pulls the addend out of the field
+       ; per kind. asked by presence off the row, never off a zero addend.
+       ad (ld-row fs 'rl-add)
+       rent (ld-n fs 'rl-ent)
+       relas (map (\ r (: n ((at r 2) // rent)
                           (es i acc) (? (i < 0) acc
-                                        (: e ((at r 1) + (i * 24))
+                                        (: e ((at r 1) + (i * rent))
                                            (es (i - 1)
-                                               (`((rle64 s e) (rle32 s (e + 8))
-                                                        (rle32 s (e + 12)) (sg64 (rle64 s (e + 16)))) >< acc))))
+                                               (`((ld-f fs s e 'rl-off) (ld-f fs s e 'rl-kind)
+                                                  (ld-f fs s e 'rl-sym)
+                                                  (? (two? ad) (sg64 (ld-f fs s e 'rl-add)) ())) >< acc))))
                           (<r >< (es (n - 1) ()))))
                   (filter (\ r (? (two? (peep secs <r ())) 1
                                   (peep drops <r ()) ()

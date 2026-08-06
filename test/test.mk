@@ -440,6 +440,8 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 # the 32-bit data model: a cross-object BL, the inline v6-M soft divide/rem, a global via the
 # literal-pool `la`, a gcc-built pointer-bearing struct whose field mooncc reads back, and a
 # NAMED SECTION holding a function-pointer table -- the vector-table shape, thumb bit and all.
+# then the other direction: test/gate/ld32.l reads one object back through link.l's ld-read,
+# the only exercise the 32-bit rows of its field table get.
 .PHONY: test_thumb1
 test_thumb1: host out/host$(hsuf)/mooncc
 	@sh test/gate/thumb.sh thumb1 $(ho)
