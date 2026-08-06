@@ -161,7 +161,10 @@ u64 efi_main(void *handle, void *st) {
  for (u64 i = lo >> 21; i < 512; i++) kpd[i] = (kbase + (i << 21) - lo) | 0x83;
  pt[2 * 512 + 510] = (u64) kpd | 3;
  pt[0] = (u64) &pt[512] | 3;
- pt[256] = (u64) &pt[512] | 3;
+ // NX on the hhdm entry alone: one bit at the top of the walk covers every page
+ // under it, and the hhdm is how the kernel reaches all of ram. the identity
+ // window keeps X -- efi_go's own next instruction fetch is there.
+ pt[256] = (u64) &pt[512] | 3 | (1ull << 63);
  pt[511] = (u64) &pt[2 * 512] | 3;
 
  // the memmap -> kboot.ram: CONVENTIONAL (7) only. loader/firmware-typed

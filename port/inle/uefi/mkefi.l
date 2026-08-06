@@ -38,8 +38,16 @@
             ;; entry. the loader's own code stays mapped through the switch
             ;; (the new tables identity-map the low 4G), and the current stack
             ;; rides along -- firmware-typed memory kboot never hands the heap.
+            ;; ⚠ EFER.NXE first: firmware is not obliged to have set it, and our
+            ;; tables NX the hhdm entry -- bit 63 is RESERVED while NXE is clear, so
+            ;; the first walk after the cr3 load would fault instead of honouring it.
+            ;; rdmsr/wrmsr touch only eax/edx/ecx, so rdi and rsi ride through.
             `('label 'efi_go)
             `('raw `(250))              ; cli
+            `('raw `(185 128 0 0 192))  ; mov $0xC0000080, %ecx -- EFER
+            `('raw `(15 50))            ; rdmsr
+            `('raw `(13 0 8 0 0))       ; or $0x800, %eax -- NXE
+            `('raw `(15 48))            ; wrmsr
             `('raw `(15 34 223))        ; mov cr3, rdi
             `('jmpr 'r5))               ; jmp rsi -- kmain, never back
    efi-exports '("efi_call" "efi_go")

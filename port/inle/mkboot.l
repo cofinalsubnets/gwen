@@ -68,6 +68,7 @@
    (i-jne lbl)      `(15 133 `('fix 4 'rel32 lbl 0))         ; 0f 85 cd     jne rel32
    (i-st-edi d)     (`(137 135) + (le32 d))                  ; 89 87 disp32 mov %eax, d(%edi)
    (i-sti-edi d l a) ((`(199 135) + (le32 d)) + (b-abs32 l a))  ; c7 87 disp32 id  movl $sym, d(%edi)
+   (i-stimm-edi d v) ((`(199 135) + (le32 d)) + (le32 v))       ; c7 87 disp32 id  movl $imm, d(%edi)
    (i-lgdt l a)     (`(15 1 21) + (b-abs32 l a))             ; 0f 01 15 id  lgdt sym
    (i-ldcr n)       `(15 32 (192 | (n << 3)))                ; 0f 20 /r     mov %crN, %eax
    (i-stcr n)       `(15 34 (192 | (n << 3)))                ; 0f 22 /r     mov %eax, %crN
@@ -118,16 +119,24 @@
          (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 24)))
      ;; kernel-high PDPT: entry 510 -> PD0, so KVMA maps phys 0..1 GiB
      + `((i32 (i-edi-sym 'pdpt_hi 0)) (i32 (i-sti-edi (510 * 8) 'pd0 3)))
-     ;; PML4: [0] identity, [256] the hhdm at 0xffff8000_00000000, [511] kernel-high
+     ;; PML4: [0] identity, [256] the hhdm at 0xffff8000_00000000, [511] kernel-high.
+     ;; NX rides the hhdm entry alone -- one bit at the top of the walk covers every
+     ;; page under it, and the hhdm is how the kernel reaches ALL of ram (kboot.hhdm),
+     ;; so heap, framebuffer and every mapped physical page stop being executable
+     ;; without a second table. ⚠ the identity window keeps X: pvh64 runs there, at a
+     ;; low physical address, until `jmpr` hops it high three instructions later.
      + `((i32 (i-edi-sym 'pml4 0)) (i32 (i-eax-sym 'pdpt_id 3))
          (i32 i-st-edi0) (i32 (i-st-edi (256 * 8)))
+         (i32 (i-stimm-edi ((256 * 8) + 4) 0x80000000))
          (i32 (i-sti-edi (511 * 8) 'pdpt_hi 3)))
      ;; the long-mode ladder: GDT, CR4.PAE, CR3, EFER.LME, CR0.PG|PE, far jump
      + `((i32 (i-lgdt 'gdtreg 0))
          (i32 (i-ldcr 4)) (i32 (i-or-eax8 0x20)) (i32 (i-stcr 4))     ; CR4.PAE
          (i32 (i-eax-sym 'pml4 0)) (i32 (i-stcr 3))
          (i32 (i-ecx-imm 0xC0000080)) (i32 i-rdmsr)                 ; EFER
-         (i32 (i-or-eax 0x100)) (i32 i-wrmsr)                         ; LME
+         (i32 (i-or-eax 0x900)) (i32 i-wrmsr)                         ; LME | NXE
+         ; ⚠ NXE before PG: with it clear, bit 63 of a table entry is RESERVED, and
+         ; the first walk after paging comes on faults instead of honouring the NX.
          (i32 (i-ldcr 0)) (i32 (i-or-eax 0x80000001)) (i32 (i-stcr 0)))   ; PG | PE
      + `((i32 (i-ljmp 'pvh64 0)))
      ;; ..and we are 64-bit. the data selectors, then the hop to the high
