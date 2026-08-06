@@ -7,6 +7,8 @@
    <- pin -> peep
    (co f x y) (f y x)                ; the argument-transpose
    flip co
+   two? link?
+   intern name
    sat saturate)
 (: : () ? () \ ())
 (: pi 3.141592653589793

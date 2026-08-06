@@ -630,7 +630,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  _(nif_snip, "snip", s3(lvm_snip)) \
  _(nif_sound0, "sound0", s1(lvm_sound0))\
  _(nif_string, "string", s1(lvm_string))\
- _(nif_intern, "intern", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
+ _(nif_intern, "name", s1(lvm_intern)) _(nif_mint, "mint", s1(lvm_mint))\
  _(nif_nomctor, "nom", s1(lvm_nomctor))\
  _(nif_spin, "spin", s1(lvm_spin))\
  _(nif_peek, "peek", s2(lvm_peek)) _(nif_poke, "poke", s3(lvm_poke)) _(nif_trim, "trim", s1(lvm_trim))\
@@ -639,7 +639,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  _(nif_table, "tablet", s1(lvm_tablet)) _(nif_keys, "keys", s1(lvm_keys))\
  _(nif_dig, "dig", s1(lvm_dig))\
  _(nif_casknew, "cask", s1(lvm_casknew)) _(nif_bcopy, "pour", s5(lvm_bcopy))\
- _(nif_chainp, "two?", s1(lvm_chainp)) _(nif_strp, "string?", s1(lvm_strp))\
+ _(nif_chainp, "link?", s1(lvm_chainp)) _(nif_strp, "string?", s1(lvm_strp))\
  _(nif_gem, "gem", s1(lvm_gem)) _(nif_gemp, "gem?", s1(lvm_gemp))\
  _(nif_sin, "sine", s1(lvm_sin)) _(nif_cos, "cosine", s1(lvm_cos))\
  _(nif_log, "log", s1(lvm_log)) _(nif_pow, "power", s2(lvm_pow))\
@@ -3911,8 +3911,6 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
   z->p = k, z->fn = io_close, z->next = g->fz, g->fz = z; }
  return g; }
 
-static struct ai *grbufg(struct ai *g, uintptr_t len);
-
 // A token is a plain decimal integer iff it is [+-]?[0-9]+ with no leading-zero
 // prefix (a leading zero is octal's prefix; bare "0" parses as decimal).
 static ai_inline bool is_dec_int(char const *s, uintptr_t n) {
@@ -3943,7 +3941,7 @@ static ai_inline bool is_oct_int(char const *s, uintptr_t n) {
 
 static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c), *ioread1str(struct ai*g, uintptr_t d);
 
-static struct ai *grbufg(struct ai *g, uintptr_t len) {
+struct ai *grbufg(struct ai *g, uintptr_t len) {
  if (ai_ok(g = str0(g, 2 * len)))
   memcpy(txt(g->sp[0]), txt(g->sp[1]), len),
   g->sp[1] = g->sp[0],

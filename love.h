@@ -488,7 +488,8 @@ static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
   (struct ai*) ((uintptr_t) g | s); }
 // re-raise a failed op's scare at the installed help, else the status-encoded
 // core straight back to C (love.c)
-struct ai *ghelp(struct ai*);
+struct ai *ghelp(struct ai*),
+          *grbufg(struct ai *g, uintptr_t len);
 // ⚠ ai_have IS the phrase "this call may collect"; under AI_GC_STRESS every one
 // DOES, so a raw local held across it goes stale on the first run, not years
 // later. AI_GC_CHECK is the other half: it checks the collector where this

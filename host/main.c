@@ -256,14 +256,6 @@ static lvm(lvm_close) {
 // child's stdout is captured into a growing l string (the reader's
 // str0 + grow + len-fixup pattern). See core/io.c ioread1str / grbufg.
 
-// Local copy of core/io.c's grbufg (static there): grow the string on sp[0]
-// to 2*len, copying the old `len` bytes in. str0 is the public allocator.
-static struct ai *host_grbufg(struct ai *g, uintptr_t len) {
- if (ai_ok(g = str0(g, 2 * len)))
-  memcpy(txt(g->sp[0]), txt(g->sp[1]), len),
-  g->sp[1] = g->sp[0], g->sp++;
- return g; }
-
 // Best-effort write-through for the tee mode below: loop over a partial write,
 // but let a failed/closed stdout pass silently -- a broken pipe on the ECHO of a
 // child's output must not fail the child, which ran fine.
@@ -405,7 +397,7 @@ ai_noinline static struct ai *host_harkdrain(struct ai *g) {
   for (;;) {
    uintptr_t lim = len(g->sp[0]);
    if (n == lim) {                                        // full -> double it and retry
-    if (ai_ok(g = host_grbufg(g, lim))) continue;
+    if (ai_ok(g = grbufg(g, lim))) continue;
     // ⚠ OOM mid-capture: close the pipe and KILL the child rather than wait on
     // it. A bounded reap of a killed child is not the wait this rung deletes.
     close((int) fd);
@@ -602,41 +594,26 @@ extern uintptr_t ai_baked_image_len;
 // (after the egg) the self-hosted pass.
 static char const cli[] =
 #include "cli0.h"
- ;
-static char const tests0[] =
+ , tests0[] =
 #include "tests0.h"
- ;
-static char const runner[] = "(reads (tap (s2cl tests)))";   // the stream shell (love/bao.l) drinks the baked corpus
-// the MODULE sources, name-keyed: the source library's rows (struct ai_lib, love.h)
-// and loaded by `use` -- the loader wraps each in its own layer, leave registers it,
-// the splice serves the bare names. bao/rng/kanren carry no brackets of their own now.
-static char const src0_bao[] =
+ , runner[] = "(reads (tap (s2cl tests)))"   // the stream shell (love/bao.l) drinks the baked corpus
+ , src0_bao[] =
 #include "bao0.h"
- ;
-static char const src0_rng[] =
+ , src0_rng[] =
 #include "rng0.h"
- ;
-static char const src0_kanren[] =
+ , src0_kanren[] =
 #include "kanren0.h"
- ;
-static char const src0_uu[] =
+ , src0_uu[] =
 #include "uu0.h"
- ;
-static char const src0_coin[] =
+ , src0_coin[] =
 #include "coin0.h"
- ;
-static char const src0_q[] =
+ , src0_q[] =
 #include "q0.h"
- ;
-static char const src0_peg[] =
+ , src0_peg[] =
 #include "peg0.h"
- ;
-static char const src0_overlay[] =
+ , src0_overlay[] =
 #include "overlay0.h"
- ;
-// holo with BOTH cross backends (x64 + arm64), one entry -- the corpus's cross-arch
-// asserts run under both of love0's compilers.
-static char const src0_holo[] =
+ , src0_holo[] =
 #include "holo0.h"
 #include "x640.h"
 #include "arm640.h"
@@ -777,7 +754,7 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
     "      (? (< n m) ()"
     "         (: (go i) (? (= i m) 1 (? (= (s (+ (- n m) i)) (w i)) (go (+ i 1)) ()))"
     "            (? (go 0) (? (= n m) 1 (= (s (- (- n m) 1)) 47)) ()))))"
-    "   (fnd t) (? (two? t) (? (sx (cap (cap t))) (cap (cup (cap t))) (fnd (cup t))) ())"
+    "   (fnd t) (? (link? t) (? (sx (cap (cap t))) (cap (cup (cap t))) (fnd (cup t))) ())"
     "   f (fnd verbs)"
     "   (? f (: _ (f (cup cmdline)) (quit 0)) 0))");
   if (argp) return ai_evals_(g, cli);
