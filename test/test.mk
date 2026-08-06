@@ -254,6 +254,17 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m $(love0)
+# mx.h and kinds.h are COMMITTED GENERATED artifacts: love.c's +/* dispatch matrices and the
+# kind lattice they are indexed by, laid from tools/mx.l through clay. `make mx` refreshes both;
+# test_clay's second half regenerates and diffs. ⚠ they are CORE headers -- a refresh rebuilds
+# the tree, so the gate to run after is `make test` and not test_clay alone. Each half is written
+# aside and moved, so a shape check that quits (mx-ok) leaves the committed file untouched.
+mx: host
+	@echo AI	mx.h kinds.h "(tools/mx.l on $m)"
+	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
+	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
+	@mv out/.mx.h mx.h
+	@mv out/.kinds.h kinds.h
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
@@ -265,9 +276,9 @@ test_clay: host out/host$(hsuf)/mooncc.image
 # are indexed by (kinds.h) are both generated from tools/mx.l, so regenerate and diff --
 # a hand edit to either, or a table edit with no regen, is a red here. `cmp`, not rtk diff.
 	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
-	@cmp -s out/.mx.h mx.h || { echo "FAIL mx.h is not what tools/mx.l lays -- regenerate it"; diff -u mx.h out/.mx.h | head -20; exit 1; }
+	@cmp -s out/.mx.h mx.h || { echo "FAIL mx.h is not what tools/mx.l lays -- run: make mx"; diff -u mx.h out/.mx.h | head -20; exit 1; }
 	@$(mw) -l tools/mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
-	@cmp -s out/.kinds.h kinds.h || { echo "FAIL kinds.h is not what tools/mx.l lays -- regenerate it"; diff -u kinds.h out/.kinds.h | head -20; exit 1; }
+	@cmp -s out/.kinds.h kinds.h || { echo "FAIL kinds.h is not what tools/mx.l lays -- run: make mx"; diff -u kinds.h out/.kinds.h | head -20; exit 1; }
 	@echo "clay-mx: mx.h and kinds.h regenerate identically"
 	@rm -f out/.mx.h out/.kinds.h
 # test_moonfuzz -- moon's REFUSAL surface (doc/moon-diag.md): each test/cc file broken
