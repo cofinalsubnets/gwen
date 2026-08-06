@@ -133,11 +133,14 @@ static void limine_to_kboot(void) {
 // ⚠ THE TABLE GROWS; IT DOES NOT CAP. it was a `k_source[32]` with five `fd <
 // k_sources_max` bounds checks around it -- unreachable while nothing wrote it,
 // and the rung-6 sweep left it as a rule in prose (doc/io.md) rather than a fix.
-// this is the fix: k_source_open is the ONE door in, and it grows the table on
-// the KERNEL'S OWN HEAP, which we own -- the one place in this tree where the
-// malloc family is not somebody else's. the bug a ceiling would have shipped is
-// worse than the host's was: not a hang but a silent refusal to open the 33rd
-// thing. (that family is OURS, defined below the allocator -- declare it here)
+// this is the fix: k_source_open is the ONE door in, and it grows the table
+// through g->alloc, which down here lands in the KERNEL'S OWN HEAP. the bug a
+// ceiling would have shipped is worse than the host's was: not a hang but a
+// silent refusal to open the 33rd thing.
+// ⚠ inle DEFINES the malloc family (below the allocator) rather than importing
+// one, so a bare malloc() here would be ours and would work -- and would read
+// exactly like the libc call nothing in this tree is allowed to make. the door
+// is g->alloc everywhere it can be reached; kmallocw where g does not exist yet.
 void *malloc(size_t n);
 void free(void *x);
 
@@ -212,16 +215,16 @@ static ai_inline struct k_source *k_source(int fd) {
 // the whole table -- this is the rule doc/io.md left for whoever adds the third,
 // built as a door instead of a sentence so it cannot be got wrong. the grow
 // branch is therefore UNEXERCISED; the first file or socket is its gate.
-struct k_source *k_source_open(int fd) {
+struct k_source *k_source_open(struct ai *g, int fd) {
   if (fd < 0) return NULL;
   if (fd >= k_sources_n) {
     int m = k_sources_n;
     while (m <= fd) m *= 2;
-    struct k_source *t = malloc((size_t) m * sizeof *t);
+    struct k_source *t = g->alloc(g, NULL, (size_t) m * sizeof *t);
     if (!t) return NULL;
     for (int i = 0; i < m; i++)
       t[i] = i < k_sources_n ? k_sources[i] : (struct k_source) {0};
-    if (k_sources != k_boot) free(k_sources);
+    if (k_sources != k_boot) g->alloc(g, k_sources, 0);
     k_sources = t, k_sources_n = m; }
   return &k_sources[fd]; }
 
@@ -542,7 +545,10 @@ static bool fbinit(void) {
 static bool cbinit(void) {
   const uintptr_t rows = kfb.height / kfont.h,
                   cols = kfb.width / kfont.w;
-  if (!(kcb = malloc(sizeof(struct cb) + rows * cols * sizeof(uint32_t)))) return false;
+  // ⚠ kmallocw, not g->alloc: kmain runs cbinit BEFORE ai_ini, because the console
+  // is how a failure in ai_ini would be said. no g exists yet, so this names the
+  // kernel heap directly rather than wearing malloc's face.
+  if (!(kcb = kmallocw(b2w(sizeof(struct cb) + rows * cols * sizeof(uint32_t))))) return false;
   cb_open(kcb, rows, cols);
   kcb->flag |= cb_lnm;  // the kernel console's discipline: a bare \n is a newline
   cb_attr(kcb, 47, 56, 0);
