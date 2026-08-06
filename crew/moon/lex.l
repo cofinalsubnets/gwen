@@ -212,18 +212,30 @@
                                               (eat (j + 1) (? (&& ((src j) = 10) (! (spliced? j))) (l2 + 1) l2)))
                                 r (eat (i + 2) line)
                                 (? (charm? <r) (go <r <>r acc) ()))
-                 (c = 34) (: (eat j acc2)                     ; a string literal
-                              (? (n <= j) ()
-                                 (: c2 (src j)
-                                    (? (c2 = 34) `(acc2 (j + 1))
-                                       (&& (c2 = 92) (&& ((j + 1) < n) ((src (j + 1)) = 10))) (eat (j + 2) acc2)   ; \<nl> splice: the pair vanishes, the string reads on
-                                       (&& (c2 = 92) (&& ((j + 2) < n) (&& ((src (j + 1)) = 13) ((src (j + 2)) = 10)))) (eat (j + 3) acc2)   ; \<cr><nl> splice
-                                       (c2 = 10) ()
-                                       (&& (c2 = 92) ((j + 1) < n))
-                                        (: r (escseq (j + 1))
-                                           (? (two? r) (eat <>r (acc2 + (string <r))) ()))
-                                       (eat (j + 1) (acc2 + (string c2))))))
-                             r (eat (i + 1) "")
+                 (c = 34) (: sink (jug 0)                    ; a string literal
+                             ; ⚠ the body lands a RUN AT A TIME, never a byte: `say` of a snip is one
+                             ; memcpy, where an accumulator grown per char is quadratic -- the corpus
+                             ; literal baked into the kernel is 910 KB and cost 51s of a 64s build.
+                             (run k) (? (n <= k) k                      ; how far the ordinary bytes reach
+                                        (: c2 (src k)
+                                           (? (|| (c2 = 34) (|| (c2 = 92) (c2 = 10))) k (run (k + 1)))))
+                             (eat j)
+                              (: e (run j)
+                                 _ (? (j < e) (say sink (snip src j e)) ())
+                                 (? (n <= e) ()
+                                    (: c2 (src e)
+                                       (? (c2 = 34) `((slurp sink) (e + 1))
+                                          (&& (c2 = 92) (&& ((e + 1) < n) ((src (e + 1)) = 10))) (eat (e + 2))   ; \<nl> splice: the pair vanishes, the string reads on
+                                          (&& (c2 = 92) (&& ((e + 2) < n) (&& ((src (e + 1)) = 13) ((src (e + 2)) = 10)))) (eat (e + 3))   ; \<cr><nl> splice
+                                          (c2 = 10) ()
+                                          (&& (c2 = 92) ((e + 1) < n))
+                                           (: r (escseq (e + 1))
+                                              (? (two? r) (: _ (put sink <r) (eat <>r)) ()))
+                                          ; a stop `run` made that none of the above claims: one byte,
+                                          ; then on. the trailing \ lands here, and so would any future
+                                          ; stop -- which is what keeps a widened `run` from looping.
+                                          (: _ (put sink c2) (eat (e + 1)))))))
+                             r (eat (i + 1))
                              (? (two? r) (go <>r line (link `('str <r line) acc)) ()))
                  (c = 39) (: esc (&& ((i + 2) < n) ((src (i + 1)) = 92))
                              r (? esc (escseq (i + 2)) ())
