@@ -31,46 +31,12 @@
 #else
 #define ai_noicf
 #endif
-// THE DATA SLOT LAYOUT: the sentinels tile one section at a fixed stride in enum d
-// order, so a value's rep is arithmetic on its ap (love.c's DSENT, love_data.ld,
-// ai_typ below). the seats that go without ask the sentinels BY NAME instead, and
-// answer the same enum d: wasm has no sections to lay, mach-o spells them
-// `segment,section`, and love0 opts out (host/build.mk) so the bootstrap owes no
-// linker script. safe in every direction -- the heap image carries an ap as its
-// INDEX in image_extra_aps, so a layout never crosses between two binaries.
-#ifndef ai_data_section
-#if defined(__wasm__) || defined(__APPLE__)
-#define ai_data_section 0
-#else
-#define ai_data_section 1
-#endif
-#endif
-// bytes per slot -- ONE PER SEAT, not one for the tree. it has only to clear the
-// fattest body the backend building THIS text emits, and they differ by an order of
-// magnitude. the sentinels already SHARE their handlers (each is one tail jump to a
-// data_*_apply), so what this measures is CALL LOWERING, not code: arm64 4, x64 8,
-// thumb2 60, riscv64 88. the two fat ones spill their params to the frame and read
-// them straight back; the IR sweeps that fold exactly that (stld, dehusk) run on x64
-// alone -- gen.l's build says so and says why. they port, and pay (measured: riscv64
-// 76, thumb2 48), but they land inside the regen's own ranking, where they cost
-// arm64 its param homing. a rung of its own.
-// 16 buys x64 exactly 2x its measured 8; 8 would buy none, and the next `endbr64`
-// (a seat built without -fcf-protection=none) is +4. the aligned() attribute does
-// lower a section below -falign-functions, so the floor here is margin, not the cc.
-// ⚠ the linker is TOLD this number and cannot read it, so the six scripts that tile
-// the slots are LAID from mx.l's seat table (`make mx`; test_clay fails on drift).
-// what stays hand-kept is that a row there and the #if here say the same thing: a
-// script tiling tighter than its seat believes answers slot 0 for every value, in
-// silence. a body past the stride is the loud direction -- ld drives its location
-// counter backwards and refuses.
-#ifndef ai_data_stride
-#if defined(__x86_64__) || defined(__aarch64__)
-#define ai_data_stride 16
-#else
-#define ai_data_stride 128
-#endif
-#endif
-#define ai_data_n 9         // slots; _Static_assert'd against enum d below
+// ai_data_section / ai_data_stride / ai_data_n -- THE DATA SLOT LAYOUT -- ride
+// kinds.h below, laid by mx.l beside the enum d roster they are a layout OF, and
+// beside the six linker scripts that tile the same slots. ⚠ the stride is the
+// seat's own and ld cannot read it: one row of mx-strides is now the only place
+// either number is written, so a script tiling tighter than its seat believes --
+// which answers slot 0 for every value, in silence -- has no way left to be said.
 #define ai_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 #define countof(_) (sizeof(_)/sizeof(*_))
 
@@ -512,8 +478,7 @@ lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembo
 // ai_data_stride in enum d order, so the SLOT IS THE KIND: one subtract answers
 // both questions, and the compiler shares it between a datp and the typ after it.
 // the base is lvm_sym -- slot 0 IS the start, so no linker-synthesized bracket is
-// owed anywhere. DChain is enum d's last member, so DChain+1 is its count.
-_Static_assert(DChain + 1 == ai_data_n, "enum d and the love_data slots disagree");
+// owed anywhere.
 #if ai_data_section
 static ai_inline bool in_data(void *a) {
  return (uintptr_t) ((char*) a - (char*) lvm_sym) < (uintptr_t) (ai_data_n * ai_data_stride); }

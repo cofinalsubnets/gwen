@@ -38,8 +38,8 @@ host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
 #    mooncc0.image, taking the whole tree down with it.
 hcc = $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # whole-archive flag differs by linker (ld64 vs GNU ld). mach-o takes no
-# love_data.ld either -- it spells sections `segment,section`, so love.h asks the
-# sentinels by name there (ai_data_section 0).
+# love_data.ld either -- it spells sections `segment,section`, so kinds.h's roster
+# asks the sentinels by name there (ai_data_section 0).
 ifeq ($(shell uname -s),Darwin)
 so_archive = -Wl,-force_load,$(ho)/liblove.a       # ld64's whole-archive
 # the host contract (ai_clock, ai_fd_port_vt, ai_stdin/out/err -- defined in
