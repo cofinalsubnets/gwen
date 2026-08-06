@@ -13,7 +13,7 @@ export LOVE_NO_IMAGE := 1
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0 site site-serve
 .PHONY: test test_host test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 test_virt test_wake
-.PHONY: valg disasm flame cat cata catav perf repl gdb vmret waits bench nettest lint fmt fmt-check ccdb
+.PHONY: valg disasm flame cat cata catav perf repl gdb vmret waits bench nettest lint ccdb
 
 .DEFAULT_GOAL := test
 
@@ -70,20 +70,6 @@ lint: $(ho)/love
 # under out/ must exist, so build first. machine-specific (absolute paths), gitignored.
 ccdb:
 	@python3 $R/tools/ccdb.py
-
-# fmt: reformat the HOUSE-STYLE C in place with moonfmt (crew/moon/fmt.l) -- reindent
-# to 1-space, respace glued operators, normalize known-type pointer declarators. it is
-# content-preserving + idempotent, so it only ever touches whitespace. SCOPED on purpose:
-# just the core + the host CLI. test/cc are compiler test INPUTS (deliberate formatting),
-# crew/moon/include are libc-shaped headers, port/* is board code -- none house style, so
-# none are swept. `fmt-check` is the read-only variant (exit 1 if anything is unformatted).
-FMT_FILES := love.c love.h $(wildcard host/*.c) $(wildcard host/*.h)
-fmt: $(ho)/love
-	@$(ho)/love $R/crew/moon/fmt.l -w $(FMT_FILES) && echo "fmt: formatted $(words $(FMT_FILES)) file(s)"
-fmt-check: $(ho)/love
-	@bad=; for f in $(FMT_FILES); do \
-	  $(ho)/love $R/crew/moon/fmt.l "$$f" | diff -q "$$f" - >/dev/null || bad="$$bad $$f"; done; \
-	  if [ -n "$$bad" ]; then echo "fmt-check: needs formatting:$$bad" >&2; exit 1; else echo "fmt-check: clean"; fi
 
 # NB: there is NO git pre-commit hook -- committed artifacts (wasm/love.js, bench/
 # bench.html) are rebuilt MANUALLY (`make wasm`, `make -C bench html`) and staged
