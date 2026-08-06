@@ -33,7 +33,6 @@ rp_cc = $(MOONCC) -t thumb1 -D __STDC_HOSTED__=0 -I.
 .DELETE_ON_ERROR:
 
 AS_NONE =
-LD = arm-none-eabi-ld
 OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 # the v6-m/nofp multilib: __aeabi_[u]idiv, the 64-bit pairs, the whole soft-float set
 lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
@@ -88,9 +87,21 @@ $(R)/$(o)/boot2.o: mkboot2.l boot2.bin $(R)/crew/holo/thumb1.l $(lay_l) $(R)/out
 $(R)/out/host/love: FORCE
 	@$(MAKE) -C $(R) out/host/love
 
-$(R)/$(o)/love.elf: $(objs) rp2040.lds
-	@echo LD	$@
-	@$(LD) -T rp2040.lds $(objs) $(lg) -o $@
+# the link is ours: rlink.l drives holo's ldbare32 with the Pico's flash map, in
+# place of arm-none-eabi-ld + rp2040.lds. gcc's cortex-m0 libgcc is named on the
+# line and read as a LIBRARY, by need through the ranlib index -- never run.
+link_l = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+  $(R)/crew/holo/thumb1.l $(R)/crew/holo/thumb2.l $(R)/crew/holo/elf.l \
+  $(R)/crew/holo/obj.l $(R)/crew/holo/link.l
+
+$(R)/$(o)/rlink.l: rlink.l $(link_l)
+	@echo AI	$@
+	@mkdir -p $(R)/$(o)
+	@{ echo "(use 'holo)"; cat $(link_l) $<; } > $@
+
+$(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(R)/out/host/love
+	@echo LINK	$@
+	@cd $(R) && out/host/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%) $(lg)
 
 # .bin byte offsets ARE flash offsets, so the boot surface is readable straight
 # out of it: the ROM checks boot2's CRC before anything else runs, then the

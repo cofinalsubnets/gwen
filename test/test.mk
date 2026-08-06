@@ -302,23 +302,35 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m $(love0)
-# mx.h, kinds.h, nifs.h and crew/quay/xterm256.h are COMMITTED GENERATED artifacts: love.c's
-# +/* dispatch matrices and the kind lattice they are indexed by (mx.l), its nif + instruction
-# registry (nifs.l), and the xterm-256 palette both the host and the kernel read (quay.l), all
-# laid through clay. `make mx` refreshes all four; test_clay's second half regenerates and diffs.
+# mx.h, kinds.h, nifs.h, crew/quay/xterm256.h and the SIX linker scripts that tile the data
+# sentinels are COMMITTED GENERATED artifacts: love.c's +/* dispatch matrices and the kind
+# lattice they are indexed by (mx.l), its nif + instruction registry (nifs.l), the xterm-256
+# palette both the host and the kernel read (quay.l), and enum d laid for ld (mx.l again --
+# the reps roster IS the slot roster). `make mx` refreshes them all; test_clay's second half
+# regenerates and diffs.
 # ⚠ the first three are CORE headers -- a refresh rebuilds the tree, so the gate to run after is
 # `make test` and not test_clay alone. Each is written aside and moved, so a shape check that
 # quits (mx-ok / nifs-ok / q-ok) leaves the committed file untouched.
+# love_data.ld is laid WHOLE; a board's own script is a board's own memory map, so mx.l takes
+# its text and answers it with the marked block relaid -- the recipe's IO is a pipe.
+mx_lds = port/inle/x86_64/x86_64.lds port/inle/aarch64/aarch64.lds
+mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0))
 mx: host
-	@echo AI	mx.h kinds.h nifs.h xterm256.h "(mx.l + nifs.l + quay.l on $m)"
+	@echo AI	mx.h kinds.h nifs.h xterm256.h love_data.ld "+5 .lds (mx.l + nifs.l + quay.l on $m)"
 	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
 	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
 	@$(mw) -l nifs.l -e '(: _ (? nifs-ok 0 (quit 1)) _ (puts nifs-h) (quit 0))' > out/.nifs.h
 	@$(mw) -l quay.l -e '(: _ (? q-ok 0 (quit 1)) _ (puts q-c) (quit 0))' > out/.xterm256.h
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-ld) (quit 0))' > out/.love_data.ld
 	@mv out/.mx.h mx.h
 	@mv out/.kinds.h kinds.h
 	@mv out/.nifs.h nifs.h
 	@mv out/.xterm256.h crew/quay/xterm256.h
+	@mv out/.love_data.ld love_data.ld
+	@t=out/.lds.$$$$; for f in $(mx_lds); do \
+	   $(mw) -l mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
+	   cmp -s $$t $$f || { mv $$t $$f; echo "AI	$$f"; }; \
+	 done; rm -f $$t
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
@@ -338,8 +350,14 @@ test_clay: host out/host$(hsuf)/mooncc.image
 	@cmp -s out/.nifs.h nifs.h || { echo "FAIL nifs.h is not what nifs.l lays -- run: make mx"; diff -u nifs.h out/.nifs.h | head -20; exit 1; }
 	@$(mw) -l quay.l -e '(: _ (? q-ok 0 (quit 1)) _ (puts q-c) (quit 0))' > out/.xterm256.h
 	@cmp -s out/.xterm256.h crew/quay/xterm256.h || { echo "FAIL crew/quay/xterm256.h is not what quay.l lays -- run: make mx"; diff -u crew/quay/xterm256.h out/.xterm256.h | head -20; exit 1; }
-	@echo "clay-mx: mx.h, kinds.h, nifs.h and xterm256.h regenerate identically"
-	@rm -f out/.mx.h out/.kinds.h out/.nifs.h out/.xterm256.h
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-ld) (quit 0))' > out/.love_data.ld
+	@cmp -s out/.love_data.ld love_data.ld || { echo "FAIL love_data.ld is not what mx.l lays -- run: make mx"; diff -u love_data.ld out/.love_data.ld | head -20; exit 1; }
+	@t=out/.lds.$$$$; for f in $(mx_lds); do \
+	   $(mw) -l mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
+	   cmp -s $$t $$f || { echo "FAIL $$f is not what mx.l lays -- run: make mx"; diff -u $$f $$t | head -20; rm -f $$t; exit 1; }; \
+	 done; rm -f $$t
+	@echo "clay-mx: mx.h, kinds.h, nifs.h, xterm256.h and the 6 love_data scripts regenerate identically"
+	@rm -f out/.mx.h out/.kinds.h out/.nifs.h out/.xterm256.h out/.love_data.ld
 # test_moonfuzz -- moon's REFUSAL surface (doc/moon-diag.md): each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
@@ -513,28 +531,43 @@ test_playdate: host out/host$(hsuf)/mooncc
 	  [ "$$m" -eq 0 ] || { echo "FAIL $$m movw/movt relocs (the loader can't relocate them)"; exit 1; }; \
 	  echo "test_playdate: love.pdx (device half all-mooncc -t thumb2sp, soft f64) -- resolved, word-relocs only"
 # test_teensy41 -- the REAL-METAL cousin's build gate: the whole port compiled by mooncc -t
-# thumb2, linked against the XIP flash map, and the ROM-facing boot image VERIFIED (FCFB tag
-# at flash 0, IVT at 0x1000, thumb-bit entry). No RT1062 emulation: test_mps2 is the runtime.
+# thumb2, LINKED BY US (tlink.l over holo's ldbare32 -- no ld and no linker script, the XIP
+# flash map being the map in that file), the baked heap image wrapped by mkimg.l rather than
+# `ld -r -b binary`, and the ROM-facing boot image VERIFIED (FCFB tag at flash 0, IVT at
+# 0x1000, thumb-bit entry). objcopy for the .hex is the one foreign tool left, so that is
+# what the skip asks after. No RT1062 emulation: test_mps2 is the runtime.
 .PHONY: test_teensy41
 test_teensy41: host out/host$(hsuf)/mooncc
 	@echo TEENSY41 out/teensy41/love.hex
-	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1; then \
-	   echo "test_teensy41: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
+	@if ! command -v llvm-objcopy >/dev/null 2>&1 && ! command -v arm-none-eabi-objcopy >/dev/null 2>&1; then \
+	   echo "test_teensy41: no objcopy, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_teensy41: love (all-mooncc thumb2) links against the XIP flash map, boot image verified"
-# test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate, teensy41-shaped: the whole port
-# compiled by mooncc -t thumb2sp and the boot image VERIFIED (initial SP inside SRAM, thumb-bit
-# reset entry inside flash). The 128 KB SRAM never held love -- this port is the TOOLCHAIN on
-# silicon -- and test_thumb2sp already runs that lane's arithmetic as 72 differential checks
-# against gcc, so booting the QSMOKE twin under qemu re-proved it at a minute a go. That face
-# stays for a hand: `make -C port/nucleo446 smoke` then boot it on netduinoplus2.
+	  echo "test_teensy41: love (all-mooncc thumb2), OUR linker and no linker script, boot image verified"
+# test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate: the whole port compiled by
+# mooncc -t thumb2sp, LINKED BY US (nlink.l over holo's ldbare32, no ld and no linker
+# script -- the F4's memory map is the map in that file), and the boot image VERIFIED
+# (initial SP inside SRAM, thumb-bit reset entry inside flash). arm-none-eabi-gcc is
+# still asked where its cortex-m4 hard-float libgcc.a lives -- the soft-double set the
+# thumb2sp lane calls -- but it is read as an archive, by need, not run.
+# The 128 KB SRAM never held love -- this port is the TOOLCHAIN on silicon -- and
+# test_thumb2sp already runs that lane's arithmetic as 72 differential checks against
+# gcc. Booting is test_nucleo446_smoke below, which runs the twin rather than reading it.
 .PHONY: test_nucleo446
 test_nucleo446: host out/host$(hsuf)/mooncc
 	@echo NUCLEO446 out/nucleo446/firm.hex
-	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1 || ! command -v arm-none-eabi-ld >/dev/null 2>&1; then \
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_nucleo446: firmware (all-mooncc thumb2sp) links against the F4 flash map, boot image verified"
+	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and no linker script, boot image verified"
+# test_nucleo446_smoke -- the same port RUN. The build gate above reads two words of the
+# image; this one boots the -D QSMOKE twin on qemu's Cortex-M4 and takes its exit code,
+# which is the self-check tally carried out through mkboot.l's sh_exit -- the only lane
+# that executes crt0, the semihosting block and the fault vectors rather than inspecting
+# them. ~0.7s. On silicon a bkpt with no debugger escalates to lockup, so this stays the
+# qemu face only.
+.PHONY: test_nucleo446_smoke
+test_nucleo446_smoke: host out/host$(hsuf)/mooncc
+	@sh test/gate/boot.sh nucleo446_smoke "$(MAKE)"
 # test_rp2040 -- the Raspberry Pi Pico firmware BUILD gate, nucleo446-shaped, and the one
 # port in the tree with NO .S: the vector table and crt0 are C, and boot2 -- the 256-byte
 # stage the mask ROM checksums before it runs anything -- is laid straight into a named
@@ -549,10 +582,10 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 .PHONY: test_rp2040
 test_rp2040: host out/host$(hsuf)/mooncc
 	@echo RP2040 out/rp2040/love.bin
-	@if ! command -v arm-none-eabi-ld >/dev/null 2>&1; then \
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S) verified"
+	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and no linker script, verified"
 # moon-tar -- the userland cousin of test_raw (doc/moon-userland.md): build GNU tar 1.13
 # with mooncc + nolibc + the holo linker (no gcc/glibc/ld) and prove the binary RUNS --
 # cf/xf + czf/xzf roundtrips + system-tar interop. Point TARSRC at a ./configure'd tree.

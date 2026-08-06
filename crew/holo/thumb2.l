@@ -62,7 +62,14 @@
    ;; its loader relocates ABS32 words at load time, never a MOVW/MOVT pair.
    (thumb-lapool d) (: dn (rn d) (catall `((t32 (0xF8DF0004 | (dn << 12))) (t16 0xE002) (t16 0xBF00))))
 
-   (thumb-mov d s) (: dn (rn d) sn (rn s) (t32 (0xEA4F0000 | ((dn << 8) | sn))))   ; MOV.W Rd, Rm (ORR Rd,Rn=15,Rm)
+   ;; (mov Rd, Rm). MOV.W is ORR with Rn=15, and that form can name neither sp nor pc in
+   ;; either slot -- UNPREDICTABLE, which a core is free to execute as the move you meant.
+   ;; the 16-bit hi-register T1 (thumb-movr) reaches all sixteen, so those two route there.
+   (thumb-sppc? n) (|| (n = 13) (n = 15))
+   (thumb-mov d s)
+      (: dn (rn d) sn (rn s)
+         (? (|| (thumb-sppc? dn) (thumb-sppc? sn)) (thumb-movr d s)
+            (t32 (0xEA4F0000 | ((dn << 8) | sn)))))                ; MOV.W Rd, Rm (ORR Rd,Rn=15,Rm)
 
    ;; -- ALU register form (wide, three-address): op -> the hw1 base (S=0). d = a OP b.
    ;; the row list stays bound: the emitter tablet below pins the group off it. --
@@ -312,6 +319,13 @@
    ;; no uart says exit(n) to qemu.
    (thumb-brk imm) (? (&& (imm >= 0) (imm <= 255)) (t16 (0xBE00 | imm))
                       (scare 'thumb-brk-imm imm))
+   ;; MRS Rd, <sysm> -- the special registers, which are not in the general file and so have
+   ;; no other door. only the two stack pointers are named: a fault handler asks which one was
+   ;; active, and that is the whole of what this tree needs to read.
+   thumb-sysm (tabof `(('msp >< 8) ('psp >< 9)))
+   (thumb-mrs d sys)
+      (: sm (look thumb-sysm sys 'badsysm)
+         (t32 (0xF3EF0000 | (0x8000 | ((rn d) << 8) | sm))))
 
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their halfwords outright, `raw` the identity. the alu group pins off its rows.
@@ -348,7 +362,9 @@
            ('call >< thumb-call)
            ('raw >< 1)
            ('dsb >< thumb-dsb) ('brk >< thumb-brk)           ; -- the system lane --
+           ('mrs >< thumb-mrs)
            ('isb >< (t32 0xF3BF8F6F))                        ; isb sy
+           ('wfi >< (t16 0xBF30))                            ; wait for interrupt
            ('ret >< (t16 0x4770))                            ; BX lr
            ('sys >< (t16 0xDF00))                            ; SVC #0
            ('nop >< (t16 0xBF00))

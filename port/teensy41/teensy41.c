@@ -3,12 +3,12 @@
 // GPIO layer for the on-board LED -- the C half, compiled by mooncc. The
 // ROM-facing boot image (FlexSPI config block + IVT + boot data + vectors),
 // the crt0, the HardFault shim, and the barrier/wfi/bkpt helpers live in
-// boot.S: exact flash sections and bare instructions, gas-assembled. The
-// FlexSPI/IVT lore (wrong-offset first-silicon stories) rides boot.S now.
+// mkboot.l: exact flash sections and bare instructions, laid from holo IR. The
+// FlexSPI/IVT lore (wrong-offset first-silicon stories) rides mkboot.l now.
 #include <stdint.h>
 #include "teensy41.h"
 
-// Linker-provided bounds (teensy41.lds) + the boot.S vector table.
+// Linker-provided bounds (teensy41.lds) + the mkboot.l vector table.
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[];
 extern void *const vectors[];
@@ -17,7 +17,7 @@ int main(void);
 
 // --- fault diagnostics ----------------------------------------------------
 // ARMv7E-M HardFault: capture the stacked exception frame so an attached SWD
-// debugger lands on a known address. boot.S's isr_hardfault selects the
+// debugger lands on a known address. mkboot.l's isr_hardfault selects the
 // active stack and branches here with the frame in r0.
 volatile struct ai_fault {
   uint32_t r0, r1, r2, r3, r12, lr, pc, psr, sp, magic;
@@ -74,7 +74,7 @@ static void caches_init(void) {
   REG(SCB_CCR) |= 1u << 16;                      // D-cache on
   arm_dsb_isb(); }
 
-// boot.S's cstartup established our stack and falls in here.
+// mkboot.l's cstartup established our stack and falls in here.
 void cmain(void) {
   // FIRST LIGHT, before anything that can hang: a cold boot that dies in
   // clock bring-up must still show the LED (an all-dark board with working

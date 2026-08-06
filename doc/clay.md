@@ -23,9 +23,9 @@ count is near its floor; its TRUSTED surface is not, and that is where clay pays
 -> JS backend is a second consumer of the same datum rather than a second implementation,
 and `cc-clay` gives a native leg with no C text at all.
 
-**rungs 0 through 4 have landed** (`crew/moon/clay.l`, `make test_clay`, `mx.l` +
-`mx.h` + `kinds.h`, the order of work's rung 1 -- the five node shapes -- and its rung 3,
-the nif registry); the rest is unbuilt.
+**rungs 0 through 5 have landed** (`crew/moon/clay.l`, `make test_clay`, `mx.l` +
+`mx.h` + `kinds.h`, the order of work's rung 1 -- the five node shapes -- its rung 3, the
+nif registry, and its rung 2, the preprocessor nodes); the rest is unbuilt.
 
 ## the state, measured
 
@@ -106,8 +106,8 @@ suit the shower. GENERATE them.
 
 the five node shapes landed (rung 3 below), so the counted table this section carried is
 gone -- every row is sayable, `__asm__` and `unsigned __int128` were already, and the
-`lvm(...)` definitions took the emit-the-expansion route. what remains unsaid is the
-preprocessor (§below), and one alternative deliberately not built: a declarator-MACRO node
+`lvm(...)` definitions took the emit-the-expansion route. the preprocessor followed (§below,
+rung 5), so what remains is one alternative deliberately not built: a declarator-MACRO node
 that would print `lvm(lvm_add)` itself rather than its expansion. rung 9 may still want it.
 
 ## the preprocessor -- the one real design decision
@@ -121,7 +121,9 @@ architecture, not detail:
 * `#ifdef __wasm__` / `#if __STDC_HOSTED__` -- the freestanding/hosted split.
 
 `love.c` is ONE TEXT compiled for many targets, and `test_fixpoint` requires the mooncc
-rebuild to be byte-identical. so, clay gains emit-only `#if` / `#define` nodes.
+rebuild to be byte-identical -- so a generator cannot fold the conditionals away by
+emitting per seat; it has to emit the `#if` itself. clay gained emit-only `#if` /
+`#define` nodes: rung 5 in §what has landed.
 
 ## comments
 
@@ -149,7 +151,8 @@ incremental, each rung shippable, `love.c` staying hand-written until its region
 1. **the five node shapes** -- attributes, `restrict`, the `ret` prefix, `_Static_assert`,
    flexible array members. lawed in `test/host/clay.l`. no `love.c` change; G1 must hold at
    63/51. **landed** -- rung 3 in §what has landed.
-2. **add preprocessor nodes** -- `cpp-if` / `cpp-def`.
+2. **add preprocessor nodes** -- `cpp-if` / `cpp-def`. **landed** -- rung 5 in §what has
+   landed.
 3. **the X-macro registry** -- `nifs` / `insts`, route (b): the first region where a macro
    is deleted and the love loop is the better abstraction. **landed** -- rung 4 in §what
    has landed.
@@ -376,9 +379,30 @@ tells about moon. state it this way or not at all.
    gives it its own line; that rule is not a knob, and a compaction wanting a new clay node
    is not worth a new clay node.
 
+5. **the preprocessor, and the data slot layout as its first consumer.** `(cpp-def NAME
+   [BODY])`, `(cpp-undef NAME)`, `(cpp-if ARMS [ELSE])`, emit-only more firmly than `note`
+   is -- cpp runs before the lexer, so a directive can never reach a parse. `#ifdef X`
+   needs no node (`defined` wears call syntax in C's own grammar, so it is a plain
+   `call`), and an `#else` out of place has no spelling because ELSE is a slot rather than
+   an arm. two rules earn their keep: a `#define` body that is a clay expression renders
+   at the TIGHTEST context, so `countof(_)` parenthesizes itself -- macro hygiene falling
+   out of the precedence table -- and a spelling body rides through verbatim, the standing
+   `fn`'s attributes already had. a gripe from inside an arm comes OUT rather than being
+   concatenated into the text.
+   the consumer is `ai_data_section` / `ai_data_stride` / `ai_data_n`, moved out of
+   `love.h` into the generated `kinds.h`: they are a layout OF the `enum d` roster, and
+   `mx.l` already laid both that roster and the six linker scripts that tile the same
+   slots. one row of `mx-strides` now carries a seat's stride for the C AND for `ld`, so
+   the last hand-kept crossing in the scheme -- a script tiling tighter than its seat
+   believes, which answers slot 0 for every value in silence -- has no way left to be
+   written down. `love.h`'s `_Static_assert` on the slot count goes with it: one roster
+   lays both sides, so it had nothing left to catch.
+   G1 held at 63/51/0, as it must -- an emit-only node adds nothing to round-trip.
+
 ## open
 
-* **the preprocessor** (§above) -- the gating decision for whole-file capture.
+* **whole-file capture** -- rung 5 built the preprocessor NODES; capturing love.c's own
+  154 `#define`s and ~92 conditionals into a table is the separate question.
 * **`love.c.l`'s own shape.** one file or a directory of regions? the generated `love.c` is
   one text either way, but the `.l` side has no constraint forcing it, and the answer
   decides whether a rung's diff is readable.

@@ -324,6 +324,71 @@
        _ (pin ob 'relas relas)
        ob)
 
+   ; -- ARCHIVES. the noms no object defines but the LINKER lays: a driver over any
+   ; door here answers for these, so a ledger must not go looking for them in a .a.
+   ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"
+             "__data_start__" "__data_end__" "__data_load__"
+             "__bss_start__" "__bss_end__" "__load_size__")
+   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
+    (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
+       (go i ds us)
+        (? ((peep ob 'nsym 0) <= i) `(ds us)
+           (: sy (peep sy9 i ()) bind (at sy 1)
+              (? (! (member? bind '(1 2))) (go (i + 1) ds us)
+                 (0 < (at sy 3)) (go (i + 1) (link <sy ds) us)
+                 (bind = 1) (go (i + 1) ds (link <sy us))
+                 (go (i + 1) ds us))))    ; a weak undef resolves to 0 (ELF's law): no need
+       (go 1 () ()))
+   ; THE LEDGER a set of objects leaves: every nom it defines (plus the ones the
+   ; linker synthesizes rather than any object defining them), and the strong
+   ; undefineds still owed. -> (dt owed), dt a tablet the caller goes on pinning into.
+   (ldledger srcs mach)
+    (: duos (map (\ p (dusyms <p <>p mach)) srcs)
+       dt (tablet 0)
+       _ (map (\ nm (pin dt nm 1)) ldsynth)
+       _ (map (\ du (map (\ nm (pin dt nm 1)) <du)) duos)
+       `(dt (foldl (\ a du (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
+                                  a <>du))
+                   () duos)))
+   ; an ARCHIVE resolves BY NEED and BY INDEX: for each nom the link still owes, the
+   ; ranlib table names the member that defines it, so a 1767-member libgcc costs a
+   ; dozen ELF reads and not 1767. a pulled member's own undefineds join the owe and
+   ; the round repeats, which is how one member drags in another.
+   ; -> (picked-srcs owed); `dt` grows in place, as the ledger's owner expects.
+   (arpull path s dt owed mach)
+    (: idx (ld-arsyms path s) lt (ld-arlong s) seen (tablet 0)
+       (go u picked)
+        (: hit (foldl (\ a nm (? (two? a) a
+                                 (: o (peep idx nm ())
+                                    (? (! (o-has? idx nm)) a (o-has? seen o) a `(o)))))
+                      () u)
+           (? (! (two? hit)) `(picked u)
+              (: off <hit
+                 _ (pin seen off 1)
+                 m (ld-armem s off lt)
+                 id ((path + "(") + (<m + ")"))
+                 du (dusyms id <>m mach)
+                 _ (map (\ nm (pin dt nm 1)) <du)
+                 u2 (foldl (\ a nm (? (|| (peep dt nm ()) (member? nm a)) a (link nm a)))
+                           (filter (\ nm (! (peep dt nm ()))) u) <>du)
+                 (go u2 (picked + `(`(id <>m)))))))
+       (go owed ()))
+   ; every archive on the line, in COMMAND ORDER and after every object -- a library
+   ; is what a link falls back on, never what it leads with. `pairs` are already-read
+   ; (path bytes), so the file I/O and its diagnostics stay with whoever has a voice
+   ; for them (moon's `cc:` line, a board driver's scare).
+   (ldarch srcs pairs tgt)
+    (? (! (two? pairs)) ()
+       (: mach (peep elf-machines tgt 0)
+          lg (ldledger srcs mach) dt <lg
+          (go ps u acc)
+           (? (! (two? ps)) acc
+              (: r <ps
+                 _ (? (ld-ar? <>r) 0 (scare 'link-not-archive <r))
+                 pr (arpull <r <>r dt u mach)
+                 (go >ps <>pr (acc + <pr))))
+          (go pairs <>lg ())))
+
    ; lay ONE lane across the set in object order -- and, within an object, its
    ; sections in header order -- each aligned as its own header asks. pins the
    ; base per SECTION INDEX; answers the address just past the last.
@@ -921,7 +986,7 @@
                           acc (ld-lanes + (peep <os 'named ())))))
        (go objs ()))
 
-   (ldbare32 target runs srcs)
+   (ldbare32 target runs srcs pins)
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
        _ (? (two? runs) 0 (scare 'link-no-map target))
@@ -934,10 +999,23 @@
        ; map stays the board's word about ORDER, this is the linker's about company
        ; -- and everything downstream (the plan, the bytes, the section headers)
        ; reads the expanded runs, so the three walks cannot disagree.
+       ;; ..except where the MAP already spoke for one. a table the silicon reads at a
+       ;; fixed address (a vector table at flash base, a boot ROM's header block) has
+       ;; only its flags to travel by, and those say rodata -- which would lay it after
+       ;; the code, where nothing looks. so the board names it, and a named lane is the
+       ;; board's word: the expansion supplies the company it did NOT mention.
+       spoken (foldl (\ a r (a + >>r)) () runs)
        lruns (map (\ r (link <r (link (at r 1)
-                                      (foldl (\ a l (a + (link l (ld-nlanes objs l)))) () >>r))))
+                                      (foldl (\ a l (a + (link l (filter (\ n (! (member? n spoken)))
+                                                                         (ld-nlanes objs l)))))
+                                             () >>r))))
                   runs)
        maplanes (foldl (\ a r (a + >>r)) () lruns)
+       ;; a lane lives in ONE place. laid twice it is emitted twice while lpos keeps
+       ;; one entry, so the bytes and the section headers part company and the file
+       ;; is corrupt rather than wrong -- name it here, where the map is still legible.
+       _ (foldl (\ seen l (? (member? l seen) (scare 'link-lane-twice l) (l >< seen)))
+                () maplanes)
        _ (foldl (\ _ l (? (member? l maplanes) 0 (scare 'link-unmapped-lane l)))
                 0 (ld-uselanes objs))
        org (at <lruns 1)
@@ -986,6 +1064,11 @@
        hdrsz (52 + (32 * (tally segs)))
        _ (? (hdrsz <= foff) 0 (scare 'link-bare-headers hdrsz))
        glo (ldsyms objs)
+       ; -- the BOARD's own absolutes, (name value) from the driver: the top of the
+       ; stack, a peripheral window, whatever the memory map states and no object can
+       ; know. they land before the brackets below, so the linker's word about its own
+       ; layout is never one a board can quietly replace.
+       _ (foldl (\ _ p (: _ (pin glo <p `(<>p 0)) 0)) 0 pins)
        ; -- the copied region's brackets. a startup that has to move .data cannot
        ; work them out: the load address is the linker's alone to know.
        _ (? (two? cps)
@@ -997,6 +1080,12 @@
                _ (pin glo "__bss_end__"    `((dv + dm) 0))
                0)
             0)
+       ; -- how many bytes the file LAYS from org. a boot ROM handed a header with a
+       ; length field (the i.MX IVT's boot data) is asking this and nothing else, and
+       ; only the layout can answer. the last run's file end, since runs lay in map
+       ; order; .bss is not in it, which is right -- a ROM copies what exists.
+       _ (: pN (at plan ((tally plan) - 1))
+            (pin glo "__load_size__" `((((at pN 2) + (at pN 3)) - foff) 0)))
        ; the entry symbol is a COURTESY -- for objdump, gdb and a reader asking what
        ; runs first. the core never consults e_entry; it takes the vector table.
        ent (: e (peep glo "_start" ()) (? (two? e) <e org))

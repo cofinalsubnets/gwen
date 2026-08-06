@@ -2,3 +2,23 @@
 //
 enum q { KMint, KNom, KCharm, KSun, KGem, KTwin, KBig, KTrayZ, KTrayR, KTrayC, KTrayO, KString, KChain, KTablet, KHot, KN };
 enum d { DMint, DNom, DSun, DGem, DTwin, DBig, DTray, DString, DChain };
+//
+// THE DATA SLOT LAYOUT. the sentinels tile one section at ai_data_stride in
+// enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT,
+// love.h's ai_typ, and the six linker scripts laid from this same roster.
+// each #if here is a DEFAULT; the guard over it is the -D door.
+#if !defined(ai_data_section)
+#if defined(__wasm__) || defined(__APPLE__)
+#define ai_data_section 0
+#else
+#define ai_data_section 1
+#endif
+#endif
+#if !defined(ai_data_stride)
+#if defined(__x86_64__) || defined(__aarch64__)
+#define ai_data_stride 16
+#else
+#define ai_data_stride 128
+#endif
+#endif
+#define ai_data_n 9

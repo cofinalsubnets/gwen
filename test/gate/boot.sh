@@ -1,14 +1,15 @@
 #!/bin/sh
-# test/gate/boot.sh -- LOVE ITSELF booting on emulated silicon. Four gates, one
+# test/gate/boot.sh -- LOVE ITSELF booting on emulated silicon. Five gates, one
 # procedure: build the port with its own make, run the ELF under qemu, and require an
 # exact exit code. 42 means the egg hatched on-device and the driver laws held; 98 is a
 # fault, 1 is a law that failed. These are the gates that prove the whole runtime --
 # not a codegen lane -- survives on a board.
 #
-#   mps2       Cortex-M7,  all-mooncc thumb2         42
-#   mps2_t1    Cortex-M0,  all-mooncc thumb1 (RP2040 ISA)  42
-#   mps2_wake  the IMAGE lane: baked on qemu's M7, woken in a DIFFERENT binary  42
-#   virt       riscv64 bare metal, our linker + holo start.o  42
+#   mps2             Cortex-M7,  all-mooncc thumb2         42
+#   mps2_t1          Cortex-M0,  all-mooncc thumb1 (RP2040 ISA)  42
+#   mps2_wake        the IMAGE lane: baked on qemu's M7, woken in a DIFFERENT binary  42
+#   nucleo446_smoke  Cortex-M4, the -D QSMOKE self-check tally  28
+#   virt             riscv64 bare metal, our linker + holo start.o  42
 #
 # ⚠ qemu reads </dev/null: -nographic muxes guest serial + monitor onto stdio, so
 # without a definite-EOF stdin qemu BLOCKS on the host chardev when this runs with no
@@ -40,6 +41,11 @@ case $gate in
              qemu="qemu-system-arm -M mps2-an500 -semihosting -nographic"
              why="image wake"
              done_msg="the qemu-baked image WAKES in a different binary -- laws hold, exit 42" ;;
+  nucleo446_smoke) banner="NUSMOKE out/nucleo446/smoke.elf" ; need=$arm
+             elf=out/nucleo446/smoke.elf              ; tmo=120 ; want=28
+             qemu="qemu-system-arm -M netduinoplus2 -semihosting -nographic"
+             why="nucleo446 QSMOKE self-check"
+             done_msg="the -D QSMOKE twin boots on qemu Cortex-M4 -- self-checks hold and mkboot.l's sh_exit carries the tally out, exit 28" ;;
   virt)      banner="VIRT out/virt/love.elf"          ; need=qemu-system-riscv64
              elf=out/virt/love.elf                    ; tmo=300 ; want=42
              qemu="qemu-system-riscv64 -M virt -bios none -nographic"
@@ -69,6 +75,7 @@ case $gate in
              # nothing to wake -- a skip, not a failure
              test -s out/mps2/love.img || {
                echo "$name: empty image (no qemu at bake), skipped"; exit 0; } ;;
+  nucleo446_smoke) $mk -C port/nucleo446 smoke || fail "nucleo446 smoke build" ;;
   virt)      $mk -C port/virt || fail "virt build" ;;
 esac
 
@@ -77,7 +84,7 @@ timeout "$tmo" $qemu -kernel "$elf" < /dev/null
 a=$?
 
 case $gate in
-  mps2_wake) [ "$a" -eq "$want" ] || fail "$why (got $a, want $want)" ;;
+  mps2_wake|nucleo446_smoke) [ "$a" -eq "$want" ] || fail "$why (got $a, want $want)" ;;
   *)         [ "$a" -eq "$want" ] \
                || fail "$why (got $a, want $want = the egg hatched + the driver laws held; 98 = fault, 1 = a law failed)" ;;
 esac

@@ -208,10 +208,10 @@ static lvm(data_sym_apply); static lvm(data_pair_apply);
 #if ai_data_section
 // ⚠ THE SLOT IS THE KIND. each sentinel lays in its own input section love_data.N,
 // N its enum d value, on a grain of ai_data_stride -- so a run of one-fn sections
-// tiles at exactly that, and ai_typ is (ap - lvm_sym) >> 7 with in_data one
-// unsigned compare (love.h). ld is told the tiling outright (love_data.ld, each
-// board's .lds); holo needs no telling -- it lays each section on the grain the
-// object declares, which is the same thing.
+// tiles at exactly that, and ai_typ is one divide on (ap - lvm_sym) with in_data one
+// unsigned compare (love.h). ld is told the tiling outright, in scripts mx.l lays
+// from the same roster enum d comes from; holo needs no telling -- it lays each
+// section on the grain the object declares, which is the same thing.
 #define DSENT(nn, name, handler) \
  __attribute__((section("love_data." #nn), used, aligned(ai_data_stride))) \
  lvm(name) { ai_musttail return Ap(handler, g); }

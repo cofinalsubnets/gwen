@@ -53,24 +53,19 @@ SECTIONS
 
     .text : AT(ADDR(.text) - 0xffffffff80000000) {
         *(.text .text.*)
-        /* the data sentinels, tiled at love.h's ai_data_stride in enum d order:
-           love.h reads the slot index AS the kind, so where these land is the
-           whole point. one `. =` per slot pins the stride whatever the bodies
-           measure -- an overgrown one moves the counter backwards and ld says so.
-           the base takes the STRIDE's own alignment, never a lesser one, or ld
-           bumps the counter past the very slot it was placing.
-           mirrors love_data.ld, the host link's fragment. */
-        . = ALIGN(128);
+        /* love_data: the sentinel tiling, laid by mx.l -- edit the table there. */
+        . = ALIGN(16);
         __love_data = .;
-        KEEP(*(love_data.0))  . = __love_data + 128;
-        KEEP(*(love_data.1))  . = __love_data + 256;
-        KEEP(*(love_data.2))  . = __love_data + 384;
-        KEEP(*(love_data.3))  . = __love_data + 512;
-        KEEP(*(love_data.4))  . = __love_data + 640;
-        KEEP(*(love_data.5))  . = __love_data + 768;
-        KEEP(*(love_data.6))  . = __love_data + 896;
-        KEEP(*(love_data.7))  . = __love_data + 1024;
-        KEEP(*(love_data.8))  . = __love_data + 1152;
+        KEEP(*(love_data.0))  . = __love_data + 16;
+        KEEP(*(love_data.1))  . = __love_data + 32;
+        KEEP(*(love_data.2))  . = __love_data + 48;
+        KEEP(*(love_data.3))  . = __love_data + 64;
+        KEEP(*(love_data.4))  . = __love_data + 80;
+        KEEP(*(love_data.5))  . = __love_data + 96;
+        KEEP(*(love_data.6))  . = __love_data + 112;
+        KEEP(*(love_data.7))  . = __love_data + 128;
+        KEEP(*(love_data.8))  . = __love_data + 144;
+        /* end love_data */
     } :text
 
     /* Move to the next memory page for .rodata */
