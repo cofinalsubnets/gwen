@@ -123,22 +123,6 @@ balance-SKIPS a trailing `__attribute__((..))` / `__asm__(..)` run rather than
 representing it ("the codegen owes nothing"). so an attribute clay prints cannot come back
 through a parse, exactly like `note`/`edef`/`sdef`.
 
-### the `__int128` caveat is void, and this matters
-
-earlier drafts said `unsigned __int128` is "a piece of C moon cannot say at all", that
-`cpp.l` leaves `__SIZEOF_INT128__` undefined on every target, and therefore that the
-bignum section's two build legs compile DIFFERENT SOURCE and can only be compared
-behaviourally.
-
-**all of that is now stale.** `moon.l:130` defines `__SIZEOF_INT128__=16` for x64,
-`parse.l:86,93` carry `__int128` in the type specifiers with `u128`/`i128` types, and
-`gen.l:1073` is the d128 lane. love.c's limb seam (`love.c:48`) gates on
-`UINTPTR_MAX == UINT64_MAX && defined(__SIZEOF_INT128__)`, so **mooncc on x64 takes the
-same 64-bit limb path gcc does**, `divq` `__asm__` lane included. the byte-identical
-framing for G3 is back on the table for the bignum section, and the "state it behaviourally"
-carve-out is withdrawn. every other target still keeps the portable 32-bit branch, which
-remains the untested-lane shape the mooncc differentials keep finding bugs in.
-
 ## the preprocessor -- the one real design decision
 
 `love.c` carries **154 `#define`s** and ~92 conditional directives (`#if` 21, `#ifdef` 7,
@@ -150,18 +134,7 @@ architecture, not detail:
 * `#ifdef __wasm__` / `#if __STDC_HOSTED__` -- the freestanding/hosted split.
 
 `love.c` is ONE TEXT compiled for many targets, and `test_fixpoint` requires the mooncc
-rebuild to be byte-identical. so:
-
-* **(a) clay gains emit-only `#if` / `#define` nodes.** keeps one-text-many-targets, keeps
-  the generator target-blind. **recommended.**
-* **(b) love generates per-target C.** breaks the single-text property, multiplies the
-  committed artifacts, and moves the target matrix into the generator. not recommended.
-
-under (a) the 154 shrinks on its own: many `#define`s are constants and small accessors
-(`datp`, `chainp`, `two`, `str`) that are call-shaped at every use site, so the generator
-either emits them as declarations or leaves them in `love.h` untouched.
-
-this is the gating decision for whole-file capture. nothing before it depends on the answer.
+rebuild to be byte-identical. so, clay gains emit-only `#if` / `#define` nodes.
 
 ## comments
 
