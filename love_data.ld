@@ -4,7 +4,9 @@
    after each KEEP pins the stride at love.h's ai_data_stride whatever the bodies
    measure, so love.h reads the kind as a shift and never has to reflect the real
    one. A body that outgrew the stride would push the location counter backwards --
-   ld refuses that out loud, which is the check.
+   ld refuses that out loud, which is the check. ⚠ the base takes the STRIDE's
+   own alignment, not a lesser one: the sentinels carry aligned(ai_data_stride), so
+   a base under it lets ld bump the counter past the slot it was placing.
 
    The output name leads with a dot, so it is no C identifier and ld defines no
    bounds for it; the two here are the ASSERT's, not C's. love.h takes lvm_sym --
@@ -15,7 +17,7 @@
    (port/inle/*.lds, the board .lds) carries an equivalent block; holo needs none --
    it lays each section on the grain the object declares, which is the same tiling. */
 SECTIONS {
-  .love_data : ALIGN(16) {
+  .love_data : ALIGN(128) {
     __start_love_data = .;
     KEEP(*(love_data.0))  . = __start_love_data + 128;
     KEEP(*(love_data.1))  . = __start_love_data + 256;

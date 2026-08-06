@@ -1888,13 +1888,22 @@
           (: en (vent g env <>e)
              (? (bad? en) 'no
                 (: ty <>>en
-                   (? (<en = 'regv)             ; a homed param: mov from the home, or ld its spill slot
+                   (? (<en = 'regv)             ; a param in a register: mov from it, or ld its spill slot
                        (? (|| (flo? (? pty pty ty)) (stru? (? pty pty ty))) 'no
                           (: sl (assoc <>en (peep g 'homes ()))
-                             (? (! (two? sl)) 'no
-                                `(`('ezm i <>en)
-                                   `(`('mov rT <>en))
-                                   `(`('ld rT 'r4 <>sl))))))
+                             (? (two? sl)
+                                 `(`('ezm i <>en)
+                                    `(`('mov rT <>en))
+                                    `(`('ld rT 'r4 <>sl)))
+                                ; THE RIDE has no spill slot to fall back on, so it is targeted
+                                ; only where nothing can move the value first: every sibling a
+                                ; pure leaf (ezride -- no evaluation runs before the emission)
+                                ; and the source outside the argument file (no sibling's own
+                                ; targeted emission lands on it). that is the VM's whole tail-
+                                ; forward fleet -- pool-homed params straight into r0..r3.
+                                (&& (peep g 'ezride ()) !(member? <>en (argr g)))
+                                 (fin ty `(`('mov rT <>en)))
+                                'no)))
                       (arr? ty)                      ; array decay: its address
                        (? (<en = 'loc) (fin `('ptr <>ty) `(`('lea rT 'r4 <>en)))
                           (fin `('ptr <>ty) `(`('la rT <>en))))
@@ -2052,7 +2061,13 @@
        sr6 (sretm? g ret)
        sroff (? sr6 (ntmp g ret) 0)
        _ (pin g 'argseal ((peep g 'argseal 0) + 1))     ; the vmap seals across the staging (see vmon?)
+       ; a call whose every argument is a pure leaf runs no sibling evaluation, so
+       ; nothing between the reads and the call can clobber a register-resident
+       ; param -- ezarg's ride lane asks for this.
+       _ (pin g 'ezride (: (pure? l) (? !(two? l) 1 (&& (member? <<l '(num var)) (pure? >l)))
+                          (pure? ags)))
        kr (kls ags 0 (? sr6 1 0) 0 0 ())
+       _ (pin g 'ezride ())
        _ (pin g 'argseal ((peep g 'argseal 0) - 1))
        (? (bad? kr) 'bad
           (: ov? (\ kent ((cap (cap kent)) = 'ov))

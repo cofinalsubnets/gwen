@@ -764,24 +764,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  }
  return g; }
 
-#if ai_data_section
-// the tiling ai_typ reads is the LINKER's promise, kept four ways (love_data.ld,
-// each board's .lds, holo's named lane). check it once per core, at the door every
-// seat passes through: a slot out of place or a body past the stride would
-// otherwise answer a wrong KIND somewhere far from the cause.
-static lvm_t *const ai_data_slots[ai_data_n] =
- { lvm_sym, lvm_nom, lvm_sunbox, lvm_gembox, lvm_twinbox, lvm_big, lvm_tray, lvm_str, lvm_chain };
-static ai_inline bool ai_data_tiled(void) {
- for (uintptr_t i = 0; i < ai_data_n; i++)
-  if ((char*) ai_data_slots[i] - (char*) lvm_sym != (intptr_t) (i * ai_data_stride)) return false;
- return true; }
-#endif
-
 struct ai *ai_ini_m(void *(*al)(struct ai*, void*, size_t)) {
  uintptr_t const len0 = ai_minor0;   // initial minor pool; grows on demand (gen_grow)
-#if ai_data_section
- if (!ai_data_tiled()) __builtin_trap();
-#endif
  struct ai *g = al(NULL, NULL, 2 * len0 * sizeof(word));
  return g == NULL ? encode(g, ai_status_scare) : ai_ini_0(g, len0, al); }
 

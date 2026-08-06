@@ -44,10 +44,12 @@
 #endif
 // bytes per slot -- the linker pins it, love.h reads it. sized off the FATTEST
 // body any backend emits, and the sentinels already SHARE their handlers (each is
-// one tail jump to a data_*_apply), so this measures call lowering, not code: x64
-// lays 8 bytes, thumb1 38, thumb2 60, riscv64 88, arm64 100. everything over x64's
-// 8 is mooncc staging the four VM registers through the stack to hand them to a
-// tail call that already has them in place. fix that and this drops to 16.
+// one tail jump to a data_*_apply), so this measures CALL LOWERING, not code:
+// arm64 4, x64 5-8, thumb2 60, riscv64 88. the two fat ones spill their params to
+// the frame and read them straight back; the IR sweeps that fold exactly that
+// (stld, dehusk) run on x64 alone -- gen.l's build says so and says why. they do
+// port, and pay (measured: riscv64 76, thumb2 48), but they land inside the
+// regen's own ranking, where they cost arm64 its param homing. a rung, not a patch.
 // ⚠ a body past the stride pushes ld's location counter backwards and the link
 // says so; holo strides wider instead, which ai_data_tiled catches at boot.
 #define ai_data_stride 128

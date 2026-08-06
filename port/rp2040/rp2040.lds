@@ -39,8 +39,10 @@ SECTIONS {
        love.h reads the slot index AS the kind, so where these land is the
        whole point. one `. =` per slot pins the stride whatever the bodies
        measure -- an overgrown one moves the counter backwards and ld says so.
+       the base takes the STRIDE's own alignment, never a lesser one, or ld
+       bumps the counter past the very slot it was placing.
        mirrors love_data.ld, the host link's fragment. */
-    . = ALIGN(16);
+    . = ALIGN(128);
     __love_data = .;
     KEEP(*(love_data.0))  . = __love_data + 128;
     KEEP(*(love_data.1))  . = __love_data + 256;
