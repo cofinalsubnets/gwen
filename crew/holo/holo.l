@@ -168,11 +168,17 @@
          _ (? (id? r 'no) (scare 'bad-op op) 0)
          (feed >r >ins <r op))
 
-   ;; -- the backend registry. a backend is a tablet { 'lower 'patch }. --
+   ;; -- the backend registry. a backend is a tablet { 'lower 'patch }, plus 'refix where the
+   ;; linker reaches in. --
    backends (tablet 0)
    (defbackend name be) (pin backends name be)
    (lower-with be ins)         ((peep be 'lower 0) ins)
    (patch-with be k t s w aux) ((peep be 'patch 0) k t s w aux)
+   ;; the LINKER's door onto the same encoders. a REL relocation keeps its addend IN the
+   ;; field and the aux the encoding hides (a movw/movt's Rd) there too, so this takes the
+   ;; field's BYTES back and answers the re-encode -- the bit scatter stays in the backend
+   ;; that owns it, in one copy, and link.l never learns an instruction format.
+   (refix-with be k bs t s w)  ((peep be 'refix 0) k bs t s w)
 
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels -> (items .
    ;; labels), the flat byte/fixup stream and a name->address tablet. ⚠ items accumulate REVERSED

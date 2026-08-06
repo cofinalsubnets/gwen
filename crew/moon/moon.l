@@ -296,9 +296,18 @@
                                          (udie 1 ("cc: cannot open " + f))))
                          (udie 2 ("cc: not a .c/.o input: " + f))))
                  ins)
+       ; an arm32 target has no hosted lane -- there is no OS on this side of the
+       ; toolchain that runs a thumb exe, so every thumb link is a BOARD's: the
+       ; image lays at the address the core boots from, and no crt0 rides first
+       ; because the first text byte has to be the port's own vector table.
+       arm? (arm32? tgt)
+       _ (? (&& arm? pie) (udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal") 0)
+       _ (? (&& arm? (! (charm? org))) (udie 2 "cc: an arm32 link needs -Ttext <addr>") 0)
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
-       all (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () () () ()))) srcs)
-       ps (ldlink tgt pie org (all + (rtpull all tgt nostd)))
+       all (? arm? srcs
+              (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () () () ()))) srcs))
+       set (all + (rtpull all tgt nostd))
+       ps (? arm? (ldbare32 tgt org set) (ldlink tgt pie org set))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."

@@ -17,11 +17,15 @@ LD = arm-none-eabi-ld
 mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
 lib_h = out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 
-objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/main.o $(R)/$(o)/start.o
+objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
+  $(R)/$(o)/str.o $(R)/$(o)/main.o
 
-baker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/main-baker.o $(R)/$(o)/start.o
+baker_objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
+  $(R)/$(o)/str.o $(R)/$(o)/main-baker.o
+
+# our own link: -Ttext 0 is the board's origin, -nostdlib says an owed nom is a
+# diagnostic rather than a hunt for a runtime this board would not want.
+mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -nostdlib
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact
 # carries a fresh mtime and the next make calls it up to date. this makefile stands
@@ -43,21 +47,21 @@ $(R)/$(o)/main-baker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -D BAKER -c port/mps2/main.c $(o)/main-baker.o
 
-$(R)/$(o)/baker.elf: $(baker_objs) mps2.lds
-	@echo LD	$@
-	@$(LD) -T mps2.lds $(baker_objs) -o $@
+$(R)/$(o)/baker.elf: $(baker_objs)
+	@echo LINK	$@
+	@cd $(R) && $(mps2_ld) $(baker_objs:$(R)/%=%) -o $(o)/baker.elf
 
-waker_objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
-  $(R)/$(o)/main-waker.o $(R)/$(o)/start.o
+waker_objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
+  $(R)/$(o)/str.o $(R)/$(o)/main-waker.o
 
 $(R)/$(o)/main-waker.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -D WAKER -c port/mps2/main.c $(o)/main-waker.o
 
-$(R)/$(o)/waker.elf: $(waker_objs) mps2.lds
-	@echo LD	$@
-	@$(LD) -T mps2.lds $(waker_objs) -o $@
+$(R)/$(o)/waker.elf: $(waker_objs)
+	@echo LINK	$@
+	@cd $(R) && $(mps2_ld) $(waker_objs:$(R)/%=%) -o $(o)/waker.elf
 
 $(R)/$(o)/love.img: $(R)/$(o)/baker.elf
 	@echo BAKE	$@ "(qemu M7)"
@@ -85,13 +89,13 @@ $(R)/$(o)/main-waker-pd.o: main.c $(R)/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate -c port/mps2/main.c $(o)/main-waker-pd.o
 
-$(R)/$(o)/baker-pd.elf: $(filter-out %/main-baker.o,$(baker_objs)) $(R)/$(o)/main-baker-pd.o mps2.lds
-	@echo LD	$@
-	@$(LD) -T mps2.lds $(filter-out %/main-baker.o mps2.lds,$^) -o $@
+$(R)/$(o)/baker-pd.elf: $(filter-out %/main-baker.o,$(baker_objs)) $(R)/$(o)/main-baker-pd.o
+	@echo LINK	$@
+	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/baker-pd.elf
 
-$(R)/$(o)/waker-pd.elf: $(filter-out %/main-waker.o,$(waker_objs)) $(R)/$(o)/main-waker-pd.o mps2.lds
-	@echo LD	$@
-	@$(LD) -T mps2.lds $(filter-out %/main-waker.o mps2.lds,$^) -o $@
+$(R)/$(o)/waker-pd.elf: $(filter-out %/main-waker.o,$(waker_objs)) $(R)/$(o)/main-waker-pd.o
+	@echo LINK	$@
+	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/waker-pd.elf
 
 $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 	@echo BAKEPD	$@ "(qemu M7 + wake-check)"
@@ -113,8 +117,8 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Iout/lib
 t1_lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
 
-t1_objs = $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/mem-t1.o $(R)/$(o)/str-t1.o \
-  $(R)/$(o)/main-t1.o $(R)/$(o)/start.o
+t1_objs = $(R)/$(o)/start.o $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/mem-t1.o \
+  $(R)/$(o)/str-t1.o $(R)/$(o)/main-t1.o
 
 .PHONY: mps2t1
 mps2t1: $(R)/$(o)/love-t1.elf
@@ -199,6 +203,6 @@ $(R)/$(o)/start.o: mkstart.l $(R)/crew/holo/thumb2.l $(lay_l) $(R)/out/host/love
 $(R)/out/host/love: FORCE
 	@$(MAKE) -C $(R) out/host/love
 
-$(R)/$(o)/love.elf: $(objs) mps2.lds
-	@echo LD	$@
-	@$(LD) -T mps2.lds $(objs) -o $@
+$(R)/$(o)/love.elf: $(objs)
+	@echo LINK	$@
+	@cd $(R) && $(mps2_ld) $(objs:$(R)/%=%) -o $(o)/love.elf

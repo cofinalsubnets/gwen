@@ -469,14 +469,18 @@ test_thumb2: host out/host$(hsuf)/mooncc
 test_virt: host out/host$(hsuf)/mooncc
 	@sh test/gate/boot.sh virt "$(MAKE)"
 # test_mps2 -- LOVE ITSELF on the M7: the whole runtime compiled end to end by mooncc -t
-# thumb2 (port/mps2/), linked by arm-none-eabi-ld, booted on qemu's Cortex-M7. The boot
-# bakes the egg FROM SOURCE, asserts spec laws over the hatched image, exits 42; 98 = fault.
+# thumb2 (port/mps2/), start.o laid from holo IR, OUR linker binding it (ldbare32, one RWX
+# segment at 0) -- no foreign toolchain ANYWHERE, the second port after virt to reach that.
+# Booted on qemu's Cortex-M7: bakes the egg FROM SOURCE, asserts spec laws over the hatched
+# image, exits 42; 98 = fault.
 .PHONY: test_mps2
 test_mps2: host out/host$(hsuf)/mooncc
 	@sh test/gate/boot.sh mps2 "$(MAKE)"
 # test_mps2_t1 -- LOVE ON THE RP2040'S ISA: the same port by mooncc -t thumb1 (ARMv6-M,
 # ai_tco=0's trampoline, soft floats through libgcc's v6-m __aeabi set). v6-M is a strict
 # subset of ARMv7E-M, so qemu's M7 executes it natively; exit 42 = hatched + laws held.
+# ⚠ the ONE arm-none-eabi-ld left in the tree: this lane pulls libgcc.a, and link.l has no
+# archive reader. mps2.lds serves this link and nothing else.
 .PHONY: test_mps2_t1
 test_mps2_t1: host out/host$(hsuf)/mooncc
 	@sh test/gate/boot.sh mps2_t1 "$(MAKE)"
@@ -538,7 +542,10 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 # thumb-bit and inside flash. v6-M is the leanest target mooncc has (no FPU, no divide);
 # test_thumb1 runs that lane's arithmetic against gcc as ~120 differential checks under
 # qemu's M0, and qemu has no RP2040 machine, so this gate builds and never boots.
-# ⚠ the LINK is still arm-none-eabi-ld: thumb relocations are not in crew/holo/link.l.
+# ⚠ the LINK is still arm-none-eabi-ld -- not for the relocations (link.l reads all five
+# thumb kinds now, and test_mps2 binds a whole M7 image with them) but for libgcc.a, which
+# a v6-M build needs and link.l has no archive reader for. flash/SRAM split too: two load
+# regions, where ldbare32 lays one.
 .PHONY: test_rp2040
 test_rp2040: host out/host$(hsuf)/mooncc
 	@echo RP2040 out/rp2040/love.bin

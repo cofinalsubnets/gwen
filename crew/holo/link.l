@@ -17,7 +17,9 @@
 ; `ldkern` is the second door out: the same objects laid for the BARE METAL --
 ; several page-aligned PT_LOADs, each carrying p_paddr = p_vaddr - bias, so one
 ; ELF serves a loader that copies physical and a bootloader that maps virtual.
-; port/inle/klink.l drives it; the inle kernel rides it on both arches.
+; port/inle/klink.l drives it; the inle kernel rides it on both arches. `ldbare32`
+; is the third: one ELF32 segment for a part with no MMU at all (an M-profile
+; board), where the image lays at the address the core boots from.
 ; loads after crew/holo/obj.l in the mooncc cat -- reads elf-base / elf-machines /
 ; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). moon.l drives it:
 ; `mooncc a.o b.c -o prog`.
@@ -75,6 +77,28 @@
    ; % is truncated here, so a negative sum comes back negative: fold it up.
    (ld-u64 v) (: r (v % 18446744073709551616)
                  (? (r < 0) (r + 18446744073709551616) r))
+   (ld-u32 v) (: r (v % 4294967296) (? (r < 0) (r + 4294967296) r))
+
+   ; --- the ARM field lane. EM_ARM is REL: there is no addend column, so each kind
+   ; pulls its own addend OUT of the field, and the thumb bit rides in the SYMBOL --
+   ; ldsyms already folded st_value's bit 0 into S, and every branch field shifts the
+   ; offset right by at least one, so ((S+A)|T) falls out of S+A with nothing masked.
+   ; the instruction formats are the BACKEND's: refix-with hands the field's bytes
+   ; back and takes the re-encode, so the J1/J2 scatter and the movw/movt imm16
+   ; scatter exist in one copy each, in thumb2.l, and nothing here knows an encoding.
+   ; ⚠ ABS32 is the one kind with no encoding to speak of -- a whole 32-bit word
+   ; carrying its own addend -- so it is read and written right here.
+   ; the numbers are obj.l's (r-arm-abs32 / r-thm-call / r-thm-jump24 / r-thm-movw /
+   ; r-thm-movt), and a kind outside the set refuses: they collide freely with the
+   ; x86-64 and riscv numbers, which is why the machine picks the lane first.
+   ldarm-kinds (ld-cls '((2 abs32) (10 bl) (30 b) (47 movw16) (48 movt16)))
+   (ldarm be s off sv kind site)
+    (: r (peep ldarm-kinds kind ())
+       _ (? (two? r) 0 (scare 'link-reloc kind))
+       k <r
+       (? (id? k 'abs32) (le32 (ld-u32 (sv + (rle32 s off))))
+          (refix-with be k (map (\ i (s (off + i))) (jot 4)) sv site 4)))
+
    ; a section NAME -> its lane, by prefix: gcc splits a lane across many
    ; sections (.text.unlikely, .rodata.str1.1, .data.rel.ro.local) and every
    ; piece of a lane lands in the same run of the image. one RWX segment maps
@@ -348,12 +372,13 @@
    ; rv flags an EM_RISCV link: riscv's reloc numbers live in their own namespace
    ; and R_RISCV_64 is 2 -- the same number as R_X86_64_PC32 -- so the kind
    ; dispatch below switches on the machine, never on the number alone.
-   ; cx is the resolution context every lane shares -- (glo n0 n1 r0 r1 relbox rv),
-   ; the symbol book, the two synthesized brackets, the -pie site box and the
-   ; riscv flag -- bundled so ldemit can thread it without a nine-argument tail.
+   ; cx is the resolution context every lane shares -- (glo n0 n1 r0 r1 relbox rv
+   ; arm? be), the symbol book, the two synthesized brackets, the -pie site box, the
+   ; riscv flag, the EM_ARM flag and the backend the ARM lane re-encodes through --
+   ; bundled so ldemit can thread it without a nine-argument tail.
    (ldpatch ob ix base cx)
     (: glo <cx n0 (at cx 1) n1 (at cx 2) r0 (at cx 3) r1 (at cx 4)
-       relbox (at cx 5) rv (at cx 6)
+       relbox (at cx 5) rv (at cx 6) arm? (at cx 7) be (at cx 8)
        s (peep ob 'src 0) se (peep (peep ob 'secs 0) ix ())
        off0 (at se 1) sz (at se 2)
        (ent es) (? !(two? es) ()
@@ -387,75 +412,83 @@
                     (&& ((at sy 1) = 2) (&& ((at sy 3) = 0)
                          (! (two? (peep glo <sy ()))))) 0
                     (ldres glo n0 n1 r0 r1 <sy))
-              sa (ld-u64 (sv + ad))                 ; S + A, wrapped as a linker wraps it
-              prel (sg64 (ld-u64 (sa - (base + ro))))            ; ..and S + A - P, signed
-              abs64? (? rv (kind = 2) (member? kind '(1 257)))   ; R_RISCV_64 / R_X86_64_64 / R_AARCH64_ABS64
-              ; R_X86_64_32 / _32S: S + A written ABSOLUTE into a 4-byte field.
-              ; a foreign object's, always -- gcc under -fno-pie and clang under
-              ; -mcmodel=kernel, where we emit the 64-bit or pc-relative form.
-              abs32? (&& !rv (member? kind '(10 11)))
-              w (? abs64? 8 (&& rv (kind = 19)) 8 4)             ; CALL_PLT spans the auipc pair
-              ; -pie: this abs64 site holds a base-0 offset (base is 0), so record its
-              ; load-address for the startup relocator to add the real base to.
-              _ (? (&& relbox abs64?)
-                    (pin relbox 0 ((base + ro) >< (peep relbox 0 ()))) 0)
-              ; ..and an abs32 site cannot be slid at all: the startup relocator
-              ; adds a 64-bit base, and a 32-bit field has nowhere to put it.
-              _ (? (&& relbox abs32?) (scare 'link-abs32-pie <sy) 0)
-              _ (? (? rv (member? kind '(2 17 19))
-                        (member? kind '(1 2 4 10 11 257 275 277 278 282 283 284 285 286 299)))
-                   0 (scare 'link-reloc kind))
-              _ (? ((ro + w) <= sz) 0 (scare 'link-oob (peep ob 'id 0)))
-              ; the aarch64/riscv field kinds patch BITS of the instruction word the
-              ; placeholder carries -- read it back and OR the field in
-              wd (? abs64? 0 (rle32 s (off0 + ro)))
-              bs (? abs64? (le64 sa)                             ; the abs64 three: S + A outright
-                    abs32?                                       ; ..and the two abs32, range-checked
-                     ; _32 is UNSIGNED and _32S signed, so each reads the wrapped
-                     ; sum its own way -- and a truncated address would point
-                     ; somewhere real and wrong, so each checks its own range.
-                     ; the kernel exercises both: its high-half addresses are
-                     ; 32S's negative half, and mkboot.l's wrapped `.boot + bias`
-                     ; is a plain unsigned physical address.
-                     (: v (? (kind = 10) sa (sg64 sa))
-                        _ (? (? (kind = 10) (v <= 4294967295) (ld-fits32 v))
-                             0 (scare 'link-range <sy))
-                        (le32 v))
-                    (&& rv (kind = 17))                          ; R_RISCV_JAL: S+A-P into jal's j-imm
-                     (: v prel
-                        _ (? (&& (-1048576 <= v) (v <= 1048575)) 0 (scare 'link-range <sy))
-                        u (v & 2097151)
-                        (le32 (wd | ((((u >> 20) & 1) << 31) | ((((u >> 1) & 1023) << 21)
-                                     | ((((u >> 11) & 1) << 20) | (((u >> 12) & 255) << 12)))))))
-                    (&& rv (kind = 19))                          ; R_RISCV_CALL_PLT: S+A-P as hi20 + signed lo12
-                     (: v prel
-                        low (v & 4095) lo (? (low > 2047) (low - 4096) low)
-                        hi ((v - lo) // 4096)
-                        _ (? (&& (-524288 <= hi) (hi <= 524287)) 0 (scare 'link-range <sy))
-                        ((le32 (wd | ((hi & 1048575) << 12)))
-                         + (le32 ((rle32 s (off0 + (ro + 4))) | ((lo & 4095) << 20)))))
-                    (member? kind '(2 4))
-                     (: v prel                          ; PC32/PLT32: S + A - P
-                        _ (? (ld-fits32 v) 0 (scare 'link-range <sy))
-                        (le32 v))
-                    (member? kind '(282 283))           ; JUMP26/CALL26: (S+A-P)>>2 into imm26
-                     (: v prel
-                        _ (? (&& (-134217728 <= v) (v <= 134217727)) 0 (scare 'link-range <sy))
-                        (le32 (wd | ((v // 4) & 67108863))))
-                    (kind = 275)                        ; ADR_PREL_PG_HI21: page(S+A)-page(P) into adrp
-                     (: pg ((sa // 4096) - ((base + ro) // 4096))
-                        _ (? (&& (-1048576 <= pg) (pg <= 1048575)) 0 (scare 'link-range <sy))
-                        (le32 (wd | (((pg & 3) << 29) | (((pg >> 2) & 524287) << 5)))))
-                    ; the ABS_LO12_NC family -- ADD's and every LDST width's --
-                    ; is one field: the low 12 bits of S+A into imm12, SCALED by
-                    ; the width the opcode implies (an `ldr x`'s imm12 counts
-                    ; 8-byte units). NC = no check: the low bits cannot overflow.
-                    ; holo's own aarch64 emits only adrp+add, so the LDST widths
-                    ; arrive from a foreign object -- clang folds the add away.
-                    (: sc (? (kind = 284) 2 (kind = 285) 4 (kind = 286) 8 (kind = 299) 16 1)
-                       (le32 (wd | (((sa % 4096) // sc) << 10)))))
-              (go (off0 + ro + w) >es
-                  (bs >< ((snip s pos (off0 + ro)) >< acc)))))
+              ; the two classes part HERE and nowhere else. an ARM field is 4 bytes
+              ; wide whatever the kind, its addend is already in it, and `ad` arrives
+              ; () -- so every line below would fold the unit into an address.
+              (? arm?
+                 (: _ (? ((ro + 4) <= sz) 0 (scare 'link-oob (peep ob 'id 0)))
+                    (go (off0 + ro + 4) >es
+                        ((ldarm be s (off0 + ro) sv kind (base + ro))
+                         >< ((snip s pos (off0 + ro)) >< acc))))
+                 (: sa (ld-u64 (sv + ad))              ; S + A, wrapped as a linker wraps it
+                    prel (sg64 (ld-u64 (sa - (base + ro))))            ; ..and S + A - P, signed
+                    abs64? (? rv (kind = 2) (member? kind '(1 257)))   ; R_RISCV_64 / R_X86_64_64 / R_AARCH64_ABS64
+                    ; R_X86_64_32 / _32S: S + A written ABSOLUTE into a 4-byte field.
+                    ; a foreign object's, always -- gcc under -fno-pie and clang under
+                    ; -mcmodel=kernel, where we emit the 64-bit or pc-relative form.
+                    abs32? (&& !rv (member? kind '(10 11)))
+                    w (? abs64? 8 (&& rv (kind = 19)) 8 4)             ; CALL_PLT spans the auipc pair
+                    ; -pie: this abs64 site holds a base-0 offset (base is 0), so record its
+                    ; load-address for the startup relocator to add the real base to.
+                    _ (? (&& relbox abs64?)
+                          (pin relbox 0 ((base + ro) >< (peep relbox 0 ()))) 0)
+                    ; ..and an abs32 site cannot be slid at all: the startup relocator
+                    ; adds a 64-bit base, and a 32-bit field has nowhere to put it.
+                    _ (? (&& relbox abs32?) (scare 'link-abs32-pie <sy) 0)
+                    _ (? (? rv (member? kind '(2 17 19))
+                              (member? kind '(1 2 4 10 11 257 275 277 278 282 283 284 285 286 299)))
+                         0 (scare 'link-reloc kind))
+                    _ (? ((ro + w) <= sz) 0 (scare 'link-oob (peep ob 'id 0)))
+                    ; the aarch64/riscv field kinds patch BITS of the instruction word the
+                    ; placeholder carries -- read it back and OR the field in
+                    wd (? abs64? 0 (rle32 s (off0 + ro)))
+                    bs (? abs64? (le64 sa)                             ; the abs64 three: S + A outright
+                          abs32?                                       ; ..and the two abs32, range-checked
+                           ; _32 is UNSIGNED and _32S signed, so each reads the wrapped
+                           ; sum its own way -- and a truncated address would point
+                           ; somewhere real and wrong, so each checks its own range.
+                           ; the kernel exercises both: its high-half addresses are
+                           ; 32S's negative half, and mkboot.l's wrapped `.boot + bias`
+                           ; is a plain unsigned physical address.
+                           (: v (? (kind = 10) sa (sg64 sa))
+                              _ (? (? (kind = 10) (v <= 4294967295) (ld-fits32 v))
+                                   0 (scare 'link-range <sy))
+                              (le32 v))
+                          (&& rv (kind = 17))                          ; R_RISCV_JAL: S+A-P into jal's j-imm
+                           (: v prel
+                              _ (? (&& (-1048576 <= v) (v <= 1048575)) 0 (scare 'link-range <sy))
+                              u (v & 2097151)
+                              (le32 (wd | ((((u >> 20) & 1) << 31) | ((((u >> 1) & 1023) << 21)
+                                           | ((((u >> 11) & 1) << 20) | (((u >> 12) & 255) << 12)))))))
+                          (&& rv (kind = 19))                          ; R_RISCV_CALL_PLT: S+A-P as hi20 + signed lo12
+                           (: v prel
+                              low (v & 4095) lo (? (low > 2047) (low - 4096) low)
+                              hi ((v - lo) // 4096)
+                              _ (? (&& (-524288 <= hi) (hi <= 524287)) 0 (scare 'link-range <sy))
+                              ((le32 (wd | ((hi & 1048575) << 12)))
+                               + (le32 ((rle32 s (off0 + (ro + 4))) | ((lo & 4095) << 20)))))
+                          (member? kind '(2 4))
+                           (: v prel                          ; PC32/PLT32: S + A - P
+                              _ (? (ld-fits32 v) 0 (scare 'link-range <sy))
+                              (le32 v))
+                          (member? kind '(282 283))           ; JUMP26/CALL26: (S+A-P)>>2 into imm26
+                           (: v prel
+                              _ (? (&& (-134217728 <= v) (v <= 134217727)) 0 (scare 'link-range <sy))
+                              (le32 (wd | ((v // 4) & 67108863))))
+                          (kind = 275)                        ; ADR_PREL_PG_HI21: page(S+A)-page(P) into adrp
+                           (: pg ((sa // 4096) - ((base + ro) // 4096))
+                              _ (? (&& (-1048576 <= pg) (pg <= 1048575)) 0 (scare 'link-range <sy))
+                              (le32 (wd | (((pg & 3) << 29) | (((pg >> 2) & 524287) << 5)))))
+                          ; the ABS_LO12_NC family -- ADD's and every LDST width's --
+                          ; is one field: the low 12 bits of S+A into imm12, SCALED by
+                          ; the width the opcode implies (an `ldr x`'s imm12 counts
+                          ; 8-byte units). NC = no check: the low bits cannot overflow.
+                          ; holo's own aarch64 emits only adrp+add, so the LDST widths
+                          ; arrive from a foreign object -- clang folds the add away.
+                          (: sc (? (kind = 284) 2 (kind = 285) 4 (kind = 286) 8 (kind = 299) 16 1)
+                             (le32 (wd | (((sa % 4096) // sc) << 10)))))
+                    (go (off0 + ro + w) >es
+                        (bs >< ((snip s pos (off0 + ro)) >< acc)))))))
        (go off0 (ent (peep ob 'relas ())) ()))
 
    ; emit ONE lane in layout order -- object by object, and within an object its
@@ -483,6 +516,15 @@
    (ld-shdr nm ty fl ad off sz lk inf al es)
     (catall `((le32 nm) (le32 ty) (le64 fl) (le64 ad) (le64 off) (le64 sz)
               (le32 lk) (le32 inf) (le64 al) (le64 es)))
+   ; the ELF32 twins -- 16 bytes and 40. ⚠ Elf32_Sym REORDERS: st_value and st_size
+   ; move AHEAD of st_info/st_other/st_shndx, which is the same fact the field table
+   ; up top records at the reading end, so this is its own door rather than a width
+   ; knob on the one above. the section header does hold its order, and is a twin.
+   (ld-sym32 nameoff bind typ shndx value size)
+    (catall `((le32 nameoff) (le32 value) (le32 size) `(((bind << 4) | typ) 0) (le16 shndx)))
+   (ld-shdr32 nm ty fl ad off sz lk inf al es)
+    (catall `((le32 nm) (le32 ty) (le32 fl) (le32 ad) (le32 off) (le32 sz)
+              (le32 lk) (le32 inf) (le32 al) (le32 es)))
 
    ; THE EXECUTABLE'S SYMBOL TABLE -- what makes `nm`, a labeled `objdump -d` and
    ; a gdb `break main` work on a binary of ours. every DEFINED symbol across the
@@ -495,8 +537,9 @@
    ; every reader already does for a stripped-but-symboled binary.
    ; lanesx maps a lane to its section index in the image -- by the section's HOME,
    ; so a symbol in a compiler-named lane is classified as what it travels with
-   ; rather than landing in UNDEF. -> (bytes strs nlocal)
-   (ldstab objs glo lanesx)
+   ; rather than landing in UNDEF. mksym/esz are the class's entry writer and its
+   ; stride -- the WALK is one, and only the wire shape differs. -> (bytes strs nlocal)
+   (ldstab objs glo lanesx mksym esz)
     (: (one ob acc)
         (: bs (peep ob 'base 0) secs (peep ob 'secs 0) syms (peep ob 'syms 0)
            (go i a)
@@ -523,9 +566,9 @@
        ord (locs + (filter (\ e (0 < (at e 1))) all))
        str (o-strtab (map (\ e <e) ord))
        ; index 0 is the reserved NULL entry, and it counts as a local
-       `(((ld-zeros 24) + (catall (o-mapi (\ i e (ld-sym (at <>str i) (at e 1) (at e 2)
-                                                         (at e 3) (at e 4) (at e 5)))
-                                          ord)))
+       `(((ld-zeros esz) + (catall (o-mapi (\ i e (mksym (at <>str i) (at e 1) (at e 2)
+                                                          (at e 3) (at e 4) (at e 5)))
+                                           ord)))
          <str (1 + (tally locs))))
 
    ; count the abs64 (R_X86_64_64 / R_AARCH64_ABS64) data relocations across the
@@ -600,7 +643,7 @@
               o1 <objs
               (? (two? e) <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx `(glo n0 end r0 r1 relbox rv)
+       cx `(glo n0 end r0 r1 relbox rv () ())
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata <et objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data <eo objs >eo))
@@ -621,7 +664,7 @@
        ; gap comes back as zeros -- the relocator's table gone, the stripped
        ; binary a segfault at the first unrebased pointer.
        lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 6) ('image >< 7)))
-       st (ldstab objs glo lanesx)
+       st (ldstab objs glo lanesx ld-sym 24)
        shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" "ai_rela" ".bss" ".image"
                          ".symtab" ".strtab" ".shstrtab"))
        (snm k) (at <>shstr k)
@@ -720,7 +763,7 @@
        _ (pin glo "kimage_end" `(kend 0))
        e (peep glo ent ())
        _ (? (two? e) 0 (scare 'link-entry ent))
-       cx `(glo n0 n1 n1 n1 () ())                  ; no -pie table here, and no riscv kernel yet
+       cx `(glo n0 n1 n1 n1 () () () ())            ; no -pie table here, and no riscv or arm kernel yet
        en (ldemit cx 'note vbase objs ())
        eb (ldemit cx 'boot b0 objs (gap vbase b0))  ; the file resumes at vbase (offset 4096)
        eq (ldemit cx 'limreq q0 objs (>eb + (gap <eb q0)))
@@ -734,7 +777,7 @@
        ; nothing -- what `nm`, a labeled objdump and a gdb `break kmain` read.
        lanesx (tabof `(('note >< 1) ('boot >< 2) ('limreq >< 3) ('text >< 4)
                        ('rodata >< 5) ('data >< 6) ('nifs >< 6) ('image >< 6) ('bss >< 7)))
-       st (ldstab objs glo lanesx)
+       st (ldstab objs glo lanesx ld-sym 24)
        shstr (o-strtab '(".note.pvh" ".boot" ".limine_requests" ".text" ".rodata"
                          ".data" ".bss" ".symtab" ".strtab" ".shstrtab"))
        (snm k) (at <>shstr k)
@@ -759,6 +802,67 @@
                             phs))
        (hdr >< (>en + `((ld-zeros (4096 - (hdrsz + nsz)))) + >eg
                 + `((ld-zeros (symo - fsz)) <st <>st <shstr
+                    (ld-zeros (shto - (ssto + sstz))) sht))))
+
+   ; --- the BARE-METAL 32-bit door ---------------------------------------------
+   ; one ELF32 executable for a part with no MMU: laid where it RUNS and loaded
+   ; there too, so p_vaddr = p_paddr and `qemu -kernel` copies each segment
+   ; straight down. it is ONE segment, RWX -- an M-profile core has nothing to
+   ; enforce anything finer with, and mps2's SSRAM1 holds code and data alike.
+   ; ⚠ the ELF HEADER is not in it. `org` is where the CORE looks (an M7 reads its
+   ; initial SP and PC out of the vector table at 0 before a single instruction
+   ; runs), so the first laid byte has to BE the first text byte and the header
+   ; rides file offset 0 with no segment over it -- which is why nothing here
+   ; reserves address space for it the way ldlink does. that also makes the first
+   ; object's first text section the vector table, by construction.
+   ; the file offset stays congruent to the address modulo a page anyway, so a
+   ; MAPPING loader could take this image too; nothing on this lane is one yet.
+   ; ⚠ no archives, no -pie, no .image: an arm32 object has no .image lane, and
+   ; a freestanding board link has nothing to slide.
+   (ldbare32 target org srcs)
+    (: mach (peep elf-machines target 0)
+       _ (? (0 < mach) 0 (scare 'link-target target))
+       be (peep backends target ())
+       objs (map (\ p (ld-read <p <>p mach)) srcs)
+       foff (4096 + (org % 4096))               ; ..the header's page, and the congruence
+       _ (? ((52 + 32) <= foff) 0 (scare 'link-bare-headers foff))
+       (fo a) (foff + (a - org))                ; an address -> its file offset
+       lay (ldlay objs org 0 1)                 ; hdrsz 0: text starts AT org. salign 1: one segment
+       end <lay n0 <>lay o0 <>>lay d0 <>>>lay
+       bend (ldlayn 'bss (ldlay1 'bss end objs) objs)
+       glo (ldsyms objs)
+       ; the entry symbol is a COURTESY -- for objdump, gdb and a reader asking what
+       ; runs first. the core never consults e_entry; it takes the vector table.
+       ent (: e (peep glo "_start" ()) (? (two? e) <e org))
+       cx `(glo n0 end end end () () 1 be)
+       et (ldemitn cx 'text objs (ldemit cx 'text org objs ()))
+       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata <et objs >et))
+       ed (ldemitn cx 'data objs (ldemit cx 'data <eo objs >eo))
+       en (ldemit cx 'nifs <ed objs >ed)
+       ; the section headers and the symbol table ride past p_filesz, mapped by
+       ; nothing -- what `nm`, a labeled objdump and a gdb `break main` read.
+       lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 5)))
+       st (ldstab objs glo lanesx ld-sym32 16)
+       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".bss"
+                         ".symtab" ".strtab" ".shstrtab"))
+       (snm k) (at <>shstr k)
+       symo (ld-align 4 (fo <en)) symz (tally <st)
+       stro (symo + symz) strz (tally <>st)
+       ssto (stro + strz) sstz (tally <shstr)
+       shto (ld-align 4 (ssto + sstz))
+       sht (catall `((ld-shdr32 0 0 0 0 0 0 0 0 0 0)                            ; the reserved null header
+                     (ld-shdr32 (snm 0) 1 6 org (fo org) (o0 - org) 0 0 4 0)
+                     (ld-shdr32 (snm 1) 1 2 o0 (fo o0) (d0 - o0) 0 0 4 0)
+                     (ld-shdr32 (snm 2) 1 3 d0 (fo d0) (<ed - d0) 0 0 4 0)
+                     (ld-shdr32 (snm 3) 1 3 <ed (fo <ed) (<en - <ed) 0 0 4 0)
+                     (ld-shdr32 (snm 4) 8 3 <en (fo <en) (bend - <en) 0 0 4 0)  ; NOBITS: an offset, no bytes
+                     (ld-shdr32 (snm 5) 2 0 0 symo symz 7 (at st 2) 4 16)       ; link=.strtab info=first global
+                     (ld-shdr32 (snm 6) 3 0 0 stro strz 0 0 1 0)
+                     (ld-shdr32 (snm 7) 3 0 0 ssto sstz 0 0 1 0)))
+       hdr (elf32-hdrn 2 ent mach `(shto 9 8)
+                       `((elf32-phdr 1 7 foff org org (<en - org) (bend - org) 4096)))
+       (hdr >< (`((ld-zeros (foff - (52 + 32)))) + >en
+                + `((ld-zeros (symo - (fo <en))) <st <>st <shstr
                     (ld-zeros (shto - (ssto + sstz))) sht))))
 
    ; write a piece list to a file, raw (texts pass through; byte lists pack into a

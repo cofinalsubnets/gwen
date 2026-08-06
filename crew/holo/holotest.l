@@ -323,6 +323,34 @@
    _ (chk-eq "elf32.p-flags"    7  (at e32img 76))         ; ..and it sits here instead
    _ (chk-eq "elf32.size" (84 + (tally (holo-bytes 'thumb2 t32prog))) (tally e32img))
 
+   ;; -- `refix`, the LINKER's door onto the same encoders (link.l's ldarm goes through it and
+   ;; knows no instruction format). ARM is REL: the field it hands back carries both the addend
+   ;; and the aux the encoding hides. the four kinds a thumb2 object mints, and one law each. --
+   t2be (peep backends 'thumb2 ())
+   (rfx k bs t s) (hexs (refix-with t2be k bs t s 4))
+   ;; the four placeholders obj.l leaves in a .o for an unresolved target: the branches hold
+   ;; their base encoding with the -4 PIPELINE addend baked in (gas writes fff7feff for `bl
+   ;; sym` too), the movw/movt pair holds Rd and a zero imm16.
+   base-bl '(255 247 254 255)  base-b '(255 247 254 191)
+   base-mw '(64 242 0 2)       base-mt '(192 242 0 2)             ; movw/movt r2, #0
+   ;; a resolved branch is the same bytes `patch` would have laid for the same pair -- there
+   ;; is one scatter, and this is it seen through the linker's door.
+   _ (chk-eq "refix.bl" (hexs (patch-with t2be 'bl 4096 256 4 0)) (rfx 'bl base-bl 4096 256))
+   _ (chk-eq "refix.b"  (hexs (patch-with t2be 'b  4096 256 4 0)) (rfx 'b  base-b  4096 256))
+   ;; ⚠ the THUMB BIT rides in the target and every branch field shifts by at least one, so an
+   ;; odd address encodes identically to its even twin -- which is why nothing masks it out.
+   _ (chk-eq "refix.thumb-bit" (rfx 'bl base-bl 4096 256) (rfx 'bl base-bl 4097 256))
+   ;; movw16/movt16 read their Rd back OUT of hw2 -- an R_ARM_THM_MOVW_ABS_NC never carried it.
+   _ (chk-eq "refix.movw" (hexs (patch-with t2be 'movw16 2271560481 0 4 2)) (rfx 'movw16 base-mw 2271560481 0))
+   _ (chk-eq "refix.movt" (hexs (patch-with t2be 'movt16 2271560481 0 4 2)) (rfx 'movt16 base-mt 2271560481 0))
+   ;; ..and a field carrying an addend this backend never bakes REFUSES, rather than quietly
+   ;; linking somewhere plausible: the base encoding is rebuilt and compared, so no inverse
+   ;; scatter has to exist for the check to be honest.
+   rfcaught (tablet 0) _ (pin rfcaught 0 0)
+   _ (hear (\ s a b (? (a = 'thumb-refix-addend) (: _ (pin rfcaught 0 1) ()) (welp s a b))))
+   _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same BL two bytes further on
+   _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
+
    ;; -- the aarch64 backend (crew/holo/arm64.l): the SAME neutral IR, a second target. fixed 32-bit
    ;; little-endian words; every golden checked vs llvm-mc / llvm-objdump. --
    a64tests `(

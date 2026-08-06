@@ -382,9 +382,22 @@
             (kind = 'movt16) (thumb-mw16 0xF2C0 aux ((target >> 16) & 65535))
             (scare 'badfix kind)))
 
+   ;; the LINKER's door onto that same scatter. ARM is REL, so the field keeps both the
+   ;; addend and the aux -- movw16/movt16 read their Rd back out of hw2, and the ADDEND is
+   ;; CHECKED rather than decoded: the base encoding thumb-patch itself bakes is rebuilt and
+   ;; compared, so a field carrying any other one refuses instead of linking somewhere
+   ;; plausible and wrong. no inverse scatter exists anywhere, which is the point.
+   ;; ⚠ the thumb bit rides in `target` (the linker folds it out of the symbol) and passes
+   ;; through untouched -- every field here shifts the offset right by at least one.
+   (thumb-refix kind bs target site width)
+      (: aux (? (member? kind '(movw16 movt16)) ((at bs 3) & 15) 0)   ; MOVW/MOVT T3: Rd, hw2 bits 11:8
+         _ (? ((thumb-patch kind 0 0 width aux) = bs) 0 (scare 'thumb-refix-addend kind))
+         (thumb-patch kind target site width aux))
+
    thumb2 (tablet 0)
    _ (pin thumb2 'lower thumb-lower)
    _ (pin thumb2 'patch thumb-patch)
+   _ (pin thumb2 'refix thumb-refix)
    _ (pin thumb2 'nop `(0 191))                ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb2 thumb2)
    _ (defbackend 'cortex-m7 thumb2)
