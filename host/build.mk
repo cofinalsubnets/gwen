@@ -37,8 +37,9 @@ host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
 #    out of the debug lane's own tree -- and a stress-built love0 segfaults baking
 #    mooncc0.image, taking the whole tree down with it.
 hcc = $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
-# whole-archive flag differs by linker (ld64 vs GNU ld); ai_typ is now a plain
-# compare in love.h, so there is no data.ld / generated data.h on any platform.
+# whole-archive flag differs by linker (ld64 vs GNU ld). mach-o takes no
+# love_data.ld either -- it spells sections `segment,section`, so love.h asks the
+# sentinels by name there (ai_data_section 0).
 ifeq ($(shell uname -s),Darwin)
 so_archive = -Wl,-force_load,$(ho)/liblove.a       # ld64's whole-archive
 # the host contract (ai_clock, ai_fd_port_vt, ai_stdin/out/err -- defined in
@@ -100,8 +101,8 @@ endif
 force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
-	@printf '%s\n' '$(host_cc) $(host_ldflags) $(image_ldflags)' > $@.tmp
-	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(host_ldflags) $(image_ldflags)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH $@; fi
 host: $(ho)/love $(ho)/ai $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 

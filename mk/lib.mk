@@ -41,9 +41,11 @@ lib: $(lib_h) $(gl0_h)
 # lcat failure) would leave a 0-byte header that make then treats as up-to-date -- which
 # SILENTLY drops a baked service (e.g. an empty holo.h => `assemble` unbound => the glaze's
 # map lane emits nothing => a corrupt native => crash/hang). Fail loudly instead.
-lcat_h = @mkdir -p out/lib; echo LOVE	$@; \
-  $(love0) -l love/prel.l tools/lcat.l $< > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
-    || { rm -f $@.tmp; echo "FAIL: $@ empty (love0 lcat failed -- broken bootstrap?)"; exit 1; }
+# ⚠ the temp takes the PID: the ports RECURSE onto these targets, so -j runs this recipe
+# twice at once and one shared temp gets renamed out from under the other's write.
+lcat_h = @mkdir -p out/lib; echo LOVE	$@; t=$@.$$$$.tmp; \
+  $(love0) -l love/prel.l tools/lcat.l $< > $$t && test -s $$t && mv -f $$t $@ \
+    || { rm -f $$t; echo "FAIL: $@ empty (love0 lcat failed -- broken bootstrap?)"; exit 1; }
 $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
 	$(lcat_h)
 # the crew/holo/ assembler (crew/holo/holo.l + crew/holo/x64.l) rides the SAME lcat pipeline into the
@@ -104,8 +106,8 @@ out/lib/hook.h: love/glaze/hook.l
 force_corpus_list: ;
 out/lib/corpus.list: force_corpus_list
 	@mkdir -p out/lib
-	@echo '$t' > $@.tmp
-	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH	$@; fi
+	@tf=$@.$$$$.tmp; echo '$t' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 out/lib/tests0.h: $t out/lib/corpus.list
 	@mkdir -p out/lib
 	@echo AI	$@
@@ -127,8 +129,8 @@ out/lib/love_version.h: force_version
 	  darcs whatsnew --repodir $(R) >/dev/null 2>&1 && v="$$v-dirty"; \
 	else \
 	  v="$$(git -C $(R) describe --always --dirty 2>/dev/null || echo unknown)"; \
-	fi; printf '#define AI_VERSION "%s"\n' "$$v" > $@.tmp
-	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; echo SH $@; fi
+	fi; tf=$@.$$$$.tmp; printf '#define AI_VERSION "%s"\n' "$$v" > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH $@; fi
 
 # The lcat'd lib headers (egg.h et al) are PRODUCED BY running love0, so re-lay
 # them whenever love0 changes. (The old "edit a .h => make clean or love0 hangs" gum is
