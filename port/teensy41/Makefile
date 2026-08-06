@@ -1,9 +1,9 @@
 # Teensy 4.1 (i.MX RT1062) build -- love compiled END TO END by mooncc.
 # Run from the project root via `make -C port/teensy41` (needs out/host/mooncc,
 # built by the root Makefile). Every C file -- love.c, the am math floor,
-# libc, teensy41.c, main.c -- goes through `mooncc -t thumb2`; boot.S (the
-# ROM-facing FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is
-# arm-none-eabi-gcc-assembled and arm-none-eabi-ld links against
+# libc, teensy41.c, main.c -- goes through `mooncc -t thumb2`, and boot.o (the
+# ROM-facing FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from
+# holo IR by mkboot.l -- no gas anywhere. arm-none-eabi-ld still links against
 # teensy41.lds. No libgcc: mooncc's thumb2 lanes are self-contained (zero
 # __aeabi_*). mooncc's system include dir is CWD-relative, so every compile
 # runs from $(R). Output lands in $(R)/out/teensy41/.
@@ -14,7 +14,6 @@
 R := ../..
 o = out/teensy41
 MOONCC = out/host/mooncc
-AS = arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16
 LD = arm-none-eabi-ld
 OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 
@@ -66,10 +65,22 @@ $(R)/$(o)/main.o: main.c teensy41.h $(R)/love.h $(addprefix $(R)/,$(lib_h))
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(te_cc) -c port/teensy41/main.c $(o)/main.o
 
-$(R)/$(o)/boot.o: boot.S
-	@echo AS	$@
+# boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid
+# from holo IR by mkboot.l -- no gas. The lay's cat is the thumb2 backend spliced into
+# the sealed holo module, then the object writer; port/mps2/mkstart.l is the same shape
+# with one section, port/rp2040/mkboot2.l the named-section one.
+lay_l = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+  $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l
+
+$(R)/$(o)/boot.o: mkboot.l $(R)/crew/holo/thumb2.l $(lay_l) $(R)/out/host/love
+	@echo LAY	$@
 	@mkdir -p $(R)/$(o)
-	@$(AS) -c boot.S -o $@
+	@cd $(R) && { echo "(use 'holo)"; cat crew/holo/thumb2.l $(subst $(R)/,,$(lay_l)) \
+	  port/teensy41/mkboot.l; \
+	  echo '(mkboot "$(o)/boot.o")'; } | out/host/love
+
+$(R)/out/host/love: FORCE
+	@$(MAKE) -C $(R) out/host/love
 
 # the baked heap image: port/mps2's qemu baker dumps it (build-time bake);
 # ld -b binary wraps the blob with _binary_love_img_{start,end} symbols and
