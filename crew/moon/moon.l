@@ -208,13 +208,6 @@
    ; sources come from the toolchain root (mhome above), so an INSTALLED mooncc
    ; pulls from its nest -- and owing symbols with no root in reach is its own
    ; diagnostic below, never a silent miss.
-   ; the noms the LINKER synthesizes rather than any object defining them (holo's
-   ; ldres). they are not owed by anybody, and counting them would report the nif
-   ; bracket as a missing symbol.
-   ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"
-             ; ..and the copied region's brackets, which only ldbare32's map knows
-             "__data_start__" "__data_end__" "__data_load__"
-             "__bss_start__" "__bss_end__")
    ; THE LINK CAME UP SHORT. noms that no input object defines and that no runtime
    ; member could add: a misspelled name, a function declared and never defined, or
    ; a `goto` to a label that is not there (gen spells the label main.<lbl> and it
@@ -228,66 +221,18 @@
    ; patcher happened to reach first.
    (qfew ns) (mfew (map (\ n ("'" + n + "'")) ns))     ; a taste of the bag, each nom quoted
    (undie us) (udie 1 ("cc: undefined reference to " + (qfew us)))
-   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
-    (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
-       (go i ds us)
-        (? ((peep ob 'nsym 0) <= i) `(ds us)
-           (: sy (peep sy9 i ()) bind (el sy 1)
-              (? (! (member? bind '(1 2))) (go (i + 1) ds us)
-                 (0 < (el sy 3)) (go (i + 1) (link <sy ds) us)
-                 (bind = 1) (go (i + 1) ds (link <sy us))
-                 (go (i + 1) ds us))))    ; a weak undef resolves to 0 (ELF's law): no need
-       (go 1 () ()))
-   ; THE LEDGER a set of objects leaves: every nom it defines (plus the ones the
-   ; linker synthesizes rather than any object defining them), and the strong
-   ; undefineds still owed. both pulling lanes below start from it, and its `owed`
-   ; at termination is the honest answer to "what does nothing here define?".
-   ; -> (dt owed), dt a tablet the caller goes on pinning into.
-   (ldledger srcs mach)
-    (: duos (map (\ p (dusyms <p <>p mach)) srcs)
-       dt (tablet 0)
-       _ (map (\ nm (pin dt nm 1)) ldsynth)
-       _ (map (\ du (map (\ nm (pin dt nm 1)) <du)) duos)
-       `(dt (foldl (\ a du (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
-                                  a <>du))
-                   () duos)))
-   ; an ARCHIVE resolves BY NEED and BY INDEX: for each nom the link still owes,
-   ; the ranlib table names the member that defines it, so a 1767-member libgcc
-   ; costs a dozen ELF reads and not 1767. a pulled member's own undefineds join
-   ; the owe and the round repeats, which is how one member drags in another.
-   ; -> (picked-srcs owed); `dt` grows in place, as the ledger's owner expects.
-   (arpull path s dt owed mach)
-    (: idx (ld-arsyms path s) lt (ld-arlong s) seen (tablet 0)
-       (go u picked)
-        (: hit (foldl (\ a nm (? (two? a) a
-                                 (: o (peep idx nm ())
-                                    (? (! (o-has? idx nm)) a (o-has? seen o) a `(o)))))
-                      () u)
-           (? (! (two? hit)) `(picked u)
-              (: off <hit
-                 _ (pin seen off 1)
-                 m (ld-armem s off lt)
-                 id ((path + "(") + (<m + ")"))
-                 du (dusyms id <>m mach)
-                 _ (map (\ nm (pin dt nm 1)) <du)
-                 u2 (foldl (\ a nm (? (|| (peep dt nm ()) (member? nm a)) a (link nm a)))
-                           (filter (\ nm (! (peep dt nm ()))) u) <>du)
-                 (go u2 (picked + `(`(id <>m)))))))
-       (go owed ()))
-   ; every .a on the line, in COMMAND ORDER and after every object -- a library is
-   ; what a link falls back on, never what it leads with.
+   ; every .a on the line: holo's ldarch resolves them by need, this reads them and
+   ; owns the sentence a reader gets when one will not open -- `cc: cannot open x`,
+   ; not the scare ldarch would raise, which names no file the user typed.
    (arload srcs paths tgt)
     (? (! (two? paths)) ()
-       (: mach (peep elf-machines tgt 0)
-          lg (ldledger srcs mach) dt <lg
-          (go ps u acc)
-           (? (! (two? ps)) acc
-              (: r (uread <ps)
-                 _ (? (two? r) 0 (udie 1 ("cc: cannot open " + <ps)))
-                 _ (? (ld-ar? <>r) 0 (udie 1 ("cc: not an archive: " + <ps)))
-                 pr (arpull <ps <>r dt u mach)
-                 (go >ps <>pr (acc + <pr))))
-          (go paths <>lg ())))
+       (ldarch srcs
+               (map (\ p (: r (uread p)
+                            _ (? (two? r) 0 (udie 1 ("cc: cannot open " + p)))
+                            _ (? (ld-ar? <>r) 0 (udie 1 ("cc: not an archive: " + p)))
+                            `(p <>r)))
+                    paths)
+               tgt))
    (rtpull srcs tgt nostd)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -370,7 +315,7 @@
        ; line NAMED is what the link meant, and the implicit one is the fallback.
        lib (all + (arload all ars tgt))
        set (lib + (rtpull lib tgt nostd))
-       ps (? arm? (ldbare32 tgt runs set) (ldlink tgt pie org set))
+       ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a .."

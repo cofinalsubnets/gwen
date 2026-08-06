@@ -1,21 +1,22 @@
 # Nucleo-F446RE build -- firmware compiled END TO END by mooncc -t thumb2sp
 # (the F446's Cortex-M4 has the single-precision FPv4 FPU: the playdate's
 # exact target -- f64 arithmetic softens to __aeabi_* libgcc calls, so the
-# link takes gcc's cortex-m4 hard-float multilib libgcc; boot.o is laid from
-# holo IR by mkboot.l, so no gas). mooncc's system include dir is CWD-relative, so every
-# compile runs from $(R). Output lands in $(R)/out/nucleo446/.
+# link takes gcc's cortex-m4 hard-float multilib libgcc -- a LIBRARY read by
+# need, not a tool run). boot.o is laid from holo IR by mkboot.l and nlink.l does
+# the link over holo's ldbare32, so the port owes neither gas nor ld nor a linker
+# script. mooncc's system include dir is CWD-relative, so every compile runs from
+# $(R). Output lands in $(R)/out/nucleo446/.
 #
 # Faces: `make` builds firm.bin/.hex (the device firmware; flash with `make
 # flash` -- st-flash -- or copy firm.bin to the NODE_F446RE mass-storage
 # drive), and that is what `make test_nucleo446` gates: mooncc compiled every
 # C file and the boot image is valid. `make smoke` builds the -D QSMOKE twin
 # that leaves through qemu semihosting with the self-check tally -- boot it by
-# hand on netduinoplus2 and expect 28.
+# hand on netduinoplus2 and expect 28 -- `make test_nucleo446_smoke` does it.
 R := ../..
 o = out/nucleo446
 MOONCC = out/host/mooncc
 mc = $(R)/out/host/mooncc
-LD = arm-none-eabi-ld
 OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 lg = `arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -print-libgcc-file-name`
 
@@ -80,13 +81,25 @@ $(R)/out/host/love: FORCE
 	@$(MAKE) -C $(R) out/host/love
 
 
-$(R)/$(o)/firm.elf: $(objs) nucleo446.lds
-	@echo LD	$@
-	@$(LD) -T nucleo446.lds $(objs) $(lg) -o $@
+# the link is ours: nlink.l drives holo's ldbare32 with the F4's memory map, in
+# place of arm-none-eabi-ld + nucleo446.lds. libgcc.a is named on the line and its
+# members are pulled by need through the ranlib index, so the .a is a LIBRARY the
+# link reads and not a tool it runs.
+link_l = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+  $(R)/crew/holo/thumb2.l $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l $(R)/crew/holo/link.l
 
-$(R)/$(o)/smoke.elf: $(qobjs) nucleo446.lds
-	@echo LD	$@
-	@$(LD) -T nucleo446.lds $(qobjs) $(lg) -o $@
+$(R)/$(o)/nlink.l: nlink.l $(link_l)
+	@echo AI	$@
+	@mkdir -p $(R)/$(o)
+	@{ echo "(use 'holo)"; cat $(link_l) $<; } > $@
+
+$(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/nlink.l $(R)/out/host/love
+	@echo LINK	$@
+	@cd $(R) && out/host/love $(o)/nlink.l $(o)/firm.elf $(objs:$(R)/%=%) $(lg)
+
+$(R)/$(o)/smoke.elf: $(qobjs) $(R)/$(o)/nlink.l $(R)/out/host/love
+	@echo LINK	$@
+	@cd $(R) && out/host/love $(o)/nlink.l $(o)/smoke.elf $(qobjs:$(R)/%=%) $(lg)
 
 # .bin byte offsets ARE flash offsets -- verify the boot surface: a valid
 # initial SP inside SRAM and a thumb-bit reset entry inside flash (the two

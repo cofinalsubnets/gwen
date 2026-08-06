@@ -182,10 +182,11 @@
    mx-sections '((byname 0 ("__wasm__" "__APPLE__"))
                  (tiled  1 ()))
    ; the scripts, keyed to a class. the third column is the script's indent, so the
-   ; block keeps its neighbours' shape.
+   ; block keeps its neighbours' shape. a seat leaves this roster when its LINK
+   ; becomes ours: holo packs each love_data.N whole and in order, which is this
+   ; tiling already, so a holo-linked board owes no script at all (nucleo446).
    mx-seats '(("port/inle/x86_64/x86_64.lds"    lean 8)
               ("port/inle/aarch64/aarch64.lds"  lean 8)
-              ("port/nucleo446/nucleo446.lds"   fat  4)
               ("port/rp2040/rp2040.lds"         fat  4)
               ("port/teensy41/teensy41.lds"     fat  4))
    (mx-stride cls) (: (go l) (? (! (two? l)) (scare 'mx-stride cls)
