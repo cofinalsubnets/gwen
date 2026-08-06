@@ -1,10 +1,10 @@
 ; glaze-data.l -- a PLAN: extend the glaze past the arithmetic kernel to the data workloads
 ; (the `tree` and `hash` benches), and the recognizer gate that says which shapes can come along.
-; STATUS: Stage A/B LANDED 2026-06-24 (commit 3fff0157) -- the `tree` traverse `ck` (the chain fold)
-; now compiles native (6.7x); `hash` (Stages C/D) is still a study. See doc/archive/glaze-data.md. The model
-; at the bottom now also reproduces the chain-vs-int SOUNDNESS gate the build added (cap-into-arith).
+; STATUS: stages A/B are built -- the `tree` traverse `ck` (the chain fold) compiles native
+; (6.7x); `hash` (stages C/D) is still a study. The model at the bottom also reproduces the
+; chain-vs-int SOUNDNESS gate that came with the build (cap-into-arith).
 ;
-; the standing fact (measured 2026-06-24, this host, bench/): the benches where ai trails the
+; the standing fact (measured on this host, bench/): the benches where love trails the
 ; compiled/JIT'd field are exactly the ones it runs INTERPRETED. the glaze (love/glaze/) is prepended
 ; only for float/fib/tak/primes/strscan/deforest (bench/run.sh); everything else -- hash, tree,
 ; closure, sum, mapfilter, sort, strcat, bell -- rides the tree-threaded interpreter while its columns
@@ -123,7 +123,7 @@
   ; fib/primes are read-loop-glazeable too (a fortiori -- they touch no heap):
   _ (assert (&& (glaze-read? fib) (glaze-read? prim)) "the arith benches stay in under the wider gate")
 
-  ; --- STAGE A/B LANDED (2026-06-24, commit 3fff0157): the build added a SOUNDNESS gate ---
+  ; --- STAGE A/B, AS BUILT: the build carries a SOUNDNESS gate ---
   ; glaze-read? (no allocators) is NECESSARY BUT NOT SUFFICIENT. (cap t) yields the TAGGED stored word
   ; putcharm(v), while the group compiler's body math runs on UNTAGGED ints -- so a chain word must
   ; never reach an arith/cmp operand ((+ (cap t) 0) would read 15 where 7 is meant). The real groupok?

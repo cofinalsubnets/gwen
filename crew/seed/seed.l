@@ -657,9 +657,9 @@ usage: seed VERB ..
   apply [ID..]    realize a dep-consistent SUBSET into the working tree (an ID
                   may be a prefix; its deps come along). checkout and cherry-pick
                   are one act here. no ID realizes the whole store -- the way back
-  bank NAME       freeze the current SINGLE-TIP head as an immutable release
-                  (a forked head refuses -- sync to reconcile first). `apply NAME`
-                  then realizes it
+  bank NAME       freeze the current head -- its whole TIP SET -- as an immutable
+                  release. deps are per PATH, so a multi-tip head is ordinary
+                  parallel work, not a fork to repair. `apply NAME` realizes it
   undo ID [NOTE]  add the INVERSE of a patch -- revert as growth, never deletion.
                   a path that moved on since three-way merges instead of being
                   clobbered: P's write is lifted OUT, later edits stay

@@ -1,13 +1,8 @@
 # net & tally — the two measures, and monadic `*` = prod
 
-A reading of the value space's algebra (user's framing, 2026-06-26), plus one pending
-one-line change. The question that started it: *is monadic `*` the counterpart of monadic
-`+` (net)?* The answer pulls apart two things CLAUDE.md had quietly fused.
+The value space's algebra: two dualities, with `net` sitting on the crossing.
 
-## Two axes, and net sits on the crossing
-
-There are **two** dualities here, not one, and `net` appears in both — which is what makes
-it look like monadic `*` should mirror it.
+## Two axes
 
 - **Measures** — structure-preserving maps `value → scalar`, one per monoid:
   - **net** = the additive measure, the `+`-hom `(values, +) → (C, +)`. *weight* — "how much."
@@ -21,14 +16,12 @@ it look like monadic `*` should mirror it.
 property — same map, two readings). For `*` they **split**: the multiplicative fold is `prod`,
 the multiplicative measure is `tally`, and they are **different maps**. So:
 
-- monadic-`*`'s honest twin **by fold** is monadic-`+`: `prod ∥ net`.
-- net's honest twin **by measure** is `tally` — **not** monadic-`*`.
+- monadic-`*`'s twin **by fold** is monadic-`+`: `prod ∥ net`.
+- net's twin **by measure** is `tally` — **not** monadic-`*`.
 
 `tally` is the multiplicative leg net structurally lacks.
 
-## The verified laws
-
-Probed against the host binary:
+## The laws
 
 | form | value | reading |
 |---|---|---|
@@ -45,7 +38,7 @@ $$\nu(a+b)=\nu a+\nu b,\quad \nu(a*b)\neq\nu a\cdot\nu b \qquad\quad \tau(a+b)=\
 So **net is a `+`-monoid hom only** (blind to `*`); **tally is the full semiring hom**. That is
 the precise sense in which tally is net's twin.
 
-## The cartesian/repeat `*` is the *founded* part
+## The cartesian/repeat `*` is the founded part
 
 The value space is a genuine **semiring**: `+` = append/concat, `*` = cartesian product, the
 shared unit `()` projecting to both `0` and `1`, right-distributive (`(a+b)*c = a*c + b*c`,
@@ -54,57 +47,19 @@ exact). `tally` is its rig hom — and it *unifies the lanes*: the **repeat** la
 (`tally(xs*ys) = tally xs · tally ys`) are **one law** under tally, since `n` is just the tally
 of an n-thing. So cartesian/repeat `*` is not ad hoc — it's the product and module-action faces
 of one semiring multiplication, with tally the witness. (`str*str = nil` / `sym*sym = nil` are a
-closure issue — the product would type-escape the string kind — defensible.)
+closure issue — the product would type-escape the string kind.)
 
-## The ad-hoc part: `jot` on the `*` sigil
-
-The only unfounded bit is `jot`. Its body is a rank pun:
-
-```lisp
-(jot x) (? (star? x) <0..x-1>      ; iota — a CONSTRUCTOR (scalar)
-            (prod x))               ; prod — a FOLD (aggregate)
-```
-
-Two unrelated operations welded under one glyph and bound to `*` in `monadics`, dispatched by
-rank — iota on scalars, prod on aggregates. They share the slot only because prod-of-a-scalar is
-vacuously the scalar (so `*5` "had room" for iota). And it *breaks* a symmetry every other
-`monadics` entry keeps: `+5 = 5` (vacuous net), but today `*5 = (0 1 2 3 4)` instead of the
-vacuous `5`.
-
-`jot`/`iota` is really the **section of tally** — `tally (jot n) = n` — the canonical witness
-builder for a count, a *constructor*, the right-inverse of the measure. A third role, distinct
-from both fold and measure; it earns its own name rather than squatting on `*`.
-
-## The decision
+## The three roles
 
 1. **Monadic `*` = `prod`, uniformly.** `*x` is `*` turned inward, the multiplicative fold:
    aggregate → product of cells, scalar → itself (vacuous, so `*5 = 5`) — the rank-uniform dual
-   of `+x`, exactly as `+5 = 5`.
-2. **`tally` is net's documented measure-twin** — the cardinality rig-hom, with both hom laws.
+   of `+x`, exactly as `+5 = 5`. Every `monadics` entry keeps that invariant: the sigil is its
+   own dyadic op, turned monadic. (Binding `*` → `tally` would break it — `tally` is not "`*`
+   folded inward" — so tally stays a named word.)
+2. **`tally` is net's measure-twin** — the cardinality rig-hom, with both hom laws.
    The trinity: **net** (weight, `+`-hom) · **tally** (count, rig-hom) · **prod** (the `*`-fold,
    an operator, neither measure).
-3. **`jot`/`iota` retired to named range constructors** — the section of tally, off the `*` glyph.
-
-Rejected alternative: bind `*` → `tally` so the operator literally *is* the measure-twin. But
-`tally` is not "`*` folded inward" — it would break the one invariant every `monadics` entry
-honors (sigil = its dyadic op, monadic). `prod` keeps that invariant; `tally` stays a named word.
-
-## Implementation (landed 2026-06-26)
-
-The grep proved the surface was tiny — glued `*<scalar>`-as-iota lived **only** in
-`test/valence.l`; every `(jot n)` call passes a scalar, so the named word stays and the
-`(prod x)` else-branch was dead.
-
-1. `love/prel.l` — flipped the `monadics` cell `* → prod` (the whole semantic change), and moved
-   the table to the backtick/quoted-list form (`` `('(< cap) … '(* prod) …) ``).
-2. `love/prel.l` — `jot` is now range-only (dropped the dead `(prod x)` else-branch):
-   ```lisp
-   (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1, a section of tally
-   ```
-3. `test/valence.l` — `((jot 7) = *7)` → `(7 = *7)`; `('(0 1 2 3 4) = (ev (\ *5)))`
-   → `(5 = (ev (\ *5)))`. The printer round-trip `("*5" = (show (\ *5)))` stayed green
-   (the sigil re-glues; surface unchanged).
-4. CLAUDE.md updated: `* prod` in the monadic words, `(jot x)` a range / section of tally.
-
-The **binary** now gives `*5 = 5` (vacuous, like `+5`), `*'(1 2 3 4) = 24`. `make test` green
-(host + love0, both reach `zz-fin`).
+3. **`jot` is the section of tally** — `(jot n)` is the range `0..n-1`, the canonical witness
+   builder for a count (`tally (jot n) = n`), a *constructor* and the right-inverse of the
+   measure. A third role, distinct from both fold and measure, so it wears its own name rather
+   than a sigil.

@@ -1,14 +1,14 @@
-# Note: the honest face is the missing face of the answer
+# the honest face is the missing face of the answer
 
-A reading of the condition system (user's framing, 2026-06-19). `help` is the global
-function that turns a raise into an **answer** (`(help s a b)` → a value, delivered per the
-status bits). So when help is missing, the *answer* is missing — and what shows instead is
-the **honest face** `;; a b` (host/main.c, the scare exit-face).
+A reading of the condition system. `help` is the global function that turns a raise into an
+**answer** (`(help s a b)` → a value, delivered per the status bits). So when help is missing,
+the *answer* is missing — and what shows instead is the **honest face** `;; a b`
+(host/main.c's scare exit-face, `ai_scare_face_`).
 
 **Three layers when a condition rises:**
 1. **help present** → an **answer** (a value).
-2. **welp** (the floor handler — help that has given up) → the **zero point** for a bare
-   scare: absence *caught* and handed back as a value (the fromempty, `()`).
+2. **welp** (the floor handler — help that has given up, `love/bao.l`) → the **zero point** for a
+   bare scare: absence *caught* and handed back as a value (the fromempty, `()`).
 3. **nothing at all** → the **honest face** `;; a b`, terminal — not a value, just shown.
 
 So the honest face sits **below even the zero point**. The zero point is the face of a
@@ -22,9 +22,8 @@ zero point is absence pretending (gracefully) to be a value; the honest face is 
 even pretending. **The honest face is the missing answer made visible — the zero point's
 reflection across the help boundary, one floor further down.**
 
-(Corollary, the `;; 0 11` UX nit: the *form* is right — `;; a b` is honest — but the
-double-prelude load raised a bare *data* scare, handing the face two mute numbers instead of
-a word. The form is honest; the payload is silent. A self-load guard could raise a legible
-condition ("prelude already loaded") so the honest face has something to say.)
+The face is only as legible as its payload: a raise carrying two mute numbers gets `;; 0 11`,
+which is honest in form and silent in content. A condition worth showing raises a word.
 
-Relates: [[faces]] (the hourglass / one core), the zero point + `welp` in test/spec.l's control section.
+Relates: [[faces]] (the hourglass / one core), the zero point + `welp` in test/spec.l's control
+section.

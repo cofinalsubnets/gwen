@@ -6,9 +6,9 @@ core -- and moon compiles love.c while holo links it, so the source-to-machine-c
 routes through gcc/ld. that makes an *end-to-end verified* chain possible for the first time;
 holo's encoder, being small and table-shaped, is the natural place to start closing it.
 
-before this work holo's only check was the frozen goldens in holotest.l / astest.l: a few dozen
-forms, each validated once by hand ("emit the bytes, `objdump -d -M intel`, confirm the
-mnemonic"). the ladder automates and then *proves* that round-trip.
+the frozen goldens in holotest.l / astest.l are the floor: forms validated once by hand ("emit
+the bytes, `objdump -d -M intel`, confirm the mnemonic"). the ladder automates and then *proves*
+that round-trip.
 
 ## the two rungs, and how they compose
 
@@ -49,14 +49,14 @@ what rung 2 proves, precisely: the encode/decode *pair* is internally consistent
 holo matches the encoder. it does not, alone, prove the decode model matches silicon -- that is
 what rung 1's objdump/llvm cross-check supplies. the honest claim is the composition.
 
-## what has landed (2026-07-17, branch `post`)
+## the slices
 
-| rung | files | domain | check | commit |
-|------|-------|--------|-------|--------|
-| 1 fuzz x64+arm64+riscv | crew/holo/fuzz/ | 25 + 16 + 27 classes | decode vs objdump/llvm-mc | `75761e5e` |
-| 2a reg-direct | proof/rocq/enc.v | mov + reg-reg ALU, 16x16 x 7 | byte-exact, 1792 | `8ceb2d91` |
-| 2b memory | proof/rocq/encmem.v | ld/st base+disp, ModRM+SIB | byte-exact, 6144 | `c9281f4d` |
-| 2c immediate | proof/rocq/encli.v | `li` 3-way form choice | byte-exact, 320 | `969335e2` |
+| rung | files | domain | check |
+|------|-------|--------|-------|
+| 1 fuzz x64+arm64+riscv | crew/holo/fuzz/ | 25 + 16 + 27 classes | decode vs objdump/llvm-mc |
+| 2a reg-direct | proof/rocq/enc.v | mov + reg-reg ALU, 16x16 x 7 | byte-exact, 1792 |
+| 2b memory | proof/rocq/encmem.v | ld/st base+disp, ModRM+SIB | byte-exact, 6144 |
+| 2c immediate | proof/rocq/encli.v | `li` 3-way form choice | byte-exact, 320 |
 
 each 2x slice models the fiddly part of its corner: 2a the REX/ModRM bit-packing (which register
 bit lands in REX.R vs REX.B); 2b the memory quirks (rsp/r12 forcing a SIB byte, rbp/r13 forcing a
@@ -85,7 +85,7 @@ the reg <-> hardware map (holo abstract regs are NOT the x86 hardware numbers --
 r7=r8=8, sp=rsp=4, ...) lives in every driver's `regs` list; it was probed once in
 crew/holo/fuzz/regmap.py.
 
-### extraction caveats (both real, both bit us)
+### extraction caveats
 
 - **nat literals** extract as nested `succ` -- verbose generated .ml but runs fine (enc.v uses the
   extract.v nat->int mapping). fine for opcode constants.
@@ -119,7 +119,7 @@ give it the same machine-checked floor as x64. reuse the driver shape with an aa
 **deeper, and off the encoder** -- the same ownership-buys-verification arc has two neighbours
 already spec'd but unstarted: **moon translation-validation** (per-compile certificates that moon's
 asm refines the C it compiled), and the **GC / scheduler refinement** proofs -- gc.v's
-`barrier_sound` and doc/proto/sched.l's 11 checks are proven as *models*; what's missing is the
+`barrier_sound` and doc/proto/gengc.l's checks are proven as *models*; what's missing is the
 proof that the actual C refines them (doc/gengc.md). closing holo's encoder is the
 first, smallest instance of that general move: prove the model, then bind the real artifact to it.
 

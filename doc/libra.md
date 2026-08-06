@@ -163,10 +163,9 @@ that reads the whole document wants the whole document.
 test/host/libra.l drives entire conversations in-process over `(tap ..)` and
 `(jug 0)` -- no subprocess, no pipes, no timing.
 
-there is no consumer yet. `textDocument/documentSymbol` is the gating rung if
-one ever appears -- Claude Code's own LSP client, for one, exposes only
-navigation operations and has no diagnostics operation at all, so a
-diagnostics-only server is connectable but useless to it.
+there is no consumer. `textDocument/documentSymbol` is the gating rung if one
+appears: an LSP client that exposes only navigation operations and no diagnostics
+operation can connect to a diagnostics-only server and get nothing from it.
 
 ## the formatter
 
@@ -213,7 +212,7 @@ deletion does to the text. `((show x)+"a")` reads fine and folds equal, but drop
 the bytes leaves `x+` as one token — a different program. so a pair drops only when
 it stands FREE: a delimiter, a comment or a quote on both outer sides. that one rule
 also disposes of `foo(x)`, `'(x)` and every sigil-glued run, and it costs almost
-nothing — 17 of the tree's 193389 code parens are right-glued.
+nothing: right-glued parens are a bare handful of the tree's ~190k code parens.
 
 **singletons ride the same flag** but rest on a different law: `(x)` is `x` by
 `(f) == f`, which opfix *declines* to apply — it keeps `((mov r3 r12))` whole,
@@ -227,9 +226,10 @@ those parens is semantics-preserving *and* deletes the only evidence of a bug th
 tree keeps hitting. fmt leaves them for `check`'s singleton rule to speak about;
 `(drop-nullary 1)` takes them anyway.
 
-**what it is checked against.** apply every drop to all 303 tracked `.l` files,
-re-read, and compare the compiled cores: 303 clean. then rebuild the self-hosting
-tree from the minified source and gate it — `make test` green, test counts unmoved.
+**how it is checked.** apply every drop to every tracked `.l` file, re-read, and
+compare the compiled cores — they must come out identical — then rebuild the
+self-hosting tree from the minified source and run the gate, with the test counts
+unmoved.
 
 ## the reindenter
 
@@ -238,5 +238,5 @@ reformatted. tree-wide it would move about a fifth of all lines, because the
 tree carries two live conventions (align-to-first-operand, and a hanging indent
 that no positional rule reproduces). the open decision is whether to adopt
 alignment and reflow the minority, or adopt file by file with a shrinking ignore
-list. a width guard was tried as a bridge between the two and paid nowhere --
-the numbers are in `lib/lint.l`, do not re-derive them.
+list. a width guard as a bridge between the two pays nowhere -- the numbers are
+in `lib/lint.l`, do not re-derive them.

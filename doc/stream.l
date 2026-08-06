@@ -1,24 +1,23 @@
-; --- doc/stream.l: path B's coinductive byte-stream, the PURE HALF, in love ---
-; a runnable design companion -- the real `source` is a C hot.
-; doc/io.md part II is the full design; this models the algebra over an in-memory
-; charlist producer, so it runs ANYWHERE (no fds, no pty) and pins the shape the
-; core session builds against. Run (assert comes from test/00-init.l):
+; --- doc/stream.l: the coinductive byte-stream, the PURE HALF, in love ---
+; a runnable design companion to doc/io.md: it models the algebra over an
+; in-memory charlist producer, so it runs ANYWHERE (no fds, no pty) and pins the
+; shape the core session builds against. Run (assert comes from test/00-init.l):
 ;
 ;   cat test/00-init.l doc/stream.l | out/host/love
 ;
 ; green dots = pass, then `stream: ok`. What it demonstrates:
 ;   * a stream forces its head ONCE and MEMOIZES it -- the memo IS the lookahead,
-;     so `ungetc` deletes (defect 1 in doc/io.md part II);
+;     which is why nothing needs an `ungetc`;
 ;   * EOF is the empty stream `()`, never a -1 byte -- a 0/NUL byte is a real
-;     value, told from end-of-stream by `seof?`, never by its magnitude (defect 2);
+;     value, told from end-of-stream by `seof?`, never by its magnitude;
 ;   * `read : stream -> () | (datum . stream')` as a PURE fold: EOF folds to (),
 ;     a datum to a pair, and a mid-datum EOF is a REAL scare (not the () floor) --
 ;     which is the whole more-bit / port-back read protocol, collapsed;
-;   * `select`/`ready?` -- the one genuinely-new multiplex primitive, here trivial
-;     because a memory stream is always ready (over fds it projects onto poll).
+;   * `select`/`ready?` -- the multiplex primitive, trivial here because a memory
+;     stream is always ready (over fds it projects onto poll).
 ;
-; surface map to the C design (doc/io.md part II): shd ~ cap, stl ~ cup,
-; seof? ~ ! (the stream tests empty), and (twop s) ~ !(seof? s).
+; surface map to the C design (doc/io.md): shd ~ cap, stl ~ cup, seof? ~ ! (the
+; stream tests empty), and (twop s) ~ !(seof? s).
 
 (: forces (tablet 0)                       ; a global counter: how many times ANY
    _ (pin forces 0 0)                       ; stream cell was actually produced

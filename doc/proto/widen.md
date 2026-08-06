@@ -3,8 +3,9 @@
 what it would take for `(s i)` to answer a codepoint instead of a byte, so the
 byte law (`text + charm` appends one, `net` sums the charms) keeps its shape but
 stops capping at 255. the motive is CJK: byte semantics means `.` matches a third
-of a kanji, and the cap leaks into user code forever. counted 2026-07-25 against
-the tree at `24039cb1`.
+of a kanji, and the cap leaks into user code forever. ⚠ the site counts below
+drift with the tree -- re-run the sweep (`txt()` / `len()` / `str()` / `ai_str` /
+`EmptyString` / `ai_strp`) before leaning on a number.
 
 the representation assumed throughout is **flexible width per string** (python's
 PEP 393): one byte if every charm < 256, else four. not UTF-32 everywhere -- 4x on
@@ -73,17 +74,17 @@ string/byte mentions. `test/gen.v` regenerates through `tools/spec2coq.l`.
 
 ## the split: 2a lands alone
 
-**2a -- evacuate the byte users, strings unchanged.** LANDED for the OUTBOUND
-half. the enabling hole was that the only BULK byte path in the system ran through
+**2a -- evacuate the byte users, strings unchanged.** the OUTBOUND half is done.
+the enabling hole was that the only BULK byte path in the system ran through
 a string: `(string <charlist>)` had a C lane, `(cask ...)` took a count only, and
-filling a cask by `pin` per byte measured 20x slower (20 ms per 200 KB -- ~200 ms
-on a real link). so `cask` grew the charlist lane its sibling already had
+filling a cask by `pin` per byte measures 20x slower (20 ms per 200 KB -- ~200 ms
+on a real link). so `cask` carries the charlist lane its sibling already had
 (`lvm_casknew`), and the two whole-binary writers say a cask:
 `crew/holo/elf.l`'s `write-bytes` and `crew/holo/link.l`'s `ld-write` -- the second
 one carries the linker's output and does NOT go through `write-bytes`, so a grep
-for that name alone misses it. the new lane also retired two hand-rolled pin-fill
-loops on hot paths: `love/glaze/emit.l`'s `emit` (the JIT) and `crew/sat/flat.l`'s
-`fnif` (the native CDCL kernels). strings stay bytes; every law stays green.
+for that name alone misses it. the same lane serves two hot paths that would
+otherwise hand-roll a pin-fill loop: `love/glaze/emit.l`'s `emit` (the JIT) and
+`crew/sat/flat.l`'s `fnif` (the native CDCL kernels). strings stay bytes.
 `o-strbytes` in `crew/holo/obj.l` STAYS -- an ELF string table holds names, which
 are text, so that one is a real encode and becomes an explicit utf-8 encode at 2b.
 

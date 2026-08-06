@@ -1,6 +1,16 @@
 # run fusion — specializing on the SHAPE of a load run, not on an operand's value
 
-An experiment on branch `nfuse`. The threaded VM already has operand-value-specialized
+**Read "the ladder, end to end" first.** Three fusion axes turned up here, and run fusion
+— the one the experiment started from — is the WEAKEST of them. The value per opcode runs
+opposite to the order below: 8 pair ops buy −3.6% cycles, 4 load+consumer ops buy another
+−5.0%, and ONE load+predicate+cond op buys another −3.6%. Ship it backwards if it ships in
+pieces.
+
+All thirteen opcodes are in the tree — love.c's op enum (`lvm_aa` … `lvm_qqp`,
+`lvm_argcap`/`argcup`/`argtwo`/`argcond`, `lvm_argtwocond`), emitted by `love/ev.l`. The
+sixteen length-3 run ops described below were built, measured and deleted.
+
+The threaded VM already has operand-value-specialized
 loads (`lvm_arg0..3`, `lvm_quo0..3/m1/m2` — one word, no operand fetch) and ap-fused
 loads (`lvm_argap`, `lvm_quoteap`, `lvm_argtap`). Both still emit **one instruction per
 load**. The question: fuse a whole RUN of consecutive loads into one op named for its
@@ -33,13 +43,11 @@ the ceiling on the whole idea, and it was worth measuring before writing any opc
 `qa` is `(- n 1)` and every other inlined dyadic with a constant; `qA` is an l2r call
 on a global.
 
-## what was built
+## the run-fusion axis
 
-⚠ READ THE LADDER AT THE BOTTOM FIRST. This section and the two measurement sections
-after it are the experiment in the order it happened, and the order was wrong: run
-fusion is the WEAKEST of the three axes it turned up. The branch ends at 13 opcodes --
-8 run pairs, 4 load+consumer, 1 load+predicate+cond -- and the 16 length-3 run ops
-described below were built, measured and deleted.
+Thirteen opcodes in total -- 8 run pairs, 4 load+consumer, 1 load+predicate+cond. The 16
+length-3 run ops this section describes were built, measured and deleted; the ablation is
+below.
 
 24 run ops to begin with, macro-generated (`frun2`/`frun2p`/`frun3`/`frun3p` in love.c;
 the `frun3` pair is gone now). The name spells the run in source order; a trailing `p`
@@ -313,17 +321,15 @@ Two smaller leaks, both worth a look and neither chased here:
 * `ava`'s closure references go out through `em2 lvm_quote` rather than `kim`, so they
   never reach the peephole at all (`qA` is still 9.9M on the image lane).
 
-## re-measured on the post base, against a REAL baseline
+## against a REAL baseline
 
-Merged `post` (the mooncc quintet, the enum split, `every raise is a scare`) and rebuilt
-the ladder as three binaries with byte-identical `.text`, differing only in the baked
-image: **B** no fusion at all, **M** consumer fusion only, **S** consumer fusion + the
-8 pairs. Every helper binding is present in all three, so the image-size delta is only
-what the emitter actually emits.
-
-B is the thing that had never been measured. Every earlier table compared fused variants
-to each OTHER, so the question they answered was "is this arm worth its opcodes", never
-"is any of it worth shipping". Against B, on three budgets where maxRSS agrees:
+⚠ **Compare against no-fusion-at-all, not against another fused variant.** A table of
+fused variants answers "is this arm worth its opcodes", never "is any of it worth
+shipping". The honest measurement is three binaries with byte-identical `.text`, differing
+only in the baked image: **B** no fusion at all, **M** consumer fusion only, **S**
+consumer fusion + the 8 pairs, with every helper binding present in all three so the
+image-size delta is only what the emitter emits. Against B, on three budgets where maxRSS
+agrees:
 
     workload  budget   RSS spread    S vs B    M vs B   pairs (S vs M)
     corpus      3072         1.4%     -9.35%   -7.31%       -2.19%
@@ -357,16 +363,12 @@ alone will not catch it. Redirect stdin too -- the corpus TESTS stdin and hangs 
 512/1536/3072 do. The pool-cliff class has now contaminated four separate comparisons in
 this investigation. Quote no timing whose RSS column is not matched.
 
-## status
+## gating this
 
-On the post base both gates are green. `make test` (host + love0 twice, vmret, waits)
-and `make test_slow` end to end, `test_fixpoint` included -- the gate that matters here,
-since this changes what the compiler emits and it still rebuilds itself to the byte.
-`wasm/love.js` regenerates with the emitter and is committed alongside it.
-
-The three failures recorded here earlier -- `test_front` (`;; missing sent`), `test_hue`
-(stale `vim/syntax.vim`) and `gen.v` at 713 asserts against a committed 715 -- were
-pre-existing on the old HEAD and are all resolved by post. None were this branch's.
+`make test` (host + love0 twice, vmret, waits) and `make test_slow` end to end,
+`test_fixpoint` included -- the gate that matters here, since this changes what the
+compiler emits and it must still rebuild itself to the byte. `wasm/love.js` regenerates
+with the emitter and is committed alongside it.
 
 ⚠ `test_hostnif` asserts the process starts with NO signal ignored (`SigIgn: 0...0`), so
 it fails under `nohup` (SIGHUP) and under a shell that ignores SIGPIPE. Reset every
@@ -374,6 +376,6 @@ signal to `SIG_DFL` before `exec` if you drive test_slow from a harness -- reset
 obvious few is not enough, python leaves SIGXFSZ ignored.
 
 The `AI_VMPROF` load-run profiler that produced the dynamic distributions above was the
-instrument, not the product, and is **gone** -- the block, the `ai_fin` dump hook and all
-twelve `Prof()` call sites. The tables it produced stand; git history has it if it is
-ever wanted again.
+instrument, not the product, and is **not in the tree** -- the block, the `ai_fin` dump
+hook and the `Prof()` call sites all came back out. The tables it produced stand; git
+history carries it if it is ever wanted again.

@@ -11,9 +11,8 @@
 ;
 ; If Phase 0 shows both, the direction is real and Phase 1 (ergonomics) + Phase 2
 ; (dial the domain up to uu's dependent types) are additive. If the seam fights,
-; we learned it in ~2-3 sessions instead of a month. See memory pluggable-types,
-; and doc/archive/analysis-unification.md (this is literally its "make the abstract-interp
-; DOMAIN pluggable" step, done as a standalone spike first).
+; we learned it in ~2-3 sessions instead of a month. This is the "make the
+; abstract-interp DOMAIN pluggable" step, done as a standalone spike first.
 ;
 ; THE CORE STANCE (do not lose): the FUNDAMENTAL type system stays FREE -- no
 ; required annotations, ever; the glaze PROVES what CL makes you assert. The

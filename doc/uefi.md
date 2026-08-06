@@ -2,8 +2,8 @@
 
 `port/inle/uefi/` is our own `BOOTX64.EFI`: the loader that puts the inle kernel
 on real hardware without limine, gnu-efi, or any foreign toolchain. mooncc
-compiles it, holo lays the PE32+ the firmware runs, and the whole thing is about
-250 lines of C plus three thunks of holo IR.
+compiles it, holo lays the PE32+ the firmware runs, and the whole thing is under
+200 lines of C (`loader.c`) plus three thunks of holo IR (`mkefi.l`).
 
     make uefi          # -> out/free/esp/{EFI/BOOT/BOOTX64.EFI, love.elf}
     make test_uefi     # the same door under qemu, corpus over serial
@@ -80,12 +80,11 @@ itself. mooncc's codegen is rip-relative for local symbols, so that table is
 usually tiny or empty -- but the section must exist regardless: an image without
 `.reloc` is one the firmware refuses to slide.
 
-## traps met on the way
+## traps
 
-- **2 MiB PDEs need 2 MiB-aligned physical addresses.** The kernel's lowest load
+- ⚠ **2 MiB PDEs need 2 MiB-aligned physical addresses.** The kernel's lowest load
   address is page-aligned (`0x201000`), not 2 MiB-aligned; using it directly as
   the map anchor sets reserved bits in every PDE and the first instruction fetch
   after `mov cr3` takes a `#PF`. The loader floors the anchor to 2 MiB.
 - **OVMF's exception dump is the debugger.** `RIP`/`CR2`/`CR3` in that dump name
-  the fault exactly -- reading it settled the above in one boot, where guessing
-  at the page tables would have taken many.
+  the fault exactly -- read it rather than guessing at the page tables.

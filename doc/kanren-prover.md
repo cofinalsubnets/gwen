@@ -1,25 +1,27 @@
-# kanren prover — search-then-certify (the next bridge rung)
+# kanren prover — search-then-certify
 
-The verification bridge so far makes love a proof *checker* whose work two independent
-kernels re-certify (Rocq 200/250, Lean 200/250, axiom-free). This rung makes love a proof
-**producer**: given a goal type `T`, kanren *searches* for a term `e` with `e : T`, uu's
-kernel *checks* it, and the bridge *certifies* it (Rocq + Lean). The search is **untrusted** —
-a buggy or incomplete search cannot fake a theorem; uu's `chk` and then Rocq/Lean reject a
-wrong candidate. That asymmetry (cheap to search, sound to check) is the whole design.
+⚠ **Design sketch, not built.** What exists is the substrate below plus a self-contained spike,
+`doc/proto/kanren-prove.l`. There is no `proves` relation in the library and no gate.
 
-## The substrate is already in place
+The verification bridge makes love a proof *checker* whose work two independent kernels
+re-certify. This design would make love a proof **producer**: given a goal type `T`, kanren
+*searches* for a term `e` with `e : T`, uu's kernel *checks* it, and the bridge *certifies* it
+(Rocq + Lean). The search is **untrusted** — a buggy or incomplete search cannot fake a theorem;
+uu's `chk` and then Rocq/Lean reject a wrong candidate. That asymmetry (cheap to search, sound to
+check) is the whole design.
 
-- **kanren** (`love/prel.l:600+`): a pure first-order `unify` (substitution or `ufail`, no
-  occurs check, cycle-safe `walk`/`reify`) + a church-stream search monad. A goal is
+## The substrate that exists
+
+- **kanren** (`love/kanren.l`, a registered module): a pure first-order `unify` (substitution or
+  `ufail`, no occurs check, cycle-safe `walk`/`reify`) + a church-stream search monad. A goal is
   `(\ s stream)`; `===` unifies, `+` interleaves (disjunction — complete), `*` binds
   (conjunction); `query` runs it. So a relation is a polynomial in unifications.
-- **uu** (`love/uu.l`, baked as the `uu` book; theorem corpus in `test/uu.l`): the trusted
-  bidirectional checker `(chk cx en d t T)` (+ the
-  predicative `pinf`/`pchk` for universes). The kernel: the search *proposes*, `chk` *disposes*.
+- **uu** (`love/uu.l`, baked as the `uu` module; theorem corpus in `test/uu.l`): the trusted
+  bidirectional checker `(chk cx en d t T)` (+ the predicative `pinf`/`pchk` for universes).
 - **the bridge** (`tools/uu2coq.l`, `tools/uu2lean.l`): a uu-certified term → Rocq + Lean. A
-  kanren-found proof rides the SAME N-kernel certification a hand-written one does.
+  kanren-found proof would ride the SAME two-kernel certification a hand-written one does.
 
-The pieces compose into a producer → checker → certifier loop; this rung wires them together.
+The pieces compose into a producer → checker → certifier loop; what is missing is the wiring.
 
 ## The shape: relational type inhabitation
 
@@ -34,32 +36,27 @@ run backward, ARE the prover:
 - **MLTT intro/elim** — `idpath` for a reflexive path, the recursors, `tpair` for Σ,
   `inl`/`inr` for coprod, `paths_rect` for J.
 
-This is "the relational typechecker run backward = the prover" (miniKanren's inhabitation trick),
-specialized to uu's term syntax (quoted lists; kanren vars are the holes).
+This is the relational typechecker run backward (miniKanren's inhabitation trick), specialized to
+uu's term syntax — quoted lists, with kanren vars as the holes.
 
-## Phases
+## The rungs
 
-0. **substrate check** — confirm kanren carries uu term syntax + a minimal `proves` for a
-   trivial goal (find `idfun`'s body). A tiny `doc/proto/kanren-prove.l` spike.
 1. **relational checker, forward** — write `proves` for the MLTT core, run it FORWARD
    (`e`,`T` ground) and cross-check it agrees with uu's `chk` on the existing corpus. Builds
-   and validates the relation with no search risk yet.
+   and validates the relation with no search risk.
 2. **backward search, bounded** — run `proves` with `e` fresh under iterative deepening.
-   Target the easy fragment first: a direct inhabitant (a hypothesis, `idpath`, a one-lemma
-   application). Demos: hypothesis lookup, `idfun`/`funcomp`, a 1-step path proof.
-3. **the path-algebra tactic (high-value slice)** — specialize to `paths` goals: search by
-   composing `pathscomp0` (transitivity), `pathsinv0` (symmetry), `maponpaths` (congruence)
-   + the lemma database. "auto for equalities" — the most common obligation, and where the
-   search is tractable. (A relational rewrite engine; the `unify`/`reify` half already backs
-   `doc/proto/datalog.l`.)
+   The easy fragment first: a direct inhabitant (a hypothesis, `idpath`, a one-lemma
+   application) — hypothesis lookup, `idfun`/`funcomp`, a 1-step path proof.
+3. **the path-algebra tactic** — specialize to `paths` goals: search by composing
+   `pathscomp0` (transitivity), `pathsinv0` (symmetry), `maponpaths` (congruence) + the lemma
+   database. "auto for equalities" — the most common obligation, and where the search is
+   tractable. (A relational rewrite engine; `unify`/`reify` already backs `doc/proto/datalog.l`.)
 4. **certify the found proof** — pipe a found `e` through uu's `chk` (trusted) THEN the bridge
-   → Rocq + Lean. New gate `test_kanren`: kanren PROVES a stated goal, uu checks, both kernels
-   certify — end to end, love discovers and three kernels agree. Guard it so it no-ops without
-   coqc/lean (like `test_uugen`/`test_uulean`).
+   → Rocq + Lean, under a gate that no-ops without coqc/lean (like `test_uugen`/`test_uulean`).
 5. **scale** — a `(solve goal)` entry; iterative deepening; the corpus as the lemma DB;
-   memoization; eventually a uu tactic `(auto goal) → term` usable INSIDE proofs.
+   memoization; a uu tactic `(auto goal) → term` usable INSIDE proofs.
 
-## Risks and mitigations
+## Risks
 
 - **search explosion** (app guessing arg types): iterative deepening (bound proof depth);
   restrict app to the LEMMA DATABASE and unify a lemma's *conclusion* with the goal FIRST
@@ -74,11 +71,6 @@ specialized to uu's term syntax (quoted lists; kanren vars are the holes).
   yields a candidate that fails `chk`, never a false theorem. This is *why* a hairy search is
   safe here.
 
-## Why this rung, why now
-
-Σ/Type-paths (74→200) + the Lean backend gave a wide corpus certified across two kernels.
-The frontier left is AUTONOMY — love writing its own proofs. Start narrow with path-algebra
-`auto`: that is where the search is tractable AND the payoff (equality obligations) is highest.
-It complements, does not replace, the differential-oracle leg (`proof/rocq/extract.v`, which ties the
-model to the binary): export ties DISCOVERED laws to independent kernels. Keep the kernel small;
-keep exporting to Rocq + Lean. See `doc/archive/uu-rocq-bridge.md` for the rung roadmap.
+It complements, not replaces, the differential-oracle leg (`proof/rocq/extract.v`, which ties the
+model to the binary): export ties DISCOVERED laws to independent kernels. See doc/uu-universes.md
+for uu and the two-kernel bridge, doc/verify.md for the whole lattice.

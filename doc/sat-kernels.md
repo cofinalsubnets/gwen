@@ -1,8 +1,8 @@
-# the sat kernels — a domain-specific compiler over crew/asm/
+# the sat kernels — a domain-specific compiler over crew/holo/
 
 `crew/sat/flat.l` is the answer to a question: can the in-tree assembler carry a *domain-specific
 compiler* — not a general codegen pass, but one app compiling its own hot loops? It can. The
-CDCL SAT solver's three hot loops are hand-written in crew/asm/ neutral IR, assembled **at
+CDCL SAT solver's three hot loops are hand-written in crew/holo/ neutral IR, assembled **at
 solver-build time, specialized to the instance** (section displacements baked as immediates,
 one kernel set per `nvars`, cached), and installed through the `nif` seam — plus `fbva`,
 the extended-resolution factoring ladder, reason-side VSIDS bumping, and the rephase
@@ -65,8 +65,8 @@ restart (reduction is only sound at level 0), tracked by an O(1) learnt counter.
   verdict on top of the 150-instance fuzz against DPLL.
 * Specialization is cached (`fkers`, keyed by nvars) and costs ~30ms once per size. Time
   solves WARM — `satrace.sh` pre-warms `(fbcpk (php-vars h))` outside its clock, exactly as
-  it already excludes interpreter warmup. (Every scoreboard before 2026-07-02 charged
-  assembly to the solve; don't repeat that.)
+  it already excludes interpreter warmup. ⚠ A scoreboard that charges assembly to the
+  solve is measuring the specializer, not the solver.
 
 ## the numbers (warm, all shootout verdicts correct)
 
@@ -81,8 +81,9 @@ first on the pigeonhole net (love 21, cadical 30.5): faster than cadical outrigh
 PHP(5–7), 1.5ms behind on PHP(8). first in the whole six-row field by net time
 (**love 156**, cadical 200, picosat 312, kissat 372, minisat 383, glucose 1013).
 
-Where the journey started (interpreted tablet solver, 2026-07-01): ~45× slower than
-minisat on PHP(7). The rungs: flatten the state (proves the layout, slower interpreted) →
+The interpreted tablet solver this stands on is ~45× slower than minisat on PHP(7), and
+the distance closed in this order — worth keeping, because the ORDER is the argument:
+flatten the state (proves the layout, slower interpreted) →
 bcp kernel (~10× over the twin) → learnt-DB reduction + minimization (kills the PHP(8)
 superlinear bloat) → conf + dec kernels (the per-conflict path was ~90% of what remained)
 → warm timing + cadence tuning → fbva (131ms on PHP(8)) → restart/decay knob retune on
@@ -114,8 +115,8 @@ reason clause gets `act += vinc` — prototyped in the interpreted twin, then la
 the conf kernel (phase 3b, between minimize and the seen-clear, where the analysis
 marks are still live): PHP(8) drops 3967 → **1547** conflicts on our level-1 encoding
 and 7068 → **1152** on cadical's level-2 — matching cadical's own count. One feature
-was the entire lock: with it, deeper factoring flips from harmful to helpful, so
-`fcdcl` now runs the **fbva ladder** — re-apply the pass on its own output with the
+is the entire lock: with it, deeper factoring flips from harmful to helpful, so
+`fcdcl` runs the **fbva ladder** — re-apply the pass on its own output with the
 baseline lifted (level-1 aux become "original") while it keeps factoring, capped at 4
 levels. An instance with nothing factorable exits after one pass, so the randoms pay
 nothing. PHP(8): 1547 → 1408 conflicts; PHP(9) solves in ~34ms warm. The remaining
@@ -142,10 +143,10 @@ the classic ratio — fine as a differential-fuzz driver (DPLL referees), useles
 difficulty calibration. The bench generator draws each (var, sign) independently from
 xoshiro.
 
-## fbva — the factoring pass, and how it was found
+## fbva — the factoring pass
 
-Ablating cadical itself (probe the binary, never trust a prior) located the pigeonhole
-killer: with **every** technique disabled except `factor`, cadical solves PHP(8) in 14ms;
+The pigeonhole killer, located by ablating cadical itself (probe the binary, never trust a
+prior): with **every** technique disabled except `factor`, cadical solves PHP(8) in 14ms;
 add `--no-factor` and it collapses to minisat-class. Factoring is **bounded variable
 addition** — introduce a fresh variable to stand for shared clause structure — and adding
 definitional variables is the *extended resolution* move: PHP has polynomial ER
@@ -158,15 +159,14 @@ were the error path. Check exit codes.)
 
 `fbva` (crew/sat/flat.l) is the Manthey–Heule–Biere greedy: for a literal l, grow M_lit ×
 M_cls with every (m | C\{l}) present, then a fresh x replaces |M_lit|·|M_cls| clauses
-with |M_cls|+|M_lit|+1. Three details carried ALL the value, found by diffing our
-factored output against cadical's (decoded from its binary DRAT proof — the added
-definitional clauses are right there):
+with |M_cls|+|M_lit|+1. Three details carry ALL the value — the way to find such a thing is to
+diff our factored output against cadical's, decoded from its binary DRAT proof, where the added
+definitional clauses sit in the open:
 * **structured tiebreaks**: on symmetric instances every match count ties, and a
-  hash-order pick yields ragged overlapping groups that HURT search (they slowed even
-  cadical 2.5× when fed our early output). Max count, ties to the lowest literal →
-  contiguous groups → the commander/AMO-tree structure. This one change took our PHP(8)
-  from 2713ms to 120ms — the entire prize was in the tiebreak (the "structured" in
-  structured reencoding).
+  hash-order pick yields ragged overlapping groups that HURT search (ragged output slows even
+  cadical 2.5×). Max count, ties to the lowest literal → contiguous groups → the
+  commander/AMO-tree structure. This is worth ~20× on PHP(8) by itself — the entire prize is in
+  the tiebreak (the "structured" in structured reencoding).
 * **complete definitions**: emit the reverse long clause (x | ¬m₁ | … | ¬mₖ) too, so
   x ↔ AND(M_lit) propagates both ways instead of leaving x free for CDCL to wander on.
 * **no aux cascade**: factor the original structure only (`fbvac0`); re-factoring the
@@ -181,29 +181,27 @@ BVA's varying variable counts (phantom vars are sound: never watched, decided de
 popped clean). Cost on unstructured instances: ~8µs/clause of intake, the floor of an
 interpreted pass.
 
-## the SATLIB rows — real instances, and what they taught
+## the SATLIB rows — real instances
 
 `satrace.sh` also races five rows of REAL benchmark-library instances (SATLIB, the
 classic competition-era suite; downloaded once into `out/bench/satlib/`, rows skip
 silently offline): uf100/uuf100 (uniform random 3-SAT at the transition, 10 satisfiable
 / 10 proven-unsatisfiable), uuf150 (5 UNSAT), uf250 (14 SAT — panel width because
 the threshold rows are a per-instance lottery), flat100 (3 graph
-3-colorings). Two traps en route: SATLIB files end in a `%` footer that minisat and
-cadical REJECT — the exit-code "solves" at 3ms were parse errors, and the signature
-column (`?????`) is what caught it (strip the footer at fetch); and the file naming is
+3-colorings). ⚠ Two traps in the harness: SATLIB files end in a `%` footer that minisat and
+cadical REJECT — the exit-code "solves" at 3ms are parse errors, and the signature
+column (`?????`) is what catches it, so strip the footer at fetch; and the file naming uses
 a literal `-0` separator (`uf100-010.cnf`, not `uf100-10.cnf`).
 
-The rows immediately found two whales. flat100 ran 12–20× off the field — all of it
-fbva intake: the solver finishes coloring instances in ~3ms with ~0 conflicts, while
-the factoring pass paid two full sweeps (and a ladder pass) to find 6 incidental
-variables in 300. Both loops now gate on SUBSTANTIAL growth (> nvars/16 fresh vars, one
-sweep otherwise): flat100 167 → 45ms, php untouched. And uf250 (SAT instances) ran
-seconds with wild per-instance variance — polarity luck, the classic case for
-**rephasing**. Always-random rephasing just reshuffles the luck (one instance went
-1.2s → 12s); the landed version is cadical's idea in miniature, a **policy wheel** —
-random → invert → keep, every 4th restart, phases drawn from a seeded reproducible
-stream — which keeps the escapes and dampens the reshuffle: uf250 4.2s → 1.1s, UNSAT
-rows and php measurably untouched.
+Two things these rows forced. **flat100 is preprocessing-bound**: the solver finishes coloring
+instances in ~3ms with ~0 conflicts, while an ungated factoring pass pays two full sweeps (and a
+ladder pass) to find 6 incidental variables in 300. Both loops gate on SUBSTANTIAL growth
+(> nvars/16 fresh vars, one sweep otherwise): flat100 167 → 45ms, php untouched. And **uf250 is
+polarity luck** — wild per-instance variance, the classic case for **rephasing**. Always-random
+rephasing just reshuffles the luck (one instance goes 1.2s → 12s); the shape that pays is
+cadical's idea in miniature, a **policy wheel** — random → invert → keep, phases drawn from a
+seeded reproducible stream — which keeps the escapes and dampens the reshuffle: uf250 4.2s →
+1.1s, UNSAT rows and php measurably untouched.
 
 **shrink stayed out.** The all-UIP learnt-shrinking phase (cadical's biggest single
 ablation, +61%) was built as a twin phase and measured: −7% conflicts on uuf150, −10%
@@ -214,40 +212,34 @@ recursive variant is the open follow-up).
 
 ## long runs: linear cap growth + the real compaction
 
-uuf250-class instances (100k+-conflict runs) exposed two long-run diseases. The learnt
-cap grew ×3/2 PER REDUCTION — geometric, so after thirty reductions the cap is
+uuf250-class instances (100k+-conflict runs) reach two diseases a short run never does. ⚠ A
+learnt cap that grows ×3/2 PER REDUCTION is geometric, so after thirty reductions the cap is
 effectively infinite, the DB balloons, and bcp relives the pre-tombstone watch-list
-disease: per-conflict cost degraded 9µs → ~78µs across one run. The cap now grows
+disease — per-conflict cost degrades 9µs → ~78µs within one run. The cap grows
 LINEARLY (+500 per reduction): uuf250-01 101s → 31s. And the tombstone reducer leaks
-dead slabs forever, so `fcompact` — the resurrected compacting reducer — now runs when
+dead slabs forever, so `fcompact`, the compacting reducer, runs when
 the arena top passes `fcmp0` words (1M default): live clauses into a fresh cask,
 watches rebuilt (the wn arena's dead nodes leak too), learnt cids remapped, level-0
 reasons zeroed. The tombstone write stashes the slab's true length at cid+1 (nothing
 reads a dead clause's literals) so the compactor can walk the arena. 31s → 21s.
 
-Two soundness lessons, both now permanently gated (a forced-fcmp0 differential battery
-in the corpus, mirroring the forced-reduction one): the old "all-false cannot arise
-(propagation was drained)" invariant is FALSE inside the compaction walk itself — a
-fact it enqueues can falsify a later clause before bcp ever runs, and that is a
-level-0 conflict, i.e. an UNSAT verdict (`s 'bad`), not a scare. And the first shipped
-fcompact returned a bogus SAT on uuf250 through a chain worth remembering: a
-misplaced closing paren restructured the `res` binding, the one-scope law made every
-`res` read the missing condition (`;; missing res`, the always-on warn was the clue),
-`(cap ())` flowed into `putw fx 4` as garbage, and the solver searched an empty arena
-to a cheerful model. The differential gate at small scale passed throughout — the
-compaction only fires past 1M words, hence the forced-threshold gate.
+⚠ **The "all-false cannot arise (propagation was drained)" invariant is FALSE inside the
+compaction walk itself** — a fact it enqueues can falsify a later clause before bcp ever runs,
+and that is a level-0 conflict, i.e. an UNSAT verdict (`s 'bad`), not a scare.
 
-## stable/focused + best-trail phases (the uuf250 search rung)
+⚠ **A differential gate at small scale says nothing about compaction**, which only fires past 1M
+words. The corpus carries a forced-`fcmp0` differential battery for exactly that reason,
+mirroring the forced-reduction one.
 
-first, a correction baked into the numbers above: cadical needs 195k conflicts and
-4.1 SECONDS on uuf250-01 (the earlier "~0.2s" read the wrong row) — hard random UNSAT
-is resolution-bound and everyone pays. our gap was 3.6× conflicts (701k) at 1.4×
-per-conflict cost. cadical's own search ablation on this class is nearly flat
-(stabilize +54% is the only real feature), which pointed the finger INWARD — and
-indeed the every-4-restarts rephase wheel was self-harm at this scale: ~440 fires
-over 700k conflicts, each scrambling the phase-saving locality a long refutation IS.
+## stable/focused + best-trail phases
 
-the landed shape: **stable/focused alternation** on a growing conflict budget (`fst0`
+hard random UNSAT is resolution-bound and everyone pays: cadical needs 195k conflicts and
+4.1 SECONDS on uuf250-01. cadical's own search ablation on this class is nearly flat
+(stabilize +54% is the only real feature), which points the finger INWARD — and an
+every-4-restarts rephase wheel is self-harm at this scale: hundreds of fires over a
+700k-conflict solve, each scrambling the phase-saving locality a long refutation IS.
+
+the shape: **stable/focused alternation** on a growing conflict budget (`fst0`
 10000, ×3/2 per switch) — focused keeps the luby schedule, stable runs rare geometric
 restarts with sticky phases — and the **rephase wheel fires only on entering stable**,
 now four spokes: random → best → invert → best, where **best** restores the polarities
@@ -260,16 +252,14 @@ the honest measurement discipline mattered more than any single knob here:
 threshold-250 instances are ±3× lotteries per (policy, instance) — single-instance
 comparisons flipped sign repeatedly, so the call was made on a 14-instance panel
 (8 proven-UNSAT + 6 SAT), where best-first and random-first orderings TIE on net
-(85s vs 88s) with opposite trades. net effect vs the pre-rung solver: the uuf250
-panel improves ~25% (and the machinery — modes, budgets, best phases — is now in
-place as knobs), the raced uf250 row lands at ~1.7s, php and the small rows are
-untouched.
+(85s vs 88s) with opposite trades. modes, budgets and best phases are all knobs; the raced
+uf250 row lands at ~1.7s, and php and the small rows are untouched by any of it.
 
 ## the DRAT lane — proofs, not trust
 
-every verdict the solver reports is now *certifiable to a skeptic who trusts none of
-this code*. SAT was always self-certifying (the model is in `s`, `sat?` checks it, the
-fuzz gate does); UNSAT now emits **DRAT**, the SAT-competition proof format. pin a jug
+every verdict the solver reports is *certifiable to a skeptic who trusts none of
+this code*. SAT is self-certifying (the model is in `s`, `sat?` checks it, and the
+fuzz gate does); UNSAT emits **DRAT**, the SAT-competition proof format. pin a jug
 into the `fdrat0` box and the solve leaves a refutation in it: every learnt commit one
 RUP line (read back off the arena in the driver — the kernels are untouched), every
 tombstoned learnt a `d` line, every BVA application its extended-resolution lines, and
@@ -293,11 +283,11 @@ per conflict; the kernel ABI and the bench numbers are unchanged.
 
 ## what the remaining distance is
 
-the eleven-row net is now a statistical three-way tie at the top (picosat ~2030,
+the eleven-row net is a statistical three-way tie at the top (picosat ~2030,
 cadical ~2220, love ~2250 — the uf250 SAT-lottery row is the entire spread), with
 kissat ~4000 and the rest behind. the per-row composition, MEASURED (uuf150-01):
 
-* **the engine is no longer behind anything in the field.** per-conflict cost is at
+* **the engine is not behind anything in the field.** per-conflict cost is at
   parity with picosat — ~6.5µs ours vs ~5.5µs its, on the same instance. the native
   kernels have fully closed execution speed against tuned C at this scale.
 * **the uuf rows are conflict count**: picosat needs 2,344 conflicts to our 5,365
@@ -307,9 +297,9 @@ kissat ~4000 and the rest behind. the per-row composition, MEASURED (uuf150-01):
   scheme took 2 restarts where we take dozens of luby blocks. uuf250-class likewise
   stays ~2.5× cadical's conflict count (target-phase decision ordering, tier-2
   clause management are the stable-mode refinements left).
-* **the flat row was our own preprocessing floor, not search — now kernelized**:
-  flat100-1 split as bva=12ms / load=2ms / search=0–1ms, ~85% of the row the
-  interpreted fbva sweep. fbva now runs over FLAT state (a clause arena +
+* **the flat row is a preprocessing floor, not search — and it is kernelized**:
+  flat100-1 splits as bva=12ms / load=2ms / search=0–1ms, ~85% of the row an
+  interpreted fbva sweep. fbva runs over FLAT state (a clause arena +
   occurrence index in casks, literals as offset keys so key order is signed order)
   and its probe machinery is the FOURTH kernel, `fbvag` — one grow step per call:
   pass 1 walks each M_cls clause's cheapest occ chain doing the sorted
@@ -317,10 +307,9 @@ kissat ~4000 and the rest behind. the per-row composition, MEASURED (uuf150-01):
   2 re-walks, zeroing the counts on sight (state-clean without a touched list)
   and chaining the winner's clauses. `fbvag3` is the honest twin (the arm64 /
   no-nif engine, and the `fknob` differential oracle — outputs byte-identical
-  kernel vs twin vs the old tablet pass). flat100-1 fbva 12 → 4.2ms, the
-  three-instance row 57 → 16ms — inside the field's band; the sat gate itself
-  dropped 3.3 → 2.4s. host/mem.c (`peepw`/`pinw`, cask word slots in one
-  dispatch) rode along and made ALL interpreted twins ~2.7× faster.
+  kernel vs twin). that puts flat100-1's fbva at 4.2ms and the three-instance row
+  at 16ms, inside the field's band. host/mem.c's `peepw`/`pinw` (cask word slots in one
+  dispatch) is what makes ALL the interpreted twins ~2.7× faster.
 * php8 sits 1.5ms behind cadical.
 
 all lisp cold-path or kernel-phase work; the architecture doesn't move.
