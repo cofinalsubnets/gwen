@@ -48,7 +48,7 @@
    (pelink srcs out)
     (: objs (map (\ p (ld-read <p <>p 62)) srcs)
        base (+ pe-ibase 4096)
-       lay (ldlay objs base 0)
+       lay (ldlay objs base 0 1)          ; one RWX .text: nothing to split, so .data packs tight
        end <lay n0 <>lay
        bend (ldlay1 'bss end objs)
        relbox (: t (tablet 0) _ (pin t 0 ()) t)
