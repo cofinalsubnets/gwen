@@ -33,8 +33,11 @@
 #endif
 // THE DATA SLOT LAYOUT: the sentinels tile one section at a fixed stride in enum d
 // order, so a value's rep is arithmetic on its ap (love.c's DSENT, love_data.ld,
-// ai_typ below). every elf seat lays that section; wasm has no sections to lay and
-// mach-o spells them `segment,section`, so those two ask the sentinels by name.
+// ai_typ below). the seats that go without ask the sentinels BY NAME instead, and
+// answer the same enum d: wasm has no sections to lay, mach-o spells them
+// `segment,section`, and love0 opts out (host/build.mk) so the bootstrap owes no
+// linker script. safe in every direction -- the heap image carries an ap as its
+// INDEX in image_extra_aps, so a layout never crosses between two binaries.
 #ifndef ai_data_section
 #if defined(__wasm__) || defined(__APPLE__)
 #define ai_data_section 0
@@ -50,8 +53,9 @@
 // (stld, dehusk) run on x64 alone -- gen.l's build says so and says why. they do
 // port, and pay (measured: riscv64 76, thumb2 48), but they land inside the
 // regen's own ranking, where they cost arm64 its param homing. a rung, not a patch.
-// ⚠ a body past the stride pushes ld's location counter backwards and the link
-// says so; holo strides wider instead, which ai_data_tiled catches at boot.
+// ⚠ the LINK is the check: a body past the stride pushes ld's location counter
+// backwards and it refuses out loud, and holo -- ours -- lays the grain the object
+// declares, so neither can hand back a tiling ai_typ would misread.
 #define ai_data_stride 128
 #define ai_data_n 9         // slots; _Static_assert'd against enum d below
 #define ai_digits "0123456789abcdefghijklmnopqrstuvwxyz"

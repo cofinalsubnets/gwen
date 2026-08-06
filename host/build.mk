@@ -171,7 +171,13 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 # ~25 s full-tree cascade, fired by nothing but a new commit hash. The bootstrap is not
 # a release artifact and its `love-version` is read by nobody; the shipped `love` still
 # carries the real id (the love.o dep below).
-gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -DAI_VERSION='"bootstrap"' -I. -Iout/lib
+# -Dai_data_section=0: the bootstrap asks the sentinels BY NAME, so it owes no
+# linker script (love_data.ld is off its link below too). the two ai_typ bodies
+# answer the same enum d for the same ap, and the one place a data object crosses
+# between two differently-built binaries -- the heap image -- carries an ap as its
+# INDEX in image_extra_aps, never an address. so the layout never crosses, and the
+# bootstrap keeps the shorter list of things a host toolchain has to agree to.
+gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"bootstrap"' -I. -Iout/lib
 love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/host/main.o: $(gl0_h)
@@ -189,10 +195,10 @@ out/host/0/%.o: $(R)/%.c $(love_h)
 # codec refuses a binary whose text sits in its index range (love.c's
 # img_encode_ "binary ptr below TBOUND") -- a PIE loads high and clears it.
 # gcc/clang default to PIE anyway; mooncc (the download door's CC) does not.
-$(love0): $(love0_o) $(R)/love_data.ld
+$(love0): $(love0_o)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o) $(data_ld)
+	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 
 # love.c -> out/host/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
