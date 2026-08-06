@@ -386,8 +386,12 @@
    ; ⚠ .bss is NOBITS (8): its size rides the header and its zeros ride NOTHING, so
    ; whoever loads the image owes them -- linux over p_memsz, the .lds ports over
    ; their own startup loop. a lay that owns no loader must not use this lane.
-   (objsecs4 textforms dataforms nifforms imgforms bssforms)
+   ; ⚠ .rodata is the one data lane at flags 2 (ALLOC, no WRITE). holo maps it writable
+   ; anyway -- one segment -- so the flag is what an EXTERNAL linker reads to give it a
+   ; read-only home, and it is a promise the stream has to keep: no relocation, ever.
+   (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
     `(`(".text"   1 6 16 textforms)
+      `(".rodata" 1 2 (o-dalign rodataforms) rodataforms)
       `(".data"   1 3 (o-dalign dataforms) dataforms)
       `(".bss"    8 3 (o-dalign bssforms) bssforms)
       `("ai_nifs" 1 3 8 nifforms)
@@ -402,18 +406,19 @@
    ; aligned and flash is the scarce thing on these parts, which is also why .bss
    ; rides here: these ports copy .data out of flash and zero .bss themselves
    ; (rp2040.c, teensy41.c, nucleo446.c), so a zero laid in .data is flash spent twice.
-   (objsecs3 target textforms dataforms nifforms imgforms bssforms)
+   (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
     (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)
        `(`(".text"   1 6 4 textforms)
+         `(".rodata" 1 2 4 rodataforms)
          `(".data"   1 3 4 dataforms)
          `(".bss"    8 3 4 bssforms)
          `("ai_nifs" 1 3 4 nifforms)))
 
-   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms)
+   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
     (? (arm32? target)
-       (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms bssforms)
+       (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
                   funcnames globnames wknames)          ; locnames unrepresented on arm32
-       (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms)
+       (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
                 funcnames globnames wknames locnames))
 
    ; -- the general object: a LIST of sections, each (name type flags align forms).

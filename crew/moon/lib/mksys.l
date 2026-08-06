@@ -285,4 +285,4 @@
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
-       (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () () () ())))
+       (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () () () () ())))

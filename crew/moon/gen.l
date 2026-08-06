@@ -5992,7 +5992,8 @@
        (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (deadlab irf)))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms
-   ; imgforms extras bssforms) | 'bad, extras being ((name forms) ..), one per OTHER named section.
+   ; imgforms extras bssforms rodataforms) | 'bad, extras being ((name forms) ..), one per OTHER
+   ; named section.
    ; a __attribute__((section(NAME))) global lays in a stream of its own. three streams have a
    ; meaning the writer knows: `ai_nifs` needs the linker's __start_/__stop_ bracket around a
    ; packed run for main()'s boot drain, `.image` must be LAST so `love --bake` can grow it at the
@@ -6046,21 +6047,26 @@
        ; the OTHER section names, first-seen in declaration order
        xnames (: (go gs acc) (? (! (two? gs)) (rev acc)
                                 (: s (strm <gs)
-                                   (go >gs (? (|| (member? s '(".data" "ai_nifs" ".image"))
+                                   (go >gs (? (|| (member? s '(".data" ".rodata" "ai_nifs" ".image"))
                                                   (member? s acc))
                                               acc (link s acc)))))
                  (go (rev (g 'globs)) ()))
        (: gb (globs (rev (g 'globs)) ".data" 'd ())     ; exported globals, then block-scope statics
-          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) ".data" 'd ()))   ; (local data labels), then strings
+          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) ".data" 'd ()))   ; (local data labels)
           zg (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) ".data" 'z ()))
           zs (? (bad? zg) 'bad (globs (rev (g 'statics)) ".data" 'z ()))
-          nb (? (|| (bad? zg) (bad? zs)) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
+          ; .rodata: the string table, and any global that named the section itself. a
+          ; literal carries no address, so this stream owns no relocation -- which is
+          ; what lets it ride a lane nothing writes, at load or at run.
+          rg (? (|| (bad? zg) (bad? zs)) 'bad (globs (rev (g 'globs)) ".rodata" () ()))
+          rs (? (bad? rg) 'bad (globs (rev (g 'statics)) ".rodata" () ()))
+          nb (? (|| (bad? rg) (bad? rs)) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
           ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".image" () ()))
           xb (? (bad? ib) 'bad
                 (map (\ nm `(nm (globs (rev (g 'globs)) nm () ()))) xnames))
-          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? zg) (|| (bad? zs)
-              (|| (bad? nb) (|| (bad? ib) (bad? xb))))))) 'bad
-             `((gb + sb + (strs (g 'strs) ())) nb ib xb (zg + zs)))))
+          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? zg) (|| (bad? zs) (|| (bad? rg)
+              (|| (bad? rs) (|| (bad? nb) (|| (bad? ib) (bad? xb))))))))) 'bad
+             `((gb + sb) nb ib xb (zg + zs) (rg + rs + (strs (g 'strs) ()))))))
 
    ; the shared core: build the gen state, then TEXT (the functions, no _start)
    ; and DATA (globals + strings) separately -> (g textforms dataforms) | ().
@@ -6170,13 +6176,14 @@
           (: dat <>>r                           ; (dataforms nifforms): the exe resolves labels itself,
              ; ..and the bss forms ride the tail as real zeros: one flat image has no
              ; NOBITS lane to put them in, so the file carries what the sections would not.
-             `(1 (crt0 + <>r + <dat + <>dat + <>>>>dat)))))   ; so the nif stream just rides along
+             ; rodata rides it too -- one lane, so nothing is read-only here either.
+             `(1 (crt0 + <>r + <>>>>>dat + <dat + <>dat + <>>>>dat)))))   ; so the nif stream just rides along
    ; the RELOCATABLE OBJECT view: text and data split, plus the DEFINED function names (global
    ; FUNC symbols, statics excluded -- they stay LOCAL, love.h's inline helpers land in every TU),
    ; the global-variable names, and the ai_nifs stream -- the .o emitter turns the rest into a
    ; symbol table + relocations. the DEFINED static functions ride the tail as lnames, laid as
    ; LOCAL FUNC symbols so nm/gdb/vmret see real function boundaries.
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           (! (two? r)) ()
@@ -6218,4 +6225,4 @@
                                                          (link <>f acc) acc))))
                        (go <>ast ()))
              dat <>>r
-             `(1 <>r <dat fnames gnames <>dat <>>dat lnames <>>>dat <>>>>dat)))))
+             `(1 <>r <dat fnames gnames <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat)))))
