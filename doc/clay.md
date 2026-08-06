@@ -96,9 +96,10 @@ union u *Ip, ai_word *Hp, ai_word *restrict Sp)`. writing that out at **184 defi
 sites** ADDS the most repetitive text in the file -- precisely what the criterion says to
 generate.
 
-and `ai_musttail return` at **311 sites** is a discipline, not noise: `love.h:64-77` says
-an opportunistic miss is one frame per dispatch and a stack overflow down some long read,
-which is why `make vmret` disassembles the binary to check it. do not thin these out to
+and `ai_musttail return` at **311 sites** is a discipline, not noise: `love.h` says an
+opportunistic miss is one frame per dispatch and a stack overflow down some long read.
+mooncc now takes the attribute and refuses any compile it cannot spell as the tail jump,
+and `make vmret` disassembles the binary as the cross-check. do not thin these out to
 suit the shower. GENERATE them.
 
 ## what clay cannot say yet
@@ -340,10 +341,12 @@ tells about moon. state it this way or not at all.
    thinned); `(sassert e "msg")` for `_Static_assert`. the fifth shape cost nothing:
    `(arr t 0)` already printed the flexible member's `[]`, and `unsigned __int128` was
    `(named ..)` all along -- both now lawed. together they say a whole `lvm(..)` definition,
-   which `test/host/clay.l` proves against `lvm_add`'s exact expansion. all emit-only BY
-   NECESSITY: `parse.l:116-121` balance-skips a trailing attribute run ("the codegen owes
+   which `test/host/clay.l` proves against `lvm_add`'s exact expansion. emit-only BY
+   NECESSITY -- `parse.l:116-121` balance-skips a trailing attribute run ("the codegen owes
    nothing"), so none can come back through a parse, exactly like `note`/`edef`/`sdef` --
-   and G1 held at 63/51/0, the check that they really are emit-only.
+   except the `ret` prefix, which parses now: a statement-position `musttail` lands in the
+   PRE slot (spelled `"__attribute__((musttail))"`), gen marks the call, and sibcall spells
+   the jump or refuses. G1 held at 63/51/0 for the rest.
 
 ## open
 

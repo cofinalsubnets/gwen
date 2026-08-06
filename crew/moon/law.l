@@ -159,6 +159,10 @@
       (= (cexp "sizeof(char)+sizeof(short)+sizeof(long)") '(bin + (bin + (num 1) (num 2)) (num 8)))
       (= (cast "int main() { while (1) break; return 0; }")
          '(prog ((fn "main" () (blk ((while (num 1) (brk)) (ret (num 0))))))))
+      ; musttail comes back through a parse now -- the ret's PRE slot (clay's (ret e PRE));
+      ; every other statement attribute still skips
+      (= (cast "int main() { __attribute__((musttail)) return main(); }")
+         '(prog ((fn "main" () (blk ((ret (call (var "main") ()) "__attribute__((musttail))")))))))
       (gripe? (cparse (caup (clex "int main() { return (1+2; }"))))       ; the lost )
       (gripe? (cparse (caup (clex "int main() { if 1 return 2; }"))))     ; if wants parens
       (gripe? (cparse (caup (clex "int main() { return 42 }"))))
@@ -186,10 +190,16 @@
       (! (member? '(call rec) (caup (cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))))
       ; a frame-escaping fn keeps the plain call (the address outlives the frame)
       (member? '(call g) (caup (cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }")))
-      ; a STATEMENT-position attribute run SKIPS -- love.h's `ai_musttail return` and a bare
-      ; fallthrough both parse, and the annotated tail still jmps (sibcall owes it anyway)
+      ; a STATEMENT-position attribute run skips (fallthrough..) -- except musttail, which
+      ; is OWED now: the annotation rides the ret's PRE slot, marks the call, and sibs
+      ; spells the jump or the compile refuses -- never a silent fallback to a plain call
       (member? '(jmp rec) (caup (cgn "int rec(int n){ if(n==0) return 5; __attribute__((musttail)) return rec(n-1); } int main(){ return rec(3); }")))
       (two? (cgn "int main(int c, char **v) { switch (c) { case 1: c++; __attribute__((fallthrough)); default: c++; } return c; }"))
+      (gripe? (cgn "int main() { __attribute__((musttail)) return 5; }"))   ; no call to mark: refused, named
+      (refused? (cgn "int f(int n) { return n; } int main() { int c; __attribute__((musttail)) c = f(1); return c; }"))   ; not a return: refused at parse
+      ; a musttail call is owed AS a call: the splice that would swallow a tiny callee
+      ; declines, and the kept call leaves as the jmp
+      (member? '(jmp f) (caup (cgn "int f(int n) { return n + 1; } int h(int n) { __attribute__((musttail)) return f(n); } int main() { return h(3); }")))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
       (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a NAMED refusal now (rung 1, doc/moon-diag.md)
       (refused? (cgn "int main() { return 5=3; }"))                 ; not an lvalue
@@ -1091,6 +1101,25 @@
       (= 3 (peep klog 'cs-unrestored 0))             ; the bare write's exit + the dirty branch + the sibcall
       (= 1 (peep klog 'cs-dark-op 0))
       (= 1 (peep klog 'cs-save-late 0))))            ; a save AFTER the write stores the clobber
+
+; -- the musttail contract (sibs): a marked ret-position call -- (call F must) -- leaves as
+; the tail jmp and the marker dies with the rewrite; a shape that cannot tail SCARES
+; (musttail-not-a-tail), and a fn sibcall declines whole (fesc) scares musttail-escape.
+; the breach probes ride the counting help, like the cs breaches above.
+(: mg9 (tablet 0) _ (pin mg9 'tgt 'x64) _ (pin mg9 'fn "f9")
+   mepi '((ld r3 r4 -8) (mov sp r4) (pop r4) (ret))
+   _ (assert
+      (member? '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
+      (! (member? '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))))
+   mlog (tablet 0)
+   _ (hear (\ s p e (: _ (pin mlog p (+ 1 (peep mlog p 0))) 0)))
+   _ (sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi))   ; a live insn after the call: no tail
+   _ (: t9 (tablet 0) _ (pin t9 'tgt 'x64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
+        (sibcall t9 '((label f9) (call g9 must) (ret))))               ; the whole-fn decline
+   _ (hear ())
+   (assert
+      (= 1 (peep mlog 'musttail-not-a-tail 0))
+      (= 1 (peep mlog 'musttail-escape 0))))
 
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs

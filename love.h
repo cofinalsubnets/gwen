@@ -61,13 +61,16 @@
 #define Resume() g->ip->ap(g, g->ip, g->hp, g->sp)
 #define Pack(g) (g->ip = Ip, g->hp = Hp, g->sp = Sp)
 #define Unpack(g) (Ip = g->ip, Hp = g->hp, Sp = g->sp)
-// every VM tail spells `ai_musttail return ..`: mooncc guarantees the jump structurally
-// (sibcall + make vmret), clang/gcc 15+ are HELD to it here -- an opportunistic miss is
-// one frame per dispatch and a stack overflow down some long read. ⚠ the extra-arg lvms
-// (vbin, gc, vmap*..) keep PLAIN returns: musttail wants matching prototypes.
-#if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 15)
+// every VM tail spells `ai_musttail return ..` and every compiler is HELD to the jump:
+// clang/gcc 15+ take the attribute natively; mooncc marks the annotated call and its
+// sibcall pass spells the tail jump or REFUSES the compile (musttail-not-a-tail /
+// musttail-escape) -- an opportunistic miss is one frame per dispatch and a stack
+// overflow down some long read. `make vmret` stays as the cross-check on the shipped
+// binary. ⚠ the extra-arg lvms (vbin, gc, vmap*..) keep PLAIN returns: musttail wants
+// matching prototypes.
+#if defined(__mooncc__) || defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 15)
 #define ai_musttail __attribute__((musttail))
-#if !defined(__clang__)
+#if defined(__GNUC__) && !defined(__clang__)
 // gcc's "maybe" escape lint: an address-taken local handed to an EARLIER helper trips it,
 // but the ⚠ no-scratch-in-lvm_ discipline already forbids a frame address outliving its call
 #pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"

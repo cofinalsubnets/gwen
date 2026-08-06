@@ -1795,7 +1795,10 @@
               bi (? (<head = 'var) <>head ())
               bv (cgbuiltin g env bi args)
               (? (! (id? bv 'no)) bv
-                 (: inlf (? (2 < (|| (peep g 'inlining ()) 0)) ()   ; splices NEST to depth 3, cbinl's cap
+                 (: m9 (peep g 'must9 ())
+                    _ (? m9 (pin g 'must9 ()) 0)
+                    inlf (? m9 ()                                  ; a musttail call is OWED as a call: never spliced
+                            (2 < (|| (peep g 'inlining ()) 0)) ()   ; splices NEST to depth 3, cbinl's cap
                             (! (<head = 'var)) ()
                             (! (bad? (vent g env <>head))) ()   ; a local/global shadows the name
                             (peep (g 'inl) <>head ()))
@@ -2918,7 +2921,7 @@
        (: f <fs r >fs
           lw2 (? (&& (two? f) (&& (<f = 'lea) (<>>f = 'r4))) 1 lw)
           cand (&& (! lw2) (&& (two? f) (|| (&& (<f = 'call) (two? >f))
-                                            (f = crf))))
+                                            (&& (<f = 'callr) (id? <>f <>crf)))))
           rr (? cand (skiprel r hs) r)
           (? (&& cand (epim? rr ej))
               ((sibjmp g f) + (sibs g (drop (tally ej) rr) () el hs ej crf))
@@ -2928,8 +2931,23 @@
               ((sibjmp g f) + (sibs g >rr () el hs ej crf))
              (&& cand (lbl-jmp? rr el))
               ((sibjmp g f) + (sibs g rr () el hs ej crf))
-             (link f (sibs g r (? (&& (two? f) (member? <f '(call callr raw))) () lw2) el hs ej crf)))))   ; raw: a builtin splice consumes its address like a call
-   (sibcall g fs) (? (|| (peep g 'fesc ()) (v6m? g)) fs   ; v6m: the pop-pc epilogue can't restore lr for a tail-jmp, so no sibcall (deferred optimization)
+             (: _ (? (must? f) (scare 'musttail-not-a-tail `((g 'fn) f)) 0)   ; a marked call is OWED its jump
+                (link f (sibs g r (? (&& (two? f) (member? <f '(call callr raw))) () lw2) el hs ej crf))))))   ; raw: a builtin splice consumes its address like a call
+   ; -- the musttail contract: a PRE-slotted ret (clay's (ret e PRE)) marks its call --
+   ; (call F must) / (callr PK must) -- and sibs spells the marked jump or SCARES
+   ; (musttail-not-a-tail; a whole-fn decline musttail-escape) instead of falling back to a
+   ; plain call. the marker dies with the rewrite, so no later pass ever meets one. --
+   (must? f) (&& (two? f) (&& (member? <f '(call callr)) (member? 'must >>f)))
+   (anymust? fs) (? (! (two? fs)) () (|| (must? <fs) (anymust? >fs)))
+   (mustret g fs)                                   ; mark the LAST call/callr; none to mark refuses
+    (: (go l) (? (! (two? l)) 'no
+                 (: r (go >l)
+                    (? (! (id? r 'no)) (link <l r)
+                       (: f <l (? (&& (two? f) (member? <f '(call callr))) (link (f + '(must)) >l) 'no)))))
+       r (go fs)
+       (? (id? r 'no) (nolane g "a musttail return does not end in a call") r))
+   (sibcall g fs) (? (|| (peep g 'fesc ()) (v6m? g))   ; v6m: the pop-pc epilogue can't restore lr for a tail-jmp, so no sibcall (deferred optimization)
+                     (: _ (? (anymust? fs) (scare 'musttail-escape (g 'fn)) 0) fs)
                      (: ej (peep g 'epi epi)
                         (sibs g fs () (elabsx fs (tablet 0) ej) (peep g 'homes ()) ej `('callr (pkr g)))))
 
@@ -4954,11 +4972,17 @@
        (? (k = 'ret)                                                     ; inside an inline splice a return JUMPS to the
           (: il (peep g 'inlret ())                                      ; splice's end label instead of the epilogue
              epj (peep g 'epi epi)                                       ; the TARGET's epilogue (cgen-core pins it)
-             (? (! (two? <>s)) (? il `(`('jmp il)) epj)           ; bare `return;` -- just the epilogue
+             mt (1 < (tally >s))                                         ; clay's (ret e PRE): presence is the arity
+             (? (&& mt il) 'bad                     ; a musttail never inlines: the splice declines, the real call still can
+                (! (two? <>s))
+                 (? mt (nolane g "a musttail return carries no call") (? il `(`('jmp il)) epj))   ; bare `return;` -- just the epilogue
                 (: _ (pin g 'want 'r0)                                   ; the return value's one true home
+                   _ (? mt (pin g 'must9 1) 0)      ; the ret's own call STAYS a call (no splice) -- consumed at first touch
                    r (cgexpr g env <>s)
+                   _ (pin g 'must9 ())
                    rt (? il (peep g 'inlrt 'long)                        ; the INLINED function's return type
                          (cap (peep (g 'sigs) (g 'fn) `('long ()))))    ; else the current function's
+                   res
                    (? (bad? r) 'bad
                       (flo? rt)                                        ; a double return leaves f0 (xmm0; never inline -- gated);
                        ((asflo g r)                                    ; v6-M base ABI carries a double out on the r0:r1 pair,
@@ -4997,7 +5021,8 @@
                       (pair? g rt) ((asll g r) + (? il `(`('jmp il)) epj))      ; a pair return: r0:r1 (widen a word value)
                       (d128? rt)                                                ; a wide return rides rdx:rax (the SysV i128 pair)
                        (? (x64t? g) ((as128 g r) + (? il `(`('jmp il)) epj)) 'bad)
-                      ((tor0 g r) + (? il `(`('jmp il)) epj))))))    ; int -> int, as before (a pair value narrows to its lo)
+                      ((tor0 g r) + (? il `(`('jmp il)) epj)))    ; int -> int, as before (a pair value narrows to its lo)
+                   (? (|| (! mt) (bad? res)) res (mustret g res)))))    ; a musttail ret MARKS its call for sibs
           (k = 'expr)
            (: pe <>s
               rv (? (&& (<pe = 'post) ((cap (caup pe)) = 'var))

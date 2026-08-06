@@ -181,7 +181,11 @@ peephole (a call immediately followed by the exact epilogue, or by a join label 
 gated per function by an **escape analysis** — a frame address that becomes a VALUE (the `&`
 lane, a local array decaying, a struct-value rep, `va_start`'s save area) pins `fesc` and the
 function keeps all its calls; an lvalue's own load/store rides `lean` and stays eligible.
-`make vmret` is the check.
+And `__attribute__((musttail))` on a return is OWED, not opportunistic: the annotation rides
+the ret's PRE slot, gen marks the call, and a shape the rewrite cannot take REFUSES the
+compile (`musttail-not-a-tail` / `musttail-escape`) — the clang/gcc-15 semantic, which is how
+love.h holds every VM tail to the jump under all three compilers. `make vmret` stays as the
+cross-check on the shipped binary.
 
 Predefines worth knowing: `__mooncc__`, `__linux__`, `__x86_64__` (or the target's twin), and
 `__STDC_HOSTED__` = 1 for a hosted link / 0 under `-ffreestanding`. `__SIZEOF_INT128__` is

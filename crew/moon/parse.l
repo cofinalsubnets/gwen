@@ -1224,15 +1224,23 @@
                                rest (? (two? r9) (want r9 ";") ())
                                (? (two? rest) `(`('asm <tr <s1 <s2 <s3) rest) ()))))))))))
 
-   ; a STATEMENT-position __attribute__((..)) run skips (musttail, fallthrough..): the one
-   ; whose semantic we owe -- musttail -- the sibcall pass already delivers on every
-   ; ret-position call, and `make vmret` holds the lvm_ fleet to it
+   ; a STATEMENT-position __attribute__((..)) run skips (fallthrough..) -- except musttail,
+   ; the one whose semantic we OWE: it lands in the ret's PRE slot (clay's (ret e PRE)) and
+   ; gen's sibcall pass spells the marked tail jump or refuses the compile. on any statement
+   ; but a value-carrying return the annotation refuses -- never honored is never skipped
+   ; in silence.
+   (mustin a b) (? (id? a b) ()                     ; a `musttail` token before the b spine?
+                   (|| (&& ((tkk <a) = 'id) ((tkv <a) = "musttail")) (mustin >a b)))
    (pstmt ps ts0)
     (? (! (two? ts0)) ()
        (: ts (pattr ts0)
           (? (! (two? ts)) ()
-             (static? ts) (pstatic ps ts)
-             (pstmt2 ps ts))))
+             (: r (? (static? ts) (pstatic ps ts) (pstmt2 ps ts))
+                (? (! (mustin ts0 ts)) r
+                   (! (two? r)) ()
+                   (: st <r
+                      (? (! (&& (id? <st 'ret) (two? <>st))) ()
+                         `((st + `("__attribute__((musttail))")) <>r))))))))
    ; a label is a flat MARKER (see pstmt2's rule) so a block can splice it beside the statement it
    ; labels. an ARM -- an if/while/do/for body without braces -- has no list to splice into, and
    ; the marker alone would BE the arm, leaving its statement to fall out past the arm's join.
