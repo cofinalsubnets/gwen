@@ -48,10 +48,10 @@
   (! (port? (cask 4)))
   ; and slurp is bounded like see: a non-port drains as the already-empty
   ; stream, so the zero point -- a missing or misused name -- slurps to the
-  ; unit, the same value an exhausted tap drains to, instead of reading the
-  ; raw words of whatever it was handed.
-  (id? () (slurp 42))
-  (id? () (slurp ()))
+  ; empty string, the same value an exhausted tap drains to, instead of reading
+  ; the raw words of whatever it was handed. every drain lands text.
+  (= "" (slurp 42))   (string? (slurp 42))
+  (= "" (slurp ()))
   (id? (slurp (tap "")) (slurp 42))
 
   ; File-I/O roundtrip: write a string to /tmp via say, read it back

@@ -194,10 +194,7 @@
    (p1-str cl acc)
      (? (nil? (two? cl)) 'torn
         (: c (cap cl) r (p1-cup cl)
-           ; ⚠ "" is the EMPTY STRING, and (string ()) is not it -- string is
-           ; identity on the zero point, so an empty accumulator has to name the
-           ; literal to get the object the C reader hands back.
-           (? (= c 34) (link (? (two? acc) (string (p1-rev acc ())) "") r)
+           (? (= c 34) (link (string (p1-rev acc ())) r)
               (nil? (= c 92)) (p1-str r (link c acc))
               (nil? (two? r)) 'torn
               (= (cap r) 120)                              ; \xHH

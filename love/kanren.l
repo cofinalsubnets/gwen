@@ -23,7 +23,7 @@
    empty_dict '(())
    has_s dict_has
    ext_s dict_set
-   (mintp x) (nom? x && nom? (string x))       ; string of a named sym is its name; of a mint, itself
+   (mintp x) (mint? x)
    (var? x) (two? x && mintp <>x)
    (var x) (x >< nom 0)                         ; (label . fresh-nom) -- identity by the nom
    (walk s u) (? (nil? (var? u)) u (: t (has_s s u) (? (two? t) (walk s <t) u)))

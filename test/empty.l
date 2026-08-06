@@ -41,11 +41,14 @@
   (= 1 ("" 5))
   (= 1 (0 5))
 
-  ; string: coercing "" stays the empty string, and coercing NOTHING -- the unit
-  ; -- stays nothing. the charm zero is a BYTE, so it coerces like every other
-  ; charm: a one-byte NUL string, which nets nothing without being nothing.
+  ; string: coercing "" stays the empty string, and so does coercing NOTHING --
+  ; a point with no spelling answers the empty spelling, the unit and a bare mint
+  ; alike, so `string` always lands a string. the charm zero is a BYTE, so it
+  ; coerces like every other charm: a one-byte NUL string, which nets nothing
+  ; without being nothing.
   (= "" (string ""))   (string? (string ""))
-  (id? () (string ()))
+  (= "" (string ()))   (string? (string ()))
+  (= "" (string (mint 0)))   (string? (string (mint 0)))
   (string? (string 0))   (1 = (tally (string 0)))   !(string 0)
 
   ; puts writes nothing for an empty operand; "" returns "", 0 returns 0

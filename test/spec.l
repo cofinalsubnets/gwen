@@ -79,7 +79,7 @@
  !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a tray
  (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
 
-; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? two? tablet?;
+; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
 ; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, ai_kind>=KTablet); hot? the opaque cask/port subset.
 (assert
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? #(1 2))
@@ -380,12 +380,18 @@
 (assert (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z)))))   ; absence: the zero point, wearing ()
 (hear 0)
 (assert
- (() = (:)) !(nom? ()) !(name? ()) !(0 = ()) !(id? 0 '()) (() = (intern "")) (0 = $()) !() !!$'x
+ (() = (:)) !(nom? ()) !(name? ()) !(mint? ()) !(0 = ()) !(id? 0 '()) (() = (intern "")) (0 = $()) !() !!$'x
  ("()" = (show ()))
- (nom? (mint 0)) !(name? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; the fresh point: nom? (a real point) but NOT name? (anonymous), materially empty
+ (nom? (mint 0)) !(name? (mint 0)) (mint? (mint 0)) (0 = $(mint 0)) !(mint 0)   ; the fresh point: nom? (a real point) but NOT name? (anonymous), materially empty
+ ; name? and mint? PARTITION nom?: every real point is one or the other, () is neither,
+ ; and nothing else is either. `string` cannot tell them apart -- a mint spells "".
+ (: m (mint 0) s (nom 'x)
+    (&& (&& (mint? m) !(name? m)) (&& (name? s) !(mint? s))))
+ (&& !(mint? 'x) (&& !(mint? "x") (&& !(mint? 0) !(mint? '(1 2)))))
+ (&& ("" = (string (mint 0))) ("" = (string ())))   ; both nameless points spell empty
  (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone
  !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (id? m m)))  ; distinct always; itself only
- (nom? (nom 'x)) (name? (nom 'x)) (name? 'x) !(two? (nom 'x)) ("x" = (string (nom 'x)))  ; a nom is a NAMED point (nom? AND name?, an ATOM, NOT a chain); its name comes via `string`
+ (nom? (nom 'x)) (name? (nom 'x)) !(mint? (nom 'x)) (name? 'x) !(two? (nom 'x)) ("x" = (string (nom 'x)))  ; a nom is a NAMED point (nom? AND name?, an ATOM, NOT a chain); its name comes via `string`
  (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; same-name noms order by serial (distinct points)
  ((mint 0) < (nom 'x))                           ; within the mint band: a bare mint below a named symbol
  ((mint 0) < 0)                                  ; the blue floor: every point sits BELOW the numbers (true-blue)

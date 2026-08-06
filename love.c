@@ -154,7 +154,7 @@ lvm_t lvm_kcall,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_saturate, lvm_peep, lvm_fputx, lvm_cask, lvm_casknew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
- lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_gem,  lvm_gemp,
+ lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_mintp,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_gem,  lvm_gemp,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,   // complex; lvm_twin_bin declared apart below
  lvm_bxor,  lvm_bsr,    lvm_bsl,    lvm_snip,
@@ -352,7 +352,7 @@ static ai_inline void tray_put_obj(struct ai_tray *v, uintptr_t i, word x) {
 // complex scalar nets itself, every other scalar nets real, aggregates SUM -- so
 // the net is additive exactly. common kinds short-circuit with no walk; a sum
 // cannot (a later negative cancels). lockstep with ai_saturate ($): same zero conditions.
-static ai_inline struct ai_str *add_name(struct ai *g, word x);   // a named sym -> its name string, else 0
+static ai_inline struct ai_str *nom_str(struct ai *g, word x);   // a named sym -> its name string, else 0
 struct ai_zn { ai_flo_t re, im; };                     // the net: a complex value
 static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
   struct ai_zn z = {re, im}; return z; }
@@ -658,7 +658,7 @@ _(nif_nifx, "nifx", s5(lvm_nifx))\
  _(nif_aall, "aall", s1(lvm_aall)) _(nif_inner, "inner", s2(lvm_inner)) _(nif_outer, "outer", s2(lvm_outer))\
  _(nif_packp, "packp", s1(lvm_packp)) _(nif_bigp, "big?", s1(lvm_bigp)) _(nif_sunp, "sun?", s1(lvm_sunp))\
  _(nif_setp, "tray?", s1(lvm_setp)) _(nif_intf, "int", s1(lvm_intf))\
- _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_namep, "name?", s1(lvm_namep)) _(nif_tabp, "tablet?", s1(lvm_tabp)) _(nif_charmp, "charm?", s1(lvm_charmp))\
+ _(nif_nomp, "nom?", s1(lvm_nomp)) _(nif_namep, "name?", s1(lvm_namep)) _(nif_mintp, "mint?", s1(lvm_mintp)) _(nif_tabp, "tablet?", s1(lvm_tabp)) _(nif_charmp, "charm?", s1(lvm_charmp))\
  _(nif_litp, "lit?", s1(lvm_litp)) _(nif_hotp, "hot?", s1(lvm_hotp))\
  _(nif_nilp, "nil?", s1(lvm_nilp)) _(nif_ev, "ev", s1(lvm_eval))\
  _(nif_callk, "call-cc", s1(lvm_callk)) _(nif_scare, "scare", s2(lvm_scare))\
@@ -1626,7 +1626,7 @@ static ai_noinline Ana(analyze) {
  if (!chainp(b)) return analyze(g, c, a); // singleton list has value of element
  // if it is a special form then do that
  struct ai_str *nm;                             // a special form is headed by a 1-char NAMED symbol (\ : ?)
- if ((nm = add_name(g, a)) && len(nm) == 1)     // add_name is 0 for a bare mint / the core / a non-sym
+ if ((nm = nom_str(g, a)) && len(nm) == 1)     // nom_str is 0 for a bare mint / the core / a non-sym
   switch (*txt(nm)) {
    case '\\': return ana_l(g, c, b);
    case ':': return ana_d(g, c, b);
@@ -1748,9 +1748,9 @@ static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x) {
  return g; }
 
 static ai_inline bool lambp(struct ai *g, word x) {
- struct ai_str *n;                                      // headed by the named symbol \ (add_name 0 for a bare mint / non-sym)
+ struct ai_str *n;                                      // headed by the named symbol \ (nom_str 0 for a bare mint / non-sym)
  return chainp(x) && chainp(B(x)) && chainp(B(B(x))) &&
-  (n = add_name(g, A(x))) && len(n) == 1 && txt(n)[0] == '\\'; }
+  (n = nom_str(g, A(x))) && len(n) == 1 && txt(n)[0] == '\\'; }
 
 static ai_inline word rev(struct ai *g, word l) {
  word m, n = zero;   // reversal points each cons at its (younger) predecessor: barrier it
@@ -2062,8 +2062,8 @@ lvm(lvm_index) {
 #if __STDC_HOSTED__
   // helpless (file mode): the zero point is silent, so surface ";; missing <nom>"
   // on err and still answer it. missing-specific -- a deliberate scare stays
-  // terminal. add_name + ioput* hold no heap operand -> no GC, so Sp/Ip survive.
-  struct ai_str *nm = add_name(g, Ip[1].x);
+  // terminal. nom_str + ioput* hold no heap operand -> no GC, so Sp/Ip survive.
+  struct ai_str *nm = nom_str(g, Ip[1].x);
   if (nm) { struct ai_io *sv = g->io; g->io = &ai_stderr.io;
             struct ai *w = ioputs(g, ";; missing ");
             for (uintptr_t i = 0; ai_ok(w) && i < nm->len; i++) w = ioputc(w, nm->bytes[i]);
@@ -3407,7 +3407,7 @@ static void seen_pop(struct ai *g, uintptr_t off) {                 // drop the 
  *slot = B(*slot); }
 
 static ai_inline struct ai*ioput_chain(struct ai*g, word _, uintptr_t off) {
- { struct ai_str *nm = add_name(g, _);                 // a NAMED symbol is (name . mint): print its bare name
+ { struct ai_str *nm = nom_str(g, _);                 // a NAMED symbol is (name . mint): print its bare name
    if (nm) { if (!ai_ok(g = ai_push(g, 1, word(nm)))) return g;
              for (uintptr_t l = len(g->sp[0]), i = 0; ai_ok(g) && i < l;)
                g = ioputc(g, txt(g->sp[0])[i++]);
@@ -3415,14 +3415,14 @@ static ai_inline struct ai*ioput_chain(struct ai*g, word _, uintptr_t off) {
  if (!ai_ok(g = ai_push(g, 1, _))) return g;
  struct ai_str *n;
  // a one-operand `\` chain (`(\ x)`) is quote -> print as 'x; ≥2 operands is a lambda.
- if ((n = add_name(g, A(g->sp[0]))) && len(n) == 1 && txt(n)[0] == '\\'
+ if ((n = nom_str(g, A(g->sp[0]))) && len(n) == 1 && txt(n)[0] == '\\'
      && chainp(B(g->sp[0])) && !chainp(BB(g->sp[0]))) {
   g = ioputc(g, '\'');                          // GC here may relocate sp[0]; read AB after
   g = ioputx(g, AB(g->sp[0]), off); }
  // a `(mono (run datum))` chain is a GLUED MONADIC -> print the source `run`+`datum`
  // (the reverse of opfix's fusion: *5, +(-3), $$0). a reader-built mono always reparses:
  // the reader only fuses where it round-trips (* to a bare datum, +/- to ( ' " @ ~ # `).
- else if ((n = add_name(g, A(g->sp[0]))) && len(n) == 4 && !memcmp(txt(n), "mono", 4)
+ else if ((n = nom_str(g, A(g->sp[0]))) && len(n) == 4 && !memcmp(txt(n), "mono", 4)
           && chainp(B(g->sp[0])) && !chainp(BB(g->sp[0]))                                 // (mono X)
           && chainp(AB(g->sp[0])) && chainp(B(AB(g->sp[0]))) && !chainp(BB(AB(g->sp[0])))) {  // X = (run datum)
   g = ioputx(g, A(AB(g->sp[0])), off);          // run -- the operator symbol
@@ -3613,8 +3613,8 @@ static word fn_src(struct ai *c, union u *k, word x) {
 // the cells, so the rebuild allocates nothing and the parked source stays stable.
 struct lam_bv { word sym; uintptr_t lev; struct lam_bv *up; };  // a \-binder in scope
 static ai_inline bool lam_head(struct ai *g, word a) {        // is a the symbol \ ?
- struct ai_str *nm;                                          // a named sym (name . mint); add_name is 0 for a bare mint / the core
- return (nm = add_name(g, a)) && len(nm) == 1 && txt(nm)[0] == '\\'; }
+ struct ai_str *nm;                                          // a named sym (name . mint); nom_str is 0 for a bare mint / the core
+ return (nm = nom_str(g, a)) && len(nm) == 1 && txt(nm)[0] == '\\'; }
 static ai_inline bool lam_isp(struct ai *g, word x) {         // (\ b.. body): >=2 operands
  return chainp(x) && lam_head(g, A(x)) && chainp(B(x)) && chainp(BB(x)); }
 static ai_inline bool lam_quotep(struct ai *g, word x) {       // (\ datum): exactly 1 operand
@@ -3983,8 +3983,8 @@ lvm(lvm_string) {
   txt(s)[0] = (char) getcharm(x);
   ai_musttail return Answer(word(s)); }
  if (nomp(x)) {                                      // a named symbol (name . mint) -> its name string; a bare point -> identity
-  struct ai_str *nm = add_name(g, x);
-  if (nm) Sp[0] = word(nm);                          // the car is the name; a bare mint / the core is nameless
+  struct ai_str *nm = nom_str(g, x);
+  Sp[0] = nm ? word(nm) : word(EmptyString);
   ai_musttail return Next(1); }
  if (chainp(x)) {                                      // charlist -> string
   uintptr_t n = llen(x), req = str_type_width + b2w(n);
@@ -5268,7 +5268,7 @@ lvm(lvm_mint) {
 lvm(lvm_nomctor) {
  Have(Width(struct ai_nom));                    // >= Width(struct ai_mint), so the bare-mint fallback fits too
  word n = Sp[0];                                // re-read post-GC (the stack is rooted)
- struct ai_str *nm = strp(n) ? str(n) : add_name(g, n);   // a string is the name; a sym lends its spelling
+ struct ai_str *nm = strp(n) ? str(n) : nom_str(g, n);   // a string is the name; a sym lends its spelling
  if (!nm) ai_musttail return Ap(lvm_mint, g);               // no name -> a bare mint
  struct ai_nom *y = (struct ai_nom*) Hp; Hp += Width(struct ai_nom);
  ini_nom(y, word(nm), ++g->next_serial, nom_dig(word(nm)));
@@ -5321,6 +5321,10 @@ op11(lvm_nomp, (nomp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : zero)
 // (name? x): a NAMED point only (KNom) -- a nom with a spelling. name? => nom?; the gap
 // nom? \ name? is the anonymous-but-real mints (gensyms).
 op11(lvm_namep, namep(Sp[0]) ? putcharm(1) : zero)
+// (mint? x): that gap, asked directly -- a BARE point, the gensym `nom` hands back.
+// mint? and name? PARTITION nom?, and () is in neither. the only way to ask, since
+// `string` answers text for every point alike and a mint's spelling is "".
+op11(lvm_mintp, (mintp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : zero)
 op11(lvm_packp, (packp(Sp[0]) || gemp(Sp[0]) || sunp(Sp[0]) || twinp(Sp[0])) ? putcharm(1) : zero)  // the pack family: arrays + the lean gem/sun/twin scalar boxes
 op11(lvm_bigp, bigp(Sp[0]) ? putcharm(1) : zero)
 op11(lvm_sunp, sunp(Sp[0]) ? putcharm(1) : zero)
@@ -5355,7 +5359,7 @@ __attribute__((weak)) struct ai_lib const *ai_libs(void) { return NULL; }
 // reaches an image. A miss falls through to `use`'s filesystem walk (love/prel.l).
 lvm(lvm_lib) {
  struct ai_lib const *t = ai_libs();
- struct ai_str *nm = nomp(Sp[0]) ? add_name(g, Sp[0]) : NULL;
+ struct ai_str *nm = nomp(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
  if (t && nm) for (; t->nom; t++) {
   if (strlen(t->nom) != len(nm) || memcmp(t->nom, txt(nm), len(nm))) continue;
   Have(Width(struct ti) + Width(struct ai_tag));   // ⚠ nm dies here; the re-run re-finds the row
@@ -5495,7 +5499,7 @@ lvm(lvm_sub) {
  avm_unit(a, b);
  if (coinp(a) || coinp(b)) ai_musttail return Ap(lvm_sub_coin, g);
  ai_musttail return Ap(lvm_subn, g); }
-// lvm_mul + its kind matrix live after the `+` string lane (they reuse add_name /
+// lvm_mul + its kind matrix live after the `+` string lane (they reuse nom_str /
 // stringrank for the symbol-repetition case), below.
 
 // `+` on sequences is order-preserving concatenation, a scalar lifting into the
@@ -5546,7 +5550,7 @@ static lvm(lvm_add_seq) {
 // the string tower is STRING (0) < UNINTERNED-SYM (1) < NAMED-SYM|NUM (2); mixing
 // demotes to the lower rank (min keeps the partner's type). the concat is built
 // as one string in operand order, then returned per rank: as-is / fresh mint / interned.
-static ai_inline struct ai_str *add_name(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
+static ai_inline struct ai_str *nom_str(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
  return namep(x) ? str(nom(x)->name) : 0; }  // a named point (KNom) carries its name; a bare mint is nameless
 static ai_inline int stringrank(struct ai *g, word x) {    // STR 0 / mint 1 / NAMED-sym|NUM 2
  if (strp(x)) return 0;
@@ -5555,11 +5559,11 @@ static ai_inline int stringrank(struct ai *g, word x) {    // STR 0 / mint 1 / N
  return 2; }                      // a number contributes one byte (rank 2)
 static ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contributes to a concat
  if (strp(x)) return len(x);
- if (nomp(x)) { struct ai_str *n = add_name(g, x); return n ? n->len : 0; }
+ if (nomp(x)) { struct ai_str *n = nom_str(g, x); return n ? n->len : 0; }
  return 1; }                                            // number -> one byte
 static ai_inline char *add_emit(struct ai *g, char *w, word x) {  // append x's bytes; return advanced w
  if (strp(x)) return (void) memcpy(w, txt(x), len(x)), w + len(x);
- if (nomp(x)) { struct ai_str *n = add_name(g, x);
+ if (nomp(x)) { struct ai_str *n = nom_str(g, x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
  return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (gated >= 0 by the byte law)
 static lvm(lvm_add_string) {
@@ -5979,7 +5983,7 @@ static int arib_pos(word s, word l, int n) {                // index of s among 
  for (int i = 0; i < n && chainp(l); i++, l = B(l)) if (A(l) == s) return i;
  return -1; }
 static bool ai_isbs(struct ai *g, word h) {                  // h is the `\` symbol?
- struct ai_str *n; return (n = add_name(g, h)) && n->len == 1 && n->bytes[0] == '\\'; }
+ struct ai_str *n; return (n = nom_str(g, h)) && n->len == 1 && n->bytes[0] == '\\'; }
 static bool salpha(struct ai *g, word a, word b, struct arib *env) {
  if (nomp(a) || nomp(b)) {
   if (!nomp(a) || !nomp(b)) return false;
@@ -7461,7 +7465,7 @@ static intptr_t ai_count(struct ai *g, word l) {
  if (caskp(l)) return (intptr_t) len(cask_str(l));
  if (tabp(l)) return (intptr_t) map_len(l);
  if (trayp(l)) return (intptr_t) tray_nelem(tray(l));
- if (nomp(l)) { struct ai_str *nm = add_name(g, l); return nm ? (intptr_t) len(nm) : 0; }  // a sym counts its spelling; a bare mint / the core: 0
+ if (nomp(l)) { struct ai_str *nm = nom_str(g, l); return nm ? (intptr_t) len(nm) : 0; }  // a sym counts its spelling; a bare mint / the core: 0
  intptr_t n = 0;
  while (chainp(l)) n++, l = B(l);
  return n; }
