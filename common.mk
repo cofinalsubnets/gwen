@@ -7,6 +7,11 @@ R ?= .
 
 m = $R/out/host$(hsuf)/love
 a ?= $(shell uname -m)
+# ⚠ the HOST's arch, which $a is NOT: a cross lane overrides $a on the command
+# line (kernel.mk's `$(MAKE) a=aarch64 ..`), and anything under out/host that
+# reads $a then lays a cross artifact into the host tree. out/host is the host's
+# by definition -- read this there.
+hosta := $(shell uname -m)
 
 # clang is the default host/love0 compiler (every dev machine here has it; mac's
 # `cc` is clang anyway, and the kernel build already defaults KCC=clang). NB: a
@@ -71,4 +76,8 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
 # it as before); macOS does without (it has no CET to turn off).
 ifneq ($(shell uname -s),Darwin)
 ai_cflags += -fcf-protection=none
+# the data-sentinel tiling love.h's ai_typ reads (love.c's DSENT): every ld/lld
+# link takes this fragment. mach-o is the seat that goes without -- it names
+# sections `segment,section`, so love.h asks the sentinels by name there.
+data_ld = -Wl,-T,$R/love_data.ld
 endif

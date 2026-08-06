@@ -20,6 +20,8 @@ ai_noinline uintptr_t ai_clock(void) {
        : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
 
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
+// FIXME this seems useless on 32 bit. who uses it? maybe squash back to just
+// one ai_clock() and pick resolution at compile time based on INTPTR_MAX
 ai_noinline intptr_t ai_nclock(void) {
   struct timespec ts;
   return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
@@ -165,9 +167,10 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 struct ai_port_vt const ai_fd_port_vt =
  { fd_flush, fd_writen, fd_readn, NULL };
 
-struct ai_fio ai_stdin = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDIN_FILENO) };
-struct ai_fio ai_stdout = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDOUT_FILENO) };
-struct ai_fio ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDERR_FILENO) };
+struct ai_fio
+ ai_stdin = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDIN_FILENO) },
+ ai_stdout = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDOUT_FILENO) },
+ ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDERR_FILENO) };
 // Override the weak g.c default with the real POSIX close. Called by the
 // finalizer that ai_io_alloc registers, so it runs when a heap port becomes
 // unreachable. Static stdin/stdout don't go through this path -- they live

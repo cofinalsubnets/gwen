@@ -8,10 +8,10 @@ compiles it, holo lays the PE32+ the firmware runs, and the whole thing is under
     make uefi          # -> out/free/esp/{EFI/BOOT/BOOTX64.EFI, love.elf}
     make test_uefi     # the same door under qemu, corpus over serial
 
-`test_uefi` rides `make test_slow` at ~64s, the same as the `-kernel` door. It is
-the only gate that hands the kernel a framebuffer, so it is the only one that runs
-`fbdraw` (`port/inle/kmain.c`) at all -- which is worth knowing when this lane and
-`test_kernel` disagree about how long the same corpus takes.
+`test_uefi` rides `make test_extra`. It is the only gate that hands the kernel a
+framebuffer, so it is the only one that runs `fbdraw` (`port/inle/kmain.c`) at all
+-- which is worth knowing when this lane and `test_kernel` disagree about how long
+the same corpus takes.
 
 Copy `out/free/esp/` onto a FAT32 EFI system partition and the machine boots
 love. `EFI/BOOT/BOOTX64.EFI` is the removable-media path every UEFI firmware

@@ -137,7 +137,7 @@
          (lit? fr) ((\ x (+ (* x 1.5) 2.0)) = fr)                         ; applicable + =-IDENTICAL to source
          (= (map ifr '(1 2 3)) (map fr '(1 2 3)))                         ; composes with map, == interp
          (= (ifr (:)) (fr (:)))))                                         ; non-fixnum arg -> fxv deopt -> interp
-  (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'x64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (gem_put's law)
+  (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'x64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (mk_gem's law)
   ; GC-SAFETY: a native-written box is a normal ai_gem (kind=lvm_gembox, 2 words) -> the cheney copier
   ; traces/moves it like any gem. hold one across a big alloc (forces GC), and box thousands under
   ; pressure -- if the box were malformed or the bump corrupted Sp's region, these would diverge/crash.

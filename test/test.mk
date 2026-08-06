@@ -39,11 +39,11 @@ test_host: $m
 # test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
 # cue (doc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
-$(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc \
+$(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_data.ld \
     out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ test/front/main.c $(ho)/liblove.a
+	@$(hcc) -o $@ test/front/main.c $(ho)/liblove.a $(data_ld)
 test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@$(ho)/front test/front/io.l </dev/null > out/host/.test_front.out 2>&1; r=$$?; \

@@ -743,10 +743,10 @@
    ; twin of the overflow guard: a ROOM GUARD (Sp - Hp >= gem_req+floor words) DEOPTS to interp when
    ; the heap is too full to fit the box, exactly as `jo` deopts when a fixnum result leaves range.
    ; fast path (room proven): write [Hp]=lvm_gembox (apof's kind const, ASLR-captured at emit like the
-   ; string guard), the double at [Hp+8] with NaN->0 (gem_put's law), return Hp UNTAGGED (an even heap
+   ; string guard), the double at [Hp+8] with NaN->0 (mk_gem's law), return Hp UNTAGGED (an even heap
    ; ptr IS the gem), bump Hp by gem_req. the epilogue stores the POINTER (NO putfix) and threads the
    ; advanced Hp on through Continue, so the box is live to the next op and the GC at the next safepoint.
-   ; nanc: NaN -> 0.0 in f0 (gem_put's law). x86: ucomisd xmm0,xmm0 ; jnp +4 ; xorpd (the parity cc +
+   ; nanc: NaN -> 0.0 in f0 (mk_gem's law). x86: ucomisd xmm0,xmm0 ; jnp +4 ; xorpd (the parity cc +
    ; self-jump as a raw blob). arm64: fcmp d0,d0 ; b.vc ok ; (d0 <- 0) ; ok -- unordered sets V, so vc
    ; skips when not-NaN; zero via a gpr-0 moved into d0.
    (nanc tgt) (? (id? tgt 'x64) `(`('raw '(102 15 46 192  123 4  102 15 87 192)))

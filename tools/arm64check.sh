@@ -41,7 +41,10 @@ for f in love.c host/*.c crew/moon/lib/math/am.c; do
   o=$O/$(basename "$f" .c).o
   $GCC $CF -c "$f" -o "$o"
 done
-$GCC -static -o $O/love $O/*.o 2>/dev/null || $GCC -static -o $O/love $O/*.o
+# love_data.ld pins the data-sentinel tiling love.h's ai_typ reads; without it
+# ai_ini traps at boot (SIGTRAP), which is how this lane announced itself.
+LD_ARGS="-Wl,-T,love_data.ld"
+$GCC -static $LD_ARGS -o $O/love $O/*.o 2>/dev/null || $GCC -static $LD_ARGS -o $O/love $O/*.o
 
 # the corpus (or the files named on the command line), under qemu. Mirror common.mk's
 # $t EXACTLY: 00-init, spec, then uu.l HOISTED to 3rd (uu's test files uukind/uukindlaw

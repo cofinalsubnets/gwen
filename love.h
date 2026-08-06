@@ -31,6 +31,27 @@
 #else
 #define ai_noicf
 #endif
+// THE DATA SLOT LAYOUT: the sentinels tile one section at a fixed stride in enum d
+// order, so a value's rep is arithmetic on its ap (love.c's DSENT, love_data.ld,
+// ai_typ below). every elf seat lays that section; wasm has no sections to lay and
+// mach-o spells them `segment,section`, so those two ask the sentinels by name.
+#ifndef ai_data_section
+#if defined(__wasm__) || defined(__APPLE__)
+#define ai_data_section 0
+#else
+#define ai_data_section 1
+#endif
+#endif
+// bytes per slot -- the linker pins it, love.h reads it. sized off the FATTEST
+// body any backend emits, and the sentinels already SHARE their handlers (each is
+// one tail jump to a data_*_apply), so this measures call lowering, not code: x64
+// lays 8 bytes, thumb1 38, thumb2 60, riscv64 88, arm64 100. everything over x64's
+// 8 is mooncc staging the four VM registers through the stack to hand them to a
+// tail call that already has them in place. fix that and this drops to 16.
+// ⚠ a body past the stride pushes ld's location counter backwards and the link
+// says so; holo strides wider instead, which ai_data_tiled catches at boot.
+#define ai_data_stride 128
+#define ai_data_n 9         // slots; _Static_assert'd against enum d below
 #define ai_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 #define countof(_) (sizeof(_)/sizeof(*_))
 
@@ -468,23 +489,37 @@ lvm(lvm_gc, uintptr_t);
 enum q ai_kind(word);
 extern union u const numap_drive[];          // [ap; swap; ret0] driver that runs (num-ap n x); shared by fixnum + data num apply
 lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_sunbox, lvm_twinbox; // the data-kind sentinels (+ ap); defined in love.c, read by inline predicates and ai_typ
-// recover a data value's rep by comparing its ap against the sentinel addresses
-// (a tiny compare on the cold apply path)
+// recover a data value's rep from its ap. the sentinels tile one section at
+// ai_data_stride in enum d order, so the SLOT IS THE KIND: one subtract answers
+// both questions, and the compiler shares it between a datp and the typ after it.
+// the base is lvm_sym -- slot 0 IS the start, so no linker-synthesized bracket is
+// owed anywhere. DChain is enum d's last member, so DChain+1 is its count.
+_Static_assert(DChain + 1 == ai_data_n, "enum d and the love_data slots disagree");
+#if ai_data_section
+static ai_inline bool in_data(void *a) {
+ return (uintptr_t) ((char*) a - (char*) lvm_sym) < (uintptr_t) (ai_data_n * ai_data_stride); }
+static ai_inline enum d ai_typ(union u *o) {
+ return (enum d) ((uintptr_t) ((char*) o->ap - (char*) lvm_sym) / ai_data_stride); }
+#else
+// the seats with no section to lay ask by name instead. ⚠ the ORDER is the
+// measured frequency, not enum d's -- over a corpus run: chain 62%, nom 19%,
+// string 13%, mint 5%, big 1.6%, the other three under a tenth of a percent each.
 static ai_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
- return p == lvm_tray || p == lvm_big || p == lvm_str || p == lvm_sym || p == lvm_nom
-     || p == lvm_chain || p == lvm_gembox || p == lvm_sunbox || p == lvm_twinbox; }
+ return p == lvm_chain || p == lvm_nom || p == lvm_str || p == lvm_sym || p == lvm_big
+     || p == lvm_tray || p == lvm_sunbox || p == lvm_gembox || p == lvm_twinbox; }
 static ai_inline enum d ai_typ(union u *o) {
  lvm_t *p = o->ap;
- return p == lvm_tray   ? DTray
-      : p == lvm_big    ? DBig
+ return p == lvm_chain  ? DChain
+      : p == lvm_nom    ? DNom
       : p == lvm_str    ? DString
       : p == lvm_sym    ? DMint
-      : p == lvm_nom    ? DNom
-      : p == lvm_chain  ? DChain
-      : p == lvm_gembox    ? DGem
-      : p == lvm_sunbox   ? DSun
-      :                   DTwin; }   // the 8th and last: lvm_twinbox
+      : p == lvm_big    ? DBig
+      : p == lvm_tray   ? DTray
+      : p == lvm_sunbox ? DSun
+      : p == lvm_gembox ? DGem
+      :                   DTwin; }   // the 9th and last: lvm_twinbox
+#endif
 uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp

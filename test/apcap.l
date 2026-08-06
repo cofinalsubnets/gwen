@@ -11,7 +11,7 @@
 (: apcap-t0 (heard ()))
 (hear (\ s a b (? (&& (scare? s) (= a 'apcap)) `('capped b) (apcap-t0 s a b))))
 (assert
- ; a bignum compose count saturates to fix_max, far above the cap -> scares
+ ; a bignum compose count saturates to maxcharm, far above the cap -> scares
  (: r ((100 2) (+ 1)) (&& (= 'capped (cap r)) (< 1048576 (caup r))))
  ; 2 ** 2^100 would be the boom: ~2^100 result bits top the word budget
  (: r ((100 2) 2) (= 'capped (cap r)))

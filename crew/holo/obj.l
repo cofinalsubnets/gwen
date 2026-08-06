@@ -211,8 +211,13 @@
                              (o-has? seen lbl) acc
                              (: _ (pin seen lbl 1) (`(lbl <w <>w) >< acc))))))
            (rev (go allrel ())))
+       ; the BRANCH kinds ride here too: a branch used to resolve in place, since
+       ; both ends shared .text -- but a fn that named its own section (love.c's
+       ; data sentinels) branches ACROSS one, and REL's in-field addend has no room
+       ; for the offset any more than movw16's does. without this the fixup binds
+       ; symbol 0 and the link answers `link-undef ""`, its cause a section away.
        locfns (o-locs (\ si lbl (&& (sec-exec? si) (! (o-has? fnset lbl))))
-                      '(movw16 movt16 abs32))
+                      '(movw16 movt16 abs32 b bcc bl))
        locdat (o-locs (\ si lbl (&& (! (sec-exec? si)) (! (o-has? gset lbl))))
                       '(movw16 movt16))
        locs (locfns + locdat)
@@ -294,7 +299,14 @@
        nsym ((((1 + nsec) + nloc) + nfun) + (nglob + (tally exts)))
        ; -- the relocations, ONE emitter dispatching on the fixup's KIND (the
        ; text/data split the 64-bit twin dropped was never the real line here either). --
-       (fnsym lbl) (? (o-has? wkset lbl) (peep fnidx lbl 0) (peep extidx lbl 0))
+       ; a branch's target as a SYMBOL, never a section+offset: the thumb bit rides
+       ; the symbol's own value (lsyms bakes it), and REL has no addend column to
+       ; carry an offset in. the locidx rung is the cross-section case -- a static
+       ; fn a sectioned caller branches to has no other symbol to bind.
+       (fnsym lbl) (? (o-has? wkset lbl) (peep fnidx lbl 0)
+                      (o-has? locidx lbl) (peep locidx lbl 0)
+                      (o-has? fnidx lbl) (peep fnidx lbl 0)
+                      (peep extidx lbl 0))
        (o-rels32 rs)
         (catall (map (\ r
            (: off <r k <>r lbl <>>r aux <>>>r
@@ -400,6 +412,12 @@
    ; widest grain its own globals ask for. the descriptor a hand-written lay
    ; needs is its own business -- it says the flags outright.
    (objsec-named nm forms) `(nm 1 3 (o-dalign forms) forms)
+   ; ..and the CODE twin, for a function that named its own section (love.c's data
+   ; sentinels). flags 6 = ALLOC|EXECINSTR, which is also what picks objsecs'
+   ; internal-resolve lane; a jump out to .text becomes a relocation, as it must.
+   ; the GRAIN is the caller's: a run of one-fn sections at grain N tiles at N, which
+   ; is how love.h's ai_typ gets a stride out of a linker that was told no such thing.
+   (objsec-code nm forms al) `(nm 1 6 al forms)
    ; the arm32 twin of objsecs4: FOUR, because there is no .image lane at 32 bits
    ; (no bake), so a non-empty one is a caller's mistake and not a section. the grain
    ; is 4 throughout rather than objsecs4's 16/8 -- a thumb function is 2-byte

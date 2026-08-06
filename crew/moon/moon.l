@@ -151,7 +151,8 @@
     (: ps (cc-parse src is ds tgt nsi)
        ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
        _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
-       xs (map (\ x (objsec-named <x <>x) ) (el ob 8))
+       xs ((map (\ x (objsec-named <x <>x) ) (el ob 8))
+           + (map (\ x (objsec-code <x <>x <>>x)) (el ob 11)))   ; ..and the fns that named a section
        ; the two writers, one shape: the standard set for the width, plus whatever
        ; the TU named. ⚠ arm32 has no .image lane and no LOCAL FUNC symbols for
        ; statics -- objsecs3 refuses the first, and (el ob 7) simply doesn't ride.

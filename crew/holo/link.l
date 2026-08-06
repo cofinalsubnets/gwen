@@ -928,10 +928,19 @@
        ; the re-encoder is the arm32 FAMILY's (see ldarm), not this target's
        be (peep backends (? (arm32? target) 'thumb2 target) ())
        objs (map (\ p (ld-read <p <>p mach)) srcs)
-       maplanes (foldl (\ a r (a + >>r)) () runs)
+       ; a COMPILER-NAMED lane travels with the known lane its FLAGS name (ld-home),
+       ; so a board's map never has to have heard of it: expand each run's list in
+       ; place, every known lane followed by the named ones that ride with it. the
+       ; map stays the board's word about ORDER, this is the linker's about company
+       ; -- and everything downstream (the plan, the bytes, the section headers)
+       ; reads the expanded runs, so the three walks cannot disagree.
+       lruns (map (\ r (link <r (link (at r 1)
+                                      (foldl (\ a l (a + (link l (ld-nlanes objs l)))) () >>r))))
+                  runs)
+       maplanes (foldl (\ a r (a + >>r)) () lruns)
        _ (foldl (\ _ l (? (member? l maplanes) 0 (scare 'link-unmapped-lane l)))
                 0 (ld-uselanes objs))
-       org (at <runs 1)
+       org (at <lruns 1)
        foff (4096 + (org % 4096))               ; ..the header's page, and the congruence
        ; -- the LAYOUT pass, run by run and lane by lane in the map's own order.
        ; lpos records each lane's (vaddr fileoff size) as it goes -- the section
@@ -958,7 +967,7 @@
                                `(start fo) ls)
                       (go >rs (? copy? cur <w) <>w (|| copied copy?)
                           (`(kind start fo (<>w - fo) (<w - start) ls) >< acc))))
-               (go runs org foff () ()))
+               (go lruns org foff () ()))
        ; -- the SEGMENTS: the `at` runs fuse into one (the file tracks the
        ; addresses, gaps and all), each `copy` run stands alone with p_paddr where
        ; its bytes actually sit. a row is (vaddr paddr fileoff filesz memsz flags).

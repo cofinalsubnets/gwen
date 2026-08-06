@@ -151,10 +151,10 @@ $(ho)/liblove.a: $(h_o)
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
-$(ho)/liblove.so: $(ho)/liblove.a
+$(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -shared -o $@ $(so_archive) $(so_undef)
+	@$(hcc) -shared -o $@ $(so_archive) $(so_undef) $(data_ld)
 
 # Bootstrap interpreter, compiled against the fallback top-level data.h (no
 # -I$(ho)) + -DGL_BOOTSTRAP -Dai_tco=0 (also exercises the non-threaded trampoline
@@ -189,10 +189,10 @@ out/host/0/%.o: $(R)/%.c $(love_h)
 # codec refuses a binary whose text sits in its index range (love.c's
 # img_encode_ "binary ptr below TBOUND") -- a PIE loads high and clears it.
 # gcc/clang default to PIE anyway; mooncc (the download door's CC) does not.
-$(love0): $(love0_o)
+$(love0): $(love0_o) $(R)/love_data.ld
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
+	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o) $(data_ld)
 
 # love.c -> out/host/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
@@ -256,8 +256,10 @@ $(moon_d)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 # have no C spelling (crew/moon/lib/mksys.l). love0 runs the lay -- the holo
 # module is registered in its boot with EVERY backend baked, so the cross
 # entries resolve natively. the entry is per-arch (mksys lays x64), picked by
-# $a (common.mk, uname -m): the moon lane is native on any elf host now.
-ifeq ($a,aarch64)
+# $(hosta) -- the HOST's arch, never $a: a cross lane overrides $a and this object
+# is out/host's, so it is the host's or it is wrong (an aarch64 sys.o laid here
+# fails the link with `link-machine`, one remove from its cause).
+ifeq ($(hosta),aarch64)
 mksys_e = mksys-arm64
 else
 mksys_e = mksys
@@ -272,10 +274,10 @@ $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@mkdir -p $(dir $@)
 	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
 ifneq ($(STATIC),)
-$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h $(holo_h) $(glaze_h)
+$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_data.ld out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h $(holo_h) $(glaze_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags) $(image_ldflags)
+	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags) $(image_ldflags) $(data_ld)
 else
 $(ho)/love $(ho)/love.cand: $(moon_o)
 	@echo MOON	$@

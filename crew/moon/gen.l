@@ -6110,6 +6110,7 @@
             _ (pin t 'alias (? (&& (two? xtra) (3 < (tally xtra))) (nthr xtra 3) (tablet 0)))
             _ (pin t 'aligns (? (&& (two? xtra) (4 < (tally xtra))) (nthr xtra 4) (tablet 0)))
             _ (pin t 'consts (? (&& (two? xtra) (7 < (tally xtra))) (nthr xtra 7) (tablet 0)))
+            _ (pin t 'xfns ())                             ; (secname forms) per fn that named a section, newest first
             _ (pin t 'romemo (tablet 0)) t)                ; a const candidate's image, laid once and read by both walks
        ; pass 0: every function name -- so a bare use of one is its address (la). the sig table
        ; too: an mproto sibling (`double sin(..), cos(..);`) has a sig but no proto form of its
@@ -6187,8 +6188,20 @@
                                               (go >l (? ((peep (g 'alias) <l ()) = <>f)
                                                         (link `('label (intern <l)) a2) a2)))
                                 (go (keys (g 'alias)) ()))
-                          (gfns >fs (revcat (link `('align 2) (als + r)) acc)
-                                (|| saw (<>f = "main")))))))))
+                          ; an aligned(N) fn lands ON its boundary, the global lane's
+                          ; rule; 2 is the floor the parity law above sets.
+                          an (: a (peep (g 'aligns) <>f 2) (? (a < 2) 2 a))
+                          fm (link `('align an) (als + r))
+                          ; a fn that named its own section leaves .text for that
+                          ; stream (love.c's data sentinels): where the code lands
+                          ; is the point, the same reason a global gets the lane.
+                          ; the align rides out too -- it is the section's grain, and
+                          ; a run of one-fn sections at grain N tiles at exactly N.
+                          sc (peep (g 'sects) <>f ())
+                          sw (|| saw (<>f = "main"))
+                          (? sc (: _ (pin g 'xfns (link `(sc fm an) (g 'xfns)))
+                                   (gfns >fs acc sw))
+                             (gfns >fs (revcat fm acc) sw))))))))
        (? ok (gfns <>ast () ()) ()))
    (cgen ast stbl sigs weaks xtra tgt)              ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
     (: crt0 (? (id? tgt 'arm64)
@@ -6210,7 +6223,7 @@
    ; the global-variable names, and the ai_nifs stream -- the .o emitter turns the rest into a
    ; symbol table + relocations. the DEFINED static functions ride the tail as lnames, laid as
    ; LOCAL FUNC symbols so nm/gdb/vmret see real function boundaries.
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           (! (two? r)) ()
@@ -6252,4 +6265,18 @@
                                                          (link <>f acc) acc))))
                        (go <>ast ()))
              dat <>>r
-             `(1 <>r <dat fnames gnames <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat)))))
+             ; the sectioned FUNCTIONS as (name forms align), folded to one stream
+             ; per name in declaration order -- moon.l gives each an executable
+             ; descriptor. a name's grain is the widest its members ask for.
+             xfns (: (noms l acc) (? (! (two? l)) (rev acc)
+                                     (noms >l (? (member? <<l acc) acc (link <<l acc))))
+                     (forsec nm l) (: (go l2 a2) (? (! (two? l2)) a2
+                                                    (go >l2 (? ((<<l2) = nm) (a2 + <><l2) a2)))
+                                      (go l ()))
+                     (grain nm l) (: (go l2 a2) (? (! (two? l2)) a2
+                                                   (go >l2 (? (&& ((<<l2) = nm) (a2 < <>><l2))
+                                                              <>><l2 a2)))
+                                     (go l 16))
+                     (: src (rev (<r 'xfns))
+                        (map (\ nm `(nm (forsec nm src) (grain nm src))) (noms src ()))))
+             `(1 <>r <dat fnames gnames <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat xfns)))))
