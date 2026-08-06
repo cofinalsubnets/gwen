@@ -617,6 +617,13 @@ test_as: host
 	  cat out/host/.test_as.out; \
 	  { [ $$r -eq 0 ] && grep -q ", 0 failed" out/host/.test_as.out; } \
 	    || { echo "FAIL as (exit $$r)"; exit 1; }
+# test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
+# lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
+# holotest.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
+# and NOTHING else -- no as, no ld, no arm-none-eabi -- so it runs where the thumb gates skip.
+.PHONY: test_elf32
+test_elf32: host
+	@sh test/gate/elf32.sh $(ho)
 # ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The ONLY net gate driving the real
 # `love tools/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.

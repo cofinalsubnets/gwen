@@ -306,6 +306,23 @@
    _ (chk-eq "elf.size"    (120 + ((tally (holo-bytes 'x64 elfprog)) + 3)) (tally elfimg))
    _ (chk-eq "elf.arm64-machine" 183 (at (peep (elf64 'arm64 (\ a elfprog) ()) 'bytes 0) 18))
 
+   ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
+   ;; would have gotten wrong are pinned here -- p_flags sits SEVENTH in an Elf32_Phdr (at 76,
+   ;; where 56 holds p_offset and an Elf64_Phdr would hold the flags), and e_entry carries the
+   ;; THUMB BIT. test_elf32 puts the same image in front of a real loader.
+   t32prog '((li r0 42) (li r7 1) (sys))
+   e32     (elf32 'thumb2 (\ a t32prog) ())
+   e32img  (peep e32 'bytes 0)
+   _ (chk-eq "elf32.class"      1  (at e32img 4))          ; ELFCLASS32
+   _ (chk-eq "elf32.machine"    40 (at e32img 18))         ; EM_ARM
+   _ (chk-eq "elf32.thumb-bit"  1  ((at e32img 24) & 1))   ; e_entry bit 0: enter in Thumb state
+   _ (chk-eq "elf32.eabi5"      5  (at e32img 39))         ; e_flags top byte: EABI version 5
+   _ (chk-eq "elf32.ehsize"     52 (at e32img 40))
+   _ (chk-eq "elf32.phentsize"  32 (at e32img 42))
+   _ (chk-eq "elf32.p-offset"   0  (at e32img 56))         ; the 64-bit order would put p_flags here
+   _ (chk-eq "elf32.p-flags"    7  (at e32img 76))         ; ..and it sits here instead
+   _ (chk-eq "elf32.size" (84 + (tally (holo-bytes 'thumb2 t32prog))) (tally e32img))
+
    ;; -- the aarch64 backend (crew/holo/arm64.l): the SAME neutral IR, a second target. fixed 32-bit
    ;; little-endian words; every golden checked vs llvm-mc / llvm-objdump. --
    a64tests `(

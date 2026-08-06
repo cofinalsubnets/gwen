@@ -68,6 +68,57 @@
          res)
    (elf64 target mkprog data) (elf64-at elf-base target mkprog data)
 
+   elf-hdr32 84                                                ; 52-byte ELF32 header + 32-byte phdr
+
+   ;; -- the ELF32 twins. ⚠ NOT one shape at two widths, which is why they are their own
+   ;; doors: an Elf32_Phdr keeps p_flags SEVENTH where an Elf64_Phdr keeps it SECOND (64
+   ;; bits moved it up to close an alignment hole), so no width knob reaches it. the file
+   ;; header and the section header do hold their order, but nothing yet asks either for a
+   ;; class-generic door -- when the 32-bit link does, link.l's field table is where it
+   ;; comes from. obj.l's objsecs/objsecs32 is the same split for the same reason.
+
+   ;; one 32-byte program header.
+   (elf32-phdr ty fl off va pa fsz msz al)
+    (catall `((le32 ty) (le32 off) (le32 va) (le32 pa)
+              (le32 fsz) (le32 msz) (le32 fl) (le32 al)))
+
+   ;; the 52-byte ELF32 header + N program headers (each already 32 bytes of elf32-phdr).
+   ;; ⚠ e_entry carries the THUMB BIT on EM_ARM -- bit 0 is how a loader knows to enter in
+   ;; Thumb state, and an M-profile part has no other state to enter. every EM_ARM backend
+   ;; here is a Thumb one, so the machine number is the whole test. e_flags says EABI
+   ;; version 5, the tag an arm reader checks first (obj.l stamps the same on its .o).
+   (elf32-hdrn etype entry machine sh phs)
+    (: shoff (? (two? sh) <sh 0) shnum (? (two? sh) <>sh 0) shstrx (? (two? sh) <>>sh 0)
+       arm? (machine = 40)
+      (catall `(
+         `(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 32-bit LSB SysV
+         (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
+         (le32 (? arm? (entry | 1) entry)) (le32 52) (le32 shoff)   ; e_entry, e_phoff=52, e_shoff
+         (le32 (? arm? 83886080 0)) (le16 52) (le16 32)        ; e_flags=EABI_VER5, e_ehsize=52, e_phentsize=32
+         (le16 (tally phs)) (le16 (? (two? sh) 40 0)) (le16 shnum) (le16 shstrx)
+         (catall phs))))
+
+   ;; the 84-byte header for a single R+X+W load segment at `base` covering the whole file.
+   (elf32-hdr etype base entry filesz memsz machine sh)
+    (elf32-hdrn etype entry machine sh
+                `((elf32-phdr 1 7 0 base base filesz memsz 4096)))
+
+   ;; elf64-at's twin at 32 bits. `entry` answers the code ADDRESS, even -- the thumb bit
+   ;; is the header's business, not an address you can compare or disassemble at.
+   (elf32-at base target mkprog data)
+      (: machine (peep elf-machines target 0)
+         _ (? (machine = 0) (scare 'no-elf-machine target) 0)
+         org (base + elf-hdr32)
+         probe-len (tally (holo-bytes-at target (mkprog (base + 65536)) org))
+         dataddr (base + elf-hdr32 + probe-len)
+         code (holo-bytes-at target (mkprog dataddr) org)
+         filesz (elf-hdr32 + (tally code) + (tally data))
+         img (catall `((elf32-hdr 2 base org filesz filesz machine ()) code data))
+         res (tablet 0)
+         _ (pin res 'bytes img) _ (pin res 'entry org) _ (pin res 'dataddr dataddr)
+         res)
+   (elf32 target mkprog data) (elf32-at elf-base target mkprog data)
+
    ;; write a byte list to a file. the blob rides a CASK, not a string: a cask is the
    ;; byte array and says raw, where a string is text that merely happens to be bytes
    ;; today (doc/proto/widen.md -- every ELF used to go out through one).
