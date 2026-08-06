@@ -533,9 +533,7 @@
 
    `(shell welp edraw wrap bao edln edlnc))
 
- ; defglob the public surface out of the export list: book is mopped post-egg, so a
- ; top-level body-less (: ..) is the only way to add a global. the holder is `_` (the
- ; previous line's value, by the sequence law), so it never leaks either.
+;;; FIXME no other file in the codebase that exports names this way
  shell <_
  welp  <>_
  edraw <>>_
