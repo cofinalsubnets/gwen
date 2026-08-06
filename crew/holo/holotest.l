@@ -538,6 +538,11 @@
       `("t2.movt"    "45f27861c1f23421"  '((li r1 305419896)))         ; 0x12345678: movw + movt
       `("t2.li.neg"  "4ff6ff72cff6ff72"  '((li r2 -1)))                ; movw #0xffff ; movt #0xffff
       `("t2.mov"     "4fea0300"          '((mov r0 r3)))               ; mov.w r0, r3
+      ;; ..but MOV.W is ORR with Rn=15 and cannot name sp or pc, so those take the 16-bit
+      ;; hi-register T1 instead. UNPREDICTABLE is not a fault: the core may well do what you
+      ;; meant, which is how a wrong encoding here rides a green board for months.
+      `("t2.movfromsp" "6846"            '((mov r0 sp)))               ; mov r0, sp
+      `("t2.movtosp"   "8d46"            '((mov sp r1)))               ; mov sp, r1
       `("t2.add"     "01eb0200"          '((add r0 r1 r2)))            ; add.w r0, r1, r2
       `("t2.sub"     "a5eb0604"          '((sub r4 r5 r6)))            ; sub.w r4, r5, r6
       `("t2.and"     "01ea0200"          '((and r0 r1 r2)))            ; and.w r0, r1, r2
@@ -643,6 +648,10 @@
       `("t2.isb"     "bff36f8f"          '((isb)))                     ; isb sy
       `("t2.brk"     "abbe"              '((brk 171)))                 ; bkpt 0xab -- the semihosting call
       `("t2.trap"    "00be"              '((trap)))                    ; ..the same instruction at 0
+      `("t2.wfi"     "30bf"              '((wfi)))                     ; wfi
+      ;; MRS: the two stack pointers, which a fault handler asks after to find the frame.
+      `("t2.mrsmsp"  "eff30880"          '((mrs r0 msp)))              ; mrs r0, msp
+      `("t2.mrspsp"  "eff30983"          '((mrs r3 psp)))              ; mrs r3, psp
       ;; the 64-bit unsigned divide/remainder expansions: dividend r2:r3 / divisor r0:r1 ->
       ;; r0:r1. 64-step restoring loop, fixed narrow branches (bhs +8 / blo +10 / bne -52),
       ;; r4-r7 saved. disassembly-verified whole (llvm-mc); the qemu gate proves the values.
