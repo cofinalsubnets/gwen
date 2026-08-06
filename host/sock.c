@@ -330,13 +330,14 @@ ai_noinline static struct dgram call_udprecv(int fd, char *buf, size_t cap) {
 static lvm(lvm_udprecv) {
  int fd = (int) port_fd(Sp[0]);
  if (fd < 0) goto fail;
- static char buf[DG_MAX];
+ // ⚠ a stack buffer is safe in an lvm_ only while its address never reaches the TAIL:
+ // every exit here unwinds the frame before it jumps. ai_musttail is owed rather than
+ // opportunistic, so a shape that could not tail-jump refuses at compile.
+ char buf[DG_MAX];
  struct dgram d = call_udprecv(fd, buf, sizeof buf);
  // no datagram yet -> PARK on the socket, exactly as accept does. Nothing has been
- // taken off the wire, so the op re-runs whole. ⚠ the fd is RE-READ off Sp[0] rather
- // than carried in `fd`: a local live across call_udprecv is scratch in an lvm_
- // frame, and make vmret catches it as a ret (it did, on the first build of this).
- if (d.n == -2) { g->next_wait_fd = port_fd(Sp[0]); ai_musttail return Ap(lvm_yield_sw, g); }
+ // taken off the wire, so the op re-runs whole.
+ if (d.n == -2) { g->next_wait_fd = fd; ai_musttail return Ap(lvm_yield_sw, g); }
  ssize_t n = d.n;
  if (n < 0) goto fail;
  uintptr_t peerfix = d.peerfix;
