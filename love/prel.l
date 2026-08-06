@@ -236,12 +236,20 @@
  ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
  ; does. hot? goes first so the peek only ever lands on a heap cell.
  (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
- ; drain a vessel to a value: a jug reads its backing buffer, a tap drains via see.
- ; the drain accumulates, it does not recurse -- a recursion's stack depth is the byte count, and
+ ; drain a vessel to a value: a jug reads its backing buffer, everything else A GULP AT A TIME.
+ ; the drain accumulates, it does not recurse -- a recursion's stack depth is the gulp count, and
  ; on a parking port every task switch copies that stack.
- (slurp o) (? (? (port? o) (id? to-vt (peek 1 o))) (snip (peek 3 o) 0 (peek 4 o))   ; a jug BY ITS VT: a buffered fd port's word 3 is a string too
-              (: (rl i acc) (: c (see i) (? (= c -1) acc (rl i (link c acc))))
-                 (string (rev (rl o ())))))
+ ; ⚠ the see/unsee pair is what makes the loop terminate: `see` is what touches the device (chug
+ ; never does), and the byte it hands back is one chug is guaranteed to count -- so a gulp is
+ ; never empty and the walk always advances.
+ ; ⚠ and an empty drain NAMES the literal: snip mints a fresh string every call, so without this
+ ; two empty drains would be = but not id?, and every vessel now empties to the ONE empty string.
+ (slurp o) (? (? (port? o) (id? to-vt (peek 1 o)))
+               (: n (peek 4 o) (? (= n 0) "" (snip (peek 3 o) 0 n)))   ; a jug BY ITS VT: a buffered fd port's word 3 is a string too
+              (: j (jug 0)
+                 (go u) (: c (see o) (? (= c -1) (slurp j)
+                                        (: _ (unsee o c) _ (say j (chug o)) (go ()))))
+                 (go ())))
  ; the promise, through a tablet -- the mutation door this tree sanctions. the answer is wrapped
  ; (1 v) and read with two?: a promise of nothing is ordinary (eof gives ()), and a bare pin would
  ; leave the slot reading like an unforced one, so f would re-run forever.
