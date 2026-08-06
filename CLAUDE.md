@@ -62,13 +62,19 @@
 ;   biting loops and named-lets. fire every thunk with an operand, and let it be the unit:
 ;   `(go ())` -- () not 0. a 0 in a do-nothing slot is a 0-fossil (sibling to the nil-tail
 ;   fossil): the ignored slot is the unit, not a number.
-; * ⚠ never put scratch in an lvm_ -- no stack buffer, no address-taken local. the VM is
-;   tail-threaded; a frame forces the tail Continue() into a `ret` and the stack grows every step,
-;   so the fault is a stack overflow deep in some unrelated test, never a wrong answer. put the
-;   body in an `ai_noinline static` helper taking `g` (rng_canon and host_cwd are the models;
-;   Have first, the helper only bumps g->hp). `make vmret` catches this: the default love is
-;   mooncc-built (test_fixpoint rebuilds it to the byte; test_raw the from-scratch cross-check),
-;   so the fast gate disassembles mooncc's own emission.
+; * ⚠ scratch in an lvm_ may not be LIVE AT THE TAIL. the VM is tail-threaded; anything the
+;   frame still owes at the jump turns the tail Continue() into a `ret` and the stack grows
+;   every step, so the fault is a stack overflow deep in some unrelated test, never a wrong
+;   answer. a local read for the last time BEFORE the jump is fine and costs nothing --
+;   lvm_udprecv's datagram buffer and lvm_accept's fd are the models; the frame is torn down
+;   and then jumped from (`add $N,%rsp; jmp`). what is barred is a local whose ADDRESS outlives
+;   the body -- handed to the callee, or read after. when the body genuinely needs to survive
+;   the jump, put it in an `ai_noinline static` helper taking `g` (rng_canon and host_cwd are
+;   the models; Have first, the helper only bumps g->hp). two instruments, not one: `ai_musttail`
+;   is owed rather than opportunistic, so a shape that cannot jump REFUSES at compile; `make
+;   vmret` then disassembles what was emitted. the default love is mooncc-built (test_fixpoint
+;   rebuilds it to the byte; test_raw the from-scratch cross-check), so the fast gate reads
+;   mooncc's own emission. ⚠ vmret reads the x86-64 host binary only -- a cross lane is on you.
 ; * ⚠ love has no global state -- a mutable global in C is a bug, never a shortcut, and adding one
 ;   is FORBIDDEN. state rides `g` (a field) or a parameter, a buffer rides `g->hp` or the caller,
 ;   a table that never changes is `const`. a global sits outside the heap: the collector cannot
