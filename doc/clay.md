@@ -23,12 +23,13 @@ count is near its floor; its TRUSTED surface is not, and that is where clay pays
 -> JS backend is a second consumer of the same datum rather than a second implementation,
 and `cc-clay` gives a native leg with no C text at all.
 
-**rungs 0 through 2d have landed** (`crew/moon/clay.l`, `make test_clay`, `tools/mx.l` +
-`mx.h` + `kinds.h`); the rest is unbuilt.
+**rungs 0 through 3 have landed** (`crew/moon/clay.l`, `make test_clay`, `tools/mx.l` +
+`mx.h` + `kinds.h`, and the order of work's rung 1 -- the five node shapes); the rest is
+unbuilt.
 
 ## the state, measured
 
-on the current tree -- `love.c` 8232 lines, `love.h` 505, `crew/moon/clay.l` 479.
+on the current tree -- `love.c` 8232 lines, `love.h` 505, `crew/moon/clay.l` 505.
 
 `make test_clay` reads **63 round-trip, 51 inexpressible, 0 unparsed, 114 files**.
 
@@ -102,26 +103,11 @@ suit the shower. GENERATE them.
 
 ## what clay cannot say yet
 
-everything, counted:
-
-| shape | sites | route |
-|---|---:|---|
-| `ai_musttail return X;` | 311 | a prefix slot on `ret`, or an attribute |
-| `ai_noinline` / `ai_noicf` / `ai_inline` | 234 | an attribute slot on `fn` |
-| `lvm(...)` definitions | 184 | attributes + `restrict`, then emit the expansion -- or a declarator-macro node |
-| `__attribute__((section/used/weak))` | 9 | the same attribute slot |
-| `unsigned __int128` | 7 | likely already sayable via `(named "unsigned __int128")` |
-| `restrict` | 5 | a qualifier beside the existing `(const t)` |
-| flexible array member (`char bytes[]`) | 5 | `(arr t ())`, or a node |
-| `_Static_assert` | 4 | one top-level node |
-| `__asm__` | 1 | **already sayable** -- clay has `(asm 4 4)`, matching `parse.l:1171`'s 4-slot form |
-
-**five node shapes cover ~750 sites.** a strikingly concentrated gap for 8,232 lines.
-
-⚠ attributes must be emit-only BY NECESSITY, not merely by choice: `parse.l:116-121`
-balance-SKIPS a trailing `__attribute__((..))` / `__asm__(..)` run rather than
-representing it ("the codegen owes nothing"). so an attribute clay prints cannot come back
-through a parse, exactly like `note`/`edef`/`sdef`.
+the five node shapes landed (rung 3 below), so the counted table this section carried is
+gone -- every row is sayable, `__asm__` and `unsigned __int128` were already, and the
+`lvm(...)` definitions took the emit-the-expansion route. what remains unsaid is the
+preprocessor (§below), and one alternative deliberately not built: a declarator-MACRO node
+that would print `lvm(lvm_add)` itself rather than its expansion. rung 9 may still want it.
 
 ## the preprocessor -- the one real design decision
 
@@ -161,8 +147,8 @@ incremental, each rung shippable, `love.c` staying hand-written until its region
 
 1. **the five node shapes** -- attributes, `restrict`, the `ret` prefix, `_Static_assert`,
    flexible array members. lawed in `test/host/clay.l`. no `love.c` change; G1 must hold at
-   63/51.
-2. **settle the preprocessor** -- (a) or (b) above, and add `cpp-if` / `cpp-def` if (a).
+   63/51. **landed** -- rung 3 in §what has landed.
+2. **add preprocessor nodes** -- `cpp-if` / `cpp-def`.
 3. **the X-macro registry** -- `nifs` / `insts` (`love.c:617-692`), route (b): the first
    region where a macro is deleted and the love loop is the better abstraction.
 4. **the alpha-equivalence cluster** -- `3574-3609` (partial-application introspection:
@@ -347,6 +333,17 @@ tells about moon. state it this way or not at all.
    ⚠ a named tag does not weaken G1: a file that DEFINES the struct it names still carries
    the `(tdef)` that refuses, so a tag clay prints without defining is one the source never
    defined either. laws in `test/host/clay.l`.
+3. **the five node shapes, ~750 sites.** attribute SPELLINGS on `fn`'s appended 5th slot
+   (`("ai_noinline" "ai_noicf")` -- love.h's macros used call-shaped, never expanded);
+   `(restrict t)` beside `(const t)`, pointers only, anything else refuses; a prefix slot
+   on `ret` (`(ret e "ai_musttail")` -- the 311-site tail-call discipline, generated, never
+   thinned); `(sassert e "msg")` for `_Static_assert`. the fifth shape cost nothing:
+   `(arr t 0)` already printed the flexible member's `[]`, and `unsigned __int128` was
+   `(named ..)` all along -- both now lawed. together they say a whole `lvm(..)` definition,
+   which `test/host/clay.l` proves against `lvm_add`'s exact expansion. all emit-only BY
+   NECESSITY: `parse.l:116-121` balance-skips a trailing attribute run ("the codegen owes
+   nothing"), so none can come back through a parse, exactly like `note`/`edef`/`sdef` --
+   and G1 held at 63/51/0, the check that they really are emit-only.
 
 ## open
 

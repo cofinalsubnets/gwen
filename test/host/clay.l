@@ -113,15 +113,58 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     ; C has no empty struct, the same way it has no empty enum
     (gripe? (one '(sdef "E" ())))))
 
+; --- the five shapes of doc/clay.md's rung 1, ~750 sites in love.c --------------
+; attributes ride fn's 5th slot as SPELLINGS -- love.h's macros used call-shaped,
+; so clay says "ai_noinline" and never what it expands to. emit-only by necessity:
+; parse.l balance-skips a trailing attribute run, so none can come back through G1.
+(assert
+ ((one '(fn "ai_sleep" (("ticks" (named "uintptr_t"))) (blk ((ret ()))) void
+            ("__attribute__((weak))" "ai_noinline")))
+  = ("__attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {" + nl
+     + " return;" + nl + "}" + nl))
+ ; restrict binds to the declarator, the shape every lvm_ parameter wears
+ ((one '(gdecl (("g" (restrict (ptr (struct "ai"))) ())))) = ("struct ai *restrict g;" + nl))
+ ; ...and qualifies a pointer or nothing -- dropping it in silence would pretend
+ (gripe? (one '(gdecl (("x" (restrict int) ())))))
+ ; the ret prefix is love.h's tail-call discipline, the one vmret disassembles for
+ ((one '(fn "f" () (blk ((ret (call (var "Continue") ()) ai_musttail)))))
+  = ("int f(void) {" + nl + " ai_musttail return Continue();" + nl + "}" + nl))
+ ; _Static_assert, which cparse reduces to the bare (tdef) marker
+ ((one '(sassert (bin eq (bin shr (un neg (num 1)) (num 1)) (un neg (num 1))) "sign extended shift"))
+  = ("_Static_assert(-1 >> 1 == -1, \"sign extended shift\");" + nl))
+ ; the flexible member composes: (arr t 0) is the unsized bound inside an sdef too
+ ((one '(sdef "blob" (("n" (named "uintptr_t")) ("bytes" (arr char 0)))))
+  = ("struct blob {" + nl + " uintptr_t n;" + nl + " char bytes[];" + nl + "};" + nl))
+ ; the wide scalar needs no node at all -- (named ..) already says it
+ ((one '(gdecl (("w" (named "unsigned __int128") ())))) = ("unsigned __int128 w;" + nl)))
+
+; --- and the composition the five buy: an lvm_ definition, whole ----------------
+; `lvm(lvm_add)`'s expansion at love.c's 184 definition sites -- attributes, the
+; restrict-qualified params, the return type, the musttail return.
+(: cl-lvm '(fn "lvm_add"
+            (("g" (restrict (ptr (struct "ai")))) ("Ip" (ptr (named "union u")))
+             ("Hp" (ptr (named "ai_word"))) ("Sp" (restrict (ptr (named "ai_word")))))
+            (blk ((ret (call (var "Continue") ()) "ai_musttail")))
+            (ptr (struct "ai"))
+            ("ai_noinline" "ai_noicf"))
+   (assert
+    ((one cl-lvm)
+     = ("ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp) {"
+        + nl + " ai_musttail return Continue();" + nl + "}" + nl))))
+
 ; --- clay-ok? is a SHAPE check, because gen.l trusts its input ------------------
 (assert
  (1 = (cok '(bin + (num 1) (num 2))))
  (gripe? (cok '(bin + (num 1))))                  ; bin takes three
  (gripe? (cok '(nosuchtag 1)))
- (gripe? (cok '(blk ((ret (num 1) (num 2))))))    ; ret takes one
+ (gripe? (cok '(blk ((ret (num 1) x y)))))        ; ret takes at most two: value + prefix
  ; the check reaches INSIDE a declarator list, which is where a generator's
  ; mistakes actually land
- (gripe? (cok '(gdecl (("x" int (bin + (num 1))))))))
+ (gripe? (cok '(gdecl (("x" int (bin + (num 1)))))))
+ ; the ATTRS slot holds spellings, not nodes, so the walk must not read them as tags
+ (1 = (cok '(fn "f" () (blk ((ret (num 1) ai_musttail))) void (ai_noinline ai_noicf))))
+ (1 = (cok '(sassert (bin eq (num 1) (num 1)) "m")))
+ (gripe? (cok '(sassert (num 1)))))                ; wants the message
 
 ; --- precedence: the shower is not fully parenthesized, so the table has to be
 ; right. these are the pairs that go wrong when it is not.

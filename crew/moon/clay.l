@@ -26,8 +26,12 @@
 ; and the extra slots are always APPENDED -- the lexer's glued-paren flag set that
 ; precedent, and it is what keeps clay acceptable to (cgen-obj ..) unchanged:
 ;
-;   (fn name params body RET)          the return type, absent = int
+;   (fn name params body RET ATTRS)    the return type, absent = int; then attribute
+;                                      SPELLINGS ("ai_noinline"), love.h's macros call-shaped
+;   (ret e PRE)                        a prefix spelling: `ai_musttail return ..`
 ;   (gdecl decls STOR)                 (static) / (extern) / (), absent = ()
+;   (restrict t)                       the qualifier beside (const t) -- pointers only
+;   (sassert e "msg")                  a _Static_assert, which cparse reduces to (tdef)
 ;   (tdef NAME TY)                     a real typedef, which cparse can never emit
 ;   (sdef TAG FIELDS)                  a struct/union DEFINITION, which it can never emit
 ;   (named "lvm_t")   (const t)        type forms with no cparse counterpart
@@ -86,9 +90,11 @@
     ; (tdef) the member list is already the one it hands back. the 3rd slot is
     ; 'union: a union DEFINES with its own keyword but REFERS as ('struct tag),
     ; since moon's tag namespace holds both (parse.l:10) -- not clay's choice.
-    '((prog 1 1) (fn 1 4) (proto 1 1) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
-      (edef 2 2) (sdef 2 3)
-      (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 1) (if 2 3) (while 2 2) (for 4 4)
+    ; ⚠ `sassert` is emit-only like edef/sdef: parse reduces a _Static_assert to the
+    ; bare (tdef) marker, so one only ever comes from a generator.
+    '((prog 1 1) (fn 1 5) (proto 1 1) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
+      (edef 2 2) (sdef 2 3) (sassert 2 2)
+      (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 4)
       (num 1 1) (flo 1 1) (str 1 1) (var 1 1) (bin 3 3) (un 2 2) (asn 2 2)
@@ -98,7 +104,7 @@
       ; type forms -- validated by the same table, since a type IS a clay node
       ; ('varr elt dim-expr [idx]) -- the optional third is gen's VLA-local slot
       ; index (gen.l:2071), bookkeeping the shower has nothing to say about
-      (ptr 1 1) (arr 2 2) (varr 2 3) (struct 1 1) (named 1 1) (const 1 1))
+      (ptr 1 1) (arr 2 2) (varr 2 3) (struct 1 1) (named 1 1) (const 1 1) (restrict 1 1))
 
    ; --- clay-ok? -----------------------------------------------------------------
    ; gen.l TRUSTS its input; a generator that hands it a malformed tree gets a
@@ -119,12 +125,16 @@
                  ; nodes -- `(static)` walked as a form would read `static` as a tag.
                  ; so the walk takes the declarators and stops. an edef is the same
                  ; hazard whole: BOTH its slots are names, and its constant list
-                 ; would read `KMint` as a tag, so it has no kids at all.
+                 ; would read `KMint` as a tag, so it has no kids at all. a full fn's
+                 ; ATTRS slot is a list of spellings, so it walks params/body/ret only.
                  (: (kids l) (? (! (two? l)) ()
                                 (: e <l
                                    (? (two? e) (: v (? (name? <e) (go e) (kids e)) (? v v (kids >l)))
                                       (kids >l))))
-                    (kids (? (member? h '(gdecl xdecl)) `(<>x) (id? h 'edef) () >x))))))
+                    (kids (? (member? h '(gdecl xdecl)) `(<>x)
+                             (id? h 'edef) ()
+                             (&& (id? h 'fn) (4 < n)) `((el x 2) (el x 3) (el x 4))
+                             >x))))))
        v (go c)
        (? v v 1))
 
@@ -157,14 +167,17 @@
              (id? h 'named) a
              (id? h 'struct) ("struct " + (ctag a))
              ; const binds to the DECLARATOR when the thing under it is a pointer
-             ; (`lvm_t *const`), to the base otherwise (`size_t const`).
+             ; (`lvm_t *const`), to the base otherwise (`size_t const`). restrict
+             ; qualifies a pointer or nothing, so the base only ever peels it.
              (id? h 'const) (? (cptr? a) (cty-base a) ((cty-base a) + " const"))
+             (id? h 'restrict) (cty-base a)
              "int")))
    (cty-dtor t s p)
     (? (! (two? t)) s
        (: h <t a <>t
           (? (id? h 'ptr) (cty-dtor a ("*" + s) 1)
              (id? h 'const) (? (cptr? a) (cty-dtor <>a ("*const " + s) 1) (cty-dtor a s p))
+             (id? h 'restrict) (? (cptr? a) (cty-dtor <>a ("*restrict " + s) 1) (cty-dtor a s p))
              (id? h 'arr) (cty-dtor a ((? p ("(" + s + ")") s) + "[" + (cdim <>>t) + "]") 0)
              ; a VLA: the bound is an expression, never a fold
              (id? h 'varr) (cty-dtor a ((? p ("(" + s + ")") s) + "[" + (ce <>>t 0) + "]") 0)
@@ -276,7 +289,7 @@
              "/*?*/")))
    ; a type shows up in operand position for sizeof; tell the two apart by the head
    (ctype? t) (? (name? t) (member? t '(char short int long uint void double float))
-                 (&& (two? t) (member? <t '(ptr arr struct named const fn))))
+                 (&& (two? t) (member? <t '(ptr arr struct named const restrict fn))))
    ; a brace initializer, and the ONE layout rule the shower has: a NESTED initializer
    ; breaks the line, a flat one does not. so a 16x16 dispatch matrix comes out one
    ; ROW per line -- which is the unit you read a matrix in -- while the row itself
@@ -341,7 +354,10 @@
              (id? h 'note) (cnote n a)
              (id? h 'decl) (line n ((cdecls a) + ";"))
              (id? h 'sdecl) (line n ("static " + (cdecls a) + ";"))
-             (id? h 'ret) (line n (? (two? a) ("return " + (ce a 0) + ";") "return;"))
+             ; ret's PRE slot is a spelling -- `ai_musttail return ..`, the tail-call
+             ; discipline vmret checks. presence is the ARITY, never the value.
+             (id? h 'ret) (: pre (? (1 < (tally >s)) ((ctag (el s 2)) + " ") "")
+                             (line n (pre + (? (two? a) ("return " + (ce a 0) + ";") "return;"))))
              (id? h 'expr) (line n ((ce a 0) + ";"))
              (id? h 'nop) (line n ";")
              (id? h 'brk) (line n "break;")
@@ -408,6 +424,8 @@
                  ((line 0 (kw + " " + (ctag a) + " {"))
                   + (join (map (\ f (line 1 ((cty (el f 1) <f) + ";"))) (el t 2)))
                   + (line 0 "};")))
+             (id? h 'sassert)
+              (line 0 ("_Static_assert(" + (ce a 21) + ", " + (cstrlit (ctag (el t 2))) + ");"))
              (gripe ("cannot show top-level " + (string h))))))
 
    ; --- what cannot be said ------------------------------------------------------
@@ -450,6 +468,10 @@
             (gripe ("(sdef " + (show <>x) + " ()) has no members -- C has no empty struct"))
            (&& (id? <x 'sdef) (! (cident? <>x)))
             (gripe ("(sdef " + (show <>x) + ") -- an anonymous tag is not a C identifier"))
+           ; restrict qualifies a pointer or nothing; anywhere else the shower would
+           ; have to drop it in silence, which is pretending.
+           (&& (id? <x 'restrict) (! (cptr? <>x)))
+            (gripe "(restrict t) -- C restricts only a pointer")
            (: (kids l) (? (! (two? l)) ()
                           (: e <l v (? (two? e) (? (name? <e) (go e) (kids e)) ())
                              (? v v (kids >l))))
@@ -471,9 +493,13 @@
           (top1 c)))
    ; a function definition: signature line, then the body block at column 0. the
    ; RETURN TYPE is clay's 4th slot; absent -- which is every fn cparse ever built --
-   ; `int` is the best the tree can justify. see the header.
+   ; `int` is the best the tree can justify. the 5th is attribute SPELLINGS laid
+   ; before it (`ai_noinline ai_noicf struct ai *lvm_add(..)`). see the header.
    (cfn t)
     (: nm (? (string? (el t 1)) (el t 1) (string (el t 1)))
        r (? (3 < (tally >t)) (el t 4) 'int)
+       at (? (4 < (tally >t)) (el t 5) ())
        b (el t 3)
-       ((copen 0 "" (cty r (nm + "(" + (cparams (el t 2)) + ")")) b) + (cclose 0 b ""))))
+       ((copen 0 (join (map (\ a ((ctag a) + " ")) at))
+               (cty r (nm + "(" + (cparams (el t 2)) + ")")) b)
+        + (cclose 0 b ""))))
