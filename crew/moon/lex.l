@@ -236,7 +236,7 @@
                                           ; stop -- which is what keeps a widened `run` from looping.
                                           (: _ (put sink c2) (eat (e + 1)))))))
                              r (eat (i + 1))
-                             (? (two? r) (go <>r line (link `('str <r line) acc)) ()))
+                             (? (two? r) (go <>r line (link `('str <r line () (snip src i <>r)) acc)) ()))
                  (c = 39) (: esc (&& ((i + 2) < n) ((src (i + 1)) = 92))
                              r (? esc (escseq (i + 2)) ())
                              v (? esc (? (two? r) <r ())
@@ -244,23 +244,23 @@
                                   ())
                              j (? esc (? (two? r) (+ <>r 1) 0) (i + 3))
                              (? (&& (charm? v) (&& (j <= n) ((src (j - 1)) = 39)))
-                                (go j line (link `('num v line) acc))
+                                (go j line (link `('num v line () (snip src i j)) acc))
                                 ()))
                  (&& (c = 48) (&& ((i + 1) < n) (|| ((src (i + 1)) = 120) ((src (i + 1)) = 88))))  ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
                      k (? <>r 'flo (ukind i <r <>>r))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
-                     (go <r line (link `(k <>>r line) acc)))
+                     (go <r line (link `(k <>>r line () (snip src i <r)) acc)))
                  (&& (c = 48) (&& ((i + 1) < n) (octd? (src (i + 1)))))   ; 0NNN octal integer (0644, 0777)
                   (: r (octlit i)
                      j2 (skipsuf <r)
                      k (ukind i j2 <>r)
-                     (go j2 line (link `(k <>r line) acc)))
+                     (go j2 line (link `(k <>r line () (snip src i j2)) acc)))
                  (|| (dig? c) (&& (c = 46) (&& ((i + 1) < n) (dig? (src (i + 1))))))
                   (: r (flolit i)                        ; a digit run, or .digit -- integer or float
                      j2 (? <>r <r (skipsuf <r))    ; an integer eats its u/U/l/L suffix
                      k (? (id? <>r 'imag) 'iflo    ; the imaginary float (1.0fi): its own kind
                           <>r 'flo (ukind i j2 <>>r))
-                     (go j2 line (link `(k <>>r line) acc)))
+                     (go j2 line (link `(k <>>r line () (snip src i j2)) acc)))
                  (< 0 (wpfx i)) (go (+ i (wpfx i)) line acc)   ; drop a wide-literal prefix; the ' or " lexes as usual
                  (idh? c) (: (idr j) (? (&& (j < n) (idc? (src j))) (idr (j + 1)) j)
                              j (idr i)

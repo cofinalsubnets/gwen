@@ -211,8 +211,7 @@ static lvm(data_sym_apply); static lvm(data_pair_apply);
 // tiles at exactly that, and ai_typ is (ap - lvm_sym) >> 7 with in_data one
 // unsigned compare (love.h). ld is told the tiling outright (love_data.ld, each
 // board's .lds); holo needs no telling -- it lays each section on the grain the
-// object declares, which is the same thing. ⚠ mooncc's `#` reads the token `00` as
-// "0", so the slots are SINGLE digits: both compilers must spell the same section.
+// object declares, which is the same thing.
 #define DSENT(nn, name, handler) \
  __attribute__((section("love_data." #nn), used, aligned(ai_data_stride))) \
  lvm(name) { ai_musttail return Ap(handler, g); }

@@ -21,7 +21,11 @@
 (: (refused? x) (|| (! x) (gripe? x)))
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
-(: (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))   ; lists don't index by application
+(: (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))
+(tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; kind/value/line: not the slot-4 spelling
+   ; kind/value/line alone: a numeric or string token also carries its SOURCE
+   ; SPELLING (cpp's sof, what # owes), which these laws are not about
+   (tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; lists don't index by application
    r (clex "int main() { return 42; }")
    ts (caup r)
    (assert
@@ -32,10 +36,15 @@
       (= (tn ts 3) (L 'p ")" 1))
       (= (tn ts 4) (L 'p "{" 1))
       (= (tn ts 5) (L 'kw 'return 1))
-      (= (tn ts 6) (L 'num 42 1))
+      (= (tn3 ts 6) (L 'num 42 1))
       (= (tn ts 7) (L 'p ";" 1))
       (= (tn ts 8) (L 'p "}" 1))))
 (: (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))
+(tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; kind/value/line: not the slot-4 spelling
+   ; kind/value/line alone: a numeric or string token also carries its SOURCE
+   ; SPELLING (cpp's sof, what # owes), which these laws are not about
+   (tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))
+   (spl r k) (: t (tn (caup r) k) (? (4 < (tally t)) <>>>>t ()))   ; the token's slot-4 spelling
    c1 (caup (clex "a // x\nb"))
    c2 (caup (clex "a /* x\ny */ b"))
    c3 (caup (clex "a+++b"))
@@ -46,40 +55,46 @@
       (= (tally c3) 4)                                       ; maximal munch: a ++ + b
       (= (tn c3 1) (L 'p "++" 1)) (= (tn c3 2) (L 'p "+" 1))
       (= (tn c4 1) (L 'p "<<=" 1)) (= (tn c4 5) (L 'p ">>=" 1))
-      (= (tn (caup (clex "'a' '\\n' '\\''")) 0) (L 'num 97 1))   ; char literals are numbers
-      (= (tn (caup (clex "'a' '\\n' '\\''")) 1) (L 'num 10 1))
-      (= (tn (caup (clex "'a' '\\n' '\\''")) 2) (L 'num 39 1))
+      (= (tn3 (caup (clex "'a' '\\n' '\\''")) 0) (L 'num 97 1))   ; char literals are numbers
+      (= (tn3 (caup (clex "'a' '\\n' '\\''")) 1) (L 'num 10 1))
+      (= (tn3 (caup (clex "'a' '\\n' '\\''")) 2) (L 'num 39 1))
       (! (clex "'ab'")) (! (clex "'"))                       ; malformed literals refuse
-      (= (tn (caup (clex "\"hi\"")) 0) (L 'str "hi" 1))
-      (= (tn (caup (clex "\"a\\nb\"")) 0) (L 'str "a\nb" 1))
-      (= (tn (caup (clex "\"ab\\\ncd\"")) 0) (L 'str "abcd" 1))   ; \<newline> inside a string SPLICES (the pair vanishes) -- tar's --help strings
+      (= (tn3 (caup (clex "\"hi\"")) 0) (L 'str "hi" 1))
+      (= (tn3 (caup (clex "\"a\\nb\"")) 0) (L 'str "a\nb" 1))
+      (= (tn3 (caup (clex "\"ab\\\ncd\"")) 0) (L 'str "abcd" 1))   ; \<newline> inside a string SPLICES (the pair vanishes) -- tar's --help strings
       (! (clex "\"open"))                                    ; unterminated string refuses
+      ; the SOURCE SPELLING beside the value, slot 4: what a value cannot answer
+      ; back (0777 and 511 are one value) and what # owes. cpp's sof reads it.
+      (= (spl (clex "0777") 0) "0777") (= (spl (clex "0777") 0) "0777")
+      (= (spl (clex "1u") 0) "1u") (= (spl (clex "1.20") 0) "1.20")
+      (= (spl (clex "0x1F") 0) "0x1F") (= (spl (clex "'a'") 0) "'a'")
+      (= (spl (clex "\"a\\nb\"") 0) "\"a\\nb\"")               ; the escape, not the byte
       ; wide/prefixed literals: L (wchar_t) / u / U / u8 -- we carry no distinct wide type,
       ; so the prefix DROPS. a char value is identical; a wide string reads narrow.
-      (= (tn (caup (clex "L'a'")) 0) (L 'num 97 1))          ; L'a' == 'a'
-      (= (tn (caup (clex "u'B'")) 0) (L 'num 66 1))          ; u'B'
-      (= (tn (caup (clex "U'C'")) 0) (L 'num 67 1))          ; U'C'
-      (= (tn (caup (clex "L'\\n'")) 0) (L 'num 10 1))        ; an escape rides through the prefix
-      (= (tn (caup (clex "L\"hi\"")) 0) (L 'str "hi" 1))     ; a wide string reads narrow
-      (= (tn (caup (clex "u8\"hi\"")) 0) (L 'str "hi" 1))    ; u8 (two-char prefix)
+      (= (tn3 (caup (clex "L'a'")) 0) (L 'num 97 1))          ; L'a' == 'a'
+      (= (tn3 (caup (clex "u'B'")) 0) (L 'num 66 1))          ; u'B'
+      (= (tn3 (caup (clex "U'C'")) 0) (L 'num 67 1))          ; U'C'
+      (= (tn3 (caup (clex "L'\\n'")) 0) (L 'num 10 1))        ; an escape rides through the prefix
+      (= (tn3 (caup (clex "L\"hi\"")) 0) (L 'str "hi" 1))     ; a wide string reads narrow
+      (= (tn3 (caup (clex "u8\"hi\"")) 0) (L 'str "hi" 1))    ; u8 (two-char prefix)
       (= (tn (caup (clex "Long")) 0) (L 'id "Long" 1))       ; an id STARTING with L/u/U is NOT a prefix (no quote follows)
       (= (tally (caup (clex "L L'a'"))) 2)                   ; bare L stays an id; L'a' a number
       (! (clex "int @"))                                     ; not C: the lex error rides up
       (= (tally (caup (clex "abc"))) 3)                   ; form-feed + vertical-tab are WHITESPACE (GNU page breaks); real FF/VT bytes here
       (! (clex "a /* open"))                                 ; unterminated comment refused
-      (= (tn (caup (clex "0644")) 0) (L 'num 420 1))       ; octal integer literal (0644 = 420); gzip's 0777/0666 modes
-      (= (tn (caup (clex "0777")) 0) (L 'num 511 1))
-      (= (tn (caup (clex "0")) 0) (L 'num 0 1))            ; a plain 0 stays 0
-      (= (tn (caup (clex "08")) 0) (L 'num 8 1))           ; 8/9 aren't octal digits -> falls to decimal
-      (= (tn (caup (clex "0x1F")) 0) (L 'num 31 1))         ; 7c-ii: hex literals
-      (= (tn (caup (clex "0xFF & 1")) 0) (L 'num 255 1))
-      (= (tn (caup (clex "255L")) 0) (L 'num 255 1))        ; an l/L suffix is consumed outright
-      (= (tn (caup (clex "100U")) 0) (L 'unum 100 1))       ; a u/U marks the token UNSIGNED (neg/div/shift go unsigned):
-      (= (tn (caup (clex "100UL")) 0) (L 'ulnum 100 1))     ; bare u an unsigned INT, u+l/L (or a >32-bit value) an unsigned LONG
-      (= (tn (caup (clex "0x8ULL")) 0) (L 'ullnum 8 1))     ; the LL pair is its own kind (t32 types it llong)
-      (= (tn (caup (clex "'\\f'")) 0) (L 'num 12 1))        ; \f form feed, \a bell, \v vtab
-      (= (tn (caup (clex "'\\a'")) 0) (L 'num 7 1))
-      (= (tn (caup (clex "'\\v'")) 0) (L 'num 11 1))
+      (= (tn3 (caup (clex "0644")) 0) (L 'num 420 1))       ; octal integer literal (0644 = 420); gzip's 0777/0666 modes
+      (= (tn3 (caup (clex "0777")) 0) (L 'num 511 1))
+      (= (tn3 (caup (clex "0")) 0) (L 'num 0 1))            ; a plain 0 stays 0
+      (= (tn3 (caup (clex "08")) 0) (L 'num 8 1))           ; 8/9 aren't octal digits -> falls to decimal
+      (= (tn3 (caup (clex "0x1F")) 0) (L 'num 31 1))         ; 7c-ii: hex literals
+      (= (tn3 (caup (clex "0xFF & 1")) 0) (L 'num 255 1))
+      (= (tn3 (caup (clex "255L")) 0) (L 'num 255 1))        ; an l/L suffix is consumed outright
+      (= (tn3 (caup (clex "100U")) 0) (L 'unum 100 1))       ; a u/U marks the token UNSIGNED (neg/div/shift go unsigned):
+      (= (tn3 (caup (clex "100UL")) 0) (L 'ulnum 100 1))     ; bare u an unsigned INT, u+l/L (or a >32-bit value) an unsigned LONG
+      (= (tn3 (caup (clex "0x8ULL")) 0) (L 'ullnum 8 1))     ; the LL pair is its own kind (t32 types it llong)
+      (= (tn3 (caup (clex "'\\f'")) 0) (L 'num 12 1))        ; \f form feed, \a bell, \v vtab
+      (= (tn3 (caup (clex "'\\a'")) 0) (L 'num 7 1))
+      (= (tn3 (caup (clex "'\\v'")) 0) (L 'num 11 1))
       (= (caup (clex "")) ())))                              ; empty text, empty tokens
 
 ; --- the parser: precedence, associativity, desugarings, statement shapes ---
@@ -344,19 +359,20 @@
    (cgn src) (: r (cparse (caup (clex src)))
                 (? (okv? r) (cgen (caup r) (cauup r) (caup (cuup r)) (cauup (cuup r)) () 'x64) ()))
    (tn ts k) (? (< k 1) (cap ts) (tn (cup ts) (- k 1)))
+   (tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; kind/value/line: not the slot-4 spelling
    irbits (caup (cgn "int main() { double d = 1.0; return (int)d; }"))
    (has op forms) (: (go l) (? (! (two? l)) () (&& (two? (cap l)) (= (cap (cap l)) op)) 1 (go (cup l))) (go forms))
    (assert
       ; the lexer: a float literal is a 'flo token carrying a gem
-      (= (tn (caup (clex "3.5")) 0) (L 'flo 3.5 1))
-      (= (tn (caup (clex ".25")) 0) (L 'flo 0.25 1))
-      (= (tn (caup (clex "1e3")) 0) (L 'flo 1000.0 1))
-      (= (tn (caup (clex "2.")) 0) (L 'flo 2.0 1))
+      (= (tn3 (caup (clex "3.5")) 0) (L 'flo 3.5 1))
+      (= (tn3 (caup (clex ".25")) 0) (L 'flo 0.25 1))
+      (= (tn3 (caup (clex "1e3")) 0) (L 'flo 1000.0 1))
+      (= (tn3 (caup (clex "2.")) 0) (L 'flo 2.0 1))
       ; the imaginary suffix (i/j, either order with f/l) is its own kind
-      (= (tn (caup (clex "1.0fi")) 0) (L 'iflo 1.0 1))
-      (= (tn (caup (clex "2.5if")) 0) (L 'iflo 2.5 1))
-      (= (tn (caup (clex ".5i")) 0) (L 'iflo 0.5 1))
-      (= (tn (caup (clex "42")) 0) (L 'num 42 1))          ; an integer stays 'num
+      (= (tn3 (caup (clex "1.0fi")) 0) (L 'iflo 1.0 1))
+      (= (tn3 (caup (clex "2.5if")) 0) (L 'iflo 2.5 1))
+      (= (tn3 (caup (clex ".5i")) 0) (L 'iflo 0.5 1))
+      (= (tn3 (caup (clex "42")) 0) (L 'num 42 1))          ; an integer stays 'num
       ; the parser: a double type and a 'flo primary
       (= (cast "int main() { double d = 1.5; return 0; }")
          '(prog ((fn "main" () (blk ((decl (("d" double (flo 1.5)))) (ret (num 0))))))))
@@ -589,6 +605,14 @@
       (= (pps "#define SQ(x) ((x)*(x))\nSQ(SQ(2))")                    ; nested / re-expansion
          "( ( ( ( 2 ) * ( 2 ) ) ) * ( ( ( 2 ) * ( 2 ) ) ) )")
       (= (pps "#define S(x) #x\nS(a b)") "\"a b\"")                    ; # stringize
+      ; # owes the argument's SPELLING, which its value cannot answer: 0777 and 511
+      ; are one value, 1u and 1 are one value, and a float's value is not text at all
+      (= (pps "#define S(x) #x\nS(0777)") "\"0777\"")                  ; ..not the octal's decimal
+      (= (pps "#define S(x) #x\nS(00)") "\"00\"")                      ; ..leading zeros kept
+      (= (pps "#define S(x) #x\nS(0x1F)") "\"0x1F\"")                  ; ..hex stays hex
+      (= (pps "#define S(x) #x\nS(1u)") "\"1u\"")                      ; ..suffix kept
+      (= (pps "#define S(x) #x\nS(1.20)") "\"1.20\"")                  ; ..a float is text, not a value
+      (= (pps "#define S(x) #x\nS(\"hi\")") "\"\"hi\"\"")              ; ..a string keeps its quotes
       (= (pps "#define C(a,b) a##b\nC(foo,bar)") "foobar")             ; ## paste
       (= (pps "#define P(...) f(__VA_ARGS__)\nP(1,2,3)") "f ( 1 , 2 , 3 )")   ; variadic
       (= (pps "#define F F\nF") "F")                                   ; blue paint: self-ref stops

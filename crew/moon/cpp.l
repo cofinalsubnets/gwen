@@ -21,6 +21,12 @@
    (vof t) <>t
    (lof t) <>>t
    (hof t) (? (3 < (tally t)) <>>>t ())
+   ; a numeric token's SOURCE SPELLING, which its value cannot answer: 0777 and 511
+   ; are one value, 1u and 1 are one value, and a float's value is not text at all.
+   ; # owes the spelling (C11 6.10.3.2), so the lexer carries it and every rebuild
+   ; below hands it on. () on a token the cpp minted itself (__LINE__, defined ..),
+   ; where the value IS the spelling. ⚠ parse reuses this slot once cpp is done.
+   (sof t) (? (4 < (tally t)) <>>>>t ())
    (tok k v l) `(k v l)
    ; -- include markers (doc/moon-diag.md rung 2) -- an #include splices the
    ; header's OWN line numbering into the one flat output stream, so a line
@@ -35,21 +41,27 @@
    (pv? t v) (&& ((kof t) = 'p) ((vof t) = v))
    (kwv? t v) (&& ((kof t) = 'kw) ((vof t) = v))
    (addhide t hs)                                   ; union hs into t's hideset
-    `((kof t) (vof t) (lof t) (dedup ((hof t) + hs)))
+    `((kof t) (vof t) (lof t) (dedup ((hof t) + hs)) (sof t))
    (dedup l) (: (go l seen) (? (! (two? l)) ()
                               (member? <l seen) (go >l seen)
                               (link <l (go >l (link <l seen))))
                 (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
-   (spell t) (: k (kof t)
-                (? (member? k '(num unum ulnum llnum ullnum)) (show (vof t))
+   numks '(num unum ulnum llnum ullnum flo iflo)
+   (spell t) (: k (kof t) s (sof t)
+                (? (0 < (tally s)) s                          ; the spelling the lexer kept
+                   (member? k numks) (show (vof t))           ; ..or a cpp-minted decimal
                    (k = 'kw) (show (vof t))
                    (k = 'str) ("\"" + (vof t) + "\"")
                    (vof t)))                          ; id / p are their text
-   (spellraw t) (? ((kof t) = 'str) (vof t) (spell t))  ; string content without the added quotes (for stringize)
+   ; C11 6.10.3.2's stringize: the argument's own spelling, quotes and escapes and
+   ; all. the standard's extra \ before each " and \ buys a text that RE-LEXES to
+   ; this; we hand the value straight to codegen and never re-lex it, so the
+   ; spelling IS the answer. ⚠ whitespace: one space between every pair of tokens,
+   ; where C keeps `a+1` tight -- the lexer would have to record what it dropped.
    (spellcat ts) (: (go l acc) (? (! (two? l)) acc
-                                  (go >l (acc + (? (acc = "") "" " ") + (spellraw <l))))
+                                  (go >l (acc + (? (acc = "") "" " ") + (spell <l))))
                     (go ts ""))
 
    ; -- macro table entries: (obj body) | (fun params body variadic?) --
@@ -166,7 +178,7 @@
                    (link t (expand rest macs)))))))
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (? (! (two? toks)) ()
-       (: t <toks (link `((kof t) (vof t) line (dedup ((hof t) + hs))) (mapadd >toks hs line))))
+       (: t <toks (link `((kof t) (vof t) line (dedup ((hof t) + hs)) (sof t)) (mapadd >toks hs line))))
 
    ; -- #if / #elif integer constant-expression evaluation (undefined ids -> 0,
    ; defined X / defined(X) resolved first, then macro-expanded). --
