@@ -701,6 +701,27 @@
 ; slot, the same hot_help the C raise lanes read -- and (heard ()) answers the installed one.
 ; (hear ()) uninstalls: a raise then takes the default escape.
 (: (hear f) (seal-hook 5 f))
+; trap -- (f x) under a help that ESCAPES: the value on a clean run, (n a b) when a
+; scare landed here. peg's (\ s y n) aimed at conditions, less the y a caller already
+; has -- a clean run just answers, and n's own answer is the form's, so which one you
+; got is a thing the caller wrote both halves of. currying supplies the operand ((trap
+; (serve1 root) c ..)), and the unit is the x when there is genuinely nothing to hand.
+; n wears the help's own arity, so `welp` is one.
+; ⚠ ALL THREE OPERANDS, always: two hand back a closure, which is truthy, and f never
+; runs at all.
+; ⚠ n fires only once the displaced help is BACK, which is what the thunks are for --
+; the presence a caller no longer carries is carried HERE, since a clean v may be a
+; closure like the escape's. run n inside and its own raise would land in this trap.
+; ⚠ nothing unwinds: the escape jumps past every pending restore between the raise and
+; here, so a cleanup belongs in n, never inside f. to catch selectively, let n re-raise
+; what is not yours -- by then the outer help is the one listening.
+(: (trap f x n)
+     (: prev (heard ())
+        r (call-cc (\ k (: _ (hear (\ a b (k (\ _ (n a b)))))
+                           v (f x)
+                           (\ _ v))))
+        _ (hear prev)
+        (r ())))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p !(member? <p ns)) cs)

@@ -65,13 +65,13 @@ syn keyword LoveBook sigtake sine slist slurp smap snip sno sort
 syn keyword LoveBook sortby sound sound0 spawn spawnio spawnmap spread stack
 syn keyword LoveBook stake star-tray star? stat still string string? subst
 syn keyword LoveBook sun sun? swig symlink tablet tablet? take tally
-syn keyword LoveBook tangent tap tether tier top-tray tray? trickle ttyfg
-syn keyword LoveBook turn turnf twin twin-tray twin? twirl two? u2
-syn keyword LoveBook u2app udp-bind udp-recv udp-send ufail? uglo umask unfold
-syn keyword LoveBook unify unlink unmap unsee use utime uu uu2l
-syn keyword LoveBook vapp var var? vof vof-spine vof-sym vsucc wait
-syn keyword LoveBook walk welp wet wheel whole? winsize wl-recv wl-send
-syn keyword LoveBook wrap zero? zip
+syn keyword LoveBook tangent tap tether tier top-tray trap tray? trickle
+syn keyword LoveBook ttyfg turn turnf twin twin-tray twin? twirl two?
+syn keyword LoveBook u2 u2app udp-bind udp-recv udp-send ufail? uglo umask
+syn keyword LoveBook unfold unify unlink unmap unsee use utime uu
+syn keyword LoveBook uu2l vapp var var? vof vof-spine vof-sym vsucc
+syn keyword LoveBook wait walk welp wet wheel whole? winsize wl-recv
+syn keyword LoveBook wl-send wrap zero? zip
 syn keyword LoveConst C Q born e false i id love-arch
 syn keyword LoveConst love-tco love-version max-charm min-charm pi tau true ufail
 syn keyword LoveMacro && , :- <=< >>= ?- L \\\\

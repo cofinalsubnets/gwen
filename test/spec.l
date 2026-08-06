@@ -547,13 +547,18 @@
 ; FLOOR HANDLER: answers the zero point (the shell's default help is welp with a face). a missing name
 ; raises (scare 'missing nom) -- ONE LAW AT EVERY DEPTH: a `:` binding read before its pin,
 ; (missing t k) on a tablet miss, all the same condition; a closure captures its free globals at
-; CREATION, so a lambda's missing read fires at the define, not the call. numeral COMPOSE
+; CREATION, so a lambda's missing read fires at the define, not the call. `trap` is the catcher:
+; (trap f x n) answers (f x), or (n a b) when a scare landed there -- peg's (\ s y n) aimed at
+; conditions, less the y a caller already has, so nothing comes back to reflect on (welp is an n).
+; built from a help that escapes through call-cc, so ⚠ nothing unwinds: a cleanup belongs in n,
+; which fires only once the displaced help is back. numeral COMPOSE
 ; counts are CAPPED by the `apcap` box; the numeric power lane caps the RESULT instead
 ; (~ exponent * log2|base| bits against the box as a word budget), so a size-fixed or
 ; growthless base runs free ((pin apcap 0 n) retunes both). in anger: test/help.l,
 ; test/missing.l, test/apcap.l.
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
+ ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b `(a b)))) (3 = (trap (+ 1) 2 welp))
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (landed? 99999)
  (: (drain _) (? (two? (scoop 0)) (drain ()) 0)                  ; the ring is shared: drain first
     _ (drain ()) p (twirl (\ _ ()) ()) _ (rest 0) s (scoop 0)

@@ -286,7 +286,17 @@
       c (accept l)
       _ (drain ())
       _ (? c (: _ (? before (before ()) 0)
-                (twirl (\ _ (: r (serve1 root c) _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ()))
+                ; ⚠ THE SESSION'S RAISE IS THE SESSION'S: uncaught, a scare anywhere under
+                ; serve1 -- a file that vanished between the stat and the gulp, a peer that
+                ; hung up mid-write -- takes the whole SERVER down with it, every other
+                ; session included. the trap lands here, where the close already is (nothing
+                ; unwinds, so the cleanup has to be at the landing site), and the client
+                ; gets a 500 instead of a reset. the help rides the task, so five sessions
+                ; hold five of these at once without seeing each other's.
+                (twirl (\ _ (: r (trap (serve1 root) c
+                                       (\ a b (: _ (oops c 500 "Internal Server Error" 0)
+                                                 `(500 "-" (show a)))))
+                               _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ()))
            0)
       (accept-loop root l quiet before))
    ; the entry. `root` is a directory (no trailing slash), `port` a fixnum, `before` a thunk

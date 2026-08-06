@@ -56,6 +56,31 @@
                (two? mine) (id? 'mine (caup mine)))))   ; ... and the parent's survived it
 (hear 0)
 
+; trap -- the call-cc catcher: (trap f x n) answers (f x) when it ran clean and
+; (n a b) when a scare landed here. there is no success continuation: a clean run
+; just answers, and n's own answer is the form's, so the caller wrote both halves
+; and needs no wrapper to tell them apart. currying supplies the x; n wears the
+; help's own arity, so welp is one. ⚠ nothing unwinds: the escape jumps past every
+; pending restore between the raise and here, so a cleanup belongs in n.
+(assert (3 = (trap (+ 1) 2 (\ a b 'no)))
+        (id? (:) (trap (\ _ ()) () (\ a b 'no)))              ; a clean nothing is clean
+        ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b `(a b))))
+        (id? (:) (trap (\ _ (scare 'x 0)) () welp))           ; the floor handler IS an n
+        (3 = (trap (foldl (\ a x (? (x = 3) (scare 'hit x) a)) 0)   ; caught from depth,
+                   '(1 2 3 4) (\ a b b)))                          ; ..and x is curried in
+        ('(outer in) = (trap (\ _ (trap (\ _ (scare 'in 0)) () (\ a b (scare 'outer a))))
+                             () (\ a b `(a b))))              ; n may re-raise: the outer help hears it
+        ; one trap per task, all open at once: each catches its own
+        (: (sess i) (twirl (\ _ (: _ (rest 0) (trap (\ _ (scare 'boom i)) () (\ a b b)))) ())
+           ('(1 2 3) = (map catch (map sess '(1 2 3))))))
+; n fires AFTER the displaced help is back: a raise inside it belongs to the trap
+; OUTSIDE, never to this one -- and the restore rides both paths
+(hear (\ a b 'floor))
+(assert ('(outer-saw from-n) = (trap (\ _ (trap (\ _ (scare 'x 0)) () (\ a b (scare 'from-n a))))
+                                     () (\ a b `('outer-saw a))))
+        (: _ (trap (\ _ (scare 'x 0)) () (\ a b 0)) (id? 'floor (scare 'y 0))))
+(hear 0)
+
 ; welp -- the floor handler (repl.l), the fromempty the introductions never
 ; named: it welps a raise to the ZERO POINT, whatever the condition. it is a
 ; plain function, not the installed help -- a policy that runs out of cases

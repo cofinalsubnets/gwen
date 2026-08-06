@@ -459,7 +459,17 @@
              (tol? a) (flags r c is ds o ins t9 p9 g9 n9 x9 d9)
              (&& (0 < (tally a)) ((a 0) = 45)) (udie 2 usage)
              (flags r c is ds o (link a ins) t9 p9 g9 n9 x9 d9))))
+   ; EVERY cc SAYS ITS SENTENCE, the internal ones too. gen and holo raise noms
+   ; (musttail-not-a-tail, cs-unsaved, link-undef) that reached the reader as a bare
+   ; love debug note -- no cc: prefix, nothing naming the input, and a compiler's own
+   ; spelling to guess at. it goes on HERE and not at the seat: six shims (the -e
+   ; drives, seed's verb table) call moon-main straight, and a compile ends the same
+   ; way through all of them. the pre-checks upstream stay what they are, the better
+   ; sentence for the cases worth naming.
    (moon-main as)
+    (trap moon-run as
+          (\ a b (udie 1 ("cc: internal error: " + show a + " " + show b))))
+   (moon-run as)
     ; the default target is the ground we stand on: love-arch (the C boot's pin)
     ; names the running binary's arch, so a native mooncc emits native code and
     ; -t stays what it always was, the CROSS flag. unknown grounds keep x64.

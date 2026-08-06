@@ -25,5 +25,21 @@ reflection across the help boundary, one floor further down.**
 The face is only as legible as its payload: a raise carrying two mute numbers gets `;; 0 11`,
 which is honest in form and silent in content. A condition worth showing raises a word.
 
+**`trap` is the fourth answer: the condition delivered somewhere else.** The three layers above
+all answer *at the raise site* — the help's value is what `(scare a b)` evaluates to. `trap` is a
+help that escapes through `call-cc` instead, so the condition arrives at the trapping frame:
+`(trap f x n)` answers `(f x)` when it ran clean, and `(n a b)` when a scare landed there. That
+is peg's and kanren's `(\ s y n)` shape aimed at conditions, less the success continuation a
+caller already has — a clean run just answers, and `n`'s own answer is the form's, so which one
+you got is a thing the caller wrote both halves of and no wrapper has to carry. `n` wears the
+help's own arity, so `welp` is one. It nests, and the displaced help is back before `n` fires —
+a raise inside `n` belongs to the trap *outside*, never to this one.
+
+⚠ **Nothing unwinds.** The escape jumps past every pending restore between the raise and the
+`trap`, so a `trap` is only right where the cleanup can live at the *landing site* — moon's entry,
+where a compile ends anyway, or a kiosko session, where the socket close already sits after the
+call. Where the cleanups are strung along the path (lush's fd swaps, its errexit depth), the
+value-threading that pays a test per node is the cheaper trade, and it is not a defect that it is.
+
 Relates: [[faces]] (the hourglass / one core), the zero point + `welp` in test/spec.l's control
 section.
