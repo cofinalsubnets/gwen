@@ -45,18 +45,30 @@
 #define ai_data_section 1
 #endif
 #endif
-// bytes per slot -- the linker pins it, love.h reads it. sized off the FATTEST
-// body any backend emits, and the sentinels already SHARE their handlers (each is
-// one tail jump to a data_*_apply), so this measures CALL LOWERING, not code:
-// arm64 4, x64 5-8, thumb2 60, riscv64 88. the two fat ones spill their params to
-// the frame and read them straight back; the IR sweeps that fold exactly that
-// (stld, dehusk) run on x64 alone -- gen.l's build says so and says why. they do
-// port, and pay (measured: riscv64 76, thumb2 48), but they land inside the
-// regen's own ranking, where they cost arm64 its param homing. a rung, not a patch.
-// ⚠ the LINK is the check: a body past the stride pushes ld's location counter
-// backwards and it refuses out loud, and holo -- ours -- lays the grain the object
-// declares, so neither can hand back a tiling ai_typ would misread.
+// bytes per slot -- ONE PER SEAT, not one for the tree. it has only to clear the
+// fattest body the backend building THIS text emits, and they differ by an order of
+// magnitude. the sentinels already SHARE their handlers (each is one tail jump to a
+// data_*_apply), so what this measures is CALL LOWERING, not code: arm64 4, x64 8,
+// thumb2 60, riscv64 88. the two fat ones spill their params to the frame and read
+// them straight back; the IR sweeps that fold exactly that (stld, dehusk) run on x64
+// alone -- gen.l's build says so and says why. they port, and pay (measured: riscv64
+// 76, thumb2 48), but they land inside the regen's own ranking, where they cost
+// arm64 its param homing. a rung of its own.
+// 16 buys x64 exactly 2x its measured 8; 8 would buy none, and the next `endbr64`
+// (a seat built without -fcf-protection=none) is +4. the aligned() attribute does
+// lower a section below -falign-functions, so the floor here is margin, not the cc.
+// ⚠ the linker is TOLD this number, in words, and cannot read it: love_data.ld and
+// port/inle/{x86_64,aarch64}.lds say 16, the three thumb boards 128. a script that
+// tiles tighter than its seat believes answers slot 0 for every value, in silence --
+// the one drift here that does not announce itself. a body past the stride is the
+// loud direction: ld drives its location counter backwards and refuses.
+#ifndef ai_data_stride
+#if defined(__x86_64__) || defined(__aarch64__)
+#define ai_data_stride 16
+#else
 #define ai_data_stride 128
+#endif
+#endif
 #define ai_data_n 9         // slots; _Static_assert'd against enum d below
 #define ai_digits "0123456789abcdefghijklmnopqrstuvwxyz"
 #define countof(_) (sizeof(_)/sizeof(*_))

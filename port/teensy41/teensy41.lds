@@ -46,7 +46,9 @@ SECTIONS {
        measure -- an overgrown one moves the counter backwards and ld says so.
        the base takes the STRIDE's own alignment, never a lesser one, or ld
        bumps the counter past the very slot it was placing.
-       mirrors love_data.ld, the host link's fragment. */
+       128 here where the x64/arm64 seats say 16, and neither is stale: a
+       thumb2 sentinel is 60 bytes to arm64's 4. love.h carries the
+       measurements and the reason. */
     . = ALIGN(128);
     __love_data = .;
     KEEP(*(love_data.0))  . = __love_data + 128;

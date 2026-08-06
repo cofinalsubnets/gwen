@@ -1,6 +1,6 @@
 /* love_data.ld -- pin the data sentinels' layout (love.c's DSENT, love.h's ai_typ).
 
-   Each sentinel lays in love_data.N, N its enum d value. The `. = __start + N*128`
+   Each sentinel lays in love_data.N, N its enum d value. The `. = __start + N*16`
    after each KEEP pins the stride at love.h's ai_data_stride whatever the bodies
    measure, so love.h reads the kind as a shift and never has to reflect the real
    one. A body that outgrew the stride would push the location counter backwards --
@@ -17,19 +17,19 @@
    (port/inle/*.lds, the board .lds) carries an equivalent block; holo needs none --
    it lays each section on the grain the object declares, which is the same tiling. */
 SECTIONS {
-  .love_data : ALIGN(128) {
+  .love_data : ALIGN(16) {
     __start_love_data = .;
-    KEEP(*(love_data.0))  . = __start_love_data + 128;
-    KEEP(*(love_data.1))  . = __start_love_data + 256;
-    KEEP(*(love_data.2))  . = __start_love_data + 384;
-    KEEP(*(love_data.3))  . = __start_love_data + 512;
-    KEEP(*(love_data.4))  . = __start_love_data + 640;
-    KEEP(*(love_data.5))  . = __start_love_data + 768;
-    KEEP(*(love_data.6))  . = __start_love_data + 896;
-    KEEP(*(love_data.7))  . = __start_love_data + 1024;
-    KEEP(*(love_data.8))  . = __start_love_data + 1152;
+    KEEP(*(love_data.0))  . = __start_love_data + 16;
+    KEEP(*(love_data.1))  . = __start_love_data + 32;
+    KEEP(*(love_data.2))  . = __start_love_data + 48;
+    KEEP(*(love_data.3))  . = __start_love_data + 64;
+    KEEP(*(love_data.4))  . = __start_love_data + 80;
+    KEEP(*(love_data.5))  . = __start_love_data + 96;
+    KEEP(*(love_data.6))  . = __start_love_data + 112;
+    KEEP(*(love_data.7))  . = __start_love_data + 128;
+    KEEP(*(love_data.8))  . = __start_love_data + 144;
     __stop_love_data = .;
   }
 } INSERT AFTER .text;
-ASSERT(__stop_love_data - __start_love_data == 9 * 128,
+ASSERT(__stop_love_data - __start_love_data == 9 * 16,
        "love_data: slot count moved -- sync love.h's ai_data_n and this script")
