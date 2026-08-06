@@ -4701,16 +4701,20 @@ lvm(lvm_snip) {
            j = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
   i = max(i, 0), i = min(i, (word) len(s));
   j = max(j, i), j = min(j, (word) len(s));
-  // An empty range (i == j) builds a 0-length string "" -- a string snip returns a
-  // STRING, the closest form of nothing for this kind, not the bare floor (fixnum 0).
-  size_t req = str_type_width + b2w(j - i);
-  Have(req);
-  s = str(Sp[0]);                                // re-read post-Have (GC may have moved it)
-  t = (struct ai_str*) Hp;
-  Hp += req;
-  ini_str(t, j - i);
-  memcpy(txt(t), txt(s) + i, j - i);
-  Sp[2] = (word) t; }
+  // An empty range (i == j) answers a STRING, the closest form of nothing for this
+  // kind, not the bare floor (fixnum 0) -- and THE empty string, never a fresh one.
+  // ⚠ no 0-length string is ever allocated (str0 holds the same line), which is what
+  // lets two empties be id?-equal wherever they were built.
+  if (j == i) Sp[2] = EmptyString;
+  else {
+   size_t req = str_type_width + b2w(j - i);
+   Have(req);
+   s = str(Sp[0]);                               // re-read post-Have (GC may have moved it)
+   t = (struct ai_str*) Hp;
+   Hp += req;
+   ini_str(t, j - i);
+   memcpy(txt(t), txt(s) + i, j - i);
+   Sp[2] = (word) t; } }
  ai_musttail return Nextp(1, 2); }
 
 

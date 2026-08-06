@@ -31,6 +31,14 @@
   (= "" (snip "" 0 5))
   (= 0 (snip 0 0 5))
 
+  ; and it is THE empty string: no 0-length string is ever allocated, so however one
+  ; is arrived at -- snipped, concatenated, repeated zero times, coerced, drained --
+  ; it is the same object, and id? holds where only = would be expected to.
+  (id? "" (snip "abc" 1 1))   (id? "" (snip "" 0 5))
+  (id? "" (+ "" ""))          (id? "" (* "ab" 0))
+  (id? "" (string ()))        (id? "" (string ""))
+  (id? "" (slurp (jug 0)))    (id? "" (slurp (tap ())))   (id? "" (slurp 42))
+
   ; get: indexing the empty string returns the default
   (= 99 (peep "" 0 99))
   (= 99 (peep 0 0 99))
