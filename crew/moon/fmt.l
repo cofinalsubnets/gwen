@@ -108,59 +108,62 @@
    ; the walk. word = the identifier being built; pw = the last COMPLETED identifier
    ; (the token just left of an operator); lo = last out char (for space-dedup); pv =
    ; last significant (non-space) char (for the binary/unary decision).
+   ; ⚠ `out` is a JUG, not a string: grown one char per `+` it was quadratic in the LINE,
+   ; and a generated C file puts its whole program on one. write-only, so a sink fits.
    (respace s tset)
     (: n (tally s)
+       (wr j t) (: _ (say j t) j)
        (w i st word pw lo pv out)
-        (? (n <= i) out
+        (? (n <= i) (slurp out)
            (: c (s i)
               (? (id? st 'str)
-                  (? (c = 92) (w (i + 2) 'str "" pw c c (out + (string c) + (? ((i + 1) < n) (string (s (i + 1))) "")))
-                     (c = 34) (w (i + 1) 'code "" pw c c (out + (string c)))
-                     (w (i + 1) 'str "" pw c c (out + (string c))))
+                  (? (c = 92) (w (i + 2) 'str "" pw c c (wr out ((string c) + (? ((i + 1) < n) (string (s (i + 1))) ""))))
+                     (c = 34) (w (i + 1) 'code "" pw c c (wr out (string c)))
+                     (w (i + 1) 'str "" pw c c (wr out (string c))))
                  (id? st 'chr)
-                  (? (c = 92) (w (i + 2) 'chr "" pw c c (out + (string c) + (? ((i + 1) < n) (string (s (i + 1))) "")))
-                     (c = 39) (w (i + 1) 'code "" pw c c (out + (string c)))
-                     (w (i + 1) 'chr "" pw c c (out + (string c))))
-                 (c = 34) (w (i + 1) 'str "" pw 34 34 (out + (string c)))
-                 (c = 39) (w (i + 1) 'chr "" pw 39 39 (out + (string c)))
-                 (idc? c) (w (i + 1) 'code (word + (string c)) pw c c (out + (string c)))   ; grow the identifier
+                  (? (c = 92) (w (i + 2) 'chr "" pw c c (wr out ((string c) + (? ((i + 1) < n) (string (s (i + 1))) ""))))
+                     (c = 39) (w (i + 1) 'code "" pw c c (wr out (string c)))
+                     (w (i + 1) 'chr "" pw c c (wr out (string c))))
+                 (c = 34) (w (i + 1) 'str "" pw 34 34 (wr out (string c)))
+                 (c = 39) (w (i + 1) 'chr "" pw 39 39 (wr out (string c)))
+                 (idc? c) (w (i + 1) 'code (word + (string c)) pw c c (wr out (string c)))   ; grow the identifier
                  ; a non-id char: first settle pw from a just-ended identifier run
                  (: pw2 (? (0 < (tally word)) word pw)
-                    (? (ws? c) (w (i + 1) 'code "" pw2 c pv (out + (string c)))   ; whitespace: copy, KEEP pv
+                    (? (ws? c) (w (i + 1) 'code "" pw2 c pv (wr out (string c)))   ; whitespace: copy, KEEP pv
                        (: op (opat s i n)
                           (? op                                                  ; a multi-char operator
                               (: L (tally op)  nc (op (L - 1))
                                  (? (member? op both2)                           ; binary: space both (additively)
                                      (: nxt (? ((i + L) < n) (s (i + L)) 0)
-                                        (w (i + L) 'code "" pw2 (? (spaced? lo nxt) 32 nc) nc (out + (binsp op lo nxt))))
-                                     (w (i + L) 'code "" pw2 nc nc (out + op))))  ; -> ++ -- : copy, no space
+                                        (w (i + L) 'code "" pw2 (? (spaced? lo nxt) 32 nc) nc (wr out (binsp op lo nxt))))
+                                     (w (i + L) 'code "" pw2 nc nc (wr out op))))  ; -> ++ -- : copy, no space
                              (c = 40) (: sp (&& (kw? pw2) (! (lo = 32)))          ; keyword glued to (
-                                         (w (i + 1) 'code "" "" (? sp 32 40) 40 (out + (? sp " (" "("))))
+                                         (w (i + 1) 'code "" "" (? sp 32 40) 40 (wr out (? sp " (" "("))))
                              (|| (c = 44) (c = 59))                              ; , ; : space after when glued
                               (: nx (? ((i + 1) < n) (s (i + 1)) 0)
                                  sp? (&& (0 < nx) (&& (! (ws? nx)) (&& (! (nx = 41)) (&& (! (nx = 44)) (! (nx = 59))))))
-                                 (w (i + 1) 'code "" "" (? sp? 32 c) c (out + (string c) + (? sp? " " ""))))
+                                 (w (i + 1) 'code "" "" (? sp? 32 c) c (wr out ((string c) + (? sp? " " "")))))
                              (member? c both1)                                   ; = < > / % | ^ : always binary
                               (: nxt (? ((i + 1) < n) (s (i + 1)) 0)
-                                 (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 c) c (out + (binsp (string c) lo nxt))))
+                                 (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 c) c (wr out (binsp (string c) lo nxt))))
                              (|| (c = 43) (|| (c = 45) (c = 38)))                ; + - & : heuristic (binary iff prev is a value)
                               (? (&& (pval? pv pw2)                             ; ...but an e/E/p/P exponent sign (1e-5, 0x1.0p-53) stays glued
                                      (! (&& (|| (c = 43) (c = 45))
                                             (&& (|| (pv = 101) (|| (pv = 69) (|| (pv = 112) (pv = 80))))
                                                 (&& ((i + 1) < n) (dig? (s (i + 1))))))))
                                  (: nxt (? ((i + 1) < n) (s (i + 1)) 0)
-                                    (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 c) c (out + (binsp (string c) lo nxt))))
-                                 (w (i + 1) 'code "" pw2 c c (out + (string c))))   ; unary / exponent sign: copy glued
+                                    (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 c) c (wr out (binsp (string c) lo nxt))))
+                                 (w (i + 1) 'code "" pw2 c c (wr out (string c))))   ; unary / exponent sign: copy glued
                              (c = 42)                                            ; * : declarator (known type) | multiply (] / digit) | leave
                               (? (&& (&& (idc? pv) (member? pw2 tset))           ; a KNOWN type, and a NAME follows -> pointer declarator:
                                      (&& ((i + 1) < n) (idc? (s (i + 1)))))      ;   space before, glue to the name (`word*p` -> `word *p`).
-                                  (w (i + 1) 'code "" pw2 42 42 (out + (? (|| (lo = 32) (lo = 0)) "" " ") + "*"))   ;   an ABSTRACT `type*` (no name: * before , ) [ *) is left alone
+                                  (w (i + 1) 'code "" pw2 42 42 (wr out ((? (|| (lo = 32) (lo = 0)) "" " ") + "*")))   ;   an ABSTRACT `type*` (no name: * before , ) [ *) is left alone
                                  (|| (pv = 93) (dig? pv))                        ; after ] or a digit -> multiply
                                   (: nxt (? ((i + 1) < n) (s (i + 1)) 0)
-                                     (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 42) 42 (out + (binsp "*" lo nxt))))
-                                 (w (i + 1) 'code "" pw2 c c (out + (string c))))   ; else leave glued (unknown id / deref)
-                             (w (i + 1) 'code "" pw2 c c (out + (string c))))))))))   ; ) ] [ { } ~ ! ? : . # : copy verbatim
-       (w 0 'code "" "" 0 0 ""))
+                                     (w (i + 1) 'code "" pw2 (? (spaced? lo nxt) 32 42) 42 (wr out (binsp "*" lo nxt))))
+                                 (w (i + 1) 'code "" pw2 c c (wr out (string c))))   ; else leave glued (unknown id / deref)
+                             (w (i + 1) 'code "" pw2 c c (wr out (string c))))))))))   ; ) ] [ { } ~ ! ? : . # : copy verbatim
+       (w 0 'code "" "" 0 0 (jug 0)))
 
    ; --- scan ONE line for brace/paren deltas + its last significant code char.
    ; entry inb = already inside a /* */ block. answers (bdelta pdelta lastsig endb?):
