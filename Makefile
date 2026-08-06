@@ -38,10 +38,11 @@ test_phases = test_host test_love0
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
-# slow gate. test_embed rides here rather than in `test`: it is 3 s of pure sub-make on a
-# tree nothing touched, and it earns them only when love.h or a frontend moved. What it adds
-# HERE is the five frontends the booting lanes below never reach -- mps2, teensy41,
-# nucleo446, playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
+# slow gate. test_embed rides here rather than in `test`: ~7 s on a tree nothing touched,
+# and it earns them only when love.h or a frontend moved (a love.h edit puts it at ~2.5 min,
+# because linking every frontend means compiling love.c once per target). What it adds HERE
+# is the frontends the booting lanes below never reach -- mps2, teensy41, nucleo446,
+# playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
 test_slow: test_host test_love0 vmret test_wasm test_kernel test_virt test_embed
 	
 

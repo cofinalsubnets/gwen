@@ -106,12 +106,16 @@
 #define TIMER_TIMEHR (TIMER_BASE + 0x08u)   // latched high (read TIMELR first)
 #define TIMER_TIMELR (TIMER_BASE + 0x0cu)   // latched low (latches high)
 
+// the board's onboard LED, the one output every Pico has
+#define LED_PIN 25u
+
 // arch backend (rp2040.c)
 void clocks_init(void);
 void serial_init(void);
 void serial_putc(int c);
 int  serial_getc(void);
 int  serial_rx_ready(void);
+uint32_t clock_ms(void);
 void gpio_init(unsigned pin);
 void gpio_set_dir(unsigned pin, int out);
 void gpio_put(unsigned pin, int hi);

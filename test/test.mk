@@ -50,21 +50,31 @@ test_front: $(ho)/front
 	  cat out/host/.test_front.out; \
 	  { [ $$r -eq 0 ] && grep -q "front: ok" out/host/.test_front.out; } \
 	    || { echo "FAIL test_front (exit $$r)"; exit 1; }
-# test_embed -- EVERY FRONTEND COMPILED, NONE BOOTED. The embed sites each spell love.h's
+# test_embed -- EVERY FRONTEND BUILT, NONE BOOTED. The embed sites each spell love.h's
 # structs and their own ai_libs table, so a core ABI edit breaks them; but every gate that
 # would SAY so boots, sits in test_extra, and costs minutes -- and the three thumb lanes
 # skip outright without arm-none-eabi, so on a bare box those ports had no gate at all.
-# This one asks for the object and stops there: seconds, and no qemu anywhere.
-# ⚠ each frontend is asked for ITS OWN main.o through ITS OWN makefile. Re-spelling the
-# flags here would drift from the build this claims to gate, and a green would mean nothing.
-# ⚠ port/rp2040/main.c is NOT in the roster: it includes gwen.h and repl.h, neither of which
-# this tree has, so it has not compiled in a long time and is gated nowhere. Its own errand.
-embed_ports = mps2 teensy41 nucleo446 playdate virt
+# Two phases: COMPILE every frontend (seconds, no toolchain but ours, no qemu), then LINK
+# every binary that can be linked here -- which is where an undefined symbol finally says so.
+# ⚠ each frontend is asked for ITS OWN object and ITS OWN ELF through ITS OWN makefile.
+# Re-spelling the flags here would drift from the build this claims to gate, and a green
+# would mean nothing. That is also why the link phase skips rather than improvises.
+# ⚠ rp2040 compiles and does not link -- the head of port/rp2040/Makefile names the three
+# reasons, all of them holo's. ⚠ wasm compiles and does not link HERE: love.js is a tracked
+# committed artifact, and a gate must not rewrite the working tree. test_wasm owns that link.
+embed_ports = mps2 teensy41 nucleo446 playdate virt rp2040
+# what each linkable port calls its ELF. ⚠ teensy41 is NOT here: its ELF embeds the baked
+# heap image, whose rule delegates to port/mps2's `img` -- a BAKE UNDER QEMU, on a FORCE rule
+# with no opt-out. Linking it here would cost 80 s and quietly boot a machine, which is the
+# one thing this gate promises not to do. test_teensy41 (test_extra) owns that link.
+embed_elfs = mps2/love.elf nucleo446/firm.elf
 # the aarch64 kernel face needs a CROSS-CAPABLE KCC -- ours or clang, never a native gcc
 embed_a64 = $(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))
+embed_arm := $(and $(shell command -v arm-none-eabi-gcc 2>/dev/null),\
+                   $(shell command -v arm-none-eabi-ld 2>/dev/null))
 .PHONY: test_embed
 test_embed: host $(ho)/mooncc
-	@echo TEST the frontends compile against love.h "(object only, nothing links or boots)"
+	@echo TEST the frontends compile against love.h "(object only)"
 	@$(MAKE) -s kmain_o
 	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kmain_o,echo "  (aarch64 kmain.c skipped: $(KCC) cannot cross)")
 	@$(MAKE) -s K_TEST=1 kmain_o
@@ -73,7 +83,20 @@ test_embed: host $(ho)/mooncc
 	     || { echo "FAIL port/$$p/main.c does not compile against love.h"; exit 1; }; \
 	 done
 	@$(if $(wildcard $(EMCC)),$(MAKE) -s -C wasm ../out/wasm/host.o,echo "  (wasm/host.c skipped: no emcc)")
-	@echo "test_embed: every frontend compiles against love.h (rp2040 is out; any other skip is named above)"
+	@echo TEST the frontends link "(no boot, no qemu)"
+	@$(MAKE) -s kernel || { echo "FAIL the $a kernel does not link"; exit 1; }
+	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kernel,echo "  (aarch64 kernel link skipped: $(KCC) cannot cross)")
+	@$(MAKE) -s -C port/virt ../../out/virt/love.elf || { echo "FAIL port/virt does not link"; exit 1; }
+	@if [ -n "$(embed_arm)" ]; then \
+	   for t in $(embed_elfs); do p=$${t%%/*}; f=$${t#*/}; \
+	     $(MAKE) -s -C port/$$p ../../out/$$p/$$f \
+	       || { echo "FAIL port/$$p does not link"; exit 1; }; done; \
+	 else echo "  (mps2 nucleo446 links skipped: no arm-none-eabi)"; fi
+	@if [ -n "$(embed_arm)" ] && [ -n "$$PLAYDATE_SDK_PATH" ]; then \
+	   $(MAKE) -s -C port/playdate ../../out/playdate/pdex.elf \
+	     || { echo "FAIL port/playdate does not link"; exit 1; }; \
+	 else echo "  (playdate link skipped: needs arm-none-eabi + PLAYDATE_SDK_PATH)"; fi
+	@echo "test_embed: every frontend builds against love.h (any skip is named above)"
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold. haven.l is OUT -- it can wedge on wayland.

@@ -2,7 +2,7 @@
 // XOSC+PLL clock bring-up, the UART0 serial console, the microsecond timer,
 // and the SIO GPIO helpers. Plays the role of arch/<arch>/arch.c for the
 // freestanding kernel, but for a Cortex-M0+ booting from flash XIP.
-#include "../../gwen.h"
+#include <stdint.h>
 #include "rp2040.h"
 
 // Linker-provided bounds (rp2040.lds).
@@ -12,34 +12,17 @@ extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
 int main(void);
 
 // --- fault diagnostics ----------------------------------------------------
-// ARMv6-M (Cortex-M0+) has no CFSR/BFAR; capture the hardware-stacked
-// exception frame so an attached SWD debugger lands on a known address.
-// Read g_fault: pc -> which instruction faulted; sp below __bss_end__ region
-// growing into the stack hints at overflow.
-volatile struct g_fault {
-  uint32_t r0, r1, r2, r3, r12, lr, pc, psr, sp, magic;
-} g_fault;
+// ARMv6-M (Cortex-M0+) has no CFSR/BFAR, so a fault says only where it stopped:
+// halt on a breakpoint and let an attached SWD debugger read the frame the
+// hardware stacked. ⚠ this handler used to select MSP/PSP and copy that frame
+// into a struct, which wants `naked` plus mrs/tst -- neither in holo's thumb1
+// lane. The frame is still on the stack for the debugger; only the copy is gone.
+void isr_hardfault(void) { for (;;) asm volatile("trap"); }
 
-__attribute__((used)) void hardfault_report(uint32_t *frame) {
-  g_fault.r0  = frame[0]; g_fault.r1 = frame[1]; g_fault.r2 = frame[2];
-  g_fault.r3  = frame[3]; g_fault.r12 = frame[4]; g_fault.lr = frame[5];
-  g_fault.pc  = frame[6]; g_fault.psr = frame[7];
-  g_fault.sp  = (uint32_t) frame;
-  g_fault.magic = 0xFA017EDu;
-  for (;;) __asm volatile("bkpt 0"); }
-
-__attribute__((naked)) void isr_hardfault(void) {
-  __asm volatile(
-    "movs r0, #4         \n"   // EXC_RETURN bit 2: which SP was active
-    "mov  r1, lr         \n"
-    "tst  r1, r0         \n"
-    "bne  1f             \n"
-    "mrs  r0, msp        \n"
-    "b    2f             \n"
-    "1: mrs r0, psp      \n"
-    "2: bl  hardfault_report \n"); }
-
-static void default_handler(void) { for (;;) __asm volatile("wfe"); }
+// ⚠ the templates here are holo's NEUTRAL mnemonics, not ARM's: `trap` is the
+// BKPT this backend lays (crew/holo/thumb1.l). wfe/wfi have no thumb1 row yet,
+// so an idle handler spins instead of parking.
+static void default_handler(void) { for (;;) asm volatile("trap"); }
 
 // --- crt0 / reset ---------------------------------------------------------
 // boot2 has already loaded SP from vectors[0] and handed control here. Copy
@@ -51,7 +34,7 @@ __attribute__((used, noreturn)) void reset_handler(void) {
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   clocks_init();
   main();
-  for (;;) __asm volatile("wfi"); }
+  for (;;) asm volatile("trap"); }
 
 // --- vector table (at 0x10000100) -----------------------------------------
 // Only the M0+ system vectors; no peripheral IRQs are enabled, so the rest
@@ -136,10 +119,10 @@ int serial_getc(void) {
   return REG(UART_DR) & 0xff; }
 
 // --- clock: milliseconds since boot (64-bit us timer) --------------------
-uintptr_t g_clock(void) {
+uint32_t clock_ms(void) {
   uint32_t lo = REG(TIMER_TIMELR);        // reading LR latches HR
   uint32_t hi = REG(TIMER_TIMEHR);
-  return (uintptr_t) ((((uint64_t) hi << 32) | lo) / 1000u); }
+  return (uint32_t) ((((uint64_t) hi << 32) | lo) / 1000u); }
 
 // --- GPIO via SIO ---------------------------------------------------------
 void gpio_init(unsigned pin) {

@@ -1,151 +1,109 @@
-// Raspberry Pi Pico (RP2040) frontend for gwen lisp -- bare metal, no SDK.
+// Raspberry Pi Pico (RP2040) firmware -- every C file compiled by mooncc -t
+// thumb1 (Cortex-M0+, ARMv6-M). No Pico SDK, no CMake, no vendor headers.
 //
-// gwen's frontend contract (gwen.h): the host defines g_clock, the
-// g_stdin/g_stdout ports, the g_fd_port_vt vtable, and the cooperative-wait
-// hooks. Here the console is UART0 on GPIO0(TX)/GPIO1(RX) at 115200 8N1 -- the
-// same PL011 the aarch64 kernel console drives -- reachable over a USB-serial
-// adapter. The arch backend (rp2040.c) owns the boot chain, clocks, UART, and
-// timer; this file is just the gwen glue plus a few GPIO nifs. The REPL line
-// editor in repl.g drives the console exactly as it drives the kernel's.
-#include "../../gwen.h"
+// NOT love, for the same reason the nucleo446 is not: the 264 KB SRAM is under
+// the arena even a prel-only bake wants, so this is the TOOLCHAIN on silicon.
+// v6-M is the LEANEST target this compiler has -- no FPU at all (every float
+// and double is a libcall), no hardware divide (so is every / and %), and only
+// the low registers for most instructions. test_mps2_t1 runs that ISA under
+// qemu's M7; this port is the same lane on the chip it was written for.
+//
+// Boot, first-light the LED, banner the clock over UART0, then run the battery
+// and let the LED say how it went -- slow blink all green, fast blink a miss.
+// The console is UART0 on GPIO0(TX)/GPIO1(RX) at 115200 8N1, reachable over any
+// USB-serial adapter.
+//
+// ⚠ what this port does NOT yet have is a LINK: the boot2 stage wants its CRC
+// stamped and the .uf2 packed (tools/, still in the pre-rename .g dialect), and
+// thumb relocations are not in holo's linker. `make test_embed` compiles it;
+// nothing links it. See port/rp2040/Makefile.
+#include <stdint.h>
 #include "rp2040.h"
 
-#ifndef EOF
-#define EOF (-1)
-#endif
+static void puts_(const char *s) {
+  for (; *s; s++) { if (*s == '\n') serial_putc('\r'); serial_putc(*s); } }
 
-// --- cooperative waits ----------------------------------------------------
-// The host backs these with poll(2); we have only the free-running timer and
-// a polled UART, so spin against a g_clock() deadline (ticks are ms; ticks==0
-// means wait forever). No IRQs are enabled, so there is nothing to WFE on --
-// a tight poll keeps (key)/timed sleeps re-checking readiness. Same shape as
-// the host's poll_wait, minus the kernel.
-void g_sleep(uintptr_t ms) {
-  if (!ms) { for (;;) __asm volatile("wfe"); }   // infinite: park (reset to exit)
-  uintptr_t start = g_clock();
-  while (g_clock() - start < ms) __asm volatile("nop"); }
+static void putu(uint32_t v) {
+  char b[10]; int n = 0;
+  do { b[n++] = '0' + (char)(v % 10u); v /= 10u; } while (v);
+  while (n) serial_putc(b[--n]); }
 
-bool g_ready(int fd) { return fd == 0 ? serial_rx_ready() : fd >= 0; }
+// --- the battery ----------------------------------------------------------
+// volatile inputs keep every operand a runtime value, so nothing here folds at
+// compile time into the answer it is supposed to be computing.
+static volatile double da = 2.5, db = -1.25, one = 1.0, two = 2.0, big = 1e9;
+static volatile float ff = 1.5f;
+static volatile long long p64 = 0x123456789ABLL;
+static volatile unsigned long long u64 = 0xFEDCBA9876543210ULL;
+static volatile int i7 = 7, i2 = 2, i1000 = 1000, im7 = -7;
+static volatile unsigned u9 = 900000007u;
 
-void g_wait_fds(int const *fds, int n, uintptr_t ms) {
-  if (n <= 0) { g_sleep(ms); return; }
-  if (n > G_WAIT_FDS_MAX) __builtin_trap();
-  uintptr_t start = g_clock();
-  for (;;) {
-    for (int i = 0; i < n; i++) if (g_ready(fds[i])) return;
-    if (ms && g_clock() - start >= ms) return;
-    __asm volatile("nop"); } }
+double am_sin(double), am_cos(double), am_sqrt(double), am_exp(double),
+       am_log(double), am_atan2(double, double);
 
-// --- port vtable ----------------------------------------------------------
-// Both ports ride UART0; the fd is nominal (>= 0 so the dispatcher routes
-// here). Serial never reaches EOF, so the dispatcher's eof_seen latch never
-// trips.
-static struct g *fd_getc(struct g *g) {
-  struct g *fc = g_core_of(g);
-  struct g_io *i = fc->io;
-  if (getcharm(i->ungetc_buf) != EOF) {
-    fc->b = getcharm(i->ungetc_buf);
-    i->ungetc_buf = putcharm(EOF);
-    return g; }
-  fc->b = serial_getc();
-  return g; }
+struct zn { double re, im; };
+static struct zn zmake(double re, double im) {
+  struct zn z; z.re = re; z.im = im; return z; }         // memory-returned
+static double znorm(struct zn z) { return z.re*z.re + z.im*z.im; }
 
-static struct g *fd_ungetc(struct g *g, int c) {
-  struct g *fc = g_core_of(g);
-  struct g_io *i = fc->io;
-  i->ungetc_buf = putcharm(c);
-  i->eof_seen = putcharm(false);
-  return fc->b = c, g; }
-
-static struct g *fd_eof(struct g *g) {
-  struct g *fc = g_core_of(g);
-  struct g_io *i = fc->io;
-  return fc->b = (getcharm(i->ungetc_buf) == EOF) && getcharm(i->eof_seen), g; }
-
-static struct g *fd_putc(struct g *g, int c) {
-  if (c == '\n') serial_putc('\r');     // cook LF -> CRLF for terminals
-  serial_putc(c);
-  return g; }
-
-static struct g *fd_flush(struct g *g) { return g; }   // UART has no buffer
-
-struct g_io g_stdin  = { g_vm_port_io, putcharm(0), putcharm(EOF), putcharm(false) };
-struct g_io g_stdout = { g_vm_port_io, putcharm(1), putcharm(EOF), putcharm(false) };
-// No separate error stream; route err to the console too.
-struct g_io g_stderr = { g_vm_port_io, putcharm(1), putcharm(EOF), putcharm(false) };
-struct g_port_vt const g_fd_port_vt = { fd_getc, fd_ungetc, fd_eof, fd_putc, fd_flush };
-
-// --- GPIO builtins --------------------------------------------------------
-// (gpio_init pin)    -- claim a pin for SIO; returns the pin.
-// (gpio_dir pin out) -- direction: out non-zero => output; returns out.
-// (gpio_put pin val) -- drive an output: val non-zero => high; returns val.
-// (gpio_get pin)     -- sample an input; returns 1 (high) or 0 (low).
-// zero is putcharm(0), so getcharm(arg) != 0 reads a number or zero correctly.
-static g_vm(g_gpio_init) {
-  gpio_init(getcharm(Sp[0]));           // leaves Sp[0] (the pin) as the result
-  Ip += 1;
-  return Continue(); }
-
-static g_vm(g_gpio_get) {
-  Sp[0] = putcharm(gpio_get(getcharm(Sp[0])));
-  Ip += 1;
-  return Continue(); }
-
-static g_vm(g_gpio_dir) {
-  unsigned pin = getcharm(Sp[0]);
-  int out = getcharm(Sp[1]) != 0;
-  gpio_set_dir(pin, out);
-  Sp[1] = putcharm(out);
-  Sp += 1;
-  Ip += 1;
-  return Continue(); }
-
-static g_vm(g_gpio_put) {
-  unsigned pin = getcharm(Sp[0]);
-  int val = getcharm(Sp[1]) != 0;
-  gpio_put(pin, val);
-  Sp[1] = putcharm(val);
-  Sp += 1;
-  Ip += 1;
-  return Continue(); }
-
-// 1-arg nifs run their thunk directly; 2-arg nifs build a 2-slot frame with
-// g_vm_cur first (mirrors the host's nif_open shape).
-static union u const
-  nif_gpio_init[] = {{g_gpio_init}, {g_vm_ret0}},
-  nif_gpio_get[]  = {{g_gpio_get}, {g_vm_ret0}},
-  nif_gpio_dir[]  = {{g_vm_cur}, {.x = putcharm(2)}, {g_gpio_dir}, {g_vm_ret0}},
-  nif_gpio_put[]  = {{g_vm_cur}, {.x = putcharm(2)}, {g_gpio_put}, {g_vm_ret0}};
-
-static struct g_def defs[] = {
-  {"gpio_init", (intptr_t) nif_gpio_init},
-  {"gpio_dir",  (intptr_t) nif_gpio_dir},
-  {"gpio_put",  (intptr_t) nif_gpio_put},
-  {"gpio_get",  (intptr_t) nif_gpio_get}, };
-
-// --- entry ----------------------------------------------------------------
-// reset_handler (rp2040.c) has set up clocks before calling us. The static
-// pool is the whole gwen heap (RP2040 has 264 KB SRAM and no malloc); the
-// rest of SRAM above it is the C stack. The bootstrap egg compiles the gwen
-// compiler with the C evaluator, recompiles it with itself, installs it, then
-// we run the REPL -- identical to host/free, just smaller. The pool is sized
-// as large as fits under the stack; if the self-hosting double-bake ever OOMs
-// on real silicon, shrink it or trim the egg (this is a RAM-fit knob, not a
-// build concern).
-static uint8_t pool[232 * (1 << 10)];
+static int run(void) {
+  int ok = 0;
+#define CK(x) do { ok++; \
+    puts_("; check "); putu((uint32_t)ok); \
+    if (x) puts_(" ok\n"); else { puts_(" FAIL\n"); return 100 + ok; } } while (0)
+  // v6-M has NO divide instruction: every one of these is an __aeabi_ call
+  CK(i1000 / i7 == 142);
+  CK(i1000 % i7 == 6);
+  CK(im7 / i2 == -3);                  // C truncates toward zero, not down
+  CK(im7 % i2 == -1);
+  CK(u9 / 7u == 128571429u);
+  CK(u9 % 7u == 4u);
+  // and no FPU: doubles are the full soft-float set
+  CK(da + db == 1.25);
+  CK(da - db == 3.75);
+  CK(da * db == -3.125);
+  CK(da / db == -2.0);
+  CK(da > db);
+  CK(db < 0.0);
+  CK((long long)(da * 4.0) == 10);
+  CK((double)i7 / (double)i2 == 3.5);
+  // bare floats soften too (no FPv4 to fall back on, unlike the nucleo)
+  CK(ff * ff == 2.25f);
+  CK((double)ff == 1.5);
+  CK(ff + ff == 3.0f);
+  // 64-bit pairs on an 8-register machine
+  CK(u64 % 1000ULL == 720ULL);
+  CK(-p64 == -1250999896491LL);
+  CK(p64 * 3 == 3752999689473LL);
+  CK(u64 >> 16 == 0xFEDCBA987654ULL);
+  CK((long long)u64 == -81985529216486896LL);
+  CK(u64 / 1000ULL == 18364758544493064ULL);
+  // the am math floor, bit-exact (the values harnessam.c pins against gcc)
+  CK(am_sin(one) == 0.8414709848078965);
+  CK(am_cos(two) == -0.41614683654714241);
+  CK(am_sqrt(two) == 1.4142135623730951);
+  CK(am_exp(one) == 2.7182818284590455);
+  CK(am_log(two) == 0.69314718055994529);
+  CK(am_atan2(one, two) == 0.46364760900080609);
+  CK(am_sin(big) == 0.54584344944869956);      // the big-argument reduction
+  // a composite through memory, the shape AAPCS returns via the sret pointer
+  { struct zn z = zmake(da, db);
+    CK(z.re == da && z.im == db);
+    CK(znorm(z) == da*da + db*db); }
+  return ok; }   // 32
 
 int main(void) {
+  // first light before anything else: a board that dies later still shows the
+  // vector table + crt0 + clock bring-up worked.
+  gpio_init(LED_PIN); gpio_set_dir(LED_PIN, 1); gpio_put(LED_PIN, 1);
   serial_init();
-  struct g *g = g_defn(g_ini_s(pool, sizeof pool), defs, LEN(defs));
-  g = g_evals_(g, "("
-#include "egg.h"
-    G_EGG_PRE
-#include "prel.h"
-    " "
-#include "ev.h"
-    G_EGG_POST
-#include "repl.h"
-    "(repl 0 0)");
-  // The REPL only returns on a fatal error. Idle low-power afterward.
-  (void) g;
-  for (;;) __asm volatile("wfe"); }
+  puts_("\n; mooncc/rp2040 (cortex-m0+, thumb1)\n");
+  int r = run();
+  puts_(r <= 100 ? "; all " : "; FAILED at ");
+  putu((uint32_t)(r <= 100 ? r : r - 100));
+  puts_(r <= 100 ? "/32 green\n" : "\n");
+  // the LED is the status channel when no terminal is watching.
+  uint32_t half = r <= 100 ? 500u : 120u;
+  for (;;) {
+    gpio_put(LED_PIN, 1); { uint32_t t = clock_ms(); while (clock_ms() - t < half) {} }
+    gpio_put(LED_PIN, 0); { uint32_t t = clock_ms(); while (clock_ms() - t < half) {} } } }
