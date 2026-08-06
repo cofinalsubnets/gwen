@@ -722,4 +722,4 @@
 ; a welp-face help so a scare answers a visible value (to the moor client, or
 ; at a drain/serve raise site) instead of dropping the compositor -- the
 ; dock's shape: answer ('scare a b), the only bit a help sees.
-(hear (\ s a b `('scare a b)))
+(hear (\ a b `('scare a b)))

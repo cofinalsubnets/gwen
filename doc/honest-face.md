@@ -1,7 +1,7 @@
 # the honest face is the missing face of the answer
 
 A reading of the condition system. `help` is the global function that turns a raise into an
-**answer** (`(help s a b)` → a value, delivered per the status bits). So when help is missing,
+**answer** (`(help a b)` → a value, delivered back at the raise site). So when help is missing,
 the *answer* is missing — and what shows instead is the **honest face** `;; a b`
 (host/main.c's scare exit-face, `ai_scare_face_`).
 

@@ -1911,12 +1911,14 @@ lvm(lvm_calloutresume) { ai_musttail return Answer(putcharm((intptr_t) callout_r
 // ============================================================================
 // the lisp help calling convention
 // ============================================================================
-// an installed help makes a raise the call (help s a b) through help_drive
-// (numap_drive's 3-arg twin) into a per-class epilogue: help_ret_more delivers the
+// an installed help makes a raise the call (help a b) through help_drive
+// (numap_drive's 2-arg twin) into a per-class epilogue: help_ret_more delivers the
 // help's result to the raise site's resume text -- ⚠ despite the name, the
 // DELIBERATE-scare lane, what makes (scare a b) and `missing` resumable; a bare
 // scare is observed, then takes the default escape to C.
-static lvm(help_ret_more) {   // [result resume port sentinel ..] -> resume sees result
+// ⚠ the epilogue's arithmetic is the RAISE SITE's 3-word frame [resume a b], not
+// the help frame the drive consumes, so the two sizes move apart.
+static lvm(help_ret_more) {   // [result resume a b ..] -> resume sees result
  Ip = cell(Sp[1]);
  Sp[3] = Sp[0];
  Sp += 3;
@@ -1926,26 +1928,26 @@ static lvm(help_ret_scare) {  // result ignored: scares are not (yet) resumable
 static union u const help_more_k[] = { {help_ret_more} };
 static union u const help_scare_k[] = { {help_ret_scare} };
 static union u const help_drive[] =
- { {lvm_ap}, {.ap = ap_next}, {.ap = ap_next}, {.ap = lvm_ret0} };
+ { {lvm_ap}, {.ap = ap_next}, {.ap = lvm_ret0} };
 
-// raise a scare with data a/b at the heard help as (help 1 a b); helpless (or
+// raise a scare with data a/b at the heard help as (help a b); helpless (or
 // still too tight after a collect) hand the scare-encoded core back to C.
 // callers Pack first (ip stays at the raise site); a/b survive the collect in
 // the scare_a/b stash, so the raise buys its own frame and never allocates.
 static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
  c->scare_a = a, c->scare_b = b;  // for the exit face
  word h = c->hot_help;
- if (!ai_nilp(c, h) && avail(c) < 5) {
-  struct ai *p = ai_please(c, 5);
+ if (!ai_nilp(c, h) && avail(c) < 4) {
+  struct ai *p = ai_please(c, 4);
   if (!ai_ok(p)) return encode(ai_core_of(p), ai_status_scare);
   c = ai_core_of(p);                            // moved: re-derive every pointer
   a = c->scare_a, b = c->scare_b;
   h = c->hot_help; }
- if (!ai_nilp(c, h) && avail(c) >= 5) {
-  word *sp = c->sp -= 5;          // [s h a b K | raise site data ..]
-  sp[0] = putcharm(ai_status_scare), sp[1] = h;
-  sp[2] = a, sp[3] = b;
-  sp[4] = word(K);
+ if (!ai_nilp(c, h) && avail(c) >= 4) {
+  word *sp = c->sp -= 4;          // [a h b K | raise site data ..]
+  sp[0] = a, sp[1] = h;
+  sp[2] = b;
+  sp[3] = word(K);
   c->ip = (union u*) help_drive;
 #if ai_tco
   return c->ip->ap(c, c->ip, c->hp, c->sp);
@@ -1955,8 +1957,7 @@ static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
  }
  return encode(c, ai_status_scare);
 }
-// re-raise a failed op's scare: bare data, observe-then-terminal. (the one
-// status that ever reaches here is scare -- more/eof die in the reader.)
+// re-raise a failed op's scare: bare data, observe-then-terminal.
 struct ai *ghelp(struct ai *g) { return ai_raise(ai_core_of(g), zero, zero, help_scare_k); }
 // (scare a b): the deliberate raise. the raise point is a clean boundary, so the
 // help's result is delivered back as the value via the more continuation; helpless
@@ -1985,7 +1986,7 @@ static ai_noinline word missing_tag(struct ai *g) {
  return ai_ok(h) ? ai_pop1(h) : 0; }
 
 // a read of the LIVE book by name -- the global twin of boxfix's (missing cell
-// 'nom). a miss raises (help 1 'missing nom); helpless it reads the zero point.
+// 'nom). a miss raises (help 'missing nom); helpless it reads the zero point.
 // the site never self-patches: a later define is seen, a rebind honoured.
 lvm(lvm_index) {
  Have1();                          // room for the push first (may GC; no live local held yet)

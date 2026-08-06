@@ -150,7 +150,7 @@
 
 ; ... and a taken signal re-raised through the condition system IS the doc's
 ; "signals arrive as conditions": scare routes it to the installed help policy
-(hear (\ s a b (L 'gotsig a b)))
+(hear (\ a b (L 'gotsig a b)))
 (assert (= (L 'gotsig 'sigusr1 (getpid 0)) (scare 'sigusr1 (getpid 0))))
 (hear 0)
 

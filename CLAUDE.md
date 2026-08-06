@@ -105,6 +105,8 @@
 ;   result wearing a real one's face. so ask presence out of band ((member? 'x (names ())), never
 ;   `(lit? x)`, which reads x). a help is installed, not bound: (hear f)
 ;   writes the hot_help slot, (hear ()) uninstalls, (heard ()) reads -- `help` is not a book name.
+;   ⚠ a help takes (a b), the condition and nothing else, and THE ARITY IS THE PROTOCOL: a stale
+;   3-arg one under-applies to a closure, which is truthy, and the raise site takes it as a value.
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the crew (crew/, the apps) rides over the core, each owning non-overlapping files so a session
 ;   can take one in parallel: lux (the X11 window manager), inle (the freestanding kernel,

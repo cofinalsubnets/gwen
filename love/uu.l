@@ -292,7 +292,7 @@
       _ (pin GLOB nm `(Tv `('nv nm)))
       nm)
    (rejects th)
-   (: r (call-cc (\ k (: _ (pin HELPC () (\ s a b (k 'rejected)))
+   (: r (call-cc (\ k (: _ (pin HELPC () (\ a b (k 'rejected)))
                          v (th 0)
                          'accepted)))
       _ (pin HELPC () 0)

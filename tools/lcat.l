@@ -6,7 +6,7 @@
 ; token (bytes since the last HARD boundary) and the whole next FORM are re-parsed
 ; with and without the space, and the space is redundant iff both spellings yield
 ; the SAME datums (`o(` reads the same as `o (`, but `-5` and `- 5` do not, and
-; `scare? s` must keep its space -- `scare?s` is ONE name token). Two things make
+; `two? s` must keep its space -- `two?s` is ONE name token). Two things make
 ; this reader-change-proof, where a count over one byte was not: the probe reaches
 ; the whole next form (so a quote sees its operand -- `ev'ev` vs `ev 'ev`), and it
 ; compares the datums themselves, not a count (a re-tokenization can keep the count

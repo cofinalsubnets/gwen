@@ -39,7 +39,7 @@
 ; scare -- so this file installs its own: a missing read answers the zero point and the case
 ; runs on, everything else still delegates to the default and stops the file.
 (: fzhelp (heard ())
-   _ (hear (\ s a b (? (&& (scare? s) (id? a 'missing)) () (fzhelp s a b)))))
+   _ (hear (\ a b (? (id? a 'missing) () (fzhelp a b)))))
 
 (: ; globals the call-out lane can resolve -- two arithmetic, two that hand back a value
    ; the integer lane cannot hold, so the lane must decline rather than emit nothing

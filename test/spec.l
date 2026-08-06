@@ -542,9 +542,9 @@
 ; presence, since a task run for its effect answers () and is handed back all the same.
 ; the RNG is xoshiro256++, two layers: FUNCTIONAL seed/random
 ; (explicit-state, reproducible) and GLOBAL rand/randf (a hidden clock-seeded stream; (rng-set
-; (wheel n)) pins it). the heard help ((hear f) installs it) takes every raise as (help s a b) -- s the status word,
-; scare (1) and more (2) bits; `welp` is the FLOOR HANDLER: keeps the read protocol, answers the
-; zero point on a bare scare (the shell's default help is welp with a face). a missing name
+; (wheel n)) pins it). the heard help ((hear f) installs it) takes every raise as (help a b) -- the
+; condition, and nothing else, since every raise that reaches a help is a scare; `welp` is the
+; FLOOR HANDLER: answers the zero point (the shell's default help is welp with a face). a missing name
 ; raises (scare 'missing nom) -- ONE LAW AT EVERY DEPTH: a `:` binding read before its pin,
 ; (missing t k) on a tablet miss, all the same condition; a closure captures its free globals at
 ; CREATION, so a lambda's missing read fires at the define, not the call. numeral COMPOSE
@@ -559,7 +559,7 @@
     _ (drain ()) p (twirl (\ _ ()) ()) _ (rest 0) s (scoop 0)
     (&& (two? s) (&& (p = (cap s)) (nil? (cup s)))))             ; a () retval is STILL a pair
  !(rest 0) (4 = (tally (wheel 1))) ((rand 10) < 10) (gem? (randf 0))
- (scare? 1) !(scare? 2) (lit? scare)
+ (lit? scare)
  (tablet? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
  (: st (wheel 7) ((cap (random st 0)) = (cap (random st 0)))))
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)

@@ -271,9 +271,6 @@
  ; ahead. `in` already flows that way: it holds nothing in hand.
  (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p))))))
  (show x) (: o (jug 0) _ (print o x) (slurp o)))
-; the help status reader. one bit reaches a help: scare (1). `sound` answers its own nothings as
-; values, so nothing raises the more bit.
-(: (scare? s) (= s 1))
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
 ; reads (). test a result with ? or id?, not arithmetic.

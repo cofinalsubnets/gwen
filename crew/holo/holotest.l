@@ -269,7 +269,7 @@
    ;; non-commutative), raising 'alias-dst rather than emitting subtly wrong bytes. the help traps
    ;; that scare and delegates everything else back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
-   _ (hear (\ s a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp s a b))))
+   _ (hear (\ a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp a b))))
    _ (holo-bytes 'x64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
@@ -277,7 +277,7 @@
    ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
    ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
    spcaught (tablet 0) _ (pin spcaught 0 0)
-   _ (hear (\ s a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp s a b))))
+   _ (hear (\ a b (? (a = 'arm64-alu-sp) (: _ (pin spcaught 0 1) ()) (welp a b))))
    _ (holo-bytes 'arm64 '((sub sp sp r0)))
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
@@ -347,7 +347,7 @@
    ;; linking somewhere plausible: the base encoding is rebuilt and compared, so no inverse
    ;; scatter has to exist for the check to be honest.
    rfcaught (tablet 0) _ (pin rfcaught 0 0)
-   _ (hear (\ s a b (? (a = 'thumb-refix-addend) (: _ (pin rfcaught 0 1) ()) (welp s a b))))
+   _ (hear (\ a b (? (a = 'thumb-refix-addend) (: _ (pin rfcaught 0 1) ()) (welp a b))))
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same BL two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 

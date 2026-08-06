@@ -241,8 +241,8 @@ on the front page):
   rebuild ITSELF byte-identically. it builds real third-party C too (gnu tar,
   m4) and is closing on clang -O2 on the code it emits. [crew/moon/](crew/moon/)
 - status rides the pointer tag bits, and a global `help` function receives every
-  raise as `(help s a b)`. the SCARE bit is the one a help sees: the reader
-  answers its own nothings as values rather than raising them.
+  raise as `(help a b)` -- the condition, and nothing else: the reader answers its
+  own nothings as values rather than raising them.
 - `=` is exact, so e^(i*pi) honestly misses -1 by ~1e-16 -- but the principal
   log is exact (`(log -1) = i * pi`, since atan2(0,-1) is pi by IEEE fiat),
   and sqrt factors its angle through sinpi/cospi, so `(1 / 2) -1 = i` on the

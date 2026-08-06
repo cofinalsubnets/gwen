@@ -15,11 +15,9 @@
 ; re-prompts: a crash never eats the terminal (installed in (sh _), main.l).
 
 (: ; --- the floor: bao's shell-help shape, cooked first so the print lands clean
-   (lush-help s a b)
-     (? (scare? s)
-        (: _ (raw 0) _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10)
-           (welp s a b))
-        (welp s a b))
+   (lush-help a b)
+     (: _ (raw 0) _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10)
+        (welp a b))
 
    ; --- the prompt --------------------------------------------------------------
    (sh-rfind s b)

@@ -62,7 +62,7 @@
   if (init() !== 0) { status.textContent = 'the image failed to boot.'; return; }
   // the shell's default help: a condition prints ";; a b" and answers (), so
   // the session survives every raise -- the same law as the native shell.
-  ev("(hear (\\ s a b (? (eof? s) b (more? s) a (: _ (puts \";; \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ()))))");
+  ev("(hear (\\ a b (: _ (puts \";; \") _ (putx a) _ (puts \" \") _ (putx b) _ (putc 10) ())))");
   // webln: bao's line protocol (parseall's law) for a STRING -- read every
   // top-level datum; ONE datum evaluates as-is, MANY become the application
   // (a b c).

@@ -127,7 +127,7 @@
 ; a welp-face help so a scare returns a visible value (to the repl client, or
 ; at a driver raise site) instead of dropping the wm -- the dock's shape:
 ; answer ('scare a b), the only bit a help sees.
-(hear (\ s a b `('scare a b)))
+(hear (\ a b `('scare a b)))
 
 (: s (x-connect lux-display)
    _ (? s 0 (: _ (say err "lux: no display -- Xephyr up?\n") (quit 1)))

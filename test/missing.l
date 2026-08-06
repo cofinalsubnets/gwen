@@ -1,6 +1,6 @@
 ; missing -- a nom not in the book (the global table). reading one is a
 ; CALL FOR HELP: with a global help installed the read raises
-; (help 1 'missing nom) and the help's result becomes the value at the site;
+; (help 'missing nom) and the help's result becomes the value at the site;
 ; helpless it reads the ZERO POINT -- the mint at serial 0: nameless, false,
 ; and a unit (absence absorbs application). the read happens where the code says it does: a closure
 ; captures its free globals at creation, so a missing read in a lambda body fires
@@ -20,12 +20,12 @@
 ; armed help the read still answers its own 0 (presence beats value; the
 ; value no longer tells bound from missing apart -- the condition lane does)
 (: an-zero 0)
-(hear (\ s a b 'BOOM))
+(hear (\ a b 'BOOM))
 (assert (0 = an-zero) !(id? 'BOOM an-zero) !(id? (:) an-zero))
 (hear 0)
 
-; the help hears (help s 'missing nom) and its result is the value at the site
-(hear (\ s a b (? (&& (scare? s) (id? a 'missing)) `('missing-was b) 0)))
+; the help hears (help 'missing nom) and its result is the value at the site
+(hear (\ a b (? (id? a 'missing) `('missing-was b) 0)))
 (assert (: r an-ghost
            (&& (two? r) (id? 'missing-was (cap r)) (id? 'an-ghost (caup r)))))
 (hear 0)
@@ -35,7 +35,7 @@
 ; with the help installed across both moments, both lanes answer the help.
 ; NOTE the discipline: love0 runs this corpus TWICE in one scope, so a name
 ; asserted missing must NEVER be defined later -- the second pass would fold it.
-(hear (\ s a b (? (&& (scare? s) (id? a 'missing)) 42 0)))
+(hear (\ a b (? (id? a 'missing) 42 0)))
 (: (an-g _) an-phantom)
 (assert (42 = (an-g 0)))
 (hear 0)
@@ -54,11 +54,11 @@
  (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the cell, once pinned
 
 ; the help hears the cell miss too; the payload is the binding-site nom
-(hear (\ s a b (? (&& (scare? s) (id? a 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
+(hear (\ a b (? (&& (id? a 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
 (assert (id? 'cell-nom (: q an-fwd an-fwd 2 q)))
 (hear 0)
 
-(hear (\ s a b (? (&& (scare? s) (id? a 'missing)) 'fired 0)))
+(hear (\ a b (? (id? a 'missing) 'fired 0)))
 (assert (id? (:) ()) (id? (?) ()) (id? (\) ()))
 (hear 0)
 

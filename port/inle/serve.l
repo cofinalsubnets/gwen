@@ -167,12 +167,12 @@
 
    ; a welp-face help so a scare returns a visible value to the client instead
    ; of dropping the dock: it answers (scare a b) so the client sees WHAT went
-   ; wrong, and the scare bit is the only one a help sees. this is
-   ; shell-help's shape, aimed at a socket peer rather than a local tty. it is a
-   ; leaked top-level global (the web term installs help the same way) -- `book`
-   ; is mopped off the globals post-egg, so a live `(pin book 'help ..)` can't
-   ; reach it; a plain top-level binding is how help gets installed after birth.
-   (help s a b)
+   ; wrong. this is shell-help's shape, aimed at a socket peer rather than a
+   ; local tty. it is a leaked top-level global (the web term installs help the
+   ; same way) -- `book` is mopped off the globals post-egg, so a live
+   ; (pin book 'help ..) can't reach it; a plain top-level binding is how help
+   ; gets installed after birth.
+   (help a b)
      `('scare a b)
 
    ; the entry: stash the relaunch argv (so `adopt` can re-exec this exact

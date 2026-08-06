@@ -53,7 +53,7 @@
 
 ; the kernel refuses through the help cell -- install the escape (test/uu.l's
 ; own tail move; the kernel span rightly bakes NO global help), probe, uninstall
-(hear (\ s p e (: h (peep (uu 'HELPC) () 0) (? h (h s p e) 0))))
+(hear (\ p e (: h (peep (uu 'HELPC) () 0) (? h (h p e) 0))))
 (assert (id? 'rejected ((uu 'rejects) (\ z ((uu 'defn) 'boot-bad 'nat '(lam x x))))))
 (hear 0)
 

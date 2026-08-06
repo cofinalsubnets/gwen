@@ -1111,7 +1111,7 @@
       (! (two? (csdefs '(st sp 80 r11))))            ; a save writes memory, not the register
       (id? 'dark (csdefs '(frob r0))))               ; an op on neither roster is dark -> refuses
    klog (tablet 0)
-   _ (hear (\ s p e (: _ (pin klog p (+ 1 (peep klog p 0))) 0)))
+   _ (hear (\ p e (: _ (pin klog p (+ 1 (peep klog p 0))) 0)))
    _ (cskeep ck9 '((label f9) (mov r12 r6) (ret)))                 ; written bare: the cs9 shape
    _ (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6)
                    (cmp r6 r5) (br lt .k9) (ret)                   ; one path exits dirty
@@ -1136,7 +1136,7 @@
       (member? '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
       (! (member? '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))))
    mlog (tablet 0)
-   _ (hear (\ s p e (: _ (pin mlog p (+ 1 (peep mlog p 0))) 0)))
+   _ (hear (\ p e (: _ (pin mlog p (+ 1 (peep mlog p 0))) 0)))
    _ (sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi))   ; a live insn after the call: no tail
    _ (: t9 (tablet 0) _ (pin t9 'tgt 'x64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
         (sibcall t9 '((label f9) (call g9 must) (ret))))               ; the whole-fn decline

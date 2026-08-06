@@ -330,13 +330,12 @@
               (repl nhu nhd))))
 
    ; welp -- the floor handler, help that has given up: answer the zero point,
-   ; whatever the condition. (it kept the read protocol too, until the reader
-   ; stopped raising one.) this is the fromempty the introductions (scare,
+   ; whatever the condition. this is the fromempty the introductions (scare,
    ; missing) never named: from any condition, a value -- and the value of the
    ; absorbed condition is the point, the held inhabitant of nothing, so
    ; (i love you) stays 1. any policy that runs out of cases delegates here:
-   ; (\ s a b (? (mine? a) .. (welp s a b))).
-   welp (\ s a b ())
+   ; (\ a b (? (mine? a) .. (welp a b))).
+   welp (\ a b ())
 
    ; the face a raise wears -- ;; a b -- ⚠ ON ERR: a DIAGNOSTIC, and a script's stdout is the
    ; script's (the C print this stands in for always went there). the two defaults share it and
@@ -348,10 +347,8 @@
    ; nif (wasm) folds the name to the point at this define, so (quit 1) is a no-op there and
    ; the floor is what answers. never let the quit be the answer -- it would be 1.
    (hface a b) (: _ (say err ";; ") _ (print err a) _ (say err " ") _ (print err b) (put err 10))
-   shell-help (\ s a b (: _ (? (scare? s) (hface a b)) (welp s a b)))
-   file-help  (\ s a b (: _ (? (scare? s) (hface a b))
-                          _ (? (scare? s) (quit 1))
-                          (welp s a b)))
+   shell-help (\ a b (: _ (hface a b) (welp a b)))
+   file-help  (\ a b (: _ (hface a b) _ (quit 1) (welp a b)))
 
    ; INSTALLED AT LOAD, not at the prompt: file mode is where nobody was listening. an unbound
    ; global already surfaced from C, a `:` read before its pin did not, and both answer the zero

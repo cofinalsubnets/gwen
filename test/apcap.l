@@ -9,7 +9,7 @@
 ; install a help that answers 'apcap scares with (capped k); anything else
 ; falls through to whatever was installed before (nil pre-help.l: const-1).
 (: apcap-t0 (heard ()))
-(hear (\ s a b (? (&& (scare? s) (= a 'apcap)) `('capped b) (apcap-t0 s a b))))
+(hear (\ a b (? (= a 'apcap) `('capped b) (apcap-t0 a b))))
 (assert
  ; a bignum compose count saturates to maxcharm, far above the cap -> scares
  (: r ((100 2) (+ 1)) (&& (= 'capped (cap r)) (< 1048576 (caup r))))
