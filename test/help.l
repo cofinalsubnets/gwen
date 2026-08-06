@@ -36,6 +36,26 @@
 (assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))   ; net-1 help: the miss fires it -> 1, no helpless read
 (hear 0)
 
+; the help is PER TASK: a raise finds the one its OWN task installed. one shared
+; slot would hand every task whichever install landed last -- and a help that
+; escapes (call-cc) would then land in another task's stack. ⚠ every twirl here
+; is caught: an orphan stalls the kernel runner.
+(assert (: pa (twirl (\ _ (: _ (hear (\ a b 'A)) _ (rest 0) (scare 'x 0))) ())
+           pb (twirl (\ _ (: _ (hear (\ a b 'B)) _ (rest 0) (scare 'x 0))) ())
+           ra (catch pa) rb (catch pb)
+           (&& (id? ra 'A) (id? rb 'B))))
+; a child starts under its parent's help, and its own install stays its own
+(hear (\ a b `('parent a)))
+(assert (: pc (twirl (\ _ (: _ (rest 0) (scare 'from-c 0))) ())        ; installs none
+           rc (catch pc)
+           pd (twirl (\ _ (: _ (hear (\ a b 'child)) _ (rest 0) (scare 'x 0))) ())
+           rd (catch pd)
+           mine (scare 'mine 0)
+           (&& (two? rc) (id? 'from-c (caup rc))        ; inherited the parent's
+               (id? rd 'child)                          ; ... its own install took
+               (two? mine) (id? 'mine (caup mine)))))   ; ... and the parent's survived it
+(hear 0)
+
 ; welp -- the floor handler (repl.l), the fromempty the introductions never
 ; named: it welps a raise to the ZERO POINT, whatever the condition. it is a
 ; plain function, not the installed help -- a policy that runs out of cases

@@ -242,6 +242,10 @@ struct ai {
    ai_word hot_help;  // 5: the INSTALLED HELP, the one DYNAMIC slot: (hear f) installs,
                   // (hear ()) uninstalls, (heard ()) answers; zero = helpless, raises
                   // take the default escape. read by ai_raise/lvm_index, never the book.
+                  // ⚠ PER TASK: this is the running task's live copy, saved into its node
+                  // and restored on the switch (like Ip/Sp), inherited at spawn. one shared
+                  // help cannot serve two tasks -- an escaping handler would land in the
+                  // wrong stack, and the last install would win for everyone.
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
                   // read by use/from. a lazy singleton, so both bootstrap prel runs
                   // capture the SAME tablet. in v0..end: traced + serialized.

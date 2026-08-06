@@ -697,15 +697,16 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->major_base = g->major_hp = g->major_pool, g->rem_cap = AI_REM_CAP, g->budget = ai_budget;
  g->next_wait_events = ai_wait_in;
  // book + macro maps (lookup-lambdas) then the main task thread.
- if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 7))) {
-  union u *M = bump(g, 7);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
+ if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 8))) {
+  union u *M = bump(g, 8);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
   M[0].m = M;
   M[1].x = zero;   // sentinel; replaced on first yield
   M[2].x = zero;   // main pid
   M[3].x = zero;   // wake_at: zero means "always runnable"
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   M[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
-  g->tasks = tagthread(M, 6);
+  M[6].x = zero;   // help: helpless until the first (hear f)
+  g->tasks = tagthread(M, 7);
   g->parked = NULL;   // nothing is fd-parked before the first task ever parks
   // book[zero] = macro (the macro table -- no separate field). Both are on the
   // stack; push the zero key so (sp2,sp1,sp0)=(book,macro,zero) for ai_mapput.
@@ -2278,7 +2279,7 @@ static ai_inline int task_live(struct ai *g, union u *head, intptr_t pid, int me
 
 // is this parked task sitting on a port already holding bytes? bytes live in the
 // PORT, not the fd; a reader parks with Ip unadvanced, so its port is the top of
-// its saved stack. ⚠ the ap guard is what makes reading n[6] legal: only these two
+// its saved stack. ⚠ the ap guard is what makes reading n[7] legal: only these two
 // ops park with a port at Sp[0]; every other parker answers false first.
 static ai_inline bool wait_buffered(struct ai*, lvm_t*, word, int);
 
@@ -2302,9 +2303,9 @@ static ai_inline int polled_ready(struct ai_wait_fd const *fds, int nfds, int *c
 static ai_inline union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live) {
  for (union u *n = head->m; n != head; n = n->m)
   if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
-   if (n[1].m->ap == lvm_wait && task_live(g, head, getcharm(n[6].x), me_live)) continue;
+   if (n[1].m->ap == lvm_wait && task_live(g, head, getcharm(n[7].x), me_live)) continue;
    int wf = (int) getcharm(n[4].x);
-   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)
+   if (wf < 0 || wait_buffered(g, n[1].m->ap, n[7].x, wf)
        || ai_ready(wf, (int) getcharm(n[5].x))) return n; }
  return NULL; }
 
@@ -2316,7 +2317,7 @@ static ai_inline int parked_ready(struct ai *g, union u *n, uintptr_t now,
                                   struct ai_wait_fd const *fds, int nfds, int *cur, int ask) {
  if (n[1].m->ap == lvm_task_exit || (uintptr_t) getcharm(n[3].x) > now) return 0;
  int wf = (int) getcharm(n[4].x), ev = (int) getcharm(n[5].x);
- if (wf < 0 || wait_buffered(g, n[1].m->ap, n[6].x, wf)) return 1;
+ if (wf < 0 || wait_buffered(g, n[1].m->ap, n[7].x, wf)) return 1;
  int pr = polled_ready(fds, nfds, cur, wf, ev);
  return pr < 0 ? (ask && ai_ready(wf, ev)) : pr; }
 
@@ -2452,16 +2453,16 @@ lvm(lvm_yield_sw) {
    if (g->yield_ctr >= yield_interval) g->yield_ctr = 0;
    ai_musttail return Continue(); } }
  word my_height = topof(g) - Sp;
- union u *next_stack = next + 6,
+ union u *next_stack = next + 7,
        *end = (union u*) ttag(g, next_stack);
  uintptr_t restore_h = end - next_stack,
-           need = my_height + restore_h + 7;
+           need = my_height + restore_h + 8;
  if (Sp < Hp + need) {
   Pack(g);
   if (!ai_ok(g = ai_please(ai_push(g, 1, next), need))) return ghelp(g);
   next = cell(pop1(g));
   Unpack(g);
-  next_stack = next + 6; }   // recompute: next was forwarded by gc
+  next_stack = next + 7; }   // recompute: next was forwarded by gc
  g->next_wake_at = 0;
  g->next_wait_fd = -1;
  g->next_wait_events = ai_wait_in;
@@ -2479,8 +2480,9 @@ lvm(lvm_yield_sw) {
  N[3].x = putcharm((intptr_t) my_wake);
  N[4].x = putcharm(my_wait_fd);
  N[5].x = putcharm(my_events);
- memcpy(N + 6, Sp, my_height * sizeof(word));
- tagthread(N, 6 + my_height);
+ N[6].x = g->hot_help;            // the help is the TASK's: saved here, restored below
+ memcpy(N + 7, Sp, my_height * sizeof(word));
+ tagthread(N, 7 + my_height);
  // the run ring closes over the departing head either way: onto the snapshot when it
  // stays, or over it entirely when it parks.
  prev->m = parking ? g->tasks->m : N;
@@ -2496,6 +2498,7 @@ lvm(lvm_yield_sw) {
   else g->parked = N; }
  g->yield_ctr = 0;
  g->tasks = next;
+ g->hot_help = next[6].x;
  Sp = memmove(topof(g) - restore_h, next_stack, restore_h * sizeof(word));
  Ip = next[1].m;
  ai_musttail return Continue(); }
@@ -2504,10 +2507,10 @@ lvm(lvm_yield_nif) { Ip++; ai_musttail return Ap(lvm_yield_sw, g); }
 lvm(lvm_task_exit) { ai_musttail return Ap(lvm_yield_sw, g); }
 static union u const spawn_body[] = { {lvm_ap}, {.ap = lvm_task_exit} };
 lvm(lvm_spawn) {
- Have(9);
- // New task node N: [next, saved_ip=spawn_body, pid, wake_at, wait_fd, wait_events, stack[0..1]=x,fn, tag]
+ Have(10);
+ // New task node N: [next, saved_ip=spawn_body, pid, wake_at, wait_fd, wait_events, help, stack[0..1]=x,fn, tag]
  union u *N = (union u*) Hp;
- Hp += 9;
+ Hp += 10;
  word fn = Sp[0], x = Sp[1];
  uintptr_t pid = ++g->next_serial;   // a pid is a fresh identity: drawn from the mint stream
  N[0].m = g->tasks->m;
@@ -2516,9 +2519,10 @@ lvm(lvm_spawn) {
  N[3].x = zero;         // wake_at: sentinel for "always runnable"
  N[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O
  N[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
- N[6].x = x;
- N[7].x = fn;
- g->tasks->m = tagthread(N, 8);
+ N[6].x = g->hot_help;   // INHERITED: a child starts under its parent's help, never helpless
+ N[7].x = x;
+ N[8].x = fn;
+ g->tasks->m = tagthread(N, 9);
  Pack(g);   // sync: ai_young reads g->hp (see lvm_yield_sw)
  gen_wb(g, (word) g->tasks, (word) g->tasks->m);   // task ring: an old node now links to the fresh (young) spawned task
  ai_musttail return Nextp(1, 1); }
@@ -2529,8 +2533,8 @@ lvm(lvm_wait) {
  for (union u *node = g->tasks->m; node != g->tasks; node = node->m) {
   if (getcharm(node[2].x) != target) continue;
   if (node[1].m->ap == lvm_task_exit) {
-   // dormant: dormant task's stack is just [retval] at node[6]
-   ret = node[6].x;
+   // dormant: dormant task's stack is just [retval] at node[7]
+   ret = node[7].x;
    union u *prev = node;
    while (prev->m != node) prev = prev->m;
    prev->m = node->m;
@@ -2574,7 +2578,7 @@ lvm(lvm_scoop) {
  Have(Width(struct ai_chain));
  for (union u *prev = g->tasks, *node = prev->m; node != g->tasks; prev = node, node = node->m) {
   if (node[1].m->ap != lvm_task_exit) continue;
-  word pid = node[2].x, ret = node[6].x;   // dormant: the stack is just [retval] at node[6]
+  word pid = node[2].x, ret = node[7].x;   // dormant: the stack is just [retval] at node[7]
   struct ai_chain *p = (struct ai_chain*) Hp;
   Hp += Width(struct ai_chain);
   ini_chain(p, pid, ret);
