@@ -173,19 +173,16 @@ static void cb_px1(uint8_t *base, intptr_t w, uint32_t cell, intptr_t x, intptr_
    row[k * 4 + 2] = (uint8_t) (px >> 16);
    row[k * 4 + 3] = 0; } } }
 
-// the builtin faces as a static atlas each, laid on first use
-static uint8_t cb_bi0[4 + 256 * 16], cb_bi1[4 + 256 * 8];
-static void cb_bi_ini(void) {
- if (cb_bi0[0]) return;
- cb_bi0[0] = 8, cb_bi0[1] = 16;
- for (int i = 0; i < 256 * 16; i++) cb_bi0[4 + i] = moderndos_8x16[i / 16][i % 16];
- cb_bi1[0] = 8, cb_bi1[1] = 8;
- for (int i = 0; i < 256 * 8; i++) cb_bi1[4 + i] = cga_8x8[i / 8][i % 8]; }
+// the two builtins. the glyphs ARE the quay tables -- a [256][n] is flat, so an atlas
+// needs no copy of them. the 4-byte {w,h,0,0} head is a fact about the table, not part
+// of it: it exists on the WIRE, where a cask carries the shape out to love.
+static struct cb_atlas const cb_builtin[2] = {
+ { (uint8_t const*) moderndos_8x16, 8, 16, 1 },
+ { (uint8_t const*) cga_8x8,        8,  8, 1 } };
 // resolve a font arg: a valid atlas cask, or anything else -> builtin 0
 static void atlas_of(ai_word x, struct cb_atlas *a) {
  if (atlas_ok(x, a)) return;
- cb_bi_ini();
- a->g = cb_bi0 + 4, a->w = 8, a->h = 16, a->bpr = 1; }
+ *a = cb_builtin[0]; }
 
 // (font b k): bake builtin k (0 moderndos 8x16, 1 cga 8x8) into cask b as
 // an atlas; a non-cask b answers the byte count -- the screen size protocol.
@@ -193,14 +190,15 @@ static lvm(lvm_font) {
  ai_word b = Sp[0], out = ZeroPoint;
  intptr_t k = (Sp[1] & 1) ? getcharm(Sp[1]) : -1;
  if (k == 0 || k == 1) {
-  uintptr_t need = k == 0 ? sizeof cb_bi0 : sizeof cb_bi1;
+  struct cb_atlas const *bi = &cb_builtin[k];
+  uintptr_t body = 256u * (uintptr_t)(bi->h * bi->bpr), need = 4 + body;
   if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
   else {
    struct ai_str *s = ((struct ai_cask*) b)->str;
    if (s->len >= need) {
-    cb_bi_ini();
-    uint8_t const *src = k == 0 ? cb_bi0 : cb_bi1;
-    for (uintptr_t i = 0; i < need; i++) s->bytes[i] = (char) src[i];
+    s->bytes[0] = (char) bi->w, s->bytes[1] = (char) bi->h;   // the head is minted here, on the wire
+    s->bytes[2] = s->bytes[3] = 0;
+    memcpy(s->bytes + 4, bi->g, body);
     out = b; } } }
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
