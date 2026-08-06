@@ -50,6 +50,30 @@ test_front: $(ho)/front
 	  cat out/host/.test_front.out; \
 	  { [ $$r -eq 0 ] && grep -q "front: ok" out/host/.test_front.out; } \
 	    || { echo "FAIL test_front (exit $$r)"; exit 1; }
+# test_embed -- EVERY FRONTEND COMPILED, NONE BOOTED. The embed sites each spell love.h's
+# structs and their own ai_libs table, so a core ABI edit breaks them; but every gate that
+# would SAY so boots, sits in test_extra, and costs minutes -- and the three thumb lanes
+# skip outright without arm-none-eabi, so on a bare box those ports had no gate at all.
+# This one asks for the object and stops there: seconds, and no qemu anywhere.
+# ⚠ each frontend is asked for ITS OWN main.o through ITS OWN makefile. Re-spelling the
+# flags here would drift from the build this claims to gate, and a green would mean nothing.
+# ⚠ port/rp2040/main.c is NOT in the roster: it includes gwen.h and repl.h, neither of which
+# this tree has, so it has not compiled in a long time and is gated nowhere. Its own errand.
+embed_ports = mps2 teensy41 nucleo446 playdate virt
+# the aarch64 kernel face needs a CROSS-CAPABLE KCC -- ours or clang, never a native gcc
+embed_a64 = $(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))
+.PHONY: test_embed
+test_embed: host $(ho)/mooncc
+	@echo TEST the frontends compile against love.h "(object only, nothing links or boots)"
+	@$(MAKE) -s kmain_o
+	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kmain_o,echo "  (aarch64 kmain.c skipped: $(KCC) cannot cross)")
+	@$(MAKE) -s K_TEST=1 kmain_o
+	@for p in $(embed_ports); do \
+	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
+	     || { echo "FAIL port/$$p/main.c does not compile against love.h"; exit 1; }; \
+	 done
+	@$(if $(wildcard $(EMCC)),$(MAKE) -s -C wasm ../out/wasm/host.o,echo "  (wasm/host.c skipped: no emcc)")
+	@echo "test_embed: every frontend compiles against love.h (rp2040 is out; any other skip is named above)"
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold. haven.l is OUT -- it can wedge on wayland.

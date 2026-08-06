@@ -12,7 +12,7 @@ export LOVE_NO_IMAGE := 1
 
 .PHONY: all install uninstall clean distclean
 .PHONY: host kernel wasm love0 site site-serve
-.PHONY: test test_host test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 test_virt test_wake
+.PHONY: test test_host test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 test_virt test_wake test_embed
 .PHONY: valg disasm flame cat cata catav perf repl gdb vmret waits bench nettest lint ccdb
 
 .DEFAULT_GOAL := test
@@ -38,12 +38,17 @@ test_phases = test_host test_love0
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
-# slow gate
-test_slow: test_host test_love0 vmret test_wasm test_kernel test_virt
+# slow gate. test_embed rides here rather than in `test`: it is 3 s of pure sub-make on a
+# tree nothing touched, and it earns them only when love.h or a frontend moved. What it adds
+# HERE is the five frontends the booting lanes below never reach -- mps2, teensy41,
+# nucleo446, playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
+test_slow: test_host test_love0 vmret test_wasm test_kernel test_virt test_embed
 	
 
-# really really really slow gate
-test_extra: test_filemode waits test_kernel_arm64 test_mps2 test_mps2_t1 \
+# really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
+# below SKIP without arm-none-eabi, so on a bare box this tier would otherwise compile none
+# of them either.
+test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2_t1 \
 	test_mps2_wake test_teensy41 test_nucleo446 test_playdate test_arm64 \
 	test_vec test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \

@@ -162,6 +162,12 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/p1.h out/lib/pre
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
+# kmain_o -- the kernel frontend, COMPILED AND NOTHING MORE, at whatever arch and face the
+# caller's `a=` / `K_TEST=` say. test_embed asks for it three ways; the odir is spelled here
+# so a caller never re-derives it (KCC decides half of it).
+.PHONY: kmain_o
+kmain_o: $(k_free_o)
+
 # l.o carries the version string (love_version.h); recompile it when the id changes. The
 # -D is what MAKES it carry one: $(KCC) defaults to mooncc, which has no __has_include for
 # love.c's fallback probe, so without this the dep tracked a header the object could not
