@@ -12,7 +12,6 @@ R := ../..
 o = out/mps2
 MOONCC = out/host/mooncc
 mc = $(R)/out/host/mooncc
-LD = arm-none-eabi-ld
 
 mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
 lib_h = out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
@@ -148,9 +147,12 @@ $(R)/$(o)/main-t1.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2t1_cc) -c port/mps2/main.c $(o)/main-t1.o
 
-$(R)/$(o)/love-t1.elf: $(t1_objs) mps2.lds
-	@echo LD	$@
-	@$(LD) -T mps2.lds $(t1_objs) $(t1_lg) -o $@
+# our linker binds this one too: libgcc.a rides in as an ARCHIVE, resolved by
+# need through its ranlib index (crew/holo/link.l's ld-arsyms). gcc's own v6-M
+# members are the only foreign objects in the tree's boot images.
+$(R)/$(o)/love-t1.elf: $(t1_objs)
+	@echo LINK	$@
+	@cd $(R) && $(MOONCC) -t thumb1 -Ttext 0 -nostdlib $(t1_objs:$(R)/%=%) $(t1_lg) -o $(o)/love-t1.elf
 
 clean:
 	rm -rf $(R)/$(o)

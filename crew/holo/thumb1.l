@@ -367,9 +367,23 @@
             (le32 (target + aux))                           ; internal resolve only; a .o leaves it an R_ARM_ABS32
             (scare 'badfix kind)))
 
+   ;; the LINKER's door onto the encoders (thumb2.l carries the same one, and the
+   ;; contract with it). only BL rides here: it is v6-M's ONE wide branch, and the
+   ;; only kind an ARMv6-M object mints that patches instruction bits at all --
+   ;; ABS32 is a whole word the linker writes itself, and MOVW/MOVT do not exist on
+   ;; this part (t1-lapool is what `la` becomes). ⚠ a JUMP24 arriving here would be
+   ;; a 4-byte field this backend can only answer with a 2-byte B, so it refuses.
+   ;; the addend is CHECKED, not decoded: the base encoding t1-patch itself bakes is
+   ;; rebuilt and compared, which is bit-for-bit thumb2's -- one wide BL, two ISAs.
+   (t1-refix kind bs target site width)
+      (: _ (? (id? kind 'bl) 0 (scare 'v6m-refix-kind kind))
+         _ (? ((t1-patch kind 0 0 width 0) = bs) 0 (scare 'thumb-refix-addend kind))
+         (t1-patch kind target site width 0))
+
    t1 (tablet 0)
    _ (pin t1 'lower t1-lower)
    _ (pin t1 'patch t1-patch)
+   _ (pin t1 'refix t1-refix)
    _ (pin t1 'nop `(0 191))                    ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb1 t1)
    _ (defbackend 'cortex-m0 t1))

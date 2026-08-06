@@ -90,8 +90,20 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
   "$ho/.kore-ld.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld run (exit $r)"
+  # and the archive as a LINK INPUT: `mooncc main.o libf.a` must bind the exe the
+  # .o link binds, byte for byte -- which is the proof that members come in BY NEED
+  # through the ranlib index, since the library also carries one nothing calls. our
+  # ar writes it, our linker reads it (crew/holo/link.l's ld-arsyms).
+  printf 'int unused(void){return 99;}\n' > "$ho/.kore-arz.c"
+  "$ho/mooncc" -c "$ho/.kore-arz.c" "$ho/.kore-arz.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c unused.c"
+  rm -f "$ho/.kore-arl.a"
+  korerun ar rcs "$ho/.kore-arl.a" "$ho/.kore-arf.o" "$ho/.kore-arz.o" || fail "kore ar rcs (library)"
+  "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arl.a" -o "$ho/.kore-ara.elf" >/dev/null 2>&1 || fail "kore ld: archive input"
+  cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ara.elf" || fail "kore ld archive vs .o link (bytes -- an unneeded member rode in?)"
+  "$ho/.kore-ara.elf"; r=$?
+  [ $r -eq 42 ] || fail "kore ld archive run (exit $r)"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld ok"
+echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld (objects and an archive) ok"
 
 # ------------------------------------------------------------- the line tools
 printf 'b\na\nc\nb\n' > "$ho/.cu1"; printf 'x y\nz\n' > "$ho/.cu2"

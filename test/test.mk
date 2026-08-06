@@ -479,8 +479,9 @@ test_mps2: host out/host$(hsuf)/mooncc
 # test_mps2_t1 -- LOVE ON THE RP2040'S ISA: the same port by mooncc -t thumb1 (ARMv6-M,
 # ai_tco=0's trampoline, soft floats through libgcc's v6-m __aeabi set). v6-M is a strict
 # subset of ARMv7E-M, so qemu's M7 executes it natively; exit 42 = hatched + laws held.
-# ⚠ the ONE arm-none-eabi-ld left in the tree: this lane pulls libgcc.a, and link.l has no
-# archive reader. mps2.lds serves this link and nothing else.
+# OUR linker binds this one too: gcc's libgcc.a is named on the line and its members are
+# pulled by need through the ranlib index, so the .a is a LIBRARY the link reads and not a
+# tool it runs -- no arm-none-eabi anywhere in either mps2 image, and no linker script.
 .PHONY: test_mps2_t1
 test_mps2_t1: host out/host$(hsuf)/mooncc
 	@sh test/gate/boot.sh mps2_t1 "$(MAKE)"
@@ -542,10 +543,9 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 # thumb-bit and inside flash. v6-M is the leanest target mooncc has (no FPU, no divide);
 # test_thumb1 runs that lane's arithmetic against gcc as ~120 differential checks under
 # qemu's M0, and qemu has no RP2040 machine, so this gate builds and never boots.
-# ⚠ the LINK is still arm-none-eabi-ld -- not for the relocations (link.l reads all five
-# thumb kinds now, and test_mps2 binds a whole M7 image with them) but for libgcc.a, which
-# a v6-M build needs and link.l has no archive reader for. flash/SRAM split too: two load
-# regions, where ldbare32 lays one.
+# ⚠ the LINK is still arm-none-eabi-ld -- not for the relocations (test_mps2 binds a whole
+# M7 image with them) and no longer for libgcc.a (test_mps2_t1 pulls that archive through
+# our own linker), but for the FLASH/SRAM split: two load regions, where ldbare32 lays one.
 .PHONY: test_rp2040
 test_rp2040: host out/host$(hsuf)/mooncc
 	@echo RP2040 out/rp2040/love.bin

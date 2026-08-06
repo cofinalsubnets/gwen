@@ -86,18 +86,66 @@
    ; the instruction formats are the BACKEND's: refix-with hands the field's bytes
    ; back and takes the re-encode, so the J1/J2 scatter and the movw/movt imm16
    ; scatter exist in one copy each, in thumb2.l, and nothing here knows an encoding.
-   ; ⚠ ABS32 is the one kind with no encoding to speak of -- a whole 32-bit word
-   ; carrying its own addend -- so it is read and written right here.
+   ; ⚠ the two WORD kinds have no encoding to speak of -- a whole 32-bit field
+   ; carrying its own addend -- so they are read and written right here: ABS32 is
+   ; ((S+A)|T), REL32 that minus P (gcc's `.word handler - .`, which is how a
+   ; libgcc divide reaches __aeabi_ldiv0).
    ; the numbers are obj.l's (r-arm-abs32 / r-thm-call / r-thm-jump24 / r-thm-movw /
-   ; r-thm-movt), and a kind outside the set refuses: they collide freely with the
-   ; x86-64 and riscv numbers, which is why the machine picks the lane first.
-   ldarm-kinds (ld-cls '((2 abs32) (10 bl) (30 b) (47 movw16) (48 movt16)))
+   ; r-thm-movt) plus REL32, and a kind outside the set refuses: they collide freely
+   ; with the x86-64 and riscv numbers, which is why the machine picks the lane first.
+   ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16)))
    (ldarm be s off sv kind site)
     (: r (peep ldarm-kinds kind ())
        _ (? (two? r) 0 (scare 'link-reloc kind))
-       k <r
-       (? (id? k 'abs32) (le32 (ld-u32 (sv + (rle32 s off))))
+       k <r  sa (sv + (rle32 s off))
+       (? (id? k 'abs32) (le32 (ld-u32 sa))
+          (id? k 'rel32) (le32 (ld-u32 (sa - site)))
           (refix-with be k (map (\ i (s (off + i))) (jot 4)) sv site 4)))
+
+   ; --- ARCHIVES. the classic "!<arch>\n" file, GNU shape -- kore's `ar` writes
+   ; exactly this, and reading it is what lets a link name a LIBRARY instead of
+   ; every member of it. only the "/" RANLIB INDEX is walked, never the members:
+   ; an index entry is a nom and the byte offset of a member's HEADER, which is
+   ; the whole reason ranlib exists -- v6-M libgcc.a is 1767 members and a link
+   ; wants a dozen. ⚠ so an archive with no index REFUSES rather than falling
+   ; back to a full scan: the fallback would be a silent thousand-fold cost, and
+   ; `ranlib` (or our own `ar rcs`) is the one-word repair.
+   ; a header is 60 bytes of left-justified, space-padded ASCII; the size field
+   ; excludes the "\n" a member pads to even with.
+   (ld-arfld s i n)
+    (: t (snip s i (i + n))
+       (go k) (? (&& (0 < k) ((t (k - 1)) = 32)) (go (k - 1)) (snip t 0 k))
+       (go n))
+   (ld-arnum t) (: (go k a) (? ((tally t) <= k) a (go (k + 1) ((10 * a) + ((t k) - 48))))
+                   (go 0 0))
+   (ld-arsz s off) (ld-arnum (ld-arfld s (off + 48) 10))
+   (ld-arnext s off) (: z (ld-arsz s off) ((off + 60) + (z + (z % 2))))
+   (ld-be32 s i) (((((s i) << 8) | (s (i + 1))) << 16) | (((s (i + 2)) << 8) | (s (i + 3))))
+   (ld-ar? s) (&& (8 <= (tally s)) ((snip s 0 8) = "!<arch>\n"))
+   ; nom -> the member header offset that defines it. a nom defined by two members
+   ; keeps the FIRST, which is the order a linker resolves in.
+   (ld-arsyms id s)
+    (: _ (? ((ld-arfld s 8 16) = "/") 0 (scare 'link-ar-noindex id))
+       d0 68 n (ld-be32 s d0) t (tablet 0)
+       (go i o) (? (n <= i) t
+                   (: nom (ld-cstr s o)
+                      _ (? (o-has? t nom) 0 (pin t nom (ld-be32 s (d0 + 4 + (4 * i)))))
+                      (go (i + 1) ((o + 1) + (tally nom)))))
+       (go 0 ((d0 + 4) + (4 * n))))
+   ; the "//" table, where a name past 15 characters lives (GNU's spelling: the
+   ; member is named "/<offset>" and the table's entries end at a "/"). "" when
+   ; every name is short enough to sit in its own header.
+   (ld-arlong s)
+    (: p (ld-arnext s 8)
+       (? (&& ((p + 60) <= (tally s)) ((ld-arfld s p 16) = "//"))
+          (snip s (p + 60) ((p + 60) + (ld-arsz s p))) ""))
+   (ld-armem s off lt)
+    (: nm (ld-arfld s off 16) d0 (off + 60)
+       real (? ((nm 0) = 47) (: o (ld-arnum (snip nm 1 (tally nm)))
+                                (go k) (? (&& (k < (tally lt)) (! ((lt k) = 47))) (go (k + 1)) k)
+                                (snip lt o (go o)))
+              (: z (tally nm) (? ((nm (z - 1)) = 47) (snip nm 0 (z - 1)) nm)))
+       `(real (snip s d0 (d0 + (ld-arsz s off)))))
 
    ; a section NAME -> its lane, by prefix: gcc splits a lane across many
    ; sections (.text.unlikely, .rodata.str1.1, .data.rel.ro.local) and every
@@ -105,6 +153,11 @@
    ; the whole thing, so .rodata and .data.rel.ro are data that nothing writes.
    ; ai_nifs is ours and exact -- it is a packed array with a bracket, not a lane.
    (ld-pre nm p) (: n (tally p) (&& ((tally nm) >= n) ((snip nm 0 n) = p)))
+   ; the unwinder's tables: .eh_frame on the 64-bit targets, .ARM.exidx (its own
+   ; section TYPE) plus the .ARM.extab it points into on arm -- and gcc splits each
+   ; into one section per function, so both are prefix tests. see `drop?`.
+   (ld-unwind? nm)
+    (|| (ld-pre nm ".eh_frame") (|| (ld-pre nm ".ARM.exidx") (ld-pre nm ".ARM.extab")))
    ; the lanes the linker knows by name; anything else allocated is a named lane
    ld-lanes '(text rodata data nifs bss image note boot limreq)
    ; a COMPILER-NAMED section -- one the list below has no word for -- becomes its
@@ -171,13 +224,13 @@
        ; never by a hunch. empty (nothing to place); no SHF_ALLOC, so the loader
        ; never maps it at all (gcc's .comment, .debug_*, .note.GNU-stack); a NOTE,
        ; which is advisory metadata (.note.gnu.property carries ISA feature bits
-       ; a static exe of ours consults nowhere); or .eh_frame, the ONE alloc
-       ; section dropped by name -- it is the unwinder's table, and a link with
-       ; no unwinder and no exceptions never reads a byte of it. its .rela goes
-       ; with it (see the rela walk). the index is recorded so a relocation
-       ; POINTING AT a dropped section can be skipped rather than scared at.
+       ; a static exe of ours consults nowhere); or the UNWINDER's tables, the one
+       ; alloc family dropped by name -- a link with no unwinder and no exceptions
+       ; never reads a byte of them. their .rel goes with them (see the rela walk).
+       ; the index is recorded so a relocation POINTING AT a dropped section can be
+       ; skipped rather than scared at.
        (drop? i ty fl nm sz)
-        (? (|| (sz = 0) (|| (0 = (fl & 2)) (|| (ty = 7) (nm = ".eh_frame"))))
+        (? (|| (sz = 0) (|| (0 = (fl & 2)) (|| (ty = 7) (ld-unwind? nm))))
            (: _ (pin drops i 1) 1) ())
        ; classify: PROGBITS and NOBITS onto their lane by name, symtab/rela by
        ; type, the droppable set by the rule above; anything ELSE with bytes is a

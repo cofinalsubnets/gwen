@@ -1,5 +1,5 @@
 ; crew/moon/moon.l -- the C compiler's driver:
-;   mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
+;   mooncc [-c] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a ..
 ; reads C, rides lex -> cpp -> parse -> gen -> the holo book. TWO outcomes, the
 ; cc shape: WITH -c it lays relocatable ELF objects (crew/holo/obj.l --
 ; separate sections, a symbol table, and relocations), several .c inputs each
@@ -234,15 +234,59 @@
                  (bind = 1) (go (i + 1) ds (link <sy us))
                  (go (i + 1) ds us))))    ; a weak undef resolves to 0 (ELF's law): no need
        (go 1 () ()))
-   (rtpull srcs tgt nostd)
-    (: mach (peep elf-machines tgt 0)
-       duos (map (\ p (dusyms <p <>p mach)) srcs)
-       dt (tablet 0)                      ; every nom the link defines (or ldres synthesizes)
+   ; THE LEDGER a set of objects leaves: every nom it defines (plus the ones the
+   ; linker synthesizes rather than any object defining them), and the strong
+   ; undefineds still owed. both pulling lanes below start from it, and its `owed`
+   ; at termination is the honest answer to "what does nothing here define?".
+   ; -> (dt owed), dt a tablet the caller goes on pinning into.
+   (ldledger srcs mach)
+    (: duos (map (\ p (dusyms <p <>p mach)) srcs)
+       dt (tablet 0)
        _ (map (\ nm (pin dt nm 1)) ldsynth)
        _ (map (\ du (map (\ nm (pin dt nm 1)) <du)) duos)
-       owed (foldl (\ a du (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
+       `(dt (foldl (\ a du (foldl (\ a2 nm (? (|| (peep dt nm ()) (member? nm a2)) a2 (link nm a2)))
                                   a <>du))
-                   () duos)
+                   () duos)))
+   ; an ARCHIVE resolves BY NEED and BY INDEX: for each nom the link still owes,
+   ; the ranlib table names the member that defines it, so a 1767-member libgcc
+   ; costs a dozen ELF reads and not 1767. a pulled member's own undefineds join
+   ; the owe and the round repeats, which is how one member drags in another.
+   ; -> (picked-srcs owed); `dt` grows in place, as the ledger's owner expects.
+   (arpull path s dt owed mach)
+    (: idx (ld-arsyms path s) lt (ld-arlong s) seen (tablet 0)
+       (go u picked)
+        (: hit (foldl (\ a nm (? (two? a) a
+                                 (: o (peep idx nm ())
+                                    (? (! (o-has? idx nm)) a (o-has? seen o) a `(o)))))
+                      () u)
+           (? (! (two? hit)) `(picked u)
+              (: off <hit
+                 _ (pin seen off 1)
+                 m (ld-armem s off lt)
+                 id ((path + "(") + (<m + ")"))
+                 du (dusyms id <>m mach)
+                 _ (map (\ nm (pin dt nm 1)) <du)
+                 u2 (foldl (\ a nm (? (|| (peep dt nm ()) (member? nm a)) a (link nm a)))
+                           (filter (\ nm (! (peep dt nm ()))) u) <>du)
+                 (go u2 (picked + `(`(id <>m)))))))
+       (go owed ()))
+   ; every .a on the line, in COMMAND ORDER and after every object -- a library is
+   ; what a link falls back on, never what it leads with.
+   (arload srcs paths tgt)
+    (? (! (two? paths)) ()
+       (: mach (peep elf-machines tgt 0)
+          lg (ldledger srcs mach) dt <lg
+          (go ps u acc)
+           (? (! (two? ps)) acc
+              (: r (uread <ps)
+                 _ (? (two? r) 0 (udie 1 ("cc: cannot open " + <ps)))
+                 _ (? (ld-ar? <>r) 0 (udie 1 ("cc: not an archive: " + <ps)))
+                 pr (arpull <ps <>r dt u mach)
+                 (go >ps <>pr (acc + <pr))))
+          (go paths <>lg ())))
+   (rtpull srcs tgt nostd)
+    (: mach (peep elf-machines tgt 0)
+       lg (ldledger srcs mach) dt <lg owed <>lg
        ; -nostdlib and friends: no runtime BY REQUEST, so there is nothing left to
        ; consult and an owed nom is undefined, full stop. this lane used to fall
        ; through to holo's raw scare, and it is the lane where a bad name is most
@@ -290,12 +334,13 @@
                        (go rest u2 (picked + hits)))))
              (go mems owed ()))))
    (cc-link ins dst is ds tgt pie org nostd nsi)
-    (: srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt nsi)))
+    (: ars (filter dota? ins)
+       srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt nsi)))
                          (doto? f) (: r (uread f)
                                       (? (two? r) `(f <>r)
                                          (udie 1 ("cc: cannot open " + f))))
-                         (udie 2 ("cc: not a .c/.o input: " + f))))
-                 ins)
+                         (udie 2 ("cc: not a .c/.o/.a input: " + f))))
+                 (filter (\ f (! (dota? f))) ins))
        ; an arm32 target has no hosted lane -- there is no OS on this side of the
        ; toolchain that runs a thumb exe, so every thumb link is a BOARD's: the
        ; image lays at the address the core boots from, and no crt0 rides first
@@ -306,11 +351,14 @@
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
        all (? arm? srcs
               (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () () () ()))) srcs))
-       set (all + (rtpull all tgt nostd))
+       ; the archives first, then whatever the runtime still owes: a library the
+       ; line NAMED is what the link meant, and the implicit one is the fallback.
+       lib (all + (arload all ars tgt))
+       set (lib + (rtpull lib tgt nostd))
        ps (? arm? (ldbare32 tgt org set) (ldlink tgt pie org set))
        _ (ld-write dst ps)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o .."
+   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -352,6 +400,7 @@
    (nostd? a) (|| (a = "-nostdlib") (|| (a = "-nostartfiles")
                (|| (a = "-nodefaultlibs") (a = "-ffreestanding"))))
    (dirn d) (: n (tally d) (? (n = 0) d ((d (n - 1)) = 47) d (d + "/")))
+   (dota? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 97))))
    (dotc? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 99))))
    (doto? p) (: n (tally p) (&& (2 < n) (&& ((p (n - 2)) = 46) ((p (n - 1)) = 111))))
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
@@ -410,11 +459,14 @@
                     (: _ (cc-obj <ins o is ds tgt nsi) (quit 0)))
                (: _ (cc-link ins o is ds tgt pie org nostd nsi) (quit 0)))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
-          ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT)
+          ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). ⚠ and a
+          ; .a is never an OUT: `mooncc a.o libgcc.a` reading as a pair would
+          ; write the library it was asked to read FROM.
           (&& (two? >ins)
               (&& (! (two? >>ins))
                   (&& (! (dotc? <>ins))
-                      (|| c (&& (! (doto? <ins)) (! (doto? <>ins)))))))
+                      (&& (! (dota? <ins)) (&& (! (dota? <>ins))
+                           (|| c (&& (! (doto? <ins)) (! (doto? <>ins)))))))))
            (: _ (? c (cc-obj <ins <>ins is ds tgt nsi)
                      (cc-link `(<ins) <>ins is ds tgt pie org nostd nsi)) (quit 0))
           c (: (go l) (? (! (two? l)) (quit 0)
