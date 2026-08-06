@@ -435,9 +435,10 @@ test_raw_riscv: host out/host$(hsuf)/mooncc out/lib/riscv.h
 .PHONY: test_raw_arm64
 test_raw_arm64: host out/host$(hsuf)/mooncc
 	@sh test/gate/raw.sh arm64 $(ho) $m $t
-# test_thumb1 -- the ELF32/EM_ARM object writer (crew/holo/obj.l objelf32) end to end and
+# test_thumb1 -- the ELF32/EM_ARM object writer (crew/holo/obj.l objsecs32) end to end and
 # the 32-bit data model: a cross-object BL, the inline v6-M soft divide/rem, a global via the
-# literal-pool `la`, and a gcc-built pointer-bearing struct whose field mooncc reads back.
+# literal-pool `la`, a gcc-built pointer-bearing struct whose field mooncc reads back, and a
+# NAMED SECTION holding a function-pointer table -- the vector-table shape, thumb bit and all.
 .PHONY: test_thumb1
 test_thumb1: host out/host$(hsuf)/mooncc
 	@sh test/gate/thumb.sh thumb1 $(ho)

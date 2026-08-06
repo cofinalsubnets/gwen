@@ -152,11 +152,12 @@
        ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps) tgt)
        _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
        xs (map (\ x (objsec-named <x <>x) ) (el ob 8))
+       ; the two writers, one shape: the standard set for the width, plus whatever
+       ; the TU named. ⚠ arm32 has no .image lane and no LOCAL FUNC symbols for
+       ; statics -- objsecs3 refuses the first, and (el ob 7) simply doesn't ride.
        (? (arm32? tgt)
-          ; the 32-bit writer has no section list; a named section there would be
-          ; dropped in silence, so say so instead.
-          (: _ (? (two? xs) (scare 'obj-section-arm32 tgt) 0)
-             (objelf tgt (el ob 1) (el ob 2) (el ob 3) (el ob 4) (el ps 4) (el ob 5) (el ob 6) (el ob 7)))
+          (objsecs32 tgt ((objsecs3 tgt (el ob 1) (el ob 2) (el ob 5) (el ob 6)) + xs)
+                     (el ob 3) (el ob 4) (el ps 4))
           (objsecs tgt ((objsecs4 (el ob 1) (el ob 2) (el ob 5) (el ob 6)) + xs)
                    (el ob 3) (el ob 4) (el ps 4) (el ob 7))))
    (cc-obj src dst is ds tgt nsi) (write-bytes dst (cc-objbytes src is ds tgt nsi))

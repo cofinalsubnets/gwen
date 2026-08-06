@@ -93,7 +93,17 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   timeout "$tmo" qemu-system-arm -M $mach -semihosting -nographic \
     -kernel "$d/$prefix$tag.elf" < /dev/null
   a=$?
-  [ "$a" -eq "$want" ] || fail "$msg (got $a, want $want$tail)"
+  # ⚠ a WANT must stay clear of 124 (timeout's own code) and of 128+n, where a
+  # guest that died by signal lands -- a crashing qemu aborts to 134 and a want
+  # of 134 reads as every check passing. Found the hard way: a deliberately
+  # thumb-bitless vector entry HardFaulted, qemu dumped core, and this gate said
+  # green. The wants below are all under 124 for that reason; say which death it
+  # was when one misses, since "got 134" alone never looked like a crash.
+  if [ "$a" -ne "$want" ]; then
+    [ "$a" -eq 124 ] && fail "$msg (TIMED OUT after ${tmo}s, want $want$tail)"
+    [ "$a" -ge 128 ] && fail "$msg (guest DIED by signal $((a - 128)), want $want$tail)"
+    fail "$msg (got $a, want $want$tail)"
+  fi
 }
 
 am=crew/moon/lib/math/am.c
@@ -104,6 +114,14 @@ if [ "$tgt" = thumb1 ]; then
   # a cross-object BL, the inline v6-M soft divide/rem, a scalar global through the
   # literal-pool `la`, and -- the cross-ABI catch -- a pointer-bearing struct BUILT by
   # gcc (4-byte pointer, x at offset 4) whose field a mooncc function reads back.
+  # ..and a NAMED SECTION carrying a table of function pointers -- the vector-table
+  # shape every one of these parts boots through, and the only shape where the
+  # object writer's own bookkeeping is load-bearing: each entry is an ABS32 into
+  # a section that is neither .text nor .data, and each target is a STATIC fn, so
+  # it can only bind through a local symbol carrying the THUMB BIT. Lose the bit
+  # and the call HardFaults on M0 (there is no ARM state to fall back to); bind it
+  # to the section instead and the addend truncates. start.S already KEEPs
+  # .vectors at flash base, so ours lands right behind the boot pair.
   { printf 'int acc = 40;\n'
     printf 'int arr[4];\n'
     printf 'struct S { int *p; int x; };\n'
@@ -112,15 +130,20 @@ if [ "$tgt" = thumb1 ]; then
     printf 'int sx(struct S *s){ return s->x; }\n'
     printf 'int aset(int i,int v){ arr[i] = v; return 0; }\n'
     printf 'int aget(int i){ return arr[i]; }\n'
+    printf 'static int v1(void){ return 3; }\n'
+    printf 'static int v2(void){ return 4; }\n'
+    printf '__attribute__((section(".vectors"))) int (*const vt[2])(void) = { v1, v2 };\n'
+    printf 'int viacall(int i){ return vt[i](); }\n'
   } > "$d/lib.c"
   { echo 'struct S { int *p; int x; };'
     echo 'int addto(int); int divmod(int,int); int sx(struct S*); int aset(int,int); int aget(int);'
-    echo 'int run(void){ int t = 0; struct S s; s.p = &t; s.x = 30;'
+    echo 'int viacall(int);'
+    echo 'int run(void){ int t = 0; struct S s; s.p = &t; s.x = 16;'
     echo '  int dd = divmod(-17,5); addto(50); aset(3, 12);'
-    echo '  return addto(dd) + sx(&s) + aget(3); }'
+    echo '  return addto(dd) + sx(&s) + aget(3) + viacall(0) + viacall(1); }'
   } > "$d/harness.c"
-  lane smoke "$d/lib.c" "$d/harness.c" "" 127 30 "thumb1 -c link+run" \
-    " = addto(40+50) then addto(-17/5 + -17%5)=85 + s->x=30 + arr[3]=12; a wrong struct offset misreads s->x, a wrong leax scale/base misreads arr[3]"
+  lane smoke "$d/lib.c" "$d/harness.c" "" 120 30 "thumb1 -c link+run" \
+    " = addto(40+50) then addto(-17/5 + -17%5)=85 + s->x=16 + arr[3]=12 + the .vectors table 3+4; a wrong struct offset misreads s->x, a wrong leax scale/base misreads arr[3], a thumb-bitless vector entry HardFaults"
 fi
 
 if [ "$tgt" = thumb2 ]; then
@@ -132,14 +155,14 @@ if [ "$tgt" = thumb2 ]; then
     printf 'static int sf(void){ return 5; }\n'
     printf 'int callidx(int i){ int (*a[2])(void) = {f1,f2}; return i ? a[1]() : a[0](); }\n'
     printf 'int callsf(void){ int (*p)(void) = sf; return p(); }\n'
-    printf 'char *msg(void){ return "AZ"; }\n'
+    printf 'char *msg(void){ return "A!"; }\n'
     printf 'int addacc(int x){ acc = acc + x; return acc; }\n'
   } > "$d/lib.c"
   { echo 'int callidx(int); int callsf(void); char *msg(void); int addacc(int);'
     echo 'int run(void){ return callidx(0) + callidx(1) + msg()[1] + addacc(3) + callsf(); }'
   } > "$d/harness.c"
-  lane smoke "$d/lib.c" "$d/harness.c" "" 180 30 "thumb2 -c link+run" \
-    " = fnptr 30+12 + 'Z' 90 + addacc 43 + static-fn 5; a missing thumb bit on the static fn faults the BLX, a bad section addend misreads the string"
+  lane smoke "$d/lib.c" "$d/harness.c" "" 123 30 "thumb2 -c link+run" \
+    " = fnptr 30+12 + '!' 33 + addacc 43 + static-fn 5; a missing thumb bit on the static fn faults the BLX, a bad section addend misreads the string"
 fi
 
 # ---------------------------------- the shared differential lanes ----------------
