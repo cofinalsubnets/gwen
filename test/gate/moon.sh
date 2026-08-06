@@ -343,4 +343,29 @@ for s in "T main" "T fill" "B bigbuf" "B zed" "R tbl"; do
     || fail "symtab missing '$s' (nm must classify by the section the symbol lives in)"
 done
 
-echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their flag homes, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"
+# ------------------------------------------------- const globals reach .rodata
+# a `const` in the SPECIFIER run names the object, and an object no relocation
+# touches may ride the read-only lane. the two exclusions are the whole rule:
+# a const POINTEE leaves the pointer writable, and a const array of ADDRESSES is
+# a lane the linker writes (gcc spells that one .data.rel.ro).
+cat > "$ho/.ro.c" <<'EOF'
+const long rotbl[4] = {3,5,7,9};
+const char romsg[] = "const bytes";
+const char *mutp = 0;
+static void h(void){}
+void (*const fnp[1])(void) = { h };
+long wtbl[2] = {1,2};
+const long rozero[2];
+int main(){ return (int)(rotbl[3] + romsg[0] + wtbl[0] + rozero[0]
+                         + (mutp!=0) + (fnp[0]!=0)); }
+EOF
+moonrun "$ho/.ro.c" -o "$ho/.rox" > /dev/null 2>&1 || fail "mooncc const-lane compile"
+"$ho/.rox"; a=$?
+[ $a -eq 110 ] || fail "const lane semantics (got $a want 110 = 9 + 'c' + 1 + 0 + 0 + 1)"
+nm "$ho/.rox" > "$ho/.ro.nm" 2>&1 || fail "nm on the const-lane exe"
+for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
+  grep -q " $s\$" "$ho/.ro.nm" \
+    || fail "const lane: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.ro.nm"))"
+done
+
+echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"

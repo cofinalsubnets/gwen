@@ -6002,30 +6002,54 @@
    ; protocol's order, not ours, which is what xnames keeps.
    (cgdata g)
     (: sects (peep g 'sects (tablet 0))
+       consts (peep g 'consts (tablet 0))
+       memo (peep g 'romemo (tablet 0))
        (strm nm) (: s (peep sects nm ())                  ; which stream a global belongs to
                     (? s s ".data"))                      ; the name IS the stream
        ; a global with NO initializer images as zeros by construction (imgbytes' first
        ; clause), so the file need not carry them: it rides .bss, the NOBITS lane. one
        ; that names its own section keeps it -- the attribute is the whole point.
        (bss? nm) (&& (! (peep sects nm ())) (! (two? <>>(peep (g 'glob) nm 0))))
-       ; zm splits the .data walk in two without imaging a global twice: 'd takes the
-       ; initialized, 'z the rest, () everything (a named stream is never split).
+       ; a const global rides .rodata only if its image needs NO relocation. `union u
+       ; const numap_drive[] = {{lvm_ap}..}` is const in C and still an address the
+       ; linker writes, so it stays in .data -- which is the lane gcc spells
+       ; .data.rel.ro. this is what keeps the flags-2 promise .rodata makes.
+       (ro? nm bytes) (&& (peep consts nm ())
+                          (! (foldl (\ a x (|| a (fixit? x))) () bytes)))
+       ; ⚠ a candidate is imaged for the 'd walk and again for the 'r one, and the
+       ; initializers this reaches are the 300k library texts -- so the image is laid
+       ; ONCE and memoized. only candidates memoize: holding every global's bytes live
+       ; would cost the whole data stream twice for nothing.
+       (image1 nm ty init)
+        (? (! (peep consts nm ())) (cgimage g ty init)
+           (: m (peep memo nm ())
+              (? (two? m) <>m
+                 (: v (cgimage g ty init) _ (pin memo nm `(1 v)) v))))
+       ; zm splits the .data walk without imaging a global twice: 'd takes the
+       ; initialized, 'z the rest, 'r the const ones .rodata claims, () everything
+       ; (a named stream is never split).
        (globs gs want zm acc)
         (? (! (two? gs)) acc
            (! ((strm <gs) = want)) (globs >gs want zm acc)   ; another stream's
-           (&& (zm = 'd) (bss? <gs)) (globs >gs want zm acc)
+           (&& (member? zm '(d r)) (bss? <gs)) (globs >gs want zm acc)
            (&& (zm = 'z) (! (bss? <gs))) (globs >gs want zm acc)
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
               _ (pin g 'undecl ()) _ (pin g 'datacause ())   ; fresh per global: the refusal below names THIS one's cause
-              bytes (cgimage g ty init)                 ; a constant image | 'bad (label values -> 4d)
+              bytes (image1 <gs ty init)                ; a constant image | 'bad (label values -> 4d)
+              ; the const split reads the image, so it lands after it: 'r keeps only what
+              ; .rodata may hold, 'd only what it may not. a REFUSAL is neither, and the 'd
+              ; walk owns reporting it -- 'r steps past in silence rather than saying it twice.
+              roq (&& (! (bad? bytes)) (ro? <gs bytes))
               ; an aligned(N) global lands ON its boundary: this pad places it within the stream,
               ; and the .o's section header carries the max N so the linker grants the same grain.
               ; the two SPECIAL streams are packed by construction and take no pad.
               an (? (member? want '("ai_nifs" ".image")) 0 (peep (g 'aligns) <gs 0))
               ; the cause rides a PIN, not a puts: cgdata's callers thread a bare 'bad through a
               ; dozen (bad? x) joins and a gripe is not one, so gfns's tail mints it from the pin
-              (? (bad? bytes)
+              (? (&& (zm = 'r) (! roq)) (globs >gs want zm acc)
+                 (&& (zm = 'd) roq) (globs >gs want zm acc)
+                 (bad? bytes)
                  (: u (peep g 'undecl ())
                     _ (pin g 'datacause
                            (? u ("undeclared '" + u + "' in the initializer of '" + <gs + "'")
@@ -6055,24 +6079,25 @@
           sb (? (bad? gb) 'bad (globs (rev (g 'statics)) ".data" 'd ()))   ; (local data labels)
           zg (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) ".data" 'z ()))
           zs (? (bad? zg) 'bad (globs (rev (g 'statics)) ".data" 'z ()))
-          ; .rodata: the string table, and any global that named the section itself. a
-          ; literal carries no address, so this stream owns no relocation -- which is
-          ; what lets it ride a lane nothing writes, at load or at run.
+          ; .rodata: the string table, any global that named the section itself, and the
+          ; const objects the 'r walk claims off .data. nothing here carries a relocation
+          ; -- which is what lets the stream ride a lane nothing writes, at load or at run.
           rg (? (|| (bad? zg) (bad? zs)) 'bad (globs (rev (g 'globs)) ".rodata" () ()))
           rs (? (bad? rg) 'bad (globs (rev (g 'statics)) ".rodata" () ()))
-          nb (? (|| (bad? rg) (bad? rs)) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
+          cg (? (|| (bad? rg) (bad? rs)) 'bad (globs (rev (g 'globs)) ".data" 'r ()))
+          cs (? (bad? cg) 'bad (globs (rev (g 'statics)) ".data" 'r ()))
+          nb (? (|| (bad? cg) (bad? cs)) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
           ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".image" () ()))
           xb (? (bad? ib) 'bad
                 (map (\ nm `(nm (globs (rev (g 'globs)) nm () ()))) xnames))
-          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? zg) (|| (bad? zs) (|| (bad? rg)
-              (|| (bad? rs) (|| (bad? nb) (|| (bad? ib) (bad? xb))))))))) 'bad
-             `((gb + sb) nb ib xb (zg + zs) (rg + rs + (strs (g 'strs) ()))))))
+          (? (foldl (\ a x (|| a (bad? x))) () `(gb sb zg zs rg rs cg cs nb ib xb)) 'bad
+             `((gb + sb) nb ib xb (zg + zs) (rg + rs + cg + cs + (strs (g 'strs) ()))))))
 
    ; the shared core: build the gen state, then TEXT (the functions, no _start)
    ; and DATA (globals + strings) separately -> (g textforms dataforms) | ().
    ; weaks: the __attribute__((weak)) names -- NEVER inlined (an inlined body
    ; would bake past the strong override the linker owes them).
-   ; xtra: the parser's (sfns svars sects) tablets -- static fns, static
+   ; xtra: the parser's (sfns svars sects .. consts) tablets -- static fns, static
    ; globals, name -> section. () reads as three empties (the law harness).
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g (: t (tablet 0) _ (pin t 'n 0) _ (pin t 'brk ()) _ (pin t 'cnt ()) _ (pin t 'cases ())
@@ -6083,7 +6108,9 @@
             _ (pin t 'tgt tgt) _ (pin t 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp riscv64)) epi-a64 epi))
             _ (pin t 'sects (? (two? xtra) <>>xtra (tablet 0)))
             _ (pin t 'alias (? (&& (two? xtra) (3 < (tally xtra))) (nthr xtra 3) (tablet 0)))
-            _ (pin t 'aligns (? (&& (two? xtra) (4 < (tally xtra))) (nthr xtra 4) (tablet 0))) t)
+            _ (pin t 'aligns (? (&& (two? xtra) (4 < (tally xtra))) (nthr xtra 4) (tablet 0)))
+            _ (pin t 'consts (? (&& (two? xtra) (7 < (tally xtra))) (nthr xtra 7) (tablet 0)))
+            _ (pin t 'romemo (tablet 0)) t)                ; a const candidate's image, laid once and read by both walks
        ; pass 0: every function name -- so a bare use of one is its address (la). the sig table
        ; too: an mproto sibling (`double sin(..), cos(..);`) has a sig but no proto form of its
        ; own. a small single-return definition also lands in the INLINE table, before any body --

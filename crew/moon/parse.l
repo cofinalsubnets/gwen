@@ -133,19 +133,31 @@
        (&& (&& ((tkk <ts) = 'id) ((tkv <ts) = "__attribute__")) (peekp >ts "("))
         (pattr (skipbal >>ts 1))
        ts)
-   ; does the leading declaration-specifier run carry `static`? scans the front
+   ; does the leading declaration-specifier run carry keyword k? scans the front
    ; run of qualifier + type-specifier keywords (and balance-skips attribute ids),
-   ; the same tokens pquals drops, and flags the `static` storage class -- so a
-   ; BLOCK-SCOPE `static` local is laid in .bss (a real global), not a stack slot
-   ; (a stack `static` is uninitialised garbage every call -- the ai_pagesize bug).
-   (leadstatic? ts)
+   ; the same tokens pquals drops. the run is order-free, so `static char const`
+   ; and `const static char` answer alike -- which C says and main.c writes.
+   (leadkw? ts k)
     (? (! (two? ts)) ()
        (: t <ts
-          (? (&& ((tkk t) = 'kw) ((tkv t) = 'static)) 1
-             (&& ((tkk t) = 'kw) (|| (member? (tkv t) qualkw) (member? (tkv t) tyspec))) (leadstatic? >ts)
+          (? (&& ((tkk t) = 'kw) ((tkv t) = k)) 1
+             (&& ((tkk t) = 'kw) (|| (member? (tkv t) qualkw) (member? (tkv t) tyspec))) (leadkw? >ts k)
              (&& ((tkk t) = 'id) (member? (tkv t) qualid))
-              (: r >ts (? (peekp r "(") (leadstatic? (skipbal >r 1)) (leadstatic? r)))
+              (: r >ts (? (peekp r "(") (leadkw? (skipbal >r 1) k) (leadkw? r k)))
              ())))
+   ; the `static` storage class -- so a BLOCK-SCOPE `static` local is laid in .bss
+   ; (a real global), not a stack slot (a stack `static` is uninitialised garbage
+   ; every call -- the ai_pagesize bug).
+   (leadstatic? ts) (leadkw? ts 'static)
+   ; `const` in the SPECIFIER run. it names the object only when the declarator
+   ; adds no pointer of its own, which cobj? decides per declarator.
+   (leadconst? ts) (leadkw? ts 'const)
+   ; does a specifier-run `const` reach the OBJECT? arrays are transparent (`const
+   ; char a[3]` is three const chars), a pointer is not: `const char *p` qualifies
+   ; the POINTEE and p itself stays writable. a declarator-side `char * const p`
+   ; reads unqualified here and keeps its .data home -- conservative, and cgdata's
+   ; relocation guard answers the same for every one this tree actually has.
+   (cobj? ty) (? (! (two? ty)) 1 (<ty = 'arr) (cobj? <>ty) (! (<ty = 'ptr)))
    ; a leading __attribute__((..)) whose balance names `weak` -> the tokens after
    ; the run; anything else (no attribute, or one without weak) -> ()
    (weakat? ts)
@@ -280,6 +292,7 @@
                 _ (pin t 'sfns (tablet 0))          ; top-level `static` fn names: LOCAL symbols in the .o
                 _ (pin t 'svars (tablet 0))         ; top-level `static` globals: internal linkage, never exported
                 _ (pin t 'sects (tablet 0))         ; global name -> its __attribute__((section "..")) string
+                _ (pin t 'consts (tablet 0))        ; global name -> 1 when `const` names the OBJECT and it has an initializer
                 _ (pin t 'aligns (tablet 0))        ; global name -> its __attribute__((aligned(N))) boundary
                 _ (pin t 'locals (tablet 0))        ; local/param name -> its declared type (for parse-time sizeof folding)
                 _ (pin t 'globals (tablet 0))       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
@@ -1692,6 +1705,17 @@
                                                   vps (: (go2 l a2) (? (! (two? l)) a2
                                                                        (go2 >l (? (fnp? <l) a2 (link <l a2))))
                                                          (go2 acc ()))
+                                                  ; a const OBJECT with an initializer is a candidate for .rodata --
+                                                  ; per DECLARATOR, since one specifier run serves them all and only
+                                                  ; some carry a star. an init-less one is left alone: it rides .bss,
+                                                  ; where it costs no file bytes at all.
+                                                  _ (? (! (leadconst? ts)) ()
+                                                       (: (goc l) (? (! (two? l)) 1
+                                                                     (: p <l
+                                                                        _ (? (&& (cobj? <>p) (two? <>>p))
+                                                                             (pin (ps 'consts) <p 1) ())
+                                                                        (goc >l)))
+                                                          (goc vps)))
                                                   (? (two? vps) `(`('gdecl vps) rest)
                                                      `(`('tdef) rest)))))
                                         (more <>first `(<first))))))))))))))
@@ -1773,7 +1797,8 @@
            (pin ps 'cursect ()))
        (tops ts2 acc)
         (? (! (two? ts2)) `(1 `('prog (rev acc)) (ps 'stag) (ps 'sigs) (ps 'weaks)   ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
-                              (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl))
+                              (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
+                              (ps 'consts))
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (link <r acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
