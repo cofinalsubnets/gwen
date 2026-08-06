@@ -57,11 +57,12 @@
 // 16 buys x64 exactly 2x its measured 8; 8 would buy none, and the next `endbr64`
 // (a seat built without -fcf-protection=none) is +4. the aligned() attribute does
 // lower a section below -falign-functions, so the floor here is margin, not the cc.
-// ⚠ the linker is TOLD this number, in words, and cannot read it: love_data.ld and
-// port/inle/{x86_64,aarch64}.lds say 16, the three thumb boards 128. a script that
-// tiles tighter than its seat believes answers slot 0 for every value, in silence --
-// the one drift here that does not announce itself. a body past the stride is the
-// loud direction: ld drives its location counter backwards and refuses.
+// ⚠ the linker is TOLD this number and cannot read it, so the six scripts that tile
+// the slots are LAID from mx.l's seat table (`make mx`; test_clay fails on drift).
+// what stays hand-kept is that a row there and the #if here say the same thing: a
+// script tiling tighter than its seat believes answers slot 0 for every value, in
+// silence. a body past the stride is the loud direction -- ld drives its location
+// counter backwards and refuses.
 #ifndef ai_data_stride
 #if defined(__x86_64__) || defined(__aarch64__)
 #define ai_data_stride 16

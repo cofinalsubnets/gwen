@@ -302,23 +302,36 @@ moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
 .PHONY: test_moon
 test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/moon.sh $(ho) $m $(love0)
-# mx.h, kinds.h, nifs.h and crew/quay/xterm256.h are COMMITTED GENERATED artifacts: love.c's
-# +/* dispatch matrices and the kind lattice they are indexed by (mx.l), its nif + instruction
-# registry (nifs.l), and the xterm-256 palette both the host and the kernel read (quay.l), all
-# laid through clay. `make mx` refreshes all four; test_clay's second half regenerates and diffs.
+# mx.h, kinds.h, nifs.h, crew/quay/xterm256.h and the SIX linker scripts that tile the data
+# sentinels are COMMITTED GENERATED artifacts: love.c's +/* dispatch matrices and the kind
+# lattice they are indexed by (mx.l), its nif + instruction registry (nifs.l), the xterm-256
+# palette both the host and the kernel read (quay.l), and enum d laid for ld (mx.l again --
+# the reps roster IS the slot roster). `make mx` refreshes them all; test_clay's second half
+# regenerates and diffs.
 # ⚠ the first three are CORE headers -- a refresh rebuilds the tree, so the gate to run after is
 # `make test` and not test_clay alone. Each is written aside and moved, so a shape check that
 # quits (mx-ok / nifs-ok / q-ok) leaves the committed file untouched.
+# love_data.ld is laid WHOLE; a board's own script is a board's own memory map, so mx.l takes
+# its text and answers it with the marked block relaid -- the recipe's IO is a pipe.
+mx_lds = port/inle/x86_64/x86_64.lds port/inle/aarch64/aarch64.lds \
+         port/nucleo446/nucleo446.lds port/rp2040/rp2040.lds port/teensy41/teensy41.lds
+mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0))
 mx: host
-	@echo AI	mx.h kinds.h nifs.h xterm256.h "(mx.l + nifs.l + quay.l on $m)"
+	@echo AI	mx.h kinds.h nifs.h xterm256.h love_data.ld "+5 .lds (mx.l + nifs.l + quay.l on $m)"
 	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-h) (quit 0))' > out/.mx.h
 	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts kinds-h) (quit 0))' > out/.kinds.h
 	@$(mw) -l nifs.l -e '(: _ (? nifs-ok 0 (quit 1)) _ (puts nifs-h) (quit 0))' > out/.nifs.h
 	@$(mw) -l quay.l -e '(: _ (? q-ok 0 (quit 1)) _ (puts q-c) (quit 0))' > out/.xterm256.h
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-ld) (quit 0))' > out/.love_data.ld
 	@mv out/.mx.h mx.h
 	@mv out/.kinds.h kinds.h
 	@mv out/.nifs.h nifs.h
 	@mv out/.xterm256.h crew/quay/xterm256.h
+	@mv out/.love_data.ld love_data.ld
+	@t=out/.lds.$$$$; for f in $(mx_lds); do \
+	   $(mw) -l mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
+	   cmp -s $$t $$f || { mv $$t $$f; echo "AI	$$f"; }; \
+	 done; rm -f $$t
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
@@ -338,8 +351,14 @@ test_clay: host out/host$(hsuf)/mooncc.image
 	@cmp -s out/.nifs.h nifs.h || { echo "FAIL nifs.h is not what nifs.l lays -- run: make mx"; diff -u nifs.h out/.nifs.h | head -20; exit 1; }
 	@$(mw) -l quay.l -e '(: _ (? q-ok 0 (quit 1)) _ (puts q-c) (quit 0))' > out/.xterm256.h
 	@cmp -s out/.xterm256.h crew/quay/xterm256.h || { echo "FAIL crew/quay/xterm256.h is not what quay.l lays -- run: make mx"; diff -u crew/quay/xterm256.h out/.xterm256.h | head -20; exit 1; }
-	@echo "clay-mx: mx.h, kinds.h, nifs.h and xterm256.h regenerate identically"
-	@rm -f out/.mx.h out/.kinds.h out/.nifs.h out/.xterm256.h
+	@$(mw) -l mx.l -e '(: _ (? mx-ok 0 (quit 1)) _ (puts mx-ld) (quit 0))' > out/.love_data.ld
+	@cmp -s out/.love_data.ld love_data.ld || { echo "FAIL love_data.ld is not what mx.l lays -- run: make mx"; diff -u love_data.ld out/.love_data.ld | head -20; exit 1; }
+	@t=out/.lds.$$$$; for f in $(mx_lds); do \
+	   $(mw) -l mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
+	   cmp -s $$t $$f || { echo "FAIL $$f is not what mx.l lays -- run: make mx"; diff -u $$f $$t | head -20; rm -f $$t; exit 1; }; \
+	 done; rm -f $$t
+	@echo "clay-mx: mx.h, kinds.h, nifs.h, xterm256.h and the 6 love_data scripts regenerate identically"
+	@rm -f out/.mx.h out/.kinds.h out/.nifs.h out/.xterm256.h out/.love_data.ld
 # test_moonfuzz -- moon's REFUSAL surface (doc/moon-diag.md): each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
