@@ -609,6 +609,12 @@
       `("t2.cvtss2sd" "b7eec11a"         '((cvtss2sd f1 f1)))          ; vcvt.f64.f32 d1, s2
       `("t2.cvtsd2ss" "b7eec11b"         '((cvtsd2ss f1 f1)))          ; vcvt.f32.f64 s2, d1
       `("t2.smull"   "80fb0102"          '((smull r0 r2 r0 r1)))       ; smull r0, r2, r0, r1
+      ;; the system lane -- what the boot lay says that C cannot. M-profile draws one
+      ;; shareability domain, so `sy` is the only barrier option there is to name.
+      `("t2.dsb"     "bff34f8f"          '((dsb sy)))                  ; dsb sy
+      `("t2.isb"     "bff36f8f"          '((isb)))                     ; isb sy
+      `("t2.brk"     "abbe"              '((brk 171)))                 ; bkpt 0xab -- the semihosting call
+      `("t2.trap"    "00be"              '((trap)))                    ; ..the same instruction at 0
       ;; the 64-bit unsigned divide/remainder expansions: dividend r2:r3 / divisor r0:r1 ->
       ;; r0:r1. 64-step restoring loop, fixed narrow branches (bhs +8 / blo +10 / bne -52),
       ;; r4-r7 saved. disassembly-verified whole (llvm-mc); the qemu gate proves the values.

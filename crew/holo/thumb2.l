@@ -302,6 +302,17 @@
    (thumb-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))    ; BX Rm
    (thumb-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))    ; BLX Rm
 
+   ;; -- the SYSTEM lane. M-profile draws ONE shareability domain, so a barrier takes only
+   ;; `sy`: naming any other asks for a distinction this core does not have, and widening it
+   ;; to SY in silence would let a shared lay read as portable when it is not. (arm64.l's
+   ;; barrier table is the wider vocabulary, for the arch that earns it.)
+   (thumb-dsb opt) (? (id? opt 'sy) (t32 0xF3BF8F4F) (scare 'thumb-barrier-opt opt))
+   ;; BKPT #imm8 -- the debugger halt. `trap` is this same instruction at 0; the immediate
+   ;; needs a door of its own because 0xAB is the SEMIHOSTING call, which is how a board with
+   ;; no uart says exit(n) to qemu.
+   (thumb-brk imm) (? (&& (imm >= 0) (imm <= 255)) (t16 (0xBE00 | imm))
+                      (scare 'thumb-brk-imm imm))
+
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their halfwords outright, `raw` the identity. the alu group pins off its rows.
    thumb-emitters (emsof
@@ -336,6 +347,8 @@
            ('div >< thumb-div) ('rem >< thumb-rem) ('udiv >< thumb-udiv) ('urem >< thumb-urem)
            ('call >< thumb-call)
            ('raw >< 1)
+           ('dsb >< thumb-dsb) ('brk >< thumb-brk)           ; -- the system lane --
+           ('isb >< (t32 0xF3BF8F6F))                        ; isb sy
            ('ret >< (t16 0x4770))                            ; BX lr
            ('sys >< (t16 0xDF00))                            ; SVC #0
            ('nop >< (t16 0xBF00))

@@ -1,9 +1,10 @@
 # qemu MPS2+ AN500 (Cortex-M7) build -- love compiled END TO END by mooncc.
 # Run from the project root via `make -C port/mps2` (needs out/host/mooncc,
 # built by the root Makefile). Every C file -- love.c, the am math floor,
-# libc, main.c -- goes through `mooncc -t thumb2`; only start.S (12
-# instructions) and the final link are arm-none-eabi. mooncc's system
-# include dir is CWD-relative, so every compile runs from $(R).
+# libc, main.c -- goes through `mooncc -t thumb2`, and start.o is laid from holo
+# IR by mkstart.l, so the LINK is the only arm-none-eabi step left (crew/holo's
+# 32-bit lane is what retires it). mooncc's system include dir is CWD-relative,
+# so every compile runs from $(R).
 # Boot it: qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel love.elf
 # (exit 42 = the egg hatched and the driver tail's laws held; `make
 # test_mps2` at the root gates exactly that).
@@ -11,7 +12,6 @@ R := ../..
 o = out/mps2
 MOONCC = out/host/mooncc
 mc = $(R)/out/host/mooncc
-AS = arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16
 LD = arm-none-eabi-ld
 
 mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
@@ -182,10 +182,22 @@ $(R)/$(o)/main.o: main.c $(R)/love.h $(addprefix $(R)/,$(lib_h)) $(mc)
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(mps2_cc) -c port/mps2/main.c $(o)/main.o
 
-$(R)/$(o)/start.o: start.S
-	@echo AS	$@
+# start.o: the vector table, the FPU gate and the semihosting trampoline, laid from
+# holo IR by mkstart.l -- no gas. The lay's cat is the thumb2 backend spliced into the
+# sealed holo module, then the object writer; see port/virt/mkstart.l for the same
+# shape at riscv64 and port/rp2040/mkboot2.l for the named-section one.
+lay_l = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+  $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l
+
+$(R)/$(o)/start.o: mkstart.l $(R)/crew/holo/thumb2.l $(lay_l) $(R)/out/host/love
+	@echo LAY	$@
 	@mkdir -p $(R)/$(o)
-	@$(AS) -c start.S -o $@
+	@cd $(R) && { echo "(use 'holo)"; cat crew/holo/thumb2.l $(subst $(R)/,,$(lay_l)) \
+	  port/mps2/mkstart.l; \
+	  echo '(mkstart "$(o)/start.o")'; } | out/host/love
+
+$(R)/out/host/love: FORCE
+	@$(MAKE) -C $(R) out/host/love
 
 $(R)/$(o)/love.elf: $(objs) mps2.lds
 	@echo LD	$@
