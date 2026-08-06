@@ -102,7 +102,7 @@ out/host/love0 -l love/prel.l tools/lcatv.l out/lib/ktests.l > out/lib/ktests.h
 touch out/lib/ktests.l out/lib/ktests.h
 make -s K_TEST=1 out/free/love-x86_64-test.iso
 qemu-system-x86_64 -m 256M -M q35 -serial stdio -display none -no-reboot \
-  -drive if=pflash,unit=0,format=raw,file=out/dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on \
+  -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-x86_64.fd,readonly=on \
   -cdrom out/free/love-x86_64-test.iso \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04
 # then restore the real corpus:  make out/lib/ktests.h   (or rm it; the next build re-bakes)

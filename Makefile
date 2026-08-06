@@ -103,11 +103,15 @@ site-serve: host
 wasm:
 	@$(MAKE) -C wasm
 
+# clean takes everything this tree BUILDS. dl/ is everything it DOWNLOADED -- limine,
+# OVMF, a package's sources -- which is minutes of network for bytes no edit invalidates,
+# so it sits outside out/ and survives. distclean is the one that asks for it back.
 clean:
 	rm -rf out
 	@rm -f proof/rocq/*.vo proof/rocq/*.vok proof/rocq/*.vos proof/rocq/*.glob proof/rocq/.*.aux
 	@$(MAKE) -C wasm clean
 distclean: clean
+	rm -rf dl
 
 # the memory lane. ⚠ THE CORPUS IS A FILE ARGUMENT, NEVER STDIN -- the corpus TESTS
 # stdin (test/io.l's see/unsee roundtrip), so piping it in has those asserts eating the

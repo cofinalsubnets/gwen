@@ -14,7 +14,7 @@
 #   make moon-m4-arm64 M4SRC=$PWD/m4-1.4
 #
 # THE SOURCES ARE CACHED, so none of that is needed twice: this looks for
-# `m4-1.4*` under out/dl/ and then under $MOONSRC -- ~/src when that is unset --
+# `m4-1.4*` under dl/ and then under $MOONSRC -- ~/src when that is unset --
 # so a bare `make moon-m4` finds a cached tree with no variable at all. An
 # explicit M4SRC= still outranks both, and a missing tree is a clean SKIP
 # rather than a failure, so this gate stays opt-in either way.
@@ -53,13 +53,13 @@ case $target in
   *) echo "moon-m4.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
 esac
 
-# where a package's sources may live, first hit wins: the tree-local out/dl,
+# where a package's sources may live, first hit wins: the tree-local dl,
 # then the cache -- $MOONSRC, or ~/src when that is unset. An explicit *SRC=
 # on the make line still outranks both. Answers EMPTY when nothing matches,
 # which is what the skip branch below reads, so a missing tree is never an
 # error and never a `set -e` abort.
 pkgfind() {                        # pkgfind <dir-glob> <witness-file>
-  for c in out/dl/$1 "${MOONSRC:-$HOME/src}"/$1; do
+  for c in dl/$1 "${MOONSRC:-$HOME/src}"/$1; do
     [ -f "$c/$2" ] && { printf '%s\n' "$c"; return 0; }
   done
   return 0
@@ -75,7 +75,7 @@ if [ -n "$need" ] && ! command -v "$need" > /dev/null 2>&1; then
   exit 0
 fi
 if [ ! -f "$M4SRC/config.h" ]; then
-  echo "$name: no configured m4-1.4 found (looked in out/dl and ${MOONSRC:-$HOME/src}) -- skipped."
+  echo "$name: no configured m4-1.4 found (looked in dl and ${MOONSRC:-$HOME/src}) -- skipped."
   echo "         set M4SRC=<a ./configure'd m4-1.4 tree> to run (see tools/moon-m4.sh)."
   exit 0
 fi

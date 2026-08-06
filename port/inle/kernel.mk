@@ -14,7 +14,9 @@
 # below serve the interactive run-* targets (framebuffer console).
 # ====================================================================
 ko = out/free
-dl = out/dl
+# downloaded, not built -- so it lives OUTSIDE out/ and `make clean` leaves it standing.
+# `make distclean` is the one that asks for the network again.
+dl = dl
 
 # K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
 # `exit` nif that quits qemu) into its own odir / elf / iso, so it never clobbers the
@@ -329,7 +331,7 @@ test_arm64: host
 
 # The x86_64 gate boots the ELF DIRECT: `qemu -kernel` reads the PVH ELF note
 # and enters our own bring-up (mkboot.l) (page tables, GDT, long mode, kboot) -- no
-# limine, no OVMF, no iso, NOTHING in out/dl. The limine/firmware machinery
+# limine, no OVMF, no iso, NOTHING in dl/. The limine/firmware machinery
 # above stays for the interactive run-* lanes (they want the framebuffer
 # console only a real bootloader hands over) and for test_kernel_arm64.
 .PHONY: test_kernel
@@ -380,7 +382,7 @@ uefi: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf
 # K_TEST kernel, the corpus runs over serial. Needs firmware (any OVMF build);
 # gated on the file being PRESENT so the gate never downloads -- rung 4's whole
 # point is that `make test_slow` fetches nothing. Fetch it once by hand with
-# `make out/dl/edk2-ovmf/ovmf-code-x86_64.fd` and this lane starts running.
+# `make dl/edk2-ovmf/ovmf-code-x86_64.fd` and this lane starts running.
 #
 # In test_slow, at ~64 s -- the same as the -kernel door. What is only HERE is the
 # hand-over: the loader reading love.elf off the ESP, kboot filled from the UEFI memmap +

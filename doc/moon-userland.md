@@ -124,7 +124,7 @@ places before giving up:
 
 ```
 $LUASRC / $SQLSRC / $M4SRC / $TARSRC   (explicit, always wins)
-out/dl/<glob>                          (tree-local; `make clean` takes it)
+dl/<glob>                              (tree-local; `make distclean` takes it)
 $MOONSRC/<glob>                        (the cache — ~/src when MOONSRC is unset)
 ```
 

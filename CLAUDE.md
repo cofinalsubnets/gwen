@@ -26,8 +26,9 @@
 ;   thinks fresh, leaving a native lane unbound: one bug, two faces (infinite loop or crash).
 ; * the kernel has three boot doors, one ELF per arch: -kernel (x86_64 PVH stub, aarch64 EL1 MMU
 ;   stub -- test_kernel + test_kernel_arm64, nothing downloaded), UEFI (port/inle/uefi/, our own
-;   BOOTX64.EFI; `make uefi`, test_uefi; doc/uefi.md), limine (iso/hdd + the run-* lanes; out/dl
-;   feeds these two, `make clean` nukes it -- stash it if you use them). the link is ours on every
+;   BOOTX64.EFI; `make uefi`, test_uefi; doc/uefi.md), limine (iso/hdd + the run-* lanes; dl/
+;   feeds these two and survives `make clean` -- `make distclean` is what asks the network
+;   again). the link is ours on every
 ;   door (holo's ldkern lane, driven by port/inle/klink.l; `KLINK=lld` is the comparison), the
 ;   assembly is ours (no .S anywhere: mkboot.l lays the bring-up, mkvec.l the interrupt tail;
 ;   `make test_vec` faults on purpose -- the one way to reach a stub), and the compiler is ours

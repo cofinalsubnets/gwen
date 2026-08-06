@@ -2,6 +2,9 @@ vgcore.*
 .gdb_history
 .claude/
 /out/
+# downloaded, never built: limine, OVMF, package sources. outside out/ so `make clean`
+# leaves it -- `make distclean` is what takes it.
+/dl/
 # proof/rocq/coqc build artifacts (proof/rocq/spec.v is checked by `make test_proof`).
 # proof/rocq/gen.v, proof/rocq/uugen.v, proof/lean/uugen.lean are GENERATED proof artifacts but are now
 # CHECKED IN (they regen + re-check in seconds) and regenerated every run -- drift-proof:

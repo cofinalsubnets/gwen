@@ -23,7 +23,7 @@ set -e
 ho=out/host
 mc=$ho/mooncc
 inc=crew/moon/include
-PKGSRC=${PKGSRC:-out/dl/gzip-1.13}
+PKGSRC=${PKGSRC:-dl/gzip-1.13}
 [ $# -gt 0 ] && for a in "$@"; do case $a in PKGSRC=*) PKGSRC=${a#PKGSRC=} ;; esac; done
 
 if [ ! -f "$PKGSRC/lib/Makefile" ]; then
