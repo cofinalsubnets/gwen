@@ -554,6 +554,15 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp) links against the F4 flash map, boot image verified"
+# test_nucleo446_smoke -- the same port RUN. The build gate above reads two words of the
+# image; this one boots the -D QSMOKE twin on qemu's Cortex-M4 and takes its exit code,
+# which is the self-check tally carried out through mkboot.l's sh_exit -- the only lane
+# that executes crt0, the semihosting block and the fault vectors rather than inspecting
+# them. ~0.7s. On silicon a bkpt with no debugger escalates to lockup, so this stays the
+# qemu face only.
+.PHONY: test_nucleo446_smoke
+test_nucleo446_smoke: host out/host$(hsuf)/mooncc
+	@sh test/gate/boot.sh nucleo446_smoke "$(MAKE)"
 # test_rp2040 -- the Raspberry Pi Pico firmware BUILD gate, nucleo446-shaped, and the one
 # port in the tree with NO .S: the vector table and crt0 are C, and boot2 -- the 256-byte
 # stage the mask ROM checksums before it runs anything -- is laid straight into a named

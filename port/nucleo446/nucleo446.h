@@ -100,7 +100,7 @@
 #define SCB_VTOR  0xE000ED08u
 #define SCB_CPACR 0xE000ED88u
 
-// boot.S
+// mkboot.l
 void arm_dsb_isb(void);
 void arm_wfi(void);
 void sh_exit(uint32_t code);   // qemu semihosting exit (QSMOKE only; bkpt)

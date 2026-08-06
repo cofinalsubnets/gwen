@@ -2,11 +2,11 @@
 // the USART2 console (the ST-LINK virtual COM port), TIM2 as the microsecond
 // timer, and the LD2/button GPIO -- the C half, compiled by mooncc -t
 // thumb2sp. The vector table, crt0, HardFault shim, and the barrier/wfi/
-// semihosting helpers live in boot.S (bare instructions, gas-assembled).
+// semihosting helpers live in mkboot.l (bare instructions, laid from holo IR).
 #include <stdint.h>
 #include "nucleo446.h"
 
-// Linker-provided bounds (nucleo446.lds) + the boot.S vector table.
+// Linker-provided bounds (nucleo446.lds) + the mkboot.l vector table.
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[];
 extern void *const vectors[];
@@ -14,7 +14,7 @@ extern void *const vectors[];
 int main(void);
 
 // --- fault diagnostics ----------------------------------------------------
-// boot.S's isr_hardfault selects the active stack and branches here with the
+// mkboot.l's isr_hardfault selects the active stack and branches here with the
 // exception frame in r0; the reporter runs on a fresh stack. Names the fault
 // on the wire, then idles (QSMOKE: leaves through qemu as 98 -- loud, not a
 // mute lockup).
@@ -32,7 +32,7 @@ void hardfault_report(uint32_t *frame) {
 #endif
   for (;;) {} }
 
-// boot.S's cstartup established our stack and falls in here.
+// mkboot.l's cstartup established our stack and falls in here.
 void cmain(void) {
   // FPU on (CP10/CP11 full access) before any float-typed code runs --
   // thumb2sp still rides the S/D registers for f32 arith and f64 transfers.

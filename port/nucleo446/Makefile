@@ -1,8 +1,8 @@
 # Nucleo-F446RE build -- firmware compiled END TO END by mooncc -t thumb2sp
 # (the F446's Cortex-M4 has the single-precision FPv4 FPU: the playdate's
 # exact target -- f64 arithmetic softens to __aeabi_* libgcc calls, so the
-# link takes gcc's cortex-m4 hard-float multilib libgcc; boot.S is the only
-# gas-assembled piece). mooncc's system include dir is CWD-relative, so every
+# link takes gcc's cortex-m4 hard-float multilib libgcc; boot.o is laid from
+# holo IR by mkboot.l, so no gas). mooncc's system include dir is CWD-relative, so every
 # compile runs from $(R). Output lands in $(R)/out/nucleo446/.
 #
 # Faces: `make` builds firm.bin/.hex (the device firmware; flash with `make
@@ -15,7 +15,6 @@ R := ../..
 o = out/nucleo446
 MOONCC = out/host/mooncc
 mc = $(R)/out/host/mooncc
-AS = arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
 LD = arm-none-eabi-ld
 OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 lg = `arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -print-libgcc-file-name`
@@ -63,10 +62,23 @@ $(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c $(mc)
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t thumb2sp -Icrew/moon/lib/math -Icrew/moon/include -c crew/moon/lib/math/am.c $(o)/am.o
 
-$(R)/$(o)/boot.o: boot.S
-	@echo AS	$@
+# boot.o: the vector table, crt0, the fault shim and the asm helpers, laid from holo
+# IR by mkboot.l -- no gas. The lay's cat is the thumb2 backend spliced into the sealed
+# holo module, then the object writer; port/teensy41/mkboot.l is the same shape with
+# the i.MX ROM blocks on top.
+lay_l = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+  $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l
+
+$(R)/$(o)/boot.o: mkboot.l $(R)/crew/holo/thumb2.l $(lay_l) $(R)/out/host/love
+	@echo LAY	$@
 	@mkdir -p $(R)/$(o)
-	@$(AS) -c boot.S -o $@
+	@cd $(R) && { echo "(use 'holo)"; cat crew/holo/thumb2.l $(subst $(R)/,,$(lay_l)) \
+	  port/nucleo446/mkboot.l; \
+	  echo '(mkboot "$(o)/boot.o")'; } | out/host/love
+
+$(R)/out/host/love: FORCE
+	@$(MAKE) -C $(R) out/host/love
+
 
 $(R)/$(o)/firm.elf: $(objs) nucleo446.lds
 	@echo LD	$@
@@ -92,3 +104,6 @@ $(R)/$(o)/firm.hex: $(R)/$(o)/firm.elf
 # Flash a connected Nucleo over its ST-LINK:
 flash: $(R)/$(o)/firm.hex
 	st-flash --reset write $(R)/$(o)/firm.bin 0x08000000
+
+.PHONY: FORCE
+FORCE:
