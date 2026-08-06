@@ -289,17 +289,18 @@
    ; once and packed tight, so the __start_/__stop_ bracket reads it as ONE
    ; array across every object. the bss lane is NOT here: it owns no file bytes,
    ; so it is laid LAST, past everything written (ldlink, once the -pie table's
-   ; size is known). pins the bases; -> (end nifstart datastart).
-   ; dalign is where .data may begin: a caller splitting the load in two asks for
-   ; a page here, so the writable half starts on its own. 1 packs them tight, and
-   ; then datastart is just where rodata stopped.
-   (ldlay objs base hdrsz dalign)
+   ; size is known). pins the bases; -> (end nifstart rodatastart datastart).
+   ; salign is the grain the three lanes may be cut on: a caller giving each its
+   ; own segment asks for a page, so a segment boundary is never shared. 1 packs
+   ; them tight, and then each start is just where the lane before it stopped.
+   (ldlay objs base hdrsz salign)
     (: t1 (ldlayn 'text (ldlay1 'text (base + hdrsz) objs) objs)
-       o1 (ldlayn 'rodata (ldlay1 'rodata t1 objs) objs)
-       d0 (ld-align dalign o1)
+       o0 (ld-align salign t1)
+       o1 (ldlayn 'rodata (ldlay1 'rodata o0 objs) objs)
+       d0 (ld-align salign o1)
        d1 (ldlayn 'data (ldlay1 'data d0 objs) objs)
        n0 (ld-align 16 d1)
-       `((ldlay1 'nifs n0 objs) n0 d0))
+       `((ldlay1 'nifs n0 objs) n0 o0 d0))
 
    ; the one symbol book: name -> (addr weak?), every defined global/weak
    ; across the set. a strong def beats any weak; two strongs scare; the
@@ -537,8 +538,8 @@
 
    ; link a set of objects -- ((id bytes-text)..) -- into a static-exe PIECE
    ; list (texts + byte lists; ld-write lays them down). entry = the first
-   ; object's text. two segments map the file -- R+X through rodata, R+W from
-   ; .data on -- plus a third for .image when the set carries one (see below).
+   ; object's text. three segments map the file -- R+X code, R literals, R+W
+   ; data -- plus a fourth for .image when the set carries one (see below).
    ; pie: emit ET_DYN laid at base 0 (the kernel biases it to a random high
    ; address), collect every abs64 site into a trailing offset table bracketed
    ; by __start_/__stop_ai_rela, and let nolibc's startup add the load base to
@@ -552,19 +553,21 @@
        objs (map (\ p (ld-read <p <>p mach)) srcs)
        rv (mach = 243)                          ; EM_RISCV: its own reloc-number namespace (see ldpatch)
        base (? (charm? org) org pie 0 elf-base)
-       ; W^X splits the load in two -- read+execute through rodata, read+write from
-       ; .data out to bss -- but only where an OS enforces it. `org` is the bare-metal
-       ; lane: the MMU is off, the image is COPIED by p_paddr, and the port owns its own
-       ; map, so it keeps the one segment it always had. ⚠ and it must: the header
-       ; reserve sits BELOW the text address, so port/virt asks for 0x80000000 - hdrsz
-       ; by hand -- one segment more here silently moves the hart's first instruction.
-       ; .image, when the set has one, takes a segment too. the reserve is the ELF
-       ; header plus one phdr per segment, and every caller reads it off the count.
+       ; W^X gives each lane the rights it needs and no others: read+execute for the
+       ; code, read for the literals, read+write for the data -- three segments, and
+       ; nothing is ever two of them at once. but only where an OS enforces it. `org`
+       ; is the bare-metal lane: the MMU is off, the image is COPIED by p_paddr, and
+       ; the port owns its own map, so it keeps the one segment it always had. ⚠ and it
+       ; must: the header reserve sits BELOW the text address, so port/virt asks for
+       ; 0x80000000 - hdrsz by hand -- one segment more here silently moves the hart's
+       ; first instruction. .image, when the set has one, takes a segment too. the
+       ; reserve is the ELF header plus one phdr per segment, and every caller reads it
+       ; off the count.
        img? (0 < (foldl (\ a ob (a + (ld-lanesz ob 'image))) 0 objs))
        wx? (! (charm? org))
-       hdrsz (64 + (56 * ((? wx? 2 1) + (? img? 1 0))))
+       hdrsz (64 + (56 * ((? wx? 3 1) + (? img? 1 0))))
        lay (ldlay objs base hdrsz (? wx? 4096 1))
-       end <lay n0 <>lay d0 <>>lay
+       end <lay n0 <>lay o0 <>>lay d0 <>>>lay
        nrel (? pie (ld-nabs objs rv) 0)
        r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
        r1 (r0 + (8 * nrel))
@@ -627,10 +630,10 @@
        ssto (stro + strz) sstz (tally <shstr)
        shto (ld-align 8 (ssto + sstz))
        sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)                                   ; the reserved null header
-                     (ld-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (<et - (base + hdrsz)) 0 0 16 0)
-                     ; .rodata runs to the page .data starts on, so the split's pad rides a
-                     ; section instead of sitting in the orphan gap the note above warns of
-                     (ld-shdr (snm 1) 1 2 <et (<et - base) (d0 - <et) 0 0 16 0)
+                     ; each lane runs to the page the next one starts on, so a split's pad
+                     ; rides a section instead of the orphan gap the note above warns of
+                     (ld-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (o0 - (base + hdrsz)) 0 0 16 0)
+                     (ld-shdr (snm 1) 1 2 o0 (o0 - base) (d0 - o0) 0 0 16 0)
                      (ld-shdr (snm 2) 1 3 d0 (d0 - base) (<ed - d0) 0 0 16 0)
                      (ld-shdr (snm 3) 1 3 <ed (<ed - base) (<en - <ed) 0 0 16 0)
                      (ld-shdr (snm 4) 1 2 r0 (r0 - base) (r1 - r0) 0 0 16 0)         ; ai_rela, the -pie table (empty non-pie)
@@ -639,19 +642,24 @@
                      (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)              ; link=.strtab info=first global
                      (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                      (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)))
-       ; W^X: segment one is the header, the code and the literals, READ+EXECUTE; segment
-       ; two is .data through ai_rela and runs out to bss in memsz alone, READ+WRITE; a
-       ; third carries the image when there is one, RW (a heap snapshot is read and
-       ; rebased, never entered). the two meet exactly on d0 -- rodata's header absorbs
-       ; the pad -- so no loaded byte belongs to neither.
-       ; ⚠ this holds only because no relocation site lands in text: the -pie table is
-       ; abs64 sites, and mooncc addresses text pc-relative, so every site is in .data or
-       ; ai_nifs. a lane that ever needs to WRITE code has to say so with its own segment.
-       ; ⚠ ai_rela is read-only in truth and rides the writable half anyway -- it is laid
-       ; past the nifs, and moving it above d0 would reorder the emit for 13k of strictness.
+       ; W^X: segment one is the header and the code, READ+EXECUTE; segment two the
+       ; literals, READ; segment three .data through ai_rela, running out to bss in memsz
+       ; alone, READ+WRITE; a fourth carries the image when there is one, RW (a heap
+       ; snapshot is read and rebased, never entered). each meets the next exactly on a
+       ; page -- every lane's header absorbs its own pad -- so no loaded byte belongs to
+       ; neither, and no page belongs to two.
+       ; ⚠ this holds only because no relocation site lands in text or rodata: the -pie
+       ; table is abs64 sites, and mooncc addresses text pc-relative, so every site is in
+       ; .data or ai_nifs. a lane that ever needs to WRITE code has to say so with its own
+       ; segment -- and rodata's promise is cgdata's, made one layer down.
+       ; ⚠ the ELF header rides the executable segment: 232 bytes of mostly-zero struct,
+       ; the price of not spending a whole page to hold it alone.
+       ; ⚠ ai_rela is read-only in truth and rides the writable segment anyway -- it is
+       ; laid past the nifs, and moving it above d0 would reorder the emit for 13k.
        ; ⚠ bake_tail asks that .image END its segment and that no LOAD live above it --
        ; both hold by construction here.
-       phs ((? wx? `((elf64-phdr 1 5 0 base base (d0 - base) (d0 - base) 4096)
+       phs ((? wx? `((elf64-phdr 1 5 0 base base (o0 - base) (o0 - base) 4096)
+                     (elf64-phdr 1 4 (o0 - base) o0 o0 (d0 - o0) (d0 - o0) 4096)
                      (elf64-phdr 1 6 (d0 - base) d0 d0 (r1 - d0) (bend - d0) 4096))
                  `((elf64-phdr 1 7 0 base base (r1 - base) (bend - base) 4096)))
             + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ()))
