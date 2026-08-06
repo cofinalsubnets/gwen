@@ -283,14 +283,15 @@
     (foldl (\ a i (a + (at (peep (peep ob 'secs 0) i ()) 2)))
            0 (peep (peep ob 'lanes 0) lane ()))
 
-   ; assign every section its load address: header first, then all text (each
-   ; aligned as its header asks), rodata, data, then the nif region -- 16-aligned
+   ; assign every section its load address: header first (hdrsz reserves the ELF
+   ; header and one phdr per segment), then all text (each aligned as its header
+   ; asks), rodata, data, then the nif region -- 16-aligned
    ; once and packed tight, so the __start_/__stop_ bracket reads it as ONE
    ; array across every object. the bss lane is NOT here: it owns no file bytes,
    ; so it is laid LAST, past everything written (ldlink, once the -pie table's
    ; size is known). pins the bases; -> (end nifstart).
-   (ldlay objs base)
-    (: t1 (ldlayn 'text (ldlay1 'text (base + 120) objs) objs)
+   (ldlay objs base hdrsz)
+    (: t1 (ldlayn 'text (ldlay1 'text (base + hdrsz) objs) objs)
        o1 (ldlayn 'rodata (ldlay1 'rodata t1 objs) objs)
        d1 (ldlayn 'data (ldlay1 'data o1 objs) objs)
        n0 (ld-align 16 d1)
@@ -532,7 +533,8 @@
 
    ; link a set of objects -- ((id bytes-text)..) -- into a static-exe PIECE
    ; list (texts + byte lists; ld-write lays them down). entry = the first
-   ; object's text. one R+X+W segment maps the whole file, elf.l's shape.
+   ; object's text. one R+X+W segment maps the file, plus a second for .image
+   ; when the set carries one (see below).
    ; pie: emit ET_DYN laid at base 0 (the kernel biases it to a random high
    ; address), collect every abs64 site into a trailing offset table bracketed
    ; by __start_/__stop_ai_rela, and let nolibc's startup add the load base to
@@ -546,7 +548,11 @@
        objs (map (\ p (ld-read <p <>p mach)) srcs)
        rv (mach = 243)                          ; EM_RISCV: its own reloc-number namespace (see ldpatch)
        base (? (charm? org) org pie 0 elf-base)
-       lay (ldlay objs base)
+       ; .image, when the set has one, takes a SEGMENT of its own -- so hdrsz is known
+       ; before the lay (the header reserve is one phdr per segment).
+       img? (0 < (foldl (\ a ob (a + (ld-lanesz ob 'image))) 0 objs))
+       hdrsz (? img? 176 120)
+       lay (ldlay objs base hdrsz)
        end <lay n0 <>lay
        nrel (? pie (ld-nabs objs rv) 0)
        r0 (? pie (ld-align 16 end) end)         ; the reloc table starts 16-aligned, just past the nifs
@@ -557,15 +563,18 @@
        bend (ldlayn 'bss (ldlay1 'bss r1 objs) objs)
        ; .image last of all -- past .bss, on a page, so `love --bake` can GROW it at
        ; the tail of the file (host/image.c: the section that ENDS the segment is the
-       ; one that can grow without moving anything). It owns file bytes where .bss does
-       ; not, so p_filesz has to reach out over the bss gap and the emit writes it as
-       ; zeros -- free here, where every object is mooncc's and .bss is empty, and the
-       ; price of a foreign .o's real .bss if one ever rides this lane. No .image
-       ; section in the set (every link but love's) and the whole lane costs nothing.
-       img? (0 < (foldl (\ a ob (a + (ld-lanesz ob 'image))) 0 objs))
+       ; one that can grow without moving anything). ⚠ it takes a SEGMENT of its own,
+       ; because .bss sits between it and everything written: one segment would have to
+       ; carry that gap as file zeros, and a real .bss makes that the whole of it. two
+       ; segments buy the address gap for free -- the file offset stops mirroring the
+       ; address. this is the shape ld's --section-start already hands the gcc lane, and
+       ; the shape bake_tail already reads. No .image section in the set (every link but
+       ; love's) and the whole lane costs nothing: one segment, as before.
        iaddr (? img? (ld-align 4096 bend) r1)
        iend (? img? (ldlay1 'image iaddr objs) r1)
-       mend (? img? iend bend)                  ; the last address the segment spans
+       isz (iend - iaddr)
+       ioff (? img? (ld-align 4096 (r1 - base)) (r1 - base))   ; ..its FILE offset, page-congruent to iaddr
+       endf (? img? (ioff + isz) (r1 - base))                  ; the file bytes the segments carry
        relbox (? pie (: t (tablet 0) _ (pin t 0 ()) t) ())    ; abs64 site accumulator (pie only)
        glo (ldsyms objs)
        ; the ENTRY: ld's rule -- the symbol `_start` when the set defines one,
@@ -578,13 +587,16 @@
               (? (two? e) <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
        cx `(glo n0 end r0 r1 relbox rv)
-       et (ldemitn cx 'text objs (ldemit cx 'text (base + 120) objs ()))
+       et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata <et objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data <eo objs >eo))
        en (ldemit cx 'nifs <ed objs >ed)
        tail (? (<en < r0) `((ld-zeros (r0 - <en))) ())      ; nif tail + table alignment in one pad
        rtab (? pie (catall (map (\ o (le64 o)) (rev (peep relbox 0 ())))) ())
-       ei (? img? (ldemit cx 'image r1 objs ()) `(r1))      ; pads r1 -> iaddr over the bss gap
+       ; the image's own pad is a FILE distance now, not an address one: r1's offset up
+       ; to ioff. emitting from iaddr leaves ldemit nothing to pad (cur is already the base).
+       ipad (? img? `((ld-zeros (ioff - (r1 - base)))) ())
+       ei (? img? (ldemit cx 'image iaddr objs ()) `(iaddr))
        ; -- the section headers and the symbol table, laid PAST p_filesz. nothing
        ; here is SHF_ALLOC, so the kernel maps not a byte of it and the program is
        ; the same program; nm, objdump and gdb read exactly this. we describe the
@@ -594,30 +606,36 @@
        ; table): binutils strip rebuilds a file FROM its sections, so an orphan
        ; gap comes back as zeros -- the relocator's table gone, the stripped
        ; binary a segfault at the first unrebased pointer.
-       fsz (iend - base)                                    ; the loaded bytes: p_filesz
        lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 6) ('image >< 7)))
        st (ldstab objs glo lanesx)
        shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" "ai_rela" ".bss" ".image"
                          ".symtab" ".strtab" ".shstrtab"))
        (snm k) (at <>shstr k)
-       symo (ld-align 8 fsz) symz (tally <st)
+       symo (ld-align 8 endf) symz (tally <st)
        stro (symo + symz) strz (tally <>st)
        ssto (stro + strz) sstz (tally <shstr)
        shto (ld-align 8 (ssto + sstz))
        sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)                                   ; the reserved null header
-                     (ld-shdr (snm 0) 1 6 (base + 120) 120 (<et - (base + 120)) 0 0 16 0)
+                     (ld-shdr (snm 0) 1 6 (base + hdrsz) hdrsz (<et - (base + hdrsz)) 0 0 16 0)
                      (ld-shdr (snm 1) 1 2 <et (<et - base) (<eo - <et) 0 0 16 0)
                      (ld-shdr (snm 2) 1 3 <eo (<eo - base) (<ed - <eo) 0 0 16 0)
                      (ld-shdr (snm 3) 1 3 <ed (<ed - base) (<en - <ed) 0 0 16 0)
                      (ld-shdr (snm 4) 1 2 r0 (r0 - base) (r1 - r0) 0 0 16 0)         ; ai_rela, the -pie table (empty non-pie)
                      (ld-shdr (snm 5) 8 3 r1 (r1 - base) (bend - r1) 0 0 16 0)       ; NOBITS: an offset, no bytes
-                     (ld-shdr (snm 6) 1 3 iaddr (iaddr - base) (iend - iaddr) 0 0 16 0)  ; .image, the grow slot
+                     (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                   ; .image, the grow slot -- its own segment
                      (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)              ; link=.strtab info=first global
                      (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                      (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)))
-       hdr (elf64-hdr (? pie 3 2) base ent fsz (mend - base) mach `(shto 11 10))
-       (hdr >< (>en + tail + (? pie `(rtab) ()) + >ei
-                + `((ld-zeros (symo - fsz)) <st <>st <shstr
+       ; segment one carries every written byte through ai_rela and runs out to bss in
+       ; memsz alone; segment two is the image, RW (a heap snapshot is read and rebased,
+       ; never entered). ⚠ bake_tail asks that .image END its segment and that no LOAD
+       ; live above it -- both hold by construction here, and neither would if the image
+       ; shared a segment with the bss it follows.
+       phs (`((elf64-phdr 1 7 0 base base (r1 - base) (bend - base) 4096))
+            + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ()))
+       hdr (elf64-hdrn (? pie 3 2) ent mach `(shto 11 10) phs)
+       (hdr >< (>en + tail + (? pie `(rtab) ()) + ipad + >ei
+                + `((ld-zeros (symo - endf)) <st <>st <shstr
                     (ld-zeros (shto - (ssto + sstz))) sht))))
 
    ; --- the KERNEL lane: one ELF, three doors ---------------------------------

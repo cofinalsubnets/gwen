@@ -48,6 +48,6 @@
                          (? (two? r) `(f <>r)
                             (: _ (say err ("mkefi: cannot open " + f)) (quit 1)))))
                  objs)
-       (pelink (link `("efi0" (string (objelf 'x64 efi-ir () efi-exports () () () () ())))
+       (pelink (link `("efi0" (string (objelf 'x64 efi-ir () efi-exports () () () () () ())))
                      srcs)
                out)))

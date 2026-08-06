@@ -139,7 +139,7 @@
        ps)
    ; the parser's static/section tablets, threaded to the gen as one list
    (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9) (el ps 10) (el ps 11))   ; sfns svars sects aliases aligns AINLS NOINLS
-   ; a relocatable object: text/data/ai_nifs/.image sections + symbols + relocations
+   ; a relocatable object: text/data/.bss/ai_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.
    ; ..plus one section per OTHER __attribute__((section(NAME))) name the TU
@@ -156,9 +156,9 @@
        ; the TU named. ⚠ arm32 has no .image lane and no LOCAL FUNC symbols for
        ; statics -- objsecs3 refuses the first, and (el ob 7) simply doesn't ride.
        (? (arm32? tgt)
-          (objsecs32 tgt ((objsecs3 tgt (el ob 1) (el ob 2) (el ob 5) (el ob 6)) + xs)
+          (objsecs32 tgt ((objsecs3 tgt (el ob 1) (el ob 2) (el ob 5) (el ob 6) (el ob 9)) + xs)
                      (el ob 3) (el ob 4) (el ps 4))
-          (objsecs tgt ((objsecs4 (el ob 1) (el ob 2) (el ob 5) (el ob 6)) + xs)
+          (objsecs tgt ((objsecs4 (el ob 1) (el ob 2) (el ob 5) (el ob 6) (el ob 9)) + xs)
                    (el ob 3) (el ob 4) (el ps 4) (el ob 7))))
    (cc-obj src dst is ds tgt nsi) (write-bytes dst (cc-objbytes src is ds tgt nsi))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
@@ -297,7 +297,7 @@
                          (udie 2 ("cc: not a .c/.o input: " + f))))
                  ins)
        c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
-       all (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () ()))) srcs)
+       all (link `("crt0" (string (objelf tgt c9 () `("__ai_start") () `("__ai_start") () () () ()))) srcs)
        ps (ldlink tgt pie org (all + (rtpull all tgt nostd)))
        _ (ld-write dst ps)
        (chmod dst 493))

@@ -375,38 +375,45 @@
    ; OBJECT symbols); locnames the STATIC functions -- LOCAL FUNC symbols, so a
    ; linked binary's nm/objdump/gdb (and tools/vmret.l's symbol spans) see them;
    ; static data stays local labels. -> a byte list.
-   ; these four sections are what a HOSTED object carries; objsecs below is the
+   ; these five sections are what a HOSTED object carries; objsecs below is the
    ; general door, and the kernel's lays go through it for names a compiler never
    ; emits (.boot, .note.pvh, the 2 KiB-aligned vector table).
-   ; the four DESCRIPTORS are their own binding because a compiler has a fifth
+   ; the five DESCRIPTORS are their own binding because a compiler has a sixth
    ; kind of stream to add to them: a global wearing __attribute__((section(..)))
    ; with a name that is neither ai_nifs nor .image (the kernel's
    ; .limine_requests, which a bootloader SCANS for). moon.l appends those and
-   ; calls objsecs itself; everything else takes the four and nothing more.
-   (objsecs4 textforms dataforms nifforms imgforms)
+   ; calls objsecs itself; everything else takes the five and nothing more.
+   ; ⚠ .bss is NOBITS (8): its size rides the header and its zeros ride NOTHING, so
+   ; whoever loads the image owes them -- linux over p_memsz, the .lds ports over
+   ; their own startup loop. a lay that owns no loader must not use this lane.
+   (objsecs4 textforms dataforms nifforms imgforms bssforms)
     `(`(".text"   1 6 16 textforms)
       `(".data"   1 3 (o-dalign dataforms) dataforms)
+      `(".bss"    8 3 (o-dalign bssforms) bssforms)
       `("ai_nifs" 1 3 8 nifforms)
       `(".image"  1 3 16 imgforms))
    ; a named section a COMPILER emits: PROGBITS, allocated and writable, on the
    ; widest grain its own globals ask for. the descriptor a hand-written lay
    ; needs is its own business -- it says the flags outright.
    (objsec-named nm forms) `(nm 1 3 (o-dalign forms) forms)
-   ; the arm32 twin of objsecs4: THREE, because there is no .image lane at 32 bits
+   ; the arm32 twin of objsecs4: FOUR, because there is no .image lane at 32 bits
    ; (no bake), so a non-empty one is a caller's mistake and not a section. the grain
    ; is 4 throughout rather than objsecs4's 16/8 -- a thumb function is 2-byte
-   ; aligned and flash is the scarce thing on these parts.
-   (objsecs3 target textforms dataforms nifforms imgforms)
+   ; aligned and flash is the scarce thing on these parts, which is also why .bss
+   ; rides here: these ports copy .data out of flash and zero .bss themselves
+   ; (rp2040.c, teensy41.c, nucleo446.c), so a zero laid in .data is flash spent twice.
+   (objsecs3 target textforms dataforms nifforms imgforms bssforms)
     (: _ (? (two? imgforms) (scare 'obj-image-arm32 target) 0)
        `(`(".text"   1 6 4 textforms)
          `(".data"   1 3 4 dataforms)
+         `(".bss"    8 3 4 bssforms)
          `("ai_nifs" 1 3 4 nifforms)))
 
-   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms locnames)
+   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms)
     (? (arm32? target)
-       (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms)
+       (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms bssforms)
                   funcnames globnames wknames)          ; locnames unrepresented on arm32
-       (objsecs target (objsecs4 textforms dataforms nifforms imgforms)
+       (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms)
                 funcnames globnames wknames locnames))
 
    ; -- the general object: a LIST of sections, each (name type flags align forms).

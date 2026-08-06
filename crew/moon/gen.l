@@ -5992,7 +5992,7 @@
        (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (deadlab irf)))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms
-   ; imgforms extras) | 'bad, extras being ((name forms) ..), one per OTHER named section.
+   ; imgforms extras bssforms) | 'bad, extras being ((name forms) ..), one per OTHER named section.
    ; a __attribute__((section(NAME))) global lays in a stream of its own. three streams have a
    ; meaning the writer knows: `ai_nifs` needs the linker's __start_/__stop_ bracket around a
    ; packed run for main()'s boot drain, `.image` must be LAST so `love --bake` can grow it at the
@@ -6003,9 +6003,17 @@
     (: sects (peep g 'sects (tablet 0))
        (strm nm) (: s (peep sects nm ())                  ; which stream a global belongs to
                     (? s s ".data"))                      ; the name IS the stream
-       (globs gs want acc)
+       ; a global with NO initializer images as zeros by construction (imgbytes' first
+       ; clause), so the file need not carry them: it rides .bss, the NOBITS lane. one
+       ; that names its own section keeps it -- the attribute is the whole point.
+       (bss? nm) (&& (! (peep sects nm ())) (! (two? <>>(peep (g 'glob) nm 0))))
+       ; zm splits the .data walk in two without imaging a global twice: 'd takes the
+       ; initialized, 'z the rest, () everything (a named stream is never split).
+       (globs gs want zm acc)
         (? (! (two? gs)) acc
-           (! ((strm <gs) = want)) (globs >gs want acc)   ; another stream's
+           (! ((strm <gs) = want)) (globs >gs want zm acc)   ; another stream's
+           (&& (zm = 'd) (bss? <gs)) (globs >gs want zm acc)
+           (&& (zm = 'z) (! (bss? <gs))) (globs >gs want zm acc)
            (: ge (peep (g 'glob) <gs 0)
               lbl <ge ty <>ge init <>>ge
               _ (pin g 'undecl ()) _ (pin g 'datacause ())   ; fresh per global: the refusal below names THIS one's cause
@@ -6026,8 +6034,8 @@
                                           (go >l (? ((peep (g 'alias) <l ()) = <gs)
                                                     (link `('label (intern <l)) a2) a2)))
                            (go (keys (g 'alias)) ()))   ; a DATA alias (musl's __stdin_used) names the same bytes
-                    (globs >gs want (acc + (? (1 < an) `(`('align an)) ())
-                                        + als + `(`('label lbl) `('raw bytes))))))))
+                    (globs >gs want zm (acc + (? (1 < an) `(`('align an)) ())
+                                           + als + `(`('label lbl) `('raw bytes))))))))
        (strs ss acc)
         (? (! (two? ss)) acc
            (: p <ss
@@ -6042,14 +6050,17 @@
                                                   (member? s acc))
                                               acc (link s acc)))))
                  (go (rev (g 'globs)) ()))
-       (: gb (globs (rev (g 'globs)) ".data" ())        ; exported globals, then block-scope statics
-          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) ".data" ()))   ; (local data labels), then strings
-          nb (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) "ai_nifs" ()))
-          ib (? (|| (bad? gb) (|| (bad? sb) (bad? nb))) 'bad (globs (rev (g 'globs)) ".image" ()))
-          xb (? (|| (bad? gb) (|| (bad? sb) (|| (bad? nb) (bad? ib)))) 'bad
-                (map (\ nm `(nm (globs (rev (g 'globs)) nm ()))) xnames))
-          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? nb) (|| (bad? ib) (bad? xb))))) 'bad
-             `((gb + sb + (strs (g 'strs) ())) nb ib xb))))
+       (: gb (globs (rev (g 'globs)) ".data" 'd ())     ; exported globals, then block-scope statics
+          sb (? (bad? gb) 'bad (globs (rev (g 'statics)) ".data" 'd ()))   ; (local data labels), then strings
+          zg (? (|| (bad? gb) (bad? sb)) 'bad (globs (rev (g 'globs)) ".data" 'z ()))
+          zs (? (bad? zg) 'bad (globs (rev (g 'statics)) ".data" 'z ()))
+          nb (? (|| (bad? zg) (bad? zs)) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
+          ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".image" () ()))
+          xb (? (bad? ib) 'bad
+                (map (\ nm `(nm (globs (rev (g 'globs)) nm () ()))) xnames))
+          (? (|| (bad? gb) (|| (bad? sb) (|| (bad? zg) (|| (bad? zs)
+              (|| (bad? nb) (|| (bad? ib) (bad? xb))))))) 'bad
+             `((gb + sb + (strs (g 'strs) ())) nb ib xb (zg + zs)))))
 
    ; the shared core: build the gen state, then TEXT (the functions, no _start)
    ; and DATA (globals + strings) separately -> (g textforms dataforms) | ().
@@ -6157,13 +6168,15 @@
           (! (two? r)) ()
           (! (nthr r 3)) ()                          ; no main -> no program (the exe has nothing to start)
           (: dat <>>r                           ; (dataforms nifforms): the exe resolves labels itself,
-             `(1 (crt0 + <>r + <dat + <>dat)))))   ; so the nif stream just rides along
+             ; ..and the bss forms ride the tail as real zeros: one flat image has no
+             ; NOBITS lane to put them in, so the file carries what the sections would not.
+             `(1 (crt0 + <>r + <dat + <>dat + <>>>>dat)))))   ; so the nif stream just rides along
    ; the RELOCATABLE OBJECT view: text and data split, plus the DEFINED function names (global
    ; FUNC symbols, statics excluded -- they stay LOCAL, love.h's inline helpers land in every TU),
    ; the global-variable names, and the ai_nifs stream -- the .o emitter turns the rest into a
    ; symbol table + relocations. the DEFINED static functions ride the tail as lnames, laid as
    ; LOCAL FUNC symbols so nm/gdb/vmret see real function boundaries.
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           (! (two? r)) ()
@@ -6205,4 +6218,4 @@
                                                          (link <>f acc) acc))))
                        (go <>ast ()))
              dat <>>r
-             `(1 <>r <dat fnames gnames <>dat <>>dat lnames <>>>dat)))))
+             `(1 <>r <dat fnames gnames <>dat <>>dat lnames <>>>dat <>>>>dat)))))
