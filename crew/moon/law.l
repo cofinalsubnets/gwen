@@ -864,6 +864,17 @@
    (assert
       (= (cast "void f() { asm(\"sys\"); }")
          '(prog ((fn "f" () (blk ((asm "sys" () () ())))))))
+      ; every GNU spelling of the head and of volatile reads the SAME statement. the
+      ; underscored ones are also patt's decoration names, and patt runs first -- so
+      ; each of these once lost its head and refused on the stranded `volatile`.
+      (= (cast "void f() { __asm__ volatile(\"sys\"); }")
+         (cast "void f() { asm(\"sys\"); }"))
+      (= (cast "void f() { __asm volatile(\"sys\"); }")
+         (cast "void f() { asm(\"sys\"); }"))
+      (= (cast "void f() { __asm__ __volatile__(\"sys\"); }")
+         (cast "void f() { asm(\"sys\"); }"))
+      (= (cast "void f() { __asm(\"sys\"); }")
+         (cast "void f() { asm(\"sys\"); }"))
       (= (cast "void f() { long v; asm volatile(\"li %0, 4\" \"0\" : \"=r\"(v) : \"r\"(v), \"i\"(3) : \"memory\"); }")
          '(prog ((fn "f" () (blk ((decl (("v" long ())))
                                   (asm "li %0, 40" (("=r" (var "v")))

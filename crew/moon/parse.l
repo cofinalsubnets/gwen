@@ -116,10 +116,22 @@
    ; skip a TRAILING run of __attribute__((..)) / __asm__(..) -- the decoration
    ; glibc hangs off a declarator's tail (`int f(void) __attribute__((__nothrow__));`,
    ; `extern int x __asm__("y");`). balance-skip the parens; the codegen owes nothing.
+   ; ⚠ the `(` is REQUIRED to skip: a bare one of these names is not decoration, and
+   ; eating it strands whatever followed.
    (patt ts)
     (? (! (two? ts)) ts
-       (&& ((tkk <ts) = 'id) (member? (tkv <ts) `("__attribute__" "__asm__" "__asm")))
-        (: r >ts (? (peekp r "(") (patt (skipbal >r 1)) (patt r)))
+       (&& (&& ((tkk <ts) = 'id) (member? (tkv <ts) `("__attribute__" "__asm__" "__asm")))
+           (peekp >ts "("))
+        (patt (skipbal >>ts 1))
+       ts)
+   ; the STATEMENT-position skip, and __attribute__ is the whole of it. ⚠ pstmt ran patt,
+   ; which meant a leading __asm__(..) -- the inline-asm STATEMENT -- was balance-skipped as
+   ; decoration and vanished without a word; the spellings that also carried `volatile`
+   ; refused on the stranded keyword instead. Only bare `asm` ever reached pasm.
+   (pattr ts)
+    (? (! (two? ts)) ts
+       (&& (&& ((tkk <ts) = 'id) ((tkv <ts) = "__attribute__")) (peekp >ts "("))
+        (pattr (skipbal >>ts 1))
        ts)
    ; does the leading declaration-specifier run carry `static`? scans the front
    ; run of qualifier + type-specifier keywords (and balance-skips attribute ids),
@@ -1217,7 +1229,7 @@
    ; ret-position call, and `make vmret` holds the lvm_ fleet to it
    (pstmt ps ts0)
     (? (! (two? ts0)) ()
-       (: ts (patt ts0)
+       (: ts (pattr ts0)
           (? (! (two? ts)) ()
              (static? ts) (pstatic ps ts)
              (pstmt2 ps ts))))
