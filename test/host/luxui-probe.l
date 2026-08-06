@@ -12,7 +12,8 @@
 ;   fullscreen float UNMAPPED and a re-show re-manages it (the telegram
 ;   media-viewer zombie: the crossing's render must not resurrect it),
 ;   the unmap ledger: lux's own hides (switch, minimize) never evict, a
-;   RUDE client unmap with no courtesy synthetic does (xmonad's rule).
+;   RUDE client unmap with no courtesy synthetic does (xmonad's rule),
+;   closing the focused tile hands the keyboard to the survivor.
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
 (: (probe dpy)
@@ -206,6 +207,16 @@
       _ (must "wr-rude-unmapped" (= 0 (mstr ())))
       _ (mapr ())                                                                ; and the re-show re-manages
       _ (waitp "wr-remanaged" (\ u (&& (known? ()) (= 2 (mstr ())))) 50)
+
+      ; --- 5d. close the FOCUSED tile: the survivor must take the keyboard.
+      ;     the pointer parks over the float first, so no crossing can hand
+      ;     focus on -- only lux's own refocus after the eviction can ---
+      gf (x-getgeom s w1)
+      _ (fake 6 0 (+ (nthl gf 0) (// (nthl gf 2) 2)) (+ (nthl gf 1) (// (nthl gf 3) 2))) _ (rest 100)
+      _ (cmsg wt a-aw 0 0 0)                                                     ; activate the victim: two tiles, wt holds the focus
+      _ (waitp "victim-focused" (\ u (= wt (getfocus ()))) 50)
+      _ (: _ (x-w8 s 4) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s wt) (x-flush s))   ; DestroyWindow: the app quits
+      _ (waitp "survivor-focused" (\ u (= wr (getfocus ()))) 50)
 
       ; --- 6. LAST, the moor: the live repl evals, survives a scare, CHANGES state
       ;     (msg! 'next-layout flips the ||| index -- read back through the

@@ -362,6 +362,7 @@
                    (? (! (wsknownw? sh win)) (loop sh lay hist ffoc)
                       (: sh2 (evict sh win) ffoc2 (? (win = ffoc) () ffoc)
                          _ (render sh2 lay ffoc2)
+                         _ (? ffoc2 (: _ (x-focus s ffoc2) (x-flush s)) (refocus sh2))   ; the departed held the keyboard: hand it on
                          _ (line ("lux: - " + ((show win) + (" " + (show (wsrow sh2))))))
                          (loop sh2 lay hist ffoc2))))
                 (code = 18)                                                     ; UnmapNotify: xmonad's waitingUnmap rule. Our own hides echo
@@ -376,6 +377,7 @@
                                                                                  ; (telegram's media viewer) -- withdrawn means UNMAPPED, so say so
                             _ (unled! win)
                             _ (render sh2 lay ffoc2) _ (x-flush s)               ; tray ghost); a re-map arrives as a fresh MapRequest
+                            _ (? ffoc2 (: _ (x-focus s ffoc2) (x-flush s)) (refocus sh2))
                             _ (line ("lux: withdraw " + (show win)))
                             (loop sh2 lay hist ffoc2)))))
                 (code = 7)                                                      ; EnterNotify: focus follows the pointer (normal crossings
