@@ -69,6 +69,19 @@
 ;   Have first, the helper only bumps g->hp). `make vmret` catches this: the default love is
 ;   mooncc-built (test_fixpoint rebuilds it to the byte; test_raw the from-scratch cross-check),
 ;   so the fast gate disassembles mooncc's own emission.
+; * ⚠ love has no global state -- a mutable global in C is a bug, never a shortcut, and adding one
+;   is FORBIDDEN. state rides `g` (a field) or a parameter, a buffer rides `g->hp` or the caller,
+;   a table that never changes is `const`. a global sits outside the heap: the collector cannot
+;   trace it, the image cannot bake it, and two tasks share it without asking. the standing
+;   exceptions are the immortals the image codec locates BY ADDRESS (ai_stdin/out/err, the port
+;   vtables, the ai_baked_image slot) -- those are load-bearing; every other one is owed a fix.
+;   temporary INSTRUMENTATION is the one licence: a counter or a probe while you hunt something.
+;   it leaves with the hunt -- a probe still in the tree at commit is the bug it was chasing.
+; * ⚠ never call malloc/free (calloc/realloc too) directly -- the allocator is one door on `g`:
+;   `g->alloc(g, p, n)`, n>0 reserves n bytes, n==0 frees p, answers the block or NULL. it is a
+;   HOOK so each seat supplies its own -- the freestanding kernel and a device heap have no libc
+;   malloc at all, which is why ai_image_load_m takes the allocator as a parameter. love.c's
+;   ai_libc_alloc (with the two decls it needs) is the one site that may name them: it IS the hook.
 ; * ⚠ presence is the wrapper, never the net -- the costliest recurring bug in this tree. every
 ;   nothing is nil by design ((), 0, "", @()), so absence and emptiness are indistinguishable by
 ;   the value alone: a "do I have one?" test written `(! x)` fails silently on every legitimate
