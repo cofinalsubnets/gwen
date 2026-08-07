@@ -482,15 +482,22 @@
                        (: rfd (cap pp) wfd (cup pp)
                           seqish (|| (id? (cap a) 'seq) (id? (cap a) 'and)
                                      (id? (cap a) 'or) (id? (cap a) 'bg))
-                          (? seqish
-                             (: _ (sh-capture a wfd)
-                                _ (fdclose wfd)
-                                (slurp (fdopen rfd)))
-                             (: pids (sh-capsimple a wfd)
-                                _ (fdclose wfd)
-                                o (slurp (fdopen rfd))
-                                _ (each pids (\ p (wait p)))
-                                o)))))))))
+                          ; ⚠ GUARDED, and the guard must be up at the fork (the
+                          ; child takes it by copy): the body's status is this
+                          ; substitution's value, never the shell's own errexit
+                          ; trigger -- aborting it would drop the very output the
+                          ; caller asked for. the seq lane reaps per step and so
+                          ; never aborted; now both lanes answer the same.
+                          (sh-guarded
+                            (\ _ (? seqish
+                                    (: _ (sh-capture a wfd)
+                                       _ (fdclose wfd)
+                                       (slurp (fdopen rfd)))
+                                    (: pids (sh-capsimple a wfd)
+                                       _ (fdclose wfd)
+                                       o (slurp (fdopen rfd))
+                                       _ (each pids (\ p (wait p)))
+                                       o)))))))))))
    _ (pin sh-subeval () sh-cmdsub)
 
    ; --- the script lane + the line entries --------------------------------------

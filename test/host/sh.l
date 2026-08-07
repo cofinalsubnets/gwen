@@ -126,6 +126,18 @@
    (assert (= 1 (cap r)) (= "" (cup r))))
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "set -e; false && echo a; echo survived"))
    (assert (= "survived\n" (cup r))))
+; ... but a $( ) body is guarded, so under set -e it runs to its end and hands
+; back what it wrote -- the two capture lanes (a seq reaped per step, a compound
+; in one forked child) answer the same, and bash agrees with both
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; v=$( { false; echo r; } ); echo v=[$v] after"))
+   (assert (= "v=[r] after\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; v=$(false; echo r); echo v=[$v] after"))
+   (assert (= "v=[r] after\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; f(){ false; echo fr; }; v=$(f); echo v=[$v] after"))
+   (assert (= "v=[fr] after\n" (cup r))))
 
 ; expansion: POSIX order -- splitting only over expansion output, quotes
 ; shield, an unset var alone is NO field, a quoted empty IS one, glob last
