@@ -28,6 +28,8 @@
 ;
 ;   (fn name params body RET ATTRS)    the return type, absent = int; then attribute
 ;                                      SPELLINGS ("ai_noinline"), love.h's macros call-shaped
+;   (proto name PARAMS RET ATTRS)      the same three slots on a forward declaration, which
+;                                      cparse keeps the NAME of and nothing else
 ;   (ret e PRE)                        a prefix spelling: `ai_musttail return ..`
 ;   (gdecl decls STOR)                 (static) / (extern) / (), absent = ()
 ;   (restrict t)                       the qualifier beside (const t) -- pointers only
@@ -114,7 +116,7 @@
     ; bare (tdef) marker, so one only ever comes from a generator.
     ; ⚠ the cpp trio is emit-only more firmly than any of those: cpp runs before the
     ; lexer, so a directive never reaches a parse at all. see the header.
-    '((prog 1 1) (fn 1 5) (proto 1 1) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
+    '((prog 1 1) (fn 1 5) (proto 1 4) (gdecl 1 2) (xdecl 1 2) (tdef 0 2) (note 1 1)
       (edef 2 2) (sdef 2 3) (sassert 2 2) (cpp-def 1 2) (cpp-undef 1 1) (cpp-if 1 2)
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
@@ -146,9 +148,10 @@
                  ; ⚠ a gdecl/xdecl's STORAGE slot is a list of bare keywords, not
                  ; nodes -- `(static)` walked as a form would read `static` as a tag.
                  ; so the walk takes the declarators and stops. an edef is the same
-                 ; hazard whole: BOTH its slots are names, and its constant list
-                 ; would read `KMint` as a tag, so it has no kids at all. a full fn's
-                 ; ATTRS slot is a list of spellings, so it walks params/body/ret only.
+                 ; hazard whole: a bare constant is a name and a valued one is
+                 ; `(nom expr)`, whose head would read as a tag, so it has no kids at
+                 ; all -- the price of letting a constant name itself. a full fn's or
+                 ; proto's ATTRS slot is a list of spellings, so the walk stops before it.
                  (: (kids l) (? (! (two? l)) ()
                                 (: e <l
                                    (? (two? e) (: v (? (name? <e) (go e) (kids e)) (? v v (kids >l)))
@@ -156,6 +159,7 @@
                     (kids (? (member? h '(gdecl xdecl)) `(<>x)
                              (id? h 'edef) ()
                              (&& (id? h 'fn) (4 < n)) `((el x 2) (el x 3) (el x 4))
+                             (&& (id? h 'proto) (3 < n)) `((el x 2) (el x 3))
                              >x))))))
        v (go c)
        (? v v 1))
@@ -253,13 +257,18 @@
            (lt "<") (gt ">") (le "<=") (ge ">=") (eq "==") (ne "!=")
            (& "&") (^ "^") (| "|"))
    unop '((neg "-") (not "!") (bnot "~"))
+   ; `a[i]` is (deref (bin + a i)) -- cparse desugars indexing -- and it binds like the
+   ; POSTFIX it is written as, not like the `*` it is written from. that is the whole
+   ; difference between `k[0].ap` and `(k + 0)->ap`, which are the same tree.
+   (cidx? e) (&& (two? e) (&& (id? <e 'deref)
+                              (: t (el e 1) (&& (two? t) (&& (id? <t 'bin) (id? (el t 1) '+))))))
    (cprec e)
     (? (! (two? e)) 100
        (: h <e
           (? (id? h 'bin) (look binprec <>e 100)
              (id? h 'land) 40 (id? h 'lor) 35 (id? h 'cond) 30
              (id? h 'asn) 25 (id? h 'comma) 20
-             (id? h 'un) 90 (id? h 'deref) 90 (id? h 'addr) 90
+             (id? h 'un) 90 (id? h 'deref) (? (cidx? e) 100 90) (id? h 'addr) 90
              (id? h 'cast) 90 (id? h 'clit) 90
              100)))
    ; ce: render e, parenthesized when it binds looser than the context wants.
@@ -285,13 +294,11 @@
              ; negation it could not fold.)
              (id? h 'un) (: o (look unop a "?") r (ce (el e 2) 90)
                              (o + (? (&& (tally r) ((r 0) = (o 0))) " " "") + r))
-             ; a[i] is (deref (bin + a i)) -- cparse desugars indexing, and printing
-             ; the star back would be faithful but unreadable. the sugar re-desugars
-             ; on the way in, so G1 holds either way; this is the one place clay
-             ; chooses the nicer of two forms that mean the same tree.
+             ; printing the star back would be faithful but unreadable. the sugar
+             ; re-desugars on the way in, so G1 holds either way; this is the one place
+             ; clay chooses the nicer of two forms that mean the same tree.
              (id? h 'deref) (: t a
-                               (? (&& (two? t) (&& (id? <t 'bin) (id? (el t 1) '+)))
-                                  ((ce (el t 2) 100) + "[" + (ce (el t 3) 0) + "]")
+                               (? (cidx? e) ((ce (el t 2) 100) + "[" + (ce (el t 3) 0) + "]")
                                   ("*" + (ce t 90))))
              (id? h 'addr) ("&" + (ce a 90))
              (id? h 'post) ((ce a 95) + (? (0 < (el e 2)) "++" "--"))
@@ -299,9 +306,11 @@
              (id? h 'szof) ("sizeof(" + (? (ctype? a) (cty a "") (ce a 0)) + ")")
              ; a call's arguments sit ABOVE the comma operator, hence 21
              (id? h 'call) ((ce a 100) + "(" + (sepby ", " (map (\ x (ce x 21)) (el e 2))) + ")")
-             ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back
+             ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back --
+             ; unless the deref is an INDEX, where `a[i].f` is the arrow already spent
              (id? h 'dot) (: t a
-                              (? (&& (two? t) (id? <t 'deref)) ((ce <>t 100) + "->" + (el e 2))
+                              (? (&& (two? t) (&& (id? <t 'deref) (! (cidx? t))))
+                                 ((ce <>t 100) + "->" + (el e 2))
                                  ((ce t 100) + "." + (el e 2))))
              (id? h 'init) (cinit e 0)
              (id? h 'clit) ("(" + (cty a "") + ") " + (craw (el e 2)))
@@ -391,9 +400,13 @@
              (id? h 'if) (cif s n "")
              (id? h 'while) (: b (el s 2) ((copen n "" ("while (" + (ce a 0) + ")") b) + (cclose n b "")))
              (id? h 'do) ((copen n "" "do" a) + (cclose n a (" while (" + (ce (el s 2) 0) + ");")))
+             ; all three clauses empty is `for (;;)`, C's own spelling of forever --
+             ; the general join would lay `for (; ; )`, which reads as three omissions
              (id? h 'for) (: b (el s 4)
-                             hdr ("for (" + (cfor a) + "; " + (? (two? (el s 2)) (ce (el s 2) 0) "")
-                                  + "; " + (? (two? (el s 3)) (ce (el s 3) 0) "") + ")")
+                             i (cfor a) c (? (two? (el s 2)) (ce (el s 2) 0) "")
+                             p (? (two? (el s 3)) (ce (el s 3) 0) "")
+                             hdr (? (! (tally (i + c + p))) "for (;;)"
+                                    ("for (" + i + "; " + c + "; " + p + ")"))
                              ((copen n "" hdr b) + (cclose n b "")))
              (id? h 'switch) ((line n ("switch (" + (ce a 0) + ") {"))
                               + (join (map (\ x (cstmt x (n + 1))) (el s 2))) + (line n "}"))
@@ -423,20 +436,39 @@
    (cparam p) (cty-dtor (el p 1) <p 0)
    (cparams ps) (: b (map (\ p ((cty-base (el p 1)) + " " + (cparam p))) ps)
                    (? (two? ps) (sepby ", " b) "void"))
+   ; a signature: attribute spellings, then the return type wrapped around
+   ; `name(params)`. cfn opens a body under it, a proto ends it with `;` -- one
+   ; spelling, so a forward declaration cannot drift from the definition it announces.
+   (csig nm at r ps)
+    ((join (map (\ a ((ctag a) + " ")) at)) + (cty r (nm + "(" + (cparams ps) + ")")))
+   ; one enum constant: a bare name takes the position C gives it, and `(nom expr)`
+   ; names its own value -- which is the only way to say the anonymous enum a
+   ; compile-time constant lives in (`enum { nf_maxcap = 64 };`).
+   (cconst k) (? (two? k) ((string <k) + " = " + (ce (el k 1) 21)) (string k))
    (ctop t)
     (? (! (two? t)) ""
        (: h <t a (el t 1)
           (? (id? h 'note) (cnote 0 a)
              (id? h 'gdecl) (line 0 ((cstor (? (1 < (tally >t)) (el t 2) ())) + (cdecls a) + ";"))
              (id? h 'xdecl) (line 0 ("extern " + (cdecls a) + ";"))
-             (id? h 'proto) (line 0 ("int " + a + "();"))
+             ; a forward declaration. cparse keeps the NAME and nothing else, so a bare
+             ; (proto n) is the same reconstruction a return-type-less fn is; the
+             ; appended slots are what a generator says, and what a mutual recursion
+             ; between two generated functions has no other way to spell.
+             (id? h 'proto)
+              (? (! (two? >>t)) (line 0 ("int " + (ctag a) + "();"))
+                 (line 0 ((csig (ctag a) (? (3 < (tally >t)) (el t 4) ())
+                                (? (2 < (tally >t)) (el t 3) 'int) (el t 2)) + ";")))
              (id? h 'tdef) (? (two? >t) (line 0 ("typedef " + (cty (el t 2) a) + ";"))
                               (gripe "(tdef) carries nothing -- a typedef cparse could not keep"))
-             ; an enum definition, one line. there is no `= n` slot and there should
-             ; not be: a generator's constants take the positions C already gives
-             ; them, and a table that had to say its own indices would not be one.
-             (id? h 'edef) (line 0 ("enum " + (string a) + " { "
-                                    + (sepby ", " (map (\ k (string k)) (el t 2))) + " };"))
+             ; an enum definition, one line. a constant takes the position C already
+             ; gives it -- a roster that had to say its own indices would not be one --
+             ; and `(nom expr)` is for the enum that is not a lattice at all: an
+             ; ANONYMOUS one, C's spelling for a lone compile-time constant, where a
+             ; position means nothing and the value is the whole point.
+             (id? h 'edef)
+              (line 0 ("enum " + (? (|| (string? a) (name? a)) ((ctag a) + " ") "") + "{ "
+                       + (sepby ", " (map cconst (el t 2))) + " };"))
              ; a struct or union definition, one member per line. a FIELD is parse's
              ; member pair, so its type is a clay node and brackets its own name the
              ; way every other declaration here does -- `lvm_t *m[KN]` as a member is
@@ -545,10 +577,8 @@
    ; `int` is the best the tree can justify. the 5th is attribute SPELLINGS laid
    ; before it (`ai_noinline ai_noicf struct ai *lvm_add(..)`). see the header.
    (cfn t)
-    (: nm (? (string? (el t 1)) (el t 1) (string (el t 1)))
+    (: nm (ctag (el t 1))
        r (? (3 < (tally >t)) (el t 4) 'int)
        at (? (4 < (tally >t)) (el t 5) ())
        b (el t 3)
-       ((copen 0 (join (map (\ a ((ctag a) + " ")) at))
-               (cty r (nm + "(" + (cparams (el t 2)) + ")")) b)
-        + (cclose 0 b ""))))
+       ((copen 0 "" (csig nm at r (el t 2)) b) + (cclose 0 b ""))))

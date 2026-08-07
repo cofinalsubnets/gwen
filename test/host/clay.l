@@ -203,6 +203,59 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     (gripe? (one '(cpp-if ((1 ((tdef)))))))
     (gripe? (one '(cpp-if ((1 ((blk ())))))))))
 
+; --- doc/clay.md's rung 4: the three shapes the alpha cluster asks for ----------
+; a forward declaration with a REAL signature. cparse keeps a prototype's name and
+; nothing else, so a bare (proto n) prints the same reconstruction a return-type-less
+; fn does; the appended slots mirror `fn`'s exactly and ONE `csig` lays both, so a
+; declaration cannot drift from the definition it announces. two generated functions
+; calling each other have no other way to be spelled.
+(assert
+ ((one '(proto "shash")) = ("int shash();" + nl))
+ ((one '(proto "shash" (("g" (ptr (struct "ai"))) ("x" (named "word"))
+                        ("env" (ptr (struct "arib")))) (named "uintptr_t") ("static")))
+  = ("static uintptr_t shash(struct ai *g, word x, struct arib *env);" + nl))
+ ; the appended slots are independent: params alone, then params and a return type
+ ((one '(proto "f" (("a" int)))) = ("int f(int a);" + nl))
+ ((one '(proto "g" () void)) = ("void g(void);" + nl)))
+
+; --- an enum constant may name its own value, and the enum may carry no tag ------
+; a lattice's constants take the positions C already gives them -- a roster that had
+; to say its own indices would not be one. but C's spelling for a lone compile-time
+; constant is an ANONYMOUS enum, where the position means nothing and the value is
+; the whole point, and love.c's `enum { nf_maxcap = 64 }` is exactly that: the one
+; way to bound an array in a struct without spending a macro on it.
+(assert
+ ((one '(edef "q" (KMint KNom KChain))) = ("enum q { KMint, KNom, KChain };" + nl))
+ ((one '(edef () ((nf_maxcap (num 64))))) = ("enum { nf_maxcap = 64 };" + nl))
+ ((one '(edef "e" (a (b (num 8)) c))) = ("enum e { a, b = 8, c };" + nl))
+ ; C has no empty enum, tagged or not
+ (gripe? (one '(edef "e" ())))
+ (gripe? (one '(edef () ()))))
+
+; --- a member of an INDEXED thing -----------------------------------------------
+; `k[0].ap` and `(k + 0)->ap` are the same tree, so G1 cannot tell them apart and the
+; choice is clay's. love.c writes the first; an index binds like the POSTFIX it is
+; written as, so `dot` spends its arrow on the star and never on the bracket.
+(: (ex x) (cs `('gdecl `(`("r" 'int x))))
+   (assert
+    ((ex '(dot (deref (bin + (var "k") (num 0))) "ap")) = ("int r = k[0].ap;" + nl))
+    ((ex '(dot (deref (bin + (var "u") (num 2))) "m")) = ("int r = u[2].m;" + nl))
+    ; an index is an EXPRESSION context, so a negative literal spells there
+    ((ex '(dot (deref (bin + (var "k") (un neg (num 1)))) "x")) = ("int r = k[-1].x;" + nl))
+    ; ...while a plain deref keeps its arrow, and the two compose in either order
+    ((ex '(dot (deref (var "p")) "f")) = ("int r = p->f;" + nl))
+    ((ex '(deref (bin + (dot (deref (var "p")) "row") (var "i")))) = ("int r = p->row[i];" + nl))
+    ((ex '(addr (dot (deref (bin + (var "k") (num 1))) "x"))) = ("int r = &k[1].x;" + nl))))
+
+; --- `for (;;)`, C's own spelling of forever ------------------------------------
+; the general join lays `for (; ; )`, which reads as three omissions rather than one
+; idiom. the clauses that ARE there still take the general shape.
+(assert
+ ((one '(fn "f" () (blk ((for () () () (blk ((brk)))))) void))
+  = ("void f(void) {" + nl + " for (;;) {" + nl + "  break;" + nl + " }" + nl + "}" + nl))
+ ((one '(fn "g" () (blk ((for () (var "c") () (blk ((brk)))))) void))
+  = ("void g(void) {" + nl + " for (; c; ) {" + nl + "  break;" + nl + " }" + nl + "}" + nl)))
+
 ; --- clay-ok? is a SHAPE check, because gen.l trusts its input ------------------
 (assert
  (1 = (cok '(bin + (num 1) (num 2))))
@@ -216,6 +269,10 @@ here")) = ("// two lines" + nl + "// here" + nl)))
  (1 = (cok '(fn "f" () (blk ((ret (num 1) ai_musttail))) void (ai_noinline ai_noicf))))
  (1 = (cok '(sassert (bin eq (num 1) (num 1)) "m")))
  (gripe? (cok '(sassert (num 1))))                 ; wants the message
+ ; a proto's ATTRS slot holds spellings too, and its params and return type are walked
+ (1 = (cok '(proto "f" (("a" int)) void (static))))
+ (gripe? (cok '(proto "f" (("a" (bin + (num 1)))))))
+ (gripe? (cok '(proto)))                           ; wants a name
  ; a cpp arm's CONDITION and its body are both walked, three list levels down
  (1 = (cok '(cpp-if (((var "A") ((cpp-def "X" 1)))))))
  (gripe? (cok '(cpp-if (((var "A") ((bin + (num 1))))))))
