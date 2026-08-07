@@ -509,6 +509,9 @@ endif
 # whole corpus in one ai_eval and greps the drained output for the zz-fin
 # summary, exactly as test_host greps `cat $t | love`. No-op when emcc or node
 # is missing (so a plain `make test_slow` stays green on a host without them).
+# ⚠ it links OUT OF TREE (wasm's `gate` target -> out/wasm/love.js) and never over the
+# committed wasm/love.js: a gate must not rewrite the working tree, and this one silently
+# did, leaving a dirty tracked artifact after every test_slow.
 NODE ?= $(shell command -v node 2>/dev/null)
 EMCC ?= $(or $(shell command -v emcc 2>/dev/null),/usr/lib/emscripten/emcc)
 .PHONY: test_wasm
@@ -516,9 +519,10 @@ ifeq ($(and $(NODE),$(wildcard $(EMCC))),)
 test_wasm:
 	@echo "test_wasm: skipped (needs emcc + node)"
 else
-test_wasm: wasm
-	@echo TEST wasm/love.js "(node)"
-	@$(NODE) $(R)/wasm/test.mjs $t
+test_wasm:
+	@$(MAKE) -s -C $(R)/wasm gate
+	@echo TEST out/wasm/love.js "(node)"
+	@$(NODE) $(R)/wasm/test.mjs --love $(R)/out/wasm/love.js $t
 endif
 
 # --- downloads -------------------------------------------------------

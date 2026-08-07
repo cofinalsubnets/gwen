@@ -62,7 +62,8 @@ test_front: $(ho)/front
 # ⚠ rp2040 links here now (it did not: its C vector table wanted a named section the
 # 32-bit object writer could not spell), and it links with OUR linker -- the arm-none-eabi-ld
 # it once borrowed is gone. ⚠ wasm compiles and does not link HERE: love.js is a tracked
-# committed artifact, and a gate must not rewrite the working tree. test_wasm owns that link.
+# committed artifact, and a gate must not rewrite the working tree. test_wasm owns the link,
+# and links OUT OF TREE (out/wasm/love.js) for exactly that reason.
 embed_ports = mps2 teensy41 nucleo446 playdate virt rp2040
 # what each linkable port calls its ELF. ⚠ teensy41 is NOT here: its ELF embeds the baked
 # heap image, whose rule delegates to port/mps2's `img` -- a BAKE UNDER QEMU, on a FORCE rule

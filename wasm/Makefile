@@ -74,8 +74,23 @@ $(o)/love.o: ../love.c $(g_h) $(o)/love_version.h
 
 # Link step: emcc's link is multi-input, so ccache can't cache it -- use
 # bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
+#
+# Spelled ONCE and linked to two places. `love.js` here is the COMMITTED artifact,
+# refreshed by hand (`make wasm`); $(o)/love.js is the same bytes under out/, which
+# is what test_wasm runs -- a gate must not rewrite the working tree, and this one
+# used to. See ../Makefile's note on why a cmp-against-committed gate is impossible.
+emlink = $(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
+
 love.js: $(objs)
-	$(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
+	$(emlink)
+
+$(o)/love.js: $(objs)
+	@mkdir -p $(dir $@)
+	$(emlink)
+
+# what test_wasm asks for: the link, out of tree.
+.PHONY: gate
+gate: $(o)/love.js
 
 $(o)/host.o: host.c ../out/lib/egg.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h $(g_h)
 	@mkdir -p $(dir $@)

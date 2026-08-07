@@ -81,6 +81,15 @@ ccdb:
 # bench.html) are rebuilt MANUALLY (`make wasm`, `make -C bench html`) and staged
 # by hand. An auto-rebuild hook re-ran the benchmarks on every commit (minutes);
 # it was removed deliberately. Rebuild before committing artifact-affecting code.
+#
+# ⚠ wasm/love.js CANNOT be gated by cmp-against-a-rebuild, and the reason is not
+# non-determinism -- the link is exactly reproducible. it BAKES `git describe`
+# (love_version.h, mapped -dirty -> -wasm), so it embeds the revision it was built
+# AT, which is necessarily the parent of the commit that carries it. a rebuild at
+# HEAD therefore always differs, in exactly those 8 bytes, after ANY commit -- not
+# only one that touches love.c. so it is one revision behind by construction; that
+# is the cost of baking the id, and the alternative is not baking it. test_wasm
+# links out of tree so at least it stops DIRTYING the file on every run.
 
 # crew/cook/Cookfile: this Makefile transpiled into a resolved cook recipe by
 # `cook --emit` (crew/cook/cook.l). cook reads this Makefile directly too, but the

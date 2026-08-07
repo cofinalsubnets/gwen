@@ -4,12 +4,25 @@
 // binary and the love0 bootstrap -- this one exercises wasm's <data.h>
 // override (sentinel-ap data kinds, no flat code-address space).
 //
-// Usage: node wasm/test.mjs <corpus.l...>   (the Makefile passes $t, in order)
-import Love from './love.js';
+// Usage: node wasm/test.mjs [--love <love.js>] <corpus.l...>
+//   (the Makefile passes out/wasm/love.js and $t, in order)
+//
+// The module path is a PARAMETER because the gate must not build over the
+// committed wasm/love.js -- see ../Makefile. Default is the gate's own build;
+// point --love at wasm/love.js to exercise the artifact that actually ships.
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
-const files = process.argv.slice(2);
-if (!files.length) { console.error('usage: test.mjs <corpus.l...>'); process.exit(2); }
+const argv = process.argv.slice(2);
+let mod = new URL('../out/wasm/love.js', import.meta.url).href;
+if (argv[0] === '--love') {
+  if (argv.length < 2) { console.error('--love wants a path'); process.exit(2); }
+  mod = pathToFileURL(argv[1]).href;
+  argv.splice(0, 2);
+}
+const files = argv;
+if (!files.length) { console.error('usage: test.mjs [--love <love.js>] <corpus.l...>'); process.exit(2); }
+const { default: Love } = await import(mod);
 // The shim bakes only prel+ev (the page feeds the REPL through ai_eval),
 // but the native runner has the shell core baked too -- and the corpus tests its
 // surface (zev/charms). bao.l is that core (repl.l was consolidated into it), so
