@@ -21,6 +21,9 @@
    iso  (cap a)
    ovmf (cap (cup a))
    arch (: x (cup (cup a)) (? (two? x) (cap x) "x86_64"))   ; optional 3rd arg; x86_64 by default
+   ; optional 4th arg: a line the serial output must ALSO contain -- test_disk's
+   ; second boot demands "disk: fat kept across the reset" on top of the summary.
+   need (: x (cup (cup (cup a))) (? (two? x) (cap x) ""))
    ; a .elf boots direct: qemu's own loader reads the PVH note and enters our
    ; bring-up stub (mkboot.l) -- nothing downloaded, nothing vendored.
    elf? (: n (tally iso) (&& (> n 4) (sub-at iso (- n 4) ".elf" 0)))
@@ -42,19 +45,41 @@
    ; a logic bug); and a full green run is ~3min wall under TCG (the kernel's
    ; own summary clock reads ~17s -- don't trust it for the timeout).
    fw   `("-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on")))
+   ; the uefi door only: OVMF parks 64-bit BARs ABOVE 4G, past every door's
+   ; 0..4G map, and the driver then skips the disk (its honest fallback). this
+   ; knob turns OVMF's 64-bit MMIO window off, so the BAR lands reachable and
+   ; the disk laws run on this door too.
+   below4g `("-fw_cfg" "opt/ovmf/X-PciMmio64Mb,string=0")
    media (? elf? `("-kernel" iso)
-            dir? (fw + `("-drive" (+ "format=raw,file=fat:rw:" iso)))
+            dir? (fw + (below4g + `("-drive" (+ "format=raw,file=fat:rw:" iso))))
             (fw + `("-cdrom" iso)))
+   ; the scratch disk (rung 5): a sparse raw image beside the artifact, virtio-blk
+   ; to the kernel. truncate CREATES it and leaves an existing one's bytes alone
+   ; (same size), so a marker written by one boot survives into the next -- the
+   ; persistence gate boots twice on purpose, and test/kernel/disk.l reads which
+   ; boot it is off the disk itself. aarch64 rides virtio-mmio, and qemu's virt
+   ; slots default to the LEGACY layout -- force-legacy=false is what makes them
+   ; speak version 2, the one blk.c drives.
+   disk (+ iso ".disk")
+   _    (hark `("truncate" "-s" "35840000" disk))
+   dargs (: d `("-drive" (+ "file=" (+ disk ",if=none,format=raw,id=d0")))
+            (? (arch = "aarch64")
+               (d + `("-device" "virtio-blk-device,drive=d0"
+                      "-global" "virtio-mmio.force-legacy=false"))
+               (d + `("-device" "virtio-blk-pci,drive=d0"))))
    r    (hark (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
              (cat mach
-             (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media))))
+             (cat dargs
+             (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media)))))
    out  (cup r)
    line (lineof out "tests pass")
    ; ⚠ "0 tests pass" is a corpus that died before its first assert wearing a
    ; green face (a stale ktests bake did exactly this) -- a summary only counts
    ; when it counted something.
    ok   (&& (has? out "tests pass")
-            (&& (! (has? out "failed:")) (! (sub-at line 0 "0 tests pass" 0))))
+            (&& (! (has? out "failed:"))
+            (&& (! (sub-at line 0 "0 tests pass" 0))
+                (? (tally need) (has? out need) 1))))
    (? ok (: _ (puts line) (putc 10))
          (: _ (say err "test_kernel: FAILED") _ (put err 10)
             _ (say err out) _ (put err 10) (quit 1))))

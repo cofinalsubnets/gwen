@@ -33,6 +33,7 @@ extern uint8_t vectors[];
 #define RTC_PHYS    0x09010000         // PL031 RTC -- inside the UART's 2MiB block
 #define GICD_PHYS   0x08000000         // GICv2 distributor
 #define GICC_PHYS   0x08010000         // GICv2 CPU interface
+#define VIRTIO_PHYS 0x0a000000         // the 32 virtio-mmio slots (blk.c scans them)
 #define UART_INTID  33                 // PL011 -> SPI 1 -> INTID 32+1
 #define TIMER_INTID 30                 // EL1 physical timer -> PPI INTID 30
 
@@ -90,8 +91,8 @@ static void mmio_map(void) {
     l2 = l2_table;
     l1[(va >> 30) & 0x1ff] = (va2pa(l2_table) & PA_MASK) | 3; }
 
-  uintptr_t const dev[] = { GICD_PHYS, UART_PHYS };
-  for (uint32_t i = 0; i < 2; i++)
+  uintptr_t const dev[] = { GICD_PHYS, UART_PHYS, VIRTIO_PHYS };
+  for (uint32_t i = 0; i < 3; i++)
     l2[((khhdm + dev[i]) >> 21) & 0x1ff] =
         (dev[i] & BLK_MASK)
       | (1ULL << 54) | (1ULL << 53)            // UXN | PXN: never execute

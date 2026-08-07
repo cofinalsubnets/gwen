@@ -33,7 +33,11 @@ Since rung 4 it has processes — pipes over kernel-heap queues, `spawn`/`wait` 
 over `twirl`/`catch` (a process IS a task), per-pid stdio seats under the folded ports, and a
 seat-aware `quit` — so lush runs real pipelines of kore tools.
 
-Missing: storage (no PCI, no block driver), network.
+Since rung 5 it has the disk: virtio-blk (PCI on x86_64, virtio-mmio on aarch64; polled, one
+C file) under three raw nifs, and **FAT32 r/w written in love** (`lib/fat.l`, off the ramfs)
+over them — a file written before a reset is there after it, and mtools reads what it writes.
+
+Missing: network.
 
 ## the shape it grows into
 
@@ -262,20 +266,40 @@ and `wait` is `catch`.
   `sh-line`, the tail redirected onto the tree and read back. `test_kboot` grew the same pipeline
   as a fourth boot of the SHIPPED kernel through `sh -c`.
 
-### rung 5 — the disk  (~2–4 weeks)
+### rung 5 — the disk  ✅ landed
 
-PCI config-space enumeration, then **virtio-blk** (the cheap real driver; a virtqueue and a
-handful of MMIO writes). Then a filesystem over it — **FAT32 r/w**, so the machine can read and
-write the same ESP it booted from (today `uefi/loader.c` reads `love.elf` off it through the
-firmware's own boot services, and we carry no FAT code of our own). The ramfs stays as the root
-and the disk mounts under it, so nothing above this rung changes.
+PCI config-space enumeration (CF8/CFC), then **virtio-blk** — modern virtio-pci on x86_64,
+virtio-mmio on aarch64 (qemu virt's 32 fixed slots), one split virtqueue, polled, synchronous,
+all in `port/inle/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
+`(disk _)` the sector count, `(disk-read l n)`, `(disk-write l s)` — and over those **FAT32
+r/w written in love**: `lib/fat.l`, which rides the ramfs into every kernel via the module
+walk, zero registration. The fs is device-parameterized (a dev is `(rd wr nsec)`), so the same
+module runs on the virtio disk, on a cask in host tests, and on anything else that answers
+sectors — mkfs, mount, ls/stat/read/write/mkdir/rm, LFN both directions, presence on the
+`(1 _)` wrapper throughout.
 
-* ⚠ **Write the filesystem in love, over a block port — not in C.** A bug in a love fs is a scare
-  on the console; the same bug in kernel C is a triple fault with no output. The driver is the
-  only part that must be C, and it is the small part.
-* ⚠ Metal wants AHCI or NVMe instead, which is the same vfs with a driver 3–4× the size. Do
-  virtio first and let the interface prove itself under qemu.
-* *gate:* a `run-*` lane that writes a file, resets the machine, and reads it back.
+* ⚠ **A polled driver must SUPPRESS the completion interrupt** (`VRING_AVAIL_F_NO_INTERRUPT` +
+  PCI INTx-disable). Without it the INTx lands on an unhandled vector stub and the machine
+  resets in SILENCE, timed exactly like a hang in the poll loop — the rung's one real bug.
+* ⚠ **DMA addresses are `va - khhdm`, which holds only for heap memory.** The ring lives in a
+  kmallocw block, data rides the love string's own bytes (nothing allocates between post and
+  completion, so the collector cannot move the buffer), and image statics are barred — their
+  physical address is not `va - khhdm`.
+* ⚠ **Every door's map stops at 4 GiB, and OVMF parks 64-bit BARs above it.** The driver skips
+  such a disk with a word (the honest fallback); the uefi test lane turns OVMF's 64-bit MMIO
+  window off (`-fw_cfg opt/ovmf/X-PciMmio64Mb,string=0`) so its BAR lands reachable. qemu
+  virt's virtio-mmio slots default LEGACY; the lanes pass `force-legacy=false` for version 2.
+* ⚠ **FAT32 only, by the format's own law:** under 65525 clusters the type flips to FAT16 by
+  definition, so `fat-mkfs` refuses a device under ~33 MB — absence, not divergence.
+* **The disk does NOT mount under the ramfs paths** (the plan's one dropped clause): `open` is
+  a C nif and the fs is love, so a C row cannot call it. The disk speaks through the module's
+  own verbs — `(fat-mount (fat-disk ()))` — which is what kore-level tooling can wrap later.
+* Metal still wants AHCI or NVMe — the same fs over a driver 3–4× the size, a later rung.
+* *gate:* `test/host/fat.l` — the fs laws over a cask dev plus **mtools interop** (mdir/mtype
+  read what we format and write; we read what mcopy writes) — `test/kernel/disk.l` (the raw
+  door + fat on the real disk, both arches, all three x86 boot doors, guarded on `(disk ())`),
+  and `test_disk`: two boots over one fresh image — write, RESET, read back — the second boot
+  must print `disk: fat kept across the reset` (in `test_slow`).
 
 ### rung 6 — preemption  (~1–2 weeks)
 

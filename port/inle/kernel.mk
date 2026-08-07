@@ -50,7 +50,7 @@ k_arch_c = $(wildcard $(R)/port/inle/$a/*.c)
 ifeq ($(KCC_IS_MOON),1)
 k_arch_c := $(filter-out %/builtins.c,$(k_arch_c))
 endif
-k_free_c = $R/port/inle/kmain.c
+k_free_c = $R/port/inle/kmain.c $R/port/inle/blk.c
 k_shared_c = $(love_c) $(f_c) $(c_c)
 k_h = $(love_h) $(wildcard *.h $(R)/port/inle/*.h $(R)/port/inle/$a/*.h)
 
@@ -350,14 +350,17 @@ init-container: host
 # fs prefix, baked into the corpus just before it; pipe.l is rung 4 (pipes, the
 # spawn/wait shim, the stdio seat) over the same tools; then lush's engine parts
 # (cat order, as test/host/sh.l reads them; sh0.l pins what they mention and the
-# seat lacks) and sh.l, the rung-4 gate -- a real pipeline through sh-line. It
-# all goes before zz-fin.l, which prints the summary and quits.
+# seat lacks) and sh.l, the rung-4 gate -- a real pipeline through sh-line.
+# disk.l is rung 5: the virtio raw door + lib/fat.l on the real device (guarded
+# on (disk ()), so a door without one stays green). It all goes before
+# zz-fin.l, which prints the summary and quits.
 kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
   $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/fs.l \
   $R/test/kernel/kore.l $R/test/kernel/pipe.l \
   $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
   $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
+  $R/test/kernel/disk.l \
   $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP (mk/lib.mk: regenerated every make, rewritten
 # only when the set changes), which is the whole job $(MAKEFILE_LIST) used to do here -- and
@@ -390,6 +393,25 @@ test_kernel: host $(R)/tools/ktest.l
 else
 test_kernel:
 	@echo "test_kernel: skipped (host arch $a is not x86_64)"
+endif
+
+# test_disk -- the rung-5 gate: write a file, RESET the machine, read it back.
+# Two boots of the K_TEST kernel over one FRESH scratch image: the first finds
+# no filesystem and formats ("disk: fat born"), the second must mount what the
+# first wrote and verify the marker -- ktest.l's 4th arg demands the kept line
+# in the serial output on top of the green summary.
+.PHONY: test_disk
+ifeq ($a,x86_64)
+test_disk: host $(R)/tools/ktest.l
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test$(kvsuf).elf
+	@rm -f $(ko)/love-$a-test$(kvsuf).elf.disk
+	@echo TEST $(ko)/love-$a-test$(kvsuf).elf "(two boots, one disk: the reset-persistence gate)"
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test$(kvsuf).elf - $a
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test$(kvsuf).elf - $a "disk: fat kept across the reset"
+	@echo "test_disk: the machine remembered"
+else
+test_disk:
+	@echo "test_disk: skipped (host arch $a is not x86_64)"
 endif
 
 # --- the UEFI door: our own BOOTX64.EFI ------------------------------------
