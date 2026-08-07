@@ -2,56 +2,56 @@
 ; host uses libm; precision is ~1 ulp so identities don't need a slop band
 ; except where two errors compound (e.g. (sine pi) is ~1e-16, not exactly 0).
 
-(: (close? a b eps) (< (- (? (< a b) (- b a) (- a b)) 0) eps)
-   (close a b)       (close? a b (? word 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
-   (very-close a b)  (close? a b (? word 1e-15 1e-5))
+(: (near? a b eps) (< (- (? (< a b) (- b a) (- a b)) 0) eps)
+   (near a b)       (near? a b (? word 1e-12 1e-5))   ; f32 reals (wasm) need a looser eps
+   (very-near a b)  (near? a b (? word 1e-15 1e-5))
 
    (assert
     ; --- pi from boot.l, basic identities ---
     (= 1.0 (cosine 0))
     (= 0.0 (sine 0))
     (= -1.0 (cosine pi))
-    (close 0 (sine pi))
-    (very-close 1.0 (sine (/ pi 2)))
-    (very-close 0 (cosine (/ pi 2)))
+    (near 0 (sine pi))
+    (very-near 1.0 (sine (/ pi 2)))
+    (very-near 0 (cosine (/ pi 2)))
 
     ; --- pythagorean identity ---
-    (close 1.0 (+ (* (sine 1.234) (sine 1.234))
+    (near 1.0 (+ (* (sine 1.234) (sine 1.234))
                   (* (cosine 1.234) (cosine 1.234))))
-    (close 1.0 (+ (* (sine (- 0 0.7)) (sine (- 0 0.7)))
+    (near 1.0 (+ (* (sine (- 0 0.7)) (sine (- 0 0.7)))
                   (* (cosine (- 0 0.7)) (cosine (- 0 0.7)))))
 
     ; --- atan inverse of tan in (-pi/2, pi/2); tan is now (/ (sine x) (cosine x)) ---
-    (close 0.7 (arg ~(1 (/ (sine 0.7) (cosine 0.7)))))
+    (near 0.7 (arg ~(1 (/ (sine 0.7) (cosine 0.7)))))
 
     ; --- atan2 quadrants ---
-    (very-close 0.0 (arg ~(1 0)))
-    (very-close (/ pi 2) (arg ~(0 1)))
-    (very-close pi (arg ~(-1 0)))
-    (very-close (- 0 (/ pi 2)) (arg ~(0 -1)))
-    (very-close (/ pi 4) (arg ~(1 1)))
+    (very-near 0.0 (arg ~(1 0)))
+    (very-near (/ pi 2) (arg ~(0 1)))
+    (very-near pi (arg ~(-1 0)))
+    (very-near (- 0 (/ pi 2)) (arg ~(0 -1)))
+    (very-near (/ pi 4) (arg ~(1 1)))
 
     ; --- sqrt ---
     (= 0.0 ((/ 1 2) 0))
     (= 1.0 ((/ 1 2) 1))
     (= 2.0 ((/ 1 2) 4))
-    (close 1.414213562373095 ((/ 1 2) 2))
+    (near 1.414213562373095 ((/ 1 2) 2))
     ; (sqrt (* x x)) ~ x for x > 0
-    (close 7.5 ((/ 1 2) (* 7.5 7.5)))
+    (near 7.5 ((/ 1 2) (* 7.5 7.5)))
 
     ; --- exp / log inverse ---
-    (close 1.0 (0 e))
-    (close 2.718281828459045 (1 e))
-    (close 0 (log 1))
-    (close 1.0 (log (1 e)))
-    (close 5.5 (log (5.5 e)))
+    (near 1.0 (0 e))
+    (near 2.718281828459045 (1 e))
+    (near 0 (log 1))
+    (near 1.0 (log (1 e)))
+    (near 5.5 (log (5.5 e)))
 
     ; --- power IS application: (n b) = b**n; a float numeral forces the float lane ---
     (= 1 (0 2))                  ; 2^0 (const-1)
     (= 2 (1 2))                  ; 2^1 (identity)
     (= 1024 (10 2))              ; 2^10 (exact, ipow)
-    (close 0.5 (-1 2))           ; 2^-1 -> reciprocal
-    (close 1.414213562373095 (0.5 2))   ; 2^0.5 = sqrt2 (the float lane)
+    (near 0.5 (-1 2))           ; 2^-1 -> reciprocal
+    (near 1.414213562373095 (0.5 2))   ; 2^0.5 = sqrt2 (the float lane)
 
     ; --- accepts fixnum args (promoted to float) ---
     (gem? (sine 0))
@@ -74,7 +74,7 @@
     (aall (= ((gem-tray '(3) '(1 2 3)) 2) (gem-tray '(3) '(2 4 8))))  ; scalar ^ array (array numeral)
     (aall (= ((gem-tray '(3) '(2 2 2)) (gem-tray '(3) '(1 2 3)))      ; array ^ array
              (gem-tray '(3) '(1 4 9))))
-    (close 1.570796326794897 (peep (arg ~((gem-tray '(2) '(1 0)) (gem-tray '(2) '(1 1)))) 1 0))
+    (near 1.570796326794897 (peep (arg ~((gem-tray '(2) '(1 0)) (gem-tray '(2) '(1 1)))) 1 0))
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
     ;     the array's element form -- full magnitude in a float array, low bits in

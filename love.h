@@ -304,7 +304,11 @@ static ai_inline size_t b2w(size_t b) {
 lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_cask,
 // how a frontend nif PARKS: set g->next_wake_at (or next_wait_fd), leave Ip
 // unadvanced, `return Ap(lvm_yield_sw, g)` -- the op re-runs on reschedule.
-      lvm_yield_sw;
+      lvm_yield_sw,
+// how a frontend nif ENDS the running task (inle's seated quit, the love-machine
+// _exit): stack down to one word (the retval), Ip at a {lvm_task_exit} cell,
+// `return Ap(lvm_task_exit, g)` -- catch then reads the retval off the node.
+      lvm_task_exit;
 
 // the vtable every port backed by a real OS fd wears; the frontend defines it,
 // and its ADDRESS is what says "there is an fd behind this one" (ai_io_fd).

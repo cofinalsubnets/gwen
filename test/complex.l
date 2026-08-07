@@ -8,9 +8,9 @@
 ;   (r, 0). `=` bridges to reals. (A rank-N c array operand stays elementwise.)
 ; - accessors re / im / conj / abs / arg; abs is type-aware.
 
-(: (close? a b eps) (< (- (? (< a b) (- b a) (- a b)) 0) eps)
-   (close a b)       (close? a b 1e-12)
-   (cclose z w)      (? (close (re z) (re w)) (close (im z) (im w)) 0)
+(: (near? a b eps) (< (- (? (< a b) (- b a) (- a b)) 0) eps)
+   (near a b)       (near? a b 1e-12)
+   (cnear z w)      (? (near (re z) (re w)) (near (im z) (im w)) 0)
    B100 (100 2))
 
 (assert
@@ -36,7 +36,7 @@
  (= (+ ~(1 2) ~(3 4)) ~(4 6))
  (= (- ~(1 2) ~(3 4)) ~(-2 -2))
  (= (* ~(1 2) ~(3 4)) ~(-5 10))
- (cclose (/ ~(1 2) ~(3 4)) ~(0.44 0.08))
+ (cnear (/ ~(1 2) ~(3 4)) ~(0.44 0.08))
  (= (* ~(0 2) i) -2)                   ; 2i * i = -2 (real), via cross-real =
 
  ; --- accessors ---
@@ -65,10 +65,10 @@
  (= B100 (abs B100))
 
  ; --- arg: phase. complex via atan2; real -> 0 (>=0) or pi (<0) ---
- (close (/ pi 2) (arg i))
- (close 0 (arg ~(1 0)))
- (close pi (arg -1))
- (close 0 (arg 5))
+ (near (/ pi 2) (arg i))
+ (near 0 (arg ~(1 0)))
+ (near pi (arg -1))
+ (near 0 (arg 5))
 
  ; --- ordered lexicographically by (re, im); a real r is (r, 0). i = (0,1) and
  ;     1 = (1,0): re 0 < 1, so i < 1; equal re falls back to im ---
@@ -79,10 +79,10 @@
  ; --- % is undefined on complex; sine stays real-domain (-> nil); sqrt is ((/ 1 2) x)
  ;     and now works on a complex (via power); twin rejects a complex part ---
  (nil? (% i 2))
- (nil? (sine i))   (close 0.7071067811865476 (re ((/ 1 2) i)))   (nil? (twin 1 i))
+ (nil? (sine i))   (near 0.7071067811865476 (re ((/ 1 2) i)))   (nil? (twin 1 i))
  ; power IS defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
- (close -1 (re (2 i)))   (? word (close 0 (im (2 i))) 1)   ; im residue exceeds close's tol under f32 powf
- (close 0.20787957635076193 (re (i i)))   (close 0 (im (i i)))
+ (near -1 (re (2 i)))   (? word (near 0 (im (2 i))) 1)   ; im residue exceeds near's tol under f32 powf
+ (near 0.20787957635076193 (re (i i)))   (near 0 (im (i i)))
 
  ; --- truthiness: a complex is FALSE iff it sorts <= 0+0i by the total order (re, then
  ;     im) -- 0, a negative real part, or re=0 with im<=0. re>0, or re=0 with im>0, is true.
@@ -177,7 +177,7 @@
 
  ; --- abs of a complex array = the flat L2 norm over every (re, im) ---
  (= 5.0 (abs (twin-tray '(1) `(~(3 4)))))          ; |3+4i| = 5
- (close ((/ 1 2) 30) (abs ca-v))                     ; sqrt(1+4+9+16)
+ (near ((/ 1 2) 30) (abs ca-v))                     ; sqrt(1+4+9+16)
 
  ; --- pin / nil?: the invariant (nil? x) == (= 0 (pin x)) holds here too ---
  (= 0 (sat ca-z))   (nil? ca-z)

@@ -153,6 +153,8 @@ static void limine_to_kboot(void) {
 // is g->alloc everywhere it can be reached; kmallocw where g does not exist yet.
 void *malloc(size_t n);
 void free(void *x);
+static void *kmallocw(uintptr_t n);
+static void kfree(void *p);
 
 struct k_source {
   // the read door (love.h's readn contract, one fd deeper): >0 = bytes,
@@ -208,10 +210,13 @@ static void serial_flush(int fd) {
 // ⚠ THE BOOT ROWS ARE STATIC ON PURPOSE, and must stay that way: the console is
 // how the kernel says anything at all -- including that an allocation failed --
 // so it cannot itself be the first thing that needs one. everything past them is
-// heap.
+// heap. err carries its own fd (rung 4): the seat remap below tells 1 from 2, so
+// a pipeline stage's out can ride a pipe while its scare face stays on the console
+// -- the rows are twins, the NUMBERS are the distinction.
 static struct k_source k_boot[] = {
   [0] = { .readn = kb_readn,    .ready = kb_ready    },
   [1] = { .putc = serial_putc1, .flush = serial_flush },
+  [2] = { .putc = serial_putc1, .flush = serial_flush },
 };
 static struct k_source *k_sources = k_boot;
 static int k_sources_n = (int) countof(k_boot);
@@ -241,16 +246,66 @@ struct k_source *k_source_open(struct ai *g, int fd) {
     k_sources = t, k_sources_n = m; }
   return &k_sources[fd]; }
 
-// Generic kernel dispatchers: readn/putc/flush route through k_sources[fd].
-// The NULL-guards keep misuse from crashing (read-from-output-fd reads the end;
+// --- rung 4: the seat table -- a process task's stdio, keyed by pid ------------
+// the love machine's dup2-in-the-child: compiled code FOLDS the global in/out/err
+// ports at its own compile (one book, one fold), so a pipeline stage cannot be
+// redirected by any rebind -- the remap has to live UNDER the port, at the fd
+// door. a seat maps the running task's fds 0/1/2 to real rows; every dispatcher
+// below reads it through k_fd_eff. slot -1 is pass-through, -2 is seated CLOSED
+// (an fdmap's () entry: reads answer the end, writes fall away).
+struct k_seat { intptr_t pid; int fd[3]; };
+static struct k_seat *k_seats;
+static int k_seats_n;
+
+// the running task's pid: the run ring's head IS the running task (love.c's law),
+// its pid at node[2]. the main task wears the zero point there, and reads as 0 --
+// which no spawned pid can be (the mint stream pre-increments), so 0 = unseated.
+static ai_inline intptr_t k_cur_pid(struct ai *g) {
+  union u *t = ai_core_of(g)->tasks;
+  return t && (t[2].x & 1) ? getcharm(t[2].x) : 0; }
+
+static struct k_seat *k_seat_find(intptr_t pid) {
+  for (int i = 0; i < k_seats_n; i++)
+    if (k_seats[i].pid == pid) return &k_seats[i];
+  return NULL; }
+
+// a free slot, growing the table (kmallocw -- the table must outlive any one g
+// frame, and the grow law is k_source_open's: double, copy, never cap).
+static struct k_seat *k_seat_slot(void) {
+  struct k_seat *s = k_seat_find(0);
+  if (s) return s;
+  int m = k_seats_n ? k_seats_n * 2 : 4;
+  struct k_seat *t = kmallocw(b2w((uintptr_t) m * sizeof *t));
+  if (!t) return NULL;
+  for (int i = 0; i < m; i++)
+    t[i] = i < k_seats_n ? k_seats[i] : (struct k_seat) { 0, {-1, -1, -1} };
+  kfree(k_seats);
+  k_seats = t;
+  s = &t[k_seats_n];
+  k_seats_n = m;
+  return s; }
+
+// the running task's EFFECTIVE fd: 0/1/2 through its seat, everything else as
+// spelled. -1 out of a seated-closed slot reads as no row at all (k_source(-1)
+// is NULL), which is the end for a reader and the void for a writer.
+static int k_fd_eff(struct ai *g, int fd) {
+  if (fd < 0 || fd > 2 || !k_seats_n) return fd;
+  intptr_t pid = k_cur_pid(g);
+  struct k_seat *s = pid ? k_seat_find(pid) : NULL;
+  if (!s || s->fd[fd] == -1) return fd;
+  return s->fd[fd] == -2 ? -1 : s->fd[fd]; }
+
+// Generic kernel dispatchers: readn/putc/flush route through k_sources[fd],
+// the fd first read through the running task's seat (rung 4). The NULL-guards
+// keep misuse from crashing (read-from-output-fd reads the end;
 // write-to-input-fd discards).
 static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  int fd = (int) ai_io_fd(g->io);
+  int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
   struct k_source *s = k_source(fd);
   if (!s || !s->readn) return -1;
   return s->readn(fd, dst, n); }
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  int fd = (int) ai_io_fd((*fp)->io);
+  int fd = k_fd_eff(*fp, (int) ai_io_fd((*fp)->io));
   struct k_source *s = k_source(fd);
   if (!s) return (intptr_t) n;
   if (s->writen) return s->writen(fd, src, n);
@@ -258,7 +313,7 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
   for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
   return (intptr_t) n; }
 static struct ai *fd_flush(struct ai *g) {
-  int fd = (int) ai_io_fd(g->io);
+  int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
   struct k_source *s = k_source(fd);
   if (s && s->flush) s->flush(fd);
   return g; }
@@ -267,9 +322,8 @@ struct ai_fio ai_stdin = { { .ap = lvm_port_io,
                         .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
 struct ai_fio ai_stdout = { { .ap = lvm_port_io,
                          .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-// No separate error stream; route err to the same fd as out (the console).
 struct ai_fio ai_stderr = { { .ap = lvm_port_io,
-                         .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
+                         .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(2) };
 
 struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
@@ -281,11 +335,22 @@ void ai_fd_close(int fd) {
 
 // the kernel has no write-direction probe: a k_source that can take a byte can
 // always take one, so an OUT park is ready by definition.
+// ⚠ a SEATED reader parks wearing its PORT's fd (love.c records ai_io_fd, which
+// for the folded stdin is 0), and by wake time the asker is not the running task
+// -- so a query on 0 sweeps every seat's read slot and takes the false wake: the
+// woken reader re-asks through its own seat and re-parks. seats are pipeline
+// stages, a handful; the spurious wake costs one re-read.
 bool ai_ready(int fd, int events) {
   if (fd < 0) return true;
   if (events != ai_wait_in) return true;
   struct k_source *s = k_source(fd);
-  return s && s->ready && s->ready(fd); }
+  if (s && s->ready && s->ready(fd)) return true;
+  if (fd == 0)
+    for (int i = 0; i < k_seats_n; i++)
+      if (k_seats[i].pid && k_seats[i].fd[0] >= 0) {
+        struct k_source *t = k_source(k_seats[i].fd[0]);
+        if (t && t->ready && t->ready(k_seats[i].fd[0])) return true; }
+  return false; }
 
 // Multi-source wait. ticks=0 means infinite. Future: program a one-shot
 // timer at the deadline instead of waking every tick.
@@ -920,6 +985,213 @@ static lvm(lvm_fdclose) {
   Sp[0] = ZeroPoint;
   ai_musttail return Next(1); }
 
+// --- rung 4: pipes, and the fd plumbing over them ---------------------------
+// a pipe is a k_source PAIR over one byte queue in the kernel heap: the read end
+// answers 0 while a writer is open and -1 when the last one closes -- exactly
+// what the scheduler parks on. each end counts its holders (dup and the seat
+// below make aliases), and the queue frees when both counts reach zero.
+// ⚠ the queue GROWS rather than refusing at a cap: the writer's lane is the
+// static port's unbuffered zputc, whose contract on a busy answer is one retry
+// and then a DROPPED byte -- a bounded ring here would shed bytes in silence
+// under exactly the load it exists for. the price rides the same open question
+// as the ramfs's memory ceiling (doc/inle.md).
+struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; };
+
+static struct k_pipe *k_pipe_of(int fd) {
+  struct k_source *s = k_source(fd);
+  return s ? s->state : NULL; }
+
+static intptr_t pipe_readn(int fd, unsigned char *dst, uintptr_t n) {
+  struct k_pipe *p = k_pipe_of(fd);
+  if (!p) return -1;
+  uintptr_t a = p->wp - p->rp;
+  if (!a) return p->wrefs ? 0 : -1;             // quiet with a writer: park; else the end
+  if (a > n) a = n;
+  memcpy(dst, p->buf + p->rp, a);
+  p->rp += a;
+  if (p->rp == p->wp) p->rp = p->wp = 0;        // drained: the queue restarts at the front
+  return (intptr_t) a; }
+
+static intptr_t pipe_writen(int fd, unsigned char const *src, uintptr_t n) {
+  struct k_pipe *p = k_pipe_of(fd);
+  // ⚠ no readers is GONE, not busy -- but with no SIGPIPE on this machine the
+  // writer only learns if it looks: the run is dropped, as the host drops one
+  // on EPIPE (io_wdrain's k < 0 lane). a `yes` into a dead pipe spins.
+  if (!p || !p->rrefs) return -1;
+  if (p->wp + n > p->cap) {
+    if (p->rp) {                                // compact before growing
+      memmove(p->buf, p->buf + p->rp, p->wp - p->rp);
+      p->wp -= p->rp, p->rp = 0; }
+    if (p->wp + n > p->cap) {
+      uintptr_t cap = p->cap ? p->cap : 4096;
+      while (cap < p->wp + n) cap *= 2;
+      unsigned char *b = kmallocw(b2w(cap));
+      if (!b) return -1;                        // memory refusing, said out loud
+      if (p->wp) memcpy(b, p->buf, p->wp);
+      kfree(p->buf);
+      p->buf = b, p->cap = cap; } }
+  memcpy(p->buf + p->wp, src, n);
+  p->wp += n;
+  return (intptr_t) n; }
+
+static bool pipe_rready(int fd) {
+  struct k_pipe *p = k_pipe_of(fd);
+  return p && (p->wp > p->rp || !p->wrefs); }   // bytes, or the end -- both wake a reader
+
+static void pipe_free(struct k_pipe *p) {
+  if (p->rrefs || p->wrefs) return;
+  kfree(p->buf);
+  kfree(p); }
+static void pipe_rclose(int fd) {
+  struct k_pipe *p = k_pipe_of(fd);
+  struct k_source *s = k_source(fd);
+  if (s) *s = (struct k_source) {0};
+  if (p) p->rrefs--, pipe_free(p); }
+static void pipe_wclose(int fd) {
+  struct k_pipe *p = k_pipe_of(fd);
+  struct k_source *s = k_source(fd);
+  if (s) *s = (struct k_source) {0};
+  if (p) p->wrefs--, pipe_free(p); }
+
+// a duped row that carries no state of its own (a console twin) still owes
+// k_fd_free a way back to empty.
+static void k_row_zero(int fd) {
+  struct k_source *s = k_source(fd);
+  if (s) *s = (struct k_source) {0}; }
+
+// clone src's row into a fresh fd -- POSIX dup as a ROW ALIAS. a pipe end shares
+// the queue and bumps its side's count; a ramfs fd clones the handle (⚠ the
+// offset then DIVERGES where POSIX shares it -- the shell's save/restore dance
+// never seeks, and a shared-offset handle costs a refcounted box nothing asks
+// for yet); a boot twin gets k_row_zero so its close frees the row.
+ai_noinline static int k_dup_row(struct ai *g, int src) {
+  struct k_source *s = k_source(src);
+  if (!s || !(s->readn || s->writen || s->putc)) return -1;
+  int fd = k_fd_free();
+  struct k_fh *h = NULL;
+  if (s->readn == ram_readn) {
+    struct k_fh *o = s->state;
+    if (!o || !(h = kmallocw(b2w(sizeof *h)))) return -1;
+    *h = *o; }
+  struct k_source *t = k_source_open(g, fd);
+  if (!t) { kfree(h); return -1; }
+  s = k_source(src);                            // the grow may have moved the table
+  *t = *s;
+  if (h) t->state = h, k_ents[h->i].refs++;
+  else if (s->readn == pipe_readn) ((struct k_pipe*) s->state)->rrefs++;
+  else if (s->writen == pipe_writen) ((struct k_pipe*) s->state)->wrefs++;
+  else if (!t->close) t->close = k_row_zero;
+  return fd; }
+
+// (pipe _) -> (rfd . wfd) | a NEGATIVE errno -- host/posix.c's shape exactly.
+// the body rides an ai_noinline helper (k_stat's model) so the wrapper stays a
+// pure tail jump.
+ai_noinline static struct ai *k_pipe_new(struct ai *g) {
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  struct k_pipe *p = kmallocw(b2w(sizeof *p));
+  if (!p) return g->sp[0] = putcharm(-ENOMEM), g;
+  *p = (struct k_pipe) { .rrefs = 1, .wrefs = 1 };
+  int rfd = k_fd_free();
+  struct k_source *rs = k_source_open(g, rfd);
+  if (rs) *rs = (struct k_source) { .readn = pipe_readn, .ready = pipe_rready,
+                                    .close = pipe_rclose, .state = p };
+  int wfd = rs ? k_fd_free() : -1;
+  struct k_source *ws = rs ? k_source_open(g, wfd) : NULL;
+  if (!ws) {
+    if (rs) k_row_zero(rfd);
+    kfree(p);
+    return g->sp[0] = putcharm(-ENOMEM), g; }
+  *ws = (struct k_source) { .writen = pipe_writen, .close = pipe_wclose, .state = p };
+  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm(rfd), putcharm(wfd));
+  return g->sp[0] = word(w), g; }
+static lvm(lvm_pipe) {
+  Pack(g); g = k_pipe_new(g);
+  if (!ai_ok(g)) return ghelp(g);
+  Unpack(g);
+  ai_musttail return Next(1); }
+
+// (fdopen fd) -> a PORT over a raw fd | () -- pipe/openfd's other half, so love
+// reads and writes its own plumbing. the port's GC finalizer owns the fd from
+// here: hand it over, don't fdclose it too (host/posix.c's law).
+ai_noinline static struct ai *k_fdopen(struct ai *g) {
+  ai_word a = g->sp[0];
+  int fd = (a & 1) ? (int) getcharm(a) : -1;
+  struct k_source *s = k_source(fd);
+  if (!s || !(s->readn || s->writen || s->putc)) return g->sp[0] = ZeroPoint, g;
+  struct ai *r = ai_io_alloc(g, fd);
+  if (!ai_ok(r)) return g->sp[0] = ZeroPoint, g;   // OOM -> the zero point (host's face)
+  g = r;
+  return g->sp[1] = g->sp[0], g->sp += 1, g; }     // port over the fd arg
+static lvm(lvm_fdopen) {
+  Pack(g); g = k_fdopen(g);
+  Unpack(g);                                       // every failure folds to (), no ghelp
+  ai_musttail return Next(1); }
+
+// (dup fd) -> a fresh row aliasing fd | -errno.  (dup2 src dst) -> () | errno |
+// EINVAL: dst's old row closes first, then src's alias lands IN that slot.
+ai_noinline static ai_word k_dup(struct ai *g, ai_word w) {
+  int fd = (w & 1) ? (int) getcharm(w) : -1;
+  int r = fd < 0 ? -1 : k_dup_row(g, fd);
+  return putcharm(r < 0 ? -EBADF : r); }
+static lvm(lvm_dup) {
+  Sp[0] = k_dup(g, Sp[0]);
+  ai_musttail return Next(1); }
+
+ai_noinline static ai_word k_dup2(struct ai *g, ai_word sw, ai_word dw) {
+  if (!(sw & 1) || !(dw & 1)) return putcharm(EINVAL);
+  int src = (int) getcharm(sw), dst = (int) getcharm(dw);
+  if (src == dst) return ZeroPoint;
+  int nfd = k_dup_row(g, src);                  // the alias first: src == a dying dst's twin survives
+  if (nfd < 0) return putcharm(EBADF);
+  struct k_source *d = k_source_open(g, dst);
+  if (!d) { ai_fd_close(nfd); k_row_zero(nfd); return putcharm(ENOMEM); }
+  if (d->close) d->close(dst);
+  d = k_source(dst);                            // close zeroes through the live table
+  struct k_source *n = k_source(nfd);
+  *d = *n;
+  *n = (struct k_source) {0};                   // the temp row retires; its state moved whole
+  return ZeroPoint; }
+static lvm(lvm_dup2) {
+  Sp[1] = k_dup2(g, Sp[0], Sp[1]);
+  Sp += 1; ai_musttail return Next(1); }
+
+// (getpid _) -> the running task's pid, a charm; the main task reads 0.
+static lvm(lvm_getpid) {
+  Sp[0] = putcharm(k_cur_pid(g));
+  ai_musttail return Next(1); }
+
+// (procseat pid f0 f1 f2) -> () | ENOMEM. the spawn shim's registration, called
+// in the PARENT right after twirl -- which does not switch tasks, so the seat is
+// in place before the child's first read. each fi: an fd >= 0 is DUPED into the
+// seat (fork's fd-copy made explicit, so the parent may fdclose its own end);
+// -1 inherits the parent's effective fd (duped when the parent is itself seated);
+// -2 seats closed (an fdmap's () entry). quit is the door that takes it down.
+ai_noinline static ai_word k_procseat(struct ai *g, ai_word pw,
+                                      ai_word w0, ai_word w1, ai_word w2) {
+  ai_word ws[3] = { w0, w1, w2 };
+  intptr_t pid = (pw & 1) ? getcharm(pw) : 0;
+  if (!pid) return putcharm(EINVAL);
+  struct k_seat *s = k_seat_slot();
+  if (!s) return putcharm(ENOMEM);
+  *s = (struct k_seat) { pid, {-1, -1, -1} };
+  for (int i = 0; i < 3; i++) {
+    intptr_t f = (ws[i] & 1) ? getcharm(ws[i]) : -1;
+    if (f == -2) { s->fd[i] = -2; continue; }
+    if (f == -1) f = i;                         // absent: inherit this slot
+    if (f >= 0 && f <= 2) {                     // a console-numbered fd means the
+      f = k_fd_eff(g, (int) f);                 // PARENT's view of it (2>&1 under
+      if (f < 0) { s->fd[i] = -2; continue; }   // a seat follows the seat)
+      if (f == i) continue; }                   // the identity seat is no seat
+    int d = k_dup_row(g, (int) f);
+    s = k_seat_find(pid);                       // the dup may have grown tables
+    if (d < 0) { s->fd[i] = -2; continue; }     // a dead fd seats closed, not silent
+    s->fd[i] = d; }
+  return ZeroPoint; }
+static lvm(lvm_procseat) {
+  Sp[3] = k_procseat(g, Sp[0], Sp[1], Sp[2], Sp[3]);
+  Sp += 3; ai_musttail return Next(1); }
+
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd,
 // chmod, utime. doc/posix.md's conventions exactly: an effect answers () | a
 // POSITIVE errno (the host's numbers -- kore reads them back, and mv's EXDEV
@@ -1197,12 +1469,46 @@ static lvm(lvm_fault) {
 static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; ai_musttail return Continue(); }
 #endif
 
-#ifndef K_TEST
-// (quit code) -- the machine's exit door (rung 3): a kore main's exit IS the
-// machine's. the code has nowhere to go on a reset; the serial output already
-// said what happened.
-static lvm(lvm_quit) { k_reset(); Ip += 1; ai_musttail return Continue(); }
+// (quit code) -- the exit door, and since rung 4 the door with two rooms behind
+// it. a SEATED task (a spawned process) quits as _exit: its seated fds close --
+// the write end's close is the downstream reader's EOF -- the seat retires, and
+// the TASK lands dormant with the code as its retval, which is what `wait`
+// (catch) answers. every program exit funnels here: the shim's wrapper quits the
+// main's answer, its help quits a scare, and a folded (quit 0) inside a kore
+// main was always going to arrive on its own feet.
+// unseated, the exit is the MACHINE's, as rung 3 laid it: reset on the shipped
+// kernel. the TEST kernel answers the code instead (kore0.l's identity pin, one
+// door deeper) -- a reset would eat the corpus summary, and `exit` stays the
+// one way out of qemu.
+static union u const k_exit_body[] = { {lvm_task_exit} };
+// the seated half: close the seat's fds (the write end's close is the reader's
+// EOF), retire the slot, clear the yield intentions. -> nonzero when a seat was
+// there, so the wrapper knows which room it is in.
+ai_noinline static int k_seat_exit(struct ai *g) {
+  intptr_t pid = k_cur_pid(g);
+  struct k_seat *s = pid ? k_seat_find(pid) : NULL;
+  if (!s) return 0;
+  for (int i = 0; i < 3; i++) if (s->fd[i] >= 0) ai_fd_close(s->fd[i]);
+  s->pid = 0;                                   // the slot is free for the next spawn
+  g->next_wake_at = 0;                          // a stale intention would gate the park
+  g->next_wait_fd = -1;
+  return 1; }
+static lvm(lvm_quit) {
+  if (k_seat_exit(g)) {
+    // the love-machine _exit: the stack becomes just [code] and Ip a task-exit
+    // cell, exactly the shape lvm_task_exit leaves -- catch reads node[7], donep
+    // and scoop read the saved ap. the frame below Sp is abandoned whole.
+    ai_word code = (Sp[0] & 1) ? Sp[0] : putcharm(0);
+    Sp = (ai_word*) g + g->len - 1;
+    Sp[0] = code;
+    Ip = (union u*) k_exit_body;
+    ai_musttail return Ap(lvm_task_exit, g); }
+#ifdef K_TEST
+  ai_musttail return Next(1);                   // unseated on the test kernel: the identity
+#else
+  k_reset(); Ip += 1; ai_musttail return Continue();
 #endif
+}
 
 
 
@@ -1226,10 +1532,15 @@ static union u
   nif_cwd[] = {{lvm_cwd}, {lvm_ret0}},
   nif_chmod[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_chmod}, {lvm_ret0}},
   nif_utime[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_utime}, {lvm_ret0}},
+  nif_pipe[] = {{lvm_pipe}, {lvm_ret0}},
+  nif_fdopen[] = {{lvm_fdopen}, {lvm_ret0}},
+  nif_dup[] = {{lvm_dup}, {lvm_ret0}},
+  nif_dup2[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_dup2}, {lvm_ret0}},
+  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}},
+  nif_procseat[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_procseat}, {lvm_ret0}},
+  nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
-#else
-  nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
@@ -1296,13 +1607,22 @@ static struct ai_def defs[] = {
   {"cwd", (intptr_t) nif_cwd},
   {"chmod", (intptr_t) nif_chmod},
   {"utime", (intptr_t) nif_utime},
+  // rung 4: the pipe pair, the fd plumbing, and the process seat under the
+  // spawn shim (the boot text below). host names, host shapes, as ever.
+  {"pipe", (intptr_t) nif_pipe},
+  {"fdopen", (intptr_t) nif_fdopen},
+  {"dup", (intptr_t) nif_dup},
+  {"dup2", (intptr_t) nif_dup2},
+  {"getpid", (intptr_t) nif_getpid},
+  {"procseat", (intptr_t) nif_procseat},
+  // quit is seat-aware now (rung 4): a spawned task's exit is the TASK's, so
+  // the row is owed on BOTH kernels. unseated it resets the shipped machine;
+  // the TEST kernel's unseated arm answers the code instead (kore0.l's identity
+  // pin, one door deeper), so a failing assert still cannot eat the summary,
+  // and `exit` stays qemu's one door out.
+  {"quit", (intptr_t) nif_quit},
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
-#else
-  // quit resets; on the TEST kernel the row would turn a failing assert's
-  // (quit 1) into a reset that eats the summary, so 00-init.l's no-op pin
-  // keeps serving there and `exit` stays the one door out.
-  {"quit", (intptr_t) nif_quit},
 #endif
   {"color", (intptr_t) nif_color} };
 
@@ -1458,6 +1778,69 @@ void kmain(void) {
  "                                (kw (+ i 1) (+ w c) 0 acc))))"
  "        (kw 0 \"\" 0 ())))"
  "   argv cmdline)"
+ // rung 4: spawn/wait as a love-side shim over the core task ops. a process on
+ // this machine IS a task: k-prog maps argv onto a love main -- kore-main (or a
+ // tool's own <name>-main where the dispatcher is not baked), sh-main, or a .l
+ // path off the ramfs, evaled form by form (⚠ no fresh layer from here: its
+ // defglobs land in the session, the shim's honest divergence) -- and k-spawn1
+ // twirls it under a help that quits any scare (the wait-side face of a died
+ // child), then seats the pid's stdio (procseat, in the PARENT: twirl does not
+ // switch, so the seat is laid before the child's first read). every exit
+ // funnels through the seat-aware quit; wait is catch, the pid is the task pid.
+ // pg/fg/closes are accepted and ignored: no process groups, no ^Z, and the
+ // seat dups its own ends so there is nothing for a child to leak.
+ "(: (k-bn p) (: n (tally p)"
+ "     (go i r) (? (< i n) (go (+ i 1) (? (= (p i) 47) (+ i 1) r)) (snip p r n))"
+ "     (go 0 0))"
+ "   (k-run-file p) (\\ as (: q (open p \"r\")"
+ "     (? (port? q)"
+ "        (: t (slurp q) _ (close q)"
+ "           (go cl) (: r (sound cl) (? (two? r) (: _ (ev (cap r)) (go (cup r))) 0))"
+ "           (go t))"
+ "        127)))"
+ "   (k-tool nm as) (? (member? nm (names ())) (link (ev nm) as) ())"
+ "   (k-prog argv) (: a0 (cap argv) b (k-bn a0)"
+ "     (? (|| (= b \"sh\") (= b \"lush\")) (k-tool 'sh-main (cup argv))"
+ "        (= b \"kore\")"
+ "          (: k (k-tool 'kore-main argv)"
+ "             (? (two? k) k"
+ "                (two? (cup argv))"
+ "                  (k-tool (intern (+ (cap (cup argv)) \"-main\")) (cup (cup argv)))"
+ "                ()))"
+ "        (: k (k-tool (intern (+ b \"-main\")) (cup argv))"
+ "           (? (two? k) k"
+ "              (two? (stat a0)) (link (k-run-file a0) (cup argv))"
+ "              ()))))"
+ "   (k-spawn1 argv f0 f1 f2) (: pr (k-prog argv)"
+ "     p (twirl (\\ _ (: _ (hear (\\ a b (: _ (say err \";; \") _ (print err a)"
+ "                                        _ (say err \" \") _ (print err b)"
+ "                                        _ (put err 10) (quit 1))))"
+ "                     r (? (two? pr) ((cap pr) (cup pr))"
+ "                          (: _ (say err (+ (cap argv) \": not found\"))"
+ "                             _ (put err 10) 127))"
+ "                     (quit (? (charm? r) r 0))))"
+ "              0)"
+ "     _ (procseat p f0 f1 f2)"
+ "     p)"
+ "   (k-fdw x) (? (charm? x) (? (< x 0) (- 0 1) x) (- 0 1))"
+ "   (spawn argv) (k-spawn1 argv (- 0 1) (- 0 1) (- 0 1))"
+ "   (spawnio argv i o e cl pg fg) (k-spawn1 argv (k-fdw i) (k-fdw o) (k-fdw e))"
+ "   (spawnmap argv fdm cl pg fg)"
+ "     ((: (go m a b c)"
+ "          (? (! (two? m)) (k-spawn1 argv a b c)"
+ "             (: e (cap m) cf (cap e) sf (cup e)"
+ "                v (? (charm? sf)"
+ "                     (? (&& (<= 0 sf) (< sf 3))"
+ "                        (: w (? (= sf 0) a (= sf 1) b c) (? (< w 0) sf w))"
+ "                        sf)"
+ "                     (- 0 2))"
+ "                (? (= cf 0) (go (cup m) v b c)"
+ "                   (= cf 1) (go (cup m) a v c)"
+ "                   (= cf 2) (go (cup m) a b v)"
+ "                   (go (cup m) a b c))))"
+ "        go)"
+ "      fdm (- 0 1) (- 0 1) (- 0 1))"
+ "   (wait p) (catch p))"
 #ifdef K_TEST
  "(use 'coin)"                                         // the optional library layers, test build ONLY: the corpus asserts on
  "(use 'rng)"                                          //   coin, rng, q and kanren, a booting kernel wants none of them -- so

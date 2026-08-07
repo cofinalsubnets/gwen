@@ -49,7 +49,12 @@
              (cat mach
              (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media))))
    out  (cup r)
-   ok   (&& (has? out "tests pass") (! (has? out "failed:")))
-   (? ok (: _ (puts (lineof out "tests pass")) (putc 10))
+   line (lineof out "tests pass")
+   ; ⚠ "0 tests pass" is a corpus that died before its first assert wearing a
+   ; green face (a stale ktests bake did exactly this) -- a summary only counts
+   ; when it counted something.
+   ok   (&& (has? out "tests pass")
+            (&& (! (has? out "failed:")) (! (sub-at line 0 "0 tests pass" 0))))
+   (? ok (: _ (puts line) (putc 10))
          (: _ (say err "test_kernel: FAILED") _ (put err 10)
             _ (say err out) _ (put err 10) (quit 1))))

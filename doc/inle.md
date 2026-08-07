@@ -29,8 +29,11 @@ lush, cook, the holo toolchain) bakes into the shipped kernel and the boot comma
 program seat dispatches it — `-append "kore ls lib"` runs the tool and resets, `-append "sh"`
 boots lush, an empty cmdline falls to the console shell with the toolbox warm.
 
-Missing: storage (no PCI, no block driver), processes (spawn/wait/pipes — lush runs builtins
-only until rung 4), network.
+Since rung 4 it has processes — pipes over kernel-heap queues, `spawn`/`wait` as a love shim
+over `twirl`/`catch` (a process IS a task), per-pid stdio seats under the folded ports, and a
+seat-aware `quit` — so lush runs real pipelines of kore tools.
+
+Missing: storage (no PCI, no block driver), network.
 
 ## the shape it grows into
 
@@ -208,25 +211,56 @@ console shell, the toolbox warm in its session.
   aarch64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is
   x86_64's).
 
-### rung 4 — pipes, `spawn`, `wait`  (~1 week)
+### rung 4 — pipes, `spawn`, `wait`  ✅ landed
 
-A pipe is a `k_source` pair over a ring buffer in the kernel heap: the read end answers **0**
+A pipe is a `k_source` pair over one byte queue in the kernel heap: the read end answers **0**
 while a writer is open and **-1** when the last one closes, which is exactly what the scheduler
-parks on. `dup`/`dup2` are row aliases.
+parks on. `dup`/`dup2` are row aliases; `fdopen` opens love's own end of the plumbing.
 
-`spawn` on inle is a love-side shim over the core task ops: read the path, load it into a fresh
-layer, `twirl` it. **The pid IS the task pid** and `wait` is `catch`.
+`spawn` on inle is a love-side shim (the boot text) over the core task ops: map argv onto a love
+main — `kore-main` (or a tool's own `<name>-main` where the dispatcher is not baked), `sh-main`,
+or a `.l` path off the ramfs, evaled form by form — and `twirl` it. **The pid IS the task pid**
+and `wait` is `catch`.
 
 * ⚠ **`doc/posix.md` says "tasks are not processes — never cross them." On inle they are the same
   thing.** That is not a shortcut, it is the machine's whole character, and this is the one place
   it gets written down. The host keeps both; inle has one, and the shared name means kore's
   `proc.l` and lush's pipelines move unedited.
-* ⚠ Job control degrades honestly: no process groups, no `tcsetpgrp`, so `spawnio`'s pg/fg
-  arguments are accepted and ignored, and `^Z` has nothing to stop. Say so in the refusal rather
-  than pretending a job is backgrounded.
+* ⚠ **Redirection lives UNDER the ports, and had to.** Compiled code FOLDS the global
+  `in`/`out`/`err` at its own compile (proved by probe: rebinding moves nothing), so a pipeline
+  stage cannot be redirected by any love-level rebind. The remap is the kernel's **seat table**:
+  pid-keyed fd 0/1/2 → real rows, read by every fd dispatcher (`k_fd_eff`). `procseat` registers
+  it **in the parent right after `twirl`** — which does not switch tasks, so the seat is laid
+  before the child's first read — and each seated fd is a **dup**, fork's fd-copy made explicit,
+  so the parent may `fdclose` its own pipe ends at once.
+* ⚠ **`quit` is the process's exit door, seat-aware.** A seated task's `(quit n)` closes its
+  seated fds (the write end's close IS the downstream EOF), retires the seat, and lands the task
+  dormant with n as its retval — the love-machine `_exit`, and what `wait` reads. Every program
+  exit funnels there: the shim's wrapper quits the main's answer, its help quits a scare, and the
+  kore mains' own folded `(quit 0)` arrives on its own feet. Unseated it still resets the shipped
+  machine; the TEST kernel's unseated arm answers the code (kore0.l's identity, one door deeper).
+  `err` grew its own boot row (fd 2) so a seat can tell a stage's out from its scare face.
+* ⚠ **A seated reader parks wearing its port's fd** (the folded stdin is fd 0), and by wake time
+  the asker is not the running task — so `ai_ready(0)` sweeps every seat's read slot and takes
+  the false wake: the woken reader re-asks through its own seat and re-parks. Seats are pipeline
+  stages, a handful; a spurious wake costs one re-read.
+* ⚠ **The queue GROWS rather than refusing at a cap.** The writer's lane is the static port's
+  unbuffered `zputc`, whose contract on a busy answer is one retry and then a DROPPED byte — a
+  bounded ring would shed bytes in silence under exactly the load it exists for. The price rides
+  the same open question as the ramfs's memory ceiling (below). And with no SIGPIPE on this
+  machine, a write on a widowed pipe answers "gone" and the run drops — a `yes | head` spins.
+* Job control degrades honestly: no process groups, no `tcsetpgrp`, so pg/fg arguments are
+  accepted and ignored, and `^Z` has nothing to stop. `dup` of a ramfs fd clones the handle, so
+  the offset diverges where POSIX shares it (nothing seeks a saved fd yet); `ai_stdin`'s ungetc
+  slot is one word all tasks share, so two stages parsing their stdin at once can cross-talk; a
+  `freeze`d process task leaks its seat (quit never runs). Known, small, and said here.
 * ⚠ **Every twirl must be caught** (CLAUDE.md's corpus law) — doubly here: an orphan stalls the
   kernel runner and the failure reads as a hang.
-* *gate:* a lush pipeline — `kore ls | kore wc -l` — on the K_TEST kernel.
+* *gate:* `test/kernel/pipe.l` — the pair, EOF at the last close, dup/dup2, spawn/wait, the seat
+  driven bare — then lush itself: the engine parts bake into the K_TEST corpus (sh0.l pins what
+  they mention and the seat lacks) and `test/kernel/sh.l` runs `kore ls lib | kore wc -l` through
+  `sh-line`, the tail redirected onto the tree and read back. `test_kboot` grew the same pipeline
+  as a fourth boot of the SHIPPED kernel through `sh -c`.
 
 ### rung 5 — the disk  (~2–4 weeks)
 
@@ -294,11 +328,13 @@ Worth stating, because it is the reason this ladder is weeks and not years:
 * **the initrd's shape** — the baked table is what rung 0 built, and it costs a rebuild per
   change. A real archive format we could also write from the host is still open, and costs a
   reader.
-* ~~**fd numbering.**~~ Answered: lowest free row at or past the boot two, POSIX's rule, which
+* ~~**fd numbering.**~~ Answered: lowest free row at or past the boot three, POSIX's rule, which
   scripts lean on. A row is free when it carries no method at all — what `k_source_open` zeroes a
   fresh one to and what the ramfs close door puts one back to.
 * **the ramfs's memory ceiling.** `g->budget` bounds the collector at RAM/8; a ramfs growing
   through the same heap competes with it, and nothing prices that yet. Rung 0 made this real
   rather than hypothetical, and rung 2 widened it: a write or a create is now the thing that can
-  take memory the collector was counting on.
+  take memory the collector was counting on. Rung 4 added the pipe queues, which grow the same
+  way (and for a reason — the growth is what keeps the unbuffered write lane from dropping
+  bytes).
 * **whether lush wants a `/bin` at all** on a machine where every program is a registry entry.

@@ -347,12 +347,18 @@ init-container: host
 # test/kernel/ is the other direction: laws that can only run HERE. ramfs.l reads
 # and writes the baked initrd, which on the host would be `open` on the real tree;
 # wfs.l is the writable tree; kore.l smokes the kore fs tools over the crew cat's
-# fs prefix, baked into the corpus just before it. It all goes before zz-fin.l,
-# which prints the summary and quits.
+# fs prefix, baked into the corpus just before it; pipe.l is rung 4 (pipes, the
+# spawn/wait shim, the stdio seat) over the same tools; then lush's engine parts
+# (cat order, as test/host/sh.l reads them; sh0.l pins what they mention and the
+# seat lacks) and sh.l, the rung-4 gate -- a real pipeline through sh-line. It
+# all goes before zz-fin.l, which prints the summary and quits.
 kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
   $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/fs.l \
-  $R/test/kernel/kore.l $R/test/zz-fin.l
+  $R/test/kernel/kore.l $R/test/kernel/pipe.l \
+  $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
+  $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
+  $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP (mk/lib.mk: regenerated every make, rewritten
 # only when the set changes), which is the whole job $(MAKEFILE_LIST) used to do here -- and
 # it did it by re-laying this header, and so rebuilding all eleven kernel objects, on any
@@ -453,10 +459,11 @@ endif
 ifeq ($a,x86_64)
 test_kboot: host $(R)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
-	@echo TEST $(k_elf) "(the kore cat off cmdline; 3 boots, ceiling 420s each)"
+	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
 	@$m $(R)/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
 	@$m $(R)/tools/kboot.l $(k_elf) "kore wc lib/json.l" "lib/json.l" $$(wc -c < $(R)/lib/json.l)
 	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib/*.l | wc -l)
 else
 test_kboot:
 	@echo "test_kboot: skipped (host arch $a is not x86_64)"
