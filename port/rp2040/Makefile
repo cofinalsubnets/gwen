@@ -14,9 +14,10 @@
 # ⚠ the .uf2 packer (tools/elf2uf2.g) still speaks the pre-rename .g dialect,
 # so `make bin` writes the raw flash image and a UF2 wants that port first.
 #
-# Faces: `make` builds love.elf + love.bin and verifies the boot surface (the
-# boot2 CRC, the vector table's SP and reset entry) -- the three words a
-# bricked-looking Pico always traces back to. `make objs` compiles only.
+# Faces: `make` builds love.elf + love.bin and verifies the segment permissions
+# and the boot surface (the boot2 CRC, the vector table's SP and reset entry) --
+# the three words a bricked-looking Pico always traces back to. `make objs`
+# compiles only.
 R := ../..
 o = out/rp2040
 MOONCC = out/host/mooncc
@@ -95,9 +96,20 @@ $(R)/$(o)/rlink.l: rlink.l $(link_l)
 	@mkdir -p $(R)/$(o)
 	@{ echo "(use 'holo)"; cat $(link_l) $<; } > $@
 
+# Flash R|X, SRAM R|W: rlink.l asserts the first and the sections answer for the
+# second. Read back rather than trusted -- nothing here is both writable and executable.
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(R)/out/host/love
 	@echo LINK	$@
 	@cd $(R) && out/host/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%) $(lg)
+	@python3 -c "import struct; b=open('$(R)/$(o)/love.elf','rb').read(); \
+	  po,pe,pn = struct.unpack_from('<I',b,28)[0], struct.unpack_from('<H',b,42)[0], struct.unpack_from('<H',b,44)[0]; \
+	  ph=[struct.unpack_from('<8I',b,po+i*pe) for i in range(pn)]; \
+	  ld=[(p[2],p[6]) for p in ph if p[0]==1]; \
+	  wx=[hex(a) for a,f in ld if (f&2) and (f&1)]; \
+	  fl=[f for a,f in ld if a==0x10000000]; \
+	  ok = fl==[5] and not wx; \
+	  print('segments:', ' '.join('%08x %s'%(a,'RWE' if f==7 else 'R E' if f==5 else 'RW ' if f==6 else str(f)) for a,f in ld), '--', 'ok' if ok else 'BAD (w+x: %s)'%wx); \
+	  exit(0 if ok else 1)" || { echo "FAIL rp2040 segment permissions"; exit 1; }
 
 # the flatten is ours too: crew/holo/copy.l reads the linked ELF and writes objcopy's
 # two output formats, byte for byte (`kore objcopy` is the same code with a name).

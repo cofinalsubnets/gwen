@@ -585,7 +585,7 @@ test_rp2040: host out/host$(hsuf)/mooncc
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, verified"
+	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, flash R|X, boot surface verified"
 # moon-tar -- the userland cousin of test_raw (doc/moon-userland.md): build GNU tar 1.13
 # with mooncc + nolibc + the holo linker (no gcc/glibc/ld) and prove the binary RUNS --
 # cf/xf + czf/xzf roundtrips + system-tar interop. Point TARSRC at a ./configure'd tree.

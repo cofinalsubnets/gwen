@@ -954,6 +954,11 @@
    ;   (copy VADDR lane..)   laid at VADDR, LOADED after the file bytes so far --
    ;                         `> RAM AT> FLASH`, the classic XIP map, and the
    ;                         port's own startup copies it across at boot.
+   ; a lane slot may instead hold `(flags N)`: the segment permissions the BOARD
+   ; asserts, in place of the ones ld-segflags reads off the sections -- the PHDRS
+   ; block a linker script writes, and it has to exist because no object can answer
+   ; for it (a vector table is const to the silicon and still carries the addresses
+   ; that make it writable to a compiler). the fused `at` segment takes ONE.
    ; consecutive `at` runs share ONE segment (the file tracks the addresses, gaps
    ; and all); each `copy` run takes its own, p_paddr where its bytes actually sit.
    ; ⚠ once a run is `copy` every later one must be: the file cursor and the
@@ -982,6 +987,21 @@
     (foldl (\ a l (: h (ld-homeof objs l)
                     (a | (? (id? h 'text) 1 (member? h '(data bss nifs image)) 2 0))))
            4 ls)
+   ; a run row's two halves: the lanes it lays, and the `(flags N)` word a board may
+   ; put among them -- a lane is an atom and the word a pair, so neither reads as the
+   ; other. ⚠ the assertion OVERRIDES: a lane written at RUN time under a read-only
+   ; run is an image that faults wherever permissions are enforced.
+   (ld-fword? x) (&& (two? x) (id? <x 'flags))
+   (ld-runlanes r) (filter (\ x (! (ld-fword? x))) >>r)
+   (ld-runflags r) (: f (filter ld-fword? >>r)
+                      (? (! (two? f)) ()
+                         (: v (at <f 1)
+                            _ (? (&& (charm? v) (&& (0 < v) (v <= 7))) 0 (scare 'link-run-flags v))
+                            v)))
+   ; the fused `at` segment takes one assertion across every run that makes it, and
+   ; two that disagree are a map with two minds -- named here, not silently joined.
+   (ld-onef vs)
+    (foldl (\ a v (? (! v) a (! a) v (a = v) a (scare 'link-run-flags v))) () vs)
    ; every lane the SET actually puts bytes or address space in, first-seen order
    (ld-uselanes objs)
     (: seen (tablet 0)
@@ -1011,13 +1031,14 @@
        ;; only its flags to travel by, and those say rodata -- which would lay it after
        ;; the code, where nothing looks. so the board names it, and a named lane is the
        ;; board's word: the expansion supplies the company it did NOT mention.
-       spoken (foldl (\ a r (a + >>r)) () runs)
+       spoken (foldl (\ a r (a + (ld-runlanes r))) () runs)
        lruns (map (\ r (link <r (link (at r 1)
-                                      (foldl (\ a l (a + (link l (filter (\ n (! (member? n spoken)))
-                                                                         (ld-nlanes objs l)))))
-                                             () >>r))))
+                                      ((filter ld-fword? >>r)
+                                       + (foldl (\ a l (a + (link l (filter (\ n (! (member? n spoken)))
+                                                                            (ld-nlanes objs l)))))
+                                                () (ld-runlanes r))))))
                   runs)
-       maplanes (foldl (\ a r (a + >>r)) () lruns)
+       maplanes (foldl (\ a r (a + (ld-runlanes r))) () lruns)
        ;; a lane lives in ONE place. laid twice it is emitted twice while lpos keeps
        ;; one entry, so the bytes and the section headers part company and the file
        ;; is corrupt rather than wrong -- name it here, where the map is still legible.
@@ -1031,11 +1052,11 @@
        ; lpos records each lane's (vaddr fileoff size) as it goes -- the section
        ; headers read it back rather than laying anything a second time (ldlay1
        ; pins bases as it walks, so a second call would be a second opinion).
-       ; -> one entry per run: (kind vaddr fileoff filesz memsz lanes)
+       ; -> one entry per run: (kind vaddr fileoff filesz memsz lanes flags)
        lpos (tablet 0)
        plan (: (go rs cur fpos copied acc)
                 (? (! (two? rs)) (rev acc)
-                   (: r <rs kind <r start (at r 1) ls >>r
+                   (: r <rs kind <r start (at r 1) ls (ld-runlanes r) fl (ld-runflags r)
                       copy? (id? kind 'copy)
                       _ (? (|| copy? (id? kind 'at)) 0 (scare 'link-run-kind kind))
                       _ (? (&& copied (! copy?)) (scare 'link-run-after-copy start) 0)
@@ -1051,7 +1072,7 @@
                                          `(n (? (id? l 'bss) f (f + (n - c))))))
                                `(start fo) ls)
                       (go >rs (? copy? cur <w) <>w (|| copied copy?)
-                          (`(kind start fo (<>w - fo) (<w - start) ls) >< acc))))
+                          (`(kind start fo (<>w - fo) (<w - start) ls fl) >< acc))))
                (go lruns org foff () ()))
        ; -- the SEGMENTS: the `at` runs fuse into one (the file tracks the
        ; addresses, gaps and all), each `copy` run stands alone with p_paddr where
@@ -1064,10 +1085,11 @@
                   `(`((at a0 1) (at a0 1) (at a0 2)
                       (((at aN 2) + (at aN 3)) - (at a0 2))
                       (((at aN 1) + (at aN 4)) - (at a0 1))
-                      (ld-segflags objs (foldl (\ a r (a + (at r 5))) () ats)))))
+                      (: af (ld-onef (map (\ r (at r 6)) ats))
+                         (? af af (ld-segflags objs (foldl (\ a r (a + (at r 5))) () ats)))))))
                ())
        segs (aseg + (map (\ r `((at r 1) (fladdr (at r 2)) (at r 2) (at r 3) (at r 4)
-                                (ld-segflags objs (at r 5)))) cps))
+                                (? (at r 6) (at r 6) (ld-segflags objs (at r 5))))) cps))
        hdrsz (52 + (32 * (tally segs)))
        _ (? (hdrsz <= foff) 0 (scare 'link-bare-headers hdrsz))
        glo (ldsyms objs)

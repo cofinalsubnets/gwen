@@ -27,7 +27,11 @@
       ; libgcc -- named on the line, pulled by need through the ranlib index.
       set (map rread objs)
       lib (set + (ldarch set (map rread ars) 'thumb1))
-      runs `(`('at 0x10000000 (intern ".boot2"))
+      ; flash says R|X outright: .vectors is const to the silicon and still carries the
+      ; handler ADDRESSES that make it writable to any compiler (gcc's answer too), and
+      ; nothing on the run is written once the linker has resolved them. rp2040.lds
+      ; asserted the same thing in a PHDRS block, for the same reason.
+      runs `(`('at 0x10000000 '(flags 5) (intern ".boot2"))
              `('at 0x10000100 (intern ".vectors") 'text 'rodata)
              `('copy 0x20000000 'data 'bss))
       _ (ld-write out (ldbare32 'thumb1 runs lib `(`("__stack_top__" sram-top))))
