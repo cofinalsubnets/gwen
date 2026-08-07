@@ -31,7 +31,8 @@
    sh-status #0                                ; $?: the last foreground status
    sh-curline #0                               ; the source line under eval (job display)
    sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
-   sh-funcs (tablet 0)                         ; functions (name -> body ast)
+   sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
+   sh-nofn (mint 0)                            ; that plan is a closure, so peep names its absence
    sh-pos #0                                   ; the positionals, a list of strings
    sh-arg0 #0                                  ; $0 (the script path, or the shell)
    sh-eflag #0 sh-uflag #0 sh-xflag #0         ; set -e / -u / -x

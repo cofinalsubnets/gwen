@@ -40,6 +40,8 @@ a raise inside `n` belongs to the trap *outside*, never to this one.
 where a compile ends anyway, or a kiosko session, where the socket close already sits after the
 call. Where the cleanups are strung along the path (lush's fd swaps, its errexit depth), the
 value-threading that pays a test per node is the cheaper trade, and it is not a defect that it is.
+lush plans its AST into closures once (`sh-plan`), so what a run pays per node is that one `two?`
+on the result and nothing else — the dispatch an escape would have skipped is already gone.
 
 Relates: [[faces]] (the hourglass / one core), the zero point + `welp` in test/spec.l's control
 section.

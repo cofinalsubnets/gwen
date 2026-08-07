@@ -91,6 +91,24 @@
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"))
    (assert (! (= 0 (cap r)))))
 
+; the engine plans: (sh-plan ast) reads the AST once and answers a THUNK, so
+; firing it twice runs twice. the function book holds that plan -- a closure, so
+; two? can never see it, and absence is the sh-nofn mint (peep's total test)
+(: pr (sh-parse (cup (sh-lex "LUSH_PL=$(expr ${LUSH_PL:-0} + 1)")))
+   p (sh-plan (cup pr))
+   _ (p ()) _ (p ())
+   (assert (= '("2") (sh-fields (L (link 'var "LUSH_PL"))))))
+(: _ (sh-line "lush_pf() { echo x; }")
+   (assert (sh-fn? "lush_pf") (! (sh-fn? "lush_pq_zz"))
+           (! (two? (sh-fnof "lush_pf")))))
+; break/continue count their levels through the planned loops
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "for a in 1 2; do for b in x y; do echo $a$b; break 2; done; done; echo end"))
+   (assert (= "1x\nend\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "for a in 1 2 3; do [ $a = 2 ] && continue; echo n=$a; done"))
+   (assert (= "n=1\nn=3\n" (cup r))))
+
 ; expansion: POSIX order -- splitting only over expansion output, quotes
 ; shield, an unset var alone is NO field, a quoted empty IS one, glob last
 (: _ (setenv "LUSH_T1" "quay")
