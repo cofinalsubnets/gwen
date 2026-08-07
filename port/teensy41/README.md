@@ -19,12 +19,14 @@ Compiled END TO END by **mooncc** (`out/host/mooncc -t thumb2`, built by the
 root Makefile): love.c, the am math floor, libc, and the port's own C all go
 through the repo's compiler, and `mkboot.l` lays the ROM-facing FlexSPI/IVT/
 vector blocks + crt0 + the barrier helpers from holo IR -- there is no `.S`
-here and nothing assembles them. `arm-none-eabi-ld` still links against
-`teensy41.lds`. No libgcc -- mooncc's thumb2 lanes are self-contained. The
+here and nothing assembles them. `tlink.l` binds the image over holo's
+`ldbare32` (the XIP flash map is a table in that file, not a linker script) and
+`ocopy.l` writes the `.hex` and `.bin` over holo's `copy.l`. No libgcc --
+mooncc's thumb2 lanes are self-contained. The
 build also verifies the boot image (FCFB tag at 0, IVT at 0x1000, a thumb-bit
 entry); the qemu cousin `port/mps2/` proves the same runtime end to end under
-emulation (`make test_mps2`). Needs `arm-none-eabi-ld` and `llvm-objcopy` or
-`arm-none-eabi-objcopy`.
+emulation (`make test_mps2`). Needs no foreign toolchain at all -- qemu only,
+and only to bake the heap image.
 
 ## Console
 

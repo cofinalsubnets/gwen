@@ -4,22 +4,20 @@
 # root Makefile). mooncc's system include dir is CWD-relative, so every compile
 # runs from $(R). Output lands in $(R)/out/rp2040/.
 #
-# NOTHING FOREIGN WRITES A BYTE OF THIS IMAGE. Every .o is mooncc's or holo's:
-# the vector table and crt0 are C (rp2040.c), and boot2 -- the 256-byte stage
-# the mask ROM checksums and runs -- is laid by mkboot2.l straight into a named
-# section. This is the only thumb port with no .S, which is what the RP2040's
-# C vector table buys: its cousins still assemble a boot.S with gas.
+# NOTHING FOREIGN WRITES A BYTE OF THIS IMAGE, and nothing foreign reads it
+# either: every .o is mooncc's or holo's (the vector table and crt0 are C in
+# rp2040.c, and boot2 -- the 256-byte stage the mask ROM checksums and runs --
+# is laid by mkboot2.l straight into a named section), rlink.l binds it over
+# holo's ldbare32, and ocopy.l flattens it. gcc's cortex-m0 libgcc is the one
+# foreign FILE, read as an archive by need and never run.
 #
-# ⚠ what is still foreign is the LINK: arm-none-eabi-ld binds this, because
-# thumb relocations (R_ARM_ABS32, R_ARM_THM_CALL, R_ARM_THM_JUMP24) are not in
-# crew/holo/link.l yet. That is the one thing between this port and a build
-# with no toolchain but ours. ⚠ and the .uf2 packer (tools/elf2uf2.g) still
-# speaks the pre-rename .g dialect, so `make bin` writes the raw flash image
-# and a UF2 wants that port first.
+# ⚠ the .uf2 packer (tools/elf2uf2.g) still speaks the pre-rename .g dialect,
+# so `make bin` writes the raw flash image and a UF2 wants that port first.
 #
-# Faces: `make` builds love.elf + love.bin and verifies the boot surface (the
-# boot2 CRC, the vector table's SP and reset entry) -- the three words a
-# bricked-looking Pico always traces back to. `make objs` compiles only.
+# Faces: `make` builds love.elf + love.bin and verifies the segment permissions
+# and the boot surface (the boot2 CRC, the vector table's SP and reset entry) --
+# the three words a bricked-looking Pico always traces back to. `make objs`
+# compiles only.
 R := ../..
 o = out/rp2040
 MOONCC = out/host/mooncc
@@ -33,7 +31,6 @@ rp_cc = $(MOONCC) -t thumb1 -D __STDC_HOSTED__=0 -I.
 .DELETE_ON_ERROR:
 
 AS_NONE =
-OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 # the v6-m/nofp multilib: __aeabi_[u]idiv, the 64-bit pairs, the whole soft-float set
 lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
 
@@ -99,17 +96,36 @@ $(R)/$(o)/rlink.l: rlink.l $(link_l)
 	@mkdir -p $(R)/$(o)
 	@{ echo "(use 'holo)"; cat $(link_l) $<; } > $@
 
+# Flash R|X, SRAM R|W: rlink.l asserts the first and the sections answer for the
+# second. Read back rather than trusted -- nothing here is both writable and executable.
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(R)/out/host/love
 	@echo LINK	$@
 	@cd $(R) && out/host/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%) $(lg)
+	@python3 -c "import struct; b=open('$(R)/$(o)/love.elf','rb').read(); \
+	  po,pe,pn = struct.unpack_from('<I',b,28)[0], struct.unpack_from('<H',b,42)[0], struct.unpack_from('<H',b,44)[0]; \
+	  ph=[struct.unpack_from('<8I',b,po+i*pe) for i in range(pn)]; \
+	  ld=[(p[2],p[6]) for p in ph if p[0]==1]; \
+	  wx=[hex(a) for a,f in ld if (f&2) and (f&1)]; \
+	  fl=[f for a,f in ld if a==0x10000000]; \
+	  ok = fl==[5] and not wx; \
+	  print('segments:', ' '.join('%08x %s'%(a,'RWE' if f==7 else 'R E' if f==5 else 'RW ' if f==6 else str(f)) for a,f in ld), '--', 'ok' if ok else 'BAD (w+x: %s)'%wx); \
+	  exit(0 if ok else 1)" || { echo "FAIL rp2040 segment permissions"; exit 1; }
+
+# the flatten is ours too: crew/holo/copy.l reads the linked ELF and writes objcopy's
+# two output formats, byte for byte (`kore objcopy` is the same code with a name).
+copy_l = $(link_l) $(R)/crew/holo/copy.l
+$(R)/$(o)/ocopy.l: $(copy_l)
+	@echo AI	$@
+	@mkdir -p $(R)/$(o)
+	@{ echo "(use 'holo)"; cat $(copy_l); echo '(objcopy >argv)'; } > $@
 
 # .bin byte offsets ARE flash offsets, so the boot surface is readable straight
 # out of it: the ROM checks boot2's CRC before anything else runs, then the
 # vector table at 0x10000100 must hold an SP inside SRAM and a thumb-bit reset
 # entry inside flash. Any one of the three wrong and the board just sits there.
-$(R)/$(o)/love.bin: $(R)/$(o)/love.elf
+$(R)/$(o)/love.bin: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	@echo BIN	$@
-	@$(OBJCOPY) -O binary $< $@
+	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
 	@python3 -c "import struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
 	  crc=struct.unpack_from('<I',b,252)[0]; sp,e=struct.unpack_from('<II',b,256); \
 	  ok = crc==0x7a4eb274 and 0x20000000<sp<=0x20042000 and (e&1)==1 and 0x10000100<e<0x10200000; \

@@ -102,8 +102,17 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ara.elf" || fail "kore ld archive vs .o link (bytes -- an unneeded member rode in?)"
   "$ho/.kore-ara.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld archive run (exit $r)"
+  # objcopy over the exe we just linked. byte-equality with the real objcopy is
+  # test_objcopy's job; what this row is for is the DISPATCH -- that the applet is
+  # reachable off the registry and takes the arguments it advertises.
+  korerun objcopy -O binary "$ho/.kore-ld.elf" "$ho/.kore-oc.bin" || fail "kore objcopy -O binary"
+  korerun objcopy -O ihex "$ho/.kore-ld.elf" "$ho/.kore-oc.hex" || fail "kore objcopy -O ihex"
+  [ -s "$ho/.kore-oc.bin" ] && [ -s "$ho/.kore-oc.hex" ] || fail "kore objcopy wrote nothing"
+  grep -q '^:00000001' "$ho/.kore-oc.hex" || fail "kore objcopy: no ihex end record"
+  korerun objcopy -O srec "$ho/.kore-ld.elf" "$ho/.kore-oc.x" 2>/dev/null \
+    && fail "kore objcopy took an unknown format"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld (objects and an archive) ok"
+echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy ok"
 
 # ------------------------------------------------------------- the line tools
 printf 'b\na\nc\nb\n' > "$ho/.cu1"; printf 'x y\nz\n' > "$ho/.cu2"

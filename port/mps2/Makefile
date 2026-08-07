@@ -1,9 +1,9 @@
 # qemu MPS2+ AN500 (Cortex-M7) build -- love compiled END TO END by mooncc.
 # Run from the project root via `make -C port/mps2` (needs out/host/mooncc,
 # built by the root Makefile). Every C file -- love.c, the am math floor,
-# libc, main.c -- goes through `mooncc -t thumb2`, and start.o is laid from holo
-# IR by mkstart.l, so the LINK is the only arm-none-eabi step left (crew/holo's
-# 32-bit lane is what retires it). mooncc's system include dir is CWD-relative,
+# libc, main.c -- goes through `mooncc -t thumb2`, start.o is laid from holo IR by
+# mkstart.l, and mooncc's own -Ttext/-Tdata drive the link over holo's 32-bit lane:
+# no arm-none-eabi anywhere. mooncc's system include dir is CWD-relative,
 # so every compile runs from $(R).
 # Boot it: qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel love.elf
 # (exit 42 = the egg hatched and the driver tail's laws held; `make

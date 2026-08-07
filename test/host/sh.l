@@ -91,6 +91,80 @@
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"))
    (assert (! (= 0 (cap r)))))
 
+; the engine plans: (sh-plan ast) reads the AST once and answers a THUNK, so
+; firing it twice runs twice. the function book holds that plan -- a closure, so
+; two? can never see it, and absence is the sh-nofn mint (peep's total test)
+(: pr (sh-parse (cup (sh-lex "LUSH_PL=$(expr ${LUSH_PL:-0} + 1)")))
+   p (sh-plan (cup pr))
+   _ (p ()) _ (p ())
+   (assert (= '("2") (sh-fields (L (link 'var "LUSH_PL"))))))
+(: _ (sh-line "lush_pf() { echo x; }")
+   (assert (sh-fn? "lush_pf") (! (sh-fn? "lush_pq_zz"))
+           (! (two? (sh-fnof "lush_pf")))))
+; break/continue count their levels through the planned loops
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "for a in 1 2; do for b in x y; do echo $a$b; break 2; done; done; echo end"))
+   (assert (= "1x\nend\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "for a in 1 2 3; do [ $a = 2 ] && continue; echo n=$a; done"))
+   (assert (= "n=1\nn=3\n" (cup r))))
+
+; errexit's guard is a DYNAMIC EXTENT, which is why sh-noe is ambient: the
+; suspension inside a condition reaches a FORKED pipeline stage and an `eval`,
+; and outside one it reaches neither. bash agrees on all five.
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; { false; echo r; } | cat; echo after"))
+   (assert (= "after\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; if { false; echo r; } | cat; then echo t; fi"))
+   (assert (= "r\nt\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; if eval \"false; echo x\"; then echo t; fi"))
+   (assert (= "x\nt\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; eval \"false; echo x\"; echo after"))
+   (assert (= 1 (cap r)) (= "" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "set -e; false && echo a; echo survived"))
+   (assert (= "survived\n" (cup r))))
+; ... but a $( ) body is guarded, so under set -e it runs to its end and hands
+; back what it wrote -- the two capture lanes (a seq reaped per step, a compound
+; in one forked child) answer the same, and bash agrees with both
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; v=$( { false; echo r; } ); echo v=[$v] after"))
+   (assert (= "v=[r] after\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; v=$(false; echo r); echo v=[$v] after"))
+   (assert (= "v=[r] after\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; f(){ false; echo fr; }; v=$(f); echo v=[$v] after"))
+   (assert (= "v=[fr] after\n" (cup r))))
+; a command with NO command name answers the last $( ) performed over its
+; assignments, in order (POSIX) -- none ran is a clean 0, a command name of its
+; own wins, and under set -e that status is a real trigger unless it is guarded
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "v=$(exit 3); echo $?"))
+   (assert (= "3\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "v=1; echo $?"))
+   (assert (= "0\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "a=$(exit 3) b=$(exit 4); echo $?"))
+   (assert (= "4\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "v=$(exit 5)x$(exit 6); echo $?"))
+   (assert (= "6\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "v=$(false) true; echo $?"))
+   (assert (= "0\n" (cup r))))
+; ⚠ the WORDS expand before the assignments, so a $( ) that vanishes to no field
+; still counts, and still counts FIRST
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "v=1 $(exit 3); echo $?"))
+   (assert (= "3\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "v=$(exit 2) $(exit 3); echo $?"))
+   (assert (= "2\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "$(exit 6); echo $?"))
+   (assert (= "6\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "set -e; v=$(false); echo never"))
+   (assert (= 1 (cap r)) (= "" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; if v=$(false); then echo t; else echo e; fi"))
+   (assert (= "e\n" (cup r))))
+
 ; expansion: POSIX order -- splitting only over expansion output, quotes
 ; shield, an unset var alone is NO field, a quoted empty IS one, glob last
 (: _ (setenv "LUSH_T1" "quay")

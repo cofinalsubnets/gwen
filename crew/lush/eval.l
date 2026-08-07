@@ -4,7 +4,10 @@
 ; (sh-line src) -> ('more . why) | status. redirects become a spawnmap fdmap
 ; ((childfd . srcfd)..) applied IN ORDER in the child -- POSIX's left-to-right
 ; law; a heredoc ("<h") is a pipe whose body pours in AFTER the spawn (the
-; child drains as we write, so size never deadlocks). pipeline stages spawn;
+; child drains as we write, so size never deadlocks). the AST is PLANNED into
+; closures once (sh-plan) and the plan is what runs, so a loop body, a function
+; and a case arm pay their kind tests and their assignment peel once, not per
+; run. pipeline stages spawn;
 ; a stage that is a compound, a builtin, a function or carries assignments
 ; FORKS instead (POSIX puts it in a subshell anyway) -- the child lays the
 ; pipe map with dup2 on itself, evals, quits. control flow threads its
@@ -176,6 +179,12 @@
            (= cmd "return") (link 'ret (? (cup argv) (sh-int (caup argv)) (sh-status ())))
            'nope))
 
+   ; --- the function book -------------------------------------------------------
+   ; a body is a PLAN (a closure), so two? cannot tell one from absence -- peep
+   ; names the miss with a mint no stored value can pose as (spec.l's total test)
+   (sh-fnof nm) (peep sh-funcs nm sh-nofn)
+   (sh-fn? nm) (! (id? sh-nofn (sh-fnof nm)))
+
    ; --- stage expansion + the spawn engines ------------------------------------
    (sh-makepipes n) (? (< n 1) () (link (pipe 0) (sh-makepipes (- n 1))))
    (sh-flat ps) (? !ps () (link (cap (cap ps)) (link (cup (cap ps)) (sh-flat (cup ps)))))
@@ -190,7 +199,7 @@
               (: pk (sh-peel (sh-nth c 1) ())
                  argv (catmap sh-fields (cup pk))
                  (? (|| (two? (cap pk)) (! (two? argv))
-                        (sh-bi? (cap argv)) (two? (peep sh-funcs (cap argv) ())))
+                        (sh-bi? (cap argv)) (sh-fn? (cap argv)))
                     (sh-stagex (cup cmds) (link (L 'a c () () ()) acc))
                     (: rm (sh-rdmap (sh-nth c 2))
                        (? (id? (cap rm) 'err) (: _ (stclean acc) rm)
@@ -245,13 +254,20 @@
                     _ (? (sh-tty ()) (puts (+ "[" (+ (show jn) (+ "] " (+ (sh-unwords (map show pids)) "\n"))))) 0)
                     0)
                  (: _ (sh-waitfg pids (sh-curline ())) (sh-echk (sh-status ())))))))
-   ; one simple foreground command: assignments, function, builtin, or a spawn
-   (sh-simple ws rs)
-     (: pk (sh-peel ws ())
-        asns (cap pk)
+   ; one simple foreground command: assignments, function, builtin, or a spawn.
+   ; pk is the peel -- (assignments . words) -- split at PLAN time, it is syntax
+   (sh-simple pk rs)
+     (: asns (cap pk)
+        _ (pin sh-substat () 0)          ; ⚠ ahead of BOTH expansions -- see below
         argv (catmap sh-fields (cup pk))
         (? (! (two? argv))
-           (: _ (each asns sh-doasn) _ (pin sh-status () 0) 0)
+           ; no command name: POSIX says the status is the LAST $( ) performed,
+           ; and the words expand before the assignments do -- so `v=1 $(exit 3)`
+           ; is 3 and `v=$(exit 2) $(exit 3)` is 2. none ran leaves the clean 0
+           (: _ (each asns sh-doasn)
+              st (sh-substat ())
+              _ (pin sh-status () st)
+              (sh-echk st))
            (: saves (map sh-tmpset asns)
               r (sh-simple2 argv rs)
               _ (each saves sh-tmprestore)
@@ -275,8 +291,8 @@
                  s))))
    (sh-simple2 argv rs)
      (: _ (? (sh-xflag ()) (say err (+ "+ " (+ (sh-unwords argv) "\n"))) 0)
-        fn (peep sh-funcs (cap argv) ())
-        (? (two? fn) (sh-withrs rs (\ _ (sh-fncall fn argv)))
+        fn (sh-fnof (cap argv))
+        (? (! (id? sh-nofn fn)) (sh-withrs rs (\ _ (sh-fncall fn argv)))
            (sh-bi? (cap argv))
              (: b (sh-withrs rs (\ _ (sh-builtin argv)))
                 (? (two? b) b                            ; brk/cnt/ret ride out
@@ -295,101 +311,125 @@
    (sh-fncall body argv)
      (: op (sh-pos ())
         _ (pin sh-pos () (cup argv))
-        s (sh-eval body)
+        s (body ())
         _ (pin sh-pos () op)
         (? (&& (two? s) (id? (cap s) 'ret))
            (: st (cup s) _ (pin sh-status () st) st)
            s))
 
-   ; --- the AST walk ------------------------------------------------------------
-   ; a condition (or an && || arm, or a ! body) evals with errexit off
-   (sh-guarded a)
+   ; --- the AST walk: plan once, then run ---------------------------------------
+   ; (sh-plan ast) -> a PLAN, a thunk fired with the unit. every kind test, every
+   ; descent and the assignment peel happen HERE, so a loop body, a function and a
+   ; case arm pay them once instead of once per run. a plan still ANSWERS its
+   ; control pair rather than jumping, so the fd restores between a `break` and
+   ; its loop all run -- the reason this is not call-cc (doc/honest-face.md).
+   (sh-zero _) (: _ (pin sh-status () 0) 0)
+   (sh-eval a) ((sh-plan a) ())          ; the raw-AST door: a forked stage, a line
+   ; a condition (or an && || arm, or a ! body) runs with errexit off
+   (sh-guarded p)
      (: _ (pin sh-noe () (+ 1 (sh-noe ())))
-        s (sh-eval a)
+        s (p ())
         _ (pin sh-noe () (- (sh-noe ()) 1))
         s)
-   (sh-eval a)
-     (? !a (sh-status ())
+   (sh-plan a)
+     (? !a (\ _ (sh-status ()))
         (: k (cap a)
-           (? (id? k 'seq) (: s (sh-eval (sh-nth a 1)) (? (two? s) s (sh-eval (sh-nth a 2))))
-              (id? k 'and) (: s (sh-guarded (sh-nth a 1))
-                              (? (two? s) s (= s 0) (sh-eval (sh-nth a 2)) s))
-              (id? k 'or)  (: s (sh-guarded (sh-nth a 1))
-                              (? (two? s) s (= s 0) s (sh-eval (sh-nth a 2))))
-              (id? k 'not) (: s (sh-guarded (sh-nth a 1))
-                              (? (two? s) s
-                                 (: ns (? (= s 0) 1 0) _ (pin sh-status () ns) ns)))
-              (id? k 'bg)  (sh-evalbg (sh-nth a 1))
-              (id? k 'pipe) (sh-pipeline (sh-nth a 1) 0)
-              (id? k 'cmd) (sh-simple (sh-nth a 1) (sh-nth a 2))
-              (id? k 'if) (sh-if (sh-nth a 1) (sh-nth a 2))
-              (id? k 'while) (sh-wloop 0 (sh-nth a 1) (sh-nth a 2) 0)
-              (id? k 'until) (sh-wloop 1 (sh-nth a 1) (sh-nth a 2) 0)
-              (id? k 'for) (sh-for (sh-nth a 1) (sh-nth a 2) (sh-nth a 3))
-              (id? k 'case) (sh-case (sh-nth a 1) (sh-nth a 2))
-              (id? k 'group) (sh-eval (sh-nth a 1))
-              (id? k 'subsh) (sh-subsh (sh-nth a 1))
-              (id? k 'fun) (: _ (pin sh-funcs (sh-nth a 1) (sh-nth a 2)) 0)
-              (id? k 'rdr) (sh-rdr (sh-nth a 1) (sh-nth a 2))
-              (cmderr "unknown form"))))
-   (sh-evalbg a)
-     (: k (cap a)
-        (? (id? k 'pipe) (sh-pipeline (sh-nth a 1) 1)
-           (sh-pipeline (L a) 1)))
+           (? (id? k 'seq)
+                (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
+                   (\ _ (: s (p ()) (? (two? s) s (q ())))))
+              (id? k 'and)
+                (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
+                   (\ _ (: s (sh-guarded p) (? (two? s) s (= s 0) (q ()) s))))
+              (id? k 'or)
+                (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
+                   (\ _ (: s (sh-guarded p) (? (two? s) s (= s 0) s (q ())))))
+              (id? k 'not)
+                (: p (sh-plan (sh-nth a 1))
+                   (\ _ (: s (sh-guarded p)
+                           (? (two? s) s
+                              (: ns (? (= s 0) 1 0) _ (pin sh-status () ns) ns)))))
+              (id? k 'bg)                        ; a lone command backgrounds as a
+                (: b (sh-nth a 1)                ; pipeline of one
+                   cmds (? (id? (cap b) 'pipe) (sh-nth b 1) (L b))
+                   (\ _ (sh-pipeline cmds 1)))
+              (id? k 'pipe) (: cmds (sh-nth a 1) (\ _ (sh-pipeline cmds 0)))
+              (id? k 'cmd)  (: pk (sh-peel (sh-nth a 1) ()) rs (sh-nth a 2)
+                               (\ _ (sh-simple pk rs)))
+              (id? k 'if)
+                (: cls (map (\ c (link (sh-plan (cap c)) (sh-plan (cup c)))) (sh-nth a 1))
+                   els (? (two? (sh-nth a 2)) (sh-plan (sh-nth a 2)) sh-zero)
+                   (\ _ (sh-if cls els)))
+              (id? k 'while)
+                (: c (sh-plan (sh-nth a 1)) b (sh-plan (sh-nth a 2))
+                   (\ _ (sh-wloop 0 c b 0)))
+              (id? k 'until)
+                (: c (sh-plan (sh-nth a 1)) b (sh-plan (sh-nth a 2))
+                   (\ _ (sh-wloop 1 c b 0)))
+              (id? k 'for)                       ; the words re-expand each run
+                (: nm (sh-nth a 1) ws (sh-nth a 2) b (sh-plan (sh-nth a 3))
+                   (\ _ (sh-floop nm (catmap sh-fields ws) b 0)))
+              (id? k 'case)                      ; a bodyless arm takes the zero at
+                (: w (sh-nth a 1)                ; plan time -- an AST tells its own
+                   its (map (\ it (link (cap it) ; absence by two?, a plan cannot
+                                        (? (two? (cup it)) (sh-plan (cup it)) sh-zero)))
+                            (sh-nth a 2))
+                   (\ _ (sh-citems (sh-textof w) its)))
+              (id? k 'group) (sh-plan (sh-nth a 1))
+              (id? k 'subsh) (: b (sh-plan (sh-nth a 1)) (\ _ (sh-subsh b)))
+              (id? k 'fun)   (: nm (sh-nth a 1) b (sh-plan (sh-nth a 2))
+                                (\ _ (: _ (pin sh-funcs nm b) 0)))
+              (id? k 'rdr)   (: b (sh-plan (sh-nth a 1)) rs (sh-nth a 2)
+                                (\ _ (sh-rdr b rs)))
+              (\ _ (cmderr "unknown form")))))
    (sh-if clauses els)
-     (? (! (two? clauses))
-        (? (two? els) (sh-eval els) (: _ (pin sh-status () 0) 0))
+     (? (! (two? clauses)) (els ())
         (: c (cap clauses)
            s (sh-guarded (cap c))
            (? (two? s) s
-              (= s 0) (sh-eval (cup c))
+              (= s 0) ((cup c) ())
               (sh-if (cup clauses) els))))
    (sh-wloop inv cond body last)
      (: s (sh-guarded cond)
         (? (two? s) s
            (: go? (? inv (! (= s 0)) (= s 0))
               (? (! go?) (: _ (pin sh-status () last) last)
-                 (: b (sh-eval body)
+                 (: b (body ())
                     (? (two? b)
                        (: kk (cap b) nn (cup b)
-                          (? (id? kk 'brk) (? (< 1 nn) (link 'brk (- nn 1))
-                                              (: _ (pin sh-status () 0) 0))
+                          (? (id? kk 'brk) (? (< 1 nn) (link 'brk (- nn 1)) (sh-zero ()))
                              (id? kk 'cnt) (? (< 1 nn) (link 'cnt (- nn 1))
                                               (sh-wloop inv cond body last))
                              b))
                        (sh-wloop inv cond body b)))))))
-   (sh-for nm ws body) (sh-floop nm (catmap sh-fields ws) body 0)
    (sh-floop nm fs body last)
      (? (! (two? fs)) (: _ (pin sh-status () last) last)
         (: _ (sh-setvar nm (cap fs))
-           b (sh-eval body)
+           b (body ())
            (? (two? b)
               (: kk (cap b) nn (cup b)
-                 (? (id? kk 'brk) (? (< 1 nn) (link 'brk (- nn 1)) (: _ (pin sh-status () 0) 0))
+                 (? (id? kk 'brk) (? (< 1 nn) (link 'brk (- nn 1)) (sh-zero ()))
                     (id? kk 'cnt) (? (< 1 nn) (link 'cnt (- nn 1)) (sh-floop nm (cup fs) body last))
                     b))
               (sh-floop nm (cup fs) body b))))
-   (sh-case wsegs items) (sh-citems (sh-textof wsegs) items)
    (sh-anymatch t pats)
      (? (! (two? pats)) 0
         (: pm (sh-patmask (cap pats))
            (? (sh-fmatch (cap pm) (cup pm) t) 1 (sh-anymatch t (cup pats)))))
    (sh-citems t items)
-     (? (! (two? items)) (: _ (pin sh-status () 0) 0)
+     (? (! (two? items)) (sh-zero ())
         (: it (cap items)
-           (? (sh-anymatch t (cap it))
-              (? (two? (cup it)) (sh-eval (cup it)) (: _ (pin sh-status () 0) 0))
+           (? (sh-anymatch t (cap it)) ((cup it) ())
               (sh-citems t (cup items)))))
-   (sh-subsh a)
+   (sh-subsh b)
      (: _ (flush out) _ (flush err)
         p (fork 0)
-        (? (= p 0) (: s (sh-eval a)
+        (? (= p 0) (: s (b ())
                       (quit (? (charm? s) s (? (id? (cap s) 'ret) (cup s) 0))))
            (< p 0) (cmderr "cannot fork")
            (: _ (sh-waitfg (L p) (sh-curline ())) (sh-echk (sh-status ())))))
    ; a compound's trailing redirect: swap OUR OWN fds (dup saves, dup2 lays),
-   ; eval in-process (a `done < file` loop keeps its variables), swap back
-   (sh-rdr a rs)
+   ; run in-process (a `done < file` loop keeps its variables), swap back
+   (sh-rdr b rs)
      (: rm (sh-rdmap rs)
         (? (id? (cap rm) 'err) (cmderr (cup rm))
            (: fdmap (sh-nth rm 1) opens (sh-nth rm 2) wrs (sh-nth rm 3)
@@ -398,7 +438,7 @@
               _ (each fdmap (\ e (? (charm? (cup e)) (dup2 (cup e) (cap e))
                                     (fdclose (cap e)))))
               _ (each opens fdclose)
-              s (sh-eval a)
+              s (b ())
               _ (each saves (\ e (? (< (cup e) 0) (fdclose (cap e))
                                     (: _ (dup2 (cup e) (cap e)) (fdclose (cup e))))))
               s)))
@@ -422,11 +462,11 @@
               _ (each (+ pfds ofds) fdclose)
               _ (sh-hwrite wrs)
               pids)))
+   (sh-capst sts)                              ; the LAST stage's status, a signal folded down
+     (? (! (two? sts)) 1
+        (: st (last sts) (? (&& (charm? st) (< 255 st)) (- st 128) st)))
    (sh-cappipe a wfd)                          ; -> status, waited
-     (: pids (sh-capsimple a wfd)
-        sts (map (\ p (wait p)) pids)
-        (? (! (two? sts)) 1
-           (: st (last sts) (? (&& (charm? st) (< 255 st)) (- st 128) st))))
+     (: pids (sh-capsimple a wfd) (sh-capst (map (\ p (wait p)) pids)))
    (sh-capture a wfd)
      (? !a 0
         (: k (cap a)
@@ -437,27 +477,40 @@
                               (? (= s 0) s (sh-capture (sh-nth a 2) wfd)))
               (id? k 'bg)  (sh-capture (sh-nth a 1) wfd)
               (sh-cappipe a wfd))))
+   ; every lane leaves sh-substat holding this body's status: an assignment with
+   ; no command name answers the LAST one performed (POSIX), so the pin is the
+   ; only way back -- sh-fields sits between here and the reader. 1 up front is
+   ; the floor the three scaring lanes keep.
    (sh-cmdsub text)
-     (: lx (sh-lex text)
+     (: _ (pin sh-substat () 1)
+        lx (sh-lex text)
         (? (id? (cap lx) 'more) (: _ (cmderr "unterminated $( ) body") "")
            (: pr (sh-parse (cup lx))
               (? (! (id? (cap pr) 'ok)) (: _ (cmderr "bad $( ) body") "")
-                 !(cup pr) ""
+                 !(cup pr) (: _ (pin sh-substat () 0) "")      ; $( ) is a clean nothing
                  (: a (cup pr)
                     pp (pipe 0)
                     (? (charm? pp) ""
                        (: rfd (cap pp) wfd (cup pp)
                           seqish (|| (id? (cap a) 'seq) (id? (cap a) 'and)
                                      (id? (cap a) 'or) (id? (cap a) 'bg))
-                          (? seqish
-                             (: _ (sh-capture a wfd)
-                                _ (fdclose wfd)
-                                (slurp (fdopen rfd)))
-                             (: pids (sh-capsimple a wfd)
-                                _ (fdclose wfd)
-                                o (slurp (fdopen rfd))
-                                _ (each pids (\ p (wait p)))
-                                o)))))))))
+                          ; ⚠ GUARDED, and the guard must be up at the fork (the
+                          ; child takes it by copy): the body's status is this
+                          ; substitution's value, never the shell's own errexit
+                          ; trigger -- aborting it would drop the very output the
+                          ; caller asked for. the seq lane reaps per step and so
+                          ; never aborted; now both lanes answer the same.
+                          (sh-guarded
+                            (\ _ (? seqish
+                                    (: st (sh-capture a wfd)
+                                       _ (pin sh-substat () st)
+                                       _ (fdclose wfd)
+                                       (slurp (fdopen rfd)))
+                                    (: pids (sh-capsimple a wfd)
+                                       _ (fdclose wfd)
+                                       o (slurp (fdopen rfd))   ; drain, THEN reap
+                                       _ (pin sh-substat () (sh-capst (map (\ p (wait p)) pids)))
+                                       o)))))))))))
    _ (pin sh-subeval () sh-cmdsub)
 
    ; --- the script lane + the line entries --------------------------------------

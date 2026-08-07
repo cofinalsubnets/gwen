@@ -29,13 +29,21 @@
    (sh-pgm _) (? (sh-tty ()) 0 (0 - 1))
    (sh-fgm _) (? (sh-tty ()) 1 0)
    sh-status #0                                ; $?: the last foreground status
+   sh-substat #0                               ; the last $( )'s status -- ambient for the
+                                               ; same reason sh-noe is: word.l's expansion
+                                               ; sits between sh-cmdsub and the reader
    sh-curline #0                               ; the source line under eval (job display)
    sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
-   sh-funcs (tablet 0)                         ; functions (name -> body ast)
+   sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
+   sh-nofn (mint 0)                            ; that plan is a closure, so peep names its absence
    sh-pos #0                                   ; the positionals, a list of strings
    sh-arg0 #0                                  ; $0 (the script path, or the shell)
    sh-eflag #0 sh-uflag #0 sh-xflag #0         ; set -e / -u / -x
    sh-lastbg #0                                ; $!: the last background pid
+   ; ⚠ AMBIENT on purpose, never a parameter: the guard is a dynamic extent every
+   ; re-entry reads -- a function body, `eval`, a dot-file, and the forks under a
+   ; pipeline stage and a $( ) body (those two take it by memory copy). a plan
+   ; parameter would have to cross word.l's expansion. test/host/sh.l pins it.
    sh-noe #0                                   ; errexit guard depth (conds, && || arms)
    sh-retf #0                                  ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
