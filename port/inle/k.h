@@ -38,6 +38,17 @@ struct k_boot {
   // the machine's RTC in kmain. ⚠ 0 is "nobody knew", not midnight 1970: a stat
   // then reads as its own uptime, which is wrong but at least visibly so.
   uint64_t date;
+  // the boot command line, copied whole at hand-off (limine's request, PVH's
+  // start_info, the DTB's /chosen bootargs). "" is a plain boot: the love-side
+  // split leaves cmdline seatless and the console shell takes over.
+  char cmdline[256];
 };
 
 extern struct k_boot kboot;
+
+// copy a hand-off cmdline into kboot; n bounds a source that may not be
+// NUL-terminated (the DTB prop), ~0 for the C-string doors.
+static inline void k_cmdline(char const *s, uintptr_t n) {
+  uintptr_t i = 0;
+  for (; i < n && i + 1 < sizeof kboot.cmdline && s[i]; i++) kboot.cmdline[i] = s[i];
+  kboot.cmdline[i] = 0; }

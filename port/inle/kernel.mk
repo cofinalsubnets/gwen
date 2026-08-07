@@ -176,9 +176,21 @@ out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 	@echo AI	$@
 	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
 
+# --- the kore cat (rung 3) -------------------------------------------
+# the whole $(korefiles) userland (crew/build.mk, included first) baked VERBATIM
+# (lcatv, the ktests precedent) for the SHIPPED kernel only: kmain.c evals it at
+# boot and the cmdline's program seat picks the tool (the K_TEST kernel skips it
+# -- its corpus bakes the kore subset it drives).
+out/lib/korecat.l: $(korefiles)
+	@mkdir -p out/lib
+	@cat $(korefiles) > $@
+out/lib/korecat.h: out/lib/korecat.l $(love0) tools/lcatv.l love/prel.l
+	@echo AI	$@
+	@$(love0) -l love/prel.l tools/lcatv.l out/lib/korecat.l > $@
+
 # Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -326,15 +338,21 @@ init-container: host
 # it. So this exercises the freestanding kernel the way test_host/test_love0 exercise
 # the host. x86_64 only (qemu + isa-debug-exit); a no-op on other hosts.
 #
-# Drop from the kernel corpus: io.l (host file open) and run.l (subprocess/getenv)
-# need host-OS nifs the kernel lacks; bell.l's Bell-number bignums are too heavy
-# for the emulated kernel. (math.l REJOINED when the math floor became am.c --
-# the same <= 2 ulp seven everywhere, so the glibc-precision bands hold.)
-# test/kernel/ is the other direction: laws that can only run HERE. ramfs.l reads and
-# writes the baked initrd, which on the host would be `open` on the real tree. It goes
-# before zz-fin.l, which prints the summary and quits.
-kt = $(filter-out %/io.l %/run.l %/bell.l %/zz-fin.l,$t) \
-  $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/zz-fin.l
+# Drop from the kernel corpus: run.l (subprocess) needs host-OS nifs the kernel
+# lacks; bell.l's Bell-number bignums are too heavy for the emulated kernel.
+# (math.l REJOINED when the math floor became am.c -- the same <= 2 ulp seven
+# everywhere, so the glibc-precision bands hold. io.l REJOINED with rung 2 --
+# create landed, and its stdin-unget laws gate themselves on the seat, since the
+# kernel's `in` is a keyboard and the corpus rides a baked tap.)
+# test/kernel/ is the other direction: laws that can only run HERE. ramfs.l reads
+# and writes the baked initrd, which on the host would be `open` on the real tree;
+# wfs.l is the writable tree; kore.l smokes the kore fs tools over the crew cat's
+# fs prefix, baked into the corpus just before it. It all goes before zz-fin.l,
+# which prints the summary and quits.
+kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
+  $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
+  $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/fs.l \
+  $R/test/kernel/kore.l $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP (mk/lib.mk: regenerated every make, rewritten
 # only when the set changes), which is the whole job $(MAKEFILE_LIST) used to do here -- and
 # it did it by re-laying this header, and so rebuilding all eleven kernel objects, on any
@@ -423,6 +441,25 @@ test_uefi: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/esp-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-test/love.elf
 	@echo TEST $(ko)/esp-test "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
 	@$m $(R)/tools/ktest.l $(ko)/esp-test $(OVMF_X64) x86_64
+endif
+
+# test_kboot -- inle rung 3's gate: the SHIPPED kernel (no K_TEST), booted
+# direct with a boot command line; the baked kore cat dispatches off the
+# program seat, runs the tool, and quits (the reset door; -no-reboot makes
+# that a qemu exit). Three boots at a cold cat eval each (~minutes under TCG),
+# so OPT-IN like test_kdiff: run it when the kernel or the kore cat moves.
+# vi stays the interactive smoke, under run-* -- `-append "vi lib/json.l"`.
+.PHONY: test_kboot
+ifeq ($a,x86_64)
+test_kboot: host $(R)/tools/kboot.l
+	@$(MAKE) -s $(k_elf)
+	@echo TEST $(k_elf) "(the kore cat off cmdline; 3 boots, ceiling 420s each)"
+	@$m $(R)/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
+	@$m $(R)/tools/kboot.l $(k_elf) "kore wc lib/json.l" "lib/json.l" $$(wc -c < $(R)/lib/json.l)
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
+else
+test_kboot:
+	@echo "test_kboot: skipped (host arch $a is not x86_64)"
 endif
 
 # test_kdiff -- the clang-vs-mooncc K_TEST DIFFERENTIAL (moon-kernel rung 5).

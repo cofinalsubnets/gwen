@@ -33,6 +33,7 @@ void pvh_to_kboot(uint32_t si_paddr) {
   uint64_t k0 = 0x200000,             // k1 page-rounded: meminit lays a struct
            k1 = (((uintptr_t) kimage_end - 0xffffffff80000000ull) + 0xfff) & ~0xfffull;
   kboot.hhdm = pvh_hhdm;
+  if (si->cmdline_paddr) k_cmdline((char const *) (pvh_hhdm + si->cmdline_paddr), (uintptr_t) ~0);
   for (uint32_t i = 0; i < si->memmap_entries; i++) {
     if (mm[i].type != 1) continue;                   // 1 = usable RAM
     uint64_t a = mm[i].addr, b = a + mm[i].size;
