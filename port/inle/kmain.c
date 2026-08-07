@@ -5,6 +5,7 @@
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include <stdarg.h>
 #include <limits.h>
+#include <string.h>
 
 uint64_t kticks;
 // Higher-half direct map offset: physical address P is reachable at
@@ -123,12 +124,10 @@ static void limine_to_kboot(void) {
 // k_sources[] holds per-fd vtables. The kernel's ai_fd_port_vt is a thin
 // shim that routes each call through k_sources[fd]. NULL slots mean
 // "no method"; the dispatcher skips them (writes discard, reads return
-// the end, ready returns false). The read side is bulk; the write side is
-// still per-byte HERE, one fd deeper than the vt's writen -- a console takes
-// bytes one at a time either way, and ramfs/files can grow a bulk slot beside
-// it when the copy is worth saving. `state` is
-// per-instance scratch (ramfs uses it for the buffer pointer; statics
-// like keyboard/serial leave it null).
+// the end, ready returns false). Both directions can be bulk; a row carrying no
+// writen is written a byte at a time instead, which is all a console can take
+// either way. `state` is per-instance scratch (a ramfs fd holds its handle
+// there; statics like keyboard/serial leave it null).
 //
 // ⚠ THE TABLE GROWS; IT DOES NOT CAP. it was a `k_source[32]` with five `fd <
 // k_sources_max` bounds checks around it -- unreachable while nothing wrote it,
@@ -150,6 +149,11 @@ struct k_source {
   // "-1 = EOF / no data" -- one sentinel, two meanings -- and the keyboard paid
   // for it by spinning the whole vm on an empty queue.
   intptr_t (*readn)(int fd, unsigned char *dst, uintptr_t n);
+  // the bulk write door, the same contract mirrored: >0 = bytes taken, 0 = busy,
+  // -1 = gone. a row carrying one is asked instead of putc -- which is how the
+  // ramfs REFUSES an allocation it could not get, where a void putc could only
+  // drop the byte in silence.
+  intptr_t (*writen)(int fd, unsigned char const *src, uintptr_t n);
   void (*putc)(int fd, int c);
   void (*flush)(int fd);
   bool (*ready)(int fd);                // non-blocking probe
@@ -211,10 +215,8 @@ static ai_inline struct k_source *k_source(int fd) {
 // is no realloc down here. -> NULL when there is no memory, which is a REFUSAL
 // the caller must read; nothing is ever silently dropped, which is the whole
 // difference between this and the ceiling it replaces.
-// ⚠ NO CALLER YET. inle owns no files and no sockets, so slots 0 and 1 are still
-// the whole table -- this is the rule doc/io.md left for whoever adds the third,
-// built as a door instead of a sentence so it cannot be got wrong. the grow
-// branch is therefore UNEXERCISED; the first file or socket is its gate.
+// the ramfs is the caller: every open file is a row past the boot two, so the grow
+// branch runs on the first one (test/kernel/ramfs.l).
 struct k_source *k_source_open(struct ai *g, int fd) {
   if (fd < 0) return NULL;
   if (fd >= k_sources_n) {
@@ -239,7 +241,9 @@ static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
   int fd = (int) ai_io_fd((*fp)->io);
   struct k_source *s = k_source(fd);
-  if (!s || !s->putc) return (intptr_t) n;
+  if (!s) return (intptr_t) n;
+  if (s->writen) return s->writen(fd, src, n);
+  if (!s->putc) return (intptr_t) n;
   for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
   return (intptr_t) n; }
 static struct ai *fd_flush(struct ai *g) {
@@ -415,6 +419,192 @@ static void kfree(void *p) {
 void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
+// --- the ramfs: the baked tree, and the copies writes make -----------------
+// The initrd is .rodata. tools/lcatfs.l bakes one {path, bytes, len} row per file
+// (out/lib/kfs.h) the way lcatv bakes the test corpus, and reads come straight off
+// it; the FIRST write copies that blob into the kernel heap and the entry reads
+// from the copy ever after. So a file nobody writes costs a row and not one word
+// of the bounded heap -- bake generously, copy lazily -- and two opens of one path
+// see each other's writes, because the copy is per FILE and never per fd.
+//
+// ⚠ kmallocw/kfree, not g->alloc: a vt method is handed an fd and nothing else, so
+// g is out of reach at the door that grows a file. On this seat they are the same
+// heap (g->alloc is love.c's ai_libc_alloc -> malloc -> kmallocw, defined above),
+// which is why cbinit already names it directly for the same reason.
+struct k_file { char const *path, *bytes; uintptr_t len; };
+static struct k_file const kfiles[] = {
+#include "kfs.h"
+};
+
+// the mutable half, one slot per baked row. ⚠ `own` is the presence bit and has to
+// be one: a file written and then emptied is {NULL, 0}, which is what a file still
+// in .rodata looks like too, so the flag is the only thing that says which blob to
+// read -- the tree's presence law wearing its C face.
+static struct { unsigned char *bytes; uintptr_t len, cap; bool own; }
+  kfsw[countof(kfiles)];
+
+// one open file: which row, where in it, and whether writes are allowed. rides the
+// k_source row's `state`; the close door frees it.
+struct k_fh { int i; uintptr_t pos; bool w; };
+
+static ai_inline struct k_fh *k_fh(int fd) {
+  struct k_source *s = k_source(fd);
+  return s ? s->state : NULL; }
+
+// what row i reads as: the heap copy once there is one, the .rodata blob until then.
+static unsigned char const *k_blob(int i, uintptr_t *len) {
+  if (kfsw[i].own) return *len = kfsw[i].len, kfsw[i].bytes;
+  return *len = kfiles[i].len, (unsigned char const*) kfiles[i].bytes; }
+
+// path -> row. LINEAR and unapologetic: the tree is a few dozen rows in .rodata,
+// and a hash would cost a table the boot has to build before it can open the file
+// that would have justified it.
+static int k_find(char const *p, uintptr_t n) {
+  for (int i = 0; i < (int) countof(kfiles); i++)
+    if (strlen(kfiles[i].path) == n && !memcmp(kfiles[i].path, p, n)) return i;
+  return -1; }
+
+// make room for `need` bytes in row i's heap copy, bringing the .rodata blob across
+// on the first write. -> false is a REFUSAL the caller must read and say; nothing
+// is ever dropped quietly.
+static bool k_fit(int i, uintptr_t need) {
+  if (!kfsw[i].own) {
+    uintptr_t n = kfiles[i].len, cap = n > need ? n : need;
+    unsigned char *p = cap ? kmallocw(b2w(cap)) : NULL;
+    if (cap && !p) return false;
+    if (n) memcpy(p, kfiles[i].bytes, n);
+    kfsw[i].bytes = p, kfsw[i].len = n, kfsw[i].cap = cap, kfsw[i].own = true;
+    return true; }
+  if (kfsw[i].cap >= need) return true;
+  uintptr_t cap = kfsw[i].cap ? kfsw[i].cap : 64;
+  while (cap < need) cap *= 2;
+  unsigned char *p = kmallocw(b2w(cap));
+  if (!p) return false;
+  if (kfsw[i].len) memcpy(p, kfsw[i].bytes, kfsw[i].len);
+  kfree(kfsw[i].bytes);
+  kfsw[i].bytes = p, kfsw[i].cap = cap;
+  return true; }
+
+static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
+  struct k_fh *h = k_fh(fd);
+  if (!h) return -1;
+  uintptr_t len;
+  unsigned char const *p = k_blob(h->i, &len);
+  // ⚠ the end, never 0: a file does not grow under its reader, so "nothing waiting"
+  // would park the scheduler on a source that will never speak (doc/io.md).
+  if (h->pos >= len) return -1;
+  uintptr_t k = len - h->pos;
+  if (k > n) k = n;
+  memcpy(dst, p + h->pos, k);
+  h->pos += k;
+  return (intptr_t) k; }
+
+static intptr_t ram_writen(int fd, unsigned char const *src, uintptr_t n) {
+  struct k_fh *h = k_fh(fd);
+  if (!h || !h->w) return -1;                  // read-only: gone, not silently taken
+  if (!n) return 0;
+  if (!k_fit(h->i, h->pos + n)) return -1;
+  // a gap (a truncate under an append fd) reads as zeros, never as the bytes the
+  // last tenant of that block left there.
+  if (h->pos > kfsw[h->i].len)
+    memset(kfsw[h->i].bytes + kfsw[h->i].len, 0, h->pos - kfsw[h->i].len);
+  memcpy(kfsw[h->i].bytes + h->pos, src, n);
+  h->pos += n;
+  if (h->pos > kfsw[h->i].len) kfsw[h->i].len = h->pos;
+  return (intptr_t) n; }
+
+static bool ram_ready(int fd) { (void) fd; return true; }
+
+static void ram_close(int fd) {
+  struct k_source *s = k_source(fd);
+  if (!s) return;
+  kfree(s->state);
+  *s = (struct k_source) {0}; }               // and the row is free again
+
+// the lowest free row at or past the boot two -- POSIX's rule, which scripts lean
+// on. A row is free when it carries no method at all, which is what k_source_open
+// zeroes a fresh one to and what ram_close puts one back to.
+static int k_fd_free(void) {
+  for (int i = (int) countof(k_boot); i < k_sources_n; i++) {
+    struct k_source *s = &k_sources[i];
+    if (!s->readn && !s->writen && !s->putc && !s->flush && !s->ready && !s->close)
+      return i; }
+  return k_sources_n; }
+
+// open a baked path -> its fd, or -1. mode's first byte only: r read, w truncate,
+// a append. ⚠ NO CREATE: a path that is not baked answers -1 even for w, which is
+// absence and not divergence -- the writable tree (mkdir/unlink/create) is rung 2.
+static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, struct ai_str *mv) {
+  if (!mv->len) return -1;
+  char m = mv->bytes[0];
+  if (m != 'r' && m != 'w' && m != 'a') return -1;
+  int i = k_find(pv->bytes, pv->len);
+  if (i < 0) return -1;
+  int fd = k_fd_free();
+  struct k_fh *h = kmallocw(b2w(sizeof *h));
+  if (!h) return -1;
+  struct k_source *s = k_source_open(g, fd);   // the grow door; -> NULL is no memory
+  if (!s) return kfree(h), -1;
+  // ⚠ the truncate lands LAST, past every way this can still fail: an open that
+  // refuses must leave the file exactly as it found it.
+  uintptr_t len = 0;
+  if (m == 'w') kfsw[i].own = true, kfsw[i].len = 0;
+  if (m == 'a') k_blob(i, &len);
+  *h = (struct k_fh) { .i = i, .pos = len, .w = m != 'r' };
+  *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
+                           .ready = ram_ready, .close = ram_close, .state = h };
+  return fd; }
+
+// (open path mode) -- host/main.c's lvm_open for the ramfs door: a heap port
+// (closed on GC) or the zero point on any failure. The kernel links no host/*.c,
+// so the shape is written fresh rather than shared -- doc/posix.md's conventions
+// exactly, since kore reads these and a wrong one is silent.
+static lvm(lvm_open) {
+  if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
+  int fd = k_ramopen(g, (struct ai_str*) Sp[0], (struct ai_str*) Sp[1]);
+  if (fd < 0) goto fail;
+  Pack(g);
+  struct ai *r = ai_io_alloc(g, fd);
+  if (!ai_ok(r)) { ai_fd_close(fd); goto fail; }
+  g = r;
+  Unpack(g);
+  // stack: [port, path, mode, ..] -> [port, ..]
+  Sp[2] = Sp[0];
+  Sp += 2;
+  Ip += 1;
+  ai_musttail return Continue();
+ fail:
+  Sp[1] = ZeroPoint;
+  Sp += 1;
+  Ip += 1;
+  ai_musttail return Continue(); }
+
+// (close p) -- flush, release the row, and HAND THE PORT THE CLOSED VT, so every
+// later read/write/flush finds the door that does nothing and the finalizer, which
+// asks the vt for an fd, skips. Answers (). No-op on a non-port.
+static lvm(lvm_close) {
+  if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == lvm_port_io) {
+    struct ai_io *io = (struct ai_io*) Sp[0];
+    intptr_t fd = ai_io_fd(io);
+    if (fd >= 0) {
+      g->io = io;
+      Pack(g);
+      g = ai_io_wflush(g, io);        // buffered bytes land before the row dies
+      if (!ai_ok(g)) return ghelp(g);
+      // the device would not take the whole run: PARK and come back. nothing has
+      // been mutated yet -- the row is live and Ip unadvanced -- so the re-run is
+      // this same close from the top.
+      if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
+        Unpack(g);
+        g->next_wake_at = ai_clock() + 1;
+        ai_musttail return Ap(lvm_yield_sw, g); }
+      Unpack(g);
+      ai_fd_close((int) fd);
+      ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // ⚠ re-read: wflush may collect
+  Sp[0] = ZeroPoint;
+  Ip += 1;
+  ai_musttail return Continue(); }
+
 static lvm(ai_kreset) { return k_reset(), g; }
 
 // paint ONE console row. `cur` is the cursor's cell (~0u when it is hidden) and
@@ -514,6 +704,8 @@ static union u
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
+  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
+  nif_close[] = {{lvm_close}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
 #endif
@@ -560,6 +752,11 @@ static struct ai_def defs[] = {
   {"draw", (intptr_t) nif_draw},
   {"key", (intptr_t) nif_key},
   {"fault", (intptr_t) nif_fault},
+  // the ramfs door. ⚠ `open`'s PRESENCE is what lights up prel's module walk
+  // (love/prel.l's fsopen, by peep) and salt's config read -- both are gated on
+  // the name being in the book, so this row is the whole wiring.
+  {"open", (intptr_t) nif_open},
+  {"close", (intptr_t) nif_close},
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
 #endif

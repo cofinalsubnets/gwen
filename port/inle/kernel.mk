@@ -157,9 +157,28 @@ $(k_elf): $(R)/port/inle/$a/$a.lds $(k_o)
 	@$(KLD) $(kldflags) $(k_o) -o $@
 endif
 
+# --- the initrd ------------------------------------------------------
+# lib/*.l baked per-file into .rodata as {path, bytes, len} rows (tools/lcatfs.l),
+# which the ramfs in kmain.c serves reads off. The paths are baked RELATIVE, exactly
+# as the walk asks for them: prel tries lib/<x>.l off the cwd, so `use` finds these
+# the moment `open` sits in defs[]. The list stamp is corpus.list's idiom -- a
+# wildcard aggregate leaves every remaining prereq older than the target when a file
+# is DELETED, and make keeps baking the ghost.
+kfs = $(sort $(wildcard $R/lib/*.l))
+.PHONY: force_kfs_list
+force_kfs_list: ;
+out/lib/kfs.list: force_kfs_list
+	@mkdir -p out/lib
+	@tf=$@.$$$$.tmp; echo '$(kfs)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
+	@mkdir -p out/lib
+	@echo AI	$@
+	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
+
 # Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h)
 	@echo CC	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -311,7 +330,11 @@ init-container: host
 # need host-OS nifs the kernel lacks; bell.l's Bell-number bignums are too heavy
 # for the emulated kernel. (math.l REJOINED when the math floor became am.c --
 # the same <= 2 ulp seven everywhere, so the glibc-precision bands hold.)
-kt = $(filter-out %/io.l %/run.l %/bell.l,$t)
+# test/kernel/ is the other direction: laws that can only run HERE. ramfs.l reads and
+# writes the baked initrd, which on the host would be `open` on the real tree. It goes
+# before zz-fin.l, which prints the summary and quits.
+kt = $(filter-out %/io.l %/run.l %/bell.l %/zz-fin.l,$t) \
+  $R/test/kernel/ramfs.l $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP (mk/lib.mk: regenerated every make, rewritten
 # only when the set changes), which is the whole job $(MAKEFILE_LIST) used to do here -- and
 # it did it by re-laying this header, and so rebuilding all eleven kernel objects, on any

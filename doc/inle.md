@@ -17,17 +17,19 @@ Where it stops being enough is named at the foot, with what it would cost.
 framebuffer console through quay, decodes PS/2 scancodes, and runs `((from 'bao 'shell) 0)`.
 Interrupts, the timer, cooperative tasks (`twirl`/`catch`), and fd-parking all work.
 
-Missing: storage (no PCI, no block driver), a filesystem, any of the file nifs, a wall clock,
-processes, network. `k_sources[]` holds exactly two rows, keyboard and console, and `kmain.c`
-says so: *"⚠ NO CALLER YET. inle owns no files and no sockets."*
+It also has a filesystem now — the rung-0 ramfs over a `.rodata` initrd, with `open` and `close`
+in `defs[]` and `use` resolving `lib/<x>.l` off it. `k_sources[]` grows a row per open file.
+
+Missing: storage (no PCI, no block driver), the rest of the file nifs (`readdir` `stat` `lseek`),
+a wall clock, processes, network.
 
 ## the shape it grows into
 
 Three mappings, all of them already half-built:
 
-* **`k_sources[]` is the vfs.** A per-fd vtable (`readn`/`putc`/`flush`/`ready`/`close` + `state`),
-  and `k_source_open` is the one door in, growing the table through `g->alloc`. Every rung below
-  adds rows.
+* **`k_sources[]` is the vfs.** A per-fd vtable (`readn`/`writen`/`putc`/`flush`/`ready`/`close` +
+  `state`), and `k_source_open` is the one door in, growing the table through `g->alloc`. Every
+  rung below adds rows.
 * **ports are the fds.** `ai_io_alloc(g, fd)` is core, not host — it wraps an fd as a port with a
   close finalizer, and read/write come free.
 * **tasks are the processes.** `twirl` answers a pid, `catch` waits on one, and the scheduler
@@ -46,33 +48,46 @@ Divergence here is worse than absence — kore reads these shapes and a wrong on
 
 Sizes are one focused person, rough, and they compound: each rung is gated before the next.
 
-### rung 0 — the initrd, and a ramfs behind it  (~1 week)
+### rung 0 — the initrd, and a ramfs behind it  ✅ landed
 
-Bake a `.l` tree into `.rodata` the way `ktests.h` is already baked — but per-file, so a new
-`tools/lcatfs.l` beside `lcatv.l` emits `{path, bytes, len}` rows instead of one concatenated
-literal. A ramfs serves reads straight from `.rodata`; the first write to a file copies its blob
-into the kernel heap through `g->alloc`, and the row's `state` points at the copy.
+`tools/lcatfs.l` bakes `lib/*.l` per-file into `.rodata` as `{path, bytes, len}` rows
+(`out/lib/kfs.h`) where `lcatv.l` bakes one file into one literal. Reads come straight off the
+rows; the first write copies the blob into the kernel heap and the entry reads from the copy ever
+after. `open` and `close` land in `defs[]` beside it — the gate needs them, and `open`'s presence
+is what lights `use` up (below).
 
 No driver, no PCI, no disk. This is the rung that changes what the machine *is*, and it defers
 every hardware question to rung 5.
 
-* ⚠ **`k_source_open`'s grow branch has never run.** It is built as a door instead of a ceiling
-  precisely for this, and rung 0 is its first exercise — the second row past the boot two.
-* ⚠ **The boot rows stay static.** `kmain.c`'s law: the console is how a failed allocation gets
-  said, so it cannot itself be the first thing that needs one.
-* ⚠ A source in `.rodata` costs a row and not one word of the bounded heap — the same argument
-  that keeps the module table cheap. Bake generously; copy lazily.
-* *gate:* `test_kernel` laws — open a baked path, read it, write it, re-read it, close it.
+* ⚠ **The copy is per FILE, never per fd** — two opens of one path must see each other's writes,
+  or it is a bundle and not a filesystem. The `k_source` row's `state` holds only the handle
+  (which entry, where in it, may it write); the bytes hang off the entry.
+* ⚠ **`own` is a presence bit and has to be one.** A file written and then emptied is `{NULL, 0}`,
+  which is exactly what one still in `.rodata` looks like — the tree's presence law wearing its
+  C face, and the flag is the only thing that says which blob to read.
+* ⚠ **The write door is bulk now.** `k_source` grew a `writen` beside `putc`, which the vtable's
+  own comment had already invited: a `void putc` can only DROP a byte it has no memory for, where
+  `writen` can refuse. A row without one is still written a byte at a time.
+* ⚠ **`kmallocw`, not `g->alloc`.** A vt method is handed an fd and nothing else, so `g` is out of
+  reach at the door that grows a file. On this seat they are the same heap — `g->alloc` is
+  `ai_libc_alloc` → `malloc` → `kmallocw` — which is why `cbinit` already names it directly.
+* **`k_source_open`'s grow branch runs now**, on the first file opened; the boot rows stay static
+  as `kmain.c`'s law asks, and a failed grow leaves the console standing.
+* **Not here: create.** `open path "w"` on an unbaked path refuses, which is absence and not
+  divergence; the writable tree is rung 2.
+* *gate:* `test/kernel/ramfs.l` (kernel-only, via `kernel.mk`'s `kt`) — open a baked path, read
+  it, write it, append, truncate, grow it past the baked blob, put it back, and `use` it.
+
+**The rung-1 payoff came with it, free.** `use` resolves `lib/<x>.l` off the ramfs on the
+freestanding kernel with zero prel change, exactly as predicted below: the walk is gated on
+`open` being in the book, and it is. The last law in `ramfs.l` proves it — `json` sits in no
+baked `ai_libs` table on this seat, only in the initrd.
 
 ### rung 1 — the file nifs, and `use` lights up for free  (~1 week)
 
-`open` `close` `readdir` `stat` `lseek`, and route `ai_fd_close` through the vfs row.
-
-The payoff is bigger than the rung: **prel's module walk is already gated on the presence of
-`open`** — `fsopen (peep book 'open ())` at `love/prel.l:312`, then `lib/<x>.l` off the cwd and
-the seat walk. The moment `open` sits in `defs[]`, `use` resolves off the filesystem on inle with
-**zero prel change**. Same for `salt` (`~/.love/etc/<app>.l`), which is presence-gated the same
-way.
+`readdir` `stat` `lseek` — `open`, `close` and the `ai_fd_close` routing came with rung 0, and
+with them `use` off the ramfs. `salt` (`~/.love/etc/<app>.l`) is presence-gated the same way and
+wants only a `HOME` to answer.
 
 * **The wall clock lands here**, because `stat` needs an mtime. `date_at_boot` is *already
   requested* from limine (`kmain.c:78`) and dropped on the floor; wire it plus `kticks` into
@@ -184,10 +199,14 @@ Worth stating, because it is the reason this ladder is weeks and not years:
 
 ## open
 
-* **the initrd's shape** — one baked table, or a real archive format we can also write from the
-  host? A format costs a reader; the table costs a rebuild per change.
-* **fd numbering.** The vfs grows by doubling from 2, and nothing yet says whether a love-side
-  `open` picks the lowest free row (POSIX's rule, which some scripts lean on) or just appends.
-* **the ramfs's memory ceiling.** `g->budget` bounds the collector at RAM/8; a ramfs that grows
-  through `g->alloc` competes with it, and nothing prices that yet.
+* **the initrd's shape** — the baked table is what rung 0 built, and it costs a rebuild per
+  change. A real archive format we could also write from the host is still open, and costs a
+  reader.
+* ~~**fd numbering.**~~ Answered: lowest free row at or past the boot two, POSIX's rule, which
+  scripts lean on. A row is free when it carries no method at all — what `k_source_open` zeroes a
+  fresh one to and what the ramfs close door puts one back to.
+* **the ramfs's memory ceiling.** `g->budget` bounds the collector at RAM/8; a ramfs growing
+  through the same heap competes with it, and nothing prices that yet. Rung 0 makes this real
+  rather than hypothetical: a write is now the one thing that can take memory the collector was
+  counting on.
 * **whether lush wants a `/bin` at all** on a machine where every program is a registry entry.
