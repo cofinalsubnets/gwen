@@ -109,6 +109,24 @@
              "for a in 1 2 3; do [ $a = 2 ] && continue; echo n=$a; done"))
    (assert (= "n=1\nn=3\n" (cup r))))
 
+; errexit's guard is a DYNAMIC EXTENT, which is why sh-noe is ambient: the
+; suspension inside a condition reaches a FORKED pipeline stage and an `eval`,
+; and outside one it reaches neither. bash agrees on all five.
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; { false; echo r; } | cat; echo after"))
+   (assert (= "after\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; if { false; echo r; } | cat; then echo t; fi"))
+   (assert (= "r\nt\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; if eval \"false; echo x\"; then echo t; fi"))
+   (assert (= "x\nt\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+             "set -e; eval \"false; echo x\"; echo after"))
+   (assert (= 1 (cap r)) (= "" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "set -e; false && echo a; echo survived"))
+   (assert (= "survived\n" (cup r))))
+
 ; expansion: POSIX order -- splitting only over expansion output, quotes
 ; shield, an unset var alone is NO field, a quoted empty IS one, glob last
 (: _ (setenv "LUSH_T1" "quay")

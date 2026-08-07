@@ -37,6 +37,10 @@
    sh-arg0 #0                                  ; $0 (the script path, or the shell)
    sh-eflag #0 sh-uflag #0 sh-xflag #0         ; set -e / -u / -x
    sh-lastbg #0                                ; $!: the last background pid
+   ; ⚠ AMBIENT on purpose, never a parameter: the guard is a dynamic extent every
+   ; re-entry reads -- a function body, `eval`, a dot-file, and the forks under a
+   ; pipeline stage and a $( ) body (those two take it by memory copy). a plan
+   ; parameter would have to cross word.l's expansion. test/host/sh.l pins it.
    sh-noe #0                                   ; errexit guard depth (conds, && || arms)
    sh-retf #0                                  ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
