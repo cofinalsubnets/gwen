@@ -258,9 +258,16 @@
    ; pk is the peel -- (assignments . words) -- split at PLAN time, it is syntax
    (sh-simple pk rs)
      (: asns (cap pk)
+        _ (pin sh-substat () 0)          ; ⚠ ahead of BOTH expansions -- see below
         argv (catmap sh-fields (cup pk))
         (? (! (two? argv))
-           (: _ (each asns sh-doasn) _ (pin sh-status () 0) 0)
+           ; no command name: POSIX says the status is the LAST $( ) performed,
+           ; and the words expand before the assignments do -- so `v=1 $(exit 3)`
+           ; is 3 and `v=$(exit 2) $(exit 3)` is 2. none ran leaves the clean 0
+           (: _ (each asns sh-doasn)
+              st (sh-substat ())
+              _ (pin sh-status () st)
+              (sh-echk st))
            (: saves (map sh-tmpset asns)
               r (sh-simple2 argv rs)
               _ (each saves sh-tmprestore)
@@ -455,11 +462,11 @@
               _ (each (+ pfds ofds) fdclose)
               _ (sh-hwrite wrs)
               pids)))
+   (sh-capst sts)                              ; the LAST stage's status, a signal folded down
+     (? (! (two? sts)) 1
+        (: st (last sts) (? (&& (charm? st) (< 255 st)) (- st 128) st)))
    (sh-cappipe a wfd)                          ; -> status, waited
-     (: pids (sh-capsimple a wfd)
-        sts (map (\ p (wait p)) pids)
-        (? (! (two? sts)) 1
-           (: st (last sts) (? (&& (charm? st) (< 255 st)) (- st 128) st))))
+     (: pids (sh-capsimple a wfd) (sh-capst (map (\ p (wait p)) pids)))
    (sh-capture a wfd)
      (? !a 0
         (: k (cap a)
@@ -470,12 +477,17 @@
                               (? (= s 0) s (sh-capture (sh-nth a 2) wfd)))
               (id? k 'bg)  (sh-capture (sh-nth a 1) wfd)
               (sh-cappipe a wfd))))
+   ; every lane leaves sh-substat holding this body's status: an assignment with
+   ; no command name answers the LAST one performed (POSIX), so the pin is the
+   ; only way back -- sh-fields sits between here and the reader. 1 up front is
+   ; the floor the three scaring lanes keep.
    (sh-cmdsub text)
-     (: lx (sh-lex text)
+     (: _ (pin sh-substat () 1)
+        lx (sh-lex text)
         (? (id? (cap lx) 'more) (: _ (cmderr "unterminated $( ) body") "")
            (: pr (sh-parse (cup lx))
               (? (! (id? (cap pr) 'ok)) (: _ (cmderr "bad $( ) body") "")
-                 !(cup pr) ""
+                 !(cup pr) (: _ (pin sh-substat () 0) "")      ; $( ) is a clean nothing
                  (: a (cup pr)
                     pp (pipe 0)
                     (? (charm? pp) ""
@@ -490,13 +502,14 @@
                           ; never aborted; now both lanes answer the same.
                           (sh-guarded
                             (\ _ (? seqish
-                                    (: _ (sh-capture a wfd)
+                                    (: st (sh-capture a wfd)
+                                       _ (pin sh-substat () st)
                                        _ (fdclose wfd)
                                        (slurp (fdopen rfd)))
                                     (: pids (sh-capsimple a wfd)
                                        _ (fdclose wfd)
-                                       o (slurp (fdopen rfd))
-                                       _ (each pids (\ p (wait p)))
+                                       o (slurp (fdopen rfd))   ; drain, THEN reap
+                                       _ (pin sh-substat () (sh-capst (map (\ p (wait p)) pids)))
                                        o)))))))))))
    _ (pin sh-subeval () sh-cmdsub)
 

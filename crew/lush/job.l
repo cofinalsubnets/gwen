@@ -29,6 +29,9 @@
    (sh-pgm _) (? (sh-tty ()) 0 (0 - 1))
    (sh-fgm _) (? (sh-tty ()) 1 0)
    sh-status #0                                ; $?: the last foreground status
+   sh-substat #0                               ; the last $( )'s status -- ambient for the
+                                               ; same reason sh-noe is: word.l's expansion
+                                               ; sits between sh-cmdsub and the reader
    sh-curline #0                               ; the source line under eval (job display)
    sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
    sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
