@@ -197,6 +197,11 @@ incremental, each rung shippable, `love.c` staying hand-written until its region
 converted and reverted: the question is no longer "how pure is it" but "what is there to
 generate". a region with no repetition C cannot abstract is not on this list at all.
 
+⚠ **the NUMBERS moved with the re-rank, and git log did not.** commits written before it
+say "rung 4" for the α-equivalence cluster, which is struck below; this list's rung 4 is
+`vbin_fill`. read a rung by its NAME, never by its number, and do not renumber again --
+name the region in a commit message instead.
+
 1. **the five node shapes** -- attributes, `restrict`, the `ret` prefix, `_Static_assert`,
    flexible array members. **landed** -- rung 3 in §what has landed.
 2. **add preprocessor nodes** -- `cpp-if` / `cpp-def`. **landed** -- rung 5 in §what has
