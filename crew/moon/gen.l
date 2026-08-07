@@ -6007,8 +6007,8 @@
        (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (deadlab irf)))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms
-   ; imgforms extras bssforms rodataforms) | 'bad, extras being ((name forms) ..), one per OTHER
-   ; named section.
+   ; imgforms extras bssforms rodataforms) | 'bad, extras being ((name forms ro?) ..), one per
+   ; OTHER named section -- ro? saying the section may go read-only (xro?, below).
    ; a __attribute__((section(NAME))) global lays in a stream of its own. three streams have a
    ; meaning the writer knows: `ai_nifs` needs the linker's __start_/__stop_ bracket around a
    ; packed run for main()'s boot drain, `.image` must be LAST so `love --bake` can grow it at the
@@ -6083,6 +6083,19 @@
               t <>p
               (strs >ss (cat acc `(`('label <p)
                                          `('raw ((bts t ((tally t) - 1) ()) + `(0))))))))
+       ; ..and whether one of them may ride a lane nothing writes: the .rodata rule
+       ; (ro?) asked of EVERY global in it, since flags belong to the section and one
+       ; writable member decides for all. .limine_requests is the live example -- a
+       ; bootloader writes its responses into those blocks, and nothing there is const.
+       ; the const gate comes first so a plain writable section never images anything.
+       (xro? nm)
+        (: (go gs) (? (! (two? gs)) 1
+                      (! ((strm <gs) = nm)) (go >gs)
+                      (! (peep consts <gs ())) ()
+                      (: ge (peep (g 'glob) <gs 0)
+                         b (image1 <gs <>ge <>>ge)
+                         (? (&& (! (bad? b)) (ro? <gs b)) (go >gs) ())))
+           (go (g 'globs)))
        ; the OTHER section names, first-seen in declaration order
        xnames (: (go gs acc) (? (! (two? gs)) (rev acc)
                                 (: s (strm <gs)
@@ -6104,7 +6117,7 @@
           nb (? (|| (bad? cg) (bad? cs)) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
           ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".image" () ()))
           xb (? (bad? ib) 'bad
-                (map (\ nm `(nm (globs (rev (g 'globs)) nm () ()))) xnames))
+                (map (\ nm `(nm (globs (rev (g 'globs)) nm () ()) (xro? nm))) xnames))
           (? (foldl (\ a x (|| a (bad? x))) () `(gb sb zg zs rg rs cg cs nb ib xb)) 'bad
              `((gb + sb) nb ib xb (zg + zs) (rg + rs + cg + cs + (strs (g 'strs) ()))))))
 

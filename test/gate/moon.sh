@@ -294,9 +294,9 @@ moonrun "$ho/.mt2.c" "$ho/.mt1.c" -o "$ho/.lnk6" > /dev/null 2>&1 || fail "moonc
 "$ho/.lnk6"; a=$?
 [ $a -eq 42 ] || fail "named-section lane (two TUs, contiguous, got $a want 42; 1 = the entries were not adjacent)"
 
-# ..and which known lane it travels with is its FLAGS, so all three homes need a
-# gcc TU to say them: mooncc marks every named section writable (it cannot know a
-# table is const), which only ever exercises the data home.
+# ..and which known lane it travels with is its FLAGS. a gcc TU says all three at
+# once -- the code home has no mooncc twin below, since a section a FUNCTION names
+# is executable by construction and never had a flag to get wrong.
 cat > "$ho/.hm1.c" <<'EOF'
 const long __attribute__((section("rotab"))) c1 = 30;
 __attribute__((section("mycode"),noinline)) int f12(int x){ return x + 10; }
@@ -311,6 +311,40 @@ $cc_g -O2 -c -o "$ho/.hm1.o" "$ho/.hm1.c" || fail "gcc -c named sections"
 moonrun "$ho/.hm2.c" "$ho/.hm1.o" -o "$ho/.lnk7" > /dev/null 2>&1 || fail "mooncc link named-section homes"
 "$ho/.lnk7"; a=$?
 [ $a -eq 42 ] || fail "named-section homes (AX->text, A->rodata below data, WA->data; got $a want 42; 1 = rodata did not land below data)"
+
+# ..and mooncc says the read-only one ITSELF: a named section whose every global is
+# const and reloc-free comes out ALLOC-only. one holding an ADDRESS stays writable --
+# the .rodata rule, and gcc's answer too (.data.rel.ro is the lane gcc renames it to,
+# and a section the programmer NAMED cannot be renamed).
+# ⚠ r2's const leads the SPECIFIER run: a declarator-side `void *const r2[]` is no
+# const object here at all (parse.l's cobj?) and never reaches the relocation guard.
+# ⚠ mixtab holds one of each in BOTH orders -- gcc refuses the mix outright ("section
+# type conflict"), we take the writable reading, and a walk that stops at the first
+# member it likes reads as unanimous from whichever end it starts.
+cat > "$ho/.hm3.c" <<'EOF'
+int f13(int);
+struct ent { void *p; long v; };
+const long __attribute__((section("rotab2"))) c2 = 30;
+const struct ent __attribute__((section("reltab"), used)) r2[] = { { (void *) f13, 2 } };
+__attribute__((section("mytab2"))) long w2 = 12;
+const long __attribute__((section("mixtab"), used)) m1 = 5;
+long __attribute__((section("mixtab"), used)) m2 = 6;
+long __attribute__((section("mixtab2"), used)) m3 = 7;
+const long __attribute__((section("mixtab2"), used)) m4 = 8;
+__attribute__((noinline)) int f13(int x){ return x + 10; }
+int main(){ if (r2[0].p != (void *) f13) return 1;
+            return (int)(c2 + w2 + m1 + m2 + m3 + m4 + f13(-36)); }
+EOF
+moonrun "$ho/.hm3.c" -o "$ho/.lnk8" > /dev/null 2>&1 || fail "mooncc link its own const named section"
+"$ho/.lnk8"; a=$?
+[ $a -eq 42 ] || fail "mooncc const named section (got $a want 42; 1 = the relocated entry is wrong)"
+# ⚠ read the home off nm, not off an address comparison: these order by declaration
+# and so agree with the claim whether or not the flags do.
+nm "$ho/.lnk8" > "$ho/.hm3.nm" 2>&1 || fail "nm on the named-flags exe"
+for s in "R c2" "D r2" "D w2" "D m1" "D m2" "D m3" "D m4"; do
+  grep -q " $s\$" "$ho/.hm3.nm" \
+    || fail "mooncc named-section flags: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.hm3.nm")) -- R c2 = const and reloc-free goes ALLOC-only, D r2 = one holding an address keeps its write bit, D m1 = one writable member decides for the whole section"
+done
 
 # ------------------------------------------------- a FOREIGN gcc .o, linked whole
 cat > "$ho/.fgn.c" <<'EOF'
@@ -368,4 +402,4 @@ for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
     || fail "const lane: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.ro.nm"))"
 done
 
-echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"
+echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their const/writable flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"

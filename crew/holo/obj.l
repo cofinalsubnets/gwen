@@ -408,10 +408,11 @@
       `(".bss"    8 3 (o-dalign bssforms) bssforms)
       `("ai_nifs" 1 3 8 nifforms)
       `(".image"  1 3 16 imgforms))
-   ; a named section a COMPILER emits: PROGBITS, allocated and writable, on the
-   ; widest grain its own globals ask for. the descriptor a hand-written lay
-   ; needs is its own business -- it says the flags outright.
-   (objsec-named nm forms) `(nm 1 3 (o-dalign forms) forms)
+   ; a named section a COMPILER emits: PROGBITS on the widest grain its own globals
+   ; ask for, allocated, and writable unless ro says the compiler found every global
+   ; in it const and reloc-free. the descriptor a hand-written lay needs is its own
+   ; business -- it says the flags outright.
+   (objsec-named nm forms ro) `(nm 1 (? ro 2 3) (o-dalign forms) forms)
    ; ..and the CODE twin, for a function that named its own section (love.c's data
    ; sentinels). flags 6 = ALLOC|EXECINSTR, which is also what picks objsecs'
    ; internal-resolve lane; a jump out to .text becomes a relocation, as it must.
