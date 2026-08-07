@@ -30,6 +30,7 @@ extern uint8_t vectors[];
 // a port to other boards would read these from the device tree Limine
 // hands us instead of hardcoding them.
 #define UART_PHYS   0x09000000         // PL011 UART
+#define RTC_PHYS    0x09010000         // PL031 RTC -- inside the UART's 2MiB block
 #define GICD_PHYS   0x08000000         // GICv2 distributor
 #define GICC_PHYS   0x08010000         // GICv2 CPU interface
 #define UART_INTID  33                 // PL011 -> SPI 1 -> INTID 32+1
@@ -119,6 +120,13 @@ static void mmio_map(void) {
 #define UARTICR   0x044                // interrupt clear
 #define FR_RXFE   (1u << 4)            // receive holding register empty
 #define FR_TXFF   (1u << 5)            // transmit holding register full
+
+// --- the wall clock: the PL031 RTC ------------------------------------
+// one register, already UNIX SECONDS, and already mapped: RTC_PHYS shares the 2MiB
+// block mmio_map lays for the UART. the aarch64 counterpart of x86_64's CMOS walk,
+// and a tenth its size -- ⚠ so it must be called AFTER archinit, like everything
+// else that touches device memory here.
+uint64_t k_rtc(void) { return mmio_rd(RTC_PHYS, 0); }
 
 // called once from kmain, just after archinit (so the GIC is up).
 void serial_init(void) {

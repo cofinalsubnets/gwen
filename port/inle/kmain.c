@@ -8,6 +8,11 @@
 #include <string.h>
 
 uint64_t kticks;
+// the timer runs at 100 Hz on both arches (mkvec.l's PIT divisor, aarch64's
+// cntfrq/100), so one tick is this many milliseconds -- the granularity every
+// deadline below rounds up to.
+#define k_tick_ms 10
+static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tick_ms; }
 // Higher-half direct map offset: physical address P is reachable at
 // khhdm + P, copied out of Limine's HHDM response. Set before archinit,
 // so arch code can use it for MMIO.
@@ -63,6 +68,7 @@ static struct font
 
 void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int),
      k_fault_trigger(intptr_t n);
+uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
 #ifdef K_TEST
 void k_qemu_exit(int);
 #endif
@@ -95,6 +101,8 @@ static void limine_to_kboot(void) {
         kboot.ram[kboot.ram_n].base = rr[i]->base,
         kboot.ram[kboot.ram_n].len  = rr[i]->length,
         kboot.ram_n++; }
+  if (date_req.response && date_req.response->timestamp > 0)
+    kboot.date = (uint64_t) date_req.response->timestamp;
   if (fb_req.response && fb_req.response->framebuffer_count) {
     struct limine_framebuffer *g = fb_req.response->framebuffers[0];
     kboot.fb.base     = g->address;
@@ -282,25 +290,33 @@ bool ai_ready(int fd, int events) {
 // reads `revents` back and skips re-asking about every fd it names (love.h). A
 // sweep of the whole block costs one flag read per source and saves the scheduler
 // a walk of the ring per parked task.
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks) {
-  if (n <= 0) { ai_sleep(ticks); return; }
-  uintptr_t deadline = kticks + ticks;
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
+  if (n <= 0) { ai_sleep(ms); return; }
+  uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     int any = 0;
     for (int i = 0; i < n; i++) {
       int r = ai_ready(fds[i].fd, fds[i].events);
       fds[i].revents = r ? fds[i].events : 0;
       any |= r; }
-    if (any || (ticks && kticks >= deadline)) return;
+    if (any || (ms && kticks >= deadline)) return;
     k_wait(); } }
-uintptr_t ai_clock(void) { return kticks; }
 
-// Pure time-wait. ticks=0 means infinite (caller is expected to chain with an
+// ⚠ MILLISECONDS SINCE THE EPOCH, the host's scale exactly (its ai_clock is
+// CLOCK_REALTIME in ms) -- one scale for the scheduler's deadlines, for (clock t),
+// and for every mtime. This used to answer kticks: an uptime in TENTHS OF A SECOND
+// wearing the millisecond name, which made (rest 30) a third of a second and every
+// date a fiction. The date rides kboot (limine's, or the machine's RTC); when
+// nobody knew it, this degrades to milliseconds since boot and says so by reading
+// as 1970.
+uintptr_t ai_clock(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
+
+// Pure time-wait. ms=0 means infinite (caller is expected to chain with an
 // input wait via ai_in->wait, so this should only be hit when no I/O is intended).
-void ai_sleep(uintptr_t ticks) {
-  uintptr_t deadline = kticks + ticks;
+void ai_sleep(uintptr_t ms) {
+  uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
-    if (ticks && kticks >= deadline) break;
+    if (ms && kticks >= deadline) break;
     k_wait(); } }
 
 static const uint8_t
@@ -431,7 +447,9 @@ void free(void *x) { return kfree(x); }
 // g is out of reach at the door that grows a file. On this seat they are the same
 // heap (g->alloc is love.c's ai_libc_alloc -> malloc -> kmallocw, defined above),
 // which is why cbinit already names it directly for the same reason.
-struct k_file { char const *path, *bytes; uintptr_t len; };
+// ⚠ ms is the SOURCE's mtime, baked: the initrd carries no directory, so the date a
+// file was last written on the machine that built it exists nowhere else.
+struct k_file { char const *path, *bytes; uintptr_t len, ms; };
 static struct k_file const kfiles[] = {
 #include "kfs.h"
 };
@@ -440,21 +458,30 @@ static struct k_file const kfiles[] = {
 // be one: a file written and then emptied is {NULL, 0}, which is what a file still
 // in .rodata looks like too, so the flag is the only thing that says which blob to
 // read -- the tree's presence law wearing its C face.
-static struct { unsigned char *bytes; uintptr_t len, cap; bool own; }
+static struct { unsigned char *bytes; uintptr_t len, cap, ms; bool own; }
   kfsw[countof(kfiles)];
 
 // one open file: which row, where in it, and whether writes are allowed. rides the
 // k_source row's `state`; the close door frees it.
 struct k_fh { int i; uintptr_t pos; bool w; };
 
+static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n);
+
+// ⚠ the handle behind an fd, and NOTHING for a row that is not the ramfs's: `state`
+// is per-instance scratch of whatever kind its row's methods please, so the read
+// door is what says it means a file handle. lseek reaches fds it did not open.
 static ai_inline struct k_fh *k_fh(int fd) {
   struct k_source *s = k_source(fd);
-  return s ? s->state : NULL; }
+  return s && s->readn == ram_readn ? s->state : NULL; }
 
 // what row i reads as: the heap copy once there is one, the .rodata blob until then.
 static unsigned char const *k_blob(int i, uintptr_t *len) {
   if (kfsw[i].own) return *len = kfsw[i].len, kfsw[i].bytes;
   return *len = kfiles[i].len, (unsigned char const*) kfiles[i].bytes; }
+
+// the same question for the date: the write's stamp once there is a copy, the
+// bake's until then.
+static uintptr_t k_mtime(int i) { return kfsw[i].own ? kfsw[i].ms : kfiles[i].ms; }
 
 // path -> row. LINEAR and unapologetic: the tree is a few dozen rows in .rodata,
 // and a hash would cost a table the boot has to build before it can open the file
@@ -474,6 +501,7 @@ static bool k_fit(int i, uintptr_t need) {
     if (cap && !p) return false;
     if (n) memcpy(p, kfiles[i].bytes, n);
     kfsw[i].bytes = p, kfsw[i].len = n, kfsw[i].cap = cap, kfsw[i].own = true;
+    kfsw[i].ms = kfiles[i].ms;        // the copy inherits the bake's date; the write stamps it
     return true; }
   if (kfsw[i].cap >= need) return true;
   uintptr_t cap = kfsw[i].cap ? kfsw[i].cap : 64;
@@ -511,6 +539,7 @@ static intptr_t ram_writen(int fd, unsigned char const *src, uintptr_t n) {
   memcpy(kfsw[h->i].bytes + h->pos, src, n);
   h->pos += n;
   if (h->pos > kfsw[h->i].len) kfsw[h->i].len = h->pos;
+  kfsw[h->i].ms = ai_clock();
   return (intptr_t) n; }
 
 static bool ram_ready(int fd) { (void) fd; return true; }
@@ -531,12 +560,12 @@ static int k_fd_free(void) {
       return i; }
   return k_sources_n; }
 
-// open a baked path -> its fd, or -1. mode's first byte only: r read, w truncate,
-// a append. ⚠ NO CREATE: a path that is not baked answers -1 even for w, which is
-// absence and not divergence -- the writable tree (mkdir/unlink/create) is rung 2.
-static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, struct ai_str *mv) {
-  if (!mv->len) return -1;
-  char m = mv->bytes[0];
+// open a baked path -> its fd, or -1. m is r read, w truncate, a append -- the one
+// door under both `open` (which reads it off a mode string) and `openfd` (off the
+// charm host/posix.c spells 0/1/2). ⚠ NO CREATE: a path that is not baked answers
+// -1 even for w, which is absence and not divergence -- the writable tree
+// (mkdir/unlink/create) is rung 2.
+static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, char m) {
   if (m != 'r' && m != 'w' && m != 'a') return -1;
   int i = k_find(pv->bytes, pv->len);
   if (i < 0) return -1;
@@ -548,7 +577,7 @@ static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, struct ai_str 
   // ⚠ the truncate lands LAST, past every way this can still fail: an open that
   // refuses must leave the file exactly as it found it.
   uintptr_t len = 0;
-  if (m == 'w') kfsw[i].own = true, kfsw[i].len = 0;
+  if (m == 'w') kfsw[i].own = true, kfsw[i].len = 0, kfsw[i].ms = ai_clock();
   if (m == 'a') k_blob(i, &len);
   *h = (struct k_fh) { .i = i, .pos = len, .w = m != 'r' };
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
@@ -561,7 +590,8 @@ static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, struct ai_str 
 // exactly, since kore reads these and a wrong one is silent.
 static lvm(lvm_open) {
   if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
-  int fd = k_ramopen(g, (struct ai_str*) Sp[0], (struct ai_str*) Sp[1]);
+  struct ai_str *mv = (struct ai_str*) Sp[1];
+  int fd = mv->len ? k_ramopen(g, (struct ai_str*) Sp[0], mv->bytes[0]) : -1;
   if (fd < 0) goto fail;
   Pack(g);
   struct ai *r = ai_io_alloc(g, fd);
@@ -604,6 +634,151 @@ static lvm(lvm_close) {
   Sp[0] = ZeroPoint;
   Ip += 1;
   ai_musttail return Continue(); }
+
+// --- the file nifs: stat, readdir, lseek, openfd, fdclose -------------------
+// doc/posix.md's conventions exactly, because kore reads these shapes and a wrong
+// one is silent. ⚠ THE TREE IS FLAT: the initrd holds "lib/json.l" and no row for
+// "lib", so a DIRECTORY here is a PREFIX that some path lies under, and its entries
+// are the distinct next components of those paths. Nothing is stored for one, and
+// nothing can be: rung 2's writable tree is what gives a directory an existence of
+// its own.
+#define k_mode_file 0100644            // (& mode 61440) = 32768: a regular file
+#define k_mode_dir  0040755            //                = 16384: a directory
+
+// the prefix a path names, its trailing slashes cut. "" and "." are both the root,
+// as they are on the host, where they name the cwd.
+static uintptr_t k_dirlen(struct ai_str *pv) {
+  uintptr_t n = pv->len;
+  while (n && pv->bytes[n - 1] == '/') n--;
+  return n == 1 && pv->bytes[0] == '.' ? 0 : n; }
+
+// row i's entry name under a prefix of pn bytes -- NULL when the row does not lie
+// under it. A row deeper than one level answers its next COMPONENT, so a
+// subdirectory is named by the paths inside it and by nothing else.
+static char const *k_entry(int i, char const *p, uintptr_t pn, uintptr_t *len) {
+  char const *q = kfiles[i].path;
+  uintptr_t ql = strlen(q);
+  if (pn) {
+    if (ql <= pn + 1 || memcmp(q, p, pn) || q[pn] != '/') return NULL;
+    q += pn + 1, ql -= pn + 1; }
+  uintptr_t k = 0;
+  while (k < ql && q[k] != '/') k++;
+  return *len = k, q; }
+
+// is this prefix a directory, and how new is it? -> its newest child's date, which
+// is the only date a synthesized directory can honestly wear.
+static bool k_dirstat(char const *p, uintptr_t pn, uintptr_t *ms) {
+  bool any = false;
+  *ms = 0;
+  for (int i = 0; i < (int) countof(kfiles); i++) {
+    uintptr_t k;
+    if (!k_entry(i, p, pn, &k)) continue;
+    any = true;
+    if (k_mtime(i) > *ms) *ms = k_mtime(i); }
+  return any; }
+
+// (stat path) -> (size mtime-ms mode ns) | (). ⚠ ns is the ms date times a million,
+// not a finer reading of it: this clock's last hand IS the millisecond (a 100 Hz
+// tick over the boot date), and digits it does not have would be the wrong honesty.
+ai_noinline static struct ai *k_stat(struct ai *g) {
+  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+  struct ai_str *pv = (struct ai_str*) g->sp[0];
+  int i = k_find(pv->bytes, pv->len);
+  uintptr_t size = 0, ms = 0, mode = k_mode_file;
+  if (i >= 0) k_blob(i, &size), ms = k_mtime(i);
+  else if (k_dirstat(pv->bytes, k_dirlen(pv), &ms)) mode = k_mode_dir;
+  else return g->sp[0] = ZeroPoint, g;          // absent -> the real ()
+  if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
+  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm((intptr_t) (ms * 1000000)), ZeroPoint);
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) mode), word(c));
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) ms), word(c));
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) size), word(c));
+  return g->sp[0] = word(c), g; }
+static lvm(lvm_stat) {
+  Pack(g); g = k_stat(g);
+  if (!ai_ok(g)) return ghelp(g);
+  Unpack(g);
+  ai_musttail return Next(1); }
+
+// (readdir path) -> the entry names, one string each, or () -- for a path that is
+// no directory as much as for one that is missing, which is the host's answer too.
+// NO order promised (row order); "." and ".." are not entries here, since a flat
+// tree has no link to hold them.
+ai_noinline static struct ai *k_readdir(struct ai *g) {
+  // ⚠ the prefix is COPIED out: every ai_have below may collect, and the string it
+  // came from is a heap object that moves. The rows are .rodata and never do, which
+  // is why the entries themselves are read in place.
+  char pb[256], nb[128];
+  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+  struct ai_str *pv = (struct ai_str*) g->sp[0];
+  uintptr_t pn = k_dirlen(pv);
+  if (pn >= sizeof pb) return g->sp[0] = ZeroPoint, g;   // longer than any row: absent
+  memcpy(pb, pv->bytes, pn);
+  uintptr_t junk;
+  if (!k_dirstat(pb, pn, &junk)) return g->sp[0] = ZeroPoint, g;
+  g->sp[0] = ZeroPoint;                                 // the accumulator, over the path
+  for (int i = 0; i < (int) countof(kfiles); i++) {
+    uintptr_t k;
+    char const *e = k_entry(i, pb, pn, &k);
+    if (!e) continue;
+    bool seen = false;                                  // one name per entry, not per row
+    for (int j = 0; j < i && !seen; j++) {
+      uintptr_t k2;
+      char const *e2 = k_entry(j, pb, pn, &k2);
+      seen = e2 && k2 == k && !memcmp(e, e2, k); }
+    if (seen || k >= sizeof nb) continue;
+    memcpy(nb, e, k), nb[k] = 0;                        // ai_strof's door is a C string
+    if (!ai_ok(g = ai_strof(g, nb))) return g;          // pushes: name over acc
+    if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+    struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                   g->sp[0], g->sp[1]); // slots re-read post-GC
+    g->sp[1] = word(w);
+    g->sp += 1; }                                       // pop the name
+  return g; }
+static lvm(lvm_readdir) {
+  Pack(g); g = k_readdir(g);
+  if (!ai_ok(g)) return ghelp(g);
+  Unpack(g);
+  ai_musttail return Next(1); }
+
+// (lseek fd off whence) -> the new offset | -1. RAW fds, openfd's lane and never a
+// port's -- a port buffers, and a seek under the buffer desyncs it. whence: 0 SET,
+// 1 CUR, 2 END. ⚠ PAST THE END IS LEGAL and lands there; a write from that offset
+// leaves a gap that reads as zeros (ram_writen), which is the hole POSIX promises.
+static lvm(lvm_lseek) {
+  intptr_t r = -1;
+  struct k_fh *h = (Sp[0] & 1) ? k_fh((int) getcharm(Sp[0])) : NULL;
+  if (h && (Sp[1] & 1)) {
+    uintptr_t len;
+    int wh = (Sp[2] & 1) ? (int) getcharm(Sp[2]) : 0;
+    k_blob(h->i, &len);
+    intptr_t at = getcharm(Sp[1])
+                + (wh == 1 ? (intptr_t) h->pos : wh == 2 ? (intptr_t) len : 0);
+    if (at >= 0) h->pos = (uintptr_t) at, r = at; }
+  Sp[2] = putcharm(r);
+  Sp += 2; ai_musttail return Next(1); }
+
+// (openfd path mode) -> a RAW fd | -1. mode 0 read, 1 write+truncate, 2 append, the
+// charm host/posix.c spells. ⚠ the failure is a bare -1 where the host answers
+// -errno: down here the only failure IS absence, and there is no errno table to
+// name it with -- the sign is what every caller reads either way.
+static lvm(lvm_openfd) {
+  intptr_t m = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
+  Sp[1] = putcharm(!ai_strp(Sp[0]) ? -1
+                   : k_ramopen(g, (struct ai_str*) Sp[0],
+                               m == 1 ? 'w' : m == 2 ? 'a' : 'r'));
+  Sp += 1; ai_musttail return Next(1); }
+
+// (fdclose fd) -> (). openfd's other half. A row nobody opened is already closed,
+// which is why this cannot fail and answers the zero point either way.
+static lvm(lvm_fdclose) {
+  if (Sp[0] & 1) ai_fd_close((int) getcharm(Sp[0]));
+  Sp[0] = ZeroPoint;
+  ai_musttail return Next(1); }
 
 static lvm(ai_kreset) { return k_reset(), g; }
 
@@ -706,6 +881,11 @@ static union u
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
   nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
   nif_close[] = {{lvm_close}, {lvm_ret0}},
+  nif_stat[] = {{lvm_stat}, {lvm_ret0}},
+  nif_readdir[] = {{lvm_readdir}, {lvm_ret0}},
+  nif_lseek[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_lseek}, {lvm_ret0}},
+  nif_openfd[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
+  nif_fdclose[] = {{lvm_fdclose}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
 #endif
@@ -757,6 +937,14 @@ static struct ai_def defs[] = {
   // the name being in the book, so this row is the whole wiring.
   {"open", (intptr_t) nif_open},
   {"close", (intptr_t) nif_close},
+  // the rest of the read surface (rung 1). ⚠ these wear the HOST'S names and the
+  // host's shapes on purpose: kore reads (size mtime mode ns) and a list of entry
+  // strings, and a divergence here would be silent where an absence is loud.
+  {"stat", (intptr_t) nif_stat},
+  {"readdir", (intptr_t) nif_readdir},
+  {"lseek", (intptr_t) nif_lseek},
+  {"openfd", (intptr_t) nif_openfd},
+  {"fdclose", (intptr_t) nif_fdclose},
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
 #endif
@@ -815,6 +1003,10 @@ void kmain(void) {
  limine_to_kboot();
  khhdm = kboot.hhdm;
  archinit();
+ // the wall date, in the one order that can answer on every door: limine's if it
+ // was asked and answered, else the machine's RTC -- which archinit has just made
+ // reachable (the aarch64 read is device memory, and mmio_map lays it).
+ if (!kboot.date) kboot.date = k_rtc();
  serial_init();
  // the heap (meminit) is the only hard requirement. the framebuffer
  // console is optional: when fbinit/cbinit fail -- no Limine

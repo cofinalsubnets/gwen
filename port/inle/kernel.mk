@@ -334,7 +334,7 @@ init-container: host
 # writes the baked initrd, which on the host would be `open` on the real tree. It goes
 # before zz-fin.l, which prints the summary and quits.
 kt = $(filter-out %/io.l %/run.l %/bell.l %/zz-fin.l,$t) \
-  $R/test/kernel/ramfs.l $R/test/zz-fin.l
+  $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP (mk/lib.mk: regenerated every make, rewritten
 # only when the set changes), which is the whole job $(MAKEFILE_LIST) used to do here -- and
 # it did it by re-laying this header, and so rebuilding all eleven kernel objects, on any

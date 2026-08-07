@@ -97,6 +97,39 @@ void serial_init(void) {
 void k_qemu_exit(int code) { k_outl(0xf4, (uint32_t) code); }
 #endif
 
+// --- the wall clock: the mc146818 CMOS RTC ---------------------------
+// Limine answers a boot date; the other two doors (-kernel, UEFI) answer none, so
+// this is what makes (clock 0) and every mtime a DATE rather than an uptime on the
+// door the gate itself rides. -> UNIX SECONDS, or 0 when the chip says nothing.
+static uint8_t cmos(uint8_t r) { return k_outb(0x70, r), k_inb(0x71); }
+static uint32_t unbcd(uint32_t v) { return (v >> 4) * 10u + (v & 15); }
+
+// days since 1970-01-01, civil. the year is shifted to start in March so the leap
+// day lands at its END -- which is why there is no month-length table here.
+static int64_t civil_days(int64_t y, uint32_t m, uint32_t d) {
+  y -= m <= 2;
+  int64_t era = (y >= 0 ? y : y - 399) / 400;
+  uint32_t yoe = (uint32_t) (y - era * 400),                          // 0..399
+           doy = (153 * (m + (m > 2 ? -3u : 9u)) + 2) / 5 + d - 1,    // 0..365
+           doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;               // 0..146096
+  return era * 146097 + (int64_t) doe - 719468; }
+
+uint64_t k_rtc(void) {
+  // ⚠ seconds and minutes live in separate registers, so a read across the tick
+  // answers 10:59:60 -- wait the update out. BOUNDED: an absent chip reads 0xff.
+  for (int i = 0; i < 100000 && cmos(0x0a) & 0x80; i++) {}
+  uint32_t st = cmos(0x0b), s = cmos(0), mi = cmos(2), h = cmos(4),
+           d = cmos(7), mo = cmos(8), y = cmos(9),
+           pm = !(st & 2) && (h & 0x80);        // 12-hour mode flags the afternoon
+  h &= 0x7f;
+  if (!(st & 4)) s = unbcd(s), mi = unbcd(mi), h = unbcd(h), d = unbcd(d),
+                 mo = unbcd(mo), y = unbcd(y);  // BCD unless bit 2 says binary
+  if (!(st & 2)) h = pm ? h % 12 + 12 : h % 12;
+  // no chip, or one nobody set: answer NOTHING rather than a plausible wrong date.
+  if (!mo || mo > 12 || !d || d > 31 || h > 23 || mi > 59 || s > 60) return 0;
+  return (uint64_t) (civil_days(2000 + (int64_t) y, mo, d) * 86400
+                     + h * 3600 + mi * 60 + s); }
+
 void serial_putc(int c) {
   if (c == '\n') serial_putc('\r');
   // bounded spin on "transmit holding register empty" so an absent or

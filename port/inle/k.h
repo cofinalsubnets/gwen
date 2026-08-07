@@ -33,6 +33,11 @@ struct k_boot {
     uint32_t pitch_px;                // pixels per scanline (not bytes)
   } fb;
   bool has_fb;
+  // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an
+  // uptime. Limine answers it; the doors that do not (-kernel, UEFI) fall back to
+  // the machine's RTC in kmain. ⚠ 0 is "nobody knew", not midnight 1970: a stat
+  // then reads as its own uptime, which is wrong but at least visibly so.
+  uint64_t date;
 };
 
 extern struct k_boot kboot;

@@ -17,11 +17,13 @@ Where it stops being enough is named at the foot, with what it would cost.
 framebuffer console through quay, decodes PS/2 scancodes, and runs `((from 'bao 'shell) 0)`.
 Interrupts, the timer, cooperative tasks (`twirl`/`catch`), and fd-parking all work.
 
-It also has a filesystem now — the rung-0 ramfs over a `.rodata` initrd, with `open` and `close`
-in `defs[]` and `use` resolving `lib/<x>.l` off it. `k_sources[]` grows a row per open file.
+It also has a filesystem now — the rung-0 ramfs over a `.rodata` initrd, with the read surface
+whole (`open` `close` `stat` `readdir` `lseek` `openfd` `fdclose`) and `use` resolving
+`lib/<x>.l` off it. `k_sources[]` grows a row per open file. And it has a wall clock: `ai_clock`
+is epoch milliseconds, off the machine's RTC.
 
-Missing: storage (no PCI, no block driver), the rest of the file nifs (`readdir` `stat` `lseek`),
-a wall clock, processes, network.
+Missing: storage (no PCI, no block driver), a writable tree (no create, no `mkdir`, no `unlink`),
+processes, network.
 
 ## the shape it grows into
 
@@ -83,28 +85,51 @@ freestanding kernel with zero prel change, exactly as predicted below: the walk 
 `open` being in the book, and it is. The last law in `ramfs.l` proves it — `json` sits in no
 baked `ai_libs` table on this seat, only in the initrd.
 
-### rung 1 — the file nifs, and `use` lights up for free  (~1 week)
+### rung 1 — the file nifs, and the clock under them  ✅ landed
 
-`readdir` `stat` `lseek` — `open`, `close` and the `ai_fd_close` routing came with rung 0, and
-with them `use` off the ramfs. `salt` (`~/.love/etc/<app>.l`) is presence-gated the same way and
-wants only a `HOME` to answer.
+`stat` `readdir` `lseek`, plus the raw-fd lane `lseek` needs (`openfd` `fdclose`) — `open`,
+`close` and the `ai_fd_close` routing came with rung 0, and with them `use` off the ramfs. Every
+name and every shape is the host's, because kore reads them and a divergence is silent where an
+absence is loud.
 
-* **The wall clock lands here**, because `stat` needs an mtime. `date_at_boot` is *already
-  requested* from limine (`kmain.c:78`) and dropped on the floor; wire it plus `kticks` into
-  `ai_clock`'s epoch and every mtime and build grade starts meaning something.
-* ⚠ `readn`'s contract is the one to honor (`doc/io.md`): **>0 bytes, 0 = nothing waiting, -1 =
-  the end.** A file at EOF answers -1; a pipe with a live writer answers 0. Confusing them is
-  what makes the scheduler spin.
-* *gate:* `test_kernel` per nif; the corpus's `io.l` rejoins the kernel set (`kt` in kernel.mk
-  drops it today for exactly this reason).
+* **The wall clock landed with it, and had to.** `ai_clock` answered `kticks` — an uptime in
+  TENTHS OF A SECOND wearing the millisecond name, so `(rest 30)` slept a third of a second and
+  every date was a fiction. It is milliseconds since the epoch now, the host's scale exactly: the
+  100 Hz tick over a boot date, and `ai_sleep`/`ai_wait_fds` convert at their door — so the
+  corpus's `(rest 30)` sleeps 30 ms, as it always claimed to.
+* ⚠ **The date has to come from the machine, not the bootloader.** `date_at_boot` is wired, but
+  limine answers on one door of three and the gate rides another — so the RTC is read directly:
+  the mc146818 CMOS walk on x86_64 (BCD, 12-hour and update-in-progress all handled, bounded so
+  an absent chip cannot hang the boot), one register of the PL031 on aarch64, which already sits
+  inside the 2MiB block `mmio_map` lays for the UART. Both doors prove it in the gate.
+* ⚠ **A directory is a PREFIX.** The initrd is flat — a row for `lib/json.l` and none for `lib` —
+  so `readdir` answers the distinct next components of every path under a prefix, and `stat` on
+  one synthesizes the dir bits and its newest child's date. Nothing is stored for a directory and
+  nothing can be; rung 2's writable tree is what gives one an existence of its own.
+* **The mtime is baked.** `lcatfs` takes each source's `stat` and lays the ms in the row, since
+  the initrd carries no directory and that date exists nowhere else. A write stamps the copy from
+  the clock, and `k_mtime` reads the copy once there is one — `k_blob`'s question, asked of the
+  date.
+* *gate:* `test/kernel/fs.l`, 24 laws — the four stat fields against a read's own byte count, the
+  dir bits, absence as the real `()`, the root deduped to one entry, `lseek`'s three whences off
+  a raw fd, and the clock read as a 2020s stamp on both arches.
+* **Not here, and the plan was wrong about it:** the corpus's `io.l` cannot rejoin yet. Its file
+  roundtrip writes `/tmp/l-io-test`, which wants **create** — rung 2's, not this rung's. The rest
+  of `io.l` (taps, flows, `sound`) would run today; splitting the file for one law is not worth
+  it, so it rejoins with rung 2.
 
 ### rung 2 — a writable tree  (~1 week)
 
-`mkdir` `rmdir` `unlink` `rename` `chdir` `cwd` `environ` `getenv` `setenv`. The cwd is a kernel
-string; the environment is a tablet. Nothing hard here — it is the rung that makes the ramfs a
-filesystem rather than a read-only bundle.
+**create** first, then `mkdir` `rmdir` `unlink` `rename` `chdir` `cwd` `environ` `getenv`
+`setenv`. The cwd is a kernel string; the environment is a tablet. Nothing hard here — it is the
+rung that makes the ramfs a filesystem rather than a read-only bundle.
 
-* *gate:* kore's fs tools (`ls cp mv rm mkdir touch pwd`) smoke on the K_TEST kernel.
+* ⚠ **A row must be able to exist without a bake behind it.** Today `kfsw[]` is one slot per
+  `kfiles[]` row and `k_find` walks .rodata, so an unbaked path has nowhere to live and `open …
+  "w"` refuses. Create is the change that decouples the two — and it is why a directory can stop
+  being a prefix and start being a thing.
+* *gate:* kore's fs tools (`ls cp mv rm mkdir touch pwd`) smoke on the K_TEST kernel; and
+  `test/io.l` rejoins `kt`, its `/tmp` roundtrip being exactly the law create owes.
 
 ### rung 3 — kore and lush boot  (~1 week)
 
