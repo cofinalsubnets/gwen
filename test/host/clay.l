@@ -305,5 +305,21 @@ here")) = ("// two lines" + nl + "// here" + nl)))
    (assert
     ((one cl-str) = ("char *s = \"a\\n\\\"b\\\\\\001\";" + nl))))
 
+; --- ...and a CHARACTER literal, emit-only: cparse folds one to its number, so it
+; exists for the sites where the number is the wrong thing to read. the two quotes
+; swap roles against a string's -- the apostrophe is the delimiter here and the
+; double quote is not -- and nothing else about the escapes changes.
+(: (ec x) (cs `('gdecl `(`("r" 'int x))))
+   (assert
+    ((ec '(chr 92)) = ("int r = '\\\\';" + nl))
+    ((ec '(chr 39)) = ("int r = '\\'';" + nl))
+    ((ec '(chr 34)) = ("int r = '\"';" + nl))
+    ((ec '(chr 10)) = ("int r = '\\n';" + nl))
+    ((ec '(chr 65)) = ("int r = 'A';" + nl))
+    ((ec '(chr 1)) = ("int r = '\\001';" + nl))
+    ; the shape it was built for: love.c asking whether a symbol is the backslash
+    ((ec '(bin eq (deref (bin + (dot (deref (var "n")) "bytes") (num 0))) (chr 92)))
+     = ("int r = n->bytes[0] == '\\\\';" + nl))))
+
 (puts "clay: ok")
 (putc 10)

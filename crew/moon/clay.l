@@ -39,6 +39,7 @@
 ;   (named "lvm_t")   (const t)        type forms with no cparse counterpart
 ;   (arr t EXPR)                       a symbolic bound -- cparse folds these to numbers,
 ;   (didx EXPR val)                    a GENERATOR wants to say [KCharm], not [2]
+;   (chr 92)                           a character literal, which cparse folds to a number
 ;   (note "text")                      a comment, authored, never captured
 ;   (cpp-def NAME [BODY])              the preprocessor, likewise never captured
 ;   (cpp-undef NAME)   (cpp-if ARMS [ELSE])
@@ -121,7 +122,7 @@
       (blk 1 1) (decl 1 1) (sdecl 1 1) (ret 1 2) (if 2 3) (while 2 2) (for 4 4)
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 4)
-      (num 1 1) (flo 1 1) (str 1 1) (var 1 1) (bin 3 3) (un 2 2) (asn 2 2)
+      (num 1 1) (flo 1 1) (str 1 1) (chr 1 1) (var 1 1) (bin 3 3) (un 2 2) (asn 2 2)
       (post 2 2) (cond 3 3) (comma 2 2) (call 2 2) (deref 1 1) (addr 1 1)
       (dot 2 2) (cast 2 2) (szof 1 1) (init 1 1) (dfield 2 2) (didx 2 2)
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
@@ -244,6 +245,11 @@
        (&& (31 < b) (b < 127)) (string b)
        ("\\" + (oct3 b)))
    (cstrlit s) ("\"" + (join (map (\ i (cesc (s i))) (jot (tally s)))) + "\"")
+   ; a character literal. cparse folds one to its number -- it is compiling -- so this
+   ; is emit-only, and it exists for the sites where the number is the wrong thing to
+   ; read: `n->bytes[0] == '\\'` says what 92 only encodes. the two quotes swap roles
+   ; against a string's, and nothing else about the escapes changes.
+   (cchr b) ("'" + (? (b = 39) "\\'" (b = 34) "\"" (cesc b)) + "'")
 
    ; --- expressions --------------------------------------------------------------
    ; precedence-aware rather than fully parenthesized: this C is CHECKED INTO GIT and
@@ -279,6 +285,7 @@
           (? (id? h 'num) (cnum a)
              (id? h 'flo) (cflo a)
              (id? h 'str) (cstrlit a)
+             (id? h 'chr) (cchr a)
              (id? h 'var) a
              (id? h 'bin) (: p (look binprec a 100)
                               ((ce (el e 2) p) + " " + (look binop a "?") + " " + (ce (el e 3) (p + 1))))

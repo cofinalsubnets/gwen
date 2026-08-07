@@ -23,13 +23,16 @@ count is near its floor; its TRUSTED surface is not, and that is where clay pays
 -> JS backend is a second consumer of the same datum rather than a second implementation,
 and `cc-clay` gives a native leg with no C text at all.
 
-**rungs 0 through 5 have landed** (`crew/moon/clay.l`, `make test_clay`, `mx.l` +
+**rungs 0 through 6 have landed** (`crew/moon/clay.l`, `make test_clay`, `mx.l` +
 `mx.h` + `kinds.h`, the order of work's rung 1 -- the five node shapes -- its rung 3, the
-nif registry, and its rung 2, the preprocessor nodes); the rest is unbuilt.
+nif registry, its rung 2, the preprocessor nodes, and four more node shapes plus
+`tools/clay-g2.l`); the rest is unbuilt. one rung was landed and REVERTED, and it is the
+one that reshaped this doc -- see §the criterion.
 
 ## the state, measured
 
-on the current tree -- `love.c` 8148 lines, `love.h` 508, `crew/moon/clay.l` 505.
+on the current tree -- `love.c` 8232 lines, `love.h` 540, `crew/moon/clay.l` 591.
+⚠ re-measure these rather than quoting them; the previous figure sat here stale by 84.
 
 `make test_clay` reads **63 round-trip, 51 inexpressible, 0 unparsed, 114 files**.
 
@@ -47,7 +50,7 @@ with `note`, `edef` and `sdef` -- never to teach `parse.l` to round-trip it firs
 emit-only nodes must leave the 63/51 reading untouched; that is the check that they really
 are emit-only.
 
-## the criterion
+## the criterion -- GENERATE, DON'T TRANSCRIBE
 
 `port/inle/mkvec.l:4-6` states it, about assembly:
 
@@ -55,8 +58,48 @@ are emit-only.
 > vector slots were `.macro`/`.rept` loops in GAS, and a love loop says the same thing
 > without an assembler's macro language.
 
-that is the REASON, not a filter. under full translation it stops selecting a shortlist
-and starts deciding, per macro, where the abstraction should live.
+**this is the FILTER, and earlier drafts of this doc said it was not.** they ranked the
+slate by purity -- "where is the emitter's oracle strongest" -- and purity is not the
+question. a region earns clay when there is something to GENERATE: a repetition C cannot
+abstract, which in practice means a macro doing a job a macro should not, or a table.
+where C's own abstraction has NOT run out, C is the right medium for C and a conversion is
+a transcription that trades readable C for less readable love.
+
+that mistake was made and paid for. the α-equivalence cluster -- `salpha`/`shash` and the
+beta bridge, 156 lines -- was converted and REVERTED, and the revert is the finding:
+
+* it was chosen for scoring zero on every purity meter. purity selects for EASY TO CONVERT,
+  which is close enough to WORTH CONVERTING to be mistaken for it, and is not the same
+  thing. the region held exactly one abstraction worth sharing (a four-site binder count)
+  against 156 lines of straight transcription.
+* the C was readable and the love was not. `alpha.l` came to 454 lines of nested
+  constructors to lay 313 lines of C where 156 stood.
+* **and the verification win was nil**, which is the part that actually settles it. see
+  §the parse is enough, for verification.
+
+so: before proposing a region, name the repetition. if there is none, the answer is no.
+
+## the parse is enough, for verification
+
+the plan's payoff is VERIFICATION, and for that purpose a region does not need to be
+authored in clay at all -- `cparse` already hands back a faithful clay term. measured on
+the α cluster: **10 of 10 functions round-trip C -> clay -> C with no authoring**, which is
+G1's own criterion applied to a region rather than to `test/cc/`.
+
+the objection that killed the authored version is that a parse arrives POST-CPP: `long`
+for `word`, `92` for `'\\'`, `((struct ai_chain *) a)->a` for `A(a)`, and `#if ai_tco`
+folded away per configuration. every one of those is disqualifying for GENERATION -- love.c
+is one text for many seats and `test_fixpoint` wants the rebuild byte-identical -- and
+none of them is disqualifying for a MODEL. post-cpp is what the compiler actually compiles,
+which is what a theorem should be about, and `cparse-t` takes the arch, so a model can be
+derived per seat instead of pinned to one.
+
+**that asymmetry is the whole rule.** parse-derived clay: fine for verification, fatal for
+generation. authored clay: required for generation, unnecessary for verification. so
+authoring is a GENERATION cost, and a region with nothing to generate should never pay it.
+
+`clay2coq` therefore wants `(cparse ..)` in front of it, not a `.l` per region -- and it
+can have the α cluster, the limb helpers and dtoa today, with no rung spent on any of them.
 
 ## macros -- the question this doc used to get wrong
 
@@ -107,8 +150,12 @@ suit the shower. GENERATE them.
 the five node shapes landed (rung 3 below), so the counted table this section carried is
 gone -- every row is sayable, `__asm__` and `unsigned __int128` were already, and the
 `lvm(...)` definitions took the emit-the-expansion route. the preprocessor followed (§below,
-rung 5), so what remains is one alternative deliberately not built: a declarator-MACRO node
-that would print `lvm(lvm_add)` itself rather than its expansion. rung 9 may still want it.
+rung 5), and four more landed with the α-cluster attempt (§rung 6): a `proto` with a
+signature, an `edef` whose constant names its value and whose tag may be absent, the index
+sugar reaching through `dot`, and a character literal. so what remains is the one
+alternative deliberately not built: a declarator-MACRO node that would print `lvm(lvm_add)`
+itself rather than its expansion -- now the order of work's rung 5, and owed rather than
+optional, since printing the expansion at 184 sites is the criterion pointing backwards.
 
 ## the preprocessor -- the one real design decision
 
@@ -146,70 +193,78 @@ own. don't build it for clay, and don't write it off.
 ## the order of work
 
 incremental, each rung shippable, `love.c` staying hand-written until its region converts
--- exactly how `mx.h` landed.
+-- exactly how `mx.h` landed. **re-ranked** against §the criterion after the α cluster was
+converted and reverted: the question is no longer "how pure is it" but "what is there to
+generate". a region with no repetition C cannot abstract is not on this list at all.
 
 1. **the five node shapes** -- attributes, `restrict`, the `ret` prefix, `_Static_assert`,
-   flexible array members. lawed in `test/host/clay.l`. no `love.c` change; G1 must hold at
-   63/51. **landed** -- rung 3 in §what has landed.
+   flexible array members. **landed** -- rung 3 in §what has landed.
 2. **add preprocessor nodes** -- `cpp-if` / `cpp-def`. **landed** -- rung 5 in §what has
    landed.
 3. **the X-macro registry** -- `nifs` / `insts`, route (b): the first region where a macro
    is deleted and the love loop is the better abstraction. **landed** -- rung 4 in §what
    has landed.
-4. **the alpha-equivalence cluster** -- `3574-3609` (partial-application introspection:
-   `fn_partialp`/`fn_base`/`fn_arg`/`fn_src`), `3609-3737` (de Bruijn canonical lambda
-   printing), `5979-6032` (`salpha` + `shash`), `6038-6136` (the beta bridge:
-   `clo_load`/`nf_hash`/`nf_walk`/`clo_eq`). **310 contiguous lines scoring zero on every
-   purity meter** -- the largest such block in the file, and absent from every earlier
-   slate. pure computation, no allocation, so the generated C is BYTE-comparable;
-   `test/spec.l` §comparing-functions (149-165) and §reduction (167-179) already pin every
-   law, with `proof/rocq/spec.v` under them.
-   ⚠ the C is deliberately CONSERVATIVE -- a captured closure vs. a source lambda stays
-   unbridged (`love.c:6036`), so `(: adder (\ a (\ b (+ a b))) ((adder 5) = (\ b (+ b 5))))`
-   answers 0. reproduce that bail exactly; "improving" on it reads as a love bug at G2.
-5. **the bignum magnitude helpers** -- `6295-6415` (raw magnitude primitives), `6415-6488`
-   (operand loading + tier conversions), `6599-6643` (resumable multiply). the banner at
-   `love.c:6295` states the contract: raw magnitude primitives over little-endian limb
-   arrays, callers passing normalized inputs and normalizing outputs via `ai_big_canon` --
-   no love pointers, no allocation.
-   **this is where clay meets a proof that is already standing.** `proof/rocq/big.v` models
-   the bignum lane against stdlib `Z` with a proven decimal codec, extracts it, and
-   `big_drive` FUZZES love's limbs against it. if the limb helpers are clay, `clay2coq` can
-   put the IMPLEMENTATION into Rocq -- upgrading an extraction-and-fuzz bridge to a proof
-   about the code that ships. the largest single verification step this plan offers.
-   gates: `test/bignum.l`, `test_big`.
-6. **dtoa** -- `dg_mul2`/`dg_mul5`/`dg_cmp`/`dg_expand` at `3745-3765` (21 lines, zero
-   imports, the smallest possible end-to-end), then `ai_dtoa2` at `3766-3841`. its oracle
-   is the best in the tree: an EXHAUSTIVE sweep of all 2^32 `float` bit patterns, printed
-   by the original and the generated build, byte-comparing the output STRINGS.
-   `test/roundtrip.l`, `test/show.l`, `test/math.l` already stand.
-7. **`vbin_fill` + the lane table** -- `love.c:7596`, whose body redefines `#define VBF(E)`
-   six times (`7611-7617`) because C cannot abstract "the same loop nest with a different
-   expression". `.macro`/`.rept` in GAS wearing a different hat. the one-datum-two-consumers
-   demo -- see §the seam -- and the theorem `love.c:7602` has been claiming for free
+4. **`vbin_fill` + the lane table** -- `love.c:7596`, whose body redefines `#define VBF(E)`
+   **six times** (`7611-7617`) because C cannot abstract "the same loop nest with a
+   different expression". `.macro`/`.rept` in GAS wearing a different hat, and after the
+   nif registry the clearest remaining case in the file. the one-datum-two-consumers demo
+   -- see §the seam -- and the theorem `love.c:7602` has been claiming for free
    ("mixed/bignum/broadcast falls through to the general loop; results bit-identical"),
    which nothing checks.
    ⚠ those in-function macros mean generated C writes the loop out ~11 times, so
-   BYTE-comparison here is structurally impossible; the AST-vs-AST oracle is immune.
-   then the rest of the family: `vmap1_fill` 7255, `vmap2_fill` 7734, `twin_fill` 7932,
-   `cbin_fill` 7958, `twin_pow_fill` 8011, `twin_build_fill` 8062, `cpart_fill` 8108,
-   `carg_fill` 8206. and `bit_slow` (`love.c:5453`, used 5762), where `doc/io.md` lists
-   unfinished tower work -- negatives should SCARE rather than answer `()` -- so clay lands
-   the fix and the generation together.
-8. **the GC and the heap-image codec** -- `875-1347` (473 lines: `evac_*`/`copy_*` per kind,
-   `gen_wb`, `gen_minor`, `gen_major`, `gen_grow`, `gen_please`, `gcp`) and `4916-5240`
-   (323 lines: the image codec). both score ZERO on every purity meter. earlier drafts
-   excluded the GC on judgment ("it IS the heap"); **that exclusion is withdrawn.** the
-   meter and the judgment disagreed and the meter is the one that can be checked.
-9. **the VM loop and `c0`/`ev`, last** -- `1349-1938` (`c0`, whose function SIGNATURES are
-   macro-generated by `Cata()`/`Ana()`) and `1976-2941` (the VM). they need step 1's nodes
-   plus a declarator-macro story, and they are where a mistake is least visible.
-10. **the lawed injection seam** -- `cc-clay` in `crew/moon/moon.l`, sibling to `cc-parse`
-    (`moon.l:128`): clay in, `clay-ok?`, `clay-tables`, `cgen-obj` (`gen.l:6141`). this is
-    what makes clay a frontend target OTHER MODULES can share, and it enables G3's third
-    leg. `clay-tables` derives `stag` + `sigs`, REUSING `playout` (`parse.l:576`) rather
-    than reimplementing C layout rules. document it in `doc/moon.md`, whose architecture
-    section names only backend seams today.
+   BYTE-comparison here is structurally impossible; the AST-vs-AST oracle (`tools/clay-g2.l`)
+   is immune, and this is the rung it was built for.
+   then the rest of the family, all the same shape: `vmap1_fill` 7255, `vmap2_fill` 7734,
+   `twin_fill` 7932, `cbin_fill` 7958, `twin_pow_fill` 8011, `twin_build_fill` 8062,
+   `cpart_fill` 8108, `carg_fill` 8206. and `bit_slow` (`love.c:5453`, used 5762), where
+   `doc/io.md` lists unfinished tower work -- negatives should SCARE rather than answer
+   `()` -- so clay lands the fix and the generation together.
+5. **the `lvm(..)` declarator, at 184 definition sites** -- `lvm(lvm_add)` expands to
+   `ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, ai_word *Hp,
+   ai_word *restrict Sp)`, and 184 of them is the most repetitive text in the file. rung 3
+   made the expansion sayable; what is not decided is whether clay should print `lvm(..)`
+   ITSELF -- a declarator-MACRO node -- or its expansion. printing the expansion is a
+   generated region 184 signatures longer than the one it replaces, which is the criterion
+   pointing the other way, so the node is probably owed. settle that before rung 7.
+6. **`c0`'s `Cata()`/`Ana()` signatures** -- `love.c:1349-1938`, where the function
+   SIGNATURES are macro-generated. same shape as rung 5 and the same open question, on a
+   smaller surface; a good place to answer it.
+7. **the VM loop, last** -- `1976-2941`. 97 threading macros, but §macros measured them:
+   they are mostly CALL-SHAPED and need no grammar, so most of the loop is transcription
+   and does not qualify. what qualifies is whatever survives rungs 5-6, and the honest
+   answer today is "not obviously anything". it is also where a mistake is least visible.
+8. **the lawed injection seam** -- `cc-clay` in `crew/moon/moon.l`, sibling to `cc-parse`
+   (`moon.l:128`): clay in, `clay-ok?`, `clay-tables`, `cgen-obj` (`gen.l:6141`). this is
+   what makes clay a frontend target OTHER MODULES can share, and it enables G3's third
+   leg. `clay-tables` derives `stag` + `sigs`, REUSING `playout` (`parse.l:576`) rather
+   than reimplementing C layout rules. document it in `doc/moon.md`, whose architecture
+   section names only backend seams today.
+   ⚠ this is independent of every rung above it: it is about clay as an INPUT, and nothing
+   in it asks a region to be authored.
+
+### struck from the slate, and why
+
+these were ranked by purity and are transcription targets. §the parse is enough shows
+`clay2coq` can have all of them TODAY through `(cparse ..)`, with no rung spent:
+
+* **the α-equivalence cluster** -- `salpha`/`shash` and the beta bridge. converted, then
+  reverted; the record is in §the criterion. `test/spec.l` §comparing-functions and
+  §reduction pin its laws, `proof/rocq/spec.v` sits under them, and the parse hands
+  `clay2coq` the term.
+* **the bignum magnitude helpers** -- the raw limb primitives, operand loading, resumable
+  multiply. `proof/rocq/big.v` already models the lane against stdlib `Z` and `big_drive`
+  FUZZES love's limbs against it, and putting the IMPLEMENTATION into Rocq is still the
+  largest single verification step this plan offers -- but that step is `clay2coq` over
+  the PARSE, not a `.l` transcription. ⚠ and it was never byte-exact anyway:
+  `crew/moon/cpp.l` leaves `__SIZEOF_INT128__` undefined, so mooncc-built love.c takes the
+  32-bit limb path and gcc-built takes the 64-bit one.
+* **dtoa** -- `dg_*` and `ai_dtoa2`. its oracle is the best in the tree (an exhaustive
+  sweep of all 2^32 `float` bit patterns) and the oracle is just as good pointed at a
+  parse. ⚠ its tenure is separately in question: it is called only from printer paths, and
+  the printer is queued to move into lisp.
+* **the GC and the heap-image codec** -- 796 lines scoring zero on the purity meter, which
+  is now known to be the wrong meter. the earlier judgement that excluded them ("it IS the
+  heap") happened to reach the right answer for the wrong reason.
 
 ## the seam
 
@@ -262,11 +317,18 @@ why `vbin_fill` earns its place even though it comes later.
   been the thing standing in front of the bug). run over all 114 files of `test/cc/`: that
   makes "expresses arbitrary C" empirical rather than claimed. currently **63 / 51 / 0**.
   ⚠ emit-only additions must not move it.
-* **G2 conversion equivalence** -- for the section being replaced, `(cparse
-  original-section.c) == clay` modulo a stated normalization (strip `note` nodes). this
-  makes a migration CHECKABLE instead of a hand-port. runs once at conversion, kept as a
-  law. rung 2 did exactly this: the love table reproduced all 512 cells the C had compiled,
-  before `love.c` was touched.
+* **G2 conversion equivalence** -- `tools/clay-g2.l`: parse the original translation unit
+  and the converted one WHOLE, and compare the named top-level definitions as TREES.
+  parsing whole is what makes it exact -- both sides meet the same cpp, typedefs and macro
+  expansions, so a surviving difference is a difference in MEANING, which is the comparison
+  a byte diff cannot make when the generator writes `A(l)`, prints `A(l)`, and cpp turns
+  both into the same tree. runs once at a conversion, against a copy of the pre-conversion
+  file; afterwards the regeneration-drift `cmp` in test_clay is what stands.
+  ⚠ it is a GENERATION gate. rung 7 is what it was built for -- where the six `VBF(E)`
+  redefinitions make byte comparison structurally impossible -- and it has no job on a
+  region that is merely being transcribed, because such a region should not be converted.
+  rung 2 did the table version of this: all 512 cells reproduced before `love.c` was
+  touched.
 * **G3 differential** -- the `test/gate/ulp.sh` shape: build the generated C with the system
   cc AND with mooncc, link both into one harness, require byte-identical reports. then the
   `test/gate/ccarch.sh` shape across arm64 and riscv64, because `255e8074` proved TARGETS
@@ -399,6 +461,32 @@ tells about moon. state it this way or not at all.
    lays both sides, so it had nothing left to catch.
    G1 held at 63/51/0, as it must -- an emit-only node adds nothing to round-trip.
 
+6. **four more node shapes, `tools/clay-g2.l`, and a rung landed then REVERTED.** the
+   α-equivalence cluster -- `salpha`/`shash` and the beta bridge, 156 lines -- was
+   converted to `alpha.l` + `alpha.h` and then taken back out. the code is gone; what it
+   bought is this doc's criterion (§the criterion, §the parse is enough) and four shapes
+   that stayed:
+   * a `proto` kept only its NAME (all cparse keeps) and printed `int f();`. it now takes
+     `fn`'s three appended slots, laid by the same `csig`, so a forward declaration cannot
+     drift from the definition it announces.
+   * an `edef`'s constants took the positions C gives them and could not name a value, so
+     `enum { nf_maxcap = 64 }` -- C's spelling for a lone compile-time constant -- was
+     unsayable. ⚠ and a valued constant did not REFUSE: it printed the list's bytes as a
+     name and emitted mojibake. that was a live bug in a committed generator's path.
+   * `dot` spent its arrow on the bracket, so `k[0].ap` printed `(k + 0)->ap`.
+   * there was no character literal, so a function about the backslash symbol compared
+     against `92`.
+   ⚠ **all four are READABILITY, not capability** -- clay could already SAY every one, and
+   that is exactly what made the rung look cheap. it is not a reason to convert a region;
+   it is the tax on converting one that should not be. they are kept because a GENERATION
+   rung still owes readable output, and rungs 4-6 of the order of work will spend them.
+   G1 held at 63/51/0 throughout, as an emit-only widening must.
+   `tools/clay-g2.l` is the durable half: it proved the reverted conversion exact (10/10
+   definitions tree-identical) and caught two real slips on the way -- a stray list
+   constructor, and a `(blk ..)` around statements that stood in the branch directly, a
+   scope the original had no brace for and a C compiler would never have noticed.
+
+
 ## open
 
 * **whole-file capture** -- rung 5 built the preprocessor NODES; capturing love.c's own
@@ -406,5 +494,10 @@ tells about moon. state it this way or not at all.
 * **`love.c.l`'s own shape.** one file or a directory of regions? the generated `love.c` is
   one text either way, but the `.l` side has no constraint forcing it, and the answer
   decides whether a rung's diff is readable.
-* **`clay2coq.l`** -- what turns any of this into a theorem rather than a tidier build. no
-  consumer until rung 5.
+* **`clay2coq.l`** -- what turns any of this into a theorem rather than a tidier build, and
+  after §the parse is enough it is the piece with the most standing value in the plan: it
+  wants `(cparse ..)` in front of it, not a `.l` per region, and it can have the α cluster,
+  the limb helpers and dtoa the day it exists. `proof/rocq/big.v` is the readiest
+  customer -- it already models the bignum lane against stdlib `Z` and fuzzes love's limbs
+  against the extraction, and `clay2coq` is what upgrades that to a proof about the code
+  that ships.
