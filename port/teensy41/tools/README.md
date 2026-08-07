@@ -7,11 +7,11 @@ PJRC bootloader chip on the board accepts it directly.
 
 ## Producing the image
 
-The `Makefile` runs `llvm-objcopy -O ihex` on the linked ELF to make
-`$R/out/teensy41/love.hex`. The flashable layout (FlexSPI config block at
-`0x60000000`, IVT at `0x60001000`, boot data, then code) is established by the
-linker script (`../teensy41.lds`) and the boot structs in `../teensy41.c`, so
-objcopy is the whole "packer".
+The `Makefile` runs `ocopy.l -O ihex` -- `crew/holo/copy.l`, our own objcopy --
+on the linked ELF to make `$R/out/teensy41/love.hex`. The flashable layout
+(FlexSPI config block at `0x60000000`, IVT at `0x60001000`, boot data, then
+code) is established by `../tlink.l`'s memory map and the blocks `../mkboot.l`
+lays, so the flatten is the whole "packer".
 
 ## Flashing
 

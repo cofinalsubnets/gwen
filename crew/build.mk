@@ -17,7 +17,7 @@
 # lush rides the cat too (before cook.l: cook's $(wildcard) presence-guard then
 # reads sh-glob bare): `kore sh` and a /bin/sh argv0 symlink are the shell --
 # the distro's one-binary userland closes over its own console.
-korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/kore/kore.l
+korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
 # mooncc: the C compiler is its OWN app, NOT baked into the kore cat -- a cc edit rebuilds
 # only mooncc (never kore), so an kore rebuild in another session can't tear the compiler.
 # Its own cat: the u-floor (text+core), then asbook splices the boot-registered holo
@@ -123,7 +123,7 @@ distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/kore/diff.l lib/dns.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
-            crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
+            crew/holo/link.l crew/holo/copy.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/seed/merge.l \
             crew/seed/http.l crew/seed/seed.l crew/kiosko/kiosko.l crew/seed/up.l
 DIST_ORIGIN ?=

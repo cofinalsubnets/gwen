@@ -2,9 +2,10 @@
 # (the F446's Cortex-M4 has the single-precision FPv4 FPU: the playdate's
 # exact target -- f64 arithmetic softens to __aeabi_* libgcc calls, so the
 # link takes gcc's cortex-m4 hard-float multilib libgcc -- a LIBRARY read by
-# need, not a tool run). boot.o is laid from holo IR by mkboot.l and nlink.l does
-# the link over holo's ldbare32, so the port owes neither gas nor ld nor a linker
-# script. mooncc's system include dir is CWD-relative, so every compile runs from
+# need, not a tool run). boot.o is laid from holo IR by mkboot.l, nlink.l does
+# the link over holo's ldbare32 and ocopy.l the flatten over holo's copy.l, so
+# the port owes no gas, no ld, no linker script and no objcopy.
+# mooncc's system include dir is CWD-relative, so every compile runs from
 # $(R). Output lands in $(R)/out/nucleo446/.
 #
 # Faces: `make` builds firm.bin/.hex (the device firmware; flash with `make
@@ -17,7 +18,6 @@ R := ../..
 o = out/nucleo446
 MOONCC = out/host/mooncc
 mc = $(R)/out/host/mooncc
-OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 lg = `arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -print-libgcc-file-name`
 
 nu_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
@@ -101,13 +101,21 @@ $(R)/$(o)/smoke.elf: $(qobjs) $(R)/$(o)/nlink.l $(R)/out/host/love
 	@echo LINK	$@
 	@cd $(R) && out/host/love $(o)/nlink.l $(o)/smoke.elf $(qobjs:$(R)/%=%) $(lg)
 
+# the flatten is ours too: crew/holo/copy.l reads the linked ELF and writes objcopy's
+# two output formats, byte for byte (`kore objcopy` is the same code with a name).
+copy_l = $(link_l) $(R)/crew/holo/copy.l
+$(R)/$(o)/ocopy.l: $(copy_l)
+	@echo AI	$@
+	@mkdir -p $(R)/$(o)
+	@{ echo "(use 'holo)"; cat $(copy_l); echo '(objcopy >argv)'; } > $@
+
 # .bin byte offsets ARE flash offsets -- verify the boot surface: a valid
 # initial SP inside SRAM and a thumb-bit reset entry inside flash (the two
 # words a bricked-looking board always traces back to).
-$(R)/$(o)/firm.hex: $(R)/$(o)/firm.elf
+$(R)/$(o)/firm.hex: $(R)/$(o)/firm.elf $(R)/$(o)/ocopy.l
 	@echo HEX	$@
-	@$(OBJCOPY) -O ihex $< $@
-	@$(OBJCOPY) -O binary $< $(R)/$(o)/firm.bin
+	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/firm.elf $(o)/firm.hex
+	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/firm.elf $(o)/firm.bin
 	@python3 -c "import struct; b=open('$(R)/$(o)/firm.bin','rb').read(); \
 	  sp=struct.unpack_from('<I',b,0)[0]; entry=struct.unpack_from('<I',b,4)[0]; \
 	  ok = 0x20000000<sp<=0x20020000 and (entry&1)==1 and 0x08000000<entry<0x08080000; \

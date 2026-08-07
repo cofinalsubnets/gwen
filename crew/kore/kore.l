@@ -6,6 +6,7 @@
 ;   kore nc HOST PORT    the netcat (tools/ain.l); nc -l PORT listens
 ;   kore make [F] [T..]  the build tool (crew/cook/cook.l)
 ;   kore as TGT IN OUT   assemble IR forms from IN (x64|arm64) into an ELF at OUT
+;   kore objcopy -O binary|ihex IN OUT   a linked ELF flattened (crew/holo/copy.l)
 ;   kore cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev   the line + field tools + trivia (crew/kore/core.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
@@ -198,6 +199,7 @@
              'make cook-main 'cook cook-main   ; bare: cook.l precedes this file in the cat, bracket-free, so it folds here
              'as as-main
              'ar ar-main 'ld ld-main
+             'objcopy objcopy         ; the applet IS the function: crew/holo/copy.l
              'cat cat-main 'echo echo-main
              'head head-main 'tail tail-main
              'wc wc-main 'sort sort-main
@@ -231,6 +233,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   as TGT IN OUT      assemble IR forms from IN (x64|arm64) into ELF OUT
   ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)
   ld A.o.. -o OUT    holo's static linker (-pie, -t x64|arm64|riscv64, -Ttext)
+  objcopy -O F IN OUT   flatten a linked ELF: F is binary or ihex (Intel HEX)
   cat head tail wc sort uniq tee          the line tools (crew/kore/core.l)
   cut tr nl rev                           the field tools
   grep [-nvcl] PAT [F..]                  the BRE matcher (crew/kore/re.l)

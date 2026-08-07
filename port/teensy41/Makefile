@@ -4,8 +4,11 @@
 # libc, teensy41.c, main.c -- goes through `mooncc -t thumb2`, and boot.o (the
 # ROM-facing FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from
 # holo IR by mkboot.l, the baked heap image by mkimg.l, and tlink.l does the
-# LINK over holo's ldbare32 -- so the port owes no gas, no ld and no linker
-# script; objcopy for the .hex is the last foreign tool here. No libgcc:
+# LINK over holo's ldbare32, and ocopy.l writes the .hex and .bin over holo's
+# copy.l -- so the port owes no gas, no ld, no linker script and no objcopy. The
+# one outside program left is qemu, and only to BAKE the heap image (port/mps2
+# runs the baker; no qemu leaves the blob empty and the device egg-boots).
+# No libgcc either --
 # mooncc's thumb2 lanes are self-contained (zero __aeabi_*). mooncc's system
 # include dir is CWD-relative, so every compile runs from $(R). Output lands
 # in $(R)/out/teensy41/.
@@ -16,7 +19,6 @@
 R := ../..
 o = out/teensy41
 MOONCC = out/host/mooncc
-OBJCOPY ?= $(shell command -v llvm-objcopy 2>/dev/null || echo arm-none-eabi-objcopy)
 
 te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
 lib_h = out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
@@ -113,12 +115,20 @@ $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(R)/out/host/love
 	@echo LINK	$@
 	@cd $(R) && out/host/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
 
+# the flatten is ours too: crew/holo/copy.l reads the linked ELF and writes objcopy's
+# two output formats, byte for byte (`kore objcopy` is the same code with a name).
+copy_l = $(link_l) $(R)/crew/holo/copy.l
+$(R)/$(o)/ocopy.l: $(copy_l)
+	@echo AI	$@
+	@mkdir -p $(R)/$(o)
+	@{ echo "(use 'holo)"; cat $(copy_l); echo '(objcopy >argv)'; } > $@
+
 # .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash.
 # The .bin is the verification surface: byte offsets ARE flash offsets.
-$(R)/$(o)/love.hex: $(R)/$(o)/love.elf
+$(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	@echo HEX	$@
-	@$(OBJCOPY) -O ihex -R .eh_frame $< $@
-	@$(OBJCOPY) -O binary $< $(R)/$(o)/love.bin
+	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
+	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
 	@python3 -c "import sys,struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
 	  fcfb=struct.unpack_from('<I',b,0)[0]; ivt=struct.unpack_from('<I',b,0x1000)[0]; \
 	  entry=struct.unpack_from('<I',b,0x1004)[0]; \
@@ -145,9 +155,9 @@ $(R)/$(o)/psram-test.o: psram-test.c psram.h teensy41.h
 $(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(R)/out/host/love
 	@echo LINK	$@
 	@cd $(R) && out/host/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
-$(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf
+$(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf $(R)/$(o)/ocopy.l
 	@echo HEX	$@
-	@$(OBJCOPY) -O ihex $< $@
+	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex
 .PHONY: psramtest flashpsram
 psramtest: $(R)/$(o)/psram-test.hex
 flashpsram: $(R)/$(o)/psram-test.hex
