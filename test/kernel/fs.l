@@ -44,11 +44,13 @@
    ; readdir hands over the baked names as strings
    (member? "json.l" (readdir d))
    (string? (cap (readdir d)))
-   ; "" and "." are both the root, as they are on the host -- and it holds ONE
-   ; entry, deduped across all thirteen rows that lie under it
+   ; "" and "." are both the root, as they are on the host -- and it holds TWO
+   ; entries: lib, deduped across all thirteen rows that lie under it, and tmp,
+   ; the scratch the rung-2 tree seeds at boot
    (member? "lib" (readdir "."))
    (member? "lib" (readdir ""))
-   (! (two? (cup (readdir ""))))
+   (member? "tmp" (readdir ""))
+   (= 2 (tally (readdir "")))
    ; a file is no directory, and neither is a prefix nothing lies under
    (id? (readdir f) ())
    (id? (readdir "lib/nope") ())

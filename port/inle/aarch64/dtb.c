@@ -46,7 +46,7 @@ void dtb_to_kboot(uint64_t dtb_pa) {
                  + 0xfff) & ~0xfffull;             // page-rounded physical far edge
   kboot.hhdm = a64_hhdm;
   uint32_t ac = 2, sc = 2;                         // root's cell counts (virt: 2/2)
-  int depth = 0, memd = 0;                         // memd: the depth of a memory node we are inside
+  int depth = 0, memd = 0, chos = 0;               // memd/chos: the depth of a memory / chosen node we are inside
   for (;;) {
     uint32_t tok = be32(p); p += 4;
     if (tok == FDT_END) break;
@@ -60,9 +60,11 @@ void dtb_to_kboot(uint64_t dtb_pa) {
       if (depth == 2 && nm[0]=='m' && nm[1]=='e' && nm[2]=='m' && nm[3]=='o'
           && nm[4]=='r' && nm[5]=='y' && (nm[6] == 0 || nm[6] == '@'))
         memd = depth;
+      if (depth == 2 && is(nm, "chosen")) chos = depth;
       continue; }
     if (tok == FDT_END_NODE) {
       if (depth == memd) memd = 0;
+      if (depth == chos) chos = 0;
       depth--;
       continue; }
     if (tok != FDT_PROP) break;                    // a malformed tree: stop, keep what we have
@@ -71,6 +73,9 @@ void dtb_to_kboot(uint64_t dtb_pa) {
     char const *pn = str + nameoff;
     if (depth == 1 && is(pn, "#address-cells")) ac = be32(p);
     if (depth == 1 && is(pn, "#size-cells"))    sc = be32(p);
+    if (chos && depth == chos && is(pn, "bootargs") && len)
+      k_cmdline((char const *) p, len);
+
     if (memd && depth == memd && is(pn, "reg")) {
       uint32_t step = (ac + sc) * 4;
       for (uint32_t o = 0; step && o + step <= len; o += step) {

@@ -17,13 +17,20 @@ Where it stops being enough is named at the foot, with what it would cost.
 framebuffer console through quay, decodes PS/2 scancodes, and runs `((from 'bao 'shell) 0)`.
 Interrupts, the timer, cooperative tasks (`twirl`/`catch`), and fd-parking all work.
 
-It also has a filesystem now — the rung-0 ramfs over a `.rodata` initrd, with the read surface
-whole (`open` `close` `stat` `readdir` `lseek` `openfd` `fdclose`) and `use` resolving
-`lib/<x>.l` off it. `k_sources[]` grows a row per open file. And it has a wall clock: `ai_clock`
-is epoch milliseconds, off the machine's RTC.
+It also has a filesystem now — the ramfs over a `.rodata` initrd, with the read surface whole
+(`open` `close` `stat` `readdir` `lseek` `openfd` `fdclose`), `use` resolving `lib/<x>.l` off
+it, and since rung 2 a **writable tree**: create, `mkdir` `rmdir` `unlink` `rename` `chmod`
+`utime`, a cwd (`chdir`/`cwd`), and the environment (`getenv` `setenv` `environ`).
+`k_sources[]` grows a row per open file. And it has a wall clock: `ai_clock` is epoch
+milliseconds, off the machine's RTC.
 
-Missing: storage (no PCI, no block driver), a writable tree (no create, no `mkdir`, no `unlink`),
-processes, network.
+Since rung 3 it has its userland: the whole kore cat (the fs and line tools, grep/sed, vi,
+lush, cook, the holo toolchain) bakes into the shipped kernel and the boot command line's
+program seat dispatches it — `-append "kore ls lib"` runs the tool and resets, `-append "sh"`
+boots lush, an empty cmdline falls to the console shell with the toolbox warm.
+
+Missing: storage (no PCI, no block driver), processes (spawn/wait/pipes — lush runs builtins
+only until rung 4), network.
 
 ## the shape it grows into
 
@@ -118,28 +125,88 @@ absence is loud.
   of `io.l` (taps, flows, `sound`) would run today; splitting the file for one law is not worth
   it, so it rejoins with rung 2.
 
-### rung 2 — a writable tree  (~1 week)
+### rung 2 — a writable tree  ✅ landed
 
-**create** first, then `mkdir` `rmdir` `unlink` `rename` `chdir` `cwd` `environ` `getenv`
-`setenv`. The cwd is a kernel string; the environment is a tablet. Nothing hard here — it is the
-rung that makes the ramfs a filesystem rather than a read-only bundle.
+**create** came first and pulled the shape with it: the parallel `kfsw[]` array is retired for a
+table of **entries** in the kernel heap (`k_ents`, laid at first touch — every baked row plus
+`tmp`, the scratch a POSIX machine promises and no initrd carries), growing as `open … "w"`/`"a"`
+and `mkdir` add paths the bake never knew. Then the roster: `mkdir` `rmdir` `unlink` `rename`
+`chdir` `cwd` `environ` `getenv` `setenv` — **plus `chmod` and `utime`**, which the plan did not
+name but the gate's own tools ride (kore's `cp` chmods its copy, `touch` utimes). The cwd is a
+kernel string (`""` canonical, worn as `"/"`); the environment is a tablet in the boot text, its
+pairs on slot 0 behind the host's three doors.
 
-* ⚠ **A row must be able to exist without a bake behind it.** Today `kfsw[]` is one slot per
-  `kfiles[]` row and `k_find` walks .rodata, so an unbaked path has nowhere to live and `open …
-  "w"` refuses. Create is the change that decouples the two — and it is why a directory can stop
-  being a prefix and start being a thing.
-* *gate:* kore's fs tools (`ls cp mv rm mkdir touch pwd`) smoke on the K_TEST kernel; and
-  `test/io.l` rejoins `kt`, its `/tmp` roundtrip being exactly the law create owes.
+* **Every path canonicalizes** (`k_canon`) against the cwd before it touches the table: absolute
+  off the root, `.` holds, `..` pops, doubled and trailing slashes fall away. `""` and `"."` are
+  still both the cwd, now by construction.
+* ⚠ **`own` kept its job and grew a sibling.** The entry's `own` is still the bytes' presence
+  bit; `heap` is the same bit for the *path* (create and rename spell names `.rodata` never
+  held), and a NULL path is a retired slot the next create may take. `refs` counts open fds:
+  unlink takes the entry out of the tree at once but the bytes free at the **last close** —
+  POSIX's rule, and what keeps a live handle off freed memory.
+* **A directory can still be a prefix.** The baked tree stays flat (`lib` has no entry); mkdir is
+  what gives one an entry — and an *emptiness* — of its own. `rmdir` refuses ENOTEMPTY while
+  anything lies under either kind.
+* **rename carries a directory whole**: every live path at or under the prefix is respelled, the
+  copies staged before any commit so a refused allocation leaves the tree untouched; a file lane
+  replaces a target file under itself; `a` → `a/b` is EINVAL.
+* **The errno are the host's, by number** (moon's own `<errno.h>`, no errno variable) — kore
+  reads them back, and mv's EXDEV lane proves a shape can matter.
+* ⚠ **Compile-time folding bit the gate, instructively.** A kore main folds its `quit` global at
+  *its* compile, and `test/00-init.l`'s absent-nif fallback answers `()` — so the identity
+  `quit` must be pinned **before** the crew cat loads (`test/kernel/kore0.l`), or every exit
+  code reads `()`. Proved on the host, where the folded *real* `quit` exited the process
+  mid-corpus.
+* ⚠ **The plan was wrong about io.l a second time.** The `/tmp` roundtrip wanted create, as
+  said — but the stdin-unget laws read the **corpus itself** off stdin on the host (the reader's
+  pushed-back delimiter), and on inle `in` is the keyboard while the corpus rides a baked tap,
+  so a bare `(see in)` on a quiet console parks forever. Those two laws gate themselves on the
+  seat (`fault`, a nif only the kernel registers); everything else rejoined whole.
+* *gate:* `test/kernel/wfs.l` (create/unlink/mkdir/rmdir/rename/chdir/chmod/utime/env, the tree
+  restored at the foot); `test/kernel/kore.l` — kore's `ls cp mv rm mkdir touch pwd` driven as
+  mains over the crew cat's fs prefix, baked into `kt` just before it; and `test/io.l` back in
+  the kernel corpus. 3894 on both arches.
 
-### rung 3 — kore and lush boot  (~1 week)
+### rung 3 — kore and lush boot  ✅ landed
 
-Bake the `$(korefiles)` cat as a rodata source and dispatch off the program seat of `cmdline`,
-which is how `out/host/kore` already works. Then lush.
+The whole `$(korefiles)` cat bakes verbatim (`lcatv`, the ktests precedent) into the SHIPPED
+kernel and evals at boot through the stream shell — the corpus's own reads-over-a-tap lane,
+since that is the one door proven on full-surface text. `holo` and `peg` join the kernel's
+`ai_libs` beside uu and bao, because asbook.l opens with `(use 'holo)` and cook.l with
+`(use 'peg)`. The cmdline rides `kboot` from every door — limine's request, PVH's
+`start_info`, the DTB's `/chosen` `bootargs` — and the boot text splits it quote-aware into
+the host's argv shape (`cmdline` = `("love" word..)`, `argv` the twin). Nothing more is
+needed: the members' own seats and kore.l's tail dispatch read `cmdline` exactly as on the
+host, so `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush, `-append "vi
+lib/json.l"` boots the editor, and an empty cmdline loads it all quietly and falls to the
+console shell, the toolbox warm in its session.
 
 * ⚠ **There is no shebang lane on inle.** `kore TOOL ARGS` is a love call into the registry
   tablet, not an exec — the multi-call trick is doing all the work, and it is why kore was the
   right thing to build first.
-* *gate:* `kore ls`, `kore wc`, `vi` on a ramfs file, under `run-*`.
+* **`quit` is the reset door.** A kore main's exit IS the machine's: `(quit n)` resets, which
+  `-no-reboot` turns into a qemu exit — the gate's whole mechanism. The TEST kernel deliberately
+  does not get the row: a failing assert's `(quit 1)` would reset mid-corpus and eat the summary,
+  so 00-init.l's no-op pin keeps serving there and `exit` stays its one door out.
+* ⚠ **The quit nif re-armed bao's file-help, instructively.** file-help folds `quit` at *bao's*
+  define — the wasm note in bao.l, live here: with no quit nif the `(quit 1)` was a no-op and a
+  load-scare welped through; with a real one, the FIRST absent-nif mention in the cat (fs.l's
+  `hardlink`) printed one `;;` face and reset the machine. The fix is 00-init.l's own move made
+  kernel-side: pin a no-op fallback for every host nif the cat mentions and this seat lacks
+  (symlink/hardlink/readlink, the spawn family, pipes and fds, sockets, the tty trio), before
+  the cat loads. The roster is self-retiring — a rung that lands the real nif takes its name
+  off the list by existing. `raw` answers `()` (the console is always a raw tty) and `signal`
+  accepts and ignores, which is what lush's interactive entry wants.
+* **lush boots.** `sh` in the program seat fires main.l's own seat mid-cat, exactly as an sh
+  symlink does on the host; builtins (cd, pwd, export, read ..) ride the rung-2 tree, external
+  commands wait for rung 4's spawn.
+* *gate:* `make test_kboot` — three boots of the shipped x86_64 kernel through the PVH door,
+  each `-append` a real command line: `kore ls lib`, `kore wc lib/json.l` byte-exact against
+  the host `wc`, and `sh -c "cd lib; pwd"`. Opt-in like test_kdiff (a cold cat eval per boot);
+  run it when the kernel or the cat moves. vi is the interactive smoke under `run-*`, and its
+  boot is proven headless — `-append "vi lib/json.l"` draws the hued file over serial. The
+  aarch64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is
+  x86_64's).
 
 ### rung 4 — pipes, `spawn`, `wait`  (~1 week)
 
@@ -231,7 +298,7 @@ Worth stating, because it is the reason this ladder is weeks and not years:
   scripts lean on. A row is free when it carries no method at all — what `k_source_open` zeroes a
   fresh one to and what the ramfs close door puts one back to.
 * **the ramfs's memory ceiling.** `g->budget` bounds the collector at RAM/8; a ramfs growing
-  through the same heap competes with it, and nothing prices that yet. Rung 0 makes this real
-  rather than hypothetical: a write is now the one thing that can take memory the collector was
-  counting on.
+  through the same heap competes with it, and nothing prices that yet. Rung 0 made this real
+  rather than hypothetical, and rung 2 widened it: a write or a create is now the thing that can
+  take memory the collector was counting on.
 * **whether lush wants a `/bin` at all** on a machine where every program is a registry entry.

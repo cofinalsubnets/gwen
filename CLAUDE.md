@@ -274,7 +274,8 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; half is off the boot path and p1.l is the only .l held to the pure lisp subset (egg.l too, via
 ; applyq's driver door). ⚠ prel rides p1: an `ai_evals_` bundling p1's text with a later one puts
 ; both on p0, because readtext picks its reader once per call. coin/rng/q/kanren/uu ride host, love0, wasm and the K_TEST kernel; the playdate workbench
-; takes q + kanren + rune; a shipped kernel takes uu + bao. every frontend opens its session with
+; takes q + kanren + rune; a shipped kernel takes uu + bao + holo + peg and the whole kore cat
+; (inle rung 3: the boot cmdline's program seat dispatches it). every frontend opens its session with
 ; ai_layer_ after boot (bakers never push; wakers always do). ⚠ a layer leans only on what
 ; survives birth -- wrapping a mopped nif means taking it off egg.l's mop list. ⚠ a post-egg
 ; layer cannot add an operator: `operators` is mopped, the grammar closes at the hatch; `fixity`

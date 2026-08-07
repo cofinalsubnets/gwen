@@ -2,7 +2,7 @@
 ; bakes one {path, bytes, len} row per file into out/lib/kfs.h -- and reads come
 ; straight off it; the FIRST write copies the blob into the kernel heap and the file
 ; reads from the copy ever after. So: a baked path opens and reads, an unbaked one
-; answers the zero point (rung 0 has no create, so `w` refuses it too), and a write
+; answers the zero point for a read (a write CREATES since rung 2), and a write
 ; is visible to the NEXT open, because the copy is per FILE and not per fd.
 ;
 ; KERNEL ONLY -- kernel.mk's kt, never $t: on the host `open` is the real
@@ -26,9 +26,11 @@
    (< 0 (tally orig))
    ; ... and reads the same on the second open: a file does not drain
    (= orig (rd f))
-   ; an unbaked path is ABSENT, and stays absent for a write -- no create yet
+   ; an unbaked path is ABSENT for a read; a write CREATES it now (rung 2 --
+   ; wfs.l holds those laws), so here it is unmade the moment it is proved
    (! (port? (open "lib/no-such-thing.l" "r")))
-   (! (port? (open "lib/no-such-thing.l" "w")))
+   (: q (open "lib/no-such-thing.l" "w")
+      (&& (port? q) (: _ (close q) (id? (unlink "lib/no-such-thing.l") ()))))
    ; the write copies the blob out of .rodata, and the NEXT open sees it
    (wr f "hi" "w")
    (= "hi" (rd f))

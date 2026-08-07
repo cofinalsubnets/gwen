@@ -19,11 +19,17 @@
       (= 32  (rt 32))
       (= 255 (rt 255))))
 
-  ; unget returns the byte it pushed.
-  (: _ (see in)   ; pull and discard whatever's at the head
-   (= 99 (unsee in 99)))
+  ; unget returns the byte it pushed. ⚠ KERNEL-GATED: the discard is a real read
+  ; of whatever stdin holds -- on the host that is the CORPUS ITSELF (the reader's
+  ; pushed-back delimiter), but on inle `in` is the KEYBOARD (the corpus rides a
+  ; baked tap), so a quiet console would park this law forever. `fault` is the
+  ; seat probe: a nif only the kernel registers.
+  (? (member? 'fault (names ())) 1
+     (: _ (see in)   ; pull and discard whatever's at the head
+      (= 99 (unsee in 99))))
   ; ...and the pushed byte is then the next read.
-  (= 99 (see in))
+  (? (member? 'fault (names ())) 1
+     (= 99 (see in)))
 
   ; A non-port reads as an already-empty stream: (get x) is -1 (EOF), not the
   ; echoed x, so a read-until-(-1) loop over an absent or misused port terminates
