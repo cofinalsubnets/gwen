@@ -33,7 +33,7 @@
    ; a field of any width, little-endian -- the table below asks for 1, 2, 3, 4 and 8
    (rlew s i n) (? (n < 1) 0 ((s i) + (256 * (rlew s (i + 1) (n - 1)))))
 
-   ; --- the FIELD TABLE: where each class keeps what ld-read reads. ---
+   ; --- the FIELD TABLE: where each class keeps what the readers read. ---
    ; ⚠ the two classes are not one shape at two widths. Elf32_Sym REORDERS (st_info
    ; 4 -> 12, st_shndx 6 -> 14, st_value 8 -> 4), a REL's r_info splits at a BYTE
    ; (type low, sym the top three) where a RELA's splits at a word, and a REL has no
@@ -53,15 +53,22 @@
    ; to it -- the file is the oracle, and it is the only one there is.
    (ld-esz fs s h want sec)
     (? ((ld-f fs s h 'sh-esz) = (ld-n fs want)) 0 (scare 'link-entsize sec))
+   ; the ph- rows are copy.l's, reading a LINKED file where this one reads relocatables --
+   ; the one wire shape, so it stays in the one table. and an Elf32_Phdr is no more the
+   ; 64-bit one narrowed than the symbol above it: every field but p_type moves.
    ;                     ELF64 / RELA                        ELF32 / REL
-   elf64f (ld-cls '((sh-ent 64) (sy-ent 24) (rl-ent 24) (rl-ty 4)
+   elf64f (ld-cls '((sh-ent 64) (sy-ent 24) (rl-ent 24) (rl-ty 4) (ph-ent 56)
+                    (e-entry 24 8) (e-phoff 32 8) (e-phent 54 2) (e-phnum 56 2)
                     (e-shent 58 2) (e-shoff 40 8) (e-shnum 60 2) (e-shstrx 62 2)
+                    (ph-type 0 4) (ph-off 8 8) (ph-pa 24 8) (ph-fsz 32 8)
                     (sh-name 0 4) (sh-type 4 4) (sh-flags 8 8) (sh-off 24 8)
                     (sh-size 32 8) (sh-link 40 4) (sh-info 44 4) (sh-align 48 8) (sh-esz 56 8)
                     (sy-name 0 4) (sy-info 4 1) (sy-shndx 6 2) (sy-val 8 8) (sy-size 16 8)
                     (rl-off 0 8) (rl-kind 8 4) (rl-sym 12 4) (rl-add 16 8)))
-   elf32f (ld-cls '((sh-ent 40) (sy-ent 16) (rl-ent 8) (rl-ty 9)
+   elf32f (ld-cls '((sh-ent 40) (sy-ent 16) (rl-ent 8) (rl-ty 9) (ph-ent 32)
+                    (e-entry 24 4) (e-phoff 28 4) (e-phent 42 2) (e-phnum 44 2)
                     (e-shent 46 2) (e-shoff 32 4) (e-shnum 48 2) (e-shstrx 50 2)
+                    (ph-type 0 4) (ph-off 4 4) (ph-pa 12 4) (ph-fsz 16 4)
                     (sh-name 0 4) (sh-type 4 4) (sh-flags 8 4) (sh-off 16 4)
                     (sh-size 20 4) (sh-link 24 4) (sh-info 28 4) (sh-align 32 4) (sh-esz 36 4)
                     (sy-name 0 4) (sy-info 12 1) (sy-shndx 14 2) (sy-val 4 4) (sy-size 8 4)

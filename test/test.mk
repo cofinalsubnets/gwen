@@ -60,8 +60,8 @@ test_front: $(ho)/front
 # Re-spelling the flags here would drift from the build this claims to gate, and a green
 # would mean nothing. That is also why the link phase skips rather than improvises.
 # ⚠ rp2040 links here now (it did not: its C vector table wanted a named section the
-# 32-bit object writer could not spell). What it still borrows is arm-none-eabi-ld --
-# see the head of port/rp2040/Makefile. ⚠ wasm compiles and does not link HERE: love.js is a tracked
+# 32-bit object writer could not spell), and it links with OUR linker -- the arm-none-eabi-ld
+# it once borrowed is gone. ⚠ wasm compiles and does not link HERE: love.js is a tracked
 # committed artifact, and a gate must not rewrite the working tree. test_wasm owns that link.
 embed_ports = mps2 teensy41 nucleo446 playdate virt rp2040
 # what each linkable port calls its ELF. ⚠ teensy41 is NOT here: its ELF embeds the baked
@@ -530,22 +530,22 @@ test_playdate: host out/host$(hsuf)/mooncc
 	  m=`llvm-readelf -r out/playdate/pdex.elf | grep -c "MOVW\|MOVT"`; \
 	  [ "$$m" -eq 0 ] || { echo "FAIL $$m movw/movt relocs (the loader can't relocate them)"; exit 1; }; \
 	  echo "test_playdate: love.pdx (device half all-mooncc -t thumb2sp, soft f64) -- resolved, word-relocs only"
-# test_teensy41 -- the REAL-METAL cousin's build gate: the whole port compiled by mooncc -t
-# thumb2, LINKED BY US (tlink.l over holo's ldbare32 -- no ld and no linker script, the XIP
-# flash map being the map in that file), the baked heap image wrapped by mkimg.l rather than
-# `ld -r -b binary`, and the ROM-facing boot image VERIFIED (FCFB tag at flash 0, IVT at
-# 0x1000, thumb-bit entry). objcopy for the .hex is the one foreign tool left, so that is
-# what the skip asks after. No RT1062 emulation: test_mps2 is the runtime.
+# test_teensy41 -- the REAL-METAL cousin's build gate, and the one port that asks for NO
+# foreign tool at all: the whole thing compiled by mooncc -t thumb2, LINKED BY US (tlink.l
+# over holo's ldbare32 -- no ld and no linker script, the XIP flash map being the map in
+# that file), the baked heap image wrapped by mkimg.l rather than `ld -r -b binary`, the
+# .hex and .bin written by ocopy.l over holo's copy.l rather than objcopy, and the
+# ROM-facing boot image VERIFIED out of that .bin (FCFB tag at flash 0, IVT at 0x1000,
+# thumb-bit entry). So this one never skips. No RT1062 emulation: test_mps2 is the runtime.
 .PHONY: test_teensy41
 test_teensy41: host out/host$(hsuf)/mooncc
 	@echo TEENSY41 out/teensy41/love.hex
-	@if ! command -v llvm-objcopy >/dev/null 2>&1 && ! command -v arm-none-eabi-objcopy >/dev/null 2>&1; then \
-	   echo "test_teensy41: no objcopy, skipped"; exit 0; fi; \
-	  $(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_teensy41: love (all-mooncc thumb2), OUR linker and no linker script, boot image verified"
+	@$(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
+	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
 # test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate: the whole port compiled by
 # mooncc -t thumb2sp, LINKED BY US (nlink.l over holo's ldbare32, no ld and no linker
-# script -- the F4's memory map is the map in that file), and the boot image VERIFIED
+# script -- the F4's memory map is the map in that file), flattened by ocopy.l over
+# holo's copy.l rather than objcopy, and the boot image VERIFIED
 # (initial SP inside SRAM, thumb-bit reset entry inside flash). arm-none-eabi-gcc is
 # still asked where its cortex-m4 hard-float libgcc.a lives -- the soft-double set the
 # thumb2sp lane calls -- but it is read as an archive, by need, not run.
@@ -558,7 +558,7 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and no linker script, boot image verified"
+	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
 # test_nucleo446_smoke -- the same port RUN. The build gate above reads two words of the
 # image; this one boots the -D QSMOKE twin on qemu's Cortex-M4 and takes its exit code,
 # which is the self-check tally carried out through mkboot.l's sh_exit -- the only lane
@@ -576,16 +576,16 @@ test_nucleo446_smoke: host out/host$(hsuf)/mooncc
 # thumb-bit and inside flash. v6-M is the leanest target mooncc has (no FPU, no divide);
 # test_thumb1 runs that lane's arithmetic against gcc as ~120 differential checks under
 # qemu's M0, and qemu has no RP2040 machine, so this gate builds and never boots.
-# ⚠ the LINK is still arm-none-eabi-ld -- not for the relocations (test_mps2 binds a whole
-# M7 image with them) and no longer for libgcc.a (test_mps2_t1 pulls that archive through
-# our own linker), but for the FLASH/SRAM split: two load regions, where ldbare32 lays one.
+# rlink.l binds it and ocopy.l flattens it, so the skip below asks after the one foreign
+# thing left on this board: gcc's cortex-m0 libgcc, which v6-M needs (no divide, no FPU)
+# and which the link READS as an archive rather than running as a tool.
 .PHONY: test_rp2040
 test_rp2040: host out/host$(hsuf)/mooncc
 	@echo RP2040 out/rp2040/love.bin
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
-	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and no linker script, verified"
+	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, verified"
 # moon-tar -- the userland cousin of test_raw (doc/moon-userland.md): build GNU tar 1.13
 # with mooncc + nolibc + the holo linker (no gcc/glibc/ld) and prove the binary RUNS --
 # cf/xf + czf/xzf roundtrips + system-tar interop. Point TARSRC at a ./configure'd tree.
@@ -675,6 +675,13 @@ test_as: host
 .PHONY: test_elf32
 test_elf32: host
 	@sh test/gate/elf32.sh $(ho)
+# test_objcopy -- crew/holo/copy.l, the flatten, against the objcopy it replaces: a BYTE
+# comparison of both output formats over fixtures our own linker mints plus every ELF on
+# hand. Intel HEX is a wire (a Teensy loader reads it), so nothing softer would do. The
+# gate skips where no objcopy exists -- see the script for what the fixtures are for.
+.PHONY: test_objcopy
+test_objcopy: host
+	@sh test/gate/objcopy.sh $(ho)
 # ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The ONLY net gate driving the real
 # `love tools/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.

@@ -24,11 +24,11 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
-## the inventory (45 tools, 48 names)
+## the inventory (46 tools, 49 names)
 
 | where | tools |
 | --- | --- |
-| kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link) |
+| kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both) |
 | tools/ain.l | nc / ain |
 | crew/cook/cook.l | make / cook |
 | core.l, the line tools | cat echo head tail wc sort uniq tee |
