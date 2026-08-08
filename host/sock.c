@@ -1,7 +1,7 @@
 // host/sock.c -- every socket nif, both address families: TCP/UDP (ain's
 // netcat core and inle's oracle wire), unix-domain connect (lux's X display
-// door) and listen (haven's shore), and SCM_RIGHTS fd-passing (wayland's
-// ancillary data). Host-only, auto-globbed + AI_NIF-registered (no
+// door) and listen (the shore lux moors at). Host-only, auto-globbed +
+// AI_NIF-registered (no
 // love.c/love.h/main.c edit). Every stream nif mirrors main.c's lvm_open:
 // produce an OS fd, hand it to ai_io_alloc (love.c) -> a heap port carrying a
 // close finalizer. Once an fd is a port, READ AND WRITE COME FREE through the
@@ -15,7 +15,7 @@
 // WAITS. getaddrinfo is what used to make connect the exception, and it is gone:
 // `connect` takes a dotted quad, and a NAME resolves one layer up in love, where
 // the lookup itself can park. doc/io.md, the nif floor.
-#define _GNU_SOURCE     // SOCK_CLOEXEC, the SCM_RIGHTS glue
+#define _GNU_SOURCE     // SOCK_CLOEXEC
 #include "love.h"
 #include <unistd.h>
 #include <stdio.h>
@@ -443,17 +443,9 @@ static lvm(lvm_connectu) {
 
 static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
 AI_NIF("connectu", nif_connectu);
-// --- haven's plumbing: the unix listener + SCM_RIGHTS fd-passing ----------------
-// the door compositor clients knock on, and sendmsg/recvmsg with ancillary fds
-// (wayland passes shared-memory fds this way). The buffers those fds name ride
-// the memfd/mapfd nifs (host/mem.c).
-//
+// --- the unix listener ----------------------------------------------------------
 //   (shore path)          -> a listening unix port | () ; unlinks stale first
 //                            (accept/await/close ride the core port nifs)
-//   (wl-recv port b)      -> (n fd..) one recvmsg into cask b, fds in order;
-//                            (0) at eof; () = nothing there / misuse
-//   (wl-send port b n fds)-> () | errno ; sendmsg of b's first n bytes with
-//                            the fd charms in the list as SCM_RIGHTS
 
 // (shore path): bind + listen a unix stream socket at path.
 // leaves EXACTLY ONE net value above the path on every non-OOM path (the
@@ -482,94 +474,5 @@ static lvm(lvm_shore) {
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
-// (wl-recv port b): one nonblocking recvmsg; the byte count then the fds,
-// as a list. () = EAGAIN or misuse; (0) = the peer hung up.
-ai_noinline static struct ai *hv_recv(struct ai *g) {
- intptr_t fd = port_fd(g->sp[0]);
- struct ai_str *b = cask_bytes(g->sp[1]);
- if (fd < 0 || !b || !b->len) { g->sp[0] = ZeroPoint; return g; }
- char cbuf[CMSG_SPACE(8 * sizeof(int))];
- struct iovec iov = { b->bytes, b->len };
- struct msghdr mh = {0};
- mh.msg_iov = &iov, mh.msg_iovlen = 1;
- mh.msg_control = cbuf, mh.msg_controllen = sizeof cbuf;
- ssize_t n = recvmsg((int) fd, &mh, MSG_DONTWAIT | MSG_CMSG_CLOEXEC);
- if (n < 0) { g->sp[0] = ZeroPoint; return g; }
- int fds[8], nf = 0;
-  // glibc's CMSG_NXTHDR compares size_t with ptrdiff_t inside the macro
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
- for (struct cmsghdr *c = CMSG_FIRSTHDR(&mh); c; c = CMSG_NXTHDR(&mh, c))
-    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS
-        && (size_t) c->cmsg_len > (size_t) CMSG_LEN(0)) {
-  size_t k = ((size_t) c->cmsg_len - (size_t) CMSG_LEN(0)) / sizeof(int);
-  for (size_t i = 0; i < k && nf < 8; i++)
-        memcpy(&fds[nf++], (char*) CMSG_DATA(c) + i * sizeof(int), sizeof(int)); }
-#pragma GCC diagnostic pop
- if (!ai_ok(g = ai_have(g, (uintptr_t) (nf + 1) * Width(struct ai_chain)))) return g;
- ai_word tail = ZeroPoint;
- for (int i = nf; i-- > 0;) {
-  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                   putcharm(fds[i]), tail);
-  tail = word(w); }
- struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(n), tail);
- g->sp[0] = word(w);
- return g; }
-
-static lvm(lvm_wlrecv) {
- Pack(g);
- g = hv_recv(g);
- if (!ai_ok(g)) return ghelp(g);
- Unpack(g);
- Sp[1] = Sp[0];
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
-
-// (wl-send port b n fds): sendmsg of the cask's first n bytes, the fd
-// charms riding as SCM_RIGHTS. Retries partial writes without the fds
-// (they travel with the first byte, per the protocol's custom).
-// the msghdr/cmsg scratch (cbuf + fds + &mh -> sendmsg) pins the frame, which
-// would defeat the lvm_ ap's tail-jump (make vmret): the body lives in a plain
-// helper so lvm_wlsend stays a thin sibcall. answers the result word.
-static ai_noinline ai_word hv_wlsend_do(ai_word *sp) {
- intptr_t fd = port_fd(sp[0]);
- struct ai_str *b = cask_bytes(sp[1]);
- intptr_t n = (sp[2] & 1) ? getcharm(sp[2]) : -1;
- ai_word out = putcharm(-1);
- if (fd >= 0 && b && n >= 0 && (uintptr_t) n <= b->len) {
-  int fds[8]; int nf = 0;
-  for (ai_word l = sp[3]; chainp(l) && nf < 8; l = B(l))
-      if (A(l) & 1) fds[nf++] = (int) getcharm(A(l));
-  char cbuf[CMSG_SPACE(8 * sizeof(int))];
-  struct iovec iov = { b->bytes, (size_t) n };
-  struct msghdr mh = {0};
-  mh.msg_iov = &iov, mh.msg_iovlen = 1;
-  if (nf) {
-   mh.msg_control = cbuf, mh.msg_controllen = CMSG_SPACE((size_t) nf * sizeof(int));
-   struct cmsghdr *c = CMSG_FIRSTHDR(&mh);
-   c->cmsg_level = SOL_SOCKET, c->cmsg_type = SCM_RIGHTS;
-   c->cmsg_len = CMSG_LEN((size_t) nf * sizeof(int));
-   memcpy(CMSG_DATA(c), fds, (size_t) nf * sizeof(int)); }
-  out = ZeroPoint;
-  uintptr_t i = 0;
-  while (i < (uintptr_t) n) {
-   ssize_t k = sendmsg((int) fd, &mh, 0);
-   if (k < 0) {
-    if (errno == EINTR) continue;
-    out = putcharm(errno);
-    break; }
-   i += (uintptr_t) k;
-   iov.iov_base = b->bytes + i, iov.iov_len = (size_t) n - i;
-   mh.msg_control = 0, mh.msg_controllen = 0; } }
- return out; }
-static lvm(lvm_wlsend) {
- Sp[3] = hv_wlsend_do(Sp);
- Sp += 3; Ip += 1; ai_musttail return Continue(); }
-
-static union u const
-  nif_shore[]   = {{lvm_shore}, {lvm_ret0}},
-  nif_wlrecv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wlrecv}, {lvm_ret0}},
-  nif_wlsend[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_wlsend}, {lvm_ret0}};
+static union u const nif_shore[] = {{lvm_shore}, {lvm_ret0}};
 AI_NIF("shore", nif_shore);
-AI_NIF("wl-recv", nif_wlrecv);
-AI_NIF("wl-send", nif_wlsend);
