@@ -58,7 +58,10 @@
                 (cat (wlay a row col r w)
                      (wlay b row (? (0 < t) (col + w + 1) col) r t)))))
        (L (L p row col r c)))
-   (wharf-lay p r c) (wlay p 0 0 r c)
+   ; ⚠ () is the EMPTY WHARF, never a berth named () -- wharf-shut answers it when
+   ; the last one leaves, and a door that missed this would hand back one phantom
+   ; berth wearing the empty name. the same guard rides bars and berths below.
+   (wharf-lay p r c) (? (() = p) () (wlay p 0 0 r c))
 
    ; --- the bars: (dir row col len), 'across spanning cols, 'down spanning rows
    ; a bar rides only where a split actually happened -- both halves showable --
@@ -76,10 +79,11 @@
                      (cat (wbars a row col r w)
                           (wbars b row (col + w + 1) r t))))))
        ())
-   (wharf-bars p r c) (wbars p 0 0 r c)
+   (wharf-bars p r c) (? (() = p) () (wbars p 0 0 r c))
 
    ; --- the roster and the hit test -------------------------------------------
-   (wharf-berths p) (? (two? p) (cat (wharf-berths <>>p) (wharf-berths <>>>p)) (L p))
+   (wberths p) (? (two? p) (cat (wberths <>>p) (wberths <>>>p)) (L p))
+   (wharf-berths p) (? (() = p) () (wberths p))
 
    ; which berth owns this cell, or () for none -- a zero-extent one owns nothing,
    ; since its half-open span is empty, so the mouse can never land on the unshowable

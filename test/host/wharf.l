@@ -132,6 +132,13 @@
     ('(beside 50 1 2) = (wharf-shut '(beside 50 1 2) 99))
     (1 = (wharf-shut '(beside 50 1 2) 2))))
 
+; --- 10a. the empty wharf holds nothing, and is not a berth named () ---
+(: _ (assert
+      (() = (wharf-lay () 24 80))
+      (() = (wharf-bars () 24 80))
+      (() = (wharf-berths ()))
+      (() = (wharf-at (wharf-lay () 24 80) 0 0))))
+
 ; --- 11. split then shut is the identity on the plan ---
 (: p '(beside 25 1 (stack 75 2 3))
  _ (assert (p = (wharf-shut (wharf-split p 3 'beside 50 4) 4))))
