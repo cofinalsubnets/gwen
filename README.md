@@ -251,3 +251,10 @@ on the front page):
   application equals its literal lambda: `(adder 5) = (\ x (+ x 5))`. numbers
   never equal closures -- numerals *act* as their lambdas (`(1 x) = x`), but
   `=` stays representation-strict.
+
+### license
+
+love is free: [0BSD](LICENSE). use it, change it, sell it, ship it, fold it
+into anything -- no attribution owed, no notice to keep, nothing asked back.
+the few files that came from elsewhere keep their own terms and are rostered
+in [NOTICE](NOTICE); none of them is copyleft, and none of them reaches love.
