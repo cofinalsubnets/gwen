@@ -1216,6 +1216,13 @@
                                       _ (pin ps 'vlan (ix + 1))
                                       (ty0 + `(ix))))
                              ts3 <>dr
+                             ; a block-scope function DECLARATION (`int f1(char *);` inside
+                             ; a body) declares an EXTERN function -- no storage, no local
+                             ; slot. its sig joins the table, which is also what makes the
+                             ; name a known function at the call; a file-scope prototype
+                             ; said more, so it wins. the entry drops out below.
+                             _ (? (|| (! (fn? ty)) (peep (ps 'sigs) name ())) 0
+                                  (pin (ps 'sigs) name `(<>ty () ())))
                              (? (&& (varr? ty) (|| stat (peekp ts3 "="))) ()
                                 (peekp ts3 "=")
                                 (: r (pinit ps >ts3)
@@ -1230,7 +1237,8 @@
                        (? (! (two? r)) ()
                           (peekp <>r ",") (more (cup (caup r)) (link <r acc))
                           (: rest (want <>r ";")
-                             (? (two? rest) `(`((? stat 'sdecl 'decl) (rev (link <r acc))) rest) ()))))
+                             es (filter (\ e (! (fn? (caup e)))) (rev (link <r acc)))
+                             (? (two? rest) `(`((? stat 'sdecl 'decl) es) rest) ()))))
                    (more ts0 ()))))))
 
    ; asm [volatile] ( "template" [: outputs [: inputs [: clobbers]]] ) ; -- the

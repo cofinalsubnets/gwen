@@ -70,7 +70,6 @@ roster_refuses='
 00219 _Generic
 '
 roster_wrong='
-00078 a block-scope function declaration binds a local SLOT -- the call jumps through garbage
 00104 an unsuffixed constant too big for long must take unsigned long, not wrap
 00178 sizeof(!a) answers 8 -- ! yields a long where C says int
 00205 an implied array bound counts INITIALIZERS, not elements, when braces are elided

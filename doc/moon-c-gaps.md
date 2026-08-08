@@ -131,15 +131,14 @@ value, so nothing announces them but a differential. Found 2026-08-08 building d
 st, xlander, PDCLib, limine and pdxlander (doc/moon-userland.md), and then six more the same
 day when `test_cts` first ran.
 
-### six from an outside corpus
+### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Nine compile
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Eight compile
 clean and answer wrong; three of those are rows elsewhere on this page — the predefine surface,
-the wide literal, `#pragma push_macro`. These six are their own:
+the wide literal, `#pragma push_macro`. These five are their own:
 
 | what | the shape | what it costs |
 |---|---|---|
-| **a block-scope function declaration binds a local slot** | `int main(){ char s=1; int f1(char *); return f1(&s); }` | **SIGSEGV** — the call jumps through an uninitialized frame slot instead of reaching the function. A declaration inside a block is ordinary C and reads as harmless. |
 | **a by-value composite argument in a variadic function** | `int f(struct foo f, int n, ...)` with a MEMORY-class `foo` | the parameter reads garbage; 00140 segfaults. Non-variadic is right, so the fault is the incoming-stack offset past the register save area. x64 only: arm64 and riscv64 refuse the shape outright. |
 | **an implied array bound counts initializers, not elements** | `PT cases[] = { 1,2,3,4,5,6,7, 8,9,10,11,12,13,14 };` over a 7-member `PT` | `sizeof(cases)/sizeof(*cases)` answers **14**, gcc **2**. The elements themselves are laid correctly, so only the length is wrong — and the length is what every `for` loop over the table reads. |
 | **`!` yields a long** | `sizeof(!a)` | 8, where C says the result of `!` is an `int` (4). Same family as the `sizeof` row below: a type lost on the way out of a node. |
