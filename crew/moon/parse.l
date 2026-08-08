@@ -856,6 +856,25 @@
    (ppost ps ts)
     (: r (pprim ps ts)
        (? (! (two? r)) () (ppostfrom ps <r <>r)))
+   ; ⚠ ++x DESUGARS BY DUPLICATING x -- (asn x (bin + x 1)) evaluates the lvalue
+   ; TWICE, so a side-effecting one runs its effect twice and the store lands where
+   ; the load did not: `++*p++` stepped p twice and incremented the byte p had just
+   ; left, which is how pdclib's %f lost its last digit. a CALM lvalue duplicates
+   ; harmlessly and keeps the lanes gen has for it (a bitfield, a pair, a wide --
+   ; `post` refuses all three); anything else rides `post`, which takes the address
+   ; once, and the step is added back to answer the NEW value rather than the old.
+   (calm? e)
+    (? (! (two? e)) 1
+       (: k <e
+          (? (member? k '(var num flo str szof)) 1
+             (member? k '(deref addr dot)) (calm? <>e)
+             (member? k '(un cast)) (calm? <>>e)
+             (k = 'bin) (&& (calm? <>>e) (calm? <>>>e))
+             ())))
+   (preop lv step)
+    (: op (? (step < 0) '- '+)
+       (? (calm? lv) `('asn lv `('bin op lv `('num 1)))
+          `('bin op `('post lv step) `('num 1))))
    ; unary (casts and sizeof(TYPE) fold here)
    (punary ps ts)
     (? (! (two? ts)) ()
@@ -913,9 +932,9 @@
              (tp? t "~") (: r (punary ps >ts)
                             (? (two? r) `(`('un 'bnot <r) <>r) ()))
              (tp? t "++") (: r (punary ps >ts)
-                             (? (two? r) `(`('asn <r `('bin '+ <r `('num 1))) <>r) ()))
+                             (? (two? r) `((preop <r 1) <>r) ()))
              (tp? t "--") (: r (punary ps >ts)
-                             (? (two? r) `(`('asn <r `('bin '- <r `('num 1))) <>r) ()))
+                             (? (two? r) `((preop <r -1) <>r) ()))
              (ppost ps ts))))
    ; the ladder
    (pmul ps ts) (plevel ps punary `(`("*" '*) `("/" '/) `("%" '%)) ts)
