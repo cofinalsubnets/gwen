@@ -31,14 +31,16 @@ one that reshaped this doc -- see §the criterion.
 
 ## the state, measured
 
-on the current tree -- `love.c` 8232 lines, `love.h` 540, `crew/moon/clay.l` 591.
+on the current tree -- `love.c` 8232 lines, `love.h` 540, `crew/moon/clay.l` 601.
 ⚠ re-measure these rather than quoting them; the previous figure sat here stale by 84.
 
-`make test_clay` reads **63 round-trip, 51 inexpressible, 0 unparsed, 114 files**.
+`make test_clay` reads **63 round-trip, 55 inexpressible, 0 unparsed, 118 files**.
 
-⚠ **that 51 is not clay's ceiling.** it measures `cparse`'s lossiness on the way IN, not
+⚠ **that 55 is not clay's ceiling.** it measures `cparse`'s lossiness on the way IN, not
 clay's grammar on the way OUT. a typedef, a struct definition, an enum and a
-`_Static_assert` all land as the empty marker `(tdef)`; a prototype keeps only its name; a
+`_Static_assert` all land as the empty marker `(tdef)`; a block-scope declaration that
+declares no OBJECT -- a bare `struct S {..};`, or a function declaration -- lands as the
+equally empty `(decl ())`; a prototype keeps only its name; a
 function definition has no RETURN TYPE; `static`/`const` are gone. that information is
 real -- it lives in the side tables (`stag`, `sigs`) and the parse state, which `gen.l` is
 HANDED and a shower is not.
@@ -47,7 +49,7 @@ so clay is a SUPERSET of cparse's output with the missing slots APPENDED, and fo
 GENERATION the binding constraint is the EMIT grammar, which is broader and cheap to
 widen. when a form is missing the move is to add an emit-only node, as rungs 2b-2d did
 with `note`, `edef` and `sdef` -- never to teach `parse.l` to round-trip it first. adding
-emit-only nodes must leave the 63/51 reading untouched; that is the check that they really
+emit-only nodes must leave the 63/55 reading untouched; that is the check that they really
 are emit-only.
 
 ## the criterion -- GENERATE, DON'T TRANSCRIBE

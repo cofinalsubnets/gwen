@@ -5554,21 +5554,40 @@
        ; (@ +0, step 8) and 8 xmm registers (@ +48, step 16, low 8 bytes each). named
        ; register-passed params are addressed INSIDE the area, overflow named params on the caller
        ; stack. the xmm registers save unconditionally -- reading an xmm never faults, so no `al`
-       ; guard is needed on this side.
+       ; guard is needed on this side. a named param is classified exactly as `spill` classifies
+       ; it -- a by-value AGGREGATE included: MEMORY class binds to the caller's block, one
+       ; eightbyte is addressed in the save area, and a PAIR touching xmm copies into a slot of
+       ; its own, because the xmm slots step 16 where a pair's eightbytes must sit 8 apart.
        (vaspill ps)
         (: rsa (nslot g 176)
            _ (pin g 'rsa rsa)
            savegp (: (go i acc) (? (5 < i) acc (go (i + 1) (acc + `(`('st 'r4 (rsa + (* 8 i)) (nthr argregs i)))))) (go 0 ()))
            savex  (: (go i acc) (? (7 < i) acc (go (i + 1) (acc + `(`('stsd 'r4 (rsa + 48 + (* 16 i)) (xmmreg i)))))) (go 0 ()))
-           (cls qs gpi xmmi ov env)
-            (? (! (two? qs)) (: _ (pin g 'vagp gpi) _ (pin g 'vaxmm xmmi) `((savegp + savex) env))
+           (cls qs gpi xmmi ov env acc)
+            (? (! (two? qs)) (: _ (pin g 'vagp gpi) _ (pin g 'vaxmm xmmi) `(((savegp + savex) + acc) env))
                (: p <qs pty <>p
-                  (? (flo? pty)
-                      (? (7 < xmmi) (cls >qs gpi xmmi (ov + 8) (link `(<p (16 + ov) pty) env))
-                         (cls >qs gpi (xmmi + 1) ov (link `(<p (rsa + 48 + (* 16 xmmi)) pty) env)))
-                     (? (5 < gpi) (cls >qs gpi xmmi (ov + 8) (link `(<p (16 + ov) pty) env))
-                        (cls >qs (gpi + 1) xmmi ov (link `(<p (rsa + (* 8 gpi)) pty) env))))))
-           (cls ps 0 0 0 ()))
+                  eb2 (aeb2 g pty)
+                  ovf (\ u (cls >qs gpi xmmi (ov + (* 8 (? (stru? pty) (aslots g pty) 1)))
+                                (link `(<p ((ovb g) + ov) pty) env) acc))
+                  (? (amem? g pty) (? (< 8 (asalign g pty)) 'bad (ovf ()))
+                     (d128? pty) (nolane g "a wide param is not carried in a variadic function")
+                     eb2 (: f0 (? (id? <eb2 'sse) 'x 'g) f1 (? (id? <>eb2 'sse) 'x 'g)
+                             gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
+                             xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
+                             (? (|| (6 < (gpi + gpn)) (8 < (xmmi + xmn))) (ovf ())   ; short of registers: the WHOLE aggregate goes to memory
+                                (2 = gpn) (cls >qs (gpi + 2) xmmi ov (link `(<p (rsa + (* 8 gpi)) pty) env) acc)
+                                (: off (nslot g 16)
+                                   st0 (? (id? f0 'g) `(`('st 'r4 off (nthr argregs gpi))) (fstf g 'double 'r4 off (xmmreg xmmi)))
+                                   gp1 (? (id? f0 'g) (gpi + 1) gpi)
+                                   xm1 (? (id? f0 'x) (xmmi + 1) xmmi)
+                                   st1 (? (id? f1 'g) `(`('st 'r4 (off + 8) (nthr argregs gp1))) (fstf g 'double 'r4 (off + 8) (xmmreg xm1)))
+                                   (cls >qs (gpi + gpn) (xmmi + xmn) ov (link `(<p off pty) env) ((acc + st0) + st1)))))
+                     (|| (flo? pty) (id? (aone g pty) 'sse))
+                      (? (7 < xmmi) (ovf ())
+                         (cls >qs gpi (xmmi + 1) ov (link `(<p (rsa + 48 + (* 16 xmmi)) pty) env) acc))
+                     (5 < gpi) (ovf ())
+                     (cls >qs (gpi + 1) xmmi ov (link `(<p (rsa + (* 8 gpi)) pty) env) acc))))
+           (cls ps 0 0 0 () ()))
        ; a VARIADIC function (AAPCS64): a 192-byte save area -- x0..x7 (@ +0, step 8) then q0..q7
        ; (@ +64, step 16; the low 8 bytes carry the double, the rest don't-care). named register
        ; params are addressed INSIDE the area, named overflow params on the caller stack.

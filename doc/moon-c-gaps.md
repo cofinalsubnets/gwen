@@ -133,13 +133,12 @@ day when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Eight compile
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Seven compile
 clean and answer wrong; three of those are rows elsewhere on this page — the predefine surface,
-the wide literal, `#pragma push_macro`. These five are their own:
+the wide literal, `#pragma push_macro`. These four are their own:
 
 | what | the shape | what it costs |
 |---|---|---|
-| **a by-value composite argument in a variadic function** | `int f(struct foo f, int n, ...)` with a MEMORY-class `foo` | the parameter reads garbage; 00140 segfaults. Non-variadic is right, so the fault is the incoming-stack offset past the register save area. x64 only: arm64 and riscv64 refuse the shape outright. |
 | **an implied array bound counts initializers, not elements** | `PT cases[] = { 1,2,3,4,5,6,7, 8,9,10,11,12,13,14 };` over a 7-member `PT` | `sizeof(cases)/sizeof(*cases)` answers **14**, gcc **2**. The elements themselves are laid correctly, so only the length is wrong — and the length is what every `for` loop over the table reads. |
 | **`!` yields a long** | `sizeof(!a)` | 8, where C says the result of `!` is an `int` (4). Same family as the `sizeof` row below: a type lost on the way out of a node. |
 | **an unsuffixed constant too big for `long` wraps** | `x != 0xffffffffffffffff` | C says such a decimal/hex constant takes `unsigned long`; we wrap it to −1 and the comparison goes the other way. |
@@ -219,6 +218,9 @@ other register file, and c-testsuite's 00204 is the probe.
 AAPCS64 closes the gp file behind a stack composite (C.13), riscv64 SPLITS one across the
 register/stack seam, and t32 has no lane at all. Three rules, three rungs; do not fold them.
 
+⚠ **A by-value composite NAMED in a variadic parameter list is x64-only too** (SysV's register
+save area, `vaspill`); `vaspill-a64`/`-rv`/`-t32` refuse the shape, each for its own ABI's reason.
+
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
   doubles/pairs/structs across a t32 VARIADIC seam. love.c reaches none of them.
@@ -268,7 +270,7 @@ three targets, ~60 s each, opt-in on `make dl/c-testsuite` and skipping whole wi
 first run is where twelve rows of the syntax ledger above and six of the wrong-answer rows came
 from. The roster of failures lives in the gate with a cause apiece.
 
-The rest are still recommendations. `test/cc/` holds 115 gcc-differentiated files, so the
+The rest are still recommendations. `test/cc/` holds 118 gcc-differentiated files, so the
 harness exists; this is a corpus question, not an infrastructure one.
 
 - **gcc.c-torture/execute** — ~1500 self-contained self-checking files (`abort()` on failure,

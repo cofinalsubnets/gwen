@@ -523,6 +523,10 @@
    ; degenerate shapes, and both have a faithful clay counterpart waiting for the day
    ; parse.l fills them:
    ;   (tdef)          a typedef / struct definition / _Static_assert, name and shape gone
+   ;   (decl ())       a block-scope declaration that declared no OBJECT -- a bare
+   ;                   `struct S {..};` or a function declaration, whose whole content
+   ;                   parse kept elsewhere (the tag table, the sig table). `int ;` is
+   ;                   what printing it anyway looks like, and it is not C.
    ;   (vastart ap)    va_start's last named parameter, dropped at parse (:733)
    ;   (struct .anon0) an ANONYMOUS tag, which is not a C identifier and so cannot be
    ;                   written down at all. a NAMED tag is sayable: `sdef` defines the
@@ -541,6 +545,8 @@
         (? (! (two? x)) ()
            (&& (id? <x 'tdef) (! (two? >x)))
             (gripe "(tdef) carries nothing -- a typedef, struct or _Static_assert cparse could not keep")
+           (&& (member? <x '(decl sdecl)) (! (two? <>x)))
+            (gripe ("(" + (string <x) + " ()) declared no object -- the tag or the function name is not in the node"))
            (&& (id? <x 'vastart) (! (two? >>x)))
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
            (&& (id? <x 'struct) (! (cident? <>x)))
