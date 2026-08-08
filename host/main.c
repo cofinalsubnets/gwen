@@ -644,6 +644,8 @@ static struct ai *boot(struct ai *g, bool argp) {
     );                                                 // loading prel.l ITSELF misses every prel fn its loader uses.
     g = ai_evals_(g,                                   // ⚠ ITS OWN CALL: readtext picks its reader ONCE per text, and
 #include "prel0.h"                                     // p1 seals hook 0 only when the call above EVALUATES
+    " "
+#include "post0.h"                                     // the printer: this lane hatches no egg, so post rides prel
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
                                                        //   because the corpus reads unify/ufail bare
@@ -658,6 +660,8 @@ static struct ai *boot(struct ai *g, bool argp) {
   );                                                  // reader in love has to exist before prel compiles
   g = ai_evals_(g,
 #include "prel0.h"                                    // prel, read by p1 now that hook 0 is sealed
+    " "
+#include "post0.h"                                    // ..and the printer, which pass 1 below already needs
   );
   g = ai_evals_(g,
     "(use 'bao)"                                       // bao (the shell core): loaded, registered, spliced
@@ -680,7 +684,9 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "prel0.h"
     " "
 #include "ev0.h"
-    );
+    ,
+#include "post0.h"
+);
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
 
 #else
@@ -835,6 +841,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 #include "prel.h"
     " "
 #include "ev.h"
+    ,
+#include "post.h"
     );
   g = ai_evals_(g,
     "(use 'coin)"                                        // the library layers, ALL modules now, in the old eval order: coin

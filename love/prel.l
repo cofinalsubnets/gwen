@@ -70,7 +70,6 @@
    putc (put out)
    puts (say out)
    (putn n) (putbn out n 10)
-   putx (print out)
    (getc _) (see in))
 ; numfn lays the n-fold thread with spin/poke, so applying a fixnum never re-enters the compiler:
 ; n quote-f's then n ap's, cell 0 the printer's source, entry at cell 1.
@@ -269,8 +268,7 @@
              (? (= c -1) () (: _ (unsee p c) (gulp (once (\ u (flow p)))))))
  ; flow at one byte per force, for taking a port slowly where a whole run would read too far
  ; ahead. `in` already flows that way: it holds nothing in hand.
- (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p))))))
- (show x) (: o (jug 0) _ (print o x) (slurp o)))
+ (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p)))))))
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
 ; reads (). test a result with ? or id?, not arithmetic.
@@ -363,7 +361,7 @@
 ; glued runs only -- a monadic-only sigil lives here and has no row above.
 (: monadics (pins (tablet 0)
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
- '% fraction '? bit '$ saturate '! nil? '. dot))
+ '% fraction '? bit '$ saturate '! nil?))   ; `.` is pinned here by post.l, whose dot it is
 ; the factorization law: greedy longest-prefix, no backtracking. every factor but the last is
 ; arity one; the last takes the positional valence. the stock table declares no arity-one row, so
 ; != && >>= :- ?- are each one name; a `fixity`-declared prefix operator is what composes.
@@ -616,7 +614,6 @@
 ; the walk has no row to fold and hands the plain symbol through. != carries the comparison row,
 ; the one thing a binding cannot say. escape mid-list as (!) (.), like any bare operator.
 (: ! nil?)
-(: . dot)
 (: (!= a b) !(a = b))
 ; lisp-compat aliases by head-symbol substitution
 (: seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l)))))

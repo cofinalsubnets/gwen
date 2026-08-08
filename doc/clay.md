@@ -263,10 +263,9 @@ these were ranked by purity and are transcription targets. §the parse is enough
   the PARSE, not a `.l` transcription. ⚠ and it was never byte-exact anyway:
   `crew/moon/cpp.l` leaves `__SIZEOF_INT128__` undefined, so mooncc-built love.c takes the
   32-bit limb path and gcc-built takes the 64-bit one.
-* **dtoa** -- `dg_*` and `ai_dtoa2`. its oracle is the best in the tree (an exhaustive
-  sweep of all 2^32 `float` bit patterns) and the oracle is just as good pointed at a
-  parse. ⚠ its tenure is separately in question: it is called only from printer paths, and
-  the printer is queued to move into lisp.
+* ~~**dtoa**~~ -- SETTLED the other way: the printer moved into lisp (`love/post.l`), and
+  `dg_*` + `ai_dtoa2` went with it. love has bignums, so the digit arrays and their x2/x5
+  carry walks are just exact integer arithmetic there. nothing left to convert.
 * **the GC and the heap-image codec** -- 796 lines scoring zero on the purity meter, which
   is now known to be the wrong meter. the earlier judgement that excluded them ("it IS the
   heap") happened to reach the right answer for the wrong reason.

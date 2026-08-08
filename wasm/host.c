@@ -13,8 +13,8 @@
 #include <string.h>
 #include <stdnoreturn.h>
 
-// the egg's three texts, one per ai_egg_ argument (love.h): the boot stitches the
-// corpus rather than reading it whole -- p0 takes egg + p1, p1 takes the corpus.
+// the egg's four texts, one per ai_egg_ argument (love.h): the boot stitches the
+// corpus rather than reading it whole -- p0 takes egg + p1, p1 takes corpus + post.
 static const char src_egg[] =
 #include "egg.h"
 ;
@@ -25,6 +25,9 @@ static const char src_corpus[] =
 #include "prel.h"
  " "
 #include "ev.h"
+;
+static const char src_post[] =
+#include "post.h"
 ;
 static const char boot_ai[] =
   "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered in ai_init, loaded by
@@ -134,7 +137,7 @@ int ai_init(void) {
   struct ai_def d[] = {{"exit", (ai_word) nif_exit}};
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);
-  F = ai_egg_(F, src_egg, src_p1, src_corpus);
+  F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);
   F = ai_evals_(F, boot_ai);
   // THE SESSION: a fresh writable layer, C-side -- everything the page ever
   // feeds through ai_eval defglobs here, never in the base.

@@ -1802,6 +1802,8 @@ void kmain(void) {
 #include "prel.h"
  " "
 #include "ev.h"
+ ,
+#include "post.h"
  );
   r = ai_evals_(r,
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the

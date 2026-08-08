@@ -354,7 +354,7 @@ struct ai
  *ai_ini(void),
  *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
  *ai_evals_(struct ai*, const char*),
- *ai_egg_(struct ai*, char const*, char const*, char const*),  // (egg, p1, corpus)
+ *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t),   // ⚠ IMMORTAL values only
  *ai_defv(struct ai*, char const*),                // its twin for a LIVE heap value (rides sp[0], stays there)
  *ai_layer_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
