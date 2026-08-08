@@ -1970,7 +1970,18 @@
                            f1 (? (a64? g) (? hfa 'x 'g) (? (id? c1 'sse) 'x 'g))
                            gpn (+ (? (id? f0 'g) 1 0) (? (id? f1 'g) 1 0))
                            xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
-                           (? (|| ((ngp g) < (gpc + gpn)) (8 < (xmmc + xmn))) 'bad   ; register-exhausted 16B struct arg: refuse (the memory-arg lane is unimplemented; rare -- needs 5+ prior int args)
+                           ; register-exhausted (5+ prior int args): SysV sends the WHOLE
+                           ; aggregate to memory -- both eightbytes into the overflow block,
+                           ; where the param side already binds it. x64 only: AAPCS64 closes
+                           ; the gp file behind a stack composite and riscv SPLITS one across
+                           ; the seam, two different rules -- they keep refusing LOUD.
+                           (? (|| ((ngp g) < (gpc + gpn)) (8 < (xmmc + xmn)))
+                               (? (arm? g) 'bad             ; arm? is every non-x64 seat here
+                                  (kls >as (i + 1) gpc xmmc (ovc + 2)
+                                       (link `(`('ov ovc 2)
+                                                ((tor0 g a) +
+                                                 `(`('ld 'r1 'r0 8) `('push 'r1) `('ld 'r1 'r0 0) `('push 'r1))))
+                                             acc)))
                               (: i0 (? (id? f0 'g) gpc xmmc)
                                  gpc1 (? (id? f0 'g) (gpc + 1) gpc)
                                  xmc1 (? (id? f0 'x) (xmmc + 1) xmmc)
@@ -3588,17 +3599,29 @@
    ; newly-dead feeding li sweeps in the same pass.
    (deadst fs)
     (: used (tablet 0) esc (tablet 0)
+       ; ⚠ a slot is read in BYTES, never at one offset: a 16-byte struct param's second
+       ; eightbyte is STORED at off+8 and read at off+12 (that eightbyte's second field),
+       ; so an offset-exact liveness called the store dead and dropped it -- a wrong answer,
+       ; silently. both sides speak the 8-byte SLOT RANGE an access spans instead.
+       (mwid op) (? (member? op '(ld1 ldu1 st1 si1)) 1
+                    (member? op '(ld2 ldu2 st2 si2)) 2
+                    (member? op '(ld4 ldu4 st4 si4 ldss stss)) 4
+                    8)
+       (mark o w) (: (go k) (? ((>> ((o + w) - 1) 3) < k) 1 (: _ (pin used k 1) (go (k + 1))))
+                     (go (>> o 3)))
+       (hit? o w) (: (go k) (? ((>> ((o + w) - 1) 3) < k) () (peep used k ()) 1 (go (k + 1)))
+                     (go (>> o 3)))
        (scan l) (? (! (two? l)) 1
                    (: f <l
                       _ (? (! (two? f)) ()
                            (member? <f ldops9)
-                            (? (<>>f = 'r4) (pin used <>>>f 1) ())
+                            (? (<>>f = 'r4) (mark <>>>f (mwid <f)) ())
                            (member? <f fldops)
-                            (? (<>>f = 'r4) (pin used <>>>f 1) ())
+                            (? (<>>f = 'r4) (mark <>>>f (mwid <f)) ())
                            (<f = 'cmpm)
-                            (? (<>f = 'r4) (pin used <>>f 1) ())
+                            (? (<>f = 'r4) (mark <>>f 8) ())
                            (<f = 'cmprm)
-                            (? (<>>f = 'r4) (pin used <>>>f 1) ())
+                            (? (<>>f = 'r4) (mark <>>>f 8) ())
                            (member? <f '(lea lean))
                             (? (<>>f = 'r4) (pin esc 'y 1) ())
                            ())
@@ -3607,7 +3630,7 @@
        (drop l) (? (! (two? l)) ()
                    (: f <l
                       (? (&& (two? f) (&& (member? <f stops9 || member? <f siops)
-                             (&& (<>f = 'r4) (! (peep used <>>f ())))))
+                             (&& (<>f = 'r4) (! (hit? <>>f (mwid <f))))))
                          (drop >l)
                          (link f (drop >l)))))
        (lisweep l) (? (! (two? l)) ()

@@ -10,6 +10,12 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define AF_LOCAL  1
 #define AF_INET   2
 #define AF_INET6 10
+/* the PF_ twins: the same numbers, the spelling socket(2) callers still use */
+#define PF_UNSPEC AF_UNSPEC
+#define PF_UNIX   AF_UNIX
+#define PF_LOCAL  AF_LOCAL
+#define PF_INET   AF_INET
+#define PF_INET6  AF_INET6
 #define SOCK_STREAM 1
 #define SOCK_DGRAM  2
 #define SOCK_NONBLOCK 2048
@@ -34,6 +40,8 @@ long recv(int, void*, unsigned long, int);
 int setsockopt(int, int, int, void const*, socklen_t);
 int getsockopt(int, int, int, void*, socklen_t*);
 int shutdown(int, int);
+int getsockname(int, struct sockaddr*, socklen_t*);
+int getpeername(int, struct sockaddr*, socklen_t*);
 long recvfrom(int, void*, unsigned long, int, struct sockaddr*, socklen_t*);
 long sendto(int, void const*, unsigned long, int, struct sockaddr const*, socklen_t);
 /* scatter-gather + ancillary (SCM_RIGHTS fd passing), glibc x86-64 layout */

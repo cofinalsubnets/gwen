@@ -24,6 +24,23 @@ and **SQLite 3.45.3** (the amalgamation). Four of them — lua, sqlite, m4, tar 
 **cross-build and run for aarch64 and riscv64**, each with a `make moon-<pkg>[-arm64|-riscv]`
 target over `tools/moon-<pkg>.sh`, and each skipping cleanly without qemu.
 
+Beside them, seven **applications** built 2026-08-08 — not LFS rungs, but the widest sweep of
+ordinary third-party C the compiler has met, and the one that found the `deadst` miscompile:
+
+| | |
+|---|---|
+| **dwm** 6.5, **st** 0.9.3 | build and RUN under Xvfb (dwm tiles a real xterm; st spawns a shell in its pty). X11 clients, so they link foreign — mooncc's holo speaks no `-l`/`-L` and emits no shared objects. |
+| **darkhttpd** 1.17 | builds and serves — a 100KB file byte-identical, `Range` exact, 404s, traversal refused. |
+| **xlander** (1992) | K&R C from before x86-64 existed, builds and draws. |
+| **PDCLib** | 232/233 files, and its own 232 per-function test drivers run with **zero mooncc-only failures** against a gcc-built control. The one refusal is dlmalloc, which reaches glibc's `<pthread.h>`. |
+| **limine** | the host tool builds and runs; the BIOS/UEFI stages are unreachable *by its own configure*, which demands a whole `x86_64-elf` binutils (`ar`/`objcopy`/`ld`) rather than a compiler. |
+| **pdxlander** | the simulator half builds and runs in the Playdate simulator; the device half stops at the SDK's `LCDMakeRect` (doc/moon-c-gaps: the t32 16B composite return). |
+| **Scheme 48** 1.9.3 | configures, ~20 files compile, stops at `pthread_sigmask`. |
+
+⚠ **Nothing here is wired into a gate.** They are an afternoon's sweep with a scratch harness,
+not rungs with oracles — say so before quoting them as coverage. What they left behind is
+doc/moon-c-gaps.md's "accepted, and WRONG" section, which is the part worth keeping.
+
 Notes worth not re-deriving:
 
 - **bzip2** is the ideal first package: in the LFS book, ~7.3k lines of plain C89, and **no

@@ -15,4 +15,5 @@ struct group *getgrgid(gid_t);
 struct group *getgrent(void);
 void          setgrent(void);
 void          endgrent(void);
+int setgroups(size_t, gid_t const*);   /* the supplementary list, dropped before a setuid */
 #endif

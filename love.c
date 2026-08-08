@@ -1961,8 +1961,8 @@ lvm(lvm_scare) {
 // so a name bound to zero stays distinct from no entry at all.
 static union u const no_entry[1];
 // the GC-free C-data emitters (defined below), forward-declared for lvm_index's helpless-miss face.
-static struct ai *ioputs(struct ai*, char const*);
-static struct ai *ioputc(struct ai*, int);
+static struct ai *ioputs(struct ai*, char const*),
+                 *ioputc(struct ai*, int);
 static ai_inline struct ai *zflush(struct ai*);
 // a helpless missing read answers ZeroPoint: absence is a POINT, not a quantity --
 // a number would exponentiate under a numeral, a unit absorbs (what keeps
@@ -3000,7 +3000,7 @@ static ai_inline struct ai *zungetc(struct ai*g, int c) {
  struct ai_io *i = fc->io;
  i->ungetc_buf = putcharm(c);
  return fc->b = c, g; }
-static struct ai *zputc(struct ai*g, int c) {
+static struct ai *ioputc(struct ai*g, int c) {
  if (!ai_ok(g)) return g;
  struct ai *fc = ai_core_of(g);
  struct ai_bio *b = bio_of(g, fc->io);
@@ -3069,19 +3069,24 @@ ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
    if (bio_of(g, i)) ai_io_read_drain(g, i, (unsigned char*) d + u, n - u);
    else vt->readn(g, (unsigned char*) d + u, n - u); } }
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
+
 lvm(lvm_chug) {
  if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
  Pack(g); g = chug_str(g, (struct ai_io*) Sp[0]);
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  ai_musttail return Next(1); }
+
 struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) { return io_wdrain(g, i); }
+
 uintptr_t ai_io_wpending(struct ai *g, struct ai_io *i) {
  struct ai_bio *b = bio_of(g, i);
  return bio_wpending(b) ? (uintptr_t) getcharm(b->wlen) : 0; }
+
 // GC-context finalizer hook: weak no-op; the host overrides with write(2).
 __attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
  (void) fd; (void) p; (void) n; }
+
 struct ci { struct ai_io io; ai_word head; }; // charlist input
 // ⚠ `t` IS A C POINTER RIDING A THREAD WORD, and that is sound for one reason: gcp
 // forwards only what lies inside a from-space, so a .rodata address passes through
@@ -3125,8 +3130,6 @@ static intptr_t ti_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  i->i = putcharm((intptr_t) p);
  return k ? (intptr_t) k : -1; }
 
-static struct ai *to_flush(struct ai *g) { return g; }
-
 // the string sink's write door: land what fits, else DOUBLE and answer 0 having
 // landed nothing. ⚠ the grow and the copy cannot share a call: str0 collects, and
 // src may be the very string being printed -- the caller re-derives and comes back.
@@ -3147,9 +3150,10 @@ static intptr_t to_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  gen_wb(g, (word) o, (word) nb);   // a tenured string-sink takes a fresh young backing -> remember it
  g->sp++;
  return 0; }
+
 struct ai_port_vt const
  ai_ti_vt     = { noop_flush, NULL,      ti_readn, ti_athand },  // a C string: the baked library's door (lvm_lib)
- ai_to_vt     = { to_flush,   to_writen, NULL,     NULL },       // a string sink: prel's `jug`
+ ai_to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
  ai_closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  ai_ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand };  // a charlist: prel's `tap`
 
@@ -3167,7 +3171,7 @@ lvm(lvm_fputc) {
     Unpack(g);
     g->next_wake_at = ai_clock() + 1;
     ai_musttail return Ap(lvm_yield_sw, g); } }
-  if (!ai_ok(g = zputc(g, getcharm(g->sp[1])))) return ghelp(g);
+  if (!ai_ok(g = ioputc(g, getcharm(g->sp[1])))) return ghelp(g);
   Unpack(g); }
  ai_musttail return Nextp(1, 1); }
 
@@ -3186,13 +3190,13 @@ lvm(lvm_fflush) {
  ai_musttail return Next(1); }
 
 // (fputs port s) — write every byte of string-or-cask s; no-op on misuse. bytes_of
-// re-reads each iteration so GC inside zputc can forward it.
+// re-reads each iteration so GC inside ioputc can forward it.
 lvm(lvm_fputs) {
  if (iop(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   g->io = (struct ai_io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
   // the bulk lane when the port has one; a 0 makes one byte of progress through
-  // zputc (its C-local src is the one shape that can grow and land in one breath).
+  // ioputc (its C-local src is the one shape that can grow and land in one breath).
   // ⚠ the direct stroke is only for an EMPTY buffer: going direct past a pending
   // run would overtake it and the stream comes out shuffled.
   intptr_t (*wn)(struct ai**, unsigned char const*, uintptr_t) = g->io->vt->writen;
@@ -3211,7 +3215,7 @@ lvm(lvm_fputs) {
               ? wn(&w, (unsigned char const*) txt(bytes_of(w->sp[1])) + i, l - i) : 0;
    g = w;
    if (k > 0) i += (uintptr_t) k;
-   else g = zputc(g, txt(bytes_of(g->sp[1]))[i++]); }
+   else g = ioputc(g, txt(bytes_of(g->sp[1]))[i++]); }
   if (!ai_ok(g = zflush(g))) return ghelp(g);
   Unpack(g); }
  ai_musttail return Nextp(1, 1); }
@@ -3220,12 +3224,12 @@ static struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o);
 lvm(lvm_fputbn) {
  if (iop(Sp[0])) {
    Pack(g);
-   if (!ai_ok(g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct ai_io*) Sp[0]))) return ghelp(g);
+   g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct ai_io*) Sp[0]);
+   if (!ai_ok(g)) return ghelp(g);
    Unpack(g);
    Sp[2] = Sp[1]; }
  ai_musttail return Nextp(1, 2); }
 
-static struct ai*ioputc(struct ai*g, int c) { return zputc(g, c); }
 static struct ai*ioputs(struct ai*g, char const *s) {
  while (*s) g = ioputc(g, *s++);
  return g; }
@@ -3402,7 +3406,7 @@ struct ai *ai_io_alloc(struct ai *g, int fd) {
   io->f.io.vt = &ai_fd_port_vt;
   io->f.io.ungetc_buf = putcharm(EOF);
   io->f.fd = putcharm(fd);
-  io->rbuf = io->wbuf = 0;                     // never dressed (io_refill/zputc dress lazily)
+  io->rbuf = io->wbuf = 0;                     // never dressed (io_refill/ioputc dress lazily)
   io->rpos = io->rlen = io->wlen = putcharm(0);
   *--g->sp = (word) tagthread(k, n);            // stack slot reserved by the +1 in have()
   struct ai_fz *z = bump(g, Width(struct ai_fz));

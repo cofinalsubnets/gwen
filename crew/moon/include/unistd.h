@@ -27,6 +27,7 @@ int  setgid(unsigned int);
 int  seteuid(unsigned int);
 int  setegid(unsigned int);
 int  chdir(char const*);
+int  chroot(char const*);
 char *getcwd(char*, unsigned long);
 int  access(char const*, int);
 #define F_OK 0

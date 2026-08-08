@@ -21,7 +21,7 @@ uint64_t k_asmops_probe(uint16_t port, uint8_t v) {
   k_int3();
   k_ud2();
   k_divzero();
-  return k_rd_cr2() + k_inb(port); }
+  return k_rd_cr2() + k_inb(port) + k_inl(port); }
 #elif defined(__aarch64__)
 uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_isb();

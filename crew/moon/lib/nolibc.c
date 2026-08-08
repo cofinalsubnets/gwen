@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <setjmp.h>
 #include <poll.h>
+#include <sys/select.h>
 #include <locale.h>
 #include <time.h>
 #include <sys/time.h>
@@ -63,6 +64,7 @@ extern int main(int, char**);
 #define NR_unlinkat        35
 #define NR_nanosleep      101
 #define NR_setgid         144
+#define NR_setgroups      159
 #define NR_setuid         146
 #define NR_geteuid        175
 #define NR_symlinkat       36
@@ -71,6 +73,7 @@ extern int main(int, char**);
 #define NR_mount           40
 #define NR_ftruncate       46
 #define NR_chdir           49
+#define NR_chroot          51
 #define NR_fchmod          52
 #define NR_fchmodat        53
 #define NR_fchownat        54
@@ -106,8 +109,12 @@ extern int main(int, char**);
 #define NR_getpid         172
 #define NR_getuid         174
 #define NR_getgid         176
+#define NR_sendfile        71
+#define NR_pselect6        72
 #define NR_socket         198
 #define NR_bind           200
+#define NR_getsockname    204
+#define NR_getpeername    205
 #define NR_listen         201
 #define NR_accept         202
 #define NR_connect        203
@@ -143,11 +150,16 @@ extern int main(int, char**);
 #define NR_getpid          39
 #define NR_setuid         105
 #define NR_setgid         106
+#define NR_setgroups      116
 #define NR_geteuid        107
+#define NR_sendfile        40
+#define NR_pselect6       270
 #define NR_socket          41
 #define NR_connect         42
 #define NR_accept          43
 #define NR_sendto          44
+#define NR_getsockname     51
+#define NR_getpeername     52
 #define NR_recvfrom        45
 #define NR_sendmsg         46
 #define NR_recvmsg         47
@@ -167,6 +179,7 @@ extern int main(int, char**);
 #define NR_ftruncate       77
 #define NR_getcwd          79
 #define NR_chdir           80
+#define NR_chroot         161
 #define NR_fchmod          91
 #define NR_umask           95
 #define NR_getuid         102
@@ -318,6 +331,20 @@ char *strerror(int e) {
 int strcasecmp(char const *a, char const *b) {
   while (*a && tolower((unsigned char) *a) == tolower((unsigned char) *b)) { a++; b++; }
   return tolower((unsigned char) *a) - tolower((unsigned char) *b); }
+/* rand/random: one 64-bit LCG (Knuth's MMIX multiplier), read off the high bits
+ * where an LCG's period per bit is longest. rand takes 15, random 31. */
+static unsigned long __rnd = 1;
+static unsigned long __rstep(void) {
+  return __rnd = __rnd * 6364136223846793005UL + 1442695040888963407UL; }
+int rand(void) { return (int) ((__rstep() >> 49) & 32767); }
+void srand(unsigned int s) { __rnd = s; }
+long random(void) { return (long) ((__rstep() >> 33) & 2147483647); }
+void srandom(unsigned int s) { __rnd = s; }
+char *strcasestr(char const *h, char const *n) {
+  size_t m = strlen(n);
+  if (!m) return (char *) h;
+  for (; *h; h++) if (!strncasecmp(h, n, m)) return (char *) h;
+  return 0; }
 int strncasecmp(char const *a, char const *b, size_t n) {
   while (n && *a && tolower((unsigned char) *a) == tolower((unsigned char) *b)) { a++; b++; n--; }
   return n ? tolower((unsigned char) *a) - tolower((unsigned char) *b) : 0; }
@@ -379,6 +406,14 @@ int ioctl(int fd, unsigned long req, ...) {
 int stat(char const *p, struct stat *st) { return (int) er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) st, 0)); }
 int fstat(int fd, struct stat *st) { return (int) er(sc2(NR_fstat, fd, (long) st)); }
 int lstat(char const *p, struct stat *st) { return (int) er(sc4(NR_newfstatat, AT_FDCWD, (long) p, (long) st, 256)); }   /* AT_SYMLINK_NOFOLLOW */
+/* select over pselect6: the only lane asm-generic carries (no plain select on
+ * arm64/riscv). the sigmask rides as the {set, size} pair the 6th arg points at. */
+int select(int n, fd_set *r, fd_set *w, fd_set *e, struct timeval *tv) {
+  struct timespec ts, *tp = 0;
+  long sm[2];
+  if (tv) { ts.tv_sec = tv->tv_sec; ts.tv_nsec = tv->tv_usec * 1000; tp = &ts; }
+  sm[0] = 0; sm[1] = 8;
+  return (int) er(sc6(NR_pselect6, n, (long) r, (long) w, (long) e, (long) tp, (long) sm)); }
 int poll(struct pollfd *fds, nfds_t n, int ms) {
   struct timespec ts;
   ts.tv_sec = ms / 1000;
@@ -405,6 +440,7 @@ char *getcwd(char *b, unsigned long n) {
   if (r < 0) { __errno_v = (int) -r; return 0; }
   return b; }
 int chdir(char const *p) { return (int) er(sc1(NR_chdir, (long) p)); }
+int chroot(char const *p) { return (int) er(sc1(NR_chroot, (long) p)); }
 int rename(char const *a, char const *b) { return (int) er(sc4(NR_renameat, AT_FDCWD, (long) a, AT_FDCWD, (long) b)); }
 int mkdir(char const *p, unsigned int m) { return (int) er(sc3(NR_mkdirat, AT_FDCWD, (long) p, m)); }
 int rmdir(char const *p) { return (int) er(sc3(NR_unlinkat, AT_FDCWD, (long) p, 512)); }   /* AT_REMOVEDIR */
@@ -421,6 +457,7 @@ int dup(int fd) { return (int) er(sc3(NR_fcntl, fd, 0, 0)); }                   
 unsigned int geteuid(void) { return (unsigned int) sc0(NR_geteuid); }
 int setuid(unsigned int u) { return (int) er(sc1(NR_setuid, u)); }
 int setgid(unsigned int g) { return (int) er(sc1(NR_setgid, g)); }
+int setgroups(size_t n, gid_t const *l) { return (int) er(sc2(NR_setgroups, (long) n, (long) l)); }
 int mknod(char const *p, unsigned int mode, unsigned long dev) { return (int) er(sc4(NR_mknodat, AT_FDCWD, (long) p, mode, (long) dev)); }
 int mkfifo(char const *p, unsigned int mode) { return mknod(p, mode | 4096U, 0); }     /* S_IFIFO = 010000 */
 int wait(int *st) { return waitpid(-1, st, 0); }
@@ -476,6 +513,11 @@ int utime(char const *path, struct utimbuf const *t) {
 /* ---- the calendar: no timezone database, so localtime IS gmtime (UTC). the
  * civil-from-days is Hinnant's exact integer algorithm (1970-01-01 = Thursday,
  * wday 4). asctime lays glibc's fixed 26-byte "Www Mmm dd hh:mm:ss yyyy\n". ---- */
+static char __tzutc[4] = "UTC";
+char *tzname[2] = { __tzutc, __tzutc };
+long timezone = 0;
+int daylight = 0;
+void tzset(void) { }                               /* the zone is UTC and always was */
 struct tm *gmtime(time_t const *tp) {
   static struct tm tm;
   long t = *tp;
@@ -674,12 +716,12 @@ void *realloc(void *p, size_t n) {
   memcpy(q, p, old);
   free(p);
   return q; }
-/* alloca: no native / __builtin form, so gnulib's C_ALLOCA scheme by hand --
- * malloc-backed, reclaimed by stack depth. both arches grow DOWN, so a frame
- * that has returned sits at a HIGHER address than the current probe; on each
- * call we free every block whose mark sits BELOW `here` (its frame unwound
- * past). blocks from the same or an ancestor frame (mark >= here) stay.
- * leak-free without a stack-direction probe. */
+/* alloca: no native / __builtin form, so malloc backs it and stack depth
+ * reclaims it. both arches grow DOWN, so a frame that has returned sits at a
+ * HIGHER address than the current probe; on each call we free every block
+ * whose mark sits BELOW `here` (its frame unwound past). blocks from the same
+ * or an ancestor frame (mark >= here) stay. leak-free without a
+ * stack-direction probe. */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 static __ablk *__ahead;
 void *alloca(size_t n) {
@@ -1212,6 +1254,25 @@ int vsnprintf(char *p, size_t n, char const *fmt, va_list ap) {
   return (int) s.at; }
 int vsprintf(char *p, char const *fmt, va_list ap) {
   return vsnprintf(p, (size_t) -1, fmt, ap); }
+/* asprintf: measure with a null sink, then format into a fresh block. two
+ * passes over the format rather than a growing buffer -- __fmt counts either way. */
+int vasprintf(char **out, char const *fmt, va_list ap) {
+  struct __sctx s; s.p = 0; s.n = 0; s.at = 0;
+  va_list m;                                       /* the measuring pass takes a COPY:
+                                                    * __fmt walks the list to its end */
+  va_copy(m, ap);
+  __fmt(__semit, &s, fmt, m);
+  va_end(m);
+  char *b = malloc(s.at + 1);
+  if (!b) return *out = 0, -1;
+  struct __sctx t; t.p = b; t.n = s.at + 1; t.at = 0;
+  __fmt(__semit, &t, fmt, ap);
+  b[t.at] = 0;
+  return *out = b, (int) t.at; }
+int asprintf(char **out, char const *fmt, ...) {
+  va_list ap; va_start(ap, fmt);
+  int r = vasprintf(out, fmt, ap);
+  va_end(ap); return r; }
 int sprintf(char *p, char const *fmt, ...) {
   va_list ap; va_start(ap, fmt);
   int r = vsprintf(p, fmt, ap);
@@ -1496,7 +1557,11 @@ int getaddrinfo(char const *host, char const *serv, struct addrinfo const *hints
 void freeaddrinfo(struct addrinfo *r) { free(r); }
 
 /* ---- sockets ---- */
+long sendfile(int out, int in, long *off, unsigned long n) {
+  return er(sc4(NR_sendfile, out, in, (long) off, (long) n)); }
 int socket(int d, int t, int p) { return (int) er(sc3(NR_socket, d, t, p)); }
+int getsockname(int fd, struct sockaddr *a, socklen_t *n) { return (int) er(sc3(NR_getsockname, fd, (long) a, (long) n)); }
+int getpeername(int fd, struct sockaddr *a, socklen_t *n) { return (int) er(sc3(NR_getpeername, fd, (long) a, (long) n)); }
 int connect(int fd, struct sockaddr const *a, socklen_t n) { return (int) er(sc3(NR_connect, fd, (long) a, n)); }
 int accept(int fd, struct sockaddr *a, socklen_t *n) { return (int) er(sc3(NR_accept, fd, (long) a, (long) n)); }
 long sendto(int fd, void const *b, unsigned long n, int fl, struct sockaddr const *a, socklen_t an) {
@@ -1599,6 +1664,26 @@ double fmod(double x, double y) {
   if (q >= 9007199254740992.0 || q <= -9007199254740992.0) return 0.0;   /* quotient past exact-int: stance */
   double r = x - __trunc9(q) * y;
   return r; }
+/* the C99 float twins: the double face, narrowed once at the return. a dedicated
+ * binary32 kernel would be faster and no more accurate -- the double result is
+ * already correct past float's 24 bits for every one of these. */
+float sinf(float x) { return (float) sin(x); }
+float cosf(float x) { return (float) cos(x); }
+float tanf(float x) { return (float) tan(x); }
+float asinf(float x) { return (float) asin(x); }
+float acosf(float x) { return (float) acos(x); }
+float atanf(float x) { return (float) atan(x); }
+float expf(float x) { return (float) exp(x); }
+float logf(float x) { return (float) log(x); }
+float log2f(float x) { return (float) log2(x); }
+float log10f(float x) { return (float) log10(x); }
+float sqrtf(float x) { return (float) sqrt(x); }
+float fabsf(float x) { return (float) fabs(x); }
+float floorf(float x) { return (float) floor(x); }
+float ceilf(float x) { return (float) ceil(x); }
+float atan2f(float y, float x) { return (float) atan2(y, x); }
+float powf(float x, float y) { return (float) pow(x, y); }
+float fmodf(float x, float y) { return (float) fmod(x, y); }
 /* frexp/ldexp: exact exponent surgery on the IEEE bits (no math floor needed) */
 double frexp(double x, int *e) {
   union { double d; unsigned long u; } b;

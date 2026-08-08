@@ -16,6 +16,7 @@ int   strcmp(char const*, char const*);
 int   strncmp(char const*, char const*, size_t);
 int   strcasecmp(char const*, char const*);
 int   strncasecmp(char const*, char const*, size_t);
+char *strcasestr(char const*, char const*);   /* the GNU case-blind strstr */
 char *strcpy(char*, char const*);
 char *strncpy(char*, char const*, size_t);
 char *strcat(char*, char const*);
