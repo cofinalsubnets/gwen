@@ -32,11 +32,6 @@
   (dch n a) (: q (n // 10) d (48 + (n - (q * 10))) (? (0 < q) (dch q (link d a)) (link d a)))
   (dstr n) (string (dch n ()))
   (ndig n) (: q (n // 10) (? (0 < q) (1 + (ndig q)) 1))          ; the count, without building the list
-  ; ⚠ integer power by SQUARING, never `**`: church application lays an O(e) thread
-  ; per call (prel's numfn), and the digit search below would rebuild one per step.
-  (ipow b e) (? (e < 1) 1
-                (: h (ipow b (e // 2)) s (h * h)
-                   (? ((e - (2 * (e // 2))) = 0) s (s * b))))
   (pnum o n) (? (n < 0) (: _ (put o 45) (say o (dstr (0 - n)))) (say o (dstr n)))
 
   ; --- text ---
@@ -77,13 +72,13 @@
   (strip n) (: q (n // 10) (? (&& (0 < q) ((n - (q * 10)) = 0)) (strip q) n))
   (zeros o n) (? (0 < n) (: _ (put o 48) (zeros o (n - 1))) 0)
   (pgem2 o a) (: me (norm a 0) m (cap me) e2 (cup me) sh (e2 - 2)
-    up (? (sh < 0) (ipow 5 (0 - sh)) (ipow 2 sh))   ; one shared scale: 2^sh, or 5^-sh with the point moved
+    up (? (sh < 0) (** 5 (0 - sh)) (** 2 sh))   ; one shared scale: 2^sh, or 5^-sh with the point moved
     flo (&& (m = p52) (emin < e2))                ; at a binade floor the gap below is already half
     dv ((4 * m) * up)
     dlo (((4 * m) - (? flo 1 2)) * up)
     dhi (((4 * m) + 2) * up)
     evn ((m - (2 * (m // 2))) = 0)
-    dc (pick dv dlo dhi evn (ipow 10 ((ndig dv) - 1)))
+    dc (pick dv dlo dhi evn (** 10 ((ndig dv) - 1)))
     lead (ndig dc)
     ss (dstr (strip dc)) sig (tally ss)
     dxp (lead + (? (sh < 0) sh 0))
