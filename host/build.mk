@@ -182,7 +182,7 @@ gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_sectio
 love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/host/main.o: $(gl0_h)
-out/host/0/host/cb.o: crew/quay/quay.c crew/quay/quay.h
+out/host/0/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # the LOVE_NO_IMAGE= prefix (empty = unset, main.c's auto-load) hands the
 # compiler its baked image back under the blanket corpus export up top: when
 # CC is the dist artifact's own mooncc verb (`love up`'s default -- the
@@ -215,8 +215,8 @@ $(ho)/love.o: out/lib/love_version.h
 # glob (compiled once, not recompiled on every link, as the old inline `$(hcc)
 # main.c` did), recompile it when any baked header changes.
 $(ho)/host/main.o: out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h $(holo_h) $(glaze_h)
-# host/cb.c rides crew/quay/quay.c by unity include -- recompile when the engine moves.
-$(ho)/host/cb.o: crew/quay/quay.c crew/quay/quay.h
+# host/cb.c rides the crew/quay sources by unity include -- recompile when they move.
+$(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 
 # host/main.c (auto-globbed into $(host_o)) carries main() + the egg, assembled
 # inline via G_EGG_PRE/POST. No separate main.c compile -- it rides the host/*.c
@@ -250,7 +250,7 @@ $(moon_d)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@mkdir -p $(dir $@)
 	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_main.o: out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h $(holo_h) $(glaze_h)
-$(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/quay.h
+$(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/nolibc.o: crew/moon/lib/nolibc.c out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)

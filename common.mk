@@ -58,7 +58,10 @@ love_h = $(wildcard $R/*.h)
 # the core rides with its math floor (crew/moon/lib/math/am.c -- our own
 # transcendentals; love.c's ai_* defines resolve there, no libm anywhere)
 love_c = $R/love.c $R/crew/moon/lib/math/am.c
-f_c = $(wildcard $R/crew/quay/*.c)
+# the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door)
+# are per-seat, not universal -- a 1-bit device wants neither and the host unity-
+# includes nif.c -- so a seat that wants one NAMES it rather than taking it here.
+f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
 c_c = $(wildcard $R/libc/*.c)
 
 # -std spelling: clang accepts `gnu23` only from ~clang 18 (Xcode 16). Older Apple

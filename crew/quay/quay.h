@@ -71,4 +71,11 @@ uint32_t cb_unfold(uint8_t);       // a glyph byte's codepoint (0 = none)
 
 struct font { uint8_t const *glyphs, w, h; };
 extern uint8_t const cga_8x8[256][8], moderndos_8x16[256][16];
+
+// where a screen lands (paint.c): a 32bpp target. px is the pixel origin and
+// pitch/w/h are all in PIXELS -- a screen paints at an ORIGIN inside it, so one
+// target can carry several panes rather than exactly one screen.
+struct cb_paper { volatile uint32_t *px; uintptr_t pitch, w, h; };
+void cb_paint(struct cb_paper const*, struct cb const*, struct font const*,
+              uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
 #endif

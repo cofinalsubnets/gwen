@@ -51,7 +51,10 @@ ifeq ($(KCC_IS_MOON),1)
 k_arch_c := $(filter-out %/builtins.c,$(k_arch_c))
 endif
 k_free_c = $R/port/inle/kmain.c
-k_shared_c = $(love_c) $(f_c) $(c_c)
+# paint.c is named rather than wildcarded (common.mk): the console renders 32bpp,
+# so this seat wants the shared painter. nif.c stays out until the kernel grows
+# defs[] rows for it -- bodies nothing calls are bytes the image cannot spend.
+k_shared_c = $(love_c) $(f_c) $R/crew/quay/paint.c $(c_c)
 k_h = $(love_h) $(wildcard *.h $(R)/port/inle/*.h $(R)/port/inle/$a/*.h)
 
 # the object tree and the ELF are per COMPILER as well as per K_TEST. ⚠ they

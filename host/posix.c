@@ -1033,8 +1033,39 @@ static lvm(lvm_raw) {
  Sp[0] = rc ? putcharm(rc) : ai_zero;
  Ip += 1; ai_musttail return Continue(); }
 
+// (swig port b): drink whatever the fd has waiting into cask b, WITHOUT blocking
+// (the caller parks on `see` for the first byte; swig drains the rest of the gulp).
+// n bytes read; 0 = nothing waiting or eof (the next see tells those apart); a
+// negative charm = -errno / misuse. The CHUNK lane a per-byte see cannot be.
+static lvm(lvm_swig) {
+ ai_word p = Sp[0], x = Sp[1];
+ ai_word out = putcharm(-1);
+ if (!(p & 1) && ((union u*) p)->ap == lvm_port_io
+      && !(x & 1) && ((union u*) x)->ap == lvm_cask) {
+  struct ai_io *io = (struct ai_io*) p;
+  intptr_t fd = ai_io_fd(io);
+  struct ai_str *s = ((struct ai_cask*) x)->str;
+    // the port's OWN pending run comes first: a buffered see may have gulped
+    // ahead of us, and reading the fd past it would scramble the byte order
+  if (s->len && ai_io_pending(g, io)) {
+   uintptr_t k = ai_io_read_drain(g, io, (unsigned char*) s->bytes, s->len);
+   Sp[1] = putcharm((intptr_t) k);
+   Sp += 1; Ip += 1; ai_musttail return Continue(); }
+  if (fd >= 0 && s->len) {
+   int fl = fcntl((int) fd, F_GETFL);
+   fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
+   ssize_t k = read((int) fd, s->bytes, s->len);
+   fcntl((int) fd, F_SETFL, fl);
+   out = k > 0 ? putcharm(k)
+          : k == 0 ? putcharm(0)
+          : (errno == EAGAIN || errno == EWOULDBLOCK) ? putcharm(0)
+          : putcharm(-errno); } }
+ Sp[1] = out;
+ Sp += 1; Ip += 1; ai_musttail return Continue(); }
+
 static union u const
   nif_raw[]        = {{lvm_raw}, {lvm_ret0}},
+  nif_swig[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}},
   nif_tether[]     = {{lvm_tether}, {lvm_ret0}},
   nif_reap[]       = {{lvm_reap}, {lvm_ret0}},
   nif_kill[]       = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kill}, {lvm_ret0}},
@@ -1048,3 +1079,4 @@ AI_NIF("winsize", nif_winsize);
 AI_NIF("setwinsize", nif_setwinsize);
 AI_NIF("ptyecho", nif_ptyecho);
 AI_NIF("raw", nif_raw);
+AI_NIF("swig", nif_swig);

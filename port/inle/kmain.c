@@ -56,14 +56,9 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
   int b = kkb.q[kkb.qh];
   return kkb.qh = (kkb.qh + 1) & 15, b; }
 
-// the xterm-256 palette rides .rodata, laid by quay.l through clay -- the SAME table
-// host/cb.c reads, so a cell means the same pixels in a window and on the framebuffer
-// by construction rather than by two copies of the recipe agreeing.
-#include "xterm256.h"
-#define palette xterm256
-static struct font
- kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 16, },
- *fonts[16] = { &kfont };
+// the console's font. the palette that goes with it lives in crew/quay/paint.c,
+// which is the one place a cell becomes pixels.
+static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, .h = 16 };
 
 
 
@@ -1379,31 +1374,6 @@ static lvm(lvm_utime) {
 
 static lvm(ai_kreset) { return k_reset(), g; }
 
-// paint ONE console row. `cur` is the cursor's cell (~0u when it is hidden) and
-// `blink` its phase -- both passed IN, never read here: kticks is bumped by the timer
-// ISR, so re-reading it per row could paint one row lit and the next one dark.
-static void fbrow(uint16_t i, uint32_t cur, bool blink) {
-  for (uint16_t j = 0, cols = kcb->cols; j < cols; j++) {
-    uint32_t const
-     pos = (uint32_t) i * cols + j,
-     _g = kcb->cb[pos];
-    struct font *ff = fonts[cb_font(_g)];
-    uint8_t const
-     face = cb_face(_g),
-     g = _g,
-     *bmp = ff->glyphs + ff->h * (g == '\n' ? 0 : g);
-    bool invert = pos == cur && blink;
-    uint8_t fgx = cb_fg(_g);
-    if (face & cb_bold && fgx < 8) fgx += 8;      // bold as the bright half
-    uint32_t fg = palette[fgx], bg = palette[cb_bg(_g)];
-    if (face & cb_rev) fg ^= bg, bg ^= fg, fg ^= bg;
-    if (invert) fg ^= bg, bg ^= fg, fg ^= bg;
-    uintptr_t y = (uintptr_t) i * ff->h, x = (uintptr_t) j * ff->w;
-    for (uint8_t r = 0; r < ff->h; r++) {
-      bool ul = face & cb_under && r == ff->h - 1u;  // underline: the last scanline
-      for (uint8_t o = bmp[r], c = ff->w; c--; o >>= 1)
-        kfb._[(y + r) * kfb.pitch + x + c] = ul || o & 1 ? fg : bg; } } }
-
 // the cursor as last PAINTED. quay marks the row of every grid WRITE, and the cursor
 // is not one: cb_cur moves wpos in silence and the blink is a function of the clock.
 // So the renderer owns the cursor, or the block stays where it last was.
@@ -1425,10 +1395,13 @@ void fbdraw(void) {
   uint32_t const was = fbcur == ~0u ? ~0u : fbcur / cols,
                  now = cur == ~0u ? ~0u : cur / cols;
   bool const moved = cur != fbcur || blink != fbblink;
+  // the paper is minted per FRAME, never per row: kticks is bumped by the timer ISR,
+  // so re-reading the blink phase mid-frame could paint one row lit and the next dark.
+  struct cb_paper const paper = { kfb._, kfb.pitch, kfb.width, kfb.height };
   for (uint16_t i = 0; i < rows; i++) {
     uint32_t const r = i > 255 ? 255 : i;   // quay's fold: bit 255 stands for 255-and-past
     if (kcb->dmg[r >> 5] >> (r & 31) & 1 || (moved && (i == was || i == now)))
-      fbrow(i, cur, blink); }
+      cb_paint(&paper, kcb, &kfont, i, 0, 0, blink ? cur : ~0u); }
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
   fbcur = cur, fbblink = blink; }
 
