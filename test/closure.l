@@ -137,3 +137,10 @@
    (tk3 _) (: (a o) (zz o) c (tablet 0) zz (\ o (peep c o 'no)) _ (pin c 'k 'yes) (a 'k))
    (assert (id? 'yes (tk1 ())) (id? 'yes (tk2 ())) (id? 'yes (tk3 ()))))
 
+; --- a top-level `:` reads its own name late ----------------------------------
+; the outer let is body-less, so closure-fct defglobs -- AFTER its own def is built.
+; a nested lambda naming it must read the book when it RUNS; capturing a value that
+; does not exist yet is what the missing condition used to report at definition.
+(: closure-fct (: (h n acc) (? (n < 1) acc (h (n - 1) (acc * n))) (\ n (h n 1))))
+(: (tl1 _) (: walk (: (kid k) (? (two? k) (walk (cup k)) k) (\ n (kid n))) (walk '(1 2 3)))
+   (assert (= 120 (closure-fct 5)) (nil? (tl1 ()))))

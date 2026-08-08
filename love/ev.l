@@ -493,6 +493,9 @@
   ; ('lam) -> lz; the let stack / the [imps args] frame -> karg; else the parent. a hit in an
   ; ENCLOSING scope (home false) also pushes x onto c's imports -- the capture -- and that push is
   ; the memo: the next reference finds x in c's OWN frame, so an import lands once per name.
+  ; ⚠ a name no scope and no book holds is NOT a capture: the index op reads the book when the
+  ; body runs, so importing it too would make the enclosing frame owe a value at CONSTRUCTION --
+  ; and a top-level `(: f <lambda that reads f>)` pins f only after its own def is built.
   (ava c x) (avw c c x)
   (shadowed? c d x) (: far (d 'far)
    (tablet? far && 0 <= peep far x -1 && !(member? x ((d 'par) 'stk))))
@@ -500,8 +503,7 @@
    (? (nil? d) ; outside all lexical scopes?
        (: y (gv x gone) ; check global scope (the layered walk)
         (? !(id? y gone) (kim y) ; if it's there use that
-         (: _ (? (c 'par) (push c 'imp x))
-          (em2 lvm_index x))))
+         (em2 lvm_index x)))
     (: lfd (assoc x (d 'lam)) home (id? d c)
      (? (two? lfd) (lz c lfd d)
         ; the shadow guard: d's let BINDS x ('far keys every binding name, pinned before the
