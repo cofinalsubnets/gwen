@@ -352,6 +352,25 @@ test_ccarm64: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/ccarch.sh arm64 $(ho) $m
 test_ccriscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/ccarch.sh riscv64 $(ho) $m
+# test_cts -- an OUTSIDE corpus: c-testsuite's 220 single-file programs, each held to the
+# stdout the corpus itself ships, on all three targets. Every file in test/cc/ was written
+# here to pin a fault we had already met; these were not, and the first run found nine
+# programs mooncc compiles clean and answers wrong. The failures are ROSTERED with a cause
+# apiece in cts.sh, refusals and wrong answers kept apart. Opt-in on an imported tree
+# (`make dl/c-testsuite`), skips whole without it.
+.PHONY: test_cts test_cts_arm64 test_cts_riscv
+test_cts: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/cts.sh x64 $(ho) $m
+test_cts_arm64: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/cts.sh arm64 $(ho) $m
+test_cts_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+	@sh test/gate/cts.sh riscv64 $(ho) $m
+# the corpus itself -- 220 files, cloned once and kept in dl/ like limine, so `make clean`
+# leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
+# a gate that downloads is a gate that fails on a train.
+$(dl)/c-testsuite:
+	@echo MK c-testsuite
+	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
 # test_libc -- OUR C LIBRARY against the system's, function by function (doc/libc.md):
 # test/libc/*.c built by mooncc (pulling crew/moon/lib/nolibc.c by need) and by gcc, run,
 # and the two OUTPUTS compared, so a drift names the function and the case.

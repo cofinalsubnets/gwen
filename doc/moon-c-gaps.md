@@ -35,6 +35,21 @@ All of C89 passes. What remains is C99/C11/GNU.
 | computed goto | `&&label`, `goto *p` |
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
 | `asm goto` | see doc/moon-next.md |
+| a block-scope `struct` tag | `{ struct T { int z; }; }` inside a function — tags are file-scoped here, so an inner one collides with the outer |
+| a declarator list mixing a function and an object | `int f(int), a;` — two functions in one list is fine |
+| a `case` label as a switch's whole body | `switch (x) case 0: ;` — a compound body is fine |
+| a `*` bound in an array parameter | `void f(int x[*])` — `[static 3]` and `[const 3]` both pass |
+| a function-typed parameter with a non-empty parameter list | `int f(int (int), int)` — `int f(int (), int)` passes |
+| `__attribute__((packed))` **before** a union tag | `union __attribute__((packed)) U { … }` — after the body it passes |
+| designated RANGE initializers | `[1 ... 5] = 9`, gcc's extension |
+| the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
+| brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
+| a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
+| a `##` paste with an empty operand and trailing tokens | `#define P(A,B) A ## B ; bob` |
+| a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
+
+The last twelve are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
+each one came from.
 
 ### what passes, for contrast
 
@@ -43,8 +58,9 @@ gcc, including a run-time-sized one); every other target says `no lane for a var
 array on <tgt>`, and a VLA with an initializer refuses everywhere. `__typeof__` over locals, globals, struct members, dereferences and
 function names. Designated initialisers (both `.field =` and `[i] =`), compound literals, K&R
 definitions, bitfields including compound assignment, flexible array members, variadic macros,
-`long long`, hex floats, wide/prefixed literals (`L`, `u`, `U`, `u8` — mooncc carries no
-distinct wide type, so the prefix drops), anonymous unions, `restrict`, `static inline`, mixed
+`long long`, hex floats, wide/prefixed literals (`L`, `u`, `U`, `u8` — they *parse*; ⚠ mooncc
+carries no distinct wide type, so the prefix drops and the elements come out as bytes, which is
+a wrong answer and not a passing row), anonymous unions, `restrict`, `static inline`, mixed
 declarations, `for`-scoped declarations, `_Static_assert` itself (including `&&`/`||`/`?:` in
 the constant), string-literal concatenation, self-referential structs, enum trailing commas,
 multidimensional arrays, brace elision in nested initialisers, pointer-to-array declarators,
@@ -59,6 +75,11 @@ C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing. `#w
 text and continues. **Everything else refuses** (C11 6.10p1) — the catch-all that used to ignore
 an unknown directive let `#cmakedefine X 1` sail through, so an unconfigured template header
 compiled clean and the name it owed was simply absent.
+
+⚠ Two of those ignores cost a right answer rather than a feature, so "on purpose" is the
+cheaper reading of them than the true one: **`#line` never moves the line number** a later
+diagnostic or `__LINE__` reports, and **`#pragma push_macro` / `pop_macro`** drop the save, so
+the macro never comes back and the `#undef` under it is permanent.
 
 ⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
 which is worse. doc/moon-userland.md carries when it becomes load-bearing.
@@ -107,7 +128,23 @@ builds an 80-bit lane the compiler cannot speak.
 
 A refusal is cheap; these are not. Everything here compiles clean and hands back the wrong
 value, so nothing announces them but a differential. Found 2026-08-08 building darkhttpd, dwm,
-st, xlander, PDCLib, limine and pdxlander (doc/moon-userland.md).
+st, xlander, PDCLib, limine and pdxlander (doc/moon-userland.md), and then six more the same
+day when `test_cts` first ran.
+
+### six from an outside corpus
+
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Nine compile
+clean and answer wrong; three of those are rows elsewhere on this page — the predefine surface,
+the wide literal, `#pragma push_macro`. These six are their own:
+
+| what | the shape | what it costs |
+|---|---|---|
+| **a block-scope function declaration binds a local slot** | `int main(){ char s=1; int f1(char *); return f1(&s); }` | **SIGSEGV** — the call jumps through an uninitialized frame slot instead of reaching the function. A declaration inside a block is ordinary C and reads as harmless. |
+| **a by-value composite argument in a variadic function** | `int f(struct foo f, int n, ...)` with a MEMORY-class `foo` | the parameter reads garbage; 00140 segfaults. Non-variadic is right, so the fault is the incoming-stack offset past the register save area. x64 only: arm64 and riscv64 refuse the shape outright. |
+| **an implied array bound counts initializers, not elements** | `PT cases[] = { 1,2,3,4,5,6,7, 8,9,10,11,12,13,14 };` over a 7-member `PT` | `sizeof(cases)/sizeof(*cases)` answers **14**, gcc **2**. The elements themselves are laid correctly, so only the length is wrong — and the length is what every `for` loop over the table reads. |
+| **`!` yields a long** | `sizeof(!a)` | 8, where C says the result of `!` is an `int` (4). Same family as the `sizeof` row below: a type lost on the way out of a node. |
+| **an unsuffixed constant too big for `long` wraps** | `x != 0xffffffffffffffff` | C says such a decimal/hex constant takes `unsigned long`; we wrap it to −1 and the comparison goes the other way. |
+| **an enum bit-field sign-extends** | `enum tree_code code : 8;` where an enumerator has bit 7 set | the value comes back negative and the `switch` takes `default`. An enum whose values are all non-negative must load zero-extended. |
 
 ### bool is four bytes
 
@@ -172,10 +209,14 @@ and `^` do not** — love's bit ops answer nothing on a big, so `#if (0xffffffff
 
 The 32-bit targets carry the live gaps. All of them are **loud scares, never silent**.
 
-⚠ **The register-exhausted by-value composite is x64-only.** A 9..16B aggregate argument with
-too few registers left now goes wholly to the overflow block on x64 (SysV's rule; the param side
-already bound it there, and the shape is `xdrawcursor(int,int,Glyph,int,int,Glyph)` in st).
-**arm64, riscv64 and t32 still refuse** — deliberately, because each has a *different* rule:
+⚠ **The register-exhausted by-value composite is x64-only, and even there only the gp half.**
+A 9..16B aggregate argument with too few *integer* registers left now goes wholly to the
+overflow block on x64 (SysV's rule; the param side already bound it there, and the shape is
+`xdrawcursor(int,int,Glyph,int,int,Glyph)` in st). ⚠ **The SSE twin still refuses**: five
+`struct { float a,b,c; }` by value exhausts xmm0–7 and `cgfn` gives up — the same rule, the
+other register file, and c-testsuite's 00204 is the probe.
+**arm64, riscv64 and t32 refuse the gp case too** — deliberately, because each has a
+*different* rule:
 AAPCS64 closes the gp file behind a stack composite (C.13), riscv64 SPLITS one across the
 register/stack seam, and t32 has no lane at all. Three rules, three rungs; do not fold them.
 
@@ -220,13 +261,17 @@ propagation, and a divergence there is a silent miscompile.
 
 ---
 
-## external corpora — recommendation, not wired
+## external corpora
 
-`test/cc/` holds 114 gcc-differentiated files, so the harness exists; this is a corpus question,
-not an infrastructure one.
+**c-testsuite is wired** — `test_cts`, `test_cts_arm64`, `test_cts_riscv` over
+`test/gate/cts.sh` (doc/moon.md). 220 single-file programs held to the output they ship, on all
+three targets, ~60 s each, opt-in on `make dl/c-testsuite` and skipping whole without it. Its
+first run is where twelve rows of the syntax ledger above and six of the wrong-answer rows came
+from. The roster of failures lives in the gate with a cause apiece.
 
-- **c-testsuite** — ~220 tiny single-file tests with expected output, purpose-built for small
-  compilers. Best first fit, and fast enough for the one-to-two-second ethos.
+The rest are still recommendations. `test/cc/` holds 115 gcc-differentiated files, so the
+harness exists; this is a corpus question, not an infrastructure one.
+
 - **gcc.c-torture/execute** — ~1500 self-contained self-checking files (`abort()` on failure,
   `return 0` on pass). The de facto bar; tcc, chibicc, cproc and lacc all run it. Ships in the
   gcc source tarball, not installed here.

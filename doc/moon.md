@@ -259,6 +259,13 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
   ⚠ Differential programs must be **UB-free**: `pick(++i,++i,++i)` is unsequenced, and gcc
   legitimately disagrees.
 * A seeded expression fuzz against gcc (`test_moonfuzz`).
+* **An OUTSIDE corpus, and its own answers** (`test_cts`, all three targets): c-testsuite's
+  220 single-file programs, each held to the stdout it ships. Every `test/cc` file was written
+  here to pin a fault we had already met, so the battery says what we already know; these were
+  written by people compiling other compilers, and the first run found **nine** programs mooncc
+  builds clean and answers wrong. The failures are rostered with a cause apiece in
+  `test/gate/cts.sh`, refusals kept apart from wrong answers, and the roster is double-edged —
+  a fix takes its line off, a regression cannot hide in a skip.
 * Cross targets get their own gates (`test_ccarm64`, `test_ccriscv`, `test_thumb*`), and
   doc/mooncc-differentials records why a package on a cross target beats a test suite on one.
 * The corpus itself is the deepest oracle: `test_raw` runs it over a gcc-free build,
