@@ -56,10 +56,17 @@ piece. ~11k lines of love.
   block (pinned on the declaration, restored at `}`) — love.h makes `num`/`word` typedefs and
   love.c uses both as local variable names. A signature table (`ps 'sigs`: name → return type,
   parameter types, variadic bit) comes out as a fourth value.
+  ⚠ **A read-modify-write may not duplicate its lvalue.** `x op= y` desugars to
+  `(asn x (bin op x y))` and `++x` to the same — exact only when evaluating the lvalue leaves
+  no trace, so `calm?` gates it and the other two doors take the address once: `++`/`--` ride
+  `('post lv step)`, `op=` stays whole as `('rmw op lv rhs)` for gen to moor.
 * **gen.l** — AST → holo IR (pure), chibicc-plain but **typed**: `cgexpr` answers
   `(type forms)`, so pointer arithmetic scales by pointee size, a dereference loads by pointee
   width, and an array decays to an address. Lvalues have one door (`clval`: the address in r0
-  plus the pointee type), through which `x`, `*p` and `a[i]` all assign. The ALU stays 64-bit —
+  plus the pointee type), through which `x`, `*p` and `a[i]` all assign — and through which
+  `('moor off ty)`, gen's own lvalue for an address already parked in a frame temp, lets an
+  `('rmw ...)` reuse every store lane there is without evaluating its target twice. The ALU
+  stays 64-bit —
   sound because signed overflow is UB — and widths bite only at memory and casts. This is also
   where the register allocator lives (doc/moon-regalloc territory).
 * **fmt.l** — diagnostics.

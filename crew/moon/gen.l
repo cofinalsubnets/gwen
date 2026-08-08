@@ -1100,6 +1100,20 @@
        (d128? ty) (mkv ty 'r0 (addrf + '((ld r2 r0 8) (ld r0 r0 0))))   ; hi first: the low load overwrites the base
        (: W (? W9 W9 'r0)
           (mkv ty W (addrf + `(`((ldop ty) W 'r0 0))))))
+   ; the VALUE at an lvalue rec: a bitfield loads its unit and extracts with two
+   ; shifts (sar signed, shr unsigned), anything else loads flat.
+   (lvload g r wnt)
+    (: ty (vty r)
+       (? (bitf? ty)
+           (: uty <>ty bitoff <>>ty width <>>>ty
+              usz (tsz g uty) hi (64 - (bitoff + width)) lo (64 - width)
+              sgn (! (usg? uty))
+              (mkv 'long 'r0
+                   ((vfs r)
+                    + `(`((uldop usz) 'r0 'r0 0))
+                    + (? (hi > 0) `(`('shl 'r0 hi)) ())
+                    + (? (lo > 0) `(`((? sgn 'sar 'shr) 'r0 lo)) ()))))
+          (loadval g ty (vfs r) wnt)))
    ; the fill code for a compound literal at frame offset off: an aggregate zeroes
    ; then fills (cgfill), a scalar unwraps its single-element brace and stores.
    (clitcode g env off ty ini)
@@ -1145,6 +1159,10 @@
               fill (clitcode g env off ty ini)
               (? (bad? fill) 'bad
                  (mkv ty 'r0 (fill + `(`('lea 'r0 'r4 off))))))   ; a real lea: the temp's address is the value (& pins via the addr lane, a call blocks via the window)
+          ; gen's OWN lvalue, minted by the rmw lane below and reachable from no
+          ; source: the object whose address is moored at frame offset <>e. reading
+          ; it is calm, so it stands in for an lvalue that must evaluate once.
+          (k = 'moor) (mkv <>>e 'r0 `(`('ld 'r0 'r4 <>e)))
           'bad))
 
    ; -- the gcc builtins love.c reaches -- x64 as short raw splices, arm64 as neutral IR or one
@@ -1339,20 +1357,9 @@
            (: lbl (nlab g ".S")
               _ (pin g 'strs (link `(lbl <>e) (g 'strs)))
               (mkv `('ptr 'char) 'r0 `(`('la 'r0 lbl))))
-          (k = 'dot)
+          (member? k '(dot moor))
            (: r (clval g env e)
-              (? (bad? r) 'bad
-                 (: ty (vty r)
-                    (? (bitf? ty)                          ; a bitfield: load the unit, then a 2-shift extract (sar signed, shr unsigned)
-                        (: uty <>ty bitoff <>>ty width <>>>ty
-                           usz (tsz g uty) hi (64 - (bitoff + width)) lo (64 - width)
-                           sgn (! (usg? uty))
-                           (mkv 'long 'r0
-                                ((vfs r)
-                                 + `(`((uldop usz) 'r0 'r0 0))
-                                 + (? (hi > 0) `(`('shl 'r0 hi)) ())
-                                 + (? (lo > 0) `(`((? sgn 'sar 'shr) 'r0 lo)) ()))))
-                       (loadval g ty (vfs r) wnt)))))
+              (? (bad? r) 'bad (lvload g r wnt)))
           (k = 'var)
            (: en (vent g env <>e)
               (? (bad? en)
@@ -1595,6 +1602,24 @@
                                  `((ldop ty) 'r0 'r2 0)
                                  `('add 'r1 'r0 (* stp <>>e))
                                  `((stop ty) 'r2 0 'r1))))))))))
+          ; ⚠ `E1 op= E2` EVALUATES E1 ONCE. the plain desugar duplicates it --
+          ; (asn lv (bin op lv rhs)) -- which is exact only for an lvalue whose
+          ; evaluation leaves no trace, so parse routes every other one here (its
+          ; calm?). the address is computed once and MOORED in a frame temp; the
+          ; read, the op and the store back then run over ('moor off ty), a calm
+          ; lvalue standing for it -- so pointer scaling, the narrowing store,
+          ; doubles, pairs, wides and bitfields each ride their own lane unchanged.
+          (k = 'rmw)
+           (: lv (clval g env <>>e)
+              (? (bad? lv) 'bad
+                 (: ty (vty lv)
+                    (? (|| (arr? ty) (stru? ty)) 'bad
+                       (: off (ntmp g 'long)
+                          mo `('moor off ty)
+                          r (cgexpr g env `('asn mo `('bin <>e mo <>>>e)))
+                          (? (bad? r) 'bad
+                             (mkv (vty r) (vreg r)
+                                  ((vfs lv) + `(`('st 'r4 off 'r0)) + (vfs r)))))))))
           (k = 'cast)
            (: tgt <>e
               _ (? (&& (! (flo? tgt)) (! (two? (cvt tgt 'r0)))) (pin g 'want wnt) ())

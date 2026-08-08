@@ -373,11 +373,12 @@ tells about moon. state it this way or not at all.
 ## what has landed
 
 0. **name it and law it.** `crew/moon/clay.l`, a registered module (`(use 'clay)`). the
-   node grammar as data -- 58 tags: top `prog fn proto gdecl xdecl tdef note edef sdef`;
-   stmt `blk decl sdecl ret if while for do switch case dflt brk cont goto lbl expr nop
-   asm`; expr `num flo str var bin un asn post cond comma call deref addr dot cast szof
-   init dfield didx clit land lor vastart vaarg vaend`; types `ptr arr varr struct named
-   const`. `clay-ok?`, a validator, because `gen.l` currently TRUSTS its input. honors the
+   node grammar as data (`clay-tags`, the live roster): top `prog fn proto gdecl xdecl tdef
+   note edef sdef`; stmt `blk decl sdecl ret if while for do switch case dflt brk cont goto
+   lbl expr nop asm`; expr `num flo str var bin un asn rmw post cond comma call deref addr
+   dot cast szof init dfield didx clit land lor vastart vaarg vaend`; types `ptr arr varr
+   struct named const`. `rmw` is `lv op= rhs` KEPT WHOLE -- the desugar to
+   `(asn lv (bin op lv rhs))` would evaluate `lv` twice (doc/moon.md, `calm?`). `clay-ok?`, a validator, because `gen.l` currently TRUSTS its input. honors the
    `gripe` protocol (`doc/moon-diag.md`).
 1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `test/cc/`.
 2. **the dispatch matrices; deleted `tools/mxdump.c`.** `mx.l` is the table; `mx.h` is

@@ -131,6 +131,13 @@
       (= (cexp "x=y=1") '(asn (var "x") (asn (var "y") (num 1))))    ; right assoc
       (= (cexp "x+=2") '(asn (var "x") (bin + (var "x") (num 2))))   ; the desugar
       (= (cexp "++x") '(asn (var "x") (bin + (var "x") (num 1))))
+      ; a CALM lvalue duplicates; a stepping one is kept whole (rmw) or taken once (post)
+      (= (cexp "a[i]+=2") '(asn (deref (bin + (var "a") (var "i")))
+                                (bin + (deref (bin + (var "a") (var "i"))) (num 2))))
+      (= (cexp "*p++|=2") '(rmw | (deref (post (var "p") 1)) (num 2)))
+      (= (cexp "a[i++]-=2") '(rmw - (deref (bin + (var "a") (post (var "i") 1))) (num 2)))
+      (= (cexp "*f()=2") '(asn (deref (call (var "f") ())) (num 2)))   ; plain = never duplicates
+      (= (cexp "++*p++") '(bin + (post (deref (post (var "p") 1)) 1) (num 1)))
       (= (cexp "x--") '(post (var "x") -1))
       (= (cexp "a?1:2") '(cond (var "a") (num 1) (num 2)))
       (= (cexp "1,2") '(comma (num 1) (num 2)))

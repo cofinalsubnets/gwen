@@ -123,6 +123,9 @@
       (do 2 2) (switch 2 2) (case 1 1) (dflt 0 0) (brk 0 0) (cont 0 0) (goto 1 1)
       (lbl 1 1) (expr 1 1) (nop 0 0) (asm 4 4)
       (num 1 1) (flo 1 1) (str 1 1) (chr 1 1) (var 1 1) (bin 3 3) (un 2 2) (asn 2 2)
+      ; ('rmw op lv rhs) -- `lv op= rhs` kept whole, because the desugar to
+      ; (asn lv (bin op lv rhs)) would evaluate lv twice (parse.l's calm?)
+      (rmw 3 3)
       (post 2 2) (cond 3 3) (comma 2 2) (call 2 2) (deref 1 1) (addr 1 1)
       (dot 2 2) (cast 2 2) (szof 1 1) (init 1 1) (dfield 2 2) (didx 2 2)
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
@@ -273,7 +276,7 @@
        (: h <e
           (? (id? h 'bin) (look binprec <>e 100)
              (id? h 'land) 40 (id? h 'lor) 35 (id? h 'cond) 30
-             (id? h 'asn) 25 (id? h 'comma) 20
+             (id? h 'asn) 25 (id? h 'rmw) 25 (id? h 'comma) 20
              (id? h 'un) 90 (id? h 'deref) (? (cidx? e) 100 90) (id? h 'addr) 90
              (id? h 'cast) 90 (id? h 'clit) 90
              100)))
@@ -294,6 +297,7 @@
              ; ?: and = are RIGHT-associative, so the tight side flips
              (id? h 'cond) ((ce a 31) + " ? " + (ce (el e 2) 31) + " : " + (ce (el e 3) 30))
              (id? h 'asn) ((ce a 90) + " = " + (ce (el e 2) 25))
+             (id? h 'rmw) ((ce (el e 2) 90) + " " + (look binop a "?") + "= " + (ce (el e 3) 25))
              (id? h 'comma) ((ce a 21) + ", " + (ce (el e 2) 20))
              ; ⚠ a space between the operator and an operand that starts with the
              ; SAME character: `- -x`, never `--x`, which the lexer would read as a

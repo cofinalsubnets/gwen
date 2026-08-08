@@ -134,30 +134,6 @@ suffixed literals already arrive under) and it was **measured at +12% of love.o'
 is more correct C at a real size cost. Written and reverted 2026-08-08: it is a rung with a
 price tag, not a patch. ⚠ measure again before believing the number; it was one build.
 
-### a compound assignment evaluates its lvalue TWICE
-
-`x op= y` desugars to `(asn x (bin op x y))` and `++x` to the same with `y` = 1 — **the lvalue
-is duplicated**, which is exact for one whose evaluation leaves no trace and wrong for any
-other. The effect runs twice and the store lands where the load did not:
-
-```c
-char buf[4] = "8X"; char *p = buf;
-++*p++;              /* want buf[0]=='9', p==buf+1  */
-                     /* got  buf[1]=='Y', p==buf+2  */
-```
-
-**`++`/`--` landed 2026-08-08**: an lvalue that is not `calm?` (parse.l) rides `('post lv
-step)`, which already takes the address once, and the step is added back to answer the new
-value. A calm lvalue keeps the duplicate — deliberately, because `post` refuses a bitfield, a
-pair and a wide, all of which `++` supports today.
-
-⚠ **The `op=` spelling is still wrong**: `*p++ += 1` steps `p` twice. The same split works
-(`calm?` is already written) but the impure lane needs a real gen rung — `('post ...)` has no
-general-op twin, and a read-modify-write through a once-computed address has to re-derive
-pointer scaling, the u32 wrap and the divide register contracts that `cgbin` owns. It is **live
-in a shipped rung**: `sqlite3.c` has `aOut[j++] += c` (37472) and `p->a[k++] ^= x[j]` (52186),
-and limine's `guid.c` two more. Pinned by `test/cc/114-rmwlv.c` on the half that works.
-
 ### what the %f hunt actually found — and the trap in it
 
 ⚠ **`printf("%f", 1.23e12)` answering `9AB0000000000.000000` under a mooncc-built PDCLib is
@@ -171,8 +147,8 @@ digit shifts by eight.
 
 The lesson is the comparison, not the bug: **a gcc-built copy of the same library is the
 control, and glibc is not**. Diffing against glibc's `printf` says only "these two libraries
-disagree". The real defect above was under it, one character wide, and only visible once both
-builds ran the *same* patched source.
+disagree". A real defect was under it — the duplicated lvalue of `++*current++`, one character
+wide (doc/moon.md, `calm?`) — and only visible once both builds ran the *same* patched source.
 
 Same build, same file family, still open: `strtod("-0.000123e+6")` does not answer -123.0.
 

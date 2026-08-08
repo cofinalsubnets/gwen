@@ -863,6 +863,9 @@
    ; harmlessly and keeps the lanes gen has for it (a bitfield, a pair, a wide --
    ; `post` refuses all three); anything else rides `post`, which takes the address
    ; once, and the step is added back to answer the NEW value rather than the old.
+   ; `op=` has the same wound and one door over: pasn's ('rmw op lv rhs), which
+   ; moors the address in a frame temp. ++/-- keep `post` -- it is the tighter code
+   ; and the two types it turns away are reachable by rmw's spelling, `x = x + 1`.
    (calm? e)
     (? (! (two? e)) 1
        (: k <e
@@ -983,7 +986,9 @@
                 (: r2 (pasn ps (cup (caup r)))
                    (? (! (two? r2)) ()
                       (: lv <r op <>hit
-                         `(`('asn lv (? op `('bin op lv <r2) <r2))
+                         `((? (! op) `('asn lv <r2)                      ; plain =: no duplicate to make
+                              (calm? lv) `('asn lv `('bin op lv <r2))    ; the desugar, exact here
+                              `('rmw op lv <r2))                         ; evaluate the lvalue ONCE
                             <>r2))))))))
    (pexpr ps ts)
     (: r (pasn ps ts)
