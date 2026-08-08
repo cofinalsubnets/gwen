@@ -1,4 +1,3 @@
-#include "love.h"
 #include "quay.h"
 
 // the blank a clear or scroll leaves behind: char 0 in the current pen,
@@ -36,7 +35,7 @@ void cb_stamp(struct cb *c, uint8_t i) {
   if (++c->wpos == (uint32_t) c->rows * c->cols) c->wpos = 0; }
 
 void cb_open(struct cb *c, uint16_t rows, uint16_t cols) {
-  c->rpos = c->wpos = c->spos = 0;
+  c->wpos = c->spos = 0;
   c->rows = rows, c->cols = cols;
   c->flag = cb_show | cb_wrap;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0;
@@ -48,9 +47,9 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols) {
   c->top = 0, c->bot = rows - 1u;
   cb_clear(c); }
 
-// scroll rows [t,b] up/down by n, blanking what opens. the trailing
-// ring reader and the saved cursor RIDE ALONG when their cells move --
-// the old scroll left them pointing at shifted ground.
+// scroll rows [t,b] up/down by n, blanking what opens. the saved cursor
+// RIDES ALONG when its cell moves -- the old scroll left it pointing at
+// shifted ground.
 static void cb_ride(struct cb *c, uint32_t *p, uint32_t t, uint32_t b, int dn, uint32_t n) {
   uint32_t r = *p / c->cols, k = n * c->cols;
   if (r < t || r > b) return;
@@ -64,7 +63,7 @@ static void cb_scup(struct cb *c, uint32_t t, uint32_t b, uint32_t n) {
   for (uint32_t i = t * cs, j = (b + 1u - n) * cs; i < j; i++) c->cb[i] = c->cb[i + n * cs];
   for (uint32_t i = (b + 1u - n) * cs, j = (b + 1u) * cs; i < j; i++) c->cb[i] = e;
   cb_dirt(c, t, b);
-  cb_ride(c, &c->rpos, t, b, -1, n), cb_ride(c, &c->spos, t, b, -1, n); }
+  cb_ride(c, &c->spos, t, b, -1, n); }
 
 static void cb_scdn(struct cb *c, uint32_t t, uint32_t b, uint32_t n) {
   if (!n) return;
@@ -73,7 +72,7 @@ static void cb_scdn(struct cb *c, uint32_t t, uint32_t b, uint32_t n) {
   for (uint32_t i = (b + 1u) * cs; i-- > (t + n) * cs;) c->cb[i] = c->cb[i - n * cs];
   for (uint32_t i = t * cs, j = (t + n) * cs; i < j; i++) c->cb[i] = e;
   cb_dirt(c, t, b);
-  cb_ride(c, &c->rpos, t, b, +1, n), cb_ride(c, &c->spos, t, b, +1, n); }
+  cb_ride(c, &c->spos, t, b, +1, n); }
 
 // index: down one row, scrolling at the region's bottom margin. a
 // cursor below the region (possible after DECSTBM) steps to the screen
@@ -132,7 +131,7 @@ static void cb_ctl(struct cb *c, uint8_t i) {
   uint32_t cs = c->cols, col = c->wpos % cs;
   switch (i) {
    case '\r': c->wpos -= col, c->flag &= (uint16_t) ~cb_pend; return;
-   case '\b': if (col && c->wpos != c->rpos) c->wpos--;
+   case '\b': if (col) c->wpos--;
               c->flag &= (uint16_t) ~cb_pend; return;
    case '\n': case 11: case 12:  // LF VT FF
     if (c->flag & cb_lnm) c->wpos -= col;
@@ -165,7 +164,7 @@ static void cb_ris(struct cb *c) {
   c->cur_fg = c->def_fg, c->cur_bg = c->def_bg, c->cur_font = 0;
   c->top = 0, c->bot = c->rows - 1u;
   c->flag = (uint16_t) (cb_show | cb_wrap | lnm);
-  c->rpos = c->wpos = c->spos = 0;
+  c->wpos = c->spos = 0;
   c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0;
   cb_clear(c); }
 
@@ -450,22 +449,3 @@ void cb_putc(struct cb *c, char _i) {
     if (i >= 0xf0 && i < 0xf5) { c->un = 3, c->ucp = i & 0x07u; return; }
     i = 0xfe; }                                  // stray continuation / bad lead
   cb_put1(c, i); }
-
-int cb_ungetc(struct cb *c, int i) {
-  uint32_t r = c->rpos;
-  r = r > 0 ? r - 1 : (uint32_t) c->rows * c->cols - 1;
-  if (r == c->wpos) return -1;
-  c->rpos = r;
-  // rewind one cell and replace its char, keeping the cell's colour/font
-  c->cb[r] = (c->cb[r] & ~(uint32_t) 0xff) | (uint8_t) i;
-  cb_dirt(c, r / c->cols, r / c->cols);
-  return i; }
-
-int cb_eof(struct cb *c) {
-  return c->rpos == c->wpos; }
-
-int cb_getc(struct cb *c) {
-  if (c->rpos == c->wpos) return -1;
-  int i = cb_ch(c->cb[c->rpos]);
-  if (++c->rpos == (uint32_t) c->rows * c->cols) c->rpos = 0;
-  return i; }

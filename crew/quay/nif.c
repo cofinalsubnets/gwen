@@ -35,7 +35,6 @@ static struct cb *scr_ok(ai_word x) {
  uintptr_t n = (uintptr_t) c->rows * c->cols;
  if (!c->rows || !c->cols || sizeof(struct cb) + n * 4 > s->len) return 0;
  if (c->wpos >= n) c->wpos = 0;
- if (c->rpos >= n) c->rpos = 0;
  if (c->spos >= n) c->spos = 0;
  if (c->bot >= c->rows) c->bot = (uint16_t) (c->rows - 1u);
  if (c->top > c->bot) c->top = 0;

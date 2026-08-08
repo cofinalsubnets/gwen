@@ -40,7 +40,7 @@ enum {              // flag bits: the console's modes
 enum { cb_outn = 64 };  // the reply queue's capacity (cb_reply's buffer size)
 
 struct cb {
-  uint32_t rpos, wpos, spos;  // read cursor (the input ring), write cursor, saved cursor
+  uint32_t wpos, spos;        // the write cursor, and DECSC's saved one
   uint16_t rows, cols, flag, arg;  // arg: the CSI parameter being collected
   uint8_t cur_fg, cur_bg, cur_font, esc;  // the pen; esc: escape-parser state
   uint16_t pv[8]; uint8_t pn;  // pv/pn: collected CSI parameters
@@ -62,11 +62,7 @@ void
   cb_fill(struct cb*, uint8_t),
   cb_attr(struct cb*, uint8_t fg, uint8_t bg, uint8_t font),
   cb_cur(struct cb*, uint32_t row, uint32_t col);
-int
-  cb_getc(struct cb*),
-  cb_ungetc(struct cb*, int),
-  cb_eof(struct cb*),
-  cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
+int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 uint32_t cb_unfold(uint8_t);       // a glyph byte's codepoint (0 = none)
 
 struct font { uint8_t const *glyphs, w, h; };
