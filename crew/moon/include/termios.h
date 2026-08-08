@@ -1,5 +1,6 @@
 #ifndef _AI_TERMIOS_H
 #define _AI_TERMIOS_H
+#include <sys/types.h>   /* pid_t, for the tc[gs]etpgrp pair */
 /* glibc x86-64 layout: 4 flag words, a line byte, 32 control chars, 2 speeds = 60 bytes */
 typedef unsigned int  tcflag_t;
 typedef unsigned char cc_t;
@@ -29,6 +30,21 @@ struct termios {
 #define TCSANOW   0
 #define TCSADRAIN 1
 #define TCSAFLUSH 2
+/* tcflush's queue selector */
+#define TCIFLUSH  0
+#define TCOFLUSH  1
+#define TCIOFLUSH 2
+/* tcflow's action */
+#define TCOOFF 0
+#define TCOON  1
+#define TCIOFF 2
+#define TCION  3
 int tcgetattr(int, struct termios*);
 int tcsetattr(int, int, struct termios const*);
+int tcsendbreak(int, int);
+int tcdrain(int);
+int tcflush(int, int);
+int tcflow(int, int);
+pid_t tcgetpgrp(int);
+int tcsetpgrp(int, pid_t);
 #endif

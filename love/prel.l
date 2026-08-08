@@ -70,7 +70,6 @@
    putc (put out)
    puts (say out)
    (putn n) (putbn out n 10)
-   putx (print out)
    (getc _) (see in))
 ; numfn lays the n-fold thread with spin/poke, so applying a fixnum never re-enters the compiler:
 ; n quote-f's then n ap's, cell 0 the printer's source, entry at cell 1.
@@ -269,8 +268,7 @@
              (? (= c -1) () (: _ (unsee p c) (gulp (once (\ u (flow p)))))))
  ; flow at one byte per force, for taking a port slowly where a whole run would read too far
  ; ahead. `in` already flows that way: it holds nothing in hand.
- (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p))))))
- (show x) (: o (jug 0) _ (print o x) (slurp o)))
+ (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p)))))))
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
 ; reads (). test a result with ? or id?, not arithmetic.
@@ -363,7 +361,7 @@
 ; glued runs only -- a monadic-only sigil lives here and has no row above.
 (: monadics (pins (tablet 0)
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
- '% fraction '? bit '$ saturate '! nil? '. dot))
+ '% fraction '? bit '$ saturate '! nil?))   ; `.` is pinned here by post.l, whose dot it is
 ; the factorization law: greedy longest-prefix, no backtracking. every factor but the last is
 ; arity one; the last takes the positional valence. the stock table declares no arity-one row, so
 ; != && >>= :- ?- are each one name; a `fixity`-declared prefix operator is what composes.
@@ -616,7 +614,6 @@
 ; the walk has no row to fold and hands the plain symbol through. != carries the comparison row,
 ; the one thing a binding cannot say. escape mid-list as (!) (.), like any bare operator.
 (: ! nil?)
-(: . dot)
 (: (!= a b) !(a = b))
 ; lisp-compat aliases by head-symbol substitution
 (: seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l)))))
@@ -683,9 +680,47 @@
     (atom? bs) 0
     (atom? (cup bs)) (w v (cap bs) bnd u dm)
     (: nd (dsug (cap bs) (caup bs)) (? (w v (cup nd) bnd u dm) 1 (wl v (cuup bs) bnd u dm))))
+   ; a name wants a cell when something that runs BEFORE its slot is filled can read it. two
+   ; doors: a direct read from a binding at or before it (for a lambda name, only one not
+   ; shielded by a \ -- a call comes after the pin), and, for a VALUE name, a read from
+   ; anywhere the earlier bindings REACH through the let's own names. the second door is
+   ; capture, not evaluation order: an earlier closure inherits a later sibling's captures, so
+   ; it wants the value's slot at CONSTRUCTION, before that slot exists.
    (boxset prs) (: nm (map cap prs)
-     (filter (\ v (any (\ p (w v (cup p) 0 0 (lambp (cup (assoc v prs)))))
-                       (take (1 + lidx v nm) prs))) nm))
+     ; bref: ONE walk of a def collecting every sibling name it reads, each tagged with whether
+     ; the read sat under a \ (u) -- w's question asked for the whole row at once, so the pass
+     ; costs a walk per binding where the name-at-a-time form cost a walk per pair. \ and : bind,
+     ; a one-operand \ is quote, macros expand -- except a head THIS let binds, which is a
+     ; variable and never a macro (boxfix-core's sub reads it the same way).
+     (bref x bnd u acc) (?
+      (nom? x) (? (&& (member? x nm) (nil? (member? x bnd))) (link (link x u) acc) acc)
+      (atom? x) acc
+      (: h (cap x) (?
+        (id? h '\) (? (atom? (cuup x)) acc (: r (lp x) (bref (cup r) (cat (cap r) bnd) 1 acc)))
+        (id? h ':) (brefl (cup x) (cat (ln (cup x)) bnd) u acc)
+        (: m (? (nom? h) (macros h) 0)
+           (? (&& m (nil? (member? h bnd)) (nil? (member? h nm))) (bref (m (cup x)) bnd u acc)
+              (foldl (\ a e (bref e bnd u a)) acc x))))))
+     (brefl bs bnd u acc) (?
+      (atom? bs) acc
+      (atom? (cup bs)) (bref (cap bs) bnd u acc)
+      (: nd (dsug (cap bs) (caup bs)) (brefl (cuup bs) bnd u (bref (cup nd) bnd u acc))))
+     es (map (\ p (link (cap p) (bref (cup p) 0 0 ()))) prs)   ; the read graph, source order
+     (reads m) (: e (assoc m es) (? (two? e) (cup e) ()))
+     (anyname m) (map cap (reads m))                           ; read anywhere
+     (barename m) (map cap (filter (\ r (nil? (cup r))) (reads m)))   ; read NOT under a \
+     (grow s) (: s2 (foldl (\ a m (cat a (filter (\ k (nil? (member? k a))) (anyname m)))) s s)
+                  (? (= (tally s2) (tally s)) s (grow s2)))
+     ; near: a read from a binding at or before v. a lambda name takes only the bare ones --
+     ; a call comes after the pin -- a value name every one.
+     (near v) (: d (lambp (cup (assoc v prs)))
+                 (any (\ m (member? v (? d (barename m) (anyname m))))
+                      (take (1 + lidx v nm) nm)))
+     ; reach: v is read from anywhere the bindings BEFORE it get to through the let's own
+     ; names -- capture, not evaluation order. an earlier closure inherits a later sibling's
+     ; captures, so it wants v's slot at CONSTRUCTION, before that slot exists.
+     (reach v) (member? v (grow (catmap anyname (take (lidx v nm) nm))))
+     (filter (\ v (? (near v) 1 (lambp (cup (assoc v prs))) 0 (reach v))) nm))
    (mkcs bx) (map (\ v (link v (link (nom 0) (nom v)))) bx)
    (cellbinds cs) (map (\ c (caup c >< list tablet 0)) cs)
    ; the cell read boxfix emits. a filled cell answers its value; a pre-fill read is a map miss, so

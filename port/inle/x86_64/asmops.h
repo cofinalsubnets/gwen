@@ -107,6 +107,15 @@ static inline void k_outl(uint16_t port, uint32_t v) {
 #endif
 }
 
+static inline uint32_t k_inl(uint16_t port) {
+  uint32_t v;
+#ifdef __mooncc__
+  asm volatile ("inl" : "=r0"(v) : "r2"(port));
+#else
+  asm volatile ("inl %1, %0" : "=a"(v) : "Nd"(port));
+#endif
+  return v; }
+
 // --- deliberate faults (the `fault` builtin's backend) ----------------
 // int3 is CC, the one-byte breakpoint, which holo calls `trap`; the two-byte
 // CD 03 is holo's `int 3` and a different instruction under vm86. we want the

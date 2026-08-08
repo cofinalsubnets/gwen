@@ -18,7 +18,7 @@
  * __va_list_tag, so the hand layouts below would be rejected, not just wrong.
  * mooncc predefines neither __GNUC__ nor __clang__, so this forks clean. */
 #if defined(__GNUC__) || defined(__clang__)
-typedef __builtin_va_list va_list;
+typedef __builtin_va_list __gnuc_va_list;
 #else
 #ifdef __aarch64__
 typedef struct {
@@ -49,8 +49,17 @@ typedef struct {
 } __va_list_tag;
 #endif
 
-typedef __va_list_tag va_list[1];
+typedef __va_list_tag __gnuc_va_list[1];
 #endif
+
+/* every glibc header we do not carry spells the type __gnuc_va_list (it asks
+ * gcc's stdarg.h for that name alone with __need___va_list), so a fallen-through
+ * <sys/syslog.h> declares vsyslog with it. name it here or the declaration is a
+ * parse error in a header the program never wrote. */
+#ifndef __GNUC_VA_LIST
+#define __GNUC_VA_LIST
+#endif
+typedef __gnuc_va_list va_list;
 
 #define va_start(ap, last) __builtin_va_start(ap, last)
 #define va_arg(ap, type)   __builtin_va_arg(ap, type)

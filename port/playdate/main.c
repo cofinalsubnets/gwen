@@ -194,6 +194,8 @@ void love_init(void) {
 #include "prel.h"
     " "
 #include "ev.h"
+    ,
+#include "post.h"
     );
   K.g = ai_evals_(K.g,
     "(use 'q)"

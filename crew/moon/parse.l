@@ -434,6 +434,9 @@
                                 (: pt (ptrarg ps <>e) (? (ptr? pt) <>pt (arr? pt) <>pt ()))))
              (k = 'cast) <>e
              (k = 'clit) <>e
+             ; &x is a pointer to x's type -- only when that type is known, so a
+             ; wrong element type never reaches a stride fold.
+             (k = 'addr) (: it (ptype ps <>e) (? it `('ptr it) ()))
              ; a call through a named function: its 'sigs return type (the
              ; complex promotion below needs clog's answer to type complex)
              (k = 'call) (? (&& (two? <>e) (id? (cap <>e) 'var))
@@ -445,6 +448,12 @@
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (? (&& (-2147483648 <= <>e) (<>e <= 2147483647)) 'int 'long)
              (k = 'flo) 'double
+             ; ptr - ptr is ptrdiff_t (a long here, and the 4-byte word on t32 --
+             ; the same answer either way). without it sizeof(&a[1] - &a[0]) had no
+             ; parse-time type, so it could not fold into an enum or an array bound.
+             (&& (k = 'bin) (id? <>e '-))
+              (: a (ptype ps <>>e) b (ptype ps <>>>e)
+                 (? (&& (|| (ptr? a) (arr? a)) (|| (ptr? b) (arr? b))) 'long ()))
              ())))
 
    ; -- declarators: stars XOR one array suffix, PLUS the function-pointer
@@ -792,6 +801,11 @@
                  rb (? (two? r2) (pasn ps r2) ())
                  rest (? (two? rb) (want <>rb ")") ())
                  (? (two? rest) `(`('asn `('deref <ra) `('deref <rb)) rest) ()))
+             ; __func__ (C99 6.4.2.2): the enclosing function's name as a string.
+             ; pinned by the two body-parsing sites; outside a body there is no name
+             ; to give, so it stays an undeclared identifier.
+             (&& ((tkk t) = 'id) (&& ((tkv t) = "__func__") (string? (peep ps 'fnname ()))))
+              `(`('str (peep ps 'fnname ())) >ts)
              ((tkk t) = 'id)
               (: ev (peep (ps 'enums) (tkv t) ())
                  (? (charm? ev) `(`('num ev) >ts)
@@ -1618,7 +1632,9 @@
                                             (: rest (mproto ps base (cup aft))
                                                (? (two? rest) `(`('proto name) <rest) ()))
                                            (: psh (bindlocs ps <rp ())   ; params typed for sizeof folding; restore on fn exit
+                                              _ (pin ps 'fnname name)     ; __func__ reads it
                                               b (pblock ps aft)
+                                              _ (pin ps 'fnname ())
                                               _ (unshadow ps psh)
                                               (? (two? b) `(`('fn name <rp <b) <>b) ()))))))
                                (fn? fpty)                                ; the declarator IS a function (returns a fn-ptr):
@@ -1627,7 +1643,9 @@
                                    aft (patt ts2)
                                    (? (peekp aft ";") `(`('proto name) (cup aft))
                                       (: psh (bindlocs ps <fprm ())
+                                         _ (pin ps 'fnname name)
                                          b (pblock ps aft)
+                                         _ (pin ps 'fnname ())
                                          _ (unshadow ps psh)
                                          (? (two? b) `(`('fn name <fprm <b) <>b) ()))))
                                ; a global declaration; the first declarator's stars came off `sr`

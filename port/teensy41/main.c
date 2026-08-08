@@ -283,6 +283,8 @@ int main(void) {
 #include "prel.h"
     " "
 #include "ev.h"
+    ,
+#include "post.h"
     );
     g = ai_evals_(g, "(use 'bao) 0"); }
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land

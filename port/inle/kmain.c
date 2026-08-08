@@ -1187,6 +1187,48 @@ static lvm(lvm_procseat) {
   Sp[3] = k_procseat(g, Sp[0], Sp[1], Sp[2], Sp[3]);
   Sp += 3; ai_musttail return Next(1); }
 
+// --- rung 5: the disk -- the block door love's filesystem (lib/fat.l) rides.
+// the driver is port/inle/blk.c (virtio-blk, polled, synchronous); DMA rides
+// the love string's own bytes -- heap memory, and nothing allocates between
+// post and completion, so the collector cannot move the buffer under the device.
+// (disk _)         -> the sector count, 0 when no disk: presence by the green.
+// (disk-read l n)  -> a string of n*512 bytes off sector l | ().
+// (disk-write l s) -> the sectors written | () (s must be whole sectors).
+void k_blk_init(void *dma);
+uint64_t k_blk_sectors(void);
+int k_blk_rw(uint64_t lba, uint32_t n, void *buf, int wr);
+
+static lvm(lvm_disk) {
+  Sp[0] = putcharm((intptr_t) k_blk_sectors());
+  ai_musttail return Next(1); }
+
+ai_noinline static struct ai *k_disk_read(struct ai *g) {
+  ai_word lw = g->sp[0], nw = g->sp[1];
+  intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
+           n   = (nw & 1) ? getcharm(nw) : -1;
+  if (lba < 0 || n <= 0 || n > 1 << 24) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+  if (!ai_ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper ghelps
+  if (k_blk_rw((uint64_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0)
+    g->sp[0] = ZeroPoint;
+  return g->sp[2] = g->sp[0], g->sp += 2, g; }
+static lvm(lvm_disk_read) {
+  Pack(g); g = k_disk_read(g);
+  if (!ai_ok(g)) return ghelp(g);
+  Unpack(g);
+  ai_musttail return Next(1); }
+
+ai_noinline static ai_word k_disk_write(ai_word lw, ai_word sw) {
+  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
+  if (lba < 0 || !ai_strp(sw)) return ZeroPoint;
+  struct ai_str *s = (struct ai_str*) sw;
+  if (!s->len || s->len % 512) return ZeroPoint;
+  if (k_blk_rw((uint64_t) lba, (uint32_t) (s->len / 512), s->bytes, 1) < 0)
+    return ZeroPoint;
+  return putcharm((intptr_t) (s->len / 512)); }
+static lvm(lvm_disk_write) {
+  Sp[1] = k_disk_write(Sp[0], Sp[1]);
+  Sp += 1; ai_musttail return Next(1); }
+
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd,
 // chmod, utime. doc/posix.md's conventions exactly: an effect answers () | a
 // POSITIVE errno (the host's numbers -- kore reads them back, and mv's EXDEV
@@ -1511,6 +1553,9 @@ static union u
   nif_dup2[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_dup2}, {lvm_ret0}},
   nif_getpid[] = {{lvm_getpid}, {lvm_ret0}},
   nif_procseat[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_procseat}, {lvm_ret0}},
+  nif_disk[] = {{lvm_disk}, {lvm_ret0}},
+  nif_disk_read[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_read}, {lvm_ret0}},
+  nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
   nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
@@ -1588,6 +1633,12 @@ static struct ai_def defs[] = {
   {"dup2", (intptr_t) nif_dup2},
   {"getpid", (intptr_t) nif_getpid},
   {"procseat", (intptr_t) nif_procseat},
+  // rung 5: the disk -- the raw block door lib/fat.l's filesystem rides. these
+  // three are OURS (no host twin: the host has no raw disk), so the shapes are
+  // love's -- absence and refusal answer (), presence is the green sector count.
+  {"disk", (intptr_t) nif_disk},
+  {"disk-read", (intptr_t) nif_disk_read},
+  {"disk-write", (intptr_t) nif_disk_write},
   // quit is seat-aware now (rung 4): a spawned task's exit is the TASK's, so
   // the row is owed on BOTH kernels. unseated it resets the shipped machine;
   // the TEST kernel's unseated arm answers the code instead (kore0.l's identity
@@ -1687,6 +1738,9 @@ void kmain(void) {
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {
   if (fbinit()) cbinit();        // the framebuffer console; the palette is a table now
+  // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
+  // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
+  k_blk_init(kmallocw(b2w(352)));
   struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
@@ -1721,6 +1775,8 @@ void kmain(void) {
 #include "prel.h"
  " "
 #include "ev.h"
+ ,
+#include "post.h"
  );
   r = ai_evals_(r,
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the

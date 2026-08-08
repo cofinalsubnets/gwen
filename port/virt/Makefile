@@ -24,7 +24,7 @@ mc = $(R)/out/host/mooncc
 lv = $(R)/out/host/love
 
 virt_cc = $(MOONCC) -t riscv64 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
-lib_h = out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
+lib_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 
 objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
   $(R)/$(o)/str.o $(R)/$(o)/main.o

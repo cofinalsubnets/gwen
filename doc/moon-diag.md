@@ -107,18 +107,33 @@ The census below counts it exactly: **lex and cpp**. `cpp.l`'s two self-naming m
 `'cppbad`, so the driver appends its own `cc: preprocessor error in <file>` — the same
 two-half-messages indictment, one stage over. Half-converted already.
 
-`#error` is the one worth doing first, because it is not a compiler bug at all: a package's
-`#error "This platform lacks fsync"` is a *configuration* signal, and telling that apart from
-"mooncc can't compile this" is the difference between a config edit and a compiler fix.
+`#error` **landed 2026-08-08** and the prediction held exactly: it is a *configuration* signal,
+and the bare form cost a whole afternoon. PDCLib's config says which construct it could not
+match, and `cc: #error directive` threw that away — 232 of 233 files refused with nothing to
+read. It says the text and the line now:
 
 ```
-cc: fsync.c:29: #error "This platform lacks fsync function, and Gnulib doesn't provide a replacement."
+cc: #error (line 248): Please create your own _PDCLIB_config . h . ( Unsupported * INTn_C macros . )
 ```
+
+Still owed on it: the **file name** (`cppgo` has no `fname` in scope — `cpp` takes it, the
+walker does not, and an `#error` inside a header is the common case), and the spelling, which is
+pp-tokens joined by spaces because that is all `spellcat` can promise. The sibling
+`cannot resolve #include` is still a bare `'cppbad` with no position at all.
 
 Also open, and a real check rather than a message: **a local label that never resolves should
 refuse in `gen` and name the label**, not escape into the symbol table as a GLOBAL UND under its
 internal spelling (`main.nowhere`) to be reported at link. That is what gcc's
 `label 'nowhere' used but not defined` is.
+
+⚠ **A parse-error LINE can be far from the fault, and it points BACKWARD.** darkhttpd.c reported
+`darkhttpd.c:786: parse error near ;` for a construct at 806-822 (an undeclared `u_char` in a
+cast), and 786 is a blank line. Truncating the file to 804 lines parsed clean, which is how the
+lie was caught. The number is not random — it is behind by roughly the lines the conditional
+skipper consumed — so **when a reported line looks innocent, bisect by truncation before reading
+it**. The same run showed the companion habit: `parse error near <filename>` prints the file
+where the token should be. Both make a real gap read as a phantom, and both are cheap to
+mistrust once you know.
 
 ## the instruments
 

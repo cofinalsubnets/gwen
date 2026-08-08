@@ -182,6 +182,8 @@ int main(void) {
 #include "prel.h"
     " "
 #include "ev.h"
+    ,
+#include "post.h"
     );
   r = ai_evals_(r,
 #include "bao.h"

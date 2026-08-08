@@ -40,7 +40,7 @@ test_host: $m
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
 # cue (doc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_data.ld \
-    out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
+    out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ test/front/main.c $(ho)/liblove.a $(data_ld)
@@ -102,7 +102,7 @@ test_embed: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane

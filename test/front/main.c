@@ -333,6 +333,8 @@ int main(int argc, char const **argv) {
 #include "prel.h"
     " "
 #include "ev.h"
+    ,
+#include "post.h"
     );
   g = ai_evals_(g, "(use 'bao)");
   g = ai_layer_(g);                  // the session layer: one load, one layer

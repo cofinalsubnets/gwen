@@ -37,4 +37,11 @@ int   posix_openpt(int);
 int   grantpt(int);
 int   unlockpt(int);
 char *ptsname(int);
+/* the two pseudo-random streams. ⚠ OURS, not glibc's -- a program that seeds and
+ * expects a particular sequence gets a different one; nothing here promises that. */
+#define RAND_MAX 32767
+int  rand(void);
+void srand(unsigned int);
+long random(void);
+void srandom(unsigned int);
 #endif

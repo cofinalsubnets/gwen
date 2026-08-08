@@ -4,8 +4,8 @@
 # miss love.h -- a fatal miss that stops the parse and makes every later name report
 # undeclared. absolute directories, one entry per file, is the fix.
 
-# rp2040 lives in the separate l-ports repo and its main.c still includes ../../gwen.h,
-# a name retired in the rename to love.h. it is out of the database; nothing resolves it.
+# rp2040 lives in the separate l-ports repo and its main.c still includes a header under
+# the name retired in the rename to love.h. it is out of the database; nothing resolves it.
 If:
   PathMatch: .*port/rp2040/.*
 Diagnostics:

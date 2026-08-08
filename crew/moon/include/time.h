@@ -9,6 +9,13 @@ struct timespec { long tv_sec; long tv_nsec; };
 struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon;
             int tm_year; int tm_wday; int tm_yday; int tm_isdst;
             long tm_gmtoff; char const* tm_zone; };
+/* tzset + its three globals: no timezone database here, so the zone is always
+ * UTC and tzset is the no-op that says so. declared because a program calls it
+ * before localtime and reads tzname for a log line. */
+void tzset(void);
+extern char *tzname[2];
+extern long timezone;
+extern int daylight;
 struct tm* localtime(time_t const*);
 struct tm* gmtime(time_t const*);
 struct tm* localtime_r(time_t const*, struct tm*);

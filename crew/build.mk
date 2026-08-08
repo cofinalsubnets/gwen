@@ -173,7 +173,7 @@ $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@echo MOONX	$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
-$(xd)/host_main.o: out/lib/egg.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h $(holo_h) $(glaze_h)
+$(xd)/host_main.o: out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h $(holo_h) $(glaze_h)
 $(xd)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(xd)/nolibc.o: crew/moon/lib/nolibc.c out/host/mooncc0.image
 	@echo MOONX	$@

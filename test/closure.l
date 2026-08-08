@@ -12,10 +12,10 @@
 ; and the self-call would dispatch on 0. ev.l's `boxfix` pass now fixes this:
 ; it indirects exactly those names through a heap cell -- letrec*'s "capture by
 ; location" -- while leaving everything else (functions, values defined before
-; their users, names captured only as lambda params) untouched. Boxing is
-; applied only when a value is captured by a lambda living in a def at index <=
-; the value's own index; later defs run after the value is assigned, so their
-; closures already see the right value.
+; their users, names captured only as lambda params) untouched. A value is boxed
+; when a def at index <= its own reads it, and also when one at a LOWER index
+; reaches it through the let's other names -- an earlier closure inherits a later
+; sibling's captures, so it wants the slot before the slot exists.
 
 (:
  ; recursive function: recursion via the lazily-resolved name
@@ -124,3 +124,23 @@
        ())                                             ; the leaf: nothing (falsy) -- a partial is truthy
    (go a) (? rq (zap a) 0)
    (assert (= 1 (go (L 5 6 7)))))                      ; ran to every leaf, no partial anywhere
+
+; --- capture that reaches THROUGH a later sibling -----------------------------
+; the read that wants a cell need not sit in the value's own def-prefix: an earlier
+; closure inherits a later sibling's captures whole, so it asks for the value's slot
+; at CONSTRUCTION -- before that slot exists. boxset follows the read graph to a
+; fixpoint, so the value is boxed on the reach, not only on a direct mention.
+(: (tk1 _) (: (a o) (f o) c (tablet 0) f (\ o (peep c o 'no)) _ (pin c 'k 'yes) (a 'k))
+   (tk2 _) (: (helper x) (other x) K (tablet 0) (other y) (peep K y 'no)
+               _ (pin K 'k 'yes) (helper 'k))
+   ; a binding whose nom also spells a macro is a variable here, never a macro head
+   (tk3 _) (: (a o) (zz o) c (tablet 0) zz (\ o (peep c o 'no)) _ (pin c 'k 'yes) (a 'k))
+   (assert (id? 'yes (tk1 ())) (id? 'yes (tk2 ())) (id? 'yes (tk3 ()))))
+
+; --- a top-level `:` reads its own name late ----------------------------------
+; the outer let is body-less, so closure-fct defglobs -- AFTER its own def is built.
+; a nested lambda naming it must read the book when it RUNS; capturing a value that
+; does not exist yet is what the missing condition used to report at definition.
+(: closure-fct (: (h n acc) (? (n < 1) acc (h (n - 1) (acc * n))) (\ n (h n 1))))
+(: (tl1 _) (: walk (: (kid k) (? (two? k) (walk (cup k)) k) (\ n (kid n))) (walk '(1 2 3)))
+   (assert (= 120 (closure-fct 5)) (nil? (tl1 ()))))
