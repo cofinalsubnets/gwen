@@ -7,6 +7,10 @@
  * so the sig it registers carries the return type and an empty list, which the
  * arity check exempts.
  *
+ * The K&R spelling -- `void f(), g();`, empty parens, several to a line -- is
+ * the one that matters in the field: xlander (1992) writes fourteen of them
+ * across four files, and each of those four alone was enough to segfault it.
+ *
  * Every check contributes 1, so the exit code IS the number that passed. */
 
 static int add1(char *p)  { return *p + 1; }
@@ -15,6 +19,9 @@ static long twice(long n) { return n + n; }
 /* declared block-scope below and defined here, so nothing at file scope says it */
 int blockonly(int n);
 int blockonly(int n) { return n * 3; }
+
+int seven(void)  { return 7; }
+int eleven(void) { return 11; }
 
 static int deep(void)
 {
@@ -37,6 +44,15 @@ int main(void)
 		r += add1(&s) == 2;
 		r += twice(t) == 14;
 		r += t == 7;                /* the object beside it is still an object */
+	}
+	{
+		/* the K&R spelling: empty parens, comma-listed. Both take no argument,
+		   because a C23 gcc reads `f()` as `f(void)` and the battery's control
+		   is gcc at its default standard. */
+		int seven(), eleven();
+
+		r += seven() == 7;
+		r += eleven() == 11;
 	}
 
 	r += deep();
