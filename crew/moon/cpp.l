@@ -223,7 +223,13 @@
                        (go ops))
    (cmul ts) (clevel cprim `(`('p "*" (\ a b (* a b))) `('p "/" (\ a b (? (b = 0) 0 (// a b)))) `('p "%" (\ a b (? (b = 0) 0 (a - (* (// a b) b)))))) ts)
    (cadd ts) (clevel cmul `(`('p "+" (\ a b (a + b))) `('p "-" (\ a b (a - b)))) ts)
-   (cshl ts) (clevel cadd `(`('p "<<" (\ a b (<< a b))) `('p ">>" (\ a b (>> a b)))) ts)
+   ; ⚠ love's shifts answer NOTHING on a big, and an unsigned 64-bit literal IS one
+   ; (18446744073709551615 is past the word) -- so `#if ULONG_MAX >> 63 == 1`, the
+   ; idiom every portable header uses to ask a type's width, read false and took the
+   ; #error arm. a non-negative big shifts by divide/multiply, which is what an
+   ; unsigned shift MEANS. (the same hole is still open for & | ^ on a big.)
+   (cshl ts) (clevel cadd `(`('p "<<" (\ a b (? (&& (big? a) (0 <= a)) (* a (b 2)) (<< a b))))
+                            `('p ">>" (\ a b (? (&& (big? a) (0 <= a)) (// a (b 2)) (>> a b))))) ts)
    (crel ts) (clevel cshl `(`('p "<" (\ a b (? (a < b) 1 0))) `('p "<=" (\ a b (? (a <= b) 1 0)))
                             `('p ">" (\ a b (? (b < a) 1 0))) `('p ">=" (\ a b (? (b <= a) 1 0)))) ts)
    (ceq ts) (clevel crel `(`('p "==" (\ a b (? (a = b) 1 0))) `('p "!=" (\ a b (? (a = b) 0 1)))) ts)
@@ -333,7 +339,13 @@
                     (dir = "define") (: _ (defmacro macs body) (cppgo rest macs cond () out1 incf))
                     (dir = "undef") (: _ (pin macs (vof <body) ()) (cppgo rest macs cond () out1 incf))
                     (dir = "include") (doinc body macs cond out1 rest incf)
-                    (dir = "error") (: _ (say err "cc: #error directive") _ (put err 10) 'cppbad)
+                    ; ⚠ SAY THE TEXT. an #error is the program telling you what is wrong in
+                    ; its own words, and "#error directive" throws that away -- pdclib's
+                    ; config prints which type it could not match, and the bare form left
+                    ; 232 refused files with nothing to read.
+                    (dir = "error")
+                     (: _ (say err ("cc: #error (line " + (show (lof <line)) + "): " + (spellcat body)))
+                        _ (put err 10) 'cppbad)
                     (member? dir '("pragma" "line")) (cppgo rest macs cond () out1 incf)   ; ignored
                     (cppgo rest macs cond () out1 incf)))                              ; unknown directive: ignore
              (! (condactive cond)) (cppgo rest macs cond buf out incf)                 ; skipped code: drop
@@ -367,8 +379,12 @@
    ; a plain (1 text) keeps this incf (the laws feed includes as data).
    (doinc body macs cond out rest incf)
     (? (! (condactive cond)) (cppgo rest macs cond () out incf)
-       (: sys? (&& (two? body) (pv? <body "<"))
-          name (incname body)
+       ; the THIRD form (C89 6.8.2): tokens matching neither <h> nor "h" are
+       ; macro-expanded and must then match one -- freetype's `#include FT_FREETYPE_H`,
+       ; which every Xft consumer reaches through.
+       (: b (? (incname body) body (expand body macs))
+          sys? (&& (two? b) (pv? <b "<"))
+          name (incname b)
           txt (? name (incf name sys?) ())
           spelt (? sys? ("<" + name + ">") ("\"" + name + "\""))
           (? (! (two? txt)) (: _ (say err ("cc: cannot resolve #include " + spelt)) _ (put err 10) 'cppbad)  ; unresolved -> FATAL
@@ -426,7 +442,15 @@
                ; and Linux is the OS under every cc-built object (raw syscalls,
                ; ELF, the host seam) -- without it host/posix.c's signalfd source
                ; silently compiled OUT of the selfhost binary (a rung-2 wart)
+               ; all three spellings gcc gives a linux ELF target: st.c asks
+               ; `#if defined(__linux)` for <pty.h>, and one spelling missing is
+               ; a header silently not included. the unprefixed `linux`/`unix`
+               ; stay out -- gcc drops them outside gnu89, and they collide with
+               ; ordinary identifiers.
                _ (pin t "__linux__" `('obj `((tok 'num 1 0))))
+               _ (pin t "__linux" `('obj `((tok 'num 1 0))))
+               _ (pin t "__unix__" `('obj `((tok 'num 1 0))))
+               _ (pin t "__unix" `('obj `((tok 'num 1 0))))
                ; gcc's limit predefines, the ones the host seam reads
                _ (pin t "__INT_MAX__" `('obj `((tok 'num 2147483647 0))))
                _ (pin t "__LONG_MAX__" `('obj `((tok 'num 9223372036854775807 0))))

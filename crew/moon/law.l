@@ -58,7 +58,10 @@
       (= (tn3 (caup (clex "'a' '\\n' '\\''")) 0) (L 'num 97 1))   ; char literals are numbers
       (= (tn3 (caup (clex "'a' '\\n' '\\''")) 1) (L 'num 10 1))
       (= (tn3 (caup (clex "'a' '\\n' '\\''")) 2) (L 'num 39 1))
-      (! (clex "'ab'")) (! (clex "'"))                       ; malformed literals refuse
+      ; a multi-char constant packs left to right into an int, gcc's rule (0x6162);
+      ; an UNTERMINATED one still refuses.
+      (= (tn3 (caup (clex "'ab'")) 0) (L 'num 24930 1))
+      (! (clex "'"))                                         ; malformed literals refuse
       (= (tn3 (caup (clex "\"hi\"")) 0) (L 'str "hi" 1))
       (= (tn3 (caup (clex "\"a\\nb\"")) 0) (L 'str "a\nb" 1))
       (= (tn3 (caup (clex "\"ab\\\ncd\"")) 0) (L 'str "abcd" 1))   ; \<newline> inside a string SPLICES (the pair vanishes) -- tar's --help strings

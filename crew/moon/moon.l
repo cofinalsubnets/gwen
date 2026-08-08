@@ -94,8 +94,13 @@
                 (|| (s = "thumb2sp") (s = "playdate")) 'thumb2sp   ; ARMv7E-M with an SP-only FPU (STM32F746): f64 softens to __aeabi_*
                 (|| (s = "riscv64") (|| (s = "riscv") (s = "rv64"))) 'riscv64   ; RV64IMFD LP64 (the pine64 ox64 / qemu-virt)
                 (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb2sp | thumb1 | riscv64)")))
-   (archdef tgt) (? (id? tgt 'arm64) "__aarch64__" (member? tgt '(thumb2 thumb2sp thumb1)) "__arm__"
-                    (id? tgt 'riscv64) "__riscv" "__x86_64__")
+   ; the arch predefines, BOTH spellings where gcc gives two -- pdclib's config asks
+   ; `defined(__x86_64)` for its varargs lane, and one spelling missing reads as an
+   ; unsupported machine rather than as a compiler that only knows the other word.
+   (archdefs tgt) (? (id? tgt 'arm64) '("__aarch64__")
+                     (member? tgt '(thumb2 thumb2sp thumb1)) '("__arm__" "__arm")
+                     (id? tgt 'riscv64) '("__riscv")
+                     '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the diagnostic driver (doc/moon-diag.md): a stage answered a gripe (a cause
    ; it named itself) or a bare bad. a gripe prints "cc: <file>:<line>:<col>: msg"
    ; -- an unknown file takes the source path, an unknown line/col elides; anything
@@ -126,7 +131,7 @@
    ; and the last -D would swallow the file's first line); deskew pays the
    ; numbering back at the report.
    (cc-parse src is ds tgt nsi)
-    (: ds9 (link (archdef tgt)             ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+    (: ds9 ((archdefs tgt) +             ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) (link "__SIZEOF_INT128__=16" ds) ds))   ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))

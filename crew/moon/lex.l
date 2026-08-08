@@ -163,6 +163,11 @@
        ; (it folds to 0). -> (endj value); a plain `0`, `0.5`, `08`, `0x..` never reach here. --
        (octd? c) (&& (& (ctbl c) 4) (c <= 55))
        (octlit i) (: (go k v) (? (&& (k < n) (octd? (src k))) (go (k + 1) ((* 8 v) + ((src k) - 48))) `(k v)) (go i 0))
+       ; 0b/0B binary (gcc's extension, C23's standard spelling) -- one lane beside
+       ; the octal one, suffix run and all. a Playdate sprite mask is written this way.
+       (binlit i) (: (go k v) (? (&& (k < n) (|| ((src k) = 48) ((src k) = 49)))
+                                 (go (k + 1) ((* 2 v) + ((src k) - 48))) `(k v))
+                     (go (i + 2) 0))
        (hexlit i)
         (: ir (hxrun (i + 2) 0 0) j0 <ir im <>ir
            dot (&& (j0 < n) ((src j0) = 46))
@@ -237,19 +242,37 @@
                                           (: _ (put sink c2) (eat (e + 1)))))))
                              r (eat (i + 1))
                              (? (two? r) (go <>r line (link `('str <r line () (snip src i <>r)) acc)) ()))
-                 (c = 39) (: esc (&& ((i + 2) < n) ((src (i + 1)) = 92))
-                             r (? esc (escseq (i + 2)) ())
-                             v (? esc (? (two? r) <r ())
-                                  ((i + 1) < n) (src (i + 1))
-                                  ())
-                             j (? esc (? (two? r) (+ <>r 1) 0) (i + 3))
-                             (? (&& (charm? v) (&& (j <= n) ((src (j - 1)) = 39)))
-                                (go j line (link `('num v line () (snip src i j)) acc))
-                                ()))
+                 ; a character constant: chars and escapes up to the closing quote.
+                 ; ⚠ MULTI-character ones are ordinary C (implementation-defined, gcc
+                 ; packs left to right into an int) and they turn up in text the
+                 ; program never means to compile -- pdclib's `#error .. 'long' ..`
+                 ; sits in a dead #if, and the whole file lexes before cpp runs.
+                 (c = 39) (: (mc k v cnt)
+                             (? (n <= k) ()
+                                ((src k) = 39) (? (cnt = 0) () `(k v cnt))
+                                ((src k) = 92)
+                                 (: r (escseq (k + 1))
+                                    (? (two? r) (mc <>r (| (<< v 8) (& <r 255)) (cnt + 1)) ()))
+                                (mc (k + 1) (| (<< v 8) (& (src k) 255)) (cnt + 1)))
+                             r (mc (i + 1) 0 0)
+                             (? (! (two? r)) ()
+                                (: j (+ <r 1)
+                                   ; one char keeps the raw byte it always had; a wider one
+                                   ; is int-wide and signed, so '\xff\xff\xff\xff' is -1.
+                                   v (? (<>>r = 1) <>r
+                                        (: w (& <>r 4294967295)
+                                           (? (0 < (& w 2147483648)) (w - 4294967296) w)))
+                                   (go j line (link `('num v line () (snip src i j)) acc)))))
                  (&& (c = 48) (&& ((i + 1) < n) (|| ((src (i + 1)) = 120) ((src (i + 1)) = 88))))  ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
                      k (? <>r 'flo (ukind i <r <>>r))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
                      (go <r line (link `(k <>>r line () (snip src i <r)) acc)))
+                 (&& (c = 48) (&& ((i + 2) < n) (&& (|| ((src (i + 1)) = 98) ((src (i + 1)) = 66))
+                                                     (|| ((src (i + 2)) = 48) ((src (i + 2)) = 49)))))   ; 0b / 0B binary
+                  (: r (binlit i)
+                     j2 (skipsuf <r)
+                     k (ukind i j2 <>r)
+                     (go j2 line (link `(k <>r line () (snip src i j2)) acc)))
                  (&& (c = 48) (&& ((i + 1) < n) (octd? (src (i + 1)))))   ; 0NNN octal integer (0644, 0777)
                   (: r (octlit i)
                      j2 (skipsuf <r)

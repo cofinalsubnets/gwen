@@ -33,7 +33,7 @@
    (front src)
     (: r (uread src)
        (? (! (two? r)) ()
-          (: lx (clex ((deftext `((archdef 'x64))) + <>r))
+          (: lx (clex ((deftext (archdefs 'x64)) + <>r))
              (? (! (okv? lx)) ()
                 (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
                    (? (! (okv? pp)) ()
