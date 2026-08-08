@@ -33,4 +33,20 @@
 #endif
 #define PATH_MAX   4096
 #define NAME_MAX   255
+/* POSIX's _POSIX_* are the guaranteed MINIMA, fixed by the standard -- a program
+ * sizes a buffer by them rather than by what this machine happens to allow. */
+#define _POSIX_ARG_MAX     4096
+#define _POSIX_OPEN_MAX    20
+#define _POSIX_NAME_MAX    14
+#define _POSIX_PATH_MAX    256
+#define _POSIX_LINK_MAX    8
+#define _POSIX_PIPE_BUF    512
+#define _POSIX_CHILD_MAX   25
+#define _POSIX_SSIZE_MAX   32767
+#define _POSIX_STREAM_MAX  8
+#define _POSIX_TZNAME_MAX  6
+#define ARG_MAX            2097152
+#define OPEN_MAX           1024
+#define LINK_MAX           127
+#define PIPE_BUF           4096
 #endif
