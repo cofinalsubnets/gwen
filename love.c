@@ -2614,7 +2614,7 @@ lvm(lvm_sleep) {
  Sp[0] = zero;
  Ip += 1;
  // rest waits on the CLOCK alone: a lingering next_wait_fd would gate the timer on
- // that fd firing (haven's painter slept forever on a quiet port)
+ // that fd firing (a painter slept forever on a quiet port)
  g->next_wait_fd = -1;
  if (!charmp(n) || getcharm(n) <= 0) { g->next_wake_at = 0; ai_musttail return Ap(lvm_yield_sw, g); }
  g->next_wake_at = (uintptr_t) ai_clock() + getcharm(n);

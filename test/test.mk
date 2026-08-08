@@ -101,34 +101,12 @@ test_embed: host $(ho)/mooncc
 	@echo "test_embed: every frontend builds against love.h (any skip is named above)"
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
-# AND a "<name>: ok"; WARM but for hostnif_cold. haven.l is OUT -- it can wedge on wayland.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/pier.l test/host/font.l test/host/drm.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l
-# haven's real-client smoke binary: libwayland-client + the generated xdg-shell glue --
-# deliberately NOT zero-dep, it exists to be the OTHER side of haven's wire. built only
-# where wayland-scanner + libwayland live; test/host/haven.l skips its act without it.
-smoke = out/host/haven-smoke
-xdgxml = $(shell pkg-config --variable=pkgdatadir wayland-protocols 2>/dev/null)/stable/xdg-shell/xdg-shell.xml
-$(smoke): crew/haven/smoke.c
-	@mkdir -p out/host
-	@if command -v wayland-scanner >/dev/null 2>&1 && pkg-config --exists wayland-client 2>/dev/null && [ -f "$(xdgxml)" ]; then \
-	  echo "CC $@"; \
-	  wayland-scanner client-header "$(xdgxml)" out/host/xdg-shell-client-protocol.h; \
-	  wayland-scanner private-code "$(xdgxml)" out/host/xdg-shell-protocol.c; \
-	  $(CC) -O1 -Wall -Wextra -o $@ crew/haven/smoke.c out/host/xdg-shell-protocol.c -Iout/host `pkg-config --cflags --libs wayland-client`; \
-	else echo "SKIP $@ (no libwayland here)"; fi
-# haven's keyboard map: the REAL compiled xkb text (what every wayland compositor ships
-# its clients), emitted by libxkbcommon's own tool where it lives. absent -> an empty
-# file, and haven ships keymap format 0 instead.
-havenkm = out/lib/haven-keymap.xkb
-$(havenkm):
-	@mkdir -p out/lib
-	@if command -v xkbcli >/dev/null 2>&1; then \
-	  echo "KM $@"; xkbcli compile-keymap > $@; \
-	else echo "SKIP $@ (no xkbcli here)"; : > $@; fi
+# AND a "<name>: ok"; WARM but for hostnif_cold.
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
-test_hostnif: host $(smoke) $(havenkm) out/host$(hsuf)/lush
+test_hostnif: host out/host$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
 	  case " $(hostnif_cold) " in *" $$s "*) L="$m";; *) L="$(mw)";; esac; \
 	  cat test/00-init.l $$s | $$L > out/host/.test_hostnif.out 2>&1; r=$$?; \

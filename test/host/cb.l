@@ -354,15 +354,4 @@
  _ (scribe s "\e[2;1H\e[L")
  _ (assert (= 14 (& 14 (wet s 0)))))      ; IL at row 1: rows 1..3
 
-; --- 20. blitrow: a grid row to pixels in one call, cursor in reverse ---
-(: s (mkscr 2 4)
- _ (scribe s "A")
- fb (cask (* 32 (* 32 4)))
- r (blitrow fb 32 s 0 () ())
- lit (foldl (\ a i (+ a (? (= 192 (peep fb i 0)) 1 0))) 0 (jot 2048))
- _ (assert (id? r fb) (= 126 lit))           ; the A's 42 strokes, 3 channels each
- _ (blitrow fb 32 s 0 0 ())                     ; the cursor sits on the A: reverse
- lit2 (foldl (\ a i (+ a (? (= 192 (peep fb i 0)) 1 0))) 0 (jot 2048))
- _ (assert (= 258 lit2)))                    ; (128-42)*3: the ground lit instead
-
 (puts "cb: ok")

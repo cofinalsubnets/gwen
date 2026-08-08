@@ -7,14 +7,14 @@
 ; GetGeometry/GetProperty/GetInputFocus, exiting 0 iff all held. TWO processes
 ; on purpose: lux's stream and the probe's never share a socket, so neither
 ; can desync the other (the one-process attempt kept mis-reading geometry;
-; the test/host/haven.l shape is the cure).
+; a -displayfd handshake is the cure).
 ;
 ;   cat test/00-init.l test/host/luxui.l | out/host/love
 ;
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
 ; the display number off Xvfb's -displayfd stdout: take the first line that is
-; ENTIRELY digits (server chatter shares the pty -- test/host/haven.l's lesson).
+; ENTIRELY digits (server chatter shares the pty).
 (: xv (tether `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    camp #()

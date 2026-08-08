@@ -58,7 +58,7 @@ mostly insulated: if `tally`/`snip`/index all switch together, code that slices 
 boundaries it found by scanning keeps working. the 207 `snip` sites are all text
 (`snip` on a list answers 0). `tally` appears 1052 times but is generic over lists;
 only the string subset moves. eighteen `("" + n)` byte-builds sit in
-`crew/quay/{berth,ink,pier,rove}.l`, `crew/vi/core.l`, `love/bao.l`,
+`crew/quay/{berth,ink,rove}.l`, `crew/vi/core.l`, `love/bao.l`,
 `crew/manifest/`, and three tests.
 
 two bonuses: `crew/quay/psf.l`'s `psf-cp` and `crew/quay/berth.l`'s `utf8` are

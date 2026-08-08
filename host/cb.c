@@ -25,8 +25,6 @@
 #include <errno.h>
 #include <string.h>   // memcpy (swig's rbuf drain)
 #include "../crew/quay/quay.c"
-#include "../crew/quay/moderndos_8x16.c"   // the builtin glyphs (host links no font objects)
-#include "../crew/quay/cga_8x8.c"
 
 // Re-derive the struct cb from a cask arg, or 0 if it isn't one / doesn't
 // hold a sane screen. The cask is OPEN DATA -- the love side can pin any byte
@@ -116,125 +114,6 @@ static lvm(lvm_gaze) {
  Sp[1] = out;
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
-// the xterm-256 palette rides .rodata, laid by quay.l through clay -- the SAME table
-// the kernel's fbdraw reads, so a cell means the same pixels on a framebuffer and in
-// a window by construction. #define xpal to keep the reading sites short.
-#include "../crew/quay/xterm256.h"
-#define xpal xterm256
-
-// a FONT ATLAS: a cask of [w u8][h u8][0 u16] then 256 glyphs, h scanlines
-// each, ceil(w/8) bytes per scanline, MSB the leftmost pixel -- the PSF
-// discipline, so console fonts pour straight in. the builtins bake into
-// the same shape via (font b k). glyphs up to 16x32.
-struct cb_atlas { uint8_t const *g; intptr_t w, h, bpr; };
-static int atlas_ok(ai_word x, struct cb_atlas *a) {
- if (x & 1 || ((union u*) x)->ap != lvm_cask) return 0;
- struct ai_str *s = ((struct ai_cask*) x)->str;
- if (s->len < 4) return 0;
- intptr_t w = (uint8_t) s->bytes[0], h = (uint8_t) s->bytes[1];
- intptr_t bpr = (w + 7) / 8;
- if (w < 1 || w > 16 || h < 1 || h > 32) return 0;
- if (s->len < 4 + (uintptr_t) (256 * h * bpr)) return 0;
- a->g = (uint8_t const*) s->bytes + 4, a->w = w, a->h = h, a->bpr = bpr;
- return 1; }
-
-// the pixel core: one cell into a 32bpp little-endian framebuffer through
-// an atlas, faces rendered like the kernel's fbdraw (bright bold, swapped
-// reverse, underline on the last scanline). caller bounds.
-static void cb_px1(uint8_t *base, intptr_t w, uint32_t cell, intptr_t x, intptr_t y,
-                   struct cb_atlas const *a) {
- uint8_t g_ = cb_ch(cell), face = cb_face(cell), fgx = cb_fg(cell);
- if (face & cb_bold && fgx < 8) fgx = (uint8_t) (fgx + 8);
- uint32_t fg = xpal[fgx], bg = xpal[cb_bg(cell)];
- if (face & cb_rev) { uint32_t t_ = fg; fg = bg, bg = t_; }
- uint8_t const *bmp = a->g + (intptr_t) g_ * a->h * a->bpr;
- for (intptr_t r = 0; r < a->h; r++) {
-  int ul = face & cb_under && r == a->h - 1;
-  uint8_t *row = base + ((uintptr_t) (y + r) * (uintptr_t) w + (uintptr_t) x) * 4;
-  uint32_t o = bmp[r * a->bpr];
-  if (a->bpr > 1) o = o << 8 | bmp[r * a->bpr + 1];
-  for (intptr_t k = a->w; k--;) {
-   uint32_t px = ul || o >> (a->bpr * 8 - 1 - k) & 1 ? fg : bg;
-   row[k * 4] = (uint8_t) px;
-   row[k * 4 + 1] = (uint8_t) (px >> 8);
-   row[k * 4 + 2] = (uint8_t) (px >> 16);
-   row[k * 4 + 3] = 0; } } }
-
-// the two builtins. the glyphs ARE the quay tables -- a [256][n] is flat, so an atlas
-// needs no copy of them. the 4-byte {w,h,0,0} head is a fact about the table, not part
-// of it: it exists on the WIRE, where a cask carries the shape out to love.
-static struct cb_atlas const cb_builtin[2] = {
- { (uint8_t const*) moderndos_8x16, 8, 16, 1 },
- { (uint8_t const*) cga_8x8,        8,  8, 1 } };
-// resolve a font arg: a valid atlas cask, or anything else -> builtin 0
-static void atlas_of(ai_word x, struct cb_atlas *a) {
- if (atlas_ok(x, a)) return;
- *a = cb_builtin[0]; }
-
-// (font b k): bake builtin k (0 moderndos 8x16, 1 cga 8x8) into cask b as
-// an atlas; a non-cask b answers the byte count -- the screen size protocol.
-static lvm(lvm_font) {
- ai_word b = Sp[0], out = ZeroPoint;
- intptr_t k = (Sp[1] & 1) ? getcharm(Sp[1]) : -1;
- if (k == 0 || k == 1) {
-  struct cb_atlas const *bi = &cb_builtin[k];
-  uintptr_t body = 256u * (uintptr_t)(bi->h * bi->bpr), need = 4 + body;
-  if ((b & 1) || ((union u*) b)->ap != lvm_cask) out = putcharm(need);
-  else {
-   struct ai_str *s = ((struct ai_cask*) b)->str;
-   if (s->len >= need) {
-    s->bytes[0] = (char) bi->w, s->bytes[1] = (char) bi->h;   // the head is minted here, on the wire
-    s->bytes[2] = s->bytes[3] = 0;
-    memcpy(s->bytes + 4, bi->g, body);
-    out = b; } } }
- Sp[1] = out;
- Sp += 1; Ip += 1; ai_musttail return Continue(); }
-
-// (blit fb wpx cell x y): one cell, bounds-checked; misuse is nothing.
-static lvm(lvm_blit) {
- ai_word fb = Sp[0], out = ZeroPoint;
- intptr_t w = (Sp[1] & 1) ? getcharm(Sp[1]) : -1,
-           cl = (Sp[2] & 1) ? getcharm(Sp[2]) : -1,
-           x = (Sp[3] & 1) ? getcharm(Sp[3]) : -1,
-           y = (Sp[4] & 1) ? getcharm(Sp[4]) : -1;
- if (!(fb & 1) && ((union u*) fb)->ap == lvm_cask
-      && w > 0 && cl >= 0 && x >= 0 && y >= 0 && x + 8 <= w) {
-  struct ai_str *s = ((struct ai_cask*) fb)->str;
-  if ((uintptr_t) (y + 16) * (uintptr_t) w * 4 <= s->len) {
-   struct cb_atlas a;
-   atlas_of(0, &a);
-   cb_px1((uint8_t*) s->bytes, w, (uint32_t) cl, x, y, &a);
-   out = fb; } }
- Sp[4] = out;
- Sp += 4; Ip += 1; ai_musttail return Continue(); }
-
-// (blitrow fb wpx scr row curpos): a whole grid row in one call -- the
-// painter's hot lane (a keystroke repaints one row, a scroll a bandful,
-// and the loop stays in C either way). curpos names the cursor's cell,
-// worn in reverse; a non-charm curpos means no cursor on this row.
-static lvm(lvm_blitrow) {
- ai_word fb = Sp[0], out = ZeroPoint;
- intptr_t w = (Sp[1] & 1) ? getcharm(Sp[1]) : -1,
-           row = (Sp[3] & 1) ? getcharm(Sp[3]) : -1,
-           cur = (Sp[4] & 1) ? getcharm(Sp[4]) : -1;
- struct cb *c = scr_ok(Sp[2]);
- struct cb_atlas a;
- atlas_of(Sp[5], &a);
- if (c && !(fb & 1) && ((union u*) fb)->ap == lvm_cask
-      && w > 0 && row >= 0 && row < (intptr_t) c->rows) {
-  struct ai_str *s = ((struct ai_cask*) fb)->str;
-  intptr_t cols = c->cols;
-  if (cols * a.w > w) cols = w / a.w;
-  if ((uintptr_t) ((row + 1) * a.h) * (uintptr_t) w * 4 <= s->len) {
-   for (intptr_t q = 0; q < cols; q++) {
-    uint32_t cell = c->cb[(uintptr_t) row * c->cols + (uintptr_t) q];
-    if ((intptr_t) ((uintptr_t) row * c->cols + (uintptr_t) q) == cur)
-          cell ^= (uint32_t) cb_rev << 28;
-    cb_px1((uint8_t*) s->bytes, w, cell, q * a.w, row * a.h, &a); }
-   out = fb; } }
- Sp[5] = out;
- Sp += 5; Ip += 1; ai_musttail return Continue(); }
-
 // (wet scr k): dirty-row bits for rows 32k..32k+31, read-and-cleared --
 // the renderer's shopping list. bit 255 stands for row 255 and past.
 static lvm(lvm_damage) {
@@ -323,9 +202,6 @@ static union u const
   nif_gaze[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gaze},   {lvm_ret0}},
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
   nif_unfold[] = {{lvm_unfold}, {lvm_ret0}},
-  nif_blit[]   = {{lvm_cur}, {.x = putcharm(5)}, {lvm_blit}, {lvm_ret0}},
-  nif_blitrow[] = {{lvm_cur}, {.x = putcharm(6)}, {lvm_blitrow}, {lvm_ret0}},
-  nif_font[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_font}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
   nif_swig[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_swig}, {lvm_ret0}};
 AI_NIF("screen", nif_screen);
@@ -334,8 +210,5 @@ AI_NIF("glass", nif_glass);
 AI_NIF("gaze", nif_gaze);
 AI_NIF("reply", nif_reply);
 AI_NIF("unfold", nif_unfold);
-AI_NIF("blit", nif_blit);
-AI_NIF("blitrow", nif_blitrow);
-AI_NIF("font", nif_font);
 AI_NIF("wet", nif_damage);
 AI_NIF("swig", nif_swig);

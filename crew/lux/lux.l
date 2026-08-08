@@ -19,7 +19,7 @@
 ; GUARDED: a change must answer a 4-list whose sheaf is wssane? -- the proved
 ; invariant, standing as a live seatbelt -- or it is refused and the old
 ; state kept. ONE HAND ON THE WIRE: the repl never touches any X socket (the
-; haven painter's law, absolute); with layout.l's open dispatch lane,
+; the painter's law, absolute); with layout.l's open dispatch lane,
 ; (lay! `(my-closure state..)) swaps in a layout written at the prompt.
 ; The socket is an EVAL SERVER -- $XDG_RUNTIME_DIR (0700) when set, /tmp
 ; otherwise (a socket refuses connect without write permission). The socket
@@ -90,7 +90,7 @@
    ; the session reads LINES (see parks the TASK -- the reader's park law) and
    ; sounds the TEXT: `sound` walks a charlist, so a socket running dry mid-skip
    ; cannot strand the whole vm in a C parse the way sounding the fd once did (an
-   ; idle attached client froze the wm between asks; haven's painter starved on
+   ; idle attached client froze the wm between asks; a painter starved on
    ; exactly this). a torn shape carries to the next line as the RESIDUE the
    ; reader hands back -- not the accumulation re-read from byte zero -- and
    ; every form on a line runs, where only the first used to.

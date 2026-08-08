@@ -65,7 +65,7 @@ different and much larger claim.)
 ⚠ **The reader does not resume.** On an unfinished shape it discards the partial parse and the
 bytes are already consumed. `more` is only a signal that the caller must own the text and
 re-parse the concatenation — which every consumer already does: bao re-reads the whole editor
-buffer from byte 0 on each Enter, lux and haven carry pending text forward and re-tap it, and
+buffer from byte 0 on each Enter, lux carries pending text forward and re-taps it, and
 `reads`/`use`/`-l`/cook/kore/salt simply end the stream.
 
 Because the reader can ask for more itself, `reads` and `forms` are a walk rather than a refill
