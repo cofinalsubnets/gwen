@@ -77,14 +77,25 @@
    ; ingredients per rebuild -- 2828 after a hundred -- which `prep` then walks every pass.
    ; unbounded memory and quadratic time, from a tool that looked idle.
    (adds a b) (foldl (\ acc x (? (member? x acc) acc (acc + `(x)))) a b)
+   ; a Cookfile is written on one seat and read on another, so its paths name the
+   ; seat symbolically: a LEADING $HOME or $PWD opens here, at registration. step
+   ; strings want none of this -- sh -c expands them itself. a non-string item is
+   ; a phony symbol ('all, 'install) and rides through untouched.
+   (unpre w tok val)
+   (: n (tally tok)
+      (? (&& (string? val) (&& ((tally w) >= n) (tok = (snip w 0 n))))
+         (val + (snip w n (tally w))) w))
+   (unseat w) (? (string? w) (unpre (unpre w "$HOME" (getenv "HOME")) "$PWD" (cwd 0)) w)
+   (unseatl l) (? (two? l) (map unseat l) l)
    (reg item ing oo steps)
-   (: prev (peep cards item ())
+   (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
+      prev (peep cards at ())
       (? prev
-         (pin cards item (link (adds <prev ing)
-                               (link (adds <>prev oo)
-                                     (? (two? steps) steps >>prev))))
-         (: _ (pin cards item (link ing (link oo steps)))
-             _ (? (peep check 0 0) 0 (pin check 0 item)) item)))
+         (pin cards at (link (adds <prev ins)
+                             (link (adds <>prev ors)
+                                   (? (two? steps) steps >>prev))))
+         (: _ (pin cards at (link ins (link ors steps)))
+             _ (? (peep check 0 0) 0 (pin check 0 at)) at)))
    ; the public Cookfile API: (recipe item ingredients steps) -- no order-only prereqs.
    (recipe item ingredients steps) (reg item ingredients 0 steps)
 
@@ -807,11 +818,22 @@
    ; exactly as prep does, and print each as a (recipe ..) / (reg ..) form. A
    ; pattern-only target with no card prints nothing (a source leaf).
    (qshow x) ("'" + (show x))                ; a quoted datum literal: 'all, '("a" b)
-   (estep steps) (? (two? steps) (qshow steps) "0")
+   ; the emitted Cookfile must not carry THIS seat's nest, or it installs into a
+   ; home nobody else has: write $HOME and $PWD back over the resolved prefixes.
+   ; ⚠ the cwd goes FIRST -- it usually sits UNDER the home, and a $HOME pass
+   ; would hide it from the $PWD one. `reg` opens both again at the far end.
+   (seat w)
+   (? (string? w)
+      (: c (cwd 0) h (getenv "HOME")
+         a (? (&& (string? c) (1 < (tally c))) (strrep c "$PWD" w) w)
+         (? (&& (string? h) (1 < (tally h))) (strrep h "$HOME" a) a))
+      w)
+   (seatl l) (? (two? l) (map seat l) l)
+   (estep steps) (? (two? steps) (qshow (map seatl steps)) "0")
    (emit-line o item ings oo steps)
    (: row (? (two? oo)
-             `("(reg" (qshow item) (qshow (? (two? ings) ings 0)) (qshow oo) (estep steps))
-             `("(recipe" (qshow item) (qshow (? (two? ings) ings 0)) (estep steps)))
+             `("(reg" (qshow (seat item)) (qshow (? (two? ings) (seatl ings) 0)) (qshow (seatl oo)) (estep steps))
+             `("(recipe" (qshow (seat item)) (qshow (? (two? ings) (seatl ings) 0)) (estep steps)))
       _ (say o (join " " row)) _ (say o ")") (put o 10))
    ; pre-order walk; `seen` (a tablet) keeps a shared prerequisite to one card.
    ; the card lookup mirrors prep: an explicit recipe wins, else a pattern rule.
