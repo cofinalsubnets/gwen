@@ -102,24 +102,28 @@ Every owed nom at once, not whichever the patcher reached first. Three lanes, on
 
 ## what still arrives bare
 
-The census below counts it exactly: **lex and cpp**. `cpp.l`'s two self-naming messages
-(`#error directive`, `cannot resolve #include`) both `say err` and *then* return a bare
-`'cppbad`, so the driver appends its own `cc: preprocessor error in <file>` — the same
-two-half-messages indictment, one stage over. Half-converted already.
+**lex.** cpp went over 2026-08-08: the `'cppbad` sentinel is gone and every refusal it can
+raise is a located gripe, so the driver names one file and one line rather than appending a
+second, vaguer sentence to the first.
 
-`#error` **landed 2026-08-08** and the prediction held exactly: it is a *configuration* signal,
-and the bare form cost a whole afternoon. PDCLib's config says which construct it could not
-match, and `cc: #error directive` threw that away — 232 of 233 files refused with nothing to
-read. It says the text and the line now:
+`#error` is the one that paid for the trip — it is a *configuration* signal, and the bare form
+cost a whole afternoon. PDCLib's config says which construct it could not match, and
+`cc: #error directive` threw that away, refusing 232 of 233 files with nothing to read:
 
 ```
-cc: #error (line 248): Please create your own _PDCLIB_config . h . ( Unsupported * INTn_C macros . )
+cc: pdclib/include/_PDCLIB_config.h:248: #error: Please create your own _PDCLIB_config . h . ( Unsupported * INTn_C macros . )
 ```
 
-Still owed on it: the **file name** (`cppgo` has no `fname` in scope — `cpp` takes it, the
-walker does not, and an `#error` inside a header is the common case), and the spelling, which is
-pp-tokens joined by spaces because that is all `spellcat` can promise. The sibling
-`cannot resolve #include` is still a bare `'cppbad` with no position at all.
+⚠ **A `#error` inside a header is the common case, and the file it names is the header's** —
+`doinc` stamps it on the way out, which is also what tells `deskew` to leave the line alone (a
+header lexed from its own line 1 and never saw the `-D` preamble). A TU-level gripe carries no
+file, gets the source path filled in, and gets the preamble subtracted. Getting that backwards
+is how `#error` first shipped reporting line 6 of a one-line file.
+
+Still owed: the **spelling**, which is pp-tokens joined by spaces (`a - b` for `a-b`) because
+that is all `spellcat` can promise once the original text is gone. And **`#warning` has no
+channel** — the gripe carrier is fatal by construction, so a warning says its text unlocated.
+A non-fatal located channel is its own small rung.
 
 Also open, and a real check rather than a message: **a local label that never resolves should
 refuse in `gen` and name the label**, not escape into the symbol table as a GLOBAL UND under its
@@ -162,7 +166,9 @@ would have to be taught the grammar first. It checks three properties:
 - **clay agrees with the parser** on trees the corpus never had: every mutant that still parses
   gets `test_clay`'s G1 law, `(cparse (clay-show ast)) == ast`.
 - **a refusal names its cause** — printed as a per-stage census (refused / named / bare), so
-  landing the cpp and lex rungs shows up as a number falling rather than as a claim.
+  landing the cpp and lex rungs shows up as a number falling rather than as a claim. It did:
+  cpp went 0 named / 8 bare → **8 named / 0 bare** the day it converted, and lex's 55 bare are
+  now the whole remainder.
 
 ⚠ The fuzz hands cpp **the driver's real include hook**. Passing `(\ n s ())` counts the corpus's
 own `#include <stdarg.h>` as a cpp refusal in every mutant of every file that has one — a fuzz

@@ -316,24 +316,32 @@
 
    ; -- the driver: walk logical lines, run directives, expand active code.
    ; macs is a MUTABLE tablet (so #define/#undef persist and includes share it);
-   ; cond is a stack of (active taken) frames; buf accumulates active code
+   ; cond is a stack of (active taken line) frames; buf accumulates active code
    ; tokens, flushed (expanded) whenever a directive or EOF interrupts. --
    (dirname t) (? ((kof t) = 'kw) (show (vof t)) (vof t))   ; #if/#else lex as keywords -> their text
+   ; the refusal channel: a gripe (doc/moon-diag.md), which the driver locates.
+   ; gripeat mints one at the directive that failed; gripein stamps the file on
+   ; the way out of an #include -- that file lexed from its OWN line 1, and the
+   ; stamp is also what tells moon.l's deskew to leave the number alone.
+   (gripeat line msg) (gripe () (? (two? line) (lof <line) ()) () msg)
+   (gripein g f) (? <>g g (gripe f <>>g <>>>g <>>>>g))   ; ⚠ moon.l's `el` is catted AFTER this file
    (condactive cond) (? (! (two? cond)) 1 (cap (cap cond)))
    (parentactive cond) (? (! (two? cond)) 1 (cap (cap cond)))
    ; buf accumulates REVERSED (a cat per line re-copies the whole run -- love.c's
    ; longest directive-free run is ~50k tokens); flush restores source order.
    (flush buf macs out) (revcat (expand (rev buf) macs) out)
    (cppgo toks macs cond buf out incf)
-    (? (! (two? toks)) (? (two? cond) 'cppbad (rev (flush buf macs out)))
+    (? (! (two? toks)) (? (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
+                          (rev (flush buf macs out)))
        (: ls (linesplit toks) line <ls rest <>ls
           (? (pv? <line "#")
               (: out1 (flush buf macs out)
                  dir (? (two? >line) (dirname <>line) ())   ; if/else are keywords; the rest ids
+                 dirk (? (two? >line) (kof <>line) ())      ; ..and its kind, which is how a line marker is known
                  body >>line
                  (? (member? dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (: cond2 (docond dir body line macs cond)
-                        (? (id? cond2 'err) 'cppbad             ; unbalanced #else/#elif/#endif -- FATAL, not empty
+                        (? (id? cond2 'err) (gripeat line ("#" + dir + " without #if"))   ; unbalanced -- FATAL, not empty
                            (cppgo rest macs cond2 () out1 incf)))
                     (! (condactive cond)) (cppgo rest macs cond () out1 incf)   ; skipped: ignore non-cond directives
                     (dir = "define") (: _ (defmacro macs body) (cppgo rest macs cond () out1 incf))
@@ -343,15 +351,34 @@
                     ; its own words, and "#error directive" throws that away -- pdclib's
                     ; config prints which type it could not match, and the bare form left
                     ; 232 refused files with nothing to read.
-                    (dir = "error")
-                     (: _ (say err ("cc: #error (line " + (show (lof <line)) + "): " + (spellcat body)))
-                        _ (put err 10) 'cppbad)
-                    (member? dir '("pragma" "line")) (cppgo rest macs cond () out1 incf)   ; ignored
-                    (cppgo rest macs cond () out1 incf)))                              ; unknown directive: ignore
+                    (dir = "error") (gripeat line ("#error: " + (spellcat body)))
+                    ; a #warning is not fatal to gcc and must not be to us: glibc
+                    ; and gnulib deprecate through it, mid-header, on purpose. it
+                    ; says the text unlocated -- the driver's channel is for fatal
+                    ; gripes, and a warning that stops nothing has none yet.
+                    (dir = "warning")
+                     (: _ (say err ("cc: warning: " + (spellcat body))) _ (put err 10)
+                        (cppgo rest macs cond () out1 incf))
+                    ; ignored on purpose, and each is one gcc also accepts: a bare
+                    ; `#` is the null directive (C11 6.10.7), and a numeric one is
+                    ; gcc -E's line marker.
+                    (|| (member? dir '("pragma" "line" "ident" "sccs" "assert" "unassert"))
+                        (! (two? >line)) (id? dirk 'num))
+                     (cppgo rest macs cond () out1 incf)
+                    ; ..and anything else is a directive we do not implement, where
+                    ; ignoring it drops whatever it would have done IN SILENCE --
+                    ; an unconfigured `#cmakedefine` template compiles clean and the
+                    ; name it owed is simply absent (C11 6.10p1 wants the
+                    ; diagnostic). #include_next lands here too: unimplemented, and
+                    ; now it says so rather than dropping a header.
+                    (gripeat line ("invalid preprocessing directive #" + (spellcat `(<>line))))))
              (! (condactive cond)) (cppgo rest macs cond buf out incf)                 ; skipped code: drop
              (cppgo rest macs cond (revcat line buf) out incf))))                       ; active code: accumulate (reversed)
 
-   ; a directive that manages the conditional stack. dir keyword symbols.
+   ; a directive that manages the conditional stack. dir keyword symbols. a frame
+   ; is (active taken line), the line being the #if's own -- an #elif or #else
+   ; carries its opener's forward, so an unterminated conditional at EOF can say
+   ; which one never closed.
    (docond dir body line macs cond)
     (? (member? dir '("if" "ifdef" "ifndef"))
         (: pa (condactive cond)                        ; parent active?
@@ -359,16 +386,16 @@
                 (dir = "ifdef") (? (two? (mdef macs (vof <body))) 1 0)
                 (dir = "ifndef") (? (two? (mdef macs (vof <body))) 0 1)
                 (? (0 < (ifval body macs)) 1 0))
-           (link `((&& pa (0 < v)) (&& pa (0 < v))) cond))
+           (link `((&& pa (0 < v)) (&& pa (0 < v)) (lof <line)) cond))
        (dir = "elif")
         (? (! (two? cond)) 'err
            (: fr <cond pa (parentactive >cond) taken <>fr
               v (? (|| taken (! pa)) 0 (? (0 < (ifval body macs)) 1 0))
-              (link `((&& (! taken) (&& pa (0 < v))) (|| taken (0 < v))) >cond)))
+              (link `((&& (! taken) (&& pa (0 < v))) (|| taken (0 < v)) <>>fr) >cond)))
        (dir = "else")
         (? (! (two? cond)) 'err
            (: fr <cond pa (parentactive >cond) taken <>fr
-              (link `((&& (! taken) pa) 1) >cond)))
+              (link `((&& (! taken) pa) 1 <>>fr) >cond)))
        (dir = "endif") (? (two? cond) >cond 'err)
        'err)
 
@@ -387,9 +414,13 @@
           name (incname b)
           txt (? name (incf name sys?) ())
           spelt (? sys? ("<" + name + ">") ("\"" + name + "\""))
-          (? (! (two? txt)) (: _ (say err ("cc: cannot resolve #include " + spelt)) _ (put err 10) 'cppbad)  ; unresolved -> FATAL
-             (: lr (clex <>txt)                         ; sentinel, NOT () -- () masks as an empty include and the ancestor
-                (? (! (two? lr)) (: _ (say err ("cc: lex error in " + spelt)) _ (put err 10) 'cppbad)         ; doinc drops its accumulated `out`, reordering the stream
+          (? (! (two? txt)) (gripeat body ("cannot resolve #include " + spelt))   ; unresolved -> FATAL
+             (: lr (clex <>txt)
+                ; ⚠ okv?, not two? -- a gripe IS a pair, and a two? here would read
+                ; a refusal as a token list and walk it. a LOCATED refusal is the
+                ; header's own and takes its name; a bare one is knowable only at
+                ; the #include, and stays there.
+                (? (! (okv? lr)) (? (gripe? lr) (gripein lr name) (gripeat body ("lex error in " + spelt)))
                    (: itoks <>lr
                       chf (: c <>>txt (? c c incf))
                       ; the marks bracket the child's run. `out` is the REVERSED
@@ -397,7 +428,11 @@
                       ; the 'in mark lands before the header's tokens, the 'out
                       ; mark onto (rev done) lands after them.
                       done (cppgo itoks macs () () (link (fmin name) out) chf)   ; recurse with FRESH cond; shares macs; accumulates
-                      (? (id? done 'cppbad) 'cppbad           ; a nested failure PROPAGATES up (never wipe `out` for it)
+                      ; a nested failure PROPAGATES up, wearing the file it happened
+                      ; in (never wipe `out` for it, and never answer () -- an empty
+                      ; answer masks as an empty include, and the ancestor doinc then
+                      ; drops its accumulated `out` and reorders the stream).
+                      (? (gripe? done) (gripein done name)
                          (cppgo rest macs cond () (link fmout (rev done)) incf))))))))
    (incname body)                                     ; the header name from #include tokens
     (? (! (two? body)) ()
@@ -405,7 +440,7 @@
        (pv? <body "<") (: (go l acc) (? (! (two? l)) () (pv? <l ">") acc (go >l (acc + (spell <l)))) (go >body ""))
        ())
 
-   (cpp toks incf fname)                              ; -> (1 out) | ()
+   (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
     (: macs (: t (tablet 0)
                _ (pin t "__STDC__" `('obj `((tok 'num 1 0))))
                ; WHO IS COMPILING. every other predefine here says something about
@@ -474,7 +509,7 @@
        ; the spans ride the stream's HEAD as one marker token, so cpp keeps its
        ; single (1 out) channel and parse peels them in O(1). a caller that
        ; feeds parse raw lexer output simply has none, and parse reads ().
-       (? (id? r 'cppbad) ()
+       (? (gripe? r) r
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
-             `(1 (link (tok 'fspans (rev (peep spanacc 'l ())) 0) out))))))   ; an EMPTY token list is a valid empty TU, not a failure -- only 'cppbad fails
+             `(1 (link (tok 'fspans (rev (peep spanacc 'l ())) 0) out))))))   ; an EMPTY token list is a valid empty TU, not a failure -- only a gripe fails

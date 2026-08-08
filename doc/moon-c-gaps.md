@@ -52,6 +52,17 @@ functions returning function pointers. Multi-character constants (`'ab'` is 0x61
 packing, signed at four chars), binary literals (`0b1010`, gcc's extension and C23's spelling),
 and `__func__`.
 
+### the directives, and which are ignored on purpose
+
+`#pragma`, `#line`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
+C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing. `#warning` says its
+text and continues. **Everything else refuses** (C11 6.10p1) — the catch-all that used to ignore
+an unknown directive let `#cmakedefine X 1` sail through, so an unconfigured template header
+compiled clean and the name it owed was simply absent.
+
+⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
+which is worse. doc/moon-userland.md carries when it becomes load-bearing.
+
 ### the predefine surface — the widest remaining hole
 
 mooncc predefines `__STDC__`, `__STDC_HOSTED__`, `__mooncc__`, `__linux__`/`__linux`/`__unix__`/
@@ -145,13 +156,6 @@ Already filed (a literal keeps 53 bits in an expression). It now has a consumer 
 into a wrong ANSWER rather than lost precision: PDCLib spells `INFINITY` as
 `(_PDCLIB_FLT_MAX * 2)`, which in mooncc multiplies in **double** to a finite 6.8e38, so
 `fmaxf(x, INFINITY) == INFINITY` is false and fdim/fmax/fmin all fail their own suites.
-
-### an unknown `#` directive is ignored in silence
-
-`#cmakedefine X 1` sails through; gcc calls it `invalid preprocessing directive`. So an
-unconfigured template header compiles, and whatever the directive would have defined is quietly
-absent. cpp.l's directive dispatch ends in a catch-all `cppgo` — the standard wants a
-diagnostic (C11 6.10p1).
 
 ### `#if` bit operations still die on a big
 

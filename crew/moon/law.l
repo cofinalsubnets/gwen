@@ -595,9 +595,13 @@
                     (|| (= k 'num) (= k 'kw)) (show (caup t))
                     (caup t)))
    (pps src) (: r (cpp (caup (clex src)) () "<law>")
-                (? (! (two? r)) 'FAIL
+                (? (! (okv? r)) 'FAIL
                    (: (go l) (? (! (two? l)) "" (+ (spell1 (cap l)) (+ (? (two? (cup l)) " " "") (go (cup l)))))
                       (go (fsbody (caup r))))))   ; peel cpp's leading spans marker (parse.l fsbody)
+   ; the refusal side of the same door: the message a cpp gripe carries, and the
+   ; line it names.
+   (cppno src) (: r (cpp (caup (clex src)) () "<law>") (? (gripe? r) <>>>>r 'FAIL))
+   (cppline src) (: r (cpp (caup (clex src)) () "<law>") (? (gripe? r) <>>r 'FAIL))
    (assert
       (= (pps "#define N 42\nN + 1") "42 + 1")                         ; object macro
       (= (pps "#define A B\n#define B 7\nA") "7")                      ; rescan to fixpoint
@@ -630,10 +634,21 @@
       (= (pps "a\nb\n__LINE__") "a b 3")                               ; ... tracked down the file
       (= (pps "__FILE__") "\"<law>\"")                                 ; __FILE__ predefined -> the TU path, a string
       (= (pps "#define M a /* one \\\n   two */ b\nM") "a b")          ; a \<nl> INSIDE a comment splices (phase 2 before 3): the directive holds together (m4 regex.c)
-      (! (cpp (caup (clex "#if 1\nx")) () "<law>"))                    ; unterminated #if refuses
-      (two? (cpp (caup (clex "#ifdef NOPE\nx\n#endif")) () "<law>"))   ; a fully-skipped file is a VALID empty TU (crypt.c), not a failure
-      (! (cpp (caup (clex "#error boom")) () "<law>"))                 ; #error is FATAL
-      (= (pps "#define E\nE + E") "+")))                               ; empty macro body vanishes
+      (okv? (cpp (caup (clex "#ifdef NOPE\nx\n#endif")) () "<law>"))   ; a fully-skipped file is a VALID empty TU (crypt.c), not a failure
+      (= (pps "#define E\nE + E") "+")                                 ; empty macro body vanishes
+      ; ⚠ a refusal is a GRIPE, and a gripe is a PAIR -- so these ask okv?/cppno,
+      ; where a `!` would read every one of them as success.
+      (= (cppno "#if 1\nx") "unterminated #if -- no #endif")           ; unterminated #if refuses
+      (= (cppno "#endif") "#endif without #if")                        ; ..and so does a stray closer
+      (= (cppno "#error boom") "#error: boom")                         ; #error is FATAL, and says the program's own words
+      (= (cppno "#cmakedefine X 1")                                    ; an unimplemented directive REFUSES (C11 6.10p1)
+         "invalid preprocessing directive #cmakedefine")
+      (= (cppno "#include_next <x.h>")                                 ; include_next among them: dropping it loses a header in silence
+         "invalid preprocessing directive #include_next")
+      (= (cppline "a\nb\n#error late") 3)                              ; the gripe carries the DIRECTIVE's line
+      (= (cppline "#if 1\na\nb") 1)                                    ; ..and an unterminated one carries its OPENER's
+      (= (cppline "#if 0\na\n#else\nb") 1)                             ; ..which an #else does not reset
+      (okv? (cpp (caup (clex "#\n#pragma x\n# 4 \"f.c\"\nz")) () "<law>"))))   ; null, pragma and gcc's line marker all pass
 
 ; --- diagnostics: a parse refusal names where it stood (doc/moon-diag.md rung 2) ---
 ; the gripe carrier is ('gripe file line col msg); file () means the TU itself,
