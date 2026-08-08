@@ -80,7 +80,13 @@
                                              0))
                            (drain ()))
                         rep (reply s)
-                        _ (? rep (: _ (map (put m) rep) (flush m)) 0)
+                        ; ⚠ NOT (map (put m) rep): map applies RIGHT TO LEFT, so the
+                        ; answer went out backwards -- "\e[1;1R" as "R1;1[\e". a reply
+                        ; is a byte STREAM and its order is the whole content of it.
+                        ; foldl is the left-to-right walk, and one say beats six puts.
+                        _ (? rep (: _ (say m (foldl (\ a b (+ a ("" + b))) "" rep))
+                                    (flush m))
+                             0)
                         _ (? dirty (pin dirty () 1) 0)
                         (moor bx m dirty))))
 

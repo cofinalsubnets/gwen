@@ -43,15 +43,20 @@
 
 ; --- the dialogue lane: a DSR answer rides home and the child reads it ---
 ; the child asks where the cursor is, drinks the 6-byte "\e[1;1R" answer off
-; its own stdin, then says OK -- proof the moor forwards replies to the pty.
+; its own stdin, then says it back through cat -v -- proof the moor forwards
+; replies to the pty, and IN ORDER.
 ; stty raw -echo, as any real full-screen guest would: a COOKED slave holds
 ; input until a newline (the answer has none) and would echo it back onto
 ; the grid besides.
-(: md (tether `("sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 >/dev/null; printf OK"))
+; ⚠ the child SAYS what it read rather than discarding it. it used to be
+; `head -c 6 >/dev/null`, which passed just as happily while moor wrote the
+; answer BACKWARDS -- a reply is a byte stream, and a test that never looks at
+; the bytes cannot tell "\e[1;1R" from "R1;1[\e".
+(: md (tether `("sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 | cat -v"))
  s (mkscr 5 20)
  bx #s
  _ (moor bx (cup md) ())
- _ (assert (= "OK" (snip (rowtx s 0) 0 2)))
+ _ (assert (= "^[[1;1R" (snip (rowtx s 0) 0 7)))
  _ (waitfor (cap md))
  (close (cup md)))
 
