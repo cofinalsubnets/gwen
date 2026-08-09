@@ -208,23 +208,23 @@ spells `bool` as `_Bool`) starts building the wrong artifact. The rung is making
 a narrow store, a nonzero-normalizing load, and the struct layout that follows. Until then a
 package wanting `<stdbool.h>` needs a config fork, which is what PDCLib got.
 
-### sizeof answers an int, not a size_t
+### sizeof answers size_t — landed 2026-08-09, via the cast coat
 
-`sizeof(sizeof(int))` folds to **4**; gcc says 8. `ptype` reads a parse-folded `('num N)` as
-`int`, and the `sizeof(TYPE)` lane emits exactly that, so the type is lost. It reaches any
-`sizeof` over an already-folded constant — `sizeof(sizeof x)`, `sizeof(offsetof(...))` — and it
-means **every `sizeof` expression is signed**, where C says unsigned.
+`sizeof` folds to `('cast (szty ps) ('num N))` — ulong, uint on t32 — so
+`sizeof(sizeof(int))` is 8 and every `sizeof` expression is unsigned, as C says. The 2026-08-08
+"+12% of `.text`" price that shelved this was **measured to be an artifact**: gen's immediate
+lanes gated on a bare `('num n)`, so the coat hid the constant and every `/ sizeof` became a
+real `div` (a signed-`long` coat cost the identical bytes — the unsignedness itself was free).
+The cast-coat read (`knum`/`cnum` in gen.l, which also un-blinded suffixed literals: `x / 8UL`
+was a materialize+`divq` dance) removed the price; with it the fold is **−0.7% of `.text`** —
+signed-left `/ sizeof` sites now license the unsigned strength-reduction. The VLA lane's
+runtime `dim * sizeof(elt)` multiply still rides bare (the dim is the runtime side), and
+`offsetof` still folds signed — two honest residues.
 
-The fix is three lines (fold to `('cast 'ulong ('num N))` in both `sizeof` lanes, the idiom
-suffixed literals already arrive under) and it was **measured at +12% of love.o's `.text`**
-(460447 → 515584 bytes) — the cast makes the surrounding arithmetic take unsigned lanes, which
-is more correct C at a real size cost. Written and reverted 2026-08-08: it is a rung with a
-price tag, not a patch. ⚠ measure again before believing the number; it was one build.
-
-It has a real consumer now (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
+The consumer that forced it (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
 PDCLib's dlmalloc guards itself with `enum { _PDCLIB_assert_667 = 1 / (!!(sizeof( sizeof(int) )
-== sizeof(long unsigned int))) };` — our 4 ≠ 8, the divide refuses, the file stops there. It is
-now dlmalloc's **only** x64 blocker: the rest of its ladder landed 2026-08-09 —
+== sizeof(long unsigned int))) };` — 4 ≠ 8 refused the divide and stopped the file. That guard
+folds true now, clearing dlmalloc's last x64 blocker; the rest of its ladder landed 2026-08-09 —
 `__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines; fully-masked neutral shift/or
 expansions, no raw splices so unframe stays alive, seeded sigs so the results type unsigned at
 their exact width; test/cc/128-bswap.c, five lanes at 9), then `__sync_lock_test_and_set` /
@@ -233,9 +233,9 @@ retry + `stlr`, riscv64 `amoswap.{w,d}.aq` + `fence rw,w`; the POINTEE sizes and
 exchange, 4/8 bytes, and an unsized pointee refuses — guessing a width would miscompile in
 silence), and `__builtin_clz`/`__builtin_ctz` (32-bit; clz32 rides the clzll lane as
 `clz64(x << 32)`, ctz is bsf / rbit+clz / a mask-narrowing search; test/cc/129-sync.c, five
-lanes at 11). With assert_667 hand-neutered, dlmalloc compiles whole on x64 — arm64/riscv64
-additionally hit the 80-byte struct **return** (`internal_mallinfo`, the memory-return
-asymmetry below).
+lanes at 11). With the guard folding true, nothing sizeof-shaped remains in dlmalloc's way on
+x64 (the 2026-08-09 hand-neutered build compiled whole); arm64/riscv64 still hit the 80-byte
+struct **return** (`internal_mallinfo`, the memory-return asymmetry below).
 
 ### what the %f hunt actually found — and the trap in it
 
