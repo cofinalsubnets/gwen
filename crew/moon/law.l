@@ -590,6 +590,16 @@
       !(member? '(label m) (el ob 2))                     ; ..and NOT in .data
       !(member? '(label e) (el ob 2))
       (member? '(label plain) (el ob 2))                  ; an unattributed global still does
+      ; a braced bitfield images its UNIT's bits, not a placement apiece: {0,1} is bit 1
+      ; alone, and 5 with 21 above it is 5 + 21*8. two placements at one offset used to
+      ; lay the second AFTER the first -- four bytes of struct imaged eight wide
+      (= (el (cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}") 2)
+         '((label g) (raw (2 0 0 0 0 0 0 0))))
+      (= (el (cobx "struct C { unsigned a:3; unsigned b:5; } h = {5,21}; int main(){return 0;}") 2)
+         '((label h) (raw (173 0 0 0 0 0 0 0))))
+      ; the unit OVERLAYS what shares its bytes -- pre lives in byte 0 of the same word
+      (= (el (cobx "struct E { unsigned char pre; unsigned a:3; unsigned b:5; } e = {200,5,21}; int main(){return 0;}") 2)
+         '((label e) (raw (200 173 0 0 0 0 0 0))))
       ; the two SPECIAL names keep their own streams and stay out of the extras
       (= (el (cobx "__attribute__((section(\"ai_nifs\"))) static long n = 1; int main() { return 0; }") 8) ())
       (= (el (cobx "__attribute__((section(\".image\"))) static long i = 1; int main() { return 0; }") 8) ())))

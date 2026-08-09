@@ -44,7 +44,8 @@ int main(void)
 	r += cases[1].a == 8 && cases[1].g == 14;   /* the bytes were never the wrong half */
 	r += N(nest) == 2;
 	r += nest[1].n.z == 6;
-	r += N(bits) == 3;      /* the VALUES are 120-bfinit's -- a bitfield brace fills wrong */
+	r += N(bits) == 3;
+	r += bits[2].b == 1;    /* the bits themselves are 120-bfinit's */
 	r += N(uni) == 3;
 	r += uni[2].a == 3;
 	r += N(names) == 3;

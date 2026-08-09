@@ -4207,10 +4207,26 @@
                      (: foff (off + <>fe) fty <>>fe
                         r (? (aggish? fty && (<val = 'init)) (cgfill g env foff fty val)
                              (stru? fty && !(<val = 'str)) (cgsfill g env foff fty val)
+                             (bitf? fty) (cgbffill g env foff fty val)
                              (cgstore g env foff fty val))
                         (? (bad? r) 'bad (fill >l (ci + 1) (acc + r)))))))
            (fill <>ini 0 ()))
        'bad))
+   ; a bitfield member of a brace initializer: read-modify-write the unit at [r4+off].
+   ; cgstore would lay the whole declared unit flat -- unshifted, and the neighbours
+   ; sharing it gone. the assignment lane's shape, minus the address computation.
+   (cgbffill g env off bt val)
+    (: r (cgexpr g env val)
+       (? (bad? r) 'bad
+          (: uty <>bt bitoff <>>bt usz (tsz g uty)
+             mask ((<< 1 <>>>bt) - 1) cmask ((0 - (<< mask bitoff)) - 1)
+             (asintt g r uty
+              + `(`((uldop usz) 'r2 'r4 off)
+                  `('li 'r3 mask) '(and r0 r0 r3)
+                  `('li 'r3 cmask) '(and r2 r2 r3)
+                  '(mov r3 r0))
+              + (? (bitoff > 0) `(`('shl 'r3 bitoff)) ())
+              + `('(or r2 r2 r3) `((stop uty) 'r4 off 'r2))))))
    ; a complex width flip, src address in r0, dest in r1: convert componentwise
    ; (a blind block copy would read the WRONG byte shapes)
    (cxcopy g sty)
@@ -4388,20 +4404,56 @@
                ps (place <>nini 0 ())
                (? (bad? ps) 'bad (imflat (imsort ps) (* <>>ty esz))))
            (stru? ty)
+            ; a bitfield member takes no placement of its own: it merges into its
+            ; UNIT's value, and the unit OVERLAYS the flattened image. two of them
+            ; share one offset -- and the unit shares its bytes with whatever else
+            ; lives in them -- where a placement can only sit beside its neighbours
             (: e (peep (g 'stag) <>ty 0)
                fields <e size <>e
-               (place l cur acc)
-                (? !(two? l) acc
+               (place l cur acc bfs)                ; -> (((off items)..) ((uoff uty bits)..)) | 'bad
+                (? !(two? l) `(acc bfs)
                    (: it <l
                       ci (? (<it = 'dfield) (fidx fields <>it) cur)
                       fe (nthfield fields ci)
                       (? (bad? fe) 'bad
+                         (bitf? <>>fe)
+                          (: v (icfold (elval it))
+                             (? (id? v 'no) 'bad
+                                (place >l (ci + 1) acc (bfmerge <>fe <>>fe v bfs))))
                          (: fb (imgpad g <>>fe (tsz g <>>fe) (elval it))
-                            (? (bad? fb) 'bad (place >l (ci + 1) (`(<>fe fb) >< acc)))))))
-               ps (place <>nini 0 ())
-               (? (bad? ps) 'bad (imflat (imsort ps) size)))
+                            (? (bad? fb) 'bad (place >l (ci + 1) (`(<>fe fb) >< acc) bfs))))))
+               pr (place <>nini 0 () ())
+               (? (bad? pr) 'bad (bfover g <>pr (imflat (imsort <pr) size))))
            'bad))
        'bad)
+   ; the bitfield units of one struct image, ((uoff uty value)..) -> ((uoff bytes)..).
+   ; ⚠ arithmetic, never the bitwise ops: a 64-bit unit's mask is a big, where they are
+   ; undefined -- % takes the low bits (a negative wrapping in) and * is the shift.
+   (pw2 n) (? (n < 1) 1 (2 * pw2 (n - 1)))
+   (bfmerge uoff bt v rows)
+    (: m (pw2 <>>>bt)
+       lo (% (+ (% v m) m) m)                       ; the low `width` bits, a negative wrapped in
+       bits (lo * pw2 <>>bt)
+       (go l) (? !(two? l) `(`(uoff <>bt bits))
+                 (<<l = uoff) (`(uoff <><l (<>><l + bits)) >< >l)
+                 (<l >< go >l))
+       (go rows))
+   ; OR each unit's bytes into a struct's flattened image. a relocation in the way
+   ; refuses -- a fixup is one list item wearing eight bytes, so it cannot be OR'd.
+   (bfover g rows bytes)
+    (: (lay img uoff ub)
+        (: (go l pos acc)
+            (? !(two? l) acc
+               (fixit? <l)
+                (? (((pos + 8) > uoff) && ((uoff + tally ub) > pos)) 'bad
+                   (go >l (pos + 8) (acc + `(<l))))
+               (: b (? ((uoff <= pos) && (pos < (uoff + tally ub))) (| <l (nthr ub (pos - uoff))) <l)
+                  (go >l (pos + 1) (acc + `(b)))))
+           (go img 0 ()))
+       (fold l img)
+        (? !(two? l) img
+           (: n (lay img <<l (imnum g <><l <>><l)) (? (bad? n) 'bad (fold >l n))))
+       (fold rows bytes))
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (: b (imgbytes g ty val) (? (bad? b) 'bad (b + zeros (w - imbytelen b))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
