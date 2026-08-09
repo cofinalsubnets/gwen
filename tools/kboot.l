@@ -17,9 +17,14 @@
    elf  (cap a)
    app  (cap (cup a))
    want (cup (cup a))
-   r    (hark `("timeout" "420" "qemu-system-x86_64" "-m" "512M" "-M" "q35"
-                "-kernel" elf "-append" app
-                "-serial" "stdio" "-display" "none" "-no-reboot"))
+   ; KVM where the host can back it -- this lane is x86_64 only, so the arch
+   ; question is just the host's. Without /dev/kvm it falls to TCG, same verdict.
+   kvm  (? (&& (two? (stat "/dev/kvm")) (has? (cup (hark `("uname" "-m"))) "x86_64"))
+           `("-enable-kvm" "-cpu" "host") ())
+   r    (hark (cat `("timeout" "420" "qemu-system-x86_64" "-m" "512M" "-M" "q35")
+              (cat kvm
+                   `("-kernel" elf "-append" app
+                     "-serial" "stdio" "-display" "none" "-no-reboot"))))
    out  (cup r)
    miss ((: (g w acc) (? (! (two? w)) (rev acc)
                          (g (cup w) (? (has? out (cap w)) acc (link (cap w) acc))))) want ())

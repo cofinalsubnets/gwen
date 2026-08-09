@@ -53,6 +53,13 @@
    media (? elf? `("-kernel" iso)
             dir? (fw + (below4g + `("-drive" (+ "format=raw,file=fat:rw:" iso))))
             (fw + `("-cdrom" iso)))
+   ; KVM where the host can back it: 7x on this corpus (50s of TCG against 7s).
+   ; ⚠ x86_64-on-x86_64 only -- `virt` is asked for gic-version=2 above, and an
+   ; arm host whose GIC cannot back v2 REFUSES the pairing rather than degrading.
+   ; A box without /dev/kvm falls to TCG, so the verdict never rides on this.
+   kvm  (? (&& (two? (stat "/dev/kvm"))
+           (&& (arch = "x86_64") (has? (cup (hark `("uname" "-m"))) "x86_64")))
+           `("-enable-kvm" "-cpu" "host") ())
    ; the scratch disk (rung 5): a sparse raw image beside the artifact, virtio-blk
    ; to the kernel. truncate CREATES it and leaves an existing one's bytes alone
    ; (same size), so a marker written by one boot survives into the next -- the
@@ -69,8 +76,9 @@
                (d + `("-device" "virtio-blk-pci,drive=d0"))))
    r    (hark (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
              (cat mach
+             (cat kvm
              (cat dargs
-             (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media)))))
+             (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media))))))
    out  (cup r)
    line (lineof out "tests pass")
    ; ⚠ "0 tests pass" is a corpus that died before its first assert wearing a
