@@ -366,6 +366,46 @@
    ; a literal too WIDE for int really is long, and then the result is 64-bit and must not wrap
    ; -- hence the range test rather than a blanket 'int. --
    (numty n) (? ((-2147483648 <= n) && (n <= 2147483647)) 'int 'long)
+   ; ..and read the literal through its written face: -1 is (un neg (num 1)), ~0 is
+   ; (un bnot (num 0)). litv folds the face to `(v) | (); numty9 types a compare or
+   ; divide OPERAND the way C reads the source, falling back to the value tuple's type.
+   (litv e) (? !(two? e) ()
+               (<e = 'num) `(<>e)
+               ((<e = 'un) && two? <>>e)
+                (: r (litv <>>e)
+                   (? !(two? r) ()
+                      (<>e = 'neg) `((0 - <r))
+                      (<>e = 'bnot) `(((0 - <r) - 1))
+                      ()))
+               ())
+   (numty9 e ty) (: r (litv e) (? (two? r) (numty <r) ty))
+   ; a compare or divide takes the COMMON converted type's signedness (C11 6.3.1.8),
+   ; not either-operand's: ulong (a pointer, u128) goes unsigned; a lone uint against
+   ; a 64-bit SIGNED side fits in long, so it goes signed; int meets uint at uint and
+   ; goes unsigned -- where the 64-bit targets also owe the 32-bit narrow (znrw): the
+   ; signed side rides sign-extended past bit 31 and C compares at uint width.
+   (cmpu ta tb)
+    (? (ptr? ta || ptr? tb) 1
+       (member? ta '(ulong ullong u128)) 1
+       (member? tb '(ulong ullong u128)) 1
+       (member? ta '(long llong)) ()
+       (member? tb '(long llong)) ()
+       ((id? ta 'uint) || (id? tb 'uint)) 1
+       ())
+   (znrw g ta tb ra rb)
+    (? !(u32bin? g ta tb) ()
+       ((? (usg? ta) () `(`('zx4 ra))) + (? (usg? tb) () `(`('zx4 rb)))))
+   ; a case constant CONVERTS to the switch control's type (C11 6.8.4.2p5), spelled
+   ; as the register's extended pattern: a 32-bit type (or the t32 word) wraps at
+   ; 2^32, signed re-signs. no & here: the 64-bit mask is a BIG, and love's bitwise
+   ; ops answer nothing on one -- % then a sign fix instead.
+   (cfit g ty v)
+    (: m (? (t32? g || !(member? ty '(long ulong llong ullong))) 4294967296 18446744073709551616)
+       r (v % m)
+       u (? (r < 0) (r + m) r)
+       (? (usg? ty || ptr? ty) u
+          (u < (m // 2)) u
+          (u - m)))
    (scc op unsg) (? !unsg op (op = 'lt) 'below (op = 'gt) 'above (op = 'le) 'be (op = 'ge) 'ae op)
    (rflip op) (? (op = 'lt) 'gt (op = 'gt) 'lt (op = 'le) 'ge (op = 'ge) 'le op)      ; MIRRORED (n < x reads x > n): constant-on-the-left
    (irop op) (? (op = '+) 'add (op = '-) 'sub (op = '*) 'imul                         ; C op -> IR mnemonic; not one of the six -> 'no
@@ -425,12 +465,14 @@
     (: rA (vreg av)
        (? (llt? aty || d128? aty) 'no               ; a pair never rides the immediate lane
           (member? op '(eq ne lt le gt ge))
-           (? (immok g 'cmp n)
+           ; C converts a negative literal to the uint side (0xffffffff will not sit
+           ; in a signed immediate): the shuttle materializes and narrows
+           (? (u32? g aty && (n < 0)) 'no
+              !(immok g 'cmp n) 'no
               (: rd (? wnt wnt (rdst g rA))
-                 fs (vfs av + `(`('cmp rA n) `('set (scc op (usg? aty || ptr? aty)) rd)))
+                 fs (vfs av + `(`('cmp rA n) `('set (scc op (cmpu aty (numty n))) rd)))
                  _ (? (id? rd rA) () (rfree g rA))
-                 (mkv 'long rd fs))
-              'no)
+                 (mkv 'long rd fs)))
           (member? op '(/ %))
            (? !(usg? aty && pow2? n) 'no
               (op = '/) (? (n = 1) (mkv (rbin g aty aty) rA (vfs av))
@@ -783,7 +825,6 @@
                                  _ (vmflush g)
                                  (mid + cf + `(`('br 'p sk) `('br 'eq lbl) `('label sk))))))))))
            (bcc o u) (scc (? (cc = 'ne) o (negrel o)) u)
-           (cu2 ta tb) ((usg? ta || usg? tb) || ptr? ta || ptr? tb)
            ; a pair side (t32 llong) branches off subs/sbcs via pbrf; a constant other side
            ; materializes as a sign-widened pair in r2:r3, a 32-bit other side widens the same way.
            (pnum v) `(`('li 'r2 (& v 4294967295)) `('li 'r3 (? (v < 0) 4294967295 0)))
@@ -799,7 +840,14 @@
                      (d128? (vty a))
                       (? !(x64t? g) 'bad
                          (wbr op (as128 g a + (wpush + wnum <>rhs)) (id? (vty a) 'u128)))
-                     (: fs (vfs a + `(`('cmp (vreg a) <>rhs) `('br (bcc op (cu2 (vty a) 'long)) lbl)))
+                     (: n <>rhs
+                        cc9 (bcc op (cmpu (vty a) (numty n)))
+                        ; C converts a negative literal to the uint side (the masked
+                        ; pattern will not sit in a signed immediate): materialize it
+                        fs (? (u32? g (vty a) && (n < 0))
+                              (: sc (? (id? (vreg a) 'r1) 'r0 'r1)
+                                 (vfs a + `(`('li sc (& n 4294967295)) `('cmp (vreg a) sc) `('br cc9 lbl))))
+                              (vfs a + `(`('cmp (vreg a) n) `('br cc9 lbl))))
                         _ (rfree g (vreg a))
                         fs)))
               ((<lhs = 'num) && immok g 'cmp <>lhs)
@@ -811,7 +859,12 @@
                      (d128? (vty b))
                       (? !(x64t? g) 'bad
                          (wbr (rflip op) (as128 g b + (wpush + wnum <>lhs)) (id? (vty b) 'u128)))
-                     (: fs (vfs b + `(`('cmp (vreg b) <>lhs) `('br (bcc (rflip op) (cu2 'long (vty b))) lbl)))
+                     (: n <>lhs
+                        cc9 (bcc (rflip op) (cmpu (numty n) (vty b)))
+                        fs (? (u32? g (vty b) && (n < 0))
+                              (: sc (? (id? (vreg b) 'r1) 'r0 'r1)
+                                 (vfs b + `(`('li sc (& n 4294967295)) `('cmp (vreg b) sc) `('br cc9 lbl))))
+                              (vfs b + `(`('cmp (vreg b) n) `('br cc9 lbl))))
                         _ (rfree g (vreg b))
                         fs)))
               (: a (cgexpr g env lhs)
@@ -839,14 +892,16 @@
                                         (af + as128 g b + fixa +
                                          (`(`('c128 (scc op u2) 'sp)) + (wdrop + `('(cmp r0 0) `('br cc lbl)))))))
                                  (t32? g && (pA || llt? (vty b)))
-                                  (: u2 (usg? (vty a) || usg? (vty b))
+                                  (: u2 (cmpu (vty a) (vty b))
                                      (af + asll g b +
                                       (? pA (spop2 'r2 'r3 + pbrf g op u2 'r2 'r3 'r0 'r1 cc lbl)
                                          (spop 'r2
                                           + (? (usg? (vty a)) '((li r3 0)) '((mov r3 r2) (sar r3 31)))
                                           + pbrf g op u2 'r2 'r3 'r0 'r1 cc lbl))))
                                  (: bf (tor0 g b)
-                                    brf `('(cmp r1 r0) `('br (bcc op (cu2 (vty a) (vty b))) lbl))
+                                    ta9 (numty9 lhs (vty a)) tb9 (numty9 rhs (vty b))
+                                    brf (znrw g ta9 tb9 'r1 'r0 +
+                                         `('(cmp r1 r0) `('br (bcc op (cmpu ta9 tb9)) lbl)))
                                     (? (r1safe? bf) (af0 + '((mov r1 r0)) + bf + brf)
                                        (af + bf + (spop 'r1 + brf))))))
                           (: b (cgexpr g env rhs)
@@ -865,10 +920,19 @@
                                  (: fs (vfs ah + vfs b
                                         + `(`('mov 'r2 (vreg ah)))
                                         + (? (usg? (vty ah)) '((li r3 0)) '((mov r3 r2) (sar r3 31)))
-                                        + pbrf g op (usg? (vty ah) || usg? (vty b)) 'r2 'r3 'r0 'r1 cc lbl)
+                                        + pbrf g op (cmpu (vty ah) (vty b)) 'r2 'r3 'r0 'r1 cc lbl)
                                     _ (rfree g (vreg ah)) _ (rfree g (vreg b))
                                     fs)
-                                (: fs (vfs ah + vfs b + `(`('cmp (vreg ah) (vreg b)) `('br (bcc op (cu2 (vty ah) (vty b))) lbl)))
+                                (: ta9 (numty9 lhs (vty ah)) tb9 (numty9 rhs (vty b))
+                                   cc9 (bcc op (cmpu ta9 tb9))
+                                   ; the zx4 narrow cannot touch a HOME in place: copy
+                                   ; through the staging pair (b first -- it may sit in r1)
+                                   fs (? (two? (znrw g ta9 tb9 'r1 'r0))
+                                         (vfs ah + vfs b
+                                          + `(`('mov 'r0 (vreg b)) `('mov 'r1 (vreg ah)))
+                                          + znrw g ta9 tb9 'r1 'r0
+                                          + `('(cmp r1 r0) `('br cc9 lbl)))
+                                         (vfs ah + vfs b + `(`('cmp (vreg ah) (vreg b)) `('br cc9 lbl))))
                                    _ (rfree g (vreg ah)) _ (rfree g (vreg b))
                                    fs)))))))))
        (: rhs (? ((<e = 'bin) && (<>e = '&)) <>>>e ())   ; the mask-test shapes: (v & k) / (k & v)
@@ -2385,8 +2449,8 @@
                    b (cgexpr g env rhs)
                    (? (bad? b) 'bad
                       (: tb (vty b)
-                         ta9 (? (<lhs = 'num) (numty <>lhs) ta)   ; C's type for a bare
-                         tb9 (? (<rhs = 'num) (numty <>rhs) tb)   ; literal -- see numty
+                         ta9 (numty9 lhs ta)   ; C's type for a literal, read through
+                         tb9 (numty9 rhs tb)   ; its written face (-1, ~0) -- see numty9
                          av (? (id? ah 'sh) a ah)
                          ; the memory shuttle: left in r1, right in r0 (today's shape)
                          (shut z9)
@@ -2396,8 +2460,7 @@
                                        (af9 + spush 'r0 + bf + spop 'r1)))
                              back '((mov r0 r1))
                              pa (ptr? ta) pb (ptr? tb)
-                             unsg (usg? ta || usg? tb)                ; either operand unsigned -> unsigned divide
-                             cunsg (unsg || pa || pb)                 ; a POINTER relational compares UNSIGNED too (C: addresses are unsigned; matters where a pointer sets bit 63)
+                             unsg (cmpu ta9 tb9)                      ; divide and compare take the COMMON type's signedness -- see cmpu
                              u32 (u32bin? g ta9 tb9)                  ; a 32-bit unsigned result wraps -- see u32bin?
                              nar (? u32 '((zx4 r0)) ())               ; the shuttle always lands in r0 (back)
                              nty (? u32 'uint 'long)
@@ -2532,15 +2595,17 @@
                                     pb 'bad
                                     (mkv nty 'r0 (mid + '((sub r1 r1 r0)) + back + nar)))
                                 (: tail (? (member? op '(* & | ^)) `(`((irop op) 'r1 'r1 'r0))
-                                           (op = '/) `(`((? unsg 'udiv 'div) 'r1 'r1 'r0))
-                                           (op = '%) `(`((? unsg 'urem 'rem) 'r1 'r1 'r0 'r3))
+                                           ; a mixed int/uint divide runs at uint width: znrw first
+                                           (op = '/) (znrw g ta9 tb9 'r1 'r0 + `(`((? unsg 'udiv 'div) 'r1 'r1 'r0)))
+                                           (op = '%) (znrw g ta9 tb9 'r1 'r0 + `(`((? unsg 'urem 'rem) 'r1 'r1 'r0 'r3)))
                                            'bad)
                                    m32 (u32 && (op = '*))              ; only the multiply here can carry
                                    (? !(bad? tail)
                                       (mkv (rbin g ta9 tb9) 'r0
                                            (mid + tail + back + (? m32 nar ())))
                                       (member? op '(eq ne lt le gt ge))
-                                       (mkv 'long 'r0 (mid + `('(cmp r1 r0) `('set (scc op cunsg) 'r0))))
+                                       (mkv 'long 'r0 (mid + znrw g ta9 tb9 'r1 'r0 +
+                                                       `('(cmp r1 r0) `('set (scc op unsg) 'r0))))
                                       'bad))))
                          iml (? (iml? && !(flo? tb)) (immop g (rflip op) b tb <>lhs wnt) 'no)
                          (? !(id? iml 'no) iml
@@ -2596,13 +2661,16 @@
                                       _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
                                       (mkv (? pa ta tb) rd fs))
                                   (: rA (vreg ah) rB (vreg b)
-                                     cunsg ((usg? ta || usg? tb) || pa || pb)
+                                     cunsg (cmpu ta9 tb9)
                                      pre (vfs ah + vfs b)
                                      (? (member? op '(eq ne lt le gt ge))
-                                         (: rd (? wnt wnt (rdst g rA))   ; set runs after the cmp: rd may alias rB
-                                            fs (pre + `(`('cmp rA rB) `('set (scc op cunsg) rd)))
-                                            _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
-                                            (mkv 'long rd fs))
+                                         ; a mixed int/uint compare owes a zx4 narrow, and rA/rB
+                                         ; may be HOMES -- the shuttle owns the copies
+                                         (? (two? (znrw g ta9 tb9 'r1 'r0)) (shut ())
+                                            (: rd (? wnt wnt (rdst g rA))   ; set runs after the cmp: rd may alias rB
+                                               fs (pre + `(`('cmp rA rB) `('set (scc op cunsg) rd)))
+                                               _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
+                                               (mkv 'long rd fs)))
                                         (member? op '(+ - * & | ^))
                                          (: iop2 (irop op)
                                             rd (? (wnt && !(id? wnt rB)) wnt (rdst g rA))
@@ -5210,7 +5278,7 @@
                     dflt (peep tab 'dflt lend)
                     disp (: (go l acc)
                              (? !(two? l) acc
-                                (: e2 <l  v <e2  lab <>e2
+                                (: e2 <l  v (cfit g (vty c) <e2)  lab <>e2
                                    ins (? (immok g 'cmp v)
                                           `(`('cmp cr9 v) `('br 'eq lab))
                                           `(`('li 'r1 v) `('cmp cr9 'r1) `('br 'eq lab)))

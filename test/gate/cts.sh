@@ -70,7 +70,6 @@ roster_refuses='
 00219 _Generic
 '
 roster_wrong='
-00104 an unsuffixed constant too big for long must take unsigned long, not wrap
 00206 #pragma push_macro/pop_macro is ignored, so the macro never comes back
 00212 __LP64__ is not predefined (doc/moon-c-gaps: the predefine surface)
 00220 a wide/u/U string literal carries no distinct element type

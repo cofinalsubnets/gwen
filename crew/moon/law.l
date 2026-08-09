@@ -182,6 +182,17 @@
       (= (cexp "(long)(int)x") '(cast long (cast int (var "x"))))
       (= (cexp "sizeof(int)") '(num 4))
       (= (cexp "sizeof(char)+sizeof(short)+sizeof(long)") '(bin + (bin + (num 1) (num 2)) (num 8)))
+      ; the unsuffixed ladder (C11 6.4.4.1): hex/octal/binary climb the unsigned
+      ; rungs -- 0xffffffff is a uint, 0xffffffffffffffff a ulong -- decimal stays
+      ; signed until it runs past long; an l suffix skips the uint rung
+      (= (cexp "0x7fffffff") '(num 2147483647))
+      (= (cexp "0xffffffff") '(cast uint (num 4294967295)))
+      (= (cexp "0x80000000l") '(num 2147483648))
+      (= (cexp "0xffffffffffffffff") '(cast ulong (num 18446744073709551615)))
+      (= (cexp "4294967295") '(num 4294967295))
+      (= (cexp "18446744073709551615") '(cast ulong (num 18446744073709551615)))
+      (= (cexp "sizeof(0xffffffff)") '(num 4))
+      (= (cexp "sizeof(0xffffffffffffffff)") '(num 8))
       ; a truth value is an int, whatever the operand -- so these fold HERE, untyped x and all
       (= (cexp "sizeof(!x)") '(num 4))
       (= (cexp "sizeof(x==y)") '(num 4))

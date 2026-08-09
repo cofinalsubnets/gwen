@@ -79,11 +79,20 @@
                        (go i))
        ; the token kind of an integer literal: u alone reads unsigned INT (-1u
        ; wraps at 32 bits), u with l/L -- or a value past 32 bits -- unsigned LONG;
-       ; the ll/LL pairs get their own kinds (ullnum/llnum).
-       (ukind i j v) (? !(hasu? i j) (? (hasll? i j) 'llnum 'num)
-                        (hasll? i j) 'ullnum
-                        (hasl? i j || (4294967296 <= v)) 'ulnum
-                        'unum)
+       ; the ll/LL pairs get their own kinds (ullnum/llnum). an UNSUFFIXED one climbs
+       ; C11 6.4.4.1's ladder, where hex/octal/binary take the unsigned rungs --
+       ; 0xffffffff is a uint, 0xffffffffffffffff a ulong -- and a decimal past
+       ; long takes ulong too (gcc's reading; C is out of types there). dec marks
+       ; the decimal caller.
+       (ukind i j v dec)
+        (? !(hasu? i j)
+            (? (hasll? i j) 'llnum
+               (!dec && !(hasl? i j) && (2147483648 <= v) && (v <= 4294967295)) 'unum
+               ((9223372036854775808 <= v) && (v <= 18446744073709551615)) 'ulnum
+               'num)
+           (hasll? i j) 'ullnum
+           (hasl? i j || (4294967296 <= v)) 'ulnum
+           'unum)
        (escv d) (? (d = 110) 10 (d = 116) 9 (d = 114) 13 (d = 97) 7 (d = 98) 8            ; \n \t \r \a \b
                    (d = 102) 12 (d = 118) 11 (d = 48) 0 (d = 92) 92                       ; \f \v \0 backslash
                    (d = 34) 34 (d = 39) 39 (d = 63) 63 (d = 101) 27 ())                   ; \" \' \? \e
@@ -265,24 +274,24 @@
                                    (go j line (`('num v line () (snip src i j)) >< acc)))))
                  ((c = 48) && ((i + 1) < n) && ((src (i + 1) = 120) || (src (i + 1) = 88)))        ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
-                     k (? <>r 'flo (ukind i <r <>>r))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
+                     k (? <>r 'flo (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
                      (go <r line (`(k <>>r line () (snip src i <r)) >< acc)))
                  ((c = 48) && ((i + 2) < n) && ((src (i + 1) = 98) || (src (i + 1) = 66)) &&
                   ((src (i + 2) = 48) || (src (i + 2) = 49)))                                            ; 0b / 0B binary
                   (: r (binlit i)
                      j2 (skipsuf <r)
-                     k (ukind i j2 <>r)
+                     k (ukind i j2 <>r ())
                      (go j2 line (`(k <>r line () (snip src i j2)) >< acc)))
                  ((c = 48) && ((i + 1) < n) && octd? (src (i + 1)))       ; 0NNN octal integer (0644, 0777)
                   (: r (octlit i)
                      j2 (skipsuf <r)
-                     k (ukind i j2 <>r)
+                     k (ukind i j2 <>r ())
                      (go j2 line (`(k <>r line () (snip src i j2)) >< acc)))
                  (dig? c || ((c = 46) && ((i + 1) < n) && dig? (src (i + 1))))
                   (: r (flolit i)                        ; a digit run, or .digit -- integer or float
                      j2 (? <>r <r (skipsuf <r))    ; an integer eats its u/U/l/L suffix
                      k (? (id? <>r 'imag) 'iflo    ; the imaginary float (1.0fi): its own kind
-                          <>r 'flo (ukind i j2 <>>r))
+                          <>r 'flo (ukind i j2 <>>r 1))
                      (go j2 line (`(k <>>r line () (snip src i j2)) >< acc)))
                  (< 0 (wpfx i)) (go (+ i (wpfx i)) line acc)   ; drop a wide-literal prefix; the ' or " lexes as usual
                  (idh? c) (: (idr j) (? ((j < n) && idc? (src j)) (idr (j + 1)) j)

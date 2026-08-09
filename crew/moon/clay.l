@@ -313,7 +313,16 @@
                                   ("*" + ce t 90)))
              (id? h 'addr) ("&" + ce a 90)
              (id? h 'post) (ce a 95 + (? (0 < el e 2) "++" "--"))
-             (id? h 'cast) ("(" + cty a "" + ") " + ce (el e 2) 90)
+             ; a uint/ulong cast around a bare literal prints as the SUFFIX: spelled as a
+             ; cast, the reparse ladder (C11 6.4.4.1) wraps a big value in its own cast
+             ; and doubles this one. same tree, so G1 holds -- like the deref sugar above.
+             (id? h 'cast)
+              (: t2 (el e 2)
+                 sfx (? !(two? t2 && id? <t2 'num && (0 <= el t2 1)) ()
+                        (id? a 'uint && (el t2 1 <= 4294967295)) "u"
+                        (id? a 'ulong) "ul" ())
+                 (? sfx (cnum (el t2 1) + sfx)
+                    ("(" + cty a "" + ") " + ce t2 90)))
              (id? h 'szof) ("sizeof(" + (? (ctype? a) (cty a "") (ce a 0)) + ")")
              ; a call's arguments sit ABOVE the comma operator, hence 21
              (id? h 'call) (ce a 100 + "(" + sepby ", " (map (\ x (ce x 21)) (el e 2)) + ")")

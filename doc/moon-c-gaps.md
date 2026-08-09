@@ -133,13 +133,9 @@ when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Four compile
-clean and answer wrong; three of those are rows elsewhere on this page — the predefine surface,
-the wide literal, `#pragma push_macro`. This one is its own:
-
-| what | the shape | what it costs |
-|---|---|---|
-| **an unsuffixed constant too big for `long` wraps** | `x != 0xffffffffffffffff` | C says such a decimal/hex constant takes `unsigned long`; we wrap it to −1 and the comparison goes the other way. |
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Three compile
+clean and answer wrong, and all three are rows elsewhere on this page — the predefine surface,
+the wide literal, `#pragma push_macro`.
 
 ### sizeof over promoted arithmetic answers 8
 
