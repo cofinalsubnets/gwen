@@ -224,8 +224,12 @@ price tag, not a patch. ⚠ measure again before believing the number; it was on
 It has a real consumer now (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
 PDCLib's dlmalloc guards itself with `enum { _PDCLIB_assert_667 = 1 / (!!(sizeof( sizeof(int) )
 == sizeof(long unsigned int))) };` — our 4 ≠ 8, the divide refuses, the file stops there.
-Behind it wait `__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines) and
-`__sync_lock_test_and_set` (dlmalloc's spin locks), so the rung alone does not finish dlmalloc.
+Behind it waits `__sync_lock_test_and_set` (dlmalloc's spin locks), so the rung alone does not
+finish dlmalloc — but `__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines, the next rung
+of that ladder) **landed 2026-08-09**: fully-masked neutral shift/or expansions on every
+target (no raw splices, so unframe stays alive; the 64-bit form refuses loudly on t32 — the
+pair lane has no taker), with seeded sigs so the results type unsigned at their exact width.
+Pinned by test/cc/128-bswap.c, five lanes at 9.
 
 ### what the %f hunt actually found — and the trap in it
 
@@ -301,6 +305,9 @@ save area, `vaspill`); `vaspill-a64`/`-rv`/`-t32` refuse the shape, each for its
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
   `;; lea-range (r0 r4 8)`, the scaled-indexed-address gap.
+- **`__builtin_bswap64` on t32** — `no lane for __builtin_bswap64 on <tgt>`; the 16/32 forms
+  ride every target (width-blind neutral expansions), the 64 wants the r0:r1 pair lane and
+  nothing reaches it there yet.
 
 What t32 *does* carry, so it is not re-derived: 64-bit `long long` as register pairs (lo:hi on
 r0:r1, r2:r3 the shuttle) with +, -, ×(UMULL/MLA), unsigned `/` and `%` (a self-contained

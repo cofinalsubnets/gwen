@@ -312,6 +312,11 @@
                           '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
                              ("reg_save_area" 16 (ptr void))) 24 8)))
                 _ (pin (t 'types) "__builtin_va_list" '(arr (struct "__va_list_tag") 1))
+                ; the bswap trio's sigs, seeded so the results type UNSIGNED (a
+                ; swapped high bit is real: compare/divide/sizeof read the width)
+                _ (pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()))
+                _ (pin (t 'sigs) "__builtin_bswap32" '(uint (uint) ()))
+                _ (pin (t 'sigs) "__builtin_bswap64" '(ulong (ulong) ()))
                 ; C99 _Complex, seeded as two-member structs (canon maps the
                 ; specifier run onto these tags): layout, copy, union membership
                 ; and the SysV (sse sse) / one-sse ABI all ride the struct lanes

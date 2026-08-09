@@ -349,6 +349,10 @@
       (= (cexpp "" "sizeof((int[]){[3]=1})") '(num 16))
       (= (cexpp "" "sizeof((char[]){\"hi\"})") '(num 3))
       (= (cexpp "" "sizeof((int[5]){1})") '(num 20))                              ; an explicit bound stays its own
+      ; the bswap builtins type by their seeded sigs -- unsigned, exact width
+      (= (cexpp "" "sizeof(__builtin_bswap16(1))") '(num 2))
+      (= (cexpp "" "sizeof(__builtin_bswap32(1))") '(num 4))
+      (= (cexpp "" "sizeof(__builtin_bswap64(1))") '(num 8))
       ; ..and the door bare, at the width seam: LP64 long HOLDS every uint so
       ; the signed side wins; ILP32 long cannot, so unsigned does. same
       ; signedness takes the higher rank; float/double win their lanes whole.

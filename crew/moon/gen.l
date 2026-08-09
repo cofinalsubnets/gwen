@@ -1309,6 +1309,32 @@
               (mkv 'long 'r0 (asint g e1 +
                               (? (a64? g) '((raw (0 16 192 218)))                    ; clz x0, x0
                                  '((raw (72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
+       ; the bswap trio (glibc's <byteswap.h> inlines): fully-masked neutral shift/or
+       ; expansions -- no raw (unframe stays alive), no new ops. 16/32 are width-blind
+       ; and ride every target; 64 is the three-stage swap (bytes, halves, words) and
+       ; falls to the undeclared refusal on t32 (a pair lane with no taker yet)
+       (member? bi '("__builtin_bswap16" "__builtin_bswap32" "__builtin_bswap64"))
+        (? ((bi = "__builtin_bswap64") && t32? g)
+            (nolane g ("no lane for __builtin_bswap64" + ontgt g))   ; the pair lane has no taker; 'no would emit a call the link can't bind
+           (: e1 (cgexpr g env <args)
+              (? (bad? e1) 'bad
+                 (mkv 'long 'r0 (asint g e1 +
+                   (? (bi = "__builtin_bswap16")
+                      '((li r2 255) (mov r1 r0) (shr r1 8) (and r1 r1 r2)
+                        (and r0 r0 r2) (shl r0 8) (or r0 r0 r1))
+                      (bi = "__builtin_bswap32")
+                      '((li r2 255)
+                        (mov r1 r0) (shr r1 24) (and r1 r1 r2)
+                        (mov r3 r0) (shr r3 16) (and r3 r3 r2) (shl r3 8) (or r1 r1 r3)
+                        (mov r3 r0) (shr r3 8) (and r3 r3 r2) (shl r3 16) (or r1 r1 r3)
+                        (and r0 r0 r2) (shl r0 24) (or r0 r0 r1))
+                      '((li r2 71777214294589695)                  ; 0x00FF00FF00FF00FF
+                        (mov r1 r0) (shr r1 8) (and r1 r1 r2)
+                        (and r0 r0 r2) (shl r0 8) (or r0 r0 r1)
+                        (li r2 281470681808895)                    ; 0x0000FFFF0000FFFF
+                        (mov r1 r0) (shr r1 16) (and r1 r1 r2)
+                        (and r0 r0 r2) (shl r0 16) (or r0 r0 r1)
+                        (mov r1 r0) (shr r1 32) (shl r0 32) (or r0 r0 r1))))))))
        (bi = "__builtin_isinf")
         (: e1 (cgexpr g env <args)
            (? (bad? e1) 'bad
