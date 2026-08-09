@@ -345,6 +345,7 @@
    ; struct SILENTLY, since playout bakes offsets here at parse and gen trusts the stag table.
    (pst32? ps) (member? (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
    (psword ps) (? (pst32? ps) 4 8)
+   (szty ps) (? (pst32? ps) 'uint 'ulong)          ; size_t: sizeof folds wear this coat
    (tsz ps ty) (? (ptr? ty) (psword ps)
                   (arr? ty) (* <>>ty (tsz ps <>ty))
                   (stru? ty) <>(peep (ps 'stag) <>ty 0)
@@ -1014,11 +1015,11 @@
                            ; sizeof of a VLA TYPE (struct T[n+1], if_nameindex's malloc):
                            ; the runtime multiply dim * sizeof(elt)
                            (varr? <tr) `(`('bin '* <>><tr `('num (tsz ps <><tr))) rest)
-                           `(`('num (tsz ps <tr)) rest)))
+                           `(`('cast (szty ps) `('num (tsz ps <tr))) rest)))
                     (: r (punary ps r1)                 ; sizeof unary-expr | sizeof(expr) -- gen sizes from the type
                        (? (two? r) (: ty (ptype ps <r)
                                       (? (ty && !(varr? ty))      ; a VLA's size is RUNTIME: defer to gen's szof
-                                         `(`('num (tsz ps ty)) <>r) `(`('szof <r) <>r))) ()))))
+                                         `(`('cast (szty ps) `('num (tsz ps ty))) <>r) `(`('szof <r) <>r))) ()))))
              ; __extension__ (gcc) prefixes a cast-expression as a no-op
              ((tkk t = 'id) && (tkv t = "__extension__")) (punary ps >ts)
              (tp? t "*") (: r (punary ps >ts)

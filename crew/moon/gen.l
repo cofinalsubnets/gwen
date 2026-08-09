@@ -379,6 +379,29 @@
                       ()))
                ())
    (numty9 e ty) (: r (litv e) (? (two? r) (numty <r) ty))
+   ; ..and a literal WEARING a cast coat is still a literal: ('cast ty ('num n)) with an
+   ; integer ty (1UL, and the sizeof fold) rides the immediate lanes as its masked value
+   ; PLUS the coat's type. narrow coats mask to their width (signed ones sign-extend --
+   ; cfold's law); long/ulong pass the 64-bit pattern whole, so t32 refuses them (long is
+   ; the word there, llong the pair). a face OVER a coat (-1UL) stays unfolded: the wrap
+   ; runs at the coat's width and the register lane already types it right. knum is the
+   ; gate's one read: bare or coated -> (v ty) | ().
+   (cnum g e)
+    (? !(two? e && id? <e 'cast) ()
+       (: ty <>e in <>>e
+          (? !(two? in && id? <in 'num && (charm? <>in || sun? <>in)) ()
+             (: n <>in
+                (? (ty = 'uchar) `((& n 255) ty)
+                   (ty = 'ushort) `((& n 65535) ty)
+                   (ty = 'uint) `((& n 4294967295) ty)
+                   (member? ty '(char short int))
+                    (: w (? (ty = 'char) 8 (ty = 'short) 16 32)
+                       r (& n ((<< 1 w) - 1))
+                       s (? (r < (<< 1 (w - 1))) r (r - (<< 1 w)))
+                       `(s ty))
+                   (member? ty '(long ulong)) (? (t32? g) () `(n ty))
+                   ())))))
+   (knum g e) (? (two? e && id? <e 'num) `(<>e (numty <>e)) (cnum g e))
    ; a compare or divide takes the COMMON converted type's signedness (C11 6.3.1.8):
    ; the signedness of the typing door's puac (parse.l) -- ONE spelling of the law,
    ; parse and gen both consuming it, width included: on t32 a long cannot hold every
@@ -458,7 +481,7 @@
    ; by a power of two strength-reduces to shr/and (signed stays a real div -- C rounds toward
    ; zero, sar toward -inf). answers (ty forms) | 'no (the caller falls back to the shuttle). --
    (pow2? n) ((0 < n) && (0 = (& n (n - 1))))
-   (immop g op av aty n wnt)                        ; av the LEFT value tuple; wnt the advisory destination
+   (immop g op av aty n nty wnt)                    ; av the LEFT value tuple; nty the constant's C type; wnt the advisory destination
     (: rA (vreg av)
        (? (llt? aty || d128? aty) 'no               ; a pair never rides the immediate lane
           (member? op '(eq ne lt le gt ge))
@@ -467,32 +490,35 @@
            (? (u32? g aty && (n < 0)) 'no
               !(immok g 'cmp n) 'no
               (: rd (? wnt wnt (rdst g rA))
-                 fs (vfs av + `(`('cmp rA n) `('set (scc op (cmpu g aty (numty n))) rd)))
+                 fs (vfs av + `(`('cmp rA n) `('set (scc op (cmpu g aty nty)) rd)))
                  _ (? (id? rd rA) () (rfree g rA))
                  (mkv 'long rd fs)))
           (member? op '(/ %))
-           (? !(usg? aty && pow2? n) 'no
-              (op = '/) (? (n = 1) (mkv (rbin g aty aty) rA (vfs av))
+           ; an unsigned participant licenses the strength-reduction: an unsigned LEFT is
+           ; nonnegative in its register (canonical zero-extension), an unsigned CONSTANT
+           ; makes the common type unsigned -- either way shr/and read the pattern right
+           (? !((usg? aty || usg? nty) && pow2? n) 'no
+              (op = '/) (? (n = 1) (mkv (rbin g aty nty) rA (vfs av))
                            (? (wr? g rA)
-                              (mkv (rbin g aty aty) rA (vfs av + `(`('shr rA (lg2 n)))))
+                              (mkv (rbin g aty nty) rA (vfs av + `(`('shr rA (lg2 n)))))
                               (: rd (? wnt wnt (rdst g rA))   ; a borrowed home shifts a COPY (no 3-address shr)
-                                 (mkv (rbin g aty aty) rd (vfs av + `(`('mov rd rA) `('shr rd (lg2 n))))))))
-              (n = 1) (mkv (rbin g aty aty) 'r0 (vdrop g av + '((li r0 0))))
+                                 (mkv (rbin g aty nty) rd (vfs av + `(`('mov rd rA) `('shr rd (lg2 n))))))))
+              (n = 1) (mkv (rbin g aty nty) 'r0 (vdrop g av + '((li r0 0))))
               !(immok g 'log (n - 1)) 'no                ; t32 has no simple AND-imm: materialize (the register path)
               (: rd (? wnt wnt (rdst g rA))
                  fs (vfs av + `(`('and rd rA (n - 1))))
                  _ (? (id? rd rA) () (rfree g rA))
-                 (mkv (rbin g aty aty) rd fs)))
+                 (mkv (rbin g aty nty) rd fs)))
           (: sn (? (ptr? aty && member? op '(+ -)) (* n (tsz g <>aty)) n)
              iop (irop op)
              icl (? (member? op '(+ -)) 'addsub (op = '*) 'mul 'log)
-             ; the constant arrived as a bare number, its C type spent -- so it
-             ; reads as `int`, which is what an unsuffixed literal is. that makes
-             ; `uint op <lit>` a uint, and it must wrap (see u32bin? above).
-             u32 (member? op '(+ - *) && u32bin? g aty 'int)
+             ; a bare constant reads as `int` (numty capped it: immok bounds every lane to
+             ; the signed-32 range anyway); a coated one carries its own type, so
+             ; `uint op <lit>` wraps and `uint op (ulong)k` widens, as C says.
+             u32 (member? op '(+ - *) && u32bin? g aty nty)
              (? (id? iop 'no) 'no
                 !(immok g icl sn) 'no
-                (: rt (? (ptr? aty) aty (rbin g aty 'int))
+                (: rt (? (ptr? aty) aty (rbin g aty nty))
                    (? ((sn = 0) && member? op '(+ -)) (mkv rt rA (vfs av))
                       (: rd (? wnt wnt (rdst g rA))
                          fs (vfs av + `(`(iop rd rA sn)) + (? u32 `(`('zx4 rd)) ()))
@@ -608,14 +634,15 @@
    ; strs pin, no argpos), so discarding the r0 emission and re-aiming costs nothing. a homed
    ; param never lands here (its tuple already rides its home register, zero forms).
    (cgleaf g env e rX)
-    (? (<e = 'num) `(`('li rX <>e))
-       !(<e = 'var) 'no
-       (: en (vent g env <>e)
-          (? (bad? en) 'no
-             !(<en = 'loc) 'no
-             (: ty <>>en
-                (? (stru? ty || arr? ty || flo? ty || d128? ty) 'no
-                   `(`((ldop ty) rX 'r4 <>en)))))))
+    (: kc (knum g e)
+       (? (two? kc) `(`('li rX <kc))
+          !(<e = 'var) 'no
+          (: en (vent g env <>e)
+             (? (bad? en) 'no
+                !(<en = 'loc) 'no
+                (: ty <>>en
+                   (? (stru? ty || arr? ty || flo? ty || d128? ty) 'no
+                      `(`((ldop ty) rX 'r4 <>en))))))))
    ; PARK the left operand out of r0 so the right may compute: a leaf re-aims at a fresh pool
    ; register (no protocol mov at all), anything else takes one mov. answers the (possibly
    ; re-homed) tuple | 'sh (pool dry -> the caller keeps the memory shuttle).
@@ -828,17 +855,19 @@
            ; a wide relation settles 0/1 through c128 (the LEFT rides the cell), then branches on it
            (wbr o2 af u2) (af + (`(`('c128 (scc o2 u2) 'sp)) + (wdrop + `('(cmp r0 0) `('br cc lbl)))))
            (wnum v) `(`('li 'r0 v) `('li 'r2 (? (v < 0) -1 0)))
-           (? ((<rhs = 'num) && immok g 'cmp <>rhs)
+           kr (knum g rhs)
+           kl (knum g lhs)
+           (? (two? kr && immok g 'cmp <kr)
                (: a (cgexpr g env lhs)
                   (? (bad? a) 'bad
                      (flo? (vty a)) (: _ (rfree g (vreg a)) (fcb ()))
                      (pair? g (vty a))
-                      (vfs a + pnum <>rhs + pbrf g op (usg? (vty a)) 'r0 'r1 'r2 'r3 cc lbl)
+                      (vfs a + pnum <kr + pbrf g op (usg? (vty a)) 'r0 'r1 'r2 'r3 cc lbl)
                      (d128? (vty a))
                       (? !(x64t? g) 'bad
-                         (wbr op (as128 g a + (wpush + wnum <>rhs)) (id? (vty a) 'u128)))
-                     (: n <>rhs
-                        cc9 (bcc op (cmpu g (vty a) (numty n)))
+                         (wbr op (as128 g a + (wpush + wnum <kr)) (id? (vty a) 'u128)))
+                     (: n <kr
+                        cc9 (bcc op (cmpu g (vty a) <>kr))
                         ; C converts a negative literal to the uint side (the masked
                         ; pattern will not sit in a signed immediate): materialize it
                         fs (? (u32? g (vty a) && (n < 0))
@@ -847,17 +876,17 @@
                               (vfs a + `(`('cmp (vreg a) n) `('br cc9 lbl))))
                         _ (rfree g (vreg a))
                         fs)))
-              ((<lhs = 'num) && immok g 'cmp <>lhs)
+              (two? kl && immok g 'cmp <kl)
                (: b (cgexpr g env rhs)
                   (? (bad? b) 'bad
                      (flo? (vty b)) (: _ (rfree g (vreg b)) (fcb ()))
                      (pair? g (vty b))
-                      (vfs b + pnum <>lhs + pbrf g (rflip op) (usg? (vty b)) 'r0 'r1 'r2 'r3 cc lbl)
+                      (vfs b + pnum <kl + pbrf g (rflip op) (usg? (vty b)) 'r0 'r1 'r2 'r3 cc lbl)
                      (d128? (vty b))
                       (? !(x64t? g) 'bad
-                         (wbr (rflip op) (as128 g b + (wpush + wnum <>lhs)) (id? (vty b) 'u128)))
-                     (: n <>lhs
-                        cc9 (bcc (rflip op) (cmpu g (numty n) (vty b)))
+                         (wbr (rflip op) (as128 g b + (wpush + wnum <kl)) (id? (vty b) 'u128)))
+                     (: n <kl
+                        cc9 (bcc (rflip op) (cmpu g <>kl (vty b)))
                         fs (? (u32? g (vty b) && (n < 0))
                               (: sc (? (id? (vreg b) 'r1) 'r0 'r1)
                                  (vfs b + `(`('li sc (& n 4294967295)) `('cmp (vreg b) sc) `('br cc9 lbl))))
@@ -934,10 +963,12 @@
                                    fs)))))))))
        (: rhs (? ((<e = 'bin) && (<>e = '&)) <>>>e ())   ; the mask-test shapes: (v & k) / (k & v)
           lhs (? (two? rhs) <>>e ())
+          kr (? (two? rhs) (knum g rhs) ())
+          kl (? (two? rhs) (knum g lhs) ())
           try (? (<e = 'call) (cbinl g env e cc lbl)
                  !(two? rhs) 'no
-                 ((<rhs = 'num) && immok g 'log <>rhs) (tbr g env lhs <>rhs cc lbl)
-                 ((<lhs = 'num) && immok g 'log <>lhs) (tbr g env rhs <>lhs cc lbl)
+                 (two? kr && immok g 'log <kr) (tbr g env lhs <kr cc lbl)
+                 (two? kl && immok g 'log <kl) (tbr g env rhs <kl cc lbl)
                  'no)
           (? !(id? try 'no) try
              (: c (cgexpr g env e)
@@ -2031,8 +2062,9 @@
     (: rT (nthr (argr g) i)
        (fin ty fs) (: aty (? pty pty ty)
                       (? (flo? aty || stru? aty || llt? aty || d128? aty) 'no `(`('ez i) fs)))   ; a pair arg keeps the cell path
-       (? (<e = 'num) (? (t32? g && !(-2147483648 <= <>e && <>e <= 4294967295)) 'no
-                         (fin 'long `(`('li rT <>e))))
+       kc (knum g e)
+       (? (two? kc) (? (t32? g && !(-2147483648 <= <kc && <kc <= 4294967295)) 'no
+                       (fin 'long `(`('li rT <kc))))
           (<e = 'str)
            (: lbl (nlab g ".S")
               _ (pin g 'strs (`(lbl <>e) >< g 'strs))
@@ -2468,8 +2500,9 @@
           ; rides shlv/sarv with the count PINNED to r1 (holo's contract)
           (member? op '(shl shr) && pair? g (vty a))    ; a pair shift keeps the left type
            (: kind (? (op = 'shl) 'shl (usg? (vty a)) 'shr 'sar)
-              (? (<rhs = 'num)
-                  (mkv (vty a) 'r0 (tor0 g a + pshiftc kind <>rhs))
+              kc (knum g rhs)
+              (? (two? kc)
+                  (mkv (vty a) 'r0 (tor0 g a + pshiftc kind <kc))
                  (: b (cgexpr g env rhs)
                     (? (bad? b) 'bad
                        (mkv (vty a) 'r0 (tor0 g a +
@@ -2480,10 +2513,11 @@
            (? !(x64t? g) 'bad
               (: kind (? (op = 'shl) 'shl128 (usg? (vty a)) 'shr128 'sar128)
                  vknd (? (op = 'shl) 'shl128v (usg? (vty a)) 'shr128v 'sar128v)
-                 (? (<rhs = 'num)
-                     (? ((<>rhs < 0) || (127 < <>rhs)) 'bad
-                        (<>rhs = 0) (mkv (vty a) 'r0 (tor0 g a))
-                        (mkv (vty a) 'r0 (tor0 g a + `(`(kind <>rhs)))))
+                 kc (knum g rhs)
+                 (? (two? kc)
+                     (? ((<kc < 0) || (127 < <kc)) 'bad
+                        (<kc = 0) (mkv (vty a) 'r0 (tor0 g a))
+                        (mkv (vty a) 'r0 (tor0 g a + `(`(kind <kc)))))
                     (: b (cgexpr g env rhs)
                        (? (bad? b) 'bad
                           (mkv (vty a) 'r0 $
@@ -2500,11 +2534,12 @@
               rt (? (u32? g (vty a)) 'uint uL 'ulong 'long) ; the shift result keeps the left operand's type
               iop (? (op = 'shl) 'shl (? uL 'shr 'sar))
               vop (? (op = 'shl) 'shlv (? uL 'shrv 'sarv))
-              (? (<rhs = 'num)
+              kc (knum g rhs)
+              (? (two? kc)
                   (? (wr? g (vreg a))
-                     (mkv rt (vreg a) (vfs a + `(`(iop (vreg a) <>rhs)) + nar (vreg a)))
+                     (mkv rt (vreg a) (vfs a + `(`(iop (vreg a) <kc)) + nar (vreg a)))
                      (: rd (? wnt wnt (rdst g (vreg a)))    ; a borrowed home shifts a COPY (no 3-address shift)
-                        (mkv rt rd (vfs a + `(`('mov rd (vreg a)) `(iop rd <>rhs)) + nar rd))))
+                        (mkv rt rd (vfs a + `(`('mov rd (vreg a)) `(iop rd <kc)) + nar rd))))
                  (: b (cgexpr g env rhs)
                     (? (bad? b) 'bad
                        (mkv rt 'r0 (tor0 g a +
@@ -2514,11 +2549,12 @@
           (: ta (vty a)
              ; a constant right rides the immediate lane; a constant LEFT swaps
              ; over (commutative ops) or mirrors (relations, rflip) onto the right
-             imr (? (!(flo? ta) && (<rhs = 'num) && !(ptr? ta && gvarr? <>ta))
-                    (immop g op a ta <>rhs wnt) 'no)
+             imr (: kr (knum g rhs)
+                    (? (!(flo? ta) && two? kr && !(ptr? ta && gvarr? <>ta))
+                       (immop g op a ta <kr <>kr wnt) 'no))
              (? !(id? imr 'no) imr
-                (: iml? (!(flo? ta) && (<lhs = 'num) &&
-                         member? op '(+ * & | ^ eq ne lt le gt ge))
+                (: kl (? (member? op '(+ * & | ^ eq ne lt le gt ge)) (knum g lhs) ())
+                   iml? (!(flo? ta) && two? kl)
                    ah (? (iml? || flo? ta || callish? rhs || llt? ta || d128? ta) 'sh
                          (vpark g env lhs a))       ; a pair lhs keeps the shuttle (no pool park)
                    ; the wide pair park: a d128 LEFT steps off the protocol into two pool
@@ -2694,7 +2730,7 @@
                                        (mkv 'long 'r0 (mid + znrw g ta9 tb9 'r1 'r0 +
                                                        `('(cmp r1 r0) `('set (scc op unsg) 'r0))))
                                       'bad))))
-                         iml (? (iml? && !(flo? tb)) (immop g (rflip op) b tb <>lhs wnt) 'no)
+                         iml (? (iml? && !(flo? tb)) (immop g (rflip op) b tb <kl <>kl wnt) 'no)
                          (? !(id? iml 'no) iml
                             ((flo? ta || flo? tb) && (d128? ta || d128? tb)) 'bad           ; wide meets double: refuse
                             (flo? ta || flo? tb)
