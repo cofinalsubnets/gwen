@@ -56,12 +56,12 @@
            ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)))
 
    (rn r) (look arm64-regs r 'badreg)
-   (reg-eq a b) ((rn a) = (rn b))   ; own the name: a free read here would leak onto x64's register file
+   (reg-eq a b) (rn a = rn b)       ; own the name: a free read here would leak onto x64's register file
 
    ;; (li d imm): MOVZ the low 16 bits, then MOVK each higher nonzero 16-bit lane (hw = lane index). the
    ;; lane extract is //% not &/>> -- a movz constant can be a full 64-bit word >= 2^63 (a BIGNUM in love,
    ;; e.g. the map hash mult), on which `&` drops the high limb (cf. le64). negatives normalize into [0,2^64).
-   (arm64-lane u k) ((u // (k 65536)) % 65536)                                   ; the k-th 16-bit lane (65536^k via (k 65536))
+   (arm64-lane u k) ((u // k 65536) % 65536)                                     ; the k-th 16-bit lane (65536^k via (k 65536))
    ;; ⚠ the immediate must BE a number. every other operand slot is a register
    ;; name and refuses a stranger through `rn` (badreg), but an immediate slot
    ;; takes arithmetic on whatever arrives -- and a symbol survives that
@@ -83,7 +83,7 @@
    ;; SP move is `add Xd, Xn, #0` instead, which is exactly `(lea d s 0)`; the guard sends you
    ;; there rather than emit the wrong register. (kernel code moves SP by name -- see spsel.)
    (arm64-mov d s) (: dn (rn d) sn (rn s)
-      _ (? (|| (dn = 31) (sn = 31)) (scare 'arm64-mov-sp `(d s)) 0)
+      _ (? ((dn = 31) || (sn = 31)) (scare 'arm64-mov-sp `(d s)) 0)
       (le32 (0xAA0003E0 | ((sn << 16) | dn))))                                       ; orr d, xzr, s
 
    ;; ALU. register form is the native three-address; immediate is add/sub only.
@@ -95,7 +95,7 @@
    ;; with `lea` (add #0) and do the arithmetic in a plain register: mksys's
    ;; __sigsetjmp and moon's VLA lane both stage that way.
    (alu-rrr base d a b) (: dn (rn d) an (rn a) bn (rn b)
-      _ (? (|| (dn = 31) (|| (an = 31) (bn = 31))) (scare 'arm64-alu-sp `(d a b)) 0)
+      _ (? ((dn = 31) || (an = 31) || (bn = 31)) (scare 'arm64-alu-sp `(d a b)) 0)
       (le32 (base | ((bn << 16) | ((an << 5) | dn)))))
    (alu-rri base d a imm) (: dn (rn d) an (rn a) (le32 (base | ((imm << 10) | ((an << 5) | dn)))))
    ;; a 12-bit immediate rides one instruction; up to 24 bits splits into the
@@ -105,7 +105,7 @@
          fop  (? (imm < 0) (? (op = 'add) 'sub (op = 'sub) 'add (op = 'adds) 'subs 'adds) op)
          base (at (peep arm64-alu fop 0) 1)                   ; the (flipped) op's immediate base word (slot 1 of its alu row)
          (? (pos <= 4095) (alu-rri base d a pos)
-            (&& (pos <= 16777215) (member? fop '(add sub)))   ; hi12 shifted (LSL #12, bit 22), then the low tail off d
+            ((pos <= 16777215) && member? fop '(add sub))     ; hi12 shifted (LSL #12, bit 22), then the low tail off d
              (catall `((alu-rri (base | 0x400000) d a (pos >> 12))                   ; (the S-forms stay single: a split
                         (? ((pos % 4096) = 0) () (alu-rri base d d (pos % 4096)))))   ;  would read the tail's flags)
             (scare 'imm12-range imm)))
@@ -114,11 +114,11 @@
    ;; run (imm = 2^n - 1, the fixnum/gap low-bit masks): N=1, immr=0, imms=n-1. a rotated/replicated
    ;; pattern raises (materialize it into a register instead).
    (bitmask-field imm)
-      (? (&& (imm > 0) (0 = (imm & (imm + 1))))                                 ; imm = 2^n - 1 (n ones at the bottom)
+      (? (imm > 0 && (0 = (imm & (imm + 1))))                                   ; imm = 2^n - 1 (n ones at the bottom)
          (0x400000 | ((((: (go k v) (? (v = 0) k (go (k + 1) (v >> 1)))) 0 imm) - 1) << 10))   ; N=1 (bit22), imms = n-1
          (scare 'arm64-bitmask-imm imm))
    (arm64-logimm-base op) (? (op = 'and) 0x92000000 (op = 'or) 0xB2000000 (op = 'xor) 0xD2000000 (scare 'badlog op))
-   (arm64-logical-imm op d a b) (: dn (rn d) an (rn a) (le32 ((arm64-logimm-base op) | ((bitmask-field b) | ((an << 5) | dn)))))
+   (arm64-logical-imm op d a b) (: dn (rn d) an (rn a) (le32 (arm64-logimm-base op | (bitmask-field b | ((an << 5) | dn)))))
    (arm64-aluop op d a b)
       (: meta (peep arm64-alu op 0) rrb (at meta 0) rib (at meta 1)
          (? (reg? b)    (alu-rrr rrb d a b)
@@ -155,9 +155,9 @@
    ;; else LDUR/STUR unscaled imm9 else the far x16 build. every face -- word, sized,
    ;; fp -- is a spelling of it.
    (arm64-mem-raw lbase ubase sc dt bn off)
-      (? (&& (0 = (off % sc)) (&& (off >= 0) ((off // sc) <= 4095)))
+      (? ((0 = (off % sc)) && (off >= 0) && ((off // sc) <= 4095))
          (le32 (ubase | (((off // sc) << 10) | ((bn << 5) | dt))))
-         (? (&& (off >= -256) (off <= 255))
+         (? ((off >= -256) && (off <= 255))
             (le32 (lbase | (((off & 511) << 12) | ((bn << 5) | dt))))
             (arm64-far ubase dt bn off)))
    (arm64-mem-r lbase ubase dt bn off) (arm64-mem-raw lbase ubase 8 dt bn off)   ; word units (the x16-based stores)
@@ -233,8 +233,8 @@
    ;; whatever SCTLR says -- which is exactly what the world looks like before
    ;; the MMU comes on, where a boot stub is most likely to want this.
    (arm64-lia d label)   (: dn (rn d)
-                            ((le32 (0x58000040 | dn))       ; ldr xd, .+8
-                             + (le32 0x14000003)            ; b .+12
+                            (le32 (0x58000040 | dn)         ; ldr xd, .+8
+                             + le32 0x14000003              ; b .+12
                              + `((fix 8 'abs64 label 0))))
    (arm64-br cond label) (: cc (look arm64-cc cond 'badcc)
                             `((fix 4 'b19 label (0x54000000 | cc))))
@@ -273,7 +273,7 @@
    ;; (the map probe's `test r0 1` low-bit/gap check) via the bitmask encoder; Rd = xzr (31).
    (arm64-test a b)
       (? (reg? b) (: an (rn a) bn (rn b) (le32 (0xEA00001F | ((bn << 16) | (an << 5)))))
-         (: an (rn a) (le32 (0xF200001F | ((bitmask-field b) | (an << 5))))))   ; ands xzr, a, #imm
+         (: an (rn a) (le32 (0xF200001F | (bitmask-field b | (an << 5))))))     ; ands xzr, a, #imm
    ;; signed division: SDIV is clean three-address. remainder = a - (a/b)*b via MSUB and a scratch t
    ;; (clobbered, != a, b -- SDIV writes t before MSUB re-reads a, b). caller guards b != 0.
    (arm64-div d a b)   (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9AC00C00 | ((bn << 16) | ((an << 5) | dn)))))   ; sdiv d, a, b
@@ -306,7 +306,7 @@
                              (le32 (0x39400000 | ((disp << 10) | ((dn << 5) | dn)))))))         ; ldrb Wd, [Xd, #disp]
    (arm64-stxb base index scale disp s)                                                       ; [base + index*scale + disp] = (byte)s
       (catall `((arm64-addsh 16 (rn base) (rn index) (arm64-shiftamt scale))                 ; add x16, base, index lsl #amt
-                 (le32 (0x39000000 | ((disp << 10) | ((16 << 5) | (rn s)))))))                 ; strb Ws, [x16, #disp]
+                 (le32 (0x39000000 | ((disp << 10) | ((16 << 5) | rn s))))))                   ; strb Ws, [x16, #disp]
 
    ;; -- scalar-double FP (the float glaze lane). f0..f15 -> v0..v15 (d-register view), a SEPARATE file
    ;;    from the GPRs. the IR carries the SSE mnemonics (addsd/movsd/...) two-address (d = op(d,s)); we
@@ -317,7 +317,7 @@
    (frn r) (look arm64-fregs r 'badfreg)
    arm64-fp3 (tabof                                                                            ; SSE arith mnemonic -> the scalar-double base word (Dd = Dn OP Dm)
         `(('addsd >< 0x1E602800) ('subsd >< 0x1E603800) ('mulsd >< 0x1E600800) ('divsd >< 0x1E601800)))
-   (arm64-fp3op op d s) (: dn (frn d) sn (frn s) (le32 ((peep arm64-fp3 op 0) | ((sn << 16) | ((dn << 5) | dn)))))   ; Dd = Dd OP Ds
+   (arm64-fp3op op d s) (: dn (frn d) sn (frn s) (le32 (peep arm64-fp3 op 0 | ((sn << 16) | ((dn << 5) | dn)))))     ; Dd = Dd OP Ds
    (arm64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (0x1E604000 | ((sn << 5) | dn))))           ; FMOV Dd, Ds
    (arm64-fcmp  a b) (: an (frn a) bn (frn b) (le32 (0x1E602000 | ((bn << 16) | (an << 5)))))   ; FCMP Da, Db (sets NZCV; unordered -> VS)
    (arm64-scvtf d g) (: dn (frn d) gn (rn g) (le32 (0x9E620000 | ((gn << 5) | dn))))            ; SCVTF Dd, Xg  (signed int -> double)
@@ -345,29 +345,29 @@
    ;; the table is the ~score the kernel touches, and it GROWS: one row is one instruction.
    (sreg o0 o1 cn cm o2) ((o0 << 19) | ((o1 << 16) | ((cn << 12) | ((cm << 8) | (o2 << 5)))))
    arm64-sysregs (tabof
-        `(('sctlr_el1 >< (sreg 3 0 1 0 0)) ('cpacr_el1 >< (sreg 3 0 1 0 2))
-           ('ttbr0_el1 >< (sreg 3 0 2 0 0)) ('ttbr1_el1 >< (sreg 3 0 2 0 1))
-           ('tcr_el1 >< (sreg 3 0 2 0 2))
-           ('spsr_el1 >< (sreg 3 0 4 0 0)) ('elr_el1 >< (sreg 3 0 4 0 1))
-           ('currentel >< (sreg 3 0 4 2 2))
-           ('esr_el1 >< (sreg 3 0 5 2 0)) ('far_el1 >< (sreg 3 0 6 0 0))
-           ('par_el1 >< (sreg 3 0 7 4 0)) ('mair_el1 >< (sreg 3 0 10 2 0))
-           ('vbar_el1 >< (sreg 3 0 12 0 0)) ('mpidr_el1 >< (sreg 3 0 0 0 5))
-           ('ctr_el0 >< (sreg 3 3 0 0 1))
-           ('cntfrq_el0 >< (sreg 3 3 14 0 0)) ('cntpct_el0 >< (sreg 3 3 14 0 1))
-           ('cntp_tval_el0 >< (sreg 3 3 14 2 0)) ('cntp_ctl_el0 >< (sreg 3 3 14 2 1))))
+        `(('sctlr_el1 >< sreg 3 0 1 0 0) ('cpacr_el1 >< sreg 3 0 1 0 2)
+           ('ttbr0_el1 >< sreg 3 0 2 0 0) ('ttbr1_el1 >< sreg 3 0 2 0 1)
+           ('tcr_el1 >< sreg 3 0 2 0 2)
+           ('spsr_el1 >< sreg 3 0 4 0 0) ('elr_el1 >< sreg 3 0 4 0 1)
+           ('currentel >< sreg 3 0 4 2 2)
+           ('esr_el1 >< sreg 3 0 5 2 0) ('far_el1 >< sreg 3 0 6 0 0)
+           ('par_el1 >< sreg 3 0 7 4 0) ('mair_el1 >< sreg 3 0 10 2 0)
+           ('vbar_el1 >< sreg 3 0 12 0 0) ('mpidr_el1 >< sreg 3 0 0 0 5)
+           ('ctr_el0 >< sreg 3 3 0 0 1)
+           ('cntfrq_el0 >< sreg 3 3 14 0 0) ('cntpct_el0 >< sreg 3 3 14 0 1)
+           ('cntp_tval_el0 >< sreg 3 3 14 2 0) ('cntp_ctl_el0 >< sreg 3 3 14 2 1)))
    (arm64-sysreg nm) (look arm64-sysregs nm 'badsysreg)
-   (arm64-mrs d nm) (le32 (0xD5200000 | ((arm64-sysreg nm) | (rn d))))     ; MRS Xd, <reg>
-   (arm64-msr nm s) (le32 (0xD5000000 | ((arm64-sysreg nm) | (rn s))))     ; MSR <reg>, Xs
+   (arm64-mrs d nm) (le32 (0xD5200000 | (arm64-sysreg nm | rn d)))         ; MRS Xd, <reg>
+   (arm64-msr nm s) (le32 (0xD5000000 | (arm64-sysreg nm | rn s)))         ; MSR <reg>, Xs
 
    ;; MSR (immediate): a PSTATE FIELD, not a register -- op1/op2 name the field and the 4-bit
    ;; immediate rides CRm. this is how interrupts mask (daifset/daifclr) and how the stack
    ;; pointer is chosen (spsel).
-   arm64-pstate (tabof `(('spsel >< `(0 5)) ('daifset >< `(3 6)) ('daifclr >< `(3 7))))
+   arm64-pstate (tabof `(('spsel >< '(0 5)) ('daifset >< '(3 6)) ('daifclr >< '(3 7))))
    (arm64-msri fld imm)
       (: r (peep arm64-pstate fld ())
          _ (? (two? r) 0 (scare 'badpstate fld))
-         _ (? (&& (imm >= 0) (imm <= 15)) 0 (scare 'arm64-pstate-imm imm))
+         _ (? ((imm >= 0) && (imm <= 15)) 0 (scare 'arm64-pstate-imm imm))
          (le32 (0xD500401F | ((<r << 16) | ((imm << 8) | (<>r << 5))))))
 
    ;; barriers. one option table (the shareability domain) under all three; ISB takes only SY,
@@ -375,7 +375,7 @@
    arm64-barrier-opts (tabof
         `(('oshld >< 1) ('oshst >< 2) ('osh >< 3) ('nshld >< 5) ('nshst >< 6) ('nsh >< 7)
            ('ishld >< 9) ('ishst >< 10) ('ish >< 11) ('ld >< 13) ('st >< 14) ('sy >< 15)))
-   (arm64-barrier base opt) (le32 (base | ((look arm64-barrier-opts opt 'badbarrier) << 8)))
+   (arm64-barrier base opt) (le32 (base | (look arm64-barrier-opts opt 'badbarrier << 8)))
    (arm64-dsb opt) (arm64-barrier 0xD503309F opt)
    (arm64-dmb opt) (arm64-barrier 0xD50330BF opt)
 
@@ -383,25 +383,25 @@
    ;; ALMOST disjoint (dc ivac vs ic ivau) and a silent cross-read would emit the wrong cache
    ;; op. the whole-system forms take no register: spell that operand `zr` (Rt = 31 = XZR).
    arm64-tlbi-ops (tabof
-        `(('vmalle1 >< (sreg 1 0 8 7 0)) ('vmalle1is >< (sreg 1 0 8 3 0))
-           ('vae1 >< (sreg 1 0 8 7 1)) ('vae1is >< (sreg 1 0 8 3 1))
-           ('aside1is >< (sreg 1 0 8 3 2)) ('alle1 >< (sreg 1 4 8 7 4))))
-   arm64-ic-ops (tabof `(('iallu >< (sreg 1 0 7 5 0)) ('ivau >< (sreg 1 3 7 5 1))))
+        `(('vmalle1 >< sreg 1 0 8 7 0) ('vmalle1is >< sreg 1 0 8 3 0)
+           ('vae1 >< sreg 1 0 8 7 1) ('vae1is >< sreg 1 0 8 3 1)
+           ('aside1is >< sreg 1 0 8 3 2) ('alle1 >< sreg 1 4 8 7 4)))
+   arm64-ic-ops (tabof `(('iallu >< sreg 1 0 7 5 0) ('ivau >< sreg 1 3 7 5 1)))
    arm64-dc-ops (tabof
-        `(('ivac >< (sreg 1 0 7 6 1)) ('zva >< (sreg 1 3 7 4 1)) ('cvac >< (sreg 1 3 7 10 1))
-           ('cvau >< (sreg 1 3 7 11 1)) ('civac >< (sreg 1 3 7 14 1))))
-   arm64-at-ops (tabof `(('s1e1r >< (sreg 1 0 7 8 0)) ('s1e1w >< (sreg 1 0 7 8 1))))
+        `(('ivac >< sreg 1 0 7 6 1) ('zva >< sreg 1 3 7 4 1) ('cvac >< sreg 1 3 7 10 1)
+           ('cvau >< sreg 1 3 7 11 1) ('civac >< sreg 1 3 7 14 1)))
+   arm64-at-ops (tabof `(('s1e1r >< sreg 1 0 7 8 0) ('s1e1w >< sreg 1 0 7 8 1)))
    (arm64-sysrt t) (? (id? t 'zr) 31 (rn t))
-   (arm64-sys tab bad op t) (le32 (0xD5000000 | ((look tab op bad) | (arm64-sysrt t))))
+   (arm64-sys tab bad op t) (le32 (0xD5000000 | (look tab op bad | arm64-sysrt t)))
 
    ;; exception generation: one shape, Dxxx | (imm16 << 5) | LL. `dbrk` is A64's HLT -- the
    ;; DEBUGGER halt (hlt #0xf000 is the semihosting call), named apart from x86's `hlt`, which
    ;; stops the core and is a different instruction entirely. UDF is the permanently-undefined
    ;; word, all zeros, and takes no head at all.
    (arm64-exc base imm)
-      (: _ (? (&& (imm >= 0) (imm <= 65535)) 0 (scare 'arm64-exc-imm imm))
+      (: _ (? ((imm >= 0) && (imm <= 65535)) 0 (scare 'arm64-exc-imm imm))
          (le32 (base | (imm << 5))))
-   (arm64-udf imm) (: _ (? (&& (imm >= 0) (imm <= 65535)) 0 (scare 'arm64-exc-imm imm)) (le32 imm))
+   (arm64-udf imm) (: _ (? ((imm >= 0) && (imm <= 65535)) 0 (scare 'arm64-exc-imm imm)) (le32 imm))
 
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their words outright, `raw` the identity. the alu group pins off its rows.
@@ -411,11 +411,11 @@
            ('ld1 >< arm64-ld1) ('ld2 >< arm64-ld2) ('ld4 >< arm64-ld4)
            ('st1 >< arm64-st1) ('st2 >< arm64-st2) ('st4 >< arm64-st4)
            ('ldu1 >< arm64-ldu1) ('ldu2 >< arm64-ldu2) ('ldu4 >< arm64-ldu4)
-           ('sx1 >< (arm64-sx 1)) ('sx2 >< (arm64-sx 2)) ('sx4 >< (arm64-sx 4))
-           ('zx1 >< (arm64-zx 1)) ('zx2 >< (arm64-zx 2)) ('zx4 >< (arm64-zx 4))
-           ('shlv >< (arm64-shiftv 'shlv)) ('shrv >< (arm64-shiftv 'shrv)) ('sarv >< (arm64-shiftv 'sarv))
-           ('shl >< (arm64-shift 'shl)) ('shr >< (arm64-shift 'shr)) ('sar >< (arm64-shift 'sar))
-           ('rol >< (arm64-shift 'rol)) ('ror >< (arm64-shift 'ror))
+           ('sx1 >< arm64-sx 1) ('sx2 >< arm64-sx 2) ('sx4 >< arm64-sx 4)
+           ('zx1 >< arm64-zx 1) ('zx2 >< arm64-zx 2) ('zx4 >< arm64-zx 4)
+           ('shlv >< arm64-shiftv 'shlv) ('shrv >< arm64-shiftv 'shrv) ('sarv >< arm64-shiftv 'sarv)
+           ('shl >< arm64-shift 'shl) ('shr >< arm64-shift 'shr) ('sar >< arm64-shift 'sar)
+           ('rol >< arm64-shift 'rol) ('ror >< arm64-shift 'ror)
            ('lea >< arm64-lea) ('lean >< arm64-lea)          ; a consumed lea (x64 tells them apart for the escape gate)
            ('push >< arm64-push) ('pop >< arm64-pop)
            ('neg >< arm64-neg) ('not >< arm64-not) ('inc >< arm64-inc) ('dec >< arm64-dec)
@@ -426,8 +426,8 @@
            ('ldxb >< arm64-ldxb) ('stxb >< arm64-stxb)
            ('call >< arm64-call) ('la >< arm64-la) ('lar >< arm64-lar) ('lia >< arm64-lia)
            ('movsd >< arm64-fmov)                            ; -- scalar-double FP --
-           ('addsd >< (arm64-fp3op 'addsd)) ('subsd >< (arm64-fp3op 'subsd))
-           ('mulsd >< (arm64-fp3op 'mulsd)) ('divsd >< (arm64-fp3op 'divsd))
+           ('addsd >< arm64-fp3op 'addsd) ('subsd >< arm64-fp3op 'subsd)
+           ('mulsd >< arm64-fp3op 'mulsd) ('divsd >< arm64-fp3op 'divsd)
            ('ucomisd >< arm64-fcmp) ('cvtsi2sd >< arm64-scvtf) ('cvttsd2si >< arm64-fcvtzs)
            ('movqxr >< arm64-fmovxr) ('movqrx >< arm64-fmovrx)
            ('stsd >< arm64-fst) ('ldsd >< arm64-fld) ('stss >< arm64-fsts) ('ldss >< arm64-flds)
@@ -436,20 +436,20 @@
            ('raw >< 1)
            ('mrs >< arm64-mrs) ('msr >< arm64-msr) ('msri >< arm64-msri)   ; -- the system lane --
            ('dsb >< arm64-dsb) ('dmb >< arm64-dmb)
-           ('tlbi >< (arm64-sys arm64-tlbi-ops 'badtlbi))
-           ('ic >< (arm64-sys arm64-ic-ops 'badic))
-           ('dc >< (arm64-sys arm64-dc-ops 'baddc))
-           ('at >< (arm64-sys arm64-at-ops 'badat))
-           ('brk >< (arm64-exc 0xD4200000)) ('dbrk >< (arm64-exc 0xD4400000))   ; brk #imm / hlt #imm (the debugger halt)
-           ('hvc >< (arm64-exc 0xD4000002)) ('smc >< (arm64-exc 0xD4000003))
+           ('tlbi >< arm64-sys arm64-tlbi-ops 'badtlbi)
+           ('ic >< arm64-sys arm64-ic-ops 'badic)
+           ('dc >< arm64-sys arm64-dc-ops 'baddc)
+           ('at >< arm64-sys arm64-at-ops 'badat)
+           ('brk >< arm64-exc 0xD4200000) ('dbrk >< arm64-exc 0xD4400000)       ; brk #imm / hlt #imm (the debugger halt)
+           ('hvc >< arm64-exc 0xD4000002) ('smc >< arm64-exc 0xD4000003)
            ('udf >< arm64-udf)
-           ('isb >< (le32 0xD5033FDF))                       ; isb sy
-           ('wfi >< (le32 0xD503207F)) ('wfe >< (le32 0xD503205F))
-           ('eret >< (le32 0xD69F03E0))
-           ('ret >< (le32 0xD65F03C0))                       ; ret x30
-           ('sys >< (le32 0xD4000001))                       ; svc #0
-           ('nop >< (le32 0xD503201F))
-           ('trap >< (le32 0xD4200000))))                    ; brk #0
+           ('isb >< le32 0xD5033FDF)                         ; isb sy
+           ('wfi >< le32 0xD503207F) ('wfe >< le32 0xD503205F)
+           ('eret >< le32 0xD69F03E0)
+           ('ret >< le32 0xD65F03C0)                         ; ret x30
+           ('sys >< le32 0xD4000001)                         ; svc #0
+           ('nop >< le32 0xD503201F)
+           ('trap >< le32 0xD4200000)))                      ; brk #0
    _ (foldl (\ _ p (emrow arm64-emitters <p (arm64-aluop <p))) 0 arm64-alu-rows)
    (arm64-lower ins) (: f lower-via (? (lit? f) (f arm64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
@@ -470,6 +470,6 @@
    arm64 (tablet 0)
    _ (pin arm64 'lower arm64-lower)
    _ (pin arm64 'patch arm64-patch)
-   _ (pin arm64 'nop `(31 32 3 213))           ; the ('align n) filler unit: NOP d503201f LE
+   _ (pin arm64 'nop '(31 32 3 213))           ; the ('align n) filler unit: NOP d503201f LE
    _ (defbackend 'arm64 arm64)
    _ (defbackend 'aarch64 arm64))

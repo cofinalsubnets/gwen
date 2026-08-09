@@ -48,8 +48,8 @@
                  (+ ("" + (| 128 (& 63 (>> cp 6)))) ("" + (| 128 (& 63 cp))))))
  (gl b) (: g (peep glyphs b ())
            (? (string? g) g
-            (: cp (? (&& (<= 32 b) (< b 127)) b (unfold b))
-               s (utf8 (? (&& (charm? cp) (< 0 cp)) cp 63))
+            (: cp (? ((<= 32 b) && (< b 127)) b (unfold b))
+               s (utf8 (? (charm? cp && (< 0 cp)) cp 63))
                _ (pin glyphs b s)
                s)))
 
@@ -106,12 +106,12 @@
  ; open a child on its own pty at r x c. ⚠ tether's errno rides back out on a
  ; refusal -- a charm, never two?, which is how the caller tells it from a pane.
  (hopen argv r c) (: md (tether argv)
-                     (? (! (two? md)) md
-                      (: m (cup md)
+                     (? !(two? md) md
+                      (: m >md
                          s (screen (cask (screen () r c)) r c)
                          bx #s
                          _ (setwinsize m r c)
-                         (L bx m (cap md)))))
+                         (L bx m <md))))
 
  ; --- the relay: the plan says where every berth is, so every screen is opened
  ; to its rectangle and every pty told its new size. content is the guest's to
@@ -120,11 +120,11 @@
  ; axis), so its grid is 1x1 and wharf-show? is what keeps it off the glass.
  (hrelay hb) (: bs (wharf-lay (hb 'plan) (hb 'rows) (hb 'cols))
                 _ (map (\ b (: p (hpane hb (wharf-id b))
-                               (? (! (two? p)) 0
+                               (? !(two? p) 0
                                 (: nr (max 1 (wharf-rows b)) nc (max 1 (wharf-cols b))
                                    bx (hbox p)
                                    s (bx -> () 0)
-                                   (? (&& (= nr (gaze s 1)) (= nc (gaze s 2))) 0
+                                   (? ((= nr (gaze s 1)) && (= nc (gaze s 2))) 0
                                     (: s2 (screen (cask (screen () nr nc)) nr nc)
                                        _ (bx <- () s2)
                                        (setwinsize (hmas p) nr nc)))))))
@@ -163,16 +163,16 @@
   (: j (jug 0)
      _ (say j "\e[?25l")
      _ (map (\ b (: p (hpane hb (wharf-id b))
-                    (? (&& (wharf-show? b) (two? p))
+                    (? (wharf-show? b && two? p)
                        (hrows j ((hbox p) -> () 0) (wharf-rows b) (wharf-cols b)
                                 (wharf-row b) (wharf-col b) 0 -1)
                        0)))
             (hb 'lay))
      _ (hbars j hb)
      _ (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
-          (? (&& (two? p) (two? b))
+          (? (two? p && two? b)
              (: s ((hbox p) -> () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
-                _ (say j (hgo ((wharf-row b) + (// w c)) ((wharf-col b) + (% w c))))
+                _ (say j (hgo (wharf-row b + (// w c)) (wharf-col b + (% w c))))
                 (? (& 1 f) (say j "\e[?25h") 0))          ; the guest's cursor wish
              0))
      (slurp j))
@@ -182,12 +182,12 @@
  ; shut for it. ⚠ the handle is kept in 'jobs so the teardown can reap it.
  (hmoor hb id) (: p (hpane hb id)
                   t (twirl (\ _ (: _ (moor (hbox p) (hmas p) (hb 'dirt)) (hshut hb id))) 0)
-                  (pin hb 'jobs (link t (hb 'jobs))))
+                  (pin hb 'jobs (t >< hb 'jobs)))
 
  ; split the focused berth and tie a fresh child up in the new half. it opens
  ; at 1x1 and the relay right after is what gives it its real size.
  (hsplit hb d) (: p (hopen (hb 'argv) 1 1)
-                  (? (! (two? p)) 0
+                  (? !(two? p) 0
                    (: id (hb 'next)
                       _ (pin (hb 'panes) id p)
                       _ (pin hb 'next (id + 1))
@@ -239,10 +239,10 @@
  ; recovers. the opening had this floor; the tide did not, and quietly undid it
  ; half a second in.
  (hsize u) (: ws (winsize 0)
-              (L (? (&& (two? ws) (< 5 (cap ws))) (cap ws) 24)
-                 (? (&& (two? ws) (< 19 (cup ws))) (cup ws) 80)))
+              (L (? (two? ws && (< 5 <ws)) <ws 24)
+                 (? (two? ws && (< 19 >ws)) >ws 80)))
  (htide hb) (: sz (hsize 0) r <sz c <>sz
-               (? (&& (= r (hb 'rows)) (= c (hb 'cols))) ()
+               (? ((= r (hb 'rows)) && (= c (hb 'cols))) ()
                 (: _ (pin hb 'rows r) _ (pin hb 'cols c) (hrelay hb))))
 
  ; --- the swim: repaint on dirt at ~30fps, feel the tide every half second,
@@ -260,7 +260,7 @@
  (berth argv) (: sz (hsize 0) r <sz c <>sz
                  _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
                  p0 (hopen argv r c)
-                 (? (! (two? p0)) p0
+                 (? !(two? p0) p0
                   (: panes #()
                      _ (pin panes 1 p0)
                      hb #()

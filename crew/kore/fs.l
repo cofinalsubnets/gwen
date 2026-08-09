@@ -10,12 +10,12 @@
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
    (uoct s)
     (: n (tally s)
-       (go i acc) (? (i < n) (go (i + 1) ((* 8 acc) + ((s i) - 48))) acc)
+       (go i acc) (? (i < n) (go (i + 1) ((* 8 acc) + (s i - 48))) acc)
        (go 0 0))
    ; is the path a directory (stat follows links, like the tools want)
-   (udirp q) (: st (stat q) (&& (two? st) (16384 = (& 61440 <>>st))))
+   (udirp q) (: st (stat q) (two? st && (16384 = (& 61440 <>>st))))
    ; a file destination: into a directory the source's basename lands beside
-   (udest src dst) (? (udirp dst) (dst + "/" + (ubase src "")) dst)
+   (udest src dst) (? (udirp dst) (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
    (ucopy who src dst)
     (: r (uread src)
@@ -33,53 +33,53 @@
    ; -- ls: a directory's entries, sorted, dotfiles held back (-a shows them);
    ; a file argument answers its own name --
    (ls-main as)
-    (: a? (&& (two? as) (<as = "-a"))
+    (: a? (two? as && (<as = "-a"))
        fs (? a? >as as)
        (one p ok)
-        (? (! (two? (stat p)))
+        (? !(two? (stat p))
            (: _ (say err ("ls: cannot access " + p)) _ (put err 10) 0)
-           (! (udirp p)) (: _ (say out p) _ (put out 10) ok)
-           (: (go m) (? (! (two? m)) ok
-                        (: _ (? (&& (! a?) ((<m 0) = 46)) ()
+           !(udirp p) (: _ (say out p) _ (put out 10) ok)
+           (: (go m) (? !(two? m) ok
+                        (: _ (? (!a? && (<m 0 = 46)) ()
                                 (: _ (say out <m) (put out 10)))
                            (go >m)))
               (go (sort (readdir p)))))
        (go a ok) (? (two? a) (go >a (one <a ok))
                     (: _ (flush out) (quit (? ok 0 1))))
-       (go (? (two? fs) fs `(".")) 1))
+       (go (? (two? fs) fs '(".")) 1))
 
    ; -- cp and mv: a directory destination pulls the basename in beside --
    (cp-main as)
-    (? (! (two? >as)) (udie 2 "usage: cp SRC DST")
+    (? !(two? >as) (udie 2 "usage: cp SRC DST")
        (: _ (ucopy "cp" <as (udest <as <>as)) (quit 0)))
    (mv-main as)
-    (? (! (two? >as)) (udie 2 "usage: mv SRC DST")
+    (? !(two? >as) (udie 2 "usage: mv SRC DST")
        (: src <as dst (udest <as <>as)
           e (rename src dst)
-          (? (! e) (quit 0)
+          (? !e (quit 0)
              (e = 18) (: _ (ucopy "mv" src dst) _ (unlink src) (quit 0))   ; EXDEV: the long way
              (udie 1 ("mv: cannot move " + src)))))
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
    (rm-main as)
-    (: (fl a r f) (? (! (two? a)) `(r f a)
+    (: (fl a r f) (? !(two? a) `(r f a)
                      (<a = "-r") (fl >a 1 f)
                      (<a = "-f") (fl >a r 1)
-                     (|| (<a = "-rf") (<a = "-fr")) (fl >a 1 1)
+                     ((<a = "-rf") || (<a = "-fr")) (fl >a 1 1)
                      `(r f a))
        p (fl as 0 0)
        r? <p f? <>p fs <>>p
        (zap q)
         (? (udirp q)
-           (: (go m ok) (? (! (two? m)) ok
+           (: (go m ok) (? !(two? m) ok
                            (: k (zap (q + "/" + <m))
                               (go >m (? k ok 0))))
               ok (go (readdir q) 1)
               e (rmdir q)
-              (&& ok (! e)))
-           (! (unlink q)))
+              (ok && !e))
+           !(unlink q))
        (one q ok)
-        (: hit (? r? (zap q) (! (unlink q)))
+        (: hit (? r? (zap q) !(unlink q))
            (? hit ok
               f? ok
               (: _ (say err ("rm: cannot remove " + q)) _ (put err 10) 0)))
@@ -90,12 +90,12 @@
 
    ; -- mkdir and rmdir: -p lays every prefix on the way down --
    (mkdir-main as)
-    (: p? (&& (two? as) (<as = "-p"))
+    (: p? (two? as && (<as = "-p"))
        fs (? p? >as as)
        (mkp q)                          ; a tolerant mkdir at every slash, then the whole
         (: n (tally q)
            (go k) (? (n <= k) (mkdir q 493)
-                     (: _ (? (&& (0 < k) ((q k) = 47)) (mkdir (snip q 0 k) 493) ())
+                     (: _ (? ((0 < k) && (q k = 47)) (mkdir (snip q 0 k) 493) ())
                         (go (k + 1))))
            (go 1))
        (one q ok)
@@ -103,7 +103,7 @@
                  (? (udirp q) ok
                     (: _ (say err ("mkdir: cannot create " + q)) _ (put err 10) 0)))
            (: e (mkdir q 493)
-              (? (! e) ok
+              (? !e ok
                  (: _ (say err ("mkdir: cannot create " + q)) _ (put err 10) 0))))
        (go a ok) (? (two? a) (go >a (one <a ok)) (quit (? ok 0 1)))
        (? (two? fs) (go fs 1) (udie 2 "usage: mkdir [-p] DIR..")))
@@ -112,42 +112,42 @@
         (? (two? a)
            (: e (rmdir <a)
               (go >a
-                  (? (! e) ok (: _ (say err ("rmdir: cannot remove " + <a)) _ (put err 10) 0))))
+                  (? !e ok (: _ (say err ("rmdir: cannot remove " + <a)) _ (put err 10) 0))))
            (quit (? ok 0 1)))
        (? (two? as) (go as 1) (udie 2 "usage: rmdir DIR..")))
 
    ; -- ln: two names for one thing (-s the pointing kind, -f moves the old name aside) --
    (ln-main as)
-    (: (fl a s f rest) (? (! (two? a)) `(s f rest)
+    (: (fl a s f rest) (? !(two? a) `(s f rest)
                           (<a = "-s") (fl >a 1 f rest)
                           (<a = "-f") (fl >a s 1 rest)
-                          (|| (<a = "-sf") (<a = "-fs")) (fl >a 1 1 rest)
+                          ((<a = "-sf") || (<a = "-fs")) (fl >a 1 1 rest)
                           `(s f (rest + a)))
        p (fl as 0 0 ())
        s? <p f? <>p rest <>>p
        _ (? (two? >rest) () (udie 2 "usage: ln [-s] [-f] TARGET LINKNAME"))
        _ (? f? (unlink <>rest) ())
        e (? s? (symlink <rest <>rest) (hardlink <rest <>rest))
-       (? (! e) (quit 0) (udie 1 ("ln: cannot link " + <>rest))))
+       (? !e (quit 0) (udie 1 ("ln: cannot link " + <>rest))))
 
    ; -- touch: be there, and be now --
    (touch-main as)
     (: (one q ok)
         (: _ (? (two? (stat q)) () (: p (open q "a") (? p (close p) ())))
            e (utime q ())
-           (? (! e) ok (: _ (say err ("touch: cannot touch " + q)) _ (put err 10) 0)))
+           (? !e ok (: _ (say err ("touch: cannot touch " + q)) _ (put err 10) 0)))
        (go a ok) (? (two? a) (go >a (one <a ok)) (quit (? ok 0 1)))
        (? (two? as) (go as 1) (udie 2 "usage: touch FILE..")))
 
    ; -- chmod: the octal bits onto every named path --
    (chmod-main as)
-    (? (! (two? >as)) (udie 2 "usage: chmod OCTAL FILE..")
+    (? !(two? >as) (udie 2 "usage: chmod OCTAL FILE..")
        (: m (uoct <as)
           (go a ok)
            (? (two? a)
               (: e (chmod <a m)
                  (go >a
-                     (? (! e) ok (: _ (say err ("chmod: cannot chmod " + <a)) _ (put err 10) 0))))
+                     (? !e ok (: _ (say err ("chmod: cannot chmod " + <a)) _ (put err 10) 0))))
               (quit (? ok 0 1)))
           (go >as 1)))
 
@@ -158,15 +158,15 @@
    ; keeps its symbol table (a fatter install, never a wrong one) --
    (imkp q)                        ; a tolerant mkdir at every slash (parents only)
     (: n (tally q)
-       (go k) (? (k < n) (: _ (? (&& (0 < k) ((q k) = 47)) (mkdir (snip q 0 k) 493) ())
+       (go k) (? (k < n) (: _ (? ((0 < k) && (q k = 47)) (mkdir (snip q 0 k) 493) ())
                             (go (k + 1)))
                  ())
        (go 1))
    (install-main as)
-    (: (fl a d D m s fs) (? (! (two? a)) `(d D m s fs)
+    (: (fl a d D m s fs) (? !(two? a) `(d D m s fs)
                             (<a = "-d") (fl >a 1 D m s fs)
                             (<a = "-D") (fl >a d 1 m s fs)
-                            (&& (<a = "-m") (two? >a)) (fl >>a d D (uoct <>a) s fs)
+                            ((<a = "-m") && two? >a) (fl >>a d D (uoct <>a) s fs)
                             (<a = "-s") (fl >a d D m 1 fs)
                             (fl >a d D m s (fs + `(<a))))
        p (fl as 0 0 493 0 ())
@@ -175,12 +175,12 @@
        (? d? (: (go a ok)
                  (? (two? a)
                     (: _ (imkp <a) e (mkdir <a m)
-                       ok2 (? (udirp <a) (: _ (? (! e) (chmod <a m) ()) ok)
+                       ok2 (? (udirp <a) (: _ (? !e (chmod <a m) ()) ok)
                               (: _ (say err ("install: cannot create " + <a)) _ (put err 10) 0))
                        (go >a ok2))
                     (quit (? ok 0 1)))
                  (? (two? fs) (go fs 1) (udie 2 "usage: install -d DIR..")))
-          (! (two? >fs)) (udie 2 "usage: install [-D] [-m OCTAL] [-s] SRC DST")
+          !(two? >fs) (udie 2 "usage: install [-D] [-m OCTAL] [-s] SRC DST")
           (: src <fs dst (udest <fs <>fs)
              _ (? D? (imkp dst) ())
              _ (ucopy "install" src dst)
@@ -188,27 +188,27 @@
              (quit 0))))
 
    ; -- readlink: what a symbolic link says (-f chases to an absolute, clean path) --
-   (rl-abs q) (? (&& (0 < (tally q)) ((q 0) = 47)) q ((cwd ()) + "/" + q))
+   (rl-abs q) (? ((0 < tally q) && (q 0 = 47)) q (cwd () + "/" + q))
    (rl-clean q)                    ; lexically: no // . .. (.. pops a segment)
     (: n (tally q)
        (seg i st acc) (? (i < n)
-                         (? ((q i) = 47)
-                            (seg (i + 1) (i + 1) (? (st < i) (link (snip q st i) acc) acc))
+                         (? (q i = 47)
+                            (seg (i + 1) (i + 1) (? (st < i) (snip q st i >< acc) acc))
                             (seg (i + 1) st acc))
-                         (rev (? (st < i) (link (snip q st i) acc) acc)))
-       (fold l acc) (? (! (two? l)) (rev acc)
+                         (rev (? (st < i) (snip q st i >< acc) acc)))
+       (fold l acc) (? !(two? l) (rev acc)
                        (<l = ".") (fold >l acc)
                        (<l = "..") (fold >l (? (two? acc) >acc acc))
-                       (fold >l (link <l acc)))
-       ("/" + (ujoinc 47 (fold (seg 0 0 ()) ()))))
+                       (fold >l (<l >< acc)))
+       ("/" + ujoinc 47 (fold (seg 0 0 ()) ())))
    (rl-chase q n)                  ; follow link upon link (n bounds a cycle)
     (: t (readlink q)
-       (? (! (two? (stat q))) ()
-          (! (string? t)) q
+       (? !(two? (stat q)) ()
+          !(string? t) q
           (0 = n) ()
-          (rl-chase (? ((t 0) = 47) t (rl-clean ((rl-abs q) + "/../" + t))) (n - 1))))
+          (rl-chase (? (t 0 = 47) t (rl-clean (rl-abs q + "/../" + t))) (n - 1))))
    (readlink-main as)
-    (: f? (&& (two? as) (<as = "-f"))
+    (: f? (two? as && (<as = "-f"))
        fs (? f? >as as)
        _ (? (two? fs) () (udie 2 "usage: readlink [-f] PATH"))
        q <fs
@@ -218,11 +218,11 @@
 
    ; -- cmp: are two files the same bytes (-s says nothing, the exit code answers) --
    (cmp-main as)
-    (: s? (&& (two? as) (<as = "-s"))
+    (: s? (two? as && (<as = "-s"))
        fs (? s? >as as)
        _ (? (two? >fs) () (udie 2 "usage: cmp [-s] A B"))
        ra (uread <fs) rb (uread <>fs)
-       (? (|| (! (two? ra)) (! (two? rb)))
+       (? (!(two? ra) || !(two? rb))
           (: _ (? s? () (: _ (say err ("cmp: cannot read " + (? (two? ra) <>fs <fs))) (put err 10)))
              (quit 2))
           (<>ra = <>rb) (quit 0)

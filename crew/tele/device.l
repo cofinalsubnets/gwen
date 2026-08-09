@@ -15,9 +15,9 @@
 ; warp simulator.
 
 (: ;; -- shape helpers (shape is a LIST -- walk it with cap/cup, like tele does) --
-   (dv-prod l)   (? (two? l) (* (cap l) (dv-prod (cup l))) 1)
-   (dv-rows v)   (cap (shape v))                       ; axis 0
-   (dv-cols v)   (cap (cup (shape v)))                 ; axis 1
+   (dv-prod l)   (? (two? l) (* <l (dv-prod >l)) 1)
+   (dv-rows v)   <(shape v)                            ; axis 0
+   (dv-cols v)   <>(shape v)                           ; axis 1
    (dv-cells v)  (? (tray? v) (dv-prod (shape v)) 1)   ; product of the shape
    dv-elsz 8                                           ; a gem is 8 bytes (f64)
 
@@ -36,17 +36,17 @@
    (dv-gemm-cost a b) (: m (dv-rows a) k (dv-cols a) n (dv-cols b)
                          (link (* 2 (* m (* k n)))
                                (* dv-elsz (+ (* m k) (+ (* k n) (* m n))))))
-   (dv-ew-cost a)     (: n (dv-cells a) (link n (* dv-elsz (* 3 n))))
-   (dv-red-cost a)    (: n (dv-cells a) (link n (* dv-elsz n)))
-   (dv-tr-cost a)     (: n (dv-cells a) (link 0 (* dv-elsz (* 2 n))))
+   (dv-ew-cost a)     (: n (dv-cells a) (n >< (* dv-elsz (* 3 n))))
+   (dv-red-cost a)    (: n (dv-cells a) (n >< (* dv-elsz n)))
+   (dv-tr-cost a)     (: n (dv-cells a) (0 >< (* dv-elsz (* 2 n))))
 
    ;; -- the SIM backend: tele's four kernels, native math WRAPPED in the meter.
    ;; keys match tele's seam exactly (gemm/ew/reduce/transp); `ew` takes the op. --
    sim-dev (hash 'name "sim"
-                 'gemm   (\ a b   (: c (dv-gemm-cost a b) _ (dv-bump (cap c) (cup c)) (inner a b)))
-                 'ew     (\ op a b (: c (dv-ew-cost a)    _ (dv-bump (cap c) (cup c)) (op a b)))
-                 'reduce (\ a     (: c (dv-red-cost a)    _ (dv-bump (cap c) (cup c)) (net a)))
-                 'transp (\ m     (: c (dv-tr-cost m)     _ (dv-bump (cap c) (cup c)) (transp2 m))))
+                 'gemm   (\ a b   (: c (dv-gemm-cost a b) _ (dv-bump <c >c) (inner a b)))
+                 'ew     (\ op a b (: c (dv-ew-cost a)    _ (dv-bump <c >c) (op a b)))
+                 'reduce (\ a     (: c (dv-red-cost a)    _ (dv-bump <c >c) (net a)))
+                 'transp (\ m     (: c (dv-tr-cost m)     _ (dv-bump <c >c) (transp2 m))))
 
    ;; -- the roofline: turn the meter into a time estimate for a named device.
    ;; spec = { name tflops gbps }: peak compute (TFLOP/s) and memory BW (GB/s).
@@ -57,7 +57,7 @@
          tf (* (peep spec 'tflops 0) 1e12) bw (* (peep spec 'gbps 0) 1e9)
          tc (/ f tf)  tm (/ b bw)                       ; compute-time, memory-time (seconds)
          t  (? (< tc tm) tm tc)  bound (? (< tc tm) "memory" "compute")
-         love (? (! b) 0 (/ f b))                         ; arithmetic intensity (flop/byte)
+         love (? !b 0 (/ f b))                            ; arithmetic intensity (flop/byte)
          _ (puts "-- roofline on ") _ (puts (peep spec 'name "?")) _ (putc 10)
          _ (puts "   flops     = ") _ (puts (show f)) _ (putc 10)
          _ (puts "   bytes     = ") _ (puts (show b)) _ (putc 10)

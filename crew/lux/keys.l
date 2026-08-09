@@ -27,12 +27,12 @@
 
    ; --- a binding row ---
    (kb mods sym act) `(mods sym act)
-   (kb-mods r) (cap r)  (kb-sym r) (caup r)  (kb-act r) (nthl r 2)
-   (keys-has t mods sym) (any (\ r (((kb-mods r) = mods) && ((kb-sym r) = sym))) t)
-   (keys-find t mods sym) (: hit (afind (\ r (((kb-mods r) = mods) && ((kb-sym r) = sym))) t)
+   (kb-mods r) <r  (kb-sym r) <>r  (kb-act r) (nthl r 2)
+   (keys-has t mods sym) (any (\ r ((kb-mods r = mods) && (kb-sym r = sym))) t)
+   (keys-find t mods sym) (: hit (afind (\ r ((kb-mods r = mods) && (kb-sym r = sym))) t)
                              (? (two? hit) (kb-act hit) ()))
-   (keys-union custom def) (cat custom (filter (\ r (! (keys-has custom (kb-mods r) (kb-sym r)))) def))
-   (keys-syms t) (foldl (\ a r (? (any (\ x (x = (kb-sym r))) a) a (link (kb-sym r) a))) () t)
+   (keys-union custom def) (custom + (filter (\ r !(keys-has custom (kb-mods r) (kb-sym r))) def))
+   (keys-syms t) (foldl (\ a r (? (any (\ x (x = kb-sym r)) a) a (kb-sym r >< a))) () t)
 
    ; --- KEY SPECS: a LIST, `(sup shift e)` -- the LAST element is the key, every
    ;     one before it a modifier. a config writes these (crew/lux/config.l reads
@@ -43,30 +43,30 @@
    ;       "," / "1"     a one-char STRING is that character, punctuation and digits included
    ;       65027         a bare charm IS the keysym, so the table is a convenience,
    ;                     never a ceiling (⚠ 32 and up: a digit key is "1" or 49, not 1) ---
-   xk-fkeys (map (\ i `(("F" + (show (i + 1))) (65470 + i))) (jot 12))           ; F1..F12
-   xk-names (cat xk-fkeys `(
-     `("Return" xk-ret)   `("Tab" xk-tab)     `("space" 32)       `("Escape" 65307)
+   xk-fkeys (map (\ i `(("F" + show (i + 1)) (65470 + i))) (jot 12))             ; F1..F12
+   xk-names (xk-fkeys + `(
+     `("Return" xk-ret)   `("Tab" xk-tab)     '("space" 32)       '("Escape" 65307)
      `("Left" xk-left)    `("Up" xk-up)       `("Right" xk-right) `("Down" xk-down)
-     `("BackSpace" 65288) `("Delete" 65535)   `("Insert" 65379)   `("Menu" 65383)
-     `("Home" 65360)      `("End" 65367)      `("Page_Up" 65365)  `("Page_Down" 65366)
-     `("Print" 65377)     `("Pause" 65299)
-     `("grave" 96)  `("comma" 44)  `("period" 46) `("slash" 47)   `("backslash" 92)
-     `("minus" 45)  `("equal" 61)  `("plus" 43)   `("asterisk" 42)
-     `("semicolon" 59) `("apostrophe" 39) `("bracketleft" 91) `("bracketright" 93)
-     `("XF86AudioMute" 269025042)        `("XF86AudioLowerVolume" 269025041)
-     `("XF86AudioRaiseVolume" 269025043) `("XF86AudioPlay" 269025044)
-     `("XF86AudioStop" 269025045)        `("XF86AudioPrev" 269025046)
-     `("XF86AudioNext" 269025047)
-     `("XF86MonBrightnessUp" 269025026)  `("XF86MonBrightnessDown" 269025027)))
+     '("BackSpace" 65288) '("Delete" 65535)   '("Insert" 65379)   '("Menu" 65383)
+     '("Home" 65360)      '("End" 65367)      '("Page_Up" 65365)  '("Page_Down" 65366)
+     '("Print" 65377)     '("Pause" 65299)
+     '("grave" 96)  '("comma" 44)  '("period" 46) '("slash" 47)   '("backslash" 92)
+     '("minus" 45)  '("equal" 61)  '("plus" 43)   '("asterisk" 42)
+     '("semicolon" 59) '("apostrophe" 39) '("bracketleft" 91) '("bracketright" 93)
+     '("XF86AudioMute" 269025042)        '("XF86AudioLowerVolume" 269025041)
+     '("XF86AudioRaiseVolume" 269025043) '("XF86AudioPlay" 269025044)
+     '("XF86AudioStop" 269025045)        '("XF86AudioPrev" 269025046)
+     '("XF86AudioNext" 269025047)
+     '("XF86MonBrightnessUp" 269025026)  '("XF86MonBrightnessDown" 269025027)))
    (xk-of k) (? (charm? k) (? (31 < k) k ())                                     ; a keysym, verbatim -- the escape hatch past the table
                 (: nm (? (name? k) (string k) k)
-                   (? (! (string? nm)) ()
-                      ((tally nm) = 1) (nm 0)                                    ; one char IS its ascii keysym
-                      (: hit (afind (\ r ((cap r) = nm)) xk-names)
-                         (? (two? hit) (caup hit) ())))))                        ; unknown name -> () (no keysym is 0, so nothing is lost)
-   (kmod-of m modm) (? ((id? m 'sup) || (id? m 'super) || (id? m 'mod4)) supm
-                       ((id? m 'alt) || (id? m 'mod1)) altm
-                       ((id? m 'ctrl) || (id? m 'control)) ctrlm
+                   (? !(string? nm) ()
+                      (tally nm = 1) (nm 0)                                      ; one char IS its ascii keysym
+                      (: hit (afind (\ r (<r = nm)) xk-names)
+                         (? (two? hit) <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
+   (kmod-of m modm) (? (id? m 'sup || id? m 'super || id? m 'mod4) supm
+                       (id? m 'alt || id? m 'mod1) altm
+                       (id? m 'ctrl || id? m 'control) ctrlm
                        (id? m 'shift) shiftm
                        (id? m 'mod) modm                                         ; `mod` follows whatever the config chose
                        ())
@@ -74,27 +74,27 @@
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
    ; answer and would read as failure on its own.
    (kspec modm spec)
-    (? (! (two? spec)) ()
+    (? !(two? spec) ()
        (: n (tally spec)
           ks (xk-of (nthl spec (n - 1)))
-          ms (foldl (\ a m (: b (kmod-of m modm) (? ((two? a) && b) `(((cap a) | b)) ())))
-                    `(0) (take (n - 1) spec))
-          (? (ks && (two? ms)) `((cap ms) ks) ())))
+          ms (foldl (\ a m (: b (kmod-of m modm) (? (two? a && b) `((<a | b)) ())))
+                    '(0) (take (n - 1) spec))
+          (? (ks && two? ms) `(<ms ks) ())))
 
    ; --- a config's own rows. `spawn`/`exec` carry their argv FLAT in a config
    ;     ((spawn "rofi" "-show" "drun")) and nested in a binding row, so they are
    ;     the two the reader re-wraps; every other action is already its own shape. ---
-   (kb-act-of a) (? (! (two? a)) a
-                    ((id? (cap a) 'spawn) || (id? (cap a) 'exec)) `((cap a) (cup a))
+   (kb-act-of a) (? !(two? a) a
+                    (id? <a 'spawn || id? <a 'exec) `(<a >a)
                     a)
    (keys-rows modm rows)                                                         ; ((spec action) ..) -> binding rows; an unreadable spec is dropped
-    (foldr (\ r acc (: k (? (two? r) (kspec modm (cap r)) ())
-                       (? ((two? k) && (two? (cup r))) (link (kb (cap k) (caup k) (kb-act-of (caup r))) acc) acc)))
+    (foldr (\ r acc (: k (? (two? r) (kspec modm <r) ())
+                       (? (two? k && two? >r) (kb <k <>k (kb-act-of <>r) >< acc) acc)))
            () rows)
    (keys-drop modm t specs)                                                      ; remove every chord named in specs
     (: ks (filter two? (map (\ s (kspec modm s)) specs))
-       (? (! (two? ks)) t
-          (filter (\ r (! (any (\ k (((cap k) = (kb-mods r)) && ((caup k) = (kb-sym r)))) ks))) t)))
+       (? !(two? ks) t
+          (filter (\ r !(any (\ k ((<k = kb-mods r) && (<>k = kb-sym r))) ks)) t)))
 
    ; --- the directional block: the .hs list comprehension as a map --
    ;     (dir keysyms delta) x {hjkl, arrows} x {mod, mod+shift, mod+ctrl} ---
@@ -102,30 +102,30 @@
                      `('down  `(106 xk-down)  `(0 nud))
                      `('up    `(107 xk-up)    `(0 (0 - nud)))
                      `('right `(108 xk-right) `(nud 0)))
-   (kdir-rows modm d) (: dir (cap d) delta (nthl d 2)
+   (kdir-rows modm d) (: dir <d delta (nthl d 2)
                          (foldl cat () (map (\ sym `((kb modm sym `('go dir delta))
                                                      (kb (modm | shiftm) sym `('swapd dir delta))
                                                      (kb (modm | ctrlm) sym `('resize dir delta))))
-                                            (caup d))))
+                                            <>d)))
    (keys-dir-for modm nud) (foldl cat () (map (\ d (kdir-rows modm d)) (kdirs-for nud)))
 
    ; --- the custom command block, exactly the config's table ---
    (keys-cmd-for modm) `(
      (kb modm 120 '(kill))                                                       ; mod+x
      (kb (modm | shiftm) 113 '(quit))                                            ; mod+shift+q
-     (kb modm xk-ret `('spawn `("xfce4-terminal")))                              ; mod+return  term
-     (kb modm 96 `('spawn `("rofi" "-show" "drun")))                             ; mod+`       menu
+     (kb modm xk-ret '(spawn ("xfce4-terminal")))                                ; mod+return  term
+     (kb modm 96 '(spawn ("rofi" "-show" "drun")))                               ; mod+`       menu
      (kb modm 32 '(msg next-layout))                                             ; mod+space
      (kb modm 98 '(toggle-struts))                                               ; mod+b       ToggleStruts (ewmh.l's avoid flag)
      (kb modm 109 '(msg mirror))                                                 ; mod+m       Toggle MIRROR
      (kb modm 102 '(msg toggle-layout))                                          ; mod+f       toggleLayouts Full
-     (kb modm 112 `('spawn `("xfce4-screenshooter")))                            ; mod+p
+     (kb modm 112 '(spawn ("xfce4-screenshooter")))                              ; mod+p
      (kb modm 119 '(float-toggle))                                               ; mod+w       f_t sink float
-     (kb (modm | shiftm) 101 `('spawn `("gvim" "/home/gwen/g/lux")))             ; mod+shift+e edit config
-     (kb modm 101 `('spawn `("rofimoji")))                                       ; mod+e
-     (kb modm 122 `('spawn `("xscreensaver-command" "-activate")))               ; mod+z
-     (kb (modm | shiftm) 111 `('exec `("openbox" "--replace")))                  ; mod+shift+o abdicate
-     (kb (modm | shiftm) 122 `('spawn `("xscreensaver-command" "-lock")))        ; mod+shift+z
+     (kb (modm | shiftm) 101 '(spawn ("gvim" "/home/gwen/g/lux")))               ; mod+shift+e edit config
+     (kb modm 101 '(spawn ("rofimoji")))                                         ; mod+e
+     (kb modm 122 '(spawn ("xscreensaver-command" "-activate")))                 ; mod+z
+     (kb (modm | shiftm) 111 '(exec ("openbox" "--replace")))                    ; mod+shift+o abdicate
+     (kb (modm | shiftm) 122 '(spawn ("xscreensaver-command" "-lock")))          ; mod+shift+z
      (kb altm xk-tab '(next-match 1))                                            ; alt+tab     nextMatch Forward
      (kb modm xk-tab '(next-match 0))                                            ; mod+tab     nextMatch Backward
      (kb modm 44 '(msg inc-master))                                              ; mod+,       IncMasterN 1
@@ -139,8 +139,8 @@
    ;     digit key to hang a tenth workspace on. ---
    (keys-def-for modm ntags) (: ds (map (+ 1) (jot (? (9 < ntags) 9 ntags)))
     (cat `(
-     (kb (modm | shiftm) xk-ret `('spawn `("xterm")))                            ; mod+shift+return  terminal
-     (kb modm 112 `('spawn `("dmenu_run")))                                      ; mod+p             (custom overrides)
+     (kb (modm | shiftm) xk-ret '(spawn ("xterm")))                              ; mod+shift+return  terminal
+     (kb modm 112 '(spawn ("dmenu_run")))                                        ; mod+p             (custom overrides)
      (kb (modm | shiftm) 99 '(kill))                                             ; mod+shift+c
      (kb modm 32 '(msg next-layout))                                             ; mod+space
      (kb (modm | shiftm) 32 '(reset-layout))                                     ; mod+shift+space
@@ -166,7 +166,7 @@
    ; --- the STOCK table: what lux drives with no config file anywhere ---
    keys-dir (keys-dir-for supm 20)
    keys-cmd (keys-cmd-for supm)
-   keys-custom (cat keys-dir keys-cmd)
+   keys-custom (keys-dir + keys-cmd)
    keys-def (keys-def-for supm 9)
    the-keys (keys-union keys-custom keys-def)
 
@@ -175,7 +175,7 @@
    (keys-build modm nud ntags binds unbinds)
     (keys-drop modm
                (keys-union (keys-rows modm binds)
-                           (keys-union (cat (keys-dir-for modm nud) (keys-cmd-for modm))
+                           (keys-union ((keys-dir-for modm nud) + (keys-cmd-for modm))
                                        (keys-def-for modm ntags)))
                unbinds)
 
@@ -184,7 +184,7 @@
    ;     the most recently used OTHER window (the alt-tab flip); Backward to
    ;     the least. Windows never yet focused count as oldest. ---
    (nm-pick row f hist fwd)
-    (: cands (filter (\ w ((! (w = f)) && (any (\ x (x = w)) row))) hist)
-       fresh (filter (\ w ((! (w = f)) && (! (any (\ x (x = w)) cands)))) row)
-       order (cat cands fresh)
-       (? (! (two? order)) () fwd (cap order) (cap (rev order)))))
+    (: cands (filter (\ w (!(w = f) && any (\ x (x = w)) row)) hist)
+       fresh (filter (\ w (!(w = f) && !(any (\ x (x = w)) cands))) row)
+       order (cands + fresh)
+       (? !(two? order) () fwd <order <(rev order))))

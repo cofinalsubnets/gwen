@@ -12,24 +12,24 @@
 ; so the session's scrollback survives the visit.
 (:
    (vi-main as)
-    (: f (? (two? as) (cap as) "")
+    (: f (? (two? as) <as "")
        r (? (< 0 (tally f)) (uread f) ())
-       st (vnew (? (two? r) (lines (caup r)) ()) f)
-       _ (? (&& (< 0 (tally f)) (! (two? r))) (vmsg st (+ f ": new file")) ())
+       st (vnew (? (two? r) (lines <>r) ()) f)
+       _ (? ((< 0 (tally f)) && !(two? r)) (vmsg st (+ f ": new file")) ())
        ; the pens are the FACE's to hand over -- they want $COLORTERM and the
        ; user's own theme file, and the engine reads neither
        _ (pin st 'pens (hue-wake ()))
        ws (winsize 0)
-       _ (? (two? ws) (: _ (pin st 'h (cap ws)) (pin st 'w (cup ws))) ())
+       _ (? (two? ws) (: _ (pin st 'h <ws) (pin st 'w >ws)) ())
        e (+ "" 27)
        _ (raw 1)
        _ (puts (+ e "[?1049h"))
        ; the ex write requests: (name) means write, "" means the buffer's file
        (dow s2)
         (: rq (s2 'dow)
-           (? (! (two? rq)) s2
+           (? !(two? rq) s2
               (: _ (pin s2 'dow ())
-                 nm (cap rq)
+                 nm <rq
                  (? (< 0 (tally nm))
                     (: q (open nm "w")
                        (? q (: _ (say q (unlines (s2 'lines))) _ (close q)
@@ -45,18 +45,18 @@
        ; the text: an empty file is a real file with nothing in it.
        (doe s2)
         (: rq (s2 'doe)
-           (? (! (two? rq)) s2
+           (? !(two? rq) s2
               (: _ (pin s2 'doe ())
-                 nm (cap rq)
+                 nm <rq
                  r (uread nm)
-                 _ (vload s2 (? (two? r) (lines (caup r)) ()) nm)
-                 (vmsg s2 (? (two? r) (nm + ": " + (show (tally (s2 'lines))) + " lines")
+                 _ (vload s2 (? (two? r) (lines <>r) ()) nm)
+                 (vmsg s2 (? (two? r) (nm + ": " + show (tally (s2 'lines)) + " lines")
                               (nm + ": new file"))))))
        ; one key, arrows decoded, with the one-byte pushback: (byte next-pend)
        (rd pend)
         (? (<= 0 pend) (L pend -1)
            (: c (see in)
-              (? (! (= c 27)) (L c -1)
+              (? !(= c 27) (L c -1)
                  (: c2 (see in)
                     (? (= c2 91)
                        (: c3 (see in)
@@ -67,11 +67,11 @@
        (go pend)
         (: _ (puts (vframe st)) _ (flush out)
            kr (rd pend)
-           c (cap kr)
+           c <kr
            (? (< c 0) (fin ())
               (: _ (vstep st c)
                  _ (dow st)
                  _ (doe st)
                  (? (st 'quit) (fin ())
-                    (go (caup kr))))))
+                    (go <>kr)))))
        (go -1)))

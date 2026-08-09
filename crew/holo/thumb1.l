@@ -31,8 +31,8 @@
            ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
            ('r10 >< 10) ('r11 >< 11) ('r12 >< 12)))
    (rn r) (look t1-regs r 'badreg)
-   (reg-eq a b) ((rn a) = (rn b))
-   (lo? r) ((rn r) <= 7)                 ; a "low" register -- the only ones most 16-bit ops reach
+   (reg-eq a b) (rn a = rn b)
+   (lo? r) (rn r <= 7)                   ; a "low" register -- the only ones most 16-bit ops reach
    (need-lo r why) (? (lo? r) 0 (scare why r))   ; guard: v6-M op wants r0..r7
 
    ;; -- condition codes: IR name -> the 4-bit AArch32 cond field (same encoding aarch64/thumb2 use). --
@@ -44,7 +44,7 @@
 
    ;; -- emit. one narrow halfword; t32 is the BL pair (hi halfword first, each little-endian). --
    (t16 w) (le16 (w & 65535))
-   (t32 w) ((le16 (w >> 16)) + (le16 (w & 65535)))
+   (t32 w) (le16 (w >> 16) + le16 (w & 65535))
 
    ;; ---- constant materialization (no MOVW/MOVT on v6-M) ----
    ;; MOVS Rd,#imm8 (T1); MVNS/LSLS/ADDS the byte-build for the rest. all LOW-REG.
@@ -63,8 +63,8 @@
    (t1-li d imm)
       (: u (? (imm < 0) (imm + 4294967296) imm)
          (? (u <= 255) (t1-movs d u)
-            (&& (imm < 0) (imm >= -256))                          ; small negative: MOVS ~imm ; MVNS
-               ((t1-movs d (((0 - imm) - 1) & 255)) + (t1-mvns d d))
+            ((imm < 0) && (imm >= -256))                          ; small negative: MOVS ~imm ; MVNS
+               (t1-movs d (((0 - imm) - 1) & 255) + t1-mvns d d)
             (t1-li-synth d u)))
 
    ;; MOV (register) T1 hi-form -- the ONLY move that legally targets sp; reaches all r0..r15, no flags.
@@ -84,16 +84,16 @@
       (: pos (? (imm < 0) (0 - imm) imm)
          fop (? (imm < 0) (? (op = 'add) 'sub (op = 'sub) 'add op) op)
          dn (rn d) an (rn a)
-         (? (&& (dn = 13) (an = 13))                       ; SUB/ADD SP, SP, #imm7*4 -- the ONLY sp-arith form on v6-M;
+         (? ((dn = 13) && (an = 13))                       ; SUB/ADD SP, SP, #imm7*4 -- the ONLY sp-arith form on v6-M;
                (: _ (? (0 = (pos & 3)) 0 (scare 'sp-adj-align imm))   ; a big frame CHUNKS through 508-byte steps
                   (chunks p acc)
                    (? (p <= 0) acc
                       (: c (? (508 < p) 508 p)
-                         (chunks (p - c) (acc + (t16 ((? (fop = 'add) 0xB000 0xB080) | (c >> 2)))))))
+                         (chunks (p - c) (acc + t16 ((? (fop = 'add) 0xB000 0xB080) | (c >> 2))))))
                   (chunks pos ()))
             (pos <= 7) (t16 ((? (fop = 'add) 0x1C00 0x1E00) | ((pos << 6) | ((an << 3) | dn))))   ; imm3 (3-addr, low)
             (pos <= 255) ((? (dn = an) () (t1-movr d a))  ; imm8 (2-addr): mov d,a first when d != a
-                          + (t16 ((? (fop = 'add) 0x3000 0x3800) | ((dn << 8) | pos))))
+                          + t16 ((? (fop = 'add) 0x3000 0x3800) | ((dn << 8) | pos)))
             ; far: build the immediate in a saved low scratch, then the 3-address register form
             ; (the ADDS/SUBS family sets flags regardless, so t1-li's flag writes cost nothing new)
             (: _ (need-lo d 'addsub-far-hi) _ (need-lo a 'addsub-far-hi)
@@ -106,34 +106,34 @@
    (t1-alu2 op d a b)
       (: base (peep t1-f4 op 0)
          dn (rn d)
-         (? (reg-eq d a) (t16 (base | (((rn b) << 3) | dn)))
-            (reg-eq d b) (t16 (base | (((rn a) << 3) | dn)))
-            ((t1-movr d a) + (t16 (base | (((rn b) << 3) | dn))))))
+         (? (reg-eq d a) (t16 (base | ((rn b << 3) | dn)))
+            (reg-eq d b) (t16 (base | ((rn a << 3) | dn)))
+            (t1-movr d a + t16 (base | ((rn b << 3) | dn)))))
    ;; the carry family (the pair kit rides it): ADCS/SBCS Rdn,Rm (format-4, two-address, flag-consuming).
    ;; MOV (hi-form) never touches flags, so the mov-first staging keeps the carry intact. ADCS is
    ;; commutative (d==b swaps); SBCS is not -- d==b borrows a saved low scratch (push/pop keep flags).
    (t1-adc d a b)
       (: dn (rn d)
-         (? (reg-eq d a) (t16 (0x4140 | (((rn b) << 3) | dn)))
-            (reg-eq d b) (t16 (0x4140 | (((rn a) << 3) | dn)))
-            ((t1-movr d a) + (t16 (0x4140 | (((rn b) << 3) | dn))))))
+         (? (reg-eq d a) (t16 (0x4140 | ((rn b << 3) | dn)))
+            (reg-eq d b) (t16 (0x4140 | ((rn a << 3) | dn)))
+            (t1-movr d a + t16 (0x4140 | ((rn b << 3) | dn)))))
    (t1-sbc d a b)
       (: dn (rn d)
-         (? (reg-eq d a) (t16 (0x4180 | (((rn b) << 3) | dn)))
+         (? (reg-eq d a) (t16 (0x4180 | ((rn b << 3) | dn)))
             (reg-eq d b)
              (: s (t1-lowscratch d a '(r0 r1 r2 r3 r4 r5 r6 r7))
                 (catall `((t1-push s) (t1-movr s b) (t1-movr d a)
-                          (t16 (0x4180 | (((rn s) << 3) | (rn d)))) (t1-pop s))))
-            ((t1-movr d a) + (t16 (0x4180 | (((rn b) << 3) | dn))))))
+                          (t16 (0x4180 | ((rn s << 3) | rn d))) (t1-pop s))))
+            (t1-movr d a + t16 (0x4180 | ((rn b << 3) | dn)))))
 
    (t1-cmp a b)                                            ; CMP Rn,Rm (low T1 / hi T2) or CMP Rn,#imm8
       (? (reg? b)
          (: an (rn a) bn (rn b)
-            (? (&& (an <= 7) (bn <= 7)) (t16 (0x4280 | ((bn << 3) | an)))              ; T1, both low
+            (? ((an <= 7) && (bn <= 7)) (t16 (0x4280 | ((bn << 3) | an)))              ; T1, both low
                (t16 (0x4500 | ((((an >> 3) & 1) << 7) | ((bn << 3) | (an & 7)))))))    ; T2, hi allowed
          (: _ (? (b < 0) (scare 'cmp-neg-imm b) 0)         ; no CMP #neg (CMN is reg-only) -- immok blocks upstream
             _ (? (b <= 255) 0 (scare 'cmp-imm-range b)) _ (need-lo a 'cmp-hi-imm)
-            (t16 (0x2800 | (((rn a) << 8) | b)))))
+            (t16 (0x2800 | ((rn a << 8) | b)))))
 
    (t1-test a b)                                           ; TST Rn,Rm (format-4, register only, low)
       (? (reg? b) (: an (rn a) bn (rn b) (t16 (0x4200 | ((bn << 3) | an))))
@@ -148,8 +148,8 @@
    ;; classic customers: the callr park reload (ld r12,r4,slot) and any frame slot past imm5 reach.
    ;; NOTE t1-li sets flags -- sound because a mem op never sits between a cmp and its fused consumer.
    (t1-mem-far base16 sh d base off ldq)
-      (: (op1 rd rb) (t16 (base16 | (((rn rb) << 3) | (rn rd))))       ; the [Rb,#0] form (imm5=0)
-         (? (&& ldq (&& (lo? d) !(reg-eq d base)))
+      (: (op1 rd rb) (t16 (base16 | ((rn rb << 3) | rn rd)))           ; the [Rb,#0] form (imm5=0)
+         (? (ldq && lo? d && !(reg-eq d base))
             (catall `((t1-li d off) (t1-add-any d base) (op1 d d)))
             (: s (t1-lowscratch d base '(r0 r1 r2 r3 r4 r5 r6 r7))
                (? ldq
@@ -162,9 +162,9 @@
             (: _ (? (&& (off >= 0) (0 = (off & 3)) ((off >> 2) <= 255)) 0 (scare 'mem-sp-range off)) _ (need-lo d 'mem-sp-hi)
                (t16 (sp16 | ((dn << 8) | (off >> 2)))))
             (: u (off >> sh)
-               ok (&& (lo? d) (&& (lo? base)
-                     (&& (off >= 0) (&& (0 = (off & ((1 << sh) - 1))) (u <= 31)))))
-               (? ok (t16 (base16 | ((u << 6) | (((rn base) << 3) | dn))))
+               ok (lo? d && lo? base &&
+                   (off >= 0) && (0 = (off & ((1 << sh) - 1))) && (u <= 31))
+               (? ok (t16 (base16 | ((u << 6) | ((rn base << 3) | dn))))
                   (t1-mem-far base16 sh d base off ldq)))))
    (t1-ld  d base off) (t1-mem 0x6800 0x9800 2 d base off 1)   ; LDR
    (t1-st  base off s) (t1-mem 0x6000 0x9000 2 s base off ())  ; STR
@@ -177,8 +177,8 @@
    (t1-sxh d) (: dn (rn d) (t16 (0xB200 | ((dn << 3) | dn))))   ; SXTH Rd,Rd
    (t1-uxb d) (: dn (rn d) (t16 (0xB2C0 | ((dn << 3) | dn))))   ; UXTB Rd,Rd
    (t1-uxh d) (: dn (rn d) (t16 (0xB280 | ((dn << 3) | dn))))   ; UXTH Rd,Rd
-   (t1-lds1 d base off) ((t1-ldb d base off) + (t1-sxb d))      ; LDRSB == LDRB + SXTB
-   (t1-lds2 d base off) ((t1-ldh d base off) + (t1-sxh d))      ; LDRSH == LDRH + SXTH
+   (t1-lds1 d base off) (t1-ldb d base off + t1-sxb d)          ; LDRSB == LDRB + SXTB
+   (t1-lds2 d base off) (t1-ldh d base off + t1-sxh d)          ; LDRSH == LDRH + SXTH
 
    ;; ---- indexed addressing: d <- base + index*scale (+disp). v6-M has no scaled-index memory op, so
    ;;      synthesize LSLS+ADDS. moon's leax contract READS both sources before writing (x64 SIB / arm64
@@ -188,17 +188,17 @@
    (t1-lg2 scale) (? (scale = 2) 1 (scale = 4) 2 (scale = 8) 3 (scale = 1) 0 (scare 'badscale scale))
    (t1-lowscratch a b lst)                                ; first low reg not aliasing a or b
       (? !lst (scare 'no-scratch `(a b))
-         (: r <lst (? (|| (reg-eq r a) (reg-eq r b)) (t1-lowscratch a b >lst) r)))
+         (: r <lst (? (reg-eq r a || reg-eq r b) (t1-lowscratch a b >lst) r)))
    (t1-eaddr d base index scale)                          ; d <- base + index*scale, honoring d==base|index
       (: k (t1-lg2 scale)
          (? (scale = 1) (t1-add-rrr d base index)
-            !(reg-eq d base) ((t1-lsls-rri d index k) + (t1-add-rrr d base d))
+            !(reg-eq d base) (t1-lsls-rri d index k + t1-add-rrr d base d)
             (: s (t1-lowscratch d index '(r0 r1 r2 r3 r4 r5 r6 r7))
                (catall `((t1-push s) (t1-lsls-rri s index k) (t1-add-rrr d base s) (t1-pop s))))))
    (t1-leax d base index scale disp)
-      ((t1-eaddr d base index scale) + (? (disp = 0) () (t1-addsub-imm 'add d d disp)))
-   (t1-ldx  d base index scale disp) ((t1-eaddr d base index scale) + (t1-ld  d d disp))   ; fused leax+LDR
-   (t1-ldxb d base index scale disp) ((t1-eaddr d base index scale) + (t1-ldb d d disp))   ; fused leax+LDRB
+      (t1-eaddr d base index scale + (? (disp = 0) () (t1-addsub-imm 'add d d disp)))
+   (t1-ldx  d base index scale disp) (t1-eaddr d base index scale + t1-ld  d d disp)       ; fused leax+LDR
+   (t1-ldxb d base index scale disp) (t1-eaddr d base index scale + t1-ldb d d disp)       ; fused leax+LDRB
 
    ;; ---- extends as IR ops (sx1/2 sign, zx1/2 zero; w=4 is a no-op -- int is already the full word) ----
    (t1-sx w d) (? (w = 4) () (w = 1) (t1-sxb d) (t1-sxh d))
@@ -228,7 +228,7 @@
    ;; clobber r0..r3 (gen.l's rdsp), so the routine OWNS all four scratch regs. branch offsets are
    ;; FIXED within the blob (like t1-set's branch-over) -- no labels, so many div sites never collide.
    (t1-div-shape d a b)   ; the canonical arrival is all this backend lowers; anything else is loud
-      (? (&& (reg-eq d 'r1) (&& (reg-eq a 'r1) (reg-eq b 'r0))) 0 (scare 'div-operands `(d a b)))
+      (? (reg-eq d 'r1 && reg-eq a 'r1 && reg-eq b 'r0) 0 (scare 'div-operands `(d a b)))
    ;; UDIVMOD core: N=r1 (dividend), D=r0 (divisor) -> quotient r1, remainder r2 (D kept, r3 spent).
    ;; 32 restoring steps: LSLS shifts N left leaving old bit31 in carry, ADCS folds it into R (=R<<1|c);
    ;; BLO skips the subtract when R<D. verified byte-exact vs llvm-mc (thumbv6m); the two branches are
@@ -266,7 +266,7 @@
    ;; (la Rd lbl) into (align 4) (lapool Rd) (raw ((fix 4 abs32 lbl 0))) -- the pooled address word sits
    ;; immediately after, 4-aligned by the align, so LDR Rd,[pc,#0] (Align(pc+4,4)=here+4) reaches it;
    ;; then B #2 hops the 4-byte word. Rd must be low (LDR-literal T1 is 3-bit).
-   (t1-lapool d) (: _ (need-lo d 'lapool-hi) (catall `((t16 (0x4800 | ((rn d) << 8))) (t16 0xE001))))
+   (t1-lapool d) (: _ (need-lo d 'lapool-hi) (catall `((t16 (0x4800 | (rn d << 8))) (t16 0xE001))))
 
    ;; set: d <- (cond) ? 1 : 0 without IT. the branch must come FIRST: MOVS sets N/Z on v6-M (no
    ;; flag-preserving MOV #imm exists below r8), so any movs before the Bcc destroys the compare.
@@ -279,12 +279,12 @@
    ;; small non-sp: ADDS #imm3. bigger -> TODO scratch materialize.
    (t1-lea d base off)
       (? (off = 0) (t1-movr d base)
-         (&& (reg-eq d 'sp) (reg-eq base 'sp))
+         (reg-eq d 'sp && reg-eq base 'sp)
             (t1-addsub-imm 'add d base off)                ; the sp-arith form (chunked; negative flips)
-         (&& (reg-eq base 'sp) (off > 0))
-            (: _ (? (&& (0 = (off & 3)) ((off >> 2) <= 255)) 0 (scare 'lea-sp-off-range off)) _ (need-lo d 'lea-hi)
-               (t16 (0xA800 | (((rn d) << 8) | (off >> 2)))))
-         (&& (off > 0) (off <= 255)) (t1-addsub-imm 'add d base off)   ; imm3 3-addr, or mov+imm8 2-addr
+         (reg-eq base 'sp && off > 0)
+            (: _ (? ((0 = (off & 3)) && ((off >> 2) <= 255)) 0 (scare 'lea-sp-off-range off)) _ (need-lo d 'lea-hi)
+               (t16 (0xA800 | ((rn d << 8) | (off >> 2)))))
+         (off > 0 && (off <= 255)) (t1-addsub-imm 'add d base off)     ; imm3 3-addr, or mov+imm8 2-addr
          !(reg-eq d base)                                  ; far (or negative): build the offset in d, fold the base in
             (: _ (need-lo d 'lea-far-hi)
                (catall `((t1-li d off) (t1-add-any d base))))
@@ -314,20 +314,20 @@
    ;; v6-M, so adds/subs ARE add/sub and the S-names alias their plain rows.
    t1-emitters (emsof
         `(('li >< t1-li) ('mov >< t1-movr) ('cmp >< t1-cmp) ('test >< t1-test)
-           ('add >< (t1-addsub 'add)) ('adds >< (t1-addsub 'add))
-           ('sub >< (t1-addsub 'sub)) ('subs >< (t1-addsub 'sub))
+           ('add >< t1-addsub 'add) ('adds >< t1-addsub 'add)
+           ('sub >< t1-addsub 'sub) ('subs >< t1-addsub 'sub)
            ('adc >< t1-adc) ('adcs >< t1-adc) ('sbc >< t1-sbc) ('sbcs >< t1-sbc)
-           ('and >< (t1-alu2 'and)) ('or >< (t1-alu2 'or)) ('ors >< (t1-alu2 'or))
-           ('xor >< (t1-alu2 'xor)) ('imul >< (t1-alu2 'imul))
+           ('and >< t1-alu2 'and) ('or >< t1-alu2 'or) ('ors >< t1-alu2 'or)
+           ('xor >< t1-alu2 'xor) ('imul >< t1-alu2 'imul)
            ('ld >< t1-ld) ('ld4 >< t1-ld) ('ldu4 >< t1-ld)
            ('st >< t1-st) ('st4 >< t1-st)
            ('ldu1 >< t1-ldb) ('ldu2 >< t1-ldh) ('ld1 >< t1-lds1) ('ld2 >< t1-lds2)
            ('st1 >< t1-stb) ('st2 >< t1-sth)
-           ('sx1 >< (t1-sx 1)) ('sx2 >< (t1-sx 2)) ('sx4 >< (t1-sx 4))
-           ('zx1 >< (t1-zx 1)) ('zx2 >< (t1-zx 2)) ('zx4 >< (t1-zx 4))
-           ('shl >< (t1-shift 'shl)) ('shr >< (t1-shift 'shr)) ('sar >< (t1-shift 'sar))
+           ('sx1 >< t1-sx 1) ('sx2 >< t1-sx 2) ('sx4 >< t1-sx 4)
+           ('zx1 >< t1-zx 1) ('zx2 >< t1-zx 2) ('zx4 >< t1-zx 4)
+           ('shl >< t1-shift 'shl) ('shr >< t1-shift 'shr) ('sar >< t1-shift 'sar)
            ('ror >< (\ d c (scare 'v6m-no-ror-imm 'ror)))     ; RORS is register-only on v6-M
-           ('shlv >< (t1-shiftv 'shlv)) ('shrv >< (t1-shiftv 'shrv)) ('sarv >< (t1-shiftv 'sarv))
+           ('shlv >< t1-shiftv 'shlv) ('shrv >< t1-shiftv 'shrv) ('sarv >< t1-shiftv 'sarv)
            ('lea >< t1-lea) ('lean >< t1-lea)
            ('leax >< t1-leax) ('ldx >< t1-ldx) ('ldxb >< t1-ldxb)
            ('push >< t1-push) ('pop >< t1-pop)
@@ -337,10 +337,10 @@
            ('div >< t1-div) ('rem >< t1-rem) ('udiv >< t1-udiv) ('urem >< t1-urem)
            ('lapool >< t1-lapool)
            ('raw >< 1)
-           ('ret >< (t16 0x4770))                             ; BX lr
-           ('sys >< (t16 0xDF00))                             ; SVC #0
-           ('nop >< (t16 0xBF00))
-           ('trap >< (t16 0xBE00))))                          ; BKPT #0
+           ('ret >< t16 0x4770)                               ; BX lr
+           ('sys >< t16 0xDF00)                               ; SVC #0
+           ('nop >< t16 0xBF00)
+           ('trap >< t16 0xBE00)))                            ; BKPT #0
    (t1-lower ins) (: f lower-via (? (lit? f) (f t1-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation. Thumb pc reads as (site + 4); branch fields hold a /2 (halfword) offset.
@@ -351,10 +351,10 @@
    (t1-patch kind target site width aux)
       (: o (target - (site + 4))
          (? (kind = 'b)
-            (: _ (? (&& (o >= -2046) (o <= 2046)) 0 (scare 'b-range-needs-veneer o))
+            (: _ (? ((o >= -2046) && (o <= 2046)) 0 (scare 'b-range-needs-veneer o))
                (t16 (0xE000 | ((o >> 1) & 2047))))
             (kind = 'bcc)
-            (: _ (? (&& (o >= -254) (o <= 254)) 0 (scare 'bcc-range-needs-veneer o))
+            (: _ (? ((o >= -254) && (o <= 254)) 0 (scare 'bcc-range-needs-veneer o))
                (t16 (0xD000 | ((aux << 8) | ((o >> 1) & 255)))))
             (kind = 'bl)
             (: imm11 ((o >> 1) & 2047)  imm10 ((o >> 12) & 1023)
@@ -378,6 +378,6 @@
    t1 (tablet 0)
    _ (pin t1 'lower t1-lower)
    _ (pin t1 'patch t1-patch)
-   _ (pin t1 'nop `(0 191))                    ; the ('align n) filler unit: NOP (16-bit) bf00 LE
+   _ (pin t1 'nop '(0 191))                    ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb1 t1)
    _ (defbackend 'cortex-m0 t1))

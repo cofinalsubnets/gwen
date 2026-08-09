@@ -27,13 +27,13 @@
 (: ;; -- list helpers (local). + adjoins () as an ELEMENT (the zero point is a
    ;; measure-zero scalar to +), so for concatenation we need a real append that
    ;; treats () as empty.
-   (tl-app a b) (? (two? a) (link (cap a) (tl-app (cup a) b)) b)
-   (tl-cat ll)  (? (two? ll) (tl-app (cap ll) (tl-cat (cup ll))) ())
+   (tl-app a b) (? (two? a) (<a >< tl-app >a b) b)
+   (tl-cat ll)  (? (two? ll) (tl-app <ll (tl-cat >ll)) ())
 
    ;; -- the tape: a global Wengert list of op nodes, newest-first (= reverse-topo)
    tl-tape (tablet 0)
    (tl-reset _) (pin tl-tape 0 ())
-   (tl-push n)  (: _ (pin tl-tape 0 (link n (peep tl-tape 0 ()))) n)
+   (tl-push n)  (: _ (pin tl-tape 0 (n >< peep tl-tape 0 ())) n)
 
    ;; -- nodes --
    (tl-node? x)  (tablet? x)                          ; a tele node (a raw constellation is never a tab)
@@ -55,36 +55,36 @@
    ;; to a target shape. Stage 1 covers a scalar target (sum all) and a matching
    ;; shape; the general numpy un-broadcast (size-1 / leading axes) is Stage 2.
    (tl-cshape v) (? (tray? v) (shape v) ())
-   (tl-lsum l)   (? (two? l) (+ (cap l) (tl-lsum (cup l))) 0)
-   (tl-lprod l)  (? (two? l) (* (cap l) (tl-lprod (cup l))) 1)
+   (tl-lsum l)   (? (two? l) (+ <l (tl-lsum >l)) 0)
+   (tl-lprod l)  (? (two? l) (* <l (tl-lprod >l)) 1)
    (tl-ncells v) (? (tray? v) (tl-lprod (shape v)) 1)
    ;; colsum: sum a rank-2 galaxy over axis 0 -> a length-C vector. this is the
    ;; bias un-broadcast: a (C,) added to an (N,C) output sums its cotangent over
    ;; the N rows it was stretched across.
-   (tl-colsum g) (: sh (shape g) r (cap sh) c (cap (cup sh))
-      (gem-tray (link c ())
-           (map (\ j (tl-lsum (map (\ i (peep g (link i (link j ())) 0)) (jot r)))) (jot c))))
+   (tl-colsum g) (: sh (shape g) r <sh c <>sh
+      (gem-tray (c >< ())
+           (map (\ j (tl-lsum (map (\ i (peep g (i >< (j >< ())) 0)) (jot r)))) (jot c))))
    ;; sh is the 1-vector (C,) where C is g's last axis -- checked element-wise.
    (tl-can-colsum g sh)
       (? (tray? g)
          (? (= (rank g) 2)
-            (? (two? sh) (? (two? (cup sh)) 0 (= (cap sh) (cap (cup (shape g))))) 0)
+            (? (two? sh) (? (two? >sh) 0 (= <sh <>(shape g))) 0)
             0)
          0)
    ;; sumto: un-broadcast a cotangent g back to a target shape. scalar target (sum
    ;; all), matching shape (identity), or an (N,C)->(C,) column reduction (the bias
    ;; case). higher-rank / general size-1 axes raise -- add them when a layer needs one.
    (tl-sumto g sh)
-      (? (! (two? sh))         (? (tray? g) (net g) g)
+      (? !(two? sh)            (? (tray? g) (net g) g)
          (= sh (tl-cshape g))  g
          (tl-can-colsum g sh)  (tl-colsum g)
          (scare 'sumto-todo sh))
 
    ;; -- 2D transpose (functional rebuild; arrays are immutable). mm's adjoint
    ;; needs A-transpose, and `inner` only contracts last-of-a vs first-of-b.
-   (transp2 m) (: sh (shape m) r (cap sh) c (cap (cup sh))
-      (gem-tray (link c (link r ()))
-           (tl-cat (map (\ j (map (\ i (peep m (link i (link j ())) 0)) (jot r))) (jot c)))))
+   (transp2 m) (: sh (shape m) r <sh c <>sh
+      (gem-tray (c >< (r >< ()))
+           (tl-cat (map (\ j (map (\ i (peep m (i >< (j >< ())) 0)) (jot r))) (jot c)))))
 
    ;; -- the device seam -- tele's heavy array ops (matmul, elementwise, reduce,
    ;; transpose) route through a SWAPPABLE backend record { gemm ew reduce transp }.
@@ -174,8 +174,8 @@
    (params m)     (tl-mparams m)                         ; the parameter list (for the optimizer)
 
    ;; weight init: small uniform in [-0.5, 0.5). seed with (rng-set (wheel n)).
-   (tl-randmat r c) (gem-tray (link r (link c ())) (map (\ _ (- (randf 0) 0.5)) (jot (* r c))))
-   (tl-zeros n)     (gem-tray (link n ()) 0)
+   (tl-randmat r c) (gem-tray (r >< (c >< ())) (map (\ _ (- (randf 0) 0.5)) (jot (* r c))))
+   (tl-zeros n)     (gem-tray (n >< ()) 0)
 
    ;; linear: y = x@W + b. linear-wb builds from given param glasses (handy for
    ;; tests); (linear i o) inits W (i,o) random, b (o,) zero. rides mm + the bias
@@ -198,5 +198,5 @@
    ;; newest-first (reverse-topo): each op's adjoint scatters to its parents, and
    ;; by the time we reach a node every later consumer has already added in.
    (tl-seed v) (? (tray? v) (+ (* v 0) 1) 1)
-   (tl-walk ns) (? (two? ns) (: n (cap ns) _ ((peep n 'bwd 0) n) (tl-walk (cup ns))) 0)
+   (tl-walk ns) (? (two? ns) (: n <ns _ ((peep n 'bwd 0) n) (tl-walk >ns)) 0)
    (back loss) (: _ (pin loss 'grad (tl-seed (tl-val loss))) _ (tl-walk (peep tl-tape 0 ())) loss))

@@ -63,9 +63,9 @@
    (le16 n)  `((byte n) (byte (n >> 8)))
    (le32 n)  `((byte n) (byte (n >> 8)) (byte (n >> 16)) (byte (n >> 24)))
    (le64 n)  (: u (? (n < 0) (n + 18446744073709551616) n)                            ; two's-complement into [0,2^64)
-              ((: (go i) (? (i < 8) (((u // (i 256)) % 256) >< (go (i + 1))) ())) 0))   ; 8 LE bytes via //% (i 256)=256^i
-   (fits8  n) (&& (n >= -128) (n <= 127))
-   (fits32 n) (&& (n >= -2147483648) (n <= 2147483647))
+              ((: (go i) (? (i < 8) (((u // i 256) % 256) >< go (i + 1)) ())) 0))       ; 8 LE bytes via //% (i 256)=256^i
+   (fits8  n) ((n >= -128) && (n <= 127))
+   (fits32 n) ((n >= -2147483648) && (n <= 2147483647))
 
    ;; -- a register operand is a symbol, an immediate a number. --
    (reg? x)  !(constellation? x)
@@ -87,13 +87,13 @@
    ;; measure-then-rev-then-append walks the chunk three times and conses it twice; this walks
    ;; once and conses once. the assembler's hottest loop -- one per instruction per pass. --
    (revonto l items n) (? !(two? l) (n >< items)
-                          (revonto >l (<l >< items) (n + (item-len <l))))
+                          (revonto >l (<l >< items) (n + item-len <l)))
 
    ;; -- the little table kit every backend leans on: `tabof` builds a tablet from
    ;; ('k >< v) pairs (the register/cc/opcode tables), `fregs` the f0..fN-1 float
    ;; file, and `look` is the guarded read (a miss scares with the caller's tag). --
    (tabof prs) (: t (tablet 0) _ (foldl (\ _ p (pin t <p >p)) 0 prs) t)
-   (fregs n)   (: t (tablet 0) _ (foldl (\ _ i (pin t (intern ("f" + (show i))) i)) 0 (jot n)) t)
+   (fregs n)   (: t (tablet 0) _ (foldl (\ _ i (pin t (intern ("f" + show i)) i)) 0 (jot n)) t)
    (look tab k tag) (: e (peep tab k -1) (? (e < 0) (scare tag k) e))
 
    ;; -- the IR's operand counts, one neutral table (the header's forms made executable). a
@@ -155,7 +155,7 @@
    ;; ('op >< f) pairs `tabof` takes, stamping each row with its count off ir-arity. so ir-arity
    ;; is read at BAKE time, once per op, and lowering reads arity and emitter in ONE lookup.
    (emsof prs) (: t (tablet 0) _ (foldl (\ _ p (emrow t <p >p)) 0 prs) t)
-   (emrow t op f) (pin t op ((look ir-arity op 'bad-op) >< f))
+   (emrow t op f) (pin t op (look ir-arity op 'bad-op >< f))
    ;; feed the emitter its operands, left to right, straight off the form's own tail. ⚠ `n` counts
    ;; the row's declared arity down and must reach zero exactly as the operands run out: a form
    ;; carrying the wrong count SCARES here rather than answering a PARTIAL APPLICATION, which
@@ -192,13 +192,13 @@
    ;; between-function filler, never executed, so a torn unit at an odd grain is harmless. --
    (pad-to be addr n)
       (: k ((n - (addr % n)) % n)
-         unit (peep be 'nop `(144))
+         unit (peep be 'nop '(144))
          (fill j u) (? (j < 1) ()
                        !(two? u) (fill j unit)
-                       (<u >< (fill (j - 1) >u)))
+                       (<u >< fill (j - 1) >u))
          (fill k unit))
    (lay prog be addr items labels)
-      (? !(two? prog) ((rev items) >< labels)
+      (? !(two? prog) (rev items >< labels)
          (: ins <prog
             (? (<ins = 'label)
                (: _ (pin labels (at ins 1) addr) (lay >prog be addr items labels))
@@ -216,8 +216,8 @@
                (: tgt (peep labels (fix-l x) ())
                   _ (? (imm? tgt) 0 (scare 'undef-label (fix-l x)))
                   bs (patch-with be (fix-k x) tgt addr (fix-w x) (fix-a x))
-                  (bs + (resolve >items labels be (addr + (fix-w x)))))
-               (x >< (resolve >items labels be (addr + 1))))))
+                  (bs + resolve >items labels be (addr + fix-w x)))
+               (x >< resolve >items labels be (addr + 1)))))
 
    ;; -- branch relaxation, fused with layout: lay's shape, but (jmp l) / (br c l) land as the
    ;; 2-byte short forms where the target provably fits rel8. ONE pessimistic decision pass is
@@ -256,25 +256,25 @@
                (: t (peep spots l ())
                   (? !(imm? t) ()
                      (peep longs l 0) ()
-                     !(era = (peep eras l -1)) ()
+                     !(era = peep eras l -1) ()
                      (fits8 (t - (addr + 2)))))
             ;; pass two: splice the cached chunks -- pessimistic addresses (pa) drive the
             ;; shortening decisions, final addresses (fa) pin the labels and re-lay the pads.
             (stitch p cs pa fa era items)
-               (? !(two? p) ((rev items) >< labels)
+               (? !(two? p) (rev items >< labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
                         (: _ (pin labels (at ins 1) fa) (stitch >p >cs pa fa era items))
                         (<ins = 'align)
                         (: pad (pad-to be fa (at ins 1))
-                           (stitch >p >cs (pa + k) (fa + (tally pad)) (era + 1)
-                                   ((rev pad) + items)))
-                        (&& (<ins = 'jmp) (near? (at ins 1) pa era))
+                           (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
+                                   (rev pad + items)))
+                        ((<ins = 'jmp) && near? (at ins 1) pa era)
                         (: sc (lower-with be `('jmp8 (at ins 1)))
-                           (stitch >p >cs (pa + k) (fa + 2) era ((rev sc) + items)))
-                        (&& (<ins = 'br) (near? (at ins 2) pa era))
+                           (stitch >p >cs (pa + k) (fa + 2) era (rev sc + items)))
+                        ((<ins = 'br) && near? (at ins 2) pa era)
                         (: sc (lower-with be `('br8 (at ins 1) (at ins 2)))
-                           (stitch >p >cs (pa + k) (fa + 2) era ((rev sc) + items)))
+                           (stitch >p >cs (pa + k) (fa + 2) era (rev sc + items)))
                         (stitch >p >cs (pa + k) (fa + k) era (c + items)))))   ; c is cached REVERSED
             (stitch prog chunks at0 at0 0 ())))
 
@@ -311,6 +311,6 @@
 
    ;; -- hex, for goldens and disassembly. --
    (hex1 d)  (snip "0123456789abcdef" d (d + 1))
-   (hex2 b)  ((hex1 (b >> 4)) + (hex1 (b & 15)))
-   (hexs bs) (foldl (\ a b (a + (hex2 b))) "" bs)
+   (hex2 b)  (hex1 (b >> 4) + hex1 (b & 15))
+   (hexs bs) (foldl (\ a b (a + hex2 b)) "" bs)
    (holo-hex target prog) (hexs (holo-bytes target prog)))

@@ -46,13 +46,13 @@
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
 (: (bn p)   (: n (tally p)
-               (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+               (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                (go 0 0))
    (dirof p) (: n (tally p)
-                (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p 0 r))
+                (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
                 (go 0 0))
-   (findme a) (? (! (two? a)) ()                     ; the word that named this file, if any
-                 (: b (bn <a) (|| (b = "papel") (b = "papel.l"))) <a
+   (findme a) (? !(two? a) ()                        ; the word that named this file, if any
+                 (: b (bn <a) ((b = "papel") || (b = "papel.l"))) <a
                  (findme >a))
    (up p)     (: n (tally p) (? (0 < n) (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
    ; ..and follow a SYMLINK to it. `papel` installs the way cook does, as a link on PATH
@@ -86,15 +86,15 @@
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
 (: (nth l k)     (? (k = 0) <l (nth >l (k - 1)))
    (strcat l)    (foldl (+) "" l)
-   (joins l sp)  (? (! (two? l)) "" (! (two? >l)) <l (<l + sp + joins >l sp))
-   (ends? s t)   (: n (tally s) m (tally t) (&& (m <= n) ((snip s (n - m) n) = t)))
+   (joins l sp)  (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
+   (ends? s t)   (: n (tally s) m (tally t) ((m <= n) && (snip s (n - m) n = t)))
    (sub? s t)    (: n (tally s) m (tally t)
-                    ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+                    ((: (g i) (? ((i + m) <= n) (? (snip s i (i + m) = t) 1 (g (i + 1))) 0)) 0))
    (base p)      (: n (tally p)
-                    (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+                    (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                     (go 0 0))
-   (numof s)     ((: (g i acc) (? (&& (i < tally s) (&& (48 <= (s i)) ((s i) <= 57)))
-                                  (g (i + 1) (acc * 10 + ((s i) - 48))) acc)) 0 0)
+   (numof s)     ((: (g i acc) (? ((i < tally s) && (48 <= s i) && (s i <= 57))
+                                  (g (i + 1) (acc * 10 + (s i - 48))) acc)) 0 0)
    (slurpf f)    (: q (open f "r") (? q (slurp q) ""))
    (spitf f s)   (: q (open f "w") _ (? q (: _ (say q s) (close q)) 0) (? q 1 0))
    ; a directory answers a list from readdir, a file answers nothing -- that IS the test,
@@ -105,7 +105,7 @@
    ; path rather than splitting it, so a LEADING SLASH survives: splitting on / and
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
    (mkdirp p)    (: n (tally p)
-                    (go i) (? (i < n) (: _ (? (&& (0 < i) ((p i) = 47)) (mkdir (snip p 0 i) 493) 0)
+                    (go i) (? (i < n) (: _ (? ((0 < i) && (p i = 47)) (mkdir (snip p 0 i) 493) 0)
                                           (go (i + 1)))
                               (? (0 < n) (mkdir p 493) 0))
                     (go 0)))
@@ -114,16 +114,16 @@
 ; lowercase, runs of anything-else collapsed to one dash, the ends trimmed. two headings
 ; that spell the same slug are deduped by a counter, so an anchor is stable for a given
 ; page even when its text is not unique.
-(: (down c)   (? (&& (65 <= c) (c <= 90)) (c + 32) c)
-   (alnum? c) (|| (&& (48 <= c) (c <= 57)) (|| (&& (65 <= c) (c <= 90)) (&& (97 <= c) (c <= 122))))
+(: (down c)   (? ((65 <= c) && (c <= 90)) (c + 32) c)
+   (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
    (squash s) ((: (g i acc prev) (? (i < tally s)
                                     (: c (s i)
-                                       (? (&& (c = 45) (prev = 45)) (g (i + 1) acc c)
+                                       (? ((c = 45) && (prev = 45)) (g (i + 1) acc c)
                                           (g (i + 1) (acc + string c) c)))
                                     acc)) 0 "" 0)
    (trimd s)  (: n (tally s)
-                 a ((: (f i) (? (&& (i < n) ((s i) = 45)) (f (i + 1)) i)) 0)
-                 b ((: (f i) (? (&& (a < i) ((s (i - 1)) = 45)) (f (i - 1)) i)) n)
+                 a ((: (f i) (? ((i < n) && (s i = 45)) (f (i + 1)) i)) 0)
+                 b ((: (f i) (? ((a < i) && (s (i - 1) = 45)) (f (i - 1)) i)) n)
                  (snip s a b))
    (slug s)   (: raw ((: (g i acc) (? (i < tally s)
                                       (: c (s i) (g (i + 1) (acc + (? (alnum? c) (string (down c)) "-"))))
@@ -136,15 +136,15 @@
 (: (itext l) (strcat (map (\ x (: t <x
                                   (? (id? t 'text) <>x
                                      (id? t 'code) <>x
-                                     (|| (id? t 'strong) (|| (id? t 'em) (id? t 'link))) (itext <>x)
+                                     (id? t 'strong || id? t 'em || id? t 'link) (itext <>x)
                                      ""))) l))
    (head? b)  (id? <b 'head)
    (pmeta d)  (: m (filter (\ b (id? <b 'meta)) d) (? (two? m) (<>(<m)) ()))
-   (pbody d)  (filter (\ b (! (id? <b 'meta))) d)
+   (pbody d)  (filter (\ b !(id? <b 'meta)) d)
    ; the heads, each with its deduped slug: ((level slug label) ..). ONE parse feeds both
    ; the anchors in the body and the toc beside it, so the two cannot drift apart.
    (pheads d) ((: (g l seen acc)
-                  (? (! (two? l)) (rev acc)
+                  (? !(two? l) (rev acc)
                      (: b <l
                         (? (head? b)
                            (: lab (itext (nth b 2))
@@ -152,11 +152,11 @@
                               k (peep seen s0 0)
                               sn (? (0 < k) (s0 + "-" + show k) s0)
                               _ (pin seen s0 (k + 1))
-                              (g >l seen (link `((<>b) sn lab) acc)))
+                              (g >l seen (`((<>b) sn lab) >< acc)))
                            (g >l seen acc)))))
                d (tablet 0) ())
    ; the title: the first head-1, else the meta `title`, else the caller's fallback.
-   (ptitle d dflt) (: h1 (filter (\ b (&& (head? b) ((<>b) = 1))) d)
+   (ptitle d dflt) (: h1 (filter (\ b (head? b && ((<>b) = 1))) d)
                       mt (mget (pmeta d) 'title)
                       (? (two? h1) (itext (nth <h1 2))
                          (0 < tally mt) mt
@@ -164,8 +164,8 @@
    ; the blurb: the first paragraph, clipped on a word boundary. () when the page has none.
    (clip s n) (: t (tally s)
                  (? (t <= n) s
-                    (: b ((: (f i) (? (&& (0 < i) (! ((s (i - 1)) = 32))) (f (i - 1)) i)) n)
-                       ((snip s 0 (? (0 < b) (b - 1) n)) + "..."))))
+                    (: b ((: (f i) (? ((0 < i) && !(s (i - 1) = 32)) (f (i - 1)) i)) n)
+                       (snip s 0 (? (0 < b) (b - 1) n) + "..."))))
    (blurb d)  (: ps (filter (\ b (id? <b 'para)) d)
                  (? (two? ps) `(`('text (clip (itext (<>(<ps))) 160))) ())))
 
@@ -175,12 +175,12 @@
 ; papel will not manufacture a dead link that the markdown did not already have.
 (: (mdurl known u)
    (? (sub? u "://") u
-      (! (ends? u ".md")) u
+      !(ends? u ".md") u
       (: b (base u)
-         (? (peep known b 0) ((snip u 0 (tally u - 3)) + ".html") u)))
+         (? (peep known b 0) (snip u 0 (tally u - 3) + ".html") u)))
    (rli f l)  (map (\ x (: t <x
                            (? (id? t 'link) `('link (rli f <>x) (f (nth x 2)))
-                              (|| (id? t 'strong) (id? t 'em)) `(t (rli f <>x))
+                              (id? t 'strong || id? t 'em) `(t (rli f <>x))
                               x))) l)
    (rlb f b)  (: t <b
                  (? (id? t 'para)    `('para (rli f <>b))
@@ -199,15 +199,15 @@
 (: (hhead lev sl inl) (: h ("h" + show lev)
                          ("<" + h + " id=\"" + hq sl + "\">" + hti inl + "</" + h + ">"))
    (pshow d hs) ((: (g l hs acc)
-                    (? (! (two? l)) (joins (rev acc) "\n")
+                    (? !(two? l) (joins (rev acc) "\n")
                        (: b <l
-                          (? (head? b) (g >l >hs (link (hhead <(<hs) (<>(<hs)) (nth b 2)) acc))
-                             (g >l hs (link (htb b) acc))))))
+                          (? (head? b) (g >l >hs (hhead <(<hs) (<>(<hs)) (nth b 2) >< acc))
+                             (g >l hs (htb b >< acc))))))
                  d hs ())
    ; the toc: the same heads, minus the one that became the title. a page with fewer than
    ; two of them gets none -- a one-item contents is furniture, not navigation.
-   (ptoc d hs) (: rest (? (&& (two? hs) (1 = <(<hs))) >hs hs)
-                  (? (! (two? >rest)) ""
+   (ptoc d hs) (: rest (? (two? hs && (1 = <(<hs))) >hs hs)
+                  (? !(two? >rest) ""
                      ("<ul>\n" + strcat (map (\ h ("<li class=\"l" + show <h + "\"><a href=\"#"
                                                    + hq (<>h) + "\">" + hq (nth h 2) + "</a></li>\n")) rest)
                       + "</ul>")))
@@ -267,7 +267,7 @@ table{border-collapse:collapse}
 ")
 
 ; --- one page, and the index ------------------------------------------------------------
-(: (outname s) (: b (base s) ((snip b 0 (tally b - 3)) + ".html"))
+(: (outname s) (: b (base s) (snip b 0 (tally b - 3) + ".html"))
    (render conf known src dst)
    (: d0 (mdread (slurpf src))
       d  (relink (\ u (mdurl known u)) d0)
@@ -318,7 +318,7 @@ table{border-collapse:collapse}
    (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (? (two? st) ((<>st) + <st) 0)))
                                    (sources conf)))
    (refresh conf box) (: f (fprint conf)
-                         (? (f = (peep box 'f -1)) 0 (: _ (pin box 'f f) (build conf))))
+                         (? (f = peep box 'f -1) 0 (: _ (pin box 'f f) (build conf))))
 
    (build conf)
    (: out (peep conf 'out "out/site")
@@ -329,7 +329,7 @@ table{border-collapse:collapse}
       self (peep conf 'self "")
       dep (? (stat self) `(self) ())
       dsts (map (\ s (out + "/" + outname s)) srcs)
-      _ (each srcs (\ s (recipe (out + "/" + outname s) (link s dep)
+      _ (each srcs (\ s (recipe (out + "/" + outname s) (s >< dep)
                                 `((\ _ (render conf known s (out + "/" + outname s)))))))
       sheet (out + "/papel.css")
       _ (recipe sheet dep `((\ _ (spitf sheet css))))
@@ -363,14 +363,14 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
    (: _ (? (lit? (from 'papel)) (use 'papel) 0)   ; splice my REGISTERED self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
       c (conf0 ())
-      (loop ws) (? (! (two? ws)) 0
+      (loop ws) (? !(two? ws) 0
                    (: w <ws r >ws
-                      (? (|| (w = "-o") (w = "--out"))   (: _ (need w r) _ (pin c 'out <r) (loop >r))
-                         (|| (w = "-t") (w = "--title")) (: _ (need w r) _ (pin c 'title <r) (loop >r))
-                         (|| (w = "-q") (w = "--quiet")) (: _ (pin c 'quiet 1) (loop r))
-                         (|| (w = "-s") (w = "--serve")) (: _ (need w r) _ (pin c 'serve (numof <r)) (loop >r))
-                         (|| (w = "-h") (w = "--help"))  (usage 0)
-                         (: _ (pin c 'src ((peep c 'src ()) + `(w))) (loop r)))))
+                      (? ((w = "-o") || (w = "--out"))   (: _ (need w r) _ (pin c 'out <r) (loop >r))
+                         ((w = "-t") || (w = "--title")) (: _ (need w r) _ (pin c 'title <r) (loop >r))
+                         ((w = "-q") || (w = "--quiet")) (: _ (pin c 'quiet 1) (loop r))
+                         ((w = "-s") || (w = "--serve")) (: _ (need w r) _ (pin c 'serve (numof <r)) (loop >r))
+                         ((w = "-h") || (w = "--help"))  (usage 0)
+                         (: _ (pin c 'src (peep c 'src () + `(w))) (loop r)))))
       _ (loop as)
       _ (? (two? (peep c 'src ())) 0 (pin c 'src '("README.md" "doc")))
       _ (build c)
@@ -403,12 +403,12 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 ; body-having, so the machinery leaks nothing; papel-main reads BARE -- whichever
 ; layer holds this file's binds is still the head here.
 (: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   (me? w) (: b (bn w) (|| (b = "papel") (b = "papel.l")))
-   (seat a) (? (! (two? a)) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (link 1 >>a) (seat >>a)) ())
-               (me? <a) (link 1 >a)
+   (me? w) (: b (bn w) ((b = "papel") || (b = "papel.l")))
+   (seat a) (? !(two? a) ()
+               (<a = "-l") (? (two? >a) (? (me? <>a) (1 >< >>a) (seat >>a)) ())
+               (me? <a) (1 >< >a)
                ())
    s (seat >cmdline)
    (? (two? s) (papel-main >s) ()))

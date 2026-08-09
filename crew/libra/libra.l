@@ -64,13 +64,13 @@
    ; --- the frame: a header block, then exactly N bytes -----------------------
    ; a trailing CR off a header line -- the protocol says CRLF, so the LF is the
    ; line end and the CR is the last byte before it
-   (chomp s) (: n (tally s) (? (&& (0 < n) ((s (n - 1)) = 13)) (snip s 0 (n - 1)) s))
+   (chomp s) (: n (tally s) (? ((0 < n) && (s (n - 1) = 13)) (snip s 0 (n - 1)) s))
 
    ; ⚠ `(1 text) or (), never a bare string: the BLANK line is what ends the
    ; header block, so "" is a legitimate read and eof must not wear its face.
    (rdline p)
     (: (go acc) (: c (see p)
-                   (? (c < 0)  (? (0 < (tally acc)) `(1 (chomp acc)) ())
+                   (? (c < 0)  (? (0 < tally acc) `(1 (chomp acc)) ())
                       (c = 10) `(1 (chomp acc))
                       (go (acc + c))))
        (go ""))
@@ -78,14 +78,14 @@
    (lc s) (: n (tally s)
              (go i acc) (? (n <= i) acc
                            (: c (s i)
-                              (go (i + 1) (acc + (? (&& (65 <= c) (c <= 90)) (c + 32) c)))))
+                              (go (i + 1) (acc + (? ((65 <= c) && (c <= 90)) (c + 32) c)))))
              (go 0 ""))
 
    ; the digits in a header value; the leading space rides through as a non-digit
    (atoi s) (: n (tally s)
                (go i acc) (? (n <= i) acc
                              (: c (s i)
-                                (? (&& (48 <= c) (c <= 57)) (go (i + 1) (acc * 10 + c - 48))
+                                (? ((48 <= c) && (c <= 57)) (go (i + 1) (acc * 10 + c - 48))
                                    (go (i + 1) acc))))
                (go 0 0))
 
@@ -94,7 +94,7 @@
    ; mis-cased header would park the reader on a body that never comes.
    (clen h) (: k "content-length:"
                n (tally k)
-               (? (&& (n <= (tally h)) ((lc (snip h 0 n)) = k))
+               (? ((n <= tally h) && (lc (snip h 0 n) = k))
                    `(1 (atoi (snip h n (tally h))))
                   ()))
 
@@ -102,13 +102,13 @@
    ; is the only other one lsp defines, and it has exactly one legal value).
    (rdhdrs p)
     (: (go n) (: r (rdline p)
-                 (? (! (two? r)) ()                            ; eof mid-block
+                 (? !(two? r) ()                               ; eof mid-block
                     (: h <>r
-                       (? (! (0 < (tally h))) (? (two? n) n ())  ; the blank line ends it
+                       (? !(0 < tally h) (? (two? n) n ())       ; the blank line ends it
                           (: v (clen h) (go (? (two? v) v n)))))))
        (go ()))
 
-   (rdn p n) (: (go k acc) (? (! (k < n)) `(1 acc)
+   (rdn p n) (: (go k acc) (? !(k < n) `(1 acc)
                               (: c (see p) (? (c < 0) () (go (k + 1) (acc + c)))))
                 (go 0 ""))
 
@@ -126,18 +126,18 @@
    (otab prs) (foldl (\ t p (pin t <p <>p)) (tablet 0) prs)
    (pos l c)  (otab `(`("line" l) `("character" c)))
 
-   (reply p id res) (libra-send p (otab `(`("jsonrpc" "2.0") `("id" id) `("result" res))))
+   (reply p id res) (libra-send p (otab `('("jsonrpc" "2.0") `("id" id) `("result" res))))
    (fault p id code m)
-    (libra-send p (otab `(`("jsonrpc" "2.0") `("id" id)
+    (libra-send p (otab `('("jsonrpc" "2.0") `("id" id)
                          `("error" (otab `(`("code" code) `("message" m)))))))
    (note p mth ps)
-    (libra-send p (otab `(`("jsonrpc" "2.0") `("method" mth) `("params" ps))))
+    (libra-send p (otab `('("jsonrpc" "2.0") `("method" mth) `("params" ps))))
 
    ; textDocumentSync 1 is FULL: every change carries the whole document, which is
    ; what a scanner that reads the whole document wants anyway.
    (libra-caps u)
-    (otab `(`("capabilities" (otab `(`("textDocumentSync" 1))))
-            `("serverInfo" (otab `(`("name" "libra") `("version" "0"))))))
+    (otab `(`("capabilities" (otab '(("textDocumentSync" 1))))
+            `("serverInfo" (otab '(("name" "libra") ("version" "0"))))))
 
    ; --- the diagnostics ------------------------------------------------------
    ; ⚠ lint counts lines and columns from ONE and lsp from ZERO, so every position
@@ -151,7 +151,7 @@
                c (<>w - 1)
                (otab `(`("range" (otab `(`("start" (pos l c)) `("end" (pos l (c + 1))))))
                        `("severity" (sev w))
-                       `("source" "libra")
+                       '("source" "libra")
                        `("message" <>>w))))
 
    (libra-diags conf text) (map diag (lint-of text conf))
@@ -192,7 +192,7 @@
     (: mth (msg "method")
        id  (msg "id")
        ps  (msg "params")
-       ask (! (() = id))                     ; ⚠ EXACT absence -- request 0 is a request
+       ask !(() = id)                        ; ⚠ EXACT absence -- request 0 is a request
        (? (mth = "initialize")  (: _ (reply p id (libra-caps ())) ())
           (mth = "shutdown")    (: _ (reply p id json-null) ())
           (mth = "exit")        'stop
@@ -210,9 +210,9 @@
    ; an editor that garbles one frame should not take the session down with it.
    (libra-serve conf inp outp)
     (: (go u) (: m (libra-recv inp)
-                 (? (! (two? m)) 0
+                 (? !(two? m) 0
                     (: r (json-read <>m)
-                       s (? (&& (two? r) (tablet? <>r)) (libra-handle conf outp <>r) ())
+                       s (? (two? r && tablet? <>r) (libra-handle conf outp <>r) ())
                        (? (id? s 'stop) 0 (go ())))))
        (go ()))
 
@@ -221,25 +221,25 @@
    ; leading whitespace, keep the rest". every line break, every alignment inside
    ; a line, every comment stays exactly where its author put it -- moonfmt's
    ; posture for C, and the reason a reindent is safe to run over a whole tree.
-   (spaces k) (? (k < 1) "" ((string 32) + (spaces (k - 1))))
+   (spaces k) (? (k < 1) "" (string 32 + spaces (k - 1)))
    (ltrim s) (: n (tally s)
-                (g i) (? (&& (i < n) (|| ((s i) = 32) ((s i) = 9))) (g (i + 1)) (snip s i n))
+                (g i) (? ((i < n) && ((s i = 32) || (s i = 9))) (g (i + 1)) (snip s i n))
                 (g 0))
    (rtrim s) (: n (tally s)
-                (g j) (? (&& (0 < j) (|| ((s (j - 1)) = 32) ((s (j - 1)) = 9))) (g (j - 1)) (snip s 0 j))
+                (g j) (? ((0 < j) && ((s (j - 1) = 32) || (s (j - 1) = 9))) (g (j - 1)) (snip s 0 j))
                 (g n))
    (linesof s) (: n (tally s)
-                  (g i st acc) (? (n <= i) (rev (link (snip s st n) acc))
-                                  ((s i) = 10) (g (i + 1) (i + 1) (link (snip s st i) acc))
+                  (g i st acc) (? (n <= i) (rev (snip s st n >< acc))
+                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i >< acc))
                                   (g (i + 1) st acc))
                   (g 0 0 ()))
-   (unlines ls) (? (! (two? ls)) "" (foldl (\ a x (a + "\n" + x)) <ls >ls))
+   (unlines ls) (? !(two? ls) "" (foldl (\ a x (a + "\n" + x)) <ls >ls))
 
    ; one line against its plan: no plan (inside a string) leaves it ALONE, an
    ; all-blank line empties, anything else takes the planned indent.
    (libra-lay ln pl)
-    (? (! (two? pl)) ln
-       (: b (ltrim ln) (? (! (0 < (tally b))) "" ((spaces <>pl) + (rtrim b)))))
+    (? !(two? pl) ln
+       (: b (ltrim ln) (? !(0 < tally b) "" (spaces <>pl + rtrim b))))
 
    ; `-p`, the paren minifier: delete the pairs lint-drops names, and NOTHING else.
    ; lint says where, this applies it -- the same division libra-lay keeps with
@@ -251,20 +251,20 @@
    ; that are no longer there. so this answers new SOURCE and libra-fmt runs on it.
    (libra-drop src conf)
     (: ds (lint-drops src conf)
-       (? (! (two? ds)) src
+       (? !(two? ds) src
           (: n (tally src)
              (g k l acc)
               (? (n <= k) (string (rev acc))
-                 (&& (two? l) (k = <l)) (g (k + 1) >l acc)
-                 (g (k + 1) l (link (src k) acc)))
+                 (two? l && (k = <l)) (g (k + 1) >l acc)
+                 (g (k + 1) l (src k >< acc)))
              (g 0 ds ()))))
 
    (libra-fmt src)
     (: ls (linesof src)
        pp (lint-lay src)
-       (g l p acc) (? (! (two? l)) (unlines (rev acc))
+       (g l p acc) (? !(two? l) (unlines (rev acc))
                       (g >l (? (two? p) >p ())
-                         (link (libra-lay <l (? (two? p) <p ())) acc)))
+                         (libra-lay <l (? (two? p) <p ()) >< acc)))
        (g ls pp ()))
 
    ; --- the check ------------------------------------------------------------
@@ -272,11 +272,11 @@
    ; editor: `path:line:col: text`, the shape a compiler prints and an editor's
    ; error list already parses. QUIET when clean; a tab warns but never fails.
    (tabcol s) (: n (tally s)
-                 (g i) (? (n <= i) () ((s i) = 9) (i + 1) (g (i + 1)))
+                 (g i) (? (n <= i) () (s i = 9) (i + 1) (g (i + 1)))
                  (g 0))
-   (tabwarns ls) (: (g l k acc) (? (! (two? l)) (rev acc)
+   (tabwarns ls) (: (g l k acc) (? !(two? l) (rev acc)
                                    (: c (tabcol <l)
-                                      (g >l (k + 1) (? c (link `(k c "tab" 'tab) acc) acc))))
+                                      (g >l (k + 1) (? c (`(k c "tab" 'tab) >< acc) acc))))
                     (g ls 1 ()))
    (warnline path w) (path + ":" + show <w + ":" + show <>w + ": " + <>>w + "\n")
 
@@ -296,30 +296,30 @@
    ; that separation is the point -- a tree can be kept tidy without anyone
    ; agreeing to a layout, which is why this lives on check and not on fmt.
    (libra-check-files conf fs fix bad)
-    (? (! (two? fs)) bad
+    (? !(two? fs) bad
        (: r (rdf <fs)
-          (? (! (two? r)) (: _ (say err ("libra: cannot open " + <fs + "\n"))
-                              (libra-check-files conf >fs fix (bad + 1)))
+          (? !(two? r) (: _ (say err ("libra: cannot open " + <fs + "\n"))
+                           (libra-check-files conf >fs fix (bad + 1)))
              (: src <>r
                 ls (linesof src)
                 bw (lint-of src conf)
                 _ (foldl (\ _ w (: _ (say err (warnline <fs w)) 0)) 0
-                         (bw + (tabwarns ls)))
+                         (bw + tabwarns ls))
                 _ (? fix (: q (open <fs "w") _ (say q (unlines (map rtrim ls))) (close q)) 0)
-                (libra-check-files conf >fs fix (bad + (tally-fatal conf bw)))))))
+                (libra-check-files conf >fs fix (bad + tally-fatal conf bw))))))
 
    (libra-check conf fs fix) (: n (libra-check-files conf fs fix 0) (? (0 < n) (quit 1) 0))
 
-   (flag? x) (&& (0 < (tally x)) ((x 0) = 45))
-   (files as) (filter (\ x (! (flag? x))) as)
+   (flag? x) ((0 < tally x) && (x 0 = 45))
+   (files as) (filter (\ x !(flag? x)) as)
 
    ; fmt: lay each file out on stdout; -w rewrites in place; -n (check) says
    ; nothing and answers the count that WOULD change, which is the gate's shape.
    (libra-fmt-files conf fs mode drop bad)
-    (? (! (two? fs)) bad
+    (? !(two? fs) bad
        (: r (rdf <fs)
-          (? (! (two? r)) (: _ (say err ("libra: cannot open " + <fs + "\n"))
-                              (libra-fmt-files conf >fs mode drop (bad + 1)))
+          (? !(two? r) (: _ (say err ("libra: cannot open " + <fs + "\n"))
+                           (libra-fmt-files conf >fs mode drop (bad + 1)))
              (: src <>r
                 lay (libra-fmt (? drop (libra-drop src conf) src))
                 same (lay = src)
@@ -347,7 +347,7 @@
    ; ⚠ the config is read ONCE, here, and handed down -- never re-read per file.
    ; `libra` over a whole tree opens two files at the top and no more.
    (libra-main as)
-    (? (|| (member? "-h" as) (member? "--help" as))
+    (? (member? "-h" as || member? "--help" as)
         (: _ (say err "libra ⚖ -- the .l balance tool.\n") _ (say err usage) 0)
        (: conf (salt 'libra)
           v (? (two? as) <as "")
@@ -366,10 +366,10 @@
                                                  ; of (drop-parens 0) is two? just as
                                                  ; much as (drop-parens 1)'s is, so
                                                  ; presence would read an OFF as an on.
-                                                 (|| (member? "-p" r)
-                                                     (salt-one conf 'drop-parens 0))
+                                                 (member? "-p" r ||
+                                                  salt-one conf 'drop-parens 0)
                                                  0)
-                              (? (&& (member? "-n" r) (0 < n)) (quit 1) 0))
+                              (? (member? "-n" r && (0 < n)) (quit 1) 0))
              (v = "serve") (libra-serve conf in out)
              (v = "")      (: _ (say err usage) (quit 1))     ; nothing named, nothing to weigh
              ; NO VERB: the whole line is files, and CHECK is what happens to them.
@@ -385,12 +385,12 @@
 ; `libra` script -- sits in the program seat of the real command line. body-having,
 ; so nothing leaks.
 (: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   (me? w) (: b (bn w) (|| (b = "libra") (b = "libra.l")))
-   (seat a) (? (! (two? a)) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (link 1 >>a) (seat >>a)) ())
-               (me? <a) (link 1 >a)
+   (me? w) (: b (bn w) ((b = "libra") || (b = "libra.l")))
+   (seat a) (? !(two? a) ()
+               (<a = "-l") (? (two? >a) (? (me? <>a) (1 >< >>a) (seat >>a)) ())
+               (me? <a) (1 >< >a)
                ())
    s (seat >cmdline)
    (? (two? s) (libra-main >s) ()))

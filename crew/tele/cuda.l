@@ -9,12 +9,12 @@
 ; (gemm / ew / reduce / transp); `ew` carries the elementwise op -- on the GPU path
 ; that op is marshaled to a small tag the fused kernel selects (see host/cuda.c).
 (: have (cuda-avail ())                                  ; probe once at load
-   cuda-dev (? (! have)
+   cuda-dev (? !have
                tl-cpu                                    ; no device -> native, unchanged
                (hash 'name "cuda"
                      'gemm   (\ a b    (cuda-gemm a b))
                      'ew     (\ op a b (cuda-ew op a b))
                      'reduce (\ a      (cuda-reduce a))
                      'transp (\ m      (cuda-transp m))))
-   _ (puts (? (! have) ";; crew/tele/cuda: no device -- cuda-dev falls back to native (runs on CPU)\n"
-                       ";; crew/tele/cuda: device present -- cuda-dev dispatches to the GPU nifs\n")))
+   _ (puts (? !have ";; crew/tele/cuda: no device -- cuda-dev falls back to native (runs on CPU)\n"
+                    ";; crew/tele/cuda: device present -- cuda-dev dispatches to the GPU nifs\n")))

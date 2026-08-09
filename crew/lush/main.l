@@ -42,19 +42,19 @@
            p (open path "r") _ (sh-lines p "") _ (close p) (quit (sh-status ())))
         (: _ (say err (+ (+ "lush: " path) ": not found\n")) (quit 127)))
    (sh-c cmd rest)                              ; -c CMD [name [args..]], POSIX
-     (: _ (pin sh-arg0 () (? (two? rest) (cap rest) "lush"))
-        _ (pin sh-pos () (? (two? rest) (cup rest) ()))
+     (: _ (pin sh-arg0 () (? (two? rest) <rest "lush"))
+        _ (pin sh-pos () (? (two? rest) >rest ()))
         _ (sh-profiles 0)
         r (sh-line cmd)
         _ (? (two? r) (: _ (say err "lush: unexpected eof\n") (pin sh-status () 2)) 0)
         (quit (sh-status ())))
    (sh-main args)
      (? !args (sh 0)
-        (: a (cap args)
-           (? (= a "--login") (: _ (pin sh-login () 1) (sh-main (cup args)))
-              (= a "-c") (? (cup args) (sh-c (caup args) (cuup args))
+        (: a <args
+           (? (= a "--login") (: _ (pin sh-login () 1) (sh-main >args))
+              (= a "-c") (? >args (sh-c <>args >>args)
                             (: _ (say err "lush: -c needs a command\n") (quit 2)))
-              (sh-file a (cup args)))))
+              (sh-file a >args))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty
    ; (the cooked fallback). interactively: hear lush-help as the floor IF no
@@ -81,20 +81,20 @@
 ; lane stays quiet here ("sh.l" is deliberately NOT a me? name) and fires
 ; through its -e instead.
 (: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
    ; a dash-led basename (-lush, -sh: login(1)'s mark) matches too and makes a
    ; LOGIN shell -- though the env -S shebang usually eats the dash, so --login
    ; is the reliable door (doc/lush.md)
    (me? w) (: b (bn w)
-              b (? (&& (tally b) ((b 0) = 45)) (snip b 1 (tally b)) b)
+              b (? (tally b && (b 0 = 45)) (snip b 1 (tally b)) b)
               (|| (b = "lush") (b = "lush.l") (b = "sh")))
-   (seat a) (? (! (two? a)) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (link <>a >>a) (seat >>a)) ())
-               (me? <a) (link <a >a)
+   (seat a) (? !(two? a) ()
+               (<a = "-l") (? (two? >a) (? (me? <>a) (<>a >< >>a) (seat >>a)) ())
+               (me? <a) (<a >< >a)
                ())
    s (seat >cmdline)
    (? (two? s) (: w (bn <s)
-                  _ (? (&& (tally w) ((w 0) = 45)) (pin sh-login () 1) 0)
+                  _ (? (tally w && (w 0 = 45)) (pin sh-login () 1) 0)
                   (sh-main >s))
       ()))

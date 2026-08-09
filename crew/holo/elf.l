@@ -32,7 +32,7 @@
    (elf64-hdrn etype entry machine sh phs)
     (: shoff (? (two? sh) <sh 0) shnum (? (two? sh) <>sh 0) shstrx (? (two? sh) <>>sh 0)
       (catall `(
-         `(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
+         '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
          (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
          (le64 entry) (le64 64) (le64 shoff)                   ; e_entry, e_phoff=64, e_shoff
          (le32 0) (le16 64) (le16 56)                          ; e_flags, e_ehsize=64, e_phentsize=56
@@ -60,7 +60,7 @@
          ;; assemble at ORG so labels carry absolute load addresses -- pc-relative fixups are
          ;; unchanged; an abs64 data pointer (cc's static char*/fn-ptr tables) resolves outright.
          code (holo-bytes-at target (mkprog dataddr) org)
-         filesz (elf-hdr + (tally code) + (tally data))
+         filesz (elf-hdr + tally code + tally data)
          entry (base + elf-hdr)
          img (catall `((elf64-hdr 2 base entry filesz filesz machine ()) code data))
          res (tablet 0)
@@ -91,7 +91,7 @@
     (: shoff (? (two? sh) <sh 0) shnum (? (two? sh) <>sh 0) shstrx (? (two? sh) <>>sh 0)
        arm? (machine = 40)
       (catall `(
-         `(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 32-bit LSB SysV
+         '(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 32-bit LSB SysV
          (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
          (le32 (? arm? (entry | 1) entry)) (le32 52) (le32 shoff)   ; e_entry, e_phoff=52, e_shoff
          (le32 (? arm? 83886080 0)) (le16 52) (le16 32)        ; e_flags=EABI_VER5, e_ehsize=52, e_phentsize=32
@@ -112,7 +112,7 @@
          probe-len (tally (holo-bytes-at target (mkprog (base + 65536)) org))
          dataddr (base + elf-hdr32 + probe-len)
          code (holo-bytes-at target (mkprog dataddr) org)
-         filesz (elf-hdr32 + (tally code) + (tally data))
+         filesz (elf-hdr32 + tally code + tally data)
          img (catall `((elf32-hdr 2 base org filesz filesz machine ()) code data))
          res (tablet 0)
          _ (pin res 'bytes img) _ (pin res 'entry org) _ (pin res 'dataddr dataddr)

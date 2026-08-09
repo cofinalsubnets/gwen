@@ -19,7 +19,7 @@
    (stage-join x y) (? (= x y) x 'top)
    (stage-tr op x y) 'top
    (stage-lit e) 'bot
-   (stage-okr bd decl) (|| (member? bd '(top bot)) (= bd decl))
+   (stage-okr bd decl) (member? bd '(top bot) || (= bd decl))
    stage-dom (hash 'dice stage-dies 'ctors () 'tr stage-tr 'join stage-join
                    'litdie stage-lit 'okr stage-okr)
    stage-sigs '((cgfn (gst top) top)                ; sigged so its body -- both chains -- is walked
@@ -40,12 +40,12 @@
    (forms text acc)
     (: r (sound text)
        (? (id? r 'torn) (: _ (puts ";; moon-stage: gen.l reads torn") (quit 1))
-          (! (two? r)) acc
-          (forms >r (link <r acc))))
+          !(two? r) acc
+          (forms >r (<r >< acc))))
    src (open "crew/moon/gen.l" "r")
    _ (? src 0 (: _ (puts ";; moon-stage: cannot open crew/moon/gen.l") (quit 1)))
    text (slurp src)
-   reps (catmap (\ f (? (&& (two? f) (id? <f ':)) (ovck stage-dom stage-sigs f) ()))
+   reps (catmap (\ f (? (two? f && id? <f ':) (ovck stage-dom stage-sigs f) ()))
                 (forms text ()))
    _ (? (two? reps)
         (: _ (map (\ r (: _ (puts ";; moon-stage: ") _ (putx r) (putc 10))) reps)

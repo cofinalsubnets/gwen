@@ -7,7 +7,7 @@
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.
-(: (bytes s) (: n (tally s) (go i acc) (? (< i 0) acc (go (- i 1) (link (s i) acc))) (go (- n 1) ()))
+(: (bytes s) (: n (tally s) (go i acc) (? (< i 0) acc (go (- i 1) (s i >< acc))) (go (- n 1) ()))
    (vgo ls ks) (vfeed (vnew ls "t") (bytes ks))
    (vgob ls bs) (vfeed (vnew ls "t") bs)
    BS 127 CR 13
@@ -128,28 +128,28 @@
       (= (at (vgo '("abc") "lxu")) '(0 1)))
 
 ; --- search over re.l: / ? n N, wrap ---
-   (skeys s) (cat (bytes "/") (cat (bytes s) (L CR)))
+   (skeys s) ((bytes "/") + (bytes s) + (L CR))
    _ (assert
       (= (at (vgob '("foo" "bar" "foobar") (skeys "bar"))) '(1 0))
-      (= (at (vgob '("foo" "bar" "foobar") (cat (skeys "bar") (bytes "n")))) '(2 3))
-      (= (at (vgob '("foo" "bar" "foobar") (cat (skeys "bar") (bytes "nn")))) '(1 0))   ; wraps
-      (= (at (vgob '("foo" "bar" "foobar") (cat (skeys "bar") (bytes "nN")))) '(1 0))
-      (= (at (vgob '("ab" "cd") (cat (bytes "j$?ab") (L CR)))) '(0 0))
+      (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "n")))) '(2 3))
+      (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nn")))) '(1 0))     ; wraps
+      (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nN")))) '(1 0))
+      (= (at (vgob '("ab" "cd") ((bytes "j$?ab") + (L CR)))) '(0 0))
       (= (at (vgob '("xax" "b") (skeys "q"))) '(0 0)))         ; a miss stands still
 
 ; --- the ex line: :N, :$, :q with dirt, :q!, :w's request ---
    _ (assert
-      (= (at (vgob '("a" "b" "c") (cat (bytes ":3") (L CR)))) '(2 0))
-      (= (at (vgob '("a" "b" "c") (cat (bytes ":$") (L CR)))) '(2 0))
-      (= (st? (vgob '("a") (cat (bytes ":q") (L CR))) 'quit) 1)
-      (! (st? (vgob '("a") (cat (bytes "x:q") (L CR))) 'quit)) ; dirty q refuses
-      (= (st? (vgob '("a") (cat (bytes "x:q!") (L CR))) 'quit) 1)
-      (= (st? (vgob '("a") (cat (bytes ":w") (L CR))) 'dow) '("t"))
-      (= (st? (vgob '("a") (cat (bytes ":w other") (L CR))) 'dow) '("other"))
-      (: q (vgob '("a") (cat (bytes "x:wq") (L CR)))
-         (&& (= (q 'dow) '("t")) (= (q 'quit) 1)))
+      (= (at (vgob '("a" "b" "c") ((bytes ":3") + (L CR)))) '(2 0))
+      (= (at (vgob '("a" "b" "c") ((bytes ":$") + (L CR)))) '(2 0))
+      (= (st? (vgob '("a") ((bytes ":q") + (L CR))) 'quit) 1)
+      !(st? (vgob '("a") ((bytes "x:q") + (L CR))) 'quit)      ; dirty q refuses
+      (= (st? (vgob '("a") ((bytes "x:q!") + (L CR))) 'quit) 1)
+      (= (st? (vgob '("a") ((bytes ":w") + (L CR))) 'dow) '("t"))
+      (= (st? (vgob '("a") ((bytes ":w other") + (L CR))) 'dow) '("other"))
+      (: q (vgob '("a") ((bytes "x:wq") + (L CR)))
+         ((= (q 'dow) '("t")) && (= (q 'quit) 1)))
       (: q (vgob '("a") (bytes "xZZ"))
-         (&& (= (q 'dow) '("t")) (= (q 'quit) 1))))
+         ((= (q 'dow) '("t")) && (= (q 'quit) 1))))
 
 ; --- the frame: escapes exact on a tiny screen ---
    (mini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
@@ -165,42 +165,42 @@
       ; scrolling: the cursor's row stays inside the 3 text rows
       (: st (vgo '("a" "b" "c" "d" "e") "G") _ (pin st 'w 8) _ (pin st 'h 4)
          f (vframe st)
-         (&& (= (st 'top) 2) (two? (L f)))))
+         ((= (st 'top) 2) && two? (L f))))
 
 ; --- :e and :o -- the request the face performs, and the buffer swap it calls -
    _ (assert
-      (= (st? (vgob '("a") (cat (bytes ":e other") (L CR))) 'doe) '("other"))
-      (= (st? (vgob '("a") (cat (bytes ":o other") (L CR))) 'doe) '("other"))   ; the same door
-      (= (st? (vgob '("a") (cat (bytes ":e") (L CR))) 'doe) '("t"))             ; bare :e reloads
-      (! (st? (vgob '("a") (cat (bytes "x:e other") (L CR))) 'doe))             ; dirty refuses ...
-      (= (st? (vgob '("a") (cat (bytes "x:e! other") (L CR))) 'doe) '("other")) ; ... and ! overrides
-      (= (st? (vgob '("a") (cat (bytes "x:e!") (L CR))) 'doe) '("t"))
-      (! (st? (vgob '("a") (cat (bytes ":e ") (L CR))) 'doe)))                  ; no name, no request
+      (= (st? (vgob '("a") ((bytes ":e other") + (L CR))) 'doe) '("other"))
+      (= (st? (vgob '("a") ((bytes ":o other") + (L CR))) 'doe) '("other"))     ; the same door
+      (= (st? (vgob '("a") ((bytes ":e") + (L CR))) 'doe) '("t"))               ; bare :e reloads
+      !(st? (vgob '("a") ((bytes "x:e other") + (L CR))) 'doe)                  ; dirty refuses ...
+      (= (st? (vgob '("a") ((bytes "x:e! other") + (L CR))) 'doe) '("other"))   ; ... and ! overrides
+      (= (st? (vgob '("a") ((bytes "x:e!") + (L CR))) 'doe) '("t"))
+      !(st? (vgob '("a") ((bytes ":e ") + (L CR))) 'doe))                       ; no name, no request
    _ (assert
       ; the swap starts the file over -- and re-decides the paint from the NEW name
       (: q (vgo '("a" "b") "jx") _ (vload q '("x" "y" "z") "n.l")
-         (&& (= (lns q) '("x" "y" "z"))
-             (&& (= (at q) '(0 0))
-                 (&& (! (q 'dirty)) (&& (! (q 'undo)) (q 'hl))))))
-      (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") (! (q 'hl)))
+         ((= (lns q) '("x" "y" "z")) &&
+          (= (at q) '(0 0)) &&
+          !(q 'dirty) && !(q 'undo) && q 'hl))
+      (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") !(q 'hl))
       (: q (vgo '("a") "") _ (vload q () "e.l") (= (lns q) '(""))))             ; an empty read is one empty line
 
 ; --- libra ⚖ on the buffer: :lint weighs what you are LOOKING AT, :fmt lays it
 ;     out. one scanner (lib/lint.l) under libra's three faces and these two -----
-   (ex ls s) (vgob ls (cat (bytes (":" + s)) (L CR)))
+   (ex ls s) (vgob ls ((bytes (":" + s)) + (L CR)))
    _ (assert
       (= (st? (ex '("(: a 1)") "lint") 'msg) "balance clean")
       (= (st? (ex '("(: a 1") "lint") 'msg) "1 warning: 1,1 unclosed (")
       (= (at (ex '("(: a 1") "lint")) '(0 0))                  ; and it goes THERE
       ; an unclosed opener reports where it OPENED, so the jump lands on the cause
       (: q (ex '("(f x)" "(: a 1" "(g y)") "lint")
-         (&& (= (at q) '(1 0)) (= (q 'msg) "1 warning: 2,1 unclosed (")))
+         ((= (at q) '(1 0)) && (= (q 'msg) "1 warning: 2,1 unclosed (")))
       ; :fmt reindents and nothing else -- the break and the text are untouched
       (= (lns (ex '("(: a 1" "     b 2)") "fmt")) '("(: a 1" "   b 2)"))
       (= (st? (ex '("(: a 1" "   b 2)") "fmt") 'msg) "already laid out")
       (st? (ex '("(: a 1" "     b 2)") "fmt") 'dirty)
       (= (lns (vgob '("(: a 1" "     b 2)")                    ; and it is undoable
-                    (cat (cat (bytes ":fmt") (L CR)) (bytes "u"))))
+                    (((bytes ":fmt") + (L CR)) + (bytes "u"))))
          '("(: a 1" "     b 2)"))
       (= (lns (ex '("(: a 1" "" "   b 2)") "fmt")) '("(: a 1" "" "   b 2)")))  ; a blank line stays blank
 
@@ -218,10 +218,10 @@
 
 ; --- the cursor sits where you are TYPING: on the status line in ex and search -
    _ (assert
-      (: f (mini '("ab") ":") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[4;2H")))
-      (: f (mini '("ab") ":wq") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[4;4H")))
-      (: f (mini '("ab") "/x") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[4;3H")))
-      (: f (mini '("ab") "") (= (snip f ((tally f) - 6) (tally f)) (E$ + "[1;1H"))))
+      (: f (mini '("ab") ":") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;2H")))
+      (: f (mini '("ab") ":wq") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;4H")))
+      (: f (mini '("ab") "/x") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;3H")))
+      (: f (mini '("ab") "") (= (snip f (tally f - 6) (tally f)) (E$ + "[1;1H"))))
 
 ; --- the syntax paint (crew/vi/hue.l): classes, the carry, and the one law
 ; that keeps every exact-frame assertion above honest --------------------------
@@ -233,15 +233,15 @@
    ; paint did not touch it
    (bare s)
     (: n (tally s)
-       (dig? c) (|| (&& (48 <= c) (c <= 57)) (c = 59))
+       (dig? c) (((48 <= c) && (c <= 57)) || (c = 59))
        (go i acc)
         (? (n <= i) acc
-           (&& ((s i) = 27) (&& ((i + 1) < n) ((s (i + 1)) = 91)))
-            (: (sk j) (? (&& (j < n) (dig? (s j))) (sk (j + 1)) j)
+           ((s i = 27) && ((i + 1) < n) && (s (i + 1) = 91))
+            (: (sk j) (? ((j < n) && dig? (s j)) (sk (j + 1)) j)
                k (sk (i + 2))
-               (? (&& (k < n) ((s k) = 109)) (go (k + 1) acc)
-                  (go (i + 1) (acc + (string (s i))))))
-           (go (i + 1) (acc + (string (s i)))))
+               (? ((k < n) && (s k = 109)) (go (k + 1) acc)
+                  (go (i + 1) (acc + string (s i)))))
+           (go (i + 1) (acc + string (s i))))
        (go 0 ""))
    (hlon st) (: _ (pin st 'pens (hue-pens hue-theme ())) _ (pin st 'hl 1) st)
 
@@ -275,25 +275,25 @@
       (= (runs "a ; b" 1) '((string 0 5)))            ; and it stays open to the end
       ; keep () is the SAME walk with its answers dropped -- one lexer, provably
       (: a (hue-lex hbk "\"x" 0 1) b (hue-lex hbk "\"x" 0 ())
-         (&& (<>a = <>b) (! (two? <b)))))
+         ((<>a = <>b) && !(two? <b))))
 
 ; --- the word lanes are ASKED, not listed. only the three special forms are
 ;     written out, and they are the grammar rather than the book ---------------
    _ (assert
       (: ls (map hue-arg (hue-tagged 'word))
-         (&& (= (tally (filter nom? ls)) 3)                ; macros values names
-             (= (tally (filter two? ls)) 1)))              ; the forms, and nothing else
-      (0 < (tally (hue-words 'macros)))
-      (0 < (tally (hue-words 'values)))
-      (0 < (tally (hue-words 'names)))
+         ((= (tally (filter nom? ls)) 3) &&                ; macros values names
+          (= (tally (filter two? ls)) 1)))                 ; the forms, and nothing else
+      (0 < tally (hue-words 'macros))
+      (0 < tally (hue-words 'values))
+      (0 < tally (hue-words 'names))
       ; the probes answer what they claim to: a known macro, a known constant, a
       ; known verb -- each in ITS lane and no other
       (member? "assert" (hue-words 'macros))
       (member? "&&" (hue-words 'macros))                   ; NOT filtered: a sigil macro is a macro
       (member? "tau" (hue-words 'values))
       (member? "map" (hue-words 'names))
-      (! (member? "+" (hue-words 'names)))                 ; a bare operator belongs to the punct lanes
-      (! (member? "$" (hue-words 'values)))
+      !(member? "+" (hue-words 'names))                    ; a bare operator belongs to the punct lanes
+      !(member? "$" (hue-words 'values))
       ; sorted, because the generator freezes them into a diff-gated file
       (: w (hue-words 'names) (= w (sort w)))
       ; ⚠ THE STABILITY LAW. both book lanes are POSITIVE tests -- a name DOES
@@ -301,13 +301,13 @@
       ; which is bound only when love was handed a file) falls out of BOTH, and
       ; the generated syntax file cannot depend on how the generator was started.
       (all (\ w (lit? (ev (intern w)))) (hue-words 'names))
-      (all (\ w (! (lit? (ev (intern w))))) (hue-words 'values))
-      (! (member? "argv" (hue-words 'names)))
-      (! (member? "argv" (hue-words 'values)))
-      (! (member? "cmdline" (hue-words 'names)))
+      (all (\ w !(lit? (ev (intern w)))) (hue-words 'values))
+      !(member? "argv" (hue-words 'names))
+      !(member? "argv" (hue-words 'values))
+      !(member? "cmdline" (hue-words 'names))
       ; earlier row wins in the one tablet, exactly as the table reads top-down
-      (: b (hue-book ()) (&& (id? (b "assert") 'macro) (&& (id? (b "tau") 'const)
-                                                           (id? (b "map") 'book)))))
+      (: b (hue-book ()) (id? (b "assert") 'macro && id? (b "tau") 'const &&
+                          id? (b "map") 'book)))
 
 ; --- the pens: molokayo, and every class has one -----------------------------
    _ (assert
@@ -322,7 +322,7 @@
    (twin ls ks) (: a (vgo ls ks) b (vgo ls ks)
                    _ (pin a 'w 30) _ (pin a 'h 5) _ (pin b 'w 30) _ (pin b 'h 5)
                    _ (hlon b)
-                   ((bare (vframe b)) = (vframe a)))
+                   (bare (vframe b) = vframe a))
    _ (assert
       (twin '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
       (twin '("(: css \"a" "b\" 1)") "j")
@@ -332,12 +332,12 @@
 ; --- born on for .l, off for everything else (which is why "t" above is plain),
 ;     and :hl flips it ------------------------------------------------------
    _ (assert
-      (! (st? (vnew '("a") "t") 'hl))
-      (! (st? (vnew '("a") "") 'hl))
-      (! (st? (vnew '("a") "l") 'hl))
+      !(st? (vnew '("a") "t") 'hl)
+      !(st? (vnew '("a") "") 'hl)
+      !(st? (vnew '("a") "l") 'hl)
       (st? (vnew '("a") "x.l") 'hl)
       (st? (vnew '("a") "crew/vi/hue.l") 'hl)
-      (st? (vgob '("a") (cat (bytes ":hl") (L CR))) 'hl)
-      (! (st? (vgob '("a") (cat (bytes ":hl") (cat (L CR) (cat (bytes ":hl") (L CR))))) 'hl)))
+      (st? (vgob '("a") ((bytes ":hl") + (L CR))) 'hl)
+      !(st? (vgob '("a") ((bytes ":hl") + (L CR) + (bytes ":hl") + (L CR))) 'hl))
 
    _ (say err "crew/vi/law: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)

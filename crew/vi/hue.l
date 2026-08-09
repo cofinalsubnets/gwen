@@ -66,14 +66,14 @@
    ; a token ends only on whitespace, a bracket, or a reader operator
    hue-stop (hue-brk + "\"'`;,")
 
-   (hue-has? t c) (: n (tally t) (go i) (? (n <= i) () ((t i) = c) 1 (go (i + 1))) (go 0))
-   (hue-blank? c) (|| (c = 32) (c = 9))
+   (hue-has? t c) (: n (tally t) (go i) (? (n <= i) () (t i = c) 1 (go (i + 1))) (go 0))
+   (hue-blank? c) ((c = 32) || (c = 9))
    (hue-delim? c) (hue-has? hue-brk c)
-   (hue-term? c)  (|| (c < 33) (hue-has? hue-stop c))
+   (hue-term? c)  ((c < 33) || hue-has? hue-stop c)
    (hue-sig? c)   (hue-has? hue-sigils c)
    (hue-at? s i t)                                         ; does s carry t at i?
     (: n (tally s) m (tally t)
-       (go k) (? (m <= k) 1 (n <= (i + k)) () ((s (i + k)) = (t k)) (go (k + 1)) ())
+       (go k) (? (m <= k) 1 (n <= (i + k)) () (s (i + k) = t k) (go (k + 1)) ())
        (go 0))
 
    ; --- the book --------------------------------------------------------------
@@ -88,7 +88,7 @@
    ; here serves both readers -- syntax.vim has always said the same thing in
    ; prose ("the sigil matches below own every punct run"), which is precisely the
    ; kind of promise that goes stale when only prose keeps it.
-   (hue-name? w) (: t (string w) (&& (0 < (tally t)) (! (hue-sig? (t 0)))))
+   (hue-name? w) (: t (string w) ((0 < tally t) && !(hue-sig? (t 0))))
 
    ; the words a lane claims. a PROBE nom asks the runtime; anything else is the
    ; literal list itself. SORTED, because the generator freezes this into a
@@ -117,8 +117,8 @@
    ; cmdline their colour, which is the price of a file that cannot flap.
    (hue-verb? w) (lit? (ev w))
    (hue-const? w) (: v (ev w)
-                     (&& (! (lit? v))
-                         (|| (constellation? v) (|| (string? v) (nom? v)))))
+                     (!(lit? v) &&
+                      (constellation? v || string? v || nom? v)))
    (hue-words a)
     (? (id? a 'names)  (sort (map string (filter hue-name? (filter hue-verb? (names ())))))
        (id? a 'macros) (sort (map string (macro-names ())))
@@ -139,18 +139,18 @@
    ; syntax.vim gets by defining LoveNumber after the sigil matches.
    (hue-num? t)
     (: n (tally t)
-       (digs i) (? (&& (i < n) (&& (48 <= (t i)) ((t i) <= 57))) (digs (i + 1)) i)
-       s0 (? (&& (0 < n) ((t 0) = 45)) 1 0)
+       (digs i) (? ((i < n) && (48 <= t i) && (t i <= 57)) (digs (i + 1)) i)
+       s0 (? ((0 < n) && (t 0 = 45)) 1 0)
        a (digs s0)                                         ; the integer part
-       b (? (&& (a < n) ((t a) = 46)) (digs (a + 1)) a)    ; the fraction
+       b (? ((a < n) && (t a = 46)) (digs (a + 1)) a)      ; the fraction
        md (? (s0 < a) 1 (? ((a + 1) < b) 1 ()))            ; at least one mantissa digit
-       x (? (&& md (&& (b < n) (|| ((t b) = 101) ((t b) = 69))))
-             (: e1 (? (&& ((b + 1) < n) (|| ((t (b + 1)) = 45) ((t (b + 1)) = 43)))
+       x (? (md && (b < n) && ((t b = 101) || (t b = 69)))
+             (: e1 (? (((b + 1) < n) && ((t (b + 1) = 45) || (t (b + 1) = 43)))
                        (b + 2) (b + 1))
                 e2 (digs e1)
                 (? (e1 < e2) e2 b))
              b)
-       (&& md (x = n)))
+       (md && (x = n)))
 
    ; the word lanes, already folded into one tablet by hue-book; () when no lane
    ; claims the token
@@ -168,17 +168,17 @@
    ; one, and this is what makes that true rather than merely intended.
    (hue-lex bk s in keep)
     (: n (tally s)
-       (emit acc k a b) (? (&& keep (a < b)) (link `(k a b) acc) acc)
-       (tend i) (? (|| (n <= i) (hue-term? (s i))) i (tend (i + 1)))
-       (srun i) (? (&& (i < n) (hue-sig? (s i))) (srun (i + 1)) i)
+       (emit acc k a b) (? (keep && (a < b)) (`(k a b) >< acc) acc)
+       (tend i) (? ((n <= i) || hue-term? (s i)) i (tend (i + 1)))
+       (srun i) (? ((i < n) && hue-sig? (s i)) (srun (i + 1)) i)
        ; GLUED means the whole run touches a datum start: syntax.vim's rule, and
        ; the excluded set is its own -- blank, `)`, `,`, `;` and more sigil chars
        ; (the last so a greedy run cannot backtrack and split itself). at the end
        ; of a line there is no datum, so a trailing run is dyadic.
-       (glued? j) (&& (j < n)
-                      (: c (s j)
-                         (! (|| (hue-blank? c)
-                                (|| (c = 41) (|| (c = 44) (|| (c = 59) (hue-sig? c))))))))
+       (glued? j) ((j < n) &&
+                   (: c (s j)
+                      !(hue-blank? c ||
+                        (c = 41) || (c = 44) || (c = 59) || hue-sig? c)))
        (word i j acc)
         (: t (snip s i j)
            (? (hue-num? t) (w j (emit acc 'number i j))
@@ -208,8 +208,8 @@
 
    ; one start-state per line: fold the lexer down the buffer, keeping nothing
    (hue-carry bk ls)
-    (: (go l st acc) (? (! (two? l)) (rev acc)
-                        (: r (hue-lex bk <l st ()) (go >l <>r (link st acc))))
+    (: (go l st acc) (? !(two? l) (rev acc)
+                        (: r (hue-lex bk <l st ()) (go >l <>r (st >< acc))))
        (go ls 0 ()))
 
    ; --- the pens --------------------------------------------------------------
@@ -219,12 +219,12 @@
    ; crew/vi/config.l's numbers for another colorscheme's moves the editor and
    ; leaves the generated syn file -- which links to the groups -- alone.
    hue-off "\e[0m"
-   (hue-hx c) (? (&& (48 <= c) (c <= 57)) (c - 48) (&& (65 <= c) (c <= 70)) (c - 55) (c - 87))
+   (hue-hx c) (? ((48 <= c) && (c <= 57)) (c - 48) ((65 <= c) && (c <= 70)) (c - 55) (c - 87))
    (hue-byte t k) ((hue-hx (t k)) * 16 + (hue-hx (t (k + 1))))
    (hue-faces fs) (foldl (\ a f (a + (? (id? f 'bold) "1;" "3;"))) "" fs)
    (hue-pen row deep)
     (: n (hue-nth row 1) g (hue-nth row 2) fs (hue-nth row 3)
-       ("\e[" + (hue-faces fs)
+       ("\e[" + hue-faces fs
         + (? deep ("38;2;" + show (hue-byte g 1) + ";" + show (hue-byte g 3)
                            + ";" + show (hue-byte g 5))
              ("38;5;" + show n))
@@ -239,10 +239,10 @@
    (hue-paint pens s runs)
     (: n (tally s)
        (go i l acc)
-        (? (! (two? l)) (acc + (snip s i n))
+        (? !(two? l) (acc + snip s i n)
            (: r <l k <r a <>r b <>>r p (pens k)
-              (? (string? p) (go b >l (acc + (snip s i a) + p + (snip s a b) + hue-off))
-                 (go b >l (acc + (snip s i b))))))
+              (? (string? p) (go b >l (acc + snip s i a + p + snip s a b + hue-off))
+                 (go b >l (acc + snip s i b)))))
        (go 0 runs ""))
    (hue-line pens bk s in) (hue-paint pens s <(hue-lex bk s in 1))
 
@@ -260,11 +260,11 @@
        q (? (string? h) (open (h + hue-theme-file) "r") ())
        (? q (: t (slurp q)
                (go x acc) (: r (sound x)
-                              (? (two? r) (go (cup r) (link (cap r) acc)) (rev acc)))
+                              (? (two? r) (go >r (<r >< acc)) (rev acc)))
                rs (go t ())
                _ (close q)
                (foldl hue-over hue-theme rs))
           hue-theme))
    (hue-deep x) (: ct (getenv "COLORTERM")
-                   (? (string? ct) (|| (ct = "truecolor") (ct = "24bit")) ()))
+                   (? (string? ct) ((ct = "truecolor") || (ct = "24bit")) ()))
    (hue-wake x) (hue-pens (hue-rows ()) (hue-deep ())))

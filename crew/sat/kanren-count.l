@@ -8,14 +8,14 @@
 ; needs no bespoke code here: the same `+`/`*` that add numbers and append lists express it.
 ; over n boolean vars x0..x(n-1), clauses (x_i | x_(i+1)) cyclically -- "no two adjacent 0s".
 ; Run: out/host/love crew/sat/kanren-count.l   ->   6726 (n=10).
-(: (boolean x) ((x === 0) + (x === 1))
-   (nth l k) (? (= k 0) (cap l) (nth (cup l) (+ k -1)))
+(: (boolean x) (x === 0 + x === 1)
+   (nth l k) (? (= k 0) <l (nth >l (+ k -1)))
    (scount s) ((: (go acc s) (s (\ _ acc) (\ s2 (go acc s2)) (\ x s2 (go (+ 1 acc) s2)))) 0 s)
    (sat n) (:
      vs (map var (map (\ i (intern (+ "x" (show i)))) (jot n)))
      bools (map boolean vs)
      clauses (map (\ i (+ ((nth vs i) === 1) ((nth vs (% (+ i 1) n)) === 1))) (jot n))
-     formula (foldl (*) () (cat bools clauses))
+     formula (foldl (*) () (bools + clauses))
      (scount ((load formula) '(0))))
  _ (assert (= 6726 (sat 10)))
  _ (puts "kanren-count: #SAT-with-multiplicity of the cyclic n=10 CNF = ") _ (putn (sat 10)) _ (putc 10))

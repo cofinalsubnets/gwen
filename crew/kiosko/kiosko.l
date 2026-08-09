@@ -35,11 +35,11 @@
 ; --- little utils -------------------------------------------------------------------
 (: (nth l k)    (? (k = 0) <l (nth >l (k - 1)))
    (strcat l)   (foldl (+) "" l)
-   (joins l sp) (? (! (two? l)) "" (! (two? >l)) <l (<l + sp + joins >l sp))
-   (ends? s t)  (: n (tally s) m (tally t) (&& (m <= n) ((snip s (n - m) n) = t)))
-   (splits s c) ((: (g i st acc) (? (i < tally s) (? ((s i) = c) (g (i + 1) (i + 1) (link (snip s st i) acc))
+   (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
+   (ends? s t)  (: n (tally s) m (tally t) ((m <= n) && (snip s (n - m) n = t)))
+   (splits s c) ((: (g i st acc) (? (i < tally s) (? (s i = c) (g (i + 1) (i + 1) (snip s st i >< acc))
                                                        (g (i + 1) st acc))
-                                    (rev (link (snip s st (tally s)) acc)))) 0 0 ())
+                                    (rev (snip s st (tally s) >< acc)))) 0 0 ())
    (dir? p)     (two? (readdir p))
    (fsize p)    (: st (stat p) (? (two? st) <st ()))
    ; ⚠ fsize answers () for MISSING and 0 for EMPTY, and both are nil -- so it
@@ -66,7 +66,7 @@
    ; `stat` cannot size -- a procfs file, a fifo -- and the fallback whenever a promise
    ; below turns out to be false. it reopens, because the lanes above have consumed theirs.
    (gulp-loop f) (: q (open f "r")
-                    (? (! q) ()
+                    (? !q ()
                        (: j (jug 0) buf (cask 65536)
                           (go _) (: k (swig q buf)
                                     (? (0 < k) (: _ (say j (snip (string buf) 0 k)) (go ()))
@@ -79,10 +79,10 @@
       ; the loop. this is not a formality: a procfs file is generated on demand -- it
       ; reports size 0 and answers SHORT READS THAT ARE NOT THE END. /proc/cpuinfo handed
       ; back 3288 of its 26322 bytes the one time a short read was trusted here.
-      (? (! (0 < n)) (gulp-loop f)
-         (! swigp) (gulp-loop f)                       ; no cb.c: the slow lane still works
+      (? !(0 < n) (gulp-loop f)
+         !swigp (gulp-loop f)                          ; no cb.c: the slow lane still works
          (: q (open f "r")
-            (? (! q) ()
+            (? !q ()
                ; --- lane 1, ZERO copies: ask for exactly n, and if we got n, hand back the
                ; CASK. `say` writes a cask straight out and `tally` gives its length, so
                ; nothing downstream needs a string at all. the catch is that a full buffer
@@ -93,7 +93,7 @@
                (: buf (cask n)
                   k (swig q buf)
                   probe (cask 1)
-                  (? (&& (k = n) (&& (0 = (swig q probe)) (-1 = (see q))))
+                  (? ((k = n) && (0 = swig q probe) && (-1 = see q))
                      (: _ (close q) buf)
                      (: _ (close q) (gulp-loop f))))    ; it grew, or it shrank
                ; --- lane 2, TWO copies: ask for ONE BYTE MORE than stat said. on a regular
@@ -103,15 +103,15 @@
                ; the two syscalls a proof costs.
                (: buf (cask (n + 1))
                   k (swig q buf)
-                  (? (&& (0 < k) (k < tally buf))
+                  (? ((0 < k) && (k < tally buf))
                      (: s (snip (string buf) 0 k) _ (close q) s)
                      (: _ (close q) (gulp-loop f))))))))    ; it grew past its own size
    ; ⚠ `got?`, not `lit?`: lit? asks "is this a FUNCTION", and a string is not one, so
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
    ; "" and () are both nothing. `=` is the one thing that tells them apart.
-   (got? x)     (! (x = ()))
+   (got? x)     !(x = ())
    (sub? s t)   (: n (tally s) m (tally t)
-                   ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+                   ((: (g i) (? ((i + m) <= n) (? (snip s i (i + m) = t) 1 (g (i + 1))) 0)) 0))
    ; the whole request head in ONE gulp, the same way a body is read. reading it a
    ; character at a time was the single biggest thing left between kiosko and darkhttpd:
    ; ~51us a request, because `(acc + ch)` reallocates the string on EVERY byte, so a
@@ -125,54 +125,54 @@
    reqcap       32768
    (reqblk c)   (: buf (cask 2048)
                    (go acc)
-                   (? (|| (sub? acc "\r\n\r\n") (sub? acc "\n\n")) acc
+                   (? (sub? acc "\r\n\r\n" || sub? acc "\n\n") acc
                       (reqcap < tally acc) acc
                       (: k (swig c buf)
-                         (? (0 < k) (go (acc + (snip (string buf) 0 k)))
+                         (? (0 < k) (go (acc + snip (string buf) 0 k))
                             (: ch (see c) (? (ch = -1) acc (go (acc + ch)))))))
                    (go ""))
    ; the request line: up to the first newline, without its carriage return.
    (line1 s)    (: n (tally s)
-                   (go i) (? (&& (i < n) (! ((s i) = 10))) (go (i + 1)) i)
+                   (go i) (? ((i < n) && !(s i = 10)) (go (i + 1)) i)
                    e (go 0)
-                   (snip s 0 (? (&& (0 < e) ((s (e - 1)) = 13)) (e - 1) e)))
+                   (snip s 0 (? ((0 < e) && (s (e - 1) = 13)) (e - 1) e)))
    ; the first space-separated word of s, and everything after it
    (word1 s)    (: n (tally s)
-                   (go i) (? (&& (i < n) (! ((s i) = 32))) (go (i + 1)) i)
+                   (go i) (? ((i < n) && !(s i = 32)) (go (i + 1)) i)
                    (snip s 0 (go 0)))
    (after1 s)   (: n (tally s)
-                   (skipw i) (? (&& (i < n) (! ((s i) = 32))) (skipw (i + 1)) i)
-                   (skips i) (? (&& (i < n) ((s i) = 32)) (skips (i + 1)) i)
+                   (skipw i) (? ((i < n) && !(s i = 32)) (skipw (i + 1)) i)
+                   (skips i) (? ((i < n) && (s i = 32)) (skips (i + 1)) i)
                    (snip s (skips (skipw 0)) n))
-   (numof s)    ((: (g i acc) (? (&& (i < tally s) (&& (48 <= (s i)) ((s i) <= 57)))
-                                 (g (i + 1) (acc * 10 + ((s i) - 48))) acc)) 0 0))
+   (numof s)    ((: (g i acc) (? ((i < tally s) && (48 <= s i) && (s i <= 57))
+                                 (g (i + 1) (acc * 10 + (s i - 48))) acc)) 0 0))
 
 ; --- the request line ----------------------------------------------------------------
 ; ⚠ -1 for "not a hex digit", never () -- a valid digit can be 0, and 0 is nothing (it
 ; nets blue), so a presence test on the VALUE cannot tell %00 from a bad escape.
-(: (hexv c)   (? (&& (48 <= c) (c <= 57)) (c - 48)
-                 (&& (97 <= c) (c <= 102)) (c - 87)
-                 (&& (65 <= c) (c <= 70)) (c - 55)
+(: (hexv c)   (? ((48 <= c) && (c <= 57)) (c - 48)
+                 ((97 <= c) && (c <= 102)) (c - 87)
+                 ((65 <= c) && (c <= 70)) (c - 55)
                  -1)
    ; percent-decoding, and `+` left alone: it means a space in a query string, never in a
    ; path, and the query is cut before we ever get here.
    (pdecode s) (: n (tally s)
                   ((: (g i acc)
-                      (? (! (i < n)) acc
+                      (? !(i < n) acc
                          (: c (s i)
-                            (? (&& (c = 37) ((i + 2) < n))
+                            (? ((c = 37) && ((i + 2) < n))
                                (: h (hexv (s (i + 1))) l (hexv (s (i + 2)))
-                                  (? (&& (-1 < h) (-1 < l)) (g (i + 3) (acc + (16 * h + l)))
+                                  (? ((-1 < h) && (-1 < l)) (g (i + 3) (acc + (16 * h + l)))
                                      (g (i + 1) (acc + c))))
                                (g (i + 1) (acc + c)))))) 0 ""))
    (cutq s)    (: n (tally s)
-                  ((: (g i) (? (! (i < n)) s
-                               (|| ((s i) = 63) ((s i) = 35)) (snip s 0 i)
+                  ((: (g i) (? !(i < n) s
+                               ((s i = 63) || (s i = 35)) (snip s 0 i)
                                (g (i + 1)))) 0))
    ; the ONE guard: no `..` segment, and the path must be rooted. everything downstream
    ; is a plain string append, so this is where an escape has to be refused.
-   (safe? p)   (&& (&& (0 < tally p) ((p 0) = 47))
-                   (! (member? ".." (splits p 47)))))
+   (safe? p)   (((0 < tally p) && (p 0 = 47)) &&
+                !(member? ".." (splits p 47))))
 
 ; --- what a file is ------------------------------------------------------------------
 (: types '(("html" "text/html; charset=utf-8") ("htm" "text/html; charset=utf-8")
@@ -185,9 +185,9 @@
            ("ico" "image/x-icon")              ("pdf" "application/pdf")
            ("woff2" "font/woff2")              ("woff" "font/woff")
            ("wasm" "application/wasm"))
-   (extof p) (: ps (splits p 46) (? (! (two? >ps)) "" (: (last l) (? (two? >l) (last >l) <l) (last ps))))
+   (extof p) (: ps (splits p 46) (? !(two? >ps) "" (: (last l) (? (two? >l) (last >l) <l) (last ps))))
    (mime p)  (: e (extof p)
-                ((: (g l) (? (! (two? l)) "application/octet-stream"
+                ((: (g l) (? !(two? l) "application/octet-stream"
                              ((<(<l)) = e) (<>(<l))
                              (g >l))) types)))
 
@@ -236,15 +236,15 @@
          (: meth (word1 line)
             raw (word1 (after1 line))
             head? (meth = "HEAD")
-            (? (! (|| (meth = "GET") head?)) (: _ (oops c 405 "Method Not Allowed" 0) `(405 meth raw))
+            (? !((meth = "GET") || head?) (: _ (oops c 405 "Method Not Allowed" 0) `(405 meth raw))
                (: p (pdecode (cutq raw))
-                  (? (! (safe? p)) (: _ (oops c 403 "Forbidden" head?) `(403 meth raw))
+                  (? !(safe? p) (: _ (oops c 403 "Forbidden" head?) `(403 meth raw))
                      (: full (root + p)
                         (? (dir? full)
                            ; a directory: redirect to the slashed form first, so the
                            ; relative links inside its index resolve against the right
                            ; base; then index.html; then a listing.
-                           (? (! (ends? p "/"))
+                           (? !(ends? p "/")
                               (: _ (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + p
                                            + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
                                  _ (flush c) `(301 meth raw))
@@ -253,7 +253,7 @@
                                  _ (reply c 200 "OK" "text/html; charset=utf-8" b head?)
                                  `(200 meth raw))
                               (: _ (listing c root p head?) `(200 meth raw)))
-                           (! (fhere? full)) (: _ (oops c 404 "Not Found" head?) `(404 meth raw))
+                           !(fhere? full) (: _ (oops c 404 "Not Found" head?) `(404 meth raw))
                            (: b (gulp full)
                               (? (got? b) (: _ (reply c 200 "OK" (mime full) b head?) `(200 meth raw))
                                  (: _ (oops c 403 "Forbidden" head?) `(403 meth raw)))))))))))))
@@ -328,16 +328,16 @@ usage: kiosko [-p PORT] [-q] [DIR]
       box (tablet 0)
       _ (pin box 'port 8080)
       _ (pin box 'root ".")
-      (loop ws) (? (! (two? ws)) 0
+      (loop ws) (? !(two? ws) 0
                    (: w <ws r >ws
-                      (? (|| (w = "-p") (w = "--port"))  (: _ (need w r) _ (pin box 'port (numof <r)) (loop >r))
-                         (|| (w = "-q") (w = "--quiet")) (: _ (pin box 'quiet 1) (loop r))
-                         (|| (w = "-h") (w = "--help"))  (usage 0)
+                      (? ((w = "-p") || (w = "--port"))  (: _ (need w r) _ (pin box 'port (numof <r)) (loop >r))
+                         ((w = "-q") || (w = "--quiet")) (: _ (pin box 'quiet 1) (loop r))
+                         ((w = "-h") || (w = "--help"))  (usage 0)
                          (: _ (pin box 'root w) (loop r)))))
       _ (loop as)
       port (peep box 'port 8080)
       _ (? (dir? (peep box 'root ".")) 0
-           (: _ (say err ("kiosko: not a directory: " + (peep box 'root "."))) _ (put err 10) (quit 1)))
+           (: _ (say err ("kiosko: not a directory: " + peep box 'root ".")) _ (put err 10) (quit 1)))
       _ (? (serve (peep box 'root ".") port (peep box 'quiet 0) ()) 0
            (: _ (say err ("kiosko: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
       (quit 0))
@@ -350,12 +350,12 @@ usage: kiosko [-p PORT] [-q] [DIR]
 ; whichever layer holds this file's binds is still the head here. body-having, so
 ; nothing leaks.
 (: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   (me? w) (: b (bn w) (|| (b = "kiosko") (b = "kiosko.l")))
-   (seat a) (? (! (two? a)) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (link 1 >>a) (seat >>a)) ())
-               (me? <a) (link 1 >a)
+   (me? w) (: b (bn w) ((b = "kiosko") || (b = "kiosko.l")))
+   (seat a) (? !(two? a) ()
+               (<a = "-l") (? (two? >a) (? (me? <>a) (1 >< >>a) (seat >>a)) ())
+               (me? <a) (1 >< >a)
                ())
    s (seat >cmdline)
    (? (two? s) (kiosko-main >s) ()))

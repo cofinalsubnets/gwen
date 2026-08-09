@@ -35,7 +35,7 @@
    (sh-gitbr _)
      (? (sh-gitup (+ "" (cwd 0)))
         (: r (hark (L "git" "symbolic-ref" "--short" "-q" "HEAD"))
-           (? (= 0 (cap r)) (sh-chomp (cup r)) ""))
+           (? (= 0 <r) (sh-chomp >r) ""))
         "")
    (sh-prompt _)
      (: st (sh-status ())
@@ -48,7 +48,7 @@
    ; --- history: ~/.lush_history, oldest first on disk, newest first in hand
    (sh-expl s)                                  ; string -> charlist
      (: n (tally s)
-        (go i) (? (= i n) () (link (s i) (go (+ i 1))))
+        (go i) (? (= i n) () (s i >< go (+ i 1)))
         (go 0))
    (sh-histpath _) (+ (+ "" (getenv "HOME")) "/.lush_history")
    (sh-histload _)
@@ -58,7 +58,7 @@
               (go acc)
                 (: ln (sh-getline prt)
                    (? (id? ln 'eof) acc
-                      (tally ln) (go (link (sh-expl ln) acc))
+                      (tally ln) (go (sh-expl ln >< acc))
                       (go acc)))
               r (go ())
               _ (close prt)
@@ -70,29 +70,29 @@
 
    ; --- completion: (insert . candidates) off the text left of the cursor ------
    sh-builtins '("cd" "exit" "export" "pwd" "jobs" "fg" "bg")
-   (sh-prefix? p s) (: n (tally p) (&& (<= n (tally s)) (= p (snip s 0 n))))
+   (sh-prefix? p s) (: n (tally p) ((<= n (tally s)) && (= p (snip s 0 n))))
    (sh-comm2 a s)                               ; longest common prefix of two
      (: n (? (< (tally a) (tally s)) (tally a) (tally s))
-        (go i) (? (&& (< i n) (= (a i) (s i))) (go (+ i 1)) i)
+        (go i) (? ((< i n) && (= (a i) (s i))) (go (+ i 1)) i)
         (snip a 0 (go 0)))
-   (sh-common l) (? (! (two? l)) "" (foldl sh-comm2 (cap l) (cup l)))
+   (sh-common l) (? !(two? l) "" (foldl sh-comm2 <l >l))
    (sh-uniq l)
-     (? (! (two? l)) l
-        (? (&& (two? (cup l)) (= (cap l) (caup l))) (sh-uniq (cup l))
-           (link (cap l) (sh-uniq (cup l)))))
+     (? !(two? l) l
+        (? (two? >l && (= <l <>l)) (sh-uniq >l)
+           (<l >< sh-uniq >l)))
    (sh-pathdirs s)                              ; "a:b:c" -> ("a" "b" "c")
      (: n (tally s)
-        (go i st acc) (? (= i n) (sh-rev (link (snip s st i) acc))
-                         (? (= (s i) 58) (go (+ i 1) (+ i 1) (link (snip s st i) acc))
+        (go i st acc) (? (= i n) (sh-rev (snip s st i >< acc))
+                         (? (= (s i) 58) (go (+ i 1) (+ i 1) (snip s st i >< acc))
                             (go (+ i 1) st acc)))
         (go 0 0 ()))
    (sh-cmds w)                                  ; command candidates for prefix w
      (sh-uniq (sort (+ (filter (sh-prefix? w) sh-builtins)
                        (catmap (\ d (filter (sh-prefix? w) (readdir d)))
                                (sh-pathdirs (+ "" (getenv "PATH")))))))
-   (sh-dirp q) (: st (stat q) (&& (two? st) (= 16384 (& 61440 (sh-nth st 2)))))
+   (sh-dirp q) (: st (stat q) (two? st && (= 16384 (& 61440 (sh-nth st 2)))))
    (sh-unfold w)                                ; ~/x -> $HOME/x (stat wants the real path)
-     (? (&& (tally w) (= (w 0) 126)) (+ (+ "" (getenv "HOME")) (snip w 1 (tally w))) w)
+     (? (tally w && (= (w 0) 126)) (+ (+ "" (getenv "HOME")) (snip w 1 (tally w))) w)
    (sh-fileca w)                                ; pathname candidates: glob w*, ~ refolded
      (: h (+ "" (getenv "HOME"))
         w2 (sh-unfold w)
@@ -108,7 +108,7 @@
    (sh-cmdpos? s st)                            ; only spaces / a separator before it?
      (: (go k) (? (< k 0) 1
                   (: b (s k)
-                     (? (|| (= b 32) (= b 9)) (go (- k 1))
+                     (? ((= b 32) || (= b 9)) (go (- k 1))
                         (|| (= b 124) (= b 38) (= b 59)) 1
                         0)))
         (go (- st 1)))
@@ -116,16 +116,16 @@
      (: s (slurp (tap left))
         st (sh-wdst s)
         w (snip s st (tally s))
-        (? (! (tally w)) (link () ())
-           (: cmdp (&& (sh-cmdpos? s st) (< (sh-rfind w 47) 0) (! (= (w 0) 126)))
+        (? !(tally w) (() >< ())
+           (: cmdp (&& (sh-cmdpos? s st) (< (sh-rfind w 47) 0) !(= (w 0) 126))
               cands (? cmdp (sh-cmds w) (sh-fileca w))
-              (? (! (two? cands)) (link () ())
+              (? !(two? cands) (() >< ())
                  (: com (sh-common cands)
                     ins (? (sh-prefix? w com) (snip com (tally w) (tally com)) "")
-                    one (! (two? (cup cands)))
-                    sfx (? (! one) ""
-                           (? (&& (! cmdp) (sh-dirp (sh-unfold (cap cands)))) "/" " "))
-                    (link (sh-expl (+ ins sfx)) cands))))))
+                    one !(two? >cands)
+                    sfx (? !one ""
+                           (? (!cmdp && sh-dirp (sh-unfold <cands)) "/" " "))
+                    (sh-expl (+ ins sfx) >< cands))))))
 
    ; --- the loops ---------------------------------------------------------------
    (sh-cooked buf)
@@ -136,11 +136,11 @@
            (: _ (? (tally buf) (say err "lush: unexpected eof\n") 0) (puts "\n"))
            (: full (? (tally buf) (+ buf (+ "\n" line)) line)
               pr (sh-parse-line full)
-              (? (id? (cap pr) 'more) (sh-cooked full)
-                 (id? (cap pr) 'err)
-                   (: _ (say err (+ "lush: " (+ (cup pr) "\n")))
+              (? (id? <pr 'more) (sh-cooked full)
+                 (id? <pr 'err)
+                   (: _ (say err (+ "lush: " (+ >pr "\n")))
                       _ (pin sh-status () 2) (sh-cooked ""))
-                 (: _ (sh-eval-top full (cup pr)) (sh-cooked ""))))))
+                 (: _ (sh-eval-top full >pr) (sh-cooked ""))))))
    ; interactive: edlnc owns echo, so raw the tty for the prompt and drop to
    ; cooked around each command. edlnc answers (line . nhist) or 'eof; nhist
    ; threads back so up/down recall, and the file gets each line as it lands.
@@ -148,16 +148,16 @@
      (: _ (? (tally buf) 0 (sh-reapbg 0))
         r (edlnc in (? (tally buf) "> " (sh-prompt 0)) hist sh-complete)
         (? (id? r 'eof) (: _ (raw 0) (puts "\n"))                 ; cooked, newline, end
-           (: line (slurp (tap (cap r))) nhist (cup r)
+           (: line (slurp (tap <r)) nhist >r
               _ (? (tally line) (sh-histput line) 0)
               full (? (tally buf) (+ buf (+ "\n" line)) line)
               pr (sh-parse-line full)
-              (? (id? (cap pr) 'more) (sh-loop full nhist)
-                 (id? (cap pr) 'err)
+              (? (id? <pr 'more) (sh-loop full nhist)
+                 (id? <pr 'err)
                    (: _ (raw 0)
-                      _ (say err (+ "lush: " (+ (cup pr) "\n")))
+                      _ (say err (+ "lush: " (+ >pr "\n")))
                       _ (pin sh-status () 2)
                       _ (raw 1) (sh-loop "" nhist))
                  (: _ (raw 0)                                     ; cooked for the command
-                    _ (sh-eval-top full (cup pr))
+                    _ (sh-eval-top full >pr)
                     _ (raw 1) (sh-loop "" nhist)))))))              ; re-raw for the next prompt

@@ -26,7 +26,7 @@
 (:
  ; --- reading a cell: repl-style, one form, unreadable text is a label ---
  (glean s) (: r (sound (+ "(" (+ s ")")))
-              (? (two? r) (: d (cap r) (? (two? d) d ())) ()))
+              (? (two? r) (: d <r (? (two? d) d ())) ()))
 
  ; --- the cell-name shape: one letter, then digits (a1 .. z999) ---
  (cell? n) (? (name? n)
@@ -34,7 +34,7 @@
                 (&& (< 1 t) (< t 5)
                     (<= 97 (s 0)) (<= (s 0) 122)
                     ((: (digs i) (? (< i t)
-                                   (? (&& (<= 48 (s i)) (<= (s i) 57)) (digs (+ i 1)) 0)
+                                   (? ((<= 48 (s i)) && (<= (s i) 57)) (digs (+ i 1)) 0)
                                    1))
                      1)))
              0)
@@ -42,7 +42,7 @@
  ; --- the book of known names, laid once on first use: a name off this
  ; book and off the sheet is a LABEL and binds to its own spelling ---
  known #()
- (knowns _) (: _ (? (! $known)
+ (knowns _) (: _ (? !$known
                     (: _ (map (\ n (pin known n 1)) (names ()))
                        ; the READER-EMITTED noms ride formulas but sit OFF the book (the egg mops
                        ; them): @(..) reads as (tuple ..), backtick as (list ..), the printer round-
@@ -53,14 +53,14 @@
                        (map (\ n (pin known n 1)) '(tuple list spread mono)))
                     0)
                  known)
- (label? n) (&& (name? n) (! (cell? n)) (! (peep (knowns ()) n 0))
-                (: b ((string n) 0) (&& (<= 97 b) (<= b 122))))
+ (label? n) (&& (name? n) !(cell? n) !(peep (knowns ()) n 0)
+                (: b ((string n) 0) ((<= 97 b) && (<= b 122))))
 
  ; --- dependencies: every cell-shaped or label name in the form, deduped,
  ; in first-sight order (quote interiors over-collect; binding is harmless
  ; there -- quoted data keeps its symbols) ---
- (walkdeps f seen acc) (? (two? f) (walkdeps (cup f) seen (walkdeps (cap f) seen acc))
-                          (&& (? (cell? f) 1 (label? f)) (! (peep seen f 0)))
+ (walkdeps f seen acc) (? (two? f) (walkdeps >f seen (walkdeps <f seen acc))
+                          ((? (cell? f) 1 (label? f)) && !(peep seen f 0))
                           (: _ (pin seen f 1) (+ acc (L f)))
                           acc)
  (deps f) (walkdeps f (tablet 0) ())
@@ -79,7 +79,7 @@
  ; its deps and is applied to their worths (cells recurse; labels are their
  ; spelling), so nothing global is touched and no missing ever fires ---
  (worth1 sh s) (: f (glean s)
-                  (? (! (two? f)) s                     ; unreadable: the text itself
+                  (? !(two? f) s                        ; unreadable: the text itself
                    (: ds (deps f)
                       lam (? ds (ev (+ (L (\ \)) (+ ds (L f)))) (ev f))
                       vs (map (\ d (? (cell? d) (worth sh d) (string d))) ds)
@@ -91,7 +91,7 @@
  ; the loop (a bare whirl is a mint -- the unit -- and would otherwise ride
  ; through the arithmetic and let a circle quietly converge).
  (worth sh n) (: v (peep (sh 1) n none)
-                 (? (! (id? v none)) v
+                 (? !(id? v none) v
                   (peep (sh 2) n 0) (: _ (sh <- 3 (+ 1 (peep sh 3 0))) whirl)
                   (: s (peep (sh 0) n none)
                      (? (id? s none) ()                 ; an empty cell is the unit
@@ -105,7 +105,7 @@
 
  ; --- stow / unstow: the sheet as one readable form ---
  (stow sh path) (: p (open path "w")
-                   (? (! (lit? p)) ()
+                   (? !(lit? p) ()
                     (: _ (say p "(manifest\n")
                        _ (map (\ n (: _ (say p " (")
                                       _ (say p (string n))
@@ -118,13 +118,13 @@
                        _ (close p)
                        1)))
  (unstow sh path) (: p (open path "r")
-                     (? (! (lit? p)) sh
+                     (? !(lit? p) sh
                       (: t (slurp p)
                          r (sound t)
-                         d (? (two? r) (cap r) ())
+                         d (? (two? r) <r ())
                          _ (close p)
-                         _ (? (&& (two? d) (id? (cap d) (\ manifest)))
-                              (map (\ pr (cell! sh (cap pr) (caup pr))) (cup d))
+                         _ (? (two? d && id? <d (\ manifest))
+                              (map (\ pr (cell! sh <pr <>pr)) >d)
                               0)
                          sh)))
 
@@ -183,7 +183,7 @@
     _ (upto nr (\ k (: cy2 (+ top k)
                        _ (say j (padl (show (+ cy2 1)) 3))
                        _ (say j " ")
-                       _ (upto nc (\ i (drawcell j sh i cy2 (&& (= i cx) (= cy2 cy)))))
+                       _ (upto nc (\ i (drawcell j sh i cy2 ((= i cx) && (= cy2 cy)))))
                        (say j "\e[K\r\n"))))
     ; the stern: keys, or the editing hint
     _ (say j (padr (? (string? edit)
@@ -211,7 +211,7 @@
           (= k 27) (go sh path r c cx cy top2 ())
           (? (= k 127) 1 (= k 8)) (go sh path r c cx cy top2
                                       (? (tally edit) (snip edit 0 (- (tally edit) 1)) edit))
-          (&& (<= 32 k) (< k 127)) (go sh path r c cx cy top2 (+ edit ("" + k)))
+          ((<= 32 k) && (< k 127)) (go sh path r c cx cy top2 (+ edit ("" + k)))
           (go sh path r c cx cy top2 edit))
        (? (? (= k 1065) 1 (= k 107)) (go sh path r c cx (max2 0 (- cy 1)) top2 ())       ; up
           (? (= k 1066) 1 (= k 106)) (go sh path r c cx (min2 98 (+ cy 1)) top2 ())      ; down
@@ -228,8 +228,8 @@
  (manifest path) (: sh (sheet 0)
                     _ (? (tally path) (unstow sh path) 0)
                     ws (winsize 0)                       ; a fresh pty says 0x0: fall back
-                    r (? (&& (two? ws) (< 5 (cap ws))) (cap ws) 24)
-                    c (? (&& (two? ws) (< 19 (cup ws))) (cup ws) 80)
+                    r (? (two? ws && (< 5 <ws)) <ws 24)
+                    c (? (two? ws && (< 19 >ws)) >ws 80)
                     _ (raw 1)
                     _ (say out "\e[?1049h\e[2J")
                     _ (flush out)

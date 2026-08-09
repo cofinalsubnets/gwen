@@ -14,31 +14,31 @@
 (:
    ; --- geometry: a rect is (x y w h); splits return rect lists ---
    (rct x y w h) `(x y w h)
-   (rx r) (cap r)  (ry r) (caup r)  (rw r) (nthl r 2)  (rh r) (nthl r 3)
+   (rx r) <r  (ry r) <>r  (rw r) (nthl r 2)  (rh r) (nthl r 3)
    (splitv-eq n r)                                                               ; n equal vertical strips, last takes the remainder
     (? (n < 1) ()
-       (: hh ((rh r) // n)
-          (: (go i) (? (i < n) (link (rct (rx r) ((ry r) + (i * hh)) (rw r)
-                                          (? (i = (n - 1)) ((rh r) - ((n - 1) * hh)) hh))
+       (: hh (rh r // n)
+          (: (go i) (? (i < n) (link (rct (rx r) (ry r + (i * hh)) (rw r)
+                                          (? (i = (n - 1)) (rh r - ((n - 1) * hh)) hh))
                                      (go (i + 1))) ())
              (go 0))))
    (splitv-w fracs r)                                                            ; weighted vertical split (ResizableTall's slave heights)
     (: n (tally fracs) tot (foldl (+) 0.0 fracs)
        (: (go i yy) (? (i < n)
                        (: fr (nthl fracs i)
-                          hh (? (i = (n - 1)) (((ry r) + (rh r)) - yy) (int ((rh r) * (fr / tot))))
-                          (link (rct (rx r) yy (rw r) hh) (go (i + 1) (yy + hh))))
+                          hh (? (i = (n - 1)) ((ry r + rh r) - yy) (int (rh r * (fr / tot))))
+                          (rct (rx r) yy (rw r) hh >< go (i + 1) (yy + hh)))
                        ())
           (go 0 (ry r))))
    (splith-by ratio r)                                                          ; split width by ratio -> (left right)
-    (: mw (int (ratio * (rw r)))
-       `((rct (rx r) (ry r) mw (rh r)) (rct ((rx r) + mw) (ry r) ((rw r) - mw) (rh r))))
-   (placeat wins rects) (? ((two? wins) && (two? rects))                        ; zip windows with rects -> (win x y w h)..
-                           (link (link (cap wins) (cap rects)) (placeat (cup wins) (cup rects))) ())
-   (posof x l) (: (go i m) (? (! (two? m)) -1 (? ((cap m) = x) i (go (i + 1) (cup m)))) (go 0 l))
+    (: mw (int (ratio * rw r))
+       `((rct (rx r) (ry r) mw (rh r)) (rct (rx r + mw) (ry r) (rw r - mw) (rh r))))
+   (placeat wins rects) (? (two? wins && two? rects)                            ; zip windows with rects -> (win x y w h)..
+                           ((<wins >< <rects) >< placeat >wins >rects) ())
+   (posof x l) (: (go i m) (? !(two? m) -1 (? (<m = x) i (go (i + 1) >m))) (go 0 l))
    (mx2 a b) (? (a < b) b a)  (mn2 a b) (? (a < b) a b)                          ; scalar max/min (max/min are array reducers)
-   (padfr fr ns) (: (go i f) (? (i < ns) (link (? (two? f) (cap f) 1.0)         ; a length-ns slave-frac list, padded with 1.0
-                                              (go (i + 1) (? (two? f) (cup f) ()))) ())
+   (padfr fr ns) (: (go i f) (? (i < ns) (link (? (two? f) <f 1.0)              ; a length-ns slave-frac list, padded with 1.0
+                                              (go (i + 1) (? (two? f) >f ()))) ())
                     (go 0 fr))
 
    ; --- ResizableTall (nmaster delta frac slaves): xmonad's Tall + slave heights ---
@@ -49,69 +49,69 @@
     (: row (zrow z) n (tally row) ratio (nthl lay 2) fracs (nthl lay 4) nm (rt-nm lay n)
        (? (n < 1) `(() lay)
           (n <= nm) `((placeat row (splitv-eq n rect)) lay)                     ; all fit the master column
-          (: hs (splith-by ratio rect) rl (cap hs) rr (caup hs)
+          (: hs (splith-by ratio rect) rl <hs rr <>hs
              ns (n - nm)
              ms (placeat (take nm row) (splitv-eq nm rl))
              ss (placeat (drop nm row) (splitv-w (padfr fracs ns) rr))
-             `((cat ms ss) lay))))
-   (rt-set lay k v) (: (go i p) (? (! (two? p)) () (link (? (i = k) v (cap p)) (go (i + 1) (cup p)))) (go 0 lay))
+             `((ms + ss) lay))))
+   (rt-set lay k v) (: (go i p) (? !(two? p) () ((? (i = k) v <p) >< go (i + 1) >p)) (go 0 lay))
    (rt-msg lay msg z)
     (: ratio (nthl lay 2) delta (nthl lay 3)
        (? (msg = 'shrink)     (rt-set lay 2 (mx2 0.05 (ratio - delta)))
           (msg = 'expand)     (rt-set lay 2 (mn2 0.95 (ratio + delta)))
-          (msg = 'inc-master) (rt-set lay 1 ((nthl lay 1) + 1))
-          (msg = 'dec-master) (rt-set lay 1 (mx2 1 ((nthl lay 1) - 1)))
+          (msg = 'inc-master) (rt-set lay 1 (nthl lay 1 + 1))
+          (msg = 'dec-master) (rt-set lay 1 (mx2 1 (nthl lay 1 - 1)))
           ((msg = 'mirror-shrink) || (msg = 'mirror-expand))                     ; nudge the FOCUSED slave's height
           (: row (zrow z) n (tally row) nm (rt-nm lay n)
              slaves (drop nm row) idx (posof (zfoc z) slaves)
              (? (idx < 0) lay                                                    ; a master is focused: no slave to resize
                 (: sf (padfr (nthl lay 4) (tally slaves)) d (? (msg = 'mirror-shrink) (0.0 - delta) delta)
-                   (rt-set lay 4 (rt-set sf idx (mx2 0.1 ((nthl sf idx) + d)))))))
+                   (rt-set lay 4 (rt-set sf idx (mx2 0.1 (nthl sf idx + d)))))))
           ()))
 
    ; --- Full: the focused window owns the whole rect; the rest go unplaced
    ;     (the driver unmaps windows absent from the placements) ---
-   full `('full)
-   (full-tile lay rect z) (: f (zfoc z) `((? f `((link f rect)) ()) lay))
+   full '(full)
+   (full-tile lay rect z) (: f (zfoc z) `((? f `((f >< rect)) ()) lay))
 
    ; --- Dwindle: the golden spiral. Each window takes a phi-fraction of the
    ;     remaining rect, the split axis alternating -- windows dwindle. Pure. ---
    (dwindle ratio) `('dwindle ratio)
    (dw-go rect wins ratio axis)
-    (? (! (two? wins)) ()
-       (! (two? (cup wins))) `((link (cap wins) rect))                           ; last window fills the remainder
+    (? !(two? wins) ()
+       !(two? >wins) `((<wins >< rect))                                          ; last window fills the remainder
        (: f (ratio / (1.0 + ratio))                                              ; the focused window's fraction (phi/(1+phi))
           hs (? (axis = 0)                                                        ; axis 0 = split left|right, 1 = top|bottom
-                (: fw (int (f * (rw rect))) `((rct (rx rect) (ry rect) fw (rh rect)) (rct ((rx rect) + fw) (ry rect) ((rw rect) - fw) (rh rect))))
-                (: fh (int (f * (rh rect))) `((rct (rx rect) (ry rect) (rw rect) fh) (rct (rx rect) ((ry rect) + fh) (rw rect) ((rh rect) - fh)))))
-          (link (link (cap wins) (cap hs)) (dw-go (caup hs) (cup wins) ratio (1 - axis)))))
+                (: fw (int (f * rw rect)) `((rct (rx rect) (ry rect) fw (rh rect)) (rct (rx rect + fw) (ry rect) (rw rect - fw) (rh rect))))
+                (: fh (int (f * rh rect)) `((rct (rx rect) (ry rect) (rw rect) fh) (rct (rx rect) (ry rect + fh) (rw rect) (rh rect - fh)))))
+          ((<wins >< <hs) >< dw-go <>hs >wins ratio (1 - axis))))
    (dw-tile lay rect z) `((dw-go rect (zrow z) (nthl lay 1) 0) lay)
-   (dw-msg lay msg z) (? (msg = 'expand) (rt-set lay 1 ((nthl lay 1) * 1.1))     ; expand/shrink nudge the spiral ratio
-                          (msg = 'shrink) (rt-set lay 1 (mx2 1.05 ((nthl lay 1) / 1.1))) ())
+   (dw-msg lay msg z) (? (msg = 'expand) (rt-set lay 1 (nthl lay 1 * 1.1))       ; expand/shrink nudge the spiral ratio
+                          (msg = 'shrink) (rt-set lay 1 (mx2 1.05 (nthl lay 1 / 1.1))) ())
 
    ; --- modifiers: layout -> layout. A modifier record holds an inner layout;
    ;     it transforms the inner's placements and/or intercepts its own messages,
    ;     delegating the rest (() from lay-msg = unhandled, so the stack composes) ---
    (with-border p b) `((nthl p 0) (nthl p 1) (nthl p 2) (nthl p 3) (nthl p 4) b)    ; a 6th field: the border width hint
-   (keep-border src dst) (? ((tally src) < 6) dst (cat dst `((nthl src 5))))        ; carry a border hint through a transform
+   (keep-border src dst) (? (tally src < 6) dst (dst + `((nthl src 5))))            ; carry a border hint through a transform
 
    ; smartBorders: a lone tiled window (or a fullscreen one) wears no border ---
    (smart-borders inner) `('smart inner)
-   (sb-tile lay rect z) (: inner (nthl lay 1) res (lay-tile inner rect z) pls (cap res)
-                           pls2 (? ((tally pls) = 1) (map (\ p (with-border p 0)) pls)
-                                   (map (\ p (? (((nthl p 3) = (rw rect)) && ((nthl p 4) = (rh rect))) (with-border p 0) p)) pls))
-                           `(pls2 `('smart (caup res))))
+   (sb-tile lay rect z) (: inner (nthl lay 1) res (lay-tile inner rect z) pls <res
+                           pls2 (? (tally pls = 1) (map (\ p (with-border p 0)) pls)
+                                   (map (\ p (? ((nthl p 3 = rw rect) && (nthl p 4 = rh rect)) (with-border p 0) p)) pls))
+                           `(pls2 `('smart <>res)))
    (sb-msg lay msg z) (: r (lay-msg (nthl lay 1) msg z) (? r `('smart r) ()))
 
    ; MIRROR (mkToggle (single MIRROR)): transpose every output rect. Starts OFF ---
    (mirror inner) `('mirror 0 inner)
-   (mir-place p rect) (: base `((nthl p 0) ((rx rect) + ((nthl p 2) - (ry rect))) ((ry rect) + ((nthl p 1) - (rx rect))) (nthl p 4) (nthl p 3))
+   (mir-place p rect) (: base `((nthl p 0) (rx rect + (nthl p 2 - ry rect)) (ry rect + (nthl p 1 - rx rect)) (nthl p 4) (nthl p 3))
                          (keep-border p base))                                    ; reflect across the rect's diagonal
    (mir-tile lay rect z)
     (: on (nthl lay 1) inner (nthl lay 2)
-       (? (! on) (: res (lay-tile inner rect z) `((cap res) `('mirror on (caup res))))
+       (? !on (: res (lay-tile inner rect z) `(<res `('mirror on <>res)))
           (: res (lay-tile inner (rct (rx rect) (ry rect) (rh rect) (rw rect)) z)   ; tile in the transposed rect
-             `((map (\ p (mir-place p rect)) (cap res)) `('mirror on (caup res))))))
+             `((map (\ p (mir-place p rect)) <res) `('mirror on <>res)))))
    (mir-msg lay msg z)
     (: on (nthl lay 1) inner (nthl lay 2)
        (? (msg = 'mirror) `('mirror (? on 0 1) inner)                             ; Toggle MIRROR
@@ -122,8 +122,8 @@
    (toggle-full inner) `('toggle-lay 0 inner)
    (tf-tile lay rect z)
     (: on (nthl lay 1) inner (nthl lay 2)
-       (? on (: f (zfoc z) `((? f `((link f rect)) ()) lay))                      ; Full: only the focus, whole rect
-          (: res (lay-tile inner rect z) `((cap res) `('toggle-lay on (caup res))))))
+       (? on (: f (zfoc z) `((? f `((f >< rect)) ()) lay))                        ; Full: only the focus, whole rect
+          (: res (lay-tile inner rect z) `(<res `('toggle-lay on <>res)))))
    (tf-msg lay msg z)
     (: on (nthl lay 1) inner (nthl lay 2)
        (? (msg = 'toggle-layout) `('toggle-lay (? on 0 1) inner)
@@ -137,30 +137,30 @@
     (: mins (nthl lay 1) inner (nthl lay 2)
        z2 (foldl (\ zz w (zdel w zz)) z mins)
        res (lay-tile inner rect z2)
-       `((cap res) `('minimize mins (caup res))))
+       `(<res `('minimize mins <>res)))
    (mn-msg lay msg z)
     (: mins (nthl lay 1) inner (nthl lay 2)
-       (? ((two? msg) && ((cap msg) = 'minimize-window)) `('minimize (link (caup msg) mins) inner)
-          ((two? msg) && ((cap msg) = 'restore-window))                           ; un-hide a NAMED window (a taskbar activate)
-          (? (any (\ w (w = (caup msg))) mins)
-             `('minimize (filter (\ w (! (w = (caup msg)))) mins) inner) ())
-          (msg = 'restore) `('minimize (? (two? mins) (cup mins) ()) inner)       ; un-hide the most recent
+       (? (two? msg && (<msg = 'minimize-window)) `('minimize (<>msg >< mins) inner)
+          (two? msg && (<msg = 'restore-window))                                  ; un-hide a NAMED window (a taskbar activate)
+          (? (any (\ w (w = <>msg)) mins)
+             `('minimize (filter (\ w !(w = <>msg)) mins) inner) ())
+          (msg = 'restore) `('minimize (? (two? mins) >mins ()) inner)            ; un-hide the most recent
           (: r (lay-msg inner msg z) (? r `('minimize mins r) ()))))
 
    ; windowNavigation: pure 2D geometry. nav-target names the window nearest the
    ;     focus in a direction ('left/'right/'up/'down); the DRIVER refocuses or
    ;     swaps to it (Go / Swap dir), since focus/swap are StackSet ops, not
    ;     layout state. nav-swap gives the (focus target) pair to exchange. ---
-   (pcx p) ((nthl p 1) + ((nthl p 3) // 2))  (pcy p) ((nthl p 2) + ((nthl p 4) // 2))
+   (pcx p) (nthl p 1 + (nthl p 3 // 2))  (pcy p) (nthl p 2 + (nthl p 4 // 2))
    (in-dir dir fx fy px py) (? (dir = 'left) (px < fx) (dir = 'right) (px > fx) (dir = 'up) (py < fy) (py > fy))
    (dist2 ax ay bx by) (((ax - bx) * (ax - bx)) + ((ay - by) * (ay - by)))
    (nav-target pls focus dir)
-    (: fp (afind (\ p ((nthl p 0) = focus)) pls)
-       (? (! (two? fp)) ()
+    (: fp (afind (\ p (nthl p 0 = focus)) pls)
+       (? !(two? fp) ()
           (: fx (pcx fp) fy (pcy fp)
-             cands (filter (\ p ((! ((nthl p 0) = focus)) && (in-dir dir fx fy (pcx p) (pcy p)))) pls)
-             (? (! (two? cands)) ()
-                (nthl (foldl (\ b p (? (! (two? b)) p (? ((dist2 fx fy (pcx p) (pcy p)) < (dist2 fx fy (pcx b) (pcy b))) p b))) () cands) 0)))))
+             cands (filter (\ p (!(nthl p 0 = focus) && in-dir dir fx fy (pcx p) (pcy p))) pls)
+             (? !(two? cands) ()
+                (nthl (foldl (\ b p (? !(two? b) p (? (dist2 fx fy (pcx p) (pcy p) < dist2 fx fy (pcx b) (pcy b)) p b))) () cands) 0)))))
 
    ; --- ||| : a list of layouts + an index; NextLayout bumps it ---
    (choice subs) `('choice 0 subs)
@@ -168,21 +168,21 @@
    (ch-put lay cur2) (: idx (nthl lay 1) subs (nthl lay 2)                       ; replace the active sublayout
                         `('choice idx (map2 (\ i s (? (i = idx) cur2 s)) (jot (tally subs)) subs)))
    (ch-tile lay rect z) (: res (lay-tile (ch-cur lay) rect z)
-                           `((cap res) (ch-put lay (caup res))))
+                           `(<res (ch-put lay <>res)))
    (ch-msg lay msg z)
-    (? (msg = 'next-layout) `('choice (((nthl lay 1) + 1) % (tally (nthl lay 2))) (nthl lay 2))
+    (? (msg = 'next-layout) `('choice ((nthl lay 1 + 1) % tally (nthl lay 2)) (nthl lay 2))
        (: r (lay-msg (ch-cur lay) msg z) (? r (ch-put lay r) ())))
 
    ; map over two lists in lockstep (prel has none) ---
-   (map2 f a b) (? ((two? a) && (two? b)) (link (f (cap a) (cap b)) (map2 f (cup a) (cup b))) ())
+   (map2 f a b) (? (two? a && two? b) (f <a <b >< map2 f >a >b) ())
 
    ; --- the dispatch: case on the record tag. The tag can also be a CLOSURE --
-   ;     the OPEN lane: (cap lay) a function answering ('tile lay rect z) ->
+   ;     the OPEN lane: <lay a function answering ('tile lay rect z) ->
    ;     (placements lay') and ('msg lay msg z) -> lay' | (), so a layout
    ;     defined at the lux repl (or anywhere) enters the dispatch as plain
    ;     DATA, no table edit -- the stumpwm move. Modifiers wrap it like any
    ;     builtin (their delegation only calls lay-tile/lay-msg). ---
-   (lay-tile lay rect z) (: k (cap lay) (? (k = 'rtall) (rt-tile lay rect z)
+   (lay-tile lay rect z) (: k <lay (? (k = 'rtall) (rt-tile lay rect z)
                                             (k = 'full)  (full-tile lay rect z)
                                             (k = 'dwindle) (dw-tile lay rect z)
                                             (k = 'smart) (sb-tile lay rect z)
@@ -191,7 +191,7 @@
                                             (k = 'minimize) (mn-tile lay rect z)
                                             (k = 'choice) (ch-tile lay rect z)
                                             (lit? k) (k 'tile lay rect z) `(() lay)))
-   (lay-msg lay msg z) (: k (cap lay) (? (k = 'rtall) (rt-msg lay msg z)
+   (lay-msg lay msg z) (: k <lay (? (k = 'rtall) (rt-msg lay msg z)
                                           (k = 'full)  ()
                                           (k = 'dwindle) (dw-msg lay msg z)
                                           (k = 'smart) (sb-msg lay msg z)

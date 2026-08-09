@@ -17,19 +17,19 @@
                     _ (puts (+ "FAIL " nm)) (putc 10)))
 
    ;; -- list / constellation helpers --
-   (nth l k)  (? (= k 0) (cap l) (nth (cup l) (- k 1)))
-   (lprod l)  (? (two? l) (* (cap l) (lprod (cup l))) 1)
-   (lall l)   (? (two? l) (? (cap l) (lall (cup l)) 0) 1)
+   (nth l k)  (? (= k 0) <l (nth >l (- k 1)))
+   (lprod l)  (? (two? l) (* <l (lprod >l)) 1)
+   (lall l)   (? (two? l) (? <l (lall >l) 0) 1)
    (ncells v) (? (tray? v) (lprod (shape v)) 1)
    ;; flat row-major index k -> a coordinate list (peep takes a coord list at any rank)
-   (decode sh k) (? (two? sh) (: t (cup sh) p (lprod t) (link (// k p) (decode t (% k p)))) ())
+   (decode sh k) (? (two? sh) (: t >sh p (lprod t) ((// k p) >< decode t (% k p))) ())
    (gcell v k)   (? (tray? v) (peep v (decode (shape v) k) 0) v)
    ;; functionally bump cell k of a constellation by d (arrays are immutable -> rebuild)
    (bump v k d)  (? (tray? v)
                     (: sh (shape v) (gem-tray sh (map (\ j (+ (gcell v j) (? (= j k) d 0)))
                                                       (jot (lprod sh)))))
                     (+ v d))
-   (setnth l p x) (? (= p 0) (link x (cup l)) (link (cap l) (setnth (cup l) (- p 1) x)))
+   (setnth l p x) (? (= p 0) (x >< >l) (<l >< setnth >l (- p 1) x))
    (close? a b)   (< (abs (- a b)) (* tol (+ 1 (abs b))))
    (close-c? a b) (lall (map (\ k (close? (gcell a k) (gcell b k))) (jot (ncells a))))  ; constellations
 
@@ -122,7 +122,7 @@
         l0 (lossof model)
         _ (trainN model opt 300)
         lf (lossof model)
-        (ok "training collapses the loss" (&& (< lf (* 0.001 l0)) (< lf 0.001))))
+        (ok "training collapses the loss" ((< lf (* 0.001 l0)) && (< lf 0.001))))
 
    ;; -- summary --
    np (peep pass 0 0) nf (peep fail 0 0)

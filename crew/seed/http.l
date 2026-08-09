@@ -21,7 +21,7 @@
     (: n (tally s)
        (go i a) (? (n <= i) (? (0 < n) a ())
                    (: c (s i)
-                      (? (&& (47 < c) (c < 58)) (go (i + 1) ((a * 10) + (c - 48))) ())))
+                      (? ((47 < c) && (c < 58)) (go (i + 1) ((a * 10) + (c - 48))) ())))
        (go 0 0))
 
    ; the index of `sub` in `s` at or after `from`, searching at most `cap`
@@ -30,38 +30,38 @@
    (findsub s sub from cap)
     (: n (tally s) m (tally sub) lim (? ((n - m) < cap) (n - m) cap)
        (go i) (? (lim < i) -1
-                 ((snip s i (i + m)) = sub) i
+                 (snip s i (i + m) = sub) i
                  (go (i + 1)))
        (go from))
 
-   (url? u) (&& (7 <= (tally u)) ((snip u 0 7) = "http://"))
+   (url? u) ((7 <= tally u) && (snip u 0 7 = "http://"))
    ; "http://host[:port]/path" -> (host port path) | ()
    (url-split u)
-    (? (! (url? u)) ()
+    (? !(url? u) ()
        (: r (snip u 7 (tally u)) m (tally r)
-          (sl i) (? (m <= i) m ((r i) = 47) i (sl (i + 1)))
+          (sl i) (? (m <= i) m (r i = 47) i (sl (i + 1)))
           k (sl 0)
           auth (snip r 0 k)
           path (? (k < m) (snip r k m) "/")
           a (tally auth)
-          (cn i) (? (a <= i) -1 ((auth i) = 58) i (cn (i + 1)))
+          (cn i) (? (a <= i) -1 (auth i = 58) i (cn (i + 1)))
           c (cn 0)
           host (? (c < 0) auth (snip auth 0 c))
           port (? (c < 0) 80 (digits (snip auth (c + 1) a)))
-          (? (&& (0 < (tally host)) port) `(host port path) ())))
+          (? ((0 < tally host) && port) `(host port path) ())))
 
    ; one GET -> (status body) | (). () is a DEAD SOCKET or an unreadable
    ; response; a 404 is a perfectly good answer and comes back as (404 ..), so
    ; the caller can tell "no such object" from "no such host".
    (http-get host port path)
     (: s (dial host port)
-       (? (! s) ()
+       (? !s ()
           (: _ (say s ("GET " + path + " HTTP/1.1\r\nHost: " + host
                        + "\r\nConnection: close\r\nUser-Agent: seed\r\n\r\n"))
              _ (flush s)
              r (slurp s)
              _ (close s)
-             (? (! (0 < (tally r))) ()
+             (? !(0 < tally r) ()
                 (: k (findsub r "\r\n\r\n" 0 8192)
                    (? (k < 0) ()
                       (: head (snip r 0 k)
@@ -77,12 +77,12 @@
    ; which is all a walk needs to know.
    (http-fetch base rel)
     (: u (url-split (base + rel))
-       (? (! (two? u)) ()
+       (? !(two? u) ()
           (: r (http-get <u (<>u) (<>>u))
-             (? (&& (two? r) (200 = <r)) `(1 (<>r)) ()))))
+             (? (two? r && (200 = <r)) `(1 (<>r)) ()))))
 
    ; the first form of a string, if it is a list; () for anything else.
    (readform s)
     (: r (sound s)
-       d (? (two? r) (cap r) ())
+       d (? (two? r) <r ())
        (? (two? d) d ())))

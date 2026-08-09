@@ -31,12 +31,12 @@
        (citems i first acc)
         (? (n <= i) ()
            (: c (p i)
-              (? (&& (c = 93) (! first)) `(acc (i + 1))
-                 (&& ((i + 2) < n) ((p (i + 1)) = 45) (! ((p (i + 2)) = 93)))
-                  (citems (i + 3) 0 (link `(c (p (i + 2))) acc))
-                 (citems (i + 1) 0 (link `(c c) acc)))))
+              (? ((c = 93) && !first) `(acc (i + 1))
+                 (&& ((i + 2) < n) (p (i + 1) = 45) !(p (i + 2) = 93))
+                  (citems (i + 3) 0 (`(c (p (i + 2))) >< acc))
+                 (citems (i + 1) 0 (`(c c) >< acc)))))
        ; can a repeat land? nothing repeats an anchor or an empty head
-       (repable acc) (&& (two? acc) (! (member? <<acc '(bol eol))))
+       (repable acc) (two? acc && !(member? <<acc '(bol eol)))
        ; the sequence walk: acc reversed; lvl counts open groups, gi groups
        ; seen (their \( order numbers them). answers (nodes j gi) with j past
        ; the closing \) (or at the end), or () malformed
@@ -44,17 +44,17 @@
         (? (n <= i) (? (0 < lvl) () `((rev acc) i gi))
            (: c (p i)
               (? (c = 42) (? (repable acc)
-                             (pseq (i + 1) (link `('rep <acc 0 ()) >acc) lvl gi)
-                             (pseq (i + 1) (link `('chr 42) acc) lvl gi))
-                 (c = 46) (pseq (i + 1) (link `('any) acc) lvl gi)
-                 (&& (c = 94) (i = 0)) (pseq 1 (link `('bol) acc) lvl gi)
-                 (&& (c = 36) ((i + 1) = n)) (pseq (i + 1) (link `('eol) acc) lvl gi)
+                             (pseq (i + 1) (`('rep <acc 0 ()) >< >acc) lvl gi)
+                             (pseq (i + 1) ('(chr 42) >< acc) lvl gi))
+                 (c = 46) (pseq (i + 1) ('(any) >< acc) lvl gi)
+                 ((c = 94) && (i = 0)) (pseq 1 ('(bol) >< acc) lvl gi)
+                 ((c = 36) && ((i + 1) = n)) (pseq (i + 1) ('(eol) >< acc) lvl gi)
                  (c = 91)
                   (: j (i + 1)
-                     neg (&& (j < n) ((p j) = 94))
+                     neg ((j < n) && (p j = 94))
                      r (citems (? neg (j + 1) j) 1 ())
                      (? (two? r)
-                        (pseq <>r (link `('cls (? neg 1 0) <r) acc) lvl gi)
+                        (pseq <>r (`('cls (? neg 1 0) <r) >< acc) lvl gi)
                         ()))
                  (c = 92)
                   (? (n <= (i + 1)) ()
@@ -63,45 +63,45 @@
                             (: g2 (gi + 1)
                                r (pseq (i + 2) () (lvl + 1) g2)
                                (? (two? r)
-                                  (pseq <>r (link `('grp g2 <r) acc) lvl <>>r)
+                                  (pseq <>r (`('grp g2 <r) >< acc) lvl <>>r)
                                   ()))
                            (d = 41) (? (0 < lvl) `((rev acc) (i + 2) gi) ())
                            (d = 43) (? (repable acc)
-                                       (pseq (i + 2) (link `('rep <acc 1 ()) >acc) lvl gi)
-                                       (pseq (i + 2) (link `('chr 43) acc) lvl gi))
+                                       (pseq (i + 2) (`('rep <acc 1 ()) >< >acc) lvl gi)
+                                       (pseq (i + 2) ('(chr 43) >< acc) lvl gi))
                            (d = 63) (? (repable acc)
-                                       (pseq (i + 2) (link `('rep <acc 0 1) >acc) lvl gi)
-                                       (pseq (i + 2) (link `('chr 63) acc) lvl gi))
-                           (&& (49 <= d) (d <= 57)) ()
+                                       (pseq (i + 2) (`('rep <acc 0 1) >< >acc) lvl gi)
+                                       (pseq (i + 2) ('(chr 63) >< acc) lvl gi))
+                           ((49 <= d) && (d <= 57)) ()
                            (|| (d = 123) (d = 125) (d = 124)) ()
-                           (pseq (i + 2) (link `('chr d) acc) lvl gi))))
-                 (pseq (i + 1) (link `('chr c) acc) lvl gi))))
+                           (pseq (i + 2) (`('chr d) >< acc) lvl gi))))
+                 (pseq (i + 1) (`('chr c) >< acc) lvl gi))))
        r (pseq 0 () 0 0)
        (? (two? r) `(1 <r <>>r) ()))
 
    ; -- the matcher: greedy backtracking in continuation style --
    ; does charm c sit in the class node?
    (rcls nd c)
-    (: hit (any (\ r (&& (<r <= c) (c <= <>r))) <>>nd)
-       (? <>nd (! hit) hit))
+    (: hit (any (\ r ((<r <= c) && (c <= <>r))) <>>nd)
+       (? <>nd !hit hit))
    ; match the node list ns against s from i; sp carries the group spans won so
    ; far; k rides (end-index spans) onward on the winning path
    (rem ns s i sp k)
-    (? (! (two? ns)) (k i sp)
+    (? !(two? ns) (k i sp)
        (: nd <ns rest >ns t <nd n (tally s)
-          (? (t = 'chr) (? (&& (i < n) ((s i) = <>nd)) (rem rest s (i + 1) sp k) ())
+          (? (t = 'chr) (? ((i < n) && (s i = <>nd)) (rem rest s (i + 1) sp k) ())
              (t = 'any) (? (i < n) (rem rest s (i + 1) sp k) ())
-             (t = 'cls) (? (&& (i < n) (rcls nd (s i))) (rem rest s (i + 1) sp k) ())
+             (t = 'cls) (? ((i < n) && rcls nd (s i)) (rem rest s (i + 1) sp k) ())
              (t = 'bol) (? (i = 0) (rem rest s i sp k) ())
              (t = 'eol) (? (i = n) (rem rest s i sp k) ())
              (t = 'grp) (: gi <>nd
                            (rem <>>nd s i sp
-                                (\ j sp2 (rem rest s j (link `(gi i j) sp2) k))))
+                                (\ j sp2 (rem rest s j (`(gi i j) >< sp2) k))))
              (: a <>nd b >>nd
                 (rrep a <b <>b rest s i sp k 0)))))
    ; the repeat: try one more (progress required), else the tail once fed
    (rrep a lo hi rest s i sp k cnt)
-    (: more (? (|| (! hi) (cnt < hi))
+    (: more (? (!hi || (cnt < hi))
                (rem `(a) s i sp
                     (\ j sp2 (? (j = i) () (rrep a lo hi rest s j sp2 k (cnt + 1)))))
                ())
@@ -130,7 +130,7 @@
 
    ; -- grep: the lines that match [-n number, -v invert, -c count, -l names] --
    (grep-main as)
-    (: (fl a n? v? c? l?) (? (! (two? a)) `(n? v? c? l? a)
+    (: (fl a n? v? c? l?) (? !(two? a) `(n? v? c? l? a)
                              (<a = "-n") (fl >a 1 v? c? l?)
                              (<a = "-v") (fl >a n? 1 c? l?)
                              (<a = "-c") (fl >a n? v? 1 l?)
@@ -145,12 +145,12 @@
        _ (? (two? r) () (udie 2 ("grep: invalid pattern: " + <rest)))
        ast <>r
        fs >rest
-       many (&& (two? fs) (two? >fs))
-       (sel ln) (: m (rehas ast ln) (? v? (! m) m))
+       many (two? fs && two? >fs)
+       (sel ln) (: m (rehas ast ln) (? v? !m m))
        ; one text through the chosen face; answers the hit flag onward
        (dof label t hit)
         (: ls (lines t)
-           (? l? (: (anyl xs) (? (! (two? xs)) () (sel <xs) 1 (anyl >xs))
+           (? l? (: (anyl xs) (? !(two? xs) () (sel <xs) 1 (anyl >xs))
                     (? (anyl ls) (: _ (say out label) _ (put out 10) 1) hit))
               c? (: (cnt xs k) (? (two? xs) (cnt >xs (? (sel <xs) (k + 1) k)) k)
                     k (cnt ls 0)
@@ -158,7 +158,7 @@
                     _ (say out (show k)) _ (put out 10)
                     (? (0 < k) 1 hit))
               (: (lp xs no h)
-                  (? (! (two? xs)) h
+                  (? !(two? xs) h
                      (: m (sel <xs)
                         _ (? m (: _ (? many (: _ (say out label) (put out 58)) ())
                                   _ (? n? (: _ (say out (show no)) (put out 58)) ())

@@ -72,14 +72,14 @@
 ; --- little utils ---
 (: (nthl l k)   (? (k = 0) <l (nthl >l (k - 1)))
    (strcat l)   (foldl (+) "" l)
-   (joins l sp) (? (! (two? l)) "" (! (two? >l)) <l (<l + sp + joins >l sp))
+   (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (rep s n)    (? (n < 1) "" (s + rep s (n - 1)))
-   (splitnl s)  ((: (g i st acc) (? (i < tally s) (? ((s i) = 10) (g (i + 1) (i + 1) (link (snip s st i) acc))
+   (splitnl s)  ((: (g i st acc) (? (i < tally s) (? (s i = 10) (g (i + 1) (i + 1) (snip s st i >< acc))
                                                       (g (i + 1) st acc))
-                                    (st < i) (rev (link (snip s st i) acc))
+                                    (st < i) (rev (snip s st i >< acc))
                                     (rev acc)))
                  0 0 ())
-   (endnl s)    (? (&& (0 < tally s) ((s (tally s - 1)) = 10)) s (s + "\n")))   ; one trailing newline, always
+   (endnl s)    (? ((0 < tally s) && (s (tally s - 1) = 10)) s (s + "\n")))     ; one trailing newline, always
 
 ; --- the combinators peg's set lacked ---
 (: nope       (\ s y n (n s))                                  ; the always-failing parser: alts' unit
@@ -92,13 +92,13 @@
 
 ; --- character classes ---
 (: (chr? c)  1
-   (nonl? c) (! (c = 10))
-   (sp? c)   (|| (c = 32) (c = 9))
-   (ws? c)   (|| (sp? c) (|| (c = 10) (c = 13)))
-   (dig? c)  (&& (47 < c) (c < 58))
+   (nonl? c) !(c = 10)
+   (sp? c)   ((c = 32) || (c = 9))
+   (ws? c)   (sp? c || (c = 10) || (c = 13))
+   (dig? c)  ((47 < c) && (c < 58))
    (hash? c) (c = 35)
    (spec? c) (member? c '(92 42 96 91 93))                     ; \ * ` [ ] -- where an inline span can start
-   (ord? c)  (! (spec? c)))
+   (ord? c)  !(spec? c))
 
 ; --- the meta record: document-level fields, one CANONICAL shape ---
 ; every reader runs `mnorm`, so a meta block always carries the same five keys in the same
@@ -108,7 +108,7 @@
 ; `=` to the literal of the same spelling, so a meta read from one surface would compare
 ; unequal to the same meta read from another -- law 1 failing on the key, not the value.
 (: metakeys '(title section date source manual)
-   (mget kvs k) (? (! (two? kvs)) "" (: p <kvs (? (id? <p k) <>p (mget >kvs k))))
+   (mget kvs k) (? !(two? kvs) "" (: p <kvs (? (id? <p k) <>p (mget >kvs k))))
    (mnorm kvs)  (map (\ k `(k (mget kvs k))) metakeys)
    (mfilled kvs) (filter (\ p (0 < tally <>p)) kvs))
 
@@ -118,45 +118,45 @@
 ; reads its input as latin-1 unless preconv ran, so a raw UTF-8 character in the source
 ; renders as MOJIBAKE, not as itself.
 (: rglyphs '(("em" "—") ("en" "–") ("bu" "•") ("la" "⟨") ("ra" "⟩") ("mi" "−"))
-   (glyph n)   ((: (g l) (? (! (two? l)) ("\\(" + n) ((<<l) = n) (<>(<l)) (g >l))) rglyphs)
-   (rqat s i)  ((: (g l) (? (! (two? l)) ()                    ; does a glyph start at i? -> (name len)
+   (glyph n)   ((: (g l) (? !(two? l) ("\\(" + n) ((<<l) = n) (<>(<l)) (g >l))) rglyphs)
+   (rqat s i)  ((: (g l) (? !(two? l) ()                       ; does a glyph start at i? -> (name len)
                             (: gl (<>(<l)) n (tally gl)
-                               (? (&& ((i + n) <= tally s) (gl = (snip s i (i + n)))) `((<(<l)) n) (g >l)))))
+                               (? (((i + n) <= tally s) && (gl = snip s i (i + n))) `((<(<l)) n) (g >l)))))
                 rglyphs))
 
 ; --- normalizing an inl: adjacent texts are ONE text (the AST is the fixed point, so this matters) ---
-(: (mrg l) (? (! (two? l)) ()
-              (: h <l (&& (id? <h 'text) (0 = tally <>h))) (mrg >l)   ; a \& contributes an EMPTY text: drop it
-              (! (two? >l)) (link <l ())
+(: (mrg l) (? !(two? l) ()
+              (: h <l (id? <h 'text && (0 = tally <>h))) (mrg >l)     ; a \& contributes an EMPTY text: drop it
+              !(two? >l) (<l >< ())
               (: a <l b <>l
-                 (? (&& (id? <a 'text) (id? <b 'text)) (mrg (link `('text (<>a + <>b)) >>l))
-                    (link a (mrg >l)))))
+                 (? (id? <a 'text && id? <b 'text) (mrg (`('text (<>a + <>b)) >< >>l))
+                    (a >< mrg >l))))
    ; ..and the same at BLOCK level: two adjacent lists of one kind are ONE list. markdown's
    ; own loose-list rule says so (`- a` blank `- b` is one list), html would spell them as two
    ; <ul>s, and roff cannot separate two `.TP` runs at all -- so the normal form is "no two
    ; adjacent bullets/numbers/deflists" and every reader lands on it. Without this the roff
    ; surface silently merges a pair that the markdown surface kept apart, and law 1 fails on
    ; a document that looks right in all three.
-   (bmrg l) (? (! (two? l)) ()
-               (! (two? >l)) (link <l ())
+   (bmrg l) (? !(two? l) ()
+               !(two? >l) (<l >< ())
                (: a <l b <>l
-                  (? (&& (id? <a <b) (member? <a '(bullets numbers deflist)))
-                     (bmrg (link `(<a (cat <>a <>b)) >>l))
-                     (link a (bmrg >l)))))
+                  (? (id? <a <b && member? <a '(bullets numbers deflist))
+                     (bmrg (`(<a (<>a + <>b)) >< >>l))
+                     (a >< bmrg >l))))
    (plain l) (strcat (map (\ x <>x) l))                        ; an inl of pure texts back to a string
-   (dpair l) (? (! (two? l)) () (! (two? >l)) () (link `(<l <>l) (dpair >>l)))   ; a flat t/b payload into pairs
-   (zipm ks vs) (? (! (two? ks)) () (! (two? vs)) () (link `(<ks <vs) (zipm >ks >vs))))
+   (dpair l) (? !(two? l) () !(two? >l) () (`(<l <>l) >< dpair >>l))             ; a flat t/b payload into pairs
+   (zipm ks vs) (? !(two? ks) () !(two? vs) () (`(<ks <vs) >< zipm >ks >vs)))
 
 ; ---------------------------------------------------------------- markdown, read
 ; inline. the text leaf stops at every sigil, so a construct is never swallowed; a sigil that
 ; starts nothing falls through to `mdchar` as one-char text and `mrg` glues it back on.
 (: (mdesc s y n)    ((tag (\ p `('text (string (nthl p 1)))) (seq (lit "\\") (one chr?))) s y n)
-   (mdcode s y n)   ((tag (\ p `('code (nthl p 1))) (seqs `((lit "`") (span (\ c (! (c = 96)))) (lit "`")))) s y n)
+   (mdcode s y n)   ((tag (\ p `('code (nthl p 1))) (seqs `((lit "`") (span (\ c !(c = 96))) (lit "`")))) s y n)
    (mdstrong s y n) ((tag (\ p `('strong <p)) (seqs `((skip (lit "**")) (pack (mdinls "**")) (skip (lit "**"))))) s y n)
    (mdem s y n)     ((tag (\ p `('em <p)) (seqs `((skip (lit "*")) (pack (mdinls "*")) (skip (lit "*"))))) s y n)
    (mdlink s y n)   ((tag (\ p `('link <p <>p))
                           (seqs `((skip (lit "[")) (pack (mdinls "]")) (skip (lit "]"))
-                                  (skip (lit "(")) (span (\ c (! (c = 41)))) (skip (lit ")"))))) s y n)
+                                  (skip (lit "(")) (span (\ c !(c = 41))) (skip (lit ")"))))) s y n)
    (mdtext s y n)   ((tag (\ p `('text (strcat p))) (seq (one ord?) (span ord?))) s y n)
    (mdchar s y n)   ((tag (\ p `('text (string <p))) (one chr?)) s y n)
    (mdspan s y n)   ((alts `(mdesc mdcode mdstrong mdem mdlink mdtext mdchar)) s y n)
@@ -171,7 +171,7 @@
    defmark   (lit ":   ")                                                        ; the definition-list body marker
    starter   (alts `(headmark nummark defmark (lit "```") (lit ">") (lit "- ") (lit "---")))   ; what a paragraph must not be
 
-   (b-rule s y n)  ((tag (\ _ `('rule)) (seqs `((lit "---") (skip (span sp?)) (lit "\n")))) s y n)
+   (b-rule s y n)  ((tag (\ _ '(rule)) (seqs `((lit "---") (skip (span sp?)) (lit "\n")))) s y n)
    (b-head s y n)  ((tag (\ p `('head (1 + tally (nthl p 1)) (mdinl (nthl p 3))))
                          (seqs `((lit "#") (span hash?) (lit " ") (span nonl?) eol))) s y n)
    (f-line s y n)  ((seqs `((notp (lit "```")) (span nonl?) (lit "\n"))) s y n)       ; ..a fenced line keeps its newline
@@ -202,14 +202,14 @@
    ; YAML-ish FRONT MATTER, the markdown face of the meta block: head-only (a `---` fence
    ; anywhere else is a rule), so it is read before the block loop and shown before it.
    (kvline s y n)  ((tag (\ p `((intern <p) (nthl p 1)))
-                         (seqs `((span (\ c (&& (nonl? c) (! (c = 58))))) (skip (lit ": ")) (span nonl?) eol))) s y n)
+                         (seqs `((span (\ c (nonl? c && !(c = 58)))) (skip (lit ": ")) (span nonl?) eol))) s y n)
    (b-meta s y n)  ((tag (\ p `('meta (mnorm p)))
                          (seqs `((skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))
                                  (many kvline) (skip (lit "---")) (skip (span sp?)) (skip (lit "\n"))))) s y n)
    (mdread t) (bmrg (runp (seqs `((opt b-meta) (many mdblock) (skip (many blankline)))) (endnl t))))
 
 ; ---------------------------------------------------------------- markdown, show
-(: (mq s) ((: (g i acc) (? (i < tally s) (: c (s i) (g (i + 1) (acc + (? (spec? c) "\\" "") + (string c)))) acc)) 0 "")
+(: (mq s) ((: (g i acc) (? (i < tally s) (: c (s i) (g (i + 1) (acc + (? (spec? c) "\\" "") + string c))) acc)) 0 "")
    (mdi l)  (strcat (map mdi1 l))
    (mdi1 x) (: t <x
                (? (id? t 'text)   (mq <>x)
@@ -222,8 +222,8 @@
    ; the escape leaf takes it back off, so law 1 survives a paragraph that starts "- " or "# ".
    (shield s) (? (two? (runp starter (endnl s))) ("\\" + s) s)
    (qpre s)   (strcat (map (\ ln (? (0 < tally ln) ("> " + ln + "\n") ">\n")) (splitnl s)))
-   (nlist l i) (? (! (two? l)) "" ((show i) + ". " + mdi <l + "\n" + nlist >l (i + 1)))
-   (mfront kvs) ("---\n" + (strcat (map (\ p ((string <p) + ": " + <>p + "\n")) (mfilled kvs))) + "---\n")
+   (nlist l i) (? !(two? l) "" ((show i) + ". " + mdi <l + "\n" + nlist >l (i + 1)))
+   (mfront kvs) ("---\n" + strcat (map (\ p (string <p + ": " + <>p + "\n")) (mfilled kvs)) + "---\n")
    (mdefs l)    (strcat (map (\ it (mdi <it + "\n:   " + mdi <>it + "\n")) l))
    (mdb x) (: t <x
               (? (id? t 'head)    (rep "#" <>x + " " + mdi (nthl x 2) + "\n")
@@ -250,9 +250,9 @@
                   (id? t 'em)     ("<em>" + hti <>x + "</em>")
                   (id? t 'link)   ("<a href=\"" + hq (nthl x 2) + "\">" + hti <>x + "</a>")
                   ""))
-   (hitems l t) ((joins (map (\ i ("<li>" + hti i + "</li>")) l) "\n") + "\n</" + t + ">")
+   (hitems l t) (joins (map (\ i ("<li>" + hti i + "</li>")) l) "\n" + "\n</" + t + ">")
    (hmeta kvs)  (joins (map (\ p ("<meta name=\"" + (string <p) + "\" content=\"" + hq <>p + "\">")) (mfilled kvs)) "\n")
-   (hdefs l)    ("<dl>\n" + (joins (map (\ it ("<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>")) l) "\n") + "\n</dl>")
+   (hdefs l)    ("<dl>\n" + joins (map (\ it ("<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>")) l) "\n" + "\n</dl>")
    (htb x) (: t <x  h (? (id? t 'head) ("h" + show <>x) "")
               (? (id? t 'head)    ("<" + h + ">" + hti (nthl x 2) + "</" + h + ">")
                  (id? t 'para)    ("<p>" + hti <>x + "</p>")
@@ -273,22 +273,22 @@
    hws         (skip (span ws?))
    (wrapt t a) (seqs `((skip (otag t)) a hws (skip (ctag t))))
    (entof nm)  (? (nm = "amp") "&" (nm = "lt") "<" (nm = "gt") ">" (nm = "quot") "\"" ("&" + nm + ";"))
-   (hraw? c)   (&& (! (c = 60)) (! (c = 38)))                  ; ordinary text runs to the next < or &
+   (hraw? c)   (!(c = 60) && !(c = 38))                        ; ordinary text runs to the next < or &
 
-   (hent s y n)    ((tag (\ p `('text (entof <p))) (seqs `((skip (lit "&")) (span (\ c (! (c = 59)))) (skip (lit ";"))))) s y n)
+   (hent s y n)    ((tag (\ p `('text (entof <p))) (seqs `((skip (lit "&")) (span (\ c !(c = 59))) (skip (lit ";"))))) s y n)
    (htext s y n)   ((tag (\ p `('text (strcat p))) (seq (one hraw?) (span hraw?))) s y n)
    (hcode s y n)   ((tag (\ p `('code (plain <p))) (wrapt "code" (pack (many (alts `(hent htext)))))) s y n)
    (hstrong s y n) ((tag (\ p `('strong <p)) (wrapt "strong" (pack htinl))) s y n)
    (hem s y n)     ((tag (\ p `('em <p)) (wrapt "em" (pack htinl))) s y n)
    ; ..the href is entity-decoded by running the same two text leaves over it
    (hlink s y n)   ((tag (\ p `('link <>p (plain (runp (many (alts `(hent htext))) <p))))
-                         (seqs `((skip (lit "<a href=\"")) (span (\ c (! (c = 34)))) (skip (lit "\">"))
+                         (seqs `((skip (lit "<a href=\"")) (span (\ c !(c = 34))) (skip (lit "\">"))
                                  (pack htinl) (skip (lit "</a>"))))) s y n)
    (htinl s y n)   ((pmap mrg (many (alts `(hent hcode hstrong hem hlink htext)))) s y n)
 
    (hlev n)  (tag (\ p `('head n <p)) (wrapt ("h" + show n) (pack htinl)))
-   hlang     (seqs `((skip (lit " class=\"language-")) (span (\ c (! (c = 34)))) (skip (lit "\""))))
-   (h-rule s y n)  ((tag (\ _ `('rule)) (lit "<hr>")) s y n)
+   hlang     (seqs `((skip (lit " class=\"language-")) (span (\ c !(c = 34))) (skip (lit "\""))))
+   (h-rule s y n)  ((tag (\ _ '(rule)) (lit "<hr>")) s y n)
    (h-head s y n)  ((alts (map hlev '(1 2 3 4 5 6))) s y n)
    (h-para s y n)  ((tag (\ p `('para <p)) (wrapt "p" (pack htinl))) s y n)
    (h-fence s y n) ((tag (\ p `('fence <p (plain <>p)))
@@ -299,8 +299,8 @@
    (h-ul s y n)    ((tag (\ p `('bullets p)) (wrapt "ul" (many h-li))) s y n)
    (h-ol s y n)    ((tag (\ p `('numbers p)) (wrapt "ol" (many h-li))) s y n)
    (h-meta1 s y n) ((tag (\ p `((intern <p) (plain (runp (many (alts `(hent htext))) <>p))))
-                          (seqs `(hws (skip (lit "<meta name=\"")) (span (\ c (! (c = 34))))
-                                  (skip (lit "\" content=\"")) (span (\ c (! (c = 34)))) (skip (lit "\">"))))) s y n)
+                          (seqs `(hws (skip (lit "<meta name=\"")) (span (\ c !(c = 34)))
+                                  (skip (lit "\" content=\"")) (span (\ c !(c = 34))) (skip (lit "\">"))))) s y n)
    (h-meta s y n)  ((tag (\ p `('meta (mnorm p))) (many1 h-meta1)) s y n)
    (h-dt s y n)    ((seqs `(hws (wrapt "dt" (pack htinl)) hws (wrapt "dd" (pack htinl)))) s y n)
    (h-dl s y n)    ((tag (\ p `('deflist (dpair p))) (wrapt "dl" (many h-dt))) s y n)
@@ -316,19 +316,19 @@
 ; left to be discovered: head >=3 lands at 2, a fence language is dropped, a rule vanishes,
 ; and a link flattens to its text with the url in \(la..\(ra (the man idiom for one).
 (: (rq s) ((: (g i acc)
-              (? (! (i < tally s)) acc
+              (? !(i < tally s) acc
                  (: hit (rqat s i)
-                    (? (two? hit) (g (i + (nthl hit 1)) (acc + "\\(" + <hit))
+                    (? (two? hit) (g (i + nthl hit 1) (acc + "\\(" + <hit))
                        (: c (s i) (g (i + 1) (acc + (? (c = 92) "\\e" (c = 45) "\\-" (string c)))))))))
            0 "")
-   (rline s) (? (&& (0 < tally s) (|| ((s 0) = 46) ((s 0) = 39))) ("\\&" + s) s)   ; a leading . or ' is text
+   (rline s) (? ((0 < tally s) && ((s 0 = 46) || (s 0 = 39))) ("\\&" + s) s)       ; a leading . or ' is text
    ; roff DOUBLE-SPACES after a period that ends an input line, so a paragraph emitted as one
    ; long line loses its sentence spacing. break it one sentence per line -- the idiomatic man
    ; source shape, and lossless: the reader fills the lines back with a single space.
    (rsent s) ((: (g i st acc)
-                 (? (! (i < tally s)) (revcat (link (rline (snip s st i)) acc) ())
-                    (&& ((s i) = 46) (&& ((i + 1) < tally s) ((s (i + 1)) = 32)))
-                      (g (i + 2) (i + 2) (link (rline (snip s st (i + 1))) acc))
+                 (? !(i < tally s) (revcat (rline (snip s st i) >< acc) ())
+                    ((s i = 46) && ((i + 1) < tally s) && (s (i + 1) = 32))
+                      (g (i + 2) (i + 2) (rline (snip s st (i + 1)) >< acc))
                     (g (i + 1) st acc))) 0 0 ())
    (rfill s) (strcat (map (\ ln (ln + "\n")) (rsent s)))
    (rfi l)  (strcat (map rfi1 l))
@@ -339,16 +339,16 @@
                   (id? t 'em)     ("\\fI" + rfi <>x + "\\fR")
                   (id? t 'link)   (rfi <>x + " \\(la" + rq (nthl x 2) + "\\(ra")
                   ""))
-   (rth kvs)   (".TH" + (strcat (map (\ k (" \"" + (mget kvs k) + "\"")) metakeys)) + "\n")
-   (rnums l i) (? (! (two? l)) "" (".IP \"" + (show i) + ".\" 4\n" + (rline (rfi <l)) + "\n" + rnums >l (i + 1)))
-   (rdefs l)   (strcat (map (\ it (".TP\n" + (rline (rfi <it)) + "\n" + (rfill (rfi <>it)))) l))
+   (rth kvs)   (".TH" + strcat (map (\ k (" \"" + mget kvs k + "\"")) metakeys) + "\n")
+   (rnums l i) (? !(two? l) "" (".IP \"" + (show i) + ".\" 4\n" + (rline (rfi <l)) + "\n" + rnums >l (i + 1)))
+   (rdefs l)   (strcat (map (\ it (".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it))) l))
    (rfb x) (: t <x
               (? (id? t 'meta)    (rth <>x)
                  (id? t 'head)    ((<>x < 2 ? ".SH " ".SS ") + rfi (nthl x 2) + "\n")
-                 (id? t 'para)    (".PP\n" + (rfill (rfi <>x)))
-                 (id? t 'fence)   (".EX\n" + (strcat (map (\ ln ((rline (rq ln)) + "\n")) (splitnl (nthl x 2)))) + ".EE\n")
+                 (id? t 'para)    (".PP\n" + rfill (rfi <>x))
+                 (id? t 'fence)   (".EX\n" + strcat (map (\ ln (rline (rq ln) + "\n")) (splitnl (nthl x 2))) + ".EE\n")
                  (id? t 'quote)   (".PP\n.RS\n" + rfshow <>x + ".RE\n")   ; the .PP spaces the display
-                 (id? t 'bullets) (strcat (map (\ i (".IP \\(bu 2\n" + (rline (rfi i)) + "\n")) <>x))
+                 (id? t 'bullets) (strcat (map (\ i (".IP \\(bu 2\n" + rline (rfi i) + "\n")) <>x))
                  (id? t 'numbers) (rnums <>x 1)
                  (id? t 'deflist) (rdefs <>x)
                  ""))                                        ; a rule has no roff form: it vanishes
@@ -362,14 +362,14 @@
 ; why this reader is line-oriented where the html one is tag-oriented: the surface is. it
 ; reads the MACRO forms a hand-written page uses (.B/.I/.BR/.RB/.IR/.RI), not just the inline
 ; escapes rfshow emits -- doc/*.md were converted from hand-written pages by this reader.
-(: rfesc? (\ c (! (c = 92)))                                    ; ordinary inline text runs to the next \
+(: rfesc? (\ c !(c = 92))                                       ; ordinary inline text runs to the next \
    rclose    (alts `((lit "\\fR") (lit "\\fP")))                ; \fP is "previous font" -- same thing here
-   (rgl s y n)     ((tag (\ p `('text (glyph ((string <p) + (string <>p)))))
+   (rgl s y n)     ((tag (\ p `('text (glyph (string <p + string <>p))))
                          (seqs `((skip (lit "\\(")) (one chr?) (one chr?)))) s y n)
-   (resc s y n)    ((alts `((tag (\ _ `('text "\\")) (lit "\\e"))
-                            (tag (\ _ `('text "-")) (lit "\\-"))
-                            (tag (\ _ `('text "")) (lit "\\&"))     ; zero-width: mrg drops it
-                            (tag (\ _ `('text " ")) (lit "\\ "))
+   (resc s y n)    ((alts `((tag (\ _ '(text "\\")) (lit "\\e"))
+                            (tag (\ _ '(text "-")) (lit "\\-"))
+                            (tag (\ _ '(text "")) (lit "\\&"))      ; zero-width: mrg drops it
+                            (tag (\ _ '(text " ")) (lit "\\ "))
                             rgl)) s y n)
    (rtext s y n)   ((tag (\ p `('text (strcat p))) (seq (one rfesc?) (span rfesc?))) s y n)
    ; ..a \ that starts none of the above is an escape we do not model: it reads as literal
@@ -390,26 +390,26 @@
 ; the font MACROS: which fonts to cycle through, and whether the arguments take a space.
 (: (rargs s)                                                  ; a macro's arguments, bare or "quoted"
    ((: (g i acc)
-       (? (! (i < tally s)) (rev acc)
-          ((s i) = 32) (g (i + 1) acc)
-          ((s i) = 34) (: j ((: (h k) (? (&& (k < tally s) (! ((s k) = 34))) (h (k + 1)) k)) (i + 1))
-                          (g (j + 1) (link (snip s (i + 1) j) acc)))
-          (: j ((: (h k) (? (&& (k < tally s) (! ((s k) = 32))) (h (k + 1)) k)) i)
-             (g j (link (snip s i j) acc))))) 0 ())
+       (? !(i < tally s) (rev acc)
+          (s i = 32) (g (i + 1) acc)
+          (s i = 34) (: j ((: (h k) (? ((k < tally s) && !(s k = 34)) (h (k + 1)) k)) (i + 1))
+                        (g (j + 1) (snip s (i + 1) j >< acc)))
+          (: j ((: (h k) (? ((k < tally s) && !(s k = 32)) (h (k + 1)) k)) i)
+             (g j (snip s i j >< acc))))) 0 ())
    fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
               (".RI" (text em) 0) (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
-   (macinfo m) ((: (g l) (? (! (two? l)) () ((<<l) = m) (>(<l)) (g >l))) fontmacs)
+   (macinfo m) ((: (g l) (? !(two? l) () ((<<l) = m) (>(<l)) (g >l))) fontmacs)
    (wrapf f l)   (? (id? f 'strong) `(`('strong l)) (id? f 'em) `(`('em l)) l)
-   (allplain? l) (? (! (two? l)) 1 (id? <<l 'text) (allplain? >l) 0)
+   (allplain? l) (? !(two? l) 1 (id? <<l 'text) (allplain? >l) 0)
    (argl a f)    (: l (rfinl a) (? (allplain? l) (wrapf f l) l))     ; an explicit \f inside the arg wins
-   (argls as fs i sp) (? (! (two? as)) ()
+   (argls as fs i sp) (? !(two? as) ()
                          (: h (argl <as (nthl fs (i % tally fs)))
-                            (? (! (two? >as)) h
-                               (cat h (cat (? sp `(`('text " ")) ()) (argls >as fs (i + 1) sp))))))
+                            (? !(two? >as) h
+                               (h + (? sp '((text " ")) ()) + (argls >as fs (i + 1) sp)))))
    (imacl line) (: a (rargs line) m (? (two? a) <a "") info (macinfo m)
                    (? (two? info) (mrg (argls (rargs (snip line (tally m) (tally line))) <info (nthl info 1) 0))
                       (rfinl line)))
-   (linl line)  (? (&& (0 < tally line) ((line 0) = 46)) (imacl line) (rfinl line)))
+   (linl line)  (? ((0 < tally line) && (line 0 = 46)) (imacl line) (rfinl line)))
 
 ; the block layer: a run of fill lines is a paragraph, a block macro ends it.
 (: blockmac (alts `((lit ".TH") (lit ".SH") (lit ".SS") (lit ".PP") (lit ".LP") (lit ".TP")
@@ -418,7 +418,7 @@
    (rmacl m) (seqs `((skip (lit m)) (skip (span sp?)) (span nonl?) (skip (lit "\n"))))
    (r-fline s y n)  ((tag (\ p (linl (strcat p)))
                           (seqs `((notp blockmac) (one nonl?) (span nonl?) (skip (lit "\n"))))) s y n)
-   (joinfr l) (? (! (two? l)) () (! (two? >l)) <l (cat <l (cat `(`('text " ")) (joinfr >l))))
+   (joinfr l) (? !(two? l) () !(two? >l) <l (<l + '((text " ")) + (joinfr >l)))
    (r-filled s y n) ((tag (\ p (mrg (joinfr p))) (many1 r-fline)) s y n)
 
    (r-th s y n)   ((tag (\ p `('meta (mnorm (zipm metakeys (rargs <p))))) (rmacl ".TH")) s y n)
@@ -436,7 +436,7 @@
    (r-ul s y n)   ((tag (\ p `('bullets p)) (many1 r-bu)) s y n)
    (r-no s y n)   ((seqs `((skip (lit ".IP")) (skip (span nonl?)) (skip (lit "\n")) r-filled)) s y n)
    (r-ol s y n)   ((tag (\ p `('numbers p)) (many1 r-no)) s y n)
-   (r-ex s y n)   ((tag (\ p `('fence "" (strcat (map (\ ln ((rplain ln) + "\n")) p))))
+   (r-ex s y n)   ((tag (\ p `('fence "" (strcat (map (\ ln (rplain ln + "\n")) p))))
                          (seqs `((skip (alts `((lit ".EX") (lit ".nf")))) (skip (span nonl?)) (skip (lit "\n"))
                                  (many (seq (notp (alts `((lit ".EE") (lit ".fi")))) rfline))
                                  (skip (alts `((lit ".EE") (lit ".fi")))) (skip (span nonl?)) (skip (lit "\n"))))) s y n)
@@ -454,7 +454,7 @@
 ; one and a shower from the other, so the table is the whole of it. a fourth surface adds
 ; a row and nothing else.
 (: surfaces `(`('md mdread mdshow) `('ht htread htshow) `('rf rfread rfshow))
-   (srow k)   ((: (g l) (? (! (two? l)) () (id? <<l k) <l (g >l))) surfaces)
+   (srow k)   ((: (g l) (? !(two? l) () (id? <<l k) <l (g >l))) surfaces)
    (reader-of k) (<>(srow k))
    (shower-of k) (nthl (srow k) 2)
    (convert from to s) ((shower-of to) ((reader-of from) s))

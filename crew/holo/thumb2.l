@@ -38,7 +38,7 @@
 
    ;; -- emit: a narrow halfword, or a 32-bit word as hi-halfword-first little-endian pair. --
    (t16 w) (le16 w)
-   (t32 w) ((le16 (w >> 16)) + (le16 (w & 65535)))
+   (t32 w) (le16 (w >> 16) + le16 (w & 65535))
 
    ;; (li d imm): MOVW the low 16, then MOVT the high 16 if nonzero. imm normalizes into [0,2^32).
    ;; the shared scatter (i/imm4/imm3/imm8) takes the hw register NUMBER -- `patch` reuses it below.
@@ -50,7 +50,7 @@
    (thumb-movt d imm16) (thumb-mw16 0xF2C0 (rn d) imm16)      ; MOVT Rd, #imm16 -- sets the top halfword
    (thumb-li d imm)
       (: u (? (imm < 0) (imm + 4294967296) imm) lo (u & 65535) hi ((u >> 16) & 65535)
-         ((thumb-movw d lo) + (? (hi = 0) () (thumb-movt d hi))))
+         (thumb-movw d lo + (? (hi = 0) () (thumb-movt d hi))))
 
    ;; (la d lbl): materialize lbl's absolute address -- MOVW the low half, MOVT the high, each its
    ;; own 4-byte fixup (movw16/movt16, aux = Rd's hw number; patch scatters the resolved half in).
@@ -65,10 +65,10 @@
    ;; (mov Rd, Rm). MOV.W is ORR with Rn=15, and that form can name neither sp nor pc in
    ;; either slot -- UNPREDICTABLE, which a core is free to execute as the move you meant.
    ;; the 16-bit hi-register T1 (thumb-movr) reaches all sixteen, so those two route there.
-   (thumb-sppc? n) (|| (n = 13) (n = 15))
+   (thumb-sppc? n) ((n = 13) || (n = 15))
    (thumb-mov d s)
       (: dn (rn d) sn (rn s)
-         (? (|| (thumb-sppc? dn) (thumb-sppc? sn)) (thumb-movr d s)
+         (? (thumb-sppc? dn || thumb-sppc? sn) (thumb-movr d s)
             (t32 (0xEA4F0000 | ((dn << 8) | sn)))))                ; MOV.W Rd, Rm (ORR Rd,Rn=15,Rm)
 
    ;; -- ALU register form (wide, three-address): op -> the hw1 base (S=0). d = a OP b.
@@ -144,21 +144,21 @@
                  (thumb-cmp 'r6 0)
                  (t16 0xD1E6)                                  ; bne loop (-52)
                  (? (id? which 'div)
-                    ((thumb-movr 'r0 'r2) + (thumb-movr 'r1 'r3))
-                    ((thumb-movr 'r0 'r4) + (thumb-movr 'r1 'r5)))
+                    (thumb-movr 'r0 'r2 + thumb-movr 'r1 'r3)
+                    (thumb-movr 'r0 'r4 + thumb-movr 'r1 'r5))
                  (thumb-pop 'r7) (thumb-pop 'r6) (thumb-pop 'r5) (thumb-pop 'r4)))
 
    ;; loads/stores. LDR/STR Rt,[Rn,#imm12] (T3, positive 0..4095) else the T4 8-bit signed offset
    ;; (a frame slot's small negative), else the FAR lane: r12 (IP, the unnamed temp) carries
    ;; base+off and the access rides [r12, #0]. disp is a raw byte offset.
    (thumb-mem-far bn off)                                    ; r12 = off ; r12 += Rbn
-      ((thumb-li 'r12 off) + (t32 ((0xEB0C << 16) | (0x0C00 | bn))))
+      (thumb-li 'r12 off + t32 ((0xEB0C << 16) | (0x0C00 | bn)))
    (thumb-mem-r lbase ubase dt bn off)                       ; dt/bn already encodings
-      (? (&& (off >= 0) (off <= 4095))
+      (? ((off >= 0) && (off <= 4095))
          (t32 (((ubase | bn) << 16) | ((dt << 12) | off)))
-         (&& (off >= -255) (off < 0))
+         ((off >= -255) && (off < 0))
          (t32 (((lbase | bn) << 16) | ((dt << 12) | (0xC00 | (0 - off)))))   ; T4: P=1 U=0 W=0 = 0b1100, imm8=|off|
-         ((thumb-mem-far bn off) + (t32 (((ubase | 12) << 16) | (dt << 12)))))   ; far: [r12, #0]
+         (thumb-mem-far bn off + t32 (((ubase | 12) << 16) | (dt << 12))))       ; far: [r12, #0]
    (thumb-mem lbase ubase d base off) (thumb-mem-r lbase ubase (rn d) (rn base) off)
    ;; the word ops (`ld`/`st`) are 32-bit here (a 32-bit target's word); the sized family follows.
    (thumb-ld d base off)  (thumb-mem 0xF850 0xF8D0 d base off)   ; LDR.W  (T4 neg / T3 pos)
@@ -231,8 +231,8 @@
    (thumb-div d a b)  (: dn (rn d) an (rn a) bn (rn b) (t32 (((0xFB90 | an) << 16) | (0xF0F0 | ((dn << 8) | bn)))))   ; SDIV
    (thumb-udiv d a b) (: dn (rn d) an (rn a) bn (rn b) (t32 (((0xFBB0 | an) << 16) | (0xF0F0 | ((dn << 8) | bn)))))   ; UDIV
    (thumb-mls d n m a) (: dn (rn d) nn (rn n) mn (rn m) an (rn a) (t32 (((0xFB00 | nn) << 16) | ((an << 12) | ((dn << 8) | (0x10 | mn))))))
-   (thumb-rem d a b t)  ((thumb-div t a b) + (thumb-mls d t b a))      ; t=a/b ; d = a - t*b
-   (thumb-urem d a b t) ((thumb-udiv t a b) + (thumb-mls d t b a))
+   (thumb-rem d a b t)  (thumb-div t a b + thumb-mls d t b a)          ; t=a/b ; d = a - t*b
+   (thumb-urem d a b t) (thumb-udiv t a b + thumb-mls d t b a)
 
    ;; test a, b -> TST.W (ANDS Rn, Rm, Rd discarded to pc/15). register only for M1.
    (thumb-test a b)
@@ -262,18 +262,18 @@
    (thumb-movsd d m) (: dn (frn d) mn (frn m) (t32 ((0xEEB0 << 16) | ((dn << 12) | (0xB40 | mn)))))
    (thumb-ucomisd a b)                                        ; VCMP.F64 Da, Db ; VMRS APSR_nzcv
       (: an (frn a) bn (frn b)                                ;   (flags land like a64 fcmp: unordered -> V)
-         ((t32 ((0xEEB4 << 16) | ((an << 12) | (0xB40 | bn)))) + (t32 0xEEF1FA10)))
+         (t32 ((0xEEB4 << 16) | ((an << 12) | (0xB40 | bn))) + t32 0xEEF1FA10))
    ;; int <-> double through the target's own S view (VMOV S[2f],Rg is one word since 2f>>1 = f).
    (thumb-cvtxsd base f g)                                    ; VMOV S[2f], Rg ; VCVT.F64.{S,U}32 Df, S[2f]
       (: fn (frn f) gn (rn g)
-         ((t32 (((0xEE00 | fn) << 16) | ((gn << 12) | 0xA10)))
-          + (t32 ((0xEEB8 << 16) | ((fn << 12) | (base | fn))))))
+         (t32 (((0xEE00 | fn) << 16) | ((gn << 12) | 0xA10))
+          + t32 ((0xEEB8 << 16) | ((fn << 12) | (base | fn)))))
    (thumb-cvtsi2sd f g) (thumb-cvtxsd 0xBC0 f g)              ; signed
    (thumb-cvtui2sd f g) (thumb-cvtxsd 0xB40 f g)              ; unsigned (t32 has no 64-bit widen dodge)
    (thumb-cvtsdxi hi g f)                                     ; VCVT.{S,U}32.F64 S30, Df ; VMOV Rg, S30
       (: gn (rn g) fn (frn f)
-         ((t32 ((hi << 16) | (0xFBC0 | fn)))
-          + (t32 ((0xEE1F << 16) | ((gn << 12) | 0xA10)))))
+         (t32 ((hi << 16) | (0xFBC0 | fn))
+          + t32 ((0xEE1F << 16) | ((gn << 12) | 0xA10))))
    (thumb-cvttsd2si g f) (thumb-cvtsdxi 0xEEBD g f)           ; toward zero, signed
    (thumb-cvttsd2ui g f) (thumb-cvtsdxi 0xEEBC g f)           ; toward zero, unsigned
    (thumb-movqxr f glo)                                       ; VMOV Df, Rlo, Rlo+1 (the pair in)
@@ -288,7 +288,7 @@
          u (? (off < 0) (0 - off) off)
          (? (u <= 1020)
             (t32 ((((? (off < 0) nbase pbase) | bn) << 16) | ((tn << 12) | (lo | (u >> 2)))))
-            ((thumb-mem-far bn off) + (t32 (((pbase | 12) << 16) | ((tn << 12) | lo))))))
+            (thumb-mem-far bn off + t32 (((pbase | 12) << 16) | ((tn << 12) | lo)))))
    (thumb-stsd base off s) (thumb-fmem 0xED80 0xED00 0xB00 (frn s) (rn base) off)   ; VSTR Ds
    (thumb-ldsd d base off) (thumb-fmem 0xED90 0xED10 0xB00 (frn d) (rn base) off)   ; VLDR Dd
    (thumb-stss base off s) (thumb-fmem 0xED80 0xED00 0xA00 (frn s) (rn base) off)   ; VSTR S[2s]
@@ -317,7 +317,7 @@
    ;; BKPT #imm8 -- the debugger halt. `trap` is this same instruction at 0; the immediate
    ;; needs a door of its own because 0xAB is the SEMIHOSTING call, which is how a board with
    ;; no uart says exit(n) to qemu.
-   (thumb-brk imm) (? (&& (imm >= 0) (imm <= 255)) (t16 (0xBE00 | imm))
+   (thumb-brk imm) (? ((imm >= 0) && (imm <= 255)) (t16 (0xBE00 | imm))
                       (scare 'thumb-brk-imm imm))
    ;; MRS Rd, <sysm> -- the special registers, which are not in the general file and so have
    ;; no other door. only the two stack pointers are named: a fault handler asks which one was
@@ -325,7 +325,7 @@
    thumb-sysm (tabof `(('msp >< 8) ('psp >< 9)))
    (thumb-mrs d sys)
       (: sm (look thumb-sysm sys 'badsysm)
-         (t32 (0xF3EF0000 | (0x8000 | ((rn d) << 8) | sm))))
+         (t32 (0xF3EF0000 | (0x8000 | (rn d << 8) | sm))))
 
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their halfwords outright, `raw` the identity. the alu group pins off its rows.
@@ -340,17 +340,17 @@
            ('stsd >< thumb-stsd) ('ldsd >< thumb-ldsd) ('stss >< thumb-stss) ('ldss >< thumb-ldss)
            ('cvtss2sd >< thumb-cvtss2sd) ('cvtsd2ss >< thumb-cvtsd2ss)
            ('clz >< thumb-clz)
-           ('udivll >< (t2-udivmod 'div)) ('uremll >< (t2-udivmod 'rem))   ; nullary: the whole expansion
+           ('udivll >< t2-udivmod 'div) ('uremll >< t2-udivmod 'rem)       ; nullary: the whole expansion
            ('ld >< thumb-ld) ('st >< thumb-st)
            ('ld1 >< thumb-ld1) ('ld2 >< thumb-ld2) ('ld4 >< thumb-ld4)
            ('st1 >< thumb-st1) ('st2 >< thumb-st2) ('st4 >< thumb-st4)
            ('ldu1 >< thumb-ldu1) ('ldu2 >< thumb-ldu2)
            ('ldu4 >< thumb-ld4)                              ; 32-bit zero-extend == word load here
-           ('sx1 >< (thumb-sx 1)) ('sx2 >< (thumb-sx 2)) ('sx4 >< (thumb-sx 4))
-           ('zx1 >< (thumb-zx 1)) ('zx2 >< (thumb-zx 2)) ('zx4 >< (thumb-zx 4))
-           ('shlv >< (thumb-shiftv 'shlv)) ('shrv >< (thumb-shiftv 'shrv)) ('sarv >< (thumb-shiftv 'sarv))
-           ('shl >< (thumb-shift 'shl)) ('shr >< (thumb-shift 'shr)) ('sar >< (thumb-shift 'sar))
-           ('rol >< (thumb-shift 'rol)) ('ror >< (thumb-shift 'ror))
+           ('sx1 >< thumb-sx 1) ('sx2 >< thumb-sx 2) ('sx4 >< thumb-sx 4)
+           ('zx1 >< thumb-zx 1) ('zx2 >< thumb-zx 2) ('zx4 >< thumb-zx 4)
+           ('shlv >< thumb-shiftv 'shlv) ('shrv >< thumb-shiftv 'shrv) ('sarv >< thumb-shiftv 'sarv)
+           ('shl >< thumb-shift 'shl) ('shr >< thumb-shift 'shr) ('sar >< thumb-shift 'sar)
+           ('rol >< thumb-shift 'rol) ('ror >< thumb-shift 'ror)
            ('lea >< thumb-lea) ('lean >< thumb-lea)
            ('la >< thumb-la) ('lapool >< thumb-lapool)
            ('leax >< thumb-leax) ('ldx >< thumb-ldx) ('ldxb >< thumb-ldxb)
@@ -363,12 +363,12 @@
            ('raw >< 1)
            ('dsb >< thumb-dsb) ('brk >< thumb-brk)           ; -- the system lane --
            ('mrs >< thumb-mrs)
-           ('isb >< (t32 0xF3BF8F6F))                        ; isb sy
-           ('wfi >< (t16 0xBF30))                            ; wait for interrupt
-           ('ret >< (t16 0x4770))                            ; BX lr
-           ('sys >< (t16 0xDF00))                            ; SVC #0
-           ('nop >< (t16 0xBF00))
-           ('trap >< (t16 0xBE00))))                         ; BKPT #0
+           ('isb >< t32 0xF3BF8F6F)                          ; isb sy
+           ('wfi >< t16 0xBF30)                              ; wait for interrupt
+           ('ret >< t16 0x4770)                              ; BX lr
+           ('sys >< t16 0xDF00)                              ; SVC #0
+           ('nop >< t16 0xBF00)
+           ('trap >< t16 0xBE00)))                           ; BKPT #0
    _ (foldl (\ _ p (emrow thumb-emitters <p (thumb-aluop <p))) 0 thumb-alu-rows)
    (thumb-lower ins) (: f lower-via (? (lit? f) (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
@@ -406,15 +406,15 @@
    ;; ⚠ the thumb bit rides in `target` (the linker folds it out of the symbol) and passes
    ;; through untouched -- every field here shifts the offset right by at least one.
    (thumb-refix kind bs target site width)
-      (: aux (? (member? kind '(movw16 movt16)) ((at bs 3) & 15) 0)   ; MOVW/MOVT T3: Rd, hw2 bits 11:8
-         _ (? ((thumb-patch kind 0 0 width aux) = bs) 0 (scare 'thumb-refix-addend kind))
+      (: aux (? (member? kind '(movw16 movt16)) (at bs 3 & 15) 0)     ; MOVW/MOVT T3: Rd, hw2 bits 11:8
+         _ (? (thumb-patch kind 0 0 width aux = bs) 0 (scare 'thumb-refix-addend kind))
          (thumb-patch kind target site width aux))
 
    thumb2 (tablet 0)
    _ (pin thumb2 'lower thumb-lower)
    _ (pin thumb2 'patch thumb-patch)
    _ (pin thumb2 'refix thumb-refix)
-   _ (pin thumb2 'nop `(0 191))                ; the ('align n) filler unit: NOP (16-bit) bf00 LE
+   _ (pin thumb2 'nop '(0 191))                ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb2 thumb2)
    _ (defbackend 'cortex-m7 thumb2)
    _ (defbackend 'thumb2sp thumb2))   ; the SP-only-FPU face (playdate): same encoder, gen softens f64

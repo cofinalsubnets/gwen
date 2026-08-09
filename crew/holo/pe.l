@@ -20,7 +20,7 @@
    (pe-al a n) (& (+ n (- a 1)) (- 0 a))
 
    (pe-secname s) (: b (map s (jot (tally s)))
-                     (b + (map (\ _ 0) (jot (8 - (tally s))))))
+                     (b + map (\ _ 0) (jot (8 - tally s))))
    (pe-sect nm vsz rva raw off ch)
     (catall `((pe-secname nm) (le32 vsz) (le32 rva) (le32 raw) (le32 off)
               (le32 0) (le32 0) (le16 0) (le16 0) (le32 ch)))
@@ -35,13 +35,13 @@
        (: (blocks ss acc)
            (? !(two? ss) (rev acc)
               (: pg (& (- <ss pe-ibase) (- 0 4096))
-                 (grab l es) (? (&& (two? l) (< (- <l pe-ibase) (+ pg 4096)))
-                               (grab >l (link (| 40960 (& (- <l pe-ibase) 4095)) es))
+                 (grab l es) (? (two? l && (< (- <l pe-ibase) (+ pg 4096)))
+                               (grab >l ((| 40960 (& (- <l pe-ibase) 4095)) >< es))
                                `(l (rev es)))
                  g (grab ss ())
                  es <>g
                  es (? (& (tally es) 1) (es + '(0)) es)
-                 (blocks <g (link (catall `((le32 pg) (le32 (+ 8 (* 2 (tally es)))) (catall (map le16 es)))) acc))))
+                 (blocks <g (catall `((le32 pg) (le32 (+ 8 (* 2 (tally es)))) (catall (map le16 es))) >< acc))))
           (catall (blocks sites ()))))
 
    ;; link a set -- ((id bytes)..), the mkefi thunk FIRST -- into a PE32+ at out.
@@ -69,7 +69,7 @@
        rraw (pe-al pe-falign rsz)
        img-sz (+ reloc-rva (pe-al 4096 rsz))
        opt (catall `(
-          (le16 523) `(0 0)                              ; PE32+ magic, linker 0.0
+          (le16 523) '(0 0)                              ; PE32+ magic, linker 0.0
           (le32 craw) (le32 0) (le32 0)
           (le32 (- ent pe-ibase)) (le32 4096)            ; entry RVA, base of code
           (le64 pe-ibase)
@@ -84,8 +84,8 @@
           (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)
           (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)))
        hdr (catall `(
-          `(77 90) (map (\ _ 0) (jot 58)) (le32 64)      ; MZ, e_lfanew = 64
-          `(80 69 0 0)
+          '(77 90) (map (\ _ 0) (jot 58)) (le32 64)      ; MZ, e_lfanew = 64
+          '(80 69 0 0)
           (le16 34404) (le16 2)                          ; 0x8664, two sections
           (le32 0) (le32 0) (le32 0)
           (le16 (tally opt)) (le16 34)                   ; EXE | LARGE_ADDRESS_AWARE

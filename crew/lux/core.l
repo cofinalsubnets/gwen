@@ -4,6 +4,10 @@
 ; tiled stacks. Pure -- so it rides the corpus on every target (crew/lux/law.l asserts
 ; the invariants), and the driver (crew/lux/lux.l) + the X layers build on it.
 ;
+; ⚠ tools/wm2uu.l reads THIS FILE AS DATA and keys on op SPELLINGS -- cap/caup/cup/cat/
+; link, and the literal shape (caup (cup z)). A surface rewrite that opfix calls equal
+; (<>>z, ><, +) is a different tree to it, and test/host/overlay.l's leg 6 stops certifying.
+;
 ; A body-LESS top-level `:` -- every binding LEAKS to the global scope, so the
 ; other crew/lux/ files see this vocabulary once concatenated. Names are chosen to
 ; shadow NO nif (the single-`:` rung-6 trap: a local `put` shadowed the put nif);

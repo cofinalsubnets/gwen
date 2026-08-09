@@ -14,8 +14,8 @@
 ; Linux-only already). also here: the shared floor (sh-rev sh-nth sh-int
 ; sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
-(: (sh-rev l) (foldl (\ a x (link x a)) () l)
-   (sh-nth l i) (? (= i 0) (cap l) (sh-nth (cup l) (- i 1)))
+(: (sh-rev l) (foldl (\ a x (x >< a)) () l)
+   (sh-nth l i) (? (= i 0) <l (sh-nth >l (- i 1)))
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
    sh-jobs (tablet 0)
@@ -63,14 +63,14 @@
      (: sts (map (\ p (wait p)) pids)
         _   (? (sh-tty ()) (ttyfg 0) 0)                ; the shell takes the terminal back
         _   (pin sh-status ()                          ; $?: the last stage; a stop folds to 128+sig
-             (: st (last sts) (? (&& (charm? st) (< 255 st)) (- st 128) st)))
+             (: st (last sts) (? (charm? st && (< 255 st)) (- st 128) st)))
         (? (sh-stopped? sts)
            (: n (sh-addjob pids 'stopped cmd)
               _ (puts (sh-jobline n (sh-jobs n))) 0)
            0))
    ; background bookkeeping: drain glean at each prompt; a reaped pid leaves its job,
    ; an emptied job prints done and goes
-   (sh-unpid l p) (? !l () (? (= (cap l) p) (cup l) (link (cap l) (sh-unpid (cup l) p))))
+   (sh-unpid l p) (? !l () (? (= <l p) >l (<l >< sh-unpid >l p)))
    (sh-bgnote pid)
      (each (keys sh-jobs)
        (\ n (: j (sh-jobs n)
@@ -82,20 +82,20 @@
                                (pull sh-jobs n 0))
                         (pin sh-jobs n (L ps (sh-nth j 1) (sh-nth j 2)))))))))
    (sh-reapbg _)
-     (: r (glean 0) (? (two? r) (: _ (sh-bgnote (cap r)) (sh-reapbg 0)) 0))
+     (: r (glean 0) (? (two? r) (: _ (sh-bgnote <r) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
    ; string membership: member? tests IDENTITY (uninterned strings never hit)
-   (sh-smem? x l) (? (! (two? l)) 0 (? (= x (cap l)) 1 (sh-smem? x (cup l))))
+   (sh-smem? x l) (? !(two? l) 0 (? (= x <l) 1 (sh-smem? x >l)))
    (sh-int s) (sh-intl s 0 0)
    (sh-intl s i a) (? (= i (tally s)) a (sh-intl s (+ i 1) (+ (* a 10) (- (s i) 48))))
    (sh-lastjob _) (foldl (\ a k (? (< a k) k a)) 0 (keys sh-jobs))
-   (sh-jobn argv) (? (cup argv) (sh-int (caup argv)) (sh-lastjob 0))
+   (sh-jobn argv) (? >argv (sh-int <>argv) (sh-lastjob 0))
    (sh-fg n)
      (: j (sh-jobs n)
         (? !j (: _ (puts "fg: no such job\n") 0)
            (: pids (sh-nth j 0) cmd (sh-nth j 2)
               _ (pull sh-jobs n 0)
-              _ (? (sh-tty ()) (ttyfg (cap pids)) 0)   ; the job's group gets the terminal first
+              _ (? (sh-tty ()) (ttyfg <pids) 0)        ; the job's group gets the terminal first
               _ (each pids (\ p (still p sig-cont)))
               (sh-waitfg pids cmd))))
    (sh-bg n)

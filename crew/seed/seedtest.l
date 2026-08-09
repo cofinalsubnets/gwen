@@ -12,9 +12,9 @@
 (: _ (mkdir "out" 493) _ (mkdir "out/host" 493)
    _ (mkdir "out/host/.seedtest" 493)
    cd (chdir "out/host/.seedtest")
-   _ (? (! cd) () (: _ (puts "seedtest: chdir failed\n") (quit 1)))
+   _ (? !cd () (: _ (puts "seedtest: chdir failed\n") (quit 1)))
    ; the same-text equality for list-shaped store values
-   (seq a b) ((show a) = (show b))
+   (seq a b) (show a = show b)
    ; the tree: two files, one ignored dir
    _ (mkdir "sub" 493)
    _ (lay "a.txt" "one\ntwo\nthree\n")
@@ -28,13 +28,13 @@
    again (seed-record "again"))
 
 (assert
- (64 = (tally p1))                                     ; a real content address
+ (64 = tally p1)                                       ; a real content address
  (seq (tips ()) `(p1))                              ; the one tip
- (2 = (tally s1))                                      ; junk/ stayed out
+ (2 = tally s1)                                        ; junk/ stayed out
  ("a.txt" = <<s1)                                      ; path-sorted
- ((blob <><s1) = "one\ntwo\nthree\n")               ; the blob rides its hash
- (! again)                                             ; a clean tree records nothing
- (p1 = (sha256 <>(look (".seed/patch/" + p1)))))    ; the id IS the file's hash
+ (blob <><s1 = "one\ntwo\nthree\n")                 ; the blob rides its hash
+ !again                                                ; a clean tree records nothing
+ (p1 = sha256 <>(look (".seed/patch/" + p1))))      ; the id IS the file's hash
 
 ; mutate: one changed, one born, one dead
 (: _ (lay "a.txt" "one\ntwo point five\nthree\n")
@@ -47,11 +47,11 @@
 (assert
  (3 = nd)                                              ; diff saw all three
  (seq (fld f2 'deps) `(p1))                         ; the context reads p1's writes
- (3 = (tally (fld f2 'hunks)))
+ (3 = tally (fld f2 'hunks))
  (seq (tips ()) `(p2))                              ; p1 is no longer maximal
- (! (member? "sub/b.txt" (: (go m acc) (? (two? m) (go >m (link <<m acc)) acc)
-                            (go (snap ()) ()))))    ; the death left the snap
- (0 = (seed-diff ())))                                 ; recorded = working again
+ !(member? "sub/b.txt" (: (go m acc) (? (two? m) (go >m (<<m >< acc)) acc)
+                          (go (snap ()) ())))       ; the death left the snap
+ (0 = seed-diff ()))                                   ; recorded = working again
 
 ; a patch of only births depends on nothing: a second tip (the DAG, locally)
 (: _ (lay "d.txt" "free\n")
@@ -59,10 +59,10 @@
    f3 (patch p3))
 
 (assert
- (! (fld f3 'deps))                                 ; no context anywhere
- (2 = (tally (tips ())))                            ; two maximal patches
+ !(fld f3 'deps)                                    ; no context anywhere
+ (2 = tally (tips ()))                              ; two maximal patches
  (member? p2 (tips ())) (member? p3 (tips ()))
- (3 = (seed-log ())))                                  ; three patches told
+ (3 = seed-log ()))                                    ; three patches told
 
 ; --- sync: a peer nest (built inside ./pr, ignored) shares d.txt's births and
 ;     adds its own, plus edits a.txt on a common base. union it in: the store
@@ -86,12 +86,12 @@
  (< nbefore nafter)                                       ; the peer's patch arrived
  (two? (patch pp))                                     ; ...as a real, addressable patch object
  (member? pp (tips ()))                                ; and it opens a fresh tip
- (3 = (tally (tips ())))                               ; p2 + p3 + pp, all maximal
+ (3 = tally (tips ()))                                 ; p2 + p3 + pp, all maximal
  (4 = got)                                                ; p1 p2 p3 + the peer's pp
  ((<>(look "peer.txt")) = "from the other machine\n")  ; materialized into the working tree
  ((<>(look "a.txt")) = "one\ntwo point five\nthree\n") ; local edits untouched
- (0 = (seed-diff ()))                                     ; working tree == the recomputed snap
- (! (seed-record "noop")))                                ; ...so nothing is left to record
+ (0 = seed-diff ())                                       ; working tree == the recomputed snap
+ !(seed-record "noop"))                                   ; ...so nothing is left to record
 
 ; --- an EMPTY file is content, not absence. it slurps to () -- the zero point --
 ;     so a scan that reads the net hashes it to () and it never reaches the snap:
@@ -101,7 +101,7 @@
 ;     sync (where blob presence is likewise the wrapper, never the net) ---
 (: _ (lay "e.txt" "")
    pe (seed-record "an empty file")
-   esnap (: (go m) (? (! (two? m)) () ("e.txt" = <<m) <m (go >m)) (go (snap ())))
+   esnap (: (go m) (? !(two? m) () ("e.txt" = <<m) <m (go >m)) (go (snap ())))
    clean (dirty ())
    _ (mkdir "nest2" 493)
    _ (chdir "nest2")
@@ -111,14 +111,14 @@
    _ (chdir ".."))
 
 (assert
- (64 = (tally pe))                                        ; the empty file made a real patch
+ (64 = tally pe)                                          ; the empty file made a real patch
  (two? esnap)                                             ; ...and reached the snap
- ((<>esnap) = (sha256 ""))                                ; ...under the honest empty digest
+ ((<>esnap) = sha256 "")                                  ; ...under the honest empty digest
  (0 = clean)                                              ; ...so the tree came back clean
- (! (seed-record "noop"))                                 ; ...and stays clean -- no junk tip
+ !(seed-record "noop")                                    ; ...and stays clean -- no junk tip
  (0 < got2)                                               ; the fresh nest took the whole store
  (two? et)                                                ; ...materializing e.txt: present...
- (0 = (tally <>et)))                                      ; ...and 0 bytes
+ (0 = tally <>et))                                        ; ...and 0 bytes
 
 ; --- divergence on ONE path is a MERGE, not a coin flip. the incoming hunk
 ;     names the base it expected, so all three sides sit in the store: disjoint
@@ -155,13 +155,13 @@
 (assert
  (mtext = "ONE\ntwo\nthree\nfour\nFIVE\n")               ; BOTH disjoint edits survived
  (0 < gotm)                                              ; ...and it was not a conflict
- (1 = (tally cfm)) (0 = (<><cfm))                        ; one merge, zero regions unresolved
+ (1 = tally cfm) (0 = (<><cfm))                          ; one merge, zero regions unresolved
  (0 = gotc)                                              ; the overlap DID conflict: sync answers 0
  (1 = (<><cfc))                                          ; ...one region
  (member? "=======" (lines ctext))                       ; ...and the markers are in the file
  (member? "A-TWO" (lines ctext))                         ; ...carrying BOTH sides, neither lost
  (member? "B-TWO" (lines ctext))
- (! cfr)                                                 ; the record settled it -- nothing left
+ !cfr                                                    ; the record settled it -- nothing left
  (0 = ndirty))                                           ; ...and the tree matches the snap
 
 ; --- the two sides that cannot line-merge: a delete meeting an edit keeps the
@@ -180,7 +180,7 @@
  (0 = gotd)                                              ; a delete against an edit is a conflict
  (two? gtext)                                            ; the file is STILL THERE...
  ((<>gtext) = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
- (1 = (tally (filter (\ e ("g" = <e)) cfd))))            ; ...and g is named in the report
+ (1 = tally (filter (\ e ("g" = <e)) cfd)))              ; ...and g is named in the report
 
 ; --- sync is an EXCHANGE, not a fetch: ONE command settles BOTH nests. the
 ;     derive is a pure function of the patch set, so two nests over one union
@@ -210,7 +210,7 @@
 (assert
  (0 < gotx)                                              ; the exchange went through
  (two? dhere) (two? chere)                               ; each nest took the other's file
- ((show csnap) = (show dsnap))                           ; ...and both derived the SAME snap
+ (show csnap = show dsnap)                               ; ...and both derived the SAME snap
  (0 = cdirty) (0 = ddirty)                               ; ...both trees clean, the far end untouched by hand
  (0 = goty)                                              ; a DIRTY peer refuses the push
  (dstore = nb4))                                         ; ...and its store is left whole, not half-fed
@@ -238,12 +238,12 @@
    _ (chdir "../.."))
 
 (assert
- (1 = n1) (a1 = "v1\n") (! (two? b1))                    ; as of pa: a rolled back, b not yet born
+ (1 = n1) (a1 = "v1\n") !(two? b1)                       ; as of pa: a rolled back, b not yet born
  (2 = n2) (a2 = "v1\n") (two? b2)                        ; pa + pc: pb's edit skipped, pc's birth kept
  (3 = nstore)                                            ; ...and the STORE never shrank -- apply is a view
  (2 = n3)                                                ; naming pb alone realized TWO: its dep came
  (3 = n4) (a4 = "v2\n")                                  ; the way back is the whole store
- (! bad)                                                 ; an unresolvable prefix answers 0
+ !bad                                                    ; an unresolvable prefix answers 0
  (0 = clean))                                            ; every apply leaves the tree clean
 
 ; --- undo: the INVERSE patch. removal is GROWTH -- the patch stays, its
@@ -278,8 +278,8 @@
  (ftext = "one\ntwo\nTHREE!\n")                        ; the bad edit LIFTED, the later work KEPT
  (n1 = (n0 + 1))                                        ; ...by growing the store, never shrinking it
  (0 = clean)                                            ; ...and the tree matches the snap after
- (1 = u2) (! (two? gone))                               ; a birth undone leaves no file
- (! u3)                                                 ; a true overlap answers 0...
+ (1 = u2) !(two? gone)                                  ; a birth undone leaves no file
+ !u3                                                    ; a true overlap answers 0...
  (n3 = n2))                                             ; ...and records NOTHING -- resolve first
 
 ; --- bank: freeze the head under a NAME, immutable. ⚠ hatch.md asks for a
@@ -310,11 +310,11 @@
 (assert
  (2 = ntip)                                              ; two independent births, TWO tips -- normal
  (1 = b1) (1 = b2)                                       ; banked; re-banking the same head is a no-op
- (2 = (tally r1))                                        ; the ref froze the TIP SET, not one id
- (! b3) (1 = b4)                                         ; a banked name is IMMUTABLE
- (2 = n1) (! (two? cgone))                               ; apply BY NAME realized exactly the release
+ (2 = tally r1)                                          ; the ref froze the TIP SET, not one id
+ !b3 (1 = b4)                                            ; a banked name is IMMUTABLE
+ (2 = n1) !(two? cgone)                                  ; apply BY NAME realized exactly the release
  (3 = n2) (two? cback)                                   ; ...and the later ref brings c back
- (! bad) (! bdirty))                                     ; an empty name and a dirty tree both refuse
+ !bad !bdirty)                                           ; an empty name and a dirty tree both refuse
 
 ; --- refs travel. a release is only "the unit you propagate" if the NAME
 ;     reaches the other nest with the patches. a ref is a single FILE, not a
@@ -341,9 +341,9 @@
 (assert
  (0 < got) (two? travelled)                              ; the ref crossed with the patches
  (1 = n1)                                                ; ...and named a release the nest never banked
- (! ((show drel) = (show lrel)))                         ; the two `rel`s really are different heads
- (! clash)                                               ; a clash makes sync answer 0
- ((show lkept) = (show lrel))                            ; each side KEPT ITS OWN -- no silent loss
- ((show dkept) = (show drel)))
+ !(show drel = show lrel)                                ; the two `rel`s really are different heads
+ !clash                                                  ; a clash makes sync answer 0
+ (show lkept = show lrel)                                ; each side KEPT ITS OWN -- no silent loss
+ (show dkept = show drel))
 
 (: _ (puts "seed: ok") _ (putc 10) 0)

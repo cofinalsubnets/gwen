@@ -48,7 +48,7 @@
        _ (puts "up: cooking the nest (cook install)\n")
        s (herald (list exe "cook" "install"))
        st (? (two? s) <s s)
-       _ (? (0 = st) 0 (oops ("up: cook install failed (exit " + (show st) + ")")))
+       _ (? (0 = st) 0 (oops ("up: cook install failed (exit " + show st + ")")))
        _ (puts ("up: the nest is " + nest + " -- love (and seed, cook, kore ..) on ~/.local/bin\n"))
        (quit 0))
 
@@ -57,27 +57,27 @@
    ; for a symlink and the REAL () otherwise, so the link test comes first and
    ; a linked directory loses its link, keeps its tree.
    (zap p)
-    (? (! (id? (readlink p) ())) (! (unlink p))
-       (dir? p) (: (go m ok) (? (! (two? m)) ok
+    (? !(id? (readlink p) ()) !(unlink p)
+       (dir? p) (: (go m ok) (? !(two? m) ok
                                 (: k (zap (p + "/" + <m)) (go >m (? k ok 0))))
                    ok (go (readdir p) 1)
-                   (&& ok (! (rmdir p))))
-       (! (unlink p)))
+                   (ok && !(rmdir p)))
+       !(unlink p))
 
    ; reap: unlink the links in d whose target leads with `nest` -- ours and only
    ; ours (a ~/.local/bin/cook pointing elsewhere is somebody else's cook)
    (reap d nest)
-    (: (go m n) (? (! (two? m)) n
+    (: (go m n) (? !(two? m) n
                    (: p (d + "/" + <m) t (readlink p)
-                      hit (&& (! (id? t ()))
-                              (&& (<= (tally nest) (tally t))
-                                  ((snip t 0 (tally nest)) = nest)))
+                      hit (!(id? t ()) &&
+                           (<= (tally nest) (tally t)) &&
+                           (snip t 0 (tally nest) = nest))
                       _ (? hit (unlink p) 0)
                       (go >m (? hit (n + 1) n))))
        (go (readdir d) 0))
 
    (down-main as)
-    (: f? (&& (two? as) (<as = "-f"))
+    (: f? (two? as && (<as = "-f"))
        nest (nestof ()) src (nest + "/src")
        here (cwd 0)
        d (? f? 0
@@ -85,16 +85,16 @@
                (: _ (chdir src) n (dirty ()) _ (chdir here) n)
                0))
        _ (? (0 < d)
-            (oops ("down: " + (show d) + " unrecorded change(s) in " + src
+            (oops ("down: " + show d + " unrecorded change(s) in " + src
                    + " -- seed record them, or love down -f"))
             0)
        _ (? (two? (stat nest)) 0 (: _ (puts ("down: no nest at " + nest + "\n")) (quit 0)))
        _ (chdir (getenv "HOME"))                       ; never rm the tree we stand in
        _ (? (zap nest) 0 (oops ("down: could not remove all of " + nest)))
-       nb (reap ((getenv "HOME") + "/.local/bin") nest)
-       nm (reap ((getenv "HOME") + "/.local/share/man/man1") nest)
+       nb (reap (getenv "HOME" + "/.local/bin") nest)
+       nm (reap (getenv "HOME" + "/.local/share/man/man1") nest)
        _ (puts ("down: removed " + nest
-                + (? (0 < (nb + nm)) (" and " + (show (nb + nm)) + " ~/.local link(s)") "")
+                + (? (0 < (nb + nm)) (" and " + show (nb + nm) + " ~/.local link(s)") "")
                 + "\n"))
        (quit 0)))
 
@@ -107,7 +107,7 @@
     (list "down" down-main)
     (list "seed" seed-main)
     (list "cook" cook-main)
-    (list "kore" (\ as (kore-main (link "kore" as))))
+    (list "kore" (\ as (kore-main ("kore" >< as))))
     (list "kiosko" kiosko-main)
     (list "mooncc" moon-main)
     (list "sh" sh-main)                ; lush: the dist answers `love sh ..`, and an

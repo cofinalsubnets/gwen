@@ -20,18 +20,18 @@
 (use 'peg)
 
 (: ;; -- byte-class predicates (the combinator leaves feed a parser one byte at a time). --
-   (txws?  c) (|| (c = 32) (c = 9))                             ; space / tab
-   (txsep? c) (|| (txws? c) (c = 44))                           ; ... or a comma, between operands
-   (txdig? c) (&& (c >= 48) (c <= 57))
-   (txidc? c) (|| (&& (c >= 97) (c <= 122))                     ; a-z
-              (|| (&& (c >= 65) (c <= 90))                      ; A-Z
-              (|| (txdig? c) (|| (c = 95) (c = 45)))))          ; 0-9 _ -  (kebab labels welcome)
+   (txws?  c) ((c = 32) || (c = 9))                             ; space / tab
+   (txsep? c) (txws? c || (c = 44))                             ; ... or a comma, between operands
+   (txdig? c) ((c >= 48) && (c <= 57))
+   (txidc? c) (((c >= 97) && (c <= 122)) ||                     ; a-z
+               ((c >= 65) && (c <= 90)) ||                      ; A-Z
+               txdig? c || (c = 95) || (c = 45))                ; 0-9 _ -  (kebab labels welcome)
 
    ;; -- small string helpers (a payload piece is a one-char byte from `one` or a substring from
    ;; `span`; `+` joins either onto a string via the byte law). --
    (txjoin ss) (foldl (\ a x (a + x)) "" ss)
-   (txint s)   (foldl (\ a i ((a * 10) + ((s i) - 48))) 0 (jot (tally s)))
-   (txnum p)   (? (<p = "-") (0 - (txint (txjoin >p))) (txint (txjoin p)))
+   (txint s)   (foldl (\ a i ((a * 10) + (s i - 48))) 0 (jot (tally s)))
+   (txnum p)   (? (<p = "-") (0 - txint (txjoin >p)) (txint (txjoin p)))
 
    ;; -- the line grammar. a token is at least one char (so `many` can't twirl on the empty match). --
    txtsym (pmap (\ x `((intern (txjoin x)))) (seq (one txidc?) (span txidc?)))
@@ -42,15 +42,15 @@
 
    ;; -- line preprocessing: drop the `;` comment, trim the ends, split on newlines. --
    (txdecomment s) (: n (tally s)
-      ((: (g i) (? (i >= n) s ((s i) = 59) (snip s 0 i) (g (i + 1)))) 0))
+      ((: (g i) (? (i >= n) s (s i = 59) (snip s 0 i) (g (i + 1)))) 0))
    (txtrim s) (: n (tally s)
-      a ((: (gl i) (? (&& (i < n) (txws? (s i))) (gl (i + 1)) i)) 0)
-      b ((: (gr j) (? (&& (j > a) (txws? (s (j - 1)))) (gr (j - 1)) j)) n)
+      a ((: (gl i) (? ((i < n) && txws? (s i)) (gl (i + 1)) i)) 0)
+      b ((: (gr j) (? (j > a && txws? (s (j - 1))) (gr (j - 1)) j)) n)
       (snip s a b))
    (txsplit s) (: n (tally s)
       ((: (g i start acc)
-          (? (i >= n)     (rev ((snip s start n) >< acc))
-             ((s i) = 10) (g (i + 1) (i + 1) ((snip s start i) >< acc))
+          (? (i >= n)     (rev (snip s start n >< acc))
+             (s i = 10) (g (i + 1) (i + 1) (snip s start i >< acc))
              (g (i + 1) start acc)))
        0 0 ()))
 
@@ -61,7 +61,7 @@
    (asm-text src)
       (foldr (\ ln acc
                 (: clean (txtrim (txdecomment ln))
-                   (? (0 = (tally clean)) acc
+                   (? (0 = tally clean) acc
                       (: form (parse txline clean)
                          (? (two? form) (form >< acc) (scare 'asm-text clean))))))
              () (txsplit src)))

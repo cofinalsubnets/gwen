@@ -34,9 +34,9 @@
    ;; the learned outputs (want ~0 1 1 0)
    _ (tl-reset 0)
    out (tl-val (call model X))
-   (cell k) (peep out (link k (link 0 ())) 0)
+   (cell k) (peep out (k >< (0 >< ())) 0)
    (yes k v) (? (< 0.5 (cell k)) (= v 1) (= v 0))             ; does row k round to v?
-   ok (&& (yes 0 0) (&& (yes 1 1) (&& (yes 2 1) (yes 3 0))))
+   ok (yes 0 0 && yes 1 1 && yes 2 1 && yes 3 0)
    _ (puts (+ "00 -> " (show (cell 0)))) _ (putc 10)
    _ (puts (+ "01 -> " (show (cell 1)))) _ (putc 10)
    _ (puts (+ "10 -> " (show (cell 2)))) _ (putc 10)
