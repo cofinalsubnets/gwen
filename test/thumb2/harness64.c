@@ -9,6 +9,7 @@ u64 widenu(unsigned); s64 widens(int); unsigned low32(u64); int clz64(u64);
 u64 neg64(u64); u64 not64(u64); int nz64(u64); u64 five(u64,int,u64,int,u64); u64 sel(int,u64);
 u64 bump(u64); u64 tow(int);
 u64 asum(int); int csum(int);
+int ltlu(long, unsigned); long divlu(long, unsigned); long remlu(long, unsigned);
 static volatile u64 A = 0x123456789abcdef0ULL, B = 0x0fedcba987654321ULL;
 static volatile u64 T = 9007199254740993ULL, U = 9007199254740992ULL;  /* 2^53+1 vs 2^53: the tie */
 static volatile s64 N = -1234567890123LL;
@@ -61,5 +62,8 @@ int run(void){
  CK(tow(5) == (((u64)1<<5)|((u64)1<<33)));
  CK(asum(5) == 1+4+7+10+13);
  CK(csum(4) == 97+98+99+100);
- return 45;                                            /* 43 checks */
+ CK(ltlu(-6, 5u) == (-6L < 5u));                       /* ILP32: unsigned compare (gcc computes the rhs) */
+ CK(divlu(-6, 5u) == (long)(-6L / 5u));
+ CK(remlu(-6, 5u) == (long)(-6L % 5u));
+ return 48;                                            /* 46 checks */
 }

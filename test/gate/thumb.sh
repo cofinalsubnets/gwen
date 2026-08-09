@@ -170,7 +170,7 @@ case $tgt in
 thumb1)
   lane v  test/thumb1/libv.c  test/thumb1/harnessv.c  "" 7  30 "thumb1 varargs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb1/harnessv.c; the pop-r3/bx epilogue or the r0-r3 push block over lr/fp/r4 is the usual suspect"
-  lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 45 30 "thumb1 64-bit pairs" \
+  lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 48 30 "thumb1 64-bit pairs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c; the v6-M lanes ride ADCS/SBCS inline + __aeabi_lmul/(u)ldivmod/shift libcalls"
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb1 soft doubles" \
     " = every differential check vs gcc's base-ABI soft float; 100+n names the first miss -- see test/thumb2/harnessd.c; doubles ride gp pairs at every seam, f0/f1/f15 are frame cells inside a fn (soften6)"
@@ -190,7 +190,7 @@ thumb1)
     echo "(ld32-check \"$d/am.lib.o\")"; } | "$ho/love" || fail "ld-read of $d/am.lib.o"
   echo "test_thumb1: mooncc -t thumb1 -c -> ELF32/EM_ARM (R_ARM_THM_CALL + soft divide + la/R_ARM_ABS32 + 32-bit struct layout + leax + AAPCS32 varargs + 64-bit pairs + soft doubles + am.c bit-exact + composites vs gcc), ld binds, runs on qemu Cortex-M0; holo's own ld-read reads the object back" ;;
 thumb2)
-  lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 45 30 "thumb2 64-bit pairs" \
+  lane p  test/thumb2/lib64.c test/thumb2/harness64.c "" 48 30 "thumb2 64-bit pairs" \
     " = every differential check vs gcc; 100+n names the first miss -- see test/thumb2/harness64.c"
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb2 VFP doubles" \
     " = every differential check vs gcc -mfloat-abi=hard; 100+n names the first miss -- see test/thumb2/harnessd.c"
@@ -198,7 +198,7 @@ thumb2)
     " = the seven transcendentals BIT-IDENTICAL to the host am floor, incl. the Payne-Hanek big-argument reduction"
   lane z  test/thumb2/libz.c  test/thumb2/harnessz.c "-Icrew/moon/include" 18 30 "thumb2 composites+varargs" \
     " = HFA d-pairs + 8B blob + <=4B int one + the AAPCS32 word walk, gcc<->mooncc both directions; 100+n names the first miss -- see test/thumb2/harnessz.c"
-  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + composites/varargs: 45+45+9+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
+  echo "test_thumb2: mooncc -t thumb2 -c -> ELF32/EM_ARM (la + pairs + VFP + am.c bit-exact + composites/varargs: 48+45+9+18 differential checks), ld binds, runs on qemu Cortex-M7" ;;
 thumb2sp)
   lane d  test/thumb2/libd.c  test/thumb2/harnessd.c  "" 45 30 "thumb2sp doubles" \
     "; 100+n names the first miss -- soft f64 vs gcc's __aeabi"

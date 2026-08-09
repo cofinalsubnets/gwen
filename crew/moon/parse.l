@@ -356,6 +356,40 @@
                      (tsz ps ty))
    (aup n a) (& (n + (a - 1)) (0 - a))              ; round n up to alignment a
 
+   ; -- the typing door: C's promotion and conversion law spelled ONCE --
+   ; integer promotions (C11 6.3.1.1) and the usual arithmetic conversions
+   ; (6.3.1.8), pure over the shared type vocabulary. ptype's arithmetic lanes
+   ; read it here, and gen's cmpu (compare/divide signedness) CONSUMES it --
+   ; one spelling, both sides, so the parse/gen type twins cannot drift on
+   ; this law. w64 is the one seam: whether long is 8 bytes (!(pst32? ps)
+   ; here, !(t32? g) in gen) -- on ILP32 a long cannot hold every uint, so
+   ; long meets uint at ULONG where LP64 answers long.
+   (parith? ty) (? (bitf? ty) 1
+                   (member? ty '(char uchar short ushort int uint long ulong
+                                 llong ullong i128 u128 float double)))
+   (trank ty) (? (member? ty '(i128 u128)) 4
+                 ((ty = 'llong) || (ty = 'ullong)) 3
+                 ((ty = 'long) || (ty = 'ulong)) 2 1)
+   (tusg? ty) (member? ty '(uchar ushort uint ulong ullong u128))
+   (tusg ty) (? (ty = 'int) 'uint (ty = 'long) 'ulong
+                (ty = 'llong) 'ullong (ty = 'i128) 'u128 ty)
+   (tw w64 ty) (: r (trank ty) (? (r = 1) 4 (r = 2) (? w64 8 4) (r = 3) 8 16))
+   (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
+                 (member? ty '(char uchar short ushort)) 'int
+                 ty)
+   (puac w64 ta tb)
+    (? ((ta = 'double) || (tb = 'double)) 'double
+       ((ta = 'float) || (tb = 'float)) 'float
+       (: a (pprom ta) b (pprom tb)
+          (? (a = b) a
+             (: ua (tusg? a) ub (tusg? b)
+                (? ((ua && ub) || (!ua && !ub)) (? (trank a < trank b) b a)   ; same signedness: higher rank
+                   (: u (? ua a b) s (? ua b a)     ; one of each: the unsigned one, the signed one
+                      (? (trank s <= trank u) u     ; unsigned rank >= signed: unsigned wins
+                         (tw w64 u < tw w64 s) s    ; signed strictly wider: it represents all of u
+                         (tusg s))))))))            ; same width: the signed one's unsigned twin
+   (tdecay ty) (? (arr? ty) `('ptr <>ty) ty)
+
    ; -- parse-time expr typer (for sizeof folding) -- the UNDECAYED type of an
    ; lvalue/pointer expr, | () when unknown (the caller keeps a deferred 'szof
    ; node then, and gen sizes it). only the forms whose type parse can settle
@@ -452,12 +486,31 @@
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (? ((-2147483648 <= <>e) && (<>e <= 2147483647)) 'int 'long)
              (k = 'flo) 'double
-             ; ptr - ptr is ptrdiff_t (a long here, and the 4-byte word on t32 --
-             ; the same answer either way). without it sizeof(&a[1] - &a[0]) had no
-             ; parse-time type, so it could not fold into an enum or an array bound.
-             ((k = 'bin) && id? <>e '-)
+             ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t (a long
+             ; here, the 4-byte word on t32 -- same answer either way), ptr +- int
+             ; the decayed pointer, and a both-arithmetic result is puac of the
+             ; operands -- so sizeof(c + x) folds to 4, not the register's 8.
+             ; either side unknown defers to gen's szof, as ever.
+             ((k = 'bin) && member? <>e '(+ - * / % & ^ |))
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
-                 (? ((ptr? a || arr? a) && (ptr? b || arr? b)) 'long ()))
+                 (? ((ptr? a || arr? a) && (ptr? b || arr? b)) (? (id? <>e '-) 'long ())
+                    (ptr? a || arr? a) (? (member? <>e '(+ -)) (tdecay a) ())
+                    (ptr? b || arr? b) (? (id? <>e '+) (tdecay b) ())
+                    (parith? a && parith? b) (puac !(pst32? ps) a b)
+                    ()))
+             ; a shift's type is the PROMOTED LEFT operand alone (C11 6.5.7) --
+             ; the right side never converts into it
+             ((k = 'bin) && member? <>e '(shl shr))
+              (: a (ptype ps <>>e) (? (parith? a) (pprom a) ()))
+             ((k = 'un) && member? <>e '(neg bnot))
+              (: a (ptype ps <>>e) (? (parith? a) (pprom a) ()))
+             ; ?: arms meet by puac (6.5.15); same non-arithmetic type rides
+             ; through whole (sizeof(c ? s1 : s2) over one struct type)
+             (k = 'cond)
+              (: a (ptype ps <>>e) b (ptype ps <>>>e)
+                 (? (parith? a && parith? b) (puac !(pst32? ps) a b)
+                    (two? a && (a = b)) a
+                    ()))
              ; a truth value is an int (C11 6.5.3.3, 6.5.8, 6.5.13): !, the six
              ; relations, && and || -- whatever the operand, so no operand typing
              ; here (gen's wider carrier only ever holds 0/1 and is never asked)

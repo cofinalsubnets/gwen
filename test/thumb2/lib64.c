@@ -32,3 +32,8 @@ unsigned garr[8];
 char cbuf[8];
 u64 asum(int n){ int i; u64 s = 0; for (i = 0; i < n; i++) garr[i] = i*3+1; for (i = 0; i < n; i++) s += garr[i]; return s; }
 int csum(int n){ int i, s = 0; for (i = 0; i < n; i++) cbuf[i] = 'a'+i; for (i = 0; i < n; i++) s += cbuf[i]; return s; }
+/* ILP32: long meets uint at ULONG (C11 6.3.1.8) -- compare and divide go UNSIGNED
+ * here where the LP64 targets go signed (long holds every uint there) */
+int ltlu(long a, unsigned b){ return a < b; }
+long divlu(long a, unsigned b){ return a / b; }
+long remlu(long a, unsigned b){ return a % b; }

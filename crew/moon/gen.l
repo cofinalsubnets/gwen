@@ -379,19 +379,16 @@
                       ()))
                ())
    (numty9 e ty) (: r (litv e) (? (two? r) (numty <r) ty))
-   ; a compare or divide takes the COMMON converted type's signedness (C11 6.3.1.8),
-   ; not either-operand's: ulong (a pointer, u128) goes unsigned; a lone uint against
-   ; a 64-bit SIGNED side fits in long, so it goes signed; int meets uint at uint and
-   ; goes unsigned -- where the 64-bit targets also owe the 32-bit narrow (znrw): the
-   ; signed side rides sign-extended past bit 31 and C compares at uint width.
-   (cmpu ta tb)
+   ; a compare or divide takes the COMMON converted type's signedness (C11 6.3.1.8):
+   ; the signedness of the typing door's puac (parse.l) -- ONE spelling of the law,
+   ; parse and gen both consuming it, width included: on t32 a long cannot hold every
+   ; uint, so long-vs-uint compares UNSIGNED there and signed on the 64-bit targets.
+   ; a pointer compares as the unsigned word. znrw stays beside it: int meets uint at
+   ; uint and the 64-bit targets also owe the 32-bit narrow -- the signed side rides
+   ; sign-extended past bit 31 and C compares at uint width.
+   (cmpu g ta tb)
     (? (ptr? ta || ptr? tb) 1
-       (member? ta '(ulong ullong u128)) 1
-       (member? tb '(ulong ullong u128)) 1
-       (member? ta '(long llong)) ()
-       (member? tb '(long llong)) ()
-       ((id? ta 'uint) || (id? tb 'uint)) 1
-       ())
+       (tusg? (puac !(t32? g) ta tb)))
    (znrw g ta tb ra rb)
     (? !(u32bin? g ta tb) ()
        ((? (usg? ta) () `(`('zx4 ra))) + (? (usg? tb) () `(`('zx4 rb)))))
@@ -470,7 +467,7 @@
            (? (u32? g aty && (n < 0)) 'no
               !(immok g 'cmp n) 'no
               (: rd (? wnt wnt (rdst g rA))
-                 fs (vfs av + `(`('cmp rA n) `('set (scc op (cmpu aty (numty n))) rd)))
+                 fs (vfs av + `(`('cmp rA n) `('set (scc op (cmpu g aty (numty n))) rd)))
                  _ (? (id? rd rA) () (rfree g rA))
                  (mkv 'long rd fs)))
           (member? op '(/ %))
@@ -841,7 +838,7 @@
                       (? !(x64t? g) 'bad
                          (wbr op (as128 g a + (wpush + wnum <>rhs)) (id? (vty a) 'u128)))
                      (: n <>rhs
-                        cc9 (bcc op (cmpu (vty a) (numty n)))
+                        cc9 (bcc op (cmpu g (vty a) (numty n)))
                         ; C converts a negative literal to the uint side (the masked
                         ; pattern will not sit in a signed immediate): materialize it
                         fs (? (u32? g (vty a) && (n < 0))
@@ -860,7 +857,7 @@
                       (? !(x64t? g) 'bad
                          (wbr (rflip op) (as128 g b + (wpush + wnum <>lhs)) (id? (vty b) 'u128)))
                      (: n <>lhs
-                        cc9 (bcc (rflip op) (cmpu (numty n) (vty b)))
+                        cc9 (bcc (rflip op) (cmpu g (numty n) (vty b)))
                         fs (? (u32? g (vty b) && (n < 0))
                               (: sc (? (id? (vreg b) 'r1) 'r0 'r1)
                                  (vfs b + `(`('li sc (& n 4294967295)) `('cmp (vreg b) sc) `('br cc9 lbl))))
@@ -892,7 +889,7 @@
                                         (af + as128 g b + fixa +
                                          (`(`('c128 (scc op u2) 'sp)) + (wdrop + `('(cmp r0 0) `('br cc lbl)))))))
                                  (t32? g && (pA || llt? (vty b)))
-                                  (: u2 (cmpu (vty a) (vty b))
+                                  (: u2 (cmpu g (vty a) (vty b))
                                      (af + asll g b +
                                       (? pA (spop2 'r2 'r3 + pbrf g op u2 'r2 'r3 'r0 'r1 cc lbl)
                                          (spop 'r2
@@ -901,7 +898,7 @@
                                  (: bf (tor0 g b)
                                     ta9 (numty9 lhs (vty a)) tb9 (numty9 rhs (vty b))
                                     brf (znrw g ta9 tb9 'r1 'r0 +
-                                         `('(cmp r1 r0) `('br (bcc op (cmpu ta9 tb9)) lbl)))
+                                         `('(cmp r1 r0) `('br (bcc op (cmpu g ta9 tb9)) lbl)))
                                     (? (r1safe? bf) (af0 + '((mov r1 r0)) + bf + brf)
                                        (af + bf + (spop 'r1 + brf))))))
                           (: b (cgexpr g env rhs)
@@ -920,11 +917,11 @@
                                  (: fs (vfs ah + vfs b
                                         + `(`('mov 'r2 (vreg ah)))
                                         + (? (usg? (vty ah)) '((li r3 0)) '((mov r3 r2) (sar r3 31)))
-                                        + pbrf g op (cmpu (vty ah) (vty b)) 'r2 'r3 'r0 'r1 cc lbl)
+                                        + pbrf g op (cmpu g (vty ah) (vty b)) 'r2 'r3 'r0 'r1 cc lbl)
                                     _ (rfree g (vreg ah)) _ (rfree g (vreg b))
                                     fs)
                                 (: ta9 (numty9 lhs (vty ah)) tb9 (numty9 rhs (vty b))
-                                   cc9 (bcc op (cmpu ta9 tb9))
+                                   cc9 (bcc op (cmpu g ta9 tb9))
                                    ; the zx4 narrow cannot touch a HOME in place: copy
                                    ; through the staging pair (b first -- it may sit in r1)
                                    fs (? (two? (znrw g ta9 tb9 'r1 'r0))
@@ -2460,7 +2457,7 @@
                                        (af9 + spush 'r0 + bf + spop 'r1)))
                              back '((mov r0 r1))
                              pa (ptr? ta) pb (ptr? tb)
-                             unsg (cmpu ta9 tb9)                      ; divide and compare take the COMMON type's signedness -- see cmpu
+                             unsg (cmpu g ta9 tb9)                      ; divide and compare take the COMMON type's signedness -- see cmpu
                              u32 (u32bin? g ta9 tb9)                  ; a 32-bit unsigned result wraps -- see u32bin?
                              nar (? u32 '((zx4 r0)) ())               ; the shuttle always lands in r0 (back)
                              nty (? u32 'uint 'long)
@@ -2661,7 +2658,7 @@
                                       _ (rfree g rB) _ (? (id? rd rA) () (rfree g rA))
                                       (mkv (? pa ta tb) rd fs))
                                   (: rA (vreg ah) rB (vreg b)
-                                     cunsg (cmpu ta9 tb9)
+                                     cunsg (cmpu g ta9 tb9)
                                      pre (vfs ah + vfs b)
                                      (? (member? op '(eq ne lt le gt ge))
                                          ; a mixed int/uint compare owes a zx4 narrow, and rA/rB

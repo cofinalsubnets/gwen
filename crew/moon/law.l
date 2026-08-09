@@ -310,6 +310,34 @@
          '((decl (("buf" (arr char 155) ()))) (ret (num 155))))
       (= (citems "int f(int a[7]) { char buf[sizeof a[0]]; return sizeof buf; }")   ; a[i] element sizeof (a param decays to a pointer: sizeof *ptr = 4)
          '((decl (("buf" (arr char 4) ()))) (ret (num 4))))
+      ; the typing door (parse.l pprom/puac -- C11 6.3.1.1 + 6.3.1.8, the ONE
+      ; spelling; gen's cmpu consumes the same door): promoted arithmetic
+      ; sizeofs to its C type, not the register's 8 -- char+int is an int,
+      ; shorts promote, ~ and unary - promote, a shift wears its promoted LEFT
+      ; type alone, ?: arms meet by puac, float wins its lane
+      (= (citems "int f(char c, int x) { return sizeof(c + x); }") '((ret (num 4))))
+      (= (citems "int f(short s) { return sizeof(s + s); }") '((ret (num 4))))
+      (= (citems "int f(char c) { return sizeof(~c); }") '((ret (num 4))))
+      (= (citems "int f(short s) { return sizeof(-s); }") '((ret (num 4))))
+      (= (citems "int f(char c) { return sizeof(c << 1); }") '((ret (num 4))))
+      (= (citems "int f(char c, short s) { return sizeof(c ? c : s); }") '((ret (num 4))))
+      (= (citems "int f(float g, char c) { return sizeof(g + c); }") '((ret (num 4))))
+      (= (citems "int f(long l, unsigned u) { return sizeof(l + u); }") '((ret (num 8))))
+      (= (citems "int f(unsigned u, char c) { return sizeof(u + c); }") '((ret (num 4))))
+      (= (citems "int f(int *p) { return sizeof(p + 1); }") '((ret (num 8))))
+      ; ..and the door bare, at the width seam: LP64 long HOLDS every uint so
+      ; the signed side wins; ILP32 long cannot, so unsigned does. same
+      ; signedness takes the higher rank; float/double win their lanes whole.
+      (= (puac 1 'long 'uint) 'long)
+      (= (puac () 'long 'uint) 'ulong)
+      (= (puac 1 'int 'uint) 'uint)
+      (= (puac 1 'ulong 'int) 'ulong)
+      (= (puac () 'llong 'ulong) 'llong)
+      (= (puac 1 'char 'ushort) 'int)
+      (= (puac 1 'double 'ulong) 'double)
+      (= (puac 1 'float 'char) 'float)
+      (= (pprom 'ushort) 'int)
+      (= (pprom 'uint) 'uint)
       (two? (cgn "struct N { long v; struct N *n; }; int main() { struct N a; a.v = 7; a.n = &a; return a.n->v; }"))
       (two? (cgn "int main() { int x = 2; switch (x) { case 1: return 9; default: return 7; } }"))
       (two? (cgn "int main() { int i = 0; do i++; while (i < 3); return i; }"))

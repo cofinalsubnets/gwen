@@ -153,16 +153,23 @@ when `test_cts` first ran.
 clean and answer wrong, and both are rows elsewhere on this page — the wide literal and
 `#pragma push_macro`.
 
-### sizeof over promoted arithmetic answers 8
+### sizeof over promoted arithmetic — landed, via the typing door
 
-`sizeof(a + b)` over a `char` and an `int` is **8**, gcc's 4 — likewise `sizeof(s + s)` on
-shorts and `sizeof(~a)`: gen types every integer result `long`, and only `sizeof` can see it
-(the values agree at either width). The truth-valued twin of this row (`sizeof(!a)`,
-c-testsuite's 00178) landed 2026-08-09 — `!`, the six relations, `&&` and `||` answer `int`
-unconditionally, so `ptype` says so without reading an operand. This remainder is priced
-differently: the promoted type is a function of BOTH operand types, and growing that ladder in
-`ptype` is a second copy of gen's type propagation — the drift hazard the target-asymmetries
-section warns about. A rung, not a patch.
+`sizeof(a + b)` over a `char` and an `int` used to answer **8** (gen types every integer
+result `long`, and only `sizeof` could see it); likewise shorts, `~a`, `-s`, shifts, `?:`
+and `float + char`. **Landed 2026-08-09** as the *typing door* — `pprom`/`puac` in parse.l,
+C11 6.3.1.1 integer promotions and 6.3.1.8 usual arithmetic conversions spelled **once**,
+width seam included (on ILP32 a long cannot hold every uint, so long meets uint at ulong
+where LP64 answers long). `ptype`'s arithmetic lanes read it, and **gen's `cmpu` consumes
+the same door**, so the compare/divide signedness law and these sizes cannot drift apart —
+the door retired the hand-synced twin this row used to warn about, and fixed a live t32
+miscompile on the way: `long < unsigned` compared signed on ILP32 where C says unsigned
+(pinned in the thumb 64-lane differential, `ltlu`/`divlu`/`remlu`). `__typeof__` over
+arithmetic expressions types through the same lanes now too.
+
+Two residues, both accepted: **unary `+` vanishes at parse** (it exists only to promote, so
+`sizeof(+c)` is 1, gcc's 4), and `sizeof(a = b)` still defers to gen's 8 (assignment wears
+the unpromoted left type; no ptype lane asks it). Neither has a real-world consumer yet.
 
 ### bool is four bytes
 
@@ -278,9 +285,11 @@ thumb2 lowers to the MOVW/MOVT absolute pair, and `leax` to `ADD.W Rd,Rn,Rm,LSL#
 ⚠ **Parse-side and gen-side type twins drift silently.** `tsz`/`talign` (parse) and `(wsize g)`
 (gen) once disagreed on pointer width, mislaying every struct containing a pointer on both
 32-bit targets with no scare. The target is threaded into the parse state now (`psnew tgt`,
-`psword ps`), but the two copies are still kept in step by hand. Any new parse-side type
-computation is the same hazard — extending `ptype` grows a second copy of gen's type
-propagation, and a divergence there is a silent miscompile.
+`psword ps`), but those two copies are still kept in step by hand. The promotion/conversion
+law stopped being a twin 2026-08-09: `pprom`/`puac` (parse.l, the typing door) is the one
+spelling, `ptype` and gen's `cmpu` both consume it, and the width rides one parameter
+(`!(pst32? ps)` / `!(t32? g)`). Any NEW parse-side type computation should go through or
+beside the door, not grow a private ladder.
 
 ⚠ **Parse folds early on purpose** — an array bound needs the constant at parse time, and gen's
 `szof` lane is too late. Deferring a fold to gen is not an available fix.
