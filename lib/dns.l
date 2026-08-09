@@ -139,7 +139,7 @@
    (dns-ask ns port h ms)
     (: p (udp-bind 0)
        (? (! p) ()
-          (: id ((clock ()) & 65535)
+          (: id ((clock 0) & 65535)
              q (dns-query id h)
              (? (! (string? q)) (: _ (close p) ())
                 (: _ (udp-send p ((ns * 65536) + port) q)

@@ -54,9 +54,9 @@
 ; watchdog waits on the clock, and the freeze out from under the catcher is what
 ; wakes the caller. this law pins that it wakes AT ALL; the elapsed time pins
 ; that it waited rather than answering at once.
-(: t0 (clock ())
+(: t0 (clock 0)
    a (dns-ask 2130706433 7402 "ab.cd" 200)            ; nothing is bound there
-   ms ((clock ()) - t0)
+   ms ((clock 0) - t0)
    _ (assert (! (two? a))
              (200 <= ms)
              (ms < 2000)))
