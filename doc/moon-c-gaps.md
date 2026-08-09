@@ -133,15 +133,14 @@ when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Six compile
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Five compile
 clean and answer wrong; three of those are rows elsewhere on this page — the predefine surface,
-the wide literal, `#pragma push_macro`. These three are their own:
+the wide literal, `#pragma push_macro`. These two are their own:
 
 | what | the shape | what it costs |
 |---|---|---|
 | **`!` yields a long** | `sizeof(!a)` | 8, where C says the result of `!` is an `int` (4). Same family as the `sizeof` row below: a type lost on the way out of a node. |
 | **an unsuffixed constant too big for `long` wraps** | `x != 0xffffffffffffffff` | C says such a decimal/hex constant takes `unsigned long`; we wrap it to −1 and the comparison goes the other way. |
-| **an enum bit-field sign-extends** | `enum tree_code code : 8;` where an enumerator has bit 7 set | the value comes back negative and the `switch` takes `default`. An enum whose values are all non-negative must load zero-extended. |
 
 ### bool is four bytes
 

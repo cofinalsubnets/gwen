@@ -829,6 +829,13 @@
       ; a string fills a char array whole, at any depth -- the row is one item, not its bytes
       (= (dty "char m[][8] = {\"ab\",\"cd\",\"ef\"};") '(arr (arr char 8) 3))
       (= (dty "struct S { char n[4]; int v; } t[] = {\"ab\",1,\"cd\",2};") '(arr (struct "S") 2))
+      ; an enum's underlying type is UNSIGNED unless an enumerator is negative (gcc's
+      ; choice) -- what makes an enum BIT-FIELD extract zero-extended. it rides the tag
+      ; too, so a later mention by tag alone reads the same; test/cc/119 holds that leg,
+      ; since dty reads the FIRST declaration and a bare definition has no declarator
+      (= (dty "enum e { A, B } v;") 'uint)
+      (= (dty "enum e { A = 148, B } v;") 'uint)
+      (= (dty "enum e { A = -1, B } v;") 'int)
       ; a PARENTHESIZED declarator (*p) then a trailing suffix: [dims] -> pointer to ARRAY,
       ; (params) -> pointer to FUNCTION, nothing -> a plain pointer. an inner [n] on the name
       ; makes it an ARRAY of those pointers. (the type the suffix binds outward around the *.)

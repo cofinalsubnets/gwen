@@ -288,6 +288,7 @@
                 _ (pin t 'ainl ())                  ; always_inline function names (love.h's ai_inline)
                 _ (pin t 'noinl ())                 ; noinline function names (love.h's ai_noinline)
                 _ (pin t 'enums (tablet 0))         ; enum constant -> value
+                _ (pin t 'etag (tablet 0))          ; enum tag -> 1 when no enumerator is negative (an unsigned underlying type)
                 _ (pin t 'stag (tablet 0))          ; tag -> (fields size align)
                 _ (pin t 'utag (tablet 0))          ; the tags of that table that are UNIONS (the layout flattens them alike)
                 _ (pin t 'sigs (tablet 0))          ; fn/proto name -> (rettype (paramty..)) for the call ABI
@@ -680,11 +681,17 @@
                              `(`('struct tag2) <>pa))))
                     (? tag `(`('struct tag) ts3) ())))
              (tkw? t 'enum)
+              ; the underlying type is UNSIGNED when no enumerator is negative (gcc's
+              ; choice), and an enum BIT-FIELD is where that shows: `enum c code : 8`
+              ; holding 148 must load 148 back, not -108. the tag remembers which,
+              ; so a later `enum c` by tag alone reads the same signedness.
               (: ts2 >ts
-                 ts3 (? (two? ts2 && (tkk <ts2 = 'id)) >ts2 ts2)
+                 tag (? (two? ts2 && (tkk <ts2 = 'id)) (tkv <ts2) ())
+                 ts3 (? tag >ts2 ts2)
+                 (ety pos) (: _ (? tag (pin (ps 'etag) tag pos) 0) (? pos 'uint 'int))
                  (? (peekp ts3 "{")
-                    (: (consts ts4 v)
-                        (? (peekp ts4 "}") `('int >ts4)    ; a trailing comma (or empty body): the enum ends
+                    (: (consts ts4 v pos)
+                        (? (peekp ts4 "}") `((ety pos) >ts4)    ; a trailing comma (or empty body): the enum ends
                            !(two? ts4 && (tkk <ts4 = 'id)) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -697,11 +704,12 @@
                               (? !(two? vr) ()
                                  (: _ (pin (ps 'enums) name <vr)
                                     ts6 <>vr
-                                    (? (peekp ts6 ",") (consts >ts6 (<vr + 1))
+                                    pos2 (pos && !(<vr < 0))
+                                    (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2)
                                        (: rest (want ts6 "}")
-                                          (? (two? rest) `('int rest) ())))))))
-                       (consts >ts3 0))
-                    `('int ts3)))
+                                          (? (two? rest) `((ety pos2) rest) ())))))))
+                       (consts >ts3 0 1))
+                    `((? (peep (ps 'etag) tag 0) 'uint 'int) ts3)))
              ((tkk t = 'id) && (? (peep (ps 'types) (tkv t) 0) 1 ()))
               `((peep (ps 'types) (tkv t) 0) >ts)
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
