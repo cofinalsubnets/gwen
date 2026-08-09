@@ -30,7 +30,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 | `_Alignof` | `_Alignof(int)` |
 | `_Generic` | `_Generic(x, int: 1, default: 0)` |
 | `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest |
-| `__extension__` | `__extension__ unsigned long long v;` — glibc's `__atomic_wide_counter` opens with it, so **`#include <pthread.h>` does not parse** (`gcc -E -P` it and mooncc stops at line 197). A no-op keyword: skipping it at declaration, member and expression position is the whole fix, and it would let pdclib's dlmalloc build. |
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
@@ -69,7 +68,12 @@ automatic in a function where C says static duration, so a pointer kept past the
 dangles, and `wchar_t *p = L"x"` at file scope refuses on the static-clit row above; and a
 mixed-prefix concatenation `u"a" U"b"` takes the first prefix where gcc refuses. Universal
 character names `\uXXXX`/`\UXXXXXXXX` stay absent — the escape refuses, loudly), anonymous
-unions, `restrict`, `static inline`, mixed
+unions, `__extension__` (**landed 2026-08-09**: a no-op skipped at a declaration's head —
+file scope, block, member, before `typedef` — and as a cast-expression prefix, with the
+typedef declarator's trailing attribute run skipping alongside; **`#include <pthread.h>`
+parses, compiles and runs now**. gcc-refused spots like `int __extension__ x;` still refuse;
+`sizeof(__extension__ T)` is accepted where gcc refuses, the one tolerance),
+`restrict`, `static inline`, mixed
 declarations, `for`-scoped declarations, `_Static_assert` itself (including `&&`/`||`/`?:` in
 the constant), string-literal concatenation, self-referential structs, enum trailing commas,
 multidimensional arrays, brace elision in nested initialisers, pointer-to-array declarators,
@@ -216,6 +220,12 @@ suffixed literals already arrive under) and it was **measured at +12% of love.o'
 (460447 → 515584 bytes) — the cast makes the surrounding arithmetic take unsigned lanes, which
 is more correct C at a real size cost. Written and reverted 2026-08-08: it is a rung with a
 price tag, not a patch. ⚠ measure again before believing the number; it was one build.
+
+It has a real consumer now (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
+PDCLib's dlmalloc guards itself with `enum { _PDCLIB_assert_667 = 1 / (!!(sizeof( sizeof(int) )
+== sizeof(long unsigned int))) };` — our 4 ≠ 8, the divide refuses, the file stops there.
+Behind it wait `__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines) and
+`__sync_lock_test_and_set` (dlmalloc's spin locks), so the rung alone does not finish dlmalloc.
 
 ### what the %f hunt actually found — and the trap in it
 

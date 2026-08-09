@@ -860,7 +860,21 @@
       (= (cast "int f(void const *p){return 0;}")             ; a qual between type and star keeps the pointer
          (cast "int f(void *p){return 0;}"))
       (= (cast "int f(int, long); int main(void){return 0;}") ; unnamed proto params -> abstract declarators
-         '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))))
+         '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))
+      ; __extension__ (gcc, a no-op) skips at a declaration's head -- file scope,
+      ; block, member, before typedef -- and as a unary prefix in an expression
+      (= (cast "__extension__ unsigned long long v;") (cast "unsigned long long v;"))
+      (= (cast "__extension__ typedef unsigned long long u; u x;")
+         (cast "typedef unsigned long long u; u x;"))
+      (= (cast "struct S { __extension__ long long w; };") (cast "struct S { long long w; };"))
+      (= (cast "int main(void){ __extension__ long long x = 5; return __extension__ (int)x; }")
+         (cast "int main(void){ long long x = 5; return (int)x; }"))
+      (= (cast "int main(void){ __extension__ typedef int t; t y = __extension__ 3; return y; }")
+         (cast "int main(void){ typedef int t; t y = 3; return y; }"))
+      ; a typedef's declarator carries the trailing attribute run too (glibc's
+      ; `} __pthread_unwind_buf_t __attribute__((__aligned__));`)
+      (= (cast "typedef struct TT { int a; } T __attribute__((__aligned__)); T t;")
+         (cast "typedef struct TT { int a; } T; T t;"))))
 
 ; -- 7c-ii: a type-specifier RUN canonicalizes to one type symbol. the unsigned
 ; scalars are 'uchar 'ushort 'uint 'ulong (gen: zero-extend loads, logical >>,

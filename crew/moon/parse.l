@@ -107,7 +107,7 @@
    ; balance-skip their parens; _Noreturn / __inline stand alone.
    qualkw '(const volatile restrict register auto inline extern static)
    qualid '("__attribute__" "__inline" "__inline__" "__restrict" "__restrict__"
-            "__volatile__" "__const" "_Noreturn" "_Alignas" "__alignof__")
+            "__volatile__" "__const" "_Noreturn" "_Alignas" "__alignof__" "__extension__")
    (pquals ts)
     (? !(two? ts) ts
        (: t <ts
@@ -1014,6 +1014,8 @@
                        (? (two? r) (: ty (ptype ps <r)
                                       (? (ty && !(varr? ty))      ; a VLA's size is RUNTIME: defer to gen's szof
                                          `(`('num (tsz ps ty)) <>r) `(`('szof <r) <>r))) ()))))
+             ; __extension__ (gcc) prefixes a cast-expression as a no-op
+             ((tkk t = 'id) && (tkv t = "__extension__")) (punary ps >ts)
              (tp? t "*") (: r (punary ps >ts)
                             (? (two? r) `(`('deref <r) <>r) ()))
              (tp? t "&") (: r (punary ps >ts)
@@ -1596,7 +1598,7 @@
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
              sh2 (`('types nm old) >< sh)
-             af <>dr
+             af (patt <>dr)
              (? (peekp af ",") (btdefs ps base >af sh2)
                 (peekp af ";") `(>af sh2)
                 ()))))
@@ -1606,6 +1608,7 @@
           (: (items ts2 acc sh)
               (? !(two? ts2) (: _ (unshadow ps sh) ())
                  (tp? <ts2 "}") (: _ (unshadow ps sh) `(`('blk (rev acc)) >ts2))
+                 ((tkk <ts2 = 'id) && (tkv <ts2 = "__extension__")) (items >ts2 acc sh)
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
                      r (? (two? br) (btdefs ps <br <>br sh) ())
@@ -1703,7 +1706,7 @@
     (: dr (pdtor ps ts base)
        (? !(two? dr) ()
           (: _ (pin (ps 'types) <<dr <><dr)
-             af <>dr
+             af (patt <>dr)                ; glibc trails __attribute__ on a typedef's declarator
              (? (peekp af ",") (tdeflist ps base >af)
                 ; peek for the `;`: the remainder may be EMPTY (a typedef at EOF)
                 (peekp af ";") `('(tdef) >af)
@@ -1723,6 +1726,9 @@
        (ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") `('(tdef) >ts)           ; a stray top-level `;` -- an empty declaration
+       ; a leading __extension__ (gcc, a no-op) strips BEFORE the keyword checks --
+       ; glibc opens `__extension__ typedef` and the typedef lane reads the raw head
+       (two? ts && (tkk <ts = 'id) && (tkv <ts = "__extension__")) (ptop9 ps >ts)
        (static? ts) (pstatic ps ts)
        ; a leading __attribute__((weak)): parse past it and record the function's
        ; name -- the .o emitter binds its symbol WEAK (a host override wins at link)
