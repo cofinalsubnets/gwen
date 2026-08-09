@@ -1,10 +1,9 @@
 ; prel.l -- love prel: data + function + macro definitions.
-; prefix only down to the `operators` table: c0 compiles this before opfix and before the church
+; prefix only down to the `dyadics` table: c0 compiles this before opfix and before the church
 ; add/mul hooks exist. an operator up here cores the egg.
 ; FIXME move ev support functions to ev where possible
 (: id 1
    (const x _) x
-   <- pin -> peep
    (co f x y) (f y x)                ; the argument-transpose
    flip co
    two? link?
@@ -127,7 +126,7 @@
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
         ; an open star: a coin whose die pins slot 7 is numeric by declaration, so a numeral powers
         ; it through its own * (ipow is generic). no size to read, so this lane keeps the count cap.
-        (starred? x) (? (coin? x) (= 1 (-> (die-of x) 7 0)) 0)
+        (starred? x) (? (coin? x) (= 1 (peep (die-of x) 7 0)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
                         (starred? x)
                         (? (whole? n) (: m (abs n)
@@ -160,8 +159,8 @@
 (: (net x) (? (tray? x) (asum x)
               (constellation? x) x
               (two? x) (foldl (\ a e (+ a (net e))) 0 x)
-              (coin? x) (? (= 1 (-> (die-of x) 7 0)) x
-                           (= 1 (-> (die-of x) 6 0)) (tally x)
+              (coin? x) (? (= 1 (peep (die-of x) 7 0)) x
+                           (= 1 (peep (die-of x) 6 0)) (tally x)
                            (net (load x)))
               (sat x))
    (prod x) (? (tray? x) (aprod x)
@@ -340,31 +339,30 @@
                     (slashy? (string m)) (: _ (rdev q) ())
                     (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
 
-; --- reader operators: the table + the opfix factor pass --------------------
-; the reader leaves a sigil a plain symbol; opfix factors it against this table at compile time.
-; a row is arity, a grip (higher binds tighter) and a hand (0 right, 1 left -- how a same-grip run
-; folds); op-ent normalizes all five written shapes to (name arity grip . hand). arity one takes
-; the next datum, never a left operand. undeclared is infix at two, grip 95 -- above every row
-; here, so the table holds only exceptions. infix is live from this table on.
-(: operators (pins (tablet 0)
+; --- reader operators: the two tables + the opfix factor pass ---------------
+; the valence law's two faces, one form: spaced is dyadic, glued is monadic. the reader leaves a
+; sigil a plain symbol; opfix factors it against these at compile time.
+; a dyadics row is arity (two or more -- an infix row always wants a left operand), a grip (higher
+; binds tighter) and a hand (0 right, 1 left -- how a same-grip run folds); op-ent normalizes all
+; five written shapes to (name arity grip . hand). undeclared is infix at two, grip 95 -- above
+; every row here, so the table holds only exceptions. infix is live from this table on.
+; a monadics entry maps a run-piece to its monadic word and a run factors greedily, so <>x is
+; (cap (cup x)) -- glued runs only, and a monadic-only sigil has no dyadics row at all.
+(: dyadics (pins (tablet 0)
  '** (>< 2 70)
  '* (>< 2 (>< 60 1)) '/ (>< 2 (>< 60 1)) '% (>< 2 (>< 60 1))  ; multiplicative, LEFT
  '+ (>< 2 (>< 50 1)) '- (>< 2 (>< 50 1))            ; additive, LEFT
  '= (>< 2 40) '!= (>< 2 40) '< (>< 2 40) '<= (>< 2 40) '> (>< 2 40) '>= (>< 2 40) ; comparison
  '| (>< 2 30) '& (>< 2 30) '&& (>< 2 30) '|| (>< 2 30) ; logical (&& || also macros; the row pins the grip below comparison)
  '>< (>< 2 25)                                                   ; cons -- the loosest builder
- '<- (>< 'pin (>< 3 20)) '-> (>< 'peep (>< 3 20))   ; assignment aliases
  '? (>< 3 10)                                                    ; cond
- '$ (>< 2 5)))                                                  ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
-; the valence law's table: a glued operator run is monadic, spaced it stays infix. each entry maps
-; a run-piece to its monadic word and a run factors greedily, so <>x is (cap (cup x)).
-; glued runs only -- a monadic-only sigil lives here and has no row above.
-(: monadics (pins (tablet 0)
+ '$ (>< 2 5))                                                   ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
+   monadics (pins (tablet 0)
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
  '% fraction '? bit '$ saturate '! nil?))   ; `.` is pinned here by post.l, whose dot it is
-; the factorization law: greedy longest-prefix, no backtracking. every factor but the last is
-; arity one; the last takes the positional valence. the stock table declares no arity-one row, so
-; != && >>= :- ?- are each one name; a `fixity`-declared prefix operator is what composes.
+; factorization is the GLUED lane's alone: a run splits greedily, longest-prefix, no backtracking,
+; against monadics. a SPACED sigil is one whole name -- it either carries a dyadics row or takes
+; the fresh-punct default -- so != && >>= :- ?- each stay one operator.
 ; everything to (seal-hook 4 opfix) stays prefix -- the first pass compiles prel with no opfix.
 (: (op-punc-byte c) (? (&& (<= 97 c) (<= c 122)) 0
                        (&& (<= 48 c) (<= c 57)) 0
@@ -385,7 +383,7 @@
        0)
    ; normalize a table entry for key k -> the quad (name arity grip . hand), or 0. head and tail
    ; fork by kind, so all five written shapes land here. a bad arity or tail answers 0.
-   (op-ar? n) (&& (charm? n) (< 0 n) (< n 8))
+   (op-ar? n) (&& (charm? n) (< 1 n) (< n 8))   ; two or more: an infix row always wants a left operand
    ; the grip/hand tail, dotted OR as a plain list -- the table writes (2 60 . 1) but `fixity`'s
    ; caller writes '(2 60 1), and the door should not make anyone count dots.
    (op-gh v)  (? (charm? v) (>< v 0)                                       ; a grip alone: right-handed
@@ -395,7 +393,7 @@
                  (&& (two? (cup v)) (charm? (caup v))) (>< (cap v) (caup v))  ; (grip hand), a list
                  (atom? (cup v)) (>< (cap v) 0))                           ; (grip), a list
                  
-   (op-ent k) (: v (operators k)
+   (op-ent k) (: v (dyadics k)
                  (? (charm? v) (? (op-ar? v) (>< k (>< v (>< 95 0))) 0)
                     (two? v)
                      (? (charm? (cap v))                                     ; self-named: (arity . grip[. hand])
@@ -406,36 +404,13 @@
                                (? (op-ar? (cup v)) (>< (cap v) (>< (cup v) (>< 95 0))) 0)
                              (: t (op-gh (cuup v))                           ; (name arity . grip[. hand])
                                 (? (&& (op-ar? (caup v)) (two? t)) (>< (cap v) (>< (caup v) t)) 0))))))
-   ; longest prefix of nm[i..n) that is a table key -> (len . entry), or 0
-   (op-long nm i n)
-    ((: (go k) (? (< k 1) 0
-                  (: e (op-ent (intern (snip nm i (+ i k))))
-                     (? (two? e) (>< k e) (go (- k 1))))))
-     (- n i))
-   ; factor symbol s -> a list of (name . arity) entries, else nothing. a no-match falls off the
-   ; end of its `?` to the unit, and op-w reads the answer with two?.
-   (opfactor s)
-    (: nm (string s) n (tally nm)
-       ((: (go i)
-           (? (< i n)
-              (: m (op-long nm i n)
-                 (? (two? m) (: k (cap m) e (cup m)
-                         (? (= (+ i k) n) (>< e ())        ; the last factor: any arity
-                            (= (caup e) 1) (: r (go (+ i k)) ; non-last factors must be arity one
-                                             (? (two? r) (>< e r)))))))))
-        0))
-   ; longest prefix of nm[i..n) with a monadic meaning -> (len . word), or 0. monadics first, then
-   ; an operators row at arity one. the table holds word values, so a hit is asked out of band
-   ; against the miss answer -- a truth test would drop any word that nets nothing.
+   ; longest prefix of nm[i..n) with a monadic meaning -> (len . word), or 0. the table holds word
+   ; values, so a hit is asked out of band against the miss answer -- a truth test would drop any
+   ; word that nets nothing.
    (mono-long nm i n)
     ((: (go k) (? (< k 1) 0
-                  (: s (intern (snip nm i (+ i k)))
-                     e (monadics s)
-                     (? (id? () e)
-                        (: o (op-ent s)
-                           (? (? (two? o) (= 1 (caup o)) 0) (>< k (cap o))
-                              (go (- k 1))))
-                        (>< k e)))))
+                  (: e (monadics (intern (snip nm i (+ i k))))
+                     (? (id? () e) (go (- k 1)) (>< k e)))))
      (- n i))
    ; factor a glued run against the monadic table -> the word list (outermost first), or 0
    (monofactor s)
@@ -447,38 +422,34 @@
                     (? (= (+ i (cap m)) n) (>< (caup m) ())
                        (: r (go (+ i (cap m))) (? (two? r) (>< (caup m) r))))))))
         0))
-; the walk. a pending-operator frame is (orig chain name need grip . got): the source symbol, the
-; arity-one wrapper names outermost first, the operands still wanted, the captured grip, and the
-; operands so far, reversed. need 0 means filled with the fold deferred, so a later operator can
-; steal the last operand -- that deferral is right-associativity. out/pend thread as (out . pend).
-   (op-fr o ch nm nd g gt) (>< o (>< ch (>< nm (>< nd (>< g gt)))))
-   (op-fro f) (cap f) (op-frc f) (caup f) (op-frn f) (cauup f)
-   (op-frd f) (cap (cuuup f)) (op-frgrip f) (cap (cup (cuuup f))) (op-frg f) (cup (cup (cuuup f)))
-   ; a frame is only ever rebuilt with a new need + got -- orig, chain, name and grip are fixed
-   ; the moment the operator is read.
-   (op-frw f nd g) (op-fr (op-fro f) (op-frc f) (op-frn f) nd (op-frgrip f) g)
-   ; wrap the chain of arity-one names around a folded form
+; the walk. a pending-operator frame is (orig name need grip . got): the source symbol, the
+; resolved name, the operands still wanted, the captured grip, and the operands so far, reversed.
+; need 0 means filled with the fold deferred, so a later operator can steal the last operand --
+; that deferral is right-associativity. out/pend thread as (out . pend).
+   (op-fr o nm nd g gt) (>< o (>< nm (>< nd (>< g gt))))
+   (op-fro f) (cap f) (op-frn f) (caup f)
+   (op-frd f) (cap (cuup f)) (op-frgrip f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
+   ; a frame is only ever rebuilt with a new need + got -- orig, name and grip are fixed the
+   ; moment the operator is read.
+   (op-frw f nd g) (op-fr (op-fro f) (op-frn f) nd (op-frgrip f) g)
+   ; wrap a chain of monadic words around a datum, outermost first
    (op-fin ch x) (? (two? ch) (>< (cap ch) (>< (op-fin (cup ch) x) ())) x)
    ; fold a collected span (out, reversed) into ONE operand: a lone datum stays itself, two-or-more
    ; become the application (juxtaposition binds tighter than any infix operator).
    (op-span out) (? (two? (cup out)) (rev out) (cap out))
    ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
-   ; partial application, arity one wraps its lone operand.
+   ; partial application -- the curry law, with no case of its own.
    ; kind tests throughout the walk, never truth -- an operand list like (0) or ("") nets zero.
    (op-fold f) (? (atom? (op-frg f)) (op-fro f)
-                  (nom? (op-frn f)) (op-fin (op-frc f) (>< (op-frn f) (rev (op-frg f))))
-                  (op-fin (op-frc f) (cap (op-frg f))))
+                  (>< (op-frn f) (rev (op-frg f))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a filled infix frame extends
    ; its right operand into a span, since juxtaposition binds tighter: (a = b c) is (= a (b c)).
-   ; the span state rides `need`: 0 = a lone datum, -1 = growing. arity one folds at once.
+   ; the span state rides `need`: 0 = a lone datum, -1 = growing.
    (op-del d out pend)
     (? (atom? pend) (>< (>< d out) pend)
        (: f (cap pend)
           (? (< 0 (op-frd f))
-             (: f2 (op-frw f (- (op-frd f) 1) (>< d (op-frg f)))
-                (? (&& (= 0 (op-frd f2)) (nil? (nom? (op-frn f2))))
-                   (op-del (op-fold f2) out (cup pend))
-                   (>< out (>< f2 (cup pend)))))
+             (>< out (>< (op-frw f (- (op-frd f) 1) (>< d (op-frg f))) (cup pend)))
              (: op (cap (op-frg f))                          ; the frame's last (right) operand
                 nx (? (= 0 (op-frd f)) (>< op (>< d ())) ; lone -> wrap into (op d)
                       (cat op (>< d ())))                  ; span -> append d
@@ -508,22 +479,17 @@
     (? (atom? l) (op-drain out pend)
        (: e (cap l)
           (? (op-puncp e)
-             ; whatever does NOT factor defaults to infix at two; with no left operand the infix
-             ; frame still folds to the plain symbol (op-fold's bare case)
-             (: fs0 (opfactor e)
-                fs (? (two? fs0) fs0 (>< (>< e (>< 2 (>< 95 0))) ()))   ; fresh punct: the (e 2 house . right) quad
-                ch (map cap (init fs)) en (last fs) nm (cap en) n (caup en) gp (cauup en)
-                (? (= n 1)                       ; arity one (or a one-chain): prefix --
-                   ; nil name, the op rides the chain: marks the frame to fold on fill (grip inert)
-                   (op-w (cup l) out (>< (op-fr e (cat ch (>< nm ())) 0 1 95 ()) pend))
-                   (: st (op-steal gp (cuuup en) out pend)  ; infix: capture if a left operand exists (at this grip + hand)
-                      (? (two? st) (op-w (cup l) (cap (cup st))
-                                  (>< (op-fr e ch nm (- n 1) gp (>< (cap st) ()))
-                                        (cup (cup st))))
-                         (two? ch)               ; composite with no left: prefix
-                         (op-w (cup l) out (>< (op-fr e ch nm 1 gp ()) pend))
-                         (: r (op-del e out pend) ; bare operator: the plain symbol
-                            (op-w (cup l) (cap r) (cup r)))))))
+             ; a spaced sigil is ONE name -- an unrowed one defaults to infix at two, and with no
+             ; left operand the infix frame still folds to the plain symbol (op-fold's bare case)
+             (: en0 (op-ent e)
+                en (? (two? en0) en0 (>< e (>< 2 (>< 95 0))))   ; fresh punct: the (e 2 house . right) quad
+                nm (cap en) n (caup en) gp (cauup en)
+                st (op-steal gp (cuuup en) out pend)   ; capture a left operand if one exists (at this grip + hand)
+                (? (two? st) (op-w (cup l) (cap (cup st))
+                            (>< (op-fr e nm (- n 1) gp (>< (cap st) ()))
+                                  (cup (cup st))))
+                   (: r (op-del e out pend)     ; no left operand: the plain symbol
+                      (op-w (cup l) (cap r) (cup r)))))
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))
    ; a `:` binds, it does not apply, so opfix must not rearrange it. binders stay verbatim and only
@@ -586,21 +552,21 @@
    (opfix x) (op-core x)
 
    ; the fixity door: the one sanctioned write into the compile table, and the only reach to
-   ; `operators` once birth mops the nom. it answers the row it replaced in the shape it takes, so
+   ; `dyadics` once birth mops the nom. it answers the row it replaced in the shape it takes, so
    ; (fixity nm (fixity nm new)) restores exactly; () clears a row. v is any shape op-ent takes,
    ; a refused one rolls back and scares. the table is read live.
    (fixity nm v)
     (? (nil? (nom? nm)) (scare 'bad-fixity nm)
-       (: old (peep operators nm ())
-          (? (nil? v) (: _ (pull operators nm 0) old)                ; () clears the row
-             (: _ (pin operators nm v)
+       (: old (peep dyadics nm ())
+          (? (nil? v) (: _ (pull dyadics nm 0) old)                ; () clears the row
+             (: _ (pin dyadics nm v)
                 (? (two? (op-ent nm)) old                            ; op-ent itself is the acceptor
-                   (: _ (? (nil? old) (pull operators nm 0) (pin operators nm old))
+                   (: _ (? (nil? old) (pull dyadics nm 0) (pin dyadics nm old))
                       (scare 'bad-fixity nm)))))))
 
    ; --- this `:` has a body, so the helpers above are local ------------------
    ; opfix and fixity are the door; the rest is the factor pass's scaffolding.
-   ; `operators`, `monadics` and `pureset` stay global-and-mopped instead: ev.l holds them, and a
+   ; `dyadics`, `monadics` and `pureset` stay global-and-mopped instead: ev.l holds them, and a
    ; cross-file capture has only the book to go through.
    _ (pin book 'fixity fixity)
    (pin book 'opfix opfix))

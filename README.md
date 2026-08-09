@@ -37,17 +37,17 @@ strings, and the value surface:
 - `#` hash (hash/box literal)
 - `~` twin (twin-gem/complex literal `~(re im)`; a bare `~x` lifts a gem, conjugates a twin gem)
 
-operator sigils are plain symbols until the compiler factors them against the
-one `operators` table (per-form extensible: pin an entry and the next form
-compiles with it):
-- at one: `$` sat (the value's net -- its content measure -- clamped once,
+operator sigils are plain symbols until the compiler resolves them, at compile
+time, against two tables -- `dyadics` for a spaced sigil, `monadics` for a glued
+run (`dyadics` is per-form extensible: pin an entry and the next form compiles
+with it):
+- spaced, at two: `+ - * / % = < <= > >= | &`
+- spaced, at three: `?` (the cond form infix: `(t ? a b)`)
+- glued: `$` sat (the value's net -- its content measure -- clamped once,
   `max(0, ceil)`; `!!$` is the iverson bracket, the truth bit `?` dispatches on),
   `!` nil? (not), `.` dot (print and return item)
-- at two: `+ - * / % = < <= > >= | &`
-- at three: `?` (the cond form infix: `(t ? a b)`)
-- aliases: `<-` pin, `->` peep (the collection accessors: `(t <- k v)`, `(t -> k d)`)
 - a glued run factors greedily, longest prefix first: `!!` double-negates, `<>`
-  is `cap` of `cup`; spaced, a token that doesn't factor stays one symbol
+  is `cap` of `cup`; a spaced sigil is one whole name and never splits
   (`!=`, `&&`, `>>=`)
 
 and the valence law: every operator is two operators -- GLUED IS MONADIC,
@@ -221,7 +221,7 @@ on the front page):
   dispatch tables. `sort` is one C comparison per chain -- the total order is
   the comparator.
 - no interpreter state lives outside the heap: the book (an ordinary love
-  hash) carries the globals, macros, the operators table, the help function
+  hash) carries the globals, macros, the operator tables, the help function
   and the rng; C finds its own hooks by name, allocation-free. the egg pulls
   every compiler-internal name -- the book itself included -- before the
   image is born. a name not in the book is missing: reading one is a

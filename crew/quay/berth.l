@@ -71,16 +71,16 @@
  ; running moor with no signal, and why a pane's screen may be swapped freely.
  (moor bx m dirty) (: ch (see m)
                     (? (= ch -1) ()
-                     (: s (bx -> () 0)
+                     (: s (peep bx () 0)
                         _ (scribe s ch)
                         b (cask 8192)
                         _ (: (drain x) (: n (swig m b)
                                           (? (< 0 n)
-                                             (: _ (scribe (bx -> () 0) (snip (string b) 0 n))
+                                             (: _ (scribe (peep bx () 0) (snip (string b) 0 n))
                                                 (drain ()))
                                              0))
                            (drain ()))
-                        rep (reply (bx -> () 0))
+                        rep (reply (peep bx () 0))
                         ; ⚠ NOT (map (put m) rep): map applies RIGHT TO LEFT, so the
                         ; answer went out backwards -- "\e[1;1R" as "R1;1[\e". a reply
                         ; is a byte STREAM and its order is the whole content of it.
@@ -101,7 +101,7 @@
  (hpid p) <>>p
  (hpane hb id) (peep (hb 'panes) id ())
  (hfind bs id) (? (two? bs) (? (= (wharf-id <bs) id) <bs (hfind >bs id)) ())
- (hsoil hb) (: b (hb 'dirt) (b <- () 1))
+ (hsoil hb) (: b (hb 'dirt) (pin b () 1))
 
  ; open a child on its own pty at r x c. ⚠ tether's errno rides back out on a
  ; refusal -- a charm, never two?, which is how the caller tells it from a pane.
@@ -123,10 +123,10 @@
                                (? !(two? p) 0
                                 (: nr (max 1 (wharf-rows b)) nc (max 1 (wharf-cols b))
                                    bx (hbox p)
-                                   s (bx -> () 0)
+                                   s (peep bx () 0)
                                    (? ((= nr (gaze s 1)) && (= nc (gaze s 2))) 0
                                     (: s2 (screen (cask (screen () nr nc)) nr nc)
-                                       _ (bx <- () s2)
+                                       _ (pin bx () s2)
                                        (setwinsize (hmas p) nr nc)))))))
                        bs)
                 _ (pin hb 'lay bs)
@@ -164,14 +164,14 @@
      _ (say j "\e[?25l")
      _ (map (\ b (: p (hpane hb (wharf-id b))
                     (? (wharf-show? b && two? p)
-                       (hrows j ((hbox p) -> () 0) (wharf-rows b) (wharf-cols b)
+                       (hrows j (peep (hbox p) () 0) (wharf-rows b) (wharf-cols b)
                                 (wharf-row b) (wharf-col b) 0 -1)
                        0)))
             (hb 'lay))
      _ (hbars j hb)
      _ (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
           (? (two? p && two? b)
-             (: s ((hbox p) -> () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
+             (: s (peep (hbox p) () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
                 _ (say j (hgo (wharf-row b + (// w c)) (wharf-col b + (% w c))))
                 (? (& 1 f) (say j "\e[?25h") 0))          ; the guest's cursor wish
              0))
@@ -248,8 +248,8 @@
  ; --- the swim: repaint on dirt at ~30fps, feel the tide every half second,
  ; and end when the last berth empties ---
  (hswim hb tick) (: b (hb 'dirt)
-                    _ (? (b -> () 0)
-                         (: _ (b <- () 0) _ (say out (hframe hb)) 0)   ; say IS the bulk lane
+                    _ (? (peep b () 0)
+                         (: _ (pin b () 0) _ (say out (hframe hb)) 0)   ; say IS the bulk lane
                          0)
                     _ (? (= 0 (% tick 16)) (htide hb) 0)
                     _ (rest 33)

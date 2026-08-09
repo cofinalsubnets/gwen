@@ -95,10 +95,10 @@
  buf #""
  rd (twirl (\ _ (: (pump x) (: ch (see m)
                               (? (= ch -1) ()
-                               (: _ (pin buf () (+ (buf -> () "") ("" + ch)))
+                               (: _ (pin buf () (+ (peep buf () "") ("" + ch)))
                                   (pump ()))))
                   (pump ()))) 0)
- (await s tries) (: (aw t) (? (find (buf -> () "") s 0) 1
+ (await s tries) (: (aw t) (? (find (peep buf () "") s 0) 1
                               (< t 1) 0
                               (: _ (rest 30) (aw (- t 1))))
                     (aw tries))
@@ -112,7 +112,7 @@
  _ (say m "q") _ (flush m)                ; step ashore
  st (: (wf p2) (: g2 (gather p2) (? (two? g2) g2 (: _ (rest 2) (wf p2)))) (wf (cap md)))
  _ (catch rd)                             ; the reader drains to EOF and rests
- outb (buf -> () "")
+ outb (peep buf () "")
  scr (mkscr 24 80)
  ; the tail "\e[?1049l" would CLEAR the one-grid witness (alt-screen leave
  ; is clear-and-restore) -- scribe only the voyage, not the stepping-ashore

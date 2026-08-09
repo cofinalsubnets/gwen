@@ -422,8 +422,7 @@
  ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (tablet? (tablet 0)) !(tablet? 5)
  !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
  (: t (tablet 0) r (pins t 1 10 2 20) (&& (id? r t) (10 = (t 1)) (20 = (t 2)) (2 = $t)))  ; pins: multi-pin onto a LIVE tablet, returns it (the mutable twin of #(..))
- (: t (pins (tablet 0) 1 10 2) (&& (10 = (t 1)) (1 = $t)))    ; an odd trailing key is dropped
- (40 = (: t #(1 10) _ (t <- 4 40) (t -> 4 0))))  ; the infix accessors
+ (: t (pins (tablet 0) 1 10 2) (&& (10 = (t 1)) (1 = $t))))    ; an odd trailing key is dropped
 
 ; --- the EMPTY SPELLINGS (the nothing surface) --- each kind's empty by its sigil: () the
 ; chain (the zero-point, DISTINCT from the number 0), "" the string, @() the array, #() the
@@ -460,20 +459,21 @@
 ; char: a name token (alnum/_) keeps - ? ! and the prime inside (kebab law; a LEADING ' is still
 ; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
 ; when spaced, fused to its datum as (mono (run datum)) when GLUED mid-list. code then factors
-; sigils at COMPILE time via `opfix` against the ONE `operators` table (symbol -> arity, or
+; sigils at COMPILE time via `opfix` against the ONE `dyadics` table (symbol -> arity, or
 ; (name . arity) an alias; the DEFAULT is dyadic at house grip, right-handed, so a fresh punct
 ; operator needs no entry -- the tables themselves are book-private since birth, the egg mops them,
 ; and `fixity` is the one door left onto them: (fixity nm v) pins nm's row and answers the row it
 ; REPLACED in the same shape, so (fixity nm (fixity nm new)) restores and () both clears a row and
 ; reports an absent one. a shape the table refuses is rolled back and SCARED, never pinned. the
-; table is read live, so a declaration governs every form compiled after it -- haskell's rule). the FACTORIZATION
-; LAW: greedy longest-prefix, no backtracking; every factor but the last is arity ONE; the last
-; takes the positional valence -- with a left operand it captures the whole APPLICATION SPAN on
-; that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
+; table is read live, so a declaration governs every form compiled after it -- haskell's rule). a
+; SPACED sigil is ONE WHOLE NAME: it carries a row or takes the default and never splits, so
+; != && >>= :- ?- are each one operator. with a left operand it captures the whole APPLICATION SPAN
+; on that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
 ; (= (a b) (c d)), (5 = abs -3) is (= 5 (abs -3))), nesting by GRIP and, at equal grip, by the
 ; operator's HAND -- arithmetic is LEFT-handed ((1 - 2 - 3) is -4) and everything else RIGHT;
-; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work, and a token that doesn't
-; factor stays atomic (&& >>= :- ?-). a sigil at one binds TIGHTEST; the CURRY LAW folds operands
+; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work. FACTORIZATION is the GLUED
+; lane's alone: a run splits greedily, longest-prefix, no backtracking, against monadics, and a
+; glued run binds TIGHTEST. the CURRY LAW folds operands
 ; missing at the end of a list to the partial application. the VALENCE LAW: glued is monadic,
 ; spaced is dyadic -- everywhere, HEAD INCLUDED ((<x = y) is (= (cap x) y)); only : ? \ stay the
 ; form's operator at head (they take the whole list); + and - are runs like every other
@@ -490,8 +490,9 @@
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
  ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
- (: was (fixity '<-> '(1 60)) t (opfix '(<-> a b)) _ (fixity '<-> was)   ; an arity-ONE row is still
-    (&& (was = ()) (t = '((<-> a) b))))                                  ;   the prefix lane: folds on fill
+ (!(catch (\ _ (fixity '<-> '(1 60)))))                                  ; arity ONE is refused: an infix
+ (: was (fixity '^ '(2 60)) t (opfix '(a ^= b)) _ (fixity '^ was)        ;   row always wants a left operand,
+    (&& (was = ()) (t = '(^= a b))))                                     ;   and ^'s row never splits ^=
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a NUMERAL (the whole exception)
@@ -514,9 +515,8 @@
  (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(+ 1 2)))   ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : still whole-list
  ('(mono (< x)) = (caup (cap (sound '(40 102 32 60 120 41)))))  ; the emission, data-lane
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
- (20 = (#(1 10 2 20) -> 2 0)) (7 = (((tablet 0) <- 'k 7) 'k)) (9 = ((tablet 0) -> 'k 9))
  (12 = (foldl (+) 0 '(3 4 5))))
-; the compile tables (operators/monadics/pureset) are OFF the book post-birth --
+; the compile tables (dyadics/monadics/pureset) are OFF the book post-birth --
 ; mopped beside macros (a live pin into a compile table would poison every later
 ; compile); the guarded asserts live in the bootstrapping section's welp window.
 
@@ -624,7 +624,7 @@
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !spin 1)                        ;  hence the born guards)
-        (? born !operators 1) (? born !monadics 1) (? born !pureset 1)  ; the compile tables too (2026-07-07)
+        (? born !dyadics 1) (? born !monadics 1) (? born !pureset 1)  ; the compile tables too (2026-07-07)
         (? born !enter 1) (? born !leave 1) (? born !lib 1))  ; the layer door + the source library: the runtime's, off the surface
 (hear 0)
 

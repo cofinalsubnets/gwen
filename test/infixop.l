@@ -1,4 +1,4 @@
-; infix -- an entry at two or more in the `operators` table. in operand position with a
+; infix -- an entry at two or more in the `dyadics` table. in operand position with a
 ; left operand available, the sigil captures it and collects arity-1 more datums,
 ; nesting RIGHT-associatively (a following operator steals the nearest operand).
 ; with no left operand it reads as the plain symbol, so (+ 1 2) prefix, '+ quote,
@@ -58,19 +58,9 @@
 (: ** (\ b n (n b))
  (assert (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2))))  ; right-assoc: 2^(3^2)
 
-; the accessor aliases: <- is (pin . 3), -> is (peep . 3) -- collection-first,
-; (t <- k v) pins (returns the collection, so it chains), (t -> k d) peeps.
-(assert
- (20 = (: t #(1 10) _ (t <- 2 20) (t -> 2 0)))   ; pin then peep, infix
- (7 = (((tablet 0) <- 'k 7) 'k))                        ; <- returns the collection
- (9 = (#(1 10) -> 2 9))                          ; -> falls back to the default
- (65 = (: b (cask 1) _ (b <- 0 65) (b -> 0 0)))  ; bufs take the same accessors
- (nom? '<-) (30 = ((->) #(3 30) 3 0))            ; escaped, -> is still peep-as-a-value
- (id? pin (<-)) (id? peep (->)) (1 = ((%) 5 2)))  ; every alias is a bound global
-
 ; DEFAULT INFIX: any all-punct symbol acts dyadic (arity two) with NO table pin --
-; the table holds only the EXCEPTIONS (other arities, the aliases, the arity-one
-; sigils). a fresh punct symbol, never registered, factors infix all the same.
+; the table holds only the EXCEPTIONS (the other grips and hands, ? at three).
+; a fresh punct symbol, never registered, reads infix all the same.
 (: >< (\ a b (L a b))                            ; a fresh punct op, never registered
  (assert
   ('(3 5) = (3 >< 5))                             ; infix: captures the left operand

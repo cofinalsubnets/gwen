@@ -1,7 +1,7 @@
 (:
  (mop _) ((peep book 'ev 0) '(:
    ; delete internal names. keep this up to date!
-   _ (each '(cellread seal-hook books setbooks mods lib enter leave gv trim peek poke seek spin lamsrc nifnom yield ci-vt to-vt macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators monadics seqx sortsplit lidx ldel packp _)
+   _ (each '(cellread seal-hook books setbooks mods lib enter leave gv trim peek poke seek spin lamsrc nifnom yield ci-vt to-vt macros boxfix boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop gone numfn nfa nfq nfnest powg power ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset dyadics monadics seqx sortsplit lidx ldel packp _)
       (\ k (pull book k 0)))
    (each (keys book)
     (\ k (? (nom? k) (? (= "lvm_" (snip (string k) 0 4)) (pull book k 0) 0) 0)))))

@@ -24,7 +24,7 @@
  (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
 
  ; a spun rng: the functional state in a box, one draw steps it
- (roll sb n) (: p (random (sb -> () 0) n) _ (sb <- () >p) <p)
+ (roll sb n) (: p (random (peep sb () 0) n) _ (pin sb () >p) <p)
 
  ; --- delve: carve rooms, lash them with corridors ---
  ; a room is `(x y rw rh); its center anchors the corridors. rooms keep a
@@ -74,7 +74,7 @@
    _ (pin d 'in (mid (last (d 'rooms))))
    _ (pin d 'down (mid <(d 'rooms)))
    _ (dput d <(d 'down) <>(d 'down) 2)
-   (d >< (sb -> () 0)))
+   (d >< (peep sb () 0)))
 
  ; --- the lantern: line-of-sight fov over bresenham strides ---
  ; a stride is clear when every cell strictly between the ends is open; the
@@ -284,9 +284,9 @@
                   ()))
 
  ; down the hatch: a fresh deck, the crew and cargo restocked
- (descend g) (: p0 (delve (g 'd 'w) (g 'd 'h) ((g 'sb) -> () 0))
+ (descend g) (: p0 (delve (g 'd 'w) (g 'd 'h) (peep (g 'sb) () 0))
                 d <p0
-                _ ((g 'sb) <- () >p0)
+                _ (pin (g 'sb) () >p0)
                 _ (pin g 'd d, pin g 'lvl (1 + g 'lvl))
                 _ (pin (g 'p) 'x <(d 'in), pin (g 'p) 'y <>(d 'in))
                 _ (stock g)

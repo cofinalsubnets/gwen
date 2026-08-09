@@ -71,7 +71,7 @@
  whirl (mint 0)    ; the cycle's face: unforgeable, nothing, shown "cycle!"
 
  (cell! sh n s) (: _ (? (tally s) (pin (sh 0) n s) (pull (sh 0) n 0))
-                   _ (sh <- 1 (tablet 0))
+                   _ (pin sh 1 (tablet 0))
                    sh)
  (cell sh n) (peep (sh 0) n ())
 
@@ -92,7 +92,7 @@
  ; through the arithmetic and let a circle quietly converge).
  (worth sh n) (: v (peep (sh 1) n none)
                  (? !(id? v none) v
-                  (peep (sh 2) n 0) (: _ (sh <- 3 (+ 1 (peep sh 3 0))) whirl)
+                  (peep (sh 2) n 0) (: _ (pin sh 3 (+ 1 (peep sh 3 0))) whirl)
                   (: s (peep (sh 0) n none)
                      (? (id? s none) ()                 ; an empty cell is the unit
                       (: _ (pin (sh 2) n 1)

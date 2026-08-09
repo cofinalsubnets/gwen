@@ -55,8 +55,9 @@ coined operator at house grip, is right.
 
 A row is `arity`, a `grip` (higher binds tighter) and a `hand` (0 right, 1 left). `op-ent`
 normalizes all five written shapes to the quad `(name arity grip . hand)`, and it is the one
-place that reads the table shape, so the rest of the walk sees a uniform quad. Arity one takes
-the next datum, never a left operand.
+place that reads the table shape, so the rest of the walk sees a uniform quad. Arity is **two or
+more** — an infix row always wants a left operand — so a spaced sigil is one whole name and never
+splits into factors. Factoring is the glued lane's alone, against `monadics`.
 
 **Undeclared is infix at two, grip 95, right-handed** — above every row, so the table holds only
 exceptions:
@@ -69,7 +70,6 @@ exceptions:
 ;   = != < <= > >= grip 40   comparison   <- the assert-relation band
 ;   | & && ||      grip 30   logical
 ;   ><             grip 25   cons — the loosest builder
-;   <- ->          grip 20   assignment aliases (pin / peep, arity 3)
 ;   ?              grip 10   cond (arity 3)
 ;   $              grip 5    weak apply — a $ b = (a b), the haskell $, loosest
 ```
@@ -102,22 +102,15 @@ leading operator with no left operand falls through op-steal to the plain-symbol
 
 ## the frame carries its grip
 
-The op-fr frame is `(orig chain name need grip . got)`. ⚠ **Store grip on the frame — do not
-re-probe the table.** The frame keeps two symbols and neither alone recovers grip:
+The op-fr frame is `(orig name need grip . got)`. ⚠ **Store grip on the frame — do not re-probe
+the table.** The frame keeps two symbols and neither alone recovers grip: `op-frn` is the
+*resolved* name, and a `fixity`-declared alias like `(fixity '=: '(pin 3 20 0))` resolves to
+`pin` while the table stays keyed by source `=:`, so probing `pin` misses. The value carrying the
+right grip is `en`, the entry already in scope at the build site. This is a correctness point,
+not a performance tradeoff.
 
-- `op-fro`, the *source* symbol: a composite run — one whose leading factors are arity-one rows —
-  has no row of its own, so `op-ent` gives the house grip while the operative grip is the last
-  factor's.
-- `op-frn`, the *resolved* name: an alias like `<-` resolves to `pin`, but the table is keyed by
-  source `<-`, so probing `pin` misses.
-
-The one value carrying the right grip in *both* cases is `en`, the last-factor entry already in
-scope at the build site: for a composite it is `=`'s entry, for an alias it is `<-`'s. So grip is
-captured from `en`. This is a correctness point, not a performance tradeoff.
-
-A frame is only ever rebuilt with a new need + got; orig, chain, name and grip are fixed. The two
-prefix builds take house, inert since prefix frames fold on fill and never sit filled to be
-stolen from.
+A frame is only ever rebuilt with a new need + got; orig, name and grip are fixed the moment the
+operator is read.
 
 ## op-steal is a climb
 
@@ -143,7 +136,7 @@ predicate.
 
 ## `fixity` — the one door onto the table
 
-`operators` is mopped at birth, so `fixity` (whose closure captured the table) is the only
+`dyadics` is mopped at birth, so `fixity` (whose closure captured the table) is the only
 sanctioned write into it afterwards. `(fixity nm v)` pins nm's row and answers the row it
 replaced *in the shape it takes*, so `(fixity nm (fixity nm new))` restores exactly, `()` both
 clears a row and reports an absent one, and a non-`()` answer says someone declared that operator

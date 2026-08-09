@@ -278,7 +278,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; (inle rung 3: the boot cmdline's program seat dispatches it). every frontend opens its session with
 ; ai_layer_ after boot (bakers never push; wakers always do). ⚠ a layer leans only on what
 ; survives birth -- wrapping a mopped nif means taking it off egg.l's mop list. ⚠ a post-egg
-; layer cannot add an operator: `operators` is mopped, the grammar closes at the hatch; `fixity`
+; layer cannot add an operator: `dyadics` is mopped, the grammar closes at the hatch; `fixity`
 ; is the one door left onto the table (it answers the row it replaced, and a refused shape rolls
 ; back and scares). build codegen lives in love under tools/; the C is freestanding,
 ; -Wall -Wextra -Werror.

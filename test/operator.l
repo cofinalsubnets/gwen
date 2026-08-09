@@ -1,23 +1,24 @@
-; the operator table -- ONE table, `operators`: sigil symbol -> arity (the symbol
-; names itself) | (name . arity) (an alias), arity 1-7. the reader is structural
-; (a sigil -- a maximal all-punct token -- reads as one plain symbol); code factors
-; sigils against the table at COMPILE time (the opfix pass). the table is opfix's
+; the operator table -- ONE table, `dyadics`: sigil symbol -> arity (the symbol
+; names itself) | (name . arity) (an alias), arity 2-7 -- an infix row always wants
+; a left operand. the reader is structural
+; (a sigil -- a maximal all-punct token -- reads as one plain symbol); code looks
+; sigils up in the table at COMPILE time (the opfix pass). the table is opfix's
 ; OWN -- book-private since birth (the egg mops it beside monadics/pureset: a live
 ; pin into a compile table would poison every later compile) -- so its laws read
-; through BEHAVIOR: the arity-one sigils and ? at three live in test/valence.l +
-; test/infixop.l, the <- -> aliases in test/infixop.l, greedy longest-prefix
-; factorization below and in the valence laws, and a FRESH punct operator needs
-; no entry at all (default dyadic; test/infixop.l's DEFAULT INFIX section).
+; through BEHAVIOR: ? at three lives in test/infixop.l, the nom-led alias shape and
+; the arity refusals in test/precedence.l's fixity door, greedy longest-prefix
+; factorization (the GLUED lane, against monadics) in the valence laws, and a FRESH
+; punct operator needs no entry at all (default dyadic; test/infixop.l's DEFAULT
+; INFIX section).
 (hear welp)                                    ; welp answers the misses quietly
-(assert (? born !operators 1) (? born !monadics 1) (? born !pureset 1))
+(assert (? born !dyadics 1) (? born !monadics 1) (? born !pureset 1))
 (hear 0)
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
 (assert ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))
 
-; ^^ has no entry and cannot factor as a run (^ is at two; a non-last factor must
-; be arity one), so in head position it stays the plain symbol -- and ^ is the
-; xor nif all along
+; ^^ has no entry, and a spaced sigil never splits, so in head position it stays
+; the plain symbol -- and ^ is the xor nif all along
 (assert (nom? '^^) ("(^^ 5)" = (show (opfix '(^^ 5))))
         (-2 = (^ 1 -1)) (6 = (^ 5 3)))
 
@@ -50,5 +51,5 @@
 ; structural -- a lone comma off a port is just the datum
 (assert (3 = (tally '(1 , 2))) (', = (caup '(1 , 2)))
         (nom? ',) ("," = (string ',)) (', = (cap (sound '(44)))))
-; clauses nest per list, and chain with the infix aliases
-(assert (6 = (: t #(0 1) _ ((t <- 0 2), (t <- 1 3)) ((t 0) * (t 1)))))
+; clauses nest per list, and chain their effects in source order
+(assert (6 = (: t #(0 1) _ ((pin t 0 2), (pin t 1 3)) ((t 0) * (t 1)))))

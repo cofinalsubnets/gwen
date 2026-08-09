@@ -1024,7 +1024,7 @@
 ; other child wraps at the band and below. so (- (- 10 4) 3) renders 10 - 4 - 3
 ; while (- 10 (- 4 3)) renders 10 - (4 - 3). an application splices bare unless
 ; its head is an operator, and application arguments wrap whenever compound.
-; `operators` is mopped post-egg, so ugrip carries the bands AND hands rune
+; `dyadics` is mopped post-egg, so ugrip carries the bands AND hands rune
 ; renders (grip . hand, 1 = left); an op off the table stays prefix, which reads
 ; back unchanged.
 (: ugrip '((+ 1 1) (- 1 1) (* 2 1) (/ 2 1) (** 3 0))

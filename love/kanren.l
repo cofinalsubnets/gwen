@@ -65,9 +65,9 @@
                   2 (\ A B (coin d (\ s (s_star ((load A) s) (load B)))))))
    rel (coin g-die))                     ; wrap a goal as a ring element
 (: === (\ u v (rel (est u v))))                       ; the relation's infix unify -- and it needs no
-; row in prel's `operators`: that table holds only the EXCEPTIONS, and any all-punct head is already
+; row in prel's `dyadics`: that table holds only the EXCEPTIONS, and any all-punct head is already
 ; infix-dyadic at house grip. (It did pin one while this lived in prel. A post-egg layer could not
-; anyway -- `operators` is mopped at birth, so the operator GRAMMAR closes when the egg hatches.)
+; anyway -- `dyadics` is mopped at birth, so the operator GRAMMAR closes when the egg hatches.)
 ; the GOAL LANGUAGE: `::` writes the head layer's macro table, so these four
 ; live in kanren's own book -- and a consumer's (use 'kanren) splice carries
 ; them: macroget walks the chain's macro slots, so et/vel/\\/zz expand at the

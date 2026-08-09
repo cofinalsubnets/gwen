@@ -75,7 +75,7 @@
     prev (fixity '<+> ())                             ; () CLEARS, and answers what it cleared
     (&& (prev = '(2 60 1)) ((opfix '(a <+> b * c)) = '(* (<+> a b) c))))   ; back to house grip -- above *
  ((fixity '<+> ()) = ())                              ; clearing an absent row is a no-op answering ()
- (: _ (fixity '=: '(pin 3 20 0))                      ; the nom-led ALIAS form, like <- itself
+ (: _ (fixity '=: '(pin 3 20 0))                      ; the nom-led ALIAS form: the row names another word
     tree (opfix '(t =: k v))
     _ (fixity '=: ())
     (tree = '(pin t k v)))
@@ -86,6 +86,7 @@
  ; a shape op-ent refuses is ROLLED BACK and scared -- never pinned, because a bad row does not
  ; error, it silently demotes its operator to the fresh-punct default.
  (!(catch (\ _ (fixity '^^ '(0 60 1)))))              ; arity 0
+ (!(catch (\ _ (fixity '^^ '(1 60 1)))))              ; arity 1 -- an infix row always wants a left operand
  (!(catch (\ _ (fixity '^^ '(9 60 1)))))              ; arity 8+
  (!(catch (\ _ (fixity '^^ '(2 zzz 1)))))             ; a grip that is not a charm
  (!(catch (\ _ (fixity 'plain '(2 60 1)))))           ; and the name must be an all-punct sigil

@@ -106,7 +106,7 @@
        _ (pin hb 'dirt #1) _ (pin hb 'jobs ()) _ (pin hb 'lay ())
        _ (hrelay hb)
        hb)
-   (scrof hb id) ((hbox (hpane hb id)) -> () 0)
+   (scrof hb id) (peep (hbox (hpane hb id)) () 0)
 
  ; --- one berth is the whole wharf, and its frame starts at the home cell ---
  hb (mkhb 10 20 `("sh" "-c" "printf hi"))
