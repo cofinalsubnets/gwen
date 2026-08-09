@@ -2859,8 +2859,9 @@ static struct ai_zn ai_net(struct ai *g, word x) {
 // $: the net observed once -- max(0, ceil) of its order-signed magnitude (a
 // phaseful net takes |z|, gated by zn_false). lockstep with ai_nilp.
 static intptr_t ai_saturate(struct ai *g, word x) {
-  // FIXME this line is probably an optimization, it's logically unneeded, can we subsume efficiently into ai_net?
-  if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is zero), exact
+  // ⚠ the charm lane is EXACTNESS, not speed: the net is a double, so above 2^53 a
+  // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
+  if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }
   struct ai_zn z = ai_net(g, x);
   if (zn_false(z)) return 0;
   return len_sat(z.im == 0 ? z.re : ai_sqrt(z.re * z.re + z.im * z.im)); }
