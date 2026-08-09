@@ -16,7 +16,12 @@
    (gripe file line col msg) `('gripe file line col msg)
    (gripe? x) (two? x && id? <x 'gripe)
    (okv? x) (two? x && !(gripe? x))
-   (clex src)
+   ; clexat: lex with the FIRST line numbered ln0 -- the driver's door. its -D
+   ; text prepends to the TU, so those lines get 1-k..0 and the source itself
+   ; starts at 1: every stamped line (gripes, __LINE__) is true with no
+   ; pay-back pass. clex is the plain 1-based face every other caller reads.
+   (clex src) (clexat src 1)
+   (clexat src ln0)
     (: n (tally src)
        kws '(auto break case char const continue default do double else enum
              extern float for goto if inline int long register restrict return
@@ -305,4 +310,4 @@
                         (: gl ((c = 40) && (0 < i) && idc? (src (i - 1)))
                            (go (i + 1) line ((? gl `('p (string c) line 1) `('p (string c) line)) >< acc)))
                        ())))))
-       (go 0 1 ())))
+       (go 0 ln0 ())))

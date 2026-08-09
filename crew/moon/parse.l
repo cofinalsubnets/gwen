@@ -1816,9 +1816,9 @@
    ; the re-parse that unexpectedly SUCCEEDS -- ps carries the first attempt's
    ; half-registered typedefs, so that is possible, and its watermark would be
    ; at the form's end, which would read as a nonsense position).
-   ; ONE position and no more: the driver deskews a gripe's line for the
-   ; prepended -D lines, and a second line number baked into the message text
-   ; would ride out uncorrected.
+   ; ONE position and no more: the stamped line is what the driver reports,
+   ; and a second line number baked into the message text would disagree
+   ; with it the day the stamping changes.
    (pfail ps ts2 spans toks)
     (: i0 (tally toks - tally ts2)       ; the failing form's index -- an O(n) walk, on the path that is already dying
        ft (? (two? ts2) <ts2 ())

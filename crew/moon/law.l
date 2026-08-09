@@ -52,6 +52,12 @@
    (assert
       (= (tally c1) 2) (= (tn c1 1) (L 'id "b" 2))          ; // eats the line, lines count
       (= (tally c2) 2) (= (tn c2 1) (L 'id "b" 2))          ; /* */ spans, lines count
+      ; clexat: the driver's door -- its prepended -D text stamps 1-k..0, so
+      ; the TU's own first line is 1 and every stamped line (__LINE__, gripes)
+      ; is TRUE with no pay-back pass
+      (= (tn <>(clexat "a\nb\nc" -1) 0) (L 'id "a" -1))
+      (= (tn <>(clexat "a\nb\nc" -1) 1) (L 'id "b" 0))
+      (= (tn <>(clexat "a\nb\nc" -1) 2) (L 'id "c" 1))
       (= (tally c3) 4)                                       ; maximal munch: a ++ + b
       (= (tn c3 1) (L 'p "++" 1)) (= (tn c3 2) (L 'p "+" 1))
       (= (tn c4 1) (L 'p "<<=" 1)) (= (tn c4 5) (L 'p ">>=" 1))

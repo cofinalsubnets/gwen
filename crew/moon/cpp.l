@@ -321,8 +321,7 @@
    (dirname t) (? (kof t = 'kw) (show (vof t)) (vof t))     ; #if/#else lex as keywords -> their text
    ; the refusal channel: a gripe (doc/moon-diag.md), which the driver locates.
    ; gripeat mints one at the directive that failed; gripein stamps the file on
-   ; the way out of an #include -- that file lexed from its OWN line 1, and the
-   ; stamp is also what tells moon.l's deskew to leave the number alone.
+   ; the way out of an #include, which lexed from its OWN line 1.
    (gripeat line msg) (gripe () (? (two? line) (lof <line) ()) () msg)
    (gripein g f) (? <>g g (gripe f <>>g <>>>g <>>>>g))   ; ⚠ moon.l's `el` is catted AFTER this file
    (condactive cond) (? !(two? cond) 1 <<cond)
@@ -486,9 +485,11 @@
                _ (pin t "__linux" `('obj `((tok 'num 1 0))))
                _ (pin t "__unix__" `('obj `((tok 'num 1 0))))
                _ (pin t "__unix" `('obj `((tok 'num 1 0))))
-               ; gcc's limit predefines, the ones the host seam reads
+               ; gcc's limit predefines, the ones the host seam reads. only the
+               ; target-blind ones live here -- __LONG_MAX__ and the whole
+               ; <stdint>-shaped family fork on the word width, so they ride the
+               ; driver's table (moon.l stddefs) down the -D channel.
                _ (pin t "__INT_MAX__" `('obj `((tok 'num 2147483647 0))))
-               _ (pin t "__LONG_MAX__" `('obj `((tok 'num 9223372036854775807 0))))
                ; FLT_MAX exactly: (2 - 2^-23) * 2^127 = 2^128 - 2^104, double-exact
                ; (love.c's 32-bit dtoa branch reads it; gcc predefines it everywhere)
                _ (pin t "__FLT_MAX__" `('obj `((tok 'flo ((2.0 - (/ 1.0 8388608.0)) * 127 2.0) 0))))

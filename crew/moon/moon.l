@@ -101,6 +101,123 @@
                      (member? tgt '(thumb2 thumb2sp thumb1)) '("__arm__" "__arm")
                      (id? tgt 'riscv64) '("__riscv")
                      '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
+   ; the gcc-shaped predefine table (doc/moon-c-gaps: the predefine surface) --
+   ; the <stdint>/<limits>/<float.h> family a library config reads instead of
+   ; probing: pdclib, gnulib and musl typedef straight off these names. one
+   ; table forked once on the word width (+ the wchar fork), every value gcc's
+   ; own spelling on that target, so a mooncc object and a gcc object agree on
+   ; every typedef. two deliberate deviations: __CHAR_UNSIGNED__ stays out
+   ; (gcc's arm/riscv char is unsigned, ours is signed on every target, and a
+   ; predefine describes THIS compiler), and the __LDBL_* rows answer double's
+   ; values -- no long double here -- so a consumer takes its double lane, the
+   ; one we can compile. a user -D lands after these and wins.
+   stdcommon
+    '("__CHAR_BIT__=8" "__SCHAR_MAX__=0x7f" "__SHRT_MAX__=0x7fff"
+      "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16" "__INT_WIDTH__=32"
+      "__LONG_LONG_MAX__=0x7fffffffffffffffLL" "__LONG_LONG_WIDTH__=64"
+      "__ORDER_LITTLE_ENDIAN__=1234" "__ORDER_BIG_ENDIAN__=4321" "__ORDER_PDP_ENDIAN__=3412"
+      "__BYTE_ORDER__=__ORDER_LITTLE_ENDIAN__" "__FLOAT_WORD_ORDER__=__ORDER_LITTLE_ENDIAN__"
+      "__INT8_TYPE__=signed char" "__UINT8_TYPE__=unsigned char"
+      "__INT8_MAX__=0x7f" "__UINT8_MAX__=0xff" "__INT8_C(c)=c" "__UINT8_C(c)=c"
+      "__INT16_TYPE__=short int" "__UINT16_TYPE__=short unsigned int"
+      "__INT16_MAX__=0x7fff" "__UINT16_MAX__=0xffff" "__INT16_C(c)=c" "__UINT16_C(c)=c"
+      "__INT32_TYPE__=int" "__UINT32_TYPE__=unsigned int"
+      "__INT32_MAX__=0x7fffffff" "__UINT32_MAX__=0xffffffffU"
+      "__INT32_C(c)=c" "__UINT32_C(c)=c ## U"
+      "__INT_LEAST8_TYPE__=signed char" "__UINT_LEAST8_TYPE__=unsigned char"
+      "__INT_LEAST8_MAX__=0x7f" "__UINT_LEAST8_MAX__=0xff" "__INT_LEAST8_WIDTH__=8"
+      "__INT_LEAST16_TYPE__=short int" "__UINT_LEAST16_TYPE__=short unsigned int"
+      "__INT_LEAST16_MAX__=0x7fff" "__UINT_LEAST16_MAX__=0xffff" "__INT_LEAST16_WIDTH__=16"
+      "__INT_LEAST32_TYPE__=int" "__UINT_LEAST32_TYPE__=unsigned int"
+      "__INT_LEAST32_MAX__=0x7fffffff" "__UINT_LEAST32_MAX__=0xffffffffU" "__INT_LEAST32_WIDTH__=32"
+      "__WINT_TYPE__=unsigned int" "__WINT_MAX__=0xffffffffU" "__WINT_MIN__=0U" "__WINT_WIDTH__=32"
+      "__SIZEOF_SHORT__=2" "__SIZEOF_INT__=4" "__SIZEOF_LONG_LONG__=8"
+      "__SIZEOF_FLOAT__=4" "__SIZEOF_DOUBLE__=8" "__SIZEOF_WCHAR_T__=4" "__SIZEOF_WINT_T__=4"
+      "__FLT_RADIX__=2"
+      "__FLT_MANT_DIG__=24" "__FLT_DIG__=6" "__FLT_DECIMAL_DIG__=9"
+      "__FLT_MIN_EXP__=(-125)" "__FLT_MIN_10_EXP__=(-37)" "__FLT_MAX_EXP__=128" "__FLT_MAX_10_EXP__=38"
+      "__FLT_MIN__=1.17549435082228750796873653722224568e-38F"
+      "__FLT_EPSILON__=1.19209289550781250000000000000000000e-7F"
+      "__FLT_DENORM_MIN__=1.40129846432481707092372958328991613e-45F"
+      "__FLT_NORM_MAX__=3.40282346638528859811704183484516925e+38F"
+      "__FLT_HAS_DENORM__=1" "__FLT_HAS_INFINITY__=1" "__FLT_HAS_QUIET_NAN__=1"
+      "__DBL_MANT_DIG__=53" "__DBL_DIG__=15" "__DBL_DECIMAL_DIG__=17"
+      "__DBL_MIN_EXP__=(-1021)" "__DBL_MIN_10_EXP__=(-307)" "__DBL_MAX_EXP__=1024" "__DBL_MAX_10_EXP__=308"
+      "__DBL_MIN__=2.22507385850720138309023271733240406e-308"
+      "__DBL_EPSILON__=2.22044604925031308084726333618164062e-16"
+      "__DBL_DENORM_MIN__=4.94065645841246544176568792868221372e-324"
+      "__DBL_NORM_MAX__=1.79769313486231570814527423731704357e+308"
+      "__DBL_HAS_DENORM__=1" "__DBL_HAS_INFINITY__=1" "__DBL_HAS_QUIET_NAN__=1"
+      "__LDBL_MANT_DIG__=53" "__LDBL_DIG__=15" "__LDBL_DECIMAL_DIG__=17"
+      "__LDBL_MIN_EXP__=(-1021)" "__LDBL_MIN_10_EXP__=(-307)" "__LDBL_MAX_EXP__=1024" "__LDBL_MAX_10_EXP__=308"
+      "__LDBL_MIN__=2.22507385850720138309023271733240406e-308"
+      "__LDBL_MAX__=1.79769313486231570814527423731704357e+308"
+      "__LDBL_EPSILON__=2.22044604925031308084726333618164062e-16"
+      "__LDBL_DENORM_MIN__=4.94065645841246544176568792868221372e-324"
+      "__LDBL_NORM_MAX__=1.79769313486231570814527423731704357e+308"
+      "__LDBL_HAS_DENORM__=1" "__LDBL_HAS_INFINITY__=1" "__LDBL_HAS_QUIET_NAN__=1"
+      "__DECIMAL_DIG__=17")
+   stdlp64
+    '("__LP64__=1" "_LP64=1"
+      "__LONG_MAX__=0x7fffffffffffffffL" "__LONG_WIDTH__=64"
+      "__SIZEOF_LONG__=8" "__SIZEOF_POINTER__=8" "__SIZEOF_SIZE_T__=8" "__SIZEOF_PTRDIFF_T__=8"
+      "__INT64_TYPE__=long int" "__UINT64_TYPE__=long unsigned int"
+      "__INT64_MAX__=0x7fffffffffffffffL" "__UINT64_MAX__=0xffffffffffffffffUL"
+      "__INT64_C(c)=c ## L" "__UINT64_C(c)=c ## UL"
+      "__INT_LEAST64_TYPE__=long int" "__UINT_LEAST64_TYPE__=long unsigned int"
+      "__INT_LEAST64_MAX__=0x7fffffffffffffffL" "__UINT_LEAST64_MAX__=0xffffffffffffffffUL"
+      "__INT_LEAST64_WIDTH__=64"
+      "__INT_FAST8_TYPE__=signed char" "__UINT_FAST8_TYPE__=unsigned char"
+      "__INT_FAST8_MAX__=0x7f" "__UINT_FAST8_MAX__=0xff" "__INT_FAST8_WIDTH__=8"
+      "__INT_FAST16_TYPE__=long int" "__UINT_FAST16_TYPE__=long unsigned int"
+      "__INT_FAST16_MAX__=0x7fffffffffffffffL" "__UINT_FAST16_MAX__=0xffffffffffffffffUL"
+      "__INT_FAST16_WIDTH__=64"
+      "__INT_FAST32_TYPE__=long int" "__UINT_FAST32_TYPE__=long unsigned int"
+      "__INT_FAST32_MAX__=0x7fffffffffffffffL" "__UINT_FAST32_MAX__=0xffffffffffffffffUL"
+      "__INT_FAST32_WIDTH__=64"
+      "__INT_FAST64_TYPE__=long int" "__UINT_FAST64_TYPE__=long unsigned int"
+      "__INT_FAST64_MAX__=0x7fffffffffffffffL" "__UINT_FAST64_MAX__=0xffffffffffffffffUL"
+      "__INT_FAST64_WIDTH__=64"
+      "__INTMAX_TYPE__=long int" "__UINTMAX_TYPE__=long unsigned int"
+      "__INTMAX_MAX__=0x7fffffffffffffffL" "__UINTMAX_MAX__=0xffffffffffffffffUL"
+      "__INTMAX_C(c)=c ## L" "__UINTMAX_C(c)=c ## UL" "__INTMAX_WIDTH__=64"
+      "__INTPTR_TYPE__=long int" "__UINTPTR_TYPE__=long unsigned int"
+      "__INTPTR_MAX__=0x7fffffffffffffffL" "__UINTPTR_MAX__=0xffffffffffffffffUL" "__INTPTR_WIDTH__=64"
+      "__SIZE_TYPE__=long unsigned int" "__SIZE_MAX__=0xffffffffffffffffUL" "__SIZE_WIDTH__=64"
+      "__PTRDIFF_TYPE__=long int" "__PTRDIFF_MAX__=0x7fffffffffffffffL" "__PTRDIFF_WIDTH__=64")
+   stdt32
+    '("__LONG_MAX__=0x7fffffffL" "__LONG_WIDTH__=32"
+      "__SIZEOF_LONG__=4" "__SIZEOF_POINTER__=4" "__SIZEOF_SIZE_T__=4" "__SIZEOF_PTRDIFF_T__=4"
+      "__INT64_TYPE__=long long int" "__UINT64_TYPE__=long long unsigned int"
+      "__INT64_MAX__=0x7fffffffffffffffLL" "__UINT64_MAX__=0xffffffffffffffffULL"
+      "__INT64_C(c)=c ## LL" "__UINT64_C(c)=c ## ULL"
+      "__INT_LEAST64_TYPE__=long long int" "__UINT_LEAST64_TYPE__=long long unsigned int"
+      "__INT_LEAST64_MAX__=0x7fffffffffffffffLL" "__UINT_LEAST64_MAX__=0xffffffffffffffffULL"
+      "__INT_LEAST64_WIDTH__=64"
+      "__INT_FAST8_TYPE__=int" "__UINT_FAST8_TYPE__=unsigned int"
+      "__INT_FAST8_MAX__=0x7fffffff" "__UINT_FAST8_MAX__=0xffffffffU" "__INT_FAST8_WIDTH__=32"
+      "__INT_FAST16_TYPE__=int" "__UINT_FAST16_TYPE__=unsigned int"
+      "__INT_FAST16_MAX__=0x7fffffff" "__UINT_FAST16_MAX__=0xffffffffU" "__INT_FAST16_WIDTH__=32"
+      "__INT_FAST32_TYPE__=int" "__UINT_FAST32_TYPE__=unsigned int"
+      "__INT_FAST32_MAX__=0x7fffffff" "__UINT_FAST32_MAX__=0xffffffffU" "__INT_FAST32_WIDTH__=32"
+      "__INT_FAST64_TYPE__=long long int" "__UINT_FAST64_TYPE__=long long unsigned int"
+      "__INT_FAST64_MAX__=0x7fffffffffffffffLL" "__UINT_FAST64_MAX__=0xffffffffffffffffULL"
+      "__INT_FAST64_WIDTH__=64"
+      "__INTMAX_TYPE__=long long int" "__UINTMAX_TYPE__=long long unsigned int"
+      "__INTMAX_MAX__=0x7fffffffffffffffLL" "__UINTMAX_MAX__=0xffffffffffffffffULL"
+      "__INTMAX_C(c)=c ## LL" "__UINTMAX_C(c)=c ## ULL" "__INTMAX_WIDTH__=64"
+      "__INTPTR_TYPE__=int" "__UINTPTR_TYPE__=unsigned int"
+      "__INTPTR_MAX__=0x7fffffff" "__UINTPTR_MAX__=0xffffffffU" "__INTPTR_WIDTH__=32"
+      "__SIZE_TYPE__=unsigned int" "__SIZE_MAX__=0xffffffffU" "__SIZE_WIDTH__=32"
+      "__PTRDIFF_TYPE__=int" "__PTRDIFF_MAX__=0x7fffffff" "__PTRDIFF_WIDTH__=32")
+   ; wchar_t forks by ABI, not by width: signed int on x64/riscv64 (SysV),
+   ; unsigned int on arm64/arm32 (AAPCS) -- gcc's values, so a header's typedef
+   ; lays the same type a gcc object carries.
+   (wchdefs tgt)
+    (? (id? tgt 'arm64 || arm32? tgt)
+       '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
+       '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
+   (stddefs tgt) ((? (arm32? tgt) stdt32 stdlp64) + wchdefs tgt + stdcommon)
    ; the diagnostic driver (doc/moon-diag.md): a stage answered a gripe (a cause
    ; it named itself) or a bare bad. a gripe prints "cc: <file>:<line>:<col>: msg"
    ; -- an unknown file takes the source path, an unknown line/col elides; anything
@@ -113,34 +230,23 @@
           loc (file + (? ln (":" + show ln) "") + (? col (":" + show col) ""))
           (udie 1 ("cc: " + loc + ": " + msg)))
        (udie 1 plain))
-   ; the -D lines are prepended TEXT (below), so every line the lexer stamped on
-   ; a TU token sits that many lines high. take them back off before reporting.
-   ; a gripe naming a FILE came from an #include, which lexed fresh from its own
-   ; line 1 and never saw the defines -- leave it alone. ⚠ any stage that learns
-   ; to mint a gripe has to come through here, or it reports skewed lines.
-   (deskew val n)
-    (? !(gripe? val) val
-       (: f (el val 1) ln (el val 2)
-          (? f val
-             !(charm? ln) val
-             (gripe f (ln - n) (el val 3) (el val 4)))))
    ; the shared front end: source path (+ -I dirs, -D defines) -> (1 ast stag
    ; sigs ..) | a fatal exit. the -D lines PREPEND to the source text before the
-   ; one lex, so the line numbering stays whole (tokens carry lines and a define
-   ; body runs to its line's end -- a separately-lexed stream would restart at 1
-   ; and the last -D would swallow the file's first line); deskew pays the
-   ; numbering back at the report.
+   ; one lex, so a define body runs to its line's end and the numbering stays
+   ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
+   ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
+   ; #include lexes fresh at its own line 1 either way.
    (cc-parse src is ds tgt nsi)
-    (: ds9 (archdefs tgt +               ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+    (: ds9 (archdefs tgt + stddefs tgt +               ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
-       lx (clex (deftext ds9 + <>r))
-       _ (? (okv? lx) () (ccdie (deskew lx (tally ds9)) src ("cc: lex error in " + src)))
+       lx (clexat (deftext ds9 + <>r) (1 - tally ds9))
+       _ (? (okv? lx) () (ccdie lx src ("cc: lex error in " + src)))
        pp (cpp <>lx (\ name sys? (incload nsi is (cdir src) name sys?)) src)
-       _ (? (okv? pp) () (ccdie (deskew pp (tally ds9)) src ("cc: preprocessor error in " + src)))
+       _ (? (okv? pp) () (ccdie pp src ("cc: preprocessor error in " + src)))
        ps (cparse-t <>pp tgt)                 ; thread the target so parse sizes pointers/longs at the ABI width
-       _ (? (okv? ps) () (ccdie (deskew ps (tally ds9)) src ("cc: parse error in " + src)))
+       _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
        ps)
    ; the parser's static/section tablets, threaded to the gen as one list
    (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9) (el ps 10) (el ps 11) (el ps 12))   ; sfns svars sects aliases aligns AINLS NOINLS CONSTS

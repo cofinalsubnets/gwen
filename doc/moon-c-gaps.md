@@ -84,22 +84,38 @@ the macro never comes back and the `#undef` under it is permanent.
 ⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
 which is worse. doc/moon-userland.md carries when it becomes load-bearing.
 
-### the predefine surface — the widest remaining hole
+### the predefine surface
 
-mooncc predefines `__STDC__`, `__STDC_HOSTED__`, `__mooncc__`, `__linux__`/`__linux`/`__unix__`/
-`__unix`, the arch pair (`__x86_64__` **and** `__x86_64`, `__amd64__`/`__amd64`; `__aarch64__`;
-`__arm__`/`__arm`; `__riscv`), `__INT_MAX__`, `__LONG_MAX__`, `__FLT_MAX__`, `__DBL_MAX__`,
-`__SIZEOF_INT128__` on x64, and `bool`/`true`/`false`.
+The gcc-shaped `<stdint>`/`<limits>`/`<float.h>` family **landed 2026-08-09** — `moon.l`'s
+`stddefs`, one table forked once on the word width plus the wchar ABI fork, ~165 rows riding
+the driver's `-D` channel (cpp stays target-blind): the `__INTn_TYPE__`/`__UINTn_C`/`*_MAX__`/
+`*_WIDTH__` ladders, `__SIZE_TYPE__`/`__PTRDIFF_TYPE__`/`__INTPTR_TYPE__`/`__INTMAX_TYPE__`,
+`__WCHAR_TYPE__`/`__WINT_TYPE__`, `__BYTE_ORDER__` and the `__ORDER_*` trio, `__CHAR_BIT__`,
+the `__SIZEOF_*__` set, `__LP64__`/`_LP64` (c-testsuite 00212), and the full `__FLT_*`/
+`__DBL_*`/`__LDBL_*` trait sets. Every value is gcc's own spelling on that target (verified by
+stringize-diff against `gcc -dM -E` on x64/riscv64/arm-none-eabi and clang's aarch64), and
+`__LONG_MAX__` moved out of cpp into the fork, so t32 now answers `0x7fffffffL` instead of the
+64-bit lie. On top of the older rows: `__STDC__`, `__STDC_HOSTED__`, `__mooncc__`, the linux/
+unix spellings, the arch pairs, `__INT_MAX__`, `__FLT_MAX__`/`__DBL_MAX__`,
+`__SIZEOF_INT128__` on x64, `bool`/`true`/`false`. Pinned by test/cc/123-predef.c (all four
+compilers agree at 21) and the t32 `#if` checker run against arm-none-eabi-gcc.
 
-It does **not** carry gcc's `<stdint>`-shaped family — `__INT8_TYPE__`, `__UINT64_C`,
-`__INT_FAST32_MAX__`, `__SIZE_TYPE__`, `__PTRDIFF_TYPE__`, `__WCHAR_TYPE__`, `__BYTE_ORDER__` —
-nor the float traits (`__FLT_MANT_DIG__`, `__DBL_DECIMAL_DIG__`, the `__LDBL_*` set). PDCLib's
-platform config is written straight against them and needs **117 `-D`s** handed over from
-`gcc -dM -E` before it will configure at all. gnulib and musl read the same names. Landing them
-is one table plus a 32-bit fork (`__LONG_MAX__` is already pinned 64-bit unconditionally, which
-is wrong on t32 today), and it is the single change that would most widen what configures.
-⚠ mooncc has no `long double`, so the `__LDBL_*` row has to answer double's values or a consumer
-builds an 80-bit lane the compiler cannot speak.
+Three deliberate deviations, all in the compiler's favor of honesty:
+- `__CHAR_UNSIGNED__` stays **out** everywhere — gcc's arm/riscv char is unsigned, ours is
+  signed on every target, and a predefine describes *this* compiler.
+- the `__LDBL_*` rows answer **double's** values — no `long double` here, so a consumer takes
+  its double lane, the one we can compile (`__DECIMAL_DIG__` is 17, not x87's 21).
+- `__SIZEOF_INT128__` stays **x64-only** where real gcc also defines it on aarch64/riscv64 —
+  only gen's x64 lane carries d128, and claiming it elsewhere invites code we refuse.
+
+A user `-D` lands after the table and wins. What remains absent is the exotic tail: the
+`__FLT16/32/64/128*` extended-float families, `__CHAR16/32_TYPE__`, decimal floats — nothing
+in the userland ladder reads them yet.
+
+Landing the table also made **`__LINE__` true**: the `-D` text used to skew it by its line
+count (nothing compensated). `clexat` now stamps the prepended lines `1-k..0` so the TU's own
+numbering starts at 1, and moon.l's `deskew` pay-back pass retired with the skew. `#line`
+still does not move it (the row above stands).
 
 ### the `_Static_assert` quirks
 
@@ -133,9 +149,9 @@ when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Three compile
-clean and answer wrong, and all three are rows elsewhere on this page — the predefine surface,
-the wide literal, `#pragma push_macro`.
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Two compile
+clean and answer wrong, and both are rows elsewhere on this page — the wide literal and
+`#pragma push_macro`.
 
 ### sizeof over promoted arithmetic answers 8
 
@@ -204,6 +220,11 @@ into a wrong ANSWER rather than lost precision: PDCLib spells `INFINITY` as
 header uses to ask a type's width, used to read false and take the `#error` arm). **`&`, `|`
 and `^` do not** — love's bit ops answer nothing on a big, so `#if (0xffffffffffffffffUL & 0xff)
 == 0xff` is false. Same root as the open item in the reader-bootstrap arc.
+
+And the evaluator is **signed throughout**: C11 says `#if` arithmetic runs in intmax/uintmax
+with a `U`-suffixed operand making the operation unsigned, so `#if 1UL - 2 < 0` must be false
+(the subtraction wraps to huge) — ours reads the values and answers true. Found writing the
+predefine table's t32 checker (`__UINT64_C(1) - 2 < 0`); no real header has tripped it yet.
 
 ---
 
