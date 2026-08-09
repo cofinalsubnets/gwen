@@ -458,6 +458,12 @@
              ((k = 'bin) && id? <>e '-)
               (: a (ptype ps <>>e) b (ptype ps <>>>e)
                  (? ((ptr? a || arr? a) && (ptr? b || arr? b)) 'long ()))
+             ; a truth value is an int (C11 6.5.3.3, 6.5.8, 6.5.13): !, the six
+             ; relations, && and || -- whatever the operand, so no operand typing
+             ; here (gen's wider carrier only ever holds 0/1 and is never asked)
+             ((k = 'un) && id? <>e 'not) 'int
+             ((k = 'bin) && member? <>e '(eq ne lt le gt ge)) 'int
+             (member? k '(land lor)) 'int
              ())))
 
    ; -- declarators: stars XOR one array suffix, PLUS the function-pointer

@@ -182,6 +182,12 @@
       (= (cexp "(long)(int)x") '(cast long (cast int (var "x"))))
       (= (cexp "sizeof(int)") '(num 4))
       (= (cexp "sizeof(char)+sizeof(short)+sizeof(long)") '(bin + (bin + (num 1) (num 2)) (num 8)))
+      ; a truth value is an int, whatever the operand -- so these fold HERE, untyped x and all
+      (= (cexp "sizeof(!x)") '(num 4))
+      (= (cexp "sizeof(x==y)") '(num 4))
+      (= (cexp "sizeof(x<y)") '(num 4))
+      (= (cexp "sizeof(x&&y)") '(num 4))
+      (= (cexp "sizeof(x||y)") '(num 4))
       (= (cast "int main() { while (1) break; return 0; }")
          '(prog ((fn "main" () (blk ((while (num 1) (brk)) (ret (num 0))))))))
       ; musttail comes back through a parse now -- the ret's PRE slot (clay's (ret e PRE));

@@ -133,14 +133,24 @@ when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Five compile
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Four compile
 clean and answer wrong; three of those are rows elsewhere on this page — the predefine surface,
-the wide literal, `#pragma push_macro`. These two are their own:
+the wide literal, `#pragma push_macro`. This one is its own:
 
 | what | the shape | what it costs |
 |---|---|---|
-| **`!` yields a long** | `sizeof(!a)` | 8, where C says the result of `!` is an `int` (4). Same family as the `sizeof` row below: a type lost on the way out of a node. |
 | **an unsuffixed constant too big for `long` wraps** | `x != 0xffffffffffffffff` | C says such a decimal/hex constant takes `unsigned long`; we wrap it to −1 and the comparison goes the other way. |
+
+### sizeof over promoted arithmetic answers 8
+
+`sizeof(a + b)` over a `char` and an `int` is **8**, gcc's 4 — likewise `sizeof(s + s)` on
+shorts and `sizeof(~a)`: gen types every integer result `long`, and only `sizeof` can see it
+(the values agree at either width). The truth-valued twin of this row (`sizeof(!a)`,
+c-testsuite's 00178) landed 2026-08-09 — `!`, the six relations, `&&` and `||` answer `int`
+unconditionally, so `ptype` says so without reading an operand. This remainder is priced
+differently: the promoted type is a function of BOTH operand types, and growing that ladder in
+`ptype` is a second copy of gen's type propagation — the drift hazard the target-asymmetries
+section warns about. A rung, not a patch.
 
 ### bool is four bytes
 
