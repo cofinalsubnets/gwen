@@ -12,7 +12,8 @@
 ; directives: #define (object + function, # stringize, ## paste, ... variadic
 ; __VA_ARGS__), #undef, #if/#ifdef/#ifndef/#elif/#else/#endif (with defined and
 ; an integer constant-expression evaluator, undefined names -> 0), #include,
-; #error, #pragma/#line (ignored). predefined __LINE__ __FILE__ __STDC__.
+; #error, #pragma/#line (ignored -- except #pragma push_macro/pop_macro, which
+; save and restore a definition). predefined __LINE__ __FILE__ __STDC__.
 ; adjacent string literals concatenate (phase 6). fenced: _Pragma, __COUNTER__,
 ; the GNU ,##__VA_ARGS__ comma elision, #if with character constants.
 (:
@@ -54,6 +55,8 @@
                    (member? k numks) (show (vof t))           ; ..or a cpp-minted decimal
                    (k = 'kw) (show (vof t))
                    (k = 'str) ("\"" + vof t + "\"")
+                   (member? k '(wstr str16 str32))                       ; a wide literal, prefix restored
+                    ((? (k = 'wstr) "L\"" (k = 'str16) "u\"" "U\"") + vof t + "\"")
                    (vof t)))                          ; id / p are their text
    ; C11 6.10.3.2's stringize: the argument's own spelling, quotes and escapes and
    ; all. the standard's extra \ before each " and \ buys a text that RE-LEXES to
@@ -280,6 +283,21 @@
               ()))
        ())
 
+   ; -- #pragma push_macro("X") / pop_macro("X") (gcc/msvc): the save is a per-name
+   ; stack riding macs under a key no C identifier can spell, each cell the entry as
+   ; saved (() = was undefined). a pop with nothing saved is a no-op, gcc's reading;
+   ; the body reads RAW, so a user macro named pop_macro cannot interfere (cts 00206). --
+   (pragmac? body) (two? body && idt? <body &&
+                    member? (vof <body) '("push_macro" "pop_macro"))
+   (dopragmac macs body)
+    (: r >body
+       (? !(two? r && pv? <r "(" && two? >r && (kof <>r = 'str) &&
+           two? >>r && pv? <>>r ")") ()
+          (: nm (vof <>r) key ("#save:" + nm) stk (peep macs key ())
+             (? (vof <body = "push_macro") (pin macs key ((mdef macs nm) >< stk))
+                (two? stk) (: _ (pin macs nm <stk) (pin macs key >stk))
+                ()))))
+
    ; -- adjacent string literal concatenation (phase 6) --
    ; it also RETIRES the file marks here, in the one pass that already rebuilds
    ; the whole spine -- so parse receives a clean stream and pays nothing for a
@@ -294,6 +312,11 @@
    ; that have to join. a mark consumed mid-join takes effect AFTER the merged
    ; token (index n + 1) -- the joined literal belongs to the file its FIRST
    ; piece came from.
+   ; the string FAMILY joins across a prefix: C11 6.4.5p5 -- a narrow piece takes the
+   ; wide side's kind (its bytes are UTF-8 text, so the decode reads them right), and
+   ; two different wide prefixes keep the first (gcc refuses; nothing here spells it)
+   (strk? k) (member? k '(str wstr str16 str32))
+   (jork a b) (? (a = b) a (a = 'str) b (b = 'str) a a)
    (fmark? t) (kof t = 'fmark)
    (fmpush t files) (? (vof t = 'in) (lof t >< files) >files)
    (fmtop files) (? (two? files) <files ())
@@ -307,12 +330,12 @@
        (: t <ts
           (? (fmark? t)
               (: fs (fmpush t files) _ (spanat n fs) (strcat-pass >ts n fs))
-             !(kof t = 'str) (t >< strcat-pass >ts (n + 1) files)
+             !(strk? (kof t)) (t >< strcat-pass >ts (n + 1) files)
              (: sr (skipfm >ts files) nxt <sr fs <>sr
-                (? !(two? nxt && (kof <nxt = 'str)) (t >< strcat-pass >ts (n + 1) files)
+                (? !(two? nxt && strk? (kof <nxt)) (t >< strcat-pass >ts (n + 1) files)
                    ; the marks we just consumed take effect after the merged token
                    (: _ (? (fmtop fs = fmtop files) () (spanat (n + 1) fs))
-                      (strcat-pass (tok 'str (vof t + vof <nxt) (lof t) >< >nxt) n fs)))))))
+                      (strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) >< >nxt) n fs)))))))
 
    ; -- the driver: walk logical lines, run directives, expand active code.
    ; macs is a MUTABLE tablet (so #define/#undef persist and includes share it);
@@ -358,6 +381,8 @@
                     (dir = "warning")
                      (: _ (say err ("cc: warning: " + spellcat body)) _ (put err 10)
                         (cppgo rest macs cond () out1 incf))
+                    ((dir = "pragma") && pragmac? body)
+                     (: _ (dopragmac macs body) (cppgo rest macs cond () out1 incf))
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.

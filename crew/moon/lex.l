@@ -20,6 +20,25 @@
    ; text prepends to the TU, so those lines get 1-k..0 and the source itself
    ; starts at 1: every stamped line (gripes, __LINE__) is true with no
    ; pay-back pass. clex is the plain 1-based face every other caller reads.
+   ; UTF-8 -> code points, the decode half of the wide-literal codec (the encode half,
+   ; utf8put, lives in clexat): a prefixed literal's token value is canonical UTF-8,
+   ; and parse asks this for the elements. tolerant: an invalid or truncated sequence
+   ; decodes as its first byte and moves one, so a re-encoded high escape (L"\xE4")
+   ; survives the round trip as the one element C says it is.
+   (utf8dec s)
+    (: m (tally s)
+       (cb? c) ((128 <= c) && (c < 192))
+       (go i acc)
+        (? (m <= i) (rev acc)
+           (: c (s i)
+              (? ((194 <= c) && (c < 224) && ((i + 1) < m) && cb? (s (i + 1)))
+                  (go (i + 2) ((| (<< (c - 192) 6) (& (s (i + 1)) 63)) >< acc))
+                 ((224 <= c) && (c < 240) && ((i + 2) < m) && cb? (s (i + 1)) && cb? (s (i + 2)))
+                  (go (i + 3) ((| (<< (c - 224) 12) (| (<< (& (s (i + 1)) 63) 6) (& (s (i + 2)) 63))) >< acc))
+                 ((240 <= c) && (c < 245) && ((i + 3) < m) && cb? (s (i + 1)) && cb? (s (i + 2)) && cb? (s (i + 3)))
+                  (go (i + 4) ((| (<< (c - 240) 18) (| (<< (& (s (i + 1)) 63) 12) (| (<< (& (s (i + 2)) 63) 6) (& (s (i + 3)) 63)))) >< acc))
+                 (go (i + 1) (c >< acc)))))
+       (go 0 ()))
    (clex src) (clexat src 1)
    (clexat src ln0)
     (: n (tally src)
@@ -66,8 +85,8 @@
        (suf? c) (& (ctbl c) 64)
        (skipsuf j) (? ((j < n) && suf? (src j)) (skipsuf (j + 1)) j)                      ; eat an int-literal suffix run
        ; a WIDE/prefixed literal marker before ' or " : L (C89 wchar_t), u/U (C11 char16/32),
-       ; u8 (C11 UTF-8 string). we carry no distinct wide type, so the prefix just DROPS -- a
-       ; char value is identical, a wide string reads narrow. -> prefix length (1|2), else 0.
+       ; u8 (C11 UTF-8 string, byte semantics). -> prefix length (1|2), else 0; the
+       ; prefixed lane below picks the token kind.
        (wpfx i) (: c (src i)
                    (? !((c = 76) || (c = 117) || (c = 85)) 0
                       (: pl (? ((c = 117) && ((i + 1) < n) && (src (i + 1) = 56)) 2 1)       ; u8 -> 2
@@ -116,6 +135,46 @@
                                (hx (k + 1) 0))
                             ())
                         (: v (escv d) (? (charm? v) `(v (k + 1)) ()))))
+       ; the body of a string-shaped literal, from qi (after the opening quote) to the
+       ; closing `term` -> (content endpos) | (). one lane under the narrow, wide and
+       ; wide-char faces; `wide` re-encodes escape values as UTF-8 (utf8put below).
+       ; ⚠ the body lands a RUN AT A TIME, never a byte: `say` of a snip is one
+       ; memcpy, where an accumulator grown per char is quadratic -- the corpus
+       ; literal baked into the kernel is 910 KB and cost 51s of a 64s build.
+       (strbody qi term wide)
+        (: sink (jug 0)
+           (run k) (? (n <= k) k                      ; how far the ordinary bytes reach
+                      (: c2 (src k)
+                         (? ((c2 = term) || (c2 = 92) || (c2 = 10)) k (run (k + 1)))))
+           (eat j)
+            (: e (run j)
+               _ (? (j < e) (say sink (snip src j e)) ())
+               (? (n <= e) ()
+                  (: c2 (src e)
+                     (? (c2 = term) `((slurp sink) (e + 1))
+                        ((c2 = 92) && ((e + 1) < n) && (src (e + 1) = 10)) (eat (e + 2))       ; \<nl> splice: the pair vanishes, the string reads on
+                        ((c2 = 92) && ((e + 2) < n) && (src (e + 1) = 13) && (src (e + 2) = 10)) (eat (e + 3))           ; \<cr><nl> splice
+                        (c2 = 10) ()
+                        ((c2 = 92) && ((e + 1) < n))
+                         (: r (escseq (e + 1))
+                            (? (two? r) (: _ (? wide (utf8put sink <r) (put sink <r)) (eat <>r)) ()))
+                        ; a stop `run` made that none of the above claims: one byte,
+                        ; then on. the trailing \ lands here, and so would any future
+                        ; stop -- which is what keeps a widened `run` from looping.
+                        (: _ (put sink c2) (eat (e + 1)))))))
+           (eat qi))
+       ; the encode half of the wide-literal codec (utf8dec above is the decode):
+       ; an escape value re-encodes, keeping the token's value canonical UTF-8
+       (utf8put sink v)
+        (? (v < 128) (put sink v)
+           (v < 2048) (: _ (put sink (192 + (>> v 6))) (put sink (128 + (& v 63))))
+           (v < 65536) (: _ (put sink (224 + (>> v 12)))
+                          _ (put sink (128 + (& (>> v 6) 63)))
+                          (put sink (128 + (& v 63))))
+           (: _ (put sink (240 + (>> v 18)))
+              _ (put sink (128 + (& (>> v 12) 63)))
+              _ (put sink (128 + (& (>> v 6) 63)))
+              (put sink (128 + (& v 63)))))
        (idh? c) (& (ctbl c) 8)
        (idc? c) (& (ctbl c) 16)
        (at? i pat) (: m (tally pat)                 ; does pat sit at i?
@@ -231,30 +290,7 @@
                                               (eat (j + 1) (? ((src j = 10) && !(spliced? j)) (l2 + 1) l2)))
                                 r (eat (i + 2) line)
                                 (? (charm? <r) (go <r <>r acc) ()))
-                 (c = 34) (: sink (jug 0)                    ; a string literal
-                             ; ⚠ the body lands a RUN AT A TIME, never a byte: `say` of a snip is one
-                             ; memcpy, where an accumulator grown per char is quadratic -- the corpus
-                             ; literal baked into the kernel is 910 KB and cost 51s of a 64s build.
-                             (run k) (? (n <= k) k                      ; how far the ordinary bytes reach
-                                        (: c2 (src k)
-                                           (? ((c2 = 34) || (c2 = 92) || (c2 = 10)) k (run (k + 1)))))
-                             (eat j)
-                              (: e (run j)
-                                 _ (? (j < e) (say sink (snip src j e)) ())
-                                 (? (n <= e) ()
-                                    (: c2 (src e)
-                                       (? (c2 = 34) `((slurp sink) (e + 1))
-                                          ((c2 = 92) && ((e + 1) < n) && (src (e + 1) = 10)) (eat (e + 2))       ; \<nl> splice: the pair vanishes, the string reads on
-                                          ((c2 = 92) && ((e + 2) < n) && (src (e + 1) = 13) && (src (e + 2) = 10)) (eat (e + 3))           ; \<cr><nl> splice
-                                          (c2 = 10) ()
-                                          ((c2 = 92) && ((e + 1) < n))
-                                           (: r (escseq (e + 1))
-                                              (? (two? r) (: _ (put sink <r) (eat <>r)) ()))
-                                          ; a stop `run` made that none of the above claims: one byte,
-                                          ; then on. the trailing \ lands here, and so would any future
-                                          ; stop -- which is what keeps a widened `run` from looping.
-                                          (: _ (put sink c2) (eat (e + 1)))))))
-                             r (eat (i + 1))
+                 (c = 34) (: r (strbody (i + 1) 34 ())          ; a string literal
                              (? (two? r) (go <>r line (`('str <r line () (snip src i <>r)) >< acc)) ()))
                  ; a character constant: chars and escapes up to the closing quote.
                  ; ⚠ MULTI-character ones are ordinary C (implementation-defined, gcc
@@ -298,7 +334,23 @@
                      k (? (id? <>r 'imag) 'iflo    ; the imaginary float (1.0fi): its own kind
                           <>r 'flo (ukind i j2 <>>r 1))
                      (go j2 line (`(k <>>r line () (snip src i j2)) >< acc)))
-                 (< 0 (wpfx i)) (go (+ i (wpfx i)) line acc)   ; drop a wide-literal prefix; the ' or " lexes as usual
+                 ; a prefixed literal: the kind carries the width (L -> 'wstr, u -> 'str16,
+                 ; U -> 'str32; u8 stays narrow), the value is canonical UTF-8, the
+                 ; spelling keeps the prefix. a wide CHAR constant decodes to its LAST
+                 ; code point (L'ä' is 0xE4, not the packed bytes; L'ab' is 'b' --
+                 ; implementation-defined, gcc's reading) and stays 'num.
+                 (< 0 (wpfx i))
+                  (: pl (wpfx i)
+                     c2 (src (i + pl))
+                     k (? ((c = 117) && (pl = 1)) 'str16 (c = 85) 'str32 (c = 76) 'wstr 'str)
+                     (? (c2 = 34)
+                         (: r (strbody ((i + pl) + 1) 34 !(k = 'str))
+                            (? (two? r) (go <>r line (`(k <r line () (snip src i <>r)) >< acc)) ()))
+                        (k = 'str) (go (i + pl) line acc)     ; u8'': lex narrow, byte semantics
+                        (: r (strbody ((i + pl) + 1) 39 1)
+                           cps (? (two? r) (utf8dec <r) ())
+                           (lastc l) (? (two? >l) (lastc >l) <l)
+                           (? (two? cps) (go <>r line (`('num (lastc cps) line () (snip src i <>r)) >< acc)) ()))))
                  (idh? c) (: (idr j) (? ((j < n) && idc? (src j)) (idr (j + 1)) j)
                              j (idr i)
                              t (snip src i j)

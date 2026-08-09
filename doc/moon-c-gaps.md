@@ -30,7 +30,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 | `_Alignof` | `_Alignof(int)` |
 | `_Generic` | `_Generic(x, int: 1, default: 0)` |
 | `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest |
-| `__extension__` | `__extension__ unsigned long long v;` — glibc's `__atomic_wide_counter` opens with it, so **`#include <pthread.h>` does not parse** (`gcc -E -P` it and mooncc stops at line 197). A no-op keyword: skipping it at declaration, member and expression position is the whole fix, and it would let pdclib's dlmalloc build. |
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
@@ -58,9 +57,23 @@ gcc, including a run-time-sized one); every other target says `no lane for a var
 array on <tgt>`, and a VLA with an initializer refuses everywhere. `__typeof__` over locals, globals, struct members, dereferences and
 function names. Designated initialisers (both `.field =` and `[i] =`), compound literals, K&R
 definitions, bitfields including compound assignment, flexible array members, variadic macros,
-`long long`, hex floats, wide/prefixed literals (`L`, `u`, `U`, `u8` — they *parse*; ⚠ mooncc
-carries no distinct wide type, so the prefix drops and the elements come out as bytes, which is
-a wrong answer and not a passing row), anonymous unions, `restrict`, `static inline`, mixed
+`long long`, hex floats, wide/prefixed literals with their C11 element types (**landed
+2026-08-09**, cts 00220: the lexer keeps the prefix as the token kind with a canonical-UTF-8
+value, parse desugars to a *bounded compound literal* of the element type — `L` → wchar,
+`u` → char16 with surrogate pairs, `U` → char32, `u8` stays bytes — and the ordinary init
+machinery lays elements, so globals, locals, braces, elision, concatenation across a prefix
+and `sizeof` all match gcc on every target; a wide *char* constant decodes to its last code
+point, gcc's reading. Two honest edges: a wide literal's storage is the compound literal's —
+automatic in a function where C says static duration, so a pointer kept past the frame
+dangles, and `wchar_t *p = L"x"` at file scope refuses on the static-clit row above; and a
+mixed-prefix concatenation `u"a" U"b"` takes the first prefix where gcc refuses. Universal
+character names `\uXXXX`/`\UXXXXXXXX` stay absent — the escape refuses, loudly), anonymous
+unions, `__extension__` (**landed 2026-08-09**: a no-op skipped at a declaration's head —
+file scope, block, member, before `typedef` — and as a cast-expression prefix, with the
+typedef declarator's trailing attribute run skipping alongside; **`#include <pthread.h>`
+parses, compiles and runs now**. gcc-refused spots like `int __extension__ x;` still refuse;
+`sizeof(__extension__ T)` is accepted where gcc refuses, the one tolerance),
+`restrict`, `static inline`, mixed
 declarations, `for`-scoped declarations, `_Static_assert` itself (including `&&`/`||`/`?:` in
 the constant), string-literal concatenation, self-referential structs, enum trailing commas,
 multidimensional arrays, brace elision in nested initialisers, pointer-to-array declarators,
@@ -71,15 +84,18 @@ and `__func__`.
 ### the directives, and which are ignored on purpose
 
 `#pragma`, `#line`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
-C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing. `#warning` says its
+C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
+**`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
+(gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
+nothing saved is a no-op, and the directive body reads raw so a user macro named `pop_macro`
+cannot interfere — cts 00206). `#warning` says its
 text and continues. **Everything else refuses** (C11 6.10p1) — the catch-all that used to ignore
 an unknown directive let `#cmakedefine X 1` sail through, so an unconfigured template header
 compiled clean and the name it owed was simply absent.
 
-⚠ Two of those ignores cost a right answer rather than a feature, so "on purpose" is the
-cheaper reading of them than the true one: **`#line` never moves the line number** a later
-diagnostic or `__LINE__` reports, and **`#pragma push_macro` / `pop_macro`** drop the save, so
-the macro never comes back and the `#undef` under it is permanent.
+⚠ One of those ignores costs a right answer rather than a feature, so "on purpose" is the
+cheaper reading of it than the true one: **`#line` never moves the line number** a later
+diagnostic or `__LINE__` reports.
 
 ⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
 which is worse. doc/moon-userland.md carries when it becomes load-bearing.
@@ -149,9 +165,9 @@ when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Two compile
-clean and answer wrong, and both are rows elsewhere on this page — the wide literal and
-`#pragma push_macro`.
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). **None
+compile clean and answer wrong** — the wide literal (00220), the last such row, landed
+2026-08-09. What remains on the roster is refusals, each loud and named.
 
 ### sizeof over promoted arithmetic — landed, via the typing door
 
@@ -170,6 +186,15 @@ arithmetic expressions types through the same lanes now too.
 Two residues, both accepted: **unary `+` vanishes at parse** (it exists only to promote, so
 `sizeof(+c)` is 1, gcc's 4), and `sizeof(a = b)` still defers to gen's 8 (assignment wears
 the unpromoted left type; no ptype lane asks it). Neither has a real-world consumer yet.
+
+### an unbounded array compound literal never got its bound — landed
+
+`(int[]){1,2}` used to compile clean with the bound still missing: `sizeof` folded to **0**
+and `p[0]` off a pointer it initialized read garbage (an explicit bound was right on every
+count). **Landed 2026-08-09**: the clit site asks `initcount` — the same door the `[]`
+declarators use — so the initializer completes the type (C11 6.5.2.5p22), designators and
+braced strings included. Found probing the wide-literal desugar the same day (the desugar
+mints *bounded* clits, so it never rode this). Pinned by test/cc/126-clitbound.c.
 
 ### bool is four bytes
 
@@ -195,6 +220,22 @@ suffixed literals already arrive under) and it was **measured at +12% of love.o'
 (460447 → 515584 bytes) — the cast makes the surrounding arithmetic take unsigned lanes, which
 is more correct C at a real size cost. Written and reverted 2026-08-08: it is a rung with a
 price tag, not a patch. ⚠ measure again before believing the number; it was one build.
+
+It has a real consumer now (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
+PDCLib's dlmalloc guards itself with `enum { _PDCLIB_assert_667 = 1 / (!!(sizeof( sizeof(int) )
+== sizeof(long unsigned int))) };` — our 4 ≠ 8, the divide refuses, the file stops there. It is
+now dlmalloc's **only** x64 blocker: the rest of its ladder landed 2026-08-09 —
+`__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines; fully-masked neutral shift/or
+expansions, no raw splices so unframe stays alive, seeded sigs so the results type unsigned at
+their exact width; test/cc/128-bswap.c, five lanes at 9), then `__sync_lock_test_and_set` /
+`__sync_lock_release` (the spin-lock pair: x64 `xchg`/plain store under TSO, a64 ldaxr/stxr
+retry + `stlr`, riscv64 `amoswap.{w,d}.aq` + `fence rw,w`; the POINTEE sizes and signs the
+exchange, 4/8 bytes, and an unsized pointee refuses — guessing a width would miscompile in
+silence), and `__builtin_clz`/`__builtin_ctz` (32-bit; clz32 rides the clzll lane as
+`clz64(x << 32)`, ctz is bsf / rbit+clz / a mask-narrowing search; test/cc/129-sync.c, five
+lanes at 11). With assert_667 hand-neutered, dlmalloc compiles whole on x64 — arm64/riscv64
+additionally hit the 80-byte struct **return** (`internal_mallinfo`, the memory-return
+asymmetry below).
 
 ### what the %f hunt actually found — and the trap in it
 
@@ -270,6 +311,10 @@ save area, `vaspill`); `vaspill-a64`/`-rv`/`-t32` refuse the shape, each for its
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
   `;; lea-range (r0 r4 8)`, the scaled-indexed-address gap.
+- **`__builtin_bswap64` and the `__sync` spin-lock pair on t32** — `no lane for <name> on
+  <tgt>`; bswap16/32 and clz/ctz ride every target (t32 clz is the CLZ word / `__clzsi2`,
+  ctz the isolate-and-clz / `__ctzsi2`), but the 64-bit swap wants the r0:r1 pair lane and
+  the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
 
 What t32 *does* carry, so it is not re-derived: 64-bit `long long` as register pairs (lo:hi on
 r0:r1, r2:r3 the shuttle) with +, -, ×(UMULL/MLA), unsigned `/` and `%` (a self-contained

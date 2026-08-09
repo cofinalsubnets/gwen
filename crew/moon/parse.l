@@ -107,7 +107,7 @@
    ; balance-skip their parens; _Noreturn / __inline stand alone.
    qualkw '(const volatile restrict register auto inline extern static)
    qualid '("__attribute__" "__inline" "__inline__" "__restrict" "__restrict__"
-            "__volatile__" "__const" "_Noreturn" "_Alignas" "__alignof__")
+            "__volatile__" "__const" "_Noreturn" "_Alignas" "__alignof__" "__extension__")
    (pquals ts)
     (? !(two? ts) ts
        (: t <ts
@@ -312,6 +312,11 @@
                           '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
                              ("reg_save_area" 16 (ptr void))) 24 8)))
                 _ (pin (t 'types) "__builtin_va_list" '(arr (struct "__va_list_tag") 1))
+                ; the bswap trio's sigs, seeded so the results type UNSIGNED (a
+                ; swapped high bit is real: compare/divide/sizeof read the width)
+                _ (pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()))
+                _ (pin (t 'sigs) "__builtin_bswap32" '(uint (uint) ()))
+                _ (pin (t 'sigs) "__builtin_bswap64" '(ulong (ulong) ()))
                 ; C99 _Complex, seeded as two-member structs (canon maps the
                 ; specifier run onto these tags): layout, copy, union membership
                 ; and the SysV (sse sse) / one-sse ABI all ride the struct lanes
@@ -843,6 +848,24 @@
              (tkk t = 'iflo)
               `(`('clit '(struct "__cplx_double") `('init `('(flo 0.0) `('flo (tkv t))))) >ts)
              (tkk t = 'str) `(`('str (tkv t)) >ts)
+             ; a WIDE literal desugars to a BOUNDED compound literal of its element
+             ; type -- the init/layout machinery then lays elements, never bytes.
+             ; L -> wchar (int; unsigned on the arm targets, the predefine table's
+             ; fork), u -> char16 (ushort, a supplementary code point as its
+             ; surrogate pair), U -> char32 (uint). the token's value is canonical
+             ; UTF-8 (lex re-encoded the escapes); utf8dec answers the elements.
+             (member? (tkk t) '(wstr str16 str32))
+              (: ety (? (tkk t = 'str16) 'ushort
+                        (tkk t = 'str32) 'uint
+                        (member? (peep ps 'tgt ()) '(arm64 thumb2 thumb2sp thumb1)) 'uint
+                        'int)
+                 (s16 l) (? !(two? l) ()
+                            (65536 <= <l) (: v (<l - 65536)
+                                             ((55296 + (>> v 10)) >< ((56320 + (& v 1023)) >< s16 >l)))
+                            (<l >< s16 >l))
+                 cps (: raw (utf8dec (tkv t)) (? (tkk t = 'str16) (s16 raw) raw))
+                 (nums l) (? !(two? l) `(`('num 0)) (`('num <l) >< nums >l))
+                 `(`('clit `('arr ety (tally cps + 1)) `('init (nums cps))) >ts))
              ; the varargs builtins (my stdarg.h maps va_* onto these): va_arg's
              ; second operand is a TYPE, so they can't ride the ordinary call path
              ((tkk t = 'id) && (tkv t = "__builtin_va_arg"))
@@ -960,7 +983,11 @@
                     (peekp rest "{")                    ; a compound literal (type){ init } -- an unnamed object,
                                                         ; and a postfix HEAD (member/index ride ppostfrom)
                      (: iv (pinit ps rest)
-                        (? (two? iv) (ppostfrom ps `('clit <tr <iv) <>iv) ()))
+                        ; an [] clit completes its bound from the initializer (C11
+                        ; 6.5.2.5p22) -- the same door the [] declarators ask
+                        cty (? (two? iv && arr? <tr && (<>><tr = 0) && charm? (initcount ps <><tr <iv))
+                               `('arr <><tr (initcount ps <><tr <iv)) <tr)
+                        (? (two? iv) (ppostfrom ps `('clit cty <iv) <>iv) ()))
                     (: r (punary ps rest)
                        (? !(two? r) ()
                           ; the complex cast lanes (C99 6.3.1.7, musl's creal/__CIMAG):
@@ -992,6 +1019,8 @@
                        (? (two? r) (: ty (ptype ps <r)
                                       (? (ty && !(varr? ty))      ; a VLA's size is RUNTIME: defer to gen's szof
                                          `(`('num (tsz ps ty)) <>r) `(`('szof <r) <>r))) ()))))
+             ; __extension__ (gcc) prefixes a cast-expression as a no-op
+             ((tkk t = 'id) && (tkv t = "__extension__")) (punary ps >ts)
              (tp? t "*") (: r (punary ps >ts)
                             (? (two? r) `(`('deref <r) <>r) ()))
              (tp? t "&") (: r (punary ps >ts)
@@ -1109,7 +1138,8 @@
    (fills ps ty items)
     (? !(two? items) items
        (arr? ty)
-        (? (chart? <>ty && two? <items && (<<items = 'str)) >items
+        (? ((chart? <>ty && two? <items && (<<items = 'str)) ||
+            (!(ptr? <>ty) && two? <items && (<<items = 'clit) && arr? <><items)) >items   ; a string / wide literal IS the array
            (: (go n l) (? (!(< 0 n) || !(two? l)) l (go (n - 1) (fills ps <>ty l)))
               (go <>>ty items)))
        (stru? ty)
@@ -1128,6 +1158,8 @@
    (allplain? items) (foldl (\ ok it (ok && !(member? <it '(init didx dfield)))) 1 items)
    (initcount ps elt ini)
     (? (two? ini && (<ini = 'str)) (tally <>ini + 1)
+       ; a wide literal (a bounded clit-of-array after the desugar): its own bound
+       (two? ini && (<ini = 'clit) && arr? <>ini && !(ptr? elt)) <>><>ini
        (two? ini && (<ini = 'init))
         (: items <>ini
            ; { "s" } sizing a char array (6.7.9p14): the string's own count,
@@ -1136,6 +1168,10 @@
                !(two? >items) &&
                two? <items && (<<items = 'str) && !(ptr? elt))
                (tally <><items + 1)
+              (two? items &&                            ; { L"s" }: p14's wide twin
+               !(two? >items) &&
+               two? <items && (<<items = 'clit) && arr? <><items && !(ptr? elt))
+               <>><><items
               ((arr? elt || stru? elt) && two? items && allplain? items)
                (: (rows l n) (? !(two? l) n
                                  (: r (fills ps elt l) (? (id? r l) n (rows r (n + 1)))))
@@ -1567,7 +1603,7 @@
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
              sh2 (`('types nm old) >< sh)
-             af <>dr
+             af (patt <>dr)
              (? (peekp af ",") (btdefs ps base >af sh2)
                 (peekp af ";") `(>af sh2)
                 ()))))
@@ -1577,6 +1613,7 @@
           (: (items ts2 acc sh)
               (? !(two? ts2) (: _ (unshadow ps sh) ())
                  (tp? <ts2 "}") (: _ (unshadow ps sh) `(`('blk (rev acc)) >ts2))
+                 ((tkk <ts2 = 'id) && (tkv <ts2 = "__extension__")) (items >ts2 acc sh)
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
                      r (? (two? br) (btdefs ps <br <>br sh) ())
@@ -1674,7 +1711,7 @@
     (: dr (pdtor ps ts base)
        (? !(two? dr) ()
           (: _ (pin (ps 'types) <<dr <><dr)
-             af <>dr
+             af (patt <>dr)                ; glibc trails __attribute__ on a typedef's declarator
              (? (peekp af ",") (tdeflist ps base >af)
                 ; peek for the `;`: the remainder may be EMPTY (a typedef at EOF)
                 (peekp af ";") `('(tdef) >af)
@@ -1694,6 +1731,9 @@
        (ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") `('(tdef) >ts)           ; a stray top-level `;` -- an empty declaration
+       ; a leading __extension__ (gcc, a no-op) strips BEFORE the keyword checks --
+       ; glibc opens `__extension__ typedef` and the typedef lane reads the raw head
+       (two? ts && (tkk <ts = 'id) && (tkv <ts = "__extension__")) (ptop9 ps >ts)
        (static? ts) (pstatic ps ts)
        ; a leading __attribute__((weak)): parse past it and record the function's
        ; name -- the .o emitter binds its symbol WEAK (a host override wins at link)

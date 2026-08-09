@@ -70,8 +70,6 @@ roster_refuses='
 00219 _Generic
 '
 roster_wrong='
-00206 #pragma push_macro/pop_macro is ignored, so the macro never comes back
-00220 a wide/u/U string literal carries no distinct element type
 '
 # the two per-target lines, both of them lanes x64 has and the others do not
 # (doc/moon-c-gaps, "target asymmetries"): a by-value composite in a variadic
