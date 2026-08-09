@@ -223,13 +223,19 @@ price tag, not a patch. ⚠ measure again before believing the number; it was on
 
 It has a real consumer now (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
 PDCLib's dlmalloc guards itself with `enum { _PDCLIB_assert_667 = 1 / (!!(sizeof( sizeof(int) )
-== sizeof(long unsigned int))) };` — our 4 ≠ 8, the divide refuses, the file stops there.
-Behind it waits `__sync_lock_test_and_set` (dlmalloc's spin locks), so the rung alone does not
-finish dlmalloc — but `__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines, the next rung
-of that ladder) **landed 2026-08-09**: fully-masked neutral shift/or expansions on every
-target (no raw splices, so unframe stays alive; the 64-bit form refuses loudly on t32 — the
-pair lane has no taker), with seeded sigs so the results type unsigned at their exact width.
-Pinned by test/cc/128-bswap.c, five lanes at 9.
+== sizeof(long unsigned int))) };` — our 4 ≠ 8, the divide refuses, the file stops there. It is
+now dlmalloc's **only** x64 blocker: the rest of its ladder landed 2026-08-09 —
+`__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines; fully-masked neutral shift/or
+expansions, no raw splices so unframe stays alive, seeded sigs so the results type unsigned at
+their exact width; test/cc/128-bswap.c, five lanes at 9), then `__sync_lock_test_and_set` /
+`__sync_lock_release` (the spin-lock pair: x64 `xchg`/plain store under TSO, a64 ldaxr/stxr
+retry + `stlr`, riscv64 `amoswap.{w,d}.aq` + `fence rw,w`; the POINTEE sizes and signs the
+exchange, 4/8 bytes, and an unsized pointee refuses — guessing a width would miscompile in
+silence), and `__builtin_clz`/`__builtin_ctz` (32-bit; clz32 rides the clzll lane as
+`clz64(x << 32)`, ctz is bsf / rbit+clz / a mask-narrowing search; test/cc/129-sync.c, five
+lanes at 11). With assert_667 hand-neutered, dlmalloc compiles whole on x64 — arm64/riscv64
+additionally hit the 80-byte struct **return** (`internal_mallinfo`, the memory-return
+asymmetry below).
 
 ### what the %f hunt actually found — and the trap in it
 
@@ -305,9 +311,10 @@ save area, `vaspill`); `vaspill-a64`/`-rv`/`-t32` refuse the shape, each for its
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
   `;; lea-range (r0 r4 8)`, the scaled-indexed-address gap.
-- **`__builtin_bswap64` on t32** — `no lane for __builtin_bswap64 on <tgt>`; the 16/32 forms
-  ride every target (width-blind neutral expansions), the 64 wants the r0:r1 pair lane and
-  nothing reaches it there yet.
+- **`__builtin_bswap64` and the `__sync` spin-lock pair on t32** — `no lane for <name> on
+  <tgt>`; bswap16/32 and clz/ctz ride every target (t32 clz is the CLZ word / `__clzsi2`,
+  ctz the isolate-and-clz / `__ctzsi2`), but the 64-bit swap wants the r0:r1 pair lane and
+  the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
 
 What t32 *does* carry, so it is not re-derived: 64-bit `long long` as register pairs (lo:hi on
 r0:r1, r2:r3 the shuttle) with +, -, ×(UMULL/MLA), unsigned `/` and `%` (a self-contained

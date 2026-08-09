@@ -1284,9 +1284,14 @@
                        `('label di)
                        '(raw (159 59 3 213))          ; dsb ish
                        '(raw (223 63 3 213)))))))     ; isb
-       (bi = "__builtin_clzll")
+       (member? bi '("__builtin_clzll" "__builtin_clz"))
         (: e1 (cgexpr g env <args)
+           ll (bi = "__builtin_clzll")
+           pre (? ll () '((shl r0 32)))    ; clz32(x) = clz64(x << 32) -- the shift also clears upper garbage
            (? (bad? e1) 'bad
+              (t32? g && !ll)              ; clz32 is one word: CLZ / libgcc's __clzsi2
+               (mkv 'long 'r0 (asint g e1 +
+                  (? (v6m? g) '((call __clzsi2)) '((clz r0 r0)))))
               (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
                (: lz (nlab g ".cz") ld (nlab g ".czd")
                   _ (vmflush g)
@@ -1299,16 +1304,41 @@
               (rv? g)                      ; no clz in RV64I: the 6-stage binary search (branchy; clz(0) stays UB)
                (: ls (map (\ k (nlab g ".cz")) '(0 1 2 3 4 5))
                   _ (vmflush g)
-                  step (\ kk ll `('(mov r2 r0) `('shr 'r2 (64 - kk)) '(cmp r2 0) `('br 'ne ll)
-                                   `('add 'r1 'r1 kk) `('shl 'r0 kk) `('label ll)))
-                  (mkv 'long 'r0 (asint g e1 +
+                  step (\ kk lb2 `('(mov r2 r0) `('shr 'r2 (64 - kk)) '(cmp r2 0) `('br 'ne lb2)
+                                   `('add 'r1 'r1 kk) `('shl 'r0 kk) `('label lb2)))
+                  (mkv 'long 'r0 (asint g e1 + pre +
                     ('((li r1 0))
                      + step 32 (nthr ls 0) + step 16 (nthr ls 1) + step 8 (nthr ls 2)
                      + step 4 (nthr ls 3) + step 2 (nthr ls 4) + step 1 (nthr ls 5)
                      + '((mov r0 r1))))))
-              (mkv 'long 'r0 (asint g e1 +
+              (mkv 'long 'r0 (asint g e1 + pre +
                               (? (a64? g) '((raw (0 16 192 218)))                    ; clz x0, x0
                                  '((raw (72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
+       ; count trailing zeros, 32-bit (dlmalloc's compute_bit2idx; ctz(0) stays UB;
+       ; upper garbage is harmless -- the defined case has a set bit in the low 32):
+       ; x64 bsf, a64 rbit+clz, rv a mask-narrowing search, t32 isolate-and-clz
+       (bi = "__builtin_ctz")
+        (: e1 (cgexpr g env <args)
+           (? (bad? e1) 'bad
+              (t32? g)
+               (mkv 'long 'r0 (asint g e1 +
+                  (? (v6m? g) '((call __ctzsi2))
+                     '((li r1 0) (sub r1 r1 r0) (and r0 r0 r1)     ; x & -x, then 31 - clz
+                        (clz r0 r0) (li r1 31) (sub r0 r1 r0)))))
+              (rv? g)
+               (: ls (map (\ k (nlab g ".tz")) '(0 1 2 3 4 5))
+                  _ (vmflush g)
+                  step (\ kk mk lb2 `(`('li 'r3 mk) '(mov r2 r0) '(and r2 r2 r3) '(cmp r2 0)
+                                      `('br 'ne lb2) `('add 'r1 'r1 kk) `('shr 'r0 kk) `('label lb2)))
+                  (mkv 'long 'r0 (asint g e1 +
+                    ('((li r1 0))
+                     + step 32 4294967295 (nthr ls 0) + step 16 65535 (nthr ls 1)
+                     + step 8 255 (nthr ls 2) + step 4 15 (nthr ls 3)
+                     + step 2 3 (nthr ls 4) + step 1 1 (nthr ls 5)
+                     + '((mov r0 r1))))))
+              (mkv 'long 'r0 (asint g e1 +
+                              (? (a64? g) '((raw (0 0 192 90 0 16 192 90)))   ; rbit w0,w0; clz w0,w0
+                                 '((raw (72 15 188 192))))))))                ; bsf rax,rax
        ; the bswap trio (glibc's <byteswap.h> inlines): fully-masked neutral shift/or
        ; expansions -- no raw (unframe stays alive), no new ops. 16/32 are width-blind
        ; and ride every target; 64 is the three-stage swap (bytes, halves, words) and
@@ -1335,6 +1365,40 @@
                         (mov r1 r0) (shr r1 16) (and r1 r1 r2)
                         (and r0 r0 r2) (shl r0 16) (or r0 r0 r1)
                         (mov r1 r0) (shr r1 32) (shl r0 32) (or r0 r0 r1))))))))
+       ; the __sync spin-lock pair (dlmalloc's CAS_LOCK/CLEAR_LOCK): test_and_set is
+       ; the atomic exchange with acquire -- x64 xchg (implicitly locked), a64 the
+       ; ldaxr/stxr retry, rv amoswap.{w,d}.aq -- and release a release-ordered store
+       ; of 0 (x64 TSO plain store, a64 stlr, rv fence rw,w + store). the POINTEE
+       ; sizes and signs the exchange (4/8 bytes; the old value re-extends via cvt),
+       ; and an unsized pointee refuses -- guessing a width miscompiles in silence
+       (member? bi '("__sync_lock_test_and_set" "__sync_lock_release"))
+        (: e1 (cgexpr g env <args)
+           pt (? (two? (vty e1) && (<(vty e1) = 'ptr)) <>(vty e1) ())
+           w (? (member? pt '(int uint)) 4
+                (ptr? pt || member? pt '(long ulong)) 8 ())
+           (? (t32? g) (nolane g (("no lane for " + bi) + ontgt g))
+              (bad? e1) 'bad
+              !w (nolane g (bi + " wants an int* or a long*/T** (the pointee sizes the exchange)"))
+              (bi = "__sync_lock_release")
+               (mkv 'long 'r0 (tor0 g e1 +
+                 '((mov r1 r0) (li r0 0)) +
+                 (? (a64? g) `(`('raw (? (w = 4) '(32 252 159 136) '(32 252 159 200))))   ; stlr w0/x0, [x1]
+                    (rv? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
+                             `(`((? (w = 4) 'st4 'st) 'r1 0 'r0)))
+                    `(`((? (w = 4) 'st4 'st) 'r1 0 'r0)))))
+              (: e2 (cgexpr g env <>args)
+                 (? (bad? e2) 'bad
+                    (: pre (tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1)   ; val r0, ptr r1
+                       body (? (a64? g)
+                               (: lb (nlab g ".ts") _ (vmflush g)
+                                  `(`('label lb)
+                                     `('raw (? (w = 4) '(34 252 95 136) '(34 252 95 200)))   ; ldaxr w2/x2, [x1]
+                                     `('raw (? (w = 4) '(32 124 3 136) '(32 124 3 200)))     ; stxr w3, w0/x0, [x1]
+                                     '(cmp r3 0) `('br 'ne lb) '(mov r0 r2)))
+                              (rv? g)
+                               `(`('raw (? (w = 4) '(47 165 165 12) '(47 181 165 12))))      ; amoswap.w/d.aq a0,a0,(a1)
+                              `(`('raw (? (w = 4) '(135 1) '(72 135 1)))))                   ; xchg eax/rax, (rcx)
+                       (mkv pt 'r0 (pre + body + cvt pt 'r0)))))))
        (bi = "__builtin_isinf")
         (: e1 (cgexpr g env <args)
            (? (bad? e1) 'bad
