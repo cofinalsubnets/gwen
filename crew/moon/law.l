@@ -78,14 +78,22 @@
       (= (spl (clex "1u") 0) "1u") (= (spl (clex "1.20") 0) "1.20")
       (= (spl (clex "0x1F") 0) "0x1F") (= (spl (clex "'a'") 0) "'a'")
       (= (spl (clex "\"a\\nb\"") 0) "\"a\\nb\"")               ; the escape, not the byte
-      ; wide/prefixed literals: L (wchar_t) / u / U / u8 -- we carry no distinct wide type,
-      ; so the prefix DROPS. a char value is identical; a wide string reads narrow.
+      ; wide/prefixed literals: the KIND carries the width (L -> wstr, u -> str16,
+      ; U -> str32; u8 stays narrow bytes), the value is canonical UTF-8 -- an escape
+      ; re-encodes, so utf8dec answers the elements whatever spelled them.
       (= (tn3 <>(clex "L'a'") 0) (L 'num 97 1))               ; L'a' == 'a'
       (= (tn3 <>(clex "u'B'") 0) (L 'num 66 1))               ; u'B'
       (= (tn3 <>(clex "U'C'") 0) (L 'num 67 1))               ; U'C'
       (= (tn3 <>(clex "L'\\n'") 0) (L 'num 10 1))             ; an escape rides through the prefix
-      (= (tn3 <>(clex "L\"hi\"") 0) (L 'str "hi" 1))          ; a wide string reads narrow
-      (= (tn3 <>(clex "u8\"hi\"") 0) (L 'str "hi" 1))         ; u8 (two-char prefix)
+      (= (tn3 <>(clex "L'ab'") 0) (L 'num 98 1))              ; multi-cp: the LAST one (gcc's reading; clang refuses the shape)
+      (= (tn3 <>(clex "L\"hi\"") 0) (L 'wstr "hi" 1))
+      (= (tn3 <>(clex "u\"hi\"") 0) (L 'str16 "hi" 1))
+      (= (tn3 <>(clex "U\"hi\"") 0) (L 'str32 "hi" 1))
+      (= (tn3 <>(clex "u8\"hi\"") 0) (L 'str "hi" 1))         ; u8 (two-char prefix): byte semantics
+      (= (utf8dec <>(tn <>(clex "L\"\\x4f60\"") 0)) '(20320))         ; a high escape re-encoded, one element back
+      (= (utf8dec "h\xc3\xa9!") '(104 233 33))                 ; the codec bare: UTF-8 text decodes
+      (= (utf8dec "\xff") '(255))                              ; ..and a stray byte answers itself
+      (= (spl (clex "L\"hi\"") 0) "L\"hi\"")                  ; the spelling keeps the prefix (# owes it)
       (= (tn <>(clex "Long") 0) (L 'id "Long" 1))            ; an id STARTING with L/u/U is NOT a prefix (no quote follows)
       (= (tally <>(clex "L L'a'")) 2)                        ; bare L stays an id; L'a' a number
       !(clex "int @")                                        ; not C: the lex error rides up
@@ -325,6 +333,22 @@
       (= (citems "int f(long l, unsigned u) { return sizeof(l + u); }") '((ret (num 8))))
       (= (citems "int f(unsigned u, char c) { return sizeof(u + c); }") '((ret (num 4))))
       (= (citems "int f(int *p) { return sizeof(p + 1); }") '((ret (num 8))))
+      ; a wide literal desugars at parse to a BOUNDED clit of its element type
+      ; (L -> wchar, u -> char16 with surrogate pairs, U -> char32, u8 bytes) --
+      ; the init machinery lays ELEMENTS, an [] bound counts them, sizeof folds
+      (= (citems "int f(void) { int w[] = L\"hi\"; return sizeof w; }")
+         '((decl (("w" (arr int 3) (clit (arr int 3) (init ((num 104) (num 105) (num 0))))))) (ret (num 12))))
+      (= (citems "int f(void) { unsigned short s[] = u\"a\\x1d11e\"; return sizeof s; }")   ; U+1D11E: the surrogate pair
+         '((decl (("s" (arr ushort 4) (clit (arr ushort 4) (init ((num 97) (num 55348) (num 56606) (num 0))))))) (ret (num 8))))
+      (= (citems "int f(void) { return sizeof(L\"ab\"); }") '((ret (num 12))))
+      (= (citems "int f(void) { return sizeof(U\"ab\"); }") '((ret (num 12))))
+      (= (citems "int f(void) { return sizeof(u8\"ab\"); }") '((ret (num 3))))    ; u8: bytes, as ever
+      ; an [] compound literal completes its bound from its initializer (C11
+      ; 6.5.2.5p22, the initcount door): plain, designated, and a braced string
+      (= (cexpp "" "sizeof((int[]){1,2,3})") '(num 12))
+      (= (cexpp "" "sizeof((int[]){[3]=1})") '(num 16))
+      (= (cexpp "" "sizeof((char[]){\"hi\"})") '(num 3))
+      (= (cexpp "" "sizeof((int[5]){1})") '(num 20))                              ; an explicit bound stays its own
       ; ..and the door bare, at the width seam: LP64 long HOLDS every uint so
       ; the signed side wins; ILP32 long cannot, so unsigned does. same
       ; signedness takes the higher rank; float/double win their lanes whole.
@@ -660,6 +684,8 @@
 ; pps runs cpp (no includes) and joins the output tokens' spellings to a string. --
 (: (spell1 t) (: k <t
                  (? (= k 'str) (+ "\"" (+ <>t "\""))
+                    (member? k '(wstr str16 str32))
+                     (+ (? (= k 'wstr) "L\"" (= k 'str16) "u\"" "U\"") (+ <>t "\""))
                     ((= k 'num) || (= k 'kw)) (show <>t)
                     <>t))
    (pps src) (: r (cpp <>(clex src) () "<law>")
@@ -702,6 +728,8 @@
       (= (pps "a\nb\n__LINE__") "a b 3")                               ; ... tracked down the file
       (= (pps "__FILE__") "\"<law>\"")                                 ; __FILE__ predefined -> the TU path, a string
       (= (pps "#define M a /* one \\\n   two */ b\nM") "a b")          ; a \<nl> INSIDE a comment splices (phase 2 before 3): the directive holds together (m4 regex.c)
+      (= (pps "L\"a\" \"b\"") "L\"ab\"")                               ; phase 6 joins across a prefix: the wide side wins (C11 6.4.5p5)
+      (= (pps "\"a\" u\"b\" \"c\"") "u\"abc\"")
       (okv? (cpp <>(clex "#ifdef NOPE\nx\n#endif") () "<law>"))        ; a fully-skipped file is a VALID empty TU (crypt.c), not a failure
       (= (pps "#define E\nE + E") "+")                                 ; empty macro body vanishes
       ; ⚠ a refusal is a GRIPE, and a gripe is a PAIR -- so these ask okv?/cppno,

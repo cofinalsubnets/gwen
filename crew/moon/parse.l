@@ -843,6 +843,24 @@
              (tkk t = 'iflo)
               `(`('clit '(struct "__cplx_double") `('init `('(flo 0.0) `('flo (tkv t))))) >ts)
              (tkk t = 'str) `(`('str (tkv t)) >ts)
+             ; a WIDE literal desugars to a BOUNDED compound literal of its element
+             ; type -- the init/layout machinery then lays elements, never bytes.
+             ; L -> wchar (int; unsigned on the arm targets, the predefine table's
+             ; fork), u -> char16 (ushort, a supplementary code point as its
+             ; surrogate pair), U -> char32 (uint). the token's value is canonical
+             ; UTF-8 (lex re-encoded the escapes); utf8dec answers the elements.
+             (member? (tkk t) '(wstr str16 str32))
+              (: ety (? (tkk t = 'str16) 'ushort
+                        (tkk t = 'str32) 'uint
+                        (member? (peep ps 'tgt ()) '(arm64 thumb2 thumb2sp thumb1)) 'uint
+                        'int)
+                 (s16 l) (? !(two? l) ()
+                            (65536 <= <l) (: v (<l - 65536)
+                                             ((55296 + (>> v 10)) >< ((56320 + (& v 1023)) >< s16 >l)))
+                            (<l >< s16 >l))
+                 cps (: raw (utf8dec (tkv t)) (? (tkk t = 'str16) (s16 raw) raw))
+                 (nums l) (? !(two? l) `(`('num 0)) (`('num <l) >< nums >l))
+                 `(`('clit `('arr ety (tally cps + 1)) `('init (nums cps))) >ts))
              ; the varargs builtins (my stdarg.h maps va_* onto these): va_arg's
              ; second operand is a TYPE, so they can't ride the ordinary call path
              ((tkk t = 'id) && (tkv t = "__builtin_va_arg"))
@@ -960,7 +978,11 @@
                     (peekp rest "{")                    ; a compound literal (type){ init } -- an unnamed object,
                                                         ; and a postfix HEAD (member/index ride ppostfrom)
                      (: iv (pinit ps rest)
-                        (? (two? iv) (ppostfrom ps `('clit <tr <iv) <>iv) ()))
+                        ; an [] clit completes its bound from the initializer (C11
+                        ; 6.5.2.5p22) -- the same door the [] declarators ask
+                        cty (? (two? iv && arr? <tr && (<>><tr = 0) && charm? (initcount ps <><tr <iv))
+                               `('arr <><tr (initcount ps <><tr <iv)) <tr)
+                        (? (two? iv) (ppostfrom ps `('clit cty <iv) <>iv) ()))
                     (: r (punary ps rest)
                        (? !(two? r) ()
                           ; the complex cast lanes (C99 6.3.1.7, musl's creal/__CIMAG):
@@ -1109,7 +1131,8 @@
    (fills ps ty items)
     (? !(two? items) items
        (arr? ty)
-        (? (chart? <>ty && two? <items && (<<items = 'str)) >items
+        (? ((chart? <>ty && two? <items && (<<items = 'str)) ||
+            (!(ptr? <>ty) && two? <items && (<<items = 'clit) && arr? <><items)) >items   ; a string / wide literal IS the array
            (: (go n l) (? (!(< 0 n) || !(two? l)) l (go (n - 1) (fills ps <>ty l)))
               (go <>>ty items)))
        (stru? ty)
@@ -1128,6 +1151,8 @@
    (allplain? items) (foldl (\ ok it (ok && !(member? <it '(init didx dfield)))) 1 items)
    (initcount ps elt ini)
     (? (two? ini && (<ini = 'str)) (tally <>ini + 1)
+       ; a wide literal (a bounded clit-of-array after the desugar): its own bound
+       (two? ini && (<ini = 'clit) && arr? <>ini && !(ptr? elt)) <>><>ini
        (two? ini && (<ini = 'init))
         (: items <>ini
            ; { "s" } sizing a char array (6.7.9p14): the string's own count,
@@ -1136,6 +1161,10 @@
                !(two? >items) &&
                two? <items && (<<items = 'str) && !(ptr? elt))
                (tally <><items + 1)
+              (two? items &&                            ; { L"s" }: p14's wide twin
+               !(two? >items) &&
+               two? <items && (<<items = 'clit) && arr? <><items && !(ptr? elt))
+               <>><><items
               ((arr? elt || stru? elt) && two? items && allplain? items)
                (: (rows l n) (? !(two? l) n
                                  (: r (fills ps elt l) (? (id? r l) n (rows r (n + 1)))))

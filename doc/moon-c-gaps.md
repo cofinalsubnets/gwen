@@ -58,9 +58,18 @@ gcc, including a run-time-sized one); every other target says `no lane for a var
 array on <tgt>`, and a VLA with an initializer refuses everywhere. `__typeof__` over locals, globals, struct members, dereferences and
 function names. Designated initialisers (both `.field =` and `[i] =`), compound literals, K&R
 definitions, bitfields including compound assignment, flexible array members, variadic macros,
-`long long`, hex floats, wide/prefixed literals (`L`, `u`, `U`, `u8` — they *parse*; ⚠ mooncc
-carries no distinct wide type, so the prefix drops and the elements come out as bytes, which is
-a wrong answer and not a passing row), anonymous unions, `restrict`, `static inline`, mixed
+`long long`, hex floats, wide/prefixed literals with their C11 element types (**landed
+2026-08-09**, cts 00220: the lexer keeps the prefix as the token kind with a canonical-UTF-8
+value, parse desugars to a *bounded compound literal* of the element type — `L` → wchar,
+`u` → char16 with surrogate pairs, `U` → char32, `u8` stays bytes — and the ordinary init
+machinery lays elements, so globals, locals, braces, elision, concatenation across a prefix
+and `sizeof` all match gcc on every target; a wide *char* constant decodes to its last code
+point, gcc's reading. Two honest edges: a wide literal's storage is the compound literal's —
+automatic in a function where C says static duration, so a pointer kept past the frame
+dangles, and `wchar_t *p = L"x"` at file scope refuses on the static-clit row above; and a
+mixed-prefix concatenation `u"a" U"b"` takes the first prefix where gcc refuses. Universal
+character names `\uXXXX`/`\UXXXXXXXX` stay absent — the escape refuses, loudly), anonymous
+unions, `restrict`, `static inline`, mixed
 declarations, `for`-scoped declarations, `_Static_assert` itself (including `&&`/`||`/`?:` in
 the constant), string-literal concatenation, self-referential structs, enum trailing commas,
 multidimensional arrays, brace elision in nested initialisers, pointer-to-array declarators,
@@ -152,8 +161,9 @@ when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). One compiles
-clean and answers wrong, and it is a row elsewhere on this page — the wide literal.
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). **None
+compile clean and answer wrong** — the wide literal (00220), the last such row, landed
+2026-08-09. What remains on the roster is refusals, each loud and named.
 
 ### sizeof over promoted arithmetic — landed, via the typing door
 
@@ -172,6 +182,15 @@ arithmetic expressions types through the same lanes now too.
 Two residues, both accepted: **unary `+` vanishes at parse** (it exists only to promote, so
 `sizeof(+c)` is 1, gcc's 4), and `sizeof(a = b)` still defers to gen's 8 (assignment wears
 the unpromoted left type; no ptype lane asks it). Neither has a real-world consumer yet.
+
+### an unbounded array compound literal never got its bound — landed
+
+`(int[]){1,2}` used to compile clean with the bound still missing: `sizeof` folded to **0**
+and `p[0]` off a pointer it initialized read garbage (an explicit bound was right on every
+count). **Landed 2026-08-09**: the clit site asks `initcount` — the same door the `[]`
+declarators use — so the initializer completes the type (C11 6.5.2.5p22), designators and
+braced strings included. Found probing the wide-literal desugar the same day (the desugar
+mints *bounded* clits, so it never rode this). Pinned by test/cc/126-clitbound.c.
 
 ### bool is four bytes
 

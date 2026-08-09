@@ -4177,19 +4177,30 @@
    ; (each elided run wrapped in an explicit ('init ..)), so the layout code below only ever sees
    ; fully-braced inits. idempotent on an already-braced tree. --
    (initval? v) (two? v && <v = 'init)
+   ; a wide literal arrives as a BOUNDED clit-of-array (parse's desugar): on an
+   ; array target its init IS the array's initializer (a POINTER element keeps the
+   ; clit as a scalar -- it decays to its address like any compound literal)
+   (clarr? ty ini) (arr? ty && !(ptr? <>ty) && two? ini && (<ini = 'clit) && arr? <>ini)
    (unelide g ty ini)                               ; normalize ini against ty
-    (? !(initval? ini) ini                        ; a scalar / non-brace: nothing to nest
+    (? (clarr? ty ini) (unelide g ty <>>ini)      ; a wide literal: take its init
+       !(initval? ini) ini                        ; a scalar / non-brace: nothing to nest
        !(aggish? ty) ini                           ; a brace on a scalar type: leave (layout unwraps/scares)
        ; { "s" } on a char array: the optionally-braced string literal (C11
        ; 6.7.9p14) -- unwrap to the bare literal, the plain lane images it
        (arr? ty && !(ptr? <>ty) &&
         (: its <>ini (two? its && !(two? >its) && (two? <its && (id? <<its 'str)))))
         <<>ini
+       (arr? ty && !(ptr? <>ty) &&                   ; { L"s" }: p14's wide twin
+        (: its <>ini (two? its && !(two? >its) && (two? <its && (id? <<its 'clit) && arr? <><its))))
+        (unelide g ty <>><<>ini)
        (: pr (normfill g ty <>ini) `('init <pr)))     ; <pr = normed items; <>pr (excess) dropped
    (redesig dh dk v) `(dh dk v)   ; ('didx k v) | ('dfield k v)
    (normelt g ty desig dh dk val l)                 ; one element of type ty from item stream l -> (item rest)
     (? (arr? ty && (!(ptr? <>ty) && (two? val && id? <val 'str)))
         `(<l >l)                                    ; a string IS a char array's whole element -- never an elision run
+       (clarr? ty val)                              ; a wide literal: the whole element, as its init
+        (: w (unelide g ty <>>val)
+           `((? desig (redesig dh dk w) w) >l))
        (aggish? ty && (!(gcplx? ty) && !(initval? val)))   ; ELIDE: fill ty from the run starting at val (never into a complex -- a scalar)
         (: pr (normfill g ty (val >< >l))
            w `('init <pr)
@@ -4444,6 +4455,7 @@
         (: t <>ini n (tsz g ty)
            (bs i acc) (? (n <= i) (rev acc) (bs (i + 1) ((? (i < tally t) (t i) 0) >< acc)))
            (bs 0 ()))
+       (clarr? ty ini) (imgbytes g ty <>>ini)          ; a wide literal at file scope: its init is the image
        (ptr? ty) (: r (imaddr g ini)                    ; a data pointer: a constant ADDRESS (word-sized abs label+offset),
                      (? !(id? r 'no) `(`('fix (wsize g) (? (t32? g) 'abs32 'abs64) <r <>r))      ; or a constant INTEGER ((int*)0x1000, a null)
                         (: v (icfold ini) (? (id? v 'no) 'bad (imnum g ty v)))))
@@ -4605,7 +4617,7 @@
               _ (? (hreg && !(two? hreg) && !(member? hreg (cspool g)))
                    (pin g 'homes (`(hreg off <p) >< peep g 'homes ())) ())
               (? !(two? init) (one >ps env3 acc)
-                 ((<init = 'init) || ((<init = 'str) && arr? ty))
+                 ((<init = 'init) || ((<init = 'str) && arr? ty) || clarr? ty init)
                   (? ((<init = 'init) && !(aggish? ty)) 'bad      ; a brace for a scalar
                      (: f (cgfill g env3 off ty init)
                         (? (bad? f) 'bad
