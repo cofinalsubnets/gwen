@@ -128,18 +128,17 @@ builds an 80-bit lane the compiler cannot speak.
 
 A refusal is cheap; these are not. Everything here compiles clean and hands back the wrong
 value, so nothing announces them but a differential. Found 2026-08-08 building darkhttpd, dwm,
-st, xlander, PDCLib, limine and pdxlander (doc/moon-userland.md), and then six more the same
-day when `test_cts` first ran.
+st, xlander, PDCLib, limine and pdxlander (doc/moon-userland.md), and then more the same day
+when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Seven compile
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Six compile
 clean and answer wrong; three of those are rows elsewhere on this page — the predefine surface,
-the wide literal, `#pragma push_macro`. These four are their own:
+the wide literal, `#pragma push_macro`. These three are their own:
 
 | what | the shape | what it costs |
 |---|---|---|
-| **an implied array bound counts initializers, not elements** | `PT cases[] = { 1,2,3,4,5,6,7, 8,9,10,11,12,13,14 };` over a 7-member `PT` | `sizeof(cases)/sizeof(*cases)` answers **14**, gcc **2**. The elements themselves are laid correctly, so only the length is wrong — and the length is what every `for` loop over the table reads. |
 | **`!` yields a long** | `sizeof(!a)` | 8, where C says the result of `!` is an `int` (4). Same family as the `sizeof` row below: a type lost on the way out of a node. |
 | **an unsuffixed constant too big for `long` wraps** | `x != 0xffffffffffffffff` | C says such a decimal/hex constant takes `unsigned long`; we wrap it to −1 and the comparison goes the other way. |
 | **an enum bit-field sign-extends** | `enum tree_code code : 8;` where an enumerator has bit 7 set | the value comes back negative and the `switch` takes `default`. An enum whose values are all non-negative must load zero-extended. |

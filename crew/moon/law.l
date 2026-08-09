@@ -815,11 +815,20 @@
       (= (dty "char m[2][3][4];") '(arr (arr (arr char 4) 3) 2))    ; three dims fold right
       (= (dty "int a[5];") '(arr int 5))                            ; a lone dim is unchanged
       (= (dty "int g[][3] = {{1,2,3},{4,5,6}};") '(arr (arr int 3) 2))   ; outer [] inferred from the init count
-      ; brace elision (C 6.7.9): a flat run fills nested rows -- the outer [] divides by
-      ; the row's scalar-leaf count (int[2]=2, int[2][3]=6), not the raw item count
-      (= (dty "int a[][2] = {1,2,3,4};") '(arr (arr int 2) 2))          ; elided: 4 items / 2 = 2 rows
-      (= (dty "int a[][2] = {1,2,3,4,5,6};") '(arr (arr int 2) 3))      ; ... /2 = 3 rows
-      (= (dty "int a[][2][3] = {1,2,3,4,5,6,7,8,9,10,11,12};") '(arr (arr (arr int 3) 2) 2))  ; 12 / 6 = 2 outer
+      ; brace elision (C 6.7.9p20): a flat run fills whole ELEMENTS in order, so the outer
+      ; [] counts how many times one element walks the run, never the raw item count
+      (= (dty "int a[][2] = {1,2,3,4};") '(arr (arr int 2) 2))          ; elided: 4 items, 2 an element
+      (= (dty "int a[][2] = {1,2,3,4,5,6};") '(arr (arr int 2) 3))      ; ... 3 elements
+      (= (dty "int a[][2][3] = {1,2,3,4,5,6,7,8,9,10,11,12};") '(arr (arr (arr int 3) 2) 2))  ; 6 an element
+      ; a STRUCT element walks its members the same way -- counting items would answer 4
+      (= (dty "struct P { int a, b; } t[] = {1,2,3,4};") '(arr (struct "P") 2))
+      (= (dty "struct P { int a, b; } t[] = {{1,2},{3,4}};") '(arr (struct "P") 2))   ; braced: an item an element
+      (= (dty "struct N { int x; struct { int y, z; } n; } t[] = {1,2,3,4,5,6};") '(arr (struct "N") 2))
+      (= (dty "struct B { unsigned a:1; unsigned b:1; } t[] = {1,0,1,1,0,1};") '(arr (struct "B") 3))  ; a bitfield takes one
+      (= (dty "union U { int a; int b; } t[] = {1,2,3};") '(arr (struct "U") 3))     ; a union takes ONE, for its first member
+      ; a string fills a char array whole, at any depth -- the row is one item, not its bytes
+      (= (dty "char m[][8] = {\"ab\",\"cd\",\"ef\"};") '(arr (arr char 8) 3))
+      (= (dty "struct S { char n[4]; int v; } t[] = {\"ab\",1,\"cd\",2};") '(arr (struct "S") 2))
       ; a PARENTHESIZED declarator (*p) then a trailing suffix: [dims] -> pointer to ARRAY,
       ; (params) -> pointer to FUNCTION, nothing -> a plain pointer. an inner [n] on the name
       ; makes it an ARRAY of those pointers. (the type the suffix binds outward around the *.)

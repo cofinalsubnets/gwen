@@ -72,7 +72,6 @@ roster_refuses='
 roster_wrong='
 00104 an unsuffixed constant too big for long must take unsigned long, not wrap
 00178 sizeof(!a) answers 8 -- ! yields a long where C says int
-00205 an implied array bound counts INITIALIZERS, not elements, when braces are elided
 00206 #pragma push_macro/pop_macro is ignored, so the macro never comes back
 00212 __LP64__ is not predefined (doc/moon-c-gaps: the predefine surface)
 00218 an enum bit-field whose values are all positive must load ZERO-extended

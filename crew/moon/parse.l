@@ -289,6 +289,7 @@
                 _ (pin t 'noinl ())                 ; noinline function names (love.h's ai_noinline)
                 _ (pin t 'enums (tablet 0))         ; enum constant -> value
                 _ (pin t 'stag (tablet 0))          ; tag -> (fields size align)
+                _ (pin t 'utag (tablet 0))          ; the tags of that table that are UNIONS (the layout flattens them alike)
                 _ (pin t 'sigs (tablet 0))          ; fn/proto name -> (rettype (paramty..)) for the call ABI
                 _ (pin t 'anon 0)                   ; the anonymous-tag counter
                 _ (pin t 'sfns (tablet 0))          ; top-level `static` fn names: LOCAL symbols in the .o
@@ -675,6 +676,7 @@
                           (: pa (pattpk <>mr)          ; a trailing __attribute__((packed)) lays align-1
                              lay (playout ps <mr uni <pa)
                              _ (pin (ps 'stag) tag2 lay)
+                             _ (? uni (pin (ps 'utag) tag2 1) 0)
                              `(`('struct tag2) <>pa))))
                     (? tag `(`('struct tag) ts3) ())))
              (tkw? t 'enum)
@@ -1030,15 +1032,34 @@
                     (<>e = 'neg) && (<<>>e = 'flo))
                     `(`('flo (0.0 - <><>>e)) <>r)             ; -1.0 in a global image: fold the neg into the literal
                    r)))))   ; cint?: a sun-sized fold (max-charm's image) is still a number
+   ; the plain items ONE object of `ty` takes when its braces are elided (C 6.7.9p20),
+   ; answering what is left over: a scalar takes one (a bitfield member too), an
+   ; aggregate takes its members in order, a union only its FIRST, and a char array
+   ; takes one item when that item is a string. an incomplete tag or a [0] bound
+   ; takes nothing, which is how the caller's walk learns to stop.
+   (uni? ps ty) (stru? ty && peep (ps 'utag) <>ty 0)
+   (chart? ty) (member? ty '(char uchar schar))
+   (fills ps ty items)
+    (? !(two? items) items
+       (arr? ty)
+        (? (chart? <>ty && two? <items && (<<items = 'str)) >items
+           (: (go n l) (? (!(< 0 n) || !(two? l)) l (go (n - 1) (fills ps <>ty l)))
+              (go <>>ty items)))
+       (stru? ty)
+        (: e (peep (ps 'stag) <>ty 0)
+           fs (? (two? e) <e ())
+           (? (uni? ps ty) (? (two? fs) (fills ps <>><fs items) items)
+              (foldl (\ l f (fills ps <>>f l)) items fs)))
+       >items)
    ; how many array elements an initializer implies (for [] size inference):
    ; a string is its bytes + NUL; a brace list is the highest index reached
    ; (designated [k] sets the cursor to k). () if it implies nothing. `elt` is the
-   ; element type: when it's an array and the items are a plain elided RUN (no braces,
-   ; no designators), the run fills rows of `arrleaves elt` scalars each -- int a[][2] =
-   ; {1,2,3,4} is 2 rows, not 4 -- so divide (C 6.7.9).
-   (arrleaves ty) (? (arr? ty) (* <>>ty (arrleaves <>ty)) 1)   ; scalar leaves of a (nested) array
+   ; element type: when the items are a plain elided RUN (no braces, no designators)
+   ; they fill whole elements in order, so the count is how many times `fills` walks
+   ; one -- int a[][2] = {1,2,3,4} is 2 rows, and a seven-member struct takes seven
+   ; items an element, not one.
    (allplain? items) (foldl (\ ok it (ok && !(member? <it '(init didx dfield)))) 1 items)
-   (initcount elt ini)
+   (initcount ps elt ini)
     (? (two? ini && (<ini = 'str)) (tally <>ini + 1)
        (two? ini && (<ini = 'init))
         (: items <>ini
@@ -1048,8 +1069,10 @@
                !(two? >items) &&
                two? <items && (<<items = 'str) && !(ptr? elt))
                (tally <><items + 1)
-              (arr? elt && two? items && allplain? items)
-               (: L (arrleaves elt) (? (< 0 L) (// (tally items + (L - 1)) L) (tally items)))
+              ((arr? elt || stru? elt) && two? items && allplain? items)
+               (: (rows l n) (? !(two? l) n
+                                 (: r (fills ps elt l) (? (id? r l) n (rows r (n + 1)))))
+                  (rows items 0))
                (: (go l i mx)
                    (? !(two? l) mx
                       (: it <l
@@ -1228,8 +1251,8 @@
                                 (: r (pinit ps >ts3)
                                    (? !(two? r) ()
                                       (: ini <r
-                                         ty2 (? (arr? ty && (<>>ty = 0) && charm? (initcount <>ty ini))
-                                                `('arr <>ty (initcount <>ty ini)) ty)   ; [] local: infer size
+                                         ty2 (? (arr? ty && (<>>ty = 0) && charm? (initcount ps <>ty ini))
+                                                `('arr <>ty (initcount ps <>ty ini)) ty)   ; [] local: infer size
                                          `(`(name ty2 ini) <>r))))
                                 `(`(name ty ()) ts3)))))
                    (more ts2 acc)
@@ -1692,7 +1715,7 @@
                                                    (? !(peekp rest0 "=") `(`(nm `('arr t2 0) ()) rest0)      ; no init: incomplete, size 0
                                                       (: ir (pinit ps >rest0)
                                                          (? !(two? ir) ()
-                                                            (: n (initcount t2 <ir)
+                                                            (: n (initcount ps t2 <ir)
                                                                (? (charm? n)
                                                                   `(`(nm `('arr t2 n) <ir) <>ir)
                                                                   ())))))
@@ -1702,7 +1725,7 @@
                                                      (? (peekp rest0 "=")     ; T a[n].. = init
                                                          (: ir (pinit ps >rest0)
                                                             (? !(two? ir) ()
-                                                               (: aty (? (<>>aty0 = 0) `('arr <>aty0 (initcount <>aty0 <ir)) aty0)
+                                                               (: aty (? (<>>aty0 = 0) `('arr <>aty0 (initcount ps <>aty0 <ir)) aty0)
                                                                   `(`(nm aty <ir) <>ir))))
                                                         `(`(nm aty0 ()) rest0)))))))
                                       (peekp ts3 "=")
@@ -1716,8 +1739,8 @@
                                              ; it `char a[]={1}, b[]={2,2};` left b INCOMPLETE, and every
                                              ; later sizeof(b) answered 0 in silence (the bytes were laid
                                              ; right; only the type was wrong, which is the worse half).
-                                             (: t3 (? (arr? t2 && (<>>t2 = 0) && charm? (initcount <>t2 <r))
-                                                      `('arr <>t2 (initcount <>t2 <r)) t2)
+                                             (: t3 (? (arr? t2 && (<>>t2 = 0) && charm? (initcount ps <>t2 <r))
+                                                      `('arr <>t2 (initcount ps <>t2 <r)) t2)
                                                 `(`(nm t3 <r) <>r))))
                                       `(`(nm t2 ()) ts3))
                                   first (one (patt ts2) name (? (two? fpty) fpty rty))
