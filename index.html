@@ -92,7 +92,7 @@
     //   <name>-web-key byte             -> next frame / quit sentinel  (key apps)
     //   <name>-web-tick ()              -> next frame                  (anim apps)
     ev('(: (play nm) (: _ (puts ("\\e_play:" + nm + "\\e\\\\")) ()) qbox #0 sbox #0 tbox #0'
-     + ' (rove-web-boot c r sd) (: g (crawl-new (c < 100 ? c 100) r (wheel sd)) _ (pin qbox () g) (crawl-frame g))'
+     + ' (rove-web-boot c r sd) (: g (crawl-new (? (c < 100) c 100) r (wheel sd)) _ (pin qbox () g) (crawl-frame g))'
      + ' (rove-web-key n) (? (|| (n = 113) (n = 27)) "\\e_quit\\e\\\\"'
      + '                     (: g (peep qbox () 0) _ (crawl-turn g (helm-dec n -1 -1)) (crawl-frame g)))'
      + ' (ink-web-boot c r sd) (: _ (pin sbox () (ink-scene r c)) _ (pin tbox () 0) ((peep sbox () 0) 0.0))'

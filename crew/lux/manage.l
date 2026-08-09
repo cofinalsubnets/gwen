@@ -16,8 +16,8 @@
 ; open after the hatch, and it must stand in its OWN form -- opfix factors a whole
 ; form at once, so a row pinned inside the `:` below would land too late for it.
 ; <||> sits in the logical band with ||, -?> just under it, both right-handed.
-(fixity '<||> '(2 30 0))
-(fixity '-?> '(2 25 0))
+(fixity '<||> '(30 0))
+(fixity '-?> '(25 0))
 (:
    (mg-ctx s win screen geom) `(s win screen geom)
    (mg-sock c) (nthl c 0)  (mg-win c) (nthl c 1)  (mg-screen c) (nthl c 2)  (mg-geom c) (nthl c 3)

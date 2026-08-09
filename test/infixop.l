@@ -1,5 +1,5 @@
 ; infix -- an entry at two or more in the `dyadics` table. in operand position with a
-; left operand available, the sigil captures it and collects arity-1 more datums,
+; left operand available, the sigil captures it and collects ONE more datum,
 ; nesting RIGHT-associatively (a following operator steals the nearest operand).
 ; with no left operand it reads as the plain symbol, so (+ 1 2) prefix, '+ quote,
 ; and (+)-as-a-value all keep working. parenthesized infix double-wraps -- (1 + 2)
@@ -21,10 +21,13 @@
  (10 = (1 + 2 + 3 + 4))
  (1 = (5 = 2 + 3))                              ; (= 5 (+ 2 3))
 
- ; ? at three -- the cond form, infix
- ('a = (1 ? 'a 'b)) ('b = (0 ? 'a 'b))
- ('big = ((1 < 2) ? 'big 'small))
- ('big = (1 < 2 ? 'big 'small))                 ; ? (grip 10) is loosest, so (1 < 2) binds first -> (? (< 1 2) 'big 'small) -> 'big (the C-ternary read)
+ ; ? is DYADIC like every other row -- infix it is the one-armed cond, and its
+ ; grip (10, the loosest declared) still decides what the condition is
+ ('a = (1 ? 'a)) (() = (0 ? 'a))
+ ('big = ((1 < 2) ? 'big))
+ ('big = (1 < 2 ? 'big))                        ; (1 < 2) binds first at grip 40 -> (? (< 1 2) 'big)
+ ; an else arm is the PREFIX cond -- which is n-ary, where the infix form takes one arm
+ ('small = (? (2 < 1) 'big 'small)) ('c = (? 0 'a 0 'b 'c))
 
  ; application binds tighter than infix: a run on either side of an operator is
  ; ONE operand (juxtaposition first), so parenthesize to seat a folded infix form
@@ -43,8 +46,8 @@
  (197 = ($"ab" + 2))
 
  ; the curry law: operands missing at the end of a list fold to the partial
- ; application -- for a special form like ? that is just the shorter form
- (3 = ((1 +) 2)) ('a = (1 ? 'a)))
+ ; application
+ (3 = ((1 +) 2)) (id? nil? (!)))
 
 ; structural incompleteness still pends: an unclosed list comes back TORN.
 ; a trailing operator does NOT pend -- "1 +" is two complete datums whose factor
@@ -59,7 +62,7 @@
  (assert (8.0 = (2 ** 3)) (512.0 = (2 ** 3 ** 2))))  ; right-assoc: 2^(3^2)
 
 ; DEFAULT INFIX: any all-punct symbol acts dyadic (arity two) with NO table pin --
-; the table holds only the EXCEPTIONS (the other grips and hands, ? at three).
+; the table holds only the EXCEPTIONS -- the other grips and hands.
 ; a fresh punct symbol, never registered, reads infix all the same.
 (: >< (\ a b (L a b))                            ; a fresh punct op, never registered
  (assert

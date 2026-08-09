@@ -17,8 +17,7 @@
 
 (:
  ; --- the deck: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the hatch ---
- (dat d x y) ((&& (0 <= x) (x < d 'w) (0 <= y) (y < d 'h)) ?
-              (peep (d 't) (x + (d 'w) * y) 0)
+ (dat d x y) (? (&& (0 <= x) (x < d 'w) (0 <= y) (y < d 'h)) (peep (d 't) (x + (d 'w) * y) 0)
               0)
  (open? d x y) (0 < dat d x y)
  (dput d x y v) (pin (d 't) (x + (d 'w) * y) v)
@@ -34,14 +33,13 @@
    d #('w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ())
    sb #st
    (mid rm) `((peep rm 0 0 + (// (peep rm 2 1) 2)) (peep rm 1 0 + (// (peep rm 3 1) 2)))
-   (carve x0 y0 rw rh) (: (row y x) (x < x0 + rw ? (dput d x y 1, row y (x + 1)) ())
-                          (rows y) (y < y0 + rh ? (row y x0, rows (y + 1)) ())
+   (carve x0 y0 rw rh) (: (row y x) (? (x < x0 + rw) (dput d x y 1, row y (x + 1)) ())
+                          (rows y) (? (y < y0 + rh) (row y x0, rows (y + 1)) ())
                           (rows y0))
-   (hallx y xa xb) (carve (xa < xb ? xa xb) y (1 + |(xb - xa)) 1)
-   (hally x ya yb) (carve x (ya < yb ? ya yb) 1 (1 + |(yb - ya)))
+   (hallx y xa xb) (carve (? (xa < xb) xa xb) y (1 + |(xb - xa)) 1)
+   (hally x ya yb) (carve x (? (ya < yb) ya yb) 1 (1 + |(yb - ya)))
    (lash a b) (: ax <a ay <>a bx <b by <>b
-                 (roll sb 2 ?
-                  (hallx ay ax bx, hally bx ay by)
+                 (? (roll sb 2) (hallx ay ax bx, hally bx ay by)
                   (hally ax ay by, hallx by ax bx)))
    (apart? rm l) (all (\ o (|| (1 + peep rm 0 0 + peep rm 2 1 <= peep o 0 0)
                                (1 + peep o 0 0 + peep o 2 1 <= peep rm 0 0)
@@ -59,7 +57,7 @@
                    rm `(x y rw rh)
                    (? (apart? rm (d 'rooms))
                     (: _ (carve x y rw rh)
-                       _ ((d 'rooms) ? (lash (mid rm) (mid <(d 'rooms))) ())
+                       _ (? (d 'rooms) (lash (mid rm) (mid <(d 'rooms))) ())
                        _ (pin d 'rooms (rm >< d 'rooms))
                        (try (n - 1)))
                     (try (n - 1))))))
@@ -81,12 +79,12 @@
  ; endpoint itself may be rock -- that is how a wall catches the light.
  (clear? d x0 y0 x1 y1) (:
    dx |(x1 - x0) dy (0 - |(y1 - y0))
-   sx (x0 < x1 ? 1 -1) sy (y0 < y1 ? 1 -1)
+   sx (? (x0 < x1) 1 -1) sy (? (y0 < y1) 1 -1)
    (go x y e) (? ((x = x1) && (y = y1)) 1
                (: e2 (2 * e)
                   mx (dy <= e2) my (e2 <= dx)
-                  nx (mx ? (x + sx) x) ny (my ? (y + sy) y)
-                  ne (e + (mx ? dy 0) + (my ? dx 0))
+                  nx (? mx (x + sx) x) ny (? my (y + sy) y)
+                  ne (e + (? mx dy 0) + (? my dx 0))
                   (? ((nx = x1) && (ny = y1)) 1
                      (open? d nx ny) (go nx ny ne)
                      0)))
@@ -99,18 +97,15 @@
  (fov d px py r) (:
    vis (tablet 0) w (d 'w) h (d 'h) sn (d 'seen) r2 (1 + r * r)
    (glow x y) (: i (x + w * y) (pin vis i 1, pin sn i 1, ()))
-   (cell x y) ((((x - px) * (x - px) + (y - py) * (y - py) <= r2) &&
-                clear? d px py x y) ?
-               (glow x y) ())
-   (row y x) (x <= px + r ? (cell x y, row y (x + 1)) ())
-   (rows y) (y <= py + r ? (row y (px - r), rows (y + 1)) ())
+   (cell x y) (? (((x - px) * (x - px) + (y - py) * (y - py) <= r2) &&
+                clear? d px py x y) (glow x y) ())
+   (row y x) (? (x <= px + r) (cell x y, row y (x + 1)) ())
+   (rows y) (? (y <= py + r) (row y (px - r), rows (y + 1)) ())
    _ (rows (py - r))
-   _ (map (\ i ((0 < peep (d 't) i 0) ?
-                (: x (i % w) y (// i w)
+   _ (map (\ i (? (0 < peep (d 't) i 0) (: x (i % w) y (// i w)
                    (map (\ o (: nx (x + <o) ny (y + <>o)
-                                ((&& (0 <= nx) (nx < w) (0 <= ny) (ny < h)
-                                     (dat d nx ny = 0)) ?
-                                 (glow nx ny) ())))
+                                (? (&& (0 <= nx) (nx < w) (0 <= ny) (ny < h)
+                                     (dat d nx ny = 0)) (glow nx ny) ())))
                         '((-1 -1) (0 -1) (1 -1) (-1 0)
                           (1 0) (-1 1) (0 1) (1 1))))
                 ()))
@@ -123,11 +118,11 @@
  ; CHANGE, threaded down the frame; the port is any jug, so frames gate headless.
  pens #()
  (pen n) (: s (peep pens n ())
-            (string? s ? s
+            (? (string? s) s
              (: s2 ("\e[38;5;" + show n + "m") _ (pin pens n s2) s2)))
  tile-gl "#.>"
- (tile-hue t lit) (lit ? (t = 2 ? 51 (t = 1 ? 242 250))
-                         (t = 2 ? 24 (t = 1 ? 236 240)))
+ (tile-hue t lit) (? lit (? (t = 2) 51 (? (t = 1) 242 250))
+                         (? (t = 2) 24 (? (t = 1) 236 240)))
  (loot-face it) (? (id? <it 'gold) '(36 220)
                    (id? <it 'grog) '(33 213)
                    '(42 159))                       ; the pearl: *
@@ -136,10 +131,10 @@
    spot (tablet 0)
    _ (map (\ e (pin spot ((e 'x) + w * e 'y) e)) ents)
    _ (say j "\e[H\e[0m")
-   _ (say j (w < tally msg ? (snip msg 0 w) msg))
+   _ (say j (? (w < tally msg) (snip msg 0 w) msg))
    _ (say j "\e[K\r\n")
-   (cell i lit) (: e (lit ? (peep spot i ()) ())
-                   it (lit ? (peep loot i ()) ())
+   (cell i lit) (: e (? lit (peep spot i ()) ())
+                   it (? lit (peep loot i ()) ())
                    (? e `((e 'gl) (e 'hue))
                       it (loot-face it)
                       (peep sn i 0)
@@ -148,11 +143,11 @@
    (row y x i p) (? (x < w)
                   (: gh (cell i (peep vis i 0))
                      p2 <>gh
-                     _ (p = p2 ? () (say j (pen p2)))
+                     _ (? (p = p2) () (say j (pen p2)))
                      _ (say j ("" + <gh))
                      (row y (x + 1) (i + 1) p2))
                   p)
-   (rows y p) (y < h ? (rows (y + 1) (: p2 (row y 0 (w * y) p) _ (say j "\r\n") p2)) p)
+   (rows y p) (? (y < h) (rows (y + 1) (: p2 (row y 0 (w * y) p) _ (say j "\r\n") p2)) p)
    _ (rows 0 -1)
    _ (say j "\e[0m", say j bar, say j "\e[K")
    j)
@@ -172,10 +167,8 @@
                      (a = -1) 'quit
                      a)
  (helm _) (: a (see in)
-             (a = 27 ?
-              (: _ (rest 1)                        ; let the tail of a sequence land
-                 (cue? 0 ?
-                  (: b (see in) (cue? 0 ? (helm-dec a b (see in)) (helm-dec a b -1)))
+             (? (a = 27) (: _ (rest 1)                        ; let the tail of a sequence land
+                 (? (cue? 0) (: b (see in) (? (cue? 0) (helm-dec a b (see in)) (helm-dec a b -1)))
                   'esc))
               (helm-dec a -1 -1)))
 
@@ -228,7 +221,7 @@
    _ (pin g 'vis (fov d (pl 'x) (pl 'y) 8))
    g)
 
- (note g s) (pin g 'msg (!(g 'msg) ? s (g 'msg + "; " + s)))
+ (note g s) (pin g 'msg (? !(g 'msg) s (g 'msg + "; " + s)))
  (mob-at g x y) <(filter (\ m ((x = m 'x) && (y = m 'y))) (g 'ms))
  (blocked? g x y) (|| !(open? (g 'd) x y)
                       ((x = g 'p 'x) && (y = g 'p 'y))
@@ -237,8 +230,7 @@
  ; the player's stride: bump a mob to strike it, step onto loot to take it
  (strike g m) (: dm (1 + roll (g 'sb) 3)
                  _ (pin m 'hp (m 'hp - dm))
-                 (0 < m 'hp ?
-                  (note g ("you strike the " + m 'nm + " (" + show dm + ")"))
+                 (? (0 < m 'hp) (note g ("you strike the " + m 'nm + " (" + show dm + ")"))
                   (: _ (pin g 'ms (filter (\ o !(id? o m)) (g 'ms)))
                      (note g ("the " + m 'nm + " is done for")))))
  (take g i it) (: _ (pull (g 'loot) i ())
@@ -246,7 +238,7 @@
                    (: _ (pin (g 'p) 'gold (g 'p 'gold + <>it))
                       (note g ("you pocket " + show <>it + " gold")))
                    (id? <it 'grog)
-                   (: mend ((g 'p 'hp) + 5 < g 'p 'mx ? 5 ((g 'p 'mx) - g 'p 'hp))
+                   (: mend (? ((g 'p 'hp) + 5 < g 'p 'mx) 5 ((g 'p 'mx) - g 'p 'hp))
                       _ (pin (g 'p) 'hp (g 'p 'hp + mend))
                       (note g ("you swig the grog (+" + show mend + ")")))
                    (pin g 'over 'won,
@@ -258,16 +250,16 @@
                      (: _ (pin p 'x nx, pin p 'y ny)
                         i (nx + (g 'd 'w) * ny)
                         it (peep (g 'loot) i ())
-                        (it ? (take g i it) ()))))
+                        (? it (take g i it) ()))))
 
  ; the hold stirs: a mob that sees you closes in; struck close, it bites
  (sgn n) (? (0 < n) 1 (n < 0) -1 0)
  (bite g m) (: dm (1 + roll (g 'sb) (m 'dm))
                _ (pin (g 'p) 'hp (g 'p 'hp - dm))
                _ (note g ("the " + m 'nm + " bites you (" + show dm + ")"))
-               (0 < g 'p 'hp ? () (pin g 'over 'dead, note g "you are done for")))
+               (? (0 < g 'p 'hp) () (pin g 'over 'dead, note g "you are done for")))
  (shift g m mv) (: nx (m 'x + <mv) ny (m 'y + <>mv)
-                   (blocked? g nx ny ? () (pin m 'x nx, pin m 'y ny)))
+                   (? (blocked? g nx ny) () (pin m 'x nx, pin m 'y ny)))
  (stir g m) (: p (g 'p) dx ((p 'x) - m 'x) dy ((p 'y) - m 'y)
                (? ((|dx <= 1) && (|dy <= 1)) (bite g m)
                   ((dx * dx + dy * dy <= 65) &&
@@ -275,9 +267,8 @@
                   (: sx (sgn dx) sy (sgn dy)
                      ox (m 'x) oy (m 'y)
                      _ (shift g m `(sx sy))
-                     (((ox = m 'x) && (oy = m 'y)) ?
-                      (: _ (shift g m `(sx 0))
-                         (((ox = m 'x) && (oy = m 'y)) ? (shift g m `(0 sy)) ()))
+                     (? ((ox = m 'x) && (oy = m 'y)) (: _ (shift g m `(sx 0))
+                         (? ((ox = m 'x) && (oy = m 'y)) (shift g m `(0 sy)) ()))
                       ()))
                   (roll (g 'sb) 3 < 1)
                   (shift g m `((roll (g 'sb) 3 - 1) (roll (g 'sb) 3 - 1)))
@@ -297,12 +288,11 @@
    _ (pin g 'msg "")
    _ (? (g 'over) ()
       (two? k) (stride g k)
-      (k = 62) (dat (g 'd) (g 'p 'x) (g 'p 'y) = 2 ?
-                (descend g)
+      (k = 62) (? (dat (g 'd) (g 'p 'x) (g 'p 'y) = 2) (descend g)
                 (note g "no hatch here"))
       (k = 46) ()                                   ; . waits a beat
       ())
-   _ ((g 'over) ? () (: _ (map (\ m ((g 'over) ? () (stir g m))) (g 'ms)) ()))
+   _ (? (g 'over) () (: _ (map (\ m (? (g 'over) () (stir g m))) (g 'ms)) ()))
    _ (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))
    g)
 
@@ -315,14 +305,14 @@
 
  ; --- rove: the crawl on the tty. any seed sails; q or esc steps ashore ---
  (rove _) (: ws (winsize 0)
-             r ((two? ws && (7 < <ws)) ? (<ws - 2) 22)
-             c ((two? ws && (19 < <>ws)) ? <>ws 80)
-             g (crawl-new (c < 100 ? c 100) r (wheel (clock 0)))
+             r (? (two? ws && (7 < <ws)) (<ws - 2) 22)
+             c (? (two? ws && (19 < <>ws)) <>ws 80)
+             g (crawl-new (? (c < 100) c 100) r (wheel (clock 0)))
              _ (raw 1)
              _ (say out "\e[?1049h\e[?25l\e[2J")
              _ (note g "the hold is dark; the pearl waits three decks down")
              (sail _) (: _ (say out (crawl-frame g))
-                         ((g 'over) ? (id? (g 'over) 'fled ? () (rest 1200))
+                         (? (g 'over) (? (id? (g 'over) 'fled) () (rest 1200))
                           (: k (helm ())
                              (? (|| (k = 113) (id? k 'esc) (id? k 'quit))
                               (: _ (pin g 'over 'fled) ())

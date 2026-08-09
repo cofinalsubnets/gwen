@@ -53,13 +53,16 @@ coined operator at house grip, is right.
 
 ## the table
 
-A row is `arity`, a `grip` (higher binds tighter) and a `hand` (0 right, 1 left). `op-ent`
-normalizes all five written shapes to the quad `(name arity grip . hand)`, and it is the one
-place that reads the table shape, so the rest of the walk sees a uniform quad. Arity is **two or
-more** — an infix row always wants a left operand — so a spaced sigil is one whole name and never
-splits into factors. Factoring is the glued lane's alone, against `monadics`.
+Every operator is **dyadic**, so a row carries no arity — only a `grip` (higher binds tighter)
+and a `hand` (0 right, 1 left). `op-ent` normalizes all five written shapes to the triple
+`(name grip . hand)`, and it is the one place that reads the table shape, so the rest of the walk
+sees a uniform triple. A spaced sigil is one whole name and never splits into factors; factoring
+is the glued lane's alone, against `monadics`.
 
-**Undeclared is infix at two, grip 95, right-handed** — above every row, so the table holds only
+⚠ **A grip must be positive.** A tablet miss answers `0`, so a zero grip would read that miss as
+a live row at the loosest grip there is.
+
+**Undeclared is infix at grip 95, right-handed** — above every row, so the table holds only
 exceptions:
 
 ```
@@ -70,7 +73,7 @@ exceptions:
 ;   = != < <= > >= grip 40   comparison   <- the assert-relation band
 ;   | & && ||      grip 30   logical
 ;   ><             grip 25   cons — the loosest builder
-;   ?              grip 10   cond (arity 3)
+;   ?              grip 10   cond — infix is the one-armed form; an else arm is prefix (? c a b)
 ;   $              grip 5    weak apply — a $ b = (a b), the haskell $, loosest
 ```
 
@@ -104,7 +107,7 @@ leading operator with no left operand falls through op-steal to the plain-symbol
 
 The op-fr frame is `(orig name need grip . got)`. ⚠ **Store grip on the frame — do not re-probe
 the table.** The frame keeps two symbols and neither alone recovers grip: `op-frn` is the
-*resolved* name, and a `fixity`-declared alias like `(fixity '=: '(pin 3 20 0))` resolves to
+*resolved* name, and a `fixity`-declared alias like `(fixity '=: '(pin 20 0))` resolves to
 `pin` while the table stays keyed by source `=:`, so probing `pin` misses. The value carrying the
 right grip is `en`, the entry already in scope at the build site. This is a correctness point,
 not a performance tradeoff.
@@ -146,7 +149,7 @@ before you.
 because ⚠ **a bad row does not error — it silently demotes its operator to the fresh-punct
 default**, which on a core operator is a poisoned compiler with no message.
 
-`'(2 60 1)` is `infixl 7`, `'(2 60)` is `infixr 7`, a bare `2` is the house grip, and the nom-led
+`'(60 1)` is `infixl 7`, `'(60)` is `infixr 7`, a bare grip is right-handed, and the nom-led
 forms alias.
 
 **It is global, deliberately (revisable).** An operator's grip is part of its meaning, so a module

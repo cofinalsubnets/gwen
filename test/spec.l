@@ -459,8 +459,9 @@
 ; char: a name token (alnum/_) keeps - ? ! and the prime inside (kebab law; a LEADING ' is still
 ; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
 ; when spaced, fused to its datum as (mono (run datum)) when GLUED mid-list. code then factors
-; sigils at COMPILE time via `opfix` against the ONE `dyadics` table (symbol -> arity, or
-; (name . arity) an alias; the DEFAULT is dyadic at house grip, right-handed, so a fresh punct
+; sigils at COMPILE time via `opfix` against the ONE `dyadics` table (symbol -> grip[. hand], or
+; (name grip[. hand]) an alias -- EVERY operator is dyadic, so no row carries an arity, and a grip
+; must be POSITIVE since a table miss answers 0; the DEFAULT is house grip, right-handed, so a fresh punct
 ; operator needs no entry -- the tables themselves are book-private since birth, the egg mops them,
 ; and `fixity` is the one door left onto them: (fixity nm v) pins nm's row and answers the row it
 ; REPLACED in the same shape, so (fixity nm (fixity nm new)) restores and () both clears a row and
@@ -490,15 +491,14 @@
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
  ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
- (!(catch (\ _ (fixity '<-> '(1 60)))))                                  ; arity ONE is refused: an infix
- (: was (fixity '^ '(2 60)) t (opfix '(a ^= b)) _ (fixity '^ was)        ;   row always wants a left operand,
-    (&& (was = ()) (t = '(^= a b))))                                     ;   and ^'s row never splits ^=
+ (: was (fixity '^ '(60 1)) t (opfix '(a ^= b)) _ (fixity '^ was)        ; a SPACED sigil is one whole
+    (&& (was = ()) (t = '(^= a b))))                                     ;   name: ^'s row never splits ^=
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a NUMERAL (the whole exception)
- (3 = 1 + 2) (7 = 1 + 2 * 3) ('b = 0 ? 'a 'b) ('big = (1 < 2) ? 'big 'small)
+ (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small))  ; ? is dyadic: infix takes ONE arm ((< 1 2) binds first at 40), an else arm is the prefix cond
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the LEFT hand: ((1 - 2) - 3), ((8 / 4) / 2)
- (: was (fixity '<+> '(2 60 1)) t (opfix '(a <+> b <+> c)) _ (fixity '<+> was)   ; the fixity door,
+ (: was (fixity '<+> '(60 1)) t (opfix '(a <+> b <+> c)) _ (fixity '<+> was)   ; the fixity door,
     (&& (was = ()) (t = '(<+> (<+> a b) c))))     ;   restored inside the form: the next one reparses
  ('(1 2 3) = 1 >< 2 >< '(3))                     ; ... while a right-handed band still folds right
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))

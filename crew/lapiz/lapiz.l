@@ -344,7 +344,7 @@
    (rdefs l)   (strcat (map (\ it (".TP\n" + rline (rfi <it) + "\n" + rfill (rfi <>it))) l))
    (rfb x) (: t <x
               (? (id? t 'meta)    (rth <>x)
-                 (id? t 'head)    ((<>x < 2 ? ".SH " ".SS ") + rfi (nthl x 2) + "\n")
+                 (id? t 'head)    ((? (<>x < 2) ".SH " ".SS ") + rfi (nthl x 2) + "\n")
                  (id? t 'para)    (".PP\n" + rfill (rfi <>x))
                  (id? t 'fence)   (".EX\n" + strcat (map (\ ln (rline (rq ln) + "\n")) (splitnl (nthl x 2))) + ".EE\n")
                  (id? t 'quote)   (".PP\n.RS\n" + rfshow <>x + ".RE\n")   ; the .PP spaces the display

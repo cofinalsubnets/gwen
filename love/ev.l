@@ -526,13 +526,13 @@
    d (sco c (init exp) imp)
    k (ana d (last exp) (k0s d))
    a (ary d)
-   e ((a = 1 ?  k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
+   e ((? (a = 1) k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
    ; source \-expr for the printer: the SURFACE body feel stashed for this node (keyed by the
    ; tagged exp) so iop/apx tags don't leak into the printed source, falling back to exp if
    ; unrecorded. the captured imports prepend as leading params (frame is [imps args]) so a closure
    ; prints as ,((\ y x …) capturedvals) and round-trips through read+eval.
    os (assoc exp (rootc c 'src))
-   s ('\ >< (d 'imp + (two? os ? >>os exp)))
+   s ('\ >< (d 'imp + (? (two? os) >>os exp)))
    _ (poke -1 s e)                                  ; value[-1] = source \-expr
    _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
    ; native-creation hook (dormant unless book['natjit] is installed -- opt-in, x86-64): given the

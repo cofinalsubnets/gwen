@@ -11,7 +11,7 @@
 (reads (open "crew/quay/rove.l" "r"))
 
 (: (find h n i) (? (i + tally n < 1 + tally h)
-                  (n = snip h i (i + tally n) ? 1 (find h n (i + 1)))
+                  (? (n = snip h i (i + tally n)) 1 (find h n (i + 1)))
                   0))
 
 ; --- delve: a seed reproduces its deck; decks are connected and bordered ---
@@ -19,8 +19,7 @@
    p2 (delve 60 20 (wheel 11))
    p3 (delve 60 20 (wheel 12))
    d <p1
-   (teq a b) (: (go i ok) (i < 1200 ?
-                           (go (i + 1) (&& ok (peep (a 't) i 0 = peep (b 't) i 0)))
+   (teq a b) (: (go i ok) (? (i < 1200) (go (i + 1) (&& ok (peep (a 't) i 0 = peep (b 't) i 0)))
                            ok)
                 (go 0 1))
    flood (: mk (cask 1200)
@@ -31,11 +30,11 @@
                                (go (cat `(`((x + 1) y) `((x - 1) y) `(x (y + 1)) `(x (y - 1))) >stk)
                                    (n + 1))))))
             (go `((d 'in)) 0))
-   floors (: (go i n) (i < 1200 ? (go (i + 1) (n + (0 < peep (d 't) i 0 ? 1 0))) n)
+   floors (: (go i n) (? (i < 1200) (go (i + 1) (n + (? (0 < peep (d 't) i 0) 1 0))) n)
              (go 0 0))
    rim (: (go i bad) (? (i < 60)
                        (go (i + 1) (|| bad (dat d i 0) (dat d i 19)))
-                       (: (gov j b2) (j < 20 ? (gov (j + 1) (|| b2 (dat d 0 j) (dat d 59 j))) b2)
+                       (: (gov j b2) (? (j < 20) (gov (j + 1) (|| b2 (dat d 0 j) (dat d 59 j))) b2)
                           (gov 0 bad)))
           (go 0 0))
  (assert
@@ -55,7 +54,7 @@
 ;   #...#...#
 ;   #########
 (: hd #('w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms `(`(1 1 3 3) `(5 1 3 3)))
-   _ (map (\ y (map (\ x (x = 4 ? () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
+   _ (map (\ y (map (\ x (? (x = 4) () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
    v (fov hd 1 1 8)
  (assert
   (peep v (1 + 9 * 1) 0)                         ; your own cell is lit
@@ -88,7 +87,7 @@
 
 ; --- the crawl on a hand deck: every verb of the game, deterministic ---
 (: (hand-g _) (: hd #('w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms `(`(1 1 3 3) `(5 1 3 3)))
-                 _ (map (\ y (map (\ x (x = 4 ? () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
+                 _ (map (\ y (map (\ x (? (x = 4) () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
                  _ (pin hd 'in `(1 1), pin hd 'down `(7 3))
                  st (wheel 5) sb #st
                  pl #('x 1 'y 1 'gl 64 'hue 228 'hp 12 'mx 12 'gold 0)
@@ -112,7 +111,7 @@
 (: g (hand-g ())
    m (mob-new 0 2 1)
    _ (pin g 'ms `(m))
-   (fight i) ((&& (i < 8) (g 'ms)) ? (crawl-turn g `(1 0), fight (i + 1)) i)
+   (fight i) (? (&& (i < 8) (g 'ms)) (crawl-turn g `(1 0), fight (i + 1)) i)
    n (fight 0)
  (assert !(g 'ms) (n <= 4) (find (g 'msg) "done for" 0)
          (1 = g 'p 'x)))                         ; you strike in place, never through
@@ -143,8 +142,7 @@
 (: g (crawl-new 60 20 (wheel 3))
    kb #(wheel 99)
    dirs `(`(1 0) `(-1 0) `(0 1) `(0 -1) `(1 1) `(-1 -1) `(1 -1) `(-1 1) 46 62)
-   (turn i ok) ((&& (i < 300) !(g 'over)) ?
-                (: k (peep dirs (roll kb 10) 46)
+   (turn i ok) (? (&& (i < 300) !(g 'over)) (: k (peep dirs (roll kb 10) 46)
                    _ (crawl-turn g k)
                    p (g 'p)
                    (turn (i + 1)

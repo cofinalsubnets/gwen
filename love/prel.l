@@ -342,21 +342,21 @@
 ; --- reader operators: the two tables + the opfix factor pass ---------------
 ; the valence law's two faces, one form: spaced is dyadic, glued is monadic. the reader leaves a
 ; sigil a plain symbol; opfix factors it against these at compile time.
-; a dyadics row is arity (two or more -- an infix row always wants a left operand), a grip (higher
-; binds tighter) and a hand (0 right, 1 left -- how a same-grip run folds); op-ent normalizes all
-; five written shapes to (name arity grip . hand). undeclared is infix at two, grip 95 -- above
-; every row here, so the table holds only exceptions. infix is live from this table on.
+; EVERY operator is dyadic -- a row carries no arity, only a grip (higher binds tighter) and a
+; hand (0 right, 1 left -- how a same-grip run folds); op-ent normalizes every written shape to
+; (name grip . hand). undeclared is infix at grip 95 -- above every row here, so the table
+; holds only exceptions. infix is live from this table on.
 ; a monadics entry maps a run-piece to its monadic word and a run factors greedily, so <>x is
 ; (cap (cup x)) -- glued runs only, and a monadic-only sigil has no dyadics row at all.
 (: dyadics (pins (tablet 0)
- '** (>< 2 70)
- '* (>< 2 (>< 60 1)) '/ (>< 2 (>< 60 1)) '% (>< 2 (>< 60 1))  ; multiplicative, LEFT
- '+ (>< 2 (>< 50 1)) '- (>< 2 (>< 50 1))            ; additive, LEFT
- '= (>< 2 40) '!= (>< 2 40) '< (>< 2 40) '<= (>< 2 40) '> (>< 2 40) '>= (>< 2 40) ; comparison
- '| (>< 2 30) '& (>< 2 30) '&& (>< 2 30) '|| (>< 2 30) ; logical (&& || also macros; the row pins the grip below comparison)
- '>< (>< 2 25)                                                   ; cons -- the loosest builder
- '? (>< 3 10)                                                    ; cond
- '$ (>< 2 5))                                                   ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
+ '** 70
+ '* (>< 60 1) '/ (>< 60 1) '% (>< 60 1)             ; multiplicative, LEFT
+ '+ (>< 50 1) '- (>< 50 1)                          ; additive, LEFT
+ '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40             ; comparison
+ '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the grip below comparison)
+ '>< 25                                                          ; cons -- the loosest builder
+ '? 10                                                           ; cond -- infix it is the one-armed form; an else arm is the prefix (? c a b)
+ '$ 5)                                                           ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
    monadics (pins (tablet 0)
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
  '% fraction '? bit '$ saturate '! nil?))   ; `.` is pinned here by post.l, whose dot it is
@@ -381,29 +381,23 @@
                    0))
              0))
        0)
-   ; normalize a table entry for key k -> the quad (name arity grip . hand), or 0. head and tail
-   ; fork by kind, so all five written shapes land here. a bad arity or tail answers 0.
-   (op-ar? n) (&& (charm? n) (< 1 n) (< n 8))   ; two or more: an infix row always wants a left operand
-   ; the grip/hand tail, dotted OR as a plain list -- the table writes (2 60 . 1) but `fixity`'s
-   ; caller writes '(2 60 1), and the door should not make anyone count dots.
-   (op-gh v)  (? (charm? v) (>< v 0)                                       ; a grip alone: right-handed
+   ; normalize a table entry for key k -> the triple (name grip . hand), or 0. a nom-led row is an
+   ; ALIAS (it names another word), anything else is self-named; a bad tail answers 0.
+   ; ⚠ the grip must be POSITIVE: a tablet MISS answers 0, and a grip of 0 would read that miss
+   ; as a live row at the loosest grip there is.
+   (op-grip? g) (&& (charm? g) (< 0 g))
+   ; the grip/hand tail, dotted OR as a plain list -- the table writes (60 . 1) but `fixity`'s
+   ; caller writes '(60 1), and the door should not make anyone count dots.
+   (op-gh v)  (? (op-grip? v) (>< v 0)                                     ; a grip alone: right-handed
                  (nil? (two? v)) 0
-                 (nil? (charm? (cap v))) 0
+                 (nil? (op-grip? (cap v))) 0
                  (charm? (cup v)) v                                          ; (grip . hand), dotted
                  (&& (two? (cup v)) (charm? (caup v))) (>< (cap v) (caup v))  ; (grip hand), a list
                  (atom? (cup v)) (>< (cap v) 0))                           ; (grip), a list
-                 
    (op-ent k) (: v (dyadics k)
-                 (? (charm? v) (? (op-ar? v) (>< k (>< v (>< 95 0))) 0)
-                    (two? v)
-                     (? (charm? (cap v))                                     ; self-named: (arity . grip[. hand])
-                          (: t (op-gh (cup v))
-                             (? (&& (op-ar? (cap v)) (two? t)) (>< k (>< (cap v) t)) 0))
-                        (nom? (cap v))
-                          (? (charm? (cup v))                                ; (name . arity): alias at house
-                               (? (op-ar? (cup v)) (>< (cap v) (>< (cup v) (>< 95 0))) 0)
-                             (: t (op-gh (cuup v))                           ; (name arity . grip[. hand])
-                                (? (&& (op-ar? (caup v)) (two? t)) (>< (cap v) (>< (caup v) t)) 0))))))
+                 (? (? (two? v) (nom? (cap v)) 0)                            ; nom-led: (name grip[. hand])
+                      (: t (op-gh (cup v)) (? (two? t) (>< (cap v) t) 0))
+                    (: t (op-gh v) (? (two? t) (>< k t) 0))))                ; self-named: the tail itself
    ; longest prefix of nm[i..n) with a monadic meaning -> (len . word), or 0. the table holds word
    ; values, so a hit is asked out of band against the miss answer -- a truth test would drop any
    ; word that nets nothing.
@@ -479,14 +473,14 @@
     (? (atom? l) (op-drain out pend)
        (: e (cap l)
           (? (op-puncp e)
-             ; a spaced sigil is ONE name -- an unrowed one defaults to infix at two, and with no
+             ; a spaced sigil is ONE name -- an unrowed one takes the house grip, and with no
              ; left operand the infix frame still folds to the plain symbol (op-fold's bare case)
              (: en0 (op-ent e)
-                en (? (two? en0) en0 (>< e (>< 2 (>< 95 0))))   ; fresh punct: the (e 2 house . right) quad
-                nm (cap en) n (caup en) gp (cauup en)
-                st (op-steal gp (cuuup en) out pend)   ; capture a left operand if one exists (at this grip + hand)
+                en (? (two? en0) en0 (>< e (>< 95 0)))   ; fresh punct: the (e house . right) triple
+                nm (cap en) gp (caup en)
+                st (op-steal gp (cuup en) out pend)   ; capture a left operand if one exists (at this grip + hand)
                 (? (two? st) (op-w (cup l) (cap (cup st))
-                            (>< (op-fr e nm (- n 1) gp (>< (cap st) ()))
+                            (>< (op-fr e nm 1 gp (>< (cap st) ()))
                                   (cup (cup st))))
                    (: r (op-del e out pend)     ; no left operand: the plain symbol
                       (op-w (cup l) (cap r) (cup r)))))
@@ -603,7 +597,7 @@
 ; the generic `tray` ctor reads the tier off a witness. past the numeric tower the whole array
 ; lifts to an object array. a shape dimension may be any numeric and saturates to a nat.
 (: (a-rank x) (? (gem? x) 1 (| (charm? x) (sun? x)) 0 (twin? x) 2 3)
-   (a-emax m x) (: k (a-rank x) (m < k ? k m))
+   (a-emax m x) (: k (a-rank x) (? (m < k) k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (k = 0) 0 (k = 1) 0.0 (k = 2) (twin 0 0) ()))   ; a witness star of the tier
    (a-dim d) (? (two? d) (tally d) (sat d))
    (a-shape s) (? (two? s) (map a-dim s) (list (a-dim s))))

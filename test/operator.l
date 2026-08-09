@@ -1,12 +1,12 @@
-; the operator table -- ONE table, `dyadics`: sigil symbol -> arity (the symbol
-; names itself) | (name . arity) (an alias), arity 2-7 -- an infix row always wants
-; a left operand. the reader is structural
+; the operator table -- ONE table, `dyadics`: sigil symbol -> grip[. hand] (the
+; symbol names itself) | (name grip[. hand]) (an alias). EVERY operator is dyadic,
+; so no row carries an arity. the reader is structural
 ; (a sigil -- a maximal all-punct token -- reads as one plain symbol); code looks
 ; sigils up in the table at COMPILE time (the opfix pass). the table is opfix's
 ; OWN -- book-private since birth (the egg mops it beside monadics/pureset: a live
 ; pin into a compile table would poison every later compile) -- so its laws read
-; through BEHAVIOR: ? at three lives in test/infixop.l, the nom-led alias shape and
-; the arity refusals in test/precedence.l's fixity door, greedy longest-prefix
+; through BEHAVIOR: ? as an ordinary dyad lives in test/infixop.l, the nom-led alias
+; shape and the grip refusals in test/precedence.l's fixity door, greedy longest-prefix
 ; factorization (the GLUED lane, against monadics) in the valence laws, and a FRESH
 ; punct operator needs no entry at all (default dyadic; test/infixop.l's DEFAULT
 ; INFIX section).

@@ -42,7 +42,8 @@ time, against two tables -- `dyadics` for a spaced sigil, `monadics` for a glued
 run (`dyadics` is per-form extensible: pin an entry and the next form compiles
 with it):
 - spaced, at two: `+ - * / % = < <= > >= | &`
-- spaced, at three: `?` (the cond form infix: `(t ? a b)`)
+- `?` is dyadic like the rest: infix `(t ? a)` is the one-armed cond, and an
+  else arm is the prefix `(? t a b)` -- which is n-ary, `(? t1 a t2 b else)`
 - glued: `$` sat (the value's net -- its content measure -- clamped once,
   `max(0, ceil)`; `!!$` is the iverson bracket, the truth bit `?` dispatches on),
   `!` nil? (not), `.` dot (print and return item)

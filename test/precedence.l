@@ -6,7 +6,7 @@
 ; and everything else stays right, which is the flat fold the surface started with. bands:
 ; house 95 (coined ops -- TIGHTEST, haskell's undeclared-is-infixl-9), apply 70, multiplicative 60,
 ; additive 50, comparison 40, logical 30, cons 25,
-; assignment 20, cond 10. we assert BOTH the factored TREE (via the live `opfix`, the source pass both
+; cond 10, weak apply 5. we assert BOTH the factored TREE (via the live `opfix`, the source pass both
 ; compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping is
 ; observable in the result.
 (assert
@@ -24,7 +24,8 @@
  ((opfix '(a < b && c < d)) = '(&& (< a b) (< c d))) ; && (30) below comparison (40)
  ((opfix '(a < b || c < d)) = '(|| (< a b) (< c d))) ; || likewise
  ((opfix '(a < b & c < d)) = '(& (< a b) (< c d)))   ; bitwise & (30) likewise
- ((opfix '(1 < 2 ? x y)) = '(? (< 1 2) x y))        ; ? (10) loosest -> the C-ternary read
+ ((opfix '(1 < 2 ? x)) = '(? (< 1 2) x))            ; ? (10) loosest -> the whole comparison is the condition
+ ((opfix '(1 < 2 ? x y)) = '(? (< 1 2) (x y)))      ; ...and ? is DYADIC, so a second arm is a span, not an else
  ((opfix '(a + b >< c)) = '(>< (+ a b) c))          ; >< (25) the loosest builder, below arithmetic
  ((opfix '(a :+ b >< c)) = '(>< (:+ a b) c))        ; a coined op (house 95) beats >< (25)
  ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic (50), and every other band:
@@ -52,7 +53,7 @@
  (3 = (2 - 3 + 4))                                    ; the band folds left as one run: ((2 - 3) + 4)
  (1 = (3 = 1 + 2))                                    ; the assert relation itself, unparenthesized
  (1 = (0 < 5 && 5 < 10))                              ; (&& (< 0 5) (< 5 10)) -- both true
- ('big = (1 < 2 ? 'big 'small))                       ; the C-ternary value
+ ('big = (1 < 2 ? 'big))                              ; ? is dyadic: the one-armed cond, (< 1 2) first at grip 40
  (4 = (3 ** (+ 1)))                                   ; ** flip-applies: ((+ 1) 3) = 4
  (8 = (2 * 3 ** (+ 1)))                               ; ** tighter than *: (* 2 ((+ 1) 3)) = (* 2 4)
  (6 = ((+ 1) $ 2 + 3))                                ; $ loosest: ((+ 1) (+ 2 3)) = ((+ 1) 5)
@@ -63,33 +64,32 @@
  ; it replaced, in the shape it takes -- so (fixity nm (fixity nm new)) restores exactly. every
  ; assert here RESTORES inside its own form: the corpus is read form by form, so a live row would
  ; change how the NEXT form parses. the table is read live, so `opfix` shows the change at once. ---
- (: was (fixity '<+> '(2 60 1))                       ; haskell's `infixl 7 <+>`
+ (: was (fixity '<+> '(60 1))                       ; haskell's `infixl 7 <+>`
     tree (opfix '(a <+> b <+> c))
     _ (fixity '<+> was)
     (&& (was = ()) (tree = '(<+> (<+> a b) c))))      ; undeclared before; left-handed after
- (: _ (fixity '<+> '(2 60))                           ; `infixr 7` -- the hand defaults right
+ (: _ (fixity '<+> '(60))                           ; `infixr 7` -- the hand defaults right
     tree (opfix '(a <+> b <+> c))
     _ (fixity '<+> ())
     (tree = '(<+> a (<+> b c))))
- (: _ (fixity '<+> '(2 60 1))
+ (: _ (fixity '<+> '(60 1))
     prev (fixity '<+> ())                             ; () CLEARS, and answers what it cleared
-    (&& (prev = '(2 60 1)) ((opfix '(a <+> b * c)) = '(* (<+> a b) c))))   ; back to house grip -- above *
+    (&& (prev = '(60 1)) ((opfix '(a <+> b * c)) = '(* (<+> a b) c))))   ; back to house grip -- above *
  ((fixity '<+> ()) = ())                              ; clearing an absent row is a no-op answering ()
- (: _ (fixity '=: '(pin 3 20 0))                      ; the nom-led ALIAS form: the row names another word
-    tree (opfix '(t =: k v))
+ (: _ (fixity '=: '(pin 20 0))                      ; the nom-led ALIAS form: the row names another word
+    tree (opfix '(t =: k))
     _ (fixity '=: ())
-    (tree = '(pin t k v)))
- (: was (fixity '+ '(2 70 1))                         ; a CORE operator can be re-gripped ..
+    (tree = '(pin t k)))
+ (: was (fixity '+ '(70 1))                         ; a CORE operator can be re-gripped ..
     tree (opfix '(a + b * c))
     _ (fixity '+ was)                                 ; .. and put back
     (&& (tree = '(* (+ a b) c)) ((opfix '(a + b * c)) = '(+ a (* b c)))))
  ; a shape op-ent refuses is ROLLED BACK and scared -- never pinned, because a bad row does not
  ; error, it silently demotes its operator to the fresh-punct default.
- (!(catch (\ _ (fixity '^^ '(0 60 1)))))              ; arity 0
- (!(catch (\ _ (fixity '^^ '(1 60 1)))))              ; arity 1 -- an infix row always wants a left operand
- (!(catch (\ _ (fixity '^^ '(9 60 1)))))              ; arity 8+
- (!(catch (\ _ (fixity '^^ '(2 zzz 1)))))             ; a grip that is not a charm
- (!(catch (\ _ (fixity 'plain '(2 60 1)))))           ; and the name must be an all-punct sigil
+ (!(catch (\ _ (fixity '^^ '(0 1)))))                 ; grip 0 -- ⚠ a table MISS answers 0, so zero can never BE a row
+ (!(catch (\ _ (fixity '^^ '(-5 1)))))                ; a negative grip
+ (!(catch (\ _ (fixity '^^ '(zzz 1)))))               ; a grip that is not a charm
+ (!(catch (\ _ (fixity 'plain '(60 1)))))             ; and the name must be an all-punct sigil
  ((opfix '(x ^^ y ^^ z)) = '(^^ x (^^ y z)))          ; the table survived all four intact
 
  ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.

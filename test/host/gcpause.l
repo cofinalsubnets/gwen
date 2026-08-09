@@ -24,7 +24,7 @@
 
 (: G_LEN 0 G_GC 3 G_EVAC 7 G_OLD 8 G_MINOR 11 G_MAJCAP 12 G_MINHI 14 G_MAJHI 15
    (gget i) (peep (gauge 0) i 0)
-   (mx a b) (a < b ? b a)
+   (mx a b) (? (a < b) b a)
 
    ; one churn step: raise a fresh 4k list, force a minor UNDER it (the list
    ; is the survivor set), answer `(minors words ns) for that one collection --
@@ -48,13 +48,13 @@
    ; until the headroom clears the nursery by a whole window's promotions
    ; (the step-snap can land the first recovery tight; stage 2 proved it).
    (recover _) (: (room _) ((// (gget G_MAJCAP) 2) - gget G_OLD)
-                  (go i) ((room ()) < (gget G_LEN) + 262144
-                          ? (go (i + tally (cask 262144))) i)
+                  (go i) (? ((room ()) < (gget G_LEN) + 262144)
+                          (go (i + tally (cask 262144))) i)
                 (go 0))
 
    ; k steps -> `(worst-words worst-ns collections) over the window
    (churn k) (: (go i ww wn cs)
-                (i < k ? (: r (step ())
+                (? (i < k) (: r (step ())
                           (go (i + 1) (mx ww <>r) (mx wn <>>r) (cs + <r)))
                          `(ww wn cs))
               (go 0 0 0 0))
