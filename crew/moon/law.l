@@ -716,7 +716,12 @@
       (= (cppline "a\nb\n#error late") 3)                              ; the gripe carries the DIRECTIVE's line
       (= (cppline "#if 1\na\nb") 1)                                    ; ..and an unterminated one carries its OPENER's
       (= (cppline "#if 0\na\n#else\nb") 1)                             ; ..which an #else does not reset
-      (okv? (cpp <>(clex "#\n#pragma x\n# 4 \"f.c\"\nz") () "<law>"))))        ; null, pragma and gcc's line marker all pass
+      (okv? (cpp <>(clex "#\n#pragma x\n# 4 \"f.c\"\nz") () "<law>"))          ; null, pragma and gcc's line marker all pass
+      ; #pragma push_macro/pop_macro: the save comes back through an #undef + redefine
+      (= (pps "#define A 1\n#pragma push_macro(\"A\")\n#undef A\n#define A 2\nA\n#pragma pop_macro(\"A\")\nA") "2 1")
+      (= (pps "#pragma pop_macro(\"A\")\nok") "ok")                     ; nothing saved: a no-op
+      (= (pps "#pragma push_macro(\"U\")\n#define U 7\n#pragma pop_macro(\"U\")\n#ifdef U\ny\n#else\nn\n#endif") "n")  ; a saved UNDEFINED pops back to undefined
+      (= (pps "#define pop_macro x\n#define A 1\n#pragma push_macro(\"A\")\n#undef A\n#pragma pop_macro(\"A\")\nA") "1")))  ; the body reads RAW -- a macro named pop_macro cannot interfere (cts 00206)
 
 ; --- diagnostics: a parse refusal names where it stood (doc/moon-diag.md rung 2) ---
 ; the gripe carrier is ('gripe file line col msg); file () means the TU itself,

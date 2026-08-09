@@ -12,7 +12,8 @@
 ; directives: #define (object + function, # stringize, ## paste, ... variadic
 ; __VA_ARGS__), #undef, #if/#ifdef/#ifndef/#elif/#else/#endif (with defined and
 ; an integer constant-expression evaluator, undefined names -> 0), #include,
-; #error, #pragma/#line (ignored). predefined __LINE__ __FILE__ __STDC__.
+; #error, #pragma/#line (ignored -- except #pragma push_macro/pop_macro, which
+; save and restore a definition). predefined __LINE__ __FILE__ __STDC__.
 ; adjacent string literals concatenate (phase 6). fenced: _Pragma, __COUNTER__,
 ; the GNU ,##__VA_ARGS__ comma elision, #if with character constants.
 (:
@@ -280,6 +281,21 @@
               ()))
        ())
 
+   ; -- #pragma push_macro("X") / pop_macro("X") (gcc/msvc): the save is a per-name
+   ; stack riding macs under a key no C identifier can spell, each cell the entry as
+   ; saved (() = was undefined). a pop with nothing saved is a no-op, gcc's reading;
+   ; the body reads RAW, so a user macro named pop_macro cannot interfere (cts 00206). --
+   (pragmac? body) (two? body && idt? <body &&
+                    member? (vof <body) '("push_macro" "pop_macro"))
+   (dopragmac macs body)
+    (: r >body
+       (? !(two? r && pv? <r "(" && two? >r && (kof <>r = 'str) &&
+           two? >>r && pv? <>>r ")") ()
+          (: nm (vof <>r) key ("#save:" + nm) stk (peep macs key ())
+             (? (vof <body = "push_macro") (pin macs key ((mdef macs nm) >< stk))
+                (two? stk) (: _ (pin macs nm <stk) (pin macs key >stk))
+                ()))))
+
    ; -- adjacent string literal concatenation (phase 6) --
    ; it also RETIRES the file marks here, in the one pass that already rebuilds
    ; the whole spine -- so parse receives a clean stream and pays nothing for a
@@ -358,6 +374,8 @@
                     (dir = "warning")
                      (: _ (say err ("cc: warning: " + spellcat body)) _ (put err 10)
                         (cppgo rest macs cond () out1 incf))
+                    ((dir = "pragma") && pragmac? body)
+                     (: _ (dopragmac macs body) (cppgo rest macs cond () out1 incf))
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.

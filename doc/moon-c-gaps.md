@@ -71,15 +71,18 @@ and `__func__`.
 ### the directives, and which are ignored on purpose
 
 `#pragma`, `#line`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
-C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing. `#warning` says its
+C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
+**`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
+(gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
+nothing saved is a no-op, and the directive body reads raw so a user macro named `pop_macro`
+cannot interfere — cts 00206). `#warning` says its
 text and continues. **Everything else refuses** (C11 6.10p1) — the catch-all that used to ignore
 an unknown directive let `#cmakedefine X 1` sail through, so an unconfigured template header
 compiled clean and the name it owed was simply absent.
 
-⚠ Two of those ignores cost a right answer rather than a feature, so "on purpose" is the
-cheaper reading of them than the true one: **`#line` never moves the line number** a later
-diagnostic or `__LINE__` reports, and **`#pragma push_macro` / `pop_macro`** drop the save, so
-the macro never comes back and the `#undef` under it is permanent.
+⚠ One of those ignores costs a right answer rather than a feature, so "on purpose" is the
+cheaper reading of it than the true one: **`#line` never moves the line number** a later
+diagnostic or `__LINE__` reports.
 
 ⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
 which is worse. doc/moon-userland.md carries when it becomes load-bearing.
@@ -149,9 +152,8 @@ when `test_cts` first ran.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Two compile
-clean and answer wrong, and both are rows elsewhere on this page — the wide literal and
-`#pragma push_macro`.
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). One compiles
+clean and answers wrong, and it is a row elsewhere on this page — the wide literal.
 
 ### sizeof over promoted arithmetic — landed, via the typing door
 
