@@ -4424,19 +4424,23 @@ static lvm_t *const image_extra_aps[] = {
  // thumb, so they would otherwise escape as "fixnums" -- raw baker addresses
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
  lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit };
-// size (words) of the object at p, the same per-kind logic as the GC; threads via
-// ttag (the hand-rolled [lo,hi) scan drifted)
-static uintptr_t image_objsize(struct ai *g, union u *p) {
- if (in_data(p->ap)) switch (ai_typ(p)) {
+// size (words) of a data object, the same per-kind logic as the GC. d carries the
+// kind, s the raw length words -- two homes only during a fused image load, where
+// the decoded ap lands in the pool while the payload still sits in the source blob.
+static uintptr_t image_datasize(union u *d, void const *s) {
+ switch (ai_typ(d)) {
   case DChain: return Width(struct ai_chain);
   case DMint:  return Width(struct ai_mint);
   case DNom:   return Width(struct ai_nom);
   case DGem:   return Width(struct ai_gem);
   case DSun:  return Width(struct ai_sun);
   case DTwin:  return Width(struct ai_twin);
-  case DString:return b2w(sizeof(struct ai_str) + str(p)->len);
-  case DBig:   return b2w(ai_big_bytes(big(p)));
-  case DTray:  return b2w(ai_tray_bytes((struct ai_tray*) p)); }
+  case DString:return b2w(sizeof(struct ai_str) + ((struct ai_str const*) s)->len);
+  case DBig:   return b2w(ai_big_bytes((struct ai_big*)(word) s));
+  case DTray:  return b2w(ai_tray_bytes((struct ai_tray*)(word) s)); }
+ return 0; }                                                     // unreachable: ai_typ covers the 9
+static uintptr_t image_objsize(struct ai *g, union u *p) {
+ if (in_data(p->ap)) return image_datasize(p, p);
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
  return (uintptr_t)(term - (word*) p) + 1; }
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, then def1 E..
@@ -4692,7 +4696,6 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  word *base = g->major_base;
  if (!base) return NULL;
  ai_image_note(2);
- memcpy(base, (char const*) buf + sizeof H, bytes);      // the blob -> the major pool
  g->major_hp = base + nw;
  ai_image_note(3);
  uintptr_t hb = bytes;
@@ -4700,29 +4703,34 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  if ((H.rsv1 & 1) && !(H.rsv1 >> 1)) delta = 0;                                  // ZERO kept absolutes: fully symbolic image (offsets +
                                                                                  // table indices only) -- binary-PORTABLE, no delta to check
  else if ((intptr_t)((word) &ai_image_save - (intptr_t) H.anchor) != delta) return NULL; // anchor delta != refsym delta -> a DIFFERENT binary (cross-arch/stale) -> normal boot
- for (union u *p = (union u*) base; (word*) p < base + nw; ) {                    // re-walk the blob, decode in place (no tables)
-  uintptr_t off = (uintptr_t)((word*) p - base), sz;
+ word const *src = (word const*)((char const*) buf + sizeof H);                   // walk the blob IN PLACE, decoding into the pool --
+ for (uintptr_t off = 0; off < nw; ) {                                            // one pass of writes, no staging copy
+  uintptr_t sz;
+  union u *p = (union u*)(base + off);
+  word const *s = src + off;
   if (!(off & 0xFFFFu)) ai_image_note(0x100 + (off >> 16));                       // walk progress, per 64K words
-  ((word*) p)[0] = img_decode(((word*) p)[0], base, hb, delta);                   // word0 first: the ap (sizing needs it real)
-  if (in_data(p->ap)) { sz = image_objsize(g, p);                                 // data kinds: size by ai_typ + raw length words
+  base[off] = (word) img_decode((intptr_t) s[0], base, hb, delta);                // word0 first: the ap (kinding needs it real)
+  if (in_data(p->ap)) { sz = image_datasize(p, s);                                // data kinds: size by ai_typ + the SOURCE's raw length words
    switch (ai_typ(p)) {
-    case DChain: ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta);
-                 ((word*) p)[2] = img_decode(((word*) p)[2], base, hb, delta); break;
-    case DNom:   ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta); break;
-    case DTray:   if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
+    case DChain: base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta);
+                 base[off + 2] = (word) img_decode((intptr_t) s[2], base, hb, delta); break;
+    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta);
+                 base[off + 2] = s[2], base[off + 3] = s[3]; break;               // code + dig ride raw
+    case DTray:  memcpy(base + off + 1, s + 1, (sz - 1) * sizeof(word));
+                 if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
                   for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], base, hb, delta); }
                  break;
-    default: break; }
+    default:     memcpy(base + off + 1, s + 1, (sz - 1) * sizeof(word)); }        // flat leaves: payload rides raw
   } else {                                                                        // thread: the ENCODED terminator is its head's byte offset | tag
    word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
-   uintptr_t kmax = (uintptr_t)(base + nw - (word*) p);                           // BOUND the walk: a mis-decoded word0 must refuse
+   uintptr_t kmax = nw - off;                                                     // BOUND the walk: a mis-decoded word0 must refuse
    for (;; k++) {                                                                 // ONE pass, decoding to the terminator (rung 2):
     if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the
-    if (((word*) p)[k] == term) break;                                            // pool's edge is a dead bus, and a dead bus is MUTE)
-    ((word*) p)[k] = (word) img_decode((intptr_t)((word*) p)[k], base, hb, delta); }
-   ((word*) p)[k] = (word) p + ai_thread_tag;                                     // the terminator, decoded by hand: its head went live
+    if (s[k] == term) break;                                                      // pool's edge is a dead bus, and a dead bus is MUTE)
+    base[off + k] = (word) img_decode((intptr_t) s[k], base, hb, delta); }
+   base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
    sz = k + 1; }
-  p = (union u*) ((word*) p + sz); }
+  off += sz; }
  ai_image_note(5);
  uintptr_t nv = (word*) g->end - (word*) &g->v0;                         // same struct/binary (anchor-checked) -> same layout
  if (H.nroot != 2 + nv) return NULL;                                     // root count mismatch -> stale/foreign image -> normal boot

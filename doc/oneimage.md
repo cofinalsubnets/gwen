@@ -171,8 +171,21 @@ wash. What the hot window actually shows is per-use slot reloads (`mov 0x1f0(%rs
 every touch), which is mooncc's known no-cross-slot-residency story, not this walk's — the
 lever lives in the regalloc arc, not here.
 
-**post-ladder differentials** (2026-08-10, quiet box). Walk share = `ai_image_load_m` +
-`image_objsize`, `img_decode` inlined on every lane now; each binary wakes its own bake:
+**the copy fused too** (2026-08-10, after the ladder). The load staged the whole blob into
+the pool with one 16 MB memcpy, then decoded it in place — a full pass of writes just to be
+rewritten. The walk now reads encoded words straight off the mmap'd blob (or the `.image`
+section) and writes decoded words into the pool: one pass of writes, no staging.
+`image_objsize` split for it — `image_datasize(d, s)` takes the kind from the decoded pool
+cell and the raw length words from the source, so a string sizes before its payload has
+moved; the thread tail stays with the save walk. Cycles −8.3% (85.9 → 78.7 M, confirmed
+78.5–81.3 M over three fresh bakes vs 85.8–86.3 M before), instructions −2.8%, wall
+33.4 → 32.2 ms; +8 lines. Ladder + fusion against the original baseline: 38.8 → 32.2 ms,
+−12% cycles. `make valg` at 0 errors is part of the evidence — the fused walk reads the
+source blob to its exact edge.
+
+**post-ladder differentials** (2026-08-10, quiet box, pre-fusion). Walk share =
+`ai_image_load_m` + `image_objsize`, `img_decode` inlined on every lane now; each binary
+wakes its own bake:
 
 | build | wake | walk share | words | walk cost |
 |---|---|---|---|---|
