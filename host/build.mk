@@ -64,7 +64,7 @@ force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(host_ldflags) $(image_ldflags)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH $@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 host: $(ho)/love $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 
@@ -84,7 +84,7 @@ dock: host
 # an egg boot on any mismatch, so a stale bake is slower, never fatal. The .baked STAMP
 # carries the dependency, since the bake mutates the binary itself.
 $(ho)/love.baked $(ho)/love.cand.baked: %.baked: %
-	@echo BAKE	$<
+	@echo LOVE	$< "(bake)"
 	@$< --bake
 	@touch $@
 
@@ -203,16 +203,16 @@ mksys_e = mksys
 endif
 mksys_l = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
 $(ho)/.mksys-cat.l: $(mksys_l)
-	@echo AI	$@
+	@echo CAT	$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(love0)
-	@echo MOON	$@
+	@echo HOLO	$@
 	@mkdir -p $(dir $@)
 	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
 ifneq ($(STATIC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_data.ld $(baked_h)
-	@echo CC	$@
+	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags) $(image_ldflags) $(data_ld)
 else

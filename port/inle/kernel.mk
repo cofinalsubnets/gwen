@@ -104,6 +104,8 @@ kcc_tgt = $(if $(KCC_IS_MOON),-t $(k_be_$a),$(kcc_if_clang))
 kcc = $(KCC) $(kcflags) $(kcflags_mach) $(kcppflags) $(kcc_tgt)
 # ours has to exist before it can compile anything.
 kcc_dep = $(if $(KCC_IS_MOON),$(ho)/mooncc,)
+# the tag names the compiler that actually runs, so the clang lane reads as clang's.
+kcctag = $(if $(KCC_IS_MOON),MOON,CC)
 
 kernel: $(k_elf)
 
@@ -116,7 +118,7 @@ kernel: $(k_elf)
 klink_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/port/inle/klink.l
 $(k_odir)/klink.l: $(klink_l)
-	@echo AI	$@
+	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $(klink_l); } > $@
 
@@ -146,7 +148,7 @@ out/lib/kfs.list: force_kfs_list
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
 
 # --- the kore cat (rung 3) -------------------------------------------
@@ -154,13 +156,14 @@ out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 # SHIPPED kernel only: kmain.c evals it at boot and the cmdline's program seat picks the
 # tool. the K_TEST kernel skips it -- its corpus bakes the kore subset it drives.
 out/lib/korecat.l: $(korefiles)
+	@echo CAT	$@
 	@mkdir -p out/lib
 	@cat $(korefiles) > $@
 
 # Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
-	@echo CC	$@
+	@echo $(kcctag)	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
@@ -187,14 +190,14 @@ klay_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
 # prerequisite is an INTERMEDIATE make deletes after the link, and the cat would then run
 # again on every build. naming the targets keeps them ordinary files.
 $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/port/inle/%.l $(klay_l)
-	@echo AI	$@
+	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $(klay_l) $<; } > $@
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
 $(k_lay_o): $(k_odir)/port/inle/$a/%.o: $(k_odir)/mk%.l $m
-	@echo LAY	$@
+	@echo HOLO	$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -n -e '(lay-$* "$@" "$a")' && test -s $@
 
@@ -217,7 +220,7 @@ $(ko)/limine.conf:
 	@printf 'timeout: 1\n/gk\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
 
 $(ko)/love-$a$(ksuf)$(kvsuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
-	@echo MK $@
+	@echo MK	$@
 	@rm -rf $(ko)/iso_root
 	@mkdir -p $(ko)/iso_root/boot
 	@cp $< $(ko)/iso_root/boot/kernel
@@ -227,12 +230,12 @@ $(ko)/love-$a$(ksuf)$(kvsuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
 	@cp $(dl)/limine/limine-uefi-cd.bin $(ko)/iso_root/boot/limine/
 	@cp $(dl)/limine/limine-bios.sys $(dl)/limine/limine-bios-cd.bin $(ko)/iso_root/boot/limine/
 	@cp $(addprefix $(dl)/limine/,$(k_efi)) $(ko)/iso_root/EFI/BOOT/
-	$(k_xorriso) $(ko)/iso_root -o $@
+	@$(k_xorriso) $(ko)/iso_root -o $@
 	@$(dl)/limine/limine bios-install $@
 	@rm -rf $(ko)/iso_root
 
 $(ko)/love-$a.hdd: $(ko)/love-$a.elf $(dl)/limine/limine $(ko)/limine.conf
-	@echo MK $@
+	@echo MK	$@
 	@rm -f $@
 	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
 	@PATH=$$PATH:/usr/sbin:/sbin sgdisk $@ -n 1:2048 -t 1:ef00
@@ -301,12 +304,13 @@ kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
 # out/lib/corpus.list carries the MEMBERSHIP, rewritten only when the set changes
 # (mk/lib.mk) -- so an edit to any makefile in the tree does not relay this header.
 out/lib/ktests.l: $(kt) out/lib/corpus.list
+	@echo CAT	$@
 	@mkdir -p out/lib
 	@cat $(kt) > $@
 # the two VERBATIM bakes, one shape (lcatv, not lcat: an inspect-reprint diverges
 # when the corpus is read back incrementally through a strin port).
 out/lib/korecat.h out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) tools/lcatv.l love/prel.l
-	@echo AI	$@
+	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatv.l $< > $@
 
 # arm64 EXECUTION validator: cross-build `love` for aarch64 and run the corpus under
@@ -365,7 +369,7 @@ $(ko)/uefi$(ksuf)/loader.o: $R/port/inle/uefi/loader.c $(ho)/mooncc
 	@mkdir -p $(dir $@)
 	@$(ho)/mooncc -c $< $@
 $(ko)/uefi$(ksuf)/BOOTX64.EFI: $(ko)/uefi$(ksuf)/loader.o $(uefi_l) $m
-	@echo PE	$@
+	@echo HOLO	$@
 	@mkdir -p $(dir $@)
 	@{ echo "(use 'holo)"; cat $(uefi_l); echo '(mkboot "$@" (list "$<"))'; } | $m
 # the ESP: BOOTX64.EFI at the removable-media path the firmware looks for, and the kernel
@@ -450,7 +454,7 @@ endif
 
 # --- downloads -------------------------------------------------------
 $(dl)/edk2-ovmf/ovmf-code-%.fd:
-	@echo MK ovmf
+	@echo MK	ovmf
 	@mkdir -p $(dl)
 	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C $(dl) -xf -
 	@case "$a" in \
@@ -458,7 +462,7 @@ $(dl)/edk2-ovmf/ovmf-code-%.fd:
 	esac
 
 $(dl)/limine/limine:
-	@echo MK limine
+	@echo MK	limine
 	@rm -rf $(dl)/limine
 	@git clone https://codeberg.org/Limine/Limine.git $(dl)/limine --branch=v10.x-binary --depth=1 > /dev/null 2>&1
 	@$(MAKE) -sC $(dl)/limine

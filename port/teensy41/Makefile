@@ -35,14 +35,14 @@ $(eval $(call p_obj,main,port/teensy41/main.c,main.c teensy41.h $(R)/love.h $(li
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. port/mps2/mkstart.l is the same shape with one section,
 # port/rp2040/mkboot2.l the named-section one.
-$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o",LAY))
+$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 
 # the baked heap image: port/mps2's qemu baker dumps it (a build-time bake), and mkimg.l
 # lays the blob as an object in place of `ld -r -b binary`. FORCE keeps the delegation
 # live -- the mps2 makefile's own deps decide whether the qemu bake re-runs.
 $(R)/out/mps2/love.img: FORCE
 	@$(MAKE) --no-print-directory -C $(R)/port/mps2 img
-$(eval $(call p_lay,love-img,mkimg,"out/mps2/love.img" "$(o)/love-img.o",IMG))
+$(eval $(call p_lay,love-img,mkimg,"out/mps2/love.img" "$(o)/love-img.o"))
 $(R)/$(o)/love-img.o: $(R)/out/mps2/love.img
 
 # the link is ours: tlink.l drives holo's ldbare32 with the XIP flash map, in place of
@@ -51,13 +51,13 @@ $(eval $(call p_link,tlink))
 $(eval $(p_ocopy))
 
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(lv)
-	@echo LINK	$@
+	@echo HOLO	$@
 	@cd $(R) && out/host/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
 
 # .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash. The .bin is the
 # verification surface: byte offsets ARE flash offsets.
 $(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
-	@echo HEX	$@
+	@echo LOVE	$@
 	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
 	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
 	@python3 -c "import sys,struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
@@ -81,8 +81,8 @@ flashpsram: $(R)/$(o)/psram-test.hex
 	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/psram-test.hex
 
 $(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(lv)
-	@echo LINK	$@
+	@echo HOLO	$@
 	@cd $(R) && out/host/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
 $(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf $(R)/$(o)/ocopy.l
-	@echo HEX	$@
+	@echo LOVE	$@
 	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex

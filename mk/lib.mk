@@ -40,7 +40,7 @@ lcat_h = @mkdir -p out/lib; echo LOVE	$@; t=$@.$$$$.tmp; \
 $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
 	$(lcat_h)
 # the lit twin of $(lcat_h): a text->C-literal that needs no interpreter.
-lit_h = @mkdir -p out/lib; echo AI	$@; $(lit) $< > $@
+lit_h = @mkdir -p out/lib; echo CAT	$@; $(lit) $< > $@
 # ⚠ every rule below is a STATIC pattern -- their sources live outside love/, so the
 # wildcard misses them, and an implicit pattern would make these headers INTERMEDIATE.
 # holo rides the same lcat pipeline as the egg (the glaze is its client); rune is the CAS,
@@ -69,7 +69,7 @@ out/lib/corpus.list: force_corpus_list
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 out/lib/tests0.h: $t out/lib/corpus.list $(lit)
 	@mkdir -p out/lib
-	@echo AI	$@
+	@echo CAT	$@
 	@cat $t | $(lit) > $@
 
 # love_version.h: the build's version-control id, surfaced as the `love-version` global.
@@ -87,7 +87,7 @@ out/lib/love_version.h: force_version
 	else \
 	  v="$$(git -C $(R) describe --always --dirty 2>/dev/null || echo unknown)"; \
 	fi; tf=$@.$$$$.tmp; printf '#define AI_VERSION "%s"\n' "$$v" > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH $@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 
 # the lcat'd headers are PRODUCED BY running love0, so re-lay them whenever love0 moves.
 $(lib_h) $(holo_h) out/lib/rune.h: $(love0)

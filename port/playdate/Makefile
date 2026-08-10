@@ -111,7 +111,7 @@ $(R)/out/mps2/love-pd.img: FORCE
 FORCE:
 
 $(o)/Source/love-pd.img: $(R)/out/mps2/love-pd.img
-	@echo IMG	$@
+	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
 

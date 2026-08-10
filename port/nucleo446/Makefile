@@ -33,7 +33,7 @@ $(eval $(call p_obj,main-q,port/nucleo446/main.c,main.c nucleo446.h $(mc),$(nu_c
 
 # boot.o: the vector table, crt0, the fault shim and the asm helpers, laid from holo IR --
 # no gas. port/teensy41/mkboot.l is the same shape with the i.MX ROM blocks on top.
-$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o",LAY))
+$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 
 # the link is ours: nlink.l drives holo's ldbare32 with the F4's memory map, in place of
 # arm-none-eabi-ld + nucleo446.lds.
@@ -41,18 +41,18 @@ $(eval $(call p_link,nlink))
 $(eval $(p_ocopy))
 
 $(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/nlink.l $(lv)
-	@echo LINK	$@
+	@echo HOLO	$@
 	@cd $(R) && out/host/love $(o)/nlink.l $(o)/firm.elf $(objs:$(R)/%=%) $(lg)
 
 $(R)/$(o)/smoke.elf: $(qobjs) $(R)/$(o)/nlink.l $(lv)
-	@echo LINK	$@
+	@echo HOLO	$@
 	@cd $(R) && out/host/love $(o)/nlink.l $(o)/smoke.elf $(qobjs:$(R)/%=%) $(lg)
 
 # .bin byte offsets ARE flash offsets -- verify the boot surface: a valid initial SP inside
 # SRAM and a thumb-bit reset entry inside flash (the two words a bricked-looking board
 # always traces back to).
 $(R)/$(o)/firm.hex: $(R)/$(o)/firm.elf $(R)/$(o)/ocopy.l
-	@echo HEX	$@
+	@echo LOVE	$@
 	@cd $(R) && out/host/love $(o)/ocopy.l -O ihex $(o)/firm.elf $(o)/firm.hex
 	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/firm.elf $(o)/firm.bin
 	@python3 -c "import struct; b=open('$(R)/$(o)/firm.bin','rb').read(); \

@@ -72,7 +72,7 @@ $(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c $(mc)
 # (virt, mps2) never asks for it.
 define p_ocopy
 $$(R)/$$(o)/ocopy.l: $$(copy_l)
-	@echo AI	$$@
+	@echo CAT	$$@
 	@mkdir -p $$(R)/$$(o)
 	@{ echo "(use 'holo)"; cat $$(copy_l); echo '(objcopy >argv)'; } > $$@
 endef
@@ -87,10 +87,10 @@ $$(R)/$$(o)/$1.o: $3
 endef
 
 # p_lay -- one object laid from holo IR, so no assembler runs. $1 stem, $2 the mk*.l driver
-# (whose name is the function too), $3 that function's arguments, $4 the echo tag.
+# (whose name is the function too), $3 that function's arguments.
 define p_lay
 $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
-	@echo $4	$$@
+	@echo HOLO	$$@
 	@mkdir -p $$(R)/$$(o)
 	@cd $$(R) && { echo "(use 'holo)"; cat $$(be_lc) $$(lay_lc) port/$$(p_dir)/$2.l; \
 	  echo '($2 $3)'; } | out/host/love
@@ -101,7 +101,7 @@ endef
 # would then run again on every build.
 define p_link
 $$(R)/$$(o)/$1.l: $1.l $$(link_l)
-	@echo AI	$$@
+	@echo CAT	$$@
 	@mkdir -p $$(R)/$$(o)
 	@{ echo "(use 'holo)"; cat $$(link_l) $$<; } > $$@
 endef
