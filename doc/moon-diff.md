@@ -32,8 +32,12 @@ written in love holding within 2× of the natives at their own -O2 job.
 | .text (bytes) | 593,632 | 244,499 | 244,531 |
 | .rodata (bytes) | 364,544 | 360,464 | 361,008 |
 
-mooncc's .text is **2.43×** clang's; .rodata is at parity, so the gap is genuinely
-emitted code, not tables. (File sizes don't compare: the gcc/clang lanes carry `-g`.)
+the 2.43× headline decomposes: 666 symbols (~170 KB) are mooncc's **own libc/runtime**
+(nolibc, `__fmt*`, `__dnsq`, rbig, the am floor) — the clang lane rides shared glibc,
+off its ledger. Over the 610 *shared* C symbols it's 421 KB vs 240 KB — **1.75×** of
+genuinely emitted code, .rodata at parity. 1.75× is the codegen number to track; 2.43×
+is what ships. (File sizes don't compare: the gcc/clang lanes carry `-g`; mooncc
+per-symbol sizes are address-gap derived, so they carry inter-fn padding, ~1–2%.)
 
 ### runtime — the corpus, egg-boot subtracted, median of 3
 
@@ -45,9 +49,11 @@ emitted code, not tables. (File sizes don't compare: the gcc/clang lanes carry `
 | egg boot wall (ms) | 962 | 823 | 1.17× | dnf |
 
 The insn ratio is the codegen differential; the wall ratio is softer because mooncc's
-extra instructions run at higher IPC (the regalloc catalog's standing shape). The corpus
-and the boot agree at 1.7× — the boot *is* the compiler compiling, so that's one story
-told twice.
+extra instructions are cheap and run at higher IPC — measured this fill: IPC 2.98 vs
+2.05, cycles 17.9G vs 15.2G (**1.18×**, and wall tracks cycles). The corpus and the
+boot agree at 1.7× — the boot *is* the compiler compiling, so that's one story told
+twice. Per-symbol, the profiles are the same roster (the VM dispatch lanes) and the
+gap is broad, not one villain: lvm_cur and lvm_qap ~2.6× insns each, lvm_eq ~2.1×.
 
 ### runtime — host nifs, 28-file roster, 28 boots subtracted, single pass
 
