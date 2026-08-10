@@ -163,12 +163,13 @@ setup: $(SETUP)
 	@cat $(SETUP)
 
 # The compiler shootout (the page's FOURTH table): build the love host binary with
-# mooncc / gcc / clang, and run the full corpus ($t) through each. Rows build+test,
+# mooncc / gcc / clang, then run the full corpus ($t) and the two cipher rows
+# (bench/ccrypto.l) through each. Rows build+test+chacha+poly1305,
 # columns the compilers. ai_cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane needs out/host/mooncc(+.image), so depend on `host`. Cached;
 # `make ccbench` to refresh it on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh $(GL) $(R)/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l $(GL) $(R)/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host out/host/mooncc out/host/mooncc.image
 	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)

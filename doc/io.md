@@ -144,11 +144,32 @@ What that shape buys:
 * **a NULL vt slot means NO METHOD**, and the dispatcher answers for it (no `readn` reads the
   end). No noop stubs.
 
-⚠ The price, measured and accepted: the unbuffered statics pay a per-call `O_NONBLOCK` toggle,
-so the syscall count per byte went 2 → 4 while the read count did not move. The `fcntl` pair is
-skipped when the fd already says nonblocking; flags are **not** cached for an inherited fd, and
-the statics do **not** get a buffer — that would make the repl swallow the line after the one it
-is reading, and re-open part III.
+⚠ The price: a static port reads one byte per call and used to pay a per-call `O_NONBLOCK`
+toggle beside it, so `love < corpus.l` spent **3.8M syscalls** on 953 KB where the same corpus
+as a file spent 23K, and ran 1.9× slower for it. Both halves are gone now, and they went
+separately, because a door that cannot lend one can still lend the other. What the frontend
+takes it gives back at `quit`, at `exec`, and at the end of `main` — `stdin_give`, three sites,
+all holding `g`, which is why none of this needs an `atexit` or a global.
+
+**A seekable fd 0 lends its bytes.** Not a buffer on the static — a **borrowed** one: a heap bio
+parked in `g->inport`, which `rbio_of` reads *through* the static. `in` keeps its identity, its
+one-byte face, and its position; only the device gulps. 3.8M → 23K, an exact match for the file
+lane, and what remains of that gap is `trickle`'s per-byte promise, not I/O.
+
+**A pipe lends its blocking bit.** No run is possible — nothing puts a pipe back — but the
+*toggle* costs nothing to hoist, because a one-byte read leaves the fd exactly where the reader
+is. `O_NONBLOCK` goes on once, the old flags into `g->inflag`, and `fd_readn` skips the dance for
+that one fd: 3.8M → 976K, with 2,859,623 `fcntl` becoming 35. Worth ~3% on the corpus, which is
+compute-bound, and **0.96 s → 0.65 s** on a load that only reads.
+
+⚠ **A tty gets neither.** A human types, so syscalls-per-byte buys nothing, and a terminal handed
+back nonblocking is the one version of this that breaks the user's shell. It is also the only
+lane where the flag is genuinely shared with something that will read again.
+
+The run is camp 2's bargain from part III taken exactly where it is free; the bit is the part of
+that bargain nobody had to pay in the first place. `test_stdinbuf` runs one program down each
+door and diffs — the only way to catch a lane that starts running ahead — and reads the exec'd
+child's `/proc/self/fdinfo/0` to prove fd 0 was handed on blocking.
 
 ⚠ Ungated: no gate feeds a keystroke to inle, virt, mps2 or teensy — the qemu harness runs
 `</dev/null` on purpose, since a non-definite stdin hangs it. Their `readn` is exercised by
@@ -237,20 +258,31 @@ says (the scheduler's side of this is doc/sched.md's syscall-free wake pass).
 
 ## part III — who owns the bytes
 
-The live question. A lazy memoized chain over an fd is a COPY with its own position, and nothing
-in the design considered two readers of one stdin.
+A lazy memoized chain over an fd is a COPY with its own position, and nothing in the original
+design considered two readers of one stdin.
 
-### the problem
+### the problem, and how it went
 
-`(reads in)` flows stdin, so a form inside the script that reads `in` finds nothing — and the
-next form still runs, because the colist held it:
+`(reads in)` flowed stdin, so a form inside the script that read `in` found nothing — and the
+next form still ran, because the colist held it:
 
 ```
 $ printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "second form ran")\n' | love
-rest: []second form ran
+rest: []second form ran            # what it used to do
+rest: [(say out "second form ran") # what it does now -- the slurp takes the tail, so
+]                                  # the second form is CONSUMED and never runs
 ```
 
-**It is ONE call site** (`love/cli.l`). The tracked stdin readers look like a migration and are
+**Camp 3 is reached.** `reads` (`love/bao.l`) asks whether the port is `in` and, if it is,
+`trickle`s it instead — one byte per force, so the reader never runs past the form it is on
+and the port's position is the only position there is. `flow` is kept for a port we own alone
+(a file, a tap), where running ahead is free.
+
+⚠ That `(id? p in)` test is why `in` is **borrowed through rather than rebound** when a seat
+buffers it (part II): `reads` folded its own `in` at egg-compile time, so binding a fresh object
+to the name would fail the test and silently go back to gulping.
+
+**It was ONE call site** (`love/cli.l`). The tracked stdin readers look like a migration and are
 not: most are kore's `(? (f = "-") (slurp in) (uread f))` idiom, which takes ALL of it and
 leaves no residue, and the rest are interactive key decoders that use one byte immediately. A
 session-wide ownership protocol to fix one line is the wrong size of answer.
@@ -273,14 +305,24 @@ through bao's editor, which reads one byte at a time because it was written for 
 ### the semantics we want, and the one thing decided
 
 **Camp 3**: one port, one buffer, one position. A reader takes exactly what it needs; in-process
-readers share coherently. love had this before the lift — the culprit is not the colist and not
-the reader, it is **the GULP**, which predates both: it takes everything ready and hands back a
+readers share coherently. love had this before the lift — the culprit was not the colist and not
+the reader, it was **the GULP**, which predates both: it takes everything ready and hands back a
 head DETACHED from the port. Two positions where there was one.
 
 **Decided: persistence is a BENEFIT, not a bug to trade away.** A charlist is a persistent value;
 a port position is ephemeral. guile has only the position — its buffer is not a value. love has
 handed the value out, and that is what made p1 clean (`once` exists precisely so forcing twice
-is free). So the way out has to keep the persistent value and give the port back its position,
-rather than choosing between them.
+is free). So the way out had to keep the persistent value and give the port back its position,
+rather than choosing between them — and `trickle` is that: the charlist is still a value, and
+the port never runs ahead of it.
 
-That is the open work. Everything else in this document is standing design.
+What is left is a COST, not a question: trickle mints a `once` per byte, which is now the whole
+of the gap between stdin and a file (~2.2 µs/byte over the corpus) — the device is at parity.
+A run-at-a-time charlist that stays attached to its port would close it. Everything else in
+this document is standing design.
+
+⚠ The pipe keeps camp 2's per-byte *read* and always will, for camp 2's reason: a child must find
+fd 0 where our reader stopped, and nothing puts a pipe back. But that is one syscall per byte, not
+four — the `O_NONBLOCK` toggle beside it was never part of the bargain and no longer runs (part II).
+Where bash's row above says "one `read()` per byte on pipes, forever", ours now says exactly that
+and nothing more.

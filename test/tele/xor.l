@@ -1,6 +1,6 @@
 ; the end-to-end gate for tele: a 2-layer MLP learns XOR, written in love over the pure
 ; constellation algebra (no host nif), so the same code runs on EVERY frontend -- the host,
-; wasm, and inle (the freestanding kernel): a neural net on bare metal. test/host/tele.l
+; wasm, and inle (the freestanding kernel): a neural net on bare metal. test/tele/grad.l
 ; grad-checks each op alone; this one asks whether they COMPOSE into a net that learns.
 ;
 ;   run:  cat test/00-init.l test/tele/xor.l test/zz-fin.l | out/host/love -l crew/tele/tele.l

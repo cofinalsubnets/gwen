@@ -1,6 +1,6 @@
 # moon — the C compiler, in love
 
-`mooncc` is a chibicc-class C compiler written in love, emitting through the holo books. With
+`mooncc` is a C compiler written in love (chibicc was the seed), emitting through the holo books. With
 `crew/holo/link.l` (our static linker) and `crew/moon/lib/` (our libc, math floor and machine
 tail) it is a **complete C toolchain that borrows nothing**: love builds itself with no gcc, no
 glibc and no ld, and the kernel is built by it too.
@@ -60,7 +60,7 @@ piece. ~11k lines of love.
   `(asn x (bin op x y))` and `++x` to the same — exact only when evaluating the lvalue leaves
   no trace, so `calm?` gates it and the other two doors take the address once: `++`/`--` ride
   `('post lv step)`, `op=` stays whole as `('rmw op lv rhs)` for gen to moor.
-* **gen.l** — AST → holo IR (pure), chibicc-plain but **typed**: `cgexpr` answers
+* **gen.l** — AST → holo IR (pure), **typed**: `cgexpr` answers
   `(type forms)`, so pointer arithmetic scales by pointee size, a dereference loads by pointee
   width, and an array decays to an address. Lvalues have one door (`clval`: the address in r0
   plus the pointee type), through which `x`, `*p` and `a[i]` all assign — and through which
@@ -68,7 +68,7 @@ piece. ~11k lines of love.
   `('rmw ...)` reuse every store lane there is without evaluating its target twice. The ALU
   stays 64-bit —
   sound because signed overflow is UB — and widths bite only at memory and casts. This is also
-  where the register allocator lives (doc/moon-regalloc territory).
+  where the register story lives (doc/moon-regalloc.md).
 * **fmt.l** — diagnostics.
 * **clay.l** — C as love data (doc/clay.md).
 * **stage.l** — the pipeline's stages, typed: each pass's signature (input stage → output

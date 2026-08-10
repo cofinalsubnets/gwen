@@ -172,6 +172,14 @@ test runs). gcc and clang build the identical units at the host&rsquo;s real
 <code>-O2</code> flags (minus <code>-Werror</code>, a lint gate, not a speed factor).
 mooncc trades some compile and run throughput for that self-sufficiency; the gap to the
 optimizing compilers is modest, and the binary it emits passes the identical corpus.</p>
+<p class="note">The last two rows are single C functions rather than the whole corpus
+(<code>bench/ccrypto.l</code> drives the <code>chacha20</code> and <code>poly1305</code>
+nifs in <code>host/tls.c</code>), and they are here because an average can hide a
+lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inner loop;
+<b>poly1305</b> keeps its five limbs as scalar <i>locals</i>. mooncc gives a register
+home to the second shape and not the first, so the two rows are a gauge: wide chacha
+beside narrow poly says the remaining gap is array slots, and the day they close
+together is the day that reading was wrong.</p>
 <div class="wrap">
 CC
 awk '

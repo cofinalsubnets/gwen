@@ -1,5 +1,5 @@
-; crew/moon/gen.l -- the code generator. AST -> (1 ir-forms) | (), in holo's neutral IR,
-; chibicc-plain: every expression computes into r0 and CARRIES ITS TYPE -- cgexpr answers
+; crew/moon/gen.l -- the code generator. AST -> (1 ir-forms) | (), in holo's neutral IR
+; (chibicc was the seed). every expression computes into r0 and CARRIES ITS TYPE -- cgexpr answers
 ; (type forms), so pointer arithmetic scales, a dereference loads by pointee width, and an
 ; array decays to an address. types: 'char 'short 'int 'long | ('ptr t) | ('arr t n); the ALU
 ; stays 64-bit (signed overflow is UB) and widths bite only at memory and casts. lvalues have
@@ -53,7 +53,7 @@
    leaops '(lea lean)                               ; the address makes (lean: consumed by its own use)
    xops '(leax ldx ldxb)                            ; the indexed forms (base index scale disp)
    stxops '(stx stxb)                               ; the indexed stores
-   siops '(si si1 si2 si4)                          ; the store-immediates (made only by the addressing fold)
+   siops '(si si1 si2 si4)                          ; the store-immediates (the addressing fold + the asn/decl delivery lanes)
    cmpmops '(cmpm cmprm)                            ; the memory cmps (made only by cmpfuse)
    aluops '(add sub and or xor imul)
    divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
@@ -900,7 +900,14 @@
                               (vfs b + `(`('cmp (vreg b) n) `('br cc9 lbl))))
                         _ (rfree g (vreg b))
                         fs)))
-              (: a (cgexpr g env lhs)
+              ; the destination die: when no call bars a register park, the left AIMS at its
+              ; park before it evaluates -- a load/li lands there directly and vpark sees a
+              ; delivered value (vreg off r0: no bridge mov). unhonored (a mapped local, a
+              ; float, a wide) hands the register back and the post-hoc park stands.
+              (: pk (? (callish? lhs || callish? rhs) () (ralloc g))
+                 _ (? pk (pin g 'want pk) ())
+                 a (cgexpr g env lhs)
+                 _ (? (pk && !(!(bad? a) && id? (vreg a) pk)) (rfree g pk) ())
                  (? (bad? a) 'bad
                     (flo? (vty a)) (: _ (rfree g (vreg a)) (fcb ()))
                     (: ah (? (callish? rhs || llt? (vty a) || d128? (vty a)) 'sh (vpark g env lhs a))           ; a call on the right / a pair left: memory only
@@ -1182,6 +1189,16 @@
                   _ (pin g 'off (peep g 'off 0 + n))
                   off)
    (ntmp g ty) (nslot g $ (tsz g ty + 7) & -8)
+   ; the store-immediate op for (ty, k) | () -- the vi fold's license, shared by the
+   ; asn/decl delivery lanes (x64 only: si is C6/C7). st sign-extends imm32, the
+   ; narrow forms truncate like their register twins.
+   (siop9 ty k)
+    (: s (stop ty)
+       (? (s = 'st) (? (fits32? k) 'si ())
+          (s = 'st4) (? ((-2147483648 <= k) && (k <= 4294967295)) 'si4 ())
+          (s = 'st2) (? ((-32768 <= k) && (k <= 65535)) 'si2 ())
+          (s = 'st1) (? ((-128 <= k) && (k <= 255)) 'si1 ())
+          ()))
    ; load a value from the address in r0, by type -- the dot/deref/clit value tail
    ; (arrays and functions decay to the address; a struct has no register value). the scalar
    ; tail honors the want hint: the load lands straight in the hinted register, so a decl/asn
@@ -3748,7 +3765,7 @@
               (? !(two? f) (ok? H A >l seen)
                  (!seen && (<f = 'mov) && id? <>f H && id? <>>f A)
                   (ok? H A >l 1)                      ; the entry mov
-                 ((<f = 'mov) && id? <>f A && id? <>>f H)
+                 (seen && (<f = 'mov) && id? <>f A && id? <>>f H)
                   (ok? H A >l seen)                   ; a staging restore
                  (: rd (rdsp f)
                     (? (id? rd 'bar)
@@ -3757,6 +3774,9 @@
                            ())                        ; an op outside the tables: keep the homes
                        (: reads <rd
                           (? (member? A reads || member? A <>rd) ()
+                             ; ⚠ H BEFORE the entry mov is ANOTHER value entirely (an arrival --
+                             ; memchr's c spilled from r5 while s homed r5): renaming it corrupts
+                             (!seen && (member? H reads || member? H <>rd)) ()
                              (member? H <>rd && !(member? H reads)) ()
                              (ok? H A >l seen))))))))
        (ren H A l)
@@ -4776,6 +4796,17 @@
                         (? (bad? f) 'bad
                            (one >ps env3 (acc + cgzero off span + f)))))
                  (arr? ty) 'bad                          ; a bare-expr init of an array
+                 ; the slot is the DESTINATION (doc/proto/dest.l's mem die): a licensed
+                 ; constant init of a plain slotted scalar delivers as ONE store-immediate
+                 ; -- no li, no cvt, no r0. the vmap-hint lane keeps priority (residency
+                 ; pays the later reads); bool keeps the protocol (its cvt normalizes to
+                 ; 0/1 where si would store the raw constant).
+                 (x64t? g && !hreg && (<init = 'num) && charm? <>init &&
+                  !(flo? ty || pair? g ty || d128? ty || id? ty 'bool) &&
+                  !(vmon? g && homable? ty && member? <p (peep g 'vuniv ())) &&
+                  siop9 ty <>init)
+                  (: _ (vmdrop g <p)
+                     (one >ps env3 (acc + `(`((siop9 ty <>init) 'r4 off <>init)))))
                  (stru? ty)                              ; a struct local from a struct VALUE (an address): copy its bytes
                   (: r (cgexpr g env3 init)
                      (? (bad? r) 'bad
@@ -4792,7 +4823,9 @@
                  (: hint (? (vmon? g && !hreg &&
                              homable? ty && member? <p (peep g 'vuniv ()))
                             (ralloc g) ())               ; the vmap hint (asn's twin)
-                    _ (? hint (pin g 'want hint) ())
+                    _ (? hint (pin g 'want hint)
+                         (hreg && !(two? hreg)) (pin g 'want hreg)   ; the home is the DESTINATION (the asn regv arm's shape)
+                         ())
                     r (cgexpr g env3 init)               ; a scalar (a pointer = string rides cgexpr -> la)
                     _ (? (hint && (bad? r || !(id? (vreg r) hint))) (rfree g hint) ())
                     _ (vmdrop g <p)
@@ -4804,8 +4837,14 @@
                            (two? hreg)              ; a pair home's init is two register moves
                             (one >ps env3 (acc + as128 g r + `(`('mov <hreg 'r0) `('mov <>hreg 'r2))))
                            (one >ps env3 (acc + as128 g r + `(`('st 'r4 off 'r0) `('st 'r4 (off + 8) 'r2)))))
-                       hreg (one >ps env3           ; a homed local's init is a register move (a narrow home lands canonical)
-                                 (acc + asintt g r ty + (`(`('mov hreg 'r0)) + cvt ty hreg)))
+                       hreg                        ; a homed local's init DELIVERS to the home (a narrow home lands canonical)
+                        (? (flo? (vty r))
+                           (one >ps env3 (acc + asintt g r ty + (`(`('mov hreg 'r0)) + cvt ty hreg)))
+                           (id? (vreg r) hreg)     ; the destination held: no bridge
+                           (one >ps env3 (acc + vfs r + cvt ty hreg))
+                           (: fs (vfs r + (`(`('mov hreg (vreg r))) + cvt ty hreg))
+                              _ (rfree g (vreg r))
+                              (one >ps env3 (acc + fs))))
                        (hint && !(flo? (vty r)) &&
                         member? (vreg r) (peep g 'pool0 ()))         ; hint set = vmap on + universe local
                         (: _ (vmpin g <p (vreg r))       ; the init value stays resident
@@ -5337,8 +5376,25 @@
               (? (two? rv && (<rv = 'regv))     ; a statement-position x++ on a home: the old value is dead
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
                      (`(`('add <>rv <>rv (* stp <>>pe))) + cvt ty <>rv))
-                 (: r (cgexpr g env pe)
-                    (? (bad? r) 'bad (vdrop g r)))))
+                 ; statement-position asn of a CONSTANT into a static slot: the value is
+                 ; dead and the slot is the destination, so it delivers as ONE store-
+                 ; immediate (x64; a value-position asn keeps the protocol -- its answer
+                 ; is read). the vmap-hint lane keeps priority: a resident store pays reads.
+                 (: sv (? ((<pe = 'asn) && (<<>pe = 'var)) (vent g env <><>pe) 'bad)
+                    sk (? (x64t? g && two? sv && member? <sv '(loc glo) &&
+                           (: t9 <>>sv
+                              !(stru? t9 || arr? t9 || flo? t9 || pair? g t9 ||
+                                d128? t9 || id? t9 'bool)) &&
+                           !(vmon? g && id? <sv 'loc && homable? <>>sv &&
+                             member? <><>pe (peep g 'vuniv ())) &&
+                           (<<>>pe = 'num) && charm? <><>>pe)
+                          (siop9 <>>sv <><>>pe) ())
+                    (? sk (: _ (vmdrop g <><>pe)
+                             (? (id? <sv 'loc)
+                                `(`(sk 'r4 <>sv <><>>pe))
+                                `(`('la 'r1 <>sv) `(sk 'r1 0 <><>>pe))))
+                       (: r (cgexpr g env pe)
+                          (? (bad? r) 'bad (vdrop g r)))))))
           (k = 'nop) ()
           (k = 'tdef) ()                            ; a block-scope _Static_assert (already checked at parse)
           (k = 'blk) (cgitems g env <>s ())

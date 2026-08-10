@@ -1,11 +1,19 @@
 #!/bin/sh
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
-# binary with three C compilers and, for each, reports two wall-clock costs:
+# binary with three C compilers and, for each, reports four wall-clock costs:
 #   build : compile every C translation unit (love.c + host/*.c + the am math floor)
 #           and link a working `love` -- source to runnable binary.
 #   test  : run the full arch-neutral corpus ($t, the same files test_host/test_raw
 #           feed) through the binary that build produced, with egg-boot EXCLUDED
 #           (subtracted) so it times the suite executing, not the compiler self-install.
+#   chacha / poly1305 : one C function each, same subtraction (bench/ccrypto.l).
+#           These are here because the corpus row averages a compiler's work over all
+#           of love.c, and the average is flattering: mooncc/clang reads ~1.1x there
+#           and ~23x on chacha. chacha20 indexes a 16-word state ARRAY in its inner
+#           loop, poly1305 keeps five limbs as scalar LOCALS, and mooncc has register
+#           residency for the second shape only -- so the PAIR is the reading. Wide
+#           chacha beside narrow poly says the gap is array slots; the day they close
+#           together is the day that reading was wrong.
 # The three compilers:
 #   mooncc : love's OWN C compiler (crew/moon/), the exact `make test_raw` sequence --
 #            no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits the syscall
@@ -15,12 +23,13 @@
 #            the identical corpus off the freshly-eval'd egg (a level field).
 #
 # Emits "<phase> <compiler> <ms> <note>" lines (the 4-field satrace shape), so
-# mkhtml renders it like the SAT table -- rows {build,test}, columns the compilers,
-# net = build+test (source to a tested binary). A missing/failed lane shows dnf.
+# mkhtml renders it like the SAT table -- one row per phase, columns the compilers,
+# net their sum (source to a tested and measured binary). A missing/failed lane
+# shows dnf.
 #
 # Requires `make host` first: the generated out/lib/*.h headers and, for the mooncc
 # lane, out/host/mooncc(+.image). x86-64 only (mooncc's native lane); off x86-64 it
-# prints the two rows with the mooncc cells dnf and gcc/clang still raced.
+# prints every row with the mooncc cells dnf and gcc/clang still raced.
 #
 # usage: ./ccbench.sh [timeout-seconds] [samples]
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
@@ -97,9 +106,17 @@ build_mooncc() { # $1=binpath
     "$MC" "$od"/*.o -o "$bin" ) || return 1
 }
 
+# the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
+# the one-global-scope property), but a redirect is seekable and a pipe is not, and only
+# a seekable fd 0 gets a read run (host/main.c). Piping still costs 953K reads over this
+# corpus -- one per byte, which no pipe can be spared -- and syscall time is the SAME work
+# in all three lanes: kernel, not codegen, so it only dilutes what this table is seeing.
+CORPUS1=$WORK/corpus.l
+cat $CORPUS > "$CORPUS1"
+
 # does $1 pass the corpus? (exit 0 AND the zz-fin sentinel). Guards against timing a
 # binary that silently reader-stops or crashes mid-corpus.
-passes() { out=$(cat $CORPUS | LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" 2>&1); r=$?
+passes() { out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" < "$CORPUS1" 2>&1); r=$?
            [ $r -eq 0 ] && printf '%s' "$out" | grep -q "tests pass"; }
 
 # the corpus's OWN run time, boot EXCLUDED. Every fresh binary egg-boots (evals the
@@ -110,30 +127,49 @@ passes() { out=$(cat $CORPUS | LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" 2>&1); r=
 # what's left is the tests actually running -- the same method for all three compilers.
 corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   bin=$1
-  full=$(med "cat $CORPUS | LOVE_NO_IMAGE=1 $bin")
+  full=$(med "LOVE_NO_IMAGE=1 $bin < $CORPUS1")
   boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# one compiler lane: build (timed once), verify, then time the corpus (boot excluded).
+# a ccrypto.l driver's own run time, boot excluded the same way. The reps are fixed
+# in the .l, so every compiler does identical work. dnf if the sentinel never printed
+# -- a lane that answered nothing must not be timed as if it were fast.
+CRYPTO=$R/bench/ccrypto.l
+crypto_ms() { # $1=binpath $2=driver-call $3=sentinel
+  bin=$1; drv=$2
+  { cat "$CRYPTO"; echo "$drv"; } > "$WORK/ccrypto.run.l"
+  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/ccrypto.run.l" 2>&1) || { echo dnf; return; }
+  printf '%s' "$out" | grep -q "$3" || { echo dnf; return; }
+  full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/ccrypto.run.l")
+  boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
+  awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
+}
+
+# one compiler lane: build (timed once), verify, then time the corpus and the two
+# cipher rows (boot excluded from each).
 lane() { # $1=label $2=builder-cmd $3=binpath
   lbl=$1; bld=$2; bin=$3
   bt=$(wall "$bld '$bin'")
-  if [ ! -x "$bin" ]; then echo "build $lbl dnf"; echo "test $lbl dnf"; return; fi
+  if [ ! -x "$bin" ]; then dnf_lane "$lbl"; return; fi
   echo "build $lbl $bt ok"
   if passes "$bin"; then echo "test $lbl $(corpus_ms "$bin") ok"
   else echo "test $lbl dnf"; fi
+  crow chacha   "$lbl" "$(crypto_ms "$bin" '(cc-run ())' 'ccrypto chacha: ok')"
+  crow poly1305 "$lbl" "$(crypto_ms "$bin" '(po-run ())' 'ccrypto poly1305: ok')"
 }
+crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
+dnf_lane() { for ph in build test chacha poly1305; do echo "$ph $1 dnf"; done; }
 
 if [ "$(uname -m)" = x86_64 ] && [ -x "$MC" ]; then
   lane mooncc build_mooncc "$WORK/love-mooncc"
 else
-  echo "build mooncc dnf"; echo "test mooncc dnf"   # mooncc's native lane is x86-64 only
+  dnf_lane mooncc                                   # mooncc's native lane is x86-64 only
 fi
 for c in gcc clang; do
   if command -v "$c" >/dev/null 2>&1; then
     lane "$c" "build_cc $c" "$WORK/love-$c"
   else
-    echo "build $c dnf"; echo "test $c dnf"
+    dnf_lane "$c"
   fi
 done

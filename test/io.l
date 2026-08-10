@@ -19,17 +19,19 @@
       (= 32  (rt 32))
       (= 255 (rt 255))))
 
-  ; unget returns the byte it pushed. ⚠ KERNEL-GATED: the discard is a real read
-  ; of whatever stdin holds -- on the host that is the CORPUS ITSELF (the reader's
-  ; pushed-back delimiter), but on inle `in` is the KEYBOARD (the corpus rides a
-  ; baked tap), so a quiet console would park this law forever. `fault` is the
-  ; seat probe: a nif only the kernel registers.
-  (? (member? 'fault (names ())) 1
-     (: _ (see in)   ; pull and discard whatever's at the head
-      (= 99 (unsee in 99))))
-  ; ...and the pushed byte is then the next read.
-  (? (member? 'fault (names ())) 1
-     (= 99 (see in)))
+  ; the same pair once a REAL read has happened, which the net-zero roundtrip above
+  ; cannot reach: unget answers the byte, the byte is next, and the port resumes.
+  ; ⚠ ON A TAP, NEVER ON `in` -- a real read of `in` eats a byte of whatever is
+  ; feeding this suite, and on the host that is the corpus itself. nothing is given
+  ; up by the swap: the pushback is the PORT's, one head word for every kind of port
+  ; (love.c's zungetc), so a tap walks the identical code -- and it runs on the
+  ; kernel too, where `in` is the keyboard and a quiet console parks forever.
+  (: t (tap '(120 121))         ; ⚠ a tap taps a CHARLIST -- (tap "xy") is the empty one
+   _ (see t)
+   (do (= 99 (unsee t 99))
+      (= 99 (see t))
+      (= 121 (see t))           ; ..and y is still there, unshifted by the detour
+      (= -1 (see t))))          ; ..and the end is still the end
 
   ; A non-port reads as an already-empty stream: (get x) is -1 (EOF), not the
   ; echoed x, so a read-until-(-1) loop over an absent or misused port terminates
