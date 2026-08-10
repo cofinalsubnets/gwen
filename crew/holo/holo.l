@@ -3,7 +3,7 @@
 ; BACKEND lowers each form to bytes. this file is the arch-NEUTRAL half: the IR shape, the two-pass
 ; layout (assign addresses, then resolve label-relative fixups), the backend registry, and the
 ; byte/hex plumbing every target shares. a new backend drops in by pinning a `lower`/`patch` pair
-; under a target name -- the driver below never changes. the gate is crew/holo/holotest.l.
+; under a target name -- the driver below never changes. the gate is test/holo/golden.l.
 ;
 ; the IR (each form a list, the head an op symbol):
 ;   (label name)            ; a named address (emits no bytes)

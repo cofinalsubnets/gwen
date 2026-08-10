@@ -229,7 +229,7 @@
    ; falls back to one past its own open paren (black's bargain), on the theory
    ; that it would rescue the hand-laid HANGING files. measured over the tree at
    ; thresholds 24/32/40/56: the hanging files barely move (love/ev.l 494 -> 506
-   ; changed lines, crew/holo/holotest.l flat), because their authors broke to a
+   ; changed lines, test/holo/golden.l flat), because their authors broke to a
    ; column LEFT of the enclosing paren -- which no cap-and-fallback reproduces --
    ; while every well-laid file gets worse (crew/libra/libra.l 7 -> 22, this file
    ; 1 -> 4) and tree-wide churn RISES from 12591 to 16448. alignment it is.

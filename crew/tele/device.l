@@ -6,7 +6,6 @@
 ; launches -- into `dv-stats`. `dv-roofline` then turns that tally into a time
 ; estimate for a named device (peak TFLOP/s + memory GB/s), so you can size the
 ; kernel decomposition (is this layer compute- or memory-bound?) before any silicon.
-; crew/tele/cuda.l is the third backend -- same four entries, run on the GPU.
 ;
 ;   Run:  cat crew/tele/tele.l crew/tele/device.l | out/host/love      # then (tl-use sim-dev)
 ;

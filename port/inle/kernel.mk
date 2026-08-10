@@ -309,7 +309,7 @@ out/lib/korecat.h out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) tools/lcat
 	@$(love0) -l love/prel.l tools/lcatv.l $< > $@
 
 # arm64 EXECUTION validator: cross-build `love` for aarch64 and run the corpus under
-# qemu-aarch64 -- holotest proves the byte encodings, this proves they run.
+# qemu-aarch64 -- test/holo/golden.l proves the byte encodings, this proves they run.
 test_arm64: host
 	@./tools/arm64check.sh
 

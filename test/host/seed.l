@@ -1,4 +1,4 @@
-; crew/seed/seedtest.l -- the seed gate: a sandbox store driven end to end
+; the seed gate (crew/seed/): a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
 ; `make test_seed`: cat test/00-init.l THIS | out/host/love -- host nifs
 ; (sha256, readdir, chdir), so it stays OFF the corpus like the other hostnif

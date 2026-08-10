@@ -15,7 +15,7 @@
    (SIB, the rbp-forced-disp / rsp-needs-SIB quirks) are the next slices. The
    theorem proves the encode/decode PAIR is internally consistent (invertible);
    grounding the decode model against the real ISA is the objdump/llvm-mc fuzz
-   rung (crew/holo/fuzz) -- the two rungs compose. *)
+   rung (test/holo/fuzz) -- the two rungs compose. *)
 
 From Stdlib Require Import List Arith Bool.
 Import ListNotations.

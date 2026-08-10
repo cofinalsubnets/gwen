@@ -1,4 +1,4 @@
-# cook.mk -- a make-shaped front door to cook (crew/cook/cook.l + crew/cook/Cookfile).
+# cook.mk -- a make-shaped front door to cook (crew/cook/cook.l over this tree's Makefile).
 # `make -f cook.mk <goal>` makes sure the love binary exists, then hands the goal to cook.
 #
 # The real Makefile stays the source of truth for the irreducible C bootstrap: cook RUNS on
@@ -7,12 +7,14 @@
 # captures stdout and waits -- passes straight through to make below.
 
 LOVE := out/host/love
-COOK := $(LOVE) -l crew/cook/cook.l crew/cook/Cookfile
+# ⚠ cook reads the Makefile ITSELF, never a transpiled snapshot: a snapshot freezes the
+# $(wildcard) lists at emit time, so it goes quietly stale the next time a source lands.
+COOK := $(LOVE) -l crew/cook/cook.l -f Makefile
 
 .DEFAULT_GOAL := all
 
 # The bootstrap rung cook cannot climb. No prerequisites, so it fires only when the binary
-# is ABSENT: an existence gate, not a staleness one -- Cookfile's 'host card rebuilds.
+# is ABSENT: an existence gate, not a staleness one -- cook's own `host` card rebuilds.
 $(LOVE):
 	@$(MAKE) host
 

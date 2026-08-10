@@ -65,7 +65,7 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(host_ldflags) $(image_ldflags)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH $@; fi
-host: $(ho)/love $(ho)/ai $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
+host: $(ho)/love $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 
 # dock: the steering dock, launched from a stable COPY so `adopt` can relink the canonical
@@ -113,7 +113,7 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 # The bootstrap interpreter: -DGL_BOOTSTRAP against the fallback top-level data.h (no
 # -I$(ho)), and -Dai_tco=0, which is also the trampoline-coverage lane. It RUNS the .l
 # tools that generate the lcat headers, so it cannot depend on them -- it #includes the
-# sed-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
+# lit-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
 # host/*.c glob: the posix nifs and host/image.c's bake/--wake are what let love0 bake and
 # wake mooncc0.image and so drive the mooncc-built default `love`.
 # ⚠ -DAI_VERSION="bootstrap" on purpose: love0 bakes the lcat headers every frontend shares,
@@ -222,18 +222,12 @@ $(ho)/love $(ho)/love.cand: $(moon_o)
 	@$(moon0) -pie $(moon_o) -o $@
 endif
 
-# compat: `ai` was the name for a while. The symlink keeps the doc/proto long tail, and any
-# script hardcoding out/host/ai, working without a rewrite.
-$(ho)/ai: $(ho)/love
-	@echo LN	$@
-	@ln -sf love $@
-
 # the man pages are WRITTEN in doc/*.md and generated here through the lapiz lens: one
 # source, so the roff cannot drift from the prose. ⚠ a STATIC pattern -- an implicit one
-# would make these intermediate and re-run the lens on every build.
+# would make these intermediate and re-run the lens on every build. mkman takes the version
+# header as its second word and fills @VERSION@ itself, so the roff needs no sed after.
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
 	@echo LOVE	$@
 	@mkdir -p $(dir $@)
-	@v=$$(sed -n 's/.*AI_VERSION "\(.*\)"/\1/p' out/lib/love_version.h); \
-	 $(ho)/love tools/mkman.l doc/$*.md | sed "s/@VERSION@/$$v/" > $@
+	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 

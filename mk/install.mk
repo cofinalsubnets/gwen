@@ -34,7 +34,7 @@ ifeq ($(BIN),love)
 instool = ln -sf $(abspath $1) $2 && chmod 755 $(abspath $1)
 instag = LN
 else
-instool = sed '1s|env -S love|env -S $(BIN)|' $1 > $2 && chmod 755 $2
+instool = $(ho)/kore sed '1s|env -S love|env -S $(BIN)|' $1 > $2 && chmod 755 $2
 instag = CP
 endif
 
@@ -44,7 +44,7 @@ endif
 libmods = cook dns json lint salt libra kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 # ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) ai kore seed mooncc moonfmt cook papel kiosko libra ain lux bao lush
+binnames = $(BIN) kore seed mooncc moonfmt cook papel kiosko libra ain lux bao lush
 mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
@@ -133,11 +133,6 @@ $d/lib/liblove.so: $(glibc_ho)/liblove.so
 $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
-# compat: `ai` was the name for a while, so a script carrying `#!/usr/bin/env -S ai -l`
-# keeps working. The first alias to drop in a distro package.
-$d/bin/ai: $d/bin/$(BIN)
-	@echo LN	$(abspath $@)
-	@ln -sf $(BIN) $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section), so
 # the plain-copy install keeps the ~4ms wake.
 
@@ -148,33 +143,35 @@ $d/bin/ai: $d/bin/$(BIN)
 # by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
 # crew directory need not be neighbours. libra's are named ((use 'json), (use 'lint)) and
 # ride libmods above instead.
-$d/bin/cook:    crew/cook/cook.l
-$d/bin/papel:   crew/papel/papel.l
-$d/bin/kiosko:  crew/kiosko/kiosko.l
-$d/bin/libra:   crew/libra/libra.l
-$d/bin/moonfmt: crew/moon/fmt.l
+# ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
+# the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
+$d/bin/cook:    crew/cook/cook.l    $(ho)/kore
+$d/bin/papel:   crew/papel/papel.l  $(ho)/kore
+$d/bin/kiosko:  crew/kiosko/kiosko.l $(ho)/kore
+$d/bin/libra:   crew/libra/libra.l  $(ho)/kore
+$d/bin/moonfmt: crew/moon/fmt.l     $(ho)/kore
 $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra $d/bin/moonfmt:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)
 
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
-# symlink, so it takes the rewrite unconditionally. At the default BIN the sed is an
-# identity and the bytes are unchanged.
-$d/bin/ain: tools/ain.l
+# symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
+# an identity and the bytes are unchanged.
+$d/bin/ain: tools/ain.l $(ho)/kore
 	@echo CP	$(abspath $@)
 	@install -d $(@D)
-	@sed '1s|env -S love|env -S $(BIN)|' $< > $@
+	@$(ho)/kore sed '1s|env -S love|env -S $(BIN)|' $< > $@
 	@chmod 755 $@
 
 # kore, the multi-call toolbox: ONE catted script, the util picked off the command line or
 # off argv[0] through a tool-named symlink. It shadows nothing here -- only `kore` lands on
 # PATH, and the distro symlinks the tool names where shadowing is the point. The member
 # SEATs stay quiet inside the cat, so kore.l's dispatcher is the one thing firing.
-$d/bin/kore: $(korefiles)
+$d/bin/kore: $(korefiles) $(ho)/kore
 	@echo AI	$(abspath $@)
 	@install -d $(dir $@)
-	@{ echo '#!/usr/bin/env -S $(BIN)'; sed 's|^#!/usr/bin/env -S love|#!/usr/bin/env -S $(BIN)|' $(korefiles); } > $@
+	@{ echo '#!/usr/bin/env -S $(BIN)'; $(ho)/kore sed 's|^#!/usr/bin/env -S love|#!/usr/bin/env -S $(BIN)|' $(korefiles); } > $@
 	@chmod 755 $@
 
 # seed 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
@@ -225,10 +222,10 @@ $d/bin/bao: $(MAKEFILE_LIST)
 
 # the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));
 # the other `love`s on that line are the PROJECT and the version string, so they stay.
-$d/share/man/man1/$(BIN).1: $(ho)/love.1
+$d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/kore
 	@echo CP	$(abspath $@)
 	@install -d $(@D)
-	@sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
+	@$(ho)/kore sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
 	@chmod 644 $@
 
 # the man pages BIN does not rename, and the three vim files. ⚠ static patterns: an
