@@ -1363,7 +1363,8 @@
       !(ldat <>irOa 'sp 48)
       !(ldat <>irOa 'fp 32)                          ; no fp read survives in a frameless leaf
       (= 0 (hmovs <>irKa))                           ; born-at-a-call locals keep their slots
-      (member? '(mov r6 r0) <>irBa)                  ; the free local s homes...
+      (member? '(li r6 0) <>irBa)                    ; the free local s homes and its init
+      !(member? '(mov r6 r0) <>irBa)                 ;  DELIVERS there (the die: no r0 bridge)
       (member? '(add r6 r6 r9) <>irBa)               ; ...and accumulates 3-address (i*i in r9)
       (member? '(add r5 r5 1) <>irBa)                ; the loop counter i ALSO homes (r5): its
       (= 0 (wrapsa <>irBa))))                        ; ++ no longer leans its own slot. zero wraps
@@ -1436,7 +1437,8 @@
       (two? irG)
       (member? '(mov r10 r9) gf)                     ; a + 1 lands its park r10...
       (member? '(add r9 r9 r10) gf)                  ; ...and the loop reads it, no reload
-      (member? '(mov r9 r0) gf)                      ; s's decl bind: init lands the register
+      (member? '(li r9 0) gf)                        ; s's decl bind: the init DELIVERS to the seat
+      !(member? '(mov r9 r0) gf)                     ;  (the die: no r0 bridge)
       (= 1 (splds gf)))                              ; the one surviving slot read is i's
    ; ⚠ a park under the CALLER's loop resets from its source every iteration -- that mov
    ; wears the entry-home shape (mov H A), and unhome renaming it away erases the reset
@@ -1562,5 +1564,73 @@
       (= (dehusk '((mov r1 r0) (call foo) (mov r0 r1) (ret)))
          '((mov r1 r0) (call foo) (mov r0 r1) (ret)))))
 
-(say err "crew/moon/law: lexer (kinds/lines/munch) + parser (precedence/desugar/shapes + refusals) + gen (golden + seams) + aggregates (layout/members/switch/bitfields) + cpp (macros/rescan/hidesets/stringize/paste/variadic/conditionals) + diagnostics (a parse refusal's file + line: the furthest token reached, header attribution, strings joining across an include) + doubles (float literals/xmm value path/conversions/the calling convention) + varargs & _Static_assert (the ... signature bit / va builtins / SysV register save area / array-param decay / const-fold-or-refuse) + float (4-byte scalar, widen/narrow, single-precision globals) & compound literals + objects (text/data split, symbols, no crt0) + freestanding headers (ignored quals/attributes, unnamed proto params) + unsigned & hex (hex/suffix/escape lexing, the specifier-soup canonicalizer, logical >>/unsigned compare/divide) + the C tail (object-vs-function macros, GNU `,##__VA_ARGS__`, function-type/multi-declarator typedefs, sizeof EXPR vs TYPE (a typed local/member folds at parse -- an array bound), bare void return, folded case labels, function-pointer cast types, incomplete arrays, multidimensional arrays with const-expr/enum dims, hex float literals, designated array initializers, block-scoped typedef shadowing) + the gen tail (mproto siblings pinned, &f a function's address in code and images) + inline asm (holo-text templates, %N operands, one opaque raw, constraint refusals) + the alive pass (per-call wraps: dead-across drops, live-across keeps, shadowed/goto blanket; free locals home through calls; a born-at-a-call kill rides its statement's record) + arm64 homing (r10..r14 homes, fp wraps, fp+32 overflow, free locals off the pool) + splice register binds (alias/park/deep-pool, an assigned param never aliases) + the shuttle skip (a leaf right parks the left in r1; stld slot residency through movs) + the mov-husk fold (dehusk's adjacent squeeze, the ALU read-through where the mov strands; cfoldir's root-restore drop; the rename sandwich and the quiet-window back-copy) + the callee-saved contract (cskeep's dirty walk holds every emitted fn; path-aware restores admitted, the cs9 shape refused) ok")
+; -- the destination die reaches asn/decl (doc/proto/dest.l, the migration's first lane):
+; a statement-position CONSTANT store into a static slot delivers as ONE store-immediate
+; (no li, no cvt, no r0), a slotted scalar's licensed constant init likewise, and a homed
+; local's init lands IN the home with no bridge mov (irBa above pins the arm64 face).
+; bool keeps the protocol (its cvt normalizes to 0/1 where si would store the raw
+; constant); a value-position asn keeps it too (its answer is read).
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (sis fs) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4))) fs))
+   (lik fs k) (tally (filter (\ f (two? f && id? <f 'li && (= <>>f k))) fs))
+   irS1 (cgn "int q(int n) { int i; i = 5; if (n) i = 6; return i + n; } int main() { return q(0) - 5; }")
+   irS2 (cgn "int w(int n) { int i = 7; int *p = &i; return *p + n; } int main() { return w(0) - 7; }")
+   irS3 (cgn "int b9(int n) { _Bool b = 4; return b + n; } int main() { return b9(0) - 1; }")
+   qf (fnf 'q <>irS1)
+   wf (fnf 'w <>irS2)
+   bf (fnf 'b9 <>irS3)
+   (assert
+      (two? irS1) (two? irS2) (two? irS3)
+      (= 2 (sis qf))                                 ; i = 5 and i = 6: one si4 each
+      (member? '(si4 sp 0 5) qf)
+      (= 0 (lik qf 5)) (= 0 (lik qf 6))              ; no li anywhere: the constants never ride a register
+      (= 1 (sis wf)) (= 0 (lik wf 7))                ; the &-barred slotted init delivers too
+      (member? '(si1 sp 0 1) bf)                     ; bool: the LANE declines (it would store the
+      !(member? '(si1 sp 0 4) bf)))                  ;  raw 4); cvt normalizes, then the fold si's the 1
+
+; -- unhome's pre-entry guard: H mentioned BEFORE its (mov H A) entry pair carries
+; ANOTHER value (an arrival -- memchr's c spilled from r5 while s homed r5, and the
+; delivery lane's zero-form init unshielded the rename); such a pair declines. with
+; no pre-pair mention the rename still fires and the pair drops.
+(: g9 (tablet 0) _ (pin g9 'tgt 'x64)
+   keep '((st sp 16 r5) (mov r5 r6) (ldu1 r0 r5 0) (ret))
+   ren9 '((mov r5 r6) (ldu1 r0 r5 0) (ret))
+   _ (assert
+      (= (unhome g9 keep) keep)
+      (= (unhome g9 ren9) '((ldu1 r0 r6 0) (ret)))))
+
+; -- the destination die reaches the compare lane (the second lane): with no call on
+; either side, cbranch's left AIMS at its park before it evaluates -- a member load
+; lands in the pool register directly and vpark sees a delivered value, so the bridge
+; mov dies. a call on either side bars the aim: the left keeps its sp cell (cmpfuse's
+; cmpm reads it) and the r0 protocol stands.
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (brid fs) (tally (filter (\ f (two? f && id? <f 'mov && id? <>>>f 'r0)) fs))
+   irC1 (cgn "struct s { long tag; long size; }; int ef(struct s *a, struct s *b) { if (a->tag == b->tag && a->size == b->size) return 1; return 0; } int main() { return 0; }")
+   irC2 (cgn "int g(int x); int h(int x, int y) { if (x == g(y)) return 1; return 0; } int main() { return 0; }")
+   ef (fnf 'ef <>irC1)
+   hf (fnf 'h <>irC2)
+   (assert
+      (two? irC1) (two? irC2)
+      (member? '(ld r9 r6 0) ef)                     ; a->tag delivered to its park
+      (member? '(cmprm r9 r5 0) ef)                  ; ...and b->tag read at the cmp
+      (member? '(ld r9 r6 8) ef)
+      (member? '(cmprm r9 r5 8) ef)
+      (= 0 (brid ef))                                ; no (mov X r0) bridge anywhere
+      (member? '(cmpm sp 8 r0) hf)                   ; a callish right bars the aim: the cell stands
+      (member? '(ld4 r0 sp 32) hf)))                 ; ...and the left keeps r0 (no wasted park)
+
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)

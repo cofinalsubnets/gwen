@@ -148,7 +148,7 @@ test_hostnif: host out/host$(hsuf)/lush
 # Runnable design companions in doc/ -- pure-love models that pin the shape a C design
 # takes (doc/stream.l ~ doc/io.md part II). Zero-dep, but they leak helper names into the
 # one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
-doc_tests = doc/stream.l
+doc_tests = doc/stream.l doc/proto/dest.l
 test_doc: host
 	@for s in $(doc_tests); do echo "DOC $$s"; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$(mw)" ": ok" \
