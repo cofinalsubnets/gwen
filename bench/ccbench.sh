@@ -106,17 +106,13 @@ build_mooncc() { # $1=binpath
     "$MC" "$od"/*.o -o "$bin" ) || return 1
 }
 
-# ⚠ the corpus goes in as a FILE, never on stdin -- test/test.mk says the same and
-# for the same reason: the corpus TESTS stdin, so a run fed on stdin has its own reader
-# eaten by the tests and dies mid-file with "missing" noise. Lay it down once, and an
-# EMPTY file for the boot baseline, so both medians take the identical door.
-CORPUS_L=$WORK/corpus.l
-EMPTY_L=$WORK/empty.l
-cat $CORPUS > "$CORPUS_L"; : > "$EMPTY_L"
-
 # does $1 pass the corpus? (exit 0 AND the zz-fin sentinel). Guards against timing a
 # binary that silently reader-stops or crashes mid-corpus.
-passes() { out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" "$CORPUS_L" </dev/null 2>&1); r=$?
+# ⚠ the corpus arrives ON STDIN, which is a thing it can do again: test/io.l used to
+# poke `in` and eat a byte of whatever was feeding the suite, and while it did, every
+# lane here was dnf. Stdin costs ~1.8x the file door in reader overhead, so the `test`
+# row carries that -- fairly, since it is the same compiler's port code in every lane.
+passes() { out=$(cat $CORPUS | LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" 2>&1); r=$?
            [ $r -eq 0 ] && printf '%s' "$out" | grep -q "tests pass"; }
 
 # the corpus's OWN run time, boot EXCLUDED. Every fresh binary egg-boots (evals the
@@ -127,8 +123,8 @@ passes() { out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" "$CORPUS_L" </dev/null 
 # what's left is the tests actually running -- the same method for all three compilers.
 corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   bin=$1
-  full=$(med "LOVE_NO_IMAGE=1 $bin $CORPUS_L </dev/null")
-  boot=$(med "LOVE_NO_IMAGE=1 $bin $EMPTY_L </dev/null")
+  full=$(med "cat $CORPUS | LOVE_NO_IMAGE=1 $bin")
+  boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
@@ -139,10 +135,10 @@ CRYPTO=$R/bench/ccrypto.l
 crypto_ms() { # $1=binpath $2=driver-call $3=sentinel
   bin=$1; drv=$2
   { cat "$CRYPTO"; echo "$drv"; } > "$WORK/ccrypto.run.l"
-  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" "$WORK/ccrypto.run.l" 2>&1) || { echo dnf; return; }
+  out=$(cat "$WORK/ccrypto.run.l" | LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" 2>&1) || { echo dnf; return; }
   printf '%s' "$out" | grep -q "$3" || { echo dnf; return; }
-  full=$(med "LOVE_NO_IMAGE=1 $bin $WORK/ccrypto.run.l </dev/null")
-  boot=$(med "LOVE_NO_IMAGE=1 $bin $EMPTY_L </dev/null")
+  full=$(med "cat $WORK/ccrypto.run.l | LOVE_NO_IMAGE=1 $bin")
+  boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 

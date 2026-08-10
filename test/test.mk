@@ -38,9 +38,12 @@ test_filemode: $m
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# ⚠ test_host takes the corpus as a FILE, not on stdin: the corpus TESTS stdin
-# (test/io.l's see/unsee roundtrip pokes `in`), and a stream you are being read from
-# is not one you can poke. cat'ing keeps the corpus's one-global-scope property.
+# test_host takes the corpus as a FILE, and that is now a SPEED choice, not a
+# necessity: stdin works (test/io.l used to poke `in` and eat a byte of whatever fed
+# the suite -- it taps a charlist now), and it is equally strict, quitting 1 on a
+# scare either way. It is just ~1.8x slower, per-byte through the port where a file
+# is slurped, and this is the gate that runs constantly. cat'ing also keeps the
+# corpus's one-global-scope property.
 test_host: $m
 	@echo TEST $m
 	@cat $t > out/host/.test_host.l
