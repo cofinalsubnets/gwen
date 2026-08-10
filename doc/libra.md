@@ -28,7 +28,7 @@ and nothing is gated on layout; serve waits for an editor that wants it.
 
 **infix and unfix are the two directions of one pass.** `unfix` is just `opfix`,
 the factor pass a compile already runs, printed instead of compiled. `infix` is
-its RIGHT INVERSE ([`lib/unfix.l`](../lib/unfix.l)): for any form it answers a
+its RIGHT INVERSE ([`lib/infix.l`](../lib/infix.l)): for any form it answers a
 surface that factors back to exactly that form, choosing the fewest parens it can
 prove correct. round-tripping a file through both reproduces it.
 
@@ -43,7 +43,7 @@ of opfix -- so the fully-parenthesized spelling is always a valid answer and eve
 proposal is checked against it before being handed out. on this tree all 1571
 top-level forms across 334 files keep the maximal spelling, at 22% fewer parens
 than the prefix spelling. the law is gated in
-[`test/host/unfix.l`](../test/host/unfix.l).
+[`test/host/infix.l`](../test/host/infix.l).
 
 ⚠ **an unknown verb reads as a FILENAME.** `libra serv x.l` says "cannot open
 serv" rather than "no such verb". that is the price of the bare file list being

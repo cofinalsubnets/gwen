@@ -48,7 +48,7 @@
 ;                            file list is the whole command (`-w` also strips
 ;                            trailing whitespace, WITHOUT reindenting)
 ;         libra fmt FILE ..  lay it out (-w rewrites, -n only checks)
-;         libra infix FILE   print it max-infix and min-paren  (lib/unfix.l)
+;         libra infix FILE   print it max-infix and min-paren  (lib/infix.l)
 ;         libra unfix FILE   print it back as pure prefix lisp (the opfix pass)
 ;         libra serve        speak lsp over stdio
 ;     or: love -l crew/libra/libra.l ..
@@ -57,7 +57,7 @@
 ; does not keep them. that is exactly why they are verbs of their own and not modes
 ; of fmt, which is a reindenter and never touches what is on a line. stdout only,
 ; and no -w: a rewrite that silently deleted every comment in a file is not a thing
-; to offer. they are inverses, and the round trip is gated in test/host/unfix.l.
+; to offer. they are inverses, and the round trip is gated in test/host/infix.l.
 ;
 ; check is the default because it is the errand that actually recurs: `make lint`
 ; runs it over every tracked .l, fmt is run BY HAND and nothing is gated on
@@ -67,7 +67,7 @@
 (use 'json)
 (use 'lint)
 (use 'salt)
-(use 'unfix)
+(use 'infix)
 
 (:
    ; --- the frame: a header block, then exactly N bytes -----------------------
@@ -339,7 +339,7 @@
 
    ; --- infix and unfix ------------------------------------------------------
    ; the two directions, one datum per line. `infix` sends a file TO the infix
-   ; surface (lib/unfix.l, the right inverse); `unfix` sends it back to pure lisp,
+   ; surface (lib/infix.l, the right inverse); `unfix` sends it back to pure lisp,
    ; which is just the `opfix` pass a compile already runs. ⚠ FROM THE DATUM, so
    ; comments do not survive -- stdout only, and see the header for why there is no -w.
    (libra-data src acc) (: r (sound src)
@@ -355,7 +355,7 @@
                 (? (id? ds 'torn)
                     (: _ (say err (<fs + ": unfinished form -- weigh it first\n"))
                        (libra-fix-files >fs way (bad + 1)))
-                   (: _ (each ds (\ x (: _ (say out (? (id? way 'infix) (unfix-spell x)
+                   (: _ (each ds (\ x (: _ (say out (? (id? way 'infix) (infix-spell x)
                                                          (show (opfix x))))
                                          (say out "\n"))))
                       (libra-fix-files >fs way bad)))))))

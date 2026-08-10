@@ -45,7 +45,7 @@
 ;   under all three. the `singleton`, `shadow` and `deprecated` rules ride a config and are off
 ;   until it asks; they only speak unless `(strict <rule>)` promotes one.
 ;   `libra infix` / `libra unfix` are the two directions of the factor pass: unfix IS opfix
-;   printed, infix is its right inverse (lib/unfix.l, gated by test/host/unfix.l -- prefix is
+;   printed, infix is its right inverse (lib/infix.l, gated by test/host/infix.l -- prefix is
 ;   a fixed point, so every proposal is checked and the parenthesized spelling always wins a
 ;   tie). ⚠ both print from the DATUM: comments are not carried, which is why neither is a
 ;   mode of fmt and neither has `-w`.
