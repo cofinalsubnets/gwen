@@ -154,6 +154,19 @@ exists mostly to stop that mistake being made twice.
 pulls an order of magnitude fewer gnulib objects than a large one, so any such number is a lower
 bound on the general distance, not a measure of it.
 
+**`tools/moon-parity.sh [table | check | why]`** — one C feature per row, all six targets per
+column: which lanes exist where. `table` prints doc/moon-c-gaps.md's parity table, `check` fails
+if that doc and the compiler have drifted, `why` prints each refusal's cause. Where moon-sweep
+measures one target against a package and moon-reject measures the refusal surface against gcc,
+this measures the **targets against each other** — drift neither of the others can see, because
+gcc has every lane and a single-target sweep only ever asks one.
+
+⚠ **It reads the object's symbols, not just the exit code.** A lane can exist and still be
+*borrowed*: thumb1 and thumb2sp lower some arithmetic to `__aeabi_*` calls, which a compile
+reports as success and only the link would catch. That is the `libgcc` cell, and finding it is
+half the reason the script exists — the other half being that a merged `t32` column had already
+hidden thumb2sp's SP-only FPU from a hand-written table.
+
 **`make test_moonfuzz`** (`test/gate/moonfuzz.l`, in `test_slow`) takes each `test/cc/` program
 and breaks it eight ways from a fixed seed — truncate, delete a byte, delete a run, flip a byte,
 insert punctuation, swap two, drop a line, double a line. Mutation and not generation on purpose:

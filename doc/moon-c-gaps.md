@@ -32,7 +32,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
-| `asm goto` | see doc/moon-next.md |
+| `asm goto` | costed below — the one refusal carrying an estimate |
 | a block-scope `struct` tag | `{ struct T { int z; }; }` inside a function — tags are file-scoped here, so an inner one collides with the outer |
 | a declarator list mixing a function and an object | `int f(int), a;` — two functions in one list is fine |
 | a `case` label as a switch's whole body | `switch (x) case 0: ;` — a compound body is fine |
@@ -51,34 +51,37 @@ each one came from.
 
 ### what passes, for contrast
 
-The more surprising half. Variable-length arrays on **x64 and arm64** (differentiated against
-gcc, including a run-time-sized one); every other target says `no lane for a variable-length
-array on <tgt>`, and a VLA with an initializer refuses everywhere. `__typeof__` over locals, globals, struct members, dereferences and
-function names. Designated initialisers (both `.field =` and `[i] =`), compound literals, K&R
+The more surprising half, and all of it on every target unless the parity table below says
+otherwise: designated initialisers (both `.field =` and `[i] =`), compound literals, K&R
 definitions, bitfields including compound assignment, flexible array members, variadic macros,
-`long long`, hex floats, wide/prefixed literals with their C11 element types (**landed
-2026-08-09**, cts 00220: the lexer keeps the prefix as the token kind with a canonical-UTF-8
-value, parse desugars to a *bounded compound literal* of the element type — `L` → wchar,
-`u` → char16 with surrogate pairs, `U` → char32, `u8` stays bytes — and the ordinary init
-machinery lays elements, so globals, locals, braces, elision, concatenation across a prefix
-and `sizeof` all match gcc on every target; a wide *char* constant decodes to its last code
-point, gcc's reading. Two honest edges: a wide literal's storage is the compound literal's —
-automatic in a function where C says static duration, so a pointer kept past the frame
-dangles, and `wchar_t *p = L"x"` at file scope refuses on the static-clit row above; and a
-mixed-prefix concatenation `u"a" U"b"` takes the first prefix where gcc refuses. Universal
-character names `\uXXXX`/`\UXXXXXXXX` stay absent — the escape refuses, loudly), anonymous
-unions, `__extension__` (**landed 2026-08-09**: a no-op skipped at a declaration's head —
-file scope, block, member, before `typedef` — and as a cast-expression prefix, with the
-typedef declarator's trailing attribute run skipping alongside; **`#include <pthread.h>`
-parses, compiles and runs now**. gcc-refused spots like `int __extension__ x;` still refuse;
-`sizeof(__extension__ T)` is accepted where gcc refuses, the one tolerance),
-`restrict`, `static inline`, mixed
-declarations, `for`-scoped declarations, `_Static_assert` itself (including `&&`/`||`/`?:` in
-the constant), string-literal concatenation, self-referential structs, enum trailing commas,
-multidimensional arrays, brace elision in nested initialisers, pointer-to-array declarators,
-functions returning function pointers. Multi-character constants (`'ab'` is 0x6162, gcc's
-packing, signed at four chars), binary literals (`0b1010`, gcc's extension and C23's spelling),
-and `__func__`.
+`long long`, hex floats, anonymous unions, `restrict`, `static inline`, mixed declarations,
+`for`-scoped declarations, `_Static_assert` (including `&&`/`||`/`?:` in the constant),
+string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
+arrays, brace elision in nested initialisers, pointer-to-array declarators, functions returning
+function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
+chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
+`__typeof__` over locals, globals, struct members, dereferences and function names.
+
+Three of them carry an edge worth knowing:
+
+- **variable-length arrays** ride x64 and arm64 only; every other target says `no lane for a
+  variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
+  (`parse error near =`) — C's own rule, not a gap. `__builtin_alloca` is absent on every
+  target, so a VLA is the only dynamic frame allocation here.
+- **wide and prefixed literals** desugar to a *bounded compound literal* of the element type
+  (`L` → wchar, `u` → char16 with surrogate pairs, `U` → char32, `u8` stays bytes), so globals,
+  locals, braces, elision, concatenation across a prefix and `sizeof` all match gcc on every
+  target, and a wide *char* constant decodes to its last code point as gcc reads it. ⚠ the
+  storage is the compound literal's — automatic inside a function where C says static duration,
+  so a pointer kept past the frame dangles, and `wchar_t *p = L"x"` at file scope refuses on the
+  static-clit row above. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
+  gcc refuses, and universal character names `\uXXXX`/`\UXXXXXXXX` stay absent — the escape
+  refuses, loudly.
+- **`__extension__`** is a no-op at a declaration's head (file scope, block, member, before
+  `typedef`) and as a cast-expression prefix, the typedef declarator's trailing attribute run
+  skipping alongside — which is what opens `#include <pthread.h>`. gcc-refused spots like
+  `int __extension__ x;` still refuse; ⚠ `sizeof(__extension__ T)` is accepted where gcc
+  refuses, the one tolerance.
 
 ### the directives, and which are ignored on purpose
 
@@ -158,93 +161,32 @@ still does not move it (the row above stands).
 ## accepted, and WRONG — the rows that cost a right answer
 
 A refusal is cheap; these are not. Everything here compiles clean and hands back the wrong
-value, so nothing announces them but a differential. Found 2026-08-08 building darkhttpd, dwm,
-st, xlander, PDCLib, limine and pdxlander (doc/moon-userland.md), and then more the same day
-when `test_cts` first ran.
+value, so nothing announces them but a differential — which is why they arrive in batches,
+each batch behind an outside package or an outside corpus (doc/moon-userland.md, `test_cts`)
+rather than behind a test we thought to write.
 
 ### from an outside corpus
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). **None
-compile clean and answer wrong** — the wide literal (00220), the last such row, landed
-2026-08-09. What remains on the roster is refusals, each loud and named.
+compile clean and answer wrong.** What remains on its roster is refusals, each loud and named.
 
-### sizeof over promoted arithmetic — landed, via the typing door
+### the residues the fixed rows left behind
 
-`sizeof(a + b)` over a `char` and an `int` used to answer **8** (gen types every integer
-result `long`, and only `sizeof` could see it); likewise shorts, `~a`, `-s`, shifts, `?:`
-and `float + char`. **Landed 2026-08-09** as the *typing door* — `pprom`/`puac` in parse.l,
-C11 6.3.1.1 integer promotions and 6.3.1.8 usual arithmetic conversions spelled **once**,
-width seam included (on ILP32 a long cannot hold every uint, so long meets uint at ulong
-where LP64 answers long). `ptype`'s arithmetic lanes read it, and **gen's `cmpu` consumes
-the same door**, so the compare/divide signedness law and these sizes cannot drift apart —
-the door retired the hand-synced twin this row used to warn about, and fixed a live t32
-miscompile on the way: `long < unsigned` compared signed on ILP32 where C says unsigned
-(pinned in the thumb 64-lane differential, `ltlu`/`divlu`/`remlu`). `__typeof__` over
-arithmetic expressions types through the same lanes now too.
+Each of these rode in behind a row that has since landed, and each is still a real divergence
+from gcc that nothing announces. None has found a consumer yet — which is why they sit here
+rather than in a commit.
 
-Two residues, both accepted: **unary `+` vanishes at parse** (it exists only to promote, so
-`sizeof(+c)` is 1, gcc's 4), and `sizeof(a = b)` still defers to gen's 8 (assignment wears
-the unpromoted left type; no ptype lane asks it). Neither has a real-world consumer yet.
-
-### an unbounded array compound literal never got its bound — landed
-
-`(int[]){1,2}` used to compile clean with the bound still missing: `sizeof` folded to **0**
-and `p[0]` off a pointer it initialized read garbage (an explicit bound was right on every
-count). **Landed 2026-08-09**: the clit site asks `initcount` — the same door the `[]`
-declarators use — so the initializer completes the type (C11 6.5.2.5p22), designators and
-braced strings included. Found probing the wide-literal desugar the same day (the desugar
-mints *bounded* clits, so it never rode this). Pinned by test/cc/126-clitbound.c.
-
-### bool is one byte — landed 2026-08-09
-
-`_Bool` is a real type now (`'bool`): size/align 1, `struct { char a; bool b; char c; }` is
-gcc's 3 bytes, and the `bool` predefine expands to the `_Bool` keyword — `<stdbool.h>`
-consumers build the right artifact, and PDCLib's config fork can retire. The conversion is
-C11 6.3.1.2 spelled once: gen's `cvt` row for bool is compare-with-zero + setne (a canonical
-0/1 in the full register on every backend), and every write site already ran `cvt` before its
-narrow store — so init, assignment, cast, the bitfield RMW (normalize BEFORE the mask:
-`(bool)4` is 1), `++`/`--` (`b--` on 0 is 1), a return, and a static's image all normalize,
-and a load is a plain `ldu1`. A float source compares (`(bool)0.5` is 1, NaN is 1), never
-truncates. Because cc calls are untyped, the CALLEE converts: a register-passed bool param
-takes one entry cvt (the inline splice binds carry the same conversion — `take(7)` spliced was
-the bug that found it), and a bitfield unit merged across widths keeps the wider unit type
-(a `bool:1` sharing its byte with a wider neighbour must not truncate the neighbour's image).
-Differential: test/cc/130-bool.c, 22 checks, gcc-exact on x64 + qemu arm64/riscv64.
-
-Three honest residues: an **overflow (7th+) or variadic-named** bool param binds straight to
-caller memory — no store, so no arrival conversion (a wild caller value reads back raw);
-a mooncc **caller** into a gcc-built bool-param callee passes the bare int where SysV promises
-0/1 (the callee-side cvt covers mooncc callees only); and `(bool)` of a **pair/i128** value
-tests the low word only.
-
-### sizeof answers size_t — landed 2026-08-09, via the cast coat
-
-`sizeof` folds to `('cast (szty ps) ('num N))` — ulong, uint on t32 — so
-`sizeof(sizeof(int))` is 8 and every `sizeof` expression is unsigned, as C says. The 2026-08-08
-"+12% of `.text`" price that shelved this was **measured to be an artifact**: gen's immediate
-lanes gated on a bare `('num n)`, so the coat hid the constant and every `/ sizeof` became a
-real `div` (a signed-`long` coat cost the identical bytes — the unsignedness itself was free).
-The cast-coat read (`knum`/`cnum` in gen.l, which also un-blinded suffixed literals: `x / 8UL`
-was a materialize+`divq` dance) removed the price; with it the fold is **−0.7% of `.text`** —
-signed-left `/ sizeof` sites now license the unsigned strength-reduction. The VLA lane's
-runtime `dim * sizeof(elt)` multiply still rides bare (the dim is the runtime side), and
-`offsetof` still folds signed — two honest residues.
-
-The consumer that forced it (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
-PDCLib's dlmalloc guards itself with `enum { _PDCLIB_assert_667 = 1 / (!!(sizeof( sizeof(int) )
-== sizeof(long unsigned int))) };` — 4 ≠ 8 refused the divide and stopped the file. That guard
-folds true now, clearing dlmalloc's last x64 blocker; the rest of its ladder landed 2026-08-09 —
-`__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines; fully-masked neutral shift/or
-expansions, no raw splices so unframe stays alive, seeded sigs so the results type unsigned at
-their exact width; test/cc/128-bswap.c, five lanes at 9), then `__sync_lock_test_and_set` /
-`__sync_lock_release` (the spin-lock pair: x64 `xchg`/plain store under TSO, a64 ldaxr/stxr
-retry + `stlr`, riscv64 `amoswap.{w,d}.aq` + `fence rw,w`; the POINTEE sizes and signs the
-exchange, 4/8 bytes, and an unsized pointee refuses — guessing a width would miscompile in
-silence), and `__builtin_clz`/`__builtin_ctz` (32-bit; clz32 rides the clzll lane as
-`clz64(x << 32)`, ctz is bsf / rbit+clz / a mask-narrowing search; test/cc/129-sync.c, five
-lanes at 11). With the guard folding true, nothing sizeof-shaped remains in dlmalloc's way on
-x64 (the 2026-08-09 hand-neutered build compiled whole); arm64/riscv64 still hit the 80-byte
-struct **return** (`internal_mallinfo`, the memory-return asymmetry below).
+- **unary `+` vanishes at parse** (it exists only to promote), so `sizeof(+c)` is 1 where gcc
+  says 4; and `sizeof(a = b)` still defers to gen's 8, the assignment wearing its unpromoted
+  left type.
+- **a bool param past the 6th, or one named in a variadic list**, binds straight to caller
+  memory — no store, so no arrival conversion, and a wild caller value reads back raw.
+- **a mooncc caller into a gcc-built bool-param callee** hands over the bare int where SysV
+  promises 0/1; the entry `cvt` covers mooncc callees only.
+- **`(bool)` of a pair/i128 value** tests the low word alone.
+- **the VLA lane's runtime `dim * sizeof(elt)`** still multiplies bare (the dim is the runtime
+  side), and **`offsetof` still folds signed** where every other `sizeof` wears the unsigned
+  coat.
 
 ### what the %f hunt actually found — and the trap in it
 
@@ -287,7 +229,52 @@ predefine table's t32 checker (`__UINT64_C(1) - 2 < 0`); no real header has trip
 
 ## target asymmetries
 
-The 32-bit targets carry the live gaps. All of them are **loud scares, never silent**.
+Six targets: **x64, arm64, riscv64, thumb2, thumb2sp, thumb1**. The 32-bit ones carry most of
+the live gaps, but not all of them — two lanes are x64-only. Everything here is a **loud scare,
+never silent**.
+
+| lane | x64 | arm64 | riscv64 | thumb2 | thumb2sp | thumb1 |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `__int128` | ✓ | — | — | — | — | — |
+| `_Complex` arithmetic | ✓ | — | — | — | — | — |
+| variable-length array | ✓ | ✓ | — | — | — | — |
+| by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | — | — | — |
+| by-value composite arg, MEMORY class | ✓ | — | — | — | — | — |
+| composite passed at a variadic call site | ✓ | ✓ | ✓ | — | — | — |
+| composite NAMED in a variadic parameter list | ✓ | ✓ | — | — | — | — |
+| composite return, 16B all-int | ✓ | ✓ | ✓ | — | — | ✓ |
+| composite return, MEMORY class | ✓ | — | — | — | — | ✓ |
+| `__builtin_bswap64` | ✓ | ✓ | ✓ | — | — | — |
+| `__sync` spin-lock pair | ✓ | ✓ | ✓ | — | — | — |
+| signed 64-bit `/` and `%` | ✓ | ✓ | ✓ | — | — | libgcc |
+| 64-bit `*` and shifts | ✓ | ✓ | ✓ | ✓ | ✓ | libgcc |
+| `double`/`float` arithmetic | ✓ | ✓ | ✓ | ✓ | libgcc | libgcc |
+
+**The table is generated, not maintained: `tools/moon-parity.sh table` prints it and
+`tools/moon-parity.sh check` fails if this doc and the compiler have drifted** (`why` prints
+each refusal's cause). Regenerate it rather than editing a cell by hand.
+
+⚠ **A ✓ means the lane exists, not that it is differentiated** — the sweep compiles (`-c`) and
+reads the object's symbols, and only x64/arm64/riscv64 have running gates behind them. ⚠ several of
+these refusals arrive as `cannot compile 'f' (cause unnamed)` rather than a named cause —
+`__int128` and every composite-argument row among them. The refusal is real either way; what is
+missing is the sentence naming it (doc/moon-diag.md's bare-diagnostic debt).
+
+⚠ **`libgcc` is a cell value, and the two targets wearing it borrow for different reasons.**
+thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divide, int↔double
+conversion and *all* float and double arithmetic lower to `__aeabi_*` calls (`gen.l`'s `v6m?`
+lanes); `port/rp2040/Makefile` names a cortex-m0 libgcc.a on the link line and calls it "the one
+foreign FILE". thumb2sp borrows for one row only — it is ARMv7E-M with an **SP-only** FPU (the
+Playdate's STM32F746), so `float` rides the hardware and `double` softens, where thumb2's
+fpv5-d16 does both. A borrow is a LINK-time dependency, invisible to a compile: it shows up as
+an undefined `__aeabi_*` in the object, which is how the table finds it. Everywhere else the
+lane is ours or there is no lane.
+
+⚠ **The two struct rows do not move together, and thumb1 inverts them.** v6-M returns *any*
+struct over 4 bytes through memory (`sretm?`), so thumb1 takes both composite returns while
+refusing every composite *argument*; arm64 and riscv64 are the mirror image, taking arguments
+and the 16B return but refusing the MEMORY-class return — which is what stops PDCLib's dlmalloc
+on the cross targets.
 
 ⚠ **The register-exhausted by-value composite is x64-only, and even there only the gp half.**
 A 9..16B aggregate argument with too few *integer* registers left now goes wholly to the
@@ -300,8 +287,10 @@ other register file, and c-testsuite's 00204 is the probe.
 AAPCS64 closes the gp file behind a stack composite (C.13), riscv64 SPLITS one across the
 register/stack seam, and t32 has no lane at all. Three rules, three rungs; do not fold them.
 
-⚠ **A by-value composite NAMED in a variadic parameter list is x64-only too** (SysV's register
-save area, `vaspill`); `vaspill-a64`/`-rv`/`-t32` refuse the shape, each for its own ABI's reason.
+⚠ **A by-value composite NAMED in a variadic parameter list rides x64 and arm64** (`vaspill`,
+`vaspill-a64`); `vaspill-rv` and `vaspill-t32` refuse the shape, each for its own ABI's reason.
+⚠ that is a different shape from *passing* a composite at a variadic call site, which riscv64
+also takes — probe the one you mean.
 
 - **mixed/int-pair 8..16B composites on t32** — an aone-`int` 5..8B, or a two-eightbyte
   not-both-sse aggregate by value; register-exhausted stack HFAs (9+ double args); and
@@ -314,8 +303,12 @@ save area, `vaspill`); `vaspill-a64`/`-rv`/`-t32` refuse the shape, each for its
   device — which is exactly why `port/playdate` routes it through `pdglue.c` on
   arm-none-eabi-gcc and calls that a "word-only seam". AAPCS32 wants the hidden-pointer memory
   return the v6-M lane already implements (`sretm?`); thumb2 has no such lane.
-- **signed 64-bit `/` and `%` on t32** refuse (`cgfn refuses`) — love.c's lane is unsigned; wrap
-  the unsigned expansion in an abs/refix sleeve when needed.
+- **a MEMORY-class composite RETURN on arm64 and riscv64** — `no lane for returning this
+  80-byte struct by value on <tgt>`. Probe: `typedef struct { long a[10]; } R;` with a
+  definition that returns one; a bare prototype compiles everywhere.
+- **signed 64-bit `/` and `%` on thumb2 and thumb2sp** refuse (`cgfn refuses`) — love.c's lane
+  is unsigned; wrap the unsigned expansion in an abs/refix sleeve when needed. thumb1 answers
+  it, but through libgcc's `__aeabi_ldivmod`.
 - **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
   v6-M whole.
 - **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
@@ -325,9 +318,10 @@ save area, `vaspill`); `vaspill-a64`/`-rv`/`-t32` refuse the shape, each for its
   ctz the isolate-and-clz / `__ctzsi2`), but the 64-bit swap wants the r0:r1 pair lane and
   the atomics want LDREX/STREX plumbing (v6-M has none), and nothing reaches either there yet.
 
-What t32 *does* carry, so it is not re-derived: 64-bit `long long` as register pairs (lo:hi on
-r0:r1, r2:r3 the shuttle) with +, -, ×(UMULL/MLA), unsigned `/` and `%` (a self-contained
-64-step restoring expansion — no `__aeabi_uldivmod`, no libgcc), all shifts across the word
+What **thumb2** carries, so it is not re-derived (thumb1 reaches libgcc for most of this — the
+⚠ above): 64-bit `long long` as register pairs (lo:hi on r0:r1, r2:r3 the shuttle) with +, -,
+×(UMULL/MLA), unsigned `/` and `%` (a self-contained 64-step restoring expansion — no
+`__aeabi_uldivmod`, no libgcc), all shifts across the word
 boundary, every relation (SUBS/SBCS, exact at the 2^53 tie), widen/narrow, `__builtin_clzll`,
 pair args (AAPCS32 even-odd pairs, 8-aligned stack slots) and pair returns, pair
 globals/locals/members/derefs. VFP doubles on thumb2 (fpv5-d16 scalar, f0..f15 → d0..d15, d15
@@ -350,6 +344,51 @@ beside the door, not grow a private ladder.
 
 ---
 
+## asm goto — what building it would cost
+
+The one refusal that has been costed rather than just filed. Still **not built**: it is close to
+kernel-only, and it is worth doing when something we actually want to compile demands it, and
+not before. ⚠ the references below were accurate when written — re-check them at the point of
+edit rather than trusting them.
+
+**The allocator is not the problem.** The obvious fear, that a terminator with multiple
+successors would break the tuned register allocator, does not apply: `hasasm` already disables
+register homing for any function containing asm, the vmap flushes at every label, and `alive`
+already answers the whole universe for both `goto` and `asm`. Keep homing off under `hasasm` and
+the allocator needs no change at all.
+
+The three real blockers:
+
+- **The raw blob cannot name an outer label.** `cgasm` assembles the body immediately via
+  `holo-bytes` with an empty pre-bound label table, so a label not defined inside the template
+  hits `(scare 'undef-label ..)`. The hook is clean, though — raw is lowered verbatim by every
+  backend (`x64.l`, `arm64.l`, `thumb2.l`, `thumb1.l`), and `chunk-len`/`resolve` already handle
+  an inline `('fix w kind label aux)` anywhere in the stream, so a raw carrying an unresolved fix
+  would lay out against the **outer** function's label table for free. What is missing is a holo
+  door — a variant of `assemble-at` that assembles while leaving a whitelist of external labels
+  as fix placeholders instead of scaring. `laylax` would treat such a fix as its widest form.
+- **`cfoldir`'s pend merge is the one correctness hazard.** A label with no recorded pending
+  state that is linearly live inherits the fall-through state verbatim, so an invisible in-edge —
+  a branch out of an opaque raw blob into a C label — makes that join unsound: constants assumed
+  at L would not hold on the asm edge. The minimum fix is to collect the asm-goto target labels
+  per function into the `backs` table, so they take the existing assume-nothing path. Cheap, and
+  it mirrors back-edge handling exactly, which exists for precisely this reason.
+- **Surface.** `pasm` hardcodes three colons as `s1`/`s2`/`s3`; a fourth (GotoLabels) needs an
+  `s4` and a fifth field on the `('asm ..)` node, which ripples to every positional consumer in
+  `gen.l` and to the goldens in `law.l`. `asmsub` must learn `%lN` — currently `'bad` — and
+  substitute the *mangled* label `fn.NAME`, sharing the mangling with the label emitter.
+  `asm goto` is implicitly volatile and, pre-GCC-14, takes no outputs.
+
+Everything else already refuses or resets on raw: `unframe` bails, `deadcell` dirties, `deaddef`
+treats it as a barrier. **The estimate is about a week**, touching parse, one gen pass and one
+new holo door — and not the allocator.
+
+⚠ **It does not bring Linux into range on its own.** The kernel additionally wants `__label__`,
+computed goto, `_Generic`, and attribute semantics that change codegen.
+
+---
+
+
 ## external corpora
 
 **c-testsuite is wired** — `test_cts`, `test_cts_arm64`, `test_cts_riscv` over
@@ -358,7 +397,7 @@ three targets, ~60 s each, opt-in on `make dl/c-testsuite` and skipping whole wi
 first run is where twelve rows of the syntax ledger above and six of the wrong-answer rows came
 from. The roster of failures lives in the gate with a cause apiece.
 
-The rest are still recommendations. `test/cc/` holds 118 gcc-differentiated files, so the
+The rest are still recommendations. `test/cc/` holds 131 gcc-differentiated files, so the
 harness exists; this is a corpus question, not an infrastructure one.
 
 - **gcc.c-torture/execute** — ~1500 self-contained self-checking files (`abort()` on failure,

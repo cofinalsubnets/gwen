@@ -11,8 +11,8 @@
 ; initializer whose value is a LABEL bakes an abs64 fixup ('fix 8 abs64 label 0). a `float` is
 ; 4 bytes in memory but ALWAYS a double in an xmm register (a load widens, a store narrows); a
 ; compound literal ('clit ty init) fills a frame temp whose ADDRESS is the lvalue.
-; refused, not fudged: ptr+ptr, deref of a non-pointer, assigning to an array, struct params
-; or returns by value.
+; refused, not fudged: ptr+ptr, deref of a non-pointer, assigning to an array. a by-value
+; aggregate rides x64; the lanes the other targets lack are doc/moon-c-gaps' asymmetries.
 ; the PIPELINE'S STAGES are typed: crew/moon/stage.l holds each pass's sig (input stage ->
 ; output stage), and the moon gate checks this file as data against it -- a new pass declares
 ; its sig there, and a recomposition of the strict chains is a clash naming its seam.

@@ -262,8 +262,9 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
 * **An OUTSIDE corpus, and its own answers** (`test_cts`, all three targets): c-testsuite's
   220 single-file programs, each held to the stdout it ships. Every `test/cc` file was written
   here to pin a fault we had already met, so the battery says what we already know; these were
-  written by people compiling other compilers, and the first run found **nine** programs mooncc
-  builds clean and answers wrong. The failures are rostered with a cause apiece in
+  written by people compiling other compilers, and their first run found **nine** programs
+  mooncc built clean and answered wrong — all nine landed, and the wrong-answer roster is
+  **empty** today. What remains is refusals. They are rostered with a cause apiece in
   `test/gate/cts.sh`, refusals kept apart from wrong answers, and the roster is double-edged —
   a fix takes its line off, a regression cannot hide in a skip.
 * Cross targets get their own gates (`test_ccarm64`, `test_ccriscv`, `test_thumb*`), and
@@ -274,10 +275,9 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
 ## known gaps
 
 `gen.l`'s header carries the live fence list — what is refused rather than fudged: `ptr+ptr`,
-dereference of a non-pointer, assigning to an array, and the by-value aggregate cases outside
-the SysV pair classes. Also: `&bitfield`, `++`/`--` on a bitfield or a wide type, an image-time
-`&arr[i]` global initializer (dodge it with separate globals). doc/moon-c-gaps.md is the fuller
-map.
+dereference of a non-pointer, assigning to an array. Also: `&bitfield`, and `++`/`--` on a
+bitfield or a wide type. doc/moon-c-gaps.md is the fuller map, and carries the by-value
+aggregate lanes the cross targets still lack.
 
 ## the basement, and the go borrowings
 
