@@ -194,6 +194,22 @@
           _ (pin g 'vmap (`(nm r) >< peep g 'vmap ()))
           (? (member? r (peep g 'vpin ())) ()
              (pin g 'vpin (r >< peep g 'vpin ())))) ())
+   ; -- frame-direct: a constant-indexed frame-array element is a STATIC slot (off + k*elsize) --
+   ; no address compute at all. the address is consumed by its own load/store, so this holds for
+   ; ESCAPING arrays too (no vuarr gate); pair/d128 elements keep the address lanes. --
+   (afd g env e)                                    ; -> (off elty) | ()
+    (? !(two? e && id? <e 'deref && two? <>e) ()
+       (: X <>e
+          (? !(id? <X 'bin && two? >X && id? <>X '+ &&
+               two? <>>X && id? <<>>X 'var) ()
+             (: en (vent g env <><>>X)
+                idx <>>>X
+                (? !(two? en && id? <en 'loc && arr? <>>en &&
+                     two? idx && id? <idx 'num && (0 <= <>idx)) ()
+                   (: et <>(<>>en)
+                      (? ((ptr? et || member? et '(char uchar bool short ushort int uint long ulong)) &&
+                          !(pair? g et))
+                         `((<>en + <>idx * tsz g et) et) ())))))))
    ; -- the forward joins: at a label whose arriving edges are all KNOWN (an if/?: join -- never
    ; a loop head, a user label, or a case), the map need not die. an entry (nm r) survives iff
    ; EVERY arriving edge carries the same pair -- on each edge r held nm's slot value when the
@@ -1288,10 +1304,14 @@
                  (<en = 'loc) (mkv <>>en 'r0 `(`('lean 'r0 'r4 <>en)))
                  (mkv <>>en 'r0 `(`('la 'r0 <>en)))))
           (k = 'deref)
-           (: r (cgexpr g env <>e)
-              (? (bad? r) 'bad
-                 !(ptr? (vty r)) 'bad
-                 (mkv <>(vty r) 'r0 (tor0 g r))))
+           ; frame-direct: a constant-indexed element's address is ONE lean (consumed like a
+           ; scalar's, so no fesc pin; the & lane's unlean flips it back to the escaping lea)
+           (: fdc (afd g env e)
+              (? (two? fdc) (mkv <>fdc 'r0 `(`('lean 'r0 'r4 <fdc)))
+                 (: r (cgexpr g env <>e)
+                    (? (bad? r) 'bad
+                       !(ptr? (vty r)) 'bad
+                       (mkv <>(vty r) 'r0 (tor0 g r))))))
           (k = 'dot)
            (: r (: lv (clval g env <>e)
                    ; an rvalue struct base (a call's parked temp: `mk(x).a`) is
@@ -1677,6 +1697,7 @@
                     (? (bad? r) 'bad (loadval g (vty r) (vfs r) wnt)))))
           (k = 'asn)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
+              fd (? (<<>e = 'deref) (afd g env <>e) ())
               (? (two? rv && <rv = 'regv)   ; store into a register-homed scalar (param or local)
                   (: _ (pin g 'want <>rv)         ; hint the rhs straight at the home
                      r (cgexpr g env <>>e)
@@ -1738,6 +1759,27 @@
                                  (vmpin g nm (vreg r)) ())    ; the stored value stays mapped
                             (mkv ty (vreg r) (vfs r + `(`('st 'r4 <>rv (vreg r))))))
                         (mkv ty (vreg r) (vfs r + `(`('la 'r1 <>rv) `('st 'r1 0 (vreg r)))))))
+                 ; FRAME-DIRECT (store-direct's element twin): the slot is static, so no address
+                 ; compute, no park, no shuttle -- even past a call on the right. the write
+                 ; residency rides unchanged: the rhs aims at a pool register, converts in
+                 ; place and re-pins; unhonored hands the register back (drop-only stands).
+                 (two? fd)
+                  (: off <fd ty <>fd
+                     ael (aelem g env <>e)
+                     hint (? (two? ael && id? <ael 'el && !(callish? <>>e) &&
+                              vmon? g && !(0 < peep g 'argseal 0))
+                             (ralloc g) ())
+                     _ (? hint (pin g 'want hint) ())
+                     r (cgexpr g env <>>e)
+                     (? (bad? r) (: _ (? hint (rfree g hint) ()) 'bad)
+                        (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
+                           (? (hint && id? (vreg r) hint && !(flo? (vty r)))
+                               (: fs (vfs r + cvt ty hint + `(`((stop ty) 'r4 off hint)))
+                                  _ (vapin g <>ael hint)
+                                  (mkv ty hint fs))
+                              (: _ (? (hint && !(id? (vreg r) hint)) (rfree g hint) ())
+                                 (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
+                                              `(`((stop ty) 'r4 off 'r0)))))))))
                  (: lv (clval g env <>e)
               (? (bad? lv) 'bad
                  (arr? (vty lv)) 'bad                ; an array is not assignable
@@ -1839,6 +1881,7 @@
                                      cvt ty 'r0 + `(`((stop ty) 'r1 0 'r0))))))))))))))
           (k = 'post)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
+              fd (? (<<>e = 'deref) (afd g env <>e) ())
               _ (? (<<>e = 'var) (vmdrop g <><>e) ())   ; the RMW retires any mapping
               (? (two? rv && <rv = 'regv)   ; p++ on a register-homed scalar: old in r0, home += step
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
@@ -1862,6 +1905,14 @@
                                        `('add 'r1 'r0 (* stp <>>e)))
                                      + (? (id? ty 'bool) (cvt ty 'r1) ())   ; b++/b-- lands on 0/1
                                      + `(`((stop ty) 'r4 off 'r1))))))
+                 ; frame-direct element ++/-- (the store-direct twin; pair/d128 stay on afd's far side)
+                 (two? fd)
+                  (: ty <>fd off <fd stp (? (ptr? ty) (tsz g <>ty) 1)
+                     _ (adrop9 g env <>e)           ; the RMW retires its pin(s)
+                     (mkv ty 'r0 (`(`((ldop ty) 'r0 'r4 off)
+                                    `('add 'r1 'r0 (* stp <>>e)))
+                                  + (? (id? ty 'bool) (cvt ty 'r1) ())
+                                  + `(`((stop ty) 'r4 off 'r1)))))
                  (: lv (clval g env <>e)
               (? (bad? lv) 'bad
                  (: ty (vty lv)
@@ -6506,7 +6557,7 @@
               (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
                  (? (tally rs < tally rd) (leaf rs) (deopt ())))))
        irf (? (bad? ir1) 'bad
-          ((hm || lh || two? ride || two? ih0) && !(peep g 'fesc ()) && !(hascall? ir1))
+          ((hm || lh || two? ride || two? ih0 || two? au) && !(peep g 'fesc ()) && !(hascall? ir1))
            (leaf ride)
           ; calls remain: home + spill where reads beat the wraps -- FN-WIDE, all homable params
           ; or none. ⚠ per-param verdicts were measured BOTH ways and lost: pruning a "losing"
@@ -6524,7 +6575,9 @@
                                  !(id? (nthr (argr g) i9) (homereg i9))) (n2 + 1) n2)))
              pp (hm && (2 * nc * nh < nr ||
                         (two? av && (2 * nh * (pmax ir1 + nthr av 4) + em < nr))))
-             (? (pp || lh) (regen (? pp 'shadow ()) st0) ir1)))
+             ; the array leg licenses its own regen: element pins are priced by neither
+             ; nr (param reads) nor the homes -- a non-empty universe is the pay
+             (? (pp || lh || two? au) (regen (? pp 'shadow ()) st0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
        ; it early lets a pass-2 ride clobber a live arrival. this chain's order is TYPED

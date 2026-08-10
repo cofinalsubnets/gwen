@@ -91,10 +91,12 @@ Learned by measuring, several times each; check a new lever against these before
    combined on its shape. Watch: chacha and poly should close TOGETHER toward poly's
    ratio. FIRST RUNG LANDED 2026-08-10 (the vmap's array leg, the rung ledger below):
    element pins with write residency — chacha −19% wall, poly −10%, moving together as
-   the diagnosis demanded. What full closure still needs is store ELISION (every write
-   still stores — the write-through law) and a frame-direct element lvalue (the
-   lea/add/park address dance per store): the first is the allocator leg's territory,
-   the second a clval fold a later rung can take alone.
+   the diagnosis demanded. SECOND RUNG LANDED 2026-08-10 (frame-direct, the ledger):
+   the clval fold — a constant index is a static slot, the lea/add/park dance is gone,
+   deadst elides write-only element stores in call-free fns, and element fns stopped
+   pinning fesc (sibcall/ride/homing open). What closure still needs: store elision
+   ACROSS calls/labels (the allocator leg's liveness), and float/pair elements ride
+   the old walk (afd's whitelist is gp+ptr).
 2. **Registers as the source of truth** — the allocator leg proper: liveness over ir1,
    values surviving labels and calls, spill placement instead of write-through. Kills
    both the def-stores and the post-flush reloads (the ~22% bucket). The vmap, the JOIN
@@ -226,6 +228,27 @@ drop-all, the escape gate), two flips falsified, and a six-shape torture C
 differential vs clang. The catch worth keeping: the first probe's chacha number
 barely moved — the state array was ESCAPED by its own memcpy fill, and the licence
 list is what unlocked the motivating shape.
+2026-08-10 · array slots, second rung (the FRAME-DIRECT element lvalue, the clval
+fold lever 1 named): a constant-indexed frame-array element is a STATIC slot
+(off + k*elsize), so afd answers the folded offset and three lanes stop computing
+addresses — clval's deref answers ONE lean (consumed like a scalar's, so element
+reads stop pinning fesc), the asn arm stores st r4 off' straight (no park, no
+shuttle — even past a call on the right; the write residency rides unchanged), and
+post gets the store-direct twin (direct ld/add/st). Escaping arrays fold too (the
+address is the same address; no vuarr gate) — only pair/d128/float elements keep
+the walk. Payload one: with no lea/lean left in such fns, deadst's whole-fn gate
+OPENS and a write-only slot's store drops — the store-elision closure need arrives
+free in the call-free case. Payload two: fesc unpoisoned unlocks leaf ride/sibcall/
+homing for element fns — which surfaced that the regen was never licensed by the
+leg itself (it rode nr>0 or fesc side effects): the array universe now licenses
+its own regen (two? au on both gates; q0, the no-param law fn, is the witness —
+without it the vmap never arms there). Corpus verdict, measured honestly: love.c +
+host compile BYTE-IDENTICAL (the cipher stores were already collapsed by
+pins+addrfold once the rhs went zero-form) — the pay is long/callish-rhs stores,
+escaped arrays, no-param fns, the elision, and the structural unlock; regression
+zero by construction. Laws: no-lea + elided-store + kept-store on f, q0's
+self-licensed pins; three flips falsified; the torture differential grew five
+shapes (callish rhs, escaped, narrow cvt, au license, ptr elements).
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
