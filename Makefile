@@ -90,13 +90,6 @@ ccdb:
 # revision behind by construction: the cost of baking the id. test_wasm links out of tree
 # so at least it stops DIRTYING the file on every run.
 
-# crew/cook/Cookfile: this Makefile transpiled by `cook --emit` into a flat snapshot with
-# every $(shell)/$(wildcard)/var/pattern RESOLVED. ⚠ a BAKED snapshot -- the wildcard lists
-# freeze at emit time, so re-run this after adding a source or test file.
-crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
-	@echo AI	$@
-	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
-
 # this tree's own docs as a browsable site: README.md + doc/*.md through papel.
 site: host
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc
