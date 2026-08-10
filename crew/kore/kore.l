@@ -7,6 +7,7 @@
 ;   kore make [F] [T..]  the build tool (crew/cook/cook.l)
 ;   kore as TGT IN OUT   assemble IR forms from IN (x64|arm64) into an ELF at OUT
 ;   kore objcopy -O binary|ihex IN OUT   a linked ELF flattened (crew/holo/copy.l)
+;   kore nm [-gup] FILE..   an ELF's symbols, nm's three columns (crew/holo/link.l)
 ;   kore cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev   the line + field tools + trivia (crew/kore/core.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
@@ -193,8 +194,77 @@
        _ (chmod o 493)
        (quit 0))
 
+   ; nm: the symbols a file names, in nm's three columns -- VALUE TYPE NAME, over
+   ; crew/holo/link.l's ld-syms. the letter is ELF's own facts and never a guess: U
+   ; undefined, A absolute, C common, else the defining section's flags pick T
+   ; executable / B nobits / D writable / R the rest, and a LOCAL bind lowercases it
+   ; -- that case IS nm's whole convention. -g keeps the externals, the only view a
+   ; link has an opinion about; -u the undefined ones, which is what says a lane was
+   ; BORROWED from libgcc rather than ours (tools/moon-parity.sh reads exactly that).
+   ; ⚠ an ARCHIVE is not walked here: `ar t` lists members, and nm's per-member
+   ; header shape wants the member walk ar-t owns. an ELF of any e_type is fine.
+   ; the sort is by BYTE, which is `LC_ALL=C nm`'s order and not the bare `nm` a
+   ; desk with a locale set answers -- a build tool reads no locale, so the order
+   ; is the same on every machine.
+   (nm-sp w) (? (w < 1) "" (nm-sp (w - 1) + " "))
+   (nm-hex v w) (: dg "0123456789abcdef"
+                   (go k a) (? (k < 0) a (go (k - 1) (a + dg ((v // (k 16)) % 16))))
+                   (go (w - 1) ""))
+   (nm-low t) (: c (t 0) (? ((65 <= c) && (c <= 90)) ("" + (c + 32)) t))
+   (nm-let sy)
+    (: x (at sy 3) sec (at sy 6)
+       u (? (x = 0) "U" (x = 65521) "A" (x = 65522) "C"
+            !(two? sec) "?"
+            (: ty (at sec 1) fl (at sec 2)
+               (? (ty = 8) "B" (0 < (fl & 4)) "T" (0 < (fl & 1)) "D" "R")))
+       (? (at sy 1 = 2) (? (x = 0) "w" "W")
+          (at sy 1 = 0) (nm-low u)
+          u))
+   (nm-file p wide g u srt)
+    (: r (uread p) _ (? (two? r) () (die ("nm: cannot open " + p)))
+       b <>r
+       w (? (b 4 = 2) 16 8)
+       ; a SECTION or FILE symbol names no value of the program's -- nm shows
+       ; neither, and an empty name is the null-ish filler a section symbol leaves
+       all (filter (\ sy (? (nil? (tally <sy)) () (member? (at sy 2) '(3 4)) () 1))
+                   (ld-syms p b))
+       ; ⚠ "no symbols" is the FILE's fact, asked before the flags narrow: a -u that
+       ; comes back empty says the lanes are all ours, which is an answer, not a lack
+       _ (? (two? all) () (: _ (say err ("nm: " + p + ": no symbols")) _ (put err 10) 1))
+       keep (filter (\ sy (? (g && (at sy 1 = 0)) () (u && !(at sy 3 = 0)) () 1)) all)
+       ord (? srt keep (sortby (\ a b (<a <= <b)) keep))
+       _ (? wide (: _ (puts ("\n" + p + ":\n")) 0) 0)
+       ; ⚠ foldl, never map: map's side effects fire RIGHT TO LEFT (it conses on the
+       ; way back up), so a map that prints hands the list back reversed
+       _ (foldl (\ _ sy (puts ((? (at sy 3 = 0) (nm-sp w) (nm-hex (at sy 4) w))
+                               + " " + nm-let sy + " " + <sy + "\n")))
+                0 ord)
+       (two? all))
+   (nm-main as)
+    ; flags CLUSTER: -gu is -g -u, which is what a hand types and what nm takes
+    (: (nm-flags t k g u srt)
+        (? (tally t <= k) `(g u srt)
+           (: c (t k)
+              (? (c = 103) (nm-flags t (k + 1) 1 u srt)
+                 (c = 117) (nm-flags t (k + 1) g 1 srt)
+                 (c = 112) (nm-flags t (k + 1) g u 1)
+                 (die ("nm: unknown flag -" + ("" + c))))))
+       (go a g u srt fs)
+        (? !(two? a) `(g u srt (rev fs))
+           ((1 < tally <a) && (<a 0 = 45))
+            (: f (nm-flags <a 1 g u srt) (go >a <f <>f <>>f fs))
+           (go >a g u srt (<a >< fs)))
+       r (go as () () () ())
+       fs (at r 3)
+       _ (? (two? fs) () (die "usage: kore nm [-g] [-u] [-p] FILE.."))
+       wide (two? >fs)
+       any (foldl (\ a p (? (nm-file p wide <r <>r <>>r) 1 a)) () fs)
+       _ (flush out)
+       (quit (? any 0 1)))
+
    ; the registry: name -> main (aliases share)
    applets #('diff diff-main
+             'nm nm-main
              'nc ain-main 'ain ain-main
              'make cook-main 'cook cook-main   ; bare: cook.l precedes this file in the cat, bracket-free, so it folds here
              'as as-main
@@ -234,6 +304,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)
   ld A.o.. -o OUT    holo's static linker (-pie, -t x64|arm64|riscv64, -Ttext)
   objcopy -O F IN OUT   flatten a linked ELF: F is binary or ihex (Intel HEX)
+  nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
   cat head tail wc sort uniq tee          the line tools (crew/kore/core.l)
   cut tr nl rev                           the field tools
   grep [-nvcl] PAT [F..]                  the BRE matcher (crew/kore/re.l)

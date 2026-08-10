@@ -331,6 +331,47 @@
        _ (pin ob 'relas relas)
        ob)
 
+   ; every symbol a file names, whatever its e_type -- `kore nm`'s door. ld-read is
+   ; ET_REL BY CONTRACT (a linker that accepts a linked file links garbage) and
+   ; classifies every section on the way; a symbol dump has neither stake, so this
+   ; reads the header, the symbol table and its strings and stops. a row is
+   ;   (name bind typ shndx value size sec)
+   ; sec being the defining section's (name type flags) -- () when the symbol is
+   ; undefined or names one of ELF's reserved indices. ⚠ answers () rather than
+   ; scaring when there is no SHT_SYMTAB: a stripped file HAS no symbols, which is
+   ; an answer, and .dynsym is a different table this does not read.
+   (ld-syms id s)
+    (: _ (? ((s 0 = 127) && (s 1 = 69) && (s 2 = 76) && (s 3 = 70)) 0
+            (scare 'link-not-elf id))
+       fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
+       shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
+       (sh i) (shoff + (i * ld-n fs 'sh-ent))
+       shstro (ld-f fs s (sh (ld-f fs s 0 'e-shstrx)) 'sh-off)
+       (sname i) (ld-cstr s (shstro + ld-f fs s (sh i) 'sh-name))
+       (find i) (? (shnum <= i) () (ld-f fs s (sh i) 'sh-type = 2) `(i) (find (i + 1)))
+       t (find 1)
+       (? !(two? t) ()
+          (: h (sh <t)
+             _ (ld-esz fs s h 'sy-ent ".symtab")
+             ent (ld-n fs 'sy-ent)
+             off (ld-f fs s h 'sh-off) n (ld-f fs s h 'sh-size // ent)
+             stro (ld-f fs s (sh (ld-f fs s h 'sh-link)) 'sh-off)
+             ; index 0 is ELF's null symbol and names nothing -- the walk starts at 1
+             (go i acc)
+              (? (i < 1) acc
+                 (: e (off + (i * ent))
+                    info (ld-f fs s e 'sy-info) x (ld-f fs s e 'sy-shndx)
+                    (go (i - 1)
+                        (`((ld-cstr s (stro + ld-f fs s e 'sy-name))
+                           (info >> 4) (info & 15) x
+                           (ld-f fs s e 'sy-val) (ld-f fs s e 'sy-size)
+                           (? ((0 < x) && (x < shnum))
+                              `((sname x) (ld-f fs s (sh x) 'sh-type)
+                                (ld-f fs s (sh x) 'sh-flags))
+                              ()))
+                         >< acc))))
+             (go (n - 1) ()))))
+
    ; -- ARCHIVES. the noms no object defines but the LINKER lays: a driver over any
    ; door here answers for these, so a ledger must not go looking for them in a .a.
    ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"

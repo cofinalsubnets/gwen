@@ -111,8 +111,28 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   grep -q '^:00000001' "$ho/.kore-oc.hex" || fail "kore objcopy: no ihex end record"
   korerun objcopy -O srec "$ho/.kore-ld.elf" "$ho/.kore-oc.x" 2>/dev/null \
     && fail "kore objcopy took an unknown format"
+  # nm over holo's own ELF reader. the differential is against LC_ALL=C nm: the
+  # BYTE order is ours, and a desk with a locale set gets a collated one from GNU,
+  # so an uncollated `nm` here would fail on the machine and not in the tree.
+  # ⚠ the executable is in the roster on purpose -- ld-read is ET_REL by contract
+  # and ld-syms is the door that is not, so a regression that hands nm to ld-read
+  # shows up here rather than the day someone reads a linked file.
+  if command -v nm >/dev/null 2>&1; then
+    for f in .kore-arm.o .kore-arf.o .kore-ld.elf; do
+      LC_ALL=C nm "$ho/$f" > "$g" 2>/dev/null
+      korerun nm "$ho/$f" > "$o" || fail "kore nm $f"
+      same "nm $f"
+    done
+  fi
+  korerun nm -u "$ho/.kore-arm.o" > "$o" || fail "kore nm -u"
+  [ "$(cat "$o")" = "                 U f" ] || fail "kore nm -u (want the one undefined nom)"
+  korerun nm -g "$ho/.kore-arf.o" > "$o" || fail "kore nm -g"
+  grep -q ' T f$' "$o" || fail "kore nm -g (want T f)"
+  korerun nm "$ho/.kore-arf.o" "$ho/.kore-arm.o" > "$o" || fail "kore nm (two files)"
+  grep -q '\.kore-arm\.o:$' "$o" || fail "kore nm: no per-file header past one file"
+  korerun nm "$ho/.kore-arf.c" >/dev/null 2>&1 && fail "kore nm read a non-ELF"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy ok"
+echo "kore: diff (GNU-identical) + argv0 symlink + usage + as + ar + ld + objcopy + nm ok"
 
 # ------------------------------------------------------------- the line tools
 printf 'b\na\nc\nb\n' > "$ho/.cu1"; printf 'x y\nz\n' > "$ho/.cu2"
