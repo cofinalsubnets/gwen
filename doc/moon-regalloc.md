@@ -89,7 +89,14 @@ Learned by measuring, several times each; check a new lever against these before
    Measured 23× on chacha20 vs 1.77× on scalar poly1305 (bench/ccbench.sh carries both
    rows); love.c's z-tray elementwise lane 4.8×. Worth more than every landed rung
    combined on its shape. Watch: chacha and poly should close TOGETHER toward poly's
-   ratio.
+   ratio. FIRST RUNG LANDED 2026-08-10 (the vmap's array leg, the rung ledger below):
+   element pins with write residency — chacha −19% wall, poly −10%, moving together as
+   the diagnosis demanded. SECOND RUNG LANDED 2026-08-10 (frame-direct, the ledger):
+   the clval fold — a constant index is a static slot, the lea/add/park dance is gone,
+   deadst elides write-only element stores in call-free fns, and element fns stopped
+   pinning fesc (sibcall/ride/homing open). What closure still needs: store elision
+   ACROSS calls/labels (the allocator leg's liveness), and float/pair elements ride
+   the old walk (afd's whitelist is gp+ptr).
 2. **Registers as the source of truth** — the allocator leg proper: liveness over ir1,
    values surviving labels and calls, spill placement instead of write-through. Kills
    both the def-stores and the post-flush reloads (the ~22% bucket). The vmap, the JOIN
@@ -203,6 +210,45 @@ nested-bin left already rides a pool register, so load shapes are the whole win
 profile. A call on either side bars it; a constant right rides immop unchanged.
 dyn insns −0.04% exact/disjoint 48.778G→48.760G, .text size-neutral. Law-pinned
 (delivered park + 3-address combine + both bars), two flips falsified.
+2026-08-10 · array slots, first rung (lever 1: the vmap's ARRAY LEG): a once-declared
+1-D gp-scalar array whose every appearance is x[e] gets element pins under minted
+content-compared keys ("x[3]"). READS pin (want-aimed load into a pool register, the
+next read zero forms); WRITES take residency too (the rhs aims at a fresh pool
+register, cvt IN PLACE — canonical like an int home's def — store from it, re-pin:
+the read-after-write is zero forms) or, unhonored, drop; a variable-index write (or
+post/rmw/fill) drops the whole array by key prefix. The ESCAPE gate is the soundness
+anchor: any bare x is decay and excludes the array — so no pointer can alias an
+eligible one and no pointer analysis exists; the non-retaining mem trio
+(memcpy/memset/memcmp) is licensed by name (cc_block's fill is THE idiom; the call's
+own vmflush retires every pin anyway). chacha −19% wall (5.40→4.38s), poly −10%
+(1.81→1.63s), moving together per the gauge; corpus dyn insns a wash (love.c's hot
+arrays are heap trays through pointers — ineligible by design); .text size-neutral.
+Five law shapes (multi-read pins, write residency, unhonored drop, variable-index
+drop-all, the escape gate), two flips falsified, and a six-shape torture C
+differential vs clang. The catch worth keeping: the first probe's chacha number
+barely moved — the state array was ESCAPED by its own memcpy fill, and the licence
+list is what unlocked the motivating shape.
+2026-08-10 · array slots, second rung (the FRAME-DIRECT element lvalue, the clval
+fold lever 1 named): a constant-indexed frame-array element is a STATIC slot
+(off + k*elsize), so afd answers the folded offset and three lanes stop computing
+addresses — clval's deref answers ONE lean (consumed like a scalar's, so element
+reads stop pinning fesc), the asn arm stores st r4 off' straight (no park, no
+shuttle — even past a call on the right; the write residency rides unchanged), and
+post gets the store-direct twin (direct ld/add/st). Escaping arrays fold too (the
+address is the same address; no vuarr gate) — only pair/d128/float elements keep
+the walk. Payload one: with no lea/lean left in such fns, deadst's whole-fn gate
+OPENS and a write-only slot's store drops — the store-elision closure need arrives
+free in the call-free case. Payload two: fesc unpoisoned unlocks leaf ride/sibcall/
+homing for element fns — which surfaced that the regen was never licensed by the
+leg itself (it rode nr>0 or fesc side effects): the array universe now licenses
+its own regen (two? au on both gates; q0, the no-param law fn, is the witness —
+without it the vmap never arms there). Corpus verdict, measured honestly: love.c +
+host compile BYTE-IDENTICAL (the cipher stores were already collapsed by
+pins+addrfold once the rhs went zero-form) — the pay is long/callish-rhs stores,
+escaped arrays, no-param fns, the elision, and the structural unlock; regression
+zero by construction. Laws: no-lea + elided-store + kept-store on f, q0's
+self-licensed pins; three flips falsified; the torture differential grew five
+shapes (callish rhs, escaped, narrow cvt, au license, ptr elements).
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

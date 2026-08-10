@@ -1689,5 +1689,57 @@
       (member? '(ld r0 r6 0) bi)                     ; a constant right: the immop lane unchanged
       (member? '(add r0 r0 1) bi)))
 
+; -- array slots (doc/moon-regalloc.md lever 1, the vmap's array leg): a once-declared
+; 1-D gp-scalar array whose every appearance is x[e] gets element pins under minted
+; keys -- a READ pins (the next read is zero forms), a WRITE drops (a constant index
+; its own key, a variable index the whole array), the slot stays the source of truth.
+; any bare x is decay: the escape gate keeps the array out and every read reloads.
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (ldsp fs off) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp && (= off <>>>f))) fs))
+   (stsp fs off) (tally (filter (\ f (two? f && member? <f '(st si) && id? <>f 'sp && (= off <>>f))) fs))
+   (leac fs) (tally (filter (\ f (two? f && member? <f '(lea lean))) fs))
+   irA (cgn "long f(long a, long b) { long x[4]; x[0] = a; x[1] = b; x[2] = x[0] + x[1]; x[3] = x[0] + x[2] + x[1]; return x[3] - x[2]; } long u(long a) { long x[2]; x[0] = a; long t = x[0] + x[0]; x[0] = t + 1; return t*10 + x[0]; } long u2(long a, long b) { long x[2]; x[0] = a + 1; long t = x[0]; x[0] = b; return t*10 + x[0]; } long v(long a, long i) { long x[2]; x[0] = a; x[1] = a + 3; long s = x[0] + x[1]; x[i] = 9; return s*100 + x[0] + x[1]; } long e(long a) { long x[2]; long *p = x; x[0] = a; p[0] = 5; return x[0] + x[0]; } long gg; long q0(void) { long x[2]; x[0] = gg; x[1] = gg + 1; x[0] = x[0] + x[1]; return x[0] + x[1] + x[1]; } int main() { return 0; }")
+   ff (fnf 'f <>irA)
+   uf (fnf 'u <>irA)
+   u2f (fnf 'u2 <>irA)
+   vf (fnf 'v <>irA)
+   ef (fnf 'e <>irA)
+   q0f (fnf 'q0 <>irA)
+   (assert
+      (two? irA)
+      (= 1 (ldsp ff 8))                              ; x[0]: three source reads, ONE load (the pin)
+      (= 1 (ldsp ff 16))                             ; x[1]: three reads, one load
+      (= 0 (ldsp ff 24))                             ; x[2]: both reads ride the write-pin -- no load at all
+      (= 1 (ldsp ff 32))                             ; x[3]: only the post-store re-read
+      ; -- frame-direct (the clval fold + the store-direct element twin): a constant index
+      ; is a static slot, so the lea/add/park address dance is gone -- every element touch
+      ; is a direct slot op. with no frame address left in the fn, deadst's whole-fn gate
+      ; opens and a write-only slot's store drops: the elision rides the fold for free. --
+      (= 0 (leac ff))                                ; no lea/lean survives: every touch frame-direct
+      (= 0 (stsp ff 24))                             ; x[2] write-only after pin-served reads: store ELIDED
+      (= 1 (stsp ff 32))                             ; x[3] is read back: write-through stands
+      (= 1 (ldsp uf 8))                              ; the WRITE re-pins: t+1 stays resident, the
+                                                     ;   read-after-write is zero forms (1 load total;
+                                                     ;   offset 8: the leaf ride keeps a off the frame)
+      (= 1 (ldsp u2f 8))                             ; a homed-var rhs declines the hint: drop-only,
+                                                     ;   so the read-after-write RELOADS (the 1 load;
+                                                     ;   the first read rode the write-pin free)
+      (= 2 (ldsp vf 8))                              ; x[i]=9 drops the whole array: both elements
+      (= 1 (ldsp vf 16))                             ;   reload after (x[1]'s pre-drop read rode
+                                                     ;   its write-pin, so its only load is the reload)
+      (= 2 (ldsp ef 16))                             ; bare x escaped: no pin, every read loads
+      ; -- the leg licenses its own regen (nothing else pays in q0: no params, no
+      ; scalar locals -- without the au license the vmap never arms here) --
+      (= 1 (ldsp q0f 8))                             ; x[0]: the one read between its two writes
+      (= 0 (ldsp q0f 16))                            ; x[1]: all three reads ride the write-pin
+      (= 0 (stsp q0f 16))                            ; ...so the slot is write-only and the store drops
+      (= 0 (leac q0f))))                             ; frame-direct throughout
+
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)

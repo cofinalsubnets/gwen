@@ -124,12 +124,12 @@
    ; basic-block locality in GENERATION order: vmflush fires at every label and call emission
    ; point, and g 'vuniv already excludes address-taken and multiply-declared names. off while
    ; inlining (an inlinee's names would conflate with the caller's). --
-   (vmon? g) (two? (peep g 'vuniv ()) && !(peep g 'inlining ()))
+   (vmon? g) ((two? (peep g 'vuniv ()) || two? (peep g 'vuarr ())) && !(peep g 'inlining ()))
    ; the READ side stays live through a splice's ARG binds (caller scope, caller names) --
    ; only the inlinee BODY blinds it ('inlbody depth: its names would conflate with the
    ; caller's). births stay gated on vmon? (no pin is born anywhere inside a splice).
    (vmget g nm)
-    (? (!(two? (peep g 'vuniv ())) || (0 < peep g 'inlbody 0)) ()
+    (? (!(two? (peep g 'vuniv ()) || two? (peep g 'vuarr ())) || (0 < peep g 'inlbody 0)) ()
        (: e9 (assoc nm (peep g 'vmap ()))
           (? (two? e9) <>e9 ())))
    ; ⚠ NOT `pins`: that is a prel MACRO (chained tablet pins), and a macro expands at head
@@ -155,6 +155,61 @@
           (? (member? r (peep g 'vpin ())) ()
              (pin g 'vpin (r >< peep g 'vpin ())))) ())
    (vmflush g) (pins g 'vmap () 'vpin ())
+   ; -- the ARRAY leg of the vmap (doc/moon-regalloc.md lever 1): a once-declared 1-D
+   ; gp-scalar array whose EVERY appearance is x[e] (any bare x is decay -- an escape,
+   ; and under & or sizeof nothing licenses) gets element pins under MINTED keys ("x[3]").
+   ; minted keys have no shared object identity, so this leg compares by CONTENT (=)
+   ; throughout. reads pin (the load is canonicalizing); writes only DROP -- a constant
+   ; index its own key, a variable index (or a fill, or an rmw) the whole array. the slot
+   ; stays the single source of truth (write-through), so a variable-index READ needs no
+   ; care at all -- and a non-escaping array admits no alias: no pointer analysis. --
+   (akey nm k) (nm + "[" + show k + "]")
+   (aelem g env e)                                  ; -> ('el key elty) | ('arr nm) | ()
+    (? !(two? e && id? <e 'deref && two? <>e) ()
+       (: X <>e
+          (? !(id? <X 'bin && two? >X && id? <>X '+ &&
+               two? <>>X && id? <<>>X 'var) ()
+             (: nm <><>>X
+                (? !(member? nm (peep g 'vuarr ())) ()
+                   (: en (vent g env nm)
+                      (? !(two? en && id? <en 'loc && arr? <>>en) ()
+                         (: idx <>>>X
+                            (? (two? idx && id? <idx 'num) `('el (akey nm <>idx) <>(<>>en))
+                               `('arr nm))))))))))
+   (vadrop9 g p)                                    ; drop by CONTENT prefix ("x[" the array, "x[3]" one key)
+    (: n9a (tally p)
+       m2 (filter (\ e9 (: k9 <e9
+                            !((n9a <= tally k9) && (= p (snip k9 0 n9a)))))
+                  (peep g 'vmap ()))
+       (pins g 'vmap m2 'vpin (vmregs m2 ())))
+   (adrop9 g env lhs)                               ; the write retires element pins
+    (: ae (aelem g env lhs)
+       (? !(two? ae) ()
+          (id? <ae 'el) (vadrop9 g <>ae)
+          (vadrop9 g (<>ae + "["))))
+   (vapin g nm r)                                   ; the element pin: vmpin sans the universe check
+    (? (vmon? g && !(0 < peep g 'argseal 0) &&
+        member? r (peep g 'pool0 ()))
+       (: _ (vadrop9 g nm)
+          _ (pin g 'vmap (`(nm r) >< peep g 'vmap ()))
+          (? (member? r (peep g 'vpin ())) ()
+             (pin g 'vpin (r >< peep g 'vpin ())))) ())
+   ; -- frame-direct: a constant-indexed frame-array element is a STATIC slot (off + k*elsize) --
+   ; no address compute at all. the address is consumed by its own load/store, so this holds for
+   ; ESCAPING arrays too (no vuarr gate); pair/d128 elements keep the address lanes. --
+   (afd g env e)                                    ; -> (off elty) | ()
+    (? !(two? e && id? <e 'deref && two? <>e) ()
+       (: X <>e
+          (? !(id? <X 'bin && two? >X && id? <>X '+ &&
+               two? <>>X && id? <<>>X 'var) ()
+             (: en (vent g env <><>>X)
+                idx <>>>X
+                (? !(two? en && id? <en 'loc && arr? <>>en &&
+                     two? idx && id? <idx 'num && (0 <= <>idx)) ()
+                   (: et <>(<>>en)
+                      (? ((ptr? et || member? et '(char uchar bool short ushort int uint long ulong)) &&
+                          !(pair? g et))
+                         `((<>en + <>idx * tsz g et) et) ())))))))
    ; -- the forward joins: at a label whose arriving edges are all KNOWN (an if/?: join -- never
    ; a loop head, a user label, or a case), the map need not die. an entry (nm r) survives iff
    ; EVERY arriving edge carries the same pair -- on each edge r held nm's slot value when the
@@ -1249,10 +1304,14 @@
                  (<en = 'loc) (mkv <>>en 'r0 `(`('lean 'r0 'r4 <>en)))
                  (mkv <>>en 'r0 `(`('la 'r0 <>en)))))
           (k = 'deref)
-           (: r (cgexpr g env <>e)
-              (? (bad? r) 'bad
-                 !(ptr? (vty r)) 'bad
-                 (mkv <>(vty r) 'r0 (tor0 g r))))
+           ; frame-direct: a constant-indexed element's address is ONE lean (consumed like a
+           ; scalar's, so no fesc pin; the & lane's unlean flips it back to the escaping lea)
+           (: fdc (afd g env e)
+              (? (two? fdc) (mkv <>fdc 'r0 `(`('lean 'r0 'r4 <fdc)))
+                 (: r (cgexpr g env <>e)
+                    (? (bad? r) 'bad
+                       !(ptr? (vty r)) 'bad
+                       (mkv <>(vty r) 'r0 (tor0 g r))))))
           (k = 'dot)
            (: r (: lv (clval g env <>e)
                    ; an rvalue struct base (a call's parked temp: `mk(x).a`) is
@@ -1618,10 +1677,27 @@
                   (mkv `('ptr (fnty g <><>e)) 'r0 `(`('la 'r0 (intern <><>e))))
                  'bad))
           (k = 'deref)
-           (: r (clval g env e)                     ; clval already walked the pointer
-              (? (bad? r) 'bad (loadval g (vty r) (vfs r) wnt)))
+           ; the array leg: a pinned element reads as ZERO forms; a miss loads into a
+           ; pinnable register (the consumer's want if it pools, else a fresh one) and
+           ; pins, so the NEXT read is free. pin refused (splice, staging) -> today's path.
+           (: ae (aelem g env e)
+              (? (two? ae && id? <ae 'el)
+                  (: rM (vmget g <>ae)
+                     (? rM (mkv <>>ae rM ())
+                        (: pino (vmon? g && !(0 < peep g 'argseal 0))
+                           W (? wnt wnt (? pino (ralloc g) ()))
+                           r (clval g env e)
+                           (? (bad? r) (: _ (? (W && !wnt) (rfree g W) ()) 'bad)
+                              (: v (loadval g (vty r) (vfs r) W)
+                                 _ (? (W && id? (vreg v) W) (vapin g <>ae W) ())
+                                 _ (? (W && !wnt && !(member? W (peep g 'vpin ())))
+                                      (rfree g W) ())
+                                 v)))))
+                 (: r (clval g env e)                ; clval already walked the pointer
+                    (? (bad? r) 'bad (loadval g (vty r) (vfs r) wnt)))))
           (k = 'asn)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
+              fd (? (<<>e = 'deref) (afd g env <>e) ())
               (? (two? rv && <rv = 'regv)   ; store into a register-homed scalar (param or local)
                   (: _ (pin g 'want <>rv)         ; hint the rhs straight at the home
                      r (cgexpr g env <>>e)
@@ -1683,6 +1759,27 @@
                                  (vmpin g nm (vreg r)) ())    ; the stored value stays mapped
                             (mkv ty (vreg r) (vfs r + `(`('st 'r4 <>rv (vreg r))))))
                         (mkv ty (vreg r) (vfs r + `(`('la 'r1 <>rv) `('st 'r1 0 (vreg r)))))))
+                 ; FRAME-DIRECT (store-direct's element twin): the slot is static, so no address
+                 ; compute, no park, no shuttle -- even past a call on the right. the write
+                 ; residency rides unchanged: the rhs aims at a pool register, converts in
+                 ; place and re-pins; unhonored hands the register back (drop-only stands).
+                 (two? fd)
+                  (: off <fd ty <>fd
+                     ael (aelem g env <>e)
+                     hint (? (two? ael && id? <ael 'el && !(callish? <>>e) &&
+                              vmon? g && !(0 < peep g 'argseal 0))
+                             (ralloc g) ())
+                     _ (? hint (pin g 'want hint) ())
+                     r (cgexpr g env <>>e)
+                     (? (bad? r) (: _ (? hint (rfree g hint) ()) 'bad)
+                        (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
+                           (? (hint && id? (vreg r) hint && !(flo? (vty r)))
+                               (: fs (vfs r + cvt ty hint + `(`((stop ty) 'r4 off hint)))
+                                  _ (vapin g <>ael hint)
+                                  (mkv ty hint fs))
+                              (: _ (? (hint && !(id? (vreg r) hint)) (rfree g hint) ())
+                                 (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
+                                              `(`((stop ty) 'r4 off 'r0)))))))))
                  (: lv (clval g env <>e)
               (? (bad? lv) 'bad
                  (arr? (vty lv)) 'bad                ; an array is not assignable
@@ -1744,23 +1841,47 @@
                  ; the ADDRESS parks in a pool register past a call-free rhs (the vpark
                  ; discipline, extended to the store shuttle): no memory round-trip on the
                  ; address. a call on the right keeps the shuttle -- it would clobber the park.
-                 (: aR (? (callish? <>>e) () (ralloc g))
+                 ; the ARRAY leg's write residency: an element store aims its rhs at a
+                 ; fresh pool register, converts IN PLACE (canonical, like an int home's
+                 ; def), stores from it and RE-PINS the key -- the written value stays
+                 ; resident and the read-after-write is zero forms. write-through holds
+                 ; (the store still emits); unhonored (a homed var, a float) hands the
+                 ; register back and the drop-only path stands.
+                 (: ael (aelem g env <>e)
+                    aR (? (callish? <>>e) () (ralloc g))
+                    hint (? (aR && two? ael && id? <ael 'el &&
+                             vmon? g && !(0 < peep g 'argseal 0))
+                            (ralloc g) ())
+                    _ (? hint (pin g 'want hint) ())
                     r (cgexpr g env <>>e)
-                    (? (bad? r) (: _ (? aR (rfree g aR) ()) 'bad)
+                    (? (bad? r) (: _ (? aR (rfree g aR) ())
+                                   _ (? hint (rfree g hint) ()) 'bad)
                        (: ty (vty lv)
-                          (? aR
-                             (: fs (vfs lv +
-                                    `(`('mov aR 'r0)) +
-                                    asintt g r ty +
-                                    cvt ty 'r0 +
-                                    `(`((stop ty) aR 0 'r0)))
-                                _ (rfree g aR)
-                                (mkv ty 'r0 fs))
-                             (mkv ty 'r0
-                              (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 +
-                               cvt ty 'r0 + `(`((stop ty) 'r1 0 'r0))))))))))))
+                          _ (adrop9 g env <>e)     ; an element store retires its pin(s)
+                          (? (hint && id? (vreg r) hint && !(flo? (vty r) || flo? ty))
+                              (: fs (vfs lv +
+                                     `(`('mov aR 'r0)) +
+                                     vfs r +
+                                     cvt ty hint +
+                                     `(`((stop ty) aR 0 hint)))
+                                 _ (rfree g aR)
+                                 _ (vapin g <>ael hint)
+                                 (mkv ty hint fs))
+                             (: _ (? (hint && !(id? (vreg r) hint)) (rfree g hint) ())
+                                (? aR
+                                   (: fs (vfs lv +
+                                          `(`('mov aR 'r0)) +
+                                          asintt g r ty +
+                                          cvt ty 'r0 +
+                                          `(`((stop ty) aR 0 'r0)))
+                                      _ (rfree g aR)
+                                      (mkv ty 'r0 fs))
+                                   (mkv ty 'r0
+                                    (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 +
+                                     cvt ty 'r0 + `(`((stop ty) 'r1 0 'r0))))))))))))))
           (k = 'post)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
+              fd (? (<<>e = 'deref) (afd g env <>e) ())
               _ (? (<<>e = 'var) (vmdrop g <><>e) ())   ; the RMW retires any mapping
               (? (two? rv && <rv = 'regv)   ; p++ on a register-homed scalar: old in r0, home += step
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
@@ -1784,10 +1905,19 @@
                                        `('add 'r1 'r0 (* stp <>>e)))
                                      + (? (id? ty 'bool) (cvt ty 'r1) ())   ; b++/b-- lands on 0/1
                                      + `(`((stop ty) 'r4 off 'r1))))))
+                 ; frame-direct element ++/-- (the store-direct twin; pair/d128 stay on afd's far side)
+                 (two? fd)
+                  (: ty <>fd off <fd stp (? (ptr? ty) (tsz g <>ty) 1)
+                     _ (adrop9 g env <>e)           ; the RMW retires its pin(s)
+                     (mkv ty 'r0 (`(`((ldop ty) 'r0 'r4 off)
+                                    `('add 'r1 'r0 (* stp <>>e)))
+                                  + (? (id? ty 'bool) (cvt ty 'r1) ())
+                                  + `(`((stop ty) 'r4 off 'r1)))))
                  (: lv (clval g env <>e)
               (? (bad? lv) 'bad
                  (: ty (vty lv)
                     stp (? (ptr? ty) (tsz g <>ty) 1)
+                    _ (adrop9 g env <>e)           ; an element RMW retires its pin(s)
                     (? (arr? ty) 'bad
                        (bitf? ty) 'bad             ; bitfield ++/-- -- refuse (rare; use `f = f + 1`)
                        (d128? ty) 'bad             ; wide ++/-- -- refuse (use `x = x + 1`)
@@ -1815,6 +1945,7 @@
                        (: off (ntmp g 'long)
                           mo `('moor off ty)
                           r (cgexpr g env `('asn mo `('bin <>e mo <>>>e)))
+                          _ (adrop9 g env <>>e)    ; the moored store retires element pin(s)
                           (? (bad? r) 'bad
                              (mkv (vty r) (vreg r)
                                   (vfs lv + `(`('st 'r4 off 'r0)) + vfs r))))))))
@@ -4832,6 +4963,7 @@
                  ((<init = 'init) || ((<init = 'str) && arr? ty) || clarr? ty init)
                   (? ((<init = 'init) && !(aggish? ty)) 'bad      ; a brace for a scalar
                      (: f (cgfill g env3 off ty init)
+                        _ (? (arr? ty) (vadrop9 g (<p + "[")) ())   ; a fill retires element pins (designated overrides re-store)
                         (? (bad? f) 'bad
                            (one >ps env3 (acc + cgzero off span + f)))))
                  (arr? ty) 'bad                          ; a bare-expr init of an array
@@ -5296,6 +5428,56 @@
        _ (pin n9 'q (peep n9 'n 0))
        _ (litems items () () () 1)
        (? (0 = peep n9 'q 0) `(liv crs univ (peep n9 'n 0) (peep n9 'ncw 0)) ()))
+   ; -- the array universe (the vmap's array leg): once-declared 1-D arrays of a gp
+   ; scalar whose every appearance is the element shape (deref (bin + (var x) idx)).
+   ; the scan LICENSES exactly that shape -- recursing into the index only -- and any
+   ; other (var x) marks decay; under & and sizeof nothing licenses (the over-mark
+   ; only shrinks the universe, sizeof x being the memcpy idiom's tell anyway). --
+   (auniv g f)
+    (: items <><>>>f
+       dcl2 #() tak2 #() ar2 #()
+       (ael? ty) (arr? ty && !(gvarr? ty) &&
+                  (: et <>ty (ptr? et ||
+                              member? et '(char uchar bool short ushort int uint long ulong))))
+       (adcl s)
+        (? !(two? s) ()
+           (: k <s
+              (? (member? k '(decl sdecl))
+                  (: (go ps) (? !(two? ps) ()
+                                (: p <ps
+                                   _ (pin dcl2 <p (1 + peep dcl2 <p 0))
+                                   _ (? ((k = 'decl) && ael? <>p)
+                                        (pin ar2 'l (<p >< peep ar2 'l ())) ())
+                                   (go >ps)))
+                     (go <>s))
+                 (adcll (stkids s)))))
+       (adcll l) (? !(two? l) () (: _ (adcl <l) (adcll >l)))
+       (axx e) (? !(two? e) ()                       ; & / sizeof context: every var marks
+                  (? (id? <e 'var && two? >e) (pin tak2 <>e 1)
+                     (: (go l) (? !(two? l) () (: _ (axx <l) (go >l))) (go e))))
+       (aex e)
+        (? !(two? e) ()
+           (id? <e 'deref && two? >e && two? <>e &&
+            (: X <>e (id? <X 'bin && two? >X && id? <>X '+ &&
+                      two? <>>X && id? <<>>X 'var)))
+            (aex <>>>(<>e))                          ; the licensed shape: only the index scans
+           ; a bare array handed to the non-retaining mem trio stays eligible: the callee
+           ; keeps no copy of the address, and the call's own vmflush retires every pin
+           ; (memcpy(x, in, sizeof x) is cc_block's fill -- THE motivating idiom)
+           (id? <e 'call && two? >e && two? <>e && id? <<>e 'var &&
+            member? <><>e '("memcpy" "memset" "memcmp"))
+            (: (goa l) (? !(two? l) ()
+                          (: a2 <l
+                             _ (? (two? a2 && id? <a2 'var) () (aex a2))
+                             (goa >l)))
+               (goa <>>e))
+           (member? <e '(addr szof)) (axx >e)
+           (id? <e 'var && two? >e) (pin tak2 <>e 1)
+           (: (go l) (? !(two? l) () (: _ (aex <l) (go >l))) (go e)))
+       _ (adcll items)
+       _ (aex items)
+       (filter (\ nm ((peep dcl2 nm 0 = 1) && !(peep tak2 nm ())))
+               (peep ar2 'l ())))
    ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this counter and pin the
    ; statement's wrapset (g 'stwrap) off g 'livtab -- a miss pins 'all, the blanket wrap. an
    ; inline splice neither ticks nor re-pins: it compiles under its statement's set.
@@ -5313,14 +5495,16 @@
     (pins (vmflush g)
      'livtab ()  ; liveness (set only for a wrap-bearing regen)
      'vuniv ()   ; vmap off (no universe)
+     'vuarr ()   ; ...and its array leg
      'lhome ()   ; locals-homing map (cgdecl's hook reads it)
      'rgon ()    ; ...and its regen flag (the splice decl gate)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
    ; and wraps per-call off the liveness (av9, alive's answer)
-   (rgset g lh9 av9)
+   (rgset g lh9 av9 au9)
     (pins (vmflush g)      ; vmflush pin set is disjoint from rgset
      'vuniv <>>av9         ; the vmap rides the regen (univ known)
+     'vuarr au9            ; ...and the array leg its universe
      'homes ()
      'lhome lh9
      'rgon 1
@@ -6301,6 +6485,7 @@
        ; livtab so call-fixed wraps only what a call actually needs
        ng (sr6f || vararg || bad? ir1 || peep g 'hasasm () || anyop? ir1 'sys)
        av (? ng () (alive g f))
+       au (? ng () (auniv g f))                     ; the array leg's universe rides the same gate
        ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
        ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
        ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
@@ -6342,7 +6527,7 @@
            _ (pins (fnreset g) ; the attempt starts from the clean record at ir1's accumulator snapshot
               'n n0 'strs strs0
               'pool0 lp9 'pool lp9)
-           _ (rgset g lh9 av)
+           _ (rgset g lh9 av au)
            ; the callee-saved homes: one slot each past the r3 cell, stored by the prologue
            ; (g 'cssv) and reloaded on every exit -- the epilogue PIN carries the loads through
            ; each ret and sib splice, and unframe re-addresses them like any slot op
@@ -6372,7 +6557,7 @@
               (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
                  (? (tally rs < tally rd) (leaf rs) (deopt ())))))
        irf (? (bad? ir1) 'bad
-          ((hm || lh || two? ride || two? ih0) && !(peep g 'fesc ()) && !(hascall? ir1))
+          ((hm || lh || two? ride || two? ih0 || two? au) && !(peep g 'fesc ()) && !(hascall? ir1))
            (leaf ride)
           ; calls remain: home + spill where reads beat the wraps -- FN-WIDE, all homable params
           ; or none. ⚠ per-param verdicts were measured BOTH ways and lost: pruning a "losing"
@@ -6390,7 +6575,9 @@
                                  !(id? (nthr (argr g) i9) (homereg i9))) (n2 + 1) n2)))
              pp (hm && (2 * nc * nh < nr ||
                         (two? av && (2 * nh * (pmax ir1 + nthr av 4) + em < nr))))
-             (? (pp || lh) (regen (? pp 'shadow ()) st0) ir1)))
+             ; the array leg licenses its own regen: element pins are priced by neither
+             ; nr (param reads) nor the homes -- a non-empty universe is the pay
+             (? (pp || lh || two? au) (regen (? pp 'shadow ()) st0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
        ; it early lets a pass-2 ride clobber a live arrival. this chain's order is TYPED
