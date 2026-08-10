@@ -144,24 +144,32 @@ What that shape buys:
 * **a NULL vt slot means NO METHOD**, and the dispatcher answers for it (no `readn` reads the
   end). No noop stubs.
 
-⚠ The price: a static port pays a per-call `O_NONBLOCK` toggle, so its syscall count per byte
-went 2 → 4 while the read count did not move. The `fcntl` pair is skipped when the fd already
-says nonblocking; flags are **not** cached for an inherited fd, because they ride the open file
-description a pty child and the launching shell both share.
+⚠ The price: a static port reads one byte per call and used to pay a per-call `O_NONBLOCK`
+toggle beside it, so `love < corpus.l` spent **3.8M syscalls** on 953 KB where the same corpus
+as a file spent 23K, and ran 1.9× slower for it. Both halves are gone now, and they went
+separately, because a door that cannot lend one can still lend the other. What the frontend
+takes it gives back at `quit`, at `exec`, and at the end of `main` — `stdin_give`, three sites,
+all holding `g`, which is why none of this needs an `atexit` or a global.
 
-Per *byte* is the part that bit. A static cannot own a heap buffer, so `love < corpus.l` spent
-**3.8M syscalls** on 953 KB where the same corpus as a file spent 23K, and ran 1.9× slower for
-it. What fixed it is not a buffer on the static — it is a **borrowed** one: a seekable fd 0 gets
-a heap bio parked in `g->inport`, and `rbio_of` reads it *through* the static. `in` keeps its
-identity, its one-byte face, and its position; only the device gulps. Syscalls now match the
-file lane exactly, and what remains of the gap is `trickle`'s per-byte promise, not I/O.
+**A seekable fd 0 lends its bytes.** Not a buffer on the static — a **borrowed** one: a heap bio
+parked in `g->inport`, which `rbio_of` reads *through* the static. `in` keeps its identity, its
+one-byte face, and its position; only the device gulps. 3.8M → 23K, an exact match for the file
+lane, and what remains of that gap is `trickle`'s per-byte promise, not I/O.
 
-⚠ **Seekable only.** A pipe and a tty keep the bare lane. The run puts the kernel's fd offset
-ahead of the port's logical one, which nothing in-process can see but an inheritor can, so the
-frontend seeks it back before handing it on (`stdin_rewind`, at `quit`, at `exec`, and at the
-end of `main`) — and only a seekable fd can be put back. This is camp 2's bargain from part III,
-taken exactly where it is free: bash pays per-byte on a pipe for the same reason. `test_stdinbuf`
-runs one program down each door and diffs, which is the only way to catch losing it.
+**A pipe lends its blocking bit.** No run is possible — nothing puts a pipe back — but the
+*toggle* costs nothing to hoist, because a one-byte read leaves the fd exactly where the reader
+is. `O_NONBLOCK` goes on once, the old flags into `g->inflag`, and `fd_readn` skips the dance for
+that one fd: 3.8M → 976K, with 2,859,623 `fcntl` becoming 35. Worth ~3% on the corpus, which is
+compute-bound, and **0.96 s → 0.65 s** on a load that only reads.
+
+⚠ **A tty gets neither.** A human types, so syscalls-per-byte buys nothing, and a terminal handed
+back nonblocking is the one version of this that breaks the user's shell. It is also the only
+lane where the flag is genuinely shared with something that will read again.
+
+The run is camp 2's bargain from part III taken exactly where it is free; the bit is the part of
+that bargain nobody had to pay in the first place. `test_stdinbuf` runs one program down each
+door and diffs — the only way to catch a lane that starts running ahead — and reads the exec'd
+child's `/proc/self/fdinfo/0` to prove fd 0 was handed on blocking.
 
 ⚠ Ungated: no gate feeds a keystroke to inle, virt, mps2 or teensy — the qemu harness runs
 `</dev/null` on purpose, since a non-definite stdin hangs it. Their `readn` is exercised by
@@ -312,3 +320,9 @@ What is left is a COST, not a question: trickle mints a `once` per byte, which i
 of the gap between stdin and a file (~2.2 µs/byte over the corpus) — the device is at parity.
 A run-at-a-time charlist that stays attached to its port would close it. Everything else in
 this document is standing design.
+
+⚠ The pipe keeps camp 2's per-byte *read* and always will, for camp 2's reason: a child must find
+fd 0 where our reader stopped, and nothing puts a pipe back. But that is one syscall per byte, not
+four — the `O_NONBLOCK` toggle beside it was never part of the bargain and no longer runs (part II).
+Where bash's row above says "one `read()` per byte on pipes, forever", ours now says exactly that
+and nothing more.

@@ -38,12 +38,14 @@ test_filemode: $m
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# test_stdinbuf -- THE BORROWED RUN IS INVISIBLE. A seekable fd 0 reads the device in
-# 4096-byte gulps (love.c's rbio_of) where a pipe still drips one byte at a time, so the
-# law is that BOTH DOORS ANSWER THE SAME: the bytes our reader has not taken are still
-# there for an in-form (slurp in), and still there for a child that inherits the fd --
-# the second is what stdin_rewind buys, and nothing else would catch losing it. The
-# corpus cannot gate this; the difference exists only BETWEEN two ways of being fed.
+# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. A
+# seekable fd 0 reads the device in 4096-byte gulps (love.c's rbio_of) where a pipe still
+# drips one byte at a time, so the first law is that BOTH DOORS ANSWER THE SAME: the bytes
+# our reader has not taken are still there for an in-form (slurp in), and still there for a
+# child that inherits the fd -- the second is what stdin_give's seek buys. The pipe lends
+# its O_NONBLOCK bit instead (`inflag`), and the law for that one is read straight off
+# /proc: a child must inherit fd 0 BLOCKING, or it takes an empty pipe for an ended one.
+# The corpus cannot gate any of this; it exists only BETWEEN two ways of being fed.
 test_stdinbuf: $m
 	@echo TEST stdin borrows a run
 	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/host/.test_stdinbuf1.l
@@ -57,6 +59,12 @@ test_stdinbuf: $m
 	  || { cat out/host/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
 	@grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.seek \
 	  || { cat out/host/.test_stdinbuf2.l.seek; echo "FAIL the exec'd child lost the fd position"; exit 1; }
+	@printf '(exec (L "cat" "/proc/self/fdinfo/0"))\n' > out/host/.test_stdinbuf3.l
+	@cat out/host/.test_stdinbuf3.l | $m > out/host/.test_stdinbuf3.out 2>&1; \
+	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' out/host/.test_stdinbuf3.out); \
+	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
+	    || { cat out/host/.test_stdinbuf3.out; \
+	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
 # test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
 # stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
 # it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.

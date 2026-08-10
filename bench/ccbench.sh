@@ -108,9 +108,9 @@ build_mooncc() { # $1=binpath
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
 # the one-global-scope property), but a redirect is seekable and a pipe is not, and only
-# a seekable fd 0 gets a read run (host/main.c). Piping costs ~2.9M extra fcntls + 953K
-# reads over this corpus, and syscall time is the SAME work in all three lanes -- it is
-# kernel, not codegen, so it only dilutes what this table is trying to see.
+# a seekable fd 0 gets a read run (host/main.c). Piping still costs 953K reads over this
+# corpus -- one per byte, which no pipe can be spared -- and syscall time is the SAME work
+# in all three lanes: kernel, not codegen, so it only dilutes what this table is seeing.
 CORPUS1=$WORK/corpus.l
 cat $CORPUS > "$CORPUS1"
 

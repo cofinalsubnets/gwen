@@ -232,10 +232,14 @@ struct ai {
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
                   // read by use/from. a lazy singleton, so both bootstrap prel runs
                   // capture the SAME tablet. in v0..end: traced + serialized.
-   ai_word inport; // the BUFFERED stdin port, or 0. a seat that can put fd 0 back where
-                  // its reader stopped mints one at boot and binds it to `in` itself;
-                  // the handoff sites read it back off `g` to rewind. traced here so a
+   ai_word inport; // the BUFFERED stdin port, or 0. a seat that can put fd 0 back where its
+                  // reader stopped mints one at boot and parks it here -- `in` stays the
+                  // static and reads THROUGH it (love.c's rbio_of). traced here so a
                   // collection forwards it -- a static port could not hold a heap run.
+   ai_word inflag; // fd 0's flags AS WE FOUND THEM (a charm), or 0 for "we left them alone".
+                  // set when a seat takes the O_NONBLOCK bit for the whole run instead of
+                  // toggling it per read; the same handoff sites put it back. raw 0 is no
+                  // charm, so the boot value cannot be read as a saved O_RDONLY.
    union {
     ai_word x;
     struct ai_io {
