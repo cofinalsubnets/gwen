@@ -52,6 +52,9 @@ per-symbol sizes are address-gap derived, so they carry inter-fn padding, ~1–2
 | egg boot insns (G) | 9.56 | 5.57 | 1.72× | dnf |
 | egg boot wall (ms) | 962 | 823 | 1.17× | dnf |
 
+gcc's dnf was the missing `love_data.ld` (traps below), fixed the same day — the column
+is fillable now and empty only because this fill predates it.
+
 The insn ratio is the codegen differential; the wall ratio is softer because mooncc's
 extra instructions are cheap and run at higher IPC — measured this fill: IPC 2.98 vs
 2.05, cycles 17.9G vs 15.2G (**1.18×**, and wall tracks cycles). The corpus and the
@@ -87,13 +90,18 @@ read as a codegen gap.
 
 ## ⚠ traps — each one ate a run before it was written down
 
-* **the corpus goes in as a FILE, never on stdin** — the corpus tests stdin (io.l reads
-  it), so a piped run desyncs the reader mid-suite and every lane looks dnf. The
-  test.mk:41 discipline applies here too.
-* **the gcc runtime column is dnf**: gcc 16.1.1 -O2 builds a love that segfaults at boot,
-  before any test. Pre-existing and undiagnosed — nothing in the tree builds with gcc
-  (the default is mooncc, `.hostcc` picks clang). Its build-time and .text rows are still
-  real; delete this bullet when the crash is found.
+* **the corpus arrives by REDIRECT, never down a pipe** — both feed it on stdin and both
+  answer 3811 pass, so this is timing hygiene, not correctness: only a seekable fd 0 gets
+  a read run, and a pipe drips the 953K bytes one syscall each. That's ~0.5 s of kernel
+  time — the same work in all three lanes, so it only dilutes what the table is seeing.
+* **a bench link owes `love_data.ld`** — the data sentinels' tiling IS love.h's ai_typ,
+  and left to itself ld keeps each `love_data.N` an orphan in first-encountered order.
+  gcc emits `love_data.7` first, so lvm_str lands below lvm_sym: `in_data` wraps unsigned
+  and every string reads as a closure, hash takes the closure branch, and ttag walks off
+  the heap during ai_ini's first intern. clang passed only by emitting in source order.
+  Fixed 2026-08-10 — ccbench now links with `$LDFLAGS`, and gcc runs the corpus green.
+  The .text rows below predate the fix and are still real: the orphans are their own
+  sections either way, so `size -A` reads the same with the script and without.
 * **the bench binaries are unbaked** — ccbench links without `image_ldflags`, so there is
   no `.image` section to bake into. Never compare their wall to a shipped love (a baked
   boot is ~33 ms; these boot in ~900). That's also why `bake` is off the roster, and
