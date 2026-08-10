@@ -89,7 +89,12 @@ Learned by measuring, several times each; check a new lever against these before
    Measured 23× on chacha20 vs 1.77× on scalar poly1305 (bench/ccbench.sh carries both
    rows); love.c's z-tray elementwise lane 4.8×. Worth more than every landed rung
    combined on its shape. Watch: chacha and poly should close TOGETHER toward poly's
-   ratio.
+   ratio. FIRST RUNG LANDED 2026-08-10 (the vmap's array leg, the rung ledger below):
+   element pins with write residency — chacha −19% wall, poly −10%, moving together as
+   the diagnosis demanded. What full closure still needs is store ELISION (every write
+   still stores — the write-through law) and a frame-direct element lvalue (the
+   lea/add/park address dance per store): the first is the allocator leg's territory,
+   the second a clval fold a later rung can take alone.
 2. **Registers as the source of truth** — the allocator leg proper: liveness over ir1,
    values surviving labels and calls, spill placement instead of write-through. Kills
    both the def-stores and the post-flush reloads (the ~22% bucket). The vmap, the JOIN
@@ -203,6 +208,24 @@ nested-bin left already rides a pool register, so load shapes are the whole win
 profile. A call on either side bars it; a constant right rides immop unchanged.
 dyn insns −0.04% exact/disjoint 48.778G→48.760G, .text size-neutral. Law-pinned
 (delivered park + 3-address combine + both bars), two flips falsified.
+2026-08-10 · array slots, first rung (lever 1: the vmap's ARRAY LEG): a once-declared
+1-D gp-scalar array whose every appearance is x[e] gets element pins under minted
+content-compared keys ("x[3]"). READS pin (want-aimed load into a pool register, the
+next read zero forms); WRITES take residency too (the rhs aims at a fresh pool
+register, cvt IN PLACE — canonical like an int home's def — store from it, re-pin:
+the read-after-write is zero forms) or, unhonored, drop; a variable-index write (or
+post/rmw/fill) drops the whole array by key prefix. The ESCAPE gate is the soundness
+anchor: any bare x is decay and excludes the array — so no pointer can alias an
+eligible one and no pointer analysis exists; the non-retaining mem trio
+(memcpy/memset/memcmp) is licensed by name (cc_block's fill is THE idiom; the call's
+own vmflush retires every pin anyway). chacha −19% wall (5.40→4.38s), poly −10%
+(1.81→1.63s), moving together per the gauge; corpus dyn insns a wash (love.c's hot
+arrays are heap trays through pointers — ineligible by design); .text size-neutral.
+Five law shapes (multi-read pins, write residency, unhonored drop, variable-index
+drop-all, the escape gate), two flips falsified, and a six-shape torture C
+differential vs clang. The catch worth keeping: the first probe's chacha number
+barely moved — the state array was ESCAPED by its own memcpy fill, and the licence
+list is what unlocked the motivating shape.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
