@@ -3,7 +3,8 @@
 How mooncc decides what lives in a register, what that costs against gcc/clang -O2, and
 which levers remain — the **catalog** the differentials built, promoted from session
 memory 2026-08-10. Companions: doc/moon-diff.md (the running three-compiler ledger),
-doc/moon-c-gaps.md (conformance), doc/moon-diag.md (refusals). Anchors below are into
+doc/moon-c-gaps.md (conformance), doc/moon-diag.md (refusals), doc/hom.md (the
+design the destination-die migration wears). Anchors below are into
 crew/moon/gen.l; verify before leaning on one — this file states shape and physics, the
 code states truth.
 

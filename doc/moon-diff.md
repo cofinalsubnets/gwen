@@ -10,6 +10,10 @@ The harness is `bench/ccbench.sh` (build + corpus wall; it leaves the three bina
 `size -A` over those same binaries. Method and traps at the bottom — reproduce rather
 than trust.
 
+This ledger is one of four docs that ride together: doc/moon-regalloc.md (the catalog
+of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
+destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
+
 ## 2026-08-10 — first fill (HEAD 9d719a28)
 
 Ryzen 7 5825U, 16 threads, quiet box. gcc 16.1.1, clang 22.1.8, mooncc at HEAD
