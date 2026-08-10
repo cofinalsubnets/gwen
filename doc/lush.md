@@ -23,6 +23,8 @@ Interactively it offers an editable line with Tab completion (commands from PATH
 
 The script subset covers pipelines and lists (`| && || ; !`), redirects including io-numbers and `2>&1`, here-documents (`<<`, `<<-`), command substitution (`$( )` and backticks), globbing (`* ? [..]`, quoting-aware), tilde expansion, `if`/`while`/`until`/`for`/`case`, `{ }` groups and `( )` subshells, functions with `return`, shell variables over the environment (`export` promotes), positional parameters with the quoted-`"$@"` law, the `${x:-y}` parameter-expansion family including `${#x}` and `${x#pat}`/`${x%pat}`, and `set -e -u -x`.
 
+Command substitution does not fork. A body that only says its piece -- **pwd**, **:**, **true**, **false** -- is taken by a sink this task wears, with no pipe and no child at all; anything else runs in the shell itself with stdout on a pipe a cooperative task drains, so any size flows. POSIX puts the body in a subshell, and forkless there is nobody to copy the state, so lush puts back by hand what a fork would have taken: the working directory, shell variables, functions, positional parameters, `$0`, the `-e -u -x` flags, and the environment. What it does not put back: a job started inside stays the shell's, an fd opened inside stays open, and **umask** and the signal dispositions stand. `exit` inside a body ends the body with that status, as it would in a subshell.
+
 # OPTIONS
 
 **-c** *command* \[*name* \[*arg*...\]\]

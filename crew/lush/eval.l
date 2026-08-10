@@ -147,7 +147,9 @@
            0))
    (sh-builtin argv)
      (: cmd <argv
-        (? (= cmd "exit") (quit (? >argv (sh-int <>argv) (sh-status ())))
+        (? (= cmd "exit")
+             (: st (? >argv (sh-int <>argv) (sh-status ()))
+                (? (sh-subfds ()) ('xit >< st) (quit st)))
            (= cmd "cd")
              (: t (? >argv <>argv (+ "" (getenv "HOME")))
                 r (chdir t)
@@ -208,18 +210,22 @@
    (stclean acc) (each acc (\ st (each (sh-nth st 3) fdclose)))
    ; spawn one stage: external -> spawnmap; anything else -> fork, the child
    ; lays the pipe map on itself (dup2), closes the plumbing, evals, quits
+   ; ⚠ FLUSH FIRST, both lanes: a builtin says through `out` and buffers, a child
+   ; writes the fd straight, and when the two share one -- a pipe, a file, a $( )
+   ; capture -- whatever we still hold would land after bytes it was said before.
    (sh-spawn1 st base allclose pg fgi)
-     (? (id? (sh-nth st 0) 'x)
-        (spawnmap (sh-nth st 1) (+ base (sh-nth st 2)) allclose pg fgi)
-        (: _ (flush out) _ (flush err)
-           p (fork 0)
-           (? (= p 0)
-              (: _ (wear ())                      ; ⚠ a child wears the CONSOLE: its fds are the dup2 below, and a jug is not one
-                 _ (each base (\ e (dup2 >e <e)))
-                 _ (each allclose (\ fd (? (< 2 fd) (fdclose fd) 0)))
-                 s (sh-eval (sh-nth st 1))
-                 (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
-              p)))
+     (: _ (flush out) _ (flush err)
+        (? (id? (sh-nth st 0) 'x)
+           (spawnmap (sh-nth st 1) (+ base (sh-nth st 2)) allclose pg fgi)
+           (: p (fork 0)
+              (? (= p 0)
+                 (: _ (wear ())                   ; ⚠ a child wears the CONSOLE: its fds are the dup2 below, and a jug is not one
+                    _ (sh-dropcaps ())            ; ...and it is inside no capture of ours
+                    _ (each base (\ e (dup2 >e <e)))
+                    _ (each allclose (\ fd (? (< 2 fd) (fdclose fd) 0)))
+                    s (sh-eval (sh-nth st 1))
+                    (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
+                 p))))
    ; stage 0 may lead a pgrp + take the tty, the rest join; base map = pipe
    ; wiring, a stage's own redirects land after. lastout >= 0 sends the LAST
    ; stage's stdout there (the cmdsub lane).
@@ -302,6 +308,7 @@
            (: rm (sh-rdmap rs)
               (? (id? <rm 'err) (cmderr >rm)
                  (: opens (sh-nth rm 2) wrs (sh-nth rm 3)
+                    _ (flush out) _ (flush err)      ; see sh-spawn1: the child writes the fd straight
                     pid (spawnmap argv (sh-nth rm 1) (+ opens (map cap wrs))
                                   (sh-pgm 0) (sh-fgm 0))
                     _ (each opens fdclose)
@@ -421,14 +428,27 @@
         (: it <items
            (? (sh-anymatch t <it) (>it ())
               (sh-citems t >items))))
+   ; ⚠ under a forkless capture a `( )` does NOT fork: the child would inherit
+   ; the drainer and stall on it, and the roster sh-subback puts back is already
+   ; the subshell's. outside one the fork stands -- it is the reference reading,
+   ; and it isolates the fds and the job table this lane cannot.
    (sh-subsh b)
-     (: _ (flush out) _ (flush err)
-        p (fork 0)
-        (? (= p 0) (: _ (wear ())            ; the child's stdio is its fds, never a jug this task wears
-                      s (b ())
-                      (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
-           (< p 0) (cmderr "cannot fork")
-           (: _ (sh-waitfg (L p) (sh-curline ())) (sh-echk (sh-status ())))))
+     (? (sh-subfds ()) (sh-subhere b)
+        (: _ (flush out) _ (flush err)
+           p (fork 0)
+           (? (= p 0) (: _ (wear ())         ; the child's stdio is its fds, never a jug this task wears
+                         _ (sh-dropcaps ())  ; ...and it is inside no capture of ours
+                         s (b ())
+                         (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
+              (< p 0) (cmderr "cannot fork")
+              (: _ (sh-waitfg (L p) (sh-curline ())) (sh-echk (sh-status ()))))))
+   (sh-subhere b)                            ; a subshell in our own process
+     (: snap (sh-subsave ())
+        s (b ())
+        _ (sh-subback snap)
+        st (sh-capstat s)                    ; brk/cnt do not cross a subshell either
+        _ (pin sh-status () st)
+        (sh-echk st))
    ; a compound's trailing redirect: swap OUR OWN fds (dup saves, dup2 lays),
    ; run in-process (a `done < file` loop keeps its variables), swap back
    (sh-rdr b rs)
@@ -446,9 +466,8 @@
               s)))
 
    ; --- command substitution (word.l's box) -------------------------------------
-   ; a single pipeline/command spawns with the LAST stdout on our pipe; drain
-   ; through fdopen, THEN reap -- any body size flows. sequencing forms (a;b,
-   ; a&&b) reap per step instead (the pipe-buffer caveat rides with them).
+   ; an all-external pipeline spawns with the LAST stdout on our pipe; drain
+   ; through fdopen, THEN reap -- any body size flows, and nothing forks.
    (sh-capsimple a wfd)                        ; -> pids, unwaited
      (: cmds (? (id? <a 'pipe) (sh-nth a 1) (L a))
         sx (sh-stagex cmds ())
@@ -467,28 +486,20 @@
    (sh-capst sts)                              ; the LAST stage's status, a signal folded down
      (? !(two? sts) 1
         (: st (last sts) (? (charm? st && (< 255 st)) (- st 128) st)))
-   (sh-cappipe a wfd)                          ; -> status, waited
-     (: pids (sh-capsimple a wfd) (sh-capst (map (\ p (wait p)) pids)))
-   (sh-capture a wfd)
-     (? !a 0
-        (: k <a
-           (? (id? k 'seq) (: _ (sh-capture (sh-nth a 1) wfd) (sh-capture (sh-nth a 2) wfd))
-              (id? k 'and) (: s (sh-capture (sh-nth a 1) wfd)
-                              (? (= s 0) (sh-capture (sh-nth a 2) wfd) s))
-              (id? k 'or)  (: s (sh-capture (sh-nth a 1) wfd)
-                              (? (= s 0) s (sh-capture (sh-nth a 2) wfd)))
-              (id? k 'bg)  (sh-capture (sh-nth a 1) wfd)
-              (sh-cappipe a wfd))))
-   ; --- the forkless capture: a body that runs HERE says its piece into a jug ----
-   ; ⚠ A JUG IS NOT AN FD, and that is the whole boundary: it takes what LOVE says
-   ; through `out` and nothing a child process writes. so this lane is for the
-   ; builtins that speak for themselves and leave nothing behind -- a function
-   ; body may spawn, and its bytes would go to the console past the capture.
-   ; ⚠ the test is SYNTAX besides, asked before a single word expands (an expansion
-   ; runs $( ) of its own, so it may happen once and only once): ONE simple
-   ; command, no redirects, no assignments, and a bare literal name -- no ~, no
-   ; glob, so the word is already its own text. what a task wears is per-task, so
-   ; a nested capture stacks, and a forked child drops the lot (sh-spawn1).
+   ; --- which lane takes this body ----------------------------------------------
+   ; three, and ONE look picks: the peel and the name are the same question for
+   ; all of them, so sh-lane asks once and answers a nom.
+   ;  'jug -- a no-effect builtin, so LOVE says the whole of it: a jug takes it
+   ;          with no pipe, no fd, no child. ⚠ A JUG IS NOT AN FD, and that is the
+   ;          boundary -- it holds what `out` is told and nothing a process writes,
+   ;          so a body that could spawn (a function, anything with a body) is out.
+   ;  'ext -- every stage a plain external: sh-capsimple already spawns those
+   ;          straight onto the pipe, forkless, and nothing needs putting back.
+   ;  'sub -- everything else, in-process down a pipe a task drains (sh-capsub).
+   ; ⚠ the test is SYNTAX, asked before a single word expands (an expansion runs
+   ; $( ) of its own, so it may happen once and only once) -- hence the bare
+   ; literal: no ~, no glob, so the name is already its own text. an unreadable
+   ; name is 'sub, the lane that holds anything.
    sh-purebi '("pwd" ":" "true" "false")
    (sh-barelit w)                              ; a word that is already its own text, or ()
      (? (!(two? w) || two? >w) ()
@@ -496,14 +507,23 @@
            (? !(id? <h 'lit) ()
               (: t >h
                  (? (!(tally t) || (= (t 0) 126) || sh-anyglob t) () t)))))
-   (sh-inproc? a)
-     (? !(id? <a 'cmd) ()
-        (two? (sh-nth a 2)) ()                 ; a redirect keeps the pipe
-        (: pk (sh-peel (sh-nth a 1) ())
-           (? (two? <pk) ()                    ; an assignment keeps the pipe
-              !(two? >pk) ()
-              (: nm (sh-barelit <>pk)
-                 (? !nm () (&& !(sh-fn? nm) (sh-smem? nm sh-purebi)))))))
+   (sh-cmdname a)                              ; a 'cmd's bare name, or () if it has none to read
+     (: pk (sh-peel (sh-nth a 1) ())
+        (? (two? <pk) ()                       ; assignments want a subshell
+           !(two? >pk) ()
+           (sh-barelit <>pk)))
+   (sh-extcmd? c)                              ; a stage sh-stagex would spawn as it stands
+     (? !(id? <c 'cmd) ()
+        (: nm (sh-cmdname c) (? !nm () (&& !(sh-bi? nm) !(sh-fn? nm)))))
+   (sh-lane a)
+     (? (id? <a 'pipe) (? (all sh-extcmd? (sh-nth a 1)) 'ext 'sub)
+        !(id? <a 'cmd) 'sub
+        (: nm (sh-cmdname a)
+           (? !nm 'sub
+              (sh-fn? nm) 'sub
+              !(sh-bi? nm) 'ext
+              (&& !(two? (sh-nth a 2)) (sh-smem? nm sh-purebi)) 'jug   ; a redirect wants an fd
+              'sub)))
    ; re-seat STDOUT alone -- `wear` replaces the whole triple, so an in or err this
    ; task already wears has to ride along by name
    (sh-wearout o)
@@ -511,14 +531,92 @@
         (wear (L (? (two? w) <w ())
                  o
                  (? (&& (two? w) (two? >w) (two? >>w)) <>>w ()))))
+   (sh-capstat st)                             ; a plan's answer read as a $( ) status
+     (? (charm? st) st
+        (&& (two? st) (|| (id? <st 'ret) (id? <st 'xit))) >st
+        0)
    (sh-capjug a)
      (: j (jug 0)
         w (worn ())
         _ (sh-wearout j)
         st (sh-guarded (\ _ (sh-eval a)))      ; the body's status is the value, never our errexit
         _ (wear w)
-        _ (pin sh-substat () (? (charm? st) st (? (&& (two? st) (id? <st 'ret)) >st 0)))
+        _ (pin sh-substat () (sh-capstat st))
         (slurp j))
+
+   ; --- the forkless capture: the body runs HERE, down a pipe a TASK drains -----
+   ; a child process needs an FD, so this lane is a real pipe with our own stdout
+   ; dup2'd onto it -- and the DRAINER is what makes that safe. a pipe holds one
+   ; buffer and the only reader is the shell, which is busy running the body, so a
+   ; body that says more than that would stop forever. a task parks on the read end
+   ; and empties it as the body fills it; the two never both stop, because every
+   ; wait in this tree parks its TASK and not the process (tools/waits.l).
+   ; ⚠ POSIX runs $( ) in a SUBSHELL, and forkless there is nobody to copy the
+   ; state -- sh-subsave/sh-subback do it by hand, and that roster IS the contract:
+   ; cwd, variables, functions, positionals, $0, the e/u/x flags, the environment.
+   ; what a fork would also have taken and this does not: a job started here stays
+   ; the shell's, an fd opened here stays open, umask and the handlers stand.
+   ; ⚠ a background child inside holds the write end, so the drain sees no eof
+   ; until it dies -- the wait `$(sleep 5 &)` has in every shell, and the same one.
+   ; ⚠ and a FORK under one of these bodies takes the drainer by copy, so the
+   ; child would read its parent's capture: shut every inherited one down before
+   ; the child runs a step -- close the read end, then join the task, which now
+   ; reads the end at once. closing without joining leaves the fd number free for
+   ; the body to reopen, and the drainer would wake onto whatever landed there.
+   (sh-dropcaps _)
+     (: _ (each (sh-subfds ()) (\ e (: _ (fdclose <e) _ (catch >e) 0)))
+        _ (pin sh-subfds () ())
+        0)
+   (sh-tabsnap t) (map (\ k (k >< (t k))) (keys t))
+   (sh-tabback t sn)
+     (: _ (each (keys t) (\ k (pull t k 0)))
+        _ (each sn (\ e (pin t <e >e)))
+        0)
+   (sh-envback old)                            ; unset what appeared, then re-lay the old
+     (: now (environ 0)
+        (? (= now old) 0
+           (: _ (each now (\ e (? (sh-smem? e old) 0
+                                  (: p (sh-eqpos e 0)
+                                     (setenv (? (nil? p) e (snip e 0 p)) ())))))
+              _ (each old (\ e (: p (sh-eqpos e 0)
+                                  (? (nil? p) 0
+                                     (setenv (snip e 0 p) (snip e (+ p 1) (tally e)))))))
+              0)))
+   (sh-subsave _)
+     (L (cwd 0) (sh-tabsnap sh-vars) (sh-tabsnap sh-funcs) (sh-pos ()) (sh-arg0 ())
+        (L (sh-eflag ()) (sh-uflag ()) (sh-xflag ())) (environ 0))
+   (sh-subback s)
+     (: _ (chdir (sh-nth s 0))
+        _ (sh-tabback sh-vars (sh-nth s 1))
+        _ (sh-tabback sh-funcs (sh-nth s 2))
+        _ (pin sh-pos () (sh-nth s 3))
+        _ (pin sh-arg0 () (sh-nth s 4))
+        f (sh-nth s 5)
+        _ (pin sh-eflag () (sh-nth f 0))
+        _ (pin sh-uflag () (sh-nth f 1))
+        _ (pin sh-xflag () (sh-nth f 2))
+        _ (sh-envback (sh-nth s 6))
+        0)
+   (sh-capsub a)
+     (: pp (pipe 0)
+        (? (charm? pp) (: _ (cmderr "cannot pipe") "")
+           (: rfd <pp wfd >pp
+              d (twirl (\ _ (: p (fdopen rfd) t (slurp p) _ (close p) t)) 0)
+              _ (flush out)                    ; the bytes already in hand are the CALLER's
+              sv (dup 1)
+              _ (dup2 wfd 1)
+              caps (sh-subfds ())
+              _ (pin sh-subfds () ((rfd >< d) >< caps))
+              snap (sh-subsave ())
+              st (sh-guarded (\ _ (sh-eval a)))
+              _ (flush out)                    ; ...and the body's, before the write end goes
+              _ (sh-subback snap)
+              _ (pin sh-subfds () caps)
+              _ (dup2 sv 1) _ (fdclose sv)
+              _ (fdclose wfd)                  ; the last write end: now the drain reads eof
+              _ (pin sh-substat () (sh-capstat st))
+              (catch d))))
+
    ; every lane leaves sh-substat holding this body's status: an assignment with
    ; no command name answers the LAST one performed (POSIX), so the pin is the
    ; only way back -- sh-fields sits between here and the reader. 1 up front is
@@ -530,30 +628,23 @@
            (: pr (sh-parse >lx)
               (? !(id? <pr 'ok) (: _ (cmderr "bad $( ) body") "")
                  !>pr (: _ (pin sh-substat () 0) "")           ; $( ) is a clean nothing
-                 (sh-inproc? >pr) (sh-capjug >pr)              ; no fork, no pipe
-                 (: a >pr
-                    pp (pipe 0)
-                    (? (charm? pp) ""
-                       (: rfd <pp wfd >pp
-                          seqish (|| (id? <a 'seq) (id? <a 'and)
-                                     (id? <a 'or) (id? <a 'bg))
-                          ; ⚠ GUARDED, and the guard must be up at the fork (the
-                          ; child takes it by copy): the body's status is this
-                          ; substitution's value, never the shell's own errexit
-                          ; trigger -- aborting it would drop the very output the
-                          ; caller asked for. the seq lane reaps per step and so
-                          ; never aborted; now both lanes answer the same.
-                          (sh-guarded
-                            (\ _ (? seqish
-                                    (: st (sh-capture a wfd)
-                                       _ (pin sh-substat () st)
-                                       _ (fdclose wfd)
-                                       (slurp (fdopen rfd)))
-                                    (: pids (sh-capsimple a wfd)
-                                       _ (fdclose wfd)
-                                       o (slurp (fdopen rfd))   ; drain, THEN reap
-                                       _ (pin sh-substat () (sh-capst (map (\ p (wait p)) pids)))
-                                       o)))))))))))
+                 (: a >pr ln (sh-lane a)
+                    (? (id? ln 'jug) (sh-capjug a)
+                       (id? ln 'sub) (sh-capsub a)
+                       (: pp (pipe 0)
+                          (? (charm? pp) ""
+                             (: rfd <pp wfd >pp
+                                ; ⚠ GUARDED: the body's status is this
+                                ; substitution's value, never the shell's own
+                                ; errexit trigger -- aborting it would drop the
+                                ; very output the caller asked for.
+                                (sh-guarded
+                                  (\ _ (: pids (sh-capsimple a wfd)
+                                          _ (fdclose wfd)
+                                          o (slurp (fdopen rfd))   ; drain, THEN reap
+                                          _ (pin sh-substat ()
+                                               (sh-capst (map (\ p (wait p)) pids)))
+                                          o))))))))))))
    _ (pin sh-subeval () sh-cmdsub)
 
    ; --- the script lane + the line entries --------------------------------------
