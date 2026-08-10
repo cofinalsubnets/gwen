@@ -232,6 +232,10 @@ struct ai {
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
                   // read by use/from. a lazy singleton, so both bootstrap prel runs
                   // capture the SAME tablet. in v0..end: traced + serialized.
+   ai_word inport; // the BUFFERED stdin port, or 0. a seat that can put fd 0 back where
+                  // its reader stopped mints one at boot and binds it to `in` itself;
+                  // the handoff sites read it back off `g` to rewind. traced here so a
+                  // collection forwards it -- a static port could not hold a heap run.
    union {
     ai_word x;
     struct ai_io {

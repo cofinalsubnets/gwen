@@ -40,6 +40,10 @@
     ; host/main.c's runner) are ours alone -- nobody else reads them, so running
     ; ahead is free and worth it. `in` is SHARED: the forms we eval can read it,
     ; and a child can inherit its fd. so stdin trickles.
+    ; ⚠ THIS TEST IS WHY `in` IS NEVER REBOUND. it folded at egg-compile time, so a
+    ; frontend handing stdin a read run parks it BEHIND the static (love.c's rbio_of)
+    ; -- bind a fresh port to the name and the identity fails here, in silence, and
+    ; the stream we mean to trickle gets gulped.
     (? (id? p in) (trickle p) (flow p)) 0))
 ; forms: every datum of a port, as DATA -- the data twin of `reads`, and the shape half
 ; the tools had each copied out by hand. it takes a PORT, like reads, so it needs neither

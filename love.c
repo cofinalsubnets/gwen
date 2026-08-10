@@ -2934,13 +2934,22 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
 // io_refill's third answer, beside a byte and EOF: the device has nothing right
 // now. distinct on purpose; never escapes lvm_fgetc.
 #define IO_WOULDBLOCK ((uintptr_t) -2)
-// the three answers for every port. no read method = END; no buffer = ask for one
-// byte. ⚠ the unbuffered lane STAYS unbuffered: bio_of refuses the statics, so
-// `in` reads one byte per readn -- the repl must not swallow the line after the
-// one it is reading (doc/io.md part III).
+// the three answers for every port. no read method = END; no buffer = ask for one byte.
+// WHICH BIO OWNS THIS PORT'S READ RUN: its own, or -- for the static input port on a seat
+// that lent it one -- the BORROWED one in `inport`. A static cannot own a heap buffer, so a
+// frontend that can put fd 0 back where its reader stopped parks a heap bio there instead;
+// same fd and same vt, so every lane below reads it verbatim.
+// ⚠ `in` KEEPS ITS IDENTITY AND ITS ONE-BYTE FACE: chug still finds nothing in hand, flow
+// still drips, (id? p in) still holds -- rebinding `in` to the bio instead would break that
+// last one, since bao's `reads` folded its own `in` at egg-compile time. Only the DEVICE
+// reads in gulps, which is why nothing above this line can tell, and why the fd offset it
+// runs ahead of is the frontend's to rewind before anyone inherits it.
+static ai_inline struct ai_bio *rbio_of(struct ai *g, struct ai_io *i) {
+ struct ai_bio *b = bio_of(g, i);
+ return b ? b : i == &ai_stdin.io ? (struct ai_bio*) ai_core_of(g)->inport : NULL; }
 static struct ai *io_refill(struct ai *g) {
  struct ai *fc = ai_core_of(g);
- struct ai_bio *b = bio_of(g, fc->io);
+ struct ai_bio *b = rbio_of(g, fc->io);
  struct ai_port_vt const *vt = fc->io->vt;
  if (!vt->readn) return fc->b = EOF, g;
  if (!b) {                                       // no buffer: the same lane at n = 1
@@ -2952,10 +2961,10 @@ static struct ai *io_refill(struct ai *g) {
   return g; }
  if (bio_wpending(b)) {                          // the crossover: our unsent ask goes first
   if (!ai_ok(g = io_wdrain(g, fc->io))) return g;
-  fc = ai_core_of(g), b = (struct ai_bio*) fc->io; }
+  fc = ai_core_of(g), b = rbio_of(g, fc->io); }
  if (!b->rbuf || (b->rbuf & 1)) {                // first buffered read: dress the backing
   if (!ai_ok(g = str0(g, ai_iobuf))) return g;
-  fc = ai_core_of(g), b = (struct ai_bio*) fc->io;   // the GC may have moved the port
+  fc = ai_core_of(g), b = rbio_of(g, fc->io);    // the GC may have moved the port
   b->rbuf = fc->sp[0];
   b->rpos = b->rlen = putcharm(0);
   gen_wb(fc, (word) b, b->rbuf);                 // a tenured port takes a young backing
@@ -2979,7 +2988,7 @@ static ai_inline struct ai *zgetc(struct ai*g) {
   fc->b = getcharm(i->ungetc_buf);
   i->ungetc_buf = putcharm(EOF);
   return g; }
- struct ai_bio *b = bio_of(g, i);
+ struct ai_bio *b = rbio_of(g, i);
  if (bio_rpending(b)) {
   uintptr_t p = getcharm(b->rpos);
   fc->b = (unsigned char) txt(str(b->rbuf))[p];

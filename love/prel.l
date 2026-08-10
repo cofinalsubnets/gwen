@@ -269,7 +269,9 @@
              c (see p)
              (? (= c -1) () (: _ (unsee p c) (gulp (once (\ u (flow p)))))))
  ; flow at one byte per force, for taking a port slowly where a whole run would read too far
- ; ahead. `in` already flows that way: it holds nothing in hand.
+ ; ahead. `in` already flows that way: it holds nothing in hand -- and still holds nothing
+ ; where the DEVICE gulps behind it (chug asks the port, which is the static, not the run
+ ; borrowed under it), so this stays the only door that reads stdin exactly.
  (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p)))))))
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail

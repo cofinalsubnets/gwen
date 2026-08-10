@@ -4,7 +4,7 @@
 
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
-  test_filemode test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
+  test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
   test_seed test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
@@ -38,12 +38,32 @@ test_filemode: $m
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# test_host takes the corpus as a FILE, and that is now a SPEED choice, not a
-# necessity: stdin works (test/io.l used to poke `in` and eat a byte of whatever fed
-# the suite -- it taps a charlist now), and it is equally strict, quitting 1 on a
-# scare either way. It is just ~1.8x slower, per-byte through the port where a file
-# is slurped, and this is the gate that runs constantly. cat'ing also keeps the
-# corpus's one-global-scope property.
+# test_stdinbuf -- THE BORROWED RUN IS INVISIBLE. A seekable fd 0 reads the device in
+# 4096-byte gulps (love.c's rbio_of) where a pipe still drips one byte at a time, so the
+# law is that BOTH DOORS ANSWER THE SAME: the bytes our reader has not taken are still
+# there for an in-form (slurp in), and still there for a child that inherits the fd --
+# the second is what stdin_rewind buys, and nothing else would catch losing it. The
+# corpus cannot gate this; the difference exists only BETWEEN two ways of being fed.
+test_stdinbuf: $m
+	@echo TEST stdin borrows a run
+	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/host/.test_stdinbuf1.l
+	@printf '(exec (L "cat"))\nHANDOFF-TAIL\n' > out/host/.test_stdinbuf2.l
+	@for f in out/host/.test_stdinbuf1.l out/host/.test_stdinbuf2.l; do \
+	   $m < $$f > $$f.seek 2>&1; cat $$f | $m > $$f.pipe 2>&1; \
+	   cmp -s $$f.seek $$f.pipe \
+	     || { echo "FAIL $$f: the buffered door differs from the bare one"; \
+	          diff $$f.pipe $$f.seek; exit 1; }; done
+	@grep -qF 'rest: [(say out "tail form")' out/host/.test_stdinbuf1.l.seek \
+	  || { cat out/host/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
+	@grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.seek \
+	  || { cat out/host/.test_stdinbuf2.l.seek; echo "FAIL the exec'd child lost the fd position"; exit 1; }
+# test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
+# stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
+# it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
+# What is left of the gap is the READER, not the device: a redirect gulps 4096 like
+# the file does (love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
+# its position exact, which costs ~1.45x here. This is the gate that runs constantly.
+# cat'ing also keeps the corpus's one-global-scope property.
 test_host: $m
 	@echo TEST $m
 	@cat $t > out/host/.test_host.l

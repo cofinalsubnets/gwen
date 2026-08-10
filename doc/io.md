@@ -144,11 +144,24 @@ What that shape buys:
 * **a NULL vt slot means NO METHOD**, and the dispatcher answers for it (no `readn` reads the
   end). No noop stubs.
 
-⚠ The price, measured and accepted: the unbuffered statics pay a per-call `O_NONBLOCK` toggle,
-so the syscall count per byte went 2 → 4 while the read count did not move. The `fcntl` pair is
-skipped when the fd already says nonblocking; flags are **not** cached for an inherited fd, and
-the statics do **not** get a buffer — that would make the repl swallow the line after the one it
-is reading, and re-open part III.
+⚠ The price: a static port pays a per-call `O_NONBLOCK` toggle, so its syscall count per byte
+went 2 → 4 while the read count did not move. The `fcntl` pair is skipped when the fd already
+says nonblocking; flags are **not** cached for an inherited fd, because they ride the open file
+description a pty child and the launching shell both share.
+
+Per *byte* is the part that bit. A static cannot own a heap buffer, so `love < corpus.l` spent
+**3.8M syscalls** on 953 KB where the same corpus as a file spent 23K, and ran 1.9× slower for
+it. What fixed it is not a buffer on the static — it is a **borrowed** one: a seekable fd 0 gets
+a heap bio parked in `g->inport`, and `rbio_of` reads it *through* the static. `in` keeps its
+identity, its one-byte face, and its position; only the device gulps. Syscalls now match the
+file lane exactly, and what remains of the gap is `trickle`'s per-byte promise, not I/O.
+
+⚠ **Seekable only.** A pipe and a tty keep the bare lane. The run puts the kernel's fd offset
+ahead of the port's logical one, which nothing in-process can see but an inheritor can, so the
+frontend seeks it back before handing it on (`stdin_rewind`, at `quit`, at `exec`, and at the
+end of `main`) — and only a seekable fd can be put back. This is camp 2's bargain from part III,
+taken exactly where it is free: bash pays per-byte on a pipe for the same reason. `test_stdinbuf`
+runs one program down each door and diffs, which is the only way to catch losing it.
 
 ⚠ Ungated: no gate feeds a keystroke to inle, virt, mps2 or teensy — the qemu harness runs
 `</dev/null` on purpose, since a non-definite stdin hangs it. Their `readn` is exercised by
@@ -237,20 +250,31 @@ says (the scheduler's side of this is doc/sched.md's syscall-free wake pass).
 
 ## part III — who owns the bytes
 
-The live question. A lazy memoized chain over an fd is a COPY with its own position, and nothing
-in the design considered two readers of one stdin.
+A lazy memoized chain over an fd is a COPY with its own position, and nothing in the original
+design considered two readers of one stdin.
 
-### the problem
+### the problem, and how it went
 
-`(reads in)` flows stdin, so a form inside the script that reads `in` finds nothing — and the
-next form still runs, because the colist held it:
+`(reads in)` flowed stdin, so a form inside the script that read `in` found nothing — and the
+next form still ran, because the colist held it:
 
 ```
 $ printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "second form ran")\n' | love
-rest: []second form ran
+rest: []second form ran            # what it used to do
+rest: [(say out "second form ran") # what it does now -- the slurp takes the tail, so
+]                                  # the second form is CONSUMED and never runs
 ```
 
-**It is ONE call site** (`love/cli.l`). The tracked stdin readers look like a migration and are
+**Camp 3 is reached.** `reads` (`love/bao.l`) asks whether the port is `in` and, if it is,
+`trickle`s it instead — one byte per force, so the reader never runs past the form it is on
+and the port's position is the only position there is. `flow` is kept for a port we own alone
+(a file, a tap), where running ahead is free.
+
+⚠ That `(id? p in)` test is why `in` is **borrowed through rather than rebound** when a seat
+buffers it (part II): `reads` folded its own `in` at egg-compile time, so binding a fresh object
+to the name would fail the test and silently go back to gulping.
+
+**It was ONE call site** (`love/cli.l`). The tracked stdin readers look like a migration and are
 not: most are kore's `(? (f = "-") (slurp in) (uread f))` idiom, which takes ALL of it and
 leaves no residue, and the rest are interactive key decoders that use one byte immediately. A
 session-wide ownership protocol to fix one line is the wrong size of answer.
@@ -273,14 +297,18 @@ through bao's editor, which reads one byte at a time because it was written for 
 ### the semantics we want, and the one thing decided
 
 **Camp 3**: one port, one buffer, one position. A reader takes exactly what it needs; in-process
-readers share coherently. love had this before the lift — the culprit is not the colist and not
-the reader, it is **the GULP**, which predates both: it takes everything ready and hands back a
+readers share coherently. love had this before the lift — the culprit was not the colist and not
+the reader, it was **the GULP**, which predates both: it takes everything ready and hands back a
 head DETACHED from the port. Two positions where there was one.
 
 **Decided: persistence is a BENEFIT, not a bug to trade away.** A charlist is a persistent value;
 a port position is ephemeral. guile has only the position — its buffer is not a value. love has
 handed the value out, and that is what made p1 clean (`once` exists precisely so forcing twice
-is free). So the way out has to keep the persistent value and give the port back its position,
-rather than choosing between them.
+is free). So the way out had to keep the persistent value and give the port back its position,
+rather than choosing between them — and `trickle` is that: the charlist is still a value, and
+the port never runs ahead of it.
 
-That is the open work. Everything else in this document is standing design.
+What is left is a COST, not a question: trickle mints a `once` per byte, which is now the whole
+of the gap between stdin and a file (~2.2 µs/byte over the corpus) — the device is at parity.
+A run-at-a-time charlist that stays attached to its port would close it. Everything else in
+this document is standing design.

@@ -46,7 +46,7 @@ test:
 # because linking every frontend means compiling love.c once per target). What it adds HERE
 # is the frontends the booting lanes below never reach -- mps2, teensy41, nucleo446,
 # playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
-test_slow: test_host test_love0 vmret test_wasm test_kernel test_disk test_virt test_embed
+test_slow: test_host test_love0 vmret test_stdinbuf test_wasm test_kernel test_disk test_virt test_embed
 	
 
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes

@@ -28,10 +28,44 @@ ai_noinline intptr_t ai_nclock(void) {
        : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 
+// --- stdin's read run, and the price of it ---
+// A bare port reads ONE BYTE PER readn (love.c's io_refill), so `love < file` used to pay
+// 3 fcntl + 1 read for every byte of it -- 3.8M syscalls over the corpus against a file's
+// 23K. The run that fixes it has to live in the heap, which a static port cannot hold, so
+// a seekable fd 0 gets a heap bio parked in `inport` that love.c's rbio_of reads THROUGH
+// the static -- `in` itself is untouched, identity and all.
+// ⚠ ONE PORT, ONE POSITION -- that is what makes this safe. Every in-process reader goes
+// through zgetc, which drains the run before the device, so an in-form (slurp in) still
+// sees exactly the bytes our reader has not taken. What runs ahead is only the KERNEL's
+// fd offset, and only an inheritor can see that -- hence the rewind below.
+// ⚠ SEEKABLE ONLY. A pipe and a tty keep the bare lane: nothing can put those back, and
+// a child inheriting fd 0 must find it where our reader stopped (bash pays the same
+// per-byte price on a pipe, for the same reason -- doc/io.md part III). test_stdinbuf
+// gates both halves by running one program down each door and diffing.
+// ⚠ TWO PLACES HOLD UNREAD BYTES: the borrowed run, and `in`'s OWN pushback -- the ungetc
+// stays on the static because that is the port everyone above reads.
+static void stdin_rewind(struct ai *g) {
+ if (!g || !ai_ok(g)) return;
+ struct ai *fc = ai_core_of(g);
+ if (!fc->inport) return;
+ uintptr_t n = ai_io_pending(g, (struct ai_io*) fc->inport)
+             + (getcharm(ai_stdin.io.ungetc_buf) != EOF ? 1 : 0);
+ if (n) lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR); }
+// mint it. ⚠ `in` IS NOT REBOUND -- it stays the static, and the run is BORROWED behind
+// it (love.c's io_refill). Rebinding would be unsound: bao's `reads` folded its own `in`
+// at egg-compile time, so a fresh object fails its (id? p in) test and it would gulp the
+// stream it means to trickle. The port here is never named in the book at all.
+static struct ai *stdin_buffer(struct ai *g) {
+ if (!ai_ok(g) || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return g;
+ if (!ai_ok(g = ai_io_alloc(g, STDIN_FILENO))) return g;
+ struct ai *fc = ai_core_of(g);
+ fc->inport = fc->sp[0], fc->sp++;
+ return g; }
+
 // for (;;): the standard noreturn-defensive shape -- moon's stdnoreturn.h defines
 // `noreturn` empty, so mooncc can't cut the fall-through tail itself; the loop
 // leaves no ret for vmret to flag (gcc emits identical code either way).
-static noreturn lvm(lvm_exit) { for (;;) exit(getcharm(Sp[0])); }
+static noreturn lvm(lvm_exit) { for (;;) stdin_rewind(g), exit(getcharm(Sp[0])); }
 // Shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
 // Returns only when poll succeeds (data ready / deadline elapsed) or fails
 // for a non-EINTR reason.
@@ -134,11 +168,12 @@ static uintptr_t fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
 // user's terminal back broken ("resource temporarily unavailable" in their
 // shell). We skip the pair when the fd already says nonblocking, which is free
 // and covers the fds love opens itself; we do NOT cache the flags for an fd we
-// inherited. The measured price, now that readn is the sole read door: the
-// unbuffered statics pay 3 fcntls + 1 read per byte where they used to pay 1
-// poll + 1 read (love's readiness pre-guard, deleted with getc). 53K of source
-// through stdin still lands in 0.05s -- the reader is orders of magnitude the
-// bottleneck, and every OTHER fd is a heap port that gulps 4096 at a time.
+// inherited. The measured price, now that readn is the sole read door: a bare port pays
+// 3 fcntls + 1 read per CALL where it used to pay 1 poll + 1 read (love's readiness
+// pre-guard, deleted with getc). ⚠ PER CALL is the whole story -- it was priced when a
+// call meant a byte, and at 953 KB that is 2.9M fcntls. A port with a run pays it once
+// per 4096 instead, which is why the toggle costs nothing on a seekable fd 0 (above) and
+// why the pipe that keeps the bare lane is the one that still feels it.
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
  struct ai_io *io = (*fp)->io;
  intptr_t fd = ai_io_fd(io);
@@ -498,6 +533,7 @@ ai_noinline static struct ai *host_exec(struct ai *g, ai_word argv) {
    cav[argc] = NULL; }
  fflush(stdout); fflush(stderr);
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
+ stdin_rewind(g);                                          // the child inherits fd 0: hand it back exact
  execvp(cav[0], cav);
  return ai_push(g, 1, putcharm(errno)); }                  // exec failed -> errno
 
@@ -966,6 +1002,9 @@ int main(int argc, char const **argv) {
     g = ai_defv(g, "argv");
     g = ai_defv(g, "cmdline");
     if (ai_ok(g)) ai_core_of(g)->sp++;              // the book holds it now
+    // give a seekable fd 0 its read run (above). ⚠ NEVER UNDER --bake: the image would
+    // carry a heap port, and `in` is rebound on every start anyway.
+    if (!bake) g = stdin_buffer(g);
 #ifdef GL_BOOTSTRAP
     if (!image_load_path) g = boot(g, argp);
     else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
@@ -978,4 +1017,5 @@ int main(int argc, char const **argv) {
 #endif
   }
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);   // the honest face: ";; a b", or ";; oom@len=N" bare
+  stdin_rewind(g);                                  // whoever shares this fd gets it back exact
   return ai_fin(g); }
