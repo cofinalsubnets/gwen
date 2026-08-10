@@ -11,11 +11,12 @@
 # make owns the dependency graph (the moon_o objects + mooncc0.image exist);
 # this owns the procedure. NOT set -e: the compile loop reports its own file.
 #
-# usage: fixpoint.sh OUTDIR LOVE0
+# usage: fixpoint.sh OUTDIR LOVE0 OBJ...
 set -u
 
 ho=$1
 love0=$2
+shift 2
 d=$ho/fix
 cat=$ho/.mooncc-cat.l
 
@@ -29,10 +30,12 @@ fail() { echo "FAIL test_fixpoint: $*" >&2; exit 1; }
 mkdir -p "$d"
 rm -f "$d"/*.o "$d"/love1 "$d"/love2 "$d"/mooncc1.image
 
-# love1: relink the generation make already compiled (love0's lane, byte-cheap)
+# love1: relink the generation make already compiled (love0's lane, byte-cheap).
+# ⚠ the list arrives FROM make ($(moon_o), source-derived) and is never globbed out of
+# the odir: a deleted host/*.c leaves its .o sitting there, and a glob relinks the ghost --
+# love1 carrying a TU love2 never compiles, which reads as a broken fixpoint.
 moon0() { "$love0" --wake "$ho/mooncc0.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
-moon0 -pie "$ho"/moon/love.o "$ho"/moon/host_*.o "$ho"/moon/nolibc.o "$ho"/moon/m_*.o "$ho"/moon/sys.o \
-      -o "$d/love1" || fail "love1 relink"
+moon0 -pie "$@" -o "$d/love1" || fail "love1 relink"
 
 echo "FIX  $d/love1 rebuilds itself"
 
@@ -59,8 +62,11 @@ done
 LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "(mksys \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
-moon1 -pie "$d"/love.o "$d"/host_*.o "$d"/nolibc.o "$d"/m_*.o "$d"/sys.o -o "$d/love2" \
-  || fail "love2 link"
+# love2 takes the SAME list in the SAME order, one directory over -- link order is layout,
+# so two globs agreeing by luck is not one list. A name love1 linked and the loops above
+# never compiled dies here, at the linker, by name.
+o2=; for o in "$@"; do o2="$o2 $d/${o##*/}"; done
+moon1 -pie $o2 -o "$d/love2" || fail "love2 link"
 
 cmp "$d/love1" "$d/love2" || fail "love2 differs from love1 -- the fixpoint broke"
 

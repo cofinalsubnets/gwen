@@ -382,9 +382,11 @@ test_vec: host
 	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/port/inle/aarch64/vec.o
 # THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
-# love2, and the two must be byte-identical. In test_slow: a headline invariant.
+# love2, and the two must be byte-identical. A headline invariant -- but it runs in
+# test_extra only, so a deleted host/*.c goes green through test_slow either way.
+# $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
-	@sh test/gate/fixpoint.sh $(ho) $(love0)
+	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_o)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.
