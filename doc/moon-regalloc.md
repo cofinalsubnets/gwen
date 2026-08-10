@@ -96,11 +96,12 @@ Learned by measuring, several times each; check a new lever against these before
    take (their reach measured exhausted 2026-08-04). Its emission-side half — passing
    the CONSUMER down as a destination die instead of delivering everything to r0 — is
    modeled runnable in doc/proto/dest.l (ev.l's continuation-taking emitter shape worn
-   by a register machine; gated by test_doc). The asn/decl lane migrated 2026-08-10
-   (the rungs below); the bin/compare and call-arg lanes remain.
-3. **Compare staging want-hints** — lvm_eq's residual rsp traffic is &&-chain compare
-   staging (spush cells + r0), not splices; want-hints through the compare lanes, or the
-   allocator leg subsumes it.
+   by a register machine; gated by test_doc). The asn/decl and cbranch-compare lanes
+   migrated 2026-08-10 (the rungs below); the bin value lane and call-arg seats remain.
+3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
+   left aims at its park before evaluating, so member loads deliver and the bridge mov
+   dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
+   would need the wrap pricing) — or the allocator leg subsumes it.
 4. Recorded small residues: leaf sp-fn stldw coverage; a non-positional fallback home
    (mag_cmp's g1 loses its seat and stays slotted); cs-borrow park elision; params on cs
    regs (lvm_eq a/b); arm64 x19+ cspool (empty there today); register-binding splice
@@ -174,6 +175,12 @@ inits deliver as store-immediates, a homed init lands in its home with no r0 bri
 (dyn insns −0.72% exact/disjoint, .text −0.69%; the payload: unhome's pre-entry rename
 hole — H read before its (mov H A) pair carries an arrival — fixed and law-pinned;
 test_libc's memchr differential was the catch, the third time that gate earned its keep).
+2026-08-10 · the destination die's compare lane: cbranch's left pre-aims at its park
+(pin the want before it evaluates; vpark recognizes the delivered value), so a member
+compare loads straight into the pool register — lvm_eq's per-member bridge mov gone
+(dyn insns −1.50% exact/disjoint 53.140G→52.344G, .text −4096B/−0.69%, cycles −1.9%
+disjoint but under the layout floor; a call on either side bars the aim, both faces
+law-pinned and falsified).
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

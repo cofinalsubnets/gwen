@@ -900,7 +900,14 @@
                               (vfs b + `(`('cmp (vreg b) n) `('br cc9 lbl))))
                         _ (rfree g (vreg b))
                         fs)))
-              (: a (cgexpr g env lhs)
+              ; the destination die: when no call bars a register park, the left AIMS at its
+              ; park before it evaluates -- a load/li lands there directly and vpark sees a
+              ; delivered value (vreg off r0: no bridge mov). unhonored (a mapped local, a
+              ; float, a wide) hands the register back and the post-hoc park stands.
+              (: pk (? (callish? lhs || callish? rhs) () (ralloc g))
+                 _ (? pk (pin g 'want pk) ())
+                 a (cgexpr g env lhs)
+                 _ (? (pk && !(!(bad? a) && id? (vreg a) pk)) (rfree g pk) ())
                  (? (bad? a) 'bad
                     (flo? (vty a)) (: _ (rfree g (vreg a)) (fcb ()))
                     (: ah (? (callish? rhs || llt? (vty a) || d128? (vty a)) 'sh (vpark g env lhs a))           ; a call on the right / a pair left: memory only

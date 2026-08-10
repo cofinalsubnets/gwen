@@ -1605,5 +1605,32 @@
       (= (unhome g9 keep) keep)
       (= (unhome g9 ren9) '((ldu1 r0 r6 0) (ret)))))
 
+; -- the destination die reaches the compare lane (the second lane): with no call on
+; either side, cbranch's left AIMS at its park before it evaluates -- a member load
+; lands in the pool register directly and vpark sees a delivered value, so the bridge
+; mov dies. a call on either side bars the aim: the left keeps its sp cell (cmpfuse's
+; cmpm reads it) and the r0 protocol stands.
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (brid fs) (tally (filter (\ f (two? f && id? <f 'mov && id? <>>>f 'r0)) fs))
+   irC1 (cgn "struct s { long tag; long size; }; int ef(struct s *a, struct s *b) { if (a->tag == b->tag && a->size == b->size) return 1; return 0; } int main() { return 0; }")
+   irC2 (cgn "int g(int x); int h(int x, int y) { if (x == g(y)) return 1; return 0; } int main() { return 0; }")
+   ef (fnf 'ef <>irC1)
+   hf (fnf 'h <>irC2)
+   (assert
+      (two? irC1) (two? irC2)
+      (member? '(ld r9 r6 0) ef)                     ; a->tag delivered to its park
+      (member? '(cmprm r9 r5 0) ef)                  ; ...and b->tag read at the cmp
+      (member? '(ld r9 r6 8) ef)
+      (member? '(cmprm r9 r5 8) ef)
+      (= 0 (brid ef))                                ; no (mov X r0) bridge anywhere
+      (member? '(cmpm sp 8 r0) hf)                   ; a callish right bars the aim: the cell stands
+      (member? '(ld4 r0 sp 32) hf)))                 ; ...and the left keeps r0 (no wasted park)
+
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)
