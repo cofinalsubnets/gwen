@@ -4714,7 +4714,12 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  if (!g) return NULL;
  if (nw > g->major_len) {                                // grow the major pool to fit the image
   g->alloc(g, g->major_pool, 0);
-  g->major_len = nw + (nw >> 2);
+  // ⚠ the slack is what the NURSERY ramps into: a minor is forced to a major once the
+  // pool has less free than a whole nursery (gen_please's worst-case promotion test),
+  // and the nursery doubles toward its overhead setpoint, so slack at 25% of live is
+  // outgrown within a few doublings -- and the major it then forces copies the whole
+  // woken image. hold a floor instead; the pages stay untouched until the ramp wants them.
+  g->major_len = nw + (nw >> 2 > (1u << 19) ? nw >> 2 : 1u << 19);
   g->major_pool = g->major_base = g->alloc(g, NULL, 2 * g->major_len * sizeof(word));
   if (!g->major_pool) return NULL;
  }
@@ -4763,6 +4768,11 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  ai_image_note(6);
  // sp stays at ai_ini's topof(g) (empty AI stack); the dispatch re-establishes ip
  g->major_live0 = nw, g->since_major = 0;
+ // seed the nursery against the live set the image arrives with: the resize controller
+ // otherwise ramps from the bare floor a doubling -- and a collection -- at a time,
+ // and a woken runtime already knows how much it will be scanning past.
+ { uintptr_t want = nw >> 1;
+   if (want > (uintptr_t) g->len) { struct ai *h = gen_grow(g, want); if (ai_ok(h)) g = h; } }
  return g; }
 struct ai *ai_image_load(void const *buf, uintptr_t len) { return ai_image_load_m(buf, len, ai_libc_alloc); }
 
