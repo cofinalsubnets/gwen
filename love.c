@@ -384,7 +384,7 @@ static intptr_t ai_count(struct ai *, word);           // fwd: tally's C body (n
 static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (charmp(x)) return getcharm(x) <= 0;            // a charm is its own net
   if (mintp(x)) return true;                         // a bare point nets nothing
-  return zn_false(ai_net(g, x)); }
+  return ai_net(g, x).re <= 0; }
 
 // truncation toward zero / float remainder; pure and freestanding-safe (no libm)
 static ai_inline ai_flo_t ai_trunc(ai_flo_t x) {
@@ -2793,12 +2793,6 @@ lvm(lvm_spin) {
  Sp[0] = word(memset(tagthread(k, n), -1, n * sizeof(word)));
  ai_musttail return Next(1); }
 
-// ceil a positive measure into a fixnum, saturating at maxcharm: ceil so the
-// result is 0 ONLY when m is exactly 0, and $ doubles as a zero test
-static ai_inline intptr_t len_sat(ai_flo_t m) {
-  if (m >= (ai_flo_t) maxcharm) return maxcharm;
-  intptr_t i = (intptr_t) m;                    // trunc toward 0 (m >= 0)
-  return i + (m > (ai_flo_t) i ? 1 : 0); }       // bump for any fractional part -> ceil
 // THE NET: the complex-valued measure. a complex scalar nets ITSELF (additivity
 // needs phase, so the codomain is C and the order retraction happens ONCE, in the
 // observers); every other scalar nets real; a chain or rank>=1 array nets the SUM
@@ -2862,9 +2856,11 @@ static intptr_t ai_saturate(struct ai *g, word x) {
   // ⚠ the charm lane is EXACTNESS, not speed: the net is a double, so above 2^53 a
   // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
   if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }
-  struct ai_zn z = ai_net(g, x);
-  if (zn_false(z)) return 0;
-  return len_sat(z.im == 0 ? z.re : ai_sqrt(z.re * z.re + z.im * z.im)); }
+  ai_flo_t re = ai_net(g, x).re;
+  if (re <= 0) return 0;
+  if (re >= (ai_flo_t) maxcharm) return maxcharm;
+  intptr_t i = (intptr_t) re;
+  return i + (re > (ai_flo_t) i ? 1 : 0); }
 lvm(lvm_saturate) { Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // ============================================================================

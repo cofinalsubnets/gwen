@@ -21,11 +21,11 @@
    ;; returns f (the empty-form law); a real argument is what invokes it.
    (trainstep _) (: _ (tl-reset 0) _ (zero opt)
                   loss (mse (call model X) Y) _ (back loss) _ (step opt) (tl-val loss))
-   (loop k) (? (= k 0) 0
+   (loop k) (? (k = 0) 0
                (: lv (trainstep 0)
-                  _ (? (= 0 (% k 1000)) (: _ (puts (+ "epoch " (+ (show (- epochs k))
-                                            (+ "   loss " (show lv))))) (putc 10)) 0)
-                  (loop (- k 1))))
+                  _ (? (0 = k % 1000) (puts $
+                     "epoch " + show (epochs - k) + "   loss " + show lv + "\n"))
+                  (loop (k - 1))))
 
    _ (puts "training a 2-8-1 MLP on XOR ...") _ (putc 10)
    _ (loop epochs)
@@ -34,12 +34,12 @@
    ;; the learned outputs (want ~0 1 1 0)
    _ (tl-reset 0)
    out (tl-val (call model X))
-   (cell k) (peep out (k >< (0 >< ())) 0)
-   (yes k v) (? (< 0.5 (cell k)) (= v 1) (= v 0))             ; does row k round to v?
+   (cell k) (peep out (k >< 0 >< ()) 0)
+   (yes k v) (? (0.5 < cell k) (v = 1) (v = 0))             ; does row k round to v?
    ok (yes 0 0 && yes 1 1 && yes 2 1 && yes 3 0)
-   _ (puts (+ "00 -> " (show (cell 0)))) _ (putc 10)
-   _ (puts (+ "01 -> " (show (cell 1)))) _ (putc 10)
-   _ (puts (+ "10 -> " (show (cell 2)))) _ (putc 10)
-   _ (puts (+ "11 -> " (show (cell 3)))) _ (putc 10)
-   _ (puts (? ok "XOR learned: all four correct." "XOR NOT learned.")) _ (putc 10)
+   _ (puts $ "00 -> " + show (cell 0) + "\n")
+   _ (puts $ "01 -> " + show (cell 1) + "\n")
+   _ (puts $ "10 -> " + show (cell 2) + "\n")
+   _ (puts $ "11 -> " + show (cell 3) + "\n")
+   _ (puts $ (? ok "XOR learned: all four correct.\n" "XOR NOT learned.\n"))
    (? ok 0 (quit 1)))                                         ; gate: nonzero exit on failure
