@@ -67,6 +67,12 @@ fi
 # throughput -- gcc's -Wall flags a benign construct in love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/out/lib"
+# common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
+# sentinels' tiling IS love.h's ai_typ, and ld left to itself keeps each love_data.N an
+# orphan in first-encountered order -- gcc emits love_data.7 first, so lvm_str lands
+# below lvm_sym and every string reads as a closure. mach-o goes without, as there.
+LDFLAGS=
+[ "$(uname -s)" = Darwin ] || LDFLAGS="-Wl,-T,$R/love_data.ld"
 
 # wall-clock (ms) of a command; echoes just the number. Runs in a subshell so a cd can't leak.
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
@@ -85,7 +91,7 @@ build_cc() { # $1=compiler $2=binpath ; leaves objects under $WORK/<compiler>
     $cc $CFLAGS -c crew/moon/lib/math/am.c -o "$od/am.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
       $cc $CFLAGS -c "$f" -o "$od/host/$b.o" || exit 1; done
-    $cc $CFLAGS -o "$bin" "$od"/love.o "$od"/am.o "$od"/host/*.o ) || return 1
+    $cc $CFLAGS $LDFLAGS -o "$bin" "$od"/love.o "$od"/am.o "$od"/host/*.o ) || return 1
 }
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
