@@ -22,6 +22,7 @@
 set -e
 
 mc=${MOONCC:-out/host/mooncc}
+kore=${KORE:-out/host/kore}
 gcc=${GCC:-gcc}
 d=${TMPDIR:-/tmp}/moon-reject.$$
 [ -x "$mc" ] || { echo "moon-reject: no $mc -- run make out/host/mooncc"; exit 0; }
@@ -113,13 +114,15 @@ int main(void){ int x = (struct s)1; return x; }'
 echo "--- labels: the ones that reach the SYMBOL TABLE ---"
 # ⚠ these two are the finding. An unresolved local label does not refuse -- it
 # leaves the object carrying an undefined GLOBAL symbol spelled with mooncc's own
-# internal name, and only the LINK notices. readelf is printed because the
-# compiler's exit code says nothing.
+# internal name, and only the LINK notices. the symbol table is printed because the
+# compiler's exit code says nothing. `kore nm -u` reads it -- our own reader over
+# holo's ELF door, so this needs no binutils to say what the object owes.
 p s_goto    'int main(void){ goto nowhere; return 0; }'
 p s_dupcase 'int main(void){ int x=1; switch(x){ case 1: return 1; case 1: return 2; } return 0; }'
 for t in s_goto s_dupcase; do
   [ -f "$d/$t.moon.o" ] || continue
-  u=$(readelf -sW "$d/$t.moon.o" 2>/dev/null | awk '$5=="GLOBAL" && $7=="UND"{print $8}' | tr '\n' ' ')
+  [ -x "$kore" ] || { echo "    (no $kore -- run make out/host/kore to read the symbol tables)"; break; }
+  u=$("$kore" nm -gu "$d/$t.moon.o" 2>/dev/null | awk '{print $2}' | tr '\n' ' ')
   [ -n "$u" ] && printf '    %-12s undefined in the object: %s\n' "$t" "$u"
 done
 echo "--- and what the LINK says about them ---"

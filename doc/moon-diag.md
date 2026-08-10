@@ -165,7 +165,15 @@ gcc has every lane and a single-target sweep only ever asks one.
 *borrowed*: thumb1 and thumb2sp lower some arithmetic to `__aeabi_*` calls, which a compile
 reports as success and only the link would catch. That is the `libgcc` cell, and finding it is
 half the reason the script exists — the other half being that a merged `t32` column had already
-hidden thumb2sp's SP-only FPU from a hand-written table.
+hidden thumb2sp's SP-only FPU from a hand-written table. The borrow test is *an undefined symbol
+the probe never declared*, so an x64 or riscv64 lane reaching for `__divti3` reads the same way
+arm's does.
+
+The symbols come from **`kore nm -u`** — one wake over every object the sweep laid, not one
+`readelf` per cell — so the instrument needs no binutils. `tools/moon-reject.sh` reads its two
+label-leak objects the same way. `kore nm` is holo's own ELF reader (`crew/holo/link.l`'s
+`ld-syms`) behind nm's surface: `-g` externals, `-u` undefined, `-p` unsorted, clustered as
+`-gu`, and its output matches `LC_ALL=C nm` byte for byte on both ELF classes.
 
 **`make test_moonfuzz`** (`test/gate/moonfuzz.l`, in `test_slow`) takes each `test/cc/` program
 and breaks it eight ways from a fixed seed — truncate, delete a byte, delete a run, flip a byte,
