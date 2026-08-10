@@ -93,7 +93,10 @@ Learned by measuring, several times each; check a new lever against these before
    values surviving labels and calls, spill placement instead of write-through. Kills
    both the def-stores and the post-flush reloads (the ~22% bucket). The vmap, the JOIN
    meet, the cs pool and cskeep are its substrate; this is the step the peepholes cannot
-   take (their reach measured exhausted 2026-08-04).
+   take (their reach measured exhausted 2026-08-04). Its emission-side half — passing
+   the CONSUMER down as a destination die instead of delivering everything to r0 — is
+   modeled runnable in doc/proto/dest.l (ev.l's continuation-taking emitter shape worn
+   by a register machine; gated by test_doc).
 3. **Compare staging want-hints** — lvm_eq's residual rsp traffic is &&-chain compare
    staging (spush cells + r0), not splices; want-hints through the compare lanes, or the
    allocator leg subsumes it.
