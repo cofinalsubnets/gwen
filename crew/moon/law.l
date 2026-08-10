@@ -1221,7 +1221,8 @@
    _ (assert
       (two? irIH) (two? irIP) (two? irID)
       (member? '(sx4 r5) ihf)                        ; n canonicalizes ON its seat (home = arrival)...
-      (member? '(ldx r0 r6 r5 8 0) ihf)              ; ...and indexes register-resident
+      (member? '(ldx r9 r6 r5 8 0) ihf)              ; ...and indexes register-resident, delivered
+                                                     ;    straight to the bin die's park (no r0 hop)
       (= 0 (splds ihf))                              ; no slot traffic at all: f4 runs bare
       (member? '(st sp 16 r7) ipf)                   ; f5: n spills -- the pool ends at two...
       (member? '(ld4 r0 sp 16) ipf)                  ; ...and the loop re-reads the slot
@@ -1658,6 +1659,35 @@
       (= 1 (cells ca))                               ;   own base's riding home; the second (which
       (member? '(ld r5 sp 8) ca)                     ;   evaluates first) keeps its cell
       (= 2 (cells ci))))                             ; an indirect call: both cells stand
+
+; -- the destination die reaches the bin value lane (the fourth lane): a LOAD-shaped
+; left (dot/moor/deref -- a var/num re-aims free via cgleaf, a nested bin already rides
+; a pool register) aims at its park before it evaluates -- vpark sees a delivered value,
+; the bridge mov dies, and the combine runs 3-address off the park. ONE aim per spine
+; (an aim at every level drains the pool and pass 1 hands out param homes -- the wraps
+; law above holds that line); a call on either side bars it; a constant right rides
+; immop unchanged (already 3-address off any register).
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (movs fs) (tally (filter (\ f (two? f && id? <f 'mov)) fs))
+   irB (cgn "struct s { long tag; long size; }; long g(long x); long badd(struct s *p, long y) { return p->tag + y; } long bcall(struct s *p, long y) { return p->tag + g(y); } long bimm(struct s *p) { return p->tag + 1; } int main() { return 0; }")
+   ba (fnf 'badd <>irB)
+   bc (fnf 'bcall <>irB)
+   bi (fnf 'bimm <>irB)
+   (assert
+      (two? irB)
+      (member? '(ld r9 r6 0) ba)                     ; p->tag delivered straight to its park
+      (member? '(add r0 r9 r5) ba)                   ; ...and the combine 3-address off it
+      (= 0 (movs ba))                                ; no bridge mov anywhere
+      (member? '(ld r0 r6 0) bc)                     ; a callish right bars the aim: r0 stands
+      (member? '(st sp 8 r0) bc)                     ; ...and the cell holds the left across the call
+      (member? '(ld r0 r6 0) bi)                     ; a constant right: the immop lane unchanged
+      (member? '(add r0 r0 1) bi)))
 
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)

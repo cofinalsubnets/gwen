@@ -2544,7 +2544,21 @@
        ; evaluates. a constant side rides the immediate lane with NO right evaluation; two
        ; register operands combine 3-address; pointer scaling, divide, a variable shift, and a
        ; call on the right keep the memory shuttle (shut).
+       ; the destination die: a LOAD-shaped left (dot/moor/deref -- the shapes whose r0
+       ; landing costs a bridge; a var/num re-aims free via cgleaf, a nested bin already
+       ; rides a pool register) AIMS at its park before it evaluates, and vpark sees a
+       ; delivered value: no bridge mov. one aim per spine -- an eager aim at every level
+       ; drains the pool top-down, and pass 1's wide roster then hands out param homes
+       ; (the wraps law's catch). a call on either side bars it; shifts keep r0 (their
+       ; lanes ride the protocol); a constant right rides immop (3-address off any
+       ; register -- no bridge to win); unhonored (a float, a pair) hands it back.
+       pk (? (!(two? lhs && member? <lhs '(dot moor deref)) ||
+              callish? lhs || callish? rhs ||
+              member? op '(shl shr) || two? (knum g rhs)) ()
+             (ralloc g))
+       _ (? pk (pin g 'want pk) ())
        a (cgexpr g env lhs)
+       _ (? (pk && !(!(bad? a) && id? (vreg a) pk)) (rfree g pk) ())
        (? (bad? a) 'bad
           (gcplx? (vty a)) (cgcx g env op a rhs)    ; a complex left: the complex lane (parse lifted a real RIGHT already)
           ; a constant count rides the immediate shift; a variable count

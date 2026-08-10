@@ -97,8 +97,9 @@ Learned by measuring, several times each; check a new lever against these before
    take (their reach measured exhausted 2026-08-04). Its emission-side half — passing
    the CONSUMER down as a destination die instead of delivering everything to r0 — is
    modeled runnable in doc/proto/dest.l (ev.l's continuation-taking emitter shape worn
-   by a register machine; gated by test_doc). The asn/decl, cbranch-compare and arg-seat
-   lanes migrated 2026-08-10 (the rungs below); the bin value lane remains.
+   by a register machine; gated by test_doc). All four lanes migrated 2026-08-10 —
+   asn/decl, cbranch-compare, arg-seat, bin-value (the rungs below); what remains of
+   the die rides the allocator leg (callish sides via cs-borrow parks, deeper arg seats).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -192,6 +193,16 @@ served the common shape — dyn insns −0.07% exact/disjoint 48.815G→48.781G,
 size-neutral. dir only; a HOME seat keeps the cell (it spills after the staging evals,
 and an ezm may read it); a zero-form delivery (riding home, vmap pin) keeps the cell
 (its value predates the staging). All three guards law-pinned, two falsified by flip.
+2026-08-10 · the destination die's bin value lane (the fourth, closing the emission
+side): a LOAD-shaped left (dot/moor/deref) aims at its park before it evaluates, vpark
+sees a delivered value, and the combine runs 3-address off the park — the bridge mov
+gone. ONE aim per spine: the first build aimed at every level, drained the pool
+top-down, and pass 1's wide roster handed out param homes — the wraps law caught it
+(b spilled in a fn owed zero wraps); a var/num left re-aims free via cgleaf and a
+nested-bin left already rides a pool register, so load shapes are the whole win
+profile. A call on either side bars it; a constant right rides immop unchanged.
+dyn insns −0.04% exact/disjoint 48.778G→48.760G, .text size-neutral. Law-pinned
+(delivered park + 3-address combine + both bars), two flips falsified.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
