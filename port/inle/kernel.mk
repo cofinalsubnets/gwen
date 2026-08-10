@@ -29,10 +29,11 @@ endif
 # KLD serves the KLINK=lld lane only -- the default link is ours.
 KCC ?= $(ho)/mooncc
 KLD ?= ld.lld
-KCC_IS_CLANG := $(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1)
 # ours by NAME: mooncc is a wake shim over an image, so `--version` would have to
-# boot it just to answer a makefile question at parse time.
+# boot it just to answer a makefile question at parse time -- and parse time is BEFORE
+# any recipe, so the probe would read whatever image a half-done build left behind.
 KCC_IS_MOON := $(if $(findstring mooncc,$(KCC)),1,)
+KCC_IS_CLANG := $(if $(KCC_IS_MOON),,$(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1))
 
 k_arch_c = $(wildcard $(R)/port/inle/$a/*.c)
 # aarch64/builtins.c hands a FOREIGN cc the __clear_cache and __udivti3 its codegen
