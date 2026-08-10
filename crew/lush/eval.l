@@ -214,7 +214,8 @@
         (: _ (flush out) _ (flush err)
            p (fork 0)
            (? (= p 0)
-              (: _ (each base (\ e (dup2 >e <e)))
+              (: _ (wear ())                      ; ⚠ a child wears the CONSOLE: its fds are the dup2 below, and a jug is not one
+                 _ (each base (\ e (dup2 >e <e)))
                  _ (each allclose (\ fd (? (< 2 fd) (fdclose fd) 0)))
                  s (sh-eval (sh-nth st 1))
                  (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
@@ -423,7 +424,8 @@
    (sh-subsh b)
      (: _ (flush out) _ (flush err)
         p (fork 0)
-        (? (= p 0) (: s (b ())
+        (? (= p 0) (: _ (wear ())            ; the child's stdio is its fds, never a jug this task wears
+                      s (b ())
                       (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
            (< p 0) (cmderr "cannot fork")
            (: _ (sh-waitfg (L p) (sh-curline ())) (sh-echk (sh-status ())))))
@@ -477,6 +479,46 @@
                               (? (= s 0) s (sh-capture (sh-nth a 2) wfd)))
               (id? k 'bg)  (sh-capture (sh-nth a 1) wfd)
               (sh-cappipe a wfd))))
+   ; --- the forkless capture: a body that runs HERE says its piece into a jug ----
+   ; ⚠ A JUG IS NOT AN FD, and that is the whole boundary: it takes what LOVE says
+   ; through `out` and nothing a child process writes. so this lane is for the
+   ; builtins that speak for themselves and leave nothing behind -- a function
+   ; body may spawn, and its bytes would go to the console past the capture.
+   ; ⚠ the test is SYNTAX besides, asked before a single word expands (an expansion
+   ; runs $( ) of its own, so it may happen once and only once): ONE simple
+   ; command, no redirects, no assignments, and a bare literal name -- no ~, no
+   ; glob, so the word is already its own text. what a task wears is per-task, so
+   ; a nested capture stacks, and a forked child drops the lot (sh-spawn1).
+   sh-purebi '("pwd" ":" "true" "false")
+   (sh-barelit w)                              ; a word that is already its own text, or ()
+     (? (!(two? w) || two? >w) ()
+        (: h <w
+           (? !(id? <h 'lit) ()
+              (: t >h
+                 (? (!(tally t) || (= (t 0) 126) || sh-anyglob t) () t)))))
+   (sh-inproc? a)
+     (? !(id? <a 'cmd) ()
+        (two? (sh-nth a 2)) ()                 ; a redirect keeps the pipe
+        (: pk (sh-peel (sh-nth a 1) ())
+           (? (two? <pk) ()                    ; an assignment keeps the pipe
+              !(two? >pk) ()
+              (: nm (sh-barelit <>pk)
+                 (? !nm () (&& !(sh-fn? nm) (sh-smem? nm sh-purebi)))))))
+   ; re-seat STDOUT alone -- `wear` replaces the whole triple, so an in or err this
+   ; task already wears has to ride along by name
+   (sh-wearout o)
+     (: w (worn ())
+        (wear (L (? (two? w) <w ())
+                 o
+                 (? (&& (two? w) (two? >w) (two? >>w)) <>>w ()))))
+   (sh-capjug a)
+     (: j (jug 0)
+        w (worn ())
+        _ (sh-wearout j)
+        st (sh-guarded (\ _ (sh-eval a)))      ; the body's status is the value, never our errexit
+        _ (wear w)
+        _ (pin sh-substat () (? (charm? st) st (? (&& (two? st) (id? <st 'ret)) >st 0)))
+        (slurp j))
    ; every lane leaves sh-substat holding this body's status: an assignment with
    ; no command name answers the LAST one performed (POSIX), so the pin is the
    ; only way back -- sh-fields sits between here and the reader. 1 up front is
@@ -488,6 +530,7 @@
            (: pr (sh-parse >lx)
               (? !(id? <pr 'ok) (: _ (cmderr "bad $( ) body") "")
                  !>pr (: _ (pin sh-substat () 0) "")           ; $( ) is a clean nothing
+                 (sh-inproc? >pr) (sh-capjug >pr)              ; no fork, no pipe
                  (: a >pr
                     pp (pipe 0)
                     (? (charm? pp) ""

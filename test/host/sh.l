@@ -285,4 +285,15 @@
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "v='x*y'; echo ${v#\"x*\"} ${v#x?}"))
    (assert (= "y y\n" (cup r))))
 
+; the FORKLESS $( ): a no-effect builtin says its piece into a jug this task
+; wears (love.h's hook 6) instead of down a pipe. the answer is the same one the
+; pipe gave -- the status included -- and a function of the same name takes the
+; name back, since a body that may spawn needs an fd a jug cannot be
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "cd /; echo \"[$(pwd)][$(pwd)]\""))
+   (assert (= "[/][/]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "x=$(false); echo $?; y=$(true); echo $?"))
+   (assert (= "1\n0\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "pwd() { echo shadow; }; echo $(pwd)"))
+   (assert (= "shadow\n" (cup r))))
+
 (puts "sh: ok") (putc 10)

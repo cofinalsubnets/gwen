@@ -235,7 +235,10 @@
 (: (tap cl)
  (poke -1 (peek 0 in) (poke -1 ci-vt (poke -1 -1 (poke 3 cl (spin 4)))))
  (jug _)                                          ; the output dual of `tap`: say INTO it, slurp it back OUT
-  (poke -1 (peek 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "  " (poke 4 0 (spin 5))))))
+  ; ⚠ the backing starts EMPTY, and that is the whole isolation: a literal here is
+  ; ONE string every jug would share, and to_writen fills a backing IN PLACE -- two
+  ; live jugs then write over each other until the first one grows.
+  (poke -1 (peek 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "" (poke 4 0 (spin 5))))))
  ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
  ; does. hot? goes first so the peek only ever lands on a heap cell.
  (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
@@ -699,6 +702,11 @@
 ; slot, the same hot_help the C raise lanes read -- and (heard ()) answers the installed one.
 ; (hear ()) uninstalls: a raise then takes the default escape.
 (: (hear f) (seal-hook 5 f))
+; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err FOR THIS TASK,
+; (wear ()) hands the console back, (worn ()) answers what is worn. an element that is
+; not a port keeps the console, so (wear (L () o ())) re-seats stdout alone. ⚠ what a
+; task wears is read by the port OPS -- `id?` and `peek` still answer the static.
+(: (wear l) (seal-hook 6 l))
 ; trap -- (f x) under a help that ESCAPES: the value on a clean run, (n a b) when a
 ; scare landed here. peg's (\ s y n) aimed at conditions, less the y a caller already
 ; has -- a clean run just answers, and n's own answer is the form's, so which one you
