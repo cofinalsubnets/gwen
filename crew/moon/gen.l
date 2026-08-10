@@ -391,7 +391,8 @@
        (: ty <>e in <>>e
           (? !(two? in && id? <in 'num && (charm? <>in || sun? <>in)) ()
              (: n <>in
-                (? (ty = 'uchar) `((& n 255) ty)
+                (? (ty = 'bool) `((? (n = 0) 0 1) ty)
+                   (ty = 'uchar) `((& n 255) ty)
                    (ty = 'ushort) `((& n 65535) ty)
                    (ty = 'uint) `((& n 4294967295) ty)
                    (member? ty '(char short int))
@@ -440,7 +441,7 @@
    (tsz g ty) (? (ptr? ty) (wsize g)
                  (arr? ty) (* <>>ty (tsz g <>ty))
                  (stru? ty) <>(peep (g 'stag) <>ty 0)
-                 ((ty = 'char) || (ty = 'uchar)) 1 ((ty = 'short) || (ty = 'ushort)) 2
+                 ((ty = 'char) || (ty = 'uchar) || (ty = 'bool)) 1 ((ty = 'short) || (ty = 'ushort)) 2
                  ((ty = 'int) || (ty = 'uint) || (ty = 'float)) 4
                  (llt? ty || (ty = 'double)) 8                ; 8-byte on EVERY target (t32's word is 4)
                  (d128? ty) 16
@@ -525,11 +526,15 @@
                          _ (? (id? rd rA) () (rfree g rA))
                          (mkv rt rd fs))))))))
    (ldop ty) (? (ty = 'char) 'ld1 (ty = 'short) 'ld2 (ty = 'int) 'ld4
-                (ty = 'uchar) 'ldu1 (ty = 'ushort) 'ldu2 (ty = 'uint) 'ldu4 'ld)
-   (stop ty) (? ((ty = 'char) || (ty = 'uchar)) 'st1 ((ty = 'short) || (ty = 'ushort)) 'st2
+                ((ty = 'uchar) || (ty = 'bool)) 'ldu1 (ty = 'ushort) 'ldu2 (ty = 'uint) 'ldu4 'ld)
+   (stop ty) (? ((ty = 'char) || (ty = 'uchar) || (ty = 'bool)) 'st1 ((ty = 'short) || (ty = 'ushort)) 'st2
                 ((ty = 'int) || (ty = 'uint)) 'st4 'st)
+   ; ⚠ bool's cvt is a CONVERSION, not a re-narrow: any nonzero pattern becomes 1
+   ; (C11 6.3.1.2) -- every write site already runs cvt before its store, so a bool
+   ; object holds 0/1 by construction and loads ride a plain ldu1.
    (cvt ty r) (? (ty = 'char) `(`('sx1 r)) (ty = 'short) `(`('sx2 r)) (ty = 'int) `(`('sx4 r))
-                 (ty = 'uchar) `(`('zx1 r)) (ty = 'ushort) `(`('zx2 r)) (ty = 'uint) `(`('zx4 r)) ())
+                 (ty = 'uchar) `(`('zx1 r)) (ty = 'ushort) `(`('zx2 r)) (ty = 'uint) `(`('zx4 r))
+                 (ty = 'bool) `(`('cmp r 0) `('set 'ne r)) ())
    ; -- the double lane: a 'double value lives in f0, not r0. its type is the flag; fbits is the
    ; compile-time IEEE-754 encoder; asflo/asint move a cgexpr result between the lanes; compares
    ; ride ucomisd's UNSIGNED flags, NaN-honest. a float and a double SHARE the register lane -- a
@@ -753,7 +758,9 @@
                                    (: off (ntmp g 'long)
                                       (cbind >ps >as
                                              (`(<<ps off pty) >< benv)
-                                             (acc + asintt g r pty + `(`('st 'r4 off 'r0)))
+                                             (acc + asintt g r pty
+                                                  + (? (id? pty 'bool) (cvt pty 'r0) ())   ; the entry conversion the splice skips
+                                                  + `(`('st 'r4 off 'r0)))
                                              rbs)))))))))
              (dtmp ds benv9)                       ; the body's own decls: fresh temps over the params
               (? !(two? ds) benv9
@@ -1196,7 +1203,7 @@
        (? (bitf? ty)
            (: uty <>ty bitoff <>>ty width <>>>ty
               usz (tsz g uty) hi (64 - (bitoff + width)) lo (64 - width)
-              sgn !(usg? uty)
+              sgn !(usg? uty || id? uty 'bool)         ; a bool field holds 0/1: never sign-extend
               (mkv 'long 'r0
                    (vfs r
                     + `(`((uldop usz) 'r0 'r0 0))
@@ -1693,10 +1700,12 @@
                         (: bt (vty lv) uty <>bt bitoff <>>bt width <>>>bt
                            usz (tsz g uty)
                            mask ((<< 1 width) - 1) mv (<< mask bitoff) cmask ((0 - mv) - 1)
-                           sgn !(usg? uty) lo (64 - width)
+                           sgn !(usg? uty || id? uty 'bool) lo (64 - width)
                            (mkv 'long 'r0
                               (vfs lv + spush 'r0
-                               + asintt g r uty + spop 'r1
+                               + asintt g r uty
+                               + (? (id? uty 'bool) (cvt uty 'r0) ())   ; normalize BEFORE the mask ((bool)4 is 1)
+                               + spop 'r1
                                + `(`((uldop usz) 'r2 'r1 0)              ; r2 = the unit
                                    `('li 'r3 mask) '(and r0 r0 r3)       ; r0 = v & mask (the truncated value)
                                    `('li 'r3 cmask) '(and r2 r2 r3)      ; clear the field's bits
@@ -1754,9 +1763,10 @@
                                           `((? (<>>e < 0) 'dec128 'inc128))
                                           `('st 'r4 off 'r0) `('st 'r4 (off + 8) 'r2)
                                           `((? (<>>e < 0) 'inc128 'dec128)))))
-                        (mkv ty 'r0 `(`((ldop ty) 'r0 'r4 off)
-                                       `('add 'r1 'r0 (* stp <>>e))
-                                       `((stop ty) 'r4 off 'r1)))))
+                        (mkv ty 'r0 (`(`((ldop ty) 'r0 'r4 off)
+                                       `('add 'r1 'r0 (* stp <>>e)))
+                                     + (? (id? ty 'bool) (cvt ty 'r1) ())   ; b++/b-- lands on 0/1
+                                     + `(`((stop ty) 'r4 off 'r1))))))
                  (: lv (clval g env <>e)
               (? (bad? lv) 'bad
                  (: ty (vty lv)
@@ -1768,10 +1778,11 @@
                         (mkv ty 'r0 (vfs lv +
                                '((mov r12 r0)) + (pld 'r12 0) + (ppost 'r12 0 (* stp <>>e))))
                        (mkv ty 'r0 (vfs lv +
-                              `('(mov r2 r0)
-                                `((ldop ty) 'r0 'r2 0)
-                                `('add 'r1 'r0 (* stp <>>e))
-                                `((stop ty) 'r2 0 'r1))))))))))
+                              (`('(mov r2 r0)
+                                 `((ldop ty) 'r0 'r2 0)
+                                 `('add 'r1 'r0 (* stp <>>e)))
+                               + (? (id? ty 'bool) (cvt ty 'r1) ())   ; b++/b-- lands on 0/1
+                               + `(`((stop ty) 'r2 0 'r1)))))))))))
           ; ⚠ `E1 op= E2` EVALUATES E1 ONCE. the plain desugar duplicates it --
           ; (asn lv (bin op lv rhs)) -- which is exact only for an lvalue whose
           ; evaluation leaves no trace, so parse routes every other one here (its
@@ -1805,6 +1816,11 @@
                         'bad))
                  (d128? tgt && flo? (vty r)) 'bad                            ; double -> wide: not carried
                  (flo? tgt && !(flo? (vty r))) (mkv 'double 'r0 (asflo g r))  ; int -> double
+                 ((tgt = 'bool) && flo? (vty r))       ; (bool)d is d != 0.0, never a truncation
+                  ; ((bool)0.5 is 1) -- the un-'not lane's shape with the NaN-honest !=
+                  (: z1 (? (t32? g) '((li r0 0) (li r1 0) (movqxr f1 r0))
+                           '((li r0 0) (movqxr f1 r0)))
+                     (mkv 'bool 'r0 (vfs r + (z1 + ('((ucomisd f0 f1)) + fsetn)))))
                  (!(flo? tgt) && flo? (vty r))                              ; double -> int, then narrow
                   (? (pair? g tgt)                                               ; double -> llong: the pattern peel
                       (mkv tgt 'r0 (vfs r + cvtdll g (usg? tgt)))
@@ -4420,6 +4436,7 @@
           (: uty <>bt bitoff <>>bt usz (tsz g uty)
              mask ((<< 1 <>>>bt) - 1) cmask ((0 - (<< mask bitoff)) - 1)
              (asintt g r uty
+              + (? (id? uty 'bool) (cvt uty 'r0) ())   ; normalize BEFORE the mask
               + `(`((uldop usz) 'r2 'r4 off)
                   `('li 'r3 mask) '(and r0 r0 r3)
                   `('li 'r3 cmask) '(and r2 r2 r3)
@@ -4463,6 +4480,8 @@
    (imbytelen l) (foldl (\ a x (a + (? (fixit? x) <>x 1))) 0 l)
    ; ⚠ bytes via // and % (not & and >>): a constant past the charm range is a BIG, where the
    ; bitwise ops are undefined and division is exact. a negative wraps into the unsigned range.
+   ; ⚠ imnum lays a raw byte pattern -- bfover feeds it merged UNIT bits, so the bool
+   ; normalization lives in imgbytes' scalar row, never here.
    (imnum g ty val) (: n (tsz g ty)
                        (pw k acc) (? (k < 1) acc (pw (k - 1) (acc * 256)))
                        u0 (? (val < 0) (val + pw n 1) val)
@@ -4485,7 +4504,9 @@
    (icfold e)
     (? !(two? e) 'no
        (<e = 'num) <>e
-       (<e = 'cast) (: v (icfold <>>e) (? (id? v 'no) 'no (flo? <>e) 'no v))
+       (<e = 'cast) (: v (icfold <>>e)
+                       (? (id? v 'no) 'no (flo? <>e) 'no
+                          (id? <>e 'bool) (? (v = 0) 0 1) v))
        (<e = 'un)
         (: v (icfold <>>e)
            (? (id? v 'no) 'no (<>e = 'neg) -v (<>e = 'bnot) (-v - 1) 'no))
@@ -4573,7 +4594,9 @@
     (? !(two? ini) (zeros (tsz g ty))
        (<ini = 'flo) (? (flo? ty) (fim ty <>ini) 'bad)
        (<ini = 'num) (? (aggish? ty) 'bad
-                             (flo? ty) (fim ty (0.0 + <>ini)) (imnum g ty <>ini))
+                             (flo? ty) (fim ty (0.0 + <>ini))
+                             (id? ty 'bool) (imnum g ty (? (<>ini = 0) 0 1))   ; a bool image normalizes (C11 6.3.1.2)
+                             (imnum g ty <>ini))
        (flo? ty && member? <ini '(bin un cast))       ; a const float expression: fold, then image
         (: v (ffold ini)
            (? (bad? v) 'bad (fim ty v)))
@@ -4619,7 +4642,7 @@
                          (bitf? <>>fe)
                           (: v (icfold (elval it))
                              (? (id? v 'no) 'bad
-                                (place >l (ci + 1) acc (bfmerge <>fe <>>fe v bfs))))
+                                (place >l (ci + 1) acc (bfmerge g <>fe <>>fe v bfs))))
                          (: fb (imgpad g <>>fe (tsz g <>>fe) (elval it))
                             (? (bad? fb) 'bad (place >l (ci + 1) (`(<>fe fb) >< acc) bfs))))))
                pr (place <>nini 0 () ())
@@ -4630,12 +4653,16 @@
    ; ⚠ arithmetic, never the bitwise ops: a 64-bit unit's mask is a big, where they are
    ; undefined -- % takes the low bits (a negative wrapping in) and * is the shift.
    (pw2 n) (? (n < 1) 1 (2 * pw2 (n - 1)))
-   (bfmerge uoff bt v rows)
-    (: m (pw2 <>>>bt)
-       lo (((v % m) + m) % m)                       ; the low `width` bits, a negative wrapped in
+   (bfmerge g uoff bt v rows)
+    (: v9 (? (id? <>bt 'bool) (? (v = 0) 0 1) v)    ; a bool field's image normalizes
+       m (pw2 <>>>bt)
+       lo (((v9 % m) + m) % m)                      ; the low `width` bits, a negative wrapped in
        bits (lo * pw2 <>>bt)
+       ; a merged row keeps the WIDER unit -- a bool/char unit sharing its byte with
+       ; a wider neighbour must not truncate the neighbour's bits at the write
        (go l) (? !(two? l) `(`(uoff <>bt bits))
-                 (<<l = uoff) (`(uoff <><l (<>><l + bits)) >< >l)
+                 (<<l = uoff) (: u9 (? (tsz g <><l < tsz g <>bt) <>bt <><l)
+                                 (`(uoff u9 (<>><l + bits)) >< >l))
                  (<l >< go >l))
        (go rows))
    ; OR each unit's bytes into a struct's flattened image. a relocation in the way
@@ -5295,10 +5322,12 @@
                       (stru? rt || stru? (vty r))                        ; a MIXED 16-byte pair, and every composite class
                        (nolane g ("no lane for returning this " + show (tsz g (? (stru? rt) rt (vty r)))     ; arm64 has no MEMORY return yet
                                   + "-byte struct by value" + ontgt g))
-                      (flo? (vty r)) (asintt g r rt + (? il `(`('jmp il)) epj))     ; a double value, an int return -> truncate to r0
+                      (flo? (vty r)) (asintt g r rt + (? (id? rt 'bool) (cvt rt 'r0) ()) + (? il `(`('jmp il)) epj))     ; a double value, an int return -> truncate to r0
                       (pair? g rt) (asll g r + (? il `(`('jmp il)) epj))        ; a pair return: r0:r1 (widen a word value)
                       (d128? rt)                                                ; a wide return rides rdx:rax (the SysV i128 pair)
                        (? (x64t? g) (as128 g r + (? il `(`('jmp il)) epj)) 'bad)
+                      (id? rt 'bool)                             ; a bool return CONVERTS (callers read r0 whole -- cc calls untyped)
+                       (tor0 g r + cvt rt 'r0 + (? il `(`('jmp il)) epj))
                       (tor0 g r + (? il `(`('jmp il)) epj)))      ; int -> int, as before (a pair value narrows to its lo)
                    (? (!mt || bad? res) res (mustret g res)))))         ; a musttail ret MARKS its call for sibs
           (k = 'expr)
@@ -5548,7 +5577,9 @@
                              (: off (ntmp g 'long)
                                 (bind >ps >as
                                       (`(<<ps off pty) >< benv)
-                                      (acc + asintt g r pty + `(`('st 'r4 off 'r0)))
+                                      (acc + asintt g r pty
+                                           + (? (id? pty 'bool) (cvt pty 'r0) ())   ; the entry conversion the splice skips
+                                           + `(`('st 'r4 off 'r0)))
                                       rbs)))))))))
        br (bind <>>f args () () ())
        ; the body-decl license: a decl name whose weighted reads price a pool seat (the
@@ -5743,8 +5774,11 @@
                             (spill hp >ps (gpi + 1) xmmi ovi (`(<p `('reg home) pty) >< env)
                                    (acc + mv))))
                      (: off (nslot g 8)
+                        ; a bool param CONVERTS its arrival (cc calls untyped, so the
+                        ; caller passed the bare int) -- the object invariant holds at entry
+                        cv9 (? (id? pty 'bool) (cvt pty (nthr (argr g) gpi)) ())
                         (spill hp >ps (gpi + 1) xmmi ovi (`(<p off pty) >< env)
-                               (acc + `(`('st 'r4 off (nthr (argr g) gpi)))))))
+                               (acc + cv9 + `(`('st 'r4 off (nthr (argr g) gpi)))))))
                  ; an overflow param reads off the caller's block: 8-byte slots (x64/a64), 4-byte on t32
                  (t32? g) (spill hp >ps gpi xmmi (ovi + 4) (`(<p (ovb g + ovi) pty) >< env) acc)
                  (spill hp >ps gpi xmmi (ovi + 1) (`(<p (ovb g + 8 * ovi) pty) >< env) acc))))

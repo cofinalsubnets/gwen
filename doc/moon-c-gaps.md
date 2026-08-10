@@ -26,7 +26,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 
 | construct | probe |
 |---|---|
-| `_Bool` | `_Bool b;` — ⚠ see "bool is four bytes" below before aliasing it to `bool` |
 | `_Alignof` | `_Alignof(int)` |
 | `_Generic` | `_Generic(x, int: 1, default: 0)` |
 | `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest |
@@ -196,17 +195,27 @@ declarators use — so the initializer completes the type (C11 6.5.2.5p22), desi
 braced strings included. Found probing the wide-literal desugar the same day (the desugar
 mints *bounded* clits, so it never rode this). Pinned by test/cc/126-clitbound.c.
 
-### bool is four bytes
+### bool is one byte — landed 2026-08-09
 
-`sizeof(bool)` is **4** where every other Linux C compiler makes `_Bool` **1**, and
-`struct { char a; bool b; char c; }` is **12** bytes against gcc's **3**. A mooncc object and a
-gcc object sharing a bool-bearing struct disagree on its layout in silence.
+`_Bool` is a real type now (`'bool`): size/align 1, `struct { char a; bool b; char c; }` is
+gcc's 3 bytes, and the `bool` predefine expands to the `_Bool` keyword — `<stdbool.h>`
+consumers build the right artifact, and PDCLib's config fork can retire. The conversion is
+C11 6.3.1.2 spelled once: gen's `cvt` row for bool is compare-with-zero + setne (a canonical
+0/1 in the full register on every backend), and every write site already ran `cvt` before its
+narrow store — so init, assignment, cast, the bitfield RMW (normalize BEFORE the mask:
+`(bool)4` is 1), `++`/`--` (`b--` on 0 is 1), a return, and a static's image all normalize,
+and a load is a plain `ldu1`. A float source compares (`(bool)0.5` is 1, NaN is 1), never
+truncates. Because cc calls are untyped, the CALLEE converts: a register-passed bool param
+takes one entry cvt (the inline splice binds carry the same conversion — `take(7)` spliced was
+the bug that found it), and a bitfield unit merged across widths keeps the wider unit type
+(a `bool:1` sharing its byte with a wider neighbour must not truncate the neighbour's image).
+Differential: test/cc/130-bool.c, 22 checks, gcc-exact on x64 + qemu arm64/riscv64.
 
-⚠ **This is why `_Bool` must keep refusing.** Aliasing it to today's `bool` would turn a loud
-parse error into that silent ABI split — one line, and every consumer of `<stdbool.h>` (which
-spells `bool` as `_Bool`) starts building the wrong artifact. The rung is making bool one byte:
-a narrow store, a nonzero-normalizing load, and the struct layout that follows. Until then a
-package wanting `<stdbool.h>` needs a config fork, which is what PDCLib got.
+Three honest residues: an **overflow (7th+) or variadic-named** bool param binds straight to
+caller memory — no store, so no arrival conversion (a wild caller value reads back raw);
+a mooncc **caller** into a gcc-built bool-param callee passes the bare int where SysV promises
+0/1 (the callee-side cvt covers mooncc callees only); and `(bool)` of a **pair/i128** value
+tests the low word only.
 
 ### sizeof answers size_t — landed 2026-08-09, via the cast coat
 
