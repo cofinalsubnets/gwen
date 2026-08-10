@@ -4446,7 +4446,7 @@ static intptr_t image_ap_index(intptr_t ap) {
  for (uintptr_t j = 0; j < countof(def1); j++)
   if (def1[j].x == ap) return (intptr_t)(countof(image_extra_aps) + j);
  return -1; }
-static intptr_t image_ap_resolve(intptr_t idx) {
+static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
  return idx < (intptr_t) countof(image_extra_aps)
    ? (intptr_t) image_extra_aps[idx]
    : def1[idx - countof(image_extra_aps)].x; }
@@ -4585,12 +4585,11 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  if (!x->suppress && img_wxp(x, (word) v)) x->fail = 1;                          // un-wakeable absolute (JIT/W^X/mmap)
  x->nabs++;                                                                      // kept absolute: the image is now binary-specific
  return v; }                                                                     // binary (host nif/.rodata): absolute, +delta on load
-static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta) {
- if (oddp(v)) return v;
+// the decode ladder, split hot/cold by the rung-0 census (doc/oneimage.md): odd,
+// heap offset, lvm index and immortal are 98.7% of decodes; the cold tail keeps
+// the nif-cell interior, bare-fn and kept-absolute rungs out of the walk's way.
+static ai_noinline intptr_t img_decode_cold(intptr_t v, uintptr_t hb, intptr_t delta) {
  uintptr_t uv = (uintptr_t) v;
- if (uv < hb) return (intptr_t)((char*) base + uv);                              // byte offset -> live pointer
- if (uv < hb + 2 * IMAGE_NLVM) return image_ap_resolve((intptr_t)((uv - hb) / 2));
- if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)) return (intptr_t) image_immortals[(uv - hb - 2 * IMAGE_NLVM) / 2];
  if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM) + 2 * IMAGE_NLVM * IMAGE_CELLW) {   // nif-cell interior: base + word offset
   uintptr_t k = (uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)) / 2;
   return image_ap_resolve((intptr_t)(k / IMAGE_CELLW)) + (k % IMAGE_CELLW) * sizeof(word); }
@@ -4599,6 +4598,13 @@ static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta)
   return image_fn_resolve((intptr_t)((uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)
                                          - 2 * IMAGE_NLVM * IMAGE_CELLW) / 2));
  return v + delta; }
+static ai_inline intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta) {
+ if (oddp(v)) return v;
+ uintptr_t uv = (uintptr_t) v;
+ if (uv < hb) return (intptr_t)((char*) base + uv);                              // byte offset -> live pointer
+ if (uv < hb + 2 * IMAGE_NLVM) return image_ap_resolve((intptr_t)((uv - hb) / 2));
+ if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)) return (intptr_t) image_immortals[(uv - hb - 2 * IMAGE_NLVM) / 2];
+ return img_decode_cold(v, hb, delta); }
 // serialize g -> a fresh g->alloc'd {header, blob} buffer; NULL on failure. the
 // worker dumps WHEREVER it's called (a mid-eval dump's continuation rides as
 // wake-unreachable ballast); the guarded entry keeps the boot path honest.
@@ -4708,11 +4714,14 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
                  break;
     default: break; }
   } else {                                                                        // thread: the ENCODED terminator is its head's byte offset | tag
-   intptr_t term = (intptr_t)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
-   uintptr_t kmax = (uintptr_t)(base + nw - (word*) p);                           // BOUND the scan: a mis-decoded word0 must refuse
-   while (((word*) p)[k] != term) if (++k >= kmax) return NULL;                   // the load, never march off the pool (on metal the
-   sz = k + 1;                                                                    // pool's edge is a dead bus, and a dead bus is MUTE)
-   for (uintptr_t i = 1; i < sz; i++) ((word*) p)[i] = img_decode(((word*) p)[i], base, hb, delta); }
+   word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
+   uintptr_t kmax = (uintptr_t)(base + nw - (word*) p);                           // BOUND the walk: a mis-decoded word0 must refuse
+   for (;; k++) {                                                                 // ONE pass, decoding to the terminator (rung 2):
+    if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the
+    if (((word*) p)[k] == term) break;                                            // pool's edge is a dead bus, and a dead bus is MUTE)
+    ((word*) p)[k] = (word) img_decode((intptr_t)((word*) p)[k], base, hb, delta); }
+   ((word*) p)[k] = (word) p + ai_thread_tag;                                     // the terminator, decoded by hand: its head went live
+   sz = k + 1; }
   p = (union u*) ((word*) p + sz); }
  ai_image_note(5);
  uintptr_t nv = (word*) g->end - (word*) &g->v0;                         // same struct/binary (anchor-checked) -> same layout
