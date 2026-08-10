@@ -747,4 +747,24 @@
  (all (\ t ((opfix (unfix t)) = t)) tcorp)            ; THE round-trip law
  (7 = (ev (unfix '(+ (* 2 3) 1)))))                   ; the rendered form is love source: it runs
 
+; --- ..and against lib/infix.l, the general one -----------------------------
+; there are TWO right inverses in this tree and there have to be. rune's answers a
+; FORM; lib/infix.l answers TEXT. neither can stand in for the other:
+;   * rune is BAKED -- port/playdate and port/mps2 hold q/kanren/rune in ai_libs and
+;     nothing else, over no filesystem, so rune cannot (use 'infix): it would scare at
+;     boot, and cas.l renders every term it shows through unfix.
+;   * a term may hold a live COIN, which HAS NO SOURCE SPELLING. a form carries the
+;     object through; text cannot, and infix.l's per-datum check catches that and falls
+;     back to prefix rather than spelling something that reads as a list. right of it.
+; so they stay two -- and this is what stops them drifting apart in silence: over rune's
+; whole corpus they agree everywhere the surface can spell, and part in exactly one
+; place, for exactly that reason.
+(use 'infix)
+(assert
+ (: viatext (\ t (cap (sound (infix-spell t))))
+    d (filter (\ t !((unfix t) = (viatext t))) tcorp)
+    (&& (1 = tally d)                                  ; one term parts company..
+        (&& ("(x + (q (1 2)))" = show (unfix <d))      ; ..rune carries the coin through
+            ("(+ x (q (1 2)))" = show (viatext <d)))))) ; ..and infix.l declines to spell it
+
 (puts "rune: ok")
