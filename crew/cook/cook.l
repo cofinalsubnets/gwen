@@ -786,8 +786,19 @@
                        (: sb (splitbar (expand-words `(prtext) as)) prs <sb oos >sb
                           (? (any haspct tgts)
                              (each tgts (\ t (? (haspct t) (pin patbox 0 (`(t prs oos raws) >< peep patbox 0 0)) 0)))
-                             (each tgts (\ t (reg (mk-item t) (map mk-item prs) (map mk-item oos)
-                                                  (expand-steps raws (mk-item t) prs "" as))))))))))))
+                             ; ⚠ the automatics read the target's WHOLE prerequisite list,
+                             ; which an earlier line may have stated and this one not repeat:
+                             ;   a.out: a.c
+                             ;   a.out b.out: ; cc $<
+                             ; make expands $</$^ when the recipe RUNS, against everything
+                             ; merged; cook expands here, so it asks the card already
+                             ; registered before adding this line's own words. (prereqs
+                             ; arriving AFTER their recipe still read short -- that one wants
+                             ; expansion deferred to prep, a bigger change than this.)
+                             (each tgts (\ t (: it (mk-item t) ps (map mk-item prs)
+                                                all (adds <(peep cards (unseat it) '(())) ps)
+                                                (reg it ps (map mk-item oos)
+                                                     (expand-steps raws it all "" as)))))))))))))
       ; make's .DEFAULT_GOAL overrides "first rule declared" -- it is a plain
       ; variable, so it survives the dot-target drop above and lands in `as`.
       dg (trim (peep as ".DEFAULT_GOAL" ""))
