@@ -58,7 +58,15 @@ fi
 if ! have "$qemu"; then
   echo "  (vec $arch: fault boots skipped, no $qemu)"
 else
-  # boot, feed one expression, stop as soon as the report lands. the kernel is
+  # ⚠ only a NEWLINE-TERMINATED report counts: rip=/err=/cr2= land after the marker,
+  # so waking on the marker alone kills qemu mid-line and the gate reads a PREFIX of
+  # the address it asked for -- a failure that only shows under load. wc -l counts
+  # terminators, so head -n that many is exactly the complete lines.
+  said() {
+    n=$(tr -d '\0' < "$work/out" | wc -l | tr -d ' ')
+    [ "${n:-0}" -gt 0 ] && tr -d '\0' < "$work/out" | head -n "$n" | grep -qa '\*\*\* CPU exception'
+  }
+  # boot, feed one expression, stop as soon as the report lands whole. the kernel is
   # halted at that point and would otherwise sit until a timeout.
   fault_report() {
     printf '(fault %s)\n' "$1" > "$work/in"
@@ -69,13 +77,14 @@ else
     qp=$!
     i=0
     while [ $i -lt 600 ]; do
-      tr -d '\0' < "$work/out" | grep -q '\*\*\* CPU exception' && break
+      said && break
       kill -0 $qp 2>/dev/null || break
       sleep 0.1; i=$((i + 1))
     done
     kill $qp 2>/dev/null
     wait $qp 2>/dev/null
-    tr -d '\0' < "$work/out" | grep -a '\*\*\* CPU exception' | head -1
+    n=$(tr -d '\0' < "$work/out" | wc -l | tr -d ' ')
+    tr -d '\0' < "$work/out" | head -n "${n:-0}" | grep -a '\*\*\* CPU exception' | head -1
   }
 
   # vector -> every string its report must contain. the x86 set covers a
