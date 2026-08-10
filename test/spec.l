@@ -456,7 +456,10 @@
 
 ; --- reader operators --- reading is STRUCTURAL and environment-free: the reader knows tokens,
 ; parens, strings, and the value surface (' quote = one-operand \, ` list, # hash, @ tup, ~ twin)
-; -- NO operator tables, so the same reader serves data and code. the LEXER LAW splits by leading
+; -- NO operator tables, so the same reader serves data and code. the OPENER CARRIES THE WRAP:
+; [..] is `(..) and {..} is #(..), a second spelling for the two that nest worst, and the three
+; closers ) ] } are ONE -- each only ends the open form, so a crossed pair is libra's to catch.
+; the LEXER LAW splits by leading
 ; char: a name token (alnum/_) keeps - ? ! and the prime inside (kebab law; a LEADING ' is still
 ; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
 ; when spaced, fused to its datum as (mono (run datum)) when GLUED mid-list. code then factors
@@ -497,6 +500,9 @@
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a NUMERAL (the whole exception)
+ ([1 2 3] = `(1 2 3)) ([] = `()) (1 = ({'a 1} 'a))            ; the opener carries the wrap: [ is `, { is #
+ ([[1 2] [3 4]] = `(`(1 2) `(3 4))) (-[1 2] = -`(1 2))       ; ...to any depth, and it glues like the wrap it spells
+ ((show (cap (sound "{'a 1}"))) = (show (cap (sound "#('a 1)"))))   ; a hash compares by identity, so the LAW is on the form
  (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small))  ; ? is dyadic: infix takes ONE arm ((< 1 2) binds first at 40), an else arm is the prefix cond
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the LEFT hand: ((1 - 2) - 3), ((8 / 4) / 2)
  (: was (fixity '<+> '(60 1)) t (opfix '(a <+> b <+> c)) _ (fixity '<+> was)   ; the fixity door,

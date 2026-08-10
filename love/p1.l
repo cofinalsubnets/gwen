@@ -165,6 +165,12 @@
         (? (= d ()) (= w 'tuple) ()) (link 'iota (link 0 ()))      ; @() -> (iota 0)
         (? (p1-splice? w) (? (link? d) 1 (? (= d ()) (nil? (= w 'hash)) ())) ()) (link w d)
         (link w (link d ())))
+   ; A BRACKET IS ITS WRAP: [a b] is `(a b) and {k v} is #(k v) -- the same datum
+   ; by a second spelling, so the splice law carries the empties too ([] -> (list),
+   ; {} -> (tablet 0)) and nothing downstream can tell which spelling was written.
+   (p1-open w cl)
+     (: d (p1-list cl 1 ())
+        (? (link? d) (link (p1-wrap w (cap d)) (cup d)) d))
 
    ; --- the parser ----------------------------------------------------------
    ; (p1-read1 cl head) -- head is true when the next datum would be a list's
@@ -178,7 +184,8 @@
               ; runs like every other punctuation, EXCEPT that a digit -- or a
               ; `.`, for -.5 -- right after them makes the token a NUMBER.
               numlead (? (& (p1-cls c) 64) (? (link? r) (? (p1-dig? (cap r)) 1 (= (cap r) 46)) ()) ())
-              (? (& (p1-cls c) 16) (p1-list r 1 ())
+              (? (= c 40) (p1-list r 1 ())
+                 (& (p1-cls c) 16) (p1-open (? (= c 91) 'list 'hash) r)
                  (& (p1-cls c) 32) ()
                  (= c 34) (p1-str r ())
                  (= c 39) (p1-lift (name "\\") r head)
@@ -220,7 +227,10 @@
    (p1-glued? cl)
      (? (link? cl) (: c (cap cl) (nil? (& (p1-cls c) 128))) ())
 
-   ; a list: datums until the close. an empty one IS the zero point.
+   ; a list: datums until the close. an empty one IS the zero point. ⚠ THE THREE
+   ; CLOSERS ARE ONE: ) ] } each just end the open form, so the opener alone picks
+   ; the wrap and a crossed pair reads silently -- matching them is libra's job,
+   ; not the reader's (a reader of a subset, not a validator).
    (p1-list cl0 head acc)
      (: cl (p1-skip cl0)
         (? (nil? (link? cl)) 'torn
