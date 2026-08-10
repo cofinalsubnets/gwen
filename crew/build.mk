@@ -7,7 +7,11 @@
 # rides the cat too, so `kore sh` and a /bin/sh symlink are the shell and the distro's
 # one-binary userland closes over its own console. ⚠ lush goes BEFORE cook.l, whose
 # $(wildcard) presence-guard then reads sh-glob bare.
-korefiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
+# ⚠ the rosters a LATER roster splices sit above it: a prerequisite list expands when
+# make READS the rule, so a $(..) still undefined there expands to nothing and the cat
+# comes out short a file -- silently, the members that remain being well-formed.
+lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l crew/lush/word.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
+korefiles =crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
 # mooncc is its OWN app, NOT in the kore cat: a cc edit rebuilds only mooncc, so a kore
 # rebuild in another session cannot tear the compiler. ⚠ member order is the scope -- the
 # u-floor, then asbook splices the boot-registered holo and the CROSS BACKENDS join it
@@ -46,7 +50,6 @@ $(ho)/mooncc: $(ho)/mooncc.image
 # whose SEAT in main.l fires on its own basename. Both are catted shebang scripts, PATH
 # picking the love that runs them.
 seedfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/seed/merge.l crew/seed/http.l crew/seed/seed.l
-lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l crew/lush/word.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
 $(ho)/seed: $(seedfiles)
 $(ho)/lush: $(lushfiles)
 $(ho)/seed $(ho)/lush:
