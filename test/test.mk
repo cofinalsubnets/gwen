@@ -4,7 +4,7 @@
 
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
-  test_filemode test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
+  test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
   test_seed test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
@@ -38,9 +38,40 @@ test_filemode: $m
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# ⚠ test_host takes the corpus as a FILE, not on stdin: the corpus TESTS stdin
-# (test/io.l's see/unsee roundtrip pokes `in`), and a stream you are being read from
-# is not one you can poke. cat'ing keeps the corpus's one-global-scope property.
+# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. A
+# seekable fd 0 reads the device in 4096-byte gulps (love.c's rbio_of) where a pipe still
+# drips one byte at a time, so the first law is that BOTH DOORS ANSWER THE SAME: the bytes
+# our reader has not taken are still there for an in-form (slurp in), and still there for a
+# child that inherits the fd -- the second is what stdin_give's seek buys. The pipe lends
+# its O_NONBLOCK bit instead (`inflag`), and the law for that one is read straight off
+# /proc: a child must inherit fd 0 BLOCKING, or it takes an empty pipe for an ended one.
+# The corpus cannot gate any of this; it exists only BETWEEN two ways of being fed.
+test_stdinbuf: $m
+	@echo TEST stdin borrows a run
+	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/host/.test_stdinbuf1.l
+	@printf '(exec (L "cat"))\nHANDOFF-TAIL\n' > out/host/.test_stdinbuf2.l
+	@for f in out/host/.test_stdinbuf1.l out/host/.test_stdinbuf2.l; do \
+	   $m < $$f > $$f.seek 2>&1; cat $$f | $m > $$f.pipe 2>&1; \
+	   cmp -s $$f.seek $$f.pipe \
+	     || { echo "FAIL $$f: the buffered door differs from the bare one"; \
+	          diff $$f.pipe $$f.seek; exit 1; }; done
+	@grep -qF 'rest: [(say out "tail form")' out/host/.test_stdinbuf1.l.seek \
+	  || { cat out/host/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
+	@grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.seek \
+	  || { cat out/host/.test_stdinbuf2.l.seek; echo "FAIL the exec'd child lost the fd position"; exit 1; }
+	@printf '(exec (L "cat" "/proc/self/fdinfo/0"))\n' > out/host/.test_stdinbuf3.l
+	@cat out/host/.test_stdinbuf3.l | $m > out/host/.test_stdinbuf3.out 2>&1; \
+	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' out/host/.test_stdinbuf3.out); \
+	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
+	    || { cat out/host/.test_stdinbuf3.out; \
+	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
+# test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
+# stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
+# it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
+# What is left of the gap is the READER, not the device: a redirect gulps 4096 like
+# the file does (love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
+# its position exact, which costs ~1.45x here. This is the gate that runs constantly.
+# cat'ing also keeps the corpus's one-global-scope property.
 test_host: $m
 	@echo TEST $m
 	@cat $t > out/host/.test_host.l
@@ -104,7 +135,7 @@ test_embed: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane

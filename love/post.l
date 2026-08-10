@@ -137,10 +137,15 @@
                                 (go (cup l) 0)) 0)
        (? !(two? ks) (say o "#()") (: _ (say o "#(") _ (go ks 1) (put o 41)))))
 
-  ; --- coins show as (name payload), reparsable when the die's name is a bound ctor
-  (pcoin o x sn) (: nm (peep (die-of x) 0 ())
+  ; --- coins show as (name 'payload): the arity-1 ctor love/coin.l hands out, applied
+  ; to what it was given, so the form EVALS BACK to an equal coin when the name is a
+  ; bound ctor. ⚠ the payload is QUOTED where it would otherwise re-evaluate -- a chain
+  ; reads as an application and a nom as a variable. without that (q (1 2)) read back as
+  ; q applied to 2, which is not the number and was never a coin.
+  (pcoin o x sn) (: nm (peep (die-of x) 0 ()) p (load x)
     _ (put o 40) _ (? (nil? nm) (say o "coin") (px o nm sn))
-    _ (put o 32) _ (px o (load x) sn) (put o 41))
+    _ (put o 32) _ (? (|| (two? p) (nom? p)) (put o 39) 0)
+    _ (px o p sn) (put o 41))
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.
@@ -190,11 +195,11 @@
 
 ; the surface. `dot` takes a string or cask VERBATIM -- the `.` sigil's raw face --
 ; and everything else in external form; it answers its operand, so it drops into
-; any sequence. the monadics table is patched too: opfix folded prel's `.` row to a
-; VALUE, so a fresh binding alone would never reach a later file's `.x`.
+; any sequence. the monadics table gets its `.` row here, where dot exists; the row
+; is the NOM, so a glued `.x` resolves through whatever `.` names at the use site.
 (: (print o x) (: _ (px o x ()) x)
    (show x) (: o (jug 0) _ (px o x ()) (slurp o))
    (dot x) (: _ (? (|| (string? x) (&& (hot? x) !(port? x))) (say out x) (px out x ())) _ (flush out) x))
 (: putx (print out)
    . dot
-   _ (pin monadics '. dot))
+   _ (pin monadics '. '.))
