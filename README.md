@@ -116,7 +116,7 @@ work here, the traps, the architecture -- is [CLAUDE.md](CLAUDE.md).
   re-baked with the crew warm -- `love up URL` clones + builds + installs the
   whole nest from a served `.seed/` tree, and `love seed|cook|kore|kiosko|mooncc ..`
   is the same binary being multi-call (`love down` uninstalls)
-- `out/host/love` is the binary -- love is the word (it was `ai` for a while); `out/host/ai` stays a symlink
+- `out/host/love` is the binary -- love is the word (it was `ai` for a while)
 - `out/host/love file.l` run a file
 - `echo .ev | love` print the compiler
 

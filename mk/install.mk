@@ -44,7 +44,7 @@ endif
 libmods = cook dns json lint salt libra kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 # ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) ai kore seed mooncc moonfmt cook papel kiosko libra ain lux bao lush
+binnames = $(BIN) kore seed mooncc moonfmt cook papel kiosko libra ain lux bao lush
 mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
@@ -133,11 +133,6 @@ $d/lib/liblove.so: $(glibc_ho)/liblove.so
 $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
-# compat: `ai` was the name for a while, so a script carrying `#!/usr/bin/env -S ai -l`
-# keeps working. The first alias to drop in a distro package.
-$d/bin/ai: $d/bin/$(BIN)
-	@echo LN	$(abspath $@)
-	@ln -sf $(BIN) $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section), so
 # the plain-copy install keeps the ~4ms wake.
 
