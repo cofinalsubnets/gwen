@@ -64,6 +64,25 @@
    (iglued? d) (? (two? d) 1  (nom? d) (! (ipunc? d))  (string? d) 1  (0 <= d))
 
    ; --- the renderer --------------------------------------------------------------------
+   ; --- the law, and what it compares -----------------------------------------------
+   ; what a spelling DENOTES: read it back and factor it. the check compares this on both
+   ; sides -- mine and `show`'s -- rather than mine against the value itself, because a
+   ; value need not have a readable twin: a coin reads back as the ctor call that rebuilds
+   ; it, never as itself. equal-THROUGH-TEXT is exactly "these two spellings say the same
+   ; thing", which is all a printer owes, and on fully readable data it is plain equality.
+   ; ⚠ it leans on `show` being faithful -- love/post.l's pcoin quotes the payload for
+   ; this reason. a printer that lied here would licence a spelling that lied with it.
+   (iread c) (: r (sound c) (? (two? r) (link 1 (link (opfix (cap r)) ())) ()))
+   (isame? c n) (: a (iread c) b (iread (show n))
+                   (&& (&& (two? a) (two? b)) (= (caup a) (caup b))))
+   ; a value that is not a chain may still SPELL as one: a coin shows as (q '(1 2)), the
+   ; ctor applied to its payload. pasting that text whole would keep parens the span rule
+   ; makes free, so an operand re-reads the spelling and renders it like any other form.
+   ; ⚠ a closure is excluded -- its show is de Bruijn source, a display and not a rebuild.
+   (iform x) (? (lit? x) ()
+                (: r (sound (show x))
+                   (? (two? r) (: d (cap r) (? (two? d) d ())) ())))
+
    (ijoin l) (: (go l) (? (two? (cup l)) ((cap l) + " " + (go (cup l))) (cap l))
                 (? (two? l) (go l) ""))
    (iparen x) ("(" + (ifree x) + ")")
@@ -80,8 +99,7 @@
                  (&& (iglue? x) (iglued? (caup x))) (iglue x)
                  (iparen x))
    (ielem x) (? (! (two? x)) (show x)
-                (: c (ielem0 x) r (sound c)
-                   (? (? (two? r) (= (opfix (cap r)) x) 0) c (show x))))
+                (: c (ielem0 x) (? (isame? c x) c (show x))))
    ; an element of an application span. juxtaposition is FLAT and binds tighter than any infix,
    ; so only an atom or a glued run rides bare -- every list takes its own parens.
    (ispan l) (ijoin (map ielem l))
@@ -89,7 +107,7 @@
    ; takes a whole leading span, op-del extends a trailing one); an infix operand rides bare only
    ; where the read re-groups it the same way.
    (iopnd x g h left)
-    (? (! (two? x)) (show x)
+    (? (! (two? x)) (: f (iform x) (? (two? f) (iopnd f g h left) (show x)))
        (iquote? x) (show x)
        (ibind? x) (iparen x)
        (&& (iglue? x) (iglued? (caup x))) (iglue x)
@@ -133,10 +151,6 @@
 
    ; --- the door. normalize, propose, VERIFY, and fall back to prefix on any mismatch. the
    ; whole-form check is a backstop over ielem's local ones; it costs one read per form.
-   (infix-spell x)
-    (: n (opfix x) c (itop n) r (sound c)
-       (? (? (two? r) (= (opfix (cap r)) n) 0) c (show n)))
+   (infix-spell x) (: n (opfix x) c (itop n) (? (isame? c n) c (show n)))
    ; did the maximal spelling survive, or did the backstop fire? (for the gate and the metric)
-   (infix-max? x)
-    (: n (opfix x) c (itop n) r (sound c)
-       (? (? (two? r) (= (opfix (cap r)) n) 0) 1 0)))
+   (infix-max? x)  (: n (opfix x) c (itop n) (? (isame? c n) 1 0)))

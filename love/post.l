@@ -137,10 +137,15 @@
                                 (go (cup l) 0)) 0)
        (? !(two? ks) (say o "#()") (: _ (say o "#(") _ (go ks 1) (put o 41)))))
 
-  ; --- coins show as (name payload), reparsable when the die's name is a bound ctor
-  (pcoin o x sn) (: nm (peep (die-of x) 0 ())
+  ; --- coins show as (name 'payload): the arity-1 ctor love/coin.l hands out, applied
+  ; to what it was given, so the form EVALS BACK to an equal coin when the name is a
+  ; bound ctor. ⚠ the payload is QUOTED where it would otherwise re-evaluate -- a chain
+  ; reads as an application and a nom as a variable. without that (q (1 2)) read back as
+  ; q applied to 2, which is not the number and was never a coin.
+  (pcoin o x sn) (: nm (peep (die-of x) 0 ()) p (load x)
     _ (put o 40) _ (? (nil? nm) (say o "coin") (px o nm sn))
-    _ (put o 32) _ (px o (load x) sn) (put o 41))
+    _ (put o 32) _ (? (|| (two? p) (nom? p)) (put o 39) 0)
+    _ (px o p sn) (put o 41))
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.

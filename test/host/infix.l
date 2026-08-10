@@ -10,6 +10,7 @@
 ; PROPOSAL -- if the grip algebra here ever drifts from op-steal's, the fallback quietly
 ; eats the difference and nothing else in the tree would notice, so the count of forms
 ; that KEPT the maximal spelling is asserted, not just the law.
+(use 'q)
 (use 'infix)
 
 (: (i-rd s) (cap (sound s))                         ; the first datum of s
@@ -40,6 +41,19 @@
  ("(f <x)"            = (i-say "(f (cap x))"))      ; glue is free anywhere but the outermost
  ("'a"                = (i-say "'a"))               ; a quote form is already its own datum
  ("(f $ a + b)"       = (i-say "($ f (+ a b))")))   ; $ at the loosest grip
+
+; --- a value that is not a chain but SPELLS as one. a coin shows as (q '(1 2)), the
+; ctor applied to its payload, so as an OPERAND the span rule frees its parens -- but
+; only there: as a span element it needs them, and alone it is already a form.
+; ⚠ this is also what the law is for. `(+ x <coin>)` has no readable twin -- the text
+; reads back as the ctor CALL, never as the coin -- so the check compares what the two
+; spellings DENOTE, mine against `show`'s, and both sides go through text.
+(assert
+ (: c (q 1 2)
+    (&& (&& ("(x + q '(1 2))" = (infix-spell (list '+ 'x c)))    ; operand: bare
+            ("(f (q '(1 2)) y)" = (infix-spell (list 'f c 'y)))) ; span element: parens
+        (&& ("(q '(1 2))" = (infix-spell c))                     ; alone: already a form
+            (c = (ev (cap (sound (show c)))))))))                ; ..and it all reads back
 
 ; --- the sigil map, asked of the COMPILER. infix keeps a copy of the monadics rows
 ; (the table is mopped and has no read door); this is what stops the copy drifting.

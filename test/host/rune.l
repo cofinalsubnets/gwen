@@ -753,18 +753,19 @@
 ;   * rune is BAKED -- port/playdate and port/mps2 hold q/kanren/rune in ai_libs and
 ;     nothing else, over no filesystem, so rune cannot (use 'infix): it would scare at
 ;     boot, and cas.l renders every term it shows through unfix.
-;   * a term may hold a live COIN, which HAS NO SOURCE SPELLING. a form carries the
-;     object through; text cannot, and infix.l's per-datum check catches that and falls
-;     back to prefix rather than spelling something that reads as a list. right of it.
+;   * a term may hold a live COIN. rune splices the OBJECT, and `show` parenthesizes a
+;     nested form, so it lands as (q '(1 2)); infix.l splices the coin's SPELLING, which
+;     the span rule then leaves bare. both are faithful -- love/post.l's pcoin quotes the
+;     payload, so either reads back to an equal coin -- and one paren pair apart is all
+;     the daylight between them, on the one shape that has any.
 ; so they stay two -- and this is what stops them drifting apart in silence: over rune's
-; whole corpus they agree everywhere the surface can spell, and part in exactly one
-; place, for exactly that reason.
+; whole corpus they agree everywhere, and part in exactly one place, for that reason.
 (use 'infix)
 (assert
- (: viatext (\ t (cap (sound (infix-spell t))))
+ (: viatext (\ t (cap (sound (infix-spell t))))        ; the surface, read but NOT factored
     d (filter (\ t !((unfix t) = (viatext t))) tcorp)
     (&& (1 = tally d)                                  ; one term parts company..
-        (&& ("(x + (q (1 2)))" = show (unfix <d))      ; ..rune carries the coin through
-            ("(+ x (q (1 2)))" = show (viatext <d)))))) ; ..and infix.l declines to spell it
+        (&& ("(x + (q '(1 2)))" = show (unfix <d))     ; ..rune, splicing the object
+            ("(x + q '(1 2))" = infix-spell <d)))))    ; ..infix.l, splicing its spelling
 
 (puts "rune: ok")
