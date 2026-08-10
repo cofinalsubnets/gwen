@@ -127,7 +127,7 @@
  (= "@(1 2 3)" (show (array 3 1 2 3)))
  ; saturating shape coercion: a float / complex / vector dimension -> ($ d)
  (= 3 (tally (array 2.9 7 8 9)))                   ; ($ 2.9) = 3 : rank-1 length 3
- (= 5 (tally (array ~(3 4) 0 0 0 0 0)))           ; ($ ~(3 4)) = 5
+ (= 3 (tally (array ~(3 4) 0 0 0)))               ; ($ ~(3 4)) = 3, the real part
  (= 8 (tally (array `(2.0 3.5) 1 2 3 4 5 6 7 8)))  ; dims (2 4) -> 8 elems
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
  (= top-tray (tier @((100 2) 1)))                    ; bignum element -> object array
@@ -138,12 +138,12 @@
 ; not the garbage that a raw word-bits L2 norm would give). A bignum element forces
 ; an o array; a complex element packs into a c array (both keep the invariant).
 (: oa-z2 (array 2 ~(0 0) ~(0 0))               ; two zero complexes -> packed c array
-   oa-c2 (array 2 ~(0 0) ~(3 4))               ; |0|²+|3+4i|² = 25 -> ceil 5
+   oa-c2 (array 2 ~(0 0) ~(3 4))               ; nets sum: ~(0 0)+~(3 4) -> re 3 -> ceil 3
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
 (assert
  (= twin-tray (tier oa-z2)) (= twin-tray (tier oa-c2)) (= top-tray (tier oa-b2))
  (= 0 (sat oa-z2)) (nil? oa-z2)                   ; all-zero object array -> falsy, pin 0
- (= 5 (sat oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(5)
+ (= 3 (sat oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(3)
  !!oa-b2                                          ; a bignum element is truthy
  (= 0 (sat (top-tray '(2 2) 0)))                       ; all-nil object array -> pin 0
  !!(array 2 'a 'b)                                ; symbol elements -> truthy

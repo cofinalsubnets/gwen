@@ -59,15 +59,15 @@
  (= 12 $@(3 4 5)))                               ; #array -> the elements' net sum
 
 ; crew/sat/$ is ONE SATURATING CLAMP over the NET, max(0, ceil(net)): a number nets its own
-; signed value (complex: |z| signed by the total order), text its length, a map its key
+; signed value (complex: the REAL part alone -- the magnitude is abs's), text its length, a map its key
 ; count, a list or array the SUM of its elements' nets -- so negatives push an aggregate
 ; toward nothing, per the law: positive to positive, zero-or-negative to zero, at every
 ; rank. abs is the plain magnitude -- the two DIVERGE on negatives: (abs -5) = 5, $-5 = 0.
 (assert
  (= 4 (sat 3.9)) (= 0 (sat -3.9))               ; positive float -> ceil; negative -> 0
  (= 5 (abs -5)) (= 0 (sat -5))                  ; abs is magnitude; $ clamps a non-positive scalar to 0
- (= 5 (sat ~(3 4)))                            ; complex re>0 -> ceil|z| (modulus): exact 5
- (= 5 (sat ~(3 -4)))                           ; re>0 sorts above 0 -> ceil|z|
+ (= 3 (sat ~(3 4)))                            ; complex re>0 -> ceil(re), conjugate-blind
+ (= 3 (sat ~(3 -4)))                           ; re>0 -> ceil(re), whatever the phase
  (= 0 (sat ~(-3 4)))                           ; re<0 sorts below 0 -> 0 (falsy)
  (= 0 (sat ~(0 -1)))                           ; -i: re=0, im<0 -> 0 (falsy)
  (= 0 (sat i))                                  ; i = ~(0 1): a PURE PHASE is blue -- gated by re, not the order

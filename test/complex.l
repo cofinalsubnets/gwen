@@ -97,7 +97,7 @@
  (nil? i)  (nil? ~(0 1))  (nil? ~(0 8))    ; every pure phase is nothing...
  (i < 5)   (~(0 -1) < i)                   ; ...but the order still ranks them
  (? ~(3 4) 1 0)   (? ~(3 -4) 1 0)          ; re>0 -> true, whatever the phase
- (5 = $~(3 4))  (5 = $~(3 -4))              ; ...and the AMOUNT is the magnitude, conjugate-blind
+ (3 = $~(3 4))  (3 = $~(3 -4))              ; ...and the AMOUNT is the real part, conjugate-blind (the magnitude is abs's)
 
  ; --- complex meets bignum: the bignum narrows to double (floating domain) ---
  (twin? (+ i B100))
@@ -181,7 +181,7 @@
 
  ; --- pin / nil?: the invariant (nil? x) == (= 0 (pin x)) holds here too ---
  (= 0 (sat ca-z))   (nil? ca-z)
- !!ca-v   (= 8 (sat ca-v))                        ; ceil |4+6i| = ceil(sqrt 52): the sum's modulus
+ !!ca-v   (= 4 (sat ca-v))                        ; the sum ~(4 6) clamps by its REAL part: ceil 4
  (= (? (nil? ca-v) 1 0) (? (= 0 (sat ca-v)) 1 0))
  (= (? (nil? ca-z) 1 0) (? (= 0 (sat ca-z)) 1 0))
 

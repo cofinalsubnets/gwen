@@ -37,7 +37,7 @@
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
 ; numbers their value, text its charm sum, lists the sum of element nets, SPINE only). `!` (nil?) reads
 ; the net's sign; `$` (sat) is one saturating clamp, max(0, ceil); !x == (0 = $x). a twin gem is
-; gated by its REAL part and measured by its MAGNITUDE ($~(3 4) = 5), so a pure phase is BLUE --
+; read by its REAL part alone -- gate and clamp both ($~(3 4) = 3; the magnitude is abs's) -- so a pure phase is BLUE --
 ; the TRUTH GATE IS NOT THE TOTAL ORDER, the only place the two part (see the true-and-false asserts).
 ; `$` is the SOLE clamp (a clamped fold is mere composition); the COUNT -- how many, not how much --
 ; is `tally` (text/cask charms, list spine, array cells, map keys: what "length" always was, $ never
@@ -278,10 +278,10 @@
     (~(2 4) = (peep (v + v) 0 0)) (~(2 4) = (peep (~(2 0) * v) 0 0)) !(v < v)
     ($v = $(net v)) ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v))))
  ; the phases sum as VECTORS to ~(0 8) either way -- and a pure phase is BLUE:
- ; the twin gem is gated by its REAL part, so a sum with no real component
- ; measures 0 however large its magnitude (the truth gate is not the order)
+ ; the twin gem is read by its REAL part alone -- $ clamps re, never |z| -- so a
+ ; sum with no real component measures 0 however large its magnitude
  (0 = $(array 2 ~(3 4) ~(-3 4))) (0 = $`(~(3 4) ~(-3 4)))
- (5 = $(array 2 ~(3 4) ~(0 0))) (~(0.0 8.0) = (net (array 2 ~(3 4) ~(-3 4)))))
+ (3 = $(array 2 ~(3 4) ~(0 0))) (~(0.0 8.0) = (net (array 2 ~(3 4) ~(-3 4)))))
 (assert
  (: m (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)))
     (&& (aall ((re m) = (star-tray '(2 2) '(1 2 3 4)))) (aall ((im m) = (star-tray '(2 2) '(5 6 7 8))))
