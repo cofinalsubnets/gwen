@@ -96,7 +96,8 @@ Learned by measuring, several times each; check a new lever against these before
    take (their reach measured exhausted 2026-08-04). Its emission-side half — passing
    the CONSUMER down as a destination die instead of delivering everything to r0 — is
    modeled runnable in doc/proto/dest.l (ev.l's continuation-taking emitter shape worn
-   by a register machine; gated by test_doc).
+   by a register machine; gated by test_doc). The asn/decl lane migrated 2026-08-10
+   (the rungs below); the bin/compare and call-arg lanes remain.
 3. **Compare staging want-hints** — lvm_eq's residual rsp traffic is &&-chain compare
    staging (spush cells + r0), not splices; want-hints through the compare lanes, or the
    allocator leg subsumes it.
@@ -168,6 +169,11 @@ mov-husk fold 6793a12b · alu read-through 3d11770c · rename sandwich d836b230 
 cginl park 591593fc (payload: the pears miscompile fix) · body-decl binds 1317b30e ·
 priced int-param homes 33af3413 · cskeep b1ac6f03 · stage sigs ba5af92c · seat table
 6c6cbcb9 · g-pin record bdc7e886.
+2026-08-10 · the destination die's asn/decl lane: constant statement stores and slotted
+inits deliver as store-immediates, a homed init lands in its home with no r0 bridge
+(dyn insns −0.72% exact/disjoint, .text −0.69%; the payload: unhome's pre-entry rename
+hole — H read before its (mov H A) pair carries an arrival — fixed and law-pinned;
+test_libc's memchr differential was the catch, the third time that gate earned its keep).
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
