@@ -171,6 +171,29 @@ wash. What the hot window actually shows is per-use slot reloads (`mov 0x1f0(%rs
 every touch), which is mooncc's known no-cross-slot-residency story, not this walk's — the
 lever lives in the regalloc arc, not here.
 
+**post-ladder differentials** (2026-08-10, quiet box). Walk share = `ai_image_load_m` +
+`image_objsize`, `img_decode` inlined on every lane now; each binary wakes its own bake:
+
+| build | wake | walk share | words | walk cost |
+|---|---|---|---|---|
+| mooncc (the default love, mooncc.image) | 33.1 ms | 38.2% | 2.07 M | 6.1 ms/Mword |
+| clang 22.1.8 (love0, mooncc0.image) | 16.9 ms | 35.5% | 1.04 M | 5.8 ms/Mword |
+| gcc 16.1.1 (love0 rebuilt CC=gcc, same cat) | 17.7 ms | 36.2% | 1.04 M | 6.1 ms/Mword |
+
+Three-way parity: the inline split erased mooncc's out-of-line penalty (7.5 → 6.1), and
+clang edges gcc by ~5% on this walk. ⚠ the original table's "gcc 4.3 ms/Mword" is not
+reproducible today and not a regression signal — it was a different cat (1.37 M words,
+11 MB) and love0's default compiler has since moved to clang; today's gcc row is a fresh
+`CC=gcc` rebuild waking today's cat. ⚠ love0's rows carry no glaze native payload, so
+their word mix is denser in decoded words than the mooncc image's — per-Mword costs
+compare lanes, not images.
+
+**baked-in vs `--wake`: the same.** One binary, one session content through both doors:
+33.2 ms / 166.4 M instructions from the `.image` section, 33.4 ms / 165.1 M from the file
+— equal within noise, as the code says it must be (one `ai_image_load_m`, only the blob's
+source pages differ). A mid-gate measurement showed a 27 ms gap; that was a busy box, not
+a lane — wake numbers want a quiet machine.
+
 **rung 4 — only if 1–3 do not pay.** Walking less means either a pre-relocated wire format
 (which loses the ASLR portability the symbolic encoding buys) or dropping glaze's cells from
 the bake and re-glazing lazily (which loses "the glaze bake is free", the payoff
