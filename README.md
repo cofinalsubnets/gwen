@@ -37,6 +37,11 @@ strings, and the value surface:
 - `#` hash (hash/box literal)
 - `~` twin (twin-gem/complex literal `~(re im)`; a bare `~x` lifts a gem, conjugates a twin gem)
 
+the two that nest worst have a bracket spelling: `[a b]` is `` `(a b) `` and
+`{k v}` is `#(k v)`, so a list of lists reads `[[a b] [c d]]`. the opener carries
+the wrap; the three closers `)` `]` `}` are one and only end the open form, so a
+crossed pair reads in silence -- matching them is libra's job (`make lint`).
+
 operator sigils are plain symbols until the compiler resolves them, at compile
 time, against two tables -- `dyadics` for a spaced sigil, `monadics` for a glued
 run (`dyadics` is per-form extensible: pin an entry and the next form compiles

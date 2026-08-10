@@ -204,8 +204,19 @@
  ('(mono (+ (tuple 3 4))) = (rdr "+@(3 4)")))         ; ...or to a constructor
 
 ; --- delimiters and the zero point ---------------------------------------------
-; [ ] { } are ( ) synonyms; the empty form is the ZERO POINT, not the number 0.
+; THE OPENER CARRIES THE WRAP: [..] is `(..) and {..} is #(..) -- a second spelling
+; for the two noisiest wraps, not a shape of their own, so the empties follow the
+; splice law ([] -> (list), {} -> (tablet 0)) and every law below is `'s and #'s.
+; the THREE CLOSERS ARE ONE: ) ] } each only end the open form, so a crossed pair
+; reads the opener's wrap in silence -- matching them is libra's, not the reader's.
+; the empty form is the ZERO POINT, not the number 0.
 (assert
- ('(a b) = (rdr "[a b]")) ('(a b) = (rdr "{a b}"))
+ ('(list a b) = (rdr "[a b]"))          ('(hash a b) = (rdr "{a b}"))
+ ((rdr "`(a b)") = (rdr "[a b]"))       ((rdr "#(a b)") = (rdr "{a b}"))
+ ((rdr "`()") = (rdr "[]"))             ((rdr "#()") = (rdr "{}"))
+ ('(list) = (rdr "[]"))                 ('(tablet 0) = (rdr "{}"))
+ ((rdr "`(`(a b) `(c d))") = (rdr "[[a b] [c d]]"))   ; the nest is the whole point
+ ((rdr "-`(1 2)") = (rdr "-[1 2]"))                   ; and it glues like its wrap
+ ('(list a b) = (rdr "[a b)")) ('(a b) = (rdr "(a b]"))    ; a crossed pair, silent
  (() = (rdr "()")) !(0 = (rdr "()"))
  (', = (rdr ",")))                                    ; the comma is its own datum
