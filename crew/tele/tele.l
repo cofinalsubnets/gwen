@@ -90,8 +90,8 @@
    ;; transpose) route through a SWAPPABLE backend record { gemm ew reduce transp }.
    ;; the default `tl-cpu` IS love's native constellation algebra, so tele stands
    ;; alone (teletest.l loads only this file). load crew/tele/device.l for the SIM +
-   ;; roofline meter, or crew/tele/cuda.l for the GPU -- then (tl-use that-backend) and
-   ;; every mm/add/mul/sub/sum/mean below reroutes with NO change to tele's source.
+   ;; roofline meter -- then (tl-use that-backend) and every mm/add/mul/sub/sum/mean
+   ;; below reroutes with NO change to tele's source.
    ;; `ew` takes the elementwise op as its first argument ((+)/(*)/(-)) so one
    ;; kernel slot covers all three lanes.
    tl-cpu  #('name "cpu" 'gemm inner 'ew id
