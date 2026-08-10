@@ -1632,5 +1632,32 @@
       (member? '(cmpm sp 8 r0) hf)                   ; a callish right bars the aim: the cell stands
       (member? '(ld4 r0 sp 32) hf)))                 ; ...and the left keeps r0 (no wasted park)
 
+; -- the destination die reaches the arg seats (the third lane): the register group emits
+; right-to-left, so the FIRST cell arg evaluates last and nothing after it writes its seat
+; -- it AIMS there, and an honored load skips the whole push/pop cell. an indirect call
+; bars the aim (its head evaluates after the staging). dies? knows the call door (a call
+; reads only the argument file), so the address walk's r0 forms fold away husk-free.
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (movs fs) (tally (filter (\ f (two? f && id? <f 'mov)) fs))
+   (cells fs) (tally (filter (\ f (two? f && id? <f 'st && id? <>f 'sp)) fs))
+   irC1 (cgn "struct s { long tag; long size; }; long f(long a, long b); long c2(struct s *p) { return f(1, p->size); } long caller(struct s *p) { return f(p->tag, p->size); } long ci(long (*fp)(long, long), struct s *p) { return fp(p->tag, p->size); } int main() { return 0; }")
+   c2 (fnf 'c2 <>irC1)
+   ca (fnf 'caller <>irC1)
+   ci (fnf 'ci <>irC1)
+   (assert
+      (two? irC1)
+      (member? '(ld r5 r6 8) c2)                     ; p->size delivered straight to its seat
+      (= 0 (cells c2)) (= 0 (movs c2))               ; no cell, no husk: ld/li/jmp is the whole call
+      (member? '(ld r6 r6 0) ca)                     ; the FIRST cell arg delivers -- even onto its
+      (= 1 (cells ca))                               ;   own base's riding home; the second (which
+      (member? '(ld r5 sp 8) ca)                     ;   evaluates first) keeps its cell
+      (= 2 (cells ci))))                             ; an indirect call: both cells stand
+
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)

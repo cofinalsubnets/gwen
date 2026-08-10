@@ -97,8 +97,8 @@ Learned by measuring, several times each; check a new lever against these before
    take (their reach measured exhausted 2026-08-04). Its emission-side half — passing
    the CONSUMER down as a destination die instead of delivering everything to r0 — is
    modeled runnable in doc/proto/dest.l (ev.l's continuation-taking emitter shape worn
-   by a register machine; gated by test_doc). The asn/decl and cbranch-compare lanes
-   migrated 2026-08-10 (the rungs below); the bin value lane and call-arg seats remain.
+   by a register machine; gated by test_doc). The asn/decl, cbranch-compare and arg-seat
+   lanes migrated 2026-08-10 (the rungs below); the bin value lane remains.
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -182,6 +182,16 @@ compare loads straight into the pool register — lvm_eq's per-member bridge mov
 (dyn insns −1.50% exact/disjoint 53.140G→52.344G, .text −4096B/−0.69%, cycles −1.9%
 disjoint but under the layout floor; a call on either side bars the aim, both faces
 law-pinned and falsified).
+2026-08-10 · the destination die's arg-seat lane: the register group emits right-to-left,
+so the FIRST cell arg evaluates last and nothing after it writes its seat — it aims
+there and an honored load skips the whole push/pop cell (the frame drops too when the
+staging was its only use). dies? learned the call door alongside (a call reads only the
+argument file; a tail target is a function symbol, labels dot-interned), so the address
+walk's r0 husks fold. Modest by design — unframe's adjacent st/ld→mov fold already
+served the common shape — dyn insns −0.07% exact/disjoint 48.815G→48.781G, .text
+size-neutral. dir only; a HOME seat keeps the cell (it spills after the staging evals,
+and an ezm may read it); a zero-form delivery (riding home, vmap pin) keeps the cell
+(its value predates the staging). All three guards law-pinned, two falsified by flip.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

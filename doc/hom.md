@@ -60,9 +60,9 @@ forms — the recovery passes and unframe read them, and a dark op is barred. Th
 die is what makes lane-by-lane migration sound: an unmigrated consumer keeps reading
 r0 and never notices. gen.l's `g 'want` hint is the die's advisory shadow (a consumer
 pins it, the top node honors or declines, a decline costs one bridge); each migration
-rung promotes the hint toward the contract. Lanes landed so far: asn/decl and the
-cbranch compare (doc/moon-regalloc.md, lever 2 and the rung ledger); the gap the
-rungs close is scored in doc/moon-diff.md.
+rung promotes the hint toward the contract. Lanes landed so far: asn/decl, the
+cbranch compare, and the call's arg seats (doc/moon-regalloc.md, lever 2 and the rung
+ledger); the gap the rungs close is scored in doc/moon-diff.md.
 
 The literature calls the register-machine face *destination-driven code generation*
 (Dybvig & Burger, 1990). The runnable model — both protocols over one AST, the

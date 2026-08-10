@@ -2152,7 +2152,19 @@
            ; a DIRECT &x / array / struct-var argument is presumed dead once the callee returns
            ; (the &Hp / &_res idiom): argpos exempts its lea from the fesc pin, one-shot. the
            ; sibs WINDOW rule still keeps the address out of a tail call's own staging.
-           (: a (: _ (? (member? <<as '(addr var)) (pin g 'argpos 1) ())
+           ; the destination die reaches the arg seats: the register group emits right-to-left,
+           ; so the FIRST cell arg evaluates last -- nothing after it writes its seat (spills
+           ; store, ez emissions own other seats, pops fill other registers). aim it there; an
+           ; unhonored hint keeps the cell. dir only (an indirect call's head evaluates after
+           ; the staging), and a HOME seat stays on the cell: it spills after this evaluation,
+           ; and an ezm may read it in between.
+           (: aim (: (psh9 pl) (? !(two? pl) ()
+                                  (member? <<<pl '(g g2 g4 x x2 p2 ezd) || psh9 >pl))
+                     rT (nthr (argr g) gpc)
+                     (? (dir && gpc < ngp g && !(psh9 acc) &&
+                         !(two? (assoc rT (peep g 'homes ())))) rT ()))
+              _ (? aim (pin g 'want aim) ())
+              a (: _ (? (member? <<as '(addr var)) (pin g 'argpos 1) ())
                    (cgexpr g env <as))
               _ (pin g 'argpos ())
               (? (bad? a) 'bad
@@ -2240,6 +2252,12 @@
                                        (link `(`('ov ov8 8)
                                                 (asll g a + `(`('st 'sp ov8 'r0) `('st 'sp (ov8 + 4) 'r1))))
                                              acc)))))
+                       ; the delivered seat: aimed and honored by the arg's OWN emission --
+                       ; a zero-form answer (a riding home, a vmap pin) predates the staging
+                       ; and an earlier-emitted callish sibling would clobber it: cell.
+                       (aim && id? (vreg a) aim && two? (vfs a) &&
+                           !(flo? (vty a) || flo? aty || stru? aty))
+                        (kls >as (i + 1) (gpc + 1) xmmc ovc (`(`('ezd gpc) (vfs a)) >< acc))
                        ; a one-eightbyte aggregate rides the scalar path: its
                        ; 8 content bytes load into r0 (the value IS an address)
                        ; and class by its eightbyte -- INT a gp arg, SSE an xmm
@@ -2311,7 +2329,7 @@
                                      (go1 >l1 (? (ov? <l1) (<l1 >< acc1) acc1)))
                     (go1 kr ()))                          ; overflow entries, REVERSED (deepest pushes first)
              rgr (: (go2 l2 acc2) (? !(two? l2) acc2
-                                     (go2 >l2 (? (member? <<<l2 '(g g2 g4 x x2 p2))
+                                     (go2 >l2 (? (member? <<<l2 '(g g2 g4 x x2 p2 ezd))
                                                       (<l2 >< acc2) acc2)))
                     (go2 kr ()))                          ; PUSHING register entries, reversed (pops run forward)
              (pushcat l3 acc3) (? !(two? l3) acc3 (pushcat >l3 (acc3 + <><l3)))
@@ -2321,7 +2339,7 @@
              pops (: (go4 l4 acc4)
                       (? !(two? l4) acc4
                          (: kc <<l4
-                            (go4 >l4 (? (member? <kc '(ov ez ezm)) acc4
+                            (go4 >l4 (? (member? <kc '(ov ez ezm ezd)) acc4
                                              (acc4 + (? (<kc = 'g) (spop (nthr (argr g) <>kc))
                                                           (<kc = 'g2)   ; the t32 pair: both words off one cell
                                                            `(`('ld (nthr (argr g) <>kc) 'sp 0)
@@ -3982,14 +4000,21 @@
    ; re-based form -- whichever order leaves every read pre-clobber -- for the deaddef rerun to
    ; harvest. x64 only (the a64 lane rides raw forms).
    ; a register DIES on the straight-line suffix when an insn overwrites it before any read; a
-   ; label/branch/call/unknown op ends the certainty -- except a ret, which rides only r0 out
+   ; label/branch/unknown op ends the certainty -- except a ret (rides only r0 out) and a call
+   ; door: a call reads the argument file and nothing caller-saved survives it, so a pending def
+   ; of r0/r9/r10 is dead there (variadic al included -- setal's own li r0 defs it first). the
+   ; sibcall jmp is the same door: a tail target is a function symbol, labels are dot-interned.
    (dies? rd l)
     (? !(two? l) ()
        (: f <l
           (? !(two? f) ()
              (: rs (rdsp f)
                 (? (id? rs 'bar)
-                    (id? <f 'ret && !(id? rd 'r0))
+                    (? (id? <f 'ret) !(id? rd 'r0)
+                       (member? <f '(call callr) ||
+                        (id? <f 'jmp && !(46 = ((show <>f) 0))))
+                        (member? rd '(r0 r9 r10))
+                       ())
                    (member? rd <rs) ()
                    (member? rd <>rs) 1
                    (dies? rd >l))))))
