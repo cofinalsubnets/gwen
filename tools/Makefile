@@ -80,8 +80,14 @@ test_tele: | $(m)
 
 # the integration gate over that same library: a 2-8-1 MLP learns XOR, seeded so it converges
 # identically every run -- autograd + nn + optim composed into a real net. test/host/tele.l
-# grad-checks the ops one at a time; this asks whether they compose. Held to exit 0 AND the
-# sentinel, since a reader that stops early exits 0 with the assertions unread.
+# grad-checks the ops one at a time; this asks whether they compose. Corpus-shaped -- 00-init
+# for `assert`, zz-fin for the count -- but tele is no module, so it cannot ride the test/*.l
+# glob and gets this lane instead. Same two checks test_host makes of the corpus: exit 0 AND
+# the summary line, because a reader that stops early leaves the asserts unrun and exits 0.
 test_xor: | $(m)
-	@echo TEST test/host/xor.l
-	@cd $(R) && sh test/gate/run.sh -a xor "$(mwr) -l crew/tele/tele.l" "xor: ok" test/host/xor.l
+	@echo TEST test/tele/xor.l
+	@cd $(R) && cat test/00-init.l test/tele/xor.l test/zz-fin.l > out/host/.test_xor.l; \
+	  $(mwr) -l crew/tele/tele.l out/host/.test_xor.l </dev/null > out/host/.test_xor.out 2>&1; \
+	  r=$$?; cat out/host/.test_xor.out; \
+	  [ $$r -eq 0 ] || { echo "FAIL test_xor (exit $$r)"; exit 1; }; \
+	  grep -q "tests pass" out/host/.test_xor.out || { echo "FAIL test_xor (exit 0, no summary)"; exit 1; }
