@@ -190,11 +190,11 @@
 
 ; the surface. `dot` takes a string or cask VERBATIM -- the `.` sigil's raw face --
 ; and everything else in external form; it answers its operand, so it drops into
-; any sequence. the monadics table is patched too: opfix folded prel's `.` row to a
-; VALUE, so a fresh binding alone would never reach a later file's `.x`.
+; any sequence. the monadics table gets its `.` row here, where dot exists; the row
+; is the NOM, so a glued `.x` resolves through whatever `.` names at the use site.
 (: (print o x) (: _ (px o x ()) x)
    (show x) (: o (jug 0) _ (px o x ()) (slurp o))
    (dot x) (: _ (? (|| (string? x) (&& (hot? x) !(port? x))) (say out x) (px out x ())) _ (flush out) x))
 (: putx (print out)
    . dot
-   _ (pin monadics '. dot))
+   _ (pin monadics '. '.))

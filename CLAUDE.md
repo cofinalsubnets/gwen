@@ -16,6 +16,8 @@
 ;   run it before committing. `make test_extra` is the really slow gate, run it before merging to main.
 ;   ⚠ read the summary, not the exit code: host and love0 must each print the zz-fin "tests pass"
 ;   line (love0 twice) -- a silent reader stop exits 0, so green proves nothing on its own.
+;   ⚠ never `| tail` a gate: each target prints its summary as it finishes, and the dot stream
+;   buries them. `make test 2>&1 | grep -aE "tests pass|FAIL|Error [0-9]|No rule"` is the reading.
 ;   between the tiers run the test_* targets covering what you touched (test/test.mk; most are
 ;   subsecond off the baked image, the egg gates test_host/test_love0/test_gcheck + test_sat stay
 ;   cold). `make valg` for memory, `make vmret` for the tail-jump law, `make waits` for the blocking
@@ -40,8 +42,13 @@
 ;   unclosed-string scan. silent means clean; warnings point at the opener of an unclosed form.
 ;   `-w` also strips trailing whitespace. not in the test gate. balance is the default verb;
 ;   `libra fmt` reindents (not adopted), `libra serve` speaks lsp -- one scanner (lib/lint.l)
-;   under all three. the `singleton` and `deprecated` rules ride a config and are off until it
-;   asks; they only speak unless `(strict <rule>)` promotes one.
+;   under all three. the `singleton`, `shadow` and `deprecated` rules ride a config and are off
+;   until it asks; they only speak unless `(strict <rule>)` promotes one.
+;   `libra infix` / `libra unfix` are the two directions of the factor pass: unfix IS opfix
+;   printed, infix is its right inverse (lib/unfix.l, gated by test/host/unfix.l -- prefix is
+;   a fixed point, so every proposal is checked and the parenthesized spelling always wins a
+;   tie). ⚠ both print from the DATUM: comments are not carried, which is why neither is a
+;   mode of fmt and neither has `-w`.
 ; * config is salt (lib/salt.l): (salt 'app) answers a settings tablet from ~/.love/etc/<app>.l
 ;   then ./.<app>.l over it -- any crew app, same door, the project file speaks last. a setting is
 ;   one form, head names it, tail is the value. ⚠ read as data with `sound`, never evaled.

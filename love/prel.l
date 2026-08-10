@@ -361,8 +361,11 @@
  '? 10                                                           ; cond -- infix it is the one-armed form; an else arm is the prefix (? c a b)
  '$ 5)                                                           ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
    monadics (pins (tablet 0)
- '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
- '% fraction '? bit '$ saturate '! nil?))   ; `.` is pinned here by post.l, whose dot it is
+ '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
+ '% 'fraction '? 'bit '$ 'saturate '! 'nil?))   ; `.` is pinned here by post.l, whose dot it is
+ ; ⚠ the rows are NOMS, not values: a value would be unwritable, and an unwritable head is a
+ ; form no text can spell -- which is what keeps opfix invertible (lib/unfix.l). a row resolves
+ ; at the use site like any name, so libra's `shadow` rule speaks where one is rebound.
 ; factorization is the GLUED lane's alone: a run splits greedily, longest-prefix, no backtracking,
 ; against monadics. a SPACED sigil is one whole name -- it either carries a dyadics row or takes
 ; the fresh-punct default -- so != && >>= :- ?- each stay one operator.

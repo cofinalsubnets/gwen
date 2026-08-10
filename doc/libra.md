@@ -17,12 +17,33 @@ libra -w FILE ..        ...and strip trailing whitespace while you are there
                         (WITHOUT reindenting)
 libra fmt FILE ..       lay it out on stdout; -w rewrites, -n only checks
 libra fmt -p FILE ..    ...and MINIFY THE PARENS while you are there
+libra infix FILE ..     print it MAX-INFIX and MIN-PAREN, on stdout
+libra unfix FILE ..     print it back as PURE PREFIX LISP, on stdout
 libra serve             speak lsp over stdio
 libra -h                the usage
 ```
 
 check is the default because it is the errand that recurs. fmt is run BY HAND
 and nothing is gated on layout; serve waits for an editor that wants it.
+
+**infix and unfix are the two directions of one pass.** `unfix` is just `opfix`,
+the factor pass a compile already runs, printed instead of compiled. `infix` is
+its RIGHT INVERSE ([`lib/unfix.l`](../lib/unfix.l)): for any form it answers a
+surface that factors back to exactly that form, choosing the fewest parens it can
+prove correct. round-tripping a file through both reproduces it.
+
+⚠ **they print from the DATUM, so comments are not carried** -- `sound` does not
+keep them. that is why they are verbs of their own rather than modes of fmt,
+which is a reindenter and never touches what is on a line, and why there is no
+`-w`: a rewrite that silently deleted every comment in a file is not a thing to
+offer. redirect if you mean it.
+
+`infix` always terminates with something correct, because prefix is a fixed point
+of opfix -- so the fully-parenthesized spelling is always a valid answer and every
+proposal is checked against it before being handed out. on this tree all 1571
+top-level forms across 334 files keep the maximal spelling, at 22% fewer parens
+than the prefix spelling. the law is gated in
+[`test/host/unfix.l`](../test/host/unfix.l).
 
 ⚠ **an unknown verb reads as a FILENAME.** `libra serv x.l` says "cannot open
 serv" rather than "no such verb". that is the price of the bare file list being
@@ -69,6 +90,27 @@ flagging them is the point.
 comments and strings are not code and are skipped; a quoted `'foo` names `foo`
 just as much as bare `foo` does, so it counts.
 
+**shadow** (off by default) -- a binding of one of the dozen words a `monadics`
+row names: `cap cup net prod abs negate reciprocal fraction bit saturate nil?
+dot`. a glued sigil factors to one of these and then resolves like any other
+name, so `(: net (a + b) .. )` quietly re-aims every `+x` in its scope. rare,
+real, and silent -- which is the whole case for saying it at the binding. it
+**reserves nothing**: the rule speaks, the binding stands.
+
+it catches a plain `:` binder name and a `\` param. two things it does not:
+
+- a **bare-name body** over-fires. `(: net 5 net)` warns twice, once for the
+  binding and once for the body, because which element is last is not known
+  until the closer. a body that is a bare monadic name is rare enough to pay
+  one line for.
+- the **sugar header** `(: (bit x) ..)` is missed, and cannot be caught here.
+  at token time it is element 1 of a form at an even `:` position -- which is
+  exactly what the far commoner body call `(: a 1 (bit x))` is. flagging one
+  would flag both, and the second is half the tree.
+
+on this tree the rule finds 20 bindings across 332 files, and they are real
+ones (`abs` in `lush/glob.l`, `dot` in `cook.l`, `net` in `moon/gen.l`).
+
 ## the config
 
 settings live in two files, read in this order, the second overlaying the first:
@@ -86,6 +128,7 @@ person, which is why the project file exists at all.
 ```love
 ; ~/.love/etc/libra.l -- or ./.libra.l
 (singleton 1)                                    ; turn the rule on
+(shadow 1)                                       ; ...and the sigil-word rule
 (deprecated old-thing (worse-thing "use better-thing"))
 (strict singleton)                               ; ...and make it fail the gate
 (drop-parens 1)                                  ; fmt minifies parens without -p
@@ -101,7 +144,7 @@ a setting is one form: the head names it, the tail is its value. an entry in the
 roster is a bare name or a `(name "hint")` pair, and the hint is printed after
 the name. a repeated key REPLACES rather than appends -- one line, one answer.
 
-**the rules only SPEAK.** singleton and deprecated print, and the editor
+**the rules only SPEAK.** singleton, shadow and deprecated print, and the editor
 underlines them, but `libra` still exits 0 -- so turning a rule on can never
 redden a tree that was green. `(strict <rule>)` promotes one when a project has
 actually finished with it. balance is always fatal; a tab never is.
