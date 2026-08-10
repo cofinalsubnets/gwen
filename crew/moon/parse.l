@@ -85,11 +85,12 @@
    ; them zero-extend loads + unsigned >> / compare / divide). `long long` folds
    ; to 'long on the 64-bit targets (same width); on the 32-bit thumb ABI it is
    ; its own 8-byte type, 'llong/'ullong -- the register pair.
-   tyspec '(char short int long void double float signed unsigned _Complex __int128)
+   tyspec '(char short int long void double float signed unsigned _Bool _Complex __int128)
    (canon ps specs)
     (? (member? '_Complex specs)                   ; C99 complex: a SEEDED two-member struct
         (? (member? 'float specs) '(struct "__cplx_float") '(struct "__cplx_double"))
        (member? 'void specs) 'void
+       (member? '_Bool specs) 'bool                  ; one byte, stores normalize to 0/1 (C11 6.3.1.2)
        (member? 'double specs) 'double
        (member? 'float specs) 'float
        (member? '__int128 specs) (? (member? 'unsigned specs) 'u128 'i128)
@@ -328,7 +329,7 @@
    ; does a type begin here?
    (tkbty? ps t)
     (? !(two? t) ()
-       (tkk t = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned _Complex __int128 struct union enum))
+       (tkk t = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned _Bool _Complex __int128 struct union enum))
        (tkk t = 'id) (? (member? (tkv t) '("__typeof" "__typeof__")) 1
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
@@ -345,11 +346,12 @@
    ; struct SILENTLY, since playout bakes offsets here at parse and gen trusts the stag table.
    (pst32? ps) (member? (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
    (psword ps) (? (pst32? ps) 4 8)
+   (szty ps) (? (pst32? ps) 'uint 'ulong)          ; size_t: sizeof folds wear this coat
    (tsz ps ty) (? (ptr? ty) (psword ps)
                   (arr? ty) (* <>>ty (tsz ps <>ty))
                   (stru? ty) <>(peep (ps 'stag) <>ty 0)
                   (bitf? ty) (tsz ps <>ty)          ; the unit's size (a bitfield rides its declared type)
-                  ((ty = 'char) || (ty = 'uchar)) 1 ((ty = 'short) || (ty = 'ushort)) 2
+                  ((ty = 'char) || (ty = 'uchar) || (ty = 'bool)) 1 ((ty = 'short) || (ty = 'ushort)) 2
                   ((ty = 'int) || (ty = 'uint) || (ty = 'float)) 4
                   ((ty = 'llong) || (ty = 'ullong) || (ty = 'double)) 8     ; 8-byte on EVERY target
                   ((ty = 'i128) || (ty = 'u128)) 16
@@ -370,7 +372,7 @@
    ; here, !(t32? g) in gen) -- on ILP32 a long cannot hold every uint, so
    ; long meets uint at ULONG where LP64 answers long.
    (parith? ty) (? (bitf? ty) 1
-                   (member? ty '(char uchar short ushort int uint long ulong
+                   (member? ty '(bool char uchar short ushort int uint long ulong
                                  llong ullong i128 u128 float double)))
    (trank ty) (? (member? ty '(i128 u128)) 4
                  ((ty = 'llong) || (ty = 'ullong)) 3
@@ -380,7 +382,7 @@
                 (ty = 'llong) 'ullong (ty = 'i128) 'u128 ty)
    (tw w64 ty) (: r (trank ty) (? (r = 1) 4 (r = 2) (? w64 8 4) (r = 3) 8 16))
    (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
-                 (member? ty '(char uchar short ushort)) 'int
+                 (member? ty '(bool char uchar short ushort)) 'int
                  ty)
    (puac w64 ta tb)
     (? ((ta = 'double) || (tb = 'double)) 'double
@@ -1014,11 +1016,11 @@
                            ; sizeof of a VLA TYPE (struct T[n+1], if_nameindex's malloc):
                            ; the runtime multiply dim * sizeof(elt)
                            (varr? <tr) `(`('bin '* <>><tr `('num (tsz ps <><tr))) rest)
-                           `(`('num (tsz ps <tr)) rest)))
+                           `(`('cast (szty ps) `('num (tsz ps <tr))) rest)))
                     (: r (punary ps r1)                 ; sizeof unary-expr | sizeof(expr) -- gen sizes from the type
                        (? (two? r) (: ty (ptype ps <r)
                                       (? (ty && !(varr? ty))      ; a VLA's size is RUNTIME: defer to gen's szof
-                                         `(`('num (tsz ps ty)) <>r) `(`('szof <r) <>r))) ()))))
+                                         `(`('cast (szty ps) `('num (tsz ps ty))) <>r) `(`('szof <r) <>r))) ()))))
              ; __extension__ (gcc) prefixes a cast-expression as a no-op
              ((tkk t = 'id) && (tkv t = "__extension__")) (punary ps >ts)
              (tp? t "*") (: r (punary ps >ts)
@@ -1283,6 +1285,7 @@
        (<e = 'cast)
         (: v (cfold <>>e) ty <>e
            (? !(cint? v) v                          ; non-integer / non-const: fold through
+              (ty = 'bool) (? (v = 0) 0 1)          ; conversion to _Bool compares with 0 (C11 6.3.1.2)
               (ty = 'uchar) (& v 255)
               (ty = 'ushort) (& v 65535)
               (ty = 'uint) (& v 4294967295)

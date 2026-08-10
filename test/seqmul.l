@@ -18,7 +18,7 @@
  ("" = "ab" * 0)   (string? ("ab" * 0))          ; 0 -> the empty string
  ("" = "ab" * -2) (string? ("ab" * -2))          ; non-positive count saturates to 0 -> empty
  ("ababab" = "ab" * 2.9)                      ; float count ceils: ($ 2.9) = 3
- ("ababababab" = "ab" * ~(3 4))              ; |3+4i| = 5 copies ; FIXME seems wrong, ceil is saturate logic, saturate should drop imaginary component
+ ("ababab" = "ab" * ~(3 4))                  ; complex count: ($ ~(3 4)) = 3, the real part
  ("xxx" = "x" * 3)
 
  ; --- a symbol inherits the string lane: * repeats the spelling and RE-INTERNS -> a symbol ---

@@ -207,8 +207,8 @@
 ; `!` (nil?) reads the net's sign, `$` (sat) is the one saturating clamp onto the green charms
 ; (!x == (0 = $x)), and `tally` is the count -- how many, not how much. every value wears a color
 ; by its net-sign: green nonnegative, red negative, blue the zero floor -- true iff positive
-; green; every nothing ((), 0, "", @(), #(), ~(0 0)) is blue. a twin gem splits the question: the
-; real part gates, the magnitude measures, so a pure phase is blue. ⚠ the one place truth and the
+; green; every nothing ((), 0, "", @(), #(), ~(0 0)) is blue. a twin gem reads by its real part
+; alone -- gate and clamp both, the magnitude is abs's -- so a pure phase is blue. ⚠ the one place truth and the
 ; total order part: `i` sorts above 0 but nets nothing (C admits no order compatible with its
 ; arithmetic -- truth cannot rest on which root we named). no "truthy"/"falsy": true and false are
 ; the bits of `!!$`. spec.l's true-and-false section, doc/measures.md.

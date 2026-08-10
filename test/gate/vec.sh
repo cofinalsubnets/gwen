@@ -48,6 +48,13 @@ case $arch in
   *) echo "FAIL test_vec: unknown arch $arch" >&2; exit 1 ;;
 esac
 
+# KVM where the host can back it; without /dev/kvm this falls to TCG and the
+# faults report the same. x86_64-on-x86_64 only -- `virt` is asked for
+# gic-version=2 above, which an arm host with no v2 backing refuses outright.
+if [ "$arch" = x86_64 ] && [ -e /dev/kvm ] && [ "$(uname -m)" = x86_64 ]; then
+  mach="$mach -enable-kvm -cpu host"
+fi
+
 if ! have "$qemu"; then
   echo "  (vec $arch: fault boots skipped, no $qemu)"
 else

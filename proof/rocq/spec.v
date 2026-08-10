@@ -166,8 +166,8 @@ Proof. intros f a. exists (vapp f a). reflexivity. Qed.
    a complex-valued content measure; this slice models the REAL fragment
    (net : V -> Z): a number is its own value, () is 0, and a product sums its
    SPINE -- the car always counts, the cdr continues the spine unless it is a
-   dotted-tail atom, which is "not an element". The complex extension (! reads
-   re then im in the total order; $ clamps the order-signed magnitude) needs
+   dotted-tail atom, which is "not an element". The complex extension (! and $
+   both read the REAL part alone; the magnitude is abs's business) needs
    reals and is the next slice; everything here is exact over the integer net. *)
 
 From Stdlib Require Import ZArith Lia Permutation.

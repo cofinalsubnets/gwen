@@ -378,17 +378,13 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
 #define zn_false(z) ((z).re <= 0)
 static struct ai_zn ai_net(struct ai *, word);         // fwd: aggregates sum their elements
 static intptr_t ai_count(struct ai *, word);           // fwd: tally's C body (net-mode 1 reads it)
-// FIXME this function should simply be ai_net(x).re <= 0. probably we pulled out to optimize. see if we can sink down into ai_net efficiently
+// ⚠ only the two lanes that answer with no load and no call earn a line here: they
+// carry the corpus (a charm truth test, `()`), and ai_net is never inlined, so a
+// third lane costs more than the walk it skips. every other kind's shape is ai_net's.
 static ai_inline bool ai_nilp(struct ai *g, word x) {
-  if (x == zero || x == EmptyString) return true;
-  if (charmp(x)) return getcharm(x) < 0;                 // 0 is zero (caught above); negatives false
-  if (tabp(x)) return map_len(x) == 0;
-  if (bigp(x)) return big(x)->slen < 0; // a negative bignum is false
-  if (mintp(x)) return true;                         // a bare point (a mint / the zero point) nets 0 -> zero
-  if (coinp(x)) return zn_false(ai_net(g, x));      // a coin's truth is its payload's net (lockstep with ai_net/$)
-  if (chainp(x) || namep(x) || packp(x) || gemp(x) || sunp(x) || twinp(x) || strp(x) || caskp(x))
-    return zn_false(ai_net(g, x));                   // content measures (a nom by its spelling): the net's real part <= 0
-  return false; }                                    // fn / port: present
+  if (charmp(x)) return getcharm(x) <= 0;            // a charm is its own net
+  if (mintp(x)) return true;                         // a bare point nets nothing
+  return ai_net(g, x).re <= 0; }
 
 // truncation toward zero / float remainder; pure and freestanding-safe (no libm)
 static ai_inline ai_flo_t ai_trunc(ai_flo_t x) {
@@ -2797,12 +2793,6 @@ lvm(lvm_spin) {
  Sp[0] = word(memset(tagthread(k, n), -1, n * sizeof(word)));
  ai_musttail return Next(1); }
 
-// ceil a positive measure into a fixnum, saturating at maxcharm: ceil so the
-// result is 0 ONLY when m is exactly 0, and $ doubles as a zero test
-static ai_inline intptr_t len_sat(ai_flo_t m) {
-  if (m >= (ai_flo_t) maxcharm) return maxcharm;
-  intptr_t i = (intptr_t) m;                    // trunc toward 0 (m >= 0)
-  return i + (m > (ai_flo_t) i ? 1 : 0); }       // bump for any fractional part -> ceil
 // THE NET: the complex-valued measure. a complex scalar nets ITSELF (additivity
 // needs phase, so the codomain is C and the order retraction happens ONCE, in the
 // observers); every other scalar nets real; a chain or rank>=1 array nets the SUM
@@ -2863,11 +2853,14 @@ static struct ai_zn ai_net(struct ai *g, word x) {
 // $: the net observed once -- max(0, ceil) of its order-signed magnitude (a
 // phaseful net takes |z|, gated by zn_false). lockstep with ai_nilp.
 static intptr_t ai_saturate(struct ai *g, word x) {
-  // FIXME this line is probably an optimization, it's logically unneeded, can we subsume efficiently into ai_net?
-  if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }   // <= 0 -> 0 (0 is zero), exact
-  struct ai_zn z = ai_net(g, x);
-  if (zn_false(z)) return 0;
-  return len_sat(z.im == 0 ? z.re : ai_sqrt(z.re * z.re + z.im * z.im)); }
+  // ⚠ the charm lane is EXACTNESS, not speed: the net is a double, so above 2^53 a
+  // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
+  if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }
+  ai_flo_t re = ai_net(g, x).re;
+  if (re <= 0) return 0;
+  if (re >= (ai_flo_t) maxcharm) return maxcharm;
+  intptr_t i = (intptr_t) re;
+  return i + (re > (ai_flo_t) i ? 1 : 0); }
 lvm(lvm_saturate) { Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // ============================================================================
@@ -3769,7 +3762,7 @@ ai_noinline struct ai *ai_egg_(struct ai *g, char const *egg, char const *p1,
 // ============================================================================
 // sys
 // ============================================================================
-op11(lvm_clock, putcharm(ai_clock() - getcharm(Sp[0])))
+op11(lvm_clock, putcharm(ai_clock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 
 // the fine clock: monotonic ns for DIFFERENCES ((nclock t) is ns minus t); clock
 // stays at ms, the scheduler's scale (ns wraps 32 bits every 4.3s). weak default

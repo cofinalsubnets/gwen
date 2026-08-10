@@ -243,10 +243,16 @@ $(ko)/love-$a.hdd: $(ko)/love-$a.elf $(dl)/limine/limine $(ko)/limine.conf
 	@for f in $(k_efi); do mcopy -i $@@@1M $(dl)/limine/$$f ::/EFI/BOOT; done
 
 # --- qemu run targets ------------------------------------------------
+# KVM where the host offers it: TCG costs 6x on the boot (22s to the prompt against
+# 5s) and 7x on the corpus. A box without /dev/kvm falls to TCG and answers the same,
+# which is what lets the GATES take it too (tools/ktest.l, tools/kboot.l, vec.sh).
+# ⚠ x86_64-on-x86_64 only, not any arch match: qemu's arm `virt` is asked for
+# gic-version=2 here, and a host whose GIC cannot back v2 REFUSES the pairing.
+k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x86_64,$a),$(filter x86_64,$(shell uname -m))),-enable-kvm -cpu host,)
 k_qemu_x86_64 = -M q35 -serial stdio
 k_qemu_risc = -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting $(k_qemu_risc)
-k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) \
+k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) $(k_kvm) \
   -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
 run: run-$a

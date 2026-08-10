@@ -160,10 +160,10 @@
       (= (cexp "&x") '(addr (var "x")))
       (= (cexp "a[2]") '(deref (bin + (var "a") (num 2))))
       (= (cexp "*p++") '(deref (post (var "p") 1)))
-      (= (cexp "sizeof(int*)") '(num 8))
+      (= (cexp "sizeof(int*)") '(cast ulong (num 8)))
       (= (cexp "(char*)x") '(cast (ptr char) (var "x")))
       (= (cexp "(const char*)x") '(cast (ptr char) (var "x")))    ; a qualifier opens the cast type too -- quals drop, like the decl sites
-      (= (cexp "sizeof(const int)") '(num 4))
+      (= (cexp "sizeof(const int)") '(cast ulong (num 4)))
       (= (cast "int main() { int *p; int a[4]; return 0; }")
          '(prog ((fn "main" () (blk ((decl (("p" (ptr int) ())))
                                      (decl (("a" (arr int 4) ())))
@@ -194,8 +194,8 @@
                                      (ret (num 0))))))))
       (= (cexp "(char)300") '(cast char (num 300)))
       (= (cexp "(long)(int)x") '(cast long (cast int (var "x"))))
-      (= (cexp "sizeof(int)") '(num 4))
-      (= (cexp "sizeof(char)+sizeof(short)+sizeof(long)") '(bin + (bin + (num 1) (num 2)) (num 8)))
+      (= (cexp "sizeof(int)") '(cast ulong (num 4)))
+      (= (cexp "sizeof(char)+sizeof(short)+sizeof(long)") '(bin + (bin + (cast ulong (num 1)) (cast ulong (num 2))) (cast ulong (num 8))))
       ; the unsuffixed ladder (C11 6.4.4.1): hex/octal/binary climb the unsigned
       ; rungs -- 0xffffffff is a uint, 0xffffffffffffffff a ulong -- decimal stays
       ; signed until it runs past long; an l suffix skips the uint rung
@@ -205,14 +205,14 @@
       (= (cexp "0xffffffffffffffff") '(cast ulong (num 18446744073709551615)))
       (= (cexp "4294967295") '(num 4294967295))
       (= (cexp "18446744073709551615") '(cast ulong (num 18446744073709551615)))
-      (= (cexp "sizeof(0xffffffff)") '(num 4))
-      (= (cexp "sizeof(0xffffffffffffffff)") '(num 8))
+      (= (cexp "sizeof(0xffffffff)") '(cast ulong (num 4)))
+      (= (cexp "sizeof(0xffffffffffffffff)") '(cast ulong (num 8)))
       ; a truth value is an int, whatever the operand -- so these fold HERE, untyped x and all
-      (= (cexp "sizeof(!x)") '(num 4))
-      (= (cexp "sizeof(x==y)") '(num 4))
-      (= (cexp "sizeof(x<y)") '(num 4))
-      (= (cexp "sizeof(x&&y)") '(num 4))
-      (= (cexp "sizeof(x||y)") '(num 4))
+      (= (cexp "sizeof(!x)") '(cast ulong (num 4)))
+      (= (cexp "sizeof(x==y)") '(cast ulong (num 4)))
+      (= (cexp "sizeof(x<y)") '(cast ulong (num 4)))
+      (= (cexp "sizeof(x&&y)") '(cast ulong (num 4)))
+      (= (cexp "sizeof(x||y)") '(cast ulong (num 4)))
       (= (cast "int main() { while (1) break; return 0; }")
          '(prog ((fn "main" () (blk ((while (num 1) (brk)) (ret (num 0))))))))
       ; musttail comes back through a parse now -- the ret's PRE slot (clay's (ret e PRE));
@@ -299,14 +299,14 @@
                    (last l) (? (two? >l) (last >l) <l)
                    <><>>>(last <>ast))
    (assert
-      (= (cexpp "struct S { char c; int i; char d; };" "sizeof(struct S)") '(num 12))
-      (= (cexpp "struct T { char c; long l; };" "sizeof(struct T)") '(num 16))
-      (= (cexpp "struct P { int a; }; struct Q { struct P p; char c; };" "sizeof(struct Q)") '(num 8))
-      (= (cexpp "union U { char c; long l; int i; };" "sizeof(union U)") '(num 8))
+      (= (cexpp "struct S { char c; int i; char d; };" "sizeof(struct S)") '(cast ulong (num 12)))
+      (= (cexpp "struct T { char c; long l; };" "sizeof(struct T)") '(cast ulong (num 16)))
+      (= (cexpp "struct P { int a; }; struct Q { struct P p; char c; };" "sizeof(struct Q)") '(cast ulong (num 8)))
+      (= (cexpp "union U { char c; long l; int i; };" "sizeof(union U)") '(cast ulong (num 8)))
       (= (cexpp "enum { X=3, Y };" "Y") '(num 4))
       (= (cexpp "enum { X=3, Y };" "X") '(num 3))
-      (= (cexpp "typedef long word;" "sizeof(word)") '(num 8))
-      (= (cexpp "typedef long word;" "sizeof(word*)") '(num 8))
+      (= (cexpp "typedef long word;" "sizeof(word)") '(cast ulong (num 8)))
+      (= (cexpp "typedef long word;" "sizeof(word*)") '(cast ulong (num 8)))
       (= (cexpp "" "s.v") '(dot (var "s") "v"))
       (= (cexpp "" "p->v") '(dot (deref (var "p")) "v"))
       (= (cexpp "" "p->a.b") '(dot (dot (deref (var "p")) "a") "b"))
@@ -315,44 +315,44 @@
       ; `h->p` sizes to its undecayed array span (155), and `sizeof buf` reads
       ; buf's own local type (155) -- both foldable, so the bound + the return fold.
       (= (citems "struct H { char n[100]; char p[155]; }; int f(struct H *h) { char buf[sizeof h->p]; return sizeof buf; }")
-         '((decl (("buf" (arr char 155) ()))) (ret (num 155))))
+         '((decl (("buf" (arr char 155) ()))) (ret (cast ulong (num 155)))))
       (= (citems "int f(int a[7]) { char buf[sizeof a[0]]; return sizeof buf; }")   ; a[i] element sizeof (a param decays to a pointer: sizeof *ptr = 4)
-         '((decl (("buf" (arr char 4) ()))) (ret (num 4))))
+         '((decl (("buf" (arr char 4) ()))) (ret (cast ulong (num 4)))))
       ; the typing door (parse.l pprom/puac -- C11 6.3.1.1 + 6.3.1.8, the ONE
       ; spelling; gen's cmpu consumes the same door): promoted arithmetic
       ; sizeofs to its C type, not the register's 8 -- char+int is an int,
       ; shorts promote, ~ and unary - promote, a shift wears its promoted LEFT
       ; type alone, ?: arms meet by puac, float wins its lane
-      (= (citems "int f(char c, int x) { return sizeof(c + x); }") '((ret (num 4))))
-      (= (citems "int f(short s) { return sizeof(s + s); }") '((ret (num 4))))
-      (= (citems "int f(char c) { return sizeof(~c); }") '((ret (num 4))))
-      (= (citems "int f(short s) { return sizeof(-s); }") '((ret (num 4))))
-      (= (citems "int f(char c) { return sizeof(c << 1); }") '((ret (num 4))))
-      (= (citems "int f(char c, short s) { return sizeof(c ? c : s); }") '((ret (num 4))))
-      (= (citems "int f(float g, char c) { return sizeof(g + c); }") '((ret (num 4))))
-      (= (citems "int f(long l, unsigned u) { return sizeof(l + u); }") '((ret (num 8))))
-      (= (citems "int f(unsigned u, char c) { return sizeof(u + c); }") '((ret (num 4))))
-      (= (citems "int f(int *p) { return sizeof(p + 1); }") '((ret (num 8))))
+      (= (citems "int f(char c, int x) { return sizeof(c + x); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(short s) { return sizeof(s + s); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(char c) { return sizeof(~c); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(short s) { return sizeof(-s); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(char c) { return sizeof(c << 1); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(char c, short s) { return sizeof(c ? c : s); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(float g, char c) { return sizeof(g + c); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(long l, unsigned u) { return sizeof(l + u); }") '((ret (cast ulong (num 8)))))
+      (= (citems "int f(unsigned u, char c) { return sizeof(u + c); }") '((ret (cast ulong (num 4)))))
+      (= (citems "int f(int *p) { return sizeof(p + 1); }") '((ret (cast ulong (num 8)))))
       ; a wide literal desugars at parse to a BOUNDED clit of its element type
       ; (L -> wchar, u -> char16 with surrogate pairs, U -> char32, u8 bytes) --
       ; the init machinery lays ELEMENTS, an [] bound counts them, sizeof folds
       (= (citems "int f(void) { int w[] = L\"hi\"; return sizeof w; }")
-         '((decl (("w" (arr int 3) (clit (arr int 3) (init ((num 104) (num 105) (num 0))))))) (ret (num 12))))
+         '((decl (("w" (arr int 3) (clit (arr int 3) (init ((num 104) (num 105) (num 0))))))) (ret (cast ulong (num 12)))))
       (= (citems "int f(void) { unsigned short s[] = u\"a\\x1d11e\"; return sizeof s; }")   ; U+1D11E: the surrogate pair
-         '((decl (("s" (arr ushort 4) (clit (arr ushort 4) (init ((num 97) (num 55348) (num 56606) (num 0))))))) (ret (num 8))))
-      (= (citems "int f(void) { return sizeof(L\"ab\"); }") '((ret (num 12))))
-      (= (citems "int f(void) { return sizeof(U\"ab\"); }") '((ret (num 12))))
-      (= (citems "int f(void) { return sizeof(u8\"ab\"); }") '((ret (num 3))))    ; u8: bytes, as ever
+         '((decl (("s" (arr ushort 4) (clit (arr ushort 4) (init ((num 97) (num 55348) (num 56606) (num 0))))))) (ret (cast ulong (num 8)))))
+      (= (citems "int f(void) { return sizeof(L\"ab\"); }") '((ret (cast ulong (num 12)))))
+      (= (citems "int f(void) { return sizeof(U\"ab\"); }") '((ret (cast ulong (num 12)))))
+      (= (citems "int f(void) { return sizeof(u8\"ab\"); }") '((ret (cast ulong (num 3)))))    ; u8: bytes, as ever
       ; an [] compound literal completes its bound from its initializer (C11
       ; 6.5.2.5p22, the initcount door): plain, designated, and a braced string
-      (= (cexpp "" "sizeof((int[]){1,2,3})") '(num 12))
-      (= (cexpp "" "sizeof((int[]){[3]=1})") '(num 16))
-      (= (cexpp "" "sizeof((char[]){\"hi\"})") '(num 3))
-      (= (cexpp "" "sizeof((int[5]){1})") '(num 20))                              ; an explicit bound stays its own
+      (= (cexpp "" "sizeof((int[]){1,2,3})") '(cast ulong (num 12)))
+      (= (cexpp "" "sizeof((int[]){[3]=1})") '(cast ulong (num 16)))
+      (= (cexpp "" "sizeof((char[]){\"hi\"})") '(cast ulong (num 3)))
+      (= (cexpp "" "sizeof((int[5]){1})") '(cast ulong (num 20)))                              ; an explicit bound stays its own
       ; the bswap builtins type by their seeded sigs -- unsigned, exact width
-      (= (cexpp "" "sizeof(__builtin_bswap16(1))") '(num 2))
-      (= (cexpp "" "sizeof(__builtin_bswap32(1))") '(num 4))
-      (= (cexpp "" "sizeof(__builtin_bswap64(1))") '(num 8))
+      (= (cexpp "" "sizeof(__builtin_bswap16(1))") '(cast ulong (num 2)))
+      (= (cexpp "" "sizeof(__builtin_bswap32(1))") '(cast ulong (num 4)))
+      (= (cexpp "" "sizeof(__builtin_bswap64(1))") '(cast ulong (num 8)))
       ; ..and the door bare, at the width seam: LP64 long HOLDS every uint so
       ; the signed side wins; ILP32 long cannot, so unsigned does. same
       ; signedness takes the higher rank; float/double win their lanes whole.
@@ -375,10 +375,10 @@
       ; --- bitfields: LSB-first packing into a declared-type unit (SysV/gcc x86);
       ; the member's stored (unit-offset bitoff width) drives a 2-shift load and a
       ; read-modify-write store. layout folds at parse; &bitfield is illegal. ---
-      (= (cexpp "struct S { unsigned a:1; unsigned b:1; unsigned c:1; };" "sizeof(struct S)") '(num 4))   ; three :1 pack into one int unit
-      (= (cexpp "struct M { char pre; unsigned x:3; unsigned y:5; int post; };" "sizeof(struct M)") '(num 8))   ; the run rides pre's tail, post int-aligns
-      (= (cexpp "struct U { unsigned a:4; unsigned b:4; };" "sizeof(struct U)") '(num 4))            ; one byte of bits, int-aligned
-      (= (cexpp "struct Z { int a; int :0; int b; };" "sizeof(struct Z)") '(num 8))                 ; `:0` forces the next unit to align
+      (= (cexpp "struct S { unsigned a:1; unsigned b:1; unsigned c:1; };" "sizeof(struct S)") '(cast ulong (num 4)))   ; three :1 pack into one int unit
+      (= (cexpp "struct M { char pre; unsigned x:3; unsigned y:5; int post; };" "sizeof(struct M)") '(cast ulong (num 8)))   ; the run rides pre's tail, post int-aligns
+      (= (cexpp "struct U { unsigned a:4; unsigned b:4; };" "sizeof(struct U)") '(cast ulong (num 4)))            ; one byte of bits, int-aligned
+      (= (cexpp "struct Z { int a; int :0; int b; };" "sizeof(struct Z)") '(cast ulong (num 8)))                 ; `:0` forces the next unit to align
       (two? (cgn "struct b { unsigned a:1; unsigned n:5; int s:4; }; int main() { struct b x; x.a=1; x.n=21; x.s=-3; return x.a + x.n + (x.s < 0); }"))  ; read/write, signed sign-extends
       (refused? (cgn "struct b { unsigned a:1; }; int main() { struct b x; unsigned *p = &x.a; return *p; }"))   ; &bitfield is illegal -- refuse
       ; --- stage 4b: whole-struct assignment (a block copy) and function pointers ---
@@ -603,8 +603,8 @@
       ; float parses as a scalar type; sizeof(float) is 4
       (= (cast "int main() { float f = 1.5; return 0; }")
          '(prog ((fn "main" () (blk ((decl (("f" float (flo 1.5)))) (ret (num 0))))))))
-      (= (cexp "sizeof(float)") '(num 4))
-      (= (cexp "sizeof(float*)") '(num 8))
+      (= (cexp "sizeof(float)") '(cast ulong (num 4)))
+      (= (cexp "sizeof(float*)") '(cast ulong (num 8)))
       ; a compound literal parses to ('clit ty init), address-takeable
       (= (cexp "(int){7}") '(clit int (init ((num 7)))))
       (= (cexp "&(int){7}") '(addr (clit int (init ((num 7))))))
@@ -907,7 +907,7 @@
       (= (cast "void f(void){return;}") '(prog ((fn "f" () (blk ((ret ())))))))   ; bare void return
       (= (cexp "sizeof x") '(szof (var "x")))                                       ; sizeof EXPR -> a node (not folded)
       (= (cexp "(int (*)(int)) p") '(cast (ptr (fn int)) (var "p")))                ; a function-pointer cast type (return rides)
-      (= (cexp "sizeof(int)") '(num 4))                                             ; sizeof TYPE folds to a num literal
+      (= (cexp "sizeof(int)") '(cast ulong (num 4)))                              ; sizeof TYPE folds to a coated num (size_t)
       (= (cast "typedef long a, b; int main(void){ b x; return x; }")                ; a multi-declarator typedef binds BOTH names as `long`
          '(prog ((tdef) (fn "main" () (blk ((decl (("x" long ()))) (ret (var "x"))))))))
       (= (cast "typedef int F(int); int main(void){return 0;}") '(prog ((tdef) (fn "main" () (blk ((ret (num 0))))))))

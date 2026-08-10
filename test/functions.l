@@ -37,7 +37,7 @@
  (aall (= (2 (star-tray '(3) '(2 3 4))) (star-tray '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
  (aall (= ((star-tray '(3) '(2 3 4)) 5) (gem-tray '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 power)
  (= 15 (((star-tray '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
- (= 15 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ ~(3 4)) = |3+4i| = 5
+ (= 13 ((~(3 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ ~(3 4)) = 3, the real part
  (= 10 ((~(-3 4) (+ 1)) 10))              ; ... but a complex sorting negative saturates to 0
  (twin? (~(0 1) 5))                       ; complex operator on a number -> complex power (5^i), no longer fenced
  (< (abs (- 1 (abs (~(0 1) 5)))) 0.0001)  ; |5^i| = 1 exactly (w^z = exp(z Log w))

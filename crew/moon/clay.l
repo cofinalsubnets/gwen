@@ -179,7 +179,8 @@
    ; 'ulong, parse.l:99), so the base name has to expand back out -- `ulong` is
    ; moon's word for the type, not C's.
    spelling '((uchar "unsigned char") (ushort "unsigned short") (uint "unsigned int")
-              (ulong "unsigned long") (ullong "unsigned long long") (llong "long long"))
+              (ulong "unsigned long") (ullong "unsigned long long") (llong "long long")
+              (bool "_Bool"))
    (cptr? t) (two? t && id? <t 'ptr)
    ; a tag spells as itself, string or symbol. cident? is a FIRST-character check and
    ; wants to be no more: a tag reaches here from a C lexer or from a generator, and

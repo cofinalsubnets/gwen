@@ -26,7 +26,6 @@ All of C89 passes. What remains is C99/C11/GNU.
 
 | construct | probe |
 |---|---|
-| `_Bool` | `_Bool b;` — ⚠ see "bool is four bytes" below before aliasing it to `bool` |
 | `_Alignof` | `_Alignof(int)` |
 | `_Generic` | `_Generic(x, int: 1, default: 0)` |
 | `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest |
@@ -196,35 +195,45 @@ declarators use — so the initializer completes the type (C11 6.5.2.5p22), desi
 braced strings included. Found probing the wide-literal desugar the same day (the desugar
 mints *bounded* clits, so it never rode this). Pinned by test/cc/126-clitbound.c.
 
-### bool is four bytes
+### bool is one byte — landed 2026-08-09
 
-`sizeof(bool)` is **4** where every other Linux C compiler makes `_Bool` **1**, and
-`struct { char a; bool b; char c; }` is **12** bytes against gcc's **3**. A mooncc object and a
-gcc object sharing a bool-bearing struct disagree on its layout in silence.
+`_Bool` is a real type now (`'bool`): size/align 1, `struct { char a; bool b; char c; }` is
+gcc's 3 bytes, and the `bool` predefine expands to the `_Bool` keyword — `<stdbool.h>`
+consumers build the right artifact, and PDCLib's config fork can retire. The conversion is
+C11 6.3.1.2 spelled once: gen's `cvt` row for bool is compare-with-zero + setne (a canonical
+0/1 in the full register on every backend), and every write site already ran `cvt` before its
+narrow store — so init, assignment, cast, the bitfield RMW (normalize BEFORE the mask:
+`(bool)4` is 1), `++`/`--` (`b--` on 0 is 1), a return, and a static's image all normalize,
+and a load is a plain `ldu1`. A float source compares (`(bool)0.5` is 1, NaN is 1), never
+truncates. Because cc calls are untyped, the CALLEE converts: a register-passed bool param
+takes one entry cvt (the inline splice binds carry the same conversion — `take(7)` spliced was
+the bug that found it), and a bitfield unit merged across widths keeps the wider unit type
+(a `bool:1` sharing its byte with a wider neighbour must not truncate the neighbour's image).
+Differential: test/cc/130-bool.c, 22 checks, gcc-exact on x64 + qemu arm64/riscv64.
 
-⚠ **This is why `_Bool` must keep refusing.** Aliasing it to today's `bool` would turn a loud
-parse error into that silent ABI split — one line, and every consumer of `<stdbool.h>` (which
-spells `bool` as `_Bool`) starts building the wrong artifact. The rung is making bool one byte:
-a narrow store, a nonzero-normalizing load, and the struct layout that follows. Until then a
-package wanting `<stdbool.h>` needs a config fork, which is what PDCLib got.
+Three honest residues: an **overflow (7th+) or variadic-named** bool param binds straight to
+caller memory — no store, so no arrival conversion (a wild caller value reads back raw);
+a mooncc **caller** into a gcc-built bool-param callee passes the bare int where SysV promises
+0/1 (the callee-side cvt covers mooncc callees only); and `(bool)` of a **pair/i128** value
+tests the low word only.
 
-### sizeof answers an int, not a size_t
+### sizeof answers size_t — landed 2026-08-09, via the cast coat
 
-`sizeof(sizeof(int))` folds to **4**; gcc says 8. `ptype` reads a parse-folded `('num N)` as
-`int`, and the `sizeof(TYPE)` lane emits exactly that, so the type is lost. It reaches any
-`sizeof` over an already-folded constant — `sizeof(sizeof x)`, `sizeof(offsetof(...))` — and it
-means **every `sizeof` expression is signed**, where C says unsigned.
+`sizeof` folds to `('cast (szty ps) ('num N))` — ulong, uint on t32 — so
+`sizeof(sizeof(int))` is 8 and every `sizeof` expression is unsigned, as C says. The 2026-08-08
+"+12% of `.text`" price that shelved this was **measured to be an artifact**: gen's immediate
+lanes gated on a bare `('num n)`, so the coat hid the constant and every `/ sizeof` became a
+real `div` (a signed-`long` coat cost the identical bytes — the unsignedness itself was free).
+The cast-coat read (`knum`/`cnum` in gen.l, which also un-blinded suffixed literals: `x / 8UL`
+was a materialize+`divq` dance) removed the price; with it the fold is **−0.7% of `.text`** —
+signed-left `/ sizeof` sites now license the unsigned strength-reduction. The VLA lane's
+runtime `dim * sizeof(elt)` multiply still rides bare (the dim is the runtime side), and
+`offsetof` still folds signed — two honest residues.
 
-The fix is three lines (fold to `('cast 'ulong ('num N))` in both `sizeof` lanes, the idiom
-suffixed literals already arrive under) and it was **measured at +12% of love.o's `.text`**
-(460447 → 515584 bytes) — the cast makes the surrounding arithmetic take unsigned lanes, which
-is more correct C at a real size cost. Written and reverted 2026-08-08: it is a rung with a
-price tag, not a patch. ⚠ measure again before believing the number; it was one build.
-
-It has a real consumer now (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
+The consumer that forced it (found 2026-08-09, once `__extension__` opened `<pthread.h>`):
 PDCLib's dlmalloc guards itself with `enum { _PDCLIB_assert_667 = 1 / (!!(sizeof( sizeof(int) )
-== sizeof(long unsigned int))) };` — our 4 ≠ 8, the divide refuses, the file stops there. It is
-now dlmalloc's **only** x64 blocker: the rest of its ladder landed 2026-08-09 —
+== sizeof(long unsigned int))) };` — 4 ≠ 8 refused the divide and stopped the file. That guard
+folds true now, clearing dlmalloc's last x64 blocker; the rest of its ladder landed 2026-08-09 —
 `__builtin_bswap16/32/64` (glibc's `<byteswap.h>` inlines; fully-masked neutral shift/or
 expansions, no raw splices so unframe stays alive, seeded sigs so the results type unsigned at
 their exact width; test/cc/128-bswap.c, five lanes at 9), then `__sync_lock_test_and_set` /
@@ -233,9 +242,9 @@ retry + `stlr`, riscv64 `amoswap.{w,d}.aq` + `fence rw,w`; the POINTEE sizes and
 exchange, 4/8 bytes, and an unsized pointee refuses — guessing a width would miscompile in
 silence), and `__builtin_clz`/`__builtin_ctz` (32-bit; clz32 rides the clzll lane as
 `clz64(x << 32)`, ctz is bsf / rbit+clz / a mask-narrowing search; test/cc/129-sync.c, five
-lanes at 11). With assert_667 hand-neutered, dlmalloc compiles whole on x64 — arm64/riscv64
-additionally hit the 80-byte struct **return** (`internal_mallinfo`, the memory-return
-asymmetry below).
+lanes at 11). With the guard folding true, nothing sizeof-shaped remains in dlmalloc's way on
+x64 (the 2026-08-09 hand-neutered build compiled whole); arm64/riscv64 still hit the 80-byte
+struct **return** (`internal_mallinfo`, the memory-return asymmetry below).
 
 ### what the %f hunt actually found — and the trap in it
 

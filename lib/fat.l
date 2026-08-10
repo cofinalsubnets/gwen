@@ -239,9 +239,9 @@
        cs (comps path)
        (? (two? cs) (go (fs@ f 6) cs) `((fs@ f 6) "" ())))
 
-   ; --- timestamps: (clock ()) ms -> the DOS pair (date . time) ---
+   ; --- timestamps: (clock 0) ms -> the DOS pair (date . time) ---
    (dos-now u)
-    (: ms (clock ()) days (// ms 86400000) secs (% (// ms 1000) 86400)
+    (: ms (clock 0) days (// ms 86400000) secs (% (// ms 1000) 86400)
        z (days + 719468) era (// z 146097) doe (% z 146097)
        yoe (// (- doe (- (+ (// doe 1460) (// doe 146096)) (// doe 36524))) 365)
        y ((era * 400) + yoe)
@@ -297,7 +297,7 @@
              _ (pin b 21 0xF8) _ (w16 b 24 32) _ (w16 b 26 8)
              _ (w32 b 32 nsec) _ (w32 b 36 fatsz) _ (w32 b 44 2)
              _ (w16 b 48 1) _ (w16 b 50 6) _ (pin b 64 0x80) _ (pin b 66 0x29)
-             _ (w32 b 67 (& (clock ()) 0xFFFFFFFF))
+             _ (w32 b 67 (& (clock 0) 0xFFFFFFFF))
              _ (bcopy b 71 "LOVE       ") _ (bcopy b 82 "FAT32   ")
              _ (w16 b 510 0xAA55)
              bpb (string b)
