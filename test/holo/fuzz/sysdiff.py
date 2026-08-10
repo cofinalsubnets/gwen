@@ -13,8 +13,8 @@ added to holo is checked the next run with no edit to this file -- which is the 
 uncovered row is the one that ships wrong. The x86 side has no name tables (the operand space
 IS the register file), so it enumerates instead.
 
-  crew/holo/fuzz/sysdiff.py            # both arches
-  crew/holo/fuzz/sysdiff.py --arch x64 -v
+  test/holo/fuzz/sysdiff.py            # both arches
+  test/holo/fuzz/sysdiff.py --arch x64 -v
 """
 import os, re, subprocess, sys, argparse
 

@@ -1,6 +1,6 @@
-; cooktest -- tests for cook's Makefile importer (crew/cook/cook.l).
+; the gate for cook's Makefile importer (crew/cook/cook.l).
 ;
-; Run on the host binary:  out/host/love tools/cooktest.l
+; Run on the host binary:  out/host/love test/host/cook.l
 ; (wired into the build as `make test_cook`, part of `make test`).
 ;
 ; cook reads a real Makefile -- variable expansion, the make functions,

@@ -13,7 +13,7 @@
 ; lenses, walked backward, seeded with the cotangent 1.
 ;
 ; pure love -- no host nif, so this runs on every frontend (host, kernel, wasm).
-; load with `-l crew/tele/tele.l` after the prel; the gradient-check gate is teletest.l.
+; load with `-l crew/tele/tele.l` after the prel; the gradient-check gate is test/tele/grad.l.
 ;
 ; a node (a "glass") is a MUTABLE tablet { 'val 'grad 'bwd }. the galaxy VALUES it
 ; holds stay immutable; only the node mutates -- grad ACCUMULATES by replacing the
@@ -89,9 +89,9 @@
    ;; -- the device seam -- tele's heavy array ops (matmul, elementwise, reduce,
    ;; transpose) route through a SWAPPABLE backend record { gemm ew reduce transp }.
    ;; the default `tl-cpu` IS love's native constellation algebra, so tele stands
-   ;; alone (teletest.l loads only this file). load crew/tele/device.l for the SIM +
-   ;; roofline meter, or crew/tele/cuda.l for the GPU -- then (tl-use that-backend) and
-   ;; every mm/add/mul/sub/sum/mean below reroutes with NO change to tele's source.
+   ;; alone (test/tele/grad.l loads only this file). load crew/tele/device.l for the SIM +
+   ;; roofline meter -- then (tl-use that-backend) and every mm/add/mul/sub/sum/mean
+   ;; below reroutes with NO change to tele's source.
    ;; `ew` takes the elementwise op as its first argument ((+)/(*)/(-)) so one
    ;; kernel slot covers all three lanes.
    tl-cpu  #('name "cpu" 'gemm inner 'ew id

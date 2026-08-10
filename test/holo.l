@@ -10,9 +10,11 @@
 ; all), so each backend's goldens gate on its presence in (A 'backends) -- under love0
 ; (every backend baked) both blocks run, on the host the native one does. The full
 ; encoder gate (every backend golden, objdump-checked, + the text/elf frontends) stays in
-; crew/holo/holotest.l (`make test_holo`, its own cat-stream of the sources); this is
-; the SMOKE that the MODULE reaches the runtime and assembles bit-identically.
-; reg map: r0=rax, r7=x86-r8 .. r10=x86-r11; goldens copied from asmtest.l (objdump-verified).
+; test/holo/golden.l (`make test_holo`, its own cat-stream of the sources), and the AT&T
+; front's in test/holo/as.l (`make test_as`); this is the SMOKE that the MODULE reaches the
+; runtime and assembles bit-identically -- it lives HERE, at test/'s top, because the corpus
+; glob is a non-recursive test/*.l.
+; reg map: r0=rax, r7=x86-r8 .. r10=x86-r11; goldens copied from golden.l (objdump-verified).
 (? (lit? (from 'holo))                                     ; presence check via the registry -- () when holo isn't baked (wasm/kernel)
    (: A (from 'holo)                                       ; the module accessor; bindings LOCAL (a body-having :)
       holo-hex (A 'holo-hex)  assemble (A 'assemble)  label-at (A 'label-at)
@@ -27,7 +29,7 @@
         (= "48b8157c4a7fb979379e" (holo-hex 'x64 '((li r0 0x9e3779b97f4a7c15))))     ; movabs rax -- the bignum-safe le64 (a movk-or-//% bug would drop the high limb)
         ; -- label fixups resolve to rel32: a whole loop assembles, and its addresses are exposed
         ; (plain assemble lays branches long-form; the relaxing layout is the object writer's
-        ; entry, gated byte-exact in crew/holo/holotest.l) --
+        ; entry, gated byte-exact in test/holo/golden.l) --
         (= "4839c80f840800000048ffc8e9efffffffc3"
            (holo-hex 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))))
         (= 17 (label-at (assemble 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))) 'done)))

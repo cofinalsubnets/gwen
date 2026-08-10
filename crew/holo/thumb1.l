@@ -4,7 +4,7 @@
 ; (r13=sp, r14=lr, r15=pc); the DATA-PROCESSING surface is TWO-ADDRESS and reaches only r0..r7 (the
 ; "low" regs) -- the hi regs (r8..r15) are touchable only by MOV/ADD/CMP-hi, BX/BLX, and push/pop of
 ; lr/pc. load after holo.l. NOTHING here is llvm-mc-checked yet: every word wants a pass against
-; `llvm-mc --triple=thumbv6m-none-eabi --show-encoding` before it earns a place in holotest.l.
+; `llvm-mc --triple=thumbv6m-none-eabi --show-encoding` before it earns a place in test/holo/golden.l.
 ;
 ; what v6-M TAKES AWAY vs thumb2 (why this isn't a crib of thumb2.l):
 ;   * no MOVW/MOVT  -> `li` synthesizes the constant (MOVS + LSLS/ADDS byte-build; a literal pool is
