@@ -1,9 +1,14 @@
 ; the end-to-end gate for tele: a 2-layer MLP learns XOR, written in love over the pure
 ; constellation algebra (no host nif), so the same code runs on EVERY frontend -- the host,
-; wasm, and inle (the freestanding kernel): a neural net on bare metal. test/host/tele.l
-; grad-checks each op alone; this one asks whether the ops COMPOSE into a net that learns.
+; wasm, and inle (the freestanding kernel): a neural net on bare metal. test/tele/grad.l
+; grad-checks each op alone; this one asks whether they COMPOSE into a net that learns.
 ;
-;   run:  out/host/love -l crew/tele/tele.l test/host/xor.l   (`make test_xor`)
+;   run:  cat test/00-init.l test/tele/xor.l test/zz-fin.l | out/host/love -l crew/tele/tele.l
+;
+; corpus-shaped but NOT in the corpus: tele is no module (no lib/tele.l, nothing registered),
+; so it arrives on -l and this file cannot ride the test/*.l glob. 00-init.l brings `assert`,
+; zz-fin.l the "N tests pass" line -- the one thing an assert cannot say for itself, since a
+; reader that stops early leaves every assert below it unrun and exits 0.
 ;
 ; the net: 2 -> H (tanh) -> 1 (sigmoid), trained full-batch by SGD on MSE. XOR is the
 ; classic not-linearly-separable problem -- a single linear layer cannot solve it, the
@@ -11,7 +16,7 @@
 ; and the loss ceiling below are deterministic, not a tolerance.
 
 (: _ (rng-set (wheel 1))
-   H 8  lr 0.6  epochs 4000  ceil 0.01     ; ceil: the observed final loss is ~3e-4, 30x under
+   H 8  lr 0.6  epochs 4000  ceil 0.01     ; ceil: the observed final loss is ~2e-4, 48x under
 
    X (gem-tray '(4 2) '(0.0 0.0  0.0 1.0  1.0 0.0  1.0 1.0))   ; the four inputs
    Y (gem-tray '(4 1) '(0.0 1.0 1.0 0.0))                       ; XOR of each
@@ -38,13 +43,14 @@
    out (tl-val (call model X))
    (cell k) (peep out (k >< 0 >< ()) 0)
    (yes k v) (? (0.5 < cell k) (v = 1) (v = 0))             ; does row k round to v?
-   ;; both halves: the four rows round right AND the loss actually fell. rounding alone
-   ;; passes a net that merely leans the right way.
-   won (yes 0 0 && yes 1 1 && yes 2 1 && yes 3 0 && final < ceil)
    _ (puts $ "00 -> " + show (cell 0) + "\n")
    _ (puts $ "01 -> " + show (cell 1) + "\n")
    _ (puts $ "10 -> " + show (cell 2) + "\n")
    _ (puts $ "11 -> " + show (cell 3) + "\n")
    _ (puts $ "final loss " + show final + " (ceiling " + show ceil + ")\n")
-   _ (puts $ (? won "xor: ok\n" "FAIL xor: the net did not learn it\n"))
-   (? won 0 (quit 1)))
+
+   ;; ⚠ bound to _: a bare assert in a binding slot is define-sugar and never runs.
+   ;; both halves -- the four rows round right AND the loss actually fell, since rounding
+   ;; alone passes a net that merely leans the right way.
+   _ (assert (yes 0 0) (yes 1 1) (yes 2 1) (yes 3 0) (final < ceil))
+   0)
