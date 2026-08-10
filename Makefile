@@ -10,10 +10,15 @@ love0 = out/host/love0
 # maybe we can change this
 export LOVE_NO_IMAGE := 1
 
-.PHONY: all install uninstall clean distclean
-.PHONY: host kernel wasm love0 site site-serve
-.PHONY: test test_host test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 test_virt test_wake test_embed test_rp2040
-.PHONY: valg disasm flame cat cata catav perf repl gdb vmret waits bench nettest lint ccdb
+# every verb here is phony: one roster, so adding one is one line and not two. (the gates
+# each fragment owns are rostered in that fragment.)
+.PHONY: all install uninstall clean distclean host kernel wasm love0 site site-serve test test_host \
+  test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm \
+  uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat \
+  test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
+  test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
+  test_virt test_wake test_embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
+  vmret waits bench nettest lint ccdb ulp
 
 .DEFAULT_GOAL := test
 
@@ -28,8 +33,6 @@ include mk/distro.mk
 include port/inle/kernel.mk
 include test/test.mk
 include mk/install.mk
-
-.PHONY: test test_slow test_extra
 
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
@@ -62,48 +65,39 @@ test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2
 
 all: host kernel wasm
 
-# lint: paren/bracket/brace balance + unclosed strings across every tracked .l
-# (libra ⚖ -- crew/libra/libra.l over lib/lint.l, a .l-aware scan: ; and #!
-# comments, ' and ` are reader ops). Balance is libra's DEFAULT verb, so the bare
-# file list is the whole invocation. QUIET when clean, path:line:col: warnings +
-# exit 1 on any imbalance; tabs warn but don't fail. NOT in the test gate (it's an
-# editing aid, not a semantic check).
+# lint: libra ⚖ over every tracked .l -- paren/bracket/brace balance and unclosed strings,
+# a .l-aware scan. Balance is libra's default verb, so the bare file list is the whole
+# invocation. Quiet when clean, path:line:col: and exit 1 otherwise. NOT in the test gate:
+# an editing aid, not a semantic check.
 lint: $(ho)/love
 	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l') && echo "lint: .l balance clean"
 
-# ccdb: emit compile_commands.json so clangd sees the flags the build actually uses.
-# without it clangd guesses, misses love.h, and the fatal include error cascades into a
-# flood of undeclared-name noise that says nothing about the code. the generated headers
-# under out/ must exist, so build first. machine-specific (absolute paths), gitignored.
+# ccdb: emit compile_commands.json so clangd reads the flags the build actually uses --
+# without it the missed love.h cascades into a flood of undeclared-name noise. ⚠ the
+# generated headers under out/ must exist, so build first. Machine-specific, gitignored.
 ccdb:
 	@python3 $R/tools/ccdb.py
 
-# NB: there is NO git pre-commit hook -- committed artifacts (wasm/love.js, bench/
-# bench.html) are rebuilt MANUALLY (`make wasm`, `make -C bench html`) and staged
-# by hand. An auto-rebuild hook re-ran the benchmarks on every commit (minutes);
-# it was removed deliberately. Rebuild before committing artifact-affecting code.
+# ⚠ there is deliberately NO pre-commit hook: the committed artifacts (wasm/love.js,
+# bench/bench.html) are rebuilt by hand (`make wasm`, `make -C bench html`) and staged, so
+# rebuild before committing anything that affects them. An auto-rebuild hook re-ran the
+# benchmarks on every commit, minutes each.
 #
-# ⚠ wasm/love.js CANNOT be gated by cmp-against-a-rebuild, and the reason is not
-# non-determinism -- the link is exactly reproducible. it BAKES `git describe`
-# (love_version.h, mapped -dirty -> -wasm), so it embeds the revision it was built
-# AT, which is necessarily the parent of the commit that carries it. a rebuild at
-# HEAD therefore always differs, in exactly those 8 bytes, after ANY commit -- not
-# only one that touches love.c. so it is one revision behind by construction; that
-# is the cost of baking the id, and the alternative is not baking it. test_wasm
-# links out of tree so at least it stops DIRTYING the file on every run.
+# ⚠ and wasm/love.js CANNOT be gated by cmp-against-a-rebuild -- not for want of
+# determinism, the link is exact, but because it BAKES `git describe`. It therefore
+# embeds the revision it was built AT, necessarily the parent of the commit carrying it,
+# so a rebuild at HEAD always differs in those 8 bytes after ANY commit. It is one
+# revision behind by construction: the cost of baking the id. test_wasm links out of tree
+# so at least it stops DIRTYING the file on every run.
 
-# crew/cook/Cookfile: this Makefile transpiled into a resolved cook recipe by
-# `cook --emit` (crew/cook/cook.l). cook reads this Makefile directly too, but the
-# emitted Cookfile is the build with every $(shell)/$(wildcard)/var/pattern
-# RESOLVED -- a flat, self-documenting snapshot. Regenerate it whenever the
-# Makefile changes. (A baked snapshot: re-run `make crew/cook/Cookfile` after adding
-# a source/test file, since the wildcard lists are frozen at emit time.)
+# crew/cook/Cookfile: this Makefile transpiled by `cook --emit` into a flat snapshot with
+# every $(shell)/$(wildcard)/var/pattern RESOLVED. ⚠ a BAKED snapshot -- the wildcard lists
+# freeze at emit time, so re-run this after adding a source or test file.
 crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
 	@echo AI	$@
 	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
 
-# site: this tree's own docs as a browsable site -- README.md + doc/*.md through
-# papel (crew/papel/papel.l)
+# this tree's own docs as a browsable site: README.md + doc/*.md through papel.
 site: host
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc
 SITEPORT ?= 8080
@@ -113,9 +107,8 @@ site-serve: host
 wasm:
 	@$(MAKE) -C wasm
 
-# clean takes everything this tree BUILDS. dl/ is everything it DOWNLOADED -- limine,
-# OVMF, a package's sources -- which is minutes of network for bytes no edit invalidates,
-# so it sits outside out/ and survives. distclean is the one that asks for it back.
+# clean takes everything this tree BUILDS; dl/ is what it DOWNLOADED, minutes of network
+# for bytes no edit invalidates, so it survives. distclean is what asks for it again.
 clean:
 	rm -rf out
 	@rm -f proof/rocq/*.vo proof/rocq/*.vok proof/rocq/*.vos proof/rocq/*.glob proof/rocq/.*.aux
@@ -123,18 +116,16 @@ clean:
 distclean: clean
 	rm -rf dl
 
-# the memory lane. ⚠ THE CORPUS IS A FILE ARGUMENT, NEVER STDIN -- the corpus TESTS
-# stdin (test/io.l's see/unsee roundtrip), so piping it in has those asserts eating the
-# script they ride on, and the run dies reading its own comments as code. e77e0e8c moved
-# four other lanes off the same pattern and missed this one; `</dev/null` is what the
-# asserts should find.
+# the memory lane. ⚠ THE CORPUS IS A FILE ARGUMENT, NEVER STDIN: the corpus TESTS stdin
+# (test/io.l's see/unsee roundtrip), so piping it in has those asserts eating the script
+# they ride on, and the run dies reading its own comments as code. `</dev/null` is what
+# the asserts should find.
 valg: host
 	@cat $t > $(ho)/.valg-corpus.l
 	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
-# the math floor's differential: am.c vs the host libm, max-ulp per fn, and the
-# REPORT -- `./out/host/ulp reduce` adds the reduction scan. this lane is the
-# eyeball one (opt-in like valg: needs a hosted oracle); test_ulp is the GATE,
-# and it builds am.c with mooncc as well, which this never did.
+# the math floor's differential: am.c vs the host libm, max-ulp per fn (`ulp reduce` adds
+# the reduction scan). The EYEBALL lane, opt-in like valg since it needs a hosted oracle;
+# test_ulp is the gate, and it builds am.c with mooncc too, which this never did.
 .PHONY: ulp
 ulp:
 	@mkdir -p out/host
@@ -159,9 +150,8 @@ disasm: host
 	exec rizin -A $m
 gdb: host
 	exec gdb $m
-# no-op with a message when no disassembler is present, so the fast `test` stays
-# portable (like test_proof/coqc). tools/vmret.l disassembles $m and flags any
-# lvm_* VM ap that emits a `ret` instead of tail-jumping to the next.
+# tools/vmret.l disassembles $m and flags any lvm_* VM ap that emits a `ret` instead of
+# tail-jumping. No-op with a message when no disassembler is present, so `test` stays portable.
 OBJDUMP_ANY := $(shell command -v objdump 2>/dev/null || command -v llvm-objdump 2>/dev/null)
 ifeq ($(OBJDUMP_ANY),)
 vmret: host
@@ -171,14 +161,12 @@ vmret: host
 	@$m tools/vmret.l $m
 endif
 
-# waits rides the fast `test` beside vmret, for the same reason: it pins an
-# invariant whose only failure mode is a HANG, which no assert can catch after
-# the fact. the device floor's rule is that the only code in the tree that blocks
-# is the scheduler, and tools/waits.l carries the roster of every wait plus the
-# sentence that earns it -- a new one reddens here instead of arriving as a wedged
-# gate. it needs no toolchain (it reads the C, never the ELF; see the file for why
-# a disassembly could only answer green), but it does need the tracked file list,
-# so it no-ops outside a git checkout the way vmret does without objdump.
+# waits rides the fast `test` beside vmret for the same reason: it pins an invariant whose
+# only failure mode is a HANG, which no assert catches after the fact. The device floor's
+# rule is that the only code here that blocks is the scheduler, and tools/waits.l carries
+# the roster of every wait plus the sentence earning it -- a new one reddens here instead
+# of arriving as a wedged gate. It reads the C, never the ELF, so it needs no toolchain,
+# but it does need the tracked file list and so no-ops outside a git checkout.
 WAITS_C := $(shell git ls-files '*.c' 2>/dev/null)
 ifeq ($(WAITS_C),)
 waits: host

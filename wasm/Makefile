@@ -1,7 +1,6 @@
 EMCC ?= /usr/lib/emscripten/emcc
-# ccache wraps emcc for the per-object compiles below; override with
-# `make CCACHE=` to disable. Caching only works because each source is
-# compiled separately (-c) -- ccache passes through multi-source links.
+# ccache wraps emcc for the per-object compiles below (`make CCACHE=` disables). It only
+# caches because each source compiles separately -- ccache passes multi-source links through.
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 emcc = $(CCACHE) $(EMCC)
 
@@ -12,9 +11,8 @@ o = ../out/wasm
 g_c = ../love.c ../crew/moon/lib/math/am.c
 g_h = $(wildcard ../*.h)
 
-# One object per source so an edit recompiles just that TU (and so ccache
-# can cache each compile). Local host.c stays rooted in cwd; shared kernel/*.c
-# carry the ../ prefix, mapped into $(o)/ by the patsubst.
+# One object per source, so an edit recompiles just that TU and ccache can cache each.
+# Local host.c stays rooted in cwd; shared kernel/*.c carry ../, mapped in by the patsubst.
 host_o = $(o)/host.o
 core_o = $(g_c:../%.c=$(o)/%.o)
 objs = $(host_o) $(core_o)
@@ -31,16 +29,15 @@ EMFLAGS = \
   -sEXPORTED_FUNCTIONS=_ai_init,_ai_eval,_ai_out_ptr,_ai_out_len,_ai_out_reset,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAPU32
 
-# a failed recipe takes its half-written target with it -- else a 0-byte artifact
-# carries a fresh mtime and the next make calls it up to date. this makefile stands
-# alone (the root does not include it), so it says so itself. see ../Makefile.
+# a failed recipe takes its half-written target with it -- else a 0-byte artifact carries a
+# fresh mtime and the next make calls it up to date. the root does not include this file,
+# so it is said here. see ../Makefile.
 .DELETE_ON_ERROR:
 
 all: love.js
 
-# prel.h/ev.h are serialized from lib/*.g by the top-level lcat rule;
-# host.c assembles them into the bootstrap via G_EGG_PRE/POST (no repl here --
-# the browser feeds the REPL through ai_eval).
+# these are serialized from love/*.l by the top-level lcat rule; host.c assembles them into
+# the bootstrap via G_EGG_PRE/POST -- no repl here, the browser feeds it through ai_eval.
 ../out/lib/egg.h: ../love/egg.l
 ../out/lib/post.h: ../love/post.l
 ../out/lib/p1.h: ../love/p1.l
@@ -54,17 +51,12 @@ all: love.js
 ../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h ../out/lib/love_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
-# love.o bakes the version string (love_version.h, via love.c's __has_include), so
-# regenerate it through the parent (force_version) and recompile love.o when the
-# id changes -- mirrors the host build's l.o relink. Without this the browser
-# banner (love-version) drifts to whatever revision love.o was last built at.
-#
-# The committed love.js is ALWAYS built from a tree that love.js itself dirties, so
-# `git describe --dirty` would brand the page banner "-dirty" in perpetuity --
-# cosmetic, but it reads as broken. Map it to "-wasm" in a wasm-local copy (same
-# revision, honest "this is the browser build"); a clean tree just keeps the bare
-# id. Compile love.o against it -- -I$(o) wins the "love_version.h" quote-include
-# over ../out/lib, so the host build's honest -dirty is untouched.
+# love.o bakes the version string, so regenerate it through the parent and recompile when
+# the id changes -- else the browser banner drifts to whatever revision love.o last saw.
+# ⚠ the committed love.js is always built from a tree love.js itself dirties, so
+# `git describe --dirty` would brand the banner "-dirty" in perpetuity. Map it to "-wasm"
+# in a wasm-local copy: same revision, honest about being the browser build. -I$(o) wins
+# the quote-include over ../out/lib, so the host build's honest -dirty is untouched.
 $(o)/love_version.h: ../out/lib/love_version.h
 	@mkdir -p $(dir $@)
 	@sed 's/-dirty"/-wasm"/' $< > $@
@@ -73,13 +65,10 @@ $(o)/love.o: ../love.c $(g_h) $(o)/love_version.h
 	@mkdir -p $(dir $@)
 	$(emcc) -I$(o) $(CFLAGS) -c $< -o $@
 
-# Link step: emcc's link is multi-input, so ccache can't cache it -- use
-# bare $(EMCC). EMFLAGS (MODULARIZE, exports, memory) only apply here.
-#
-# Spelled ONCE and linked to two places. `love.js` here is the COMMITTED artifact,
-# refreshed by hand (`make wasm`); $(o)/love.js is the same bytes under out/, which
-# is what test_wasm runs -- a gate must not rewrite the working tree, and this one
-# used to. See ../Makefile's note on why a cmp-against-committed gate is impossible.
+# the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply
+# only here. Spelled ONCE for two places: `love.js` is the COMMITTED artifact refreshed by
+# hand, $(o)/love.js the same bytes under out/, which is what test_wasm runs. ⚠ a gate must
+# not rewrite the working tree. ../Makefile says why a cmp-against-committed gate cannot work.
 emlink = $(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
 love.js: $(objs)
@@ -104,11 +93,10 @@ $(o)/%.o: ../%.c $(g_h)
 serve: all
 	python3 -m http.server 8000
 
-# clean only the build intermediates ($(o) = ../out/wasm). love.js is a TRACKED,
-# committed artifact (the .githooks pre-commit keeps it fresh), so clean must
-# NOT delete it -- doing so left a spurious `D wasm/love.js` after every top-level
-# `make clean`. (l.wasm was a dead pre-rename name; SINGLE_FILE=1 embeds the
-# wasm into love.js, so no standalone .wasm is ever emitted.)
+# ⚠ clean takes only the build intermediates: love.js is a TRACKED, committed artifact
+# refreshed BY HAND (`make wasm` -- there is no pre-commit hook; see ../Makefile), so
+# deleting it here would leave a spurious `D wasm/love.js` after every top-level clean.
+# SINGLE_FILE=1 embeds the wasm into love.js, so no standalone .wasm is ever emitted.
 clean:
 	rm -rf $(o)
 

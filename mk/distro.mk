@@ -1,23 +1,18 @@
-# mk/distro.mk -- the love-native Linux distro: an initramfs where love is /init.
-#
-# Fragment of the root Makefile (see the include list). The LFS "toolchain" phase
-# is already solved differently -- rung 4 is a gcc-free, glibc-free static `love`
-# (out/host/love-raw, `make test_raw`). So a bootable system is just PACKAGING what is
-# already green: love as pid 1 (init/boot.l), kore as the busybox-style userland
-# (crew/kore, the $(korefiles) cat), and lush (crew/lush, the $(lushfiles) cat)
-# as the console shell.
+# mk/distro.mk -- the love-native Linux distro: an initramfs where love is /init. The LFS
+# toolchain phase is already solved elsewhere (a gcc-free static love, `make test_raw`), so
+# a bootable system is just PACKAGING what is green: love as pid 1, kore as the
+# busybox-style userland, lush as the console shell.
 #
 #   make distro-initramfs   -> out/distro/initramfs.cpio.gz
-#   make distro-run         -> boot it under qemu on a gcc-built stock kernel
+#   make distro-run         -> boot it under qemu on a stock kernel
 #
-# The kernel stays the one imported artifact (BZIMAGE, default the host's);
-# building it with mooncc is a later ladder, not yet mapped.
+# The kernel stays the one imported artifact (BZIMAGE, default the host's).
 
 distro_dir   = out/distro
 distro_root  = $(distro_dir)/root
 distro_img   = $(distro_dir)/initramfs.cpio.gz
-# the base love binary: MUST be static (a bare initramfs has no ld.so/glibc). Prefer
-# the gcc-free love-raw (the true love base); fall back to a static-musl host love.
+# ⚠ the base love MUST be static -- a bare initramfs has no ld.so or glibc. Prefer the
+# gcc-free love-raw, the true love base; fall back to a static-musl host love.
 distro_love    = $(firstword $(wildcard out/host/love-raw out/host-musl/love))
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
 distro_applets = ls cat head tail wc sort uniq grep sed cut tr nl rev cp mv rm \
@@ -45,11 +40,11 @@ $(distro_img): init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@( cd $(distro_root) && find . | cpio --quiet -o -H newc ) | gzip -9 > $@
 	@echo "  packed $$(gzip -l $@ | awk 'NR==2{print $$2}') bytes -> $@"
 
-# Direct kernel boot: no bootloader/OVMF needed. -append rdinit=/init makes love pid 1.
-# KVM when the host offers it (TCG is too slow to reach the console in a smoke window).
+# Direct kernel boot, no bootloader: rdinit=/init makes love pid 1. KVM when the host
+# offers it -- TCG is too slow to reach the console inside a smoke window.
 distro_accel = $(shell test -e /dev/kvm && echo -enable-kvm -cpu host)
-# 2G: love reserves a two-space GC heap at startup, so pid1 love PLUS a forked+execve'd
-# child love each need one -- 512M overflows (execve -> ENOMEM=12). Override with QMEM=.
+# ⚠ 2G: love reserves a two-space GC heap at startup, so pid1 love PLUS a forked child
+# each need one -- 512M overflows (execve -> ENOMEM). Override with QMEM=.
 QMEM ?= 2048
 distro_qemu = qemu-system-x86_64 -m $(QMEM) $(distro_accel) -kernel $(BZIMAGE) -initrd $(distro_img) \
               -append "console=ttyS0 earlyprintk=serial,ttyS0 rdinit=/init panic=-1" \
@@ -58,9 +53,9 @@ distro-run: $(distro_img)
 	@test -r "$(BZIMAGE)" || { echo "distro-run: no kernel at $(BZIMAGE) -- set BZIMAGE=..."; exit 1; }
 	exec $(distro_qemu)
 
-# Non-interactive smoke: boot, feed `ls /proc` to the console, prove love came up as
-# pid 1 with /proc mounted AND that the kore userland runs, then kill qemu. Holding
-# stdin open (the trailing sleep) keeps the shell from EOF-respawn-looping.
+# Non-interactive smoke: boot, feed `ls /proc` to the console, prove love came up as pid 1
+# with /proc mounted and the kore userland running, then kill qemu. ⚠ the trailing sleep
+# holds stdin open, keeping the shell out of an EOF-respawn loop.
 distro-smoke: $(distro_img)
 	@test -r "$(BZIMAGE)" || { echo "distro-smoke: no kernel at $(BZIMAGE)"; exit 1; }
 	@echo "-- booting (10s capture) --"
