@@ -78,9 +78,10 @@ test_tele: | $(m)
 	@echo TEST tele.l
 	@cd $(R) && $(mwr) -l crew/tele/tele.l test/host/tele.l
 
-# the flagship integration demo: a 2-8-1 MLP learns XOR, seeded so it converges identically
-# every run, nonzero if the four outputs do not round right -- autograd + nn + optim on a
-# real net.
+# the integration gate over that same library: a 2-8-1 MLP learns XOR, seeded so it converges
+# identically every run -- autograd + nn + optim composed into a real net. test/host/tele.l
+# grad-checks the ops one at a time; this asks whether they compose. Held to exit 0 AND the
+# sentinel, since a reader that stops early exits 0 with the assertions unread.
 test_xor: | $(m)
-	@echo TEST xor.l
-	@cd $(R) && $(mwr) -l crew/tele/tele.l crew/tele/xor.l
+	@echo TEST test/host/xor.l
+	@cd $(R) && sh test/gate/run.sh -a xor "$(mwr) -l crew/tele/tele.l" "xor: ok" test/host/xor.l
