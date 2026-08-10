@@ -201,9 +201,9 @@ test_lux: host
 	    crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l \
 	  | sh test/gate/run.sh lux "$(mw)" "crew/lux/law: StackSet"
 test_seed: host out/host$(hsuf)/seed
-	@echo "SEED crew/seed/{seed,seedtest}.l"
+	@echo "SEED crew/seed/seed.l + test/host/seed.l"
 	@rm -rf out/host/.seedtest
-	@cat test/00-init.l crew/seed/seedtest.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
+	@cat test/00-init.l test/host/seed.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
 # the kore smokes drive the BAKED image (`--wake kore.image`), ~0.02s vs ~0.75s per spawn
 # over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
 # dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.
@@ -524,22 +524,24 @@ $(eval $(call moon_pkg,m4,M4SRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,lua,LUASRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
-# objdump-checked (crew/holo/holotest.l). A host-only app -- it adds no nif and is NOT
-# baked into love0. Gate = exit 0 AND the "N passed, 0 failed" sentinel.
+# objdump-checked (test/holo/golden.l). A host-only app -- it adds no nif and is NOT
+# baked into love0. The sources are cat'd in because the host bakes its NATIVE backend
+# only; the other four reach the gate no other way. Gate = exit 0 AND the "N passed,
+# 0 failed" sentinel.
 test_holo: host
-	@echo "HOLO crew/holo/holotest.l"
+	@echo "HOLO test/holo/golden.l"
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l \
 	    crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l \
-	    crew/holo/holotest.l | sh test/gate/run.sh holo "$(mw)" ", 0 failed"
-# as.l -- the real AT&T x86-64 front over holo. astest.l's goldens are byte-identical to
-# /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
+	    test/holo/golden.l | sh test/gate/run.sh holo "$(mw)" ", 0 failed"
+# as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
+# to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 test_as: host
-	@echo "AS crew/holo/astest.l"
-	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l crew/holo/astest.l \
+	@echo "AS test/holo/as.l"
+	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$(mw)" ", 0 failed"
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
-# holotest.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
+# test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
 # and NOTHING else -- no as, no ld, no arm-none-eabi -- so it runs where the thumb gates skip.
 test_elf32: host
 	@sh test/gate/elf32.sh $(ho)
@@ -558,7 +560,7 @@ nettest: host
 	@sh $R/test/net/loopback.sh $m $(PORT)
 # Validate the l tool rewrites against their frozen Python references in tools/py/
 # (gen_data / vmret). See tools/Makefile + tools/py/README.md. ⚠ lush is a real
-# prerequisite: cooktest's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
+# prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
 	@$(MAKE) -C tools
 # test_gcheck: the copy loop's FIXPOINT instance check. AI_GC_CHECK makes gen_minor re-drive
@@ -704,7 +706,7 @@ test_uulean: host
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
 endif
 
-# the fuzz-first rung of the holo encoder ladder (crew/holo/fuzz/): random IR forms encoded via
+# the fuzz-first rung of the holo encoder ladder (test/holo/fuzz/): random IR forms encoded via
 # holo, disassembled (objdump for x64, llvm-mc elsewhere), decode checked against intent.
 # sysdiff.py rides the same lane for the SYSTEM ops, off holo's own arm64.l tables.
 holofuzz = x64:objdump:--no-llvm arm64:llvm-mc: riscv:llvm-mc:
@@ -713,14 +715,14 @@ test_holofuzz:
 	@echo "test_holofuzz: skipped (needs python3)"
 else
 test_holofuzz: host
-	@echo TEST crew/holo/fuzz/fuzz.py "(holo x64+arm64+riscv encoder differential fuzz)"
+	@echo TEST test/holo/fuzz/fuzz.py "(holo x64+arm64+riscv encoder differential fuzz)"
 	@for s in $(holofuzz); do a=$${s%%:*}; r=$${s#*:}; t=$${r%%:*}; x=$${r#*:}; \
 	   if command -v $$t >/dev/null 2>&1; then \
-	     $(PYTHON3) crew/holo/fuzz/fuzz.py --arch $$a -n 8 --seed 20250717 $$x \
+	     $(PYTHON3) test/holo/fuzz/fuzz.py --arch $$a -n 8 --seed 20250717 $$x \
 	       || { echo "FAIL holofuzz $$a -- a holo encoding disagrees with $$t"; exit 1; }; \
 	   else echo "  ($$a skipped: no $$t)"; fi; done
 	@if command -v llvm-mc >/dev/null 2>&1; then \
-	   $(PYTHON3) crew/holo/fuzz/sysdiff.py \
+	   $(PYTHON3) test/holo/fuzz/sysdiff.py \
 	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 endif

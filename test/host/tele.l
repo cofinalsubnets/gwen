@@ -1,11 +1,11 @@
-; teletest -- the gradient-check gate for tele (Stage 1: add / mul / mm / sum).
+; the gradient-check gate for tele (Stage 1: add / mul / mm / sum).
 ;
 ; the oracle is SELF-VALIDATING: for every op the analytic gradient (from `back`)
 ; must match the central finite difference (f(x+eps) - f(x-eps)) / 2eps, cell by
 ; cell. no hand-written expected gradients -- the math checks itself. that IS the
 ; gate. wired as `test_tele` (see tools/Makefile).
 ;
-; run from the repo root:  out/host/love -l crew/tele/tele.l crew/tele/teletest.l
+; run from the repo root:  out/host/love -l crew/tele/tele.l test/host/tele.l
 
 (: eps 0.0001 tol 0.003
 

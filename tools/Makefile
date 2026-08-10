@@ -11,7 +11,7 @@ include $(R)/common.mk
 
 # the WARM love (test/test.mk's $(mw), same bargain): the baked image woken rather than the
 # egg compiled from source. The root exports LOVE_NO_IMAGE so the EGG gates boot cold;
-# these tools are not the egg, and cooktest spawns a subprocess per fixture that would
+# these tools are not the egg, and test/host/cook.l spawns a subprocess per fixture that would
 # inherit it.
 mw = env -u LOVE_NO_IMAGE $(m)
 # the same warm love spelled from the REPO ROOT, for the recipes that `cd $(R)` first
@@ -57,7 +57,7 @@ test_hue: | $(m)
 	       rm -f $(R)/out/host/.syntax.vim; exit 1; }
 	@rm -f $(R)/out/host/.syntax.vim; echo "  ok   vim/syntax.vim"
 
-# cook's Makefile-importer suite: cooktest.l writes fixture Makefiles to a temp dir and
+# cook's Makefile-importer suite: test/host/cook.l writes fixture Makefiles to a temp dir and
 # runs cook on them as a subprocess, asserting over the captured output. Paths are relative
 # to the repo root, so it runs from there.
 # ⚠ the SHELL pair needs the BUILT lush (a fixture sets `SHELL := out/host/lush` to prove
@@ -69,14 +69,14 @@ test_hue: | $(m)
 test_cook: | $(m)
 	@echo TEST cook.l
 	@mkdir -p $(R)/out/host$(hsuf)/.bin && ln -sf ../love $(R)/out/host$(hsuf)/.bin/love
-	@cd $(R) && PATH="$(abspath $(R)/out/host$(hsuf)/.bin):$$PATH" $(mwr) crew/cook/cooktest.l
+	@cd $(R) && PATH="$(abspath $(R)/out/host$(hsuf)/.bin):$$PATH" $(mwr) test/host/cook.l
 
-# tele, the autograd library (pure love over the constellation algebra): teletest.l
+# tele, the autograd library (pure love over the constellation algebra): test/host/tele.l
 # grad-checks every op, analytic gradient vs central finite difference, so the oracle is
 # self-validating. tele loads as a user `-l` and is NOT in the corpus -- this is its gate.
 test_tele: | $(m)
 	@echo TEST tele.l
-	@cd $(R) && $(mwr) -l crew/tele/tele.l crew/tele/teletest.l
+	@cd $(R) && $(mwr) -l crew/tele/tele.l test/host/tele.l
 
 # the flagship integration demo: a 2-8-1 MLP learns XOR, seeded so it converges identically
 # every run, nonzero if the four outputs do not round right -- autograd + nn + optim on a

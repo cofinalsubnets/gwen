@@ -255,7 +255,7 @@
 ; functions ($(shell)/$(wildcard)/$(dir)/$(patsubst)/$(filter)/...), ifeq/ifdef
 ; conditionals, `include`, the = := ?= += flavors, pattern + static-pattern rules,
 ; order-only prereqs, and the $@ $< $^ $* automatics. Each recipe LINE runs via
-; ("sh" "-c" line). See crew/cook/cooktest.l.
+; ("sh" "-c" line). See test/host/cook.l.
 ;
 ; $(wildcard) prefers PURE LOVE: lush's glob (crew/lush/glob.l, the mask law)
 ; over readdir/stat -- no /bin/sh underneath, so `kore make` globs before a

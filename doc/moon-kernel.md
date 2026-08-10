@@ -189,7 +189,7 @@ Not added, because nothing asks: `dc` maintenance-by-set/way, ASID-scoped tlbi v
 `sgdt`/`sidt`, the debug registers. One row is one instruction, so each is a two-line change when
 a caller appears.
 
-The laws are goldens in holotest plus `crew/holo/fuzz/sysdiff.py` in `test_holofuzz` — a
+The laws are goldens in `test/holo/golden.l` plus `test/holo/fuzz/sysdiff.py` in `test_holofuzz` — a
 byte-exact differential that ASSEMBLES the intended text with llvm-mc and demands the same bytes.
 It reads the arm64 op tables out of arm64.l itself, so a row added to holo is checked with no
 edit to the harness.
