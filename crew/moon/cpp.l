@@ -522,9 +522,9 @@
                ; (love.c's dtoa reads it as its finite ceiling)
                _ (pin t "__DBL_MAX__" `('obj `((tok 'flo ((2.0 - (/ 1.0 4503599627370496.0)) * 1023 2.0) 0))))
                ; bool/true/false BUILTIN (C23-style, no <stdbool.h> needed): modern C
-               ; (gnulib, gzip) uses them bare. bool stays cc's int (the old stdbool.h
-               ; choice) -- an int keyword token; true/false the 1/0 constants.
-               _ (pin t "bool"  `('obj `((tok 'kw 'int 0))))
+               ; (gnulib, gzip) uses them bare. bool IS _Bool -- one byte, stores
+               ; normalize to 0/1; true/false the 1/0 constants.
+               _ (pin t "bool"  `('obj `((tok 'kw '_Bool 0))))
                _ (pin t "true"  `('obj `((tok 'num 1 0))))
                _ (pin t "false" `('obj `((tok 'num 0 0))))
                t)
