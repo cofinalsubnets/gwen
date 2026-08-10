@@ -4,7 +4,7 @@
 
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
-  test_filemode test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
+  test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
   test_seed test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
@@ -38,9 +38,40 @@ test_filemode: $m
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# ⚠ test_host takes the corpus as a FILE, not on stdin: the corpus TESTS stdin
-# (test/io.l's see/unsee roundtrip pokes `in`), and a stream you are being read from
-# is not one you can poke. cat'ing keeps the corpus's one-global-scope property.
+# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. A
+# seekable fd 0 reads the device in 4096-byte gulps (love.c's rbio_of) where a pipe still
+# drips one byte at a time, so the first law is that BOTH DOORS ANSWER THE SAME: the bytes
+# our reader has not taken are still there for an in-form (slurp in), and still there for a
+# child that inherits the fd -- the second is what stdin_give's seek buys. The pipe lends
+# its O_NONBLOCK bit instead (`inflag`), and the law for that one is read straight off
+# /proc: a child must inherit fd 0 BLOCKING, or it takes an empty pipe for an ended one.
+# The corpus cannot gate any of this; it exists only BETWEEN two ways of being fed.
+test_stdinbuf: $m
+	@echo TEST stdin borrows a run
+	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/host/.test_stdinbuf1.l
+	@printf '(exec (L "cat"))\nHANDOFF-TAIL\n' > out/host/.test_stdinbuf2.l
+	@for f in out/host/.test_stdinbuf1.l out/host/.test_stdinbuf2.l; do \
+	   $m < $$f > $$f.seek 2>&1; cat $$f | $m > $$f.pipe 2>&1; \
+	   cmp -s $$f.seek $$f.pipe \
+	     || { echo "FAIL $$f: the buffered door differs from the bare one"; \
+	          diff $$f.pipe $$f.seek; exit 1; }; done
+	@grep -qF 'rest: [(say out "tail form")' out/host/.test_stdinbuf1.l.seek \
+	  || { cat out/host/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
+	@grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.seek \
+	  || { cat out/host/.test_stdinbuf2.l.seek; echo "FAIL the exec'd child lost the fd position"; exit 1; }
+	@printf '(exec (L "cat" "/proc/self/fdinfo/0"))\n' > out/host/.test_stdinbuf3.l
+	@cat out/host/.test_stdinbuf3.l | $m > out/host/.test_stdinbuf3.out 2>&1; \
+	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' out/host/.test_stdinbuf3.out); \
+	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
+	    || { cat out/host/.test_stdinbuf3.out; \
+	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
+# test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
+# stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
+# it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
+# What is left of the gap is the READER, not the device: a redirect gulps 4096 like
+# the file does (love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
+# its position exact, which costs ~1.45x here. This is the gate that runs constantly.
+# cat'ing also keeps the corpus's one-global-scope property.
 test_host: $m
 	@echo TEST $m
 	@cat $t > out/host/.test_host.l
@@ -104,7 +135,7 @@ test_embed: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -117,7 +148,7 @@ test_hostnif: host out/host$(hsuf)/lush
 # Runnable design companions in doc/ -- pure-love models that pin the shape a C design
 # takes (doc/stream.l ~ doc/io.md part II). Zero-dep, but they leak helper names into the
 # one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
-doc_tests = doc/stream.l
+doc_tests = doc/stream.l doc/proto/dest.l
 test_doc: host
 	@for s in $(doc_tests); do echo "DOC $$s"; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$(mw)" ": ok" \
@@ -201,9 +232,9 @@ test_lux: host
 	    crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l \
 	  | sh test/gate/run.sh lux "$(mw)" "crew/lux/law: StackSet"
 test_seed: host out/host$(hsuf)/seed
-	@echo "SEED crew/seed/{seed,seedtest}.l"
+	@echo "SEED crew/seed/seed.l + test/host/seed.l"
 	@rm -rf out/host/.seedtest
-	@cat test/00-init.l crew/seed/seedtest.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
+	@cat test/00-init.l test/host/seed.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
 # the kore smokes drive the BAKED image (`--wake kore.image`), ~0.02s vs ~0.75s per spawn
 # over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
 # dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.
@@ -382,9 +413,11 @@ test_vec: host
 	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/port/inle/aarch64/vec.o
 # THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
-# love2, and the two must be byte-identical. In test_slow: a headline invariant.
+# love2, and the two must be byte-identical. A headline invariant -- but it runs in
+# test_extra only, so a deleted host/*.c goes green through test_slow either way.
+# $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
-	@sh test/gate/fixpoint.sh $(ho) $(love0)
+	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_o)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.
@@ -524,22 +557,24 @@ $(eval $(call moon_pkg,m4,M4SRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,lua,LUASRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
-# objdump-checked (crew/holo/holotest.l). A host-only app -- it adds no nif and is NOT
-# baked into love0. Gate = exit 0 AND the "N passed, 0 failed" sentinel.
+# objdump-checked (test/holo/golden.l). A host-only app -- it adds no nif and is NOT
+# baked into love0. The sources are cat'd in because the host bakes its NATIVE backend
+# only; the other four reach the gate no other way. Gate = exit 0 AND the "N passed,
+# 0 failed" sentinel.
 test_holo: host
-	@echo "HOLO crew/holo/holotest.l"
+	@echo "HOLO test/holo/golden.l"
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l \
 	    crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l \
-	    crew/holo/holotest.l | sh test/gate/run.sh holo "$(mw)" ", 0 failed"
-# as.l -- the real AT&T x86-64 front over holo. astest.l's goldens are byte-identical to
-# /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
+	    test/holo/golden.l | sh test/gate/run.sh holo "$(mw)" ", 0 failed"
+# as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
+# to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 test_as: host
-	@echo "AS crew/holo/astest.l"
-	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l crew/holo/astest.l \
+	@echo "AS test/holo/as.l"
+	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$(mw)" ", 0 failed"
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
-# holotest.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
+# test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
 # and NOTHING else -- no as, no ld, no arm-none-eabi -- so it runs where the thumb gates skip.
 test_elf32: host
 	@sh test/gate/elf32.sh $(ho)
@@ -558,7 +593,7 @@ nettest: host
 	@sh $R/test/net/loopback.sh $m $(PORT)
 # Validate the l tool rewrites against their frozen Python references in tools/py/
 # (gen_data / vmret). See tools/Makefile + tools/py/README.md. ⚠ lush is a real
-# prerequisite: cooktest's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
+# prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
 	@$(MAKE) -C tools
 # test_gcheck: the copy loop's FIXPOINT instance check. AI_GC_CHECK makes gen_minor re-drive
@@ -704,7 +739,7 @@ test_uulean: host
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
 endif
 
-# the fuzz-first rung of the holo encoder ladder (crew/holo/fuzz/): random IR forms encoded via
+# the fuzz-first rung of the holo encoder ladder (test/holo/fuzz/): random IR forms encoded via
 # holo, disassembled (objdump for x64, llvm-mc elsewhere), decode checked against intent.
 # sysdiff.py rides the same lane for the SYSTEM ops, off holo's own arm64.l tables.
 holofuzz = x64:objdump:--no-llvm arm64:llvm-mc: riscv:llvm-mc:
@@ -713,14 +748,14 @@ test_holofuzz:
 	@echo "test_holofuzz: skipped (needs python3)"
 else
 test_holofuzz: host
-	@echo TEST crew/holo/fuzz/fuzz.py "(holo x64+arm64+riscv encoder differential fuzz)"
+	@echo TEST test/holo/fuzz/fuzz.py "(holo x64+arm64+riscv encoder differential fuzz)"
 	@for s in $(holofuzz); do a=$${s%%:*}; r=$${s#*:}; t=$${r%%:*}; x=$${r#*:}; \
 	   if command -v $$t >/dev/null 2>&1; then \
-	     $(PYTHON3) crew/holo/fuzz/fuzz.py --arch $$a -n 8 --seed 20250717 $$x \
+	     $(PYTHON3) test/holo/fuzz/fuzz.py --arch $$a -n 8 --seed 20250717 $$x \
 	       || { echo "FAIL holofuzz $$a -- a holo encoding disagrees with $$t"; exit 1; }; \
 	   else echo "  ($$a skipped: no $$t)"; fi; done
 	@if command -v llvm-mc >/dev/null 2>&1; then \
-	   $(PYTHON3) crew/holo/fuzz/sysdiff.py \
+	   $(PYTHON3) test/holo/fuzz/sysdiff.py \
 	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 endif

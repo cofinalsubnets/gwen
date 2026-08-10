@@ -5,7 +5,7 @@
 > [`doc/holo-verify.md`](../../../doc/holo-verify.md).
 
 The verification frontier stops at holo today: `crew/holo/` (the x86-64 + aarch64 assembler)
-has no formal proof, only the frozen goldens in `holotest.l`/`astest.l`. Those goldens were
+has no formal proof, only the frozen goldens in `test/holo/golden.l`/`test/holo/as.l`. Those goldens were
 each validated by hand — "emit the bytes, `objdump -d -M intel`, confirm the mnemonic" — over a
 few dozen forms. This harness **automates that exact round-trip and runs it over tens of
 thousands of randomly generated forms**, so the encoder is exercised far past the goldens
@@ -44,12 +44,12 @@ every aarch64 instruction is exactly 4 bytes, the decoded-instruction count must
 ## Running
 
 ```
-python3 crew/holo/fuzz/regmap.py                            # verify the abstract-reg -> x86 map
-python3 crew/holo/fuzz/fuzz.py --arch x64  -n 300 --seed 7  # x64, both decoders
-python3 crew/holo/fuzz/fuzz.py --arch arm64 -n 300 --seed 7 # arm64, via llvm-mc
-python3 crew/holo/fuzz/fuzz.py --arch riscv -n 300 --seed 7 # riscv64, via llvm-mc
-python3 crew/holo/fuzz/fuzz.py --arch x64 -n 250 --seed 3 --no-llvm    # faster, objdump only
-python3 crew/holo/fuzz/fuzz.py --arch arm64 --classes ld,st,li -n 500  # a subset
+python3 test/holo/fuzz/regmap.py                            # verify the abstract-reg -> x86 map
+python3 test/holo/fuzz/fuzz.py --arch x64  -n 300 --seed 7  # x64, both decoders
+python3 test/holo/fuzz/fuzz.py --arch arm64 -n 300 --seed 7 # arm64, via llvm-mc
+python3 test/holo/fuzz/fuzz.py --arch riscv -n 300 --seed 7 # riscv64, via llvm-mc
+python3 test/holo/fuzz/fuzz.py --arch x64 -n 250 --seed 3 --no-llvm    # faster, objdump only
+python3 test/holo/fuzz/fuzz.py --arch arm64 --classes ld,st,li -n 500  # a subset
 ```
 
 Deterministic per seed. Needs `out/host/love` built, plus `objdump` (x64) / `llvm-mc` (arm64, and
@@ -125,8 +125,8 @@ read/write, `lgdt`/`lidt`/`invlpg` over every base including the rsp-SIB and rbp
 quirks, `ltr`, all 256 `int` vectors, and the nullaries.
 
 ```
-python3 crew/holo/fuzz/sysdiff.py             # both arches (in test_holofuzz)
-python3 crew/holo/fuzz/sysdiff.py --arch arm64 -v
+python3 test/holo/fuzz/sysdiff.py             # both arches (in test_holofuzz)
+python3 test/holo/fuzz/sysdiff.py --arch arm64 -v
 ```
 
 Two rejections by `llvm-mc` are counted as skips, not failures, because holo is deliberately the

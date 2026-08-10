@@ -48,8 +48,16 @@
 ;                            file list is the whole command (`-w` also strips
 ;                            trailing whitespace, WITHOUT reindenting)
 ;         libra fmt FILE ..  lay it out (-w rewrites, -n only checks)
+;         libra infix FILE   print it max-infix and min-paren  (lib/infix.l)
+;         libra unfix FILE   print it back as pure prefix lisp (the opfix pass)
 ;         libra serve        speak lsp over stdio
 ;     or: love -l crew/libra/libra.l ..
+;
+; ⚠ infix and unfix PRINT FROM THE DATUM, so they do not carry comments -- `sound`
+; does not keep them. that is exactly why they are verbs of their own and not modes
+; of fmt, which is a reindenter and never touches what is on a line. stdout only,
+; and no -w: a rewrite that silently deleted every comment in a file is not a thing
+; to offer. they are inverses, and the round trip is gated in test/host/infix.l.
 ;
 ; check is the default because it is the errand that actually recurs: `make lint`
 ; runs it over every tracked .l, fmt is run BY HAND and nothing is gated on
@@ -59,6 +67,7 @@
 (use 'json)
 (use 'lint)
 (use 'salt)
+(use 'infix)
 
 (:
    ; --- the frame: a header block, then exactly N bytes -----------------------
@@ -328,6 +337,30 @@
                      (say out lay))
                 (libra-fmt-files conf >fs mode drop (? same bad (bad + 1)))))))
 
+   ; --- infix and unfix ------------------------------------------------------
+   ; the two directions, one datum per line. `infix` sends a file TO the infix
+   ; surface (lib/infix.l, the right inverse); `unfix` sends it back to pure lisp,
+   ; which is just the `opfix` pass a compile already runs. ⚠ FROM THE DATUM, so
+   ; comments do not survive -- stdout only, and see the header for why there is no -w.
+   (libra-data src acc) (: r (sound src)
+                           (? (two? r) (libra-data >r (link <r acc))
+                              (id? r 'torn) 'torn
+                              (rev acc)))
+   (libra-fix-files fs way bad)
+    (? !(two? fs) bad
+       (: r (rdf <fs)
+          (? !(two? r) (: _ (say err ("libra: cannot open " + <fs + "\n"))
+                           (libra-fix-files >fs way (bad + 1)))
+             (: ds (libra-data <>r ())
+                (? (id? ds 'torn)
+                    (: _ (say err (<fs + ": unfinished form -- weigh it first\n"))
+                       (libra-fix-files >fs way (bad + 1)))
+                   (: _ (each ds (\ x (: _ (say out (? (id? way 'infix) (infix-spell x)
+                                                         (show (opfix x))))
+                                         (say out "\n"))))
+                      (libra-fix-files >fs way bad)))))))
+   (libra-fix fs way) (: n (libra-fix-files fs way 0) (? (0 < n) (quit 1) 0))
+
    ; ⚠ ABOVE its reader, and not for tidiness: a lambda that closes over a LATER
    ; binding of the same `:` reads the cell before pin when the value is not
    ; itself a lambda (only lambda-to-lambda recursion resolves lazily), and the
@@ -338,6 +371,9 @@
           + "                               exit 1; -w also strips trailing whitespace. THE DEFAULT.\n"
           + "       libra fmt FILE ..      lay it out on stdout; -w rewrites, -n only checks (exit 1)\n"
           + "                              -p also MINIFIES PARENS: drops the pairs that do nothing\n"
+          + "       libra infix FILE ..    print it MAX-INFIX and MIN-PAREN, on stdout\n"
+          + "       libra unfix FILE ..    print it back as PURE PREFIX LISP, on stdout\n"
+          + "                              ⚠ both print from the datum: COMMENTS ARE NOT CARRIED\n"
           + "       libra serve            speak lsp over stdio -- diagnostics as you type\n"
           + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 1),\n"
           + "          (deprecated old (worse \"use better\")), (strict singleton),\n"
@@ -370,6 +406,8 @@
                                                   salt-one conf 'drop-parens 0)
                                                  0)
                               (? (member? "-n" r && (0 < n)) (quit 1) 0))
+             (v = "infix") (libra-fix (files r) 'infix)
+             (v = "unfix") (libra-fix (files r) 'lisp)
              (v = "serve") (libra-serve conf in out)
              (v = "")      (: _ (say err usage) (quit 1))     ; nothing named, nothing to weigh
              ; NO VERB: the whole line is files, and CHECK is what happens to them.

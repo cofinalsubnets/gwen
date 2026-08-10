@@ -2960,13 +2960,22 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
 // io_refill's third answer, beside a byte and EOF: the device has nothing right
 // now. distinct on purpose; never escapes lvm_fgetc.
 #define IO_WOULDBLOCK ((uintptr_t) -2)
-// the three answers for every port. no read method = END; no buffer = ask for one
-// byte. ⚠ the unbuffered lane STAYS unbuffered: bio_of refuses the statics, so
-// `in` reads one byte per readn -- the repl must not swallow the line after the
-// one it is reading (doc/io.md part III).
+// the three answers for every port. no read method = END; no buffer = ask for one byte.
+// WHICH BIO OWNS THIS PORT'S READ RUN: its own, or -- for the static input port on a seat
+// that lent it one -- the BORROWED one in `inport`. A static cannot own a heap buffer, so a
+// frontend that can put fd 0 back where its reader stopped parks a heap bio there instead;
+// same fd and same vt, so every lane below reads it verbatim.
+// ⚠ `in` KEEPS ITS IDENTITY AND ITS ONE-BYTE FACE: chug still finds nothing in hand, flow
+// still drips, (id? p in) still holds -- rebinding `in` to the bio instead would break that
+// last one, since bao's `reads` folded its own `in` at egg-compile time. Only the DEVICE
+// reads in gulps, which is why nothing above this line can tell, and why the fd offset it
+// runs ahead of is the frontend's to rewind before anyone inherits it.
+static ai_inline struct ai_bio *rbio_of(struct ai *g, struct ai_io *i) {
+ struct ai_bio *b = bio_of(g, i);
+ return b ? b : i == &ai_stdin.io ? (struct ai_bio*) ai_core_of(g)->inport : NULL; }
 static struct ai *io_refill(struct ai *g) {
  struct ai *fc = ai_core_of(g);
- struct ai_bio *b = bio_of(g, fc->io);
+ struct ai_bio *b = rbio_of(g, fc->io);
  struct ai_port_vt const *vt = fc->io->vt;
  if (!vt->readn) return fc->b = EOF, g;
  if (!b) {                                       // no buffer: the same lane at n = 1
@@ -2978,10 +2987,10 @@ static struct ai *io_refill(struct ai *g) {
   return g; }
  if (bio_wpending(b)) {                          // the crossover: our unsent ask goes first
   if (!ai_ok(g = io_wdrain(g, fc->io))) return g;
-  fc = ai_core_of(g), b = (struct ai_bio*) fc->io; }
+  fc = ai_core_of(g), b = rbio_of(g, fc->io); }
  if (!b->rbuf || (b->rbuf & 1)) {                // first buffered read: dress the backing
   if (!ai_ok(g = str0(g, ai_iobuf))) return g;
-  fc = ai_core_of(g), b = (struct ai_bio*) fc->io;   // the GC may have moved the port
+  fc = ai_core_of(g), b = rbio_of(g, fc->io);    // the GC may have moved the port
   b->rbuf = fc->sp[0];
   b->rpos = b->rlen = putcharm(0);
   gen_wb(fc, (word) b, b->rbuf);                 // a tenured port takes a young backing
@@ -3005,7 +3014,7 @@ static ai_inline struct ai *zgetc(struct ai*g) {
   fc->b = getcharm(i->ungetc_buf);
   i->ungetc_buf = putcharm(EOF);
   return g; }
- struct ai_bio *b = bio_of(g, i);
+ struct ai_bio *b = rbio_of(g, i);
  if (bio_rpending(b)) {
   uintptr_t p = getcharm(b->rpos);
   fc->b = (unsigned char) txt(str(b->rbuf))[p];
@@ -4459,19 +4468,23 @@ static lvm_t *const image_extra_aps[] = {
  // thumb, so they would otherwise escape as "fixnums" -- raw baker addresses
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
  lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit };
-// size (words) of the object at p, the same per-kind logic as the GC; threads via
-// ttag (the hand-rolled [lo,hi) scan drifted)
-static uintptr_t image_objsize(struct ai *g, union u *p) {
- if (in_data(p->ap)) switch (ai_typ(p)) {
+// size (words) of a data object, the same per-kind logic as the GC. d carries the
+// kind, s the raw length words -- two homes only during a fused image load, where
+// the decoded ap lands in the pool while the payload still sits in the source blob.
+static uintptr_t image_datasize(union u *d, void const *s) {
+ switch (ai_typ(d)) {
   case DChain: return Width(struct ai_chain);
   case DMint:  return Width(struct ai_mint);
   case DNom:   return Width(struct ai_nom);
   case DGem:   return Width(struct ai_gem);
   case DSun:  return Width(struct ai_sun);
   case DTwin:  return Width(struct ai_twin);
-  case DString:return b2w(sizeof(struct ai_str) + str(p)->len);
-  case DBig:   return b2w(ai_big_bytes(big(p)));
-  case DTray:  return b2w(ai_tray_bytes((struct ai_tray*) p)); }
+  case DString:return b2w(sizeof(struct ai_str) + ((struct ai_str const*) s)->len);
+  case DBig:   return b2w(ai_big_bytes((struct ai_big*)(word) s));
+  case DTray:  return b2w(ai_tray_bytes((struct ai_tray*)(word) s)); }
+ return 0; }                                                     // unreachable: ai_typ covers the 9
+static uintptr_t image_objsize(struct ai *g, union u *p) {
+ if (in_data(p->ap)) return image_datasize(p, p);
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
  return (uintptr_t)(term - (word*) p) + 1; }
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, then def1 E..
@@ -4481,7 +4494,7 @@ static intptr_t image_ap_index(intptr_t ap) {
  for (uintptr_t j = 0; j < countof(def1); j++)
   if (def1[j].x == ap) return (intptr_t)(countof(image_extra_aps) + j);
  return -1; }
-static intptr_t image_ap_resolve(intptr_t idx) {
+static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
  return idx < (intptr_t) countof(image_extra_aps)
    ? (intptr_t) image_extra_aps[idx]
    : def1[idx - countof(image_extra_aps)].x; }
@@ -4620,12 +4633,11 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  if (!x->suppress && img_wxp(x, (word) v)) x->fail = 1;                          // un-wakeable absolute (JIT/W^X/mmap)
  x->nabs++;                                                                      // kept absolute: the image is now binary-specific
  return v; }                                                                     // binary (host nif/.rodata): absolute, +delta on load
-static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta) {
- if (oddp(v)) return v;
+// the decode ladder, split hot/cold by the rung-0 census (doc/oneimage.md): odd,
+// heap offset, lvm index and immortal are 98.7% of decodes; the cold tail keeps
+// the nif-cell interior, bare-fn and kept-absolute rungs out of the walk's way.
+static ai_noinline intptr_t img_decode_cold(intptr_t v, uintptr_t hb, intptr_t delta) {
  uintptr_t uv = (uintptr_t) v;
- if (uv < hb) return (intptr_t)((char*) base + uv);                              // byte offset -> live pointer
- if (uv < hb + 2 * IMAGE_NLVM) return image_ap_resolve((intptr_t)((uv - hb) / 2));
- if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)) return (intptr_t) image_immortals[(uv - hb - 2 * IMAGE_NLVM) / 2];
  if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM) + 2 * IMAGE_NLVM * IMAGE_CELLW) {   // nif-cell interior: base + word offset
   uintptr_t k = (uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)) / 2;
   return image_ap_resolve((intptr_t)(k / IMAGE_CELLW)) + (k % IMAGE_CELLW) * sizeof(word); }
@@ -4634,6 +4646,13 @@ static intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta)
   return image_fn_resolve((intptr_t)((uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)
                                          - 2 * IMAGE_NLVM * IMAGE_CELLW) / 2));
  return v + delta; }
+static ai_inline intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta) {
+ if (oddp(v)) return v;
+ uintptr_t uv = (uintptr_t) v;
+ if (uv < hb) return (intptr_t)((char*) base + uv);                              // byte offset -> live pointer
+ if (uv < hb + 2 * IMAGE_NLVM) return image_ap_resolve((intptr_t)((uv - hb) / 2));
+ if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)) return (intptr_t) image_immortals[(uv - hb - 2 * IMAGE_NLVM) / 2];
+ return img_decode_cold(v, hb, delta); }
 // serialize g -> a fresh g->alloc'd {header, blob} buffer; NULL on failure. the
 // worker dumps WHEREVER it's called (a mid-eval dump's continuation rides as
 // wake-unreachable ballast); the guarded entry keeps the boot path honest.
@@ -4726,7 +4745,6 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  word *base = g->major_base;
  if (!base) return NULL;
  ai_image_note(2);
- memcpy(base, (char const*) buf + sizeof H, bytes);      // the blob -> the major pool
  g->major_hp = base + nw;
  ai_image_note(3);
  uintptr_t hb = bytes;
@@ -4734,26 +4752,34 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  if ((H.rsv1 & 1) && !(H.rsv1 >> 1)) delta = 0;                                  // ZERO kept absolutes: fully symbolic image (offsets +
                                                                                  // table indices only) -- binary-PORTABLE, no delta to check
  else if ((intptr_t)((word) &ai_image_save - (intptr_t) H.anchor) != delta) return NULL; // anchor delta != refsym delta -> a DIFFERENT binary (cross-arch/stale) -> normal boot
- for (union u *p = (union u*) base; (word*) p < base + nw; ) {                    // re-walk the blob, decode in place (no tables)
-  uintptr_t off = (uintptr_t)((word*) p - base), sz;
+ word const *src = (word const*)((char const*) buf + sizeof H);                   // walk the blob IN PLACE, decoding into the pool --
+ for (uintptr_t off = 0; off < nw; ) {                                            // one pass of writes, no staging copy
+  uintptr_t sz;
+  union u *p = (union u*)(base + off);
+  word const *s = src + off;
   if (!(off & 0xFFFFu)) ai_image_note(0x100 + (off >> 16));                       // walk progress, per 64K words
-  ((word*) p)[0] = img_decode(((word*) p)[0], base, hb, delta);                   // word0 first: the ap (sizing needs it real)
-  if (in_data(p->ap)) { sz = image_objsize(g, p);                                 // data kinds: size by ai_typ + raw length words
+  base[off] = (word) img_decode((intptr_t) s[0], base, hb, delta);                // word0 first: the ap (kinding needs it real)
+  if (in_data(p->ap)) { sz = image_datasize(p, s);                                // data kinds: size by ai_typ + the SOURCE's raw length words
    switch (ai_typ(p)) {
-    case DChain: ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta);
-                 ((word*) p)[2] = img_decode(((word*) p)[2], base, hb, delta); break;
-    case DNom:   ((word*) p)[1] = img_decode(((word*) p)[1], base, hb, delta); break;
-    case DTray:   if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
+    case DChain: base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta);
+                 base[off + 2] = (word) img_decode((intptr_t) s[2], base, hb, delta); break;
+    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta);
+                 base[off + 2] = s[2], base[off + 3] = s[3]; break;               // code + dig ride raw
+    case DTray:  memcpy(base + off + 1, s + 1, (sz - 1) * sizeof(word));
+                 if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
                   for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], base, hb, delta); }
                  break;
-    default: break; }
+    default:     memcpy(base + off + 1, s + 1, (sz - 1) * sizeof(word)); }        // flat leaves: payload rides raw
   } else {                                                                        // thread: the ENCODED terminator is its head's byte offset | tag
-   intptr_t term = (intptr_t)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
-   uintptr_t kmax = (uintptr_t)(base + nw - (word*) p);                           // BOUND the scan: a mis-decoded word0 must refuse
-   while (((word*) p)[k] != term) if (++k >= kmax) return NULL;                   // the load, never march off the pool (on metal the
-   sz = k + 1;                                                                    // pool's edge is a dead bus, and a dead bus is MUTE)
-   for (uintptr_t i = 1; i < sz; i++) ((word*) p)[i] = img_decode(((word*) p)[i], base, hb, delta); }
-  p = (union u*) ((word*) p + sz); }
+   word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
+   uintptr_t kmax = nw - off;                                                     // BOUND the walk: a mis-decoded word0 must refuse
+   for (;; k++) {                                                                 // ONE pass, decoding to the terminator (rung 2):
+    if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the
+    if (s[k] == term) break;                                                      // pool's edge is a dead bus, and a dead bus is MUTE)
+    base[off + k] = (word) img_decode((intptr_t) s[k], base, hb, delta); }
+   base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
+   sz = k + 1; }
+  off += sz; }
  ai_image_note(5);
  uintptr_t nv = (word*) g->end - (word*) &g->v0;                         // same struct/binary (anchor-checked) -> same layout
  if (H.nroot != 2 + nv) return NULL;                                     // root count mismatch -> stale/foreign image -> normal boot

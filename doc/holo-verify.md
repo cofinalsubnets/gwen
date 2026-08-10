@@ -6,13 +6,13 @@ core -- and moon compiles love.c while holo links it, so the source-to-machine-c
 routes through gcc/ld. that makes an *end-to-end verified* chain possible for the first time;
 holo's encoder, being small and table-shaped, is the natural place to start closing it.
 
-the frozen goldens in holotest.l / astest.l are the floor: forms validated once by hand ("emit
+the frozen goldens in test/holo/{golden,as}.l are the floor: forms validated once by hand ("emit
 the bytes, `objdump -d -M intel`, confirm the mnemonic"). the ladder automates and then *proves*
 that round-trip.
 
 ## the two rungs, and how they compose
 
-**rung 1 -- fuzz** (crew/holo/fuzz/, `make test_holofuzz`). generate random neutral-IR forms,
+**rung 1 -- fuzz** (test/holo/fuzz/, `make test_holofuzz`). generate random neutral-IR forms,
 encode via holo, disassemble the bytes, check the decode matches intent. it is a *decode* oracle,
 not byte-exact: x86 encoding is non-unique (holo legally picks the 32-bit zero-extend mov, minimal
 disp, redundant rex; arm64 lsl#0 == lsr#0), so registers compare by abstract identity, immediates
@@ -53,7 +53,7 @@ what rung 1's objdump/llvm cross-check supplies. the honest claim is the composi
 
 | rung | files | domain | check |
 |------|-------|--------|-------|
-| 1 fuzz x64+arm64+riscv | crew/holo/fuzz/ | 25 + 16 + 27 classes | decode vs objdump/llvm-mc |
+| 1 fuzz x64+arm64+riscv | test/holo/fuzz/ | 25 + 16 + 27 classes | decode vs objdump/llvm-mc |
 | 2a reg-direct | proof/rocq/enc.v | mov + reg-reg ALU, 16x16 x 7 | byte-exact, 1792 |
 | 2b memory | proof/rocq/encmem.v | ld/st base+disp, ModRM+SIB | byte-exact, 6144 |
 | 2c immediate | proof/rocq/encli.v | `li` 3-way form choice | byte-exact, 320 |
@@ -83,7 +83,7 @@ the loop, ~an afternoon per slice:
 
 the reg <-> hardware map (holo abstract regs are NOT the x86 hardware numbers -- r4=rbp=5,
 r7=r8=8, sp=rsp=4, ...) lives in every driver's `regs` list; it was probed once in
-crew/holo/fuzz/regmap.py.
+test/holo/fuzz/regmap.py.
 
 ### extraction caveats
 
@@ -128,8 +128,8 @@ first, smallest instance of that general move: prove the model, then bind the re
 ```
 make test_holofuzz     # rung 1: fuzz both backends (needs python3 + objdump / llvm-mc)
 make test_encver       # rung 2: the three prove slices (needs coqc + ocamlopt)
-python3 crew/holo/fuzz/fuzz.py --arch arm64 -n 500 --seed 7   # a bigger fuzz campaign by hand
-python3 crew/holo/fuzz/sysdiff.py -v                          # the system lane, row by row
+python3 test/holo/fuzz/fuzz.py --arch arm64 -n 500 --seed 7   # a bigger fuzz campaign by hand
+python3 test/holo/fuzz/sysdiff.py -v                          # the system lane, row by row
 ```
 
 both gates skip gracefully when their toolchain is absent, and both live in `make test_slow`.

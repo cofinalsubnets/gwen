@@ -24,7 +24,7 @@
 # two compilers pick different ones and both are right) and the plain
 # arithmetic around a privileged instruction. so a wrong MASK inside a
 # read-modify-write is out of its reach -- those live in C-readable form in the
-# header, and the encodings themselves are frozen in crew/holo/holotest.l.
+# header, and the encodings themselves are frozen in test/holo/golden.l.
 #
 # usage: asmops.sh HOSTDIR
 set -u

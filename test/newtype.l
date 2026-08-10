@@ -87,7 +87,10 @@
     (q 1 2 = q 2 3 * q 3 4)    ; 2/3 * 3/4 = 1/2
     (q 1 2 = q 2 4)                ; reduced on construction
     (q 1 2 = q `(1 2))            ; the 2-list form (what show reads back)
-    ("(q (1 2))" = show (q 2 4))     ; show is reduced + reparsable
+    ; show is reduced, and REPARSABLE -- which wants the payload quoted: a bare (1 2)
+    ; in a form is an application, so the old (q (1 2)) read back as q applied to 2.
+    ("(q '(1 2))" = show (q 2 4))
+    (q 1 2 = ev (cap (sound (show (q 2 4)))))   ; ..and that is the whole claim, checked
 
     ; --- `-` rides slot 5: q pins it (cross-multiply, reduce); the unit still rides ---
     (q 1 6 = q 1 2 - q 1 3)    ; 1/2 - 1/3 = 1/6

@@ -81,6 +81,32 @@
        h  (? (&& (two? e) (two? >e)) <>e ())
        ("deprecated " + (string nm) + (? (string? h) (" -- " + h) "")))
 
+   ; --- the shadow rule ------------------------------------------------------
+   ; the words a `monadics` row names. a glued sigil factors to ONE of these and then
+   ; resolves like any other name, so a binding of one IN SCOPE quietly re-aims every
+   ; `<x` / `!x` / `+x` under it -- rare, real and silent, which is what a rule is for.
+   ; ⚠ this does NOT reserve the names: the rule speaks, the binding stands.
+   lshadow-words '("cap" "cup" "net" "prod" "abs" "negate" "reciprocal" "fraction"
+                   "bit" "saturate" "nil?" "dot")
+   (lsmem? l t) (? (! (two? l)) 0 (t = <l) 1 (lsmem? >l t))
+   ; is the token that just ended a BINDING NAME? two shapes, both read off the frame in
+   ; hand: (: nm ..) an even element of a `:`, and (\ nm .. b) any element past a `\`'s
+   ; head. both over-fire on a BARE-NAME BODY ((: a 1 cap), (\ x cap)) -- the last operand
+   ; is the body, and which element is last is not known until the closer. that shape is
+   ; rare enough to cost one line of noise.
+   ;
+   ; ⚠ the SUGAR HEADER (: (bit x) ..) is NOT caught, and cannot be here: at token time it
+   ; is element 1 of a form at an even `:` position, which is exactly what a body call
+   ; (: a 1 (cap x)) also is -- and THAT is common, so guessing would fire on half the
+   ; tree. deciding it needs the `:` closer plus a per-element index the frame does not
+   ; keep. a real gap, named rather than papered over.
+   (lbind-pos? src n stk)
+    (? (! (two? stk)) 0
+       (: f <stk h (ltok-at src n <>>>>f) ne <>>>f
+          (? (h = ":")  (&& (2 <= ne) (0 = (ne % 2)))
+             (h = "\\") (2 <= ne)
+             0)))
+
    ; --- the frame ------------------------------------------------------------
    ; `(closer line col nelem e1i plain quoted): the expected closer and where the
    ; opener SAT (so an unclosed one reports its own position), how many elements
@@ -146,14 +172,20 @@
    (lint-of src conf)
     (: n  (tally src)
        sg (lint-on? conf 'singleton)
+       sh (lint-on? conf 'shadow)
        dp (peep conf 'deprecated ())
-       ; a token just ENDED at index i, having started at ti/tc: the deprecated
-       ; roster is the only rule that reads whole tokens, so it is the only work
-       ; here, and an empty roster makes it a no-op.
-       (lend line tc ti i warns)
-        (? (! (two? dp)) warns
-           (: r (lint-dep dp (lname (snip src ti i)))
-              (? (two? r) (link `(line tc (lint-depmsg <>r) 'deprecated) warns) warns)))
+       ; a token just ENDED at index i, having started at ti/tc: the two token rules
+       ; run here, and each is a no-op until its config asks -- an empty roster for
+       ; `deprecated`, an unset switch for `shadow`.
+       (lend line tc ti i stk warns)
+        (: t  (snip src ti i)
+           w0 (? (! (two? dp)) warns
+                 (: r (lint-dep dp (lname t))
+                    (? (two? r) (link `(line tc (lint-depmsg <>r) 'deprecated) warns) warns)))
+           (? (&& sh (&& (lsmem? lshadow-words t) (lbind-pos? src n stk)))
+              (link `(line tc ("shadow " + t + " -- a glued sigil factors to this name")
+                      'shadow) w0)
+              w0))
 
        ; stk: the frames above, a matched-pair stack, so ([)] is caught and not
        ; just a net count. sl/sc hold a string's opening spot. it/ti/tc are the
@@ -163,7 +195,7 @@
        ; states: code | cmt (; to EOL) | str (".." with \ escapes).
        (w i st stk line col sl sc it ti tc warns)
         (? (n <= i)
-            (: w0 (? it (lend line tc ti i warns) warns)
+            (: w0 (? it (lend line tc ti i stk warns) warns)
                w1 (? (id? st 'str) (link `(sl sc "unclosed string" 'balance) w0) w0)
                (rev (foldl (\ a o (link `(<>o <>>o ("unclosed " + string (lopen <o)) 'balance) a)) w1 stk)))
            (: c (src i)
@@ -177,24 +209,24 @@
                      (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
                   (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (? it (lend line tc ti i stk warns) warns))
                  (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))          ; #! shebang, to EOL
                   (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (? it (lend line tc ti i stk warns) warns))
                  (c = 34)                                                      ; " -- start string
                   (w (i + 1) 'str (? it stk (lelem stk i)) line (col + 1) line col 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (? it (lend line tc ti i stk warns) warns))
                  (c = 10)
                   (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (? it (lend line tc ti i stk warns) warns))
                  (|| (c = 40) (|| (c = 91) (c = 123)))                          ; ( [ {  -- push
                   ; an opener is an element of its PARENT -- unless it is GLUED to
                   ; the token before it, in which case the two are one datum.
                   (w (i + 1) 'code (lpush (? it stk (lelem stk i)) c i line col src it ti)
                      line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (? it (lend line tc ti i stk warns) warns))
                  (|| (c = 41) (|| (c = 93) (c = 125)))                          ; ) ] }  -- match
-                  (: w0 (? it (lend line tc ti i warns) warns)
+                  (: w0 (? it (lend line tc ti i stk warns) warns)
                      (? (! (two? stk))
                          (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
                             (link `(line col ("stray " + string c) 'balance) w0))
@@ -206,7 +238,7 @@
                               (? (two? sw) (link sw w0) w0)))))
                  (c < 33)                                                      ; space, tab, the rest
                   (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i warns) warns))
+                     (? it (lend line tc ti i stk warns) warns))
                  ; an ordinary character: a token START only if we were not in one
                  (w (i + 1) 'code (? it stk (lelem stk i)) line (col + 1) sl sc
                     1 (? it ti i) (? it tc col) warns))))
@@ -229,7 +261,7 @@
    ; falls back to one past its own open paren (black's bargain), on the theory
    ; that it would rescue the hand-laid HANGING files. measured over the tree at
    ; thresholds 24/32/40/56: the hanging files barely move (love/ev.l 494 -> 506
-   ; changed lines, crew/holo/holotest.l flat), because their authors broke to a
+   ; changed lines, test/holo/golden.l flat), because their authors broke to a
    ; column LEFT of the enclosing paren -- which no cap-and-fallback reproduces --
    ; while every well-laid file gets worse (crew/libra/libra.l 7 -> 22, this file
    ; 1 -> 4) and tree-wide churn RISES from 12591 to 16448. alignment it is.

@@ -161,14 +161,14 @@ steps, record what shipped, from the cards; the ticket names what to make
   conditionals, `include`, `:= ?= +=`, pattern + static-pattern rules,
   order-only prereqs, and the `$@ $< $^ $*` automatics
 - `make -f cook.mk test` -- the make-shaped stub: bootstraps the binary, then
-  forwards to cook (it names the `Cookfile` explicitly)
+  forwards to cook
 - [crew/cook/example/](crew/cook/example/) is a worked C build;
-  [crew/cook/cooktest.l](crew/cook/cooktest.l) (`make test_cook`) tests the importer
+  [test/host/cook.l](test/host/cook.l) (`make test_cook`) tests the importer
 
 love builds itself this way too: `love -l crew/cook/cook.l Makefile host` runs g's own
 Makefile from scratch, and the cook-built binary passes the whole corpus. cook
-runs *on* love, so you need a love to begin; the [crew/cook/Cookfile](crew/cook/Cookfile) is the
-curated cross-cutting verbs (`test clean valg vmret bench install`).
+runs *on* love, so you need a love to begin -- that one rung stays make's, and
+`cook --emit` transpiles the rest to a resolved Cookfile whenever you want one.
 
 ### the crew
 

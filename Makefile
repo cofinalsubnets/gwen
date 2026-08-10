@@ -46,7 +46,7 @@ test:
 # because linking every frontend means compiling love.c once per target). What it adds HERE
 # is the frontends the booting lanes below never reach -- mps2, teensy41, nucleo446,
 # playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
-test_slow: test_host test_love0 vmret test_wasm test_kernel test_disk test_virt test_embed
+test_slow: test_host test_love0 vmret test_stdinbuf test_wasm test_kernel test_disk test_virt test_embed
 	
 
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
@@ -89,13 +89,6 @@ ccdb:
 # so a rebuild at HEAD always differs in those 8 bytes after ANY commit. It is one
 # revision behind by construction: the cost of baking the id. test_wasm links out of tree
 # so at least it stops DIRTYING the file on every run.
-
-# crew/cook/Cookfile: this Makefile transpiled by `cook --emit` into a flat snapshot with
-# every $(shell)/$(wildcard)/var/pattern RESOLVED. ⚠ a BAKED snapshot -- the wildcard lists
-# freeze at emit time, so re-run this after adding a source or test file.
-crew/cook/Cookfile: $(MAKEFILE_LIST) crew/cook/cook.l $(ho)/love
-	@echo AI	$@
-	@$(ho)/love -l crew/cook/cook.l --emit Makefile > $@
 
 # this tree's own docs as a browsable site: README.md + doc/*.md through papel.
 site: host

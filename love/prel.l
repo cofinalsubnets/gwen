@@ -272,7 +272,9 @@
              c (see p)
              (? (= c -1) () (: _ (unsee p c) (gulp (once (\ u (flow p)))))))
  ; flow at one byte per force, for taking a port slowly where a whole run would read too far
- ; ahead. `in` already flows that way: it holds nothing in hand.
+ ; ahead. `in` already flows that way: it holds nothing in hand -- and still holds nothing
+ ; where the DEVICE gulps behind it (chug asks the port, which is the static, not the run
+ ; borrowed under it), so this stays the only door that reads stdin exactly.
  (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p)))))))
 (: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
@@ -364,8 +366,11 @@
  '? 10                                                           ; cond -- infix it is the one-armed form; an else arm is the prefix (? c a b)
  '$ 5)                                                           ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
    monadics (pins (tablet 0)
- '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
- '% fraction '? bit '$ saturate '! nil?))   ; `.` is pinned here by post.l, whose dot it is
+ '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
+ '% 'fraction '? 'bit '$ 'saturate '! 'nil?))   ; `.` is pinned here by post.l, whose dot it is
+ ; ⚠ the rows are NOMS, not values: a value would be unwritable, and an unwritable head is a
+ ; form no text can spell -- which is what keeps opfix invertible (lib/infix.l). a row resolves
+ ; at the use site like any name, so libra's `shadow` rule speaks where one is rebound.
 ; factorization is the GLUED lane's alone: a run splits greedily, longest-prefix, no backtracking,
 ; against monadics. a SPACED sigil is one whole name -- it either carries a dyadics row or takes
 ; the fresh-punct default -- so != && >>= :- ?- each stay one operator.
