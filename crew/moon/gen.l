@@ -1,5 +1,5 @@
-; crew/moon/gen.l -- the code generator. AST -> (1 ir-forms) | (), in holo's neutral IR,
-; chibicc-plain: every expression computes into r0 and CARRIES ITS TYPE -- cgexpr answers
+; crew/moon/gen.l -- the code generator. AST -> (1 ir-forms) | (), in holo's neutral IR
+; (chibicc was the seed). every expression computes into r0 and CARRIES ITS TYPE -- cgexpr answers
 ; (type forms), so pointer arithmetic scales, a dereference loads by pointee width, and an
 ; array decays to an address. types: 'char 'short 'int 'long | ('ptr t) | ('arr t n); the ALU
 ; stays 64-bit (signed overflow is UB) and widths bite only at memory and casts. lvalues have
