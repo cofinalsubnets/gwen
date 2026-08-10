@@ -22,6 +22,9 @@
 ; so both branches are always computed and one is selected by AND/OR. a `?` here
 ; would be a branch on the accumulator, which is a branch on the message and the
 ; key together.
+;
+; host/tls.c's `poly1305` nif is the C twin, the same five limbs and the same
+; mask; test/host/tlsc.l holds it to this file, crew/tls/bench.l times both.
 (:
    m26 67108863                              ; 2^26 - 1, one limb
    hib 16777216                              ; 2^24, the high bit a full block carries

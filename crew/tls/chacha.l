@@ -2,8 +2,8 @@
 ;
 ; the cipher is add / xor / rotate on 32-bit words, which is exactly what a z-tray
 ; is: contiguous limbs, fixed-width two's complement, `+ - *` wrapping, the bitwise
-; five broadcasting elementwise (test/spec.l's WIDTH LAW). so there is no C here,
-; and none is wanted -- the arithmetic love already has IS the cipher's arithmetic.
+; five broadcasting elementwise (test/spec.l's WIDTH LAW). so there is no C here --
+; the arithmetic love already has IS the cipher's arithmetic.
 ;
 ; the shape that makes it fast enough to be worth doing: VECTORISE ACROSS BLOCKS,
 ; not across the state. each of the 16 state words becomes a GALAXY of n cells --
@@ -13,10 +13,11 @@
 ; the counter word is the one that varies down a galaxy: ctr + (iota n).
 ;
 ; ~2 MB/s at any batch width from 256 blocks up (the plateau is the lane's
-; per-cell cost, ~14ns, not per-op overhead). that is ~330x under the same
-; cipher in C. it is ample for a handshake and for seed's pulls; if the serving
-; path ever wants more, the C twin goes BEHIND this interface and this stays the
-; differential oracle -- never the other way round.
+; per-cell cost, ~14ns, not per-op overhead) -- ample for a handshake and for
+; seed's pulls. the serving path has the C twin instead: host/tls.c's `chacha20`
+; nif, which sits BEHIND this interface. this file stays the oracle, and
+; test/host/tlsc.l holds the twin to it -- never the other way round.
+; crew/tls/bench.l prints the two side by side.
 ;
 ; ⚠ THE ONE-SCOPE LAW EATS THIS CIPHER IF YOU LET IT. a body-having `:` is one
 ; scope, so a quarter-round written the obvious way --
