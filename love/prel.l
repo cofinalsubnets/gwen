@@ -147,6 +147,9 @@
    (compose f g x) (f (g x))                      ; (* f g)
    _ (seal-hook 2 stack)
    _ (seal-hook 3 compose))
+; ⚠ map is for VALUES: link takes its two operands right to left, so a mapped EFFECT
+; (a print, a pin) fires from the tail back and the page comes out reversed -- silently,
+; every element having run. ordered effects want foldl, which is a left fold by shape.
 (: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
    (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
