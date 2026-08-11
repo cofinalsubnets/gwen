@@ -129,8 +129,13 @@ Learned by measuring, several times each; check a new lever against these before
    ANSWERED 2026-08-11 (the element arm, the ledger): a constant-indexed element
    of a non-escaping frame array is a static slot, so lomig seats and rosters
    its pin exactly like a scalar's, and a written element re-establishes IN its
-   seat. What remains: store elision across calls (the write-through stores
-   still stand and are now the count's whole residue).
+   seat. STORE ELISION ANSWERED 2026-08-11 (the exit meet, the ledger): the loop
+   exit label is the THIRD join (if-joins, the splice end, now ld) -- kept pins
+   ride out of the loop over the meet of the cond edge (kp-verified pairs only)
+   and every break edge's snap, post-loop reads become zero forms, and with the
+   slots load-free deadst sweeps the write-through stores and entry spills whole.
+   What remains of the def-store bucket: the pre-call park pair and rostered
+   pins' true reload stores (both priced, both earning their keep).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -474,6 +479,44 @@ element-arm-off flip reds them; eight element torture shapes (written, variable-
 index barred, six-element seat exhaustion, element RMW, nested, continue/break,
 element-through-splice) agree with gcc -O0/-O1 across two arg sets; battery 132,
 fixpoint byte-identical, fast gate flat.
+2026-08-11 · store elision across calls (the exit meet -- the loop exit is the third
+join): every keep died at ld, so a kept var paid a post-loop reload AND kept its
+write-through stores alive (the slot's loads made them undead to deadst) -- the
+count's whole residue on call-loop shapes. Now ld MEETS its arriving edges: the cond's
+false branch (g 'brkm-free) and this loop's breaks (each break snaps its line map onto
+g 'brkm, a stack in lock-step with g 'brk; switches push/pop in lock-step and their
+snaps are discarded). The surviving pins make post-loop reads zero forms; with the
+slot load-free, deadst sweeps the write-through stores AND the entry spill -- lp4's
+i and s never touch memory at all now, and the loop runs register-pure but for the
+park pair. TWO SOUNDNESS HOLES found and closed on the way, the second latent in the
+tree: (1) the cond edge must carry kp-VERIFIED pairs only (vmeet with kp, all three
+lanes) -- a short-circuit cond exits to ld from EVERY false leg, and a pin born in a
+later leg never ran on an earlier leg's edge; kills are monotone along the cond, so
+kp survivors hold on all. (2) `pex`, the &-taken prepass, never descended into an
+element in HEAD position -- every AST node heads with a tag symbol so it never
+mattered, but an init list's first element is an EXPRESSION in head position, and
+`&lam` as a compound literal's first initializer (love.c's mm() root shape, exactly)
+escaped the scan: mm-rooted locals stayed in vuniv, pinnable, and the collector's
+root rewrite made any kept register STALE across a GC-ing call. Latent since the cs
+borrow made pins call-crossing; the exit meet's wider survival let ana_d's closure
+fixpoint hit it (an unbounded shash recursion on the corrupt analysis chain, at egg
+boot). One line closes it (pex walks two? heads), and test/cc/132-clitaddr.c pins the
+shape in the battery -- the callee writes through the registered root, so gcc is the
+oracle. Gauge: the lp4 call-loop shape −12.5% insns and −16.6% CYCLES, the
+locals+elements shape −9.1% insns, cbm −16.3% cycles at FLAT insns (the inner loop's
+slot store→load dependence chain broke -- wall, not count), fast gate flat. Laws:
+lp4 re-truthed (s+i ride out, `(= 4 ldc/stc)` -- park pair + cs saves are the WHOLE
+frame traffic), zpf (the return reads the seat, s's slot gone), spl/nrg/epc/epw/
+slk/erk/wlk re-truthed the same way -- the meet-off flip reds them; ten exit-shape
+tortures (breaks with divergent pin states, short-circuit while/do conds, for(;;),
+nested, post-loop calls, the ana_d fixpoint skeleton) agree with gcc -O0/-O1 across
+two arg sets; battery 133, fixpoint byte-identical, fuzz green. And a process lesson
+paid for twice: the make lane compiles through mooncc0.image (love0-baked from the
+TREE'S gen.l) -- swapping out/host/mooncc.image changes nothing it builds, so a
+variant test that leans on `make` is testing the tree, not the variant; hand-baked
+images + hand-linked hybrids (moon0 -pie love.o host_*.o ...) are the honest bisect,
+and a boot probe that "works" right after a cp of a known-good binary is testing
+the cp.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

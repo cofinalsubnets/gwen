@@ -307,15 +307,15 @@
                          (pin g 'lomiss ([lab <e9] >< peep g 'lomiss ())))
                     (go >l)))
        (go kp))
-   (loext g)                                        ; the enclosing keeps, one map (breaks and exits check it)
-    (: (go l acc) (? !(two? l) acc (go >l (acc + nthr <l 3)))
-       (go (peep g 'vkeep ()) ()))
-   (lopres g kp)                                    ; a loop exit: only entries verified on EVERY exit edge
-    (: u (loext g)
-       (filter (\ e9 (: o (assoc <e9 kp)
-                        o2 (assoc <e9 u)
-                        ((two? o && id? <>o <>e9) && (two? o2 && id? <>o2 <>e9))))
-               (peep g 'vmap ())))
+   ; the loop EXIT is a forward join too: its arriving edges are exactly the cond's false
+   ; branch and this loop's breaks (the license refused goto/switch/label subtrees), so the
+   ; meet of those edge maps survives ld -- kept pins ride out of the loop, post-loop reads
+   ; are zero forms, and a seat-riding slot whose loads all die loses its write-through
+   ; stores to deadst. break edges snap onto g 'brkm (a stack in lock-step with g 'brk).
+   (lomt g ms)                                      ; ms: one map per arriving edge
+    (? !(two? ms) (: _ (vmflush g) ())
+       (: (go l a) (? !(two? l) a (go >l (vmeet a <l)))
+          (vmset g (go >ms <ms))))
    (vmraw g nm)                                     ; the current pin, gates aside (the write-aim reads it)
     (: e9 (assoc nm (peep g 'vmap ()))
        (? (two? e9) <>e9 ()))
@@ -5511,6 +5511,9 @@
        (pex e) (? !(two? e) ()
                   (: _ (? ((<e = 'addr) && two? <>e && (<<>e = 'var))
                           (pin tak <><>e 1) ())
+                     ; ⚠ the HEAD too: an init list's first element is an EXPRESSION in head
+                     ; position (a clit's `&x` first initializer -- love.c's mm() -- hid there)
+                     _ (? (two? <e) (pex <e) ())
                      (pexl >e)))
        (pexl l) (? !(two? l) () (: _ (pex <l) (pexl >l)))
        ; -- prepass: the tick total, declaration counts, homable locals (⚠ ticks mirror lst's
@@ -5962,15 +5965,22 @@
               _ (pin g 'vkeep ([lc lc ld kp] >< peep g 'vkeep ()))
               c (cbranch g env <>s 'eq ld)
               _ (lochk g lc kp)                        ; the exit edge (and the body entry)
+              ; ⚠ the exit map is kp-verified pairs ONLY: a short-circuit cond exits to ld
+              ; from EVERY false leg, and a pin born in a later leg never ran on an earlier
+              ; leg's edge (kills are monotone along the cond, so kp survivors hold on all)
+              mx (vmeet (vmsnap g) kp)
               _ (pins g 'brk (ld >< g 'brk)
+                        'brkm (() >< peep g 'brkm ())
                         'cnt (lc >< g 'cnt))
               b (cgstmt g env <>>s)
+              bs9 <(peep g 'brkm ())
               _ (pins g 'brk >(g 'brk)
+                        'brkm >(peep g 'brkm ())
                         'cnt >(g 'cnt))
               _ (lochk g lc kp)                        ; the back edge
               _ (pin g 'vkeep >(peep g 'vkeep ()))
               _ (pin g 'saro sv9)                      ; the roster dies with its loop
-              _ (vmset g (lopres g kp))                ; label ld joins: verified entries survive the loop
+              _ (lomt g (mx >< bs9))                   ; label ld joins: the exit meet
               (? (bad? c || bad? b) 'bad
                (mg + [['label lc]] + c + (b + [['jmp lc] ['label ld]]))))
           (k = 'for)
@@ -5995,10 +6005,15 @@
                     _ (pin g 'vkeep ([ls lc ld kp] >< peep g 'vkeep ()))
                     c (? (two? cnd) (cbranch g env2 cnd 'eq ld) ())
                     _ (lochk g lc kp)                ; the exit edge (and the body entry)
+                    ; kp-verified pairs only: a short-circuit cond exits from every false leg
+                    mx (? (two? cnd) [(vmeet (vmsnap g) kp)] ())   ; (no edge for a bare for(;;))
                     _ (pins g 'brk (ld >< g 'brk)
+                              'brkm (() >< peep g 'brkm ())
                               'cnt (ls >< g 'cnt))
                     b (cgstmt g env2 body)
+                    bs9 <(peep g 'brkm ())
                     _ (pins g 'brk >(g 'brk)
+                              'brkm >(peep g 'brkm ())
                               'cnt >(g 'cnt)
                               'stwrap myw)           ; the body re-pinned as it went; the step is OURS
                     _ (lochk g lc kp)                ; the fall-through into ls
@@ -6007,7 +6022,7 @@
                     _ (lochk g lc kp)                ; the back edge
                     _ (pin g 'vkeep >(peep g 'vkeep ()))
                     _ (pin g 'saro sv9)              ; the roster dies with its loop
-                    _ (vmset g (lopres g kp))        ; label ld joins: verified entries survive
+                    _ (lomt g (mx + bs9))            ; label ld joins: the exit meet
                     (? (bad? c || bad? b || bad? st2) 'bad
                        (<ir + mg + [['label lc]] + (? (two? cnd) c ()) +
                         b + [['label ls]] + (? (two? st2) (vdrop g st2) ()) +
@@ -6024,6 +6039,9 @@
                                (go2 >l))
                            (go >l))
                  _ (go (peep g 'vkeep ()))
+                 ; the break edge's map snaps onto the innermost roster (ld's exit meet reads it)
+                 bm (peep g 'brkm ())
+                 _ (? (two? bm) (pin g 'brkm (((vmsnap g) >< <bm) >< >bm)) 0)
                  [['jmp tgt]])
               'bad)
           (k = 'cont)
@@ -6043,11 +6061,14 @@
               sd (? lic (loseed g env [<>s <>>s] lt lic <km) [() ()])
               kp (<km + <sd) mg (<>km + <>sd)        ; the keep + seeds + their movs (laid before lt)
               _ (pins g 'brk (ld >< g 'brk)
+                        'brkm (() >< peep g 'brkm ())
                         'cnt (lc >< g 'cnt))
               _ (? (two? kp) (vmset g kp) (vmflush g)) ; label lt heads the loop block
               _ (pin g 'vkeep ([lc lt ld kp] >< peep g 'vkeep ()))
               b (cgstmt g env <>s)
+              bs9 <(peep g 'brkm ())
               _ (pins g 'brk >(g 'brk)
+                        'brkm >(peep g 'brkm ())
                         'cnt >(g 'cnt)
                         'stwrap myw)                 ; the body re-pinned as it went; the cond is OURS
               _ (lochk g lt kp)                      ; the fall-through into lc
@@ -6056,7 +6077,10 @@
               _ (lochk g lt kp)                      ; the back edge (and the exit edge)
               _ (pin g 'vkeep >(peep g 'vkeep ()))
               _ (pin g 'saro sv9)                    ; the roster dies with its loop
-              _ (vmset g (lopres g kp))              ; label ld joins
+              ; kp-verified pairs only, same as while/for: a short-circuit cond falls out
+              ; from every false leg, and a later leg's cond-born pin never ran on an
+              ; earlier leg's edge
+              _ (lomt g ((vmeet (vmsnap g) kp) >< bs9))   ; label ld joins: the exit meet
               (? (bad? b || bad? c) 'bad
                  (mg + [['label lt]] +
                   b +
@@ -6095,9 +6119,11 @@
                             (go cases ()))
                     _ (rfree g cr9)
                     _ (pins g 'brk (lend >< g 'brk)
+                              'brkm (() >< peep g 'brkm ())   ; lock-step (a switch break's snap is discarded)
                               'cases (tab >< g 'cases)) ; PUSH -- cgstmt emits each case/dflt label from here
                     body (cgitems g env items ())       ; decls thread env; case/dflt labels emit via g 'cases
                     _ (pins g 'brk >(g 'brk)
+                              'brkm >(peep g 'brkm ())
                               'cases >(g 'cases))      ; POP
                     _ (vmflush g)                       ; label lend joins
                     (? (bad? body) 'bad
@@ -7107,7 +7133,7 @@
    ; xtra: the parser's (sfns svars sects .. consts) tablets -- static fns, static
    ; globals, name -> section. () reads as three empties (the law harness).
    (cgen-core ast stbl sigs weaks xtra tgt)
-    (: g #('n 0 'brk () 'cnt () 'cases () 'glob #() 'globs () 'strs () 'statics ()
+    (: g #('n 0 'brk () 'brkm () 'cnt () 'cases () 'glob #() 'globs () 'strs () 'statics ()
            'laid #()                                 ; names already on 'globs (a tentative repeat lays no twin)
            'fns #() 'inl #() 'cgitems cgitems 'stag stbl 'sigs sigs
            'tgt tgt 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp riscv64)) epi-a64 epi)

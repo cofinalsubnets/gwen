@@ -14,7 +14,78 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
-## 2026-08-10 — first fill (HEAD 9d719a28)
+## 2026-08-11 — after the allocator arc (HEAD c83b19a8)
+
+Same box, same method. Between the fills the vmap crossed every boundary it had
+(loop heads, calls, seat exhaustion, entry seeding, splices, element pins, the loop
+exit) — doc/moon-regalloc.md's 2026-08-10/11 ledger entries are the why per row.
+
+### invocation speed
+
+| | mooncc | gcc | clang |
+|---|---|---|---|
+| full build + link (s) | 14.7 | 8.7 | 5.1 |
+
+mooncc's own invocation cost +6% over the first fill (13.9 → 14.7 s): the keeps buy
+their soundness with regen attempts (a barred entry rebuilds the fn), and the meet
+machinery rides every loop. The price of the rows below.
+
+### text size — `size -A`
+
+| | mooncc | gcc | clang |
+|---|---|---|---|
+| .text (bytes) | 601,824 | 250,931 | 250,627 |
+
+mooncc +1.4% (cs saves, seat movs, roster reloads lay real bytes), the natives +2.6%
+(love.c itself grew); the ratio nudged 2.43× → 2.40×.
+
+Why 2.40× — measured per symbol this fill (nm over the pair; the natives are dynamic
+against glibc, mooncc a static ELF carrying its own nolibc, so only the 614 shared C
+symbols compare): 428 KB vs 246 KB, **1.74×** of genuinely emitted code. The gap is
+instruction COUNT, not encoding: lvm_add_string (a 3× representative) lays 1132 insns
+vs clang's 396 at the same ~4 bytes/insn. Of its 454 movs, **271 are stack-slot
+traffic** (137 reloads + 134 spills; clang: 6) — the write-through discipline in
+call-dense, branch-dense dispatch code: pins die at every call (cs seats ride only
+loop keeps, and these fns have no loops), and a leaf materialization (the lea of a
+type sigil) clobbers the pinned scratch, forcing a reload the next compare. Secondary:
+no CSE (the same tag word reloads per test), no tail merge or identical-code folding
+(clang folds lvm_chain to a 5-byte alias of a twin; mooncc lays every epilogue in
+full), immediates rematerialized per use. The spread is broad — 248 of 614 symbols
+above 2×, but 105 at or under parity (−27 KB: clang paying inlining bytes mooncc
+doesn't). The size gap and the corpus's flat 1.71× insn ratio are one fact seen
+twice: the slot movs are cheap (IPC eats them — cycles sit at 1.23×) but they are
+most of the extra instructions and most of the extra bytes.
+
+### runtime — the corpus, egg-boot subtracted, median of 3
+
+| | mooncc | clang | ratio | gcc |
+|---|---|---|---|---|
+| corpus insns (G, user) | 43.39 | 25.40 | **1.71×** | 23.33 |
+| corpus cycles (G, user) | 15.41 | 12.54 | 1.23× | 12.44 |
+| egg boot insns (G) | 9.38 | 5.60 | 1.68× | 5.18 |
+
+The gcc column fills for the first time (the love_data.ld fix held): gcc lays FEWER
+corpus instructions than clang here — mooncc/gcc is **1.86×**, the harder number.
+**The corpus ratio did not move (1.71× → 1.71×), and that is the honest reading, not
+a null result**: the corpus's hot symbols are the VM dispatch lanes (lvm_cur, lvm_qap,
+lvm_eq) — tail-threaded musttail chains the keep machinery deliberately never touches
+(no loops to keep, scratch dies at every jump). The arc's wins live where loops live:
+
+### the pair that says where the gap is — wall, boot subtracted
+
+| | mooncc | gcc | clang | mooncc/clang |
+|---|---|---|---|---|
+| chacha20 (ms) | 1059.6 | 279.8 | 165.8 | **6.4×** (was ~23×) |
+| poly1305 (ms) | 1424.5 | 1317.9 | 776.9 | 1.83× (gcc 1.08×) |
+
+chacha20 — the array-indexed inner loop, the shape the first fill named as the
+23× outlier — dropped to 6.4× vs clang and 3.8× vs gcc: loop-head survival, element
+pins across calls and the exit meet are exactly that shape's levers. poly1305 (five
+scalar limbs, the shape mooncc already held) sits at 1.08× of gcc. The pair still
+reads array-slots-are-the-gap, but the outlier is now a ratio, not a scandal; what
+remains of it is the pre-call park pair and the residues doc/moon-regalloc.md lists.
+
+
 
 Ryzen 7 5825U, 16 threads, quiet box. gcc 16.1.1, clang 22.1.8, mooncc at HEAD
 (warm off `mooncc.image`).
