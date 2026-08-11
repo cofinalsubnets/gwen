@@ -310,6 +310,19 @@
    (assert (= "[I][G]\n" (cup r))))
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "set -- keep it; f() { echo $1; }; echo [$(f one)][$1 $2]"))
    (assert (= "[one][keep it]\n" (cup r))))
+; ..and the roster rides the RAISED way out too -- the one exit a driven shell
+; cannot reach from here, since nothing a script can type raises a condition. a
+; scare crossing the boundary used to leave the body's cwd (and its vars, funcs,
+; positionals and flags with it) standing in the shell that ran it.
+; ⚠ the cwd is read and PUT BACK before the assert, never inside it: a failure
+; here would otherwise leave every later test reading from the wrong directory.
+(: start (cwd 0)
+   r (trap (\ _ (sh-subhere (\ _ (: _ (chdir "/") (scare 'boom 0))))) () (\ a b a))
+   here (cwd 0)
+   _ (chdir start)
+   (assert (id? r 'boom)                       ; the condition still rides outward
+           (start = here)                      ; ..and the subshell's chdir did not
+           !(start = "/")))                    ; ..(and the law was not vacuous)
 ; ⚠ `exit` in a forkless body may not reach `quit` -- it folds to ('xit . st),
 ; which nothing catches but the capture. a FORK under one puts the depth back,
 ; so a subshell's exit is a real one again
