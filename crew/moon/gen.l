@@ -2367,23 +2367,35 @@
                                           ['add 'r1 'r0 (* stp <>>e)]]
                                         + (? (id? ty 'bool) (cvt ty 'r1) ())
                                         + [[(stop ty) 'r4 off 'r1]])))))
-                 (: lv (matv g (clval g env <>e))
-              (? (bad? lv) 'bad
-                 (: ty (vty lv)
+                 (: lv0 (clval g env <>e)
+              (? (bad? lv0) 'bad
+                 (: ty (vty lv0)
                     stp (? (ptr? ty) (tsz g <>ty) 1)
                     _ (adrop9 g env <>e)           ; an element RMW retires its pin(s)
                     (? (arr? ty) 'bad
                        (bitf? ty) 'bad             ; bitfield ++/-- -- refuse (rare; use `f = f + 1`)
                        (d128? ty) 'bad             ; wide ++/-- -- refuse (use `x = x + 1`)
                        (pair? g ty)
-                        (mkv ty 'r0 (vfs lv +
-                               '((mov r12 r0)) + (pld 'r12 0) + (ppost 'r12 0 (* stp <>>e))))
-                       (mkv ty 'r0 (vfs lv +
-                              (['(mov r2 r0)
-                                 [(ldop ty) 'r0 'r2 0]
-                                 ['add 'r1 'r0 (* stp <>>e)]]
-                               + (? (id? ty 'bool) (cvt ty 'r1) ())   ; b++/b-- lands on 0/1
-                               + [[(stop ty) 'r2 0 'r1]])))))))))
+                        (: lv (matv g lv0)
+                           (mkv ty 'r0 (vfs lv +
+                                  '((mov r12 r0)) + (pld 'r12 0) + (ppost 'r12 0 (* stp <>>e)))))
+                       ; face-direct: no step rhs runs, so the base survives by construction
+                       (vm? lv0 && !(id? (vmb lv0) 'r0))
+                        (: b (vmb lv0) o (vmo lv0)
+                           fs (vfs lv0 +
+                               ([[(ldop ty) 'r0 b o]
+                                  ['add 'r1 'r0 (* stp <>>e)]]
+                                + (? (id? ty 'bool) (cvt ty 'r1) ())   ; b++/b-- lands on 0/1
+                                + [[(stop ty) b o 'r1]]))
+                           _ (rfree g b)
+                           (mkv ty 'r0 fs))
+                       (: lv (matv g lv0)
+                          (mkv ty 'r0 (vfs lv +
+                                 (['(mov r2 r0)
+                                    [(ldop ty) 'r0 'r2 0]
+                                    ['add 'r1 'r0 (* stp <>>e)]]
+                                  + (? (id? ty 'bool) (cvt ty 'r1) ())   ; b++/b-- lands on 0/1
+                                  + [[(stop ty) 'r2 0 'r1]]))))))))))
           ; ⚠ `E1 op= E2` EVALUATES E1 ONCE. the plain desugar duplicates it --
           ; (asn lv (bin op lv rhs)) -- which is exact only for an lvalue whose
           ; evaluation leaves no trace, so parse routes every other one here (its
