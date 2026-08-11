@@ -292,14 +292,15 @@ init-container: host
 # test/host/sh.l reads them (sh0.l pins what they mention and the seat lacks) and sh.l,
 # rung 4's gate -- a real pipeline through sh-line -- then disk.l (rung 5: the virtio raw
 # door + lib/fat.l on the real device, guarded on (disk ()) so a seat without one stays
-# green). zz-fin.l goes last: it prints the summary and quits.
+# green) and svm.l (the AMD-V spike, guarded twice: the nom is x86_64-only and the
+# silicon may be Intel's). zz-fin.l goes last: it prints the summary and quits.
 kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
   $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/fs.l \
   $R/test/kernel/kore.l $R/test/kernel/pipe.l \
   $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
   $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
-  $R/test/kernel/disk.l \
+  $R/test/kernel/disk.l $R/test/kernel/svm.l \
   $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP, rewritten only when the set changes
 # (mk/lib.mk) -- so an edit to any makefile in the tree does not relay this header.

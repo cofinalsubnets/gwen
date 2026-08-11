@@ -12,6 +12,7 @@
 
 #if defined(__x86_64__)
 uint64_t k_asmops_probe(uint16_t port, uint8_t v) {
+  uint32_t b, c, d;
   k_cli();
   k_sti();
   k_wait();
@@ -21,7 +22,14 @@ uint64_t k_asmops_probe(uint16_t port, uint8_t v) {
   k_int3();
   k_ud2();
   k_divzero();
-  return k_rd_cr2() + k_inb(port) + k_inl(port); }
+  k_wrmsr(0xc0000080u, 0);
+  k_cpuid(0, &b, &c, &d);
+  k_vmsave(port);
+  k_vmrun(port);
+  k_vmload(port);
+  k_stgi();
+  k_clgi();
+  return k_rd_cr2() + k_inb(port) + k_inl(port) + k_rdmsr(0xc0000080u) + b + c + d; }
 #elif defined(__aarch64__)
 uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_isb();

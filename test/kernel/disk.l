@@ -7,7 +7,7 @@
 ; that is the point: tools/kdisk.l boots this corpus twice on one image and
 ; greps the second log for "disk: fat kept" -- the reset-persistence gate.
 (: dn (disk ())
-   (? (! dn) (: _ (puts "disk: none here, laws skipped") (putc 10) ())
+   (? (! dn) (: _ (puts "disk: none here, laws skipped") _ (putc 10) ())
       (: pat ((: (go b i) (? (< i 512) (: _ (pin b i (% (i * 7) 256)) (go b (i + 1)))
                              (string b)))
               (cask 512) 0)
@@ -29,7 +29,7 @@
          _ (? (two? seen)
               (: _ (assert ("the machine remembers" = (cap (cup seen))))
                  _ (puts "disk: fat kept across the reset") (putc 10))
-              (: _ (puts "disk: fat born") (putc 10) ()))
+              (: _ (puts "disk: fat born") _ (putc 10) ()))
          _ (assert (tablet? f))
          _ (assert (1 = (fat-write f "boot.txt" "the machine remembers")))
          _ (assert (1 = (fat-write f "scratch.txt" "abc"))

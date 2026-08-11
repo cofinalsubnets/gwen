@@ -524,6 +524,11 @@
            ('cli >< '(250)) ('sti >< '(251)) ('hlt >< '(244))
            ('ud2 >< '(15 11)) ('iretq >< '(72 207)) ('swapgs >< '(15 1 248))
            ('rdmsr >< '(15 50)) ('wrmsr >< '(15 48)) ('cpuid >< '(15 162)) ('rdtsc >< '(15 49))
+           ; the SVM lane (AMD-V), all of 0f 01 /3 with mod=11 and all
+           ; register-CONTRACTED like in/out: vmrun/vmload/vmsave take the VMCB's
+           ; PHYSICAL address in rax and name no operand of their own.
+           ('vmrun >< '(15 1 216)) ('vmload >< '(15 1 218)) ('vmsave >< '(15 1 219))
+           ('stgi >< '(15 1 220)) ('clgi >< '(15 1 221))
            ('int >< emit-int) ('ltr >< emit-ltr)
            ('ldcr >< emit-ldcr) ('stcr >< emit-stcr)
            ('lgdt >< emit-m0f 2 '(15 1)) ('lidt >< emit-m0f 3 '(15 1))

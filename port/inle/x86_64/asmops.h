@@ -77,6 +77,106 @@ static inline void k_sse_enable(void) {
 #endif
 }
 
+// --- model-specific registers -----------------------------------------
+// rdmsr/wrmsr are register-CONTRACTED like the port ops: the MSR number rides
+// ecx and the value edx:eax, so the neutral half pins by register name (r0=rax,
+// r1=rcx, r2=rdx) where AT&T pins by letter.
+static inline uint64_t k_rdmsr(uint32_t msr) {
+  uint32_t lo, hi;
+#ifdef __mooncc__
+  asm volatile ("rdmsr" : "=r0"(lo), "=r2"(hi) : "r1"(msr));
+#else
+  asm volatile ("rdmsr" : "=a"(lo), "=d"(hi) : "c"(msr));
+#endif
+  return ((uint64_t) hi << 32) | lo; }
+
+static inline void k_wrmsr(uint32_t msr, uint64_t v) {
+#ifdef __mooncc__
+  asm volatile ("wrmsr" :: "r0"((uint32_t) v), "r2"((uint32_t) (v >> 32)), "r1"(msr));
+#else
+  asm volatile ("wrmsr" :: "a"((uint32_t) v), "d"((uint32_t) (v >> 32)), "c"(msr));
+#endif
+}
+
+// CPUID: the leaf rides eax, the answers come back in eax/ebx/ecx/edx.
+//
+// ⚠ EAX IS AN INPUT HERE AND NOT AN OUTPUT, which is a real limit and not a
+// preference: mooncc refuses an output pinned to a register that is also an
+// input (nothing spells GNU's tied "0" constraint on the neutral surface), so
+// a caller wanting the eax answer -- the max-leaf probe is the only one that
+// ever does -- has to ask a different question. `cpuid` still WRITES eax; that
+// is safe unnamed because an asm function's homing is off, so mooncc keeps
+// nothing in a register across the statement.
+static inline void k_cpuid(uint32_t leaf, uint32_t *b, uint32_t *c, uint32_t *d) {
+  uint32_t rb, rc, rd;
+#ifdef __mooncc__
+  asm volatile ("cpuid" : "=r3"(rb), "=r1"(rc), "=r2"(rd) : "r0"(leaf));
+#else
+  // GNU cannot clobber a register it is also given as an input, so eax is
+  // named as the tied output it architecturally is, and then dropped.
+  uint32_t ra;
+  asm volatile ("cpuid" : "=a"(ra), "=b"(rb), "=c"(rc), "=d"(rd) : "0"(leaf));
+  (void) ra;
+#endif
+  *b = rb; *c = rc; *d = rd; }
+
+// --- SVM, the AMD-V lane (port/inle/x86_64/svm.c) ---------------------
+// vmrun/vmload/vmsave take the VMCB's PHYSICAL address in rax and name no
+// operand on holo's surface; AT&T names %rax and LLVM prints it back bare, so
+// the two halves disassemble alike.
+//
+// ⚠ THE CLOBBER LIST IS THE CONTRACT. #VMEXIT restores RAX, RSP, RIP, RFLAGS,
+// the segments and the control registers from the host save area -- and NO
+// other GPR. rbx/rcx/rdx/rsi/rdi/r8..r15 come back holding whatever the guest
+// left in them, so clang is told so by name. rbp is not nameable (it is the
+// frame pointer), which is the standing reason a guest that runs real code
+// wants a save/restore stub around vmrun rather than this inline.
+//
+// ⚠ the two halves DIVERGE, and legitimately: mooncc's asm surface reaches
+// only r0-r3 and r5-r10 (the frame and the callee-saved four are refused), so
+// it could not name half the list -- and does not need to, because an asm
+// function's homing is off and nothing of its own lives in a register across
+// the statement. "memory" is the whole of what it has to be told.
+#ifdef __mooncc__
+#define k_svm_clobbers "memory"
+#else
+#define k_svm_clobbers "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", \
+                       "r10", "r11", "r12", "r13", "r14", "r15", "memory"
+#endif
+
+static inline void k_vmrun(uint64_t vmcb_pa) {
+#ifdef __mooncc__
+  asm volatile ("vmrun" :: "r0"(vmcb_pa) : k_svm_clobbers);
+#else
+  asm volatile ("vmrun %%rax" :: "a"(vmcb_pa) : k_svm_clobbers);
+#endif
+}
+
+// the host state vmrun does NOT save: FS, GS, TR, LDTR and the syscall MSRs.
+// vmsave before the entry and vmload after it are what keep the kernel's own
+// segment state off the guest's floor.
+static inline void k_vmsave(uint64_t vmcb_pa) {
+#ifdef __mooncc__
+  asm volatile ("vmsave" :: "r0"(vmcb_pa) : "memory");
+#else
+  asm volatile ("vmsave %%rax" :: "a"(vmcb_pa) : "memory");
+#endif
+}
+
+static inline void k_vmload(uint64_t vmcb_pa) {
+#ifdef __mooncc__
+  asm volatile ("vmload" :: "r0"(vmcb_pa) : "memory");
+#else
+  asm volatile ("vmload %%rax" :: "a"(vmcb_pa) : "memory");
+#endif
+}
+
+// the global interrupt flag. ⚠ #VMEXIT leaves GIF CLEAR: between the exit and
+// the stgi the machine takes no interrupt at all, so a missing stgi is a deaf
+// machine wearing a hang's face. both spell the same in either dialect.
+static inline void k_stgi(void) { asm volatile ("stgi" ::: "memory"); }
+static inline void k_clgi(void) { asm volatile ("clgi" ::: "memory"); }
+
 // --- port I/O ---------------------------------------------------------
 // holo's in/out are register-CONTRACTED and take no operands: the port is in
 // dx, the datum in al/ax/eax. so the neutral half pins by register name where

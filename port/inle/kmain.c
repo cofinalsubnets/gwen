@@ -1229,6 +1229,45 @@ static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
+// --- the SVM spike (x86_64 only; port/inle/x86_64/svm.c, doc/svm.md). (svm ())
+// is the capability and (svm-run ()) runs one guest, answering (exitcode rax
+// rip) or (). Nothing else in the kernel asks for a guest yet: the whole job of
+// these two rows is to prove that a guest can run and that the exit lands back
+// in ordinary C.
+#if defined(__x86_64__)
+uintptr_t k_svm_need(void);
+bool k_svm_ok(void);
+int k_svm_spike(void *mem, uint64_t *code, uint64_t *rax, uint64_t *rip);
+
+static lvm(lvm_svm) {
+  Sp[0] = k_svm_ok() ? putcharm(1) : ZeroPoint;
+  ai_musttail return Next(1); }
+
+ai_noinline static struct ai *k_svm_run(struct ai *g) {
+  uint64_t code = 0, rax = 0, rip = 0;
+  if (!k_svm_ok()) return g->sp[0] = ZeroPoint, g;
+  // the spike's pages ride a love string's own bytes -- blk.c's trick for DMA,
+  // and safe for the same reason: nothing allocates between the carve and the
+  // vmrun, so the collector cannot move the VMCB out from under the CPU. It
+  // also keeps the machine from spending a page on a guest nobody asked for.
+  if (!ai_ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper ghelps
+  if (k_svm_spike(txt(g->sp[0]), &code, &rax, &rip) < 0)
+    return g->sp[1] = ZeroPoint, g->sp += 1, g;
+  if (!ai_ok(g = ai_have(g, 3 * Width(struct ai_chain)))) return g;
+  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm((intptr_t) rip), ZeroPoint);
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) rax), word(c));
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) code), word(c));
+  return g->sp[1] = word(c), g->sp += 1, g; }
+static lvm(lvm_svm_run) {
+  Pack(g); g = k_svm_run(g);
+  if (!ai_ok(g)) return ghelp(g);
+  Unpack(g);
+  ai_musttail return Next(1); }
+#endif
+
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd,
 // chmod, utime. doc/posix.md's conventions exactly: an effect answers () | a
 // POSITIVE errno (the host's numbers -- kore reads them back, and mv's EXDEV
@@ -1556,6 +1595,10 @@ static union u
   nif_disk[] = {{lvm_disk}, {lvm_ret0}},
   nif_disk_read[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_read}, {lvm_ret0}},
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
+#if defined(__x86_64__)
+  nif_svm[] = {{lvm_svm}, {lvm_ret0}},
+  nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
+#endif
   nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
@@ -1639,6 +1682,13 @@ static struct ai_def defs[] = {
   {"disk", (intptr_t) nif_disk},
   {"disk-read", (intptr_t) nif_disk_read},
   {"disk-write", (intptr_t) nif_disk_write},
+  // ⚠ x86_64 only, so a love-side reader must ask (member? 'svm (names ()))
+  // before it asks (svm ()) -- on the aarch64 seat the nom is not in the book
+  // at all, and reading it is a missing condition rather than an absence.
+#if defined(__x86_64__)
+  {"svm", (intptr_t) nif_svm},
+  {"svm-run", (intptr_t) nif_svm_run},
+#endif
   // quit is seat-aware now (rung 4): a spawned task's exit is the TASK's, so
   // the row is owed on BOTH kernels. unseated it resets the shipped machine;
   // the TEST kernel's unseated arm answers the code instead (kore0.l's identity

@@ -113,6 +113,8 @@
            ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
            ('cli >< 0) ('sti >< 0) ('hlt >< 0) ('ud2 >< 0) ('iretq >< 0) ('swapgs >< 0)
            ('rdmsr >< 0) ('wrmsr >< 0) ('cpuid >< 0) ('rdtsc >< 0)
+           ; the SVM lane: register-contracted too -- the VMCB's physical address rides rax.
+           ('vmrun >< 0) ('vmload >< 0) ('vmsave >< 0) ('stgi >< 0) ('clgi >< 0)
            ('isb >< 0) ('wfi >< 0) ('wfe >< 0) ('eret >< 0)
            ('int >< 1) ('ltr >< 1) ('dsb >< 1) ('dmb >< 1)
            ('brk >< 1) ('dbrk >< 1) ('hvc >< 1) ('smc >< 1) ('udf >< 1)

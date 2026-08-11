@@ -84,6 +84,8 @@
       ("sys.swapgs"  "0f01f8"                ((swapgs)))
       ("sys.msr"     "0f320f30"              ((rdmsr) (wrmsr)))
       ("sys.cpuid"   "0fa20f31"              ((cpuid) (rdtsc)))
+      ("sys.svm"     "0f01d80f01da0f01db0f01dc0f01dd"
+                                             ((vmrun) (vmload) (vmsave) (stgi) (clgi)))
       ("sys.int"     "cd00cd20"              ((int 0) (int 32)))
       ;; the control registers: the CR number rides ModRM.reg, so REX.R reaches cr8 and REX.B
       ;; reaches r8 -- and neither carries REX.W, a CR move being 64-bit already
