@@ -98,8 +98,8 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
 - the **advisory** families (`-W..` `-O..` `-g..` `-std=` `-f..` `-pipe` `-static`) ride through
   ignored;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — nolibc
-  + the am math + the mksys leaf, compiled from the toolchain root, so a set carrying its own
-  `am.o` never meets a twin;
+  + the am math + the mksys leaf, compiled from the toolchain root and cached under
+  `~/.love/cache/moon/` (below), so a set carrying its own `am.o` never meets a twin;
 - `-nostdlib`/`-nodefaultlibs`/`-ffreestanding` turn that pull off;
 - `-ffreestanding` ALSO says the standard's own word: it makes `__STDC_HOSTED__` 0, which is how
   a source asks (love.c asks it to choose the W^X mmap arena over the freestanding heap copy).
@@ -151,6 +151,24 @@ the same face.
   Every encoding objdump-checked, the holo house rule.
 * **math/am.c** — our transcendentals. sqrt exact, the seven within a few ulp; `make ulp` is the
   differential gate. `-lm` appears in no link.
+
+**The pull is cached, content-addressed.** A member has to be compiled before the need loop can
+see what it defines, so every link owing a libc nom paid for all of them — ~1.4s of a
+hello-world link's ~1.5s, nolibc.c being 2000 lines. They now ride `~/.love/cache/moon/<sha>.o`,
+keyed on the member's path, the target, the include list, the runtime tree's whole text (headers
+included — an edited `stdio.h` changes what `nolibc.c` means) and the compiler's own identity.
+A warm link is ~0.13s.
+
+⚠ **The compiler's identity is every `*.image` beside the love**, by name and stat, plus the
+love's own — the wake strips the image path from `cmdline`, so mooncc cannot know which one it
+woke, and taking them all makes a stranger's rebuild a miss rather than a stale hit. Hashing the
+compiler's `.l` sources instead looks tighter and is a hole: edit `gen.l`, link once before the
+image catches up, and the entry filed under the new sources holds the old image's codegen.
+No identity — a love with no image file in reach — means no cache at all. Nor is anything else
+owed it: no HOME, an unwritable directory, a mangled entry (each is checked for its ELF magic)
+all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot tear
+one, and a miss sweeps anything 30 days unrewritten. The `-c` path is not cached, and neither is
+a `.c` the user named — this is the *implicit* runtime only.
 
 **The crt0 switch is one weak symbol.** `__ai_start` is defined WEAK in the crt0 object (the
 bare call-main tail every small link gets), and nolibc overrides it STRONG to unpack
