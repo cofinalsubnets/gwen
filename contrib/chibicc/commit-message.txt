@@ -1,7 +1,19 @@
 Fix parse error on a declarator list whose first declarator is a function
 
-`struct S *f(void), *g(int);` and `int a(void), b;` are rejected with
-"expected '{'".
+The first example under C89 3.5.4.3, "Function declarators (including
+prototypes)", does not compile:
+
+    $ cat t.c
+    int f(void), *fip(), (*pfi)();
+    $ chibicc -c t.c
+    t.c:1: int f(void), *fip(), (*pfi)();
+                      ^ expected '{'
+
+Nor does a list built only from prototypes, so this is not about the
+non-prototype declarators in that example:
+
+    struct S *f(void), *g(int);
+    int a(void), b;
 
 The syntax is C89 -- not a C99 or C11 addition. A declaration carries a
 list of declarators, while a function definition takes a single
@@ -19,9 +31,6 @@ int, which made the specifiers mandatory):
             declaration-specifiers_opt declarator declaration-list_opt
                     compound-statement
 
-The parameter lists above are prototypes -- C89 3.5.4.3, "Function
-declarators (including prototypes)" -- not the K&R identifier-list form.
-
 parse() dispatches on is_function(), which inspects only the first
 declarator, into function(), which parses that declarator and then
 accepts only ';' or '{' -- so it asks whether a declaration begins with a
@@ -31,12 +40,16 @@ declare_function(), hand a comma tail to the existing global_variable()
 loop, and have that loop dispatch on ty->kind == TY_FUNC, which also
 covers the mixed forms `int f(void), x;` and `int x, f(void);`.
 
-gcc and clang accept the case above with zero diagnostics under
--pedantic-errors at -std= c89, c99, c11, c17 and c23. Nothing that
-already compiled changes: building this tree with and without the patch
-and compiling all 49 translation units of the compiler and test/ with
-each, the emitted assembly is byte-identical except for parse.c itself
-and test/macro.c, whose __TIME__ differs between any two runs a second
-apart. make test and make test-stage2 both pass.
+gcc accepts both cases above with zero diagnostics under -pedantic-errors
+at -std= c89, c99, c11, c17 and c23; so does clang, but for a
+-Wstrict-prototypes complaint about `int *fip()`, which it raises for
+that declarator alone with no comma in sight. With the patch, the 3.5.4.3
+example compiles and runs correctly -- calling f, dereferencing fip()'s
+result and calling through pfi all agree with gcc. Nothing that already
+compiled changes: building this tree with and without the patch and
+compiling all 49 translation units of the compiler and test/ with each,
+the emitted assembly is byte-identical except for parse.c itself and
+test/macro.c, whose __TIME__ differs between any two runs a second apart.
+make test and make test-stage2 both pass.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>

@@ -6,13 +6,19 @@ where it will not rot. mooncc's own conformance ledger is doc/moon-c-gaps.md.
 
 ## the bug
 
-A declaration whose **first** declarator is a function and which then continues past a
-comma is rejected:
+**The first example under C89 3.5.4.3, "Function declarators (including prototypes)", does
+not compile.** The standard picked the reproducer:
 
 ```c
-struct S;
-struct S *f(void), *g(int);    // chibicc: "expected '{'"
-int a(void), b;                // likewise
+int f(void), *fip(), (*pfi)();   // chibicc: "expected '{'"
+```
+
+Any declaration whose first declarator is a function and which then continues past a comma
+is rejected, prototypes or not:
+
+```c
+struct S *f(void), *g(int);
+int a(void), b;
 ```
 
 gcc and clang accept both with **zero diagnostics** at `-pedantic-errors` under c89, c99,
@@ -86,6 +92,8 @@ open-std.org and read:
 | gcc + clang, `-pedantic-errors`, c89–c23, zero diagnostics | ✅ 10 runs |
 | the README quotes | ✅ read off the cloned tree |
 | no effect on code that already compiled | ✅ 49 TUs, byte-identical .s |
+| **stock rejects C89 3.5.4.3's own first example** | ✅ patched accepts, compiles and runs, agrees with gcc |
+| clang's c89 complaint is `-Wstrict-prototypes`, not the list | ✅ fires on `int *fip();` alone, no comma present |
 
 The no-effect row is the one worth reproducing: build the tree with and without the patch
 and compile every TU of the compiler and `test/` with each. All 49 emit byte-identical
