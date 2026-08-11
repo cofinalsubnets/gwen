@@ -1150,15 +1150,18 @@
    ; -- the aim HOLD (the ana_d why, found and fixed): a callish rhs may aim at the pin.
    ; the hold keeps the aim register on rpin across the rhs, so a mid-rhs call flush plus a
    ; splice body's psreset cannot hand it to a same-statement ralloc (the comma chain was
-   ; the reachable shape). g rides r7 through the chain; the spliced ok()'s AND lands in a
-   ; FRESH register, and pop() reads g->sp through the live pin.
+   ; the reachable shape). g rides a borrowed seat (r13) through the chain -- the splice-
+   ; crossing meet keeps it -- and the spliced ok()'s AND lands in a FRESH register, and
+   ; pop() reads g->sp through the live pin.
    irH (cgn "struct E { long a; long b; long c; long stack; }; struct S { long tag; long x; long sp; }; struct S *push2(struct S *g, long z, long e); static struct S *gx(struct S *g) { g->x = g->x + 1; return g; } static struct S *cix(struct S *g, struct E **b, long k) { g = push2(g, k, (*b)->a); return gx(g); } static long ok(struct S *g) { return ((long)g & 7) == 0; } static long pop(struct S *g) { long *p = (long*)g->sp; g->sp = (long)(p + 1); return *p; } struct S *ana2(struct S *g, struct E **b); long run(struct S *g, struct E **b, long globp, long n) { long i; for (i = 0; i < n; i = i + 1) g = ana2(g, b), g = globp ? cix(g, b, i) : g, g = gx(push2(g, 0, (*b)->stack)), (*b)->stack = ok(g) ? pop(g) : 0; return (long)g; } int main() { return 0; }")
    hf (fnf 'run <>irH)
    _ (assert
       (two? irH)
-      !(member? '(and r7 r7 7) hf)                   ; the spliced ok() must not land its AND on the pin
-      (member? '(and r8 r7 7) hf)                    ; ...it reads the pin into a fresh register
-      (member? '(ld r0 r7 16) hf))                   ; ...and pop() reads g->sp through the LIVE pin
+      !(member? '(and r13 r13 7) hf)                 ; the spliced ok() must not land its AND on the pin
+      (member? '(and r7 r13 7) hf)                   ; ...it reads the pin into a fresh register
+      (member? '(ld r0 r13 16) hf)                   ; ...and pop() reads g->sp through the LIVE pin
+      (member? '(mov r13 r0) hf)                     ; g = ana2(..) re-establishes IN its seat...
+      (member? '(cmp r11 r12) hf))                   ; ...and the loop cond runs register-register
    ; -- slot-load elision: loadval honors the want hint (a decl/asn init from a member/deref
    ; lands straight in the hinted register, so the vmap pin fires and re-reads are zero forms),
    ; and stld rides a whole straight-line run (a bound slot's reload forwards from the register
@@ -1803,7 +1806,8 @@
       (two? irL)
       (= 0 (ldc lp1f)) (= 0 (stc lp1f)) (= 0 (leac lp1f))   ; while: s/i/x[0]/x[1] register-resident, frame gone
       (= 0 (ldc lp2f)) (= 0 (stc lp2f))                     ; for: the counter and the accumulator ride (i++ steps in place)
-      (2 <= ldc lp3f)                                       ; an INLINED call (the splice flush) refuses the keep: reloads stand
+      (2 <= ldc lp3f)                                       ; an inlinee carrying its OWN loop refuses the keep (the inner
+                                                            ;   head flush empties every ret edge): reloads stand
       (member? '(mov r6 r11) lp4f)                          ; an EXTERN call: i keeps on a borrowed cs seat -- the arg rides it
       (member? '(add r11 r11 1) lp4f)                       ; ...steps in place across the call
       (member? '(mov r12 r0) lp4f)                          ; s (callish-written) re-establishes in ITS seat -- the aim hold's class
@@ -1854,6 +1858,41 @@
       (= 1 (ldsp nrgf 56))                           ; ...but write-only x REFUSES the roster: store + post-loop
                                                      ;    read only, no dead per-call reload
       (= 2 (ldsp nrgf 16))))                         ; e (unpinned at entry): its use-site loads stand
+
+; -- splice-crossing keeps: a splice's end label is a forward JOIN (its ret jmps + the
+; fall-through), not a clobber -- no pin is born inside a splice, so every edge map descends
+; from entry by deaths only and the meet holds. a loop keep therefore RIDES an inlined call:
+; a call-free or branchy inlinee costs the pins nothing, and a callish inlinee's real call
+; is spared by the same vmcflush the extern call gets (seats ride, rostered pins reload).
+; an inlinee carrying its own loop still refuses honestly (the inner head flush empties
+; every edge map -- lp3 above keeps that law).
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (ldsp fs off) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp && (= off <>>>f))) fs))
+   irS (cgn "static long half(long v) { return v / 2; } static long pick(long v) { if (v > 10) return v - 10; return v; } long tick(long v); static long wrap(long v) { return tick(v) + 1; } long slk(long n) { long a = 1; long b = 2; long i = 0; long s = 0; while (i < n) { s = s + half(i) + a + b; i = i + 1; } return s + a + b; } long erk(long n) { long a = 3; long b = 5; long i = 0; long s = 0; while (i < n) { s = s + pick(i) + a + b; i = i + 1; } return s + a + b; } long wlk(long n) { long a = 4; long i = 0; long s = 0; while (i < n) { s = s + wrap(i) + a; i = i + 1; } return s + a; } int main() { return 0; }")
+   slkf (fnf 'slk <>irS)
+   erkf (fnf 'erk <>irS)
+   wlkf (fnf 'wlk <>irS)
+   (assert
+      (two? irS)
+      (member? '(mov r11 r7) slkf)                   ; slk: a's pin migrates onto a seat...
+      (member? '(add r7 r7 r11) slkf)                ; ...and the use past the call-free splice reads it
+      (= 1 (ldsp slkf 24))                           ; a's slot: one post-loop read, NONE in the loop
+      (member? '(mov r11 r7) erkf)                   ; erk: the same keep through an EARLY-RETURN inlinee --
+      (member? '(add r7 r7 r11) erkf)                ;   two ret edges meet at the end label and a still rides
+      (= 1 (ldsp erkf 24))
+      (member? '(mov r14 r6) wlkf)                   ; wlk (a CALLISH inlinee): n seats...
+      (member? '(cmp r12 r14) wlkf)                  ; ...the cond runs register-register
+      (member? '(mov r6 r12) wlkf)                   ; the inner real call's arg served from i's seat
+      (member? '(add r12 r12 1) wlkf)                ; i steps in place, its slot never touched
+      (member? '(add r11 r5 r13) wlkf)               ; a reads its seat, s lands in its own
+      (= 1 (ldsp wlkf 8))                            ; s: the pre-call park read (the recorded residue)...
+      (= 1 (ldsp wlkf 24))))                         ; ...and one post-loop slot read; nothing else loads in-loop
 
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)

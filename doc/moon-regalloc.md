@@ -121,8 +121,12 @@ Learned by measuring, several times each; check a new lever against these before
    2026-08-11 (entry seeding, the ledger): a keep no longer only preserves — a
    loop's hot unpinned scalars pin by one seed load before the head, so inner
    loops rediscover what an outer keep dropped, and stld+deadst routinely erase
-   the seed's memory touch entirely. What remains: element pins across calls,
-   splice-crossing keeps, and store elision across calls (the write-through
+   the seed's memory touch entirely. SPLICE-CROSSING KEEPS ANSWERED 2026-08-11
+   (the end-label meet, the ledger): a splice's end label is a forward join, not
+   a clobber, so a loop keep now rides an inlined call -- straight-line, branchy
+   and early-return inlinee bodies cost the pins nothing, and a callish inlinee's
+   real call is spared by the same vmcflush the extern call gets. What remains:
+   element pins across calls and store elision across calls (the write-through
    stores still stand and are now the count's whole residue).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
@@ -403,6 +407,44 @@ param re-enters by seed, x64 + arm64), lp4/zpf/spl re-truthed with their seeds �
 the seed-off flip reds them; five-shape seed torture (trip-0, nested rediscovery,
 call-killed, seeded-then-written, continue/break) agrees with gcc; battery,
 fixpoint byte-identical, fuzz, virt-on-hart all green.
+2026-08-11 · splice-crossing keeps (the end-label meet): a loop keep survived a real
+call (seats ride, rostered pins reload) but died at an INLINED one -- cginl ended
+every splice with an unconditional vmflush at its end label, so inlining a call, an
+improvement, cost the loop its register residency (the old lp3 refusal). The flush
+was over-conservative: the end label is a forward JOIN whose arriving edges are all
+known (the body's fall-through plus one jmp per mid-body return), no pin is ever
+BORN inside a splice (vmon? is false while inlining), and no store in the body can
+alias a pinned slot (vuniv already excludes address-taken names) -- so every edge
+map descends from the entry map by deaths only and the meet holds. The machinery is
+the if/else join's, worn by the splice: the ret door snapshots the map on each jmp
+edge into inlret (g 'inlsnp, saved/restored per splice like inlret itself), and
+cginl replaces the end flush with vmset over the vmeet of the fall-through (gated by
+vmout?) and every snap; a DECLINE still flushes (the discarded-emission hygiene
+law). What rides: a call-free inlinee costs the pins nothing at all; an early-return
+body meets its edges (a pin killed on ONE path dies -- the intersection is exactly
+the soundness); a callish inlinee's real call is spared by the same vmcflush as an
+extern call (seats ride, outer rostered pins reload inside the splice); an inlinee
+carrying its own LOOP still refuses honestly -- the inner head flush empties every
+edge map, which is why lp3's law survives with its why reworded. Gauge: the
+call-free-inlinee loop −4.3% insns, the callish-inlinee loop −21.7% insns (i/s/a/n
+all seat through the inlined wrapper: cmp register-register, the arg served from
+the seat, the step in place -- ~4 loads + 2 stores per iteration down to the s park
+pair), cycles flat on the host (removed work hides as slack -- the ship gate's
+wall-neutral-insn-cut clause), the loop-inlinee wash count-identical, cbm twins
+byte-identical, corpus flat. The aim-hold law re-truthed: g in the ana_d shape now
+rides a borrowed seat through calls AND splices (the and-not-on-pin claim held, on
+new registers). Laws: slk (seat mov + seat read past a call-free splice, one
+post-loop slot read), erk (the same through two ret edges), wlk (callish inlinee:
+seated cond, seat-served arg, in-place step) -- the meet-to-flush flip reds them
+and un-seats the aim-hold law's g; ten splice-crossing torture shapes (one-sided
+call, param-writing, depth-3 nesting, loop-carrying, continue/break, fesc,
+seeded-then-written) agree with gcc -O0/-O1 across two arg sets; battery (now 132),
+fixpoint byte-identical, fuzz green. And an excavation beside the rung: the bench
+harness found the weak crt0 tail passing the RAW SP to an arg-taking main in a
+libc-free link (argc read stack noise -- nondeterministic segfaults on the shipped
+compiler; nolibc's strong __ai_start had hidden it everywhere else). Fixed in its
+own commit (fdbd7aba): the weak tail unpacks argc/argv on all three arches, and
+test/cc/131-argv.c pins it in the battery.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

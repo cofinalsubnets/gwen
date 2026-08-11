@@ -5789,6 +5789,7 @@
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'inlining () 'inlbody 0   ; splice depth + body depth (vmget's blind)
      'inlret () 'inlrt ()      ; splice return label + type (cgstmt's ret door)
+     'inlsnp ()                ; splice ret-edge maps (cginl's end-label meet)
      'inlrb () 'inlrbs ()      ; splice decl-license + its reg roster
      'rpin ()                  ; splice bind pins
      'argseal 0                ; the vmap's staging seal depth
@@ -5804,6 +5805,7 @@
           (: il (peep g 'inlret ())                                      ; splice's end label instead of the epilogue
              epj (peep g 'epi epi)                                       ; the TARGET's epilogue (cgen-core pins it)
              mt (1 < tally >s)                                           ; clay's (ret e PRE): presence is the arity
+             rr9
              (? (mt && il) 'bad                     ; a musttail never inlines: the splice declines, the real call still can
                 !(two? <>s)
                  (? mt (nolane g "a musttail return carries no call") (? il [['jmp il]] epj))   ; bare `return;` -- just the epilogue
@@ -5854,7 +5856,11 @@
                       (id? rt 'bool)                             ; a bool return CONVERTS (callers read r0 whole -- cc calls untyped)
                        (tor0 g r + cvt rt 'r0 + (? il [['jmp il]] epj))
                       (tor0 g r + (? il [['jmp il]] epj)))      ; int -> int, as before (a pair value narrows to its lo)
-                   (? (!mt || bad? res) res (mustret g res)))))         ; a musttail ret MARKS its call for sibs
+                   (? (!mt || bad? res) res (mustret g res))))
+             ; a splice ret's map rides its jmp edge into the end label (cginl meets the edges)
+             _ (? (il && !(bad? rr9))
+                  (pin g 'inlsnp ((vmsnap g) >< peep g 'inlsnp ())) 0)
+             rr9)         ; a musttail ret MARKS its call for sibs
           (k = 'expr)
            (: pe <>s
               rv (? ((<pe = 'post) && (<<>pe = 'var))
@@ -6122,6 +6128,7 @@
        il0 (peep g 'inlining ())
        ir0 (peep g 'inlret ())
        irt0 (peep g 'inlrt ())
+       is0 (peep g 'inlsnp ())
        _ (pin g 'inlining ((? !il0 0 il0) + 1))
        rt <(peep (g 'sigs) <>f ['long ()])
        ilb9 (nlab g ".il")
@@ -6191,7 +6198,7 @@
                (dn <>x a9))
            (dnames <x (dnames >x a9)))
        _ (pins g 'inlrb (? nocall (filter paid? (dnames body9 ())) ())
-          'inlrbs () 'inlret ilb9 'inlrt rt)
+          'inlrbs () 'inlret ilb9 'inlrt rt 'inlsnp ())
        ; ⚠ cgitems rides the g tablet, not a direct call: the direct edge closes the
        ; cgexpr->cginl->cgitems->cgstmt->cgexpr cycle, and the loader's analysis then re-weaves
        ; the scope so several `epi` reads compile as book reads before the pin. the indirection
@@ -6199,14 +6206,24 @@
        ib0 (peep g 'inlbody 0)
        _ (pin g 'inlbody (ib0 + 1))                ; the body blinds vmget (name conflation)
        ibd (? (bad? br) 'bad ((g 'cgitems) g <br body9 ()))
-       _ (pins g 'inlbody ib0 'inlret ir0 'inlrt irt0 'inlining il0 'rpin rp0) ; the bind pins die with the splice
+       snaps (peep g 'inlsnp ())
+       _ (pins g 'inlbody ib0 'inlret ir0 'inlrt irt0 'inlining il0 'rpin rp0 'inlsnp is0) ; the bind pins die with the splice
        drbs (peep g 'inlrbs ())
        _ (pins g 'inlrb rb0 'inlrbs rbs0)
        (unrb l) (? !(two? l) ()
                    (: _ (rfree g <l) (unrb >l)))
        _ (? (two? br) (unrb (nthr br 2)) ())          ; the park regs return to the pool...
        _ (unrb drbs)                                  ; ...and the body-decl binds with them
-       _ (vmflush g)                                  ; the splice's end label joins
+       ; the end label is a forward JOIN, not a clobber: no pin is born inside a splice, so
+       ; every edge map (the ret jmps + the fall-through) descends from entry by deaths only
+       ; and the meet holds -- a caller's loop keep rides an inlined call. a DECLINE discards
+       ; its emission, so it flushes (the hygiene law).
+       ms9 (? (bad? br || bad? ibd) ()
+              ((? (vmout? ibd) [(vmsnap g)] ()) + snaps))
+       _ (? (two? ms9)
+            (: (go l a) (? !(two? l) a (go >l (vmeet a <l)))
+               (vmset g (go >ms9 <ms9)))
+            (: _ (vmflush g) ()))
        (? (bad? br || bad? ibd)                       ; a shape the splice can't take: the real call still can
            (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
           (!fe0 && peep g 'fesc ())                   ; the splice took a frame address (an & arg too -- the
