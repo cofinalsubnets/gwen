@@ -115,10 +115,12 @@ Learned by measuring, several times each; check a new lever against these before
    the call-loop shape drops ~20% wall at flat insns (the slot's store→load chain
    breaks). THE CALLISH BAR LIFTED 2026-08-10 (the aim hold, the ledger): the why was
    the free-list/pin split, and with it fixed a callish rhs aims and pins — `s +=
-   f(..)` accumulators now ride seats through their own calls. What remains:
-   spill-around when seats run out, element pins across calls, splice-crossing
-   keeps, and store elision across calls (the write-through stores still stand and
-   are now the count's whole residue).
+   f(..)` accumulators now ride seats through their own calls. SEAT EXHAUSTION
+   ANSWERED 2026-08-10 (spill-around, the ledger): the surplus pins keep on their
+   pool regs and reload per call, priced reads-vs-calls. What remains: element pins
+   across calls, splice-crossing keeps, keep depth (a pin the outer loop drops is
+   dead to the inner keep), and store elision across calls (the write-through
+   stores still stand and are now the count's whole residue).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -338,6 +340,40 @@ reds it; calltort t11 (the ana_d shape, runnable); corpus flat, all gates green
 taint lesson: `make out/host/mooncc.image` relinks love through the CURRENT gen.l,
 so the "reproducer" first crashed in the instrument, not the subject — hand-bake
 on a saved-healthy binary before trusting any compiler-under-test.
+2026-08-10 · spill-around (the keep past seat exhaustion): when a callish loop holds
+more scalar pins than the borrow grant has seats, the surplus no longer drops — a pin
+still worth its reloads stays on its POOL register, rostered (g 'saro), and every call
+in the loop reloads it from its slot (`vmcflush` keeps the pin and ANSWERS the reload
+forms; the call lanes lay them after the clean, beside the home relods). Write-through
+makes the spill half free — the slot already holds the value at every call — so the
+whole cost is one ld per call per rostered pin, and the license prices exactly that:
+reads in the loop subtree >= its calls (`nreads`, an asn's own lhs excluded, vs `ncls`,
+a nested loop's calls ×8), so a written-only pin or one read less often than the loop
+calls refuses and no dead reload ever ships. Soundness is again UNCHANGED machinery:
+the reload re-establishes the exact pair the keep claims, lochk verifies the same
+edges, a splice's full flush still misses and bars. The roster nests (saved/restored
+per loop, enclosing entries ride inner keeps as-is) and dies with its loop. Two
+knock-ons: `skiprel` learned to peel roster reloads after a ret-position call
+(pool-reg lds only — the first draft peeled cspool too and ATE THE EPILOGUE'S OWN cs
+reloads, refusing every marked musttail; epim? verification keeps the loose peel
+honest); and `vmset` became a pin door (its regs leave the pool) — the riscv64 love.c
+build proved the armor's worth: a rostered pool pin dropped by a splice, freed at
+psreset, then re-asserted by the step label's vmset split the free list from the pin
+set, and ralloc SCARED where pre-armor it would have silently double-booked. Gauge: the two-reads-per-var seat-exhausted call loop −5.0% insns (2/iter),
+cycles flat-to-better (the host hides removed work as slack — the ship gate's
+wall-neutral-insn-cut clause); the one-read shape byte-identical (the license refuses
+the wash), corpus flat. The nested shape shows the standing conservatism: a pin the
+OUTER loop drops is dead to the inner keep — outer rostering is correctly refused by
+the ×8, but the inner loop can't rescue what vmset already killed (the keep-depth
+residue, recorded). Laws: spl (four seats then the post-call reload into the pin, the
+in-loop use reads the register, two slot reads total) reds on the license flip; nrg
+(write-only x refuses: no dead reload). Eight spill-around torture shapes (two calls,
+nesting, continue/break, cond calls, tail-from-loop, callish for-step, do-while)
+agree with gcc at -O0/-O1; battery, fixpoint byte-identical, fuzz green. And a
+process lesson beside the taint one: the shell's cwd silently reset to the POST tree
+mid-session, so a "falsification flip" and a law run quietly read the pre-rung
+sources and answered plausibly — absolute paths for every gate and probe in a
+worktree session, and treat a flip that agrees too easily as a tree check first.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

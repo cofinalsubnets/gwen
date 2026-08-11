@@ -189,11 +189,18 @@
              (pin g 'vpin (r >< peep g 'vpin ())))) ())
    (vmrepin g nm r)                                 ; re-establish wherever the pin lives
     (? (member? r (peep g 'csbor ())) (vmbpin g nm r) (vmpin g nm r))
-   (vmcflush g)                                     ; the call flush: pool pins die, cs seats ride
-    (: bs (peep g 'csbor ())
-       (? !(two? bs) (vmflush g)
-          (: m2 (filter (\ e9 (member? <>e9 bs)) (peep g 'vmap ()))
-             (pins g 'vmap m2 'vpin (vmregs m2 ())))))
+   (vmcflush g)                                     ; the call flush: pool pins die, cs seats ride,
+    (: bs (peep g 'csbor ())                        ; a ROSTERED pin (g 'saro) reloads from its slot
+       sr (peep g 'saro ())                         ; -- answers the reload forms, laid after the call
+       (? (!(two? bs) && !(two? sr)) (: _ (vmflush g) ())
+          (: (sm e9) (: o (assoc <e9 sr)
+                        (? (two? o && id? <>o <>e9) o ()))
+             m2 (filter (\ e9 (member? <>e9 bs || two? (sm e9))) (peep g 'vmap ()))
+             rl (: (go l acc) (? !(two? l) (rev acc)
+                                 (: o (sm <l) (go >l (? (two? o) ((nthr o 2) >< acc) acc))))
+                   (go m2 ()))
+             _ (pins g 'vmap m2 'vpin (vmregs m2 ()))
+             rl)))
    ; -- the ARRAY leg of the vmap (doc/moon-regalloc.md lever 1): a once-declared 1-D
    ; gp-scalar array whose EVERY appearance is x[e] (any bare x is decay -- an escape,
    ; and under & or sizeof nothing licenses) gets element pins under MINTED keys ("x[3]").
@@ -274,6 +281,17 @@
              ((id? k 'for) && id? (loscan >>e) 'callish) 1
              (: (go l) (? !(two? l) () (? (blscan <l) 1 (go >l)))
                 (go e)))))
+   (nreads e nm)                                    ; read occurrences of nm (an asn's own lhs is no read)
+    (? !(two? e) 0
+       (id? <e 'var) (? (= <>e nm) 1 0)             ; names are text: content compare
+       (id? <e 'asn) ((? (two? <>e && id? <<>e 'var && (= <><>e nm)) 0 (nreads <>e nm)) + nreads <>>e nm)
+       (: (go l a) (? !(two? l) a (go >l (a + nreads <l nm)))
+          (go e 0)))
+   (ncls e)                                         ; the call count; a nested loop's repeat (x8)
+    (? !(two? e) 0
+       (: (go l a) (? !(two? l) a (go >l (a + ncls <l)))
+          s (go e (? (id? <e 'call) 1 0))
+          (? (member? <e '(while do for)) (8 * s) s)))
    (lobar? g lab nm)
     (: (go l) (? !(two? l) ()
                  (: b <l (? (id? <b lab && (= <>b nm)) 1 (go >l))))
@@ -301,20 +319,28 @@
    (vmraw g nm)                                     ; the current pin, gates aside (the write-aim reads it)
     (: e9 (assoc nm (peep g 'vmap ()))
        (? (two? e9) <>e9 ()))
-   (lomig g lab)                                    ; a CALLISH keep: scalar pool pins migrate onto
+   (lomig g env sub lab)                            ; a CALLISH keep: scalar pool pins migrate onto
     (: base (lokeep g lab)                          ; granted cs seats -> (kp movs); the movs lay
-       bs (peep g 'csbor ())                        ; before the head label
-       used (vmregs (peep g 'vmap ()) ())
-       (go l free kp mvs)
-        (? !(two? l) [(rev kp) (rev mvs)]
+       bs (peep g 'csbor ())                        ; before the head label. seats gone, a pin still
+       used (vmregs (peep g 'vmap ()) ())           ; worth its reloads SPILLS AROUND: kept on its
+       nc (ncls sub)                                ; pool reg, rostered (g 'saro), and every call
+       (go l free kp mvs sr)                        ; in the loop reloads it (vmcflush)
+        (? !(two? l) (: _ (pin g 'saro sr) [(rev kp) (rev mvs)])
            (: e9 <l nm <e9 r <>e9
-              (? (member? r bs) (go >l free (e9 >< kp) mvs)     ; already seated (an enclosing keep)
-                 (!(two? free) || !(member? nm (peep g 'vuniv ())))
-                  (go >l free kp mvs)                           ; seats gone, or not a scalar: not kept
-                 (: c <free
-                    _ (vmbpin g nm c)
-                    (go >l >free ([nm c] >< kp) (['mov c r] >< mvs))))))
-       (go base (filter (\ r9 !(member? r9 used)) bs) () ()))
+              (? (member? r bs) (go >l free (e9 >< kp) mvs sr)     ; already seated (an enclosing keep)
+                 (two? (assoc nm sr)) (go >l free (e9 >< kp) mvs sr)   ; already rostered (an enclosing loop)
+                 !(member? nm (peep g 'vuniv ())) (go >l free kp mvs sr)   ; not a scalar: not kept
+                 (two? free)
+                  (: c <free
+                     _ (vmbpin g nm c)
+                     (go >l >free ([nm c] >< kp) (['mov c r] >< mvs) sr))
+                 ; the spill-around license: reads outstrip the calls, so the per-call
+                 ; reload beats the per-use load it replaces
+                 (: en (vent g env nm)
+                    (? (two? en && id? <en 'loc && homable? <>>en && (nc <= nreads sub nm))
+                       (go >l free (e9 >< kp) mvs ([nm r [(ldop <>>en) r 'r4 <>en]] >< sr))
+                       (go >l free kp mvs sr))))))
+       (go base (filter (\ r9 !(member? r9 used)) bs) () () (peep g 'saro ())))
    ; -- the forward joins: at a label whose arriving edges are all KNOWN (an if/?: join -- never
    ; a loop head, a user label, or a case), the map need not die. an entry (nm r) survives iff
    ; EVERY arriving edge carries the same pair -- on each edge r held nm's slot value when the
@@ -323,7 +349,10 @@
    ; the free list (ralloc took it, rfree refuses vpin, a dropped pin waits for psreset), so a
    ; restored branch-point map cannot be clobbered by the other arm's scratch. --
    (vmsnap g) (peep g 'vmap ())
-   (vmset g m) (pins g 'vmap m 'vpin (vmregs m ()))
+   (vmset g m)                                      ; a pin door too: a set pin's reg leaves the pool
+    (: R (vmregs m ())
+       (pins g 'vmap m 'vpin R
+               'pool (filter (\ q !(member? q R)) (peep g 'pool ()))))
    (vmeet a b) (filter (\ e9 (: o (assoc <e9 b)
                                  (? (two? o) (id? <>o <>e9) ()))) a)
    ; ⚠ may an ALIAS live across a splice body? only in a register the body's STAGING can
@@ -2731,7 +2760,7 @@
                                                     (a7 + <><l7)))))))
                     (go7 kr ()))
              (? dir
-                 (: _ (vmcflush g)                        ; the call clobbers every pool reg -- a borrowed cs seat rides
+                 (: rl (vmcflush g)                       ; the call clobbers every pool reg -- a borrowed cs seat rides, a rostered pin reloads
                     ; v6-M base ABI: a double result arrives in r0:r1, a bare float as one word
                     ; (binary32 in r0 -- widen it) -- either lands on the f0 fiction
                     fres (? !(v6m? g && flo? ret) ()
@@ -2741,10 +2770,10 @@
                     ; on arm), and the result is the temp's address, materialized fresh in r0
                     srin (? sr6 [['lea (nthr (argr g) 0) 'r4 sroff]] ())
                     srout (? sr6 [['lea 'r0 'r4 sroff]] ())
-                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods)))
+                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods + rl)))
                 (: hr (cgexpr g env hd)                   ; a function-pointer value: park (x64 rbx; arm64 x15), callr
                    pk (pkr g)
-                   _ (vmcflush g)                        ; the call clobbers every pool reg -- a borrowed cs seat rides
+                   rl (vmcflush g)                        ; the call clobbers every pool reg -- a borrowed cs seat rides, a rostered pin reloads
                    fres (? !(v6m? g && flo? (fnret (vty hr))) ()
                            (id? (fnret (vty hr)) 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                            '((movqxr f0 r0)))
@@ -2758,9 +2787,9 @@
                       (t32? g)
                        (: pko (ntmp g 'long)
                           (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['st 'r4 pko 'r0]] +
-                                    spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods)))
+                                    spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods + rl)))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + [['callr pk]] + clean + relods))))))))
+                                spills + ezf + pops + setal + [['callr pk]] + clean + relods + rl))))))))
    ; -- the C99 complex lane (x64): a complex value is its seeded two-member struct (gcplx?), so
    ; it flows everywhere a struct value flows. ARITHMETIC runs here: each side MATERIALIZES into a
    ; double-pair frame temp (the other side's evaluation may call), f0..f3 then carry
@@ -3482,22 +3511,25 @@
        (rv? g) (butret (peep g 'epi epi-a64) + [['jmpr (pkr g)]])     ; riscv: the park (t4) survives the epilogue
        (t32? g) (butret epi-a64 + [['jmpr (pkr g)]])         ; thumb2: the callr target parks in r12 (pkr), untouched by the epilogue
        ('((mov r10 r3)) + butret (peep g 'epi epi) + '((jmpr r10))))            ; park first: the x64 epilogue reloads r3
-   ; a home reload run ((ld rH r4 slot)..) after a ret-position call is DEAD --
-   ; the tail-jump hands the frame back first. skiprel peels exactly those.
-   (skiprel fs hs)
+   ; a home reload run ((ld rH r4 slot)..) after a ret-position call is DEAD, and so is a
+   ; roster reload into a POOL reg (caller-saved dies at the ret) -- the tail-jump hands the
+   ; frame back first. skiprel peels exactly those; the epim? verification downstream keeps
+   ; the loose peel honest. ⚠ pool only: a cs-reg ld here is the EPILOGUE's own reload.
+   (skiprel g fs hs)
     (? !(two? fs) fs
        (: f <fs
-          (? (two? f && (<f = 'ld) && (<>>f = 'r4))
-              (: h (assoc <>f hs)
-                 (? (two? h && (<>h = <>>>f)) (skiprel >fs hs) fs))
-             fs)))
+          (? !(two? f && member? <f ldops9 && (<>>f = 'r4)) fs
+             (: h (assoc <>f hs)
+                (? (two? h && (<>h = <>>>f)) (skiprel g >fs hs)
+                   (member? <>f (peep g 'pool0 ())) (skiprel g >fs hs)
+                   fs)))))
    (sibs g fs lw el hs ej crf)
     (? !(two? fs) ()
        (: f <fs r >fs
           lw2 (? (two? f && (<f = 'lea) && (<>>f = 'r4)) 1 lw)
           cand (!lw2 && two? f && (((<f = 'call) && two? >f) ||
                                      ((<f = 'callr) && id? <>f <>crf)))
-          rr (? cand (skiprel r hs) r)
+          rr (? cand (skiprel g r hs) r)
           (? (cand && epim? rr ej)
               (sibjmp g f + sibs g (drop (tally ej) rr) () el hs ej crf)
              (cand && lbl-epi? rr ej)
@@ -5673,6 +5705,7 @@
      'lomiss ()  ; ...and its recorded edge misses (regen retries on them)
      'csbor ()   ; the cs borrow grant (call-crossing keeps take seats from it)
      'csbu ()    ; ...and the seats a build took (the grant shrinks to the use)
+     'saro ()    ; ...and the spill-around roster (vmcflush reloads its pins)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
    ; and wraps per-call off the liveness (av9, alive's answer)
@@ -5817,7 +5850,8 @@
           (k = 'while)
            (: lc (nlab g ".c") ld (nlab g ".d")
               lic (? (vmon? g) (loscan [<>s <>>s]) ())
-              km (? (id? lic 'callish) (lomig g lc)
+              sv9 (peep g 'saro ())
+              km (? (id? lic 'callish) (lomig g env [<>s <>>s] lc)
                     lic [(lokeep g lc) ()]
                     [() ()])
               kp <km mg <>km                           ; the keep + its seat movs (laid before lc)
@@ -5832,6 +5866,7 @@
                         'cnt >(g 'cnt))
               _ (lochk g lc kp)                        ; the back edge
               _ (pin g 'vkeep >(peep g 'vkeep ()))
+              _ (pin g 'saro sv9)                      ; the roster dies with its loop
               _ (vmset g (lopres g kp))                ; label ld joins: verified entries survive the loop
               (? (bad? c || bad? b) 'bad
                (mg + [['label lc]] + c + (b + [['jmp lc] ['label ld]]))))
@@ -5847,7 +5882,8 @@
                  (: env2 <>ir
                     _ (pin g 'stwrap myw)            ; a decl init re-pinned; the cond is OURS
                     lic (? (vmon? g) (loscan [cnd stp body]) ())
-                    km (? (id? lic 'callish) (lomig g lc)
+                    sv9 (peep g 'saro ())
+                    km (? (id? lic 'callish) (lomig g env2 [cnd stp body] lc)
                           lic [(lokeep g lc) ()]
                           [() ()])
                     kp <km mg <>km                   ; the keep + its seat movs (after init, before lc)
@@ -5866,6 +5902,7 @@
                     st2 (? (two? stp) (cgexpr g env2 stp) ())
                     _ (lochk g lc kp)                ; the back edge
                     _ (pin g 'vkeep >(peep g 'vkeep ()))
+                    _ (pin g 'saro sv9)              ; the roster dies with its loop
                     _ (vmset g (lopres g kp))        ; label ld joins: verified entries survive
                     (? (bad? c || bad? b || bad? st2) 'bad
                        (<ir + mg + [['label lc]] + (? (two? cnd) c ()) +
@@ -5895,7 +5932,8 @@
           (k = 'do)
            (: lt (nlab g ".t") lc (nlab g ".c") ld (nlab g ".d")
               lic (? (vmon? g) (loscan [<>s <>>s]) ())
-              km (? (id? lic 'callish) (lomig g lt)
+              sv9 (peep g 'saro ())
+              km (? (id? lic 'callish) (lomig g env [<>s <>>s] lt)
                     lic [(lokeep g lt) ()]
                     [() ()])
               kp <km mg <>km                         ; the keep + its seat movs (laid before lt)
@@ -5912,6 +5950,7 @@
               c (cbranch g env <>>s 'ne lt)
               _ (lochk g lt kp)                      ; the back edge (and the exit edge)
               _ (pin g 'vkeep >(peep g 'vkeep ()))
+              _ (pin g 'saro sv9)                    ; the roster dies with its loop
               _ (vmset g (lopres g kp))              ; label ld joins
               (? (bad? b || bad? c) 'bad
                  (mg + [['label lt]] +

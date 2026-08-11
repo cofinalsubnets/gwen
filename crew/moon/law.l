@@ -1807,5 +1807,33 @@
       (= 2 (ldsp lo8f 24))                                  ; s: the call-arg read + the post-call reload
       (= 1 (ldsp lo8f 32))))                                ; x[0]: the element pin rides the loop
 
+; -- spill-around (the keep past seat exhaustion): a callish loop with more scalar pins
+; than free cs seats keeps the surplus on their POOL regs -- write-through makes the spill
+; half free, so every call in the loop just reloads the rostered pin from its slot
+; (vmcflush answers the forms). the license is static: reads in the subtree >= its calls
+; (a nested loop's count x8), so a written-only or barely-read pin refuses and the dead
+; per-call reload never exists. soundness rides the same lochk edges as every keep.
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (ldsp fs off) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp && (= off <>>>f))) fs))
+   irR (cgn "long tick(long v); long spl(long n) { long a = 1; long b = 2; long c = 3; long d = 4; long e = 5; long f = 6; long i = 0; long s = 0; while (i < n) { s = s + tick(i) + a + b + c + d + e + f; i = i + 1; } return s + a + b + c + d + e + f; } long nrg(long n) { long x = 0; long a = 1; long b = 2; long c = 3; long d = 4; long e = 5; long i = 0; long s = 0; while (i < n) { x = tick(i); s = s + a + b + c + d + e; i = i + 1; } return s + x + a + b + c + d + e; } int main() { return 0; }")
+   splf (fnf 'spl <>irR)
+   nrgf (fnf 'nrg <>irR)
+   (assert
+      (two? irR)
+      (member? '(mov r14 r9) splf)                   ; four seats grant (b the last) ...
+      (member? '(ld r5 sp 72) splf)                  ; ...then a spills around: the post-call reload into ITS pin
+      (= 2 (ldsp splf 72))                           ; a's slot: that reload + the post-loop read -- no use-site load
+      (member? '(add r10 r10 r5) splf)               ; the in-loop use reads the register
+      (member? '(mov r14 r9) nrgf)                   ; nrg: a-d seat as before ...
+      (= 1 (ldsp nrgf 56))                           ; ...but write-only x REFUSES the roster: store + post-loop
+                                                     ;    read only, no dead per-call reload
+      (= 2 (ldsp nrgf 16))))                         ; e (unpinned at entry): its use-site loads stand
+
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)
