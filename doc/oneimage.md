@@ -47,6 +47,15 @@ mk/install.mk's `binnames` is fourteen commands plus `lib/love/mooncc.image`.
   `love mooncc ..` and a `mooncc` symlink are already the same binary.
 * **`make`.** crew/kore/kore.l registers `'make cook-main 'cook cook-main`; `love kore make
   all` runs a Makefile through cook now. Nothing to add.
+* **holo's linker half, baked** (2026-08-11). elf.l / obj.l / link.l ride `src_holo` beside
+  the native backend, so a plain `love` assembles, lays a `.o` and links one with no cat and
+  no shim — `elf64`, `objelf`, `ldkern` and `ld-read` all answer through `(from 'holo ..)`.
+  holo goes 164 members to 297, the image 4.36 → 5.14 MB, the binary 5.38 → 6.20 MB, boot
+  117.3 → 122.9 M instructions (+4.8%, wall under the timer). ⚠ they read holo's internals
+  bare (`catall`, `le*`, `lay`, `laylax`, `patch-with`), so they sit INSIDE the module text
+  rather than loading over it — one layer, so there is no splice to arrange. ⚠ the cats keep
+  their own copies regardless: love0's holo carries no linker, and love0 is what bakes
+  `mooncc0.image`.
 
 What is missing is only the **width** of the table: crew/seed/up.l's `verbs` is nine names (up
 down seed cook kore kiosko mooncc sh lush), so `love cat` and a `cat` symlink fall through to
@@ -88,6 +97,30 @@ On this box, booting `(quit 0)`:
 A full unified bake is **8.6 s**. For contrast, test.mk:207 records the lane the shims exist to
 avoid: `~0.02s vs ~0.75s per spawn`.
 
+Where that 22 MB goes, measured a piece at a time (`--bake PATH` over a `LOVE_BAKE_LOAD` cat,
+x86_64) — worth having before arguing about what to carry, because the two candidates are not
+the same size at all:
+
+| baked on top of the base | image | delta |
+|---|---|---|
+| base — today's `out/host/love` | 4.36 MB | — |
+| kore's floor (text/core/asbook) | 4.70 MB | +330 KB |
+| one cross backend (arm64.l) | 4.93 MB | +230 KB |
+| holo's linker half | 5.14 MB | **+780 KB** |
+| all five backends *and* the linker | 7.13 MB | +2.4 MB |
+| moon (lex/cpp/parse/gen/mksys/moon) | 17.6 MB | **+10.5 MB** |
+| the rest of the crew (kore/vi/lush/cook/seed/kiosko) | 20.9 MB | +3.3 MB |
+
+Image runs about **10× the canonical `.l` source** it came from, steadily (153 KB of source →
+1.44 MB of image). So the linker half is noise and **moon is four times the whole current
+image** — rung 3's cost is essentially moon's cost, and the rest is rounding.
+
+⚠ the GC line needs the budget pinned to mean anything. Unpinned, a fat image ran the same
+allocation churn *faster* (0.31 → 0.14 s), because `ai_image_load_m` seeds the nursery at
+`nw>>1` and a fat image gets a fat nursery. Under `LOVE_BUDGET_MB=256` — one schedule, both
+sides — the honest tax shows: +20% wall and +36 MB, the permanent live set being copied by
+every major.
+
 **The corpus does not pay the +20 ms.** Makefile:11 exports `LOVE_NO_IMAGE := 1`, so every
 recipe egg-boots on purpose and a fatter baked image is invisible to the gate. ⚠ the same fact
 is a conversion trap: under that export `$m kore cat` egg-boots *without* kore, so every
@@ -99,6 +132,56 @@ size, not a property of unification**: ~47% of a unified boot is the image decod
 format is symbolic, so waking means touching every word. Three times the heap is three times
 the walk. Anything dropped from the cat comes straight off the boot, and any speedup to the
 walk pays here, on today's `--wake` gates, and on `love up`'s nest alike.
+
+## what a smaller seat carries
+
+"One image" is a claim about the **host** frontend. Every other seat picks its own subset
+through its own `ai_libs` table (love.h) and its own boot text: teensy41 and mps2 list `bao`
+alone, playdate `q`/`kanren`/`rune`, the inle kernel nine entries plus the whole kore cat. An
+entry nothing loads costs a `.rodata` row and no heap at all (`lvm_lib`), so the table is the
+cheap lever — what costs is what the boot `(use ..)`s into the heap.
+
+⚠ on a small seat the image is the CHEAP door, not the expensive one. An egg boot peaks at
+149 MB RSS here against 8.8 MB to wake the same content: an image is the compacted live set
+with none of the compiler's garbage. That is why mps2, playdate and teensy41 bake under qemu
+at build time and ship the image — port/teensy41's comment records the 384 KB OCRAM pool
+starving the *bake*, faulting inside the collector. Tiering is about what is IN the set; it is
+never image-vs-source.
+
+So a crew file that rides more than one seat has to **ask what it has**. Three doors, already
+split by how hard the dependency is:
+
+| door | a miss answers | for |
+|---|---|---|
+| `(use 'x)` | **scares** (love/prel.l) | a hard dependency — a silent `()`-splice would be a silent no-op |
+| `(from 'x)` | `()` | a soft module dependency |
+| `(member? 'nom (names ()))` | `()` | a nif — disk, sockets, sh-glob: no module wears them |
+
+and three rules, each already proved somewhere in the tree:
+
+1. **pin the probe to a local, at load time.** a global folds at its reader's compile, so a
+   late `(names ())` probe lies: once a form reading the nom bare has compiled, the nom shows
+   on the book wearing its missing cell. crew/kiosko/kiosko.l's `swigp` and crew/cook/cook.l's
+   verdict both pin ahead of their readers, and cook says why in place.
+2. **guard with `lit?`, never `!`.** `(from 'x)` on a miss is `()`, and `(() 'nif)` is `1` —
+   truthy, so `!` passes a module that isn't there. the presence law wearing its module face.
+   crew/sat/flat.l's `nifseam (from 'glaze 'nif)` is the model: bound once to a local,
+   `lit?`-guarded, interpreted twins behind it.
+3. **build the fallback's caller through `ev`** wherever the present-branch would read an
+   unbound nom bare — even a dead branch's compile scares. crew/cook/cook.l's `cook-glob` and
+   lib/fat.l's `fat-disk` both do exactly this.
+
+cook is the whole pattern in three lines — probe, pin, fall back:
+`(globw pat) (? (lit? cook-glob) (cook-glob pat) (glob1 pat))`, lush's glob where the seat has
+one and a built-in walk where it does not, invisible to every caller. test/holo.l opens the
+same way, which is why it is green on the seats that bake no assembler.
+
+**what is missing is one verb.** There is no soft `use`: `use` is fatal on a miss and `from`
+does not load. A frontend that wants "take holo if this build has it" has to reach `libsrc`,
+which is closure-private inside prel's `use`. A `want` answering `1`/`()` instead of scaring
+would close the ladder — `use` hard, `want` soft, `from` probe — and let a seat's tiering be
+said in its boot text rather than only in `#ifdef`s around its table. Not owed by any rung
+here; noted so it is chosen rather than rediscovered.
 
 ## preliminary — the decode walk
 
@@ -236,7 +319,8 @@ instructions — the walk's share of a fat wake down from ~46% to ~39%.
   its own compiler image under `LOVE_NO_IMAGE=1`. The bake must stay a post-link step.
 * **the other frontends are not this.** wasm, playdate, mps2, teensy41 and the inle kernel
   embed their own lib subsets through the `ai_libs` tables. "One image" is a claim about the
-  host frontend only.
+  host frontend only — and a crew file that rides more than one seat has to ask what it has.
+  The three doors and the three rules: "what a smaller seat carries", above.
 * **the seats.** Every crew file's tail seat must stay quiet in a cat that is loaded under a
   neutral name. The dist cat already satisfies this — which is the evidence the ordering is
   right, and the reason to copy the roster rather than write a new one.

@@ -11,6 +11,11 @@ lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # cross-arch asserts run under both its compilers. Both flavors are generated either way:
 # holo_h is the lcat header, asm0_h the sed-wrapped raw source love0 needs.
 holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/riscv.h
+# holo's LINKER half, baked beside the backends: elf.l wraps assembled bytes in an
+# executable, obj.l lays a relocatable .o, link.l links a set (ldkern is the kernel's door).
+# ⚠ the holo- prefix is load-bearing: a quoted #include "link.h" sits next to glibc's
+# <link.h>, and a missing header would find that one instead of failing.
+ld_h = out/lib/holo-elf.h out/lib/holo-obj.h out/lib/holo-link.h
 asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h
 # the glaze (native JIT): raw-text headers, no lcat round-trip. Evaled ONLY before a
 # --bake, so a normal boot never pays the ~810 ms and the baked snapshot carries an
@@ -46,6 +51,8 @@ lit_h = @mkdir -p out/lib; echo CAT	$@; $(lit) $< > $@
 # holo rides the same lcat pipeline as the egg (the glaze is its client); rune is the CAS,
 # for device frontends that bake it behind the egg.
 $(holo_h): out/lib/%.h: crew/holo/%.l tools/lcat.l
+	$(lcat_h)
+$(ld_h): out/lib/holo-%.h: crew/holo/%.l tools/lcat.l
 	$(lcat_h)
 out/lib/rune.h: crew/rune/rune.l tools/lcat.l
 	$(lcat_h)
@@ -90,4 +97,4 @@ out/lib/love_version.h: force_version
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 
 # the lcat'd headers are PRODUCED BY running love0, so re-lay them whenever love0 moves.
-$(lib_h) $(holo_h) out/lib/rune.h: $(love0)
+$(lib_h) $(holo_h) $(ld_h) out/lib/rune.h: $(love0)
