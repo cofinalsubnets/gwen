@@ -3,9 +3,11 @@ Fix parse error on a declarator list whose first declarator is a function
 `struct S *f(void), *g(int);` and `int a(void), b;` are rejected with
 "expected '{'".
 
-A declaration carries a list of declarators, while a function definition
-takes a single declarator and so admits no comma (C11 6.7 p1, 6.7.6 p1,
-6.9.1 p1):
+The syntax is C89 -- not a C99 or C11 addition. A declaration carries a
+list of declarators, while a function definition takes a single
+declarator and so admits no comma (C89 3.5 and 3.7.1, quoted; standing
+unchanged in C11 6.7 p1 and 6.9.1 p1 but for C99's removal of implicit
+int, which made the specifiers mandatory):
 
     init-declarator-list:
             init-declarator
@@ -14,25 +16,27 @@ takes a single declarator and so admits no comma (C11 6.7 p1, 6.7.6 p1,
             declarator
             declarator = initializer
     function-definition:
-            declaration-specifiers declarator declaration-list_opt
+            declaration-specifiers_opt declarator declaration-list_opt
                     compound-statement
+
+The parameter lists above are prototypes -- C89 3.5.4.3, "Function
+declarators (including prototypes)" -- not the K&R identifier-list form.
 
 parse() dispatches on is_function(), which inspects only the first
 declarator, into function(), which parses that declarator and then
 accepts only ';' or '{' -- so it asks whether a declaration begins with a
-function declarator, where 6.9.1 needs it to ask whether the declaration
+function declarator, where 3.7.1 needs it to ask whether the declaration
 is a definition. Split the symbol-registration half of function() into
 declare_function(), hand a comma tail to the existing global_variable()
 loop, and have that loop dispatch on ty->kind == TY_FUNC, which also
 covers the mixed forms `int f(void), x;` and `int x, f(void);`.
 
 gcc and clang accept the case above with zero diagnostics under
--pedantic-errors at -std= c89, c99, c11, c17 and c23, the productions
-being unchanged in C99 (N1256: 6.7, 6.7.5, 6.9.1) and back to C89.
-Nothing that already compiled changes: building this tree with and
-without the patch and compiling all 49 translation units of the compiler
-and test/ with each, the emitted assembly is byte-identical except for
-parse.c itself and test/macro.c, whose __TIME__ differs between any two
-runs a second apart. make test and make test-stage2 both pass.
+-pedantic-errors at -std= c89, c99, c11, c17 and c23. Nothing that
+already compiled changes: building this tree with and without the patch
+and compiling all 49 translation units of the compiler and test/ with
+each, the emitted assembly is byte-identical except for parse.c itself
+and test/macro.c, whose __TIME__ differs between any two runs a second
+apart. make test and make test-stage2 both pass.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>

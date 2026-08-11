@@ -75,6 +75,9 @@ open-std.org and read:
 
 | claim | checked |
 |---|---|
+| **C89 3.5 carries `init-declarator-list`** — the framing claim | ✅ verbatim |
+| **C89 3.7.1 `function-definition` takes one declarator** | ✅ verbatim (specifiers `_opt`; C99 removed implicit int) |
+| **C89 3.5.4 `direct-declarator ( parameter-type-list )`** — prototypes are C89 | ✅ verbatim, and 3.5.4.3 is titled "Function declarators (including prototypes)" |
 | C11 6.7 ¶1 carries `init-declarator-list` | ✅ verbatim |
 | C11 6.7.6 ¶1 `direct-declarator ( parameter-type-list )` | ✅ verbatim |
 | C11 6.9.1 ¶1 `function-definition`, one declarator | ✅ verbatim |
@@ -89,6 +92,11 @@ and compile every TU of the compiler and `test/` with each. All 49 emit byte-ide
 assembly bar two — `parse.c`, which the patch changes, and `test/macro.c`, which carries
 `__TIME__` and differs between any two runs of the *same* binary a second apart.
 
-⚠ C89 section numbers are deliberately absent: ANSI X3.159-1989 numbered these §3.x and
-ISO C90 renumbered to §6.x, and neither text was checked. The "back to C89" claim rests on
-the `-std=c89 -pedantic-errors` runs instead — a thing the reader can reproduce.
+**C89 is what decides this is a bug report and not a feature request.** The construct is in
+the first standardized C, so "most of C11" was never the bar. And the reproducer's `(void)`
+and `(int)` are *prototypes* — themselves a C89 addition — not the K&R identifier-list
+form, so the README's exclusion of "K&R-style function prototypes" does not reach it. That
+distinction is the one a skimming reader would otherwise get wrong.
+
+⚠ ISO C90 renumbered ANSI's §3.x to §6.x; the C90 text was not checked, so the message
+cites C89 (the ANSI draft, read) and C11 (N1570, read), skipping C90.
