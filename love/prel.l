@@ -724,8 +724,9 @@
 ; the presence a caller no longer carries is carried HERE, since a clean v may be a
 ; closure like the escape's. run n inside and its own raise would land in this trap.
 ; ⚠ nothing unwinds: the escape jumps past every pending restore between the raise and
-; here, so a cleanup belongs in n, never inside f. to catch selectively, let n re-raise
-; what is not yours -- by then the outer help is the one listening.
+; here, so a cleanup belongs in n, never inside f -- or in `mind`'s c, which is the same
+; cleanup owned by the resource instead of by the catcher. to catch selectively, let n
+; re-raise what is not yours -- by then the outer help is the one listening.
 (: (trap f x n)
      (: prev (heard ())
         r (call-cc (\ k (: _ (hear (\ a b (k (\ _ (n a b)))))
@@ -733,6 +734,17 @@
                            (\ _ v))))
         _ (hear prev)
         (r ())))
+; mind -- (f x) with c minded on the way out: c fires once on the clean path and once on
+; the raised one, the condition rides on to the help outside, and the answer is f's. so a
+; helper holds its own port or its own restore, however far under a catcher it sits.
+; ⚠ ALL THREE OPERANDS, like trap, and c is a thunk fired with the unit.
+; ⚠ RAISES ONLY: a scare is what reaches a help, so a bare (k v) into a continuation
+; captured outside jumps clean past every c between there and here.
+; ⚠ c runs with the displaced help back, so its own raise belongs to the trap OUTSIDE.
+(: (mind f x c)
+     (: r (trap f x (\ a b (: _ (c ()) (scare a b))))
+        _ (c ())
+        r))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p !(member? <p ns)) cs)

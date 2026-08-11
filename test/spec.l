@@ -564,7 +564,11 @@
 ; (trap f x n) answers (f x), or (n a b) when a scare landed there -- peg's (\ s y n) aimed at
 ; conditions, less the y a caller already has, so nothing comes back to reflect on (welp is an n).
 ; built from a help that escapes through call-cc, so ⚠ nothing unwinds: a cleanup belongs in n,
-; which fires only once the displaced help is back. numeral COMPOSE
+; which fires only once the displaced help is back -- or in `mind`, the same cleanup owned by the
+; RESOURCE instead of the catcher: (mind f x c) answers (f x) and fires c on the way out either
+; way, the condition riding on to the help outside, so a helper holds its own port however deep
+; under a trap it sits. ⚠ raises only -- a bare (k v) jumps past every c between there and here.
+; numeral COMPOSE
 ; counts are CAPPED by the `apcap` box; the numeric power lane caps the RESULT instead
 ; (~ exponent * log2|base| bits against the box as a word budget), so a size-fixed or
 ; growthless base runs free ((pin apcap 0 n) retunes both). in anger: test/help.l,
@@ -572,6 +576,12 @@
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b `(a b)))) (3 = (trap (+ 1) 2 welp))
+ (: t (tablet 0) _ (pin t 0 'held)                            ; mind: c fires, f's value answers
+    v (mind (\ _ 'value) () (\ _ (pin t 0 'freed)))
+    (&& (id? v 'value) (id? (t 0) 'freed)))
+ (: t (tablet 0) _ (pin t 0 'held)                            ; ..and on the raised path too,
+    r (trap (\ _ (mind (\ _ (scare 'boom 7)) () (\ _ (pin t 0 'freed)))) () (\ a b a))
+    (&& (id? r 'boom) (id? (t 0) 'freed)))                    ; ..the condition riding on outward
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (landed? 99999)
  (: (drain _) (? (two? (scoop 0)) (drain ()) 0)                  ; the ring is shared: drain first
     _ (drain ()) p (twirl (\ _ ()) ()) _ (rest 0) s (scoop 0)

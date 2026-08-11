@@ -229,7 +229,7 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; equality, comparing functions, + and * generic, numeric functions (sine/cosine/log the only
 ; transcendental nifs -- power is application), identities, complex, arrays, chains & lists,
 ; strings & mints, hashes (peep the total presence test), casks, reader operators, macros,
-; control (help/welp, trap, missing, apcap), i/o & ports (sound takes text -- a port, a string or a charlist --
+; control (help/welp, trap/mind, missing, apcap), i/o & ports (sound takes text -- a port, a string or a charlist --
 ; and its return is the read protocol: (datum . rest) with the rest always a charlist, () at a
 ; clean end, the symbol 'torn mid-shape -- spelled at each site, not a book name), bootstrapping.
 ; each law lives in

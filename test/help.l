@@ -81,6 +81,38 @@
         (: _ (trap (\ _ (scare 'x 0)) () (\ a b 0)) (id? 'floor (scare 'y 0))))
 (hear 0)
 
+; mind -- trap's sibling, and the cleanup owned by the RESOURCE instead of by the
+; catcher: (mind f x c) answers (f x) and fires c on the way out, clean or raised,
+; once either way. the condition rides on outward, so the trap that was going to
+; catch it still does -- which is what lets a helper hold its own port however deep
+; under one it sits.
+(: mlog (tablet 0)
+   (note s) (pin mlog 0 (mlog 0 + `(s)))
+   (fresh _) (pin mlog 0 ())
+   (assert
+    ; the clean path: c fires after f, and f's own value is the form's
+    (: _ (fresh ())
+       v (mind (\ _ (: _ (note 'body) 'value)) () (\ _ (note 'freed)))
+       (&& (id? v 'value) ('(body freed) = (mlog 0))))
+    ; the raised path: c fires, and the condition goes on to the catcher outside
+    (: _ (fresh ())
+       r (trap (\ _ (mind (\ _ (: _ (note 'body) (scare 'boom 7))) () (\ _ (note 'freed))))
+               () (\ a b `(a b)))
+       (&& ('(boom 7) = r) ('(body freed) = (mlog 0))))
+    ; one raise fires EVERY c between it and the catcher, innermost first
+    (: _ (fresh ())
+       r (trap (\ _ (mind (\ _ (mind (\ _ (scare 'deep 0)) () (\ _ (note 'inner))))
+                          () (\ _ (note 'outer))))
+               () (\ a b a))
+       (&& (id? r 'deep) ('(inner outer) = (mlog 0))))
+    ; c runs with the displaced help BACK, so its own raise belongs to the trap OUTSIDE
+    (id? 'from-c (trap (\ _ (mind (\ _ 'v) () (\ _ (scare 'from-c 0)))) () (\ a b a)))
+    ; ⚠ RAISES ONLY: only a scare reaches a help, so a k captured outside jumps clean
+    ; past every c between there and here -- the wall this rung stops at
+    (: _ (fresh ())
+       v (call-cc (\ k (mind (\ _ (k 'jumped)) () (\ _ (note 'never)))))
+       (&& (id? v 'jumped) (nil? (mlog 0))))))
+
 ; welp -- the floor handler (repl.l), the fromempty the introductions never
 ; named: it welps a raise to the ZERO POINT, whatever the condition. it is a
 ; plain function, not the installed help -- a policy that runs out of cases
