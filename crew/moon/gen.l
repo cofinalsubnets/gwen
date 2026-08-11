@@ -89,7 +89,10 @@
    (mata b o) (? (id? b 'r4) [['lean 'r0 'r4 o]]            ; consumed, so lean (the & lane lays its own lea)
                  (id? b 'r0) (? (o = 0) () [['add 'r0 'r0 o]])
                  (? (o = 0) [['mov 'r0 b]] [['add 'r0 b o]]))
-   (matv g v) (? !(vm? v) v (mkv (vty v) 'r0 (vfs v + mata (vmb v) (vmo v))))
+   (matv g v) (? !(vm? v) v
+                 (: b (vmb v)
+                    _ (rfree g b)
+                    (mkv (vty v) 'r0 (vfs v + mata b (vmo v)))))
    ; -- the operand pool: an expression value may live in a home-pool register instead of riding
    ; the r0 protocol. g 'pool0 is the fn's whole set (opool minus any param homes), g 'pool the
    ; free list, reset at every statement (values never cross one). ralloc answers a register | ()
@@ -1498,9 +1501,10 @@
    ; (arrays and functions decay to the address; a struct has no register value). the scalar
    ; tail honors the want hint: the load lands straight in the hinted register, so a decl/asn
    ; hint holds and the vmap pin fires (the wide/float/aggregate lanes keep their protocols)
-   (loadval g r W9)                                 ; the VALUE at an lvalue rec (mem face consumed: one fused form)
-    (: ty (vty r) fs (vfs r)
+   (loadval g r W9)                                 ; the VALUE at an lvalue rec (mem face consumed: one fused
+    (: ty (vty r) fs (vfs r)                        ;  form, and the face's base register is freed here)
        b (? (vm? r) (vmb r) 'r0) o (? (vm? r) (vmo r) 0)
+       _ (rfree g b)
        (? (arr? ty) (mkv ['ptr <>ty] 'r0 (fs + mata b o))
           (gvarr? ty) (mkv ['ptr (varel ty)] 'r0 (fs + mata b o))   ; a VLA row decays to its address (p[i] a char*)
           (fn? ty) (mkv ['ptr ty] 'r0 (fs + mata b o))
@@ -1519,6 +1523,7 @@
               usz (tsz g uty) hi (64 - (bitoff + width)) lo (64 - width)
               sgn !(usg? uty || id? uty 'bool)         ; a bool field holds 0/1: never sign-extend
               b (? (vm? r) (vmb r) 'r0) o (? (vm? r) (vmo r) 0)
+              _ (rfree g b)
               (mkv 'long 'r0
                    (vfs r
                     + [[(uldop usz) 'r0 b o]]
@@ -1553,7 +1558,9 @@
                  (: r (cgexpr g env <>e ())
                     (? (bad? r) 'bad
                        !(ptr? (vty r)) 'bad
-                       (mkm <>(vty r) 'r0 0 (tor0 g r))))))
+                       ; the face keeps the pointer's OWN register (a home, a pin, a park --
+                       ; the consumer reads through it and frees it); no bridge to r0
+                       (mkm <>(vty r) (vreg r) 0 (vfs r))))))
           (k = 'dot)
            (: r (: lv (clval g env <>e)
                    ; an rvalue struct base (a call's parked temp: `mk(x).a`) is
@@ -1563,7 +1570,7 @@
                          (? (bad? rv) 'bad !(stru? (vty rv)) 'bad rv))))
               (? (bad? r) 'bad
                  (: fm (fmem g (vty r) <>>e)
-                    (? (bad? fm) 'bad
+                    (? (bad? fm) (: _ (? (vm? r) (rfree g (vmb r)) ()) 'bad)
                        (vm? r) (mkm <>fm (vmb r) (vmo r + <fm) (vfs r))   ; the member FOLDS into the face
                        (mkm <>fm 'r0 <fm (vfs r))))))
           (k = 'clit)                               ; a compound literal is an lvalue: fill a temp, address it
@@ -1845,6 +1852,7 @@
        (? (k = 'szof)                                   ; sizeof EXPR: the UNDECAYED type (clval keeps arrays), size a constant
            (: e2 <>e
               lv (clval g env e2)
+              _ (? (vm? lv) (rfree g (vmb lv)) ())   ; the face is discarded: hand back its base
               ty (? (bad? lv) (: r (cgexpr g env e2 ()) (? (bad? r) 'bad (: _ (rfree g (vreg r)) (vty r)))) (vty lv))
               (? (bad? ty) 'bad
                  (gvarr? ty && 3 < tally ty)   ; sizeof a VLA local: the stashed byte size
@@ -1937,6 +1945,7 @@
                                                  (id? b 'r0) (? (o = 0) () [['add 'r0 'r0 o]])
                                                  (? (o = 0) [['mov 'r0 b]] [['add 'r0 b o]]))))
                            (unlean (vfs r)))
+                    _ (? (vm? r) (rfree g (vmb r)) ())
                     v (mkv ['ptr (vty r)] 'r0 fs)
                     (? ap? v (escan g v)))
                  ; &f on a function name: same address as the bare use (no lvalue).

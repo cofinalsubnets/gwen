@@ -1699,8 +1699,9 @@
       (member? '(ld r5 r6 8) c2)                     ; p->size delivered straight to its seat
       (= 0 (cells c2)) (= 0 (movs c2))               ; no cell, no husk: ld/li/jmp is the whole call
       (member? '(ld r6 r6 0) ca)                     ; the FIRST cell arg delivers -- even onto its
-      (= 1 (cells ca))                               ;   own base's riding home; the second (which
-      (member? '(ld r5 sp 8) ca)                     ;   evaluates first) keeps its cell
+      (= 0 (cells ca))                               ;   own base's riding home; the second reads
+      (member? '(ld r0 r6 8) ca)                     ;   through the face and RIDES r0 across the
+      (member? '(mov r5 r0) ca)                      ;   first's delivery -- no cell at all
       (= 2 (cells ci))))                             ; an indirect call: both cells stand
 
 ; -- the destination die reaches the bin value lane (the fourth lane): a LOAD-shaped

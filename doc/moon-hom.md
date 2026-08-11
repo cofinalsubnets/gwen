@@ -63,9 +63,19 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
     single-pass — sfd's forward call to clval loaded under host-ev and broke the
     love0 bake (the miss surfaces as an unrelated later nom); definition order is
     the fix, and the love0 load is the honest gate for it.
-  * **2c — the indexed face**: the leax/ldx lanes (variable-index element reads ride
-    rvalue pointer arithmetic, a different provenance than clval). with 2b's store
-    face this holds most of addrfold's remaining ~7k.
+  * **2c — the face keeps the pointer's register (landed 2026-08-11).** the ablation
+    reclassified the residue first: the dominant class was not leax/ldx but 2a's own
+    tor0 — the deref face bridged every pointer to r0 and addrfold folded the mov
+    back into the load. now the face carries the pointer's OWN register (a home, an
+    arg seat, a park) and the consumer both lays the fused access and FREES the base
+    (rfree is pin-guarded, so r0/r4/homes are safe no-ops; matv, loadval, lvload,
+    the & lane, szof and the dot fm-bad path each free). p->f off a homed param is
+    (ld W r6 off), no bridge; an arg cell died with it (f(p->tag, p->size) is now
+    cell-free — the law re-truthed to the tighter shape, ci's indirect-call cells
+    honestly stand). love.c −114 insns; addrfold's earnings 7,135 → **5,047**
+    (construction owns 53% of the rung-2 baseline). remaining residue: the
+    store-immediate folds through computed addresses, the true leax/ldx indexed
+    lanes, and spill-position folds.
   * **2d — ('br lt lf)**: the ?:/&&/|| value lanes stop reifying and their vmflush
     joins close (an emission win, not a pass retirement — cmpfuse stays).
 * **rung 3 — the shuttle.** spush2 parks replaced by pool-threaded operand reads
