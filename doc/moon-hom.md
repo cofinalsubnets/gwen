@@ -172,6 +172,12 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
   bitfield, pair and wide stores keep matv (multi-word protocols). love.c
   **−1,459 insns, −4,846 text bytes** -- the largest single step of this arc;
   224 functions shrank, the worst grower is +2 bytes.
+* **the post tail rides the face too (landed 2026-08-11).** `p->n++` is
+  ld/add/st straight through the face's base -- no step rhs runs, so the base
+  survives by construction and not even wrany? is owed. the pair lane keeps its
+  r12 protocol; the rmw lane keeps its moor (it exists for evaluate-once on
+  non-calm lvalues -- `*f() += 1` -- and its address slot IS that guarantee).
+  love.c −143 insns, −358 bytes, zero growers.
 
 each rung past 0 rides the standing ritual: laws re-truthed from measured emissions,
 tortures vs gcc, the differential tier, fixpoint as the self-consistency gate.
