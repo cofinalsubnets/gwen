@@ -351,6 +351,87 @@
                             `(p <>r)))
                     paths)
                tgt))
+   ; -- THE RUNTIME CACHE. a member must be COMPILED to know what it defines, so
+   ; the need loop below cannot select without paying for all of them, and
+   ; nolibc.c alone is ~1.4s of the ~1.5s a hello-world link costs. so each rides
+   ; ~/.love/cache/moon/<sha256>.o, keyed on everything that decides its bytes.
+   ; ⚠ the compiler is one of those inputs and the costly one to get wrong -- a
+   ; stale entry is an old codegen worn silently, and the gates that compile
+   ; nolibc by hand (test_raw, test_libc, test_fixpoint) would pass against it.
+   ; its identity is the BAKED IMAGE, which the wake strips from cmdline: we
+   ; cannot know which one we woke, so every *.image beside the love rides, by
+   ; name and stat. hashing the compiler's .l sources instead looks tighter and
+   ; is a hole -- edit gen.l, link once before the image catches up, and the
+   ; entry stored under the new sources holds the old image's codegen.
+   ; no identity, no cache: the digest is the only door, and a love with no image
+   ; in reach does not open it.
+   ; ⚠ read at each call, never bound -- mhome's law, for mhome's reason.
+   (sdir? st) ((two? st) && (16384 = (& (el st 2) 61440)))
+   (mcdir _)
+    (: h (getenv "HOME")
+       _ (? (string? h) (map (\ s (mkdir (h + s) 493)) '("/.love" "/.love/cache" "/.love/cache/moon")) 0)
+       d (? (string? h) (h + "/.love/cache/moon/") ())
+       (? ((string? d) && (sdir? (stat d))) d ()))
+   ; the build tree keeps the images in the love's own directory, an installed
+   ; nest one rung over in lib/love/ -- the two seats mseat already knows.
+   (mcims d) (map (\ f `(f (stat (d + f)))) (sort (filter dotim? (readdir d))))
+   ; a directory's whole text, names and bytes, sorted and recursive. ⚠ the
+   ; HEADERS are an input too: an edited stdio.h changes what nolibc.c means, and
+   ; hashing the .c alone would not see it.
+   (mctree d)
+    (foldl (\ a f (: p (d + f)
+                     st (stat p)
+                     (? !(two? st) a
+                        (sdir? st) ((a + f) + ("/\n" + (mctree (p + "/"))))
+                        (: r (uread p) ((a + f) + ("\n" + (? (two? r) <>r "") + "\n"))))))
+           "" (sort (readdir d)))
+   ; ⚠ the exe's PATH rides beside its stat: two worktrees hold the same
+   ; cwd-relative include paths, and only the seat tells their headers apart.
+   (mcid home)
+    (: x (readlink "/proc/self/exe")
+       d (? (string? x) (cdir x) ())
+       ims (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ())
+       src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
+       (? !(two? ims) ()
+          (sha256 ((("moon-rt 1\n" + x) + ("\n" + show (stat x))) + (("\n" + show ims) + ("\n" + src))))))
+   ; an entry, read back and checked for its ELF magic: the rename below lands
+   ; each one whole, so a torn file cannot appear, and a mangled one is passed
+   ; over rather than linked. the (1 bytes) wrapper -- an empty entry is absence.
+   (mcget d k)
+    (: r (uread ((d + k) + ".o"))
+       s (? (two? r) <>r "")
+       (? ((3 < tally s) && (s 0 = 127) && (s 1 = 69) && (s 2 = 76) && (s 3 = 70)) `(1 s) ()))
+   ; write beside the entry, then rename ONTO it: two links racing under make -j
+   ; land the same bytes either way, and neither can read a half-written one.
+   ; every failure here is silent by design -- a read-only home costs speed, and
+   ; a cache is never owed a link's correctness.
+   (mcput d k bs)
+    (: p ((d + k) + ".o")
+       t ((p + ".") + show (getpid ()))
+       q (open t "w")
+       _ (? q (: _ (say q bs) (close q)) 0)
+       _ (? (q && !(rename t p)) (mcsweep d) (unlink t))
+       0)
+   ; the bound, swept on the miss we are already paying for -- without it every
+   ; image rebuild mints a generation and abandons the last. nothing here knows
+   ; which entries are dead, so age decides: 30 days unrewritten costs one
+   ; recompile, once.
+   (mcsweep d)
+    (: cut ((clock ()) - 2592000000)
+       (map (\ f (: st (stat (d + f)) (? ((two? st) && (el st 1 < cut)) (unlink (d + f)) 0)))
+            (readdir d)))
+   ; a member's bytes: the cache when it can answer, the compiler otherwise --
+   ; and the compile is what fills the cache. a cache that cannot open is
+   ; invisible, and the link is the one that happens today, at today's price.
+   (mcobj cd id src is tgt)
+    (: k (? ((string? cd) && (string? id))
+            (sha256 (((id + "\n") + (show tgt + "\n")) + ((src + "\n") + (foldl (\ a i (a + i + "\n")) "" is))))
+            ())
+       hit (? (string? k) (mcget cd k) ())
+       (? (two? hit) <>hit
+          (: bs (string (cc-objbytes src is () tgt ()))
+             _ (? (string? k) (mcput cd k bs) 0)
+             bs)))
    (rtpull srcs tgt nostd)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -373,12 +454,13 @@
        (? (nostd || !(string? home)) ()
           (: mdir (home + "lib/math/")
              inc (home + "include/")
+             id (mcid home) cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
              ; the IMPLICIT runtime compiles with the system tail LEFT ON (the () below):
              ; these are our own sources reaching only our own headers, and the user's
              ; -nostdinc is about the user's translation units, not this one.
              mems (map (\ p (p + dusyms <p <>p mach))
-                       ((`("nolibc" (string (cc-objbytes (home + "lib/nolibc.c") `(inc) () tgt ())))
-                          >< map (\ f `(f (string (cc-objbytes (mdir + f) `(mdir inc) () tgt ()))))
+                       ((`("nolibc" (mcobj cd id (home + "lib/nolibc.c") `(inc) tgt))
+                          >< map (\ f `(f (mcobj cd id (mdir + f) `(mdir inc) tgt)))
                                  (sort (filter dotc? (readdir (home + "lib/math")))))
                         + (? (member? tgt '(x64 arm64 riscv64))
                              `(`("sys" (string (mksys-bytes tgt)))) ())))
@@ -481,6 +563,7 @@
    (dota? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 97)))
    (dotc? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 99)))
    (doto? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 111)))
+   (dotim? p) (: n (tally p) ((6 < n) && (snip p (n - 6) n = ".image")))
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r (n - 1)))
                 (go 0 0 + "o"))
