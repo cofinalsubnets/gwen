@@ -14,6 +14,60 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
+## 2026-08-11 — after the cs-seat rung, pmin-gated (HEAD 3dd9e1fc)
+
+Third fill today. Between it and the last: the callish cs-homes rung, landed
+pmin-GATED after its own A/B — doc/moon-regalloc.md's ledger carries the story (the
+fat grant read −1.6% static insns and measured **+2.7% dynamic**; a per-invocation
+save cannot buy a per-call saving in early-out code) — and the str-juxt arc moved
+love.c/ev/prel and grew the corpus ~70 tests per target. ⚠ So the corpus rows
+RE-BASE here: not comparable backward (the 2026-07-18 lesson again); the clean
+cross-rung statement is the same-corpus A/B in the ledger, which measured the landed
+grant dynamically EXACT (insns flat to the third digit, cycles −0.9%). This fill's
+walls ran on a shared-loaded box (load ~2, another session on the tree): absolute
+walls +10%, ratios stand, insn lanes unaffected (user-scoped).
+
+### text size — `size -A`
+
+| | mooncc | gcc | clang |
+|---|---|---|---|
+| .text (bytes) | 581,344 | 251,763 | 251,123 |
+
+2.32× → **2.31×**, shared-symbol 1.67× (flat): str-juxt's love.c growth and the
+pmin-gated grant's trim (13 symbols, −1,020 B, ai_ini_0 −736 the biggest) net out.
+The unshipped fat grant had read 573,152 / 2.28× / 1.64× — that 8 KB is real and
+waits on shrink-wrap (saves at the callish region's head, so a fast path never
+pays), the allocator leg's next boundary.
+
+### runtime — the corpus (NEW BASE), egg-boot subtracted, median of 3
+
+| | mooncc | clang | ratio | gcc |
+|---|---|---|---|---|
+| corpus insns (G, user) | 40.95 | 25.17 | **1.63×** | 23.23 |
+| corpus cycles (G, user) | 15.23 | 12.04 | 1.27× | 11.92 |
+| egg boot insns (G) | 8.92 | 5.70 | 1.57× | 5.25 |
+
+The 1.60× → 1.63× move against the last fill is the CORPUS moving, not the codegen:
+the str-juxt tests lean on the string lanes (mooncc's 2.4–3× band), and the same-
+corpus A/B pinned the rung itself at exactly flat. 1.63× is the number to beat on
+this corpus.
+
+### the pair — wall, boot subtracted (loaded box: ratios only)
+
+| | mooncc | gcc | clang | mooncc/clang |
+|---|---|---|---|---|
+| chacha20 (ms) | 1173 | 325 | 199 | 5.9× |
+| poly1305 (ms) | 1490 | 1460 | 891 | 1.67× (gcc 1.02×) |
+
+flat, the expected null — the cs-seat rung's levers are call boundaries, not array
+slots.
+
+The methodological catch this fill exists to record: the static ledger (insns, .text,
+per-symbol growers) APPROVED the fat grant unanimously, and only the corpus row
+caught the +2.7% — the differential is the instrument that reads invocation mix,
+which no static count sees. A codegen rung that changes per-invocation costs owes a
+corpus A/B before it ships.
+
 ## 2026-08-11 — after the hom ladder (HEAD d83892e3)
 
 Same box, same method, hours after the previous fill. Between them sits the whole
