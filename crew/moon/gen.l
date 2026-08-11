@@ -1531,6 +1531,11 @@
                   _ (pin g 'off (peep g 'off 0 + n))
                   _ (pin g 'slots ([off n] >< peep g 'slots ()))
                   off)
+   ; the object under a frame offset, off the slot map -- () when no cell claims it
+   (obj9 sl x) (? !(charm? x) ()
+                  (: (go l) (? !(two? l) ()
+                               (: o <l (? ((<o <= x) && (x < (<o + <>o))) o (go >l))))
+                     (go sl)))
    (ntmp g ty) (nslot g $ (tsz g ty + 7) & -8)
    ; the store-immediate op for (ty, k) | () -- the vi fold's license, shared by the
    ; asn/decl delivery lanes (x64 only: si is C6/C7). st sign-extends imm32, the
@@ -3698,15 +3703,11 @@
              _ (foldl (\ _ o (pin t o 1)) 0 ((stops9 + stxops) + (siops + '(cmpm))))
              t)
    (a4ize fs)
-    (: (swap f i bp)
-        (? !(two? f) ()
-           (link (? ((i = bp) && id? <f 'r4) 'fp <f)
-                 (swap >f (i + 1) bp)))
-       (go l)
+    (: (go l)
         (? !(two? l) ()
            (: f <l
               bp (? (two? f) (peep a4base <f -1) -1)
-              (link (? (bp < 0) f (swap f 0 bp))
+              (link (? (0 <= bp && id? (nthr f bp) 'r4) (reop f bp 'fp) f)
                     (go >l))))
        (go fs))
    ; v6-M slot retarget: slots live at fp-NEGATIVE offsets, but ARMv6-M loads/stores encode only
@@ -3882,12 +3883,19 @@
            _ (foldl (\ _ o (pin t o 2)) 0 (stops9 + siops + '(cmpm)))
            _ (foldl (\ _ o (pin t o 4)) 0 stxops)
            t)
+   ; rebuild a form with the operand at position i9 replaced -- the a4base/uoff seam
+   ; every frame-rewriting pass (a4ize, unframe, repack) lands on
+   (reop f i9 v) (: (go e i) (? !(two? e) ()
+                                (link (? (i = i9) v <e) (go >e (i + 1))))
+                    (go f 0))
+   ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
+   (pro4? fs) (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp))
    (unframe g fs)
     (: a64 (a64? g)
        fb (? a64 'fp 'r4)
        pro (? a64
               (nthr fs 1 = '(push lr) && nthr fs 2 = '(push fp) && nthr fs 3 = '(lea fp sp 0))
-              (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp)))
+              (pro4? fs))
        sf (nthr fs (? a64 4 3))
        K (? (two? sf && <sf = 'sub && <>sf = 'sp && <>>sf = 'sp && charm? <>>>sf)
             <>>>sf ())
@@ -3982,10 +3990,7 @@
              vs (<vr || r3f)                         ; the save is a slot: r3f forces the sub
              K9 (K + (? a64 32 8))
              (radj f2 bp op9 D)                      ; the base slot -> sp, its displacement -> off+K+D
-              (: (go e i) (? !(two? e) ()
-                             (link (? (i = bp) 'sp (i = op9) (<e + K + D) <e)
-                                   (go >e (i + 1))))
-                 (go f2 0))
+              (reop (reop f2 bp 'sp) op9 ((nthr f2 op9) + K + D))
              (rw l D)
               (? !(two? l) ()
                  (: n3 (epi3? l)
@@ -4316,7 +4321,7 @@
           (: subdrop (tablet 0) addsh (tablet 0)     ; sub-index -> drop; add-index -> shrink bytes
              stconv (tablet 0) ldconv (tablet 0)     ; st/ld-index -> the slot's positive offset
              pf3 (nthr fs 3)                         ; the prologue's frame sub: (sub sp sp F)
-             cvok ((nthr fs 1 = '(push r4)) && (nthr fs 2 = '(mov r4 sp)) &&
+             cvok (pro4? fs &&
                    two? pf3 && (<pf3 = 'sub) && (<>pf3 = 'sp) && (<>>pf3 = 'sp) && charm? <>>>pf3)
              F (? cvok <>>>pf3 0)
              (mark w cv) (? !(two? w) cv
@@ -4488,11 +4493,7 @@
    (deadst g fs)
     (: used (tablet 0) esc (tablet 0)
        slots (peep g 'slots ())
-       (obj9 x) (? !(charm? x) ()
-                   (: (go l) (? !(two? l) ()
-                                (: o <l (? ((<o <= x) && (x < (<o + <>o))) o (go >l))))
-                      (go slots)))
-       (obmark x) (: o9 (obj9 x)                     ; the object under x rides whole | the old bar
+       (obmark x) (: o9 (obj9 slots x)               ; the object under x rides whole | the old bar
                      (? (two? o9) (mark <o9 <>o9) (pin esc 'y 1)))
        ; ⚠ a slot is read in BYTES, never at one offset: a 16-byte struct param's second
        ; eightbyte is STORED at off+8 and read at off+12 (that eightbyte's second field),
@@ -4554,16 +4555,12 @@
    ; the sub SHRINKS. x64 only -- arm rides its own frame family. --
    (repack g fs)
     (: slots (peep g 'slots ())
-       pro (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp))
+       pro (pro4? fs)
        sf (nthr fs 3)
        K (? (two? sf && (<sf = 'sub) && (<>sf = 'sp) && (<>>sf = 'sp) && charm? <>>>sf)
             <>>>sf ())
        (? (!(two? slots) || arm? g || peep g 'hasasm () || !pro || !(charm? K)) fs
           (: obs (tablet 0)                            ; base -> (size lo hi esc)
-             (obj9 x) (? !(charm? x) ()
-                         (: (go l) (? !(two? l) ()
-                                      (: o <l (? ((<o <= x) && (x < (<o + <>o))) o (go >l))))
-                            (go slots)))
              (touch b n i e9)
               (: w (peep obs b ())
                  (pin obs b (? (two? w) [n <>w i (nthr w 3 || e9)] [n i i e9])))
@@ -4587,7 +4584,7 @@
                           bp (peep a4base <f -1)
                           (? (0 <= bp && id? (nthr f bp) 'r4)
                              (: X (nthr f (peep uoff <f -1))
-                                o9 (obj9 X)
+                                o9 (obj9 slots X)
                                 (? (loose? >f 1 bp) 'no
                                    (two? o9)
                                     (: _ (touch <o9 <>o9 i
@@ -4644,15 +4641,11 @@
                           (place >rs ([hi n <pr] >< act2) <>pr)))
                    high2 (place rows () 8)
                    K2 (high2 + 15 & -16)
-                   (radj2 f bp op9)                    ; a mapped touch -> its packed spelling
+                   (radj2 f op9)                       ; a mapped touch -> its packed spelling
                     (: X (nthr f op9)
-                       o9 (obj9 X)
+                       o9 (obj9 slots X)
                        nb (? (two? o9) (peep nmap <o9 'no9) 'no9)
-                       (? !(charm? nb) f
-                          (: (go e i) (? !(two? e) ()
-                                         (link (? (i = op9) (nb + (X - <o9)) <e)
-                                               (go >e (i + 1))))
-                             (go f 0))))
+                       (? !(charm? nb) f (reop f op9 (nb + (X - <o9)))))
                    (rw l i)
                     (? !(two? l) ()
                        (: f <l
@@ -4660,7 +4653,7 @@
                                 (i = 3) ['sub 'sp 'sp K2]
                                 (: bp (peep a4base <f -1)
                                    (? (0 <= bp && id? (nthr f bp) 'r4)
-                                      (radj2 f bp (peep uoff <f -1)) f)))
+                                      (radj2 f (peep uoff <f -1)) f)))
                           (f2 >< rw >l (i + 1))))
                    (? (K2 < K) (rw fs 0) fs))))))
 
