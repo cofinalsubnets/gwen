@@ -32,6 +32,17 @@
  (= "abZcd"    (: (f x) ("ab" x "cd") (f "Z")))        ; nothing known past the head -> wholly residual
  (= "xy" (: (f s) (s "y") (f "x")))           ; an UNKNOWN head stays residual, and still joins at run time
 
+ ; --- ... and the walk is the head VALUE's purity, not text: a point and a numeral fold too ---
+ (= 256 (: (f x) (3 2 x) (f 2)))              ; (3 2) is the charm 8, folded; the unknown tail rides on
+ (= 9   (: (f x) ('sym 5 x) (f 9)))           ; a point applies const-1 -> (1 x), the identity
+ (= 5   (0 0 5)) (= 262144 (2 3 4))           ; const of const is id; the tower, both charm-sized
+ (= 1.0 (: (f x) (2 1.5 x) (f 1)))            ; (2 1.5) is the gem 2.25 -- charm-sized, so it folds
+ ; ⚠ a CHAIN is its own eliminator, so applying one CALLS the operand -- never folded
+ (= 3 (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))
+ ; ⚠ and a numeral whose answer OUTGROWS a charm stays residual rather than baking into the image:
+ ; a composition here, 2**200000 in test/task.l -- whose yieldable-multiply gate leans on it
+ (= 3 (: (f x) (3 (\ y (y + 1)) x) (f 0)))
+
  ; --- currying: under-application yields a usable closure; prefix+unknown tail ---
  (= 7  ((+ 3) 4))                                ; (+ 3) baked, applied at runtime
  (= 15 (: (g x) (+ 10 x) (g 5)))                 ; (+ 10) folded; x unknown -> residual

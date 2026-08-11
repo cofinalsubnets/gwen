@@ -296,13 +296,22 @@
    (kval v) (? (atom? v) v <>v)                                                  ; a const FORM -> its value
    (allk as) (all propk? as)                                                       ; all args constant?
    (foldc o as) (cbake (foldl (\ g a (g a)) o (map kval as)))                 ; apply the nif to the consts
-   ; a TEXT head applies PURE and TOTAL at every operand -- byte index or juxtaposition -- so a
-   ; KNOWN PREFIX folds away even when the tail stays unknown: ("ab" "cd" x) leaves ("abcd" x).
-   ; it stops as soon as the value stops being text (an index answers a charm): the law ends there.
-   (cpstr v as) (: k (? (two? as) (kconst <as) ())
+   ; cpap: fold a head's KNOWN PREFIX, one operand at a time, for as long as the value in hand
+   ; still applies purely -- so an unknown tail costs only itself: ("ab" "cd" x) leaves ("abcd" x)
+   ; and (3 2 x) leaves (8 x). the predicate is re-read every step, so a value that stops being
+   ; foldable simply ends the walk and gets baked as the residual head.
+   ; ⚠ a NUMERIC head is held to a CHARM-SIZED answer. church application is the one lane where a
+   ; tiny source form answers an unboundedly large value -- (200000 2) is a 25KB bignum, (3 f) a
+   ; composition -- and folding BAKES that into the image. a star bounded by max-charm costs about
+   ; what the form it replaced did, so (3 2), (2 3 4), (2 1.5) and a small twin all still fold.
+   ; `star?` is doing size work, not order work: it drops the CONTAINERS, whose magnitude says
+   ; nothing about how many cells they are.
+   (cpgrew? v r) (constellation? v && nil? (star? r && (abs r) <= max-charm))
+   (cpap v as) (: k (? (two? as) (kconst <as) ())
     (? (atom? as) (cbake v)                                              ; every operand consumed -> the value
-       (string? v && <k) (cpstr (v >k) >as)                              ; known operand -> apply it, walk on
-       (cbake v >< as)))                                                 ; stuck -> the folded head, then the rest
+       (nil? (pure-ap? v && <k)) (cbake v >< as)                         ; unknown operand or an impure apply -> stop
+       (: r (v >k) (? (cpgrew? v r) (cbake v >< as)                      ; ... or a numeral that left the charm band
+                       (cpap r >as)))))                                  ; else take the step and walk on
    ; --- the known-lambda INLINER (cprop's beta-reduction lane) ----------------------------
    ; beta-reduce an application whose (resolved) head is a statically-known lambda. SOUND by three
    ; gates: the lambda is INLINABLE (non-recursive, body bsub-safe `simple?`, and CLOSED -- every
@@ -316,6 +325,12 @@
    ; guard: a beta result that is itself a lambda is committed only when CONSUMED (op=1, an
    ; enclosing application's head); at a VALUE position (op=0) we REVERT to the un-inlined source.
    (pure-head? h) !!(peep pureset (gv h ()) 0)                                    ; h's global value is a KNOWN PURE fn (the lifted ~50-fn set)
+   ; pure-ap?: applying THIS VALUE is effect-free, so cpap may fold a known operand into it here
+   ; instead of at run time. the curated pure fns by value, plus the data lanes that never RUN what
+   ; they are handed: text indexes or joins, a point answers const-1, a numeric or array COMPOSES
+   ; (it builds the composition, it does not call it). ⚠ a CHAIN is out -- it is its own
+   ; eliminator, ((a . b) g) == (g a b), so applying one CALLS the operand.
+   (pure-ap? v) (|| (string? v) (nom? v) (constellation? v) !!(peep pureset v 0))
    (allp as se) (all (\ a (purep a se)) as)                                  ; all args effect-free?
    (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
     (h = a) 1                                                                         ; nom / number / string
@@ -391,8 +406,8 @@
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h)               ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
-                (<hk && string? >hk && two? as && propk? <as)                         ; a TEXT head with a KNOWN operand: fold the whole known
-                  (cpstr >hk as)                                                      ;   prefix, an unknown tail keeps the folded text as its head
+                (<hk && pure-ap? >hk && two? as && propk? <as)                        ; a PURE-APPLYING head with a KNOWN operand: fold the whole
+                  (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
                 (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
    (wx (cprop x () 64 0 0) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a nom? literal.

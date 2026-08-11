@@ -124,6 +124,13 @@
         ; frequency-ordered, so it stays a chain: k=2/3 costs one or two compares. a table would
         ; only pay past k=6.
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
+        ; past cmp8 the count still has to compose. numfn LAYS the thread -- straight-line, no
+        ; counter, the fast shape -- but the 3n+5 cells ARE the cost, and they are the one thing a
+        ; numeral can grow without bound: n=100000 is ~72MB, and apcap admits 2^20. so the thread
+        ; is for counts small enough to be free, and past nfcap nfloop composes by COUNTING
+        ; instead -- one closure, O(1) cells, the same function.
+        (nfloop n f x) (? (< n 1) x (nfloop (+ -1 n) f (f x)))
+        nfcap 1024
         ; an open star: a coin whose die pins slot 7 is numeric by declaration, so a numeral powers
         ; it through its own * (ipow is generic). no size to read, so this lane keeps the count cap.
         (starred? x) (? (coin? x) (= 1 (peep (die-of x) 7 0)) 0)
@@ -136,7 +143,7 @@
                         (: k (sat n)
                            (? (< k 1) 1 (= k 1) x
                               (apover k) (scare 'apcap k)
-                              (: c (cmp k) (? c (c x) (numfn k x))))))
+                              (: c (cmp k) (? c (c x) (< nfcap k) (nfloop k x) (numfn k x))))))
         (pin book 'num-ap num-ap)))
 ; seal-hook caches num-ap into the VM, so it must follow the pin above.
 (seal-hook 1 num-ap)
