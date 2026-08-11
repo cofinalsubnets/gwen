@@ -1578,6 +1578,28 @@
           (k = 'moor) (mkm <>>e 'r0 0 [['ld 'r0 'r4 <>e]])
           'bad))
 
+   ; the STATIC face of a store target, one door: a deref-const element (afd), or a dot
+   ; chain over a frame local whose clval face is (r4, off) with NO emission -- (off ty)
+   ; | (). the frame-direct store lanes ride either identically (a dot's aelem/adrop9 are
+   ; no-ops); afd's type gate is mirrored so every rider stores flat. ⚠ only a pure
+   ; var/dot chain over a loc enters clval -- any other base could emit into the discard.
+   (sfd g env e)
+    (? (id? <e 'deref) (afd g env e)
+       !(id? <e 'dot) ()
+       (: (dotv? x) (? (id? <x 'var) <>x (id? <x 'dot) (dotv? <>x) ())
+          nm (dotv? e)
+          (? !nm ()
+             (: en (vent g env nm)
+                (? !(two? en && id? <en 'loc) ()
+                   (: lv (clval g env e)
+                      (? !(vm? lv) ()
+                         !(id? (vmb lv) 'r4) ()
+                         (two? (vfs lv)) ()
+                         (: ty (vty lv)
+                            (? ((ptr? ty || member? ty '(char uchar bool short ushort int uint long ulong)) &&
+                                !(pair? g ty))
+                               [(vmo lv) ty] ())))))))))
+
    ; -- the gcc builtins love.c reaches -- x64 as short raw splices, arm64 as neutral IR or one
    ; raw word (clz): trap = ud2 / brk; inf/nanf = IEEE constants into f0; expect = its value (the
    ; hint drops); clear_cache = nothing on x86; clzll = bsr+xor / clz; isinf = bits<<1 == inf<<1;
@@ -1944,7 +1966,7 @@
                     (? (bad? r) 'bad (loadval g r wnt)))))
           (k = 'asn)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
-              fd (? (<<>e = 'deref) (afd g env <>e) ())
+              fd (sfd g env <>e)
               (? (two? rv && <rv = 'regv)   ; store into a register-homed scalar (param or local)
                   (: r (cgexpr g env <>>e <>rv)   ; the rhs aims straight at the home
                      (? (bad? r) 'bad
@@ -2158,7 +2180,7 @@
                                      cvt ty 'r0 + [[(stop ty) 'r1 0 'r0]]))))))))))))
           (k = 'post)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
-              fd (? (<<>e = 'deref) (afd g env <>e) ())
+              fd (sfd g env <>e)
               ; a PINNED scalar/element steps IN its register (old value to r0, step, store,
               ; the pin stays valid) -- the loop-carried counter's shape. bool keeps the
               ; normalize lane; pair/d128 never pin. ⚠ the vmon?/argseal gate is LOAD-

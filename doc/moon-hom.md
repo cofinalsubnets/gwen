@@ -51,10 +51,21 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
     −160 insns, −770 text bytes; addrfold's earnings 10,691 → 7,135 (a third moved
     to construction). gates: battery, cts (0 wrong), libc, ccarm64 129/129,
     ccriscv 128/128, fixpoint, fast gate.
-  * **2b — the mem STORE face**: promote the matv'd lanes to consume (st b o v)
-    directly. **2c — the indexed face**: the leax/ldx lanes (variable-index element
-    reads ride rvalue pointer arithmetic, a different provenance than clval).
-    together they hold addrfold's remaining 7.1k.
+  * **2b — the mem STORE face (landed 2026-08-11).** smaller than planned, because
+    two doors already stood open: parse's calm? already desugars every static `op=`
+    to a plain asn, and the frame-direct fd lanes already lay (st r4 off v). the rung
+    is one new door — `sfd`, the STATIC face of a store target: a deref-const element
+    (afd) or a pure var/dot chain over a frame local whose clval face is (r4, off)
+    with no emission — wired into the asn and post fd lanes. s.a.z += 3 is ld/add/st
+    on the slot, no lean, no park; the load-free slot then feeds the deadst cascade.
+    love.c −2 insns (its style is pointer-heavy — the shape lives in struct-local
+    code, where the probe shows 3+ forms saved per store). ⚠ lesson: c0 is
+    single-pass — sfd's forward call to clval loaded under host-ev and broke the
+    love0 bake (the miss surfaces as an unrelated later nom); definition order is
+    the fix, and the love0 load is the honest gate for it.
+  * **2c — the indexed face**: the leax/ldx lanes (variable-index element reads ride
+    rvalue pointer arithmetic, a different provenance than clval). with 2b's store
+    face this holds most of addrfold's remaining ~7k.
   * **2d — ('br lt lf)**: the ?:/&&/|| value lanes stop reifying and their vmflush
     joins close (an emission win, not a pass retirement — cmpfuse stays).
 * **rung 3 — the shuttle.** spush2 parks replaced by pool-threaded operand reads
