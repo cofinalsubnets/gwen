@@ -1048,6 +1048,14 @@
    (hasraw2 fs) (? !(two? fs) ()
                    (: f2 <fs
                       (? (two? f2 && (= <f2 'raw) && (= <>f2 want2)) 1 (hasraw2 >fs))))
+   ;; the "m" operand: an ADDRESS in a picked register, substituted as the base and the
+   ;; zero displacement holo spells a memory operand with -- so `vmxon %0` has to read
+   ;; back as `vmxon r10, 0`, two tokens where every other constraint substitutes one.
+   g3 (cgn "void f(unsigned long *p) { asm volatile(\"vmxon %0\" : : \"m\"(*p) : \"memory\"); } int main() { return 0; }")
+   want3 (hb 'x64 (asm-text "vmxon r10, 0"))
+   (hasraw3 fs) (? !(two? fs) ()
+                   (: f2 <fs
+                      (? (two? f2 && (= <f2 'raw) && (= <>f2 want3)) 1 (hasraw3 >fs))))
    (assert
       (= (cast "void f() { asm(\"sys\"); }")
          '(prog ((fn "f" () (blk ((asm "sys" () () ())))))))
@@ -1072,6 +1080,9 @@
       ; like `sys`, so the template is bare and the operands only pin -- the
       ; assembled body is exactly the opcode bytes
       (two? g2) (hasraw2 <>g2)
+      (two? g3) (hasraw3 <>g3)
+      ; "=m" is refused: an output to memory wants a store the body cannot be asked to make
+      (refused? (cgn "int main() { long v; asm(\"sys\" : \"=m\"(v)); return 0; }"))
       (refused? (cgn "int main() { long v; asm(\"li %0, 1\" : \"=q\"(v)); return 0; }"))
       (refused? (cgn "int main() { asm(\"sys\" : : \"r0\"(1), \"r0\"(2)); return 0; }"))
       (refused? (cgn "int main() { asm(\"sys\" : : \"r4\"(1)); return 0; }"))

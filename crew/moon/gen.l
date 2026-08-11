@@ -5713,9 +5713,14 @@
    (asmreg? g r9) (member? r9 asmregs || (a64? g && id? r9 'r4))
    ; a constraint's register part: "r" -> 'pick, "i" -> 'imm, "rN" -> the nom;
    ; the x86 letters "a"/"d" pin rax/rdx (the divq protocol), "rm" reads as "r"
+   ;; "m" is a MEMORY operand, and the neutral surface has no such addressing mode as one token:
+   ;; holo spells memory as a base and a displacement, two operands. So a "m" input lowers to the
+   ;; ADDRESS of its expression in a picked register and substitutes as `rN, 0` -- two tokens where
+   ;; the others substitute one, which is exactly what `vmxon %0` needs to read as `vmxon r3, 0`.
+   ;; Input only: "=m" would want a store the body cannot be asked to make.
    (asmc c9) (: n (tally c9)
                 (? (n < 1) 'bad
-                   (n = 1) (? (c9 0 = 114) 'pick (c9 0 = 105) 'imm
+                   (n = 1) (? (c9 0 = 114) 'pick (c9 0 = 105) 'imm (c9 0 = 109) 'mem
                               (c9 0 = 97) 'r0 (c9 0 = 100) 'r2 'bad)
                    (c9 = "rm") 'pick
                    (intern c9)))
@@ -5740,13 +5745,13 @@
     (: _ (pin g 'hasasm 1)
        tmpl <>s
        ; one operand list, GNU order: ('o|'x reg expr) an output (x in-out),
-       ; ('i reg expr) a register input, ('m imm) an immediate input
+       ; ('i reg expr) a register input, ('b reg (addr expr)) a MEMORY input, ('m imm) an immediate
        (oconv l acc)
         (? !(two? l) (rev acc)
            (: c <<l n (tally c)
               h (? (0 < n) (c 0) 0)
               k (? (h = 61 || h = 43) (asmc (snip c 1 n)) 'bad)
-              (? (id? k 'bad || id? k 'imm) 'bad
+              (? (id? k 'bad || id? k 'imm || id? k 'mem) 'bad
                  (oconv >l ([(? (h = 43) 'x 'o) k <><l] >< acc)))))
        (iconv l acc)
         (? !(two? l) (rev acc)
@@ -5755,6 +5760,7 @@
                  (id? k 'imm)
                   (? (two? e && id? <e 'num && charm? <>e)
                      (iconv >l (['m <>e] >< acc)) 'bad)
+                 (id? k 'mem) (iconv >l (['b 'pick ['addr e]] >< acc))
                  (iconv >l (['i k e] >< acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
@@ -5784,13 +5790,22 @@
                                      (asmreg? g (intern c)) (cok? >l)
                                      ())))
                    (? (bad? asgn || !(cok? <>>>>s)) 'bad
-                      (: txt (asmsub tmpl (map (\ a9 (? (charm? a9) (show a9) (peep asmnames a9 "r?"))) asgn))
+                      (: ; the operand TEXTS, walked against their kinds: an immediate prints as a
+                         ; number, a register as its name, and a "m" operand as `rN, 0` -- the base
+                         ; and displacement holo's memory operands are spelled with.
+                         (optext l al acc)
+                          (? !(two? l) (rev acc)
+                             (: a9 <al
+                                (optext >l >al ((? (charm? a9) (show a9)
+                                                   (id? <<l 'b) ((peep asmnames a9 "r?") + ", 0")
+                                                   (peep asmnames a9 "r?")) >< acc))))
+                         txt (asmsub tmpl (optext ops9 asgn ()))
                          (? (bad? txt) 'bad
                             (: ; inputs (and in-out outputs) evaluate and PUSH..
                                (loads l acc)
                                 (? !(two? l) acc
                                    (: e2 <l
-                                      (? (member? <e2 '(x i))
+                                      (? (member? <e2 '(x i b))
                                           (: r (cgexpr g env <>>e2 ())
                                              (? (bad? r) 'bad
                                                 (flo? (vty r) || stru? (vty r)) 'bad
@@ -5801,7 +5816,7 @@
                                   (: ; ..then POP into their registers, reverse order
                                      (pops l al acc)
                                       (? !(two? l) acc
-                                         (? (member? <<l '(x i))
+                                         (? (member? <<l '(x i b))
                                             (pops >l >al (spop <al + acc))
                                             (pops >l >al acc)))
                                      ; the body: text -> IR forms -> BYTES, one opaque raw

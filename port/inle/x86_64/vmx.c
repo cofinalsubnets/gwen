@@ -14,12 +14,16 @@
 //     -- and a TSS, and a GDT, because VMX checks host and guest TR and inle
 //     has never had one.
 //
+// The guest runs under EPT, so it has an address space of its own: it believes
+// its code is at guest-physical 0 and its page directory at 0x1000, and neither
+// is true of the machine. There are now TWO translations under every guest
+// fetch -- the guest's own directory turns a linear address into a
+// guest-physical one, and the EPT turns that into a host-physical one -- and
+// the gate's laws cannot pass unless both happened.
+//
 // ⚠ every physical address is `va - khhdm`, which holds for kernel-heap memory
 // and NOT for image statics -- blk.c's law. The caller hands in one
 // k_vmx_need() block and everything is carved out of it.
-// ⚠ no nested paging here: guest-physical IS host-physical, so the guest's own
-// page directory maps it straight onto the machine's memory. Two instructions
-// cannot abuse that; a real guest is exactly why EPT is the next rung.
 #include "k.h"
 #include "asmops.h"
 #include <stdint.h>
@@ -41,6 +45,8 @@
 #define msr_vmx_true_proc   0x48eu
 #define msr_vmx_true_exit   0x48fu
 #define msr_vmx_true_entry  0x490u
+#define msr_vmx_proc2       0x48bu   // the secondary controls' allowed bits
+#define msr_vmx_ept_cap     0x48cu   // IA32_VMX_EPT_VPID_CAP
 
 // the VMCS fields this spike touches (arch/x86/include/asm/vmx.h's numbers).
 #define f_vpid              0x0000
@@ -49,6 +55,7 @@
 #define f_host_es_sel       0x0c00
 #define f_host_cs_sel       0x0c02
 #define f_host_tr_sel       0x0c0c
+#define f_eptp              0x201a
 #define f_vmcs_link         0x2800
 #define f_pin_ctl           0x4000
 #define f_cpu_ctl           0x4002
@@ -60,6 +67,7 @@
 #define f_entry_ctl         0x4012
 #define f_entry_msr_load    0x4014
 #define f_entry_intr        0x4016
+#define f_secondary_ctl     0x401e
 #define f_vm_insn_error     0x4400
 #define f_exit_reason       0x4402
 #define f_guest_es_limit    0x4800
@@ -114,8 +122,14 @@
 
 #define vmx_pg     4096u
 // the vmxon region, the VMCS, the guest's code, its page directory, a GDT with
-// a TSS descriptor in it, and the TSS that descriptor points at.
-#define vmx_pages  6u
+// a TSS descriptor in it, the TSS that descriptor points at -- and the four
+// levels of EPT under all of it.
+#define vmx_pages  10u
+// where the guest BELIEVES its two pages are. Neither is where they live: the
+// EPT is what makes guest-physical 0 the code page and 0x1000 the directory,
+// and the two laws in the gate cannot pass unless that translation happened.
+#define gpa_code   0x0000u
+#define gpa_pd     0x1000u
 #define vmx_sentinel 0x1234u
 // our own GDT: null, the boot code and data selectors copied, then a 16-byte
 // 64-bit TSS descriptor at index 3. TR selects it.
@@ -127,8 +141,6 @@ static void vmx_zero(unsigned char *p, uintptr_t n) { while (n--) *p++ = 0; }
 static uint64_t pa_of(void const *va) { return (uint64_t) ((uintptr_t) va - khhdm); }
 static void w64(unsigned char *p, uintptr_t off, uint64_t v) {
   *(uint64_t*) (p + off) = v; }
-static uint64_t r64(unsigned char const *p, uintptr_t off) {
-  return *(uint64_t const*) (p + off); }
 
 // a control word, reconciled with what this CPU will actually accept: the low
 // half of the capability MSR is the bits that MUST be 1, the high half the bits
@@ -147,7 +159,14 @@ bool k_vmx_ok(void) {
   if (!(c & (1u << 5))) return false;                    // ECX.VMX
   uint64_t fc = k_rdmsr(msr_feature_control);
   if ((fc & 1) && !(fc & (1u << 2))) return false;       // locked, and locked OFF
-  return true; }
+  // EPT is not optional here (the spike gives its guest an address space of its
+  // own), so the capability is part of the question rather than a fallback:
+  // secondary controls must be reachable, EPT among them, with a 4-level walk
+  // and write-back memory. Every VMX part since Nehalem answers yes.
+  if (!(k_rdmsr(msr_vmx_procbased) & (1ull << 63))) return false;   // secondary allowed
+  if (!(k_rdmsr(msr_vmx_proc2) & (1ull << 33))) return false;       // ..and EPT among them
+  uint64_t ec = k_rdmsr(msr_vmx_ept_cap);
+  return (ec & (1ull << 6)) && (ec & (1ull << 14)); }  // 4-level walk, write-back
 
 int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
                 uint64_t *err) {
@@ -159,7 +178,11 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
                 *guest = base + 2 * vmx_pg,
                 *gpd   = base + 3 * vmx_pg,   // the guest's 4 MiB-page directory
                 *gdt   = base + 4 * vmx_pg,
-                *tss   = base + 5 * vmx_pg;
+                *tss   = base + 5 * vmx_pg,
+                *ept4  = base + 6 * vmx_pg,   // the four EPT levels, pml4 down to pt
+                *ept3  = base + 7 * vmx_pg,
+                *ept2  = base + 8 * vmx_pg,
+                *ept1  = base + 9 * vmx_pg;
   vmx_zero(base, vmx_pages * vmx_pg);
 
   // the guest, in 32-bit protected mode: load the sentinel, then CPUID, which
@@ -173,11 +196,22 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
   guest[5] = 0x0f; guest[6] = 0xa2;                      // cpuid
   guest[7] = 0xf4;                                       // hlt
 
-  // the guest's paging: one directory of 4 MiB PSE pages mapping 0..4 GiB onto
-  // itself, so a guest-linear address is a host-physical one and the code page
-  // is reachable at the address CS's base already names.
+  // the guest's own paging: one directory of 4 MiB PSE pages mapping its linear
+  // space onto its GUEST-PHYSICAL space, one to one. That is as far as the guest
+  // can see; the EPT below decides what those addresses actually are.
   for (uint32_t i = 0; i < 1024; i++)
     *(uint32_t*) (gpd + 4 * i) = (i << 22) | 0x83u;      // present, write, PS
+
+  // the EPT, four levels down to 4 KiB leaves, mapping exactly the two pages the
+  // guest can reach: its code at guest-physical 0 and its page directory at
+  // 0x1000. ⚠ a leaf carries a memory type in bits 5:3 where the upper levels
+  // carry only the three permission bits -- write-back is 6, and an EPT with no
+  // memory type is a refused entry.
+  w64(ept4, 0, pa_of(ept3) | 0x7);                       // read | write | execute
+  w64(ept3, 0, pa_of(ept2) | 0x7);
+  w64(ept2, 0, pa_of(ept1) | 0x7);
+  w64(ept1, 8 * (gpa_code >> 12), pa_of(guest) | 0x7 | (6u << 3));
+  w64(ept1, 8 * (gpa_pd >> 12), pa_of(gpd) | 0x7 | (6u << 3));
 
   // our own GDT, because the host TR selector may not be 0 and inle has never
   // loaded a TR. The two boot descriptors are WRITTEN rather than copied out of
@@ -230,7 +264,13 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
 
   // --- the controls. CPUID needs no bit: it exits on its own.
   k_vmwrite(f_pin_ctl, ctl_fit(true_msrs ? msr_vmx_true_pin : msr_vmx_pinbased, 0));
-  k_vmwrite(f_cpu_ctl, ctl_fit(true_msrs ? msr_vmx_true_proc : msr_vmx_procbased, 0));
+  k_vmwrite(f_cpu_ctl, ctl_fit(true_msrs ? msr_vmx_true_proc : msr_vmx_procbased,
+                               1u << 31));              // activate secondary controls
+  // ..which is the only door to EPT. ⚠ the secondary word has no TRUE_ twin:
+  // 0x48b is the whole truth about what this part will take.
+  k_vmwrite(f_secondary_ctl, ctl_fit(msr_vmx_proc2, 1u << 1));
+  // EPTP: the table, write-back (6), and a walk length of 4 given as 3.
+  k_vmwrite(f_eptp, pa_of(ept4) | 6u | (3u << 3));
   k_vmwrite(f_exit_ctl, ctl_fit(true_msrs ? msr_vmx_true_exit : msr_vmx_exit,
                                 1u << 9));               // host address-space size
   k_vmwrite(f_entry_ctl, ctl_fit(true_msrs ? msr_vmx_true_entry : msr_vmx_entry, 0));
@@ -267,14 +307,15 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
   k_vmwrite(f_host_sysenter_sp, 0);
   k_vmwrite(f_host_sysenter_ip, 0);
 
-  // --- guest state. CS carries the code page as its BASE so the guest's rip
-  // is an offset and reads 5 at the exit, exactly as the SVM twin's does.
+  // --- guest state. Every segment is based at 0 now: the code sits at
+  // guest-physical 0 because the EPT put it there, so the guest's rip is a plain
+  // offset and reads 5 at the exit, exactly as the SVM twin's does.
   uint64_t gcr0 = (0x80000021ull | k_rdmsr(msr_vmx_cr0_fixed0))
                   & k_rdmsr(msr_vmx_cr0_fixed1);         // PG | NE | PE
   uint64_t gcr4 = ((1ull << 4) | k_rdmsr(msr_vmx_cr4_fixed0))
                   & k_rdmsr(msr_vmx_cr4_fixed1);         // CR4.PSE
   k_vmwrite(f_guest_cr0, gcr0);
-  k_vmwrite(f_guest_cr3, pa_of(gpd));
+  k_vmwrite(f_guest_cr3, gpa_pd);                        // a GUEST-physical address now
   k_vmwrite(f_guest_cr4, gcr4);
   k_vmwrite(f_cr0_shadow, gcr0);
   k_vmwrite(f_cr4_shadow, gcr4);
@@ -282,8 +323,7 @@ int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
     k_vmwrite(f_guest_es_sel + 2 * s, s == seg_cs ? 0x08 :
                                       s == seg_tr ? vmx_tr_sel :
                                       s == seg_ldtr ? 0 : 0x10);
-    k_vmwrite(f_guest_es_base + 2 * s, s == seg_cs ? pa_of(guest) :
-                                       s == seg_tr ? tb : 0);
+    k_vmwrite(f_guest_es_base + 2 * s, s == seg_tr ? tb : 0);
     k_vmwrite(f_guest_es_limit + 2 * s, s == seg_tr ? 0x67 : 0xffffffffu);
     // access rights: 32-bit code, 32-bit data, an UNUSABLE ldtr (bit 16), and a
     // busy 32-bit TSS -- ⚠ the guest's tr may not be unusable, so it gets a

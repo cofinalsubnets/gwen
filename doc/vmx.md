@@ -3,8 +3,9 @@
 The other half of doc/svm.md's question, answered on the other vendor. `(vmx-run ())` builds one
 VMCS, enters a seven-byte 32-bit guest, and takes its CPUID exit.
 
-Green on an Intel i5-8200Y under nested KVM (`tree.lan`), and skipped with a word everywhere else
-— on AMD, and on aarch64 where the nom is not in the book. Four laws, one more than the SVM gate:
+Green on two Intel parts under nested KVM — an i5-8200Y (`tree.lan`, Amber Lake) and a Celeron
+J4125 (`tau.lan`, Gemini Lake) — and skipped with a word on AMD, and on aarch64 where the nom is
+not in the book. Four laws, one more than the SVM gate:
 
 | law | what a failure would have meant |
 |---|---|
@@ -15,7 +16,7 @@ Green on an Intel i5-8200Y under nested KVM (`tree.lan`), and skipped with a wor
 
 ## it really is three times the file
 
-The SVM spike is ~160 lines; this one is ~300, and every extra line traces to one of three things
+The SVM spike is ~160 lines; this one is ~360, and every extra line traces to one of three things
 the other vendor gave away free.
 
 **The VMCS is opaque.** Forty-odd `vmwrite`s with a field encoding apiece, where the VMCB was
@@ -29,10 +30,9 @@ arrive at the same place by different roads — a **refused** launch falls *thro
 instruction, a successful one lands on the label — so a marker register is the only thing that
 tells them apart. It is set to 1 before the launch and to 0 on the label.
 
-**Real mode needs "unrestricted guest", which needs EPT.** SVM ran a real-mode guest natively. To
-avoid building EPT for a spike, this guest runs in 32-bit *paged* protected mode instead — which
-means it brings a page directory (one page of 4 MiB PSE entries mapping 0..4 GiB onto itself),
-and a TSS, and a GDT. Which brings the surprise:
+**Real mode needs "unrestricted guest", which needs EPT.** SVM ran a real-mode guest natively.
+This guest runs in 32-bit *paged* protected mode instead — which means it brings a page directory
+(one page of 4 MiB PSE entries), and a TSS, and a GDT. Which brings the surprise:
 
 ## inle had never had a TSS
 
@@ -70,24 +70,46 @@ And the ones that answer a refused entry with nothing but a number in VM_INSTRUC
   nothing else — so a guest that writes more than rax wants a save/restore stub around the launch
   rather than an inline. Sharper here than on SVM, where rax and rflags came back.
 
-## what mooncc could not say
+## EPT: the guest gets an address space
 
-The SVM half found two limits of the neutral asm surface (doc/svm.md). VMX found a third, and it
-shaped the interface:
+The guest runs under EPT, so there are **two** translations under every fetch — its own page
+directory turns a linear address into a guest-physical one, and the EPT turns that into a
+host-physical one. The guest believes its code is at guest-physical `0` and its page directory at
+`0x1000`. Neither is true of the machine: both pages live wherever the collector put the love
+string they were carved from.
 
-* **There is no `"m"` constraint.** `vmxon`, `vmclear` and `vmptrld` take a *memory* operand
-  holding a physical address, and mooncc cannot express one — so the neutral half takes the
-  address in a register and names a base and a displacement (`lgdt`'s shape, `vmxon %0, 0`), where
-  AT&T takes the operand directly. That is why every one of those wrappers takes a `uint64_t *`.
+That makes the existing laws prove one thing more than they did. Host physical `0` is the
+machine's own low memory, so a sentinel of `0x1234` coming back could only have been executed out
+of the page the EPT pointed at — an untranslated fetch would have run whatever lies at the bottom
+of RAM, and would not have produced it.
 
-What did work, and was the open question before any of this was written: **a label and a
-pc-relative `la` survive inside a mooncc asm template.** The template assembles to
-`leaq 0x16(%rip), %rax` and a `jmp` over the landing site, exactly as intended. Without that, the
+Four levels down to 4 KiB leaves, mapping exactly the two pages the guest can reach. ⚠ A leaf
+carries a memory type in bits 5:3 where the upper levels carry only the three permission bits;
+write-back is 6, and an EPT leaf with no memory type is a refused entry. The EPTP wants the same
+memory type plus a walk length given as `levels - 1`. ⚠ EPT is reached only through the
+*secondary* controls, so the primary word must set "activate secondary controls" (bit 31) first —
+and the secondary word has no `TRUE_` twin, so `IA32_VMX_PROCBASED_CTLS2` is the whole truth about
+what a part will take.
+
+EPT is not a fallback here: `k_vmx_ok` requires it, along with a 4-level walk and write-back. Every
+VMX part since Nehalem answers yes, and both test boxes do.
+
+## what mooncc could not say — and now can
+
+The SVM half found two limits of the neutral asm surface (doc/svm.md). VMX found a third, and that
+one was **fixed rather than worked around**: mooncc now takes `"m"`, lowering the address of its
+operand into a picked register and substituting `rN, 0` — the base and displacement holo spells a
+memory operand with. So `vmxon %0` reads as `vmxon r3, 0` on our half and `vmxon (%rax)` on
+clang's, from one template with no `#ifdef`; the six memory-operand wrappers in `asmops.h` are
+shared lines now. doc/moon-kernel.md carries the details, `crew/moon/law.l` the law.
+
+What worked from the start, and was the open question before any of this was written: **a label
+and a pc-relative `la` survive inside a mooncc asm template.** The template assembles to
+`leaq 0x16(%rip), %rax` and a `jmp` over the landing site, exactly as intended. Without that the
 whole exit-path design would have needed a separate laid function.
 
 ## what it does not show
 
-One vCPU, no EPT, no device model, no interrupt injection, and a guest that retires one
-instruction. Guest-physical is host-physical here, so the guest's page directory maps it straight
-onto the machine's memory — two instructions cannot abuse that, and it is exactly why EPT is the
-next rung rather than an optional one.
+One vCPU, no device model, no interrupt injection, and a guest that retires one instruction. What
+EPT buys is the address space, not the isolation story: the two mapped pages are all the guest can
+reach, but nothing yet stops a *host* bug from handing it more.

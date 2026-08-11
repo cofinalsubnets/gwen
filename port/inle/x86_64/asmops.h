@@ -223,34 +223,20 @@ static inline void k_stgi(void) { asm volatile ("stgi" ::: "memory"); }
 static inline void k_clgi(void) { asm volatile ("clgi" ::: "memory"); }
 
 // --- VMX, the Intel lane (port/inle/x86_64/vmx.c) ---------------------
-// Nothing here is register-contracted the way SVM's ops are. vmxon, vmclear
-// and vmptrld take a MEMORY operand holding a physical address, and mooncc's
-// asm surface has no "m" constraint at all -- so the neutral half takes the
-// address in a REGISTER and names a base and a displacement (lgdt's shape),
-// where AT&T takes the operand directly.
+// Nothing here is register-contracted the way SVM's ops are: vmxon, vmclear and
+// vmptrld take a MEMORY operand holding a physical address. Both dialects spell
+// those three the SAME way, with no #ifdef between them -- mooncc grew the "m"
+// constraint for exactly this, and lowers it to the address in a register plus
+// a zero displacement, which is how holo spells a memory operand (crew/moon/
+// gen.l's asmc). sgdt/sidt/lgdt below ride the same door.
 static inline void k_vmxon(uint64_t *pa) {
-#ifdef __mooncc__
-  asm volatile ("vmxon %0, 0" :: "r"(pa) : "cc", "memory");
-#else
-  asm volatile ("vmxon %0" :: "m"(*pa) : "cc", "memory");
-#endif
-}
+  asm volatile ("vmxon %0" :: "m"(*pa) : "cc", "memory"); }
 
 static inline void k_vmclear(uint64_t *pa) {
-#ifdef __mooncc__
-  asm volatile ("vmclear %0, 0" :: "r"(pa) : "cc", "memory");
-#else
-  asm volatile ("vmclear %0" :: "m"(*pa) : "cc", "memory");
-#endif
-}
+  asm volatile ("vmclear %0" :: "m"(*pa) : "cc", "memory"); }
 
 static inline void k_vmptrld(uint64_t *pa) {
-#ifdef __mooncc__
-  asm volatile ("vmptrld %0, 0" :: "r"(pa) : "cc", "memory");
-#else
-  asm volatile ("vmptrld %0" :: "m"(*pa) : "cc", "memory");
-#endif
-}
+  asm volatile ("vmptrld %0" :: "m"(*pa) : "cc", "memory"); }
 
 static inline void k_vmxoff(void) { asm volatile ("vmxoff" ::: "cc", "memory"); }
 
@@ -276,30 +262,15 @@ static inline void k_vmwrite(uint64_t field, uint64_t v) {
 // the descriptor-table READS. lgdt/lidt were here from the bring-up; VMX is
 // what needs to write the bases down before it can promise to restore them.
 static inline void k_sgdt(void *p) {
-#ifdef __mooncc__
-  asm volatile ("sgdt %0, 0" :: "r"(p) : "memory");
-#else
-  asm volatile ("sgdt %0" :: "m"(*(char (*)[10]) p) : "memory");
-#endif
-}
+  asm volatile ("sgdt %0" :: "m"(*(char (*)[10]) p) : "memory"); }
 
 static inline void k_sidt(void *p) {
-#ifdef __mooncc__
-  asm volatile ("sidt %0, 0" :: "r"(p) : "memory");
-#else
-  asm volatile ("sidt %0" :: "m"(*(char (*)[10]) p) : "memory");
-#endif
-}
+  asm volatile ("sidt %0" :: "m"(*(char (*)[10]) p) : "memory"); }
 
 // ..and the write back, which VMX needs because every exit reloads GDTR from
 // the VMCS and the table it names is not the one the boot laid.
 static inline void k_lgdt(void const *p) {
-#ifdef __mooncc__
-  asm volatile ("lgdt %0, 0" :: "r"(p) : "memory");
-#else
-  asm volatile ("lgdt %0" :: "m"(*(char const (*)[10]) p) : "memory");
-#endif
-}
+  asm volatile ("lgdt %0" :: "m"(*(char const (*)[10]) p) : "memory"); }
 
 // k_vmlaunch -- the entry, which on this vendor cannot be one instruction.
 //

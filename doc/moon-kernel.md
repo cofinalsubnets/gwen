@@ -89,6 +89,22 @@ holo's arm64 bitmask-immediate encoder takes bottom-aligned runs only, so `orr x
 materializes through a register in the neutral half — the one op whose two halves differ in
 instruction COUNT.
 
+**`"m"` is shared, and was not always.** The x86 virtualization ops (`vmxon`, `vmclear`,
+`vmptrld`, `sgdt`/`sidt`/`lgdt`) take a MEMORY operand, which the neutral surface has no
+single-token spelling for — holo spells memory as a base and a displacement, two operands. So
+mooncc's `"m"` lowers the ADDRESS of its expression into a picked register and substitutes
+`rN, 0`, two tokens where every other constraint substitutes one. `vmxon %0` then reads as
+`vmxon r3, 0` on our half and `vmxon (%rax)` on clang's, from ONE template with no `#ifdef` —
+those six ops are shared lines. Input only: `"=m"` is refused, since an output to memory wants a
+store the body cannot be asked to make. The law is in `crew/moon/law.l` beside the other asm
+laws (`make test_moon`).
+
+Two limits remain, and both bind hardest on the VMX half (doc/vmx.md): **an output may not be
+pinned to a register that is also an input** — there is no neutral spelling of GNU's tied `"0"`
+— and **only r0–r3 and r5–r10 are nameable**, the frame register and the callee-saved four being
+refused. The second costs nothing in practice: an asm function's homing is off, so nothing of
+mooncc's own lives in a register across the statement.
+
 One declared divergence in the gate: `k_divzero` only has to FAULT, and the neutral surface has
 no 32-bit divide, so clang's half raises #DE with `divl` and ours with `divq`. Every other op
 matches instruction for instruction on both arches.
