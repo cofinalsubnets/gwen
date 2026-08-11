@@ -7519,6 +7519,13 @@
    ; would bake past the strong override the linker owes them).
    ; xtra: the parser's (sfns svars sects .. consts) tablets -- static fns, static
    ; globals, name -> section. () reads as three empties (the law harness).
+   ; every nom anywhere in a form tree -- the dead-static sweep's reference relation,
+   ; and OVER-approximate on purpose: an opcode and a register name count too. A static
+   ; wrongly kept costs bytes; a reference wrongly missed costs a wild jump.
+   (cg-refs x acc)
+    (? (nom? x) (? (member? x acc) acc (x >< acc))
+       !(two? x) acc
+       (cg-refs >x (cg-refs <x acc)))
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g #('n 0 'brk () 'brkm () 'cnt () 'cases () 'glob #() 'globs () 'strs () 'statics ()
            'laid #()                                 ; names already on 'globs (a tentative repeat lays no twin)
@@ -7577,9 +7584,31 @@
        (gfns fs acc saw)
         (? !(two? fs)
            (: dat (cgdata g)
-              (? !(bad? dat) [g (rev acc) dat saw]
+              (? (bad? dat)
                  (: c (peep g 'datacause ())            ; the static-data refusal, minted here (globs pinned it)
-                    (gripe () () () (? c c "cannot lay the static data (cause unnamed -- see doc/moon-diag.md)")))))
+                    (gripe () () () (? c c "cannot lay the static data (cause unnamed -- see doc/moon-diag.md)")))
+                 ; -- THE DEAD-STATIC SWEEP. we splice a small static into its call sites and
+                 ; still lay the body, so one inlined everywhere ships referenced by nothing
+                 ; (33 KB of love's own text before this: doc/moon-diff.md). Only a static may
+                 ; go, and only when no root names it. ⚠ the roots are every EXPORTED fn, every
+                 ; alias target, the section-named fns (xfns -- placed for their address), and
+                 ; every nom the DATA lane names: love's kind-indexed tables carry fn addresses,
+                 ; and one missed there is a jump into the heap, not a bigger binary.
+                 (: us (rev acc)                        ; (name forms), emission order
+                    sfns (? (two? xtra) <xtra #())
+                    als (peep g 'alias #())
+                    atg (foldl (\ a k ((peep als k ()) >< a)) () (keys als))
+                    (cut? nm) (!(id? (peep sfns nm 'no) 'no) && !(member? nm atg))
+                    seed (cg-refs (g 'xfns) (cg-refs dat ()))
+                    (mark ns)                           ; grow the live name set to a fixpoint
+                     (: r (foldl (\ a u (? (member? <u ns) (cg-refs <>u a) a)) seed us)
+                        add (foldl (\ a u (? ((member? (intern <u) r) && !(member? <u ns))
+                                             (<u >< a) a)) () us)
+                        (? !(two? add) ns (mark (ns + add))))
+                    keep (mark (foldl (\ a u (? (cut? <u) a (<u >< a))) () us))
+                    _ (pin g 'dropped (foldl (\ a u (? (member? <u keep) a (<u >< a))) () us))
+                    txt (foldl (\ a u (? (member? <u keep) (revcat <>u a) a)) () us)
+                    [g (rev txt) dat saw])))
            (: f <fs
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
                  (: _ (pin g 'undecl ()) _ (pin g 'nolane ()) _ (pin g 'arity ())   ; fresh per fn: the pins the refusal reads name THIS fn's cause
@@ -7619,7 +7648,9 @@
                           sw (saw || (<>f = "main"))
                           (? sc (: _ (pin g 'xfns ([sc fm an] >< g 'xfns))
                                    (gfns >fs acc sw))
-                             (gfns >fs (revcat fm acc) sw))))))))
+                             ; a UNIT, not a flat splice: the sweep above needs each fn's
+                             ; forms addressable by name before they are concatenated.
+                             (gfns >fs ([<>f fm] >< acc) sw))))))))
        (? ok (gfns <>ast () ()) ()))
    (cgen ast stbl sigs weaks xtra tgt)              ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
     (: crt0 (? (id? tgt 'arm64)
@@ -7675,9 +7706,13 @@
                           (go2 l a2) (? !(two? l) a2
                                         (go2 >l (? (member? (peep als <l ()) dgl) (<l >< a2) a2)))
                           (base + go2 (keys als) ())))
+             ; ⚠ minus the swept ones: a LOCAL FUNC symbol whose body no longer rides
+             ; would name an address belonging to whatever followed it.
+             gone (peep <r 'dropped ())
              lnames (: (go fs acc) (? !(two? fs) (rev acc)
                                       (: f <fs
-                                         (go >fs (? (<f = 'fn && !(id? (peep sfns <>f 'no) 'no))
+                                         (go >fs (? (<f = 'fn && !(id? (peep sfns <>f 'no) 'no)
+                                                     && !(member? <>f gone))
                                                          (<>f >< acc) acc))))
                        (go <>ast ()))
              dat <>>r

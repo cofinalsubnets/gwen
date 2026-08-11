@@ -17,6 +17,44 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
+## 2026-08-11 — the dead-static sweep: mooncc stops laying what it inlined (HEAD fc061fc0)
+
+The biggest single move on this page, and it is not codegen — it is **mooncc laying the
+body of a static it had already spliced into every call site**. gen.l inlines a small
+static and then emits the out-of-line copy anyway; nothing ever calls it. gcc and clang
+inline *and* drop the body, which is most of why they emit 265 symbols fewer.
+
+| | mooncc before | mooncc after | gcc-musl |
+|---|---|---|---|
+| .text | 556,768 | **524,000** | 292,240 |
+| ratio | 1.905× | **1.793×** | — |
+| love's own C | 517,328 (879 syms) | **486,448** (730) | 252,073 |
+| ..of it unreachable | 33,056 — 6.4% | **3,076 — 0.6%** | 6,624 — 2.6% |
+
+**149 static bodies went, 32,768 bytes.** The row that says the sweep is complete rather
+than lucky is the last one: mooncc's own unreachable text is now **0.6%, under gcc's own
+2.6% and clang's 1.7%** — the natives leave a little dead code of their own, and we now
+leave less. Runtime is the expected null (corpus 40.72 G against 40.74; every removed
+byte was unreachable).
+
+The sweep is a mark from roots over the emitted forms, in `gfns` before the per-function
+units are concatenated. ⚠ the roots are what make it safe, and one missing root is a jump
+into the heap rather than a bigger binary: every **exported** function, every **alias
+target**, every **section-named** function (`xfns` — those are placed for their address),
+and every nom the **data lane** names. That last one carries love's kind-indexed dispatch
+tables, which reach `copy_data` and the collector by address and never by call. The
+reference relation is deliberately over-approximate — an opcode and a register name count
+as references too, because a static wrongly kept costs bytes and one wrongly swept costs
+correctness. Only a `static` is ever a candidate; `lnames` drops the swept ones too, since
+a LOCAL FUNC symbol with no body would name whatever followed it.
+
+Gates: `test_fixpoint` byte-identical (the compiler sweeps *itself* and still reproduces),
+`vmret` all 307 `lvm_*` ret-free, `test_raw`/`test_drv`/`test_libc` green, `test_slow`
+green, and the corpus + `net`/`fs`/`tlsc` pass on the swept binary.
+
+What is left: 3,076 in love's own C and 7,838 in the libc — the libc's being the
+inside-a-live-area residue the per-function split has not reached yet.
+
 ## 2026-08-11 — nolibc splits by area, and the libc lever is half-climbed (HEAD 6a8f8b68)
 
 The lever the fill below records as open, taken: `crew/moon/lib/nolibc.c` is now
