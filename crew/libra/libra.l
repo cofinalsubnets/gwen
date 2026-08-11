@@ -431,4 +431,9 @@
                (me? <a) (1 >< >a)
                ())
    s (seat >cmdline)
-   (? (two? s) (libra-main >s) ()))
+   ; ⚠ QUIT, never return: the shebang's -l makes this file a PRELOAD, so every
+   ; path that merely answers -- a clean check, fmt, infix, serve, -h -- leaves
+   ; cli holding the tool's own arguments and it LOADS the first one as a love
+   ; program. a clean `libra f.l` ran f.l. the seat miss still returns: that arm
+   ; is (use 'libra), where quitting would take the session down with it.
+   (? (two? s) (: _ (libra-main >s) (quit 0)) ()))

@@ -558,4 +558,7 @@
    _ (twirl (\ u (lux-moor (lux-sock ()))) 0)                                   ; the repl moor: its own task, its own sockets
    _ (loop sh1 lux-layout () ())
    _ (close s)
-   (line "lux: done"))
+   _ (line "lux: done")
+   (quit 0))                                                                    ; ⚠ the shebang's -l makes this file a PRELOAD: falling off
+                                                                                ; the end lands in cli's stdin shell and the process never
+                                                                                ; exits, so `exec lux` outlives the wm and the session hangs
