@@ -159,9 +159,19 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
   the knum constant scaled at compile time into the face's offset, both `p + k`
   and `k + p` and `p - k`; a dot on top folds again (`ip[1].w` is ONE load).
   afd's discipline: the guard is static, no evaluation is ever discarded.
-  love.c −503 insns, −2,114 text bytes. the store side still reaches these
-  faces through matv (one add, as before -- no loss); face-direct stores are
-  the recorded next.
+  love.c −503 insns, −2,114 text bytes.
+* **face-direct stores (landed 2026-08-11).** matv leaves the scalar and float
+  asn paths: the store reads through the face's own base -- `p->w = v` is ONE
+  store from v's home through p's, `p->d = x` is one stsd, and the deref/dot
+  folds compose underneath (`p[1].w = v+1` is add + store). the license is the
+  base surviving the rhs: `wrany?` scans the rhs AST for any writing head
+  (asn/post/call/asm/va) and declines to the proven matv/park path -- calls
+  clobber the pool, an rhs asn could rewrite the very home or pin the face
+  rides (the unsequenced-store shapes stay on the old path whole). element
+  residency (hint/vapin) and the value's own register ride unchanged. struct,
+  bitfield, pair and wide stores keep matv (multi-word protocols). love.c
+  **−1,459 insns, −4,846 text bytes** -- the largest single step of this arc;
+  224 functions shrank, the worst grower is +2 bytes.
 
 each rung past 0 rides the standing ritual: laws re-truthed from measured emissions,
 tortures vs gcc, the differential tier, fixpoint as the self-consistency gate.

@@ -120,6 +120,11 @@
    (callish? x) (? !(two? x) ()                                ; does the AST reach a call? (an inline splice still may)
                    (<x = 'call) 1
                    (callish? <x || callish? >x))
+   ; does the AST WRITE anything? a face's base register must survive the rhs, so a
+   ; store rides the face only past a write-free right side (calls clobber the pool too)
+   (wrany? x) (? !(two? x) ()
+                 (member? <x '(asn post call asm vastart vaarg)) 1
+                 (wrany? <x || wrany? >x))
    (tor0 g v)                                       ; land a value on the r0 protocol (frees its pool reg)
     (? (id? (vreg v) 'r0) (vfs v)
        (: rd (vreg v) rl (rev (vfs v))
@@ -2153,11 +2158,15 @@
                                     (mkv ty (vreg r) (vfs r + [[(stop ty) 'r4 off (vreg r)]]))
                                     (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
                                                  [[(stop ty) 'r4 off 'r0]]))))))))
-                 (: lv (matv g (clval g env <>e))
-              (? (bad? lv) 'bad
-                 (arr? (vty lv)) 'bad                ; an array is not assignable
-                 (stru? (vty lv))                    ; a whole-struct copy (dest r1, src r0)
-                  (: rl (matv g (clval g env <>>e))   ; an rvalue struct (a call's temp) is its address too
+                 (: lv0 (clval g env <>e)
+                    ; face-direct: the base register survives a write-free rhs, so the
+                    ; store reads through the face -- no matv, no address park, no cell
+                    fdd (? (vm? lv0 && !(id? (vmb lv0) 'r0) && !(wrany? <>>e)) 1 ())
+              (? (bad? lv0) 'bad
+                 (arr? (vty lv0)) 'bad                ; an array is not assignable
+                 (stru? (vty lv0))                    ; a whole-struct copy (dest r1, src r0)
+                  (: lv (matv g lv0)
+                     rl (matv g (clval g env <>>e))   ; an rvalue struct (a call's temp) is its address too
                      rv (? (bad? rl) (cgexpr g env <>>e ()) rl)
                      (? (bad? rv) 'bad
                         ; a REAL into a complex lvalue converts: re the value, im zero
@@ -2176,13 +2185,22 @@
                                  !(<>(vty lv) = <>(vty rv)))
                                 (cxcopy g (vty rv))
                                 (bcopy g 0 (tsz g (vty lv)) ())))))
-                 (flo? (vty lv))                     ; a float/double store (addr in r1, value in f0; narrow if float)
-                  (: r (cgexpr g env <>>e ())
-                     (? (bad? r) 'bad
-                        (mkv 'double 'r0 (vfs lv + spush 'r0 +
-                         (asflo g r + spop 'r1 + fstf g (vty lv) 'r1 0 'f0)))))
-                 (bitf? (vty lv))                    ; a bitfield store: unit addr in r1, read-modify-write, result (truncated) in r0
-                  (: r (cgexpr g env <>>e ())
+                 (flo? (vty lv0))                     ; a float/double store (value in f0; narrow if float)
+                  (? fdd
+                     (: b (vmb lv0) o (vmo lv0)      ; the face IS the address: fstf reads through it
+                        r (cgexpr g env <>>e ())
+                        (? (bad? r) (: _ (rfree g b) 'bad)
+                           (: fs (vfs lv0 + asflo g r + fstf g (vty lv0) b o 'f0)
+                              _ (rfree g b)
+                              (mkv 'double 'r0 fs))))
+                     (: lv (matv g lv0)
+                        r (cgexpr g env <>>e ())
+                        (? (bad? r) 'bad
+                           (mkv 'double 'r0 (vfs lv + spush 'r0 +
+                            (asflo g r + spop 'r1 + fstf g (vty lv) 'r1 0 'f0))))))
+                 (bitf? (vty lv0))                   ; a bitfield store: unit addr in r1, read-modify-write, result (truncated) in r0
+                  (: lv (matv g lv0)
+                     r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (: bt (vty lv) uty <>bt bitoff <>>bt width <>>>bt
                            usz (tsz g uty)
@@ -2200,17 +2218,46 @@
                                + (? (bitoff > 0) [['shl 'r3 bitoff]] ())   ; r3 = (v & mask) << bitoff
                                + ['(or r2 r2 r3) [(stop uty) 'r1 0 'r2]]
                                + (? sgn [['shl 'r0 lo] ['sar 'r0 lo]] ()))))))
-                 (pair? g (vty lv))                  ; a pair store through a computed address
-                  (: r (cgexpr g env <>>e ())
+                 (pair? g (vty lv0))                 ; a pair store through a computed address
+                  (: lv (matv g lv0)
+                     r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (mkv (vty lv) 'r0
                          (vfs lv + spush 'r0 + asll g r + spop 'r2 + pst 'r2 0))))
-                 (d128? (vty lv))                    ; a wide store through a computed address (r1)
+                 (d128? (vty lv0))                   ; a wide store through a computed address (r1)
                   (? !(x64t? g) 'bad
-                     (: r (cgexpr g env <>>e ())
+                     (: lv (matv g lv0)
+                        r (cgexpr g env <>>e ())
                         (? (bad? r) 'bad
                            (mkv (vty lv) 'r0 (vfs lv + spush 'r0 +
                             as128 g r + spop 'r1 + '((st r1 0 r0) (st r1 8 r2)))))))
+                 ; face-direct: the store reads through the face's own base -- no matv, no
+                 ; address park. the element residency rides unchanged (hint/vapin)
+                 fdd
+                  (: b (vmb lv0) o (vmo lv0)
+                     ty (vty lv0)
+                     ael (aelem g env <>e)
+                     hint (? (two? ael && id? <ael 'el &&
+                              vmon? g && !(0 < peep g 'argseal 0))
+                             (ralloc g) ())
+                     r (cgexpr g env <>>e hint)
+                     (? (bad? r) (: _ (? hint (rfree g hint) ()) _ (rfree g b) 'bad)
+                        (: _ (adrop9 g env <>e)
+                           (? (hint && id? (vreg r) hint && !(flo? (vty r)))
+                               (: fs (vfs lv0 + vfs r + cvt ty hint + [[(stop ty) b o hint]])
+                                  _ (rfree g b)
+                                  _ (vapin g <>ael hint)
+                                  (mkv ty hint fs))
+                              (: _ (? (hint && !(id? (vreg r) hint)) (rfree g hint) ())
+                                 (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                                     !(id? (vreg r) 'r0) && !(id? (vreg r) b))
+                                    (: fs (vfs lv0 + vfs r + [[(stop ty) b o (vreg r)]])
+                                       _ (rfree g b)
+                                       (mkv ty (vreg r) fs))
+                                    (: fs (vfs lv0 + asintt g r ty + cvt ty 'r0 +
+                                           [[(stop ty) b o 'r0]])
+                                       _ (rfree g b)
+                                       (mkv ty 'r0 fs))))))))
                  ; the ADDRESS parks in a pool register past a call-free rhs (the vpark
                  ; discipline, extended to the store shuttle): no memory round-trip on the
                  ; address. a call on the right keeps the shuttle -- it would clobber the park.
@@ -2220,7 +2267,8 @@
                  ; resident and the read-after-write is zero forms. write-through holds
                  ; (the store still emits); unhonored (a homed var, a float) hands the
                  ; register back and the drop-only path stands.
-                 (: ael (aelem g env <>e)
+                 (: lv (matv g lv0)
+                    ael (aelem g env <>e)
                     aR (? (callish? <>>e) () (ralloc g))
                     hint (? (aR && two? ael && id? <ael 'el &&
                              vmon? g && !(0 < peep g 'argseal 0))
