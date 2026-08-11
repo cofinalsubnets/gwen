@@ -548,8 +548,11 @@
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4)))
 
 ; --- control --- ev compiles+runs; call-cc a one-shot escape; tasks twirl/catch/rest/freeze/
-; landed?/scoop/cue? ((twirl f x) forks to an id, (catch p) blocks for the result, (rest 0) yields --
-; always catch an orphan). `scoop` collects an orphan WITHOUT naming it: (pid . retval) for one
+; landed?/scoop/cue?/myself ((twirl f x) forks to an id, (catch p) blocks for the result, (rest 0) yields --
+; always catch an orphan). `myself` answers the RUNNING task's own id -- the charm twirl handed
+; back for it, the zero point for the task nobody twirled -- so per-task state can ask whether it
+; is still home: trap's escape compares against it before jumping, since a help is inherited at
+; spawn and a child landing in its parent's stack tears both. `scoop` collects an orphan WITHOUT naming it: (pid . retval) for one
 ; task that has finished, () when none have, so a server that twirls a task per client drains
 ; what ended instead of polling a roster of what might have -- ⚠ and the PAIR carries the
 ; presence, since a task run for its effect answers () and is handed back all the same.
@@ -564,7 +567,11 @@
 ; (trap f x n) answers (f x), or (n a b) when a scare landed there -- peg's (\ s y n) aimed at
 ; conditions, less the y a caller already has, so nothing comes back to reflect on (welp is an n).
 ; built from a help that escapes through call-cc, so ⚠ nothing unwinds: a cleanup belongs in n,
-; which fires only once the displaced help is back. numeral COMPOSE
+; which fires only once the displaced help is back -- or in `mind`, the same cleanup owned by the
+; RESOURCE instead of the catcher: (mind f x c) answers (f x) and fires c on the way out either
+; way, the condition riding on to the help outside, so a helper holds its own port however deep
+; under a trap it sits. ⚠ raises only -- a bare (k v) jumps past every c between there and here.
+; numeral COMPOSE
 ; counts are CAPPED by the `apcap` box; the numeric power lane caps the RESULT instead
 ; (~ exponent * log2|base| bits against the box as a word budget), so a size-fixed or
 ; growthless base runs free ((pin apcap 0 n) retunes both). in anger: test/help.l,
@@ -572,10 +579,18 @@
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b `(a b)))) (3 = (trap (+ 1) 2 welp))
+ (: t (tablet 0) _ (pin t 0 'held)                            ; mind: c fires, f's value answers
+    v (mind (\ _ 'value) () (\ _ (pin t 0 'freed)))
+    (&& (id? v 'value) (id? (t 0) 'freed)))
+ (: t (tablet 0) _ (pin t 0 'held)                            ; ..and on the raised path too,
+    r (trap (\ _ (mind (\ _ (scare 'boom 7)) () (\ _ (pin t 0 'freed)))) () (\ a b a))
+    (&& (id? r 'boom) (id? (t 0) 'freed)))                    ; ..the condition riding on outward
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (landed? 99999)
  (: (drain _) (? (two? (scoop 0)) (drain ()) 0)                  ; the ring is shared: drain first
     _ (drain ()) p (twirl (\ _ ()) ()) _ (rest 0) s (scoop 0)
     (&& (two? s) (&& (p = (cap s)) (nil? (cup s)))))             ; a () retval is STILL a pair
+ (nil? (myself ()))                                           ; nobody twirled the root task
+ (: p (twirl (\ _ (myself ())) ()) (p = (catch p)))           ; ..a child knows the id twirl gave it
  !(rest 0) (4 = (tally (wheel 1))) ((rand 10) < 10) (gem? (randf 0))
  (lit? scare)
  (tablet? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box

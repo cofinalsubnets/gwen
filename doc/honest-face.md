@@ -43,5 +43,33 @@ value-threading that pays a test per node is the cheaper trade, and it is not a 
 lush plans its AST into closures once (`sh-plan`), so what a run pays per node is that one `two?`
 on the result and nothing else — the dispatch an escape would have skipped is already gone.
 
+**`mind` is the fifth answer: the cleanup owned by the resource.** `(mind f x c)` answers `(f x)`
+and fires `c` on the way out, clean or raised, once either way, with the condition riding on
+outward — so the `trap` that was going to catch it still does. It is `trap` with the ownership
+turned around: `n` is the *catcher's* cleanup and has to sit in the catcher's frame, `c` is the
+*resource's* and travels with it, which is what lets a helper hold its own port however deep under
+a `trap` it sits. Built on `trap`, no C: `c` runs inside the `n`, where the displaced help is
+already back, and then re-raises. ~145ns over a bare call.
+
+⚠ **The escape is its task's.** A help is *inherited at spawn*, so a child raising under a help it
+never installed would invoke a continuation captured in its parent's stack — landing there tears
+both, and it took whole programs down. `trap` records the installing task (`myself`) and compares
+before it jumps: same task, escape; different, re-seat `prev` and raise *there*, so the child meets
+the help it would have met with no `trap` in sight. An outer `trap`'s help meets the same test, so
+the chain walks down to an answering help or to none. This is the difference between a runtime a
+determined user can do anything with on purpose and one a naive user breaks by accident — `twirl`
+inside a `mind`ed body is an ordinary thing to write, and it must not be a trap.
+
+⚠ **Raises only, and that is where this stops.** Only a scare reaches a help, so a bare `(k v)`
+into a continuation captured outside jumps clean past every `c` between there and here — pinned as
+a passing assert in test/help.l, so the rung that ever closes it fails a law instead of moving the
+semantics in silence. Closing it means running love thunks from inside `lvm_kcall`, which in a
+tail-threaded VM is a synthesized frame chain, plus a per-task hook slot mirroring `hot_help` at
+all four of its sites. Not bought, and on the evidence not worth buying: `call-cc` outside the
+tests is `trap` itself and uu's `rejects`, both of which land in the frame that captured — there
+is no `k` in this tree that outlives its own escape. The paragraph above is the reason it stays
+that way: where cleanups string along the path, threading is the cheaper trade, and `mind` is for
+where they do not.
+
 Relates: [[faces]] (the hourglass / one core), the zero point + `welp` in test/spec.l's control
 section.

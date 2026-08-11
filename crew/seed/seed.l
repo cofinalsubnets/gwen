@@ -30,13 +30,17 @@
    ; presence is the (1 _) wrapper, content is always a string: an EMPTY file
    ; slurps to () -- the zero point -- and `+ ""` folds it back onto the shared
    ; identity, so a 0-byte file hashes honestly instead of to ().
-   (look p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))  ; (1 text) | ()
-   (lay p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) 0))
+   ; the port is MINDED, not closed at the tail: a torn read raises, and the close has
+   ; to ride that way out too or the fd sits until a major compact.
+   (look p) (: q (open p "r")                                            ; (1 text) | ()
+                 (? q (mind (\ _ (: s (slurp q) `(1 (s + "")))) () (\ _ (close q))) ()))
+   (lay p s) (: q (open p "w") (? q (mind (\ _ (: _ (say q s) 1)) () (\ _ (close q))) 0))
    (form p) (: q (open p "r")                                 ; the file's one form | ()
-                  (? q (: t (slurp q) _ (close q)
-                          r (sound t)
-                          d (? (two? r) <r ())
-                          (? (two? d) d ())) ()))
+                  (? q (mind (\ _ (: r (sound (slurp q))
+                                     d (? (two? r) <r ())
+                                     (? (two? d) d ())))
+                             () (\ _ (close q)))
+                     ()))
 
    ; --- the store ---
    (mk _) (: _ (mkdir ".seed" 493) _ (mkdir ".seed/blob" 493) _ (mkdir ".seed/patch" 493) ())

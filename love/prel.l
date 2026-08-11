@@ -133,7 +133,7 @@
                                          (? (apover m) (scare 'apcap m)
                                             (< n 0) (/ 1 (ipow x m)) (ipow x m)))
                            ())
-                        (: k (sat n)
+                        (: k (saturate n)
                            (? (< k 1) 1 (= k 1) x
                               (apover k) (scare 'apcap k)
                               (: c (cmp k) (? c (c x) (numfn k x))))))
@@ -165,7 +165,7 @@
               (coin? x) (? (= 1 (peep (die-of x) 7 0)) x
                            (= 1 (peep (die-of x) 6 0)) (tally x)
                            (net (load x)))
-              (sat x))
+              (saturate x))
    (prod x) (? (tray? x) (aprod x)
                (two? x) (foldl (\ a e (* a (prod e))) 1 x)
                x)
@@ -610,7 +610,7 @@
 (: (a-rank x) (? (gem? x) 1 (| (charm? x) (sun? x)) 0 (twin? x) 2 3)
    (a-emax m x) (: k (a-rank x) (? (m < k) k m))
    (a-type d) (: k (foldl a-emax 0 d) (? (k = 0) 0 (k = 1) 0.0 (k = 2) (twin 0 0) ()))   ; a witness star of the tier
-   (a-dim d) (? (two? d) (tally d) (sat d))
+   (a-dim d) (? (two? d) (tally d) (saturate d))
    (a-shape s) (? (two? s) (map a-dim s) (list (a-dim s))))
 
 ; tuple/hash value constructors -- also the read-back targets of the printed @(…) / #(…)
@@ -724,15 +724,40 @@
 ; the presence a caller no longer carries is carried HERE, since a clean v may be a
 ; closure like the escape's. run n inside and its own raise would land in this trap.
 ; ⚠ nothing unwinds: the escape jumps past every pending restore between the raise and
-; here, so a cleanup belongs in n, never inside f. to catch selectively, let n re-raise
-; what is not yours -- by then the outer help is the one listening.
+; here, so a cleanup belongs in n, never inside f -- or in `mind`'s c, which is the same
+; cleanup owned by the resource instead of by the catcher. to catch selectively, let n
+; re-raise what is not yours -- by then the outer help is the one listening.
+; ⚠ the escape is THIS TASK'S: a help is inherited at spawn, so a child raising under
+; one it never installed would land in the parent's stack and tear both. `home` is the
+; installing task, and a raise from anywhere else re-seats prev and re-raises there
+; instead -- an outer trap's help meets the same test, so the chain walks down to an
+; answering help or to none, which is what a child that installed nothing deserves.
 (: (trap f x n)
      (: prev (heard ())
-        r (call-cc (\ k (: _ (hear (\ a b (k (\ _ (n a b)))))
+        home (myself ())
+        r (call-cc (\ k (: _ (hear (\ a b (? (id? (myself ()) home) (k (\ _ (n a b)))
+                                             (: _ (hear prev) (scare a b)))))
                            v (f x)
                            (\ _ v))))
         _ (hear prev)
         (r ())))
+; mind -- (f x) with c minded on the way out: c fires EXACTLY ONCE, clean or raised, the
+; condition rides on to the help outside, and the answer is f's. so a helper holds its own
+; port or its own restore, however far under a catcher it sits.
+; the n hands back a marked condition rather than re-raising in place, so the one (c ())
+; below serves both paths -- re-raise inside the n and a help that ANSWERS (the shell's
+; default, welp, any plain (hear f)) returns through it and the tail fires c a second time.
+; `mark` is minted once and closure-private, so no value f answers can pose as the raise.
+; ⚠ ALL THREE OPERANDS, like trap, and c is a thunk fired with the unit.
+; ⚠ RAISES ONLY: a scare is what reaches a help, so a bare (k v) into a continuation
+; captured outside jumps clean past every c between there and here.
+; ⚠ c runs with the displaced help back, so its own raise belongs to the trap OUTSIDE --
+; and REPLACES the condition c was firing for, which is the one way out of a lost raise.
+(: mind (: mark (mint 0)
+           (\ f x c
+              (: r (trap f x (\ a b (mark >< `(a b))))
+                 _ (c ())
+                 (? (&& (two? r) (id? <r mark)) (scare <>r <>>r) r)))))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p !(member? <p ns)) cs)
