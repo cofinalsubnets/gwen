@@ -18,6 +18,10 @@
 #     `c0_lambda`, and the clone's bytes belong to the parent. 53 symbols (7.5 KB) land
 #     in the wrong column without it.
 #
+# ⚠ this counts what a lane SHIPS. For a libc that is half the question -- 55% of what
+# mooncc's nolibc ships is unreachable, so its 1.59x here is 0.76x on the code that runs.
+# ccdead.py is the other half.
+#
 # usage: ./ccsize.sh          (after ./ccbench.sh, or `make ccbench`)
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 W=$R/out/bench/cc

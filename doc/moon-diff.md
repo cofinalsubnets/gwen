@@ -5,9 +5,10 @@ compiler *runs* (invocation speed), how big the code it lays is (.text), and how
 code *executes* (wall + user instructions on the test corpus and the host-nif suite).
 Rows are dated and appended, newest first — trend is the point, not any single cell.
 
-Two harnesses, both over the binaries `bench/ccbench.sh` leaves in `out/bench/cc/`:
+Three harnesses, all over the binaries `bench/ccbench.sh` leaves in `out/bench/cc/`:
 `ccbench.sh` itself for build and corpus wall, `bench/ccsize.sh` for the `.text`
-decomposition (`make ccbench`, `make ccsize`). The insn lanes are `perf stat -e
+decomposition, `bench/ccdead.py` for how much of each libc is reachable at all
+(`make ccbench`, `make ccsize`, `make ccdead`). The insn lanes are `perf stat -e
 instructions:u`. **All three lanes are static** — mooncc against its own nolibc, gcc and
 clang against musl — because that is the only shape in which the size rows mean
 anything. Method and traps at the bottom — reproduce rather than trust.
@@ -54,14 +55,15 @@ carry inter-fn padding):
 |---|---|---|---|
 | mooncc | 515,040 | 64,110 | 334 |
 | gcc-musl | 251,625 | 40,375 | 229 |
-| clang-musl | 251,040 | 40,384 | 230 |
+| clang-musl | 251,056 | 40,368 | 230 |
 | gcc (dyn) | 251,584 | 1,936 | 10 |
 | clang (dyn) | 250,976 | 1,904 | 10 |
 
 Two readings, and the second **corrects every fill below**:
 
 * **mooncc's libc is the well-behaved half.** nolibc plus the syscall leaf is 64,110
-  bytes against musl's 40,375 linked in — **1.59×**, the narrowest ratio on this page.
+  bytes against musl's 40,375 linked in — **1.59×**, the narrowest ratio on this page,
+  and the next section takes that 1.59× apart: almost none of it is code.
 * **love's own C is 2.05×, and mooncc's libc is 64 KB, not ~167.** The fills below read
   the "own libc/runtime" set off the roster of symbols the *native binary lacked* — but
   ~106 KB of that roster is love code gcc inlined out of existence, not runtime. Judged
@@ -82,6 +84,68 @@ compiles. The other 265 are love statics the natives emit no code for at all (`a
 `copy_data`, `cb_csi`, `rbig`, `obin_run`): **21% of mooncc's love .text is functions gcc
 inlines**, a lever the per-symbol number cannot see. No native-only symbols exist — every
 symbol gcc emits is in the shared set.
+
+### the libc's 1.59× is packaging, and reverses when read live
+
+`bench/ccdead.py` (`make ccdead`) asks the other question: not how many libc bytes a lane
+*ships* but how many it can ever *call*. It walks call/jmp/lea targets out of the
+disassembly, seeded from `_start` and from every function address sitting in a data
+section — a vtable entry is reached no other way.
+
+| | libc syms | shipped | reachable | dead | |
+|---|---|---|---|---|---|
+| mooncc | 334 | 64,110 | 28,794 | 35,316 | **55.1%** |
+| gcc-musl | 229 | 40,375 | 37,749 | 2,626 | 6.5% |
+| clang-musl | 230 | 40,368 | 37,758 | 2,610 | 6.5% |
+| gcc (dyn, `CCGLIBC=1`) | 10 | 1,936 | 1,808 | 128 | 6.6% |
+
+**The native rows are the control**, and reading all 28 of gcc-musl's is what says the
+scan works: hardly any of them are scan misses. `pad` (256 B) has *zero* references
+anywhere in the binary — gcc inlined it into `printf_core` and left the out-of-line copy;
+`putenv` is dead while `__putenv` is live, the public entry riding along with the
+`setenv` its object shares; `umount`/`umount2` ride together the same way. The rest is
+crt (`deregister_tm_clones`, `libc_start_init`) and alternates the static link did not
+pick (`__simple_malloc`, `static_init_tls`, `static_dl_iterate_phdr`). So 6.5% is not
+noise — it is mostly real dead code, and it is what a libc *built* for static linking
+still cannot shed. mooncc's 55% is eight times that floor.
+
+The cause is granularity, not code quality. **`nolibc.o` carries one `.text` section of
+63,887 bytes**, and a section is the linker's unit of discard — all or nothing. musl
+compiles roughly one function per object, so its static link drops what love never calls.
+What mooncc therefore ships and cannot reach: `__dnsq` 2,514 · `strftime` 1,634 ·
+`asctime` 1,598 · `popen` 1,506 · `gmtime` 1,158 · `__vfscanf` 1,048, then `qsort`,
+`system`, `mktemp`, the exec family. `getaddrinfo` and `strtol` are on that list and are
+the two worth checking, since love calling either would be a hole in the scan — both
+appear in the tree **only in comments**, each marking its own removal (host/sock.c:15,
+*"getaddrinfo is what used to make connect the exception, and it is gone"*).
+
+Live against live, the ratio turns over:
+
+| | syms | .text | |
+|---|---|---|---|
+| mooncc, reachable | 130 | 28,794 | **0.76×** |
+| gcc-musl, reachable | 201 | 37,749 | — |
+
+and 97% of that 8,955-byte gap is two clusters:
+
+| | mooncc | gcc-musl | |
+|---|---|---|---|
+| malloc | 672 | 8,483 | −7,811 |
+| printf | 11,122 | 12,029 | −907 |
+
+malloc alone is 87% of it, and it is a fit rather than a win: love brings its own
+two-space heap and mallocs pools — big and rare — so nolibc's K&R first-fit over 1 MB
+mmap arenas is right-sized where musl's mallocng buys it nothing but `alloc_slot` (2,528)
+and the meta machinery. printf is the honest read on the same job done twice: `__fmtflo`
++ `__fmt` + `__fmtnum` against `printf_core` + `pop_arg` + `wcrtomb`, and mooncc's is the
+smaller of the two.
+
+**So on the code both lanes actually run, mooncc's libc is not the well-behaved half by
+courtesy — it is smaller.** The ~35 KB is 3.5% of the whole binary and is recoverable by
+`-ffunction-sections` in mooncc plus `--gc-sections` in holo; neither exists today, and
+how hard either is was not costed. ⚠ the scan's error is one-directional — an indirect
+call it misses marks a live function dead, never the reverse — so 28,794 is a lower bound
+on live and 35,316 an upper bound on dead.
 
 ### runtime — musl moves nothing
 
@@ -410,6 +474,12 @@ read as a codegen gap.
   padding, ~1–2%), decides love's C per lane from **that lane's own objects**, and folds
   gcc/clang clone suffixes back into the parent before any set is taken. The two traps
   below are why each of those is spelled out.
+* `bench/ccdead.py` (`make ccdead`) is the reachability half: call/jmp/lea edges out of
+  `objdump -d`, seeded from `_start` and from every function address found in `.data`,
+  `.rodata`, `.data.rel.ro` and `.init_array`. It cannot see an indirect call it has no
+  data root for, so it errs toward calling a live function dead — read the native lanes
+  as the floor (~6.5%, and mostly real dead code rather than scan error) and only a lane
+  well clear of it as a finding. `CCDEAD_V=1` lists each lane's biggest dead symbols.
 
 ## ⚠ traps — each one ate a run before it was written down
 
@@ -442,6 +512,12 @@ read as a codegen gap.
   first — gcc ships `c0_lambda.isra.0` where mooncc ships `c0_lambda`, so 53 symbols
   (7.5 KB) land in the wrong column if the `.isra`/`.part`/`.constprop`/`.cold` suffix
   is not folded back into the parent.
+* **shipped is not reachable, and for a libc the two barely relate** — `size -A` and
+  ccsize.sh both read mooncc's libc as 1.59× musl's, which invites "mooncc's libc is
+  slightly fat". 55% of it is code the binary cannot call, because nolibc.o is a single
+  `.text` section and the linker discards by section; on what actually runs it is 0.76×.
+  Any claim about a *libc's* size owes the reachability pass, and the natives are the
+  control that says the pass is working.
 * **a build lane can report `ok` having emitted a DIRECTORY** — `lane` gated on
   `[ -x "$bin" ]`, and a directory passes that. When the musl lanes first landed, the
   object dir was keyed on the binary's name, so `$WORK/love-gcc` was both; the build row
