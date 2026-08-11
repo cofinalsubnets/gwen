@@ -16,6 +16,77 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
+## 2026-08-11 — after shrink-wrap, on the musl lanes (HEAD 32b54ab8)
+
+The first fill wholly on the static-musl method (the section below is its
+justification). Between fills: the shrink-wrap rung landed (doc/moon-regalloc.md's
+ledger — the wrap machinery whole, scoped honestly to the fns whose wraps are not
+already cold-path-right; corpus-exact by its own A/B), and the str-juxt arc's second
+round grew love.c and the corpus again (~30 tests/target). Quiet box, load < 0.5.
+
+### .text — `size -A`, and ccsize's decomposition
+
+| | mooncc | gcc-musl | clang-musl |
+|---|---|---|---|
+| .text (bytes) | 581,438 | 292,448 | 292,832 |
+| love's own C | 517,328 | 252,073 | 252,496 |
+| libc under it | 64,110 | 40,375 | 40,336 |
+
+Whole binary **1.99×**, both-emit codegen **1.63×** (614 shared symbols, 411,554 vs
+252,073 — identical against either native), mooncc-only inlining residue 265 syms /
+105,774 B, nolibc vs musl 1.59×. All three lanes grew a touch with the new love.c;
+the ratios sat still.
+
+⚠ and the libc row is softer than it reads: the reference CLOSURE over the mooncc
+lane's own relocations (probed this fill; seeds = love's undefined syms + the entry
+root, data→text edges traversed) finds only 111 of nolibc's 367 text symbols live —
+26 KB of the 64 is referenced, ~60 KB rides along because holo links objects whole,
+where musl's 40 KB is archive-pulled closure-only. The comparison charges mooncc for
+bytes musl's link model never pays; per-function sections + a gc pass in holo (both
+halves ours, the sentinel sections exempt) would take the headline to ~1.8× without
+touching codegen. Recorded as its own lever, beside the inlining one.
+
+### runtime — the corpus, egg-boot subtracted, median of 3
+
+| | mooncc | clang-musl | ratio | gcc-musl |
+|---|---|---|---|---|
+| corpus insns (G, user) | 40.74 | 25.04 | **1.63×** | 23.17 |
+| corpus cycles (G, user) | 15.20 | 12.21 | 1.24× | 11.80 |
+| egg boot insns (G) | 8.92 | 5.70 | 1.56× | 5.25 |
+
+The corpus grew again, and the lanes moved TOGETHER (natives +0.3–0.4%, mooncc
++0.07%) — the shrink rung's corpus-exactness reading straight through the method.
+And a convergence worth naming: the dynamic corpus ratio and the static both-emit
+codegen ratio now both read **1.63×** — the corpus executes mooncc's excess at
+exactly its static rate, i.e. the remaining gap is uniform over hot and cold code
+alike. (mooncc/gcc-musl is 1.76×, the harder number as ever.)
+
+### the pair — wall, boot subtracted
+
+| | mooncc | gcc-musl | clang-musl | mooncc/clang |
+|---|---|---|---|---|
+| chacha20 (ms) | 1071 | 289 | 191 | 5.6× |
+| poly1305 (ms) | 1343 | 1329 | 804 | 1.67× (gcc 1.01×) |
+
+flat — the expected null for a call-boundary rung. poly sits at parity with
+gcc-musl; chacha's residue remains lever 1's.
+
+### invocation speed
+
+| | mooncc | gcc-musl | clang-musl |
+|---|---|---|---|
+| full build + link (s) | 14.2 | 9.2 | 5.4 |
+
+flat through the whole cs-seat arc — three grant flavors, two pricing walks and the
+build split added no measurable compile cost.
+
+What this fill closes: the size-discrepancy thread that started the day. The
+headline decomposes cleanly now — 1.99× whole binary = 1.63× codegen (uniform,
+dynamic-confirmed) + 106 KB of inlining gcc does and mooncc doesn't + a 1.59× libc
+— and the codegen term's next levers are named in the regalloc ledger with their
+prices: PGO for the fleet's cold-path wraps, the inlining lever the per-symbol
+number cannot see, and lever 1's array residue on the cipher shape.
+
 ## 2026-08-11 — static musl, and the libc comes onto the ledger (HEAD b0f92305)
 
 Every size row before this one raced a static mooncc binary carrying its own nolibc
