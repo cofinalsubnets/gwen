@@ -37,22 +37,28 @@
 ; uniform today (a link for later), so we vary it to pin that. Non-data applies
 ; (fixnum numeral, lambda/nif, map, opaque handle) take their own paths.
 (assert
- ; --- row KChain: a chain IS its own Church eliminator, (p f) == (f (A p) (B p)).
- ;     This row had no test before -- a sentinel mis-route would silently break
- ;     it (and it shares the failure mode that bit string/sym apply). ---
- (= '(1 (2)) ('(1 2) (\ a b `(a b))))        ; f sees car=1, cdr='(2)
- (= '(1 (2 3)) ('(1 2 3) (\ a b `(a b))))    ; longer cdr passed whole
- (= '(1 2) ((link 1 2) (\ a b `(a b))))         ; improper chain: cdr=2 (a fixnum), raw
- (= '(1 2) ('(1 2) (+)))                        ; arg = a nif: (+ 1 '(2)) = (1 2)
- (= '(1 2 3) ('(1 2 3) (+)))                    ; (+ 1 '(2 3))
- (nil? ('(1) (\ a b b)))                      ; cdr of (1) is nil -> 0
+ ; --- row KChain: a chain is a SEQUENCE, the text law one lattice rung up -- a charm
+ ;     INDEXES an element, a chain JUXTAPOSES (the append), everything else takes the
+ ;     default action. it was the Church eliminator ((p f) == (f (A p) (B p))) until the
+ ;     tree was checked and nothing at all applied a chain to a function. ---
+ (= 7 ('(7 8 9) 0))  (= 9 ('(7 8 9) 2))       ; arg = charm: the kth element
+ (= 9 ('(7 8 9) -1)) (= 7 ('(7 8 9) -3))      ; negative counts from the end
+ (= 1 ('(7 8 9) 3))  (= 1 ('(7 8 9) -4))      ; out of range either way -> the unit
+ (= 1 ((link 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
+ (= '(1 2 3 4) ('(1 2) '(3 4)))                  ; arg = chain: the append
+ (= (+ '(1 2) '(3 4)) ('(1 2) '(3 4)))           ; ... which agrees with + on the nose
+ (= '(1 2 3 4 5) ('(1 2) '(3 4) '(5)))           ; ... and curries, like text juxtaposition
+ (= 1 ('(1 2) (\ a b `(a b))))                   ; arg = a lambda: the DEFAULT action, not an eliminator
+ (= 1 ('(1 2) 'x)) (= 1 ('(1 2) "ab"))           ; ... as for every other kind
+ (= 1 ('(1 2) ()))                               ; ⚠ () is the ZERO POINT, not a chain: default, not identity
 
  ; --- row KString: applying a string indexes a byte (1 if oob/non-numeric) ---
  (= 97 ("ab" 0))   (= 98 ("ab" 1))            ; arg = fixnum
- (= 1 ("ab" 9))    (= 1 ("ab" -1))            ; oob -> 1 (matches "" == k**0)
+ (= 98 ("ab" -1))  (= 97 ("ab" -2))           ; negative counts from the end, as a chain does
+ (= 1 ("ab" 9))    (= 1 ("ab" -3))            ; oob -> 1 (matches "" == k**0)
  (= 1 ("ab" 'x))                              ; arg = symbol (non-number) -> 1
  (= 255 ((string 255) 0))                     ; byte is unsigned 0..255
- (= 1 ("" 5))                                 ; the empty string indexes to 1
+ (= 1 ("" 5)) (= 1 ("" -1))                   ; the empty string indexes to 1
 
  ; --- row KMint: the name index left with the string algebra (the mint round);
  ;     a symbol is a point with a spelling attribute and applies as every unit

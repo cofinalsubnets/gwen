@@ -22,6 +22,8 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
 3. **the scratch pool is threaded, not a free-list.** a subexpression writes its own
    die and scratches strictly below it in the pool; one allocation discipline where
    today the free-list/pin split interacts (the aim hold's own postmortem).
+   (answered NO at rung 4 -- the split died by the ledger fix, and the shape is
+   blocked while dies are partial; read the rung.)
 
 ## the ladder
 
@@ -87,10 +89,95 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
     but −616 text bytes — memory operands became register reads plus seat movs, the
     keeps-engaging signature. reification itself stays (a value consumer needs the
     bit); the va_arg walk and discard-hygiene flushes stay (different licenses).
-* **rung 3 — the shuttle.** spush2 parks replaced by pool-threaded operand reads
-  (dest.l's rd9); the park aims already landed are this rung half-done.
-* **rung 4 — the pool as parameter.** ralloc/rfree → the threaded pool with the
-  strictly-below discipline. last, because everything above makes it smaller.
+* **rung 3 — the shuttle (landed 2026-08-11).** the sp cell became the LAST resort:
+  the word/float binop and compare shuttles now stage through a three-tier read —
+  a left already RIDING a live register (a pin, a home) is read through it at the
+  combine (zero forms, rd9's "an operand that already sits somewhere"), else the
+  r1 hold, else a POOL park; the cell only when the pool is dry or the right's
+  forms genuinely bar. two findings shaped it:
+  * **decide from the FORMS, not the AST.** `callish?` barred every pool path for
+    a right side containing a call — but an inline-spliced call (love.h's b2w in
+    `Have(box_req)`, on every VM op) leaves call-free straight-line forms. psafe?
+    scans the emitted forms: labels and internal branches pass (nlab-fresh, no
+    entry from outside), a real call or a write of the candidate bars. the same
+    scan licenses riding a pin across a splice — which also dropped the dead
+    bridge mov the old cell recovery left behind.
+  * **a park is a BORROW, not an allocation** (spare): its span closes inside its
+    own staging, so the free list keeps its order — an alloc/free cycle reordered
+    it and renamed every seat downstream (pass 1 runs the same code; the roster
+    weighs its emission). and **never park what recovery already reads through**:
+    the first cut parked floats with a bridge mov pair where the old cell had been
+    recovered to ONE mov — movqrx aiming straight at the hold register beat both.
+  love.c: −397 insns, −2,700 text bytes, cells 231 → 209 (the rest are divide
+  staging, real call crossings, and dry-pool spills — the honest floor). the
+  residue: a handful of +2..8-byte functions where a 2-mov park chain stands
+  where recovery once made 1 mov. two laws re-truthed (an incidental slot
+  offset; erk's seat rename once s rides its pin through the splice).
+* **rung 4 — the pool as parameter: answered NO (2026-08-11), and here is why.**
+  the rung's motivation was the free-list/pin split (the aim hold's postmortem) --
+  and that class died the day before this ladder was written (2026-08-10, the
+  ledger fix in doc/moon-regalloc.md): pin doors evict their register from the
+  free list CONTINUOUSLY, the aim hold rides rpin, and ralloc scares on any
+  pinned member. the invariant threading would grant by construction is already
+  the code's, loud forever. what remains would be the shape alone, and the shape
+  is blocked: dest.l threads its pool because ck's die is total and the value
+  tuple has no register column -- gen.l's dies are partial BY LICENSE (the
+  totality section below), so values answer registers upward and the consumer
+  frees them; a threaded pool under that protocol means every lane re-deriving
+  "free now" per sibling -- the one ledger reimplemented n times, by hand, for
+  zero emission delta (allocation order renames seats; dry is dry in any order).
+  the tree had already measured "more threading" in miniature and declined
+  twice: one aim per spine (an eager aim at every level drained the pool -- the
+  wraps law's catch), and cbind parks only into a DEEP pool (the +0.4% L1
+  displacement). rung 3's `spare` banks the discipline's real content at the one
+  new site class -- a BORROW whose span closes inside its own staging keeps the
+  free list's order by construction, no parameter needed. revisit only if die
+  totality ever lands (then the column retires and the parameter is the natural
+  shape); until then the ledger IS the threaded pool, held by the ledger fix.
+
+* **the addrfold residue, measured and split (2026-08-11).** the residue stood at
+  4,891 insns on love.c; the class ablation ranked it: store-VALUE folds 2,811
+  (renames 1,791 + store-immediates 1,028), base folds 2,025, alu-imm 330, the
+  true indexed lanes 274. the rename half LANDED as construction -- the store
+  lanes take the value's OWN register (the splice slot bind, the frame-direct
+  fallthrough, the parked-address fallthrough: 2c's ownership rule on the value
+  side), and stld learned the si vocabulary (a full-width si binds its constant
+  and a later ld remats as li; a narrow si invalidates -- the sound completion
+  for the decl-born si, which the pass had silently not invalidated). love.c
+  −120 insns, −512 text bytes. the store-immediate half is **answered NO at
+  birth, by measurement**: laying si at the four store sites cost +5,995 -- the
+  li+st idiom is the FOOD of the stld/remat/deadst/addrfold compose, and a
+  construction-laid si starves the pipeline of six times what it saves. that
+  residue class is pipeline-shaped on purpose; it retires only with the passes
+  it feeds.
+* **the base folds: ptr ± const enters the face (landed 2026-08-11).** the same
+  instrument (log every hit/sh fold) attributed the 2,025-insn base-fold class:
+  the single dominant idiom was `(add r0 r0 8)(ld r0 r0 0)` -- `Ip[1]`/`Sp[0]`,
+  a deref of ptr+const where cgbin laid the scaled add and clval faced at offset
+  0. now clval's deref lane folds it at birth: a `var` whose vent type is a
+  plain pointer (VLA pointees decline -- their stride is cgbin's runtime lane),
+  the knum constant scaled at compile time into the face's offset, both `p + k`
+  and `k + p` and `p - k`; a dot on top folds again (`ip[1].w` is ONE load).
+  afd's discipline: the guard is static, no evaluation is ever discarded.
+  love.c −503 insns, −2,114 text bytes.
+* **face-direct stores (landed 2026-08-11).** matv leaves the scalar and float
+  asn paths: the store reads through the face's own base -- `p->w = v` is ONE
+  store from v's home through p's, `p->d = x` is one stsd, and the deref/dot
+  folds compose underneath (`p[1].w = v+1` is add + store). the license is the
+  base surviving the rhs: `wrany?` scans the rhs AST for any writing head
+  (asn/post/call/asm/va) and declines to the proven matv/park path -- calls
+  clobber the pool, an rhs asn could rewrite the very home or pin the face
+  rides (the unsequenced-store shapes stay on the old path whole). element
+  residency (hint/vapin) and the value's own register ride unchanged. struct,
+  bitfield, pair and wide stores keep matv (multi-word protocols). love.c
+  **−1,459 insns, −4,846 text bytes** -- the largest single step of this arc;
+  224 functions shrank, the worst grower is +2 bytes.
+* **the post tail rides the face too (landed 2026-08-11).** `p->n++` is
+  ld/add/st straight through the face's base -- no step rhs runs, so the base
+  survives by construction and not even wrany? is owed. the pair lane keeps its
+  r12 protocol; the rmw lane keeps its moor (it exists for evaluate-once on
+  non-calm lvalues -- `*f() += 1` -- and its address slot IS that guarantee).
+  love.c −143 insns, −358 bytes, zero growers.
 
 each rung past 0 rides the standing ritual: laws re-truthed from measured emissions,
 tortures vs gcc, the differential tier, fixpoint as the self-consistency gate.

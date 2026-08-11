@@ -153,3 +153,22 @@
 ; then welps).
 (assert (id? (:) (welp 'x 'y))                 ; a scare -> the zero point
         !(welp 'x 'y))                         ; ... which nets nothing (false)
+
+; --- THE ARITY IS THE PROTOCOL --- a help takes (a b) and nothing else. under-applied, a
+; stale 3-arg one answers a CLOSURE, which is truthy, and the raise site takes it for a
+; value -- silence that rides every later raise in the task AND every child, since a task
+; starts under its parent's help. so both doors refuse a non-binary handler at ENTRY, where
+; the ambient help is still listening. ⚠ the refusal is one-sided: what binary? cannot read
+; (a nif, a partial) passes, because a false refusal here walls off the one door a session
+; cannot route around.
+(hear welp)
+(assert
+ (binary? (\ a b a)) (binary? welp)                       ; two operands: the protocol
+ !(binary? (\ a b c a)) !(binary? (\ a a)) !(binary? 0)   ; over, under, and not a handler at all
+ (binary? cap) (binary? (+ 1))                            ; unreadable shapes PASS (one-sided)
+ ; the doors: a bad handler raises rather than being installed / run
+ (id? 'help-arity (trap (\ _ (hear (\ a b c 1))) () (\ a b a)))
+ (id? 'help-arity (trap (\ _ (trap (\ _ 1) () (\ a a))) () (\ a b a)))
+ ; ... and every nothing still uninstalls
+ (: _ (hear ()) r (nil? (heard ())) _ (hear welp) r))
+(hear 0)

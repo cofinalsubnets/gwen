@@ -355,7 +355,7 @@ don't automatically construct a list for you.</p>
   <dt id="g-cap"><a href="#g-cap">🧢 cap</a></dt>
   <dd>contents of the above part of the product. aka <code>car</code>/<code>fst</code>/<code>hd</code>. see also: <a href="#g-cup">cup</a> <a href="#g-chain">chain</a> <a href="#g-link">link</a></dd>
   <dt id="g-chain"><a href="#g-chain">⛓️ chain</a></dt>
-  <dd>a free binary product, aka pair or cons cell. used for lists per lisp usual. see also: <a href="#g-link">link</a> <a href="#g-cap">cap</a> <a href="#g-cup">cup</a>.</dd>
+  <dd>a free binary product, aka pair or cons cell. used for lists per lisp usual. indexes its elements (<code>('(7 8 9) -1)</code> is <code>9</code>), joins on another chain (<code>('(1 2) '(3 4))</code> is <code>(1 2 3 4)</code>). see also: <a href="#g-link">link</a> <a href="#g-cap">cap</a> <a href="#g-cup">cup</a>.</dd>
   <dt id="g-charm"><a href="#g-charm">🧿 charm</a></dt>
     <dd>a register-allocated fixed-width integer, aka fixnum. a type of <a href="#g-star">star</a></dd>
   <dt id="g-church"><a href="#g-church">⛪ church numeral</a></dt>
@@ -414,7 +414,7 @@ don't automatically construct a list for you.</p>
   <dt id="g-star"><a href="#g-star">🌟 star</a></dt>
     <dd>a scalar fixpoint of <a href="#g-net">net</a>: <a href="#g-charm">charm</a>, <a href="#g-sun">sun</a>, <a href="#g-big">big</a>, <a href="#g-gem">gem</a> or <a href="#g-twin">twin</a>.</dd>
   <dt id="g-string"><a href="#g-string">🧵 string</a></dt>
-    <dd>a byte vector: indexes its bytes, nets its charm-sum.</dd>
+    <dd>a byte vector: indexes its bytes (<code>("abc" -1)</code> is <code>99</code>, counting from the end), joins on another string (<code>("ab" "cd")</code> is <code>"abcd"</code>), nets its charm-sum.</dd>
   <dt id="g-sun"><a href="#g-sun">☀️ sun</a></dt>
     <dd>a pointer-width integer (<code>intptr_t</code>). a type of <a href="#g-star">star</a></dd>
   <dt id="g-tablet"><a href="#g-tablet">📱 tablet</a></dt>
