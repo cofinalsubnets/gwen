@@ -82,6 +82,12 @@ open-std.org and read:
 | the productions are identical in C99 | ✅ (C11 only adds `static_assert-declaration`) |
 | gcc + clang, `-pedantic-errors`, c89–c23, zero diagnostics | ✅ 10 runs |
 | the README quotes | ✅ read off the cloned tree |
+| no effect on code that already compiled | ✅ 49 TUs, byte-identical .s |
+
+The no-effect row is the one worth reproducing: build the tree with and without the patch
+and compile every TU of the compiler and `test/` with each. All 49 emit byte-identical
+assembly bar two — `parse.c`, which the patch changes, and `test/macro.c`, which carries
+`__TIME__` and differs between any two runs of the *same* binary a second apart.
 
 ⚠ C89 section numbers are deliberately absent: ANSI X3.159-1989 numbered these §3.x and
 ISO C90 renumbered to §6.x, and neither text was checked. The "back to C89" claim rests on
