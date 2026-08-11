@@ -38,9 +38,11 @@
             sine cosine log power))
    (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) #() names)))
 ; the CONTAINER DOORS -- pure or not depending on WHAT they are handed, which is why they
-; cannot sit in pureset. on a tablet peep reads mutable state and pin writes it; on a chain or
-; text neither can, so both are effect-free there: pin on an immutable has no cell to write, so
-; whatever it answers it answers as a VALUE. keyed by value, like pureset.
+; cannot sit in pureset. on a tablet peep reads mutable state and pin writes it; on text or a
+; chain neither can -- pin has no cell there, so it answers a FRESH container and the call is
+; a value like any other. keyed by value, like pureset. ⚠ a tray is immutable too, but @(..)
+; reads as a `tuple` CALL, so no tray ever reaches a fold site known -- the gate below would
+; never fire on one and does not name it.
 (: readset (: names '(peep pin)
    (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) #() names)))
 (: feels (:
