@@ -151,7 +151,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, // the data sentinels; each tail-jumps to its apply handler
- lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
+ lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_myself, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_saturate, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_casknew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -2051,6 +2051,12 @@ op11(lvm_heard, (intptr_t) g->hot_help)
 // (worn x) -> the stdio this task wears (x ignored): the live read of hook 6, the
 // zero point when it wears the console. what a caller saves before re-seating.
 op11(lvm_worn, (intptr_t) g->hot_io)
+// (myself x) -> the running task's own id (x ignored): the charm `twirl` answered for it,
+// and the zero point for the task nobody twirled. the run ring's head IS the running
+// task, so this is a read of its pid slot. what a per-task escape compares against
+// before it jumps -- a help is INHERITED at spawn, so a child can hold a continuation
+// captured in its parent's stack, and landing there tears both.
+op11(lvm_myself, (intptr_t) g->tasks[2].x)
 
 // `+`/`*` over a lambda operand: build the combinator partial (stack/compose g g)
 // through numap_drive. Ip is at the re-runnable +/* opcode, so a plain Have is

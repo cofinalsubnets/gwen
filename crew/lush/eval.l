@@ -442,10 +442,12 @@
                          (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
               (< p 0) (cmderr "cannot fork")
               (: _ (sh-waitfg (L p) (sh-curline ())) (sh-echk (sh-status ()))))))
+   ; ⚠ the roster sh-subback puts back IS the subshell's contract, so it has to ride
+   ; the raised way out too: a scare under the body would leak the body's cwd, vars,
+   ; funcs, positionals, $0, flags and environment into the shell that ran it.
    (sh-subhere b)                            ; a subshell in our own process
      (: snap (sh-subsave ())
-        s (b ())
-        _ (sh-subback snap)
+        s (mind b () (\ _ (sh-subback snap)))
         st (sh-capstat s)                    ; brk/cnt do not cross a subshell either
         _ (pin sh-status () st)
         (sh-echk st))
@@ -535,12 +537,15 @@
      (? (charm? st) st
         (&& (two? st) (|| (id? <st 'ret) (id? <st 'xit))) >st
         0)
+   ; the re-seat is MINDED: a scare under the body leaves this task wearing a jug
+   ; nobody drains, and every later word the shell says lands in it instead of the
+   ; terminal. one capture pays the mind, not one node -- sh-guarded stays bare.
    (sh-capjug a)
      (: j (jug 0)
         w (worn ())
         _ (sh-wearout j)
-        st (sh-guarded (\ _ (sh-eval a)))      ; the body's status is the value, never our errexit
-        _ (wear w)
+        st (mind (\ _ (sh-guarded (\ _ (sh-eval a))))   ; the body's status is the value,
+                 () (\ _ (wear w)))                     ; ..never our errexit
         _ (pin sh-substat () (sh-capstat st))
         (slurp j))
 
@@ -608,14 +613,27 @@
               caps (sh-subfds ())
               _ (pin sh-subfds () ((rfd >< d) >< caps))
               snap (sh-subsave ())
-              st (sh-guarded (\ _ (sh-eval a)))
-              _ (flush out)                    ; ...and the body's, before the write end goes
-              _ (sh-subback snap)
-              _ (pin sh-subfds () caps)
-              _ (dup2 sv 1) _ (fdclose sv)
-              _ (fdclose wfd)                  ; the last write end: now the drain reads eof
+              ; ⚠ the whole seat is MINDED: nothing here is reclaimed by anything else.
+              ; sv and wfd are RAW fds -- fdclose is the only door, and a port's
+              ; finalizer never sees them -- our stdout is dup2'd onto the pipe, and the
+              ; drain has no other reader. a scare under the body left the shell talking
+              ; into a pipe nobody empties, which at the next prompt reads as a dead shell.
+              ; the join lands in `got` because it belongs to the teardown: a second catch
+              ; answers the zero point, so it can happen in ONE place, and that place has
+              ; to be the one both ways out share.
+              got (tablet 0)
+              st (mind (\ _ (sh-guarded (\ _ (sh-eval a)))) ()
+                       (\ _ (: _ (flush out)         ; the body's bytes, before the ends go
+                                _ (sh-subback snap)
+                                _ (pin sh-subfds () caps)
+                                ; fd 1 is a write end TOO (the dup2 above), so it has to be
+                                ; put back before the drain can ever read eof
+                                _ (dup2 sv 1) _ (fdclose sv)
+                                _ (fdclose wfd)      ; the last write end: now eof
+                                _ (pin got 0 (catch d))
+                                0)))
               _ (pin sh-substat () (sh-capstat st))
-              (catch d))))
+              (got 0))))
 
    ; every lane leaves sh-substat holding this body's status: an assignment with
    ; no command name answers the LAST one performed (POSIX), so the pin is the
