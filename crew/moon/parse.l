@@ -53,7 +53,7 @@
    (stampf ts i spans)
     (? !(two? ts) ()
        (: t <ts
-          (`((tkk t) (tkv t) <>>t i (filat spans i)) >< stampf >ts (i + 1) spans)))
+          ([(tkk t) (tkv t) <>>t i (filat spans i)] >< stampf >ts (i + 1) spans)))
    (stamped? t) (two? >>>>t)                       ; a 5th cell -- probed, never counted: mark runs on EVERY lookahead of every parse
    (seqof t) (? (stamped? t) <>>>t ())
    (filof t) (? (stamped? t) <>>>>t ())
@@ -76,8 +76,8 @@
        ts)
    (want ts s) (: _ (mark ts) (? (two? ts && tp? <ts s) >ts ()))
    (peekp ts s) (: _ (mark ts) (two? ts && tp? <ts s))
-   asnops `(`("=" ()) '("+=" +) '("-=" -) '("*=" *) '("/=" /) '("%=" %)
-             '("&=" &) '("|=" |) '("^=" ^) '("<<=" shl) '(">>=" shr))
+   asnops [["=" ()] '("+=" +) '("-=" -) '("*=" *) '("/=" /) '("%=" %)
+             '("&=" &) '("|=" |) '("^=" ^) '("<<=" shl) '(">>=" shr)]
    scalars '(char short int long void double float)
    ; a type-specifier RUN (char short int long void double float signed unsigned)
    ; canonicalizes to one type symbol -- `unsigned long` -> 'ulong, `signed char`
@@ -184,9 +184,9 @@
    ; exit.c defines __stdio_exit weakly so __stdio_exit.c's real one wins.
    (aliasat? ts)
     (: (go s d tgt wk)
-        (? !(two? s) (? tgt `(tgt wk) ())
+        (? !(two? s) (? tgt [tgt wk] ())
            (: t <s
-              (? ((d < 1) && (tp? t ";" || tp? t "{")) (? tgt `(tgt wk) ())
+              (? ((d < 1) && (tp? t ";" || tp? t "{")) (? tgt [tgt wk] ())
                  (tp? t "(") (go >s (d + 1) tgt wk)
                  (tp? t ")") (go >s (d - 1) tgt wk)
                  ((tkk t = 'id) &&
@@ -395,7 +395,7 @@
                       (? (trank s <= trank u) u     ; unsigned rank >= signed: unsigned wins
                          (tw w64 u < tw w64 s) s    ; signed strictly wider: it represents all of u
                          (tusg s))))))))            ; same width: the signed one's unsigned twin
-   (tdecay ty) (? (arr? ty) `('ptr <>ty) ty)
+   (tdecay ty) (? (arr? ty) ['ptr <>ty] ty)
 
    ; -- parse-time expr typer (for sizeof folding) -- the UNDECAYED type of an
    ; lvalue/pointer expr, | () when unknown (the caller keeps a deferred 'szof
@@ -409,7 +409,7 @@
    (fmof ps sty nm) (? !(stru? sty) ()                  ; a member's (byte-offset ty) off a struct type
                        (: e (peep (ps 'stag) <>sty ())
                           (? !(two? e) ()
-                             (: f (assoc nm <e) (? (two? f) `(<>f <>>f) ())))))
+                             (: f (assoc nm <e) (? (two? f) [<>f <>>f] ())))))
    ; &((T*)0)->fld (and a.b chains over it) folds to the member's byte offset --
    ; the offsetof idiom, which sqlite carries as its own macro. the chain must
    ; GROUND in a deref of a null pointer cast; anything else stays an address.
@@ -420,12 +420,12 @@
             (: c <>b
                (? !(two? c && (<c = 'cast)) ()
                   (: ty <>c v (cfold <>>c)
-                     (? (ptr? ty && charm? v && (v = 0)) `(0 <>ty) ()))))
+                     (? (ptr? ty && charm? v && (v = 0)) [0 <>ty] ()))))
            (<b = 'dot)
             (: gr (ground <>b)
                (? !(two? gr) ()
                   (: f (fmof ps <>gr <>>b)
-                     (? (two? f) `((<gr + <f) <>f) ()))))
+                     (? (two? f) [(<gr + <f) <>f] ()))))
            ())
        ; a null-grounded pointer VALUE -> (byte-address stride) | (): the cast
        ; ((T*)K), and + arithmetic over it scaled by the pointee (sqlite's
@@ -436,21 +436,21 @@
            ((<x = 'cast) && ptr? <>x)
             (: ty <>x
                v (cfold <>>x)
-               (? (charm? v) `(v (tsz ps <>ty)) ()))
+               (? (charm? v) [v (tsz ps <>ty)] ()))
            ((<x = 'bin) && id? <>x '+)
             (: pa (pval <>>x)
                (? (two? pa)
-                  (: n (cfold <>>>x) (? (charm? n) `((<pa + (* n <>pa)) <>pa) ()))
+                  (: n (cfold <>>>x) (? (charm? n) [(<pa + (* n <>pa)) <>pa] ()))
                   (: pb (pval <>>>x)
                      (? !(two? pb) ()
-                        (: n (cfold <>>x) (? (charm? n) `((<pb + (* n <>pb)) <>pb) ()))))))
+                        (: n (cfold <>>x) (? (charm? n) [(<pb + (* n <>pb)) <>pb] ()))))))
            ; a null-grounded ARRAY member decays to its (constant) address with
            ; the element stride -- &((T*)0)->ts[i] (musl's ioctl compat table)
            (<x = 'dot)
             (: gr (ground x)
                (? !(two? gr) ()
                   (: ty <>gr
-                     (? (arr? ty) `(<gr (tsz ps <>ty)) ()))))
+                     (? (arr? ty) [<gr (tsz ps <>ty)] ()))))
            ())
        (? (two? e && (<e = 'deref))                  ; &*(ptr-expr): the pointer's own value
            (: pv (pval <>e) (? (two? pv) <pv ()))
@@ -472,7 +472,7 @@
                                     ; a bare FUNCTION name: its 'sigs row as ('fn rty)
                                     ; (__typeof(open) -- musl's weak_alias declares through it)
                                     (: sg (peep (ps 'sigs) <>e ())
-                                       (? (two? sg) `('fn <sg) ()))))))
+                                       (? (two? sg) ['fn <sg] ()))))))
              (k = 'dot) (: bt (ptype ps <>e) (? (stru? bt) (fldty ps bt <>>e) ()))
              (k = 'deref) (: it (ptype ps <>e)
                              (? (ptr? it) <>it (arr? it) <>it
@@ -481,14 +481,14 @@
              (k = 'clit) <>e
              ; &x is a pointer to x's type -- only when that type is known, so a
              ; wrong element type never reaches a stride fold.
-             (k = 'addr) (: it (ptype ps <>e) (? it `('ptr it) ()))
+             (k = 'addr) (: it (ptype ps <>e) (? it ['ptr it] ()))
              ; a call through a named function: its 'sigs return type (the
              ; complex promotion below needs clog's answer to type complex)
              (k = 'call) (? (two? <>e && id? <<>e 'var)
                             (: sg (peep (ps 'sigs) <><>e ())
                                (? (two? sg) <sg ()))
                             ())
-             (k = 'str) `('arr 'char (tally <>e + 1))     ; a literal IS its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
+             (k = 'str) ['arr 'char (tally <>e + 1)]     ; a literal IS its array (cpp pasted phase 6; the lexer decoded escapes) -- sizeof("ab") folds to 3, an array bound
              ; a literal: sizeof('T') is sizeof(int) (musl's _IOW ioctl codes);
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (? ((-2147483648 <= <>e) && (<>e <= 2147483647)) 'int 'long)
@@ -544,7 +544,7 @@
    ; a dim that will not fold is a RUNTIME dim (C99 VLA), carried as ('vdim expr)
    ; -- the consumers judge: a local decl allocates, a pointee scales at runtime,
    ; sizeof multiplies; anywhere else the varr type refuses downstream.
-   (adims ps ts2 acc) (? !(peekp ts2 "[") `((rev acc) ts2)
+   (adims ps ts2 acc) (? !(peekp ts2 "[") [(rev acc) ts2]
                          (: t2 (pquals >ts2)
                             (? (peekp t2 "]") (adims ps >t2 (0 >< acc))
                                (: er (pexpr ps t2)
@@ -553,13 +553,13 @@
                                         rest (want <>er "]")
                                         (? !(two? rest) ()
                                            (charm? dv) (adims ps rest (dv >< acc))
-                                           (adims ps rest (`('vdim <er) >< acc)))))))))
+                                           (adims ps rest (['vdim <er] >< acc)))))))))
    ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3);
    ; a 'vdim dim lays ('varr elt expr) instead
    (mkarr ety dims) (? !(two? dims) ety
                        (: d <dims
-                          (? (two? d && id? <d 'vdim) `('varr (mkarr ety >dims) <>d)
-                             `('arr (mkarr ety >dims) d))))
+                          (? (two? d && id? <d 'vdim) ['varr (mkarr ety >dims) <>d]
+                             ['arr (mkarr ety >dims) d])))
    (varr? ty) (two? ty && (<ty = 'varr))
    ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
    ; INSIDE w (the wrap-so-far: eventual-pointee -> declared type), so the type
@@ -569,19 +569,19 @@
    (psufs ps ts name w dat bare)
     (? (peekp ts "(")
         (: rp (pparams ps >ts ())
-           (? !(two? rp) () (psufs ps <>rp name (\ t (w `('fn t))) (? bare rp dat) ())))
+           (? !(two? rp) () (psufs ps <>rp name (\ t (w ['fn t])) (? bare rp dat) ())))
        (peekp ts "[")
         (: ar (adims ps ts ())
            (? !(two? ar) () (psufs ps <>ar name (\ t (w (mkarr t <ar))) dat ())))
-       `(`(name w dat bare) ts))
+       [[name w dat bare] ts])
    ; direct declarator, RECURSIVE: name | ( *.. dtor ) , then suffixes -- covers
    ; (*name)(params), the redundant (name), (*const p) (quals ride pquals), and
    ; nested forms (`void (*(*x)(a))(b)`: x a ptr to fn(a) returning a ptr to
    ; fn(b) returning void). a paren declarator's pointee is what TRAILS its `)`.
    ; the head may also be EMPTY (abstract: `(*)(params)`). -> ((name w dat bare) rest) | ()
    (pdirect ps ts)
-    (: (nstars s k) (: s2 (pquals s) (? (peekp s2 "*") (nstars >s2 (k + 1)) `(k s2)))
-       (ptrk k t) (? (k < 1) t (ptrk (k - 1) `('ptr t)))
+    (: (nstars s k) (: s2 (pquals s) (? (peekp s2 "*") (nstars >s2 (k + 1)) [k s2]))
+       (ptrk k t) (? (k < 1) t (ptrk (k - 1) ['ptr t]))
        (? (two? ts && (tkk <ts = 'id)) (psufs ps >ts (tkv <ts) (\ t t) () 1)
           !(peekp ts "(") (psufs ps ts () (\ t t) () ())
           (: sr (nstars >ts 0)
@@ -593,7 +593,7 @@
                    (? !(two? r) ()
                       (psufs ps r <e (\ t (<>e (ptrk k t))) <>>e (<>>>e && (k = 0)))))))))
    (pdtor ps ts base)                               ; ps threads to adims for const-expr array dims; -> ((name ty) rest) | ()
-    (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s `('ptr ty)) `(ty s)))
+    (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s ['ptr ty]) [ty s]))
        sr (stars ts base)
        ty <sr ts2 (pquals <>sr)           ; attrs may sit before the name
        (? (peekp ts2 "(")                            ; a parenthesized declarator -- pdirect recurses,
@@ -602,22 +602,22 @@
            (: dr (pdirect ps ts2)
               (? !(two? dr) ()
                  (: e <dr ty2 (<>e ty) dat <>>e
-                    `((? (two? dat) `(<e ty2 dat) `(<e ty2)) <>dr))))
+                    [(? (two? dat) [<e ty2 dat] [<e ty2]) <>dr])))
           !(two? ts2 && (tkk <ts2 = 'id))           ; no name: an ABSTRACT declarator (unnamed proto param)
            (? (peekp ts2 "[")                          ; abstract ARRAY `T [n]..` (e.g. `struct timespec const[2]`)
                (: dr (adims ps ts2 ())                 ; -> nested arr of ty; pparams decays it to a pointer
-                  (? !(two? dr) () `(`(() (mkarr ty <dr)) <>dr)))
-              (peekp ts2 ")" || peekp ts2 ",") `(`(() ty) ts2)
+                  (? !(two? dr) () [[() (mkarr ty <dr)] <>dr]))
+              (peekp ts2 ")" || peekp ts2 ",") [[() ty] ts2]
               ())
           (: name (tkv <ts2)
              ts3 >ts2
              (? (peekp ts3 "(")                       ; name(params) -- a function declarator; type ('fn), the params balance-skipped (cc calls untyped)
                  (: t2 (skipbal >ts3 1)
-                    (? (two? t2) `(`(name `('fn ty)) t2) ()))
-                !(peekp ts3 "[") `(`(name ty) ts3)
+                    (? (two? t2) [[name ['fn ty]] t2] ()))
+                !(peekp ts3 "[") [[name ty] ts3]
                 (: dr (adims ps ts3 ())               ; one or more [n]/[] suffixes -> a nested arr of ty
                    (? !(two? dr) ()
-                      `(`(name (mkarr ty <dr)) <>dr)))))))
+                      [[name (mkarr ty <dr)] <>dr]))))))
 
    ; -- base types: scalars, struct/union (with bodies), enum, typedef names --
    ; struct bodies REGISTER into ps 'stag; answers (ty rest) | ()
@@ -625,30 +625,30 @@
    (pbits ps ts) (? !(peekp ts ":") ()
                     (: er (pasn ps >ts)
                        (? !(two? er) ()
-                          (: cv (cfold <er) (? (charm? cv) `(cv <>er) ())))))
+                          (: cv (cfold <er) (? (charm? cv) [cv <>er] ())))))
    (pmembers ps ts acc)                             ; member pairs ((name ty)..); () name = anonymous splice; (name ty width) = a bitfield
     (? !(two? ts) ()
-       (peekp ts "}") `((rev acc) >ts)
+       (peekp ts "}") [(rev acc) >ts]
        (: br (pbty ps ts)
           (? !(two? br) ()
              (: bty <br ts2 <>br
                 (? (peekp ts2 ";")                   ; an anonymous struct/union member
-                   (? (stru? bty) (pmembers ps >ts2 (`(() bty) >< acc)) ())
+                   (? (stru? bty) (pmembers ps >ts2 ([() bty] >< acc)) ())
                    (peekp ts2 ":")                   ; an anonymous bitfield (padding / `:0` aligner): () name + width
                    (: bw (pbits ps ts2)
                       (? !(two? bw) ()
                          (: rest (want <>bw ";")
-                            (? (two? rest) (pmembers ps rest (`(() bty <bw) >< acc)) ()))))
+                            (? (two? rest) (pmembers ps rest ([() bty <bw] >< acc)) ()))))
                    (: (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
                        (? (peekp toks ",") (dts >toks (mem2 >< acc2))
                           (: rest (want toks ";")
-                             (? (two? rest) `((mem2 >< acc2) rest) ())))
+                             (? (two? rest) [(mem2 >< acc2) rest] ())))
                       (dts ts3 acc2)                 ; dtor [: width] (, dtor [: width])* ;
                        (: dr (pdtor ps ts3 bty)
                           (? !(two? dr) ()
                              (peekp <>dr ":")        ; a bitfield: append the width to (name ty)
                               (: bw (pbits ps <>dr)
-                                 (? !(two? bw) () (dfin (<dr + `(<bw)) <>bw acc2)))
+                                 (? !(two? bw) () (dfin (<dr + [<bw]) <>bw acc2)))
                              (dfin <dr <>dr acc2)))
                       r (dts ts2 ())
                       ; <r is REVERSED (dts links) -- and acc accumulates reversed
@@ -665,35 +665,35 @@
    ; whether `packed` rides inside (x86_64 epoll_event -- the kernel ABI needs
    ; the packed layout, so skipping the attribute would mislay `data` at 8)
    (pattpk ts)
-    (? !(two? ts && (tkk <ts = 'id) && (tkv <ts = "__attribute__")) `(0 ts)
+    (? !(two? ts && (tkk <ts = 'id) && (tkv <ts = "__attribute__")) [0 ts]
        (: r >ts
-          (? !(peekp r "(") `(0 ts)
+          (? !(peekp r "(") [0 ts]
              (: (scan s d pk)
-                 (? (!(two? s) || (d < 1)) `(pk s)
+                 (? (!(two? s) || (d < 1)) [pk s]
                     (peekp s "(") (scan >s (d + 1) pk)
                     (peekp s ")") (scan >s (d - 1) pk)
                     ((tkk <s = 'id) && member? (tkv <s) '("packed" "__packed__")) (scan >s d 1)
                     (scan >s d pk))
                 r2 (scan >r 1 0)
                 nx (pattpk <>r2)
-                `((| <r2 <nx) <>nx)))))
+                [(| <r2 <nx) <>nx]))))
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
     (: (go l bit mx acc)
         (? !(two? l)
            (: a2 (? (mx < 1) 1 mx)
-              `((rev acc) (aup (>> (bit + 7) 3) a2) a2))
+              [(rev acc) (aup (>> (bit + 7) 3) a2) a2])
            (: m <l name <m ty <>m
               (? (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     nmx (? (mx < a) a mx)
                     (? (= w 0) (go >l (aup bit ubits) nmx acc)        ; `:0` -- align the cursor to the unit, no field
-                       uni (: fld (? name `(name 0 `('bitfield ty 0 w)) ())
+                       uni (: fld (? name [name 0 ['bitfield ty 0 w]] ())
                               (go >l (? (bit < ubits) ubits bit) nmx (? name (fld >< acc) acc)))
                        (: bit2 (? (((& bit (ubits - 1)) + w) > ubits) (aup bit ubits) bit)   ; bump to avoid straddling the unit
                           uoff (& (>> bit2 3) (0 - usz))              ; the declared-type-aligned word holding these bits
                           bitoff (bit2 - (uoff * 8))
-                          fld (? name `(name uoff `('bitfield ty bitoff w)) ())   ; anonymous -> reserve bits, no field
+                          fld (? name [name uoff ['bitfield ty bitoff w]] ())   ; anonymous -> reserve bits, no field
                           (go >l (bit2 + w) nmx (? name (fld >< acc) acc)))))
                  !name                               ; the anonymous struct/union splice (name absent, no width)
                  (: inner (peep (ps 'stag) <>ty 0)
@@ -703,7 +703,7 @@
                     at (>> sbit 3)
                     (spl fs acc2) (? !(two? fs) acc2
                                      (: f <fs
-                                        (spl >fs (`(<f (at + <>f) <>>f) >< acc2))))
+                                        (spl >fs ([<f (at + <>f) <>>f] >< acc2))))
                     nmx (? (mx < ia) ia mx)
                     nbit (? uni (? (bit < (isz * 8)) (isz * 8) bit) (sbit + (isz * 8)))
                     (go >l nbit nmx (spl <inner acc)))
@@ -713,7 +713,7 @@
                     at (>> abit 3)
                     nmx (? (mx < a) a mx)
                     nbit (? uni (? (bit < (sz * 8)) (sz * 8) bit) (abit + (sz * 8)))
-                    (go >l nbit nmx (`(name at ty) >< acc))))))
+                    (go >l nbit nmx ([name at ty] >< acc))))))
        (go ms 0 0 ()))
    (panon ps) (: k (peep ps 'anon 0) _ (pin ps 'anon (k + 1)) (".anon" + show k))
    (pbty ps ts0)
@@ -728,9 +728,9 @@
                                  (: l2 (pquals l)
                                     (? (two? l2 && (tkk <l2 = 'kw) && member? (tkv <l2) tyspec)
                                        (grab l2 acc)
-                                       `((rev acc) l))))
+                                       [(rev acc) l])))
                  r (grab ts ())
-                 `((canon ps <r) <>r))
+                 [(canon ps <r) <>r])
              (tkw? t 'struct || tkw? t 'union)
               (: uni (tkw? t 'union)
                  ts2 >ts
@@ -744,8 +744,8 @@
                              lay (playout ps <mr uni <pa)
                              _ (pin (ps 'stag) tag2 lay)
                              _ (? uni (pin (ps 'utag) tag2 1) 0)
-                             `(`('struct tag2) <>pa))))
-                    (? tag `(`('struct tag) ts3) ())))
+                             [['struct tag2] <>pa])))
+                    (? tag [['struct tag] ts3] ())))
              (tkw? t 'enum)
               ; the underlying type is UNSIGNED when no enumerator is negative (gcc's
               ; choice), and an enum BIT-FIELD is where that shows: `enum c code : 8`
@@ -757,7 +757,7 @@
                  (ety pos) (: _ (? tag (pin (ps 'etag) tag pos) 0) (? pos 'uint 'int))
                  (? (peekp ts3 "{")
                     (: (consts ts4 v pos)
-                        (? (peekp ts4 "}") `((ety pos) >ts4)    ; a trailing comma (or empty body): the enum ends
+                        (? (peekp ts4 "}") [(ety pos) >ts4]    ; a trailing comma (or empty body): the enum ends
                            !(two? ts4 && (tkk <ts4 = 'id)) ()
                            (: name (tkv <ts4)
                               ts5 >ts4
@@ -765,19 +765,19 @@
                                     (: er (pasn ps >ts5)              ; = CONST-EXPR: fold it (enum consts, 1<<n, A+1) -- not just a literal
                                        (? !(two? er) ()
                                           (: cv (cfold <er)
-                                             (? (charm? cv) `(cv <>er) ()))))
-                                    `(v ts5))
+                                             (? (charm? cv) [cv <>er] ()))))
+                                    [v ts5])
                               (? !(two? vr) ()
                                  (: _ (pin (ps 'enums) name <vr)
                                     ts6 <>vr
                                     pos2 (pos && !(<vr < 0))
                                     (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2)
                                        (: rest (want ts6 "}")
-                                          (? (two? rest) `((ety pos2) rest) ())))))))
+                                          (? (two? rest) [(ety pos2) rest] ())))))))
                        (consts >ts3 0 1))
-                    `((? (peep (ps 'etag) tag 0) 'uint 'int) ts3)))
+                    [(? (peep (ps 'etag) tag 0) 'uint 'int) ts3]))
              ((tkk t = 'id) && (? (peep (ps 'types) (tkv t) 0) 1 ()))
-              `((peep (ps 'types) (tkv t) 0) >ts)
+              [(peep (ps 'types) (tkv t) 0) >ts]
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
              ; type -- a type-name reads pcty, an expression ptype (whose 'sigs lane
              ; carries musl's weak_alias: `extern __typeof(old) new __attribute__(..)`)
@@ -787,12 +787,12 @@
                     (tkbty? ps <r1)
                      (: tr (pcty ps r1)
                         rest (? (two? tr) (want <>tr ")") ())
-                        (? (two? rest) `(<tr rest) ()))
+                        (? (two? rest) [<tr rest] ()))
                     (: er (pasn ps r1)
                        (? !(two? er) ()
                           (: ty (ptype ps <er)
                              rest (want <>er ")")
-                             (? (ty && two? rest) `(ty rest) ()))))))
+                             (? (ty && two? rest) [ty rest] ()))))))
              ()))))
    ; a type-name (casts, sizeof): base + an ABSTRACT declarator -- pdtor covers
    ; stars, arrays, AND the function-pointer form `T (*)(params)` (name = ()).
@@ -800,20 +800,20 @@
     (: br (pbty ps ts)
        (? !(two? br) ()
           (: dr (pdtor ps <>br <br)
-             (? (two? dr) `(<><dr <>dr) ()))))
+             (? (two? dr) [<><dr <>dr] ()))))
 
    ; complex usual-arithmetic conversion (C99 6.3.1.8): exactly one side
    ; complex, the other arithmetic-real -> the real side rises to {x, 0}
    ; (a clit, single-eval), so gen's complex lane only meets complex operands
-   (cxwrap ty x) `('clit ty `('init `(x '(flo 0.0))))
+   (cxwrap ty x) ['clit ty ['init [x '(flo 0.0)]]]
    (mkbin ps op l r)
     (: tl (ptype ps l) tr (ptype ps r)
        cl (cplxty? tl) cr (cplxty? tr)
        (? (cl && !cr && tr && !(ptr? tr || arr? tr || stru? tr))
-           `('bin op l (cxwrap tl r))
+           ['bin op l (cxwrap tl r)]
           (cr && !cl && tl && !(ptr? tl || arr? tl || stru? tl))
-           `('bin op (cxwrap tr l) r)
-          `('bin op l r)))
+           ['bin op (cxwrap tr l) r]
+          ['bin op l r]))
    ; one left-associative binary level
    (plevel ps sub ops ts)
     (: r (sub ps ts)
@@ -821,7 +821,7 @@
           (: (more l ts2)
               (: t (? (two? ts2) <ts2 ())
                  hit (? (two? t && (tkk t = 'p)) (passoc (tkv t) ops) ())
-                 (? !(two? hit) `(l ts2)
+                 (? !(two? hit) [l ts2]
                     (: r2 (sub ps >ts2)
                        (? (two? r2)
                           (more (mkbin ps <>hit l <r2) <>r2)
@@ -832,24 +832,24 @@
    (pprim ps ts)
     (? !(two? (mark ts)) ()         ; the bottom of the expression ladder: mark here and a bad OPERAND reports itself, not the operator before it
        (: t <ts
-          (? (tkk t = 'num) `(`('num (tkv t)) >ts)
+          (? (tkk t = 'num) [['num (tkv t)] >ts]
              (tkk t = 'unum)                          ; a u-suffixed literal wears its unsignedness (neg/div/shift go unsigned):
-              `(`('cast 'uint `('num (tkv t))) >ts)     ; 1u an unsigned INT (-1u wraps at 32 bits),
+              [['cast 'uint ['num (tkv t)]] >ts]     ; 1u an unsigned INT (-1u wraps at 32 bits),
              (tkk t = 'ulnum)                                   ; 1UL an unsigned LONG -- and on t32, a
               (: v (tkv t)                                      ; value past the 32-bit word promotes to
                  uty (? (pst32? ps && ((v < 0) || (4294967295 < v))) 'ullong 'ulong)     ; ullong (C99 6.4.4.1)
-                 `(`('cast uty `('num v)) >ts))
+                 [['cast uty ['num v]] >ts])
              (tkk t = 'ullnum)                                  ; 1ULL: the suffix FORCES 64 bits on t32
-              `(`('cast (? (pst32? ps) 'ullong 'ulong) `('num (tkv t))) >ts)
+              [['cast (? (pst32? ps) 'ullong 'ulong) ['num (tkv t)]] >ts]
              (tkk t = 'llnum)                                   ; 1LL: llong on t32, plain elsewhere
-              (? (pst32? ps) `(`('cast 'llong `('num (tkv t))) >ts) `(`('num (tkv t)) >ts))
-             (tkk t = 'flo) `(`('flo (tkv t)) >ts)
+              (? (pst32? ps) [['cast 'llong ['num (tkv t)]] >ts] [['num (tkv t)] >ts])
+             (tkk t = 'flo) [['flo (tkv t)] >ts]
              ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex
              ; constant {0, v} -- complex-double: complex FLOATS compute as
              ; doubles too (the float model), narrowing only at typed stores
              (tkk t = 'iflo)
-              `(`('clit '(struct "__cplx_double") `('init `('(flo 0.0) `('flo (tkv t))))) >ts)
-             (tkk t = 'str) `(`('str (tkv t)) >ts)
+              [['clit '(struct "__cplx_double") ['init ['(flo 0.0) ['flo (tkv t)]]]] >ts]
+             (tkk t = 'str) [['str (tkv t)] >ts]
              ; a WIDE literal desugars to a BOUNDED compound literal of its element
              ; type -- the init/layout machinery then lays elements, never bytes.
              ; L -> wchar (int; unsigned on the arm targets, the predefine table's
@@ -866,8 +866,8 @@
                                              ((55296 + (>> v 10)) >< ((56320 + (& v 1023)) >< s16 >l)))
                             (<l >< s16 >l))
                  cps (: raw (utf8dec (tkv t)) (? (tkk t = 'str16) (s16 raw) raw))
-                 (nums l) (? !(two? l) `(`('num 0)) (`('num <l) >< nums >l))
-                 `(`('clit `('arr ety (tally cps + 1)) `('init (nums cps))) >ts))
+                 (nums l) (? !(two? l) [['num 0]] (['num <l] >< nums >l))
+                 [['clit ['arr ety (tally cps + 1)] ['init (nums cps)]] >ts])
              ; the varargs builtins (my stdarg.h maps va_* onto these): va_arg's
              ; second operand is a TYPE, so they can't ride the ordinary call path
              ((tkk t = 'id) && (tkv t = "__builtin_va_arg"))
@@ -876,19 +876,19 @@
                  r2 (? (two? ra) (want <>ra ",") ())
                  tr (? (two? r2) (pcty ps r2) ())
                  rest (? (two? tr) (want <>tr ")") ())
-                 (? (two? rest) `(`('vaarg <ra <tr) rest) ()))
+                 (? (two? rest) [['vaarg <ra <tr] rest] ()))
              ((tkk t = 'id) && (tkv t = "__builtin_va_start"))
               (: r1 (want >ts "(")
                  ra (? (two? r1) (pasn ps r1) ())
                  r2 (? (two? ra) (want <>ra ",") ())
                  rb (? (two? r2) (pasn ps r2) ())         ; the last named param (unused)
                  rest (? (two? rb) (want <>rb ")") ())
-                 (? (two? rest) `(`('vastart <ra) rest) ()))
+                 (? (two? rest) [['vastart <ra] rest] ()))
              ((tkk t = 'id) && (tkv t = "__builtin_va_end"))
               (: r1 (want >ts "(")
                  ra (? (two? r1) (pasn ps r1) ())
                  rest (? (two? ra) (want <>ra ")") ())
-                 (? (two? rest) `(`('vaend <ra) rest) ()))
+                 (? (two? rest) [['vaend <ra] rest] ()))
              ; va_copy: a va_list is an array of one tag, so the copy IS `*dst = *src`
              ((tkk t = 'id) && (tkv t = "__builtin_va_copy"))
               (: r1 (want >ts "(")
@@ -896,29 +896,29 @@
                  r2 (? (two? ra) (want <>ra ",") ())
                  rb (? (two? r2) (pasn ps r2) ())
                  rest (? (two? rb) (want <>rb ")") ())
-                 (? (two? rest) `(`('asn `('deref <ra) `('deref <rb)) rest) ()))
+                 (? (two? rest) [['asn ['deref <ra] ['deref <rb]] rest] ()))
              ; __func__ (C99 6.4.2.2): the enclosing function's name as a string.
              ; pinned by the two body-parsing sites; outside a body there is no name
              ; to give, so it stays an undeclared identifier.
              ((tkk t = 'id) && (tkv t = "__func__") && string? (peep ps 'fnname ()))
-              `(`('str (peep ps 'fnname ())) >ts)
+              [['str (peep ps 'fnname ())] >ts]
              (tkk t = 'id)
               (: ev (peep (ps 'enums) (tkv t) ())
-                 (? (charm? ev) `(`('num ev) >ts)
-                    `(`('var (tkv t)) >ts)))
+                 (? (charm? ev) [['num ev] >ts]
+                    [['var (tkv t)] >ts]))
              (tp? t "(") (: r (pexpr ps >ts)
                             (? !(two? r) ()
                                (: rest (want <>r ")")
-                                  (? (two? rest) `(<r rest) ()))))
+                                  (? (two? rest) [<r rest] ()))))
              ())))
    ; postfix: calls, indexing, members, ++/--
    (pargs ps ts acc)
-    (? (peekp ts ")") `((rev acc) >ts)
+    (? (peekp ts ")") [(rev acc) >ts]
        (: r (pasn ps ts)
           (? !(two? r) ()
              (peekp <>r ",") (pargs ps ><>r (<r >< acc))
              (: rest (want <>r ")")
-                (? (two? rest) `((rev (<r >< acc)) rest) ())))))
+                (? (two? rest) [(rev (<r >< acc)) rest] ())))))
    ; the suffix run from a given seed -- ppost seeds with a primary; punary's
    ; compound literal seeds with the clit ((struct kstat){0}.st_atime_sec,
    ; (size_t [3]){..}[i] -- musl indexes and members straight off the literal)
@@ -926,27 +926,27 @@
     (: (more e ts2)
               (? (peekp ts2 "(")                     ; a call: the HEAD is any postfix expr (fn pointers)
                   (: ra (pargs ps >ts2 ())
-                     (? (two? ra) (more `('call e <ra) <>ra) `(() ())))
+                     (? (two? ra) (more ['call e <ra] <>ra) [() ()]))
                  (peekp ts2 "[")
                   (: ri (pexpr ps >ts2)
-                     (? !(two? ri) `(() ())
+                     (? !(two? ri) [() ()]
                         (: rest (want <>ri "]")
                            (? (two? rest)
-                              (more `('deref `('bin '+ e <ri)) rest)
-                              `(() ())))))
+                              (more ['deref ['bin '+ e <ri]] rest)
+                              [() ()]))))
                  (peekp ts2 ".")
                   (: t2 >ts2
                      (? (two? t2 && (tkk <t2 = 'id))
-                        (more `('dot e (tkv <t2)) >t2)
-                        `(() ())))
+                        (more ['dot e (tkv <t2)] >t2)
+                        [() ()]))
                  (peekp ts2 "->")
                   (: t2 >ts2
                      (? (two? t2 && (tkk <t2 = 'id))
-                        (more `('dot `('deref e) (tkv <t2)) >t2)
-                        `(() ())))
-                 (peekp ts2 "++") (more `('post e 1) >ts2)
-                 (peekp ts2 "--") (more `('post e -1) >ts2)
-                 `(e ts2))
+                        (more ['dot ['deref e] (tkv <t2)] >t2)
+                        [() ()]))
+                 (peekp ts2 "++") (more ['post e 1] >ts2)
+                 (peekp ts2 "--") (more ['post e -1] >ts2)
+                 [e ts2])
        m (more e0 ts0)
        (? (two? <m) m ()))
    (ppost ps ts)
@@ -972,8 +972,8 @@
              ())))
    (preop lv step)
     (: op (? (step < 0) '- '+)
-       (? (calm? lv) `('asn lv `('bin op lv '(num 1)))
-          `('bin op `('post lv step) '(num 1))))
+       (? (calm? lv) ['asn lv ['bin op lv '(num 1)]]
+          ['bin op ['post lv step] '(num 1)]))
    ; unary (casts and sizeof(TYPE) fold here)
    (punary ps ts)
     (? !(two? ts) ()
@@ -988,8 +988,8 @@
                         ; an [] clit completes its bound from the initializer (C11
                         ; 6.5.2.5p22) -- the same door the [] declarators ask
                         cty (? (two? iv && arr? <tr && (<>><tr = 0) && charm? (initcount ps <><tr <iv))
-                               `('arr <><tr (initcount ps <><tr <iv)) <tr)
-                        (? (two? iv) (ppostfrom ps `('clit cty <iv) <>iv) ()))
+                               ['arr <><tr (initcount ps <><tr <iv)] <tr)
+                        (? (two? iv) (ppostfrom ps ['clit cty <iv] <>iv) ()))
                     (: r (punary ps rest)
                        (? !(two? r) ()
                           ; the complex cast lanes (C99 6.3.1.7, musl's creal/__CIMAG):
@@ -1000,13 +1000,13 @@
                           (: cty <tr
                              sty (ptype ps <r)
                              (? (cplxty? cty)
-                                 (? (cplxty? sty && (<>sty = <>cty)) `(<r <>r)
+                                 (? (cplxty? sty && (<>sty = <>cty)) [<r <>r]
                                     (cplxty? sty)
-                                     `(`('clit cty `('init `(`('dot <r "re") `('dot <r "im")))) <>r)
-                                    `(`('clit cty `('init `(<r '(flo 0.0)))) <>r))
+                                     [['clit cty ['init [['dot <r "re"] ['dot <r "im"]]]] <>r]
+                                    [['clit cty ['init [<r '(flo 0.0)]]] <>r])
                                 (cplxty? sty && !(stru? cty))
-                                 `(`('cast cty `('dot <r "re")) <>r)
-                                `(`('cast cty <r) <>r)))))))
+                                 [['cast cty ['dot <r "re"]] <>r]
+                                [['cast cty <r] <>r]))))))
              (tkw? t 'sizeof)
               (: r1 >ts
                  (? (peekp r1 "(" && tkbty? ps <(pquals >r1))             ; sizeof(const T) too
@@ -1015,31 +1015,31 @@
                         (? !(two? rest) ()
                            ; sizeof of a VLA TYPE (struct T[n+1], if_nameindex's malloc):
                            ; the runtime multiply dim * sizeof(elt)
-                           (varr? <tr) `(`('bin '* <>><tr `('num (tsz ps <><tr))) rest)
-                           `(`('cast (szty ps) `('num (tsz ps <tr))) rest)))
+                           (varr? <tr) [['bin '* <>><tr ['num (tsz ps <><tr)]] rest]
+                           [['cast (szty ps) ['num (tsz ps <tr)]] rest]))
                     (: r (punary ps r1)                 ; sizeof unary-expr | sizeof(expr) -- gen sizes from the type
                        (? (two? r) (: ty (ptype ps <r)
                                       (? (ty && !(varr? ty))      ; a VLA's size is RUNTIME: defer to gen's szof
-                                         `(`('cast (szty ps) `('num (tsz ps ty))) <>r) `(`('szof <r) <>r))) ()))))
+                                         [['cast (szty ps) ['num (tsz ps ty)]] <>r] [['szof <r] <>r])) ()))))
              ; __extension__ (gcc) prefixes a cast-expression as a no-op
              ((tkk t = 'id) && (tkv t = "__extension__")) (punary ps >ts)
              (tp? t "*") (: r (punary ps >ts)
-                            (? (two? r) `(`('deref <r) <>r) ()))
+                            (? (two? r) [['deref <r] <>r] ()))
              (tp? t "&") (: r (punary ps >ts)
                             (? !(two? r) ()
                                (: n (nulloff ps <r)   ; the offsetof idiom folds to a constant
-                                  (? (charm? n) `(`('num n) <>r) `(`('addr <r) <>r)))))
+                                  (? (charm? n) [['num n] <>r] [['addr <r] <>r]))))
              (tp? t "+") (punary ps >ts)
              (tp? t "-") (: r (punary ps >ts)
-                            (? (two? r) `(`('un 'neg <r) <>r) ()))
+                            (? (two? r) [['un 'neg <r] <>r] ()))
              (tp? t "!") (: r (punary ps >ts)
-                            (? (two? r) `(`('un 'not <r) <>r) ()))
+                            (? (two? r) [['un 'not <r] <>r] ()))
              (tp? t "~") (: r (punary ps >ts)
-                            (? (two? r) `(`('un 'bnot <r) <>r) ()))
+                            (? (two? r) [['un 'bnot <r] <>r] ()))
              (tp? t "++") (: r (punary ps >ts)
-                             (? (two? r) `((preop <r 1) <>r) ()))
+                             (? (two? r) [(preop <r 1) <>r] ()))
              (tp? t "--") (: r (punary ps >ts)
-                             (? (two? r) `((preop <r -1) <>r) ()))
+                             (? (two? r) [(preop <r -1) <>r] ()))
              (ppost ps ts))))
    ; the ladder
    (pmul ps ts) (plevel ps punary '(("*" *) ("/" /) ("%" %)) ts)
@@ -1055,16 +1055,16 @@
        (? !(two? r) ()
           (: (more l ts2) (? (peekp ts2 "&&")
                              (: r2 (pbor ps >ts2)
-                                (? (two? r2) (more `('land l <r2) <>r2) ()))
-                             `(l ts2))
+                                (? (two? r2) (more ['land l <r2] <>r2) ()))
+                             [l ts2])
              (more <r <>r))))
    (plor ps ts)
     (: r (pland ps ts)
        (? !(two? r) ()
           (: (more l ts2) (? (peekp ts2 "||")
                              (: r2 (pland ps >ts2)
-                                (? (two? r2) (more `('lor l <r2) <>r2) ()))
-                             `(l ts2))
+                                (? (two? r2) (more ['lor l <r2] <>r2) ()))
+                             [l ts2])
              (more <r <>r))))
    (pcond ps ts)
     (: r (plor ps ts)
@@ -1076,7 +1076,7 @@
                     (? !(two? ts2) ()
                        (: re (pcond ps ts2)
                           (? (two? re)
-                             `(`('cond <r <rt <re) <>re)
+                             [['cond <r <rt <re] <>re]
                              ()))))))
           r))
    (pasn ps ts)
@@ -1088,17 +1088,17 @@
                 (: r2 (pasn ps ><>r)
                    (? !(two? r2) ()
                       (: lv <r op <>hit
-                         `((? !op `('asn lv <r2)                         ; plain =: no duplicate to make
-                              (calm? lv) `('asn lv `('bin op lv <r2))    ; the desugar, exact here
-                              `('rmw op lv <r2))                         ; evaluate the lvalue ONCE
-                            <>r2))))))))
+                         [(? !op ['asn lv <r2]                         ; plain =: no duplicate to make
+                              (calm? lv) ['asn lv ['bin op lv <r2]]    ; the desugar, exact here
+                              ['rmw op lv <r2])                         ; evaluate the lvalue ONCE
+                            <>r2])))))))
    (pexpr ps ts)
     (: r (pasn ps ts)
        (? !(two? r) ()
           (: (more l ts2) (? (peekp ts2 ",")
                              (: r2 (pasn ps >ts2)
-                                (? (two? r2) (more `('comma l <r2) <>r2) ()))
-                             `(l ts2))
+                                (? (two? r2) (more ['comma l <r2] <>r2) ()))
+                             [l ts2])
              (more <r <>r))))
 
    ; an initializer is an assignment-expr OR a brace list. a brace list is
@@ -1112,12 +1112,12 @@
    (pinit ps ts)
     (? (peekp ts "{")
         (: (items ts2 acc)
-            (? (peekp ts2 "}") `(`('init (dbuild (rev acc))) >ts2)
+            (? (peekp ts2 "}") [['init (dbuild (rev acc))] >ts2]
                (: it (pinititem ps ts2)
                   (? !(two? it) ()
                      (: elem <it ts3 <>it
                         (? (peekp ts3 ",") (items >ts3 (elem >< acc))
-                           (peekp ts3 "}") `(`('init (dbuild (rev (elem >< acc)))) >ts3)
+                           (peekp ts3 "}") [['init (dbuild (rev (elem >< acc)))] >ts3]
                            ())))))
            (items >ts ()))
        ; a scalar initializer that FOLDS is its number -- `(Bits>>3)`-style macro
@@ -1125,10 +1125,10 @@
        (: r (pasn ps ts)
           (? !(two? r) ()
              (: e <r v (cfold e)
-                (? (cint? v) `(`('num v) <>r)            ; cint?: a sun-sized fold (max-charm's image) is still a number
+                (? (cint? v) [['num v] <>r]            ; cint?: a sun-sized fold (max-charm's image) is still a number
                    ((<e = 'un) &&
                     (<>e = 'neg) && (<<>>e = 'flo))
-                    `(`('flo (0.0 - <><>>e)) <>r)             ; -1.0 in a global image: fold the neg into the literal
+                    [['flo (0.0 - <><>>e)] <>r]             ; -1.0 in a global image: fold the neg into the literal
                    r)))))   ; cint?: a sun-sized fold (max-charm's image) is still a number
    ; the plain items ONE object of `ty` takes when its braces are elided (C 6.7.9p20),
    ; answering what is left over: a scalar takes one (a bitfield member too), an
@@ -1190,16 +1190,16 @@
     (? (peekp ts ".")
         (: t2 >ts
            (? !(two? t2 && (tkk <t2 = 'id)) ()
-              (pdesigs ps >t2 (`('f (tkv <t2)) >< acc))))
+              (pdesigs ps >t2 (['f (tkv <t2)] >< acc))))
        (peekp ts "[")
         (: er (pexpr ps >ts)                         ; a designator index: any const-expr ([KMint]=.., [2]=..)
            (? !(two? er) ()
               (: n (cfold <er)
                  r1 (want <>er "]")
-                 (? (charm? n && two? r1) (pdesigs ps r1 (`('i n) >< acc)) ()))))
+                 (? (charm? n && two? r1) (pdesigs ps r1 (['i n] >< acc)) ()))))
        !(two? acc) ()
        (: r (want ts "=")
-          (? (two? r) `((rev acc) r) ())))
+          (? (two? r) [(rev acc) r] ())))
    ; the item stream carries (path value) pairs (path () = a plain item); dbuild
    ; folds them into 'dfield/'didx items, one nested init per consecutive
    ; same-head run, the value DIRECT when a lone path exhausts (today's shape)
@@ -1209,24 +1209,24 @@
           (? !(two? path) (v >< dbuild >prs)
              (: h <path
                 (grab l acc)                         ; consecutive pairs whose head = h, stripped
-                 (? !(two? l) `((rev acc) ())
+                 (? !(two? l) [(rev acc) ()]
                     (: p2 <<l
                        (? (two? p2 && (= <p2 h))
-                          (grab >l (`(>p2 <><l) >< acc))
-                          `((rev acc) l))))
-                gr (grab >prs `(`(>path v)))
+                          (grab >l ([>p2 <><l] >< acc))
+                          [(rev acc) l])))
+                gr (grab >prs [[>path v]])
                 subs <gr
                 sub (dbuild subs)
-                node (? (!(two? >subs) && !(two? <<subs)) <sub `('init sub))
-                (`((? (id? <h 'f) 'dfield 'didx) <>h node) >< dbuild <>gr)))))
+                node (? (!(two? >subs) && !(two? <<subs)) <sub ['init sub])
+                ([(? (id? <h 'f) 'dfield 'didx) <>h node] >< dbuild <>gr)))))
    (pinititem ps ts)                                 ; -> ((path value) rest) | ()
     (? (peekp ts "." || peekp ts "[")
         (: dr (pdesigs ps ts ())
            (? !(two? dr) ()
               (: v (pinit ps <>dr)
-                 (? (two? v) `(`(<dr <v) <>v) ()))))
+                 (? (two? v) [[<dr <v] <>v] ()))))
        (: v (pinit ps ts)
-          (? (two? v) `(`(() <v) <>v) ())))
+          (? (two? v) [[() <v] <>v] ())))
 
    ; a constant-expression folder (for _Static_assert): an integer | () if the
    ; expression is not a compile-time constant. sizeof/enum already folded to num.
@@ -1323,7 +1323,7 @@
        rest (? (two? r4) (want r4 ";") ())
        (? !(two? rest) ()
           (: v (cfold <re)
-             (? (charm? v && (v <= 0)) () `('(tdef) rest)))))
+             (? (charm? v && (v <= 0)) () ['(tdef) rest]))))
    (static? ts) (two? ts && (tkk <ts = 'id) && (tkv <ts = "_Static_assert"))
 
    ; decl := TYPE [dtor [= asn] (, dtor [= asn])*] ;
@@ -1332,7 +1332,7 @@
        stat (leadstatic? ts)                          ; block-scope `static` -> ('sdecl ..), laid in .bss
        (? !(two? br) ()
           (: base <br ts0 <>br
-             (? (peekp ts0 ";") `(`('decl ()) >ts0)   ; a bare definition (struct S {..};)
+             (? (peekp ts0 ";") [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
                     (: dr (pdtor ps ts2 base)
                        (? !(two? dr) ()
@@ -1343,7 +1343,7 @@
                              ty (? !(varr? ty0) ty0
                                    (: ix (peep ps 'vlan 0)
                                       _ (pin ps 'vlan (ix + 1))
-                                      (ty0 + `(ix))))
+                                      (ty0 + [ix])))
                              ts3 <>dr
                              ; a block-scope function DECLARATION (`int f1(char *);` inside
                              ; a body) declares an EXTERN function -- no storage, no local
@@ -1351,23 +1351,23 @@
                              ; name a known function at the call; a file-scope prototype
                              ; said more, so it wins. the entry drops out below.
                              _ (? (!(fn? ty) || peep (ps 'sigs) name ()) 0
-                                  (pin (ps 'sigs) name `(<>ty () ())))
+                                  (pin (ps 'sigs) name [<>ty () ()]))
                              (? (varr? ty && (stat || peekp ts3 "=")) ()
                                 (peekp ts3 "=")
                                 (: r (pinit ps >ts3)
                                    (? !(two? r) ()
                                       (: ini <r
                                          ty2 (? (arr? ty && (<>>ty = 0) && charm? (initcount ps <>ty ini))
-                                                `('arr <>ty (initcount ps <>ty ini)) ty)   ; [] local: infer size
-                                         `(`(name ty2 ini) <>r))))
-                                `(`(name ty ()) ts3)))))
+                                                ['arr <>ty (initcount ps <>ty ini)] ty)   ; [] local: infer size
+                                         [[name ty2 ini] <>r])))
+                                [[name ty ()] ts3]))))
                    (more ts2 acc)
                     (: r (one ts2)
                        (? !(two? r) ()
                           (peekp <>r ",") (more ><>r (<r >< acc))
                           (: rest (want <>r ";")
                              es (filter (\ e !(fn? <>e)) (rev (<r >< acc)))
-                             (? (two? rest) `(`((? stat 'sdecl 'decl) es) rest) ()))))
+                             (? (two? rest) [[(? stat 'sdecl 'decl) es] rest] ()))))
                    (more ts0 ()))))))
 
    ; asm [volatile] ( "template" [: outputs [: inputs [: clobbers]]] ) ; -- the
@@ -1387,32 +1387,32 @@
        (? !(two? r0 && (tkk <r0 = 'str)) ()
           (: (tmpl ts2 acc) (? (two? ts2 && (tkk <ts2 = 'str))
                                (tmpl >ts2 (acc + tkv <ts2))
-                               `(acc ts2))
+                               [acc ts2])
              ; an operand run: "constraint" ( expr ) , .. -- empty before : or )
              (ops ts2 acc)
-              (? !(two? ts2 && (tkk <ts2 = 'str)) `((rev acc) ts2)
+              (? !(two? ts2 && (tkk <ts2 = 'str)) [(rev acc) ts2]
                  (: c (tkv <ts2)
                     r1 (want >ts2 "(")
                     re (? (two? r1) (pexpr ps r1) ())
                     r2 (? (two? re) (want <>re ")") ())
                     (? !(two? r2) ()
-                       (peekp r2 ",") (ops >r2 (`(c <re) >< acc))
-                       `((rev (`(c <re) >< acc)) r2))))
+                       (peekp r2 ",") (ops >r2 ([c <re] >< acc))
+                       [(rev ([c <re] >< acc)) r2])))
              (clobs ts2 acc)
-              (? !(two? ts2 && (tkk <ts2 = 'str)) `((rev acc) ts2)
+              (? !(two? ts2 && (tkk <ts2 = 'str)) [(rev acc) ts2]
                  (: c (tkv <ts2)
                     (? (peekp >ts2 ",") (clobs >>ts2 (c >< acc))
-                       `((rev (c >< acc)) >ts2))))
+                       [(rev (c >< acc)) >ts2])))
              tr (tmpl r0 "")
-             s1 (? (peekp <>tr ":") (ops ><>tr ()) `(() <>tr))
+             s1 (? (peekp <>tr ":") (ops ><>tr ()) [() <>tr])
              (? !(two? s1) ()
-                (: s2 (? (peekp <>s1 ":") (ops ><>s1 ()) `(() <>s1))
+                (: s2 (? (peekp <>s1 ":") (ops ><>s1 ()) [() <>s1])
                    (? !(two? s2) ()
-                      (: s3 (? (peekp <>s2 ":") (clobs ><>s2 ()) `(() <>s2))
+                      (: s3 (? (peekp <>s2 ":") (clobs ><>s2 ()) [() <>s2])
                          (? !(two? s3) ()
                             (: r9 (want <>s3 ")")
                                rest (? (two? r9) (want r9 ";") ())
-                               (? (two? rest) `(`('asm <tr <s1 <s2 <s3) rest) ()))))))))))
+                               (? (two? rest) [['asm <tr <s1 <s2 <s3] rest] ()))))))))))
 
    ; a STATEMENT-position __attribute__((..)) run skips (fallthrough..) -- except musttail,
    ; the one whose semantic we OWE: it lands in the ret's PRE slot (clay's (ret e PRE)) and
@@ -1430,7 +1430,7 @@
                    !(two? r) ()
                    (: st <r
                       (? !(id? <st 'ret && two? <>st) ()
-                         `((st + '("__attribute__((musttail))")) <>r))))))))
+                         [(st + '("__attribute__((musttail))")) <>r])))))))
    ; a label is a flat MARKER (see pstmt2's rule) so a block can splice it beside the statement it
    ; labels. an ARM -- an if/while/do/for body without braces -- has no list to splice into, and
    ; the marker alone would BE the arm, leaving its statement to fall out past the arm's join.
@@ -1442,17 +1442,17 @@
            (? !(two? r) ()
               (markerp <r) (go <>r (<r >< acc))
               !(two? acc) r
-              `(`('blk (rev (<r >< acc))) <>r))))
+              [['blk (rev (<r >< acc))] <>r])))
      ts ())
    (pstmt2 ps ts)
     (? !(two? ts) ()
        (: t <ts
           (? (tkw? t 'return)
-              (? (peekp >ts ";") `(`('ret ()) >>ts)    ; bare `return;` -- a void return
+              (? (peekp >ts ";") [['ret ()] >>ts]    ; bare `return;` -- a void return
                  (: r (pexpr ps >ts)
                     (? !(two? r) ()
                        (: rest (want <>r ";")
-                          (? (two? rest) `(`('ret <r) rest) ())))))
+                          (? (two? rest) [['ret <r] rest] ())))))
              (tkw? t 'if)
               (: r1 (want >ts "(")
                  rc (? (two? r1) (pexpr ps r1) ())
@@ -1462,15 +1462,15 @@
                     (? (two? <>rt && tkw? <<>rt 'else)
                        (: re (parm ps ><>rt)
                           (? (two? re)
-                             `(`('if <rc <rt <re) <>re)
+                             [['if <rc <rt <re] <>re]
                              ()))
-                       `(`('if <rc <rt ()) <>rt))))
+                       [['if <rc <rt ()] <>rt])))
              (tkw? t 'while)
               (: r1 (want >ts "(")
                  rc (? (two? r1) (pexpr ps r1) ())
                  r2 (? (two? rc) (want <>rc ")") ())
                  rb (? (two? r2) (parm ps r2) ())
-                 (? (two? rb) `(`('while <rc <rb) <>rb) ()))
+                 (? (two? rb) [['while <rc <rb] <>rb] ()))
              (tkw? t 'do)
               (: rb (parm ps >ts)
                  (? !(two? rb) ()
@@ -1479,35 +1479,35 @@
                        rc (? (two? r1) (pexpr ps r1) ())
                        r2 (? (two? rc) (want <>rc ")") ())
                        rest (? (two? r2) (want r2 ";") ())
-                       (? (two? rest) `(`('do <rb <rc) rest) ()))))
+                       (? (two? rest) [['do <rb <rc] rest] ()))))
              (tkw? t 'for)
               (: r1 (want >ts "(")
                  (? !(two? r1) ()
                     (: ri (? (tkbty? ps <(pquals r1)) (pdecl ps r1)        ; the decl gate skips quals, like a block's (`for (const char *x; ..`)
-                             (peekp r1 ";") `(() >r1)
+                             (peekp r1 ";") [() >r1]
                              (: r (pexpr ps r1)
                                 (? (two? r)
                                    (: rest (want <>r ";")
-                                      (? (two? rest) `(`('expr <r) rest) ()))
+                                      (? (two? rest) [['expr <r] rest] ()))
                                    ())))
                        (? !(two? ri) ()
-                          (: rc (? (peekp <>ri ";") `(() ><>ri)
+                          (: rc (? (peekp <>ri ";") [() ><>ri]
                                    (: r (pexpr ps <>ri)
                                       (? (two? r)
                                          (: rest (want <>r ";")
-                                            (? (two? rest) `(<r rest) ()))
+                                            (? (two? rest) [<r rest] ()))
                                          ())))
                              (? !(two? rc) ()
-                                (: rs (? (peekp <>rc ")") `(() ><>rc)
+                                (: rs (? (peekp <>rc ")") [() ><>rc]
                                          (: r (pexpr ps <>rc)
                                             (? (two? r)
                                                (: rest (want <>r ")")
-                                                  (? (two? rest) `(<r rest) ()))
+                                                  (? (two? rest) [<r rest] ()))
                                                ())))
                                    (? !(two? rs) ()
                                       (: rb (parm ps <>rs)
                                          (? (two? rb)
-                                            `(`('for <ri <rc <rs <rb) <>rb)
+                                            [['for <ri <rc <rs <rb] <>rb]
                                             ()))))))))))
              (tkw? t 'switch)
               (: r1 (want >ts "(")
@@ -1517,30 +1517,30 @@
                  (? !(two? r3) ()
                     (: (items ts2 acc)
                         (? !(two? ts2) ()
-                           (tp? <ts2 "}") `((rev acc) >ts2)
+                           (tp? <ts2 "}") [(rev acc) >ts2]
                            (tkw? <ts2 'case)               ; case CONST-EXPR : -- parse + fold (EOF -> (-1), enum consts, 1<<4)
                             (: rv (pexpr ps >ts2)
                                (? !(two? rv) ()
                                   (: v (cfold <rv)
                                      (? !(charm? v) ()
                                         (: rest (want <>rv ":")
-                                           (? (two? rest) (items rest (`('case v) >< acc)) ()))))))
+                                           (? (two? rest) (items rest (['case v] >< acc)) ()))))))
                            (tkw? <ts2 'default)
                             (: rest (want >ts2 ":")
                                (? (two? rest) (items rest ('(dflt) >< acc)) ()))
                            (: r (? (tkbty? ps <(pquals ts2)) (pdecl ps ts2) (pstmt ps ts2))
                               (? (two? r) (items <>r (<r >< acc)) ())))
                        ir (items r3 ())
-                       (? (two? ir) `(`('switch <rc <ir) <>ir) ()))))
+                       (? (two? ir) [['switch <rc <ir] <>ir] ()))))
              (tkw? t 'goto)
               (: t2 >ts
                  (? !(two? t2 && (tkk <t2 = 'id)) ()
                     (: rest (want >t2 ";")
-                       (? (two? rest) `(`('goto (tkv <t2)) rest) ()))))
+                       (? (two? rest) [['goto (tkv <t2)] rest] ()))))
              (tkw? t 'break)
-              (: rest (want >ts ";") (? (two? rest) `('(brk) rest) ()))
+              (: rest (want >ts ";") (? (two? rest) ['(brk) rest] ()))
              (tkw? t 'continue)
-              (: rest (want >ts ";") (? (two? rest) `('(cont) rest) ()))
+              (: rest (want >ts ";") (? (two? rest) ['(cont) rest] ()))
              ; case/default are LABELS -- legal at any statement depth, not just as a
              ; direct child of the switch body (the switch handler above catches the
              ; top-level ones; these catch the nested coroutine-style ones -- bzip2's
@@ -1552,19 +1552,19 @@
                     (: v (cfold <rv)
                        (? !(charm? v) ()
                           (: rest (want <>rv ":")
-                             (? (two? rest) `(`('case v) rest) ()))))))
+                             (? (two? rest) [['case v] rest] ()))))))
              (tkw? t 'default)
-              (: rest (want >ts ":") (? (two? rest) `('(dflt) rest) ()))
+              (: rest (want >ts ":") (? (two? rest) ['(dflt) rest] ()))
              (asmid? t) (pasm ps ts)     ; before the call/label fallthroughs: asm( is a statement
              (tp? t "{") (pblock ps ts)
-             (tp? t ";") `('(nop) >ts)
+             (tp? t ";") ['(nop) >ts]
              ; a label: id ':' (a ternary's id is followed by '?', never ':')
              ((tkk t = 'id) && tp? (? (two? >ts) <>ts ()) ":")
-              `(`('lbl (tkv t)) >>ts)
+              [['lbl (tkv t)] >>ts]
              (: r (pexpr ps ts)
                 (? !(two? r) ()
                    (: rest (want <>r ";")
-                      (? (two? rest) `(`('expr <r) rest) ())))))))
+                      (? (two? rest) [['expr <r] rest] ())))))))
    ; block-scoped shadowing (C scope): a local variable whose NAME is a typedef or
    ; an ENUM CONSTANT hides it for the rest of the block -- so a later `name op name`
    ; reads as an expression (not a cast), and a read of the local stays a var (not a
@@ -1576,10 +1576,10 @@
    (shadow1 ps nm shadows)
     (: s1 (: old (peep (ps 'types) nm 'none)
              (? (old = 'none) shadows
-                (: _ (pin (ps 'types) nm 0) (`('types nm old) >< shadows))))
+                (: _ (pin (ps 'types) nm 0) (['types nm old] >< shadows))))
        olde (peep (ps 'enums) nm 'none)
        (? (olde = 'none) s1
-          (: _ (pull (ps 'enums) nm 0) (`('enums nm olde) >< s1))))
+          (: _ (pull (ps 'enums) nm 0) (['enums nm olde] >< s1))))
    (shadowdecl ps names shadows) (? !(two? names) shadows
                                      (shadowdecl ps >names (shadow1 ps <names shadows)))
    (unshadow ps shadows) (? !(two? shadows) ()
@@ -1592,7 +1592,7 @@
    (bindloc ps ent shadows) (: nm <ent
                                 old (peep (ps 'locals) nm 'none)
                                 _ (pin (ps 'locals) nm <>ent)
-                                (`('locals nm old) >< shadows))
+                                (['locals nm old] >< shadows))
    (bindlocs ps ents shadows) (? !(two? ents) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (? (two? form && member? <form '(decl sdecl)) <>form ())       ; a block decl's entries, () otherwise
    ; a BLOCK-scope typedef (sqlite's LOGFUNC_t): pin each declarator into ps
@@ -1605,17 +1605,17 @@
           (: nm <<dr
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
-             sh2 (`('types nm old) >< sh)
+             sh2 (['types nm old] >< sh)
              af (patt <>dr)
              (? (peekp af ",") (btdefs ps base >af sh2)
-                (peekp af ";") `(>af sh2)
+                (peekp af ";") [>af sh2]
                 ()))))
    (pblock ps ts)
     (: ts0 (want ts "{")
        (? !(two? ts0) ()
           (: (items ts2 acc sh)
               (? !(two? ts2) (: _ (unshadow ps sh) ())
-                 (tp? <ts2 "}") (: _ (unshadow ps sh) `(`('blk (rev acc)) >ts2))
+                 (tp? <ts2 "}") (: _ (unshadow ps sh) [['blk (rev acc)] >ts2])
                  ((tkk <ts2 = 'id) && (tkv <ts2 = "__extension__")) (items >ts2 acc sh)
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
@@ -1629,8 +1629,8 @@
 
    ; params := void | TYPE '*'* id (, ..)* [, ...]   -> (entries rest variadic?)
    (pparams ps ts acc)
-    (? (peekp ts ")") `((rev acc) >ts ())
-       (two? ts && tkw? <ts 'void && peekp >ts ")") `(() >>ts ())
+    (? (peekp ts ")") [(rev acc) >ts ()]
+       (two? ts && tkw? <ts 'void && peekp >ts ")") [() >>ts ()]
        !(tkbty? ps <(pquals ts)) ()
        (: br (pbty ps ts)
           (? !(two? br) ()
@@ -1639,15 +1639,15 @@
                    ; a parameter of ARRAY type decays to a pointer (the C rule) --
                    ; so `int a[]`, and a va_list (an array typedef), ride as pointers
                    (: e0 <dr ty0 <>e0
-                      entry (? (arr? ty0) `(<e0 `('ptr <>ty0)) e0)
+                      entry (? (arr? ty0) [<e0 ['ptr <>ty0]] e0)
                       ts3 <>dr
                       (? (peekp ts3 ",")
                           (? (peekp >ts3 "...")              ; ... after this param -> variadic
                               (: rest (want >>ts3 ")")
-                                 (? (two? rest) `((rev (entry >< acc)) rest 1) ()))
+                                 (? (two? rest) [(rev (entry >< acc)) rest 1] ()))
                              (pparams ps >ts3 (entry >< acc)))
                          (: rest (want ts3 ")")
-                            (? (two? rest) `((rev (entry >< acc)) rest ()) ())))))))))
+                            (? (two? rest) [(rev (entry >< acc)) rest ()] ())))))))))
 
    ; -- K&R (old-style) definitions: `f(a, b) int a; char *b; { .. }`. the parens
    ; hold a bare IDENTIFIER list; the parameter TYPES follow as declarations before
@@ -1660,7 +1660,7 @@
     (? (two? ts && (tkk <ts = 'id))
         (: nm (tkv <ts) r >ts
            (? (peekp r ",") (kids >r (nm >< acc))
-              (peekp r ")") `((rev (nm >< acc)) >r)
+              (peekp r ")") [(rev (nm >< acc)) >r]
               ()))
        ())
    (klook nm l) (? !(two? l) 'int (<<l = nm) <><l (klook nm >l))
@@ -1668,13 +1668,13 @@
     (: dr (pdtor ps ts base)
        (? !(two? dr) ()
           (: nm <<dr ty0 <><dr rest <>dr
-             ty (? (arr? ty0) `('ptr <>ty0) ty0)
-             acc2 (`(nm ty) >< acc)
+             ty (? (arr? ty0) ['ptr <>ty0] ty0)
+             acc2 ([nm ty] >< acc)
              (? (peekp rest ",") (kdtors ps >rest base acc2)
                 (peekp rest ";") (kdecls ps >rest acc2)
                 ()))))
    (kdecls ps ts acc)                                ; the run of parameter declarations up to `{` -> (tmap rest)
-    (? (peekp ts "{") `(acc ts)
+    (? (peekp ts "{") [acc ts]
        (: br (pbty ps ts)
           (? !(two? br) () (kdtors ps <>br <br acc))))
    (pkr ps ts)                                       ; ts after `(` -> (entries rest-at-`{` ()) | ()
@@ -1684,7 +1684,7 @@
              dr (kdecls ps afterp ())
              (? !(two? dr) ()
                 (: tmap <dr rest <>dr
-                   `((map (\ nm `(nm (klook nm tmap))) names) rest ()))))))
+                   [(map (\ nm [nm (klook nm tmap)]) names) rest ()])))))
 
    ; a comma-list of `*.. name (params)` function prototypes sharing one base type.
    ; each sibling's OWN stars ride into its sig's return slot -- dropping them read
@@ -1692,7 +1692,7 @@
    ; to an mproto sibling refused (invisible from love.c: the DEFINITIONS re-pin).
    ; registers each sig; answers (L rest-after-`;`) | ().
    (mproto ps base ts)
-    (: (stars s ty) (: s2 (pquals s) (? (peekp s2 "*") (stars >s2 `('ptr ty)) `(ty s2)))
+    (: (stars s ty) (: s2 (pquals s) (? (peekp s2 "*") (stars >s2 ['ptr ty]) [ty s2]))
        sr (stars ts base)
        rty <sr s0 <>sr
        (? !(two? s0 && (tkk <s0 = 'id)) ()
@@ -1700,12 +1700,12 @@
              (? !(peekp s1 "(") ()
                 (: rp (pparams ps >s1 ())
                    (? !(two? rp) ()
-                      (: _ (pin (ps 'sigs) nm `(rty (map caup <rp) <>>rp))
+                      (: _ (pin (ps 'sigs) nm [rty (map caup <rp) <>>rp])
                          af <>rp
                          (? (peekp af ",") (mproto ps base >af)
                             ; answer WRAPPED (L rest): a bare rest conflates the
                             ; empty remainder (a proto list at EOF) with refusal
-                            (peekp af ";") `(>af)
+                            (peekp af ";") [>af]
                             ()))))))))
 
    ; a comma-list of typedef declarators sharing one base type (`typedef T a, b;`);
@@ -1717,7 +1717,7 @@
              af (patt <>dr)                ; glibc trails __attribute__ on a typedef's declarator
              (? (peekp af ",") (tdeflist ps base >af)
                 ; peek for the `;`: the remainder may be EMPTY (a typedef at EOF)
-                (peekp af ";") `('(tdef) >af)
+                (peekp af ";") ['(tdef) >af]
                 ()))))
 
    ; the top level: typedefs, functions, globals, bare type definitions.
@@ -1733,7 +1733,7 @@
        _ (? (peep ps 'curalign ()) () (: an (alignat? ts) (? an (pin ps 'curalign an) ())))
        (ptop9 ps ts))
    (ptop9 ps ts)
-    (? (peekp ts ";") `('(tdef) >ts)           ; a stray top-level `;` -- an empty declaration
+    (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration
        ; a leading __extension__ (gcc, a no-op) strips BEFORE the keyword checks --
        ; glibc opens `__extension__ typedef` and the typedef lane reads the raw head
        (two? ts && (tkk <ts = 'id) && (tkv <ts = "__extension__")) (ptop9 ps >ts)
@@ -1758,15 +1758,15 @@
               (: (initless? ps2) (? !(two? ps2) 1
                                     (two? <>><ps2) ()
                                     (initless? >ps2))
-                 (? (initless? <><r) `(`('xdecl <><r) <>r) r))))
+                 (? (initless? <><r) [['xdecl <><r] <>r] r))))
        (tkw? <ts 'typedef)
         (: br (pbty ps >ts)
            (? !(two? br) () (tdeflist ps <br <>br)))
        (: br (pbty ps ts)
           (? !(two? br) ()
              (: base <br ts0 <>br
-                (? (peekp ts0 ";") `('(tdef) >ts0)     ; a bare struct/enum definition
-                   (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s `('ptr ty)) `(ty s)))
+                (? (peekp ts0 ";") ['(tdef) >ts0]     ; a bare struct/enum definition
+                   (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s ['ptr ty]) [ty s]))
                       sr (stars ts0 base)
                       rty <sr ts1 (pquals <>sr)
                       ; the first declarator: a plain name, or a paren fn-pointer
@@ -1774,12 +1774,12 @@
                       ; through pdtor like the comma declarators below; the
                       ; leading stars already rode into rty. -> (name rest ty),
                       ; ty () on the plain path (the declarator's type is rty)
-                      fdr (? (two? ts1 && (tkk <ts1 = 'id)) `((tkv <ts1) >ts1 () ())
+                      fdr (? (two? ts1 && (tkk <ts1 = 'id)) [(tkv <ts1) >ts1 () ()]
                              (peekp ts1 "(")
                               (: dr (pdtor ps ts1 rty)
                                  (? !(two? dr) ()
                                     !<<dr ()                          ; abstract at top level: refuse
-                                    `(<<dr <>dr <><dr <>><dr)))                                 ; 4th = a fn declarator's parsed params
+                                    [<<dr <>dr <><dr <>><dr]))                                 ; 4th = a fn declarator's parsed params
                              ())
                       (? !(two? fdr) ()
                          (: name <fdr
@@ -1789,32 +1789,32 @@
                             (? (!(two? fpty) && peekp ts2 "(")        ; a function (the return type rides the sig table)
                                (: rp (? (krhead? ps >ts2) (pkr ps >ts2) (pparams ps >ts2 ()))
                                   (? !(two? rp) ()
-                                     (: _ (pin (ps 'sigs) name `(rty (map caup <rp) <>>rp))
+                                     (: _ (pin (ps 'sigs) name [rty (map caup <rp) <>>rp])
                                         aft (patt <>rp)                     ; a trailing __attribute__((..)) after the proto/fn declarator
-                                        (? (peekp aft ";") `(`('proto name) >aft)
+                                        (? (peekp aft ";") [['proto name] >aft]
                                            ; more comma-separated declarators SHARING base -- each `* nm (params)`
                                            ; is another prototype (register its sig); ends at `;`. (`void *malloc
                                            ; (size_t), free(void*)` / love.h's `struct ai *ai_ini(void), *ai_ini_m(..)`)
                                            (peekp aft ",")
                                             (: rest (mproto ps base >aft)
-                                               (? (two? rest) `(`('proto name) <rest) ()))
+                                               (? (two? rest) [['proto name] <rest] ()))
                                            (: psh (bindlocs ps <rp ())   ; params typed for sizeof folding; restore on fn exit
                                               _ (pin ps 'fnname name)     ; __func__ reads it
                                               b (pblock ps aft)
                                               _ (pin ps 'fnname ())
                                               _ (unshadow ps psh)
-                                              (? (two? b) `(`('fn name <rp <b) <>b) ()))))))
+                                              (? (two? b) [['fn name <rp <b] <>b] ()))))))
                                (fn? fpty)                                ; the declarator IS a function (returns a fn-ptr):
                                                                          ; the return type is <>fpty, the params rode fprm out of pdtor
-                                (: _ (pin (ps 'sigs) name `(<>fpty (map caup <fprm) <>>fprm))
+                                (: _ (pin (ps 'sigs) name [<>fpty (map caup <fprm) <>>fprm])
                                    aft (patt ts2)
-                                   (? (peekp aft ";") `(`('proto name) >aft)
+                                   (? (peekp aft ";") [['proto name] >aft]
                                       (: psh (bindlocs ps <fprm ())
                                          _ (pin ps 'fnname name)
                                          b (pblock ps aft)
                                          _ (pin ps 'fnname ())
                                          _ (unshadow ps psh)
-                                         (? (two? b) `(`('fn name <fprm <b) <>b) ()))))
+                                         (? (two? b) [['fn name <fprm <b] <>b] ()))))
                                ; a global declaration; the first declarator's stars came off `sr`
                                (: (one ts3 nm t2)                        ; t2 is the element type (stars included)
                                    (? (peekp ts3 "[")
@@ -1822,12 +1822,12 @@
                                          (? !(two? dr) ()
                                             (: dims <dr rest0 (patt <>dr)   ; an ARRAY declarator carries trailing attributes too
                                                (? (!(two? >dims) && (<dims = 0))      ; a LONE [] -- size from init, or 0 (extern)
-                                                   (? !(peekp rest0 "=") `(`(nm `('arr t2 0) ()) rest0)      ; no init: incomplete, size 0
+                                                   (? !(peekp rest0 "=") [[nm ['arr t2 0] ()] rest0]      ; no init: incomplete, size 0
                                                       (: ir (pinit ps >rest0)
                                                          (? !(two? ir) ()
                                                             (: n (initcount ps t2 <ir)
                                                                (? (charm? n)
-                                                                  `(`(nm `('arr t2 n) <ir) <>ir)
+                                                                  [[nm ['arr t2 n] <ir] <>ir]
                                                                   ())))))
                                                   ; multi-dim (or a single sized dim): nested arr, optional init.
                                                   ; an outer [] ([][3]) infers its count from the init's top level.
@@ -1835,9 +1835,9 @@
                                                      (? (peekp rest0 "=")     ; T a[n].. = init
                                                          (: ir (pinit ps >rest0)
                                                             (? !(two? ir) ()
-                                                               (: aty (? (<>>aty0 = 0) `('arr <>aty0 (initcount ps <>aty0 <ir)) aty0)
-                                                                  `(`(nm aty <ir) <>ir))))
-                                                        `(`(nm aty0 ()) rest0)))))))
+                                                               (: aty (? (<>>aty0 = 0) ['arr <>aty0 (initcount ps <>aty0 <ir)] aty0)
+                                                                  [[nm aty <ir] <>ir])))
+                                                        [[nm aty0 ()] rest0]))))))
                                       (peekp ts3 "=")
                                        (: r (pinit ps >ts3)
                                           (? !(two? r) ()
@@ -1850,9 +1850,9 @@
                                              ; later sizeof(b) answered 0 in silence (the bytes were laid
                                              ; right; only the type was wrong, which is the worse half).
                                              (: t3 (? (arr? t2 && (<>>t2 = 0) && charm? (initcount ps <>t2 <r))
-                                                      `('arr <>t2 (initcount ps <>t2 <r)) t2)
-                                                `(`(nm t3 <r) <>r))))
-                                      `(`(nm t2 ()) ts3))
+                                                      ['arr <>t2 (initcount ps <>t2 <r)] t2)
+                                                [[nm t3 <r] <>r])))
+                                      [[nm t2 ()] ts3])
                                   first (one (patt ts2) name (? (two? fpty) fpty rty))
                                   (? !(two? first) ()
                                      (: (more ts3 acc)
@@ -1875,7 +1875,7 @@
                                                                    (: p2 <l
                                                                       _ (? (fnp? p2)
                                                                            (pin (ps 'sigs) <p2
-                                                                                `((? (two? ><>p2) <><>p2 'long) () ()))
+                                                                                [(? (two? ><>p2) <><>p2 'long) () ()])
                                                                            ())
                                                                       ; an ALIAS declared through a function TYPE (musl's
                                                                       ; weak_alias: `extern __typeof(old) new __attribute__
@@ -1901,9 +1901,9 @@
                                                                              (pin (ps 'consts) <p 1) ())
                                                                         (goc >l)))
                                                           (goc vps)))
-                                                  (? (two? vps) `(`('gdecl vps) rest)
-                                                     `('(tdef) rest)))))
-                                        (more <>first `(<first))))))))))))))
+                                                  (? (two? vps) [['gdecl vps] rest]
+                                                     ['(tdef) rest]))))
+                                        (more <>first [<first])))))))))))))
    ; a parse refusal names where it stood. the first pass ran unstamped and so
    ; left no trail -- so stamp JUST this form and run it through ptop again,
    ; which is cheap (one form) and now marks as it goes. the FURTHEST token
@@ -1960,8 +1960,8 @@
            _ (: al (peep ps 'curalias ())
                 (? !(two? al) ()
                    (: nms (? (<f = 'gdecl) (map cap <>f)
-                             (<f = 'proto) `(<>f)
-                             (<f = 'fn) `(<>f) ())
+                             (<f = 'proto) [<>f]
+                             (<f = 'fn) [<>f] ())
                       (go3 l) (? !(two? l) 1
                                  (: _ (pin (ps 'alias) <l <al)
                                     _ (? <>al (pin ps 'weaks (<l >< ps 'weaks)) ())
@@ -1970,7 +1970,7 @@
            _ (: wk (peep ps 'curweak ())
                 (? !wk ()
                    (: nms (? (member? <f '(gdecl xdecl)) (map cap <>f)
-                             (member? <f '(proto fn)) `(<>f) ())
+                             (member? <f '(proto fn)) [<>f] ())
                       (go4 l) (? !(two? l) 1
                                  (: _ (pin ps 'weaks (<l >< ps 'weaks)) (go4 >l)))
                       (go4 nms))))
@@ -1986,9 +1986,9 @@
            _ (pin ps 'curalign ())
            (pin ps 'cursect ()))
        (tops ts2 acc)
-        (? !(two? ts2) `(1 `('prog (rev acc)) (ps 'stag) (ps 'sigs) (ps 'weaks)      ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
+        (? !(two? ts2) [1 ['prog (rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)      ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                              (ps 'consts))
+                              (ps 'consts)]
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (<r >< acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
