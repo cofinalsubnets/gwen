@@ -220,3 +220,21 @@
  ('(list a b) = (rdr "[a b)")) ('(a b) = (rdr "(a b]"))    ; a crossed pair, silent
  (() = (rdr "()")) !(0 = (rdr "()"))
  (', = (rdr ",")))                                    ; the comma is its own datum
+
+; --- a constructor sigil over an open form RENAMES the wrap ---------------------
+; ` # @ ~ -- exactly the four SPLICING wraps -- name the constructor the opener
+; would otherwise have picked, so @[1 2] is @(1 2) and any delimiter serves any
+; wrap. stacking is what they cannot mean: `[a b] would splice `'s own list in and
+; read (list list a b), a wrong VALUE with nothing to raise. ⚠ ' and \ are not
+; constructors -- they take the next datum whatever it is, so '[a b] is the form
+; (list a b) quoted, and a sigil over a SIGIL still stacks (#@(1 2) is unchanged).
+; ⚠ ~ alone reads its opener GLUED (~ (1 2) is conj, as before); the rest do not.
+(assert
+ ((rdr "@(1 2 3)") = (rdr "@[1 2 3]")) ((rdr "#(a b)") = (rdr "#[a b]"))
+ ((rdr "`(a b)") = (rdr "`[a b]"))     ((rdr "~(1 2)") = (rdr "~[1 2]"))
+ ((rdr "@()") = (rdr "@[]"))           ((rdr "#()") = (rdr "#{}"))
+ ((rdr "@(a b)") = (rdr "@{a b}"))     ((rdr "@(1 2)") = (rdr "@ [1 2]"))
+ ('(twin 1 2) = (rdr "~[1 2]")) ('(conj (list 1 2)) = (rdr "~ [1 2]"))  ; ~ still reads glue
+ ('(\ (list a b)) = (rdr "'[a b]"))                   ; ' is not a constructor: it quotes the FORM
+ ('(hash tuple 1 2) = (rdr "#@(1 2)"))                ; sigil over sigil still stacks
+ ('torn = (rdr "@[")))

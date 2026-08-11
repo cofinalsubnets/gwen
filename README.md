@@ -42,6 +42,12 @@ the two that nest worst have a bracket spelling: `[a b]` is `` `(a b) `` and
 the wrap; the three closers `)` `]` `}` are one and only end the open form, so a
 crossed pair reads in silence -- matching them is libra's job (`make lint`).
 
+a constructor sigil over an open form *renames* that wrap instead of stacking on
+it, so any delimiter serves any wrap: `@[1 2 3]` is `@(1 2 3)`, `#[k v]` is
+`#(k v)`. the constructors are exactly the four above -- `` ` `` `#` `@` `~`.
+`'` is not one: it takes the next datum whatever it is, so `'[a b]` is the form
+`(list a b)` quoted.
+
 operator sigils are plain symbols until the compiler resolves them, at compile
 time, against two tables -- `dyadics` for a spaced sigil, `monadics` for a glued
 run (`dyadics` is per-form extensible: pin an entry and the next form compiles

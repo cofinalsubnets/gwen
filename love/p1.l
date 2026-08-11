@@ -168,6 +168,7 @@
    ; A BRACKET IS ITS WRAP: [a b] is `(a b) and {k v} is #(k v) -- the same datum
    ; by a second spelling, so the splice law carries the empties too ([] -> (list),
    ; {} -> (tablet 0)) and nothing downstream can tell which spelling was written.
+   ; p1-lift reaches here too, with the wrap the sigil named instead.
    (p1-open w cl)
      (: d (p1-list cl 1 ())
         (? (link? d) (link (p1-wrap w (cap d)) (cup d)) d))
@@ -192,17 +193,26 @@
                  (= c 96) (p1-lift 'list r head)
                  (= c 35) (p1-lift 'hash r head)
                  (= c 64) (p1-lift 'tuple r head)
-                 (= c 126) (p1-lift (? (? (link? r) (= (cap r) 40) ()) 'twin 'conj) r head)
+                 (= c 126) (p1-lift (? (? (link? r) (& (p1-cls (cap r)) 16) ()) 'twin 'conj) r head)
                  (= c 44) (link (name ",") r)
                  (? (p1-opc? c) (nil? numlead) ()) (p1-op cl head)
                  (: tr (p1-tok cl ())
                     (link (p1-atom (cap tr)) (cup tr)))))))
 
    ; a wrap takes the next datum; an unfinished one is MORE, never EOF.
+   ; ⚠ a CONSTRUCTOR sigil over an open form RENAMES the wrap rather than stacking
+   ; on it: @[1 2] is @(1 2), #[k v] is #(k v). the four constructors are exactly
+   ; the splicing wraps, and stacking is what they cannot mean -- `[a b] would
+   ; otherwise splice `'s own list in and read (list list a b), a wrong value with
+   ; nothing to raise. ' and \ are NOT constructors: they take the next datum
+   ; whatever it is, so '[a b] stays the FORM (list a b) quoted.
    (p1-lift w cl head)
-     (: d (p1-read1 cl head)
-        (? (nil? (link? d)) 'torn
-           (link (p1-wrap w (cap d)) (cup d))))
+     (: s (p1-skip cl)
+        open (? (p1-splice? w) (? (link? s) (& (p1-cls (cap s)) 16) ()) ())
+        (? open (p1-open w (p1-cup s))
+           (: d (p1-read1 s head)
+              (? (nil? (link? d)) 'torn
+                 (link (p1-wrap w (cap d)) (cup d))))))
 
    ; THE VALENCE LAW, reader half: a run GLUED to the datum after it is MONADIC
    ; -- the run becomes a wrap UNDER a mono wrap, so the emission is the nested
