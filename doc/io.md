@@ -19,8 +19,9 @@ doubt settles by probing `sound`.
   else: the operator run, the valence law's `mono` wrap with its head-fusion rule and the
   `:`/`?` suppression, the constructor wraps `` ` `` `#` `@` `~` and their SPLICE rewrites, the
   `~` twin-vs-conj peek, the empty-collection direct-nif rewrite, the comma datum, the
-  trailing-`-` shed, the bracket spellings (`[..]` is `` `(..) ``, `{..}` is `#(..)`, and the
-  three closers are one), the prime inside names, the number tower and the
+  trailing-`-` shed, the bracket spellings (`[..]` is `` `(..) ``, `{..}` is `#(..)`, the three
+  closers are one, and a constructor sigil over any opener renames the wrap -- `@[1 2]` is
+  `@(1 2)`), the prime inside names, the number tower and the
   `ieee-inf` named literals.
 
 This is `c0`/`ev` again, one layer down: a tiny C bootstrap and the real thing in love. ⚠ The

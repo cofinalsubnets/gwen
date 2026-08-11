@@ -459,6 +459,10 @@
 ; -- NO operator tables, so the same reader serves data and code. the OPENER CARRIES THE WRAP:
 ; [..] is `(..) and {..} is #(..), a second spelling for the two that nest worst, and the three
 ; closers ) ] } are ONE -- each only ends the open form, so a crossed pair is libra's to catch.
+; a CONSTRUCTOR sigil over an open form RENAMES that wrap rather than stacking on it (@[1 2] is
+; @(1 2)), so any delimiter serves any wrap; the constructors are exactly the four splicing ones
+; ` # @ ~, since stacking is the one thing they cannot mean. ' and \ are not constructors -- they
+; take the next DATUM whatever it is, so '[a b] is the form (list a b) quoted.
 ; the LEXER LAW splits by leading
 ; char: a name token (alnum/_) keeps - ? ! and the prime inside (kebab law; a LEADING ' is still
 ; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
@@ -503,6 +507,8 @@
  ([1 2 3] = `(1 2 3)) ([] = `()) (1 = ({'a 1} 'a))            ; the opener carries the wrap: [ is `, { is #
  ([[1 2] [3 4]] = `(`(1 2) `(3 4))) (-[1 2] = -`(1 2))       ; ...to any depth, and it glues like the wrap it spells
  ((show (cap (sound "{'a 1}"))) = (show (cap (sound "#('a 1)"))))   ; a hash compares by identity, so the LAW is on the form
+ (@[1 2 3] = @(1 2 3)) (~[1 2] = ~(1 2)) (1 = (#['a 1] 'a))  ; a constructor sigil RENAMES the opener's wrap
+ ('(\ (list a b)) = (cap (sound "'[a b]")))                  ; ...but ' is not one: it quotes the form
  (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small))  ; ? is dyadic: infix takes ONE arm ((< 1 2) binds first at 40), an else arm is the prefix cond
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the LEFT hand: ((1 - 2) - 3), ((8 / 4) / 2)
  (: was (fixity '<+> '(60 1)) t (opfix '(a <+> b <+> c)) _ (fixity '<+> was)   ; the fixity door,
