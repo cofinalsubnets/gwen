@@ -341,6 +341,61 @@
                        (go >l free (e9 >< kp) mvs ([nm r [(ldop <>>en) r 'r4 <>en]] >< sr))
                        (go >l free kp mvs sr))))))
        (go base (filter (\ r9 !(member? r9 used)) bs) () () (peep g 'saro ())))
+   (rdscan e t acc)                                 ; one pass: read counts land in t (interned
+    (? !(two? e) acc                                ; keys), names answer once, source order (rev'd)
+       (id? <e 'var) (: k9 (intern <>e)
+                        n9 (peep t k9 0)
+                        _ (pin t k9 (n9 + 1))
+                        (? n9 acc (<>e >< acc)))
+       (id? <e 'asn) (rdscan <>>e t (? (two? <>e && id? <<>e 'var) acc (rdscan <>e t acc)))
+       (: (go l a) (? !(two? l) a (go >l (rdscan <l t a)))
+          (go e acc)))
+   ; -- entry SEEDING (keep depth): a keep only ever PRESERVED existing pins, so a hot
+   ; scalar arriving unpinned (an outer keep dropped it, or its reads sit mid-expression
+   ; and never pinned) stayed a per-use load forever. seed it: one slot load laid before
+   ; the head (beside the seat movs) establishes the pin truthfully, and it rides the keep
+   ; under the SAME edge verification -- a clobber misses and bars it like any entry.
+   ; callish loops seat first, then the roster's own pricing; clean loops pin the pool,
+   ; both capped to leave the pool workable. --
+   (loseed g env sub lab lic kp)                    ; -> (seeds movs), appended to the keep
+    (: bs (peep g 'csbor ())
+       kregs (vmregs kp ())
+       fs0 (filter (\ r9 !(member? r9 kregs)) bs)   ; the seats the keep left
+       ; the free file is pool0 minus the KEEP's regs -- not g 'pool: a dying pin's reg
+       ; waits for psreset, but the seed's vmpin evicts the corpse (one reg, one name)
+       ; and the seed load lays after the movs that read it. one reg stays for the body.
+       pf0 (filter (\ r9 !(member? r9 kregs)) (peep g 'pool0 ()))
+       nc (ncls sub)
+       rt (tablet 0)
+       nms (rev (rdscan sub rt ()))
+       (cand nm) (: en (vent g env nm)
+                    (? (two? (assoc nm kp)) ()
+                       (lobar? g lab nm) ()
+                       !(member? nm (peep g 'vuniv ())) ()
+                       !(two? en && id? <en 'loc && homable? <>>en) ()
+                       (: nr (peep rt (intern nm) 0) (? (0 < nr) [en nr] ()))))
+       (go l fs pf kp2 mvs sr2)
+        (? !(two? l) (: _ (? (id? lic 'callish) (pin g 'saro sr2) 0)
+                        [(rev kp2) (rev mvs)])
+           (: nm <l c (cand nm)
+              (? !(two? c) (go >l fs pf kp2 mvs sr2)
+                 (: en <c nr <>c off <>en ty <>>en
+                    (? (id? lic 'callish)
+                       (? (two? fs)
+                           (: r <fs _ (vmbpin g nm r)
+                              (go >l >fs pf ([nm r] >< kp2) ([(ldop ty) r 'r4 off] >< mvs) sr2))
+                          ((nc <= nr) && two? >pf)
+                           (: r <pf _ (vmpin g nm r)
+                              (go >l fs >pf ([nm r] >< kp2) ([(ldop ty) r 'r4 off] >< mvs)
+                                  ([nm r [(ldop ty) r 'r4 off]] >< sr2)))
+                          (go >l fs pf kp2 mvs sr2))
+                       (? (two? >pf)
+                          (: r <pf _ (vmpin g nm r)
+                             (go >l fs >pf ([nm r] >< kp2) ([(ldop ty) r 'r4 off] >< mvs) sr2))
+                          (go >l fs pf kp2 mvs sr2)))))))
+       ; ⚠ lonone is the cap's keep-nothing attempt: it CANNOT miss, so it must not seed
+       (? ((0 < peep g 'argseal 0) || peep g 'lonone ()) [() ()]
+          (go nms fs0 pf0 () () (peep g 'saro ()))))
    ; -- the forward joins: at a label whose arriving edges are all KNOWN (an if/?: join -- never
    ; a loop head, a user label, or a case), the map need not die. an entry (nm r) survives iff
    ; EVERY arriving edge carries the same pair -- on each edge r held nm's slot value when the
@@ -5854,7 +5909,8 @@
               km (? (id? lic 'callish) (lomig g env [<>s <>>s] lc)
                     lic [(lokeep g lc) ()]
                     [() ()])
-              kp <km mg <>km                           ; the keep + its seat movs (laid before lc)
+              sd (? lic (loseed g env [<>s <>>s] lc lic <km) [() ()])
+              kp (<km + <sd) mg (<>km + <>sd)          ; the keep + seeds + their movs (laid before lc)
               _ (? (two? kp) (vmset g kp) (vmflush g)) ; label lc heads the loop block; the keep survives
               _ (pin g 'vkeep ([lc lc ld kp] >< peep g 'vkeep ()))
               c (cbranch g env <>s 'eq ld)
@@ -5886,7 +5942,8 @@
                     km (? (id? lic 'callish) (lomig g env2 [cnd stp body] lc)
                           lic [(lokeep g lc) ()]
                           [() ()])
-                    kp <km mg <>km                   ; the keep + its seat movs (after init, before lc)
+                    sd (? lic (loseed g env2 [cnd stp body] lc lic <km) [() ()])
+                    kp (<km + <sd) mg (<>km + <>sd)  ; the keep + seeds + their movs (after init, before lc)
                     _ (? (two? kp) (vmset g kp) (vmflush g))   ; label lc heads the loop block
                     _ (pin g 'vkeep ([ls lc ld kp] >< peep g 'vkeep ()))
                     c (? (two? cnd) (cbranch g env2 cnd 'eq ld) ())
@@ -5936,7 +5993,8 @@
               km (? (id? lic 'callish) (lomig g env [<>s <>>s] lt)
                     lic [(lokeep g lt) ()]
                     [() ()])
-              kp <km mg <>km                         ; the keep + its seat movs (laid before lt)
+              sd (? lic (loseed g env [<>s <>>s] lt lic <km) [() ()])
+              kp (<km + <sd) mg (<>km + <>sd)        ; the keep + seeds + their movs (laid before lt)
               _ (pins g 'brk (ld >< g 'brk)
                         'cnt (lc >< g 'cnt))
               _ (? (two? kp) (vmset g kp) (vmflush g)) ; label lt heads the loop block

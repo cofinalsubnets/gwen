@@ -1126,18 +1126,25 @@
    ; the register, so the home takes no wrap; the price is one save/restore pair in the
    ; owner's frame, and only compounding iteration counts repay it. here s and the inner j
    ; ride r11/r12 through g(j) unwrapped; the depth-1 i takes a BORROWED seat (r13, the
-   ; call-crossing keep) and rides register-resident too -- its slot stores sweep away.
+   ; call-crossing keep); and the spilled param n takes the LAST seat by entry SEED --
+   ; stld turns its slot load into the arrival mov and deadst sweeps the spill, so n
+   ; never touches memory and both loop conds run register-register.
    irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
    qf (fnf 'ql <>irQ)
    (occ f2) (: (go l n) (? !(two? l) n (go >l (? (= <l f2) (n + 1) n))) (go qf 0))
    _ (assert
       (two? irQ)
-      (= 1 (occ '(st sp 64 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
-      (= 1 (occ '(ld r11 sp 64)))                    ; s's restore, ONCE (epilogue)
-      (= 1 (occ '(st sp 72 r12)))                    ; j's pair likewise
-      (= 1 (occ '(ld r12 sp 72)))
-      (= 1 (occ '(st sp 80 r13)))                    ; the borrow's pair: i's seat saves like a home
-      (= 1 (occ '(ld r13 sp 80)))
+      (= 1 (occ '(st sp 56 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
+      (= 1 (occ '(ld r11 sp 56)))                    ; s's restore, ONCE (epilogue)
+      (= 1 (occ '(st sp 64 r12)))                    ; j's pair likewise
+      (= 1 (occ '(ld r12 sp 64)))
+      (= 1 (occ '(st sp 72 r13)))                    ; the borrow pairs: i's seat saves like a home
+      (= 1 (occ '(ld r13 sp 72)))
+      (= 1 (occ '(st sp 80 r14)))                    ; ...and seeded n's
+      (= 1 (occ '(ld r14 sp 80)))
+      (member? '(mov r14 r5) qf)                     ; n enters its seat straight from the arrival
+      (member? '(cmp r13 r14) qf)                    ; both conds register-register
+      (member? '(cmp r12 r14) qf)
       (member? '(add r12 r12 1) qf)                  ; the inner step is register-only
       (member? '(add r13 r13 1) qf))                 ; ...and the kept i steps its seat in place
    ; -- the aim HOLD (the ana_d why, found and fixed): a callish rhs may aim at the pin.
@@ -1217,13 +1224,16 @@
    zpf (fnf 'h3 <>irZp)
    _ (assert
       (two? irZp)
-      (member? '(st sp 40 r6) zpf)                   ; n spills at entry...
-      (member? '(ld4 r0 sp 40) zpf))                 ; ...and every read re-extends from the slot
+      (member? '(st sp 48 r6) zpf)                   ; n spills at entry...
+      (member? '(ld4 r0 sp 48) zpf))                 ; ...and every read re-extends from the slot
    ; ...and the callish accumulator s now RIDES: the aim hold lets `s += ext(..)` keep s
-   ; on a borrowed cs seat through the call (the write re-establishes in the seat)
+   ; on a borrowed cs seat through the call (the write re-establishes in the seat);
+   ; the pointer param a rides a SEEDED seat, so the indexed arg serves from r12
    _ (assert
       (member? '(add r11 r6 r0) zpf)                 ; s's def lands in its seat
-      (member? '(st sp 24 r11) zpf))                 ; ...write-through stands
+      (member? '(st sp 32 r11) zpf)                  ; ...write-through stands
+      (member? '(mov r12 r5) zpf)                    ; a's seed: arrival straight to the seat (stld+deadst)
+      (member? '(ldx r6 r12 r0 8 0) zpf))            ; ...and the indexed arg reads the seat
    ; -- priced int-param homes (the leaf lane): an int param whose slot touches pay the
    ; entry cvt takes its POSITIONAL pool seat -- after the locals pick, and only while the
    ; pool stays deep (>= 2 free after the take). f4: n homes its own arrival seat (one sx4,
@@ -1321,14 +1331,18 @@
 ; -- free locals (zero-crossing, stage B1): a local never live across any
 ; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
 ; its loop body all-register. s rides r5 (hpool front past the reserve) and
-; i r9; the loop's imul/adds are 3-address on the homes, no slot traffic.
+; i r9; the loop's imul/adds are 3-address on the homes, no slot traffic --
+; and n, whose pin the call killed, re-enters by SEED (r10), so the cond
+; runs register-register and the body touches no memory at all.
 (: (cgn src) (: r (cparse <>(clex src))
                (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
    irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
    (assert
       (two? irB)
-      (member? '(imul r10 r9 r9) <>irB)               ; i*i on the home, 3-address
-      (member? '(add r5 r5 r10) <>irB)                ; s accumulates in its home
+      (member? '(ld r10 sp 16) <>irB)                 ; n's seed, laid before the head
+      (member? '(cmp r9 r10) <>irB)                   ; the cond rides it
+      (member? '(imul r7 r9 r9) <>irB)                ; i*i on the home, 3-address
+      (member? '(add r5 r5 r7) <>irB)                 ; s accumulates in its home
       (member? '(add r9 r9 1) <>irB)))                ; i++ is ONE add on the home
 
 ; -- arm64 homing (stage D): the same alive machinery rides AAPCS64. homes come
@@ -1385,7 +1399,9 @@
       (= 0 (hmovs <>irKa))                           ; born-at-a-call locals keep their slots
       (member? '(li r6 0) <>irBa)                    ; the free local s homes and its init
       !(member? '(mov r6 r0) <>irBa)                 ;  DELIVERS there (the die: no r0 bridge)
-      (member? '(add r6 r6 r9) <>irBa)               ; ...and accumulates 3-address (i*i in r9)
+      (member? '(ld r9 fp -16) <>irBa)               ; n re-enters by SEED (the call killed its pin)
+      (member? '(cmp r5 r9) <>irBa)                  ; ...so the cond runs register-register
+      (member? '(add r6 r6 r7) <>irBa)               ; ...and s accumulates 3-address (i*i in r7)
       (member? '(add r5 r5 1) <>irBa)                ; the loop counter i ALSO homes (r5): its
       (= 0 (wrapsa <>irBa))))                        ; ++ no longer leans its own slot. zero wraps
 
@@ -1792,7 +1808,9 @@
       (member? '(add r11 r11 1) lp4f)                       ; ...steps in place across the call
       (member? '(mov r12 r0) lp4f)                          ; s (callish-written) re-establishes in ITS seat -- the aim hold's class
       (member? '(st sp 8 r12) lp4f)                         ; ...and the pre-call park reads the seat, not the slot
-      (= 1 (ldsp lp4f 16))                                  ; i's slot: one post-loop read, NONE in the loop
+      (member? '(mov r13 r6) lp4f)                          ; n's seed: arrival straight to the last seat (stld+deadst)
+      (member? '(cmp r11 r13) lp4f)                         ; ...and the cond runs register-register
+      (= 1 (ldsp lp4f 24))                                  ; i's slot: one post-loop read, NONE in the loop
       (= 0 (ldc lo6f)) (= 0 (stc lo6f))                     ; nested: the outer keeps survive the inner loop
       (2 <= ldsp lo7f 16)                                   ; x[i&1]=i drops x[0] mid-loop: the edge CHECK barred the
                                                             ;   keep (a zero-miss build ships) -- x[0] reloads in-loop
@@ -1829,7 +1847,9 @@
       (member? '(mov r14 r9) splf)                   ; four seats grant (b the last) ...
       (member? '(ld r5 sp 72) splf)                  ; ...then a spills around: the post-call reload into ITS pin
       (= 2 (ldsp splf 72))                           ; a's slot: that reload + the post-loop read -- no use-site load
-      (member? '(add r10 r10 r5) splf)               ; the in-loop use reads the register
+      (member? '(add r8 r8 r5) splf)                 ; the in-loop use reads the register
+      (member? '(mov r10 r6) splf)                   ; n's SEED, stld'd to the arrival mov
+      (member? '(cmp r9 r10) splf)                   ; ...so the cond runs register-register (i seeded too)
       (member? '(mov r14 r9) nrgf)                   ; nrg: a-d seat as before ...
       (= 1 (ldsp nrgf 56))                           ; ...but write-only x REFUSES the roster: store + post-loop
                                                      ;    read only, no dead per-call reload

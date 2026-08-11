@@ -117,9 +117,12 @@ Learned by measuring, several times each; check a new lever against these before
    the free-list/pin split, and with it fixed a callish rhs aims and pins — `s +=
    f(..)` accumulators now ride seats through their own calls. SEAT EXHAUSTION
    ANSWERED 2026-08-10 (spill-around, the ledger): the surplus pins keep on their
-   pool regs and reload per call, priced reads-vs-calls. What remains: element pins
-   across calls, splice-crossing keeps, keep depth (a pin the outer loop drops is
-   dead to the inner keep), and store elision across calls (the write-through
+   pool regs and reload per call, priced reads-vs-calls. KEEP DEPTH ANSWERED
+   2026-08-11 (entry seeding, the ledger): a keep no longer only preserves — a
+   loop's hot unpinned scalars pin by one seed load before the head, so inner
+   loops rediscover what an outer keep dropped, and stld+deadst routinely erase
+   the seed's memory touch entirely. What remains: element pins across calls,
+   splice-crossing keeps, and store elision across calls (the write-through
    stores still stand and are now the count's whole residue).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
@@ -374,6 +377,32 @@ process lesson beside the taint one: the shell's cwd silently reset to the POST 
 mid-session, so a "falsification flip" and a law run quietly read the pre-rung
 sources and answered plausibly — absolute paths for every gate and probe in a
 worktree session, and treat a flip that agrees too easily as a tree check first.
+2026-08-11 · entry seeding (keep depth — the keep learns to CREATE): a keep only ever
+preserved existing pins, so a hot scalar arriving at a loop unpinned — an outer keep
+dropped it, or its reads sit mid-expression and never pinned, or a pre-loop call
+killed it — stayed a per-use load forever. Now the loop entry SEEDS it: `loseed`
+walks the subtree once (`rdscan`, a tablet of interned read counts — the first draft's
+per-candidate string-compare walks were quadratic and crawled on love.c), and each
+unpinned vuniv scalar with reads takes one slot load laid beside the seat movs:
+callish loops seat first then the roster's own pricing, clean loops pin the pool.
+The free file is pool0 minus the KEEP's regs — not g 'pool, whose dying-pin regs
+wait for psreset; the seed's vmpin evicts the corpse (one reg, one name) and the
+seed load lays after the movs that read it. One reg stays for the body's aim. The
+same lochk edges verify; a clobber misses and bars a seed like any entry — and the
+one genuine trap was the CAP'S CONTRACT: the keep-nothing lonone attempt "cannot
+miss", but a seed that ignored lonone still could, so no bar ever accumulated and
+the attempt loop spun forever (vbin_fill's twenty splicey loops; the fix is one
+gate: lonone seeds nothing). The peepholes compose: stld turns a seed whose store
+is still downstream into the arrival mov and deadst sweeps the spill, so a seeded
+param or fresh local often never touches memory at all (ql's n, lp4's n, cln's b).
+Gauge: the seat-covered call-loop fn −10.3% insns, the two-reads shape −7.9%, the
+nested main-level shape +0.015% insns for −1.1% cycles (roster reloads trade 1:1
+with use loads there; the win is the broken chain), cbm and the corpus flat. Laws:
+ql (n's seat by seed, both conds register-register), irB/irBa (the call-killed
+param re-enters by seed, x64 + arm64), lp4/zpf/spl re-truthed with their seeds —
+the seed-off flip reds them; five-shape seed torture (trip-0, nested rediscovery,
+call-killed, seeded-then-written, continue/break) agrees with gcc; battery,
+fixpoint byte-identical, fuzz, virt-on-hart all green.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
