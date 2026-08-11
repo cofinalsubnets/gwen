@@ -39,6 +39,23 @@ machinery rides every loop. The price of the rows below.
 mooncc +1.4% (cs saves, seat movs, roster reloads lay real bytes), the natives +2.6%
 (love.c itself grew); the ratio nudged 2.43× → 2.40×.
 
+Why 2.40× — measured per symbol this fill (nm over the pair; the natives are dynamic
+against glibc, mooncc a static ELF carrying its own nolibc, so only the 614 shared C
+symbols compare): 428 KB vs 246 KB, **1.74×** of genuinely emitted code. The gap is
+instruction COUNT, not encoding: lvm_add_string (a 3× representative) lays 1132 insns
+vs clang's 396 at the same ~4 bytes/insn. Of its 454 movs, **271 are stack-slot
+traffic** (137 reloads + 134 spills; clang: 6) — the write-through discipline in
+call-dense, branch-dense dispatch code: pins die at every call (cs seats ride only
+loop keeps, and these fns have no loops), and a leaf materialization (the lea of a
+type sigil) clobbers the pinned scratch, forcing a reload the next compare. Secondary:
+no CSE (the same tag word reloads per test), no tail merge or identical-code folding
+(clang folds lvm_chain to a 5-byte alias of a twin; mooncc lays every epilogue in
+full), immediates rematerialized per use. The spread is broad — 248 of 614 symbols
+above 2×, but 105 at or under parity (−27 KB: clang paying inlining bytes mooncc
+doesn't). The size gap and the corpus's flat 1.71× insn ratio are one fact seen
+twice: the slot movs are cheap (IPC eats them — cycles sit at 1.23×) but they are
+most of the extra instructions and most of the extra bytes.
+
 ### runtime — the corpus, egg-boot subtracted, median of 3
 
 | | mooncc | clang | ratio | gcc |
