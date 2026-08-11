@@ -30,9 +30,10 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
   it. ⚠ in a curried language a missed site silently answers a closure — the census
   must be exhaustive before the edit. gate: test_fixpoint **byte-identical** — the
   plumbing proven inert before any semantics move.
-* **rung 1 — retire the `want` state.** the 13 pin sites pass their die as `w`
-  instead; cgexpr reads the parameter; the pin/clear dance and the aim-hold rpin
-  machinery delete. emission near-identical; differentials + fixpoint.
+* **rung 1 — retire the `want` state.** the pin sites pass their hint as `w` instead;
+  cgexpr reads the parameter; the pin/clear dance deletes. ⚠ the aim HOLD (rpin) stays:
+  it protects the hint register from ralloc across the rhs — free-list state, rung 4's
+  business, not the hint's. emission byte-identical (same values, same order).
 * **rung 2 — promote advisory to total, one die arm at a time, each retiring its
   recovery pass.** ('mem b o) at the store sites → addrfold's cascade becomes
   construction; ('br lt lf) with 'fall → cbranch/cbinl/tbr/fcb collapse into one die

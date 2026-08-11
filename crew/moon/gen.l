@@ -1190,8 +1190,7 @@
               ; delivered value (vreg off r0: no bridge mov). unhonored (a mapped local, a
               ; float, a wide) hands the register back and the post-hoc park stands.
               (: pk (? (callish? lhs || callish? rhs) () (ralloc g))
-                 _ (? pk (pin g 'want pk) ())
-                 a (cgexpr g env lhs ())
+                 a (cgexpr g env lhs pk)
                  _ (? (pk && !(!(bad? a) && id? (vreg a) pk)) (rfree g pk) ())
                  (? (bad? a) 'bad
                     (flo? (vty a)) (: _ (rfree g (vreg a)) (fcb ()))
@@ -1801,15 +1800,13 @@
                '((st r3 0 r0) (mov r0 r1)))))
        'no)
 
-   ; -- expressions: answers a value tuple | 'bad. g 'want is the DESTINATION HINT, pinned by a
-   ; consumer that knows where the value must land (an asn into a home, a ret's r0), consumed by
-   ; the TOP node only (cleared here, so subexpressions never inherit it), and always ADVISORY --
-   ; a lane that ignores it answers its usual register and the consumer bridges. w is the
-   ; destination die (doc/moon-hom.md), inert this rung: every site passes (), no lane reads it. --
-   (cgexpr g env e w)
-    (: wnt (peep g 'want ())
-       _ (pin g 'want ())
-       k <e
+   ; -- expressions: answers a value tuple | 'bad. wnt is the DESTINATION HINT, the die's
+   ; advisory face (doc/moon-hom.md): a consumer that knows where the value must land (an asn
+   ; into a home, a ret's r0) passes it; a subexpression only gets one its consumer chose; and
+   ; it is ADVISORY -- a lane that ignores it answers its usual register and the consumer
+   ; bridges. --
+   (cgexpr g env e wnt)
+    (: k <e
        (? (k = 'szof)                                   ; sizeof EXPR: the UNDECAYED type (clval keeps arrays), size a constant
            (: e2 <>e
               lv (clval g env e2)
@@ -1930,8 +1927,7 @@
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
               fd (? (<<>e = 'deref) (afd g env <>e) ())
               (? (two? rv && <rv = 'regv)   ; store into a register-homed scalar (param or local)
-                  (: _ (pin g 'want <>rv)         ; hint the rhs straight at the home
-                     r (cgexpr g env <>>e ())
+                  (: r (cgexpr g env <>>e <>rv)   ; the rhs aims straight at the home
                      (? (bad? r) 'bad
                         (flo? (vty r)) (mkv <>>rv 'r0 (asintt g r <>>rv + ([['mov <>rv 'r0]] + cvt <>>rv <>rv)))
                         (id? (vreg r) <>rv) (mkv <>>rv <>rv ((vfs r) + cvt <>>rv <>rv))   ; landed in the home already (re-narrowed)
@@ -1960,9 +1956,8 @@
                      hint (? (vmon? g && id? <rv 'loc &&
                                (homable? ty && member? nm (peep g 'vuniv ())))
                              (: kr (vmraw g nm) (? kr kr (ralloc g))) ())
-                     _ (? hint (pins g 'want hint
-                                       'rpin (hint >< peep g 'rpin ())) ())
-                     r (cgexpr g env <>>e ())
+                     _ (? hint (pin g 'rpin (hint >< peep g 'rpin ())) ())
+                     r (cgexpr g env <>>e hint)
                      _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())   ; the hold dies with the rhs
                      ; unhonored int values FORCE below instead of freeing: only a bad
                      ; or float rhs hands the hint back
@@ -2024,9 +2019,8 @@
                      hint (? (two? ael && id? <ael 'el &&
                               vmon? g && !(0 < peep g 'argseal 0))
                              (: kr (vmraw g <>ael) (? kr kr (ralloc g))) ())
-                     _ (? hint (pins g 'want hint
-                                       'rpin (hint >< peep g 'rpin ())) ())   ; the aim hold (see the scalar lane)
-                     r (cgexpr g env <>>e ())
+                     _ (? hint (pin g 'rpin (hint >< peep g 'rpin ())) ())   ; the aim hold (see the scalar lane)
+                     r (cgexpr g env <>>e hint)
                      _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())
                      (? (bad? r) (: _ (? hint (rfree g hint) ()) 'bad)
                         (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
@@ -2117,8 +2111,7 @@
                     hint (? (aR && two? ael && id? <ael 'el &&
                              vmon? g && !(0 < peep g 'argseal 0))
                             (ralloc g) ())
-                    _ (? hint (pin g 'want hint) ())
-                    r (cgexpr g env <>>e ())
+                    r (cgexpr g env <>>e hint)
                     (? (bad? r) (: _ (? aR (rfree g aR) ())
                                    _ (? hint (rfree g hint) ()) 'bad)
                        (: ty (vty lv)
@@ -2241,8 +2234,7 @@
                                   (vfs lv + [['st 'r4 off 'r0]] + vfs r))))))))
           (k = 'cast)
            (: tgt <>e
-              _ (? (!(flo? tgt) && !(two? (cvt tgt 'r0))) (pin g 'want wnt) ())
-              r (cgexpr g env <>>e ())
+              r (cgexpr g env <>>e (? (!(flo? tgt) && !(two? (cvt tgt 'r0))) wnt ()))
               (? (bad? r) 'bad
                  (flo? tgt && d128? (vty r))
                   ; (double) of a WIDE value: only a CONSTANT expression, folded exactly (love.c's
@@ -2326,8 +2318,7 @@
                         renar)))))
           (k = 'comma)
            (: a (cgexpr g env <>e ())
-              _ (pin g 'want wnt)
-              b (cgexpr g env <>>e ())
+              b (cgexpr g env <>>e wnt)
               (? (bad? a || bad? b) 'bad
                  (mkv (vty b) (vreg b) (vdrop g a + vfs b))))
           (k = 'land)                                ; as a VALUE: cbranch the short-circuit, then settle the bit
@@ -2591,9 +2582,8 @@
                      rT (nthr (argr g) gpc)
                      (? (dir && gpc < ngp g && !(psh9 acc) &&
                          !(two? (assoc rT (peep g 'homes ())))) rT ()))
-              _ (? aim (pin g 'want aim) ())
               a (: _ (? (member? <<as '(addr var)) (pin g 'argpos 1) ())
-                   (cgexpr g env <as ()))
+                   (cgexpr g env <as aim))
               _ (pin g 'argpos ())
               (? (bad? a) 'bad
                  (: pty (nthty pts i)
@@ -2984,8 +2974,7 @@
               callish? lhs || callish? rhs ||
               member? op '(shl shr) || two? (knum g rhs)) ()
              (ralloc g))
-       _ (? pk (pin g 'want pk) ())
-       a (cgexpr g env lhs ())
+       a (cgexpr g env lhs pk)
        _ (? (pk && !(!(bad? a) && id? (vreg a) pk)) (rfree g pk) ())
        (? (bad? a) 'bad
           (gcplx? (vty a)) (cgcx g env op a rhs)    ; a complex left: the complex lane (parse lifted a real RIGHT already)
@@ -5294,10 +5283,8 @@
                  (: hint (? (vmon? g && !hreg &&
                              homable? ty && member? <p (peep g 'vuniv ()))
                             (ralloc g) ())               ; the vmap hint (asn's twin)
-                    _ (? hint (pin g 'want hint)
-                         (hreg && !(two? hreg)) (pin g 'want hreg)   ; the home is the DESTINATION (the asn regv arm's shape)
-                         ())
-                    r (cgexpr g env3 init ())               ; a scalar (a pointer = string rides cgexpr -> la)
+                    w9 (? hint hint (hreg && !(two? hreg)) hreg ())   ; the home is the DESTINATION (the asn regv arm's shape)
+                    r (cgexpr g env3 init w9)               ; a scalar (a pointer = string rides cgexpr -> la)
                     _ (? (hint && (bad? r || !(id? (vreg r) hint))) (rfree g hint) ())
                     _ (vmdrop g <p)
                     (? (bad? r) 'bad
@@ -5854,9 +5841,8 @@
              (? (mt && il) 'bad                     ; a musttail never inlines: the splice declines, the real call still can
                 !(two? <>s)
                  (? mt (nolane g "a musttail return carries no call") (? il [['jmp il]] epj))   ; bare `return;` -- just the epilogue
-                (: _ (pin g 'want 'r0)                                   ; the return value's one true home
-                   _ (? mt (pin g 'must9 1) 0)      ; the ret's own call STAYS a call (no splice) -- consumed at first touch
-                   r (cgexpr g env <>s ())
+                (: _ (? mt (pin g 'must9 1) 0)      ; the ret's own call STAYS a call (no splice) -- consumed at first touch
+                   r (cgexpr g env <>s 'r0)         ; the return value's one true home
                    _ (pin g 'must9 ())
                    rt (? il (peep g 'inlrt 'long)                        ; the INLINED function's return type
                          <(peep (g 'sigs) (g 'fn) ['long ()]))         ; else the current function's
