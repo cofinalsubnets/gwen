@@ -71,8 +71,8 @@ gh pr create --repo rui314/chibicc --title "..." --body-file pr.md
 **Title:** `Fix parse error on a declarator list whose first declarator is a function`
 
 ````markdown
-A declaration whose first declarator is a function and which then continues past a
-comma is rejected:
+`chibicc` rejects a declaration whose first declarator is a function and which then
+continues past a comma:
 
 ```c
 struct S;
@@ -87,12 +87,48 @@ t.c:2: struct S *f(void), *g(int);
                                  ^ expected '{'
 ```
 
-gcc and clang accept this with no diagnostics at `-pedantic-errors` under c89 through
-c23 — it's `init-declarator-list`, so it isn't a newer-standard question.
+This is plain `init-declarator-list`, unchanged since C89:
 
-`parse()` dispatches on `is_function()`, which looks only at the first declarator, into
-`function()`; `function()` parses that declarator and then accepts only `;` or `{`, so a
-`,` has nowhere to go.
+```
+declaration:
+        declaration-specifiers init-declarator-list_opt ;
+
+init-declarator-list:
+        init-declarator
+        init-declarator-list , init-declarator
+```
+
+and a function declarator is an ordinary `direct-declarator` (C11 6.7.6):
+
+```
+direct-declarator:
+        direct-declarator ( parameter-type-list )
+        direct-declarator ( identifier-list_opt )
+```
+
+Nothing restricts a declarator carrying a parameter list to being the sole
+init-declarator. The construct that *is* restricted to one declarator is a function
+**definition** (C11 6.9.1):
+
+```
+function-definition:
+        declaration-specifiers declarator declaration-list_opt compound-statement
+```
+
+— and that is exactly the distinction being conflated. `parse()` dispatches on
+`is_function()`, which inspects only the first declarator, into `function()`; `function()`
+parses that declarator and then accepts only `;` or `{`, so a `,` has nowhere to go. The
+test is "does this declaration begin with a function declarator", where it needs to be
+"is this a function definition".
+
+gcc and clang accept the case above with zero diagnostics at `-pedantic-errors` under
+`-std=` c89, c99, c11, c17 and c23. It isn't on the README's non-support list either
+(complex numbers, K&R prototypes, GCC inline asm, digraphs/trigraphs), and it predates
+C11 entirely, so "almost all mandatory features of C11" reads as covering it.
+
+In fairness it is a rare spelling — I scanned 120 headers under /usr/include and found no
+instance, which is presumably why it has gone unnoticed while Git and SQLite build fine.
+So this is a conformance gap rather than a practical blocker.
 
 The patch splits the symbol-registration half of `function()` into `declare_function()`,
 hands a comma tail to the existing `global_variable()` loop, and has that loop dispatch on
