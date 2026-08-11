@@ -62,6 +62,69 @@ differential ~22% of all static insns were rsp slot movs; only ~15% of reloads w
 straight-line (peephole-reachable) — the rest cross branches and calls, which is exactly
 the boundary the write-through vmap cannot cross.
 
+## the splice client — what the gap costs a JIT
+
+2026-08-11, `bench/vmsplice/`. A second client for lever 2, pricing it from a direction
+the corpus differential cannot reach: a **template JIT over the tail-threaded VM** —
+decode a thread into its named handlers (`def1` + `image_ap_index` already do this; the
+image codec depends on it), splice their bodies into one function with the dispatch
+deleted, compile, install through `nif`.
+
+**It works.** A hand-composed body of 64 spliced op bodies, compiled by mooncc, lifted
+out of the `.o` with holo's own `ld-read` and installed with `(from 'glaze 'nif)`,
+agrees with its interp twin and runs. mooncc honors `ai_musttail` here, so the emitted
+tail is exactly loopepi's shape (`st Sp[0]; ld Ip[2]; Ip += 16; jmp`) — the body drops
+into the VM's convention with no shim.
+
+**The tier is real and it is ~4×.** Same 64-op body, ⚠ `LOVE_NO_GLAZE=1` (without it the
+"interpreted" twin is silently glaze-compiled and the baseline reads ~9× too fast):
+
+| lane | ns/call (64 ops) | ns/op |
+|---|---|---|
+| interpreted thread | 248.5 | 3.88 |
+| **mooncc-composed native** | **62.8** | **0.98** |
+| glaze (auto.l's recognizer) | 26.3 | 0.41 |
+
+So a splice JIT is a *universal* baseline tier and the glaze is a further ~2.4× on the
+shapes it recognizes — they compose, they do not compete.
+
+**And the gap is the whole distance between those last two rows.** The same probe source
+through both compilers, on a chain walk where nothing folds:
+
+| | dispatched | composed | |
+|---|---|---|---|
+| cc | 1.59 ns/op | 0.83 | **1.91×** |
+| mooncc | 1.84 ns/op | 2.21 | **0.83× — slower than dispatch** |
+
+Insn counts are close (11.1 vs 13.0 per op), so this is not density. It is the op-to-op
+seam, one line of disassembly each:
+
+```
+cc:      mov %rsi,(%rcx)  /  mov %rsi,%rdx     ; store, and KEEP it in a register
+mooncc:  mov %rax,(%rcx)  /  mov (%r11),%rax   ; store, then RELOAD the slot just written
+```
+
+Sixty-four store→load round trips on the dependent path. This is lever 2's ~22% bucket
+seen from the client side: a splice's every op boundary is exactly the write-through the
+allocator leg exists to remove, and closing it is worth ~2.5× **on the spliced body** —
+about the distance to the glaze.
+
+Two things the probe settled that the design had worried about:
+
+* **`Have1` is free.** A safepoint in every spliced body cost nothing on either compiler
+  (cc 0.825 vs 0.830, mooncc 2.188 vs 2.214 ns/op) — the heap-limit branch predicts.
+* **splicing lets the optimizer see ACROSS ops.** cc folded the 64-bump arithmetic body
+  to **30 bytes** — one `add` — against mooncc's 1299. Real extra value on top of
+  dispatch elimination, and the reason the probe's first version read 60×: the whole
+  body had folded into its own answer (see the README's traps).
+
+⚠ what a real splice JIT owes beyond this: the lifted body was relocation-free only
+because it touches nothing external. A body that touches chains or can collect pulls in
+`lvm_chain`, `lvm_sym`, `ai_please` — references that must bind to the LIVE process's
+addresses. `lift.l` refuses such a body rather than lifting one that would jump wherever
+it happened to be mapped; binding them is a linking step, and holo's `ld-read` (in the
+image since the linker half landed) is the tool for it.
+
 ## the physics — what prices a lever here
 
 Learned by measuring, several times each; check a new lever against these before building:
@@ -101,12 +164,17 @@ Learned by measuring, several times each; check a new lever against these before
    values surviving labels and calls, spill placement instead of write-through. Kills
    both the def-stores and the post-flush reloads (the ~22% bucket). The vmap, the JOIN
    meet, the cs pool and cskeep are its substrate; this is the step the peepholes cannot
-   take (their reach measured exhausted 2026-08-04). Its emission-side half — passing
+   take (their reach measured exhausted 2026-08-04). THE ARC IS PLANNED: doc/moon-alloc.md
+   — two phases (slots-become-intervals post-choice, then vreg emission), seven rungs,
+   and the retirement schedule for the five parallel residency mechanisms. Its emission-side half — passing
    the CONSUMER down as a destination die instead of delivering everything to r0 — is
    modeled runnable in doc/proto/dest.l (ev.l's continuation-taking emitter shape worn
    by a register machine; gated by test_doc). All four lanes migrated 2026-08-10 —
    asn/decl, cbranch-compare, arg-seat, bin-value (the rungs below); what remains of
    the die rides the allocator leg (callish sides via cs-borrow parks, deeper arg seats).
+   ⚠ this lever has a SECOND client with its own price: a splice JIT over the VM, where
+   every op boundary is a write-through and the gap costs ~2.5× on the spliced body —
+   "the splice client", above.
    FIRST BOUNDARY CROSSED 2026-08-10 (loop-head survival, the ledger): the map keeps
    across loop heads under optimism-with-verification, writes re-establish in place,
    and chacha20 dropped 74% of its wall — call-free hot loops now run register-resident.
@@ -190,6 +258,11 @@ Learned by measuring, several times each; check a new lever against these before
   a semantic no-op (⚠ a bake is never byte-stable and the embedded love-version hash
   differs across HEADs — compare offset sets or the .o). Real text is `objdump -h`
   .text, never size(1).
+* ⚠ **a microbenchmark whose ops are constant on their input measures folding, not the
+  op.** bench/vmsplice's first version read 60× at 0.023 ns/op — under a cycle, the body
+  gone. Two tells, both cheap: a sub-cycle per-op cost, and a `.text` far smaller than
+  the source implies (30 bytes for 64 ops). Reach every operand through a `volatile`
+  seed and real heap data, and read the emitted size before the timing.
 * Probe the verdict chain before theorizing: the sed-probe on a gen.l copy + the mooncc
   cat answers in minutes what disassembly matrices can't; the framed-set diff (objdump
   push-rbp per symbol, comm vs a twin) finds frame regressions; dump pre-fold IR via the
@@ -583,6 +656,34 @@ substrate the frequency-driven grant will ride. Residues: sk=0 shapes (cmp3 —
 first statement callish, needs a form-level wrap point), big_addsub-shaped
 declines (call-carrying paths whose dirty loads are thin), and the fleet itself
 (waits on PGO).
+2026-08-11 · SLOT REPACK + object-precise deadst (the frame lever the fifth
+diff fill named: nslot never hands a cell twice, so a frame is the COUNT of its
+temporaries — 27% of love.c's fns carried >128 B frames and 11 K stack movs paid
+disp32; deadst's whole-fn lea bar hid 11 KB of dead stores, ALL of them in the 160
+lea-carrying fns). Two pieces on one substrate, the slot map: nslot registers every
+cell in g 'slots ((off n)..), deadst's lea arm marks the OBJECT under the lea live
+(the granule refinement its own ⚠ said would lie — the map is what makes it honest;
+an unclaimed lea still bars whole), and repack — POST-CHOICE, between deadlab and
+unframe — packs objects whose live windows never meet into shared cells and shrinks
+the sub. Windows are form-index spans widened over every backedge to a fixpoint
+(linear-scan's loop extension); an address-taken object relocates whole (the lea
+moves with it) but lives to the last form and only 8-byte cells pool (wider cells
+place fresh, 16-parity held); bars mirror unframe's law (raw, loose r4, unclaimed
+touch, -8 pinned); ships only when the sub shrinks. THE PLACEMENT is the payload
+lesson: the first build ran repack inside the per-attempt pipeline and the corpus
+laws caught ql's cs lane wrapping — the rankers price param slots BY BUILD OFFSET
+(nreads/nrac/pslots), so a packed ir1 misprices every grant. Post-choice, with
+deopt restoring ir1's slot map beside the accumulators, the rankers read unpacked
+ir and the winner packs once. .text 585,440→560,864 (−24.6 KB, −4.2%), the movq
+$imm fold-residue stores −6.4 KB, dead stores −4.6 KB, median frame 72→40 B,
+disp32 stack movs 11,055→9,711; corpus dyn insns −0.25% (40.746→40.646 G), boot
+−0.60%, corpus green through the packed binary, fixpoint + vmret + the moon
+battery green. The law churn was the offsets: save/restore laws re-anchored by
+SHAPE (cspair?/spillrd?/wrapon? — the offset binds within the pair, the seat is
+repack's to choose), array laws by the lea base (aeb). Residues: 16-byte cells
+never pool (parity insurance), sk-anchored fns keep old layout on any bail, and
+slot canonicalization now makes link-time ICF worth re-measuring (~0.5 KB today
+because offsets de-canonicalized identical bodies).
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

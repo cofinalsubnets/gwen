@@ -1525,9 +1525,17 @@
    (zext128? fs) (: rl (rev fs) (two? rl && '(li r2 0) = <rl))
    ; a fresh n-byte frame cell -> its (negative) offset. bumps the frame's
    ; high-water like a local; ntmp sizes one for a type (a compound literal's home).
+   ; every cell registers in g 'slots ((off n)..) -- the OBJECT map deadst and repack
+   ; read (an lea escapes the whole object under it, never one granule).
    (nslot g n) (: off (0 - (peep g 'off 0 + n))
                   _ (pin g 'off (peep g 'off 0 + n))
+                  _ (pin g 'slots ([off n] >< peep g 'slots ()))
                   off)
+   ; the object under a frame offset, off the slot map -- () when no cell claims it
+   (obj9 sl x) (? !(charm? x) ()
+                  (: (go l) (? !(two? l) ()
+                               (: o <l (? ((<o <= x) && (x < (<o + <>o))) o (go >l))))
+                     (go sl)))
    (ntmp g ty) (nslot g $ (tsz g ty + 7) & -8)
    ; the store-immediate op for (ty, k) | () -- the vi fold's license, shared by the
    ; asn/decl delivery lanes (x64 only: si is C6/C7). st sign-extends imm32, the
@@ -3695,15 +3703,11 @@
              _ (foldl (\ _ o (pin t o 1)) 0 ((stops9 + stxops) + (siops + '(cmpm))))
              t)
    (a4ize fs)
-    (: (swap f i bp)
-        (? !(two? f) ()
-           (link (? ((i = bp) && id? <f 'r4) 'fp <f)
-                 (swap >f (i + 1) bp)))
-       (go l)
+    (: (go l)
         (? !(two? l) ()
            (: f <l
               bp (? (two? f) (peep a4base <f -1) -1)
-              (link (? (bp < 0) f (swap f 0 bp))
+              (link (? (0 <= bp && id? (nthr f bp) 'r4) (reop f bp 'fp) f)
                     (go >l))))
        (go fs))
    ; v6-M slot retarget: slots live at fp-NEGATIVE offsets, but ARMv6-M loads/stores encode only
@@ -3879,12 +3883,19 @@
            _ (foldl (\ _ o (pin t o 2)) 0 (stops9 + siops + '(cmpm)))
            _ (foldl (\ _ o (pin t o 4)) 0 stxops)
            t)
+   ; rebuild a form with the operand at position i9 replaced -- the a4base/uoff seam
+   ; every frame-rewriting pass (a4ize, unframe, repack) lands on
+   (reop f i9 v) (: (go e i) (? !(two? e) ()
+                                (link (? (i = i9) v <e) (go >e (i + 1))))
+                    (go f 0))
+   ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
+   (pro4? fs) (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp))
    (unframe g fs)
     (: a64 (a64? g)
        fb (? a64 'fp 'r4)
        pro (? a64
               (nthr fs 1 = '(push lr) && nthr fs 2 = '(push fp) && nthr fs 3 = '(lea fp sp 0))
-              (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp)))
+              (pro4? fs))
        sf (nthr fs (? a64 4 3))
        K (? (two? sf && <sf = 'sub && <>sf = 'sp && <>>sf = 'sp && charm? <>>>sf)
             <>>>sf ())
@@ -3979,10 +3990,7 @@
              vs (<vr || r3f)                         ; the save is a slot: r3f forces the sub
              K9 (K + (? a64 32 8))
              (radj f2 bp op9 D)                      ; the base slot -> sp, its displacement -> off+K+D
-              (: (go e i) (? !(two? e) ()
-                             (link (? (i = bp) 'sp (i = op9) (<e + K + D) <e)
-                                   (go >e (i + 1))))
-                 (go f2 0))
+              (reop (reop f2 bp 'sp) op9 ((nthr f2 op9) + K + D))
              (rw l D)
               (? !(two? l) ()
                  (: n3 (epi3? l)
@@ -4313,7 +4321,7 @@
           (: subdrop (tablet 0) addsh (tablet 0)     ; sub-index -> drop; add-index -> shrink bytes
              stconv (tablet 0) ldconv (tablet 0)     ; st/ld-index -> the slot's positive offset
              pf3 (nthr fs 3)                         ; the prologue's frame sub: (sub sp sp F)
-             cvok ((nthr fs 1 = '(push r4)) && (nthr fs 2 = '(mov r4 sp)) &&
+             cvok (pro4? fs &&
                    two? pf3 && (<pf3 = 'sub) && (<>pf3 = 'sp) && (<>>pf3 = 'sp) && charm? <>>>pf3)
              F (? cvok <>>>pf3 0)
              (mark w cv) (? !(two? w) cv
@@ -4478,11 +4486,15 @@
              (f >< spmerge r))))
 
    ; dead frame stores: after the constant folds, a slot the function never loads back is
-   ; write-only and its stores drop. ⚠ SAFE only when NO frame address is taken at all -- an lea
-   ; marks one offset but hands out a RANGE, so per-offset liveness would lie. a store's
-   ; newly-dead feeding li sweeps in the same pass.
-   (deadst fs)
+   ; write-only and its stores drop. ⚠ an lea marks one offset but hands out a RANGE -- the
+   ; slot map (g 'slots) names the whole OBJECT under it, and every granule of an
+   ; address-taken object stays live (a derived pointer reads and writes unseen); an lea no
+   ; object claims bars the fn whole. a store's newly-dead feeding li sweeps in the same pass.
+   (deadst g fs)
     (: used (tablet 0) esc (tablet 0)
+       slots (peep g 'slots ())
+       (obmark x) (: o9 (obj9 slots x)               ; the object under x rides whole | the old bar
+                     (? (two? o9) (mark <o9 <>o9) (pin esc 'y 1)))
        ; ⚠ a slot is read in BYTES, never at one offset: a 16-byte struct param's second
        ; eightbyte is STORED at off+8 and read at off+12 (that eightbyte's second field),
        ; so an offset-exact liveness called the store dead and dropped it -- a wrong answer,
@@ -4507,7 +4519,11 @@
                            (<f = 'cmprm)
                             (? (<>>f = 'r4) (mark <>>>f 8) ())
                            (member? <f '(lea lean))
-                            (? (<>>f = 'r4) (pin esc 'y 1) ())
+                            (? (<>>f = 'r4) (obmark <>>>f) ())
+                           (member? <f xops)          ; a runtime index roams its object
+                            (? (<>>f = 'r4) (obmark (nthr f 5)) ())
+                           (member? <f stxops)
+                            (? (<>f = 'r4) (obmark (nthr f 4)) ())
                            ())
                       (scan >l)))
        _ (scan fs)
@@ -4524,6 +4540,122 @@
                             (lisweep >l)
                             (f >< lisweep >l))))
        (? (peep esc 'y ()) fs (lisweep (drop fs))))
+
+   ; -- slot repack: nslot never hands a cell twice, so a frame is the COUNT of its temporaries,
+   ; not the width of a moment, and a deep frame puts disp32 under every touch. POST-CHOICE (the
+   ; rankers price param slots by build offset, so ir1 must reach them unpacked; deopt restores
+   ; ir1's slot map), objects whose live windows never meet share one cell and the sub shrinks. a
+   ; window is the
+   ; form-index span of an object's touches, widened over every backedge it meets to a fixpoint
+   ; (a loop's re-read joins everything the loop spans); an address-taken object relocates whole
+   ; (its lea moves with it) but lives to the last form -- a derived pointer's life is invisible.
+   ; bars, unframe's own law: a raw, r4 outside a mapped base seat, a frame touch no object
+   ; claims. only 8-byte cells pool (a wider cell places fresh, its 16-parity held for any
+   ; aligned rider); -8 (the r3 cell) and the caller frame (0 <=) ride pinned. ships only when
+   ; the sub SHRINKS. x64 only -- arm rides its own frame family. --
+   (repack g fs)
+    (: slots (peep g 'slots ())
+       pro (pro4? fs)
+       sf (nthr fs 3)
+       K (? (two? sf && (<sf = 'sub) && (<>sf = 'sp) && (<>>sf = 'sp) && charm? <>>>sf)
+            <>>>sf ())
+       (? (!(two? slots) || arm? g || peep g 'hasasm () || !pro || !(charm? K)) fs
+          (: obs (tablet 0)                            ; base -> (size lo hi esc)
+             (touch b n i e9)
+              (: w (peep obs b ())
+                 (pin obs b (? (two? w) [n <>w i (nthr w 3 || e9)] [n i i e9])))
+             labt (tablet 0)
+             (loose? e i bp) (? !(two? e) ()
+                                (id? <e 'r4 && !(i = bp)) 1
+                                (loose? >e (i + 1) bp))
+             (scan l i sps)                            ; every frame touch noted -> the backward spans | 'no
+              (? !(two? l) sps
+                 (: f <l
+                    (? !(two? f) (scan >l (i + 1) sps)
+                       (id? <f 'label) (: _ (pin labt <>f i) (scan >l (i + 1) sps))
+                       (id? <f 'raw) 'no
+                       (member? <f '(push pop)) (scan >l (i + 1) sps)
+                       (id? <f 'mov && ((id? <>f 'r4 && id? <>>f 'sp) ||
+                                        (id? <>f 'sp && id? <>>f 'r4)))
+                        (scan >l (i + 1) sps)          ; the frame link movs (unframe strips them)
+                       (: tg (? (id? <f 'jmp) <>f (id? <f 'br) <>>f ())
+                          li9 (? tg (peep labt tg 'no9) 'no9)
+                          sp2 (? (charm? li9) ([li9 i] >< sps) sps)
+                          bp (peep a4base <f -1)
+                          (? (0 <= bp && id? (nthr f bp) 'r4)
+                             (: X (nthr f (peep uoff <f -1))
+                                o9 (obj9 slots X)
+                                (? (loose? >f 1 bp) 'no
+                                   (two? o9)
+                                    (: _ (touch <o9 <>o9 i
+                                                (member? <f (leaops + '(leax))))
+                                       (scan >l (i + 1) sp2))
+                                   (charm? X && ((X = -8) || (0 <= X))) (scan >l (i + 1) sp2)
+                                   'no))
+                             (loose? >f 1 -1) 'no
+                             (scan >l (i + 1) sp2))))))
+             spans (scan fs 0 ())
+             (? (id? spans 'no) fs
+                (: n2 (tally fs)
+                   bases (keys obs)
+                   ; an escape pins the window's tail to the last form
+                   _ (foldl (\ _ b (: w (peep obs b ())
+                                      (? (nthr w 3) (pin obs b [<w <>w n2 1]) 0)))
+                            0 bases)
+                   (widen1 bs ch)                      ; one widening sweep -> did anything grow?
+                    (? !(two? bs) ch
+                       (: b <bs w (peep obs b ())
+                          (grow ss lo hi)
+                           (? !(two? ss) [lo hi]
+                              (: s <ss
+                                 (? ((lo <= <>s) && (<s <= hi))
+                                    (grow >ss (? (<s < lo) <s lo) (? (hi < <>s) <>s hi))
+                                    (grow >ss lo hi))))
+                          r (grow spans <>w <>>w)
+                          ch2 !((<r = <>w) && (<>r = <>>w))
+                          _ (? ch2 (pin obs b [<w <r <>r (nthr w 3)]) 0)
+                          (widen1 >bs (ch || ch2))))
+                   _ (: (fix u) (? (widen1 bases ()) (fix ()) 0) (fix ()))
+                   rows (sortby (\ a b (<a < <b))
+                                (map (\ b (: w (peep obs b ()) [<>w b <w <>>w])) bases))
+                   free (tablet 0)                     ; the retired 8-byte cells
+                   nmap (tablet 0)                     ; base -> its packed seat
+                   (ret1 act lo)                       ; act ((hi n nb)..) -> the still-live rest
+                    (? !(two? act) ()
+                       (: a <act
+                          (? (<a < lo)
+                             (: _ (? (<>a = 8) (pin free 8 (nthr a 2 >< peep free 8 ())) 0)
+                                (ret1 >act lo))
+                             (a >< ret1 >act lo))))
+                   (place rs act high)                 ; sweep by lo -> the packed high-water
+                    (? !(two? rs) high
+                       (: r1 <rs lo <r1 b <>r1 n (nthr r1 2) hi (nthr r1 3)
+                          act2 (ret1 act lo)
+                          fr (? (n = 8) (peep free 8 ()) ())
+                          pr (? (two? fr) (: _ (pin free 8 >fr) [<fr high])
+                                (: h1 (? ((16 <= n) &&
+                                          !((& (0 - (high + n)) 15) = (& b 15)))
+                                         (high + 8) high)
+                                   [(0 - (h1 + n)) (h1 + n)]))
+                          _ (pin nmap b <pr)
+                          (place >rs ([hi n <pr] >< act2) <>pr)))
+                   high2 (place rows () 8)
+                   K2 (high2 + 15 & -16)
+                   (radj2 f op9)                       ; a mapped touch -> its packed spelling
+                    (: X (nthr f op9)
+                       o9 (obj9 slots X)
+                       nb (? (two? o9) (peep nmap <o9 'no9) 'no9)
+                       (? !(charm? nb) f (reop f op9 (nb + (X - <o9)))))
+                   (rw l i)
+                    (? !(two? l) ()
+                       (: f <l
+                          f2 (? !(two? f) f
+                                (i = 3) ['sub 'sp 'sp K2]
+                                (: bp (peep a4base <f -1)
+                                   (? (0 <= bp && id? (nthr f bp) 'r4)
+                                      (radj2 f (peep uoff <f -1)) f)))
+                          (f2 >< rw >l (i + 1))))
+                   (? (K2 < K) (rw fs 0) fs))))))
 
    ; dead label regions: the sibcall rewrite splices its jump BEFORE a shared epilogue and leaves
    ; the label + epi standing for the other arms -- when no arm remains, the region is unreachable
@@ -6049,6 +6181,7 @@
    (fnreset g)
     (pins (rgreset g)          ; the regen channels' neutral state -- disjoint pin set
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
+     'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'inlining () 'inlbody 0   ; splice depth + body depth (vmget's blind)
      'inlret () 'inlrt ()      ; splice return label + type (cgstmt's ret door)
@@ -6966,7 +7099,7 @@
                                   ()) +
                                ['(push lr) '(push fp) '(lea fp sp 0) ['sub 'sp 'sp frame]])) +
                            <sp0 + body + '((li r0 0)) + peep g 'epi epi-a64)))))
-                       (deadst
+                       (deadst g
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse
                         (addrfold
@@ -7201,6 +7334,7 @@
        sp1 (? (two? vzf) [(<sp1 + vzf) <>sp1] sp1)        ; the VLA size-slot zeroes ride after the spills
        ir1 (build sp1)
        n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
+       sl1 (peep g 'slots ())                       ; ...and ir1's slot map (repack reads the WINNER's, post-choice)
        lrec1 (peep g 'lrec ())                      ; ir1's locals record: a leaf RETRY ranks on it (a regen leaves pass-2 offsets)
        ride (? (sr6f || vararg || peep g 'fesc () || hascall? ir1) () (rideset ir1 params 0 ()))
        (pools rd) (: rh (map (\ k (homereg k)) rd)   ; the freed homes rejoin the pool for locals
@@ -7247,7 +7381,8 @@
            [(? (two? lr) <lr ()) <ih <>ih (? (two? lr) (nthr lr 2) ())])
        st0 (seats ride hpool !(ng || peep g 'fesc () || hascall? ir1))
        lh <st0 ih0 <>st0                            ; the choice below reads these two; regen takes the table whole
-       (deopt u) (: _ (pin g 'n n1) _ (pin g 'strs strs1) ir1)   ; ir1 stands, accumulators restored
+       (deopt u) (: _ (pin g 'n n1) _ (pin g 'strs strs1)
+                    _ (pin g 'slots sl1) ir1)       ; ir1 stands, accumulators + slot map restored
        ; the REGEN dance: reset the accumulators and the frame to the ir1 snapshot, pin the
        ; analyses' channels (the vmap universe, the locals homes, the livtab), rebuild under
        ; the spill policy hp with the seat table's pool, then clear every channel. a 'bad ir2
@@ -7392,11 +7527,13 @@
              ; loop (wb) licenses too, so its keep can take borrowed cs seats
              (? (two? pcs || two? swcs || pp || lh || two? au || (wb && two? av && two? <>>av))
                 (regen (? (two? swcs) () (two? pcs || pp) 'shadow ()) st0) ir1)))
-       ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
-       ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
-       ; it early lets a pass-2 ride clobber a live arrival. this chain's order is TYPED
-       ; (stage.l): each pass advances a stage die, so only this composition checks.
-       (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (deadlab irf)))))))
+       ; ⚠ deadlab and repack join unframe in the POST-CHOICE slot and must never touch the ir1
+       ; the rankers read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis,
+       ; and the rankers price param slots BY BUILD OFFSET (nreads/nrac/pslots), so a packed ir1
+       ; misprices every grant. repack reads the WINNER's slot map (deopt restores ir1's) and
+       ; runs after deadlab (a dead region's touches would fatten the windows). this chain's
+       ; order is TYPED (stage.l): each pass advances a stage die, so only this composition checks.
+       (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (repack g (deadlab irf))))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms
    ; imgforms extras bssforms rodataforms) | 'bad, extras being ((name forms ro?) ..), one per
