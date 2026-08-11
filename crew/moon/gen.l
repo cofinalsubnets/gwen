@@ -7656,13 +7656,15 @@
    ; would bake past the strong override the linker owes them).
    ; xtra: the parser's (sfns svars sects .. consts) tablets -- static fns, static
    ; globals, name -> section. () reads as three empties (the law harness).
-   ; every nom anywhere in a form tree -- the dead-static sweep's reference relation,
-   ; and OVER-approximate on purpose: an opcode and a register name count too. A static
-   ; wrongly kept costs bytes; a reference wrongly missed costs a wild jump.
-   (cg-refs x acc)
-    (? (nom? x) (? (member? x acc) acc (x >< acc))
-       !(two? x) acc
-       (cg-refs >x (cg-refs <x acc)))
+   ; every nom anywhere in a form tree, pinned into a tablet -- the dead-static sweep's
+   ; reference relation, and OVER-approximate on purpose: an opcode and a register name
+   ; count too. A static wrongly kept costs bytes; one wrongly missed costs a wild jump.
+   ; ⚠ a TABLET, never a list: love.c is 879 functions and a linear member? here made
+   ; the sweep cost more than the compile it rides in.
+   (cg-refs x t)
+    (? (nom? x) (: _ (pin t x 1) t)
+       !(two? x) t
+       (cg-refs >x (cg-refs <x t)))
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g #('n 0 'brk () 'brkm () 'cnt () 'cases () 'glob #() 'globs () 'strs () 'statics ()
            'laid #()                                 ; names already on 'globs (a tentative repeat lays no twin)
@@ -7731,20 +7733,34 @@
                  ; alias target, the section-named fns (xfns -- placed for their address), and
                  ; every nom the DATA lane names: love's kind-indexed tables carry fn addresses,
                  ; and one missed there is a jump into the heap, not a bigger binary.
+                 ; ⚠ every set here is a TABLET and each unit's noms are read ONCE: the
+                 ; list-and-member? spelling re-walked every live body per round and cost
+                 ; 9x the compile it rides in.
                  (: us (rev acc)                        ; (name forms), emission order
                     sfns (? (two? xtra) <xtra #())
                     als (peep g 'alias #())
                     atg (foldl (\ a k ((peep als k ()) >< a)) () (keys als))
                     (cut? nm) (!(id? (peep sfns nm 'no) 'no) && !(member? nm atg))
-                    seed (cg-refs (g 'xfns) (cg-refs dat ()))
-                    (mark ns)                           ; grow the live name set to a fixpoint
-                     (: r (foldl (\ a u (? (member? <u ns) (cg-refs <>u a) a)) seed us)
-                        add (foldl (\ a u (? ((member? (intern <u) r) && !(member? <u ns))
-                                             (<u >< a) a)) () us)
-                        (? !(two? add) ns (mark (ns + add))))
-                    keep (mark (foldl (\ a u (? (cut? <u) a (<u >< a))) () us))
-                    _ (pin g 'dropped (foldl (\ a u (? (member? <u keep) a (<u >< a))) () us))
-                    txt (foldl (\ a u (? (member? <u keep) (revcat <>u a) a)) () us)
+                    urefs (tablet 0)                    ; fn name -> the noms its forms carry
+                    _ (map (\ u (pin urefs <u (keys (cg-refs <>u (tablet 0))))) us)
+                    unom (tablet 0)                     ; a nom -> the fn of that name
+                    _ (map (\ u (pin unom (intern <u) <u)) us)
+                    live (tablet 0)
+                    (walk q)                            ; worklist over the reference graph
+                     (? !(two? q) ()
+                        (: n <q
+                           (? (peep live n ()) (walk >q)
+                              (: _ (pin live n 1)
+                                 (walk (foldl (\ a r (: t (peep unom r ())
+                                                        (? (t && !(peep live t ())) (t >< a) a)))
+                                              >q (peep urefs n ())))))))
+                    ; the roots: every fn no sweep may touch, then every fn the data lane
+                    ; and the sectioned bodies name by address
+                    _ (walk (foldl (\ a r (: t (peep unom r ()) (? t (t >< a) a)))
+                                   (foldl (\ a u (? (cut? <u) a (<u >< a))) () us)
+                                   (keys (cg-refs (g 'xfns) (cg-refs dat (tablet 0))))))
+                    _ (pin g 'dropped (foldl (\ a u (? (peep live <u ()) a (<u >< a))) () us))
+                    txt (foldl (\ a u (? (peep live <u ()) (revcat <>u a) a)) () us)
                     [g (rev txt) dat saw])))
            (: f <fs
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
