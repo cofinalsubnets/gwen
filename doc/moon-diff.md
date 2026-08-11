@@ -17,6 +17,50 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
+## 2026-08-11 — nolibc, one function to a file: 5.4% dead, under musl's own floor (HEAD a1e12f40)
+
+The per-function split finished. `crew/moon/lib/nolibc/` is **185 members in eleven
+folders** — `sys/` 72, `string/` 28, `net/` 19, `signal/` 14, `ctype/` 14, `mem/` 10,
+`stdio/` 10, `fmt/` 7, `proc/` 5, `env/` 3, `dirent/` 3 — over a `core.c` that is down
+to the startup floor.
+
+| | libc .text | syms | dead | |
+|---|---|---|---|---|
+| one file (this morning) | 64,110 | 334 | 35,316 | 55.1% |
+| four area members | 39,902 | 234 | 11,108 | 27.8% |
+| **185 per-function members** | **31,662** | 145 | **1,718** | **5.4%** |
+| musl, for scale | 40,375 | 229 | 2,626 | 6.5% |
+
+**Under musl's own floor**, and 0.78× its shipped size. .text 524,000 → **519,904**,
+**1.779×**. What is left is twelve functions that share a file with a live sibling
+(`freopen` beside `fopen`, `vasprintf` beside `vsnprintf`).
+
+The sweep landed first and that ordering mattered: `er` and `sc0..sc6` are now `static`
+**in impl.h**, so each member inlines the ones it uses and the dead-static sweep drops
+the bodies it did not. Before the sweep that shape would have duplicated seven helpers
+into 185 objects and cost more than the split saved.
+
+### what a per-function split actually costs
+
+Beyond the three couplings the area split paid, four more, each found by a gate rather
+than by reading:
+
+* **a tentative definition in a shared header** — `char **environ;` rode into impl.h with
+  the syscall numbers and every member then defined it (`link-dup "environ"`). Slice on
+  the symbol, never on the line number.
+* **`#endif` is not a landmark** — patching impl.h by replacing `"#endif"` hit the one
+  inside the arch-gated NR block, not the guard. impl.h is now composed, not patched.
+* **types and macros are members too** — `struct __sctx`, `__mhdr`, `FF_SPC`, the `BD_*`
+  limb geometry. A splitter that only knows functions and objects strands them.
+* **a static helper crossing a region boundary** — `__fmtsgn`, `__pad`, `__fmtnum`,
+  `__femit`, `__semit`. Grouping within a region cannot see it, and `__femit` is passed
+  as a **pointer**, so a `name(` scan misses it where a word scan finds it. Those five
+  are extern now, declared in impl.h; `__stdf` and `__obuf` likewise, since the entry
+  wires stdout's buffer.
+
+Gates: `test_fixpoint` byte-identical, `vmret` 307 ret-free, `test_raw`/`test_drv`/
+`test_libc` (all 116 names) green, corpus + `net`/`fs`/`tlsc` pass.
+
 ## 2026-08-11 — the dead-static sweep: mooncc stops laying what it inlined (HEAD fc061fc0)
 
 The biggest single move on this page, and it is not codegen — it is **mooncc laying the
