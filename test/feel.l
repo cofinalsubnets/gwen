@@ -43,6 +43,11 @@
  ; ((200001) 2), a 60207-digit bignum. the safe prefix folds, the growing step residualizes.
  (big? (: (f x) (+ 1 200000 2) (f 0)))       ; ⚠ big?, not (tally (show ..)) -- rendering 60207 digits cost the gate 2.5s
  (= '(1 2 3 4) (: (f x) ('(1 2) x) (f '(3 4))))   ; a chain joins like text, and folds the same way
+ ; --- readset: peep and pin fold on an IMMUTABLE container, never on a tablet ---
+ (= "aXcd" (: (f x) (pin "abcd" 1 x) (f 88)))     ; pin on text -- the functional update, folded whole
+ (= '(1 X 3) (: (f x) (pin '(1 2 3) 1 x) (f 'X)))  ; ... and on a chain
+ (= 8 (: (f x) (peep '(7 8 9) x 0) (f 1)))        ; peep reads a known chain at compile time
+ (: (f _) (pin (tablet 0) 1 2) (nil? (id? (f 0) (f 0))))   ; ⚠ a tablet is MUTABLE: pin there is a write, never folded
  (= 256 (: (f x) ('(7 8 9) 1 x) (f 2)))       ; ... and INDEXES: ('(7 8 9) 1) folds to 8, leaving (8 x)
  (= 1 (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the DEFAULT action
  ; ⚠ and a numeral whose answer OUTGROWS a charm stays residual rather than baking into the image:

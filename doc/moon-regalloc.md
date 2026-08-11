@@ -204,10 +204,12 @@ Learned by measuring, several times each; check a new lever against these before
    pins' true reload stores (both priced, both earning their keep). PARAMS
    SEATED, pmin-GATED 2026-08-11 (the callish cs homes, the ledger): a priced
    callish fn whose EVERY path calls homes its params on callee-saved seats,
-   wrap-free. The dispatch fleet's fat grant measured +2.7% dynamic insns and
-   was pulled -- its fast paths pay the prologue and earn nothing; taking that
-   traffic needs shrink-wrapping (saves at the callish region's head), which
-   is this leg's next boundary.
+   wrap-free. SHRINK-WRAP BUILT AND SCOPED 2026-08-11 (the ledger): the wrap
+   machinery landed (statement-level split, dual-epilogue sibs, pminp), and
+   its A/B ladder settled the fleet question -- pp's per-call wraps are
+   COLD-PATH wraps, dynamically right for the early-out profile; the static
+   8 KB they represent is already-paid-for at runtime, and beating them needs
+   a frequency signal (PGO), not a better static model.
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -623,6 +625,35 @@ insns 40.95 G to the third digit, cycles −0.9%. The machinery (grant plumbing,
 dirty-load pricing, pmin) is the substrate; the fleet's 8 KB waits on SHRINK-WRAP —
 saves at the callish region's head instead of the prologue, so a fast path never
 pays — which is this leg's next boundary.
+2026-08-11 · shrink-wrap (the cs grant's second flavor, for the early-out fns pmin
+declines): the wrap moves off the prologue — region 1 (the call-free statement
+prefix) runs the pre-rung emission unchanged, params in slots and the PLAIN
+epilogue; at the split build lays a minted label + seat saves + slot→seat loads and
+flips the epilogue pin; region 2 rides the seats wrap-free. The machinery: build
+splits the statement list (cgitemx threads region-1 decls' env across), sibs
+matches tails against TWO epilogues picked by which side of the wrap label the
+candidate sits (sibjmp emits the one that matched — a region-1 tail reloading
+unsaved seats would corrupt the caller), goto/lbl bars the grant (a cross-region
+jump skips or re-runs the wrap), and cskeep verifies unchanged — its dirty-set
+fixpoint was built for path-dependent saves. The recovery passes then finish the
+job unasked: stld folds the wrap's slot loads to arrival movs and deadst sweeps
+the entry stores, so the probe's fast path is byte-identical to pre-rung. THE
+EMPIRICAL LADDER is the story: contending pp for the dispatch fleet measured
++1.0% dynamic insns (fat grant: +2.7%) — lvm_eq alone +0.55 G — because pp's
+per-call wraps are COLD-PATH wraps: the hot early-out path keeps its registers
+and the wrap movs execute only where calls do. Every static model tried (dirty
+loads, wrap-benefit, region-1 read debit) approved grants the corpus refuted;
+the pp fleet's 8 KB of wrap bytes is dynamically already-paid-for, and only a
+frequency signal (PGO) can beat a cold-path wrap. The landed scope: !pp, every
+call-carrying path ≥ 2 calls (pminp, pmin's positive twin), dirty-load priced —
+one grant in love.c (ai_big_quot_true) plus the ez cs arm (a seat param arg is
+targetable unconditionally: staging never writes callee-saved and no sibling's
+call clobbers it), net −39 static insns, corpus insns EXACT to four digits
+(40.95 G), cycles flat. Pays a little, regresses nowhere; the machinery is the
+substrate the frequency-driven grant will ride. Residues: sk=0 shapes (cmp3 —
+first statement callish, needs a form-level wrap point), big_addsub-shaped
+declines (call-carrying paths whose dirty loads are thin), and the fleet itself
+(waits on PGO).
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

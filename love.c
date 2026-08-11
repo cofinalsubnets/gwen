@@ -484,6 +484,42 @@ static ai_inline word mk_sun(ai_word **hpp, intptr_t v) {
  struct ai_sun *w = (struct ai_sun*) *hpp; *hpp += sun_req;
  w->ap = lvm_sunbox; w->w = v; return word(w); }
 
+// a tray key -> a row-major element offset: a fixnum on a rank-1 tray, else a
+// shape-list of `rank` fixnums. -1 = wrong rank or out of bounds (the caller's miss
+// lane). peep reads through it, pin writes through it: one index law. ⚠ answers by
+// VALUE, never through an out-param: an escaping &local costs its caller the tail jump.
+static intptr_t tray_off(struct ai_tray *v, word k) {
+ if (v->rank == 1 && charmp(k)) {
+  intptr_t ix = getcharm(k);
+  return ix >= 0 && ix < (intptr_t) v->shape[0] ? ix : -1; }
+ if (!chainp(k)) return -1;
+ uintptr_t a = 0, o = 0;
+ for (word l = k;; l = B(l)) {
+  if (!chainp(l)) return a == v->rank ? (intptr_t) o : -1;
+  word ki = A(l);
+  if (a >= v->rank || !charmp(ki)) return -1;
+  intptr_t ix = getcharm(ki);
+  if (ix < 0 || ix >= (intptr_t) v->shape[a]) return -1;
+  o = o * v->shape[a] + (uintptr_t) ix, a++; } }
+
+// store x at element i, converting to v's tier: O takes any value verbatim, C packs
+// (re,im) (a real rides in as (r,0)), R/Z take a number. false = a non-number into a
+// numeric tray, which leaves the slot alone. ⚠ v is the CALLER's fresh tray -- an
+// object slot gaining a young word needs no barrier only because nothing old is written.
+static bool tray_put(struct ai_tray *v, uintptr_t i, word x) {
+ if (v->type == ai_O) return tray_put_obj(v, i, x), true;
+ if (v->type == ai_C) {
+  ai_flo_t *fp = tray_data(v);
+  if (twinp(x)) fp[2*i] = twin_re(x), fp[2*i+1] = twin_im(x);
+  else if (isnum(x)) fp[2*i] = toflo(x), fp[2*i+1] = 0;
+  else return false;
+  return true; }
+ if (!isnum(x)) return false;
+ if (v->type >= ai_R) tray_put_flo(v, i, toflo(x));
+ else tray_put_int(v, i, charmp(x) ? (intptr_t) getcharm(x)
+                      : gemp(x) ? (intptr_t) gem_get(x) : sun_get(x));
+ return true; }
+
 // equality comparisons inline the fast identity check
 ai_noinline bool eqv(struct ai*, word, word); // this is for checking equality of non-identical values
 static bool eqv_at(struct ai*, word, word, word*); // eqv with an explicit worklist base (for re-entrant calls from the beta bridge)
@@ -4090,19 +4126,7 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
    // array index: a fixnum (rank-1) or a row-major shape-list (rank-N);
    // out-of-bounds or wrong rank falls through to the default
    struct ai_tray *v = tray(x);
-   uintptr_t R = v->rank, off = 0; bool ok = false;
-   if (R == 1 && charmp(k)) {
-    intptr_t ix = getcharm(k);
-    if (ix >= 0 && ix < (intptr_t) v->shape[0]) off = ix, ok = true; }
-   else if (chainp(k)) {
-    uintptr_t a = 0; ok = true;
-    for (word l = k;; l = B(l)) {
-     if (!chainp(l)) { ok = a == R; break; }
-     word ki = A(l);
-     if (a >= R || !charmp(ki)) { ok = false; break; }
-     intptr_t ix = getcharm(ki);
-     if (ix < 0 || ix >= (intptr_t) v->shape[a]) { ok = false; break; }
-     off = off * v->shape[a] + ix, a++; } }
+   intptr_t o = tray_off(v, k); uintptr_t off = (uintptr_t) o; bool ok = o >= 0;
    if (ok && v->type == ai_O) z = tray_get_obj(v, off);   // object: the slot IS the value
    else if (ok && v->type == ai_C) {                       // packed complex -> a (re,im) box
     Have(twin_req); v = tray(Sp[0]);                      // re-read coll (Sp[0]) post-Have
@@ -4124,20 +4148,54 @@ lvm(lvm_peep) {                                // (peep coll key default): colle
     if (chainp(x)) z = A(x); } }
  ai_musttail return Answerp(2, z); }
 
-// (pin coll key val): map insert, or a cask byte store; both answer coll.
-// out-of-range/non-numeric is a silent no-op, the byte ops' misuse convention.
+// (pin coll key val): a map or a cask has a cell, so the write is in place and the SAME
+// collection answers; text, a chain and a tray have none, so a FRESH one carrying the pin
+// answers -- the functional update. (peep (pin c k v) k d) = v wherever the pin lands;
+// a rank-0 scalar is the one kind peep reads that pin does not write (there is no cell to
+// replace, only the value itself). out-of-range/wrong-kind is a silent no-op answering
+// coll, the byte ops' misuse convention.
 lvm(lvm_pin) {
  word x = Sp[0], n;                              // coll
  if (tabp(x)) {
   Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // ai_mapput wants (sp0,sp1,sp2)=(key,val,coll)
   Pack(g);
   if (!ai_ok(g = ai_mapput(g))) return ghelp(g);
-  Unpack(g); }
- else {
-  if (caskp(x) && charmp(Sp[1]) && (n = getcharm(Sp[1])) >= 0 && n < (word) len(cask(x)->str))
+  Unpack(g);
+  ai_musttail return Next(1); }
+ if (caskp(x)) {
+  if (charmp(Sp[1]) && charmp(Sp[2]) && (n = getcharm(Sp[1])) >= 0 && n < (word) len(cask(x)->str))
    txt(cask(x)->str)[n] = (char) getcharm(Sp[2]);    // index = key = Sp[1], val = Sp[2]
-  Sp[2] = x, Sp += 2; }                           // leave coll as the result
- ai_musttail return Next(1); }
+  ai_musttail return Answerp(2, x); }
+ if (lamp(x) && datp(x)) switch (typ(x)) {
+  default: break;                                // a mint, a scalar: nothing to pin into
+  case DString: {                                // one byte replaced in a fresh text
+   if (!charmp(Sp[1]) || !charmp(Sp[2])) break;
+   if ((n = getcharm(Sp[1])) < 0 || n >= (word) len(x)) break;
+   uintptr_t sz = len(x), req = str_type_width + b2w(sz);
+   Have(req);
+   struct ai_str *s = ini_str(str(Hp), sz); Hp += req;
+   memcpy(s->bytes, txt(Sp[0]), sz);             // re-read coll: the Have may have moved it
+   s->bytes[n] = (char) getcharm(Sp[2]);
+   ai_musttail return Answerp(2, word(s)); }
+  case DChain: {                                 // the prefix copied, the tail SHARED
+   if (!charmp(Sp[1]) || (n = getcharm(Sp[1])) < 0 || n >= (word) llen(x)) break;
+   Have((uintptr_t) (n + 1) * Width(struct ai_chain));
+   struct ai_chain *w = (struct ai_chain*) Hp, *base = w;
+   Hp += (uintptr_t) (n + 1) * Width(struct ai_chain);
+   word l = Sp[0];                               // re-read coll post-Have
+   for (word i = 0; i < n; i++, w++, l = B(l)) ini_chain(w, A(l), word(w + 1));
+   ini_chain(w, Sp[2], B(l));                    // the pinned cell, then the old tail
+   ai_musttail return Answerp(2, word(base)); }
+  case DTray: {                                  // the whole payload copied, one slot stored
+   intptr_t o = tray_off(tray(x), Sp[1]);
+   if (o < 0) break;
+   uintptr_t req = b2w(ai_tray_bytes(tray(x)));
+   Have(req);
+   struct ai_tray *v = (struct ai_tray*) Hp; Hp += req;
+   memcpy(v, tray(Sp[0]), ai_tray_bytes(tray(Sp[0])));   // re-read coll post-Have
+   if (!tray_put(v, (uintptr_t) o, Sp[2])) { Hp -= req; break; }   // a non-number into a numeric tray
+   ai_musttail return Answerp(2, word(v)); } }
+ ai_musttail return Answerp(2, x); }
 
 // (pull coll key default): remove key from a map, answering its value or default
 // (symmetry with peep); a non-map coll yields default
@@ -6575,18 +6633,7 @@ lvm(lvm_trayctor) {
  if (ty == ai_O) for (i = 0; i < nelem; i++) tray_put_obj(v, i, ZeroPoint);  // O floor is () not 0
  else memset(tray_data(v), 0, nelem * ai_T[ty]);
  i = 0;                                        // no alloc below, so v/Sp[2] stay put
- for (word l = Sp[2]; chainp(l) && i < nelem; l = B(l), i++) {
-  word e = A(l);
-  if (ty == ai_O) { tray_put_obj(v, i, e); continue; }   // store any value verbatim
-  if (ty == ai_C) {                                        // pack (re,im): a real -> (r,0)
-   ai_flo_t *fp = tray_data(v);
-   if (twinp(e)) fp[2*i] = twin_re(e), fp[2*i+1] = twin_im(e);
-   else if (isnum(e)) fp[2*i] = toflo(e), fp[2*i+1] = 0;
-   continue; }
-  if (!isnum(e)) continue;
-  if (ty >= ai_R) tray_put_flo(v, i, toflo(e));
-  else tray_put_int(v, i, charmp(e) ? (intptr_t) getcharm(e)
-                       : gemp(e) ? (intptr_t) gem_get(e) : sun_get(e)); }
+ for (word l = Sp[2]; chainp(l) && i < nelem; l = B(l), i++) tray_put(v, i, A(l));
  // only a RANK-0 point (empty shape) demotes to its lone scalar gem; a
  // rank-1-len-1 STAYS an array (@(5) is a one-cell array, not 5 -- collapsing it
  // left the surface discontinuous). root the built tray: the box alloc can GC.

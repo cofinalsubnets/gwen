@@ -355,7 +355,12 @@
  (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ...nor an OBJECT tray: boxed cells, not words
  (: m @(1 3 5 7 9) (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine: the everyday customer
  (: M (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)))  ; 2x2 matmul
-    (&& ('(2 2) = (shape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2)))
+    (&& ('(2 2) = (shape M)) (154 = (peep M '(1 1) 0)))) !(inner @(1 2 3) @(1 2))
+ ; a tray is immutable, so pin answers a FRESH one -- one slot replaced, the rest copied
+ (@(1 9 3) = (pin @(1 2 3) 1 9)) (: v @(1 2 3) _ (pin v 1 9) (@(1 2 3) = v))
+ (@(7.0 2.5) = (pin @(1.5 2.5) 0 7))                       ; the value converts to the tray's TIER, as the ctor's fill does
+ (@(1 2 3) = (pin @(1 2 3) 1 'x)) (@(1 2 3) = (pin @(1 2 3) 9 5))   ; ...so a non-number into a numeric tray, or a miss, is the no-op
+ (: m (star-tray '(2 2) '(1 2 3 4)) (9 = (peep (pin m '(1 0) 9) '(1 0) 0))))   ; the shape-list key writes where it reads
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
 ; the compounds); sort/sortby by the total order; (jot n) the first n charms; the higher-order
@@ -377,6 +382,10 @@
  (1 = ('(7 8 9) 3)) (1 = ('(7 8 9) -4)) (1 = ('(7 8 9) 'x)) (1 = ('(7 8 9) ()))  ; out of range, and every non-index operand, is the unit
  ('(1 2 3 4) = ('(1 2) '(3 4))) (('(1 2) '(3 4)) = (+ '(1 2) '(3 4)))            ; a chain juxtaposes: the append, agreeing with +
  ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ... and it curries, as text does
+ ('(1 X 3) = (pin '(1 2 3) 1 'X)) (: l '(1 2 3) _ (pin l 1 'X) ('(1 2 3) = l))   ; pin answers a FRESH spine; the original is untouched
+ (: a '(1 2 3 4 5) b (pin a 1 'X) (id? (cuup a) (cuup b)))                       ; ... the prefix is copied, the tail past the pin SHARED
+ ('(1 2 3) = (pin '(1 2 3) 3 'X)) ('(1 2 3) = (pin '(1 2 3) -1 'X))              ; out of range is the no-op (from-the-end is APPLY's alone)
+ (: p (pin (link 1 2) 0 'X) (&& ('X = (cap p)) (2 = (cup p))))                   ; ... the tail is whatever was there: an IMPROPER one rides too
  (294 = $'(a b c)) (3 = (tally '(a b c))))  ; net sums spellings; tally counts the spine
 
 ; --- strings, symbols & mints --- a symbol is interned; (mint 0) adjoins a fresh nameless POINT
@@ -415,6 +424,8 @@
  ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
  ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (+ a b)))   ; juxtaposition joins text, curried, no literal needed
  (99 = ("abc" -1)) (97 = ("abc" -3)) (1 = ("abc" -4))   ; a negative index counts from the END; past the front is out of range
+ ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))   ; pin answers a FRESH text; the original is untouched
+ ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))  ; out of range / a non-byte is the no-op (from-the-end is APPLY's alone)
  ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) (1 = ("ab" 'cd)) (1 = ("ab" '(1 2)))   ; "" is the unit; a non-text operand stays const-1
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("(mint " = (snip (show (mint 0)) 0 6)))   ; a mint prints (mint <serial>) (diagnostic, not an exact reparse)
@@ -427,7 +438,16 @@
 ; peep is also the PRESENCE test, and a total one: a fresh (mint 0) is unique, so no stored
 ; value can pose as it -- (id? s (peep t k s)) tells absence from every value INCLUDING the
 ; empty ones, which is the out-of-band presence the ⚠ wrapper law asks for.
+; PIN LANDS WHEREVER PEEP READS, and the collection decides HOW: a tablet or a cask has a cell,
+; so the write is in place and the SAME collection answers; text, a chain and a tray have none,
+; so a FRESH one carrying the pin answers -- the functional update. (peep (pin c k v) k d) = v
+; either way; only the mutable kinds show the pin to a second holder. the sections below carry
+; each kind's own line. ⚠ a rank-0 scalar is the one thing peep reads that pin does not write:
+; peep at 0 answers the scalar itself, so there is no cell to replace, only the value.
 (assert
+ (50 = (peep (pin (tablet 0) 5 50) 5 0)) (99 = (peep (pin "abc" 1 99) 1 0))    ; the pin law, mutable and not
+ (9 = (peep (pin '(1 2 3) 2 9) 2 0)) (9 = (peep (pin @(1 2 3) 0 9) 0 0))
+ (5 = (pin 5 0 1)) (1.5 = (pin 1.5 0 1))         ; ⚠ ...and the scalar exception: nothing to write
  (: b #0 (&& (tablet? b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
  (tablet? #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
  (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
@@ -463,6 +483,8 @@
  (: b (cask 3) _ (pin b 0 65) (65 = (peep b 0 0))) (0 = $(cask 4)) (4 = (tally (cask 4)))
  !(cask 3) (65 = (: b (cask 1) _ (pin b 0 65) $b))  ; zeroed -> nothing; bytes are charms (lockstep at bufs)
  (: b (cask 1) _ (pin b 0 257) (1 = (peep b 0 0))) (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (68 = (peep b 3 0)))
+ (: b (cask 1) _ (pin b 0 "x") (0 = (peep b 0 -1)))  ; a byte pin takes a CHARM: anything else writes nothing
+ (: b (cask 1) (id? b (pin b 0 65)))                 ; ...and a cask has a cell, so the pin is in place: the SAME buffer answers
  (: b (cask '(200 65 0 255)) (&& (4 = (tally b)) (&& (200 = (peep b 0 0)) (255 = (peep b 3 0)))))   ; the charlist lane: high bytes and an embedded NUL ride
  (: b (cask '(65 66)) ("AB" = (string b)))          ; ... and it reads back as those bytes (identity equality, so compare CONTENT)
  ("" = (cask ())) ("" = (cask 0))                   ; no empty cask: both empties ARE ""
