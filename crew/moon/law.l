@@ -1109,6 +1109,25 @@
                               (= <l '(align 2)) ()
                               (<l >< take >l))
                   (take (seek fs)))
+   ; the SEAT is repack's to choose, so no law pins an offset: stores/loads match by shape
+   ; and an offset binds only WITHIN a pair (a save must restore from its own slot)
+   (stofs fs op rg) (? !(two? fs) ()
+                       (: f2 <fs r (stofs >fs op rg)
+                          (? (two? f2 && (<f2 = op) && (<>f2 = 'sp) && (<>>>f2 = rg))
+                             (<>>f2 >< r) r)))
+   (ldofs fs op rg) (? !(two? fs) ()
+                       (: f2 <fs r (ldofs >fs op rg)
+                          (? (two? f2 && (<f2 = op) && (<>f2 = rg) && (<>>f2 = 'sp))
+                             (<>>>f2 >< r) r)))
+   (wrapon? rg fs) (two? (stofs fs 'st rg))
+   (cspair? fs rg)                                  ; some slot holds rg's save/restore pair, once each
+    (: so (stofs fs 'st rg) lo (ldofs fs 'ld rg)
+       (once k l) (: (go e n) (? !(two? e) n (go >e (? (<e = k) (n + 1) n))) (go l 0))
+       (seek l) (? !(two? l) ()
+                   (: k <l (? (((once k so) = 1) && ((once k lo) = 1)) 1 (seek >l))))
+       (seek so))
+   (spillrd? fs srg lop lrg) (: so (stofs fs 'st srg)             ; a spill some lop re-reads
+                                (? !(two? so) () (member? <so (ldofs fs lop lrg))))
    pre9 "long g(long x); "
    irD (cgn (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
    irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
@@ -1119,7 +1138,7 @@
       (= 0 (wraps (fnf 'f <>irD)))                   ; dead across the call: no spills at all
       (= 2 (wraps (fnf 'h <>irL)))                   ; live across: both homes keep their wrap
       (= 1 (wraps (fnf 'q <>irS)))                   ; the shadowed a's blanket; b's own still drops
-      (member? '(st sp 32 r6) (fnf 'q <>irS))        ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
+      (wrapon? 'r6 (fnf 'q <>irS))                   ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
       (= 2 (wraps (fnf 'w <>irG))))                  ; a goto fn wraps everything
    ; -- callee-saved locals (the cs lane): a local touched under NESTED loops (depth >= 2)
    ; homes on r11..r14 (machine r12-r15) even while it CROSSES calls -- the callee preserves
@@ -1131,17 +1150,12 @@
    ; never touches memory and both loop conds run register-register.
    irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
    qf (fnf 'ql <>irQ)
-   (occ f2) (: (go l n) (? !(two? l) n (go >l (? (= <l f2) (n + 1) n))) (go qf 0))
    _ (assert
       (two? irQ)
-      (= 1 (occ '(st sp 56 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
-      (= 1 (occ '(ld r11 sp 56)))                    ; s's restore, ONCE (epilogue)
-      (= 1 (occ '(st sp 64 r12)))                    ; j's pair likewise
-      (= 1 (occ '(ld r12 sp 64)))
-      (= 1 (occ '(st sp 72 r13)))                    ; the borrow pairs: i's seat saves like a home
-      (= 1 (occ '(ld r13 sp 72)))
-      (= 1 (occ '(st sp 80 r14)))                    ; ...and seeded n's
-      (= 1 (occ '(ld r14 sp 80)))
+      (cspair? qf 'r11)                              ; s's save/restore pair, ONCE each -- the calls never wrap it
+      (cspair? qf 'r12)                              ; j's pair likewise
+      (cspair? qf 'r13)                              ; the borrow pairs: i's seat saves like a home
+      (cspair? qf 'r14)                              ; ...and seeded n's
       (member? '(mov r14 r5) qf)                     ; n enters its seat straight from the arrival
       (member? '(cmp r13 r14) qf)                    ; both conds register-register
       (member? '(cmp r12 r14) qf)
@@ -1201,8 +1215,7 @@
    yf (fnf 'lf <>irY)
    _ (assert
       (two? irY)
-      (member? '(st sp 32 r11) yf)                   ; s saves (prologue), homes r11
-      (member? '(ld r11 sp 32) yf)                   ; ...and restores (epilogue)
+      (cspair? yf 'r11)                              ; s saves (prologue), homes r11, restores (epilogue)
       (member? '(add r12 r12 1) yf)                  ; i steps on its home, register-only
       (member? '(add r13 r13 1) yf)                  ; j likewise
       (= 3 (splds yf)))                              ; the ONLY sp loads are the three restores
@@ -1217,7 +1230,7 @@
       (two? irZ)
       (member? '(sx4 r2) zf)                         ; na rides its arrival, canonicalized once
       (member? '(cmp r11 r2) zf)                     ; ...and the bound compare reads it register-register
-      (member? '(st sp 32 r7) zf)                    ; nb's dropped ride lands in its slot
+      (wrapon? 'r7 zf)                               ; nb's dropped ride lands in its slot
       (member? '(sx4 r11) zf)                        ; i's defs re-narrow: the home stays canonical
       (member? '(add r11 r11 1) zf)                  ; i on its cs home
       (= 2 (splds zf)))                              ; full-word sp loads: only the two cs restores
@@ -1227,8 +1240,7 @@
    zpf (fnf 'h3 <>irZp)
    _ (assert
       (two? irZp)
-      (member? '(st sp 48 r6) zpf)                   ; n spills at entry...
-      (member? '(ld4 r0 sp 48) zpf))                 ; ...and every read re-extends from the slot
+      (spillrd? zpf 'r6 'ld4 'r0))                   ; n spills at entry, every read re-extends from the slot
    ; ...and the callish accumulator s now RIDES: the aim hold lets `s += ext(..)` keep s
    ; on a borrowed cs seat through the call (the write re-establishes in the seat), the
    ; exit meet carries it OUT of the loop (the return reads the seat), and with the slot
@@ -1261,8 +1273,7 @@
       (member? '(ldx r9 r6 r5 8 0) ihf)              ; ...and indexes register-resident, delivered
                                                      ;    straight to the bin die's park (no r0 hop)
       (= 0 (splds ihf))                              ; no slot traffic at all: f4 runs bare
-      (member? '(st sp 16 r7) ipf)                   ; f5: n spills -- the pool ends at two...
-      (member? '(ld4 r0 sp 16) ipf)                  ; ...and the loop re-reads the slot
+      (spillrd? ipf 'r7 'ld4 'r0)                    ; f5: n spills (the pool ends at two), the loop re-reads the slot
       !(member? '(sx4 r5) idf))                      ; a read-free param earns nothing
    ; -- d128 LOCALS home as CS PAIRS: a loop-carried __int128 local takes (lo hi) off the
    ; cs pool (callee-saved: call-safe, no wraps, and no operand-pool pressure -- the wpk
@@ -1347,7 +1358,11 @@
    irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
    (assert
       (two? irB)
-      (member? '(ld r10 sp 16) <>irB)                 ; n's seed, laid before the head
+      (: (sld? l) (? !(two? l) ()                     ; n's seed, laid before the head --
+                     (: f2 <l                         ;  the seat is repack's, so no offset pins
+                        (? (two? f2 && (<f2 = 'ld) && (<>f2 = 'r10) && (<>>f2 = 'sp)) 1
+                           (sld? >l))))
+         (sld? <>irB))
       (member? '(cmp r9 r10) <>irB)                   ; the cond rides it
       (member? '(imul r7 r9 r9) <>irB)                ; i*i on the home, 3-address
       (member? '(add r5 r5 r7) <>irB)                 ; s accumulates in its home
@@ -1460,7 +1475,11 @@
    wf (fnf 'wv <>irW)
    _ (assert
       (two? irW)
-      (member? '(st sp 0 r6) wf)                     ; the written param p spills off a's ride...
+      (: (sst? l) (? !(two? l) ()                    ; the written param p spills off a's ride...
+                     (: f2 <l                        ;  (the seat is repack's, so no offset pins)
+                        (? (two? f2 && (<f2 = 'st) && (<>f2 = 'sp) && (<>>>f2 = 'r6)) 1
+                           (sst? >l))))
+         (sst? wf))
       !(member? '(add r6 r6 1) wf)                   ; ...and a's ride is never walked
       (member? '(cmp r7 r5) wf))                     ; lim, never written, still aliases n's ride
    irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
@@ -1748,6 +1767,14 @@
    (ldsp fs off) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp && (= off <>>>f))) fs))
    (stsp fs off) (tally (filter (\ f (two? f && member? <f '(st si) && id? <>f 'sp && (= off <>>f))) fs))
    (leac fs) (tally (filter (\ f (two? f && member? <f '(lea lean))) fs))
+   ; the whole-frame twins and the array-base anchor (repack seats the array, so the laws
+   ; that survive slot traffic speak RELATIVE to the lea the escape leaves standing)
+   (ldspa fs) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp)) fs))
+   (stspa fs) (tally (filter (\ f (two? f && member? <f '(st si) && id? <>f 'sp)) fs))
+   (aeb fs) (: (go l) (? !(two? l) ()
+                         (: f <l (? (two? f && member? <f '(lea lean) && id? <>>f 'sp)
+                                    <>>>f (go >l))))
+                (go fs))
    irA (cgn "long f(long a, long b) { long x[4]; x[0] = a; x[1] = b; x[2] = x[0] + x[1]; x[3] = x[0] + x[2] + x[1]; return x[3] - x[2]; } long u(long a) { long x[2]; x[0] = a; long t = x[0] + x[0]; x[0] = t + 1; return t*10 + x[0]; } long u2(long a, long b) { long x[2]; x[0] = a + 1; long t = x[0]; x[0] = b; return t*10 + x[0]; } long v(long a, long i) { long x[2]; x[0] = a; x[1] = a + 3; long s = x[0] + x[1]; x[i] = 9; return s*100 + x[0] + x[1]; } long e(long a) { long x[2]; long *p = x; x[0] = a; p[0] = 5; return x[0] + x[0]; } long gg; long q0(void) { long x[2]; x[0] = gg; x[1] = gg + 1; x[0] = x[0] + x[1]; return x[0] + x[1] + x[1]; } int main() { return 0; }")
    ff (fnf 'f <>irA)
    uf (fnf 'u <>irA)
@@ -1761,23 +1788,21 @@
       ; canonical value in a pool register and pins (honored free, unhonored one mov --
       ; dead if never re-read), so a call-free fn's eligible traffic registerizes FULLY:
       ; no loads, no frame address, and deadst elides every write-only slot's stores. --
-      (= 0 (ldsp ff 8))  (= 0 (ldsp ff 16))          ; f: all element reads ride pins
-      (= 0 (ldsp ff 24)) (= 0 (ldsp ff 32))
+      (= 0 (ldspa ff))                               ; f: all element reads ride pins -- no slot load at all
       (= 0 (leac ff))                                ; no lea/lean: every touch frame-direct
-      (= 0 (stsp ff 24)) (= 0 (stsp ff 32))          ; no slot is ever read: stores ELIDED whole
-      (= 0 (ldsp uf 8))                              ; the write re-pins: reads-after-write zero forms
-      (= 0 (ldsp u2f 8))                             ; the homed-var rhs that DECLINED the hint now
+      (= 0 (stspa ff))                               ; no slot is ever read: stores ELIDED whole
+      (= 0 (ldspa uf))                               ; the write re-pins: reads-after-write zero forms
+      (= 0 (ldspa u2f))                              ; the homed-var rhs that DECLINED the hint now
                                                      ;   FORCES: one mov re-establishes, no reload
-      (= 1 (ldsp vf 8))                              ; x[i]=9 drops the whole array: x[0] reloads
-      (= 1 (ldsp vf 16))                             ;   after (each pre-drop read rode its pin)
-      (= 1 (stsp vf 8))                              ; the variable write keeps slots LIVE (a lea
+      (= 1 (ldsp vf (aeb vf)))                       ; x[i]=9 drops the whole array: x[0] reloads
+      (= 1 (ldsp vf ((aeb vf) + 8)))                 ;   after (each pre-drop read rode its pin)
+      (= 1 (stsp vf (aeb vf)))                       ; the variable write keeps slots LIVE (a lea
                                                      ;   stands): write-through survives here
-      (= 2 (ldsp ef 16))                             ; bare x escaped: no pin, every read loads
+      (= 2 (ldsp ef (aeb ef)))                       ; bare x escaped: no pin, every read loads
       ; -- the leg licenses its own regen (nothing else pays in q0: no params, no
       ; scalar locals -- without the au license the vmap never arms here) --
-      (= 0 (ldsp q0f 8))                             ; x[0] rides its forced pin end-to-end
-      (= 0 (ldsp q0f 16))                            ; x[1]: all three reads ride the write-pin
-      (= 0 (stsp q0f 16))                            ; ...so the slot is write-only and the store drops
+      (= 0 (ldspa q0f))                              ; x[0] and x[1]: every read rides its pin
+      (= 0 (stspa q0f))                              ; ...so the slots are write-only and the stores drop
       (= 0 (leac q0f))))                             ; frame-direct throughout
 
 ; -- loop-head survival (the vmap crossing its first boundary): at a loop head the pinned
@@ -1797,6 +1822,10 @@
                               (<l >< take >l))
                   (take (seek fs)))
    (ldsp fs off) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp && (= off <>>>f))) fs))
+   (aeb fs) (: (go l) (? !(two? l) ()                 ; the array's base: the lea its mid-loop drop leaves standing
+                         (: f <l (? (two? f && member? <f '(lea lean) && id? <>>f 'sp)
+                                    <>>>f (go >l))))
+                (go fs))
    (ldc fs) (tally (filter (\ f (two? f && member? <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && id? <>>f 'sp)) fs))
    (stc fs) (tally (filter (\ f (two? f && member? <f '(st st1 st2 st4 si si1 si2 si4) && id? <>f 'sp)) fs))
    (leac fs) (tally (filter (\ f (two? f && member? <f '(lea lean))) fs))
@@ -1824,10 +1853,10 @@
       (= 4 (ldc lp4f)) (= 4 (stc lp4f))                     ; ...so i/s never touch their slots at all -- the only
                                                             ;    sp traffic is the park pair + three cs save/restores
       (= 0 (ldc lo6f)) (= 0 (stc lo6f))                     ; nested: the outer keeps survive the inner loop
-      (2 <= ldsp lo7f 16)                                   ; x[i&1]=i drops x[0] mid-loop: the edge CHECK barred the
+      (2 <= ldsp lo7f (aeb lo7f))                           ; x[i&1]=i drops x[0] mid-loop: the edge CHECK barred the
                                                             ;   keep (a zero-miss build ships) -- x[0] reloads in-loop
                                                             ;   AND after (2+; an unbarred keep would serve the first)
-      (= 1 (ldsp lo7f 24))                                  ; x[1], dropped too, reloads once after the loop
+      (= 1 (ldsp lo7f ((aeb lo7f) + 8)))                    ; x[1], dropped too, reloads once after the loop
       ; -- lo8: a call AFTER the loop bars the homes (s/i/b cross it) but the loop itself
       ; keeps, so the counters ride the vmap: b = n re-establishes by FORCE (the regv rhs
       ; that ignores the aim), i++ steps in its pinned register (the kept post twin), and

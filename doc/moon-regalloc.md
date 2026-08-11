@@ -583,6 +583,34 @@ substrate the frequency-driven grant will ride. Residues: sk=0 shapes (cmp3 —
 first statement callish, needs a form-level wrap point), big_addsub-shaped
 declines (call-carrying paths whose dirty loads are thin), and the fleet itself
 (waits on PGO).
+2026-08-11 · SLOT REPACK + object-precise deadst (the frame lever the fifth
+diff fill named: nslot never hands a cell twice, so a frame is the COUNT of its
+temporaries — 27% of love.c's fns carried >128 B frames and 11 K stack movs paid
+disp32; deadst's whole-fn lea bar hid 11 KB of dead stores, ALL of them in the 160
+lea-carrying fns). Two pieces on one substrate, the slot map: nslot registers every
+cell in g 'slots ((off n)..), deadst's lea arm marks the OBJECT under the lea live
+(the granule refinement its own ⚠ said would lie — the map is what makes it honest;
+an unclaimed lea still bars whole), and repack — POST-CHOICE, between deadlab and
+unframe — packs objects whose live windows never meet into shared cells and shrinks
+the sub. Windows are form-index spans widened over every backedge to a fixpoint
+(linear-scan's loop extension); an address-taken object relocates whole (the lea
+moves with it) but lives to the last form and only 8-byte cells pool (wider cells
+place fresh, 16-parity held); bars mirror unframe's law (raw, loose r4, unclaimed
+touch, -8 pinned); ships only when the sub shrinks. THE PLACEMENT is the payload
+lesson: the first build ran repack inside the per-attempt pipeline and the corpus
+laws caught ql's cs lane wrapping — the rankers price param slots BY BUILD OFFSET
+(nreads/nrac/pslots), so a packed ir1 misprices every grant. Post-choice, with
+deopt restoring ir1's slot map beside the accumulators, the rankers read unpacked
+ir and the winner packs once. .text 585,440→560,864 (−24.6 KB, −4.2%), the movq
+$imm fold-residue stores −6.4 KB, dead stores −4.6 KB, median frame 72→40 B,
+disp32 stack movs 11,055→9,711; corpus dyn insns −0.25% (40.746→40.646 G), boot
+−0.60%, corpus green through the packed binary, fixpoint + vmret + the moon
+battery green. The law churn was the offsets: save/restore laws re-anchored by
+SHAPE (cspair?/spillrd?/wrapon? — the offset binds within the pair, the seat is
+repack's to choose), array laws by the lea base (aeb). Residues: 16-byte cells
+never pool (parity insurance), sk-anchored fns keep old layout on any bail, and
+slot canonicalization now makes link-time ICF worth re-measuring (~0.5 KB today
+because offsets de-canonicalized identical bodies).
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
