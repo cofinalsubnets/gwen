@@ -68,8 +68,8 @@ syn keyword LoveBook tier top-tray trap tray? trickle ttyfg turn turnf
 syn keyword LoveBook twin twin-tray twin? twirl two? u2 u2app udp-bind
 syn keyword LoveBook udp-recv udp-send ufail? uglo umask unfold unify unlink
 syn keyword LoveBook unsee use utime uu uu2l vapp var var?
-syn keyword LoveBook vof vof-spine vof-sym vsucc wait walk welp wet
-syn keyword LoveBook wheel whole? winsize wrap zero? zip
+syn keyword LoveBook vof vof-spine vof-sym vsucc wait walk wear welp
+syn keyword LoveBook wet wheel whole? winsize worn wrap zero? zip
 syn keyword LoveConst C Q born e false i id love-arch
 syn keyword LoveConst love-tco love-version max-charm min-charm pi tau true ufail
 syn keyword LoveMacro && , :- <=< >>= ?- L \\\\

@@ -58,12 +58,14 @@ all: love.js
 # in a wasm-local copy: same revision, honest about being the browser build. -I$(o) wins
 # the quote-include over ../out/lib, so the host build's honest -dirty is untouched.
 $(o)/love_version.h: ../out/lib/love_version.h
+	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@sed 's/-dirty"/-wasm"/' $< > $@
 
 $(o)/love.o: ../love.c $(g_h) $(o)/love_version.h
+	@echo CC	$@
 	@mkdir -p $(dir $@)
-	$(emcc) -I$(o) $(CFLAGS) -c $< -o $@
+	@$(emcc) -I$(o) $(CFLAGS) -c $< -o $@
 
 # the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply
 # only here. Spelled ONCE for two places: `love.js` is the COMMITTED artifact refreshed by
@@ -72,23 +74,27 @@ $(o)/love.o: ../love.c $(g_h) $(o)/love_version.h
 emlink = $(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
 love.js: $(objs)
-	$(emlink)
+	@echo LD	$@
+	@$(emlink)
 
 $(o)/love.js: $(objs)
+	@echo LD	$@
 	@mkdir -p $(dir $@)
-	$(emlink)
+	@$(emlink)
 
 # what test_wasm asks for: the link, out of tree.
 .PHONY: gate
 gate: $(o)/love.js
 
 $(o)/host.o: host.c ../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h $(g_h)
+	@echo CC	$@
 	@mkdir -p $(dir $@)
-	$(emcc) $(CFLAGS) -c $< -o $@
+	@$(emcc) $(CFLAGS) -c $< -o $@
 
 $(o)/%.o: ../%.c $(g_h)
+	@echo CC	$@
 	@mkdir -p $(dir $@)
-	$(emcc) $(CFLAGS) -c $< -o $@
+	@$(emcc) $(CFLAGS) -c $< -o $@
 
 serve: all
 	python3 -m http.server 8000

@@ -22,7 +22,7 @@
 ;     the band order (symbol < string < number < chain < map); cross-band = is false.
 ;   * GAUSSIAN twins (exact complex over Z as (re,im) pairs): twin/conj/i literals,
 ;     + - * and negation, = numeric within the band, order and SIGN lex on (re,im),
-;     $ the magnitude of a lex-positive twin (Z.sqrt -- the corpus is pythagorean).
+;     $ the REAL PART of a twin the gate passes -- the part the gate itself reads.
 ;   * LAMBDAS as de Bruijn terms: function = is alpha + structural (never eta/beta),
 ;     so two lambda literals compare by lteqb on their ltm translations; < answers
 ;     nothing, a closure nets 1, and a closure never = a plain nom.
@@ -563,8 +563,9 @@
      ; which root of x^2+1 we named `i` (conjugation is a field automorphism, and
      ; C admits no order compatible with its arithmetic). so a pure phase is BLUE.
      "Definition gpos (a:Z*Z):bool := Z.ltb 0 (fst a)." (string 10)
-     ; $ of a twin: its magnitude once the gate passes, else the 0 floor (corpus instances are pythagorean, so Z.sqrt is exact)
-     "Definition gsat (a:Z*Z):Z := if gpos a then Z.sqrt (fst a*fst a + snd a*snd a) else 0." (string 10)
+     ; $ of a twin: its REAL PART once the gate passes, else the 0 floor -- the same
+     ; part the gate reads, so clamp and gate agree; the magnitude is abs's
+     "Definition gsat (a:Z*Z):Z := if gpos a then fst a else 0." (string 10)
      ; de Bruijn lambda terms: love compares functions by ALPHA + structure (no eta/beta/numeral bridge),
      ; which is plain structural equality on the de Bruijn form
      "Inductive ltm := LV (n:nat) | LO (o:Z) | LN (z:Z) | LAp (f a:ltm) | LLam (b:ltm)." (string 10)

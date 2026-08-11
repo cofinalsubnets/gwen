@@ -45,16 +45,16 @@ $(eval $(call p_obj,main-waker,port/mps2/main.c,$(mainc),$(mps2_cc) -D WAKER))
 # start.o: the vector table, the FPU gate and the semihosting trampoline, laid from holo IR
 # -- no gas. port/virt/mkstart.l is the same shape at riscv64, port/rp2040/mkboot2.l the
 # named-section one.
-$(eval $(call p_lay,start,mkstart,"$(o)/start.o",START))
+$(eval $(call p_lay,start,mkstart,"$(o)/start.o"))
 
 $(R)/$(o)/love.elf: $(objs)
-	@echo LINK	$@
+	@echo MOON	$@
 	@cd $(R) && $(mps2_ld) $(objs:$(R)/%=%) -o $(o)/love.elf
 $(R)/$(o)/baker.elf: $(baker_objs)
-	@echo LINK	$@
+	@echo MOON	$@
 	@cd $(R) && $(mps2_ld) $(baker_objs:$(R)/%=%) -o $(o)/baker.elf
 $(R)/$(o)/waker.elf: $(waker_objs)
-	@echo LINK	$@
+	@echo MOON	$@
 	@cd $(R) && $(mps2_ld) $(waker_objs:$(R)/%=%) -o $(o)/waker.elf
 
 # the BAKED HEAP IMAGE (love.img): main.c's -D BAKER face bakes the corpus on qemu's M7 and
@@ -63,7 +63,7 @@ $(R)/$(o)/waker.elf: $(waker_objs)
 # from source as always.
 img: $(R)/$(o)/love.img
 $(R)/$(o)/love.img: $(R)/$(o)/baker.elf
-	@echo BAKE	$@ "(qemu M7)"
+	@echo LOVE	$@ "(qemu M7)"
 	@if command -v qemu-system-arm >/dev/null 2>&1; then \
 	   cd $(R) && timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic \
 	     -kernel $(o)/baker.elf </dev/null && test -s $(o)/love.img; \
@@ -80,14 +80,14 @@ $(eval $(call p_obj,main-baker-pd,port/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKE
 $(eval $(call p_obj,main-waker-pd,port/mps2/main.c,$(pdmainc),$(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate))
 
 $(R)/$(o)/baker-pd.elf: $(skel) $(R)/$(o)/main-baker-pd.o
-	@echo LINK	$@
+	@echo MOON	$@
 	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/baker-pd.elf
 $(R)/$(o)/waker-pd.elf: $(skel) $(R)/$(o)/main-waker-pd.o
-	@echo LINK	$@
+	@echo MOON	$@
 	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/waker-pd.elf
 
 $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
-	@echo BAKEPD	$@ "(qemu M7 + wake-check)"
+	@echo LOVE	$@ "(qemu M7 + wake-check)"
 	@if command -v qemu-system-arm >/dev/null 2>&1; then \
 	   cd $(R) && timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic \
 	     -kernel $(o)/baker-pd.elf </dev/null && test -s $(o)/love-pd.img \
@@ -118,5 +118,5 @@ $(eval $(call p_obj,am-t1,crew/moon/lib/math/am.c,$(R)/crew/moon/lib/math/am.c $
 # its ranlib index (crew/holo/link.l's ld-arsyms). gcc's own v6-M members are the only
 # foreign objects in the tree's boot images.
 $(R)/$(o)/love-t1.elf: $(t1_objs)
-	@echo LINK	$@
+	@echo MOON	$@
 	@cd $(R) && $(MOONCC) -t thumb1 -Ttext 0 -Tdata 0x20000000 -nostdlib $(t1_objs:$(R)/%=%) $(t1_lg) -o $(o)/love-t1.elf

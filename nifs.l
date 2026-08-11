@@ -35,6 +35,7 @@
       (nif_apof          "apof"          1 lvm_apof)
       (nif_seal          "seal-hook"     2 lvm_seal)
       (nif_heard         "heard"         1 lvm_heard)
+      (nif_worn          "worn"          1 lvm_worn)
       (nif_books         "books"         1 lvm_books)
       (nif_setbooks      "setbooks"      1 lvm_setbooks)
       (nif_mods          "mods"          1 lvm_mods)

@@ -169,7 +169,7 @@ $d/bin/ain: tools/ain.l $(ho)/kore
 # PATH, and the distro symlinks the tool names where shadowing is the point. The member
 # SEATs stay quiet inside the cat, so kore.l's dispatcher is the one thing firing.
 $d/bin/kore: $(korefiles) $(ho)/kore
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN)'; $(ho)/kore sed 's|^#!/usr/bin/env -S love|#!/usr/bin/env -S $(BIN)|' $(korefiles); } > $@
 	@chmod 755 $@
@@ -180,7 +180,7 @@ $d/bin/kore: $(korefiles) $(ho)/kore
 $d/bin/seed: $(seedfiles)
 $d/bin/lush: $(lushfiles)
 $d/bin/seed $d/bin/lush:
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $^; } > $@
 	@chmod 755 $@
@@ -191,7 +191,7 @@ $d/bin/seed $d/bin/lush:
 # home comes off the CHASED path (readlink -f): invoked through a ~/.local compat symlink,
 # $0's own dir has no lib/ sibling -- the nest does.
 $d/bin/mooncc: $(MAKEFILE_LIST)
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
@@ -202,10 +202,10 @@ $d/lib/love/mooncc.image: $(ho)/mooncc.image
 
 # lux, the window manager: its modules catted into one shebang script. Settings ride salt
 # (~/.love/etc/lux.l then ./.lux.l), which also names the display and the cookie when
-# DISPLAY/~/.Xauthority will not do; mod+q restarts in place by exec'ing this script.
+# DISPLAY/XAUTHORITY will not do; mod+q restarts in place by exec'ing this script.
 luxfiles = crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/lux.l
 $d/bin/lux: $(luxfiles)
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN) -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
@@ -213,7 +213,7 @@ $d/bin/lux: $(luxfiles)
 # bao, the interactive shell. Unlike cook and ain, love/bao.l is DEFINE-ONLY -- main.c
 # fires `(bao 0)` on a tty -- so the bin is a tiny launcher that loads it and fires it.
 $d/bin/bao: $(MAKEFILE_LIST)
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \

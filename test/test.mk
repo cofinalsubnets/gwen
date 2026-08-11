@@ -140,7 +140,7 @@ hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/ho
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
 test_hostnif: host out/host$(hsuf)/lush
-	@for s in $(hostnif_tests); do echo "HOSTNIF $$s"; \
+	@for s in $(hostnif_tests); do echo "TEST $$s"; \
 	  case " $(hostnif_cold) " in *" $$s "*) L="$m";; *) L="$(mw)";; esac; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh hostnif "$$L" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
@@ -150,7 +150,7 @@ test_hostnif: host out/host$(hsuf)/lush
 # one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
 doc_tests = doc/stream.l doc/proto/dest.l
 test_doc: host
-	@for s in $(doc_tests); do echo "DOC $$s"; \
+	@for s in $(doc_tests); do echo "TEST $$s"; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$(mw)" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
@@ -159,7 +159,7 @@ test_doc: host
 # itself, and runs each block through base-ev. Needs the `nat` nif; x86-64 only.
 ifeq ($a,x86_64)
 test_glaze: host
-	@echo "GLAZE test/glaze-x86.l (emit + auto)"
+	@echo TEST test/glaze-x86.l "(emit + auto)"
 	@{ echo "(use 'holo)"; cat crew/holo/x64.l crew/holo/arm64.l test/glaze-x86.l; } \
 	  | sh test/gate/run.sh glaze "$m" "test/glaze-x86:"
 else
@@ -171,9 +171,9 @@ endif
 # EGG BOOT's ($m). ⚠ never by cat'ing hook.l in: a woken image has `nif` off the book.
 ifneq ($(filter $a,x86_64 aarch64),)
 test_hook: host
-	@echo "HOOK test/glaze-hook.l (the baked image)"
+	@echo TEST test/glaze-hook.l "(the baked image)"
 	@sh test/gate/run.sh -a hook "$(mw)" "glaze-hook: ok" test/glaze-hook.l
-	@echo "HOOK test/glaze-hook.l (egg boot, hook.l out of the tree)"
+	@echo TEST test/glaze-hook.l "(egg boot, hook.l out of the tree)"
 	@sh test/gate/run.sh -a hook "$m" "glaze-hook: ok" test/glaze-hook.l
 else
 test_hook:
@@ -215,7 +215,7 @@ endif
 # Gate = exit 0 AND the sentinels. COLD ($m, not $(mw)) -- the one app gate that is: the
 # solver answers in 3.6 s over the fresh egg and 14.4 s over the woken image.
 test_sat: host
-	@echo "SAT crew/sat/sat.l + crew/sat/dimacs.l + crew/sat/flat.l"
+	@echo TEST crew/sat/sat.l + crew/sat/dimacs.l + crew/sat/flat.l
 	@cat crew/sat/sat.l crew/sat/dimacs.l crew/sat/flat.l \
 	  | sh test/gate/run.sh sat "$m" "sat: Stages 1-3 ok|crew/sat/dimacs: ok|crew/sat/flat: ok"
 # The DRAT lane's EXTERNAL check: flat.l's refutations verified by drat-trim, the SAT
@@ -227,12 +227,12 @@ test_drat: host
 # sheaf, floating half -- with xmonad's QuickCheck laws + a seeded fuzz. Pure love, so it
 # self-tests portably; the X layers need connectu and are proven against Xephyr, not here.
 test_lux: host
-	@echo "LUX crew/lux/core.l ... crew/lux/config.l + crew/lux/law.l (the whole app, host)"
+	@echo TEST crew/lux/core.l ... crew/lux/config.l + crew/lux/law.l "(the whole app, host)"
 	@cat test/00-init.l crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l \
 	    crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l \
 	  | sh test/gate/run.sh lux "$(mw)" "crew/lux/law: StackSet"
 test_seed: host out/host$(hsuf)/seed
-	@echo "SEED crew/seed/seed.l + test/host/seed.l"
+	@echo TEST crew/seed/seed.l + test/host/seed.l
 	@rm -rf out/host/.seedtest
 	@cat test/00-init.l test/host/seed.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
 # the kore smokes drive the BAKED image (`--wake kore.image`), ~0.02s vs ~0.75s per spawn
@@ -255,7 +255,7 @@ test_up: out/dist/love-$a
 # byte), then scripted end-to-end passes through the `kore vi` face over a pipe (keys off
 # stdin, frames onto a captured stdout, :wq writes), driven through the baked kore.image.
 test_vi: host out/host$(hsuf)/kore.image
-	@echo "VI crew/vi/{hue,core,law}.l"
+	@echo TEST crew/vi/{hue,core,law}.l
 	@cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l \
 	    crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l \
 	  | sh test/gate/run.sh vi "$(mw)" "crew/vi/law:"
@@ -301,12 +301,12 @@ mx_gen = mx.h:mx.l:mx-h:mx-ok kinds.h:mx.l:kinds-h:mx-ok nifs.h:nifs.l:nifs-h:ni
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
 mxlay   = $(mw) -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo AI	mx.h kinds.h nifs.h xterm256.h love_data.ld "+5 .lds (mx.l + nifs.l + quay.l on $m)"
+	@echo LOVE	mx.h kinds.h nifs.h xterm256.h love_data.ld "+5 .lds (mx.l + nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 	@t=out/.lds.$$$$; for f in $(mx_lds); do \
 	   $(mw) -l mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
-	   cmp -s $$t $$f || { mv $$t $$f; echo "AI	$$f"; }; \
+	   cmp -s $$t $$f || { mv $$t $$f; echo "LOVE	$$f"; }; \
 	 done; rm -f $$t
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
@@ -354,7 +354,7 @@ test_cts_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
 # a gate that downloads is a gate that fails on a train.
 $(dl)/c-testsuite:
-	@echo MK c-testsuite
+	@echo MK	c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
 # test_libc -- OUR C LIBRARY against the system's, function by function (doc/libc.md):
 # test/libc/*.c built by mooncc (pulling crew/moon/lib/nolibc.c by need) and by gcc, run,
@@ -370,7 +370,7 @@ test_ulp: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
 # the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.
 test_selfhost: host out/host$(hsuf)/mooncc
-	@echo SELFHOST $(ho)/love-selfhost
+	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
 	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c love.c $$d/love.o \
@@ -483,7 +483,7 @@ test_thumb2sp: host out/host$(hsuf)/mooncc
 # behind pdglue's word-only SDK seam, the pdx built by pdc. Verifies the DEVICE elf: no UND,
 # eventHandler exported, ZERO movw/movt relocs -- the loader relocates ABS32 words only.
 test_playdate: host out/host$(hsuf)/mooncc
-	@echo PLAYDATE out/playdate/love.pdx
+	@echo TEST out/playdate/love.pdx
 	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_playdate: no PLAYDATE_SDK_PATH / arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/playdate || { echo "FAIL playdate build"; exit 1; }; \
@@ -499,7 +499,7 @@ test_playdate: host out/host$(hsuf)/mooncc
 # and the ROM-facing boot image is VERIFIED out of that .bin (FCFB tag at flash 0, IVT at
 # 0x1000, thumb-bit entry). So this one never skips; test_mps2 is the runtime (no RT1062 qemu).
 test_teensy41: host out/host$(hsuf)/mooncc
-	@echo TEENSY41 out/teensy41/love.hex
+	@echo TEST out/teensy41/love.hex
 	@$(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
 # test_nucleo446 -- the Nucleo-F446RE firmware BUILD gate: mooncc -t thumb2sp compiles,
@@ -510,7 +510,7 @@ test_teensy41: host out/host$(hsuf)/mooncc
 # held love: this port is the TOOLCHAIN on silicon, its arithmetic gated by test_thumb2sp
 # and its boot by test_nucleo446_smoke below.
 test_nucleo446: host out/host$(hsuf)/mooncc
-	@echo NUCLEO446 out/nucleo446/firm.hex
+	@echo TEST out/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
@@ -529,7 +529,7 @@ test_nucleo446_smoke: host out/host$(hsuf)/mooncc
 # skip asks after the last foreign thing here, gcc's cortex-m0 libgcc, READ as an archive.
 # qemu has no RP2040 machine, so this builds and never boots -- test_thumb1 gates the ISA.
 test_rp2040: host out/host$(hsuf)/mooncc
-	@echo RP2040 out/rp2040/love.bin
+	@echo TEST out/rp2040/love.bin
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
@@ -562,14 +562,14 @@ $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 # only; the other four reach the gate no other way. Gate = exit 0 AND the "N passed,
 # 0 failed" sentinel.
 test_holo: host
-	@echo "HOLO test/holo/golden.l"
+	@echo TEST test/holo/golden.l
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l \
 	    crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l \
 	    test/holo/golden.l | sh test/gate/run.sh holo "$(mw)" ", 0 failed"
 # as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 test_as: host
-	@echo "AS test/holo/as.l"
+	@echo TEST test/holo/as.l
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$(mw)" ", 0 failed"
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
@@ -589,7 +589,7 @@ test_objcopy: host
 # `love tools/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
 PORT ?= 7390
 nettest: host
-	@echo NETTEST $m "(127.0.0.1:$(PORT))"
+	@echo TEST $m "(127.0.0.1:$(PORT))"
 	@sh $R/test/net/loopback.sh $m $(PORT)
 # Validate the l tool rewrites against their frozen Python references in tools/py/
 # (gen_data / vmret). See tools/Makefile + tools/py/README.md. ⚠ lush is a real
@@ -643,7 +643,7 @@ test_gc:
 # The .l -> .v pipeline: tools/spec2coq.l reads test/spec.l and EMITS gen.v, the spec generating
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
-	@echo AI	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
+	@echo LOVE	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
 	@$(mw) tools/spec2coq.l > proof/rocq/gen.v
 	@echo TEST proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd proof/rocq && $(COQC) -R . "" gen.v
@@ -652,7 +652,7 @@ test_gen: host $(rocq_kept)
 # has uu's kernel TYPE-CHECK a proof term and emits the same term in Gallina for coqc to re-check
 # -- a law proved in love's own kernel and certified by Rocq.
 test_uugen: host
-	@echo AI	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
+	@echo LOVE	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
 	@$(mw) tools/uu2coq.l > proof/rocq/uugen.v
 	@echo TEST proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q proof/rocq/uugen.v
@@ -680,7 +680,7 @@ test_extract: host $(rocq_kept)
 	@proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
 	@$m out/.extract_oracle.l > out/.extract_oracle.out 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" out/.extract_oracle.out; } \
-	    || { echo "EXTRACT ORACLE FAILED (exit $$r):"; cat out/.extract_oracle.out; exit 1; }
+	    || { echo "FAIL the extract oracle (exit $$r):"; cat out/.extract_oracle.out; exit 1; }
 	@cat out/.extract_oracle.out
 	@$(call vclean,extract)
 	@rm -f proof/rocq/normalizer.ml proof/rocq/normalizer.mli proof/rocq/oracle_drive \
@@ -695,7 +695,7 @@ test_big: host
 	@proof/rocq/big_drive 2000 1 > out/.big_oracle.l
 	@$m out/.big_oracle.l > out/.big_oracle.out 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" out/.big_oracle.out; } \
-	    || { echo "BIG ORACLE FAILED (exit $$r):"; cat out/.big_oracle.out; exit 1; }
+	    || { echo "FAIL the big oracle (exit $$r):"; cat out/.big_oracle.out; exit 1; }
 	@cat out/.big_oracle.out
 	@$(call vclean,big)
 	@rm -f proof/rocq/bigref.ml proof/rocq/bigref.mli proof/rocq/big_drive \
@@ -712,11 +712,11 @@ test_encver: host
 	  && $(OCAMLOPT) -w -a encmem_ref.ml encmem_drive.ml -o encmem_drive >/dev/null \
 	  && $(OCAMLOPT) -w -a encli_ref.ml encli_drive.ml -o encli_drive >/dev/null
 	@for s in $(encver); do n=$${s%%:*}; r=$${s#*:}; c=$${r%%:*}; l=$${r#*:}; \
-	   o=out/.$${n}_oracle; u=`echo $$n | tr a-z A-Z`; \
+	   o=out/.$${n}_oracle; \
 	   proof/rocq/$${n}_drive > $$o.l; \
 	   cat crew/holo/holo.l crew/holo/x64.l $$o.l | $m > $$o.out 2>&1; r=$$?; \
 	   { [ $$r -eq 0 ] && grep -q "$$c / $$c PASS" $$o.out; } \
-	     || { echo "$$u ($$l) ORACLE FAILED (exit $$r):"; cat $$o.out; exit 1; }; \
+	     || { echo "FAIL the $$n oracle, $$l (exit $$r):"; cat $$o.out; exit 1; }; \
 	   cat $$o.out; done
 	@$(call vclean,enc encmem encli)
 	@$(call dclean,enc encmem encli)
@@ -732,7 +732,7 @@ test_uulean:
 else
 test_uulean: host
 	@mkdir -p lean
-	@echo AI	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
+	@echo LOVE	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
 	@$(mw) tools/uu2lean.l > proof/lean/uugen.lean
 	@echo TEST proof/lean/uugen.lean "(lean)"
 	@$(LEAN) proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
@@ -763,7 +763,7 @@ endif
 # into uu terms (tools/uuwmgen.l), so test/uuwmlaw.l proves its theorems OF THE IMPLEMENTATION
 # at corpus time. `make uuwm` refreshes it; test_uuwm regenerates and diffs.
 uuwm: host
-	@echo AI	test/uuwm.l "(tools/uuwmgen.l on $m)"
+	@echo LOVE	test/uuwm.l "(tools/uuwmgen.l on $m)"
 	@$(mw) tools/uuwmgen.l > test/uuwm.l
 test_uuwm: host
 	@echo TEST test/uuwm.l "(regenerate + diff)"
@@ -775,7 +775,7 @@ test_uuwm: host
 # JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l proves the semilattice
 # laws OF THE ANALYSIS at corpus time. `make uukind` refreshes it; test_uukind diffs it.
 uukind: host
-	@echo AI	test/uukind.l "(tools/kinds2uu.l on $m)"
+	@echo LOVE	test/uukind.l "(tools/kinds2uu.l on $m)"
 	@$(mw) tools/kinds2uu.l > test/uukind.l
 test_uukind: host
 	@echo TEST test/uukind.l "(regenerate + diff)"

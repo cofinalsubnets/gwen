@@ -229,6 +229,14 @@ struct ai {
                   // and restored on the switch (like Ip/Sp), inherited at spawn. one shared
                   // help cannot serve two tasks -- an escaping handler would land in the
                   // wrong stack, and the last install would win for everyone.
+   ai_word hot_io;    // 6: THE TASK'S STDIO, the second dynamic slot: (wear (i o e))
+                  // re-seats in/out/err for the running task, (wear ()) hands them back.
+                  // zero = the console, and it is the steady state -- every op tests one
+                  // word before it looks at anything. ⚠ PER TASK, like the help above:
+                  // saved into the node, restored on the switch, inherited at spawn --
+                  // dup2 is the process's and cannot serve two tasks at once.
+                  // ⚠ OP-LEVEL ONLY: id?, peek and the image still see the static, because
+                  // prel's tap/jug poke the port head by index and must keep seeing it.
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
                   // read by use/from. a lazy singleton, so both bootstrap prel runs
                   // capture the SAME tablet. in v0..end: traced + serialized.

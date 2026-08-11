@@ -45,6 +45,15 @@
    ; pipeline stage and a $( ) body (those two take it by memory copy). a plan
    ; parameter would have to cross word.l's expansion. test/host/sh.l pins it.
    sh-noe #0                                   ; errexit guard depth (conds, && || arms)
+   ; ⚠ ambient for the same reason: the forkless $( ) captures this shell is
+   ; INSIDE, innermost first, each a (read-end . drainer) pair -- empty when none,
+   ; and that emptiness is the question `exit` asks (inside one it may not reach
+   ; `quit`: it folds to ('xit . st), which nothing catches but the capture).
+   ; ⚠ A FORK UNDER ONE INHERITS THE DRAINER TASK, and a child draining its
+   ; parent's capture eats the bytes and then blocks the whole child on a pipe
+   ; only its parent can end. so a fork shuts each one down first thing
+   ; (sh-dropcaps), and a `( )` under a capture does not fork at all (sh-subsh).
+   sh-subfds #0
    sh-retf #0                                  ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on

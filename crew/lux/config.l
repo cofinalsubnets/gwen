@@ -99,13 +99,17 @@
                                '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
 
    ; the display: DISPLAY (":0" / ":7.0" -> the unix socket) unless a config names
-   ;   one, the cookie from ~/.Xauthority when the server wants one (an -ac Xephyr
-   ;   has no entry -> ())
+   ;   one, the cookie from the xauth file when the server wants one (an -ac Xephyr
+   ;   has no entry -> ()). ⚠ XAUTHORITY names that file and WINS over ~/.Xauthority
+   ;   -- every other X client reads it that way, and a display manager that parks
+   ;   the live cookie elsewhere (ly's /run/user/<uid>/lyxauth) leaves a stale
+   ;   ~/.Xauthority behind, whose cookie the server refuses
    (lux-dispof d) (? (tally d < 2) "7"                                           ; unset: the Xephyr harness habit
                      (: b (snip d 1 (tally d))
                         (: (go i) (? ((i = tally b) || (b i = 46)) (snip b 0 i) (go (i + 1)))
                            (go 0))))
    (lux-dispnum u) (lux-dispof (: d (salt-one lux-conf 'display ()) (? (string? d) d (getenv "DISPLAY"))))
-   (lux-auth-for disp) (xauth-cookie (salt-one lux-conf 'xauthority (getenv "HOME" + "/.Xauthority")) disp)
+   (lux-xauth u) (: v (getenv "XAUTHORITY") (? (0 < tally v) v (getenv "HOME" + "/.Xauthority")))
+   (lux-auth-for disp) (xauth-cookie (salt-one lux-conf 'xauthority (lux-xauth ())) disp)
    lux-display ("/tmp/.X11-unix/X" + lux-dispnum ())
    lux-auth (lux-auth-for (lux-dispnum ())))

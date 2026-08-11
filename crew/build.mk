@@ -30,18 +30,18 @@ moonfiles = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/x64.l
 $(ho)/.kore-cat.l: $(korefiles)
 $(ho)/.mooncc-cat.l: $(moonfiles)
 $(ho)/.kore-cat.l $(ho)/.mooncc-cat.l:
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@cat $^ > $@
 $(ho)/kore: $(ho)/kore.image
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'n=$$(basename -- "$$0")'; \
 	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(kore-main (link \"$$n\" (cuup (cup cmdline))))" "$$@"'; } > $@
 	@chmod 755 $@
 $(ho)/mooncc: $(ho)/mooncc.image
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
 	   echo 'exec "$$h/love" --wake "$$h/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
@@ -53,7 +53,7 @@ seedfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/seed/merge.l crew/s
 $(ho)/seed: $(seedfiles)
 $(ho)/lush: $(lushfiles)
 $(ho)/seed $(ho)/lush:
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
 	@chmod 755 $@
@@ -61,13 +61,13 @@ $(ho)/seed $(ho)/lush:
 # so its tail SEAT stays quiet, then the bake nif snapshots the session. LOVE_NO_IMAGE
 # rides the recipe, so the bake session itself egg-boots -- same warm state every time.
 $(ho)/mooncc.image $(ho)/kore.image: $(ho)/%.image: $(ho)/.%-cat.l $m
-	@echo AI	$(abspath $@)
+	@echo LOVE	$(abspath $@)
 	@$m -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 # mooncc0.image: the SAME cat baked by LOVE0, the build-time compiler that breaks the
 # self-host circle -- the default love is mooncc-built, so its own image cannot drive its
 # build, and love0 waking this one can. PINNED to out/host like love0 itself.
 out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
-	@echo AI	$(abspath $@)
+	@echo LOVE	$(abspath $@)
 	@$(love0) -l out/host/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 # ==== dist: the ONE artifact (self-host rung 3) ====
@@ -94,7 +94,7 @@ distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/seed/http.l crew/seed/seed.l crew/kiosko/kiosko.l crew/seed/up.l
 DIST_ORIGIN ?=
 out/dist/.dist-cat.l: $(distfiles)
-	@echo AI	$(abspath $@)
+	@echo CAT	$(abspath $@)
 	@mkdir -p out/dist
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
 # the artifact is named for its arch ($a = uname -m): love-x86_64 here,
@@ -132,25 +132,25 @@ xhost_o = $(patsubst host/%.c,$(xd)/host_%.o,$(wildcard host/*.c))
 xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
 xobjs = $(xd)/love.o $(xhost_o) $(xd)/nolibc.o $(xmath_o) $(xd)/sys.o
 $(xd)/love.o: love.c $(love_h) out/host/mooncc0.image
-	@echo MOONX	$@
+	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
 $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
-	@echo MOONX	$@
+	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
 $(xd)/host_main.o: $(baked_h)
 $(xd)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(xd)/nolibc.o: crew/moon/lib/nolibc.c out/host/mooncc0.image
-	@echo MOONX	$@
+	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -Icrew/moon/include -c $< $@
 $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
-	@echo MOONX	$@
+	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
 $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
-	@echo MOONX	$@
+	@echo HOLO	$@
 	@mkdir -p $(dir $@)
 	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(xmksys) "$@")' && test -s $@
 out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l

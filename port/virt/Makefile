@@ -26,7 +26,7 @@ objs = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o \
 default: virt
 virt: $(R)/$(o)/love.elf
 
-$(eval $(call p_lay,start,mkstart,"$(o)/start.o",START))
+$(eval $(call p_lay,start,mkstart,"$(o)/start.o"))
 
 $(eval $(call p_obj,love,love.c,$(R)/love.c $(R)/love.h $(lib_hR) $(mc),$(virt_cc)))
 $(eval $(call p_obj,mem,libc/mem.c,$(R)/libc/mem.c $(R)/love.h $(mc),$(virt_cc)))
@@ -34,5 +34,5 @@ $(eval $(call p_obj,str,libc/str.c,$(R)/libc/str.c $(R)/love.h $(mc),$(virt_cc))
 $(eval $(call p_obj,main,port/virt/main.c,main.c $(R)/love.h $(lib_hR) $(mc),$(virt_cc)))
 
 $(R)/$(o)/love.elf: $(objs)
-	@echo LINK	$@
+	@echo MOON	$@
 	@cd $(R) && $(MOONCC) -t riscv64 -Ttext 0x7FFFFF88 $(objs:$(R)/%=%) -o $(o)/love.elf

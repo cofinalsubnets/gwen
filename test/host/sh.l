@@ -285,4 +285,52 @@
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "v='x*y'; echo ${v#\"x*\"} ${v#x?}"))
    (assert (= "y y\n" (cup r))))
 
+; the FORKLESS $( ), lane one: a no-effect builtin says its piece into a jug this
+; task wears (love.h's hook 6) -- no pipe, no fd, no child. the answer is the one
+; the pipe gave, the status included, and a function of the same name takes the
+; name back (to lane two, below: a body that may spawn needs an fd)
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "cd /; echo \"[$(pwd)][$(pwd)]\""))
+   (assert (= "[/][/]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "x=$(false); echo $?; y=$(true); echo $?"))
+   (assert (= "1\n0\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "pwd() { echo shadow; }; echo $(pwd)"))
+   (assert (= "shadow\n" (cup r))))
+
+; lane two: the body runs HERE, down a pipe a TASK drains, and the state a
+; subshell would have taken by copy is put back by hand (sh-subsave's roster).
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "f() { echo a; echo b; }; x=$(f); echo \"[$x]\""))
+   (assert (= "[a\nb]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "cd /tmp; echo [$(cd /; pwd)][$(pwd)]"))
+   (assert (= "[/][/tmp]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "v=out; echo [$(v=in; echo $v)][$v]"))
+   (assert (= "[in][out]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "export E=out; echo [$(export E=in; echo $E)][$E]"))
+   (assert (= "[in][out]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "g() { echo G; }; f() { g() { echo I; }; }; echo [$(f; g)][$(g)]"))
+   (assert (= "[I][G]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "set -- keep it; f() { echo $1; }; echo [$(f one)][$1 $2]"))
+   (assert (= "[one][keep it]\n" (cup r))))
+; ⚠ `exit` in a forkless body may not reach `quit` -- it folds to ('xit . st),
+; which nothing catches but the capture. a FORK under one puts the depth back,
+; so a subshell's exit is a real one again
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "echo [$(echo x; exit 7; echo y)]; z=$(exit 7); echo $?"))
+   (assert (= "[x]\n7\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "f() { exit 9; }; (f); echo after $?"))
+   (assert (= "after 9\n" (cup r))))
+; ⚠ a FORK under a forkless body inherits the DRAINER, so it has to shut it down
+; before it runs a step -- else the child reads its parent's capture and stalls
+; on a pipe only its parent can end. a stage that is a function is such a fork; a
+; `( )` is not, since under a capture it runs in-process instead
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "f() { echo hi; }; echo [$(f | tr a-z A-Z)]"))
+   (assert (= "[HI]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "cd /tmp; echo [$( (cd /; pwd) )][$(pwd)]"))
+   (assert (= "[/][/tmp]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "x=$( (exit 4); echo tail); echo [$x]"))
+   (assert (= "[tail]\n" (cup r))))
+; the drainer earns its keep: a body saying more than one pipe buffer would stop
+; forever against a reader that is us. a builtin's buffered bytes come first
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "f() { pwd; cat love.c; cat love.c; }; x=$(f); echo ${#x}"))
+   t (cup r)
+   (assert (< 800000 (sh-int (snip t 0 (- (tally t) 1))))))
+
 (puts "sh: ok") (putc 10)

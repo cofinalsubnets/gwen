@@ -34,7 +34,7 @@ $(eval $(call p_obj,rp2040,port/rp2040/rp2040.c,rp2040.c rp2040.h $(mc),$(rp_cc)
 
 # boot2: 240 payload bytes zero-padded to 252 and CRC-stamped, in .boot2. no gas -- the
 # section name IS the interface, and the writer spells it now.
-$(eval $(call p_lay,boot2,mkboot2,"port/rp2040/boot2.bin" "$(o)/boot2.o",BOOT2))
+$(eval $(call p_lay,boot2,mkboot2,"port/rp2040/boot2.bin" "$(o)/boot2.o"))
 $(R)/$(o)/boot2.o: boot2.bin
 
 # the link is ours: rlink.l drives holo's ldbare32 with the Pico's flash map, in place of
@@ -46,7 +46,7 @@ $(eval $(p_ocopy))
 # Flash R|X, SRAM R|W: rlink.l asserts the first and the sections answer for the second.
 # Read back rather than trusted -- nothing here is both writable and executable.
 $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(lv)
-	@echo LINK	$@
+	@echo HOLO	$@
 	@cd $(R) && out/host/love $(o)/rlink.l $(o)/love.elf $(objs:$(R)/%=%) $(lg)
 	@python3 -c "import struct; b=open('$(R)/$(o)/love.elf','rb').read(); \
 	  po,pe,pn = struct.unpack_from('<I',b,28)[0], struct.unpack_from('<H',b,42)[0], struct.unpack_from('<H',b,44)[0]; \
@@ -63,7 +63,7 @@ $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/rlink.l $(lv)
 # must hold an SP inside SRAM and a thumb-bit reset entry inside flash. Any one of the
 # three wrong and the board just sits there.
 $(R)/$(o)/love.bin: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
-	@echo BIN	$@
+	@echo LOVE	$@
 	@cd $(R) && out/host/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
 	@python3 -c "import struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
 	  crc=struct.unpack_from('<I',b,252)[0]; sp,e=struct.unpack_from('<II',b,256); \

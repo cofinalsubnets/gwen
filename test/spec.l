@@ -586,6 +586,9 @@
 ; ⚠ AND THE RESIDUE IS A CHARLIST WHICHEVER DOOR WENT IN: a string is spread ONCE and a port lifted
 ; ONCE, at the door, so the three doors meet after the first datum and a resuming caller has one
 ; shape to know -- and a port, having become its own tail, is never handed in twice.
+; in/out/err are NAMES a task seats for itself: (wear (i o e)) re-seats them for the RUNNING
+; task, (wear ()) hands the console back, (worn ()) answers what is worn -- carried like the
+; help (saved on the switch, inherited at spawn). two live jugs are two sinks. doc/io.md.
 ; ⚠ THE PORT DOOR STREAMS, one buffered run per gulp: the reader takes a heap fd port's 4096-byte
 ; run and stops, so reading one form off a file leaves the rest ON THE PORT. an UNBUFFERED port
 ; (`in`, a tap, a jug) has no run to hand over, so it trickles a byte per force and CANNOT run
@@ -602,6 +605,7 @@
 ; plain symbol # to sound0. it is what reads prel.l before there is a language (doc/io.md).
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
+ (: a (jug 0) b (jug 0) _ (say a "a") _ (say b "b") (&& ("a" = (slurp a)) ("b" = (slurp b))))   ; two jugs are two sinks
  (1 = (cap (sound '(49)))) (nil? (sound ())) (id? 'torn (sound '(40)))
  (: r (sound '(49 32 50)) (2 = (cap (sound >r))))    ; the residue reads the next datum
  (: r (sound '(40 41)) (&& (two? r) (nil? <r)))      ; ...and the datum () is still a datum

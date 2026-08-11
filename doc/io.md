@@ -119,6 +119,40 @@ base-delta path. The witness is a live `tap` and `jug` baked and woken in a fres
 prel still builds `tap` and `jug`: C hands the two addresses over as book globals (`ci-vt`,
 `to-vt`) exactly the way it hands over `lvm_quote`, and `love/egg.l` mops both noms at birth.
 
+⚠ **A jug's backing starts EMPTY, and that is its whole isolation.** `to_writen` fills the
+backing string IN PLACE while it has room, so a literal there would be ONE string every jug
+shares — two live jugs then wrote over each other until the first one grew, and the second one's
+first bytes were whatever the first had put down. spec.l's io section holds the two-jugs law.
+
+### in, out and err are NAMES, and a task seats its own
+
+`(wear (i o e))` re-seats the three for the RUNNING TASK; `(wear ())` hands the console back and
+`(worn ())` answers what is worn. It is `seal-hook`'s second dynamic slot (`g->hot_io`, love.h),
+carried exactly the way the help is: saved into the task's node, restored on the switch,
+inherited at spawn, and **zero — the console — is the steady state**, so an op that is not
+routing tests one word. `wear` replaces the whole triple; an element that is not a port keeps
+the console, so re-seating stdout alone reads `(() o ())` and a caller who wants to keep an
+in it already wears has to name it.
+
+Why a slot rather than a rebind: `in`/`out`/`err` are C addresses in `image_immortals`, so every
+holder — the book, a folded compile-time reference, a baked image — has the same pointer, and no
+rebinding of the NAME could reach compiled code. And why per task rather than `dup2`: dup2 is the
+process's, so two tasks cannot each have their own fd 1.
+
+⚠ **The routing is OP-LEVEL, never identity-level.** `io_route` runs in the port ops' prologues
+and rewrites the operand IN PLACE (the ops re-read it across a GC edge, so the routed port has to
+be what the stack holds); `id?`, `peek`, `hot?` and the image all still answer the static. They
+have to: prel's `tap`/`jug` read the port head by index. The two C-internal writers that name
+`ai_stderr` outright (the missing-nom face, the scare face) are not ops and do not route: a
+raise says its piece to the real console whatever the task is wearing.
+
+⚠ **A jug is not an fd.** It takes what love says through `out` and nothing a child process
+writes — a captured body that may `spawn` still wants a pipe. And a forked child must drop what
+its parent wears (lush's `sh-spawn1` does, first thing): its stdio is the fds dup2 just laid.
+
+⚠ **Nothing worn survives a bake.** A worn port names an fd, which means nothing in a new
+process, so the wake clears the slot — the parked ring's rule, for the parked ring's reason.
+
 **The end is not a state a port remembers.** There is no `eof_seen` latch — a spent device
 answers `-1` to every ask, which love.h's `readn` contract states as an obligation on the
 DEVICE, with `test/front/io.l`'s law 3 the witness that reddens if a frontend ever answers the
