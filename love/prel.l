@@ -713,7 +713,20 @@
 ; the help door: (hear f) installs f as the help every raise reaches -- seal-hook's one dynamic
 ; slot, the same hot_help the C raise lanes read -- and (heard ()) answers the installed one.
 ; (hear ()) uninstalls: a raise then takes the default escape.
-(: (hear f) (seal-hook 5 f))
+; binary?: does f take exactly two operands? read two ways -- the arity off the n-ary closure
+; marker, else the param count off the source a compiled lambda stashes. ⚠ ONE-SIDED on purpose:
+; a shape neither reads (a nif, a partial) PASSES. a false refusal walls off a legitimate handler
+; at the one door a session cannot route around; a missed one is only today's silence.
+; ⚠ the marker is read off a known binary rather than named: `peek`'s nom dies at the hatch but
+; the folded reference lives. ⚠ and it must be lvm_cur -- the ap TABLE has it. binding lvm_ret0
+; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
+(: hcur (peek 0 (\ a b a))
+   (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
+                  (id? hcur (peek 0 f)) (= 2 (peek 1 f))
+                  (: s (lamsrc f) (? (two? s) (= 4 (tally s)) 1)))
+   (hear f) (? !f (seal-hook 5 f)                   ; every nothing uninstalls
+               (binary? f) (seal-hook 5 f)
+               (scare 'help-arity f)))
 ; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err FOR THIS TASK,
 ; (wear ()) hands the console back, (worn ()) answers what is worn. an element that is
 ; not a port keeps the console, so (wear (L () o ())) re-seats stdout alone. ⚠ what a
@@ -726,7 +739,8 @@
 ; (serve1 root) c ..)), and the unit is the x when there is genuinely nothing to hand.
 ; n wears the help's own arity, so `welp` is one.
 ; ⚠ ALL THREE OPERANDS, always: two hand back a closure, which is truthy, and f never
-; runs at all.
+; runs at all. n's own arity is checked (binary?) BEFORE f runs -- so the refusal lands
+; under the AMBIENT help, not inside the raise this form exists to catch.
 ; ⚠ n fires only once the displaced help is BACK, which is what the thunks are for --
 ; the presence a caller no longer carries is carried HERE, since a clean v may be a
 ; closure like the escape's. run n inside and its own raise would land in this trap.
@@ -734,7 +748,8 @@
 ; here, so a cleanup belongs in n, never inside f. to catch selectively, let n re-raise
 ; what is not yours -- by then the outer help is the one listening.
 (: (trap f x n)
-     (: prev (heard ())
+     (: _ (? (binary? n) 0 (scare 'help-arity n))
+        prev (heard ())
         r (call-cc (\ k (: _ (hear (\ a b (k (\ _ (n a b)))))
                            v (f x)
                            (\ _ v))))

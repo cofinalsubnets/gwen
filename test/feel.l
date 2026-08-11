@@ -41,7 +41,7 @@
  ; ⚠ the bound is owed by BOTH fold lanes. a pure-fn head cleared by pure-head? still reaches
  ; church application by OVER-application, and that is the unbounded one: (+ 1 200000 2) is
  ; ((200001) 2), a 60207-digit bignum. the safe prefix folds, the growing step residualizes.
- (= 60207 (tally (show (: (f x) (+ 1 200000 2) (f 0)))))
+ (big? (: (f x) (+ 1 200000 2) (f 0)))       ; ⚠ big?, not (tally (show ..)) -- rendering 60207 digits cost the gate 2.5s
  (= '(1 2 3 4) (: (f x) ('(1 2) x) (f '(3 4))))   ; a chain joins like text, and folds the same way
  (= 256 (: (f x) ('(7 8 9) 1 x) (f 2)))       ; ... and INDEXES: ('(7 8 9) 1) folds to 8, leaving (8 x)
  (= 1 (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the DEFAULT action
