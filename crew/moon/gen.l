@@ -319,6 +319,36 @@
    (vmraw g nm)                                     ; the current pin, gates aside (the write-aim reads it)
     (: e9 (assoc nm (peep g 'vmap ()))
        (? (two? e9) <>e9 ()))
+   ; a minted element key ("x[3]") names a STATIC frame slot: recover it from the key --
+   ; the array is vuarr (local, non-escaping), so vent has the base and the index is the
+   ; digits between the brackets. afd's own width gate (pair/d128/flo keep their lanes).
+   (aeoff g env nm)                                 ; -> [off elty] | ()
+    (: (go l) (? !(two? l) ()
+                 (: a <l p (a + "[")
+                    n9 (tally p)
+                    (? ((n9 < tally nm) && (= p (snip nm 0 n9)))
+                       (: en (vent g env a)
+                          (? !(two? en && id? <en 'loc && arr? <>>en) ()
+                             (: et <>(<>>en)
+                                r9 (sound (snip nm n9 ((tally nm) - 1)))
+                                k9 (? (two? r9) <r9 ())
+                                (? ((ptr? et || member? et '(char uchar bool short ushort int uint long ulong)) &&
+                                    !(pair? g et) && charm? k9 && (0 <= k9))
+                                   [(<>en + k9 * tsz g et) et] ()))))
+                       (go >l))))
+       (go (peep g 'vuarr ())))
+   (nrdse g env e key)                              ; read occurrences of one element key (a write's own lhs is no read)
+    (? !(two? e) 0
+       (: n9 (? (id? <e 'deref)
+                (: ae (aelem g env e) (? (two? ae && id? <ae 'el && (= <>ae key)) 1 0)) 0)
+          (go l a) (? !(two? l) a (go >l (a + nrdse g env <l key)))
+          t9 (go e n9)
+          (? (id? <e 'asn && two? <>e && id? <<>e 'deref)
+             (: a2 (aelem g env <>e)
+                (? (two? a2 && id? <a2 'el && (= <>a2 key)) (t9 - 1) t9))
+             t9)))
+   (vaepin g nm r)                                  ; the element RE-pin: a borrowed seat re-establishes too
+    (? (member? r (peep g 'csbor ())) (vmbpin g nm r) (vapin g nm r))
    (lomig g env sub lab)                            ; a CALLISH keep: scalar pool pins migrate onto
     (: base (lokeep g lab)                          ; granted cs seats -> (kp movs); the movs lay
        bs (peep g 'csbor ())                        ; before the head label. seats gone, a pin still
@@ -329,7 +359,18 @@
            (: e9 <l nm <e9 r <>e9
               (? (member? r bs) (go >l free (e9 >< kp) mvs sr)     ; already seated (an enclosing keep)
                  (two? (assoc nm sr)) (go >l free (e9 >< kp) mvs sr)   ; already rostered (an enclosing loop)
-                 !(member? nm (peep g 'vuniv ())) (go >l free kp mvs sr)   ; not a scalar: not kept
+                 !(member? nm (peep g 'vuniv ()))
+                  ; the ELEMENT arm: a minted key is a static frame slot -- it seats or
+                  ; rosters exactly like a scalar (the per-call reload is one direct ld)
+                  (: eo (aeoff g env nm)
+                     (? !(two? eo) (go >l free kp mvs sr)
+                        (two? free)
+                         (: c <free
+                            _ (vmbpin g nm c)
+                            (go >l >free ([nm c] >< kp) (['mov c r] >< mvs) sr))
+                        (nc <= nrdse g env sub nm)
+                         (go >l free (e9 >< kp) mvs ([nm r [(ldop <>eo) r 'r4 <eo]] >< sr))
+                        (go >l free kp mvs sr)))
                  (two? free)
                   (: c <free
                      _ (vmbpin g nm c)
@@ -1990,7 +2031,7 @@
                         (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
                            (? (hint && id? (vreg r) hint && !(flo? (vty r)))
                                (: fs (vfs r + cvt ty hint + [[(stop ty) 'r4 off hint]])
-                                  _ (vapin g <>ael hint)
+                                  _ (vaepin g <>ael hint)
                                   (mkv ty hint fs))
                               (hint && !(flo? (vty r)))
                                ; forced re-establishment: the canonical value also lands in
@@ -1998,7 +2039,7 @@
                                ; when the element rides a loop)
                                (: fs (asintt g r ty + cvt ty 'r0 +
                                       [[(stop ty) 'r4 off 'r0] ['mov hint 'r0]])
-                                  _ (vapin g <>ael hint)
+                                  _ (vaepin g <>ael hint)
                                   (mkv ty 'r0 fs))
                               (: _ (? hint (rfree g hint) ())
                                  (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +

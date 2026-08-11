@@ -125,9 +125,12 @@ Learned by measuring, several times each; check a new lever against these before
    (the end-label meet, the ledger): a splice's end label is a forward join, not
    a clobber, so a loop keep now rides an inlined call -- straight-line, branchy
    and early-return inlinee bodies cost the pins nothing, and a callish inlinee's
-   real call is spared by the same vmcflush the extern call gets. What remains:
-   element pins across calls and store elision across calls (the write-through
-   stores still stand and are now the count's whole residue).
+   real call is spared by the same vmcflush the extern call gets. ELEMENT PINS
+   ANSWERED 2026-08-11 (the element arm, the ledger): a constant-indexed element
+   of a non-escaping frame array is a static slot, so lomig seats and rosters
+   its pin exactly like a scalar's, and a written element re-establishes IN its
+   seat. What remains: store elision across calls (the write-through stores
+   still stand and are now the count's whole residue).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -445,6 +448,32 @@ libc-free link (argc read stack noise -- nondeterministic segfaults on the shipp
 compiler; nolibc's strong __ai_start had hidden it everywhere else). Fixed in its
 own commit (fdbd7aba): the weak tail unpacks argc/argv on all three arches, and
 test/cc/131-argv.c pins it in the battery.
+2026-08-11 · element pins across calls (the element arm): a constant-indexed element
+pin ("x[3]", the vmap's array leg) died at every call -- lomig's walk refused any
+name outside vuniv, so a callish loop reloaded its hot elements per use while seats
+sat free. But a vuarr array is local and non-escaping, so an element's slot is a
+STATIC frame offset recoverable from the minted key itself (`aeoff`: prefix-match
+the array over vuarr, sound the digits, afd's own width gate) -- and with the slot
+static, the element arm in lomig seats and rosters exactly like a scalar's: free cs
+seats first, then the spill-around license priced by a per-key read counter
+(`nrdse`, an asn's own element lhs excluded), the reload one direct ld. vmcflush,
+lochk, lobar and the regen ride unchanged -- a variable-index write still drops the
+whole array and the edge check bars it (lo7's law untouched). One knock-on: the
+frame-direct element write re-pinned through vapin, which refuses non-pool
+registers, so a written element on a SEAT lost its keep -- `vaepin` (the
+borrow-aware re-pin: csbor → vmbpin, else vapin) closes it, and epw's law pins the
+write-through + re-establish-in-seat pair. The peepholes compose as with seeds: a
+seat-riding element whose slot is never re-read loses the slot entirely (deadst
+sweeps the dead write-through store -- epc's x[1] never touches memory). Gauge: the
+two-element call loop −9.5% insns and −14.5% CYCLES (the element loads leave the
+loop's dependency chain -- a genuine wall win, not just count), the variable-index
+wash insn-flat, cbm twins byte-identical, corpus flat. Laws: epc (both elements
+seated, n spills around, x[0] one post-loop read, x[1] memory-free) and epw (the
+mid-loop element write stores through and re-establishes in its seat) -- the
+element-arm-off flip reds them; eight element torture shapes (written, variable-
+index barred, six-element seat exhaustion, element RMW, nested, continue/break,
+element-through-splice) agree with gcc -O0/-O1 across two arg sets; battery 132,
+fixpoint byte-identical, fast gate flat.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

@@ -1894,5 +1894,39 @@
       (= 1 (ldsp wlkf 8))                            ; s: the pre-call park read (the recorded residue)...
       (= 1 (ldsp wlkf 24))))                         ; ...and one post-loop slot read; nothing else loads in-loop
 
+; -- element pins across calls: a constant-indexed element of a non-escaping frame array
+; is a static slot, so its pin seats and rosters exactly like a scalar's (lomig's element
+; arm; the per-call reload is one direct ld). a written element re-establishes IN its
+; seat (vaepin, the borrow-aware re-pin), and a seat-riding element whose slot is never
+; re-read loses the slot entirely (deadst sweeps the dead write-through store).
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (ldsp fs off) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp && (= off <>>>f))) fs))
+   (stsp fs off) (tally (filter (\ f (two? f && member? <f '(st si) && id? <>f 'sp && (= off <>>f))) fs))
+   irP (cgn "long tick(long v); long epc(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = n + 1; while (i < n) { s = s + tick(i) + x[0] + x[1]; i = i + 1; } return s + x[0]; } long epw(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = 3; while (i < n) { s = s + tick(i) + x[0] + x[1]; x[1] = i; i = i + 1; } return s + x[1]; } int main() { return 0; }")
+   epcf (fnf 'epc <>irP)
+   epwf (fnf 'epw <>irP)
+   (assert
+      (two? irP)
+      (member? '(mov r12 r10) epcf)                  ; epc: x[0]'s pin migrates onto a seat...
+      (member? '(mov r11 r7) epcf)                   ; ...and x[1]'s
+      (member? '(add r9 r9 r12) epcf)                ; the in-loop element reads ride the seats
+      (member? '(add r14 r9 r11) epcf)
+      (member? '(ld r5 sp 48) epcf)                  ; n spills around: the post-call reload into ITS pin
+      (member? '(cmp r13 r5) epcf)                   ; ...and the cond runs register-register
+      (= 1 (ldsp epcf 32))                           ; x[0]: one post-loop read, NONE in the loop
+      (= 1 (ldsp epcf 48))                           ; n: the roster reload is its only load
+      (= 0 (stsp epcf 40))                           ; x[1] rides its seat end to end: deadst swept
+      (= 0 (ldsp epcf 40))                           ;   the dead store, the slot never exists
+      (member? '(st sp 40 r13) epwf)                 ; epw: the mid-loop element write stores through...
+      (member? '(mov r11 r0) epwf)                   ; ...and re-establishes IN the seat (vaepin)
+      (member? '(add r9 r9 r12) epwf)                ; x[0] still rides
+      (= 1 (ldsp epwf 40))))                         ; x[1]: one post-loop read, none in the loop
+
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)
