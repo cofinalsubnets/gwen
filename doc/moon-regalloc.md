@@ -110,8 +110,13 @@ Learned by measuring, several times each; check a new lever against these before
    FIRST BOUNDARY CROSSED 2026-08-10 (loop-head survival, the ledger): the map keeps
    across loop heads under optimism-with-verification, writes re-establish in place,
    and chacha20 dropped 74% of its wall — call-free hot loops now run register-resident.
-   What remains: values across CALLS (cs-borrow/spill-around instead of the flush), and
-   the callish-write pin bar (see the ledger's why) lifts only with that machinery.
+   SECOND BOUNDARY CROSSED 2026-08-10 (the cs borrow, the ledger): a callish loop's
+   scalar keeps migrate onto free callee-saved seats and ride THROUGH the calls —
+   the call-loop shape drops ~20% wall at flat insns (the slot's store→load chain
+   breaks). What remains: the callish-write pin bar (its why still open — a callish
+   rhs keeps no hint), spill-around when seats run out, element pins across calls,
+   splice-crossing keeps, and store elision across calls (the write-through stores
+   still stand and are now the count's whole residue).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -280,6 +285,31 @@ machinery explains and owns it. Laws: lp1/lp2 (registerized loops), lp3 (call re
 lo6 (nested), lo7 (the bar engages — sharp against a disabled check), lo8 (force +
 kept-post under a post-loop call); four flips falsified; five loop shapes in the
 torture differential; fixpoint byte-identical, fuzz, kernel, full battery green.
+2026-08-10 · the cs borrow (the vmap's second boundary — values across CALLS): a loop
+whose subtree carries calls (and nothing darker: asm/goto/lbl/switch still refuse)
+keeps its SCALAR pins by migrating them onto free callee-saved seats at loop entry
+(`lomig`: one mov per pin, laid before the head label), and the call flush learns to
+spare them (`vmcflush`: pool pins die, borrowed seats ride — the callee preserves
+them). The grant is the regen's: a prescan (`blscan`) licenses the offer of every
+seat the cs homes left, the attempt loop saves/restores them exactly like cs homes
+(same cssv/epi forms, so cskeep accepts by construction), and a zero-miss build that
+took fewer seats than offered rebuilds once on the used set — no idle saves ship.
+Soundness is UNCHANGED machinery: the same lochk edges verify map ⊇ keep, a lane
+that clobbers or full-flushes (splices do) just misses and bars — which is also why
+an INLINED call still refuses the keep (lp3's law, reworded) while an extern one
+keeps (lp4). Writes re-establish through `vmrepin` (the force movs into the seat);
+the targeted-arg lane serves a kept name from its seat (`mov rT seat` for `ld` —
+sound because a sibling's call spares cs and staging never allocates one). Gauge:
+the two-TU call-loop shape −19.6% wall at FLAT insns — the win is the broken
+store→load chain through the slot, not count; the corpus and spec.l flat; ql's
+depth-1 counter now rides a borrowed seat with its slot stores swept. Laws: lp4
+(seat-served arg, in-place step, cond on the seat, one post-loop slot read), ql's
+borrow save/restore pair; three flips falsified (no spare, no grant, no arg ride).
+The callish-write pin bar STAYS (its why still open); s in `s += f(i)` refuses by
+the bar and the miss→bar ladder converges on keeping i alone. Ten call-crossing
+torture shapes (fn-pointer calls, nested, break/continue, global-writing callee,
+address-taken, seat pressure, goto refusal) agree with gcc; fixpoint byte-identical,
+fuzz, kernel, full battery green.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

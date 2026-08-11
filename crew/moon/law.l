@@ -1125,19 +1125,21 @@
    ; homes on r11..r14 (machine r12-r15) even while it CROSSES calls -- the callee preserves
    ; the register, so the home takes no wrap; the price is one save/restore pair in the
    ; owner's frame, and only compounding iteration counts repay it. here s and the inner j
-   ; ride r11/r12 through g(j) unwrapped; the depth-1 i (and irS's loop-free s above) stay
-   ; slotted -- their touches never earn the pair.
+   ; ride r11/r12 through g(j) unwrapped; the depth-1 i takes a BORROWED seat (r13, the
+   ; call-crossing keep) and rides register-resident too -- its slot stores sweep away.
    irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
    qf (fnf 'ql <>irQ)
    (occ f2) (: (go l n) (? !(two? l) n (go >l (? (= <l f2) (n + 1) n))) (go qf 0))
    _ (assert
       (two? irQ)
-      (= 1 (occ '(st sp 56 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
-      (= 1 (occ '(ld r11 sp 56)))                    ; s's restore, ONCE (epilogue)
-      (= 1 (occ '(st sp 64 r12)))                    ; j's pair likewise
-      (= 1 (occ '(ld r12 sp 64)))
+      (= 1 (occ '(st sp 64 r11)))                    ; s's save, ONCE (prologue) -- the calls never wrap it
+      (= 1 (occ '(ld r11 sp 64)))                    ; s's restore, ONCE (epilogue)
+      (= 1 (occ '(st sp 72 r12)))                    ; j's pair likewise
+      (= 1 (occ '(ld r12 sp 72)))
+      (= 1 (occ '(st sp 80 r13)))                    ; the borrow's pair: i's seat saves like a home
+      (= 1 (occ '(ld r13 sp 80)))
       (member? '(add r12 r12 1) qf)                  ; the inner step is register-only
-      (member? '(st sp 24 r9) qf))
+      (member? '(add r13 r13 1) qf))                 ; ...and the kept i steps its seat in place
    ; -- slot-load elision: loadval honors the want hint (a decl/asn init from a member/deref
    ; lands straight in the hinted register, so the vmap pin fires and re-reads are zero forms),
    ; and stld rides a whole straight-line run (a bound slot's reload forwards from the register
@@ -1756,10 +1758,11 @@
    (ldc fs) (tally (filter (\ f (two? f && member? <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && id? <>>f 'sp)) fs))
    (stc fs) (tally (filter (\ f (two? f && member? <f '(st st1 st2 st4 si si1 si2 si4) && id? <>f 'sp)) fs))
    (leac fs) (tally (filter (\ f (two? f && member? <f '(lea lean))) fs))
-   irL (cgn "long lp1(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = n + 1; while (i < 100) { s = s + x[0] + x[1]; i = i + 1; } return s + i; } long lp2(long n) { long a = 0; long i; for (i = 0; i < n; i++) a += i; return a; } long lp3(long n) { long s = 0; long i = 0; while (i < n) { s += lp2(i); i = i + 1; } return s; } long lo6(long n) { long s = 0; long j = 0; for (j = 0; j < n; j++) { long k = j; while (k > 0) { s = s + k; k = k - 1; } } return s; } long lo7(long n) { long x[2]; x[0] = n; x[1] = n + 1; long i = 0; long s = 0; while (i < n) { s = s + x[0]; x[i & 1] = i; i = i + 1; } return s + x[0] + x[1]; } long tick(long v); long lo8(long n) { long x[2]; long s; long i; long b; x[0] = n; s = 0; i = 0; b = 0; while (i < n) { b = n; s = s + b + i + x[0] + n; i++; } tick(s); return s + i + b + x[0]; } int main() { return 0; }")
+   irL (cgn "long lp1(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = n + 1; while (i < 100) { s = s + x[0] + x[1]; i = i + 1; } return s + i; } long lp2(long n) { long a = 0; long i; for (i = 0; i < n; i++) a += i; return a; } long lp3(long n) { long s = 0; long i = 0; while (i < n) { s += lp2(i); i = i + 1; } return s; } long lo6(long n) { long s = 0; long j = 0; for (j = 0; j < n; j++) { long k = j; while (k > 0) { s = s + k; k = k - 1; } } return s; } long lo7(long n) { long x[2]; x[0] = n; x[1] = n + 1; long i = 0; long s = 0; while (i < n) { s = s + x[0]; x[i & 1] = i; i = i + 1; } return s + x[0] + x[1]; } long tick(long v); long lp4(long n) { long s = 0; long i = 0; while (i < n) { s = s + tick(i); i = i + 1; } return s + i; } long lo8(long n) { long x[2]; long s; long i; long b; x[0] = n; s = 0; i = 0; b = 0; while (i < n) { b = n; s = s + b + i + x[0] + n; i++; } tick(s); return s + i + b + x[0]; } int main() { return 0; }")
    lp1f (fnf 'lp1 <>irL)
    lp2f (fnf 'lp2 <>irL)
    lp3f (fnf 'lp3 <>irL)
+   lp4f (fnf 'lp4 <>irL)
    lo6f (fnf 'lo6 <>irL)
    lo7f (fnf 'lo7 <>irL)
    lo8f (fnf 'lo8 <>irL)
@@ -1767,7 +1770,11 @@
       (two? irL)
       (= 0 (ldc lp1f)) (= 0 (stc lp1f)) (= 0 (leac lp1f))   ; while: s/i/x[0]/x[1] register-resident, frame gone
       (= 0 (ldc lp2f)) (= 0 (stc lp2f))                     ; for: the counter and the accumulator ride (i++ steps in place)
-      (2 <= ldc lp3f)                                       ; a call in the body refuses the keep: reloads stand
+      (2 <= ldc lp3f)                                       ; an INLINED call (the splice flush) refuses the keep: reloads stand
+      (member? '(mov r6 r11) lp4f)                          ; an EXTERN call: i keeps on a borrowed cs seat -- the arg rides it
+      (member? '(add r11 r11 1) lp4f)                       ; ...steps in place across the call
+      (member? '(cmprm r11 sp 40) lp4f)                     ; ...and the cond compares the seat
+      (= 1 (ldsp lp4f 24))                                  ; i's slot: one post-loop read, NONE in the loop
       (= 0 (ldc lo6f)) (= 0 (stc lo6f))                     ; nested: the outer keeps survive the inner loop
       (2 <= ldsp lo7f 16)                                   ; x[i&1]=i drops x[0] mid-loop: the edge CHECK barred the
                                                             ;   keep (a zero-miss build ships) -- x[0] reloads in-loop
