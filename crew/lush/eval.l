@@ -535,12 +535,15 @@
      (? (charm? st) st
         (&& (two? st) (|| (id? <st 'ret) (id? <st 'xit))) >st
         0)
+   ; the re-seat is MINDED: a scare under the body leaves this task wearing a jug
+   ; nobody drains, and every later word the shell says lands in it instead of the
+   ; terminal. one capture pays the mind, not one node -- sh-guarded stays bare.
    (sh-capjug a)
      (: j (jug 0)
         w (worn ())
         _ (sh-wearout j)
-        st (sh-guarded (\ _ (sh-eval a)))      ; the body's status is the value, never our errexit
-        _ (wear w)
+        st (mind (\ _ (sh-guarded (\ _ (sh-eval a))))   ; the body's status is the value,
+                 () (\ _ (wear w)))                     ; ..never our errexit
         _ (pin sh-substat () (sh-capstat st))
         (slurp j))
 

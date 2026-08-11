@@ -38,7 +38,9 @@
 
 ; the help is PER TASK: a raise finds the one its OWN task installed. one shared
 ; slot would hand every task whichever install landed last -- and a help that
-; escapes (call-cc) would then land in another task's stack. ⚠ every twirl here
+; escapes (call-cc) would then land in another task's stack, which is what `myself`
+; is for: trap's help compares the raising task against the installing one and
+; delegates rather than jumping. ⚠ every twirl here
 ; is caught: an orphan stalls the kernel runner.
 (assert (: pa (twirl (\ _ (: _ (hear (\ a b 'A)) _ (rest 0) (scare 'x 0))) ())
            pb (twirl (\ _ (: _ (hear (\ a b 'B)) _ (rest 0) (scare 'x 0))) ())
@@ -107,11 +109,42 @@
        (&& (id? r 'deep) ('(inner outer) = (mlog 0))))
     ; c runs with the displaced help BACK, so its own raise belongs to the trap OUTSIDE
     (id? 'from-c (trap (\ _ (mind (\ _ 'v) () (\ _ (scare 'from-c 0)))) () (\ a b a)))
+    ; ⚠ EXACTLY ONCE under a help that ANSWERS rather than escapes -- the shell's default
+    ; is one of these, so this is the ordinary repl path and not a corner
+    (: _ (fresh ()) prev (heard ())
+       _ (hear (\ a b 'answered))
+       r (mind (\ _ (scare 'boom 0)) () (\ _ (note 'freed)))
+       _ (hear prev)
+       (&& (id? r 'answered) ('(freed) = (mlog 0))))
+    (: _ (fresh ()) prev (heard ())                       ; ..welp underneath, the floor handler
+       _ (hear welp)
+       r (mind (\ _ (scare 'boom 0)) () (\ _ (note 'freed)))
+       _ (hear prev)
+       (&& (nil? r) ('(freed) = (mlog 0))))
     ; ⚠ RAISES ONLY: only a scare reaches a help, so a k captured outside jumps clean
     ; past every c between there and here -- the wall this rung stops at
     (: _ (fresh ())
        v (call-cc (\ k (mind (\ _ (k 'jumped)) () (\ _ (note 'never)))))
        (&& (id? v 'jumped) (nil? (mlog 0))))))
+
+; a trap's escape is ITS TASK'S. a help is inherited at spawn, so a child can hold a
+; continuation captured in its parent's stack -- landing there tears both, and before
+; `myself` this exact shape took the whole program down. the raising task is compared
+; against the installing one: same, jump; different, re-seat prev and raise THERE, so
+; the child meets the help it would have met with no trap in sight. ⚠ twirls caught.
+(: prev (heard ())
+   _ (hear (\ a b 'delegated))
+   log (tablet 0)
+   (note s) (pin log 0 (log 0 + `(s)))
+   ; the child's raise is answered in the CHILD, and both tasks run to their ends
+   r (trap (\ _ (: p (twirl (\ _ (: v (scare 'child-boom 0) _ (note 'child-lived) v)) ())
+                     _ (catch p) _ (note 'parent-lived) 'clean))
+           () (\ a b 'trapped))
+   _ (hear prev)
+   (assert (id? r 'clean) ('(child-lived parent-lived) = (log 0))
+           ; ..and a trap the child installs ITSELF still escapes: home is its own task
+           (: q (twirl (\ _ (trap (\ _ (scare 'mine 7)) () (\ a b `(a b)))) ())
+              ('(mine 7) = (catch q)))))
 
 ; welp -- the floor handler (repl.l), the fromempty the introductions never
 ; named: it welps a raise to the ZERO POINT, whatever the condition. it is a

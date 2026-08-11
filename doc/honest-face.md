@@ -51,6 +51,15 @@ turned around: `n` is the *catcher's* cleanup and has to sit in the catcher's fr
 a `trap` it sits. Built on `trap`, no C: `c` runs inside the `n`, where the displaced help is
 already back, and then re-raises. ~145ns over a bare call.
 
+⚠ **The escape is its task's.** A help is *inherited at spawn*, so a child raising under a help it
+never installed would invoke a continuation captured in its parent's stack — landing there tears
+both, and it took whole programs down. `trap` records the installing task (`myself`) and compares
+before it jumps: same task, escape; different, re-seat `prev` and raise *there*, so the child meets
+the help it would have met with no `trap` in sight. An outer `trap`'s help meets the same test, so
+the chain walks down to an answering help or to none. This is the difference between a runtime a
+determined user can do anything with on purpose and one a naive user breaks by accident — `twirl`
+inside a `mind`ed body is an ordinary thing to write, and it must not be a trap.
+
 ⚠ **Raises only, and that is where this stops.** Only a scare reaches a help, so a bare `(k v)`
 into a continuation captured outside jumps clean past every `c` between there and here — pinned as
 a passing assert in test/help.l, so the rung that ever closes it fails a law instead of moving the
