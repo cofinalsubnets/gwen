@@ -296,6 +296,13 @@
    (kval v) (? (atom? v) v <>v)                                                  ; a const FORM -> its value
    (allk as) (all propk? as)                                                       ; all args constant?
    (foldc o as) (cbake (foldl (\ g a (g a)) o (map kval as)))                 ; apply the nif to the consts
+   ; a TEXT head applies PURE and TOTAL at every operand -- byte index or juxtaposition -- so a
+   ; KNOWN PREFIX folds away even when the tail stays unknown: ("ab" "cd" x) leaves ("abcd" x).
+   ; it stops as soon as the value stops being text (an index answers a charm): the law ends there.
+   (cpstr v as) (: k (? (two? as) (kconst <as) ())
+    (? (atom? as) (cbake v)                                              ; every operand consumed -> the value
+       (string? v && <k) (cpstr (v >k) >as)                              ; known operand -> apply it, walk on
+       (cbake v >< as)))                                                 ; stuck -> the folded head, then the rest
    ; --- the known-lambda INLINER (cprop's beta-reduction lane) ----------------------------
    ; beta-reduce an application whose (resolved) head is a statically-known lambda. SOUND by three
    ; gates: the lambda is INLINABLE (non-recursive, body bsub-safe `simple?`, and CLOSED -- every
@@ -378,11 +385,14 @@
              h2 (? (nom? h) h hr)                                                 ; the emitted head: a nom stays a nom (ana resolves it);
                                                                                   ; a COMPOUND head goes out WALKED, which is what keeps
                                                                                   ; cprop's output macro-free and wx's macro lane gone
+             hk (kconst hr)                                                       ; the head's own value, when it has one
              (? (&& (< 0 fl) (lambp hr) (two? as) (allp as se))                        ; two? as: (f) is f -- nothing to substitute
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h)               ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
+                (<hk && string? >hk && two? as && propk? <as)                         ; a TEXT head with a KNOWN operand: fold the whole known
+                  (cpstr >hk as)                                                      ;   prefix, an unknown tail keeps the folded text as its head
                 (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
    (wx (cprop x () 64 0 0) 0))
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a nom? literal.

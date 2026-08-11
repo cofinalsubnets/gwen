@@ -376,6 +376,9 @@
 ; (materially empty, applies const-1); a NOM is a named point (its own kind); () IS THE CORE -- the one
 ; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
+; a string INDEXES by a charm (out of range the unit 1) and JUXTAPOSES by a string: (s t) is
+; s then t, C's adjacent-literal law with the literal restriction lifted -- so it curries to
+; any arity and agrees with (+ s t). every other operand still applies const-1.
 ; a missing read answers the zero point under the floor handler welp (no warning surfaced)
 (hear welp)
 (assert (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z)))))   ; absence: the zero point, wearing ()
@@ -402,6 +405,8 @@
  !(string 0) !!(string 1) (1 = (tally (string 0)))   ; a NUL nets nothing: the chain of nothings reaches the BYTES, and (string 0) is one of them
  !(snip (+ "a" 0) 1 2) (97 = $(+ "a" 0))        ; ... an all-NUL text IS nothing, and the NUL byte appends for free
  ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
+ ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (+ a b)))   ; juxtaposition joins text, curried, no literal needed
+ ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) (1 = ("ab" 'cd)) (1 = ("ab" '(1 2)))   ; "" is the unit; a non-text operand stays const-1
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("(mint " = (snip (show (mint 0)) 0 6)))   ; a mint prints (mint <serial>) (diagnostic, not an exact reparse)
 

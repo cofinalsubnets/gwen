@@ -5224,12 +5224,23 @@ static lvm(lvm_mul_cart) {
 
 // --- apply lane (the data-value `(g x)` aps) ---
 // an applied data value's sentinel tail-jumps straight to its handler -- no table.
-// chain = eliminator, string = byte index, numbers = church numerals; opaque
+// chain = eliminator, string = byte index (or juxtaposition on a string), numbers = church numerals; opaque
 // handles behave as 0 via their own sentinels.
 
 // (s k): index the string -- the unsigned byte at k, else 1 (matches "" == 0:
-// a numeric ("" k) is k**0 == 1)
+// a numeric ("" k) is k**0 == 1). a TEXT k JUXTAPOSES instead: (s t) is s then t,
+// C's adjacent-literal law with the literal restriction lifted -- and it curries,
+// so ("a" "b" "c") joins three. agrees with (+ s t) on every text pair.
 static lvm(data_string_apply) {
+ if (strp(Sp[0])) {
+  uintptr_t m = len(Ip), n = len(Sp[0]), req = str_type_width + b2w(m + n);
+  if (!(m + n)) { Ip = cell(*++Sp); *Sp = EmptyString; ai_musttail return Continue(); }  // no empty string is ever allocated
+  Have(req);
+  struct ai_str *z = ini_str(str(Hp), m + n);
+  Hp += req;
+  memcpy(txt(z), txt(Ip), m);
+  memcpy(txt(z) + m, txt(Sp[0]), n);
+  Ip = cell(*++Sp); *Sp = word(z); ai_musttail return Continue(); }
  word k = Sp[0], v = putcharm(1), n;
  if (oddp(k) && (n = getcharm(k)) >= 0 && n < (word) len(Ip))
   v = putcharm((unsigned char) txt(Ip)[n]);

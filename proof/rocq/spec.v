@@ -849,6 +849,17 @@ Theorem str_index_oob : sidx [104;105] 9 = 1.     Proof. reflexivity. Qed. (* ("
 Theorem str_net       : asum [97;98;99] = 294.    Proof. reflexivity. Qed. (* $"abc" = 294 *)
 Theorem str_tally     : tally [97;98;99] = 3.     Proof. reflexivity. Qed. (* (tally "abc") = 3 *)
 
+(* JUXTAPOSITION: a string applied to a string is the concatenation -- C's adjacent-literal
+   law with the literal restriction lifted. It IS ++, so it inherits the monoid (associative
+   with "" the unit) and hence agrees with `+` and curries to any arity. *)
+Definition sjux (s t : list Z) : list Z := s ++ t.
+Theorem str_juxt      : sjux [97;98] [99;100] = [97;98;99;100]. Proof. reflexivity. Qed. (* ("ab" "cd") = "abcd" *)
+Theorem str_juxt_cat  : forall s t, sjux s t = s ++ t.          Proof. reflexivity. Qed. (* agrees with `+` *)
+Theorem str_juxt_unitl: forall s, sjux [] s = s.                Proof. reflexivity. Qed. (* ("" s) = s *)
+Theorem str_juxt_unitr: forall s, sjux s [] = s.                Proof. intros. apply app_nil_r. Qed. (* (s "") = s *)
+Theorem str_juxt_assoc: forall s t u, sjux (sjux s t) u = sjux s (sjux t u).  (* so ("a" "b" "c") joins three *)
+Proof. intros. unfold sjux. now rewrite app_assoc. Qed.
+
 (* the NUL byte nets nothing: + is the measure homomorphism down to the bytes *)
 Theorem nul_appends_free : asum [97; 0] = 97.   Proof. reflexivity. Qed. (* $(+ "a" 0) = 97 *)
 Theorem all_nul_nothing  : asum [0;0;0] = 0.    Proof. reflexivity. Qed. (* an all-NUL text IS nothing *)

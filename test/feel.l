@@ -22,6 +22,16 @@
  (= 2  (caup '(1 2 3)))
  (= 4  (tally (+ "ab" "cd")))                 ; string built + counted at compile time
 
+ ; --- a TEXT head folds its KNOWN PREFIX: pure and total at every operand ---
+ (= "abcd"   ("ab" "cd"))                     ; juxtaposition
+ (= "abcdef" ("ab" "cd" "ef"))                ; ... curried, folded left to right
+ (= "abcd"   (: a "ab" b "cd" (a b)))         ; ... through const-propagated binders, no literal in sight
+ (= 97 ("abc" 0)) (= 1 ("hi" 9))              ; the byte index and its out-of-range unit
+ (= "abcdef"   (: (f x) ("ab" "cd" x) (f "ef")))       ; known PREFIX folds, the unknown tail rides on
+ (= "abcdefgh" (: (f x) ("ab" "cd" x "gh") (f "ef")))  ; ... and the operands after it still apply in order
+ (= "abZcd"    (: (f x) ("ab" x "cd") (f "Z")))        ; nothing known past the head -> wholly residual
+ (= "xy" (: (f s) (s "y") (f "x")))           ; an UNKNOWN head stays residual, and still joins at run time
+
  ; --- currying: under-application yields a usable closure; prefix+unknown tail ---
  (= 7  ((+ 3) 4))                                ; (+ 3) baked, applied at runtime
  (= 15 (: (g x) (+ 10 x) (g 5)))                 ; (+ 10) folded; x unknown -> residual
