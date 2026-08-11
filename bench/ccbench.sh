@@ -14,13 +14,22 @@
 #           residency for the second shape only -- so the PAIR is the reading. Wide
 #           chacha beside narrow poly says the gap is array slots; the day they close
 #           together is the day that reading was wrong.
-# The three compilers:
+# The three compilers, ALL THREE STATIC -- that is the whole point of the pairing:
 #   mooncc : love's OWN C compiler (crew/moon/), the exact `make test_raw` sequence --
 #            no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits the syscall
 #            leaf, our linker (crew/holo/) binds. It egg-boots (no baked image).
-#   gcc / clang : the same translation units at the host's real -O2 cflags, linked
-#            the ordinary way. Also egg-boot -- no `--bake`, so all three lanes run
-#            the identical corpus off the freshly-eval'd egg (a level field).
+#   gcc-musl / clang-musl : the same translation units at the host's real -O2 cflags,
+#            through the musl-gcc/musl-clang wrappers and linked -static. Also
+#            egg-boot -- no `--bake`, so all three lanes run the identical corpus off
+#            the freshly-eval'd egg (a level field).
+#
+# ⚠ the natives are STATIC MUSL, not the distro's dynamic glibc, and the size rows are
+# why: mooncc's binary is a static ELF carrying its own nolibc, so racing it against a
+# dynamic binary asks two questions at once and answers neither -- ~40 KB of the gap it
+# used to report was glibc being ABSENT from the file. Runtime is untouched by the
+# choice (measured: under 0.1% on insns, cycles and boot -- love runs on its own floor,
+# so libc barely executes), so the corpus rows compare straight across the change.
+# CCGLIBC=1 adds the old dynamic gcc/clang lanes back alongside, for continuity.
 #
 # Emits "<phase> <compiler> <ms> <note>" lines (the 4-field satrace shape), so
 # mkhtml renders it like the SAT table -- one row per phase, columns the compilers,
@@ -83,15 +92,15 @@ med() { i=0; while [ "$i" -lt "$SAMPLES" ]; do wall "$1"; echo; i=$((i+1)); done
 
 # -- gcc / clang: the ordinary lane. Compile the liblove.a translation units (love.c +
 #    am.c) and the host/*.c glob (main.c carries the egg), then link the objects. --
-build_cc() { # $1=compiler $2=binpath ; leaves objects under $WORK/<compiler>
-  cc=$1; bin=$2; od=$WORK/$(basename "$cc")
+build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<binname>
+  cc=$1; bin=$2; xf=$3; od=$WORK/o-$(basename "$bin")   # o- prefix: $bin itself lives in $WORK
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
-    $cc $CFLAGS -c love.c                    -o "$od/love.o" || exit 1
-    $cc $CFLAGS -c crew/moon/lib/math/am.c -o "$od/am.o" || exit 1
+    $cc $CFLAGS $xf -c love.c                    -o "$od/love.o" || exit 1
+    $cc $CFLAGS $xf -c crew/moon/lib/math/am.c -o "$od/am.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
-      $cc $CFLAGS -c "$f" -o "$od/host/$b.o" || exit 1; done
-    $cc $CFLAGS $LDFLAGS -o "$bin" "$od"/love.o "$od"/am.o "$od"/host/*.o ) || return 1
+      $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
+    $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/love.o "$od"/am.o "$od"/host/*.o ) || return 1
 }
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
@@ -154,10 +163,10 @@ crypto_ms() { # $1=binpath $2=driver-call $3=sentinel
 
 # one compiler lane: build (timed once), verify, then time the corpus and the two
 # cipher rows (boot excluded from each).
-lane() { # $1=label $2=builder-cmd $3=binpath
+lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   lbl=$1; bld=$2; bin=$3
-  bt=$(wall "$bld '$bin'")
-  if [ ! -x "$bin" ]; then dnf_lane "$lbl"; return; fi
+  bt=$(wall "$bld '$bin' '$4'")
+  if [ ! -f "$bin" ] || [ ! -x "$bin" ]; then dnf_lane "$lbl"; return; fi
   echo "build $lbl $bt ok"
   if passes "$bin"; then echo "test $lbl $(corpus_ms "$bin") ok"
   else echo "test $lbl dnf"; fi
@@ -172,10 +181,24 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$MC" ]; then
 else
   dnf_lane mooncc                                   # mooncc's native lane is x86-64 only
 fi
+# the native lanes: static musl. The wrappers hand the compiler musl's headers and crt,
+# so the translation units are the identical job -- only the libc differs, and -static
+# puts it inside the binary where mooncc's nolibc already is.
 for c in gcc clang; do
-  if command -v "$c" >/dev/null 2>&1; then
-    lane "$c" "build_cc $c" "$WORK/love-$c"
+  if command -v "musl-$c" >/dev/null 2>&1; then
+    lane "$c-musl" "build_cc musl-$c" "$WORK/love-$c-musl" -static
   else
-    dnf_lane "$c"
+    dnf_lane "$c-musl"
   fi
 done
+# CCGLIBC=1: the old dynamic-glibc lanes, kept for continuity with the fills that
+# predate the switch. Not the comparison the size rows want -- see the ⚠ at the top.
+if [ -n "$CCGLIBC" ]; then
+  for c in gcc clang; do
+    if command -v "$c" >/dev/null 2>&1; then
+      lane "$c" "build_cc $c" "$WORK/love-$c"
+    else
+      dnf_lane "$c"
+    fi
+  done
+fi
