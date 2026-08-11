@@ -336,7 +336,10 @@
    ; that asks has the operand in hand by construction, so consulting it costs nothing.
    (pure-fn? v k) (|| !!(peep pureset v 0)
                       (!!(peep readset v 0) && (|| (string? k) (two? k))))
-   (pure-head? h as) (pure-fn? (gv h ()) (? (two? as) (kval <as) ()))            ; the SATURATED lane: foldc applies every arg at once
+   ; ⚠ TWO operands, and THE ARITY IS THE PROTOCOL: under-applied this answers a closure, which
+   ; is truthy, and every purity gate below silently opens. `as` is the ARG FORMS, not values --
+   ; kconst declines a non-constant, so a site that cannot know its operand denies readset.
+   (pure-head? h as) (pure-fn? (gv h ()) (: k (? (two? as) (kconst <as) ()) (? <k >k ())))
    ; pure-ap?: the same question for cpap's walk, widened by the DATA lanes -- which never RUN
    ; what they are handed: a sequence indexes or joins (text by byte, a chain by element), a point
    ; answers const-1, a numeric or array COMPOSES (it builds the composition, it does not call it).
@@ -350,7 +353,7 @@
     (h = '\) 1                                                                  ; a lambda value (pure to build)
     (h = '?) (allp >a se)                                                  ; cond: pure iff every limb is
     (nom? h) (: e (assq h se)                                               ; a known pure lambda OR a pure fn, applied to pure args
-       (? (two? e && lambp <>e) (allp >a se) (pure-head? h) (allp >a se) 0))
+       (? (two? e && lambp <>e) (allp >a se) (pure-head? h >a) (allp >a se) 0))
     0))
    (smpl? x) (?                                                                        ; bsub-safe body: no : / macro head
     (atom? x) 1
@@ -368,7 +371,7 @@
     (atom? x) 1
     (id? <x '?) (all (\ e (pbody? e bnd)) >x)
     (id? <x '\) (? (atom? >>x) 1 (: r (lp x) (pbody? (last x) (<r + bnd))))
-    (nom? <x) (&& (|| (pure-head? <x) (member? <x bnd)) (all (\ e (pbody? e bnd)) >x))
+    (nom? <x) (&& (|| (pure-head? <x >x) (member? <x bnd)) (all (\ e (pbody? e bnd)) >x))
     (all (\ e (pbody? e bnd)) x))
    (inlinable? nm lam) (lambp lam && smpl? lam && closedl? lam && pbody? lam () && !(w nm lam 0 0 0))
    (rmkeys ps env) (filter (\ p (! (member? <p ps))) env)                         ; drop shadowed substitutions

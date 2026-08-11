@@ -64,6 +64,18 @@
  (= 'a  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 9)))  ; ... first clause still wins
  (id? () (: (f x) (? (nil? x) 'z) (f 5))))         ; no-else cond falls to the zero point () (nil-ontology)
 
+; --- the PURITY GATE on beta's arguments --- an inlined lambda SUBSTITUTES its args, so a
+; body naming a param twice would run an impure arg twice. `allp`/`purep` is what forbids it,
+; and its failure is silent: the answer is simply wrong, no scare. this pins the gate itself.
+; ⚠ it caught pure-head? being called under-applied -- a partial is TRUTHY, so every purity
+; question answered yes and (dbl (bump 0)) bumped the counter twice. the arity IS the protocol.
+(: pg-ctr (cask 1)
+   (pg-bump _) (: v (peep pg-ctr 0 0) _ (pin pg-ctr 0 (+ v 1)) (+ v 1))
+   (pg-dbl x) (x + x)                                ; names its param TWICE -- the duplication site
+   (assert
+    (: _ (pin pg-ctr 0 0) r (pg-dbl (pg-bump 0))
+       (&& (= 2 r) (= 1 (peep pg-ctr 0 0))))))       ; evaluated ONCE: 1+1, counter at 1
+
 ; --- the inliner's under-saturated beta --- a known lambda applied SHORT of its params
 ; substitutes the given args and answers a \ of the rest -- so curried HOFs collapse
 ; statically when consumed (op=1), and still REVERT at value position (the escape law).
