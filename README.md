@@ -108,7 +108,7 @@ do-nothing operand, the op never happens.
 false is *nothing*: whatever nets `<= 0`. the net is the complex-valued content
 measure -- a number its own value, text the sum of its charms, a list the sum of its
 elements'. `$` is the one saturating clamp onto that measure and `!!$` is the truth bit
-`?` dispatches on, so `!x = 0 = $x`. see [doc/measures.md](doc/measures.md).
+`?` dispatches on, so `!x` is exactly `0 = $x`. see [doc/measures.md](doc/measures.md).
 
 ### hello world
 
