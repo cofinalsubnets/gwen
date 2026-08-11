@@ -6803,6 +6803,28 @@
                            (member? k '(ret jmpr)) (go >l 'dead (mxu mx cur))
                            (go >l cur mx))))))
            (go fs 0 0))
+       ; the forward-path call MINIMUM, pmax's twin: the price a per-invocation cost must
+       ; clear -- a zero-call path (the dispatch fleet's early out) pays entry work and
+       ; earns nothing, so a grant priced per invocation needs every path to call.
+       (pmin fs)
+        (: best (tablet 0) big 1000000
+           (mnu m c) (? (id? c 'dead) m (? (c < m) c m))
+           (bpin lab c) (? (id? c 'dead) ()
+                           (: b (peep best lab big) (? (c < b) (pin best lab c) ())))
+           (go l cur mn)
+            (? !(two? l) (mnu mn cur)
+               (: f <l
+                  (? !(two? f) (go >l cur mn)
+                     (: k <f
+                        (? (k = 'label)
+                            (go >l (: b (peep best <>f big)
+                                      (? (id? cur 'dead) b (? (cur < b) cur b))) mn)
+                           (member? k '(call callr)) (go >l (? (id? cur 'dead) 'dead (cur + 1)) mn)
+                           (k = 'br) (: _ (bpin <>>f cur) (go >l cur mn))
+                           (k = 'jmp) (: _ (bpin <>f cur) (go >l 'dead (mnu mn cur)))
+                           (member? k '(ret jmpr)) (go >l 'dead (mnu mn cur))
+                           (go >l cur mn))))))
+           (go fs 0 big))
        (pslots env acc)                             ; the homable params' PASS-1 frame slots
         (? !(two? env) acc
            (: e2 <env
@@ -7240,6 +7262,7 @@
                    (go9 ir1 0))
              nra (nrac ir1 (pslots <>sp1 ()))
              pcs (? (hm && (0 < nh) && (nh <= tally free9) &&
+                     (0 < pmin ir1) &&
                      (nh * (1 + nx) + em < 2 * nra))
                     (: pg (homefold g params 0 [() free9]
                            (\ a2 i9 p9 (? (homable? <>p9 && two? <>a2)
