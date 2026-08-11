@@ -6006,6 +6006,7 @@
      'csbor ()   ; the cs borrow grant (call-crossing keeps take seats from it)
      'csbu ()    ; ...and the seats a build took (the grant shrinks to the use)
      'saro ()    ; ...and the spill-around roster (vmcflush reloads its pins)
+     'pcs ()     ; the param cs-seat grant ((gpi reg)..; the shadow spill reads it)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
    ; and wraps per-call off the liveness (av9, alive's answer)
@@ -6656,10 +6657,12 @@
                             mv ((? (home = inc) () [['mov home inc]]) + cvt pty home)
                             (spill hp >ps (gpi + 1) xmmi ovi ([<p ['reg home] pty] >< env)
                                    (acc + mv)))
-                         (: home (homereg gpi)          ; the non-leaf lane: home + the spill shadow
+                         (: pc9 (assoc gpi (peep g 'pcs ()))   ; a granted cs seat: the callee
+                            ; preserves it, so no call wrap, no shadow slot -- off g 'homes
+                            home (? (two? pc9) <>pc9 (homereg gpi))
                             inc (nthr (argr g) gpi)
-                            off (nslot g 8)
-                            _ (pin g 'homes ([home off <p] >< peep g 'homes ()))
+                            _ (? (two? pc9) ()
+                                 (pin g 'homes ([home (nslot g 8) <p] >< peep g 'homes ())))
                             mv ((? (home = inc) () [['mov home inc]]) + cvt pty home)
                             (spill hp >ps (gpi + 1) xmmi ovi ([<p ['reg home] pty] >< env)
                                    (acc + mv))))
@@ -6813,6 +6816,21 @@
                      (member? <f gstops) ((<>f = fb9) && member? <>>f offs)
                      ())
               (nreads >fs offs (? hit (n + 1) n))))
+       (nrac fs offs)                               ; the unerasable reloads: a call dirties every
+        (: t (tablet 0)                             ; slot, a store cleans its own (stld remats the
+           (go l n9)                                ; loads behind it), the FIRST dirty load counts
+            (? !(two? l) n9
+               (: f <l
+                  (? !(two? f) (go >l n9)
+                     (member? <f '(call callr))
+                      (: _ (foldl (\ _ o9 (pin t o9 1)) 0 offs) (go >l n9))
+                     (member? <f gstops && (<>f = fb9) && member? <>>f offs)
+                      (: _ (pin t <>>f ()) (go >l n9))
+                     (member? <f ldops9 && (<>>f = fb9) && member? <>>>f offs &&
+                      peep t <>>>f ())
+                      (: _ (pin t <>>>f ()) (go >l (n9 + 1)))
+                     (go >l n9))))
+           (go fs 0))
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
         (? (bad? sp0) 'bad
            (: _ (bldreset g)
@@ -7136,22 +7154,26 @@
        ; deopts: ir1 stands.
        (regen hp st)
         (: lh9 <st lp9 <>>st cs9 (nthr st 3)
+           pc0 (peep g 'pcs ())                     ; the param cs grant, captured across fnreset
            e0 (peep g 'epi epi)
            ; the borrow offer: the cs seats the homes left, when some loop licenses a
            ; callish keep (wb) -- granted whole, then shrunk to what a build took
            bf9 (? wb (filter (\ r9 !(member? r9 cs9)) (cspool g)) ())
            _ (pins g 'lobar () 'lonone ())
            (att k9 bor9)
-            (: _ (pins (fnreset g) ; the attempt starts from the clean record at ir1's accumulator snapshot
+            (: lp2 (lp9 + filter (\ r9 (member? r9 tpool && !(member? r9 lp9)))   ; the granted
+                           (map (\ e9 (homereg <e9)) pc0))   ; params' homeregs rejoin the pool
+               _ (pins (fnreset g) ; the attempt starts from the clean record at ir1's accumulator snapshot
                   'n n0 'strs strs0
-                  'pool0 lp9 'pool lp9)
+                  'pool0 lp2 'pool lp2)
                _ (rgset g lh9 av au)
                _ (pin g 'csbor bor9)
+               _ (pin g 'pcs pc0)
                ; the callee-saved homes AND borrows: one slot each past the r3 cell, stored by
                ; the prologue (g 'cssv) and reloaded on every exit -- the epilogue PIN carries
                ; the loads through each ret and sib splice, and unframe re-addresses them like
                ; any slot op
-               csa (cs9 + bor9)
+               csa (cs9 + bor9 + map (\ e9 <>e9) pc0)
                _ (? (two? csa)
                     (: sv (map (\ r9 ['st 'r4 (nslot g 8) r9]) csa)
                        _ (pin g 'cssv sv)
@@ -7208,11 +7230,29 @@
                                  !(id? (nthr (argr g) i9) (homereg i9))) (n2 + 1) n2)))
              pp (hm && (2 * nc * nh < nr ||
                         (two? av && (2 * nh * (pmax ir1 + nthr av 4) + em < nr))))
+             ; the cs-home grant: the homes take callee-saved seats and the per-call wraps
+             ; retire for one save + a reload per EXIT (the epilogue rides every ret) --
+             ; fn-wide, the whole set or none (the law above), seats from what lpick left,
+             ; never beside the loop borrow (wb: a keep's claim wins the seat)
+             free9 (? wb () (filter (\ r9 !(member? r9 (nthr st0 3))) (cspool g)))
+             nx (: (go9 l n9) (? !(two? l) n9
+                                 (go9 >l (? (two? <l && id? <<l 'ret) (n9 + 1) n9)))
+                   (go9 ir1 0))
+             nra (nrac ir1 (pslots <>sp1 ()))
+             pcs (? (hm && (0 < nh) && (nh <= tally free9) &&
+                     (nh * (1 + nx) + em < 2 * nra))
+                    (: pg (homefold g params 0 [() free9]
+                           (\ a2 i9 p9 (? (homable? <>p9 && two? <>a2)
+                                          [([i9 <<>a2] >< <a2) ><>a2]
+                                          a2)))
+                       <pg)
+                    ())
+             _ (pin g 'pcs pcs)
              ; the array leg licenses its own regen: element pins are priced by neither
              ; nr (param reads) nor the homes -- a non-empty universe is the pay; a callish
              ; loop (wb) licenses too, so its keep can take borrowed cs seats
-             (? (pp || lh || two? au || (wb && two? av && two? <>>av))
-                (regen (? pp 'shadow ()) st0) ir1)))
+             (? (two? pcs || pp || lh || two? au || (wb && two? av && two? <>>av))
+                (regen (? (two? pcs || pp) 'shadow ()) st0) ir1)))
        ; ⚠ deadlab joins unframe in the POST-CHOICE slot and must never touch the ir1 the rankers
        ; read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis, and sweeping
        ; it early lets a pass-2 ride clobber a live arrival. this chain's order is TYPED
