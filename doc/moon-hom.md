@@ -150,6 +150,18 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
   construction-laid si starves the pipeline of six times what it saves. that
   residue class is pipeline-shaped on purpose; it retires only with the passes
   it feeds.
+* **the base folds: ptr ± const enters the face (landed 2026-08-11).** the same
+  instrument (log every hit/sh fold) attributed the 2,025-insn base-fold class:
+  the single dominant idiom was `(add r0 r0 8)(ld r0 r0 0)` -- `Ip[1]`/`Sp[0]`,
+  a deref of ptr+const where cgbin laid the scaled add and clval faced at offset
+  0. now clval's deref lane folds it at birth: a `var` whose vent type is a
+  plain pointer (VLA pointees decline -- their stride is cgbin's runtime lane),
+  the knum constant scaled at compile time into the face's offset, both `p + k`
+  and `k + p` and `p - k`; a dot on top folds again (`ip[1].w` is ONE load).
+  afd's discipline: the guard is static, no evaluation is ever discarded.
+  love.c −503 insns, −2,114 text bytes. the store side still reaches these
+  faces through matv (one add, as before -- no loss); face-direct stores are
+  the recorded next.
 
 each rung past 0 rides the standing ritual: laws re-truthed from measured emissions,
 tortures vs gcc, the differential tier, fixpoint as the self-consistency gate.

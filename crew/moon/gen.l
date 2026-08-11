@@ -1592,12 +1592,34 @@
            ; frame-direct: a constant-indexed element is a static (r4, off) face
            (: fdc (afd g env e)
               (? (two? fdc) (mkm <>fdc 'r4 <fdc ())
-                 (: r (cgexpr g env <>e ())
-                    (? (bad? r) 'bad
-                       !(ptr? (vty r)) 'bad
-                       ; the face keeps the pointer's OWN register (a home, a pin, a park --
-                       ; the consumer reads through it and frees it); no bridge to r0
-                       (mkm <>(vty r) (vreg r) 0 (vfs r))))))
+                 ; ptr ± const: the SCALED constant folds into the face's offset, so the
+                 ; add never emits (p[1] is one load). static only: a var whose vent type
+                 ; is a plain pointer (a VLA pointee scales at runtime -- cgbin's lane)
+                 (: X <>e
+                    pv (? (two? X && id? <X 'bin && member? <>X '(+ -))
+                          (: ka (knum g <>>X) kb (knum g <>>>X)
+                             (? (two? kb && !(two? ka)) [<>>X (? (id? <>X '+) <kb (0 - <kb))]
+                                (two? ka && !(two? kb) && id? <>X '+) [<>>>X <ka]
+                                ()))
+                          ())
+                    pty (? (two? pv && two? <pv && id? <<pv 'var)
+                           (: en (vent g env <><pv)
+                              (? (two? en && member? <en '(loc regv glo) && ptr? <>>en &&
+                                  !(gvarr? <>(<>>en)))
+                                 <>>en ()))
+                           ())
+                    off9 (? pty (: d (* <>pv (tsz g <>pty))
+                                  (? (fits32? d) d 'no)) 'no)
+                    (? (charm? off9)
+                       (: r (cgexpr g env <pv ())
+                          (? (bad? r) 'bad
+                             (mkm <>pty (vreg r) off9 (vfs r))))
+                       (: r (cgexpr g env <>e ())
+                          (? (bad? r) 'bad
+                             !(ptr? (vty r)) 'bad
+                             ; the face keeps the pointer's OWN register (a home, a pin, a park --
+                             ; the consumer reads through it and frees it); no bridge to r0
+                             (mkm <>(vty r) (vreg r) 0 (vfs r))))))))
           (k = 'dot)
            (: r (: lv (clval g env <>e)
                    ; an rvalue struct base (a call's parked temp: `mk(x).a`) is
