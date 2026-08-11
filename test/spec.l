@@ -359,7 +359,10 @@
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
 ; the compounds); sort/sortby by the total order; (jot n) the first n charms; the higher-order
-; functions live in the prel.
+; functions live in the prel. APPLYING a chain is the text law one lattice rung up: a charm
+; INDEXES an element (negatives from the end, out of range the unit 1), a chain JUXTAPOSES --
+; the append, agreeing with + -- and every other operand takes the default action, const-1.
+; ⚠ () is the zero point, not a chain, so (l ()) is the default and not the identity + gives it.
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 ())))
  !(cap 0) ("x" = (string 'x)) !(two? 'x)          ; no cap at the end of the list; a symbol is NOT a chain -- its name comes via `string`
@@ -370,12 +373,20 @@
  (20 = (caup (assoc 2 (list `(1 10) `(2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (member? 3 '(1 2 3)) !(member? 9 '(1 2 3))
  (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3))
+ (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) (9 = ('(7 8 9) -1)) (7 = ('(7 8 9) -3))   ; a charm indexes, negatives from the end
+ (1 = ('(7 8 9) 3)) (1 = ('(7 8 9) -4)) (1 = ('(7 8 9) 'x)) (1 = ('(7 8 9) ()))  ; out of range, and every non-index operand, is the unit
+ ('(1 2 3 4) = ('(1 2) '(3 4))) (('(1 2) '(3 4)) = (+ '(1 2) '(3 4)))            ; a chain juxtaposes: the append, agreeing with +
+ ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ... and it curries, as text does
  (294 = $'(a b c)) (3 = (tally '(a b c))))  ; net sums spellings; tally counts the spine
 
 ; --- strings, symbols & mints --- a symbol is interned; (mint 0) adjoins a fresh nameless POINT
 ; (materially empty, applies const-1); a NOM is a named point (its own kind); () IS THE CORE -- the one
 ; true nothing (serial-0 mint, printed ()), DISTINCT from 0 and "" though all net 0;
 ; absence reads it; `$` clamps the net measure, `tally` counts; snip/+/string.
+; a string INDEXES by a charm -- negatives from the end, out of range the unit 1 -- and
+; JUXTAPOSES by a string: (s t) is s then t, C's adjacent-literal law with the literal
+; restriction lifted, so it curries to any arity and agrees with (+ s t). every other operand
+; takes the default action, const-1. a chain reads the same way, by element (see chains).
 ; a missing read answers the zero point under the floor handler welp (no warning surfaced)
 (hear welp)
 (assert (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z)))))   ; absence: the zero point, wearing ()
@@ -402,6 +413,9 @@
  !(string 0) !!(string 1) (1 = (tally (string 0)))   ; a NUL nets nothing: the chain of nothings reaches the BYTES, and (string 0) is one of them
  !(snip (+ "a" 0) 1 2) (97 = $(+ "a" 0))        ; ... an all-NUL text IS nothing, and the NUL byte appends for free
  ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
+ ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (+ a b)))   ; juxtaposition joins text, curried, no literal needed
+ (99 = ("abc" -1)) (97 = ("abc" -3)) (1 = ("abc" -4))   ; a negative index counts from the END; past the front is out of range
+ ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) (1 = ("ab" 'cd)) (1 = ("ab" '(1 2)))   ; "" is the unit; a non-text operand stays const-1
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ("\"a\\nb\"" = (show "a\nb")) ("(mint " = (snip (show (mint 0)) 0 6)))   ; a mint prints (mint <serial>) (diagnostic, not an exact reparse)
 

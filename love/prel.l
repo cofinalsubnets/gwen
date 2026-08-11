@@ -124,6 +124,13 @@
         ; frequency-ordered, so it stays a chain: k=2/3 costs one or two compares. a table would
         ; only pay past k=6.
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
+        ; past cmp8 the count still has to compose. numfn LAYS the thread -- straight-line, no
+        ; counter, the fast shape -- but the 3n+5 cells ARE the cost, and they are the one thing a
+        ; numeral can grow without bound: n=100000 is ~72MB, and apcap admits 2^20. so the thread
+        ; is for counts small enough to be free, and past nfcap nfloop composes by COUNTING
+        ; instead -- one closure, O(1) cells, the same function.
+        (nfloop n f x) (? (< n 1) x (nfloop (+ -1 n) f (f x)))
+        nfcap 1024
         ; an open star: a coin whose die pins slot 7 is numeric by declaration, so a numeral powers
         ; it through its own * (ipow is generic). no size to read, so this lane keeps the count cap.
         (starred? x) (? (coin? x) (= 1 (peep (die-of x) 7 0)) 0)
@@ -136,7 +143,7 @@
                         (: k (saturate n)
                            (? (< k 1) 1 (= k 1) x
                               (apover k) (scare 'apcap k)
-                              (: c (cmp k) (? c (c x) (numfn k x))))))
+                              (: c (cmp k) (? c (c x) (< nfcap k) (nfloop k x) (numfn k x))))))
         (pin book 'num-ap num-ap)))
 ; seal-hook caches num-ap into the VM, so it must follow the pin above.
 (seal-hook 1 num-ap)
@@ -706,7 +713,20 @@
 ; the help door: (hear f) installs f as the help every raise reaches -- seal-hook's one dynamic
 ; slot, the same hot_help the C raise lanes read -- and (heard ()) answers the installed one.
 ; (hear ()) uninstalls: a raise then takes the default escape.
-(: (hear f) (seal-hook 5 f))
+; binary?: does f take exactly two operands? read two ways -- the arity off the n-ary closure
+; marker, else the param count off the source a compiled lambda stashes. ⚠ ONE-SIDED on purpose:
+; a shape neither reads (a nif, a partial) PASSES. a false refusal walls off a legitimate handler
+; at the one door a session cannot route around; a missed one is only today's silence.
+; ⚠ the marker is read off a known binary rather than named: `peek`'s nom dies at the hatch but
+; the folded reference lives. ⚠ and it must be lvm_cur -- the ap TABLE has it. binding lvm_ret0
+; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
+(: hcur (peek 0 (\ a b a))
+   (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
+                  (id? hcur (peek 0 f)) (= 2 (peek 1 f))
+                  (: s (lamsrc f) (? (two? s) (= 4 (tally s)) 1)))
+   (hear f) (? !f (seal-hook 5 f)                   ; every nothing uninstalls
+               (binary? f) (seal-hook 5 f)
+               (scare 'help-arity f)))
 ; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err FOR THIS TASK,
 ; (wear ()) hands the console back, (worn ()) answers what is worn. an element that is
 ; not a port keeps the console, so (wear (L () o ())) re-seats stdout alone. ⚠ what a
@@ -719,7 +739,8 @@
 ; (serve1 root) c ..)), and the unit is the x when there is genuinely nothing to hand.
 ; n wears the help's own arity, so `welp` is one.
 ; ⚠ ALL THREE OPERANDS, always: two hand back a closure, which is truthy, and f never
-; runs at all.
+; runs at all. n's own arity is checked (binary?) BEFORE f runs -- so the refusal lands
+; under the AMBIENT help, not inside the raise this form exists to catch.
 ; ⚠ n fires only once the displaced help is BACK, which is what the thunks are for --
 ; the presence a caller no longer carries is carried HERE, since a clean v may be a
 ; closure like the escape's. run n inside and its own raise would land in this trap.
@@ -733,7 +754,8 @@
 ; instead -- an outer trap's help meets the same test, so the chain walks down to an
 ; answering help or to none, which is what a child that installed nothing deserves.
 (: (trap f x n)
-     (: prev (heard ())
+     (: _ (? (binary? n) 0 (scare 'help-arity n))   ; refuse BEFORE f runs, under the ambient help
+        prev (heard ())
         home (myself ())
         r (call-cc (\ k (: _ (hear (\ a b (? (id? (myself ()) home) (k (\ _ (n a b)))
                                              (: _ (hear prev) (scare a b)))))
