@@ -443,6 +443,21 @@
          _ (? ((n >= 0) && (n <= 15)) 0 (scare 'x64-crnum n))
          ((? ((hi n = 0) && (hi gn = 0)) () `((rex 0 (hi n) 0 (hi gn))))
           + `(15 opc (modrm 3 n gn))))
+   ;; the VMX pointer ops: 0f c7 /6 over a memory operand holding a physical address, each
+   ;; under its own legacy prefix. ⚠ the PREFIX LEADS and REX follows it -- emit-m0f puts REX
+   ;; first, which is right for a bare 0f op and wrong the moment a prefix joins it.
+   (emit-vmp pre base off)
+      (: bn (rn base)
+         (pre + ((? (hi bn = 0) () `((rex 0 0 0 1))) + ('(15 199) + mem 6 base off))))
+   ;; vmread/vmwrite move a VMCS field to or from a GPR. ModRM.reg always names the FIELD and
+   ;; .rm the other end, so the two rows below differ only in opcode and argument order. no
+   ;; REX.W: both are 64-bit operations in 64-bit mode whether or not anyone says so.
+   (emit-vmrw opc f g)
+      (: fn (rn f) gn (rn g)
+         ((? ((hi fn = 0) && (hi gn = 0)) () `((rex 0 (hi fn) 0 (hi gn))))
+          + `(15 opc (modrm 3 fn gn))))
+   (emit-vmread d f) (emit-vmrw 120 f d)                              ; (vmread d f)  d <- VMCS[f]
+   (emit-vmwrite f s) (emit-vmrw 121 f s)                             ; (vmwrite f s) VMCS[f] <- s
    (emit-ldcr d n) (emit-cr 32 n d)                                   ; (ldcr d n)  d <- CRn
    (emit-stcr n s) (emit-cr 34 n s)                                   ; (stcr n s)  CRn <- s
    (emit-ltr s) (: sn (rn s)                                          ; 0F 00 /3 -- the operand is r/m16
@@ -529,6 +544,12 @@
            ; PHYSICAL address in rax and name no operand of their own.
            ('vmrun >< '(15 1 216)) ('vmload >< '(15 1 218)) ('vmsave >< '(15 1 219))
            ('stgi >< '(15 1 220)) ('clgi >< '(15 1 221))
+           ; ..and the VMX lane beside it: two bare ops, the three pointer ops under their
+           ; prefixes, the field pair, and the two descriptor-table READS lgdt/lidt lacked.
+           ('vmlaunch >< '(15 1 194)) ('vmxoff >< '(15 1 196))
+           ('vmxon >< emit-vmp '(243)) ('vmclear >< emit-vmp '(102)) ('vmptrld >< emit-vmp ())
+           ('vmread >< emit-vmread) ('vmwrite >< emit-vmwrite)
+           ('sgdt >< emit-m0f 0 '(15 1)) ('sidt >< emit-m0f 1 '(15 1))
            ('int >< emit-int) ('ltr >< emit-ltr)
            ('ldcr >< emit-ldcr) ('stcr >< emit-stcr)
            ('lgdt >< emit-m0f 2 '(15 1)) ('lidt >< emit-m0f 3 '(15 1))

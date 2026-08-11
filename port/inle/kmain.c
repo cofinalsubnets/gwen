@@ -1266,6 +1266,41 @@ static lvm(lvm_svm_run) {
   if (!ai_ok(g)) return ghelp(g);
   Unpack(g);
   ai_musttail return Next(1); }
+
+// ..and its Intel twin (port/inle/x86_64/vmx.c, doc/vmx.md). (vmx-run ())
+// answers FOUR numbers where the SVM door answers three: the last is the
+// VM-instruction error, which is the only thing a refused entry has to say and
+// is worth carrying out to where a human reads it.
+uintptr_t k_vmx_need(void);
+bool k_vmx_ok(void);
+int k_vmx_spike(void *mem, uint64_t *reason, uint64_t *rax, uint64_t *rip,
+                uint64_t *err);
+
+static lvm(lvm_vmx) {
+  Sp[0] = k_vmx_ok() ? putcharm(1) : ZeroPoint;
+  ai_musttail return Next(1); }
+
+ai_noinline static struct ai *k_vmx_run(struct ai *g) {
+  uint64_t reason = 0, rax = 0, rip = 0, err = 0;
+  if (!k_vmx_ok()) return g->sp[0] = ZeroPoint, g;
+  if (!ai_ok(g = str0(g, k_vmx_need()))) return g;       // OOM: the wrapper ghelps
+  if (k_vmx_spike(txt(g->sp[0]), &reason, &rax, &rip, &err) < 0)
+    return g->sp[1] = ZeroPoint, g->sp += 1, g;
+  if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
+  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                                 putcharm((intptr_t) err), ZeroPoint);
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) rip), word(c));
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) rax), word(c));
+  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+                putcharm((intptr_t) reason), word(c));
+  return g->sp[1] = word(c), g->sp += 1, g; }
+static lvm(lvm_vmx_run) {
+  Pack(g); g = k_vmx_run(g);
+  if (!ai_ok(g)) return ghelp(g);
+  Unpack(g);
+  ai_musttail return Next(1); }
 #endif
 
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd,
@@ -1598,6 +1633,8 @@ static union u
 #if defined(__x86_64__)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
+  nif_vmx[] = {{lvm_vmx}, {lvm_ret0}},
+  nif_vmx_run[] = {{lvm_vmx_run}, {lvm_ret0}},
 #endif
   nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #ifdef K_TEST
@@ -1688,6 +1725,8 @@ static struct ai_def defs[] = {
 #if defined(__x86_64__)
   {"svm", (intptr_t) nif_svm},
   {"svm-run", (intptr_t) nif_svm_run},
+  {"vmx", (intptr_t) nif_vmx},
+  {"vmx-run", (intptr_t) nif_vmx_run},
 #endif
   // quit is seat-aware now (rung 4): a spawned task's exit is the TASK's, so
   // the row is owed on BOTH kernels. unseated it resets the shipped machine;

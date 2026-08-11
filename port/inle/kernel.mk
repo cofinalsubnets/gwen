@@ -300,7 +300,7 @@ kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/kernel/kore.l $R/test/kernel/pipe.l \
   $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
   $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
-  $R/test/kernel/disk.l $R/test/kernel/svm.l \
+  $R/test/kernel/disk.l $R/test/kernel/svm.l $R/test/kernel/vmx.l \
   $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP, rewritten only when the set changes
 # (mk/lib.mk) -- so an edit to any makefile in the tree does not relay this header.

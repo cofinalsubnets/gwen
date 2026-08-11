@@ -86,6 +86,13 @@
       ("sys.cpuid"   "0fa20f31"              ((cpuid) (rdtsc)))
       ("sys.svm"     "0f01d80f01da0f01db0f01dc0f01dd"
                                              ((vmrun) (vmload) (vmsave) (stgi) (clgi)))
+      ;; VMX: the two bare ops, the three prefixed pointer ops over [rax], the field pair
+      ;; (ModRM.reg is the FIELD both ways, so both read cb), and sgdt/sidt over [rax].
+      ("sys.vmx"     "0f01c20f01c4f30fc730660fc7300fc7300f78cb0f79cb0f01000f0108"
+                                             ((vmlaunch) (vmxoff)
+                                              (vmxon r0 0) (vmclear r0 0) (vmptrld r0 0)
+                                              (vmread r3 r1) (vmwrite r1 r3)
+                                              (sgdt r0 0) (sidt r0 0)))
       ("sys.int"     "cd00cd20"              ((int 0) (int 32)))
       ;; the control registers: the CR number rides ModRM.reg, so REX.R reaches cr8 and REX.B
       ;; reaches r8 -- and neither carries REX.W, a CR move being 64-bit already

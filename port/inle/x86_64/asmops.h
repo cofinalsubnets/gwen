@@ -48,6 +48,51 @@ static inline uint64_t k_rd_cr2(void) {
 #endif
   return v; }
 
+// VMX needs the host's own CR0/CR3/CR4 written into the VMCS, and CR4.VMXE set
+// before vmxon -- so the control registers grew readers beside CR2's.
+static inline uint64_t k_rd_cr0(void) {
+  uint64_t v;
+#ifdef __mooncc__
+  asm volatile ("ldcr %0, 0" : "=r"(v));
+#else
+  asm volatile ("mov %%cr0, %0" : "=r"(v));
+#endif
+  return v; }
+
+static inline uint64_t k_rd_cr3(void) {
+  uint64_t v;
+#ifdef __mooncc__
+  asm volatile ("ldcr %0, 3" : "=r"(v));
+#else
+  asm volatile ("mov %%cr3, %0" : "=r"(v));
+#endif
+  return v; }
+
+static inline uint64_t k_rd_cr4(void) {
+  uint64_t v;
+#ifdef __mooncc__
+  asm volatile ("ldcr %0, 4" : "=r"(v));
+#else
+  asm volatile ("mov %%cr4, %0" : "=r"(v));
+#endif
+  return v; }
+
+static inline void k_wr_cr0(uint64_t v) {
+#ifdef __mooncc__
+  asm volatile ("stcr 0, %0" :: "r"(v) : "memory");
+#else
+  asm volatile ("mov %0, %%cr0" :: "r"(v) : "memory");
+#endif
+}
+
+static inline void k_wr_cr4(uint64_t v) {
+#ifdef __mooncc__
+  asm volatile ("stcr 4, %0" :: "r"(v) : "memory");
+#else
+  asm volatile ("mov %0, %%cr4" :: "r"(v) : "memory");
+#endif
+}
+
 // CR0.EM=0 / CR0.MP=1 and CR4.OSFXSR|OSXMMEXCPT: enable x87/SSE. this runs
 // before ANY other C in kmain -- neither compiler guarantees it will not emit
 // an SSE instruction (a struct copy is enough), and one of those #UDs into a
@@ -176,6 +221,139 @@ static inline void k_vmload(uint64_t vmcb_pa) {
 // machine wearing a hang's face. both spell the same in either dialect.
 static inline void k_stgi(void) { asm volatile ("stgi" ::: "memory"); }
 static inline void k_clgi(void) { asm volatile ("clgi" ::: "memory"); }
+
+// --- VMX, the Intel lane (port/inle/x86_64/vmx.c) ---------------------
+// Nothing here is register-contracted the way SVM's ops are. vmxon, vmclear
+// and vmptrld take a MEMORY operand holding a physical address, and mooncc's
+// asm surface has no "m" constraint at all -- so the neutral half takes the
+// address in a REGISTER and names a base and a displacement (lgdt's shape),
+// where AT&T takes the operand directly.
+static inline void k_vmxon(uint64_t *pa) {
+#ifdef __mooncc__
+  asm volatile ("vmxon %0, 0" :: "r"(pa) : "cc", "memory");
+#else
+  asm volatile ("vmxon %0" :: "m"(*pa) : "cc", "memory");
+#endif
+}
+
+static inline void k_vmclear(uint64_t *pa) {
+#ifdef __mooncc__
+  asm volatile ("vmclear %0, 0" :: "r"(pa) : "cc", "memory");
+#else
+  asm volatile ("vmclear %0" :: "m"(*pa) : "cc", "memory");
+#endif
+}
+
+static inline void k_vmptrld(uint64_t *pa) {
+#ifdef __mooncc__
+  asm volatile ("vmptrld %0, 0" :: "r"(pa) : "cc", "memory");
+#else
+  asm volatile ("vmptrld %0" :: "m"(*pa) : "cc", "memory");
+#endif
+}
+
+static inline void k_vmxoff(void) { asm volatile ("vmxoff" ::: "cc", "memory"); }
+
+// the field pair. ModRM.reg names the FIELD in both directions; the two
+// dialects differ only in which operand they write first.
+static inline uint64_t k_vmread(uint64_t field) {
+  uint64_t v;
+#ifdef __mooncc__
+  asm volatile ("vmread %0, %1" : "=r"(v) : "r"(field) : "cc");
+#else
+  asm volatile ("vmread %1, %0" : "=r"(v) : "r"(field) : "cc");
+#endif
+  return v; }
+
+static inline void k_vmwrite(uint64_t field, uint64_t v) {
+#ifdef __mooncc__
+  asm volatile ("vmwrite %0, %1" :: "r"(field), "r"(v) : "cc");
+#else
+  asm volatile ("vmwrite %1, %0" :: "r"(field), "r"(v) : "cc");
+#endif
+}
+
+// the descriptor-table READS. lgdt/lidt were here from the bring-up; VMX is
+// what needs to write the bases down before it can promise to restore them.
+static inline void k_sgdt(void *p) {
+#ifdef __mooncc__
+  asm volatile ("sgdt %0, 0" :: "r"(p) : "memory");
+#else
+  asm volatile ("sgdt %0" :: "m"(*(char (*)[10]) p) : "memory");
+#endif
+}
+
+static inline void k_sidt(void *p) {
+#ifdef __mooncc__
+  asm volatile ("sidt %0, 0" :: "r"(p) : "memory");
+#else
+  asm volatile ("sidt %0" :: "m"(*(char (*)[10]) p) : "memory");
+#endif
+}
+
+// ..and the write back, which VMX needs because every exit reloads GDTR from
+// the VMCS and the table it names is not the one the boot laid.
+static inline void k_lgdt(void const *p) {
+#ifdef __mooncc__
+  asm volatile ("lgdt %0, 0" :: "r"(p) : "memory");
+#else
+  asm volatile ("lgdt %0" :: "m"(*(char const (*)[10]) p) : "memory");
+#endif
+}
+
+// k_vmlaunch -- the entry, which on this vendor cannot be one instruction.
+//
+// ⚠ A VM EXIT DOES NOT RESUME AFTER `vmlaunch`. It resumes at the HOST_RIP in
+// the VMCS with the HOST_RSP in the VMCS, so this block writes both to its own
+// label and its own stack pointer first. That is the whole structural
+// difference from SVM's `vmrun`, which simply came back.
+//
+// ⚠ And the two outcomes arrive at the same place by different roads: a
+// REFUSED launch falls THROUGH to the next instruction, while a guest that ran
+// and exited lands on the label. Only the marker register tells them apart --
+// it is set to 1 before the launch and to 0 on the label.
+//
+// ⚠ VMX saves no guest GPR: rax is read at the label because by the next
+// instruction it is gone. By the same token the host's own GPRs are NOT
+// restored on exit (rsp and rip are, and nothing else), so a guest that writes
+// more than rax wants a save/restore stub around this instead of an inline.
+static inline int k_vmlaunch(uint64_t *guest_rax) {
+  uint64_t bad, grax;
+#ifdef __mooncc__
+  asm volatile (
+    "lea r0, sp, 0\n"          // the rsp the exit has to come back to
+    "li r1, 27668\n"           // HOST_RSP  (0x6c14)
+    "vmwrite r1, r0\n"
+    "la r0, vmx-back\n"
+    "li r1, 27670\n"           // HOST_RIP  (0x6c16)
+    "vmwrite r1, r0\n"
+    "li %0, 1\n"
+    "vmlaunch\n"
+    "jmp vmx-done\n"
+    "label vmx-back\n"
+    "mov %1, r0\n"             // the guest's rax, before anything else takes it
+    "li %0, 0\n"
+    "label vmx-done"
+    : "=r"(bad), "=r2"(grax) :: "r0", "r1", "cc", "memory");
+#else
+  asm volatile (
+    "movq %%rsp, %%rax\n"
+    "movq $0x6c14, %%rcx\n"
+    "vmwrite %%rax, %%rcx\n"
+    "leaq 1f(%%rip), %%rax\n"
+    "movq $0x6c16, %%rcx\n"
+    "vmwrite %%rax, %%rcx\n"
+    "movq $1, %0\n"
+    "vmlaunch\n"
+    "jmp 2f\n"
+    "1:\n"
+    "movq %%rax, %1\n"
+    "movq $0, %0\n"
+    "2:"
+    : "=r"(bad), "=r"(grax) :: "rax", "rcx", "cc", "memory");
+#endif
+  *guest_rax = grax;
+  return (int) bad; }
 
 // --- port I/O ---------------------------------------------------------
 // holo's in/out are register-CONTRACTED and take no operands: the port is in

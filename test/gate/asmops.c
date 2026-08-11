@@ -29,7 +29,20 @@ uint64_t k_asmops_probe(uint16_t port, uint8_t v) {
   k_vmload(port);
   k_stgi();
   k_clgi();
-  return k_rd_cr2() + k_inb(port) + k_inl(port) + k_rdmsr(0xc0000080u) + b + c + d; }
+  uint64_t pa = port, grax = 0;
+  char dt[10];
+  k_vmxon(&pa);
+  k_vmclear(&pa);
+  k_vmptrld(&pa);
+  k_vmwrite(0x6c14, pa);
+  k_vmxoff();
+  k_sgdt(dt);
+  k_sidt(dt);
+  k_lgdt(dt);
+  k_wr_cr0(k_rd_cr0());
+  k_wr_cr4(k_rd_cr4());
+  return k_rd_cr2() + k_inb(port) + k_inl(port) + k_rdmsr(0xc0000080u) + b + c + d
+       + k_rd_cr0() + k_rd_cr3() + k_vmread(0x4402) + (uint64_t) k_vmlaunch(&grax) + grax; }
 #elif defined(__aarch64__)
 uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_isb();

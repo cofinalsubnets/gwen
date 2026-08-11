@@ -115,6 +115,13 @@
            ('rdmsr >< 0) ('wrmsr >< 0) ('cpuid >< 0) ('rdtsc >< 0)
            ; the SVM lane: register-contracted too -- the VMCB's physical address rides rax.
            ('vmrun >< 0) ('vmload >< 0) ('vmsave >< 0) ('stgi >< 0) ('clgi >< 0)
+           ; the VMX lane, where nothing is register-contracted: vmxon/vmclear/vmptrld take a
+           ; MEMORY operand holding a physical address (base + displacement, lgdt's shape),
+           ; vmread/vmwrite move a field to or from a GPR, vmlaunch/vmxoff are bare. sgdt/sidt
+           ; join them because VMX must WRITE DOWN the descriptor-table bases it will restore.
+           ('vmlaunch >< 0) ('vmxoff >< 0)
+           ('vmxon >< 2) ('vmclear >< 2) ('vmptrld >< 2) ('sgdt >< 2) ('sidt >< 2)
+           ('vmread >< 2) ('vmwrite >< 2)
            ('isb >< 0) ('wfi >< 0) ('wfe >< 0) ('eret >< 0)
            ('int >< 1) ('ltr >< 1) ('dsb >< 1) ('dmb >< 1)
            ('brk >< 1) ('dbrk >< 1) ('hvc >< 1) ('smc >< 1) ('udf >< 1)

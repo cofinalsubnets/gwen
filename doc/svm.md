@@ -84,3 +84,7 @@ The VMX twin is a second backend behind the same door, not a rewrite of this one
 feel bigger for the two reasons named in doc/inle.md: the VMCS is opaque (every field through
 `vmread`/`vmwrite` with an encoding table, where the VMCB is plain stores at documented offsets),
 and the exit needs a host-RIP entry point where `vmrun` just came back.
+
+**It landed — doc/vmx.md.** Both predictions held, and it came to three times this file. The
+third cost was not predicted here: real mode needs "unrestricted guest", which needs EPT, so the
+Intel guest runs 32-bit paged instead and brings a page directory, a TSS and a GDT with it.
