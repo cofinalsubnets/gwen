@@ -43,10 +43,11 @@
    (mroots _) (: s (mseat ()) (? (string? s) `("crew/moon/" s) '("crew/moon/")))
    ; the runtime home: the FIRST root that actually carries the sources. by
    ; READ, not by a name test -- presence is the wrapper (uread answers
-   ; (1 text), an absent file the zero point), and an empty nolibc.c would be
-   ; no runtime either.
+   ; (1 text), an absent file the zero point), and an empty core.c would be
+   ; no runtime either. core.c is the one member every link takes, so it is
+   ; the one that says a root is real.
    (mhome _) (: (go rs) (? !(two? rs) ()
-                           (two? (uread (<rs + "lib/nolibc.c"))) <rs
+                           (two? (uread (<rs + "lib/nolibc/core.c"))) <rs
                            (go >rs))
                 (go (mroots ())))
    ; the first three of a name list, comma-joined, with a count of the rest --
@@ -453,15 +454,20 @@
             0)
        (? (nostd || !(string? home)) ()
           (: mdir (home + "lib/math/")
+             ndir (home + "lib/nolibc/")
              inc (home + "include/")
              id (mcid home) cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
              ; the IMPLICIT runtime compiles with the system tail LEFT ON (the () below):
              ; these are our own sources reaching only our own headers, and the user's
              ; -nostdinc is about the user's translation units, not this one.
+             ; nolibc is a DIRECTORY of members, globbed the way math is: a link
+             ; owing no calendar takes no calendar. one file would arrive whole,
+             ; which is what the split bought (doc/moon-diff.md's libc rows).
              mems (map (\ p (p + dusyms <p <>p mach))
-                       ((`("nolibc" (mcobj cd id (home + "lib/nolibc.c") `(inc) tgt))
-                          >< map (\ f `(f (mcobj cd id (mdir + f) `(mdir inc) tgt)))
-                                 (sort (filter dotc? (readdir (home + "lib/math")))))
+                       (((map (\ f `(f (mcobj cd id (ndir + f) `(ndir inc) tgt)))
+                              (sort (filter dotc? (readdir (home + "lib/nolibc")))))
+                         + map (\ f `(f (mcobj cd id (mdir + f) `(mdir inc) tgt)))
+                               (sort (filter dotc? (readdir (home + "lib/math")))))
                         + (? (member? tgt '(x64 arm64 riscv64))
                              `(`("sys" (string (mksys-bytes tgt)))) ())))
              (needs? m u) (foldl (\ a nm (a || member? nm u)) () (el m 2))

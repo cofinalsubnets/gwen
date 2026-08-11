@@ -2,11 +2,11 @@
 """ccdead.py -- how much of each lane's libc the binary can never reach.
 
 ccsize.sh answers how many libc bytes a lane ships. This answers how many
-it can call. The two differ enormously for mooncc and barely at all for
-musl, and that difference is the whole of mooncc's 1.59x libc ratio: musl
-compiles ~one function per object so the static link drops what love never
-calls, while nolibc.o is a SINGLE .text section and a section is the
-linker's unit of discard -- all or nothing.
+it can call, and the gap between them is what granularity buys: a libc that
+arrives as one object arrives whole, where one compiled ~a function (musl)
+or ~an area (crew/moon/lib/nolibc/, pulled member by need) sheds what the
+link never asks for. Run it on any lane that grows a libc to see whether
+its shape still earns its size.
 
 Method: walk call/jmp/lea targets out of `objdump -d`, seeded from _start
 and from every function address found in the data sections (vtables and

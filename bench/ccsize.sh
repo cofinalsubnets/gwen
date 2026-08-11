@@ -18,9 +18,8 @@
 #     `c0_lambda`, and the clone's bytes belong to the parent. 53 symbols (7.5 KB) land
 #     in the wrong column without it.
 #
-# ⚠ this counts what a lane SHIPS. For a libc that is half the question -- 55% of what
-# mooncc's nolibc ships is unreachable, so its 1.59x here is 0.76x on the code that runs.
-# ccdead.py is the other half.
+# ⚠ this counts what a lane SHIPS, which for a libc is half the question: what it can
+# CALL is the other half, and ccdead.py answers that one.
 #
 # usage: ./ccsize.sh          (after ./ccbench.sh, or `make ccbench`)
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -52,8 +51,9 @@ objsyms() { nm --defined-only "$@" 2>/dev/null | awk '
 for l in $LANES; do
   binsyms "$W/love-$l" > "$TD/bin.$l"
   if [ "$l" = mooncc ]; then
-    # mooncc's own lane: love.o + m_am.o + the host objects (flat). nolibc.o and sys.o
-    # are its libc -- exactly what the natives take from musl.
+    # mooncc's own lane: love.o + m_am.o + the host objects (flat). ⚠ there is no
+    # nolibc object to exclude -- the driver pulls those members itself, so they
+    # reach the binary and never the object dir. The complement IS the libc.
     objsyms "$W/mooncc/love.o" "$W/mooncc/m_am.o" \
             $(ls "$W"/mooncc/*.o | grep -vE '/(love|nolibc|sys|m_[a-z0-9]+)\.o$') > "$TD/own.$l"
   else

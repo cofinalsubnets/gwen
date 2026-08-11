@@ -54,7 +54,7 @@ for f in host/*.c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco=1 -I"$ho" -I. -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
-moon1 -Icrew/moon/include -c crew/moon/lib/nolibc.c "$d/nolibc.o" || fail "love1 mooncc -c nolibc.c"
+# nolibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
   moon1 -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"

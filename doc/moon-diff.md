@@ -17,6 +17,71 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
+## 2026-08-11 — nolibc splits by area, and the libc lever is half-climbed (HEAD 6a8f8b68)
+
+The lever the fill below records as open, taken: `crew/moon/lib/nolibc.c` is now
+`crew/moon/lib/nolibc/` — four members (`core` `time` `dns` `num`) plus `impl.h` — and
+**no love link names a nolibc object any more**. The driver's runtime table globs the
+directory the way it already globbed `lib/math/`, so the by-need loop that was always
+there now has something to select: a love owing no calendar and no resolver links
+neither. No linker work, no `--gc-sections`, no new machinery.
+
+### .text — `size -A`
+
+| | mooncc | gcc-musl | clang-musl |
+|---|---|---|---|
+| .text (bytes) | **560,864** | 292,240 | 292,688 |
+| love's own C | 517,328 | 252,073 | 252,512 |
+| libc under it | **39,902** | 40,375 | 40,384 |
+
+**1.99× → 1.92×**, and mooncc's libc lands at **0.99× musl's** where it read 1.59× the
+fill below. love's own C did not move (517,328) and codegen is still **1.63×** over 614
+shared symbols — the whole delta is libc, which is what a granularity change owes.
+
+| | libc syms | shipped | reachable | dead | |
+|---|---|---|---|---|---|
+| mooncc, before | 334 | 64,110 | 28,794 | 35,316 | 55.1% |
+| mooncc, after | 234 | 39,902 | 28,794 | **11,108** | **27.8%** |
+| gcc-musl | 229 | 40,375 | 37,749 | 2,626 | 6.5% |
+
+Reachable is unchanged to the byte — nothing live left, which is the check that says the
+cut was clean rather than lucky. 24,208 bytes of dead went, 11,108 remain, and musl's
+6.5% is still the floor: the rest is dead code sitting *inside* live areas (`fread` in
+stdio, `strncasecmp` in mem/string), which no topical split can reach and which is what
+`-ffunction-sections` + a gc pass in holo would be for. **My earlier estimate that a
+split would capture most of the 35 KB was optimistic — it captures 69%.**
+
+The cut areas were chosen by measurement, not by taste: `time` (513–617), `dns`
+(1394–1558) and `num` + the stdio odds-and-ends (1584–1969) each read **100% dead, zero
+live bytes**. ⚠ `mmap` and `sysconf` sit at 618/624, tacked onto the end of the calendar
+comment block and belonging to neither — they stay in `core`, and a split on the comment
+rather than the symbols would have dragged the whole calendar back in.
+
+### what splitting a libc costs
+
+Three couplings, each the ordinary price of a second translation unit, and each one a
+thing to expect next time:
+
+* **a file-scope static crossing the cut** — `__errno_v` is written directly by `strtol`
+  and friends. The members use `errno` (the macro over `__errno_location()`) instead.
+* **a declaration that was never needed** — `htons` is *defined* above its uses in one
+  file, so nothing declared it. `impl.h` carries `<netinet/in.h>` now.
+* **a struct the public header keeps opaque** — `stdio.h` hands out `FILE` as an
+  incomplete type, so `ferror` and `popen` could not see `->err` or `->pid` from a second
+  TU. `struct _IO_FILE` moved to `impl.h`, which is musl's `stdio_impl.h` arrangement.
+
+### runtime — the expected null
+
+| | mooncc | gcc-musl |
+|---|---|---|
+| corpus insns (G, user) | 40.74 | 23.13 |
+
+Unmoved: 40.74 is the fill below's figure to the digit, and it must be — every byte
+removed was unreachable. The gates say the same from the other side: `test_raw`,
+`test_drv`, `test_fixpoint` (byte-identical rebuild) and `test_libc` all pass, the last
+one still finding all 116 names its headers declare, since a program that *does* call
+`strtol` pulls `num` exactly as it should.
+
 ## 2026-08-11 — after shrink-wrap, on the musl lanes (HEAD 32b54ab8)
 
 The first fill wholly on the static-musl method (the section below is its
@@ -53,7 +118,9 @@ on the code both lanes actually run, mooncc's libc is not merely competitive but
 against nolibc's K&R first-fit. The comparison charges mooncc for bytes musl's link
 model never pays; per-function sections + a gc pass in holo (both halves ours, the
 sentinel sections exempt) would take the headline to ~1.87× without touching codegen.
-Recorded as its own lever, beside the inlining one.
+Recorded as its own lever, beside the inlining one — **and half-climbed the same day by
+the fill above**, which got 1.92× out of splitting nolibc into by-need members and no
+linker work at all. What is left of it wants the per-function pass after all.
 
 ### runtime — the corpus, egg-boot subtracted, median of 3
 
