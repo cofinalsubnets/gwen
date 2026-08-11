@@ -16,84 +16,95 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
-## 2026-08-11 — static musl, and the libc comes onto the ledger (HEAD c95a3da4)
+## 2026-08-11 — static musl, and the libc comes onto the ledger (HEAD 535cc274)
 
 Every size row before this one raced a static mooncc binary carrying its own nolibc
 against *dynamic* gcc/clang binaries whose glibc sat off the ledger entirely — one
 number answering two questions. **The native lanes are now `gcc-musl` and `clang-musl`**:
 the same translation units through the musl wrappers, linked `-static`. Both passed the
 corpus first try, no source change of any kind. (`CCGLIBC=1` puts the old dynamic lanes
-back alongside, for continuity with the fills below.)
+back alongside, and they are kept below for continuity.)
+
+Measured after the hom ladder, so mooncc here is the compiler the fill below describes,
+one commit further on.
 
 ### .text — `size -A`
 
-| | mooncc | gcc | clang | gcc-musl | clang-musl |
+| | mooncc | gcc-musl | clang-musl | gcc (dyn) | clang (dyn) |
 |---|---|---|---|---|---|
-| .text (bytes) | 597,728 | 250,931 | 250,531 | 290,960 | 290,576 |
-| mooncc ÷ | — | 2.38× | 2.39× | **2.05×** | **2.06×** |
+| .text (bytes) | 573,152 | 291,792 | 291,216 | 251,763 | 251,123 |
+| mooncc ÷ | — | **1.96×** | **1.97×** | 2.28× | 2.28× |
 
-**2.05× is the apples-to-apples headline, not 2.40×** — ~40 KB of the old gap was never
-mooncc's code, it was glibc being absent from the file.
+**1.96× is the apples-to-apples headline, not 2.28×** — ~40 KB of the old gap was never
+mooncc's code, it was glibc being absent from the file. Every fill below quotes the
+dynamic column, so read them as that column, not this one.
 
 musl is the right static target and not just the available one: linked `-static` against
-**glibc** the same units lay 774,381 bytes of `.text` (gcc; clang 774,061) in a 2.8 MB
-file — 2.66× musl's, and **bigger than mooncc's whole binary**. Whatever else this page
-says about mooncc's codegen, its static ELF is 0.77× the size of the one gcc lays when
-gcc is held to the same self-sufficiency. A libc that was designed to be linked in is
-the honest opponent; glibc was not.
+**glibc** the same units lay 775,213 bytes of `.text` in a 2.8 MB file — 2.66× musl's,
+and **1.35× mooncc's whole binary**. Whatever else this page says about mooncc's codegen,
+its static ELF is 0.74× the size of the one gcc lays when gcc is held to the same
+self-sufficiency. A libc designed to be linked in is the honest opponent; glibc was not.
 
-Decomposed, each lane judged against **its own objects** (gcc's `.isra`/`.part` clones
-folded back into the parent; sizes address-gap derived, so they carry inter-fn padding):
+Decomposed by `bench/ccsize.sh`, each lane judged against **its own objects** (gcc's
+`.isra`/`.part` clones folded back into the parent; sizes address-gap derived, so they
+carry inter-fn padding):
 
 | | love's own C | libc in .text | libc syms |
 |---|---|---|---|
-| mooncc | 531,696 | 64,830 | 334 |
-| gcc | 250,752 | 1,936 | 10 |
-| clang | 250,384 | 1,904 | 10 |
-| gcc-musl | 250,793 | 40,375 | 229 |
-| clang-musl | 250,448 | 40,336 | 230 |
+| mooncc | 507,904 | 64,110 | 334 |
+| gcc-musl | 251,625 | 40,375 | 229 |
+| clang-musl | 251,040 | 40,384 | 230 |
+| gcc (dyn) | 251,584 | 1,936 | 10 |
+| clang (dyn) | 250,976 | 1,904 | 10 |
 
-Two readings, and the second **corrects the fills below**:
+Two readings, and the second **corrects every fill below, including the hom-ladder one
+directly under this**:
 
-* **mooncc's libc is the well-behaved half.** nolibc plus the syscall leaf is 64,830
-  bytes against musl's 40,375 linked in — **1.61×**, the narrowest ratio on this page.
-* **love's own C is 2.12×, not 1.75×.** The earlier fills read "mooncc's own
-  libc/runtime, 666 symbols / ~170 KB" off the roster of symbols the *native binary
-  lacked* — but ~110 KB of that roster is love code gcc inlined out of existence, not
-  runtime. Against its own objects mooncc's libc is 334 symbols / 65 KB, and the whole
-  love-code comparison is 531,696 vs 250,752 = **2.12×**.
+* **mooncc's libc is the well-behaved half.** nolibc plus the syscall leaf is 64,110
+  bytes against musl's 40,375 linked in — **1.59×**, the narrowest ratio on this page.
+* **love's own C is 2.02×, and mooncc's libc is 64 KB, not ~167.** The fills below read
+  the "own libc/runtime" set off the roster of symbols the *native binary lacked* — but
+  ~105 KB of that roster is love code gcc inlined out of existence, not runtime. Judged
+  against its own objects mooncc's libc is 334 symbols / 64 KB, and the whole love-code
+  comparison is 507,904 vs 251,625 = **2.02×**. The "~170 KB" and "167 KB" figures below
+  are that error, not a measurement that moved.
 
-That 2.12× splits in two, and only one half is codegen:
+That 2.02× splits in two, and only one half is codegen:
 
 | | syms | mooncc | native | |
 |---|---|---|---|---|
-| both lanes emit | 613 | 421,888 | 250,752 | **1.68×** — codegen |
-| mooncc emits, gcc doesn't | 265 | 109,808 | 0 | inlining |
+| both lanes emit | 612 | 402,242 | 251,625 | **1.60×** — codegen |
+| mooncc emits, gcc doesn't | 265 | 105,662 | 0 | inlining |
 
-The 1.68× is the differential the regalloc arc moves, and it reads 1.68×/1.69× whichever
-libc the native lane rides — as it must, the libc not touching how love.c compiles. The
-other 265 are love statics the natives emit no code for at all (`ana_d`, `copy_data`,
-`cb_csi`, `rbig`, `obin_run`): **21% of mooncc's love .text is functions gcc inlines**,
-a lever the per-symbol number cannot see. No native-only symbols exist — every symbol
-gcc emits is in the shared set.
+The 1.60× is the differential the regalloc and hom arcs move, and it reads 1.60×/1.61×
+whichever libc the native lane rides — as it must, the libc not touching how love.c
+compiles. The other 265 are love statics the natives emit no code for at all (`ana_d`,
+`copy_data`, `cb_csi`, `rbig`, `obin_run`): **21% of mooncc's love .text is functions gcc
+inlines**, a lever the per-symbol number cannot see. No native-only symbols exist — every
+symbol gcc emits is in the shared set.
 
 ### runtime — musl moves nothing
 
-| | mooncc | gcc | gcc-musl | clang | clang-musl |
+| | mooncc | gcc-musl | gcc (dyn) | clang-musl | clang (dyn) |
 |---|---|---|---|---|---|
-| corpus insns (G, user) | 42.52 | 23.30 | 23.28 | 25.32 | 25.31 |
-| corpus cycles (G, user) | 15.66 | 12.31 | 12.33 | 12.48 | 12.53 |
-| egg boot insns (G) | 9.17 | 5.18 | 5.18 | 5.61 | 5.61 |
-| build wall (s) | 14.6 | 9.2 | 9.3 | 5.4 | 5.4 |
-| chacha20 (ms) | 1083.7 | 274.6 | 280.6 | 187.9 | 166.2 |
-| poly1305 (ms) | 1508.5 | 1370.8 | 1367.5 | 823.4 | 842.3 |
+| corpus insns (G, user) | 41.81 | 23.12 | 23.09 | 25.03 | 25.00 |
+| corpus cycles (G, user) | 15.30 | 11.85 | 11.77 | 12.03 | 12.03 |
+| egg boot insns (G) | 9.11 | 5.25 | 5.25 | 5.70 | 5.70 |
+| build wall (s) | 15.9 | 9.7 | 9.7 | 5.9 | 5.6 |
+| chacha20 (ms) | 1153.8 | 326.0 | 285.0 | 188.6 | 189.5 |
+| poly1305 (ms) | 1444.5 | 1438.8 | 1374.0 | 926.6 | 829.2 |
 
-The three perf-counted rows are under 0.1% apart across each libc pair: love allocates,
-formats and copies through its own floor, so libc barely runs. That is the licence to
-move the size lane onto static musl and leave the runtime story alone — the corpus rows
-below compare straight across the change. The wall rows are noisier, as wall rows are:
-gcc's cipher pair agrees to 2%, clang's spreads 13% on chacha with no counted difference
-under it, so read the insn rows and not those two cells.
+Each libc pair agrees to 0.15% on corpus insns and 0.7% on cycles, and the boot rows are
+identical to three digits: love allocates, formats and copies through its own floor, so
+libc barely runs. That is the licence to move the size lane onto static musl and leave
+the runtime story alone — the corpus rows below compare straight across the change. The
+wall rows are noisier, as wall rows are; read the insn rows.
+
+⚠ the corpus ratio here is mooncc/clang **1.67×** (mooncc/gcc 1.81×), where the fill
+below reads 1.60× at its own HEAD. This fill sits one commit later (`bfb0be4b`, params on
+cs seats) and love.c moved with it — both natives shifted too, ~1.5% the other way. Which
+of those the 1.60 → 1.67 belongs to is not something this fill establishes; it is a row
+for the next one to settle, not a regression claimed here.
 
 Behaviour holds where the two libcs actually differ, too — `net`, `tls`, `tlsc`, `pty`
 and `fs` off the hostnif roster pass on both static-musl binaries (static musl carries a
@@ -107,10 +118,10 @@ compiles `love.c` and, given musl's headers, every other translation unit — bu
 not produce a love, and the reasons are structural rather than a missing flag:
 
 * **nine `__builtin_*` it does not have** — `add`/`sub`/`mul_overflow`, `clzll`, `trap`,
-  `inf`, `nanf`, `isinf`, `___clear_cache`. Each becomes an implicit declaration, so
-  they link as ordinary calls, and three of them are the trap: an implicit declaration
-  returns `int`, so `dv = __builtin_inf()` and love.h's `NAN` would be silently wrong
-  rather than loud. A shim cannot fix what the call site already got wrong.
+  `inf`, `nanf`, `isinf`, `___clear_cache`. As bare implicit declarations three of them
+  are silently wrong (an implicit declaration returns `int`, so `dv = __builtin_inf()`
+  converts one), though a *prototyped* polyfill header fixes that — and `-include` means
+  no source change is needed to supply one.
 * **no `__int128`** — glibc's `<link.h>` needs it, so `host/image.c` will not preprocess
   at all against the system headers. musl's headers dodge this one.
 * **no `musttail`** — love.h's guard names mooncc, clang and gcc≥15, so under tcc
@@ -120,9 +131,14 @@ not produce a love, and the reasons are structural rather than a missing flag:
 
 ⚠ and the `#else` branch love.h keeps for exactly such a compiler — `ai_tco=0`, the
 plain-return interpreter — **does not work under gcc either**: same flags, `-Dai_tco=1`
-runs and `-Dai_tco=0` segfaults on `(+ 1 2)`. So there is no fallback shape for tcc to
-take even if the builtins were dealt with, and that dead branch is its own bug, not a
-finding about tcc.
+runs and `-Dai_tco=0` faults in `ttag` walking off the heap, reached from `eqv` →
+`clo_load`. Not the `love_data.ld` trap below — the sentinel order is correct in both
+lanes. So there is no fallback shape for tcc to take even if the builtins were dealt
+with, and that dead branch is its own bug, not a finding about tcc.
+
+chibicc was probed the same way and gets further — with musl's headers and that polyfill
+it compiles every TU — but it has no `_Static_assert` at all, and love.c uses C23 labels
+before declarations. contrib/chibicc/ carries the one thing that was upstream's bug.
 
 ## 2026-08-11 — after the hom ladder (HEAD d83892e3)
 
@@ -149,7 +165,9 @@ flat — the face machinery reads state clval already had; no new passes, no reg
 mooncc **−20,480 bytes (−3.4%)** against still natives: 2.40× → **2.32×**. Per symbol
 (same 604-shared-C-symbol comparison): 411 KB vs 245 KB, 1.74× → **1.67×** of genuinely
 emitted code; mooncc's own libc/runtime lane trimmed too (~170 → 167 KB, nolibc is
-compiled by the same faces). The representative recount: lvm_add_string 1132 → 1086
+compiled by the same faces). ⚠ that 167 KB is the mis-attribution the static-musl
+section above corrects — most of it is love code gcc inlines away, and mooncc's actual
+libc is 64 KB. The `.text` and 1.67× rows here stand; the libc split does not. The representative recount: lvm_add_string 1132 → 1086
 insns, its rsp-slot movs 271 → 255 (clang: 6) — the write-through discipline at calls
 is still most of the remaining gap; the faces removed the *address* traffic (the lea +
 seat movs around member access), not the slot traffic.
