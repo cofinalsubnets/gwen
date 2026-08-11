@@ -3,21 +3,32 @@ Fix parse error on a declarator list whose first declarator is a function
 `struct S *f(void), *g(int);` and `int a(void), b;` are rejected with
 "expected '{'".
 
-A declaration carries a *list* of declarators (C11 6.7 p1):
+A declaration carries a *list* of declarators, and each entry in that
+list is a declarator (C11 6.7 p1):
 
     init-declarator-list:
             init-declarator
             init-declarator-list , init-declarator
+    init-declarator:
+            declarator
+            declarator = initializer
 
-and a function declarator is an ordinary direct-declarator (6.7.6 p1),
-with no special standing in that list:
+A declarator reaches a function shape only through an ordinary
+direct-declarator alternative (6.7.6 p1), sitting alongside the
+identifier and array forms. There is no separate "function declarator"
+nonterminal, and nothing on this path constrains the init-declarator-list
+that encloses it:
 
+    declarator:
+            pointer_opt direct-declarator
     direct-declarator:
+            identifier
             direct-declarator ( parameter-type-list )
             direct-declarator ( identifier-list_opt )
 
 What *is* restricted to a single declarator is a function definition
-(6.9.1 p1), which admits no comma:
+(6.9.1 p1), which takes a declarator directly rather than a list, and so
+structurally admits no comma:
 
     function-definition:
             declaration-specifiers declarator declaration-list_opt
