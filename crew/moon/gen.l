@@ -945,7 +945,7 @@
                    (mkv (vty v) rX (vfs v + [['mov rX 'r0]])))))))
    ; a truth value in r0 that `cmp r0 0` can test: a double folds to d != 0.0
    (ctest g env e)
-    (: r (cgexpr g env e)
+    (: r (cgexpr g env e ())
        (? (bad? r) 'bad
           (flo? (vty r))                             ; d != 0.0, NaN-honest: unordered is NONZERO (true) -- fsetn
            (mkv 'long 'r0 (vfs r + ('((li r1 0) (movqxr f1 r1) (ucomisd f0 f1)) + fsetn)))
@@ -1024,7 +1024,7 @@
                     (? al                          ; the alias bind: zero forms
                         (: _ (pin g 'rpin (al >< peep g 'rpin ()))
                            (cbind >ps >as ([<<ps ['reg al] pty] >< benv) acc rbs))
-                       (: r (cgexpr g env <as)
+                       (: r (cgexpr g env <as ())
                           (? (bad? r) 'bad
                              (pair? g pty)         ; a pair param: an 8-byte slot, both words
                               (: off (ntmp g 'llong)
@@ -1068,7 +1068,7 @@
    ; so truth through the mask is exact at every width. both backends carry test-imm (x64 F7 /0
    ; id, arm64 ands xzr #bitmask), and the 'log gate is exactly test's immediate reach on each. --
    (tbr g env v k cc lbl)
-    (: a (cgexpr g env v)
+    (: a (cgexpr g env v ())
        (? (bad? a || flo? (vty a)) 'bad
           (: fs (vfs a + [['test (vreg a) k] ['br cc lbl]])
              _ (rfree g (vreg a))
@@ -1116,12 +1116,12 @@
            ; unordered-false natively, so every relation is ONE branch and negrel spells false.
            (fcb z9)
             (: _ (vmflush g)
-               a (cgexpr g env lhs)
+               a (cgexpr g env lhs ())
                (? (bad? a) 'bad
                   (: af (? (t32? g)                      ; the gp shuttle moves the PAIR on t32
                            (asflo g a + '((movqrx r0 f0)) + spush2)
                            (asflo g a + '((movqrx r0 f0)) + spush 'r0))
-                     b (cgexpr g env rhs)
+                     b (cgexpr g env rhs ())
                      (? (bad? b) 'bad
                         (: mid (? (t32? g)
                                   (af + asflo g b + (spop2 'r2 'r3 + '((movqxr f1 r2))))
@@ -1150,7 +1150,7 @@
            kr (knum g rhs)
            kl (knum g lhs)
            (? (two? kr && immok g 'cmp <kr)
-               (: a (cgexpr g env lhs)
+               (: a (cgexpr g env lhs ())
                   (? (bad? a) 'bad
                      (flo? (vty a)) (: _ (rfree g (vreg a)) (fcb ()))
                      (pair? g (vty a))
@@ -1169,7 +1169,7 @@
                         _ (rfree g (vreg a))
                         fs)))
               (two? kl && immok g 'cmp <kl)
-               (: b (cgexpr g env rhs)
+               (: b (cgexpr g env rhs ())
                   (? (bad? b) 'bad
                      (flo? (vty b)) (: _ (rfree g (vreg b)) (fcb ()))
                      (pair? g (vty b))
@@ -1191,7 +1191,7 @@
               ; float, a wide) hands the register back and the post-hoc park stands.
               (: pk (? (callish? lhs || callish? rhs) () (ralloc g))
                  _ (? pk (pin g 'want pk) ())
-                 a (cgexpr g env lhs)
+                 a (cgexpr g env lhs ())
                  _ (? (pk && !(!(bad? a) && id? (vreg a) pk)) (rfree g pk) ())
                  (? (bad? a) 'bad
                     (flo? (vty a)) (: _ (rfree g (vreg a)) (fcb ()))
@@ -1203,7 +1203,7 @@
                               af (? wA (as128 g a + wpush)
                                     pA (asll g a + spush2)
                                     (af0 + spush 'r0))
-                              b (cgexpr g env rhs)
+                              b (cgexpr g env rhs ())
                               (? (bad? b) 'bad
                                  (flo? (vty b)) (? wA 'bad (: _ (rfree g (vreg b)) (fcb ())))
                                  (wA || d128? (vty b))                 ; a wide side: c128 over the cell
@@ -1229,7 +1229,7 @@
                                          ['(cmp r1 r0) ['br (bcc op (cmpu g ta9 tb9)) lbl]])
                                     (? (r1safe? bf) (af0 + '((mov r1 r0)) + bf + brf)
                                        (af + bf + (spop 'r1 + brf))))))
-                          (: b (cgexpr g env rhs)
+                          (: b (cgexpr g env rhs ())
                              (? (bad? b) 'bad
                                 (flo? (vty b)) (: _ (rfree g (vreg ah)) _ (rfree g (vreg b)) (fcb ()))
                                 (d128? (vty b))                       ; a word park against a wide right: build its cell
@@ -1270,7 +1270,7 @@
                  (two? kl && immok g 'log <kl) (tbr g env rhs <kl cc lbl)
                  'no)
           (? !(id? try 'no) try
-             (: c (cgexpr g env e)
+             (: c (cgexpr g env e ())
                 (? (bad? c) 'bad
                    (flo? (vty c))
                     ; a bare double condition is d != 0.0, NaN-honest -- the parity dance
@@ -1538,7 +1538,7 @@
            ; scalar's, so no fesc pin; the & lane's unlean flips it back to the escaping lea)
            (: fdc (afd g env e)
               (? (two? fdc) (mkv <>fdc 'r0 [['lean 'r0 'r4 <fdc]])
-                 (: r (cgexpr g env <>e)
+                 (: r (cgexpr g env <>e ())
                     (? (bad? r) 'bad
                        !(ptr? (vty r)) 'bad
                        (mkv <>(vty r) 'r0 (tor0 g r))))))
@@ -1547,7 +1547,7 @@
                    ; an rvalue struct base (a call's parked temp: `mk(x).a`) is
                    ; its address too -- same license the asn lane rides
                    (? !(bad? lv) lv
-                      (: rv (cgexpr g env <>e)
+                      (: rv (cgexpr g env <>e ())
                          (? (bad? rv) 'bad !(stru? (vty rv)) 'bad rv))))
               (? (bad? r) 'bad
                  (: fm (fmem g (vty r) <>>e)
@@ -1580,7 +1580,7 @@
        (bi = "__builtin_nanf" || bi = "__builtin_nan")   ; both take a (ignored) tag string; one quiet-NaN pattern
         (? (t32? g) (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9221120237041090560) (movqxr f0 r0))))
-       (bi = "__builtin_expect") (cgexpr g env <args)
+       (bi = "__builtin_expect") (cgexpr g env <args ())
        (bi = "__builtin___clear_cache")
         ; x86 keeps I-cache coherent with D-cache: nothing to do. arm64 does NOT (qemu-user is
         ; coherent, metal is not), so the architectural sequence: dc cvau each D-line, dsb, ic
@@ -1589,8 +1589,8 @@
         ; ⚠ scratch = r2/r3/r9/r15 ONLY -- NEVER r10-r14, the a64 param/local HOMES, resident
         ; across the whole fn and spilled only around real calls.
         (? !(a64? g) (mkv 'long 'r0 ())
-           (: e1 (cgexpr g env <args)
-              e2 (cgexpr g env <>args)
+           (: e1 (cgexpr g env <args ())
+              e2 (cgexpr g env <>args ())
               _ (vmflush g)                 ; labels join + the splice clobbers pool regs
               lb (nlab g ".ccd") db (nlab g ".ccdd")
               li9 (nlab g ".cci") di (nlab g ".ccid")
@@ -1629,7 +1629,7 @@
                        '(raw (159 59 3 213))          ; dsb ish
                        '(raw (223 63 3 213))]))))     ; isb
        (member? bi '("__builtin_clzll" "__builtin_clz"))
-        (: e1 (cgexpr g env <args)
+        (: e1 (cgexpr g env <args ())
            ll (bi = "__builtin_clzll")
            pre (? ll () '((shl r0 32)))    ; clz32(x) = clz64(x << 32) -- the shift also clears upper garbage
            (? (bad? e1) 'bad
@@ -1662,7 +1662,7 @@
        ; upper garbage is harmless -- the defined case has a set bit in the low 32):
        ; x64 bsf, a64 rbit+clz, rv a mask-narrowing search, t32 isolate-and-clz
        (bi = "__builtin_ctz")
-        (: e1 (cgexpr g env <args)
+        (: e1 (cgexpr g env <args ())
            (? (bad? e1) 'bad
               (t32? g)
                (mkv 'long 'r0 (asint g e1 +
@@ -1690,7 +1690,7 @@
        (member? bi '("__builtin_bswap16" "__builtin_bswap32" "__builtin_bswap64"))
         (? ((bi = "__builtin_bswap64") && t32? g)
             (nolane g ("no lane for __builtin_bswap64" + ontgt g))   ; the pair lane has no taker; 'no would emit a call the link can't bind
-           (: e1 (cgexpr g env <args)
+           (: e1 (cgexpr g env <args ())
               (? (bad? e1) 'bad
                  (mkv 'long 'r0 (asint g e1 +
                    (? (bi = "__builtin_bswap16")
@@ -1716,7 +1716,7 @@
        ; sizes and signs the exchange (4/8 bytes; the old value re-extends via cvt),
        ; and an unsized pointee refuses -- guessing a width miscompiles in silence
        (member? bi '("__sync_lock_test_and_set" "__sync_lock_release"))
-        (: e1 (cgexpr g env <args)
+        (: e1 (cgexpr g env <args ())
            pt (? (two? (vty e1) && (<(vty e1) = 'ptr)) <>(vty e1) ())
            w (? (member? pt '(int uint)) 4
                 (ptr? pt || member? pt '(long ulong)) 8 ())
@@ -1730,7 +1730,7 @@
                     (rv? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
                              [[(? (w = 4) 'st4 'st) 'r1 0 'r0]])
                     [[(? (w = 4) 'st4 'st) 'r1 0 'r0]])))
-              (: e2 (cgexpr g env <>args)
+              (: e2 (cgexpr g env <>args ())
                  (? (bad? e2) 'bad
                     (: pre (tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1)   ; val r0, ptr r1
                        body (? (a64? g)
@@ -1744,7 +1744,7 @@
                               [['raw (? (w = 4) '(135 1) '(72 135 1))]])                   ; xchg eax/rax, (rcx)
                        (mkv pt 'r0 (pre + body + cvt pt 'r0)))))))
        (bi = "__builtin_isinf")
-        (: e1 (cgexpr g env <args)
+        (: e1 (cgexpr g env <args ())
            (? (bad? e1) 'bad
               (mkv 'long 'r0 (asflo g e1 +
                         (? (v6m? g)                 ; the r12-free twin: the diffs land in r1 (dead past the set)
@@ -1761,12 +1761,12 @@
                            (+ '((movqrx r0 f0) (raw (72 209 224)) (li r1 18437736874454810624))   ; shl rax,1; rcx = inf<<1
                               '((raw (72 57 200 15 148 192 72 15 182 192)))))))))     ; cmp; sete al; movzx rax,al
        (member? bi '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
-        (: e1 (cgexpr g env <args)
-           e2 (cgexpr g env <>args)
+        (: e1 (cgexpr g env <args ())
+           e2 (cgexpr g env <>args ())
            ; the &t arg is consumed by the splice's own store -- argpos,
            ; like a call arg (else every overflow user loses sibcalls)
            e3 (: _ (? (member? <<>>args '(addr var)) (pin g 'argpos 1) ())
-                 (cgexpr g env <>>args))
+                 (cgexpr g env <>>args ()))
            _ (pin g 'argpos ())
            opb (? (bi = "__builtin_add_overflow") '(72 1 200)      ; add rax,rcx
                   (bi = "__builtin_sub_overflow") '(72 41 200)     ; sub rax,rcx
@@ -1804,15 +1804,16 @@
    ; -- expressions: answers a value tuple | 'bad. g 'want is the DESTINATION HINT, pinned by a
    ; consumer that knows where the value must land (an asn into a home, a ret's r0), consumed by
    ; the TOP node only (cleared here, so subexpressions never inherit it), and always ADVISORY --
-   ; a lane that ignores it answers its usual register and the consumer bridges. --
-   (cgexpr g env e)
+   ; a lane that ignores it answers its usual register and the consumer bridges. w is the
+   ; destination die (doc/moon-hom.md), inert this rung: every site passes (), no lane reads it. --
+   (cgexpr g env e w)
     (: wnt (peep g 'want ())
        _ (pin g 'want ())
        k <e
        (? (k = 'szof)                                   ; sizeof EXPR: the UNDECAYED type (clval keeps arrays), size a constant
            (: e2 <>e
               lv (clval g env e2)
-              ty (? (bad? lv) (: r (cgexpr g env e2) (? (bad? r) 'bad (: _ (rfree g (vreg r)) (vty r)))) (vty lv))
+              ty (? (bad? lv) (: r (cgexpr g env e2 ()) (? (bad? r) 'bad (: _ (rfree g (vreg r)) (vty r)))) (vty lv))
               (? (bad? ty) 'bad
                  (gvarr? ty && 3 < tally ty)   ; sizeof a VLA local: the stashed byte size
                   (: sl (peep (g 'vslots) (varix ty) ())
@@ -1930,7 +1931,7 @@
               fd (? (<<>e = 'deref) (afd g env <>e) ())
               (? (two? rv && <rv = 'regv)   ; store into a register-homed scalar (param or local)
                   (: _ (pin g 'want <>rv)         ; hint the rhs straight at the home
-                     r (cgexpr g env <>>e)
+                     r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (flo? (vty r)) (mkv <>>rv 'r0 (asintt g r <>>rv + ([['mov <>rv 'r0]] + cvt <>>rv <>rv)))
                         (id? (vreg r) <>rv) (mkv <>>rv <>rv ((vfs r) + cvt <>>rv <>rv))   ; landed in the home already (re-narrowed)
@@ -1938,7 +1939,7 @@
                            _ (rfree g (vreg r))
                            (mkv <>>rv <>rv fs))))
                  (two? rv && <rv = 'regw)     ; store into a pair-homed d128: land on the protocol, mov both halves
-                  (: r (cgexpr g env <>>e)
+                  (: r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (mkv <>>rv 'r0 (as128 g r
                                         + [['mov <<>rv 'r0] ['mov <><>rv 'r2]]))))
@@ -1961,7 +1962,7 @@
                              (: kr (vmraw g nm) (? kr kr (ralloc g))) ())
                      _ (? hint (pins g 'want hint
                                        'rpin (hint >< peep g 'rpin ())) ())
-                     r (cgexpr g env <>>e)
+                     r (cgexpr g env <>>e ())
                      _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())   ; the hold dies with the rhs
                      ; unhonored int values FORCE below instead of freeing: only a bad
                      ; or float rhs hands the hint back
@@ -2025,7 +2026,7 @@
                              (: kr (vmraw g <>ael) (? kr kr (ralloc g))) ())
                      _ (? hint (pins g 'want hint
                                        'rpin (hint >< peep g 'rpin ())) ())   ; the aim hold (see the scalar lane)
-                     r (cgexpr g env <>>e)
+                     r (cgexpr g env <>>e ())
                      _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())
                      (? (bad? r) (: _ (? hint (rfree g hint) ()) 'bad)
                         (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
@@ -2049,7 +2050,7 @@
                  (arr? (vty lv)) 'bad                ; an array is not assignable
                  (stru? (vty lv))                    ; a whole-struct copy (dest r1, src r0)
                   (: rl (clval g env <>>e)      ; an rvalue struct (a call's temp) is its address too
-                     rv (? (bad? rl) (cgexpr g env <>>e) rl)
+                     rv (? (bad? rl) (cgexpr g env <>>e ()) rl)
                      (? (bad? rv) 'bad
                         ; a REAL into a complex lvalue converts: re the value, im zero
                         (gcplx? (vty lv) && !(stru? (vty rv)))
@@ -2068,12 +2069,12 @@
                                 (cxcopy g (vty rv))
                                 (bcopy g 0 (tsz g (vty lv)) ())))))
                  (flo? (vty lv))                     ; a float/double store (addr in r1, value in f0; narrow if float)
-                  (: r (cgexpr g env <>>e)
+                  (: r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (mkv 'double 'r0 (vfs lv + spush 'r0 +
                          (asflo g r + spop 'r1 + fstf g (vty lv) 'r1 0 'f0)))))
                  (bitf? (vty lv))                    ; a bitfield store: unit addr in r1, read-modify-write, result (truncated) in r0
-                  (: r (cgexpr g env <>>e)
+                  (: r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (: bt (vty lv) uty <>bt bitoff <>>bt width <>>>bt
                            usz (tsz g uty)
@@ -2092,13 +2093,13 @@
                                + ['(or r2 r2 r3) [(stop uty) 'r1 0 'r2]]
                                + (? sgn [['shl 'r0 lo] ['sar 'r0 lo]] ()))))))
                  (pair? g (vty lv))                  ; a pair store through a computed address
-                  (: r (cgexpr g env <>>e)
+                  (: r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (mkv (vty lv) 'r0
                          (vfs lv + spush 'r0 + asll g r + spop 'r2 + pst 'r2 0))))
                  (d128? (vty lv))                    ; a wide store through a computed address (r1)
                   (? !(x64t? g) 'bad
-                     (: r (cgexpr g env <>>e)
+                     (: r (cgexpr g env <>>e ())
                         (? (bad? r) 'bad
                            (mkv (vty lv) 'r0 (vfs lv + spush 'r0 +
                             as128 g r + spop 'r1 + '((st r1 0 r0) (st r1 8 r2)))))))
@@ -2117,7 +2118,7 @@
                              vmon? g && !(0 < peep g 'argseal 0))
                             (ralloc g) ())
                     _ (? hint (pin g 'want hint) ())
-                    r (cgexpr g env <>>e)
+                    r (cgexpr g env <>>e ())
                     (? (bad? r) (: _ (? aR (rfree g aR) ())
                                    _ (? hint (rfree g hint) ()) 'bad)
                        (: ty (vty lv)
@@ -2233,7 +2234,7 @@
                     (? (arr? ty || stru? ty) 'bad
                        (: off (ntmp g 'long)
                           mo ['moor off ty]
-                          r (cgexpr g env ['asn mo ['bin <>e mo <>>>e]])
+                          r (cgexpr g env ['asn mo ['bin <>e mo <>>>e]] ())
                           _ (adrop9 g env <>>e)    ; the moored store retires element pin(s)
                           (? (bad? r) 'bad
                              (mkv (vty r) (vreg r)
@@ -2241,7 +2242,7 @@
           (k = 'cast)
            (: tgt <>e
               _ (? (!(flo? tgt) && !(two? (cvt tgt 'r0))) (pin g 'want wnt) ())
-              r (cgexpr g env <>>e)
+              r (cgexpr g env <>>e ())
               (? (bad? r) 'bad
                  (flo? tgt && d128? (vty r))
                   ; (double) of a WIDE value: only a CONSTANT expression, folded exactly (love.c's
@@ -2272,7 +2273,7 @@
                  (two? (cvt tgt 'r0)) (mkv tgt 'r0 (tor0 g r + cvt tgt 'r0))   ; int -> narrower int
                  (mkv tgt (vreg r) (vfs r))))                                    ; a full-word int cast KEEPS the register (a wide one narrows to its lo)
           (k = 'un)
-           (: r (cgexpr g env <>>e)
+           (: r (cgexpr g env <>>e ())
               (? (bad? r) 'bad
                  (gcplx? (vty r) && id? <>e 'neg)      ; -z: both components flip through the complex lane
                   (: pa (cxpark g r)
@@ -2324,9 +2325,9 @@
                            '((cmp r0 0) (set eq r0))) +
                         renar)))))
           (k = 'comma)
-           (: a (cgexpr g env <>e)
+           (: a (cgexpr g env <>e ())
               _ (pin g 'want wnt)
-              b (cgexpr g env <>>e)
+              b (cgexpr g env <>>e ())
               (? (bad? a || bad? b) 'bad
                  (mkv (vty b) (vreg b) (vdrop g a + vfs b))))
           (k = 'land)                                ; as a VALUE: cbranch the short-circuit, then settle the bit
@@ -2347,10 +2348,10 @@
            (: le (nlab g ".e") ld (nlab g ".d")
               c (cbranch g env <>e 'eq le)
               m0 (vmsnap g)                          ; the branch edge into le
-              t (cgexpr g env <>>e)
+              t (cgexpr g env <>>e ())
               mt (vmsnap g)                          ; an expression arm always falls out
               _ (vmset g m0)                         ; the else arm enters off the branch edge
-              el (cgexpr g env <>>>e)
+              el (cgexpr g env <>>>e ())
               _ (vmset g (vmeet mt (vmsnap g)))      ; label ld joins the two edges
               (? (bad? c || bad? t || bad? el) 'bad
                  ; ⚠ C's conditional CONVERTS its arms: one flo arm makes the whole result flo,
@@ -2374,7 +2375,7 @@
           (k = 'vastart)
            ; cgexpr (not clval) gives the struct pointer uniformly: a va_list LOCAL (array) decays
            ; to its address, a va_list PARAM loads its value -- both land the address in r0.
-           (: lv (cgexpr g env <>e)                 ; the va_list struct pointer in r0
+           (: lv (cgexpr g env <>e ())                 ; the va_list struct pointer in r0
               rsa (peep g 'rsa 0) ngp (peep g 'vagp 0) nxmm (peep g 'vaxmm 0)
               nov (peep g 'vaov 0)                  ; named params that overflowed (slots)
               (? (bad? lv) 'bad
@@ -2395,7 +2396,7 @@
                             '(lea r1 r4 16)  '(st r0 8 r1)             ; overflow_arg_area = rbp+16
                             ['lea 'r1 'r4 rsa] '(st r0 16 r1)]))))))      ; reg_save_area = rbp+rsa
           (k = 'vaarg)
-           (: lv (cgexpr g env <>e) ty <>>e    ; the va_list struct pointer in r0
+           (: lv (cgexpr g env <>e ()) ty <>>e    ; the va_list struct pointer in r0
               lov (nlab g ".vo") ld (nlab g ".vd")
               ; r1 = the relevant offset; r2 = the fetch address. SysV: an offset below the limit
               ; reads reg_save_area + offset and advances, else overflow (which advances 8).
@@ -2592,7 +2593,7 @@
                          !(two? (assoc rT (peep g 'homes ())))) rT ()))
               _ (? aim (pin g 'want aim) ())
               a (: _ (? (member? <<as '(addr var)) (pin g 'argpos 1) ())
-                   (cgexpr g env <as))
+                   (cgexpr g env <as ()))
               _ (pin g 'argpos ())
               (? (bad? a) 'bad
                  (: pty (nthty pts i)
@@ -2867,7 +2868,7 @@
                     srin (? sr6 [['lea (nthr (argr g) 0) 'r4 sroff]] ())
                     srout (? sr6 [['lea 'r0 'r4 sroff]] ())
                     (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods + rl)))
-                (: hr (cgexpr g env hd)                   ; a function-pointer value: park (x64 rbx; arm64 x15), callr
+                (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; arm64 x15), callr
                    pk (pkr g)
                    rl (vmcflush g)                        ; the call clobbers every pool reg -- a borrowed cs seat rides, a rostered pin reloads
                    fres (? !(v6m? g && flo? (fnret (vty hr))) ()
@@ -2923,7 +2924,7 @@
    ; evaluate an EXPR and park it -> (off forms srcty) | 'bad
    (cxmat g env x)
     (: rl (clval g env x)
-       rv (? (!(bad? rl) && stru? (vty rl)) rl (cgexpr g env x))
+       rv (? (!(bad? rl) && stru? (vty rl)) rl (cgexpr g env x ()))
        (? (bad? rv) 'bad (cxpark g rv)))
    (cxload oa ob) [['ldsd 'f0 'r4 oa] ['ldsd 'f1 'r4 (oa + 8)]
                     ['ldsd 'f2 'r4 ob] ['ldsd 'f3 'r4 (ob + 8)]]
@@ -2984,7 +2985,7 @@
               member? op '(shl shr) || two? (knum g rhs)) ()
              (ralloc g))
        _ (? pk (pin g 'want pk) ())
-       a (cgexpr g env lhs)
+       a (cgexpr g env lhs ())
        _ (? (pk && !(!(bad? a) && id? (vreg a) pk)) (rfree g pk) ())
        (? (bad? a) 'bad
           (gcplx? (vty a)) (cgcx g env op a rhs)    ; a complex left: the complex lane (parse lifted a real RIGHT already)
@@ -2995,7 +2996,7 @@
               kc (knum g rhs)
               (? (two? kc)
                   (mkv (vty a) 'r0 (tor0 g a + pshiftc kind <kc))
-                 (: b (cgexpr g env rhs)
+                 (: b (cgexpr g env rhs ())
                     (? (bad? b) 'bad
                        (mkv (vty a) 'r0 (tor0 g a +
                                          spush2 +
@@ -3010,7 +3011,7 @@
                      (? ((<kc < 0) || (127 < <kc)) 'bad
                         (<kc = 0) (mkv (vty a) 'r0 (tor0 g a))
                         (mkv (vty a) 'r0 (tor0 g a + [[kind <kc]])))
-                    (: b (cgexpr g env rhs)
+                    (: b (cgexpr g env rhs ())
                        (? (bad? b) 'bad
                           (mkv (vty a) 'r0 $
                            tor0 g a + wpush + tor0 g b +
@@ -3032,7 +3033,7 @@
                      (mkv rt (vreg a) (vfs a + [[iop (vreg a) <kc]] + nar (vreg a)))
                      (: rd (? wnt wnt (rdst g (vreg a)))    ; a borrowed home shifts a COPY (no 3-address shift)
                         (mkv rt rd (vfs a + [['mov rd (vreg a)] [iop rd <kc]] + nar rd))))
-                 (: b (cgexpr g env rhs)
+                 (: b (cgexpr g env rhs ())
                     (? (bad? b) 'bad
                        (mkv rt 'r0 (tor0 g a +
                                     spush 'r0 +
@@ -3061,7 +3062,7 @@
                                 (: rh (ralloc g)
                                    (? rh [rl rh] (: _ (rfree g rl) ())))))
                           ())
-                   b (cgexpr g env rhs)
+                   b (cgexpr g env rhs ())
                    (? (bad? b) 'bad
                       (: tb (vty b)
                          ta9 (numty9 lhs ta)   ; C's type for a literal, read through
@@ -3161,7 +3162,7 @@
                                     (pa && gvarr? <>ta)
                                      (: vt <>ta                    ; mid ran: ptr r1, idx r0 -- park before the dim eval
                                         dv (: pk (spush 'r1 + spush 'r0)
-                                              de (cgexpr g env (varn vt))
+                                              de (cgexpr g env (varn vt) ())
                                               (? (bad? de) 'bad
                                                  (: es (tsz g (varel vt))
                                                     (mid + pk + asint g de +
@@ -3172,7 +3173,7 @@
                                     (pb && gvarr? <>tb)
                                      (: vt <>tb
                                         dv (: pk (spush 'r0 + spush 'r1)       ; ptr r0, idx r1 here
-                                              de (cgexpr g env (varn vt))
+                                              de (cgexpr g env (varn vt) ())
                                               (? (bad? de) 'bad
                                                  (: es (tsz g (varel vt))
                                                     (mid + pk + asint g de +
@@ -4877,7 +4878,7 @@
     (: (go i acc) (? (i < 0) acc (go (i - 1) ([['li 'r0 (text i)] ['st1 'r4 (off + i) 'r0]] + acc)))
        (go (tally text - 1) ()))
    (cgstore g env off ty val)                       ; store a scalar value expr into [r4+off]
-    (: r (cgexpr g env val)
+    (: r (cgexpr g env val ())
        (? (bad? r) 'bad
           (flo? ty) (asflo g r + fstf g ty 'r4 off 'f0)
           (pair? g ty) (asll g r + pst 'r4 off)
@@ -4920,7 +4921,7 @@
    ; cgstore would lay the whole declared unit flat -- unshifted, and the neighbours
    ; sharing it gone. the assignment lane's shape, minus the address computation.
    (cgbffill g env off bt val)
-    (: r (cgexpr g env val)
+    (: r (cgexpr g env val ())
        (? (bad? r) 'bad
           (: uty <>bt bitoff <>>bt usz (tsz g uty)
              mask ((<< 1 <>>>bt) - 1) cmask ((0 - (<< mask bitoff)) - 1)
@@ -4948,7 +4949,7 @@
    ; image. the source evaluates FIRST (it may call); the tail stores cannot.
    (cgsfill g env foff fty val)
     (: rl (clval g env val)
-       rv (? (!(bad? rl) && stru? (vty rl)) rl (cgexpr g env val))
+       rv (? (!(bad? rl) && stru? (vty rl)) rl (cgexpr g env val ()))
        (? (bad? rv) 'bad
           (stru? (vty rv))
            (: mv (tor0 g rv + [['lea 'r1 'r4 foff]])
@@ -5204,7 +5205,7 @@
                  es (tsz g (varel ty))
                  _ (pin g 'fesc 1) _ (pin g 'hasasm 1)
                  _ (vmflush g)
-                 dr (cgexpr g env2 (varn ty))
+                 dr (cgexpr g env2 (varn ty) ())
                  (? (bad? dr) 'bad
                     (: lf (nlab g ".vla")
                        code ([['ld 'r0 'r4 so] '(cmp r0 0) ['br 'eq lf]]
@@ -5278,7 +5279,7 @@
                   (: _ (vmdrop g <p)
                      (one >ps env3 (acc + [[(siop9 ty <>init) 'r4 off <>init]])))
                  (stru? ty)                              ; a struct local from a struct VALUE (an address): copy its bytes
-                  (: r (cgexpr g env3 init)
+                  (: r (cgexpr g env3 init ())
                      (? (bad? r) 'bad
                         (: sz (tsz g ty)
                            cpf (: (go k acc9)
@@ -5296,7 +5297,7 @@
                     _ (? hint (pin g 'want hint)
                          (hreg && !(two? hreg)) (pin g 'want hreg)   ; the home is the DESTINATION (the asn regv arm's shape)
                          ())
-                    r (cgexpr g env3 init)               ; a scalar (a pointer = string rides cgexpr -> la)
+                    r (cgexpr g env3 init ())               ; a scalar (a pointer = string rides cgexpr -> la)
                     _ (? (hint && (bad? r || !(id? (vreg r) hint))) (rfree g hint) ())
                     _ (vmdrop g <p)
                     (? (bad? r) 'bad
@@ -5438,7 +5439,7 @@
                                 (? !(two? l) acc
                                    (: e2 <l
                                       (? (member? <e2 '(x i))
-                                          (: r (cgexpr g env <>>e2)
+                                          (: r (cgexpr g env <>>e2 ())
                                              (? (bad? r) 'bad
                                                 (flo? (vty r) || stru? (vty r)) 'bad
                                                 (loads >l (acc + tor0 g r + spush 'r0))))
@@ -5855,7 +5856,7 @@
                  (? mt (nolane g "a musttail return carries no call") (? il [['jmp il]] epj))   ; bare `return;` -- just the epilogue
                 (: _ (pin g 'want 'r0)                                   ; the return value's one true home
                    _ (? mt (pin g 'must9 1) 0)      ; the ret's own call STAYS a call (no splice) -- consumed at first touch
-                   r (cgexpr g env <>s)
+                   r (cgexpr g env <>s ())
                    _ (pin g 'must9 ())
                    rt (? il (peep g 'inlrt 'long)                        ; the INLINED function's return type
                          <(peep (g 'sigs) (g 'fn) ['long ()]))         ; else the current function's
@@ -5929,7 +5930,7 @@
                              (? (id? <sv 'loc)
                                 [[sk 'r4 <>sv <><>>pe]]
                                 [['la 'r1 <>sv] [sk 'r1 0 <><>>pe]]))
-                       (: r (cgexpr g env pe)
+                       (: r (cgexpr g env pe ())
                           (? (bad? r) 'bad (vdrop g r)))))))
           (k = 'nop) ()
           (k = 'tdef) ()                            ; a block-scope _Static_assert (already checked at parse)
@@ -5989,7 +5990,7 @@
               ir (? !(two? init) [() env]
                     (<init = 'decl) (cgdecl g env <>init)
                     (<init = 'sdecl) (cgsdecl g env <>init)
-                    (: r (cgexpr g env <>init)
+                    (: r (cgexpr g env <>init ())
                        (? (bad? r) 'bad [(vdrop g r) env])))
               (? (bad? ir) 'bad
                  (: env2 <>ir
@@ -6018,7 +6019,7 @@
                               'stwrap myw)           ; the body re-pinned as it went; the step is OURS
                     _ (lochk g lc kp)                ; the fall-through into ls
                     _ (? (two? kp) (vmset g kp) (vmflush g))   ; label ls heads the step block (edges verified)
-                    st2 (? (two? stp) (cgexpr g env2 stp) ())
+                    st2 (? (two? stp) (cgexpr g env2 stp ()) ())
                     _ (lochk g lc kp)                ; the back edge
                     _ (pin g 'vkeep >(peep g 'vkeep ()))
                     _ (pin g 'saro sv9)              ; the roster dies with its loop
@@ -6101,7 +6102,7 @@
               (: lab (peep <(g 'cases) 'dflt 'no) _ (vmflush g)
                  (? (lab = 'no) 'bad [['label lab]])))
           (k = 'switch)
-           (: c (cgexpr g env <>s)
+           (: c (cgexpr g env <>s ())
               (? (bad? c) 'bad
                  (: items <>>s
                     cr9 (vreg c)
@@ -6229,7 +6230,7 @@
               (? al                                  ; the alias bind: zero forms
                   (: _ (pin g 'rpin (al >< peep g 'rpin ()))
                      (bind >ps >as ([<<ps ['reg al] pty] >< benv) acc rbs))
-                 (: r (cgexpr g env <as)
+                 (: r (cgexpr g env <as ())
                     (? (bad? r) 'bad
                        (pair? g pty)                 ; a pair param: an 8-byte slot, both words land
                         (: off (ntmp g 'llong)
