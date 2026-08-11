@@ -1713,33 +1713,74 @@
    q0f (fnf 'q0 <>irA)
    (assert
       (two? irA)
-      (= 1 (ldsp ff 8))                              ; x[0]: three source reads, ONE load (the pin)
-      (= 1 (ldsp ff 16))                             ; x[1]: three reads, one load
-      (= 0 (ldsp ff 24))                             ; x[2]: both reads ride the write-pin -- no load at all
-      (= 1 (ldsp ff 32))                             ; x[3]: only the post-store re-read
-      ; -- frame-direct (the clval fold + the store-direct element twin): a constant index
-      ; is a static slot, so the lea/add/park address dance is gone -- every element touch
-      ; is a direct slot op. with no frame address left in the fn, deadst's whole-fn gate
-      ; opens and a write-only slot's store drops: the elision rides the fold for free. --
-      (= 0 (leac ff))                                ; no lea/lean survives: every touch frame-direct
-      (= 0 (stsp ff 24))                             ; x[2] write-only after pin-served reads: store ELIDED
-      (= 1 (stsp ff 32))                             ; x[3] is read back: write-through stands
-      (= 1 (ldsp uf 8))                              ; the WRITE re-pins: t+1 stays resident, the
-                                                     ;   read-after-write is zero forms (1 load total;
-                                                     ;   offset 8: the leaf ride keeps a off the frame)
-      (= 1 (ldsp u2f 8))                             ; a homed-var rhs declines the hint: drop-only,
-                                                     ;   so the read-after-write RELOADS (the 1 load;
-                                                     ;   the first read rode the write-pin free)
-      (= 2 (ldsp vf 8))                              ; x[i]=9 drops the whole array: both elements
-      (= 1 (ldsp vf 16))                             ;   reload after (x[1]'s pre-drop read rode
-                                                     ;   its write-pin, so its only load is the reload)
+      ; -- frame-direct + write residency + FORCED re-establishment: every write lands its
+      ; canonical value in a pool register and pins (honored free, unhonored one mov --
+      ; dead if never re-read), so a call-free fn's eligible traffic registerizes FULLY:
+      ; no loads, no frame address, and deadst elides every write-only slot's stores. --
+      (= 0 (ldsp ff 8))  (= 0 (ldsp ff 16))          ; f: all element reads ride pins
+      (= 0 (ldsp ff 24)) (= 0 (ldsp ff 32))
+      (= 0 (leac ff))                                ; no lea/lean: every touch frame-direct
+      (= 0 (stsp ff 24)) (= 0 (stsp ff 32))          ; no slot is ever read: stores ELIDED whole
+      (= 0 (ldsp uf 8))                              ; the write re-pins: reads-after-write zero forms
+      (= 0 (ldsp u2f 8))                             ; the homed-var rhs that DECLINED the hint now
+                                                     ;   FORCES: one mov re-establishes, no reload
+      (= 1 (ldsp vf 8))                              ; x[i]=9 drops the whole array: x[0] reloads
+      (= 1 (ldsp vf 16))                             ;   after (each pre-drop read rode its pin)
+      (= 1 (stsp vf 8))                              ; the variable write keeps slots LIVE (a lea
+                                                     ;   stands): write-through survives here
       (= 2 (ldsp ef 16))                             ; bare x escaped: no pin, every read loads
       ; -- the leg licenses its own regen (nothing else pays in q0: no params, no
       ; scalar locals -- without the au license the vmap never arms here) --
-      (= 1 (ldsp q0f 8))                             ; x[0]: the one read between its two writes
+      (= 0 (ldsp q0f 8))                             ; x[0] rides its forced pin end-to-end
       (= 0 (ldsp q0f 16))                            ; x[1]: all three reads ride the write-pin
       (= 0 (stsp q0f 16))                            ; ...so the slot is write-only and the store drops
       (= 0 (leac q0f))))                             ; frame-direct throughout
+
+; -- loop-head survival (the vmap crossing its first boundary): at a loop head the pinned
+; map is KEPT and verified at every arriving edge (back jmp, continues, the label
+; fall-throughs, breaks vs the enclosing keeps); a miss bars the entry and the regen
+; retries, so only a zero-miss build ships. writes re-establish IN the pinned register
+; (the aim + the force + the kept post twin), so counters, accumulators and constant-
+; indexed elements ride registers across iterations -- with deadst's elision, a
+; call-free loop fn drops its frame entirely. a call/asm/goto/label/switch in the
+; subtree refuses the keep statically; a variable-index element write drops the array
+; mid-loop and the CHECK bars it (lo7 -- the reload proves the bar engaged).
+(: (cgn src) (: r (cparse <>(clex src))
+               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+                  (take l) (? !(two? l) ()
+                              (= <l '(align 2)) ()
+                              (<l >< take >l))
+                  (take (seek fs)))
+   (ldsp fs off) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp && (= off <>>>f))) fs))
+   (ldc fs) (tally (filter (\ f (two? f && member? <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && id? <>>f 'sp)) fs))
+   (stc fs) (tally (filter (\ f (two? f && member? <f '(st st1 st2 st4 si si1 si2 si4) && id? <>f 'sp)) fs))
+   (leac fs) (tally (filter (\ f (two? f && member? <f '(lea lean))) fs))
+   irL (cgn "long lp1(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = n + 1; while (i < 100) { s = s + x[0] + x[1]; i = i + 1; } return s + i; } long lp2(long n) { long a = 0; long i; for (i = 0; i < n; i++) a += i; return a; } long lp3(long n) { long s = 0; long i = 0; while (i < n) { s += lp2(i); i = i + 1; } return s; } long lo6(long n) { long s = 0; long j = 0; for (j = 0; j < n; j++) { long k = j; while (k > 0) { s = s + k; k = k - 1; } } return s; } long lo7(long n) { long x[2]; x[0] = n; x[1] = n + 1; long i = 0; long s = 0; while (i < n) { s = s + x[0]; x[i & 1] = i; i = i + 1; } return s + x[0] + x[1]; } long tick(long v); long lo8(long n) { long x[2]; long s; long i; long b; x[0] = n; s = 0; i = 0; b = 0; while (i < n) { b = n; s = s + b + i + x[0] + n; i++; } tick(s); return s + i + b + x[0]; } int main() { return 0; }")
+   lp1f (fnf 'lp1 <>irL)
+   lp2f (fnf 'lp2 <>irL)
+   lp3f (fnf 'lp3 <>irL)
+   lo6f (fnf 'lo6 <>irL)
+   lo7f (fnf 'lo7 <>irL)
+   lo8f (fnf 'lo8 <>irL)
+   (assert
+      (two? irL)
+      (= 0 (ldc lp1f)) (= 0 (stc lp1f)) (= 0 (leac lp1f))   ; while: s/i/x[0]/x[1] register-resident, frame gone
+      (= 0 (ldc lp2f)) (= 0 (stc lp2f))                     ; for: the counter and the accumulator ride (i++ steps in place)
+      (2 <= ldc lp3f)                                       ; a call in the body refuses the keep: reloads stand
+      (= 0 (ldc lo6f)) (= 0 (stc lo6f))                     ; nested: the outer keeps survive the inner loop
+      (2 <= ldsp lo7f 16)                                   ; x[i&1]=i drops x[0] mid-loop: the edge CHECK barred the
+                                                            ;   keep (a zero-miss build ships) -- x[0] reloads in-loop
+                                                            ;   AND after (2+; an unbarred keep would serve the first)
+      (= 1 (ldsp lo7f 24))                                  ; x[1], dropped too, reloads once after the loop
+      ; -- lo8: a call AFTER the loop bars the homes (s/i/b cross it) but the loop itself
+      ; keeps, so the counters ride the vmap: b = n re-establishes by FORCE (the regv rhs
+      ; that ignores the aim), i++ steps in its pinned register (the kept post twin), and
+      ; the only load each slot ever sees is the post-call reload --
+      (= 1 (ldsp lo8f 8))                                   ; b: the force (one mov, no in-loop reload)
+      (= 1 (ldsp lo8f 16))                                  ; i: the kept post twin
+      (= 2 (ldsp lo8f 24))                                  ; s: the call-arg read + the post-call reload
+      (= 1 (ldsp lo8f 32))))                                ; x[0]: the element pin rides the loop
 
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)

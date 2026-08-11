@@ -107,6 +107,11 @@ Learned by measuring, several times each; check a new lever against these before
    by a register machine; gated by test_doc). All four lanes migrated 2026-08-10 —
    asn/decl, cbranch-compare, arg-seat, bin-value (the rungs below); what remains of
    the die rides the allocator leg (callish sides via cs-borrow parks, deeper arg seats).
+   FIRST BOUNDARY CROSSED 2026-08-10 (loop-head survival, the ledger): the map keeps
+   across loop heads under optimism-with-verification, writes re-establish in place,
+   and chacha20 dropped 74% of its wall — call-free hot loops now run register-resident.
+   What remains: values across CALLS (cs-borrow/spill-around instead of the flush), and
+   the callish-write pin bar (see the ledger's why) lifts only with that machinery.
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -249,6 +254,32 @@ escaped arrays, no-param fns, the elision, and the structural unlock; regression
 zero by construction. Laws: no-lea + elided-store + kept-store on f, q0's
 self-licensed pins; three flips falsified; the torture differential grew five
 shapes (callish rhs, escaped, narrow cvt, au license, ptr elements).
+2026-08-10 · loop-head survival (the vmap's first boundary): at a loop head the pinned
+map KEEPS, under OPTIMISM WITH VERIFICATION — every arriving edge (back jmp, continues,
+the cont/cond label fall-throughs, breaks vs the enclosing keeps) checks map ⊇ keep; a
+miss records (headlab nm) and the regen retries with it barred, so only a zero-miss
+build ships. Writes re-establish IN the pinned register: the store hints aim at the
+existing pin (honored free), unhonored int writes FORCE (store + one mov + re-pin;
+dead if never re-read), and ++/-- steps in place (the kept post twin). A loop whose
+subtree carries a call/asm/goto/label/switch/case keeps nothing (statically, zero
+cost); a variable-index element write drops mid-loop and the check bars it. With
+deadst, a call-free loop fn goes fully register-resident, frame gone (lp1/lp2/lo6).
+chacha20 −24.5% dyn insns, −74% wall (4.74s→1.25s) — the QR state words and counter
+ride pins across iterations; poly1305 flat as the gauge demands (already homed).
+THE EXCAVATION (the keeps forced two latent bugs into the light): (1) vmdrop filtered
+by id? while scalar map keys are parse-minted per-site strings — the drop was INERT
+across statements always; harmless while every keep died at the next label, fatal once
+maps survived loops (p0chars's strlen kept a counter whose ++ never retired the pin).
+Now content-=, like the array leg always was. (2) the post twins read the raw map
+ungated — an inlinee's i++ would find the CALLER's pin under the colliding name and
+step the caller's register; now vmon?/argseal-gated. And ONE bar with an open why:
+pinning a CALLISH write's result (a class the shipped compiler never pinned — always
+unhonored+freed) miscompiles the context-threading shape (g = ai_push(g ..) in
+love.c's analyzer); callish rhs keeps no hint until the allocator leg's call-crossing
+machinery explains and owns it. Laws: lp1/lp2 (registerized loops), lp3 (call refusal),
+lo6 (nested), lo7 (the bar engages — sharp against a disabled check), lo8 (force +
+kept-post under a post-loop call); four flips falsified; five loop shapes in the
+torture differential; fixpoint byte-identical, fuzz, kernel, full battery green.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
