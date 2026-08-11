@@ -67,4 +67,6 @@ rides the allocator leg. The gap the rungs close is scored in doc/moon-diff.md.
 
 The literature calls the register-machine face *destination-driven code generation*
 (Dybvig & Burger, 1990). The runnable model — both protocols over one AST, the
-before/after shapes law-pinned — is doc/proto/dest.l, gated by test_doc.
+before/after shapes law-pinned — is doc/proto/dest.l, gated by test_doc. The plan for
+migrating gen.l's *shape* (die as parameter, no register column, threaded pool) is
+doc/moon-hom.md.
