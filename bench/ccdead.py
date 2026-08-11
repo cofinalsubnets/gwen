@@ -20,14 +20,14 @@ a public entry riding along with the object-mate that is used), not scan
 error, so it is the floor a libc built for static linking still cannot
 get under. A lane well clear of it is reporting something.
 
-⚠ this reports the LIBC column only, and that scoping is load-bearing: love's
-own C reaches copy_data, evac_tray and the rest of the collector through the
-kind-indexed tables, whose entries this scan does not resolve, so it calls 170
-live love functions dead. A relocation-based closure sees them (a table entry
-is a relocation); this one does not. The libc column has no such shape, which
-is why it is the one reported -- spot-checks hold there (`pad` in the musl lane
-has literally zero references in the disassembly, `getaddrinfo` and `strtol`
-appear in love's tree only inside comments).
+⚠ this reports the LIBC column only, but love's OWN C is worth asking about
+too, and the natives are the control that makes the answer readable: mooncc
+leaves 6.4% of its own text unreachable against gcc's 2.6% and clang's 1.7%.
+The excess is not this scan missing a dispatch table -- all three lanes run
+the same tables -- it is that MOONCC INLINES WITHOUT DROPPING THE BODY. Its
+own `static ai_inline` copy_data is spliced into every call site and the
+out-of-line copy still ships, referenced by nothing. Read the natives' figure
+as the floor here exactly as in the libc column.
 
 Usage: ./ccdead.py            (after ./ccbench.sh, or `make ccbench`)
        ./ccdead.py ELF ...    (⚠ no own-object split, so every text symbol is

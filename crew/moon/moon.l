@@ -460,12 +460,22 @@
              ; the IMPLICIT runtime compiles with the system tail LEFT ON (the () below):
              ; these are our own sources reaching only our own headers, and the user's
              ; -nostdinc is about the user's translation units, not this one.
-             ; nolibc is a DIRECTORY of members, globbed the way math is: a link
-             ; owing no calendar takes no calendar. one file would arrive whole,
-             ; which is what the split bought (doc/moon-diff.md's libc rows).
+             ; nolibc is a TREE of members: every .c directly under lib/nolibc/ and
+             ; every .c one level down (string/, ..), one function to a file where
+             ; the file-scope state allows. A link owing no calendar takes no
+             ; calendar (doc/moon-diff.md's libc rows). ⚠ one level, not a walk --
+             ; the depth is the vocabulary, and a deeper tree would say nothing.
+             (nlmems d)
+              (foldl (\ a e (: p (d + e)
+                               (? (dotc? e) (a + `(`(e p)))
+                                  (sdir? (stat p))
+                                   (a + foldl (\ a2 f (a2 + `(`((e + ("/" + f)) (p + ("/" + f))))))
+                                              () (sort (filter dotc? (readdir p))))
+                                  a)))
+                     () (sort (readdir d)))
              mems (map (\ p (p + dusyms <p <>p mach))
-                       (((map (\ f `(f (mcobj cd id (ndir + f) `(ndir inc) tgt)))
-                              (sort (filter dotc? (readdir (home + "lib/nolibc")))))
+                       (((map (\ q `(<q (mcobj cd id <>q `(inc) tgt)))
+                              (nlmems ndir))
                          + map (\ f `(f (mcobj cd id (mdir + f) `(mdir inc) tgt)))
                                (sort (filter dotc? (readdir (home + "lib/math")))))
                         + (? (member? tgt '(x64 arm64 riscv64))
