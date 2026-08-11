@@ -20,8 +20,18 @@ a public entry riding along with the object-mate that is used), not scan
 error, so it is the floor a libc built for static linking still cannot
 get under. A lane well clear of it is reporting something.
 
+⚠ this reports the LIBC column only, and that scoping is load-bearing: love's
+own C reaches copy_data, evac_tray and the rest of the collector through the
+kind-indexed tables, whose entries this scan does not resolve, so it calls 170
+live love functions dead. A relocation-based closure sees them (a table entry
+is a relocation); this one does not. The libc column has no such shape, which
+is why it is the one reported -- spot-checks hold there (`pad` in the musl lane
+has literally zero references in the disassembly, `getaddrinfo` and `strtol`
+appear in love's tree only inside comments).
+
 Usage: ./ccdead.py            (after ./ccbench.sh, or `make ccbench`)
-       ./ccdead.py ELF ...    (any binaries, own-object split skipped)
+       ./ccdead.py ELF ...    (⚠ no own-object split, so every text symbol is
+                               reported as libc -- read with the caveat above)
 """
 import collections, os, re, subprocess, sys
 
