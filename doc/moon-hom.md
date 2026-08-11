@@ -22,6 +22,8 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
 3. **the scratch pool is threaded, not a free-list.** a subexpression writes its own
    die and scratches strictly below it in the pool; one allocation discipline where
    today the free-list/pin split interacts (the aim hold's own postmortem).
+   (answered NO at rung 4 -- the split died by the ledger fix, and the shape is
+   blocked while dies are partial; read the rung.)
 
 ## the ladder
 
@@ -111,8 +113,27 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
   residue: a handful of +2..8-byte functions where a 2-mov park chain stands
   where recovery once made 1 mov. two laws re-truthed (an incidental slot
   offset; erk's seat rename once s rides its pin through the splice).
-* **rung 4 — the pool as parameter.** ralloc/rfree → the threaded pool with the
-  strictly-below discipline. last, because everything above makes it smaller.
+* **rung 4 — the pool as parameter: answered NO (2026-08-11), and here is why.**
+  the rung's motivation was the free-list/pin split (the aim hold's postmortem) --
+  and that class died the day before this ladder was written (2026-08-10, the
+  ledger fix in doc/moon-regalloc.md): pin doors evict their register from the
+  free list CONTINUOUSLY, the aim hold rides rpin, and ralloc scares on any
+  pinned member. the invariant threading would grant by construction is already
+  the code's, loud forever. what remains would be the shape alone, and the shape
+  is blocked: dest.l threads its pool because ck's die is total and the value
+  tuple has no register column -- gen.l's dies are partial BY LICENSE (the
+  totality section below), so values answer registers upward and the consumer
+  frees them; a threaded pool under that protocol means every lane re-deriving
+  "free now" per sibling -- the one ledger reimplemented n times, by hand, for
+  zero emission delta (allocation order renames seats; dry is dry in any order).
+  the tree had already measured "more threading" in miniature and declined
+  twice: one aim per spine (an eager aim at every level drained the pool -- the
+  wraps law's catch), and cbind parks only into a DEEP pool (the +0.4% L1
+  displacement). rung 3's `spare` banks the discipline's real content at the one
+  new site class -- a BORROW whose span closes inside its own staging keeps the
+  free list's order by construction, no parameter needed. revisit only if die
+  totality ever lands (then the column retires and the parameter is the natural
+  shape); until then the ledger IS the threaded pool, held by the ledger fix.
 
 each rung past 0 rides the standing ritual: laws re-truthed from measured emissions,
 tortures vs gcc, the differential tier, fixpoint as the self-consistency gate.
