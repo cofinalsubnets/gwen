@@ -135,14 +135,21 @@ Learned by measuring, several times each; check a new lever against these before
    and every break edge's snap, post-loop reads become zero forms, and with the
    slots load-free deadst sweeps the write-through stores and entry spills whole.
    What remains of the def-store bucket: the pre-call park pair and rostered
-   pins' true reload stores (both priced, both earning their keep).
+   pins' true reload stores (both priced, both earning their keep). PARAMS
+   SEATED, pmin-GATED 2026-08-11 (the callish cs homes, the ledger): a priced
+   callish fn whose EVERY path calls homes its params on callee-saved seats,
+   wrap-free. The dispatch fleet's fat grant measured +2.7% dynamic insns and
+   was pulled -- its fast paths pay the prologue and earn nothing; taking that
+   traffic needs shrink-wrapping (saves at the callish region's head), which
+   is this leg's next boundary.
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
    would need the wrap pricing) — or the allocator leg subsumes it.
 4. Recorded small residues: leaf sp-fn stldw coverage; a non-positional fallback home
-   (mag_cmp's g1 loses its seat and stays slotted); cs-borrow park elision; params on cs
-   regs (lvm_eq a/b); arm64 x19+ cspool (empty there today); register-binding splice
+   (mag_cmp's g1 loses its seat and stays slotted); cs-borrow park elision (params on
+   cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share waits on
+   shrink-wrap); arm64 x19+ cspool (empty there today); register-binding splice
    depth (map_probe's &-decline); d128 params ("a wide arg: not carried"); variable
    index±k rebase; narrow cmp fusion (632 sites, needs cc-aware licensing); the
    3-address dance emission (encoder territory — the reverted lea-fusion physics, only
@@ -517,6 +524,34 @@ variant test that leans on `make` is testing the tree, not the variant; hand-bak
 images + hand-linked hybrids (moon0 -pie love.o host_*.o ...) are the honest bisect,
 and a boot probe that "works" right after a cp of a known-good binary is testing
 the cp.
+2026-08-11 · params on cs seats, pmin-gated (the callish cs homes — the residue
+list's "lvm_eq a/b"): a priced callish fn's homable params take callee-saved seats
+instead of wrapped hregs — the per-call wrap pair retires for one prologue save + a
+reload per exit (the cssv/epi machinery unchanged, unframe and cskeep ride as-is),
+the home stays off g 'homes (no wrap, no shadow slot), and the granted params'
+homeregs REJOIN the regen's pool. Fn-wide grant or none; seats from what lpick left;
+never beside the loop borrow (a keep's claim wins the seat); x64 by construction
+(a64's cspool is empty). The pricing took three cuts, each caught by the per-symbol
+grower audit: raw slot reads (nr) overcount — stld/dehusk erase pre-call reads free,
+so lvm_eval paid 12 movs to save nothing; reads-after-a-call still overcount — a
+redefining store re-arms stld (g = c0(..) feeds the loads behind it); the honest
+static signal is the DIRTY LOAD — a call dirties every param slot, a store cleans
+its own, and the first dirty load per window is the reload no recovery pass erases.
+Priced nh·(1+nrets)+em < 2·ndirty. THEN THE DYNAMIC VERDICT REVERSED THE HEADLINE:
+the static grant read love.c −1,574 insns / .text −8 KB (lvm_eq 841→586,
+lvm_add_string's wrap quads gone), but the corpus A/B — same merged tree, same
+corpus, pre-rung vs rung binaries — measured **+2.7% dynamic insns** (40.95→42.06 G;
+cycles −0.9%, under the layout floor). The pmax lesson wearing the params face: the
+save/reload is a PER-INVOCATION cost and the wraps were a PER-CALL cost, so every
+early-out fast path — the dispatch fleet's whole hot profile, lvm_eq's fixnum lane
+first — pays the prologue and earns nothing. The landed gate is `pmin`, pmax's twin
+(the forward-path call MINIMUM): a grant needs every path through the fn to call.
+What survives is small and true — 13 symbols, −1,020 B, ai_ini_0 −736 the biggest
+(straight-line call-dense init, the exact shape) — and dynamically EXACT: corpus
+insns 40.95 G to the third digit, cycles −0.9%. The machinery (grant plumbing,
+dirty-load pricing, pmin) is the substrate; the fleet's 8 KB waits on SHRINK-WRAP —
+saves at the callish region's head instead of the prologue, so a fast path never
+pays — which is this leg's next boundary.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
