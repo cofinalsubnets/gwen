@@ -2124,8 +2124,13 @@
                                   _ (vaepin g <>ael hint)
                                   (mkv ty 'r0 fs))
                               (: _ (? hint (rfree g hint) ())
-                                 (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
-                                              [[(stop ty) 'r4 off 'r0]])))))))
+                                 ; a register-riding value stores ITSELF (no r0 bridge; the
+                                 ; consumer owns the register, 2c's ownership rule)
+                                 (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                                     !(id? (vreg r) 'r0))
+                                    (mkv ty (vreg r) (vfs r + [[(stop ty) 'r4 off (vreg r)]]))
+                                    (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
+                                                 [[(stop ty) 'r4 off 'r0]]))))))))
                  (: lv (matv g (clval g env <>e))
               (? (bad? lv) 'bad
                  (arr? (vty lv)) 'bad                ; an array is not assignable
@@ -2214,13 +2219,22 @@
                                  (mkv ty hint fs))
                              (: _ (? (hint && !(id? (vreg r) hint)) (rfree g hint) ())
                                 (? aR
-                                   (: fs (vfs lv +
-                                          [['mov aR 'r0]] +
-                                          asintt g r ty +
-                                          cvt ty 'r0 +
-                                          [[(stop ty) aR 0 'r0]])
-                                      _ (rfree g aR)
-                                      (mkv ty 'r0 fs))
+                                   ; a register-riding value stores ITSELF (no r0 bridge)
+                                   (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                                       !(id? (vreg r) 'r0) && !(id? (vreg r) aR))
+                                      (: fs (vfs lv +
+                                             [['mov aR 'r0]] +
+                                             vfs r +
+                                             [[(stop ty) aR 0 (vreg r)]])
+                                         _ (rfree g aR)
+                                         (mkv ty (vreg r) fs))
+                                      (: fs (vfs lv +
+                                             [['mov aR 'r0]] +
+                                             asintt g r ty +
+                                             cvt ty 'r0 +
+                                             [[(stop ty) aR 0 'r0]])
+                                         _ (rfree g aR)
+                                         (mkv ty 'r0 fs)))
                                    (mkv ty 'r0
                                     (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 +
                                      cvt ty 'r0 + [[(stop ty) 'r1 0 'r0]]))))))))))))
@@ -4786,6 +4800,8 @@
                        b9 (assoc o bs)
                        (? (member? rY stldkeep)
                           (f >< stldw r (([o rY]) >< bdropo (bdropr bs rY) o))
+                          (two? b9 && two? <>b9)     ; an immediate binding: the load remats
+                           (['li rY <><>b9] >< stldw r (([o rY]) >< bdropr bs rY))
                           (two? b9 && <>b9 = rY) (stldw r bs)
                           (two? b9) (['mov rY <>b9] >< stldw r (([o rY]) >< bdropr bs rY))
                           (f >< stldw r (([o rY]) >< bdropr bs rY))))
@@ -4794,6 +4810,14 @@
                        b2 (bdropo bs o)
                        (? (op = 'st && nom? <>>>f)
                           (f >< stldw r (([o <>>>f]) >< b2))
+                          (f >< stldw r b2)))
+                   ; a store-immediate binds its constant (full width only; narrow si's
+                   ; truncated bytes just invalidate) -- a later ld remats as li
+                   (member? op siops && <>f = 'r4)
+                    (: o <>>f
+                       b2 (bdropo bs o)
+                       (? (op = 'si)
+                          (f >< stldw r (([o ['k <>>>f]]) >< b2))
                           (f >< stldw r b2)))
                    ; a reg-reg mov CARRIES its src's bindings: the slot now rides both registers,
                    ; and when one dies the other still answers. sp/fp/r4 stay out (sp moves in
@@ -6340,12 +6364,20 @@
                                        (acc + asintt g r pty
                                             + ([['mov rb 'r0]] + cvt pty rb))
                                        (rb >< rbs)))
+                             ; a register-riding value stores ITSELF (no r0 bridge)
                              (: off (ntmp g 'long)
+                                vd (? (flo? (vty r) || id? pty 'bool ||
+                                       id? (vreg r) 'r0) ()
+                                      (vreg r))
                                 (bind >ps >as
                                       ([<<ps off pty] >< benv)
-                                      (acc + asintt g r pty
-                                           + (? (id? pty 'bool) (cvt pty 'r0) ())   ; the entry conversion the splice skips
-                                           + [['st 'r4 off 'r0]])
+                                      (? vd
+                                         (: fs (acc + vfs r + [['st 'r4 off vd]])
+                                            _ (rfree g vd)
+                                            fs)
+                                         (acc + asintt g r pty
+                                              + (? (id? pty 'bool) (cvt pty 'r0) ())   ; the entry conversion the splice skips
+                                              + [['st 'r4 off 'r0]]))
                                       rbs)))))))))
        br (bind <>>f args () () ())
        ; the body-decl license: a decl name whose weighted reads price a pool seat (the

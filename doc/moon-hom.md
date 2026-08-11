@@ -135,6 +135,22 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
   totality ever lands (then the column retires and the parameter is the natural
   shape); until then the ledger IS the threaded pool, held by the ledger fix.
 
+* **the addrfold residue, measured and split (2026-08-11).** the residue stood at
+  4,891 insns on love.c; the class ablation ranked it: store-VALUE folds 2,811
+  (renames 1,791 + store-immediates 1,028), base folds 2,025, alu-imm 330, the
+  true indexed lanes 274. the rename half LANDED as construction -- the store
+  lanes take the value's OWN register (the splice slot bind, the frame-direct
+  fallthrough, the parked-address fallthrough: 2c's ownership rule on the value
+  side), and stld learned the si vocabulary (a full-width si binds its constant
+  and a later ld remats as li; a narrow si invalidates -- the sound completion
+  for the decl-born si, which the pass had silently not invalidated). love.c
+  −120 insns, −512 text bytes. the store-immediate half is **answered NO at
+  birth, by measurement**: laying si at the four store sites cost +5,995 -- the
+  li+st idiom is the FOOD of the stld/remat/deadst/addrfold compose, and a
+  construction-laid si starves the pipeline of six times what it saves. that
+  residue class is pipeline-shaped on purpose; it retires only with the passes
+  it feeds.
+
 each rung past 0 rides the standing ritual: laws re-truthed from measured emissions,
 tortures vs gcc, the differential tier, fixpoint as the self-consistency gate.
 
