@@ -113,10 +113,12 @@ Learned by measuring, several times each; check a new lever against these before
    SECOND BOUNDARY CROSSED 2026-08-10 (the cs borrow, the ledger): a callish loop's
    scalar keeps migrate onto free callee-saved seats and ride THROUGH the calls —
    the call-loop shape drops ~20% wall at flat insns (the slot's store→load chain
-   breaks). What remains: the callish-write pin bar (its why still open — a callish
-   rhs keeps no hint), spill-around when seats run out, element pins across calls,
-   splice-crossing keeps, and store elision across calls (the write-through stores
-   still stand and are now the count's whole residue).
+   breaks). THE CALLISH BAR LIFTED 2026-08-10 (the aim hold, the ledger): the why was
+   the free-list/pin split, and with it fixed a callish rhs aims and pins — `s +=
+   f(..)` accumulators now ride seats through their own calls. What remains:
+   spill-around when seats run out, element pins across calls, splice-crossing
+   keeps, and store elision across calls (the write-through stores still stand and
+   are now the count's whole residue).
 3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
    left aims at its park before evaluating, so member loads deliver and the bridge mov
    dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
@@ -280,8 +282,8 @@ ungated — an inlinee's i++ would find the CALLER's pin under the colliding nam
 step the caller's register; now vmon?/argseal-gated. And ONE bar with an open why:
 pinning a CALLISH write's result (a class the shipped compiler never pinned — always
 unhonored+freed) miscompiles the context-threading shape (g = ai_push(g ..) in
-love.c's analyzer); callish rhs keeps no hint until the allocator leg's call-crossing
-machinery explains and owns it. Laws: lp1/lp2 (registerized loops), lp3 (call refusal),
+love.c's analyzer); barred that day, EXCAVATED AND LIFTED 2026-08-10 (the aim hold,
+below). Laws: lp1/lp2 (registerized loops), lp3 (call refusal),
 lo6 (nested), lo7 (the bar engages — sharp against a disabled check), lo8 (force +
 kept-post under a post-loop call); four flips falsified; five loop shapes in the
 torture differential; fixpoint byte-identical, fuzz, kernel, full battery green.
@@ -305,11 +307,37 @@ store→load chain through the slot, not count; the corpus and spec.l flat; ql's
 depth-1 counter now rides a borrowed seat with its slot stores swept. Laws: lp4
 (seat-served arg, in-place step, cond on the seat, one post-loop slot read), ql's
 borrow save/restore pair; three flips falsified (no spare, no grant, no arg ride).
-The callish-write pin bar STAYS (its why still open); s in `s += f(i)` refuses by
-the bar and the miss→bar ladder converges on keeping i alone. Ten call-crossing
+The callish-write pin bar stayed one more rung (its why then still open); s in
+`s += f(i)` refused by the bar — until the aim hold (the next entry) lifted it. Ten call-crossing
 torture shapes (fn-pointer calls, nested, break/continue, global-writing callee,
 address-taken, seat pressure, goto refusal) agree with gcc; fixpoint byte-identical,
 fuzz, kernel, full battery green.
+2026-08-10 · the aim hold (the callish why, found — the bar lifts): the ana_d
+miscompile was never about pinning call results — it was THE FREE-LIST/PIN SPLIT.
+'pool and 'vpin agree only at psreset boundaries; the callish aim opened a window
+between them: hint = the existing pin's register, the rhs's call flush unpins it
+(vmcflush), a SPLICE body's own statements then psreset with vpin empty — handing
+the aim register to the free pool — and the force re-pins it with 'pool never
+re-filtered. A statement boundary heals the split (the next psreset re-excludes
+vpin), which is why plain statements never reproduced: the reachable shape was
+ana_d's COMMA CHAINS, where leg N+1's ralloc double-books the register leg N still
+pins — the spliced ai_ok's AND landed ON g's pin (`and r7 r7 7`) and pop1 walked
+g&7. Twenty lines reproduce it; the fix is three-fold and principled: (1) the aim
+HOLD — the hint rides 'rpin across the rhs, the splice binds' own discipline, so no
+reset can free it and no ralloc can take it (load-bearing: eviction alone cannot
+stop a mid-rhs claimant living past the force); (2) the pin doors evict their
+register from 'pool outright — "a pinned reg is never on the free list" was the
+comment's claim, now it is the code's, continuously; (3) ralloc SCARES on handing
+out a vpin/rpin member — the whole class is loud forever. Both bars lifted (scalar
++ element): callish writes aim and pin, `s += ext(a[i]) + n` keeps its accumulator
+on a borrowed seat THROUGH the call (zpf's new law), lp4's s re-establishes in its
+seat with even the pre-call park reading it. Laws: the aim-hold shape (the spliced
+AND must not land on the pin, pop reads through the LIVE pin) — the plain lift
+reds it; calltort t11 (the ana_d shape, runnable); corpus flat, all gates green
+(battery, fixpoint byte-identical, fuzz, kernel). The excavation cost one more
+taint lesson: `make out/host/mooncc.image` relinks love through the CURRENT gen.l,
+so the "reproducer" first crashed in the instrument, not the subject — hand-bake
+on a saved-healthy binary before trusting any compiler-under-test.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

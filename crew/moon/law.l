@@ -1140,6 +1140,18 @@
       (= 1 (occ '(ld r13 sp 80)))
       (member? '(add r12 r12 1) qf)                  ; the inner step is register-only
       (member? '(add r13 r13 1) qf))                 ; ...and the kept i steps its seat in place
+   ; -- the aim HOLD (the ana_d why, found and fixed): a callish rhs may aim at the pin.
+   ; the hold keeps the aim register on rpin across the rhs, so a mid-rhs call flush plus a
+   ; splice body's psreset cannot hand it to a same-statement ralloc (the comma chain was
+   ; the reachable shape). g rides r7 through the chain; the spliced ok()'s AND lands in a
+   ; FRESH register, and pop() reads g->sp through the live pin.
+   irH (cgn "struct E { long a; long b; long c; long stack; }; struct S { long tag; long x; long sp; }; struct S *push2(struct S *g, long z, long e); static struct S *gx(struct S *g) { g->x = g->x + 1; return g; } static struct S *cix(struct S *g, struct E **b, long k) { g = push2(g, k, (*b)->a); return gx(g); } static long ok(struct S *g) { return ((long)g & 7) == 0; } static long pop(struct S *g) { long *p = (long*)g->sp; g->sp = (long)(p + 1); return *p; } struct S *ana2(struct S *g, struct E **b); long run(struct S *g, struct E **b, long globp, long n) { long i; for (i = 0; i < n; i = i + 1) g = ana2(g, b), g = globp ? cix(g, b, i) : g, g = gx(push2(g, 0, (*b)->stack)), (*b)->stack = ok(g) ? pop(g) : 0; return (long)g; } int main() { return 0; }")
+   hf (fnf 'run <>irH)
+   _ (assert
+      (two? irH)
+      !(member? '(and r7 r7 7) hf)                   ; the spliced ok() must not land its AND on the pin
+      (member? '(and r8 r7 7) hf)                    ; ...it reads the pin into a fresh register
+      (member? '(ld r0 r7 16) hf))                   ; ...and pop() reads g->sp through the LIVE pin
    ; -- slot-load elision: loadval honors the want hint (a decl/asn init from a member/deref
    ; lands straight in the hinted register, so the vmap pin fires and re-reads are zero forms),
    ; and stld rides a whole straight-line run (a bound slot's reload forwards from the register
@@ -1205,8 +1217,13 @@
    zpf (fnf 'h3 <>irZp)
    _ (assert
       (two? irZp)
-      (member? '(st sp 48 r6) zpf)                   ; n spills at entry...
-      (member? '(ld4 r0 sp 48) zpf))                 ; ...and every read re-extends from the slot
+      (member? '(st sp 40 r6) zpf)                   ; n spills at entry...
+      (member? '(ld4 r0 sp 40) zpf))                 ; ...and every read re-extends from the slot
+   ; ...and the callish accumulator s now RIDES: the aim hold lets `s += ext(..)` keep s
+   ; on a borrowed cs seat through the call (the write re-establishes in the seat)
+   _ (assert
+      (member? '(add r11 r6 r0) zpf)                 ; s's def lands in its seat
+      (member? '(st sp 24 r11) zpf))                 ; ...write-through stands
    ; -- priced int-param homes (the leaf lane): an int param whose slot touches pay the
    ; entry cvt takes its POSITIONAL pool seat -- after the locals pick, and only while the
    ; pool stays deep (>= 2 free after the take). f4: n homes its own arrival seat (one sx4,
@@ -1773,8 +1790,9 @@
       (2 <= ldc lp3f)                                       ; an INLINED call (the splice flush) refuses the keep: reloads stand
       (member? '(mov r6 r11) lp4f)                          ; an EXTERN call: i keeps on a borrowed cs seat -- the arg rides it
       (member? '(add r11 r11 1) lp4f)                       ; ...steps in place across the call
-      (member? '(cmprm r11 sp 40) lp4f)                     ; ...and the cond compares the seat
-      (= 1 (ldsp lp4f 24))                                  ; i's slot: one post-loop read, NONE in the loop
+      (member? '(mov r12 r0) lp4f)                          ; s (callish-written) re-establishes in ITS seat -- the aim hold's class
+      (member? '(st sp 8 r12) lp4f)                         ; ...and the pre-call park reads the seat, not the slot
+      (= 1 (ldsp lp4f 16))                                  ; i's slot: one post-loop read, NONE in the loop
       (= 0 (ldc lo6f)) (= 0 (stc lo6f))                     ; nested: the outer keeps survive the inner loop
       (2 <= ldsp lo7f 16)                                   ; x[i&1]=i drops x[0] mid-loop: the edge CHECK barred the
                                                             ;   keep (a zero-miss build ships) -- x[0] reloads in-loop

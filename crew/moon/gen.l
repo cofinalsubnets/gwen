@@ -87,7 +87,13 @@
    ; homes, have no spill wrap -- the callish? gate holds that line. --
    opool '(r6 r5 r9 r10 r7 r8)
    (ralloc g) (: fr (peep g 'pool ())
-                 (? (two? fr) (: _ (pin g 'pool >fr) <fr) ()))
+                 (? (two? fr)
+                    (: r9 <fr
+                       ; ⚠ armor: a pinned reg on the free list is the free-list/pin split
+                       ; (the callish-aim window) resurfacing -- refuse LOUD
+                       _ (? (member? r9 (peep g 'vpin ()) || member? r9 (peep g 'rpin ()))
+                            (scare 'ralloc-pinned r9) ())
+                       _ (pin g 'pool >fr) r9) ()))
    (rfree g r) (? (member? r (peep g 'pool0 ()) &&
                    !(member? r (peep g 'pool ())) &&
                    !(member? r (peep g 'vpin ())) &&               ; a vmap pin is not ours to free
@@ -162,6 +168,7 @@
        (: _ (vmdrop g nm)
           _ (vmxdrop g nm r)
           _ (pin g 'vmap ([nm r] >< peep g 'vmap ()))
+          _ (pin g 'pool (filter (\ q !(id? q r)) (peep g 'pool ())))   ; a pinned reg is never free
           (? (member? r (peep g 'vpin ())) ()
              (pin g 'vpin (r >< peep g 'vpin ())))) ())
    (vmflush g) (pins g 'vmap () 'vpin ())
@@ -177,6 +184,7 @@
           _ (pin g 'vmap ([nm r] >< peep g 'vmap ()))
           _ (? (member? r (peep g 'csbu ())) ()
                (pin g 'csbu (r >< peep g 'csbu ())))
+          _ (pin g 'pool (filter (\ q !(id? q r)) (peep g 'pool ())))   ; a pinned reg is never free
           (? (member? r (peep g 'vpin ())) ()
              (pin g 'vpin (r >< peep g 'vpin ())))) ())
    (vmrepin g nm r)                                 ; re-establish wherever the pin lives
@@ -224,6 +232,7 @@
        (: _ (vadrop9 g nm)
           _ (vmxdrop g nm r)
           _ (pin g 'vmap ([nm r] >< peep g 'vmap ()))
+          _ (pin g 'pool (filter (\ q !(id? q r)) (peep g 'pool ())))   ; a pinned reg is never free
           (? (member? r (peep g 'vpin ())) ()
              (pin g 'vpin (r >< peep g 'vpin ())))) ())
    ; -- frame-direct: a constant-indexed frame-array element is a STATIC slot (off + k*elsize) --
@@ -1817,14 +1826,18 @@
                      ; the vmap hint: aim the rhs at the EXISTING pin's register (a kept
                      ; loop pin re-establishes in place), else a fresh pool one -- the
                      ; stored value stays RESIDENT (an unhonored hint goes back)
-                     ; ⚠ !callish: a call's result was NEVER pinned (unhonored, freed) --
-                     ; the force would pin it, and the context-threading shape (g = ai_push(g ..)
-                     ; every other statement) miscompiled under exactly that new class
-                     hint (? (vmon? g && id? <rv 'loc && !(callish? <>>e) &&
+                     ; ⚠ the aim HOLD (rpin across the rhs) is what licenses a CALLISH
+                     ; rhs here: a mid-rhs call flush unpins the aim register, a splice
+                     ; body's psreset then frees it, and a later ralloc in the SAME
+                     ; statement (ana_d's comma chains) double-books it -- the hold keeps
+                     ; it off the pool for the statement, the way splice binds already do
+                     hint (? (vmon? g && id? <rv 'loc &&
                                (homable? ty && member? nm (peep g 'vuniv ())))
                              (: kr (vmraw g nm) (? kr kr (ralloc g))) ())
-                     _ (? hint (pin g 'want hint) ())
+                     _ (? hint (pins g 'want hint
+                                       'rpin (hint >< peep g 'rpin ())) ())
                      r (cgexpr g env <>>e)
+                     _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())   ; the hold dies with the rhs
                      ; unhonored int values FORCE below instead of freeing: only a bad
                      ; or float rhs hands the hint back
                      _ (? (hint && (bad? r || flo? (vty r))) (rfree g hint) ())
@@ -1882,11 +1895,13 @@
                  (two? fd)
                   (: off <fd ty <>fd
                      ael (aelem g env <>e)
-                     hint (? (two? ael && id? <ael 'el && !(callish? <>>e) &&
+                     hint (? (two? ael && id? <ael 'el &&
                               vmon? g && !(0 < peep g 'argseal 0))
                              (: kr (vmraw g <>ael) (? kr kr (ralloc g))) ())
-                     _ (? hint (pin g 'want hint) ())
+                     _ (? hint (pins g 'want hint
+                                       'rpin (hint >< peep g 'rpin ())) ())   ; the aim hold (see the scalar lane)
                      r (cgexpr g env <>>e)
+                     _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())
                      (? (bad? r) (: _ (? hint (rfree g hint) ()) 'bad)
                         (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
                            (? (hint && id? (vreg r) hint && !(flo? (vty r)))
