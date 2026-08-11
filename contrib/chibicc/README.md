@@ -87,7 +87,9 @@ t.c:2: struct S *f(void), *g(int);
                                  ^ expected '{'
 ```
 
-This is plain `init-declarator-list`, unchanged since C89:
+### why this is valid C
+
+**C11 6.7 "Declarations", ¶1** — a declaration carries a *list* of declarators:
 
 ```
 declaration:
@@ -96,9 +98,14 @@ declaration:
 init-declarator-list:
         init-declarator
         init-declarator-list , init-declarator
+
+init-declarator:
+        declarator
+        declarator = initializer
 ```
 
-and a function declarator is an ordinary `direct-declarator` (C11 6.7.6):
+**C11 6.7.6 "Declarators", ¶1** — a function declarator is an ordinary
+`direct-declarator`, with no special status in that list:
 
 ```
 direct-declarator:
@@ -106,29 +113,49 @@ direct-declarator:
         direct-declarator ( identifier-list_opt )
 ```
 
-Nothing restricts a declarator carrying a parameter list to being the sole
-init-declarator. The construct that *is* restricted to one declarator is a function
-**definition** (C11 6.9.1):
+So nothing restricts a declarator carrying a parameter list to being the sole
+init-declarator. The construct that *is* so restricted is a function **definition** —
+**C11 6.9.1 "Function definitions", ¶1**, one declarator, no comma possible:
 
 ```
 function-definition:
         declaration-specifiers declarator declaration-list_opt compound-statement
 ```
 
-— and that is exactly the distinction being conflated. `parse()` dispatches on
-`is_function()`, which inspects only the first declarator, into `function()`; `function()`
-parses that declarator and then accepts only `;` or `{`, so a `,` has nowhere to go. The
-test is "does this declaration begin with a function declarator", where it needs to be
-"is this a function definition".
+These productions are unchanged from C99 (N1256, the free TC3 draft: 6.7, 6.7.5 —
+Declarators is 6.7.5 there, C11 having inserted 6.7.5 "Alignment specifier" — and 6.9.1)
+and back to C89. Checkable without buying a standard:
 
-gcc and clang accept the case above with zero diagnostics at `-pedantic-errors` under
-`-std=` c89, c99, c11, c17 and c23. It isn't on the README's non-support list either
-(complex numbers, K&R prototypes, GCC inline asm, digraphs/trigraphs), and it predates
-C11 entirely, so "almost all mandatory features of C11" reads as covering it.
+```
+$ for s in c89 c99 c11 c17 c23; do gcc -std=$s -pedantic-errors -Wall -Wextra -c t.c; done
+$ for s in c89 c99 c11 c17 c23; do clang -std=$s -pedantic-errors -Wall -Wextra -c t.c; done
+```
+
+Both compilers, every standard, zero diagnostics.
+
+### why it looks in scope for chibicc
+
+From the README's Status section:
+
+> chibicc supports almost all mandatory features and most optional features of C11 as
+> well as a few GCC language extensions.
+
+Declarations are as mandatory as C11 gets, and this predates C11 entirely. The same
+section's exclusion list is explicit, and this is not on it:
+
+> chibicc does not support complex numbers, K&R-style function prototypes and GCC-style
+> inline assembly. Digraphs and trigraphs are intentionally left out.
 
 In fairness it is a rare spelling — I scanned 120 headers under /usr/include and found no
 instance, which is presumably why it has gone unnoticed while Git and SQLite build fine.
-So this is a conformance gap rather than a practical blocker.
+A conformance gap, then, not a practical blocker.
+
+### the cause, and the fix
+
+`parse()` dispatches on `is_function()`, which inspects only the first declarator, into
+`function()`; `function()` parses that declarator and then accepts only `;` or `{`, so a
+`,` has nowhere to go. The test asks "does this declaration begin with a function
+declarator" where 6.9.1 needs it to ask "is this a function definition".
 
 The patch splits the symbol-registration half of `function()` into `declare_function()`,
 hands a comma tail to the existing `global_variable()` loop, and has that loop dispatch on
