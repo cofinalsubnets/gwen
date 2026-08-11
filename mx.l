@@ -41,6 +41,12 @@
    ; two. the tray is the one that differs: ONE rep, refined by element tier into
    ; four dispatch kinds. reps carry no order and no lanes; only the map below reads
    ; this list's shape.
+   ; ⚠ the APPLY action is not a table here (each sentinel tail-jumps to its own handler in
+   ; love.c), but it has a DEFAULT and the roster is where to say so: const-1, what an operand
+   ; gets when its kind has no lane of its own. a point answers it at every operand; the two
+   ; sequences answer it at everything that is neither an index nor their own kind. it is the
+   ; zero point's own action, so it reads as "nothing to look up here" rather than as an error --
+   ; subject to change, and the reason a dead lane can be retired by falling back to it.
    mx-reps '(DMint DNom DSun DGem DTwin DBig DTray DString DChain)
    ; each rep's dispatch kind. DTray's entry is the FLOOR of the tier ladder and is
    ; never read -- ai_kind branches on the tray first and adds the tier itself.

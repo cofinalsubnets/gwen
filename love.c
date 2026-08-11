@@ -5224,13 +5224,14 @@ static lvm(lvm_mul_cart) {
 
 // --- apply lane (the data-value `(g x)` aps) ---
 // an applied data value's sentinel tail-jumps straight to its handler -- no table.
-// chain = eliminator, string = byte index (or juxtaposition on a string), numbers = church numerals; opaque
-// handles behave as 0 via their own sentinels.
+// the sequences INDEX and JUXTAPOSE -- text by byte, a chain by element -- numbers are
+// church numerals; opaque handles behave as 0 via their own sentinels. const-1 is the
+// DEFAULT action: what an operand gets when its kind has no lane of its own (mx.l).
 
-// (s k): index the string -- the unsigned byte at k, else 1 (matches "" == 0:
-// a numeric ("" k) is k**0 == 1). a TEXT k JUXTAPOSES instead: (s t) is s then t,
-// C's adjacent-literal law with the literal restriction lifted -- and it curries,
-// so ("a" "b" "c") joins three. agrees with (+ s t) on every text pair.
+// (s k): index the string -- the unsigned byte at k, negatives from the end, else 1
+// (matches "" == 0: a numeric ("" k) is k**0 == 1). a TEXT k JUXTAPOSES instead: (s t)
+// is s then t, C's adjacent-literal law with the literal restriction lifted -- and it
+// curries, so ("a" "b" "c") joins three. agrees with (+ s t) on every text pair.
 static lvm(data_string_apply) {
  if (strp(Sp[0])) {
   uintptr_t m = len(Ip), n = len(Sp[0]), req = str_type_width + b2w(m + n);
@@ -5241,9 +5242,11 @@ static lvm(data_string_apply) {
   memcpy(txt(z), txt(Ip), m);
   memcpy(txt(z) + m, txt(Sp[0]), n);
   Ip = cell(*++Sp); *Sp = word(z); ai_musttail return Continue(); }
- word k = Sp[0], v = putcharm(1), n;
- if (oddp(k) && (n = getcharm(k)) >= 0 && n < (word) len(Ip))
-  v = putcharm((unsigned char) txt(Ip)[n]);
+ word v = putcharm(1);
+ if (oddp(Sp[0])) {
+  word n = getcharm(Sp[0]);
+  if (n < 0) n += (word) len(Ip);                       // -1 is the last byte
+  if (n >= 0 && n < (word) len(Ip)) v = putcharm((unsigned char) txt(Ip)[n]); }
  Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
 
 // applying a symbol: a point applies as every unit does -- const-1
@@ -5259,19 +5262,26 @@ static lvm(data_num_apply) {
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 
-// ((a . b) g) == (g a b): a chain is its own church eliminator. the static driver
-// [ap ; swap+ap ; ret0] runs ((g a) b); it lives in .data, so its return addresses
-// fall outside the GC pool.
-static lvm(pair_swap) {
- word t = Sp[0]; Sp[0] = Sp[1], Sp[1] = t;
- ai_musttail return Ap(lvm_ap, g); }
-static union u const pair_drive[] = { {lvm_ap}, {.ap = pair_swap}, {.ap = lvm_ret0} };
+// (l k): index the spine -- the kth element, negatives from the end, out of range the
+// unit 1. (l m): a chain operand JUXTAPOSES -- the append, agreeing with (+ l m) on
+// the nose (add_seq's list+list lane, spelled here). the text law, one lattice rung up:
+// a chain indexes elements where text indexes bytes. every other operand is const-1.
 static lvm(data_pair_apply) {
- Have(2);
- word a = A(Ip), b = B(Ip), fn = Sp[0];     // re-read after the Have guard; no alloc past here
- Sp -= 2;                                    // grow the frame to [a, fn, b, ret]
- Sp[0] = a, Sp[1] = fn, Sp[2] = b;           // Sp[3] = ret (was Sp[1]) stays put
- Ip = (union u*) pair_drive; ai_musttail return Continue(); }
+ if (chainp(Sp[0])) {
+  uintptr_t n = llen(word(Ip));
+  Have(n * Width(struct ai_chain));
+  struct ai_chain *base = (struct ai_chain*) Hp, *w = base;
+  Hp += n * Width(struct ai_chain);
+  for (word l = word(Ip); chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
+  (w - 1)->b = Sp[0];                        // last cdr -> the operand (a chain is never empty)
+  Ip = cell(*++Sp); *Sp = word(base); ai_musttail return Continue(); }
+ word v = putcharm(1);
+ if (oddp(Sp[0])) {
+  word k = getcharm(Sp[0]), l = word(Ip);
+  if (k < 0) k += (word) llen(l);            // -1 is the last element
+  if (k >= 0) { while (k-- > 0 && chainp(l)) l = B(l);
+                if (chainp(l)) v = A(l); } }
+ Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
 
 // === the two generic-op dispatch matrices (+ and *), indexed by ai_kind =====
 // lanes: *n numeric/broadcast (every star and tray kind routes identically), add_seq

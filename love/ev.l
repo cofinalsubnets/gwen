@@ -37,6 +37,12 @@
             re im conj arg gem twin
             sine cosine log power))
    (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) #() names)))
+; the CONTAINER DOORS -- pure or not depending on WHAT they are handed, which is why they
+; cannot sit in pureset. on a tablet peep reads mutable state and pin writes it; on a chain or
+; text neither can, so both are effect-free there: pin on an immutable has no cell to write, so
+; whatever it answers it answers as a VALUE. keyed by value, like pureset.
+(: readset (: names '(peep pin)
+   (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) #() names)))
 (: feels (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
@@ -309,7 +315,7 @@
    (cpgrew? v r) (constellation? v && nil? (star? r && (abs r) <= max-charm))
    (cpap v as) (: k (? (two? as) (kconst <as) ())
     (? (atom? as) (cbake v)                                              ; every operand consumed -> the value
-       (nil? (pure-ap? v && <k)) (cbake v >< as)                         ; unknown operand or an impure apply -> stop
+       (nil? (<k && pure-ap? v >k)) (cbake v >< as)                      ; unknown operand or an impure apply -> stop
        (: r (v >k) (? (cpgrew? v r) (cbake v >< as)                      ; ... or a numeral that left the charm band
                        (cpap r >as)))))                                  ; else take the step and walk on
    ; --- the known-lambda INLINER (cprop's beta-reduction lane) ----------------------------
@@ -324,13 +330,20 @@
    ; never ESCAPE to where =/id?/show could observe it. the operator-position flag `op` is the
    ; guard: a beta result that is itself a lambda is committed only when CONSUMED (op=1, an
    ; enclosing application's head); at a VALUE position (op=0) we REVERT to the un-inlined source.
-   (pure-head? h) !!(peep pureset (gv h ()) 0)                                    ; h's global value is a KNOWN PURE fn (the lifted ~50-fn set)
-   ; pure-ap?: applying THIS VALUE is effect-free, so cpap may fold a known operand into it here
-   ; instead of at run time. the curated pure fns by value, plus the data lanes that never RUN what
-   ; they are handed: text indexes or joins, a point answers const-1, a numeric or array COMPOSES
-   ; (it builds the composition, it does not call it). ⚠ a CHAIN is out -- it is its own
-   ; eliminator, ((a . b) g) == (g a b), so applying one CALLS the operand.
-   (pure-ap? v) (|| (string? v) (nom? v) (constellation? v) !!(peep pureset v 0))
+   ; the purity oracle, in ONE place: applying this FUNCTION VALUE to this KNOWN first operand
+   ; is effect-free. the curated set is pure at every operand, so it ignores k; readset is pure
+   ; only on an IMMUTABLE container, which is the whole reason k is a parameter -- every site
+   ; that asks has the operand in hand by construction, so consulting it costs nothing.
+   (pure-fn? v k) (|| !!(peep pureset v 0)
+                      (!!(peep readset v 0) && (|| (string? k) (two? k))))
+   (pure-head? h as) (pure-fn? (gv h ()) (? (two? as) (kval <as) ()))            ; the SATURATED lane: foldc applies every arg at once
+   ; pure-ap?: the same question for cpap's walk, widened by the DATA lanes -- which never RUN
+   ; what they are handed: a sequence indexes or joins (text by byte, a chain by element), a point
+   ; answers const-1, a numeric or array COMPOSES (it builds the composition, it does not call it).
+   ; ⚠ a PARTIAL of a pure fn is not itself in pureset, so the walk stops at one: ((+) 1 2 x)
+   ; folds ((+) 1) and no further. that is why readset pays off in the nom lane above -- peep
+   ; wants three operands -- and not here. a sticky licence would close it; not today.
+   (pure-ap? v k) (|| (string? v) (two? v) (nom? v) (constellation? v) (pure-fn? v k))
    (allp as se) (all (\ a (purep a se)) as)                                  ; all args effect-free?
    (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
     (h = a) 1                                                                         ; nom / number / string
@@ -404,9 +417,9 @@
              (? (&& (< 0 fl) (lambp hr) (two? as) (allp as se))                        ; two? as: (f) is f -- nothing to substitute
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
-                (nom? h && allk as && !(member? h bnd) && pure-head? h)               ; pure-fn on consts -> fold. bnd-guarded: a binder
+                (nom? h && allk as && !(member? h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
-                (<hk && pure-ap? >hk && two? as && propk? <as)                        ; a PURE-APPLYING head with a KNOWN operand: fold the whole
+                (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a PURE-APPLYING head with a KNOWN operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
                 (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
    (wx (cprop x () 64 0 0) 0))

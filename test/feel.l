@@ -37,8 +37,9 @@
  (= 9   (: (f x) ('sym 5 x) (f 9)))           ; a point applies const-1 -> (1 x), the identity
  (= 5   (0 0 5)) (= 262144 (2 3 4))           ; const of const is id; the tower, both charm-sized
  (= 1.0 (: (f x) (2 1.5 x) (f 1)))            ; (2 1.5) is the gem 2.25 -- charm-sized, so it folds
- ; ⚠ a CHAIN is its own eliminator, so applying one CALLS the operand -- never folded
- (= 3 (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))
+ (= '(1 2 3 4) (: (f x) ('(1 2) x) (f '(3 4))))   ; a chain joins like text, and folds the same way
+ (= 256 (: (f x) ('(7 8 9) 1 x) (f 2)))       ; ... and INDEXES: ('(7 8 9) 1) folds to 8, leaving (8 x)
+ (= 1 (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the DEFAULT action
  ; ⚠ and a numeral whose answer OUTGROWS a charm stays residual rather than baking into the image:
  ; a composition here, 2**200000 in test/task.l -- whose yieldable-multiply gate leans on it
  (= 3 (: (f x) (3 (\ y (y + 1)) x) (f 0)))

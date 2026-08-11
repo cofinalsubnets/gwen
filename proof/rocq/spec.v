@@ -841,7 +841,12 @@ Proof. reflexivity. Qed.
 
 Open Scope Z_scope.
 
-(* --- strings: indexed bytes; net = charm sum; tally = count --- *)
+(* --- strings: indexed bytes; net = charm sum; tally = count ---
+   sidx is the SEQUENCE index law, shared with the chain: a negative i counts from the end,
+   and out of range in EITHER direction answers the unit 1. *)
+Definition sidx' (v : list Z) (i : Z) : Z :=
+  let j := if i <? 0 then i + Z.of_nat (length v) else i in
+  if j <? 0 then 1 else nth (Z.to_nat j) v 1.
 Definition sidx  (v : list Z) (i : Z) : Z := nth (Z.to_nat i) v 1. (* OOB applies as the unit, 1 *)
 Definition tally (v : list Z) : Z := Z.of_nat (length v).
 Theorem str_index     : sidx [97;98;99] 0 = 97.   Proof. reflexivity. Qed. (* ("abc" 0) = 97 *)
@@ -859,6 +864,31 @@ Theorem str_juxt_unitl: forall s, sjux [] s = s.                Proof. reflexivi
 Theorem str_juxt_unitr: forall s, sjux s [] = s.                Proof. intros. apply app_nil_r. Qed. (* (s "") = s *)
 Theorem str_juxt_assoc: forall s t u, sjux (sjux s t) u = sjux s (sjux t u).  (* so ("a" "b" "c") joins three *)
 Proof. intros. unfold sjux. now rewrite app_assoc. Qed.
+
+(* NEGATIVE INDEXES count from the end; past either end is the unit. The j < 0 guard is
+   load-bearing: Z.to_nat sends every negative to 0, so without it an index below
+   -(length v) would answer the FIRST element instead of the unit -- which is exactly the
+   >= 0 test the C makes after adding the length. *)
+Theorem str_idx_neg1  : sidx' [97;98;99] (-1) = 99.  Proof. reflexivity. Qed. (* ("abc" -1) = 'c' *)
+Theorem str_idx_neg3  : sidx' [97;98;99] (-3) = 97.  Proof. reflexivity. Qed. (* ("abc" -3) = 'a' *)
+Theorem str_idx_neg_oob : sidx' [97;98;99] (-4) = 1. Proof. reflexivity. Qed. (* past the front -> the unit *)
+Theorem str_idx_pos_agrees : forall v i, 0 <= i -> sidx' v i = sidx v i.      (* non-negative: the old law *)
+Proof. intros v i H. unfold sidx', sidx. apply Z.ltb_ge in H as E. rewrite E. cbn. now rewrite E. Qed.
+
+(* --- chains: the SAME two laws one lattice rung up -- index an ELEMENT, juxtapose by
+   APPEND. The Church eliminator ((a . b) g) == (g a b) was retired once the tree was
+   checked and nothing applied a chain to a function; every non-index, non-chain operand
+   takes the default action, const-1 (see mx.l). --- *)
+Definition cidx (v : list Z) (i : Z) : Z := sidx' v i.
+Definition cjux (s t : list Z) : list Z := s ++ t.
+Theorem chain_idx      : cidx [7;8;9] 0 = 7.        Proof. reflexivity. Qed. (* ('(7 8 9) 0) = 7 *)
+Theorem chain_idx_neg  : cidx [7;8;9] (-1) = 9.     Proof. reflexivity. Qed. (* ('(7 8 9) -1) = 9 *)
+Theorem chain_idx_oob  : cidx [7;8;9] 3 = 1.        Proof. reflexivity. Qed. (* out of range -> the unit *)
+Theorem chain_juxt     : cjux [1;2] [3;4] = [1;2;3;4].  Proof. reflexivity. Qed. (* ('(1 2) '(3 4)) *)
+Theorem chain_juxt_cat : forall s t, cjux s t = s ++ t. Proof. reflexivity. Qed. (* agrees with `+` *)
+(* the two sequence lanes are ONE law, read at two grains: bytes and elements *)
+Theorem seq_one_law    : forall v i, cidx v i = sidx' v i /\ forall s t, cjux s t = sjux s t.
+Proof. intros. split. reflexivity. intros. reflexivity. Qed.
 
 (* the NUL byte nets nothing: + is the measure homomorphism down to the bytes *)
 Theorem nul_appends_free : asum [97; 0] = 97.   Proof. reflexivity. Qed. (* $(+ "a" 0) = 97 *)
