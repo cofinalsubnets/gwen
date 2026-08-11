@@ -1138,12 +1138,18 @@
                (? (bad? a) 'bad
                   (: af (? (t32? g)                      ; the gp shuttle moves the PAIR on t32
                            (asflo g a + '((movqrx r0 f0)) + spush2)
-                           (asflo g a + '((movqrx r0 f0)) + spush 'r0))
+                           (asflo g a))                  ; the word hold joins per-arm below
                      b (cgexpr g env rhs ())
                      (? (bad? b) 'bad
                         (: mid (? (t32? g)
                                   (af + asflo g b + (spop2 'r2 'r3 + '((movqxr f1 r2))))
-                                  (af + asflo g b + spop 'r1 + '((movqxr f1 r1))))
+                                  ; the left's bits HOLD in a gp reg -- movqrx aims straight at it
+                                  (: bf (asflo g b)
+                                     s (? (r1safe? bf) 'r1 (spare g bf))
+                                     (? s (af + [['movqrx s 'f0]] +
+                                           (bf + [['movqxr 'f1 s]]))
+                                        (af + ('((movqrx r0 f0)) + spush 'r0) +
+                                         (bf + spop 'r1 + '((movqxr f1 r1)))))))
                            swp (member? op '(lt le))
                            cf [['ucomisd (? swp 'f0 'f1) (? swp 'f1 'f0)]]
                            ecc (? (arm? g)               ; VCMP/FCMP flags: gt/ge unordered-false native
@@ -1244,8 +1250,12 @@
                                     ta9 (numty9 lhs (vty a)) tb9 (numty9 rhs (vty b))
                                     brf (znrw g ta9 tb9 'r1 'r0 +
                                          ['(cmp r1 r0) ['br (bcc op (cmpu g ta9 tb9)) lbl]])
-                                    (? (r1safe? bf) (af0 + '((mov r1 r0)) + bf + brf)
-                                       (af + bf + (spop 'r1 + brf))))))
+                                    (? (!(two? (vfs a)) && !(id? (vreg a) 'r0) && psafe? bf (vreg a))
+                                       (bf + ([['mov 'r1 (vreg a)]] + brf))   ; the left rides: read through it
+                                       (r1safe? bf) (af0 + '((mov r1 r0)) + bf + brf)
+                                       (: s (spare g bf)
+                                          (? s (af0 + ([['mov s 'r0]] + bf) + ([['mov 'r1 s]] + brf))
+                                             (af + bf + (spop 'r1 + brf))))))))
                           (: b (cgexpr g env rhs ())
                              (? (bad? b) 'bad
                                 (flo? (vty b)) (: _ (rfree g (vreg ah)) _ (rfree g (vreg b)) (fcb ()))
@@ -1339,6 +1349,29 @@
                    (member? 'r1 <>rd) ()
                    (member? 'sp <>rd) ()
                    (r1safe? >fs))))))
+   ; the POOL CELL (hom rung 3): when r1 is barred, the left may still hold in a pool register
+   ; ACROSS the right's forms -- labels and internal branches are the right's own (nlab-fresh,
+   ; no path enters from outside), so only a call (the pool clobber), an unknown op, or a write
+   ; of the candidate bars it. an inline-spliced call passes: the bar reads the FORMS, not the AST.
+   (psafe? fs r)
+    (? !(two? fs) 1
+       (: f <fs
+          (? !(two? f) (psafe? >fs r)
+             (member? <f '(label br jmp)) (psafe? >fs r)
+             (: rd (rdsp f)
+                (? (id? rd 'bar) ()
+                   (member? r <>rd) ()
+                   (psafe? >fs r))))))
+   ; a free pool register bf never writes -> r | () (dry or barred: the sp cell stands).
+   ; a BORROW, not an allocation: the park's span closes inside its own staging (write,
+   ; bf, read -- nothing generates between), so the free list keeps its order untouched.
+   (spare g bf)
+    (: (go l) (? !(two? l) ()
+                 (member? <l (peep g 'vpin ()) || member? <l (peep g 'rpin ()))
+                  (scare 'spare-pinned <l)
+                 (psafe? bf <l) <l
+                 (go >l))
+       (go (peep g 'pool ())))
 
    ; -- the PAIR kit (t32 llong/ullong, moon rung 3): a 64-bit value rides r0 (lo) : r1 (hi),
    ; the AAPCS32 return pair. pairs NEVER enter the operand pool or the immediate lanes --
@@ -3082,10 +3115,12 @@
                         (mkv rt rd (vfs a + [['mov rd (vreg a)] [iop rd <kc]] + nar rd))))
                  (: b (cgexpr g env rhs ())
                     (? (bad? b) 'bad
-                       (mkv rt 'r0 (tor0 g a +
-                                    spush 'r0 +
-                                    tor0 g b + '((mov r1 r0)) + spop 'r0 +
-                                    ([[vop 'r0 'r1]] + nar 'r0)))))))
+                       (: af (tor0 g a)
+                          bf (tor0 g b)
+                          st (: s (spare g bf)      ; the value holds in a pool reg past the count's eval
+                                (? s (([['mov s 'r0]] + bf) + ['(mov r1 r0) ['mov 'r0 s]])
+                                   (spush 'r0 + bf + ('((mov r1 r0)) + spop 'r0))))
+                          (mkv rt 'r0 (af + st + ([[vop 'r0 'r1]] + nar 'r0))))))))
           (: ta (vty a)
              ; a constant right rides the immediate lane; a constant LEFT swaps
              ; over (commutative ops) or mirrors (relations, rflip) onto the right
@@ -3115,12 +3150,19 @@
                          ta9 (numty9 lhs ta)   ; C's type for a literal, read through
                          tb9 (numty9 rhs tb)   ; its written face (-1, ~0) -- see numty9
                          av (? (id? ah 'sh) a ah)
-                         ; the memory shuttle: left in r1, right in r0 (today's shape)
+                         ; the memory shuttle: left in r1, right in r0 (today's shape) --
+                         ; the cell is the LAST resort: a left already RIDING a register bf
+                         ; skips reads through it, then the r1 skip, then a pool-cell park
                          (shut z9)
-                          (: mid (: af9 (tor0 g av)
+                          (: mid (: rA (vreg av)
+                                    af9 (tor0 g av)       ; built first (the standing free order); the ride drops it
                                     bf (tor0 g b)
-                                    (? (r1safe? bf) (af9 + '((mov r1 r0)) + bf)
-                                       (af9 + spush 'r0 + bf + spop 'r1)))
+                                    (? (!(two? (vfs av)) && !(id? rA 'r0) && psafe? bf rA)
+                                       (bf + [['mov 'r1 rA]])
+                                       (r1safe? bf) (af9 + '((mov r1 r0)) + bf)
+                                       (: s (spare g bf)
+                                          (? s (af9 + ([['mov s 'r0]] + bf) + [['mov 'r1 s]])
+                                             (af9 + spush 'r0 + bf + spop 'r1)))))
                              back '((mov r0 r1))
                              pa (ptr? ta) pb (ptr? tb)
                              unsg (cmpu g ta9 tb9)                      ; divide and compare take the COMMON type's signedness -- see cmpu
@@ -3279,8 +3321,15 @@
                              (: mid (? (t32? g)               ; the gp stack moves PAIRS on t32
                                        (asflo g av + ('((movqrx r0 f0)) + spush2) +
                                         (asflo g b + spop2 'r2 'r3 + '((movqxr f1 r2))))
-                                       (asflo g av + ('((movqrx r0 f0)) + spush 'r0) +
-                                        (asflo g b + spop 'r1 + '((movqxr f1 r1)))))
+                                       ; the left's bits HOLD in a gp reg across the right --
+                                       ; movqrx aims straight at it, no bridge, no cell
+                                       (: af (asflo g av)
+                                          bf (asflo g b)
+                                          s (? (r1safe? bf) 'r1 (spare g bf))
+                                          (? s (af + [['movqrx s 'f0]] +
+                                                (bf + [['movqxr 'f1 s]]))
+                                             (af + ('((movqrx r0 f0)) + spush 'r0) +
+                                              (bf + spop 'r1 + '((movqxr f1 r1)))))))
                                 (? (op = '+) (mkv 'double 'r0 (mid + '((addsd f0 f1))))
                                    (op = '*) (mkv 'double 'r0 (mid + '((mulsd f0 f1))))
                                    (op = '-) (mkv 'double 'r0 (mid + '((subsd f1 f0) (movsd f0 f1))))

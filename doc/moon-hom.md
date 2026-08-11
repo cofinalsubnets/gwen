@@ -87,8 +87,30 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
     but −616 text bytes — memory operands became register reads plus seat movs, the
     keeps-engaging signature. reification itself stays (a value consumer needs the
     bit); the va_arg walk and discard-hygiene flushes stay (different licenses).
-* **rung 3 — the shuttle.** spush2 parks replaced by pool-threaded operand reads
-  (dest.l's rd9); the park aims already landed are this rung half-done.
+* **rung 3 — the shuttle (landed 2026-08-11).** the sp cell became the LAST resort:
+  the word/float binop and compare shuttles now stage through a three-tier read —
+  a left already RIDING a live register (a pin, a home) is read through it at the
+  combine (zero forms, rd9's "an operand that already sits somewhere"), else the
+  r1 hold, else a POOL park; the cell only when the pool is dry or the right's
+  forms genuinely bar. two findings shaped it:
+  * **decide from the FORMS, not the AST.** `callish?` barred every pool path for
+    a right side containing a call — but an inline-spliced call (love.h's b2w in
+    `Have(box_req)`, on every VM op) leaves call-free straight-line forms. psafe?
+    scans the emitted forms: labels and internal branches pass (nlab-fresh, no
+    entry from outside), a real call or a write of the candidate bars. the same
+    scan licenses riding a pin across a splice — which also dropped the dead
+    bridge mov the old cell recovery left behind.
+  * **a park is a BORROW, not an allocation** (spare): its span closes inside its
+    own staging, so the free list keeps its order — an alloc/free cycle reordered
+    it and renamed every seat downstream (pass 1 runs the same code; the roster
+    weighs its emission). and **never park what recovery already reads through**:
+    the first cut parked floats with a bridge mov pair where the old cell had been
+    recovered to ONE mov — movqrx aiming straight at the hold register beat both.
+  love.c: −397 insns, −2,700 text bytes, cells 231 → 209 (the rest are divide
+  staging, real call crossings, and dry-pool spills — the honest floor). the
+  residue: a handful of +2..8-byte functions where a 2-mov park chain stands
+  where recovery once made 1 mov. two laws re-truthed (an incidental slot
+  offset; erk's seat rename once s rides its pin through the splice).
 * **rung 4 — the pool as parameter.** ralloc/rfree → the threaded pool with the
   strictly-below discipline. last, because everything above makes it smaller.
 

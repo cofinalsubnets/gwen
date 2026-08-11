@@ -1460,7 +1460,7 @@
    wf (fnf 'wv <>irW)
    _ (assert
       (two? irW)
-      (member? '(st sp 16 r6) wf)                    ; the written param p spills off a's ride...
+      (member? '(st sp 0 r6) wf)                     ; the written param p spills off a's ride...
       !(member? '(add r6 r6 1) wf)                   ; ...and a's ride is never walked
       (member? '(cmp r7 r5) wf))                     ; lim, never written, still aliases n's ride
    irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
@@ -1898,7 +1898,7 @@
       (= 1 (ldc9 slkf)) (= 1 (stc9 slkf))            ; ...so the only sp traffic is the one cs save/restore
       (member? '(mov r11 r7) erkf)                   ; erk: the same keep through an EARLY-RETURN inlinee --
       (member? '(add r7 r7 r11) erkf)                ;   two ret edges meet at the end label and a still rides
-      (member? '(add r7 r10 r11) erkf)
+      (member? '(add r7 r9 r11) erkf)                ;   (s's seat: the left now rides its pin through the splice)
       (= 1 (ldc9 erkf)) (= 1 (stc9 erkf))
       (member? '(mov r14 r6) wlkf)                   ; wlk (a CALLISH inlinee): n seats...
       (member? '(cmp r12 r14) wlkf)                  ; ...the cond runs register-register
