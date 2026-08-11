@@ -301,7 +301,16 @@
    (cbake v) (? (charm? v) v `('\ v))                                                ; folded value -> source
    (kval v) (? (atom? v) v <>v)                                                  ; a const FORM -> its value
    (allk as) (all propk? as)                                                       ; all args constant?
-   (foldc o as) (cbake (foldl (\ g a (g a)) o (map kval as)))                 ; apply the nif to the consts
+   ; apply the fn to the consts. pure-head?'s licence covers the WHOLE saturated call -- a partial
+   ; of a pure fn is pure at every arity -- so this keeps applying without re-asking.
+   ; ⚠ it still owes cpgrew?. OVER-application turns the answer into a CHURCH numeral, the one
+   ; unbounded lane, and it reaches that lane through a head pure-head? already cleared:
+   ; (+ 1 200000 2) is ((200001) 2), a 60207-digit bignum baked into the image. a step that grows
+   ; residualizes the rest, exactly as cpap does -- the bound belongs to both lanes, not one.
+   (foldc o as) (? (atom? as) (cbake o)
+                   (: r (o (kval <as))
+                      (? (cpgrew? o r) (cbake o >< as)
+                         (foldc r >as))))
    ; cpap: fold a head's KNOWN PREFIX, one operand at a time, for as long as the value in hand
    ; still applies purely -- so an unknown tail costs only itself: ("ab" "cd" x) leaves ("abcd" x)
    ; and (3 2 x) leaves (8 x). the predicate is re-read every step, so a value that stops being

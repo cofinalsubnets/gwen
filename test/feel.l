@@ -38,6 +38,10 @@
  (= 9   (: (f x) (() 5 x) (f 9)))             ; ⚠ () folds too -- nom? is false of it, so it is named apart
  (= 5   (0 0 5)) (= 262144 (2 3 4))           ; const of const is id; the tower, both charm-sized
  (= 1.0 (: (f x) (2 1.5 x) (f 1)))            ; (2 1.5) is the gem 2.25 -- charm-sized, so it folds
+ ; ⚠ the bound is owed by BOTH fold lanes. a pure-fn head cleared by pure-head? still reaches
+ ; church application by OVER-application, and that is the unbounded one: (+ 1 200000 2) is
+ ; ((200001) 2), a 60207-digit bignum. the safe prefix folds, the growing step residualizes.
+ (= 60207 (tally (show (: (f x) (+ 1 200000 2) (f 0)))))
  (= '(1 2 3 4) (: (f x) ('(1 2) x) (f '(3 4))))   ; a chain joins like text, and folds the same way
  (= 256 (: (f x) ('(7 8 9) 1 x) (f 2)))       ; ... and INDEXES: ('(7 8 9) 1) folds to 8, leaving (8 x)
  (= 1 (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the DEFAULT action
