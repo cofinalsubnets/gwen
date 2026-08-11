@@ -278,15 +278,18 @@
    ; text is the entry), and ldlink binds the static exe -- no system linker.
    ; the entry hands the OS stack pointer (argc sits at [rsp]) to __ai_start
    ; and exits with its answer if it ever returns. __ai_start is defined here
-   ; WEAK -- the bare call-main tail every small link gets (the push 16-aligns
-   ; the call) -- so a libc object (crew/moon/lib/nolibc.c, rung 4) can override
-   ; it strong and unpack argv/envp/auxv before main. no conditional anywhere:
-   ; the weak machinery is the whole switch.
+   ; WEAK -- the call-main tail every small link gets (the push 16-aligns the
+   ; call, and argc/argv unpack so an arg-taking main reads truth, not the raw
+   ; sp) -- so a libc object (crew/moon/lib/nolibc.c, rung 4) can override it
+   ; strong and unpack envp/auxv too. no conditional anywhere: the weak
+   ; machinery is the whole switch.
    crt0 '((mov r6 sp)
            (call __ai_start)
            (mov r6 r0) (li r0 60) (sys)
            (label __ai_start)
            (push r6)
+           (lea r5 r6 8)
+           (ld r6 r6 0)
            (call main)
            (mov r6 r0) (li r0 60) (sys))
    ; the aarch64 twin: x0 = the OS stack pointer (mov from sp must be lea --
@@ -298,6 +301,8 @@
                (li r8 93) (sys)
                (label __ai_start)
                (push lr)
+               (lea r1 r0 8)
+               (ld r0 r0 0)
                (call main)
                (li r8 93) (sys))
    ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
@@ -307,6 +312,8 @@
               (li r7 94) (sys)
               (label __ai_start)
               (push lr)
+              (lea r1 r0 8)
+              (ld r0 r0 0)
               (call main)
               (li r7 94) (sys))
    ; the driver's LIBC (tolerance's other half): a link still owing strong
