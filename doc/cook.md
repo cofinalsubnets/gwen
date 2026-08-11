@@ -92,4 +92,4 @@ Without the installed symlink, loading cook by hand:
 
 # SEE ALSO
 
-**love**(1), **make**(1). The project README, and *crew/cook/example/* for a worked C build.
+**love**(1), **make**(1), and *crew/cook/example/* for a worked C build.
