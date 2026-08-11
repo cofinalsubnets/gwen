@@ -346,7 +346,10 @@
    ; ⚠ a PARTIAL of a pure fn is not itself in pureset, so the walk stops at one: ((+) 1 2 x)
    ; folds ((+) 1) and no further. that is why readset pays off in the nom lane above -- peep
    ; wants three operands -- and not here. a sticky licence would close it; not today.
-   (pure-ap? v k) (|| (string? v) (two? v) (nom? v) (constellation? v) (pure-fn? v k))
+   ; ⚠ the zero point is named SEPARATELY: it applies through the very same sentinel a mint
+   ; does, but `nom?` is false of it by design -- name? and mint? partition nom?, and () is in
+   ; neither, so that absence never wears a real point's face. here it is just a point.
+   (pure-ap? v k) (|| (string? v) (two? v) (nom? v) (id? v ()) (constellation? v) (pure-fn? v k))
    (allp as se) (all (\ a (purep a se)) as)                                  ; all args effect-free?
    (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
     (h = a) 1                                                                         ; nom / number / string
