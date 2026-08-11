@@ -14,6 +14,64 @@ This ledger is one of four docs that ride together: doc/moon-regalloc.md (the ca
 of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
+## 2026-08-11 — after the hom ladder (HEAD d83892e3)
+
+Same box, same method, hours after the previous fill. Between them sits the whole
+destination-die migration (doc/moon-hom.md rungs 0–3 and the addrfold residue rungs:
+faces at birth, face-direct loads, stores and post tails, the ptr±const fold, the sp
+cell demoted to last resort) — ~210 net lines of gen.l. love.c moved by one nif
+(lvm_myself), so the native columns are the control: both sat still.
+
+### invocation speed
+
+| | mooncc | gcc | clang |
+|---|---|---|---|
+| full build + link (s) | 14.2 | 9.0 | 5.4 |
+
+flat — the face machinery reads state clval already had; no new passes, no regen.
+
+### text size — `size -A`
+
+| | mooncc | gcc | clang |
+|---|---|---|---|
+| .text (bytes) | 581,344 | 250,931 | 250,515 |
+
+mooncc **−20,480 bytes (−3.4%)** against still natives: 2.40× → **2.32×**. Per symbol
+(same 604-shared-C-symbol comparison): 411 KB vs 245 KB, 1.74× → **1.67×** of genuinely
+emitted code; mooncc's own libc/runtime lane trimmed too (~170 → 167 KB, nolibc is
+compiled by the same faces). The representative recount: lvm_add_string 1132 → 1086
+insns, its rsp-slot movs 271 → 255 (clang: 6) — the write-through discipline at calls
+is still most of the remaining gap; the faces removed the *address* traffic (the lea +
+seat movs around member access), not the slot traffic.
+
+### runtime — the corpus, egg-boot subtracted, median of 3
+
+| | mooncc | clang | ratio | gcc |
+|---|---|---|---|---|
+| corpus insns (G, user) | 40.63 | 25.43 | **1.60×** | 23.37 |
+| corpus cycles (G, user) | 15.70 | 12.51 | 1.26× | 12.39 |
+| egg boot insns (G) | 8.79 | 5.61 | 1.57× | 5.18 |
+
+**The corpus ratio moved for the first time: 1.71× → 1.60×** (mooncc/gcc 1.86× → 1.74×),
+natives flat to three digits — the delta is all mooncc. The previous fill's reading
+called it: the corpus's hot symbols are the tail-threaded dispatch lanes the keep
+machinery never touches, straight-line member-access code — which is exactly the shape
+the faces compile. The boot row agrees twice over: mooncc's own boot insns dropped 6.3%
+(9.38 → 8.79 G) — the boot IS the compiler compiling, so the arc shrank both the code
+it lays and the work of laying it. The two arcs are complements: the allocator arc moved
+the loop shapes, the hom arc moved the straight-line ones.
+
+### the pair — wall, boot subtracted
+
+| | mooncc | gcc | clang | mooncc/clang |
+|---|---|---|---|---|
+| chacha20 (ms) | 1055.6 | 275.4 | 174.7 | 6.0× |
+| poly1305 (ms) | 1377.0 | 1316.4 | 805.0 | 1.71× (gcc 1.05×) |
+
+both flat within wall wiggle, and that is the expected null: the pair reads array-slot
+residency, and the hom arc's levers are member faces. What remains of chacha's ratio is
+the pre-call park pair and doc/moon-regalloc.md's residues, unchanged by this arc.
+
 ## 2026-08-11 — after the allocator arc (HEAD c83b19a8)
 
 Same box, same method. Between the fills the vmap crossed every boundary it had
