@@ -61,6 +61,8 @@
   ; negative (and snip clamps one to the front), so counting from the end is apply's alone.
   (= (peep "vaporeon" 3 0) ("vaporeon" 3))
   (= 0 (peep "vaporeon" -1 0)) (= 110 ("vaporeon" -1))
+  ; pin writes exactly where peep reads, and text has no cell, so it answers a FRESH string
+  (= "vapoReon" (pin "vaporeon" 4 82)) (= "vaporeon" (pin "vaporeon" -1 82))
   (= "eon" (stripPrefix "vapor" "vaporeon"))
  (= '("eon" "vapor")
   (lit "vapor" link 0 "vaporeon"))
