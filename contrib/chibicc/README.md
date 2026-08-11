@@ -51,122 +51,38 @@ a rejection. Send one patch, one bug, and no follow-up.
 ordinary C; the moment a downstream project appears, a bug report reads as a feature
 request. No mention of love, mooncc, or what we wanted it for.
 
+**The argument lives in the commit message, not in a PR comment.** GitHub prefills the PR
+form from the single commit, so the compare link below already shows it — and since he
+folds patches into history by rewriting, the commit message is the part that survives. A
+PR body would be discarded. There is nothing to paste.
+
 ```sh
-gh repo fork rui314/chibicc --clone --remote      # or fork in the web UI, then clone
-cd chibicc
-git checkout -b declarator-list
+gh repo fork rui314/chibicc --clone
+cd chibicc && git checkout -b declarator-list
 patch -p1 < /path/to/contrib/chibicc/declarator-list.patch
 make test && make test-stage2                     # both must print OK
-git commit -am "Fix parse error on a declarator list whose first declarator is a function"
+git commit -a -F /path/to/the/message             # the text below
 git push -u origin declarator-list
-gh pr create --repo rui314/chibicc --title "..." --body-file pr.md
 ```
 
-`pr.md` is the body below.
+Then open <https://github.com/rui314/chibicc/compare/main...cofinalsubnets:chibicc:declarator-list?expand=1>
+— the `...` is GitHub's compare separator, not an ellipsis — and press Create pull request.
 
----
+## the citations, all verified against the text
 
-## the PR body, ready to paste
+Not from memory. `N1570` (the C11 committee draft) and `N1256` (C99 TC3) were fetched from
+open-std.org and read:
 
-**Title:** `Fix parse error on a declarator list whose first declarator is a function`
+| claim | checked |
+|---|---|
+| C11 6.7 ¶1 carries `init-declarator-list` | ✅ verbatim |
+| C11 6.7.6 ¶1 `direct-declarator ( parameter-type-list )` | ✅ verbatim |
+| C11 6.9.1 ¶1 `function-definition`, one declarator | ✅ verbatim |
+| C99 numbers Declarators 6.7.5, and has no 6.7.6 | ✅ (C11 inserted 6.7.5 Alignment specifier) |
+| the productions are identical in C99 | ✅ (C11 only adds `static_assert-declaration`) |
+| gcc + clang, `-pedantic-errors`, c89–c23, zero diagnostics | ✅ 10 runs |
+| the README quotes | ✅ read off the cloned tree |
 
-````markdown
-`chibicc` rejects a declaration whose first declarator is a function and which then
-continues past a comma:
-
-```c
-struct S;
-struct S *f(void), *g(int);
-int a(void), b;
-int main(void) { return 0; }
-```
-
-```
-$ chibicc -c t.c
-t.c:2: struct S *f(void), *g(int);
-                                 ^ expected '{'
-```
-
-### why this is valid C
-
-**C11 6.7 "Declarations", ¶1** — a declaration carries a *list* of declarators:
-
-```
-declaration:
-        declaration-specifiers init-declarator-list_opt ;
-
-init-declarator-list:
-        init-declarator
-        init-declarator-list , init-declarator
-
-init-declarator:
-        declarator
-        declarator = initializer
-```
-
-**C11 6.7.6 "Declarators", ¶1** — a function declarator is an ordinary
-`direct-declarator`, with no special status in that list:
-
-```
-direct-declarator:
-        direct-declarator ( parameter-type-list )
-        direct-declarator ( identifier-list_opt )
-```
-
-So nothing restricts a declarator carrying a parameter list to being the sole
-init-declarator. The construct that *is* so restricted is a function **definition** —
-**C11 6.9.1 "Function definitions", ¶1**, one declarator, no comma possible:
-
-```
-function-definition:
-        declaration-specifiers declarator declaration-list_opt compound-statement
-```
-
-These productions are unchanged from C99 (N1256, the free TC3 draft: 6.7, 6.7.5 —
-Declarators is 6.7.5 there, C11 having inserted 6.7.5 "Alignment specifier" — and 6.9.1)
-and back to C89. Checkable without buying a standard:
-
-```
-$ for s in c89 c99 c11 c17 c23; do gcc -std=$s -pedantic-errors -Wall -Wextra -c t.c; done
-$ for s in c89 c99 c11 c17 c23; do clang -std=$s -pedantic-errors -Wall -Wextra -c t.c; done
-```
-
-Both compilers, every standard, zero diagnostics.
-
-### why it looks in scope for chibicc
-
-From the README's Status section:
-
-> chibicc supports almost all mandatory features and most optional features of C11 as
-> well as a few GCC language extensions.
-
-Declarations are as mandatory as C11 gets, and this predates C11 entirely. The same
-section's exclusion list is explicit, and this is not on it:
-
-> chibicc does not support complex numbers, K&R-style function prototypes and GCC-style
-> inline assembly. Digraphs and trigraphs are intentionally left out.
-
-In fairness it is a rare spelling — I scanned 120 headers under /usr/include and found no
-instance, which is presumably why it has gone unnoticed while Git and SQLite build fine.
-A conformance gap, then, not a practical blocker.
-
-### the cause, and the fix
-
-`parse()` dispatches on `is_function()`, which inspects only the first declarator, into
-`function()`; `function()` parses that declarator and then accepts only `;` or `{`, so a
-`,` has nowhere to go. The test asks "does this declaration begin with a function
-declarator" where 6.9.1 needs it to ask "is this a function definition".
-
-The patch splits the symbol-registration half of `function()` into `declare_function()`,
-hands a comma tail to the existing `global_variable()` loop, and has that loop dispatch on
-`ty->kind == TY_FUNC` so a function declarator in the list is declared rather than given
-storage. That also covers the mixed forms, `int f(void), x;` and `int x, f(void);`.
-
-`make test` and `make test-stage2` both pass. I also checked these against gcc:
-`int f(void), x;`, `int x, f(void);`, `extern int f(void), x;`, a `static` list with both
-functions defined later, a pointer-returning list of three, a plain definition still
-parsing, and a declaration list followed by its definitions.
-
-I know you don't merge PRs here — please fold this into whichever commit it belongs to, or
-close it and reimplement it however fits the book. No reply needed.
-````
+⚠ C89 section numbers are deliberately absent: ANSI X3.159-1989 numbered these §3.x and
+ISO C90 renumbered to §6.x, and neither text was checked. The "back to C89" claim rests on
+the `-std=c89 -pedantic-errors` runs instead — a thing the reader can reproduce.

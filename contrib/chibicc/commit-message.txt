@@ -1,0 +1,49 @@
+Fix parse error on a declarator list whose first declarator is a function
+
+`struct S *f(void), *g(int);` and `int a(void), b;` are rejected with
+"expected '{'".
+
+A declaration carries a *list* of declarators (C11 6.7 p1):
+
+    init-declarator-list:
+            init-declarator
+            init-declarator-list , init-declarator
+
+and a function declarator is an ordinary direct-declarator (6.7.6 p1),
+with no special standing in that list:
+
+    direct-declarator:
+            direct-declarator ( parameter-type-list )
+            direct-declarator ( identifier-list_opt )
+
+What *is* restricted to a single declarator is a function definition
+(6.9.1 p1), which admits no comma:
+
+    function-definition:
+            declaration-specifiers declarator declaration-list_opt
+                    compound-statement
+
+parse() dispatches on is_function(), which inspects only the first
+declarator, into function(); function() parses that declarator and then
+accepts only ';' or '{', so a ',' has nowhere to go. The test asks
+whether a declaration *begins with* a function declarator, where 6.9.1
+needs it to ask whether the declaration *is* a definition.
+
+Split the symbol-registration half of function() into declare_function(),
+hand a comma tail to the existing global_variable() loop, and have that
+loop dispatch on ty->kind == TY_FUNC so a function declarator in the list
+is declared rather than given storage. This also covers the mixed forms,
+`int f(void), x;` and `int x, f(void);`.
+
+The productions are unchanged in C99 (N1256: 6.7, 6.7.5, 6.9.1 -- C11
+inserted 6.7.5 "Alignment specifier", moving Declarators to 6.7.6) and
+back to C89. gcc and clang both accept the case above with zero
+diagnostics under -pedantic-errors at -std= c89, c99, c11, c17 and c23.
+
+make test and make test-stage2 both pass. Also checked against gcc:
+`int f(void), x;`, `int x, f(void);`, `extern int f(void), x;`, a static
+list with both functions defined later, a pointer-returning list of
+three, a plain definition still parsing, and a declaration list followed
+by its definitions.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
