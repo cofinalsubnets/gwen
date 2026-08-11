@@ -169,7 +169,11 @@ produced. All three lanes egg-boot (no baked image), so the corpus runs off the 
 eval&rsquo;d egg either way &mdash; a level field, so the test row also reflects each
 binary&rsquo;s own speed (it eval&rsquo;s its compiler out of the egg before the first
 test runs). gcc and clang build the identical units at the host&rsquo;s real
-<code>-O2</code> flags (minus <code>-Werror</code>, a lint gate, not a speed factor).
+<code>-O2</code> flags (minus <code>-Werror</code>, a lint gate, not a speed factor),
+against <b>musl</b> and linked <code>-static</code> &mdash; mooncc emits a static
+binary carrying its own libc, so the natives are held to the same shape rather than
+leaving glibc off the ledger. Which libc does not move the timings (under 0.1%): love
+allocates, formats and copies through its own floor, so libc barely runs.
 mooncc trades some compile and run throughput for that self-sufficiency; the gap to the
 optimizing compilers is modest, and the binary it emits passes the identical corpus.</p>
 <p class="note">The last two rows are single C functions rather than the whole corpus
