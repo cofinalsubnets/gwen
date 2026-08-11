@@ -1102,9 +1102,12 @@
               f2 (cbranch g env <>>e 'eq lbl)
               (? (bad? f1 || bad? f2) 'bad (f1 + f2)))
            (: lf (nlab g ".f")
+              m0 (vmsnap g)
               f1 (cbranch g env <>e 'eq lf)
               f2 (cbranch g env <>>e 'ne lbl)
-              _ (vmflush g)                            ; label lf joins
+              ; label lf joins the first-false edge and the fall: meet, not flush
+              ; (kills are monotone along the cond, the land value lane's rule)
+              _ (vmset g (vmeet m0 (vmsnap g)))
               (? (bad? f1 || bad? f2) 'bad (f1 + f2 + [['label lf]]))))
        (<e = 'lor)
         (? (cc = 'ne)
@@ -1112,9 +1115,10 @@
               f2 (cbranch g env <>>e 'ne lbl)
               (? (bad? f1 || bad? f2) 'bad (f1 + f2)))
            (: lt (nlab g ".t")
+              m0 (vmsnap g)
               f1 (cbranch g env <>e 'ne lt)
               f2 (cbranch g env <>>e 'eq lbl)
-              _ (vmflush g)                            ; label lt joins
+              _ (vmset g (vmeet m0 (vmsnap g)))       ; label lt joins: the land meet's twin
               (? (bad? f1 || bad? f2) 'bad (f1 + f2 + [['label lt]]))))
        ((<e = 'bin) && member? <>e '(eq ne lt le gt ge))
         (: op <>e
@@ -2373,15 +2377,19 @@
                  (mkv (vty b) (vreg b) (vdrop g a + vfs b))))
           (k = 'land)                                ; as a VALUE: cbranch the short-circuit, then settle the bit
            (: lf (nlab g ".f") ld (nlab g ".d")
+              m0 (vmsnap g)
               f (cbranch g env e 'eq lf)
-              _ (vmflush g)                          ; labels lf/ld join
+              ; labels lf/ld JOIN, but need not flush: kills are monotone along the cond, so
+              ; a pin in both the before and after maps held on every arriving edge
+              _ (vmset g (vmeet m0 (vmsnap g)))
               (? (bad? f) 'bad
                  (mkv 'long 'r0 (f + ['(li r0 1) ['jmp ld]
                                           ['label lf] '(li r0 0) ['label ld]]))))
           (k = 'lor)
            (: lt (nlab g ".t") ld (nlab g ".d")
+              m0 (vmsnap g)
               f (cbranch g env e 'ne lt)
-              _ (vmflush g)                          ; labels lt/ld join
+              _ (vmset g (vmeet m0 (vmsnap g)))      ; labels lt/ld join (the land meet's twin)
               (? (bad? f) 'bad
                  (mkv 'long 'r0 (f + ['(li r0 0) ['jmp ld]
                                           ['label lt] '(li r0 1) ['label ld]]))))

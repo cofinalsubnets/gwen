@@ -76,8 +76,17 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
     (construction owns 53% of the rung-2 baseline). remaining residue: the
     store-immediate folds through computed addresses, the true leax/ldx indexed
     lanes, and spill-position folds.
-  * **2d — ('br lt lf)**: the ?:/&&/|| value lanes stop reifying and their vmflush
-    joins close (an emission win, not a pass retirement — cmpfuse stays).
+  * **2d — the value-join meets (landed 2026-08-11).** the ?: value lane already met;
+    the rung closed the four remaining expression-level flush joins — the &&/|| value
+    lanes and cbranch's two internal mixed-polarity joins — with the exit meet's own
+    rule: kills are monotone along a short-circuit cond, so the join map is
+    vmeet(before, after). the payoff is the KEEP interaction: a && value inside a
+    loop used to flush the map at its labels, miss lochk at the back edge, and bar
+    the loop's keeps — now the pins ride through and the keep holds (the probe shows
+    s and i pinned across the join, zero post-join reloads). love.c +55 static insns
+    but −616 text bytes — memory operands became register reads plus seat movs, the
+    keeps-engaging signature. reification itself stays (a value consumer needs the
+    bit); the va_arg walk and discard-hygiene flushes stay (different licenses).
 * **rung 3 — the shuttle.** spush2 parks replaced by pool-threaded operand reads
   (dest.l's rd9); the park aims already landed are this rung half-done.
 * **rung 4 — the pool as parameter.** ralloc/rfree → the threaded pool with the
