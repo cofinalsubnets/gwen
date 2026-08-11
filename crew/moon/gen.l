@@ -79,6 +79,17 @@
    (vreg v) <>v
    (vfs v) <>>v
    (mkv ty reg fs) [ty reg fs]
+   ; the MEM face: an lvalue as a symbolic (base, offset) memory operand -- the ('mem b o)
+   ; die's read side (doc/moon-hom.md rung 2). a consumer lays ONE fused form; matv is the
+   ; degenerate face (the address on r0, exactly what clval used to lay) for unmigrated lanes.
+   (mkm ty b o fs) [ty ['m b o] fs]
+   (vm? v) (? (bad? v) () (two? (vreg v)))
+   (vmb v) <>(vreg v)
+   (vmo v) <>>(vreg v)
+   (mata b o) (? (id? b 'r4) [['lean 'r0 'r4 o]]            ; consumed, so lean (the & lane lays its own lea)
+                 (id? b 'r0) (? (o = 0) () [['add 'r0 'r0 o]])
+                 (? (o = 0) [['mov 'r0 b]] [['add 'r0 b o]]))
+   (matv g v) (? !(vm? v) v (mkv (vty v) 'r0 (vfs v + mata (vmb v) (vmo v))))
    ; -- the operand pool: an expression value may live in a home-pool register instead of riding
    ; the r0 protocol. g 'pool0 is the fn's whole set (opool minus any param homes), g 'pool the
    ; free list, reset at every statement (values never cross one). ralloc answers a register | ()
@@ -1487,16 +1498,18 @@
    ; (arrays and functions decay to the address; a struct has no register value). the scalar
    ; tail honors the want hint: the load lands straight in the hinted register, so a decl/asn
    ; hint holds and the vmap pin fires (the wide/float/aggregate lanes keep their protocols)
-   (loadval g ty addrf W9)
-    (? (arr? ty) (mkv ['ptr <>ty] 'r0 addrf)
-       (gvarr? ty) (mkv ['ptr (varel ty)] 'r0 addrf)   ; a VLA row decays to its address (p[i] a char*)
-       (fn? ty) (mkv ['ptr ty] 'r0 addrf)
-       (stru? ty) (mkv ty 'r0 addrf)                 ; a struct value IS its address (the pair reps read through it)
-       (flo? ty) (mkv 'double 'r0 (addrf + fldf ty 'f0 'r0 0))
-       (pair? g ty) (mkv ty 'r0 (addrf + pld 'r0 0))
-       (d128? ty) (mkv ty 'r0 (addrf + '((ld r2 r0 8) (ld r0 r0 0))))   ; hi first: the low load overwrites the base
-       (: W (? W9 W9 'r0)
-          (mkv ty W (addrf + [[(ldop ty) W 'r0 0]]))))
+   (loadval g r W9)                                 ; the VALUE at an lvalue rec (mem face consumed: one fused form)
+    (: ty (vty r) fs (vfs r)
+       b (? (vm? r) (vmb r) 'r0) o (? (vm? r) (vmo r) 0)
+       (? (arr? ty) (mkv ['ptr <>ty] 'r0 (fs + mata b o))
+          (gvarr? ty) (mkv ['ptr (varel ty)] 'r0 (fs + mata b o))   ; a VLA row decays to its address (p[i] a char*)
+          (fn? ty) (mkv ['ptr ty] 'r0 (fs + mata b o))
+          (stru? ty) (mkv ty 'r0 (fs + mata b o))    ; a struct value IS its address (the pair reps read through it)
+          (flo? ty) (mkv 'double 'r0 (fs + fldf ty 'f0 b o))
+          (pair? g ty) (mkv ty 'r0 (fs + pld b o))
+          (d128? ty) (mkv ty 'r0 (fs + [['ld 'r2 b (o + 8)] ['ld 'r0 b o]]))   ; hi first: the low load may overwrite the base
+          (: W (? W9 W9 'r0)
+             (mkv ty W (fs + [[(ldop ty) W b o]])))))
    ; the VALUE at an lvalue rec: a bitfield loads its unit and extracts with two
    ; shifts (sar signed, shr unsigned), anything else loads flat.
    (lvload g r wnt)
@@ -1505,12 +1518,13 @@
            (: uty <>ty bitoff <>>ty width <>>>ty
               usz (tsz g uty) hi (64 - (bitoff + width)) lo (64 - width)
               sgn !(usg? uty || id? uty 'bool)         ; a bool field holds 0/1: never sign-extend
+              b (? (vm? r) (vmb r) 'r0) o (? (vm? r) (vmo r) 0)
               (mkv 'long 'r0
                    (vfs r
-                    + [[(uldop usz) 'r0 'r0 0]]
+                    + [[(uldop usz) 'r0 b o]]
                     + (? (hi > 0) [['shl 'r0 hi]] ())
                     + (? (lo > 0) [[(? sgn 'sar 'shr) 'r0 lo]] ()))))
-          (loadval g ty (vfs r) wnt)))
+          (loadval g r wnt)))
    ; the fill code for a compound literal at frame offset off: an aggregate zeroes
    ; then fills (cgfill), a scalar unwraps its single-element brace and stores.
    (clitcode g env off ty ini)
@@ -1521,26 +1535,25 @@
                (? (two? <>ini) <<>ini '(num 0)) ini)
           (cgstore g env off ty v)))
 
-   ; -- lvalues: the ADDRESS lands in r0; answers (pointee-ty forms) | 'bad --
+   ; -- lvalues: answers a MEM-faced rec (pointee-ty (m base off) forms) | a plain rec with
+   ; the address on r0 (globals, clits) | 'bad. consumers lay one fused form off the face
+   ; (loadval and friends); matv is the bridge for lanes still wanting the address on r0 --
    (clval g env e)
     (: k <e
        (? (k = 'var)
            (: en (vent g env <>e)
               (? (bad? en) 'bad
                  (member? <en '(regv regw)) 'bad   ; a register home has no address (& is gated out per-fn)
-                 ; lean, not lea: an lvalue's address is CONSUMED by its own load/store, so the
-                 ; sibcall escape gate must not see it (the & lane flips it back -- it escapes there)
-                 (<en = 'loc) (mkv <>>en 'r0 [['lean 'r0 'r4 <>en]])
+                 (<en = 'loc) (mkm <>>en 'r4 <>en ())
                  (mkv <>>en 'r0 [['la 'r0 <>en]])))
           (k = 'deref)
-           ; frame-direct: a constant-indexed element's address is ONE lean (consumed like a
-           ; scalar's, so no fesc pin; the & lane's unlean flips it back to the escaping lea)
+           ; frame-direct: a constant-indexed element is a static (r4, off) face
            (: fdc (afd g env e)
-              (? (two? fdc) (mkv <>fdc 'r0 [['lean 'r0 'r4 <fdc]])
+              (? (two? fdc) (mkm <>fdc 'r4 <fdc ())
                  (: r (cgexpr g env <>e ())
                     (? (bad? r) 'bad
                        !(ptr? (vty r)) 'bad
-                       (mkv <>(vty r) 'r0 (tor0 g r))))))
+                       (mkm <>(vty r) 'r0 0 (tor0 g r))))))
           (k = 'dot)
            (: r (: lv (clval g env <>e)
                    ; an rvalue struct base (a call's parked temp: `mk(x).a`) is
@@ -1551,8 +1564,8 @@
               (? (bad? r) 'bad
                  (: fm (fmem g (vty r) <>>e)
                     (? (bad? fm) 'bad
-                       (mkv <>fm 'r0
-                            (vfs r + (? (<fm = 0) () [['add 'r0 'r0 <fm]])))))))
+                       (vm? r) (mkm <>fm (vmb r) (vmo r + <fm) (vfs r))   ; the member FOLDS into the face
+                       (mkm <>fm 'r0 <fm (vfs r))))))
           (k = 'clit)                               ; a compound literal is an lvalue: fill a temp, address it
            (: ty <>e ini <>>e
               off (ntmp g ty)
@@ -1562,7 +1575,7 @@
           ; gen's OWN lvalue, minted by the rmw lane below and reachable from no
           ; source: the object whose address is moored at frame offset <>e. reading
           ; it is calm, so it stands in for an lvalue that must evaluate once.
-          (k = 'moor) (mkv <>>e 'r0 [['ld 'r0 'r4 <>e]])
+          (k = 'moor) (mkm <>>e 'r0 0 [['ld 'r0 'r4 <>e]])
           'bad))
 
    ; -- the gcc builtins love.c reaches -- x64 as short raw splices, arm64 as neutral IR or one
@@ -1896,8 +1909,14 @@
               ap? (peep g 'argpos ())
               _ (pin g 'argpos ())
               (? (!(bad? r) && bitf? (vty r)) 'bad   ; &bitfield is illegal C -- refuse
-                 !(bad? r)                        ; under & the lvalue's address ESCAPES: flip its leans to leas
-                 (: v (mkv ['ptr (vty r)] 'r0 (unlean (vfs r))) (? ap? v (escan g v)))
+                 !(bad? r)                        ; under & the lvalue's address ESCAPES: a real lea, so the gate sees it
+                 (: fs (? (vm? r) (vfs r + (: b (vmb r) o (vmo r)
+                                              (? (id? b 'r4) [['lea 'r0 'r4 o]]
+                                                 (id? b 'r0) (? (o = 0) () [['add 'r0 'r0 o]])
+                                                 (? (o = 0) [['mov 'r0 b]] [['add 'r0 b o]]))))
+                           (unlean (vfs r)))
+                    v (mkv ['ptr (vty r)] 'r0 fs)
+                    (? ap? v (escan g v)))
                  ; &f on a function name: same address as the bare use (no lvalue).
                  ; a VARIABLE of the same name shadows it -- a homed param's regv
                  ; lands here as 'bad and must DEOPT, not read &libm-exp (vent!)
@@ -1916,13 +1935,13 @@
                            W (? wnt wnt (? pino (ralloc g) ()))
                            r (clval g env e)
                            (? (bad? r) (: _ (? (W && !wnt) (rfree g W) ()) 'bad)
-                              (: v (loadval g (vty r) (vfs r) W)
+                              (: v (loadval g r W)
                                  _ (? (W && id? (vreg v) W) (vapin g <>ae W) ())
                                  _ (? (W && !wnt && !(member? W (peep g 'vpin ())))
                                       (rfree g W) ())
                                  v)))))
                  (: r (clval g env e)                ; clval already walked the pointer
-                    (? (bad? r) 'bad (loadval g (vty r) (vfs r) wnt)))))
+                    (? (bad? r) 'bad (loadval g r wnt)))))
           (k = 'asn)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
               fd (? (<<>e = 'deref) (afd g env <>e) ())
@@ -2039,11 +2058,11 @@
                               (: _ (? hint (rfree g hint) ())
                                  (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
                                               [[(stop ty) 'r4 off 'r0]])))))))
-                 (: lv (clval g env <>e)
+                 (: lv (matv g (clval g env <>e))
               (? (bad? lv) 'bad
                  (arr? (vty lv)) 'bad                ; an array is not assignable
                  (stru? (vty lv))                    ; a whole-struct copy (dest r1, src r0)
-                  (: rl (clval g env <>>e)      ; an rvalue struct (a call's temp) is its address too
+                  (: rl (matv g (clval g env <>>e))   ; an rvalue struct (a call's temp) is its address too
                      rv (? (bad? rl) (cgexpr g env <>>e ()) rl)
                      (? (bad? rv) 'bad
                         ; a REAL into a complex lvalue converts: re the value, im zero
@@ -2196,7 +2215,7 @@
                                           ['add 'r1 'r0 (* stp <>>e)]]
                                         + (? (id? ty 'bool) (cvt ty 'r1) ())
                                         + [[(stop ty) 'r4 off 'r1]])))))
-                 (: lv (clval g env <>e)
+                 (: lv (matv g (clval g env <>e))
               (? (bad? lv) 'bad
                  (: ty (vty lv)
                     stp (? (ptr? ty) (tsz g <>ty) 1)
@@ -2221,7 +2240,7 @@
           ; lvalue standing for it -- so pointer scaling, the narrowing store,
           ; doubles, pairs, wides and bitfields each ride their own lane unchanged.
           (k = 'rmw)
-           (: lv (clval g env <>>e)
+           (: lv (matv g (clval g env <>>e))
               (? (bad? lv) 'bad
                  (: ty (vty lv)
                     (? (arr? ty || stru? ty) 'bad
@@ -2493,7 +2512,7 @@
                        'bad))))))
           (k = 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
-              (? (bad? lv) 'bad (loadval g (vty lv) (vfs lv) wnt)))
+              (? (bad? lv) 'bad (loadval g lv wnt)))
           (k = 'bin) (cgbin g env e wnt)
           'bad))
    ; a TARGETABLE gp register argument: pure and single-emission, reading only an immediate, the
@@ -2913,7 +2932,7 @@
             ty]))
    ; evaluate an EXPR and park it -> (off forms srcty) | 'bad
    (cxmat g env x)
-    (: rl (clval g env x)
+    (: rl (matv g (clval g env x))
        rv (? (!(bad? rl) && stru? (vty rl)) rl (cgexpr g env x ()))
        (? (bad? rv) 'bad (cxpark g rv)))
    (cxload oa ob) [['ldsd 'f0 'r4 oa] ['ldsd 'f1 'r4 (oa + 8)]
@@ -4937,7 +4956,7 @@
    ; takes a REAL expr ({3.0} -- C converts): re gets the value, im a zero
    ; image. the source evaluates FIRST (it may call); the tail stores cannot.
    (cgsfill g env foff fty val)
-    (: rl (clval g env val)
+    (: rl (matv g (clval g env val))
        rv (? (!(bad? rl) && stru? (vty rl)) rl (cgexpr g env val ()))
        (? (bad? rv) 'bad
           (stru? (vty rv))
@@ -5451,7 +5470,7 @@
                                       (? !(two? l) acc
                                          (: e2 <l
                                             (? !(member? <e2 '(o x)) (ostores >l >al acc)
-                                               (: lv (clval g env <>>e2)
+                                               (: lv (matv g (clval g env <>>e2))
                                                   (? (bad? lv) 'bad
                                                      (: ty (vty lv)
                                                         (? (flo? ty || stru? ty || arr? ty || bitf? ty) 'bad

@@ -34,13 +34,29 @@ emission, the continuation in hand *defunctionalized* — never ev's backward th
   cgexpr reads the parameter; the pin/clear dance deletes. ⚠ the aim HOLD (rpin) stays:
   it protects the hint register from ralloc across the rhs — free-list state, rung 4's
   business, not the hint's. emission byte-identical (same values, same order).
-* **rung 2 — promote advisory to total, one die arm at a time, each retiring its
-  recovery pass.** ('mem b o) at the store sites → addrfold's cascade becomes
-  construction; ('br lt lf) with 'fall → cbranch/cbinl/tbr/fcb collapse into one die
-  arm, cmpfuse retires, the ?:/&&/|| value lanes stop reifying (and their vmflush
-  joins close); ('reg r) total → no decline, no husk movs, dehusk retires; 'tail at
-  ret → sibcall by construction (the musttail refusal door stays — refusal is a
-  contract, not recovery).
+* **rung 2 — promote advisory to total, one die arm at a time.** the ablation
+  (love.c, static insns) ranked the recovery passes first: addrfold still earned
+  10,691 insns (10.4%), cmpfuse 1,255, dehusk 939. and it sharpened the frame:
+  **cmpfuse and dehusk are LIVENESS-shaped recoveries, not destination-shaped** —
+  their licenses are death proofs (dieb?, the strand condition), knowledge an
+  emitter doesn't have at birth. the die fixes destination knowledge only, so those
+  two passes STAY; the retirement targets are addrfold's cascades and the sibcall
+  rewrite (which needs a fesc prescan, not a die — deferred).
+  * **2a — the mem READ face (landed 2026-08-11).** clval answers a symbolic
+    (base, offset) face (mkm/vm?/vmb/vmo); a member access FOLDS into the face at
+    compile time; loadval/lvload lay ONE fused form; matv is the degenerate bridge
+    (the address on r0, exactly what clval used to lay) at the six unconverted
+    lanes (general asn store, ++/--, rmw, cxmat, cgsfill, asm ostores); the & lane
+    lays its own ESCAPING lea off the face. p->b.y is one load at birth. love.c:
+    −160 insns, −770 text bytes; addrfold's earnings 10,691 → 7,135 (a third moved
+    to construction). gates: battery, cts (0 wrong), libc, ccarm64 129/129,
+    ccriscv 128/128, fixpoint, fast gate.
+  * **2b — the mem STORE face**: promote the matv'd lanes to consume (st b o v)
+    directly. **2c — the indexed face**: the leax/ldx lanes (variable-index element
+    reads ride rvalue pointer arithmetic, a different provenance than clval).
+    together they hold addrfold's remaining 7.1k.
+  * **2d — ('br lt lf)**: the ?:/&&/|| value lanes stop reifying and their vmflush
+    joins close (an emission win, not a pass retirement — cmpfuse stays).
 * **rung 3 — the shuttle.** spush2 parks replaced by pool-threaded operand reads
   (dest.l's rd9); the park aims already landed are this rung half-done.
 * **rung 4 — the pool as parameter.** ralloc/rfree → the threaded pool with the
