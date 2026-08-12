@@ -644,8 +644,15 @@
    ; ..and SHELL picks the shell itself (a Makefile saying SHELL := lush runs
    ; its recipes -- and its $(shell) calls -- under lush), default sh.
    (shname as) (: s (trim (peep as "SHELL" "")) (? (0 < tally s) s "sh"))
+   ; ⚠ a PHONY item is a SYMBOL, not a string (mk-item interns it) -- and an automatic
+   ; must read as the NAME either way. lua's top Makefile is `all: $(PLAT)` with the
+   ; platforms phony and `cd src && $(MAKE) $@`; unconverted, $@ expands to nothing and
+   ; the recursive make is handed an empty target. @F already knew this; @, < and ^ did
+   ; not, which is the whole bug wearing three faces.
+   (itext x) (? (nom? x) (show x) x)
    (expand-steps raws t pr stem as)
-   (: _ (pins as "@" t "<" (? (two? pr) <pr "") "^" (join " " pr) "*" stem)
+   (: pt (map itext pr)
+       _ (pins as "@" (itext t) "<" (? (two? pt) <pt "") "^" (join " " pt) "*" stem)
        _ (pins as "@D" (? (nom? t) "." (dslash t)) "@F" (? (nom? t) (show t) (fnotdir t)))
        fl (shflags as)
        sn (shname as)
@@ -754,7 +761,15 @@
    ; NAME=value, origin "environment" -- $(HOME) and friends expand for real),
    ; then the builtin defaults for whatever the environment left unsaid, then
    ; the command line's VAR=VAL words, whose origin silences file assignments.
-   (seed-defaults as)
+   ; `.POSIX:` is not decoration: it changes make's own DEFAULTS, CC to c99 and CFLAGS
+   ; to -O1 (every suckless Makefile opens with it, and st's whole build reads them
+   ; through STCFLAGS). read off the raw source, since the defaults are seeded before
+   ; a single rule is parsed -- and as defaults, so a file's own CC= still wins.
+   (posixp src)
+   (any (\ l (: t (trim (strip-comment l))
+                (&& (7 <= tally t) (snip t 0 7 = ".POSIX:"))))
+        (lines src))
+   (seed-defaults as px)
    (: _ (each (keys origins) (\ k (pull origins k 0)))       ; a fresh provenance per import
       ; ..EXCEPT SHELL: make's documented exception -- the user's login shell
       ; must never become the recipe shell (only a Makefile's own SHELL= does)
@@ -768,10 +783,32 @@
                          0))))
       (dflt nm v) (? (nom? (peep as nm 'cook.undef))
                      (: _ (pin as nm v) (pin origins nm "default")) 0)
-      _ (dflt "CC" "cc") _ (dflt "MAKE" "make") _ (dflt "AR" "ar") _ (dflt "RM" "rm -f")
+      _ (dflt "CC" (? px "c99" "cc")) _ (? px (dflt "CFLAGS" "-O1") 0)
+      _ (dflt "MAKE" "make") _ (dflt "AR" "ar") _ (dflt "RM" "rm -f")
+      _ (dflt "AS" "as") _ (dflt "ARFLAGS" "rv")      ; the builtin rules below read these
       _ (each (peep clivars 0 ())
               (\ pr (: _ (pin as <pr >pr) (pin origins <pr "command line"))))
       as)
+
+   ; make's OLD-STYLE suffix rules, the form every suckless Makefile is written in:
+   ; `.c.o:` IS `%.o: %.c`, and a single `.c:` is `%: %.c`. answers (tgtpat srcpat),
+   ; or 0 when the target is not one. ⚠ keyed on the SUFFIX LIST, not on "starts with
+   ; a dot": .PHONY would otherwise read as a single-suffix rule the moment somebody
+   ; hung a recipe off it. and ⚠ it must be recognized at all -- the dot-target drop
+   ; eats these in silence, which is worse than not having suffix rules, because the
+   ; builtin %.o: %.c then compiles the file with DEFAULT flags instead of the ones
+   ; the Makefile spent its whole config.mk computing (st, exactly).
+   sufs '("c" "cc" "C" "cpp" "S" "s" "o" "a" "h" "y" "l" "f" "F" "p" "r" "m" "sh")
+   (sufpat t)
+   (: n (tally t)
+      (? (|| (n < 2) !(t 0 = 46)) 0
+         (: (lastdot k r) (? (n <= k) r (? (t k = 46) (lastdot (1 + k) k) (lastdot (1 + k) r)))
+            d (lastdot 1 0)
+            (? (d = 0)                                        ; .c -> % : %.c
+               (? (any (\ s (s = snip t 1 n)) sufs) `("%" ("%" + t)) 0)
+               (: sr (snip t 1 d) tg (snip t (1 + d) n)       ; .c.o -> %.o : %.c
+                  (? (&& (any (\ s (s = sr)) sufs) (any (\ s (s = tg)) sufs))
+                     `(("%." + tg) ("%." + sr)) 0))))))
 
    ; split a prereq word list at a `|` into (normal . order-only).
    (splitbar ws) ((: (g l acc) (? !(two? l) (rev acc >< 0)
@@ -782,7 +819,7 @@
    ; (targets: tgtpat: prereqpats), an implicit PATTERN rule (a % target -> stored
    ; for prep-time resolution), or a NORMAL rule. The first registered is the ticket.
    (register-makefile src)
-   (: as (seed-defaults (tablet 0))
+   (: as (seed-defaults (tablet 0) (posixp src))
       rules (build (map classify (lines (uncont src))) as)
       phony (: ps (tablet 0)
                _ (each rules (\ r (: tg (expand-words `(<r) as)
@@ -797,7 +834,9 @@
       _ (each rules (\ r
            (: tgtstext <r prtext <>r raws >>r
               tgts (expand-words `(tgtstext) as)
-              (? (any (\ t ((0 < tally t) && (t 0 = 46))) tgts) 0        ; drop .PHONY / .SUFFIXES / ...
+              sp (? (two? raws) (sufpat <tgts) 0)   ; an old-style suffix rule, .c.o style
+              (? sp (pin patbox 0 (`(<sp (list <>sp) () raws) >< peep patbox 0 0))
+                 (any (\ t ((0 < tally t) && (t 0 = 46))) tgts) 0        ; drop .PHONY / .SUFFIXES / ...
                  (: cp (splittop prtext 58)
                     (? (two? >cp)
                        ; static pattern rule
@@ -827,12 +866,43 @@
       dg (trim (peep as ".DEFAULT_GOAL" ""))
       _ (? (0 < tally dg) (pin check 0 (mk-item dg)) 0)
       patlist (peep patbox 0 0)
+      ; make's BUILTIN implicit rules -- the database a Makefile never has to state,
+      ; and the reason lua 5.4 writes recipes for three of its 34 objects and leaves
+      ; the rest to the tool. same shape as a file's own pattern: (tgtpat prs oos raws).
+      ; ⚠ TWO fences, and both are load-bearing. tried only AFTER the file's patterns,
+      ; so a Makefile that states its own %.o: %.c still wins outright. and taken only
+      ; when the stem-source EXISTS: `%: %.c` matches literally every word, so a phony
+      ; `all` that carries prereqs but no recipe of its own would otherwise resolve to
+      ; a link of `all.c` and fail asking for a file nobody ever mentioned.
+      ; ⚠ a raw recipe line is (silent ignore . text), what parse-mods answers -- so
+      ; the builtins are built THROUGH it rather than written as bare strings, and go
+      ; down the one door the file's own recipes take. a plain string here reads as a
+      ; recipe of no lines: the card resolves, nothing runs, and the miss surfaces
+      ; later wearing somebody else's name.
+      (bpat tgt prs cmd) (list tgt prs () (list (parse-mods cmd)))
+      builtpats
+       (list (bpat "%.o" '("%.c") "$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<")
+             (bpat "%.o" '("%.S") "$(CC) $(ASFLAGS) $(CPPFLAGS) -c -o $@ $<")
+             (bpat "%.o" '("%.s") "$(AS) $(ASFLAGS) -o $@ $<"))
+      ; ⚠ make's MATCH-ANYTHING builtins -- `%: %.c` and `%: %.o` -- are deliberately
+      ; NOT here. they match every target there is, and GNU only dares them under
+      ; conditions this resolver does not model (it will not apply one to a target
+      ; that already has any rule, nor to an intermediate). without those conditions
+      ; `%: %.o` hijacks a real link: this tree's own `out/host/love` has love.o
+      ; sitting right there, so the builtin links THAT ALONE and the host objects and
+      ; the math floor never reach the command -- a wall of undefined references from
+      ; a rule nobody wrote. the narrow %.o: rules above cannot do that: their target
+      ; must already end in .o. (test_nest is what caught it.)
       (psrc p item) (: stem <(pmatch <p item) prs <>p (? (two? prs) (stemsub <prs stem) ""))
       (best-of ms item)        ; prefer a pattern whose stem-source exists, then the shortest stem
       (: ok (filter (\ p (exists? (psrc p item))) ms) cand (? (two? ok) ok ms)
          (foldl (\ b p (? !b p (? (tally <(pmatch <p item) < tally <(pmatch <b item)) p b))) 0 cand))
+      (builtin-of item)        ; the builtin lane: a match whose source is really there
+      (: ms (filter (\ p (&& (two? (pmatch <p item)) (exists? (psrc p item)))) builtpats)
+         (best-of ms item))
       (resolve item)           ; synthesize a card from the best matching pattern rule (merging an explicit prereq-only card)
-      (: ms (filter (\ p (two? (pmatch <p item))) patlist) best (best-of ms item)
+      (: ms (filter (\ p (two? (pmatch <p item))) patlist)
+         best (: b (best-of ms item) (? b b (builtin-of item)))
          (? best
             (: stem <(pmatch <best item)
                ping (map (\ pp (stemsub pp stem)) <>best)
