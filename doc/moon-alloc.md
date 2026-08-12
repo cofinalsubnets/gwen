@@ -322,6 +322,8 @@ probe cost twenty minutes to find out.
   beyond bad-shape bail. ⚠ its entry condition was "after rung 3 proves the engine on the
   easier input" and that was wrong: rung 3's remaining half is BLOCKED ON rung 5, not the
   reverse (the joint above). Rung 5 inherits `pcs` as a mechanism to retire.
+  **PLANNED 2026-08-12 in doc/moon-vreg.md** — the seam, the coupling count (~200 decision points,
+  not 938), what it does NOT pull back to, and six sub-rungs each retiring a named mechanism.
   ⚠ **it must be the EMISSION REWRITE, not an increment on `repack`** — the call-crossing class
   was built on cs seats twice and refused twice (the ledger carries both). Retrofitting a cs seat
   post-build can only ever copy the store's already-assigned caller-saved source, so the rewrite
