@@ -93,7 +93,8 @@ One declared divergence in the gate: `k_divzero` only has to FAULT, and the neut
 no 32-bit divide, so clang's half raises #DE with `divl` and ours with `divq`. Every other op
 matches instruction for instruction on both arches.
 
-The law is `test/gate/asmops.sh` (`make test_asmops`, in `test_slow`): one probe TU calling every
+The law is `test/gate/asmops.sh` (`make test_asmops`) — ⚠ **not in `test_slow`**, so it is one of
+the few gates a `test_slow` run will not catch for you: one probe TU calling every
 inline, compiled by BOTH compilers and compared op by op — same privileged mnemonics, same
 symbolic operands, same order, same function. **The op list is read out of asmops.h itself**, so
 adding an op and forgetting the probe fails the gate. It is the only check that can catch one

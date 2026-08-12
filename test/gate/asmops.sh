@@ -8,7 +8,10 @@
 #
 #   1. COVERAGE. every `static inline k_*` the header defines is called by
 #      test/gate/asmops.c. derived from the header itself, so adding an op and
-#      forgetting the probe fails here rather than going unchecked.
+#      forgetting the probe fails here rather than going unchecked. ⚠ the probe
+#      also takes each op's ADDRESS (k_asmops_keep): calling one is not enough
+#      to make it EXIST, since a static inline whose calls are all inlined is
+#      dead and a compiler is right to drop it.
 #   2. MOONCC TAKES IT. the probe compiles with `mooncc -t <arch> -nostdinc`.
 #      that alone exercises the whole seam: the __mooncc__ predefine picks the
 #      neutral half of every #ifdef, -nostdinc keeps glibc's headers out of a
@@ -112,15 +115,23 @@ for a in x86_64 aarch64; do
   fi
   seq "$work/$a-clang.o" $t > "$work/$a-clang.seq"
   eval "skip=\$divergent_$a"
-  n=$(awk -v skip="$skip" '
+  # ⚠ the two sides are separated by a MARKER LINE, not by which file a record came
+  # from. An empty side is a real state -- a compiler that inlines every op and drops
+  # the dead statics emits none of them -- and FNR==1 never fires for an empty file,
+  # so a record-driven side counter silently files the OTHER compiler's functions under
+  # the first one's name and blames the wrong half. That is exactly what it did.
+  n=$({ cat "$work/$a-moon.seq"; echo "@@side@@"; cat "$work/$a-clang.seq"; } |
+      awk -v skip="$skip" '
     function flush(  i) {
       if (name == "") return
       key = name; body = ""
       for (i = 1; i <= n; i++) body = body lines[i] "\n"
-      if (side == 1) { A[key] = body; order[++k] = key } else B[key] = body
+      if (side == 1) { A[key] = body; order[++k] = key }
+      else { B[key] = body; orderB[++kb] = key }
       n = 0
     }
-    FNR == 1 { flush(); side++; name = "" }
+    BEGIN { side = 1 }
+    /^@@side@@$/ { flush(); side = 2; name = ""; next }
     /^@/ { flush(); name = substr($0, 2); next }
     { lines[++n] = $0 }
     END {
@@ -136,8 +147,15 @@ for a in x86_64 aarch64; do
           bad++
         }
       }
+      # ..and the other direction, which used to be silence: an op only ONE compiler
+      # emitted was simply never compared, so the gate could lose coverage and stay green.
+      for (i = 1; i <= kb; i++) {
+        key = orderB[i]
+        if (index(" " skip " ", " " key " ")) continue
+        if (!(key in A)) { printf "%s: mooncc emitted no %s\n", key, key > "/dev/stderr"; bad++ }
+      }
       print bad
-    }' "$work/$a-moon.seq" "$work/$a-clang.seq" 2>"$work/$a.diff")
+    }' 2>"$work/$a.diff")
   if [ "${n:-1}" != 0 ]; then
     sed 's/^/    /' "$work/$a.diff" >&2
     fail "$a: $n op(s) disagree between the mooncc and clang spellings"
