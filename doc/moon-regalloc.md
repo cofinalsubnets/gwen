@@ -1062,6 +1062,35 @@ ablation, plus two greps. No instrumented build, no probe in the tree. **Diff th
 already have before you instrument** — the ablation binaries answer "which functions and how much"
 for free, and the source answered "why" once the question was narrow enough to ask.
 
+2026-08-12 · WHERE THE FRAME BUCKET IS STUCK — the promotion-rejection census, rung 5's pricing.
+The bucket is 79,538 B and 76.6% of the codegen gap, and three copy-folding rungs left it dead
+flat. Rather than guess which lever reaches it, a temporary probe in `repack` classified every
+frame object in love.c by why it did NOT take a register — 5,216 objects, 14,768 touches:
+
+| reason | objs | touches | share |
+|---|---|---|---|
+| **noseat-call** — a candidate, refused because a CALL sits in its range | **1,696** | **6,573** | **44.5%** |
+| shape — some touch is not a full-word ld/st at the object's own base | 1,420 | 3,711 | 25.1% |
+| **prom** — promoted today | 1,026 | 2,418 | 16.4% |
+| noseat-plain — a candidate, no call in range, still no free seat | 767 | 2,012 | 13.6% |
+| wide (size≠8) / esc (a lea took its address) | 307 | 54 | 0.4% |
+
+**The cs-file class is the single largest bucket and it is 2.7× what promotion currently
+captures.** `noseat-call` is exact rather than inferred: a call defines the whole caller-saved
+file, so a call anywhere in `[lo,hi]` GUARANTEES `pfree?` refuses every seat — those 1,696
+objects are refused BY the call and by nothing else. That is rung 5's first increment priced
+before a line of it was written, and it is the same finding the `pcs` probe reached from the
+other end: the capability missing everywhere is a seat that survives a call.
+
+The other three buckets each name a different rung. `shape` (25.1%) is a touch-shape question —
+sub-word and mixed-width access — not an allocation question, and no register file reaches it.
+`noseat-plain` (13.6%) is honest register pressure with no call involved: that one is greedy
+allocation losing to a real linear scan, which is rung 5's OTHER half. `wide`/`esc` at 0.4%
+together are proof that neither address-taking nor multi-word objects are worth a rung.
+
+⚠ touches are IR frame touches, not emitted bytes, and a promoted object removes its touches
+while possibly adding movs — so read the shares as where the traffic IS, not as bytes banked.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
