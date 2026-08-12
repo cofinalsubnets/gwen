@@ -66,27 +66,33 @@
                   (vof-sym en t))
       (: h <t
          (? (two? h) (vof-spine en (vof en h) >t)
-            (id? h 'UU)     (? (<>t = 0) 'UU `('U <>t))         ; (UU level) -> a sort value (UU0 stays the symbol UU; level may be an expr, Stage 2)
+            ; ⚠ ORDERED BY MEASURED FREQUENCY, and the tail of this chain is never reached at all:
+            ; over the UniMath corpus lam and succ are 550740 and 526521 of 1102646 head dispatches,
+            ; while total2 pr1 pr2 ii1 ii2 are ZERO -- the reader spells them (total2 ..) but every
+            ; USE goes through a spine or a rect. succ sat at position 8 behind four of those zeros.
+            ; the tests are mutually exclusive symbols, so the order is semantically free; only
+            ; `(two? h)` above must stay first, and the vof-spine fallback last.
             (id? h 'lam)    `('lam `('clo en <>t <>>t))
-            (id? h 'pi)     `('pi  (vof en <>>t) `('clo en <>t <>>>t))
-            (id? h 'total2) `('sig (vof en <>>t) `('clo en <>t <>>>t))
-            (id? h 'tpair)  `('chain (vof en <>t) (vof en <>>t))
-            (id? h 'pr1)    (dop1 (vof en <>t))
-            (id? h 'pr2)    (dop2 (vof en <>t))
             (id? h 'succ)   (vsucc (vof en <>t))
-            (id? h 'coprod) `('coprod (vof en <>t) (vof en <>>t))
-            (id? h 'ii1)    `('i1 (vof en <>t))
-            (id? h 'ii2)    `('i2 (vof en <>t))
+            (id? h 'pi)     `('pi  (vof en <>>t) `('clo en <>t <>>>t))
             (id? h 'paths)  `('paths (vof en <>t) (vof en <>>t) (vof en <>>>t))
-            (id? h 'idpath) `('refl (vof en <>t))
-            (id? h 'the)    (vof en <>>t)
-            (id? h 'let)    (vof (link `(<>t (vof en <>>t)) en) <>>>t)
             (id? h 'nat_rect)    (donr (vof en <>t) (vof en <>>t) (vof en <>>>t) (vof en <>>>>t))
+            (id? h 'tpair)  `('chain (vof en <>t) (vof en <>>t))
+            (id? h 'idpath) `('refl (vof en <>t))
+            (id? h 'paths_rect)  (dojr (vof en <>t) (vof en <>>t) (vof en <>>>t))
             (id? h 'bool_rect)   (dobr (vof en <>t) (vof en <>>t) (vof en <>>>t) (vof en <>>>>t))
-            (id? h 'unit_rect)   (dour (vof en <>t) (vof en <>>t) (vof en <>>>t))
+            (id? h 'coprod) `('coprod (vof en <>t) (vof en <>>t))
             (id? h 'coprod_rect) (docr (vof en <>t) (vof en <>>t) (vof en <>>>t) (vof en <>>>>t))
             (id? h 'empty_rect)  (doer (vof en <>t) (vof en <>>t))
-            (id? h 'paths_rect)  (dojr (vof en <>t) (vof en <>>t) (vof en <>>>t))
+            (id? h 'unit_rect)   (dour (vof en <>t) (vof en <>>t) (vof en <>>>t))
+            (id? h 'UU)     (? (<>t = 0) 'UU `('U <>t))         ; (UU level) -> a sort value (UU0 stays the symbol UU; level may be an expr, Stage 2)
+            (id? h 'the)    (vof en <>>t)
+            (id? h 'let)    (vof (link `(<>t (vof en <>>t)) en) <>>>t)
+            (id? h 'total2) `('sig (vof en <>>t) `('clo en <>t <>>>t))
+            (id? h 'pr1)    (dop1 (vof en <>t))
+            (id? h 'pr2)    (dop2 (vof en <>t))
+            (id? h 'ii1)    `('i1 (vof en <>t))
+            (id? h 'ii2)    `('i2 (vof en <>t))
             (vof-spine en (vof en h) >t))))
 
    ; empty-list tests are STRUCTURAL (two?): a love list of zeros NETS zero,
