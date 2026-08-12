@@ -437,16 +437,21 @@
        t ((p + ".") + show (getpid ()))
        q (open t "w")
        _ (? q (: _ (say q bs) (close q)) 0)
-       _ (? (q && !(rename t p)) (mcsweep d) (unlink t))
+       _ (? (q && !(rename t p)) 0 (unlink t))
        0)
-   ; the bound, swept on the miss we are already paying for -- without it every
-   ; image rebuild mints a generation and abandons the last. nothing here knows
-   ; which generations are dead, so COUNT decides: the newest few stay and each
-   ; one dropped costs one rebuild, once. count and not age, because the rate is
-   ; the tree's own -- a day of rebuilds mints more generations than a month of
-   ; use, and a clock cannot tell the two apart.
+   ; the bound, and the cache keeps it ITSELF: swept on every link, hit or miss,
+   ; so a folder grown fat under an older policy trims on the next one rather than
+   ; waiting for a rebuild to notice it. nothing here knows which generations are
+   ; dead, so COUNT decides -- count and not age, because the rate is the tree's
+   ; own: a day of rebuilds mints more generations than a month of use, and a
+   ; clock cannot tell those apart. the order is by USE, which is what the touch
+   ; on a hit is for -- a write time would evict the identity you link with daily
+   ; in favour of the ones you minted once.
    (mcsweep d)
-    (: mckeep 6                                        ; generations kept
+    (: mckeep 32                                       ; ~400K each, so ~13M held.
+       ; the live set is one generation per (worktree, lane, target) -- a tree
+       ; carries the shim's love+mooncc.image and the build's love0+mooncc0.image
+       ; as two distinct compilers -- so the room here is deliberate, not slack.
        fs (foldl (\ a f (: st (stat (d + f))
                           (? ((dota? f) && (two? st)) (a + `(`((el st 1) f))) a)))
                  () (readdir d))
@@ -462,10 +467,13 @@
    (rtarch cd id home tgt)
     (: k (? ((string? cd) && (string? id)) (sha256 ((id + "\n") + show tgt)) ())
        hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
-       (? (two? hit) <>hit
-          (: bs (arbytes (rtmems home tgt))
-             _ (? (string? k) (mcput cd (k + ".a") bs) 0)
-             bs)))
+       _ (? (two? hit) (utime ((cd + k) + ".a") (clock ())) 0)   ; the sweep orders by use
+       bs (? (two? hit) <>hit
+             (: b (arbytes (rtmems home tgt))
+                _ (? (string? k) (mcput cd (k + ".a") b) 0)
+                b))
+       _ (? (string? cd) (mcsweep cd) 0)
+       bs)
    ; every member compiled, ready to index. the IMPLICIT runtime compiles with the
    ; system tail LEFT ON (the () below): these are our own sources reaching only
    ; our own headers, and the user's -nostdinc is about the user's translation
