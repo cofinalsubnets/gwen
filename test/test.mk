@@ -238,7 +238,7 @@ test_seed: host out/host$(hsuf)/seed
 # the kore smokes drive the BAKED image (`--wake kore.image`), ~0.02s vs ~0.75s per spawn
 # over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
 # dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.
-korerun = $m --wake $(ho)/kore.image -e '(kore-main (link "kore" (cuup (cup cmdline))))'
+korerun = $m --wake $(ho)/kore.image -e '(: r (kore-main (link "kore" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))'
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/kore.sh $(ho) $m
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.

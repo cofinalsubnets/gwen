@@ -56,6 +56,7 @@
    check (tablet 0)        ; a 1-cell box: the standing check -- the first item declared (the default when no ticket is named)
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
    pgen (tablet 0)         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), installed by the Makefile importer (() until then)
+   cookbox (tablet 0)      ; a 1-cell box: the in-image shell verdict (sh-line's `inimg`), decided once a run
 
    origins (tablet 0)      ; make's variable provenance: name -> "default" | "environment"
                            ; | "file" | "command line" | "override" ($(origin), and the
@@ -194,15 +195,37 @@
           (: _ (say err ("cook: cannot run " + join " " step))
              _ (put err 10) (quit 1))))
 
+   ; the IN-IMAGE shell, decided once and kept. lush rides the same cats cook does
+   ; (kore's, the dist artifact's), so when the shell we would spawn is the binary we
+   ; are already running, the recipe line can run HERE -- one image wake for a whole
+   ; make instead of one per line, and every other tool in this image (mooncc above
+   ; all) is then in-image too, so a CC=mooncc build stops paying a wake per TU.
+   ; ⚠ asked by NAME, never by a bare reference: cook runs standalone as well
+   ; (`love -l crew/cook/cook.l`), where lush is not aboard at all, and a bare
+   ; sh-oneline would raise 'missing at the define rather than at the call.
+   ; the policy -- "would spawning this land on us?" -- is lush's, not ours.
+   (inimg sh)
+   (: v (peep cookbox 'inimg 'no)
+       (? !(id? v 'no) v
+          (: f (? (&& (member? 'sh-oneline (names ())) (member? 'sh-ours? (names ()))
+                      ((ev 'sh-ours?) sh))
+                 (ev 'sh-oneline) 0)
+             _ (pin cookbox 'inimg f)
+             f)))
+
    ; run one make recipe line (via SHELL -c, default sh), make-style: echo the
    ; RAW command (the expanded line, not the shell wrapper) unless @ silent, STREAM its
    ; stdout as it is produced, and on a nonzero exit either carry on (- ignore,
    ; with a note to err) or abort. The Makefile path's analogue of `shell`, and
    ; the one that carries a recursive $(MAKE) -- the whole reason it must stream.
+   ; the in-image door goes first and answers (1 status) when it took the line; a ()
+   ; from it (flags we do not serve) falls through to the spawn, unchanged.
    (sh-line silent ignore sh flags cmd)
    (: _ (? silent 0 (: _ (puts cmd) (putc 10)))
        _ (flush out)
-       r (herald ((`(sh) + flags) + `(cmd)))
+       f (inimg sh)
+       o (? f (f flags cmd) ())
+       r (? (two? o) `(<>o) (herald ((`(sh) + flags) + `(cmd))))
        ec (? (two? r) <r -1)
        (? (0 = ec) 0
           !(two? r) (: _ (say err ("cook: cannot run " + cmd)) _ (put err 10) (quit 1))

@@ -52,7 +52,73 @@ smoke)
   echo '(quit 7)' > "$s/up"
   ( cd "$s" && run "$dabs" -- up ); [ $? -eq 7 ]   || fail "-- should force the file lane"
 
+  # --- the in-image lane -------------------------------------------------------
+  # one artifact on PATH under many names is the shape the whole thing turns on: lush
+  # runs a tool whose main rides THIS image instead of exec'ing it, and cook runs its
+  # recipe lines through lush instead of spawning a shell -- so a CC=mooncc make pays
+  # ONE image wake, not one per TU. the gate is not the speed, it is that the two
+  # lanes AGREE: the same objects, and the same make semantics a spawned /bin/sh gives.
+  sabs=$(cd "$s" && pwd)
+  mkdir -p "$sabs/bin" "$sabs/cbin" "$sabs/w/sub" "$sabs/refo"
+  for n in sh mooncc cook; do ln -sf "$dabs" "$sabs/bin/$n"; done
+  # the reference lane's compiler: a COPY. same bytes, different file -- so the skew
+  # guard refuses the shortcut and every TU is exec'd, which is the old behaviour.
+  cp "$dabs" "$sabs/love-copy" && ln -sf "$sabs/love-copy" "$sabs/cbin/mooncc"
+  i=1; while [ $i -le 4 ]; do printf 'int f%d(int x){return x+%d;}\n' $i $i > "$sabs/w/s$i.c"; i=$((i+1)); done
+  cat > "$sabs/w/Makefile" <<'MK'
+.SHELLFLAGS := -ec
+CC = mooncc
+all: $(patsubst %.c,%.o,$(wildcard s*.c)) scope
+%.o: %.c
+	$(CC) -c $< -o $@
+scope:
+	cd sub && pwd
+	pwd
+	V=set-in-line; echo "V=$$V"
+	echo "next=[$$V]"
+	-exit 7
+	echo past-ignored
+MK
+  ( cd "$sabs/w" && SHELL=/bin/sh PATH=$sabs/cbin:/usr/bin:/bin run "$dabs" cook ) > "$sabs/ref.out" 2>&1
+  echo "exit=$?" >> "$sabs/ref.out"
+  ls "$sabs/w"/*.o >/dev/null 2>&1 || fail "the reference lane laid no objects"
+  cp "$sabs/w"/*.o "$sabs/refo/" && rm -f "$sabs/w"/*.o
+  ( cd "$sabs/w" && PATH=$sabs/bin:/usr/bin:/bin run "$dabs" cook ) > "$sabs/img.out" 2>&1
+  echo "exit=$?" >> "$sabs/img.out"
+  cmp -s "$sabs/ref.out" "$sabs/img.out" \
+    || fail "in-image cook diverged from a spawned /bin/sh: $(diff "$sabs/ref.out" "$sabs/img.out" | head -6)"
+  for f in "$sabs/refo"/*.o; do
+    cmp -s "$f" "$sabs/w/$(basename "$f")" || fail "in-image mooncc laid a different $(basename "$f")"
+  done
+  # ..and PROVE the lane engaged, not merely that it could have. agreement alone
+  # would still hold if the call site quietly stopped consulting the decision --
+  # both sides would just be the spawn. so run a real line through lush IN this
+  # process and ask whether the decision was taken and kept: an unconsulted lane
+  # leaves the cache untouched, whatever the predicate on its own would answer.
+  ( PATH=$sabs/bin:/usr/bin:/bin && export PATH \
+    && run "$dabs" -e '(: _ (sh-oneline (list "-c") "mooncc -zzz") (quit (? (two? (peep sh-imgc "mooncc" 0)) 0 1)))' ) \
+     >/dev/null 2>&1 \
+    || fail "lush ran a command without taking its own in-image decision"
+  # ..and cook's own: two recipe lines are ONE process in-image, one process EACH spawned
+  mkdir -p "$sabs/pw"
+  printf 'all:\n\t@echo $$$$\n\t@echo $$$$\n' > "$sabs/pw/Makefile"
+  ( cd "$sabs/pw" && PATH=$sabs/bin:/usr/bin:/bin && export PATH && run "$dabs" cook ) > "$sabs/cp.out" 2>&1
+  [ "$(sed -n 1p "$sabs/cp.out")" = "$(sed -n 2p "$sabs/cp.out")" ] \
+    || fail "cook spawned a shell per recipe line where it could have run them here"
+  ( cd "$sabs/pw" && SHELL=/bin/sh PATH=/usr/bin:/bin && export PATH SHELL && run "$dabs" cook ) > "$sabs/cp2.out" 2>&1
+  [ "$(sed -n 1p "$sabs/cp2.out")" = "$(sed -n 2p "$sabs/cp2.out")" ] \
+    && fail "cook ran its lines in-image while SHELL was a foreign /bin/sh"
+  # the skew guard, stated directly: same bytes, different file -> the shortcut is refused
+  ( PATH=$sabs/cbin:/usr/bin:/bin && export PATH \
+    && run "$dabs" -e '(quit (? (two? (sh-imgfn "mooncc")) 1 0))' ) \
+    || fail "the in-image lane engaged for a mooncc that is a DIFFERENT file"
+
+  # a bare name we do NOT own must never go in-image, whatever rides this image
+  ( cd "$sabs/w" && PATH=/usr/bin:/bin run "$dabs" sh -c 'ls Makefile' ) 2>&1 | grep -q Makefile \
+    || fail "a foreign ls must still spawn"
+
   echo "test_dist: the artifact is multi-call -- up/down/seed/cook/kore/kiosko/mooncc dispatch, files and -e untouched"
+  echo "test_dist: the in-image lane -- cook's lines and mooncc run in THIS image, byte-for-byte and semantics-for-semantics what a spawned sh gives"
   ;;
 
 up)

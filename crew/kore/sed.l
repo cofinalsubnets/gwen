@@ -195,10 +195,10 @@
                                (: _ (say out ps2) (put out 10)) ())
                           (rline >cs (idx + 1) ps2 no)))))))
        (mline ls no)
-        (? !(two? ls) (: _ (flush out) _ (flush err) (quit rc))
+        (? !(two? ls) (: _ (flush out) _ (flush err) rc)
            (: r (rline cmds 0 <ls no)
               kind <r ps <>r
               _ (? (kind = 1) () (? n? () (: _ (say out ps) (put out 10))))
-              (? (kind = 2) (: _ (flush out) _ (flush err) (quit rc))
+              (? (kind = 2) (: _ (flush out) _ (flush err) rc)
                  (mline >ls (no + 1)))))
        (mline all 1)))

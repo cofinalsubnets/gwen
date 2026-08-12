@@ -107,7 +107,8 @@
     (list "down" down-main)
     (list "seed" seed-main)
     (list "cook" cook-main)
-    (list "kore" (\ as (kore-main ("kore" >< as))))
+    ; kore ANSWERS its status (crew/kore/core.l's urun), so this verb owns the exit
+    (list "kore" (\ as (: r (kore-main ("kore" >< as)) (quit (? (charm? r) r 0)))))
     (list "kiosko" kiosko-main)
     (list "mooncc" moon-main)
     (list "sh" sh-main)                ; lush: the dist answers `love sh ..`, and an

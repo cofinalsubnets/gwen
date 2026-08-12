@@ -88,6 +88,72 @@
         (nm >< old))
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
+   ; --- the in-image lane: a tool whose main rides THIS image -------------------
+   ; a main in this image runs HERE -- no fork, no exec, no image wake -- and answers
+   ; its status as a charm (crew/kore/core.l's urun, the door every kore tool and
+   ; mooncc leave through). ⚠ we take it ONLY when the thing we would have exec'd IS
+   ; the thing we already hold: PATH's winner for the word must be this very binary,
+   ; which stat answers through the symlink (size mode mtime-ns -- the distro's shadow
+   ; lane is one artifact on PATH wearing every tool's name). an installed twin of our
+   ; own name is the SKEW crew/build.mk warns about wearing a friendly face, so it
+   ; spawns like anything else; so does a word with a / (an explicit path is a demand).
+   ; the verdict is decided once per word and kept: the PATH walk is a session cost.
+   ; ⚠ these are NOT builtins -- sh-bi? drives sh-stagex's fork decision, and a stage
+   ; that forks where it used to spawn is slower for nothing. this is the simple
+   ; foreground command only, and it takes its redirects the way a builtin does.
+   sh-imgc (tablet 0)                           ; word -> (1 fn whole?) | 0, decided once
+   ; ⚠ AN ALLOW LIST, and a short one on purpose -- the qualifying word is not "is
+   ; its main here?" but "is running it here the same thing as running it there?".
+   ; three ways that fails, and every one of them is a silent wrong answer:
+   ;   * a main that QUITS takes its caller with it. sh-main ends in one, so an
+   ;     in-image `sh -c` would end the line that called it -- everything after it
+   ;     gone, status 0. cook-main too.
+   ;   * a main that keeps STATE one run owns. cook's recipe cards are tablets, so a
+   ;     recursive $(MAKE) in here would lay the child's rules over the parent's.
+   ;     env-main setenvs into the process it is standing in, which would be ours.
+   ;   * a main that BLOCKS. a spawned `cat`, `yes`, `sleep`, `tee` is a child ^C
+   ;     kills; in here ^C would kill the shell, and there is no pid for `kill %1`
+   ;     to name. that is the job-control half, and it wants tasks before it widens.
+   ; that leaves the compiler, which is the one that pays: a make spends its whole
+   ; life calling it. `kore` is NOT here either, though kore-main answers -- its own
+   ; dispatcher reaches sh-main, cook-main and vi-main, so `kore sh ..` in here would
+   ; walk straight into the first failure above through a side door. widening this --
+   ; to the bare coreutil names, which is what would make the distro's shadow lane
+   ; free -- waits on the interrupt and stdin story, not on anything in this file.
+   sh-imgok '("mooncc")
+   ; the words whose main is not spelled <word>-main. kore-main wants the WHOLE argv
+   ; (it reads its own program seat); the rest take the args after the name.
+   sh-imgalias '(("mooncc" "moon-run") ("kore" "kore-main"))
+   (sh-pathdirs _)
+     (: p (+ "" (getenv "PATH")) n (tally p)
+        (go from k acc) (? (<= n k) (sh-rev (snip p from k >< acc))
+                           (= (p k) 58) (go (+ k 1) (+ k 1) (snip p from k >< acc))
+                           (go from (+ k 1) acc))
+        (go 0 0 ()))
+   (sh-slashed? w) (: n (tally w)
+                      (go k) (? (<= n k) 0 (= (w k) 47) 1 (go (+ k 1)))
+                      (go 0))
+   (sh-self? p) (: a (stat p) (&& (two? a) (= a (stat "/proc/self/exe"))))
+   (sh-onpath? w)                               ; is PATH's winner for w this binary
+     (: (go l) (? !(two? l) 0
+                  (: d (? (tally <l) <l ".") p (+ d (+ "/" w))
+                     (? (two? (stat p)) (sh-self? p) (go >l))))
+        (go (sh-pathdirs ())))
+   ; would spawning this word land on the binary we are already running? the one
+   ; policy question behind every in-image lane -- lush's own, and cook's.
+   (sh-ours? w) (? (sh-slashed? w) (sh-self? w) (sh-onpath? w))
+   (sh-imgask w)
+     (: al (sh-assoc w sh-imgalias)
+        mn (? (two? al) <>al (+ w "-main"))
+        nm (intern mn)
+        (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) (member? nm (names ())) (sh-ours? w))
+           (L 1 (ev nm) (= mn "kore-main"))
+           0))
+   (sh-assoc w l) (? !(two? l) 0 (= w <<l) <l (sh-assoc w >l))
+   (sh-imgfn w) (: v (peep sh-imgc w 'no)
+                   (? !(id? v 'no) v
+                      (: f (sh-imgask w) _ (pin sh-imgc w f) f)))
+
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local"
@@ -149,7 +215,7 @@
      (: cmd <argv
         (? (= cmd "exit")
              (: st (? >argv (sh-int <>argv) (sh-status ()))
-                (? (sh-subfds ()) ('xit >< st) (quit st)))
+                (sh-leave st))
            (= cmd "cd")
              (: t (? >argv <>argv (+ "" (getenv "HOME")))
                 r (chdir t)
@@ -240,7 +306,7 @@
                        (? (< pg 0) pg (? (= i 0) pid pg)) fg (pid >< pids))))
    (sh-echk st)
      (? (&& (charm? st) !(= st 0) (sh-eflag ()) (= 0 (sh-noe ())) !(sh-tty ()))
-        (quit st) st)
+        (sh-leave st) st)
    (sh-pipeline cmds bg)
      (: sx (sh-stagex cmds ())
         (? (id? <sx 'err) (cmderr >sx)
@@ -305,6 +371,13 @@
                 (? (two? b) b                            ; brk/cnt/ret ride out
                    (charm? b) (: _ (pin sh-status () b) (sh-echk b))
                    b))
+           (two? (sh-imgfn <argv))                       ; the in-image lane
+             (: g (sh-imgfn <argv)
+                f (sh-nth g 1)
+                s (sh-withrs rs (\ _ (f (? (sh-nth g 2) argv >argv))))
+                st (? (charm? s) s 0)
+                _ (pin sh-status () st)
+                (sh-echk st))
            (: rm (sh-rdmap rs)
               (? (id? <rm 'err) (cmderr >rm)
                  (: opens (sh-nth rm 2) wrs (sh-nth rm 3)
@@ -602,6 +675,59 @@
         _ (pin sh-xflag () (sh-nth f 2))
         _ (sh-envback (sh-nth s 6))
         0)
+
+   ; --- one line, run the way a subshell would: the door a caller in this image
+   ; uses instead of spawning a shell (cook's recipe lines). a make recipe line
+   ; runs in ITS OWN shell, so a `cd` in one must not reach the next -- this is the
+   ; forkless capture's contract with the capture taken off: the body says its piece
+   ; straight onto OUR fds, and sh-subsave/sh-subback put back by hand what a fork
+   ; would have copied (cwd, variables, functions, positionals, $0, the e/u/x flags,
+   ; the environment). ⚠ the same holes stand: a job started inside stays ours, an
+   ; fd opened inside stays open, umask and the handlers hold. `exit` ends the LINE.
+   ; answers (1 status) when it ran here, () when the flags ask for something this
+   ; door does not serve -- the caller then spawns a shell, exactly as it always did.
+   ; ⚠ the restore rides `mind`, so a scare under the line still puts the shell back.
+   (sh-oneflags fl)                            ; ("-ec") -> (1 e u x) | () not ours
+     (: (go l e u x)
+         (? !(two? l) (L 1 e u x)
+            (: w <l n (tally w)
+               (? (|| (< n 2) !(= (w 0) 45)) ()
+                  (: (ch k e2 u2 x2)
+                      (? (<= n k) (go >l e2 u2 x2)
+                         (: c (w k)
+                            (? (= c 99) (ch (+ k 1) e2 u2 x2)      ; c, the command marker
+                               (= c 101) (ch (+ k 1) 1 u2 x2)
+                               (= c 117) (ch (+ k 1) e2 1 x2)
+                               (= c 120) (ch (+ k 1) e2 u2 1)
+                               ())))                              ; anything else is not ours
+                     (ch 1 e u x)))))
+        (go fl 0 0 0))
+   (sh-oneline fl src)
+     (: fs (sh-oneflags fl)
+        (? !(two? fs) ()
+           (: sv (sh-subsave ())
+              _ (pin sh-online () (+ 1 (sh-online ())))
+              _ (pin sh-eflag () (sh-nth fs 1))
+              _ (pin sh-uflag () (sh-nth fs 2))
+              _ (pin sh-xflag () (sh-nth fs 3))
+              ; the body under BOTH: mind puts the shell back either way (the restore
+              ; is the resource's, not the catcher's), trap turns sh-leave's scare
+              ; into the line's status. any OTHER condition is a real fault -- say it
+              ; and let the line fail, so a caller aborts loudly rather than silently.
+              r (trap (\ _ (mind (\ _ (sh-line src)) ()
+                                 (\ _ (: _ (pin sh-online () (- (sh-online ()) 1))
+                                         _ (flush out) _ (flush err)
+                                         (sh-subback sv)))))
+                      ()
+                      (\ a b (? (id? a 'sh-exit) (? (charm? b) b 1)
+                                (: _ (say err ";; ") _ (print err a) _ (say err " ")
+                                   _ (print err b) _ (put err 10) _ (flush err) 1))))
+              (L 1 (? (two? r) (? (id? <r 'more)
+                                   (: _ (say err "lush: unexpected eof in a recipe line")
+                                      _ (put err 10) 2)
+                                   (? (charm? >r) >r 1))
+                      (charm? r) r
+                      0)))))
    (sh-capsub a)
      (: pp (pipe 0)
         (? (charm? pp) (: _ (cmderr "cannot pipe") "")

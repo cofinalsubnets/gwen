@@ -22,9 +22,11 @@
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
 ; dispatcher is the one thing that fires. ONE body-having `:` -- the registry, the
 ; thin mains that live here (diff over the engines, as over the holo book), and the
-; dispatch as the body; nothing leaks, and every path ends in a quit (the exit door).
+; dispatch as the body; nothing leaks, and every path ANSWERS a charm through core.l's
+; urun, so an in-image caller lives through a tool that would have quit (the SEAT below
+; is the one site that quits). ⚠ a main here leaves deep through `die`, never `quit`.
 (: kore-main (: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
-   (die m) (: _ (say err m) _ (put err 10) (quit 2))
+   (die m) (: _ (say err m) _ (put err 10) (uleave 2))
 
    ; diff: two files -> unified hunks on out; the classic exit triple
    (diff-main as)
@@ -34,8 +36,8 @@
           _ (? (two? ta) () (die ("diff: cannot open " + fa)))
           _ (? (two? tb) () (die ("diff: cannot open " + fb)))
           d (udiff fa fb <>ta <>tb)
-          (? (nil? d) (quit 0)
-             (: _ (puts d) _ (flush out) (quit 1)))))
+          (? (nil? d) 0
+             (: _ (puts d) _ (flush out) 1))))
 
    ; as: IR forms -> a runnable ELF (crew/holo/elf.l over the baked holo book)
    (as-main as)
@@ -54,7 +56,7 @@
           res (elf64 tgt (\ _ ir) ())
           _ (write-bytes dst (peep res 'bytes 0))
           _ (say err ("as: wrote " + dst)) _ (put err 10)
-          (quit 0)))
+          0))
 
    ; ar: the classic "!<arch>" archive, GNU shape to the byte. `ar rcs OUT M..`
    ; writes OUT whole (fresh, like liblove.a's rm-first recipe; deterministic:
@@ -145,7 +147,7 @@
                                _ (puts (shown + "\n"))
                                (go nx lt)))))
        _ (go 8 "")
-       (quit 0))
+       0)
    (ar-main as)
     (? !(two? as) (die "usage: kore ar rcs OUT MEMBER..   |   kore ar t OUT")
        (: fl <as
@@ -160,7 +162,7 @@
                                  (? (two? r) `((ubase f "") <>r) (die ("ar: cannot open " + f)))))
                         fs)
                 _ (ar-write dst ms)
-                (quit 0)))))
+                0))))
 
    ; ld: holo's static linker as an applet -- mooncc .o (and any ELF relocatable
    ; crew/holo/link.l reads) into a static exe, no binutils anywhere; -pie the
@@ -192,7 +194,7 @@
        ps (ldlink tgt pie org srcs)
        _ (ld-write o ps)
        _ (chmod o 493)
-       (quit 0))
+       0)
 
    ; nm: the symbols a file names, in nm's three columns -- VALUE TYPE NAME, over
    ; crew/holo/link.l's ld-syms. the letter is ELF's own facts and never a guess: U
@@ -260,7 +262,7 @@
        wide (two? >fs)
        any (foldl (\ a p (? (nm-file p wide <r <>r <>>r) 1 a)) () fs)
        _ (flush out)
-       (quit (? any 0 1)))
+       (? any 0 1))
 
    ; the registry: name -> main (aliases share)
    applets #('diff diff-main
@@ -316,7 +318,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   install readlink cmp                         ... the build's fs verbs
   echo seq yes true false basename dirname     ... and the trivia
 ")
-                (quit 2))
+                2)
    (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
@@ -334,20 +336,21 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; dispatch fires only when it is -- so a `-l` preload that seats a flag (the bake
    ; loads the cat as `love -l .kore-cat.l -e ..`) stays quiet, like moon.l's me?.
    (me? w) (: b (bn w) ((b = "kore") || (b = "kore.l") || applets (intern b)))
-   ; kore-main is the ONE leaked global: the baked kore.image wakes to it
-   ; (--wake kore.image -e '(kore-main (link "kore" (cuup (cup cmdline))))' -- the
-   ; synthetic "kore" argv0 makes an unknown tool usage+quit like the real cli). it
-   ; dispatches a program-relative arg list -- argv0 a tool symlink, or `kore`/a dev
-   ; path then the tool word -- and stays QUIET when kore is not seated (the bake).
+   ; kore-main is the ONE leaked global, and the in-image door too: it dispatches a
+   ; program-relative arg list -- argv0 a tool symlink, or `kore`/a dev path then the
+   ; tool word -- and ANSWERS the status charm, () when kore is not seated (the bake
+   ; stays quiet; an unknown tool is usage's 2, a status like any other). the baked
+   ; kore.image wakes to it with a synthetic "kore" argv0, so a caller holding the
+   ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
    (\ a (: s (seat a)
            (? !(two? s) ()
               !(me? <s) ()
               (: f0 (applets (intern (bn <s)))
-                 _ (? f0 (: _ (f0 >s) (quit 0)) ())
-                 t >s
-                 f (? (two? t) (applets (intern <t)) ())
-                 _ (? f (: _ (f >t) (quit 0)) ())
-                 (usage ())))))))
-; the SEAT: file mode (cat | love) dispatches on the real command line; the -l bake
-; preload seats a flag, not kore, so me? is false and kore-main returns quietly.
-(kore-main >cmdline)
+                 (? f0 (urun f0 >s)
+                    (: t >s
+                       f (? (two? t) (applets (intern <t)) ())
+                       (? f (urun f >t) (usage ()))))))))))
+; the SEAT: file mode (cat | love) dispatches on the real command line and quits with
+; the status; the -l bake preload seats a flag, not kore, so me? is false and kore-main
+; answers () -- the presence guard, and the one answer that is not a status.
+(: r (kore-main >cmdline) (? (charm? r) (quit r) ()))

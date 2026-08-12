@@ -1,8 +1,9 @@
 ; crew/kore/core.l -- the line tools, the coreutils batch of kore: cat, echo, head,
 ; tail, wc, sort, uniq, tee, seq, yes, true, false, basename, dirname -- and the field
 ; tools: cut, tr, nl, rev. every tool is a
-; <name>-main (the args after its name -> conversation on the ports -> quit, the exit
-; door), dispatched by the multi-call `kore` (crew/kore/kore.l holds the registry). this
+; <name>-main (the args after its name -> conversation on the ports -> the exit status,
+; ANSWERED as a charm; a leave from deep inside rides udie, and urun is the door both
+; come back through), dispatched by the multi-call `kore` (kore.l holds the registry). this
 ; file is a TOOLBOX, not a tool: no seat of its own, kore is its door. it rides text.l's
 ; lines/unlines and loads right after text.l in the cat, so the capture law folds the
 ; real bridge here before cook.l's later `lines` leak can shadow it. a body-less
@@ -20,8 +21,21 @@
        (? ((0 < n) && (s 0 = 45)) (0 - go 1 0) (go 0 0)))
    ; a path -> (1 text) when it opens, () when it does not (kore.l's read-text shape)
    (uread p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))
+   ; the exit door, two faces: a main ANSWERS its status as a charm, and a leave from
+   ; deep inside scares 'leave carrying it. urun is the driver both come back through,
+   ; so a caller in the SAME IMAGE gets a charm instead of a dead process -- the seat
+   ; quits with what it answers. ⚠ nothing unwinds through a scare (spec.l's control
+   ; section), so a port a tool holds at the leave is lost, exactly as `quit` lost it.
+   (uleave c) (scare 'leave c)
+   (urun f as)
+    (: (out! _) (: _ (flush out) (flush err))
+       (trap (\ _ (: r (f as) _ (out! ()) (? (charm? r) r 0))) ()
+             (\ a b (: _ (out! ())
+                       (? (id? a 'leave) b
+                          (: _ (say err ";; ") _ (print err a) _ (say err " ")
+                             _ (print err b) _ (put err 10) _ (flush err) 1))))))
    ; complain on err and leave through the exit door with code c
-   (udie c m) (: _ (say err m) _ (put err 10) (quit c))
+   (udie c m) (: _ (say err m) _ (put err 10) (uleave c))
    ; left-pad with spaces to width w (a wider count never shrinks)
    (upad w s) (? (tally s < w) (upad w (" " + s)) s)
    ; join texts with single spaces
@@ -122,8 +136,8 @@
                      (: r (uread f)
                         (? (two? r) (: _ (dot <>r) ok)
                            (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))))
-       (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (quit (? ok 0 1))))
-       (? (two? as) (go as 1) (: _ (dot (slurp in)) _ (flush out) (quit 0))))
+       (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
+       (? (two? as) (go as 1) (: _ (dot (slurp in)) _ (flush out) 0)))
 
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (ueach "cat" puts as)
@@ -131,8 +145,8 @@
    ; -- echo: the args back; -n holds the newline --
    (echo-main as)
     (? (two? as && (<as = "-n"))
-       (: _ (say out (ujoin >as)) _ (flush out) (quit 0))
-       (: _ (say out (ujoin as)) _ (put out 10) _ (flush out) (quit 0)))
+       (: _ (say out (ujoin >as)) _ (flush out) 0)
+       (: _ (say out (ujoin as)) _ (put out 10) _ (flush out) 0))
 
    ; -- head and tail: one driver, two clips; -n N (10 the default) --
    (uclip who clip as)
@@ -150,9 +164,9 @@
                  ok)
               (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0)))
        (go a first ok) (? (two? a) (go >a 0 (one <a first ok))
-                          (: _ (flush out) (quit (? ok 0 1))))
+                          (: _ (flush out) (? ok 0 1)))
        (? (two? fs) (go fs 1 1)
-          (: _ (say out (clip n (slurp in))) _ (flush out) (quit 0))))
+          (: _ (say out (clip n (slurp in))) _ (flush out) 0)))
    (head-main as) (uclip "head" uhead as)
    (tail-main as) (uclip "tail" utail as)
 
@@ -194,7 +208,7 @@
        _ (emit rows)
        _ (? (two? rows && two? >rows)
             (: _ (say out (fmt `(tl tw tb))) _ (say out " total") (put out 10)) ())
-       _ (flush out) (quit (? ok 0 1)))
+       _ (flush out) (? ok 0 1))
 
    ; -- sort: the prel sort IS byte order (the LC_ALL=C face); -r reverses, -u keeps firsts --
    (sort-main as)
@@ -217,7 +231,7 @@
        s1 (sort (? (two? fs) (rd fs ()) (lines (slurp in))))
        s2 (? u? (ded s1) s1)
        _ (say out (unlines (? r? (rev s2) s2)))
-       _ (flush out) (quit 0))
+       _ (flush out) 0)
 
    ; -- uniq: adjacent runs to their firsts; -c wears the run count, width 7 --
    (uniq-main as)
@@ -235,7 +249,7 @@
            (<a = prev) (go >a prev (cnt + 1))
            (: _ (emit prev cnt) (go >a <a 1)))
        _ (go (lines t) () 0)
-       _ (flush out) (quit 0))
+       _ (flush out) 0)
 
    ; -- tee: stdin onto out AND every file (-a appends) --
    (tee-main as)
@@ -247,7 +261,7 @@
                         (: _ (say err ("tee: cannot open " + f)) _ (put err 10) 0)))
        (go a ok) (? (two? a) (go >a (one <a ok)) ok)
        ok (go fs 1)
-       _ (puts t) _ (flush out) (quit (? ok 0 1)))
+       _ (puts t) _ (flush out) (? ok 0 1))
 
    ; -- seq: FIRST INCR LAST, one a line (one and two args fill in the 1s) --
    (seq-main as)
@@ -261,7 +275,7 @@
        (go i) (? (? (0 < d) (i <= z) (z <= i))
                  (: _ (say out (show i)) _ (put out 10) (go (i + d)))
                  ())
-       _ (go a) _ (flush out) (quit 0))
+       _ (go a) _ (flush out) 0)
 
    ; -- yes: the affirmative, forever (args override the y) --
    (yes-main as)
@@ -270,17 +284,17 @@
        (go ()))
 
    ; -- true and false: the two exit codes, nothing else --
-   (true-main _) (quit 0)
-   (false-main _) (quit 1)
+   (true-main _) 0
+   (false-main _) 1
 
    ; -- basename and dirname: the two path clips --
    (basename-main as)
     (? !(two? as) (udie 2 "usage: basename NAME [SUFFIX]")
        (: _ (say out (ubase <as (? (two? >as) <>as "")))
-          _ (put out 10) _ (flush out) (quit 0)))
+          _ (put out 10) _ (flush out) 0))
    (dirname-main as)
     (? !(two? as) (udie 2 "usage: dirname NAME")
-       (: _ (say out (udir <as)) _ (put out 10) _ (flush out) (quit 0)))
+       (: _ (say out (udir <as)) _ (put out 10) _ (flush out) 0))
 
    ; -- cut: -f LIST [-d C] [-s] over fields, -c LIST over charms (flags glue or not) --
    (cut-main as)
@@ -354,7 +368,7 @@
             (: mt (tmap one two)
                (go k) (? (n <= k) () (: c (src k) _ (put o (peep mt c c)) (go (k + 1))))
                (go 0)))
-       _ (puts (slurp o)) _ (flush out) (quit 0))
+       _ (puts (slurp o)) _ (flush out) 0)
 
    ; -- nl: number the lines that hold ink (pad 6, a tab after); a blank line wears
    ; seven spaces and no number, and the count carries across inputs --

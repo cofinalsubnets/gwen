@@ -29,7 +29,7 @@ hand-rolled `moonrun()`/`korerun()`:
 
 ```sh
 moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
-korerun() { "$m" --wake "$ho/kore.image" -e '(kore-main (link "kore" (cuup (cup cmdline))))' "$@"; }
+korerun() { "$m" --wake "$ho/kore.image" -e '(: r (kore-main (link "kore" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))' "$@"; }
 ```
 
 and ~30 test.mk targets carry `out/host$(hsuf)/mooncc.image` prerequisites to match.
