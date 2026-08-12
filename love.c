@@ -161,7 +161,7 @@ lvm_t lvm_kcall,
  lvm_bxor,  lvm_bsr,    lvm_bsl,    lvm_snip,
  lvm_link,   lvm_cap,  lvm_cup,    lvm_puts,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
- lvm_sort,  lvm_tally,
+ lvm_sort,  lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
  lvm_unc, lvm_poke, lvm_peek,
  lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
@@ -1584,10 +1584,12 @@ static ai_noinline Ana(analyze) {
  if (nomp(x) && x != ZeroPoint) return ana_v(g, c, x); // lookup symbol as variable
  if (!chainp(x)) return ana_q(g, c, x); // non-chains are self quoting
  word a = A(x), b = B(x);                        // it must be a chain
- if (!chainp(b)) return analyze(g, c, a); // singleton list has value of element
  // if it is a special form then do that
  struct ai_str *nm;                             // a special form is headed by a 1-char NAMED symbol (\ : ?)
- if ((nm = nom_str(g, a)) && len(nm) == 1)     // nom_str is 0 for a bare mint / the core / a non-sym
+ if (chainp(b) && (nm = nom_str(g, a)) && len(nm) == 1)  // ⚠ chainp: (\) (:) (?) hold no operand to
+                                                // consume, so an EMPTY form is not a special form at
+                                                // all -- it falls to (f) == f like every other head.
+                                                // nom_str is 0 for a bare mint / the core / a non-sym
   switch (*txt(nm)) {
    case '\\': return ana_l(g, c, b);
    case ':': return ana_d(g, c, b);
@@ -1732,6 +1734,7 @@ static ai_inline Ana(ana_2, word a, word b) {
  if ((x = macroget(ai_core_of(g), a)) && !lexbound(g, *c, a))   // macro table = each layer's [zero] slot, walked; the scope walk only on a macro HIT
   return g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x))))))),
          analyze(g, c, ai_ok(g) ? pop1(g) : 0);
+ if (!chainp(b)) return analyze(g, c, a);  // (f) == f -- BELOW the macro lane, which has no value to be
  return avec(g, b, g = analyze(g, c, a)),
         ana_ap(g, c, b); }
 
@@ -7178,6 +7181,17 @@ static intptr_t ai_count(struct ai *g, word l) {
 lvm(lvm_tally) {
  Sp[0] = putcharm(ai_count(g, Sp[0]));
  ai_musttail return Next(1); }
+
+// (long? n l): is l a chain at least n links deep -- the ARITY question, asked once.
+// `two?` per step is the spelling that reads, and it costs a cup, a load and a
+// dispatch EACH; a destructuring pattern asks it n times to reach n fields
+// (love/pat.l). n <= 0 is true of anything: no link is claimed.
+lvm(lvm_longp) { word l = Sp[1];
+ if (!charmp(Sp[0])) ai_musttail return Push(zero);
+ for (intptr_t k = getcharm(Sp[0]); k > 0; k--) {
+  if (!chainp(l) || nomp(l)) ai_musttail return Push(zero);
+  l = B(l); }
+ ai_musttail return Push(putcharm(1)); }
 
 lvm(lvm_sort) {
  word l = Sp[0];

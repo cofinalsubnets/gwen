@@ -192,7 +192,7 @@
                  (= c 39) (p1-lift (name "\\") r head)
                  (= c 96) (p1-lift 'list r head)
                  (= c 35) (p1-lift 'hash r head)
-                 (= c 64) (p1-lift 'tuple r head)
+                 (= c 64) (? (p1-glued? r) (p1-lift 'tuple r head) (link (name "@") r))
                  (= c 126) (p1-lift (? (? (link? r) (& (p1-cls (cap r)) 16) ()) 'twin 'conj) r head)
                  (= c 44) (link (name ",") r)
                  (? (p1-opc? c) (nil? numlead) ()) (p1-op cl head)
@@ -206,6 +206,8 @@
    ; otherwise splice `'s own list in and read (list list a b), a wrong value with
    ; nothing to raise. ' and \ are NOT constructors: they take the next datum
    ; whatever it is, so '[a b] stays the FORM (list a b) quoted.
+   ; ⚠ @ and ~ read GLUE (p1-read1): spaced, @ is the plain symbol -- the head of
+   ; the match form -- and ~ is conj. the other sigils reach across the space.
    (p1-lift w cl head)
      (: s (p1-skip cl)
         open (? (p1-splice? w) (? (link? s) (& (p1-cls (cap s)) 16) ()) ())

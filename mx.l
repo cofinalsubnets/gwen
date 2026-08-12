@@ -172,7 +172,7 @@
    ; their handlers (each is one tail jump to a data_*_apply), so what it measures is
    ; CALL LOWERING, not code: arm64 4, x64 8, thumb2 60, riscv64 88. the two fat ones
    ; spill their params to the frame and read them straight back; the IR sweeps that
-   ; fold exactly that (stld, dehusk) run on x64 alone -- gen.l's build says so and
+   ; fold exactly that (stld, copyprop) run on x64 alone -- gen.l's build says so and
    ; says why. they port, and pay (measured: riscv64 76, thumb2 48), but they land
    ; inside the regen's own ranking, where they cost arm64 its param homing. a rung
    ; of its own. lean's 16 buys x64 exactly 2x its measured 8; 8 would buy none, and

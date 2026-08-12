@@ -363,7 +363,8 @@
  (: m (star-tray '(2 2) '(1 2 3 4)) (9 = (peep (pin m '(1 0) 9) '(1 0) 0))))   ; the shape-list key writes where it reads
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
-; the compounds); sort/sortby by the total order; (jot n) the first n charms; the higher-order
+; the compounds); (long? n l) asks the ARITY -- at least n links, one walk, where `two?` per
+; step spends a cup and a dispatch at each; sort/sortby by the total order; (jot n) the first n charms; the higher-order
 ; functions live in the prel. APPLYING a chain is the text law one lattice rung up: a charm
 ; INDEXES an element (negatives from the end, out of range the unit 1), a chain JUXTAPOSES --
 ; the append, agreeing with + -- and every other operand takes the default action, const-1.
@@ -371,6 +372,8 @@
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 ())))
  !(cap 0) ("x" = (string 'x)) !(two? 'x)          ; no cap at the end of the list; a symbol is NOT a chain -- its name comes via `string`
+ (long? 3 '(1 2 3)) !(long? 4 '(1 2 3)) ((long? 1 '(1 2)) = (two? '(1 2))) ((long? 1 'x) = (two? 'x))
+ (long? 0 'x) !(long? 1 ()) !(long? 2 "ab") !(long? 'a '(1 2))  ; at zero nothing is claimed, so anything answers; a count that is not a charm never does
  ('(0 1 2) = (jot 3)) !(jot 0) (3 = $(jot 3)) ; jot: the first n charms; the empty count is nothing
  ('(2 3 4) = (map (+ 1) '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
  ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (sortby (>) '(1 2 3)))
@@ -573,6 +576,8 @@
 ; ` list ctor EVALUATES every element, so QUOTE the literal positions instead of unquoting the
 ; computed ones -- the convention inverts (numbers self-eval, so bare). the prel ships
 ; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, :- and ?-, >>= <=<.
+; ⚠ A MACRO EXPANDS AT ZERO OPERANDS TOO -- (f) == f is a law about VALUES, and a macro has none
+; to be, so (list) is () and never a read of `list`. the empties ride it: [] and `() ARE (list).
 (:: 'unless (\ a `('? (cap a) 0 (caup a))))
 (assert
  ('ok = (unless 0 'ok)) (0 = (unless 1 'ok)) (3 = (&& 1 2 3)) !(&& 1 0 3)
@@ -581,7 +586,9 @@
  ; nothing, not a number
  (id? (&& () 5) ()) (id? (&& 1 0 3) ()) (id? (|| () ()) ()) (id? (|| () 0) ())
  (2 = (|| 0 2 3)) ('(1 2 3) = `(1 2 3)) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
- (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4)))
+ (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4))
+ (id? () (list)) (tray? (tuple)) (tablet? (hash)) (id? () (unless))   ; ⚠ the zero-operand macro
+ (id? () (:)) (id? () (?)) (id? () (\)))                           ;   ..and the empty forms, still their head's value
 
 ; --- control --- ev compiles+runs; call-cc a one-shot escape; tasks twirl/catch/rest/freeze/
 ; landed?/scoop/cue?/myself ((twirl f x) forks to an id, (catch p) blocks for the result, (rest 0) yields --
